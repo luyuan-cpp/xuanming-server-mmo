@@ -151,6 +151,29 @@ var (
 			"sum by (result) gives the success/failure split.",
 		Labels: []string{"result"},
 	})
+
+	// failureNotifyCounter:异步链失败后"经 gate 给客户端推失败 tip"这一步的结果
+	// (notifyEnterGameFailed)。稳态下 sent 应与 total{result=preload_failed|apply_failed}
+	// 之和大致相等;failed / skipped_no_gate 有数 = 有玩家仍在靠客户端 60s 超时兜底。
+	// label 只有两个低基数枚举,**不放 player_id / session_id**(定位具体玩家靠同一处的日志)。
+	failureNotifyCounter = metric.NewCounterVec(&metric.CounterVecOpts{
+		Namespace: metricNamespace,
+		Subsystem: "",
+		Name:      "failure_notify_total",
+		Help: "Client-facing failure tip pushes issued after the EnterGame async chain failed. " +
+			"Stage: preload | apply. Outcome: sent | failed | skipped_no_gate.",
+		Labels: []string{"stage", "outcome"},
+	})
+)
+
+// failureNotifyCounter 的 label 取值。
+const (
+	notifyStagePreload = "preload" // 预加载失败(含 dispatcher TTL 超时)
+	notifyStageApply   = "apply"   // applyLoadedPlayerSession 失败(含 EnterScene 被 scene_manager 拒绝)
+
+	notifyOutcomeSent          = "sent"            // 命令已写进 Kafka(不等于客户端一定收到)
+	notifyOutcomeFailed        = "failed"          // 组装被守卫拒绝或 Kafka 写失败
+	notifyOutcomeSkippedNoGate = "skipped_no_gate" // 会话上没有 gate 寻址信息,无处可推
 )
 
 // Result label values — exported so call sites self-document.

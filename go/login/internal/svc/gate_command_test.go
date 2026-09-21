@@ -11,11 +11,14 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	game "login/generated/pb/game"
+	basepb "proto/common/base"
 	kafkapb "proto/contracts/kafka"
+	"shared/generated/pb/table"
 	"shared/kafkacmd"
 )
 
-// 本文件盯住 login 发往 gate 的两条控制面命令(BindSession / KickPlayer)的寻址与守卫。
+// 本文件盯住 login 发往 gate 的命令(控制面的 BindSession / KickPlayer,以及推给客户端的 PushTip)
+// 的寻址与守卫。
 //
 // 为什么要跨模块读 shared 的向量文件:寻址契约(topic 名 + partition = node_id % P)
 // 有三份实现在跑 —— C++ 的 node_command_topic.h、Go 的 shared/kafkacmd、以及各生产者
@@ -118,8 +121,12 @@ func TestGateCommandAddressingMatchesSharedVectors(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: buildKickPlayerCommand(%s): %v", c.Name, gateID, err)
 		}
+		pushTip, err := buildPushTipCommand(gateID, instanceID, 7, 1001, uint32(table.SceneError_kEnterSceneFailed))
+		if err != nil {
+			t.Fatalf("%s: buildPushTipCommand(%s): %v", c.Name, gateID, err)
+		}
 
-		for path, msg := range map[string]gateCommandMessage{"bind session": bind, "kick": kick} {
+		for path, msg := range map[string]gateCommandMessage{"bind session": bind, "kick": kick, "push tip": pushTip} {
 			if msg.Topic != c.ExpectTopic {
 				t.Errorf("%s/%s: topic for gate %s = %q, want %q",
 					c.Name, path, gateID, msg.Topic, c.ExpectTopic)
@@ -178,6 +185,15 @@ func TestGateCommandTargetFieldsArePopulated(t *testing.T) {
 				return buildKickPlayerCommand(gateID, instanceID, sessionID, playerID)
 			},
 			wantEventID:  uint32(game.ContractsKafkaKickPlayerEventEventId),
+			wantSession:  sessionID,
+			wantPlayerID: playerID,
+		},
+		{
+			name: "push tip",
+			build: func() (gateCommandMessage, error) {
+				return buildPushTipCommand(gateID, instanceID, sessionID, playerID, uint32(table.SceneError_kEnterSceneFailed))
+			},
+			wantEventID:  uint32(game.ContractsKafkaPushToPlayerEventEventId),
 			wantSession:  sessionID,
 			wantPlayerID: playerID,
 		},
@@ -289,7 +305,72 @@ func TestGateCommandFailsClosed(t *testing.T) {
 			if !strings.Contains(err.Error(), tc.wantSubstr) {
 				t.Errorf("KickSessionOnGate error = %q, want it to mention %q", err, tc.wantSubstr)
 			}
+
+			err = sc.PushTipToSession(tc.gateID, tc.instanceID, 1, 2, uint32(table.SceneError_kEnterSceneFailed))
+			if err == nil {
+				t.Fatal("PushTipToSession: want error, got nil (command would be unroutable/unfilterable)")
+			}
+			if !strings.Contains(err.Error(), tc.wantSubstr) {
+				t.Errorf("PushTipToSession error = %q, want it to mention %q", err, tc.wantSubstr)
+			}
 		})
+	}
+}
+
+// TestPushTipCommandPayloadLayers 把 PushTip 的三层信封逐层拆开:
+// GateCommand.payload → PushToPlayerEvent → MessageContent.serialized_message → TipInfoMessage。
+//
+// 每一层错了都是**静默**的:事件号错 → gate 分发到别的 handler 或直接丢;payload 里的 session_id
+// 错 → gate 找不到连接只打一条 WARN;message_id 错 → 客户端按别的消息解析;tip id 错 → 客户端
+// 弹出一条毫不相干的文案。期望值一律引用生成常量,不在测试里抄数字。
+func TestPushTipCommandPayloadLayers(t *testing.T) {
+	requireDefaultContract(t)
+
+	const (
+		sessionID = uint32(4242)
+		playerID  = uint64(90001)
+	)
+	tipID := uint32(table.SceneError_kEnterSceneFailed)
+
+	msg, err := buildPushTipCommand("300", "b0a1-uuid", sessionID, playerID, tipID)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+
+	var cmd kafkapb.GateCommand
+	if err := proto.Unmarshal(msg.Payload, &cmd); err != nil {
+		t.Fatalf("unmarshal GateCommand: %v", err)
+	}
+	if cmd.GetEventId() != uint32(game.ContractsKafkaPushToPlayerEventEventId) {
+		t.Fatalf("event_id = %d, want PushToPlayerEvent(%d)", cmd.GetEventId(), game.ContractsKafkaPushToPlayerEventEventId)
+	}
+
+	var event kafkapb.PushToPlayerEvent
+	if err := proto.Unmarshal(cmd.GetPayload(), &event); err != nil {
+		t.Fatalf("unmarshal PushToPlayerEvent: %v", err)
+	}
+	// gate 的 PushToPlayerEventHandler 只认 payload 里的这个 session_id。
+	if event.GetSessionId() != sessionID {
+		t.Errorf("PushToPlayerEvent.session_id = %d, want %d", event.GetSessionId(), sessionID)
+	}
+	content := event.GetMessageContent()
+	if content == nil {
+		t.Fatal("PushToPlayerEvent.message_content is nil; gate would push an empty frame")
+	}
+	if content.GetMessageId() != uint32(game.SceneClientPlayerCommonSendTipToClientMessageId) {
+		t.Errorf("message_id = %d, want SendTipToClient(%d)",
+			content.GetMessageId(), game.SceneClientPlayerCommonSendTipToClientMessageId)
+	}
+
+	var tip basepb.TipInfoMessage
+	if err := proto.Unmarshal(content.GetSerializedMessage(), &tip); err != nil {
+		t.Fatalf("unmarshal TipInfoMessage: %v", err)
+	}
+	if tip.GetId() != tipID {
+		t.Errorf("tip id = %d, want %d", tip.GetId(), tipID)
+	}
+	if len(tip.GetParameters()) != 0 {
+		t.Errorf("tip parameters = %v, want none", tip.GetParameters())
 	}
 }
 

@@ -305,7 +305,7 @@ C++ MSBuild 必须串行 `/m:1 /nr:false`;这批代码从未编译,失败时先�
 - **修法**:在 `cpp/nodes/scene/main.cpp` 装,**不碰生成物**(AGENTS §3)。形状照 `ConfigureGuidSegmentClients` 里的 `InitDataServiceReply()`(`id_segment_bootstrap.cpp:244`)——手写引导代码自己装自己的 gRPC 应答处理器。只是给两个全局 `std::function` 赋值,无前置依赖,放在发出任何请求之前即可。注释里写清"为什么不能放进生成的 `InitReply()`",避免下一个人又搬回去。
 - **风险**:这一修同时**激活了约 150 行从未执行过的代码**(两个应答处理器的全部分支),首次编译与联调会第一次真正走到它们。
 
-#### 12.5.2 传送后半程失败时服务端对客户端零通知(4 条,均未修)
+#### 12.5.2 传送后半程失败时服务端对客户端零通知(4 条;S5-B1 / S8-1 已于 §12.5.5 修复,S7-1 / S3L1-1 仍未修)
 
 四条审计发现指向同一个根:**第一条腿失败有出口(源 scene 解冻 + tip,§10.2 R5),第二条腿及其之后没有对等机制**,而那时源实体已经销毁。
 
@@ -351,3 +351,39 @@ C++ MSBuild 必须串行 `/m:1 /nr:false`;这批代码从未编译,失败时先�
 | CL-8 | P3 | 多处 | 跨区窗口总预算 120s 小于链路最坏耗时(约 165–180s),中途到期会清掉在途区号,是 CL-3 的又一触发源;验票被拒 / 新连接中途断开时管线协程不提前退出,`_redirecting` 会多挂 10–60s;`ZoneTravelClient.cs` 文件头仍写"跑 gen 之前编不过是预期"。 | 随 CL-3 一并处理 |
 
 被反驳者推翻的两条:重定向进行中到达的第二条 msg 124 被丢弃(与 robot 语义不一致,但无害);以及 CL-1 的一个重复表述。
+
+#### 12.5.5 ⑨ 第二条腿失败出口 + ⑩ 回家:两端落码(2026-09-20,未编译、Unity 未跑)
+
+用户要求"按最标准的做",并授权同时改服务端与客户端。两端各一包,各经"编译级静读 + 语义与契约"两名只读复审后回修,零 blocker、零 major。
+
+**新契约(写进 §11.1 的客户端契约,以本节为准)**:`EnterGame` 应答无错 = **已受理**;之后进场没成,服务端经 gate 推一条 `SendTipToClient`(消息号 23),tip 码 = `scene_error` 的 **`kEnterSceneFailed`(3023)**。异步进场链的所有显式失败(预加载失败、apply 失败——含 EnterScene 被 scene_manager 拒、RPC 失败、BindSession / 会话落盘失败)统一走这一个出口、同一个码;具体原因只进服务端日志。选 3023 是因为 Go 侧 `table.SceneError_kEnterSceneFailed` 与客户端 `scene_error.KEnterSceneFailed` 都已生成且有文案,两端都不需要 regen / 导表。
+
+**服务端(`go/login`)**:
+
+- `internal/svc/gate_command.go`:新增 `buildPushTipCommand`,`TipInfoMessage → MessageContent{message_id = SendTipToClient} → PushToPlayerEvent{session_id}` 装进 `GateCommand.payload`,仍经唯一寻址收口 `buildGateCommandMessage`(空 instance id / 非数字 gate id / node id 为 0 三道 fail-closed 守卫、显式分区)。消息号、事件号、tip 码全部用生成常量。
+- `internal/svc/servicecontext.go`:`PushTipToSession`,形状与 `KickSessionOnGate` 一致。
+- `internal/logic/clientplayerlogin/entergamelogic.go`:唯一失败出口 `notifyEnterGameFailed`,由 `onPreloadComplete` **最先注册的 defer** 触发(最后执行,排在停心跳、释放玩家锁之后——推送是一次同步 Kafka 写,不该拉长持锁窗口)。两处失败分支只置 `failedStage`,**既有处置一行没变**:不新增 `cleanupLoginSessionState`、不踢线(推 tip 是 best-effort 通知,不是状态变更;推送失败只记 ERROR + 计数,不重试)。会话上没有 gate 寻址信息时不硬造,计 `skipped_no_gate`。回调 panic(dispatcher 的 `safego` 各自 recover)不经过这里,由客户端 60s 超时兜底,注释写明。
+- `metrics.go`:`entergame_failure_notify_total{stage=preload|apply, outcome=sent|failed|skipped_no_gate}`,无 player_id label。
+- 顺带:两处仍把 14 `ErrUnsafeCrossNodeHandoff`、"重定向前先解析场景"当现状的过期注释改成实情。
+- 单测:`gate_command_test.go` 补 push tip 的目标字段 / 守卫 / 逐层反序列化用例;新文件 `entergame_failure_notify_test.go` 覆盖 sent / failed(只调一次、不重试)/ skipped 三种结果与一条从 EnterGame 入口打的接线用例。**成功路径不通知、预加载失败分支的接线**无法单测(要起真 Kafka 生产者),只由代码阅读覆盖。
+
+**客户端(`mmorpg-client`)**:
+
+- **⑨**:`GameClient.IsEnterFailureTip`(只认契约码 3023);等进场期间 msg 23 命中即记下,等待循环立刻 `FailPipeline` 收口并显示 `DescribeTravelTip` 文案,不再干等 60s(60s 兜底保留)。msg 23 原有的"传送失败 → `EndZoneTravel` → 广播 `OnServerTip`"不变;游戏内换图失败同样会收到 3023,但那时不在等进场,新标志不生效。重定向场景下失败文案为"切换服务器失败,请重新登录(进入场景失败…)",其它失败只显示固定文案,开发者诊断串只进日志。选服界面断线处理改读 `GameClient.DisconnectReason`,**不再用"与服务器的连接已断开"盖掉真正的失败原因**。
+- **⑩**:`GameClient.CurrentZoneId` 成为"当前所在区"的单一真源 = 当前连着的那个 gate 所属的区:普通进入取所选区;每次 `RedirectFlow` 换连接成功后,从服务端签发的票据**只读解析** `target_zone_id`(为 0 取 `zone_id`;解析失败保留旧值并打日志,不影响重定向,也不影响 payload / signature 原样透传);断线清零。地图窗改读它,**删掉 `_visitingZoneId` 旁路记账**;跨区在途只认 `IsTravelFailureTip` 的 5 个码,失败文案走 `DescribeTravelTip`,不再拼裸编号。
+- 顺带:`DescribeTravelTip` 补 3007 / 3014 文案;`ZoneTravelClient.cs` 文件头过期注释改成实情。
+- EditMode 单测 5 个(`Tianyong/CityTravelRequestTests.cs`):进场失败判据、文案、票据解析的两种情形。
+
+**对应条目状态**:§12.5.2 的 S5-B1 / S8-1 **已修**(服务端出口);§12.5.4 的 CL-1(⑨ 客户端面)、CL-3 / CL-4(⑩)**已修**;CL-6 部分(3007 / 3014 已补,`kSceneTransferInProgress` 等客户端下次 gen 收进 `cross_server_error_tip.proto`);CL-8 的 `ZoneTravelClient` 文件头已修。**仍未修**:CL-2(本机时钟预判票据过期)、CL-5(手动重进无冷却)、S7-1、S3L1-1、CL-7(`SceneErrorTip.cs.meta`)。
+
+**残余与待验证**:
+
+- 已知的重复通知:EnterScene RPC 超时、但 scene_manager 实际已放行时,客户端可能先后收到进场通知与 3023。先到进场则 3023 被忽略(已不在等进场);先到 3023 则客户端断线回选服,服务端侧玩家随之走正常退出。不回档,但玩家要重进一次。
+- `Tianyong` 测试程序集是唯一没有显式声明 `Google.Protobuf.dll` 的测试 asmdef(`overrideReferences: false`)。插件 `isExplicitlyReferenced: 0`(Auto Reference 开),按 Unity 规则会自动引用,但**首次编译若报 CS0246 / CS0012**,照其它测试 asmdef 改成 `overrideReferences: true` + `precompiledReferences: ["Google.Protobuf.dll"]` 即可。
+- 端到端链路(login → Kafka gate-cmd → gate `PushToPlayerEventHandler` 按 session_id 找连接 → 客户端 msg 23)只做了静读。
+
+**验证**:
+
+1. 服务端,工作目录 `go/login`:`go build ./...` → `go vet ./internal/svc/... ./internal/logic/clientplayerlogin/...` → `go test ./internal/svc/ -run "GateCommand|PushTip" -count=1 -v` → `go test ./internal/logic/clientplayerlogin/ -run "TestNotifyEnterGameFailed|TestEnterGame_" -count=1 -v` → `go test ./... -count=1`。`gofmt -l` 只允许出现 `entergamelogic.go`(`enterGameSessionState` 的字段对齐差异是 HEAD 既有的)。
+2. 客户端:Unity 打开工程无 CS 错误 → Test Runner 跑 `MmorpgClient.Tests.EditMode.Tianyong`。
+3. 联调(两端都就位):a) 构造目标区 EnterScene 被拒 → 客户端数秒内回选服,状态栏显示"切换服务器失败,请重新登录(进入场景失败…)",login 计数 `entergame_failure_notify_total{stage="apply",outcome="sent"}` +1;b) 构造换连接后验票失败 → 状态栏只显示固定文案、不含 `token verify`;c) 传送到外区后打开地图窗,归属区出现在可去列表里;d) 普通登录同样构造一次 EnterScene 被拒,确认也是秒级收口而不是等 60s。

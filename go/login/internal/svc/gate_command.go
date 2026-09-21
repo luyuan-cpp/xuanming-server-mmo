@@ -7,11 +7,13 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	game "login/generated/pb/game"
+	basepb "proto/common/base"
 	kafkapb "proto/contracts/kafka"
 	"shared/kafkacmd"
 )
 
-// 本文件是 login 发往 gate 的控制面命令(BindSession / KickPlayer)的**唯一**寻址收口。
+// 本文件是 login 发往 gate 的命令(控制面的 BindSession / KickPlayer,以及经 gate 转给客户端的
+// PushToPlayer tip 通知)的**唯一**寻址收口。
 //
 // 背景:控制面命令从"一个节点一个 topic"(gate-5)改成"一个节点类型一个 topic +
 // partition = node_id % P"(gate-cmd_g1 的第 5 号分区),
@@ -20,11 +22,12 @@ import (
 // Kafka.DisableLegacyPerNodeTopic 才能置 true、老的 group 订阅路径才能关掉
 // (在那之前 R05/R09 的"僵尸前任把继任者饿死"在老路径上仍然成立)。
 //
-// 为什么收成一个函数而不是在两个方法里各写一遍:
+// 为什么收成一个函数而不是在每个方法里各写一遍:
 //   - topic 名与分区号必须一起算。分开写必然漂移,而漂移的表现是消息落到没人
 //     assign 的分区上、Kafka 一个错都不报。
-//   - 两道 fail-closed 守卫(空 instance id / 非数字 gate id)必须对**每一条**
-//     命令都成立。写在这里,新增命令类型时想漏也漏不掉。
+//   - fail-closed 守卫(空 instance id / 非数字 gate id / node id 为 0)必须对**每一条**
+//     命令都成立。写在这里,新增命令类型时想漏也漏不掉 —— PushTip 就是后加的第三条,
+//     它同样只填业务字段,寻址与守卫一行没抄。
 
 // gateCommandMessage 是一条命令的完整投递描述:寻址 + 载荷。
 type gateCommandMessage struct {
@@ -34,7 +37,7 @@ type gateCommandMessage struct {
 	Payload      []byte
 }
 
-// buildGateCommandMessage 填齐目标字段、做两道守卫、算出 topic+分区并序列化。
+// buildGateCommandMessage 填齐目标字段、做三道 fail-closed 守卫、算出 topic+分区并序列化。
 //
 // kind 只用于错误信息(排障时要一眼看出是哪条命令被拒了)。
 // cmd 由调用方填业务字段(event_id / session_id / player_id / …),
@@ -46,7 +49,8 @@ func buildGateCommandMessage(kind string, gateID string, gateInstanceID string,
 	// 空值 = 消费端 ValidateCommandTarget 的防僵尸过滤被关闭 —— gate 的路由 node_id
 	// 会被 node_allocator 立刻回收复用,老 gate 没彻底退出时会把发给新 gate 的命令
 	// 一并消费掉再执行。共享推送路径(shared/kafkautil/gate_push.go:57)早就是
-	// fail-closed 的,login 这两条是审计点名的最后缺口。
+	// fail-closed 的,login 这两条(审计当时的 Bind / Kick)是审计点名的最后缺口;
+	// 后加的 PushTip 同样受此守卫。
 	if gateInstanceID == "" {
 		return gateCommandMessage{}, fmt.Errorf(
 			"%s to gate %q rejected: empty gate_instance_id, anti-zombie filtering would be disabled",
@@ -94,7 +98,7 @@ func buildGateCommandMessage(kind string, gateID string, gateInstanceID string,
 	}, nil
 }
 
-// buildBindSessionCommand / buildKickPlayerCommand 是两条命令各自的组装入口。
+// buildBindSessionCommand / buildKickPlayerCommand / buildPushTipCommand 是各条命令各自的组装入口。
 // 单独拆出来是为了让单测能盯住**生产路径本身**(事件号、目标字段、topic、分区),
 // 而不是在测试里再抄一遍字段字面量 —— 抄一遍的测试只能证明抄得对。
 func buildBindSessionCommand(gateID string, gateInstanceID string,
@@ -115,5 +119,43 @@ func buildKickPlayerCommand(gateID string, gateInstanceID string,
 		SessionId: sessionID,
 		PlayerId:  playerID,
 		EventId:   uint32(game.ContractsKafkaKickPlayerEventEventId),
+	})
+}
+
+// buildPushTipCommand 组装"经 gate 给某个会话的客户端推一条 tip"的命令。
+//
+// 三层信封,由内到外:
+//
+//	TipInfoMessage{id}                        客户端按 id 查文案(id 由导表器发号,调用方只传枚举值)
+//	MessageContent{message_id, serialized}    gate 原样写给客户端 TCP;message_id = SendTipToClient
+//	PushToPlayerEvent{session_id, content}    gate 的 PushToPlayerEventHandler 按 session_id 找连接
+//
+// 最外层仍是 GateCommand,寻址与守卫走 buildGateCommandMessage,与 Bind / Kick 同一条路。
+// gate 侧只认 payload 里的 session_id;GateCommand 上的 SessionId / PlayerId 照 Kick 那样填,
+// 一是分区 key 取自 PlayerId(同一玩家的命令在分区内保序),二是 broker 侧排障可读。
+//
+// 消息号与事件号一律引用生成常量,不写数字字面量。
+func buildPushTipCommand(gateID string, gateInstanceID string,
+	sessionID uint32, playerID uint64, tipID uint32,
+) (gateCommandMessage, error) {
+	tipBody, err := proto.Marshal(&basepb.TipInfoMessage{Id: tipID})
+	if err != nil {
+		return gateCommandMessage{}, fmt.Errorf("marshal push tip body (tip=%d): %w", tipID, err)
+	}
+	eventPayload, err := proto.Marshal(&kafkapb.PushToPlayerEvent{
+		SessionId: sessionID,
+		MessageContent: &basepb.MessageContent{
+			MessageId:         uint32(game.SceneClientPlayerCommonSendTipToClientMessageId),
+			SerializedMessage: tipBody,
+		},
+	})
+	if err != nil {
+		return gateCommandMessage{}, fmt.Errorf("marshal PushToPlayerEvent (tip=%d): %w", tipID, err)
+	}
+	return buildGateCommandMessage("push tip", gateID, gateInstanceID, &kafkapb.GateCommand{
+		SessionId: sessionID,
+		PlayerId:  playerID,
+		EventId:   uint32(game.ContractsKafkaPushToPlayerEventEventId),
+		Payload:   eventPayload,
 	})
 }

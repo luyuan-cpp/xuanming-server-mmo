@@ -231,6 +231,11 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	//    in SubmitPreload so the gRPC handler thread never touches the
 	//    SyncProducer mutex. The pool task exits as soon as Kafka send
 	//    returns — no waiting on results.
+	//
+	//    对客户端的契约:本 RPC 的应答**无错 = 已受理**,不等于已进场。之后链上任何一步
+	//    没成(预加载失败 / applyLoadedPlayerSession 失败,含 EnterScene 被 scene_manager
+	//    拒绝),服务端经 gate 推一条 SendTipToClient,tip = kEnterSceneFailed
+	//    (notifyEnterGameFailed)。客户端收到即可收口,自身等 NotifyEnterScene 的超时只作兜底。
 	// flowState 在这里按值拷进闭包:classID / playerName 这类入场前定好的字段必须在此之前赋完,
 	// 之后再改 flowState 进不到 applyLoadedPlayerSession → backfillPlayerIdentity,而且不报任何错
 	// (回归用例:TestEnterGame_PlayerNameReachesIdentityBackfill)。
@@ -283,6 +288,20 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	)
 
 	onPreloadComplete := func(err error) {
+		// 失败出口(契约见 notifyEnterGameFailed):本函数的 gRPC 应答早已同步回了"成功",
+		// 链上之后的失败只能经 gate 推 tip 告诉客户端。failedStage 非空 = 客户端会因此等不到
+		// NotifyEnterScene。这个 defer 注册在最前、因而**最后**执行 —— 排在停心跳与释放玩家锁
+		// 之后:推送是一次同步 Kafka 写,Kafka 抖动时可能阻塞数秒,不能让它拉长持锁窗口
+		// (持锁期间该账号的每次重连都是 kLoginInProgress)。
+		// 反过来不成立:failedStage 只在下面两个显式失败分支置位。本回调中途 panic(跑在 dispatcher
+		// 的 worker / sweep goroutine 上,会被其 recover 吞掉)时 failedStage 仍为空,不通知,
+		// 由客户端自己的 60s 进场超时兜底。
+		failedStage := ""
+		defer func() {
+			if failedStage != "" {
+				notifyEnterGameFailed(l.svcCtx, enterCtx, failedStage)
+			}
+		}()
 		defer chainCancel()
 		defer releaseLock()
 		// 会话落盘和职业 / 名字补齐期间继续续租；退出时先停心跳，再释放锁。
@@ -300,6 +319,7 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		if err != nil {
 			logx.Errorf("EnterGame preload failed [PlayerId=%d]: %v", playerID, err)
 			observeTotal(chainStart, ResultPreloadFailed)
+			failedStage = notifyStagePreload
 			return
 		}
 
@@ -317,6 +337,11 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		if applyErr != nil {
 			logx.Errorf("EnterGame apply session failed [PlayerId=%d]: %v", playerID, applyErr)
 			observeTotal(chainStart, ResultApplyFailed)
+			// applyLoadedPlayerSession 的每一个 error 返回点(GetSession / 身份补齐 / 会话落盘 /
+			// BindSession / EnterScene 调用失败 / EnterScene 被拒)都发生在 scene_manager 放行之前,
+			// 客户端都等不到 NotifyEnterScene;而它自行处置后返回 nil 的路径(跨区重定向已推给
+			// gate、ReplaceLogin 踢旧会话失败只记日志)走不到这里,不会误报。
+			failedStage = notifyStageApply
 			return
 		}
 		logx.Infof("EnterGame complete (decision=%d) playerId=%d", decision, playerID)
@@ -387,6 +412,59 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	resp.ErrorMessage = nil
 	resp.PlayerId = in.PlayerId
 	return resp, nil
+}
+
+// enterFailureTipPusher 是 notifyEnterGameFailed 唯一需要的能力:经 gate 给某个会话推一条 tip。
+// 生产实现是 *svc.ServiceContext(PushTipToSession)。只收这一个方法而不是整个 ServiceContext,
+// 是因为其 KafkaClient 是具体类型、单测里起不出来;与 resolveEnterName 收 roleNameLookup 同做法。
+type enterFailureTipPusher interface {
+	PushTipToSession(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error
+}
+
+// notifyEnterGameFailed 是 EnterGame 异步链**唯一**的面向客户端的失败出口
+// (只覆盖链上显式返回的失败;panic 路径不经过这里,见 onPreloadComplete 里 failedStage 的注释)。
+//
+// 契约(cross-zone-scene-travel.md §12.5.2 / §12.5.4 CL-1):EnterGame 的 gRPC 应答无错 = 已受理;
+// 之后进场没成,服务端经 gate 推 SendTipToClient,tip 固定为 scene_error 的 kEnterSceneFailed。
+// 所有失败(预加载失败、apply 失败含 EnterScene 被拒)共用这一个码:客户端要做的事只有一件 ——
+// 别再等 NotifyEnterScene 了;具体原因(scene_manager 的拒绝码等)只进服务端日志,不外发。
+// 这个洞不是跨 zone 传送独有,普通登录同样如此;传送只是因为源实体此刻已销毁而后果更重。
+//
+// 这是 best-effort 的**通知**,不是状态变更:
+//   - 不清登录会话、不踢线、不动玩家锁,既有处置一概不变。链失败后保留登录会话是刻意的(供客户端
+//     在同一连接上重试);踢线会逼客户端回选服走全新登录,而带着旧 location 的全新登录多半又被
+//     换手门以 18 拒绝,比留在原连接上更糟。实情:当前 Unity 客户端收到该 tip 后直接拆连接
+//     回选服,同连接重试只对 robot / 将来的客户端实现有意义(见 §12.5.4 CL-1);本函数按
+//     "通知不改处置"不去动这份保留。
+//   - 推送失败只记 ERROR + 计数,不向上传播、不重试:目标会话可能已经断开,重发没有意义;
+//     客户端自己的 60s 超时仍是兜底。
+//   - 已知的重复通知:EnterScene RPC 超时但 scene_manager 其实已放行时,客户端会先后收到
+//     NotifyEnterScene 与这条 tip。客户端须按"已进场则忽略进场失败 tip"处理。
+//
+// state 里的 gate 寻址三元组在进入异步链之前就从 SessionDetails 按值抄好了(buildEnterGameSessionState),
+// 所以预加载失败这种还没走到 apply 的分支同样拿得到。拿不到(dev 旁路 / 旧版 gate 不透传
+// gate_instance_id,或 gate_node_id 没填 = "0")就不推:硬造寻址只会被 buildGateCommandMessage 的
+// fail-closed 守卫拒掉,这里提前分流只是为了让计数区分"无处可推"与"推了但失败"。
+//
+// stage 只用于日志与计数 label(notifyStagePreload / notifyStageApply)。
+func notifyEnterGameFailed(pusher enterFailureTipPusher, state enterGameSessionState, stage string) {
+	if state.gateInstanceID == "" || state.gateID == "" || state.gateID == "0" {
+		failureNotifyCounter.Inc(stage, notifyOutcomeSkippedNoGate)
+		logx.Errorf("EnterGame failure tip not sent: session carries no gate address [PlayerId=%d session=%d stage=%s gate=%q]; client falls back to its own enter timeout",
+			state.playerID, state.sessionID, stage, state.gateID)
+		return
+	}
+
+	tipID := uint32(table.SceneError_kEnterSceneFailed)
+	if err := pusher.PushTipToSession(state.gateID, state.gateInstanceID, state.sessionID, state.playerID, tipID); err != nil {
+		failureNotifyCounter.Inc(stage, notifyOutcomeFailed)
+		logx.Errorf("EnterGame failure tip push failed [PlayerId=%d session=%d stage=%s gate=%s tip=%d]: %v; client falls back to its own enter timeout",
+			state.playerID, state.sessionID, stage, state.gateID, tipID, err)
+		return
+	}
+	failureNotifyCounter.Inc(stage, notifyOutcomeSent)
+	logx.Infof("EnterGame failure tip sent [PlayerId=%d session=%d stage=%s gate=%s tip=%d]",
+		state.playerID, state.sessionID, stage, state.gateID, tipID)
 }
 
 // consumePostMergeFlags reads the two Redis flag keys written by
@@ -509,9 +587,11 @@ func resolveEnterName(ctx context.Context, accountName string, names roleNameLoo
 // homeZoneOverrideAllowed 决定这次 EnterGame 能不能把 ZoneId 换成归属 zone。
 //
 // 只有「首次登录且 player_locator 里没有在场 scene」才允许。理由:重连(ShortReconnect)
-// 与顶号(ReplaceLogin)都带着旧 zone 的 player:{id}:location,而 scene_manager 的跨节点
-// 安全闸(AllowUnsafeCrossNodeHandoff,生产默认 false)对「有定位且跨 zone」的请求一律
-// 返回 ErrUnsafeCrossNodeHandoff —— 强行覆盖只会把本来能回到原 scene 的玩家变成进不去。
+// 与顶号(ReplaceLogin)都带着旧 zone 的 player:{id}:location,而 scene_manager 对「有定位且
+// 要离开所在 zone」的请求要过换手门:源 scene 没为当前 owner_epoch 写出「已落盘」标记之前一律回
+// 可重试的 18 ErrHandoffPending(历史上这里回的是 14 ErrUnsafeCrossNodeHandoff,该码已不再发出,
+// 见 scene_manager constants/errors.go)。18 要等源 scene 落盘写标记才会放行,而登录请求自己
+// 催不动这件事 —— 强行覆盖只会把本来能回到原 scene 的玩家变成撞 18 进不去。
 // 合服后的引导由角色列表的 zone 刷新负责,玩家下一次从目标 zone 登录即可。
 func homeZoneOverrideAllowed(decision sessionmanager.EnterGameDecision, existing *sessionmanager.PlayerSession) bool {
 	if decision != sessionmanager.FirstLogin {
@@ -583,10 +663,12 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 		targetZone, redirected = homezone.ResolveEnterZone(ctx, l.svcCtx.HomeZone, state.playerID, ownZone)
 	}
 	if redirected {
-		// 重定向前 scene_manager 会先按 (SceneId, targetZone) 解析场景,而
-		// player_locator 里的 existing.SceneID 属于旧 zone —— resolveScene 会以
-		// 「scene 属于 zone X、请求 zone Y」拒绝,重定向根本走不到。清零让它在
-		// 目标 zone 按负载挑世界频道;那次预占会在重定向分支里成对释放。
+		// player_locator 里的 existing.SceneID 属于旧 zone,对目标 zone 没有意义,清零。
+		// 现状(enterscenelogic.go「CROSS-ZONE CHECK」):scene_manager 的重定向判定**先于**
+		// 场景解析,重定向分支既不读 SceneId 也不做任何预占,目标场景由第二条腿上目标 zone
+		// 自己的 EnterScene 解析。早先是「先解析再重定向」,带着旧 zone 的 scene 会被
+		// resolveScene 以「scene 属于 zone X、请求 zone Y」拒掉 —— 清零最初是为那个顺序加的,
+		// 现在保留只是不把一个跨 zone 的 scene_id 递出去。
 		sceneID = 0
 	}
 	smTimeout := time.Duration(config.AppConfig.SceneManagerRpc.Timeout) * time.Millisecond
@@ -614,8 +696,14 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 		// 必须当失败返回:调用方(EnterGame 的异步链)只有在 applyErr != nil 时才会
 		// **跳过** cleanupLoginSessionState,把登录会话留给客户端重试。以前这里只记
 		// 一条 ERROR 就继续走 SetIdempotency + 清会话,于是 scene_manager 拒绝
-		// (ErrNoAvailableNode / ErrUnsafeCrossNodeHandoff …)之后客户端既等不到
+		// (ErrNoAvailableNode / 可重试的 18 ErrHandoffPending / 20 ErrHomeZoneUnavailable …;
+		// 历史上的 14 ErrUnsafeCrossNodeHandoff 已不再发出)之后客户端既等不到
 		// RoutePlayer,重试又撞 kLoginSessionNotFound —— 玩家卡死且日志之外无迹可寻。
+		//
+		// 现在的契约(见 notifyEnterGameFailed):返回 error → 异步链在释放玩家锁之后经 gate
+		// 给客户端推 kEnterSceneFailed,客户端不必再干等 NotifyEnterScene 的超时。具体拒绝码
+		// 只进这条 error 的日志,不外发。登录会话照旧保留、**不踢线**:被拒的多数是可重试码,
+		// 踢线会逼客户端回选服走全新登录,而带着旧 location 的全新登录多半又是 18。
 		return decision, fmt.Errorf("scene_manager rejected EnterScene for player %d: code=%d msg=%s",
 			state.playerID, enterResp.ErrorCode, enterResp.ErrorMessage)
 	}

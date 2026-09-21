@@ -449,6 +449,28 @@ func (s *ServiceContext) KickSessionOnGate(gateID string, gateInstanceID string,
 	return nil
 }
 
+// PushTipToSession 经 gate 给指定会话的客户端推一条 tip(SendTipToClient)。
+//
+// 这是 login 唯一的"面向客户端的异步通知"原语:EnterGame 的 gRPC 应答在提交预加载后就已
+// 同步回了成功,之后异步链上的失败只能靠它告诉客户端(契约见 entergamelogic.go 的
+// notifyEnterGameFailed)。它只送通知、不改任何状态 —— 踢线请用 KickSessionOnGate。
+//
+// 与 Bind / Kick 同一个生产者、同一条寻址收口(buildGateCommandMessage 的三道 fail-closed
+// 守卫照样生效)。发送是同步的,时长上界由 sarama 生产者自身的超时与重试配置决定,这里不另加
+// 重试:目标会话可能已经断开,重发没有意义。tipID 必须来自导表器生成的枚举,不许手写数字。
+func (s *ServiceContext) PushTipToSession(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error {
+	msg, err := buildPushTipCommand(gateID, gateInstanceID, sessionID, playerID, tipID)
+	if err != nil {
+		return err
+	}
+
+	if err := s.KafkaClient.SendToTopicPartition(msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
+		return fmt.Errorf("send gate push tip command to %s/%d: %w", msg.Topic, msg.Partition, err)
+	}
+
+	return nil
+}
+
 func (s *ServiceContext) Stop() {
 	s.ExpandMonitor.Stop()
 	if s.PlayerIDSegment != nil {
