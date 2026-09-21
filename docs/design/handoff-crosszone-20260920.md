@@ -3,7 +3,7 @@
 > **给接手的 Claude Code 会话**:整份读完再动手。每一条都标了证据等级——
 > 「**已核实**」= 本会话在代码上沿路径走通过;「**上一会话报出,未核实**」= 只见于上一会话的聊天记录,本机没有对应代码,无法复核。
 > 设计与落码记录的权威出处是 [`cross-zone-scene-travel.md`](./cross-zone-scene-travel.md)(本轮内容在 §12);本文只讲"现在是什么状态、接下来做什么、别踩什么"。
-> **这条链路的全部服务端代码从未被编译、从未跑过任何测试。** 任何"已修"都应读作"已落码,待验证"。
+> **验证现状(2026-09-21 更新)**:C++ 已由 Codex 按 `msbuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64` 整体编译通过(退出码 0,见 PROGRESS.md 同日 Codex 条目);`cross_zone_test`、`routing_identity_test` 都在 `game.sln` 里,**编译过了但没运行**。实际跑过的只有 `bag_test` 的 10 个结算用例。**Go(`go/scene_manager`、`go/login`)的 build / vet / test、Unity 编译与 EditMode 测试、任何联调与故障注入都还没有证据**。任何"已修"都应读作"已落码 / 已编译,待测试"。
 
 ## 0. 三十秒版
 

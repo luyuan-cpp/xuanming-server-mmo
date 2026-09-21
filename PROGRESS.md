@@ -5578,3 +5578,14 @@ friend 移植会话(机器 A,`E:\work\xuanming-server-mmo`)写交接文档写到
 - 实测发现并修复检查器忽略 Clang 解析错误而误报通过的问题;修复 PowerShell 构建钩子把工具标准输出混入退出码的问题,以及响应文件含空格路径引用。检查器增加 MSVC UTF-8 编译选项。
 - 验证:下载入口 6 项隔离用例通过;检查器合法成员、裸指针成员、解析失败 3 项行为通过;真实构建钩子成功缓存、拒绝违规并移除旧缓存 2 项通过(含空格路径)。脚本语法检查通过。
 - 验证范围是依赖准备、检查器构建与上述用例;本次没有重新扫描整个 scene/game.sln,没有数据库或服务器 E2E 证据,不能把工具就绪当成项目静态门禁通过。保留工作区既有改动,未提交或推送。
+
+## 2026-09-20/21 跨 zone 传送:端到端闭环核查 + 两端补缺口 + S3L1-1 第二层出口(Claude,机器 B)
+
+- **验证现状**:C++ 由 Codex 09-21 整体编译通过(`game.sln` Debug x64,见上一条 Codex 条目),`cross_zone_test` / `routing_identity_test` 已编译**未运行**;Go(`go/scene_manager`、`go/login`)未 build / test;Unity 未打开;无联调。全部改动已在 origin/main(服务端)与 mmorpg-client 的 main。
+- **P0(`8e0667cd1`)**:scene 节点从不装 SceneManager 的 gRPC 应答处理器(`InitSceneManagerReply` 无调用点,2026-04-16 一次 regen 丢的;生成器谓词只收 muduo TCP 服务,手写进生成文件下次 regen 必然再丢)。后果是同 zone 跨节点换图、副本 / 镜像进入一直失效。改为在 `cpp/nodes/scene/main.cpp` 装。**编译后第一件事是实跑验证这条**(设计文档 §12.4 第 6 条)。
+- **端到端闭环核查**(设计文档 §12.5):服务端 8 段 + 客户端 5 段逐段查"上一段出口 = 下一段入口",每条断点派反驳者。主链通;查出并修掉:第二条腿被拒时服务端零通知(`a8116e3f1`,login 经 gate 推 3023;客户端 `6876247` 秒级收口并显示原因)、客户端"当前所在区"旁路记账会变脏导致 UI 上回不了家(`6876247`,改由 `GameClient.CurrentZoneId` 单一真源)。
+- **剩余修复**:CL-2 客户端不再用本机时钟拦截票据过期、S7-1 回家 conf=0 预检、CL-7 `SceneErrorTip.cs.meta`(三者随自动保存 `4624ddf9e` / `2ca620e` 进库);S3L1-1 第二层出口(`36596dea5` 回滚三态 + 铸造 EVAL 重放识别;`ba11d050e` 源端按证据 tip + 踢线;客户端 `2f2e1ca` 踢线原因文案)。
+- **待决(未落码)**:CL-5 / GO-5 的根因是干净断线后 location 滞留无持有者;查它时发现现存缺陷 **Z1**——真写盘的正常断线退出不销毁实体(僵尸,有实跑日志)。修复规格在设计文档 §12.6(两名对抗复审 15 条必须改项已并入);范围已扩大到存盘 / 退出核心路径,且复审要求先在编译好的构建上复现 Z1,所以本轮未落码。
+- **与帮会二期 B4c 的分工**(§12.6.9):owner_epoch 已堵跨节点版 K1;同节点缺口里 `redis_client.h` 新旧颠倒由 B4c 修(已落 `4a86f2b2d`,并提供 `HasUnsettledSave` 供 Z1 复用),Z1 与 GO-2 归本线。本线欠一行:scene_manager 观察到 epoch 为 0 时同节点也铸造。
+- **新上线前置**(§12.2):K8s scene-manager 的 zrpc `Timeout` ≥ 8000(现默认 2000,小于 KafkaWriteTimeout 5s);老号开放跨 zone 传送前先跑 `merge_zone -backfill-home-zone`。
+- **下一步**:① 跑 Go 的 build / vet / test 与 `cross_zone_test`、`routing_identity_test`(命令在 §12.4 / §12.5.5 / §12.5.6);② 实跑 P0 修复;③ 按 §12.6.7 复现 Z1 后落 Z1 + 断线释放标记;④ epoch==0 同节点铸造那一行。
