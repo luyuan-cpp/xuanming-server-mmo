@@ -573,3 +573,16 @@ C++ MSBuild 必须串行 `/m:1 /nr:false`;这批代码从未编译,失败时先�
 - 退出存盘在途时重登仍回 18,这是正确的拒绝(盘上还不是最新),下一次重试即放行;客户端 2–5s 退避可选,不需要 ≥30s。
 - 拿不准:Z1 回档时序与"队伍系统把僵尸当在线"的实际频率;停机 drain 卡看门狗目前是推断。
 - 需要用户拍板:Z1 修复带来的行为变化(12.6.3 第一步末尾);访客短断线后从归属区入口重登 = 回家(与 Offline-Return 一致,若要"回原区"是方案 C 的产品问题)。
+
+#### 12.6.9 与帮会二期 B4c(玩家存盘属主围栏)的分工(2026-09-21 约定)
+
+帮会二期 B4c 要根治 K1(旧节点退出存盘迟到、覆盖新节点已 durable 的资产改动 → 帮会捐献的钱回到玩家手里 = 复制,`docs/design/guild-phase2/04-asset-channel.md` §4.35)。它不另造 token 围栏,改为在本文的 owner_epoch 机制上补缺口。双方核对后的结论与分工:
+
+- **owner_epoch 已堵住的**:跨节点版 K1。新节点铸出 E+1 后,旧节点的 Redis 存盘(guard=E)被 Lua 拒,DBTask(epoch=E)被 db 的 applied_epoch 守卫拒。
+- **没堵住的三处**(都在同节点、同 epoch 下,CAS 区分不开):
+  - (a) `redis_client.h` 同 key 新旧颠倒:ERROR 重试 / 成功路径会把更旧的值发在更新的值之后。**B4c 负责修**,修法以 §12.6.4 M1 第 (3) 条为准,并顺带提供只读查询"该 key 是否有在途 / 排队中的存盘"(接口定稿前先与本线对齐),§12.6.3 的 Z1 修复与 M4 直接复用。
+  - (b) Z1 僵尸被同节点重登复用 → 旧内存覆盖盘上新进度。**本线负责**(§12.6)。
+  - (c) GO-2 回滚让 epoch 退回、之后同值再铸。**本线负责**(§12.3,要改协议,待拍板)。
+- **epoch==0**:C++ 存盘不带 guard(`player_lifecycle.cpp` 的 owner_epoch 段,计 `owner_epoch_unknown`),db 按 `legacy_zero` 放行。B4c 会让资产改动类 RPC 在 epoch==0 时回 RETRY(本线同意,fail-closed)。代价:卡在 0 的存量玩家(存量 location + 一直落回同节点)在换一次节点之前资产操作会一直 RETRY。**本线待办**:scene_manager 在观察值为 0 时即使同节点也铸造(`enterscenelogic.go` 的 `mint: !samePhysicalNode` 改为 `!samePhysicalNode || observedEpoch == 0`)。安全性:持有节点此刻存盘本就不带 guard,不会被新值拒;路由到达后其 comp 更新为新值。**等首次编译之后再做**,B4c 设计里列为依赖。
+- **文件边界**:B4c 改 `redis_client.h`、`asset_op_system.cpp`、告警规则与一个连真 Redis 的围栏用例;`HandlePlayerAsyncSaved` / `HandlePlayerSaveRejected` 原则上只读,若必须改会先与本线对齐。本线不碰 `asset_op_system.cpp`;B4c 不碰 Z1、GO-2 与 `go/scene_manager`。
+- **durable 判定的约束**(给 B4c 的提醒):存盘被 guard 拒之前活实体仍在服务、仍会改资产,这些改动随 `DestroyDeposedPlayer` 丢弃;且同 key 有更新 pending 值时旧值落地不发布 `save_callback_`(`redis_client.h` 约 :738-744)。资产操作的 durable 只能认"包含这笔操作的那一份"的落地回调。
