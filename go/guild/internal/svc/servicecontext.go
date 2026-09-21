@@ -35,6 +35,10 @@ type ServiceContext struct {
 	// IdSegment.Enabled=false 时为 nil。发号策略(是否回退 snowflake)在 guild.go 里
 	// 用 NewGuildIDMinter 组装,因为 snowflake 节点在那里才申领得到。
 	GuildIDSegment *idsegment.Client
+	// AssetOpIDSegment 是资产指令 op_id 的号段客户端(biz_tag="guild_asset_op",B5b);
+	// IdSegment.Enabled=false 时为 nil。**没有** snowflake 回退(op_id 是 outbox 主键),
+	// guild.go 据 nil 把 EconomyDeps.OpIDs 留成 nil 接口。见 asset_op.go 的 initAssetOpIDSegment。
+	AssetOpIDSegment *idsegment.Client
 	// MergeMarkerRedisClient 指向 data_service 的 mapping Redis,只用来读
 	// merge:in_progress:{zone}(合服闸门,见 internal/logic/merge_fence.go)。
 	// 没配 MergeMarkerRedis 时为 nil = 闸门不生效。
@@ -128,6 +132,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 	sc.initDataServiceClient()
 	sc.initGuildIDSegment()
+	// 必须在 initGuildIDSegment 之后:"开了号段却没配 data_service"由它先拒启,这里只剩启用 / 未启用两种形态。
+	sc.initAssetOpIDSegment()
 	return sc
 }
 
@@ -157,6 +163,11 @@ func newMergeMarkerRedis(c config.Config) *redis.Client {
 }
 
 func (s *ServiceContext) Stop() {
+	// 号段客户端最先关:Close 取消在途领段并等它退出,之后再关 Kafka / Redis / DB。
+	// op_id 排在 guild_id 之前只是与建立顺序相反,两者互不依赖。
+	if s.AssetOpIDSegment != nil {
+		s.AssetOpIDSegment.Close()
+	}
 	if s.GuildIDSegment != nil {
 		s.GuildIDSegment.Close()
 	}

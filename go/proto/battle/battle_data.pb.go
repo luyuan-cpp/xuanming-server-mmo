@@ -509,6 +509,9 @@ type BattlePlayerSnapshot struct {
 	// 出战宝宝(宝宝系统,player-pet.md §5):与主人同队的独立行动单位。
 	// 核心线同时只能带 1 只,repeated 是为了二期多宠不改 wire。
 	Pets          []*BattlePetSnapshot `protobuf:"bytes,16,rep,name=pets,proto3" json:"pets,omitempty"`
+	AppearanceId  string               `protobuf:"bytes,17,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"` // 与主城、选角一致的玩家外观身份。
+	ClassId       uint32               `protobuf:"varint,18,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"`
+	Gender        uint32               `protobuf:"varint,19,opt,name=gender,proto3" json:"gender,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -653,6 +656,27 @@ func (x *BattlePlayerSnapshot) GetPets() []*BattlePetSnapshot {
 		return x.Pets
 	}
 	return nil
+}
+
+func (x *BattlePlayerSnapshot) GetAppearanceId() string {
+	if x != nil {
+		return x.AppearanceId
+	}
+	return ""
+}
+
+func (x *BattlePlayerSnapshot) GetClassId() uint32 {
+	if x != nil {
+		return x.ClassId
+	}
+	return 0
+}
+
+func (x *BattlePlayerSnapshot) GetGender() uint32 {
+	if x != nil {
+		return x.Gender
+	}
+	return 0
 }
 
 // ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
@@ -818,6 +842,9 @@ type BattleActorState struct {
 	OwnerPlayerId       uint64                        `protobuf:"varint,21,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`                                                                                              // 仅宝宝有效:主人 player_id(结算按它归属到主人名下)
 	PetTableId          uint32                        `protobuf:"varint,22,opt,name=pet_table_id,json=petTableId,proto3" json:"pet_table_id,omitempty"`                                                                                                       // 仅宝宝有效(Pet 表 id)
 	PetId               uint64                        `protobuf:"varint,23,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`                                                                                                                        // 仅宝宝有效:真实 pet_id(结算回写认它;actor_id 是引擎局内号)
+	AppearanceId        string                        `protobuf:"bytes,24,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`                                                                                                    // 玩家来自快照；重连/观战保持同一身份。
+	ClassId             uint32                        `protobuf:"varint,25,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"`
+	Gender              uint32                        `protobuf:"varint,26,opt,name=gender,proto3" json:"gender,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -1009,6 +1036,27 @@ func (x *BattleActorState) GetPetTableId() uint32 {
 func (x *BattleActorState) GetPetId() uint64 {
 	if x != nil {
 		return x.PetId
+	}
+	return 0
+}
+
+func (x *BattleActorState) GetAppearanceId() string {
+	if x != nil {
+		return x.AppearanceId
+	}
+	return ""
+}
+
+func (x *BattleActorState) GetClassId() uint32 {
+	if x != nil {
+		return x.ClassId
+	}
+	return 0
+}
+
+func (x *BattleActorState) GetGender() uint32 {
+	if x != nil {
+		return x.Gender
 	}
 	return 0
 }
@@ -1522,7 +1570,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\tcaster_id\x18\x05 \x01(\x04R\bcasterId\"K\n" +
 	"\x0fBattleItemEntry\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xde\x04\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\xb6\x05\n" +
 	"\x14BattlePlayerSnapshot\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
 	"\vplayer_name\x18\x02 \x01(\tR\n" +
@@ -1543,7 +1591,10 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x0fphysical_attack\x18\r \x01(\x04R\x0ephysicalAttack\x12!\n" +
 	"\fmagic_attack\x18\x0e \x01(\x04R\vmagicAttack\x12\x18\n" +
 	"\adefense\x18\x0f \x01(\x04R\adefense\x12&\n" +
-	"\x04pets\x18\x10 \x03(\v2\x12.BattlePetSnapshotR\x04pets\"\xab\x03\n" +
+	"\x04pets\x18\x10 \x03(\v2\x12.BattlePetSnapshotR\x04pets\x12#\n" +
+	"\rappearance_id\x18\x11 \x01(\tR\fappearanceId\x12\x19\n" +
+	"\bclass_id\x18\x12 \x01(\rR\aclassId\x12\x16\n" +
+	"\x06gender\x18\x13 \x01(\rR\x06gender\"\xab\x03\n" +
 	"\x11BattlePetSnapshot\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12&\n" +
 	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12\x19\n" +
@@ -1559,7 +1610,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\fmagic_attack\x18\n" +
 	" \x01(\x04R\vmagicAttack\x12\x18\n" +
 	"\adefense\x18\v \x01(\x04R\adefense\x12&\n" +
-	"\x0fskill_table_ids\x18\f \x03(\rR\rskillTableIds\"\x90\a\n" +
+	"\x0fskill_table_ids\x18\f \x03(\rR\rskillTableIds\"\xe8\a\n" +
 	"\x10BattleActorState\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x120\n" +
 	"\n" +
@@ -1590,7 +1641,10 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x0fowner_player_id\x18\x15 \x01(\x04R\rownerPlayerId\x12 \n" +
 	"\fpet_table_id\x18\x16 \x01(\rR\n" +
 	"petTableId\x12\x15\n" +
-	"\x06pet_id\x18\x17 \x01(\x04R\x05petId\x1aF\n" +
+	"\x06pet_id\x18\x17 \x01(\x04R\x05petId\x12#\n" +
+	"\rappearance_id\x18\x18 \x01(\tR\fappearanceId\x12\x19\n" +
+	"\bclass_id\x18\x19 \x01(\rR\aclassId\x12\x16\n" +
+	"\x06gender\x18\x1a \x01(\rR\x06gender\x1aF\n" +
 	"\x18SkillCooldownRoundsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xaa\x01\n" +
@@ -1675,7 +1729,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x16BATTLE_OUTCOME_ONGOING\x10\x00\x12\x1d\n" +
 	"\x19BATTLE_OUTCOME_SIDE_A_WIN\x10\x01\x12\x1d\n" +
 	"\x19BATTLE_OUTCOME_SIDE_B_WIN\x10\x02\x12\x17\n" +
-	"\x13BATTLE_OUTCOME_DRAW\x10\x03B\x0eZ\fproto/battleb\x06proto3"
+	"\x13BATTLE_OUTCOME_DRAW\x10\x03B\bZ\x06battleb\x06proto3"
 
 var (
 	file_proto_battle_battle_data_proto_rawDescOnce sync.Once

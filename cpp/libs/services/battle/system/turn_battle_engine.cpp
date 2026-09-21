@@ -136,6 +136,9 @@ bool TurnBattleEngine::InitPlayers(const CreateBattleRequest& request) {
         actor.set_actor_type(BATTLE_ACTOR_TYPE_PLAYER);
         actor.set_team_index(snapshot.team_index());
         actor.set_name(snapshot.player_name());
+        actor.set_appearance_id(snapshot.appearance_id());
+        actor.set_class_id(snapshot.class_id());
+        actor.set_gender(snapshot.gender());
         actor.set_level(snapshot.level());
         *actor.mutable_attributes() = snapshot.base_attributes();
         actor.set_max_health(FallbackMax(snapshot.max_health(), snapshot.base_attributes().health()));

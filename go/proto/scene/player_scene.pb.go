@@ -336,6 +336,9 @@ type ActorCreateS2C struct {
 	ActorType     ActorType              `protobuf:"varint,3,opt,name=actor_type,json=actorType,proto3,enum=ActorType" json:"actor_type,omitempty"`
 	Guid          uint64                 `protobuf:"varint,4,opt,name=guid,proto3" json:"guid,omitempty"`
 	ConfigId      uint64                 `protobuf:"varint,5,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
+	AppearanceId  string                 `protobuf:"bytes,6,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"` // 玩家稳定外观 ID；NPC 留空。
+	ClassId       uint32                 `protobuf:"varint,7,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"`               // 旧玩家 appearance_id 为空时供客户端兼容。
+	Gender        uint32                 `protobuf:"varint,8,opt,name=gender,proto3" json:"gender,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -401,6 +404,27 @@ func (x *ActorCreateS2C) GetGuid() uint64 {
 func (x *ActorCreateS2C) GetConfigId() uint64 {
 	if x != nil {
 		return x.ConfigId
+	}
+	return 0
+}
+
+func (x *ActorCreateS2C) GetAppearanceId() string {
+	if x != nil {
+		return x.AppearanceId
+	}
+	return ""
+}
+
+func (x *ActorCreateS2C) GetClassId() uint32 {
+	if x != nil {
+		return x.ClassId
+	}
+	return 0
+}
+
+func (x *ActorCreateS2C) GetGender() uint32 {
+	if x != nil {
+		return x.Gender
 	}
 	return 0
 }
@@ -660,7 +684,7 @@ const file_proto_scene_player_scene_proto_rawDesc = "" +
 	"\x10SceneInfoRequest\"B\n" +
 	"\x11SceneInfoResponse\x12-\n" +
 	"\n" +
-	"scene_info\x18\x01 \x03(\v2\x0e.SceneInfoCompR\tsceneInfo\"\xae\x01\n" +
+	"scene_info\x18\x01 \x03(\v2\x0e.SceneInfoCompR\tsceneInfo\"\x86\x02\n" +
 	"\x0eActorCreateS2C\x12\x16\n" +
 	"\x06entity\x18\x01 \x01(\x04R\x06entity\x12(\n" +
 	"\ttransform\x18\x02 \x01(\v2\n" +
@@ -669,7 +693,10 @@ const file_proto_scene_player_scene_proto_rawDesc = "" +
 	"actor_type\x18\x03 \x01(\x0e2\n" +
 	".ActorTypeR\tactorType\x12\x12\n" +
 	"\x04guid\x18\x04 \x01(\x04R\x04guid\x12\x1b\n" +
-	"\tconfig_id\x18\x05 \x01(\x04R\bconfigId\")\n" +
+	"\tconfig_id\x18\x05 \x01(\x04R\bconfigId\x12#\n" +
+	"\rappearance_id\x18\x06 \x01(\tR\fappearanceId\x12\x19\n" +
+	"\bclass_id\x18\a \x01(\rR\aclassId\x12\x16\n" +
+	"\x06gender\x18\b \x01(\rR\x06gender\")\n" +
 	"\x0fActorDestroyS2C\x12\x16\n" +
 	"\x06entity\x18\x01 \x01(\x04R\x06entity\"D\n" +
 	"\x12ActorListCreateS2C\x12.\n" +
@@ -697,7 +724,7 @@ const file_proto_scene_player_scene_proto_rawDesc = "" +
 	"\x15NotifyActorListCreate\x12\x13.ActorListCreateS2C\x1a\x06.Empty\x126\n" +
 	"\x16NotifyActorListDestroy\x12\x14.ActorListDestroyS2C\x1a\x06.Empty\x12;\n" +
 	"\fTravelToZone\x12\x14.TravelToZoneRequest\x1a\x15.TravelToZoneResponse\x1a\n" +
-	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
+	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x0e\x98\xd4a\x03Z\x05scene\x80\x01\x01b\x06proto3"
 
 var (
 	file_proto_scene_player_scene_proto_rawDescOnce sync.Once

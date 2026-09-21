@@ -235,6 +235,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 func (l *LoginLogic) roleListWithCurrentHomeZone(userAccount *login_proto_data_base.UserAccounts) []*login_proto.AccountSimplePlayerWrapper {
 	players := userAccount.GetSimplePlayers().GetPlayers()
 	roles := buildRoleList(l.ctx, l.svcCtx.HomeZone, config.AppConfig.HomeZone.RefreshRoleListDisabled, players)
+	fillMissingRoleAppearances(l.ctx, l.svcCtx.RedisClient, roles)
 	fillMissingRoleNames(l.ctx, l.svcCtx.PlayerNames, roles, config.AppConfig.HomeZone.RoleListLookupTimeout)
 	return roles
 }

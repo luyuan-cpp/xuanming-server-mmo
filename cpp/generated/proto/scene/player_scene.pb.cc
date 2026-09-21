@@ -1517,11 +1517,11 @@ constexpr ActorCreateS2C::ParseTableT_ ActorCreateS2C::InternalGenerateParseTabl
     {
       PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      8, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967040,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      8,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1531,42 +1531,57 @@ constexpr ActorCreateS2C::ParseTableT_ ActorCreateS2C::InternalGenerateParseTabl
       ::_pbi::TcParser::GetTable<::ActorCreateS2C>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 gender = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ActorCreateS2C, _impl_.gender_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.gender_)}},
       // uint64 entity = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ActorCreateS2C, _impl_.entity_), 1>(),
-       {8, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ActorCreateS2C, _impl_.entity_), 2>(),
+       {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.entity_)}},
       // .Transform transform = 2;
       {::_pbi::TcParser::FastMtS1,
-       {18, 0, 0,
+       {18, 1, 0,
         PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.transform_)}},
       // .ActorType actor_type = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ActorCreateS2C, _impl_.actor_type_), 4>(),
-       {24, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ActorCreateS2C, _impl_.actor_type_), 5>(),
+       {24, 5, 0,
         PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.actor_type_)}},
       // uint64 guid = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ActorCreateS2C, _impl_.guid_), 2>(),
-       {32, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ActorCreateS2C, _impl_.guid_), 3>(),
+       {32, 3, 0,
         PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.guid_)}},
       // uint64 config_id = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ActorCreateS2C, _impl_.config_id_), 3>(),
-       {40, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ActorCreateS2C, _impl_.config_id_), 4>(),
+       {40, 4, 0,
         PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.config_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // string appearance_id = 6;
+      {::_pbi::TcParser::FastUS1,
+       {50, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.appearance_id_)}},
+      // uint32 class_id = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ActorCreateS2C, _impl_.class_id_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.class_id_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 entity = 1;
-      {PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.entity_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.entity_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .Transform transform = 2;
-      {PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.transform_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.transform_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .ActorType actor_type = 3;
-      {PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.actor_type_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.actor_type_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // uint64 guid = 4;
-      {PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.guid_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.guid_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 config_id = 5;
-      {PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.config_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.config_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string appearance_id = 6;
+      {PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.appearance_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 class_id = 7;
+      {PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.class_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 gender = 8;
+      {PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.gender_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1576,6 +1591,9 @@ constexpr ActorCreateS2C::ParseTableT_ ActorCreateS2C::InternalGenerateParseTabl
         #endif
     }},
     {{
+      "\16\0\0\0\0\0\15\0\0\0\0\0\0\0\0\0"
+      "ActorCreateS2C"
+      "appearance_id"
     }},
   };
 }
@@ -1585,11 +1603,16 @@ inline constexpr ActorCreateS2C::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        appearance_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         transform_{nullptr},
         entity_{::uint64_t{0u}},
         guid_{::uint64_t{0u}},
         config_id_{::uint64_t{0u}},
-        actor_type_{static_cast< ::ActorType >(0)} {}
+        actor_type_{static_cast< ::ActorType >(0)},
+        class_id_{0u},
+        gender_{0u} {}
 
 template <typename>
 constexpr ActorCreateS2C::ActorCreateS2C(::_pbi::ConstantInitialized,
@@ -1607,7 +1630,7 @@ inline void* PROTOBUF_NONNULL ActorCreateS2C::PlacementNew_(
   return ::new (mem) ActorCreateS2C(arena);
 }
 constexpr auto ActorCreateS2C::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ActorCreateS2C), alignof(ActorCreateS2C));
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ActorCreateS2C), alignof(ActorCreateS2C));
 }
 constexpr auto ActorCreateS2C::InternalGenerateClassData_(
     const MessageLite& prototype,
@@ -1869,17 +1892,23 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ActorCreateS2C, _impl_._has_bits_),
-        8, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ActorCreateS2C, _impl_.entity_),
         PROTOBUF_FIELD_OFFSET(::ActorCreateS2C, _impl_.transform_),
         PROTOBUF_FIELD_OFFSET(::ActorCreateS2C, _impl_.actor_type_),
         PROTOBUF_FIELD_OFFSET(::ActorCreateS2C, _impl_.guid_),
         PROTOBUF_FIELD_OFFSET(::ActorCreateS2C, _impl_.config_id_),
-        1,
-        0,
-        4,
+        PROTOBUF_FIELD_OFFSET(::ActorCreateS2C, _impl_.appearance_id_),
+        PROTOBUF_FIELD_OFFSET(::ActorCreateS2C, _impl_.class_id_),
+        PROTOBUF_FIELD_OFFSET(::ActorCreateS2C, _impl_.gender_),
         2,
+        1,
+        5,
         3,
+        4,
+        0,
+        6,
+        7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ActorDestroyS2C, _impl_._has_bits_),
         4, // hasbit index offset
@@ -1918,11 +1947,11 @@ static const ::_pbi::MigrationSchema
         {20, sizeof(::SceneInfoRequest)},
         {21, sizeof(::SceneInfoResponse)},
         {26, sizeof(::ActorCreateS2C)},
-        {39, sizeof(::ActorDestroyS2C)},
-        {44, sizeof(::ActorListCreateS2C)},
-        {49, sizeof(::ActorListDestroyS2C)},
-        {54, sizeof(::TravelToZoneRequest)},
-        {61, sizeof(::TravelToZoneResponse)},
+        {45, sizeof(::ActorDestroyS2C)},
+        {50, sizeof(::ActorListCreateS2C)},
+        {55, sizeof(::ActorListDestroyS2C)},
+        {60, sizeof(::TravelToZoneRequest)},
+        {67, sizeof(::TravelToZoneResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1953,32 +1982,33 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fscene_2eproto[] AB
     "neInfoComp\"2\n\014SceneInfoS2C\022\"\n\nscene_info"
     "\030\001 \003(\0132\016.SceneInfoComp\"\022\n\020SceneInfoReque"
     "st\"7\n\021SceneInfoResponse\022\"\n\nscene_info\030\001 "
-    "\003(\0132\016.SceneInfoComp\"\200\001\n\016ActorCreateS2C\022\016"
+    "\003(\0132\016.SceneInfoComp\"\271\001\n\016ActorCreateS2C\022\016"
     "\n\006entity\030\001 \001(\004\022\035\n\ttransform\030\002 \001(\0132\n.Tran"
     "sform\022\036\n\nactor_type\030\003 \001(\0162\n.ActorType\022\014\n"
-    "\004guid\030\004 \001(\004\022\021\n\tconfig_id\030\005 \001(\004\"!\n\017ActorD"
-    "estroyS2C\022\016\n\006entity\030\001 \001(\004\"9\n\022ActorListCr"
-    "eateS2C\022#\n\nactor_list\030\001 \003(\0132\017.ActorCreat"
-    "eS2C\"%\n\023ActorListDestroyS2C\022\016\n\006entity\030\001 "
-    "\003(\004\"F\n\023TravelToZoneRequest\022\026\n\016target_zon"
-    "e_id\030\001 \001(\r\022\027\n\017scene_config_id\030\002 \001(\r\">\n\024T"
-    "ravelToZoneResponse\022&\n\rerror_message\030\001 \001"
-    "(\0132\017.TipInfoMessage*K\n\tActorType\022\023\n\017ACTO"
-    "R_TYPE_NONE\020\000\022\025\n\021ACTOR_TYPE_PLAYER\020\001\022\022\n\016"
-    "ACTOR_TYPE_NPC\020\0022\353\003\n\026SceneSceneClientPla"
-    "yer\022;\n\nEnterScene\022\025.EnterSceneC2SRequest"
-    "\032\026.EnterSceneC2SResponse\022*\n\020NotifyEnterS"
-    "cene\022\016.EnterSceneS2C\032\006.Empty\022)\n\014SceneInf"
-    "oC2S\022\021.SceneInfoRequest\032\006.Empty\022(\n\017Notif"
-    "ySceneInfo\022\r.SceneInfoS2C\032\006.Empty\022,\n\021Not"
-    "ifyActorCreate\022\017.ActorCreateS2C\032\006.Empty\022"
-    ".\n\022NotifyActorDestroy\022\020.ActorDestroyS2C\032"
-    "\006.Empty\0224\n\025NotifyActorListCreate\022\023.Actor"
-    "ListCreateS2C\032\006.Empty\0226\n\026NotifyActorList"
-    "Destroy\022\024.ActorListDestroyS2C\032\006.Empty\022;\n"
-    "\014TravelToZone\022\024.TravelToZoneRequest\032\025.Tr"
-    "avelToZoneResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200"
-    "\001\001\230\324a\003b\006proto3"
+    "\004guid\030\004 \001(\004\022\021\n\tconfig_id\030\005 \001(\004\022\025\n\rappear"
+    "ance_id\030\006 \001(\t\022\020\n\010class_id\030\007 \001(\r\022\016\n\006gende"
+    "r\030\010 \001(\r\"!\n\017ActorDestroyS2C\022\016\n\006entity\030\001 \001"
+    "(\004\"9\n\022ActorListCreateS2C\022#\n\nactor_list\030\001"
+    " \003(\0132\017.ActorCreateS2C\"%\n\023ActorListDestro"
+    "yS2C\022\016\n\006entity\030\001 \003(\004\"F\n\023TravelToZoneRequ"
+    "est\022\026\n\016target_zone_id\030\001 \001(\r\022\027\n\017scene_con"
+    "fig_id\030\002 \001(\r\">\n\024TravelToZoneResponse\022&\n\r"
+    "error_message\030\001 \001(\0132\017.TipInfoMessage*K\n\t"
+    "ActorType\022\023\n\017ACTOR_TYPE_NONE\020\000\022\025\n\021ACTOR_"
+    "TYPE_PLAYER\020\001\022\022\n\016ACTOR_TYPE_NPC\020\0022\353\003\n\026Sc"
+    "eneSceneClientPlayer\022;\n\nEnterScene\022\025.Ent"
+    "erSceneC2SRequest\032\026.EnterSceneC2SRespons"
+    "e\022*\n\020NotifyEnterScene\022\016.EnterSceneS2C\032\006."
+    "Empty\022)\n\014SceneInfoC2S\022\021.SceneInfoRequest"
+    "\032\006.Empty\022(\n\017NotifySceneInfo\022\r.SceneInfoS"
+    "2C\032\006.Empty\022,\n\021NotifyActorCreate\022\017.ActorC"
+    "reateS2C\032\006.Empty\022.\n\022NotifyActorDestroy\022\020"
+    ".ActorDestroyS2C\032\006.Empty\0224\n\025NotifyActorL"
+    "istCreate\022\023.ActorListCreateS2C\032\006.Empty\0226"
+    "\n\026NotifyActorListDestroy\022\024.ActorListDest"
+    "royS2C\032\006.Empty\022;\n\014TravelToZone\022\024.TravelT"
+    "oZoneRequest\032\025.TravelToZoneResponse\032\n\200\250\303"
+    "\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto_deps[5] = {
@@ -1992,7 +2022,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto = {
     false,
     false,
-    1494,
+    1551,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fscene_2eproto,
     "proto/scene/player_scene.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto_once,
@@ -3182,7 +3212,7 @@ void SceneInfoResponse::InternalSwap(SceneInfoResponse* PROTOBUF_RESTRICT PROTOB
 void ActorCreateS2C::clear_transform() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.transform_ != nullptr) _impl_.transform_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 ActorCreateS2C::ActorCreateS2C(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -3198,7 +3228,8 @@ PROTOBUF_NDEBUG_INLINE ActorCreateS2C::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
     [[maybe_unused]] const ::ActorCreateS2C& from_msg)
       : _has_bits_{from._has_bits_},
-        _cached_size_{0} {}
+        _cached_size_{0},
+        appearance_id_(arena, from.appearance_id_) {}
 
 ActorCreateS2C::ActorCreateS2C(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -3215,32 +3246,33 @@ ActorCreateS2C::ActorCreateS2C(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.transform_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+  _impl_.transform_ = (CheckHasBit(cached_has_bits, 0x00000002U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.transform_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, entity_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, entity_),
-           offsetof(Impl_, actor_type_) -
+           offsetof(Impl_, gender_) -
                offsetof(Impl_, entity_) +
-               sizeof(Impl_::actor_type_));
+               sizeof(Impl_::gender_));
 
   // @@protoc_insertion_point(copy_constructor:ActorCreateS2C)
 }
 PROTOBUF_NDEBUG_INLINE ActorCreateS2C::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
+      : _cached_size_{0},
+        appearance_id_(arena) {}
 
 inline void ActorCreateS2C::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, transform_),
            0,
-           offsetof(Impl_, actor_type_) -
+           offsetof(Impl_, gender_) -
                offsetof(Impl_, transform_) +
-               sizeof(Impl_::actor_type_));
+               sizeof(Impl_::gender_));
 }
 ActorCreateS2C::~ActorCreateS2C() {
   // @@protoc_insertion_point(destructor:ActorCreateS2C)
@@ -3253,6 +3285,7 @@ inline void ActorCreateS2C::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.appearance_id_.Destroy();
   delete this_._impl_.transform_;
   this_._impl_.~Impl_();
 }
@@ -3291,14 +3324,19 @@ PROTOBUF_NOINLINE void ActorCreateS2C::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    ABSL_DCHECK(_impl_.transform_ != nullptr);
-    _impl_.transform_->Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.appearance_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.transform_ != nullptr);
+      _impl_.transform_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
     ::memset(&_impl_.entity_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.actor_type_) -
-        reinterpret_cast<char*>(&_impl_.entity_)) + sizeof(_impl_.actor_type_));
+        reinterpret_cast<char*>(&_impl_.gender_) -
+        reinterpret_cast<char*>(&_impl_.entity_)) + sizeof(_impl_.gender_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -3324,7 +3362,7 @@ PROTOBUF_NOINLINE void ActorCreateS2C::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 entity = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_entity() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3333,14 +3371,14 @@ PROTOBUF_NOINLINE void ActorCreateS2C::Clear() {
   }
 
   // .Transform transform = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         2, *this_._impl_.transform_, this_._impl_.transform_->GetCachedSize(), target,
         stream);
   }
 
   // .ActorType actor_type = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_actor_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -3349,7 +3387,7 @@ PROTOBUF_NOINLINE void ActorCreateS2C::Clear() {
   }
 
   // uint64 guid = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_guid() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3358,11 +3396,39 @@ PROTOBUF_NOINLINE void ActorCreateS2C::Clear() {
   }
 
   // uint64 config_id = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_config_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           5, this_._internal_config_id(), target);
+    }
+  }
+
+  // string appearance_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_appearance_id().empty()) {
+      const ::std::string& _s = this_._internal_appearance_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "ActorCreateS2C.appearance_id");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
+    }
+  }
+
+  // uint32 class_id = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_class_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_class_id(), target);
+    }
+  }
+
+  // uint32 gender = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_gender() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_gender(), target);
     }
   }
 
@@ -3391,38 +3457,59 @@ PROTOBUF_NOINLINE void ActorCreateS2C::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
-    // .Transform transform = 2;
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string appearance_id = 6;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_appearance_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_appearance_id());
+      }
+    }
+    // .Transform transform = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.transform_);
     }
     // uint64 entity = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_entity() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_entity());
       }
     }
     // uint64 guid = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_guid() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_guid());
       }
     }
     // uint64 config_id = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_config_id());
       }
     }
     // .ActorType actor_type = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_actor_type() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_actor_type());
+      }
+    }
+    // uint32 class_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_class_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_class_id());
+      }
+    }
+    // uint32 gender = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_gender() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_gender());
       }
     }
   }
@@ -3444,8 +3531,17 @@ void ActorCreateS2C::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_appearance_id().empty()) {
+        _this->_internal_set_appearance_id(from._internal_appearance_id());
+      } else {
+        if (_this->_impl_.appearance_id_.IsDefault()) {
+          _this->_internal_set_appearance_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       ABSL_DCHECK(from._impl_.transform_ != nullptr);
       if (_this->_impl_.transform_ == nullptr) {
         _this->_impl_.transform_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.transform_);
@@ -3453,24 +3549,34 @@ void ActorCreateS2C::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.transform_->MergeFrom(*from._impl_.transform_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_entity() != 0) {
         _this->_impl_.entity_ = from._impl_.entity_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_guid() != 0) {
         _this->_impl_.guid_ = from._impl_.guid_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_config_id() != 0) {
         _this->_impl_.config_id_ = from._impl_.config_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_actor_type() != 0) {
         _this->_impl_.actor_type_ = from._impl_.actor_type_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_class_id() != 0) {
+        _this->_impl_.class_id_ = from._impl_.class_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_gender() != 0) {
+        _this->_impl_.gender_ = from._impl_.gender_;
       }
     }
   }
@@ -3489,11 +3595,14 @@ void ActorCreateS2C::CopyFrom(const ActorCreateS2C& from) {
 
 void ActorCreateS2C::InternalSwap(ActorCreateS2C* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.appearance_id_, &other->_impl_.appearance_id_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.actor_type_)
-      + sizeof(ActorCreateS2C::_impl_.actor_type_)
+      PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.gender_)
+      + sizeof(ActorCreateS2C::_impl_.gender_)
       - PROTOBUF_FIELD_OFFSET(ActorCreateS2C, _impl_.transform_)>(
           reinterpret_cast<char*>(&_impl_.transform_),
           reinterpret_cast<char*>(&other->_impl_.transform_));

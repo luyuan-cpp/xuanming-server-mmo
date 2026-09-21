@@ -161,7 +161,7 @@ func TestDisbandPath_RemovesFromAuthoritativeZoneAfterRowIsGone(t *testing.T) {
 
 	// DisbandGuild 自己按 MySQL 的 leader_id 授权,所以必须传真帮主;
 	// 传别人会拿到 ErrRankTooLow,而不是删掉帮会。
-	res, err := repo.DisbandGuild(ctx, guildID, leaderID)
+	res, err := repo.DisbandGuild(ctx, guildID, leaderID, testNowMs)
 	require.NoError(t, err)
 	zoneFromDelete := res.ZoneID
 	assert.Equal(t, actualZone, zoneFromDelete,

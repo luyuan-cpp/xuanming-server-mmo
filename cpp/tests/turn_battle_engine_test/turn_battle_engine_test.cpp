@@ -244,6 +244,23 @@ TEST(TurnBattleEngineTest, SameSeedSameCommandsProduceIdenticalEventStream) {
     EXPECT_EQ(runBattle(20260815), runBattle(20260815));
 }
 
+TEST(TurnBattleEngineTest, AppearanceIdentitySurvivesBattleStateSnapshots) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9010, turnbattle::kMatchModePveSolo, 42);
+    auto* player = AddPlayer(request, kPlayerA, 0, 1000, 1000, 4, 100, 50, 120);
+    player->set_appearance_id("04_mountain_guardian_boy");
+    player->set_class_id(3);
+    player->set_gender(1);
+    ASSERT_TRUE(engine.Initialize(request));
+    // 入场、断线恢复与观战共用快照，不能从职业或局内 actor_id 猜外观。
+    const auto state = engine.BuildStateSnapshot();
+    const auto* actor = FindStateActor(state, kPlayerA);
+    ASSERT_NE(actor, nullptr);
+    EXPECT_EQ(actor->appearance_id(), "04_mountain_guardian_boy");
+    EXPECT_EQ(actor->class_id(), 3);
+    EXPECT_EQ(actor->gender(), 1);
+}
+
 // ---------------------------------------------------------------------------
 // 速度序:速度降序结算,同速按 actor_id 升序
 // ---------------------------------------------------------------------------

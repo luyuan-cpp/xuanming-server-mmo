@@ -114,6 +114,14 @@ COMMIT;
 - **容量守卫行同时是"这一对玩家"的串行化载体**:`AddFriend` / `AcceptFriend` / `RemoveFriend` /
   `Block` 都锁同一对容量行,于是两两互斥。RC 下的探针自己挡不住并发插入,挡住并发的是这把守卫;
   新增写路径时先拿守卫,否则所有"权威判定"会静默退化成 check-then-act。
+- **守卫之后的锁定读 / 锁定写一律写成"完整主键的等值点查 / 点更新"**(2026-09-21 新增,真库实证)。
+  守卫只串行化"这一对玩家",锁集必须恰好落在这一对的行上;而锁集由执行计划决定。首次真库回归里,
+  `(a,b) OR (b,a) ... FOR UPDATE` 被规划成二级覆盖索引全扫描,锁到别的玩家对的二级索引项,与那一对
+  "先主键后二级索引"的 `DELETE`(Unblock / 删边)反序,**真死锁 1213**;`IN (...) FOR UPDATE` 被规划成
+  PRIMARY 全索引扫描;`OR` 形的取消 pending `UPDATE` 扫全服 pending 行。现已全部拆成主键点查 / 点更新,
+  sweep 的批量 `DELETE ... LIMIT` 也改成"候选普通读 + 逐行按主键删"。确定性回归
+  `TestLockingStatementsArePrimaryKeyPointLookups` 对生产 SQL 常量做 `EXPLAIN`,改回 OR / IN / 范围即红。
+  细节见 `go/friend/internal/data/friend_repo.go` 顶部锁序说明 (6)。
 
 回归证据在 `go/friend/internal/data/friend_guard_lock_order_mysql_test.go`(真 MySQL 门控,
 `FRIEND_TEST_MYSQL_DSN`)。**全体 SKIP 时 `go test` 退出码仍是 0**,所以验收必须确认看到 PASS。

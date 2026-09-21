@@ -595,6 +595,728 @@ TEST(TravelOutcomeReset, NoRecordedEvidenceKeepsIncoming)
 }
 
 // ============================================================================
+// 9. ExitPersist —— Z1 修复(cross-zone-scene-travel.md §12.6.3 第一步):
+//    退出意图组件的纯判据 + HandlePlayerAsyncSaved 退出分支的 ECS 级回归(M15)
+// ============================================================================
+#include "services/scene/player/system/player_exit_intent.h" // 与 player_lifecycle.h 同一写法
+#include "player/comp/player_ownership_comp.h"                  // PlayerOwnerEpochComp
+#include "proto/common/component/actor_comp.pb.h"            // Velocity / Acceleration
+#include <limits>
+#include "player/comp/last_persisted_snapshot_comp.h"
+#include "player/system/player_data_loader.h"
+#include "proto/common/component/player_comp.pb.h"         // UnregisterPlayer
+#include "proto/common/component/player_network_comp.pb.h" // PlayerSessionSnapshotComp
+#include "type_alias/player_session_type_alias.h"          // SessionMap
+
+namespace
+{
+constexpr SessionId kSessionAtExit = 131073; // 取自 Z1 实跑日志里被误判的退出会话号
+constexpr SessionId kNewerSession = 131074;
+
+constexpr ExitCause kAllExitCauses[] = {
+    ExitCause::kUnspecified,
+    ExitCause::kClientDisconnect,
+    ExitCause::kNodeShutdown,
+    ExitCause::kSceneDrain,
+    ExitCause::kIdentityConflict,
+    ExitCause::kReleasedByTransfer,
+};
+static_assert(std::size(kAllExitCauses) == player_exit::kExitCauseCount, "新增退出原因时补进这张表,并补 Merge 用例");
+} // namespace
+
+TEST(ExitPersistSession, SameSessionIsNotSuperseding)
+{
+    // Z1 的回归用例:HandleExitGameNode 不解绑会话,退出会话本身一直留在 SessionMap 里、映射到本玩家。
+    // 旧判据把它当成"重连已取代退出",实体成了僵尸。
+    EXPECT_FALSE(player_exit::IsSupersedingSession(kSessionAtExit, kSessionAtExit, /*currentMappedToPlayer=*/true));
+}
+
+TEST(ExitPersistSession, NewerMappedSessionIsSuperseding)
+{
+    EXPECT_TRUE(player_exit::IsSupersedingSession(kNewerSession, kSessionAtExit, /*currentMappedToPlayer=*/true));
+    EXPECT_TRUE(player_exit::IsSupersedingSession(kNewerSession, kInvalidSessionId, true))
+        << "退出时没有会话、之后绑上了一个映射到本玩家的会话:算取代";
+}
+
+TEST(ExitPersistSession, UnmappedOrUnboundIsNotSuperseding)
+{
+    EXPECT_FALSE(player_exit::IsSupersedingSession(kNewerSession, kSessionAtExit, /*currentMappedToPlayer=*/false))
+        << "SessionMap 里没有 / 映射到别的玩家:不是本玩家的活会话";
+    EXPECT_FALSE(player_exit::IsSupersedingSession(kInvalidSessionId, kSessionAtExit, true));
+    EXPECT_FALSE(player_exit::IsSupersedingSession(0, kSessionAtExit, true)) << "0 同样表示没有会话";
+}
+
+TEST(ExitPersistCause, NamesCoverEveryValue)
+{
+    for (const auto cause : kAllExitCauses)
+    {
+        EXPECT_STRNE(player_exit::ExitCauseName(cause), "?");
+    }
+    EXPECT_STREQ(player_exit::ExitCauseName(ExitCause::kCount), "?") << "越界不能读出数组外";
+}
+
+TEST(ExitPersistCause, MergeSuppressesOnlyForIdentityConflictOrUnspecified)
+{
+    for (const auto first : kAllExitCauses)
+    {
+        for (const auto incoming : kAllExitCauses)
+        {
+            PlayerExitIntentComp intent;
+            intent.cause = first;
+            player_exit::MergeExitCause(intent, incoming, /*devBypassSuppressesTransfer=*/false);
+            const bool expectSuppressed =
+                incoming == ExitCause::kIdentityConflict || incoming == ExitCause::kUnspecified;
+            EXPECT_EQ(intent.releaseMarkSuppressed, expectSuppressed)
+                << "first=" << player_exit::ExitCauseName(first) << " incoming=" << player_exit::ExitCauseName(incoming);
+            EXPECT_EQ(intent.cause, first) << "合并不改第一次的原因";
+        }
+    }
+}
+
+TEST(ExitPersistCause, ReleasedByTransferSuppressesOnlyUnderDevBypass)
+{
+    PlayerExitIntentComp production;
+    production.cause = ExitCause::kClientDisconnect;
+    player_exit::MergeExitCause(production, ExitCause::kReleasedByTransfer, /*devBypassSuppressesTransfer=*/false);
+    EXPECT_FALSE(production.releaseMarkSuppressed) << "生产口径不压制,由 A1′ 的 owner_epoch 条件把关(M6)";
+
+    PlayerExitIntentComp devBypass;
+    devBypass.cause = ExitCause::kClientDisconnect;
+    player_exit::MergeExitCause(devBypass, ExitCause::kReleasedByTransfer, /*devBypassSuppressesTransfer=*/true);
+    EXPECT_TRUE(devBypass.releaseMarkSuppressed);
+}
+
+TEST(ExitPersistCause, SuppressionIsSticky)
+{
+    PlayerExitIntentComp intent;
+    intent.cause = ExitCause::kClientDisconnect;
+    player_exit::MergeExitCause(intent, ExitCause::kIdentityConflict, false);
+    ASSERT_TRUE(intent.releaseMarkSuppressed);
+    player_exit::MergeExitCause(intent, ExitCause::kNodeShutdown, false);
+    EXPECT_TRUE(intent.releaseMarkSuppressed) << "置位后不再清";
+    EXPECT_TRUE(player_exit::ShouldSuppressReleaseMarkOnMerge(ExitCause::kCount, false)) << "越界按来源不明处理";
+}
+
+TEST(ExitPersistDecision, FinishOnlyWhenCurrentAndSettled)
+{
+    using D = player_exit::AfterPersistDecision;
+    constexpr uint8_t kMax = player_exit::kMaxExitResaveRounds;
+    EXPECT_EQ(player_exit::DecideAfterPersist(true, false, 0, kMax), D::kFinish);
+    EXPECT_EQ(player_exit::DecideAfterPersist(true, false, kMax, kMax), D::kFinish)
+        << "超限之后的落地只要收敛了照样收尾";
+    EXPECT_EQ(player_exit::DecideAfterPersist(false, false, 0, kMax), D::kResave);
+    EXPECT_EQ(player_exit::DecideAfterPersist(true, true, 0, kMax), D::kResave) << "还有未落地的存盘不能销毁(M4)";
+    EXPECT_EQ(player_exit::DecideAfterPersist(false, false, static_cast<uint8_t>(kMax - 1), kMax), D::kResave);
+    EXPECT_EQ(player_exit::DecideAfterPersist(false, false, kMax, kMax), D::kRetainExhausted);
+    EXPECT_EQ(player_exit::DecideAfterPersist(true, true, kMax, kMax), D::kRetainExhausted);
+}
+
+TEST(ExitPersistDecision, RekickOnlyWhenExhaustedAndSettled)
+{
+    constexpr uint8_t kMax = player_exit::kMaxExitResaveRounds;
+    EXPECT_TRUE(player_exit::ShouldRekickExhaustedExit(kMax, kMax, /*hasUnsettledSave=*/false));
+    EXPECT_FALSE(player_exit::ShouldRekickExhaustedExit(kMax, kMax, true)) << "有在途存盘就等它落地";
+    EXPECT_FALSE(player_exit::ShouldRekickExhaustedExit(0, kMax, false)) << "没到上限 = 退出分支自己的重存还在途";
+    EXPECT_FALSE(player_exit::ShouldRekickExhaustedExit(static_cast<uint8_t>(kMax - 1), kMax, false));
+}
+
+TEST(ExitPersistReentry, DeposedOnlyWhenEpochJumpsByAtLeastTwo)
+{
+    EXPECT_FALSE(player_exit::IsDeposedWhileExiting(5, 0)) << "上游未填,无从判断";
+    EXPECT_FALSE(player_exit::IsDeposedWhileExiting(5, 4)) << "乱序的旧路由";
+    EXPECT_FALSE(player_exit::IsDeposedWhileExiting(5, 5)) << "同节点重连不铸造";
+    EXPECT_FALSE(player_exit::IsDeposedWhileExiting(5, 6)) << "落回本节点这一次自己铸的,内存仍是真身";
+    EXPECT_TRUE(player_exit::IsDeposedWhileExiting(5, 7)) << "别处落点铸一次 + 回到本节点再铸一次";
+    EXPECT_FALSE(player_exit::IsDeposedWhileExiting(0, 1)) << "epoch 0 的同节点落点铸造(§12.6.9)不是被废黜";
+    EXPECT_TRUE(player_exit::IsDeposedWhileExiting(0, 2));
+    EXPECT_FALSE(player_exit::IsDeposedWhileExiting(std::numeric_limits<uint64_t>::max(), 1))
+        << "不新就不废黜,减法不得回绕";
+}
+
+TEST(ExitPersistPayload, ProbeFieldsAreIgnoredBusinessFieldsAreNot)
+{
+    PlayerAllData current;
+    current.mutable_player_database_data()->set_player_id(7);
+    current.mutable_player_database_1_data()->set_player_id(7);
+    current.mutable_player_database_data()->mutable_level_component()->set_level(10);
+
+    PlayerAllData landed = current;
+    auto* probe = landed.mutable_player_database_data()->mutable_stress_test_probe();
+    probe->set_test_seq(42);
+    probe->set_test_sig(std::string(16, '\x5a'));
+    landed.mutable_player_database_1_data()->mutable_stress_test_probe()->set_test_seq(43);
+    EXPECT_TRUE(player_exit::IsPersistedPayloadCurrent(landed, current))
+        << "压测探针只打在写盘的那份上,不剔除的话 STRESS_TEST_PROBE 构建退出永不收敛";
+
+    current.mutable_player_database_data()->mutable_level_component()->set_level(11);
+    EXPECT_FALSE(player_exit::IsPersistedPayloadCurrent(landed, current)) << "业务字段不同必须判不一致";
+}
+
+// ── ECS 级回归(M15):直接驱动 PlayerLifecycleSystem::HandlePlayerAsyncSaved ──
+// 宿主里没有初始化 RedisSystem(GetPlayerDataRedis() 为空):"未落地存盘"查询如实返回 false,
+// 且下面的用例都不会走到重存(SavePlayerToRedis 需要真的 Redis 客户端)。
+namespace
+{
+constexpr Guid kExitPlayerId = 950200001;
+
+// 构造一个"退出存盘在途"的玩家:当前绑定 currentSession(已写进 SessionMap、映射到本玩家)、
+// 挂 UnregisterPlayer + 退出意图(sessionAtExit)。logout_initiated_ms 留 0 = 跳过租约告警。
+entt::entity MakeExitingPlayer(SessionId sessionAtExit, SessionId currentSession, bool withIntent = true)
+{
+    tlsEcs.Clear();
+    SessionMap().clear(); // SessionMap 不随 tlsEcs.Clear() 清,不清的话用例之间互相依赖执行顺序
+    const auto player = tlsEcs.actorRegistry.create();
+    tlsEcs.playerList.emplace(kExitPlayerId, player);
+    tlsEcs.actorRegistry.emplace<Guid>(player, kExitPlayerId);
+    auto& session = tlsEcs.actorRegistry.emplace<PlayerSessionSnapshotComp>(player);
+    session.set_gate_session_id(currentSession);
+    session.set_player_id(kExitPlayerId);
+    SessionMap().insert_or_assign(currentSession, kExitPlayerId);
+    tlsEcs.actorRegistry.emplace<UnregisterPlayer>(player);
+    if (withIntent)
+    {
+        PlayerExitIntentComp intent;
+        intent.sessionAtExit = sessionAtExit;
+        intent.cause = ExitCause::kClientDisconnect;
+        tlsEcs.actorRegistry.emplace<PlayerExitIntentComp>(player, intent);
+    }
+    return player;
+}
+
+// 与 SavePlayerToRedis 写盘时同一个形状:marshal + 两张子表的 player_id。
+PlayerAllData MarshalAsSaved(entt::entity player)
+{
+    PlayerAllData data;
+    PlayerAllDataMessageFieldsMarshal(player, data);
+    data.mutable_player_database_data()->set_player_id(kExitPlayerId);
+    data.mutable_player_database_1_data()->set_player_id(kExitPlayerId);
+    return data;
+}
+} // namespace
+
+TEST(ExitPersistEcs, ExitSessionStillMappedIsDestroyed)
+{
+    // Z1:退出会话仍在 SessionMap 里、映射到本玩家(HandleExitGameNode 不解绑会话),落地内容就是当前内存。
+    // 修复前这里判"被取代"、摘标记后 return,实体成僵尸。
+    const auto player = MakeExitingPlayer(kSessionAtExit, kSessionAtExit);
+    PlayerAllData landed = MarshalAsSaved(player);
+
+    PlayerLifecycleSystem::HandlePlayerAsyncSaved(kExitPlayerId, landed);
+
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << "真写盘的正常断线退出必须销毁实体";
+    EXPECT_EQ(tlsEcs.playerList.count(kExitPlayerId), 0u);
+    EXPECT_EQ(SessionMap().count(kSessionAtExit), 0u) << "退出会话的映射随收尾一起摘掉";
+}
+
+TEST(ExitPersistEcs, LandedPayloadWithProbeStillConverges)
+{
+    const auto player = MakeExitingPlayer(kSessionAtExit, kSessionAtExit);
+    PlayerAllData landed = MarshalAsSaved(player);
+    landed.mutable_player_database_data()->mutable_stress_test_probe()->set_test_seq(1);
+    landed.mutable_player_database_1_data()->mutable_stress_test_probe()->set_test_seq(1);
+
+    PlayerLifecycleSystem::HandlePlayerAsyncSaved(kExitPlayerId, landed);
+
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
+}
+
+TEST(ExitPersistEcs, NewerSessionKeepsEntityAndClearsExitMarkers)
+{
+    const auto player = MakeExitingPlayer(kSessionAtExit, kNewerSession);
+    PlayerAllData landed = MarshalAsSaved(player);
+
+    PlayerLifecycleSystem::HandlePlayerAsyncSaved(kExitPlayerId, landed);
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "被更新的会话取代:保留实体";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerExitIntentComp>(player)) << "与 UnregisterPlayer 成对摘";
+    const auto* snapshot = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
+    ASSERT_NE(snapshot, nullptr) << "这份字节确实落了盘,快照照常更新";
+    EXPECT_TRUE(snapshot->HasSnapshot());
+}
+
+TEST(ExitPersistEcs, MissingIntentFailsClosed)
+{
+    const auto player = MakeExitingPlayer(kSessionAtExit, kSessionAtExit, /*withIntent=*/false);
+    PlayerAllData landed = MarshalAsSaved(player);
+
+    PlayerLifecycleSystem::HandlePlayerAsyncSaved(kExitPlayerId, landed);
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "意图缺失不销毁(M9 fail-closed)";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player));
+}
+
+// ── 退出入口(HandleExitGameNode)与重连取消(CancelExitOnReconnect)的接缝 ──
+// 宿主里没有 Redis:只能走不写盘的路径,所以用"快照 = 当前 marshal"让 SavePlayerToRedis 走快路径(返回 false)。
+namespace
+{
+// 一个在线(未退出)的玩家:绑定 session、写进 SessionMap。
+entt::entity MakeOnlinePlayer(SessionId session)
+{
+    tlsEcs.Clear();
+    SessionMap().clear();
+    const auto player = tlsEcs.actorRegistry.create();
+    tlsEcs.playerList.emplace(kExitPlayerId, player);
+    tlsEcs.actorRegistry.emplace<Guid>(player, kExitPlayerId);
+    auto& snapshot = tlsEcs.actorRegistry.emplace<PlayerSessionSnapshotComp>(player);
+    snapshot.set_gate_session_id(session);
+    snapshot.set_player_id(kExitPlayerId);
+    SessionMap().insert_or_assign(session, kExitPlayerId);
+    return player;
+}
+
+// 让下一次 SavePlayerToRedis 判"盘上已是同一份"(快路径,不碰 Redis)。
+void MarkPersisted(entt::entity player)
+{
+    tlsEcs.actorRegistry.emplace_or_replace<PlayerLastPersistedSnapshotComp>(player).Replace(MarshalAsSaved(player));
+}
+} // namespace
+
+TEST(ExitPersistEcs, StopMotionForExitZeroesKinematics)
+{
+    tlsEcs.Clear();
+    const auto player = tlsEcs.actorRegistry.create();
+    auto& velocity = tlsEcs.actorRegistry.emplace<Velocity>(player);
+    velocity.set_x(3.0);
+    velocity.set_y(-1.5);
+    velocity.set_z(0.25);
+    auto& acceleration = tlsEcs.actorRegistry.emplace<Acceleration>(player);
+    acceleration.set_x(1.0);
+
+    PlayerLifecycleSystem::StopMotionForExit(player);
+
+    const auto& v = tlsEcs.actorRegistry.get<Velocity>(player);
+    EXPECT_EQ(v.x(), 0.0);
+    EXPECT_EQ(v.y(), 0.0);
+    EXPECT_EQ(v.z(), 0.0);
+    EXPECT_EQ(tlsEcs.actorRegistry.get<Acceleration>(player).x(), 0.0)
+        << "MovementAccelerationSystem 积分 (Velocity + Acceleration),只清速度不够";
+
+    const auto bare = tlsEcs.actorRegistry.create();
+    PlayerLifecycleSystem::StopMotionForExit(bare);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<Velocity>(bare)) << "只改已有组件,不 emplace";
+}
+
+TEST(ExitPersistEcs, FirstExitOnFastPathFinishesInline)
+{
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    MarkPersisted(player);
+
+    PlayerLifecycleSystem::HandleExitGameNode(player, ExitCause::kClientDisconnect);
+
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << "盘上已是当前内存、没有未落地存盘:同步收尾";
+    EXPECT_EQ(tlsEcs.playerList.count(kExitPlayerId), 0u);
+    EXPECT_EQ(SessionMap().count(kSessionAtExit), 0u);
+}
+
+TEST(ExitPersistEcs, ReexitMergesCauseWithoutFinishing)
+{
+    const auto player = MakeExitingPlayer(kSessionAtExit, kSessionAtExit);
+    MarkPersisted(player);
+
+    PlayerLifecycleSystem::HandleExitGameNode(player, ExitCause::kIdentityConflict);
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "轮次没到上限 = 退出存盘仍在途,再来一次退出不插手";
+    const auto& intent = tlsEcs.actorRegistry.get<PlayerExitIntentComp>(player);
+    EXPECT_EQ(intent.cause, ExitCause::kClientDisconnect) << "原因保持第一次的";
+    EXPECT_TRUE(intent.releaseMarkSuppressed);
+    EXPECT_EQ(intent.sessionAtExit, kSessionAtExit) << "不重挂,不改退出那一刻的会话";
+}
+
+TEST(ExitPersistEcs, ReexitAfterExhaustedRekicksAndConverges)
+{
+    const auto player = MakeExitingPlayer(kSessionAtExit, kSessionAtExit);
+    tlsEcs.actorRegistry.get<PlayerExitIntentComp>(player).resaveRounds = player_exit::kMaxExitResaveRounds;
+    MarkPersisted(player);
+
+    PlayerLifecycleSystem::HandleExitGameNode(player, ExitCause::kNodeShutdown);
+
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player))
+        << "超限保留的实体再收到退出请求:补发的存盘判盘上已是同一份、且没有未落地存盘 → 收尾(停机时的最后出口)";
+    EXPECT_EQ(SessionMap().count(kSessionAtExit), 0u);
+}
+
+TEST(ExitPersistEcs, CancelExitOnReconnectRemovesBothMarkers)
+{
+    const auto player = MakeExitingPlayer(kSessionAtExit, kSessionAtExit);
+
+    PlayerLifecycleSystem::CancelExitOnReconnect(player);
+
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerExitIntentComp>(player)) << "与 UnregisterPlayer 成对摘";
+
+    // 成对约定被破坏、只剩意图组件时同样收干净。
+    tlsEcs.actorRegistry.emplace<PlayerExitIntentComp>(player);
+    PlayerLifecycleSystem::CancelExitOnReconnect(player);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerExitIntentComp>(player));
+}
+
+TEST(ExitPersistEcs, ReentryDiscardsExitingEntityOnlyWhenDeposed)
+{
+    {
+        const auto player = MakeExitingPlayer(kSessionAtExit, kSessionAtExit);
+        tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 5;
+        EXPECT_FALSE(PlayerLifecycleSystem::DiscardDeposedExitingEntity(player, 6))
+            << "恰好 +1:落回本节点这一次自己铸的,照常复用";
+        EXPECT_TRUE(tlsEcs.actorRegistry.valid(player));
+        EXPECT_TRUE(PlayerLifecycleSystem::DiscardDeposedExitingEntity(player, 7));
+        EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << "中间有别的持有者:不存盘销毁,调用方重载";
+        EXPECT_EQ(tlsEcs.playerList.count(kExitPlayerId), 0u);
+    }
+    {
+        const auto player = MakeOnlinePlayer(kNewerSession);
+        tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 5;
+        EXPECT_FALSE(PlayerLifecycleSystem::DiscardDeposedExitingEntity(player, 9))
+            << "不在退出中的实体不归这条路径管";
+        EXPECT_TRUE(tlsEcs.actorRegistry.valid(player));
+    }
+}
+
+// ============================================================================
+// 10. ExitRelease —— 断线释放标记 A1′ 与载入时清标记 A2′(cross-zone-scene-travel.md §12.6.3 第二步 / 第三步):
+//     exit_release_mark.h 的纯判定 + 两段 Lua 的关键片段 + 无 Redis 宿主里的 ECS 级接缝(M15)
+// ============================================================================
+#include "services/scene/player/system/exit_release_mark.h"
+
+namespace erm = exit_release_mark;
+
+namespace
+{
+// 一份"全部条件满足"的输入:原因 kClientDisconnect、未压制、没消费票据、没有在途交接、epoch 非 0、身份有效、开关开。
+erm::ExitReleaseFacts WritableFacts()
+{
+    erm::ExitReleaseFacts facts;
+    facts.featureEnabled = true;
+    facts.entityValid = true;
+    facts.hasIntent = true;
+    facts.cause = ExitCause::kClientDisconnect;
+    facts.ownerEpoch = 7;
+    facts.identityValid = true;
+    return facts;
+}
+} // namespace
+
+TEST(ExitReleaseDecision, WritesForTheThreeReleaseCauses)
+{
+    for (const auto cause : {ExitCause::kClientDisconnect, ExitCause::kNodeShutdown, ExitCause::kSceneDrain})
+    {
+        auto facts = WritableFacts();
+        facts.cause = cause;
+        EXPECT_EQ(erm::DecideExitReleaseMark(facts), erm::ExitReleaseDecision::kWrite)
+            << "cause=" << player_exit::ExitCauseName(cause);
+    }
+}
+
+TEST(ExitReleaseDecision, ReleaseIdentityUnspecifiedCausesDoNotWrite)
+{
+    for (const auto cause : {ExitCause::kReleasedByTransfer, ExitCause::kIdentityConflict, ExitCause::kUnspecified,
+                             ExitCause::kCount})
+    {
+        auto facts = WritableFacts();
+        facts.cause = cause;
+        EXPECT_EQ(erm::DecideExitReleaseMark(facts), erm::ExitReleaseDecision::kSkipCause)
+            << "cause=" << player_exit::ExitCauseName(cause);
+    }
+}
+
+TEST(ExitReleaseDecision, SuppressionIsCountedByItsFirstReason)
+{
+    auto facts = WritableFacts();
+    facts.releaseMarkSuppressed = true;
+    facts.suppressedBy = ExitCause::kReleasedByTransfer;
+    EXPECT_EQ(erm::DecideExitReleaseMark(facts), erm::ExitReleaseDecision::kSkipSuppressedRelease);
+    facts.suppressedBy = ExitCause::kIdentityConflict;
+    EXPECT_EQ(erm::DecideExitReleaseMark(facts), erm::ExitReleaseDecision::kSkipSuppressedIdentity);
+    facts.suppressedBy = ExitCause::kUnspecified;
+    EXPECT_EQ(erm::DecideExitReleaseMark(facts), erm::ExitReleaseDecision::kSkipSuppressedUnspecified);
+    facts.suppressedBy = ExitCause::kCount;
+    EXPECT_EQ(erm::DecideExitReleaseMark(facts), erm::ExitReleaseDecision::kSkipSuppressedUnspecified)
+        << "压制位置了却没记原因:按来源不明,仍然不写";
+}
+
+TEST(ExitReleaseDecision, MergeRecordsTheFirstSuppressor)
+{
+    PlayerExitIntentComp intent;
+    intent.cause = ExitCause::kClientDisconnect;
+    player_exit::MergeExitCause(intent, ExitCause::kNodeShutdown, false);
+    EXPECT_EQ(intent.suppressedBy, ExitCause::kCount) << "不压制的合并不记原因";
+    player_exit::MergeExitCause(intent, ExitCause::kReleasedByTransfer, /*devBypassSuppressesTransfer=*/true);
+    player_exit::MergeExitCause(intent, ExitCause::kIdentityConflict, false);
+    EXPECT_TRUE(intent.releaseMarkSuppressed);
+    EXPECT_EQ(intent.suppressedBy, ExitCause::kReleasedByTransfer) << "记第一次触发压制的原因";
+}
+
+TEST(ExitReleaseDecision, ConsumedRelocateTicketDoesNotWrite)
+{
+    auto facts = WritableFacts();
+    facts.cause = ExitCause::kSceneDrain;
+    facts.relocateTicketConsumed = true;
+    EXPECT_EQ(erm::DecideExitReleaseMark(facts), erm::ExitReleaseDecision::kSkipRelocate)
+        << "改派自己写了标记,A1′ 不得覆盖";
+}
+
+TEST(ExitReleaseDecision, EpochZeroOrInvalidEntityOrMissingIntentDoesNotWrite)
+{
+    auto facts = WritableFacts();
+    facts.ownerEpoch = 0;
+    EXPECT_EQ(erm::DecideExitReleaseMark(facts), erm::ExitReleaseDecision::kSkipEpochUnknown);
+
+    facts = WritableFacts();
+    facts.entityValid = false;
+    EXPECT_EQ(erm::DecideExitReleaseMark(facts), erm::ExitReleaseDecision::kSkipEntityInvalid);
+
+    facts = WritableFacts();
+    facts.hasIntent = false;
+    EXPECT_EQ(erm::DecideExitReleaseMark(facts), erm::ExitReleaseDecision::kSkipIntentMissing);
+}
+
+TEST(ExitReleaseDecision, ExitWinsOverIssuedHandoffDoesNotWrite)
+{
+    auto facts = WritableFacts();
+    facts.handoffMarkInflight = true;
+    EXPECT_EQ(erm::DecideExitReleaseMark(facts), erm::ExitReleaseDecision::kSkipHandoffInflight)
+        << "M11:新标记会被在途的交接 EnterScene 用掉";
+}
+
+TEST(ExitReleaseDecision, UnconfirmedIdentityDoesNotWrite)
+{
+    auto facts = WritableFacts();
+    facts.identityValid = false;
+    EXPECT_EQ(erm::DecideExitReleaseMark(facts), erm::ExitReleaseDecision::kSkipIdentityConflict) << "M3";
+}
+
+TEST(ExitReleaseDecision, DisabledSwitchDoesNotWrite)
+{
+    auto facts = WritableFacts();
+    facts.featureEnabled = false;
+    EXPECT_EQ(erm::DecideExitReleaseMark(facts), erm::ExitReleaseDecision::kSkipDisabled) << "M14 回滚开关";
+}
+
+TEST(ExitReleaseDecision, SwitchParsing)
+{
+    EXPECT_TRUE(erm::ParseSwitch(nullptr, true)) << "未设置取默认值";
+    EXPECT_FALSE(erm::ParseSwitch("", false));
+    EXPECT_FALSE(erm::ParseSwitch("0", true));
+    EXPECT_FALSE(erm::ParseSwitch("off", true));
+    EXPECT_FALSE(erm::ParseSwitch("false", true));
+    EXPECT_TRUE(erm::ParseSwitch("1", false));
+    EXPECT_TRUE(erm::ParseSwitch("on", false));
+    EXPECT_TRUE(erm::ParseSwitch("true", false));
+    EXPECT_TRUE(erm::ParseSwitch("garbage", true)) << "不认识的值取默认值";
+}
+
+TEST(ExitReleaseDecision, NamesCoverEveryValue)
+{
+    for (std::size_t i = 0; i < erm::kExitReleaseDecisionCount; ++i)
+    {
+        EXPECT_STRNE(erm::ExitReleaseDecisionName(static_cast<erm::ExitReleaseDecision>(i)), "?");
+    }
+    EXPECT_STREQ(erm::ExitReleaseDecisionName(erm::ExitReleaseDecision::kCount), "?");
+    for (std::size_t i = 0; i < erm::kInheritClearResultCount; ++i)
+    {
+        EXPECT_STRNE(erm::InheritClearResultName(static_cast<erm::InheritClearResult>(i)), "?");
+    }
+    EXPECT_STREQ(erm::InheritClearResultName(erm::InheritClearResult::kCount), "?");
+}
+
+TEST(ExitReleaseMarkWrite, ReplyClassification)
+{
+    using R = erm::MarkWriteResult;
+    EXPECT_EQ(erm::ClassifyMarkWriteReply(erm::ReplyShape::kInteger, 1), R::kWritten);
+    EXPECT_EQ(erm::ClassifyMarkWriteReply(erm::ReplyShape::kInteger, 0), R::kEpochMoved);
+    EXPECT_EQ(erm::ClassifyMarkWriteReply(erm::ReplyShape::kInteger, 2), R::kFailed);
+    EXPECT_EQ(erm::ClassifyMarkWriteReply(erm::ReplyShape::kNone, 1), R::kFailed) << "空应答:结果未知,计失败";
+    EXPECT_EQ(erm::ClassifyMarkWriteReply(erm::ReplyShape::kError, 0), R::kFailed);
+    EXPECT_EQ(erm::ClassifyMarkWriteReply(erm::ReplyShape::kOther, 1), R::kFailed);
+}
+
+TEST(ExitReleaseMarkWrite, LuaChecksOwnerEpochBeforeSet)
+{
+    const std::string lua = erm::kLuaWriteIfOwnerEpoch;
+    const auto compare = lua.find("redis.call('GET', KEYS[1]) ~= ARGV[1]");
+    ASSERT_NE(compare, std::string::npos) << "先比 owner_epoch";
+    const auto set = lua.find("redis.call('SET', KEYS[2]");
+    ASSERT_NE(set, std::string::npos);
+    EXPECT_LT(compare, set) << "比对在写之前";
+    EXPECT_LT(lua.find("return 0"), set) << "核对不过直接返回 0、不写";
+    EXPECT_NE(lua.find("'EX', ARGV[3]"), std::string::npos) << "标记必须带 TTL";
+}
+
+TEST(ExitReleaseInheritClear, LuaComparesOwnerEpochFirstAndOnlyDeletesUpToN)
+{
+    const std::string lua = erm::kLuaInheritClear;
+    const auto compare = lua.find("if cur ~= ARGV[1] then return -1 end");
+    ASSERT_NE(compare, std::string::npos) << "先比 owner_epoch,核对不过返回 -1";
+    EXPECT_NE(lua.find("if cur == false then cur = '0' end"), std::string::npos) << "owner_epoch 缺键按 0";
+    const auto firstDel = lua.find("DEL");
+    ASSERT_NE(firstDel, std::string::npos);
+    EXPECT_LT(compare, firstDel) << "核对不过时一个标记都不删(M2)";
+    const auto keepNewer = lua.find("then return 3 end");
+    const auto lastDel = lua.rfind("redis.call('DEL', KEYS[2])");
+    ASSERT_NE(keepNewer, std::string::npos);
+    EXPECT_LT(keepNewer, lastDel) << "代际比 N 新的标记先返回 3、不删:只删 ≤N";
+    EXPECT_EQ(lua.find("tonumber"), std::string::npos) << "uint64 代际不能过 tonumber(2^53 以上丢精度)";
+}
+
+TEST(ExitReleaseInheritClear, ReplyClassification)
+{
+    using R = erm::InheritClearResult;
+    EXPECT_EQ(erm::ClassifyInheritClearReply(erm::ReplyShape::kInteger, -1), R::kEpochMismatch);
+    EXPECT_EQ(erm::ClassifyInheritClearReply(erm::ReplyShape::kInteger, 0), R::kAbsent);
+    EXPECT_EQ(erm::ClassifyInheritClearReply(erm::ReplyShape::kInteger, 1), R::kDeletedOlder);
+    EXPECT_EQ(erm::ClassifyInheritClearReply(erm::ReplyShape::kInteger, 2), R::kDeletedCurrent);
+    EXPECT_EQ(erm::ClassifyInheritClearReply(erm::ReplyShape::kInteger, 3), R::kKeptNewer);
+    EXPECT_EQ(erm::ClassifyInheritClearReply(erm::ReplyShape::kInteger, 4), R::kDeletedMalformed);
+    EXPECT_EQ(erm::ClassifyInheritClearReply(erm::ReplyShape::kInteger, 5), R::kReplyError);
+    EXPECT_EQ(erm::ClassifyInheritClearReply(erm::ReplyShape::kError, 0), R::kReplyError);
+    EXPECT_EQ(erm::ClassifyInheritClearReply(erm::ReplyShape::kOther, 0), R::kReplyError);
+    EXPECT_EQ(erm::ClassifyInheritClearReply(erm::ReplyShape::kNone, 0), R::kReplyLost);
+
+    for (const auto confirmed : {R::kAbsent, R::kDeletedOlder, R::kDeletedCurrent, R::kKeptNewer, R::kDeletedMalformed})
+    {
+        EXPECT_TRUE(erm::IsInheritClearConfirmed(confirmed)) << erm::InheritClearResultName(confirmed);
+        EXPECT_FALSE(erm::IsInheritClearFailure(confirmed));
+    }
+    EXPECT_FALSE(erm::IsInheritClearConfirmed(R::kEpochMismatch)) << "-1 不是确认";
+    EXPECT_FALSE(erm::IsInheritClearFailure(R::kEpochMismatch)) << "-1 也不是失败:不补发";
+    EXPECT_TRUE(erm::IsInheritClearFailure(R::kReplyError));
+    EXPECT_TRUE(erm::IsInheritClearFailure(R::kReplyLost));
+
+    EXPECT_TRUE(erm::MayHaveDeletedCurrent(R::kDeletedCurrent));
+    EXPECT_TRUE(erm::MayHaveDeletedCurrent(R::kReplyLost)) << "空应答结果未知,放弃时按删过处理(M7)";
+    EXPECT_FALSE(erm::MayHaveDeletedCurrent(R::kReplyError)) << "ERROR = Redis 明确没执行";
+    EXPECT_FALSE(erm::MayHaveDeletedCurrent(R::kDeletedOlder));
+    EXPECT_FALSE(erm::MayHaveDeletedCurrent(R::kEpochMismatch));
+}
+
+TEST(ExitReleaseInheritClear, GateHasThreeStates)
+{
+    using P = erm::InheritClearPhase;
+    using G = erm::InheritGateDecision;
+    EXPECT_EQ(erm::DecideInheritGate(0, 0, P::kNone), G::kProceed) << "旧版路由没有 owner_epoch:放行";
+    EXPECT_EQ(erm::DecideInheritGate(5, 5, P::kConfirmed), G::kProceed);
+    EXPECT_EQ(erm::DecideInheritGate(5, 5, P::kInFlight), G::kWait) << "EVAL 在途:暂存载入结果";
+    EXPECT_EQ(erm::DecideInheritGate(5, 5, P::kRetryWait), G::kWait) << "失败待重发:暂存载入结果";
+    EXPECT_EQ(erm::DecideInheritGate(5, 5, P::kNone), G::kRefuse) << "没发过:fail-closed";
+    EXPECT_EQ(erm::DecideInheritGate(6, 5, P::kConfirmed), G::kRefuse)
+        << "只认本 ctx.ownerEpoch 的那一次,别的 epoch 的确认不能冒充(M2)";
+}
+
+TEST(ExitReleaseInheritClear, RetryIsBoundedByAttemptsAndDeadline)
+{
+    using namespace std::chrono_literals;
+    EXPECT_FALSE(erm::IsInheritClearExhausted(1, 0ms));
+    EXPECT_FALSE(erm::IsInheritClearExhausted(erm::kInheritClearMaxAttempts - 1, 4999ms));
+    EXPECT_TRUE(erm::IsInheritClearExhausted(erm::kInheritClearMaxAttempts, 0ms)) << "次数上限";
+    EXPECT_TRUE(erm::IsInheritClearExhausted(1, erm::kInheritClearDeadline)) << "截止时刻";
+    EXPECT_EQ(erm::InheritClearRetryDelay(1), 250ms);
+    EXPECT_EQ(erm::InheritClearRetryDelay(2), 500ms);
+    EXPECT_EQ(erm::InheritClearRetryDelay(3), 1000ms);
+    EXPECT_EQ(erm::InheritClearRetryDelay(9), 1000ms) << "退避封顶";
+}
+
+// ── ECS 级接缝(M15):宿主里没有 zone Redis(tlsRedis.GetZoneRedis() 为空)──
+namespace
+{
+constexpr Guid kReleasePlayerId = 950200002;
+
+// 在待入场表里放一条"新载入"上下文(session 0:不预登记会话、不回 tip,只看闸门)。
+void RegisterPendingEnter(uint64_t ownerEpoch)
+{
+    tlsEcs.Clear();
+    SessionMap().clear();
+    auto& pending = PlayerLifecycleSystem::GetPendingEnterMap();
+    pending.clear();
+    PlayerEnterContext ctx;
+    ctx.ownerEpoch = ownerEpoch;
+    pending[kReleasePlayerId] = ctx;
+}
+} // namespace
+
+TEST(ExitReleaseEcs, ConvergedExitWithoutRedisCountsFailedAndLeavesNothingInFlight)
+{
+    // M15:无 Redis 宿主里 A1′ 判定为写后必须走"写不成"分支、不增加在途计数;实体照常销毁。
+    PlayerLifecycleSystem::SetNodeIdentityProbe([] { return true; });
+    const auto player = MakeExitingPlayer(kSessionAtExit, kSessionAtExit);
+    tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 5;
+    PlayerAllData landed = MarshalAsSaved(player);
+    const auto before = exit_release_stats::Read();
+
+    PlayerLifecycleSystem::HandlePlayerAsyncSaved(kExitPlayerId, landed);
+
+    const auto after = exit_release_stats::Read();
+    PlayerLifecycleSystem::SetNodeIdentityProbe({});
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
+    const auto attempted = static_cast<std::size_t>(erm::ExitReleaseDecision::kWrite);
+    EXPECT_EQ(after.decisions[attempted], before.decisions[attempted] + 1) << "条件都满足,判定为写";
+    EXPECT_EQ(after.failed, before.failed + 1) << "zone Redis 不可用:计 failed,不重试";
+    EXPECT_EQ(PlayerLifecycleSystem::ExitReleaseMarksInFlight(), 0u);
+}
+
+TEST(ExitReleaseEcs, UnconfirmedIdentityOnExitSkipsTheMark)
+{
+    PlayerLifecycleSystem::SetNodeIdentityProbe({}); // 未注入 = 身份不确认
+    const auto player = MakeExitingPlayer(kSessionAtExit, kSessionAtExit);
+    tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 5;
+    PlayerAllData landed = MarshalAsSaved(player);
+    const auto before = exit_release_stats::Read();
+
+    PlayerLifecycleSystem::HandlePlayerAsyncSaved(kExitPlayerId, landed);
+
+    const auto after = exit_release_stats::Read();
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
+    const auto skip = static_cast<std::size_t>(erm::ExitReleaseDecision::kSkipIdentityConflict);
+    EXPECT_EQ(after.decisions[skip], before.decisions[skip] + 1);
+    EXPECT_EQ(after.failed, before.failed) << "不写就不会有失败";
+}
+
+TEST(ExitReleaseEcs, LoadWithoutClearForItsEpochIsRefused)
+{
+    // 闸门 fail-closed:ctx.ownerEpoch 非 0 却没有针对它的 A2′(没调 BeginInheritedMarkClear)→ 拒建实体。
+    RegisterPendingEnter(/*ownerEpoch=*/5);
+    const auto before = exit_release_stats::Read();
+
+    PlayerLifecycleSystem::HandlePlayerAsyncLoaded(kReleasePlayerId, PlayerAllData{});
+
+    EXPECT_EQ(PlayerLifecycleSystem::GetPendingEnterMap().count(kReleasePlayerId), 0u) << "待入场条目已擦掉";
+    EXPECT_EQ(tlsEcs.playerList.count(kReleasePlayerId), 0u) << "没有建实体";
+    EXPECT_EQ(exit_release_stats::Read().inheritRefused, before.inheritRefused + 1);
+}
+
+TEST(ExitReleaseEcs, FailingClearKeepsTheLoadThenRefusesWhenExhausted)
+{
+    RegisterPendingEnter(/*ownerEpoch=*/5);
+    PlayerLifecycleSystem::BeginInheritedMarkClear(kReleasePlayerId);
+    {
+        auto& pending = PlayerLifecycleSystem::GetPendingEnterMap();
+        ASSERT_EQ(pending.count(kReleasePlayerId), 1u) << "首发失败不拒绝";
+        const auto& state = pending.at(kReleasePlayerId).inheritClear;
+        EXPECT_NE(state.lifecycle, 0u);
+        EXPECT_EQ(state.targetEpoch, 5u);
+        EXPECT_EQ(state.phase, erm::InheritClearPhase::kRetryWait) << "zone Redis 不可用 = 失败,等重发";
+        EXPECT_EQ(state.attemptsSent, 1u);
+    }
+
+    PlayerLifecycleSystem::HandlePlayerAsyncLoaded(kReleasePlayerId, PlayerAllData{});
+    {
+        auto& pending = PlayerLifecycleSystem::GetPendingEnterMap();
+        ASSERT_EQ(pending.count(kReleasePlayerId), 1u) << "等重发期间保留载入结果(M10)";
+        EXPECT_NE(pending.at(kReleasePlayerId).inheritClear.stashedLoad, nullptr);
+        EXPECT_EQ(tlsEcs.playerList.count(kReleasePlayerId), 0u);
+    }
+
+    const auto before = exit_release_stats::Read();
+    // 重连触发的补发忽略退避;每次都失败,第 kInheritClearMaxAttempts 次失败后拒绝。
+    for (uint32_t i = 1; i < erm::kInheritClearMaxAttempts; ++i)
+    {
+        PlayerLifecycleSystem::RetryInheritedMarkClears(/*reconnected=*/true);
+    }
+    EXPECT_EQ(PlayerLifecycleSystem::GetPendingEnterMap().count(kReleasePlayerId), 0u) << "重发耗尽:拒建实体";
+    EXPECT_EQ(tlsEcs.playerList.count(kReleasePlayerId), 0u);
+    EXPECT_EQ(exit_release_stats::Read().inheritRefused, before.inheritRefused + 1);
+}
+
+// ============================================================================
 // Test bootstrap
 // ============================================================================
 int main(int argc, char** argv)

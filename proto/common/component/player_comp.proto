@@ -57,6 +57,9 @@ message PlayerUint32Comp
 message PlayerProfileComp
 {
 	string name = 1;
+	// 随存档原样往返；login 首次入场从账号补空，scene/战斗/队伍只读。
+	string appearance_id = 2;
+	uint32 gender = 3; // 1=男 2=女；0=旧存档未补齐，与外观 ID 独立。
 }
 
 // Stress-test instrumentation for player-data persistence.
@@ -138,4 +141,3 @@ message PlayerMergeStateComp
 	// one bool that flips.
 	int64 post_merge_notice_seen_ms = 3;
 }
-

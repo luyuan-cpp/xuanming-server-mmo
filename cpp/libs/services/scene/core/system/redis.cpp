@@ -38,6 +38,9 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         // (这道闸管不到不经本节点的跨节点落点,例如玩家断线后重登落到别的节点;那条路在撤回确认前
         // 仍只有标记 TTL 兜底,见 handoff_mark_withdraw.h 的契约说明。)
         PlayerLifecycleSystem::RetryPendingHandoffWithdrawals(/*reconnected=*/true);
+        // 断线期间失败、等重发的 A2′(载入前"先核归属再删"继承来的 handoff 标记)也立刻补发,排在重发的
+        // 玩家加载之前(同一条连接 FIFO)。闸门只认 A2′ 的应答,不靠这条顺序(见 exit_release_mark.h)。
+        PlayerLifecycleSystem::RetryInheritedMarkClears(/*reconnected=*/true);
         if (playerRedis)
         {
             playerRedis->OnReconnected();
@@ -49,6 +52,9 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     static constexpr double kRetryIntervalSec = 1.0;
     retryTimerId_ = loop->runEvery(kRetryIntervalSec, [this]()
                                    {
+        // A2′ 的有上限重发与截止拒绝(单调时钟,见 exit_release_mark.h)搭这个 1s 节拍,排在加载 / 存盘重试之前。
+        // 待入场表为空时直接返回。静态函数,不引入新的绑定。
+        PlayerLifecycleSystem::RetryInheritedMarkClears(/*reconnected=*/false);
         if (playerRedis)
         {
             playerRedis->RetryDuePending();

@@ -91,18 +91,20 @@ func teamViewFor(viewer uint64, rec *teampb.TeamRecord, version, epoch, nowMs ui
 	return view
 }
 
-// memberView 一名玩家的展示视图;name 恒 ""、gender 恒 0(§G.2 / J-29)。
+// memberView 一名玩家的展示视图；外观和性别复用存档资料，name 暂未接线。
 func memberView(playerId uint64, zone, joinSeq uint32, leader uint64, dc displayCache) *teampb.TeamMemberView {
 	d := dc[playerId]
 	return &teampb.TeamMemberView{
-		PlayerId: playerId,
-		Level:    d.Level,
-		ClassId:  d.ClassId,
-		IsLeader: playerId == leader,
-		IsOnline: d.Online,
-		InBattle: d.InBattle,
-		ZoneId:   zone,
-		JoinSeq:  joinSeq,
+		PlayerId:     playerId,
+		Level:        d.Level,
+		ClassId:      d.ClassId,
+		AppearanceId: d.AppearanceId,
+		Gender:       d.Gender,
+		IsLeader:     playerId == leader,
+		IsOnline:     d.Online,
+		InBattle:     d.InBattle,
+		ZoneId:       zone,
+		JoinSeq:      joinSeq,
 	}
 }
 

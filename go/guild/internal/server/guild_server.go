@@ -80,6 +80,28 @@ func (s *GuildServer) ReviewGuildApplication(ctx context.Context, req *pb.Review
 	return s.logic.ReviewGuildApplication(ctx, req)
 }
 
+// ── 帮会经济(B5:捐献 / 升级 / 商店)──────────────────────────────
+
+func (s *GuildServer) GetGuildDonateOptions(ctx context.Context, req *pb.GetGuildDonateOptionsRequest) (*pb.GetGuildDonateOptionsResponse, error) {
+	return s.logic.GetGuildDonateOptions(ctx, req)
+}
+
+func (s *GuildServer) DonateToGuild(ctx context.Context, req *pb.DonateToGuildRequest) (*pb.DonateToGuildResponse, error) {
+	return s.logic.DonateToGuild(ctx, req)
+}
+
+func (s *GuildServer) UpgradeGuild(ctx context.Context, req *pb.UpgradeGuildRequest) (*pb.UpgradeGuildResponse, error) {
+	return s.logic.UpgradeGuild(ctx, req)
+}
+
+func (s *GuildServer) GetGuildShop(ctx context.Context, req *pb.GetGuildShopRequest) (*pb.GetGuildShopResponse, error) {
+	return s.logic.GetGuildShop(ctx, req)
+}
+
+func (s *GuildServer) BuyGuildShopGoods(ctx context.Context, req *pb.BuyGuildShopGoodsRequest) (*pb.BuyGuildShopGoodsResponse, error) {
+	return s.logic.BuyGuildShopGoods(ctx, req)
+}
+
 // NotifyGuildChanged 只是推送的 message id 占位(下行走 Kafka gate PushToPlayerEvent,
 // 与 match 的 NotifyChallenge* 同形)。客户端调用在 session 拦截器就被 PermissionDenied
 // 挡下,内部调用也无意义,所以这里恒返回空,不进 logic。

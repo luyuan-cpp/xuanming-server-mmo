@@ -1012,7 +1012,7 @@ func TestIsLostResponseRetry(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := isLostResponseRetry(players, tc.owner, tc.classID, tc.gender); got != tc.want {
+			if got := isLostResponseRetry(players, tc.owner, tc.classID, tc.gender, ""); got != tc.want {
 				t.Fatalf("isLostResponseRetry = %v, want %v", got, tc.want)
 			}
 		})

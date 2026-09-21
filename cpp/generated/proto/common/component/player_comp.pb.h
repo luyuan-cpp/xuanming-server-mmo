@@ -1115,6 +1115,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
   // accessors -------------------------------------------------------
   enum : int {
     kNameFieldNumber = 1,
+    kAppearanceIdFieldNumber = 2,
+    kGenderFieldNumber = 3,
   };
   // string name = 1;
   void clear_name() ;
@@ -1131,12 +1133,37 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
   ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
 
   public:
+  // string appearance_id = 2;
+  void clear_appearance_id() ;
+  [[nodiscard]] const ::std::string& appearance_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_appearance_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_appearance_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_appearance_id();
+  void set_allocated_appearance_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_appearance_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_appearance_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_appearance_id();
+
+  public:
+  // uint32 gender = 3;
+  void clear_gender() ;
+  [[nodiscard]] ::uint32_t gender() const;
+  void set_gender(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_gender() const;
+  void _internal_set_gender(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PlayerProfileComp)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
-                          0, 30,
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 43,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1165,6 +1192,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr name_;
+    ::google::protobuf::internal::ArenaStringPtr appearance_id_;
+    ::uint32_t gender_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2258,6 +2287,94 @@ inline void PlayerProfileComp::set_allocated_name(::std::string* PROTOBUF_NULLAB
     _impl_.name_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:PlayerProfileComp.name)
+}
+
+// string appearance_id = 2;
+inline void PlayerProfileComp::clear_appearance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.appearance_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& PlayerProfileComp::appearance_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PlayerProfileComp.appearance_id)
+  return _internal_appearance_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerProfileComp::set_appearance_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.appearance_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PlayerProfileComp.appearance_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerProfileComp::mutable_appearance_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_appearance_id();
+  // @@protoc_insertion_point(field_mutable:PlayerProfileComp.appearance_id)
+  return _s;
+}
+inline const ::std::string& PlayerProfileComp::_internal_appearance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.appearance_id_.Get();
+}
+inline void PlayerProfileComp::_internal_set_appearance_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.appearance_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerProfileComp::_internal_mutable_appearance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.appearance_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerProfileComp::release_appearance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PlayerProfileComp.appearance_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.appearance_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.appearance_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerProfileComp::set_allocated_appearance_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.appearance_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.appearance_id_.IsDefault()) {
+    _impl_.appearance_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PlayerProfileComp.appearance_id)
+}
+
+// uint32 gender = 3;
+inline void PlayerProfileComp::clear_gender() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gender_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t PlayerProfileComp::gender() const {
+  // @@protoc_insertion_point(field_get:PlayerProfileComp.gender)
+  return _internal_gender();
+}
+inline void PlayerProfileComp::set_gender(::uint32_t value) {
+  _internal_set_gender(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:PlayerProfileComp.gender)
+}
+inline ::uint32_t PlayerProfileComp::_internal_gender() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gender_;
+}
+inline void PlayerProfileComp::_internal_set_gender(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gender_ = value;
 }
 
 // -------------------------------------------------------------------

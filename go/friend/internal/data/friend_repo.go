@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	// 只为识别 1213(isMySQLDeadlock)。驱动本来就在 go.mod 的直接 require 里
@@ -183,6 +184,27 @@ type AddFriendLimits struct {
 //       零报错。挡法:deleteFriendEdges 减计数时**同时把 created_ms 刷成当前时刻**,于是"刚减到 0 的行"
 //       要再过一个完整保留期才是回收候选,上面那条交错里的"回收删行"不可能落进 ensure 两条语句
 //       之间。残留:陈旧窗口(COUNT 与 INSERT 之间)跨过整个 RetentionDays 才可能复现,视为不可达。
+//
+// (6) **守卫之后的锁定读 / 锁定写,一律写成"完整主键的等值点查 / 点更新"**,不许用 OR / IN / 前缀范围。
+//     守卫只串行化"这一对玩家",所以锁集必须**恰好**落在这一对的行上;锁集由执行计划决定,而执行计划由
+//     优化器按统计信息挑 —— 写成 OR / IN 等于把正确性押在优化器身上。2026-09-21 首次真库回归(MySQL 26.7,
+//     小表)实证:
+//     - blockedEitherWay 原先的 `(a,b) OR (b,a) ... FOR UPDATE` 被规划成 **idx_blocked_player 覆盖索引全扫描**,
+//       锁住了**别的玩家对**那一行的二级索引项,再去等它的主键;而那一对的 Unblock(`DELETE` 按主键)先主键、
+//       后二级索引 —— 取锁顺序相反,1213。friendEdgeExistsForUpdate 同形(idx_friend_player),与 RemoveFriend 的
+//       删边 DELETE 成环,同样复现了 1213。LATEST DETECTED DEADLOCK 原文见交接文档 §9。
+//     - lockCapacityRows 原先的 `IN (...) ORDER BY ... FOR UPDATE` 被规划成 **PRIMARY 全索引扫描**:按主键序取锁
+//       所以不成环,但每个守卫都要排在所有"更小 player_id 上正被持有的守卫"之后,等于按玩家号把写路径串行化。
+//     - Block 取消双向 pending 的 `status=? AND ((…) OR (…))` UPDATE 走的是 idx_status_updated 的 status 前缀
+//       (type=range),扫的是**全服**所有 pending 行,先二级索引后主键,与别的玩家对上"先主键"的写同样可以成环。
+//     完整主键等值的执行计划是 const(UPDATE 为 key=PRIMARY、用满两列),与统计信息无关;RC 下未命中不加锁,
+//     命中只锁那一行主键 —— 不碰任何二级索引项,所以与"先主键后二级索引"的 DELETE / UPDATE 不可能反序。
+//     前提:WHERE 不能同时钉死**另一个唯一索引**的全部列 —— 否则优化器可能在两个 const 路径里选中唯一二级索引,
+//     又变成先二级后主键。本服务四张表按 D-14 零 UNIQUE KEY,前提成立;新增唯一键时回来重核(回归用例断言
+//     key = PRIMARY,真被规划到唯一二级索引上会变红)。
+//     代价:一对玩家的"任一方向"判定从一次往返变成两次。回归:friend_guard_lock_order_mysql_test.go 的
+//     TestLockingStatementsArePrimaryKeyPointLookups 对下面这几个 SQL 常量逐条 EXPLAIN(确定性),
+//     TestCapacityRowReclaimRacesWithGuardedWrites 负责并发实证(概率性)。
 //
 // 隔离级别固定 READ COMMITTED(照 A 仓):
 //   - RR 的间隙锁会让"同一玩家并发拉黑 16 个不同目标"这类**只碰不同行**的事务互相挡:
@@ -685,12 +707,19 @@ var errCapacityRowsMissing = errors.New("friend capacity rows missing")
 // 为什么恰好是 3,见顶部锁序说明 (5)。
 const capacityGuardMaxAttempts = 3
 
-// ensureDeadlockMaxAttempts:ensureFriendCapacityRows 对**单个玩家**的"COUNT + INSERT IGNORE"
-// 撞上 1213 时最多跑几遍。成因见顶部锁序说明 (5) 的"回收给 ensure 带来的 1213"。
-// 通常一遍收敛,但不保证:N 个等待者同时拿到 S 时 InnoDB 每次只牺牲一个,可能连续几轮;
-// 牺牲者重跑时若记录仍是 delete-marked(purge 还没清)且又有多个等待者,也可能再撞一次。
-// 所以给上限 3,用尽后 fail-closed(1213 原样上抛,logic 定性 ErrStorage)。
+// ensureDeadlockMaxAttempts:ensureFriendCapacityRows 对**单个玩家**的"COUNT + 补行 INSERT"
+// 撞上 1213 时最多跑几遍,用尽后 fail-closed(1213 原样上抛,logic 定性 ErrStorage)。
+//
+// 2026-09-21 起这条重试只剩**纵深防御**:原先的成因是"回收留下 delete-marked 记录后,多个并发的
+// INSERT IGNORE 各拿 S 锁、再都要升 X"(真库复现过),现已从根上消掉 —— 补行改用
+// INSERT … ON DUPLICATE KEY UPDATE(主键重复时直接取 X、不走 S→X),连接池又统一为 RC(不拿间隙锁,
+// 见 svc.BuildDSN)。回归用例 TestEnsureCapacityRows_ConcurrentInsertOnReclaimedRowSurvivesDeadlock
+// 断言这条重试一次都没被触发(ensureDeadlockRetries 不变)。
 const ensureDeadlockMaxAttempts = 3
+
+// ensureDeadlockRetries 累计 ensure 因 1213 进入重试的次数。
+// 正常运行时应恒为 0;非 0 说明出现了新的成环形态。包内测试读它来证明"不是靠重试吸收的,而是根本没死锁"。
+var ensureDeadlockRetries atomic.Int64
 
 // guardedWriteBody 是写事务在**已持有容量守卫**之后要做的事。counts 是守卫读回的双方 friend_count。
 // 返回 nil → 提交;返回任何 error → 回滚并原样上抛(哨兵照旧穿透)。
@@ -781,80 +810,92 @@ func (r *FriendRepo) beginWriteTx(ctx context.Context) (*sql.Tx, error) {
 // 共 capacityGuardMaxAttempts 遍)。每一遍都缺行才是不变量破裂(有回收之外的东西在删这张表,或者表被别的服务动了):
 // 哨兵原样上抛、logic 定性 ErrStorage,fail-closed。
 // 无论哪种,都绝不能"当作 0"继续写,那会把好友硬上限凭空放宽一轮。
+//
+// 实现是**逐个 id 的主键点查**(顶部锁序说明 (6)),不是一条 `IN (...) FOR UPDATE`:后者在小表上被规划成
+// PRIMARY 全索引扫描,锁集越出这一对玩家。点查的顺序就是取锁顺序,所以这里按 ascendingUniqueIDs 的升序逐个查。
+// 遇到第一个缺行就返回:事务随后由 runGuardedWriteOnce 回滚,不必再去锁后面的行。
 func lockCapacityRows(ctx context.Context, tx *sql.Tx, playerIDs ...uint64) (map[uint64]uint32, error) {
 	ids := ascendingUniqueIDs(playerIDs)
-	if len(ids) == 0 {
-		return map[uint64]uint32{}, nil
-	}
-	placeholders := "?"
-	args := []any{ids[0]}
-	for _, id := range ids[1:] {
-		placeholders += ", ?"
-		args = append(args, id)
-	}
-	rows, err := tx.QueryContext(ctx,
-		"SELECT player_id, friend_count FROM friend_capacity WHERE player_id IN ("+placeholders+
-			") ORDER BY player_id FOR UPDATE", args...)
-	if err != nil {
-		return nil, fmt.Errorf("lock friend capacity rows %v: %w", ids, err)
-	}
 	counts := make(map[uint64]uint32, len(ids))
-	for rows.Next() {
-		var playerID uint64
+	for _, id := range ids {
 		var count uint32
-		if err := rows.Scan(&playerID, &count); err != nil {
-			rows.Close()
-			return nil, err
+		err := tx.QueryRowContext(ctx, lockCapacityRowSQL, id).Scan(&count)
+		switch {
+		case err == nil:
+			counts[id] = count
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, fmt.Errorf("%w: players %v (missing %d)", errCapacityRowsMissing, ids, id)
+		default:
+			return nil, fmt.Errorf("lock friend capacity row %d: %w", id, err)
 		}
-		counts[playerID] = count
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if len(counts) != len(ids) {
-		return nil, fmt.Errorf("%w: players %v (got %d)", errCapacityRowsMissing, ids, len(counts))
 	}
 	return counts, nil
 }
 
-// blockedEitherWay 报告两人之间是否存在任一方向的拉黑(守卫之后的锁定读)。
-//
-// 单条 OR 查询而不是查两次:正向那条是 friend_block 的完整主键匹配,反向那条走
-// blocked_player_id 上的二级索引(friend_table.proto 的 OptionIndex,索引名由 schemamigrate 生成,
-// 所以这里不写具体名字),一次往返即可;RC 下未命中不加任何锁,命中则锁住那一行。
-// 这两行都在"本对玩家"范围内,而所有会写它们的事务都持有同一对容量行,所以锁集不会跨对交叉。
-func blockedEitherWay(ctx context.Context, tx *sql.Tx, a, b uint64) (bool, error) {
+// 守卫之后的三条锁定点查。写成包级常量是为了让
+// friend_guard_lock_order_mysql_test.go 的 TestLockingStatementsArePrimaryKeyPointLookups 对**生产代码
+// 实际执行的那一条** SQL 做 EXPLAIN —— 测试里另抄一份,两边漂移时这条回归就失去意义。
+// 三条的 WHERE 都必须是**完整主键的等值条件**(顶部锁序说明 (6))。
+const (
+	lockCapacityRowSQL   = "SELECT friend_count FROM friend_capacity WHERE player_id = ? FOR UPDATE"
+	lockBlockRowSQL      = "SELECT 1 FROM friend_block WHERE player_id = ? AND blocked_player_id = ? FOR UPDATE"
+	lockFriendEdgeRowSQL = "SELECT 1 FROM friend WHERE player_id = ? AND friend_player_id = ? FOR UPDATE"
+)
+
+// ensureCapacityRowSQL:事务外补容量行。ODKU 的 no-op 更新保证"行已存在时什么都不改",
+// 用它而不是 INSERT IGNORE 的原因见 ensureFriendCapacityRow。
+const ensureCapacityRowSQL = "INSERT INTO friend_capacity (player_id, friend_count, created_ms) VALUES (?, ?, ?)" +
+	" ON DUPLICATE KEY UPDATE player_id = player_id"
+
+// lockRowExists 执行一条"完整主键等值 + FOR UPDATE"的点查,报告该行是否存在。
+// RC 下未命中不加任何锁;命中只锁这一行的主键记录,不碰二级索引。
+func lockRowExists(ctx context.Context, tx *sql.Tx, query string, args ...any) (bool, error) {
 	var probe int
-	err := tx.QueryRowContext(ctx,
-		`SELECT 1 FROM friend_block
-		 WHERE (player_id=? AND blocked_player_id=?) OR (player_id=? AND blocked_player_id=?)
-		 LIMIT 1 FOR UPDATE`, a, b, b, a).Scan(&probe)
+	err := tx.QueryRowContext(ctx, query, args...).Scan(&probe)
 	if err == nil {
 		return true, nil
 	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
-	return false, fmt.Errorf("check block %d-%d: %w", a, b, err)
+	return false, err
+}
+
+// blockedEitherWay 报告两人之间是否存在任一方向的拉黑(守卫之后的锁定读)。
+//
+// **两次主键点查,不是一条 OR**(顶部锁序说明 (6))。原先的 `(a,b) OR (b,a)` 在真库上被规划成
+// idx_blocked_player 覆盖索引全扫描,锁住了别的玩家对的二级索引项,与那一对的 Unblock 反序成环(1213,已实证)。
+// 两个方向的点查都落在"本对玩家"的主键行上,而所有写这两行的事务都持有同一对容量守卫 ——
+// 唯一不拿守卫的写者是 Unblock(单条按主键 DELETE,先主键后二级索引),本函数只锁主键、不锁二级索引,
+// 与它不可能反序。先查哪个方向无关紧要:同一对玩家的守卫已把这类事务串行化。
+// 任一方向命中即返回 true(调用方随即回滚),另一方向不再查。
+func blockedEitherWay(ctx context.Context, tx *sql.Tx, a, b uint64) (bool, error) {
+	for _, dir := range [2][2]uint64{{a, b}, {b, a}} {
+		found, err := lockRowExists(ctx, tx, lockBlockRowSQL, dir[0], dir[1])
+		if err != nil {
+			return false, fmt.Errorf("check block %d->%d: %w", dir[0], dir[1], err)
+		}
+		if found {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // friendEdgeExistsForUpdate 报告两人之间是否存在任一方向的好友边(守卫之后的锁定读)。
+// 与 blockedEitherWay 同理写成两次主键点查:原先的 OR 形式被规划成 idx_friend_player 覆盖索引全扫描,
+// 与 RemoveFriend / Block 删边的 DELETE(先主键后二级索引)反序成环,真库上复现过 1213。
 func friendEdgeExistsForUpdate(ctx context.Context, tx *sql.Tx, a, b uint64) (bool, error) {
-	var probe int
-	err := tx.QueryRowContext(ctx,
-		`SELECT 1 FROM friend
-		 WHERE (player_id=? AND friend_player_id=?) OR (player_id=? AND friend_player_id=?)
-		 LIMIT 1 FOR UPDATE`, a, b, b, a).Scan(&probe)
-	if err == nil {
-		return true, nil
+	for _, dir := range [2][2]uint64{{a, b}, {b, a}} {
+		found, err := lockRowExists(ctx, tx, lockFriendEdgeRowSQL, dir[0], dir[1])
+		if err != nil {
+			return false, fmt.Errorf("check friend edge %d->%d: %w", dir[0], dir[1], err)
+		}
+		if found {
+			return true, nil
+		}
 	}
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	return false, fmt.Errorf("check friend edge %d-%d: %w", a, b, err)
+	return false, nil
 }
 
 // friendEdgeExists 是事务外的普通读版本(RemoveFriend 的 F2-15 前置判定用,见那里的理由)。
@@ -1021,10 +1062,12 @@ func (r *FriendRepo) ensureFriendCapacityRows(ctx context.Context, playerIDs ...
 			if !isMySQLDeadlock(err) {
 				break
 			}
+			ensureDeadlockRetries.Add(1)
 			if attempt < ensureDeadlockMaxAttempts {
-				// 与守卫缺行那条 WARN 同一个目的:让回收带来的竞态可观测。持续出现说明同一玩家上的
-				// 并发 ensure 很密(热点 target),那时值得评估把 INSERT IGNORE 换成直接取 X 的写法。
-				logx.WithContext(ctx).Errorf("[friend] WARN ensure 容量行撞上 1213(多半是回收留下的 delete-marked 记录),"+
+				// 2026-09-21 起 ensure 改用 ODKU + 连接级 RC,已知会走到这里的形态(回收后并发补行的
+				// S→X 升级)已从根上消掉;这条重试只剩纵深防御的意义。**正常运行时应当永远看不到它** ——
+				// 看到了就说明出现了新的成环形态,要按事故报告的方法抓 LATEST DETECTED DEADLOCK 查清。
+				logx.WithContext(ctx).Errorf("[friend] WARN ensure 容量行撞上 1213(预期不应再发生,请抓 INNODB STATUS 排查),"+
 					"重跑 COUNT+INSERT player=%d attempt=%d/%d: %v", playerID, attempt, ensureDeadlockMaxAttempts, err)
 			}
 		}
@@ -1036,8 +1079,14 @@ func (r *FriendRepo) ensureFriendCapacityRows(ctx context.Context, playerIDs ...
 	return nil
 }
 
-// ensureFriendCapacityRow 对单个玩家跑一遍"按权威边数算初值 → INSERT IGNORE"。
+// ensureFriendCapacityRow 对单个玩家跑一遍"按权威边数算初值 → 补行(ODKU)"。
 // 拆出来只为让 ensureFriendCapacityRows 的 1213 重试能把这一对语句**整体**重跑。
+//
+// 补行用 `INSERT … ON DUPLICATE KEY UPDATE player_id = player_id`,**不是** INSERT IGNORE:
+// 两者在"行已存在"时都什么也不改(ODKU 的更新是 no-op,不会覆盖已有的 friend_count / created_ms),
+// 区别只在锁 —— 主键重复时 INSERT IGNORE 拿 **S** 锁,ODKU 直接拿 **X**。回收刚删掉这一行(delete-marked、
+// 尚未提交)时,多个并发补行若各拿 S、之后都要升 X 就会互等成环(2026-09-21 真库复现);都直接要 X 则只是排队,
+// 先到者插入、后到者看到它的新行走 no-op 更新。代价:行已存在时并发补行也串行(自动提交,持锁极短)。
 func (r *FriendRepo) ensureFriendCapacityRow(ctx context.Context, playerID uint64) error {
 	// 缺行几乎都是从未有过好友的新玩家(COUNT 返回 0)。但初值仍然只能从 friend 表
 	// 的权威边数来,**绝不能直接写 0**:将来若有任何路径先写了 friend 边再补容量行,
@@ -1049,8 +1098,7 @@ func (r *FriendRepo) ensureFriendCapacityRow(ctx context.Context, playerID uint6
 		"SELECT COUNT(*) FROM friend WHERE player_id = ?", playerID).Scan(&authoritativeCount); err != nil {
 		return fmt.Errorf("count authoritative friends for player %d: %w", playerID, err)
 	}
-	if _, err := r.db.ExecContext(ctx,
-		"INSERT IGNORE INTO friend_capacity (player_id, friend_count, created_ms) VALUES (?, ?, ?)",
+	if _, err := r.db.ExecContext(ctx, ensureCapacityRowSQL,
 		playerID, authoritativeCount, time.Now().UnixMilli()); err != nil {
 		return fmt.Errorf("ensure friend capacity row for player %d: %w", playerID, err)
 	}

@@ -38,6 +38,7 @@ namespace
         std::size_t lastPendingPlayerSaves = std::numeric_limits<std::size_t>::max();
         std::size_t lastPendingKafkaMessages = std::numeric_limits<std::size_t>::max();
         std::size_t lastRemainingPlayers = std::numeric_limits<std::size_t>::max();
+        std::size_t lastExitReleaseMarks = std::numeric_limits<std::size_t>::max();
         bool shutdownDrainLogged = false;
 
         explicit SceneRuntimeContext(EventLoop& loop) : grpcService(loop) {}
@@ -78,6 +79,12 @@ int main(int argc, char *argv[])
                   &handler);
 
         node::entry::detail::ApplyPostConstructionHooks<SceneNodeHooks>(node);
+
+        // 断线释放标记(A1′)的"本节点身份当前有效"探针(cross-zone-scene-travel.md §12.6.4 M3):
+        // etcd 租约没有推定过期(最近一次 keepalive ACK 在租约 TTL 内)。scene 库不直接依赖 Node,由这里注入;
+        // 捕获的 node 活到本作用域结束(含析构里的兜底 drain 循环),作用域之后立即清掉。
+        PlayerLifecycleSystem::SetNodeIdentityProbe([&node]()
+            { return !node.GetServiceDiscoveryManager().etcdService.IsLeasePresumablyExpired(); });
 
         node.RegisterGrpcService(&context->grpcService);
 
@@ -146,7 +153,7 @@ int main(int argc, char *argv[])
 			{
 				if (tlsEcs.actorRegistry.valid(entity))
 				{
-					PlayerLifecycleSystem::HandleExitGameNode(entity);
+					PlayerLifecycleSystem::HandleExitGameNode(entity, ExitCause::kNodeShutdown);
 				}
 			}
 			LOG_INFO << "Shutdown save initiated; waiting for Redis ACK and Kafka producer flush.";
@@ -177,7 +184,7 @@ int main(int argc, char *argv[])
 			{
 				if (tlsEcs.actorRegistry.valid(entity))
 				{
-					PlayerLifecycleSystem::HandleExitGameNode(entity);
+					PlayerLifecycleSystem::HandleExitGameNode(entity, ExitCause::kNodeShutdown);
 				}
 			}
 
@@ -193,19 +200,26 @@ int main(int argc, char *argv[])
 			const std::size_t remainingPlayers = tlsEcs.actorRegistry.view<Player>().size();
 			const bool kafkaDrained = n.GetKafkaManager().FlushProducer(std::chrono::milliseconds(0));
 			const std::size_t pendingKafkaMessages = n.GetKafkaManager().PendingProducerMessages();
+			// 断线释放标记(A1′)的条件写在途数(R6):实体销毁之后才发、回调才归零,不等它的话 loop 一退
+			// 回调就再也不会来。受 Node drain 看门狗约束(Redis 卡住时不会无限等)。
+			const std::size_t exitReleaseMarks = PlayerLifecycleSystem::ExitReleaseMarksInFlight();
 			if (pendingPlayerSaves != context->lastPendingPlayerSaves ||
 				pendingKafkaMessages != context->lastPendingKafkaMessages ||
-				remainingPlayers != context->lastRemainingPlayers)
+				remainingPlayers != context->lastRemainingPlayers ||
+				exitReleaseMarks != context->lastExitReleaseMarks)
 			{
 				LOG_INFO << "Shutdown drain progress: redis_player_saves=" << pendingPlayerSaves
 						 << " kafka_messages=" << pendingKafkaMessages
-						 << " remaining_players=" << remainingPlayers;
+						 << " remaining_players=" << remainingPlayers
+						 << " exit_release_marks=" << exitReleaseMarks;
 				context->lastPendingPlayerSaves = pendingPlayerSaves;
 				context->lastPendingKafkaMessages = pendingKafkaMessages;
 				context->lastRemainingPlayers = remainingPlayers;
+				context->lastExitReleaseMarks = exitReleaseMarks;
 			}
 
-			const bool drained = remainingPlayers == 0 && pendingPlayerSaves == 0 && kafkaDrained;
+			const bool drained =
+				remainingPlayers == 0 && pendingPlayerSaves == 0 && exitReleaseMarks == 0 && kafkaDrained;
 			if (drained && !context->shutdownDrainLogged)
 			{
 				context->shutdownDrainLogged = true;
@@ -310,6 +324,9 @@ int main(int argc, char *argv[])
 
         loop.loop();
 		} // 异常 quit 时先让 Node 析构兜底完成业务 drain,Redis 此时仍保持可用。
+
+		// Node 已析构:身份探针捕获的引用从此悬空,立即清掉(之后不再跑 loop,A1′ 也不会再被调用)。
+		PlayerLifecycleSystem::SetNodeIdentityProbe({});
 
 		// Node 正常 finalizer 已先 free Hiredis;这里是幂等兜底,随后才销毁
 		// 仍由 SceneRuntimeContext 持有的 MessageAsyncClient。

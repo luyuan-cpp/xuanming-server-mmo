@@ -173,7 +173,7 @@ void SceneNodeGrpcImpl::HandleReleasePlayer(const ::scene_node::ReleasePlayerReq
              << " moving to scene " << request->target_scene_id()
              << " on node " << request->target_node_id();
 
-    PlayerLifecycleSystem::HandleExitGameNode(playerIt->second);
+    PlayerLifecycleSystem::HandleExitGameNode(playerIt->second, ExitCause::kReleasedByTransfer);
     ///<<< END WRITING YOUR CODE
 }
 

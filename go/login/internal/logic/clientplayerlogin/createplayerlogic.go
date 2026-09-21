@@ -184,6 +184,11 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		logx.Errorf("CreatePlayer rejected: gender=%d invalid (account=%s)", in.Gender, account)
 		return resp, nil
 	}
+	if !validCharacterAppearance(in.GetAppearanceId()) {
+		resp.ErrorMessage = loginTip(table.LoginError_kLoginUnknownError)
+		logx.Infof("CreatePlayer rejected: invalid appearance_id (bytes=%d)", len(in.GetAppearanceId()))
+		return resp, nil
+	}
 
 	// 6a'. 名字预检:纯计算、无副作用,所以必须排在发号**之前** —— 名字不合规是玩家手滑的
 	// 常态,不该为它烧掉一个 PlayerId,更不该碰登记表。规则读不出来(配表缺行 / 不合法)时
@@ -243,7 +248,7 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		// 不出新 id 时取最后一个角色,正好进入那个已经建好的角色。
 		// owner 只在这里用于比对,**不下发客户端**。本次铸出的 id 已经烧掉,无害。
 		if tip.Id == uint32(table.LoginError_kRoleNameTaken) &&
-			isLostResponseRetry(userAccount.SimplePlayers.Players, owner, classId, gender) {
+			isLostResponseRetry(userAccount.SimplePlayers.Players, owner, classId, gender, in.GetAppearanceId()) {
 			logx.Infof("[player-name] create retry matched existing player_id=%d (burned id=%d) account=%s",
 				owner, newPlayerId, account)
 			appendRoleList(resp, userAccount)
@@ -274,11 +279,12 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 
 	// 6e. Name 是登记表的只读副本(真源 data_service player_name);读侧遇到空名会回源。
 	newPlayer := &login_proto_common.AccountSimplePlayer{
-		PlayerId: newPlayerId,
-		ClassId:  classId,
-		Gender:   gender,
-		ZoneId:   config.AppConfig.Node.ZoneId,
-		Name:     name,
+		PlayerId:     newPlayerId,
+		ClassId:      classId,
+		Gender:       gender,
+		ZoneId:       config.AppConfig.Node.ZoneId,
+		Name:         name,
+		AppearanceId: in.GetAppearanceId(),
 	}
 	userAccount.SimplePlayers.Players = append(userAccount.SimplePlayers.Players, newPlayer)
 
@@ -332,15 +338,15 @@ func roleNameInvalidTip(rules playername.Rules) *login_proto_common.TipInfoMessa
 }
 
 // isLostResponseRetry 判定「名字被占」是不是本账号上一次建角丢了响应之后的重试(见 6c')。
-// 三个条件缺一不可:占用者非 0、就在本账号的角色列表里、职业与性别都和这次请求相同。
-// 职业 / 性别不同说明玩家是想再建一个**不同**的角色却撞上了自己的旧名字,那就该如实报被占。
-func isLostResponseRetry(players []*login_proto_common.AccountSimplePlayer, owner uint64, classID, gender uint32) bool {
+// 三个条件缺一不可:占用者非 0、就在本账号的角色列表里、职业/性别/外观都和请求相同。
+// 不同外观也不是同一次重试，即使职业、性别相同也不能误回旧人物。
+func isLostResponseRetry(players []*login_proto_common.AccountSimplePlayer, owner uint64, classID, gender uint32, appearanceID string) bool {
 	if owner == 0 {
 		return false
 	}
 	for _, p := range players {
 		if p.GetPlayerId() == owner {
-			return p.GetClassId() == classID && p.GetGender() == gender
+			return p.GetClassId() == classID && p.GetGender() == gender && p.GetAppearanceId() == appearanceID
 		}
 	}
 	return false

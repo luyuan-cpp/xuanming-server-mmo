@@ -212,6 +212,238 @@ func TestEtcYamlPassesValidate(t *testing.T) {
 	}
 }
 
+// ── 资产通道(AssetOp,B5b)────────────────────────────────────
+
+// TestAssetOpAbsentMeansDisabled 钉住"整段缺失 = 关"(裁决 D,fail-closed):
+// 一份配置抄到别的环境时少抄这一段,结果必须是通道关着;而且关着时零值的循环 / 清理参数
+// 不许让 Validate 拒启(那会让所有没配这段的环境直接起不来)。
+func TestAssetOpAbsentMeansDisabled(t *testing.T) {
+	c := loadMinimal(t)
+	if c.AssetOp.Enabled {
+		t.Fatal("没写 AssetOp 段时资产通道必须是关的")
+	}
+	if c.AssetOp.CleanupEnabled {
+		t.Fatal("没写 AssetOp 段时清理必须是关的")
+	}
+	if c.AssetOp.Workers != 0 || c.AssetOp.LeaseMs != 0 {
+		t.Fatalf("整段缺失时 go-zero 不回填 default,字段应为零值,得到 %+v", c.AssetOp)
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("通道关闭时零值参数不该被校验: %v", err)
+	}
+}
+
+// assetOpReadyYaml 在最小配置上补齐资产通道的两项前置:号段开启 + data_service 有目标。
+// 用替换而不是再追加一个 DataServiceRpc 段:yaml 里同名键出现两次会直接加载失败。
+func assetOpReadyYaml(t *testing.T) string {
+	t.Helper()
+	const from = "DataServiceRpc:\n  Timeout: 2000\n"
+	const to = "DataServiceRpc:\n  Endpoints:\n    - 127.0.0.1:9000\n  Timeout: 2000\nIdSegment:\n  Enabled: true\n"
+	if !strings.Contains(minimalGuildYaml, from) {
+		t.Fatal("minimalGuildYaml 的 DataServiceRpc 段形状变了,同步改 assetOpReadyYaml")
+	}
+	return strings.Replace(minimalGuildYaml, from, to, 1)
+}
+
+// loadAssetOpEnabled 加载"只写 Enabled: true"的配置(加载即校验)。
+func loadAssetOpEnabled(t *testing.T) Config {
+	t.Helper()
+	var c Config
+	if err := conf.LoadFromYamlBytes([]byte(assetOpReadyYaml(t)+"AssetOp:\n  Enabled: true\n"), &c); err != nil {
+		t.Fatalf("只写 Enabled: true 的配置必须能通过校验: %v", err)
+	}
+	return c
+}
+
+// TestAssetOpEnabledFillsY06Defaults:段一出现,go-zero 就按 default 回填没写的键,
+// 得到的必须是 90-consistency Y-06 的那组值。段名或 default 写错时字段会静默保持 0,
+// 只有这里能抓到。
+func TestAssetOpEnabledFillsY06Defaults(t *testing.T) {
+	a := loadAssetOpEnabled(t).AssetOp
+	if !a.Enabled {
+		t.Fatal("Enabled 应为 true")
+	}
+	checks := []struct {
+		name      string
+		got, want int
+	}{
+		{"ReconcileIntervalMs", a.ReconcileIntervalMs, 2000},
+		{"ReconcileBatch", a.ReconcileBatch, 100},
+		{"Workers", a.Workers, 8},
+		{"LeaseMs", a.LeaseMs, 10000},
+		{"OpBudgetMs", a.OpBudgetMs, 2500},
+		{"MaxBackoffMs", a.MaxBackoffMs, 60000},
+		{"PoisonDelayMs", a.PoisonDelayMs, 3600000},
+		{"LedgerReadMinAttempts", a.LedgerReadMinAttempts, 3},
+		{"CleanupIntervalMinutes", a.CleanupIntervalMinutes, 10},
+		{"TerminalRetentionDays", a.TerminalRetentionDays, 30},
+		{"CounterRetentionDays", a.CounterRetentionDays, 30},
+	}
+	for _, ck := range checks {
+		if ck.got != ck.want {
+			t.Errorf("AssetOp.%s = %d,Y-06 默认值是 %d", ck.name, ck.got, ck.want)
+		}
+	}
+	if a.CleanupEnabled {
+		t.Error("CleanupEnabled 没写时应为 false(只有显式打开才清理)")
+	}
+}
+
+// TestAssetOpLoopBounds:循环参数越界各一例,以及每条边界的合法端点。
+// 边界与 assetop.NewLoop 的校验同形(Workers ≤ 64、Batch ≥ Workers、Lease ≥ OpBudget + 2000),
+// 这里放过的配置不该在 NewLoop 里才炸(svc 包的 LoopConfigFrom 测试守住另一半)。
+func TestAssetOpLoopBounds(t *testing.T) {
+	cases := []struct {
+		name    string
+		mutate  func(a *AssetOpConf)
+		wantErr string // 空 = 应通过
+	}{
+		{"间隔下界", func(a *AssetOpConf) { a.ReconcileIntervalMs = 200 }, ""},
+		{"间隔上界", func(a *AssetOpConf) { a.ReconcileIntervalMs = 60000 }, ""},
+		{"间隔过小", func(a *AssetOpConf) { a.ReconcileIntervalMs = 199 }, "ReconcileIntervalMs"},
+		{"间隔过大", func(a *AssetOpConf) { a.ReconcileIntervalMs = 60001 }, "ReconcileIntervalMs"},
+		{"单 worker 单行", func(a *AssetOpConf) { a.Workers, a.ReconcileBatch = 1, 1 }, ""},
+		{"worker 上界", func(a *AssetOpConf) { a.Workers, a.ReconcileBatch = 64, 64 }, ""},
+		{"worker 为 0", func(a *AssetOpConf) { a.Workers = 0 }, "Workers"},
+		{"worker 超 64", func(a *AssetOpConf) { a.Workers, a.ReconcileBatch = 65, 100 }, "Workers"},
+		{"批小于 worker", func(a *AssetOpConf) { a.Workers, a.ReconcileBatch = 8, 7 }, "ReconcileBatch"},
+		{"批上界", func(a *AssetOpConf) { a.ReconcileBatch = 1000 }, ""},
+		{"批过大", func(a *AssetOpConf) { a.ReconcileBatch = 1001 }, "ReconcileBatch"},
+		{"预算下界", func(a *AssetOpConf) { a.OpBudgetMs = 1000 }, ""},
+		{"预算过小", func(a *AssetOpConf) { a.OpBudgetMs = 999 }, "OpBudgetMs"},
+		{"预算上界", func(a *AssetOpConf) { a.OpBudgetMs, a.LeaseMs = 10000, 12000 }, ""},
+		{"预算过大", func(a *AssetOpConf) { a.OpBudgetMs, a.LeaseMs = 10001, 20000 }, "OpBudgetMs"},
+		{"租约恰好等于预算加余量", func(a *AssetOpConf) { a.OpBudgetMs, a.LeaseMs = 2500, 4500 }, ""},
+		{"租约短于预算加余量", func(a *AssetOpConf) { a.OpBudgetMs, a.LeaseMs = 2500, 4499 }, "LeaseMs"},
+		{"租约上界", func(a *AssetOpConf) { a.LeaseMs = 600000 }, ""},
+		{"租约过大", func(a *AssetOpConf) { a.LeaseMs = 600001 }, "LeaseMs"},
+		{"退避封顶下界", func(a *AssetOpConf) { a.MaxBackoffMs = 1000 }, ""},
+		{"退避封顶过小", func(a *AssetOpConf) { a.MaxBackoffMs = 999 }, "MaxBackoffMs"},
+		{"退避封顶过大", func(a *AssetOpConf) { a.MaxBackoffMs = 600001 }, "MaxBackoffMs"},
+		{"毒行延迟下界", func(a *AssetOpConf) { a.PoisonDelayMs = 60000 }, ""},
+		{"毒行延迟上界", func(a *AssetOpConf) { a.PoisonDelayMs = 86400000 }, ""},
+		{"毒行延迟过小", func(a *AssetOpConf) { a.PoisonDelayMs = 59999 }, "PoisonDelayMs"},
+		{"毒行延迟过大", func(a *AssetOpConf) { a.PoisonDelayMs = 86400001 }, "PoisonDelayMs"},
+		{"账本门槛为 0", func(a *AssetOpConf) { a.LedgerReadMinAttempts = 0 }, "LedgerReadMinAttempts"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := loadAssetOpEnabled(t)
+			tc.mutate(&c.AssetOp)
+			err := c.Validate()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("应通过,得到 %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("错误 = %v,期望包含 %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestAssetOpLoopParamsIgnoredWhenDisabled:关着通道时循环参数不校验 —— 否则"改一行 Enabled: false
+// 止血"会因为别的键不合法而起不来,止血开关本身失效。
+func TestAssetOpLoopParamsIgnoredWhenDisabled(t *testing.T) {
+	c := loadAssetOpEnabled(t)
+	c.AssetOp.Enabled = false
+	c.AssetOp.Workers = 0
+	c.AssetOp.LeaseMs = 1
+	c.IdSegment.Enabled = false
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Enabled=false 时循环参数与号段前置都不该被校验: %v", err)
+	}
+}
+
+// TestAssetOpRequiresIdSegmentAndDataService:开着通道却发不出 op_id,
+// 表现是进程正常、每一次捐献 / 兑换都回发号失败 —— 必须炸在启动期。
+func TestAssetOpRequiresIdSegmentAndDataService(t *testing.T) {
+	c := loadAssetOpEnabled(t)
+	c.IdSegment.Enabled = false
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "IdSegment") {
+		t.Fatalf("Enabled=true 且号段关闭必须拒启,得到 %v", err)
+	}
+
+	c = loadAssetOpEnabled(t)
+	c.DataServiceRpc.Endpoints = nil
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "DataServiceRpc") {
+		t.Fatalf("Enabled=true 且 data_service 没有目标必须拒启,得到 %v", err)
+	}
+}
+
+// TestAssetOpCleanupBounds:清理参数只在 CleanupEnabled 时校验,越界各一例 + 合法端点。
+func TestAssetOpCleanupBounds(t *testing.T) {
+	cases := []struct {
+		name    string
+		mutate  func(a *AssetOpConf)
+		wantErr string
+	}{
+		{"间隔下界", func(a *AssetOpConf) { a.CleanupIntervalMinutes = 1 }, ""},
+		{"间隔上界", func(a *AssetOpConf) { a.CleanupIntervalMinutes = 1440 }, ""},
+		{"间隔为 0", func(a *AssetOpConf) { a.CleanupIntervalMinutes = 0 }, "CleanupIntervalMinutes"},
+		{"间隔过大", func(a *AssetOpConf) { a.CleanupIntervalMinutes = 1441 }, "CleanupIntervalMinutes"},
+		{"终态保留下界", func(a *AssetOpConf) { a.TerminalRetentionDays = 7 }, ""},
+		{"终态保留上界", func(a *AssetOpConf) { a.TerminalRetentionDays = 365 }, ""},
+		{"终态保留过短", func(a *AssetOpConf) { a.TerminalRetentionDays = 6 }, "TerminalRetentionDays"},
+		{"终态保留过长", func(a *AssetOpConf) { a.TerminalRetentionDays = 366 }, "TerminalRetentionDays"},
+		{"计数保留过短", func(a *AssetOpConf) { a.CounterRetentionDays = 6 }, "CounterRetentionDays"},
+		{"计数保留过长", func(a *AssetOpConf) { a.CounterRetentionDays = 366 }, "CounterRetentionDays"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := loadAssetOpEnabled(t)
+			c.AssetOp.CleanupEnabled = true
+			tc.mutate(&c.AssetOp)
+			err := c.Validate()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("应通过,得到 %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("错误 = %v,期望包含 %q", err, tc.wantErr)
+			}
+		})
+	}
+
+	// 清理关着时,越界的清理参数不校验。
+	c := loadAssetOpEnabled(t)
+	c.AssetOp.CleanupEnabled = false
+	c.AssetOp.CleanupIntervalMinutes = 0
+	c.AssetOp.TerminalRetentionDays = 0
+	if err := c.Validate(); err != nil {
+		t.Fatalf("CleanupEnabled=false 时清理参数不该被校验: %v", err)
+	}
+}
+
+// TestEtcYamlAssetOpBlock:仓库里的 dev 配置把资产通道与清理都显式打开,
+// 且每个键都显式写出(与 Y-06 默认值一致)—— 段名拼错时 Enabled 会静默变成 false,
+// 本地就再也演练不到捐献 / 兑换。
+func TestEtcYamlAssetOpBlock(t *testing.T) {
+	var c Config
+	if err := conf.Load("../../etc/guild.yaml", &c); err != nil {
+		t.Fatalf("加载 etc/guild.yaml 失败: %v", err)
+	}
+	a := c.AssetOp
+	if !a.Enabled {
+		t.Fatal("etc/guild.yaml 应显式打开 AssetOp.Enabled(本地演练捐献 / 兑换)")
+	}
+	if !a.CleanupEnabled {
+		t.Fatal("etc/guild.yaml 应显式打开 AssetOp.CleanupEnabled")
+	}
+	if a.Workers != 8 || a.LeaseMs != 10000 || a.OpBudgetMs != 2500 || a.ReconcileBatch != 100 ||
+		a.ReconcileIntervalMs != 2000 || a.MaxBackoffMs != 60000 || a.PoisonDelayMs != 3600000 ||
+		a.LedgerReadMinAttempts != 3 {
+		t.Errorf("etc/guild.yaml 的循环参数偏离 Y-06 默认值: %+v", a)
+	}
+	if a.CleanupIntervalMinutes != 10 || a.TerminalRetentionDays != 30 || a.CounterRetentionDays != 30 {
+		t.Errorf("etc/guild.yaml 的清理参数偏离默认值: %+v", a)
+	}
+}
+
 func TestShouldAutoMigrateDefaults(t *testing.T) {
 	var c Config
 	if !c.ShouldAutoMigrate() {

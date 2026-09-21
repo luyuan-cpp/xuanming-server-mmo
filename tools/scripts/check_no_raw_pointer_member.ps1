@@ -3,7 +3,11 @@ param(
     [string]$ProjectDir,
 
     [Parameter(Mandatory = $false)]
-    [string]$ProjectName = "unknown-project"
+    [string]$ProjectName = "unknown-project",
+    [string]$ProjectFile = '',
+    [string]$Configuration = 'Debug',
+    [string]$Platform = 'x64',
+    [string]$MSBuildPath = ''
 )
 
 Set-StrictMode -Version Latest
@@ -47,6 +51,13 @@ if (-not $useStandalone -and -not $clangQuery) {
 if (-not (Test-Path -LiteralPath $ProjectDir -PathType Container)) {
     Write-Error "ProjectDir does not exist: $ProjectDir"
     exit 1
+}
+
+# 正式工程必须使用 MSBuild 计算后的翻译单元和配置。头文件随真实包含关系检查，
+# 不能把未参与构建的示例、其他平台源码和非独立头文件当成单独的翻译单元。
+if ($ProjectFile) {
+    . (Join-Path $PSScriptRoot 'lib/no_raw_pointer_project.ps1')
+    exit (Invoke-ProjectRawPointerCheck)
 }
 
 # ==================================================================
@@ -99,6 +110,7 @@ $sysIncludes = @(
     "$repoRoot\third_party\grpc\include"
     "$repoRoot\third_party\grpc\third_party\protobuf\src"
     "$repoRoot\third_party\grpc\third_party\abseil-cpp"
+    "$repoRoot\third_party\grpc\third_party\utf8_range"
     "$repoRoot\third_party\spdlog\include"
     "$repoRoot\third_party\muduo"
     "$repoRoot\third_party\muduo\contrib\windows\include"
@@ -129,6 +141,9 @@ function Invoke-StandaloneTool {
         $lines.Add('--skip-path=generated')
         $lines.Add('--skip-path=\build\')
         $lines.Add('--skip-path=\.vs\')
+        # 与 Windows vcxproj 的平台宏一致；muduo 用 WIN32 启用 socket/pid 适配。
+        # 不设宏会在检查业务源码之前解析失败，不能靠跳过检查绕过。
+        $lines.Add('--extra-arg=-DWIN32')
 
         if ($env:INCLUDE) {
             foreach ($d in $env:INCLUDE.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries)) {
@@ -192,6 +207,7 @@ function Invoke-ClangQuery {
     $cqArgs.Add("-w")
     $cqArgs.Add("-Wno-everything")
     $cqArgs.Add("-ferror-limit=0")
+    $cqArgs.Add("-DWIN32")
 
     # MSVC system include dirs
     if ($env:INCLUDE) {

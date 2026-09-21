@@ -176,7 +176,9 @@ func (d *Deps) sweepTerminalRequests(ctx context.Context, cfg config.SweepConf) 
 	pending, deleted, err := d.Sweeps.SweepTerminalRequests(
 		ctx, cfg.Mode, cfg.RetentionDays, cfg.BatchLimit, d.now().UnixMilli())
 	if err != nil {
-		logx.WithContext(ctx).Errorf("[friend] sweep 执行失败 mode=%s: %v", cfg.Mode, err)
+		// data 层逐行按主键删,出错时已删的行是真删了:行数要进日志(与容量行回收那一支同口径)。
+		logx.WithContext(ctx).Errorf("[friend] sweep 清理终态申请失败 mode=%s(中止前看到 %d 行、已删 %d 行): %v",
+			cfg.Mode, pending, deleted, err)
 		return
 	}
 

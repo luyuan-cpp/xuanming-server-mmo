@@ -53,6 +53,9 @@ message BattlePlayerSnapshot {
   // 出战宝宝(宝宝系统,player-pet.md §5):与主人同队的独立行动单位。
   // 核心线同时只能带 1 只,repeated 是为了二期多宠不改 wire。
   repeated BattlePetSnapshot pets = 16;
+  string appearance_id = 17; // 与主城、选角一致的玩家外观身份。
+  uint32 class_id = 18;
+  uint32 gender = 19;
 }
 
 // ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
@@ -108,6 +111,9 @@ message BattleActorState {
   uint64 owner_player_id = 21;      // 仅宝宝有效:主人 player_id(结算按它归属到主人名下)
   uint32 pet_table_id = 22;         // 仅宝宝有效(Pet 表 id)
   uint64 pet_id = 23;               // 仅宝宝有效:真实 pet_id(结算回写认它;actor_id 是引擎局内号)
+  string appearance_id = 24; // 玩家来自快照；重连/观战保持同一身份。
+  uint32 class_id = 25;
+  uint32 gender = 26;
 }
 
 // ---- 玩家行动指令 ----

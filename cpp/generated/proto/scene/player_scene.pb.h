@@ -2380,12 +2380,30 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorCreateS2C final : public ::goo
 
   // accessors -------------------------------------------------------
   enum : int {
+    kAppearanceIdFieldNumber = 6,
     kTransformFieldNumber = 2,
     kEntityFieldNumber = 1,
     kGuidFieldNumber = 4,
     kConfigIdFieldNumber = 5,
     kActorTypeFieldNumber = 3,
+    kClassIdFieldNumber = 7,
+    kGenderFieldNumber = 8,
   };
+  // string appearance_id = 6;
+  void clear_appearance_id() ;
+  [[nodiscard]] const ::std::string& appearance_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_appearance_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_appearance_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_appearance_id();
+  void set_allocated_appearance_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_appearance_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_appearance_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_appearance_id();
+
+  public:
   // .Transform transform = 2;
   [[nodiscard]] bool has_transform()
       const;
@@ -2442,12 +2460,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorCreateS2C final : public ::goo
   void _internal_set_actor_type(::ActorType value);
 
   public:
+  // uint32 class_id = 7;
+  void clear_class_id() ;
+  [[nodiscard]] ::uint32_t class_id() const;
+  void set_class_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_class_id() const;
+  void _internal_set_class_id(::uint32_t value);
+
+  public:
+  // uint32 gender = 8;
+  void clear_gender() ;
+  [[nodiscard]] ::uint32_t gender() const;
+  void set_gender(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_gender() const;
+  void _internal_set_gender(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ActorCreateS2C)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
-                          1, 0,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          1, 44,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2475,11 +2513,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorCreateS2C final : public ::goo
         const ActorCreateS2C& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr appearance_id_;
     ::Transform* PROTOBUF_NULLABLE transform_;
     ::uint64_t entity_;
     ::uint64_t guid_;
     ::uint64_t config_id_;
     int actor_type_;
+    ::uint32_t class_id_;
+    ::uint32_t gender_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3248,7 +3289,7 @@ SceneInfoResponse::_internal_mutable_scene_info() {
 inline void ActorCreateS2C::clear_entity() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entity_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t ActorCreateS2C::entity() const {
   // @@protoc_insertion_point(field_get:ActorCreateS2C.entity)
@@ -3256,7 +3297,7 @@ inline ::uint64_t ActorCreateS2C::entity() const {
 }
 inline void ActorCreateS2C::set_entity(::uint64_t value) {
   _internal_set_entity(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:ActorCreateS2C.entity)
 }
 inline ::uint64_t ActorCreateS2C::_internal_entity() const {
@@ -3270,7 +3311,7 @@ inline void ActorCreateS2C::_internal_set_entity(::uint64_t value) {
 
 // .Transform transform = 2;
 inline bool ActorCreateS2C::has_transform() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
   PROTOBUF_ASSUME(!value || _impl_.transform_ != nullptr);
   return value;
 }
@@ -3291,16 +3332,16 @@ inline void ActorCreateS2C::unsafe_arena_set_allocated_transform(
   }
   _impl_.transform_ = reinterpret_cast<::Transform*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ActorCreateS2C.transform)
 }
 inline ::Transform* PROTOBUF_NULLABLE ActorCreateS2C::release_transform() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::Transform* released = _impl_.transform_;
   _impl_.transform_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -3320,7 +3361,7 @@ inline ::Transform* PROTOBUF_NULLABLE ActorCreateS2C::unsafe_arena_release_trans
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:ActorCreateS2C.transform)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::Transform* temp = _impl_.transform_;
   _impl_.transform_ = nullptr;
   return temp;
@@ -3335,7 +3376,7 @@ inline ::Transform* PROTOBUF_NONNULL ActorCreateS2C::_internal_mutable_transform
 }
 inline ::Transform* PROTOBUF_NONNULL ActorCreateS2C::mutable_transform()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::Transform* _msg = _internal_mutable_transform();
   // @@protoc_insertion_point(field_mutable:ActorCreateS2C.transform)
   return _msg;
@@ -3352,9 +3393,9 @@ inline void ActorCreateS2C::set_allocated_transform(::Transform* PROTOBUF_NULLAB
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
 
   _impl_.transform_ = reinterpret_cast<::Transform*>(value);
@@ -3365,7 +3406,7 @@ inline void ActorCreateS2C::set_allocated_transform(::Transform* PROTOBUF_NULLAB
 inline void ActorCreateS2C::clear_actor_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.actor_type_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::ActorType ActorCreateS2C::actor_type() const {
   // @@protoc_insertion_point(field_get:ActorCreateS2C.actor_type)
@@ -3373,7 +3414,7 @@ inline ::ActorType ActorCreateS2C::actor_type() const {
 }
 inline void ActorCreateS2C::set_actor_type(::ActorType value) {
   _internal_set_actor_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:ActorCreateS2C.actor_type)
 }
 inline ::ActorType ActorCreateS2C::_internal_actor_type() const {
@@ -3389,7 +3430,7 @@ inline void ActorCreateS2C::_internal_set_actor_type(::ActorType value) {
 inline void ActorCreateS2C::clear_guid() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.guid_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t ActorCreateS2C::guid() const {
   // @@protoc_insertion_point(field_get:ActorCreateS2C.guid)
@@ -3397,7 +3438,7 @@ inline ::uint64_t ActorCreateS2C::guid() const {
 }
 inline void ActorCreateS2C::set_guid(::uint64_t value) {
   _internal_set_guid(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:ActorCreateS2C.guid)
 }
 inline ::uint64_t ActorCreateS2C::_internal_guid() const {
@@ -3413,7 +3454,7 @@ inline void ActorCreateS2C::_internal_set_guid(::uint64_t value) {
 inline void ActorCreateS2C::clear_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.config_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t ActorCreateS2C::config_id() const {
   // @@protoc_insertion_point(field_get:ActorCreateS2C.config_id)
@@ -3421,7 +3462,7 @@ inline ::uint64_t ActorCreateS2C::config_id() const {
 }
 inline void ActorCreateS2C::set_config_id(::uint64_t value) {
   _internal_set_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:ActorCreateS2C.config_id)
 }
 inline ::uint64_t ActorCreateS2C::_internal_config_id() const {
@@ -3431,6 +3472,118 @@ inline ::uint64_t ActorCreateS2C::_internal_config_id() const {
 inline void ActorCreateS2C::_internal_set_config_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.config_id_ = value;
+}
+
+// string appearance_id = 6;
+inline void ActorCreateS2C::clear_appearance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.appearance_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& ActorCreateS2C::appearance_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ActorCreateS2C.appearance_id)
+  return _internal_appearance_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ActorCreateS2C::set_appearance_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.appearance_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:ActorCreateS2C.appearance_id)
+}
+inline ::std::string* PROTOBUF_NONNULL ActorCreateS2C::mutable_appearance_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_appearance_id();
+  // @@protoc_insertion_point(field_mutable:ActorCreateS2C.appearance_id)
+  return _s;
+}
+inline const ::std::string& ActorCreateS2C::_internal_appearance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.appearance_id_.Get();
+}
+inline void ActorCreateS2C::_internal_set_appearance_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.appearance_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ActorCreateS2C::_internal_mutable_appearance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.appearance_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ActorCreateS2C::release_appearance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ActorCreateS2C.appearance_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.appearance_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.appearance_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ActorCreateS2C::set_allocated_appearance_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.appearance_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.appearance_id_.IsDefault()) {
+    _impl_.appearance_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:ActorCreateS2C.appearance_id)
+}
+
+// uint32 class_id = 7;
+inline void ActorCreateS2C::clear_class_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.class_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t ActorCreateS2C::class_id() const {
+  // @@protoc_insertion_point(field_get:ActorCreateS2C.class_id)
+  return _internal_class_id();
+}
+inline void ActorCreateS2C::set_class_id(::uint32_t value) {
+  _internal_set_class_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:ActorCreateS2C.class_id)
+}
+inline ::uint32_t ActorCreateS2C::_internal_class_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.class_id_;
+}
+inline void ActorCreateS2C::_internal_set_class_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.class_id_ = value;
+}
+
+// uint32 gender = 8;
+inline void ActorCreateS2C::clear_gender() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gender_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t ActorCreateS2C::gender() const {
+  // @@protoc_insertion_point(field_get:ActorCreateS2C.gender)
+  return _internal_gender();
+}
+inline void ActorCreateS2C::set_gender(::uint32_t value) {
+  _internal_set_gender(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:ActorCreateS2C.gender)
+}
+inline ::uint32_t ActorCreateS2C::_internal_gender() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gender_;
+}
+inline void ActorCreateS2C::_internal_set_gender(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gender_ = value;
 }
 
 // -------------------------------------------------------------------

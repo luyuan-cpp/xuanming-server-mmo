@@ -1,14 +1,22 @@
 #pragma once
+#include <array>
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <iterator>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include "engine/core/type_define/type_define.h"
 #include "engine/infra/storage/redis_client/redis_client.h"
 #include "proto/common/database/player_cache.pb.h"
 #include "proto/common/component/player_async_comp.pb.h"
+// ExitCause:HandleExitGameNode 的参数。写全路径:本头也被 modules 库(bag_service / currency_system)包含,
+// 那个工程的包含目录里只有 cpp/libs,没有 cpp/libs/services/scene。
+#include "services/scene/player/system/player_exit_intent.h"
+#include "services/scene/player/system/exit_release_mark.h"
 
 namespace scene_manager { class EnterSceneResponse; }
 namespace storage { class PlayerLocation; }
@@ -29,11 +37,38 @@ namespace player_ownership
 // homeZoneId / ownerEpoch 来自 PlayerEnterGameNodeRequest(gate 从 RoutePlayerEvent 透传),
 // 是"这次路由决策"的值,不是持久化组件,所以不进 PlayerGameNodeEntryInfoComp 这个 proto comp;
 // 只在建实体 / 重连时消费一次。0 的含义见 player/comp/player_ownership_comp.h。
+// 一次载入生命周期里 A2′(载入前"先核归属再删"继承来的 handoff 标记,cross-zone-scene-travel.md §12.6.3
+// 第三步)的状态。挂在待入场上下文上:同一次载入期间的重连覆盖上下文时必须原样拷过去
+// (scene_handler.cpp 的新载入分支),载入完成 / 放弃时随上下文一起消失。
+// 只在 scene 逻辑线程上读写(PlayerEnterGameNode、Redis 回调、RedisSystem 定时器同一个 EventLoop)。
+struct InheritClearState
+{
+	// 本次载入生命周期号(节点内单调,0 = 还没分配)。A2′ 的应答只按值捕获它,晚到时据此认出
+	// "这次载入已经放弃 / 已经建了实体"。
+	uint64_t lifecycle{0};
+	// A2′ 当前针对的 epoch 与进度(只描述"针对 targetEpoch 的那一次",见 exit_release_mark::DecideInheritGate)。
+	uint64_t targetEpoch{0};
+	exit_release_mark::InheritClearPhase phase{exit_release_mark::InheritClearPhase::kNone};
+	// 每发一次 EVAL 加一;应答只按值捕获发送时的值,不等于当前值的应答只记账、不参与闸门判定。
+	uint32_t attemptSeq{0};
+	// 针对 targetEpoch 已发出的次数与首发时刻(单调时钟),重发上限见 exit_release_mark::IsInheritClearExhausted。
+	uint32_t attemptsSent{0};
+	exit_release_mark::Clock::time_point firstSentAt{};
+	exit_release_mark::Clock::time_point nextRetryAt{};
+	// 本生命周期已发出、应答未到的 EVAL 数(可能跨 epoch 不止一个)。
+	uint32_t outstandingReplies{0};
+	// 本生命周期删掉过(或可能删掉过)epoch == rewriteEpoch 的标记;0 = 没有。没建出实体就放弃时按它补写(M7)。
+	uint64_t rewriteEpoch{0};
+	// 载入已经完成、在等 A2′ 应答 / 重发时暂存的载入结果(M10:等待期间保留,不重新 GET)。
+	std::shared_ptr<const PlayerAllData> stashedLoad;
+};
+
 struct PlayerEnterContext
 {
 	PlayerGameNodeEntryInfoComp enterInfo;
 	uint32_t homeZoneId{0};
 	uint64_t ownerEpoch{0};
+	InheritClearState inheritClear;
 };
 
 // Map of player_id → enter-context for players whose Redis load is in flight.
@@ -216,6 +251,166 @@ namespace travel_handoff_stats
 	}
 } // namespace travel_handoff_stats
 
+// 退出存盘收尾(Z1 修复,cross-zone-scene-travel.md §12.6.3 第一步)的计数。与 travel_handoff_stats
+// 同一套写法(relaxed atomic、不接 Prometheus、只在 scene 逻辑线程上写),由 player_lifecycle.cpp 里与
+// [TravelHandoff] 同款的 30s 定时器(第一次有玩家退出时挂上)打成一行 [ExitPersist]:key=value 平铺、
+// 进程启动以来的累计值,有变化才打,级别 INFO。
+//
+//   superseded             退出存盘落地时发现已被一个更新的会话取代(player_exit::IsSupersedingSession),
+//                          保留实体、摘退出标记。正常重连在 EnterScene 第 0 步就摘了标记,走不到这里,应接近 0
+//   intent_missing         带 UnregisterPlayer 却没有 PlayerExitIntentComp(成对约定被破坏)。fail-closed
+//                          保留实体、摘 UnregisterPlayer。应恒 0,非 0 = 有路径漏挂 / 漏摘
+//   resave                 落地内容与当前内存不一致(或还有未落地的存盘),更新快照后重存。
+//                          偶发正常(退出存盘在途时的战斗结算 / 客户端操作已被拦,但仍有别的改动来源)
+//   resave_exhausted       重存到上限仍不收敛,fail-closed 保留实体(交周期存盘 / 再次退出请求 / 停机看门狗)。
+//                          已知的逐帧改动源(客户端消息、战斗结算、移动积分)都已关掉,应接近 0;持续非 0 =
+//                          还有未识别的改动源在改退出中的实体
+//   exhausted_rekick       超限保留的实体又收到一次退出请求(停机 exitAllPlayers 等),补发了一次存盘
+//   fastpath_deferred      退出时 dirty-save 快路径判"盘上已是同一份",但该 key 还有在途 / 排队中的存盘,
+//                          改走一次真实存盘、等落地回调收尾(M4)
+//   client_msg_rejected    退出中的实体收到 ExitGame 以外的客户端消息,被丢弃(已回 tip 的与只丢弃的都计)
+//   deposed_on_reentry     进场路由命中本节点上仍在退出中的旧实体,且 owner_epoch 显示中间有别的持有者
+//                          (player_exit::IsDeposedWhileExiting),不存盘销毁后从盘上重载。非 0 = 有退出
+//                          曾被保留到租约之后(看 resave_exhausted / save outran reconnect lease)
+namespace exit_persist_stats
+{
+	struct Counters
+	{
+		std::atomic<uint64_t> superseded{0};
+		std::atomic<uint64_t> intentMissing{0};
+		std::atomic<uint64_t> resave{0};
+		std::atomic<uint64_t> resaveExhausted{0};
+		std::atomic<uint64_t> exhaustedRekick{0};
+		std::atomic<uint64_t> fastpathDeferred{0};
+		std::atomic<uint64_t> clientMsgRejected{0};
+		std::atomic<uint64_t> deposedOnReentry{0};
+	};
+
+	inline Counters& Get()
+	{
+		static Counters g_counters;
+		return g_counters;
+	}
+
+	inline void Inc(std::atomic<uint64_t>& counter) { counter.fetch_add(1, std::memory_order_relaxed); }
+
+	struct Snapshot
+	{
+		uint64_t superseded{0};
+		uint64_t intentMissing{0};
+		uint64_t resave{0};
+		uint64_t resaveExhausted{0};
+		uint64_t exhaustedRekick{0};
+		uint64_t fastpathDeferred{0};
+		uint64_t clientMsgRejected{0};
+		uint64_t deposedOnReentry{0};
+
+		bool operator==(const Snapshot&) const = default;
+	};
+
+	inline Snapshot Read()
+	{
+		const auto& counters = Get();
+		Snapshot snapshot;
+		snapshot.superseded = counters.superseded.load(std::memory_order_relaxed);
+		snapshot.intentMissing = counters.intentMissing.load(std::memory_order_relaxed);
+		snapshot.resave = counters.resave.load(std::memory_order_relaxed);
+		snapshot.resaveExhausted = counters.resaveExhausted.load(std::memory_order_relaxed);
+		snapshot.exhaustedRekick = counters.exhaustedRekick.load(std::memory_order_relaxed);
+		snapshot.fastpathDeferred = counters.fastpathDeferred.load(std::memory_order_relaxed);
+		snapshot.clientMsgRejected = counters.clientMsgRejected.load(std::memory_order_relaxed);
+		snapshot.deposedOnReentry = counters.deposedOnReentry.load(std::memory_order_relaxed);
+		return snapshot;
+	}
+} // namespace exit_persist_stats
+
+// 断线释放标记(A1′)与载入时清标记(A2′)的计数(cross-zone-scene-travel.md §12.6.3 第二步 / 第三步)。
+// 写法同 exit_persist_stats(relaxed atomic、不接 Prometheus、player_id 不做 label),由 player_lifecycle.cpp
+// 与 [ExitPersist] 同一个 30s 定时器打成一行 [ExitRelease](INFO,有变化才打,进程启动以来的累计值)。
+//
+//   decisions[]           A1′ 每一次判定按结果计数,key 见 exit_release_mark::kExitReleaseDecisionNames:
+//                         attempted = 判定为写、发出了条件写;skip_* = 各类不写的原因
+//   written / epoch_moved A1′ 条件写返回 1 / 0(owner_epoch 已变,不写是对的)
+//   failed                A1′ 空应答 / ERROR / 派发失败(Redis 不可用也算)。一律不重试
+//   inheritResults[]      A2′ 每一次 EVAL 的结果,key 见 exit_release_mark::kInheritClearResultNames
+//   inherit_failed        A2′ 失败(应答失败 + 派发失败),会有上限地重发
+//   inherit_refused       闸门拒建实体(核对不过 / 重发耗尽 / 没有针对本 epoch 的 A2′),已回 kEnterSceneFailed
+//   inherit_rewritten     载入被放弃时补写成功(M7);inherit_rewrite_skipped = owner_epoch 已变没写;
+//                         inherit_rewrite_failed = 补写失败(不重试)
+namespace exit_release_stats
+{
+	struct Counters
+	{
+		std::array<std::atomic<uint64_t>, exit_release_mark::kExitReleaseDecisionCount> decisions{};
+		std::atomic<uint64_t> written{0};
+		std::atomic<uint64_t> epochMoved{0};
+		std::atomic<uint64_t> failed{0};
+		std::array<std::atomic<uint64_t>, exit_release_mark::kInheritClearResultCount> inheritResults{};
+		std::atomic<uint64_t> inheritFailed{0};
+		std::atomic<uint64_t> inheritRefused{0};
+		std::atomic<uint64_t> inheritRewritten{0};
+		std::atomic<uint64_t> inheritRewriteSkipped{0};
+		std::atomic<uint64_t> inheritRewriteFailed{0};
+	};
+
+	inline Counters& Get()
+	{
+		static Counters g_counters;
+		return g_counters;
+	}
+
+	inline void Inc(std::atomic<uint64_t>& counter) { counter.fetch_add(1, std::memory_order_relaxed); }
+
+	struct Snapshot
+	{
+		std::array<uint64_t, exit_release_mark::kExitReleaseDecisionCount> decisions{};
+		uint64_t written{0};
+		uint64_t epochMoved{0};
+		uint64_t failed{0};
+		std::array<uint64_t, exit_release_mark::kInheritClearResultCount> inheritResults{};
+		uint64_t inheritFailed{0};
+		uint64_t inheritRefused{0};
+		uint64_t inheritRewritten{0};
+		uint64_t inheritRewriteSkipped{0};
+		uint64_t inheritRewriteFailed{0};
+
+		bool operator==(const Snapshot&) const = default;
+	};
+
+	inline Snapshot Read()
+	{
+		const auto& counters = Get();
+		Snapshot snapshot;
+		for (std::size_t i = 0; i < snapshot.decisions.size(); ++i)
+		{
+			snapshot.decisions[i] = counters.decisions[i].load(std::memory_order_relaxed);
+		}
+		snapshot.written = counters.written.load(std::memory_order_relaxed);
+		snapshot.epochMoved = counters.epochMoved.load(std::memory_order_relaxed);
+		snapshot.failed = counters.failed.load(std::memory_order_relaxed);
+		for (std::size_t i = 0; i < snapshot.inheritResults.size(); ++i)
+		{
+			snapshot.inheritResults[i] = counters.inheritResults[i].load(std::memory_order_relaxed);
+		}
+		snapshot.inheritFailed = counters.inheritFailed.load(std::memory_order_relaxed);
+		snapshot.inheritRefused = counters.inheritRefused.load(std::memory_order_relaxed);
+		snapshot.inheritRewritten = counters.inheritRewritten.load(std::memory_order_relaxed);
+		snapshot.inheritRewriteSkipped = counters.inheritRewriteSkipped.load(std::memory_order_relaxed);
+		snapshot.inheritRewriteFailed = counters.inheritRewriteFailed.load(std::memory_order_relaxed);
+		return snapshot;
+	}
+} // namespace exit_release_stats
+
+namespace player_exit
+{
+	// 刚落地的 PlayerAllData 是否就是当前内存(M1 "比对后才销毁")。比对前把两边 player_database /
+	// player_database_1 的 stress_test_probe 剔掉:压测探针只在真正写盘的那份上打(SavePlayerToRedis 在快路径
+	// 比对之后才 Stamp),落地的 message 带着 test_seq / test_sig,而新 marshal 的不带;不剔的话开了
+	// STRESS_TEST_PROBE 的构建永远判"不一致",退出永不收敛。其余字段用 dirty_save::IsEqual(与快路径同一把尺子)。
+	// 入参不改;内部各拷一份再剔。只在退出落地回调里调,不在逐帧路径上。
+	bool IsPersistedPayloadCurrent(const PlayerAllData& landed, const PlayerAllData& current);
+} // namespace player_exit
+
 // 交接去留裁决(PlayerLifecycleSystem::ResolveTravelOutcome)手里的"证据":这次裁决是凭什么进来的。
 // 替代原来的 bool replyWasSuccess —— 一个布尔分不清"显式失败""没收到应答""EnterScene 根本没发出去"
 // "协议异常",而它们在"epoch 已变"时该不该让客户端断线重登答案不同(见 ShouldResetClientOnGrant)。
@@ -335,7 +530,52 @@ public:
 	static void RemovePlayerSession(entt::entity player);
 	static void RemovePlayerSessionSilently(Guid playerId);
 	static void DestroyPlayer(Guid player_id);
-	static void HandleExitGameNode(entt::entity player);
+
+	// 推进退出流程:挂 UnregisterPlayer + PlayerExitIntentComp(抄下退出那一刻的会话与原因)→ 摘场景 →
+	// 存盘;落地后由 HandlePlayerAsyncSaved 的退出分支比对收敛再销毁(§12.6.3 第一步)。
+	// cause 决定收尾时写不写断线释放标记(A1′,见 exit_release_mark.h);默认 kUnspecified = 来源不明 = 不写。已在退出中时不重挂,
+	// 按 player_exit::MergeExitCause 合并原因后返回。
+	static void HandleExitGameNode(entt::entity player, ExitCause cause = ExitCause::kUnspecified);
+
+	// 退出即冻结运动学:把 Velocity / Acceleration 清零(只改已有组件,不 emplace)。HandleExitGameNode 在
+	// 第一次存盘之前调用。不清的话 MovementSystem 会继续积分退出中实体的 Transform(它不排除 UnregisterPlayer,
+	// 摘掉 SceneEntityComp 后导航夹持也失效),退出存盘的收敛比对每轮都判不一致。重连后客户端会重新上报速度。
+	// 公开只为单测能直接验证;业务代码不要在退出流程之外调用。
+	static void StopMotionForExit(entt::entity player);
+
+	// 重连取消退出(EnterScene 第 0 步):UnregisterPlayer 与 PlayerExitIntentComp 成对摘掉
+	// (player_exit_intent.h 的成对约定)。两者都不在时 no-op。公开只为单测能直接验证成对摘除。
+	static void CancelExitOnReconnect(entt::entity player);
+
+	// 进场路由命中本节点上仍在退出中的旧实体、且 owner_epoch 显示中间有别的持有者
+	// (player_exit::IsDeposedWhileExiting)时,按"被废黜"不存盘销毁它并返回 true,调用方随后从盘上重载。
+	// 其余情况返回 false、什么都不做(照常复用实体)。只由 SceneHandler::PlayerEnterGameNode 调用,
+	// 与 DiscardStaleHandoffEntity 同一位置、同一套路。
+	static bool DiscardDeposedExitingEntity(entt::entity player, uint64_t incomingOwnerEpoch);
+
+	// ── A2′:新载入前"先核归属再删"继承来的 handoff 标记(§12.6.3 第三步,M2 / M7 / M10)──
+	// SceneHandler::PlayerEnterGameNode 的新载入分支在登记待入场上下文之后、AsyncLoad 之前调用。
+	// ctx.ownerEpoch == N(非 0)且本生命周期还没针对 N 发过时,在 zone Redis 上发一段原子 Lua
+	// (exit_release_mark::kLuaInheritClear):owner_epoch ≠ N 返回 -1、一个标记都不删;相等才删 epoch ≤ N 的标记。
+	// 结果决定 HandlePlayerAsyncLoaded 的闸门(exit_release_mark::DecideInheritGate):已确认 → 建实体;
+	// 在途 / 等重发 → 暂存载入结果;-1 / 重发耗尽 → 立即拒建实体、回 kEnterSceneFailed、擦掉预登记会话。
+	// ctx.ownerEpoch == 0(旧版路由)什么都不做,闸门放行。待入场条目不存在时 no-op。
+	static void BeginInheritedMarkClear(Guid playerId);
+
+	// 有上限地重发失败的 A2′,并对超过截止时刻的(失败或在途)拒建实体。由 RedisSystem 驱动:
+	//   reconnected = true  → Redis 重连回调里、playerRedis->OnReconnected() 之前调,忽略退避;
+	//   reconnected = false → 1s 周期定时器里、RetryDuePending() 之前调,只发退避已到的。
+	// 待入场表为空时零开销。
+	static void RetryInheritedMarkClears(bool reconnected);
+
+	// 已发出、应答未到的断线释放标记条件写数(A1′ 与 A2′ 放弃补写,R6)。计入停机 drain 谓词
+	// (main.cpp 的 drained 条件)与 IsEmergencyRelocateDrained,受 Node drain 看门狗约束。
+	static std::size_t ExitReleaseMarksInFlight();
+
+	// 本节点身份当前是否确认有效(M3)的只读探针,由节点入口(nodes/scene/main.cpp)注入:scene 库不直接依赖
+	// Node(单测宿主没有 Node,链进 node.cpp 会拖进整条 gRPC / etcd 依赖)。未注入 / 传空 = 身份不确认,
+	// A1′ 一律不写(fail-closed)。探针只在 scene 逻辑线程上调用。
+	static void SetNodeIdentityProbe(std::function<bool()> probe);
 
 	// 该玩家是否处于"归属交接在途"的冻结态(PlayerFrozenComp 存在)。
 	// 业务系统(AOI / 战斗 / 货币 / 背包 / 聊天 / 移动)写之前必须查它,为真就跳过:冻结中的实体
@@ -511,17 +751,24 @@ public:
 	static bool IsSaveInFlight(Guid playerId);
 
 private:
-	// 存盘确实落地之后的统一收尾:紧急疏散改派(如果在疏散中)-> 摘会话 -> 销毁实体。
-	// 异步存盘回调与"快路径没写盘"两条路径都走这里,避免两份收尾逻辑漂移。
+	// 存盘确实落地之后的统一收尾:紧急疏散改派(如果在疏散中)-> 断线释放标记(A1′,条件满足才写)
+	// -> 摘会话 -> 销毁实体。异步存盘回调与"快路径没写盘"两条路径都走这里,避免两份收尾逻辑漂移。
 	static void FinishExitAfterPersist(Guid playerId);
 
 	// 向 SceneManager 请求把该玩家改派到大世界频道。只在疏散票据存在时生效,
-	// 消费即删除(幂等)。
-	static void DispatchEmergencyRelocate(Guid playerId);
+	// 消费即删除(幂等)。返回 true = 本次消费了票据(改派自己写 handoff 标记,A1′ 不得再写)。
+	static bool DispatchEmergencyRelocate(Guid playerId);
 
 	// 抄改派票据 + 推进退出流程。整节点疏散与单场景排空共用。
 	// 返回 true 表示登记了票据(玩家有活着的 gate 会话)。
-	static bool EnqueueRelocateTicket(entt::entity playerEntity, const char *reasonTag);
+	// cause:整节点疏散传 kIdentityConflict,单场景排空传 kSceneDrain(原样交给 HandleExitGameNode)。
+	static bool EnqueueRelocateTicket(entt::entity playerEntity, const char *reasonTag, ExitCause cause);
+
+	// SavePlayerToRedis 的本体。allowSkipWhenPersisted = false 时跳过 dirty-save 快路径、一定写盘
+	// (交接已发起时的"不得再写"仍然生效)。只给退出流程用:快路径判"盘上已是同一份",但同 key 还有
+	// 在途 / 排队中的存盘时,必须改走一次真实存盘、等落地回调收尾(§12.6.4 M4)。
+	// 不给 SavePlayerToRedis 加默认参数:它以函数指针形式被引用(asset_op_system.cpp 的 PersistFn)。
+	static bool SavePlayerToRedisImpl(entt::entity player, bool allowSkipWhenPersisted);
 
 	// 把玩家从所在场景摘掉:BeforeLeaveScene(AOI / crowd)→ ScenePlayers 摘除 → 摘 SceneEntityComp + Hex。
 	// 退出流程与"被废黜"销毁共用;不在场景里则 no-op。

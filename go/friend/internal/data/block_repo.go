@@ -41,7 +41,7 @@ type BlockEntry struct {
 //	    ① 容量守卫(升序锁 me 与 target 两行)—— 与 AddFriend / AcceptFriend 互斥的唯一依据
 //	    body:
 //	      ② 已拉黑?(锁定读)→ 幂等提交,不占新名额
-//	      ③ 名额(锁定读 COUNT)≥ maxBlocks → ErrBlockListFull
+//	      ③ 名额(守卫内普通读 COUNT,见该步说明)≥ maxBlocks → ErrBlockListFull
 //	      ④ INSERT IGNORE friend_block
 //	      ⑤ 删双向好友边 + 按 RowsAffected 减 friend_count
 //	      ⑥ 两个方向的 pending 置 rejected 并写 updated_ms
@@ -65,7 +65,7 @@ func (r *FriendRepo) Block(ctx context.Context, playerID, targetPlayerID uint64,
 	// 它挡的是回收周期**之内**的增长速度 —— Block 是本域唯一没有 §3.6 频率配额的写路径,不挡这一下,
 	// 客户端就能用互不相同的随机 target 在一个保留期内任意撑大 friend_capacity(F2-15 的同类缺陷)。
 	// 这一探是**普通读**:此刻还没有容量守卫,按顶部锁序 (2) 不允许做锁定读;
-	// 权威判定仍是下面 ③ 守卫内的那条 FOR UPDATE COUNT,漏判一两条只是多进一次事务。
+	// 权威判定仍是下面 ③ 守卫内的那条 COUNT,漏判一两条只是多进一次事务。
 	//
 	// ⚠ 它只封住"稳态名额"这一维:**Block + Unblock 反复换目标仍可绕过**
 	// (每次 Unblock 之后名额又空出来,而 capacity 行已经建了,要等保留期过了才被回收)。
@@ -114,16 +114,19 @@ func (r *FriendRepo) Block(ctx context.Context, playerID, targetPlayerID uint64,
 			return err
 		}
 		if !alreadyBlocked {
-			// ③ 名额校验:守卫锁内的**锁定读** COUNT 才是权威。
+			// ③ 名额校验:守卫锁内的**普通读** COUNT 就是权威值。
 			//
-			// 这条 COUNT 保留 FOR UPDATE(与 AddFriendRequest 的两条 pending COUNT 不同,
-			// 那两条刻意用普通读,理由见那里):它的加锁集合恒是"player_id = 操作者自己"的行,
-			// 而任何会往这个集合里插行的事务(只有 Block 本身)都必须先持有**同一个** me 的
-			// 容量守卫行,所以锁集不会跨玩家交叉,不存在 AddFriend 那种 ABBA。
+			// 不加 FOR UPDATE,与 AddFriendRequest 的两条 pending COUNT 同一个论证:能让这个计数
+			// **变大**的只有 Block 本身(往 player_id = me 插行),而它必须先持有**同一个** me 的容量守卫行 ——
+			// 我们此刻正握着它;RC 下每条语句各取一份新快照,看得到守卫等待期间别人已提交的写。
+			// 原先这里是 FOR UPDATE(注释说"锁集恒是 player_id = me 的行"),那只在执行计划恰好是主键前缀
+			// 查找时成立:COUNT(*) 天然偏好更小的覆盖索引,统计信息一变就可能被规划成 idx_blocked_player
+			// 全扫描,锁到别的玩家对的二级索引项上 —— 正是 friend_repo.go 顶部锁序说明 (6) 实证过的那类 1213。
+			// 普通读不加任何锁,正确性不再依赖执行计划。
 			if maxBlocks > 0 {
 				var blocked uint32
 				if err := tx.QueryRowContext(ctx,
-					"SELECT COUNT(*) FROM friend_block WHERE player_id=? FOR UPDATE",
+					"SELECT COUNT(*) FROM friend_block WHERE player_id=?",
 					playerID).Scan(&blocked); err != nil {
 					return fmt.Errorf("count blocks %d: %w", playerID, err)
 				}
@@ -154,16 +157,18 @@ func (r *FriendRepo) Block(ctx context.Context, playerID, targetPlayerID uint64,
 			return err
 		}
 
-		// ⑥ 取消两人之间**两个方向**的 pending 申请(单条语句覆盖两行,天然原子)。
+		// ⑥ 取消两人之间**两个方向**的 pending 申请:两条按主键的点更新,同一事务内,原子性不变。
 		// 置 rejected 而不是删行:玩家的申请列表要能解释"我发的申请怎么没了";
 		// 行本身由 sweep 在保留期后回收。updated_ms 必须一起写(F2-14),
 		// 否则这些行在 sweep 眼里永远停在 0。
-		if _, err := tx.ExecContext(ctx,
-			`UPDATE friend_request SET status=?, updated_ms=?
-		 WHERE status=? AND ((from_player_id=? AND to_player_id=?) OR (from_player_id=? AND to_player_id=?))`,
-			requestStatusRejected, nowMs, requestStatusPending,
-			playerID, targetPlayerID, targetPlayerID, playerID); err != nil {
-			return fmt.Errorf("cancel pending requests %d-%d: %w", playerID, targetPlayerID, err)
+		// ⚠ 不要合回一条 `status=? AND ((…) OR (…))`:真库上它走 idx_status_updated 的 status 前缀
+		// (type=range),扫的是全服所有 pending 行,先二级索引后主键,与别的玩家对上"先主键"的写可以成环
+		// (friend_repo.go 顶部锁序说明 (6))。
+		for _, dir := range [2][2]uint64{{playerID, targetPlayerID}, {targetPlayerID, playerID}} {
+			if _, err := tx.ExecContext(ctx, cancelPendingRequestSQL,
+				requestStatusRejected, nowMs, dir[0], dir[1], requestStatusPending); err != nil {
+				return fmt.Errorf("cancel pending request %d->%d: %w", dir[0], dir[1], err)
+			}
 		}
 		return nil
 	})
@@ -258,3 +263,9 @@ func blockExistsForUpdate(ctx context.Context, tx *sql.Tx, playerID, targetPlaye
 	}
 	return false, fmt.Errorf("check block %d->%d: %w", playerID, targetPlayerID, err)
 }
+
+// cancelPendingRequestSQL 是 Block ⑥ 按单个方向取消 pending 申请的点更新。
+// WHERE 必须是 friend_request 的**完整主键等值**再加 status 过滤,执行计划才会是 key=PRIMARY、
+// 用满两列主键(friend_repo.go 顶部锁序说明 (6));写成包级常量是为了让
+// TestLockingStatementsArePrimaryKeyPointLookups 对生产代码实际执行的这一条做 EXPLAIN。
+const cancelPendingRequestSQL = "UPDATE friend_request SET status = ?, updated_ms = ? WHERE from_player_id = ? AND to_player_id = ? AND status = ?"

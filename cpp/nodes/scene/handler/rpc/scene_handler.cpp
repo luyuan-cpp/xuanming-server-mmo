@@ -16,6 +16,7 @@
 #include "network/network_constants.h"
 #include "network/error_handling_system.h"
 #include "proto/common/component/player_async_comp.pb.h"
+#include "proto/common/component/player_comp.pb.h" // UnregisterPlayer:退出中只放行 ExitGame
 #include "proto/common/component/player_network_comp.pb.h"
 #include "proto/common/base/node.pb.h"
 #include "rpc/service_metadata/rpc_event_registry.h"
@@ -132,6 +133,25 @@ namespace
 		return false;
 	}
 
+	// 把一个拒绝码写进泛型应答的 error_message(按字段名反射,与生成层同一个 "error_message" 字段名契约)。
+	// 应答里没有这个字段(返回 Empty 的推送类方法)时返回 false、什么都不写。
+	// 不经进程级全局 TipInfoMessage:直接构造局部 tip 写进应答,没有跨请求污染的问题
+	// (GM 闸门那条分支为什么要清全局 tip,见 ProcessClientPlayerMessage 里的注释)。
+	bool WriteRejectTip(google::protobuf::Message &playerResponse, const uint32_t tipId)
+	{
+		const auto *tipField = playerResponse.GetDescriptor()->FindFieldByName("error_message");
+		if (tipField == nullptr ||
+			tipField->cpp_type() != google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE ||
+			tipField->message_type() != TipInfoMessage::descriptor())
+		{
+			return false;
+		}
+		TipInfoMessage tip;
+		tip.set_id(tipId);
+		playerResponse.GetReflection()->MutableMessage(&playerResponse, tipField)->CopyFrom(tip);
+		return true;
+	}
+
 } // namespace
 
 ///<<< END WRITING YOUR CODE
@@ -171,6 +191,14 @@ void SceneHandler::PlayerEnterGameNode(::google::protobuf::RpcController* contro
 		PlayerLifecycleSystem::DiscardStaleHandoffEntity(playerIt->second, ctx.ownerEpoch))
 	{
 		// 销毁会改 playerList,迭代器已失效,不得再用。
+		playerIt = tlsEcs.playerList.end();
+	}
+	// 1.6 同一套路,针对仍在退出中(UnregisterPlayer)的旧实体:owner_epoch 至少比它缓存的大 2 = 中间有别的
+	//     持有者(退出被保留到租约之后,玩家在别处玩过又被派回来),复用它同样是回档,按"被废黜"销毁后重载。
+	//     恰好 +1(落回本节点这一次自己铸的)照旧复用,EnterScene 第 0 步取消退出(cross-zone-scene-travel.md §12.6)。
+	else if (playerIt != tlsEcs.playerList.end() &&
+		PlayerLifecycleSystem::DiscardDeposedExitingEntity(playerIt->second, ctx.ownerEpoch))
+	{
 		playerIt = tlsEcs.playerList.end();
 	}
 
@@ -213,7 +241,18 @@ void SceneHandler::PlayerEnterGameNode(::google::protobuf::RpcController* contro
 	{
 		SessionMap().erase(pendingIt->second.enterInfo.session_id());
 	}
+	// A2′ 的清理状态(生命周期号、已确认 / 在途的 epoch、删过哪一代标记、暂存的载入结果)属于"这一次载入",
+	// 覆盖在途条目时原样沿用 —— AsyncLoad 对在途 key 不重发 GET,载入仍是同一个(§12.6.3 第三步)。
+	if (pendingIt != pendingMap.end())
+	{
+		ctx.inheritClear = pendingIt->second.inheritClear;
+	}
 	pendingMap[request->player_id()] = ctx;
+
+	// 3.5 A2′:载入之前"先核归属再删"继承来的 handoff 标记(owner_epoch ≠ ctx.ownerEpoch 一个都不删)。
+	//     必须在登记待入场上下文之后(应答按 player_id 找它)、AsyncLoad 之前(同一条 zone Redis 连接 FIFO,
+	//     EVAL 排在 GET 前面)。结果决定 HandlePlayerAsyncLoaded 建不建实体;ctx.ownerEpoch == 0 时什么都不做。
+	PlayerLifecycleSystem::BeginInheritedMarkClear(request->player_id());
 
 	tlsRedisSystem.GetPlayerDataRedis()->AsyncLoad(request->player_id());
 	///<<< END WRITING YOUR CODE
@@ -406,8 +445,13 @@ void SceneHandler::ProcessClientPlayerMessage(::google::protobuf::RpcController*
 	}
 
 	// Update last-active frame for AFK detection.
-	tlsEcs.actorRegistry.get<LastActiveFrameComp>(player).frame =
-		tlsFrameTimeManager.frameTime.current_frame();
+	// 退出中(UnregisterPlayer)的实体不续:它的消息除 ExitGame 外都会被下面的退出闸拒掉,被拒的消息不算"活跃",
+	// 否则仍连着的客户端(停机 / 排空这类服务端发起的退出)每发一条被拒的消息都在续 AFK 计时。
+	if (!tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player))
+	{
+		tlsEcs.actorRegistry.get<LastActiveFrameComp>(player).frame =
+			tlsFrameTimeManager.frameTime.current_frame();
+	}
 
 	// Parse request and validate field constraints
 	const MessageUniquePtr playerRequest(service->GetRequestPrototype(method).New());
@@ -439,7 +483,22 @@ void SceneHandler::ProcessClientPlayerMessage(::google::protobuf::RpcController*
 	// (descriptor.h:1354),它既没有 c_str(),muduo 的 LogStream 也没有对应的
 	// operator<<。拷一次的代价只发生在闸门命中之前的一次判定上。
 	const std::string methodName(method->name());
-	if (scene_gm_guard::IsClientGmMethodName(methodName) &&
+	if (tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player) && msg.message_id() != ScenePlayerExitGameMessageId)
+	{
+		// 退出中(UnregisterPlayer:退出存盘在途 / 等收敛)的实体只放行 ExitGame
+		// (cross-zone-scene-travel.md §12.6.3 第一步,M1 第 2 条)。退出分支要等"刚落地的就是当前内存"
+		// 才销毁,这里不关门的话,停机 / 排空期间照收的客户端操作会一直改实体、退出永不收敛;
+		// 而落地后才到的改动,在"落地即销毁"的旧假设下是直接丢掉的。
+		// 回 kFeatureUnavailable(common 段现成的业务拒绝码,"该功能当前不可用",非故障):
+		// tip 表里没有"正在退出"专用码,也不为此新增 —— 这条路上的客户端多半已经断开(gate 断线即代发 ExitGame),
+		// 仍连着的只有停机 / 排空这类服务端发起的退出,对它们"当前不可用"是如实的。
+		// 逐条只打 DEBUG(断线瞬间客户端在途的包都会走到这里),趋势看 [ExitPersist] client_msg_rejected。
+		exit_persist_stats::Inc(exit_persist_stats::Get().clientMsgRejected);
+		LOG_DEBUG << "ProcessClientPlayerMessage: player_id=" << it->second
+				  << " is exiting; dropping message_id=" << msg.message_id() << " method=" << methodName;
+		WriteRejectTip(*playerResponse, kFeatureUnavailable);
+	}
+	else if (scene_gm_guard::IsClientGmMethodName(methodName) &&
 		scene_gm_guard::RejectGmClientRpc(methodName.c_str()))
 	{
 		// 客户端 GM 指令统一闸门(guild-phase2.md §S4 4.34)。

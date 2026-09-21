@@ -716,11 +716,11 @@ func TestKickMember_Matrix(t *testing.T) {
 		officer1: constants.RoleOfficer, officer2: constants.RoleOfficer, member: constants.RoleMember,
 	})
 
-	_, err := repo.KickMember(ctx, guildID, officer1, officer2)
+	_, err := repo.KickMember(ctx, guildID, officer1, officer2, testNowMs)
 	assert.ErrorIs(t, err, ErrRankTooLow, "平级不能互踢")
-	_, err = repo.KickMember(ctx, guildID, officer1, leader)
+	_, err = repo.KickMember(ctx, guildID, officer1, leader, testNowMs)
 	assert.ErrorIs(t, err, ErrRankTooLow, "没有人能踢帮主")
-	_, err = repo.KickMember(ctx, guildID, leader, outsider)
+	_, err = repo.KickMember(ctx, guildID, leader, outsider, testNowMs)
 	assert.ErrorIs(t, err, ErrTargetNotMember)
 
 	// 先把被踢者的映射缓存预热,才能证明踢人之后那个键真的被删了。
@@ -729,7 +729,7 @@ func TestKickMember_Matrix(t *testing.T) {
 	require.Equal(t, guildID, cachedGuildID)
 	require.EqualValues(t, 1, repo.rdb.Exists(ctx, playerGuildKey(officer2)).Val())
 
-	res, err := repo.KickMember(ctx, guildID, leader, officer2)
+	res, err := repo.KickMember(ctx, guildID, leader, officer2, testNowMs)
 	require.NoError(t, err)
 	assert.True(t, res.Changed)
 	require.NotNil(t, res.Guild)
@@ -839,17 +839,17 @@ func TestLeaveGuild(t *testing.T) {
 	)
 	seedManagedGuild(t, ctx, db, guildID, 2, 1, 50, leader, map[uint64]uint32{member: constants.RoleMember})
 
-	_, err := repo.LeaveGuild(ctx, guildID, leader)
+	_, err := repo.LeaveGuild(ctx, guildID, leader, testNowMs)
 	assert.ErrorIs(t, err, ErrLeaderCantLeave)
 	assert.Equal(t, 1, memberCount(t, ctx, db, leader))
 
-	res, err := repo.LeaveGuild(ctx, guildID, member)
+	res, err := repo.LeaveGuild(ctx, guildID, member, testNowMs)
 	require.NoError(t, err)
 	assert.True(t, res.Changed)
 	require.NotNil(t, res.Guild)
 	assert.NotContains(t, guildRoles(res.Guild), member)
 
-	_, err = repo.LeaveGuild(ctx, guildID, member)
+	_, err = repo.LeaveGuild(ctx, guildID, member, testNowMs)
 	assert.ErrorIs(t, err, ErrNotGuildMember)
 }
 
@@ -1303,7 +1303,7 @@ func TestCreateGuild_DeletesOwnApplications(t *testing.T) {
 	assert.Empty(t, applicants)
 
 	// 关键在"解散之后仍然为空":I2 删的是物理行,不是靠 I1 过滤遮住。
-	_, err = repo.DisbandGuild(ctx, g2, founder)
+	_, err = repo.DisbandGuild(ctx, g2, founder, testNowMs)
 	require.NoError(t, err)
 	applicants, err = repo.ListApplicants(ctx, g1, testNowMs, 50)
 	require.NoError(t, err)
@@ -1331,11 +1331,11 @@ func TestDisbandGuild_AuthorizesByMySQLAndDeletesApplications(t *testing.T) {
 	seedApplicationRow(t, ctx, db, guildID, outsider, testNowMs-10, testNowMs+testApplicationTTLMs)
 	seedApplicationRow(t, ctx, db, other, member, testNowMs-10, testNowMs+testApplicationTTLMs)
 
-	_, err := repo.DisbandGuild(ctx, guildID, officer)
+	_, err := repo.DisbandGuild(ctx, guildID, officer, testNowMs)
 	assert.ErrorIs(t, err, ErrRankTooLow)
 	assert.Equal(t, 1, guildRowCount(t, ctx, db, guildID))
 
-	res, err := repo.DisbandGuild(ctx, guildID, leader)
+	res, err := repo.DisbandGuild(ctx, guildID, leader, testNowMs)
 	require.NoError(t, err)
 	assert.Equal(t, zone, res.ZoneID, "清榜只能信删除事务里 FOR UPDATE 读到的 zone")
 	assert.Equal(t, []uint64{leader, officer, member}, res.MemberIDs, "收件人必须是 player_id 升序")
@@ -1395,18 +1395,18 @@ func TestLeaveAndKickDeleteOwnApplications(t *testing.T) {
 
 	// 直接插行:模拟"申请与他帮审批并发"留下的竞态残留。
 	seedApplicationRow(t, ctx, db, elseWhere, leaver, testNowMs-10, testNowMs+testApplicationTTLMs)
-	_, err := repo.LeaveGuild(ctx, guildID, leaver)
+	_, err := repo.LeaveGuild(ctx, guildID, leaver, testNowMs)
 	require.NoError(t, err)
 	assert.Zero(t, playerApplicationCount(t, ctx, db, leaver), "退帮必须带走残留申请")
 
 	seedApplicationRow(t, ctx, db, elseWhere, kicked, testNowMs-10, testNowMs+testApplicationTTLMs)
-	_, err = repo.KickMember(ctx, guildID, leader, kicked)
+	_, err = repo.KickMember(ctx, guildID, leader, kicked, testNowMs)
 	require.NoError(t, err)
 	assert.Zero(t, playerApplicationCount(t, ctx, db, kicked), "被踢必须带走残留申请")
 
 	seedApplicationRow(t, ctx, db, elseWhere, stayer, testNowMs-10, testNowMs+testApplicationTTLMs)
 	seedApplicationRow(t, ctx, db, elseWhere, leader, testNowMs-10, testNowMs+testApplicationTTLMs)
-	_, err = repo.DisbandGuild(ctx, guildID, leader)
+	_, err = repo.DisbandGuild(ctx, guildID, leader, testNowMs)
 	require.NoError(t, err)
 	assert.Zero(t, playerApplicationCount(t, ctx, db, stayer), "解散必须带走全部成员的残留申请")
 	assert.Zero(t, playerApplicationCount(t, ctx, db, leader))
@@ -1437,7 +1437,7 @@ func TestLockWaitTimeoutBounded(t *testing.T) {
 		"SELECT level FROM guild WHERE guild_id=? FOR UPDATE", guildID).Scan(&level))
 
 	start := time.Now()
-	_, err = repo.KickMember(ctx, guildID, leader, member)
+	_, err = repo.KickMember(ctx, guildID, leader, member, testNowMs)
 	elapsed := time.Since(start)
 	t.Logf("锁等待实测耗时 %v(innodb_lock_wait_timeout=%ds)", elapsed, LockWaitTimeoutSeconds)
 	assert.ErrorIs(t, err, ErrWriteConflict, "1205 必须归一到可重试的忙错误,不是内部错误")
@@ -1445,7 +1445,7 @@ func TestLockWaitTimeoutBounded(t *testing.T) {
 		"必须在 innodb_lock_wait_timeout 内返回,而不是等到 ctx 超时或 InnoDB 默认的 50s")
 
 	require.NoError(t, blocker.Rollback())
-	res, err := repo.KickMember(ctx, guildID, leader, member)
+	res, err := repo.KickMember(ctx, guildID, leader, member, testNowMs)
 	require.NoError(t, err, "占锁事务结束后同一操作必须成功")
 	assert.True(t, res.Changed)
 }
@@ -1705,7 +1705,7 @@ func TestConcurrentCreateAndApply(t *testing.T) {
 		require.NoError(t, err)
 		assert.Zero(t, live, "round %d:建帮成功就不该还有本人的有效申请(I2)", round)
 
-		res, err := repo.DisbandGuild(ctx, founded, player)
+		res, err := repo.DisbandGuild(ctx, founded, player, now)
 		require.NoError(t, err, "round %d", round)
 		assert.Equal(t, []uint64{player}, res.MemberIDs)
 

@@ -344,12 +344,18 @@ const (
 	opVerifyMapping = "verify_mapping"
 	opScore         = "score"
 
-	// 下面四个由 B5 / B6 使用(90-consistency Y-04 要求 B2s 一次把集合定全,
-	// 后续批次只调用、不再改本文件)。
+	// 下面四个由 B5 / B6 使用(90-consistency Y-04 要求 B2s 一次把集合定全)。
 	opUpgrade       = "upgrade"
 	opAssetFinalize = "asset_finalize"
 	opActivity      = "activity"
 	opTrialSettle   = "trial_settle"
+
+	// B5b 追加:捐献预留(T-D)与兑换预留(T-S)两个写事务的标签。
+	// 原注释"后续批次只调用、不再改本文件"就此作废:离帮 / 被踢 / 解散要提前截止未决捐献
+	// (05 §5.20、X-14),B5b 本来就必须改这个文件;而 T-D / T-S 若借用 opAssetFinalize,
+	// 预留与终结的死锁 / 超预算指标会混在同一个 label 下,排障时分不清是哪条路径在抢锁。
+	opDonate = "donate"
+	opShop   = "shop"
 )
 
 // ── 权限判定(§2.2,纯函数,事务内调用) ──────────────────────
@@ -938,11 +944,13 @@ func (r *GuildRepo) SetMemberRole(ctx context.Context, guildID, actorID, targetI
 
 // KickMember 把目标踢出帮会。
 //
-// 输入约束:actorID != targetID。不变量:职位必须严格高于对方(canKick);被踢者的帮贡随成员行一起消失。
-// 事务边界:单事务 op=kick,锁序 guild → guild_member → guild_application(I3)。
+// 输入约束:actorID != targetID;now 为服务进程时钟毫秒(> 0,由 logic 传入)。
+// 不变量:职位必须严格高于对方(canKick);被踢者的帮贡随成员行一起消失;
+// 被踢者在本帮的未决捐献截止时间提前到 now(05 §5.20),让还没扣款的指令尽快中止、次数退回。
+// 事务边界:单事务 op=kick,锁序 guild → guild_member → guild_application(I3)→ guild_asset_op。
 // 错误语义:同 SetMemberRole 的哨兵集合(不含 ErrOfficerLimit)。
 // 幂等:目标已经不在帮里 → ErrTargetNotMember(客户端据此刷新列表)。
-func (r *GuildRepo) KickMember(ctx context.Context, guildID, actorID, targetID uint64) (MemberWriteResult, error) {
+func (r *GuildRepo) KickMember(ctx context.Context, guildID, actorID, targetID, now uint64) (MemberWriteResult, error) {
 	if actorID == targetID {
 		return MemberWriteResult{}, fmt.Errorf("kick member of guild %d: actor and target must differ", guildID)
 	}
@@ -971,6 +979,11 @@ func (r *GuildRepo) KickMember(ctx context.Context, guildID, actorID, targetID u
 		// 这些行会在他离帮后按 I1 重新"复活"。
 		if _, err := tx.ExecContext(ctx, sqlDeletePlayerApplication, targetID); err != nil {
 			return fmt.Errorf("delete applications of kicked member %d: %w", targetID, err)
+		}
+		// 与删成员行放在同一事务:两者要么都生效、要么都不生效。拆成提交后再补一条的话,
+		// 中间崩溃会留下"人已离帮、捐献仍按原截止等满 asset_op_deadline_seconds"的行。
+		if err := accelerateDonationDeadlines(ctx, tx, guildID, []uint64{targetID}, now); err != nil {
+			return err
 		}
 
 		snapshot, err := txSnapshot(ctx, tx, guildID)
@@ -1077,11 +1090,13 @@ func (r *GuildRepo) TransferLeader(ctx context.Context, guildID, actorID, target
 
 // LeaveGuild:玩家主动退帮(取代旧的 RemoveMember)。
 //
-// 不变量:帮主不能退帮(必须先转让或解散),否则帮会会变成无主状态。
-// 事务边界:单事务 op=leave,锁序 guild → guild_member → guild_application(I3)。
+// 输入约束:now 为服务进程时钟毫秒(> 0,由 logic 传入)。
+// 不变量:帮主不能退帮(必须先转让或解散),否则帮会会变成无主状态;
+// 退帮者在本帮的未决捐献截止时间提前到 now(05 §5.20)。
+// 事务边界:单事务 op=leave,锁序 guild → guild_member → guild_application(I3)→ guild_asset_op。
 // 错误语义:ErrGuildGone / ErrNotGuildMember / ErrLeaderCantLeave / ErrWriteConflict。
 // 幂等:重放得到 ErrNotGuildMember,logic 复核映射为 0 后按成功处理。
-func (r *GuildRepo) LeaveGuild(ctx context.Context, guildID, playerID uint64) (MemberWriteResult, error) {
+func (r *GuildRepo) LeaveGuild(ctx context.Context, guildID, playerID, now uint64) (MemberWriteResult, error) {
 	var out MemberWriteResult
 	err := r.inTx(ctx, opLeave, func(ctx context.Context, tx *sql.Tx) error {
 		var res MemberWriteResult
@@ -1109,6 +1124,9 @@ func (r *GuildRepo) LeaveGuild(ctx context.Context, guildID, playerID uint64) (M
 		}
 		if _, err := tx.ExecContext(ctx, sqlDeletePlayerApplication, playerID); err != nil { // I3
 			return fmt.Errorf("delete applications of leaving member %d: %w", playerID, err)
+		}
+		if err := accelerateDonationDeadlines(ctx, tx, guildID, []uint64{playerID}, now); err != nil {
+			return err
 		}
 
 		snapshot, err := txSnapshot(ctx, tx, guildID)
@@ -1534,11 +1552,12 @@ func (r *GuildRepo) ReviewApplication(ctx context.Context, guildID, actorID, app
 //
 // 授权读 MySQL 的 leader_id,不读缓存的 LeaderID —— 缓存在转让之后最长陈旧 30 分钟,
 // 按它授权等于让前帮主还能解散帮会。
-// 事务边界:单事务 op=disband,锁序 guild → guild_member(全部成员)→ guild_application。
+// 事务边界:单事务 op=disband,锁序 guild → guild_member(全部成员)→ guild_application → guild_asset_op。
+// 输入约束:now 为服务进程时钟毫秒(> 0,由 logic 传入),用于把全体成员在本帮的未决捐献截止时间提前到 now。
 // 错误语义:ErrGuildGone / ErrRankTooLow(logic 映射为 kGuildNotLeader)/ ErrWriteConflict。
 // 幂等:重放得到 ErrGuildGone。
-// 扩展点:B5(捐献提前截止)、B6(活动进度 / 历练战报)按 90-consistency X-14 的步骤插在删申请之后、删成员之前。
-func (r *GuildRepo) DisbandGuild(ctx context.Context, guildID, actorID uint64) (DisbandResult, error) {
+// 扩展点:B5(捐献提前截止,已落)、B6(活动进度 / 历练战报)按 90-consistency X-14 的步骤插在删申请之后、删成员之前。
+func (r *GuildRepo) DisbandGuild(ctx context.Context, guildID, actorID, now uint64) (DisbandResult, error) {
 	var out DisbandResult
 	err := r.inTx(ctx, opDisband, func(ctx context.Context, tx *sql.Tx) error {
 		var res DisbandResult
@@ -1563,6 +1582,11 @@ func (r *GuildRepo) DisbandGuild(ctx context.Context, guildID, actorID uint64) (
 		}
 		// I3:成员们在别的帮会留下的申请也要删,否则解散后它们会按 I1 复活。
 		if err := deleteApplicationsOfPlayers(ctx, tx, memberIDs); err != nil {
+			return err
+		}
+		// X-14 第 4 步:B5 捐献提前截止,位置在删申请之后、删成员之前。解散后帮会行不在了,
+		// 这些捐献即便被 scene 扣成功也记不上资金(D2 计 orphan),所以更要让它们尽快改发中止。
+		if err := accelerateDonationDeadlines(ctx, tx, guildID, memberIDs, now); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, sqlDeleteGuildMembers, guildID); err != nil {

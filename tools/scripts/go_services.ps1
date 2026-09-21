@@ -91,6 +91,11 @@ $LegacyPidFile = Join-Path $RepoRoot "bin\go_services.pid.json"
 # because that directory is the runtime working dir for local launches.
 $GoBinDir   = Join-Path $RepoRoot "bin\go_services"
 
+# 资产通道(docs/design/guild-phase2/04-asset-channel.md §4.32)的本机开发密钥来源。
+# guild 用 MMORPG_ASSET_OP_SECRET_GUILD 签名、scene 用同名变量验签,值必须一致,否则每一次资产 RPC
+# 都回 27008(AssetAuthFailed)。密钥值不写进仓库,见该文件的说明;用法见 Start-ServiceInstance。
+. (Join-Path $ScriptDir "lib\assetop_dev_secret.ps1")
+
 # ── Service catalogue ────────────────────────────────────────────────
 # Order matters: infrastructure-layer services first, then domain services.
 # Each entry:
@@ -577,33 +582,53 @@ function Start-ServiceInstance {
     $configFlag = $Info.ConfigFlag
     $configArg  = $cfg.Path
 
-    if ($UseExe) {
-        $exePath = Resolve-GoExecutablePath -ServiceName $Name -ServiceDir $svcDir
-        if (-not $exePath) {
-            Write-Warning "Skipping '$instanceKey': executable not found. Run -Command build first or place $Name.exe in bin\go_services\ or $svcDir."
-            return $null
+    # 资产通道签名密钥(规格 §4.32,90 清单 G-04 指派 B5b)。guild 的 etc/guild.yaml 打开了 AssetOp,
+    # 启动时读不到 ≥32 字节的 MMORPG_ASSET_OP_SECRET_GUILD 即拒启;值取自 run/secrets/assetop-dev.env
+    # (由 lib 首次随机生成,与 scene 同一把),**只在没设时兜底**、不回显值、finally 里还原。
+    # **只对 guild 注入,且只给 guild 这一把**:lib 会把两把都补进环境,trade 那把在启动 guild 前摘掉,
+    # 按最小权限给(AGENTS §11.3,同 cpp_nodes.ps1 只给 scene 注入)。trade 的注入不在本批范围。
+    # 仅限本机 dev:预发 / 生产的密钥由部署侧注入(k8s_deploy.ps1 Resolve-InjectedSecret -MinLength 32)。
+    $injectAssetOpSecret = ($Name -eq 'guild')
+    $prevAssetOpSecrets = $null
+    try {
+        if ($injectAssetOpSecret) {
+            # Backup 必须在 try 之内:Initialize 抛错时环境变量可能已被改了一半,放在外面就进不了 finally。
+            $prevAssetOpSecrets = Backup-AssetOpDevSecrets
+            Initialize-AssetOpDevSecrets -RepoRoot $RepoRoot | Out-Null
+            Remove-Item Env:MMORPG_ASSET_OP_SECRET_TRADE -ErrorAction SilentlyContinue
         }
 
-        Write-Host "[start-exe] $instanceKey  :$($cfg.Port)  ($($Info.Desc))" -ForegroundColor Cyan
+        if ($UseExe) {
+            $exePath = Resolve-GoExecutablePath -ServiceName $Name -ServiceDir $svcDir
+            if (-not $exePath) {
+                Write-Warning "Skipping '$instanceKey': executable not found. Run -Command build first or place $Name.exe in bin\go_services\ or $svcDir."
+                return $null
+            }
 
-        $proc = Start-Process -FilePath $exePath `
-            -ArgumentList @($configFlag, $configArg) `
-            -WorkingDirectory $svcDir `
-            -RedirectStandardOutput $logOut `
-            -RedirectStandardError  $logErr `
-            -PassThru `
-            -WindowStyle Hidden
-    }
-    else {
-        Write-Host "[start] $instanceKey  :$($cfg.Port)  ($($Info.Desc))" -ForegroundColor Cyan
+            Write-Host "[start-exe] $instanceKey  :$($cfg.Port)  ($($Info.Desc))" -ForegroundColor Cyan
 
-        $proc = Start-Process -FilePath "go" `
-            -ArgumentList @("run", $Info.Entry, $configFlag, $configArg) `
-            -WorkingDirectory $svcDir `
-            -RedirectStandardOutput $logOut `
-            -RedirectStandardError  $logErr `
-            -PassThru `
-            -WindowStyle Hidden
+            $proc = Start-Process -FilePath $exePath `
+                -ArgumentList @($configFlag, $configArg) `
+                -WorkingDirectory $svcDir `
+                -RedirectStandardOutput $logOut `
+                -RedirectStandardError  $logErr `
+                -PassThru `
+                -WindowStyle Hidden
+        }
+        else {
+            Write-Host "[start] $instanceKey  :$($cfg.Port)  ($($Info.Desc))" -ForegroundColor Cyan
+
+            $proc = Start-Process -FilePath "go" `
+                -ArgumentList @("run", $Info.Entry, $configFlag, $configArg) `
+                -WorkingDirectory $svcDir `
+                -RedirectStandardOutput $logOut `
+                -RedirectStandardError  $logErr `
+                -PassThru `
+                -WindowStyle Hidden
+        }
+    } finally {
+        # 没注入过就没什么可还原的($prevAssetOpSecrets 仍是 $null);还原同时把摘掉的 trade 那把放回去。
+        if ($injectAssetOpSecret) { Restore-AssetOpDevSecrets $prevAssetOpSecrets }
     }
 
     $entry = [pscustomobject]@{

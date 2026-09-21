@@ -34,6 +34,7 @@ import (
 	"schemamigrate"
 	"shared/buildinfo"
 	"shared/grpcstats"
+	"shared/idsegment"
 	"shared/killswitch"
 	"shared/safego"
 	"shared/serverbase"
@@ -58,6 +59,12 @@ const lockBusyAttempts = 3
 var lockBusyRetryDelay = 2 * time.Second
 
 const nodeType = uint32(base.ENodeType_GuildNodeService)
+
+// economySyncBudget 是捐献 / 兑换提交后同步投递一次的预算上限(05-economy.md §5.25 第 8 步)。
+// 实际预算还会被请求截止时间截短(RequestBudget − 1000ms 尾部余量,见 logic.EconomyDeps),
+// 不足 300ms 就不同步投递、交给重投循环。与 AssetOp.OpBudgetMs 默认值同为 2500ms 只是巧合:
+// ProcessOne 内部自己按 OpBudget 切投递 / 落库,这里只限"本请求最多陪它等多久"。
+const economySyncBudget = 2500 * time.Millisecond
 
 func main() {
 	flag.Parse()
@@ -86,6 +93,12 @@ func main() {
 	// 配置不对的实例连 etcd 都不该注册进去,免得流量先被路由过来再出问题。
 	if err := logic.ValidateGuildTables(); err != nil {
 		logx.Must(fmt.Errorf("guild config tables invalid: %w", err))
+	}
+	// 帮会经济(B5b)配表:GuildDonate / GuildShop / 物品堆叠,以及 GuildRule 的资产列
+	// (asset_op_deadline_seconds、asset_op_retry_base_ms)。同样拒启不降级:截止时长查成 0 = 捐献永不中止,
+	// 退避基数查成 0 = 重投循环构造失败。它内部会先重跑 validateGuildTables,与上一条重复无害。
+	if err := logic.ValidateEconomyTables(); err != nil {
+		logx.Must(fmt.Errorf("guild economy tables invalid: %w", err))
 	}
 
 	// 表结构不对的实例不能对外服务,也不能注册进 etcd:建表 / 核对放在节点注册之前。
@@ -186,6 +199,65 @@ func main() {
 	guildIDs := svc.NewGuildIDMinter(config.AppConfig.IdSegment, svcCtx.GuildIDSegment, sf.Generate)
 	svcCtx.WarmGuildIDSegment()
 
+	// ── 帮会经济:资产通道(B5b,docs/design/guild-phase2/05-economy.md §5.29)──
+	// 经济仓储与 outbox Store 无论通道开关都建:升级与两个读接口不经资产通道,关着通道也照常服务;
+	// 清理任务也只依赖 Store。
+	economyRepo, err := data.NewEconomyRepo(repo)
+	if err != nil {
+		logx.Must(fmt.Errorf("guild economy repo: %w", err))
+	}
+	assetStore, err := data.NewGuildAssetStore(repo)
+	if err != nil {
+		logx.Must(fmt.Errorf("guild asset store: %w", err))
+	}
+
+	// op_id 发号器。号段关着时 svcCtx.AssetOpIDSegment 是 nil *Client:必须让 assetOpIDs 保持
+	// **nil 接口**,不能把 nil 指针包进 Minter 或直接赋给接口 —— 那样 logic 里 `OpIDs == nil` 为 false,
+	// 每次捐献都会去调一个空客户端(与上面 mergeFence 同一个坑)。不设 Fallback:op_id 是 outbox 主键,
+	// 号段失败就整体拒绝(kGuildIdGenUnavailable),绝不自造 id。
+	var assetOpIDs logic.IDMinter
+	if svcCtx.AssetOpIDSegment != nil {
+		assetOpIDs = &idsegment.Minter{Name: svc.AssetOpBizTag, Segment: svcCtx.AssetOpIDSegment}
+	}
+
+	// 资产通道只在 AssetOp.Enabled 时装配(裁决 D):关着时不建签名器 / 定位件 / 循环,
+	// EconomyDeps.Loop 为 nil,捐献与兑换在发号与建行之前就回 kGuildAssetPending。
+	// 开着时密钥缺失 / 过短、循环参数非法都在这里拒启(资产路径 fail-closed,不降级)。
+	var assetPipe *svc.AssetPipeline
+	if config.AppConfig.AssetOp.Enabled {
+		// 配置与配表的交叉约束(插行租约 vs 捐献截止、退避基数 vs 封顶):两边各自校验都过、组合起来却会让
+		// 同步投递被跳过的捐献未扣款即被中止。只在通道开启时判 —— 关着时不插行也不起循环。
+		assetOp := config.AppConfig.AssetOp
+		if err := logic.ValidateAssetOpTiming(
+			time.Duration(assetOp.LeaseMs)*time.Millisecond,
+			time.Duration(assetOp.ReconcileIntervalMs)*time.Millisecond,
+			time.Duration(assetOp.MaxBackoffMs)*time.Millisecond,
+		); err != nil {
+			logx.Must(fmt.Errorf("guild asset op timing invalid: %w", err))
+		}
+		assetPipe, err = svc.NewAssetPipeline(config.AppConfig.AssetOp, logic.AssetOpRetryBase(),
+			svcCtx.PlayerLocatorRedisClient, assetStore)
+		if err != nil {
+			logx.Must(fmt.Errorf("guild asset pipeline: %w", err))
+		}
+		svcCtx.WarmAssetOpIDSegment()
+	} else {
+		// go-zero logx 没有 WARN 级;沿用本文件"降级形态打一条 ERROR"的写法(同 DataServiceRpc 未配置)。
+		logx.Error("Guild: AssetOp.Enabled=false,资产通道关闭:帮会捐献 / 商店兑换一律回 kGuildAssetPending," +
+			"升级与读接口照常(共享 / 预发环境开启前须满足 08-save-owner-fence.md §8.3 门禁)")
+	}
+	economy := logic.EconomyDeps{
+		Repo:       economyRepo,
+		OpIDs:      assetOpIDs,
+		Now:        time.Now,
+		SyncBudget: economySyncBudget,
+		// 插行租约与重投循环同一个值(裁决 G):通道关着时这里是 0,logic 取自己的默认值,但那时也不会插行。
+		Lease: time.Duration(config.AppConfig.AssetOp.LeaseMs) * time.Millisecond,
+	}
+	if assetPipe != nil {
+		economy.Loop = assetPipe.Loop
+	}
+
 	// 合服闸门(可选):没配 MergeMarkerRedis 时 NewRedisMergeFence 返回 nil 指针,
 	// 必须显式转成 nil **接口** 再传下去 —— 直接传一个 nil 的具体类型指针,
 	// GuildLogic 里的 `l.mergeFence == nil` 会是 false,于是每次建帮都去调一个
@@ -221,7 +293,12 @@ func main() {
 	guildLogic := logic.NewGuildLogic(repo, guildIDs, onlineResolver, mergeFence, homeZones,
 		logic.WithNotifier(logic.NewGuildNotifier(svcCtx.KafkaWriter, svcCtx.GateCommandBuilder, svcCtx.PlayerLocatorRedisClient)),
 		logic.WithApplyPushGate(repo.TryMarkApplyPush),
-		logic.WithPlayerNames(playerNames))
+		logic.WithPlayerNames(playerNames),
+		logic.WithEconomy(economy))
+
+	// 终结推送回调。必须在重投循环与 gRPC server 启动**之前**赋值:此后只读,不需要同步。
+	// 晚于它们赋值 = 启动初期被循环终结的行不推送,且与读它的 worker 构成数据竞争。
+	assetStore.OnFinalized = guildLogic.OnAssetFinalized
 
 	// Start gRPC server
 	s := zrpc.MustNewServer(config.AppConfig.RpcServerConf, func(grpcServer *grpc.Server) {
@@ -232,6 +309,23 @@ func main() {
 	})
 	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget())...)
 	defer s.Stop()
+
+	// 资产通道后台 goroutine(guild.scene_node_watch / guild.asset_op_reconcile / guild.asset_op_cleanup)。
+	//
+	// ⚠️ 它们的 stop 必须写在 `defer s.Stop()` 之后:defer 后进先出,进程退出时它们**最先**执行,
+	// 从而早于 ksCancel、sfHandle.Close、etcdCli.Close、n.Close 与 svcCtx.Stop(关 MySQL / Redis)。
+	// 此时 s.Start 已经返回(gRPC 在途请求已排空),不会再有同步投递用到 Loop。
+	// 反过来的后果:循环落库那一步用 WithoutCancel + 700ms,取消拦不住,DB 先关就写不回终局,
+	// 行留在 PENDING、下一轮再投一次;watcher 撞上已 Close 的 etcd 客户端同理。
+	// 两个 stop 都会**等** goroutine 真正退出才返回;写在 s.Stop 之前执行还让它们的停机日志不被 logx.Close 吞掉。
+	if assetPipe != nil {
+		assetPipe.Start(context.Background(), etcdCli)
+		defer assetPipe.Stop()
+	}
+	if config.AppConfig.AssetOp.CleanupEnabled {
+		stopCleanup := startAssetOpCleanup(assetStore, svc.CleanupConfFrom(config.AppConfig.AssetOp))
+		defer stopCleanup()
+	}
 
 	// Lost() 关闭 = 本进程**确认**不再是这个槽的持有者(slots key 被挂到了别的 uuid 上:
 	// 运维手动清理 / 水位机制被绕过 / 旧版本二进制)。再用 sf 发一个公会 ID 就是确定性撞号,
@@ -262,6 +356,25 @@ func main() {
 
 	logx.Infof("Starting Guild RPC server at %s...", config.AppConfig.ListenOn)
 	s.Start()
+}
+
+// startAssetOpCleanup 起终态资产指令 / 过期计数行的清理 goroutine(guild.asset_op_cleanup,§5.22),
+// 返回的 stop 取消它并**等它退出**:清理语句跑在 MySQL 上,必须在 svcCtx.Stop 关库之前停下。
+// 与资产通道开关独立:通道关着时历史终态行照样要清。
+func startAssetOpCleanup(store *data.GuildAssetStore, c data.CleanupConf) (stop func()) {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	safego.Go("guild.asset_op_cleanup", func() {
+		// close 放在 defer 里:safego 兜住 panic 时它照样执行,stop 不会永远等下去。
+		defer close(done)
+		store.RunCleanup(ctx, c)
+	})
+	logx.Infof("[guild] 资产清理已启动: goroutine guild.asset_op_cleanup interval=%v terminal_retention=%v counter_retention=%v",
+		c.Interval, c.TerminalRetention, c.CounterRetention)
+	return func() {
+		cancel()
+		<-done
+	}
 }
 
 // buildUnaryInterceptors 组装本服务的一元拦截器链。

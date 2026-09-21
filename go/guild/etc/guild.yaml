@@ -103,6 +103,45 @@ IdSegment:
   MaxStep: 1000
   FallbackToSnowflake: false
 
+# ---- 帮会资产通道(B5b,docs/design/guild-phase2/05-economy.md §5.29;循环参数见 90-consistency.md Y-06)----
+# 捐献扣货币、商店兑换发物品都经这条通道投给玩家所在的 scene(AssetDebit / AssetCredit)。
+#
+# Enabled:**只有显式写 true 才开**;整段不写 = 关(代码默认 false,fail-closed)。关着时捐献 / 兑换
+#   一律回 kGuildAssetPending、不生成指令,升级与两个读接口照常。本地 dev 打开;共享 / 预发 / 生产必须先满足
+#   08-save-owner-fence.md §8.3 的六条门禁,K8s ConfigMap 是否打开由 BK8s 批次决定,不满足门禁一律 false。
+# 签名密钥**只**从环境变量 MMORPG_ASSET_OP_SECRET_GUILD 读,本段没有、也不许加存放密钥的键:
+#   本机由 tools/scripts/go_services.ps1 / start_game.ps1 从 run/secrets/assetop-dev.env 注入(与 scene 验签同一把);
+#   Enabled=true 而缺密钥、或去首尾空白后短于 32 字节,启动即拒绝。
+# 玩家定位读的是上面 PlayerLocatorRedis 里的 player:{id}:location:它必须与 scene / scene_manager 写这把键的
+#   Redis **同一实例同一 DB**(K8s 指向 SharedRedis)。指错的表现是所有玩家"不在线"、指令永远 PENDING,且不报错。
+# 另依赖 IdSegment.Enabled=true 与 DataServiceRpc:op_id 由号段 biz_tag=guild_asset_op 发,无 snowflake 回退
+#   (config.Validate 强制)。
+AssetOp:
+  Enabled: true
+  # 重投循环节律。Workers 是**每个副本**同时压向 scene 的资产 RPC 上限(scene 的同步 poller 默认只有 8 条),
+  # 扩副本或调大前先复核;ReconcileBatch 必须 ≥ Workers。
+  ReconcileIntervalMs: 2000
+  ReconcileBatch: 100
+  Workers: 8
+  # 行级租约,必须 ≥ OpBudgetMs + 2000。捐献 / 兑换插行时也用它当"提交后同步投递期间循环看不见这一行"的时长,
+  # 所以还必须满足 LeaseMs + ReconcileIntervalMs < 配表 GuildRule.asset_op_deadline_seconds(启动期校验)。
+  LeaseMs: 10000
+  # 单行预算(同步投递与重投共用),其中 700ms 固定留给落库。
+  OpBudgetMs: 2500
+  # 退避封顶,也是 scene 回 UNKNOWN 的行的重排间隔;退避基数在配表 GuildRule.asset_op_retry_base_ms,不得大于本值。
+  MaxBackoffMs: 60000
+  # payload 解不开的毒行推迟多久再看。
+  PoisonDelayMs: 3600000
+  # 连续几次投不出去之后才读已落盘账本(B5d 接上 Ledger 之前不生效)。
+  LedgerReadMinAttempts: 3
+  # 终态行 / 过期计数行清理(goroutine guild.asset_op_cleanup,每个副本都跑,删除幂等,PENDING 与
+  # APPLIED_PARTIAL 永不删)。TerminalRetentionDays 同时是 B5d 回档检查可追溯窗口的下界,调小前先看
+  # 07-rollback-fail-closed.md §7.4.2。
+  CleanupEnabled: true
+  CleanupIntervalMinutes: 10
+  TerminalRetentionDays: 30
+  CounterRetentionDays: 30
+
 # RPC 级热关停(shared/killswitch)规则在 etcd 里的前缀。
 # 留空 = 用默认前缀 /mmorpg/killswitch/,且前缀下没有 key 时全部放行。
 # 关停某个方法:etcdctl put /mmorpg/killswitch/guildpb.GuildService/CreateGuild '{"deny":true,"reason":"..."}'

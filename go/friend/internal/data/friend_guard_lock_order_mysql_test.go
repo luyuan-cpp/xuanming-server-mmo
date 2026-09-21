@@ -57,6 +57,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -865,4 +866,120 @@ func TestEnsureCapacityRows_ConcurrentInsertOnReclaimedRowSurvivesDeadlock(t *te
 			"本场景没有真的走到 delete-marked 分支", created, beforeEnsureMs)
 	}
 	assertFriendInvariants(t, ctx, db)
+}
+
+// TestLockingStatementsArePrimaryKeyPointLookups 钉住 friend_repo.go 顶部锁序说明 (6):
+// 守卫之后的每一条锁定语句,执行计划都必须是**完整主键的等值点查 / 点更新**。
+//
+// 为什么需要这条确定性用例(并发场景已经有了):2026-09-21 首次真库回归里,blockedEitherWay /
+// friendEdgeExistsForUpdate 原先的 `(a,b) OR (b,a) ... FOR UPDATE` 被规划成二级覆盖索引全扫描,锁到
+// 别的玩家对的行上,与那一对的 Unblock / 删边 DELETE 反序成环(1213);lockCapacityRows 原先的
+// `IN (...) FOR UPDATE` 被规划成 PRIMARY 全索引扫描;Block 取消 pending 的 OR 形 UPDATE 走 status 前缀、
+// 扫全服 pending 行。这类问题**只取决于执行计划**,并发用例只能按概率撞上,而 EXPLAIN 每次都答得出来。
+//
+// 做法:对生产代码里**同一个 SQL 常量**做 EXPLAIN(测试里不另抄一份,否则两边漂移时本用例就失去意义),
+// 断言 key = PRIMARY 且用满全部主键列(key_len),SELECT 的 access type 必须是 const。
+// 先各插一行:点查命中已存在的行时计划才显示 const;表空时 MySQL 只报 "no matching row in const table"。
+//
+// 把哪一条改回 OR / IN / 前缀范围,本用例就会稳定变红。
+func TestLockingStatementsArePrimaryKeyPointLookups(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+
+	for _, seed := range []string{
+		"INSERT INTO friend_capacity (player_id, friend_count, created_ms) VALUES (91001, 0, 1), (91002, 0, 1)",
+		"INSERT INTO friend_block (player_id, blocked_player_id, since_ms) VALUES (91001, 91002, 1)",
+		"INSERT INTO friend (player_id, friend_player_id, since_ms) VALUES (91001, 91002, 1)",
+		"INSERT INTO friend_request (from_player_id, to_player_id, request_time_ms, status, updated_ms) VALUES (91001, 91002, 1, 1, 1)",
+	} {
+		if _, err := db.ExecContext(ctx, seed); err != nil {
+			t.Fatalf("种子数据写入失败 %q: %v", seed, err)
+		}
+	}
+
+	// BIGINT UNSIGNED 占 8 字节:单列主键 key_len=8,两列主键 key_len=16。
+	cases := []struct {
+		name       string
+		sql        string
+		args       []any
+		wantTypes  []string // UPDATE 按主键点更新时 MySQL 显示 range(rows=1),SELECT 点查是 const
+		wantKeyLen string
+	}{
+		{"lockCapacityRowSQL", lockCapacityRowSQL, []any{91001}, []string{"const"}, "8"},
+		{"lockBlockRowSQL", lockBlockRowSQL, []any{91001, 91002}, []string{"const"}, "16"},
+		{"lockFriendEdgeRowSQL", lockFriendEdgeRowSQL, []any{91001, 91002}, []string{"const"}, "16"},
+		{"cancelPendingRequestSQL", cancelPendingRequestSQL,
+			[]any{requestStatusRejected, 1, 91001, 91002, requestStatusPending}, []string{"range", "const"}, "16"},
+		// sweep 清理终态申请:逐行按主键删(sweep_repo.go 的 deleteTerminalRequestsBefore)。
+		{"deleteTerminalRequestSQL", deleteTerminalRequestSQL,
+			[]any{91001, 91002, requestStatusAccepted, requestStatusRejected, 2000000000000}, []string{"range", "const"}, "16"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := explainTraditional(t, ctx, db, inlineNumericArgs(t, tc.sql, tc.args...))
+			if plan["key"] != "PRIMARY" || plan["key_len"] != tc.wantKeyLen {
+				t.Fatalf("%s 的执行计划没有用满主键:key=%q key_len=%q(期望 PRIMARY / %s),type=%q。"+
+					"锁定语句必须是完整主键的等值条件,否则锁集由优化器决定、会越出这一对玩家(锁序说明 (6))。SQL: %s",
+					tc.name, plan["key"], plan["key_len"], tc.wantKeyLen, plan["type"], tc.sql)
+			}
+			ok := false
+			for _, want := range tc.wantTypes {
+				if plan["type"] == want {
+					ok = true
+				}
+			}
+			if !ok {
+				t.Fatalf("%s 的 access type=%q,期望 %v(全索引扫描 index / ALL 会锁到别的玩家对的行)。SQL: %s",
+					tc.name, plan["type"], tc.wantTypes, tc.sql)
+			}
+		})
+	}
+}
+
+// explainTraditional 跑一条 EXPLAIN FORMAT=TRADITIONAL,返回第一行的列名 → 值(NULL 记为空串)。
+// 这几条语句都只涉及一张表,第一行就是它的计划。
+func explainTraditional(t *testing.T, ctx context.Context, db *sql.DB, stmt string) map[string]string {
+	t.Helper()
+	rows, err := db.QueryContext(ctx, "EXPLAIN FORMAT=TRADITIONAL "+stmt)
+	if err != nil {
+		t.Fatalf("EXPLAIN 失败 %q: %v", stmt, err)
+	}
+	defer rows.Close()
+	cols, err := rows.Columns()
+	if err != nil {
+		t.Fatalf("读取 EXPLAIN 列名失败: %v", err)
+	}
+	if !rows.Next() {
+		t.Fatalf("EXPLAIN 没有返回任何行: %q", stmt)
+	}
+	vals := make([]sql.NullString, len(cols))
+	ptrs := make([]any, len(cols))
+	for i := range vals {
+		ptrs[i] = &vals[i]
+	}
+	if err := rows.Scan(ptrs...); err != nil {
+		t.Fatalf("读取 EXPLAIN 结果失败: %v", err)
+	}
+	plan := make(map[string]string, len(cols))
+	for i, c := range cols {
+		plan[c] = vals[i].String
+	}
+	return plan
+}
+
+// inlineNumericArgs 把 SQL 里的 ? 依次替换成数字字面量,供 EXPLAIN 使用。
+// 只接受整数参数:这几条语句的参数全是 id / 状态码 / 毫秒时间戳,出现别的类型说明用法错了。
+func inlineNumericArgs(t *testing.T, query string, args ...any) string {
+	t.Helper()
+	if strings.Count(query, "?") != len(args) {
+		t.Fatalf("占位符 %d 个,参数 %d 个: %s", strings.Count(query, "?"), len(args), query)
+	}
+	for _, a := range args {
+		switch a.(type) {
+		case int, int32, int64, uint32, uint64:
+		default:
+			t.Fatalf("inlineNumericArgs 只接受整数参数,得到 %T", a)
+		}
+		query = strings.Replace(query, "?", fmt.Sprint(a), 1)
+	}
+	return query
 }

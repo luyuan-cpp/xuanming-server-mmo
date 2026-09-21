@@ -503,7 +503,7 @@ go build -o robot.exe .
 | # | 严重度 | 条目 | 改动面 | 收尾批 |
 |---|---|---|---|---|
 | 1 | **P2** | `friend_capacity` 无回收路径 | 3–5 文件(含 proto) | ✅ 已落码:路线一(加 `created_ms` 列)+ 缺行有上限重试,同批处理了 fail-closed 契约 |
-| 2 | **P2** | 三条锁序假设未经 `EXPLAIN` 核对 | 0(纯核对)或 1–2 | ❌ 未做(运行期);现为四条 |
+| 2 | **P2** | 三条锁序假设未经 `EXPLAIN` 核对 | 0(纯核对)或 1–2 | ✅ **2026-09-21 真库核对:假设不成立,已真死锁** —— 修法与证据见 §9.4 进度块下方「第 6 步首跑发现的两个问题」 |
 | 3 | P3 | pending 计数的并发不变量只靠注释守着,无测试 | 1 文件 | ✅ 注释更正 + 交叉 pending 并发用例 |
 | 4 | P3 | `metrics` 里第三份 sweep 模式字面量对齐不到 | 1–2 文件 | ✅ 常量导出 + 三份对齐断言 |
 | 5 | P3 | 三个零调用方的导出方法(`AreFriends` 尤其危险) | 1–2 文件 | ✅ 三个全删 |
@@ -1079,8 +1079,21 @@ go-zero 的 `core/stores/redis/redis.go` 里,`GetCtx` 遇到 `redis.Nil` 时 `er
 > - ✅ 第 1 步:`new-tables` / `tip-codes` / `tip-text` 都已跑(guild 段 22 → 32 码;`FriendBlocked` 已是中性文案)。
 > - ✅ 第 2 步:导表(22:39)。
 > - ✅ 第 3 步:proto-gen(22:41,新生成器;22:38 先恢复了 `scene_node_service.{cpp,h}`,Agones 块计数 1)。开头"五类悬空引用"已逐项核对,**全部补齐**(PROGRESS 同日「friend 生成物逐项验收」条)。
-> - ❌ **第 3b 步(客户端生成)未跑,且客户端当前提交编译不过**:自动保存 `2ca620e` 已把 11 个 `ClientPlayerFriend*Handler.cs` 提交进客户端,但 `Friend.cs` / `FriendErrorTip.cs` 还没生成。先跑 3b,生成物一起提交,再推。
-> - ❌ 第 4 步(两个 `message-limiter` + 第二次导表)、第 5 步起的编译 / 测试未跑;robot 的 `go mod vendor` 未跑(`robot/vendor/proto/` 下仍无 `friend`)。
+> - ✅ 第 3b 步(2026-09-21,按用户指示由 Claude 实跑):`Friend.cs` / `FriendErrorTip.cs` 已生成,11 个 handler 引用的类型全部在;客户端离线 Roslyn 编译检查 `tools/client_compile_check.ps1` **0 错误**(355 个文件)。同批追上了帮会二期 / 建角带名字两批改过的 `Guild.cs` / `Login.cs` / `UserAccounts.cs` / `GuildErrorTip.cs`(服务端 proto 早改了、客户端一直没重新生成),编译检查证明没有破坏客户端。用户已提交为客户端 `fc0a8dc`。
+> - ✅ 第 4 步:两个 `message-limiter`(B5a 5 行 + friend 10 行,53 → 68 行)+ 第二次导表;`generated/tables/messagelimiter.json` 68 行、15 个新号档位核对无误。
+> - ✅ robot:`go mod tidy` + `go mod vendor`(`vendor/proto/friend` 已补进;`go.mod` 只是 `google.golang.org/grpc` 从 indirect 变 direct);`go build ./...` / `go vet ./...` 零输出。⚠ 官方代理拉不到旧组织名 `github.com/luyuancpp/muduoclient`,直连要 GitHub 凭据 —— 当次用**进程级** `GOPROXY=https://goproxy.cn,https://mirrors.aliyun.com/goproxy/,direct`(未 `go env -w`),下载内容与 `go.sum` 的哈希一致。
+> - ✅ 第 5 步:`go/friend` **首次编译即通过**;`gofmt -l` 空、`go mod tidy` 后 `go-redis` 只在 indirect、`go build` / `go vet` 零输出;`go test ./...` 241 PASS / 0 FAIL,67 个 SKIP 全部是"未设 `FRIEND_TEST_MYSQL_DSN`"(已逐条核对原因)。
+> - ✅ 第 6 步(真 MySQL:`mysql:latest` 实为 **MySQL Community Server 26.7.0**,不是 TiDB;binlog ROW、死锁检测开):**首跑 71 PASS / 2 FAIL / 0 SKIP**,两个失败见下方「第 6 步首跑发现的两个问题」;修复后 `go/friend` 全部包 **314 PASS(含子用例)/ 0 FAIL / 0 SKIP**,8 个并发锁序场景连跑 5 轮 **40/40 PASS**,场景 (g) 以外零 1213。输出存档在仓外 `D:\luyuan\wuxingqitan\friend-lockorder*.log` / `friend-alltests.log` / `friend-deadlock.txt`。
+> - 🔶 第 7 步**部分完成**(2026-09-21):`go-svc-build -GoServices friend` 已重编 `bin/go_services/friend.exe`(二进制里 `ClientPlayerFriend` 12 处、`FriendService` 0 处 —— §0.3 那份 08-02 旧构建的陷阱已清除);`friend.exe -f etc/friend.yaml -allow-modify`(不带 `-migrate`)以 **1** 退出、报 `-allow-modify 必须与 -migrate 一起使用`,未碰任何外部依赖 ✅。**未做**:建空库 + `-migrate` 的 5 张表 / 索引 / 零 UNIQUE / 幂等核对、常驻启动横幅 / `/metrics` 五个指标 / etcd 双填 —— 卡在 Docker Desktop 被关闭(需用户手动打开,Claude 的非交互命令环境拉不起来)。
+> - ✅ 第 8 步由单测覆盖:`TestVersionedCache_FillsWhenGenerationKeyNeverWritten`(miniredis,不依赖 MySQL)已 PASS,钉住"generation 键从未写过时补 "0""那条分支 —— 按本文 §2 第 8 步末段的建议,不再手工核对。
+> - ❌ 第 9 步(两区 robot `friend-smoke`)未跑。前置盘点:C++ `gate/scene/battle.exe` 为 09-21 03:13–03:35 构建(晚于 22:41 的 proto-gen);Java 网关 jar 仍是 09-14 旧构建(冒烟只用它分配 gate,大概率可用);Kafka 容器需重新拉起;`zone_config` 需补 zone 2 行;`dev-start-zones` 只起 Go 服务与 C++ 节点,不起基础设施与 Java 网关。
+
+**第 6 步首跑发现的两个问题(2026-09-21,均已修,未提交)**。完整事故报告:`docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md`(死锁现场原文、执行计划、成环机制、修复清单、同类待核位置)。
+
+1. **真死锁(P1,产品缺陷)** —— 正是 §3 第 2 条担心、却一直没 `EXPLAIN` 核对的那条。`TestCapacityRowReclaimRacesWithGuardedWrites` 首跑即 1213,单独重跑第一次就复现。`LATEST DETECTED DEADLOCK` 原文:事务 (2) 在执行 `blockedEitherWay`(玩家对 101/102 的 `(a,b) OR (b,a) ... FOR UPDATE`),**持有另一对玩家(141/142)那一行在 `idx_blocked_player` 上的 X 锁**、在等它的主键锁;事务 (1) 是 141/142 的 `Unblock`(`DELETE` 按主键),持主键锁、等二级索引锁 —— 取锁顺序相反。第二次复现撞在 `RemoveFriend` 的删边 `DELETE` 上,对应 `friendEdgeExistsForUpdate`(`friend` 表同形)。`EXPLAIN` 证实:两条 `OR` 都被规划成**二级覆盖索引全扫描**;`lockCapacityRows` 的 `IN (...) FOR UPDATE` 是 **PRIMARY 全索引扫描**(不成环但按玩家号把写路径串行化);`Block` 取消双向 pending 的 `OR` 形 `UPDATE` 走 `idx_status_updated` 的 status 前缀、扫全服 pending 行。**修法**(`friend_repo.go` 顶部新增锁序说明 (6)):守卫之后的锁定读 / 写一律**完整主键的等值点查 / 点更新** —— 上述四处都拆成逐条主键点查;`Block` ③ 的 `COUNT(*) ... FOR UPDATE` 改成守卫内普通读(与 `AddFriendRequest` ⑤⑥ 同一论证,锁集从此不依赖执行计划);sweep 终态申请的批量 `DELETE ... LIMIT` 改成"候选普通读 + 逐行按主键删"(它先二级索引后主键,与玩家重新申请时 upsert 的先主键反序)。新增确定性回归 `TestLockingStatementsArePrimaryKeyPointLookups`:对生产代码里的**同一个 SQL 常量**做 `EXPLAIN`,断言 `key=PRIMARY`、用满主键列、SELECT 为 `const` —— 改回 OR / IN / 前缀范围必红。
+2. **测试夹具自相矛盾(非产品缺陷,原移植即有)**:`TestAcceptFriend_RejectsBlockedPair` 直写 `friend_block` 绕过 `Block()`、故意造出"拉黑与 pending 并存"去测守卫内拉黑复核,末尾却调用含"拉黑后无 pending"的 `assertFriendInvariants` —— 测的是夹具自己。改为逐条调用其余三条不变量,并显式断言"被拒的 AcceptFriend 整体回滚、申请行仍是 pending"。
+
+此外:评审时**推演**出来的"回收后 ensure 撞 1213"在真库上**复现了**(场景 (g) 的 WARN `ensure 容量行撞上 1213 … attempt=1/3`),被 ensure 的有限重试吸收,用例 PASS。
 
 ```powershell
 # 0. 一次性前置。本机已有 Python 3.14.7(**用 py -3,别用 python** —— 那是商店占位桩;在 Claude 的 Bash 里敲
@@ -1154,7 +1167,7 @@ go test ./internal/data -count=1 -v 2>&1 | Tee-Object -FilePath ..\..\..\friend-
 
 | # | 条目 | 说明 |
 |---|---|---|
-| 1 | §3 第 2 条 `EXPLAIN` | 运行期核对,现为四条 |
+| 1 | ~~§3 第 2 条 `EXPLAIN`~~ **✅ 已核对并修复(2026-09-21)** | 见 §9.4「第 6 步首跑发现的两个问题」第 1 条;另有确定性回归 `TestLockingStatementsArePrimaryKeyPointLookups` 守住 |
 | 2 | ~~friend 对"缺索引"不拒绝启动~~ **✅ 已补(续做)** | 照 guild 的口径:`go/friend/friend.go` 新增 `missingIndexWarnings` / `missingIndexError`(前缀提成常量 `missingIndexWarningPrefix`),`ensureSchema` 的 Up / Plan 两个分支都调 —— Plan 分支必须**单独**判,因为 `Report.Clean()` 只看 Statements 与 Manual、不看 Warnings;`runMigration` 在 `ExitCode == ExitOK` 时把缺索引升级成 `ExitManual`(4),否则 K8s 迁移 Job 会绿着结束、随后 Pod 被拦下。测试:`friend_test.go` 的 `TestMissingIndexWarningIsBlocking`、`TestEnsureSchemaRejectsStartupWhenPlanNotClean` 新增两行、新增 `TestRunMigrationExitCodes`(`runMigration` 此前零覆盖;钉住 D-14 退出码表,含"迁移已失败时缺索引不得把 1 改善成 4")。⚠ 告警文案的前缀与 schemamigrate 的一致性**没有机械守住**(测试里是一条逐字抄来的样本,与 guild 同一取舍),真正的保障是 7a 步的真库核对 |
 | 3 | ~~`tools/scripts/k8s_deploy.ps1` 的 friend ConfigMap Sweep 段注释~~ **✅ 已改(续做)** | 改成"两类后台清理共用这一段参数",补上 `friend_sweep_idle_capacity_rows{mode}`。纯注释;PowerShell 解析器 0 错误。⚠ 该文件另有帮会 B5a 的一处未提交改动(data-service ConfigMap 的 `BootstrapTags` 加 `guild_asset_op`),两处互不相干 —— **提交时只暂存自己那一块**(`git diff` 取出那个 hunk 再 `git apply --cached`),别把对方的行卷进来 |
 | 4 | `runGuardedWrite` 重试分支没有确定性用例 | ensure 与守卫之间没有可注入的缝(为测试给生产代码开缝不值);"缺行 → 重试成功"由并发场景概率性覆盖,"耗尽 → fail-closed"有确定性用例 |

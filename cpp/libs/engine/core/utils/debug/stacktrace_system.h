@@ -1,4 +1,8 @@
 ﻿#pragma once
+#ifdef _WIN32
+// Windows SDK 的 winsock.h 与 winsock2.h 不能混用；必须先于 Boost/Windows.h。
+#include <winsock2.h>
+#endif
 #include <boost/stacktrace.hpp>
 #include <sstream>
 #include <string>

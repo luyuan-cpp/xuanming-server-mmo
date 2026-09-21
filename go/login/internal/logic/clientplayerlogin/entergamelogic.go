@@ -36,14 +36,16 @@ type EnterGameLogic struct {
 }
 
 type enterGameSessionState struct {
-	playerID       uint64
-	sessionID      uint32
-	gateID         string
-	gateInstanceID string
-	account        string
-	requestID      string
-	classID        uint32
-	playerLockKey  string
+	playerID        uint64
+	sessionID       uint32
+	gateID          string
+	gateInstanceID  string
+	account         string
+	requestID       string
+	classID         uint32
+	appearanceID    string
+	gender          uint32
+	playerLockKey   string
 	playerLockToken string
 	// ticketTargetZoneID 是本连接所持重定向票据的目标 zone(gate 验签后经 SessionDetails 透传);
 	// 0 = 普通 AssignGate 票据。等于本 zone 时进场景不按 home_zone 弹回(CZ-8)。
@@ -156,6 +158,8 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 			found = true
 			// 职业只能来自已验证归属的账号角色记录，不能由入场请求自由指定。
 			flowState.classID = p.GetClassId()
+			flowState.appearanceID = p.GetAppearanceId()
+			flowState.gender = p.GetGender()
 			// 名字与职业同源。账号记录有名字就直接用(不多一次 RPC);只有缺名的记录
 			// (早于名字功能的旧角色、此前 self-heal 恢复出的空记录)才回源注册表。
 			flowState.playerName = resolveEnterName(ctx, p.GetName(), l.svcCtx.PlayerNames, in.PlayerId)
@@ -592,12 +596,91 @@ func resolveEnterName(ctx context.Context, accountName string, names roleNameLoo
 // 可重试的 18 ErrHandoffPending(历史上这里回的是 14 ErrUnsafeCrossNodeHandoff,该码已不再发出,
 // 见 scene_manager constants/errors.go)。18 要等源 scene 落盘写标记才会放行,而登录请求自己
 // 催不动这件事 —— 强行覆盖只会把本来能回到原 scene 的玩家变成撞 18 进不去。
+// 重连 / 顶号的落点由 resolveEnterSceneRoute 交给 scene_manager 按 location 决定(GO-5)。
 // 合服后的引导由角色列表的 zone 刷新负责,玩家下一次从目标 zone 登录即可。
 func homeZoneOverrideAllowed(decision sessionmanager.EnterGameDecision, existing *sessionmanager.PlayerSession) bool {
 	if decision != sessionmanager.FirstLogin {
 		return false
 	}
 	return existing == nil || existing.SceneID == 0
+}
+
+// enterSceneRoute 是 EnterGame 发给 scene_manager 的落点意图,即 EnterSceneRequest 的
+// ZoneId / SceneId。GateZoneId 不在这里:它恒为 login 自己的 zone,是「连接在哪」而不是「去哪」。
+type enterSceneRoute struct {
+	// zoneID 为 0 = 本次不指定去向,由 scene_manager 按它自己的 player:{id}:location 决定。
+	zoneID  uint32
+	sceneID uint64
+}
+
+// resolveEnterSceneRoute 决定 EnterScene 请求的去向。优先级自上而下,命中即止:
+//
+//  1. 持重定向票据且票据 target_zone_id == 本 zone(跨 zone 传送 / 重定向的第二条腿,CZ-8)
+//     → ZoneId = 本 zone,SceneId 清零。**必须排在第 2 条之前**:第二条腿的登录发生在客户端
+//     刚从源 gate 断开、30s 内连上目标 gate 的时候,源 gate 断线已把会话置成 DISCONNECTING,
+//     decision 多半就是 ShortReconnect;若先按第 2 条发 ZoneId=0,就绕过了「票据指明来本 zone」
+//     这层访客识别,落点改由 location 决定。
+//  2. decision ∈ {ShortReconnect, ReplaceLogin} → ZoneId = 0(GO-5 的决定,§12.3 / §12.6):
+//     访客(归属 A、正在访问 B)短暂断线后重登,**在重连窗口内回到原处(B),超出窗口或主动登出回家(A)**;
+//     顶号则是新设备接管角色当前所在的位置。
+//     「窗口」就是服务端现成的断线租约,不另造:gate 断线时 login 以显式的 LeaseTtlSeconds=30
+//     把会话置成 DISCONNECTING(sessionmanager.SetSessionDisconnecting);租约内同账号重登被
+//     DecideEnterGame / CanReconnect 判成 ShortReconnect,别的在线会话判成 ReplaceLogin。租约到期
+//     (挂机月卡会顺延,见 player_locator leasemonitor.go)由 player_locator 调 LeaveScene 删掉
+//     location,之后的重登是 FirstLogin → 走第 3 / 4 条;主动登出(LeaveGame → MarkOffline)同理。
+//     去向由服务端决定、不靠客户端记住「上次在哪个区」:客户端崩溃重开、换设备都会把这份记忆弄丢,
+//     而 location 是归属的唯一权威。scene_manager 在 ZoneId==0 时只跟随**落在具体节点上**的 location
+//     (node_id 非空);「等待落点」(跨 zone 传送途中、node_id 为空)不牵引、按 gate zone 落点,
+//     避免第二条腿持续失败时每次登录都被来回重定向。location 在别的 zone 时 scene_manager 回
+//     「只送连接」的重定向(Redirect 非空、ErrorCode 0),本链走成功出口,不推 3023。
+//     SceneId 清零:scene_manager 在 ZoneId==0 且 SceneId!=0 时会先按 GetSceneZone(SceneId) 定目标 zone
+//     (enterscenelogic.go「1. Determine the target zone」),绕过上面的 node_id 规则。会话里的 SceneID
+//     今天恒为 0(player_locator leasemonitor.go resolveSceneManagerSceneID 的注释),但去向只能由
+//     location 这一处权威决定,不给日后写进会话的陈旧 scene_id 留口子。
+//  3. FirstLogin 且 RedirectOnEnter 命中(开关打开 + homeZoneOverrideAllowed + 归属 zone ≠ 本 zone)
+//     → ZoneId = 归属 zone,SceneId 清零(合服后仍从源 zone 进来的玩家送去目标 zone)。
+//  4. 其余 → ZoneId = 本 zone,SceneId = 0。能走到这里的只有 FirstLogin(DecideEnterGame 在
+//     existing==nil 时才判 FirstLogin),没有会话可取 SceneID;同 zone 重连已由第 2 条接走。
+//
+// homeZones 为 nil 接口时第 3 条按「查不到」处理;*homezone.Resolver 的 nil 指针由其自身兜成
+// ErrUnavailable,同样维持本 zone。
+func resolveEnterSceneRoute(
+	ctx context.Context,
+	state enterGameSessionState,
+	decision sessionmanager.EnterGameDecision,
+	existing *sessionmanager.PlayerSession,
+	ownZone uint32,
+	redirectOnEnterEnabled bool,
+	homeZones homezone.Lookup,
+) enterSceneRoute {
+	if homezone.TicketPinsZone(state.ticketTargetZoneID, ownZone) {
+		// CZ-8:票据指明就是来本 zone 的(跨 zone 传送的第二条腿)。不查 home_zone、不弹回 ——
+		// 否则打开 RedirectOnEnter 的目标 zone 会把访客再送回家,与客户端 RedirectFlow 的
+		// 3 跳熔断互撞。existing.SceneID 若有也属于源 zone,清零让 scene_manager 在本 zone
+		// 落点(它会读「等待落点」里记的目标地图;resolveScene 对跨 zone 的 scene 会直接拒)。
+		logx.Infof("[travel] EnterGame player=%d 持重定向票据落地 zone=%d,跳过 home_zone 弹回", state.playerID, ownZone)
+		return enterSceneRoute{zoneID: ownZone, sceneID: 0}
+	}
+
+	if decision == sessionmanager.ShortReconnect || decision == sessionmanager.ReplaceLogin {
+		logx.Infof("[travel] EnterGame player=%d decision=%s 不指定去向(ZoneId=0),由 scene_manager 按 location 决定 gate_zone=%d",
+			state.playerID, decisionLabel(decision), ownZone)
+		return enterSceneRoute{zoneID: 0, sceneID: 0}
+	}
+
+	if redirectOnEnterEnabled && homeZoneOverrideAllowed(decision, existing) {
+		if home, redirected := homezone.ResolveEnterZone(ctx, homeZones, state.playerID, ownZone); redirected {
+			// player_locator 里的 existing.SceneID 属于旧 zone,对目标 zone 没有意义,清零。
+			// 现状(enterscenelogic.go「CROSS-ZONE CHECK」):scene_manager 的重定向判定**先于**
+			// 场景解析,重定向分支既不读 SceneId 也不做任何预占,目标场景由第二条腿上目标 zone
+			// 自己的 EnterScene 解析。早先是「先解析再重定向」,带着旧 zone 的 scene 会被
+			// resolveScene 以「scene 属于 zone X、请求 zone Y」拒掉 —— 清零最初是为那个顺序加的,
+			// 现在保留只是不把一个跨 zone 的 scene_id 递出去。
+			return enterSceneRoute{zoneID: home, sceneID: 0}
+		}
+	}
+
+	return enterSceneRoute{zoneID: ownZone, sceneID: 0}
 }
 
 func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state enterGameSessionState) (sessionmanager.EnterGameDecision, error) {
@@ -638,39 +721,13 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 	}
 
 	// Route player to Scene node via SceneManager.
-	// For reconnect/replace: use existing scene_id so player returns to same scene.
-	// For first login: scene_id=0 tells SceneManager to pick a node via load balancing.
-	var sceneID uint64
-	if existing != nil {
-		sceneID = existing.SceneID
-	}
-
-	// Zone routing (homezone 包注释):ZoneId 取 data_service 映射里的当前归属 zone,
-	// GateZoneId 保持 login 自己的 zone。两者不同时 scene_manager 的跨区重定向
-	// (enterscenelogic.go crossZoneRedirect)才会触发,把合服后仍从源 zone 进来的
-	// 玩家送去目标 zone;修复前两者恒等于本 zone,重定向从 login 路径永远打不到。
+	// 去向(ZoneId / SceneId)的优先级见 resolveEnterSceneRoute;GateZoneId 保持 login 自己的 zone。
+	// 两者不同时 scene_manager 的跨区重定向(enterscenelogic.go crossZoneRedirect)才会触发;
+	// ZoneId=0(重连 / 顶号)时由 scene_manager 按 location 决定,location 在别的 zone 同样触发重定向。
 	// 映射不可用 / 为 0 / 开关关闭 → 维持本 zone,不阻断进游戏。
 	ownZone := config.AppConfig.Node.ZoneId
-	targetZone, redirected := ownZone, false
-	if homezone.TicketPinsZone(state.ticketTargetZoneID, ownZone) {
-		// CZ-8:票据指明就是来本 zone 的(跨 zone 传送的第二条腿)。不查 home_zone、不弹回 ——
-		// 否则打开 RedirectOnEnter 的目标 zone 会把访客再送回家,与客户端 RedirectFlow 的
-		// 3 跳熔断互撞。existing.SceneID 若有也属于源 zone,清零让 scene_manager 在本 zone
-		// 落点(它会读「等待落点」里记的目标地图;resolveScene 对跨 zone 的 scene 会直接拒)。
-		sceneID = 0
-		logx.Infof("[travel] EnterGame player=%d 持重定向票据落地 zone=%d,跳过 home_zone 弹回", state.playerID, ownZone)
-	} else if config.AppConfig.HomeZone.RedirectOnEnterEnabled && homeZoneOverrideAllowed(decision, existing) {
-		targetZone, redirected = homezone.ResolveEnterZone(ctx, l.svcCtx.HomeZone, state.playerID, ownZone)
-	}
-	if redirected {
-		// player_locator 里的 existing.SceneID 属于旧 zone,对目标 zone 没有意义,清零。
-		// 现状(enterscenelogic.go「CROSS-ZONE CHECK」):scene_manager 的重定向判定**先于**
-		// 场景解析,重定向分支既不读 SceneId 也不做任何预占,目标场景由第二条腿上目标 zone
-		// 自己的 EnterScene 解析。早先是「先解析再重定向」,带着旧 zone 的 scene 会被
-		// resolveScene 以「scene 属于 zone X、请求 zone Y」拒掉 —— 清零最初是为那个顺序加的,
-		// 现在保留只是不把一个跨 zone 的 scene_id 递出去。
-		sceneID = 0
-	}
+	route := resolveEnterSceneRoute(ctx, state, decision, existing, ownZone,
+		config.AppConfig.HomeZone.RedirectOnEnterEnabled, l.svcCtx.HomeZone)
 	smTimeout := time.Duration(config.AppConfig.SceneManagerRpc.Timeout) * time.Millisecond
 	// Stage observation: SceneManager.EnterScene RPC. This is the prime
 	// suspect under load — it routes through SceneManager → Scene
@@ -679,13 +736,13 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 	enterSceneTimer := observeStage(applyEnterSceneSeconds)
 	enterResp, err := l.svcCtx.SceneManagerClient.EnterScene(ctx, &smpb.EnterSceneRequest{
 		PlayerId:       state.playerID,
-		SceneId:        sceneID,
+		SceneId:        route.sceneID,
 		SessionId:      state.sessionID,
 		RequestId:      state.requestID,
 		GateId:         state.gateID,
 		GateInstanceId: state.gateInstanceID,
 		GateZoneId:     ownZone,
-		ZoneId:         targetZone,
+		ZoneId:         route.zoneID,
 	}, zrpc.WithCallTimeout(smTimeout))
 	enterSceneTimer()
 	if err != nil {
@@ -710,6 +767,8 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 
 	// Cross-zone redirect: SceneManager already pushed RedirectToGateEvent to the gate.
 	// Skip idempotency — the player hasn't entered a scene yet; they'll re-login in the new zone.
+	// 重连 / 顶号发 ZoneId=0 时,location 在别的 zone 也走这里(「只送连接」的重定向,ErrorCode 0):
+	// 返回 nil = 链的成功出口,不推 3023(见 notifyEnterGameFailed)。
 	if enterResp.Redirect != nil {
 		logx.Infof("Player %d cross-zone redirect to %s:%d",
 			state.playerID, enterResp.Redirect.TargetGateIp, enterResp.Redirect.TargetGatePort)

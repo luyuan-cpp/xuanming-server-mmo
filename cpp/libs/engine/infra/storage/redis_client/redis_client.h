@@ -4,6 +4,7 @@
 #include <chrono>
 #include <functional>
 #include <string>
+#include <string_view>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -465,7 +466,8 @@ private:
 	// 存盘各一份,因为 SHA 是按脚本文本算的。
 	struct ScriptSlot
 	{
-		const char* source = nullptr;
+		// 仅引用下方初始化的静态、以零结尾 Lua 字面量，生命周期长于连接。
+		std::string_view source;
 		std::string sha1;
 		bool load_in_flight = false;
 	};
@@ -557,7 +559,7 @@ private:
 		}
 		slot.load_in_flight = true;
 		hiredis_->command(std::bind(&MessageAsyncClient::OnScriptLoaded, this, std::placeholders::_1, std::placeholders::_2, std::ref(slot)),
-						  "SCRIPT LOAD %s", slot.source);
+						  "SCRIPT LOAD %s", slot.source.data());
 	}
 
 	void OnScriptLoaded(hiredis::Hiredis * /*c*/, redisReply *reply, ScriptSlot& slot)
@@ -595,7 +597,7 @@ private:
 			}
 			return hiredis_->command(onSaved,
 									 "EVAL %s 1 %b %b",
-									 slot.source,
+									 slot.source.data(),
 									 element->redis_key.c_str(), element->redis_key.length(),
 									 element->serialized_payload.data(), element->serialized_payload.size());
 		}
@@ -611,7 +613,7 @@ private:
 		}
 		return hiredis_->command(onSaved,
 								 "EVAL %s 2 %b %b %b %b",
-								 slot.source,
+								 slot.source.data(),
 								 element->redis_key.c_str(), element->redis_key.length(),
 								 element->guard_key.c_str(), element->guard_key.length(),
 								 element->serialized_payload.data(), element->serialized_payload.size(),

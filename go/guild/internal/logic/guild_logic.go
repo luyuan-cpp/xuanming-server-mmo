@@ -49,6 +49,9 @@ type GuildLogic struct {
 	// playerNames 批量取成员 / 帮主的展示名(player_name_resolver.go)。
 	// nil = 没配 DataServiceRpc 或单测:名字一律留空,不 panic。只经 resolveNames 访问。
 	playerNames PlayerNameResolver
+	// economy 是捐献 / 升级 / 商店的依赖(economy_logic.go 的 EconomyDeps),经 WithEconomy 注入。
+	// nil = 未接线:五个经济 RPC 一律回 codes.Unavailable,其余 RPC 不受影响。
+	economy *EconomyDeps
 }
 
 // Option 是 NewGuildLogic 的可选项。
@@ -429,7 +432,8 @@ func (l *GuildLogic) LeaveGuild(ctx context.Context, req *pb.LeaveGuildRequest) 
 	if err != nil || tip != nil {
 		return &pb.LeaveGuildResponse{ErrorMessage: tip}, err
 	}
-	res, err := l.repo.LeaveGuild(ctx, guildID, who.playerID)
+	// now 显式传入(B5):事务内要把本人未结算捐献的截止时间提前到"现在",时钟归调用方(§11.2 显式依赖)。
+	res, err := l.repo.LeaveGuild(ctx, guildID, who.playerID, nowMs())
 	if errors.Is(err, data.ErrNotGuildMember) || errors.Is(err, data.ErrGuildGone) {
 		// 缓存指的帮会里没有他:以 MySQL 复核。真的不在任何帮 = 这次退帮本来就无事可做(幂等成功);
 		// 在别的帮 = 缓存过期,让客户端刷新后重来,**绝不**按旧 guild_id 去删别的帮的成员行。
@@ -473,7 +477,8 @@ func (l *GuildLogic) DisbandGuild(ctx context.Context, req *pb.DisbandGuildReque
 	if err != nil || tip != nil {
 		return &pb.DisbandGuildResponse{ErrorMessage: tip}, err
 	}
-	res, err := l.repo.DisbandGuild(ctx, guildID, who.playerID)
+	// now 显式传入(B5):解散事务把全体成员未结算捐献的截止时间提前到"现在"。
+	res, err := l.repo.DisbandGuild(ctx, guildID, who.playerID, nowMs())
 	// 解散是唯一一处 ErrRankTooLow 不回 kGuildRankTooLow 的地方:解散只有帮主能做,
 	// 沿用既有的"只有会长可以执行该操作"文案比"职位不足"更贴合玩家看到的按钮。
 	if errors.Is(err, data.ErrRankTooLow) {

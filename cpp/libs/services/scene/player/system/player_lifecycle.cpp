@@ -34,6 +34,9 @@
 #include "player_scene.h"
 #include "player_team.h"
 #include "hexagons_grid.h"  // Hex —— 退出场景时要和 SceneEntityComp 成对摘掉
+#include "generated/attribute/actorbaseattributess2c_attribute_sync.h" // StopMotionForExit:速度脏位
+#include "proto/common/component/actor_comp.pb.h"                     // Velocity / Acceleration
+#include "proto/scene/player_state_attribute_sync.pb.h"                // ActorBaseAttributesS2C 字段号
 #include "stress_test_probe.h"
 #include "player/constants/player.h"
 #include "proto/db/db_task.pb.h"
@@ -56,7 +59,11 @@
 #include "muduo/net/EventLoop.h"
 #include <algorithm>
 #include <chrono>
+#include <functional>
+#include <iterator>
 #include <limits>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 bool player_ownership::ParsePlayerLocationElement(const redisReply *element, storage::PlayerLocation &out)
@@ -94,6 +101,9 @@ thread_local std::unordered_map<Guid, EmergencyRelocateTicket> tlsEmergencyReloc
 // 不单独计这一段的话 IsEmergencyRelocateDrained 会在"改派请求其实还没发"时宣布收敛,
 // 节点随即 quit loop,Redis 回调再也不会来,这批玩家的改派就丢了。
 thread_local std::size_t tlsRelocateHandoffMarksInFlight = 0;
+// 已发出、应答未到的断线释放标记条件写数(A1′ 与 A2′ 放弃补写,exit_release_mark.h)。计入停机 drain 谓词
+// (main.cpp)与 IsEmergencyRelocateDrained(R6):节点在它归零之前 quit loop 的话回调再也不会来,计数与日志都丢。
+thread_local std::size_t tlsExitReleaseMarksInFlight = 0;
 
 namespace
 {
@@ -253,6 +263,82 @@ namespace
 		});
 	}
 
+	// [ExitPersist] 与 [ExitRelease] 两行汇总(计数含义见 player_lifecycle.h 的 exit_persist_stats /
+	// exit_release_stats)。与上面的 [TravelHandoff] 同款:第一次有玩家退出(或第一次发起 A2′)时在当前线程的
+	// EventLoop 上挂 30s 定时器,回调不捕获任何对象、只读进程级原子计数(AGENTS §11.7 管的是绑了对象的回调,
+	// 这里没有对象),各自有变化才打。挂在本文件而不是 RedisSystem 的快照定时器里:计数只属于本文件的退出链,
+	// 改动也只落在退出链自己的文件里。
+	constexpr double kExitPersistStatsIntervalSec = 30.0;
+
+	// [ExitRelease] 行:key=value 平铺,key 取自 exit_release_mark 的两张名表与固定项。
+	std::string FormatExitReleaseStats(const exit_release_stats::Snapshot &stats)
+	{
+		std::string line = "[ExitRelease]";
+		const auto append = [&line](const char *key, uint64_t value)
+		{
+			line += ' ';
+			line += key;
+			line += '=';
+			line += std::to_string(value);
+		};
+		for (std::size_t i = 0; i < stats.decisions.size(); ++i)
+		{
+			append(exit_release_mark::kExitReleaseDecisionNames[i], stats.decisions[i]);
+		}
+		append("written", stats.written);
+		append("epoch_moved", stats.epochMoved);
+		append("failed", stats.failed);
+		for (std::size_t i = 0; i < stats.inheritResults.size(); ++i)
+		{
+			append(exit_release_mark::kInheritClearResultNames[i], stats.inheritResults[i]);
+		}
+		append("inherit_failed", stats.inheritFailed);
+		append("inherit_refused", stats.inheritRefused);
+		append("inherit_rewritten", stats.inheritRewritten);
+		append("inherit_rewrite_skipped", stats.inheritRewriteSkipped);
+		append("inherit_rewrite_failed", stats.inheritRewriteFailed);
+		return line;
+	}
+
+	void EnsureExitStatsTimer()
+	{
+		static thread_local bool armed = false;
+		if (armed)
+		{
+			return;
+		}
+		auto *loop = muduo::net::EventLoop::getEventLoopOfCurrentThread();
+		if (loop == nullptr)
+		{
+			return; // 单测 / 无 loop 的宿主:不打汇总行,计数本身照常累加
+		}
+		armed = true;
+		loop->runEvery(kExitPersistStatsIntervalSec,
+					   [lastLogged = exit_persist_stats::Snapshot{}, lastRelease = exit_release_stats::Snapshot{}]() mutable
+		{
+			const auto release = exit_release_stats::Read();
+			if (!(release == lastRelease))
+			{
+				lastRelease = release;
+				LOG_INFO << FormatExitReleaseStats(release);
+			}
+			const auto stats = exit_persist_stats::Read();
+			if (stats == lastLogged)
+			{
+				return;
+			}
+			lastLogged = stats;
+			LOG_INFO << "[ExitPersist] superseded=" << stats.superseded
+					 << " intent_missing=" << stats.intentMissing
+					 << " resave=" << stats.resave
+					 << " resave_exhausted=" << stats.resaveExhausted
+					 << " exhausted_rekick=" << stats.exhaustedRekick
+					 << " fastpath_deferred=" << stats.fastpathDeferred
+					 << " client_msg_rejected=" << stats.clientMsgRejected
+					 << " deposed_on_reentry=" << stats.deposedOnReentry;
+		});
+	}
+
 	// handoff 标记的待撤回表(契约见 handoff_mark_withdraw.h)。只在 scene 逻辑线程上读写:
 	// 登记(WithdrawHandoffMark)、Redis 回调销账、RedisSystem 的重连回调与 1s 定时器重试,
 	// 都跑在同一个 EventLoop 上,不需要锁。
@@ -383,6 +469,510 @@ namespace
 					 << " pending=" << tlsHandoffWithdrawQueue.size();
 		}
 	}
+
+	// 存盘要写的那份 PlayerAllData:marshal 全部字段,再补两张子表的 player_id(生成的 marshal 不填)。
+	// SavePlayerToRedisImpl 与退出分支的收敛比对共用,保证"比的"与"写的"是同一个形状。
+	// 不打压测探针:探针只在真正写盘的路径上打(见 SavePlayerToRedisImpl)。
+	void MarshalPlayerForSave(entt::entity player, Guid playerId, PlayerAllData &out)
+	{
+		PlayerAllDataMessageFieldsMarshal(player, out);
+		out.mutable_player_database_data()->set_player_id(playerId);
+		out.mutable_player_database_1_data()->set_player_id(playerId);
+	}
+
+	// 该玩家的 PlayerAllData 在 MessageAsyncClient 里还有没有未落地的存盘(在途或排队),
+	// 复用帮会 B4c 在 redis_client.h 落的只读查询 HasUnsettledSave。
+	// 客户端未初始化(单测宿主;生产在任何玩家进场之前就 Initialize 了)时没有任何存盘队列,如实返回 false。
+	// 注意 redis_client.h 的使用约束:在 save_callback_(即 HandlePlayerAsyncSaved)里调用恒为 false ——
+	// 同 key 有更新的排队值时旧值落地不回调。退出分支仍然查它,是为了不依赖那条实现细节。
+	bool HasUnsettledPlayerSave(Guid playerId)
+	{
+		const auto &playerRedis = tlsRedisSystem.GetPlayerDataRedis();
+		return playerRedis != nullptr && playerRedis->HasUnsettledSave(playerId);
+	}
+} // namespace
+
+bool player_exit::IsPersistedPayloadCurrent(const PlayerAllData &landed, const PlayerAllData &current)
+{
+	PlayerAllData landedStripped = landed;
+	PlayerAllData currentStripped = current;
+	for (PlayerAllData *payload : {&landedStripped, &currentStripped})
+	{
+		payload->mutable_player_database_data()->clear_stress_test_probe();
+		payload->mutable_player_database_1_data()->clear_stress_test_probe();
+	}
+	return dirty_save::IsEqual(landedStripped, currentStripped);
+}
+
+namespace
+{
+	// ── 断线释放标记(A1′)与载入时清标记(A2′)的粘合代码 ─────────────────────────────
+	// 判定、Lua 与结果枚举见 exit_release_mark.h;设计见 cross-zone-scene-travel.md §12.6.3 第二步 / 第三步。
+	// 全部只在 scene 逻辑线程上跑(FinishExitAfterPersist、PlayerEnterGameNode、HandlePlayerAsyncLoaded、Redis 回调、
+	// RedisSystem 的重连回调与 1s 定时器同一个 EventLoop),不需要锁。
+	// Redis 回调一律只按值捕获 id / 代际 / 标记原文,不绑对象、不持连接(AGENTS §11.7)。
+
+	// 本节点身份探针(M3),由节点入口经 PlayerLifecycleSystem::SetNodeIdentityProbe 注入。
+	thread_local std::function<bool()> tlsNodeIdentityProbe;
+
+	// A2′ 载入生命周期号的发号器(节点内单调,0 保留给"未分配")。
+	thread_local uint64_t tlsInheritClearLifecycleSeq = 0;
+
+	// 已放弃、但还有 A2′ 应答未到的载入生命周期:lifecycle → 玩家与待到应答数。晚到的应答若删掉了
+	// (或可能删掉了)epoch == N 的标记,由它补写一次(M7)。条目在补写发出或应答到齐时删除;hiredis 断线时
+	// 对挂起命令逐个回空应答,条目不会无界增长。建出实体的生命周期不登记:那时本节点就是持有者,不补写。
+	struct AbandonedInheritClear
+	{
+		Guid playerId{kInvalidGuid};
+		uint32_t outstandingReplies{0};
+	};
+	thread_local std::unordered_map<uint64_t, AbandonedInheritClear> tlsAbandonedInheritClears;
+
+	bool ReadSwitchOnce(const char *envName, bool defaultValue)
+	{
+		const char *raw = std::getenv(envName);
+		const bool value = exit_release_mark::ParseSwitch(raw, defaultValue);
+		LOG_INFO << "[ExitRelease] " << envName << "=" << (raw != nullptr ? raw : "<unset>") << " -> "
+				 << (value ? "on" : "off");
+		return value;
+	}
+
+	// A1′ 总开关(M14),默认开;进程内第一次用到时读一次环境变量。回滚步骤见 exit_release_mark::kEnvExitReleaseMark。
+	bool IsExitReleaseMarkEnabled()
+	{
+		static const bool enabled = ReadSwitchOnce(exit_release_mark::kEnvExitReleaseMark, true);
+		return enabled;
+	}
+
+	// dev 旁路开关(M6),默认关;必须与 scene_manager 的 AllowUnsafeCrossNodeHandoff 同步打开。
+	bool IsDevUnsafeCrossNodeHandoff()
+	{
+		static const bool enabled = ReadSwitchOnce(exit_release_mark::kEnvDevUnsafeCrossNode, false);
+		return enabled;
+	}
+
+	// 本节点身份当前是否确认有效(M3):疏散中一律无效;其余看节点入口注入的探针(etcd 租约未推定过期)。
+	// 没注入 = 不确认(fail-closed)。
+	bool IsNodeIdentityConfirmed()
+	{
+		if (tlsEmergencyRelocating)
+		{
+			return false;
+		}
+		return tlsNodeIdentityProbe && tlsNodeIdentityProbe();
+	}
+
+	exit_release_mark::ReplyShape ToReplyShape(const redisReply *reply)
+	{
+		if (reply == nullptr)
+		{
+			return exit_release_mark::ReplyShape::kNone;
+		}
+		switch (reply->type)
+		{
+		case REDIS_REPLY_INTEGER:
+			return exit_release_mark::ReplyShape::kInteger;
+		case REDIS_REPLY_ERROR:
+			return exit_release_mark::ReplyShape::kError;
+		default:
+			return exit_release_mark::ReplyShape::kOther;
+		}
+	}
+
+	int64_t ReplyInteger(const redisReply *reply)
+	{
+		return reply != nullptr && reply->type == REDIS_REPLY_INTEGER ? static_cast<int64_t>(reply->integer) : 0;
+	}
+
+	// 失败应答的排障后缀:空应答 → reason=reply_lost;ERROR → reason=reply_error err=…;其余为空串。
+	std::string ReplyFailureSuffix(const redisReply *reply)
+	{
+		if (reply == nullptr)
+		{
+			return " reason=reply_lost";
+		}
+		if (reply->type == REDIS_REPLY_INTEGER)
+		{
+			return std::string();
+		}
+		std::string suffix = " reason=reply_error";
+		if (reply->type == REDIS_REPLY_ERROR && reply->str != nullptr)
+		{
+			suffix += " err=";
+			suffix += reply->str;
+		}
+		return suffix;
+	}
+
+	// 条件写标记的两个来源:A1′ 退出收尾,A2′ 载入放弃补写。只决定计到哪组计数、日志里写哪个 site。
+	enum class MarkWriteSite : uint8_t
+	{
+		kExitRelease,
+		kInheritRewrite,
+
+		kCount
+	};
+	constexpr const char *kMarkWriteSiteNames[] = {
+		"exit_release",
+		"inherit_rewrite",
+	};
+	static_assert(std::size(kMarkWriteSiteNames) == static_cast<std::size_t>(MarkWriteSite::kCount),
+				  "kMarkWriteSiteNames 必须与 MarkWriteSite 一一对应");
+
+	constexpr const char *MarkWriteSiteName(MarkWriteSite site)
+	{
+		const auto index = static_cast<std::size_t>(site);
+		return index < std::size(kMarkWriteSiteNames) ? kMarkWriteSiteNames[index] : "?";
+	}
+
+	void CountMarkWrite(MarkWriteSite site, exit_release_mark::MarkWriteResult result)
+	{
+		using Result = exit_release_mark::MarkWriteResult;
+		auto &stats = exit_release_stats::Get();
+		const bool rewrite = site == MarkWriteSite::kInheritRewrite;
+		switch (result)
+		{
+		case Result::kWritten:
+			exit_release_stats::Inc(rewrite ? stats.inheritRewritten : stats.written);
+			break;
+		case Result::kEpochMoved:
+			exit_release_stats::Inc(rewrite ? stats.inheritRewriteSkipped : stats.epochMoved);
+			break;
+		default:
+			exit_release_stats::Inc(rewrite ? stats.inheritRewriteFailed : stats.failed);
+			break;
+		}
+	}
+
+	// 条件写 player:{id}:handoff "E:now_ms":owner_epoch 仍等于 E 才写(exit_release_mark::kLuaWriteIfOwnerEpoch)。
+	// A1′ 与 A2′ 放弃补写共用。走 tlsRedis.GetZoneRedis() —— 与存盘、A2′、标记撤回同一条连接(FIFO):
+	// 退出存盘的落地回调已经到了,这条写必然排在它之后执行。
+	// **一律不重试**(R7):写不成的后果只是这一次重登可能回 18、下一次重试放行;重试会把"这一刻已落盘"的
+	// 凭证推迟到一个不再成立的时刻。在途计数:发出前 +1,回调或派发失败时 -1(R6)。
+	void SendConditionalMarkWrite(Guid playerId, uint64_t epoch, MarkWriteSite site)
+	{
+		const std::string markValue = player_ownership::HandoffRedisValue(epoch, TimeSystem::NowMillisecondsUTC());
+		auto &redis = tlsRedis.GetZoneRedis();
+		if (!redis || !redis->connected())
+		{
+			CountMarkWrite(site, exit_release_mark::MarkWriteResult::kFailed);
+			LOG_WARN << "[ExitRelease] mark write failed player=" << playerId << " mark=" << markValue
+					 << " site=" << MarkWriteSiteName(site) << " reason=redis_unavailable (not retried)";
+			return;
+		}
+		const std::string ownerEpochKey = player_ownership::OwnerEpochRedisKey(playerId);
+		const std::string handoffKey = player_ownership::HandoffRedisKey(playerId);
+		const std::string epochText = std::to_string(epoch);
+		++tlsExitReleaseMarksInFlight;
+		// 脚本串作为一个 %s 参数传入是安全的:hiredis 只按**格式串**里的空格切参数(同 SendHandoffWithdraw)。
+		const int ret = redis->command(
+			[playerId, markValue, site](hiredis::Hiredis *, redisReply *reply)
+			{
+				if (tlsExitReleaseMarksInFlight > 0)
+				{
+					--tlsExitReleaseMarksInFlight;
+				}
+				const auto result =
+					exit_release_mark::ClassifyMarkWriteReply(ToReplyShape(reply), ReplyInteger(reply));
+				CountMarkWrite(site, result);
+				switch (result)
+				{
+				case exit_release_mark::MarkWriteResult::kWritten:
+					LOG_INFO << "[ExitRelease] mark written player=" << playerId << " mark=" << markValue
+							 << " site=" << MarkWriteSiteName(site);
+					break;
+				case exit_release_mark::MarkWriteResult::kEpochMoved:
+					LOG_INFO << "[ExitRelease] mark not written player=" << playerId << " mark=" << markValue
+							 << " site=" << MarkWriteSiteName(site) << ": owner_epoch moved on";
+					break;
+				default:
+					LOG_WARN << "[ExitRelease] mark write failed player=" << playerId << " mark=" << markValue
+							 << " site=" << MarkWriteSiteName(site) << ReplyFailureSuffix(reply) << " (not retried)";
+					break;
+				}
+			},
+			"EVAL %s 2 %s %s %s %s %d", exit_release_mark::kLuaWriteIfOwnerEpoch, ownerEpochKey.c_str(),
+			handoffKey.c_str(), epochText.c_str(), markValue.c_str(), player_ownership::kHandoffMarkTtlSec);
+		if (ret != REDIS_OK)
+		{
+			// 命令没发出去,回调不会来:自己把计数还回去。
+			if (tlsExitReleaseMarksInFlight > 0)
+			{
+				--tlsExitReleaseMarksInFlight;
+			}
+			CountMarkWrite(site, exit_release_mark::MarkWriteResult::kFailed);
+			LOG_WARN << "[ExitRelease] mark write failed player=" << playerId << " mark=" << markValue
+					 << " site=" << MarkWriteSiteName(site) << " reason=dispatch_failed (not retried)";
+		}
+	}
+
+	// A1′:退出收尾时按 exit_release_mark::DecideExitReleaseMark 判定写不写断线释放标记,并按结果计数。
+	// 只由 FinishExitAfterPersist 调用,位置在 DispatchEmergencyRelocate 之后、RemovePlayerSession 之前
+	// (实体与意图组件此刻还在)。
+	//   relocateTicketConsumed    本次改派消费了疏散票据(它自己写标记,A1′ 不覆盖)
+	//   exitWonOverIssuedHandoff  FinishExitAfterPersist 自己的"退出优先"分支里交接标记已写(M11)
+	void WriteExitReleaseMarkIfEligible(Guid playerId, entt::entity playerEntity, bool relocateTicketConsumed,
+										bool exitWonOverIssuedHandoff)
+	{
+		exit_release_mark::ExitReleaseFacts facts;
+		facts.featureEnabled = IsExitReleaseMarkEnabled();
+		facts.entityValid = tlsEcs.actorRegistry.valid(playerEntity);
+		const PlayerExitIntentComp *intent =
+			facts.entityValid ? tlsEcs.actorRegistry.try_get<PlayerExitIntentComp>(playerEntity) : nullptr;
+		facts.hasIntent = intent != nullptr;
+		if (intent != nullptr)
+		{
+			facts.cause = intent->cause;
+			facts.releaseMarkSuppressed = intent->releaseMarkSuppressed;
+			facts.suppressedBy = intent->suppressedBy;
+		}
+		facts.relocateTicketConsumed = relocateTicketConsumed;
+		facts.handoffMarkInflight = exitWonOverIssuedHandoff || (intent != nullptr && intent->travelHandoffMarkIssued);
+		if (facts.entityValid)
+		{
+			if (const auto *epochComp = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(playerEntity))
+			{
+				facts.ownerEpoch = epochComp->epoch;
+			}
+		}
+		facts.identityValid = IsNodeIdentityConfirmed();
+
+		const auto decision = exit_release_mark::DecideExitReleaseMark(facts);
+		exit_release_stats::Inc(exit_release_stats::Get().decisions[static_cast<std::size_t>(decision)]);
+		if (decision == exit_release_mark::ExitReleaseDecision::kWrite)
+		{
+			SendConditionalMarkWrite(playerId, facts.ownerEpoch, MarkWriteSite::kExitRelease);
+			return;
+		}
+		// 常态的不写(原因不在可写集合 / 开关关闭 / epoch 未铸造 / 实体已无效)打 DEBUG:ReleasePlayer 每次跨节点
+		// 换图都会走到 skip_cause;其余(压制 / 改派 / 交接在途 / 身份不确认 / 意图缺失)打 INFO,排障要看得见。
+		switch (decision)
+		{
+		case exit_release_mark::ExitReleaseDecision::kSkipCause:
+		case exit_release_mark::ExitReleaseDecision::kSkipDisabled:
+		case exit_release_mark::ExitReleaseDecision::kSkipEpochUnknown:
+		case exit_release_mark::ExitReleaseDecision::kSkipEntityInvalid:
+			LOG_DEBUG << "[ExitRelease] not writing release mark player=" << playerId
+					  << " reason=" << exit_release_mark::ExitReleaseDecisionName(decision)
+					  << " cause=" << player_exit::ExitCauseName(facts.cause);
+			break;
+		default:
+			LOG_INFO << "[ExitRelease] not writing release mark player=" << playerId
+					 << " reason=" << exit_release_mark::ExitReleaseDecisionName(decision)
+					 << " cause=" << player_exit::ExitCauseName(facts.cause) << " owner_epoch=" << facts.ownerEpoch;
+			break;
+		}
+	}
+
+	// 载入被放弃(会话在载入期间取消 / 载入 RedisError / 闸门拒绝)时处理本生命周期删掉过的标记(M7):
+	// 已知删掉过(或可能删掉过)epoch == N 的那一份 → 按 A1′ 同款条件补写一次(owner_epoch == N 才写 "N:now");
+	// 否则若还有 A2′ 应答未到,登记进 tlsAbandonedInheritClears,由晚到的应答决定要不要补写。只发一次。
+	// 安全性同 A1′:本生命周期从未建过实体,盘上仍是上一任持有者的终态。
+	void AbandonInheritClear(Guid playerId, const InheritClearState &state, const char *reason)
+	{
+		if (state.rewriteEpoch != 0)
+		{
+			LOG_INFO << "[ExitRelease][InheritClear] load abandoned (" << reason << ") after the inherited mark of"
+					 << " epoch " << state.rewriteEpoch << " was deleted (or may have been); re-writing it player="
+					 << playerId;
+			SendConditionalMarkWrite(playerId, state.rewriteEpoch, MarkWriteSite::kInheritRewrite);
+			return;
+		}
+		if (state.lifecycle != 0 && state.outstandingReplies > 0)
+		{
+			AbandonedInheritClear abandoned;
+			abandoned.playerId = playerId;
+			abandoned.outstandingReplies = state.outstandingReplies;
+			tlsAbandonedInheritClears.insert_or_assign(state.lifecycle, abandoned);
+		}
+	}
+
+	// 拒建实体(M2 / M10)。写法照 HandlePlayerAsyncLoadFailed 的 RedisError 分支:回 kEnterSceneFailed、擦掉预登记
+	// 会话与待入场条目(之后到达的载入结果找不到条目,按"孤儿载入"跳过);随后按 M7 处理删掉过的标记。
+	void RefuseInheritedEntry(Guid playerId, const char *reason)
+	{
+		auto pendingIt = tlsPendingEnterMap.find(playerId);
+		if (pendingIt == tlsPendingEnterMap.end())
+		{
+			return;
+		}
+		const SessionId sessionId = pendingIt->second.enterInfo.session_id();
+		const uint64_t ownerEpoch = pendingIt->second.ownerEpoch;
+		InheritClearState state = std::move(pendingIt->second.inheritClear);
+		tlsPendingEnterMap.erase(pendingIt);
+
+		exit_release_stats::Inc(exit_release_stats::Get().inheritRefused);
+		LOG_ERROR << "[ExitRelease][InheritClear] refusing entry player=" << playerId << " owner_epoch=" << ownerEpoch
+				  << " session=" << sessionId << " reason=" << reason << " attempts=" << state.attemptsSent
+				  << " (metric=inherit_refused)";
+		if (sessionId != 0)
+		{
+			// Best-effort tip; safe even if the gate session is already gone.
+			SendTipToPendingSession(sessionId, playerId, kEnterSceneFailed);
+			SessionMap().erase(sessionId);
+		}
+		AbandonInheritClear(playerId, state, reason);
+	}
+
+	void SendInheritClear(Guid playerId);
+
+	// A2′ 失败(空应答 / ERROR / Redis 不可用 / 派发失败)后:没到上限就排下一次重发(期间保留已载入的数据),
+	// 到了上限(次数或截止时刻,单调时钟)就拒建实体。
+	void ScheduleInheritClearRetry(Guid playerId, const char *reason)
+	{
+		auto pendingIt = tlsPendingEnterMap.find(playerId);
+		if (pendingIt == tlsPendingEnterMap.end())
+		{
+			return;
+		}
+		auto &state = pendingIt->second.inheritClear;
+		state.phase = exit_release_mark::InheritClearPhase::kRetryWait;
+		const auto now = exit_release_mark::Clock::now();
+		if (exit_release_mark::IsInheritClearExhausted(state.attemptsSent, now - state.firstSentAt))
+		{
+			RefuseInheritedEntry(playerId, "inherited-mark clear kept failing");
+			return;
+		}
+		state.nextRetryAt = now + exit_release_mark::InheritClearRetryDelay(state.attemptsSent);
+		LOG_WARN << "[ExitRelease][InheritClear] clear failed player=" << playerId << " epoch=" << state.targetEpoch
+				 << " reason=" << reason << " attempt=" << state.attemptsSent << "/"
+				 << exit_release_mark::kInheritClearMaxAttempts << "; will retry, loaded data (if any) is kept";
+	}
+
+	void HandleInheritClearReply(Guid playerId, uint64_t lifecycle, uint64_t epoch, uint32_t seq,
+								 exit_release_mark::InheritClearResult result, const std::string &detail)
+	{
+		auto &stats = exit_release_stats::Get();
+		exit_release_stats::Inc(stats.inheritResults[static_cast<std::size_t>(result)]);
+		if (exit_release_mark::IsInheritClearFailure(result))
+		{
+			exit_release_stats::Inc(stats.inheritFailed);
+		}
+		// 成功类逐条 INFO(M15:验证步骤要看得见),核对不过与失败 WARN(拒建实体另有 ERROR)。
+		if (exit_release_mark::IsInheritClearConfirmed(result))
+		{
+			LOG_INFO << "[ExitRelease][InheritClear] player=" << playerId << " epoch=" << epoch
+					 << " result=" << exit_release_mark::InheritClearResultName(result);
+		}
+		else
+		{
+			LOG_WARN << "[ExitRelease][InheritClear] player=" << playerId << " epoch=" << epoch
+					 << " result=" << exit_release_mark::InheritClearResultName(result) << detail;
+		}
+
+		auto pendingIt = tlsPendingEnterMap.find(playerId);
+		if (pendingIt == tlsPendingEnterMap.end() || pendingIt->second.inheritClear.lifecycle != lifecycle)
+		{
+			// 这次载入已经结束:放弃了(在放弃表里)或者建出了实体(不在表里,本节点就是持有者,什么都不做)。
+			const auto abandonedIt = tlsAbandonedInheritClears.find(lifecycle);
+			if (abandonedIt == tlsAbandonedInheritClears.end())
+			{
+				return;
+			}
+			if (exit_release_mark::MayHaveDeletedCurrent(result))
+			{
+				const Guid abandonedPlayer = abandonedIt->second.playerId;
+				tlsAbandonedInheritClears.erase(abandonedIt);
+				LOG_INFO << "[ExitRelease][InheritClear] late reply for an abandoned load deleted (or may have deleted)"
+						 << " the mark of epoch " << epoch << "; re-writing it player=" << abandonedPlayer;
+				SendConditionalMarkWrite(abandonedPlayer, epoch, MarkWriteSite::kInheritRewrite);
+				return;
+			}
+			if (abandonedIt->second.outstandingReplies <= 1)
+			{
+				tlsAbandonedInheritClears.erase(abandonedIt);
+			}
+			else
+			{
+				--abandonedIt->second.outstandingReplies;
+			}
+			return;
+		}
+
+		auto &state = pendingIt->second.inheritClear;
+		if (state.outstandingReplies > 0)
+		{
+			--state.outstandingReplies;
+		}
+		if (exit_release_mark::MayHaveDeletedCurrent(result))
+		{
+			state.rewriteEpoch = epoch;
+		}
+		if (seq != state.attemptSeq || epoch != state.targetEpoch)
+		{
+			return; // 更早的一次(或针对别的 epoch):只记账,不参与闸门判定(M2:只认本 ctx.ownerEpoch 的那一次)
+		}
+		if (exit_release_mark::IsInheritClearConfirmed(result))
+		{
+			state.phase = exit_release_mark::InheritClearPhase::kConfirmed;
+			if (state.stashedLoad != nullptr)
+			{
+				// 载入早已完成、在等这条应答:按原路径重走一遍(会话取消判定 → 闸门 → 建实体)。
+				// 调用之后待入场条目会被擦掉,state 引用随之失效,不再使用。
+				const std::shared_ptr<const PlayerAllData> stashed = std::move(state.stashedLoad);
+				state.stashedLoad.reset();
+				PlayerLifecycleSystem::HandlePlayerAsyncLoaded(playerId, *stashed);
+			}
+			return;
+		}
+		if (result == exit_release_mark::InheritClearResult::kEpochMismatch)
+		{
+			// 核对不过:这次路由已过时(M2)。立即拒绝、不补发;Lua 一个标记都没删。
+			RefuseInheritedEntry(playerId, "owner_epoch no longer matches this route (clear returned -1)");
+			return;
+		}
+		ScheduleInheritClearRetry(playerId, exit_release_mark::InheritClearResultName(result));
+	}
+
+	// 针对待入场条目的 targetEpoch 发一次 A2′。条目此刻必须在 tlsPendingEnterMap 里。
+	void SendInheritClear(Guid playerId)
+	{
+		auto pendingIt = tlsPendingEnterMap.find(playerId);
+		if (pendingIt == tlsPendingEnterMap.end())
+		{
+			return;
+		}
+		auto &state = pendingIt->second.inheritClear;
+		const uint64_t epoch = state.targetEpoch;
+		++state.attemptSeq;
+		++state.attemptsSent;
+		if (state.attemptsSent == 1)
+		{
+			state.firstSentAt = exit_release_mark::Clock::now();
+		}
+		state.phase = exit_release_mark::InheritClearPhase::kInFlight;
+		const uint64_t lifecycle = state.lifecycle;
+		const uint32_t seq = state.attemptSeq;
+
+		auto &redis = tlsRedis.GetZoneRedis();
+		if (!redis || !redis->connected())
+		{
+			exit_release_stats::Inc(exit_release_stats::Get().inheritFailed);
+			ScheduleInheritClearRetry(playerId, "redis_unavailable");
+			return;
+		}
+		const std::string ownerEpochKey = player_ownership::OwnerEpochRedisKey(playerId);
+		const std::string handoffKey = player_ownership::HandoffRedisKey(playerId);
+		const std::string epochText = std::to_string(epoch);
+		++state.outstandingReplies;
+		const int ret = redis->command(
+			[playerId, lifecycle, epoch, seq](hiredis::Hiredis *, redisReply *reply)
+			{
+				HandleInheritClearReply(
+					playerId, lifecycle, epoch, seq,
+					exit_release_mark::ClassifyInheritClearReply(ToReplyShape(reply), ReplyInteger(reply)),
+					ReplyFailureSuffix(reply));
+			},
+			"EVAL %s 2 %s %s %s", exit_release_mark::kLuaInheritClear, ownerEpochKey.c_str(), handoffKey.c_str(),
+			epochText.c_str());
+		if (ret != REDIS_OK)
+		{
+			// 命令没发出去,回调不会来。command() 期间没有改过待入场表,state 引用仍有效。
+			--state.outstandingReplies;
+			exit_release_stats::Inc(exit_release_stats::Get().inheritFailed);
+			ScheduleInheritClearRetry(playerId, "dispatch_failed");
+		}
+	}
 } // namespace
 
 void PlayerLifecycleSystem::HandlePlayerAsyncLoadFailed(Guid playerId,
@@ -421,7 +1011,10 @@ void PlayerLifecycleSystem::HandlePlayerAsyncLoadFailed(Guid playerId,
 			SendTipToPendingSession(sessionId, playerId, kEnterSceneFailed);
 			SessionMap().erase(sessionId);
 		}
+		// 载入放弃:A2′ 若已删掉(或可能删掉)epoch == N 的标记,补写回去(M7)。
+		const InheritClearState inheritClear = std::move(pendingIt->second.inheritClear);
 		tlsPendingEnterMap.erase(pendingIt);
+		AbandonInheritClear(playerId, inheritClear, "load failed with a Redis error");
 	}
 }
 
@@ -467,18 +1060,46 @@ void PlayerLifecycleSystem::HandlePlayerAsyncLoaded(Guid playerId, const PlayerA
 		LOG_WARN << "HandlePlayerAsyncLoaded: no pending enter info for player " << playerId << ", skipping";
 		return;
 	}
-	PlayerEnterContext ctx = std::move(pendingIt->second);
-	tlsPendingEnterMap.erase(pendingIt);
 
 	// If the session was erased during async load (e.g. client disconnected
 	// and ExitGame arrived before load completed), skip entity creation.
-	if (ctx.enterInfo.session_id() != 0
-		&& SessionMap().find(ctx.enterInfo.session_id()) == SessionMap().end())
+	const SessionId pendingSessionId = pendingIt->second.enterInfo.session_id();
+	if (pendingSessionId != 0 && SessionMap().find(pendingSessionId) == SessionMap().end())
 	{
-		LOG_INFO << "HandlePlayerAsyncLoaded: session " << ctx.enterInfo.session_id()
+		LOG_INFO << "HandlePlayerAsyncLoaded: session " << pendingSessionId
 		         << " cancelled during async load for player " << playerId << ", skipping";
+		// 载入放弃:A2′ 若已删掉(或可能删掉)epoch == N 的标记,补写回去(M7)。
+		const InheritClearState inheritClear = std::move(pendingIt->second.inheritClear);
+		tlsPendingEnterMap.erase(pendingIt);
+		AbandonInheritClear(playerId, inheritClear, "session cancelled during load");
 		return;
 	}
+
+	// A2′ 闸门(§12.6.3 第三步,M10 三态):只认"针对本 ctx.ownerEpoch 的那一次清理返回了非 -1"。
+	// 不对 enter_gs_type == 0 fail-open:首登与重登走同一道闸。
+	{
+		auto &inheritClear = pendingIt->second.inheritClear;
+		switch (exit_release_mark::DecideInheritGate(pendingIt->second.ownerEpoch, inheritClear.targetEpoch,
+													 inheritClear.phase))
+		{
+		case exit_release_mark::InheritGateDecision::kProceed:
+			break;
+		case exit_release_mark::InheritGateDecision::kWait:
+			// 应答未到 / 等重发:暂存载入结果,由应答(或重发后的应答)回来重走本函数;截止时刻到了由
+			// RetryInheritedMarkClears 拒绝。待入场条目保留,期间的重连照常覆盖上下文、沿用清理状态。
+			inheritClear.stashedLoad = std::make_shared<const PlayerAllData>(message);
+			LOG_INFO << "HandlePlayerAsyncLoaded: player " << playerId << " loaded; waiting for the inherited-mark"
+					 << " clear of owner_epoch " << pendingIt->second.ownerEpoch << " before creating the entity";
+			return;
+		case exit_release_mark::InheritGateDecision::kRefuse:
+		default:
+			RefuseInheritedEntry(playerId, "no inherited-mark clear confirmed for this owner_epoch");
+			return;
+		}
+	}
+
+	PlayerEnterContext ctx = std::move(pendingIt->second);
+	tlsPendingEnterMap.erase(pendingIt);
 
 	// If the loaded data has player_id=0, this is a brand-new player whose DB
 	// rows don't exist yet (CreatePlayer only creates an account entry), or an
@@ -522,11 +1143,29 @@ void PlayerLifecycleSystem::HandlePlayerAsyncSaved(Guid playerId, PlayerAllData 
 	{
 		if (tlsEcs.actorRegistry.any_of<UnregisterPlayer>(playerEntity))
 		{
+			// 先抄后摘(与 FinishExitAfterPersist 同一写法):交接若已发起(HandleExitGameNode 的 M4 分支在
+			// requestedAtMs != 0 时不内联收尾、等的就是这次落地),"{markEpoch}:{requestedAtMs}" 标记已写,
+			// 组件一摘 FinishExitAfterPersist 就再也看不到它,必须在这里撤回;否则标记留到 300s TTL,
+			// 玩家同节点重连后的下一次跨节点换图会凭它免存盘过换手门(回档)。理由详见 FinishExitAfterPersist。
+			const auto &travelIntent = tlsEcs.actorRegistry.get<PlayerTravelHandoffComp>(playerEntity);
+			const uint64_t handoffMarkEpoch = travelIntent.markEpoch;
+			const uint64_t handoffRequestedAtMs = travelIntent.requestedAtMs;
+			const bool handoffMarkWritten = handoffMarkEpoch != 0 && handoffRequestedAtMs != 0;
 			LOG_WARN << "HandlePlayerAsyncSaved: player " << playerId
-					 << " is exiting; dropping in-flight zone travel intent (exit wins)";
+					 << " is exiting; dropping in-flight zone travel intent (exit wins)"
+					 << " handoff_mark_written=" << handoffMarkWritten;
 			travel_handoff_stats::Inc(travel_handoff_stats::Get().exitWins);
 			tlsEcs.actorRegistry.remove<PlayerTravelHandoffComp>(playerEntity);
 			tlsEcs.actorRegistry.remove<PlayerFrozenComp>(playerEntity);
+			if (handoffMarkWritten)
+			{
+				WithdrawHandoffMark(playerId, handoffMarkEpoch, handoffRequestedAtMs, "exit wins");
+				// 交接组件已摘,FinishExitAfterPersist 看不到它了:记在意图组件上,让 A1′ 不写断线释放标记(M11)。
+				if (auto *exitIntent = tlsEcs.actorRegistry.try_get<PlayerExitIntentComp>(playerEntity))
+				{
+					exitIntent->travelHandoffMarkIssued = true;
+				}
+			}
 		}
 		else
 		{
@@ -568,27 +1207,114 @@ void PlayerLifecycleSystem::HandlePlayerAsyncSaved(Guid playerId, PlayerAllData 
 			}
 		}
 
-		// Defense in depth: if a reconnect rebound this entity to a live session
-		// after the save was enqueued, the UnregisterPlayer tag should have been
-		// cleared by EnterScene. If a tag still slipped through but the player
-		// has an active session, do NOT destroy — drop the stale unregister intent.
-		const auto *snapshot = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(playerEntity);
-		if (snapshot != nullptr && snapshot->gate_session_id() != kInvalidSessionId)
+		// ── Z1 修复(cross-zone-scene-travel.md §12.6.3 第一步)──────────────────────────────
+		// 旧判据"快照里的会话仍在 SessionMap 里、映射到本玩家 → 重连已取代退出"是错的:HandleExitGameNode
+		// 从不解绑会话,查到的就是退出会话本身,于是每一次真写盘的正常断线都被判成"被取代",实体成了
+		// 僵尸(2026-09-06 实跑日志 "ignoring stale UnregisterPlayer … live session <退出会话>")。
+		// 判定顺序:1 被取代 → 2 意图缺失(fail-closed)→ 3 收敛才销毁 → 4 不收敛则重存。
+		auto *exitIntent = tlsEcs.actorRegistry.try_get<PlayerExitIntentComp>(playerEntity);
+
+		// 1. 被取代:当前会话 ≠ 退出那一刻的会话,且它在 SessionMap 里映射到本玩家。正常重连在 EnterScene
+		//    第 0 步就摘了标记、走不到这里,这是纵深防御。保留实体、摘两件退出标记;快照照常在函数末尾
+		//    更新(这份字节确实落了盘,旧实现在这里 return、连快照都不更新)。
+		if (exitIntent != nullptr)
 		{
-			const auto sessionIt = SessionMap().find(snapshot->gate_session_id());
-			if (sessionIt != SessionMap().end() && sessionIt->second == playerId)
+			SessionId currentSession = kInvalidSessionId;
+			if (const auto *snapshot = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(playerEntity))
 			{
-				LOG_WARN << "HandlePlayerAsyncSaved: ignoring stale UnregisterPlayer for player "
-						 << playerId << " — live session " << snapshot->gate_session_id()
-						 << " indicates reconnect superseded the logout intent";
-				tlsEcs.actorRegistry.remove<UnregisterPlayer>(playerEntity);
-				return;
+				currentSession = snapshot->gate_session_id();
+			}
+			const auto sessionIt = SessionMap().find(currentSession);
+			const bool mappedToPlayer = sessionIt != SessionMap().end() && sessionIt->second == playerId;
+			if (player_exit::IsSupersedingSession(currentSession, exitIntent->sessionAtExit, mappedToPlayer))
+			{
+				LOG_WARN << "HandlePlayerAsyncSaved: exit of player " << playerId
+						 << " superseded by a newer session " << currentSession
+						 << " (session at exit " << exitIntent->sessionAtExit
+						 << ", cause=" << player_exit::ExitCauseName(exitIntent->cause)
+						 << "); keeping the entity (metric=exit_superseded)";
+				exit_persist_stats::Inc(exit_persist_stats::Get().superseded);
+				tlsEcs.actorRegistry.remove<UnregisterPlayer, PlayerExitIntentComp>(playerEntity);
+				exitIntent = nullptr;
 			}
 		}
+		// 2. 意图缺失:UnregisterPlayer 只在 HandleExitGameNode 里与意图组件成对挂,缺失说明成对约定被破坏。
+		//    分不清是不是被取代、也不知道内存与盘上差多少,销毁可能踢掉活玩家或丢掉差额(§12.6.4 M9)。
+		//    fail-closed 沿用旧行为:保留实体、摘 UnregisterPlayer(停机 drain 会对它重新发起退出)。
+		else
+		{
+			LOG_ERROR << "HandlePlayerAsyncSaved: exiting player " << playerId
+					  << " has UnregisterPlayer but no PlayerExitIntentComp; keeping the entity and dropping the"
+					  << " unregister tag instead of destroying it (fail-closed, metric=exit_intent_missing)";
+			exit_persist_stats::Inc(exit_persist_stats::Get().intentMissing);
+			tlsEcs.actorRegistry.remove<UnregisterPlayer>(playerEntity);
+		}
 
-		LOG_INFO << "Player marked for unregistration: " << playerId;
-
-		FinishExitAfterPersist(playerId);
+		if (exitIntent != nullptr)
+		{
+			// 3. 收敛判定(M1 "比对后才销毁"):落地的 payload 未必等于此刻的内存 —— 存盘在途期间的改动
+			//    (停机期间照收的客户端操作、战斗结算,Redis ERROR 时的新旧颠倒)今天靠僵尸的周期存盘补回,
+			//    改成"落地即销毁"会让它们永久丢失。所以只在"刚落地的就是当前内存,且该 key 没有未落地的
+			//    存盘"时才销毁。
+			PlayerAllData current;
+			MarshalPlayerForSave(playerEntity, playerId, current);
+			const bool payloadCurrent = player_exit::IsPersistedPayloadCurrent(message, current);
+			const bool unsettledSave = HasUnsettledPlayerSave(playerId);
+			switch (player_exit::DecideAfterPersist(payloadCurrent, unsettledSave, exitIntent->resaveRounds,
+													player_exit::kMaxExitResaveRounds))
+			{
+			case player_exit::AfterPersistDecision::kFinish:
+				LOG_INFO << "Player marked for unregistration: " << playerId
+						 << " (cause=" << player_exit::ExitCauseName(exitIntent->cause)
+						 << ", resave_rounds=" << static_cast<uint32_t>(exitIntent->resaveRounds) << ")";
+				FinishExitAfterPersist(playerId);
+				return; // 实体已销毁,快照无处可挂
+			case player_exit::AfterPersistDecision::kResave:
+			{
+				// 4. 不收敛:先把快照更新为刚落地的这份(它确实已在盘上),再存一次当前内存;保留
+				//    UnregisterPlayer 与意图组件,等下一次落地再判。
+				++exitIntent->resaveRounds;
+				exit_persist_stats::Inc(exit_persist_stats::Get().resave);
+				LOG_INFO << "HandlePlayerAsyncSaved: exiting player " << playerId
+						 << " changed while its exit save was in flight (payload_current=" << payloadCurrent
+						 << " unsettled_save=" << unsettledSave << "); re-saving before destroying, round "
+						 << static_cast<uint32_t>(exitIntent->resaveRounds) << "/"
+						 << static_cast<uint32_t>(player_exit::kMaxExitResaveRounds) << " (metric=exit_resave)";
+				tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(playerEntity).Replace(message);
+				if (SavePlayerToRedis(playerEntity))
+				{
+					return; // 等这次存盘的落地回调
+				}
+				// 没写盘:快路径判"盘上已是同一份",或交接已发起不得再写。还有未落地的存盘就等它的落地回调;
+				// 否则盘上此刻就是当前内存,直接收尾。
+				if (HasUnsettledPlayerSave(playerId))
+				{
+					LOG_INFO << "HandlePlayerAsyncSaved: exiting player " << playerId
+							 << " has an unsettled save; finishing exit when it lands";
+					return;
+				}
+				LOG_INFO << "Player marked for unregistration: " << playerId
+						 << " (converged on re-save, cause=" << player_exit::ExitCauseName(exitIntent->cause) << ")";
+				FinishExitAfterPersist(playerId);
+				return;
+			}
+			case player_exit::AfterPersistDecision::kRetainExhausted:
+			default:
+				// 重存到上限仍不收敛:还有别的东西在持续改这个实体。fail-closed 保留实体与两件退出标记,
+				// 不销毁、不丢差额;IsSaveInFlight 保持为真。出口:之后的任何一次落地(例如周期存盘)只要收敛了
+				// 照样收尾;再来一次退出请求(停机 exitAllPlayers / s2s LeaveScene / 排空)会补发一次存盘
+				// (HandleExitGameNode 的"已在退出中"分支);都不收敛时停机由 Node 的有界 drain 看门狗裁决;
+				// 保留期间玩家若在别处玩过又被派回本节点,由 DiscardDeposedExitingEntity 丢弃重载、不复用。
+				// 快照照常在函数末尾更新。
+				LOG_ERROR << "HandlePlayerAsyncSaved: exiting player " << playerId << " did not converge after "
+						  << static_cast<uint32_t>(exitIntent->resaveRounds)
+						  << " re-save round(s) (payload_current=" << payloadCurrent
+						  << " unsettled_save=" << unsettledSave
+						  << "); keeping the entity, the node drain watchdog decides (metric=exit_resave_exhausted)";
+				exit_persist_stats::Inc(exit_persist_stats::Get().resaveExhausted);
+				break;
+			}
+		}
 	}
 
 	// Update last-persisted snapshot (todo.md #204 / #226 slice B).
@@ -623,11 +1349,8 @@ void PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	//    the entity still carries the UnregisterPlayer tag and the save callback
 	//    will destroy it. Reconnect supersedes the logout intent — clear the tag
 	//    so HandlePlayerAsyncSaved leaves the live entity alone.
-	if (tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player))
-	{
-		tlsEcs.actorRegistry.remove<UnregisterPlayer>(player);
-		LOG_INFO << "EnterScene: cancelled pending unregistration for reconnected player " << playerId;
-	}
+	//    PlayerExitIntentComp 与 UnregisterPlayer 成对摘(player_exit_intent.h 的成对约定),见 CancelExitOnReconnect。
+	CancelExitOnReconnect(player);
 
 	// 0.5 归属:放在场景查找之前 —— 归属讲的是"这份数据归谁、谁持有",与放没放进场景无关,
 	//     实体只要在本节点存在、会被存盘,就必须带着 Go 这次路由决策给的值。
@@ -920,7 +1643,45 @@ void PlayerLifecycleSystem::DetachFromScene(entt::entity player)
 	tlsEcs.actorRegistry.remove<Hex>(player);
 }
 
-void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player)
+void PlayerLifecycleSystem::StopMotionForExit(entt::entity player)
+{
+	// 只改已有组件、不 emplace:没有运动学组件的实体(测试宿主、非移动实体)什么都不做。
+	// 两者都清:MovementSystem 积分 Velocity(不排除 UnregisterPlayer),MovementAccelerationSystem 积分
+	// (Velocity + Acceleration)。与各 tick 系统排除 PlayerFrozenComp 同一个道理 —— 要落盘的那一刻起
+	// Transform 不能再被逐帧推进;这里不去改 movement.cpp 的排除目录,而是在退出链自己的入口把矢量清掉。
+	if (auto *velocity = tlsEcs.actorRegistry.try_get<Velocity>(player))
+	{
+		if (velocity->x() != 0.0 || velocity->y() != 0.0 || velocity->z() != 0.0)
+		{
+			velocity->set_x(0.0);
+			velocity->set_y(0.0);
+			velocity->set_z(0.0);
+			// 与 MovementSystem 撞墙清速同一写法:重连后同步给客户端的是 0 速度。
+			SetActorBaseAttributesS2CAttrDirtyBit(player, ActorBaseAttributesS2C::kVelocityFieldNumber);
+		}
+	}
+	if (auto *acceleration = tlsEcs.actorRegistry.try_get<Acceleration>(player))
+	{
+		acceleration->set_x(0.0);
+		acceleration->set_y(0.0);
+		acceleration->set_z(0.0);
+	}
+}
+
+void PlayerLifecycleSystem::CancelExitOnReconnect(entt::entity player)
+{
+	if (tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player))
+	{
+		const auto *guid = tlsEcs.actorRegistry.try_get<Guid>(player);
+		tlsEcs.actorRegistry.remove<UnregisterPlayer>(player);
+		LOG_INFO << "EnterScene: cancelled pending unregistration for reconnected player "
+				 << (guid != nullptr ? *guid : kInvalidGuid);
+	}
+	// remove 对不存在的组件是 no-op。意图组件无条件摘:成对约定被破坏(只剩意图)时也在这里收干净。
+	tlsEcs.actorRegistry.remove<PlayerExitIntentComp>(player);
+}
+
+void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player, ExitCause cause)
 {
 	// valid() 必须在 try_get 之前:对已销毁的实体调 try_get 是 entt 的未定义行为,
 	// 旧顺序是先 try_get 再判 valid,等于先踩了再检查。
@@ -930,17 +1691,78 @@ void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player)
 		return;
 	}
 
+	EnsureExitStatsTimer();
+
 	const auto* g = tlsEcs.actorRegistry.try_get<Guid>(player);
-	LOG_INFO << "HandleExitGameNode: Player " << (g ? *g : 0) << " is exiting the scene node";
+	LOG_INFO << "HandleExitGameNode: Player " << (g ? *g : 0) << " is exiting the scene node"
+			 << " (cause=" << player_exit::ExitCauseName(cause) << ")";
 
 	if (tlsEcs.actorRegistry.all_of<UnregisterPlayer>(player))
 	{
-		LOG_INFO << "Player " << (g ? *g : 0) << " is already marked for unregistration";
+		// 已在退出中:不重挂,只合并原因(原因保持第一次的,按规则粘性置位 releaseMarkSuppressed)。
+		// devBypassSuppressesTransfer 取 scene 侧 dev 开关(SCENE_DEV_UNSAFE_CROSS_NODE_HANDOFF,默认关 = 生产口径,
+		// 须与 scene_manager 的 AllowUnsafeCrossNodeHandoff 同步打开,M6)。
+		if (auto *intent = tlsEcs.actorRegistry.try_get<PlayerExitIntentComp>(player))
+		{
+			player_exit::MergeExitCause(*intent, cause, IsDevUnsafeCrossNodeHandoff());
+			LOG_INFO << "Player " << (g ? *g : 0) << " is already marked for unregistration"
+					 << " (cause=" << player_exit::ExitCauseName(intent->cause)
+					 << ", incoming=" << player_exit::ExitCauseName(cause)
+					 << ", release_mark_suppressed=" << intent->releaseMarkSuppressed << ")";
+
+			// 重存到上限仍不收敛、被保留的实体:再来一次退出请求时补发一次存盘(轮次清零,重新计)。
+			// 停机时 RedisSystem 已取消周期存盘、drain 只对不在退出中的实体重发退出,exitAllPlayers 这一次
+			// 就是它最后的落盘机会;平时的 s2s LeaveScene / 排空 / 疏散同样给它一个出口。有在途 / 排队的存盘
+			// 时不插手,等它落地由退出分支照常判定。
+			if (g != nullptr &&
+				player_exit::ShouldRekickExhaustedExit(intent->resaveRounds, player_exit::kMaxExitResaveRounds,
+													   HasUnsettledPlayerSave(*g)))
+			{
+				const Guid retainedPlayerId = *g;
+				intent->resaveRounds = 0;
+				exit_persist_stats::Inc(exit_persist_stats::Get().exhaustedRekick);
+				LOG_WARN << "HandleExitGameNode: player " << retainedPlayerId
+						 << " was retained after exhausting its exit re-saves; saving once more"
+						 << " (incoming cause=" << player_exit::ExitCauseName(cause) << ", metric=exit_exhausted_rekick)";
+				StopMotionForExit(player); // 纵深防御:退出发起时已清过,这里再清一次不改变语义
+				if (!SavePlayerToRedis(player) && !HasUnsettledPlayerSave(retainedPlayerId))
+				{
+					// 没写盘(快路径判"盘上已是同一份",或交接已发起不得再写)且没有未落地的存盘:
+					// 盘上就是当前内存,直接收尾。intent / g 此后悬空,不再使用。
+					LOG_INFO << "Player marked for unregistration: " << retainedPlayerId
+							 << " (converged on exhausted re-kick)";
+					FinishExitAfterPersist(retainedPlayerId);
+				}
+			}
+		}
+		else
+		{
+			// 成对约定被破坏(不该发生)。不在这里补挂:补挂的意图抄不到退出那一刻的会话,只会让落地回调
+			// 误判;留给落地回调按"意图缺失"fail-closed 处理(计 exit_intent_missing)。
+			LOG_ERROR << "Player " << (g ? *g : 0)
+					  << " is already marked for unregistration but has no PlayerExitIntentComp";
+		}
 		return;
 	}
 
 	auto& unregisterTag = tlsEcs.actorRegistry.emplace<UnregisterPlayer>(player);
 	unregisterTag.set_logout_initiated_ms(TimeSystem::NowMillisecondsUTC());
+
+	// 与 UnregisterPlayer 成对挂(见 player_exit_intent.h)。sessionAtExit 必须此刻抄:落地回调要凭它
+	// 区分"退出会话本身还在 SessionMap 里"(不算取代,Z1)与"已被一个更新的会话取代"。
+	{
+		PlayerExitIntentComp intent;
+		if (const auto *sessionSnapshot = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(player))
+		{
+			intent.sessionAtExit = sessionSnapshot->gate_session_id();
+		}
+		intent.cause = cause;
+		tlsEcs.actorRegistry.emplace_or_replace<PlayerExitIntentComp>(player, intent);
+	}
+
+	// 退出即冻结运动学,必须在第一次存盘之前:否则 MovementSystem 继续推进 Transform,落地内容永远追不上
+	// 内存,退出分支重存到上限后保留实体(Z1 以"超限保留"的形态回来)。
+	StopMotionForExit(player);
 
 	// Remove entity from AOI grid immediately so the AOI system stops
 	// sending messages to the (already-disconnected) gate session.
@@ -950,7 +1772,28 @@ void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player)
 	SnapshotSystem::CaptureAndSend(player, SNAPSHOT_LOGOUT);
 
 	const Guid exitingPlayerId = (g != nullptr) ? *g : kInvalidGuid;
-	const bool savePending = PlayerLifecycleSystem::SavePlayerToRedis(player);
+	bool savePending = PlayerLifecycleSystem::SavePlayerToRedis(player);
+
+	// 快路径只比了"上次落地的快照",没看同 key 还有没有在途 / 排队中的存盘(§12.6.4 M4 / Z2):
+	// 例如更早一次内容不同的周期存盘正在退避重试,此刻销毁实体,那笔写随后落地会把盘改回去,
+	// 而内存里的最新态已经没了。有未落地的存盘就改走一次真实存盘(与排队值合并,只留最新),
+	// 落地后由 HandlePlayerAsyncSaved 的退出分支按收敛规则收尾。
+	if (!savePending && exitingPlayerId != kInvalidGuid && HasUnsettledPlayerSave(exitingPlayerId))
+	{
+		exit_persist_stats::Inc(exit_persist_stats::Get().fastpathDeferred);
+		LOG_INFO << "HandleExitGameNode: player " << exitingPlayerId
+				 << " matches its last persisted snapshot but still has an unsettled save; forcing a real save"
+				 << " before finishing exit (metric=exit_fastpath_deferred)";
+		savePending = SavePlayerToRedisImpl(player, /*allowSkipWhenPersisted=*/false);
+		if (!savePending)
+		{
+			// 仍没写(交接已发起、不得再写):不能同步收尾(那笔在途存盘会在实体销毁后落地、把盘改回中间态),
+			// 等它的落地回调走退出分支;交接标记若已写,由 HandlePlayerAsyncSaved 的"退出优先"分支撤回。
+			LOG_WARN << "HandleExitGameNode: player " << exitingPlayerId
+					 << " could not force a save; finishing exit when the unsettled save lands";
+			return;
+		}
+	}
 
 	if (!savePending)
 	{
@@ -1002,6 +1845,8 @@ void PlayerLifecycleSystem::FinishExitAfterPersist(Guid playerId)
 	}
 
 	const auto playerEntity = tlsEcs.GetPlayer(playerId);
+	// 本分支里交接标记已写(交接 EnterScene 可能在途):A1′ 不写断线释放标记(M11)。
+	bool exitWonOverIssuedHandoff = false;
 
 	// 归属交接在途(PlayerTravelHandoffComp):退出优先。交接只在"状态已落盘 + 输入已冻结"
 	// 之后发起,盘上就是最新状态,本地实体没有任何目的地还要等的东西 —— 直接按普通退出销毁。
@@ -1034,11 +1879,13 @@ void PlayerLifecycleSystem::FinishExitAfterPersist(Guid playerId)
 		// 新标记 ms 取自墙钟、正常情况下与旧标记不同,迟到 / 重发的撤回删不到它(同一毫秒 / 墙钟回拨的
 		// 同值碰撞不排除,后果只是改派被 18 拒回、玩家重登,不回档)。Redis 不通或应答丢失时不再只靠 TTL
 		// 兜底:条目留在待撤回表里重试,期间该玩家重连回本节点也发不出 EnterScene(IsSceneChangeBusy)。
-		// HandlePlayerAsyncSaved 里同名的"退出优先"分支不需要这一步:交接发起之后 SavePlayerToRedis
-		// 直接跳过、不会再有落地回调,走到那条分支时 requestedAtMs 必为 0(标记还没写)。
+		// HandlePlayerAsyncSaved 里同名的"退出优先"分支也做同样的撤回:交接发起之后 SavePlayerToRedis 虽然
+		// 直接跳过,但 HandleExitGameNode 的 M4 分支会在那时改为等一笔更早的未落地存盘,它落地时
+		// requestedAtMs 可能已非 0(标记已写)。
 		if (handoffMarkWritten)
 		{
 			WithdrawHandoffMark(playerId, handoffMarkEpoch, handoffRequestedAtMs, "exit wins");
+			exitWonOverIssuedHandoff = true;
 		}
 	}
 
@@ -1056,7 +1903,11 @@ void PlayerLifecycleSystem::FinishExitAfterPersist(Guid playerId)
 	// 顺序不能反:先改派再摘 session 的话,改派用到的 session 已经没了;
 	// 先销毁实体再改派的话,票据里的 gate/session 也拿不到。
 	// 改派只需要票据里抄下来的信息,所以放在最前面。
-	DispatchEmergencyRelocate(playerId);
+	const bool relocateTicketConsumed = DispatchEmergencyRelocate(playerId);
+
+	// A1′ 断线释放标记(§12.6.3 第二步):改派之后(改派消费了票据就由它写标记,A1′ 不覆盖)、摘会话之前
+	// (实体、意图组件、owner_epoch 此刻都还在)。条件与计数见 WriteExitReleaseMarkIfEligible。
+	WriteExitReleaseMarkIfEligible(playerId, playerEntity, relocateTicketConsumed, exitWonOverIssuedHandoff);
 
 	RemovePlayerSession(playerId);
 	LOG_INFO << "Player session removed";
@@ -1074,7 +1925,7 @@ void PlayerLifecycleSystem::FinishExitAfterPersist(Guid playerId)
 // 供两条路径共用:整节点疏散(身份冲突)与单场景排空(频道缩容)。
 // 两者对玩家的处理完全一样 —— 存盘、改派到大世界、销毁本地实体 ——
 // 区别只在于**范围**,以及节点自己要不要跟着退出。所以逻辑只写一份。
-bool PlayerLifecycleSystem::EnqueueRelocateTicket(entt::entity playerEntity, const char *reasonTag)
+bool PlayerLifecycleSystem::EnqueueRelocateTicket(entt::entity playerEntity, const char *reasonTag, ExitCause cause)
 {
 	if (!tlsEcs.actorRegistry.valid(playerEntity))
 	{
@@ -1105,9 +1956,9 @@ bool PlayerLifecycleSystem::EnqueueRelocateTicket(entt::entity playerEntity, con
 				 << " has no live gate session; persisting only";
 	}
 
-	// 已经在退出流程中的玩家这里是 no-op,票据仍然登记着,
+	// 已经在退出流程中的玩家这里只合并退出原因(见 HandleExitGameNode),票据仍然登记着,
 	// 等它自己的存盘回调到达时一样会被消费。
-	HandleExitGameNode(playerEntity);
+	HandleExitGameNode(playerEntity, cause);
 	return ticketed;
 }
 
@@ -1128,7 +1979,7 @@ void PlayerLifecycleSystem::BeginEmergencyRelocateAll()
 
 	for (auto entity : players)
 	{
-		EnqueueRelocateTicket(entity, "EmergencyRelocate");
+		EnqueueRelocateTicket(entity, "EmergencyRelocate", ExitCause::kIdentityConflict);
 	}
 }
 
@@ -1150,7 +2001,7 @@ std::size_t PlayerLifecycleSystem::BeginSceneDrain(entt::entity sceneEntity)
 	std::size_t relocating = 0;
 	for (auto entity : residents)
 	{
-		if (EnqueueRelocateTicket(entity, "SceneDrain"))
+		if (EnqueueRelocateTicket(entity, "SceneDrain", ExitCause::kSceneDrain))
 		{
 			++relocating;
 		}
@@ -1167,17 +2018,19 @@ bool PlayerLifecycleSystem::IsEmergencyRelocateDrained()
 	// 票据清空 = 每个有会话的玩家都已存盘落地并进入改派;
 	// 标记在途为 0 = 这些改派的 EnterScene 确实都发出去了(写 handoff 标记是异步的);
 	// 实体清空 = 本地不再持有任何玩家状态。
+	// 断线释放标记在途为 0(R6):疏散期间 A1′ 按"身份不确认"一律不写,这一项正常恒 0,纳入谓词只为不依赖那条判定。
 	return tlsEmergencyRelocateTickets.empty() &&
 		   tlsRelocateHandoffMarksInFlight == 0 &&
+		   tlsExitReleaseMarksInFlight == 0 &&
 		   tlsEcs.actorRegistry.view<Player>().size() == 0;
 }
 
-void PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId)
+bool PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId)
 {
 	auto it = tlsEmergencyRelocateTickets.find(playerId);
 	if (it == tlsEmergencyRelocateTickets.end())
 	{
-		return; // 不在疏散中,或者已经派发过
+		return false; // 不在疏散中,或者已经派发过
 	}
 	const EmergencyRelocateTicket ticket = it->second;
 	tlsEmergencyRelocateTickets.erase(it);
@@ -1206,7 +2059,7 @@ void PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId)
 					  << playerId << ", scene_manager will refuse the re-home until the player re-enters";
 		}
 		SendEmergencyRelocateEnterScene(playerId, ticket);
-		return;
+		return true;
 	}
 
 	const std::string key = player_ownership::HandoffRedisKey(playerId);
@@ -1232,6 +2085,7 @@ void PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId)
 		LOG_ERROR << "[EmergencyRelocate] redis command dispatch failed for player " << playerId;
 		SendEmergencyRelocateEnterScene(playerId, ticket);
 	}
+	return true;
 }
 
 void PlayerLifecycleSystem::SendEmergencyRelocateEnterScene(Guid playerId, const EmergencyRelocateTicket &ticket)
@@ -1333,6 +2187,11 @@ entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &p
 
 bool PlayerLifecycleSystem::SavePlayerToRedis(entt::entity player)
 {
+	return SavePlayerToRedisImpl(player, /*allowSkipWhenPersisted=*/true);
+}
+
+bool PlayerLifecycleSystem::SavePlayerToRedisImpl(entt::entity player, bool allowSkipWhenPersisted)
+{
 	if (!tlsEcs.actorRegistry.valid(player))
 	{
 		LOG_ERROR << "[SavePlayerToRedis] Invalid player entity";
@@ -1356,14 +2215,12 @@ bool PlayerLifecycleSystem::SavePlayerToRedis(entt::entity player)
 	using SaveMessage = PlayerDataRedis::element_type::MessageValuePtr;
 	SaveMessage message = std::make_shared<SaveMessage::element_type>();
 
-	PlayerAllDataMessageFieldsMarshal(player, *message);
-
-	// Set player_id on each sub-table (not set by generated marshal code).
+	// Marshal + set player_id on each sub-table (not set by generated marshal code),
+	// shared with the exit-convergence compare in HandlePlayerAsyncSaved.
 	// MUST be done BEFORE Save(): MessageAsyncClient::Save() now serializes the
 	// payload eagerly into Element::serialized_payload, so any post-Save mutation
 	// would not make it into the Redis blob.
-	message->mutable_player_database_data()->set_player_id(playerId);
-	message->mutable_player_database_1_data()->set_player_id(playerId);
+	MarshalPlayerForSave(player, playerId, *message);
 
 	// Count every save attempt that reaches the fast-path check (i.e. we
 	// already paid the marshal cost). The pre-condition failures above
@@ -1397,8 +2254,10 @@ bool PlayerLifecycleSystem::SavePlayerToRedis(entt::entity player)
 	// we'd rather pay one redundant write than risk skipping a save
 	// when the in-memory state diverged from Redis during a load path
 	// we don't fully trust.
+	//
+	// allowSkipWhenPersisted = false(只有退出流程的 M4 分支这么传):不走快路径,一定写盘。
 	if (auto* snap = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
-		snap != nullptr && snap->HasSnapshot() &&
+		allowSkipWhenPersisted && snap != nullptr && snap->HasSnapshot() &&
 		dirty_save::IsEqual(*message, *snap->snapshot))
 	{
 		dirty_save_stats::IncSkipped();
@@ -1523,8 +2382,21 @@ void PlayerLifecycleSystem::HandlePlayerSaveRejected(Guid playerId, const std::s
 			LOG_WARN << "HandlePlayerSaveRejected: stale in-flight save rejected for player " << playerId
 					 << " key=" << redisKey << " rejected_epoch=" << rejectedEpoch
 					 << " current_epoch=" << currentEpoch << " — still the owner, re-saving with current epoch";
-			// SavePlayerToRedis 返回 false = 与上次成功落盘的快照相同、无需再写,同样是安全的终点。
-			SavePlayerToRedis(playerEntity);
+			// SavePlayerToRedis 返回 false = 与上次成功落盘的快照相同、无需再写(或交接已发起不得再写),
+			// 对在线实体是安全的终点。
+			if (SavePlayerToRedis(playerEntity))
+			{
+				return;
+			}
+			// 退出中的实体却不是:被拒的那笔若就是它的退出存盘,不写盘就没有落地回调,退出永远收不了尾
+			// (UnregisterPlayer 一直挂着、IsSaveInFlight 恒真、客户端消息一直被拒)。与 HandleExitGameNode
+			// 快路径同一规则:还有未落地的存盘就等它落地走退出分支;没有就说明盘上已是当前内存,直接收尾。
+			if (tlsEcs.actorRegistry.any_of<UnregisterPlayer>(playerEntity) && !HasUnsettledPlayerSave(playerId))
+			{
+				LOG_INFO << "Player marked for unregistration: " << playerId
+						 << " (exit save re-issued after a stale-epoch rejection was already persisted)";
+				FinishExitAfterPersist(playerId);
+			}
 			return;
 		}
 	}
@@ -1913,6 +2785,41 @@ bool PlayerLifecycleSystem::DiscardStaleHandoffEntity(entt::entity player, uint6
 	travel_handoff_stats::Inc(travel_handoff_stats::Get().grantedWithoutReply);
 	ObserveTravelHandoffEnded(player, travel_handoff_stats::Get().granted);
 	DestroyDeposedPlayer(playerId, "handoff_superseded_by_reentry");
+	return true;
+}
+
+bool PlayerLifecycleSystem::DiscardDeposedExitingEntity(entt::entity player, uint64_t incomingOwnerEpoch)
+{
+	if (!tlsEcs.actorRegistry.valid(player) || !tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player))
+	{
+		return false;
+	}
+	uint64_t cachedEpoch = 0;
+	if (const auto *epochComp = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player))
+	{
+		cachedEpoch = epochComp->epoch;
+	}
+	if (!player_exit::IsDeposedWhileExiting(cachedEpoch, incomingOwnerEpoch))
+	{
+		// 恰好 +1(落回本节点这一次自己铸的)/ 不新 / 上游未填:内存仍是真身,照常复用,
+		// EnterScene 第 0 步取消退出(判据推导见 player_exit::IsDeposedWhileExiting)。
+		return false;
+	}
+	const auto *guid = tlsEcs.actorRegistry.try_get<Guid>(player);
+	if (guid == nullptr)
+	{
+		return false;
+	}
+	const Guid playerId = *guid;
+	// 这个退出曾被保留到租约之后(重存超限 / 存盘失败重试中),期间 location 被删、玩家在别的节点玩过
+	// 又被派回本节点。盘上是别处的最新状态,本实体是旧状态:复用它 = 旧内存成真身,下一次带新 epoch 的
+	// 存盘覆盖别处的进度(§12.6.1(d) 回档)。它自己带旧 epoch 的在途 / 之后的写本来就会被 CAS 拒。
+	LOG_WARN << "HandleReentry: player " << playerId << " re-entered with owner_epoch " << incomingOwnerEpoch
+			 << " while a stale exiting entity (cached " << cachedEpoch
+			 << ") was still retained; discarding it so the player is reloaded from storage"
+			 << " (metric=exit_deposed_on_reentry)";
+	exit_persist_stats::Inc(exit_persist_stats::Get().deposedOnReentry);
+	DestroyDeposedPlayer(playerId, "exit_superseded_by_reentry");
 	return true;
 }
 
@@ -2434,6 +3341,90 @@ void PlayerLifecycleSystem::WithdrawHandoffMark(Guid playerId, uint64_t markEpoc
 void PlayerLifecycleSystem::RetryPendingHandoffWithdrawals(bool reconnected)
 {
 	FlushDueHandoffWithdrawals(/*force=*/reconnected, reconnected ? "reconnect" : "retry");
+}
+
+void PlayerLifecycleSystem::BeginInheritedMarkClear(Guid playerId)
+{
+	auto pendingIt = tlsPendingEnterMap.find(playerId);
+	if (pendingIt == tlsPendingEnterMap.end())
+	{
+		return;
+	}
+	EnsureExitStatsTimer();
+	PlayerEnterContext &ctx = pendingIt->second;
+	InheritClearState &state = ctx.inheritClear;
+	if (state.lifecycle == 0)
+	{
+		state.lifecycle = ++tlsInheritClearLifecycleSeq;
+	}
+	if (ctx.ownerEpoch == 0)
+	{
+		// 旧版路由没有 owner_epoch:无从核对归属,不删任何标记,闸门放行(兼容窗口)。
+		LOG_DEBUG << "[ExitRelease][InheritClear] skipped for player " << playerId << ": route carries no owner_epoch";
+		return;
+	}
+	if (state.targetEpoch == ctx.ownerEpoch && state.phase != exit_release_mark::InheritClearPhase::kNone)
+	{
+		return; // 本生命周期已针对这个 epoch 发过(在途 / 等重发 / 已确认),重连覆盖上下文时不重复发
+	}
+	// 新的 epoch(首次,或同一次载入期间重连带来了不同的路由):重新开始计次与截止时刻。旧 epoch 那次若还在途,
+	// 它的应答只记账(rewriteEpoch),不参与闸门判定。
+	state.targetEpoch = ctx.ownerEpoch;
+	state.phase = exit_release_mark::InheritClearPhase::kNone;
+	state.attemptsSent = 0;
+	state.firstSentAt = {};
+	state.nextRetryAt = {};
+	SendInheritClear(playerId);
+}
+
+void PlayerLifecycleSystem::RetryInheritedMarkClears(bool reconnected)
+{
+	if (tlsPendingEnterMap.empty())
+	{
+		return;
+	}
+	// 先收集、后处理:拒绝会擦待入场条目,重发失败也可能拒绝,遍历中不能改表。
+	const auto now = exit_release_mark::Clock::now();
+	std::vector<Guid> toRefuse;
+	std::vector<Guid> toResend;
+	for (const auto &[playerId, ctx] : tlsPendingEnterMap)
+	{
+		const InheritClearState &state = ctx.inheritClear;
+		const bool waiting = state.phase == exit_release_mark::InheritClearPhase::kRetryWait;
+		const bool inFlight = state.phase == exit_release_mark::InheritClearPhase::kInFlight;
+		if (!waiting && !inFlight)
+		{
+			continue;
+		}
+		// 截止时刻对在途同样生效:黑洞连接上的 EVAL 不会回空应答,不能让玩家无限停在载入界面。
+		if (now - state.firstSentAt >= exit_release_mark::kInheritClearDeadline)
+		{
+			toRefuse.push_back(playerId);
+			continue;
+		}
+		if (waiting && (reconnected || now >= state.nextRetryAt))
+		{
+			toResend.push_back(playerId);
+		}
+	}
+	for (const Guid playerId : toRefuse)
+	{
+		RefuseInheritedEntry(playerId, "inherited-mark clear deadline passed");
+	}
+	for (const Guid playerId : toResend)
+	{
+		SendInheritClear(playerId);
+	}
+}
+
+std::size_t PlayerLifecycleSystem::ExitReleaseMarksInFlight()
+{
+	return tlsExitReleaseMarksInFlight;
+}
+
+void PlayerLifecycleSystem::SetNodeIdentityProbe(std::function<bool()> probe)
+{
+	tlsNodeIdentityProbe = std::move(probe);
 }
 
 void PlayerLifecycleSystem::AbortTravelHandoff(Guid playerId, const char *reason, bool notifyFailure)

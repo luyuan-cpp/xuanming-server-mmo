@@ -793,6 +793,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamMemberView final : public ::goo
   // accessors -------------------------------------------------------
   enum : int {
     kNameFieldNumber = 2,
+    kAppearanceIdFieldNumber = 11,
     kPlayerIdFieldNumber = 1,
     kLevelFieldNumber = 3,
     kClassIdFieldNumber = 4,
@@ -816,6 +817,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamMemberView final : public ::goo
   const ::std::string& _internal_name() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // string appearance_id = 11;
+  void clear_appearance_id() ;
+  [[nodiscard]] const ::std::string& appearance_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_appearance_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_appearance_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_appearance_id();
+  void set_allocated_appearance_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_appearance_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_appearance_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_appearance_id();
 
   public:
   // uint64 player_id = 1;
@@ -912,8 +928,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamMemberView final : public ::goo
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
-                          0, 42,
+      ::google::protobuf::internal::TcParseTable<4, 11,
+                          0, 55,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -942,6 +958,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamMemberView final : public ::goo
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr name_;
+    ::google::protobuf::internal::ArenaStringPtr appearance_id_;
     ::uint64_t player_id_;
     ::uint32_t level_;
     ::uint32_t class_id_;
@@ -7297,7 +7314,7 @@ inline void ListMyInvitesResponse::_internal_set_server_time_ms(::uint64_t value
 inline void TeamMemberView::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t TeamMemberView::player_id() const {
   // @@protoc_insertion_point(field_get:teampb.TeamMemberView.player_id)
@@ -7305,7 +7322,7 @@ inline ::uint64_t TeamMemberView::player_id() const {
 }
 inline void TeamMemberView::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:teampb.TeamMemberView.player_id)
 }
 inline ::uint64_t TeamMemberView::_internal_player_id() const {
@@ -7385,7 +7402,7 @@ inline void TeamMemberView::set_allocated_name(::std::string* PROTOBUF_NULLABLE 
 inline void TeamMemberView::clear_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t TeamMemberView::level() const {
   // @@protoc_insertion_point(field_get:teampb.TeamMemberView.level)
@@ -7393,7 +7410,7 @@ inline ::uint32_t TeamMemberView::level() const {
 }
 inline void TeamMemberView::set_level(::uint32_t value) {
   _internal_set_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:teampb.TeamMemberView.level)
 }
 inline ::uint32_t TeamMemberView::_internal_level() const {
@@ -7409,7 +7426,7 @@ inline void TeamMemberView::_internal_set_level(::uint32_t value) {
 inline void TeamMemberView::clear_class_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.class_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t TeamMemberView::class_id() const {
   // @@protoc_insertion_point(field_get:teampb.TeamMemberView.class_id)
@@ -7417,7 +7434,7 @@ inline ::uint32_t TeamMemberView::class_id() const {
 }
 inline void TeamMemberView::set_class_id(::uint32_t value) {
   _internal_set_class_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:teampb.TeamMemberView.class_id)
 }
 inline ::uint32_t TeamMemberView::_internal_class_id() const {
@@ -7433,7 +7450,7 @@ inline void TeamMemberView::_internal_set_class_id(::uint32_t value) {
 inline void TeamMemberView::clear_gender() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gender_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t TeamMemberView::gender() const {
   // @@protoc_insertion_point(field_get:teampb.TeamMemberView.gender)
@@ -7441,7 +7458,7 @@ inline ::uint32_t TeamMemberView::gender() const {
 }
 inline void TeamMemberView::set_gender(::uint32_t value) {
   _internal_set_gender(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:teampb.TeamMemberView.gender)
 }
 inline ::uint32_t TeamMemberView::_internal_gender() const {
@@ -7457,7 +7474,7 @@ inline void TeamMemberView::_internal_set_gender(::uint32_t value) {
 inline void TeamMemberView::clear_is_leader() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_leader_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline bool TeamMemberView::is_leader() const {
   // @@protoc_insertion_point(field_get:teampb.TeamMemberView.is_leader)
@@ -7465,7 +7482,7 @@ inline bool TeamMemberView::is_leader() const {
 }
 inline void TeamMemberView::set_is_leader(bool value) {
   _internal_set_is_leader(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:teampb.TeamMemberView.is_leader)
 }
 inline bool TeamMemberView::_internal_is_leader() const {
@@ -7481,7 +7498,7 @@ inline void TeamMemberView::_internal_set_is_leader(bool value) {
 inline void TeamMemberView::clear_is_online() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_online_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline bool TeamMemberView::is_online() const {
   // @@protoc_insertion_point(field_get:teampb.TeamMemberView.is_online)
@@ -7489,7 +7506,7 @@ inline bool TeamMemberView::is_online() const {
 }
 inline void TeamMemberView::set_is_online(bool value) {
   _internal_set_is_online(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:teampb.TeamMemberView.is_online)
 }
 inline bool TeamMemberView::_internal_is_online() const {
@@ -7505,7 +7522,7 @@ inline void TeamMemberView::_internal_set_is_online(bool value) {
 inline void TeamMemberView::clear_in_battle() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.in_battle_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline bool TeamMemberView::in_battle() const {
   // @@protoc_insertion_point(field_get:teampb.TeamMemberView.in_battle)
@@ -7513,7 +7530,7 @@ inline bool TeamMemberView::in_battle() const {
 }
 inline void TeamMemberView::set_in_battle(bool value) {
   _internal_set_in_battle(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:teampb.TeamMemberView.in_battle)
 }
 inline bool TeamMemberView::_internal_in_battle() const {
@@ -7529,7 +7546,7 @@ inline void TeamMemberView::_internal_set_in_battle(bool value) {
 inline void TeamMemberView::clear_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t TeamMemberView::zone_id() const {
   // @@protoc_insertion_point(field_get:teampb.TeamMemberView.zone_id)
@@ -7537,7 +7554,7 @@ inline ::uint32_t TeamMemberView::zone_id() const {
 }
 inline void TeamMemberView::set_zone_id(::uint32_t value) {
   _internal_set_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:teampb.TeamMemberView.zone_id)
 }
 inline ::uint32_t TeamMemberView::_internal_zone_id() const {
@@ -7553,7 +7570,7 @@ inline void TeamMemberView::_internal_set_zone_id(::uint32_t value) {
 inline void TeamMemberView::clear_join_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.join_seq_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t TeamMemberView::join_seq() const {
   // @@protoc_insertion_point(field_get:teampb.TeamMemberView.join_seq)
@@ -7561,7 +7578,7 @@ inline ::uint32_t TeamMemberView::join_seq() const {
 }
 inline void TeamMemberView::set_join_seq(::uint32_t value) {
   _internal_set_join_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:teampb.TeamMemberView.join_seq)
 }
 inline ::uint32_t TeamMemberView::_internal_join_seq() const {
@@ -7571,6 +7588,70 @@ inline ::uint32_t TeamMemberView::_internal_join_seq() const {
 inline void TeamMemberView::_internal_set_join_seq(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.join_seq_ = value;
+}
+
+// string appearance_id = 11;
+inline void TeamMemberView::clear_appearance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.appearance_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& TeamMemberView::appearance_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:teampb.TeamMemberView.appearance_id)
+  return _internal_appearance_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TeamMemberView::set_appearance_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.appearance_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:teampb.TeamMemberView.appearance_id)
+}
+inline ::std::string* PROTOBUF_NONNULL TeamMemberView::mutable_appearance_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_appearance_id();
+  // @@protoc_insertion_point(field_mutable:teampb.TeamMemberView.appearance_id)
+  return _s;
+}
+inline const ::std::string& TeamMemberView::_internal_appearance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.appearance_id_.Get();
+}
+inline void TeamMemberView::_internal_set_appearance_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.appearance_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TeamMemberView::_internal_mutable_appearance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.appearance_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TeamMemberView::release_appearance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:teampb.TeamMemberView.appearance_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.appearance_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.appearance_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TeamMemberView::set_allocated_appearance_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.appearance_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.appearance_id_.IsDefault()) {
+    _impl_.appearance_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:teampb.TeamMemberView.appearance_id)
 }
 
 // -------------------------------------------------------------------

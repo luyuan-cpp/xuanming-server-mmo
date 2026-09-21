@@ -5589,3 +5589,19 @@ friend 移植会话(机器 A,`E:\work\xuanming-server-mmo`)写交接文档写到
 - **与帮会二期 B4c 的分工**(§12.6.9):owner_epoch 已堵跨节点版 K1;同节点缺口里 `redis_client.h` 新旧颠倒由 B4c 修(已落 `4a86f2b2d`,并提供 `HasUnsettledSave` 供 Z1 复用),Z1 与 GO-2 归本线。本线欠一行:scene_manager 观察到 epoch 为 0 时同节点也铸造。
 - **新上线前置**(§12.2):K8s scene-manager 的 zrpc `Timeout` ≥ 8000(现默认 2000,小于 KafkaWriteTimeout 5s);老号开放跨 zone 传送前先跑 `merge_zone -backfill-home-zone`。
 - **下一步**:① 跑 Go 的 build / vet / test 与 `cross_zone_test`、`routing_identity_test`(命令在 §12.4 / §12.5.5 / §12.5.6);② 实跑 P0 修复;③ 按 §12.6.7 复现 Z1 后落 Z1 + 断线释放标记;④ epoch==0 同节点铸造那一行。
+
+## 2026-09-21 friend 验证链实跑:客户端生成 → 限流档位 → robot vendor → 编译 / 单测 → 真 MySQL 并发回归,首跑抓出真死锁并修复(Claude,机器 B,**按用户指示实跑,偏离 AGENTS §10.1**)
+
+用户明确要求 Claude 直接跑("你帮我跑吧"),所以这一轮由 Claude 执行生成、编译与测试,不再交给 Codex;交接入口 `docs/design/friend-handoff-20260920.md` §9.4 进度块已逐项更新。
+
+- **客户端生成**:`gen_proto.ps1` / `gen_messageids.ps1` 出了 `Friend.cs` / `FriendErrorTip.cs`,11 个 handler 引用的类型全在;同批追上了帮会二期与建角带名字早就改过、客户端一直没重新生成的 `Guild.cs` / `Login.cs` 等 4 个文件。客户端离线 Roslyn 编译检查 **0 错误 / 355 文件**;用户已提交为客户端 `fc0a8dc`,客户端 HEAD 不再 CS0246。
+- **限流档位 + 第二次导表**:B5a 5 行 + friend 10 行,`MessageLimiter` 53 → 68 行,15 个新号全部落表、档位核对无误。
+- **robot**:`go mod tidy` + `go mod vendor` 补进 `vendor/proto/friend`;`go build` / `go vet` 零输出。官方代理拉不到旧组织名 `github.com/luyuancpp/muduoclient`(直连要 GitHub 凭据),用**进程级** `GOPROXY=https://goproxy.cn,…` 拉取、哈希与 `go.sum` 一致,未改 `go env`。
+- **`go/friend`**:**首次编译即通过**;tidy 后 `go-redis` 只在 indirect;`go test ./...` 241 PASS / 0 FAIL,67 SKIP 全是"未设 MySQL DSN"(逐条核对)。
+- **真 MySQL 并发回归(MySQL Community Server 26.7.0,不是 TiDB)**:首跑 **71 PASS / 2 FAIL / 0 SKIP**。事故报告:`docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md`。
+  - **真死锁(产品缺陷,P1)**:回收并发场景 1213,单独重跑第一次就复现。`LATEST DETECTED DEADLOCK` 显示 `blockedEitherWay` 的 `(a,b) OR (b,a) ... FOR UPDATE` 持有**另一对玩家**在 `idx_blocked_player` 上的 X 锁、在等它的主键,而那一对的 `Unblock` 先主键后二级索引 —— 反序成环;第二次复现在 `RemoveFriend` 删边上(`friendEdgeExistsForUpdate` 同形)。`EXPLAIN` 证实两条 OR 都是**二级覆盖索引全扫描**;`lockCapacityRows` 的 `IN (...) FOR UPDATE` 是 PRIMARY 全索引扫描;`Block` 取消 pending 的 OR 形 `UPDATE` 扫全服 pending 行。这正是交接文档 §3 第 2 条担心、一直没核对过的那一环。**修法**(`friend_repo.go` 顶部新增锁序说明 (6)):守卫之后的锁定读 / 写一律"完整主键等值点查 / 点更新";`Block` ③ 名额 COUNT 改守卫内普通读;sweep 终态申请的批量 `DELETE ... LIMIT` 改"候选普通读 + 逐行按主键删"(出错时带回已删行数进日志)。新增确定性回归 `TestLockingStatementsArePrimaryKeyPointLookups`(对生产 SQL 常量做 `EXPLAIN`,断言 `key=PRIMARY` 用满主键、SELECT 为 `const`;旧写法三处都会被它拦下)。
+  - **测试夹具自相矛盾**:`TestAcceptFriend_RejectsBlockedPair`(原移植即有)直写拉黑绕过 `Block()`,末尾却断言"拉黑后无 pending";改为逐条调用其余不变量 + 显式断言被拒的 `AcceptFriend` 整体回滚。
+  - 评审时推演出的"回收后 ensure 撞 1213"在真库**复现**并被有限重试吸收(场景 (g) PASS)。
+  - **修复后**:`go/friend` 全部包 **314 PASS(含子用例)/ 0 FAIL / 0 SKIP**;8 个并发锁序场景连跑 5 轮 **40/40 PASS**,场景 (g) 以外零 1213。日志存档在仓外 `D:\luyuan\wuxingqitan\friend-*.log`。
+- **提交状态(写入本条时)**:死锁修复的 6 个文件(`go/friend/internal/data/{friend_repo,block_repo,sweep_repo}.go`、`friend_repo_mysql_test.go`、`friend_guard_lock_order_mysql_test.go`、`go/friend/internal/logic/sweep.go`)与两份文档**尚未提交**。本条可能先于代码进库(多会话共用 PROGRESS.md,谁先提交谁带上别人的条目)—— 判断修复是否已在库里,以 `git log -- go/friend/internal/data/friend_repo.go` 里有没有"锁定读改主键点查"的提交为准,别以本条为准。
+- **第 7–9 步**:7a 已重编 `friend.exe`(清掉 08-02 旧构建陷阱)、`-allow-modify` 不带 `-migrate` 以 1 退出 ✅;第 8 步由单测 `TestVersionedCache_FillsWhenGenerationKeyNeverWritten` 覆盖 ✅;建库迁移、常驻启动与两区 `friend-smoke` **未跑**(Docker Desktop 被关闭,需用户手动打开)。C++ 已由用户编译(结果未经本会话核对)。

@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"proto/scene_manager"
 	"scene_manager/internal/svc"
+	"shared/ownerepoch"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
@@ -254,8 +255,8 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 1. Determine the target zone.
 	//    - Caller provided zone_id: use it (explicit cross-zone teleport).
 	//    - sceneId != 0, no zone_id: look up scene:{id}:zone (reconnect / follow).
-	//    - sceneId == 0, no zone_id: fall back to existing PlayerLocation zone,
-	//      then to GateZoneId (first login — gate zone = home zone).
+	//    - sceneId == 0, no zone_id: 只跟随「落在具体节点上」的 PlayerLocation 的 zone
+	//      (GO-5,见下方第 1b 步),否则 GateZoneId(首登 —— gate zone = home zone)。
 	targetZoneId := in.ZoneId
 	if targetZoneId == 0 && in.SceneId != 0 {
 		targetZoneId = GetSceneZone(l.svcCtx, in.SceneId)
@@ -316,13 +317,27 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 的对象(可能仍在写的旧持有者)不存在,所以第二条腿的落点、以及再次跨 zone
 	// 重定向都直接放行,只按常规铸造 epoch + CAS 落点。
 	awaitingPlacement := currentLoc != nil && currentLoc.GetNodeId() == "" && currentLoc.GetOwnerEpoch() != 0
-	// 等待落点只在重定向票据有效期内指向目标 zone。票据过期仍未落地 = 传送失败
-	// (CZ-8),之后的登录不再被这条记录牵去目标 zone,而是按 gate zone 走常规落点
-	// (login 的 RedirectOnEnter 会把人送回 home,CZ-9「回家」)。没有持有者,在哪
-	// 落点都安全;位置记录本身留着,由这次落点的 CAS 写覆盖。
+	// 等待落点里记的目标地图只在重定向票据有效期内采用(第 3 步);票据过期仍未落地
+	// = 传送失败(CZ-8),过期的记录不再参与任何去向决策。
 	awaitingExpired := awaitingPlacement && awaitingPlacementExpired(currentLoc, time.Now())
+	// 1b. 没有显式去向(ZoneId == 0,且没有能解析出 zone 的 SceneId)时的去向 —— GO-5 决定(cross-zone-scene-travel.md
+	//     §12.3 GO-5 / §12.6):访客短暂断线后在重连窗口内重登回到原处,超出窗口或主动登出回家。
+	//     「窗口」就是 login 现成的断线租约:租约内的重登(ShortReconnect / ReplaceLogin)由 login 发
+	//     ZoneId = 0,去向交给这里按 scene_manager 自己的 location 决定,不靠客户端记忆;租约到期后
+	//     location 已被 LeaveScene 删掉,干净登出同理,自然落回 gate zone(= 回家)。
+	//   - location 落在具体节点上(node_id 非空):跟随它的 zone。不是 gate zone 就走第 2 步的跨区
+	//     重定向;目标就是玩家所在 zone,属 R7 a)「只送连接」,归属不动。
+	//   - location 是「等待落点」(node_id 为空,跨 zone 传送途中):**不牵引**,按 gate zone 落点。
+	//     传送途中断线、重连按「回到最后稳定位置」处理,等于这次传送作废;等待落点没有持有者,
+	//     在 gate zone 落点照常铸造 + CAS,第 3b 步仍按传送残留查归属(GO-1 纵深防御)。
+	//     牵引的话,第二条腿持续失败(目标 zone 落不了地)时每次从 gate zone 登录都会被送去目标
+	//     zone 再失败一次,来回重定向直到票据过期。这取代了旧的 R8「等待落点在票据有效期内牵引
+	//     去向」:R8 从此不可达,过期与否对去向不再有区别。
+	//   - 没有 location,或它已被上面的 playerLocationOwnerGone / playerLocationOwnerDead 过滤掉:
+	//     GateZoneId(不变)。
+	//   跟随的是 location 里记的 zone_id(与旧语义相同);zone_id 为 0 的历史记录不跟随,按 gate zone。
 	if targetZoneId == 0 {
-		if currentLoc != nil && currentLoc.ZoneId != 0 && !awaitingExpired {
+		if currentLoc != nil && currentLoc.GetNodeId() != "" && currentLoc.ZoneId != 0 {
 			targetZoneId = currentLoc.ZoneId
 		}
 	}
@@ -464,7 +479,68 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 被当成废黜销毁(踢人 + 回档)。跨节点交接:过了标记门才铸;dev 旁路下无标记
 	// 放行时不铸,保持旧的竞态语义,让旧节点 ReleasePlayer 的释放存盘照常落地
 	// (铸了它必被拒,每次跨节点换图确定性回档)。
-	guard := placementGuard{observedEpoch: observedEpoch, mint: !samePhysicalNode}
+	//
+	// 例外:同物理节点但观察到的 epoch 为 0(存量玩家,从未铸造过)也铸造(§12.6.9)。上面「铸了
+	// 会被 CAS 拒」的前提是持有节点手里有非 0 的缓存值;缓存为 0 时 C++ 存盘走的是**不带 guard**
+	// 的旧 Save(player_lifecycle.cpp SavePlayerToRedis 的 owner_epoch 段,计 owner_epoch_unknown),
+	// Redis 里铸出的新值拒不了它;DBTask 带 0,db 按 legacy_zero 放行。路由到达后 EnterScene 第 0.5 步
+	// 把缓存抬到新值(0 不覆盖、取 max),此后存盘带 guard 且与 Redis 相等,DBTask 从 0 升到新值被 db
+	// 判 advance。epoch 为 0 的实体不会有在途交接(BeginTravelHandoff 在 epoch 为 0 时直接放弃,
+	// requestedAtMs 不置位),DiscardStaleHandoffEntity 不会因更新的一代把它销毁。
+	// 不这样做,「存量 location + 一直落回同节点」的玩家永远停在 0:帮会 B4c 让资产改动类 RPC 在
+	// epoch == 0 时回 RETRY(fail-closed),这类玩家在换一次节点之前资产操作会一直 RETRY ——
+	// B4c 依赖这一条。观察值非 0 的同节点落点仍不铸造(既有语义)。
+	//
+	// 「持有节点缓存为 0」只从两处同时为 0 推出:owner_epoch 键(observedEpoch)**与** location 里记的
+	// epoch。location 记的是上一次派给这个节点的路由事件所带的值,它非 0 而键读到 0,说明持有节点缓存
+	// 着 N ≠ 0、只是键单独丢了(deploy 的 Redis 是 allkeys-lfu,键可被单独淘汰)。此时铸出 1,持有节点
+	// 按 max 保留 N,下一次带 guard 的存盘拿 "1" 比 N 被拒,合法持有者被当废黜销毁(踢人 + 回档)。
+	// 所以这种情形不铸造,并先按 location 记的 N 把键补种回去(SET NX,与 C++ kSaveIfGuardLuaScript
+	// 缺键补种同一语义),本次落点以 N 为观察值走不铸造的 CAS:location 继续记 N,路由事件带 N。
+	// 只放过不补种是不够的:不铸造的落点把 location 的 epoch 写成观察值,0 会把 N 抹掉,之后在持有
+	// 节点存盘补种之前的下一次同节点换图就与存量玩家无从区分、照样铸造。
+	// 补种没成功 = 观察之后这把键已存在:要么被并发请求写过(观察值 0 已过期),要么键值本身就是 "0"
+	// 而 location 记着 N(按现有写入方 —— 铸造 / 不铸造 CAS / 回滚 Lua 都成对写 location 与键 ——
+	// 构造不出来,但拿不准外部有没有单独写 "0" 的)。两种都直接回 19、不走落点:后一种若照常走不铸造的
+	// CAS,"0" 比 "0" 会通过,location 里的 N 被抹成 0,正是上面要防的情形。前一种重试即收口;后一种
+	// 会持续 19,直到持有节点带 guard 的存盘 / 干净登出把两边对齐 —— fail-closed 优先于抹掉 N。
+	//
+	// 已知残余(同节点 epoch 0 铸造):这次铸造不带 handoff 标记,luaMintEpochAndSetLocation 没有重放
+	// 识别(只对标记铸造做,见 owner_epoch.go)。go-redis 在首发已执行、读超时后重发 EVAL 时,重发的
+	// CAS 看到 epoch 已是 1 → 本次回 19:第 6 步退回目标场景预占人数、6b 不退旧场景人数、路由不发,
+	// 两边人数各漂一次,location 短暂指向目标场景而持有节点仍在旧场景。频率 = 一次 Redis 读超时;
+	// 客户端重试同落点重连 / 再次换图即收口。改动前同节点只走幂等的不铸造 CAS,这是本条新开的入口。
+	// 同落点重连(samePlacement)在第 4 步提前返回、不走落点,仍原样下发观察值(存量玩家即 0,
+	// 这类玩家要等一次换图 / 干净登出才会铸造,B4c 的资产 RPC 在此之前回 RETRY —— 已知残余);
+	// 键丢失时它下发补种后的 N。
+	if samePhysicalNode && observedEpoch == 0 && currentLoc.GetOwnerEpoch() != 0 {
+		recordedEpoch := currentLoc.GetOwnerEpoch()
+		reseeded, reseedErr := l.svcCtx.Redis.Setnx(ownerepoch.OwnerEpochKey(in.PlayerId), strconv.FormatUint(recordedEpoch, 10))
+		if reseedErr != nil {
+			if reserved {
+				DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
+			}
+			l.Logger.Errorf("[OwnerEpoch] owner_epoch 键缺失、补种失败,拒绝本次同节点落点: player=%d location_epoch=%d err=%v",
+				in.PlayerId, recordedEpoch, reseedErr)
+			return errResp(constants.ErrRedis, "owner epoch reseed failed; retry"), nil
+		}
+		if !reseeded {
+			if reserved {
+				DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
+			}
+			metrics.ObserveEnterSceneRejected(targetZoneId, "epoch_conflict")
+			l.Logger.Errorf("[OwnerEpoch] 观察到 owner_epoch 为 0 而 location 记着 %d,补种时键已存在,拒绝本次同节点落点: player=%d node=%s",
+				recordedEpoch, in.PlayerId, nodeId)
+			return errResp(constants.ErrOwnerEpochConflict,
+				"owner epoch changed while reseeding; retry"), nil
+		}
+		l.Logger.Errorf("[OwnerEpoch] owner_epoch 键缺失而 location 记着 %d:按 location 补种,同节点落点不铸造: player=%d node=%s",
+			recordedEpoch, in.PlayerId, nodeId)
+		observedEpoch = recordedEpoch
+	}
+	// 走到这里 samePhysicalNode 为真时 currentLoc 必非 nil。
+	sameNodeZeroMint := samePhysicalNode && observedEpoch == 0 && currentLoc.GetOwnerEpoch() == 0
+	guard := placementGuard{observedEpoch: observedEpoch, mint: !samePhysicalNode || sameNodeZeroMint}
 	if crossNodeHandoff {
 		resp, grant := l.requireHandoffCommitted(in, currentLoc, currentZoneID, targetZoneId, observedEpoch, "场景交接")
 		if resp != nil {
@@ -617,7 +693,15 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		routeStart := time.Now()
 		if err := l.routePlayerToGate(in, nodeId, sceneId, homeZoneID, placed.epoch); err != nil {
 			l.Logger.Errorf("Failed to route player %d to gate, rolling back location/epoch/counts: %v", in.PlayerId, err)
-			l.rollbackEnterSceneAfterRouteFailure(in.PlayerId, currentLoc, currentLocRaw, placed,
+			// 同节点 epoch 0 的铸造回滚时 epoch 不退,只退 location:持有者没换,epoch 本来就不需要退。
+			// 没投递到 —— 持有节点缓存仍是 0,存盘不带 guard,新值拒不了它;kafka-go 报错但 broker 其实
+			// 已投递 —— 缓存已是新值,退回 "0" 反而让它之后带 guard 的存盘被拒、实体被当废黜销毁。
+			// 其余铸造按 rollbackEpochFor 退回旧持有者手里的值。
+			restoreEpoch := rollbackEpochFor(currentLoc, placed)
+			if sameNodeZeroMint {
+				restoreEpoch = placed.epoch
+			}
+			l.rollbackEnterSceneAfterRouteFailure(in.PlayerId, currentLoc, currentLocRaw, placed, restoreEpoch,
 				currentZoneID, targetZoneId, sceneId)
 			metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageRouteGate, time.Since(routeStart))
 			return errResp(constants.ErrKafkaRoute, fmt.Sprintf("route player to gate failed: %v", err)), nil
@@ -957,9 +1041,10 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 //
 // location 与 owner_epoch 一起退回(理由见 luaRollbackPlayerPlacement):路由没发
 // 出去,目标节点不会拿到新 epoch,而旧节点仍持有玩家并缓存着旧 epoch。
+// restoreEpoch 由调用方决定(通常是 rollbackEpochFor(old, placed);同节点 epoch 0 的铸造原样保留)。
 func (l *EnterSceneLogic) rollbackEnterSceneAfterRouteFailure(playerID uint64, old *scene_manager.PlayerLocation, oldRaw string,
-	placed placedLocation, oldZoneID, newZoneID uint32, newSceneID uint64) {
-	if !rollbackPlayerPlacement(l.svcCtx, l.Logger, playerID, placed, oldRaw, rollbackEpochFor(old, placed)) {
+	placed placedLocation, restoreEpoch uint64, oldZoneID, newZoneID uint32, newSceneID uint64) {
+	if !rollbackPlayerPlacement(l.svcCtx, l.Logger, playerID, placed, oldRaw, restoreEpoch) {
 		return
 	}
 

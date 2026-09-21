@@ -413,7 +413,8 @@ func (l *GuildLogic) KickGuildMember(ctx context.Context, req *pb.KickGuildMembe
 	if err != nil || tip != nil {
 		return &pb.KickGuildMemberResponse{ErrorMessage: tip}, err
 	}
-	res, err := l.repo.KickMember(ctx, guildID, actor, target)
+	// now 显式传入(B5):事务内把被踢者未结算捐献的截止时间提前到"现在"。
+	res, err := l.repo.KickMember(ctx, guildID, actor, target, nowMs())
 	if tip, err := l.mapWriteErr(ctx, actor, guildID, guildID, err); err != nil || tip != nil {
 		return &pb.KickGuildMemberResponse{ErrorMessage: tip}, err
 	}

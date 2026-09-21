@@ -90,6 +90,154 @@ type Config struct {
 
 	// Schema 决定启动期是建表(Up)还是只核对(Plan)。整段不写 = Up(dev 默认)。
 	Schema SchemaConf `json:",optional"`
+
+	// AssetOp 是帮会经济(B5b)的资产通道开关、重投循环参数与清理参数,见 AssetOpConf。
+	// **整段缺失 = 资产通道关闭**(fail-closed,不是"用默认值打开")。
+	AssetOp AssetOpConf `json:"AssetOp,optional"`
+}
+
+// AssetOpConf 是帮会资产通道(docs/design/guild-phase2/05-economy.md §5.29,
+// 循环参数按 90-consistency.md Y-06)的配置。
+//
+// # 为什么 Enabled 默认 false 且"整段缺失 = 关"
+//
+// go-zero 不下钻一个整段 optional 且未出现的嵌套结构(同 idsegment.Conf 的说明),所以没写 AssetOp 段时
+// 所有字段都是零值、Enabled=false —— 这正是想要的**代码级默认拒绝**:08-save-owner-fence.md §8.3
+// 规定"门禁未满足的环境不得开启帮会资产操作",一份配置被抄到预发 / 生产时少抄这一段,结果应当是
+// "通道关着"而不是"通道悄悄开着"。关闭时捐献 / 兑换在发号与建行之前就回 kGuildAssetPending,
+// 升级与两个读接口照常(05 顶部裁决 D;05:923"只停重投、同步照常"已作废 —— 没有签名器就无法同步投递)。
+//
+// # 为什么循环参数只在 Enabled 时校验、清理参数只在 CleanupEnabled 时校验
+//
+// 整段缺失时这些字段全是 0,若无条件校验,关着通道的环境反而起不来;而关着时它们根本没有消费者。
+// 打开开关的同时 go-zero 会按 default 回填没写的键,所以"只写 Enabled: true"得到的是 Y-06 的默认值。
+//
+// **本段不含密钥**:签名密钥只从环境变量 MMORPG_ASSET_OP_SECRET_GUILD 读(svc.AssetOpSecretEnv),
+// 缺失或短于 32 字节即拒启。
+type AssetOpConf struct {
+	// Enabled 打开资产通道:建签名器、scene 节点镜像、重投循环,捐献 / 兑换才会生成新指令。
+	Enabled bool `json:",optional"`
+
+	// ── 重投循环(assetop.LoopConfig,Y-06;Validate 与 assetop.NewLoop 的约束同形)──
+
+	// ReconcileIntervalMs 两次 Tick 的间隔。
+	ReconcileIntervalMs int `json:",default=2000"`
+	// ReconcileBatch 一次 Tick 最多领多少行;必须 ≥ Workers,否则多出来的 worker 永远闲着。
+	ReconcileBatch int `json:",default=100"`
+	// Workers 是**每个副本**同时在途的资产 RPC 上限。scene 的资产 RPC 是同步 gRPC,整个 scene 进程的
+	// sync poller 默认只有 8 条,调大会把 scene 的进场 / 开战请求挤在后面(assetop.LoopConfig.Workers 注释)。
+	// 副本数 × Workers 才是 scene 看到的并发,扩副本时连带复核。
+	Workers int `json:",default=8"`
+	// LeaseMs 行级租约;必须 ≥ OpBudgetMs + 2000,否则一行还在处理就被别的副本领走。
+	// 捐献 / 兑换插行时也用它当"提交后同步投递期间循环看不见这一行"的时长(裁决 G,不另写常量)。
+	// 另有一条跨配表的约束在这里判不了:LeaseMs + ReconcileIntervalMs 必须小于 GuildRule.asset_op_deadline_seconds,
+	// 否则同步投递被跳过的捐献会未扣款即被中止 —— 由 logic.ValidateAssetOpTiming 在启动期判。
+	LeaseMs int `json:",default=10000"`
+	// OpBudgetMs 单行处理预算,含 assetop 固定切走的 700ms 落库预留;下限 1000 保证投递至少有 300ms。
+	OpBudgetMs int `json:",default=2500"`
+	// MaxBackoffMs 退避封顶,也是 UNKNOWN(Alert)行的重排间隔。退避基数来自配表
+	// GuildRule.asset_op_retry_base_ms,基数大于本值时启动期拒启(logic.ValidateAssetOpTiming 指名报错,
+	// assetop.NewLoop 兜底)。
+	MaxBackoffMs int `json:",default=60000"`
+	// PoisonDelayMs payload 解不开的毒行推迟多久再看(循环算好绝对时刻传给 Store.Claim)。
+	PoisonDelayMs int `json:",default=3600000"`
+	// LedgerReadMinAttempts 连续几次投不出去之后才读已落盘账本(B5d 接 Ledger 之前不生效)。
+	LedgerReadMinAttempts int `json:",default=3"`
+
+	// ── 清理(goroutine guild.asset_op_cleanup,§5.22)──
+
+	// CleanupEnabled 打开终态行 / 过期计数行清理。与 Enabled 独立:通道关着时仍可以清历史行。
+	CleanupEnabled bool `json:",optional"`
+	// CleanupIntervalMinutes 两轮清理的间隔(每个副本都跑,删除幂等,启动有随机初始延迟)。
+	CleanupIntervalMinutes int `json:",default=10"`
+	// TerminalRetentionDays 终态行保留天数。它同时是 B5d 回档检查可追溯窗口的下界
+	// (07-rollback-fail-closed.md §7.4.2),调小之前先确认那边的窗口。
+	TerminalRetentionDays int `json:",default=30"`
+	// CounterRetentionDays 每日 / 每周计数行保留天数(只影响历史周期,当期行永不被删)。
+	CounterRetentionDays int `json:",default=30"`
+}
+
+// 资产通道配置的合法区间。上下界的来历:
+//   - Workers 上限 64 与 assetop 的 maxWorkers 同值;OpBudget 下限 1000 = assetop settleBudget(700)+ 300ms 投递;
+//   - LeaseMs 相对 OpBudgetMs 的 2000ms 余量与 assetop 的 leaseHeadroom 同值 —— 两边分叉时
+//     这里放过的配置会在 assetop.NewLoop 里拒启(svc 的 LoopConfigFrom 测试守住两者一致);
+//   - 保留天数下限 7:清理删的是终态行,太短会让 B5d 回档检查、运维追查拿不到近期记录。
+const (
+	minReconcileIntervalMs    = 200
+	maxReconcileIntervalMs    = 60000
+	maxAssetOpWorkers         = 64
+	maxReconcileBatch         = 1000
+	minOpBudgetMs             = 1000
+	maxOpBudgetMs             = 10000
+	assetOpLeaseHeadroomMs    = 2000
+	maxLeaseMs                = 600000
+	minMaxBackoffMs           = 1000
+	maxMaxBackoffMs           = 600000
+	minPoisonDelayMs          = 60000
+	maxPoisonDelayMs          = 86400000
+	minCleanupIntervalMinutes = 1
+	maxCleanupIntervalMinutes = 1440
+	minRetentionDays          = 7
+	maxRetentionDays          = 365
+)
+
+// validateLoop 校验重投循环参数;只在 Enabled 时调用。
+func (a AssetOpConf) validateLoop() error {
+	if a.ReconcileIntervalMs < minReconcileIntervalMs || a.ReconcileIntervalMs > maxReconcileIntervalMs {
+		return fmt.Errorf("AssetOp.ReconcileIntervalMs(%d)必须在 [%d, %d] 内",
+			a.ReconcileIntervalMs, minReconcileIntervalMs, maxReconcileIntervalMs)
+	}
+	if a.Workers < 1 || a.Workers > maxAssetOpWorkers {
+		return fmt.Errorf("AssetOp.Workers(%d)必须在 [1, %d] 内:它是每个副本同时压向 scene 的资产 RPC 上限",
+			a.Workers, maxAssetOpWorkers)
+	}
+	if a.ReconcileBatch < a.Workers || a.ReconcileBatch > maxReconcileBatch {
+		return fmt.Errorf("AssetOp.ReconcileBatch(%d)必须在 [Workers(%d), %d] 内",
+			a.ReconcileBatch, a.Workers, maxReconcileBatch)
+	}
+	if a.OpBudgetMs < minOpBudgetMs || a.OpBudgetMs > maxOpBudgetMs {
+		return fmt.Errorf("AssetOp.OpBudgetMs(%d)必须在 [%d, %d] 内:其中 700ms 固定留给落库",
+			a.OpBudgetMs, minOpBudgetMs, maxOpBudgetMs)
+	}
+	if a.LeaseMs < a.OpBudgetMs+assetOpLeaseHeadroomMs || a.LeaseMs > maxLeaseMs {
+		return fmt.Errorf("AssetOp.LeaseMs(%d)必须在 [OpBudgetMs + %d = %d, %d] 内:租约短于单行预算会让同一行被两个副本同时投递",
+			a.LeaseMs, assetOpLeaseHeadroomMs, a.OpBudgetMs+assetOpLeaseHeadroomMs, maxLeaseMs)
+	}
+	if a.MaxBackoffMs < minMaxBackoffMs || a.MaxBackoffMs > maxMaxBackoffMs {
+		return fmt.Errorf("AssetOp.MaxBackoffMs(%d)必须在 [%d, %d] 内",
+			a.MaxBackoffMs, minMaxBackoffMs, maxMaxBackoffMs)
+	}
+	if a.PoisonDelayMs < minPoisonDelayMs || a.PoisonDelayMs > maxPoisonDelayMs {
+		return fmt.Errorf("AssetOp.PoisonDelayMs(%d)必须在 [%d, %d] 内",
+			a.PoisonDelayMs, minPoisonDelayMs, maxPoisonDelayMs)
+	}
+	if a.LedgerReadMinAttempts < 1 {
+		return fmt.Errorf("AssetOp.LedgerReadMinAttempts(%d)必须 ≥ 1", a.LedgerReadMinAttempts)
+	}
+	return nil
+}
+
+// validateCleanup 校验清理参数;只在 CleanupEnabled 时调用。
+func (a AssetOpConf) validateCleanup() error {
+	if a.CleanupIntervalMinutes < minCleanupIntervalMinutes || a.CleanupIntervalMinutes > maxCleanupIntervalMinutes {
+		return fmt.Errorf("AssetOp.CleanupIntervalMinutes(%d)必须在 [%d, %d] 内",
+			a.CleanupIntervalMinutes, minCleanupIntervalMinutes, maxCleanupIntervalMinutes)
+	}
+	if a.TerminalRetentionDays < minRetentionDays || a.TerminalRetentionDays > maxRetentionDays {
+		return fmt.Errorf("AssetOp.TerminalRetentionDays(%d)必须在 [%d, %d] 内",
+			a.TerminalRetentionDays, minRetentionDays, maxRetentionDays)
+	}
+	if a.CounterRetentionDays < minRetentionDays || a.CounterRetentionDays > maxRetentionDays {
+		return fmt.Errorf("AssetOp.CounterRetentionDays(%d)必须在 [%d, %d] 内",
+			a.CounterRetentionDays, minRetentionDays, maxRetentionDays)
+	}
+	return nil
+}
+
+// hasRpcTarget 判断 zrpc 客户端配置是否指向了任何目标。与 svc.hasRpcTarget 同一判据
+// (config 不能 import svc:svc 已经 import 本包)。
+func hasRpcTarget(c zrpc.RpcClientConf) bool {
+	return c.Etcd.Key != "" || len(c.Endpoints) > 0 || c.Target != ""
 }
 
 // ShouldAutoMigrate 是启动路径跑 Up 还是只跑 Plan 的唯一判据:没写 = Up。
@@ -134,6 +282,26 @@ func (c *Config) Validate() error {
 	if dsn.DBName != data.DatabaseName {
 		return fmt.Errorf("MySQL.DataSource 的库名必须是 %q(得到 %q):帮会表只建在独占库(port-decisions D-14)",
 			data.DatabaseName, dsn.DBName)
+	}
+
+	// 资产通道(B5b)。关着时一概不查,见 AssetOpConf 的说明。
+	if c.AssetOp.Enabled {
+		if err := c.AssetOp.validateLoop(); err != nil {
+			return err
+		}
+		// op_id 只由号段发(biz_tag=guild_asset_op,不设 snowflake 回退)。开着通道却没有号段,
+		// 进程能起来、每一次捐献 / 兑换都回 kGuildIdGenUnavailable —— 这种"半开"必须炸在启动期。
+		if !c.IdSegment.Enabled {
+			return errors.New("AssetOp.Enabled=true 要求 IdSegment.Enabled=true:资产指令的 op_id 只由号段发(biz_tag=guild_asset_op)")
+		}
+		if !hasRpcTarget(c.DataServiceRpc) {
+			return errors.New("AssetOp.Enabled=true 要求配置 DataServiceRpc(Etcd.Key / Endpoints / Target 之一):op_id 号段由 data_service.AllocateIdSegment 发")
+		}
+	}
+	if c.AssetOp.CleanupEnabled {
+		if err := c.AssetOp.validateCleanup(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

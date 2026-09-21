@@ -106,7 +106,41 @@ const (
 	// innodb_lock_wait_timeout=1)。是业务 tip 不是 gRPC 错误 —— 回 gRPC 错误会让客户端
 	// 进入重连隔离,而这里玩家原地重试一次就能成功。
 	ErrBusyRetry = uint32(table.GuildError_kGuildBusyRetry)
+
+	// ── 帮会二期 B5(捐献 / 升级 / 商店)新增的 10 个 ──
+	// 10 个全是业务拒绝(Tip.xlsx 的 fault 列留空):捐献与兑换失败都有可重试或可理解的原因,
+	// 回 gRPC 错误会让客户端进入重连隔离。scene 回的资产原因码(27xxx)**不在这里**加别名:
+	// 它们属于 asset_error 段,放进本组会被 TestNoHandWrittenTipCodes 判成"引用其他码轴";
+	// 业务代码直接用 assetop.Reason*。
+
+	// ErrFundsInsufficient:帮会资金不足以升到下一级(按**当前等级行**的 upgrade_cost_funds 判)。
+	ErrFundsInsufficient = uint32(table.GuildError_kGuildFundsInsufficient)
+	// ErrMaxLevel:帮会已在最高级(当前等级行 upgrade_cost_funds == 0)。
+	ErrMaxLevel = uint32(table.GuildError_kGuildMaxLevel)
+	// ErrDonateLimit:该捐献选项今日次数已用完(计数器在提交 PENDING 时占用,结局拒绝 / 中止才退回)。
+	ErrDonateLimit = uint32(table.GuildError_kGuildDonateLimit)
+	// ErrCurrencyInsufficient:scene 以 durable 结局拒绝捐献扣款,原因是货币不足。
+	ErrCurrencyInsufficient = uint32(table.GuildError_kGuildCurrencyInsufficient)
+	// ErrAssetPending:本人未结算的帮会资产操作过多(assetop.ErrTooManyPending),或资产通道未开启。
+	// 此时**没有写入任何指令**,响应不带订单视图。
+	ErrAssetPending = uint32(table.GuildError_kGuildAssetPending)
+	// ErrAssetRejected:scene 以 durable 结局永久拒绝(货币不足之外的原因),本次操作已撤销并退回占用。
+	ErrAssetRejected = uint32(table.GuildError_kGuildAssetRejected)
+	// ErrShopGoodsNotFound:GuildShop 配表里没有这个 goods_id。
+	ErrShopGoodsNotFound = uint32(table.GuildError_kGuildShopGoodsNotFound)
+	// ErrShopLevelTooLow:帮会等级不足(捐献选项的 min_guild_level 与商品的 required_guild_level 共用)。
+	ErrShopLevelTooLow = uint32(table.GuildError_kGuildShopLevelTooLow)
+	// ErrShopLimit:单次份数超过 MaxBuyCount,或本周期限购已满。
+	ErrShopLimit = uint32(table.GuildError_kGuildShopLimit)
+	// ErrContributionInsufficient:可用帮贡(contribution_balance)不足以兑换。
+	ErrContributionInsufficient = uint32(table.GuildError_kGuildContributionInsufficient)
 )
+
+// MaxShopBuyCount:帮会商店单次兑换的份数上限(05-economy.md §5.11.2)。
+//
+// 它同时是 GuildShop.cost_contribution ≤ 1e9 这条配表校验的前提:cost × 20 必须装得进 uint64
+// 且远离溢出,改大之前先重算那条校验。实际单次上限还受物品堆叠约束,见 logic.MaxBuyCount。
+const MaxShopBuyCount uint32 = 20
 
 // Default limits.
 //

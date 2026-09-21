@@ -608,6 +608,158 @@ func TestEnterScene_SameNodeSceneSwitchDoesNotMintEpoch(t *testing.T) {
 	assert.Equal(t, uint64(1), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch)
 }
 
+// 同节点换图、但观察到的 epoch 为 0(存量玩家从未铸造过):照样铸造(§12.6.9)。持有节点缓存为 0
+// 时存盘不带 guard,不会被新值拒;不铸的话这名玩家一直落回同节点就永远停在 0,帮会 B4c 的资产
+// 操作会一直 RETRY。持有者没换:不发 ReleasePlayer,旧场景人数照常扣减。
+func TestEnterScene_SameNodeSceneSwitchMintsWhenEpochIsZero(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6199)
+		oldScene = uint64(7199)
+		targetID = uint64(7299)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
+	// 存量 location:落在节点 10 上、epoch 0,owner_epoch 键从未写过。
+	_, err := placePlayerLocation(sc, playerID, oldScene, "10", testZoneId, placementGuard{observedEpoch: 0, mint: false})
+	require.NoError(t, err)
+	require.False(t, mr.Exists(ownerepoch.OwnerEpochKey(playerID)))
+	fake := withReachableSceneNode(t, sc, "10")
+	releasesBefore := fake.releaseCalls.Load()
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode, "同节点换图不需要标记")
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "观察值为 0:同节点也铸造,0 → 1")
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, targetID, loc.SceneId)
+	assert.Equal(t, "10", loc.NodeId)
+	assert.Equal(t, uint64(1), loc.OwnerEpoch, "location 里记铸出的值")
+	require.Len(t, *captured, 1)
+	assert.Equal(t, uint64(1), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch, "路由事件带铸出的值,持有节点据此把缓存从 0 抬上来")
+	assert.Equal(t, releasesBefore, fake.releaseCalls.Load(), "持有者没换:同节点不得调用 ReleasePlayer")
+	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	assert.Equal(t, "2", oldCount)
+	assert.Equal(t, "5", targetCount)
+}
+
+// owner_epoch 键单独丢了(location 还记着 5):持有节点缓存的是 5,不是 0。这时铸出 1 会让它下一次
+// 带 guard 的存盘被拒、被当废黜销毁。必须不铸造,并按 location 把键补种回 5;location 继续记 5
+// (不能被不铸造的落点抹成 0,否则下一次同节点换图就会被当成存量玩家铸造)。
+func TestEnterScene_SameNodeSceneSwitchReseedsLostEpochKeyInsteadOfMinting(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6211)
+		oldScene = uint64(7611)
+		targetID = uint64(7711)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
+	raw, err := gproto.Marshal(&scene_manager.PlayerLocation{
+		SceneId: oldScene, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 5, UpdateTime: uint64(time.Now().Unix()),
+	})
+	require.NoError(t, err)
+	require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), string(raw)))
+	require.False(t, mr.Exists(ownerepoch.OwnerEpochKey(playerID)))
+	fake := withReachableSceneNode(t, sc, "10")
+	releasesBefore := fake.releaseCalls.Load()
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode)
+	assert.Equal(t, "5", ownerEpochRaw(t, sc, playerID), "键按 location 补种回 5,不得铸出 1")
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, targetID, loc.SceneId)
+	assert.Equal(t, uint64(5), loc.OwnerEpoch, "location 里的 5 不得被抹成 0")
+	require.Len(t, *captured, 1)
+	assert.Equal(t, uint64(5), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch)
+	assert.Equal(t, releasesBefore, fake.releaseCalls.Load(), "持有者没换:同节点不得调用 ReleasePlayer")
+}
+
+// 键存在且值为 "0" 而 location 记着 5:补种 SETNX 不会成功。旧写法会照常走不铸造的 CAS,"0" 比 "0"
+// 通过,把 location 里的 5 抹成 0;现在必须回 19、一个字节都不改,并退回目标场景的人数。
+func TestEnterScene_SameNodeReseedBlockedByZeroKeyRejectsWithoutErasingLocationEpoch(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6213)
+		oldScene = uint64(7613)
+		targetID = uint64(7713)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
+	raw, err := gproto.Marshal(&scene_manager.PlayerLocation{
+		SceneId: oldScene, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 5, UpdateTime: uint64(time.Now().Unix()),
+	})
+	require.NoError(t, err)
+	require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), string(raw)))
+	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "0"))
+	withReachableSceneNode(t, sc, "10")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrOwnerEpochConflict, resp.ErrorCode)
+	assert.Equal(t, "0", ownerEpochRaw(t, sc, playerID), "不得铸造,也不得改写键")
+	after, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, string(raw), after, "location 里的 5 不得被抹成 0")
+	assert.Empty(t, *captured, "拒绝时不发路由")
+	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	assert.Equal(t, "3", oldCount)
+	assert.Equal(t, "4", targetCount)
+}
+
+// 同节点 epoch 0 的铸造路由失败:只退 location,epoch 不退回 "0"。持有者没换,epoch 本来就不需要退;
+// 退回 "0" 的话,kafka-go 报错但 broker 其实已投递时,持有节点缓存已是 1,之后带 guard 的存盘被拒。
+func TestEnterScene_SameNodeZeroEpochMintRouteFailureKeepsMintedEpoch(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	sc.Kafka = &countingKafkaWriter{err: errors.New("broker unavailable")}
+	sc.Config.KafkaWriteTimeoutSeconds = 1
+
+	const (
+		playerID = uint64(6212)
+		oldScene = uint64(7612)
+		targetID = uint64(7712)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
+	_, err := placePlayerLocation(sc, playerID, oldScene, "10", testZoneId, placementGuard{observedEpoch: 0, mint: false})
+	require.NoError(t, err)
+	oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	withReachableSceneNode(t, sc, "10")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "同节点 epoch 0 的铸造回滚不退 epoch")
+	restoredRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, oldRaw, restoredRaw, "location 照常退回")
+	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	assert.Equal(t, "3", oldCount)
+	assert.Equal(t, "4", targetCount)
+}
+
 // 不铸造的落点同样受 CAS 约束:观察之后 epoch 被并发推进,location 一个字节都不改。
 func TestSetLocationIfEpochRejectsStaleObservation(t *testing.T) {
 	sc, _ := newTestSvcCtxWithWorldScenes(t)
@@ -1029,28 +1181,186 @@ func seedAwaitingPlacement(t *testing.T, sc *svc.ServiceContext, mr *miniredis.M
 	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
 }
 
-// 票据有效期内:没指定去向的登录被等待落点牵去目标 zone(只送连接,归属不动)。
-func TestEnterScene_FreshAwaitingPlacementRedirectsToTargetZone(t *testing.T) {
+// GO-5(取代旧 R8「票据有效期内等待落点牵引去向」):没指定去向(ZoneId == 0)的登录遇到**未过期**的
+// 等待落点,也不再被牵去目标 zone,而是按 gate zone 落点 —— 传送途中断线等于这次传送作废,回到
+// 最后稳定位置;否则第二条腿持续失败时每次从 gate zone 登录都会被送去目标 zone 再失败一次。
+// 等待落点没有持有者:不过换手门,照常铸造下一代;归属走真实查询分支(消费等待落点必须查归属)。
+func TestEnterScene_FreshAwaitingPlacementWithoutZoneLandsInGateZone(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
-	capturingKafkaWriter(sc)
-	const playerID = uint64(6121)
+	captured := capturingKafkaWriter(sc)
+	fake := &fakeHomeZoneClient{zone: testZoneId}
+	sc.HomeZone = fake
+
+	const (
+		playerID    = uint64(6121)
+		defaultConf = uint64(3321)
+		defaultID   = uint64(7121)
+	)
 	seedAwaitingPlacement(t, sc, mr, playerID, time.Now())
+	// gate zone 开着默认大世界:没指定地图的登录落在这里。
+	t.Cleanup(SetWorldConfIdsForTest([]uint64{defaultConf}))
+	mr.SAdd(worldChannelsKey(testZoneId, defaultConf), fmt.Sprintf("%d", defaultID))
+	seedSceneOnNode(mr, testZoneId, defaultID, "10", "0")
+	mr.Set(nodePlayerCountKey(testZoneId, "10"), "0")
 
 	logic := NewEnterSceneLogic(context.Background(), sc)
-	logic.assignGateForZone = func(_ context.Context, _ *svc.ServiceContext, zone uint32, _ uint64) (*scene_manager.RedirectToGateInfo, error) {
-		assert.Equal(t, uint32(2), zone)
-		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+		t.Error("等待落点 + ZoneId == 0 不应再触发跨区重定向(R8 已被 GO-5 取代)")
+		return nil, errors.New("unexpected redirect")
 	}
 	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
 		PlayerId: playerID, GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, uint32(0), resp.ErrorCode)
-	require.NotNil(t, resp.Redirect)
-	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "目标 zone 没变:只送连接,不再铸造")
+	assert.Nil(t, resp.Redirect, "按 gate zone 落点,不送去目标 zone")
+	assert.Equal(t, 1, fake.calls, "消费等待落点必须真的查归属")
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "等待落点没有持有者:落点照常铸造下一代")
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, testZoneId, loc.ZoneId)
+	assert.Equal(t, defaultID, loc.SceneId)
+	assert.Equal(t, "10", loc.NodeId)
+	assert.Equal(t, uint64(2), loc.OwnerEpoch)
+	require.Len(t, *captured, 1)
+	event := decodeRoutePlayerEvent(t, (*captured)[0])
+	assert.Equal(t, uint64(2), event.OwnerEpoch)
+	assert.Equal(t, testZoneId, event.HomeZoneId)
+}
+
+// GO-5 新开的「未过期等待落点 + ZoneId == 0 → 在 gate zone 落点」同样是在消费等待落点:未映射时 gate zone
+// 证明不了归属,必须拒绝,状态原样(epoch / location / 人数都不动)。把 3b 的策略放宽成「回落 gate zone」
+// 的话,这里会成功落点。
+func TestEnterScene_FreshAwaitingPlacementWithoutZoneRejectsUnmappedHomeZone(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	fake := &fakeHomeZoneClient{err: status.Error(codes.NotFound, "error_code=2: no home zone mapping for player 6213")}
+	sc.HomeZone = fake
+
+	const (
+		playerID    = uint64(6213)
+		defaultConf = uint64(3313)
+		defaultID   = uint64(7613)
+	)
+	seedAwaitingPlacement(t, sc, mr, playerID, time.Now())
+	awaitingRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	t.Cleanup(SetWorldConfIdsForTest([]uint64{defaultConf}))
+	mr.SAdd(worldChannelsKey(testZoneId, defaultConf), fmt.Sprintf("%d", defaultID))
+	seedSceneOnNode(mr, testZoneId, defaultID, "10", "0")
+	mr.Set(nodePlayerCountKey(testZoneId, "10"), "0")
+
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+		t.Error("等待落点 + ZoneId == 0 不应再触发跨区重定向(R8 已被 GO-5 取代)")
+		return nil, errors.New("unexpected redirect")
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrHomeZoneUnavailable, resp.ErrorCode, "消费等待落点时 gate zone 不得当归属")
+	assert.Nil(t, resp.Redirect)
+	assert.Equal(t, 1, fake.calls)
+	assert.Empty(t, *captured)
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, awaitingRaw, raw)
+	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, defaultID))
+	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "10"))
+	assert.Equal(t, "0", count, "预占人数必须成对退回")
+	assert.Equal(t, "0", nodeCount)
+}
+
+// GO-5 的常见路径不变:location 就落在 gate zone 的具体节点上时,ZoneId == 0(login 在断线租约内的
+// ShortReconnect / ReplaceLogin)与 ZoneId == GateZoneId 的行为必须完全相同 —— 这里是同落点重连:
+// 不铸造、不改 location、原样下发当前 epoch、人数不重复计。
+// 注意:这条是回归护栏,不是 GO-5 的判别用例 —— 这种输入在 GO-5 之前同样跟随 location 的 zone,改动前后
+// 都会通过。GO-5 新增的「跟随要求 node_id 非空」由 FreshAwaitingPlacementWithoutZone* 两条守住;
+// 「location 在别 zone 的具体节点 + ZoneId == 0 → 只送连接」由 CrossZoneRedirectIntoOwnZoneLeavesOwnershipUntouched 守住。
+func TestEnterScene_ZeroZoneOverLocationInGateZoneBehavesLikeExplicitGateZone(t *testing.T) {
+	const (
+		playerID    = uint64(6205)
+		defaultConf = uint64(3306)
+		defaultID   = uint64(7305)
+	)
+	type outcome struct {
+		errorCode   uint32
+		redirected  bool
+		epochRaw    string
+		locRaw      string
+		routeScene  uint64
+		routeNode   uint32
+		routeEpoch  uint64
+		routeHome   uint32
+		sceneCount  string
+		homeQueries int
+	}
+	run := func(t *testing.T, zoneID uint32) outcome {
+		t.Helper()
+		sc, mr := newTestSvcCtxWithWorldScenes(t)
+		captured := capturingKafkaWriter(sc)
+		fake := &fakeHomeZoneClient{zone: testZoneId}
+		sc.HomeZone = fake
+		t.Cleanup(SetWorldConfIdsForTest([]uint64{defaultConf}))
+		mr.SAdd(worldChannelsKey(testZoneId, defaultConf), fmt.Sprintf("%d", defaultID))
+		seedSceneOnNode(mr, testZoneId, defaultID, "10", "1")
+		mr.Set(nodePlayerCountKey(testZoneId, "10"), "1")
+		require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, defaultID, "10", testZoneId))
+
+		logic := NewEnterSceneLogic(context.Background(), sc)
+		logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+			t.Error("location 就在 gate zone:不应触发跨区重定向")
+			return nil, errors.New("unexpected redirect")
+		}
+		resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+			PlayerId: playerID, ZoneId: zoneID,
+			GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+		})
+		require.NoError(t, err)
+		require.Len(t, *captured, 1)
+		event := decodeRoutePlayerEvent(t, (*captured)[0])
+		locRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, defaultID))
+		return outcome{
+			errorCode:   resp.ErrorCode,
+			redirected:  resp.Redirect != nil,
+			epochRaw:    ownerEpochRaw(t, sc, playerID),
+			locRaw:      locRaw,
+			routeScene:  event.SceneId,
+			routeNode:   event.TargetNodeId,
+			routeEpoch:  event.OwnerEpoch,
+			routeHome:   event.HomeZoneId,
+			sceneCount:  count,
+			homeQueries: fake.calls,
+		}
+	}
+
+	explicit := run(t, testZoneId)
+	zero := run(t, 0)
+
+	assert.Equal(t, uint32(0), explicit.errorCode)
+	assert.False(t, explicit.redirected)
+	assert.Equal(t, "1", explicit.epochRaw, "同落点重连不铸造")
+	assert.Equal(t, defaultID, explicit.routeScene)
+	assert.Equal(t, uint32(10), explicit.routeNode)
+	assert.Equal(t, uint64(1), explicit.routeEpoch)
+	assert.Equal(t, "1", explicit.sceneCount, "重连不重复计人数")
+	// location 字节里带秒级 UpdateTime,两次各自由 UpdatePlayerLocation 写入,不逐字节比;
+	// 各自「重连前后不变」由同落点分支保证,这里比对解码后的落点。
+	decode := func(raw string) *scene_manager.PlayerLocation {
+		loc := &scene_manager.PlayerLocation{}
+		require.NoError(t, gproto.Unmarshal([]byte(raw), loc))
+		loc.UpdateTime = 0
+		return loc
+	}
+	assert.True(t, gproto.Equal(decode(explicit.locRaw), decode(zero.locRaw)), "两种请求留下的落点必须相同")
+	explicit.locRaw, zero.locRaw = "", ""
+	assert.Equal(t, explicit, zero, "ZoneId == 0 与 ZoneId == GateZoneId 的行为必须完全相同")
 }
 
 // 票据过期 = 传送失败:同样的登录不再被牵去目标 zone,按 gate zone 走常规落点(回家)。
+// GO-5 之后未过期的等待落点同样不牵引(见上面的 FreshAwaitingPlacementWithoutZoneLandsInGateZone),
+// 过期与否对去向已无区别;保留本用例守住「过期记录不牵引」这一半。
 // 本用例不摆世界频道,所以常规落点以「无可用节点」收场 —— 要证明的只是它**没有**
 // 再去签目标 zone 的票据。
 func TestEnterScene_ExpiredAwaitingPlacementNoLongerRedirects(t *testing.T) {

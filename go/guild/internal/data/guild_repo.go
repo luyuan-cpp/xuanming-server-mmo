@@ -62,6 +62,25 @@ var (
 	ErrApplicationLimit = errors.New("player pending application limit reached")
 	// ErrApplicationQueueFull:目标帮会待审申请数已达 GuildRule.max_pending_applications_per_guild。
 	ErrApplicationQueueFull = errors.New("guild pending application queue full")
+
+	// 下面这组由 economy_repo.go 的经济事务返回(05-economy.md §5.16–§5.18)。
+	// 帮会不存在 / 不是成员 / 职位不够 / 配表缺行 / 写冲突直接复用上面已有的哨兵,不另造一份同义错误。
+
+	// ErrZoneMerging:合服闸门拒绝,或闸门状态读不出来。读失败也按拒绝处理(fail-closed):
+	// 合服期间放过一笔资产写,源区与目标区的帮会资金就会各记一份。
+	ErrZoneMerging = errors.New("guild zone is merging or merge fence unreadable")
+	// ErrGuildLevelTooLow:帮会等级低于捐献选项 / 商品要求的等级(事务内读到的权威等级)。
+	ErrGuildLevelTooLow = errors.New("guild level too low")
+	// ErrDonateLimit:该捐献选项本游戏日次数已用完(计数行的带上限 upsert 判为达上限)。
+	ErrDonateLimit = errors.New("daily donate limit reached")
+	// ErrShopLimit:该商品本周期限购份数不够本次兑换。
+	ErrShopLimit = errors.New("guild shop purchase limit reached")
+	// ErrContributionInsufficient:锁内读到的可用帮贡不够本次兑换的总价。
+	ErrContributionInsufficient = errors.New("contribution balance insufficient")
+	// ErrGuildMaxLevel:当前等级行的 upgrade_cost_funds 为 0,即已是最高级。
+	ErrGuildMaxLevel = errors.New("guild already at max level")
+	// ErrFundsInsufficient:锁内读到的帮会资金不够升到下一级。
+	ErrFundsInsufficient = errors.New("guild funds insufficient")
 )
 
 // GuildData is the persistence-layer representation of a guild (stored in Redis + MySQL).

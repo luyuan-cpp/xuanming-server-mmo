@@ -28,10 +28,12 @@ import (
 
 // memberDisplay 视图里一名玩家的运行时展示信息。
 type memberDisplay struct {
-	Online   bool
-	InBattle bool
-	Level    uint32
-	ClassId  uint32
+	Online       bool
+	InBattle     bool
+	Level        uint32
+	ClassId      uint32
+	AppearanceId string
+	Gender       uint32
 }
 
 // displayCache player_id → 展示信息。一次提交 / 一次读只构建一份,所有接收者复用(§G.2)。
@@ -94,7 +96,7 @@ func (p presenceReader) loadDisplay(ctx context.Context, playerIds []uint64) dis
 			d.InBattle = locks[i] != ""
 		}
 		if blobs != nil {
-			d.Level, d.ClassId = parsePlayerBrief(ctx, id, blobs[i])
+			d.Level, d.ClassId, d.AppearanceId, d.Gender = parsePlayerBrief(ctx, id, blobs[i])
 		}
 		dc[id] = d
 	}
@@ -124,20 +126,21 @@ func (p presenceReader) mget(ctx context.Context, ids []uint64, keyOf func(uint6
 
 // parsePlayerBrief 从 PlayerAllData 取等级与职业(读法照 login player_class_backfill.go)。
 // 缺失、解析失败、player_id 不匹配都返回 0(尽力而为,§G.2 / J-11)。
-func parsePlayerBrief(ctx context.Context, playerId uint64, raw string) (level, classId uint32) {
+func parsePlayerBrief(ctx context.Context, playerId uint64, raw string) (level, classId uint32, appearanceId string, gender uint32) {
 	if raw == "" {
-		return 0, 0
+		return 0, 0, "", 0
 	}
 	data := &dbpb.PlayerAllData{}
 	if err := proto.Unmarshal([]byte(raw), data); err != nil {
 		logx.WithContext(ctx).Infof("[team] PlayerAllData 解析失败,展示字段填 0 player=%d: %v", playerId, err)
-		return 0, 0
+		return 0, 0, "", 0
 	}
 	player := data.GetPlayerDatabaseData()
 	if player.GetPlayerId() != playerId {
-		return 0, 0
+		return 0, 0, "", 0
 	}
-	return player.GetLevelComponent().GetLevel(), player.GetUint32PbComponent().GetClass()
+	return player.GetLevelComponent().GetLevel(), player.GetUint32PbComponent().GetClass(),
+		player.GetProfileComponent().GetAppearanceId(), player.GetProfileComponent().GetGender()
 }
 
 // uniqueIds 去掉 0 与重复,保持首次出现顺序。

@@ -99,6 +99,15 @@ void ViewSystem::FillActorCreateMessageInfo(entt::entity observer, entt::entity 
     if (tlsEcs.actorRegistry.any_of<Player>(entrant))
     {
         createMessage.set_actor_type(ACTOR_TYPE_PLAYER);
+        if (const auto* profile = tlsEcs.actorRegistry.try_get<PlayerProfileComp>(entrant))
+        {
+            createMessage.set_appearance_id(profile->appearance_id());
+            createMessage.set_gender(profile->gender());
+        }
+        if (const auto* identity = tlsEcs.actorRegistry.try_get<PlayerUint32Comp>(entrant))
+        {
+            createMessage.set_class_id(identity->class_());
+        }
     }
     else if (tlsEcs.actorRegistry.any_of<Npc>(entrant))
     {

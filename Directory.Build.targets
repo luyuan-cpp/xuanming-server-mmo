@@ -45,6 +45,6 @@
 
   <Target Name="NoRawPointerMemberCheck" BeforeTargets="PreBuildEvent"
           Condition="'$(MSBuildProjectExtension)' == '.vcxproj' and $([System.String]::Copy('$(MSBuildProjectDirectory)').Contains('\third_party\')) != 'True'">
-    <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)tools\scripts\check_no_raw_pointer_member.ps1&quot; -ProjectDir &quot;$(MSBuildProjectDirectory)&quot; -ProjectName &quot;$(ProjectName)&quot;" />
+    <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)tools\scripts\check_no_raw_pointer_member.ps1&quot; -ProjectDir &quot;$(MSBuildProjectDirectory)&quot; -ProjectName &quot;$(ProjectName)&quot; -ProjectFile &quot;$(MSBuildProjectFullPath)&quot; -Configuration &quot;$(Configuration)&quot; -Platform &quot;$(Platform)&quot; -MSBuildPath &quot;$(MSBuildBinPath)\MSBuild.exe&quot;" />
   </Target>
 </Project>

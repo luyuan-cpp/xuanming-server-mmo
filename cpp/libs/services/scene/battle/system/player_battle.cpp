@@ -624,6 +624,11 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 	// 缺组件或副本尚未补齐时留空,battle 侧照常结算 —— 名字是展示数据,不拦开战。
 	const auto* profile = tlsEcs.actorRegistry.try_get<PlayerProfileComp>(player);
 	snapshot.set_player_name(profile != nullptr ? profile->name() : std::string());
+	snapshot.set_appearance_id(profile != nullptr ? profile->appearance_id() : std::string());
+	snapshot.set_gender(profile != nullptr ? profile->gender() : 0);
+	if (const auto* identity = tlsEcs.actorRegistry.try_get<PlayerUint32Comp>(player)) {
+		snapshot.set_class_id(identity->class_());
+	}
 
 	const auto* levelComp = tlsEcs.actorRegistry.try_get<LevelComp>(player);
 	snapshot.set_level(levelComp != nullptr && levelComp->level() > 0 ? levelComp->level() : 1);
@@ -1451,9 +1456,13 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 	}
 
 	const auto player = tlsEcs.GetPlayer(playerId);
-	if (!tlsEcs.actorRegistry.valid(player))
+	// 退出中(UnregisterPlayer:退出存盘在途 / 等收敛)的实体视同离线(cross-zone-scene-travel.md §12.6.3,
+	// M1 第 2 条):在线应用会在退出存盘之后改实体,而应用后立刻销账 —— 退出收尾若没把这笔差额存下来
+	// (旧实现的"落地即销毁"就是这样),奖励就两头落空。走离线暂存:按锁校验后 StorePendingSettlement、
+	// **不销账**,玩家下次进场由 OnPlayerEnterScene 补应用(同节点重连复用实体时 EnterScene 第 6 步同样会补)。
+	if (!tlsEcs.actorRegistry.valid(player) || tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player))
 	{
-		// 玩家已下线(lease 过期被清理):写离线挂起结算。
+		// 玩家已下线(lease 过期被清理)或正在退出:写离线挂起结算。
 		// 写之前按锁值校验 battle_id —— 锁已易主/已被 reaper 判废的迟到结算直接丢弃,
 		// 与在线路径"按 InBattleComp.battle_id 匹配"的语义对齐。
 		if (!RedisReady())
@@ -1544,9 +1553,11 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 					ClearPendingSettlementIfMatch(playerId, battleId);
 					return;
 				}
-				if (!tlsEcs.actorRegistry.valid(player) || GuidForLog(player) != playerId)
+				if (!tlsEcs.actorRegistry.valid(player) || GuidForLog(player) != playerId ||
+					tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player))
 				{
-					// 回调期间玩家又下线了:锁还在,交给 Kafka 重投走离线暂存路径
+					// 回调期间玩家又下线了 / 进入了退出流程(视同离线,理由见本函数开头):
+					// 锁还在,交给 Kafka 重投走离线暂存路径
 					LOG_WARN << "[PlayerBattle] 结算按锁应用放弃: 实体已不在, player_id=" << playerId
 							 << " battle_id=" << battleId << "(Kafka 重投可补)";
 					return;

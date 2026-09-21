@@ -718,7 +718,18 @@ func TestAcceptFriend_RejectsBlockedPair(t *testing.T) {
 
 	assert.ErrorIs(t, repo.AcceptFriend(ctx, a, b, 100), ErrBlocked)
 	assert.Zero(t, mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend"))
-	assertFriendInvariants(t, ctx, db)
+
+	// 这里**不能**调 assertFriendInvariants:夹具直写 friend_block、绕过了 Block(),故意造出
+	// "拉黑与 pending 并存"—— 只有这样才能走到 AcceptFriend ② 的守卫内拉黑复核(真实路径上 Block 会在
+	// 同一把守卫里把 pending 置终态,两者不会并存)。于是 assertNoPendingBetweenBlockedPairs 必然命中
+	// 夹具自己造的那一行,这条断言测的是夹具、不是产品(2026-09-21 首次真库运行时就这样假红)。
+	// 其余三条不变量仍然适用,逐条调用;再显式钉住"被拒的 AcceptFriend 整体回滚、没有碰申请行"。
+	assertCapacityMatchesEdges(t, ctx, db)
+	assertNoFriendAndBlocked(t, ctx, db)
+	assertNoPendingBetweenFriends(t, ctx, db)
+	assert.EqualValues(t, requestStatusPending, mustCount(t, ctx, db,
+		"SELECT status FROM friend_request WHERE from_player_id=? AND to_player_id=?", a, b),
+		"被拉黑拒绝的 AcceptFriend 必须整体回滚,申请行应原样保持 pending")
 }
 
 // TestRemoveFriend_NonFriendDoesNotCreateCapacityRows 是 F2-15 的回归。

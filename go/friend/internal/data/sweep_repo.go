@@ -178,7 +178,8 @@ func (r *FriendRepo) SweepTerminalRequests(ctx context.Context, mode string,
 
 	deleted, err := r.deleteTerminalRequestsBefore(ctx, cutoff, batchLimit)
 	if err != nil {
-		return pending, 0, err
+		// 逐行删:出错前已删掉的行是真删了,把计数带回去,别让日志把它们记成 0。
+		return pending, deleted, err
 	}
 	return pending, deleted, nil
 }
@@ -224,25 +225,64 @@ func (r *FriendRepo) countTerminalRequestsMissingUpdatedMs(ctx context.Context, 
 
 // deleteTerminalRequestsBefore 删一批终态过期行,返回实际删除行数。
 //
-// 单条自动提交语句,不开事务:分批的意义就是让每次持锁窗口足够短,
-// 再把几批包进一个事务会把这个意义抹掉。
-// 不加 ORDER BY:删哪一批无所谓(迟早都要删),而 ORDER BY 会为这条 DELETE 加一次排序。
-// `DELETE ... LIMIT` 在 STATEMENT 格式的 binlog 下是不确定语句(从库可能删到不同的行),
-// 本仓 MySQL 显式配了 binlog_format=ROW(见 friend_repo.go 顶部核对到的
-// deploy/k8s/manifests/infra/mysql.yaml:60),ROW 格式记录的是具体行,所以安全。
+// **候选普通读 + 逐行按主键删**,与容量行回收(deleteIdleCapacityRow)同一个写法,不是一条批量
+// `DELETE ... WHERE status IN (...) AND updated_ms < ? LIMIT ?`。原因见 friend_repo.go 顶部锁序说明 (6):
+// 批量 DELETE 走 idx_status_updated 的范围,**先锁二级索引项、后锁主键**;而玩家重新申请一个很久以前
+// 被拒过的人时,AddFriendRequest 的 upsert 是**先锁主键**(④ 的 FOR UPDATE)、后改这一行的二级索引 ——
+// 两者恰好撞在同一行上就是反序,1213。批量 DELETE 一次删到上千行、undo 大,InnoDB 更可能牺牲的是
+// 玩家那一侧,等于把后台清理的锁冲突转嫁成玩家可见的失败。逐行按主键删时任一时刻只持一行、先主键,
+// 与 upsert 同序,不可能成环。
+//
+// 代价:一轮至多 batchLimit 次往返(默认 1000),对 5 分钟一轮的后台任务可以接受。
+// 每行 DELETE 的 WHERE 重复终态与截止点条件,是提交点复核:候选读与删除之间该行可能已被 upsert
+// 改回 pending(玩家重新发起申请),这时必须不删。多副本同时跑时,后到的一方删到 0 行,无害。
+// 单条自动提交语句,不开事务:分批的意义就是让每次持锁窗口足够短。
 func (r *FriendRepo) deleteTerminalRequestsBefore(ctx context.Context, cutoffMs uint64, limit int) (int64, error) {
-	result, err := r.db.ExecContext(ctx,
-		"DELETE FROM friend_request WHERE status IN (?, ?) AND updated_ms < ? LIMIT ?",
+	rows, err := r.db.QueryContext(ctx,
+		"SELECT from_player_id, to_player_id FROM friend_request WHERE status IN (?, ?) AND updated_ms < ? LIMIT ?",
 		requestStatusAccepted, requestStatusRejected, cutoffMs, limit)
 	if err != nil {
-		return 0, fmt.Errorf("delete terminal friend requests before %d: %w", cutoffMs, err)
+		return 0, fmt.Errorf("list terminal friend requests before %d: %w", cutoffMs, err)
 	}
-	deleted, err := result.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("delete terminal friend requests: rows affected: %w", err)
+	type requestKey struct{ from, to uint64 }
+	var candidates []requestKey
+	for rows.Next() {
+		var k requestKey
+		if err := rows.Scan(&k.from, &k.to); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("scan terminal friend request: %w", err)
+		}
+		candidates = append(candidates, k)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, err
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("iterate terminal friend requests: %w", err)
+	}
+
+	var deleted int64
+	for _, k := range candidates {
+		if err := ctx.Err(); err != nil {
+			return deleted, err
+		}
+		result, err := r.db.ExecContext(ctx, deleteTerminalRequestSQL,
+			k.from, k.to, requestStatusAccepted, requestStatusRejected, cutoffMs)
+		if err != nil {
+			return deleted, fmt.Errorf("delete terminal friend request %d->%d: %w", k.from, k.to, err)
+		}
+		n, err := result.RowsAffected()
+		if err != nil {
+			return deleted, fmt.Errorf("delete terminal friend request: rows affected: %w", err)
+		}
+		deleted += n
 	}
 	return deleted, nil
 }
+
+// deleteTerminalRequestSQL:按 friend_request 完整主键删一行终态过期申请,WHERE 里重复终态与截止点条件
+// 作提交点复核。写成包级常量是为了让 TestLockingStatementsArePrimaryKeyPointLookups 对它做 EXPLAIN。
+const deleteTerminalRequestSQL = "DELETE FROM friend_request WHERE from_player_id = ? AND to_player_id = ? AND status IN (?, ?) AND updated_ms < ?"
 
 // SweepIdleCapacityRows 跑一轮 friend_capacity 回收,返回(本轮看到的可回收行数, 实际删除行数)。
 //

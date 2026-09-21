@@ -32,7 +32,9 @@ type AccountSimplePlayer struct {
 	// 可能为空:self-heal 补出来的账号记录、早于名字功能的旧角色都没有这一份,
 	// 所以角色列表读到空名要回源 BatchGetPlayerName 补齐,不能直接显示空白。
 	// 见 docs/design/guild-phase2/03-names.md §3.9 / §3.12。
-	Name          string `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	Name string `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	// 建角时选择的稳定人物资源 ID；空值是旧身份，不自动指定新人物。
+	AppearanceId  string `protobuf:"bytes,6,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -102,6 +104,13 @@ func (x *AccountSimplePlayer) GetName() string {
 	return ""
 }
 
+func (x *AccountSimplePlayer) GetAppearanceId() string {
+	if x != nil {
+		return x.AppearanceId
+	}
+	return ""
+}
+
 type AccountSimplePlayerList struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Players       []*AccountSimplePlayer `protobuf:"bytes,1,rep,name=players,proto3" json:"players,omitempty"`
@@ -150,15 +159,16 @@ var File_proto_common_base_user_accounts_proto protoreflect.FileDescriptor
 
 const file_proto_common_base_user_accounts_proto_rawDesc = "" +
 	"\n" +
-	"%proto/common/base/user_accounts.proto\"\x92\x01\n" +
+	"%proto/common/base/user_accounts.proto\"\xb7\x01\n" +
 	"\x13AccountSimplePlayer\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x19\n" +
 	"\bclass_id\x18\x02 \x01(\rR\aclassId\x12\x16\n" +
 	"\x06gender\x18\x03 \x01(\rR\x06gender\x12\x17\n" +
 	"\azone_id\x18\x04 \x01(\rR\x06zoneId\x12\x12\n" +
-	"\x04name\x18\x05 \x01(\tR\x04name\"I\n" +
+	"\x04name\x18\x05 \x01(\tR\x04name\x12#\n" +
+	"\rappearance_id\x18\x06 \x01(\tR\fappearanceId\"I\n" +
 	"\x17AccountSimplePlayerList\x12.\n" +
-	"\aplayers\x18\x01 \x03(\v2\x14.AccountSimplePlayerR\aplayersB\x13Z\x11proto/common/baseb\x06proto3"
+	"\aplayers\x18\x01 \x03(\v2\x14.AccountSimplePlayerR\aplayersB\rZ\vcommon/baseb\x06proto3"
 
 var (
 	file_proto_common_base_user_accounts_proto_rawDescOnce sync.Once

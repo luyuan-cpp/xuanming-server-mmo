@@ -56,6 +56,17 @@ func tipCodes() map[string]uint32 {
 		"ErrApplicationLimit":     ErrApplicationLimit,
 		"ErrApplicationQueueFull": ErrApplicationQueueFull,
 		"ErrBusyRetry":            ErrBusyRetry,
+		// 帮会二期 B5(捐献 / 升级 / 商店)新增的 10 个。
+		"ErrFundsInsufficient":        ErrFundsInsufficient,
+		"ErrMaxLevel":                 ErrMaxLevel,
+		"ErrDonateLimit":              ErrDonateLimit,
+		"ErrCurrencyInsufficient":     ErrCurrencyInsufficient,
+		"ErrAssetPending":             ErrAssetPending,
+		"ErrAssetRejected":            ErrAssetRejected,
+		"ErrShopGoodsNotFound":        ErrShopGoodsNotFound,
+		"ErrShopLevelTooLow":          ErrShopLevelTooLow,
+		"ErrShopLimit":                ErrShopLimit,
+		"ErrContributionInsufficient": ErrContributionInsufficient,
 	}
 }
 
@@ -236,6 +247,36 @@ func TestManagementTipCodesAreBusinessRejects(t *testing.T) {
 		code, ok := all[name]
 		if !ok {
 			t.Errorf("%s 不在 tipCodes 里:B2 的码漏进全量护栏了", name)
+			continue
+		}
+		if got := serverbase.TipVerdict(code); got != serverbase.VerdictBizReject {
+			t.Errorf("%s = %d 应判 VerdictBizReject, 实际 %v ——"+
+				"检查 data/tip/Tip.xlsx 的 fault 列是不是被填了 1", name, code, got)
+		}
+	}
+}
+
+// TestEconomyTipCodesAreBusinessRejects 守住「B5 这 10 个码都是业务拒绝」。
+//
+// 余额不足、限购已满、未结算过多都是玩家可理解、可重试的结果;谁要是给它们补上 fault=1,
+// 拦截器会把每一次正常的捐献失败记成服务端故障,客户端还会进重连隔离。
+func TestEconomyTipCodesAreBusinessRejects(t *testing.T) {
+	all := tipCodes()
+	for _, name := range []string{
+		"ErrFundsInsufficient",
+		"ErrMaxLevel",
+		"ErrDonateLimit",
+		"ErrCurrencyInsufficient",
+		"ErrAssetPending",
+		"ErrAssetRejected",
+		"ErrShopGoodsNotFound",
+		"ErrShopLevelTooLow",
+		"ErrShopLimit",
+		"ErrContributionInsufficient",
+	} {
+		code, ok := all[name]
+		if !ok {
+			t.Errorf("%s 不在 tipCodes 里:B5 的码漏进全量护栏了", name)
 			continue
 		}
 		if got := serverbase.TipVerdict(code); got != serverbase.VerdictBizReject {
