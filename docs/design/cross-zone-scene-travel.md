@@ -311,8 +311,8 @@ C++ MSBuild 必须串行 `/m:1 /nr:false`;这批代码从未编译,失败时先�
 
 | # | 触发点 | 说明 |
 |---|---|---|
-| S5-B1 / S8-1 | `entergamelogic.go:310-321` | login 的 `EnterGame` gRPC 在提交预加载后就同步回成功,真正的 `SceneManager.EnterScene` 在异步链里;被拒时唯一处置是 `logx.Errorf` + `return`,刻意跳过 `cleanupLoginSessionState`("把登录会话留给客户端重试")。login 全仓没有任何 `PushToPlayer` / `SendTipToClient`,唯一的客户端通知原语 `KickSessionOnGate` 只服务 `ReplaceLogin`;`kEnterSceneFailed`(3023)的发射点全在 scene 节点,而此刻没有 scene 参与,该 tip 通道不可达。gate 侧也没有"已绑会话但迟迟没进场"的看门狗。**玩家表现**:连上 gate(B)、`EnterGame` 回成功,然后永远停在进入中,无 tip 无断线。可拒码含 1 / 7 / 8 / 17 / 18 / 19 / 20。其中 **20(归属未映射)在等待落点有效期内每次重试都会复现**,只能等 300s 票据过期回落 Offline-Return,或运维先跑回填。 |
-| S7-1 | `enterscenelogic.go:358` | 第一条腿的"目标地图在不在目标 zone 开着"只读预检被 `in.SceneConfId != 0` 挡住。而 `scene_config_id = 0` 是协议明文支持的形态(`player_scene.proto:81`:0 = 由目标 zone 挑默认大世界),**也正是"回家"的典型形态**。传 0 时第一条腿只校验目标 zone 有没有 gate,不校验有没有任何世界频道;放行后源实体立刻销毁,第二条腿解析场景失败只回 `ErrNoAvailableNode`,再落进上面那条无通知路径。§4 写的"目标 zone 无可用 gate / 频道 → 回可重试错误 → 源 scene 解冻并回 tip"对 conf=0 不成立。 |
+| S5-B1 / S8-1 | `entergamelogic.go:310-321` | login 的 `EnterGame` gRPC 在提交预加载后就同步回成功,真正的 `SceneManager.EnterScene` 在异步链里;被拒时唯一处置是 `logx.Errorf` + `return`,刻意跳过 `cleanupLoginSessionState`("把登录会话留给客户端重试")。login 全仓没有任何 `PushToPlayer` / `SendTipToClient`,唯一的客户端通知原语 `KickSessionOnGate` 只服务 `ReplaceLogin`;`kEnterSceneFailed`(3023)的发射点全在 scene 节点,而此刻没有 scene 参与,该 tip 通道不可达。gate 侧也没有"已绑会话但迟迟没进场"的看门狗。**玩家表现**(2026-09-20 客户端核查后更正):连上 gate(B)、`EnterGame` 回成功,然后停在"正在进入游戏…",**不会永远卡住**——客户端等 `NotifyEnterScene` 有 60s 硬上限(`GameClient.cs:645`),到期 `FailPipeline` 关连接、打回选服界面;但玩家看不到失败原因(见 §12.5.4 CL-1)。服务端侧仍是无 tip 无断线。可拒码含 1 / 7 / 8 / 17 / 18 / 19 / 20。其中 **20(归属未映射)在等待落点有效期内每次重试都会复现**,只能等 300s 票据过期回落 Offline-Return,或运维先跑回填。 |
+| S7-1 | `enterscenelogic.go:358` | 第一条腿的"目标地图在不在目标 zone 开着"只读预检被 `in.SceneConfId != 0` 挡住。而 `scene_config_id = 0` 是协议明文支持的形态(`player_scene.proto:81`:0 = 由目标 zone 挑默认大世界)。*(2026-09-20 客户端核查后更正:原文称它"也正是回家的典型形态",不成立——Unity 的地图窗把 `scene_config_id` 硬限在 1..4(`CityTravelUiRoot.cs:197`),回家也是"选归属区 + 选一张图";发 0 的只有 `DevAutoPilot` 与 robot。所以本条对真实玩家基本不可达,实际严重度 P3。)*传 0 时第一条腿只校验目标 zone 有没有 gate,不校验有没有任何世界频道;放行后源实体立刻销毁,第二条腿解析场景失败只回 `ErrNoAvailableNode`,再落进上面那条无通知路径。§4 写的"目标 zone 无可用 gate / 频道 → 回可重试错误 → 源 scene 解冻并回 tip"对 conf=0 不成立。 |
 | S3L1-1 | `enterscenelogic.go:909-917` | 第一条腿 Kafka 推重定向失败后只有一层补偿:`rollbackPlayerPlacement` 回滚 location 与 epoch。该函数在 **Redis Eval 出错**时只记 Errorf 返回 false,epoch 停在 N+1 且无人重试;而应答里区分不出"已回滚 / 没回滚",源 scene 把 epoch 变化读成"已被放行",`DestroyDeposedPlayer` 不存盘销毁实体且全程不发任何客户端消息。双重故障才触发(Kafka 写失败 + Redis 回滚失败),但没有第二层出口。另一支(exact-value CAS 不过)销毁源实体本属正确,不算缺陷。 |
 
 - **共同修法方向**(需要拍板,且 `go/login/**` 当前有别的会话在改,本轮未动):① 给 login 一条面向客户端的失败通道——最小做法是复用已有的 `KickSessionOnGate` 把会话踢掉,让客户端明确回到登录流程,而不是无声等待;② 或在 gate 侧加"已绑会话但 N 秒内没收到 RoutePlayerEvent 就踢"的看门狗(同时也能兜住 §12.3 的 CPP-2);③ S7-1 单独可低成本收敛:第一条腿在 `SceneConfId == 0` 时也做一次"目标 zone 有没有任何世界频道"的只读预检。
@@ -323,3 +323,31 @@ C++ MSBuild 必须串行 `/m:1 /nr:false`;这批代码从未编译,失败时先�
 以下每一跳都核对过接收方、字段透传与失败出口,证据链见工作流记录:协议契约与消息号 226 在 `message_id.txt` / C++ 生成物 / 10 个 Go 服务 / robot 之间一致且无重号;gate 的客户端白名单(`IsClientMessageId`)含 226,限速表缺省放行,按 `OptionFileDefaultNode = NODE_SCENE` 路由到 scene,应答经 `OnSceneProcessClientPlayerMessageReply` 原样回客户端;scene 侧 CZ-6 六条校验**每条拒绝都有 tip**(四个 `kZoneTravel*` 码 3024–3027 已发号、按枚举名引用);`StartTravelHandoff` 的两条存盘路径(写盘在途挂 30s 看门狗 / 脏数据快路径同步直调)都有接续,`BeginTravelHandoff` 与 `RequestTravelEnterScene` 的五条同步失败分支全部收口到 `AbortTravelHandoff`;第一条腿的换手门、归属前置检查、铸 epoch、签票据、写等待落点、Kafka 事件(含 `target_instance_id`)齐备;gate(A) 推 msg 124、gate(B) 验票绑定 `player_id` / `target_zone_id`、票据字段进 `SessionDetails`、第二条腿消费等待落点、`RoutePlayerEvent` 字段透传到 scene(B)、目标节点从共享 Redis 读档并按 `home_zone` 选 DBTask topic —— 均通。
 
 被反驳者推翻、不作为缺陷记录的两条:① "只送连接的重定向也会让源 scene 无条件销毁实体"(票据语义两端其实一致);② "第二条腿读不到档时会把访客当新号建成空实体并覆盖原档"(读档失败有 fail-closed 保护)。另有一条 P2 时序问题(受理后同步失败时,失败 tip 会早于"已受理"应答到达,与 `player_scene.proto:74-76` 写的次序契约相反)被判 refuted,但它依赖客户端是否按"先收应答再开遮罩"实现,**归入客户端核对项**。
+
+#### 12.5.4 客户端那半条链(2026-09-20,`mmorpg-client` @ `120e2d8`,只读核查)
+
+客户端已推到远端(`main = 120e2d8`,比 09-14 的 `d2b165a` 多 26 个提交)。同样分段追踪 + 每条断点一名反驳者;其中"tip 码表"一段的 agent 因看不到用户授权而拒读客户端仓,由主会话手工补核。**Unity 实机未跑过**,以下全部是静态结论。
+
+**主链判定为闭环**:
+
+- 入口只有两处:地图窗选区(`CityTravelWindow.cs:107` → `CityTravelUiRoot.RequestZoneTravel`)与 `DevAutoPilot -travelZone`;没有"传送点"入口。`MessageIds.TravelToZone = 226`、`TravelToZoneRequest{target_zone_id=1, scene_config_id=2}`、应答 `error_message=1`、msg 23 / 34 / 79 / 124 的消息号与字段号,均与服务端 `proto/` 一致。应答不走 `HandlerRegistry`(全仓无人调 `Register`,生成的 handler 是空壳),走 `GameClient.Call` 的 `_pending` 回调,有效。
+- `_travelPending` 只在 `BeginZoneTravel` 置位,清除路径 6 条齐全(同步失败 / 响应体拒绝码 / msg 23 且属于传送失败码 / msg 124 到达 / 断线 / `Tick` 75s 兜底),**未发现置位后清不掉的分支**。UI 侧另有 120s 总预算。
+- 服务端那条"受理后同步失败时 tip 早于应答到达"(§12.5.3 末尾归入客户端核对项的)在客户端侧**表现正确**:tip 先到时 UI 把请求 `Reset`(代次 +1),迟到的无错应答因代次不符被丢弃,遮罩不会重开。该项关闭。
+- **踢线消息 34 的结论(解除 §12.3"冻结上限"的前置)**:客户端收到 34 后**一定**主动断开 TCP 并回到选服界面(`GameClient.cs:1463-1467` → `DisconnectInternal`:关 socket、清 `InGame` / `TokenVerified` / 在途传送标志 / pending、触发 `OnDisconnected` → 选服界面重新激活),不自动重连。传送冻结期间收到同样成立。所以"到期发踢线"的设计在客户端侧成立,不需要 gate 强制断开(对不守规矩的客户端无效,那是另一回事)。
+- 客户端没有任何大厅连接的自动重连 / 自动重发 `EnterGame`;断线后一律回选服界面走全新 HTTP login + assign-gate,**不带旧票据**(票据只是 `RedirectFlow` 的局部实参)。
+- tip 码按**枚举名**引用生成的 `SceneErrorTip`(无手抄数字),取值 3023–3027 与服务端一致。
+
+**存活的断点**(客户端仓,本轮未改;AGENTS §9 要求客户端改动须单独授权):
+
+| # | 严重度 | 位置 | 问题 | 最小修法 |
+|---|---|---|---|---|
+| CL-1 | P1 | `GameClient.cs:645-658`、`QdaoServerSelectView.cs:493-501` | **与 §12.5.2 是同一个洞的客户端面**:第二条腿被拒时客户端等满 60s 后拆连接回选服,只显示"与服务器的连接已断开"("切换服务器失败,请重新登录"被后一条状态盖掉),玩家不知道原因。服务端 `entergamelogic.go` 刻意保留登录会话、票据与等待落点 300s 有效,"供客户端重试"——**客户端没有对应实现**,这份保留完全用不上;回选服后只能从家区入口全新登录,而那条路按 §12.3 GO-5 多半又是 18。 | 两端对齐后二选一:① 服务端在第二条腿被拒时补发 tip / 踢线(§12.5.2 的修法),客户端在等待循环里识别并立即收口;② 客户端在重定向分支超时后于同一连接上按 ≥30s 间隔重发 `EnterGame` 1–2 次。另:选服界面的断线处理不要覆盖已有的失败文案 |
+| CL-2 | P2 | `GameClient.cs:717-722` | 客户端用**本机时钟**与服务端签出的 `token_deadline`(TTL 300s)做无容差比较,`now >= deadline` 即 `FailRedirect` 强制断线。玩家机器时钟快 5 分钟以上时,msg 124 一到就被本地判过期——而此刻服务端已放行、源实体将销毁——**每次跨区传送(含回家)必现**。robot 有同款校验但跑在服务端时钟下,压测测不出。 | 本地过期判定降级为告警,权威判定交给 gate(B)(它会回 token_expired 并关连接,现有收口路径已覆盖) |
+| CL-3 | P2 | `CityTravelUiRoot.cs:224, :285-286` | "当前所在区"靠 UI 自记的 `_visitingZoneId`,只在"`_pendingZoneId` 非零且入场通知来自新连接"时更新。凡 UI 先收场、msg 124 随后才到的时序(RPC 15s 超时但服务端已受理 / 在途期间任意无关 tip / 75s 超时后服务端才放行),玩家实际已到 B 而客户端仍认为在 A:可去列表滤掉真正的家 A、列出 B,选 B 被服务端回 3024。**UI 上回不了家**,两个区时只能退出重登。 | 由 `GameClient` 在 `RedirectFlow` 换连接成功后只读解析票据的 `target_zone_id` 存成 `CurrentZoneId`(不影响 payload / signature 原样转发),UI 改读它,删掉旁路记账 |
+| CL-4 | P2 | `CityTravelUiRoot.cs:306-316` | 地图窗在途期间把**任何** tip 都当传送失败收场,而 `GameClient.IsTravelFailureTip` 已收窄到 5 个码——两者脱节。无关 tip(限流、别的系统)会让窗口提前收场而底层仍在途:要么随后被 msg 124 突然搬走(先报失败后成功),要么 75s 内再点被"正在传送中"挡回。它也是 CL-3 的触发源之一。上一会话报过这条,属实。 | 跨区在途(`_pendingZoneId != 0`)时改用 `IsTravelFailureTip(tip.Id)`;同区换图分支可保持宽判 |
+| CL-5 | P2 | `QdaoServerSelectView.cs:714` | 超时 / 断线收口后立刻可再点进入,无任何冷却,间隔必然 <30s;若服务端把这次全新登录判为 ShortReconnect,正好命中 §12.3 GO-3 / GO-5 描述的"每次重连都撤销断线租约、遗留 location 没人清"。是否真被判为 Reconnect 取决于服务端会话状态,**拿不准**。 | 与 GO-5 的服务端修法一起定 |
+| CL-6 | P3 | `GameClient.cs:922-930` | `DescribeTravelTip` 缺 3007 `kEnterSceneSceneNotFound`、3014 `kEnterSceneChangingScene` 的文案(枚举已生成),以及 `kSceneTransferInProgress`(在 `cross_server_error_tip.proto`,客户端没生成该枚举)。这些是同步拒绝,走响应体,**能正确收场**,只是显示成"传送失败(tip=3007)"。上一会话报过,属实。 | 补三条文案;`gen_proto.ps1` 收进 `cross_server_error_tip.proto` |
+| CL-7 | P3 | `Assets/Scripts/Proto/Generated/SceneErrorTip.cs` | 该目录下唯一没有 `.meta` 的文件。纯枚举无 GUID 引用,编译不受影响,只会在每台机器首次打开 Unity 时各自生成随机 GUID、产生提交噪音。上一会话报过,属实。 | 有 Unity 的机器打开一次工程,提交生成的 `.meta` |
+| CL-8 | P3 | 多处 | 跨区窗口总预算 120s 小于链路最坏耗时(约 165–180s),中途到期会清掉在途区号,是 CL-3 的又一触发源;验票被拒 / 新连接中途断开时管线协程不提前退出,`_redirecting` 会多挂 10–60s;`ZoneTravelClient.cs` 文件头仍写"跑 gen 之前编不过是预期"。 | 随 CL-3 一并处理 |
+
+被反驳者推翻的两条:重定向进行中到达的第二条 msg 124 被丢弃(与 robot 语义不一致,但无害);以及 CL-1 的一个重复表述。

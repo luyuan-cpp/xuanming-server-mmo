@@ -9,7 +9,7 @@
 
 - **先看这条**:端到端闭环核查查出一个 P0 —— scene 节点从来没装 SceneManager 的 gRPC 应答处理器,所有 EnterScene / CreateScene 应答被静默丢弃。**同 zone 跨节点换图、副本 / 镜像场景进入一直是坏的**,跨 zone 传送也要靠 30s 看门狗兜。2026-04-16 的一次 regen 丢的,与本轮新代码无关,已修(设计文档 §12.5.1),**必须实跑验证**。
 - 服务端:上一会话留下的 4 个 P1 已全部处理,另外一轮只读审计 + 反驳式核实又确认了 8 条缺陷,其中 3 条已落码、5 条 + 若干 P3 写成已知限制(§12.3),全部在 `origin/main`。
-- 客户端(`mmorpg-client`):**推送没有成功**。远端 `main` 仍停在 09-14 的 `d2b165a`,约 542 MB 提交只存在于 luyuan 那台机器上。这是现在**唯一真正阻塞**的事,见 §2。
+- 客户端(`mmorpg-client`):**已推上去**(2026-09-20 晚,远端 `main = 120e2d8`,比 09-14 的 `d2b165a` 多 26 个提交;机器 B 已同步)。客户端那半条链已只读核查:主链闭环,另有 1 条 P1 + 4 条 P2 + 3 条 P3 未改,见设计文档 §12.5.4 与本文 §2.2。
 - 传送**后半程**(第二条腿及之后)失败时,服务端对客户端零通知:无 tip、无踢线、无解冻,而那时源实体已销毁,玩家停在进入中。4 条发现同一个根,修法要动 `go/login`(别的会话在改),本轮只落文档,见 §12.5.2。
 - 最高优先级永远是**把它编出来**(§4),其余一切结论都悬在这上面。
 
@@ -20,9 +20,11 @@
 3. **Claude 不编译、不跑测试、不 regen**(`AGENTS.md` §10.1)。改完给出可直接执行的命令与通过标准;没有运行结果之前不得写"通过 / 已验证"。
 4. 机器 B 有 `gofmt`、`node`、`pwsh`,**没有 python、没有 promtool**。
 
-## 2. 必须在机器 A 上做的事:客户端
+## 2. 客户端
 
-### 2.1 把客户端推上去(阻塞项)
+### 2.1 把客户端推上去(~~阻塞项~~ 已完成,以下留作"大包推送"的经验记录)
+
+> **2026-09-20 晚更新**:用户已从机器 A 推送成功,远端 `main = 120e2d8`。下面的做法与坑不再是待办,保留是因为同一条慢上行以后还会推大包。那批 4K 审图 PNG(`Assets/Editor/CityTiles4KReview/`,53 个文件)**已随推送进了远端历史**,要不要清仍需用户拍板。
 
 上一会话的推送失败过多次,根因与做法如下(**上一会话报出,未核实**——机器 B 看不到那些提交;但远端现状"`main = d2b165a`、无任何含 `3447cc1` 的分支"是本会话 `git ls-remote` **已核实**的,说明分段推的中间分支也没留下):
 
@@ -31,10 +33,13 @@
 - 停掉一个后台推送时,`TaskStop` 只杀 shell,`git` / `git-remote-https` 子进程会继续占着上行。重推前先查进程树并清掉孤儿,也不要让多个会话同时推大包(当时有三个上传在抢同一条链路)。
 - 那 542 MB 里有约 320 MB 集中在一个自动保存提交(上一会话记的是 `4fb0515`,09-18 06:58):`Assets/Editor/CityTiles4KReview/Tiles/` 下几十张 15–18 MB 的 4K 审图 PNG。这是仓库卫生问题,**清掉要改写历史,而那条分支上有别的会话在提交,必须由用户拍板**;不改写历史的话,至少加进 `.gitignore` 或挪出 `Assets/`(Unity 会给每张图生成 `.meta` 并导入)。
 
-### 2.2 客户端剩余项(均为**上一会话报出,未核实**)
+### 2.2 客户端剩余项
+
+> **2026-09-20 晚更新**:客户端到位后已逐条核实,证据等级从"上一会话报出,未核实"改为下表"核实结果"一列;完整清单(含新查出的 CL-1…CL-8)在设计文档 §12.5.4。**客户端仓本轮一行没改**(AGENTS §9:客户端改动须单独授权)。
 
 | # | 位置 | 要做什么 | 怎么算做完 |
 |---|---|---|---|
+| — | **核实结果** | C-1 属实(= CL-6,P3,还缺 3014 与 `kSceneTransferInProgress`);C-2 属实(= CL-7,P3,是该目录唯一缺 `.meta` 的文件);C-3 属实(= CL-4,P2,且它会触发 CL-3"UI 上回不了家");C-4 确认:20 到客户端是 3027,表现为"提示 + 留在原地",不卡;C-6 **关闭**:tip 先到时 UI 代次 +1,迟到的应答被丢弃,遮罩不会重开;C-5 **有答案**:收到 34 后客户端一定断线回选服界面(`GameClient.cs:1463-1467`),"冻结硬上限"设计的前置解除 | — |
 | C-1 | `GameClient.DescribeTravelTip` | 漏了 `kEnterSceneSceneNotFound`,该码目前落到裸编号文案 | 该码有对应中文文案;对照 `generated/code/proto/tip/scene_error_tip.proto` 把传送链上会回到客户端的码过一遍 |
 | C-2 | `SceneErrorTip.cs` | 缺 `.meta`,换机器后 Unity 会重新生成 GUID,引用它的资源会断 | `.meta` 进版本库 |
 | C-3 | `CityTravelUiRoot.cs:303` | 城内传送窗口仍是"见任何 tip 就收场"并拼裸编号;`GameClient.IsTravelFailureTip` / `DescribeTravelTip` 已是现成的 `public static`,两行就能接上 | 只对传送失败类 tip 收场,文案走 `DescribeTravelTip` |
@@ -59,13 +64,14 @@
 ## 4. 服务端:剩余工作(按优先级)
 
 0. **实跑验证 §12.5.1 的 P0 修复**(编译之后第一件事)。它激活了约 150 行从未执行过的代码。两条最小验证:① 同 zone 起 2 个 scene 节点 + `AllowUnsafeCrossNodeHandoff=false` 跑一次跨节点换图,scene 日志应出现 `SceneManager.EnterScene deferred (handoff pending)` 并随后起交接重发(修复前这条日志**从不出现**);② 进一次副本 / 镜像场景,确认玩家真的被自动带进去(修复前是"请求发出、无任何后续")。
-0b. **补上传送后半程的失败出口**(§12.5.2,4 条同根)。最小做法是复用 login 已有的 `KickSessionOnGate` 让客户端明确回登录,或在 gate 侧加"已绑会话但 N 秒没收到 RoutePlayerEvent 就踢"的看门狗(顺带兜住 §12.3 的 CPP-2)。`go/login/**` 有别的会话在改,动手前先对范围。其中 S7-1 可单独低成本收敛:第一条腿在 `SceneConfId == 0`(回家的典型形态)时也做一次"目标 zone 有没有任何世界频道"的只读预检。
+0b. **补上传送后半程的失败出口**(§12.5.2,4 条同根;客户端面是 §12.5.4 的 CL-1)。客户端核查更正了一点:玩家**不会永远卡住**,客户端等进场有 60s 硬上限,到期打回选服——但看不到失败原因,服务端刻意保留的登录会话 / 票据客户端也完全用不上,所以两端要一起定方案。最小做法是复用 login 已有的 `KickSessionOnGate` 让客户端明确回登录,或在 gate 侧加"已绑会话但 N 秒没收到 RoutePlayerEvent 就踢"的看门狗(顺带兜住 §12.3 的 CPP-2)。`go/login/**` 有别的会话在改,动手前先对范围。其中 S7-1 可单独低成本收敛:第一条腿在 `SceneConfId == 0`(回家的典型形态)时也做一次"目标 zone 有没有任何世界频道"的只读预检。
 1. **编译 + 单测 + 冒烟**(阻塞其余一切)。命令、通过标准、失败时保留什么:设计文档 §12.4,在 §9 / §11.4 基础上追加。main 上还叠着组队、战斗 G1–G9、帮会二期、聚宝斋、friend 等多批未编译代码,总顺序见 `turn-battle-gap-closure.md` §7;C++ 必须串行 `msbuild … /m:1 /nr:false`。
 2. **§12.3 的 P2 五条**,每条都写了"为什么没修 / 修法":
    - GO-2 回滚让 epoch 回退、毒化 db 守卫——要改 proto(`EnterSceneResponse` 回显 epoch)或调 C++ 发 DBTask 的时机;
    - GO-3 同 node_id 重注册后死节点接管永不触发——要在 `PlayerLocation` 里记进程实例标识(proto);
    - GO-5 R7 / R8 从 login 不可达——要动 `go/login`(本轮有「帮会二期」会话在改那个目录,先对一下);
-   - CPP-2 gate 丢路由无补发、CPP-3 疏散改派 fire-and-forget——都需要"补发 / 待确认表 + 超限发 tip 并踢线"的设计,和冻结硬上限共用 C-5 这个前置。
+   - CPP-2 gate 丢路由无补发、CPP-3 疏散改派 fire-and-forget——都需要"补发 / 待确认表 + 超限发 tip 并踢线"的设计。它们与冻结硬上限共用的前置 C-5 **已解除**(客户端收到 34 一定回选服),三者现在都可以落。
+   - 客户端侧:CL-2(本机时钟预判票据过期,时钟快 5 分钟的玩家每次传送必败)与 CL-3 / CL-4(UI 自记的"当前所在区"会变脏,变脏后 UI 上回不了家)是最该先修的两处,修法写在 §12.5.4。
 3. **需要随一次全量 regen 做的**:真删 `proto/common/event/player_migration_event.proto`(整条 DEPRECATED、无调用方,仍占着 event id 27 / 41,清单写在该文件头注释里);`proto/common/database/player_cache.proto:7` 与 `bag_quest_mail_data.proto:7-8` 的注释仍把 `PlayerAllData` 说成"跨 zone 迁移携带的快照"。「Friend 服务移植后续工作」会话计划跑 regen,可与它同批。
 4. **本轮因归属没碰、只登记的过期文字**:`go/login/internal/logic/clientplayerlogin/entergamelogic.go:470`、`:575` 附近(仍写 14 `ErrUnsafeCrossNodeHandoff` 与"重定向前先解析场景");`docs/design/guild-phase2/04-asset-channel.md:29 / :300 / :335 / :352`(C6 的正确性论证依赖已删的"迁移包");`cpp/libs/services/scene/battle/system/player_battle.cpp:838`;`docs/notes/` 下 3 处。
 5. **P3**:GO-6(`death_at` 写失败仍 ZREM——注意"写失败就不 ZREM"是错的修法)、GO-4 残余(`LeaveScene` 改 compare-and-delete)、告警盲区(整 zone 节点全灭无从触发)、`Hiredis.cc` 在 `redisvAsyncCommand` 返回 ERR 时泄漏 `CommandCallback`、`robot/connected()` 是个被 git 跟踪的 0 字节空文件(疑似 shell 重定向误操作残留)。
@@ -79,10 +85,9 @@ docs/design/handoff-crosszone-20260920.md 和 docs/design/cross-zone-scene-trave
 1. 这条链路的服务端代码从未编译、从未测试;你不许编译 / 跑测试 / regen,改完给出可执行命令。
 2. 同一个 main 工作树上有别的 Claude 会话在改文件:动手前 ListAgents + SendMessage 互报范围,
    提交只用 git commit -- <显式路径>,不 stash / reset / checkout / rebase。
-3. 先确认你在哪台机器上:git -C ../mmorpg-client log -1 如果停在 09-14 的 d2b165a,你就在机器 B,
-   客户端的活(交接说明 §2)在这台机器上做不了,只能做服务端(§4)。
-   如果能看到 ZoneTravelClient.cs / GameClient.IsTravelFailureTip,你在机器 A:第一件事是 §2.1
-   把客户端推上去,推之前先查有没有残留的 git-remote-https 进程,推的过程判 git push 自己的退出码。
+3. 客户端已推到远端(main = 120e2d8 或更新)。先 git -C ../mmorpg-client pull,确认能看到
+   ZoneTravelClient.cs / GameClient.IsTravelFailureTip。客户端仓的改动需要用户单独授权(AGENTS §9),
+   未获授权时只读;待修清单在 cross-zone-scene-travel.md §12.5.4(CL-1…CL-8)。
 4. 交接说明里标「上一会话报出,未核实」的条目,先在代码上核实再动手,不要默认它成立。
 现在先告诉我:你在哪台机器上、origin/main 与本地 HEAD 各是什么、客户端远端 main 是什么,然后给出你打算做的第一件事。
 ```
