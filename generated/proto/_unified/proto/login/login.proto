@@ -59,6 +59,8 @@ message CreatePlayerRequest
   // 成功再建角(fail-closed),建角失败走 ReleasePlayerName 补偿。
   // 见 docs/design/guild-phase2/03-names.md §3.9 / §3.11。
   string name = 3;
+  // 稳定人物资源 ID，独立于职业/性别；空值兼容旧客户端的外观映射。
+  string appearance_id = 4;
 }
 
 message CreatePlayerResponse

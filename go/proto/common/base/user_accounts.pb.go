@@ -168,7 +168,7 @@ const file_proto_common_base_user_accounts_proto_rawDesc = "" +
 	"\x04name\x18\x05 \x01(\tR\x04name\x12#\n" +
 	"\rappearance_id\x18\x06 \x01(\tR\fappearanceId\"I\n" +
 	"\x17AccountSimplePlayerList\x12.\n" +
-	"\aplayers\x18\x01 \x03(\v2\x14.AccountSimplePlayerR\aplayersB\rZ\vcommon/baseb\x06proto3"
+	"\aplayers\x18\x01 \x03(\v2\x14.AccountSimplePlayerR\aplayersB\x13Z\x11proto/common/baseb\x06proto3"
 
 var (
 	file_proto_common_base_user_accounts_proto_rawDescOnce sync.Once

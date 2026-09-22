@@ -2028,7 +2028,8 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\x0eStartTeamMatch\x12\x1d.teampb.StartTeamMatchRequest\x1a\x14.teampb.TeamResponse\"\x00\x127\n" +
 	"\x12NotifyTeamSnapshot\x12\x17.teampb.TeamSnapshotS2C\x1a\x06.Empty\"\x00\x123\n" +
 	"\x10NotifyTeamInvite\x12\x15.teampb.TeamInviteS2C\x1a\x06.Empty\"\x00\x121\n" +
-	"\x0fNotifyTeamEvent\x12\x14.teampb.TeamEventS2C\x1a\x06.Empty\"\x00\x1a\x05\x88\xa8\xc3\x01\x01B\r\x98\xd4a\x0fZ\x04team\x80\x01\x00b\x06proto3"
+	"\x0fNotifyTeamEvent\x12\x14.teampb.TeamEventS2C\x1a\x06.Empty\"\x00\x1a\x05\x88\xa8\xc3\x01\x01B\x13\x98\xd4a\x0fZ\n" +
+	"proto/team\x80\x01\x00b\x06proto3"
 
 var (
 	file_proto_team_team_proto_rawDescOnce sync.Once

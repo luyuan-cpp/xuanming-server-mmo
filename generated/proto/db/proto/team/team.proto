@@ -124,12 +124,13 @@ message TeamMemberView {
   string name = 2;       // 仓库暂无昵称,恒为 ""(§G.2)
   uint32 level = 3;      // 尽力而为,0 = 未知
   uint32 class_id = 4;   // 尽力而为,0 = 未知
-  uint32 gender = 5;     // v1 恒 0(性别只在账号 blob);客户端头像因此不可推导,见 §H.4
+  uint32 gender = 5;     // 从玩家存档资料读取；旧存档未补齐时为 0。
   bool is_leader = 6;
   bool is_online = 7;    // 读时由 player:session 算,仅 SESSION_STATE_ONLINE 为 true
   bool in_battle = 8;    // 读时由 battle:lock 算(咨询性)
   uint32 zone_id = 9;    // 玩家 home zone
   uint32 join_seq = 10;  // 显式顺序(§11.6);members 已按它升序,但客户端不得依赖下标
+  string appearance_id = 11; // 从玩家存档资料读取，空值保留旧身份映射。
 }
 
 message TeamApplicationView {

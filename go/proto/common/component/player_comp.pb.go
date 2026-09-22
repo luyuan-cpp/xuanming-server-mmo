@@ -583,7 +583,7 @@ const file_proto_common_component_player_comp_proto_rawDesc = "" +
 	"\x14PlayerMergeStateComp\x122\n" +
 	"\x15force_rename_required\x18\x01 \x01(\bR\x13forceRenameRequired\x125\n" +
 	"\x17force_rename_stamped_ms\x18\x02 \x01(\x03R\x14forceRenameStampedMs\x128\n" +
-	"\x19post_merge_notice_seen_ms\x18\x03 \x01(\x03R\x15postMergeNoticeSeenMsB\x12Z\x10common/componentb\x06proto3"
+	"\x19post_merge_notice_seen_ms\x18\x03 \x01(\x03R\x15postMergeNoticeSeenMsB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_player_comp_proto_rawDescOnce sync.Once

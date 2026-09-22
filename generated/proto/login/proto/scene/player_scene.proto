@@ -53,6 +53,9 @@ message ActorCreateS2C
 	ActorType actor_type = 3;
 	uint64 guid = 4;
 	uint64 config_id = 5;
+	string appearance_id = 6; // 玩家稳定外观 ID；NPC 留空。
+	uint32 class_id = 7; // 旧玩家 appearance_id 为空时供客户端兼容。
+	uint32 gender = 8;
 }
 
 message ActorDestroyS2C

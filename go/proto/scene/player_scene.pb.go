@@ -724,7 +724,7 @@ const file_proto_scene_player_scene_proto_rawDesc = "" +
 	"\x15NotifyActorListCreate\x12\x13.ActorListCreateS2C\x1a\x06.Empty\x126\n" +
 	"\x16NotifyActorListDestroy\x12\x14.ActorListDestroyS2C\x1a\x06.Empty\x12;\n" +
 	"\fTravelToZone\x12\x14.TravelToZoneRequest\x1a\x15.TravelToZoneResponse\x1a\n" +
-	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x0e\x98\xd4a\x03Z\x05scene\x80\x01\x01b\x06proto3"
+	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
 	file_proto_scene_player_scene_proto_rawDescOnce sync.Once

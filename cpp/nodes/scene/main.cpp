@@ -13,7 +13,6 @@
 #include "player/system/player_lifecycle.h"
 #include "battle/system/player_battle.h"
 #include "services/battle/data/battle_table_fingerprint.h"
-#include "node_config_manager.h"
 #include "proto/contracts/kafka/scene_command.pb.h"
 #include "id_segment_bootstrap.h"
 #include "modules/id_segment/guid_segment_registry.h"

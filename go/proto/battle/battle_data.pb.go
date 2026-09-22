@@ -1729,7 +1729,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x16BATTLE_OUTCOME_ONGOING\x10\x00\x12\x1d\n" +
 	"\x19BATTLE_OUTCOME_SIDE_A_WIN\x10\x01\x12\x1d\n" +
 	"\x19BATTLE_OUTCOME_SIDE_B_WIN\x10\x02\x12\x17\n" +
-	"\x13BATTLE_OUTCOME_DRAW\x10\x03B\bZ\x06battleb\x06proto3"
+	"\x13BATTLE_OUTCOME_DRAW\x10\x03B\x0eZ\fproto/battleb\x06proto3"
 
 var (
 	file_proto_battle_battle_data_proto_rawDescOnce sync.Once
