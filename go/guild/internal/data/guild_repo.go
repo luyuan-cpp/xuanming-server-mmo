@@ -173,6 +173,7 @@ redis.call("SET", KEYS[2], ARGV[2], "PX", ARGV[3])
 return 1
 `)
 
+// releaseRankLockScript:榜维护锁的"令牌相符才删"(比较后删除),TTL 到期后别人重新拿到的锁不会被迟到的释放删掉。
 var releaseRankLockScript = redis.NewScript(`
 if redis.call("GET", KEYS[1]) == ARGV[1] then
     return redis.call("DEL", KEYS[1])
@@ -305,8 +306,28 @@ func (r *GuildRepo) cacheGeneration(ctx context.Context, key string) (string, er
 // 任何一步失败整体回滚 —— 不允许出现「有公会无会长」或「有会长无公会」的半态。
 //
 // 事务边界:经 inTx(op=create),因此与管理 / 审批事务共用同一套死锁重试与 READ COMMITTED。
-// 锁序 guild(INSERT 新行)→ guild_player_state → guild_member → guild_application,与 §6.1 一致。
-// 错误语义:ErrGuildNameTaken / ErrPlayerAlreadyInGuild / ErrWriteConflict;其余为内部错误。
+// 锁序 guild_player_state(0)(全局插入守卫)→ guild_player_state(建帮者)→ guild_member(INSERT)→
+// guild_application(I2,主键升序逐行点删)→ guild(INSERT 新行,**事务里最后一条写**)。
+//
+// 新 guild 行排在最后,是全局表序(guild 在最前)的登记例外之一(2026-09-21 死锁修复契约 P1,friend 审计 #6;
+// 另一个是审批通过在锁申请行之后插成员行,论证见 ReviewApplication)。
+// 旧顺序先 INSERT guild:建帮者 p1 若正被别帮审批通过,事务会带着新 uk_guild('x') 项卡在 guild_player_state(p1) 上;
+// 同名的 p2、p3 此时插 guild 做重复检查,都在 'x' 上排队等 S 锁;审批提交后 p1 插成员撞 1062、整事务回滚,
+// 'x' 项被清掉,p2 / p3 的 S 锁同时授予,再各自插入时插入意向被对方的 S 挡住 —— 1213。
+// 现在 INSERT guild 之后只剩 COMMIT:会让本事务业务回滚的步骤(成员 1062)全在它之前,彼时还没碰过 uk_guild,
+// 同名插入者卷不进来;撞 uk_guild 时本事务只是持有已提交重复项上的 S 锁然后回滚。
+// 为什么这个例外不成环:新 guild 行的 guild_id 刚发号、提交前别人无从得知,能等它的只有同名插入者(在 uk_guild 项上
+// 以 S 锁等)—— 而同名插入者也是建帮,排在本事务持有的全局插入守卫 S(0) 后面,根本走不到 uk_guild;本事务插完 guild 后
+// 不再等任何锁。guild_member 没有指向 guild 的外键,先插成员行、后插帮会行在提交前对外不可见,没有半态。
+//
+// 全局插入守卫 S(0)(guild_manage_repo.go 文件头 (d),G-OUT1):建帮同时是 uk_guild 与 uk_guild_member 两个唯一二级索引的
+// **查重插入者**。同名(名字刚被解散的帮用过)、名字在 uk 上相邻的两帮、在 uk_guild_member 上相邻的两个刚离帮玩家,两个
+// 查重插入者各持 S next-key(R12),插入意向互相挡住 —— 与建帮者本人的状态行无关。所以事务第一把锁是哨兵行 S(0),
+// 持到提交:同一时刻至多一个查重插入者(建帮或审批通过)在 uk 上持有 S next-key。S(0) 之后本事务只等 S(p)(p > 0,表内升序)、
+// p 名下的申请行、唯一索引查重与新行,从不锁任何已有 guild 行,所以不会与"持 guild(G) 等 S(0)"的审批通过成环。
+// 唯一性仍由 uk 裁决。
+// 错误语义:ErrGuildNameTaken / ErrPlayerAlreadyInGuild / ErrWriteConflict;哨兵行缺失 → errGlobalInsertGuardMissing
+// (内部错误,fail-closed);其余为内部错误。
 // 提交后的缓存失效走 invalidateAfterCommit,**不再**把失效失败当成建帮失败回给客户端。
 func (r *GuildRepo) CreateGuild(ctx context.Context, guild *GuildData) error {
 	if len(guild.Members) != 1 {
@@ -320,20 +341,14 @@ func (r *GuildRepo) CreateGuild(ctx context.Context, guild *GuildData) error {
 	}
 	// 建帮者的串行化状态行必须在**事务外**建好(90-consistency X-10):
 	// 对不存在的行做加锁读再插入,在 TiDB 上锁不住后续插入,在 RR 下靠间隙锁互等。
-	if err := r.ensurePlayerStateRow(ctx, leader.PlayerID, guild.CreateTimeMs); err != nil {
+	if err := r.ensurePlayerStateRows(ctx, opCreate, guild.CreateTimeMs, leader.PlayerID); err != nil {
 		return err
 	}
 
-	err := r.inTx(ctx, opCreate, func(ctx context.Context, tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO guild (guild_id, name, name_norm, leader_id, level, announcement, create_time_ms, max_members, zone_id, score, funds)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
-			guild.GuildID, guild.Name, nameNorm, guild.LeaderID, guild.Level,
-			guild.Announcement, guild.CreateTimeMs, guild.MaxMembers, guild.ZoneID); err != nil {
-			if isDuplicateKeyOn(err, guildNameUniqueKey) {
-				return ErrGuildNameTaken
-			}
-			return fmt.Errorf("insert guild %d: %w", guild.GuildID, err)
+	if err := r.inTx(ctx, opCreate, func(ctx context.Context, tx *sql.Tx) error {
+		// 全局插入守卫(见函数头):事务第一把锁,状态行表内 0 最小,排在建帮者的状态行之前。
+		if err := lockGlobalInsertGuard(ctx, tx); err != nil {
+			return err
 		}
 		// 与"审批通过"抢同一个申请人状态行:两者都要给同一玩家插成员行,
 		// 由这把行锁串行,不再靠间隙锁。
@@ -351,13 +366,23 @@ func (r *GuildRepo) CreateGuild(ctx context.Context, guild *GuildData) error {
 		}
 		// 不变式 I2:成员行出现即清该玩家的全部申请(02-management.md §8.1)。
 		// 漏了这一步,建帮者日后解散 / 转让退帮时,72h 内的旧申请会按 I1 重新"复活",
-		// 他会莫名其妙被拉进一个早就忘了的帮会。
-		if _, err := tx.ExecContext(ctx, sqlDeletePlayerApplication, leader.PlayerID); err != nil {
+		// 他会莫名其妙被拉进一个早就忘了的帮会。普通读候选 + 主键升序点删(guild_manage_repo.go 文件头 (b))。
+		if err := deleteApplicationsOfPlayer(ctx, tx, leader.PlayerID); err != nil {
 			return fmt.Errorf("delete applications of founder %d: %w", leader.PlayerID, err)
 		}
+		// 最后一条写(见函数头:P1 的登记例外)。之后只剩 COMMIT。
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO guild (guild_id, name, name_norm, leader_id, level, announcement, create_time_ms, max_members, zone_id, score, funds)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+			guild.GuildID, guild.Name, nameNorm, guild.LeaderID, guild.Level,
+			guild.Announcement, guild.CreateTimeMs, guild.MaxMembers, guild.ZoneID); err != nil {
+			if isDuplicateKeyOn(err, guildNameUniqueKey) {
+				return ErrGuildNameTaken
+			}
+			return fmt.Errorf("insert guild %d: %w", guild.GuildID, err)
+		}
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 	r.invalidateAfterCommit(ctx, opCreate, guild.GuildID, leader.PlayerID)

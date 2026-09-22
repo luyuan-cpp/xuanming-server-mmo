@@ -778,3 +778,127 @@ xlsx 脚本 5 条(1 major:发号机制的注释写错;4 minor:幂等判定、核
 
 **提交**:B4c 未提交。自己提交时逐路径 add;`docs/ops/cross-zone-failure-test-runbook.md` 虽是跨 zone 会话的文件,§9 那段算本批(对方已确认由本批提交)。
 
+(2026-09-21 补:B4c 已由用户提交为 `4a86f2b2d`。跨 zone 会话已落 "owner_epoch 为 0 时同节点也铸造"(`enterscenelogic.go` sameNodeZeroMint,条件为 owner_epoch 键与 location 记录的 epoch 都是 0;键丢失而 location 记着 N 时按 N 补种、不铸造),上面第 2 条的根治已有代码,**未编译、未测试**;scene 的 `save outran reconnect lease` 现在每次退出只打一条,runbook §9 那条 LogQL 阈值是 `> 0`,不受影响。)
+
+---
+
+## 12. 2026-09-21 B5b 帮会经济服务 + go/guild 死锁全量修复(机器 B;**全部未编译、未跑测试,待用户验证**)
+
+### 12.0 先看这几条
+
+- **提交状态**:B5b 主体(约 26 个文件)已被别的会话的 WIP 提交 `9cef7b2ec`("保存跨服释放、角色外观、公会经济与好友锁序改动")带进 main,那一刻死锁修复正做到一半。**死锁修复的后续改动仍未提交**:`go/guild` 下 14 个修改文件 + 5 个新文件(清单见 12.3)。以 `git status --short -- go/guild` 为准。
+- **用户硬要求"go/guild 不能有死锁"**(2026-09-21)。本批按此做了四轮修复 + 逐轮修后审计(清单 → 两两找环 → 对抗反驳 → 查漏),最后一轮独立收敛检查的结论见 12.4 末。**所有结论都来自静态推演,没有一条经过真库运行**;验收以 12.6 的真库回归为准。
+- **跨会话硬依赖**:guild 依赖"数据库死锁审计与修复"会话在 `go/shared/assetop/seq.go` 里的修法 A(`AllocateSeq` 的本纪元未决行查询改为普通读,契约要求调用事务是 READ COMMITTED)。该改动与本批**必须同一批发布**;guild 先上而 shared 回退,审计 #4 的环(未决行"二级 → 主键"与终结 CAS 反序)会回来。
+- **部署前提**(违反任一条都可能重新出现死锁,写进上线清单):
+  1. MySQL ≥ 8.0.29(启动期 `CheckServerVersion` 会拒绝更低版本与 MariaDB);`deploy/docker-compose.yml` 现用 `mysql:latest`、K8s 用 `mysql:8.0` 浮动标签,建议钉到 `mysql:8.4`。
+  2. TiDB 必须是悲观事务 + READ COMMITTED,且**不得**打开 `[pessimistic-txn] pessimistic-auto-commit`(guild 的 Claim 是 autocommit 单 key 写,它不成环的论证依赖 autocommit 走乐观模式;之前发给别的会话的"打开它作纵深防御"已撤回)。TiDB 需支持 `GET_LOCK`(启动建哨兵行用,与 schemamigrate 同一前提)。
+  3. 新旧版本 guild **不得混跑**:旧版本在 Redis 互斥 / 事务外建 seq 行 / 旧锁序下运行,混跑期间原来的环会复现(被重试吸收,但违反硬要求)。停服切换或按区整体切换。
+  4. 合服工具 `tools/merge_zone` 跑之前必须先置闸门并排空写流量(审计 #17 的整区改写由另一会话改成按主键逐行点更新;建帮、审批、任免不在事务内查闸门)。TiDB 下 merge_zone 的自动提交点更新与 DisbandGuild 还有一条检测器看不见的互等,修法(每行包成悲观短事务、先点锁)已转给死锁审计会话。
+  5. **表结构变更(ALTER)只在 mmorpg_guild 没有 guild 写流量时执行**:DDL 的元数据锁与行锁会混成 InnoDB / MDL 各自都检测不到的环(例:建帮持 S(0) 后首次触碰 guild 表 ‖ 审批持 guild 行等 S(0) ‖ 排队的 ALTER),只能靠 1s / 5s 超时打破。生产设 `Schema.AutoMigrate=false`,由迁移 Job 在停流量后执行;本地起服的 ensureSchema 发生在本进程开始服务之前,多开实例时先停旧实例。
+
+### 12.1 B5b 做了什么(设计与决策)
+
+实现契约的裁决(A–K)原文在本会话 scratchpad,要点如下,均已落码:
+
+| # | 裁决 |
+|---|---|
+| A | `KickMember` / `LeaveGuild` / `DisbandGuild` 末尾加 `now uint64`(与 `ApplyToGuild` 的显式 now 惯例一致);死锁修复后 `DisbandGuild` 又加了第 5 个参数 `fence FenceFunc`(§12.2 第 6 条) |
+| B | inTx 的 op 固定集合追加 `donate` / `shop` / `insert_guard` |
+| C | Store 子预算:Finalize / ResolveManually 2000ms、Claim / 读 1000ms;Loop 路径被 assetop 的 settleContext 截到 700ms |
+| D | `AssetOp.Enabled=false` = 资产通道整体关闭:捐献 / 兑换在发号之前回 `kGuildAssetPending`,升级与两个读 RPC 照常;**整段缺失即关闭**(默认 false),本地 `etc/guild.yaml` 显式打开。05:923"只停重投、同步照常"作废(没签名器发不出同步请求),依据 08 §8.3 与 07:237 |
+| E | assetopfix 人工终结不置 durable、只开 `applied` / `aborted`、`-reason` 必填 |
+| F | DONATE+APPLIED 帮会在、捐献者已离帮:只记资金,计 `guild_asset_orphan_total{kind="donate",what="member_gone"}` |
+| G | 插行租约取 `AssetOp.LeaseMs`;启动期 `ValidateAssetOpTiming` 要求 `LeaseMs + ReconcileIntervalMs < asset_op_deadline_seconds`、`retry_base ≤ MaxBackoffMs` |
+| I | `go/shared/assetop/reconcile.go:136-138` 的 Finalize 契约注释漏 `next_attempt_ms`,属共享库持有会话,本批不改(guild 的 Finalize 与 ResolveManually 都已同写 `next_attempt_ms = now`,07 §7.4.1) |
+| K | 删 `HandlerBudget`:同步投递预算 = `min(2500ms, ctx 剩余 − 1000ms)`,不足 300ms 跳过并计 `guild_asset_sync_skipped_total` |
+
+其它落定:经济哨兵错误放 `guild_repo.go` 既有 var 块;op_id 发号复用 logic 的 `IDMinter`(号段 `guild_asset_op`,**无 snowflake 回退**);AssetError 原因码直接用 `assetop.Reason*`;D2 的退款分支零残留。
+
+**B5b 文件**(已在 `9cef7b2ec`,之后被死锁修复继续改):
+- data:`guild_repo.go`、`economy_repo.go`、`asset_store.go`、`guild_manage_repo.go`、`economy_repo_test.go`、`economy_lock_plan_mysql_test.go`、`guild_manage_repo_test.go`、`rank_zone_integration_test.go`
+- logic:`economy_config.go`、`economy_config_test.go`、`economy_logic.go`、`economy_logic_test.go`、`economy_flow_integration_test.go`(`//go:build integration`)、`guild_logic.go`、`guild_manage_logic.go`
+- 其余:`server/guild_server.go`、`constants/constants.go` + `constants_test.go`、`svc/asset_op.go` + `asset_op_test.go`、`svc/servicecontext.go`、`config/config.go` + `config_test.go`、`guild.go`、`etc/guild.yaml`、`cmd/assetopfix/main.go`、`tools/scripts/go_services.ps1`(只给 guild 注入 `MMORPG_ASSET_OP_SECRET_GUILD`,值取自 `run/secrets/assetop-dev.env`,不写死、不回显,`finally` 还原)
+
+### 12.2 死锁修复:统一口径(以代码注释为准,这里是索引)
+
+1. **表间全序** G(guild) < S(guild_player_state,player_id 升序,**0 号哨兵最小**) < M(guild_member) < A(guild_application) < Q(guild_player_op_seq) < O(guild_asset_op) < C(guild_daily_counter)。登记过的例外(均已论证不成环,见 `guild_repo.go` / `guild_manage_repo.go` 函数头):CreateGuild 的**新** guild 行放在最后插;审批通过在锁 A(G,p) 之后插 M(G,p);Disband 最后删 guild 行、Transfer 改 leader_id 时才碰 guild 的二级项。
+2. **锁定语句只做完整主键等值点操作**;`guild_member`(主键 (guild_id, player_id) 另有 uk(player_id))上的锁定 SELECT / UPDATE 一律 `FORCE INDEX (PRIMARY)`;`IN (?,?)` 拆成按主键升序的点查;需要按二级条件找行时"普通读候选 → 按主键升序逐行点锁 → 带复核条件点改 / 点删"。
+3. **玩家守卫**:插 / 删成员行的事务(建帮、审批通过、踢人、退帮、解散)先锁该玩家的 S(p);解散按 player_id 升序锁全体成员的 S。
+4. **全局插入守卫 S(0)**:`guild_player_state` 里 player_id=0 的哨兵行。持有者只有三类 —— 建帮、审批通过(唯一二级索引查重插入者,消除 next-key S 与插入意向互等,审计 G-OUT1)、首次建状态行的短事务(消除首插者回滚后的锁继承互等,G-C3)。启动期 `EnsureGlobalInsertGuard` 在 `GET_LOCK` 下建行,缺行即拒启;运行期缺行 fail-closed。**这是数据约定变更**:`guild_player_state` 不再是"每玩家一行"(proto 注释与 01-storage.md 待改,见 12.7)。
+5. **seq 行首次建行**挪进 T-D / T-S 事务、成员行锁之下(普通读,缺行才插)。`economy_repo.go` 的 `sqlEnsureSeqRow` 是 assetop 建行 SQL 的**临时副本**(有逐列比对测试守着),等共享库提供 `assetop.EnsureSeqRowTx` 后删掉改调它。
+6. **TiDB 专项**:凡是悲观事务也会改的行,多 key 写(改到二级索引列、删行)一律进显式 RC 事务,且**写之前先用完整主键点锁**(`sqlLockAssetOp` / `sqlSelectApplicationExpire`),让所有竞争者先在 PRIMARY 上串行;Claim 保持 autocommit(只写行 key)。
+7. **其余**:连接串显式 `transaction_isolation='READ-COMMITTED'`(autocommit 语句也走 RC);`DisbandGuild` 在事务内按 `guild.zone_id` 查合服闸门(内部 / GM 路径也挡住);清理任务改为"普通读候选 → 每行一个短事务点锁再点删",计数行截止至少保留 8 天(上一周期的行切换后至少再留 24h,避开跨切点的兑换预留);申请后的本帮过期清理移出事务、每次最多 10 行;`EnsureSeqRowRetry` 已不再使用。
+
+对应 friend / 死锁审计会话的编号:#2(申请表二级索引)、#3(本帮过期清理跨帮扫描)、#5 / #10(提前截止)、#6(建帮 uk 回滚)、#16(seq 首插者回滚)、#17-6(解散闸门)全部已修;#4 / #15 由共享库修法 A 解决。本会话审计另查出并修掉:离帮删成员行 ‖ 别帮审批同一玩家(缺玩家守卫)、G-C2(TiDB 乐观 autocommit 与悲观写者 TTL 级互等)、G-OUT1、G-C3、C1(启动期多副本建哨兵)、C2(seq 首插者)、C5 / C6(TiDB 计数行)、V1 / V2(TiDB 多 key 写前无点锁)、计数行清理与跨切周预留。反驳成立(不修):G-C1(8.0.29 起已持 S 再升 X 可越过排队的 X,Bug #11745929)。
+
+### 12.3 本批未提交的文件(死锁修复,`9cef7b2ec` 之后)
+
+修改 14:`go/guild/guild.go`;`internal/data/` 的 `asset_store.go`、`economy_repo.go`、`guild_manage_repo.go`、`guild_repo.go`、`economy_repo_test.go`、`economy_lock_plan_mysql_test.go`、`guild_manage_repo_test.go`、`guild_repo_test.go`、`rank_zone_integration_test.go`;`internal/logic/` 的 `guild_logic.go`、`guild_manage_logic.go`、`economy_logic_test.go`、`economy_flow_integration_test.go`。
+新建 5:`internal/data/guild_lock_order_mysql_test.go`(并发回归)、`guild_lock_plan_mysql_test.go`(B2 语句 EXPLAIN 回归)、`point_lock_order_test.go`(AST 检查"先点锁后写")、`server_version.go` + `server_version_test.go`(版本下限)。
+文档:本节、`PROGRESS.md` 末尾一条、05 §5.42 第 7 步的 `-run` 正则订正。
+
+### 12.4 最终取锁序列(摘要;完整论证在各函数头注释)
+
+| 事务 | 取锁序列 |
+|---|---|
+| 启动建哨兵 | GET_LOCK → 普通读 → 插 S(0) |
+| 首次建状态行 | S(0) → 普通读 → 插 S(p↑) |
+| 建帮 | S(0) → S(p) → 插 M(新,p) → A(*,p)↑ 点锁点删 → 插 G(新) |
+| 审批通过 | [预读] G → S(0) → S(p) → M(审批人) → A(G,p) → 插 M(G,p) → A(*,p)↑ |
+| 审批拒绝 / 过期 / 撤回 | G → M(审批人) → A(G,p) 点锁 → 删 / 撤回:A(G,p) 点锁 → 条件删 |
+| 申请 | G → S(p) → 本人过期 A↑ 点锁点删 → A(G,p) FOR UPDATE → 刷新或 IODKU;提交后本帮过期 ≤10 行各一短事务 |
+| 踢人 / 退帮 | [预读] G → S(t) → M↑ → 删 M → A(*,t)↑ → O↑(点锁 → 带复核点改) |
+| 解散 | G → 闸门 → S(全员↑) → M(全员↑) → 删 M → A↑ → O↑ → 删 G |
+| 任免 / 转让 / 公告 / 升级 / 积分 | G → [M↑] → UPDATE |
+| 捐献 / 兑换预留 | G 普通读 → M(G,p) → [缺行插 Q] → Q FOR UPDATE → 插 O → C(IODKU) |
+| 终结 / 人工终结 | 捐献 APPLIED:G → M → O 点锁 → CAS;被拒 / 中止:[M] → Q → O 点锁 → CAS → 退 C |
+| 重排 / 毒行 | 事务:O 点锁 → 带 lease_token 复核的 UPDATE |
+| Claim | autocommit,只改无索引列 |
+| 清理 | 每行一短事务:点锁 O / C → 带复核点删 |
+
+收敛检查(最后一轮,两路独立视角从零找环):**[结论见 PROGRESS 同日条目与本节 12.8]**。
+
+### 12.5 仍需用户 / 别的会话拍板或处理
+
+1. **全局串行的可用性代价**:建帮、审批通过、首次建状态行在 S(0) 上全服串行;持有者在后续锁上最多等 1s,期间排队者可能 1205 → 客户端收到 `GuildBusyRetry`。压测若证明是瓶颈再议。
+2. **审批通过是 P1 的第二个例外**(先锁申请行再插成员行):已论证不成环,需主设计确认接受。
+3. **共享库**:`EnsureSeqRowTx` 落地后删 `sqlEnsureSeqRow` 副本;`seq.go` 约 123 行"Finalize 不锁 seq 行"对 guild 已不准确;`go/trade` 的事务外建 seq 行与 guild 的 C2 同形;`reconcile.go:136-138` 注释漏 `next_attempt_ms`;assetop 传输失败时覆盖 `last_outcome=0`,assetopfix 分不清"scene 回 UNKNOWN"与"没拿到答复"(工具里已加第 0 步人工核对)。
+4. `go/guild/go.mod` 的 `prometheus/client_golang` 仍标 `// indirect`(svc 已直接 import),下次 `go mod tidy` 会改它。
+5. `tools/scripts/lib/assetop_dev_secret.ps1` 的 `Set-StrictMode -Off` 会随 dot-source 带进调用脚本(现无影响)。
+6. 单独用 `go_services.ps1` 起 trade 仍拿不到 TRADE 密钥(不在本批范围)。
+
+### 12.6 用户验证序列(工作目录 `D:\luyuan\wuxingqitan\mmorpg\go\guild`;全部未执行;串行)
+
+```
+1) gofmt -l .                                   # 期望无输出;有输出就 gofmt -w 列出的文件后重跑
+2) go build ./... ; go build ./cmd/assetopfix
+3) go vet ./... ; go vet -tags integration ./...
+4) go test ./... -count=1                        # 不设 DSN:真库用例全部 SKIP,其余全绿
+5) 真库(MySQL ≥ 8.0.29;账号需 CREATE/DROP DATABASE 与 PROCESS 权限;独占实例;库名只能 guild_test):
+   $env:GUILD_TEST_MYSQL_DSN = "<本地 dev 账号>/guild_test?..."   # 不写进任何文件
+   go test ./internal/data -p 1 -count=1 -v
+   go test -tags integration ./internal/logic -p 1 -count=1 -v
+   通过标准:锁序 / EXPLAIN / 并发回归(TestGuildLockOrder* / TestGuildInsertGuard* / TestEconomyLockOrder* /
+   *LockingStatements* / TestCheckServerVersion_TestDatabase)显示 PASS 而不是 SKIP;记下 SELECT VERSION()。
+6) 可选强证据:临时撤掉某一处修复(如 FORCE INDEX 或玩家守卫),对应并发用例应当变红,再恢复。
+7) TiDB(悲观 + RC,pessimistic-auto-commit 保持默认 false):把 DSN 指向 TiDB 重跑第 5 步的 data 包部分。
+8) 运行时:etc/guild.yaml 的 AssetOp.Enabled=true 起 guild,日志应出现 goroutine
+   guild.scene_node_watch / guild.asset_op_reconcile / guild.asset_op_cleanup 与版本自检 Info;
+   核对 guild 的 PlayerLocatorRedis 与 scene 写 player:{id}:location 是同一实例。
+9) 字面量守卫(仓库根):rg -n "(stream|counter_kind|kind)\s*=\s*[0-9]" go/guild/internal/data   → 0 行
+                       rg -n "status\s*=\s*[0-5]\b" go/guild/internal/data                   → 0 行
+                       rg -n "change-me-dev" go tools                                        → 0 行
+```
+失败时保留:失败用例名与断言、`-v` 输出、`SHOW ENGINE INNODB STATUS` 的 LATEST DETECTED DEADLOCK 段、MySQL 版本。
+
+### 12.7 文档待同步(本批只改了本节与 05 §5.42 第 7 步)
+
+01-storage.md §2.1 规则 4("判定用加锁读")→ 守卫之下 RC 普通读;§2.1 补 P2 / P3 / P4、全局插入守卫与 CreateGuild / 审批通过两个例外;"guild_player_state 每玩家一行"→ 另有 0 号哨兵(proto 注释同改,需重生);02-management.md §6.1"操作者与目标用一条语句 IN (?,?)"→ 两次点锁、§6.2a 补 transaction_isolation、I3 锁序加 S、CancelApplication 改 RC 短事务;05-economy.md §5.15 / §5.20 / §5.22(seq 行在事务内建、提前截止与清理改点锁点删);90 X-14 的解散顺序改为"删成员 → 删申请 → 提前截止";`docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md` §7.2 的 guild 三行标为已修;运维节补 assetopfix 与告警(见 12.8)。
+
+### 12.8 运维要点
+
+- **assetopfix**:`assetopfix -f etc/guild.yaml list [-min-age-min 60] [-limit 50]`;`assetopfix -f etc/guild.yaml resolve -op <id> -as applied|aborted -operator <名字> -reason <依据> -confirm <id> -txlog-checked [-force]`。前置:PENDING、创建早于 30 分钟、`last_outcome=0 且 attempts≥10`(`-force` 只跳这一条)。**last_outcome=0 也包括传输失败 / 超时**:动手前先确认 scene 可达、Loki 里循环仍在报 `[AssetOp] scene 回 UNKNOWN,不终结 op_id=<id>`。退出码 0 成功 / 1 出错 / 2 前置不满足 / 3 已非 PENDING。审计行 `[AssetOpManual] …` 为 ERROR 级。
+- **告警**(建议,BK8s 落规则):`increase(assetop_unknown_total{service="guild"}[10m]) > 0`;`assetop_pending_oldest_age_seconds{service="guild",stream="2"} > 86400`;`increase(assetop_partial_total{service="guild"}[1h]) > 0`(部分发放需人工补偿);`increase(guild_tx_deadlock_total[10m]) > 0`(本批的验收指标:应恒为 0);`guild_cache_invalidate_failed_total`、`guild_asset_orphan_total` 持续上升。
+- **密钥**:只从环境变量 `MMORPG_ASSET_OP_SECRET_GUILD` 读(≥32 字节,缺失 / 过短且 `AssetOp.Enabled=true` 即拒启);本机由 `go_services.ps1` / `start_game.ps1` 从 `run/secrets/assetop-dev.env` 注入。
+- **门禁**:共享 / 预发环境开启 `AssetOp.Enabled` 前满足 08 §8.3 六条。
+

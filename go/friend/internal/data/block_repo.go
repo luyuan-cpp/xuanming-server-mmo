@@ -30,6 +30,10 @@ type BlockEntry struct {
 	SinceMs         int64
 }
 
+// insertBlockRowSQL 是 Block ④ 写黑名单的语句,用 ODKU 而不是 INSERT IGNORE 的原因见该步说明。
+const insertBlockRowSQL = "INSERT INTO friend_block (player_id, blocked_player_id, since_ms) VALUES (?, ?, ?)" +
+	" ON DUPLICATE KEY UPDATE player_id = player_id"
+
 // Block 把 targetPlayerID 加入 playerID 的黑名单,并把两人之间的既有关系一并了结。
 //
 // 事务形状(逐字照 F2 §3.4,锁序见 friend_repo.go 顶部说明):
@@ -42,7 +46,7 @@ type BlockEntry struct {
 //	    body:
 //	      ② 已拉黑?(锁定读)→ 幂等提交,不占新名额
 //	      ③ 名额(守卫内普通读 COUNT,见该步说明)≥ maxBlocks → ErrBlockListFull
-//	      ④ INSERT IGNORE friend_block
+//	      ④ 写 friend_block(INSERT … ON DUPLICATE KEY UPDATE,不是 INSERT IGNORE,见该步说明)
 //	      ⑤ 删双向好友边 + 按 RowsAffected 减 friend_count
 //	      ⑥ 两个方向的 pending 置 rejected 并写 updated_ms
 //	  Commit
@@ -136,11 +140,15 @@ func (r *FriendRepo) Block(ctx context.Context, playerID, targetPlayerID uint64,
 				}
 			}
 
-			// ④ 写黑名单。INSERT IGNORE 而不是 INSERT:② 与这里之间没有任何窗口
-			//(同一事务、同一把守卫),但 IGNORE 让这条语句本身幂等,重试整个事务也安全。
-			if _, err := tx.ExecContext(ctx,
-				"INSERT IGNORE INTO friend_block (player_id, blocked_player_id, since_ms) VALUES (?, ?, ?)",
-				playerID, targetPlayerID, nowMs); err != nil {
+			// ④ 写黑名单。用 ODKU 的 no-op 更新让语句本身幂等(撞上活行时什么都不改,不刷新原来的 since_ms)。
+			//
+			// 为什么不是 INSERT IGNORE(2026-09-21 死锁审计):② 走到这里说明没有**活的** (me, target) 行,
+			// 但这一行可能是刚被 Unblock 删掉、尚未 purge 的 delete-marked 记录。Unblock 不拿守卫(见 Unblock),
+			// 同一对上可以有两个 Unblock 排队:一个持 X 正在删,一个排在我们后面等 X。INSERT IGNORE 的重复键检查取 **S**,
+			// 前一个 Unblock 提交后我们先拿到 S,复活记录还要升 X —— 却得排在后一个 Unblock 等待中的 X 后面,
+			// 而它又在等我们的 S → 1213,且 body 里的 1213 不重试,直接变成玩家可见的 ErrStorage。
+			// ODKU 的重复键检查直接取 **X**,不存在升级,只会排队。
+			if _, err := tx.ExecContext(ctx, insertBlockRowSQL, playerID, targetPlayerID, nowMs); err != nil {
 				return fmt.Errorf("insert block %d->%d: %w", playerID, targetPlayerID, err)
 			}
 		}
@@ -192,6 +200,9 @@ func (r *FriendRepo) Block(ctx context.Context, playerID, targetPlayerID uint64,
 //
 // 刻意**不加容量守卫、不开事务**:它只会让黑名单数量变少,不可能越过任何上限,
 // 而单条 DELETE 本身就是原子的。为它加一把守卫只会白白扩大与写路径的锁冲突面。
+//
+// 不拿守卫也进不了等待环:自动提交的单条完整主键 DELETE,至多持有这一行的一把锁、持锁时不再等别的锁;
+// 连接池是 RC(svc.BuildDSN),删不到行时不加任何锁。与 Block ④ 在同一条 delete-marked 记录上的交互见那一步。
 //
 // 已知的良性竞态:Unblock 与 AddFriend 并发时,AddFriend 的拉黑探针可能在解除之前那一瞬
 // 读到"仍被拉黑"而拒绝本次申请。玩家重试即可,不产生任何不一致状态,所以不为它加锁。

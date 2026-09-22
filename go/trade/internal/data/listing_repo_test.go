@@ -117,6 +117,26 @@ func TestListingOrderBy(t *testing.T) {
 	}
 }
 
+// TestInsertFavoriteSQLIsUpsertNotInsertIgnore 钉住收藏写入的锁模式(2026-09-21 死锁审计 #9)。
+//
+// 重复键检查取什么锁由语句形状决定:INSERT IGNORE 取 S,排在同一条删除标记记录后面的并发收藏会同时拿到,
+// 再各自升 X 就成环(1213);ODKU 直接取 X,并发者只会排队。改回 INSERT IGNORE 之后重复收藏照样幂等、
+// 功能用例照样绿,死锁却回来了 —— 而能抓住它的真库回归(listing_repo_integration_test.go 末尾)默认不跑,
+// 所以在这里用纯文本再拦一道。
+func TestInsertFavoriteSQLIsUpsertNotInsertIgnore(t *testing.T) {
+	// 大写 + 折叠空白,换行、多空格、大小写的改写都不影响判定。
+	normalized := strings.ToUpper(strings.Join(strings.Fields(insertFavoriteSQL), " "))
+	if !strings.Contains(normalized, "ON DUPLICATE KEY UPDATE") {
+		t.Errorf("insertFavoriteSQL 必须是 INSERT … ON DUPLICATE KEY UPDATE(重复键检查直接取 X),got: %s", insertFavoriteSQL)
+	}
+	// 按词比对而不是只找 "INSERT IGNORE" 子串:INSERT LOW_PRIORITY IGNORE 之类的写法同样取 S。
+	for _, word := range strings.Fields(normalized) {
+		if word == "IGNORE" {
+			t.Errorf("insertFavoriteSQL 不得带 IGNORE(重复键检查取 S,删除标记记录上会 S→X 成环),got: %s", insertFavoriteSQL)
+		}
+	}
+}
+
 func TestListingColumnsMatchScanOrder(t *testing.T) {
 	// scanListing 的目标数与列清单必须一致,否则 Scan 在运行期报列数不符。
 	summaryCols := strings.Count(listingSummaryColumns, ",") + 1

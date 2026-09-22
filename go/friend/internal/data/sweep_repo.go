@@ -42,7 +42,7 @@ import (
 // friend_count = 0 的行 —— 删掉之后再被 ensure 建回来,得到的仍是同一个权威值。
 // 上面这句只论证了"不会偏小"。**偏大**要另外挡:ensure 的 COUNT 与 INSERT 不原子,交错
 // "ensure 读到 COUNT=1 → RemoveFriend 提交(行变成 friend_count=0)→ 回收删行 → 陈旧的
-// INSERT IGNORE (P, 1) 落地"会留下一行 friend_count=1 而真实边数为 0 的计数,此后减不到它、
+// 补行 INSERT (P, 1) 落地"会留下一行 friend_count=1 而真实边数为 0 的计数,此后减不到它、
 // 它也永不再进回收 —— 上限永久少 1、零报错。挡法在写路径一侧:deleteFriendEdges 减计数时同时把
 // created_ms 刷成当前时刻,所以 created_ms 的含义是"本行被(重新)建出、或最近一次 friend_count
 // 减少的时刻",刚减到 0 的行要再过一个完整保留期才会出现在这里的候选里。

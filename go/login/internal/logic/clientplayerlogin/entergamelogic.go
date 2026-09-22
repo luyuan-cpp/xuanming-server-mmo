@@ -210,8 +210,7 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		userAccount.SimplePlayers.Players = append(userAccount.SimplePlayers.Players,
 			&login_proto_common.AccountSimplePlayer{PlayerId: in.PlayerId, Name: name})
 		if patched, mErr := proto.Marshal(userAccount); mErr == nil {
-			if sErr := l.svcCtx.RedisClient.Set(ctx, accountKey, patched,
-				config.AppConfig.Account.CacheExpire).Err(); sErr != nil {
+			if sErr := l.svcCtx.RedisClient.Set(ctx, accountKey, patched, 0).Err(); sErr != nil {
 				// Non-fatal: self-heal is best-effort; ownership is proven by
 				// the reverse index, so we still proceed to EnterGame.
 				logx.Errorf("EnterGame self-heal write-back failed: account=%s err=%v", account, sErr)

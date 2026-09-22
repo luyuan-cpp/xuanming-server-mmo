@@ -309,6 +309,10 @@ func (l *GuildLogic) mapWriteErr(ctx context.Context, actor, logGuildID, cachedG
 		return tipErr(constants.ErrApplicationLimit, "pending application limit reached"), nil
 	case errors.Is(err, data.ErrApplicationQueueFull):
 		return tipErr(constants.ErrApplicationQueueFull, "guild application queue is full"), nil
+	case errors.Is(err, data.ErrZoneMerging):
+		// 事务内的合服闸门拒绝(目前只有解散在事务里判;经济事务先经 economyTip 截走,走不到这里)。
+		// 与事务外的 mergeFenceTip 同一答复:合服是可预期的运维窗口,回 tip 而不是 gRPC 错误。
+		return tipErr(constants.ErrZoneMerging, "zone merging"), nil
 	case errors.Is(err, data.ErrWriteConflict):
 		// 记 Info 不记 Error:两个人同时改同一个帮会是正常玩法,客户端原地重试一次就能成功。
 		// 这里**不能**回 gRPC 错误 —— 那会让客户端进入重连隔离(见文件头纪律 3)。

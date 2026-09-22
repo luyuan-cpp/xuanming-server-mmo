@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tradepb "proto/trade"
+	"shared/assetop"
 )
 
 // ErrListingNotFound 表示 GetListing 查无此行。与存储故障区分:前者是业务拒绝,后者是 fault。
@@ -60,7 +61,7 @@ type ListingStore interface {
 	FavoriteIDs(ctx context.Context, playerID uint64, listingIDs []uint64) (map[uint64]bool, error)
 	FavoriteExists(ctx context.Context, playerID, listingID uint64) (bool, error)
 	CountFavorites(ctx context.Context, playerID uint64) (uint64, error)
-	// InsertFavorite 用 INSERT IGNORE:重复收藏幂等,不报错。
+	// InsertFavorite 幂等:重复收藏不报错,也不刷新原收藏时间(ODKU 的 no-op 更新,不是 INSERT IGNORE,见实现)。
 	InsertFavorite(ctx context.Context, rec *tradepb.TradeFavoriteRecord) error
 	// DeleteFavorite 幂等:行不存在也不报错。
 	DeleteFavorite(ctx context.Context, playerID, listingID uint64) error
@@ -264,13 +265,47 @@ func (r *ListingRepo) CountFavorites(ctx context.Context, playerID uint64) (uint
 	return total, nil
 }
 
-// InsertFavorite 收藏。INSERT IGNORE 让重复收藏(客户端重试 / 并发双击)幂等。
+// insertFavoriteSQL 是收藏写入。ODKU 的 no-op 更新(created_ms = created_ms)让重复收藏(客户端重试 / 并发双击 /
+// 多端)幂等,且不刷新原收藏时间。
+//
+// 为什么不是 INSERT IGNORE(2026-09-21 死锁审计 #9):收藏 → 取消 → 再收藏时,(player, listing) 主键可能是刚被
+// DeleteFavorite 删掉、尚未 purge 的 delete-marked 记录。成环有一个前提:**必须有第三方正持着这条删除标记记录的 X**,
+// 两个 INSERT IGNORE 同时排在它后面。本调用路径上的第三方只有两种:
+//   - 未提交的取消收藏 DELETE(自动提交语句从取锁到提交之间同样持着 X,只是窗口窄);
+//   - 先到的收藏已把删除标记记录复活、随后回滚(ctx 超时、断连、被选为死锁牺牲者)。
+//
+// 第三方一放锁,两个排队者的重复键检查**同时**拿到 **S**(彼此相容),都判定"只是删除标记、不算重复",
+// 要复活它就各自申请 **X**,被对方的 S 挡住 → 1213。
+// 没有第三方时两方交错成不了环:单条 INSERT 自己的 S 与随后的 X 是在同一个 mini-transaction 的页闩下连续取得的,
+// 另一方插不进来拿 S,只能排在它的 X 后面,等它提交后看见活行(或回滚后独自复活)。
+// ODKU 的重复键检查直接取 X,排队者只能一个一个拿到:先到者复活记录,后到者看见活行走 no-op 更新,不存在升级。
+// (取锁细节按手册 "Locks Set by Different SQL Statements" 与 InnoDB 插入路径的已知行为推演,以真库回归为准:
+// listing_repo_integration_test.go 的 TestLegacyInsertIgnoreFavoriteDeadlocksOnDeleteMarkedRow 是红对照,
+// TestInsertFavoriteSQLRevivesDeleteMarkedRowWithoutDeadlock 钉住本语句。)
+const insertFavoriteSQL = "INSERT INTO trade_favorite (`player_id`, `listing_id`, `created_ms`) VALUES (?, ?, ?)" +
+	" ON DUPLICATE KEY UPDATE `created_ms` = `created_ms`"
+
+// InsertFavorite 收藏,幂等。
+//
+// 这一条语句包在 assetop.WithTxRetry 的单语句 RC 事务里,只为复用它的有界重试与可取消退避。
+// ODKU 已经消掉了删除标记记录上的 S→X 环(见 insertFavoriteSQL,也就是手册三会话例说的那种);剩下的 1213
+// 只可能来自两类 InnoDB 固有情形,SQL 层去不掉,与本服务的锁序无关:
+//   - purge 在排队期间清掉了删除标记记录;
+//   - 同键全新插入,先到者回滚(它插入的记录随回滚被物理移除)。
+//
+// 两者都是"排队者等着的那条记录物理消失":排队中的 X 被继承成下一条记录上的间隙锁(ODKU 的重复键检查带
+// duplicates 标记,RC 下这把锁照样被继承),随后各自的插入意向锁被对方的间隙锁挡住而互等,InnoDB 当场牺牲其一。
+// 收敛:被牺牲方整条回滚后重跑,记录要么已被胜者插入(走 no-op 更新),要么仍不存在(普通插入);只有再次撞上
+// "同键插入 + 回滚 / purge"才会再成环,而每成一次环都有一方完成。重试有上限(txRetryAttempts)、带抖动退避、
+// 受 opTimeout 与 ctx 约束;极端同键风暴下重试用尽则返回错误,不会挂住。语句幂等,重跑安全;
+// 不重试的话玩家看到的是一次"服务不可用"。代价是多两次 BEGIN / COMMIT 往返,收藏是低频操作。
 func (r *ListingRepo) InsertFavorite(ctx context.Context, rec *tradepb.TradeFavoriteRecord) error {
 	ctx, cancel := r.bounded(ctx)
 	defer cancel()
-	if _, err := r.db.ExecContext(ctx,
-		"INSERT IGNORE INTO trade_favorite (`player_id`, `listing_id`, `created_ms`) VALUES (?, ?, ?)",
-		rec.GetPlayerId(), rec.GetListingId(), rec.GetCreatedMs()); err != nil {
+	if err := assetop.WithTxRetry(ctx, r.db, txRetryAttempts, IsRetryableTxError, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, insertFavoriteSQL, rec.GetPlayerId(), rec.GetListingId(), rec.GetCreatedMs())
+		return err
+	}); err != nil {
 		return fmt.Errorf("insert trade_favorite: %w", err)
 	}
 	return nil

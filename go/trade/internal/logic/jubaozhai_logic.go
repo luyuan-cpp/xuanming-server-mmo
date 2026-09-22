@@ -260,7 +260,7 @@ func (l *JubaozhaiLogic) GetListingDetail(in *tradepb.GetListingDetailRequest) (
 // SetFavorite 收藏 / 取消收藏。
 //
 //   - 取消:直接 DELETE,幂等,不查商品 —— 商品已下架 / 已结束的收藏也必须能删掉。
-//   - 收藏:商品必须对调用者可见(规则同详情);已收藏直接回 true;否则检查上限后 INSERT IGNORE。
+//   - 收藏:商品必须对调用者可见(规则同详情);已收藏直接回 true;否则检查上限后幂等写入(InsertFavorite)。
 //
 // 上限是**软上限**:CountFavorites 与 InsertFavorite 之间没有锁,同一玩家的并发收藏请求最多能超出
 // "在途请求数"条。可接受的依据(AGENTS.md §11.3):收藏不涉及资产、不影响他人,上限只为防止单个玩家

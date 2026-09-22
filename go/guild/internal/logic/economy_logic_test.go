@@ -6,6 +6,10 @@ package logic
 // 一旦前置顺序被改错、提前碰了库,就当场 nil panic —— 顺序正确是这里唯一能机械守住的东西。
 // 需要 MySQL 的完整流程在 economy_flow_integration_test.go(build tag integration)。
 //
+// 配表:大多数用例依赖"未加载配表"的状态。"走到配表判定才拒绝"的几个用例(商店份数上限、未知捐献选项)
+// 必须有真实配表,它们经 loadEconomyFlowTables 换上新建的管理器实例、用例结束换回原实例(见该函数注释),
+// 不污染其它用例。该函数定义在本文件,集成文件与这里共用同一份。
+//
 // 共用替身:clientCtx / fakeHomeZones / newCacheOnlyRepo / seedGuild 在 client_zone_test.go,
 // fakeFence 在 merge_fence_test.go,managementCall 在 guild_manage_logic_test.go。
 
@@ -16,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -33,6 +38,7 @@ import (
 	assetpb "proto/common/asset"
 	pb "proto/guild"
 	"shared/assetop"
+	"shared/generated/table"
 )
 
 // ── 测试替身 ──────────────────────────────────────────────────
@@ -126,6 +132,140 @@ func economyRPCs() []managementCall {
 func seedMembership(t *testing.T, mr *miniredis.Miniredis, playerID, guildID uint64) {
 	t.Helper()
 	require.NoError(t, mr.Set(fmt.Sprintf("player_guild:v2:%d", playerID), fmt.Sprintf("%d", guildID)))
+}
+
+// seedEconomyCallerCache 为"前置全过、拒绝只可能来自被测那条判定"的用例布好缓存:帮会 9 为 10 级
+// (generated/tables/guildlevel.json 的最高级 id=10,任何捐献 / 商品的等级门槛都挡不住),帮主 42 帮贡充足。
+// MySQL 为 nil:前置之后的任何碰库都会当场 panic。
+func seedEconomyCallerCache(t *testing.T) *data.GuildRepo {
+	t.Helper()
+	repo, mr := newCacheOnlyRepo(t)
+	seedGuild(t, mr, data.GuildData{GuildID: 9, ZoneID: 2, Level: 10, Members: []data.MemberData{
+		{PlayerID: 42, Role: constants.RoleLeader, ContributionBalance: 100000},
+	}}, 0)
+	seedMembership(t, mr, 42, 9)
+	return repo
+}
+
+// countingApplier 是单测用的假 scene(assetop.Applier):一律回 RETRY,只记调用次数。
+// 集成文件里能按脚本作答的 scriptedScene 带 build tag integration,单测拿不到。加锁:Loop 的调用方可能并发。
+type countingApplier struct {
+	mu    sync.Mutex
+	calls int
+}
+
+var _ assetop.Applier = (*countingApplier)(nil)
+
+func (a *countingApplier) Do(context.Context, assetop.RPC, *assetpb.AssetOpRequest) (assetop.Result, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.calls++
+	return assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_RETRY}, nil
+}
+
+func (a *countingApplier) count() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.calls
+}
+
+// countingAssetStore 是 assetop.Store 的计数替身:单测里 Loop 只能经它碰"库",调用 0 次就证明
+// 同步投递根本没开始。Reschedule 回 nil,让对照组(假 scene 回 RETRY → 重排)走完整条路径。
+type countingAssetStore struct {
+	mu    sync.Mutex
+	calls int
+}
+
+var _ assetop.Store = (*countingAssetStore)(nil)
+
+func (s *countingAssetStore) touch() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls++
+}
+
+func (s *countingAssetStore) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls
+}
+
+func (s *countingAssetStore) ListDue(context.Context, uint64, int) ([]uint64, error) {
+	s.touch()
+	return nil, nil
+}
+
+func (s *countingAssetStore) Claim(context.Context, uint64, uint64, uint64, uint64, uint64) (assetop.Op, bool, error) {
+	s.touch()
+	return assetop.Op{}, false, nil
+}
+
+func (s *countingAssetStore) Finalize(context.Context, assetop.Op, assetop.Status, assetop.Result, uint64) (bool, error) {
+	s.touch()
+	return false, nil
+}
+
+func (s *countingAssetStore) Reschedule(context.Context, assetop.Op, uint64, assetop.Result, uint64) error {
+	s.touch()
+	return nil
+}
+
+// newCountingLoop 用真 assetop.Loop 包住两个计数替身:logic 只认 *assetop.Loop,
+// Loop 非 nil 才能越过"资产通道关闭"那道前置,走到本文件要测的判定。
+func newCountingLoop(t *testing.T) (*assetop.Loop, *countingApplier, *countingAssetStore) {
+	t.Helper()
+	applier := &countingApplier{}
+	store := &countingAssetStore{}
+	loop, err := assetop.NewLoop(assetop.DefaultLoopConfig(), store, applier, nil, time.Now)
+	require.NoError(t, err)
+	return loop, applier, store
+}
+
+// loadEconomyFlowTables 加载真实导表产物(仓库根 generated/tables),并跑一遍启动校验:
+// 用例的数值(捐献 1 = 10000 银两 / 帮贡 10 / 资金 1000;商品 101 每份 30 帮贡、每日限 10)以它为准。
+// 单测(本文件)与集成用例(economy_flow_integration_test.go)共用这一份;名字沿用集成文件里的旧名,
+// economy_config_test.go 的文件头按名字引用它。
+//
+// 隔离:各 *TableManagerInstance 是包级变量,生产代码每次都经它现查、不缓存指针。所以这里换上新建的
+// 管理器再加载,t.Cleanup 换回原实例,还原"未加载配表"的状态。换指针是普通赋值而非原子操作,成立的前提是:
+// 本包用例都不调 t.Parallel,且调用它的用例结束时没有仍在读配表的 goroutine(Tick / ProcessOne 同步返回,
+// 推送替身同步记录)。日后给本包用例加 t.Parallel 之前,先改掉这里。
+func loadEconomyFlowTables(t *testing.T) {
+	t.Helper()
+	origRule := table.GuildRuleTableManagerInstance
+	origLevel := table.GuildLevelTableManagerInstance
+	origDonate := table.GuildDonateTableManagerInstance
+	origShop := table.GuildShopTableManagerInstance
+	origItem := table.ItemTableManagerInstance
+	t.Cleanup(func() {
+		table.GuildRuleTableManagerInstance = origRule
+		table.GuildLevelTableManagerInstance = origLevel
+		table.GuildDonateTableManagerInstance = origDonate
+		table.GuildShopTableManagerInstance = origShop
+		table.ItemTableManagerInstance = origItem
+	})
+	table.GuildRuleTableManagerInstance = table.NewGuildRuleTableManager()
+	table.GuildLevelTableManagerInstance = table.NewGuildLevelTableManager()
+	table.GuildDonateTableManagerInstance = table.NewGuildDonateTableManager()
+	table.GuildShopTableManagerInstance = table.NewGuildShopTableManager()
+	table.ItemTableManagerInstance = table.NewItemTableManager()
+
+	// 下面的方法值在换指针**之后**求值,绑定的是新实例。
+	dir := filepath.Join("..", "..", "..", "..", "generated", "tables")
+	loaders := []struct {
+		name string
+		load func(configDir string, useBinary bool) error
+	}{
+		{"GuildRule", table.GuildRuleTableManagerInstance.Load},
+		{"GuildLevel", table.GuildLevelTableManagerInstance.Load},
+		{"GuildDonate", table.GuildDonateTableManagerInstance.Load},
+		{"GuildShop", table.GuildShopTableManagerInstance.Load},
+		{"Item", table.ItemTableManagerInstance.Load},
+	}
+	for _, l := range loaders {
+		require.NoError(t, l.load(dir, false), l.name)
+	}
+	require.NoError(t, ValidateEconomyTables())
 }
 
 // ── 接线与公共前置 ────────────────────────────────────────────
@@ -293,6 +433,70 @@ func TestAssetChannelDisabledRefusesBeforeMinting(t *testing.T) {
 	assert.Nil(t, buy.GetOrder())
 
 	assert.Zero(t, minter.calls, "通道关闭时不许发号:号段只进不退")
+}
+
+// TestBuyGuildShopGoodsOverMaxBuyCountRefusesBeforeMinting(完整性审查 finding 4):份数超过单次上限回
+// kGuildShopLimit,且发生在发号、建行、投递之前 —— 号段只进不退,超限请求不该烧号,更不能占帮贡与限购。
+// 两条样例取真实配表(generated/tables/guildshop.json + item.json):
+//   - 101 培元丹:item 15 堆叠 999、每份 5 个 → 单次上限 min(999/5, MaxShopBuyCount=20) = 20,请求 21;
+//   - 202 玄铁护符:item 12 堆叠 1 → 单次上限 1,请求 2。
+//
+// Repo 为 nil(走到预留事务就 panic);假 scene 与假 Store 调用 0 次 = Loop 一下都没碰。
+func TestBuyGuildShopGoodsOverMaxBuyCountRefusesBeforeMinting(t *testing.T) {
+	loadEconomyFlowTables(t)
+	cases := []struct {
+		name    string
+		goodsID uint32
+		count   uint32
+	}{
+		{"堆叠 999 的商品按份数封顶", 101, 21},
+		{"堆叠 1 的商品每次只能 1 份", 202, 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// 前提:请求份数恰好比单次上限多 1。配表改了使前提不成立时在这里明确失败,而不是让用例悄悄变味。
+			row, ok := table.GuildShopTableManagerInstance.FindById(tc.goodsID)
+			require.True(t, ok, "guildshop.json 缺商品 %d", tc.goodsID)
+			stack, ok := itemMaxStack(row.GetItemId())
+			require.True(t, ok, "item.json 缺物品 %d", row.GetItemId())
+			require.Equal(t, tc.count-1, MaxBuyCount(row, stack), "配表变了:先按 generated/tables 重算样例")
+
+			loop, applier, store := newCountingLoop(t)
+			minter := &countingMinter{id: 777}
+			l := newEconomyLogic(seedEconomyCallerCache(t), EconomyDeps{Loop: loop, OpIDs: minter})
+
+			resp, err := l.BuyGuildShopGoods(clientCtx(42), &pb.BuyGuildShopGoodsRequest{GoodsId: tc.goodsID, Count: tc.count})
+
+			require.NoError(t, err, "超过单次上限是业务拒绝,不是故障")
+			assert.Equal(t, constants.ErrShopLimit, resp.GetErrorMessage().GetId())
+			assert.Nil(t, resp.GetOrder(), "没有写入指令就不能回订单视图")
+			assert.Zero(t, minter.calls, "超限请求不许发号:号段只进不退")
+			assert.Zero(t, applier.count(), "拒绝发生在投递之前")
+			assert.Zero(t, store.count())
+		})
+	}
+}
+
+// TestDonateUnknownOptionRefusesBeforeMinting(finding 4):配表里没有的 donate_id(热更删了行或请求被篡改)
+// 回 kGuildAssetRejected,不发号、不建行、不投递。配表是加载了的(generated/tables/guilddonate.json 只有 1–3),
+// 证明拒绝来自"查无此行",而不是来自"配表根本没加载"。
+func TestDonateUnknownOptionRefusesBeforeMinting(t *testing.T) {
+	const unknownDonateID uint32 = 999
+	loadEconomyFlowTables(t)
+	_, exists := table.GuildDonateTableManagerInstance.FindById(unknownDonateID)
+	require.False(t, exists, "前提:guilddonate.json 里没有 id=%d", unknownDonateID)
+	loop, applier, store := newCountingLoop(t)
+	minter := &countingMinter{id: 777}
+	l := newEconomyLogic(seedEconomyCallerCache(t), EconomyDeps{Loop: loop, OpIDs: minter})
+
+	resp, err := l.DonateToGuild(clientCtx(42), &pb.DonateToGuildRequest{DonateId: unknownDonateID})
+
+	require.NoError(t, err, "查不到选项是业务拒绝,不是故障")
+	assert.Equal(t, constants.ErrAssetRejected, resp.GetErrorMessage().GetId())
+	assert.Nil(t, resp.GetDonation(), "没有写入指令就不能回订单视图")
+	assert.Zero(t, minter.calls, "查不到选项不许发号")
+	assert.Zero(t, applier.count())
+	assert.Zero(t, store.count())
 }
 
 // ── 错误映射 ──────────────────────────────────────────────────
@@ -647,6 +851,37 @@ func TestSyncBudgetFor(t *testing.T) {
 	defer cancelShort()
 	_, ok = syncBudgetFor(short, 2500*time.Millisecond)
 	assert.False(t, ok, "剩 1.2s 时扣掉 1s 尾巴只剩 ≤200ms,不够一次正常往返")
+}
+
+// TestDeliverNowSkipsWhenBudgetTooSmall(finding 4,裁决 K):请求只剩 900ms 时扣掉 1000ms 尾巴,预算为负,
+// 同步投递必须整个跳过 —— 假 scene 一次都不被调用,Loop 也不碰 Store(行上带着插行时的租约,到期后交给重投循环)。
+// 对照组:没有截止的 ctx 按满额投递,假 scene 恰好被调一次,证明替身确实接在投递路径上、前面的 0 次不是空转。
+// 端到端的"回包视图为 PENDING"需要真库,见集成文件 TestEconomyFlowDonateBudgetShortSkipsSyncDelivery。
+func TestDeliverNowSkipsWhenBudgetTooSmall(t *testing.T) {
+	loop, applier, store := newCountingLoop(t)
+	l := NewGuildLogic(nil, nil, nil, nil, nil)
+	eco := &EconomyDeps{Loop: loop, SyncBudget: defaultSyncBudget}
+	op := assetop.Op{
+		OpID:          1,
+		PlayerID:      42,
+		Stream:        assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_DEBIT,
+		Seq:           1,
+		StreamEpoch:   1,
+		CorrelationID: 1,
+		Bundle:        &assetpb.AssetBundle{},
+		LeaseToken:    1,
+	}
+
+	short, cancel := context.WithTimeout(context.Background(), 900*time.Millisecond)
+	defer cancel()
+	l.deliverNow(short, eco, op, assetKindDonate)
+
+	assert.Zero(t, applier.count(), "预算不足必须跳过同步投递")
+	assert.Zero(t, store.count(), "跳过时 Loop 不写行(不重排、不终结),行保持插行时的租约")
+
+	l.deliverNow(context.Background(), eco, op, assetKindDonate)
+
+	assert.Equal(t, 1, applier.count(), "对照:满额预算时同步投递恰好一次")
 }
 
 // ── 推送 ──────────────────────────────────────────────────────

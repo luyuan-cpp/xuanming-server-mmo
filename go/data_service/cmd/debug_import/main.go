@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -193,13 +194,6 @@ func importPlayerDB(ctx context.Context, dbConfigPath string, data *exportFile, 
 	}
 
 	// Parse all rows first to catch decode errors before writing
-	type tableImport struct {
-		Table       string
-		MatchColumn string
-		Columns     []string
-		Rows        [][]any // each row = ordered column values
-	}
-
 	var tables []tableImport
 	totalRows := 0
 
@@ -269,62 +263,108 @@ func importPlayerDB(ctx context.Context, dbConfigPath string, data *exportFile, 
 	}
 	defer db.Close()
 
+	// 表的处理顺序 = 导出文件里 matches 数组的顺序(JSON 数组,有序;debug_fetch 按 table_name, column_name
+	// ORDER BY 产出),不是 Go map 的随机迭代序。而且下面**每张表单独一个事务**、提交后才碰下一张表,
+	// 任何时刻一个导入事务只持有一张表上的锁,两个并发导入之间不存在"跨表取锁顺序相反"的环 ——
+	// 所以这里不需要再按表名重排。以后若有人把多张表并进同一个事务(比如为了整体原子),
+	// 必须先按表名排序再遍历,否则两份表序不同的导入文件会跨表成环。
 	for _, t := range tables {
 		safeTable, err := debugutil.QuoteIdentifier(t.Table)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  [SKIP] table %q: unsafe name\n", t.Table)
 			continue
 		}
-
-		safeCols := make([]string, len(t.Columns))
-		for i, col := range t.Columns {
-			safeCols[i], err = debugutil.QuoteIdentifier(col)
-			if err != nil {
-				return fmt.Errorf("table %s: unsafe column name %q", t.Table, col)
-			}
+		if err := importTable(ctx, db, safeTable, t, data.PlayerID); err != nil {
+			return err
 		}
-
-		// DELETE existing rows for this player, then INSERT
-		safeMatchCol, err := debugutil.QuoteIdentifier(t.MatchColumn)
-		if err != nil {
-			return fmt.Errorf("table %s: unsafe match column %q", t.Table, t.MatchColumn)
-		}
-
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return fmt.Errorf("begin tx for table %s: %w", t.Table, err)
-		}
-
-		delSQL := fmt.Sprintf("DELETE FROM %s WHERE %s = ?", safeTable, safeMatchCol)
-		if _, err := tx.ExecContext(ctx, delSQL, data.PlayerID); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("delete from %s: %w", t.Table, err)
-		}
-
-		placeholders := strings.Repeat("?,", len(t.Columns))
-		placeholders = placeholders[:len(placeholders)-1]
-		insertSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-			safeTable,
-			strings.Join(safeCols, ", "),
-			placeholders,
-		)
-
-		for _, row := range t.Rows {
-			if _, err := tx.ExecContext(ctx, insertSQL, row...); err != nil {
-				tx.Rollback()
-				return fmt.Errorf("insert into %s: %w", t.Table, err)
-			}
-		}
-
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("commit table %s: %w", t.Table, err)
-		}
-
 		fmt.Fprintf(os.Stderr, "  [OK] %s: deleted old + inserted %d rows\n", t.Table, len(t.Rows))
 	}
 
 	fmt.Fprintf(os.Stderr, "\n[OK] Imported %d rows across %d tables for player %d\n", totalRows, len(tables), data.PlayerID)
 	return nil
+}
+
+// tableImport 是一张表待导入的内容:列名(已排序)与按列序展开的行。
+type tableImport struct {
+	Table       string
+	MatchColumn string
+	Columns     []string
+	Rows        [][]any // each row = ordered column values
+}
+
+// importTable 在**一个** READ COMMITTED 事务里对一张表做"DELETE 该玩家旧行 + INSERT 导出行"并提交。
+// safeTable 是已经过 QuoteIdentifier 的表名;列名与 match 列在这里校验。
+//
+// 拆成独立函数是为了让"开导入事务"这个调用点能被单测直接覆盖(main_test.go 用记录 TxOptions 的假驱动跑它):
+// 有人把下面的 BeginTx 改回 BeginTx(ctx, nil)(= 库默认 RR,见 importTableTxOptions 的成环分析),单测立刻变红。
+func importTable(ctx context.Context, db *sql.DB, safeTable string, t tableImport, playerID uint64) error {
+	var err error
+	safeCols := make([]string, len(t.Columns))
+	for i, col := range t.Columns {
+		safeCols[i], err = debugutil.QuoteIdentifier(col)
+		if err != nil {
+			return fmt.Errorf("table %s: unsafe column name %q", t.Table, col)
+		}
+	}
+
+	// DELETE existing rows for this player, then INSERT
+	safeMatchCol, err := debugutil.QuoteIdentifier(t.MatchColumn)
+	if err != nil {
+		return fmt.Errorf("table %s: unsafe match column %q", t.Table, t.MatchColumn)
+	}
+
+	// 显式 READ COMMITTED,不用库默认的 RR:RR 下"DELETE 未命中 + INSERT"会在主键间隙上成环,见 importTableTxOptions。
+	tx, err := db.BeginTx(ctx, importTableTxOptions())
+	if err != nil {
+		return fmt.Errorf("begin tx for table %s: %w", t.Table, err)
+	}
+
+	delSQL := fmt.Sprintf("DELETE FROM %s WHERE %s = ?", safeTable, safeMatchCol)
+	if _, err := tx.ExecContext(ctx, delSQL, playerID); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("delete from %s: %w", t.Table, err)
+	}
+
+	placeholders := strings.Repeat("?,", len(t.Columns))
+	placeholders = placeholders[:len(placeholders)-1]
+	insertSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+		safeTable,
+		strings.Join(safeCols, ", "),
+		placeholders,
+	)
+
+	for _, row := range t.Rows {
+		if _, err := tx.ExecContext(ctx, insertSQL, row...); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("insert into %s: %w", t.Table, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit table %s: %w", t.Table, err)
+	}
+	return nil
+}
+
+// importTableTxOptions 是每张表"DELETE 该玩家旧行 + INSERT 导出行"那个事务的选项:READ COMMITTED
+// (go-sql-driver 在 START TRANSACTION 前发 SET TRANSACTION ISOLATION LEVEL,只作用于这一个事务)。
+//
+// 用库的默认 RR 会成环(审计 #13):玩家行不存在时,RR 下 DELETE 未命中也要在主键间隙上拿 X 间隙锁,
+// 两个并发导入(不同玩家但落在同一段间隙,例如 player_id 都大于表内最大值;或同一玩家导两次)各拿到
+// 同一段间隙锁(间隙锁彼此兼容),随后各自 INSERT 申请插入意向锁,又都被对方的间隙锁挡住 → 1213。
+// RC 下 DELETE 未命中不加间隙锁;match_column 没有索引要全表扫时,不匹配的行在判定后立即放锁,
+// 两条成环路径都消失。DELETE 与 INSERT 仍在同一个事务里原子提交,导出行比库里少时多余的行照样被删。
+//
+// 同一玩家被两个人同时导入同一张单行表时,RC 下后到者只会在主键记录上单向等先到者提交(之后要么
+// 覆盖先到者的行,要么撞 1062 整张表回滚),不成环。剩下一种有界情形:match_column 不是主键、同一玩家
+// 有多行、且两份导出的行序不同,两个并发导入仍可能在各自插入的主键上交叉等待而 1213 —— 那本身就是
+// "同一玩家被并发导入两次"的操作失误,败者整张表回滚、不写半截;要彻底杜绝得把同库导入串行化
+// (GET_LOCK),本工具没有做。
+//
+// 前提:RC 要求 binlog_format 为 ROW/MIXED(STATEMENT 下 DELETE 报 1665)。MySQL 8 默认 ROW,
+// deploy/k8s/manifests/infra/mysql.yaml 也显式写了 binlog_format = ROW。
+func importTableTxOptions() *sql.TxOptions {
+	return &sql.TxOptions{Isolation: sql.LevelReadCommitted}
 }
 
 // ── Shared helpers ──────────────────────────────────────────────

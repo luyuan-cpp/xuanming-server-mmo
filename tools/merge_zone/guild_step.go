@@ -27,6 +27,12 @@ package main
 //     失效方式镜像 guild_repo.go 的 invalidateVersionedCacheScript:
 //     INCR generation 再 DEL 数据键 —— 只 DEL 不 INCR 会被一个正在途中的
 //     旧 reader 用旧快照重新填回来(那正是 generation 机制存在的原因)。
+//
+//  4. zone_id 改写只按清单逐条主键点更新(2026-09-21 死锁审计 #17)。旧的整区
+//     `UPDATE guild SET zone_id = dst WHERE zone_id = src` 沿 idx_guild_0(zone_id)先锁二级项、
+//     再回表锁主键,与 guild 服 DisbandGuild「主键 FOR UPDATE → DELETE 删二级项」反序成环;
+//     guild 是全局服务、合服期间不停,DisbandGuild 的合服闸门只在客户端路径上查。
+//     现在锁序与在线写者同为「主键 → 二级」,改写后再复查源区计数(见 migrateGuildZone)。
 
 import (
 	"context"
@@ -47,6 +53,9 @@ const (
 	// guildTable / guildMemberTable 与 proto/guild/guild_db.proto 的 OptionTableName 一致。
 	guildTable       = "guild"
 	guildMemberTable = "guild_member"
+	// guildPKColumn / guildZoneColumn:guild 表的主键(OptionPrimaryKey)与本步骤改写的唯一一列。
+	guildPKColumn   = "guild_id"
+	guildZoneColumn = "zone_id"
 	// guildNameNormColumn 是帮名唯一键所在列(uk_guild)。重名探测比它,不比展示名:
 	// 规范化(NFKC → TrimSpace → 小写)在 go/guild 侧完成,库里存的就是规范化结果。
 	guildNameNormColumn = "name_norm"
@@ -72,7 +81,7 @@ func assertGuildTablesReady(ctx context.Context, db *sql.DB, schema string) erro
 	if err := assertSchemaExists(ctx, db, schema); err != nil {
 		return err
 	}
-	if err := assertGuildTableShape(ctx, db, schema, guildTable, "zone_id", "name", guildNameNormColumn); err != nil {
+	if err := assertGuildTableShape(ctx, db, schema, guildTable, guildPKColumn, guildZoneColumn, "name", guildNameNormColumn); err != nil {
 		return err
 	}
 	return assertGuildTableShape(ctx, db, schema, guildMemberTable, "guild_id")
@@ -178,23 +187,70 @@ func assertNoGuildNameCollision(ctx context.Context, db *sql.DB, schema string, 
 	return nil
 }
 
-// migrateGuildZone 把 zone_id 从 src 改成 dst。返回受影响行数。
-func migrateGuildZone(ctx context.Context, db *sql.DB, schema string, src, dst uint32, dryRun bool) (int64, error) {
+// migrateGuildZone 把清单 guildIDs 里当前 zone_id = src 的公会改成 dst,返回受影响行数;
+// dry-run 返回「会被改」的行数,不写。
+//
+// **只动清单里的 id**,且逐条主键点更新 `UPDATE guild SET zone_id = dst WHERE guild_id = ? AND zone_id = src`
+// (锁序论证见 rewriteZoneByPrimaryKey):取锁顺序与 guild 服 DisbandGuild 同为「主键 → 二级」,
+// 撞上正在解散的公会只会等它提交,等到的是已删除的行就影响 0 行。
+// 清单之外的源区公会(清单落盘之后经内部 / GM 路径建的)原地不动,由调用方改写后用 countGuildsInZone
+// 复查并拒绝继续(见 merge_run.go 步骤 3)。重跑幂等:已经改过的行不再满足 zone_id = src。
+func migrateGuildZone(ctx context.Context, db *sql.DB, schema string, guildIDs []uint64, src, dst uint32, dryRun bool) (int64, error) {
 	table := guildQualified(schema, guildTable)
 	if dryRun {
-		var count int64
-		if err := db.QueryRowContext(ctx,
-			"SELECT COUNT(*) FROM "+table+" WHERE zone_id = ?", src).Scan(&count); err != nil {
+		n, err := countGuildsInZoneAmong(ctx, db, schema, guildIDs, src)
+		if err != nil {
 			return 0, err
 		}
-		log.Printf("[DRY-RUN] Would migrate %d %s rows", count, table)
-		return count, nil
+		log.Printf("[DRY-RUN] Would migrate zone_id %d → %d on %d of %d manifest guilds in %s",
+			src, dst, n, len(guildIDs), table)
+		return n, nil
 	}
-	res, err := db.ExecContext(ctx, "UPDATE "+table+" SET zone_id = ? WHERE zone_id = ?", dst, src)
-	if err != nil {
-		return 0, err
+	return rewriteZoneByPrimaryKey(ctx, db, table, guildPKColumn, guildZoneColumn, guildIDs, src, dst)
+}
+
+// restoreGuildZone 是撤销:把清单 guildIDs 里当前 zone_id = dst 的公会改回 src,锁序与 migrateGuildZone
+// 相同(逐条主键点更新,不用 `zone_id = ? AND guild_id IN (...)` 这种可能被规划成二级索引 range 的写法)。
+// 不在清单里的(目标区原住民)与已经不在 dst 的(去了第三个 zone,不是这次合服造成的)一律不动。
+// dry-run 数出「会被改回」的行数但不写。
+func restoreGuildZone(ctx context.Context, db *sql.DB, schema string, guildIDs []uint64, src, dst uint32, dryRun bool) (int64, error) {
+	table := guildQualified(schema, guildTable)
+	if dryRun {
+		n, err := countGuildsInZoneAmong(ctx, db, schema, guildIDs, dst)
+		if err != nil {
+			return 0, err
+		}
+		log.Printf("[DRY-RUN] Would restore zone_id=%d on %d of %d manifest guilds in %s", src, n, len(guildIDs), table)
+		return n, nil
 	}
-	return res.RowsAffected()
+	return rewriteZoneByPrimaryKey(ctx, db, table, guildPKColumn, guildZoneColumn, guildIDs, dst, src)
+}
+
+// countGuildsInZone 数 zone_id = zone 的公会。步骤 3 改写后的复查用;非锁定读(RC 下每条语句一个新快照)。
+func countGuildsInZone(ctx context.Context, db *sql.DB, schema string, zone uint32) (int64, error) {
+	table := guildQualified(schema, guildTable)
+	var n int64
+	if err := db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM "+table+" WHERE zone_id = ?", zone).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count %s with zone_id=%d: %w", table, zone, err)
+	}
+	return n, nil
+}
+
+// countGuildsInZoneAmong 数 ids 里当前 zone_id = zone 的公会(dry-run 用)。非锁定读,
+// 按 playerRowsBatchSize 分批 IN,不存在锁序问题。
+func countGuildsInZoneAmong(ctx context.Context, db *sql.DB, schema string, ids []uint64, zone uint32) (int64, error) {
+	table := guildQualified(schema, guildTable)
+	var total int64
+	for _, batch := range chunkUint64(ids, playerRowsBatchSize) {
+		var n int64
+		if err := db.QueryRowContext(ctx,
+			"SELECT COUNT(*) FROM "+table+" WHERE zone_id = ? AND guild_id IN ("+inListLiteral(batch)+")", zone).Scan(&n); err != nil {
+			return total, fmt.Errorf("count manifest guilds in %s with zone_id=%d: %w", table, zone, err)
+		}
+		total += n
+	}
+	return total, nil
 }
 
 // ── Redis:缓存失效 ───────────────────────────────────────────

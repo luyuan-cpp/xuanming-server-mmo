@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 
@@ -340,3 +343,253 @@ func TestIntegrationWithTxRetryRetriesOnce(t *testing.T) {
 
 // alwaysRetryable 只用于并发用例:真实服务注入的是按 MySQL 错误号分类的实现。
 func alwaysRetryable(error) bool { return true }
+
+// ── 2026-09-21 死锁审计的三条回归 ──
+
+// itIsLockConflict 按错误文本认 1213 / 1205。集成测试刻意不直接 import MySQL 驱动(理由见文件头),
+// 所以不能 errors.As 到 *mysql.MySQLError;生产侧的分类函数在各业务服务里,按错误号判。
+func itIsLockConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "Error 1213") || strings.Contains(s, "Error 1205")
+}
+
+// itAwaitLockWaiters 轮询 performance_schema,直到当前库 table 上至少有 want 个事务在排队等行锁。
+// 读不了 performance_schema(账号无权限 / 不是 MySQL 8)时返回 ok=false,由调用方 Skip:那是环境问题,不是产品缺陷。
+func itAwaitLockWaiters(ctx context.Context, db *sql.DB, table string, want int, budget time.Duration) (waiters int, ok bool, err error) {
+	const q = `
+		SELECT COUNT(DISTINCT w.REQUESTING_ENGINE_TRANSACTION_ID)
+		FROM performance_schema.data_lock_waits w
+		JOIN performance_schema.data_locks l ON l.ENGINE_LOCK_ID = w.REQUESTING_ENGINE_LOCK_ID
+		WHERE l.OBJECT_SCHEMA = DATABASE() AND l.OBJECT_NAME = ?`
+	deadline := time.Now().Add(budget)
+	for {
+		if qErr := db.QueryRowContext(ctx, q, table).Scan(&waiters); qErr != nil {
+			return 0, false, qErr
+		}
+		if waiters >= want {
+			return waiters, true, nil
+		}
+		if time.Now().After(deadline) {
+			return waiters, true, fmt.Errorf("%v 内只看到 %d/%d 个事务排进 %s 的锁等待队列", budget, waiters, want, table)
+		}
+		// 轮询间的短停顿只是不去空转打爆 MySQL;条件不满足就一直等到预算用尽,不靠 sleep 估时间。
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// TestIntegrationAllocateSeqDoesNotDeadlockWithFinalize:分配与终结在同一玩家同一流上对撞,不得出现 1213。
+//
+// 原先未决读带 FOR UPDATE,经 idx_pending 取锁"二级 → 主键";终结按主键 CAS 改 status,"主键 → 同一二级项",
+// 两者反序成环(Finalize 不锁 seq 行,seq 行挡不住它)。未决读改普通读之后,分配方对 op 表不持任何锁,环不存在。
+// 分配与终结都**不重试**(IsRetryable=nil),任何一次 1213 都直接暴露。终结语句的形状与 trade / guild 的
+// Finalize 一致:按主键 op_id、带 status 条件的 CAS。
+// 旧写法下这条是概率性的红(窗口在一条语句内部);新写法下"零 1213"是确定的。
+func TestIntegrationAllocateSeqDoesNotDeadlockWithFinalize(t *testing.T) {
+	db, tables := openIntegrationDB(t)
+	ctx := context.Background()
+	const (
+		playerID = 9006
+		epoch    = uint64(1700000000000)
+		rounds   = 300
+	)
+	if err := EnsureSeqRow(ctx, db, tables, playerID, testStream, epoch); err != nil {
+		t.Fatalf("建 seq 行失败: %v", err)
+	}
+	noRetry := DefaultTxRetryConfig()
+	noRetry.Attempts = 1
+
+	allocated := make(chan uint64, rounds)
+	allocErr := make(chan error, 1)
+	go func() {
+		defer close(allocated)
+		for i := 0; i < rounds; i++ {
+			var seq uint64
+			err := WithTxRetryConfig(ctx, db, noRetry, func(tx *sql.Tx) error {
+				alloc, err := AllocateSeq(ctx, tx, tables, playerID, testStream, DefaultLimits, epoch)
+				if err != nil {
+					return err
+				}
+				seq = alloc.Seq
+				return insertOp(ctx, tx, playerID, testStream, alloc.Epoch, alloc.Seq, itPendingStatus)
+			})
+			// 终结跟不上时守卫会拒绝:那是守卫在工作,不是本用例要找的东西,跳过这一轮即可。
+			if errors.Is(err, ErrTooManyPending) {
+				continue
+			}
+			if err != nil {
+				allocErr <- fmt.Errorf("第 %d 轮分配: %w", i+1, err)
+				return
+			}
+			allocated <- seq
+		}
+		allocErr <- nil
+	}()
+
+	var finalizeErr error
+	for seq := range allocated {
+		var opID uint64
+		if err := db.QueryRowContext(ctx,
+			"SELECT op_id FROM "+itOpTable+" WHERE player_id = ? AND stream = ? AND stream_epoch = ? AND seq = ?",
+			playerID, uint32(testStream), epoch, seq).Scan(&opID); err != nil {
+			finalizeErr = fmt.Errorf("读 seq %d 的 op_id: %w", seq, err)
+			break
+		}
+		if err := WithTxRetryConfig(ctx, db, noRetry, func(tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx,
+				"UPDATE "+itOpTable+" SET status = ? WHERE op_id = ? AND status = ?", itDoneStatus, opID, itPendingStatus)
+			return err
+		}); err != nil {
+			finalizeErr = fmt.Errorf("终结 op %d: %w", opID, err)
+			break
+		}
+	}
+	for range allocated { // 终结提前出错时把分配方剩下的结果排空,让它能退出
+	}
+	aErr := <-allocErr
+	for _, err := range []error{aErr, finalizeErr} {
+		if itIsLockConflict(err) {
+			t.Fatalf("分配与终结对撞出现锁冲突(1213 / 1205):AllocateSeq 的未决读又加锁了?见 seq.go 注释 —— %v", err)
+		}
+		if err != nil {
+			t.Fatalf("非预期错误: %v", err)
+		}
+	}
+}
+
+// TestIntegrationAllocateSeqGuardHoldsUnderConcurrentAllocators:未决读改普通读之后,并发分配者仍不能超发。
+//
+// 这是"普通读在 RC 下正确"那段论证的实证:N 个分配者同时抢,每个都留下一行未决;守卫上限是 limit,
+// 恰好 limit 个成功,其余全是 ErrTooManyPending。少算未决(RR 快照、或 seq 行没把分配者串行化)会让成功数超过 limit。
+func TestIntegrationAllocateSeqGuardHoldsUnderConcurrentAllocators(t *testing.T) {
+	db, tables := openIntegrationDB(t)
+	ctx := context.Background()
+	const (
+		playerID = 9007
+		epoch    = uint64(1700000000000)
+		workers  = 16
+	)
+	limits := Limits{MaxPending: 4, MaxSpan: 512}
+	if err := EnsureSeqRow(ctx, db, tables, playerID, testStream, epoch); err != nil {
+		t.Fatalf("建 seq 行失败: %v", err)
+	}
+
+	var (
+		mu       sync.Mutex
+		ok       int
+		rejected int
+		others   []error
+		wg       sync.WaitGroup
+	)
+	start := make(chan struct{})
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			err := WithTxRetry(ctx, db, 1, nil, func(tx *sql.Tx) error {
+				alloc, err := AllocateSeq(ctx, tx, tables, playerID, testStream, limits, epoch)
+				if err != nil {
+					return err
+				}
+				return insertOp(ctx, tx, playerID, testStream, alloc.Epoch, alloc.Seq, itPendingStatus)
+			})
+			mu.Lock()
+			defer mu.Unlock()
+			switch {
+			case err == nil:
+				ok++
+			case errors.Is(err, ErrTooManyPending):
+				rejected++
+			default:
+				others = append(others, err)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	if len(others) != 0 {
+		t.Fatalf("并发分配出现非预期错误: %v", others)
+	}
+	if ok != int(limits.MaxPending) || rejected != workers-int(limits.MaxPending) {
+		t.Fatalf("上限 %d 时应恰好 %d 个成功、%d 个被守卫拒绝,实际成功 %d、拒绝 %d(成功数超限 = 未决被少算)",
+			limits.MaxPending, limits.MaxPending, workers-int(limits.MaxPending), ok, rejected)
+	}
+}
+
+// TestIntegrationEnsureSeqRowRetrySurvivesRolledBackFirstInserter:首个插入者回滚时,排队的两个补行都要成功。
+//
+// 手册 "Locks Set by Different SQL Statements" 的三会话例:会话 A 插入 (P,S) 不提交;B、C 对同一键的 INSERT
+// 排队做重复键检查;A 回滚之后 B、C 同时继承到同一段间隙上的锁,又都要插入意向锁,InnoDB 牺牲其一(1213)。
+// EnsureSeqRow 不重试,这里就是一次失败的请求;EnsureSeqRowRetry 应当把它吸收掉,两个都成功、表里恰好一行。
+// 编排靠 performance_schema 观察"两个等待者都已排队"之后才回滚,不靠 sleep。
+func TestIntegrationEnsureSeqRowRetrySurvivesRolledBackFirstInserter(t *testing.T) {
+	db, tables := openIntegrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	const (
+		playerID = 9008
+		epoch    = uint64(1700000000000)
+	)
+
+	first, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		t.Fatalf("开首个插入者事务失败: %v", err)
+	}
+	defer first.Rollback()
+	if _, err := first.ExecContext(ctx,
+		"INSERT INTO "+itSeqTable+" (player_id, stream, next_seq, epoch, updated_ms) VALUES (?, ?, 1, ?, ?)",
+		playerID, uint32(testStream), epoch, epoch); err != nil {
+		t.Fatalf("首个插入者插入失败: %v", err)
+	}
+
+	var retried atomic.Int32
+	countingRetryable := func(err error) bool {
+		if itIsLockConflict(err) {
+			retried.Add(1)
+			return true
+		}
+		return false
+	}
+	results := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			results <- EnsureSeqRowRetry(ctx, db, tables, playerID, testStream, epoch+uint64(1), countingRetryable)
+		}()
+	}
+	collect := func() []error { return []error{<-results, <-results} }
+
+	if _, ok, err := itAwaitLockWaiters(ctx, db, itSeqTable, 2, 10*time.Second); err != nil || !ok {
+		_ = first.Rollback()
+		collect()
+		if !ok {
+			t.Skipf("读 performance_schema.data_lock_waits 失败,无法编排本场景,跳过(不代表通过): %v", err)
+		}
+		t.Fatalf("夹具编排失败:%v —— 未提交的首个插入应当让两个补行都卡在重复键检查上", err)
+	}
+
+	// 回滚:两个等待者此刻继承间隙锁、互相挡住插入意向锁,成环的时刻就在这里。
+	if err := first.Rollback(); err != nil {
+		collect()
+		t.Fatalf("回滚首个插入者失败: %v", err)
+	}
+	for i, err := range collect() {
+		if err != nil {
+			t.Fatalf("第 %d 个补行失败(重试应当吸收回滚引发的 1213): %v", i+1, err)
+		}
+	}
+	var rows int
+	if err := db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM "+itSeqTable+" WHERE player_id = ? AND stream = ?", playerID, uint32(testStream)).
+		Scan(&rows); err != nil {
+		t.Fatalf("数 seq 行失败: %v", err)
+	}
+	if rows != 1 {
+		t.Fatalf("两个补行都成功之后应恰好 1 行,实际 %d 行", rows)
+	}
+	// 重试次数只记录不断言:它取决于 InnoDB 在回滚时怎样放锁,真库上看到 1 次说明推演成立。
+	t.Logf("补行因锁冲突重试了 %d 次", retried.Load())
+}

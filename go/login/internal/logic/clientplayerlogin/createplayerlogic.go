@@ -59,8 +59,8 @@ const (
 // 从账号里消失(名字和 player:zone 映射却都留着),或者两边合起来超过角色数上限。
 // 围栏把这类交错变成「后到者写失败」。
 //
-// KEYS = {accountDataKey, createLock.Key};ARGV = {createLock.Value, dataBytes, CacheExpire 毫秒}。
-// ARGV[3] 为 "0" 表示不设过期(与原来 Set(..., 0) 的语义一致)。
+// KEYS = {accountDataKey, createLock.Key};ARGV = {createLock.Value, dataBytes}。
+// 账号角色目录无冷缓存回源，必须长期保留；SET 同时清除旧账号遗留的 TTL。
 // 返回 1 = 已写;-1 = 锁已不属于本次建角,**这一次执行**没有写。
 // 注意 -1 不等于「blob 里没有新角色」:go-redis 会在内部重发读超时的 EVALSHA,
 // 调用方只看得到最后一次执行的结果,见 writeAccountBlob。
@@ -68,11 +68,7 @@ var writeAccountBlobScript = redis.NewScript(`
 if redis.call("GET", KEYS[2]) ~= ARGV[1] then
     return -1
 end
-if ARGV[3] == "0" then
-    redis.call("SET", KEYS[1], ARGV[2])
-else
-    redis.call("SET", KEYS[1], ARGV[2], "PX", ARGV[3])
-end
+redis.call("SET", KEYS[1], ARGV[2])
 return 1
 `)
 
@@ -625,10 +621,8 @@ func recordNameOrphan(account string, playerID uint64, name string, err error) {
 func (l *CreatePlayerLogic) writeAccountBlob(account, accountDataKey string, createLock *locker.Lock,
 	dataBytes []byte, playerID uint64, name string) *login_proto_common.TipInfoMessage {
 
-	// 负数(go-redis 的 KeepTTL 等特殊值)在这里没有意义,按「不设过期」处理。
-	expireMs := max(config.AppConfig.Account.CacheExpire.Milliseconds(), 0)
 	res, err := writeAccountBlobScript.Run(l.ctx, l.svcCtx.RedisClient,
-		[]string{accountDataKey, createLock.Key}, createLock.Value, dataBytes, expireMs).Int64()
+		[]string{accountDataKey, createLock.Key}, createLock.Value, dataBytes).Int64()
 	failTip := table.LoginError_kLoginRedisSetFailed
 	if err == nil {
 		switch res {

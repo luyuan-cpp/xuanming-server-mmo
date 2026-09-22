@@ -379,7 +379,7 @@ type LockerConf struct {
 type AccountConf struct {
 	MaxDevicesPerAccount int64         `json:"MaxDevicesPerAccount"`
 	MaxPlayersPerAccount int           `json:"MaxPlayersPerAccount,default=5"`
-	CacheExpire          time.Duration `json:"CacheExpire"`
+	CacheExpire          time.Duration `json:"CacheExpire,optional"` // 已弃用，仅兼容旧配置；账号目录不设 TTL。
 }
 
 // RegistryConf holds service registry/discovery settings.

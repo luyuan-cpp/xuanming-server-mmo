@@ -12,7 +12,61 @@ package data
 //     清理判龄也会偏早。assetop.Store 的 Finalize 契约注释(reconcile.go:136-138)与 trade 都漏了它,别照抄。
 //  2. 对侧账在同一事务里真的做了(资金 / 帮贡 / 次数 / 限购),trade 那边还只是 TODO。
 //
-// 锁序与业务写事务一致:guild → guild_member → guild_asset_op → guild_daily_counter。
+// 锁序与业务写事务一致:guild → guild_member → guild_player_op_seq → guild_asset_op → guild_daily_counter
+// (全序见 economy_repo.go 文件头)。本文件的每条锁定语句都是完整主键等值点操作(2026-09-21 死锁修复契约 P3):
+//   - 领取按 op_id 点改(自动提交,理由见下);重排 / 毒行 / 终结 / 人工终结在事务里**先** sqlLockAssetOp 主键点锁、
+//     再按 op_id 带复核条件点改(死锁复核 V1,理由见下方 TiDB 附加规则)。MySQL 下取锁顺序都是"聚簇记录 → 被改列所在的二级索引项";
+//   - 对侧账锁 guild 行、成员行(guild_member 带 FORCE INDEX (PRIMARY),理由同 economy_repo.go 的 sqlLockMemberBalance);
+//   - 终结在退次数 / 退限购分支另锁 guild_player_op_seq(p, op 的流)作计数行守卫(死锁复核 C6,sqlLockSeqGuard);
+//   - 清理改成"普通读候选主键 → 逐行 RC 短事务{主键点锁 → 带复核条件的主键点删}",不再有经二级索引的范围 DELETE。
+//
+// 终结对 op 行的主键 CAS 不需要 seq 行守卫(friend 审计 #4 的修法 B 未采用):assetop.AllocateSeq 的未决行查询已改成
+// 普通读(修法 A),预留事务对 op 表除自己插入的新行外不持任何锁,终结的主键 CAS 与它之间没有可反序的资源。
+// 这条结论依赖**预留事务是 READ COMMITTED**(普通读才看得见前一个分配者已提交的未决行):guild 的 inTx 与
+// 本文件用的 assetop.WithTxRetry(DefaultTxRetryConfig)都固定 RC,改隔离级之前先回来重判这里。
+// 退款分支那把 seq 行锁管的是**计数行**(C6,TiDB 下 IODKU 与 Point_Get 在计数行上各持一半互等),与上面这条无关。
+//
+// TiDB 附加规则(2026-09-21 死锁复核 G-C2 / C5 / V1):**凡是悲观事务会锁到的行(行 key 或任一唯一 key,含非聚簇 PRIMARY),
+// 多 key 写(改到二级索引列、删行)一律进显式 RC 事务,且先用快路径主键点锁**,不走自动提交。
+// TiDB 默认 pessimistic-auto-commit=false,自动提交语句按乐观两阶段提交;7 张表都是 SHARD_ROW_ID_BITS + PRE_SPLIT_REGIONS,
+// 行 key 与各索引 key 落在不同 region,prewrite 按 region 并行,于是可能先写上一部分 key 的乐观锁、再在另一个 key 上
+// 撞到悲观事务的锁;对方随后要的正是被乐观锁占着的那个 key —— 这种互等不在 TiKV 死锁检测器的等待图里,
+// 只能等锁超时或乐观锁 TTL 过期。环不需要对方改非唯一索引项:只要对方锁住这一行的行 key 或任一唯一 key 就够。
+// **只进显式事务还不够,写之前必须先点锁**(V1 订正:此前这里写的"进事务后写者都先在行 key 上串行"不成立)。
+// 带复核谓词的 UPDATE / DELETE(`op_id = ? AND status = ? …`)不走 Point_Get 快路径:执行期间只读不锁,到语句末尾才把
+// {行 key, PRIMARY key, uk_guild_asset_op key}(tidb_lock_unchanged_keys 默认 ON,没改的唯一 key 也锁)按 region **并行**
+// 加悲观锁,批内顺序应用控制不了。两条这样的语句(如提前截止 ‖ 捐献被拒的终结、提前截止 ‖ 重排、人工终结 ‖ 重排)在它们
+// 之前没有更早取到的公共锁时,可能各拿到一部分 key 再互等 —— 检测器看得见的 1213,会被重试吸收,但仍是死锁。
+// 所以每个写者在这类语句之前,**在同一事务里**先跑 sqlLockAssetOp(完整主键等值 FOR UPDATE,不带任何复核条件):
+// 它走 Point_Get 快路径,加锁顺序固定为"PRIMARY key → 行 key"两次独立加锁,同一 op 行的全部悲观写者都先在 PRIMARY key
+// 上排成一列;拿到它的一方随后语句末尾那一批里只剩 uk key 是新锁,而没有任何人能不先拿 PRIMARY key 就去锁这一行的 uk key
+// (领取只写行 key,见下;预留插的是新行新 uk 值)。点锁读不到行 = 行已被清理(只删终态行),按"已被别人处理"走原语义。
+// MySQL 下点锁与随后的主键 UPDATE 锁的是同一条聚簇记录,锁集与顺序都不变(聚簇 → 二级),只多一次往返。
+//   - 重排(Reschedule)、毒行(markPoison)改 next_attempt_ms(idx_0),与提前截止 / 终结 / 人工终结改同一行:进事务,首句点锁;
+//   - 终结 / 人工终结(terminate):lockCounterparty(guild / 成员 / seq 行,锁序靠前的表)之后、CAS 之前点锁;
+//   - 提前截止(economy_repo.go 的 accelerateDonationDeadlines):每个候选先点锁、再带复核条件点改;
+//   - 领取(Claim)**保留自动提交,且不许包进事务**:自动提交 UPDATE 只有在 !InTxn 时才带 SkipWriteUntouchedIndices
+//     (tidb pkg/executor/write.go),它只改无索引列,变更集合只有行 key 一个;lock_unchanged_keys 对乐观事务直接返回
+//     (addUnchangedKeysForLockByRow 的 !IsPessimistic 分支)。单 key 不可能"只拿到一部分",只会单向等待。
+//     包进事务反而会让它在语句末尾并行锁 PRIMARY / uk_guild_asset_op,与带额外谓词的 CAS 写者之间出现可检测的 1213,
+//     还给热路径多 3 次往返。同理**不要**在没有重新推演 Claim 的情况下打开 TiDB 的 pessimistic-auto-commit:
+//     打开后 Claim 成了悲观语句,同样会带上 PRIMARY / UKO 的并行批锁;单开它也消不掉清理与退款的环,只把 TTL 互等变成 1213。
+//   - 清理点删(死锁复核 C5):旧周期计数行会被终结的退款(sqlRefundCounter,Point_Get 锁 PRIMARY key → 行 key)锁到,
+//     自动提交的乐观 DELETE 与它可能各持一半 —— 进 RC 短事务,先 sqlLockCleanupCounter / sqlLockAssetOp 快路径点锁,
+//     与退款同序。保留期外的终态 op 行没有别的悲观写者,只是共用同一个 helper(execCleanupDelete)。
+//     **前提**(C5 补遗):清理不持 seq 行守卫,所以它只许与退款相遇、不许与预留的带上限 upsert 相遇 —— 后者在语句末尾
+//     并行锁 {行 key, PRIMARY key},与清理的 Point_Get 在同一行上可各持一半(与 C6 同一机制)。这由截止键保证:计数行清理的
+//     截止时刻至少是 now − minCounterCleanupAge(8 天),上一周期(含切周 / 切日后仍在途的预留要写的那一期)永不进清理范围。
+//
+// 计数行 guild_daily_counter 上的写者与取锁全序(修后;记号 M = guild_member、Q = guild_player_op_seq、
+// O = guild_asset_op、C = guild_daily_counter):
+//   - 带上限 upsert(T-D / T-S):M → Q(p, stream) FOR UPDATE → 插 O → 语句末尾整批锁 C 本行 {行 key, PRIMARY key};
+//     只写 period_key = 请求开头 start 所在周期的行;
+//   - 退次数 / 退限购(终结 / 人工终结):[M] → Q(p, stream) → O 点锁 → C Point_Get 点改(PRIMARY key → 行 key);
+//   - 清理:C Point_Get 点锁(PRIMARY key → 行 key)→ 带范围复核的点删;只删 period_key ≤ 截止键的行(counterCleanupCutoffs)。
+//   upsert 与退款先在同一 Q 上串行;退款与清理在 C 上同序;upsert 与清理的行集合不相交(截止键所在周期早于任何
+//   开始于 24h 内的请求的周期,见 minCounterCleanupAge),所以计数行上不存在反序对。
+//   新增计数写者要么先持 Q,要么同样只碰截止键以前的行。
 
 import (
 	"context"
@@ -45,21 +99,39 @@ const (
 	storeFinalizeBudget = 2000 * time.Millisecond // Finalize / ResolveManually(含事务外那一次不可变列读)
 )
 
-// backgroundTxAttempts:后台写(Finalize / ResolveManually / 清理)的总尝试次数(90 part2 §2 第 6 条)。
+// backgroundTxAttempts:后台写事务(Finalize / ResolveManually,以及 2026-09-21 起的 Reschedule / 毒行推迟)的
+// 总尝试次数(90 part2 §2 第 6 条)。
+// 清理是逐行 RC 短事务(死锁复核 C5 起;之前是逐行 autocommit 点删),每行只尝试 1 次、不在本轮重试(失败的行下一轮再删)。
 const backgroundTxAttempts = 3
 
-// 清理节律(05 §5.22):单批 500 行、批间 100ms、每条语句每轮至多 20 批,RowsAffected < 500 即停。
-// 批量删是为了不让一条 DELETE 长时间持有一大片行锁;批间 sleep 给业务写事务让路。
+// 清理节律(05 §5.22):单批 500 行、批间 100ms、每类每轮至多 20 批,一批候选不足 500 行即停。
+// 一批 = 一次候选普通读(≤ 500 行主键)+ 逐行 RC 短事务{主键点锁 → 主键点删};批间 sleep 给业务写事务让路。
 const (
-	cleanupBatchSize   = 500
-	cleanupBatchPause  = 100 * time.Millisecond
-	cleanupMaxBatches  = 20
-	cleanupBatchBudget = 2 * time.Second // 单批 DELETE 的上限;锁等待已被 DSN 封顶 1s,跑满 2s 说明库有状况
+	cleanupBatchSize  = 500
+	cleanupBatchPause = 100 * time.Millisecond
+	cleanupMaxBatches = 20
+	// cleanupStmtBudget:单行清理短事务(点锁 + 点删 + 提交)的上限。只锁一行,锁等待已被 DSN 封顶 1s;预算放到 2s 是为了
+	// 让 1205 先于 ctx 到期暴露(错误更好判读)。跑满说明库有状况,本轮到此为止,已删的行照常计数,下一轮接着删。
+	cleanupStmtBudget = 2 * time.Second
 
 	// 计数行的周期键:日键 8 位(YYYYMMDD)、周键 6 位(YYYYWW),数值域不相交,
-	// 两条 BETWEEN 各走 idx_guild_daily_counter_0 的一段,互不误删(gameday.PeriodKey 的注释)。
+	// 日 / 周两类各用一段 BETWEEN 取候选、做点删复核,互不误删(gameday.PeriodKey 的注释)。
 	dayKeyFloor  = 19700101
 	weekKeyFloor = 100000
+
+	// minCounterCleanupAge:计数行清理截止时刻离 now 的最小距离(死锁复核 C5 补遗);CounterRetention 比它短时按它算。
+	//
+	// 为什么:清理短事务不持 seq 行守卫,它能与计数行的其他写者安全相遇,前提是只碰带上限 upsert 已不可能再写的旧周期行。
+	// 游戏周恰好 7 天:保留期取配置下限 7 天时,切周后整整一周 WeekKey(now − 7d) 都等于上一周 W−1,清理会删 W−1 的全部行;
+	// 而跨切周的兑换预留(T-S)用请求开头的 start 算周期键,经 economyCaller、跨服务发号之后才在切周之后 upsert W−1 行
+	// (副本时钟偏差 < 1s 也会造成同样的跨期,gameday 包头写明这是接受的)。两者同行相遇:
+	//   - TiDB 下 upsert 语句末尾并行锁 {行 key, PRIMARY key},清理 Point_Get 先 PRIMARY key 后行 key,可各持一半互等(1213);
+	//   - 清理先删掉后 upsert 又会重建一行 used_count = n 的 W−1 计数,把该周期的限购绕过一次。
+	// 取 8 天:相差 7 天的两个时刻必落在相邻两个游戏周(固定时区、无夏令时),所以 WeekKey(now − 8d) < WeekKey(now − 24h);
+	// 日键同理只会更早(DayKey(now − 8d) < DayKey(now − 24h))。于是请求开头 start 晚于"清理时刻 − 24h"的预留,
+	// 写的周期键一定大于本轮截止键;预留事务跑在秒级请求预算内,24h 余量足够。默认保留 30 天时不起作用。
+	// 夹紧放在清理自身而不只靠配置校验:绕过 config 直接构造 CleanupConf(测试、工具)也删不到上一周期。
+	minCounterCleanupAge = 8 * 24 * time.Hour
 )
 
 // 清理指标的 table label 与 orphan 指标的两个 label,全部取自固定集合(不带任何 id,AGENTS §9)。
@@ -108,6 +180,12 @@ const (
 		" WHERE `status` = ? AND `next_attempt_ms` <= ? AND `lease_until_ms` < ? AND `attempts` >= ?" +
 		" ORDER BY `next_attempt_ms` ASC, `op_id` ASC LIMIT ?"
 
+	// sqlLockAssetOp:op 行的主键点锁(死锁复核 C5 / V1)。**只许**是完整主键等值 + FOR UPDATE、不带任何复核条件:
+	// TiDB 只有这种形状才走 Point_Get 快路径,加锁顺序固定为"PRIMARY key → 行 key";复核条件留在随后的点改 / 点删里。
+	// 用在四类写者的写语句之前(同一事务):提前截止(economy_repo.go)、终结 / 人工终结(terminate)、重排、毒行推迟,
+	// 以及清理点删(execCleanupDelete)。MySQL 下是 PRIMARY const,只锁这一条聚簇记录 —— 随后的主键写本来就要锁它,锁集不变。
+	sqlLockAssetOp = "SELECT `op_id` FROM " + guildAssetOpTable + " WHERE `op_id` = ? FOR UPDATE"
+
 	sqlClaimAssetOp = "UPDATE " + guildAssetOpTable + " SET `lease_until_ms` = ?, `lease_token` = ?, `updated_ms` = ?" +
 		" WHERE `op_id` = ? AND `status` = ? AND `lease_until_ms` < ?"
 	// 毒行推迟:令牌之外还要带 `status = PENDING`。人工终结(sqlResolveAssetOp)的 CAS 只看 status、不换令牌,
@@ -134,27 +212,71 @@ const (
 		" WHERE `op_id` = ? AND `status` = ?"
 
 	// 终结前在事务外读的**不可变列**:插入之后没有任何路径改它们,读一次即可,不必占事务时间。
-	sqlSelectAssetOpImmutable = "SELECT `player_id`, `guild_id`, `kind`, `ref_id`, `ref_count`, `period_key`," +
+	// stream 给退次数 / 退限购分支的 seq 行守卫用(C6):取 op 行自身的列,不按 kind 反推(不造第二份 kind→stream 事实源)。
+	sqlSelectAssetOpImmutable = "SELECT `player_id`, `guild_id`, `stream`, `kind`, `ref_id`, `ref_count`, `period_key`," +
 		" `contribution_delta`, `funds_delta` FROM " + guildAssetOpTable + " WHERE `op_id` = ?"
+
+	// sqlLockSeqGuard:终结在退次数 / 退限购分支对 guild_player_op_seq(p, op 的流)的点锁,计数行守卫(死锁复核 C6,仅 TiDB 成环)。
+	// TiDB 下预留的带上限 upsert(IODKU)在语句末尾把计数行的 {行 key, PRIMARY key} 按 region 并行加锁,可能先拿到行 key、
+	// PRIMARY key 还在途;退款的 sqlRefundCounter 是 Point_Get,先 PRIMARY key 后行 key —— 两者同时在途就各持一半互等(1213)。
+	// 预留在 AllocateSeq 里已持同一 seq 行 X,这里让退款也先拿它:计数行的全部悲观写者都在 seq 行上排成一列,不再部分持有。
+	// 完整主键等值、stream 绑定参数(不写字面量);MySQL 下是 PRIMARY const,只锁这一条聚簇记录。
+	sqlLockSeqGuard = "SELECT `next_seq` FROM " + guildPlayerOpSeqTable + " WHERE `player_id` = ? AND `stream` = ? FOR UPDATE"
 
 	sqlSelectAssetOpByID = "SELECT " + assetOpColumns + " FROM " + guildAssetOpTable + " WHERE `op_id` = ?"
 	sqlListStuckAssetOps = "SELECT " + assetOpColumns + " FROM " + guildAssetOpTable +
 		" WHERE `status` = ? AND `created_ms` < ? ORDER BY `created_ms` ASC, `op_id` ASC LIMIT ?"
 	sqlOldestPendingAssetOp = "SELECT MIN(`created_ms`) FROM " + guildAssetOpTable + " WHERE `status` = ? AND `stream` = ?"
 
-	// 对侧账与计数行清理。
-	sqlLockGuildFunds      = `SELECT funds FROM guild WHERE guild_id = ? FOR UPDATE`
-	sqlCreditGuildFunds    = `UPDATE guild SET funds = funds + ? WHERE guild_id = ?`
-	sqlCreditContribution  = `UPDATE guild_member SET contribution_total = contribution_total + ?, contribution_balance = contribution_balance + ? WHERE guild_id = ? AND player_id = ?`
-	sqlRefundContribution  = `UPDATE guild_member SET contribution_balance = contribution_balance + ? WHERE guild_id = ? AND player_id = ?`
-	sqlRefundCounter       = `UPDATE guild_daily_counter SET used_count = IF(used_count >= ?, used_count - ?, 0), updated_ms = ? WHERE player_id = ? AND counter_kind = ? AND ref_id = ? AND period_key = ?`
-	sqlCleanupDailyCounter = `DELETE FROM guild_daily_counter WHERE period_key BETWEEN ? AND ? LIMIT ?`
+	// 对侧账。guild_member 的两条 UPDATE 带 FORCE INDEX (PRIMARY):WHERE 同时钉死了 uk_guild_member(player_id),
+	// 理由同 economy_repo.go 的 sqlLockMemberBalance;行已在同一事务里先经 sqlLockMemberRole 锁住,
+	// 帮贡列不在任何二级索引里,这两条只动聚簇记录。
+	sqlLockGuildFunds     = `SELECT funds FROM guild WHERE guild_id = ? FOR UPDATE`
+	sqlCreditGuildFunds   = `UPDATE guild SET funds = funds + ? WHERE guild_id = ?`
+	sqlCreditContribution = `UPDATE guild_member FORCE INDEX (PRIMARY)
+	SET contribution_total = contribution_total + ?, contribution_balance = contribution_balance + ?
+	WHERE guild_id = ? AND player_id = ?`
+	sqlRefundContribution = `UPDATE guild_member FORCE INDEX (PRIMARY)
+	SET contribution_balance = contribution_balance + ?
+	WHERE guild_id = ? AND player_id = ?`
+	sqlRefundCounter = `UPDATE guild_daily_counter SET used_count = IF(used_count >= ?, used_count - ?, 0), updated_ms = ? WHERE player_id = ? AND counter_kind = ? AND ref_id = ? AND period_key = ?`
 )
 
-// sqlCleanupTerminalOps 只删三种终态:**不含** APPLIED_PARTIAL(要人工补偿,证据不能自动消失,X-15 / 90 part2 §3)
-// 与 PENDING(永不删)。判龄按 next_attempt_ms —— 终态行上它等于终结时刻(Finalize / ResolveManually 同写)。
-const sqlCleanupTerminalOps = "DELETE FROM " + guildAssetOpTable +
-	" WHERE `status` IN (?, ?, ?) AND `next_attempt_ms` < ? LIMIT ?"
+// 清理(05 §5.22)的候选读与点删(2026-09-21 死锁修复,契约 §2.2 第 3 条)。
+//
+// 旧写法是带 LIMIT 的范围 DELETE:终态行那条走 idx_guild_asset_op_0 (status, next_attempt_ms),"二级项 → 聚簇记录"
+// 取锁,且 DELETE 没有 semi-consistent read,扫到被锁的行一律真等;一批 500 行的锁要到整批提交才放。它与旧的
+// 提前截止(经 idx_2 / idx_1 扫到本玩家 / 本帮的历史终态行)在同一行上反序成环(friend 审计 #5、#15)。
+//
+// 现在每批:普通读候选主键(不加锁,走哪个索引都行)→ 按主键升序逐行一个 RC 短事务:完整主键点锁 → 点删,
+// 点删的 WHERE 带原条件做提交点复核(影响 0 行 = 已被别人删 / 条件已不成立,跳过)。每个短事务只锁这一行的聚簇记录,
+// 再按字典顺序 delete-mark 它的各个二级项(聚簇 → 二级)。修复后没有任何事务经二级索引去锁终态行或旧周期的计数行 ——
+// 未决读是普通读、提前截止是候选读 + 主键点改、终结 / 重排 / 领取 / 毒行都是主键 CAS、退款是主键点改 —— 所以清理只会
+// 单向等待,不可能成环;锁也只持有一行的时间,不会再让离帮 / 被踢 / 解散在整批清理后面排满 1s。
+// 为什么是短事务而不是单条自动提交(死锁复核 C5,TiDB):见文件头 TiDB 附加规则与 execCleanupDelete。
+const (
+	// 终态行只删三种:**不含** APPLIED_PARTIAL(要人工补偿,证据不能自动消失,X-15 / 90 part2 §3)与 PENDING(永不删)。
+	// 判龄按 next_attempt_ms —— 终态行上它等于终结时刻(Finalize / ResolveManually 同写)。
+	// 按 op_id 升序取前 500:op_id 是雪花号、随创建时刻单调增,老的终态行天然排在前面。
+	sqlListCleanupTerminalOps = "SELECT `op_id` FROM " + guildAssetOpTable +
+		" WHERE `status` IN (?, ?, ?) AND `next_attempt_ms` < ? ORDER BY `op_id` ASC LIMIT ?"
+	sqlCleanupTerminalOp = "DELETE FROM " + guildAssetOpTable +
+		" WHERE `op_id` = ? AND `status` IN (?, ?, ?) AND `next_attempt_ms` < ?"
+
+	// 计数行:4 列完整主键点删,period_key 的范围条件同时作复核(日键与周键各走一段,见 dayKeyFloor)。
+	sqlListCleanupCounters = `SELECT player_id, counter_kind, ref_id, period_key FROM guild_daily_counter
+	WHERE period_key BETWEEN ? AND ? ORDER BY player_id, counter_kind, ref_id, period_key LIMIT ?`
+	sqlCleanupCounter = `DELETE FROM guild_daily_counter
+	WHERE player_id = ? AND counter_kind = ? AND ref_id = ? AND period_key = ? AND period_key BETWEEN ? AND ?`
+
+	// 清理点删前的点锁(死锁复核 C5)。只写完整主键等值、不带任何复核条件:TiDB 只有这种形状才走 Point_Get 快路径,
+	// 加锁顺序固定为"PRIMARY 索引 key → 行 key"两次独立加锁,与 sqlRefundCounter(同为 4 列主键等值的快路径点改)同序,
+	// 双方只会排队、不会各持一半;复核条件留在随后的点删里。MySQL 下是 PRIMARY const,只锁聚簇记录。
+	// 预留的带上限 upsert(语句末尾并行锁)与它同序不了,靠截止键让两者永不碰同一行(minCounterCleanupAge,C5 补遗)。
+	// 终态 op 行的点锁与其余 op 行写者共用 sqlLockAssetOp(同一形状,见上)。
+	sqlLockCleanupCounter = `SELECT period_key FROM guild_daily_counter
+	WHERE player_id = ? AND counter_kind = ? AND ref_id = ? AND period_key = ? FOR UPDATE`
+)
 
 // PendingStatus 是 guild_asset_op.status 的"未决"库值,给 assetop 的 seq 分配与本文件的 SQL 用。
 // 取生成枚举而不是写 1:assetop.Status 刻意不绑库值,库值只由本表的枚举定。
@@ -294,6 +416,8 @@ func (s *GuildAssetStore) listDueSegment(ctx context.Context, query string, nowM
 }
 
 // Claim 单行主键 CAS 领取(autocommit),紧挨着处理前调用,租约从"领到这一行"起算。
+// 刻意**不**进事务(死锁复核 C5 的结论):TiDB 下它只改无索引列,自动提交时变更集合只有行 key 一个,不会部分持有;
+// 包进悲观事务反而会在语句末尾并行锁 PRIMARY / uk_guild_asset_op,见文件头 TiDB 附加规则。
 // RowsAffected != 1 → (Op{}, false, nil):已被别的副本领走或已终结。
 //
 // payload 为空或解不开都是毒行:把它推迟到 poisonUntilMs(循环按 LoopConfig.PoisonDelay 算好的绝对时刻,
@@ -353,9 +477,26 @@ func (s *GuildAssetStore) Claim(ctx context.Context, opID, nowMs, leaseUntilMs, 
 // markPoison 把毒行推迟到 poisonUntilMs,last_outcome 记"结局未知"。用本次领取的 lease_token 且仍为 PENDING 做 CAS:
 // 不会推迟别的副本刚领走的同一行,也不会改写领取之后才被人工终结的行。写失败只记日志:后果是下一轮再撞一次
 // 同一行(仍然跳过),不丢数据。
+//
+// 进显式 RC 短事务而不是自动提交(G-C2,见文件头 TiDB 附加规则):它改 next_attempt_ms(idx_0),与离帮 / 被踢 / 解散
+// 的提前截止点改、终结 / 人工终结的 CAS 是同一行上的写者。事务首句 sqlLockAssetOp 主键点锁(V1):TiDB 下先与其余写者在
+// PRIMARY key 上排队,再做带复核条件的 CAS,不会在语句末尾的并行批里与对方各持一半;MySQL 下锁集不变。
+// 点锁读不到行 = 行已被清理(只删终态行),与 CAS 影响 0 行同义:什么都不写。
+// 重试口径同 Finalize(1213 / 9007 / 1205,整事务已回滚,重跑安全)。
 func (s *GuildAssetStore) markPoison(ctx context.Context, opID, token, nowMs, poisonUntilMs uint64) {
-	if _, err := s.db.ExecContext(ctx, sqlPoisonAssetOp,
-		uint32(assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN), poisonUntilMs, nowMs, opID, token, PendingStatus()); err != nil {
+	err := assetop.WithTxRetry(ctx, s.db, backgroundTxAttempts, isRetryableBackground, func(tx *sql.Tx) error {
+		found, err := lockRowExists(ctx, tx, sqlLockAssetOp, opID)
+		if err != nil {
+			return fmt.Errorf("lock %s %d: %w", guildAssetOpTable, opID, err)
+		}
+		if !found {
+			return nil
+		}
+		_, err = tx.ExecContext(ctx, sqlPoisonAssetOp,
+			uint32(assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN), poisonUntilMs, nowMs, opID, token, PendingStatus())
+		return err
+	})
+	if err != nil {
 		logx.Errorf("[GuildAsset] 推迟毒行失败 op_id=%d: %v", opID, err)
 	}
 }
@@ -365,24 +506,46 @@ func (s *GuildAssetStore) markPoison(ctx context.Context, opID, token, nowMs, po
 // 回 nil 会把"我的结果被丢弃"伪装成成功,assetop_reschedule_lost_total 就恒为 0。
 // last_reason 照写 res.Reason:部分发放码(assetop.ReasonPartialApplied)的粘性由 assetop 的 carryPartialReason 负责,
 // 这里不自作主张。
+//
+// 显式 RC 短事务,不用自动提交(G-C2,见文件头 TiDB 附加规则)。TiDB 下自动提交按乐观事务提交:本语句可能先把
+// idx_0 旧项 (PENDING, 旧 next_attempt_ms, rowid) 锁上,再在行 key 上撞到提前截止 / 终结的悲观锁,而对方提交时要删的
+// 正是这条 idx_0 旧项 —— 互等只能等 TTL 过期打破。
+// 只进事务还不够(V1):带复核条件的 CAS 在 TiDB 上于语句末尾**并行**锁 {行 key, PRIMARY key, uk key},两个这样的写者
+// 可能各持一半互等(可检测的 1213)。所以事务首句先 sqlLockAssetOp 主键点锁(Point_Get:PRIMARY key → 行 key),
+// 同一 op 行上的全部悲观写者都先在 PRIMARY key 上排队,拿到它才发 CAS。
+// 修后取锁全序(同一 op 行上所有写者一致):TiDB 为 PRIMARY key → 行 key → uk key;MySQL 为聚簇记录 → 被改列所在的二级项
+// (点锁与 CAS 锁同一条聚簇记录,锁集不变)。
+// 点锁读不到行 = 行已被清理(只删终态行,租约早已不在我手里),与 CAS 影响 0 行同义:回 ErrLeaseLost。
+// 重试只接 1213 / 9007 / 1205(整事务已回滚,重跑安全)。ErrLeaseLost 不可重试,原样透传给 reconcile(errors.Is 可判)。
+// 预算仍是 storeReadBudget;重投循环传进来的是 700ms 的 settleContext,取两者较小值(reconcile.go settleBudget 的注释
+// 本来就按"这里走 WithTxRetry"估算)。
 func (s *GuildAssetStore) Reschedule(ctx context.Context, op assetop.Op, nextAttemptMs uint64, res assetop.Result, nowMs uint64) error {
 	ctx, cancel := context.WithTimeout(ctx, storeReadBudget)
 	defer cancel()
 
-	result, err := s.db.ExecContext(ctx, sqlRescheduleAssetOp,
-		nextAttemptMs, durableFlag(res.Durable), uint32(res.Outcome), res.Reason, nowMs,
-		op.OpID, PendingStatus(), op.LeaseToken)
-	if err != nil {
-		return fmt.Errorf("reschedule %s %d: %w", guildAssetOpTable, op.OpID, err)
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("reschedule %s %d: read rows affected: %w", guildAssetOpTable, op.OpID, err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("guild asset op %d: %w", op.OpID, assetop.ErrLeaseLost)
-	}
-	return nil
+	return assetop.WithTxRetry(ctx, s.db, backgroundTxAttempts, isRetryableBackground, func(tx *sql.Tx) error {
+		found, err := lockRowExists(ctx, tx, sqlLockAssetOp, op.OpID)
+		if err != nil {
+			return fmt.Errorf("reschedule %s %d: lock: %w", guildAssetOpTable, op.OpID, err)
+		}
+		if !found {
+			return fmt.Errorf("guild asset op %d: %w", op.OpID, assetop.ErrLeaseLost)
+		}
+		result, err := tx.ExecContext(ctx, sqlRescheduleAssetOp,
+			nextAttemptMs, durableFlag(res.Durable), uint32(res.Outcome), res.Reason, nowMs,
+			op.OpID, PendingStatus(), op.LeaseToken)
+		if err != nil {
+			return fmt.Errorf("reschedule %s %d: %w", guildAssetOpTable, op.OpID, err)
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("reschedule %s %d: read rows affected: %w", guildAssetOpTable, op.OpID, err)
+		}
+		if affected == 0 {
+			return fmt.Errorf("guild asset op %d: %w", op.OpID, assetop.ErrLeaseLost)
+		}
+		return nil
+	})
 }
 
 func durableFlag(durable bool) uint32 {
@@ -395,7 +558,7 @@ func durableFlag(durable bool) uint32 {
 // Finalize 把行终结成 status,并在**同一事务**里做对侧账;返回是否**本次**终结。
 //
 // 事务外先读不可变列(无行 → ERROR + (false, nil));事务经 assetop.WithTxRetry(RC,1213 / 1205 / 9007 重跑 3 次):
-// 按锁序加锁 → CAS(同写 next_attempt_ms = now,07 §7.4.1)→ RowsAffected == 1 才做对侧账。
+// 按锁序加锁(对侧账的行 → op 行主键点锁,V1)→ CAS(同写 next_attempt_ms = now,07 §7.4.1)→ RowsAffected == 1 才做对侧账。
 // reason_tip_id 只在 REJECTED 时写 res.Reason(玩家看得到的拒绝原因),其余写 0。
 // 提交后:动过 guild / 成员行 → 失效缓存;然后调 OnFinalized。
 func (s *GuildAssetStore) Finalize(ctx context.Context, op assetop.Op, status assetop.Status, res assetop.Result, nowMs uint64) (bool, error) {
@@ -427,6 +590,7 @@ func (s *GuildAssetStore) ResolveManually(ctx context.Context, r assetop.ManualR
 // assetOpImmutable 是终结时要用的不可变列。
 type assetOpImmutable struct {
 	PlayerID, GuildID             uint64
+	Stream                        uint32 // assetpb.AssetOpStream 的库值;只给 sqlLockSeqGuard 绑参数
 	Kind                          pb.GuildAssetOpKind
 	RefID, RefCount, PeriodKey    uint32
 	ContributionDelta, FundsDelta uint64
@@ -471,6 +635,17 @@ func (s *GuildAssetStore) terminate(ctx context.Context, opID uint64, status ass
 		locks, err := lockCounterparty(dbCtx, tx, row, status)
 		if err != nil {
 			return err
+		}
+		// op 行主键点锁(V1):排在对侧账的 guild / 成员 / seq 行之后(op 表在锁序里靠后),CAS 之前。
+		// TiDB 下 CAS 带 `status = PENDING` 复核、不走快路径,语句末尾并行锁 {行 key, PRIMARY key, uk key};先点锁让它与
+		// 提前截止 / 重排 / 毒行 / 另一个终结者先在 PRIMARY key 上排队,不再各持一半。MySQL 下点锁与 CAS 锁同一条聚簇记录。
+		// 读不到行 = 已被清理(只删终态行),与 CAS 影响 0 行同义:不终结、不做对侧账。
+		opRowFound, err := lockRowExists(dbCtx, tx, sqlLockAssetOp, opID)
+		if err != nil {
+			return fmt.Errorf("lock %s %d: %w", guildAssetOpTable, opID, err)
+		}
+		if !opRowFound {
+			return nil
 		}
 		result, err := tx.ExecContext(dbCtx, casQuery, casArgs...)
 		if err != nil {
@@ -526,7 +701,7 @@ func (s *GuildAssetStore) readImmutable(ctx context.Context, opID uint64) (asset
 		kind int32
 	)
 	err := s.db.QueryRowContext(ctx, sqlSelectAssetOpImmutable, opID).Scan(
-		&row.PlayerID, &row.GuildID, &kind, &row.RefID, &row.RefCount, &row.PeriodKey,
+		&row.PlayerID, &row.GuildID, &row.Stream, &kind, &row.RefID, &row.RefCount, &row.PeriodKey,
 		&row.ContributionDelta, &row.FundsDelta)
 	if errors.Is(err, sql.ErrNoRows) {
 		return assetOpImmutable{}, false, nil
@@ -538,12 +713,34 @@ func (s *GuildAssetStore) readImmutable(ctx context.Context, opID uint64) (asset
 	return row, true, nil
 }
 
-// lockCounterparty 按锁序先锁对侧账要改的行(在 CAS 之前:op 表排在 guild / guild_member 之后)。
+// counterRefund 判定本次终结要不要退次数 / 退限购,以及退哪类计数、退几份。**判定只此一处**:
+// lockCounterparty 的 seq 行守卫与 applyCounterparty 的退款都调它,两边不许各写一份条件(迟早分叉 —— 守卫漏锁即 C6)。
+//   - 只有 REJECTED / ABORTED 退;APPLIED / APPLIED_PARTIAL 不退;period_key == 0(不限购的商品,当初没占计数行)不退;
+//   - DONATE 退今日次数 1 次;SHOP 退限购 ref_count 份(0 份不退);其余 kind(活动发奖、未知)不退。
+func counterRefund(row assetOpImmutable, status assetop.Status) (pb.GuildDailyCounterKind, uint32, bool) {
+	if (status != assetop.StatusRejected && status != assetop.StatusAborted) || row.PeriodKey == 0 {
+		return 0, 0, false
+	}
+	switch row.Kind {
+	case pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_DONATE:
+		return pb.GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_DONATE, 1, true
+	case pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_SHOP:
+		return pb.GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_SHOP, row.RefCount, row.RefCount > 0
+	}
+	return 0, 0, false
+}
+
+// lockCounterparty 按锁序先锁对侧账要改的行(在 op 行点锁与 CAS 之前:op 表排在 guild / guild_member / guild_player_op_seq 之后)。
 //
 //   - DONATE + APPLIED:guild 行 FOR UPDATE;帮会在才锁成员行。成员行按 op.guild_id 找 —— D2:结算一律记给
 //     发起时绑定的帮会,不看玩家此刻在哪个帮。
 //   - SHOP + REJECTED / ABORTED:成员行 FOR UPDATE(要退帮贡)。
-//   - 其余组合不加锁:APPLIED_PARTIAL 不做对侧账;退次数 / 退限购只动计数行(锁序最后一张表)。
+//   - 要退次数 / 退限购的(counterRefund 为真):最后再锁 guild_player_op_seq(p, op 的流)作计数行守卫(C6,sqlLockSeqGuard)。
+//     兑换分支因此是 guild_member → seq → op → counter,与 T-S 同向;捐献分支是 seq → op → counter,与 T-D 的 member → seq
+//     同向(T-D 先持的成员行,本事务从不要)。seq 行建出后永不删除;缺行(人工删过、或夹具直接插的 op 行)不当错误 ——
+//     守卫只管锁序、不管正确性,在这里拒绝会让这条指令永远停在 PENDING;缺行时至多退化成修复前那次可被重试吸收的 TiDB 1213。
+//     与 friend 审计 #4 无关:op 行上的反序由 AllocateSeq 的未决行普通读(修法 A)解决,那条结论不依赖这把锁。
+//   - 其余组合不加锁:APPLIED_PARTIAL 不做对侧账。
 func lockCounterparty(ctx context.Context, tx *sql.Tx, row assetOpImmutable, status assetop.Status) (counterpartyLocks, error) {
 	var locks counterpartyLocks
 	switch {
@@ -566,6 +763,11 @@ func lockCounterparty(ctx context.Context, tx *sql.Tx, row assetOpImmutable, sta
 			return locks, fmt.Errorf("lock buyer %d of guild %d: %w", row.PlayerID, row.GuildID, err)
 		}
 		locks.memberOK = ok
+	}
+	if _, _, refund := counterRefund(row, status); refund {
+		if _, err := lockRowExists(ctx, tx, sqlLockSeqGuard, row.PlayerID, row.Stream); err != nil {
+			return locks, fmt.Errorf("lock seq guard (player=%d stream=%d): %w", row.PlayerID, row.Stream, err)
+		}
 	}
 	return locks, nil
 }
@@ -605,8 +807,7 @@ func applyCounterparty(ctx context.Context, tx *sql.Tx, row assetOpImmutable, st
 
 	switch row.Kind {
 	case pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_DONATE:
-		switch {
-		case status == assetop.StatusApplied:
+		if status == assetop.StatusApplied {
 			if !locks.guildOK {
 				out.orphanKind, out.orphanWhat = orphanKindDonate, orphanWhatGuildGone
 				return out, nil
@@ -629,32 +830,30 @@ func applyCounterparty(ctx context.Context, tx *sql.Tx, row assetOpImmutable, st
 				}
 				out.touched = true
 			}
-		case refunded:
-			if err := refundCounter(ctx, tx, row, pb.GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_DONATE, 1, nowMs); err != nil {
-				return out, err
-			}
 		}
 	case pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_SHOP:
-		if !refunded {
-			return out, nil
-		}
-		switch {
-		case !locks.memberOK:
-			out.orphanKind, out.orphanWhat = orphanKindShop, orphanWhatRefundMemberGone
-		case row.ContributionDelta > 0:
-			if err := execExactlyOneRow(ctx, tx, fmt.Sprintf("refund contribution of member %d in guild %d", row.PlayerID, row.GuildID),
-				sqlRefundContribution, row.ContributionDelta, row.GuildID, row.PlayerID); err != nil {
-				return out, err
+		if refunded {
+			switch {
+			case !locks.memberOK:
+				out.orphanKind, out.orphanWhat = orphanKindShop, orphanWhatRefundMemberGone
+			case row.ContributionDelta > 0:
+				if err := execExactlyOneRow(ctx, tx, fmt.Sprintf("refund contribution of member %d in guild %d", row.PlayerID, row.GuildID),
+					sqlRefundContribution, row.ContributionDelta, row.GuildID, row.PlayerID); err != nil {
+					return out, err
+				}
+				out.touched = true
 			}
-			out.touched = true
-		}
-		if err := refundCounter(ctx, tx, row, pb.GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_SHOP, row.RefCount, nowMs); err != nil {
-			return out, err
 		}
 	case pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_ACTIVITY_REWARD:
 		// 只 CAS。
 	default:
 		out.unknownKind = true
+	}
+	// 退次数 / 退限购:与 lockCounterparty 的 seq 行守卫同一个判定(counterRefund),计数行仍是最后一张表。
+	if kind, n, refund := counterRefund(row, status); refund {
+		if err := refundCounter(ctx, tx, row, kind, n, nowMs); err != nil {
+			return out, err
+		}
 	}
 	return out, nil
 }
@@ -728,6 +927,7 @@ func (s *GuildAssetStore) getRecord(ctx context.Context, opID uint64) (*pb.Guild
 //
 // TerminalRetention 同时是 B5d 回档检查"保留期可证明性"的下界(90 part2 §3 末行):
 // 删掉的终态行回档检查就再也看不见,调小它之前先核对回档窗口。
+// CounterRetention 短于 minCounterCleanupAge(8 天)时,清理按 8 天算(counterCleanupCutoffs,C5 补遗):只会多留,不会少留。
 type CleanupConf struct {
 	Interval          time.Duration
 	TerminalRetention time.Duration
@@ -760,9 +960,10 @@ func (s *GuildAssetStore) RunCleanup(ctx context.Context, c CleanupConf) {
 	}
 }
 
-// CleanupOnce 跑一轮清理(可测:时刻由调用方给)。三条语句各自分批,每批一个 RC 事务(WithTxRetry,
-// 不用连接默认的 RR 裸跑 —— RR 的范围 DELETE 会在 idx_0 上留下间隙锁,挡住业务事务插新行)。
-// 一条语句失败不影响另外两条,错误合并返回;已删的行数照常计指标。
+// CleanupOnce 跑一轮清理(可测:时刻由调用方给)。三类(终态指令、过期日键计数、过期周键计数)各自分批,
+// 每批"普通读候选主键 → 逐行 RC 短事务{主键点锁 → 主键点删}"(见 sqlListCleanupTerminalOps 上方的说明与 execCleanupDelete)。
+// 一类失败不影响另外两类,错误合并返回;已删的行数照常计指标。
+// 点删失败不在本轮重试:没删掉的行仍满足条件,下一轮(Interval 之后)自然再删,不丢任何东西。
 func (s *GuildAssetStore) CleanupOnce(ctx context.Context, now time.Time, c CleanupConf) error {
 	if c.TerminalRetention <= 0 || c.CounterRetention <= 0 {
 		return fmt.Errorf("guild asset cleanup: retention must be positive (terminal=%v counter=%v)",
@@ -774,37 +975,49 @@ func (s *GuildAssetStore) CleanupOnce(ctx context.Context, now time.Time, c Clea
 	if nowMs > terminalMs {
 		opCutoffMs = nowMs - terminalMs
 	}
-	counterCutoff := now.Add(-c.CounterRetention)
-	dayCutoff := gameday.DayKey(counterCutoff)
-	weekCutoff := gameday.WeekKey(counterCutoff)
+	dayCutoff, weekCutoff := counterCleanupCutoffs(now, c.CounterRetention)
 
 	var errs []error
 	if opCutoffMs > 0 {
-		errs = append(errs, s.deleteInBatches(ctx, cleanupTableAssetOp, sqlCleanupTerminalOps,
-			int32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED),
-			int32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_REJECTED),
-			int32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_ABORTED),
-			opCutoffMs))
+		errs = append(errs, s.cleanupInBatches(ctx, cleanupTableAssetOp, func(ctx context.Context) (int, int64, error) {
+			return s.cleanupTerminalOpsBatch(ctx, opCutoffMs)
+		}))
 	}
 	errs = append(errs,
-		s.deleteInBatches(ctx, cleanupTableCounter, sqlCleanupDailyCounter, uint32(dayKeyFloor), dayCutoff),
-		s.deleteInBatches(ctx, cleanupTableCounter, sqlCleanupDailyCounter, uint32(weekKeyFloor), weekCutoff))
+		s.cleanupInBatches(ctx, cleanupTableCounter, func(ctx context.Context) (int, int64, error) {
+			return s.cleanupCountersBatch(ctx, uint32(dayKeyFloor), dayCutoff)
+		}),
+		s.cleanupInBatches(ctx, cleanupTableCounter, func(ctx context.Context) (int, int64, error) {
+			return s.cleanupCountersBatch(ctx, uint32(weekKeyFloor), weekCutoff)
+		}))
 	return errors.Join(errs...)
 }
 
-// deleteInBatches 反复执行一条带 LIMIT 的 DELETE(最后一个占位符是批大小,由本函数追加),
-// 直到某批不足 cleanupBatchSize 行、达到 cleanupMaxBatches 批或 ctx 结束。
-func (s *GuildAssetStore) deleteInBatches(ctx context.Context, table, query string, args ...any) error {
-	batchArgs := append(append(make([]any, 0, len(args)+1), args...), cleanupBatchSize)
-	for batch := 0; batch < cleanupMaxBatches; batch++ {
-		deleted, err := s.deleteOneBatch(ctx, query, batchArgs)
+// counterCleanupCutoffs 返回本轮计数行清理的日键 / 周键截止(含):period_key 落在 [floor, cutoff] 的行会被删。
+// 截止时刻取 now − max(retention, minCounterCleanupAge),保证上一周期的行在切周 / 切日后至少再留 24h,
+// 不与在途预留的带上限 upsert 相遇(理由见 minCounterCleanupAge)。纯函数,切周边界由单测钉住。
+func counterCleanupCutoffs(now time.Time, retention time.Duration) (dayCutoff, weekCutoff uint32) {
+	cutoff := now.Add(-max(retention, minCounterCleanupAge))
+	return gameday.DayKey(cutoff), gameday.WeekKey(cutoff)
+}
+
+// cleanupBatch 跑一批清理:候选至多 cleanupBatchSize 行,返回候选行数与实际删掉的行数。
+// 出错时已删的行数仍如实返回(每行的点锁 + 点删是各自提交的短事务,删掉的就是删掉了)。
+type cleanupBatch func(ctx context.Context) (candidates int, deleted int64, err error)
+
+// cleanupInBatches 反复跑同一类的批,直到某批候选不足 cleanupBatchSize 行、达到 cleanupMaxBatches 批或 ctx 结束。
+// 判"还有没有下一批"看候选数而不是删除数:复核落空(0 行)的候选说明那一行已不满足条件,下一次候选读不会再读到它,
+// 按删除数判会在"候选满批、个别落空"时提前收工。
+func (s *GuildAssetStore) cleanupInBatches(ctx context.Context, table string, batch cleanupBatch) error {
+	for i := 0; i < cleanupMaxBatches; i++ {
+		candidates, deleted, err := batch(ctx)
 		if deleted > 0 {
 			recordCleanupDeleted(table, deleted)
 		}
 		if err != nil {
 			return fmt.Errorf("cleanup %s: %w", table, err)
 		}
-		if deleted < cleanupBatchSize {
+		if candidates < cleanupBatchSize {
 			return nil
 		}
 		timer := time.NewTimer(cleanupBatchPause)
@@ -818,19 +1031,120 @@ func (s *GuildAssetStore) deleteInBatches(ctx context.Context, table, query stri
 	return nil
 }
 
-func (s *GuildAssetStore) deleteOneBatch(ctx context.Context, query string, args []any) (int64, error) {
-	ctx, cancel := context.WithTimeout(ctx, cleanupBatchBudget)
+// cleanupTerminalOpsBatch:普通读至多 500 个保留期外的三种终态 op_id(升序),逐行短事务点锁 + 点删并复核条件。
+func (s *GuildAssetStore) cleanupTerminalOpsBatch(ctx context.Context, cutoffMs uint64) (int, int64, error) {
+	applied := int32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED)
+	rejected := int32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_REJECTED)
+	aborted := int32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_ABORTED)
+
+	readCtx, cancel := context.WithTimeout(ctx, storeReadBudget)
+	opIDs, err := scanOpIDs(readCtx, s.db, sqlListCleanupTerminalOps, applied, rejected, aborted, cutoffMs, cleanupBatchSize)
+	cancel()
+	if err != nil {
+		return 0, 0, fmt.Errorf("list terminal %s: %w", guildAssetOpTable, err)
+	}
+	var deleted int64
+	for _, opID := range opIDs {
+		n, err := s.execCleanupDelete(ctx, sqlLockAssetOp, []any{opID},
+			sqlCleanupTerminalOp, opID, applied, rejected, aborted, cutoffMs)
+		deleted += n
+		if err != nil {
+			return len(opIDs), deleted, fmt.Errorf("delete terminal %s %d: %w", guildAssetOpTable, opID, err)
+		}
+	}
+	return len(opIDs), deleted, nil
+}
+
+// counterKey 是 guild_daily_counter 的完整主键。
+type counterKey struct {
+	PlayerID         uint64
+	Kind             int32
+	RefID, PeriodKey uint32
+}
+
+// cleanupCountersBatch:普通读至多 500 个 period_key 落在 [floor, cutoff] 的计数行主键(主键升序),逐行短事务点锁 + 点删并复核范围。
+//
+// 前提:cutoff 来自 counterCleanupCutoffs,从不删到仍可能被在途预留 upsert 写的上一周期行。本短事务不持 seq 行守卫,
+// 所以它在计数行上只会遇到退款(sqlRefundCounter,Point_Get,与 sqlLockCleanupCounter 同为 PRIMARY key → 行 key),同序排队;
+// 直接传一个更新的 cutoff 进来就会与 upsert 同行相遇(TiDB 各持一半,C5 补遗),也会让被删周期的限购被在途预留绕过一次。
+func (s *GuildAssetStore) cleanupCountersBatch(ctx context.Context, floor, cutoff uint32) (int, int64, error) {
+	keys, err := s.listCleanupCounters(ctx, floor, cutoff)
+	if err != nil {
+		return 0, 0, err
+	}
+	var deleted int64
+	for _, k := range keys {
+		n, err := s.execCleanupDelete(ctx, sqlLockCleanupCounter, []any{k.PlayerID, k.Kind, k.RefID, k.PeriodKey},
+			sqlCleanupCounter, k.PlayerID, k.Kind, k.RefID, k.PeriodKey, floor, cutoff)
+		deleted += n
+		if err != nil {
+			return len(keys), deleted, fmt.Errorf("delete daily counter (player=%d kind=%d ref=%d period=%d): %w",
+				k.PlayerID, k.Kind, k.RefID, k.PeriodKey, err)
+		}
+	}
+	return len(keys), deleted, nil
+}
+
+func (s *GuildAssetStore) listCleanupCounters(ctx context.Context, floor, cutoff uint32) ([]counterKey, error) {
+	ctx, cancel := context.WithTimeout(ctx, storeReadBudget)
+	defer cancel()
+	rows, err := s.db.QueryContext(ctx, sqlListCleanupCounters, floor, cutoff, cleanupBatchSize)
+	if err != nil {
+		return nil, fmt.Errorf("list expired daily counters: %w", err)
+	}
+	defer rows.Close()
+
+	var keys []counterKey
+	for rows.Next() {
+		var k counterKey
+		if err := rows.Scan(&k.PlayerID, &k.Kind, &k.RefID, &k.PeriodKey); err != nil {
+			return nil, fmt.Errorf("scan expired daily counter: %w", err)
+		}
+		keys = append(keys, k)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate expired daily counters: %w", err)
+	}
+	return keys, nil
+}
+
+// execCleanupDelete 在一个 RC 短事务里删一行:先按完整主键点锁(lockQuery,不带复核条件),再跑带复核条件的主键点删(query),
+// 返回删掉的行数(0 或 1)。
+//
+// 为什么进事务(死锁复核 C5,只在 TiDB 成环):TiDB 默认 pessimistic-auto-commit=false,自动提交的 DELETE 按乐观事务提交,
+// prewrite 按 region 并行写行 key、PRIMARY key 与各索引 key(本表行 key 与索引 key 落在不同 region)。计数行清理若与
+// 同一旧周期计数行的退款(sqlRefundCounter,悲观 Point_Get:先 PRIMARY key 后行 key)同时在途:退款先锁住 PRIMARY key,
+// 清理 prewrite 行 key 成功、在 PRIMARY key 上撞到退款的悲观锁;退款再申请行 key 时撞到清理的乐观锁 —— 这种互等不在 TiKV
+// 死锁检测器的等待图里,只能等 1s 锁超时或乐观锁 TTL 过期。前提在业务上可达:商店指令永不中止,背包满 / 离线可以一直 PENDING
+// 超过计数保留期,之后被 scene 拒绝或经 assetopfix 终结时退的正是保留期外的旧周期计数行。
+// 进了显式事务,两边都先走快路径点锁"PRIMARY key → 行 key",同序排队;MySQL 下锁集不变(聚簇记录 → 本行二级项),
+// 只多 SET TRANSACTION / START TRANSACTION / 点锁 / COMMIT 几次往返。终态 op 行没有悲观写者(已证明),只是共用同一个 helper。
+//
+// 尝试次数为 1:点锁 / 点删失败的行下一轮再删(与之前"不在本轮重试"同一语义)。行已被别的副本删掉 → 点锁读不到 → 0 行。
+// 超过 1 行只可能是 WHERE 写坏了(不再是完整主键等值):现在能整体回滚,返回错误。
+func (s *GuildAssetStore) execCleanupDelete(ctx context.Context, lockQuery string, lockArgs []any, query string, args ...any) (int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, cleanupStmtBudget)
 	defer cancel()
 	var deleted int64
-	err := assetop.WithTxRetry(ctx, s.db, backgroundTxAttempts, isRetryableBackground, func(tx *sql.Tx) error {
-		deleted = 0
+	err := assetop.WithTxRetry(ctx, s.db, 1, isRetryableBackground, func(tx *sql.Tx) error {
+		deleted = 0 // 重试契约:结果只在成功返回前写到外层
+		found, err := lockRowExists(ctx, tx, lockQuery, lockArgs...)
+		if err != nil {
+			return fmt.Errorf("lock: %w", err)
+		}
+		if !found {
+			return nil // 已被别的副本删掉
+		}
 		result, err := tx.ExecContext(ctx, query, args...)
 		if err != nil {
 			return err
 		}
 		n, err := result.RowsAffected()
 		if err != nil {
-			return err
+			return fmt.Errorf("read rows affected: %w", err)
+		}
+		if n > 1 {
+			return fmt.Errorf("point delete removed %d rows (WHERE is no longer a full primary-key match)", n)
 		}
 		deleted = n
 		return nil

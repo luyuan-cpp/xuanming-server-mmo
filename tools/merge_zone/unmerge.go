@@ -92,6 +92,15 @@ func runUnmerge(o options) {
 		log.Fatalf("merge fence: %v", err)
 	}
 	defer fence.release(context.Background())
+	// abortKeepingFence:MySQL / 公会缓存改回到一半的失败走这里,围栏故意不释放并给出续跑指引
+	// (撤销口径的文案,见 fenceKeptAbortMessage)。
+	// dry-run 从没写过围栏,只报原因。
+	abortKeepingFence := func(cause string) {
+		if o.dryRun {
+			log.Fatal(cause)
+		}
+		log.Fatal(fenceKeptAbortMessage(cause, fencedOpUnmerge, src, dst, runID, o.mappingAddr, o.mappingDB))
+	}
 
 	// 7' 公告 flag。
 	if n, err := deleteNoticeFlags(ctx, sharedRdb, m.PlayerIDs, o.dryRun); err != nil {
@@ -128,7 +137,8 @@ func runUnmerge(o options) {
 	if len(m.TradeListingIDs) > 0 {
 		n, terr := restoreTradeMarketZone(ctx, db, o.tradeSchema, m.TradeListingIDs, src, dst, o.dryRun)
 		if terr != nil {
-			log.Fatalf("restore trade market_zone: %v", terr)
+			// mapping / ZSET 已经改回,围栏与 3' 同理不提前释放。
+			abortKeepingFence(fmt.Sprintf("restore trade market_zone:改回中途失败:%v", terr))
 		}
 		tradeRestored = n
 		verb := "restored"
@@ -138,30 +148,25 @@ func runUnmerge(o options) {
 		log.Printf("MySQL: %d of %d manifest trade listings %s to market_zone=%d", n, len(m.TradeListingIDs), verb, src)
 	}
 
-	// 3' guild.zone_id 改回,只针对清单里的 guild_id。
+	// 3' guild.zone_id 改回,只针对清单里的 guild_id,逐条主键点更新(锁序见 restoreGuildZone):
+	// 原先的 `zone_id = dst AND guild_id IN (...)` 可能被规划成 idx_guild_0 range,与目标区公会的解散反序成环。
 	if len(m.GuildIDs) > 0 {
+		n, gerr := restoreGuildZone(ctx, db, o.guildSchema, m.GuildIDs, src, dst, o.dryRun)
+		if gerr != nil {
+			abortKeepingFence(fmt.Sprintf("restore guild zone_id:改回中途失败:%v", gerr))
+		}
+		verb := "restored"
 		if o.dryRun {
-			log.Printf("[DRY-RUN] Would set zone_id=%d on %d guild rows", src, len(m.GuildIDs))
-		} else {
-			restored := 0
-			for _, batch := range chunkUint64(m.GuildIDs, playerRowsBatchSize) {
-				res, err := db.ExecContext(ctx,
-					fmt.Sprintf("UPDATE %s SET zone_id = ? WHERE zone_id = ? AND guild_id IN (%s)",
-						guildQualified(o.guildSchema, guildTable), inListLiteral(batch)),
-					src, dst)
-				if err != nil {
-					log.Fatalf("restore guild zone_id: %v", err)
-				}
-				n, _ := res.RowsAffected()
-				restored += int(n)
-			}
-			log.Printf("MySQL: %d guild rows restored to zone_id=%d", restored, src)
+			verb = "would be restored"
 		}
-		if n, err := invalidateGuildCaches(ctx, guildRdb, m.GuildIDs, o.dryRun); err != nil {
-			log.Fatalf("invalidate guild caches: %v", err)
-		} else {
-			log.Printf("Guild cache: %d guild:v2 entries invalidated", n)
+		log.Printf("MySQL: %d of %d manifest guilds %s to zone_id=%d", n, len(m.GuildIDs), verb, src)
+		// 失效失败时 zone_id 已经改回,与 3' 写失败同属「改回到一半」:围栏同样保留、给续跑指引。
+		// 重跑时 3' 按 `zone_id = dst` 幂等(已改回的影响 0 行),失效对全清单再做一遍。
+		inv, ierr := invalidateGuildCaches(ctx, guildRdb, m.GuildIDs, o.dryRun)
+		if ierr != nil {
+			abortKeepingFence(fmt.Sprintf("restore guild zone_id:已改回 %d 行,但 guild:v2 缓存失效失败:%v", n, ierr))
 		}
+		log.Printf("Guild cache: %d guild:v2 entries invalidated", inv)
 	}
 
 	// 1' 目标库玩家行。只删逐字节相同的。

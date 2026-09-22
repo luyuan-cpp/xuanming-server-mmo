@@ -725,15 +725,22 @@ func TestCreatePlayerName_LostLockFencesAccountWrite(t *testing.T) {
 	}
 }
 
-// 围栏写成功时 blob 带上配置的过期时间(原来的裸 SET 就带,换成脚本后不能丢)。
-func TestCreatePlayerName_AccountBlobKeepsCacheExpire(t *testing.T) {
+// 建角不能把账号目录重新变成缓存，即使旧配置仍包含 CacheExpire。
+func TestCreatePlayerName_AccountBlobOutlivesLegacyCacheExpire(t *testing.T) {
 	n := newNameHarness(t)
+	key := constants.GetAccountDataKey(hzAccount)
+	if err := n.rdb.Expire(n.ctx, key, time.Hour).Err(); err != nil {
+		t.Fatal(err)
+	}
 	if resp := n.create(t, "云中君"); resp.ErrorMessage != nil {
 		t.Fatalf("unexpected tip %v", resp.ErrorMessage)
 	}
-	// harness 把 Account.CacheExpire 设成 1h。
-	if ttl := n.mr.TTL(constants.GetAccountDataKey(hzAccount)); ttl != time.Hour {
-		t.Fatalf("account blob TTL = %s, want 1h", ttl)
+	if ttl := n.mr.TTL(key); ttl != 0 {
+		t.Fatalf("账号目录仍有过期时间: %s", ttl)
+	}
+	n.mr.FastForward(48 * time.Hour)
+	if players := storedPlayers(t, n.ctx, n.rdb); len(players) != 1 || players[0].GetPlayerId() != hzPlayerID {
+		t.Fatalf("超过旧 TTL 后建角记录丢失: %v", players)
 	}
 }
 

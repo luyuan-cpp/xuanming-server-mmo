@@ -30,6 +30,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -39,7 +40,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -704,7 +705,7 @@ func TestIT_AssertGuildTablesReady(t *testing.T) {
 func TestIT_MigrateGuildZone(t *testing.T) {
 	itReset(t)
 	ctx := context.Background()
-	db := itOpen(t)
+	db := itOpenReadCommitted(t)
 	if _, err := db.Exec("INSERT INTO " + itGuildDB + ".guild (guild_id, name, zone_id) VALUES (11,'a',901),(12,'b',901),(21,'c',902)"); err != nil {
 		t.Fatal(err)
 	}
@@ -712,23 +713,313 @@ func TestIT_MigrateGuildZone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(gids) != 2 || gids[0] != 11 {
-		t.Fatalf("guild ids = %v", gids)
+	if fmt.Sprint(gids) != "[11 12]" {
+		t.Fatalf("guild ids = %v, want [11 12]", gids)
 	}
-	if n, err := migrateGuildZone(ctx, db, itGuildDB, itSrcZone, itDstZone, true); err != nil || n != 2 {
-		t.Fatalf("dry-run: n=%d err=%v", n, err)
+
+	// 清单收集之后才进源区的公会(内部 / GM 建帮路径不读合服围栏):改写只动清单里的 id,它必须原地不动,
+	// 由改写后的复查(countGuildsInZone)拦住 —— merge_run.go 步骤 3 据此中止且不标记完成。
+	if _, err := db.Exec("INSERT INTO " + itGuildDB + ".guild (guild_id, name, zone_id) VALUES (13,'late',901)"); err != nil {
+		t.Fatal(err)
 	}
-	if n := itCount(t, db, itGuildDB+".guild WHERE zone_id = 901"); n != 2 {
-		t.Fatalf("dry-run wrote: %d rows still in 901, want 2", n)
+
+	if n, err := migrateGuildZone(ctx, db, itGuildDB, gids, itSrcZone, itDstZone, true); err != nil || n != 2 {
+		t.Fatalf("dry-run: n=%d err=%v, want 2 (only the manifest guilds)", n, err)
 	}
-	if n, err := migrateGuildZone(ctx, db, itGuildDB, itSrcZone, itDstZone, false); err != nil || n != 2 {
+	if n := itCount(t, db, itGuildDB+".guild WHERE zone_id = 901"); n != 3 {
+		t.Fatalf("dry-run wrote: %d rows still in 901, want 3", n)
+	}
+	if n, err := migrateGuildZone(ctx, db, itGuildDB, gids, itSrcZone, itDstZone, false); err != nil || n != 2 {
 		t.Fatalf("apply: n=%d err=%v", n, err)
 	}
-	if n := itCount(t, db, itGuildDB+".guild WHERE zone_id = 901"); n != 0 {
-		t.Errorf("%d guilds left in the source zone", n)
+	if left, err := countGuildsInZone(ctx, db, itGuildDB, itSrcZone); err != nil || left != 1 {
+		t.Fatalf("source zone left=%d err=%v, want 1 (guild 13 is outside the manifest)", left, err)
 	}
-	if n := itCount(t, db, itGuildDB+".guild WHERE zone_id = 902"); n != 3 {
-		t.Errorf("target zone has %d guilds, want 3", n)
+	var zone13 uint32
+	if err := db.QueryRow("SELECT zone_id FROM " + itGuildDB + ".guild WHERE guild_id = 13").Scan(&zone13); err != nil {
+		t.Fatal(err)
+	}
+	if zone13 != itSrcZone {
+		t.Errorf("guild 13 is not in the manifest but was rewritten to zone_id=%d", zone13)
+	}
+
+	// 续跑口径:重新收集并进清单,再改写;已改过的 11 / 12 不再命中。
+	more, err := collectGuildIDsInZone(ctx, db, itGuildDB, itSrcZone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gids = sortedUint64(append(gids, more...))
+	if n, err := migrateGuildZone(ctx, db, itGuildDB, gids, itSrcZone, itDstZone, false); err != nil || n != 1 {
+		t.Fatalf("resume apply: n=%d err=%v, want 1 row", n, err)
+	}
+	if left, err := countGuildsInZone(ctx, db, itGuildDB, itSrcZone); err != nil || left != 0 {
+		t.Errorf("source zone left=%d err=%v, want 0", left, err)
+	}
+	if n := itCount(t, db, itGuildDB+".guild WHERE zone_id = 902"); n != 4 {
+		t.Errorf("target zone has %d guilds, want 4", n)
+	}
+	// 重跑幂等。
+	if n, err := migrateGuildZone(ctx, db, itGuildDB, gids, itSrcZone, itDstZone, false); err != nil || n != 0 {
+		t.Errorf("re-run: n=%d err=%v, want 0 rows", n, err)
+	}
+
+	// 撤销:只改清单 id 里当前在 dst 的;原住民 21 不在清单里,不动。
+	if n, err := restoreGuildZone(ctx, db, itGuildDB, gids, itSrcZone, itDstZone, true); err != nil || n != 3 {
+		t.Fatalf("restore dry-run: n=%d err=%v, want 3", n, err)
+	}
+	if n, err := restoreGuildZone(ctx, db, itGuildDB, gids, itSrcZone, itDstZone, false); err != nil || n != 3 {
+		t.Fatalf("restore: n=%d err=%v, want 3", n, err)
+	}
+	if n := itCount(t, db, itGuildDB+".guild WHERE zone_id = 901"); n != 3 {
+		t.Errorf("source zone has %d guilds after restore, want 3", n)
+	}
+	var zone21 uint32
+	if err := db.QueryRow("SELECT zone_id FROM " + itGuildDB + ".guild WHERE guild_id = 21").Scan(&zone21); err != nil {
+		t.Fatal(err)
+	}
+	if zone21 != itDstZone {
+		t.Errorf("target-zone native guild moved by the restore: zone_id=%d", zone21)
+	}
+	if n, err := restoreGuildZone(ctx, db, itGuildDB, gids, itSrcZone, itDstZone, false); err != nil || n != 0 {
+		t.Errorf("restore re-run: n=%d err=%v, want 0 rows", n, err)
+	}
+}
+
+// ── 锁序(2026-09-21 死锁审计 #17)────────────────────────────
+
+// itOpenReadCommitted 与 mustOpenMySQL 同口径打开句柄(readCommittedDSN),合服写路径的用例都走它。
+func itOpenReadCommitted(t *testing.T) *sql.DB {
+	t.Helper()
+	dsn, err := readCommittedDSN(itDSN())
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := db.Ping(); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+// TestIT_MySQLSessionIsReadCommitted:readCommittedDSN 改出来的 DSN 真的让驱动在建连时把会话设成 RC ——
+// 单测只能证明 DSN 字符串长对了,这里证明服务器端确实生效(包括 DSN 里原有的 multiStatements 等参数照常工作)。
+func TestIT_MySQLSessionIsReadCommitted(t *testing.T) {
+	db := itOpenReadCommitted(t)
+	var level string
+	if err := db.QueryRow("SELECT @@SESSION.transaction_isolation").Scan(&level); err != nil {
+		t.Fatal(err)
+	}
+	if level != "READ-COMMITTED" {
+		t.Fatalf("session isolation = %q, want READ-COMMITTED — the merge's lock-order reasoning assumes RC", level)
+	}
+}
+
+// itInlineUintArgs 把 ? 依次替换成数字,供 EXPLAIN 使用(EXPLAIN 不走预编译,且参数只有无符号整数)。
+func itInlineUintArgs(t *testing.T, stmt string, args ...uint64) string {
+	t.Helper()
+	if strings.Count(stmt, "?") != len(args) {
+		t.Fatalf("placeholder count %d != arg count %d in %q", strings.Count(stmt, "?"), len(args), stmt)
+	}
+	for _, a := range args {
+		stmt = strings.Replace(stmt, "?", strconv.FormatUint(a, 10), 1)
+	}
+	return stmt
+}
+
+// itExplain 跑 EXPLAIN FORMAT=TRADITIONAL,返回第一行列名 → 值(NULL 记空串)。单表语句,第一行即其计划。
+func itExplain(t *testing.T, db *sql.DB, stmt string) map[string]string {
+	t.Helper()
+	rows, err := db.Query("EXPLAIN FORMAT=TRADITIONAL " + stmt)
+	if err != nil {
+		t.Fatalf("EXPLAIN %q: %v", stmt, err)
+	}
+	defer rows.Close()
+	cols, err := rows.Columns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rows.Next() {
+		t.Fatalf("EXPLAIN returned no row: %q", stmt)
+	}
+	vals := make([]sql.NullString, len(cols))
+	ptrs := make([]any, len(cols))
+	for i := range vals {
+		ptrs[i] = &vals[i]
+	}
+	if err := rows.Scan(ptrs...); err != nil {
+		t.Fatal(err)
+	}
+	plan := make(map[string]string, len(cols))
+	for i, c := range cols {
+		plan[c] = vals[i].String
+	}
+	return plan
+}
+
+// TestIT_ZonePointUpdatesArePrimaryKeyPointLookups 钉住 rewriteZoneByPrimaryKey 的执行计划:对生产代码
+// **同一个** zonePointUpdateSQL 的产物做 EXPLAIN,断言 key=PRIMARY 且用满主键(BIGINT UNSIGNED 单列 key_len=8)。
+// 改回 `zone = ? AND pk IN (...)` 或整区 `WHERE zone = ?`,优化器就可能挑 zone 二级索引(先锁二级项再回表),
+// 与在线写者「主键 → 二级」反序成环 —— 这类问题只取决于执行计划,EXPLAIN 每次都答得出来。
+// 先各插一行:点更新命中已存在的行时计划才稳定。UPDATE 按主键点更新时 MySQL 显示 range(rows=1)或 const。
+func TestIT_ZonePointUpdatesArePrimaryKeyPointLookups(t *testing.T) {
+	itReset(t)
+	db := itOpenReadCommitted(t)
+	if _, err := db.Exec("INSERT INTO " + itGuildDB + ".guild (guild_id, name, zone_id) VALUES (11,'a',901),(12,'b',901),(21,'c',902)"); err != nil {
+		t.Fatal(err)
+	}
+	itSeedListing(t, db, 7001, 9901, itSrcZone, itSrcZone)
+	itSeedListing(t, db, 7002, 9902, itSrcZone, itSrcZone)
+	itSeedListing(t, db, 7101, 9950, itDstZone, itDstZone)
+
+	cases := []struct {
+		name string
+		stmt string
+		pk   uint64 // 已存在的行
+	}{
+		{"guild zone_id", zonePointUpdateSQL(guildQualified(itGuildDB, guildTable), guildPKColumn, guildZoneColumn), 11},
+		{"trade_listing market_zone", zonePointUpdateSQL(tradeListingQualified(itTradeDB), tradeListingPKColumn, tradeMarketZoneColumn), 7001},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// 参数顺序与 rewriteZoneByPrimaryKey 一致:(to, pk, from)。
+			plan := itExplain(t, db, itInlineUintArgs(t, c.stmt, uint64(itDstZone), c.pk, uint64(itSrcZone)))
+			if plan["key"] != "PRIMARY" || plan["key_len"] != "8" {
+				t.Fatalf("%s: plan key=%q key_len=%q type=%q, want PRIMARY/8 — the zone rewrite must lock the primary key "+
+					"first, never walk the zone secondary index. SQL: %s", c.name, plan["key"], plan["key_len"], plan["type"], c.stmt)
+			}
+			if plan["type"] != "range" && plan["type"] != "const" {
+				t.Fatalf("%s: access type=%q, want range(rows=1)/const. SQL: %s", c.name, plan["type"], c.stmt)
+			}
+		})
+	}
+}
+
+// itLockWaitersQuery 数 schema.table 上正在排队等行锁的事务数(MySQL 8 performance_schema)。
+// 帮会表不在 DSN 的默认库里,所以库名显式传,不用 DATABASE()。
+const itLockWaitersQuery = `
+	SELECT COUNT(DISTINCT w.REQUESTING_ENGINE_TRANSACTION_ID)
+	FROM performance_schema.data_lock_waits w
+	JOIN performance_schema.data_locks l ON l.ENGINE_LOCK_ID = w.REQUESTING_ENGINE_LOCK_ID
+	WHERE l.OBJECT_SCHEMA = ? AND l.OBJECT_NAME = ?`
+
+// itAwaitLockWaiters 轮询直到 schema.table 上至少有 want 个事务在等行锁,或 budget 用尽(返回错误)。
+// 靠观察而不是 sleep 估时间:两次轮询之间的短停顿只为不空转打爆 MySQL。
+func itAwaitLockWaiters(ctx context.Context, db *sql.DB, schema, table string, want int, budget time.Duration) error {
+	deadline := time.Now().Add(budget)
+	for {
+		var waiters int
+		if err := db.QueryRowContext(ctx, itLockWaitersQuery, schema, table).Scan(&waiters); err != nil {
+			return fmt.Errorf("read performance_schema.data_lock_waits (the test account needs SELECT on it; MySQL 8+): %w", err)
+		}
+		if waiters >= want {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("only %d/%d transactions queued on %s.%s within %s", waiters, want, schema, table, budget)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// isITDeadlock 报告 err 是否是 InnoDB 死锁(1213)。
+func isITDeadlock(err error) bool {
+	var me *mysql.MySQLError
+	return errors.As(err, &me) && me.Number == mysqlErrDeadlock
+}
+
+// TestIT_MigrateGuildZone_ConcurrentDisbandDoesNotDeadlock 是审计 #17 的确定性交错回归。
+//
+// 修复前的环(审计原文 INTERLEAVING):
+//
+//	T2 = guild 服 DisbandGuild(12):RC 事务,`SELECT ... WHERE guild_id = 12 FOR UPDATE` 持主键 12 的 X;
+//	T1 = 合服整区 `UPDATE guild SET zone_id = dst WHERE zone_id = src` 沿 idx_guild_0:锁 (901,11) → 回表改 11 →
+//	     锁 (901,12) 的二级项 → 回表请求主键 12,被 T2 挡住(此时 T1 持有二级项 (901,12));
+//	T2 `DELETE FROM guild WHERE guild_id = 12` 要 delete-mark idx_guild_0 的 (901,12),撞上 T1 的显式 X → 1213。
+//
+// 修复后 T1 逐条主键点更新:改完 11 即提交,轮到 12 时在主键上排队、此前什么都不持有;T2 的 DELETE
+// 立即完成,提交后 T1 等到的是已删除的行,影响 0 行。编排:T2 先锁住 12 → 起 T1 → 在 data_lock_waits
+// 里**看见** T1 排进 guild 表的锁等待队列 → T2 DELETE + 提交 → 两边都不得 1213。
+// 这里 T2 直接执行与 guild_manage_repo.go(sqlLockGuild / DisbandGuild)同形的两条语句:merge_zone 是独立
+// module,不能 import go/guild;环只取决于这两条语句的锁模式,与事务里其余的删申请 / 删成员无关。
+func TestIT_MigrateGuildZone_ConcurrentDisbandDoesNotDeadlock(t *testing.T) {
+	itReset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	fixture := itOpen(t)
+	mergeDB := itOpenReadCommitted(t)
+	guild := guildQualified(itGuildDB, guildTable)
+
+	if _, err := fixture.Exec("INSERT INTO " + guild + " (guild_id, name, zone_id) VALUES (11,'a',901),(12,'b',901),(21,'c',902)"); err != nil {
+		t.Fatal(err)
+	}
+	gids, err := collectGuildIDsInZone(ctx, mergeDB, itGuildDB, itSrcZone)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// T2:guild 服写事务是 RC(guild_manage_repo.go inTx)。任何提前失败的路径都必须放掉主键锁,否则 T1 会挂到超时。
+	disband, err := fixture.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer disband.Rollback()
+	var zone uint32
+	if err := disband.QueryRowContext(ctx, "SELECT zone_id FROM "+guild+" WHERE guild_id = ? FOR UPDATE", 12).Scan(&zone); err != nil {
+		t.Fatalf("fixture: lock guild 12: %v", err)
+	}
+
+	type result struct {
+		n   int64
+		err error
+	}
+	mergeDone := make(chan result, 1)
+	go func() {
+		n, err := migrateGuildZone(ctx, mergeDB, itGuildDB, gids, itSrcZone, itDstZone, false)
+		mergeDone <- result{n, err}
+	}()
+	if err := itAwaitLockWaiters(ctx, fixture, itGuildDB, guildTable, 1, 10*time.Second); err != nil {
+		_ = disband.Rollback()
+		<-mergeDone
+		t.Fatalf("fixture: the merge rewrite should queue behind guild 12's primary-key lock: %v", err)
+	}
+
+	// 修复前成环的时刻:T2 删行、顺带删 idx_guild_0 的二级项。
+	if _, err := disband.ExecContext(ctx, "DELETE FROM "+guild+" WHERE guild_id = ?", 12); err != nil {
+		_ = disband.Rollback()
+		<-mergeDone
+		if isITDeadlock(err) {
+			t.Fatalf("DisbandGuild's DELETE deadlocked with the merge rewrite (1213) — did the rewrite go back to "+
+				"walking idx_guild_0? %v", err)
+		}
+		t.Fatalf("disband DELETE: %v", err)
+	}
+	if err := disband.Commit(); err != nil {
+		<-mergeDone
+		t.Fatalf("disband commit: %v", err)
+	}
+
+	r := <-mergeDone
+	if isITDeadlock(r.err) {
+		t.Fatalf("the merge rewrite was chosen as a deadlock victim (1213): %v", r.err)
+	}
+	if r.err != nil {
+		t.Fatalf("merge rewrite: %v", r.err)
+	}
+	if r.n != 1 {
+		t.Errorf("rewrote %d rows, want 1 (guild 11; guild 12 was disbanded while the merge waited)", r.n)
+	}
+	if left, err := countGuildsInZone(ctx, mergeDB, itGuildDB, itSrcZone); err != nil || left != 0 {
+		t.Errorf("source zone left=%d err=%v, want 0", left, err)
+	}
+	if n := itCount(t, fixture, guild+" WHERE guild_id = 12"); n != 0 {
+		t.Errorf("guild 12 survived its disband")
+	}
+	if n := itCount(t, fixture, guild+" WHERE zone_id = 902"); n != 2 {
+		t.Errorf("target zone has %d guilds, want 2 (11 merged + 21 native)", n)
 	}
 }
 
@@ -1527,6 +1818,120 @@ func TestIT_TradeMarketZone_ResidualAbortKeepsFenceThenResumesAfterDEL(t *testin
 	}
 	if v, _ := mapRdb.Get(ctx, playerZoneKeyPrefix+"9971").Result(); v != "902" {
 		t.Errorf("mapping not remapped by the resumed run: %q", v)
+	}
+	for _, key := range []string{srcFence, dstFence} {
+		if n, _ := mapRdb.Exists(ctx, key).Result(); n != 0 {
+			t.Errorf("%s left behind by the resumed run", key)
+		}
+	}
+}
+
+// 步骤 3 复查中止经真二进制走一遍「中止 → 重跑」(审计 #17 FIX 2):公会改为按清单逐条改之后,清单落盘后
+// 才进源区的公会(内部 / GM 建帮路径不读合服围栏)不会被捎带,改写后复查源区计数 > 0 必须中止、不标记步骤完成、
+// 围栏留在本次 run_id 上并给出 GET/DEL 指引;照做之后重跑,清单阶段把新公会并进清单再搬。
+// 「清单落盘之后才进源区」与 3b 的用例同法用触发器确定性制造:步骤 1 往目标库插玩家行时顺手在源区建一个公会。
+func TestIT_GuildZone_ResidualAbortKeepsFenceThenResumesAfterDEL(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	db := itOpen(t)
+	mapRdb := itRedis(t, itMappingRD)
+	guild := guildQualified(itGuildDB, guildTable)
+
+	itSeedPlayers(t, []uint64{9981}, true)
+	if _, err := db.Exec("INSERT INTO " + guild + " (guild_id, name, zone_id) VALUES (11,'src-a',901),(21,'dst-a',902)"); err != nil {
+		t.Fatal(err)
+	}
+
+	trigger := zoneDBName(itDstZone) + ".it_guild_late_create"
+	if _, err := db.Exec(fmt.Sprintf("CREATE TRIGGER %s AFTER INSERT ON %s.player_centre_database FOR EACH ROW "+
+		"INSERT IGNORE INTO %s (guild_id, name, zone_id) VALUES (13, 'late-guild', %d)",
+		trigger, zoneDBName(itDstZone), guild, itSrcZone)); err != nil {
+		t.Fatalf("create trigger (needs TRIGGER privilege; with binlog on also SUPER or log_bin_trust_function_creators): %v", err)
+	}
+	t.Cleanup(func() { _, _ = db.Exec("DROP TRIGGER IF EXISTS " + trigger) })
+
+	manifest := filepath.Join(t.TempDir(), "merge.json")
+	args := []string{"-source-zone", "901", "-target-zone", "902", "-manifest-path", manifest,
+		"-apply", "-expected-src-players", "1"}
+	srcFence, dstFence := mergeFenceKey(itSrcZone), mergeFenceKey(itDstZone)
+
+	// 1) 首跑:步骤 1 的触发器建出公会 13;步骤 3 只改清单里的 11,复查剩 1 个 → 中止。
+	out, code := itRun(t, args...)
+	if code == 0 {
+		t.Fatalf("the merge passed although a guild reached the source zone after the manifest was written:\n%s", out)
+	}
+	if !strings.Contains(out, "步骤 "+stepGuildMySQL+" 未标记完成") || !strings.Contains(out, "DEL "+srcFence+" "+dstFence) {
+		t.Errorf("the guild abort must say the step is not done and how to clear the fence:\n%s", out)
+	}
+	var zone11, zone13 uint32
+	if err := db.QueryRow("SELECT zone_id FROM " + guild + " WHERE guild_id = 11").Scan(&zone11); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow("SELECT zone_id FROM " + guild + " WHERE guild_id = 13").Scan(&zone13); err != nil {
+		t.Fatal(err)
+	}
+	if zone11 != itDstZone || zone13 != itSrcZone {
+		t.Errorf("after the abort guild 11 zone=%d (want %d), guild 13 zone=%d (want %d, it is outside the manifest)",
+			zone11, itDstZone, zone13, itSrcZone)
+	}
+	man, err := loadManifest(manifest)
+	if err != nil || man == nil {
+		t.Fatalf("manifest after the abort: %v", err)
+	}
+	if !man.stepDone(stepPlayerRows) || man.stepDone(stepGuildMySQL) || man.stepDone(stepPlayerMapping) {
+		t.Errorf("step flags after the guild abort are wrong: %+v", man.Steps)
+	}
+	if fmt.Sprint(man.GuildIDs) != "[11]" {
+		t.Errorf("manifest guild ids = %v, want [11]", man.GuildIDs)
+	}
+	if v, _ := mapRdb.Get(ctx, playerZoneKeyPrefix+"9981").Result(); v != "901" {
+		t.Errorf("mapping flipped although step 3 aborted: %q", v)
+	}
+
+	// 2) 围栏留在本次 run_id 上,且文案里的 run_id 与之一致。
+	for _, key := range []string{srcFence, dstFence} {
+		raw, gerr := mapRdb.Get(ctx, key).Result()
+		if gerr != nil {
+			t.Fatalf("%s should be left in place after the guild abort: %v", key, gerr)
+		}
+		var v mergeInProgressValue
+		if uerr := json.Unmarshal([]byte(raw), &v); uerr != nil {
+			t.Fatalf("%s value: %v", key, uerr)
+		}
+		if v.RunID == "" || !strings.Contains(out, "仍归 run_id="+v.RunID) {
+			t.Errorf("abort message does not name the run_id held by %s (%q):\n%s", key, v.RunID, out)
+		}
+	}
+
+	// 3) 不 DEL 直接重跑:被残留围栏拒绝,且在任何写之前。
+	out, code = itRun(t, args...)
+	if code == 0 || !strings.Contains(out, "another merge is already fencing zone") {
+		t.Fatalf("a re-run without clearing the fence should be refused by the fence (exit=%d):\n%s", code, out)
+	}
+
+	// 4) 照文案:停建帮入口(删触发器)→ DEL 两把围栏 → 原命令重跑。
+	if _, err := db.Exec("DROP TRIGGER " + trigger); err != nil {
+		t.Fatal(err)
+	}
+	if err := mapRdb.Del(ctx, srcFence, dstFence).Err(); err != nil {
+		t.Fatal(err)
+	}
+	out, code = itRun(t, args...)
+	if code != 0 {
+		t.Fatalf("re-run after DEL exit=%d\n%s", code, out)
+	}
+	if n := itCount(t, db, guild+" WHERE zone_id = 901"); n != 0 {
+		t.Errorf("%d guilds left in the source zone after the resumed run", n)
+	}
+	man, err = loadManifest(manifest)
+	if err != nil || man == nil {
+		t.Fatalf("manifest after the resumed run: %v", err)
+	}
+	if fmt.Sprint(man.GuildIDs) != "[11 13]" {
+		t.Errorf("resumed manifest guild ids = %v, want [11 13]", man.GuildIDs)
+	}
+	if !man.stepDone(stepGuildMySQL) || !man.stepDone(stepPlayerMapping) {
+		t.Errorf("resumed run did not finish the remaining steps: %+v", man.Steps)
 	}
 	for _, key := range []string{srcFence, dstFence} {
 		if n, _ := mapRdb.Exists(ctx, key).Result(); n != 0 {

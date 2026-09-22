@@ -44,10 +44,13 @@ package data
 //	     预置交叉 pending 行,两个**不相干 pair** 并发 AddFriend(⑤⑥ 不加 FOR UPDATE 的双向回归)
 //	(f)  TestCapacityRowReclaimRacesWithGuardedWrites           容量行回收与四条写路径并发
 //	(g)  TestEnsureCapacityRows_ConcurrentInsertOnReclaimedRowSurvivesDeadlock
-//	     回收的 DELETE 压着 X,两个 ensure 同时排队等同一主键的 S(delete-marked 记录上的 S→X 成环)
+//	     回收的 DELETE 压着 X,两个 ensure 同时排队等同一主键;断言两者都成功且 1213 重试一次都没触发
+//	     (补行改 ODKU 之前,这里是 delete-marked 记录上的 S→X 成环)
+//	(h)  TestBlockInsertOnRowUnderPendingDeleteDoesNotDeadlockWithQueuedUnblock
+//	     Unblock 的 DELETE 压着 X,Block ④ 与另一个 Unblock 先后排队;断言两者都不 1213
 //
 // (a)–(d) 都从空表起跑;(e) 是唯一预置 friend_request 行的,(f)(g) 是仅有的两个有"删守卫行"一方的;
-// (g) 是唯一**手工编排**时序的(靠 performance_schema 观察锁等待,不靠并发度去撞)。
+// (g)(h) 是**手工编排**时序的(靠 performance_schema 观察锁等待,不靠并发度去撞),共用 awaitLockWaiters。
 //
 // 公共夹具(门控、schema、不变量断言、isInnoDBDeadlock)在 friend_repo_mysql_test.go。
 
@@ -62,6 +65,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	drivermysql "github.com/go-sql-driver/mysql"
 )
 
 // guardConcurrency = 16。
@@ -717,32 +722,34 @@ func TestCapacityRowReclaimRacesWithGuardedWrites(t *testing.T) {
 	}
 }
 
-// ── 场景 (g):回收删行之后,并发 ensure 在同一条 delete-marked 主键记录上 S→X 成环 ──
+// ── 场景 (g):回收删行之后,并发 ensure 撞上同一条 delete-marked 主键记录 ──
 //
-// 回收上线之前 friend_capacity 从不删行:并发 INSERT IGNORE 同一主键时,后到者等 S、拿到后看见的是
-// **活的**重复键 → IGNORE,不再需要 X,成不了环。有了回收的 DELETE 之后出现了 delete-marked 记录,
-// 形状就变成 MySQL 手册 "Deadlocks in InnoDB" 的那个例子:
+// 回收上线之前 friend_capacity 从不删行:并发补行同一主键时,后到者拿到锁后看见的是**活的**重复键,
+// 什么都不用改,成不了环。有了回收的 DELETE 之后出现了 delete-marked 记录,形状就变成 MySQL 手册
+// "Deadlocks in InnoDB" 的那个例子 —— 前提是**至少两个 INSERT 同时排队等同一条被 X 锁住(或 delete-marked)
+// 的主键记录**,压着 X 的一方可以是回收的 DELETE,也可以是另一个事务的守卫 FOR UPDATE:
 //
-//	成环的前提是**至少两个 INSERT 同时排队等同一条被 X 锁住(或 delete-marked)的主键记录的 S**。
-//	压着 X 的一方可以是回收的 DELETE,也可以是另一个事务的守卫 FOR UPDATE。X 一释放,等待者同时拿到 S;
-//	重复键检查发现记录是已提交的删除标记 → 不算重复 → 要在这条记录上就地复活 → 各自申请 X,
-//	而对方的 S 挡着 → 互等 → InnoDB 牺牲其一(1213)。
+//   - 补行若用 INSERT IGNORE:重复键检查取的是 **S**。X 一释放,等待者**同时**拿到 S;发现记录是已提交的删除
+//     标记 → 不算重复 → 要就地复活 → 各自申请 X,而对方的 S 挡着 → 互等 → InnoDB 牺牲其一(1213)。
+//     2026-09-21 真库复现过,当时靠 ensureFriendCapacityRows 的有上限重试吸收。
+//   - 现在补行用 INSERT … ON DUPLICATE KEY UPDATE:重复键检查直接取 **X**,等待者只能一个一个拿到,
+//     先到者复活记录并提交,后到者看见活行、走 no-op 更新。**根本不成环**,不再依赖重试。
 //
-// ensure 在事务外、自动提交,这个 1213 不属于 runGuardedWrite 的缺行哨兵,缺行重试吸收不了它;
-// 不处理的话,回收每删一行,都可能把紧随其后的并发请求(两个人同时向同一个零好友玩家发申请)打成
-// ErrStorage 并触发 fault 告警。产品侧的处理是 ensureFriendCapacityRows 对 1213 做有上限的重试
-// (包住 COUNT + INSERT 这一对语句):牺牲者重跑时胜者已经把行复活,INSERT IGNORE 撞上活的重复键即空操作。
+// 所以本用例的判据比"两个 ensure 都成功"更严:ensureDeadlockRetries 必须一次都没涨。只断言成功的话,
+// 有人把补行改回 INSERT IGNORE,重试依旧能把 1213 吸收成绿 —— 死锁回来了,测试却不红。
 //
 // # 为什么手工编排,而不是照本文件的惯例拿并发度去撞
 //
-// 这个环要求"两个等待者**同时**在队列里",撞出来的概率取决于机器快慢:拿 N 个 goroutine 对撞 + 回收循环,
-// 产品没有重试时未必红、有重试时在上限之内也可能偶发红,两头都不满足"产品错了必然红"。
+// 这个环要求"两个等待者**同时**在队列里",撞出来的概率取决于机器快慢,满足不了"产品错了必然红"。
 // 所以照手册的步骤一步一步摆:用独立事务执行回收那条 DELETE 且**先不提交**(持住 X)→ 起两个 ensure →
-// 在 performance_schema.data_lock_waits 里**看见**两个等待者之后才提交。没有重试时,两个 ensure 里
-// 必然恰有一个返回 1213。(InnoDB 的取锁细节是按手册与已知行为推演的,以真库上跑出来的结果为准。)
+// 在 performance_schema.data_lock_waits 里**看见**两个等待者之后才提交。补行若是 INSERT IGNORE,
+// 两个等待者必然同时拿到 S 并成环,重试计数必然涨;ODKU 下必然为 0。
+// (InnoDB 的取锁细节是按手册与 row_ins_duplicate_error_in_clust 的已知行为推演的,以真库上跑出来的结果为准。)
 //
 // 等待者数量靠轮询观察,不靠 sleep 估时间:轮询间的短暂停顿只是不去空转打爆 MySQL,条件不满足就一直等到
 // 预算用尽并判红,不会"睡够了就当它们已经在等"。
+//
+// 本用例读包级计数器 ensureDeadlockRetries,**不能**与其它会触发 ensure 的用例并行(不加 t.Parallel)。
 func TestEnsureCapacityRows_ConcurrentInsertOnReclaimedRowSurvivesDeadlock(t *testing.T) {
 	db, ctx := openFriendTestDB(t)
 	repo, _ := newFriendTestRepo(t, db)
@@ -751,7 +758,6 @@ func TestEnsureCapacityRows_ConcurrentInsertOnReclaimedRowSurvivesDeadlock(t *te
 		player     uint64 = 88000001
 		ensurers          = 2 // 手册原形就是两个等待者;更多等待者会连环牺牲几轮,那是重试上限要覆盖的事,不是本用例要证的
 		waitBudget        = 10 * time.Second
-		pollEvery         = 10 * time.Millisecond
 	)
 
 	// 1. 先有一行陈旧的零好友容量行(= 回收的合法候选)。
@@ -779,15 +785,16 @@ func TestEnsureCapacityRows_ConcurrentInsertOnReclaimedRowSurvivesDeadlock(t *te
 		t.Fatalf("夹具:回收 DELETE 应当恰好删 1 行(此时未提交、持有该主键的 X),got removed=%d err=%v", removed, err)
 	}
 
-	// 3. 两个 ensure 对同一玩家起跑:它们的 INSERT IGNORE 会卡在重复键检查的 S 上。
+	// 3. 两个 ensure 对同一玩家起跑:它们的补行 INSERT 会卡在重复键检查上(ODKU 等 X;若被改回 INSERT IGNORE 则等 S)。
 	//
 	// 末尾"行是重建出来的"那条断言的基准时刻必须取在**起 goroutine 之前**,不能等到第 5 步提交前再取:
 	// ensureFriendCapacityRow 的 created_ms 是 ExecContext 的实参 time.Now().UnixMilli(),在 INSERT **发出之前**
-	// 求值 —— 也就是该 goroutine 卡进锁等待之前。胜者最终落库的正是这个阻塞前的时刻;牺牲者重跑时
-	// INSERT IGNORE 撞上活行是空操作,不会改写它。基准若取在"看见两个等待者之后",落库值必然早于基准,
+	// 求值 —— 也就是该 goroutine 卡进锁等待之前。先拿到锁的一方落库的正是这个阻塞前的时刻;后到者撞上活行
+	// 走 ODKU 的 no-op 更新(player_id = player_id),不会改写它。基准若取在"看见两个等待者之后",落库值必然早于基准,
 	// 产品完全正确时断言也几乎必红。夹具已把旧行的 created_ms 直写成 1,所以这个更早的下界同样足以区分
 	// "重建出来的行"与"DELETE 没生效、原样留着的旧行"。
 	beforeEnsureMs := uint64(time.Now().UnixMilli())
+	retriesBefore := ensureDeadlockRetries.Load()
 	results := make(chan error, ensurers)
 	for i := 0; i < ensurers; i++ {
 		go func() { results <- repo.ensureFriendCapacityRows(ctx, player) }()
@@ -800,39 +807,14 @@ func TestEnsureCapacityRows_ConcurrentInsertOnReclaimedRowSurvivesDeadlock(t *te
 		return errs
 	}
 
-	// 4. 等到两个等待者都**真的**排进了这张表的锁等待队列。只数 friend_capacity 上的等待,
-	//    同一个 MySQL 实例上别的库、别的表的锁等待不算数。
-	const waitersQuery = `
-		SELECT COUNT(DISTINCT w.REQUESTING_ENGINE_TRANSACTION_ID)
-		FROM performance_schema.data_lock_waits w
-		JOIN performance_schema.data_locks l ON l.ENGINE_LOCK_ID = w.REQUESTING_ENGINE_LOCK_ID
-		WHERE l.OBJECT_SCHEMA = DATABASE() AND l.OBJECT_NAME = 'friend_capacity'`
-	deadline := time.Now().Add(waitBudget)
-	for {
-		var waiters int
-		if err := db.QueryRowContext(ctx, waitersQuery).Scan(&waiters); err != nil {
-			_ = reclaimTx.Rollback()
-			collect()
-			// 测试账号读不了 performance_schema(或库不是 MySQL 8)时,这个编排做不出来 —— 那不是产品缺陷。
-			// 验收模式(FRIEND_REQUIRE_MYSQL_TESTS)下不许静默跳过:这条用例是 ensure 死锁重试的唯一确定性证据。
-			if os.Getenv(friendRequireMySQLEnv) != "" {
-				t.Fatalf("读 performance_schema.data_lock_waits 失败,无法编排本场景(测试账号需要 performance_schema 的 SELECT 权限): %v", err)
-			}
-			t.Skipf("读 performance_schema.data_lock_waits 失败,无法编排本场景,跳过(不代表通过): %v", err)
-		}
-		if waiters >= ensurers {
-			break
-		}
-		if time.Now().After(deadline) {
-			_ = reclaimTx.Rollback()
-			collect()
-			t.Fatalf("夹具编排失败:%v 内只看到 %d/%d 个 ensure 排进 friend_capacity 的锁等待队列 —— "+
-				"未提交的回收 DELETE 应当让每个 INSERT IGNORE 都卡在重复键检查上", waitBudget, waiters, ensurers)
-		}
-		time.Sleep(pollEvery)
+	// 4. 等到两个等待者都**真的**排进了这张表的锁等待队列。
+	if _, err := awaitLockWaiters(ctx, db, "friend_capacity", ensurers, waitBudget); err != nil {
+		_ = reclaimTx.Rollback()
+		collect()
+		failOrSkipOnLockWaitError(t, err, "未提交的回收 DELETE 应当让每个补行 INSERT 都卡在重复键检查上")
 	}
 
-	// 5. 放掉 X:两个等待者同时拿到 S,成环的时刻就在这里。
+	// 5. 放掉 X。补行若是 INSERT IGNORE,两个等待者此刻同时拿到 S、成环;ODKU 下只会一个一个拿到 X。
 	if err := reclaimTx.Commit(); err != nil {
 		collect()
 		t.Fatalf("夹具:提交回收事务失败: %v", err)
@@ -841,12 +823,17 @@ func TestEnsureCapacityRows_ConcurrentInsertOnReclaimedRowSurvivesDeadlock(t *te
 	// 6. 两个 ensure 都必须成功。这里不用 assertNoDeadlock:它的文案讲的是守卫锁序,与本场景的成因无关。
 	for i, err := range collect() {
 		if isInnoDBDeadlock(err) {
-			t.Fatalf("第 %d 个 ensure 返回 InnoDB 死锁(1213):两个 INSERT IGNORE 在同一条 delete-marked 主键记录上 "+
-				"S→X 互等,而 ensureFriendCapacityRows 没有对 1213 做有上限的重试(见本场景头注)—— %v", i+1, err)
+			t.Fatalf("第 %d 个 ensure 返回 InnoDB 死锁(1213),且连重试上限都用尽了:补行在同一条 delete-marked "+
+				"主键记录上互等(见本场景头注)—— %v", i+1, err)
 		}
 		if err != nil {
 			t.Fatalf("第 %d 个 ensure 出现非预期错误: %v", i+1, err)
 		}
+	}
+	// 比"都成功"更严的判据:一次 1213 都不许发生。成功可能只是重试把死锁吸收掉了。
+	if retried := ensureDeadlockRetries.Load() - retriesBefore; retried != 0 {
+		t.Fatalf("两个 ensure 虽然最终成功,但期间撞了 %d 次 InnoDB 死锁(1213)、靠重试才过:补行又拿回了 S 锁"+
+			"(被改回 INSERT IGNORE?)或会话隔离级别不是 RC —— 见 friend_repo.go ensureFriendCapacityRow 与 svc.BuildDSN", retried)
 	}
 	if got := mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend_capacity WHERE player_id=?", player); got != 1 {
 		t.Fatalf("ensure 全部成功之后容量行必须在,got %d 行", got)
@@ -865,6 +852,207 @@ func TestEnsureCapacityRows_ConcurrentInsertOnReclaimedRowSurvivesDeadlock(t *te
 		t.Fatalf("容量行的 created_ms=%d 早于起 ensure 之前取的时刻 %d(夹具旧行是 1):这一行不是重建出来的,"+
 			"本场景没有真的走到 delete-marked 分支", created, beforeEnsureMs)
 	}
+	assertFriendInvariants(t, ctx, db)
+}
+
+// ── 手工编排场景 (g)(h) 的公共夹具 ──
+
+// lockWaitersQuery 数本库里正在排队等某张表上行锁的事务数。只看当前库、指定表:
+// 同一个 MySQL 实例上别的库、别的表的锁等待不算数。
+const lockWaitersQuery = `
+	SELECT COUNT(DISTINCT w.REQUESTING_ENGINE_TRANSACTION_ID)
+	FROM performance_schema.data_lock_waits w
+	JOIN performance_schema.data_locks l ON l.ENGINE_LOCK_ID = w.REQUESTING_ENGINE_LOCK_ID
+	WHERE l.OBJECT_SCHEMA = DATABASE() AND l.OBJECT_NAME = ?`
+
+// errLockWaitsUnobservable:测试账号读不了 performance_schema 的锁视图,或实例上根本没有这两张表。
+// 这时手工编排做不出来 —— 那不是产品缺陷,由 failOrSkipOnLockWaitError 按验收模式决定跳过还是判红。
+// 只有 isLockWaitsUnobservable 认定的错误号才归到这里,见 lockWaitsQueryError。
+var errLockWaitsUnobservable = errors.New("读 performance_schema.data_lock_waits 失败")
+
+// awaitLockWaiters 轮询,直到 table 上至少有 want 个事务在排队等行锁,或 budget 用尽(返回错误)。
+// 靠轮询**观察**,不靠 sleep 估时间:两次轮询之间的短停顿只是不去空转打爆 MySQL,
+// 条件不满足就一直等到预算用尽并报错,不会"睡够了就当它们已经在等"。
+// 查询失败时的定性见 lockWaitsQueryError:只有权限 / 对象缺失类错误算"不可观测",ctx 结束与其余错误都判红。
+func awaitLockWaiters(ctx context.Context, db *sql.DB, table string, want int, budget time.Duration) (int, error) {
+	const pollEvery = 10 * time.Millisecond
+	deadline := time.Now().Add(budget)
+	for {
+		var waiters int
+		if err := db.QueryRowContext(ctx, lockWaitersQuery, table).Scan(&waiters); err != nil {
+			return 0, lockWaitsQueryError(ctx, err)
+		}
+		if waiters >= want {
+			return waiters, nil
+		}
+		if time.Now().After(deadline) {
+			return waiters, fmt.Errorf("%v 内只看到 %d/%d 个事务排进 %s 的锁等待队列", budget, waiters, want, table)
+		}
+		time.Sleep(pollEvery)
+	}
+}
+
+// lockWaitsQueryError 给 lockWaitersQuery 的失败定性:是"环境看不见锁等待"(可按模式跳过),还是"编排出错"(判红)。
+// 2026-09-21 复审前这里把一切查询错误都包成 errLockWaitsUnobservable,连 ctx 超时 / 取消也算,
+// 于是用例卡住会被报成 SKIP。现在:
+//   - 用例 ctx 已结束(预算用尽 / 被取消):带出 ctx 错误(errors.Is 可认出 context.DeadlineExceeded / Canceled),判红。
+//     这时查询失败只是结果,原因是编排卡住或超了预算。先看 ctx.Err() 而不是先看错误本身,是因为 ctx 结束时驱动
+//     报出来的形态不固定(可能是 ctx 错误,也可能是 invalid connection 之类),以 ctx 的状态为准。
+//   - MySQL 权限 / 对象缺失类错误(isLockWaitsUnobservable):归为 errLockWaitsUnobservable。
+//   - 其余一律判红:断连、SQL 写错、服务端内部错误都说明编排本身坏了。
+//
+// 与 go/trade/internal/data/listing_repo_integration_test.go 的同名助手同一口径(代码只差驱动包的导入别名),
+// 改一处要同步另一处。
+func lockWaitsQueryError(ctx context.Context, err error) error {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return fmt.Errorf("轮询锁等待时用例 ctx 已结束(编排卡住或超出预算,不是读不了 performance_schema): %w; 查询错误: %v", ctxErr, err)
+	}
+	if isLockWaitsUnobservable(err) {
+		return fmt.Errorf("%w: %v", errLockWaitsUnobservable, err)
+	}
+	return fmt.Errorf("查询 performance_schema 锁等待失败,且不是权限 / 对象缺失类错误,按编排失败判红: %w", err)
+}
+
+// isLockWaitsUnobservable 只按驱动给出的 MySQL 错误号判定"账号或实例不支持观察锁等待" —— 都是环境问题,
+// 与被测的锁行为无关。刻意不匹配错误文本,也不把"查询失败"整体归进来。
+// 注意 performance_schema=OFF 时表仍在、只是恒为空,查询不报错,会走到 awaitLockWaiters 的"等待者没到齐"而判红;
+// 本仓的 MySQL 8 默认开启,真遇到时先检查 SELECT @@performance_schema。
+func isLockWaitsUnobservable(err error) bool {
+	var myErr *drivermysql.MySQLError
+	if !errors.As(err, &myErr) {
+		return false
+	}
+	switch myErr.Number {
+	case 1044, // ER_DBACCESS_DENIED_ERROR:对 performance_schema 库整体无权
+		1142, // ER_TABLEACCESS_DENIED_ERROR:对 data_lock_waits / data_locks 没有 SELECT 权限
+		1143, // ER_COLUMNACCESS_DENIED_ERROR:只授了部分列的 SELECT 权限
+		1146, // ER_NO_SUCH_TABLE:实例没有这两张表(MySQL 8.0 以前、MariaDB 等)
+		1227: // ER_SPECIFIC_ACCESS_DENIED_ERROR:缺某项全局权限
+		return true
+	}
+	return false
+}
+
+// failOrSkipOnLockWaitError 处理 awaitLockWaiters 的错误。读不了 performance_schema 时:验收模式
+// (FRIEND_REQUIRE_MYSQL_TESTS)下判红 —— (g)(h) 是这两类死锁唯一的确定性证据,不许静默跳过;
+// 否则跳过(不代表通过)。其余错误(等待者没到齐、ctx 结束、非权限类查询错误)一律判红:编排失败本身就说明
+// 锁行为与推演不符,或者用例卡住了。
+func failOrSkipOnLockWaitError(t *testing.T, err error, expectation string) {
+	t.Helper()
+	if errors.Is(err, errLockWaitsUnobservable) {
+		if os.Getenv(friendRequireMySQLEnv) != "" {
+			t.Fatalf("无法编排本场景(测试账号需要 performance_schema 的 SELECT 权限): %v", err)
+		}
+		t.Skipf("无法编排本场景,跳过(不代表通过): %v", err)
+	}
+	t.Fatalf("夹具编排失败:%v —— %s", err, expectation)
+}
+
+// ── 场景 (h):Block ④ 在"被未提交删除压住"的 friend_block 记录上,与排队的 Unblock 不成环 ──
+//
+// Unblock 不拿守卫(自动提交的单条 DELETE),所以同一对 (me, target) 上除了 Block 自己,能来排队的只有 Unblock
+// (第二个 Block 会先被守卫挡住)。2026-09-21 死锁审计推出的交错:Unblock#2 持 X 正在删 (me,target) →
+// Block 走到 ④、在这条记录上等 → Unblock#3 也来排队等 X → Unblock#2 提交。
+//   - ④ 若是 INSERT IGNORE:重复键检查取 **S**。Block 先拿到 S(Unblock#3 的 X 与之冲突,继续等);记录是已提交的
+//     删除标记,复活它要升 **X**,却得排在 Unblock#3 等待中的 X 后面,而 Unblock#3 在等 Block 的 S → 1213,
+//     且 body 的 1213 不重试,直接变成玩家可见的 ErrStorage。
+//   - ④ 现在是 ODKU(insertBlockRowSQL):重复键检查直接取 **X**,不存在升级,只会排队。
+//
+// # 为什么直接执行 ④ 的 SQL 常量,而不是整条调用 repo.Block
+//
+// 真实交错要求 Unblock#2 恰好落在 Block 的 ② 与 ④ 之间(② 若撞上 Unblock#2 的 X,RC 下等到之后看见的是删除标记、
+// 立即放锁,不参与成环),产品代码里没有能停在 ②④ 之间的钩子,整条调用只能按概率撞。环只取决于 ④ 这一条语句的
+// 锁模式,所以本用例在一个 RC 事务里只执行 insertBlockRowSQL(与生产同一个常量,不另抄一份)来扮演"已走到 ④
+// 的 Block":锁行为与在 Block 事务里执行时完全相同,时序则可以确定地编排。
+//
+// 判据的强弱要说清楚:改回 INSERT IGNORE 后是否一定变红,取决于 Unblock#2 提交时 InnoDB 先放锁给谁 —— 先放 ④ 的 S
+// 才成环;MySQL 8 的 CATS 按事务权重而不是到达顺序放锁,所以旧写法下本用例**按推演会红,但不保证每次都红**。
+// 新写法下两者都成功是确定的。
+//
+// 编排:夹具先 Block 出一行活的 (me,target) → 独立事务执行 Unblock 的 DELETE 且**先不提交**(持 X)→
+// "④ 事务"执行 insertBlockRowSQL(排队)→ 看见 1 个等待者之后才起 repo.Unblock(排在它后面)→
+// 看见 2 个等待者 → 提交 Unblock#2 → 两者都必须成功。
+func TestBlockInsertOnRowUnderPendingDeleteDoesNotDeadlockWithQueuedUnblock(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	const (
+		me         uint64 = 88100001
+		target     uint64 = 88100002
+		waitBudget        = 10 * time.Second
+	)
+
+	if err := repo.Block(ctx, me, target, 0); err != nil {
+		t.Fatalf("夹具:先拉黑一次造出活行失败: %v", err)
+	}
+
+	// Unblock#2:与 Unblock 同一条语句,放进独立事务、先不提交。任何提前失败的路径都必须放掉这把 X,
+	// 否则后面两个等待者会一直挂到 ctx 超时。Commit 之后的 Rollback 无害。
+	unblock2, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		t.Fatalf("夹具:开 Unblock#2 事务失败: %v", err)
+	}
+	defer unblock2.Rollback()
+	res, err := unblock2.ExecContext(ctx,
+		"DELETE FROM friend_block WHERE player_id=? AND blocked_player_id=?", me, target)
+	if err != nil {
+		t.Fatalf("夹具:Unblock#2 的 DELETE 失败: %v", err)
+	}
+	if removed, err := res.RowsAffected(); err != nil || removed != 1 {
+		t.Fatalf("夹具:Unblock#2 应当恰好删 1 行(此时未提交、持有该主键的 X),got removed=%d err=%v", removed, err)
+	}
+
+	// "已走到 ④ 的 Block":与 Block 的写事务同一隔离级,执行 ④ 的生产常量,成功则提交。
+	blockTx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: friendWriteTxIsolation})
+	if err != nil {
+		t.Fatalf("夹具:开 ④ 事务失败: %v", err)
+	}
+	defer blockTx.Rollback()
+	blockDone := make(chan error, 1)
+	go func() {
+		_, err := blockTx.ExecContext(ctx, insertBlockRowSQL, me, target, time.Now().UnixMilli())
+		if err == nil {
+			err = blockTx.Commit()
+		}
+		blockDone <- err
+	}()
+	// 先确认 ④ 已经在排队,再放 Unblock#3 进来:"④ 排在前、Unblock#3 排在后"正是这个环的前提。
+	if _, err := awaitLockWaiters(ctx, db, "friend_block", 1, waitBudget); err != nil {
+		_ = unblock2.Rollback()
+		<-blockDone
+		failOrSkipOnLockWaitError(t, err, "未提交的 DELETE 应当让 ④ 卡在重复键检查上")
+	}
+
+	unblock3Done := make(chan error, 1)
+	go func() { unblock3Done <- repo.Unblock(ctx, me, target) }()
+	if _, err := awaitLockWaiters(ctx, db, "friend_block", 2, waitBudget); err != nil {
+		_ = unblock2.Rollback()
+		<-blockDone
+		<-unblock3Done
+		failOrSkipOnLockWaitError(t, err, "Unblock#3 应当排在 ④ 之后等同一条记录")
+	}
+
+	// 放掉 X:旧写法下成环的时刻就在这里。
+	if err := unblock2.Commit(); err != nil {
+		<-blockDone
+		<-unblock3Done
+		t.Fatalf("夹具:提交 Unblock#2 失败: %v", err)
+	}
+
+	for _, c := range []struct {
+		what string
+		err  error
+	}{{"④(Block 写黑名单)", <-blockDone}, {"Unblock#3", <-unblock3Done}} {
+		if isInnoDBDeadlock(c.err) {
+			t.Fatalf("%s 返回 InnoDB 死锁(1213):④ 在删除标记记录上 S→X 升级、排在 Unblock#3 等待中的 X 后面"+
+				"(insertBlockRowSQL 被改回 INSERT IGNORE 了?见本场景头注)—— %v", c.what, c.err)
+		}
+		if c.err != nil {
+			t.Fatalf("%s 出现非预期错误: %v", c.what, c.err)
+		}
+	}
+	// 终态取决于 InnoDB 先放锁给谁(④ 先:插入后被 Unblock#3 删掉;Unblock#3 先:删空后 ④ 再插入),
+	// 两种都合法,所以不断言有没有这一行,只断言全局不变量。
 	assertFriendInvariants(t, ctx, db)
 }
 

@@ -478,7 +478,10 @@ func (l *GuildLogic) DisbandGuild(ctx context.Context, req *pb.DisbandGuildReque
 		return &pb.DisbandGuildResponse{ErrorMessage: tip}, err
 	}
 	// now 显式传入(B5):解散事务把全体成员未结算捐献的截止时间提前到"现在"。
-	res, err := l.repo.DisbandGuild(ctx, guildID, who.playerID, nowMs())
+	// 闸门在事务内**再判一次**(friend 审计 #17 第 6 点):上面的 mergeFenceTip 查的是请求者归属区、且在事务外,
+	// 与合服置闸之间有检查到使用的窗口,内部调用路径更是完全不查;repo 锁住 guild 行后按行里的 zone_id 调它,
+	// 拒绝回 data.ErrZoneMerging,由 mapWriteErr 翻成 kGuildZoneMerging。
+	res, err := l.repo.DisbandGuild(ctx, guildID, who.playerID, nowMs(), l.economyFence)
 	// 解散是唯一一处 ErrRankTooLow 不回 kGuildRankTooLow 的地方:解散只有帮主能做,
 	// 沿用既有的"只有会长可以执行该操作"文案比"职位不足"更贴合玩家看到的按钮。
 	if errors.Is(err, data.ErrRankTooLow) {

@@ -524,6 +524,9 @@ func TestEnterGame_PlayerNameReachesIdentityBackfill(t *testing.T) {
 			if got := restored[0].GetName(); got != tc.wantName {
 				t.Fatalf("restored account name = %q, want %q (self-heal must not drop the name copy)", got, tc.wantName)
 			}
+			if ttl, err := h.rdb.TTL(ctx, constants.GetAccountDataKey(enterWiringAccount)).Result(); err != nil || ttl != -1 {
+				t.Fatalf("self-heal 后账号目录不应过期: ttl=%v err=%v", ttl, err)
+			}
 		})
 	}
 }

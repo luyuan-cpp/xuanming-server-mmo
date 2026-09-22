@@ -140,7 +140,7 @@ func openFriendTestDB(t *testing.T) (*sql.DB, context.Context) {
 		t.Skipf("%s 未设置,跳过真实 MySQL 集成用例", friendTestDSNEnv)
 	}
 
-	db, err := sql.Open("mysql", dsn)
+	db, err := sql.Open("mysql", withProductionSessionIsolation(dsn))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 	// 并发用例要 16 条连接同时在事务里;池比并发度小的话,后来的 goroutine 会在
@@ -158,6 +158,25 @@ func openFriendTestDB(t *testing.T) (*sql.DB, context.Context) {
 	resetFriendIntegrationSchema(t, ctx, db)
 	t.Cleanup(func() { truncateFriendIntegrationTables(t, db) })
 	return db, ctx
+}
+
+// testSessionIsolationParam 与 svc.BuildDSN 里的同名参数逐字一致:生产连接池的会话隔离级别是 RC。
+// data 包不能 import svc(svc 是装配层,反向依赖会成环),所以这里单写一份;两边任何一边改了都要同步。
+const testSessionIsolationParam = "transaction_isolation=%27READ-COMMITTED%27"
+
+// withProductionSessionIsolation 让测试连接池与生产同一个会话隔离级别。
+//
+// 不补的话,DSN 里没写这一项时自动提交语句(ensure 的补行、Unblock / sweep 的 DELETE)会落在服务器全局默认的
+// REPEATABLE-READ 上 —— 测的就不是生产的锁行为了:RR 多出来的间隙锁 / next-key 锁既可能制造生产里不存在的死锁,
+// 也可能掩盖只在 RC 下出现的问题。验收人自己在 DSN 里显式写了 transaction_isolation 时尊重他的写法,不覆盖。
+func withProductionSessionIsolation(dsn string) string {
+	if strings.Contains(dsn, "transaction_isolation=") {
+		return dsn
+	}
+	if strings.Contains(dsn, "?") {
+		return dsn + "&" + testSessionIsolationParam
+	}
+	return dsn + "?" + testSessionIsolationParam
 }
 
 // newFriendTestRepo 给一个挂在 miniredis 上的 repo。
@@ -279,8 +298,8 @@ func assertFriendInvariants(t *testing.T, ctx context.Context, db *sql.DB) {
 // 不这样做的后果(A 仓 2026-08-11 的原始症状):死锁被包进一句"意外错误",
 // 看起来像业务失败,没人想到去查锁序。1213 是**可重试**错误,所以它也绝不能被
 // 当成"偶发抖动"忽略 —— 写事务本身不重试 1213,一次 1213 就是一次玩家可见的失败。
-// (唯一的例外是事务外的 ensureFriendCapacityRows:回收引入 delete-marked 记录之后,并发 INSERT IGNORE
-// 会 S→X 成环,那一处有上限地重试,见锁序文件的场景 (g)。)
+// (事务外的 ensureFriendCapacityRows 对 1213 有上限地重试,但那只是纵深防御:已知成因(回收留下 delete-marked
+// 记录后并发 INSERT IGNORE 的 S→X)已由 ODKU + RC 消掉,场景 (g) 断言那条重试一次都不触发。)
 func isInnoDBDeadlock(err error) bool {
 	if err == nil {
 		return false

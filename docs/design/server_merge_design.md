@@ -56,7 +56,7 @@
    └→ 必须在 mapping 重映射**之前**做(否则 DataService 读新 zone 撞空)
 
   [步骤 1] guild MySQL zone_id 改写  (除非 -skip-guild-mysql)
-   └→ UPDATE guild SET zone_id = target WHERE zone_id = source
+   └→ UPDATE guild SET zone_id = target WHERE zone_id = source   ← 已作废,现行做法见下方第 4 点
    └→ 内置重名冲突检测:JOIN guild s ↔ guild d ON name + d.zone_id=target
    └→ 冲突的 source 公会跳过迁移,打印名单要求人工处理
 
@@ -68,7 +68,7 @@
    └→ SCAN player:zone:* → GET → 若值=source 则 SET 为 target
 ```
 
-**这段原文里已经作废的三点**(留在这里是为了让读到旧 commit 的人对得上):
+**这段原文里已经作废的四点**(留在这里是为了让读到旧 commit 的人对得上):
 
 1. **「玩家主数据不用搬」是错的**。玩家主数据在 `zone_<N>_db`(按 zone 分库),合服**必须**逐表拷贝
    `zone_src_db → zone_dst_db`,否则 mapping 一改,玩家在目标库里什么都没有。这是现在的步骤 1,
@@ -79,6 +79,16 @@
    旧的 JOIN 永远返回空。真要哪天改成 `(zone_id, name)`,正确做法是**中止**——跳过会把源区公会
    连同成员一起留在一个已下线的 zone 里。
 3. **ZSET 合并从普通 pipeline 改成了 MULTI/EXEC**,并且要先拿 `guild_rank:maintenance_lock`。
+4. **公会 zone_id 不再整区 `UPDATE`**(2026-09-21 死锁审计 #17)。现行做法:只按写前落盘的清单,
+   以 `guild_id` 升序**逐条主键点更新** `UPDATE guild SET zone_id = dst WHERE guild_id = ? AND zone_id = src`
+   (每条自动提交;3b 的 `trade_listing.market_zone` 与撤销 3' / 3b' 用同一个 `rewriteZoneByPrimaryKey`);
+   改完先失效 `guild:v2` 缓存,再复查源区 `COUNT(*)`,仍 > 0 就中止、不标记步骤完成;MySQL 连接固定
+   READ COMMITTED;单行遇 1213 / 1205(TiDB 9007 同)有界重试(5 次、指数退避封顶、可取消);重试耗尽
+   或任何写 / 复查 / 缓存失效失败都**保留合服围栏**中止,日志给出续跑指引「GET 核对 run_id → DEL 两把
+   围栏 → 原命令重跑」。为什么:整区 UPDATE 经 `idx_guild_0(zone_id)` 先锁二级项、再回表锁主键,在线
+   `DisbandGuild` 是「主键 FOR UPDATE → DELETE 删二级项」,两边反序即 1213(同类锁序问题见
+   [`docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md`](../ops/incident-friend-lock-order-deadlock-2026-09-21.md));
+   主键点更新让合服与在线写者同为「主键 → 二级」,只排队、不成环。
 
 ### 3.1a 当前实际步骤顺序(2026-09-08,真源 = `tools/merge_zone/main.go` 顶部注释)
 
@@ -95,8 +105,8 @@ F   fence       merge:in_progress:{src} 与 {dst} 同时打标(见 §3.5)
 M   manifest    **在任何写之前**落盘清单(玩家 id / 公会 id / ZSET 成员+分数 / 表名)
 1   player_rows zone_src_db → zone_dst_db 逐表拷贝 + 共享 DB 0 上的玩家缓存失效   ← 最关键
 2   player_blobs 跨 data Redis 拷 player:{id}:*(仅多集群;拷到的人数对不上就中止)
-3   guild_mysql  guild.zone_id 改写 + guild:v2 缓存失效(INCR generation + DEL)
-3b  trade_mysql  聚宝斋 trade_listing.market_zone 改写(只改清单 listing_id,分批;复查源区仍有商品则中止不标完成)
+3   guild_mysql  guild.zone_id 改写(只改清单 guild_id,逐条主键点更新,见 §3.1 第 4 点)+ guild:v2 缓存失效(INCR generation + DEL);复查源区仍有公会则中止不标完成
+3b  trade_mysql  聚宝斋 trade_listing.market_zone 改写(只改清单 listing_id,逐条主键点更新;复查源区仍有商品则中止不标完成)
 4   guild_rank   guild_rank:zone ZSET 合并(guild_rank:maintenance_lock + MULTI/EXEC)
 5   player_mapping player:zone:{id} 改写                                        ← 必须在 1/2 之后
 6   hot_state    scene_manager 源区热状态清理(可选,-clear-source-hot-state)

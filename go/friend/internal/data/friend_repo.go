@@ -106,9 +106,9 @@ type AddFriendLimits struct {
 //
 //	事务外:各方法自己的前置判定(普通读;不进 runGuardedWrite,也就不进重试)
 //	runGuardedWrite(至多 capacityGuardMaxAttempts 遍,见 (5)):
-//	  事务外:按 player_id 升序 INSERT IGNORE 补齐双方 friend_capacity 行(自动提交)
+//	  事务外:按 player_id 升序补齐双方 friend_capacity 行(INSERT … ON DUPLICATE KEY UPDATE,自动提交)
 //	  BeginTx(READ COMMITTED)
-//	    ① 容量守卫:SELECT ... FROM friend_capacity WHERE player_id IN (...) ORDER BY player_id FOR UPDATE
+//	    ① 容量守卫:按 player_id 升序逐行 SELECT ... FROM friend_capacity WHERE player_id = ? FOR UPDATE
 //	    body:
 //	      ② 一切与"能不能做"有关的判定读(拉黑 / 好友边 / 申请行)都在守卫之后
 //	      ③ 写入
@@ -119,7 +119,7 @@ type AddFriendLimits struct {
 //
 // 前四条"为什么",每条都对应一次真实的 1213;第五条是容量行回收带来的新约束:
 //
-// (1) **ensure 必须在事务外**。把双方的 INSERT IGNORE 放进事务里,多个请求各持有自己刚插入的
+// (1) **ensure 必须在事务外**。把双方的补行 INSERT 放进事务里,多个请求各持有自己刚插入的
 //     新行、又都去抢同一个接收者行,真实 InnoDB 会形成 insert-intention 死锁。
 //
 // (2) **容量守卫必须是事务里的第一把锁**。这是 A 仓 2026-08-11 在真 MySQL 8.4 上压测出 1213 的
@@ -151,7 +151,7 @@ type AddFriendLimits struct {
 //       写成一条批量 `DELETE ... LIMIT ?` 就不行:那条语句在一个语句事务里按**二级索引序**
 //       锁多行守卫行,与这里"按 player_id 升序"的取锁顺序不同,可以成环(1213)。
 //     - 为什么缺行要重试、且至多 3 遍(capacityGuardMaxAttempts)严格充分:ensure 在事务外自动提交,
-//       回收可以插进两个窗口 —— "ensure(行已在,INSERT IGNORE 空操作)→ 回收删行 → 取守卫缺行",
+//       回收可以插进两个窗口 —— "ensure(行已在,补行是 no-op)→ 回收删行 → 取守卫缺行",
 //       以及"FOR UPDATE 正等着这行、回收提交后该行消失"。这是预期内的竞态,不是故障:
 //       runGuardedWrite 回到事务外重新 ensure 再跑一遍。缺行只可能发生在事务的**第一条语句**
 //       (守卫),此时事务还没有任何副作用,整遍重跑是安全的。
@@ -164,22 +164,22 @@ type AddFriendLimits struct {
 //       第 3 遍仍缺行 = 有回收之外的东西在删这张表,或时钟前提被破坏 —— 那才是不变量破裂,
 //       照旧 fail-closed(ErrStorage)。相对"只重试一次",代价只是 fault 之前多一次 ensure 和一个空事务。
 //       1213 不属于缺行哨兵,不在本重试范围内(ensure 自己那条 1213 见下一条)。
-//     - 回收给 ensure 带来的 1213:HEAD 从不删容量行,并发 INSERT IGNORE 同键时后到者等到 S 锁后
-//       看到的是**活的**重复键,IGNORE 即可、不再要 X,成不了环。有了回收的 DELETE 就会出现
-//       delete-marked 的主键记录:INSERT 对它做重复键检查先取 S,发现是已提交的删除标记、不算重复,
-//       要在该记录上就地复活就得再取 X。成环的前提是"**至少两个** INSERT 同时排队等同一条
-//       delete-marked 或被 X 锁住的主键记录的 S" —— 压住 X 的一方可以是 sweeper 的 DELETE,也可以是
-//       另一个事务的守卫 FOR UPDATE;压住的一方一提交,等待者同时拿到 S、又都要 X,互等(手册
-//       "Deadlocks in InnoDB" 的例子)。InnoDB 牺牲其一报 1213。这条 1213 发生在事务外的 ensure 里,
-//       此时没有任何副作用,所以由 ensureFriendCapacityRows **自己**有上限地重试
-//       (ensureDeadlockMaxAttempts),不进 runGuardedWrite 的缺行重试,也不改"body 的 1213 不重试"的口径。
-//       (取锁细节按手册与已知行为推演,未在真库上复现;回归用例见 friend_repo_mysql_test.go。)
+//     - 回收给 ensure 带来的 1213(**已从根上消掉**,2026-09-21):HEAD 从不删容量行,并发补行同键时后到者
+//       看到的是**活的**重复键,成不了环。有了回收的 DELETE 就会出现 delete-marked 的主键记录,补行对它做
+//       重复键检查、发现是已提交的删除标记后要就地复活(取 X)。补行原先是 INSERT IGNORE,重复键检查取 **S**:
+//       "**至少两个**补行同时排队等同一条被 X 压住的主键记录"(压住的一方可以是 sweeper 的 DELETE,也可以是
+//       另一个事务的守卫 FOR UPDATE),一提交等待者就同时拿到 S、又都要 X,互等(手册 "Deadlocks in InnoDB"
+//       的例子),真库复现过。现在补行是 `INSERT … ON DUPLICATE KEY UPDATE player_id = player_id`:重复键检查
+//       直接取 **X**,等待者只能一个一个拿到,不存在"都持 S 再升 X"的形状;连接池又统一为 RC(svc.BuildDSN),
+//       重复键检查只取记录锁、不取 next-key。ensure 是自动提交的单条语句,整个生命周期至多持有这一把锁,
+//       不"持有并等待",进不了任何环。ensureFriendCapacityRows 对 1213 的有上限重试(ensureDeadlockMaxAttempts)
+//       保留为纵深防御并计数(ensureDeadlockRetries);回归用例场景 (g) 断言它一次都没被触发。
 //     - 为什么删行不放宽好友数上限:回收只删 friend_count = 0 的行(即权威边数为 0),而 ensure 补行时
 //       从 friend 表的权威边数重算初值、绝不猜 0(见 ensureFriendCapacityRows)。行缺失期间任何加边
 //       路径都必须先 ensure 把行建回来,所以一个读到较小 COUNT 的陈旧 ensure 不可能落地成偏小的计数。
 //     - 为什么删行也不会让计数**偏大**(需要 created_ms 配合):ensure 的 COUNT 与 INSERT 是两条各自
 //       自动提交的语句,不原子。交错"ensure 读到 COUNT=1 → RemoveFriend 提交(边数 0、行变成
-//       friend_count=0)→ 回收删行 → 陈旧的 INSERT IGNORE (P, 1) 落地"会留下 friend_count=1 而真实
+//       friend_count=0)→ 回收删行 → 陈旧的补行 INSERT (P, 1) 落地"会留下 friend_count=1 而真实
 //       边数为 0 的行:之后无边可删、减不到它,friend_count≠0 的行也永不再进回收 —— 上限永久少 1、
 //       零报错。挡法:deleteFriendEdges 减计数时**同时把 created_ms 刷成当前时刻**,于是"刚减到 0 的行"
 //       要再过一个完整保留期才是回收候选,上面那条交错里的"回收删行"不可能落进 ensure 两条语句
@@ -215,6 +215,9 @@ type AddFriendLimits struct {
 //   - 代价:RC 下同一事务内两次普通 SELECT 可能读到不同结果(每条语句各取一份新快照)。
 //     所以"判定读必须在守卫之后"不是可选优化;守卫之后的探针用锁定读还是普通读,
 //     取决于该次读的对象是否已被守卫覆盖 —— 逐处理由写在 AddFriendRequest 的 ⑤⑥ 旁边。
+//   - 事务**之外**的自动提交语句(ensure 的补行、Unblock / sweep 的 DELETE)不经过 BeginTx,
+//     它们的隔离级别来自连接会话:svc.BuildDSN 用 transaction_isolation 把整个连接池设成 RC,
+//     否则它们会落回服务器全局默认的 REPEATABLE-READ、重新拿间隙锁 / next-key 锁。
 //   - 前提是 binlog_format=ROW(RC + STATEMENT 格式的 binlog 不安全)。
 //     ⚠ 已核对本仓配置:`deploy/k8s/manifests/infra/mysql.yaml:60` 显式写了 `binlog_format = ROW`
 //     (同段还有 `binlog_row_image = FULL`);`deploy/` 下**没有别的**地方设置这一项,
@@ -1034,16 +1037,16 @@ func (r *FriendRepo) invalidateCachesAfterCommit(ctx context.Context, keys ...st
 // 先在事务外补齐行、再在事务内按 player_id 升序 FOR UPDATE 锁双方容量行的顺序也不变。
 //
 // created_ms 是"本行被(重新)建出、或最近一次 friend_count 减少的时刻";回收的保留期从这一刻起算。
-// 写它的只有两处:这里的 INSERT,以及 deleteFriendEdges 减计数的那条 UPDATE。INSERT IGNORE 撞上
-// 已有行时整条语句是空操作,既有行的 created_ms 不会被 ensure 刷新(刷新会让陈旧的零好友行永远
+// 写它的只有两处:这里的 INSERT,以及 deleteFriendEdges 减计数的那条 UPDATE。补行撞上已有行时
+// ODKU 的更新是 no-op(player_id = player_id),既有行的 created_ms 不会被 ensure 刷新(刷新会让陈旧的零好友行永远
 // 不过期)。为什么减计数也要写:本函数的 COUNT 与 INSERT 是两条各自自动提交的语句、不原子,
 // 不刷新的话"刚减到 0 的老行"立刻可回收,陈旧的 INSERT 会把计数永久写大 1 —— 完整交错与残留
 // (陈旧窗口跨过整个 RetentionDays 才可能复现,视为不可达)见顶部锁序说明 (5)。
 // 它只服务于 sweep 的容量行回收(SweepIdleCapacityRows:friend_count = 0 且 created_ms 早于保留期
 // 的行),不参与任何业务判定。
 //
-// 1213:回收的 DELETE 会留下 delete-marked 的主键记录,并发 INSERT IGNORE 同一个玩家时可能在它上面
-// S→X 互等成环(顶部锁序说明 (5))。此时还在事务外、没有任何副作用,所以对**单个玩家**的
+// 1213:已知形态(回收留下的 delete-marked 记录上并发补行 S→X)已由 ODKU + RC 从根上消掉(顶部锁序说明 (5)),
+// 下面的重试只是纵深防御。万一出现新的成环形态,此时还在事务外、没有任何副作用,所以对**单个玩家**的
 // "COUNT + INSERT"这一对语句有上限地重跑(ensureDeadlockMaxAttempts):COUNT 必须一起重跑,
 // 否则重试写下去的是上一遍的陈旧边数。只认 1213,其它错误一律原样上抛;每遍之前先看 ctx。
 func (r *FriendRepo) ensureFriendCapacityRows(ctx context.Context, playerIDs ...uint64) error {

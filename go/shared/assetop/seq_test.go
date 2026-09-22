@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -399,5 +400,117 @@ func TestWithTxRetryPropagatesBeginError(t *testing.T) {
 	}
 	if len(slept) != 1 || slept[0] != 10*time.Millisecond {
 		t.Fatalf("两次尝试之间应退避一次 10ms,实际 %v", slept)
+	}
+}
+
+// TestPendingSeqQueryTakesNoLocks 钉住 AllocateSeq 的未决读是**普通读**。
+//
+// 2026-09-21 死锁审计:这条读原先带 FOR UPDATE,经二级索引 (player_id, stream, stream_epoch, status, seq)
+// 取锁是"二级 → 主键",与 Finalize / ResolveManually 的主键 CAS 改 status("主键 → 同一二级项")在同一 op 行上
+// 反序成环。谁把锁定子句加回来,这条环就回来了 —— 正确性改由"seq 行串行化 + RC 语句级快照"保证,见 AllocateSeq。
+func TestPendingSeqQueryTakesNoLocks(t *testing.T) {
+	q := strings.ToUpper(pendingSeqQueryFormat)
+	for _, clause := range []string{"FOR UPDATE", "FOR SHARE", "LOCK IN SHARE MODE"} {
+		if strings.Contains(q, clause) {
+			t.Fatalf("AllocateSeq 的未决读不得带 %q(会与 Finalize 的主键 CAS 反序成环,见 AllocateSeq 注释): %s",
+				clause, pendingSeqQueryFormat)
+		}
+	}
+}
+
+// execScript 让假驱动按脚本依次返回 Exec 的错误(用完之后返回成功),并记下被调用了几次。
+type execScript struct {
+	mu    sync.Mutex
+	errs  []error
+	calls int
+}
+
+func (s *execScript) next() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := s.calls
+	s.calls++
+	if i < len(s.errs) {
+		return s.errs[i]
+	}
+	return nil
+}
+
+func (s *execScript) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls
+}
+
+type execScriptConnector struct{ s *execScript }
+
+func (c execScriptConnector) Connect(context.Context) (driver.Conn, error) {
+	return execScriptConn{s: c.s}, nil
+}
+
+func (c execScriptConnector) Driver() driver.Driver { return execScriptDriver{s: c.s} }
+
+type execScriptDriver struct{ s *execScript }
+
+func (d execScriptDriver) Open(string) (driver.Conn, error) { return execScriptConn{s: d.s}, nil }
+
+// execScriptConn 只支持无事务的 ExecContext(EnsureSeqRow 就是一条自动提交语句);
+// 其余入口一律报错,真走到了应当一眼看见。
+type execScriptConn struct{ s *execScript }
+
+func (c execScriptConn) Prepare(string) (driver.Stmt, error) {
+	return nil, errors.New("假驱动不支持 Prepare")
+}
+func (c execScriptConn) Close() error { return nil }
+func (c execScriptConn) Begin() (driver.Tx, error) {
+	return nil, errors.New("假驱动不支持事务")
+}
+func (c execScriptConn) ExecContext(context.Context, string, []driver.NamedValue) (driver.Result, error) {
+	if err := c.s.next(); err != nil {
+		return nil, err
+	}
+	return driver.RowsAffected(1), nil
+}
+
+// TestEnsureSeqRowRetry:可重试的错误按 DefaultTxRetryConfig 的次数重跑,其余错误一次就返回。
+// 退避用真实的 sleepCtx(两次合计约 30ms):EnsureSeqRowRetry 刻意不开放退避参数,用的就是默认值。
+func TestEnsureSeqRowRetry(t *testing.T) {
+	tables, err := NewSeqTables("unit_seq", "unit_op", 0)
+	if err != nil {
+		t.Fatalf("表名校验失败: %v", err)
+	}
+	deadlock := errors.New("模拟 1213")
+	other := errors.New("模拟语法错")
+	onlyDeadlock := func(err error) bool { return errors.Is(err, deadlock) }
+
+	cases := []struct {
+		name        string
+		script      []error
+		isRetryable func(error) bool
+		wantErr     error
+		wantCalls   int
+	}{
+		{"两次死锁后成功", []error{deadlock, deadlock}, onlyDeadlock, nil, 3},
+		{"次数用尽仍失败", []error{deadlock, deadlock, deadlock}, onlyDeadlock, deadlock, 3},
+		{"不可重试的错误只跑一次", []error{other}, onlyDeadlock, other, 1},
+		{"分类函数为 nil 时不重试", []error{deadlock}, nil, deadlock, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			script := &execScript{errs: tc.script}
+			db := sql.OpenDB(execScriptConnector{s: script})
+			t.Cleanup(func() { _ = db.Close() })
+
+			err := EnsureSeqRowRetry(context.Background(), db, tables, 1, testStream, 1700000000000, tc.isRetryable)
+			if tc.wantErr == nil && err != nil {
+				t.Fatalf("应当成功,实际: %v", err)
+			}
+			if tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
+				t.Fatalf("应带出 %v,实际: %v", tc.wantErr, err)
+			}
+			if got := script.count(); got != tc.wantCalls {
+				t.Fatalf("应执行 %d 次,实际 %d 次", tc.wantCalls, got)
+			}
+		})
 	}
 }

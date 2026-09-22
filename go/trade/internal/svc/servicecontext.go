@@ -151,9 +151,18 @@ func (sc *ServiceContext) StartAssetChannel(ctx context.Context) {
 // BuildDSN 拼 mmorpg_trade 的 DSN,与 go/data_service/internal/store/mysql.go buildDSN 同口径:
 // sql_mode=%27STRICT_TRANS_TABLES%27 强制会话级严格模式(%27 是转义的单引号)。标题 / 描述是自由文本,
 // 非严格模式下超长写入会**静默截断且无报错**,在连接层兜底。
+//
+// transaction_isolation=%27READ-COMMITTED%27 把整个连接池的会话隔离级别设成 RC(驱动建连时发 SET),
+// 与 go/friend 的 BuildDSN 同口径。显式事务本来就经 assetop.WithTxRetry 固定 RC;这一项管的是事务**之外**的
+// 自动提交语句(Claim / Reschedule / 毒行的主键 UPDATE、InsertListing、DeleteFavorite、EnsureSeqRow 的 INSERT),
+// 它们原先落在服务器全局默认的 REPEATABLE-READ 上,删不到行 / 撞上删除标记时会拿间隙锁或 next-key 锁,
+// 与别人的插入意向锁互等。RC 下只剩记录锁。自动提交语句每条各取新快照,读语义与 RR 下相同。
+// 前提同 WithTxRetry:binlog_format=ROW。
+//
 // 返回值含密码,只能交给 sql.Open,绝不打日志。
 func BuildDSN(c config.MySQLConf) string {
-	return fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&charset=utf8mb4&sql_mode=%%27STRICT_TRANS_TABLES%%27",
+	return fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&charset=utf8mb4&sql_mode=%%27STRICT_TRANS_TABLES%%27"+
+		"&transaction_isolation=%%27READ-COMMITTED%%27",
 		c.User, c.Password, c.Host, c.DBName)
 }
 

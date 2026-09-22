@@ -9,10 +9,14 @@ package main
 // 而且没有任何报错。
 //
 // 改什么、不改什么:
-//   - `UPDATE trade_listing SET market_zone = dst WHERE market_zone = src AND listing_id IN (清单)`,
-//     按 playerRowsBatchSize 分批。比规格原文多了 `listing_id IN (清单)`:整区 UPDATE 会改到
-//     清单落盘之后才落到源区的商品,违反 merge_run.go 的「清单先于写」—— 撤销找不回、
-//     -verify-merged 也查不出来(源区计数已经是 0)。清单完整时两种写法改到的行完全相同。
+//   - 按清单逐条主键点更新 `UPDATE trade_listing SET market_zone = dst WHERE listing_id = ? AND market_zone = src`
+//     (rewriteZoneByPrimaryKey)。只改清单里的 id:整区 UPDATE 会改到清单落盘之后才落到源区的商品,
+//     违反 merge_run.go 的「清单先于写」—— 撤销找不回、-verify-merged 也查不出来(源区计数已经是 0)。
+//     不再用 `market_zone = src AND listing_id IN (清单)` 分批(2026-09-21 死锁审计 #17 同形问题):
+//     该条件可被规划成 idx_trade_listing_0(market_zone, status, ...)的 range,先锁二级项再回表锁主键;
+//     P3 的商品状态迁移是「主键 FOR UPDATE → UPDATE status(改同一行的二级项)」,两边反序即成环。
+//     P1 的 trade 服对 trade_listing 只有 INSERT,今天不成环;这里按全仓统一口径先改成主键点更新,
+//     不把这个环留给 P3。
 //   - `seller_zone_at_listing` 不改:它是上架时 home_zone 的原值,审计用。
 //   - `trade_favorite` 没有 zone 列,不动。
 //
@@ -43,9 +47,10 @@ package main
 // 撤销:按清单 TradeListingIDs,只把其中**当前** market_zone = dst 的改回 src;
 // 目标区原住民与已经去了第三个 zone 的商品一律不动(与 restoreMappingForIDs 同口径)。
 //
-// 规模与原子性:改写按清单 id 每 playerRowsBatchSize 条一条 UPDATE(自动提交),单条事务
-// 大小有上限,不撞 TiDB 大事务限制。批与批之间不原子:中途失败时已改的批留在 dst,步骤
-// 未完成,重跑按 `WHERE market_zone = src` 幂等补齐剩下的批。
+// 规模与原子性:改写按清单 id 每行一条自动提交的点更新(语句预编译一次),单条事务只有一行,
+// 不撞 TiDB 大事务限制;锁冲突按 zoneRewriteRetry 有界重试。行与行之间不原子:中途失败时已改的行
+// 留在 dst,步骤未完成,重跑按 `market_zone = src` 幂等补齐剩下的行。dry-run 的计数仍按
+// playerRowsBatchSize 分批 IN —— 非锁定读,没有锁序问题。
 
 import (
 	"context"
@@ -64,6 +69,8 @@ const (
 	tradeListingTable = "trade_listing"
 	// tradeMarketZoneColumn 是本步骤改写的唯一一列。
 	tradeMarketZoneColumn = "market_zone"
+	// tradeListingPKColumn 是 trade_listing 的主键(OptionPrimaryKey),点更新按它定位。
+	tradeListingPKColumn = "listing_id"
 )
 
 // validateTradeSchemaName 在任何 SQL 之前验库名形状(形状定义见 player_rows.go 的 schemaNamePattern)。
@@ -174,32 +181,31 @@ func tradeResidualAbortMessage(rows int64, manifestListings int, left int64, src
 // 重跑幂等:已经改过的行不再满足 market_zone = src。
 func migrateTradeMarketZone(ctx context.Context, db *sql.DB, schema string, ids []uint64, src, dst uint32, dryRun bool) (int64, error) {
 	table := tradeListingQualified(schema)
+	if !dryRun {
+		// 错误原样上抛:rewriteZoneByPrimaryKey 已带表.列、方向、出错主键与已改行数,再包一层只会把它们重复一遍。
+		return rewriteZoneByPrimaryKey(ctx, db, table, tradeListingPKColumn, tradeMarketZoneColumn, ids, src, dst)
+	}
+	total, err := countListingsInZoneAmong(ctx, db, schema, ids, src)
+	if err != nil {
+		return total, fmt.Errorf("count rewritable %s rows: %w", table, err)
+	}
+	log.Printf("[DRY-RUN] Would rewrite market_zone %d → %d on %d of %d manifest listings in %s",
+		src, dst, total, len(ids), table)
+	return total, nil
+}
+
+// countListingsInZoneAmong 数 ids 里当前 market_zone = zone 的商品(dry-run 用)。非锁定读,
+// 按 playerRowsBatchSize 分批 IN,不存在锁序问题。
+func countListingsInZoneAmong(ctx context.Context, db *sql.DB, schema string, ids []uint64, zone uint32) (int64, error) {
+	table := tradeListingQualified(schema)
 	var total int64
 	for _, batch := range chunkUint64(ids, playerRowsBatchSize) {
-		in := inListLiteral(batch)
-		if dryRun {
-			var n int64
-			if err := db.QueryRowContext(ctx,
-				"SELECT COUNT(*) FROM "+table+" WHERE market_zone = ? AND listing_id IN ("+in+")", src).Scan(&n); err != nil {
-				return total, fmt.Errorf("count rewritable %s rows: %w", table, err)
-			}
-			total += n
-			continue
-		}
-		res, err := db.ExecContext(ctx,
-			"UPDATE "+table+" SET market_zone = ? WHERE market_zone = ? AND listing_id IN ("+in+")", dst, src)
-		if err != nil {
-			return total, fmt.Errorf("rewrite %s market_zone %d → %d: %w", table, src, dst, err)
-		}
-		n, err := res.RowsAffected()
-		if err != nil {
-			return total, fmt.Errorf("rows affected for %s market_zone rewrite: %w", table, err)
+		var n int64
+		if err := db.QueryRowContext(ctx,
+			"SELECT COUNT(*) FROM "+table+" WHERE market_zone = ? AND listing_id IN ("+inListLiteral(batch)+")", zone).Scan(&n); err != nil {
+			return total, err
 		}
 		total += n
-	}
-	if dryRun {
-		log.Printf("[DRY-RUN] Would rewrite market_zone %d → %d on %d of %d manifest listings in %s",
-			src, dst, total, len(ids), table)
 	}
 	return total, nil
 }
@@ -212,33 +218,18 @@ func restoreTradeMarketZone(ctx context.Context, db *sql.DB, schema string, ids 
 		return 0, nil
 	}
 	table := tradeListingQualified(schema)
-	total := 0
-	for _, batch := range chunkUint64(ids, playerRowsBatchSize) {
-		in := inListLiteral(batch)
-		if dryRun {
-			var n int
-			if err := db.QueryRowContext(ctx,
-				"SELECT COUNT(*) FROM "+table+" WHERE market_zone = ? AND listing_id IN ("+in+")", dst).Scan(&n); err != nil {
-				return total, fmt.Errorf("count restorable %s rows: %w", table, err)
-			}
-			total += n
-			continue
-		}
-		res, err := db.ExecContext(ctx,
-			"UPDATE "+table+" SET market_zone = ? WHERE market_zone = ? AND listing_id IN ("+in+")", src, dst)
-		if err != nil {
-			return total, fmt.Errorf("restore %s market_zone %d ← %d: %w", table, src, dst, err)
-		}
-		n, err := res.RowsAffected()
-		if err != nil {
-			return total, fmt.Errorf("rows affected for %s market_zone restore: %w", table, err)
-		}
-		total += int(n)
+	if !dryRun {
+		// 与改写同一个点更新函数(锁序见 rewriteZoneByPrimaryKey),方向反过来:dst → src。
+		// 错误原样上抛,理由同 migrateTradeMarketZone。
+		total, err := rewriteZoneByPrimaryKey(ctx, db, table, tradeListingPKColumn, tradeMarketZoneColumn, ids, dst, src)
+		return int(total), err
 	}
-	if dryRun {
-		log.Printf("[DRY-RUN] Would restore market_zone=%d on %d of %d manifest listings in %s", src, total, len(ids), table)
+	total, err := countListingsInZoneAmong(ctx, db, schema, ids, dst)
+	if err != nil {
+		return int(total), fmt.Errorf("count restorable %s rows: %w", table, err)
 	}
-	return total, nil
+	log.Printf("[DRY-RUN] Would restore market_zone=%d on %d of %d manifest listings in %s", src, total, len(ids), table)
+	return int(total), nil
 }
 
 // ── 合服后验证(-verify-merged)────────────────────────────────

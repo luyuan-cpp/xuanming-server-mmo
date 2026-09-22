@@ -67,28 +67,105 @@ type Alloc struct {
 // 「加锁读 → 没有 → 插入」时,共享锁升级会死锁。INSERT IGNORE 天然幂等,
 // 已存在时不会改动纪元 —— 纪元一旦写下就不再变,库重建后重新建行自然得到更大的纪元
 // (规格 §4.29;按库恢复后由运维手册显式抬高)。
+//
+// 本函数**不重试**;新调用方用 EnsureSeqRowRetry(原因见那里)。保留它是为了不改动既有调用方的签名。
 func EnsureSeqRow(ctx context.Context, db *sql.DB, t SeqTables, playerID uint64, s assetpb.AssetOpStream, nowMs uint64) error {
+	return ensureSeqRow(ctx, db, t, playerID, s, nowMs)
+}
+
+// EnsureSeqRowTx 是 EnsureSeqRow 的**事务内**版本:同一条语句、同一纪元语义(已存在是空操作、不改纪元),
+// 只是跑在调用方的事务里。不重试,错误原样返回 —— 重试整笔事务是调用方的事。
+//
+// 为什么要有它(2026-09-21 死锁审计 #16):事务外的 EnsureSeqRow 只剩一种 1213 —— 首个插入者回滚时,
+// 排在这条未提交记录后面的多个插入者继承间隙锁后互等(见 EnsureSeqRowRetry)。要从根上消掉它,
+// 得让所有首次建行者先排在一行**已存在、已提交**的守卫行上(调用方选定,如帮会的全局哨兵行),
+// 再在同一事务里普通读 → 缺行才调本函数插入:同一时刻最多一个插入者,排队的是守卫行的记录锁,
+// 守卫持有者回滚只是放锁,不会把锁继承成间隙锁。
+//
+// 契约:调用方事务必须是 READ COMMITTED(与 AllocateSeq 相同的理由:普通读要看得见前一个建行者已提交的行);
+// 调用方必须先持有自己的守卫锁,否则本函数与事务外的 EnsureSeqRow 没有区别,只是把锁持有时间拉长了。
+func EnsureSeqRowTx(ctx context.Context, tx *sql.Tx, t SeqTables, playerID uint64, s assetpb.AssetOpStream, nowMs uint64) error {
+	return ensureSeqRow(ctx, tx, t, playerID, s, nowMs)
+}
+
+// ensureSeqRowFormat 是建 seq 行的唯一语句(%s = seq 表名)。EnsureSeqRow 与 EnsureSeqRowTx 共用,
+// 调用方若要在别处核对语句形状,引用这里,不要另抄一份。
+const ensureSeqRowFormat = "INSERT IGNORE INTO %s (player_id, stream, next_seq, epoch, updated_ms) VALUES (?, ?, 1, ?, ?)"
+
+// seqRowExecer 是 *sql.DB 与 *sql.Tx 的公共子集,只为让两个入口共用同一段实现。
+type seqRowExecer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+func ensureSeqRow(ctx context.Context, ex seqRowExecer, t SeqTables, playerID uint64, s assetpb.AssetOpStream, nowMs uint64) error {
 	if err := t.validate(); err != nil {
 		return err
 	}
 	if nowMs == 0 {
 		return errors.New("assetop: 纪元必须为正(nowMs=0)")
 	}
-	q := fmt.Sprintf("INSERT IGNORE INTO %s (player_id, stream, next_seq, epoch, updated_ms) VALUES (?, ?, 1, ?, ?)", t.SeqTable)
-	if _, err := db.ExecContext(ctx, q, playerID, uint32(s), nowMs, nowMs); err != nil {
+	if _, err := ex.ExecContext(ctx, fmt.Sprintf(ensureSeqRowFormat, t.SeqTable), playerID, uint32(s), nowMs, nowMs); err != nil {
 		return fmt.Errorf("assetop: 建 seq 行失败(player=%d stream=%d): %w", playerID, s, err)
 	}
 	return nil
 }
 
+// EnsureSeqRowRetry 是带有界重试的 EnsureSeqRow,新代码用它。
+//
+// 为什么要重试(2026-09-21 死锁审计):seq 行一旦建出就永不删除,所以并发补行时后到者拿 S 看到的是
+// 已提交的重复键、判重复即结束,不会升 X。只剩一种会成环的情形 —— 首个插入者在提交前**回滚**
+// (连接被 KILL、提交刷盘失败、实例关闭):排在它后面做重复键检查的多个 INSERT 会同时继承到同一段间隙上的锁,
+// 随后各自申请插入意向锁、被对方的间隙锁挡住,InnoDB 牺牲其一(1213)。这是 InnoDB 对"同键并发插入 +
+// 插入者回滚"的固有行为(手册 "Locks Set by Different SQL Statements" 的三会话例),不是锁序问题;
+// 把 INSERT IGNORE 换成 ODKU 也拆不掉(回滚时 X 等待者同样继承间隙锁)。
+//
+// 重跑是安全的:语句幂等(行已存在是空操作,不改纪元),在事务外自动提交,没有任何副作用要复位。
+// 牺牲者重跑时要么撞上胜者已提交的行(空操作),要么自己插入成功。
+//
+// isRetryable 由调用方注入(本包不引 MySQL 驱动),形状与 WithTxRetry 相同:1213 / 1205 / 9007;
+// 为 nil 时一次都不重试,等价于 EnsureSeqRow。次数与退避取 DefaultTxRetryConfig(3 次、10ms 起 ±20% 抖动),
+// 退避可取消:ctx 到期立刻返回,错误里同时带着最后一次 SQL 错误与 ctx 错误。
+func EnsureSeqRowRetry(ctx context.Context, db *sql.DB, t SeqTables, playerID uint64, s assetpb.AssetOpStream, nowMs uint64, isRetryable func(error) bool) error {
+	cfg := DefaultTxRetryConfig()
+	cfg.IsRetryable = isRetryable
+	return retryWithBackoff(ctx, cfg, "建 seq 行", func() error {
+		return EnsureSeqRow(ctx, db, t, playerID, s, nowMs)
+	})
+}
+
+// pendingSeqQueryFormat 是 AllocateSeq 读本纪元未决行的语句(%s = op 表名)。
+// **普通读,不加锁** —— 为什么见 AllocateSeq;seq_test.go 钉着它不得再带锁定子句。
+const pendingSeqQueryFormat = "SELECT seq FROM %s WHERE player_id = ? AND stream = ? AND stream_epoch = ? AND status = ? ORDER BY seq LIMIT ?"
+
 // AllocateSeq 在**调用方的业务事务内**分配下一个 seq,并顺带回报当前纪元。
 //
-// 锁序(帮会):guild → guild_member → guild_player_op_seq → guild_asset_op。
-// 本函数按这个顺序先锁 seq 行、再锁未决 op 行;调用方必须把本函数放在业务锁之后、
-// 插入 op 行之前,否则两条路径的加锁顺序相反就会死锁。
+// 锁序(帮会):guild → guild_member → guild_player_op_seq → (插入)guild_asset_op。
+// 本函数只锁 seq 行(完整主键点查);调用方必须把本函数放在业务锁之后、插入 op 行之前。
 //
-// 未决行用**加锁读**而不是 COUNT(*):业务事务里通常已经做过普通读,MySQL 可重复读的
-// 一致性快照看不到并发分配者刚插入的行;加锁读总读最新版本,MySQL 与 TiDB 都支持。
+// **调用方事务必须是 READ COMMITTED**(MySQL 与 TiDB 皆然)。这是硬契约,不是建议:
+//
+// 未决行用**普通读**,不加锁(2026-09-21 起;之前是 FOR UPDATE)。原先的加锁读经二级索引
+// (player_id, stream, stream_epoch, status, seq) 取锁,顺序是"二级索引项 → 主键";而 Finalize /
+// ResolveManually 的主键 CAS 改 status 时顺序是"主键 → 同一条二级索引项"(status 在这条索引里),
+// 两者在同一 op 行上反序,真能成环(1213,trade 与 guild 都中;trade 的 Finalize 与 guild 的非退款终结
+// 都不锁 seq 行,seq 行挡不住它们 —— guild 退款分支后来会先锁 seq 行,但只要有一条终结路径不锁,环就还在)。
+// 执行计划若退化到 (status, next_attempt_ms) 或唯一键,锁集还会越出本玩家,与 Reschedule / 清理 DELETE
+// 跨玩家成环。不加锁之后,本函数对 op 表不持任何锁,这些环一并消失,正确性也不再取决于执行计划。
+//
+// 为什么普通读在 RC 下仍然正确:
+//  1. 同一 (player, stream) 的分配者都先在 seq 行上 FOR UPDATE,彼此串行;
+//  2. PENDING 行只由持有 seq 行锁的分配者插入(trade EnqueueEscrowDebit、guild ReserveDonation /
+//     ReserveShopOrder),前一个分配者提交之前,后一个连 seq 行都拿不到;
+//  3. RC 下每条语句各取一份新快照,这条读发生在拿到 seq 行锁**之后**,前一个分配者已提交的
+//     PENDING 行一定看得见;
+//  4. 行只会离开 PENDING(终结),没有任何路径把它改回 PENDING。并发终结最多让本次读到的集合
+//     比真实略大 —— 守卫因此只会更保守(多拒),不会放行超额。
+//
+// 为什么必须是 RC:在 REPEATABLE READ(或 TiDB 的 SI)下,快照在事务里**第一条普通读**时就定下了,
+// 调用方往往在本函数之前已经做过普通读(guild 先读帮会等级),那份快照看不到"拿 seq 行锁期间别人刚提交的
+// PENDING 行" —— 未决数被少算,MaxPending / MaxSpan 守卫就会放行超额,未决 seq 可能滑出 scene 的窗口。
+// 现有调用方都满足:trade 经 WithTxRetry(DefaultTxRetryConfig 固定 RC),guild 经 inTx(BeginTx RC)。
+// 新调用方只能经 WithTxRetry / WithTxRetryConfig(Isolation 保持 RC)或显式 BeginTx(RC) 进来。
 //
 // 返回 ErrTooManyPending 表示守卫拒绝(不是故障):该玩家该流积压太多,再发就可能让
 // 未决 seq 滑出 scene 的窗口,那时结局就查不回来了。
@@ -114,10 +191,7 @@ func AllocateSeq(ctx context.Context, tx *sql.Tx, t SeqTables, playerID uint64, 
 
 	// 只数**本纪元**的未决行:旧纪元的未决行不该挡住新操作,它们会各自拿到真实旧结局
 	// 或 UNKNOWN,走人工处置(规格 §4.29)。多取一行是为了区分「刚好到上限」和「超了」。
-	pendingQuery := fmt.Sprintf(
-		"SELECT seq FROM %s WHERE player_id = ? AND stream = ? AND stream_epoch = ? AND status = ? ORDER BY seq LIMIT ? FOR UPDATE",
-		t.OpTable)
-	rows, err := tx.QueryContext(ctx, pendingQuery, playerID, uint32(s), epoch, t.PendingStatus, int(lim.MaxPending)+1)
+	rows, err := tx.QueryContext(ctx, fmt.Sprintf(pendingSeqQueryFormat, t.OpTable), playerID, uint32(s), epoch, t.PendingStatus, int(lim.MaxPending)+1)
 	if err != nil {
 		return Alloc{}, fmt.Errorf("assetop: 读未决行失败(player=%d stream=%d): %w", playerID, s, err)
 	}
@@ -181,8 +255,8 @@ const (
 
 	// minTxBaseBackoff 是 BaseBackoff 的下限。取 2ms 而不是 1ms 的理由见 validate():
 	// ±20% 抖动的下界要在毫秒取整后仍然 >= 1ms,否则"退避"对一半的重试是空话。
-	minTxBaseBackoff = 2 * time.Millisecond
-	defaultTxMaxBackoff  = 200 * time.Millisecond
+	minTxBaseBackoff    = 2 * time.Millisecond
+	defaultTxMaxBackoff = 200 * time.Millisecond
 )
 
 // TxRetryConfig 是一次「带重试的业务事务」的全部参数。零值不可用,请从 DefaultTxRetryConfig 改。
@@ -224,9 +298,11 @@ type TxRetryConfig struct {
 // 本仓 deploy/k8s/manifests/infra/mysql.yaml 已显式写了)。确需跟随连接默认的调用方,
 // 把 Isolation 显式写成 sql.LevelDefault。
 //
-// 换 RC 不会削弱本包的守卫:同一 (player, stream) 的分配都先在 seq 行上拿 FOR UPDATE
-// (全局锁序第一步)而彼此串行,未决行数 / 跨度的判定因此不依赖间隙锁;重复 seq 由唯一键
+// 换 RC 不会削弱本包的守卫,反而是守卫的前提:同一 (player, stream) 的分配都先在 seq 行上拿
+// FOR UPDATE(全局锁序第一步)而彼此串行;AllocateSeq 的未决读是**普通读**,它看得见前一个分配者
+// 已提交的行,靠的正是 RC 的"每条语句一份新快照"(RR 下会少算,见 AllocateSeq);重复 seq 由唯一键
 // (player_id, stream, stream_epoch, seq) 兜住;Finalize / Reschedule 是主键 CAS,与隔离级无关。
+// 所以调用 AllocateSeq 的事务**不能**把 Isolation 改成 sql.LevelDefault。
 //
 // **审稿异议与结论(2026-09-19,记下来免得被反复提起)**:有意见认为 D7 的作用域只有帮会,
 // 而 go/guild 目前一行 WithTxRetry 都没有,真正受这个默认值影响的只有 go/trade —— 一条
@@ -301,6 +377,14 @@ func WithTxRetryConfig(ctx context.Context, db *sql.DB, cfg TxRetryConfig, fn fu
 		return err
 	}
 	opts := &sql.TxOptions{Isolation: cfg.Isolation}
+	return retryWithBackoff(ctx, cfg, "事务", func() error { return runTx(ctx, db, opts, fn) })
+}
+
+// retryWithBackoff 是 WithTxRetryConfig 与 EnsureSeqRowRetry 共用的有界重试骨架:
+// 每次尝试前先看 ctx;只有 cfg.IsRetryable 认可的错误才重跑;两次尝试之间按 txBackoff 可取消地退避。
+// op 必须可整体重跑(自己不留半截副作用)。what 只进最终错误文案("<what>重试 N 次仍失败")。
+// cfg 由调用方先 validate —— 这里不重复校验,免得两处校验口径漂移。
+func retryWithBackoff(ctx context.Context, cfg TxRetryConfig, what string, op func() error) error {
 	sleep := cfg.sleep
 	if sleep == nil {
 		sleep = sleepCtx
@@ -314,7 +398,7 @@ func WithTxRetryConfig(ctx context.Context, db *sql.DB, cfg TxRetryConfig, fn fu
 			}
 			return err
 		}
-		err := runTx(ctx, db, opts, fn)
+		err := op()
 		if err == nil {
 			return nil
 		}
@@ -330,7 +414,7 @@ func WithTxRetryConfig(ctx context.Context, db *sql.DB, cfg TxRetryConfig, fn fu
 			return errors.Join(lastErr, waitErr)
 		}
 	}
-	return fmt.Errorf("assetop: 事务重试 %d 次仍失败: %w", cfg.Attempts, lastErr)
+	return fmt.Errorf("assetop: %s重试 %d 次仍失败: %w", what, cfg.Attempts, lastErr)
 }
 
 // txBackoff 复用 NextAttemptMs 的退避形状(指数 + ±20% 抖动),不另起一套参数:

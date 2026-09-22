@@ -3,6 +3,7 @@ package clientplayerloginlogic
 import (
 	"context"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 	"login/internal/constants"
@@ -76,7 +77,7 @@ func TestBackfillAppearancePersistsAndKeepsStoredIdentity(t *testing.T) {
 }
 
 func TestSelfHealedRoleRecoversAppearanceWithoutMutatingOtherRoles(t *testing.T) {
-	l, rdb, _, _ := newIdentityBackfillHarness(t, &dbpb.PlayerDatabase{
+	l, rdb, mr, _ := newIdentityBackfillHarness(t, &dbpb.PlayerDatabase{
 		PlayerId: identityPlayerID, Uint32PbComponent: &comppb.PlayerUint32Comp{Class: 3},
 		ProfileComponent: &comppb.PlayerProfileComp{AppearanceId: "04_mountain_guardian_boy", Gender: 1},
 	})
@@ -88,7 +89,7 @@ func TestSelfHealedRoleRecoversAppearanceWithoutMutatingOtherRoles(t *testing.T)
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	if err := rdb.Set(ctx, constants.GetAccountDataKey("appearance-recovery"), blob, 0).Err(); err != nil {
+	if err := rdb.Set(ctx, constants.GetAccountDataKey("appearance-recovery"), blob, time.Hour).Err(); err != nil {
 		t.Fatal(err)
 	}
 	roles := []*loginpb.AccountSimplePlayerWrapper{{Player: account.SimplePlayers.Players[0]}}
@@ -113,6 +114,13 @@ func TestSelfHealedRoleRecoversAppearanceWithoutMutatingOtherRoles(t *testing.T)
 	}
 	if account.SimplePlayers.Players[1].AppearanceId != "06_thunder_caster_boy" {
 		t.Fatal("修复覆盖了其他人物")
+	}
+	if mr.TTL(identityBlobKey()) <= 0 {
+		t.Fatal("外观修复不能取消 PlayerAllData 缓存 TTL")
+	}
+	mr.FastForward(48 * time.Hour)
+	if saved, err := rdb.Get(ctx, constants.GetAccountDataKey(state.account)).Bytes(); err != nil || !proto.Equal(account, mustUnmarshalAccount(t, saved)) {
+		t.Fatalf("修复后的账号目录未长期保留: %v", err)
 	}
 }
 

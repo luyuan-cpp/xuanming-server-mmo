@@ -2,7 +2,6 @@ package clientplayerloginlogic
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"login/internal/config"
 	"login/internal/constants"
@@ -115,7 +114,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 	// login_session:* write happen the first time the client hits the gate
 	// (via the legacy path's EnterGame → bindSession flow).
 	if !isLegacyPath {
-		userAccount, err := GetOrInitUserAccount(l.ctx, l.svcCtx.RedisClient, account, config.AppConfig.Account.CacheExpire)
+		userAccount, err := GetOrInitUserAccount(l.ctx, l.svcCtx.RedisClient, account)
 		if err != nil {
 			return nil, err
 		}
@@ -189,7 +188,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 	}
 
 	// 5. Load account data
-	userAccount, err := GetOrInitUserAccount(l.ctx, l.svcCtx.RedisClient, account, config.AppConfig.Account.CacheExpire)
+	userAccount, err := GetOrInitUserAccount(l.ctx, l.svcCtx.RedisClient, account)
 	if err != nil {
 		return nil, err
 	}
@@ -317,42 +316,31 @@ func fillMissingRoleNames(ctx context.Context, names roleNameLookup,
 	}
 }
 
-func GetOrInitUserAccount(ctx context.Context, rdb *redis.Client, account string, ttl time.Duration) (*login_proto_data_base.UserAccounts, error) {
-	key := constants.GetAccountDataKey(account)
+// 账号角色目录是当前 Redis 权威记录，不是可重新加载的缓存。
+// GET/PERSIST/初始化在同一个脚本中完成：迁移旧 TTL，且不会以空账号覆盖并发建角。
+var getOrInitUserAccountScript = redis.NewScript(`
+local value = redis.call("GET", KEYS[1])
+if value then
+    redis.call("PERSIST", KEYS[1])
+    return value
+end
+redis.call("SET", KEYS[1], ARGV[1])
+return ARGV[1]
+`)
 
-	// Try Redis first
-	cmd := rdb.Get(ctx, key)
-	valueBytes, err := cmd.Bytes()
-
-	if errors.Is(err, redis.Nil) {
-		// Not in Redis; create empty default
-		logx.Infof("UserAccounts not found for account=%s, initializing default", account)
-		userAccount := &login_proto_data_base.UserAccounts{}
-
-		valueBytes, err = proto.Marshal(userAccount)
-		if err != nil {
-			logx.Errorf("Marshal default UserAccounts failed: %v", err)
-			return nil, err
-		}
-
-		// Save to Redis
-		err = rdb.Set(ctx, key, valueBytes, ttl).Err()
-		if err != nil {
-			logx.Errorf("Failed to save default UserAccounts to Redis for account=%s: %v", account, err)
-			return nil, err
-		}
-
-		return userAccount, nil
-	}
-
+func GetOrInitUserAccount(ctx context.Context, rdb *redis.Client, account string) (*login_proto_data_base.UserAccounts, error) {
+	userAccount := &login_proto_data_base.UserAccounts{}
+	empty, err := proto.Marshal(userAccount)
 	if err != nil {
-		logx.Errorf("Failed to get UserAccounts from Redis: %v", err)
+		return nil, err
+	}
+	value, err := getOrInitUserAccountScript.Run(ctx, rdb, []string{constants.GetAccountDataKey(account)}, empty).Text()
+	if err != nil {
+		logx.Errorf("读取或保留账号角色目录失败: account=%s err=%v", account, err)
 		return nil, err
 	}
 
-	// Deserialize and return
-	userAccount := &login_proto_data_base.UserAccounts{}
-	if err := proto.Unmarshal(valueBytes, userAccount); err != nil {
+	if err := proto.Unmarshal([]byte(value), userAccount); err != nil {
 		logx.Errorf("Unmarshal user account failed for account=%s: %v", account, err)
 		return nil, err
 	}

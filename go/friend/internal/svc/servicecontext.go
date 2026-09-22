@@ -156,9 +156,20 @@ func NewRedisHandles(c config.Config) (friendRds, sharedRds *redis.Redis, target
 // (friend_count 溢出写成 65535、负数写成 0),而且一个错都不报 —— 容量计数一旦偏了,
 // 后面所有"好友列表满"的判定全是错的。在连接层兜底比在每条 SQL 上兜底可靠。
 //
+// transaction_isolation=%27READ-COMMITTED%27 把**整个连接池**的会话隔离级别设成 RC(驱动在建连时
+// 发 SET)。显式写事务本来就用 BeginTx(RC)(data.friendWriteTxIsolation);这一项管的是
+// **事务之外**的自动提交语句 —— Unblock 的 DELETE、sweep / 回收的逐行 DELETE、ensure 的 INSERT ——
+// 它们原先落在服务器全局默认的 REPEATABLE-READ 上,会拿间隙锁 / next-key 锁:
+//   - 排队中的间隙锁请求会挡住别人的插入意向锁,是 RR 下经典的插入死锁源;
+//   - ensure 的"主键重复 → ODKU 取 X"在 RR 下拿的是 next-key,两个并发 ensure 撞上刚被回收的行时
+//     仍可能互等(2026-09-21 死锁事故的后续,docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md)。
+// RC 下只剩记录锁,friend 全部锁定语句又都是完整主键点查 / 点更新,于是不存在可成环的间隙。
+// 自动提交语句每条各取新快照,读语义与 RR 下相同,不影响任何业务判定。
+//
 // 返回值**含密码**,只能交给 sql.Open,绝不打日志、绝不进错误信息(横幅用 MySQLTarget)。
 func BuildDSN(c config.MySQLConf) string {
-	return fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&charset=utf8mb4&sql_mode=%%27STRICT_TRANS_TABLES%%27",
+	return fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&charset=utf8mb4&sql_mode=%%27STRICT_TRANS_TABLES%%27"+
+		"&transaction_isolation=%%27READ-COMMITTED%%27",
 		c.User, c.Password, c.Host, c.DBName)
 }
 

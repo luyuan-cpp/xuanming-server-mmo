@@ -12,8 +12,26 @@ package data
 //
 //  1. **写事务只走 GuildRepo.inTx**(90 part2 §2 第 1 条):READ COMMITTED、1213 / 9007 整事务重跑、
 //     1205 与子预算到期归一成 ErrWriteConflict、COMMIT 结果不明归一成 ErrWriteConflict。本文件不另写重试助手。
-//  2. **锁序**:guild → guild_member → guild_player_op_seq → guild_asset_op → guild_daily_counter(tables.go 的顺序)。
+//  2. **锁序**(guild_db.proto 文件头的全序,tables.go 同序):guild → guild_player_state → guild_member →
+//     guild_application → guild_player_op_seq → guild_asset_op → guild_daily_counter;同表多行按主键升序逐行取锁。
 //     guild 行在 T-D / T-S 里只做非锁定读:它只提供 zone 与等级,锁它会让同帮所有捐献在一把行锁上排队。
+//     锁定语句一律是**完整主键等值点操作**(2026-09-21 死锁修复契约 P3):
+//     - guild_member 上的锁定读与 UPDATE 带 `FORCE INDEX (PRIMARY)`:WHERE 同时钉死了 uk_guild_member(player_id),
+//       被规划到唯一键就是"二级 → 主键"取锁,与离帮 / 被踢 / 解散"按主键删成员行(主键 → 二级)"在同一行上反序;
+//     - 需要按二级条件找行时(提前截止)先普通读候选主键,再按主键升序逐行"主键点锁 → 点改",WHERE 带原条件做提交点复核
+//       (点锁是 TiDB 的要求,死锁复核 V1,见 asset_store.go 文件头 TiDB 附加规则)。
+//     assetop.AllocateSeq 只锁 seq 行(完整主键点查),本纪元未决行是**普通读**(friend 审计 #4 修法 A,2026-09-21 起):
+//     T-D / T-S 对 guild_asset_op 除自己插入的新行外不持任何锁,终结(asset_store.go)对 op 行的主键 CAS 与它们之间
+//     没有可反序的资源(终结在退次数 / 退限购分支另锁 seq 行,是计数行的守卫,见下一条与 asset_store.go 的 lockCounterparty)。
+//     普通读看得全前一个分配者已提交的未决行,靠的是 READ COMMITTED 的"每条语句一份新快照" —— inTx 固定 RC,不得改。
+//     seq 行在事务内、锁住本人成员行之后按需建(死锁复核 C2,ensureSeqRowTx):成员行就是 seq 行全部建行者的守卫,
+//     首插者回滚时没有排队者,不再有"继承间隙 S、插入意向互挡"的 1213。
+//     计数行 guild_daily_counter 的每个悲观写者(本文件的带上限 upsert、终结的退次数 / 退限购)都先持同一 (p, stream) 的
+//     seq 行(死锁复核 C6):TiDB 下 IODKU 在语句末尾并行锁 {行 key, PRIMARY key},退款的 Point_Get 是先 PRIMARY key 后行 key,
+//     两者一旦同时在途就可能各持一半互等;seq 行把它们排成一列。以后新增计数写者(如 B6 活动计数)同样要先持 seq 行。
+//     唯一不持 seq 行的是清理短事务(asset_store.go,Point_Get 点锁 → 点删):它只删截止键(now − max(保留期, 8 天))
+//     以前的周期行,本文件的 upsert 只写请求开头 start 所在周期的行,两者行集合不相交(C5 补遗,minCounterCleanupAge);
+//     清理与退款同为 Point_Get,同序。计数行上的完整全序见 asset_store.go 文件头。
 //  3. **SQL 不写 status / kind / stream / counter_kind / tx_type 的数字字面量**,一律绑定生成常量(90 part2 §3 末行)。
 //  4. **合服闸门在事务内**,zone 取本事务读到的 guild.zone_id,不取缓存(缓存合服后最长陈旧一个 TTL)。
 
@@ -22,6 +40,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	assetpb "proto/common/asset"
@@ -57,7 +76,7 @@ const assetOpColumnCount = 28
 var sqlInsertAssetOp = "INSERT INTO " + guildAssetOpTable + " (" + assetOpColumns + ") VALUES (" +
 	placeholders(assetOpColumnCount) + ")"
 
-// economyReadBudget:经济读查询与事务外 autocommit 语句的子预算(90 part2 §2 第 8 条的 1000ms 档)。
+// economyReadBudget:经济读查询的子预算(90 part2 §2 第 8 条的 1000ms 档;seq 行自死锁复核 C2 起在事务内建,不再用它)。
 // 读的都是主键 / 索引点查,跑满 1s 说明库出了状况,尽早把"稍后再试"还给玩家比吃满请求预算好。
 const economyReadBudget = 1000 * time.Millisecond
 
@@ -77,8 +96,13 @@ ON DUPLICATE KEY UPDATE
 
 const (
 	sqlSelectGuildZoneLevel = `SELECT zone_id, level FROM guild WHERE guild_id = ?`
-	sqlLockMemberBalance    = `SELECT contribution_balance FROM guild_member WHERE guild_id = ? AND player_id = ? FOR UPDATE`
-	sqlDebitContribution    = `UPDATE guild_member SET contribution_balance = contribution_balance - ?
+	// guild_member 的两条锁定语句带 FORCE INDEX (PRIMARY):完整主键等值同时钉死了 uk_guild_member(player_id),
+	// 优化器若选唯一键,取锁顺序就成了"uk 项 → 聚簇记录",与离帮 / 被踢 / 解散按主键删这一行(聚簇 → uk 项)反序成环
+	// (lock-rules H1)。MySQL 与 TiDB 都认这个子句;实际计划由 economy_lock_plan_mysql_test.go 的 EXPLAIN 回归钉住。
+	// 帮贡列不在任何二级索引里,UPDATE 只锁聚簇记录这一把锁。
+	sqlLockMemberBalance = `SELECT contribution_balance FROM guild_member FORCE INDEX (PRIMARY)
+	WHERE guild_id = ? AND player_id = ? FOR UPDATE`
+	sqlDebitContribution = `UPDATE guild_member FORCE INDEX (PRIMARY) SET contribution_balance = contribution_balance - ?
 	WHERE guild_id = ? AND player_id = ? AND contribution_balance >= ?`
 
 	sqlLockGuildForUpgrade = `SELECT level, funds, zone_id FROM guild WHERE guild_id = ? FOR UPDATE`
@@ -101,6 +125,33 @@ const (
 	// 最近结果:沿 uk_guild_asset_op 倒序,最多扫 limit 行,与历史行数无关;含 PENDING,由调用方在 Go 里过滤。
 	sqlSelectRecentOps = "SELECT " + assetOpColumns + " FROM " + guildAssetOpTable +
 		" WHERE `player_id` = ? AND `stream` = ? ORDER BY `stream_epoch` DESC, `seq` DESC LIMIT ?"
+
+	// 离帮 / 被踢 / 解散的提前截止,拆成"候选普通读 + 主键点改"两步(friend 审计 #5 / #10,见 accelerateDonationDeadlines)。
+	// 候选读的 IN 列表按批在运行期拼接(前缀 + 占位符 + 后缀);它**不带任何锁定子句**,走哪个索引都不加行锁。
+	sqlSelectAccelerateCandidatesHead = "SELECT `op_id` FROM " + guildAssetOpTable + " WHERE `player_id` IN ("
+	sqlSelectAccelerateCandidatesTail = ") AND `stream` = ? AND `status` = ? AND `guild_id` = ? AND `kind` = ?" +
+		" AND `deadline_ms` > ? ORDER BY `op_id`"
+	// sqlAccelerateDonationDeadline:完整主键等值点改。`status = PENDING AND deadline_ms > now` 是提交点复核:
+	// 候选读之后该行已被终结 / 已被提前(或本语句重放),影响 0 行,是 no-op 而不是错误。
+	// kind / guild_id / player_id / stream 插入后不可变,候选读判过就够,这里不重复。
+	// 只改 deadline_ms(无索引)、next_attempt_ms(在 idx_guild_asset_op_0)、updated_ms(无索引):
+	// 取锁顺序是"聚簇记录 → idx_0 项",与终结 / 人工终结 / 重排 / 毒行 / 领取 / 清理点删同向。
+	// 调用方在它之前先对同一 op_id 跑 sqlLockAssetOp(V1,TiDB 下让同一行的悲观写者先在 PRIMARY key 上排队)。
+	sqlAccelerateDonationDeadline = "UPDATE " + guildAssetOpTable +
+		" SET `deadline_ms` = ?, `next_attempt_ms` = LEAST(`next_attempt_ms`, ?), `updated_ms` = ?" +
+		" WHERE `op_id` = ? AND `status` = ? AND `deadline_ms` > ?"
+
+	// sqlSeqRowExists:ensureSeqRowTx 的前置普通读(完整主键等值,不带锁定子句;RC 下不取行锁)。
+	// seq 行建出后永不删除,常态直接命中、不必再发 INSERT IGNORE。
+	sqlSeqRowExists = "SELECT 1 FROM " + guildPlayerOpSeqTable + " WHERE `player_id` = ? AND `stream` = ?"
+
+	// sqlEnsureSeqRow:事务内建 seq 行(死锁复核 C2,见 ensureSeqRowTx)。
+	// **与 shared/assetop.EnsureSeqRow 的建行语句逐字同义**(列、next_seq 从 1 起、纪元 = 建行时刻毫秒、已存在即空操作不改纪元)。
+	// 这是一次有记录的 DRY 偏离(AGENTS §11 取舍序:正确性 > 可维护):assetop 目前只有吃 *sql.DB 的自动提交版建行,
+	// 而消掉 C2 的环必须在守卫行锁之下、在同一事务里建行;本会话无权改 go/shared。assetop 提供事务版建行
+	// (EnsureSeqRowTx)之后,删掉本常量、ensureSeqRowTx 改调它即可。两边不许悄悄分叉:
+	// TestEnsureSeqRowTx_MatchesAssetopEnsureSeqRow 在真库上逐列比对两条路径建出的行。
+	sqlEnsureSeqRow = "INSERT IGNORE INTO " + guildPlayerOpSeqTable + " (player_id, stream, next_seq, epoch, updated_ms) VALUES (?, ?, 1, ?, ?)"
 )
 
 // FenceFunc:合服闸门。nil = 不设闸;返回 ErrZoneMerging(或包它)= 拒绝。zone 一律取事务内读到的 guild.zone_id。
@@ -282,6 +333,13 @@ func checkFence(ctx context.Context, fence FenceFunc, zoneID uint32) error {
 }
 
 // upsertCounterWithLimit 占用计数行 n 次;超过 limit 时一次都不占,返回 limited=true。
+//
+// 硬前提(死锁复核 C6):调用方已持有 guild_player_op_seq(p, 该计数所属的流)的 X —— 捐献计数属 GUILD_DEBIT、商店限购属
+// GUILD_CREDIT(T-D / T-S 里 AllocateSeq 已锁住它)。计数行的全部悲观写者(这里与终结的 refundCounter)都先在这一行上串行:
+// TiDB 下本语句在语句末尾把 {行 key, PRIMARY key} 按 region 并行加锁,可能先拿到行 key、PRIMARY key 还在途;
+// 退款是 Point_Get,先 PRIMARY key 后行 key —— 两者同时在途就各持一半互等(1213)。以后新增计数写者也必须先持 seq 行。
+// periodKey 必须是本请求开头 start 的周期键:清理不持 seq 行,它与本语句不相遇只靠"清理截止键至少早 24h"(minCounterCleanupAge),
+// 拿一个更早的时刻算周期键写进来会破坏这个前提。
 func upsertCounterWithLimit(ctx context.Context, tx *sql.Tx, playerID uint64, kind pb.GuildDailyCounterKind,
 	refID, periodKey, n, limit uint32, nowMs uint64) (limited bool, err error) {
 	result, err := tx.ExecContext(ctx, sqlUpsertCounterWithLimit,
@@ -308,23 +366,73 @@ func upsertCounterWithLimit(ctx context.Context, tx *sql.Tx, playerID uint64, ki
 }
 
 // accelerateDonationDeadlines 把这些玩家在本帮的**未决捐献**截止时间提前到 now(05 §5.20,D2 覆盖第 4 条保留)。
-// 由离帮 / 被踢 / 解散三个事务调用,放在删申请之后、删成员之前(X-14);锁序 guild_member → guild_asset_op。
+// 由离帮 / 被踢 / 解散三个事务调用,放在删成员行、删申请之后(成员行 X 锁仍持有到提交,捐献预留照样被挡在外面;
+// 2026-09-21 死锁修复把删成员前移,原 X-14 的"删申请之后、删成员之前"已不成立);锁序 guild_member → guild_asset_op。
 //
 // 只动 deadline_ms / next_attempt_ms / updated_ms:**不抢租约**(lease_until_ms 不动),同步投递还握着租约的行
 // 要等租约到期才被循环领走;next_attempt_ms 取 LEAST 是为了把退避中的行拉回"现在",而不是把已到期的行推后。
-// deadline_ms > now 过滤掉已经到期的行,重放本语句是 no-op。只作用于 DONATE:商店 / 活动发奖的物品属于玩家,照常投递。
-// IN 占位符按 100 分块(X-14:成员上限 100,与 deleteApplicationsOfPlayers 同一口径)。
+// deadline_ms > now 过滤掉已经到期的行,重放是 no-op。只作用于 DONATE:商店 / 活动发奖的物品属于玩家,照常投递。
+// IN 占位符按 100 分块(X-14:成员上限 100,与删申请同一口径)。
+//
+// # 为什么是"候选普通读 + 主键升序逐行点改",而不是一条多条件 UPDATE(2026-09-21 死锁修复,friend 审计 #5 / #10)
+//
+// 旧写法 `UPDATE … WHERE player_id IN (…) AND stream = ? AND status = ? AND guild_id = ? AND kind = ? AND deadline_ms > ?`
+// 的候选路径全是二级索引(uk、idx_1、idx_2、idx_0),经二级索引的 UPDATE 没有 semi-consistent read,扫到的每一行都
+// "先二级项、后聚簇记录"真的等锁 —— 与终结 CAS / 重排 / 毒行 / 清理 DELETE 的"先聚簇、后改二级项"在同一 op 行上反序:
+// 走 idx_2 时撞 Finalize(DONATE, REJECTED/ABORTED) 与本玩家历史终态行的清理,走 idx_1 撞全帮的终态行清理,
+// 走 idx_0 则锁遍全服未决行、与任意一行的重排成环。锁集由执行计划决定,测试库(小表)与线上还不一样。
+//
+// 现在两步:
+//  1. 候选读:同样的条件做**普通读**(RC 语句级快照,不加任何行锁;TiDB 同样不锁),只取 op_id;
+//  2. 把全部批次的 op_id 合并、去重、升序,逐行先 sqlLockAssetOp 主键点锁、再 sqlAccelerateDonationDeadline 点改
+//     (完整主键等值;MySQL 下两条锁同一条聚簇记录,点改再 delete-mark / 插入它的 idx_0 项)。
+//     先点锁是为 TiDB(死锁复核 V1):点改带复核谓词、不走 Point_Get 快路径,语句末尾并行锁 {行 key, PRIMARY key, uk key},
+//     与同一行上捐献被拒 / 中止的终结、重排、毒行推迟可能各持一半;点锁让所有写者先在 PRIMARY key 上排队
+//     (详见 asset_store.go 文件头 TiDB 附加规则)。MySQL 下锁集不变。
+//
+// 候选集为什么是完整的(正确性前提,调用方必须满足):三个调用方在调用前**已持有**这些 (guild_id, player_id) 的
+// guild_member 行 X 锁(被踢:lockMemberPair 锁目标;离帮:锁本人;解散:锁全体成员),而 ReserveDonation 插入
+// PENDING DONATE 行之前必先 `FOR UPDATE` 锁同一成员行 —— 候选读之后不可能再冒出新的未决捐献;候选读本身发生在
+// 拿到成员锁之后,RC 下看得见此前已提交的全部行。候选读与点改之间行可能被终结或已被提前:点改的 WHERE 复核
+// status / deadline_ms,影响 0 行即跳过,不做"恰好一行"的自检。行只会离开 PENDING,没有路径把它改回来。
 //
 // now 必须 > 0:deadline_ms = 0 在本表的语义是"永不中止",传 0 会把所有未决捐献改成永不中止 —— fail-closed 拒绝。
 func accelerateDonationDeadlines(ctx context.Context, tx *sql.Tx, guildID uint64, playerIDs []uint64, now uint64) error {
 	if now == 0 {
 		return fmt.Errorf("accelerate donation deadlines of guild %d: now must be > 0", guildID)
 	}
+	opIDs, err := selectAccelerateCandidates(ctx, tx, guildID, playerIDs, now)
+	if err != nil {
+		return err
+	}
+	for _, opID := range opIDs {
+		// 先主键点锁、再带复核条件点改(V1,理由见 asset_store.go 文件头 TiDB 附加规则)。读不到行 = 候选读之后已被清理
+		// (只删终态行),与点改影响 0 行同义,跳过。
+		found, err := lockRowExists(ctx, tx, sqlLockAssetOp, opID)
+		if err != nil {
+			return fmt.Errorf("lock %s %d for deadline acceleration (guild %d): %w", guildAssetOpTable, opID, guildID, err)
+		}
+		if !found {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, sqlAccelerateDonationDeadline,
+			now, now, now, opID, PendingStatus(), now); err != nil {
+			return fmt.Errorf("accelerate donation deadline of %s %d (guild %d): %w", guildAssetOpTable, opID, guildID, err)
+		}
+	}
+	return nil
+}
+
+// selectAccelerateCandidates 普通读这些玩家在本帮、本条件下的未决捐献 op_id,返回去重后的升序列表。
+//
+// 每批的游标在下一批查询之前就读完并关闭:同一个 *sql.Tx 只有一条连接,游标没关就发下一条语句会被驱动拒绝;
+// 也正因为全部候选先读完、再统一排序,跨批次的点改才是全局按 op_id 升序(P2)。
+func selectAccelerateCandidates(ctx context.Context, tx *sql.Tx, guildID uint64, playerIDs []uint64, now uint64) ([]uint64, error) {
 	const chunkSize = 100
+	var opIDs []uint64
 	for start := 0; start < len(playerIDs); start += chunkSize {
 		batch := playerIDs[start:min(start+chunkSize, len(playerIDs))]
-		args := make([]any, 0, len(batch)+8)
-		args = append(args, now, now, now)
+		args := make([]any, 0, len(batch)+5)
 		for _, playerID := range batch {
 			args = append(args, playerID)
 		}
@@ -334,15 +442,37 @@ func accelerateDonationDeadlines(ctx context.Context, tx *sql.Tx, guildID uint64
 			guildID,
 			int32(pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_DONATE),
 			now)
-		query := "UPDATE " + guildAssetOpTable +
-			" SET `deadline_ms` = ?, `next_attempt_ms` = LEAST(`next_attempt_ms`, ?), `updated_ms` = ?" +
-			" WHERE `player_id` IN (" + placeholders(len(batch)) + ")" +
-			" AND `stream` = ? AND `status` = ? AND `guild_id` = ? AND `kind` = ? AND `deadline_ms` > ?"
-		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
-			return fmt.Errorf("accelerate donation deadlines of %d members of guild %d: %w", len(batch), guildID, err)
+		query := sqlSelectAccelerateCandidatesHead + placeholders(len(batch)) + sqlSelectAccelerateCandidatesTail
+		found, err := scanOpIDs(ctx, tx, query, args...)
+		if err != nil {
+			return nil, fmt.Errorf("select pending donations of %d members of guild %d: %w", len(batch), guildID, err)
 		}
+		opIDs = append(opIDs, found...)
 	}
-	return nil
+	slices.Sort(opIDs)
+	return slices.Compact(opIDs), nil
+}
+
+// scanOpIDs 跑一条只返回 op_id 一列的查询,读完即关游标。
+func scanOpIDs(ctx context.Context, q queryer, query string, args ...any) ([]uint64, error) {
+	rows, err := q.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []uint64
+	for rows.Next() {
+		var id uint64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan op_id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate op_id: %w", err)
+	}
+	return ids, nil
 }
 
 // ── T-D 捐献预留 ─────────────────────────────────────────────
@@ -388,19 +518,17 @@ func (in DonationReserve) validate() error {
 
 // ReserveDonation 捐献预留事务 T-D(05 §5.16,X-13 upsert 订正)。
 //
-// 事务外先 EnsureSeqRow(GUILD_DEBIT);事务 op=donate,锁序 guild(非锁定读)→ guild_member → seq → op → counter:
-// 读帮会 zone / 等级 → 等级门槛 → 合服闸门 → 锁本人成员行 → 分 seq → 写 PENDING 行(28 列全写)→ 占今日次数。
+// 事务 op=donate,锁序 guild(普通读)→ guild_member → seq(缺行先在事务内插)→ seq FOR UPDATE → op → counter:
+// 读帮会 zone / 等级 → 等级门槛 → 合服闸门 → 锁本人成员行 → 按需建 seq 行(GUILD_DEBIT,ensureSeqRowTx)→ 分 seq →
+// 写 PENDING 行(28 列全写)→ 占今日次数。
 // 错误语义:ErrGuildGone / ErrGuildLevelTooLow / ErrZoneMerging / ErrNotGuildMember /
 // 包了 assetop.ErrTooManyPending 的错误(errors.Is 可判)/ ErrDonateLimit / ErrWriteConflict;其余为内部错误。
-// 任何拒绝都整体回滚:seq 不前进、行不落、次数不占。
+// 任何拒绝都整体回滚:seq 不前进、行不落、次数不占(首次建出的 seq 行也随之回滚,下次再建,纪元取那一次的时刻)。
 func (r *EconomyRepo) ReserveDonation(ctx context.Context, in DonationReserve) (Reserved, error) {
 	if err := in.validate(); err != nil {
 		return Reserved{}, err
 	}
 	const stream = assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_DEBIT
-	if err := r.ensureSeqRow(ctx, in.PlayerID, stream, in.NowMs); err != nil {
-		return Reserved{}, err
-	}
 
 	var out Reserved
 	err := r.guilds.inTx(ctx, opDonate, func(ctx context.Context, tx *sql.Tx) error {
@@ -416,6 +544,8 @@ func (r *EconomyRepo) ReserveDonation(ctx context.Context, in DonationReserve) (
 		}
 		// 本人成员行加锁:同一玩家的并发捐献在这里串行,也让离帮事务(删这一行)与本事务互斥 ——
 		// 离帮先提交,这里读不到行;本事务先提交,离帮事务里的提前截止能看到这一行。
+		// 这一步是 accelerateDonationDeadlines 候选普通读"完整"的前提:插 PENDING DONATE 行之前必先持有成员行锁。
+		// 以后若新增任何插入 DONATE 行的路径,也必须先锁同一成员行,否则离帮的提前截止会漏行。
 		var role uint32
 		err = tx.QueryRowContext(ctx, sqlLockMemberRole, in.GuildID, in.PlayerID).Scan(&role)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -423,6 +553,10 @@ func (r *EconomyRepo) ReserveDonation(ctx context.Context, in DonationReserve) (
 		}
 		if err != nil {
 			return fmt.Errorf("lock donating member %d of guild %d: %w", in.PlayerID, in.GuildID, err)
+		}
+		// seq 行在成员行锁之下建(C2):同一 (p, DEBIT) 的建行者都已在这把锁上串行,见 ensureSeqRowTx。
+		if err := ensureSeqRowTx(ctx, tx, in.PlayerID, stream, in.NowMs); err != nil {
+			return err
 		}
 
 		alloc, err := assetop.AllocateSeq(ctx, tx, r.seq, in.PlayerID, stream, assetop.DefaultLimits, in.NowMs)
@@ -512,8 +646,9 @@ func (in ShopReserve) validate() error {
 
 // ReserveShopOrder 兑换预留事务 T-S(05 §5.17,X-13 upsert 订正)。
 //
-// 事务外先 EnsureSeqRow(GUILD_CREDIT);事务 op=shop,锁序 guild(非锁定读)→ guild_member → seq → op → counter,
-// 最后回到已锁的成员行扣帮贡(同一行再次 UPDATE 不算新加锁)。商店指令 deadline_ms 恒 0:物品属于玩家,永不中止。
+// 事务 op=shop,锁序 guild(普通读)→ guild_member → seq(缺行先在事务内插,GUILD_CREDIT,ensureSeqRowTx)→
+// seq FOR UPDATE → op → counter,最后回到已锁的成员行扣帮贡(同一行再次 UPDATE 不算新加锁)。
+// 商店指令 deadline_ms 恒 0:物品属于玩家,永不中止。
 // 错误语义:ErrShopLimit / ErrGuildGone / ErrGuildLevelTooLow / ErrZoneMerging / ErrNotGuildMember /
 // ErrContributionInsufficient / 包了 assetop.ErrTooManyPending 的错误 / ErrWriteConflict;其余为内部错误。
 func (r *EconomyRepo) ReserveShopOrder(ctx context.Context, in ShopReserve) (ShopReserved, error) {
@@ -526,9 +661,6 @@ func (r *EconomyRepo) ReserveShopOrder(ctx context.Context, in ShopReserve) (Sho
 		return ShopReserved{}, ErrShopLimit
 	}
 	const stream = assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_CREDIT
-	if err := r.ensureSeqRow(ctx, in.PlayerID, stream, in.NowMs); err != nil {
-		return ShopReserved{}, err
-	}
 
 	var out ShopReserved
 	err := r.guilds.inTx(ctx, opShop, func(ctx context.Context, tx *sql.Tx) error {
@@ -552,6 +684,10 @@ func (r *EconomyRepo) ReserveShopOrder(ctx context.Context, in ShopReserve) (Sho
 		}
 		if balance < in.Cost {
 			return ErrContributionInsufficient
+		}
+		// seq 行在成员行锁之下建(C2),理由同 ReserveDonation。
+		if err := ensureSeqRowTx(ctx, tx, in.PlayerID, stream, in.NowMs); err != nil {
+			return err
 		}
 
 		alloc, err := assetop.AllocateSeq(ctx, tx, r.seq, in.PlayerID, stream, assetop.DefaultLimits, in.NowMs)
@@ -615,11 +751,41 @@ func (r *EconomyRepo) ReserveShopOrder(ctx context.Context, in ShopReserve) (Sho
 	return out, nil
 }
 
-// ensureSeqRow 在事务**外**(autocommit)建 seq 行:对不存在的行"加锁读再插入"会让并发的首次请求死锁。
-func (r *EconomyRepo) ensureSeqRow(ctx context.Context, playerID uint64, stream assetpb.AssetOpStream, nowMs uint64) error {
-	ctx, cancel := context.WithTimeout(ctx, economyReadBudget)
-	defer cancel()
-	if err := assetop.EnsureSeqRow(ctx, r.db, r.seq, playerID, stream, nowMs); err != nil {
+// ensureSeqRowTx 在 T-D / T-S 事务内、**已持本人成员行 X 锁之后**,按需建 seq 行(死锁复核 C2,根除 G-C3 的 seq 行形态)。
+//
+// 旧写法是事务外自动提交 INSERT IGNORE:首个插入者在提交前被回滚(连接被 KILL、刷盘失败)时,排在它未提交记录上做
+// 重复键检查的两个同键 INSERT IGNORE,其 S 锁在 RC 下照样被继承成后继记录前那段间隙上的间隙 S(查重锁带 inherit_all),
+// 随后各自的插入意向锁被对方挡住,InnoDB 报 1213(手册 "Locks Set by Different SQL Statements" 三会话例)。
+// 前置普通读挡不住首次建行的竞态 —— RC 下别人未提交的插入对它不可见。
+//
+// 守卫不变量:guild_player_op_seq 的每个建行者都先持 p 当前所在帮的 guild_member(G,p) X(ReserveDonation / ReserveShopOrder,
+// sqlLockMemberRole / sqlLockMemberBalance)。p 同一时刻只在一个帮(uk(player_id));离帮 / 被踢 / 解散删这一行之前都要等它;
+// 对旧帮发起的预留在 RC 下锁不到行(不存在或已删除标记)、直接回 ErrNotGuildMember,走不到这里。所以同一 (p, ·) 的在途
+// 建行者至多一个:首插者回滚(业务拒绝、子预算到期、1213 重跑都会)时它的记录上没有排队者,不会留下继承的间隙 S。
+// 本表不再有任何 S 锁(没有并发查重),RC 下 X 锁不被继承,插入意向锁永远不用等。新增的只有"成员行 → seq 行"这一条边,
+// 与表间全序 P1 同向。TiDB 下是 PRIMARY key 与新行 key 的 X 悲观锁,同键竞争者都已在成员行上串行。
+// **以后新增任何建 seq 行或调 AllocateSeq 的路径(如 B6 活动发奖要分配 CREDIT 流的 seq),都必须先持同一成员行锁**,
+// 否则事务内插入者一回滚,排在它后面的查重 S 锁就会被继承成间隙 S,并发建行者互等 1213 —— 而事务内回滚远比自动提交常见。
+//
+// 先普通读:行建出后永不删除,常态直接命中、不发写语句;拿到成员行锁之后读,前一个持锁者已提交的行在 RC 下一定看得见。
+// 缺行才 INSERT IGNORE(语句与 assetop.EnsureSeqRow 同义,见 sqlEnsureSeqRow 的 DRY 偏离说明;纪元 = 建行时刻毫秒)。
+// 错误原样上抛,由 inTx 统一分类:1213 / 9007 整事务重跑,1205 与子预算到期归一成 ErrWriteConflict。
+//
+// 滚动升级窗口:旧版本副本的事务外自动提交建行不经过成员行守卫,新旧版本混跑期间原环仍可能出现;发布须停服切换或逐区切换。
+func ensureSeqRowTx(ctx context.Context, tx *sql.Tx, playerID uint64, stream assetpb.AssetOpStream, nowMs uint64) error {
+	var exists int
+	switch err := tx.QueryRowContext(ctx, sqlSeqRowExists, playerID, uint32(stream)).Scan(&exists); {
+	case err == nil:
+		return nil
+	case !errors.Is(err, sql.ErrNoRows):
+		return fmt.Errorf("read %s row (player=%d stream=%d): %w", guildPlayerOpSeqTable, playerID, int32(stream), err)
+	}
+	// 与 assetop.EnsureSeqRow 同一条前置:纪元必须为正(调用方的 validate 已拒掉 NowMs == 0,这里是接缝上的第二道)。
+	if nowMs == 0 {
+		return fmt.Errorf("ensure %s row (player=%d stream=%d): epoch must be positive (nowMs=0)",
+			guildPlayerOpSeqTable, playerID, int32(stream))
+	}
+	if _, err := tx.ExecContext(ctx, sqlEnsureSeqRow, playerID, uint32(stream), nowMs, nowMs); err != nil {
 		return fmt.Errorf("ensure %s row (player=%d stream=%d): %w", guildPlayerOpSeqTable, playerID, int32(stream), err)
 	}
 	return nil

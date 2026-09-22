@@ -17,6 +17,8 @@ package data
 // sqlLockMemberRole(B2 的常量,B5b 复用)、sqlLockMemberBalance 与三条帮贡 UPDATE 的 WHERE 同时把这两个
 // 唯一索引的全部列都钉死了 —— 正是事故报告 §5.1 所说"规则前提不成立"的情形:若被规划到 uk_guild_member,
 // 取锁顺序是"二级索引 → 主键",而离帮 / 被踢 / 解散按主键删成员行是"主键 → 二级索引",同一行上反序成环。
+// 2026-09-21 起这几条都带 `FORCE INDEX (PRIMARY)`(死锁修复契约 P3);本用例验的是"带了之后计划确实是主键",
+// 提示子句被误删、或某个版本不认它时这里会红。
 //
 // # 做法
 //
@@ -25,7 +27,7 @@ package data
 //   - 断言 key = PRIMARY,key_len = 主键全部列的字节数之和。key_len 不写死,由 lockPlanPrimaryKeyLen 从
 //     INFORMATION_SCHEMA 现算(整数列按类型定长:BIGINT 8、INT 4;可空列再 +1)。按 proto2mysql 的类型映射
 //     (uint64 → bigint unsigned NOT NULL,uint32 → int unsigned NOT NULL,枚举 → int NOT NULL),
-//     当前应得:guild 8、guild_member 16、guild_daily_counter 20(8+4+4+4)、guild_asset_op 8。
+//     当前应得:guild 8、guild_member 16、guild_player_op_seq 12(8+4)、guild_daily_counter 20(8+4+4+4)、guild_asset_op 8。
 //   - SELECT … FOR UPDATE 另断言 type = const。按主键的 UPDATE:MySQL 单表 UPDATE 走范围优化器,显示 range
 //     (rows=1);若某个版本改走 join 优化器则显示 const —— 两者都接受,index / ALL / ref 一律红。
 //   - 非锁定读 sqlSelectAssetOpImmutable 只断言 key 与 key_len。
@@ -33,27 +35,37 @@ package data
 // # 夹具为什么只有"被查的那一行"
 //
 // 小表是最坏情况(优化器在小表上最爱全扫描,测试库与新服刚开时恰恰是小表),所以**不灌数据去帮优化器**:
-// guild / guild_daily_counter / guild_asset_op 各只插被点查的那一行,guild_member 是帮主 + 被查成员两行
-// (seedManagedGuild 必带帮主)。
+// guild / guild_daily_counter / guild_player_op_seq 各只插被点查的那一行,guild_member 是帮主 + 被查成员两行(seedManagedGuild 必带帮主),
+// guild_asset_op 是两行 —— 一行未决(领取 / 重排 / 毒行 / 终结 / 提前截止点改用)、一行保留期外的终态
+// (清理点删用;两种语句要求的状态互斥,一行满足不了两边)。
 // 但被查的行**必须存在**,且满足语句里的其余条件:MySQL 的 const 判定在优化期就去读这一行 ——
 // 读不到时 EXPLAIN 只给 "no matching row in const table",读到了但其余条件不成立时给
 // "Impossible WHERE noticed after reading const tables",两种情况 table / key 都是 NULL,
 // 用例会因为夹具而红、什么都没验到。所以下面每条语句的参数都与夹具行逐列对得上。
 //
-// # 不在本用例覆盖范围的两处(及原因)
+// # 不在本用例覆盖范围的(及原因)
 //
-//   - assetop.AllocateSeq 的两条锁定读(go/shared/assetop/seq.go,属聚宝斋会话,本批只调用、不改):
-//     SQL 在 assetop 里按表名运行期拼接,没有导出常量,要 EXPLAIN 只能在测试里另抄一份 —— 那正是本用例要避免的;
-//     而且未决行那条 `… player_id = ? AND stream = ? AND stream_epoch = ? AND status = ? ORDER BY seq LIMIT ? FOR UPDATE`
-//     按设计就是 idx_guild_asset_op_2 等值前缀上的范围锁,不是主键点查,"断言 PRIMARY"本身就是错的期望。
-//     索引列序由 TestAssetTablesShape 守;计划核对与改动归属见事故报告 §7.2(已登记,交用户决定)。
-//   - accelerateDonationDeadlines(离帮 / 被踢 / 解散事务内的提前截止):`WHERE player_id IN (…) AND stream = ? …`
-//     的 IN 列表按批次在运行期拼接,同样没有常量可 EXPLAIN;它按设计是按 (player_id, stream) 前缀的多行更新,
-//     也不是主键点写。它在调用方已按锁序锁住 guild 行与成员行之后才执行;它实际选中的二级索引要在真实数据量下
-//     另行 EXPLAIN 核对,不在"必须走 PRIMARY"这条断言的适用范围内。
+//   - assetop.AllocateSeq(go/shared/assetop/seq.go,不归本服务改):2026-09-21 起它对 guild_asset_op 只剩**普通读**
+//     (未决行查询去掉了 FOR UPDATE,friend 审计 #4 修法 A),不加锁,不在"锁定语句必须走 PRIMARY"的范围里;
+//     "不带锁定子句"由 seq_test.go 钉着。它唯一的锁定读是 seq 行 `WHERE player_id = ? AND stream = ? FOR UPDATE`:
+//     guild_player_op_seq 只有 PRIMARY(player_id, stream)一个索引,完整主键等值没有第二条计划可选;
+//     SQL 在 assetop 里按表名运行期拼接、没有导出常量,在这里另抄一份反而会与生产漂移。
+//     guild 自己对同一行的守卫点锁(终结退款分支的 sqlLockSeqGuard,死锁复核 C6)是本包常量,已纳入下面的 EXPLAIN 回归。
+//   - 各条**候选普通读**(提前截止的 sqlSelectAccelerateCandidates*、清理的 sqlListCleanupTerminalOps /
+//     sqlListCleanupCounters、事务内建 seq 行前的 sqlSeqRowExists):不加锁,走哪个索引只影响性能不影响锁集。"不带锁定子句"由
+//     economy_repo_test.go 的 TestEconomyCandidateReadsTakeNoLocks 钉着;真实数据量下的性能计划另行 EXPLAIN。
+//   - 重排 / 毒行自 2026-09-21(G-C2)起包进显式 RC 事务:SQL 常量没变,下面的 sqlRescheduleAssetOp / sqlPoisonAssetOp
+//     断言照旧有效;"是否在事务里"是 TiDB 上的提交方式问题,EXPLAIN 看不出来,由 economy_repo_test.go 的
+//     TestEconomyLockOrder_BackgroundCASQueuesBehindPessimisticWriter 在 TiDB 上验。
+//   - op 行的写者(提前截止 / 终结 / 人工终结 / 重排 / 毒行,死锁复核 V1)与清理(C5)在各自的点改 / 点删之前先跑同一条
+//     主键点锁 sqlLockAssetOp;它与计数行清理的点锁 sqlLockCleanupCounter、两条点删都在下面。"点锁只写完整主键等值、
+//     不带复核条件"(TiDB 快路径的前提)由 TestEconomyCandidateReadsTakeNoLocks 静态钉住,"写之前必先点锁"的调用顺序
+//     由 point_lock_order_test.go 静态钉住(EXPLAIN 看不出语句先后)。
+//   - INSERT / upsert(sqlInsertAssetOp、sqlUpsertCounterWithLimit、sqlEnsureSeqRow):EXPLAIN INSERT 不给出访问路径,
+//     它们的锁由插入行的主键 / 唯一键值决定,与执行计划无关。
 //
-// INSERT / upsert(sqlInsertAssetOp、sqlUpsertCounterWithLimit)也不在此列:EXPLAIN INSERT 不给出访问路径,
-// 它们的锁由插入行的主键 / 唯一键值决定,与执行计划无关。
+// 提前截止(accelerateDonationDeadlines)原先是 `WHERE player_id IN (…) AND stream = ? …` 的多行 UPDATE、
+// 不在本用例范围;现在它的写只剩 sqlAccelerateDonationDeadline 这条主键点改,已纳入下面的断言。
 
 import (
 	"context"
@@ -90,6 +102,7 @@ func TestEconomyLockingStatementsArePrimaryKeyPointLookups(t *testing.T) {
 		member  uint64 = 8802
 		goodsID uint32 = 101
 		opID    uint64 = 9_780_001
+		oldOpID uint64 = 9_780_002 // 保留期外的终态行,只给清理点删用
 		token   uint64 = 0x5a5a
 		funds   uint64 = 25_000
 		cost    uint64 = 20_000 // ≤ funds:sqlUpgradeGuild 的 `funds >= ?` 对夹具行成立
@@ -105,13 +118,27 @@ func TestEconomyLockingStatementsArePrimaryKeyPointLookups(t *testing.T) {
 	mustExec(t, f.ctx, f.db,
 		`INSERT INTO guild_daily_counter (player_id, counter_kind, ref_id, period_key, used_count, updated_ms) VALUES (?, ?, ?, ?, ?, ?)`,
 		member, shopKind, goodsID, econDayKey, 3, testNowMs)
+	// seq 行:终结退款分支的守卫点锁(sqlLockSeqGuard)要点到它。走生产的建行语句,纪元 = testNowMs。
+	creditStream := uint32(assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_CREDIT)
+	mustExec(t, f.ctx, f.db, sqlEnsureSeqRow, member, creditStream, testNowMs, testNowMs)
 	op := econShopRecord(t, opID, member, testNowMs, 1) // PENDING、lease_until_ms = 0
 	op.GuildId, op.LeaseToken = guildID, token
+	// 只为 sqlAccelerateDonationDeadline 的 `deadline_ms > ?` 对夹具行成立;其余语句不看这一列。
+	// (点改的 WHERE 不看 kind,商店行做夹具不影响计划。)
+	op.DeadlineMs = testNowMs + econDeadlineMs
 	econInsertOp(t, f, op)
+	old := econShopRecord(t, oldOpID, member, testNowMs, 2)
+	old.GuildId = guildID
+	old.Status = pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED
+	old.NextAttemptMs = testNowMs - 31*econDayMs // 终结时刻早于下面清理点删的截止参数 testNowMs
+	old.UpdatedMs = old.NextAttemptMs
+	econInsertOp(t, f, old)
 
 	// 枚举一律先转成整数:生成枚举带 String(),直接内联会被印成名字而不是库值。
 	pending := PendingStatus()
 	applied := int32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED)
+	rejected := int32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_REJECTED)
+	aborted := int32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_ABORTED)
 	outcomeApplied := uint32(assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_APPLIED)
 	outcomeRetry := uint32(assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_RETRY)
 	outcomeUnknown := uint32(assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN)
@@ -127,6 +154,7 @@ func TestEconomyLockingStatementsArePrimaryKeyPointLookups(t *testing.T) {
 		{"sqlCreditGuildFunds", sqlCreditGuildFunds, []any{uint64(1000), guildID}, "guild", pointWrite},
 
 		// guild_member(锁序位置 3):主键与 uk_guild_member 的列同时被钉死,必须选主键。
+		// 这五条都带 FORCE INDEX (PRIMARY);sqlLockMemberRole 归 B2(guild_manage_repo.go),这里只复用它的常量。
 		{"sqlLockMemberBalance", sqlLockMemberBalance, []any{guildID, member}, "guild_member", lockRead},
 		{"sqlLockMemberRole", sqlLockMemberRole, []any{guildID, member}, "guild_member", lockRead},
 		{"sqlCreditContribution", sqlCreditContribution,
@@ -146,14 +174,31 @@ func TestEconomyLockingStatementsArePrimaryKeyPointLookups(t *testing.T) {
 		{"sqlResolveAssetOp", sqlResolveAssetOp,
 			[]any{applied, "ops", "lock-plan", testNowMs, testNowMs, opID, pending}, guildAssetOpTable, pointWrite},
 		{"sqlSelectAssetOpImmutable", sqlSelectAssetOpImmutable, []any{opID}, guildAssetOpTable, nil},
+		// 离帮 / 被踢 / 解散的提前截止:候选普通读之后逐行的主键点改(friend 审计 #5 / #10)。
+		{"sqlAccelerateDonationDeadline", sqlAccelerateDonationDeadline,
+			[]any{testNowMs, testNowMs, testNowMs, opID, pending, testNowMs}, guildAssetOpTable, pointWrite},
+		// op 行写前的主键点锁(V1):提前截止 / 终结 / 人工终结 / 重排 / 毒行在各自的点改之前、同一事务里先跑它。
+		// 同一条常量也用于清理(下一条,C5);两条夹具行各点一次,证明未决行与终态行上计划相同。
+		{"sqlLockAssetOp(未决行)", sqlLockAssetOp, []any{opID}, guildAssetOpTable, lockRead},
+		// 清理:终态行的逐行短事务 —— 先点锁(C5)、再点删(单表 DELETE 不接受索引提示,只能靠这里钉住它确实走主键)。
+		{"sqlLockAssetOp(终态行)", sqlLockAssetOp, []any{oldOpID}, guildAssetOpTable, lockRead},
+		{"sqlCleanupTerminalOp", sqlCleanupTerminalOp,
+			[]any{oldOpID, applied, rejected, aborted, testNowMs}, guildAssetOpTable, pointWrite},
 
-		// guild_daily_counter(锁序位置 7):退次数 / 退限购按完整主键点更新。
+		// guild_player_op_seq(锁序位置 5):终结退款分支的计数行守卫(C6)。
+		{"sqlLockSeqGuard", sqlLockSeqGuard, []any{member, creditStream}, guildPlayerOpSeqTable, lockRead},
+
+		// guild_daily_counter(锁序位置 7):退次数 / 退限购按完整主键点更新;清理按 4 列完整主键先点锁(C5)再点删。
 		{"sqlRefundCounter", sqlRefundCounter,
 			[]any{uint32(1), uint32(1), testNowMs, member, shopKind, goodsID, econDayKey}, "guild_daily_counter", pointWrite},
+		{"sqlLockCleanupCounter", sqlLockCleanupCounter,
+			[]any{member, shopKind, goodsID, econDayKey}, "guild_daily_counter", lockRead},
+		{"sqlCleanupCounter", sqlCleanupCounter,
+			[]any{member, shopKind, goodsID, econDayKey, uint32(dayKeyFloor), econDayKey}, "guild_daily_counter", pointWrite},
 	}
 
 	keyLen := map[string]string{}
-	for _, table := range []string{"guild", "guild_member", "guild_daily_counter", guildAssetOpTable} {
+	for _, table := range []string{"guild", "guild_member", guildPlayerOpSeqTable, "guild_daily_counter", guildAssetOpTable} {
 		keyLen[table] = lockPlanPrimaryKeyLen(t, f.ctx, f.db, table)
 	}
 

@@ -169,7 +169,7 @@ var repairAccountAppearanceScript = redis.NewScript(`
 if redis.call("GET", KEYS[2]) ~= ARGV[1] then return -1 end
 if redis.call("GET", KEYS[3]) ~= ARGV[4] then return -1 end
 if redis.call("GET", KEYS[1]) ~= ARGV[2] then return 0 end
-redis.call("SET", KEYS[1], ARGV[3], "KEEPTTL")
+redis.call("SET", KEYS[1], ARGV[3])
 return 1
 `)
 

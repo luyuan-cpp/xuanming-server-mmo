@@ -106,6 +106,34 @@ func main() {
 		logx.Must(err)
 	}
 
+	// Initialize data repo with singleflight + cache-aside
+	repo := data.NewGuildRepo(svcCtx.RedisClient, svcCtx.DB, config.AppConfig.Cache.DefaultTTL)
+
+	// 数据库版本下限(纵深防御,2026-09-21 死锁修复第四轮;判定与理由见 data/server_version.go):
+	// 帮会写事务"不成环"的推演只对 TiDB(悲观 + RC)与 MySQL 8.0.29+ 成立 —— 审批通过重插删除标记成员行的 S → X 升级
+	// 依赖 InnoDB Bug #11745929 的修复。低于下限、MariaDB 或版本串解析不出一律拒启,不降级成告警:
+	// 带着会成环的锁语义上线,出事时只表现为偶发的 1213 与"稍后重试",很难回溯到版本。
+	// 放在全局插入守卫之前:版本不对的实例连哨兵行都不该去建,更不该注册进 etcd。
+	verCtx, verCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	dbVersion, verErr := repo.CheckServerVersion(verCtx)
+	verCancel()
+	if verErr != nil {
+		logx.Must(fmt.Errorf("guild database version check: %w", verErr))
+	}
+	logx.Infof("[guild] 数据库版本 %s 满足下限(TiDB 或 MySQL 8.0.29+)", dbVersion)
+
+	// 全局插入守卫哨兵行(guild_player_state.player_id = 0;data/guild_manage_repo.go 文件头 (d)):
+	// 建帮、审批通过、首次建状态行都在事务内锁它,缺了一律 fail-closed。所以放在建表之后、创建 repo 之后、
+	// 节点注册与任何 goroutine / RPC 启动之前:建不出来的实例既不能对外服务,也不该注册进 etcd。
+	// 幂等:行已在(常态)只是一次普通读,不排在运行中实例持有的锁后面;多实例同时首建时在会话级命名锁下串行
+	// (死锁复核 C1,等锁上限 5s,短于这里的 10s 预算,拿不到锁时复读一次、仍缺才拒启)。
+	guardCtx, guardCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	guardErr := repo.EnsureGlobalInsertGuard(guardCtx, uint64(time.Now().UnixMilli()))
+	guardCancel()
+	if guardErr != nil {
+		logx.Must(fmt.Errorf("ensure guild global insert guard row: %w", guardErr))
+	}
+
 	// Register node with etcd
 	host, port, err := splitHostPort(config.AppConfig.ListenOn)
 	if err != nil {
@@ -183,9 +211,7 @@ func main() {
 	// 前任借过逻辑秒这三类"启动 guard 挡不住"的重号。
 	sf := sfHandle.NewNode()
 
-	// Initialize data repo with singleflight + cache-aside
-	repo := data.NewGuildRepo(svcCtx.RedisClient, svcCtx.DB, config.AppConfig.Cache.DefaultTTL)
-
+	// repo 已在建表之后创建(全局插入守卫要在节点注册之前建好)。
 	// 每次启动从 MySQL 权威快照重建全局 / 分区榜;失败拒绝启动,避免对外提供不完整榜单。
 	if err := repo.RebuildRanks(context.Background()); err != nil {
 		panic(fmt.Errorf("rebuild guild ranks from MySQL: %w", err))

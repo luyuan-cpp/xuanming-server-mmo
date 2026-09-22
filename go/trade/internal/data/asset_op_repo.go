@@ -82,10 +82,11 @@ func (r *AssetOpRepo) bounded(ctx context.Context) (context.Context, context.Can
 
 // EnsureSeqRow 在事务外(autocommit)建 (player_id, stream) 的 seq 行。
 // 必须在开业务事务之前调用:事务内首次并发建行会让两个共享锁升级成死锁(§4.19 seq.go)。
+// 走带有界重试的 EnsureSeqRowRetry:首个建行者回滚时排队的并发建行者会互等(1213),重跑幂等、安全(见 assetop)。
 func (r *AssetOpRepo) EnsureSeqRow(ctx context.Context, playerID uint64, stream assetpb.AssetOpStream, nowMs uint64) error {
 	ctx, cancel := r.bounded(ctx)
 	defer cancel()
-	if err := assetop.EnsureSeqRow(ctx, r.db, r.tables, playerID, stream, nowMs); err != nil {
+	if err := assetop.EnsureSeqRowRetry(ctx, r.db, r.tables, playerID, stream, nowMs, IsRetryableTxError); err != nil {
 		return fmt.Errorf("ensure %s row (player=%d stream=%d): %w", AssetOpSeqTableName, playerID, int32(stream), err)
 	}
 	return nil

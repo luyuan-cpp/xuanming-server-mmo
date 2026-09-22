@@ -89,7 +89,7 @@ Locker:
 # Account config
 Account:
   MaxDevicesPerAccount: 3
-  CacheExpire: 12h # 12 hours
+  # 账号角色目录 account:<account> 长期保留；旧 CacheExpire 配置已弃用。
 
 # Legacy/internal etcd client settings used by custom node helpers.
 # Keep Hosts/Key aligned with top-level Etcd to avoid split-brain discovery.

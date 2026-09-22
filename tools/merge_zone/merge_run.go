@@ -12,12 +12,13 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -168,6 +169,14 @@ func runMerge(o options) {
 		log.Fatalf("merge fence: %v", err)
 	}
 	defer fence.release(context.Background())
+	// abortKeepingFence:写到一半的失败走这里,围栏故意不释放并给出续跑指引(见 fenceKeptAbortMessage)。
+	// dry-run 从没写过围栏,只报原因。
+	abortKeepingFence := func(cause string) {
+		if o.dryRun {
+			log.Fatal(cause)
+		}
+		log.Fatal(fenceKeptAbortMessage(cause, fencedOpMerge, src, dst, runID, o.mappingAddr, o.mappingDB))
+	}
 
 	// ── M: 清单(在第一次写之前落盘)────────────────────────
 	m := existing
@@ -177,12 +186,17 @@ func runMerge(o options) {
 	m.PlayerIDs = playerIDs
 	m.Tables = playerTables
 	if !o.skipGuild || !o.skipRank {
-		if len(m.GuildIDs) == 0 {
+		// 公会 id 与下面的聚宝斋同口径:只要 guild 步骤还没做完,每次都把「当前 zone_id=src」并进清单。
+		// 步骤 3 只按清单逐条主键点更新(见 migrateGuildZone 的锁序说明),清单之外的源区公会原地不动、
+		// 由改写后的复查拒绝继续;若这里仍只在「清单为空」时收集,T-1 dry-run 留下的清单或上次复查中止
+		// 的清单就永远收不进后来的公会,步骤 3 会一直中止。步骤做完之后不再收集:那时清单里的 id 就是
+		// 撤销的唯一依据。-skip-guild-mysql(只做榜单)时沿用原口径:清单为空才收集一次。
+		if (!o.skipGuild && !m.stepDone(stepGuildMySQL)) || len(m.GuildIDs) == 0 {
 			gids, gerr := collectGuildIDsInZone(ctx, db, o.guildSchema, src)
 			if gerr != nil {
 				log.Fatalf("list guilds in source zone: %v", gerr)
 			}
-			m.GuildIDs = gids
+			m.GuildIDs = sortedUint64(append(m.GuildIDs, gids...))
 		}
 		if len(m.RankMembers) == 0 {
 			members, rerr := readZoneRankMembers(ctx, guildRdb, src)
@@ -262,22 +276,45 @@ func runMerge(o options) {
 		if err := assertNoGuildNameCollision(ctx, db, o.guildSchema, src, dst); err != nil {
 			log.Fatalf("guild: %v", err)
 		}
-		rows, gerr := migrateGuildZone(ctx, db, o.guildSchema, src, dst, o.dryRun)
+		// 只改清单里的 id,逐条主键点更新(锁序理由见 migrateGuildZone)。锁冲突重试耗尽 / 其他写失败时
+		// 已有一部分公会搬过去了,与 3b 复查中止同理**不提前释放围栏**,文案给出核对 run_id → DEL → 重跑。
+		rows, gerr := migrateGuildZone(ctx, db, o.guildSchema, m.GuildIDs, src, dst, o.dryRun)
 		if gerr != nil {
-			log.Fatalf("guild MySQL: %v", gerr)
+			abortKeepingFence(fmt.Sprintf("guild MySQL:改写 zone_id 中途失败,步骤 %s 未标记完成:%v",
+				stepGuildMySQL, gerr))
 		}
 		summary.guildRows = rows
 		// guild 是全局服务,不随 zone-down 重启;30 分钟的 guild:v2 缓存里
 		// 存着旧 zone_id,不失效就等于合服后半小时公会还挂在死掉的区上。
+		// 放在复查之前:复查中止时,已经搬过去的那些公会的缓存也已与库一致(失效幂等,重跑再做一遍无害)。
+		// 失效失败时 zone_id 已经改写,与上面的写失败是同一种「写到一半」:围栏同样保留、给续跑指引。
+		// 重跑时本步骤仍未完成,改写按 `zone_id = src` 幂等(已搬的影响 0 行),失效对全清单再做一遍。
 		inv, ierr := invalidateGuildCaches(ctx, guildRdb, m.GuildIDs, o.dryRun)
 		if ierr != nil {
-			log.Fatalf("invalidate guild caches: %v", ierr)
+			abortKeepingFence(fmt.Sprintf("guild MySQL:zone_id 已改写 %d 行,但 guild:v2 缓存失效失败,步骤 %s 未标记完成:%v",
+				rows, stepGuildMySQL, ierr))
 		}
 		summary.guildCacheInvalidated = inv
-		log.Printf("MySQL: %d guild rows %s for zone %d → %d; %d guild:v2 cache entries invalidated",
-			rows, verbWrite(o.dryRun), src, dst, inv)
+		// 复查:源区还有公会 = 清单落盘之后又有公会进了源区(guild 服只有客户端建帮路径读合服围栏,
+		// 内部 / GM 路径不读)。与 3b 同口径:中止且**不 persist**,重跑时清单阶段先把它们并进清单再搬;
+		// 只打 WARN 继续是 fail-open —— 步骤一旦标记完成就不再收集,那几个公会会被留在已下线的 zone 里。
 		if !o.dryRun {
-			persist(stepGuildMySQL, fmt.Sprintf("rows=%d cache_invalidated=%d", rows, inv))
+			left, cerr := countGuildsInZone(ctx, db, o.guildSchema, src)
+			if cerr != nil {
+				abortKeepingFence(fmt.Sprintf("guild MySQL:改写后复查源区失败,步骤 %s 未标记完成:%v",
+					stepGuildMySQL, cerr))
+			}
+			if left > 0 {
+				abortKeepingFence(fmt.Sprintf("guild MySQL:清单内 %d 个公会已改写 %d 行,但仍有 %d 个公会 zone_id=%d —— "+
+					"它们在清单落盘之后才进入源区(内部 / GM 建帮路径不读合服围栏)。清单之外的公会一个没动,"+
+					"步骤 %s 未标记完成;先停掉这些建帮入口,重跑时清单阶段会先把它们并进清单再搬",
+					len(m.GuildIDs), rows, left, src, stepGuildMySQL))
+			}
+		}
+		log.Printf("MySQL: %d guild rows %s for zone %d → %d (%d guilds in manifest); %d guild:v2 cache entries invalidated",
+			rows, verbWrite(o.dryRun), src, dst, len(m.GuildIDs), inv)
+		if !o.dryRun {
+			persist(stepGuildMySQL, fmt.Sprintf("rows=%d manifest_guilds=%d cache_invalidated=%d", rows, len(m.GuildIDs), inv))
 		}
 	}
 
@@ -287,7 +324,9 @@ func runMerge(o options) {
 		// 只改清单里的 id(清单先于写):清单之外的商品一个字节都不动。
 		rows, terr := migrateTradeMarketZone(ctx, db, o.tradeSchema, m.TradeListingIDs, src, dst, o.dryRun)
 		if terr != nil {
-			log.Fatalf("trade MySQL: %v", terr)
+			// 与步骤 3 同理:走到这里玩家行 / 公会已经搬过,围栏不提前释放。
+			abortKeepingFence(fmt.Sprintf("trade MySQL:改写 market_zone 中途失败,步骤 %s 未标记完成:%v",
+				stepTradeMySQL, terr))
 		}
 		summary.tradeListingRows = rows
 		// 复查:源区还有商品 = 清单落盘之后又有商品落到源区(P1 trade 不读合服围栏)。
@@ -298,7 +337,8 @@ func runMerge(o options) {
 		if !o.dryRun {
 			left, cerr := countTradeListingsInZone(ctx, db, o.tradeSchema, src)
 			if cerr != nil {
-				log.Fatalf("trade MySQL: %v", cerr)
+				abortKeepingFence(fmt.Sprintf("trade MySQL:改写后复查源区失败,步骤 %s 未标记完成:%v",
+					stepTradeMySQL, cerr))
 			}
 			if left > 0 {
 				log.Fatal(tradeResidualAbortMessage(rows, len(m.TradeListingIDs), left, src, dst,
@@ -503,8 +543,24 @@ func remapPlayerMapping(ctx context.Context, rdb *redis.Client, src, dst uint32,
 
 // ── 句柄与小工具 ──────────────────────────────────────────────
 
+// mustOpenMySQL 打开合服 / 撤销共用的 MySQL 句柄,会话隔离级别固定为 READ COMMITTED。
+//
+// 为什么显式设 RC(2026-09-21 死锁审计 #17):
+//   - 此前直接用运维给的 DSN,未设隔离级别 = 实例默认 RR。RR 下 UPDATE 对扫描到的二级项加 next-key,
+//     对不存在的主键加间隙锁,锁集会越出清单;在线服务(guild / trade / friend)的写事务都是 RC,
+//     本工具与它们同口径,锁行为才能按同一套「主键 → 二级」推演。
+//   - RC 下 INSERT ... SELECT 对源表做一致性读、不加 S 锁(RR 下对源行加共享 next-key)。合服时源区
+//     已下线、没有写者,读到的内容与 RR 相同。
+//
+// 风险:binlog_format=STATEMENT 的实例在 RC 下拒绝 InnoDB 写。在线服务已经在同一实例上以 RC 写,
+// 这不是新约束;真遇上时第一条写就会响亮失败,不会静默写一半。
+// DSN 本身含密码,任何日志都不打印它(ParseDSN 的错误也不回显 DSN 原文)。
 func mustOpenMySQL(ctx context.Context, dsn string) *sql.DB {
-	db, err := sql.Open("mysql", dsn)
+	rcDSN, err := readCommittedDSN(dsn)
+	if err != nil {
+		log.Fatalf("mysql dsn: %v", err)
+	}
+	db, err := sql.Open("mysql", rcDSN)
 	if err != nil {
 		log.Fatalf("mysql open: %v", err)
 	}
@@ -512,6 +568,250 @@ func mustOpenMySQL(ctx context.Context, dsn string) *sql.DB {
 		log.Fatalf("mysql ping: %v", err)
 	}
 	return db
+}
+
+const (
+	// mysqlIsolationParam 经 go-sql-driver 的 DSN 参数变成连接建立时的 `SET transaction_isolation = ...`
+	// (v1.9.2 connection.go handleParams:未知参数一律当会话变量 SET),连接池里每条新连接都会带上。
+	mysqlIsolationParam = "transaction_isolation"
+	// mysqlLegacyIsolationParam 是同一个变量的旧名(MySQL 5.7 早期;8.0 已删)。两个名字同时出现时,驱动按
+	// map 迭代顺序拼进同一条 SET,最后生效的是哪一个不确定 —— 所以一律删掉旧名。
+	mysqlLegacyIsolationParam = "tx_isolation"
+	// mysqlReadCommitted 带引号:值原样拼进 SET 语句,READ-COMMITTED 里的连字符不加引号就是语法错。
+	mysqlReadCommitted = "'READ-COMMITTED'"
+)
+
+// readCommittedDSN 把 dsn 的会话隔离级别改成 READ COMMITTED,其余参数原样保留。
+// 用 ParseDSN / FormatDSN 改结构而不是手拼字符串:参数的 URL 编码、密码里的特殊字符都交给驱动处理。
+// 运维在 DSN 里显式写了别的隔离级别也会被覆盖(并打一行日志):本工具的锁序推演只对 RC 成立。
+func readCommittedDSN(dsn string) (string, error) {
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return "", fmt.Errorf("parse -mysql-dsn: %w", err)
+	}
+	if cfg.Params == nil {
+		cfg.Params = map[string]string{}
+	}
+	if v, ok := cfg.Params[mysqlIsolationParam]; ok && v != mysqlReadCommitted {
+		log.Printf("-mysql-dsn 里的 %s=%s 被改成 %s:合服的锁序推演只对 READ COMMITTED 成立",
+			mysqlIsolationParam, v, mysqlReadCommitted)
+	}
+	if v, ok := cfg.Params[mysqlLegacyIsolationParam]; ok {
+		log.Printf("-mysql-dsn 里的旧参数 %s=%s 已删除,改用 %s=%s", mysqlLegacyIsolationParam, v,
+			mysqlIsolationParam, mysqlReadCommitted)
+		delete(cfg.Params, mysqlLegacyIsolationParam)
+	}
+	cfg.Params[mysqlIsolationParam] = mysqlReadCommitted
+	return cfg.FormatDSN(), nil
+}
+
+// ── 按主键逐行改 zone 列(guild.zone_id / trade_listing.market_zone 共用)─────────
+
+const (
+	mysqlErrDeadlock        = 1213 // ER_LOCK_DEADLOCK
+	mysqlErrLockWaitTimeout = 1205 // ER_LOCK_WAIT_TIMEOUT
+	tidbErrWriteConflict    = 9007 // TiDB 乐观事务写冲突(全局数据层迁往 TiDB 后同样可能出现)
+)
+
+// isRetryableLockConflict 判断错误是否是可重试的锁冲突。取值与 go/guild、go/trade 的事务重试判定一致
+// (1213 / 1205 / 9007);本工具是独立 module,不能 import 它们。
+func isRetryableLockConflict(err error) bool {
+	var me *mysql.MySQLError
+	if !errors.As(err, &me) {
+		return false
+	}
+	switch me.Number {
+	case mysqlErrDeadlock, mysqlErrLockWaitTimeout, tidbErrWriteConflict:
+		return true
+	default:
+		return false
+	}
+}
+
+// lockRetryPolicy 是单行点更新遇到锁冲突时的有界重试(次数上限 + 指数退避封顶 + 可取消)。
+//
+// 收敛论证:被重试的是**单行、自动提交**的 UPDATE。1213 时 InnoDB 回滚整个事务(即这一条语句),
+// 1205 时回滚这条语句,自动提交下两者都什么也没留下;WHERE 里带着旧 zone,重跑幂等(已改过的行不再命中)。
+// 点更新在拿到那一行的主键锁之前不持有任何锁,按推演不会成环;真出现 1213 / 1205 只能是对端长事务或
+// 执行计划没走主键,这时有限次数后交给人,而不是无限重试把维护窗口耗光。
+// 不加抖动:本工具是单进程串行的唯一写者,没有需要彼此错开的同伴重试。
+type lockRetryPolicy struct {
+	attempts    int
+	baseBackoff time.Duration
+	maxBackoff  time.Duration
+	// sleep 为 nil 时用 sleepCtx;单测注入记录型实现,不依赖真实墙钟。
+	sleep func(ctx context.Context, d time.Duration) error
+}
+
+// zoneRewriteRetry:最坏情况 5 次 × innodb_lock_wait_timeout(默认 50s)+ 退避约 3s,仍远小于 -timeout 默认 2h。
+var zoneRewriteRetry = lockRetryPolicy{attempts: 5, baseBackoff: 200 * time.Millisecond, maxBackoff: 5 * time.Second}
+
+// backoff 返回第 retry 次重试(从 0 起)前的等待:base·2^retry,封顶 maxBackoff。
+func (p lockRetryPolicy) backoff(retry int) time.Duration {
+	d := p.baseBackoff
+	for i := 0; i < retry && d < p.maxBackoff; i++ {
+		d *= 2
+	}
+	return min(d, p.maxBackoff)
+}
+
+// do 执行 op,仅对 isRetryableLockConflict 认可的错误重试。每次尝试前先看 ctx;op 必须可整体重跑。
+// what 只进日志与最终错误文案。
+func (p lockRetryPolicy) do(ctx context.Context, what string, op func() error) error {
+	sleep := p.sleep
+	if sleep == nil {
+		sleep = sleepCtx
+	}
+	attempts := max(p.attempts, 1)
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return errors.Join(lastErr, err)
+		}
+		err := op()
+		if err == nil {
+			return nil
+		}
+		if !isRetryableLockConflict(err) {
+			return err
+		}
+		lastErr = err
+		if attempt == attempts {
+			break // 最后一次失败后不必再睡
+		}
+		wait := p.backoff(attempt - 1)
+		log.Printf("WARN: %s 锁冲突(第 %d/%d 次):%v —— %s 后重试", what, attempt, attempts, err, wait)
+		if serr := sleep(ctx, wait); serr != nil {
+			return errors.Join(lastErr, serr)
+		}
+	}
+	return fmt.Errorf("%s:锁冲突重试 %d 次仍失败:%w", what, attempts, lastErr)
+}
+
+// sleepCtx 可取消地等待 d。
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+// zonePointUpdateSQL 是「按主键逐行改 zone 列」唯一的 SQL 形状,参数依次为 (to, pk, from)。
+// table 已是 schema.table(库名过了 schemaNamePattern),pkCol / zoneCol 是本工具的常量,不来自输入。
+// 集成测试对同一个函数的产物做 EXPLAIN,断言走满主键 —— 测试里不另抄一份 SQL。
+func zonePointUpdateSQL(table, pkCol, zoneCol string) string {
+	return "UPDATE " + table + " SET " + zoneCol + " = ? WHERE " + pkCol + " = ? AND " + zoneCol + " = ?"
+}
+
+// rewriteZoneByPrimaryKey 把 ids 里当前 zoneCol = from 的行逐条改成 to,返回实际改动的行数。
+// 不在 ids 里的行一个都不碰;已经不在 from 的(改过了 / 去了第三个 zone / 已被删除)影响 0 行。
+//
+// 锁序(2026-09-21 死锁审计 #17,与 docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md 同一口径:
+// 守卫之后的锁定写一律是完整主键的等值点更新):
+//
+//	旧写法 `UPDATE t SET zone = dst WHERE zone = src [AND pk IN (...)]` 可被规划成沿 zone 二级索引的
+//	range 扫描:先对二级项加 X、再回表锁主键。在线写者(guild 服 DisbandGuild;P3 起 trade 的商品状态
+//	迁移)是先 `WHERE pk = ? FOR UPDATE` 锁主键、再在 DELETE / UPDATE 里改同一行的二级项 —— 两边反序,
+//	合服扫到那一行时 1213,且牺牲者可能是合服这条大语句。
+//	现在逐条 `WHERE pk = ? AND zone = ?`:主键等值是 const 访问,必走主键;每条自动提交,同一时刻最多
+//	持有一行的主键锁及其自身的二级项,拿到主键锁之前什么都不持有,取锁顺序与在线写者同为
+//	「主键 → 二级」,只会排队、不会成环。等到的若是已删除的行,影响 0 行。
+//
+// ids 升序处理:每条独立提交,顺序本身不影响成环;升序只为日志与重跑可复现 —— 将来若改成「N 条一个
+// 事务」,升序就是必要条件(且一个事务里只能改这一张表)。
+// 成本:每行一次往返。语句只 Prepare 一次;不预编译时驱动每条都要 prepare / exec / close 三次往返。
+// 失败:锁冲突按 zoneRewriteRetry 有界重试;其余错误或重试耗尽立即返回,已改的行留在 to。调用方的
+// 步骤不标记完成,重跑按 `zone = from` 幂等补齐。
+func rewriteZoneByPrimaryKey(ctx context.Context, db *sql.DB, table, pkCol, zoneCol string,
+	ids []uint64, from, to uint32) (int64, error) {
+	ids = sortedUint64(ids)
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	stmt, err := db.PrepareContext(ctx, zonePointUpdateSQL(table, pkCol, zoneCol))
+	if err != nil {
+		return 0, fmt.Errorf("prepare %s.%s 点更新:%w", table, zoneCol, err)
+	}
+	defer stmt.Close()
+
+	var total int64
+	for _, id := range ids {
+		what := fmt.Sprintf("%s %s=%d", table, pkCol, id)
+		var n int64
+		err := zoneRewriteRetry.do(ctx, what, func() error {
+			res, err := stmt.ExecContext(ctx, to, id, from)
+			if err != nil {
+				return err
+			}
+			n, err = res.RowsAffected()
+			return err
+		})
+		if err != nil {
+			// 这一层就是完整上下文(表.列、方向、出错的主键、已改行数),调用方原样上抛、不再包一层。
+			return total, fmt.Errorf("%s.%s %d → %d 在 %s=%d 处失败(此前已改 %d 行):%w",
+				table, zoneCol, from, to, pkCol, id, total, err)
+		}
+		total += n
+	}
+	return total, nil
+}
+
+// fencedOp 标明中止发生在哪条持围栏的路径上。合服与撤销「为什么不释放围栏」「重跑会做什么」
+// 不是同一回事(合服按清单续跑,撤销没有步骤进度、靠每一步幂等),中止文案按它分开写。
+type fencedOp int
+
+const (
+	fencedOpMerge   fencedOp = iota // -mode merge:runMerge 的步骤 3 / 3b
+	fencedOpUnmerge                 // -mode unmerge:runUnmerge 的 3b' / 3'
+)
+
+// fenceKeptAbortMessage 是「写到一半中止、合服围栏故意留着」的统一中止文案:合服步骤 3 / 3b 的写失败、
+// 复查失败、步骤 3 改写后的缓存失效失败;撤销 3' / 3b' 的写失败与 3' 之后的缓存失效失败。
+//
+// 这些路径走 log.Fatal → os.Exit,defer 的 fence.release 不执行:merge:in_progress:{src,dst} 两把围栏
+// 仍挂在**本次** run_id 上,直到 TTL(-timeout+30m,下限 1h)。**故意不在中止前释放**:
+//   - 合服(与 tradeResidualAbortMessage 同理):数据已搬了一部分,续跑按清单走、不重扫玩家;放开围栏 =
+//     放开这两个 zone 的建号与建帮,新号不在清单里,mapping 却会在步骤 5 被整体翻到 dst,它的行从没拷过。
+//   - 撤销:mapping 已指回源区,MySQL / 公会缓存只改回了一部分,两个 zone 处于半撤销状态;撤销不记步骤
+//     进度,重跑靠每一步按对象当前值过滤、幂等,围栏要保持到人工核对之后。
+//
+// 围栏要一直挂到运维排除故障、核对 run_id、手工 DEL、立刻重跑为止,把「无围栏」窗口压到人工可控的几秒。
+// 文案必须写全:本次 run_id(供 GET 核对,不误删别人的围栏)、两把键名、mapping Redis 位置、
+// 「不 DEL 直接重跑会被拒」—— 重跑会生成新 run_id,SETNX 撞上残留围栏。字面量由 lock_order_test.go 守住。
+func fenceKeptAbortMessage(cause string, op fencedOp, src, dst uint32, runID, mappingAddr string, mappingDB int) string {
+	// 未知 op 落到中性表述:文案只影响人读,不影响正确性,不值得在 log.Fatal 的路上再 panic。
+	why := "两个 zone 的数据处于半改状态,围栏须保持到人工核对之后"
+	fixHint := ""
+	rerun := "每一步都幂等"
+	switch op {
+	case fencedOpMerge:
+		why = "合服写到一半,数据已搬了一部分:提前释放会重新放开这两个 zone 的建号 / 建帮,而续跑按清单走、" +
+			"不重扫玩家 —— 窗口里新建的号不在清单里,mapping 却会在步骤 5 被整体翻到目标区,它的行从没拷过"
+		fixHint = ";源区残留对象:先停掉对应的写入口"
+		rerun = "合服读清单续跑,已标记完成的步骤不重做"
+	case fencedOpUnmerge:
+		why = "撤销做到一半:mapping 已指回源区,MySQL / 公会缓存只改回了一部分,两个 zone 处于半撤销状态," +
+			"围栏要保持到人工核对之后,不在此之前放开这两个 zone 的建号 / 建帮"
+		rerun = "撤销不记步骤进度,每一步都按对象当前值过滤、幂等,可整体重跑"
+	}
+	srcKey, dstKey := mergeFenceKey(src), mergeFenceKey(dst)
+	return fmt.Sprintf("%s。合服围栏 %s 与 %s 故意保留(LEFT IN PLACE),仍归 run_id=%s:%s。续跑步骤:"+
+		"(1) 按上面的原因排除故障(锁冲突:查 SHOW ENGINE INNODB STATUS 与 information_schema.innodb_trx 里的长事务;"+
+		"Redis 失败:先恢复对应 Redis 的连通%s);"+
+		"(2) 确认没有存活的 merge_zone 进程;"+
+		"(3) 在 mapping Redis(%s db=%d)上 GET %s,核对其 run_id 是 %s;"+
+		"(4) DEL %s %s;"+
+		"(5) 立即用原命令重跑(%s)。"+
+		"不做 (4) 直接重跑会被围栏拒绝(\"another merge is already fencing zone\"),直到围栏 TTL 过期",
+		cause, srcKey, dstKey, runID, why,
+		fixHint,
+		mappingAddr, mappingDB, srcKey, runID,
+		srcKey, dstKey,
+		rerun)
 }
 
 func mustDial(ctx context.Context, label, addr, pwd string, dbIndex int) *redis.Client {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"login/internal/config"
 	"login/internal/constants"
 	"login/internal/svc"
 	login_proto_common "proto/common/base"
@@ -135,7 +134,7 @@ func removePlayersFromAccount(ctx context.Context, svcCtx *svc.ServiceContext, a
 	if err != nil {
 		return 0, err
 	}
-	if err := svcCtx.RedisClient.Set(ctx, accountKey, updatedData, config.AppConfig.Account.CacheExpire).Err(); err != nil {
+	if err := svcCtx.RedisClient.Set(ctx, accountKey, updatedData, 0).Err(); err != nil {
 		return 0, err
 	}
 

@@ -130,6 +130,8 @@ var guildTestDBNamePattern = regexp.MustCompile(`^(guild_test|guild_it_\d+_\d+)$
 
 // resetGuildSchemaViaMigrate:DROP 全部表后经 schemamigrate.Up 重建 —— 与生产同一条建表路径,
 // 表结构只来自 proto/guild/guild_db.proto,测试里不再手写 DDL。
+// 建表后紧接着建全局插入守卫哨兵行(EnsureGlobalInsertGuard),与 guild.go 启动顺序一致:建帮、审批通过、
+// 首次建状态行都要锁它,缺了一律 fail-closed。要验"哨兵缺失"的用例自己删掉它。
 func resetGuildSchemaViaMigrate(t *testing.T, ctx context.Context, db *sql.DB) {
 	t.Helper()
 	var dbName string
@@ -145,6 +147,8 @@ func resetGuildSchemaViaMigrate(t *testing.T, ctx context.Context, db *sql.DB) {
 	report, err := schemamigrate.Up(ctx, db, schemamigrate.Options{Database: dbName, Tables: Tables(), Logf: t.Logf})
 	require.NoError(t, err)
 	require.Empty(t, report.Manual, "新建库不应出现需人工项")
+	// EnsureGlobalInsertGuard 只用 db,不碰 Redis。
+	require.NoError(t, NewGuildRepo(nil, db, time.Minute).EnsureGlobalInsertGuard(ctx, testNowMs), "建全局插入守卫哨兵行")
 }
 
 // TestDropListCoversTables:新增表却忘了加进清理清单时,后续用例会在残留表上跑,必须红。

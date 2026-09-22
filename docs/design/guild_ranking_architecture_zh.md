@@ -48,7 +48,7 @@
 
 ### 功能
 1. **名称冲突检测**：SQL JOIN 查找源区和目标区中同名的公会
-2. **MySQL 迁移**：`UPDATE guild SET zone_id = <target> WHERE zone_id = <source>`（跳过冲突项）
+2. **MySQL 迁移**：按写前落盘的清单，以 `guild_id` 升序逐条主键点更新 `UPDATE guild SET zone_id = <target> WHERE guild_id = ? AND zone_id = <source>`（每条自动提交），再失效 `guild:v2` 缓存并复查源区公会数（仍 > 0 则中止、不标记步骤完成）；MySQL 会话固定 READ COMMITTED，单行遇 1213 / 1205 有界重试（指数退避封顶、可取消），任何失败都**保留合服围栏**中止，并在日志给出续跑指引（GET 核对 run_id → DEL 两把围栏 → 原命令重跑）。不用整区 `UPDATE ... WHERE zone_id = <source>` 的原因：它经 `idx_guild_0` 先锁二级项、再回表锁主键，与在线 `DisbandGuild`「主键 FOR UPDATE → DELETE 删二级项」反序，两者会死锁（1213），同类锁序问题见 [`docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md`](../ops/incident-friend-lock-order-deadlock-2026-09-21.md)
 3. **Redis 本服 ZSET 合并**：`ZRANGE` 源区 `guild_rank:zone:*` → `ZADD` 目标区 → `DEL` 源区 key
 4. **（多集群必做）玩家存档串键复制**：按 `data_service` 的 `player:{playerId}:*` 字符串键，从**源区数据 Redis** 拷到**目标区数据 Redis**，**必须在改 `player:zone` 之前**完成；若源/目标 endpoint+DB 完全相同则工具自动跳过（等同单 Redis 开发环境）
 5. **玩家 `home_zone` 映射**：`player:zone:{playerId}` 在 **mapping Redis**（`-mapping-redis-*`）

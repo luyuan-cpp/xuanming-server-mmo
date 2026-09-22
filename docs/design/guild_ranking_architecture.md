@@ -48,7 +48,7 @@
 
 ### What It Does
 1. **Name conflict detection**: SQL JOIN to find guilds with same name in source and target zones
-2. **MySQL migration**: `UPDATE guild SET zone_id = <target> WHERE zone_id = <source>` (skips conflicts)
+2. **MySQL migration**: primary-key point updates over the manifest written before any write — `UPDATE guild SET zone_id = <target> WHERE guild_id = ? AND zone_id = <source>`, ascending `guild_id`, one autocommit statement per guild — then invalidate `guild:v2` caches and re-count the source zone (still > 0 → abort, step not marked done). The session runs at READ COMMITTED; a row hitting 1213 / 1205 is retried a bounded number of times (capped exponential backoff, cancellable); any failure aborts with the merge fences **left in place** and logs the resume steps (GET to check run_id → DEL both fences → re-run). Why not a zone-wide `UPDATE ... WHERE zone_id = <source>`: it walks `idx_guild_0` (secondary entry first, then the primary key), the reverse of the online `DisbandGuild` (primary key `FOR UPDATE` → DELETE removes the secondary entry), so the two deadlock (1213) — same lock-order class as [`docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md`](../ops/incident-friend-lock-order-deadlock-2026-09-21.md)
 3. **Redis ZSET merge**: `ZRANGEWITHSCORES` source → `ZADD` target → `DEL` source key
 
 ### Usage
