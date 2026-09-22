@@ -28,7 +28,6 @@
 // 实体已销毁或槽位被复用时丢弃,绝不让另一个玩家去跟随。
 
 #include <charconv>
-#include <cstdint>
 #include <system_error>
 
 #include <hiredis/hiredis.h>

@@ -24,7 +24,7 @@ namespace {
 // 同一个卡住的线程,最坏停顿不会变短,反而可能让在途消息来不及出失败回执、漏计 DeliveryFailed。
 // 真要让停顿有界,得把旧实例交给后台线程去销毁(已核实 rd_kafka_destroy 不回调 dr_cb),
 // 并处理进程退出时该线程仍在运行的情况 —— 需要能编译、能实测时再做。
-constexpr int kPurgeDrainTimeoutMs = 200;
+constexpr uint32_t kPurgeDrainTimeoutMs = 200;
 } // namespace
 
 void KafkaProducer::setBrokers(const std::string& brokers) {

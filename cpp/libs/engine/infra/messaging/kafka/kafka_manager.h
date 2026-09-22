@@ -3,7 +3,6 @@
 #pragma once
 
 #include <chrono>
-#include <cstddef>
 #include <string>
 #include <functional>
 #include <memory>

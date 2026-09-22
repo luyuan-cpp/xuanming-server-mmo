@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 
 // 伤害数值纯规则:回合引擎(turn_battle_engine.cpp)与实时技能(scene 的 combat/skill/system/skill.cpp)共用,

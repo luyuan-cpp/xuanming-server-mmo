@@ -1,7 +1,5 @@
 #include "redis.h"
 
-#include <cstdlib>
-
 #include "muduo/net/EventLoop.h"
 
 #include "player/system/dirty_save_stats.h"

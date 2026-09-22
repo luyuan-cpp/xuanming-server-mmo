@@ -1,6 +1,5 @@
 #include "battle_room_manager.h"
 
-#include <cstdlib>
 #include <limits>
 #include <map>
 #include <string>

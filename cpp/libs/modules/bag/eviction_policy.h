@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstddef>
-
 #include "engine/core/type_define/type_define.h"
 
 #include "container_layout.h"

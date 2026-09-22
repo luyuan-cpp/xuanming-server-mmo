@@ -1,6 +1,5 @@
 #include "nav_query.h"
 
-#include <cmath>
 #include <limits>
 
 #include "Detour/DetourNavMeshQuery.h"

@@ -4,7 +4,6 @@
 #include <limits>
 #include <set>
 #include <utility>
-#include <vector>
 
 #include "thread_context/ecs_context.h"
 #include "modules/bag/bag_service.h"

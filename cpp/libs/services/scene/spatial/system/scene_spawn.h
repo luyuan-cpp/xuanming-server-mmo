@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstdint>
-
 #include "entt/src/entt/entity/entity.hpp"
 
 #include "proto/common/component/actor_comp.pb.h"

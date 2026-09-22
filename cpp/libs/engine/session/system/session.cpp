@@ -8,7 +8,6 @@
 
 constexpr char kSessionBinMetaKey[] = "x-session-detail-bin";
 
-
 using SessionDetailsPtr = std::unique_ptr<SessionDetails>;
 
 SessionDetailsPtr GetSessionDetailsByClientContext(const grpc::ClientContext& context)

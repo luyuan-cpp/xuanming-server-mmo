@@ -14,7 +14,6 @@
 #include "utils/random/random.h"
 #include <thread_context/ecs_context.h>
 #include "broadcast_target_codec.h"
-#include <algorithm>
 
 void SendMessageToClientViaGate(uint32_t messageId, const google::protobuf::Message &message, Guid playerId)
 {

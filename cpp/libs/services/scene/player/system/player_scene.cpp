@@ -5,8 +5,6 @@
 #include "proto/common/event/scene_event.pb.h"
 #include "hexagons_grid.h"
 
-#include "thread_context/redis_manager.h"
-
 #include "rpc/service_metadata/player_scene_service_metadata.h"
 
 #include "network/player_message_utils.h"
@@ -23,7 +21,6 @@
 #include "battle/system/player_battle.h"
 #include "spatial/system/scene_spawn.h"
 #include "spatial/system/view.h"
-#include <limits>
 #include <thread_context/ecs_context.h>
 
 namespace {

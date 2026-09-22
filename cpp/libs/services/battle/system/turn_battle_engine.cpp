@@ -1,7 +1,6 @@
 #include "system/turn_battle_engine.h"
 
 #include <algorithm>
-#include <cmath>
 
 #include "data/table_battle_data_provider.h"
 #include "system/combat_damage_rules.h"

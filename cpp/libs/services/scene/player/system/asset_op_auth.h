@@ -30,8 +30,6 @@
 //
 // 单测:cpp/tests/currency_test/asset_op_auth_test.cpp。
 
-#include <cstddef>
-#include <cstdint>
 #include <string>
 #include <string_view>
 

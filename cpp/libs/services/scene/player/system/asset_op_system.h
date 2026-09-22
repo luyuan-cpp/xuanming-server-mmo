@@ -25,8 +25,6 @@
 // 闸门只在本文件(资产 RPC 入口层)判,**绝不下沉** BagService / CurrencySystem:
 // 战斗结算、任务发奖等内部路径共用那两个模块,下沉冻结/战斗闸会让结算永久卡死(D48 红线)。
 
-#include <cstdint>
-
 #include "entt/src/entt/entity/entity.hpp"
 
 #include "modules/currency/constants/currency.h"

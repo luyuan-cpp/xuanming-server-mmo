@@ -2,8 +2,6 @@
 #include <yaml-cpp/yaml.h>
 #include <muduo/base/Logging.h>
 #include <node_config_manager.h>
-#include <cstdlib>
-#include <cstring>
 
 namespace
 {

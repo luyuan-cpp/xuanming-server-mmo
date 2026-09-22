@@ -1,10 +1,7 @@
 #include "stress_test_probe.h"
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
-#include <cstdlib>
-#include <cstring>
 #include <mutex>
 #include <unordered_map>
 

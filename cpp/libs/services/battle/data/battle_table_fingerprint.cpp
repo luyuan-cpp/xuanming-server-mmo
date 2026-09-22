@@ -1,6 +1,5 @@
 #include "data/battle_table_fingerprint.h"
 
-#include <cstdint>
 #include <string>
 
 #include "google/protobuf/io/coded_stream.h"

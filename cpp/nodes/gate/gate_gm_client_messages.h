@@ -20,8 +20,6 @@
 // proto/trade/trade_admin.proto:14 与 go/guild/internal/session/session.go 的
 // ClientMethods 白名单),本表只是给"已经放出去的那六条"兜底。
 
-#include <cstdint>
-
 #include "rpc/service_metadata/player_attribute_service_metadata.h"
 #include "rpc/service_metadata/player_currency_service_metadata.h"
 #include "rpc/service_metadata/player_pet_service_metadata.h"

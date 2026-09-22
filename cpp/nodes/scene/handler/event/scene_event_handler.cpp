@@ -3,7 +3,6 @@
 
 ///<<< BEGIN WRITING YOUR CODE
 #include "agones/agones_scene_lifecycle.h"
-#include "muduo/base/Logging.h"
 #include "spatial/system/aoi.h"
 #include "spatial/system/scene_crowd.h"
 ///<<< END WRITING YOUR CODE

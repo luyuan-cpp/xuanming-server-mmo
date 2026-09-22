@@ -18,7 +18,6 @@
 // 线程模型:纯函数,状态全在入参里,由调用方(scene loop 线程)保证独占访问。
 // 单测:cpp/tests/currency_test/asset_op_ledger_test.cpp。
 
-#include <cstdint>
 #include <string>
 
 #include "proto/common/component/asset_op_ledger_comp.pb.h"

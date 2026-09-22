@@ -1,7 +1,6 @@
 #include "player/system/asset_op_system.h"
 
 #include <array>
-#include <cstddef>
 #include <iterator>
 #include <limits>
 #include <string>

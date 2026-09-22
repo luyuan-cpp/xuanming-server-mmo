@@ -11,7 +11,6 @@
 //
 // 单测:cpp/tests/turn_battle_engine_test/attribute_allocation_rules_test.cpp(纯头文件,不需要链接 scene.lib)。
 
-#include <cmath>
 #include <cstdint>
 #include <map>
 #include <vector>

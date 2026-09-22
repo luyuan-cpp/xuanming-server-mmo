@@ -1,6 +1,5 @@
 #pragma once
 
-class OnSceneCreated;
 class AfterEnterScene;
 class BeforeLeaveScene;
 

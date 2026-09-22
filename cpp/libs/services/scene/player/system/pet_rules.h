@@ -12,7 +12,6 @@
 // —— 玩家看到的"力量 50"是实打实的 50 点,资质高低体现在这 50 点换来多少物伤。
 
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <vector>
 

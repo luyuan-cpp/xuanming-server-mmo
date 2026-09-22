@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 // AFK (Away From Keyboard) component.
 // Attached to a player entity when they have been idle (no client messages)
 // for kAfkInactivityFrames. Movement systems exclude entities with this tag

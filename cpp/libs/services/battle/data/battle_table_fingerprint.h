@@ -18,7 +18,6 @@
 // 注意:generated/table/code/all_table.h 的 ReloadTables() 目前全仓无人调用;
 // 若日后接线热重载,必须在重载完成回调里调用 Refresh(),否则指纹与内存表脱节。
 
-#include <cstddef>
 #include <string>
 
 class SkillTableData;

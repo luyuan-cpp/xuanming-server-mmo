@@ -14,7 +14,6 @@
 #include "proto/common/component/frame_comp.pb.h"
 #include "core/system/id_generator.h"
 #include "node/system/node/node.h"
-#include "network/node_utils.h"
 
 using namespace std::chrono;
 

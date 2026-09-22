@@ -2,7 +2,6 @@
 
 #include <unordered_set>
 
-#include "core/type_define/type_define.h"
 #include "modules/mission/comp/missions_config_comp.h"
 #include "core/utils/registry/game_registry.h"
 

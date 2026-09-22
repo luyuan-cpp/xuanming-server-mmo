@@ -1,7 +1,5 @@
 #include "bag_service.h"
 
-#include <cstddef> // std::size_t — RemoveItemsByGuid 半截批次的计数
-
 #include "engine/core/error_handling/error_handling.h"
 #include "engine/core/macros/return_define.h"
 #include "table/proto/tip/asset_error_tip.pb.h" // kAssetFrozen / kAssetInvalidBundle — 按 guid 扣出的错误码

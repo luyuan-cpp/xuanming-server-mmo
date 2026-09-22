@@ -14,7 +14,6 @@
 // golden-vector test that locks the algorithm. If you change either side,
 // update both AND both fixtures.
 
-#include <cstdint>
 #include <string>
 
 #include "proto/common/database/mysql_database_table.pb.h"
