@@ -100,7 +100,6 @@ MessageResponseDispatcher gRpcResponseDispatcher(std::bind(&HandleUnknownProtobu
 
 GameChannel::GameChannel()
     : codec_(std::bind(&GameChannel::HandleRpcMessage, this, _1, _2, _3)),
-      services_(nullptr),
       dispatcher_(std::bind(&HandleUnknownProtobufMessage, _1, _2, _3))
 {
     LOG_DEBUG << "GameChannel created: " << this;
@@ -109,7 +108,6 @@ GameChannel::GameChannel()
 GameChannel::GameChannel(const TcpConnectionPtr &connection)
     : codec_(std::bind(&GameChannel::HandleRpcMessage, this, _1, _2, _3)),
       connection_(connection),
-      services_(nullptr),
       dispatcher_(std::bind(&HandleUnknownProtobufMessage, _1, _2, _3))
 {
     LOG_DEBUG << "GameChannel created with connection: " << this;
@@ -447,9 +445,16 @@ void GameChannel::ProcessMessage(const TcpConnectionPtr &conn, const GameRpcMess
         return;
     }
 
+    // 未装服务表时按"无此服务"回错,不对空 optional 解引用(原裸指针版本在这里是空指针访问)。
+    if (!services_)
+    {
+        SendErrorResponse(rpcMessage, GameErrorCode::NO_SERVICE);
+        return;
+    }
+    const auto &services = services_->get();
     const auto &messageInfo = gRpcMethodRegistry[rpcMessage.message_id()];
-    auto it = services_->find(messageInfo.serviceName);
-    if (it == services_->end())
+    auto it = services.find(messageInfo.serviceName);
+    if (it == services.end())
     {
         SendErrorResponse(rpcMessage, GameErrorCode::NO_SERVICE);
         return;

@@ -5,8 +5,10 @@
 #include "network/codec/dispatcher.h"
 
 #include <google/protobuf/service.h>
+#include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 
 #include "proto/common/base/rpc_message.pb.h"
 
@@ -40,7 +42,9 @@ public:
 
     void SetConnection(const TcpConnectionPtr &connection) { connection_ = connection; }
 
-    void SetServiceMap(const std::map<std::string, ProtobufService *> *services) { services_ = services; }
+    // 只借用,不拥有:服务表由 RpcServer / RpcClient 持有。禁止传临时对象,否则存下的是悬空引用。
+    void SetServiceMap(const std::map<std::string, ProtobufService *> &services) { services_ = std::cref(services); }
+    void SetServiceMap(const std::map<std::string, ProtobufService *> &&) = delete;
 
     inline bool IsValidMessageId(uint32_t messageId) const;
 
@@ -94,7 +98,8 @@ private:
     //    DOWN 分支清 context 只是卫生,不再是释放连接的前提;
     //  - 对 muduo TcpClient::~TcpClient 的 use_count()==1 判断永远不会造成干扰。
     std::weak_ptr<muduo::net::TcpConnection> connection_;
-    const std::map<std::string, ProtobufService *> *services_ = nullptr;
+    // reference_wrapper 而非裸指针,满足 no-raw-pointer-member 检查;SetServiceMap 之前为空。
+    std::optional<std::reference_wrapper<const std::map<std::string, ProtobufService *>>> services_;
     ProtobufDispatcher dispatcher_;
 };
 

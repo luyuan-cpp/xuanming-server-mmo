@@ -51,7 +51,8 @@ struct Async{{ $svc.Service }}{{ $method.Method }}GrpcClient {
 
 {{ end }}
 
-class {{ $method.CppRequest }};
+{{- /* 不前置声明请求类型:CppRequest 是全限定名(::pkg::Type),"class ::pkg::Type;" 在标准 C++ 里非法,
+       MSVC 放行、clang 报错,会让 no-raw-pointer-member 检查解析失败;完整定义已由上方 GrpcIncludeHeadName 引入。 */}}
 using Async{{ $svc.Service }}{{ $method.Method }}HandlerFunctionType =
     std::function<void(const ClientContext&, const {{ $method.CppResponse }}&)>;
 extern Async{{ $svc.Service }}{{ $method.Method }}HandlerFunctionType Async{{ $svc.Service }}{{ $method.Method }}Handler;

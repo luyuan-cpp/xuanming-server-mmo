@@ -86,7 +86,7 @@ public:
                 channel->HandleIncomingMessage(conn, buf, ts);
             }
         });
-        channel_->SetServiceMap(&services_);
+        channel_->SetServiceMap(services_);
         client_.connect();
     }
 

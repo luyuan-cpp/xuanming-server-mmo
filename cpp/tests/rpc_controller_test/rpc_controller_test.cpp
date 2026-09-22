@@ -198,7 +198,7 @@ TEST_F(LoopbackFixture, DispatchLeavesNoStrongRefBehind_RequestWithInvalidMessag
     GameChannel channel;
     channel.SetConnection(serverConn_);
     const std::map<std::string, ProtobufService*> noServices;
-    channel.SetServiceMap(&noServices);
+    channel.SetServiceMap(noServices);
 
     GameRpcMessage msg;
     msg.set_type(GameMessageType::REQUEST);

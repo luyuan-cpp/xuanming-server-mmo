@@ -123,6 +123,9 @@
     <RootNamespace>muduo</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <ProjectName>muduo</ProjectName>
+    <!-- src/ 是 vendored 的 muduo Windows 移植(第三方代码),不受本仓库裸指针成员规则约束;
+         它不在 third_party\ 下,Directory.Build.targets 的路径判断拦不住,所以在这里显式退出。 -->
+    <SkipNoRawPointerMemberCheck>true</SkipNoRawPointerMemberCheck>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">

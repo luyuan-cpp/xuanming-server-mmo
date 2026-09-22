@@ -5,6 +5,9 @@
 #include <muduo/net/InetAddress.h>
 #include <muduo/net/TimerId.h>
 
+#include <functional>
+#include <optional>
+
 class RedisManager
 {
 public:
@@ -53,7 +56,9 @@ private:
 	void ResetConnection();
 
 	HiredisPtr zoneRedis_;
-	muduo::net::EventLoop *loop_ = nullptr;
+	// 不拥有 EventLoop。用 reference_wrapper 而非裸 EventLoop*,满足 no-raw-pointer-member 检查
+	// (与 RedisSystem / KafkaManager 同一写法);未 Connect 或已 Shutdown 时为空。
+	std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop_;
 	muduo::net::InetAddress redisAddr_;
 	muduo::net::TimerId reconnectTimerId_;
 	bool reconnectTimerActive_ = false;
