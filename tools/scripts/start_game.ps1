@@ -279,10 +279,16 @@ function Invoke-Dev([string]$Label, [string[]]$Arguments) {
     $reply.Err | Set-Content -LiteralPath (Join-Path $logDir "$Label.stderr.log")
     if ($reply.Code -ne 0) { throw "$Label 启动失败，查看 $logDir 下同名日志。" }
 }
+# friend / guild 的异步推送经 shared/kafkautil 写 gate-cmd,必须与 gate 使用同一代主题。
+# chat v1 只读写 Redis 历史,trade 资产通道走 gRPC,db/router 也不生产命令主题;不纳入此契约。
+# 校验与落记录共用名单,防止服务被复用后才在第一次推送时暴露旧 generation。
+function Test-UsesKafkaCommandContract([string]$Name) {
+    return $Name -in @('gate','scene','battle','login','scene_manager','player_locator','match','guild','friend')
+}
 # 已运行进程不会重新读取进程环境；记录本启动器实际拉起的 PID 与启动时间，防止换代后复用旧进程。
 function Assert-RunningCommandContract($Process) {
     $name = [IO.Path]::GetFileNameWithoutExtension($Process.Name)
-    if ($name -notin @('gate','scene','battle','login','scene_manager','player_locator','match')) { return }
+    if (-not (Test-UsesKafkaCommandContract $name)) { return }
     $path = Join-Path $serverRoot 'run/pids/kafka_command_contract.json'
     $records = if (Test-Path -LiteralPath $path) { Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -AsHashtable } else { @{} }
     $record = $records[$name]
@@ -293,7 +299,7 @@ function Assert-RunningCommandContract($Process) {
     }
 }
 function Save-LocalCommandContract([string]$Name, [int]$ProcessId) {
-    if ($Name -notin @('gate','scene','battle','login','scene_manager','player_locator','match')) { return }
+    if (-not (Test-UsesKafkaCommandContract $Name)) { return }
     $path = Join-Path $serverRoot 'run/pids/kafka_command_contract.json'
     $records = if (Test-Path -LiteralPath $path) { Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -AsHashtable } else { @{} }
     $process = Get-Process -Id $ProcessId -ErrorAction Stop
@@ -512,7 +518,7 @@ try {
             }
         }
         Write-Step '3/6 启动存档服务'
-        # login、scene_manager、player_locator、match 由 dev_tools 的子进程继承同一契约。
+        # 命令生产者(含 friend / guild 推送)由 dev_tools 子进程继承与 C++ 消费者相同的契约。
         $env:KAFKA_COMMAND_TOPIC_PARTITIONS = [string]$kafkaContract.Partitions
         $env:KAFKA_COMMAND_TOPIC_GENERATION = [string]$kafkaContract.Generation
         $goRecords = Repair-PidRecords 'go_services.pid.json'

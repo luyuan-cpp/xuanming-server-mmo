@@ -5617,3 +5617,16 @@ friend 移植会话(机器 A,`E:\work\xuanming-server-mmo`)写交接文档写到
 - **客户端**(`mmorpg-client`):登录期重定向先于 EnterGame 应答到达时沿用本次请求的角色,不再回选角(`GameClient.ResolveRedirectPlayerId`,未编译)。
 - **新增部署前提**:各 zone 的 player_locator 必须连同一个 Redis(`cross-zone-matchmaking.md` D12;否则访客从归属区重登一律回家);login 与 scene_manager 两侧同批上线(只上 login 会被旧版 scene_manager 牵引"等待落点")。§12.2 的 zrpc `Timeout` ≥ 8000、老号先跑 `merge_zone -backfill-home-zone` 仍有效。
 - **下一步**:Codex 按 §12.6.10 清单执行(含 runbook v2.4 场景 Z / R 与 11b 的 M3 探针);失败保留首个错误前后 20–30 行,不连续重试、不改断言。
+
+## 2026-09-22 本机启动、社交验收与旧客户端断线修复(Codex)
+
+- 修复 `tools/scripts/go_services.ps1` 端口分配:Windows 保留区间挪移时同时避开同批计划、真实监听及所有已运行但尚未监听的实例;复用前核对程序/配置身份,不重写运行中配置;就绪仅认可目标 PID 或 go run 子进程持有监听。端口回归 `tools/scripts/tests/go_services_ports.tests.ps1` 18/18 通过。实际 chat 使用 50849、trade 使用 50850,原冲突消除。
+- 实测好友申请推送发现 friend/guild 手动启动进程仍使用 command generation 1,而 gate 使用 generation 2。以 g2/256 分区重启后通过全流程;`start_game.ps1` 的契约检查与记录通过共用 `Test-UsesKafkaCommandContract` 覆盖实际生产者 friend/guild,防止复用错误代数的旧进程。新增 `start_game_command_contract.tests.ps1` 14/14 通过。当前 chat v1 与 trade 没有 Kafka command producer,未纳入该检查。
+- 构建并部署当前 friend/guild/client_rpc_router/db、gate/scene;本轮 C++ 首次串行编译暴露 `afk_comp.h` 缺少整数类型声明,补 `<cstdint>` 并使用 `std::uint32_t`,不改变布局。修复后 `/m:1` Debug x64 增量构建退出 0。原始指针检查工具在本机缺失并显示 SKIP,不能计为静态门禁通过。首轮和修复后日志分别为 `run/builds/social-ready-20260922/cpp-build.log`、`cpp-build-fixed.log`。
+- 创建并授权本机 mmorpg_friend/mmorpg_guild 库,用服务自带迁移建表。实际登录暴露旧 zone_1_db.player_database 缺 profile_component/asset_op_ledger;使用 go/db/cmd/migrate 官方工具仅新增这两个可空 MEDIUMBLOB 列。二次 plan 无待新增列。原有 user_oauth.provider_id、user_phone.phone 类型漂移保持原样,未使用 allow-modify;工具返回 4 对应这两项历史待审差异,本次 ADD 已成功。
+- 存盘保全:备份 7 条原始 dead queue 收据和相关完整 Redis 快照;补列后正常存盘已覆盖旧失败序号,最新 Redis 与 MySQL 两张角色表逐组件一致。未重放、删除旧任务或直接改玩家数据。只读取证保存在 `run/builds/social-ready-20260922/recovery/`,其中准备的 replay 工具未执行。
+- Unity 新版构建成功,335 源文件编译检查 0 错误。官方生成器补齐 8 个帮会 MessageIds,110 个常量与服务端一致。截图 WSACancelBlockingCall 来自仍在运行的 9/13 旧客户端 catch 过滤器遗漏主动断开异常;当前源码已包含 9/17 修复,不重复改网络代码、不隐藏错误日志。现有网络生命周期测试 8/8 通过,覆盖正常取消与真实故障上报。已将整套成品提升到 `E:\work\tmp\showcase_player`,旧版完整备份在 `E:\work\tmp\showcase_player.before-social-20260923`。
+- 真实新版 Unity 客户端以独立账号完成登录/建角/进场,`client-login-final.log` 记录 RESULT=PASS stage=in_game;隐藏验收进程已关闭,用户游戏窗口保留。标准一键启动及新增契约后的重复启动复核均退出 0,全部服务就绪、一区 OPEN;最终启动日志在 run/logs/game-launcher/20260922-235101-*/launcher.log。
+- 单区好友 `FRIEND_SMOKE_OK`:申请/推送/接受/双向列表与在线状态/拉黑/推荐过滤/非法下行接口拒绝。单区帮会 `GUILD_MGMT_OK` 与 `GUILD_SMOKE_OK`:建帮、审批、公告、成员管理、任免、踢人、转让、退出、解散及推送。日志分别为 `verification/friend-smoke-generation2.log` 与 `verification/guild-smoke-final.log`;测试关系和帮会已清理,独立测试角色保留。
+- 基础单人 PVE + 观战 `BATTLE_SMOKE_OK`,21 回合正常胜利与终局,退出 0;证据在 `verification/battle/`。现有 match/battle 已满足这条基础链,没有仅因程序日期旧而额外更新。
+- 验收范围限制:未测跨区、帮会捐献/兑换/活动或新版宠物/击杀任务结算。客户端 G 键可打开基础帮会界面;当前客户端仍没有好友协议/面板,C 的仙友会是现有聊天界面,不能把好友后端通过称为好友界面可手测。未手工提交或推送;运行期间仓库已有自动 WIP 保存。
