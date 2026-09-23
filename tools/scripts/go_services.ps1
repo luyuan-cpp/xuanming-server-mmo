@@ -279,10 +279,11 @@ function Get-InstanceKey {
 # 固定端口落进去时 bind 报 "An attempt was made to access a socket in a way forbidden by its access permissions",
 # go-zero 服务直接 panic(2026-08-22 player_locator 51200、2026-09-05 scene_manager 60300 都是这个坑)。
 # 起服务前探一次:落在保留区间就往上挪到第一个不在任何区间里的端口,并强制走派生 yaml 写入;
-# 对等方经 etcd 发现实际端口,不受影响。只规避保留区间,不规避"已被占用"(占用要么是陈旧实例要么是配置撞车,应当报错而不是悄悄换)。
+# 对等方经 etcd 发现实际端口,不受影响。原始端口被占用仍报错;只有从保留区间挪出的候选
+# 才继续避让本批计划和已有监听,避免 chat / trade 从同一保留区间挪到同一个出口。
 $script:ExcludedPortRanges = $null
 function Get-ExcludedPortRanges {
-    if ($null -ne $script:ExcludedPortRanges) { return $script:ExcludedPortRanges }
+    if ($null -ne $script:ExcludedPortRanges) { return ,$script:ExcludedPortRanges }
     $ranges = @()
     try {
         $out = netsh interface ipv4 show excludedportrange protocol=tcp 2>$null
@@ -291,19 +292,42 @@ function Get-ExcludedPortRanges {
         }
     } catch { }
     $script:ExcludedPortRanges = $ranges
-    return $ranges
+    return ,$ranges
 }
 function Test-PortExcluded([int]$Port) {
     foreach ($r in (Get-ExcludedPortRanges)) { if ($Port -ge $r[0] -and $Port -le $r[1]) { return $true } }
     return $false
 }
-function Resolve-BindablePort([int]$Port, [string]$Label) {
-    $p = $Port
-    for ($i = 0; $i -lt 2000 -and (Test-PortExcluded $p); $i++) { $p++ }
-    if ($p -ne $Port) {
-        Write-Warning "[port] $Label : $Port 落在 Windows 保留端口区间,改用 $p(派生 yaml;对等方经 etcd 发现,不受影响)"
+function Get-TcpListenerProcessIds([int]$Port) {
+    # 不按 LocalPort 过滤 CIM 查询:没有匹配项时 cmdlet 会报错,不能把查询失败误当作端口空闲。
+    return @(Get-NetTCPConnection -State Listen -ErrorAction Stop |
+        Where-Object LocalPort -eq $Port | Select-Object -ExpandProperty OwningProcess -Unique)
+}
+
+function Get-InstancePort([hashtable]$Info, [int]$Index) {
+    $zoneShift = if ($Zone -gt 0) { ($Zone - 1) * $ZonePortShift } else { 0 }
+    return [int]$Info.Port + $zoneShift + ($Index - 1) * $PortStride
+}
+
+function Resolve-BindablePort {
+    param([int]$Port, [string]$Label, [hashtable]$ReservedPorts = @{})
+    if ($Port -lt 1 -or $Port -gt 65535) { throw "[port] $Label : 无效端口 $Port" }
+    $relocate = Test-PortExcluded $Port
+    for ($p = $Port; $p -le [Math]::Min(65535, $Port + 2000); $p++) {
+        if (Test-PortExcluded $p) { continue }
+        $planned = $ReservedPorts.ContainsKey($p) -and $ReservedPorts[$p] -ne $Label
+        $owners = @(Get-TcpListenerProcessIds $p)
+        if ($planned -or $owners.Count -gt 0) {
+            if ($relocate) { continue }
+            throw "[port] $Label : 原始端口 $Port 已占用 (计划=$($ReservedPorts[$p]), PID=$($owners -join ',')); 请核对实例或配置,不会终止占用进程。"
+        }
+        $ReservedPorts[$p] = $Label
+        if ($p -ne $Port) {
+            Write-Warning "[port] $Label : $Port 落在 Windows 保留端口区间,改用 $p(派生 yaml;对等方经 etcd 发现,不受影响)"
+        }
+        return $p
     }
-    return $p
+    throw "[port] $Label : $Port 起 2000 个端口内没有可用候选。"
 }
 
 function Resolve-InstanceConfig {
@@ -311,13 +335,14 @@ function Resolve-InstanceConfig {
         [string]$Name,
         [hashtable]$Info,
         [int]$Index,
-        [int]$Total
+        [int]$Total,
+        [hashtable]$ReservedPorts = @{}
     )
     $svcDir    = Join-Path $GoRoot $Info.Dir
     $baseYaml  = Join-Path $svcDir $Info.ConfigFile
     $zoneShift = if ($Zone -gt 0) { ($Zone - 1) * $ZonePortShift } else { 0 }
-    $port      = [int]$Info.Port + $zoneShift + ($Index - 1) * $PortStride
-    $port      = Resolve-BindablePort $port "$Name #$Index"   # 保留区间规避,见上
+    $port      = Get-InstancePort -Info $Info -Index $Index
+    $port      = Resolve-BindablePort $port (Get-InstanceKey -Name $Name -Index $Index -Total $Total) $ReservedPorts
 
     # Legacy fast path: single-zone, single-instance -> original yaml as-is.
     if ($Total -le 1 -and $Zone -le 0 -and $port -eq [int]$Info.Port) {
@@ -431,34 +456,38 @@ function Read-InstanceEntry {
     return @{ Pid = $procId; Port = $port; Service = $svc }
 }
 
-# Soft TCP LISTEN probe used between tiers. Returns $true once any process is
-# accepting on 127.0.0.1:$Port, or $false on timeout. We deliberately do NOT
+# 分层就绪只认目标进程的监听;go run 的监听者是它启动的子进程。
+# Soft TCP LISTEN probe used between tiers. We deliberately do NOT
 # fail the launch on timeout: this is just a "give earlier tiers a head start"
 # heuristic to avoid first-boot dial races. Runtime services keep using etcd
 # discovery + gRPC reconnect, so rolling upgrades / canary releases are unaffected.
 function Wait-TcpListenReady {
     param(
         [int]$Port,
-        [int]$TimeoutSeconds = 10
+        [int]$TimeoutSeconds = 10,
+        [Parameter(Mandatory = $true)][int]$ProcessId,
+        [switch]$AllowChildProcess
     )
-    if ($Port -le 0) { return $true }
+    if ($Port -le 0 -or $ProcessId -le 0) { return $false }
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ((Get-Date) -lt $deadline) {
-        $client = $null
-        try {
-            $client = [System.Net.Sockets.TcpClient]::new()
-            $iar = $client.BeginConnect('127.0.0.1', $Port, $null, $null)
-            if ($iar.AsyncWaitHandle.WaitOne(250) -and $client.Connected) {
-                $client.EndConnect($iar) | Out-Null
-                return $true
+    do {
+        $proc = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+        if (-not $proc -or $proc.HasExited) { return $false }
+        $processIds = @($ProcessId)
+        if ($AllowChildProcess) {
+            for ($i = 0; $i -lt $processIds.Count; $i++) {
+                $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($processIds[$i])" -ErrorAction Stop)
+                foreach ($child in $children) {
+                    if ($processIds -notcontains [int]$child.ProcessId) { $processIds += [int]$child.ProcessId }
+                }
             }
-        } catch {
-            # connection refused / not listening yet
-        } finally {
-            if ($client) { $client.Close() }
         }
+        foreach ($owner in (Get-TcpListenerProcessIds $Port)) {
+            if ($processIds -contains $owner) { return $true }
+        }
+        if ((Get-Date) -ge $deadline) { break }
         Start-Sleep -Milliseconds 200
-    }
+    } while ((Get-Date) -lt $deadline)
     return $false
 }
 
@@ -546,6 +575,65 @@ function Resolve-GoExecutablePath {
     return $null
 }
 
+function Test-InstanceProcessIdentity {
+    param([string]$Name, [hashtable]$Info, [string]$InstanceKey, [int]$Total, $Process)
+    $svcDir = Join-Path $GoRoot $Info.Dir
+    $executablePaths = @((Join-Path $GoBinDir "$Name.exe"), (Join-Path $svcDir "$Name.exe"))
+    $commandLine = ([string]$Process.CommandLine).Replace('/', '\')
+    if ($executablePaths -notcontains [string]$Process.ExecutablePath) {
+        $goCommand = Get-Command go -ErrorAction SilentlyContinue
+        if (-not $goCommand -or $Process.ExecutablePath -ne $goCommand.Source) { return $false }
+        # go.exe 是全机共用的;只有绝对源码路径能证明它属于本仓库。旧的相对路径命令无法核实,
+        # 保守拒绝复用,避免另一个仓库同名 chat.go 被当成本实例。
+        $entryPattern = [regex]::Escape((Join-Path $svcDir $Info.Entry).Replace('/', '\'))
+        if ($commandLine -notmatch "(?:^|\s)run\s+`"?$entryPattern`"?(?=\s|$)") { return $false }
+    }
+    # 兼容旧 PID 文件;身份必须同时匹配仓库内二进制和本实例配置,不能只凭 PID 存活。
+    $configPaths = @((Join-Path $DerivedEtcDir "$InstanceKey.yaml"))
+    if ($InstanceKey -eq $Name) {
+        $configPaths += $Info.ConfigFile, (Join-Path $svcDir $Info.ConfigFile)
+    }
+    $flagPattern = [regex]::Escape($Info.ConfigFlag)
+    foreach ($path in $configPaths) {
+        $pathPattern = [regex]::Escape($path.Replace('/', '\'))
+        if ($commandLine -match "(?:^|\s)$flagPattern\s+(?:`"$pathPattern`"|$pathPattern)(?=\s|$)") { return $true }
+    }
+    return $false
+}
+
+function Get-TrackedRunningInstance {
+    param([string]$Name, [hashtable]$Info, [string]$InstanceKey, $RawValue, [int]$FallbackPort)
+    $existing = Read-InstanceEntry -RawValue $RawValue -FallbackService $Name -FallbackPort $FallbackPort
+    if (-not $existing -or $existing.Pid -le 0) { return $null }
+    $existingProcess = Get-CimInstance Win32_Process -Filter "ProcessId = $($existing.Pid)" -ErrorAction Stop
+    if (-not $existingProcess) { return $null }
+    if ($existing.Service -ne $Name -or -not (Test-InstanceProcessIdentity -Name $Name -Info $Info -InstanceKey $InstanceKey -Process $existingProcess)) {
+        throw "[pid] $InstanceKey : PID $($existing.Pid) 的可执行文件或配置不匹配,请核对 PID 记录;不会复用或终止该进程。"
+    }
+    return $existing
+}
+
+function Reserve-RunningInstancePorts {
+    param([pscustomobject]$Pids, [hashtable]$ReservedPorts)
+    $runningOwners = @{}
+    foreach ($property in $Pids.PSObject.Properties) {
+        $instanceKey = $property.Name
+        $name = if ($ServiceCatalogue.Contains($instanceKey)) { $instanceKey }
+                elseif ($instanceKey -match '^(?:z\d+_)?(?<svc>.+?)(?:_\d+)?$' -and $ServiceCatalogue.Contains($Matches.svc)) { $Matches.svc }
+                else { continue }
+        $info = $ServiceCatalogue[$name]
+        $existing = Get-TrackedRunningInstance -Name $name -Info $info -InstanceKey $instanceKey -RawValue $property.Value -FallbackPort $info.Port
+        if (-not $existing -or $existing.Port -le 0) { continue }
+        if ($runningOwners.ContainsKey($existing.Port)) {
+            throw "[port] $instanceKey 与 $($runningOwners[$existing.Port]) 的运行记录占用同一端口 $($existing.Port),请核对实例。"
+        }
+        $runningOwners[$existing.Port] = $instanceKey
+        # 活实例可能仍在初始化,尚未 LISTEN。必须在任何新分配之前预留它的实际端口,
+        # 并覆盖同端口的原始计划占位;后续新实例会避让或明确报错,不会抢占该端口。
+        $ReservedPorts[$existing.Port] = $instanceKey
+    }
+}
+
 function Start-ServiceInstance {
     param(
         [string]$Name,
@@ -553,28 +641,23 @@ function Start-ServiceInstance {
         [int]$Index,
         [int]$Total,
         [pscustomobject]$Pids,
-        [switch]$UseExe
+        [switch]$UseExe,
+        [hashtable]$ReservedPorts = @{}
     )
 
     $svcDir = Join-Path $GoRoot $Info.Dir
     $instanceKey = Get-InstanceKey -Name $Name -Index $Index -Total $Total
-    $cfg = Resolve-InstanceConfig -Name $Name -Info $Info -Index $Index -Total $Total
 
-    # Skip if already running
+    # 必须先确认能否复用再派生配置,否则重复 start 会改写仍在运行实例的 yaml。
     if ($Pids.PSObject.Properties.Name -contains $instanceKey) {
-        $existing = Read-InstanceEntry -RawValue $Pids.$instanceKey -FallbackService $Name -FallbackPort $cfg.Port
-        if ($existing -and $existing.Pid -gt 0) {
-            try {
-                $proc = Get-Process -Id $existing.Pid -ErrorAction Stop
-                if (-not $proc.HasExited) {
-                    Write-Host "[skip]  $instanceKey (PID $($existing.Pid) already running on :$($existing.Port))" -ForegroundColor Yellow
-                    return $null
-                }
-            } catch {
-                # process gone; will restart
-            }
+        $existing = Get-TrackedRunningInstance -Name $Name -Info $Info -InstanceKey $instanceKey -RawValue $Pids.$instanceKey -FallbackPort (Get-InstancePort -Info $Info -Index $Index)
+        if ($existing) {
+            $ReservedPorts[$existing.Port] = $instanceKey
+            Write-Host "[skip]  $instanceKey (PID $($existing.Pid) already running on :$($existing.Port))" -ForegroundColor Yellow
+            return $null
         }
     }
+    $cfg = Resolve-InstanceConfig -Name $Name -Info $Info -Index $Index -Total $Total -ReservedPorts $ReservedPorts
 
     $logOut  = Join-Path $LogDir "$instanceKey.stdout.log"
     $logErr  = Join-Path $LogDir "$instanceKey.stderr.log"
@@ -619,7 +702,7 @@ function Start-ServiceInstance {
             Write-Host "[start] $instanceKey  :$($cfg.Port)  ($($Info.Desc))" -ForegroundColor Cyan
 
             $proc = Start-Process -FilePath "go" `
-                -ArgumentList @("run", $Info.Entry, $configFlag, $configArg) `
+                -ArgumentList @("run", (Join-Path $svcDir $Info.Entry), $configFlag, $configArg) `
                 -WorkingDirectory $svcDir `
                 -RedirectStandardOutput $logOut `
                 -RedirectStandardError  $logErr `
@@ -646,6 +729,8 @@ function Start-ServiceInstance {
         InstanceKey = $instanceKey
         LogFile     = $logOut
         Port        = $cfg.Port
+        ProcessId   = $proc.Id
+        AllowChildProcess = -not $UseExe
         Tier        = if ($Info.ContainsKey('Tier')) { [int]$Info.Tier } else { 99 }
     }
 }
@@ -658,6 +743,7 @@ function Invoke-Start {
     $names = Resolve-ServiceList -Requested $Services
     $pids  = Read-PidFile
     $launchedServices = @()
+    $reservedPorts = @{}
 
     if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
 
@@ -675,6 +761,13 @@ function Invoke-Start {
         $count = Get-ServiceInstanceCount -Name $name
         $tier  = if ($info.ContainsKey('Tier')) { [int]$info.Tier } else { 99 }
         for ($i = 1; $i -le $count; $i++) {
+            $instanceKey = Get-InstanceKey -Name $name -Index $i -Total $count
+            $requestedPort = Get-InstancePort -Info $info -Index $i
+            if ($reservedPorts.ContainsKey($requestedPort)) {
+                throw "[port] $instanceKey 与 $($reservedPorts[$requestedPort]) 计划使用同一原始端口 $requestedPort,请核对配置。"
+            }
+            # 提前预留后续实例的原始端口,前面的保留区间避让不能抢占它。
+            $reservedPorts[$requestedPort] = $instanceKey
             $plan += [pscustomobject]@{
                 Name = $name; Info = $info; Index = $i; Total = $count; Tier = $tier
             }
@@ -685,13 +778,15 @@ function Invoke-Start {
         Write-Host "No services to launch." -ForegroundColor Yellow
         return
     }
+    # 包括未请求的已运行实例,分批启动同样不能抢走其初始化阶段的端口。
+    Reserve-RunningInstancePorts -Pids $pids -ReservedPorts $reservedPorts
 
     if ($NoTier) {
         # Legacy parallel path: launch every instance back-to-back, then wait
         # for startup banners at the end. Useful when caller knows there is no
         # cross-service dial dependency to honor.
         foreach ($p in $plan) {
-            $launched = Start-ServiceInstance -Name $p.Name -Info $p.Info -Index $p.Index -Total $p.Total -Pids $pids -UseExe:$UseExe
+            $launched = Start-ServiceInstance -Name $p.Name -Info $p.Info -Index $p.Index -Total $p.Total -Pids $pids -UseExe:$UseExe -ReservedPorts $reservedPorts
             if ($launched) { $launchedServices += $launched }
         }
         Write-PidFile $pids
@@ -717,7 +812,7 @@ function Invoke-Start {
 
         $launchedThisTier = @()
         foreach ($p in $entries) {
-            $launched = Start-ServiceInstance -Name $p.Name -Info $p.Info -Index $p.Index -Total $p.Total -Pids $pids -UseExe:$UseExe
+            $launched = Start-ServiceInstance -Name $p.Name -Info $p.Info -Index $p.Index -Total $p.Total -Pids $pids -UseExe:$UseExe -ReservedPorts $reservedPorts
             if ($launched) {
                 $launchedServices += $launched
                 $launchedThisTier += $launched
@@ -730,7 +825,7 @@ function Invoke-Start {
         if ($launchedThisTier.Count -gt 0) {
             Write-Host "  waiting up to ${TierReadySeconds}s for tier $tierName to LISTEN..." -ForegroundColor DarkGray
             foreach ($svc in $launchedThisTier) {
-                $ok = Wait-TcpListenReady -Port $svc.Port -TimeoutSeconds $TierReadySeconds
+                $ok = Wait-TcpListenReady -Port $svc.Port -TimeoutSeconds $TierReadySeconds -ProcessId $svc.ProcessId -AllowChildProcess:$svc.AllowChildProcess
                 if ($ok) {
                     Write-Host "  [ready]   $($svc.InstanceKey) :$($svc.Port)" -ForegroundColor Green
                 } else {
