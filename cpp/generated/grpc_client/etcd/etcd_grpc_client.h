@@ -23,7 +23,6 @@ struct AsyncKVRangeGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::etcdserverpb::RangeResponse>> response_reader;
 };
 
-class ::etcdserverpb::RangeRequest;
 using AsyncKVRangeHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::RangeResponse&)>;
 extern AsyncKVRangeHandlerFunctionType AsyncKVRangeHandler;
@@ -42,7 +41,6 @@ struct AsyncKVPutGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::etcdserverpb::PutResponse>> response_reader;
 };
 
-class ::etcdserverpb::PutRequest;
 using AsyncKVPutHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::PutResponse&)>;
 extern AsyncKVPutHandlerFunctionType AsyncKVPutHandler;
@@ -61,7 +59,6 @@ struct AsyncKVDeleteRangeGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::etcdserverpb::DeleteRangeResponse>> response_reader;
 };
 
-class ::etcdserverpb::DeleteRangeRequest;
 using AsyncKVDeleteRangeHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::DeleteRangeResponse&)>;
 extern AsyncKVDeleteRangeHandlerFunctionType AsyncKVDeleteRangeHandler;
@@ -80,7 +77,6 @@ struct AsyncKVTxnGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::etcdserverpb::TxnResponse>> response_reader;
 };
 
-class ::etcdserverpb::TxnRequest;
 using AsyncKVTxnHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::TxnResponse&)>;
 extern AsyncKVTxnHandlerFunctionType AsyncKVTxnHandler;
@@ -99,7 +95,6 @@ struct AsyncKVCompactGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::etcdserverpb::CompactionResponse>> response_reader;
 };
 
-class ::etcdserverpb::CompactionRequest;
 using AsyncKVCompactHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::CompactionResponse&)>;
 extern AsyncKVCompactHandlerFunctionType AsyncKVCompactHandler;
@@ -127,7 +122,6 @@ struct WatchRequestWriteInProgress {
     bool isInProgress{false};
 };
 
-class ::etcdserverpb::WatchRequest;
 using AsyncWatchWatchHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::WatchResponse&)>;
 extern AsyncWatchWatchHandlerFunctionType AsyncWatchWatchHandler;
@@ -147,7 +141,6 @@ struct AsyncLeaseLeaseGrantGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::etcdserverpb::LeaseGrantResponse>> response_reader;
 };
 
-class ::etcdserverpb::LeaseGrantRequest;
 using AsyncLeaseLeaseGrantHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::LeaseGrantResponse&)>;
 extern AsyncLeaseLeaseGrantHandlerFunctionType AsyncLeaseLeaseGrantHandler;
@@ -166,7 +159,6 @@ struct AsyncLeaseLeaseRevokeGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::etcdserverpb::LeaseRevokeResponse>> response_reader;
 };
 
-class ::etcdserverpb::LeaseRevokeRequest;
 using AsyncLeaseLeaseRevokeHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::LeaseRevokeResponse&)>;
 extern AsyncLeaseLeaseRevokeHandlerFunctionType AsyncLeaseLeaseRevokeHandler;
@@ -193,7 +185,6 @@ struct LeaseKeepAliveRequestWriteInProgress {
     bool isInProgress{false};
 };
 
-class ::etcdserverpb::LeaseKeepAliveRequest;
 using AsyncLeaseLeaseKeepAliveHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::LeaseKeepAliveResponse&)>;
 extern AsyncLeaseLeaseKeepAliveHandlerFunctionType AsyncLeaseLeaseKeepAliveHandler;
@@ -212,7 +203,6 @@ struct AsyncLeaseLeaseTimeToLiveGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::etcdserverpb::LeaseTimeToLiveResponse>> response_reader;
 };
 
-class ::etcdserverpb::LeaseTimeToLiveRequest;
 using AsyncLeaseLeaseTimeToLiveHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::LeaseTimeToLiveResponse&)>;
 extern AsyncLeaseLeaseTimeToLiveHandlerFunctionType AsyncLeaseLeaseTimeToLiveHandler;
@@ -231,7 +221,6 @@ struct AsyncLeaseLeaseLeasesGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::etcdserverpb::LeaseLeasesResponse>> response_reader;
 };
 
-class ::etcdserverpb::LeaseLeasesRequest;
 using AsyncLeaseLeaseLeasesHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::LeaseLeasesResponse&)>;
 extern AsyncLeaseLeaseLeasesHandlerFunctionType AsyncLeaseLeaseLeasesHandler;

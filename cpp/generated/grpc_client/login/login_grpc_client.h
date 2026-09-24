@@ -23,7 +23,6 @@ struct AsyncClientPlayerLoginLoginGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::loginpb::LoginResponse>> response_reader;
 };
 
-class ::loginpb::LoginRequest;
 using AsyncClientPlayerLoginLoginHandlerFunctionType =
     std::function<void(const ClientContext&, const ::loginpb::LoginResponse&)>;
 extern AsyncClientPlayerLoginLoginHandlerFunctionType AsyncClientPlayerLoginLoginHandler;
@@ -42,7 +41,6 @@ struct AsyncClientPlayerLoginCreatePlayerGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::loginpb::CreatePlayerResponse>> response_reader;
 };
 
-class ::loginpb::CreatePlayerRequest;
 using AsyncClientPlayerLoginCreatePlayerHandlerFunctionType =
     std::function<void(const ClientContext&, const ::loginpb::CreatePlayerResponse&)>;
 extern AsyncClientPlayerLoginCreatePlayerHandlerFunctionType AsyncClientPlayerLoginCreatePlayerHandler;
@@ -61,7 +59,6 @@ struct AsyncClientPlayerLoginEnterGameGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::loginpb::EnterGameResponse>> response_reader;
 };
 
-class ::loginpb::EnterGameRequest;
 using AsyncClientPlayerLoginEnterGameHandlerFunctionType =
     std::function<void(const ClientContext&, const ::loginpb::EnterGameResponse&)>;
 extern AsyncClientPlayerLoginEnterGameHandlerFunctionType AsyncClientPlayerLoginEnterGameHandler;
@@ -80,7 +77,6 @@ struct AsyncClientPlayerLoginLeaveGameGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::loginpb::LoginEmptyResponse>> response_reader;
 };
 
-class ::loginpb::LeaveGameRequest;
 using AsyncClientPlayerLoginLeaveGameHandlerFunctionType =
     std::function<void(const ClientContext&, const ::loginpb::LoginEmptyResponse&)>;
 extern AsyncClientPlayerLoginLeaveGameHandlerFunctionType AsyncClientPlayerLoginLeaveGameHandler;
@@ -99,7 +95,6 @@ struct AsyncClientPlayerLoginDisconnectGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::loginpb::LoginEmptyResponse>> response_reader;
 };
 
-class ::loginpb::LoginNodeDisconnectRequest;
 using AsyncClientPlayerLoginDisconnectHandlerFunctionType =
     std::function<void(const ClientContext&, const ::loginpb::LoginEmptyResponse&)>;
 extern AsyncClientPlayerLoginDisconnectHandlerFunctionType AsyncClientPlayerLoginDisconnectHandler;
@@ -118,7 +113,6 @@ struct AsyncClientPlayerLoginRefreshTokenGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::loginpb::RefreshTokenResponse>> response_reader;
 };
 
-class ::loginpb::RefreshTokenRequest;
 using AsyncClientPlayerLoginRefreshTokenHandlerFunctionType =
     std::function<void(const ClientContext&, const ::loginpb::RefreshTokenResponse&)>;
 extern AsyncClientPlayerLoginRefreshTokenHandlerFunctionType AsyncClientPlayerLoginRefreshTokenHandler;
@@ -138,7 +132,6 @@ struct AsyncLoginPreGateAssignGateGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::loginpb::AssignGateResponse>> response_reader;
 };
 
-class ::loginpb::AssignGateRequest;
 using AsyncLoginPreGateAssignGateHandlerFunctionType =
     std::function<void(const ClientContext&, const ::loginpb::AssignGateResponse&)>;
 extern AsyncLoginPreGateAssignGateHandlerFunctionType AsyncLoginPreGateAssignGateHandler;
@@ -157,7 +150,6 @@ struct AsyncLoginPreGateQueryQueueStatusGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::loginpb::QueryQueueStatusResponse>> response_reader;
 };
 
-class ::loginpb::QueryQueueStatusRequest;
 using AsyncLoginPreGateQueryQueueStatusHandlerFunctionType =
     std::function<void(const ClientContext&, const ::loginpb::QueryQueueStatusResponse&)>;
 extern AsyncLoginPreGateQueryQueueStatusHandlerFunctionType AsyncLoginPreGateQueryQueueStatusHandler;
@@ -177,7 +169,6 @@ struct AsyncLoginAdminRemovePlayersFromAccountsGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::loginpb::RemovePlayersFromAccountsResponse>> response_reader;
 };
 
-class ::loginpb::RemovePlayersFromAccountsRequest;
 using AsyncLoginAdminRemovePlayersFromAccountsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::loginpb::RemovePlayersFromAccountsResponse&)>;
 extern AsyncLoginAdminRemovePlayersFromAccountsHandlerFunctionType AsyncLoginAdminRemovePlayersFromAccountsHandler;

@@ -23,7 +23,6 @@ struct AsyncSceneNodeGrpcCreateSceneGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::CreateSceneResponse>> response_reader;
 };
 
-class ::CreateSceneRequest;
 using AsyncSceneNodeGrpcCreateSceneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::CreateSceneResponse&)>;
 extern AsyncSceneNodeGrpcCreateSceneHandlerFunctionType AsyncSceneNodeGrpcCreateSceneHandler;
@@ -42,7 +41,6 @@ struct AsyncSceneNodeGrpcDestroySceneGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::DestroySceneRequest;
 using AsyncSceneNodeGrpcDestroySceneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncSceneNodeGrpcDestroySceneHandlerFunctionType AsyncSceneNodeGrpcDestroySceneHandler;
@@ -61,7 +59,6 @@ struct AsyncSceneNodeGrpcReleasePlayerGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::scene_node::ReleasePlayerRequest;
 using AsyncSceneNodeGrpcReleasePlayerHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncSceneNodeGrpcReleasePlayerHandlerFunctionType AsyncSceneNodeGrpcReleasePlayerHandler;
@@ -80,7 +77,6 @@ struct AsyncSceneNodeGrpcPrepareBattleGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::PrepareBattleResponse>> response_reader;
 };
 
-class ::PrepareBattleRequest;
 using AsyncSceneNodeGrpcPrepareBattleHandlerFunctionType =
     std::function<void(const ClientContext&, const ::PrepareBattleResponse&)>;
 extern AsyncSceneNodeGrpcPrepareBattleHandlerFunctionType AsyncSceneNodeGrpcPrepareBattleHandler;
@@ -99,7 +95,6 @@ struct AsyncSceneNodeGrpcCancelBattlePrepareGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::CancelBattlePrepareRequest;
 using AsyncSceneNodeGrpcCancelBattlePrepareHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncSceneNodeGrpcCancelBattlePrepareHandlerFunctionType AsyncSceneNodeGrpcCancelBattlePrepareHandler;
@@ -118,7 +113,6 @@ struct AsyncSceneNodeGrpcAssetDebitGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::AssetOpResponse>> response_reader;
 };
 
-class ::AssetOpRequest;
 using AsyncSceneNodeGrpcAssetDebitHandlerFunctionType =
     std::function<void(const ClientContext&, const ::AssetOpResponse&)>;
 extern AsyncSceneNodeGrpcAssetDebitHandlerFunctionType AsyncSceneNodeGrpcAssetDebitHandler;
@@ -137,7 +131,6 @@ struct AsyncSceneNodeGrpcAssetAbortDebitGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::AssetOpResponse>> response_reader;
 };
 
-class ::AssetOpRequest;
 using AsyncSceneNodeGrpcAssetAbortDebitHandlerFunctionType =
     std::function<void(const ClientContext&, const ::AssetOpResponse&)>;
 extern AsyncSceneNodeGrpcAssetAbortDebitHandlerFunctionType AsyncSceneNodeGrpcAssetAbortDebitHandler;
@@ -156,7 +149,6 @@ struct AsyncSceneNodeGrpcAssetCreditGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::AssetOpResponse>> response_reader;
 };
 
-class ::AssetOpRequest;
 using AsyncSceneNodeGrpcAssetCreditHandlerFunctionType =
     std::function<void(const ClientContext&, const ::AssetOpResponse&)>;
 extern AsyncSceneNodeGrpcAssetCreditHandlerFunctionType AsyncSceneNodeGrpcAssetCreditHandler;

@@ -63,8 +63,16 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command no-raw-pointer-setup
 下载及构建产物均在已忽略的构建目录，不安装系统软件、不修改全局 PATH。
 LLVM 官方静态库还需要 zlib、zstd、libxml2；入口同样按固定版本和 SHA256 准备它们，
 编译到 `build/deps/llvm-23.1.1-support`，已有完整产物则复用。DIA SDK 自动取自本机 Visual Studio。
-编译后自动验证合法成员通过、裸指针成员拒绝、解析失败拒绝三个行为。
+编译后自动验证合法成员、裸指针拒绝、解析失败拒绝和第三方源码排除边界。
 同时验证真实构建钩子的含空格路径、成功缓存和失败时清除旧缓存。
+
+第三方源码按完整目录排除：`third_party/` 与 `cpp/libs/engine/muduo_windows/`，
+包括被业务源码包含的库头文件。Windows 路径兼容大小写与两种分隔符；
+`third_party_adapter` 等近似目录仍检查。排除依据是成员声明所在源码，
+项目类中指向 `muduo::EventLoop`、`protobuf::Service` 等类型的裸指针仍会报告。
+独立工具与备用 clang-query 使用相同边界；检查规则更新会让成功缓存失效。
+工程检查还会保留 CMake `/external:I` 外部头目录，并拒绝 clang-query 的解析错误，
+即使它同时输出 `0 matches`、退出码为 0。
 
 - 预览路径与下载地址：增加 `-DryRun`。
 - 只准备开发库：增加 `-DownloadOnly`。

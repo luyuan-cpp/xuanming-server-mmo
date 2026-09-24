@@ -23,7 +23,6 @@ struct AsyncClientPlayerTeamCreateTeamGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::teampb::TeamResponse>> response_reader;
 };
 
-class ::teampb::CreateTeamRequest;
 using AsyncClientPlayerTeamCreateTeamHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 extern AsyncClientPlayerTeamCreateTeamHandlerFunctionType AsyncClientPlayerTeamCreateTeamHandler;
@@ -42,7 +41,6 @@ struct AsyncClientPlayerTeamGetMyTeamGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::teampb::TeamResponse>> response_reader;
 };
 
-class ::teampb::GetMyTeamRequest;
 using AsyncClientPlayerTeamGetMyTeamHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 extern AsyncClientPlayerTeamGetMyTeamHandlerFunctionType AsyncClientPlayerTeamGetMyTeamHandler;
@@ -61,7 +59,6 @@ struct AsyncClientPlayerTeamApplyJoinTeamGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::teampb::TeamResponse>> response_reader;
 };
 
-class ::teampb::ApplyJoinTeamRequest;
 using AsyncClientPlayerTeamApplyJoinTeamHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 extern AsyncClientPlayerTeamApplyJoinTeamHandlerFunctionType AsyncClientPlayerTeamApplyJoinTeamHandler;
@@ -80,7 +77,6 @@ struct AsyncClientPlayerTeamHandleApplicationGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::teampb::TeamResponse>> response_reader;
 };
 
-class ::teampb::HandleApplicationRequest;
 using AsyncClientPlayerTeamHandleApplicationHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 extern AsyncClientPlayerTeamHandleApplicationHandlerFunctionType AsyncClientPlayerTeamHandleApplicationHandler;
@@ -99,7 +95,6 @@ struct AsyncClientPlayerTeamInviteToTeamGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::teampb::TeamResponse>> response_reader;
 };
 
-class ::teampb::InviteToTeamRequest;
 using AsyncClientPlayerTeamInviteToTeamHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 extern AsyncClientPlayerTeamInviteToTeamHandlerFunctionType AsyncClientPlayerTeamInviteToTeamHandler;
@@ -118,7 +113,6 @@ struct AsyncClientPlayerTeamRespondInviteGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::teampb::TeamResponse>> response_reader;
 };
 
-class ::teampb::RespondInviteRequest;
 using AsyncClientPlayerTeamRespondInviteHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 extern AsyncClientPlayerTeamRespondInviteHandlerFunctionType AsyncClientPlayerTeamRespondInviteHandler;
@@ -137,7 +131,6 @@ struct AsyncClientPlayerTeamListMyInvitesGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::teampb::ListMyInvitesResponse>> response_reader;
 };
 
-class ::teampb::ListMyInvitesRequest;
 using AsyncClientPlayerTeamListMyInvitesHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::ListMyInvitesResponse&)>;
 extern AsyncClientPlayerTeamListMyInvitesHandlerFunctionType AsyncClientPlayerTeamListMyInvitesHandler;
@@ -156,7 +149,6 @@ struct AsyncClientPlayerTeamLeaveTeamGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::teampb::TeamResponse>> response_reader;
 };
 
-class ::teampb::LeaveTeamRequest;
 using AsyncClientPlayerTeamLeaveTeamHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 extern AsyncClientPlayerTeamLeaveTeamHandlerFunctionType AsyncClientPlayerTeamLeaveTeamHandler;
@@ -175,7 +167,6 @@ struct AsyncClientPlayerTeamKickMemberGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::teampb::TeamResponse>> response_reader;
 };
 
-class ::teampb::KickMemberRequest;
 using AsyncClientPlayerTeamKickMemberHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 extern AsyncClientPlayerTeamKickMemberHandlerFunctionType AsyncClientPlayerTeamKickMemberHandler;
@@ -194,7 +185,6 @@ struct AsyncClientPlayerTeamTransferLeaderGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::teampb::TeamResponse>> response_reader;
 };
 
-class ::teampb::TransferLeaderRequest;
 using AsyncClientPlayerTeamTransferLeaderHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 extern AsyncClientPlayerTeamTransferLeaderHandlerFunctionType AsyncClientPlayerTeamTransferLeaderHandler;
@@ -213,7 +203,6 @@ struct AsyncClientPlayerTeamDisbandTeamGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::teampb::TeamResponse>> response_reader;
 };
 
-class ::teampb::DisbandTeamRequest;
 using AsyncClientPlayerTeamDisbandTeamHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 extern AsyncClientPlayerTeamDisbandTeamHandlerFunctionType AsyncClientPlayerTeamDisbandTeamHandler;
@@ -232,7 +221,6 @@ struct AsyncClientPlayerTeamStartTeamMatchGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::teampb::TeamResponse>> response_reader;
 };
 
-class ::teampb::StartTeamMatchRequest;
 using AsyncClientPlayerTeamStartTeamMatchHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 extern AsyncClientPlayerTeamStartTeamMatchHandlerFunctionType AsyncClientPlayerTeamStartTeamMatchHandler;
@@ -251,7 +239,6 @@ struct AsyncClientPlayerTeamNotifyTeamSnapshotGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::teampb::TeamSnapshotS2C;
 using AsyncClientPlayerTeamNotifyTeamSnapshotHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncClientPlayerTeamNotifyTeamSnapshotHandlerFunctionType AsyncClientPlayerTeamNotifyTeamSnapshotHandler;
@@ -270,7 +257,6 @@ struct AsyncClientPlayerTeamNotifyTeamInviteGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::teampb::TeamInviteS2C;
 using AsyncClientPlayerTeamNotifyTeamInviteHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncClientPlayerTeamNotifyTeamInviteHandlerFunctionType AsyncClientPlayerTeamNotifyTeamInviteHandler;
@@ -289,7 +275,6 @@ struct AsyncClientPlayerTeamNotifyTeamEventGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::teampb::TeamEventS2C;
 using AsyncClientPlayerTeamNotifyTeamEventHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncClientPlayerTeamNotifyTeamEventHandlerFunctionType AsyncClientPlayerTeamNotifyTeamEventHandler;

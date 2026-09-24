@@ -23,7 +23,6 @@ struct AsyncClientPlayerChatSendChatGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::chatpb::SendChatResponse>> response_reader;
 };
 
-class ::chatpb::SendChatRequest;
 using AsyncClientPlayerChatSendChatHandlerFunctionType =
     std::function<void(const ClientContext&, const ::chatpb::SendChatResponse&)>;
 extern AsyncClientPlayerChatSendChatHandlerFunctionType AsyncClientPlayerChatSendChatHandler;
@@ -42,7 +41,6 @@ struct AsyncClientPlayerChatPullChatHistoryGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::chatpb::PullChatHistoryResponse>> response_reader;
 };
 
-class ::chatpb::PullChatHistoryRequest;
 using AsyncClientPlayerChatPullChatHistoryHandlerFunctionType =
     std::function<void(const ClientContext&, const ::chatpb::PullChatHistoryResponse&)>;
 extern AsyncClientPlayerChatPullChatHistoryHandlerFunctionType AsyncClientPlayerChatPullChatHistoryHandler;

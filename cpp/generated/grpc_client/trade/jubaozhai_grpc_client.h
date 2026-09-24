@@ -23,7 +23,6 @@ struct AsyncClientPlayerJubaozhaiBrowseListingsGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::trade::BrowseListingsResponse>> response_reader;
 };
 
-class ::trade::BrowseListingsRequest;
 using AsyncClientPlayerJubaozhaiBrowseListingsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::trade::BrowseListingsResponse&)>;
 extern AsyncClientPlayerJubaozhaiBrowseListingsHandlerFunctionType AsyncClientPlayerJubaozhaiBrowseListingsHandler;
@@ -42,7 +41,6 @@ struct AsyncClientPlayerJubaozhaiGetListingDetailGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::trade::GetListingDetailResponse>> response_reader;
 };
 
-class ::trade::GetListingDetailRequest;
 using AsyncClientPlayerJubaozhaiGetListingDetailHandlerFunctionType =
     std::function<void(const ClientContext&, const ::trade::GetListingDetailResponse&)>;
 extern AsyncClientPlayerJubaozhaiGetListingDetailHandlerFunctionType AsyncClientPlayerJubaozhaiGetListingDetailHandler;
@@ -61,7 +59,6 @@ struct AsyncClientPlayerJubaozhaiSetFavoriteGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::trade::SetFavoriteResponse>> response_reader;
 };
 
-class ::trade::SetFavoriteRequest;
 using AsyncClientPlayerJubaozhaiSetFavoriteHandlerFunctionType =
     std::function<void(const ClientContext&, const ::trade::SetFavoriteResponse&)>;
 extern AsyncClientPlayerJubaozhaiSetFavoriteHandlerFunctionType AsyncClientPlayerJubaozhaiSetFavoriteHandler;
@@ -80,7 +77,6 @@ struct AsyncClientPlayerJubaozhaiGetMyShelfGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::trade::GetMyShelfResponse>> response_reader;
 };
 
-class ::trade::GetMyShelfRequest;
 using AsyncClientPlayerJubaozhaiGetMyShelfHandlerFunctionType =
     std::function<void(const ClientContext&, const ::trade::GetMyShelfResponse&)>;
 extern AsyncClientPlayerJubaozhaiGetMyShelfHandlerFunctionType AsyncClientPlayerJubaozhaiGetMyShelfHandler;

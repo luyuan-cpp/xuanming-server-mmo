@@ -22,7 +22,6 @@ struct AsyncBattleNodeCreateBattleGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::CreateBattleResponse>> response_reader;
 };
 
-class ::CreateBattleRequest;
 using AsyncBattleNodeCreateBattleHandlerFunctionType =
     std::function<void(const ClientContext&, const ::CreateBattleResponse&)>;
 extern AsyncBattleNodeCreateBattleHandlerFunctionType AsyncBattleNodeCreateBattleHandler;
@@ -41,7 +40,6 @@ struct AsyncBattleNodeDestroyBattleGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::DestroyBattleRequest;
 using AsyncBattleNodeDestroyBattleHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncBattleNodeDestroyBattleHandlerFunctionType AsyncBattleNodeDestroyBattleHandler;
@@ -60,7 +58,6 @@ struct AsyncBattleNodeAddObserverGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::AddObserverResponse>> response_reader;
 };
 
-class ::AddObserverRequest;
 using AsyncBattleNodeAddObserverHandlerFunctionType =
     std::function<void(const ClientContext&, const ::AddObserverResponse&)>;
 extern AsyncBattleNodeAddObserverHandlerFunctionType AsyncBattleNodeAddObserverHandler;
@@ -79,7 +76,6 @@ struct AsyncBattleNodeRemoveObserverGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::RemoveObserverRequest;
 using AsyncBattleNodeRemoveObserverHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncBattleNodeRemoveObserverHandlerFunctionType AsyncBattleNodeRemoveObserverHandler;
@@ -98,7 +94,6 @@ struct AsyncBattleNodeIssueBattleTicketGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::IssueBattleTicketResponse>> response_reader;
 };
 
-class ::IssueBattleTicketRequest;
 using AsyncBattleNodeIssueBattleTicketHandlerFunctionType =
     std::function<void(const ClientContext&, const ::IssueBattleTicketResponse&)>;
 extern AsyncBattleNodeIssueBattleTicketHandlerFunctionType AsyncBattleNodeIssueBattleTicketHandler;

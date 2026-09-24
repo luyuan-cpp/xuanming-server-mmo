@@ -5617,3 +5617,10 @@ friend 移植会话(机器 A,`E:\work\xuanming-server-mmo`)写交接文档写到
 - **客户端**(`mmorpg-client`):登录期重定向先于 EnterGame 应答到达时沿用本次请求的角色,不再回选角(`GameClient.ResolveRedirectPlayerId`,未编译)。
 - **新增部署前提**:各 zone 的 player_locator 必须连同一个 Redis(`cross-zone-matchmaking.md` D12;否则访客从归属区重登一律回家);login 与 scene_manager 两侧同批上线(只上 login 会被旧版 scene_manager 牵引"等待落点")。§12.2 的 zrpc `Timeout` ≥ 8000、老号先跑 `merge_zone -backfill-home-zone` 仍有效。
 - **下一步**:Codex 按 §12.6.10 清单执行(含 runbook v2.4 场景 Z / R 与 11b 的 M3 探针);失败保留首个错误前后 20–30 行,不连续重试、不改断言。
+
+## 2026-09-23 第三方源码裸指针成员检查边界修复（Codex）
+
+- 复现内嵌 `cpp/libs/engine/muduo_windows` 头文件被业务源码包含时仍报库内部裸指针的问题。独立检查器、clang-query、MSBuild 工程与翻译单元过滤统一排除 `third_party/` 和该内嵌库目录，兼容 Windows 大小写、正反斜杠，保留完整目录边界；近似名称的自有目录和项目中指向库类型的裸指针仍拒绝。
+- 补齐规则文件与工具更新后的缓存失效，以及 CMake `/external:I` 第三方包含目录传递。补测发现 clang-query 在解析失败时可退出 0 并输出 `0 matches`，已统一识别诊断并以解析失败退出。
+- 检查器按 `/m:1 /nr:false` 串行编译通过；首次沙盒 FileTracker 权限失败后改用正常构建权限，未关闭检查。独立工具与 clang-query 各 10 个行为用例、2 个构建钩子用例、9 个真实 MSBuild 输入用例、3 个实际 MSBuild 目标路径用例通过；最小复现从退出 1 变为 0。测试摘要：`build/diagnostics/20260923-third-party-check/`。
+- 本次仅修检查器与检查范围，未修用户原日志中的自有类裸指针、`afk_comp.h` 类型缺失或 `cross_zone_test` 链接错误，也未执行整套 `game.sln` 构建、服务运行或 E2E。保留既有生成文件与子模块改动，未提交或推送。

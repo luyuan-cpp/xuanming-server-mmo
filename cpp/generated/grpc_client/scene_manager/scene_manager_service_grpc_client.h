@@ -23,7 +23,6 @@ struct AsyncSceneManagerCreateSceneGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::scene_manager::CreateSceneResponse>> response_reader;
 };
 
-class ::scene_manager::CreateSceneRequest;
 using AsyncSceneManagerCreateSceneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::scene_manager::CreateSceneResponse&)>;
 extern AsyncSceneManagerCreateSceneHandlerFunctionType AsyncSceneManagerCreateSceneHandler;
@@ -42,7 +41,6 @@ struct AsyncSceneManagerDestroySceneGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::scene_manager::DestroySceneRequest;
 using AsyncSceneManagerDestroySceneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncSceneManagerDestroySceneHandlerFunctionType AsyncSceneManagerDestroySceneHandler;
@@ -61,7 +59,6 @@ struct AsyncSceneManagerEnterSceneGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::scene_manager::EnterSceneResponse>> response_reader;
 };
 
-class ::scene_manager::EnterSceneRequest;
 using AsyncSceneManagerEnterSceneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::scene_manager::EnterSceneResponse&)>;
 extern AsyncSceneManagerEnterSceneHandlerFunctionType AsyncSceneManagerEnterSceneHandler;
@@ -80,7 +77,6 @@ struct AsyncSceneManagerLeaveSceneGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::scene_manager::LeaveSceneRequest;
 using AsyncSceneManagerLeaveSceneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncSceneManagerLeaveSceneHandlerFunctionType AsyncSceneManagerLeaveSceneHandler;

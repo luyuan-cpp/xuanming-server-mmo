@@ -1,2 +1,2 @@
 set output diag
-m fieldDecl(hasType(pointerType()), unless(isExpansionInSystemHeader()), unless(isImplicit()))
+m fieldDecl(hasType(pointerType()), unless(isExpansionInSystemHeader()), unless(isImplicit()), unless(isExpansionInFileMatching("(^|[/\\\\])(third_party|cpp[/\\\\]libs[/\\\\]engine[/\\\\]muduo_windows)([/\\\\]|$)", "IgnoreCase")))

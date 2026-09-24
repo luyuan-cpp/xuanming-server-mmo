@@ -23,7 +23,6 @@ struct AsyncClientRpcRouterForwardGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::MessageContent>> response_reader;
 };
 
-class ::client_rpc_router::ForwardRequest;
 using AsyncClientRpcRouterForwardHandlerFunctionType =
     std::function<void(const ClientContext&, const ::MessageContent&)>;
 extern AsyncClientRpcRouterForwardHandlerFunctionType AsyncClientRpcRouterForwardHandler;

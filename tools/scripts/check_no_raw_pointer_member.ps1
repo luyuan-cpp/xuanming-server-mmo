@@ -14,6 +14,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
+# 目录边界与独立检查器、clang-query 保持一致，不能按类型名放行业务成员。
+$thirdPartyPathPattern = '(^|[\\/])(third_party|cpp[\\/]libs[\\/]engine[\\/]muduo_windows)([\\/]|$)'
+if ($ProjectDir -match $thirdPartyPathPattern) {
+    Write-Host "[no-raw-pointer-member] SKIP third-party project '$ProjectName'."
+    exit 0
+}
 
 # ==================================================================
 # Phase 1 – locate a checker engine
@@ -55,8 +61,8 @@ if (-not (Test-Path -LiteralPath $ProjectDir -PathType Container)) {
 
 # 正式工程必须使用 MSBuild 计算后的翻译单元和配置。头文件随真实包含关系检查，
 # 不能把未参与构建的示例、其他平台源码和非独立头文件当成单独的翻译单元。
+. (Join-Path $PSScriptRoot 'lib/no_raw_pointer_project.ps1')
 if ($ProjectFile) {
-    . (Join-Path $PSScriptRoot 'lib/no_raw_pointer_project.ps1')
     exit (Invoke-ProjectRawPointerCheck)
 }
 
@@ -66,7 +72,8 @@ if ($ProjectFile) {
 $sourceFiles = @(
     Get-ChildItem -LiteralPath $ProjectDir -Recurse -File -Include *.h,*.hpp,*.hh,*.hxx,*.cpp,*.cc,*.cxx |
         Where-Object {
-            $_.FullName -notmatch "\\(third_party|generated|bin|x64|build|\.vs)\\"
+            $_.FullName -notmatch $thirdPartyPathPattern -and
+            $_.FullName -notmatch '[\\/](generated|bin|x64|build|\.vs)[\\/]'
         }
 )
 
@@ -80,6 +87,9 @@ $markerFile = Join-Path $ProjectDir ".no_raw_ptr_check_ok"
 if (Test-Path $markerFile) {
     $markerTime = (Get-Item $markerFile).LastWriteTime
     $changed = @($sourceFiles | Where-Object { $_.LastWriteTime -gt $markerTime })
+    $ruleInputs = @($PSCommandPath, (Join-Path $PSScriptRoot 'lib/no_raw_pointer_project.ps1'), $toolExe, $clangQuery, (Join-Path $repoRoot 'cpp/plugin/no_raw_ptr_matcher.cq'))
+    $changed += @($ruleInputs | Where-Object { $_ -and (Test-Path -LiteralPath $_) } |
+        Get-Item | Where-Object { $_.LastWriteTime -gt $markerTime })
     if (-not $changed) {
         Write-Host "[no-raw-pointer-member] PASSED (cached) for '$ProjectName'"
         exit 0
@@ -137,7 +147,6 @@ function Invoke-StandaloneTool {
         $lines = [System.Collections.Generic.List[string]]::new()
         foreach ($f in $sourceFiles) { $lines.Add($f.FullName) }
 
-        $lines.Add('--skip-path=third_party')
         $lines.Add('--skip-path=generated')
         $lines.Add('--skip-path=\build\')
         $lines.Add('--skip-path=\.vs\')
@@ -224,10 +233,14 @@ function Invoke-ClangQuery {
 
     Write-Host "[no-raw-pointer-member] Scanning $($mainCpp.Name) with clang-query ..."
     $argArray = $cqArgs.ToArray()
-    $output = & $clangQuery @argArray 2>$null | Out-String
+    $output = & $clangQuery @argArray 2>&1 | Out-String
+    if ((Get-ClangQueryExitCode -OutputText $output -ProcessExitCode $LASTEXITCODE) -eq 2) {
+        Write-Host $output
+        return 2
+    }
 
     # Parse diag output: collect unique file:line violations
-    $skipPatterns = @('third_party', 'generated', '\build\', '\.vs\')
+    $skipPatterns = @('generated', '\build\', '\.vs\')
     $seen = [System.Collections.Generic.HashSet[string]]::new()
     $violations = [System.Collections.Generic.List[string]]::new()
 
