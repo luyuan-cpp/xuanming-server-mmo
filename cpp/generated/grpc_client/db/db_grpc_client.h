@@ -22,7 +22,6 @@ struct AsyncdbTestGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::TestResponse>> response_reader;
 };
 
-class ::TestRequest;
 using AsyncdbTestHandlerFunctionType =
     std::function<void(const ClientContext&, const ::TestResponse&)>;
 extern AsyncdbTestHandlerFunctionType AsyncdbTestHandler;

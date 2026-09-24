@@ -23,7 +23,6 @@ struct AsyncTradeAdminSeedListingGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::trade::SeedListingResponse>> response_reader;
 };
 
-class ::trade::SeedListingRequest;
 using AsyncTradeAdminSeedListingHandlerFunctionType =
     std::function<void(const ClientContext&, const ::trade::SeedListingResponse&)>;
 extern AsyncTradeAdminSeedListingHandlerFunctionType AsyncTradeAdminSeedListingHandler;

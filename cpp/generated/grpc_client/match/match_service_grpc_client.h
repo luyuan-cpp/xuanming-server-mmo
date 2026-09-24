@@ -23,7 +23,6 @@ struct AsyncMatchServiceJoinQueueGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::match::JoinQueueResponse>> response_reader;
 };
 
-class ::match::JoinQueueRequest;
 using AsyncMatchServiceJoinQueueHandlerFunctionType =
     std::function<void(const ClientContext&, const ::match::JoinQueueResponse&)>;
 extern AsyncMatchServiceJoinQueueHandlerFunctionType AsyncMatchServiceJoinQueueHandler;
@@ -42,7 +41,6 @@ struct AsyncMatchServiceCancelQueueGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::match::CancelQueueRequest;
 using AsyncMatchServiceCancelQueueHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncMatchServiceCancelQueueHandlerFunctionType AsyncMatchServiceCancelQueueHandler;
@@ -61,7 +59,6 @@ struct AsyncMatchServiceGetQueueStatusGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::match::GetQueueStatusResponse>> response_reader;
 };
 
-class ::match::GetQueueStatusRequest;
 using AsyncMatchServiceGetQueueStatusHandlerFunctionType =
     std::function<void(const ClientContext&, const ::match::GetQueueStatusResponse&)>;
 extern AsyncMatchServiceGetQueueStatusHandlerFunctionType AsyncMatchServiceGetQueueStatusHandler;
@@ -80,7 +77,6 @@ struct AsyncMatchServiceChallengePlayerGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::match::ChallengePlayerResponse>> response_reader;
 };
 
-class ::match::ChallengePlayerRequest;
 using AsyncMatchServiceChallengePlayerHandlerFunctionType =
     std::function<void(const ClientContext&, const ::match::ChallengePlayerResponse&)>;
 extern AsyncMatchServiceChallengePlayerHandlerFunctionType AsyncMatchServiceChallengePlayerHandler;
@@ -99,7 +95,6 @@ struct AsyncMatchServiceRespondChallengeGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::match::RespondChallengeResponse>> response_reader;
 };
 
-class ::match::RespondChallengeRequest;
 using AsyncMatchServiceRespondChallengeHandlerFunctionType =
     std::function<void(const ClientContext&, const ::match::RespondChallengeResponse&)>;
 extern AsyncMatchServiceRespondChallengeHandlerFunctionType AsyncMatchServiceRespondChallengeHandler;
@@ -118,7 +113,6 @@ struct AsyncMatchServiceNotifyChallengeInviteGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::match::ChallengeInviteS2C;
 using AsyncMatchServiceNotifyChallengeInviteHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncMatchServiceNotifyChallengeInviteHandlerFunctionType AsyncMatchServiceNotifyChallengeInviteHandler;
@@ -137,7 +131,6 @@ struct AsyncMatchServiceNotifyChallengeResultGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::match::ChallengeResultS2C;
 using AsyncMatchServiceNotifyChallengeResultHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncMatchServiceNotifyChallengeResultHandlerFunctionType AsyncMatchServiceNotifyChallengeResultHandler;
@@ -156,7 +149,6 @@ struct AsyncMatchServiceWatchBattleGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::match::WatchBattleResponse>> response_reader;
 };
 
-class ::match::WatchBattleRequest;
 using AsyncMatchServiceWatchBattleHandlerFunctionType =
     std::function<void(const ClientContext&, const ::match::WatchBattleResponse&)>;
 extern AsyncMatchServiceWatchBattleHandlerFunctionType AsyncMatchServiceWatchBattleHandler;
@@ -175,7 +167,6 @@ struct AsyncMatchServiceRequestBattleTicketGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::RequestBattleTicketResponse>> response_reader;
 };
 
-class ::RequestBattleTicketRequest;
 using AsyncMatchServiceRequestBattleTicketHandlerFunctionType =
     std::function<void(const ClientContext&, const ::RequestBattleTicketResponse&)>;
 extern AsyncMatchServiceRequestBattleTicketHandlerFunctionType AsyncMatchServiceRequestBattleTicketHandler;
@@ -194,7 +185,6 @@ struct AsyncMatchServiceListWatchableBattlesGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::match::ListWatchableBattlesResponse>> response_reader;
 };
 
-class ::match::ListWatchableBattlesRequest;
 using AsyncMatchServiceListWatchableBattlesHandlerFunctionType =
     std::function<void(const ClientContext&, const ::match::ListWatchableBattlesResponse&)>;
 extern AsyncMatchServiceListWatchableBattlesHandlerFunctionType AsyncMatchServiceListWatchableBattlesHandler;

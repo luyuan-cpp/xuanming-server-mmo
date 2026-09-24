@@ -5630,3 +5630,10 @@ friend 移植会话(机器 A,`E:\work\xuanming-server-mmo`)写交接文档写到
 - 单区好友 `FRIEND_SMOKE_OK`:申请/推送/接受/双向列表与在线状态/拉黑/推荐过滤/非法下行接口拒绝。单区帮会 `GUILD_MGMT_OK` 与 `GUILD_SMOKE_OK`:建帮、审批、公告、成员管理、任免、踢人、转让、退出、解散及推送。日志分别为 `verification/friend-smoke-generation2.log` 与 `verification/guild-smoke-final.log`;测试关系和帮会已清理,独立测试角色保留。
 - 基础单人 PVE + 观战 `BATTLE_SMOKE_OK`,21 回合正常胜利与终局,退出 0;证据在 `verification/battle/`。现有 match/battle 已满足这条基础链,没有仅因程序日期旧而额外更新。
 - 验收范围限制:未测跨区、帮会捐献/兑换/活动或新版宠物/击杀任务结算。客户端 G 键可打开基础帮会界面;当前客户端仍没有好友协议/面板,C 的仙友会是现有聊天界面,不能把好友后端通过称为好友界面可手测。未手工提交或推送;运行期间仓库已有自动 WIP 保存。
+
+## 2026-09-23 第三方源码裸指针成员检查边界修复（Codex）
+
+- 复现内嵌 `cpp/libs/engine/muduo_windows` 头文件被业务源码包含时仍报库内部裸指针的问题。独立检查器、clang-query、MSBuild 工程与翻译单元过滤统一排除 `third_party/` 和该内嵌库目录，兼容 Windows 大小写、正反斜杠，保留完整目录边界；近似名称的自有目录和项目中指向库类型的裸指针仍拒绝。
+- 补齐规则文件与工具更新后的缓存失效，以及 CMake `/external:I` 第三方包含目录传递。补测发现 clang-query 在解析失败时可退出 0 并输出 `0 matches`，已统一识别诊断并以解析失败退出。
+- 检查器按 `/m:1 /nr:false` 串行编译通过；首次沙盒 FileTracker 权限失败后改用正常构建权限，未关闭检查。独立工具与 clang-query 各 10 个行为用例、2 个构建钩子用例、9 个真实 MSBuild 输入用例、3 个实际 MSBuild 目标路径用例通过；最小复现从退出 1 变为 0。测试摘要：`build/diagnostics/20260923-third-party-check/`。
+- 本次仅修检查器与检查范围，未修用户原日志中的自有类裸指针、`afk_comp.h` 类型缺失或 `cross_zone_test` 链接错误，也未执行整套 `game.sln` 构建、服务运行或 E2E。保留既有生成文件与子模块改动，未提交或推送。

@@ -22,7 +22,6 @@ struct AsyncBattleClientPlayerSubmitBattleActionGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::SubmitBattleActionResponse>> response_reader;
 };
 
-class ::SubmitBattleActionRequest;
 using AsyncBattleClientPlayerSubmitBattleActionHandlerFunctionType =
     std::function<void(const ClientContext&, const ::SubmitBattleActionResponse&)>;
 extern AsyncBattleClientPlayerSubmitBattleActionHandlerFunctionType AsyncBattleClientPlayerSubmitBattleActionHandler;
@@ -41,7 +40,6 @@ struct AsyncBattleClientPlayerGetBattleStateGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::BattleStateS2C>> response_reader;
 };
 
-class ::GetBattleStateRequest;
 using AsyncBattleClientPlayerGetBattleStateHandlerFunctionType =
     std::function<void(const ClientContext&, const ::BattleStateS2C&)>;
 extern AsyncBattleClientPlayerGetBattleStateHandlerFunctionType AsyncBattleClientPlayerGetBattleStateHandler;
@@ -60,7 +58,6 @@ struct AsyncBattleClientPlayerNotifyBattleStartGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::BattleStartS2C;
 using AsyncBattleClientPlayerNotifyBattleStartHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncBattleClientPlayerNotifyBattleStartHandlerFunctionType AsyncBattleClientPlayerNotifyBattleStartHandler;
@@ -79,7 +76,6 @@ struct AsyncBattleClientPlayerNotifyTurnResultGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::TurnResultS2C;
 using AsyncBattleClientPlayerNotifyTurnResultHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncBattleClientPlayerNotifyTurnResultHandlerFunctionType AsyncBattleClientPlayerNotifyTurnResultHandler;
@@ -98,7 +94,6 @@ struct AsyncBattleClientPlayerNotifyBattleEndGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::BattleEndS2C;
 using AsyncBattleClientPlayerNotifyBattleEndHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncBattleClientPlayerNotifyBattleEndHandlerFunctionType AsyncBattleClientPlayerNotifyBattleEndHandler;
@@ -117,7 +112,6 @@ struct AsyncBattleClientPlayerNotifyBattleReconnectGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::BattleReconnectS2C;
 using AsyncBattleClientPlayerNotifyBattleReconnectHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncBattleClientPlayerNotifyBattleReconnectHandlerFunctionType AsyncBattleClientPlayerNotifyBattleReconnectHandler;
@@ -136,7 +130,6 @@ struct AsyncBattleClientPlayerStopWatchBattleGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::StopWatchBattleResponse>> response_reader;
 };
 
-class ::StopWatchBattleRequest;
 using AsyncBattleClientPlayerStopWatchBattleHandlerFunctionType =
     std::function<void(const ClientContext&, const ::StopWatchBattleResponse&)>;
 extern AsyncBattleClientPlayerStopWatchBattleHandlerFunctionType AsyncBattleClientPlayerStopWatchBattleHandler;
@@ -155,7 +148,6 @@ struct AsyncBattleClientPlayerSetAutoBattleGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::SetAutoBattleResponse>> response_reader;
 };
 
-class ::SetAutoBattleRequest;
 using AsyncBattleClientPlayerSetAutoBattleHandlerFunctionType =
     std::function<void(const ClientContext&, const ::SetAutoBattleResponse&)>;
 extern AsyncBattleClientPlayerSetAutoBattleHandlerFunctionType AsyncBattleClientPlayerSetAutoBattleHandler;
@@ -174,7 +166,6 @@ struct AsyncBattleClientPlayerNotifySpectateStateGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::SpectateStateS2C;
 using AsyncBattleClientPlayerNotifySpectateStateHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncBattleClientPlayerNotifySpectateStateHandlerFunctionType AsyncBattleClientPlayerNotifySpectateStateHandler;
@@ -193,7 +184,6 @@ struct AsyncBattleClientPlayerNotifySpectateTurnResultGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::TurnResultS2C;
 using AsyncBattleClientPlayerNotifySpectateTurnResultHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncBattleClientPlayerNotifySpectateTurnResultHandlerFunctionType AsyncBattleClientPlayerNotifySpectateTurnResultHandler;
@@ -212,7 +202,6 @@ struct AsyncBattleClientPlayerNotifySpectateEndGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::SpectateEndS2C;
 using AsyncBattleClientPlayerNotifySpectateEndHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncBattleClientPlayerNotifySpectateEndHandlerFunctionType AsyncBattleClientPlayerNotifySpectateEndHandler;
@@ -231,7 +220,6 @@ struct AsyncBattleClientPlayerNotifyBattleAssignedGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::BattleAssignedS2C;
 using AsyncBattleClientPlayerNotifyBattleAssignedHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncBattleClientPlayerNotifyBattleAssignedHandlerFunctionType AsyncBattleClientPlayerNotifyBattleAssignedHandler;

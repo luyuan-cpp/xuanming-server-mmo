@@ -23,7 +23,6 @@ struct AsyncClientPlayerFriendAddFriendGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::friendpb::AddFriendResponse>> response_reader;
 };
 
-class ::friendpb::AddFriendRequest;
 using AsyncClientPlayerFriendAddFriendHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::AddFriendResponse&)>;
 extern AsyncClientPlayerFriendAddFriendHandlerFunctionType AsyncClientPlayerFriendAddFriendHandler;
@@ -42,7 +41,6 @@ struct AsyncClientPlayerFriendAcceptFriendGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::friendpb::AcceptFriendResponse>> response_reader;
 };
 
-class ::friendpb::AcceptFriendRequest;
 using AsyncClientPlayerFriendAcceptFriendHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::AcceptFriendResponse&)>;
 extern AsyncClientPlayerFriendAcceptFriendHandlerFunctionType AsyncClientPlayerFriendAcceptFriendHandler;
@@ -61,7 +59,6 @@ struct AsyncClientPlayerFriendRejectFriendGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::friendpb::RejectFriendResponse>> response_reader;
 };
 
-class ::friendpb::RejectFriendRequest;
 using AsyncClientPlayerFriendRejectFriendHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::RejectFriendResponse&)>;
 extern AsyncClientPlayerFriendRejectFriendHandlerFunctionType AsyncClientPlayerFriendRejectFriendHandler;
@@ -80,7 +77,6 @@ struct AsyncClientPlayerFriendRemoveFriendGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::friendpb::RemoveFriendResponse>> response_reader;
 };
 
-class ::friendpb::RemoveFriendRequest;
 using AsyncClientPlayerFriendRemoveFriendHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::RemoveFriendResponse&)>;
 extern AsyncClientPlayerFriendRemoveFriendHandlerFunctionType AsyncClientPlayerFriendRemoveFriendHandler;
@@ -99,7 +95,6 @@ struct AsyncClientPlayerFriendGetFriendListGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::friendpb::GetFriendListResponse>> response_reader;
 };
 
-class ::friendpb::GetFriendListRequest;
 using AsyncClientPlayerFriendGetFriendListHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::GetFriendListResponse&)>;
 extern AsyncClientPlayerFriendGetFriendListHandlerFunctionType AsyncClientPlayerFriendGetFriendListHandler;
@@ -118,7 +113,6 @@ struct AsyncClientPlayerFriendGetPendingRequestsGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::friendpb::GetPendingRequestsResponse>> response_reader;
 };
 
-class ::friendpb::GetPendingRequestsRequest;
 using AsyncClientPlayerFriendGetPendingRequestsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::GetPendingRequestsResponse&)>;
 extern AsyncClientPlayerFriendGetPendingRequestsHandlerFunctionType AsyncClientPlayerFriendGetPendingRequestsHandler;
@@ -137,7 +131,6 @@ struct AsyncClientPlayerFriendBlockGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::friendpb::BlockResponse>> response_reader;
 };
 
-class ::friendpb::BlockRequest;
 using AsyncClientPlayerFriendBlockHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::BlockResponse&)>;
 extern AsyncClientPlayerFriendBlockHandlerFunctionType AsyncClientPlayerFriendBlockHandler;
@@ -156,7 +149,6 @@ struct AsyncClientPlayerFriendUnblockGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::friendpb::UnblockResponse>> response_reader;
 };
 
-class ::friendpb::UnblockRequest;
 using AsyncClientPlayerFriendUnblockHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::UnblockResponse&)>;
 extern AsyncClientPlayerFriendUnblockHandlerFunctionType AsyncClientPlayerFriendUnblockHandler;
@@ -175,7 +167,6 @@ struct AsyncClientPlayerFriendListBlocksGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::friendpb::ListBlocksResponse>> response_reader;
 };
 
-class ::friendpb::ListBlocksRequest;
 using AsyncClientPlayerFriendListBlocksHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::ListBlocksResponse&)>;
 extern AsyncClientPlayerFriendListBlocksHandlerFunctionType AsyncClientPlayerFriendListBlocksHandler;
@@ -194,7 +185,6 @@ struct AsyncClientPlayerFriendRecommendFriendsGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::friendpb::RecommendFriendsResponse>> response_reader;
 };
 
-class ::friendpb::RecommendFriendsRequest;
 using AsyncClientPlayerFriendRecommendFriendsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::RecommendFriendsResponse&)>;
 extern AsyncClientPlayerFriendRecommendFriendsHandlerFunctionType AsyncClientPlayerFriendRecommendFriendsHandler;
@@ -213,7 +203,6 @@ struct AsyncClientPlayerFriendNotifyFriendEventGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::friendpb::FriendEventS2C;
 using AsyncClientPlayerFriendNotifyFriendEventHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncClientPlayerFriendNotifyFriendEventHandlerFunctionType AsyncClientPlayerFriendNotifyFriendEventHandler;

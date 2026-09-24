@@ -1,4 +1,12 @@
 # 由 check_no_raw_pointer_member.ps1 装入；不修改源码或编译工程。
+function Get-ClangQueryExitCode {
+    param([string]$OutputText, [int]$ProcessExitCode)
+    # clang-query 在头文件解析失败时也可能退出 0 并打印 0 matches，必须拒绝。
+    if ($ProcessExitCode -ne 0 -or $OutputText -match '(?m)(?:^|:\s+)(?:fatal )?error:') { return 2 }
+    if ($OutputText -match '"root" binds here') { return 1 }
+    return 0
+}
+
 function Invoke-ProjectRawPointerCheck {
     if (-not $MSBuildPath -or -not (Test-Path -LiteralPath $MSBuildPath)) {
         throw '工程检查需要当前构建所用的 MSBuildPath。'
@@ -7,7 +15,8 @@ function Invoke-ProjectRawPointerCheck {
     if ($LASTEXITCODE -ne 0) { throw '读取 MSBuild 编译参数失败，未执行检查。' }
     $metadata = ($metadataText -join "`n") | ConvertFrom-Json -AsHashtable
     $items = @($metadata.Items.ClCompile | Where-Object {
-        $_['ExcludedFromBuild'] -ne 'true' -and $_.FullPath -notmatch '\\(third_party|generated|bin|x64|build|\.vs)\\'
+        $_['ExcludedFromBuild'] -ne 'true' -and $_.FullPath -notmatch $thirdPartyPathPattern -and
+        $_.FullPath -notmatch '[\\/](generated|bin|x64|build|\.vs)[\\/]'
     })
     if (-not $items.Count) {
         Write-Host "[no-raw-pointer-member] No compiled translation units in '$ProjectName'."
@@ -22,7 +31,7 @@ function Invoke-ProjectRawPointerCheck {
         Sort-Object FullName | ForEach-Object { "$($_.FullName)|$($_.LastWriteTimeUtc.Ticks)|$($_.Length)" })
     $inputs += @(Get-ChildItem -LiteralPath $ProjectDir -Recurse -File -Include *.h,*.hpp,*.hh,*.hxx,*.cpp,*.cc,*.cxx |
         Sort-Object FullName | ForEach-Object { "$($_.FullName)|$($_.LastWriteTimeUtc.Ticks)|$($_.Length)" })
-    foreach ($path in @($PSCommandPath, (Join-Path $PSScriptRoot '../check_no_raw_pointer_member.ps1'), $toolExe, $clangQuery)) {
+    foreach ($path in @($PSCommandPath, (Join-Path $PSScriptRoot '../check_no_raw_pointer_member.ps1'), (Join-Path $repoRoot 'cpp/plugin/no_raw_ptr_matcher.cq'), $toolExe, $clangQuery)) {
         if ($path -and (Test-Path -LiteralPath $path)) {
             $item = Get-Item -LiteralPath $path
             $inputs += "$($item.FullName)|$($item.LastWriteTimeUtc.Ticks)|$($item.Length)"
@@ -55,8 +64,14 @@ function Invoke-ProjectRawPointerCheck {
         foreach ($include in ($item['AdditionalIncludeDirectories'] -split ';')) {
             if (-not $include) { continue }
             $absolute = [IO.Path]::GetFullPath($include, $ProjectDir)
-            if ($absolute -match '\\(third_party|generated)\\') { $args.Add("-isystem$absolute") }
+            if ($absolute -match $thirdPartyPathPattern -or $absolute -match '[\\/]generated([\\/]|$)') { $args.Add("-isystem$absolute") }
             else { $args.Add("-I$absolute") }
+        }
+        # CMake 的 SYSTEM 目录通过 /external:I 写入 AdditionalOptions，不能丢掉，
+        # 否则 LLVM 等第三方头在真正编译前就会被检查器误报为找不到。
+        foreach ($external in [regex]::Matches([string]$item['AdditionalOptions'], '(?:^|\s)[/-]external:I\s*(?:"([^"]+)"|(\S+))')) {
+            $include = if ($external.Groups[1].Success) { $external.Groups[1].Value } else { $external.Groups[2].Value }
+            $args.Add('-isystem' + [IO.Path]::GetFullPath($include, $ProjectDir))
         }
         foreach ($include in ($metadata.Properties.IncludePath -split ';')) {
             if ($include) { $args.Add("-isystem$include") }
@@ -77,7 +92,7 @@ function Invoke-ProjectRawPointerCheck {
             if ($useStandalone) {
                 $responsePath = [IO.Path]::GetTempFileName()
                 try {
-                    $arguments = @($group.Sources) + @('--skip-path=third_party', '--skip-path=generated', '--skip-path=\build\', '--skip-path=\.vs\')
+                    $arguments = @($group.Sources) + @('--skip-path=generated', '--skip-path=\build\', '--skip-path=\.vs\')
                     $arguments += @($group.Arguments | ForEach-Object { "--extra-arg=$_" })
                     $quoted = @($arguments | ForEach-Object { '"' + ($_ -replace '(\\*)"', '$1$1\"' -replace '(\\+)$', '$1$1') + '"' })
                     [IO.File]::WriteAllLines($responsePath, $quoted)
@@ -88,9 +103,8 @@ function Invoke-ProjectRawPointerCheck {
                 $query = Join-Path $repoRoot 'cpp/plugin/no_raw_ptr_matcher.cq'
                 $arguments = @('-f', $query) + @($group.Sources) + @('--', '-xc++', '-fsyntax-only', '-fms-extensions', '-fms-compatibility', '-Wno-everything') + @($group.Arguments)
                 $result = & $clangQuery @arguments 2>&1
-                $code = $LASTEXITCODE
+                $code = Get-ClangQueryExitCode -OutputText ($result -join "`n") -ProcessExitCode $LASTEXITCODE
                 $result | ForEach-Object { Write-Host $_ }
-                if (($result -join "`n") -match '"root" binds here') { $code = 1 }
             }
             if ($code -ne 0) {
                 Write-Host "[no-raw-pointer-member] FAILED for '$ProjectName' (exit $code)."

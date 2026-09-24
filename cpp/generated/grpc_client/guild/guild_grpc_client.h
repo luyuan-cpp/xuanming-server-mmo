@@ -23,7 +23,6 @@ struct AsyncGuildServiceCreateGuildGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::CreateGuildResponse>> response_reader;
 };
 
-class ::guildpb::CreateGuildRequest;
 using AsyncGuildServiceCreateGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::CreateGuildResponse&)>;
 extern AsyncGuildServiceCreateGuildHandlerFunctionType AsyncGuildServiceCreateGuildHandler;
@@ -42,7 +41,6 @@ struct AsyncGuildServiceGetGuildGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::GetGuildResponse>> response_reader;
 };
 
-class ::guildpb::GetGuildRequest;
 using AsyncGuildServiceGetGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::GetGuildResponse&)>;
 extern AsyncGuildServiceGetGuildHandlerFunctionType AsyncGuildServiceGetGuildHandler;
@@ -61,7 +59,6 @@ struct AsyncGuildServiceGetPlayerGuildGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::GetPlayerGuildResponse>> response_reader;
 };
 
-class ::guildpb::GetPlayerGuildRequest;
 using AsyncGuildServiceGetPlayerGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::GetPlayerGuildResponse&)>;
 extern AsyncGuildServiceGetPlayerGuildHandlerFunctionType AsyncGuildServiceGetPlayerGuildHandler;
@@ -80,7 +77,6 @@ struct AsyncGuildServiceLeaveGuildGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::LeaveGuildResponse>> response_reader;
 };
 
-class ::guildpb::LeaveGuildRequest;
 using AsyncGuildServiceLeaveGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::LeaveGuildResponse&)>;
 extern AsyncGuildServiceLeaveGuildHandlerFunctionType AsyncGuildServiceLeaveGuildHandler;
@@ -99,7 +95,6 @@ struct AsyncGuildServiceDisbandGuildGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::DisbandGuildResponse>> response_reader;
 };
 
-class ::guildpb::DisbandGuildRequest;
 using AsyncGuildServiceDisbandGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::DisbandGuildResponse&)>;
 extern AsyncGuildServiceDisbandGuildHandlerFunctionType AsyncGuildServiceDisbandGuildHandler;
@@ -118,7 +113,6 @@ struct AsyncGuildServiceSetAnnouncementGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::SetAnnouncementResponse>> response_reader;
 };
 
-class ::guildpb::SetAnnouncementRequest;
 using AsyncGuildServiceSetAnnouncementHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::SetAnnouncementResponse&)>;
 extern AsyncGuildServiceSetAnnouncementHandlerFunctionType AsyncGuildServiceSetAnnouncementHandler;
@@ -137,7 +131,6 @@ struct AsyncGuildServiceSetGuildMemberRoleGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::SetGuildMemberRoleResponse>> response_reader;
 };
 
-class ::guildpb::SetGuildMemberRoleRequest;
 using AsyncGuildServiceSetGuildMemberRoleHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::SetGuildMemberRoleResponse&)>;
 extern AsyncGuildServiceSetGuildMemberRoleHandlerFunctionType AsyncGuildServiceSetGuildMemberRoleHandler;
@@ -156,7 +149,6 @@ struct AsyncGuildServiceKickGuildMemberGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::KickGuildMemberResponse>> response_reader;
 };
 
-class ::guildpb::KickGuildMemberRequest;
 using AsyncGuildServiceKickGuildMemberHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::KickGuildMemberResponse&)>;
 extern AsyncGuildServiceKickGuildMemberHandlerFunctionType AsyncGuildServiceKickGuildMemberHandler;
@@ -175,7 +167,6 @@ struct AsyncGuildServiceTransferGuildLeaderGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::TransferGuildLeaderResponse>> response_reader;
 };
 
-class ::guildpb::TransferGuildLeaderRequest;
 using AsyncGuildServiceTransferGuildLeaderHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::TransferGuildLeaderResponse&)>;
 extern AsyncGuildServiceTransferGuildLeaderHandlerFunctionType AsyncGuildServiceTransferGuildLeaderHandler;
@@ -194,7 +185,6 @@ struct AsyncGuildServiceApplyJoinGuildGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::ApplyJoinGuildResponse>> response_reader;
 };
 
-class ::guildpb::ApplyJoinGuildRequest;
 using AsyncGuildServiceApplyJoinGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::ApplyJoinGuildResponse&)>;
 extern AsyncGuildServiceApplyJoinGuildHandlerFunctionType AsyncGuildServiceApplyJoinGuildHandler;
@@ -213,7 +203,6 @@ struct AsyncGuildServiceCancelGuildApplicationGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::CancelGuildApplicationResponse>> response_reader;
 };
 
-class ::guildpb::CancelGuildApplicationRequest;
 using AsyncGuildServiceCancelGuildApplicationHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::CancelGuildApplicationResponse&)>;
 extern AsyncGuildServiceCancelGuildApplicationHandlerFunctionType AsyncGuildServiceCancelGuildApplicationHandler;
@@ -232,7 +221,6 @@ struct AsyncGuildServiceListMyGuildApplicationsGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::ListMyGuildApplicationsResponse>> response_reader;
 };
 
-class ::guildpb::ListMyGuildApplicationsRequest;
 using AsyncGuildServiceListMyGuildApplicationsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::ListMyGuildApplicationsResponse&)>;
 extern AsyncGuildServiceListMyGuildApplicationsHandlerFunctionType AsyncGuildServiceListMyGuildApplicationsHandler;
@@ -251,7 +239,6 @@ struct AsyncGuildServiceListGuildApplicationsGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::ListGuildApplicationsResponse>> response_reader;
 };
 
-class ::guildpb::ListGuildApplicationsRequest;
 using AsyncGuildServiceListGuildApplicationsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::ListGuildApplicationsResponse&)>;
 extern AsyncGuildServiceListGuildApplicationsHandlerFunctionType AsyncGuildServiceListGuildApplicationsHandler;
@@ -270,7 +257,6 @@ struct AsyncGuildServiceReviewGuildApplicationGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::ReviewGuildApplicationResponse>> response_reader;
 };
 
-class ::guildpb::ReviewGuildApplicationRequest;
 using AsyncGuildServiceReviewGuildApplicationHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::ReviewGuildApplicationResponse&)>;
 extern AsyncGuildServiceReviewGuildApplicationHandlerFunctionType AsyncGuildServiceReviewGuildApplicationHandler;
@@ -289,7 +275,6 @@ struct AsyncGuildServiceNotifyGuildChangedGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
 };
 
-class ::guildpb::GuildChangedS2C;
 using AsyncGuildServiceNotifyGuildChangedHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 extern AsyncGuildServiceNotifyGuildChangedHandlerFunctionType AsyncGuildServiceNotifyGuildChangedHandler;
@@ -308,7 +293,6 @@ struct AsyncGuildServiceUpdateGuildScoreGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::UpdateGuildScoreResponse>> response_reader;
 };
 
-class ::guildpb::UpdateGuildScoreRequest;
 using AsyncGuildServiceUpdateGuildScoreHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::UpdateGuildScoreResponse&)>;
 extern AsyncGuildServiceUpdateGuildScoreHandlerFunctionType AsyncGuildServiceUpdateGuildScoreHandler;
@@ -327,7 +311,6 @@ struct AsyncGuildServiceGetGuildRankGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::GetGuildRankResponse>> response_reader;
 };
 
-class ::guildpb::GetGuildRankRequest;
 using AsyncGuildServiceGetGuildRankHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::GetGuildRankResponse&)>;
 extern AsyncGuildServiceGetGuildRankHandlerFunctionType AsyncGuildServiceGetGuildRankHandler;
@@ -346,7 +329,6 @@ struct AsyncGuildServiceGetGuildRankByGuildGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::GetGuildRankByGuildResponse>> response_reader;
 };
 
-class ::guildpb::GetGuildRankByGuildRequest;
 using AsyncGuildServiceGetGuildRankByGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::GetGuildRankByGuildResponse&)>;
 extern AsyncGuildServiceGetGuildRankByGuildHandlerFunctionType AsyncGuildServiceGetGuildRankByGuildHandler;
@@ -365,7 +347,6 @@ struct AsyncGuildServiceGetGuildDonateOptionsGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::GetGuildDonateOptionsResponse>> response_reader;
 };
 
-class ::guildpb::GetGuildDonateOptionsRequest;
 using AsyncGuildServiceGetGuildDonateOptionsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::GetGuildDonateOptionsResponse&)>;
 extern AsyncGuildServiceGetGuildDonateOptionsHandlerFunctionType AsyncGuildServiceGetGuildDonateOptionsHandler;
@@ -384,7 +365,6 @@ struct AsyncGuildServiceDonateToGuildGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::DonateToGuildResponse>> response_reader;
 };
 
-class ::guildpb::DonateToGuildRequest;
 using AsyncGuildServiceDonateToGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::DonateToGuildResponse&)>;
 extern AsyncGuildServiceDonateToGuildHandlerFunctionType AsyncGuildServiceDonateToGuildHandler;
@@ -403,7 +383,6 @@ struct AsyncGuildServiceUpgradeGuildGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::UpgradeGuildResponse>> response_reader;
 };
 
-class ::guildpb::UpgradeGuildRequest;
 using AsyncGuildServiceUpgradeGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::UpgradeGuildResponse&)>;
 extern AsyncGuildServiceUpgradeGuildHandlerFunctionType AsyncGuildServiceUpgradeGuildHandler;
@@ -422,7 +401,6 @@ struct AsyncGuildServiceGetGuildShopGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::GetGuildShopResponse>> response_reader;
 };
 
-class ::guildpb::GetGuildShopRequest;
 using AsyncGuildServiceGetGuildShopHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::GetGuildShopResponse&)>;
 extern AsyncGuildServiceGetGuildShopHandlerFunctionType AsyncGuildServiceGetGuildShopHandler;
@@ -441,7 +419,6 @@ struct AsyncGuildServiceBuyGuildShopGoodsGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::guildpb::BuyGuildShopGoodsResponse>> response_reader;
 };
 
-class ::guildpb::BuyGuildShopGoodsRequest;
 using AsyncGuildServiceBuyGuildShopGoodsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::BuyGuildShopGoodsResponse&)>;
 extern AsyncGuildServiceBuyGuildShopGoodsHandlerFunctionType AsyncGuildServiceBuyGuildShopGoodsHandler;

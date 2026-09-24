@@ -23,7 +23,6 @@ struct AsyncDataServiceLoadPlayerDataGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::LoadPlayerDataResponse>> response_reader;
 };
 
-class ::data_service::LoadPlayerDataRequest;
 using AsyncDataServiceLoadPlayerDataHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::LoadPlayerDataResponse&)>;
 extern AsyncDataServiceLoadPlayerDataHandlerFunctionType AsyncDataServiceLoadPlayerDataHandler;
@@ -42,7 +41,6 @@ struct AsyncDataServiceSavePlayerDataGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::SavePlayerDataResponse>> response_reader;
 };
 
-class ::data_service::SavePlayerDataRequest;
 using AsyncDataServiceSavePlayerDataHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::SavePlayerDataResponse&)>;
 extern AsyncDataServiceSavePlayerDataHandlerFunctionType AsyncDataServiceSavePlayerDataHandler;
@@ -61,7 +59,6 @@ struct AsyncDataServiceGetPlayerFieldGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::GetPlayerFieldResponse>> response_reader;
 };
 
-class ::data_service::GetPlayerFieldRequest;
 using AsyncDataServiceGetPlayerFieldHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::GetPlayerFieldResponse&)>;
 extern AsyncDataServiceGetPlayerFieldHandlerFunctionType AsyncDataServiceGetPlayerFieldHandler;
@@ -80,7 +77,6 @@ struct AsyncDataServiceSetPlayerFieldGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::SetPlayerFieldResponse>> response_reader;
 };
 
-class ::data_service::SetPlayerFieldRequest;
 using AsyncDataServiceSetPlayerFieldHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::SetPlayerFieldResponse&)>;
 extern AsyncDataServiceSetPlayerFieldHandlerFunctionType AsyncDataServiceSetPlayerFieldHandler;
@@ -99,7 +95,6 @@ struct AsyncDataServiceRegisterPlayerZoneGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::google::protobuf::Empty>> response_reader;
 };
 
-class ::data_service::RegisterPlayerZoneRequest;
 using AsyncDataServiceRegisterPlayerZoneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::google::protobuf::Empty&)>;
 extern AsyncDataServiceRegisterPlayerZoneHandlerFunctionType AsyncDataServiceRegisterPlayerZoneHandler;
@@ -118,7 +113,6 @@ struct AsyncDataServiceGetPlayerHomeZoneGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::GetPlayerHomeZoneResponse>> response_reader;
 };
 
-class ::data_service::GetPlayerHomeZoneRequest;
 using AsyncDataServiceGetPlayerHomeZoneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::GetPlayerHomeZoneResponse&)>;
 extern AsyncDataServiceGetPlayerHomeZoneHandlerFunctionType AsyncDataServiceGetPlayerHomeZoneHandler;
@@ -137,7 +131,6 @@ struct AsyncDataServiceBatchGetPlayerHomeZoneGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::BatchGetPlayerHomeZoneResponse>> response_reader;
 };
 
-class ::data_service::BatchGetPlayerHomeZoneRequest;
 using AsyncDataServiceBatchGetPlayerHomeZoneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::BatchGetPlayerHomeZoneResponse&)>;
 extern AsyncDataServiceBatchGetPlayerHomeZoneHandlerFunctionType AsyncDataServiceBatchGetPlayerHomeZoneHandler;
@@ -156,7 +149,6 @@ struct AsyncDataServiceRemapHomeZoneForMergeGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::RemapHomeZoneForMergeResponse>> response_reader;
 };
 
-class ::data_service::RemapHomeZoneForMergeRequest;
 using AsyncDataServiceRemapHomeZoneForMergeHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::RemapHomeZoneForMergeResponse&)>;
 extern AsyncDataServiceRemapHomeZoneForMergeHandlerFunctionType AsyncDataServiceRemapHomeZoneForMergeHandler;
@@ -175,7 +167,6 @@ struct AsyncDataServiceDeletePlayerDataGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::DeletePlayerDataResponse>> response_reader;
 };
 
-class ::data_service::DeletePlayerDataRequest;
 using AsyncDataServiceDeletePlayerDataHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::DeletePlayerDataResponse&)>;
 extern AsyncDataServiceDeletePlayerDataHandlerFunctionType AsyncDataServiceDeletePlayerDataHandler;
@@ -194,7 +185,6 @@ struct AsyncDataServiceCreatePlayerSnapshotGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::CreatePlayerSnapshotResponse>> response_reader;
 };
 
-class ::data_service::CreatePlayerSnapshotRequest;
 using AsyncDataServiceCreatePlayerSnapshotHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::CreatePlayerSnapshotResponse&)>;
 extern AsyncDataServiceCreatePlayerSnapshotHandlerFunctionType AsyncDataServiceCreatePlayerSnapshotHandler;
@@ -213,7 +203,6 @@ struct AsyncDataServiceListPlayerSnapshotsGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::ListPlayerSnapshotsResponse>> response_reader;
 };
 
-class ::data_service::ListPlayerSnapshotsRequest;
 using AsyncDataServiceListPlayerSnapshotsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::ListPlayerSnapshotsResponse&)>;
 extern AsyncDataServiceListPlayerSnapshotsHandlerFunctionType AsyncDataServiceListPlayerSnapshotsHandler;
@@ -232,7 +221,6 @@ struct AsyncDataServiceGetPlayerSnapshotDiffGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::GetPlayerSnapshotDiffResponse>> response_reader;
 };
 
-class ::data_service::GetPlayerSnapshotDiffRequest;
 using AsyncDataServiceGetPlayerSnapshotDiffHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::GetPlayerSnapshotDiffResponse&)>;
 extern AsyncDataServiceGetPlayerSnapshotDiffHandlerFunctionType AsyncDataServiceGetPlayerSnapshotDiffHandler;
@@ -251,7 +239,6 @@ struct AsyncDataServiceRollbackPlayerGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::RollbackPlayerResponse>> response_reader;
 };
 
-class ::data_service::RollbackPlayerRequest;
 using AsyncDataServiceRollbackPlayerHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::RollbackPlayerResponse&)>;
 extern AsyncDataServiceRollbackPlayerHandlerFunctionType AsyncDataServiceRollbackPlayerHandler;
@@ -270,7 +257,6 @@ struct AsyncDataServiceRollbackZoneGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::RollbackZoneResponse>> response_reader;
 };
 
-class ::data_service::RollbackZoneRequest;
 using AsyncDataServiceRollbackZoneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::RollbackZoneResponse&)>;
 extern AsyncDataServiceRollbackZoneHandlerFunctionType AsyncDataServiceRollbackZoneHandler;
@@ -289,7 +275,6 @@ struct AsyncDataServiceRollbackAllGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::RollbackAllResponse>> response_reader;
 };
 
-class ::data_service::RollbackAllRequest;
 using AsyncDataServiceRollbackAllHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::RollbackAllResponse&)>;
 extern AsyncDataServiceRollbackAllHandlerFunctionType AsyncDataServiceRollbackAllHandler;
@@ -308,7 +293,6 @@ struct AsyncDataServiceBatchRecallItemsGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::BatchRecallItemsResponse>> response_reader;
 };
 
-class ::data_service::BatchRecallItemsRequest;
 using AsyncDataServiceBatchRecallItemsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::BatchRecallItemsResponse&)>;
 extern AsyncDataServiceBatchRecallItemsHandlerFunctionType AsyncDataServiceBatchRecallItemsHandler;
@@ -327,7 +311,6 @@ struct AsyncDataServiceQueryTransactionLogGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::QueryTransactionLogResponse>> response_reader;
 };
 
-class ::data_service::QueryTransactionLogRequest;
 using AsyncDataServiceQueryTransactionLogHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::QueryTransactionLogResponse&)>;
 extern AsyncDataServiceQueryTransactionLogHandlerFunctionType AsyncDataServiceQueryTransactionLogHandler;
@@ -346,7 +329,6 @@ struct AsyncDataServiceCreateEventSnapshotGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::CreateEventSnapshotResponse>> response_reader;
 };
 
-class ::data_service::CreateEventSnapshotRequest;
 using AsyncDataServiceCreateEventSnapshotHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::CreateEventSnapshotResponse&)>;
 extern AsyncDataServiceCreateEventSnapshotHandlerFunctionType AsyncDataServiceCreateEventSnapshotHandler;
@@ -365,7 +347,6 @@ struct AsyncDataServiceAllocateIdSegmentGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::AllocateIdSegmentResponse>> response_reader;
 };
 
-class ::data_service::AllocateIdSegmentRequest;
 using AsyncDataServiceAllocateIdSegmentHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::AllocateIdSegmentResponse&)>;
 extern AsyncDataServiceAllocateIdSegmentHandlerFunctionType AsyncDataServiceAllocateIdSegmentHandler;
@@ -384,7 +365,6 @@ struct AsyncDataServiceReservePlayerNameGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::ReservePlayerNameResponse>> response_reader;
 };
 
-class ::data_service::ReservePlayerNameRequest;
 using AsyncDataServiceReservePlayerNameHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::ReservePlayerNameResponse&)>;
 extern AsyncDataServiceReservePlayerNameHandlerFunctionType AsyncDataServiceReservePlayerNameHandler;
@@ -403,7 +383,6 @@ struct AsyncDataServiceReleasePlayerNameGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::google::protobuf::Empty>> response_reader;
 };
 
-class ::data_service::ReleasePlayerNameRequest;
 using AsyncDataServiceReleasePlayerNameHandlerFunctionType =
     std::function<void(const ClientContext&, const ::google::protobuf::Empty&)>;
 extern AsyncDataServiceReleasePlayerNameHandlerFunctionType AsyncDataServiceReleasePlayerNameHandler;
@@ -422,7 +401,6 @@ struct AsyncDataServiceBatchGetPlayerNameGrpcClient {
     std::unique_ptr<ClientAsyncResponseReader<::data_service::BatchGetPlayerNameResponse>> response_reader;
 };
 
-class ::data_service::BatchGetPlayerNameRequest;
 using AsyncDataServiceBatchGetPlayerNameHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::BatchGetPlayerNameResponse&)>;
 extern AsyncDataServiceBatchGetPlayerNameHandlerFunctionType AsyncDataServiceBatchGetPlayerNameHandler;
