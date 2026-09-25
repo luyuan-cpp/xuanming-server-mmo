@@ -225,3 +225,35 @@ pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -UseBin
 C++ 串行编译、C++ 单测(`run_cpp_tests.ps1`)、robot `battle_smoke`、客户端 `gen_proto` / 编译体检。
 因此:**本轮代码从未被编译器看过**。§7 的第 3–6 步原样保留,谁要跑照着跑即可。
 风险集中在三处 —— 新写的 C++ 是否编得过、18 个新单测是否真的绿、掉落与用药的端到端是否跑通。
+
+## 9. 2026-09-25 整合复核(仍未编译)
+
+本轮改动落 `main` 一周后复核一次:期间组队、跨区传送三阶段、帮会二期、聚宝斋资产通道都合并了,
+而它们几条线都点名要动 `player_battle.cpp`。结论:**本任务的产出全部完好,与这周的并行改动无冲突**。
+
+| 复核项 | 结果 |
+|---|---|
+| 16 项成果(配表 / 生成物 / 引擎 / 节点 / 背包 / scene / 闸 / 测试 / 文档) | 全部在 `HEAD` 内,无被合并冲掉的 |
+| 六处局中闸 | `skill.cpp` / `buff.cpp` / `movement.cpp` / `player_movement_handler.cpp` / `player_feature_snapshot.cpp` / `player_rollback_handler.cpp` 逐个确认仍在 |
+| `ApplySettlementItems` 与 `IsBattleUsableItem` | 仍在,调用点仍挂在结算 lambda 内 |
+| `PlayerLifecycleSystem::IsCrossZoneFrozen` | 签名未变,冻结期整笔延后的闸仍成立(跨区传送三阶段没有改它的语义) |
+| `ApplySettlementToEntity` / 应用缓存 | 形状未变,三个调用点仍是 `if (!Apply...) return;` |
+| `e8b2bfd04`"用 rider 手动删除不需要的头文件" | 删的都是标准库头(`<cmath>` / `<cstdint>` / `<cstddef>` / `<cstdlib>`)。逐个核对:`turn_battle_engine.cpp` 仍留着 `<algorithm>`(我的 `SelfItems` 用 `std::sort`、`ExecuteItem` 用 `std::min`,都还有头);我新增的项目头(`item_table.pb.h` / `battle_comp.pb.h`)一个没被删。**本任务不受影响** |
+
+### 9.1 新出现的背包扣减入口:`BagService::RemoveItemsByGuid`
+
+D48 立的不变量是"闸只放入口层,日后新增的扣减入口必须各自加 `InBattle` 闸"。这一周资产通道
+(聚宝斋 / 帮会 B4)新增了 `BagService::RemoveItemsByGuid`(按 guid 批量扣,`TX_AUCTION_SELL`)。
+
+**现在不用动**:它只有单测调用方(`cpp/tests/bag_test/bag_remove_by_guid_test.cpp`),生产零调用点。
+
+**但寄售上架真正接线的那一刻必须补闸** —— 否则玩家可以在战斗中把身上的战斗消耗品挂上架,
+结算按账本扣除时就变成"不足按 0",那几瓶药等于白喝(`player_battle.cpp` 的夹紧 WARN 会开始
+常态化刷屏,那就是信号)。闸加在寄售的**客户端入口 handler**,不要加进 `BagService`
+(理由见 D48:结算入账时 `InBattleComp` 还挂着,下沉会把结算自己挡住)。
+
+### 9.2 仍然没做
+
+编译、18 个新单测、`battle_smoke` —— 用户 09-18 明确跳过,至今未做。**这批代码从落码到现在
+从未被编译器看过**,而期间引擎、节点、背包、scene 四个文件都被别的会话改过(含一次 IDE 批量
+删头文件)。真要验证,§7 第 3–6 步照跑;风险排序:能不能编过 > 单测是否真绿 > 端到端是否跑通。
