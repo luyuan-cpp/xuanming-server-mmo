@@ -508,7 +508,9 @@ function Apply-OpsProfileDefaults {
 			# battle 是**不分 zone 的全局池**,只部署一份:1 副本时它挂掉 = 全服回合制战斗全停
 			# (在打的战斗全部作废,且玩家身上的 battle:lock 要等 InBattleComp.deadline_ms 到期才由
 			# scene reaper 解冻)。gate / scene 有下限而它没有,是这份门禁一直漏掉的一项。
-			if ($BattleReplicas -lt 2) { $script:BattleReplicas = 2 }
+			# 0 不抬:参数区约定 0 = 不装配、不删除已部署的池(例如 battle 由别的 infra 统一管),
+			# 抬成 2 会违背调用方的显式决定,还会连带要求 battle 票据密钥。
+			if ($BattleReplicas -gt 0 -and $BattleReplicas -lt 2) { $script:BattleReplicas = 2 }
 		}
 		"bare-metal" {
 			$script:GateServiceType = "NodePort"
@@ -518,7 +520,8 @@ function Apply-OpsProfileDefaults {
 			# battle 是**不分 zone 的全局池**,只部署一份:1 副本时它挂掉 = 全服回合制战斗全停
 			# (在打的战斗全部作废,且玩家身上的 battle:lock 要等 InBattleComp.deadline_ms 到期才由
 			# scene reaper 解冻)。gate / scene 有下限而它没有,是这份门禁一直漏掉的一项。
-			if ($BattleReplicas -lt 2) { $script:BattleReplicas = 2 }
+			# 0 不抬,理由同 managed-cloud。
+			if ($BattleReplicas -gt 0 -and $BattleReplicas -lt 2) { $script:BattleReplicas = 2 }
 		}
 		default {
 		}
@@ -935,22 +938,74 @@ function New-NodeDeploymentYaml {
 	}
 	# node-logs emptyDir 会遮住镜像目录；Node 构造器立即打开 logs/cpp_nodes/<role>，先建父目录。
 	$grpcEnvBlock = $extraEnvLines -join "`n"
-	$battlePortAndProbes = ''
-	if ($NodeName -eq 'battle') {
+	# 端口与探针按角色拼在 ports 列表之后(推导与证据见 PROGRESS「2026-09-25 C++ 节点就绪探针」)。
+	# 三个角色共同的约束:
+	#  - C++ 尚未注册 grpc.health.v1,只能用 tcpSocket 探**实际在监听**的口;端口一律写数字,不写端口名。
+	#  - 两个口都在 etcd 注册完成之后才 listen,所以 tcpSocket 通 = 「已发布进 etcd」,**不等于**依赖门
+	#    (gate 等 Login / Scene,scene 等 SceneManager 与号段首段)已过。readiness 只能表达前者。
+	#  - 不加 livenessProbe:tcpSocket 看不出 EventLoop 卡死(内核照样完成握手),加了只多一条杀容器的路。
+	#  - startupProbe 会杀容器,预算必须越过 etcd 租约:同 Pod 重启时 POD_IP 不变,旧进程的注册要等
+	#    NodeTTLSeconds(180s,bin/etc/base_deploy_config.yaml)到期才消失,在此之前新进程命中
+	#    node_allocator.cpp「Preset RPC port ... already registered」一直退避重试、不开监听。
+	#  - readiness 失败不杀容器,只影响滚动更新节奏与 -WaitReady:login 从 etcd 取 POD_IP:18000 原样下发给
+	#    客户端,不经过任何 Service,所以 gate NotReady 不会把玩家挡在门外。
+	# 现状(加之前)是容器一启动就 Ready:滚动更新时新 Pod 还没注册进 etcd,旧 Pod 就可能开始收 SIGTERM。
+	$nodePortsAndProbes = ''
+	if ($NodeName -eq 'gate') {
+		# gate 只有一个监听口 $RpcPort:玩家连接与节点 RPC 共用 Node 自带的那个 TcpServer
+		# (gate/main.cpp 在 SetAfterStart 里换掉它的连接 / 消息回调)。gate 不注册任何 gRPC 服务,
+		# **RpcPort+30000 上没有监听** —— 照抄 battle / scene 去探那个口,探针会恒失败。
+		# 不加 startupProbe:要加的话预算不少于 300s(180s 租约 + 正常启动),给不准就会在同 Pod 重启时多杀几轮。
+		# 探测开销:每次探测在 gate 上建一个未验证会话、断开即删、不通知 login,muduo 多打两行 INFO,可忽略。
+		$nodePortsAndProbes = @"
+		  readinessProbe:
+			tcpSocket:
+			  port: $RpcPort
+			periodSeconds: 5
+			failureThreshold: 3
+"@
+	}
+	elseif ($SceneNodeType -ge 0) {
+		# scene(Deployment 模式;只有 scene 的调用方传 SceneNodeType)。Agones 模式走 New-SceneFleetYaml,
+		# 那边**不加**任何 K8s 探针:Agones 给 GameServer Pod 写死 restartPolicy: Never,会杀容器的探针
+		# 等于销毁整个 GameServer,就绪交给 Agones SDK 的 Ready / Health。
+		# C++ 非 gate TCP 合法区间为 20000..35535,gRPC 固定派生为 TCP+30000(node_allocator.cpp kGrpcPortOffset)。
+		if ($RpcPort -lt 20000 -or $RpcPort -gt 35535) {
+			throw 'scene RPC_PORT 必须在 20000..35535，保证派生 gRPC 端口不越界。'
+		}
+		$sceneGrpcPort = $RpcPort + 30000
+		# readiness 探 gRPC 口:它依赖 main.cpp 的 RegisterGrpcService,多确认一次 gRPC server 起来了
+		# (与 battle 同形)。gRPC 口此前没有 containerPort 声明,这里一并补上。
+		# 停机时 before-shutdown hook 跑完才关 gRPC,而 Pod 进入终止状态时 K8s 本来就把它摘成 NotReady,没有副作用。
+		# 不加 startupProbe:要加的话预算不少于 600s —— 同 Pod 重启要等 180s 租约,listen 前还要同步加载配表与
+		# 导航数据,这段耗时在 K8s 里没有测过。
+		$nodePortsAndProbes = @"
+			- containerPort: $sceneGrpcPort
+			  name: grpc
+		  readinessProbe:
+			tcpSocket:
+			  port: $sceneGrpcPort
+			periodSeconds: 5
+			failureThreshold: 3
+"@
+	}
+	elseif ($NodeName -eq 'battle') {
 		# C++ 非 gate TCP 合法区间为 20000..35535，gRPC 固定派生为 TCP+30000。
 		if ($RpcPort -lt 20000 -or $RpcPort -gt 35535) {
 			throw 'battle RPC_PORT 必须在 20000..35535，保证派生 gRPC 端口不越界。'
 		}
 		$battleGrpcPort = $RpcPort + 30000
 		# C++ 尚未注册 grpc.health.v1；用实际监听端口，不能套 Go 的 gRPC health 探针。
-		$battlePortAndProbes = @"
+		# startup 预算 2s × 150 = 300s:原来的 2s × 90 = 180s 恰好等于 etcd 租约,同 Pod 重启撞上旧注册时
+		# 正处在临界点,会被多杀几轮进 CrashLoopBackOff(见上方共同约束)。
+		$nodePortsAndProbes = @"
 			- containerPort: $battleGrpcPort
 			  name: grpc
 		  startupProbe:
 			tcpSocket:
 			  port: $RpcPort
 			periodSeconds: 2
-			failureThreshold: 90
+			failureThreshold: 150
 		  readinessProbe:
 			tcpSocket:
 			  port: $battleGrpcPort
@@ -1002,7 +1057,7 @@ $grpcEnvBlock
 		  ports:
 			- containerPort: $RpcPort
 			  name: rpc
-$battlePortAndProbes
+$nodePortsAndProbes
 	  volumes:
 		- name: node-config
 		  configMap:

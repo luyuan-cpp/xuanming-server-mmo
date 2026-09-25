@@ -5637,3 +5637,38 @@ friend 移植会话(机器 A,`E:\work\xuanming-server-mmo`)写交接文档写到
 - 补齐规则文件与工具更新后的缓存失效，以及 CMake `/external:I` 第三方包含目录传递。补测发现 clang-query 在解析失败时可退出 0 并输出 `0 matches`，已统一识别诊断并以解析失败退出。
 - 检查器按 `/m:1 /nr:false` 串行编译通过；首次沙盒 FileTracker 权限失败后改用正常构建权限，未关闭检查。独立工具与 clang-query 各 10 个行为用例、2 个构建钩子用例、9 个真实 MSBuild 输入用例、3 个实际 MSBuild 目标路径用例通过；最小复现从退出 1 变为 0。测试摘要：`build/diagnostics/20260923-third-party-check/`。
 - 本次仅修检查器与检查范围，未修用户原日志中的自有类裸指针、`afk_comp.h` 类型缺失或 `cross_zone_test` 链接错误，也未执行整套 `game.sln` 构建、服务运行或 E2E。保留既有生成文件与子模块改动，未提交或推送。
+
+## 2026-09-25 C++ 节点就绪探针 + 更正 09-19 交接单的错误论断(Claude,未跑契约测试、未上集群)
+
+**先更正**:09-19「单点加固交接」B.2 写的「gate 同时监听内部 RPC 端口与面向玩家的 TCP 端口,探错端口会让 zone 入口 Pod 永远不就绪,比没有探针更糟」**两处都是错的**,以本条为准:
+
+- gate **只有一个监听口 18000**。它没有自建玩家用的 TcpServer,而是在 `SetAfterStart` 里取 Node 自带的那一个、换掉连接 / 消息回调(`cpp/nodes/gate/main.cpp:312-346`),玩家连接与节点 RPC 共用;gate 不注册任何 gRPC 服务,**48000(18000+30000)上没有监听**。`gate-entry` Service 的 `targetPort: rpc` 也指向 18000。
+- readinessProbe 失败**不会**把玩家挡在门外:login 从 etcd 取 gate 的 `POD_IP:18000` 原样下发给客户端(`go/login/internal/svc/servicecontext.go:283-303`),不经过任何 Service,仓库里也没有代码消费 `gate-entry`。readiness 只影响滚动更新节奏与 `-WaitReady`。真正会断流的只有**会杀容器**的 startupProbe / livenessProbe。
+
+### 本次改动(`tools/scripts/k8s_deploy.ps1` 的 `New-NodeDeploymentYaml` + 契约测试)
+
+| 角色 | 加了什么 | 刻意没加 |
+|---|---|---|
+| gate | readinessProbe `tcpSocket 18000`,5s × 3 | liveness、startup;不探 48000 |
+| scene(Deployment 模式) | `containerPort 50000 name: grpc` + readinessProbe `tcpSocket 50000`,5s × 3 | liveness、startup |
+| scene(Agones Fleet) | **不动** | 任何 K8s 探针:GameServer Pod 是 `restartPolicy: Never`,杀容器 = 销毁 GameServer |
+| battle | startupProbe 预算 2s × 90 = 180s → **2s × 150 = 300s** | — |
+
+依据(推导全文在模板注释里):
+
+- 两个口都在 etcd 注册完成**之后**才 listen,所以 tcpSocket 通 = 「已发布进 etcd」,**不等于**依赖门已过(gate 等 Login / Scene,scene 等 SceneManager 与号段首段)。它比现状(容器一启动就 Ready,滚动时新 Pod 还没注册、旧 Pod 就可能收 SIGTERM)严格更好,但不是完整的「能服务」判据;要后者得在 C++ 里注册 `grpc.health.v1`。
+- 不加 liveness:tcpSocket 看不出 EventLoop 卡死(内核照样完成握手),加了只多一条杀容器的路。
+- 会杀容器的 startupProbe 预算必须越过 etcd 租约 `NodeTTLSeconds: 180`(`bin/etc/base_deploy_config.yaml:6`):同 Pod 重启时 POD_IP 不变,旧注册没过期前新进程命中 `node_allocator.cpp:230-236`「Preset RPC port ... already registered」一直退避重试、不开监听。battle 原来的 180s **恰好等于**租约,正处在临界点,所以抬到 300s。gate / scene 的 startup 没有启动耗时实测数据(gate 要 ≥300s,scene 要 ≥600s,scene listen 前还要同步加载配表与导航数据),先不加。
+
+### 顺手修掉的两处我自己 09-19 引入的问题
+
+1. **契约测试会变红**:`17c8d4261` 把 Java gateway 三个探针改走 `/actuator/health/readiness` / `/liveness` 分组,但 `k8s_deploy_contract.tests.ps1` 里「Java gateway 冷启动…」用例仍按旧路径 `/actuator/health\s+port` 匹配,三条断言必失败。已改为新路径,并补一条「不得再用聚合的 `/actuator/health`」反向断言。
+2. **`-BattleReplicas 0` 被吞**:`a5ca66851` 在 managed-cloud / bare-metal 两档写的 `if ($BattleReplicas -lt 2)` 会把显式的 0 抬成 2。参数区约定 0 = 不装配、不删除已部署的池,抬成 2 既违背调用方决定,又会连带要求 battle 票据密钥(`MMORPG_BATTLE_TOKEN_SECRET`)。改为 `-gt 0 -and -lt 2`,只把 1 抬到 2。
+
+### 核对与未验证项
+
+- 已做(静态):PowerShell 解析器对两个文件 0 错误;把三个角色的探针块按 here-string 规则替换、制表符换 4 空格后 `yaml.safe_load`,容器的 ports / probes 结构与预期一致;新增与改动的契约正则逐条对着渲染结果和 `gateway.yaml` 核过(正向命中、反向不误伤;日志 sidecar 与 Fleet 模板里没有任何 probe 关键字)。
+- **未做**(交 Codex,AGENTS.md §10.1):
+  1. `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(工作目录为仓库根),期望全部 PASS;重点看新增的「gate 就绪探针…」「scene(Deployment)就绪探针…」两条,以及 battle 端口用例、Java gateway 冷启动用例。
+  2. 本机 kind 上 `zone-up` 一次(Deployment 模式),`kubectl -n <zone> get pod -l app=gate` / `-l app=scene` 应在 C++ 节点注册进 etcd 后变 `1/1 Ready`;再 `kubectl rollout restart deployment/gate` 看滚动能正常推进。若 scene 一直 NotReady,先查 50000 是否在 POD_IP 上 listen(`RegisterGrpcService` 是否仍在 `cpp/nodes/scene/main.cpp:92`)。
+- 仍然缺的:依赖门语义的就绪(需要 C++ 注册 `grpc.health.v1`);gate / scene 的 startupProbe(需要先在 kind 上量一次启动日志里 `RPC server listen addr=` 的耗时);Agones 模式下 `health.initialDelaySeconds` 默认 30 是否够(scene 要 etcd 注册 + StartRpcServer 完成后才开始 Ready / Health,未测)。
