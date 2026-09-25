@@ -889,12 +889,13 @@ type TeamMemberView struct {
 	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`                       // 仓库暂无昵称,恒为 ""(§G.2)
 	Level         uint32                 `protobuf:"varint,3,opt,name=level,proto3" json:"level,omitempty"`                    // 尽力而为,0 = 未知
 	ClassId       uint32                 `protobuf:"varint,4,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"` // 尽力而为,0 = 未知
-	Gender        uint32                 `protobuf:"varint,5,opt,name=gender,proto3" json:"gender,omitempty"`                  // v1 恒 0(性别只在账号 blob);客户端头像因此不可推导,见 §H.4
+	Gender        uint32                 `protobuf:"varint,5,opt,name=gender,proto3" json:"gender,omitempty"`                  // 从玩家存档资料读取；旧存档未补齐时为 0。
 	IsLeader      bool                   `protobuf:"varint,6,opt,name=is_leader,json=isLeader,proto3" json:"is_leader,omitempty"`
-	IsOnline      bool                   `protobuf:"varint,7,opt,name=is_online,json=isOnline,proto3" json:"is_online,omitempty"` // 读时由 player:session 算,仅 SESSION_STATE_ONLINE 为 true
-	InBattle      bool                   `protobuf:"varint,8,opt,name=in_battle,json=inBattle,proto3" json:"in_battle,omitempty"` // 读时由 battle:lock 算(咨询性)
-	ZoneId        uint32                 `protobuf:"varint,9,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`       // 玩家 home zone
-	JoinSeq       uint32                 `protobuf:"varint,10,opt,name=join_seq,json=joinSeq,proto3" json:"join_seq,omitempty"`   // 显式顺序(§11.6);members 已按它升序,但客户端不得依赖下标
+	IsOnline      bool                   `protobuf:"varint,7,opt,name=is_online,json=isOnline,proto3" json:"is_online,omitempty"`             // 读时由 player:session 算,仅 SESSION_STATE_ONLINE 为 true
+	InBattle      bool                   `protobuf:"varint,8,opt,name=in_battle,json=inBattle,proto3" json:"in_battle,omitempty"`             // 读时由 battle:lock 算(咨询性)
+	ZoneId        uint32                 `protobuf:"varint,9,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                   // 玩家 home zone
+	JoinSeq       uint32                 `protobuf:"varint,10,opt,name=join_seq,json=joinSeq,proto3" json:"join_seq,omitempty"`               // 显式顺序(§11.6);members 已按它升序,但客户端不得依赖下标
+	AppearanceId  string                 `protobuf:"bytes,11,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"` // 从玩家存档资料读取，空值保留旧身份映射。
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -997,6 +998,13 @@ func (x *TeamMemberView) GetJoinSeq() uint32 {
 		return x.JoinSeq
 	}
 	return 0
+}
+
+func (x *TeamMemberView) GetAppearanceId() string {
+	if x != nil {
+		return x.AppearanceId
+	}
+	return ""
 }
 
 type TeamApplicationView struct {
@@ -1886,7 +1894,7 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\x15ListMyInvitesResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x128\n" +
 	"\ainvites\x18\x02 \x03(\v2\x1e.teampb.TeamIncomingInviteViewR\ainvites\x12$\n" +
-	"\x0eserver_time_ms\x18\x03 \x01(\x04R\fserverTimeMs\"\x95\x02\n" +
+	"\x0eserver_time_ms\x18\x03 \x01(\x04R\fserverTimeMs\"\xba\x02\n" +
 	"\x0eTeamMemberView\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
@@ -1898,7 +1906,8 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\tin_battle\x18\b \x01(\bR\binBattle\x12\x17\n" +
 	"\azone_id\x18\t \x01(\rR\x06zoneId\x12\x19\n" +
 	"\bjoin_seq\x18\n" +
-	" \x01(\rR\ajoinSeq\"\x8b\x01\n" +
+	" \x01(\rR\ajoinSeq\x12#\n" +
+	"\rappearance_id\x18\v \x01(\tR\fappearanceId\"\x8b\x01\n" +
 	"\x13TeamApplicationView\x12.\n" +
 	"\x06player\x18\x01 \x01(\v2\x16.teampb.TeamMemberViewR\x06player\x12\"\n" +
 	"\rapplied_at_ms\x18\x02 \x01(\x04R\vappliedAtMs\x12 \n" +

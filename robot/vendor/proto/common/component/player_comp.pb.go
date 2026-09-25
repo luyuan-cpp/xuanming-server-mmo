@@ -319,8 +319,11 @@ func (x *PlayerUint32Comp) GetClass() uint32 {
 // v1 无改名,所以副本内容不会变;但副本可能缺失(self-heal 恢复出的空记录、
 // 早于首次入场的回档快照),任何"要拿到名字"的读侧都必须能回源 BatchGetPlayerName。
 type PlayerProfileComp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// 随存档原样往返；login 首次入场从账号补空，scene/战斗/队伍只读。
+	AppearanceId  string `protobuf:"bytes,2,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`
+	Gender        uint32 `protobuf:"varint,3,opt,name=gender,proto3" json:"gender,omitempty"` // 1=男 2=女；0=旧存档未补齐，与外观 ID 独立。
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -360,6 +363,20 @@ func (x *PlayerProfileComp) GetName() string {
 		return x.Name
 	}
 	return ""
+}
+
+func (x *PlayerProfileComp) GetAppearanceId() string {
+	if x != nil {
+		return x.AppearanceId
+	}
+	return ""
+}
+
+func (x *PlayerProfileComp) GetGender() uint32 {
+	if x != nil {
+		return x.Gender
+	}
+	return 0
 }
 
 // Stress-test instrumentation for player-data persistence.
@@ -555,9 +572,11 @@ const file_proto_common_component_player_comp_proto_rawDesc = "" +
 	"\x10PlayerUint64Comp\x125\n" +
 	"\x16registration_timestamp\x18\x01 \x01(\x04R\x15registrationTimestamp\"(\n" +
 	"\x10PlayerUint32Comp\x12\x14\n" +
-	"\x05class\x18\x01 \x01(\rR\x05class\"'\n" +
+	"\x05class\x18\x01 \x01(\rR\x05class\"d\n" +
 	"\x11PlayerProfileComp\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"M\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12#\n" +
+	"\rappearance_id\x18\x02 \x01(\tR\fappearanceId\x12\x16\n" +
+	"\x06gender\x18\x03 \x01(\rR\x06gender\"M\n" +
 	"\x15PlayerStressTestProbe\x12\x19\n" +
 	"\btest_seq\x18\x01 \x01(\x04R\atestSeq\x12\x19\n" +
 	"\btest_sig\x18\x02 \x01(\fR\atestSig\"\xbb\x01\n" +

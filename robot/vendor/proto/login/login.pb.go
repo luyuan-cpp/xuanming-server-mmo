@@ -380,7 +380,9 @@ type CreatePlayerRequest struct {
 	// 名字全服唯一,真源是 data_service 的 player_name 表:login 先 ReservePlayerName
 	// 成功再建角(fail-closed),建角失败走 ReleasePlayerName 补偿。
 	// 见 docs/design/guild-phase2/03-names.md §3.9 / §3.11。
-	Name          string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	// 稳定人物资源 ID，独立于职业/性别；空值兼容旧客户端的外观映射。
+	AppearanceId  string `protobuf:"bytes,4,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -432,6 +434,13 @@ func (x *CreatePlayerRequest) GetGender() uint32 {
 func (x *CreatePlayerRequest) GetName() string {
 	if x != nil {
 		return x.Name
+	}
+	return ""
+}
+
+func (x *CreatePlayerRequest) GetAppearanceId() string {
+	if x != nil {
+		return x.AppearanceId
 	}
 	return ""
 }
@@ -1379,11 +1388,12 @@ const file_proto_login_login_proto_rawDesc = "" +
 	"\n" +
 	"teststring\x18\x03 \x03(\tR\n" +
 	"teststring\x12\x18\n" +
-	"\atestint\x18\x04 \x03(\x05R\atestint\"\\\n" +
+	"\atestint\x18\x04 \x03(\x05R\atestint\"\x81\x01\n" +
 	"\x13CreatePlayerRequest\x12\x19\n" +
 	"\bclass_id\x18\x01 \x01(\rR\aclassId\x12\x16\n" +
 	"\x06gender\x18\x02 \x01(\rR\x06gender\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\"\x8b\x01\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12#\n" +
+	"\rappearance_id\x18\x04 \x01(\tR\fappearanceId\"\x8b\x01\n" +
 	"\x14CreatePlayerResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12=\n" +
 	"\aplayers\x18\x02 \x03(\v2#.loginpb.AccountSimplePlayerWrapperR\aplayers\"N\n" +
