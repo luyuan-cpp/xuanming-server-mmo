@@ -121,11 +121,14 @@ func TestInitWorldScenes_UnreachableButRegisteredNodeKeepsOwnershipAndLoadSet(t 
 
 	assert.Equal(t, before, worldSceneOwnersForTest(t, ctx, sc, mr),
 		"节点只是不可达且仍在注册表里时,不得改写任何频道的属主")
-	_, err := mr.ZScore(nodeLoadKey(testZoneId), worldInitDownNode)
-	assert.NoError(t, err,
+	// 用 ZMembers 查成员,**不能**用 ZScore:miniredis 的 ZScore 在键存在、成员不存在时返回 (0, nil),
+	// 不报错。活节点 20 始终在集合里、键一直存在,于是 ZScore 永远不报错 —— 那样写这条断言是空的,
+	// 不管节点 10 有没有被摘掉都会通过(09-25 在修复前的代码上做红绿验证时发现)。
+	members, err := mr.ZMembers(nodeLoadKey(testZoneId))
+	require.NoError(t, err)
+	assert.Contains(t, members, worldInitDownNode,
 		"world_init 不得把不可达节点摘出负载集:IsNodeAlive 把「不在负载集」当作已死的唯一证据")
-	_, err = mr.ZScore(nodeLoadKey(testZoneId), worldInitLiveNode)
-	assert.NoError(t, err)
+	assert.Contains(t, members, worldInitLiveNode)
 }
 
 // 节点不可达、且已从 etcd 注册表消失(租约到期 / 主动注销):这才是死亡证据,
