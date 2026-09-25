@@ -33,6 +33,7 @@
 #include "proto/db/proto_option.pb.h"
 #include "proto/common/base/user_accounts.pb.h"
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
+#include "proto/common/component/battle_settlement_ledger_comp.pb.h"
 #include "proto/common/component/player_attribute_comp.pb.h"
 #include "proto/common/component/player_pet_comp.pb.h"
 #include "proto/common/component/player_scene_comp.pb.h"
@@ -2156,6 +2157,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     kMissionComponentFieldNumber = 14,
     kProfileComponentFieldNumber = 15,
     kAssetOpLedgerFieldNumber = 16,
+    kSettlementLedgerFieldNumber = 17,
     kPlayerIdFieldNumber = 1,
   };
   // .Transform transform = 2;
@@ -2398,6 +2400,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
   ::PlayerAssetOpLedgerComp* PROTOBUF_NONNULL _internal_mutable_asset_op_ledger();
 
   public:
+  // .BattleSettlementLedgerComp settlement_ledger = 17;
+  [[nodiscard]] bool has_settlement_ledger()
+      const;
+  void clear_settlement_ledger() ;
+  [[nodiscard]] const ::BattleSettlementLedgerComp& settlement_ledger() const;
+  [[nodiscard]] ::BattleSettlementLedgerComp* PROTOBUF_NULLABLE release_settlement_ledger();
+  ::BattleSettlementLedgerComp* PROTOBUF_NONNULL mutable_settlement_ledger();
+  void set_allocated_settlement_ledger(::BattleSettlementLedgerComp* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_settlement_ledger(::BattleSettlementLedgerComp* PROTOBUF_NULLABLE value);
+  ::BattleSettlementLedgerComp* PROTOBUF_NULLABLE unsafe_arena_release_settlement_ledger();
+
+  private:
+  const ::BattleSettlementLedgerComp& _internal_settlement_ledger() const;
+  ::BattleSettlementLedgerComp* PROTOBUF_NONNULL _internal_mutable_settlement_ledger();
+
+  public:
   // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -2412,8 +2430,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 16,
-                          15, 0,
+      ::google::protobuf::internal::TcParseTable<5, 17,
+                          16, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2456,6 +2474,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     ::QuestAllData* PROTOBUF_NULLABLE mission_component_;
     ::PlayerProfileComp* PROTOBUF_NULLABLE profile_component_;
     ::PlayerAssetOpLedgerComp* PROTOBUF_NULLABLE asset_op_ledger_;
+    ::BattleSettlementLedgerComp* PROTOBUF_NULLABLE settlement_ledger_;
     ::uint64_t player_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -3473,7 +3492,7 @@ inline void player_centre_database::set_allocated_scene_info(::PlayerSceneContex
 inline void player_database::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint64_t player_database::player_id() const {
   // @@protoc_insertion_point(field_get:player_database.player_id)
@@ -3481,7 +3500,7 @@ inline ::uint64_t player_database::player_id() const {
 }
 inline void player_database::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:player_database.player_id)
 }
 inline ::uint64_t player_database::_internal_player_id() const {
@@ -4886,6 +4905,99 @@ inline void player_database::set_allocated_asset_op_ledger(::PlayerAssetOpLedger
 
   _impl_.asset_op_ledger_ = reinterpret_cast<::PlayerAssetOpLedgerComp*>(value);
   // @@protoc_insertion_point(field_set_allocated:player_database.asset_op_ledger)
+}
+
+// .BattleSettlementLedgerComp settlement_ledger = 17;
+inline bool player_database::has_settlement_ledger() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00008000U);
+  PROTOBUF_ASSUME(!value || _impl_.settlement_ledger_ != nullptr);
+  return value;
+}
+inline const ::BattleSettlementLedgerComp& player_database::_internal_settlement_ledger() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::BattleSettlementLedgerComp* p = _impl_.settlement_ledger_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::BattleSettlementLedgerComp>(&::BattleSettlementLedgerComp_globals_);
+}
+inline const ::BattleSettlementLedgerComp& player_database::settlement_ledger() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_database.settlement_ledger)
+  return _internal_settlement_ledger();
+}
+inline void player_database::unsafe_arena_set_allocated_settlement_ledger(
+    ::BattleSettlementLedgerComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.settlement_ledger_);
+  }
+  _impl_.settlement_ledger_ = reinterpret_cast<::BattleSettlementLedgerComp*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.settlement_ledger)
+}
+inline ::BattleSettlementLedgerComp* PROTOBUF_NULLABLE player_database::release_settlement_ledger() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ::BattleSettlementLedgerComp* released = _impl_.settlement_ledger_;
+  _impl_.settlement_ledger_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::BattleSettlementLedgerComp* PROTOBUF_NULLABLE player_database::unsafe_arena_release_settlement_ledger() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_database.settlement_ledger)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ::BattleSettlementLedgerComp* temp = _impl_.settlement_ledger_;
+  _impl_.settlement_ledger_ = nullptr;
+  return temp;
+}
+inline ::BattleSettlementLedgerComp* PROTOBUF_NONNULL player_database::_internal_mutable_settlement_ledger() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.settlement_ledger_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::BattleSettlementLedgerComp>(GetArena());
+    _impl_.settlement_ledger_ = reinterpret_cast<::BattleSettlementLedgerComp*>(p);
+  }
+  return _impl_.settlement_ledger_;
+}
+inline ::BattleSettlementLedgerComp* PROTOBUF_NONNULL player_database::mutable_settlement_ledger()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ::BattleSettlementLedgerComp* _msg = _internal_mutable_settlement_ledger();
+  // @@protoc_insertion_point(field_mutable:player_database.settlement_ledger)
+  return _msg;
+}
+inline void player_database::set_allocated_settlement_ledger(::BattleSettlementLedgerComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.settlement_ledger_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  }
+
+  _impl_.settlement_ledger_ = reinterpret_cast<::BattleSettlementLedgerComp*>(value);
+  // @@protoc_insertion_point(field_set_allocated:player_database.settlement_ledger)
 }
 
 // -------------------------------------------------------------------

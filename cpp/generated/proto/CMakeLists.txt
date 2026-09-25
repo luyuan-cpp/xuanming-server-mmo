@@ -52,6 +52,7 @@ set(SOURCE_FILES
     common/component/actor_combat_state_comp.pb.cc
     common/component/actor_comp.pb.cc
     common/component/asset_op_ledger_comp.pb.cc
+    common/component/battle_settlement_ledger_comp.pb.cc
     common/component/buff_comp.pb.cc
     common/component/base_comp.pb.cc
     common/component/currency_comp.pb.cc

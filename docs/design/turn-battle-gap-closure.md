@@ -252,38 +252,95 @@ D48 立的不变量是"闸只放入口层,日后新增的扣减入口必须各�
 常态化刷屏,那就是信号)。闸加在寄售的**客户端入口 handler**,不要加进 `BagService`
 (理由见 D48:结算入账时 `InBattleComp` 还挂着,下沉会把结算自己挡住)。
 
-### 9.3 结算幂等基底不持久:一个丢失窗口 + 一个复制窗口(**既有缺陷,本轮放大,待拍板**)
+### 9.3 结算幂等基底持久化(**2026-09-25 已落码,未编译**)
 
-2026-09-25 与跨区传送线对接时查出来的。**不是本轮引入的,但本轮把它的影响面从"金币"扩大到"金币 + 掉落"。**
-
-事实(逐行核过):
-- 幂等缓存是 `thread_local battle_settlement::SettlementApplicationCache`(`player_battle.cpp:109`),
-  **纯进程内**,保留期 7 天但进程一重启就空;
-- `ClearPendingSettlementIfMatch`(`:206`)是 fire-and-forget,EVAL 失败只打 ERROR、不重试;
-- `ApplyPendingSettlement` 登录补应用时,除这个进程内缓存外**没有第二道去重**。
-
-于是有两个窗口,**现在只能二选一**:
+原缺陷(既有,G1-G9 把影响面从"金币"扩大到"金币 + 掉落"):幂等基底是
+`thread_local battle_settlement::SettlementApplicationCache`,**纯进程内**,重启即空;
+`ClearPendingSettlementIfMatch` 是 fire-and-forget;登录补应用没有第二道去重。于是二选一:
 
 | 窗口 | 触发 | 后果 |
 |---|---|---|
-| **丢失(今天的现状)** | 结算应用 → 当场销账 → 周期存盘前进程崩 | 掉落只在内存、pending 已销账、battle 侧不再重投,而 `transaction_log` 记着发放成功。客服查流水说发过,玩家说没收到,两边都对。每一场有掉落的战斗都有这个窗口,与跨区无关 |
-| **复制(把销账挪到存盘回调后就会出现)** | 存盘成功 → 销账那一跳失败(Redis 抖动 / 两跳之间挂掉)→ 重启 → 登录补应用 | 进程内缓存已空,补应用不被拦 → 再发一次掉落、再加一次金币。**今天对金币就已经成立**(应用成功 + 销账失败 + 重启) |
+| **丢失(改造前的现状)** | 应用 → 当场销账 → 周期存盘(默认 300s)前崩溃 | 掉落只在内存、pending 已销账、battle 不再重投,而 `transaction_log` 记着发放成功 |
+| **复制(只把销账挪到存盘之后就会出现)** | 存盘成功 → 销账那一跳失败 → 重启 → 登录补应用 | 再发一次掉落、再加一次金币 |
 
-**为什么不直接把销账挪到存盘成功回调**:那只是把确定性丢失换成概率性复制。对经济系统复制更糟 ——
-丢了能靠流水补发,复制出来的东西进了市场收不回,`correlation_id` 只能证明发过两次、拦不住。
+两个窗口不能靠调顺序同时堵住。**唯一干净的修法是让"这一局已应用"的标记与资产写进同一份
+blob、同一次落盘**,于是两者同生共死:崩溃 → 一起没 → pending 还在 → 重投重发(不丢);
+落盘 → 一起在 → 重投/重登被标记挡掉(不复制)。
 
-**唯一干净的修法**:把"这一局已应用"的标记与资产写进**同一份 blob、同一次落盘**,即
-[xuanming-port-feasibility-20260902.md](./xuanming-port-feasibility-20260902.md) §8.1 D1 已经设计好的
-per-player seq + `applied_watermark` + 1024 位位图。标记与背包同生共死之后:崩溃则两者一起丢 →
-pending 还在 → 重投重发(正确);存盘成功则两者一起在 → 即使销账失败、即使重启,补应用也会被
-持久标记挡掉(不复制)。
+#### 落地形态
 
-**待拍板**:这要动持久化 blob(给 `player_database` 加字段),超出本轮 G1-G9 范围,且与 D1 发物入口
-共用同一套载体。两条路:并进 D1 一起做,或单独立项。**拍板前保持现状** —— 宁可留着已知的丢失窗口,
-也不引入复制窗口。
+| 件 | 内容 |
+|---|---|
+| 持久载体 | 新 `proto/common/component/battle_settlement_ledger_comp.proto`:`BattleSettlementLedgerComp.applied[]`,每项 `{battle_id, applied_at_ms}`。**刻意不放进 `battle_comp.proto`** —— 那个文件开头自述"不落库",两条相反契约不共用一段文件头 |
+| 存档字段 | `player_database.settlement_ledger = 17`(下一个空闲号;已按 G-03 登记,帮会剩余批次从 18 起) |
+| 存盘接线 | `player_database_loader.cpp` 的 Marshal / Unmarshal 各一行,紧挨 `asset_op_ledger` —— 同一条**不变量 I3**:必须与 currency / bag_component 同记录同一次落盘 |
+| 纯规则 | `battle_settlement_ledger.h`(header-only,无 ECS/Redis/时钟):`HasApplied` / `RecordApplied` / `ForgetApplied` |
+| 去重判据 | `ApplySettlementToEntity` 开头先查**活账本**:命中 = 奖已发过,不再发第二次 |
+| 销账判据 | `IsSettlementDurable` 只看 `PlayerLastPersistedSnapshotComp` —— 上一次**确实写进 Redis** 的那份 `PlayerAllData`。条目出现在这份字节里,才允许销账 |
+| 销账收口 | 新增 `AckSettlementPending(playerId, battleId)` 为**唯一销账入口**,原先 7 个 `ClearPendingSettlementIfMatch` 调用点全部改走它 |
+| 条目回收 | 条件删 EVAL **成功回调**里才 `ForgetApplied`。所以账本只登记"已应用但销账未确认"的局,稳态长度 0~1 |
+| 排空兜底 | reaper(30s)第二遍扫账本补 Ack —— 不依赖 battle 发件箱(它只重投 12 轮 120s 就放弃) |
+| 压缩窗口 | 应用成功后立刻 `SavePlayerToRedis`(经 `SetPersistFnForTest` 注入点,与资产通道同形状),把"已应用未落盘"从一个周期存盘压到一次 Redis 往返 |
 
-跨区传送线已知悉并同意这个口径;他们在 `HandlePlayerAsyncSaved` 给本任务留了挂点,拍板要做时再用
-(届时销账与持久标记一起挂,避免两边同时改那个函数体)。
+#### 为什么两条判据必须分开
+
+"在账本里"和"已经落盘"是**两件事**,合成一条就等于没改:活账本里有、落盘快照里没有,恰恰是
+最危险的一刻 —— 此时销账,崩溃即永久丢失。所以:
+
+- `HasApplied(实体上的活账本)` → **别再发一次奖**;
+- `IsSettlementDurable(落盘快照里的账本)` → **可以销账**。
+
+#### 顺带修掉的两个真缺陷
+
+1. **销账绕过点**:应用成功后紧接着 `ClearBattleFreeze`(删锁 + 摘 `InBattleComp`),于是发件箱
+   10s 后的第一次重投必然落进"无 `InBattleComp` 且锁不在"那一支 —— 那里**不经过**
+   `ApplySettlementToEntity`,改造前会当场销账,把延后的努力全部作废。收归单一入口后这些分支
+   一并受持久判据保护:账本里有 = 已应用 → 等落盘;账本里没有 = 真作废 → 立即销账(行为不变)。
+2. **冻结闸只看 gold/items**:一笔"只有 HP + 宝宝 + 击杀事实、没有金币也没有掉落"的 PVE 结算
+   (打空怪,完全正常)会穿过闸门 —— 任务进度被推、宝宝被改,而此刻存盘被硬性跳过,改动随实体
+   销毁一起没,账本却记成已应用。现在改为整笔判据 `IsSettlementApplicable`,并补上
+   `PlayerTravelHandoffComp` / `UnregisterPlayer`(这两个窗口里 `SavePlayerToRedis` 开头直接跳过
+   写盘,应用了也落不了盘)。刻意**不**含资产通道的 `HasFencedOwnership`,理由写在函数注释里。
+
+#### 残留与代价(已知、刻意接受)
+
+- **每场战斗多一次存盘 + 一轮重投**:durable 判定要等异步存盘落地,应用当下探测必为假,所以销账
+  通常发生在发件箱 10s 后的那一次重投(或 reaper 的 30s 扫描)。这是照搬通用资产通道"触发存盘、
+  如实回报、由上游重试追平"的口径,不新造等待机制。
+- **pending 每玩家单槽**(`battle:settlement:pending:{player_id}`,无条件 SET):延后销账把槽位
+  占得更久,连打两场时后一场会覆盖前一场的 payload。靠"应用后立刻存盘"把窗口压到一次 Redis
+  往返来规避;**彻底修法是 pending 改成按 (player, battle) 一条**,那要动两端 key 契约,未做。
+- **"落盘"指写进 Redis,不是 MySQL**:与全仓既有口径一致(Redis 是在线权威存储,MySQL 在其下游)。
+- **回档会把账本退回旧值**,而 pending 不参与回档、活 7 天 → 已发的奖可能被重发。但回档同时把
+  资产也退回了,重发与回档语义自洽,不额外加机制。
+- **账本容量 `kMaxAppliedRecords = 64` 是异常兜底不是常规容量**:条目销账一确认就摘,要堆到 64
+  意味着连续 64 局条件删全失败(Redis 已不可用)。溢出淘汰最旧项并打
+  `metric=battle_settlement_ledger_evicted`。
+
+#### 设计过程(留痕)
+
+第一版设计挂 `HandlePlayerAsyncSaved` 回调 + 一个独立"待确认集合",被对抗评审(3 个评审面、
+`wvo7qkttt`)判 **broken**,4 个 blocker:销账点只搬了 1 个、账本成员被当成已落盘、pending 单槽、
+整集合清空会 ACK 掉没落盘的局。现方案逐条规避,且**不再需要新挂点** ——
+`PlayerLastPersistedSnapshotComp` 本来就是"刚写进 Redis 的那份字节",跨区传送线预留的
+`HandlePlayerAsyncSaved` 挂点**不再需要**,那个文件一行未动。
+
+#### 验证清单(全部未执行)
+
+1. **MySQL 加列**(导表/生成之后、任何新 go/db 或 scene 启动之前,冒烟之前必须):
+   `cd go/db && go run ./cmd/migrate -f etc/db.yaml -command plan`,计划应只含 `player_database`
+   加列 `settlement_ledger`;确认后 `-command up`(不加 `-allow-modify`)。本地多 zone 时对启动器
+   实际用的每份 db 配置各跑一次。随后每个 zone 库 `SHOW COLUMNS FROM player_database LIKE
+   'settlement_ledger'` 返回 1 行。**漏这一步会让全服玩家回写全部失败**
+   (`AutoMigrateSchema: false`,`key_ordered_consumer.go` 按 descriptor 写全部列)。
+2. 编译 scene 相关工程与 `bag_test`。
+3. `bag_test` 全绿,重点看本节新增的 7 个用例(账本登记 / 重启后不重复发 / 冻结与交接整笔延后 /
+   三条纯规则),以及**契约变更后更新过的**
+   `DuplicateSuccessfulCallbacksAndReentryPayAndProgressOnce`。
+4. `battle-smoke` 端到端:打一场有掉落的战斗 → 看日志出现一次"结算已应用"、随后出现
+   "销账延后"、再在下一轮重投或 reaper 后出现销账落地;`battle:settlement:pending:{id}` 最终消失。
+5. 杀进程验丢失窗口:应用之后、存盘之前 kill scene → 重启 → 登录应重新发一次掉落(不丢);
+   人为让条件删失败 + 重启 → 登录**不得**重复发(不复制)。
 
 ### 9.2 仍然没做
 

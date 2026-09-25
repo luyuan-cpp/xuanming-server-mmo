@@ -12,6 +12,9 @@
 // 通用资产通道:账本组件(持久化)+ 纯函数校验 + 运行时"账本损坏"标记。
 // 账本必须与 currency / bag_component 走同一次 Marshal、同一次 Redis SET(不变量 I3)。
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
+// 回合制战斗结算幂等账本(turn-battle-gap-closure.md §9.3):与 asset_op_ledger 同一条不变量 I3,
+// 必须与 currency / bag_component 同记录同一次落盘,否则「资产落了标记没落」=重复发奖,反之=白丢奖励。
+#include "proto/common/component/battle_settlement_ledger_comp.pb.h"
 #include "asset_op_ledger.h"
 #include "asset_op_system.h"
 #include "table/code/class_table.h"
@@ -114,6 +117,10 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 				  << " reason=" << err;
 		tlsEcs.actorRegistry.emplace_or_replace<PlayerAssetOpLedgerInvalidComp>(player);
 	}
+	// 结算幂等账本跟着同一条 player_database 行回来。不做校验、不阻断登录:
+	// 空账本的后果只是「上一局可能被重投补发一次」,而补发本身被待结算记录的条件删兜住;
+	// 拿不准时宁可多判一次「已应用」也不要让玩家进不去游戏。
+	tlsEcs.actorRegistry.emplace<BattleSettlementLedgerComp>(player, message.settlement_ledger());
 	tlsEcs.actorRegistry.emplace<CurrencyComp>(player, message.currency());
 	// 补缴欠款(debts)是 PlayerCurrencyComp 的运行时结构,持久化载体是
 	// CurrencyComp.debts。这一对 LoadFromProto/SaveToProto 之前从未被调用过 ——
@@ -147,6 +154,9 @@ void PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	// 位置必须在下面那对 currency CopyFrom / SaveToProto **之外** —— 夹在中间会把
 	// 刚写进去的补缴欠款抹掉(见下条注释)。存盘路径非逐帧,沿用本函数的 get_or_emplace 写法。
 	message.mutable_asset_op_ledger()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<PlayerAssetOpLedgerComp>(player));
+	// 结算幂等账本:与上一行同理由(不变量 I3)。位置同样必须在下面那对 currency
+	// CopyFrom / SaveToProto **之外**,夹在中间会把刚写进去的补缴欠款抹掉。
+	message.mutable_settlement_ledger()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<BattleSettlementLedgerComp>(player));
 	message.mutable_currency()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<CurrencyComp>(player));
 	// 必须在 CopyFrom 之后:CopyFrom 会覆盖整个 currency 子消息(含 debts),
 	// 反序会把刚写进去的欠款抹掉。

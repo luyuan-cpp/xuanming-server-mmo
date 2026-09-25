@@ -4,6 +4,7 @@ option go_package = "proto/common/database";
 import "proto/db/proto_option.proto";
 import "proto/common/base/user_accounts.proto";
 import "proto/common/component/asset_op_ledger_comp.proto";
+import "proto/common/component/battle_settlement_ledger_comp.proto";
 import "proto/common/component/player_attribute_comp.proto";
 import "proto/common/component/player_pet_comp.proto";
 import "proto/common/component/player_scene_comp.proto";
@@ -147,6 +148,10 @@ message player_database
   // 必须与 currency / bag_component 同记录同 DBTask:账本与资产一起落盘、一起丢,
   // 否则会出现"资产落了账本没落"的中间态,同一笔指令被重复应用(不变量 I3)。
   PlayerAssetOpLedgerComp asset_op_ledger = 16;
+  // 回合制战斗结算幂等账本(§9.3)。与 asset_op_ledger 同一条不变量 I3:必须与
+  // currency / bag_component 同记录同一次落盘 —— 标记和它产生的资产要么一起在盘上,
+  // 要么一起没有,不允许"资产落了标记没落"(重复发奖)或"标记落了资产没落"(白丢奖励)。
+  BattleSettlementLedgerComp settlement_ledger = 17;
 }
 
 message player_database_1

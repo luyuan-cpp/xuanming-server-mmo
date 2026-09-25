@@ -495,8 +495,12 @@ type PlayerDatabase struct {
 	// 必须与 currency / bag_component 同记录同 DBTask:账本与资产一起落盘、一起丢,
 	// 否则会出现"资产落了账本没落"的中间态,同一笔指令被重复应用(不变量 I3)。
 	AssetOpLedger *component.PlayerAssetOpLedgerComp `protobuf:"bytes,16,opt,name=asset_op_ledger,json=assetOpLedger,proto3" json:"asset_op_ledger,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 回合制战斗结算幂等账本(§9.3)。与 asset_op_ledger 同一条不变量 I3:必须与
+	// currency / bag_component 同记录同一次落盘 —— 标记和它产生的资产要么一起在盘上,
+	// 要么一起没有,不允许"资产落了标记没落"(重复发奖)或"标记落了资产没落"(白丢奖励)。
+	SettlementLedger *component.BattleSettlementLedgerComp `protobuf:"bytes,17,opt,name=settlement_ledger,json=settlementLedger,proto3" json:"settlement_ledger,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PlayerDatabase) Reset() {
@@ -641,6 +645,13 @@ func (x *PlayerDatabase) GetAssetOpLedger() *component.PlayerAssetOpLedgerComp {
 	return nil
 }
 
+func (x *PlayerDatabase) GetSettlementLedger() *component.BattleSettlementLedgerComp {
+	if x != nil {
+		return x.SettlementLedger
+	}
+	return nil
+}
+
 type PlayerDatabase_1 struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -699,7 +710,7 @@ var File_proto_common_database_mysql_database_table_proto protoreflect.FileDescr
 
 const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\n" +
-	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
+	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a:proto/common/component/battle_settlement_ledger_comp.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
 	"\x04user\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x19\n" +
@@ -739,7 +750,7 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x16player_centre_database\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x126\n" +
 	"\n" +
-	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xf9\a\n" +
+	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xc3\b\n" +
 	"\x0fplayer_database\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12(\n" +
 	"\ttransform\x18\x02 \x01(\v2\n" +
@@ -761,7 +772,8 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\rbag_component\x18\r \x01(\v2\v.BagAllDataR\fbagComponent\x12:\n" +
 	"\x11mission_component\x18\x0e \x01(\v2\r.QuestAllDataR\x10missionComponent\x12?\n" +
 	"\x11profile_component\x18\x0f \x01(\v2\x12.PlayerProfileCompR\x10profileComponent\x12@\n" +
-	"\x0fasset_op_ledger\x18\x10 \x01(\v2\x18.PlayerAssetOpLedgerCompR\rassetOpLedger:D\x8a\x92\xf4\x01\x0fplayer_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xe8\x92\xf4\x01\x01\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xbc\x01\n" +
+	"\x0fasset_op_ledger\x18\x10 \x01(\v2\x18.PlayerAssetOpLedgerCompR\rassetOpLedger\x12H\n" +
+	"\x11settlement_ledger\x18\x11 \x01(\v2\x1b.BattleSettlementLedgerCompR\x10settlementLedger:D\x8a\x92\xf4\x01\x0fplayer_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xe8\x92\xf4\x01\x01\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xbc\x01\n" +
 	"\x11player_database_1\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12B\n" +
 	"\x11stress_test_probe\x18\x02 \x01(\v2\x16.PlayerStressTestProbeR\x0fstressTestProbe:F\x8a\x92\xf4\x01\x11player_database_1\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xe8\x92\xf4\x01\x01\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04B\x17Z\x15proto/common/databaseb\x06proto3"
@@ -780,32 +792,33 @@ func file_proto_common_database_mysql_database_table_proto_rawDescGZIP() []byte 
 
 var file_proto_common_database_mysql_database_table_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_proto_common_database_mysql_database_table_proto_goTypes = []any{
-	(*User)(nil),                              // 0: user
-	(*UserOauth)(nil),                         // 1: user_oauth
-	(*UserPhone)(nil),                         // 2: user_phone
-	(*UserPassword)(nil),                      // 3: user_password
-	(*UserAccounts)(nil),                      // 4: user_accounts
-	(*AccountShareDatabase)(nil),              // 5: account_share_database
-	(*PlayerCentreDatabase)(nil),              // 6: player_centre_database
-	(*PlayerDatabase)(nil),                    // 7: player_database
-	(*PlayerDatabase_1)(nil),                  // 8: player_database_1
-	(*base.AccountSimplePlayerList)(nil),      // 9: AccountSimplePlayerList
-	(*component.PlayerSceneContextComp)(nil),  // 10: PlayerSceneContextComp
-	(*component.Transform)(nil),               // 11: Transform
-	(*component.PlayerUint64Comp)(nil),        // 12: PlayerUint64Comp
-	(*component.PlayerSkillListComp)(nil),     // 13: PlayerSkillListComp
-	(*component.PlayerUint32Comp)(nil),        // 14: PlayerUint32Comp
-	(*component.BaseAttributesComp)(nil),      // 15: BaseAttributesComp
-	(*component.LevelComp)(nil),               // 16: LevelComp
-	(*component.CurrencyComp)(nil),            // 17: CurrencyComp
-	(*component.PlayerStressTestProbe)(nil),   // 18: PlayerStressTestProbe
-	(*component.PlayerMergeStateComp)(nil),    // 19: PlayerMergeStateComp
-	(*component.PlayerAttributeComp)(nil),     // 20: PlayerAttributeComp
-	(*component.PlayerPetComp)(nil),           // 21: PlayerPetComp
-	(*BagAllData)(nil),                        // 22: BagAllData
-	(*QuestAllData)(nil),                      // 23: QuestAllData
-	(*component.PlayerProfileComp)(nil),       // 24: PlayerProfileComp
-	(*component.PlayerAssetOpLedgerComp)(nil), // 25: PlayerAssetOpLedgerComp
+	(*User)(nil),                                 // 0: user
+	(*UserOauth)(nil),                            // 1: user_oauth
+	(*UserPhone)(nil),                            // 2: user_phone
+	(*UserPassword)(nil),                         // 3: user_password
+	(*UserAccounts)(nil),                         // 4: user_accounts
+	(*AccountShareDatabase)(nil),                 // 5: account_share_database
+	(*PlayerCentreDatabase)(nil),                 // 6: player_centre_database
+	(*PlayerDatabase)(nil),                       // 7: player_database
+	(*PlayerDatabase_1)(nil),                     // 8: player_database_1
+	(*base.AccountSimplePlayerList)(nil),         // 9: AccountSimplePlayerList
+	(*component.PlayerSceneContextComp)(nil),     // 10: PlayerSceneContextComp
+	(*component.Transform)(nil),                  // 11: Transform
+	(*component.PlayerUint64Comp)(nil),           // 12: PlayerUint64Comp
+	(*component.PlayerSkillListComp)(nil),        // 13: PlayerSkillListComp
+	(*component.PlayerUint32Comp)(nil),           // 14: PlayerUint32Comp
+	(*component.BaseAttributesComp)(nil),         // 15: BaseAttributesComp
+	(*component.LevelComp)(nil),                  // 16: LevelComp
+	(*component.CurrencyComp)(nil),               // 17: CurrencyComp
+	(*component.PlayerStressTestProbe)(nil),      // 18: PlayerStressTestProbe
+	(*component.PlayerMergeStateComp)(nil),       // 19: PlayerMergeStateComp
+	(*component.PlayerAttributeComp)(nil),        // 20: PlayerAttributeComp
+	(*component.PlayerPetComp)(nil),              // 21: PlayerPetComp
+	(*BagAllData)(nil),                           // 22: BagAllData
+	(*QuestAllData)(nil),                         // 23: QuestAllData
+	(*component.PlayerProfileComp)(nil),          // 24: PlayerProfileComp
+	(*component.PlayerAssetOpLedgerComp)(nil),    // 25: PlayerAssetOpLedgerComp
+	(*component.BattleSettlementLedgerComp)(nil), // 26: BattleSettlementLedgerComp
 }
 var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	9,  // 0: user_accounts.simple_players:type_name -> AccountSimplePlayerList
@@ -825,12 +838,13 @@ var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	23, // 14: player_database.mission_component:type_name -> QuestAllData
 	24, // 15: player_database.profile_component:type_name -> PlayerProfileComp
 	25, // 16: player_database.asset_op_ledger:type_name -> PlayerAssetOpLedgerComp
-	18, // 17: player_database_1.stress_test_probe:type_name -> PlayerStressTestProbe
-	18, // [18:18] is the sub-list for method output_type
-	18, // [18:18] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	26, // 17: player_database.settlement_ledger:type_name -> BattleSettlementLedgerComp
+	18, // 18: player_database_1.stress_test_probe:type_name -> PlayerStressTestProbe
+	19, // [19:19] is the sub-list for method output_type
+	19, // [19:19] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_database_mysql_database_table_proto_init() }

@@ -146,10 +146,12 @@ const (
 	sqlSeqRowExists = "SELECT 1 FROM " + guildPlayerOpSeqTable + " WHERE `player_id` = ? AND `stream` = ?"
 
 	// sqlEnsureSeqRow:事务内建 seq 行(死锁复核 C2,见 ensureSeqRowTx)。
-	// **与 shared/assetop.EnsureSeqRow 的建行语句逐字同义**(列、next_seq 从 1 起、纪元 = 建行时刻毫秒、已存在即空操作不改纪元)。
-	// 这是一次有记录的 DRY 偏离(AGENTS §11 取舍序:正确性 > 可维护):assetop 目前只有吃 *sql.DB 的自动提交版建行,
-	// 而消掉 C2 的环必须在守卫行锁之下、在同一事务里建行;本会话无权改 go/shared。assetop 提供事务版建行
-	// (EnsureSeqRowTx)之后,删掉本常量、ensureSeqRowTx 改调它即可。两边不许悄悄分叉:
+	// **与 shared/assetop 的建行语句(seq.go 的 ensureSeqRowFormat)逐字同义**(列、next_seq 从 1 起、纪元 = 建行时刻毫秒、
+	// 已存在即空操作不改纪元)。这是一次有记录的 DRY 偏离(AGENTS §11 取舍序:正确性 > 可维护):写下它时 assetop 只有吃
+	// *sql.DB 的自动提交版建行,而消掉 C2 的环必须在守卫行锁之下、在同一事务里建行。assetop.EnsureSeqRowTx 现已存在,
+	// 但 economy_repo_test.go 与 economy_lock_plan_mysql_test.go 直接引用本常量,切换要连这两个测试一起改,
+	// 不在 B5b 本次的文件范围内,副本暂留(92-handoff §12.5 第 3 条的欠账)。切换时:删本常量,ensureSeqRowTx 的插入
+	// 改调 assetop.EnsureSeqRowTx(前置普通读保留)。在那之前两边不许悄悄分叉:
 	// TestEnsureSeqRowTx_MatchesAssetopEnsureSeqRow 在真库上逐列比对两条路径建出的行。
 	sqlEnsureSeqRow = "INSERT IGNORE INTO " + guildPlayerOpSeqTable + " (player_id, stream, next_seq, epoch, updated_ms) VALUES (?, ?, 1, ?, ?)"
 )

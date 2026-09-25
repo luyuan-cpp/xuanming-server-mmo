@@ -1,0 +1,30 @@
+syntax = "proto3";
+option go_package = "login/proto/common/component";
+
+// 回合制战斗结算幂等账本(scene 侧玩家实体组件,**落库**)。
+//
+// 与 battle_comp.proto 的 InBattleComp 刻意分开两个文件:那个文件开头自述"不落库,
+// 玩家下线即弃",而本账本恰恰必须落库 —— 放在一起会让两条相反的契约共用一段文件头注释。
+//
+// 为什么需要它(docs/design/turn-battle-gap-closure.md §9.3):
+// 结算的幂等基底原先只有进程内的 thread_local 缓存,进程一重启就空。于是"应用 → 销账 →
+// 存盘前崩溃"会把奖励永久吞掉(掉落没了,而 transaction_log 记着发放成功),而把销账挪到
+// 存盘之后又会开出一个"存盘成功但销账失败 + 重启 → 登录补应用重复发"的复制窗口。
+// 两个窗口不能同时堵住,除非标记与资产**同生共死**:
+//   - 崩溃 → 资产和标记一起没 → 待结算记录还在 → 重投重发(不丢);
+//   - 落盘 → 资产和标记一起在 → 重投或重登被标记挡掉(不复制)。
+// 所以本账本必须与 currency / bag_component 同在 player_database 一行、同一次 Redis SET
+// 落盘,与通用资产通道的 asset_op_ledger 是同一条不变量 I3。
+message BattleSettlementApplied {
+  uint64 battle_id = 1;
+  uint64 applied_at_ms = 2;  // Unix 毫秒;仅用于满员时淘汰最旧项与排障,不承载业务语义
+}
+
+// **只登记"已应用但销账尚未确认"的局**:销账 EVAL 成功回调即摘掉对应项,
+// 所以稳态长度是 0~1,容量上限是异常兜底而不是常规容量(容量推导见
+// battle_settlement_ledger.h 的 kMaxAppliedRecords)。
+// 条目之间无序(满员淘汰按 applied_at_ms,不按下标),符合 AGENTS.md §11.6
+// "集合顺序必须显式"——下标不承载任何业务语义。
+message BattleSettlementLedgerComp {
+  repeated BattleSettlementApplied applied = 1;
+}

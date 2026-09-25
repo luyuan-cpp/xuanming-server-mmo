@@ -1,5 +1,6 @@
 #include "player_battle.h"
 #include "battle_settlement_application_cache.h"
+#include "battle_settlement_ledger.h"
 
 #include <muduo/base/Logging.h>
 #include <muduo/net/EventLoop.h>
@@ -34,7 +35,12 @@
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
-#include "player/system/player_lifecycle.h"  // IsCrossZoneFrozen:冻结期整笔结算延后重投
+// PlayerTravelHandoffComp:交接一挂上 SavePlayerToRedis 就硬性跳过写盘,此刻应用等于落不了盘。
+#include "player/comp/player_ownership_comp.h"
+// PlayerLastPersistedSnapshotComp:上一次**确实写进 Redis** 的那份 PlayerAllData。
+// 判「可不可以销账」只认它,不另建已持久化水位(与通用资产通道同一条纪律)。
+#include "player/comp/last_persisted_snapshot_comp.h"
+#include "player/system/player_lifecycle.h"  // IsCrossZoneFrozen / SavePlayerToRedis
 #include "player/system/player_pet.h"
 #include "modules/condition/condition_type.h"
 #include "proto/common/event/mission_event.pb.h"
@@ -107,6 +113,9 @@ namespace
     // 场景 loop 内跨实体生命周期的有限去重，覆盖正常下线重建与 Redis DEL 尚未完成窗口。
     // 不持久化，不承诺进程崩溃后的 exactly-once；已完成项最多保留 pending 的 7 天。
     thread_local battle_settlement::SettlementApplicationCache gSettlementApplications;
+
+	// 结算应用后的存盘入口(见 PlayerBattleSystem::SetPersistFnForTest)。
+	PlayerBattleSystem::PersistFn gPersistFn = &PlayerLifecycleSystem::SavePlayerToRedis;
 
 	bool RedisReady()
 	{
@@ -217,11 +226,110 @@ namespace
 				{
 					LOG_ERROR << "[PlayerBattle] 结算销账 EVAL 失败, player_id=" << playerId
 							  << " battle_id=" << battleId;
+					return;  // 账本条目保留:下一轮重投/reaper 会再来一次
+				}
+				// 条件删已经落地(删掉了,或记录已不属于本局 —— 两种都意味着本局的 pending
+				// 再也不会被任何人应用)。此刻、且只有此刻,才能摘掉账本条目:提前摘会让
+				// 「销账其实没落地 + 重启」退回重复发奖(§9.3 的复制窗口)。
+				const auto owner = tlsEcs.GetPlayer(playerId);
+				if (!tlsEcs.actorRegistry.valid(owner)) return;  // 实体已销毁 = 已随退出存盘落地
+				if (auto* ledger = tlsEcs.actorRegistry.try_get<BattleSettlementLedgerComp>(owner);
+					ledger != nullptr && battle_settlement::ForgetApplied(*ledger, battleId))
+				{
+					LOG_DEBUG << "[PlayerBattle] 结算账本条目已摘(销账已落地), player_id=" << playerId
+							  << " battle_id=" << battleId;
 				}
 			},
 			(std::string("EVAL %s 2 ") + kPendingSettlementKeyFmt + " " +
 			 kPendingSettlementIdKeyFmt + " %llu").c_str(),
 			battle_settlement::kDeletePendingSettlementIfMatchScript, playerId, playerId, battleId);
+	}
+
+	// ── 结算幂等的持久基底(turn-battle-gap-closure.md §9.3)──────────────────
+	//
+	// 改造前:幂等只有进程内的 thread_local 应用缓存,而「应用 → 当场销账」之间隔着
+	// 一次周期存盘(默认 300s)。进程死在这个窗口里,奖励就永久没了,transaction_log
+	// 却记着发放成功。把销账挪到存盘之后又会开出反向的复制窗口。两个窗口只能靠
+	// 「标记与资产同生共死」同时堵住 —— 标记就落在同一行 player_database 里。
+	//
+	// 于是有两条**必须分开**的判据(合成一条是第一版设计被评审判 broken 的主因):
+	//   HasApplied(实体上的活账本)      -> 「别再发一次奖」
+	//   IsSettlementDurable(落盘快照)   -> 「可以销账」
+	// 活账本里有、落盘快照里没有,恰恰是最危险的一刻:此时销账 = 崩溃即永久丢失。
+
+	BattleSettlementLedgerComp& SettlementLedgerOf(entt::entity player)
+	{
+		// 存盘路径非逐帧,沿用仓库在这类路径上的 get_or_emplace 写法(§7 不变量 5 限的是 per-tick)。
+		return tlsEcs.actorRegistry.get_or_emplace<BattleSettlementLedgerComp>(player);
+	}
+
+	// 这一局的账本条目是否**确实已经在盘上**。只看 PlayerLastPersistedSnapshotComp —— 它是
+	// HandlePlayerAsyncSaved 回调里写下的、刚写进 Redis 的整份 PlayerAllData。
+	// 账本与背包/金币在同一份 blob 里,所以「条目在这份快照里」等价于「这一局的资产也在盘上」。
+	bool IsSettlementDurable(entt::entity player, const uint64_t battleId)
+	{
+		const auto* snapshot = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
+		if (snapshot == nullptr || !snapshot->HasSnapshot()) return false;
+		return battle_settlement::HasApplied(
+			snapshot->snapshot->player_database_data().settlement_ledger(), battleId);
+	}
+
+	// 整笔结算此刻能不能应用。**必须是 BagService / CurrencySystem 内部闸的超集**:
+	//  - IsCrossZoneFrozen:与那两个入口同判据。漏掉它,金币会被拒(整笔返回 false 重投)
+	//    但道具会被静默拒绝而结算照样记进账本 —— 道具永久丢;
+	//  - PlayerTravelHandoffComp / UnregisterPlayer:这两个窗口里 SavePlayerToRedis 开头
+	//    直接跳过写盘,应用了也落不了盘。不应用、不销账,交给发件箱重投或目的地节点补应用。
+	//
+	// 刻意**不**含资产通道的 HasFencedOwnership(归属围栏):那条是给「Go 依据 durable 记账」
+	// 用的,本路径的重做凭据是发件箱 + pending,重投时会重新解析 player:{id}:location,
+	// 无围栏实体上最坏结果是这一笔被重投一次,不会出现帮会那种「记了资金却被盖掉」。
+	bool IsSettlementApplicable(entt::entity player)
+	{
+		return !PlayerLifecycleSystem::IsCrossZoneFrozen(player) &&
+			   !tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp, UnregisterPlayer>(player);
+	}
+
+	// 应用之后立刻压一次存盘:不等回调、不阻塞,只为把「已应用但没落盘」的窗口从一个
+	// 周期存盘(默认 300s)压到一次 Redis 往返。这一步是 pending **每玩家单槽**时的关键 ——
+	// 槽位被占太久,玩家打下一场时 battle 侧的无条件 SET 会把上一场的 payload 覆盖掉,
+	// 那一局就再也没有持久副本了(评审 blocker 3)。
+	void RequestSettlementPersist(entt::entity player, const uint64_t playerId, const uint64_t battleId)
+	{
+		if (!gPersistFn(player))
+		{
+			// false 有两种来源:脏比较判定「盘上已是这一份」,或交接/退出在途跳过写盘。
+			// 两者都不能当成「已落盘」—— 是否 durable 一律由 IsSettlementDurable 按字节判。
+			LOG_DEBUG << "[PlayerBattle] 结算存盘未产生写入(脏比较相等或写盘被跳过), player_id="
+					  << playerId << " battle_id=" << battleId;
+		}
+	}
+
+	// **销账的唯一入口**(= 给 battle 侧发件箱的 ACK,R07)。
+	//
+	// 两类调用方共用它,区别只在账本里有没有这一局:
+	//  (a) 判废 / 重复投递:这一局根本不需要被应用(锁已易主、battle_id 不匹配、已作废)。
+	//      账本里没有它 -> 立即销账,与改造前行为完全一致。
+	//  (b) 已应用:账本里有它。此时销账必须等它的字节真的落了盘,否则
+	//      「应用 -> 销账 -> 崩溃」把奖励永久吞掉。没落盘就再推一次存盘、什么都不删,
+	//      交给发件箱下一轮(10s)、reaper(30s)或下次登录补销账。
+	//
+	// 为什么 (b) 必须覆盖那些看起来「与应用无关」的判废分支:应用成功后紧接着就
+	// ClearBattleFreeze(删锁 + 摘 InBattleComp),于是发件箱 10s 后的第一次重投必然落进
+	// 「无 InBattleComp 且锁不在」那一支 —— 改造前它会当场销账,把延后的努力全部作废
+	// (评审 blocker 1)。按 player_id 现取实体,调用方不必持实体句柄,也不会拿到过期句柄。
+	void AckSettlementPending(const uint64_t playerId, const uint64_t battleId)
+	{
+		const auto player = tlsEcs.GetPlayer(playerId);
+		if (tlsEcs.actorRegistry.valid(player) && GuidForLog(player) == playerId &&
+			battle_settlement::HasApplied(SettlementLedgerOf(player), battleId) &&
+			!IsSettlementDurable(player, battleId))
+		{
+			RequestSettlementPersist(player, playerId, battleId);
+			LOG_INFO << "[PlayerBattle] 结算已应用但尚未落盘,销账延后: player_id=" << playerId
+					 << " battle_id=" << battleId << ",等落盘后由重投/reaper/登录补销账";
+			return;
+		}
+		ClearPendingSettlementIfMatch(playerId, battleId);
 	}
 
 	// 写待结算记录(两键同 TTL)。离线分支仍然写:battle 已经写过同一份,这里是
@@ -1279,8 +1387,10 @@ void PlayerBattleSystem::RestoreBattleFreezeOnLogin(entt::entity player, const u
 		kGetLockAndCtxScript, playerId, playerId);
 }
 
-bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::BattleSettlementData& settlement)
+bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::BattleSettlementData& settlement,
+                                                bool* alreadyAppliedOut)
 {
+    if (alreadyAppliedOut != nullptr) *alreadyAppliedOut = false;
     if (!tlsEcs.actorRegistry.valid(player)) return false;
     const uint64_t playerId = GuidForLog(player);
     const uint64_t battleId = settlement.battle_id();
@@ -1288,6 +1398,29 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     {
         LOG_ERROR << "[PlayerBattle] 应用结算失败: 实体或结算归属非法, player_id=" << playerId
                   << " battle_id=" << battleId;
+        return false;
+    }
+
+    // 持久账本先判:它是**权威**的「这一局是否已经应用过」,唯一能跨进程重启与实体重建
+    // 生效的一层(thread_local 应用缓存重启即空)。命中 = 奖已经发过,绝不能再发一次。
+    // 但这**不**代表可以销账 —— 能不能销账由 IsSettlementDurable 按落盘字节单独判,
+    // 调用方经 AckSettlementPending 决定。两条判据分开是本次改造的核心。
+    if (battle_settlement::HasApplied(SettlementLedgerOf(player), battleId))
+    {
+        LOG_INFO << "[PlayerBattle] 结算已在持久账本中,跳过重复应用: player_id=" << playerId
+                 << " battle_id=" << battleId;
+        if (alreadyAppliedOut != nullptr) *alreadyAppliedOut = true;
+        return true;
+    }
+
+    // 整笔可应用判据。必须在任何不可重复的副作用之前(应用缓存契约),且必须覆盖**整笔**结算 ——
+    // 改造前它只看 gold/items,于是一笔「只有 HP + 宝宝 + 击杀事实」的 PVE 结算(打空怪、无掉落,
+    // 完全正常)会在冻结期穿过闸门:任务进度被推、宝宝被改,而此刻存盘被硬性跳过,改动随实体
+    // 销毁一起没,账本却已记成已应用。
+    if (!IsSettlementApplicable(player))
+    {
+        LOG_WARN << "[PlayerBattle] 玩家此刻不可改(跨 zone 冻结 / 交接在途 / 退出中),"
+                    "保留结算待重投: player_id=" << playerId << " battle_id=" << battleId;
         return false;
     }
 
@@ -1301,19 +1434,6 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 					  << " battle_id=" << settlement.battle_id();
 			return false;
 		}
-
-	    // 跨 zone 冻结期整笔延后:此刻改源端资产,目标端已 marshal 的快照里还是旧值,
-	    // 改动等于丢失。金币路径本来就会被 AddCurrency 拒(返回 false 重投),但 gold_gain==0
-	    // 而只有道具的结算原先无人拦 —— 会被标记 Applied、道具却一件没动。
-	    // 这里必须在任何不可重复的副作用之前返回(应用缓存契约)。
-	    if ((settlement.gold_gain() > 0 || settlement.items_consumed_size() > 0 ||
-	         settlement.items_gained_size() > 0) &&
-	        PlayerLifecycleSystem::IsCrossZoneFrozen(player))
-	    {
-	        LOG_WARN << "[PlayerBattle] 跨 zone 冻结中,保留结算待重投: player_id=" << playerId
-	                 << " battle_id=" << battleId;
-	        return false;
-	    }
 
 	    // 唯一会正常返回失败的入账入口必须在 HP/宝宝/任务副作用之前执行。
 	    // 拒绝时不标记完成、不销账，保留 pending 等服务恢复后重投。
@@ -1411,6 +1531,18 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 	            tlsEcs.dispatcher.trigger(progress);
 	        }
 	    }
+		// 登记「这一局已应用」。必须在所有副作用之后、返回 true 之前:提前登记会让中途
+		// 失败的结算被永久判成已应用。条目与上面这些资产改动在同一份 player_database blob 里,
+		// 下一次落盘要么一起落、要么一起没 —— 这正是幂等能跨进程重启生效的全部原因。
+		if (battle_settlement::RecordApplied(SettlementLedgerOf(player), battleId,
+											 TimeSystem::NowMillisecondsUTC()))
+		{
+			LOG_ERROR << "[PlayerBattle] metric=battle_settlement_ledger_evicted player_id=" << playerId
+					  << " battle_id=" << battleId << ",账本满(连续 "
+					  << battle_settlement::kMaxAppliedRecords
+					  << " 局销账未确认,说明 Redis 条件删长期失败)已淘汰最旧项;"
+						 "被淘汰的那一局若再被重投会重复发奖";
+		}
 		LOG_INFO << "[PlayerBattle] 结算已应用: player_id=" << playerId
 				 << " battle_id=" << settlement.battle_id()
 				 << " outcome=" << settlement.outcome()
@@ -1420,22 +1552,25 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 				 << " rounds=" << settlement.total_rounds();
         return true;
     });
-    if (status == ApplicationCache::Result::Applied) return true;
+    if (status == ApplicationCache::Result::Applied)
+    {
+        // 立刻压一次存盘,把「已应用但没落盘」的窗口从一个周期存盘压到一次 Redis 往返。
+        // 这一步在 pending 每玩家单槽的前提下是必需的:槽位被占太久,玩家打下一场时
+        // battle 侧的无条件 SET 会覆盖掉上一场的 payload,那一局就再无持久副本。
+        RequestSettlementPersist(player, playerId, battleId);
+        return true;
+    }
     if (status == ApplicationCache::Result::Duplicate)
     {
-        // 应用过但上次 Redis 清理可能未完成；只重试条件销账，不重复发奖或推任务。
-        // 重登补发旧局时不能摘掉新局组件，两个 Redis 清理也都校验 battle_id。
-        const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
-        const bool removeCurrent = current != nullptr && current->battle_id() == battleId;
-        ClearPendingSettlementIfMatch(playerId, battleId);
-        DeleteBattleLockIfMatch(playerId, battleId);
-        // 先发条件删锁再摘组件(组队跟随链读 battle:lock fail-closed)
-        if (removeCurrent)
-        {
-            RemoveInBattleComp(player);
-        }
-        LOG_INFO << "[PlayerBattle] 重复结算已跳过并重试条件销账: player_id=" << playerId
-                 << " battle_id=" << battleId;
+        // 走到这里 = 进程内缓存说「应用过」,但函数开头的持久账本里没有这一局。
+        // 以账本为准:缓存是上一条实体生命周期留下的陈旧记录(实体被重建 —— 重登、
+        // DiscardDeposedEntityOnReentry —— 而那次应用并没有落盘,否则账本会随盘上的字节
+        // 一起回来)。既然资产也没落盘,这一局就该被重新应用,而不是被当成重复吞掉。
+        // 忘掉这条缓存记录,本轮不应用、不销账,交给下一轮重投真正应用。
+        gSettlementApplications.Forget(playerId, battleId);
+        LOG_ERROR << "[PlayerBattle] metric=battle_settlement_cache_ledger_mismatch player_id=" << playerId
+                  << " battle_id=" << battleId
+                  << ",进程内缓存判重复但持久账本无记录,已按账本重置缓存待重投";
         return false;
     }
     // InFlight 不能提前 ACK；Failed/Full 保留记录供重投，避免永久吞掉合法结算。
@@ -1495,14 +1630,14 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 					// 判定为"这一局不再需要结算"就必须销账(条件删,只删仍属于本局的记录):
 					// 不销账的话 battle 会一直重投到次数用尽,而且记录会留到玩家下次登录
 					// 被登录钩子应用 —— 那等于把刚判废的结算又发了出去。
-					ClearPendingSettlementIfMatch(playerId, battleId);
+					AckSettlementPending(playerId, battleId);
 					return;
 				}
 				if (std::string(reply->str, reply->len) != std::to_string(battleId))
 				{
 					LOG_WARN << "[PlayerBattle] 离线结算丢弃: 战斗锁值不匹配, player_id=" << playerId
 							 << " battle_id=" << battleId;
-					ClearPendingSettlementIfMatch(playerId, battleId);
+					AckSettlementPending(playerId, battleId);
 					return;
 				}
 				StorePendingSettlement(playerId, battleId, payload);
@@ -1521,7 +1656,7 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 				 << " event_battle_id=" << battleId << " in_battle_id=" << inBattle->battle_id();
 		// 条件销账:只删仍指向本局的记录。玩家已经在打下一场时,记录早被那一局覆盖,
 		// 这里是无害的空操作;而真的是"重复投递"时,它让 battle 停止重投。
-		ClearPendingSettlementIfMatch(playerId, battleId);
+		AckSettlementPending(playerId, battleId);
 		return;
 	}
 	if (inBattle == nullptr)
@@ -1550,7 +1685,7 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 				{
 					LOG_WARN << "[PlayerBattle] 结算丢弃: 无 InBattleComp 且锁不在/值不匹配(重复投递或已作废), player_id="
 							 << playerId << " battle_id=" << battleId;
-					ClearPendingSettlementIfMatch(playerId, battleId);
+					AckSettlementPending(playerId, battleId);
 					return;
 				}
 				if (!tlsEcs.actorRegistry.valid(player) || GuidForLog(player) != playerId ||
@@ -1571,18 +1706,20 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 				}
 				LOG_WARN << "[PlayerBattle] metric=battle_settlement_applied_by_lock player_id=" << playerId
 						 << " battle_id=" << battleId << ",无 InBattleComp,按锁值匹配应用结算";
-				if (!ApplySettlementToEntity(player, event.settlement())) return;
+				bool alreadyApplied = false;
+				if (!ApplySettlementToEntity(player, event.settlement(), &alreadyApplied)) return;
 				// 组件可能在回调期间被登录重建/迟到确认挂回来(同 battle_id):一并摘除
 				ClearBattleFreeze(player, playerId, battleId);
 				// 销账 = 给 battle 侧发件箱的 ACK(R07),必须在应用之后
-				ClearPendingSettlementIfMatch(playerId, battleId);
-				PushBattleEndToPlayer(player, event.settlement());
+				AckSettlementPending(playerId, battleId);
+				if (!alreadyApplied) PushBattleEndToPlayer(player, event.settlement());
 			},
 			(std::string("GET ") + kBattleLockKeyFmt).c_str(), playerId);
 		return;
 	}
 
-	if (!ApplySettlementToEntity(player, settlement)) return;
+	bool alreadyApplied = false;
+	if (!ApplySettlementToEntity(player, settlement, &alreadyApplied)) return;
 	ClearBattleFreeze(player, playerId, battleId);
 	// 销账 = 给 battle 侧发件箱的 ACK(R07):battle 探测到伴生 id 键已不属于本局就停止重投。
 	// 顺序不能反 —— 先销账后应用的话,应用中途进程崩溃就两头落空。
@@ -1593,8 +1730,8 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 	// fire-and-forget 语义,不是本次引入的新形状。用"锁还在才补应用"来收紧它是错的:
 	// 玩家离线超过锁 TTL(deadline+60s)后锁自然过期,而待结算记录还有 7 天,
 	// 按锁 gating 会把这类**合法**的离线结算判掉,那是真丢奖励。
-	ClearPendingSettlementIfMatch(playerId, battleId);
-	PushBattleEndToPlayer(player, settlement);
+	AckSettlementPending(playerId, battleId);
+	if (!alreadyApplied) PushBattleEndToPlayer(player, settlement);
 }
 
 void PlayerBattleSystem::ApplyPendingSettlement(entt::entity player, const ::BattleSettlementEvent& event)
@@ -1602,7 +1739,8 @@ void PlayerBattleSystem::ApplyPendingSettlement(entt::entity player, const ::Bat
 	const auto& settlement = event.settlement();
 	const uint64_t playerId = settlement.player_id();
 
-	if (!ApplySettlementToEntity(player, settlement)) return;
+	bool alreadyApplied = false;
+	if (!ApplySettlementToEntity(player, settlement, &alreadyApplied)) return;
 
 	// 理论上离线结算与"实体上还挂着 InBattleComp"不共存(实体重建后组件不落库),
 	// 防御性摘除:同 battle_id 才摘,避免误伤登录后刚备战的新战斗
@@ -1613,7 +1751,7 @@ void PlayerBattleSystem::ApplyPendingSettlement(entt::entity player, const ::Bat
 	// 两者都按 battle_id **条件删**:登录钩子理论上早于任何备战,但一旦顺序反过来,
 	// 无条件 DEL 会把玩家刚开始的下一场的记录/锁抹掉。条件删同时也是给 battle 侧
 	// 发件箱的 ACK(R07)。
-	ClearPendingSettlementIfMatch(playerId, settlement.battle_id());
+	AckSettlementPending(playerId, settlement.battle_id());
 	DeleteBattleLockIfMatch(playerId, settlement.battle_id());
 
 	// 先发条件删锁再摘组件(组队跟随链读 battle:lock fail-closed)
@@ -1622,7 +1760,7 @@ void PlayerBattleSystem::ApplyPendingSettlement(entt::entity player, const ::Bat
 		RemoveInBattleComp(player);
 	}
 
-	PushBattleEndToPlayer(player, settlement);
+	if (!alreadyApplied) PushBattleEndToPlayer(player, settlement);
 	LOG_INFO << "[PlayerBattle] 离线挂起结算已补应用: player_id=" << playerId
 			 << " battle_id=" << settlement.battle_id();
 }
@@ -1839,10 +1977,46 @@ void PlayerBattleSystem::StartReaper(muduo::net::EventLoop* loop)
 			// 按 battle_id 条件删锁:作废判定与锁值同源,不会误删别的战斗
 			ClearBattleFreeze(entry.entity, playerId, entry.battleId);
 		}
+
+		// 第二遍:排空「已应用但销账尚未确认」的账本条目。
+		//
+		// 为什么需要它:销账被改成必须等落盘之后,而推动重试的只有 battle 侧发件箱,
+		// 它只重投 12 轮(120s)就放弃 —— 之后再没有任何人会来碰这条 pending。
+		// 没有这一遍,条目会一直挂到玩家下次登录,pending 也白占 7 天,还会被下一局的
+		// 无条件 SET 覆盖。有了它,排空只依赖本节点自己的定时器,不依赖对端是否还在重投。
+		//
+		// 稳态下这个 view 是空的(销账一确认就摘条目),所以这一遍几乎不产生开销。
+		struct PendingAck
+		{
+			uint64_t playerId;
+			uint64_t battleId;
+		};
+		std::vector<PendingAck> pendingAcks;
+		for (auto&& [entity, ledger] : tlsEcs.actorRegistry.view<BattleSettlementLedgerComp>().each())
+		{
+			if (ledger.applied_size() == 0) continue;
+			const uint64_t playerId = GuidForLog(entity);
+			if (playerId == 0) continue;
+			// 先收集再处理:AckSettlementPending 会按 player_id 重新取实体并可能触发存盘,
+			// 边遍历边调用等于在遍历中改注册表。
+			for (const auto& applied : ledger.applied())
+			{
+				pendingAcks.push_back({playerId, applied.battle_id()});
+			}
+		}
+		for (const auto& ack : pendingAcks)
+		{
+			AckSettlementPending(ack.playerId, ack.battleId);
+		}
 	});
 	gReaperActive = true;
 
 	LOG_INFO << "[PlayerBattle] 战斗冻结 reaper 已启动, interval=" << kReaperIntervalSec << "s";
+}
+
+void PlayerBattleSystem::SetPersistFnForTest(PersistFn fn)
+{
+	gPersistFn = (fn == nullptr) ? &PlayerLifecycleSystem::SavePlayerToRedis : fn;
 }
 
 void PlayerBattleSystem::StopReaper()

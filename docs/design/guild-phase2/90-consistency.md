@@ -271,6 +271,12 @@ S6 `ActivityDeps` 删 `Notifier`(用 `l.notify`),`OpIDs` 类型改 `data.OpIDMin
 ## G-03 `player_database` 加列与迁移
 
 - 字段号按 S3 规则"落码时下一个空闲号、声明在末尾"。按 91 的批次顺序:B3a-1 `profile_component = 15`,B4a-1 `asset_op_ledger = 16`;S4 4.3.4 原文"= 15"作废。
+- **`settlement_ledger = 17` 已被回合制战斗结算幂等占用**(2026-09-25 落码,见
+  [turn-battle-gap-closure.md](../turn-battle-gap-closure.md) §9.3)。它不属于帮会二期批次,
+  但共用 `player_database` 这条数轴,所以登记在这里 —— **帮会剩余批次取号从 18 起**。
+  与本节其余两批同一条纪律:生成物落地后、任何新 go/db / scene 启动前跑
+  `cmd/migrate plan → up → SHOW COLUMNS`;若与帮会某批同日落地可合并为一次迁移,
+  但 plan 必须只含这几条 ADD COLUMN。
 - 两批各自在生成物落地后、任何新 go/db / scene 启动前,对每份 zone 的 db 配置跑 `cmd/migrate plan → up → SHOW COLUMNS`(S3 §3.15a、S4 4.42 第 1b 步);若两批同一天连续落地,可合并为一次迁移,但 plan 必须只含这一或两条 ADD COLUMN。
 - B3a-2 的 merge_zone"按列名拷贝"必须先于任何带新列的合服演练。
 

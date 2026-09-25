@@ -99,6 +99,12 @@ public:
 
 	// reaper 扫描间隔(秒)。战斗作废的时间精度要求是"分钟级",30s 足够。
 	static constexpr double kReaperIntervalSec = 30.0;
+
+	// 存盘注入点。与通用资产通道同形状(PlayerAssetOpSystem::SetPersistFnForTest):
+	// 生产恒为 PlayerLifecycleSystem::SavePlayerToRedis,单测用它把「结算应用后立刻压一次
+	// 存盘」这一步替掉,避免单测被迫连 Redis。传 nullptr 恢复生产实现。
+	using PersistFn = bool (*)(entt::entity);
+	static void SetPersistFnForTest(PersistFn fn);
 	// battle:lock 的 EX 在 deadline 之上的余量(秒):锁必须活得比 InBattleComp 久,
 	// 避免"组件还在、锁先没了"让 match 放进第二场。
 	static constexpr uint32_t kLockExtraTtlSec = 60;
@@ -113,7 +119,11 @@ private:
 
 	// 把结算终值落到玩家实体；统一按 (player_id,battle_id) 有限去重。
 	// true=本次应用成功；false=重复已条件销账，或失败/处理中须保留 pending。
-	static bool ApplySettlementToEntity(entt::entity player, const ::BattleSettlementData& settlement);
+	// 返回 true = 这一局已经应用(本次应用成功,或此前已应用过),调用方可以解冻并尝试销账。
+	// alreadyAppliedOut 置 true 表示「此前就已应用」—— 奖是上一次发的,调用方**不要**再推一次
+	// 战斗结束面板,否则重投/重登会让客户端反复弹结算。
+	static bool ApplySettlementToEntity(entt::entity player, const ::BattleSettlementData& settlement,
+										bool* alreadyAppliedOut = nullptr);
 
 	// RECONNECT 重绑:经 Kafka gate-{gate_id} 发 BindBattleEvent(GateCommand,
 	// target_instance_id 必填,宪法 §7 不变量 2),并推 BattleReconnectS2C。

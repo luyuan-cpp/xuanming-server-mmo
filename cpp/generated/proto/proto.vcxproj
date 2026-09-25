@@ -31,6 +31,7 @@
     <ClCompile Include="client_rpc_router\client_rpc_router.grpc.pb.cc" />
     <ClCompile Include="common\asset\asset_op.pb.cc" />
     <ClCompile Include="common\component\asset_op_ledger_comp.pb.cc" />
+    <ClCompile Include="common\component\battle_settlement_ledger_comp.pb.cc" />
     <ClCompile Include="common\component\battle_comp.pb.cc" />
     <ClCompile Include="common\event\battle_event.pb.cc" />
     <ClCompile Include="common\event\team_event.pb.cc" />
@@ -171,6 +172,7 @@
     <ClInclude Include="common\asset\asset_op.pb.h" />
     <ClInclude Include="common\component\actor_comp.pb.h" />
     <ClInclude Include="common\component\asset_op_ledger_comp.pb.h" />
+    <ClInclude Include="common\component\battle_settlement_ledger_comp.pb.h" />
     <ClInclude Include="common\component\buff_comp.pb.h" />
     <ClInclude Include="common\component\base_comp.pb.h" />
     <ClInclude Include="common\component\currency_comp.pb.h" />

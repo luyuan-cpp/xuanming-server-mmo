@@ -6,11 +6,17 @@ package data
 // 它回答四件事:哪些行到期了(ListDue)、这一行归我处理(Claim)、这一轮没结论改天再来(Reschedule)、
 // 结论定了一次性落库并做对侧账(Finalize / ResolveManually)。另有清理任务与 assetopfix 用的两个读。
 //
-// 与 go/trade/internal/data/asset_op_repo.go 同形,**有意不同的两处**:
+// 与 go/trade/internal/data/asset_op_repo.go 同形,**有意不同的三处**:
 //  1. Finalize 与 ResolveManually 都同写 next_attempt_ms = now(07 §7.4.1 硬要求):B5d 的回档检查按
 //     "终态行的 next_attempt_ms = 终结时刻"查 `next_attempt_ms > since`,漏写 = 漏行 = 回档复制资产(fail-open),
 //     清理判龄也会偏早。assetop.Store 的 Finalize 契约注释(reconcile.go:136-138)与 trade 都漏了它,别照抄。
 //  2. 对侧账在同一事务里真的做了(资金 / 帮贡 / 次数 / 限购),trade 那边还只是 TODO。
+//  3. ResolveManually 写审计两列之前自己校验长度(validateManualAudit,92 §10.5):列是 MEDIUMTEXT,库不兜。
+//
+// 事务入口是 assetop.WithTxRetry 而不是 guild 的 inTx,依据 90-consistency part2 §2 第 6 / 8 条与 X-03:
+// 这里全是后台写,没有玩家在等"稍后重试"。inTx 把 1205 与重试耗尽归一成 ErrWriteConflict(给客户端的 busy tip)、
+// 子预算按 op 固定 1500ms;后台写要的是 1205 也重跑(isRetryableBackground)、Finalize 2000ms / 其余 1000ms 的子预算。
+// 两者隔离级相同(WithTxRetry 默认 READ COMMITTED,D7);提交后的缓存失效照样走 invalidateAfterCommit(opAssetFinalize)。
 //
 // 锁序与业务写事务一致:guild → guild_member → guild_player_op_seq → guild_asset_op → guild_daily_counter
 // (全序见 economy_repo.go 文件头)。本文件的每条锁定语句都是完整主键等值点操作(2026-09-21 死锁修复契约 P3):
@@ -75,6 +81,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"time"
+	"unicode/utf8"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/metric"
@@ -447,6 +454,15 @@ func (s *GuildAssetStore) Claim(ctx context.Context, opID, nowMs, leaseUntilMs, 
 		// 刚 CAS 成功又查不到:只可能是被并发删了(清理只删终态行),按故障返回。
 		return assetop.Op{}, false, fmt.Errorf("claim %s %d: row vanished after claim", guildAssetOpTable, opID)
 	}
+	// 回读的行必须仍是"我刚领到的未决行",否则不下发。Claim 的 CAS 与这次回读是两条语句,中间可能被人工终结
+	// (assetopfix 的 CAS 只看 status、不换令牌):对一条已被判成 ABORTED 的捐献再发一次扣款,scene 若仍接受,
+	// 就是钱扣了、次数却已退回、资金也不再记 —— 丢玩家的钱。令牌不同 = 租约已被别的副本接管(只可能是租约配得比
+	// 处理还短),同样不归我处理。这只收窄窗口、不消灭它(回读之后仍可能被终结):兜底仍是 Finalize 的 status CAS
+	// 与 assetopfix 的前置条件(只终结 scene 回 UNKNOWN、以后也不会再应用的行)。
+	// 放在解 payload 之前:已终结的坏包行不该再被当成毒行推迟、计一次 decode 错误。
+	if rec.GetStatus() != pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_PENDING || rec.GetLeaseToken() != token {
+		return assetop.Op{}, false, nil
+	}
 	bundle := &assetpb.AssetBundle{}
 	decodeErr := errors.New("empty payload")
 	if len(rec.GetPayload()) > 0 {
@@ -574,8 +590,8 @@ func (s *GuildAssetStore) Finalize(ctx context.Context, op assetop.Op, status as
 		int32(final), uint32(res.Outcome), res.Reason, reasonTip, nowMs, nowMs, op.OpID, PendingStatus())
 }
 
-// ResolveManually 是人工终结通道(assetopfix)。入参合法性(终态、操作人与理由长度)由 assetop.ResolveManually
-// 先校验;这里仍兜住"映射不出终态库值"的情况,在碰库之前失败。
+// ResolveManually 是人工终结通道(assetopfix)。assetop.ResolveManually 会先做通用入参校验;这里在碰库之前
+// 再兜两件本表自己的事:映射不出终态库值,以及审计两列超出列契约(validateManualAudit)。
 // 与 Finalize 共用同一把 `status = PENDING` 的 CAS 与同一份对侧账:人工与循环同时下手只有一个赢家;
 // 对侧账若各写一份,迟早出现"只改了一边"的分叉。
 func (s *GuildAssetStore) ResolveManually(ctx context.Context, r assetop.ManualResolution, nowMs uint64) (bool, error) {
@@ -583,8 +599,38 @@ func (s *GuildAssetStore) ResolveManually(ctx context.Context, r assetop.ManualR
 	if !isTerminalRecord(final) {
 		return false, fmt.Errorf("manual resolve %s %d: status %s is not terminal", guildAssetOpTable, r.OpID, r.Final)
 	}
+	if err := validateManualAudit(r); err != nil {
+		return false, fmt.Errorf("manual resolve %s %d: %w", guildAssetOpTable, r.OpID, err)
+	}
 	return s.terminate(ctx, r.OpID, r.Final, nowMs, "manual resolve", sqlResolveAssetOp,
 		int32(final), r.Operator, r.Reason, nowMs, nowMs, r.OpID, PendingStatus())
+}
+
+// resolved_by / resolve_reason 的长度上限,即 guild_db.proto 字段 27 / 28 注释里的列契约。
+// 按字符数(rune)计,与 assetop.ManualResolution 的校验口径相同:同一输入两边给出同一结论,不会出现
+// "包级校验放行、这里拒绝"的分叉。
+const (
+	resolvedByMaxRunes    = 64
+	resolveReasonMaxRunes = 191
+)
+
+// validateManualAudit 在写库之前校验人工终结的两个审计字符串:操作人必填,两列不超过列契约。
+//
+// 为什么 Store 还要自己查一遍(92-handoff §10.5):这两列落库是 MEDIUMTEXT,库既不截断也不报错,超长值会原样进表;
+// assetop 的前置校验只在经包级 assetop.ResolveManually 进来时才成立,而 ResolveManually 是导出的接口方法,
+// 单测、日后的管理 RPC 都能绕开包级函数直接调它。列契约归本表所有,由写入者在写入前兜底 ——
+// 上游被绕过或日后放宽时,审计列里也不会出现超长值。
+func validateManualAudit(r assetop.ManualResolution) error {
+	if r.Operator == "" {
+		return errors.New("resolved_by (operator) is required")
+	}
+	if n := utf8.RuneCountInString(r.Operator); n > resolvedByMaxRunes {
+		return fmt.Errorf("resolved_by (operator) has %d characters, limit %d", n, resolvedByMaxRunes)
+	}
+	if n := utf8.RuneCountInString(r.Reason); n > resolveReasonMaxRunes {
+		return fmt.Errorf("resolve_reason has %d characters, limit %d", n, resolveReasonMaxRunes)
+	}
+	return nil
 }
 
 // assetOpImmutable 是终结时要用的不可变列。

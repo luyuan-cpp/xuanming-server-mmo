@@ -50,6 +50,22 @@ public:
         return Result::Applied;
     }
 
+    // 忘掉一条已完成记录，让同一局能被重新应用。
+    // **唯一合法调用场景**：持久账本(BattleSettlementLedgerComp)里没有这一局，而本缓存
+    // 说应用过 —— 那次应用没落盘(实体被重建过)，资产也随之没了，必须重来。
+    // 权威是持久账本，本缓存只是进程内快路径；两者冲突时以账本为准。
+    // 正在应用中(InFlight)的项绝不摘：摘了会让重入保护失效。
+    bool Forget(uint64_t playerId, uint64_t battleId) {
+        const Key key{playerId, battleId};
+        const auto found = entries_.find(key);
+        if (found == entries_.end() || !found->second) return false;
+        entries_.erase(found);
+        for (auto it = completed_.begin(); it != completed_.end(); ++it) {
+            if (it->first == key) { completed_.erase(it); break; }
+        }
+        return true;
+    }
+
     std::size_t Size() const { return entries_.size(); }
 
 private:
