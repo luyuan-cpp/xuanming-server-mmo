@@ -226,7 +226,9 @@ TEST_F(PlayerBattleSettlementTest, FrozenPlayerDefersSettlementWithNoGoldOrItems
     EXPECT_FALSE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
     EXPECT_TRUE(kills.empty());
     EXPECT_EQ(tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health(), 100u);
-    EXPECT_EQ(tlsEcs.actorRegistry.try_get<BattleSettlementLedgerComp>(player), nullptr);
+    // 账本组件本身会被建出来(查重在判据之前),但这一局绝不能被登记进去。
+    EXPECT_FALSE(battle_settlement::HasApplied(
+        tlsEcs.actorRegistry.get<BattleSettlementLedgerComp>(player), settlement.battle_id()));
     EXPECT_EQ(gPersistCalls, 0);
 
     // 解冻后照常应用,奖励一次不差 —— 延后不是丢弃。
@@ -244,7 +246,8 @@ TEST_F(PlayerBattleSettlementTest, TravelHandoffDefersWholeSettlement) {
     EXPECT_FALSE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
     EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 0u);
     EXPECT_TRUE(kills.empty());
-    EXPECT_EQ(tlsEcs.actorRegistry.try_get<BattleSettlementLedgerComp>(player), nullptr);
+    EXPECT_FALSE(battle_settlement::HasApplied(
+        tlsEcs.actorRegistry.get<BattleSettlementLedgerComp>(player), settlement.battle_id()));
 }
 
 // ── 账本纯规则(无 ECS、无 Redis)────────────────────────────────────────────

@@ -5,8 +5,9 @@ package logic
 //
 // 四条贯穿全文件的纪律:
 //
-//  1. **身份只认会话,帮会只认复核过的映射**(Y-01):economyCaller = callerOf + operatorGuild。
-//     经济 RPC **不查**归属 zone(R4):S2 的申请事务已保证"是成员 ⇒ 归属区一致",
+//  1. **身份只认会话,帮会只认复核过的映射**(Y-01):economyCaller = callerOf + operatorGuild,
+//     快照里没有本人时以 MySQL 复核(ResolvePlayerGuild);事务回"不是成员 / 帮会不存在"时经 mapWriteErr
+//     调 VerifyPlayerGuildID 自愈。经济 RPC **不查**归属 zone(R4):S2 的申请事务已保证"是成员 ⇒ 归属区一致",
 //     合服窗口由事务内的闸门兜底,省下的同步预算留给 scene 同步投递。
 //  2. **合服闸门在事务里**:zone 一律取事务内读到的 guild.zone_id(缓存里的 zone 在合服后会说谎
 //     一个 TTL);闸门读不到按封锁处理(fail-closed),见 economyFence。
@@ -36,6 +37,7 @@ import (
 	pb "proto/guild"
 	"shared/assetop"
 	"shared/gameday"
+	tablepb "shared/generated/pb/table"
 	"shared/generated/table"
 )
 
@@ -186,11 +188,19 @@ func isSyncDelivery(ctx context.Context) bool {
 
 // economyCaller 是五个经济 RPC 的公共前置(Y-01)。
 //
-// 顺序:会话身份 → operatorGuild(缓存读到 0 时用 MySQL 复核)→ 帮会快照 → 快照里有本人。
-// **不查归属 zone**(R4,见文件头纪律 1)。快照里没有本人时回未入帮(省一次发号与建行),
-// 并与"帮会不存在"一支同口径以 MySQL 复核映射。
+// 快路径:会话身份(callerOf)→ operatorGuild(缓存读到 0 时用 MySQL 复核)→ 帮会快照 → 快照里有本人。
+// **不查归属 zone**(R4,见文件头纪律 1)。
 //
-// 返回约定同 clientWrite:err 非 nil = 故障;tip 非 nil = 业务拒绝;两者都为 nil 时 g 非 nil。
+// 坏路径(映射指着一个已不存在的帮,或快照里没有本人)交给 repo.ResolvePlayerGuild 以 MySQL 复核:
+// 它先失效那份可疑的帮会快照、用 VerifyPlayerGuildID 纠正映射,再**绕过缓存**直读权威快照。
+// 为什么不只纠正映射就回未入帮:坏路径有两种成因,只纠映射只治得了一种 ——
+//   - 映射陈旧(离帮后入了别的帮,审批提交后映射失效失败):纠正映射就够;
+//   - 映射是对的、快照陈旧(审批通过后帮会快照失效失败):映射本来就对,纠了等于没纠,
+//     刚入帮的玩家会在整个快照 TTL(30 分钟)里捐献 / 兑换 / 打开商店全部回"未入帮",且没有任何自愈路径。
+// 客户端 GetPlayerGuild 走的是同一个函数(guild_logic.go),两处对"我在哪个帮"的回答因此一致。
+// 代价只落在坏路径:几次缓存读 + 两三次主键 / 唯一索引点查。授权仍一律在事务里按锁住的行复核,这里的快照只用于预判与展示。
+//
+// 返回约定同 clientWrite:err 非 nil = 故障;tip 非 nil = 业务拒绝;两者都为 nil 时 g 非 nil 且快照里有本人。
 func (l *GuildLogic) economyCaller(ctx context.Context) (uint64, *data.GuildData, *base.TipInfoMessage, error) {
 	who := callerOf(ctx, 0)
 	if !who.fromClient {
@@ -204,19 +214,20 @@ func (l *GuildLogic) economyCaller(ctx context.Context) (uint64, *data.GuildData
 	if err != nil {
 		return who.playerID, nil, nil, fmt.Errorf("load guild %d: %w", guildID, err)
 	}
-	if g == nil {
-		// 映射指着一个已不存在的帮会(解散与缓存失效赛跑):以 MySQL 纠正映射后回未入帮。
-		l.verifyMapping(ctx, who.playerID, guildID)
+	if _, ok := memberOf(g, who.playerID); ok {
+		return who.playerID, g, nil, nil
+	}
+	fresh, err := l.repo.ResolvePlayerGuild(ctx, who.playerID)
+	if err != nil {
+		return who.playerID, nil, nil, fmt.Errorf("resolve guild of player %d (cached guild %d): %w", who.playerID, guildID, err)
+	}
+	if fresh == nil {
 		return who.playerID, nil, tipErr(constants.ErrNotInGuild, "not in any guild"), nil
 	}
-	if _, ok := memberOf(g, who.playerID); !ok {
-		// 映射指着一个快照里没有他的帮(典型:离帮后入了别的帮,审批提交后映射失效失败)。operatorGuild 只在
-		// 读到 0 时复核,这里不复核的话,这条路径永远纠正不了非 0 的陈旧映射,他在新帮的经济 RPC 会在整个
-		// 映射 TTL 内都回未入帮(Y-01)。复核失败只记日志,不改变本次回答。
-		l.verifyMapping(ctx, who.playerID, guildID)
-		return who.playerID, nil, tipErr(constants.ErrNotInGuild, "not a member of the guild"), nil
+	if fresh.GuildID != guildID {
+		logx.Infof("[GuildEconomy] player %d guild mapping healed from stale %d to %d", who.playerID, guildID, fresh.GuildID)
 	}
-	return who.playerID, g, nil, nil
+	return who.playerID, fresh, nil, nil
 }
 
 // memberOf 在快照里找某人。只用于展示与"省一次事务"的预判,授权一律在事务里复核。
@@ -528,6 +539,19 @@ func donationCurrencyOf(payload []byte) (*assetpb.CurrencyAmount, bool) {
 	return bundle.GetCurrencies()[0], true
 }
 
+// shopUsedCount 取一件商品在 now 所在周期里已兑换的份数(含待发放)。
+//
+// 周期键与兑换预留用同一个函数算(gameday.PeriodKey,一次请求只取一次 now):展示与占用若各算各的,
+// 跨 05:00 / 周一切点时会出现"页面说还能买 3 份、点下去说限购已满"。不限购(键 0,不占计数行)回 0;
+// 非法周期同样回 0 —— 启动校验已拒,运行期出现只可能是配表被错误替换,展示宁可少报也不能读错周期的行。
+func shopUsedCount(row *tablepb.GuildShopTable, usage map[data.ShopUsageKey]uint32, now time.Time) uint32 {
+	periodKey, ok := gameday.PeriodKey(row.GetLimitPeriod(), now)
+	if !ok || periodKey == 0 {
+		return 0
+	}
+	return usage[data.ShopUsageKey{GoodsID: row.GetId(), PeriodKey: periodKey}]
+}
+
 // shopOrderViewOf 把一行兑换指令装配成视图:goods_id = ref_id,份数 = ref_count,总帮贡 = contribution_delta。
 func shopOrderViewOf(row data.AssetOpRow) *pb.GuildShopOrderView {
 	order, reason := orderViewOf(row.Status, row.LastReason, row.ReasonTipID)
@@ -705,7 +729,10 @@ func (l *GuildLogic) donateToGuild(ctx context.Context, req *pb.DonateToGuildReq
 	})
 	if err != nil {
 		rejectTip, result, fault := l.economyTip(ctx, playerID, g.GuildID, err)
-		return &pb.DonateToGuildResponse{ErrorMessage: rejectTip}, result, fault
+		if fault != nil {
+			return nil, result, fault
+		}
+		return &pb.DonateToGuildResponse{ErrorMessage: rejectTip}, result, nil
 	}
 
 	l.deliverNow(ctx, eco, assetop.Op{
@@ -832,14 +859,14 @@ func (l *GuildLogic) buyGuildShopGoods(ctx context.Context, req *pb.BuyGuildShop
 	if count > MaxBuyCount(row, maxStack) {
 		return &pb.BuyGuildShopGoodsResponse{ErrorMessage: tipErr(constants.ErrShopLimit, "count exceeds max buy count")}, resultLimit, nil
 	}
-	// 以下两条是缓存预判,只为省一次发号与事务;事务内按 MySQL 锁行复核。
+	// 以下两条是预判,只为省一次发号与事务;事务内按 MySQL 锁行复核。
 	if g.Level < row.GetRequiredGuildLevel() {
 		return &pb.BuyGuildShopGoodsResponse{ErrorMessage: tipErr(constants.ErrShopLevelTooLow, "guild level too low")}, resultLevel, nil
 	}
 	// cost_contribution ≤ 1e9 且 count ≤ MaxShopBuyCount(启动校验),乘积不会溢出。
 	cost := row.GetCostContribution() * uint64(count)
-	if me, _ := memberOf(g, playerID); me.ContributionBalance < cost {
-		return &pb.BuyGuildShopGoodsResponse{ErrorMessage: tipErr(constants.ErrContributionInsufficient, "contribution insufficient")}, resultInsufficient, nil
+	if tip, result := l.contributionPrecheck(ctx, eco, g, playerID, cost); tip != nil {
+		return &pb.BuyGuildShopGoodsResponse{ErrorMessage: tip}, result, nil
 	}
 	periodKey, ok := gameday.PeriodKey(row.GetLimitPeriod(), start)
 	if !ok {
@@ -882,7 +909,10 @@ func (l *GuildLogic) buyGuildShopGoods(ctx context.Context, req *pb.BuyGuildShop
 	})
 	if err != nil {
 		rejectTip, result, fault := l.economyTip(ctx, playerID, g.GuildID, err)
-		return &pb.BuyGuildShopGoodsResponse{ErrorMessage: rejectTip}, result, fault
+		if fault != nil {
+			return nil, result, fault
+		}
+		return &pb.BuyGuildShopGoodsResponse{ErrorMessage: rejectTip}, result, nil
 	}
 
 	l.deliverNow(ctx, eco, assetop.Op{
@@ -922,6 +952,35 @@ func (l *GuildLogic) buyGuildShopGoods(ctx context.Context, req *pb.BuyGuildShop
 		resp.ContributionBalance = l.refundedBalance(ctx, eco, g.GuildID, playerID, reserved.BalanceAfter)
 	}
 	return resp, resultOfOrder(order), nil
+}
+
+// contributionPrecheck 是兑换前的帮贡预判:只为省一次发号与事务,授权仍在事务里按锁住的成员行复核。
+// 返回非 nil tip = 拒绝(result 是指标 label);nil = 放行进事务。
+//
+// 快照说够就放行;快照说不够时先直读 MySQL 确认再拒绝。只按快照拒绝有一条无法自愈的误判:
+// 快照里的帮贡靠结算后的缓存失效刷新,失效失败(Redis 抖动超过后台重试窗口)时它会比真实余额**低**一个 TTL,
+// 而商店页展示的是 MySQL 直读的余额(05 §5.21)—— 玩家看到"页面显示够、点下去说不够",整整 30 分钟都这样。
+// 快照偏高的一侧不必管:事务按锁内余额判,照样回帮贡不足。
+// 直读失败既不拒绝也不报故障:交给事务按锁内余额裁决(它本来就是权威判据),代价只是多发一个号。
+func (l *GuildLogic) contributionPrecheck(ctx context.Context, eco *EconomyDeps, g *data.GuildData, playerID, cost uint64) (*base.TipInfoMessage, string) {
+	if me, _ := memberOf(g, playerID); me.ContributionBalance >= cost {
+		return nil, ""
+	}
+	_, balance, found, err := eco.Repo.MemberContribution(ctx, g.GuildID, playerID)
+	switch {
+	case err != nil:
+		logx.Errorf("[GuildEconomy] confirm contribution before buying failed, leaving it to the transaction (guild %d, player %d): %v",
+			g.GuildID, playerID, err)
+		return nil, ""
+	case !found:
+		// 快照说他在帮、MySQL 说不在:以 MySQL 为准,顺手纠正映射(同 mapWriteErr 的 ErrNotGuildMember 一支)。
+		l.verifyMapping(ctx, playerID, g.GuildID)
+		return tipErr(constants.ErrNotInGuild, "not a member of the guild"), resultNotMember
+	case balance < cost:
+		return tipErr(constants.ErrContributionInsufficient, "contribution insufficient"), resultInsufficient
+	default:
+		return nil, ""
+	}
 }
 
 // refundedBalance:兑换被拒 / 中止后 Finalize 已退回帮贡,余额改为直读 MySQL。
@@ -1079,10 +1138,6 @@ func (l *GuildLogic) getGuildShop(ctx context.Context, _ *pb.GetGuildShopRequest
 			// 读路径不因一行坏配表整页失败:这件商品显示为不可兑换(单次上限 0),同时留 ERROR。
 			logx.Errorf("[GuildEconomy] Item row %d of GuildShop[%d] missing, shown as not purchasable", row.GetItemId(), row.GetId())
 		}
-		var used uint32
-		if periodKey, ok := gameday.PeriodKey(row.GetLimitPeriod(), now); ok && periodKey != 0 {
-			used = usage[data.ShopUsageKey{GoodsID: row.GetId(), PeriodKey: periodKey}]
-		}
 		resp.Goods = append(resp.Goods, &pb.GuildShopGoodsView{
 			GoodsId:            row.GetId(),
 			Name:               row.GetName(),
@@ -1094,7 +1149,7 @@ func (l *GuildLogic) getGuildShop(ctx context.Context, _ *pb.GetGuildShopRequest
 			Unlocked:           g.Level >= row.GetRequiredGuildLevel(),
 			LimitPeriod:        row.GetLimitPeriod(),
 			LimitCount:         row.GetLimitCount(),
-			UsedCount:          used,
+			UsedCount:          shopUsedCount(row, usage, now),
 			MaxBuyCount:        MaxBuyCount(row, maxStack),
 		})
 	}

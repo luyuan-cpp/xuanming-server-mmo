@@ -295,6 +295,15 @@ namespace
 	// 那一局就再也没有持久副本了(评审 blocker 3)。
 	void RequestSettlementPersist(entt::entity player, const uint64_t playerId, const uint64_t battleId)
 	{
+		// 不可改的实体不压存盘:冻结/交接在途时本节点无权再写盘,退出在途时退出存盘已经在飞
+		// (它 marshal 的那一份本来就含账本,落地即 durable),这里再压一次只会与之竞争。
+		// 跳过不影响正确性:durable 仍为假 -> 不销账 -> pending 保留 -> 重投或目的地补应用。
+		if (!IsSettlementApplicable(player))
+		{
+			LOG_DEBUG << "[PlayerBattle] 跳过结算存盘(实体此刻不可改), player_id=" << playerId
+					  << " battle_id=" << battleId;
+			return;
+		}
 		if (!gPersistFn(player))
 		{
 			// false 有两种来源:脏比较判定「盘上已是这一份」,或交接/退出在途跳过写盘。
