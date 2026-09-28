@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -13,6 +14,7 @@
 
 #include "grpc_client/data_service/data_service_grpc_client.h"
 #include "modules/id_segment/guid_segment_registry.h"
+#include "node/system/grpc_call_deadline.h"
 #include "node/system/node/node.h"
 #include "node_config_manager.h"
 #include "proto/common/base/node.pb.h"
@@ -24,13 +26,15 @@
 namespace
 {
     // 每个请求带一个客户端编号(gRPC metadata)。AllocateIdSegmentResponse 本身不回显 biz_tag /
-    // 请求编号,所以今天的归属靠下面的"共享路径单飞 + FIFO";Go 侧若把这个 key 回显到
+    // 请求编号,所以今天**响应**的归属靠下面的"共享路径单飞 + FIFO";Go 侧若把这个 key 回显到
     // initial metadata(或响应里加回显字段),这里会自动改走精确归属,不用再改 C++。
+    // **失败**的归属是精确的:生成的客户端把本次发出的 metadata 原样交给失败处理器(OnFailure)。
     constexpr char kSeqMetadataKey[] = "x-idseg-seq";
 
+    // 兜底路径(正常情况下失败通知先于 fetchTimeout 到达,走不到这里):
     // 一次请求被它的持有者按 fetchTimeout 判失败之后,响应可能还在路上。这段窗口里共享路径
     // 不发新请求,于是窗口内到达的任何响应都能无歧义地还给那一次(号没浪费,归属也不会串)。
-    // 窗口过了还没回来就放弃归属:一个 CAS 更新超过 3s + 10s 没回来,数据库已经病得够重,
+    // 窗口过了还没回来就放弃归属:一个 CAS 更新超过 fetchTimeout + 10s 没回来,数据库已经病得够重,
     // 此时被 FIFO 误归属的概率已经很小;而且各种类的范围校验(lo ≥ 上一段 hi)还挡一层。
     constexpr double kLateResponseWindowSec = 10.0;
 
@@ -61,6 +65,7 @@ namespace
     public:
         bool Send(GuidKind kind, uint32_t step);
         void OnResponse(const grpc::ClientContext &ctx, const ::data_service::AllocateIdSegmentResponse &resp);
+        void OnFailure(const GrpcCallFailure &failure);
 
     private:
         static entt::entity PickReadyDataServiceNode();
@@ -80,10 +85,9 @@ namespace
     // stub 再 emplace NodeInfo,三者同在才是可用连接。DataService 是全局池(node_util.h
     // IsZoneScopedNodeType 注释:所有 zone 共享一个逻辑池),所以不比对 zone_id;多实例随机分摊领段压力。
     //
-    // 为什么要看通道状态:生成的客户端在 RPC 失败时只打日志、不回调,失败只能靠 fetchTimeout
-    // 发现;data_service 整个不在时每次都白等 3s。通道不 READY 就直接返回"发不出去",客户端按
-    // 500ms→5s 退避,冷启动时 data_service 一连上就能领到段。try_to_connect=true 顺手把
-    // 空闲超时后 IDLE 的通道踢回 CONNECTING。
+    // 为什么要看通道状态:通道不 READY 时发出去也只会换回一次 UNAVAILABLE 失败通知,白占共享路径;
+    // 直接返回"发不出去",客户端按 500ms→5s 退避,冷启动时 data_service 一连上就能领到段。
+    // try_to_connect=true 顺手把空闲超时后 IDLE 的通道踢回 CONNECTING。
     entt::entity IdSegmentTransport::PickReadyDataServiceNode()
     {
         auto &registry = tlsNodeContextManager.GetRegistry(DataServiceNodeService);
@@ -221,6 +225,34 @@ namespace
         tlsGuidSegmentRegistry.Get(*owner).OnResponse(resp.error_code(), resp.lo(), resp.hi());
     }
 
+    // 失败按发出的请求编号精确归属:同一次调用只会有一次完成(成功或失败),编号对上就是它。
+    void IdSegmentTransport::OnFailure(const GrpcCallFailure &failure)
+    {
+        std::ostringstream why;
+        why << "gRPC " << failure.method << " code=" << static_cast<int>(failure.status.error_code())
+            << " msg=" << failure.status.error_message();
+
+        const std::string *sentSeq = failure.FindSentMetadata(kSeqMetadataKey);
+        if (sentSeq != nullptr && SeqMatches(inflight_, *sentSeq))
+        {
+            const GuidKind kind = inflight_->kind;
+            inflight_.reset();
+            // 客户端自己按连续失败次数节流记 ERROR,这里不再另记。
+            tlsGuidSegmentRegistry.Get(kind).OnTransportFailure(why.str());
+            return;
+        }
+        if (sentSeq != nullptr && SeqMatches(abandoned_, *sentSeq))
+        {
+            // 持有者早已按 fetchTimeout 判过失败;这次调用到此确定不会再有响应,共享路径不必再为它守迟到窗口。
+            LOG_WARN << "[idsegment] abandoned request seq=" << *sentSeq << " kind=" << GuidKindName(abandoned_->kind)
+                     << " finally failed (" << why.str() << "); releasing the shared DataService path";
+            abandoned_.reset();
+            return;
+        }
+        LOG_WARN << "[idsegment] failure for an unknown request seq '" << (sentSeq != nullptr ? *sentSeq : std::string{})
+                 << "' ignored (" << why.str() << ")";
+    }
+
     // DataService 节点连上(NodeInfo 是 ConnectToGrpcNode 最后 emplace 的组件)就催一次首段。
     // 此刻通道多半还是 CONNECTING,Send 会返回 false,客户端 500ms 后重试即可命中 READY。
     void OnDataServiceNodeConnected(entt::registry & /*registry*/, entt::entity /*entity*/)
@@ -234,6 +266,9 @@ void InitDataServiceReply()
     data_service::AsyncDataServiceAllocateIdSegmentHandler =
         [](const grpc::ClientContext &ctx, const ::data_service::AllocateIdSegmentResponse &resp)
     { tlsIdSegmentTransport.OnResponse(ctx, resp); };
+    data_service::AsyncDataServiceAllocateIdSegmentFailedHandler =
+        [](const GrpcCallFailure &failure, const ::data_service::AllocateIdSegmentRequest & /*request*/)
+    { tlsIdSegmentTransport.OnFailure(failure); };
 }
 
 std::size_t ConfigureGuidSegmentClients(Node & /*node*/)
@@ -244,6 +279,12 @@ std::size_t ConfigureGuidSegmentClients(Node & /*node*/)
     InitDataServiceReply();
 
     const IdSegmentConfig &config = gNodeConfigManager.GetBaseDeployConfig().id_segment();
+    // 单次领段的兜底期限从 DataService 的 gRPC deadline 派生、比它宽 1s(上游比下游宽,
+    // docs/design/grpc-client-deadline-failure-callback.md §4.2):失败通知必须先于它到,
+    // 否则持有者先放弃、共享路径进迟到窗口,随后到的失败 / 响应只能靠 abandoned_ 归属。
+    // Node 构造时已 Apply,这里读到的就是生效值。
+    const double fetchTimeoutSec =
+        std::chrono::duration<double>(grpc_call_deadline::Get(DataServiceNodeService)).count() + 1.0;
     std::array<bool, kGuidKindCount> configured{};
     std::size_t enabled = 0;
 
@@ -279,6 +320,7 @@ std::size_t ConfigureGuidSegmentClients(Node & /*node*/)
         options.initialStep = kindConfig.initial_step();
         options.minStep = kindConfig.min_step();
         options.maxStep = kindConfig.max_step();
+        options.fetchTimeoutSec = fetchTimeoutSec;
         // 传输 = 共享的 DataService 路径(按种类闭包);定时器 / 时钟留空 = 内置 TimerTaskComp / steady_clock。
         auto send = [kind](const std::string & /*bizTag*/, uint32_t step) { return tlsIdSegmentTransport.Send(kind, step); };
         if (!tlsGuidSegmentRegistry.Get(kind).Enable(std::move(options), std::move(send)))

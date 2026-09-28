@@ -29,14 +29,17 @@ import (
 //     - random(recommendAnchor):只看 pivot 起按 player_id 升序的前 RecommendAnchorWindow(W=1024)个去重 id
 //       (派生表里的 LIMIT 给出),每个候选的排除判定是 ≤5 次完整主键单行点查(FORCE INDEX (PRIMARY) +
 //       SEMIJOIN(FIRSTMATCH) 钉死)。单次调用 Handler 读 ≤ 窗口生产 + (W+1) + 5×W,与 friend / friend_block /
-//       friend_request 的行数、"拉黑我的人数"、全服 pending 数都无关;典型 ≈ 2.1×W。
+//       friend_request 的行数、"拉黑我的人数"、全服 pending 数都无关;典型 2.1–3.1×W。窗口生产随计划不同:
+//       跳跃扫描约 W+1 次定位,范围扫描要读完窗口里 W 个人的全部出边(最坏 ≈ W×MaxFriends ≈ 20.5 万次,
+//       见 RecommendAnchorWindow 的"代价")。
 //     - mutual(RecommendByMutual):外层行数由 friend 表 player_id 前缀给出(我的好友 → 好友的好友),上界 MaxFriends²;
 //       ⚠ 但它的两条 OR 形 NOT EXISTS 仍可能被做成"每个 FOF 行扫一遍全服 pending",2026-09-28 在对抗数据上实测过
 //       (见 RecommendByMutual 的注释),属已登记待修项,**目前不满足本条**。
 //     "有界索引区间 + LIMIT"本身**不**构成上界:2026-09-28 在 MySQL 26.7.0、5 万玩家 / 100 万好友边的库上实测,
 //     旧写法 `WHERE player_id >= ? ... GROUP BY player_id ORDER BY player_id LIMIT ?` 的 GROUP BY 去重落成临时表、
 //     OR 形 NOT EXISTS 被做成 hash antijoin,LIMIT 无法提前终止 —— 扫描量 = pivot 之后的全部玩家数
-//     (pivot 在区间开头:49,899 个分组、1113 ms;中段:20,000 个分组、636 ms),随玩家规模线性增长。
+//     (pivot=1000100 在区间开头:49,899 个分组、1113 ms;pivot=1030000 在中段:20,000 个分组、636 ms),
+//     随玩家规模线性增长。
 //     直接 `ORDER BY RAND()` 或无下界地扫 friend 表同理:好友边上百万行时就是一次全表排序。
 //
 //  3. **候选池只有"有过好友边的玩家"**。random 兜底是从 friend 表里挑锚点,所以一个好友数为 0 的
@@ -136,7 +139,17 @@ LIMIT ?`
 // 逐条相同"(2026-09-28 实测:754 恰好凑满 20、753 只有 19)。取 1024,多出的 270 个位置留给唯一没有配置上限的
 // 一类("拉黑了我的人":MaxBlocks 只限拉黑方自己的名单)和超出上限的历史行。
 //
-// 代价随 W 线性:典型 ≈ 2.1×W 次 Handler 读(约 3 ms),窗口里全是被排除者时 ≈ 7×W。
+// 代价随 W 线性,但系数取决于派生表生产窗口时选了哪种计划 —— 由采样统计决定,同一份数据上两种都会出现:
+//   - 跳跃扫描(EXPLAIN ANALYZE 显示 Covering index skip scan for deduplication):约 W+1 次定位,
+//     单次调用典型 ≈ 2.1×W 次 Handler 读(约 3 ms);窗口里全是被排除者时 ≈ 7×W(W 个候选的 5 次点查全部做满);
+//   - 范围扫描 + 流式分组(Covering index range scan + Group (no aggregates)):要读完窗口里 W 个人的全部出边,
+//     每人 2 条边时约 3.1×W;最坏是窗口里全是满好友的人,≈ W×MaxFriends ≈ 20.5 万次索引读
+//     (AcceptFriend 对双方都查 MaxFriends,单人出边数由它封顶;超出上限的历史行按实际行数算)。
+//
+// 2026-09-28 实测(MySQL 26.7.0;50 万人每人 2 条边,另有 pivot 起 2000 人每人 202 条边):同一条查询,
+// ANALYZE 采样出的 n_diff_pfx01 ≈ 51–53 万时走跳跃扫描、2,151 次;≈ 56 万时走范围扫描、207,974 次,
+// EXPLAIN ANALYZE 约 81 ms。最坏情况仍与玩家总数无关、远在 RPC 预算之内,但"典型 2.1×W"不是上界。
+//
 // ⚠ 调大上面任一阈值都要同步复核本值:internal/config 的 TestRecommendAnchorWindowCoversExclusionBudget
 // 在 etc/friend.yaml 超预算时会红。超了不会推荐出错人,只会在排除者扎堆于 pivot 之后时推荐偏少。
 // 导出只是为了让 config 包的测试能引用(config import data,data 不能反向 import config)。
@@ -154,8 +167,9 @@ const RecommendAnchorWindow uint32 = 1024
 //
 // 代价:返回可能少于 limit(可能为空),两种来源都可接受 —— 推荐是可降级的展示功能:
 //   - pivot 靠近区间尾部时,pivot 之后本来就不足 limit 个合格者(正向扫,没有回绕);
-//   - 窗口里被排除的人超过 W - limit 个:只可能来自没有配置上限的"拉黑了我的人"成片落在 pivot 之后,
-//     或者好友 / 拉黑 / 申请 / exclude 的上限被调到超出窗口预算(见 RecommendAnchorWindow)。
+//   - 窗口里被排除的人超过 W - limit 个:只可能来自没有配置上限的"拉黑了我的人"成片落在 pivot 之后、
+//     超出上限的历史行,或者好友 / 拉黑 / 申请 / exclude 的上限被调到超出窗口预算(见 RecommendAnchorWindow)。
+//
 // 为了凑满而越过窗口继续扫、或加一次回绕扫,都会把扫描上界重新撑开 —— 那正是 2026-09-28 修掉的缺陷。
 // 返回的候选永远满足全部排除条件、不重复;偏少只影响数量。
 func (r *FriendRepo) RecommendRandom(ctx context.Context, playerID uint64, exclude []uint64, limit uint32) ([]RecommendCandidate, error) {
@@ -194,7 +208,8 @@ func (r *FriendRepo) RecommendRandom(ctx context.Context, playerID uint64, exclu
 //
 //  1. **派生表里的 LIMIT 就是上界本身**。带 LIMIT 的派生表不能合并进外层、外层条件也不会下推进去,优化器只能
 //     先把它物化,候选生产在第 W 个分组处停下(跳跃扫描约 W+1 次定位;或范围扫描 + 流式分组,最多
-//     W×MaxFriends 条索引项)。去掉这个 LIMIT 就退回旧缺陷:2026-09-28 实测退回扫 49,900 个分组、99,903 次读。
+//     W×MaxFriends 条索引项 —— 两种计划随采样统计翻转,实测数字见 RecommendAnchorWindow 的"代价")。
+//     去掉这个 LIMIT 就退回旧缺陷:2026-09-28 实测退回扫 49,900 个分组、99,903 次读。
 //     派生表上的 FORCE INDEX (PRIMARY) 排除"拿 friend_player_id 二级索引全扫再去重"这条路。
 //  2. **DISTINCT 负责去重**(取代旧写法的 GROUP BY):friend 表一条边一行,一个有 N 个好友的玩家出现 N 次,
 //     不去重会让同一候选重复 N 遍、还把窗口与 limit 名额吃光。
@@ -204,18 +219,22 @@ func (r *FriendRepo) RecommendRandom(ctx context.Context, playerID uint64, exclu
 //     r_out 我发出的 pending / r_in 发给我的 pending)。旧写法 `(a=me AND b=c) OR (a=c AND b=me)` 没有可用的完整
 //     主键,优化器只能去扫 per-me 甚至全服的集合。拆开是逻辑等价的:NOT EXISTS(A OR B) ≡ NOT EXISTS(A) AND
 //     NOT EXISTS(B);"已是好友"从 NOT IN 改成 NOT EXISTS 也等价(两边的列都是 NOT NULL)。
-//  5. **FORCE INDEX (PRIMARY) 与 SEMIJOIN(FIRSTMATCH) 缺一不可**:两者一起把每条排除钉成"每个候选一次主键单行
-//     点查",并保留"先排序、凑够 limit 即停"的计划形状。2026-09-28 实测(TestRecommendAnchor_PlanIsPerRowPrimaryKeyLookups
-//     同形数据):两个提示都不加时,r_out 被物化成 idx(status, updated_ms) 上 status=1 的全服 pending 扫描;
-//     只加 FORCE INDEX 时,b_in 被物化成 friend_block 主键全索引扫描、r_in 被物化成 friend_request 全表扫描;
-//     只加 FIRSTMATCH 时,b_in 改走 blocked_player_id 二级索引的 hash join、失去提前终止。
-//     这些计划都与玩家总数或无上限的 per-me 集合成正比。
+//  5. **SEMIJOIN(FIRSTMATCH) 是承重的,FORCE INDEX (PRIMARY) 是防线,两个都要留**:两者一起把每条排除钉成
+//     "每个候选一次主键单行点查",并保留"先排序、凑够 limit 即停"的计划形状。2026-09-28 实测
+//     (TestRecommendAnchor_PlanIsPerRowPrimaryKeyLookups 同形数据,EXPLAIN FORMAT=TRADITIONAL):
+//     (a) 两个提示都不加:五条排除全被物化,其中 r_out 物化成 idx(status, updated_ms) 上 status=1 的全服
+//     pending 扫描;(b) 只加 FORCE INDEX(去掉 SEMIJOIN 提示):五条排除全被物化,b_in 成了 friend_block
+//     主键全索引扫描、r_in 成了 friend_request 全表扫描。这两种计划都与玩家总数或无上限的 per-me 集合成正比。
+//     (c) 只加 SEMIJOIN(FIRSTMATCH)(去掉 FORCE INDEX):在上述夹具、friend_explain_scratch(5 万玩家 /
+//     100 万边)和"2 万人拉黑我"的对抗库上,计划都**仍是**逐行主键点查,只是 possible_keys 多出二级索引
+//     (如 b_in 的 idx_blocked_player)—— 没有实测到退化。FORCE INDEX 留作防线:防统计信息变化后优化器
+//     改用二级索引去建排除集;上面那个计划守卫用例用 possible_keys == PRIMARY 的断言钉住它。
 //     TiDB 不认 SEMIJOIN 提示(警告 8061 后忽略;v8.5.2 上实测计划仍有界),迁移时要按它自己的计划重新核对。
 //
 // 上界(与表规模无关):Handler 读 ≤ 窗口生产 + (W+1)(物化表扫描)+ 5×W(点查),外加 ≤ W 行的内存排序。
-// 2026-09-28 实测(MySQL 26.7.0,服务端预处理语句):5 万玩家 / 100 万边的库上 pivot 在开头与中段都是 2,151 次
-// (旧写法 149,725 / 75,055);对抗库(5 万玩家,窗口里塞满 734 个有上限的排除 + 100 个拉黑我的)4,301 次,
-// 旧写法超过 120 s 被 MAX_EXECUTION_TIME 中断;窗口被 2 万个"拉黑我的"占满时 6,147 次、返回空
+// 2026-09-28 实测(MySQL 26.7.0,服务端预处理语句):5 万玩家 / 100 万边的库上 pivot=1000100 / 1025000 / 1030000
+// 都是 2,151 次(旧写法依次 149,725 / 75,055 / 60,055);对抗库(5 万玩家,窗口里塞满 734 个有上限的排除
+// + 100 个拉黑我的)4,301 次,旧写法超过 120 s 被 MAX_EXECUTION_TIME 中断;窗口被 2 万个"拉黑我的"占满时 6,147 次、返回空
 // (旧写法约 22.8 s 后返回窗口外的 10 个)。
 //
 // 窗口里合格者不足 limit 时返回偏少(可能为空),见 RecommendRandom 的"代价"。

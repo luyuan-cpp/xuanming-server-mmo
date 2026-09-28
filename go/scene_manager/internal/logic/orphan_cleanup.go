@@ -135,13 +135,17 @@ func deleteOrphanChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone u
 	// 这里的清理会 Del 掉 scene:{id}:node 与人数键,属于"销毁"一类,同样受
 	// 屏障约束。整组跳过而不是逐条跳过,是因为 setKey 只能在全部成员都处理完
 	// 之后才删,半清理会留下一个指向已删映射的集合。
+	//
+	// 推迟摘除态(GO-6:已判死,但 death_at 没落地、节点还留在负载集)也要过屏障:这时
+	// IsNodeAlive 为真,只看它会让整组直接进下面的删除循环(对死节点发 DestroyScene 失败被忽略,
+	// 然后删 scene:{id}:node),在老节点 drain 期间改写归属。
 	for _, m := range members {
 		sceneId, err := strconv.ParseUint(m, 10, 64)
 		if err != nil || sceneId == 0 {
 			continue
 		}
 		nodeId, _ := svcCtx.Redis.Get(fmt.Sprintf("scene:%d:node", sceneId))
-		if nodeId != "" && !IsNodeAlive(svcCtx, zone, nodeId) &&
+		if nodeId != "" && (!IsNodeAlive(svcCtx, zone, nodeId) || isNodeDetachDeferred(zone, nodeId)) &&
 			reentryBarrierBlocks(svcCtx, zone, nodeId, barrierSiteOrphanCleanup) {
 			logx.Infof("[OrphanCleanup] zone=%d conf=%d: 场景 %d 的属主节点 %s 刚判死,整组推迟到下一次 fullSync",
 				zone, confId, sceneId, nodeId)

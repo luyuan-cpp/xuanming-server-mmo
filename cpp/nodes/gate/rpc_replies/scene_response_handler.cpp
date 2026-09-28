@@ -10,6 +10,10 @@ extern MessageResponseDispatcher gRpcResponseDispatcher;
 #include "node/system/node/node.h"
 #include "session/manager/session_manager.h"
 #include "gate_codec.h"
+#include "handler/event/scene_entry_dispatch.h"
+#include "table/proto/tip/common_error_tip.pb.h"
+
+#include <chrono>
 
 ///<<< END WRITING YOUR CODE
 
@@ -135,5 +139,14 @@ void OnSceneNodeHandshakeReply(const muduo::net::TcpConnectionPtr& conn, const s
 {
 ///<<< BEGIN WRITING YOUR CODE
 	gNode->GetNodeRegistrationManager().OnHandshakeReplied(*replied);
+	// CPP-2 链路就绪印章:TCP 连上 0.5s 后才发握手(registration_manager.cpp RunAfter(0.5)),scene 在收到
+	// 握手时才为本 gate 挂 RpcSession,之前发出的进场通知会被丢掉。所以"可以向这个 scene 交付进场"要以
+	// 这里的成功应答为准。conn 就是应答所走的出站连接,按连接对象盖章,重连后旧章自然失效。
+	// 不用 ConnectToNodeEvent:它按 peer_addr 匹配,而且不带 conn,分不出迟到的旧连接应答。
+	if (replied && replied->error_message().id() == kCommon_errorOK)
+	{
+		gate_scene_entry::OnSceneLinkHandshaken(conn, replied->peer_node().node_uuid(),
+		                                        std::chrono::steady_clock::now());
+	}
 ///<<< END WRITING YOUR CODE
 }

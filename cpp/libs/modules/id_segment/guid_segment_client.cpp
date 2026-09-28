@@ -284,7 +284,7 @@ void GuidSegmentClient::StartFetch(const char *why)
     }
     LOG_DEBUG << "[idsegment] fetch started kind=" << options_.kindName << " why=" << why << " seq=" << fetchSeq_
               << " step=" << step_ << " " << Describe();
-    // 生成的 gRPC 客户端在 status 非 OK 时不回调 handler,超时是唯一的失败通知。
+    // 兜底:传输失败正常由 OnTransportFailure 先报回;完成通知永远不来时才靠它。
     Schedule(TimerKind::kFetchTimeout, options_.fetchTimeoutSec,
              [this, seq = fetchSeq_] { OnFetchTimeout(seq); });
 }
@@ -299,6 +299,19 @@ void GuidSegmentClient::OnFetchTimeout(uint64_t seq)
     inflight_ = false;
     ++timeouts_;
     OnFetchFailed("fetch timeout (transport failure or data_service not answering)", /*alreadyLogged=*/false);
+}
+
+void GuidSegmentClient::OnTransportFailure(const std::string &why)
+{
+    // 只认本次在途:fetchTimeout 已先判过失败(inflight_ 已清)时不重复计失败、不重复安排重试。
+    // 已挂的 fetchTimeout 回调随后开火时按 inflight_ 已清自行作废。
+    if (!enabled_ || !inflight_)
+    {
+        return;
+    }
+    inflight_ = false;
+    const std::string text = "transport failure: " + why;
+    OnFetchFailed(text.c_str(), /*alreadyLogged=*/false);
 }
 
 void GuidSegmentClient::OnFetchFailed(const char *why, bool alreadyLogged)

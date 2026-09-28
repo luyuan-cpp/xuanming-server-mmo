@@ -36,6 +36,7 @@
     <ClInclude Include="player\constants\player.h" />
     <ClInclude Include="player\system\handoff_mark_withdraw.h" />
     <ClInclude Include="player\system\exit_release_mark.h" />
+    <ClInclude Include="player\system\travel_freeze_cap.h" />
     <ClInclude Include="player\system\player_data_loader.h" />
     <ClInclude Include="player\system\player_exit_intent.h" />
     <ClInclude Include="player\system\player_lifecycle.h" />

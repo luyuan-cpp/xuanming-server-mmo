@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 
@@ -108,7 +109,11 @@ struct PlayerOwnerEpochComp
 //               请求(加入已有镜像 / 副本时非 0)。
 // sceneConfigId 目标地图配置 id,填进 EnterSceneRequest.scene_conf_id;0 = 让 scene_manager
 //               按世界频道表挑大世界(与紧急疏散同款)。
-// requestedAtMs 0 = 交接尚未发起(等本次存盘落地);非 0 = handoff 标记已写、EnterScene 已发。
+// requestedAtMs 0 = 交接尚未发起(等本次存盘落地);非 0 = handoff 标记的 SET 已发出(已进缓冲 / 已执行 /
+//               结果未知);EnterScene 发没发看 enterSceneCorrelationId。它在 SET 的 command() 之前就写了,命令发不
+//               出去(同一次调用里)或 SET 收到 ERROR 应答(同一个回调里)时都会当场 AbortTravelHandoff 摘掉组件,
+//               所以只要观察到非 0,SET 就一定已经发出。冻结上限与晚发闸按它切"标记已发出"
+//               (travel_freeze_cap::IsHandoffMarkSent):已发出一侧它们只销毁、不解冻。
 //               发起之后本节点**不得再写**该玩家(SavePlayerToRedis 直接跳过):标记一旦落地,
 //               scene_manager 随时可能放行并 INCR epoch,再写只会被 CAS 拒、徒增
 //               stale_owner_write_rejected 噪声。也是 EnterScene 应答超时看门狗的代际:
@@ -129,6 +134,18 @@ struct PlayerOwnerEpochComp
 //               应答才算本代交接的应答(PlayerLifecycleSystem::DispatchEnterSceneReply)——requestedAtMs 在
 //               SET 发出前就已置位,拿它当"已发"判据会把 SET 在途期间到达的外来应答错吃成交接证据。
 //               每代只写一次;若被重写,只认最新一次。
+//               冻结上限的收口日志也用它判"交接的 EnterScene 发没发出去"(enter_scene_sent=),不另设字段。
+// frozenAtSteady
+//               单调时钟(steady_clock)上的冻结起点,只由 StartTravelHandoff 与 PlayerFrozenComp 同时写,之后不改。
+//               冻结硬上限与晚发闸(travel_freeze_cap.h)都以它为准。缺省值(时钟纪元)= "未打点":上限扫描发现时
+//               就地补记为当前时刻并计 freeze_unstamped,不当作到期(漏打点只会晚处置,不会下一拍就被销毁)。
+//               不复用 PlayerFrozenComp.frozenAtMs:那是墙钟,而且它是存盘阶段看门狗用来认代际的,不能动。
+//               类型必须与 travel_freeze_cap::Clock::time_point 一致(player_lifecycle.cpp 有 static_assert);这里
+//               直接写 std::chrono::steady_clock 而不包含 travel_freeze_cap.h,是为了不让这个被二十来个业务系统
+//               间接包含的组件头依赖系统头。
+// destroyDeferralReported
+//               "handoff 标记已发出、该销毁了,但还有未落地的存盘,推迟销毁"(ConcludeHandoffAfterMarkSent)的
+//               ERROR 与 destroy_deferred_unsettled_save 计数每次交接只打 / 只计一次;随组件销毁。
 struct PlayerTravelHandoffComp
 {
 	uint32_t targetZoneId{0};
@@ -139,6 +156,8 @@ struct PlayerTravelHandoffComp
 	bool hasRecordedEvidence{false};
 	uint8_t recordedEvidence{0};
 	uint64_t enterSceneCorrelationId{0};
+	std::chrono::steady_clock::time_point frozenAtSteady{};
+	bool destroyDeferralReported{false};
 };
 
 // 本节点替在线玩家发出、应答还没回来的**普通** EnterScene(客户端换图 / 镜像创建后的自动进场 /

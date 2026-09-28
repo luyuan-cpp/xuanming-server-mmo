@@ -60,6 +60,7 @@ include_directories(
 
 set(SOURCE_FILES
     handler/event/battle_binding_helper.cpp
+    handler/event/scene_entry_dispatch.cpp
     handler/event/event_handler.cpp
     handler/event/gate_event_handler.cpp
     handler/event/gate_kafka_command_router.cpp

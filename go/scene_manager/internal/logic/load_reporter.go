@@ -128,7 +128,8 @@ func isKnownNodeIdentityAmbiguous(zoneID uint32, nodeID string) bool {
 // 为什么 Redis 里已经有 death_at 还要再记一份进程本地的:death_at 只有 leader 写。
 // leader 缺位的窗口里节点丢了租约,没有人写 death_at,而「没有 death_at」在
 // CanReclaimDeadNode 里的语义是放行 —— 跟随者若据此接管玩家,正好撞上老进程 15s 的
-// 紧急疏散存盘(markNodeDeath 的 Setex 失败、PUT 分支提前 clearNodeDeath 也是同一类缺口)。
+// 紧急疏散存盘(PUT 分支提前 clearNodeDeath 也是同一类缺口;markNodeDeath 的 Setex 失败
+// 已不再摘负载集,见 retryDeferredNodeDetaches)。
 // 本地这一份不依赖任何人写 Redis:只要本副本看到了它消失,屏障就从那一刻起算。
 // 本副本没看到(进程在那之后才启动)时没有记录,退回只看 Redis 的 death_at。
 var (
@@ -177,7 +178,8 @@ func localGoneBarrierBlocks(svcCtx *svc.ServiceContext, zoneID uint32, nodeID st
 // 缺席可能只是「这一刻没看到它」(刷新间隔、leader 缺位、别的路径短暂改写),而且那些路径
 // 未必写 death_at —— 而「没有 death_at」在 CanReclaimDeadNode 里的语义是放行。
 // etcd 注册则只在租约到期或进程主动注销时消失,那时 removeNodeFromRedis / 周期巡检会先写
-// death_at 再摘负载集,再入屏障才有意义。
+// death_at 再摘负载集,再入屏障才有意义;death_at 写不进时推迟摘除,满一个屏障才不带标记摘
+// (GO-6)。所以「已从注册表消失」只是死亡证据,改派还要看负载集(world_init 两处已补)。
 // 用例:world_init 的改派前提也复用本函数(ba2337b0d),口径一致。
 //
 // knownNodes 每个副本都在维护(watch 的 PUT / DELETE 先改内存表,之后才判 leader),
@@ -313,16 +315,61 @@ func removeNodeFromRedis(svcCtx *svc.ServiceContext, entry nodeEntry) {
 	// 反过来的失败模式是安全的:标记写成功而进程随即崩在 Zrem 之前,节点仍留在
 	// 负载集里 ⇒ IsNodeAlive 为真,本来就不会触发改派;屏障多压一个 TTL 也只是
 	// 少自愈一轮。这正是本文件其余判定一贯的 fail-closed 方向。
-	markNodeDeath(svcCtx, entry.reg.ZoneId, entry.nodeID)
+	//
+	// 写不进就不摘(GO-6):以前 Setex 失败只打一条日志就照样 Zrem,等于亲手造出上面那个
+	// 「不在负载集 + 没有 death_at」的组合。现在写失败 → 节点留在负载集(按存活处理)进推迟
+	// 队列,由 retryDeferredNodeDetaches 每拍补写,补不上则满一个屏障后才不带标记摘除;
+	// death_at 已写、摘负载集失败同样进队列,不再等下一次 fullSync。见 reentry_barrier.go
+	// 「推迟的摘除」一段。
+	if err := markNodeDeath(svcCtx, entry.reg.ZoneId, entry.nodeID); err != nil {
+		deferNodeDetach(svcCtx, entry, err)
+		return
+	}
+	// 已有推迟任务(fullSync 重扫到它时这次写成了):沿用首次推迟时抄的判死时刻快照。
+	// 没有任务时 task 是零值(scenes=nil、scenesCaptured=false),detach 退回现读快照,与旧行为一致。
+	task, hadTask := lookupDeferredNodeDetach(entry.reg.ZoneId, entry.nodeID)
+	if err := detachDeadNode(svcCtx, entry, task.scenes, task.scenesCaptured); err != nil {
+		// death_at 已写,摘负载集失败:节点留在负载集按存活处理,进推迟队列每拍重试,不再等 fullSync。
+		deferNodeDetach(svcCtx, entry, err)
+		return
+	}
+	if hadTask && forgetDeferredNodeDetach(entry.reg.ZoneId, entry.nodeID) {
+		metrics.ObserveNodeDetachDeferred(entry.reg.ZoneId, metrics.NodeDetachOutcomeRecovered)
+	}
+}
 
-	loadKey := nodeLoadKey(entry.reg.ZoneId)
-	svcCtx.Redis.Zrem(loadKey, entry.nodeID)
-	svcCtx.Redis.Del(nodeSceneNodeTypeKey(entry.reg.ZoneId, entry.nodeID))
-	RemoveNodeConn(entry.reg.ZoneId, entry.nodeID)
-	metrics.ForgetNode(entry.nodeID, entry.reg.ZoneId, entry.reg.SceneNodeType)
-	logx.Infof("[LoadReporter] removed node %s from Redis load set (zone %d)", entry.nodeID, entry.reg.ZoneId)
+// detachDeadNode 把一个已判死的节点摘出调度面:负载集、类型镜像、gRPC 连接缓存、指标,
+// 然后把它名下场景的收尾交给屏障队列。
+//
+// 调用前提:death_at 已落地,或推迟已满一个屏障(G6-I1,见 reentry_barrier.go「推迟的摘除」)。
+// **不得单独调用**:绕过 markNodeDeath 直接摘,就是 GO-6 修掉的那个洞。
+//
+// 第一步 Zrem 失败时什么都不做就返回错误:不删类型镜像 —— node_selection.go getNodesForPurpose
+// 把「没有类型镜像」的节点当作未分类、放进所有用途的池子,节点还在负载集里时删掉镜像反而让
+// 死节点进了更多的池;也不入收尾队列 —— 节点还在负载集里、按存活处理,收尾要等它真正被摘除时
+// 由推迟任务带着判死时刻快照一次交出(或节点重新注册时交出),这里先入队只会重复。
+// 调用方把节点放进推迟队列重试。
+func detachDeadNode(svcCtx *svc.ServiceContext, entry nodeEntry, scenes []string, scenesCaptured bool) error {
+	zoneID := entry.reg.ZoneId
+	if _, err := svcCtx.Redis.Zrem(nodeLoadKey(zoneID), entry.nodeID); err != nil {
+		return fmt.Errorf("摘负载集失败: zone=%d node=%s: %w", zoneID, entry.nodeID, err)
+	}
+	if _, err := svcCtx.Redis.Del(nodeSceneNodeTypeKey(zoneID, entry.nodeID)); err != nil {
+		// 节点已不在负载集,残留的类型镜像不参与选点(getNodesForPurpose 只遍历负载集),
+		// 重新注册时 updateNodeLoad 会覆盖它。记一笔即可。
+		logx.Errorf("[LoadReporter] failed to delete scene_node_type mirror for dead node %s (zone %d): %v",
+			entry.nodeID, zoneID, err)
+	}
+	RemoveNodeConn(zoneID, entry.nodeID)
+	metrics.ForgetNode(entry.nodeID, zoneID, entry.reg.SceneNodeType)
+	logx.Infof("[LoadReporter] removed node %s from Redis load set (zone %d)", entry.nodeID, zoneID)
 
-	enqueueDeadNodeReconcile(svcCtx, entry)
+	if scenesCaptured {
+		enqueueDeadNodeReconcileSnapshot(entry, scenes)
+	} else {
+		enqueueDeadNodeReconcile(svcCtx, entry)
+	}
+	return nil
 }
 
 // deleteNodeCounters 清掉一个已判死节点的负载计数键。
@@ -639,75 +686,15 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 	// 领导者缺位窗口(选举间隙 / 领导者刚挂)里漏掉的动作,由新任领导者
 	// 当选时触发的 RequestLoadReporterResync -> fullSync 一次补齐。
 	if isLeader() {
-		// Clean stale Redis entries not in current etcd snapshot.
-		//
-		// 扫描范围 = 快照里的 zone ∪ Redis 里还留有负载集的 zone。只按快照
-		// 扫有个洞:某 zone 的**最后一个**节点在无领导窗口(或 SM 整体停机)
-		// 里死掉时,快照里根本没有这个 zone,它的负载集条目、计数和孤儿
-		// 实例就永远没人清(runPeriodicRebalance 也只迭代 GetActiveZones)。
-		sweepZones := make(map[uint32]struct{}, len(zones))
-		for _, z := range zones {
-			sweepZones[z] = struct{}{}
-		}
-		cursor := uint64(0)
-		for {
-			loadKeys, nextCursor, err := svcCtx.Redis.Scan(cursor, "scene_nodes:zone:*:load", 64)
-			if err != nil {
-				logx.Errorf("[LoadReporter] scan zone load keys failed at cursor=%d: %v", cursor, err)
-				break
-			}
-			for _, k := range loadKeys {
-				var z uint32
-				if _, err := fmt.Sscanf(k, NodeLoadKeyFmt, &z); err == nil {
-					sweepZones[z] = struct{}{}
-				}
-			}
-			if nextCursor == 0 {
-				break
-			}
-			cursor = nextCursor
+		// 中途失去领导权:降级即停,新领导者的 resync fullSync 会重扫同一批(与旧写法一致,
+		// 后面的 drain / init / rebalance / 孤儿清理本轮都不做)。
+		if !sweepStaleLoadSetMembers(svcCtx, seenByZone, zones) {
+			return resp.Header.Revision, nil
 		}
 
-		for zoneId := range sweepZones {
-			// seen 对快照外的 zone 是 nil map —— 该 zone 所有条目都视为 stale。
-			seen := seenByZone[zoneId]
-			loadKey := nodeLoadKey(zoneId)
-			pairs, err := svcCtx.Redis.ZrangeWithScores(loadKey, 0, -1)
-			if err != nil {
-				continue
-			}
-			for _, p := range pairs {
-				// 长循环里领导权可能中途易主:降级即停,
-				// 新领导者的 resync fullSync 会重扫同一批。
-				if !isLeader() {
-					return resp.Header.Revision, nil
-				}
-				if _, ok := seen[p.Key]; !ok {
-					// 顺序与 removeNodeFromRedis 保持一致:**先**写 death_at(下面那段注释说明了
-					// 为什么必须记),**再**摘负载集。反过来的话,两步之间并发的 EnterScene 会
-					// 看到「不在负载集」+「没有 death_at ⇒ 屏障已过」,在老节点 emergency drain
-					// 还没跑完时就改派(理由详见 removeNodeFromRedis 的注释)。
-					markNodeDeath(svcCtx, zoneId, p.Key)
-					svcCtx.Redis.Zrem(loadKey, p.Key)
-					svcCtx.Redis.Del(nodeSceneNodeTypeKey(zoneId, p.Key))
-					RemoveNodeConn(zoneId, p.Key)
-					// SceneManager 停机 / 领导者缺位窗口期间死掉的节点走不到
-					// watch DELETE,这里是唯一能观察到它们消失的地方。死亡时刻
-					// 必须补记:不记的话 CanReclaimDeadNode 读不到标记,会把它们
-					// 当成「没死过」直接放行改派,而它们很可能是几秒前刚断的、
-					// C++ 侧还在 drain。我们不知道真实死亡时刻,只能用「首次
-					// 观察到」这个偏晚的时刻 —— 方向是安全的(屏障结束点跟着偏晚)。
-					// (markNodeDeath 已在本分支开头、摘负载集之前调用。)
-					// 孤儿实例场景与计数残留也只有这条路径能补收(这也是新任
-					// 领导者补齐跟随期间漏掉的 DELETE 事件的唯一路径)。与 watch
-					// DELETE 同构:入队等再入屏障走完,由 drainPendingDeadNodeReconciles
-					// 收尾;计数由它在 reconcile **之后**清(顺序理由见 deleteNodeCounters)。
-					staleEntry := nodeEntry{nodeID: p.Key}
-					staleEntry.reg.ZoneId = zoneId
-					enqueueDeadNodeReconcile(svcCtx, staleEntry)
-				}
-			}
-		}
+		// 清扫不判截止(写不进只续推迟);先重试推迟的摘除(GO-6)再 drain,本次写成的节点同一拍
+		// 入收尾队列(屏障照样压着)。
+		retryDeferredNodeDetaches(svcCtx)
 
 		// watch 中断期间入队的死节点收尾在这里也推一把:屏障已过的立刻做掉,
 		// 没过的原样留在队列里等下一拍。
@@ -736,6 +723,77 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 	logx.Infof("[LoadReporter] full sync: %d nodes, %d zones, rev=%d",
 		len(resp.Kvs), len(zones), resp.Header.Revision)
 	return resp.Header.Revision, nil
+}
+
+// sweepStaleLoadSetMembers 清掉 Redis 负载集里、但不在本次 etcd 快照里的节点(只在领导者上调用)。
+// seenByZone 是快照里每个 zone 的节点集合,snapshotZones 是快照里出现过的 zone。
+// 中途失去领导权返回 false,调用方应停止本轮后续的变更动作;扫完返回 true。
+//
+// 扫描范围 = 快照里的 zone ∪ Redis 里还留有负载集的 zone。只按快照扫有个洞:某 zone 的
+// **最后一个**节点在无领导窗口(或 SM 整体停机)里死掉时,快照里根本没有这个 zone,它的
+// 负载集条目、计数和孤儿实例就永远没人清(runPeriodicRebalance 也只迭代 GetActiveZones)。
+//
+// 每个陈旧成员与 watch DELETE 走同一条摘除路径 removeNodeFromRedis:先写 death_at 再摘负载集,
+// 写不进就推迟(GO-6)。已在推迟队列里的节点被重扫到时:这次写成 death_at 就按首次推迟时的
+// 快照摘除(记 recovered),写不进(或写成但摘负载集失败)就续推迟(沿用首次时刻与快照);
+// 清扫从不判截止,也从不不带标记摘,截止时间只由 retryDeferredNodeDetaches 判。
+// 与旧写法的差异:这条路径现在会调
+// ForgetNode(nodeID, zone, 0) —— 本进程不认识这个节点,删不存在的序列是 no-op;同身份的活节点
+// 也不在清扫范围里。
+func sweepStaleLoadSetMembers(svcCtx *svc.ServiceContext, seenByZone map[uint32]map[string]struct{}, snapshotZones []uint32) bool {
+	sweepZones := make(map[uint32]struct{}, len(snapshotZones))
+	for _, z := range snapshotZones {
+		sweepZones[z] = struct{}{}
+	}
+	cursor := uint64(0)
+	for {
+		loadKeys, nextCursor, err := svcCtx.Redis.Scan(cursor, "scene_nodes:zone:*:load", 64)
+		if err != nil {
+			logx.Errorf("[LoadReporter] scan zone load keys failed at cursor=%d: %v", cursor, err)
+			break
+		}
+		for _, k := range loadKeys {
+			var z uint32
+			if _, err := fmt.Sscanf(k, NodeLoadKeyFmt, &z); err == nil {
+				sweepZones[z] = struct{}{}
+			}
+		}
+		if nextCursor == 0 {
+			break
+		}
+		cursor = nextCursor
+	}
+
+	for zoneId := range sweepZones {
+		// seen 对快照外的 zone 是 nil map —— 该 zone 所有条目都视为 stale。
+		seen := seenByZone[zoneId]
+		pairs, err := svcCtx.Redis.ZrangeWithScores(nodeLoadKey(zoneId), 0, -1)
+		if err != nil {
+			continue
+		}
+		for _, p := range pairs {
+			// 长循环里领导权可能中途易主:降级即停,
+			// 新领导者的 resync fullSync 会重扫同一批。
+			if !isLeader() {
+				return false
+			}
+			if _, ok := seen[p.Key]; ok {
+				continue
+			}
+			// SceneManager 停机 / 领导者缺位窗口期间死掉的节点走不到 watch DELETE,这里是唯一
+			// 能观察到它们消失的地方。死亡时刻必须补记:不记的话 CanReclaimDeadNode 读不到标记,
+			// 会把它们当成「没死过」直接放行改派,而它们很可能是几秒前刚断的、C++ 侧还在 drain。
+			// 我们不知道真实死亡时刻,只能用「首次观察到」这个偏晚的时刻 —— 方向是安全的
+			// (屏障结束点跟着偏晚)。孤儿实例场景与计数残留也只有这条路径能补收(这也是新任
+			// 领导者补齐跟随期间漏掉的 DELETE 事件的唯一路径):与 watch DELETE 同构,入队等
+			// 再入屏障走完,由 drainPendingDeadNodeReconciles 收尾;计数由它在 reconcile **之后**清
+			// (顺序理由见 deleteNodeCounters)。
+			staleEntry := nodeEntry{nodeID: p.Key}
+			staleEntry.reg.ZoneId = zoneId
+			removeNodeFromRedis(svcCtx, staleEntry)
+		}
+	}
+	return true
 }
 
 // watchAndRefresh starts an etcd Watch from the given revision, a periodic
@@ -775,6 +833,9 @@ func watchAndRefresh(ctx context.Context, svcCtx *svc.ServiceContext, rev int64)
 			}
 		case <-loadTicker.C:
 			refreshLoadScores(svcCtx)
+			// death_at 写不进 / 摘负载集失败而推迟的摘除(GO-6):在 drain 之前重试,
+			// 本拍摘成的节点同一拍入收尾队列(屏障照样压着)。
+			retryDeferredNodeDetaches(svcCtx)
 			// 被再入屏障压着的死节点收尾:屏障(默认 20s)远大于一拍(5s),
 			// 所以「等屏障」就是「多等几拍」,不需要每个死节点起一条 goroutine。
 			drainPendingDeadNodeReconciles(ctx, svcCtx)
@@ -857,6 +918,9 @@ func handleWatchEvent(ctx context.Context, svcCtx *svc.ServiceContext, ev *clien
 		// 节点(重新)注册 = 它此刻是活的,上一次的死亡标记必须抹掉,否则
 		// IsNodeAlive 说活、再入屏障却还压着它名下的场景,两个判定自相矛盾。
 		clearNodeDeath(svcCtx, entry.reg.ZoneId, entry.nodeID)
+		// 同理取消上一次死亡的推迟摘除(GO-6;只有领导者的队列里可能有它)。不取消的话
+		// 「重新注册后再死」会沿用上一次死亡的 firstObservedAt,截止时间提前。
+		cancelDeferredNodeDetachOnReregister(entry.reg.ZoneId, entry.nodeID)
 
 		// Clear stale gRPC connection: endpoint may have changed after restart.
 		RemoveNodeConn(entry.reg.ZoneId, entry.nodeID)
@@ -949,7 +1013,10 @@ func refreshLoadScores(svcCtx *svc.ServiceContext) {
 			Role   uint32
 		}{entry.reg.ZoneId, entry.reg.SceneNodeType}]++
 	}
-	metrics.SetNodesByRole(counts)
+	// 本进程配置的 ZoneId 即使一个节点都没有也要补 0:scene_manager 按 c.ZoneId 注册,该 zone 的
+	// scene 节点正是靠这个注册找到它,所以「服务 zone Z 的 SM 期待 Z 里有 scene 节点」是现成的事实。
+	// 不补的话整 zone 全灭时该 zone 一条序列都不剩,PoolEmpty 告警无从触发(见 SetNodesByRole)。
+	metrics.SetNodesByRole(counts, []uint32{svcCtx.Config.ZoneId})
 }
 
 // GetBestNode selects the instance-hosting node with the lowest load from

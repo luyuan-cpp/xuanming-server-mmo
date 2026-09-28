@@ -4,6 +4,8 @@
 #include "{{.GeneratorGrpcFileName}}.h"
 #include "proto/common/constants/etcd_grpc.pb.h"
 #include "core/utils/encode/base64.h"
+#include <atomic>
+#include <chrono>
 #include <boost/pool/object_pool.hpp>
 #include "grpc_call_tag.h"
 
@@ -11,6 +13,14 @@
      tagPool 无服务前缀,单独放真匿名 namespace 保持内部链接,避免多个无 package 服务撞名 */}}
 namespace {
 boost::object_pool<GrpcTag> tagPool;
+// 本文件所有 unary 调用的 deadline(毫秒)。启动时 Set{{.FileBaseNameCamel}}CallDeadline 按目标节点类型写入
+// (Node::Initialize → grpc_call_deadline::Apply);原子量:与应答处理器一样是进程级全局。
+std::atomic<uint32_t> callDeadlineMs{kDefaultGrpcCallDeadlineMs};
+
+std::chrono::system_clock::time_point NextCallDeadline() {
+    return std::chrono::system_clock::now() +
+        std::chrono::milliseconds(callDeadlineMs.load(std::memory_order_relaxed));
+}
 }
 
 {{if .Package}}namespace {{.Package}} {{"{"}}{{end}}
@@ -25,6 +35,9 @@ boost::object_pool<Async{{ $svc.Service }}{{ $method.Method }}GrpcClient> {{ $sv
 using Async{{ $svc.Service }}{{ $method.Method }}HandlerFunctionType =
     std::function<void(const ClientContext&, const {{ $method.CppResponse }}&)>;
 Async{{ $svc.Service }}{{ $method.Method }}HandlerFunctionType Async{{ $svc.Service }}{{ $method.Method }}Handler;
+{{- if not $method.ClientStreaming }}
+Async{{ $svc.Service }}{{ $method.Method }}FailedHandlerFunctionType Async{{ $svc.Service }}{{ $method.Method }}FailedHandler;
+{{- end }}
 {{ if $method.ClientStreaming }}
 
 void TryWriteNextNext{{ $svc.Service }}{{ $method.Method }}(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq) {
@@ -92,9 +105,22 @@ void AsyncCompleteGrpc{{ $svc.Service }}{{ $method.Method }}(entt::registry& reg
     if (call->status.ok()) {
         if (Async{{ $svc.Service }}{{ $method.Method }}Handler) {
             Async{{ $svc.Service }}{{ $method.Method }}Handler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC {{ $svc.Service }}.{{ $method.Method }} reply dropped: Async{{ $svc.Service }}{{ $method.Method }}Handler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (Async{{ $svc.Service }}{{ $method.Method }}FailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "{{ $svc.Service }}.{{ $method.Method }}", call->context, call->status, call->sentMetadata};
+        Async{{ $svc.Service }}{{ $method.Method }}FailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC {{ $svc.Service }}.{{ $method.Method }} failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	{{ $svc.Service }}{{ $method.Method }}Pool.destroy(call);
@@ -109,15 +135,7 @@ void Send{{ $svc.Service }}{{ $method.Method }}(entt::registry& registry, entt::
     pendingWritesBuffer.push_back(request);
     TryWriteNextNext{{ $svc.Service }}{{ $method.Method }}(registry, nodeEntity, cq);
 {{ else }}
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call({{ $svc.Service }}{{ $method.Method }}Pool.construct());
-    call->response_reader = registry
-        .get<{{ $svc.Service }}StubPtr>(nodeEntity)
-        ->PrepareAsync{{ $method.Method }}(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct({{ $svc.Service }}{{ $method.Method }}MessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    Send{{ $svc.Service }}{{ $method.Method }}(registry, nodeEntity, request, {}, {});
 {{ end }}
 }
 
@@ -132,13 +150,17 @@ void Send{{ $svc.Service }}{{ $method.Method }}(entt::registry& registry, entt::
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<{{ $svc.Service }}StubPtr>(nodeEntity)
-        ->PrepareAsync{{ $method.Method }}(&call->context, request,
+        ->PrepareAsync{{ $method.Method }}(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct({{ $svc.Service }}{{ $method.Method }}MessageId, (void*)call));
@@ -197,6 +219,32 @@ void Set{{ $m.FileBaseNameCamel }}IfEmptyHandler(const std::function<void(const 
     }
 {{- end }}
 {{- end }}
+}
+
+void Set{{ .FileBaseNameCamel }}FailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler) {
+{{- range $svc := .ServiceInfo }}
+{{- range $method := $svc.Methods }}
+{{- if not $method.ClientStreaming }}
+    Async{{ $svc.Service }}{{ $method.Method }}FailedHandler = handler;
+{{- end }}
+{{- end }}
+{{- end }}
+}
+
+void Set{{ .FileBaseNameCamel }}IfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler) {
+{{- range $svc := .ServiceInfo }}
+{{- range $method := $svc.Methods }}
+{{- if not $method.ClientStreaming }}
+    if (!Async{{ $svc.Service }}{{ $method.Method }}FailedHandler) {
+        Async{{ $svc.Service }}{{ $method.Method }}FailedHandler = handler;
+    }
+{{- end }}
+{{- end }}
+{{- end }}
+}
+
+void Set{{ .FileBaseNameCamel }}CallDeadline(std::chrono::milliseconds deadline) {
+    callDeadlineMs.store(static_cast<uint32_t>(deadline.count()), std::memory_order_relaxed);
 }
 
 {{ range $index, $m := .ServiceInfo }}

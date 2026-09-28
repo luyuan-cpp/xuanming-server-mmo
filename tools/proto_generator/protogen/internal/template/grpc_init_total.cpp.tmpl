@@ -1,5 +1,7 @@
 #pragma once
 
+#include <chrono>
+#include <cstdint>
 #include <functional>
 #include "entt/src/entt/entity/registry.hpp"
 #include <grpcpp/grpcpp.h>
@@ -30,6 +32,9 @@ namespace NodeUtils
 {{if .CppPackage}}namespace {{.CppPackage}} {{"{"}}{{end}}
     void Set{{.FileBaseNameCamel}}Handler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void Set{{.FileBaseNameCamel}}IfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void Set{{.FileBaseNameCamel}}FailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void Set{{.FileBaseNameCamel}}IfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void Set{{.FileBaseNameCamel}}CallDeadline(std::chrono::milliseconds deadline);
     void Init{{.FileBaseNameCamel}}GrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void Handle{{.FileBaseNameCamel}}CompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 {{if .CppPackage}}{{"}"}}{{end}}
@@ -45,6 +50,28 @@ void SetHandler(const std::function<void(const ClientContext&, const ::google::p
 {{ range .GrpcFiles }}
     {{.CppPackage}}::Set{{.FileBaseNameCamel}}Handler(handler);
 {{ end }}
+}
+
+void SetIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler){
+{{ range .GrpcFiles }}
+    {{.CppPackage}}::Set{{.FileBaseNameCamel}}IfEmptyFailedHandler(handler);
+{{ end }}
+}
+
+void SetFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler){
+{{ range .GrpcFiles }}
+    {{.CppPackage}}::Set{{.FileBaseNameCamel}}FailedHandler(handler);
+{{ end }}
+}
+
+{{/* 放在 HandleCompletedQueueMessage 之前:同一节点类型可能有多个 gRPC 文件(battle_node + player_battle),
+     与 InitGrpcNode 一样用互相独立的 if,不能写成 else if。 */}}
+void SetGrpcCallDeadline(uint32_t nodeType, std::chrono::milliseconds deadline){
+{{- range $file := .GrpcFiles }}
+    if (static_cast<uint32_t>({{$.NodeEnumCppType}}::{{$file.NodeServiceForCpp}}NodeService) == nodeType) {
+        {{$file.CppPackage}}::Set{{$file.FileBaseNameCamel}}CallDeadline(deadline);
+    }
+{{- end }}
 }
 
 void HandleCompletedQueueMessage(entt::registry& registry){

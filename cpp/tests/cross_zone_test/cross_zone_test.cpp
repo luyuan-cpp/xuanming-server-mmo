@@ -74,6 +74,15 @@
 //                                 the §11.2 "18 starts a same-zone handoff" chain
 //                                 still works, and an old scene_manager (no echo,
 //                                 corr 0) falls back to today's player_id matching.
+//   12. TravelFreezeCap         — handoff freeze hard cap + dispatch window
+//                                 (travel_freeze_cap.h): the budget relations the
+//                                 static_asserts guard, DecideFreezeCap / dispatch
+//                                 window / monotonic re-check pure functions, plus
+//                                 ECS-level seams in a host without Redis that drive
+//                                 EnforceTravelFreezeCaps (unfreeze only when the
+//                                 handoff mark was never sent, otherwise tip + kick +
+//                                 destroy without persisting) and the set_mark-stage
+//                                 gate in BeginTravelHandoff.
 //
 // History: these cases were written for the player_migrate data-moving chain
 // (Kafka PlayerMigrationEvent + ACK + CrossZoneReaper). That chain was
@@ -87,6 +96,15 @@
 //   - The handoff chain end-to-end (StartTravelHandoff → save → handoff mark →
 //     scene_manager.EnterScene → reply / watchdog) — needs scene-node bootstrap
 //     (tlsRedisSystem, world tick, a scene_manager). See robot travel-smoke.
+//   - Freeze cap (section 12) pieces the no-Redis / no-EventLoop host cannot reach
+//     (code review + runbook scenario H only):
+//       * the enter_scene-stage dispatch-window gate in RequestTravelEnterScene
+//         (only reachable from the handoff SET's OK callback);
+//       * the StartTravelHandoff fast-path forced save (HasUnsettledPlayerSave needs
+//         a real player-data Redis client, it is always false here);
+//       * the "unsettled save → defer destroy" branch of
+//         ConcludeHandoffAfterMarkSent (same reason);
+//       * RunAtMonotonic re-arming on an early muduo wake-up (needs an EventLoop).
 // ---------------------------------------------------------------------------
 
 namespace
@@ -1460,6 +1478,7 @@ TEST(ExitReleaseEcs, FailingClearKeepsTheLoadThenRefusesWhenExhausted)
 #include "proto/scene_manager/scene_manager_service.pb.h"
 #include "network/node_utils.h" // GetNodeInfo:tlsEcs.Clear() 会清 globalRegistry,zone 要在每个用例里重设
 #include "time/system/time.h"   // TimeSystem::NowMillisecondsUTC:在途换图组件的 sentAtMs
+#include "thread_context/node_context_manager.h" // 假 scene_manager 节点(StartTravelHandoff 的 SM 预检)
 
 namespace esr = enter_scene_reply;
 
@@ -1572,6 +1591,30 @@ void AttachSceneChange(entt::entity player, uint64_t sceneId, bool playerRequest
     pending.correlationId = correlationId;
 }
 
+// StartTravelHandoff 在冻结之前预检 scene_manager 是否可达(冻结上限:SET 之后才发现没有 SM 只能销毁 + 踢线,
+// 所以要在改状态之前挡住)。宿主里没有 SM 节点,凡是要真正起交接的用例都得临时登记一个假的:只挂 NodeInfo,
+// 够 GetSceneManagerEntity 挑中即可。作用域结束即销毁 —— 假实体上没有 gRPC 客户端,别的用例若走到真的发送点,
+// 不能让它被挑中。这些用例都在 BeginTravelHandoff 的 epoch / Redis 检查处就地 Abort,走不到发送点。
+class ScopedFakeSceneManagerNode
+{
+public:
+    ScopedFakeSceneManagerNode()
+    {
+        auto& registry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
+        entity_ = registry.create();
+        registry.emplace<NodeInfo>(entity_);
+    }
+    ~ScopedFakeSceneManagerNode()
+    {
+        tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService).destroy(entity_);
+    }
+    ScopedFakeSceneManagerNode(const ScopedFakeSceneManagerNode&) = delete;
+    ScopedFakeSceneManagerNode& operator=(const ScopedFakeSceneManagerNode&) = delete;
+
+private:
+    entt::entity entity_{entt::null};
+};
+
 ::scene_manager::EnterSceneResponse MakeReply(Guid playerId, uint32_t errorCode, uint64_t correlationId,
                                               bool withRedirect = false)
 {
@@ -1669,6 +1712,7 @@ TEST(EnterSceneReplyEcs, UncorrelatedReplyAfterSendFallsBackToLegacy)
 TEST(EnterSceneReplyEcs, SceneChange18StillStartsSameZoneHandoff)
 {
     // §11.2 回归:普通换图被 18 暂拒 → 用记下的目标起同 zone 交接。对号的依据从 player_id 换成了关联号。
+    const ScopedFakeSceneManagerNode sceneManager; // StartTravelHandoff 的 SM 预检
     const auto player = MakeReplyTestPlayer();
     AttachSceneChange(player, /*sceneId=*/777, /*playerRequested=*/true, /*correlationId=*/9);
     const auto before = travel_handoff_stats::Read();
@@ -1696,6 +1740,7 @@ TEST(EnterSceneReplyEcs, SceneChange18StillStartsSameZoneHandoff)
 TEST(EnterSceneReplyEcs, LegacySceneChange18StillStartsHandoff)
 {
     // 旧版 SM 不回显号:§11.2 的 18 链照样接得上(按 player_id 退回)。
+    const ScopedFakeSceneManagerNode sceneManager; // StartTravelHandoff 的 SM 预检
     const auto player = MakeReplyTestPlayer();
     AttachSceneChange(player, /*sceneId=*/777, /*playerRequested=*/true, /*correlationId=*/9);
     const auto before = travel_handoff_stats::Read();
@@ -1753,6 +1798,301 @@ TEST(EnterSceneReplyEcs, NoWaiterAndGonePlayerAreSilent)
     EXPECT_EQ(after.replyUnmatched, before.replyUnmatched);
     EXPECT_EQ(after.replyUncorrelated, before.replyUncorrelated)
         << "player_id 为 0 的应答在计 reply_uncorrelated 之前就返回";
+}
+
+// ============================================================================
+// 12. TravelFreezeCap —— 交接冻结硬上限 + 晚发闸 +「标记已发出」统一收口(travel_freeze_cap.h、
+//     PlayerLifecycleSystem::EnforceTravelFreezeCaps / BeginTravelHandoff):纯常量关系与纯判定,
+//     加无 Redis、无 EventLoop 宿主里的 ECS 级接缝。时间一律注入(单调时钟的相对偏移),不读真实墙钟。
+// ============================================================================
+#include "services/scene/player/system/travel_freeze_cap.h"
+
+namespace
+{
+namespace tfc = travel_freeze_cap;
+using namespace std::chrono_literals;
+
+constexpr Guid kCapPlayerId = 950300001;
+constexpr SessionId kCapSession = 131301;
+constexpr uint32_t kCapSelfZone = 1;
+// 注入的"冻结起点":离时钟纪元 1 小时,保证与"未打点"(纪元)区分开,且减去任何用例里的偏移都不为负。
+const tfc::Clock::time_point kT0 = tfc::Clock::time_point{} + std::chrono::hours(1);
+
+// 一个交接在途的在线玩家:本节点 zone = kCapSelfZone,会话活着(SessionMap 映射到本玩家),交接组件与冻结组件
+// 成对挂。requestedAtMs 0 = handoff 标记的 SET 还没发出;非 0 = 已发出。frozenAt = 单调冻结起点(纪元 = 未打点)。
+entt::entity MakeFrozenHandoffPlayer(uint32_t targetZoneId, uint64_t requestedAtMs, uint64_t markEpoch,
+                                     tfc::Clock::time_point frozenAt)
+{
+    tlsEcs.Clear();
+    SessionMap().clear();
+    GetNodeInfo().set_zone_id(kCapSelfZone); // 必须在 Clear 之后:Clear 会清 globalRegistry,GetZoneId() 回到 0
+    const auto player = tlsEcs.actorRegistry.create();
+    tlsEcs.playerList.emplace(kCapPlayerId, player);
+    tlsEcs.actorRegistry.emplace<Guid>(player, kCapPlayerId);
+    auto& session = tlsEcs.actorRegistry.emplace<PlayerSessionSnapshotComp>(player);
+    session.set_gate_session_id(kCapSession);
+    session.set_player_id(kCapPlayerId);
+    SessionMap().insert_or_assign(kCapSession, kCapPlayerId);
+    // 逐字段赋值(PlayerTravelHandoffComp 的约定)。
+    auto& travel = tlsEcs.actorRegistry.emplace<PlayerTravelHandoffComp>(player);
+    travel.targetZoneId = targetZoneId;
+    travel.requestedAtMs = requestedAtMs;
+    travel.markEpoch = markEpoch;
+    travel.frozenAtSteady = frozenAt;
+    auto& frozen = tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+    frozen.frozenAtMs = 1000; // 固定值,不读墙钟(AGENTS §11.4);只影响 frozen_ms 统计
+    frozen.toZoneId = targetZoneId;
+    return player;
+}
+
+travel_handoff_stats::Snapshot Stats()
+{
+    return travel_handoff_stats::Read();
+}
+
+// 本项新增的 8 个计数都没动。
+void ExpectNoFreezeCapCounterMoved(const travel_handoff_stats::Snapshot& before,
+                                   const travel_handoff_stats::Snapshot& after)
+{
+    EXPECT_EQ(after.freezeCapReached, before.freezeCapReached);
+    EXPECT_EQ(after.dispatchWindowClosed, before.dispatchWindowClosed);
+    EXPECT_EQ(after.markSentDestroyed, before.markSentDestroyed);
+    EXPECT_EQ(after.markSentClientReset, before.markSentClientReset);
+    EXPECT_EQ(after.destroyDeferredUnsettledSave, before.destroyDeferredUnsettledSave);
+    EXPECT_EQ(after.freezeUnstamped, before.freezeUnstamped);
+    EXPECT_EQ(after.watchdogEarlyFire, before.watchdogEarlyFire);
+    EXPECT_EQ(after.handoffFastpathForced, before.handoffFastpathForced);
+}
+} // namespace
+
+TEST(TravelFreezeCap, BudgetsKeepVerifiedPathInsideCap)
+{
+    // 与头文件的 static_assert 重复:把设计意图留在测试里,改常量时这里先红。
+    EXPECT_TRUE(tfc::kSaveBudget <= tfc::kDispatchWindow) << "存盘看门狗先于晚发窗口关闭到期";
+    EXPECT_TRUE(tfc::kDispatchWindow + tfc::kReplyBudget + tfc::kVerifyMargin <= tfc::kFreezeCap)
+        << "窗口内发出的 EnterScene,其应答看门狗 + 一次核实在上限前做完";
+    EXPECT_TRUE(tfc::kEarlyFireTolerance <= tfc::kVerifyMargin);
+    EXPECT_TRUE(tfc::kFreezeCap + tfc::kSweepInterval < tfc::kClientAcceptedHandoffBudget)
+        << "服务端最迟出结论早于客户端遮罩超时";
+    EXPECT_TRUE(tfc::kDispatchWindow == 35s);
+    EXPECT_TRUE(tfc::kFreezeCap == 70s);
+}
+
+TEST(TravelFreezeCap, NotDueBeforeCap)
+{
+    EXPECT_EQ(tfc::DecideFreezeCap(tfc::kFreezeCap - 1ms, true), tfc::FreezeCapAction::kNone);
+    EXPECT_EQ(tfc::DecideFreezeCap(tfc::kFreezeCap - 1ms, false), tfc::FreezeCapAction::kNone);
+}
+
+TEST(TravelFreezeCap, UnfreezeOnlyWhenMarkNeverSent)
+{
+    EXPECT_FALSE(tfc::IsHandoffMarkSent(0));
+    EXPECT_TRUE(tfc::IsHandoffMarkSent(123)) << "只看 requestedAtMs(在 SET 的 command() 之前写)";
+    EXPECT_EQ(tfc::DecideFreezeCap(tfc::kFreezeCap, false), tfc::FreezeCapAction::kUnfreeze)
+        << "恰好等于上限即到期";
+}
+
+TEST(TravelFreezeCap, DestroyOnceMarkSent)
+{
+    EXPECT_EQ(tfc::DecideFreezeCap(tfc::kFreezeCap, true), tfc::FreezeCapAction::kDestroy);
+    EXPECT_EQ(tfc::DecideFreezeCap(tfc::kFreezeCap + 1h, true), tfc::FreezeCapAction::kDestroy)
+        << "标记已发出后永不解冻";
+}
+
+TEST(TravelFreezeCap, DispatchWindowClosesBeforeReplyBudgetRunsOut)
+{
+    EXPECT_TRUE(tfc::IsDispatchWindowOpen(tfc::Clock::duration::zero()));
+    EXPECT_TRUE(tfc::IsDispatchWindowOpen(tfc::kDispatchWindow - 1ms));
+    EXPECT_FALSE(tfc::IsDispatchWindowOpen(tfc::kDispatchWindow));
+    EXPECT_FALSE(tfc::IsDispatchWindowOpen(tfc::kFreezeCap));
+    EXPECT_TRUE(tfc::kDispatchWindow + tfc::kReplyBudget < tfc::kFreezeCap);
+}
+
+TEST(TravelFreezeCap, NamesCoverEveryValue)
+{
+    for (const auto action : {tfc::FreezeCapAction::kNone, tfc::FreezeCapAction::kUnfreeze,
+                              tfc::FreezeCapAction::kDestroy})
+    {
+        EXPECT_STRNE(tfc::FreezeCapActionName(action), "?") << "action=" << static_cast<uint32_t>(action);
+    }
+    for (const auto site : {tfc::MarkSentSite::kFreezeCap, tfc::MarkSentSite::kDispatchWindow,
+                            tfc::MarkSentSite::kNoGateSession, tfc::MarkSentSite::kNoSceneManager})
+    {
+        EXPECT_STRNE(tfc::MarkSentSiteName(site), "?") << "site=" << static_cast<uint32_t>(site);
+    }
+    EXPECT_STREQ(tfc::FreezeCapActionName(tfc::FreezeCapAction::kCount), "?") << "越界不能读出数组外";
+    EXPECT_STREQ(tfc::MarkSentSiteName(tfc::MarkSentSite::kCount), "?");
+    EXPECT_STREQ(tfc::MarkSentSiteName(tfc::MarkSentSite::kFreezeCap), "travel_freeze_cap")
+        << "runbook 按这段原文 grep(也是 DestroyDeposedPlayer 的 reasonTag)";
+}
+
+TEST(TravelFreezeCap, RemainingUntilNeverNegative)
+{
+    const tfc::Clock::time_point due = tfc::Clock::time_point{} + 1h;
+    EXPECT_TRUE(tfc::RemainingUntil(due, due - 3s) == 3s);
+    EXPECT_TRUE(tfc::RemainingUntil(due, due) == tfc::Clock::duration::zero());
+    EXPECT_TRUE(tfc::RemainingUntil(due, due + 1s) == tfc::Clock::duration::zero()) << "已过期按 0,不返回负值";
+}
+
+TEST(TravelFreezeCap, EarlyFireWithinToleranceRunsInsteadOfRearming)
+{
+    const tfc::Clock::time_point due = tfc::Clock::time_point{} + 1h;
+    EXPECT_FALSE(tfc::ShouldRearmEarlyFire(due, due - 999ms)) << "亚秒级的时钟差不计数、直接执行";
+    EXPECT_FALSE(tfc::ShouldRearmEarlyFire(due, due - 1s)) << "恰好等于容差不重挂";
+    EXPECT_TRUE(tfc::ShouldRearmEarlyFire(due, due - 1001ms)) << "墙钟前跳 ≥1s:按剩余时间重挂";
+    EXPECT_FALSE(tfc::ShouldRearmEarlyFire(due, due));
+    EXPECT_FALSE(tfc::ShouldRearmEarlyFire(due, due + 1s));
+}
+
+// ── ECS 级接缝:直接驱动 PlayerLifecycleSystem::EnforceTravelFreezeCaps / BeginTravelHandoff ──
+// 宿主里没有 zone Redis、没有玩家数据 Redis 客户端(HasUnsettledPlayerSave 恒为 false、真写盘会解引用空指针)、
+// 没有 EventLoop、gate 注册表为空(发 tip / 34 只打 ERROR 就返回)。"会话活着 → 决定踢线"的可观察结果是
+// mark_sent_client_reset 计数。
+
+TEST(TravelFreezeCapEcs, NotYetDueLeavesHandoffAlone)
+{
+    const auto player = MakeFrozenHandoffPlayer(kCapSelfZone + 1, /*requestedAtMs=*/123, /*markEpoch=*/7, kT0);
+    const auto before = Stats();
+
+    PlayerLifecycleSystem::EnforceTravelFreezeCaps(kT0 + tfc::kFreezeCap - 1ms);
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(player));
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
+    ExpectNoFreezeCapCounterMoved(before, Stats());
+}
+
+TEST(TravelFreezeCapEcs, UnstampedFreezeIsStampedNotExpired)
+{
+    // 漏打点(frozenAtSteady 为纪元)只会晚处置,不会下一拍就被销毁:第一次扫描就地补记为当前时刻。
+    const auto player =
+        MakeFrozenHandoffPlayer(kCapSelfZone + 1, /*requestedAtMs=*/123, /*markEpoch=*/7, tfc::Clock::time_point{});
+    const auto before = Stats();
+
+    PlayerLifecycleSystem::EnforceTravelFreezeCaps(kT0);
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
+    const auto* travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(player);
+    ASSERT_NE(travel, nullptr);
+    EXPECT_TRUE(travel->frozenAtSteady == kT0) << "补记为扫描时刻";
+    EXPECT_EQ(Stats().freezeUnstamped, before.freezeUnstamped + 1);
+
+    PlayerLifecycleSystem::EnforceTravelFreezeCaps(kT0 + tfc::kFreezeCap - 1ms);
+    EXPECT_TRUE(tlsEcs.actorRegistry.valid(player)) << "从补记时刻起算,还没到上限";
+
+    PlayerLifecycleSystem::EnforceTravelFreezeCaps(kT0 + tfc::kFreezeCap);
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_EQ(Stats().markSentDestroyed, before.markSentDestroyed + 1);
+    EXPECT_EQ(Stats().freezeUnstamped, before.freezeUnstamped + 1) << "只补记一次";
+}
+
+TEST(TravelFreezeCapEcs, MarkNeverSentUnfreezesWithoutWithdrawal)
+{
+    const auto player = MakeFrozenHandoffPlayer(kCapSelfZone + 1, /*requestedAtMs=*/0, /*markEpoch=*/0, kT0);
+    const auto before = Stats();
+
+    PlayerLifecycleSystem::EnforceTravelFreezeCaps(kT0 + tfc::kFreezeCap);
+
+    const auto after = Stats();
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "SET 没发出:不可能已被放行,解冻而不是销毁";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
+    EXPECT_EQ(after.freezeCapReached, before.freezeCapReached + 1);
+    EXPECT_EQ(after.aborted, before.aborted + 1);
+    EXPECT_EQ(after.markSentDestroyed, before.markSentDestroyed);
+    EXPECT_FALSE(PlayerLifecycleSystem::IsSceneChangeBusy(player)) << "没发过标记,不登记撤回";
+}
+
+TEST(TravelFreezeCapEcs, MarkSentDestroysWithoutPersistingAndResetsClient)
+{
+    const auto player = MakeFrozenHandoffPlayer(kCapSelfZone + 1, /*requestedAtMs=*/123, /*markEpoch=*/7, kT0);
+    tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 7;
+    const auto before = Stats();
+
+    PlayerLifecycleSystem::EnforceTravelFreezeCaps(kT0 + tfc::kFreezeCap);
+
+    const auto after = Stats();
+    // 宿主里真写盘会解引用空的玩家数据 Redis 客户端:走到这里没崩,本身就证明没有存盘。
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << "标记已发出:永不解冻,不存盘销毁";
+    EXPECT_EQ(tlsEcs.playerList.count(kCapPlayerId), 0u);
+    EXPECT_EQ(SessionMap().count(kCapSession), 0u);
+    EXPECT_EQ(after.freezeCapReached, before.freezeCapReached + 1);
+    EXPECT_EQ(after.markSentDestroyed, before.markSentDestroyed + 1);
+    EXPECT_EQ(after.markSentClientReset, before.markSentClientReset + 1) << "会话活着:销毁前发 tip + 踢线 34";
+    EXPECT_EQ(after.granted, before.granted);
+    EXPECT_EQ(after.aborted, before.aborted);
+    EXPECT_EQ(after.destroyDeferredUnsettledSave, before.destroyDeferredUnsettledSave);
+
+    // 上限处置不往待撤回表里加条目:标记留作释放标记(A1′ 同义),同一玩家立刻可以再发起。
+    const auto reentered = tlsEcs.actorRegistry.create();
+    tlsEcs.actorRegistry.emplace<Guid>(reentered, kCapPlayerId);
+    EXPECT_FALSE(PlayerLifecycleSystem::IsSceneChangeBusy(reentered));
+}
+
+TEST(TravelFreezeCapEcs, SameZoneMarkSentAlsoResetsClient)
+{
+    // 有意为之:到上限时 epoch 状态未知,宁可多重登一次,也不留哑连接。
+    const auto player = MakeFrozenHandoffPlayer(kCapSelfZone, /*requestedAtMs=*/123, /*markEpoch=*/7, kT0);
+    const auto before = Stats();
+
+    PlayerLifecycleSystem::EnforceTravelFreezeCaps(kT0 + tfc::kFreezeCap);
+
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_EQ(Stats().markSentClientReset, before.markSentClientReset + 1);
+}
+
+TEST(TravelFreezeCapEcs, ExitingEntityPastCapIsDestroyedWithoutKick)
+{
+    // 退出中的实体不再被排除(骨架没有例外);客户端已断开,不踢线。
+    const auto player = MakeFrozenHandoffPlayer(kCapSelfZone + 1, /*requestedAtMs=*/123, /*markEpoch=*/7, kT0);
+    tlsEcs.actorRegistry.emplace<UnregisterPlayer>(player);
+    PlayerExitIntentComp intent;
+    intent.sessionAtExit = kCapSession;
+    tlsEcs.actorRegistry.emplace<PlayerExitIntentComp>(player, intent);
+    const auto before = Stats();
+
+    PlayerLifecycleSystem::EnforceTravelFreezeCaps(kT0 + tfc::kFreezeCap);
+
+    const auto after = Stats();
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_EQ(after.markSentDestroyed, before.markSentDestroyed + 1);
+    EXPECT_EQ(after.markSentClientReset, before.markSentClientReset) << "退出中不踢";
+}
+
+TEST(TravelFreezeCapEcs, BeginTravelHandoffPastDispatchWindowAbortsWithoutMark)
+{
+    // 关键证据是 dispatch_window_closed:没有这道闸时代码会走到"zone redis 未连接"分支,那条分支同样让 aborted +1,
+    // 但不会动 dispatch_window_closed。时间只用 steady 时钟的相对偏移,余量 1s,结果确定。
+    const auto player = MakeFrozenHandoffPlayer(kCapSelfZone + 1, /*requestedAtMs=*/0, /*markEpoch=*/0,
+                                                tfc::Clock::now() - (tfc::kDispatchWindow + 1s));
+    tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 7;
+    const auto before = Stats();
+
+    PlayerLifecycleSystem::BeginTravelHandoff(kCapPlayerId);
+
+    const auto after = Stats();
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
+    EXPECT_EQ(after.dispatchWindowClosed, before.dispatchWindowClosed + 1);
+    EXPECT_EQ(after.aborted, before.aborted + 1);
+    EXPECT_FALSE(PlayerLifecycleSystem::IsSceneChangeBusy(player)) << "SET 没发出,不登记撤回";
+}
+
+TEST(TravelFreezeCapEcs, BeginTravelHandoffInsideWindowIsNotRefusedByTheGate)
+{
+    // 对照组:窗口内这道闸不生效,且排在 epoch 检查之前 —— 没有 owner_epoch 时走原有的"epoch unknown"分支 Abort。
+    const auto player =
+        MakeFrozenHandoffPlayer(kCapSelfZone + 1, /*requestedAtMs=*/0, /*markEpoch=*/0, tfc::Clock::now());
+    const auto before = Stats();
+
+    PlayerLifecycleSystem::BeginTravelHandoff(kCapPlayerId);
+
+    const auto after = Stats();
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(player));
+    EXPECT_EQ(after.aborted, before.aborted + 1);
+    EXPECT_EQ(after.dispatchWindowClosed, before.dispatchWindowClosed);
 }
 
 // ============================================================================

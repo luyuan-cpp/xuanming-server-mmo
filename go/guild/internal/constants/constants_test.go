@@ -67,6 +67,17 @@ func tipCodes() map[string]uint32 {
 		"ErrShopLevelTooLow":          ErrShopLevelTooLow,
 		"ErrShopLimit":                ErrShopLimit,
 		"ErrContributionInsufficient": ErrContributionInsufficient,
+		// 帮会二期 B6a(帮会活动)新增的 10 个,含 B6b 同道历练要用的 5 个。
+		"ErrActivityNotOpen":             ErrActivityNotOpen,
+		"ErrActivityAlreadyClaimed":      ErrActivityAlreadyClaimed,
+		"ErrActivityThresholdNotReached": ErrActivityThresholdNotReached,
+		"ErrActivityLevelTooLow":         ErrActivityLevelTooLow,
+		"ErrActivityJoinTooRecent":       ErrActivityJoinTooRecent,
+		"ErrTrialTeamInvalid":            ErrTrialTeamInvalid,
+		"ErrTrialInviteExpired":          ErrTrialInviteExpired,
+		"ErrTrialInviteDeclined":         ErrTrialInviteDeclined,
+		"ErrTrialInviteCooldown":         ErrTrialInviteCooldown,
+		"ErrTrialServiceBusy":            ErrTrialServiceBusy,
 	}
 }
 
@@ -282,6 +293,37 @@ func TestEconomyTipCodesAreBusinessRejects(t *testing.T) {
 		if got := serverbase.TipVerdict(code); got != serverbase.VerdictBizReject {
 			t.Errorf("%s = %d 应判 VerdictBizReject, 实际 %v ——"+
 				"检查 data/tip/Tip.xlsx 的 fault 列是不是被填了 1", name, code, got)
+		}
+	}
+}
+
+// TestActivityTipCodesVerdict 守住 B6a 这 10 个码的定性:9 个业务拒绝 + ErrTrialServiceBusy 一个故障。
+//
+// 两个方向都会出事:给"今日已参与""人数不足"这类码补上 fault=1,拦截器会把每次正常的参与失败记成服务端故障;
+// 反过来漏掉 GuildTrialServiceBusy 的 fault=1,match 挂掉时故障指标一声不吭。定性来自 Tip.xlsx 的 fault 列,
+// 这里是编译进二进制之后的第二道网。
+func TestActivityTipCodesVerdict(t *testing.T) {
+	all := tipCodes()
+	want := map[string]serverbase.Verdict{
+		"ErrActivityNotOpen":             serverbase.VerdictBizReject,
+		"ErrActivityAlreadyClaimed":      serverbase.VerdictBizReject,
+		"ErrActivityThresholdNotReached": serverbase.VerdictBizReject,
+		"ErrActivityLevelTooLow":         serverbase.VerdictBizReject,
+		"ErrActivityJoinTooRecent":       serverbase.VerdictBizReject,
+		"ErrTrialTeamInvalid":            serverbase.VerdictBizReject,
+		"ErrTrialInviteExpired":          serverbase.VerdictBizReject,
+		"ErrTrialInviteDeclined":         serverbase.VerdictBizReject,
+		"ErrTrialInviteCooldown":         serverbase.VerdictBizReject,
+		"ErrTrialServiceBusy":            serverbase.VerdictFault,
+	}
+	for name, verdict := range want {
+		code, ok := all[name]
+		if !ok {
+			t.Errorf("%s 不在 tipCodes 里:B6a 的码漏进全量护栏了", name)
+			continue
+		}
+		if got := serverbase.TipVerdict(code); got != verdict {
+			t.Errorf("%s = %d 应判 %v, 实际 %v —— 检查 data/tip/Tip.xlsx 的 fault 列", name, code, verdict, got)
 		}
 	}
 }

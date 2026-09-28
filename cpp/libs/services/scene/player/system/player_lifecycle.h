@@ -15,6 +15,8 @@
 // 那个工程的包含目录里只有 cpp/libs,没有 cpp/libs/services/scene。
 #include "services/scene/player/system/player_exit_intent.h"
 #include "services/scene/player/system/exit_release_mark.h"
+// 冻结硬上限 / 晚发闸的常量与纯判定(EnforceTravelFreezeCaps 等的参数类型)。写全路径,理由同上。
+#include "services/scene/player/system/travel_freeze_cap.h"
 
 namespace scene_manager { class EnterSceneRequest; class EnterSceneResponse; }
 namespace storage { class PlayerLocation; }
@@ -150,9 +152,11 @@ namespace owner_epoch_stats
 //   save_watchdog_fired    交接存盘 30s 没落地,看门狗解冻(同时计入 aborted)
 //   reply_watchdog_fired   EnterScene 应答 30s 没到,看门狗去核实归属
 //   verify_rearmed         核实归属时 Redis 不可用 / 读失败,保持冻结并重挂看门狗。
-//                          持续增长 = 有玩家一直冻着出不来
-//   frozen_ms_total        走到终态(granted / resolved_in_place / aborted)的交接累计冻结毫秒数;
-//   frozen_ms_max          平均冻结时长 = frozen_ms_total / 三个终态之和,max 是单次最大值
+//                          持续增长 = zone Redis 持续不可用 / 半开;单个玩家最迟在冻结上限(70s)被处置,
+//                          看 freeze_cap_reached / mark_sent_destroyed(唯一例外见 destroy_deferred_unsettled_save)
+//   frozen_ms_total        走到终态(granted / resolved_in_place / aborted / mark_sent_destroyed)的交接累计冻结毫秒数;
+//   frozen_ms_max          平均冻结时长 = frozen_ms_total / (granted + resolved_in_place + aborted + mark_sent_destroyed),
+//                          max 是单次最大值
 //   withdraw_deferred      作废交接后撤回 handoff 标记没能当场确认(Redis 不通 / 命令没发出去 / 应答丢失或报错),
 //                          条目留在待撤回表里重试。趋势类计数:同一条目每失败一次计一次。持续增长 = Redis 不稳
 //   withdraw_expired       到截止时刻(标记 TTL + 余量)仍未确认撤回而放弃,或待撤回表满被淘汰。应恒为 0,
@@ -171,9 +175,27 @@ namespace owner_epoch_stats
 //                          (enter_scene_reply::IsSuspiciousUnmatched)——正是过去会被错吃成交接证据的那一类。
 //                          基线接近 0,与"换图后立刻再换图 / 交接作废后立刻换图"的频率相关,只看突增。
 //                          路由先到之后才到的纯成功迟到应答是常态,不计
+//   ── 冻结硬上限 / 晚发闸 /「标记已发出」统一收口(travel_freeze_cap.h)──
+//   freeze_cap_reached     冻结满 travel_freeze_cap::kFreezeCap(70s,单调时钟)仍无结论而被处置的次数:标记没发出
+//                          的那一支同时计入 aborted,已发出的那一支同时计入 mark_sent_destroyed。两道 30s 看门狗与
+//                          35s 晚发闸都先于它收敛,应恒为 0;非 0 = 有归属核实不了(zone Redis 不可用 / 半开)
+//   dispatch_window_closed 冻结超过 kDispatchWindow(35s)才走到发送点、被晚发闸拦下的次数:set_mark 阶段(SET 还没发)
+//                          同时计入 aborted,enter_scene 阶段(SET 已 OK)同时计入 mark_sent_destroyed。应接近 0
+//   mark_sent_destroyed    新终态:handoff 标记的 SET 已发出、归属无法在本节点核实,tip(会话活着时)+ 踢线 34 + 不存盘
+//                          销毁(ConcludeHandoffAfterMarkSent)。四个收口点:冻结上限 / enter_scene 晚发闸 / SET 之后发现
+//                          没有 gate 会话 / SET 之后发现没有 scene_manager。应接近 0
+//   mark_sent_client_reset mark_sent_destroyed 的子集:销毁前给客户端发了 tip + 踢线 34(会话活着、实体不在退出中)
+//   destroy_deferred_unsettled_save  标记已发出、该销毁了,但该玩家还有未落地的存盘而推迟销毁的次数(每次交接最多计一次)。
+//                          StartTravelHandoff 快路径补写之后不可达,应恒为 0;非 0 = 冻结越过了上限(唯一允许的例外)
+//   freeze_unstamped       交接组件上的单调冻结起点(frozenAtSteady)没打点、被上限扫描就地补记的次数。应恒为 0,
+//                          非 0 = 有一条挂交接组件的路径漏写了它(只会晚处置,不会提前销毁)
+//   watchdog_early_fire    存盘 / 应答看门狗比单调截止时刻早 1s 以上被 muduo(按墙钟)唤醒、按剩余时间重挂的次数。
+//                          非 0 = 墙钟向前跳过 ≥1s(对时 / 人工改时间)
+//   handoff_fastpath_forced 交接快路径判"盘上已是同一份"、但该 key 还有在途 / 排队中的存盘,改走一次真实存盘再写标记的
+//                          次数(与退出链的 exit_fastpath_deferred 同一写法)。趋势值
 //
-// started 减去各终态 = 仍在途的 + 交接期间被存盘 CAS 拒而销毁的(后者已计入
-// owner_epoch_stats::StaleOwnerWriteRejected)。
+// started 减去 (granted + resolved_in_place + aborted + exit_wins + mark_sent_destroyed) = 仍在途的 + 交接期间被存盘
+// CAS 拒而销毁的(后者已计入 owner_epoch_stats::StaleOwnerWriteRejected)。
 namespace travel_handoff_stats
 {
 	struct Counters
@@ -195,6 +217,14 @@ namespace travel_handoff_stats
 		std::atomic<uint64_t> grantedClientReset{0};
 		std::atomic<uint64_t> replyUncorrelated{0};
 		std::atomic<uint64_t> replyUnmatched{0};
+		std::atomic<uint64_t> freezeCapReached{0};
+		std::atomic<uint64_t> dispatchWindowClosed{0};
+		std::atomic<uint64_t> markSentDestroyed{0};
+		std::atomic<uint64_t> markSentClientReset{0};
+		std::atomic<uint64_t> destroyDeferredUnsettledSave{0};
+		std::atomic<uint64_t> freezeUnstamped{0};
+		std::atomic<uint64_t> watchdogEarlyFire{0};
+		std::atomic<uint64_t> handoffFastpathForced{0};
 	};
 
 	inline Counters& Get()
@@ -236,6 +266,14 @@ namespace travel_handoff_stats
 		uint64_t grantedClientReset{0};
 		uint64_t replyUncorrelated{0};
 		uint64_t replyUnmatched{0};
+		uint64_t freezeCapReached{0};
+		uint64_t dispatchWindowClosed{0};
+		uint64_t markSentDestroyed{0};
+		uint64_t markSentClientReset{0};
+		uint64_t destroyDeferredUnsettledSave{0};
+		uint64_t freezeUnstamped{0};
+		uint64_t watchdogEarlyFire{0};
+		uint64_t handoffFastpathForced{0};
 
 		bool operator==(const Snapshot&) const = default;
 	};
@@ -261,6 +299,14 @@ namespace travel_handoff_stats
 		snapshot.grantedClientReset = counters.grantedClientReset.load(std::memory_order_relaxed);
 		snapshot.replyUncorrelated = counters.replyUncorrelated.load(std::memory_order_relaxed);
 		snapshot.replyUnmatched = counters.replyUnmatched.load(std::memory_order_relaxed);
+		snapshot.freezeCapReached = counters.freezeCapReached.load(std::memory_order_relaxed);
+		snapshot.dispatchWindowClosed = counters.dispatchWindowClosed.load(std::memory_order_relaxed);
+		snapshot.markSentDestroyed = counters.markSentDestroyed.load(std::memory_order_relaxed);
+		snapshot.markSentClientReset = counters.markSentClientReset.load(std::memory_order_relaxed);
+		snapshot.destroyDeferredUnsettledSave = counters.destroyDeferredUnsettledSave.load(std::memory_order_relaxed);
+		snapshot.freezeUnstamped = counters.freezeUnstamped.load(std::memory_order_relaxed);
+		snapshot.watchdogEarlyFire = counters.watchdogEarlyFire.load(std::memory_order_relaxed);
+		snapshot.handoffFastpathForced = counters.handoffFastpathForced.load(std::memory_order_relaxed);
 		return snapshot;
 	}
 } // namespace travel_handoff_stats
@@ -755,6 +801,9 @@ public:
 	//   * 未成、原地恢复:随后收到 SendTipToClient,且已解冻(owner_epoch 没动,玩家仍在本节点);
 	//   * 未成、无法原地恢复(owner_epoch 已被推进、玩家已不在本节点,又没收到放行应答):SendTipToClient
 	//     之后紧跟踢线 KickPlayer(34),实体销毁而不是解冻,客户端断线回选服重登(见 ResolveTravelOutcome)。
+	//     handoff 标记已发出、但归属在本节点核实不了时同样是 tip + 34 + 不存盘销毁:冻结满 70s
+	//     (travel_freeze_cap::kFreezeCap)、SET 的 OK 晚于 35s 晚发窗口才到,或 SET 之后才发现没有 gate 会话 /
+	//     没有 scene_manager(ConcludeHandoffAfterMarkSent)。所以受理之后服务端最迟约 71s 一定给出结论。
 	// 非 0 = 拒绝的 tip id,未改任何状态。
 	// 目标 zone 是否真的存在由 scene_manager 判(C++ 侧没有 zone 表):不存在时走"受理后未成"。
 	// sceneConfigId:0 = 由目标 zone 挑默认大世界;非 0 必须是 World 表登记的世界图,否则同步拒绝
@@ -766,8 +815,10 @@ public:
 	// 落地后由 BeginTravelHandoff 接手。两个调用方:RequestZoneTravel(跨 zone),以及
 	// HandleSceneChangeEnterSceneReply 收到 18 时(同 zone 跨节点换图,targetZoneId = 本 zone)。
 	// 返回 kTravelAccepted = 已进入交接;非 0 = tip id,且未改任何状态。
-	// 自带一份最小校验(实体有效 / 未在退出 / 未在交接 / 不在战斗 / 会话活着):18 到达时离发请求
-	// 已经隔了一个往返,玩家可能刚进备战或刚断线,不能只信发请求那一刻的检查。
+	// 自带一份最小校验(实体有效 / 未在退出 / 未在交接 / 不在战斗 / 会话活着 / 有可达的 scene_manager):18 到达时
+	// 离发请求已经隔了一个往返,玩家可能刚进备战或刚断线,不能只信发请求那一刻的检查。scene_manager 预检的理由:
+	// SET 之后才发现没有 SM 只能按"标记已发出"销毁并踢线,常见情形(请求时 SM 就不在)要在冻结之前挡住。
+	// 冻结时同时在交接组件上打单调冻结起点(frozenAtSteady),冻结硬上限从这一刻起算。
 	static uint32_t StartTravelHandoff(entt::entity player, uint32_t targetZoneId, uint64_t sceneId, uint32_t sceneConfigId);
 
 	// 普通 EnterScene(客户端换图 / 镜像自动进场 / 队伍跟随)的发送侧闸:交接在途,或上一条
@@ -783,6 +834,14 @@ public:
 	//   reconnected = false → 1s 周期定时器里调,只发到了重试间隔的。
 	// 表为空时零开销。没有初始化 RedisSystem 的宿主(单测)只登记、不重试。
 	static void RetryPendingHandoffWithdrawals(bool reconnected);
+
+	// 冻结硬上限扫描(travel_freeze_cap.h):遍历所有挂着 PlayerTravelHandoffComp 的实体(**包括退出中的**:
+	// 骨架没有给退出开例外),冻结满 travel_freeze_cap::kFreezeCap 的按 travel_freeze_cap::DecideFreezeCap 处置 ——
+	// handoff 标记没发出 → AbortTravelHandoff(解冻 + 失败 tip);已发出 → ConcludeHandoffAfterMarkSent
+	// (tip + 踢线 34 + 不存盘销毁)。先收集、后处置(处置会改 registry)。
+	// 由本文件的 1s 定时器(player_lifecycle.cpp 的 EnsureTravelFreezeCapTimer,第一次发起交接时挂上)与单测调用,
+	// now 显式传入(单调时钟,AGENTS §11.2 显式依赖)。不是 per-tick 路径:平时只有 0 到几个交接实体。
+	static void EnforceTravelFreezeCaps(travel_freeze_cap::Clock::time_point now);
 
 	// 替在线玩家发普通 EnterScene(客户端换图 / 镜像自动进场 / 队伍跟随)的**唯一入口**:取一个关联号 →
 	// 登记在途换图(PlayerSceneChangeInFlightComp:目标、发送时刻、playerRequested、号)→ 经统一出口带号发出 →
@@ -831,7 +890,11 @@ public:
 	// 请求 EnterScene(ZoneId=目标, SceneId, SceneConfId) → 应答经 DispatchEnterSceneReply 按号分到
 	// HandleTravelEnterSceneReply。
 	// 幂等:requestedAtMs 已非 0(交接已发起)则直接返回,不重复写标记、不重复请求。
-	// 失败分支(无 epoch / Redis 断连 / 无 gate 会话 / 无 scene_manager)一律解冻回 tip,不悬挂。
+	// 失败分支按"handoff 标记的 SET 发没发出去"分两类(travel_freeze_cap::IsHandoffMarkSent):
+	//   * SET 发出之前(冻结已超过 35s 晚发窗口 / 无 epoch / Redis 断连 / 命令没发出去),以及 SET 收到 ERROR 应答
+	//     (确定没写)→ 一律 AbortTravelHandoff 解冻回 tip,不悬挂;
+	//   * SET 之后在 RequestTravelEnterScene 里(SET 的 OK 晚于晚发窗口才到 / 无 gate 会话 / 无 scene_manager)→
+	//     一律 ConcludeHandoffAfterMarkSent(tip + 踢线 34 + 不存盘销毁),不解冻。
 	static void BeginTravelHandoff(Guid playerId);
 
 	// ── 节点身份冲突时的紧急疏散 ────────────────────────────────────────────
@@ -897,8 +960,11 @@ private:
 	static bool EnqueueRelocateTicket(entt::entity playerEntity, const char *reasonTag, ExitCause cause);
 
 	// SavePlayerToRedis 的本体。allowSkipWhenPersisted = false 时跳过 dirty-save 快路径、一定写盘
-	// (交接已发起时的"不得再写"仍然生效)。只给退出流程用:快路径判"盘上已是同一份",但同 key 还有
-	// 在途 / 排队中的存盘时,必须改走一次真实存盘、等落地回调收尾(§12.6.4 M4)。
+	// (交接已发起时的"不得再写"仍然生效)。快路径判"盘上已是同一份",但同 key 还有在途 / 排队中的存盘时,
+	// 必须改走一次真实存盘、等落地回调收尾。只有两个调用方:
+	//   * 退出流程的 M4 分支(HandleExitGameNode,exit_fastpath_deferred,§12.6.4 M4);
+	//   * StartTravelHandoff 的快路径补写(handoff_fastpath_forced):保证写 handoff 标记之前没有更早的未落地存盘,
+	//     也就是"SET 发出 ⇒ Redis ⊇ 冻结内存"(骨架 I1)。
 	// 不给 SavePlayerToRedis 加默认参数:它以函数指针形式被引用(asset_op_system.cpp 的 PersistFn)。
 	static bool SavePlayerToRedisImpl(entt::entity player, bool allowSkipWhenPersisted);
 
@@ -908,7 +974,10 @@ private:
 
 	// "我已被废黜"的统一销毁:不存盘、不改派(疏散票据作废)、摘冻结 / 交接标记、摘场景、摘会话、销毁实体。
 	// 入口:存盘被 epoch CAS 拒(HandlePlayerSaveRejected)、交接被放行(EnterScene 应答 Redirect /
-	// ResolveTravelOutcome 判出 epoch 已变)、进场路由撞上过期的交接实体(DiscardStaleHandoffEntity)。
+	// ResolveTravelOutcome 判出 epoch 已变)、进场路由撞上过期的交接实体(DiscardStaleHandoffEntity)、
+	// handoff 标记已发出但归属核实不了(ConcludeHandoffAfterMarkSent,reasonTag = travel_freeze_cap::MarkSentSiteName)。
+	// 最后这个入口下 routine=false 打出的原文 "(ownership moved away)" 是沿用下来的,实际含义是"归属未知";
+	// 判读以它前一行的 [ZoneTravel][MarkSentDestroy](ownership UNKNOWN)为准。
 	// routine = 这是交接成功的正常收尾,收尾日志打 INFO;否则打 WARN(异常信号,要留证据)。
 	// 本函数自己**不给客户端发任何消息**,而且它会摘会话(RemovePlayerSession),之后再也发不出去。
 	// 需要让客户端断线重登的调用方(ResolveTravelOutcome 的"跨 zone 已放行却没收到放行应答"分支)
@@ -923,8 +992,11 @@ private:
 	static void WithdrawHandoffMark(Guid playerId, uint64_t markEpoch, uint64_t requestedAtMs, const char *site);
 
 	// 交接未成 **且已确认没有被放行**:摘 PlayerTravelHandoffComp + PlayerFrozenComp、撤回 handoff
-	// 标记(WithdrawHandoffMark)、按情形回 tip。只有两种调用方:EnterScene 请求发出之前的失败分支(此时不可能被放行),
-	// 以及 ResolveTravelOutcome 核实过的分支。已无交接意图时幂等 no-op。
+	// 标记(WithdrawHandoffMark)、按情形回 tip。只有两类调用方:
+	//   * handoff 标记的 SET 没发出(或确定没写)的失败分支 —— 此时不可能被放行(不变量 I0):BeginTravelHandoff 里的
+	//     各分支(含 set_mark 阶段的晚发闸)、存盘阶段看门狗、冻结上限的"标记未发出"分支(ExpireTravelFreeze);
+	//   * ResolveTravelOutcome 核实过的分支。
+	// RequestTravelEnterScene 已不再调用它(那里 SET 已 OK,走 ConcludeHandoffAfterMarkSent)。已无交接意图时幂等 no-op。
 	//   notifyFailure = true  → 回失败 tip 让客户端收起遮罩:跨 zone 传送未成 kZoneTravelTargetBusy,
 	//                           同 zone 换图未成 kEnterSceneFailed(按组件里的 targetZoneId 自己分);
 	//   notifyFailure = false → 静默解冻。只用于"同 zone 重发后落回了本节点":换图其实成功了,场景由
@@ -939,7 +1011,8 @@ private:
 	//      不相等 = 已被放行 → DestroyDeposedPlayer,玩家已在去目标节点 / zone 的路上。
 	//      location 只用来决定已放行时要不要踢线(见下)。
 	// 两条命令在同一条 Redis 连接上顺序发出,判定没有竞态窗口。Redis 不可用 / 应答异常时保持冻结并
-	// 重新挂看门狗(证据原样透传):解冻一个可能已被放行的玩家 = 同一名玩家在两处同时活着。
+	// 重新挂看门狗(证据原样透传),直到冻结硬上限(travel_freeze_cap::kFreezeCap,EnforceTravelFreezeCaps 按
+	// "标记已发出"销毁 + 踢线):解冻一个可能已被放行的玩家 = 同一名玩家在两处同时活着。
 	// requestedAtMs 是交接代际,回调到达时不符即 no-op。
 	//
 	// evidence(不给默认值,调用方必须说清凭什么进来)。入口处非 kNoReply 的证据记到交接组件上;实际裁决
@@ -962,6 +1035,31 @@ private:
 	static void ResolveTravelOutcome(Guid playerId, uint64_t requestedAtMs, const char *reason,
 									 travel_outcome::Evidence evidence);
 
+	// 冻结上限到期的单个处置(EnforceTravelFreezeCaps 收集阶段之后逐个调)。按 id 重查实体与交接组件、重算冻结时长、
+	// 重新 DecideFreezeCap,不信任收集阶段的判定(前一个玩家的处置可能已经改了 registry)。
+	static void ExpireTravelFreeze(Guid playerId, travel_freeze_cap::Clock::time_point now);
+
+	// "handoff 标记的 SET 已发出、归属在本节点核实不了"的统一收口。
+	// 前置条件:SET 已发出(requestedAtMs != 0,travel_freeze_cap::IsHandoffMarkSent);被破坏时 LOG_ERROR 并退回
+	// AbortTravelHandoff(SET 未发出一侧,按 I0 安全)。
+	// 动作:
+	//   * 该玩家还有未落地的存盘 → 不销毁,返回 false(每次交接只告警 / 计数一次),由下一拍上限扫描重判。
+	//     这是冻结硬上限唯一允许的例外:此刻不存盘销毁,那笔在途存盘随后落地会把盘改回中间态、成为永久状态;
+	//   * 否则:会话活着且实体不在退出中 → 先发失败 tip + 踢线 34(reason = 同一个 tip:跨 zone kZoneTravelTargetBusy,
+	//     同 zone kEnterSceneFailed),再 DestroyDeposedPlayer(不存盘),返回 true。**必须先踢再销毁**:
+	//     DestroyDeposedPlayer 会摘会话,之后两条都发不出去。
+	// 为什么不解冻:标记已发出,scene_manager 随时可能(或已经)凭它放行并推进 epoch,解冻 = 同一玩家两处同时活着
+	//   (骨架:SET 发出之后唯一的解冻出口是读到与自己标记原文一致的回滚回执,只在 ResolveTravelOutcome)。
+	// 为什么不发任何 Redis 命令、不撤回标记:走到这里多半就是 Redis 不可用;销毁之后"标记时刻的状态已落盘、本节点
+	//   不再持有"成了事实,标记与断线释放标记 A1′ 同义 —— 重登挑到别的节点凭它过换手门,同节点重登由 A2′ 删掉;
+	//   撤回只会伤活性(18 循环)。
+	// 为什么同 zone 也踢:此刻 epoch 状态未知(已放行且会话已改绑 / 已放行但路由丢了 / 没放行 / 铸造后又回滚),
+	//   后三种不踢就是一条哑连接,scene 又没有强制 gate 断开的 RPC;只有第一种会多踢一次,数据安全。
+	// 调用点(site 只进日志、并作 DestroyDeposedPlayer 的 reasonTag):冻结上限(ExpireTravelFreeze)、enter_scene 阶段
+	// 晚发闸、SET 之后发现没有 gate 会话、SET 之后发现没有 scene_manager(后三处都在 RequestTravelEnterScene)。
+	static bool ConcludeHandoffAfterMarkSent(Guid playerId, travel_freeze_cap::MarkSentSite site,
+											 travel_freeze_cap::Clock::time_point now);
+
 	// 疏散 / 排空的改派请求本体(EnterScene(zone=本 zone, scene_id=0))。票据按值传入:
 	// 调用时本地实体多半已经销毁。
 	static void SendEmergencyRelocateEnterScene(Guid playerId, const EmergencyRelocateTicket &ticket);
@@ -969,6 +1067,9 @@ private:
 	// handoff 标记落地后向 scene_manager 请求 EnterScene(目标 zone / 场景)。gate / session 从实体上现取
 	// (与 DispatchEmergencyRelocate 不同:交接中实体还活着,不需要提前抄票据)。
 	// 发送前取关联号写进 PlayerTravelHandoffComp.enterSceneCorrelationId:只有回显这个号的应答才算本代交接的应答。
+	// 只由 SET 的 OK 回调调用:走到这里标记确定已写,按骨架**不许解冻**。冻结已超过晚发窗口
+	// (travel_freeze_cap::kDispatchWindow)、没有 gate 会话、没有 scene_manager 三种情形都不发 EnterScene,
+	// 走 ConcludeHandoffAfterMarkSent(tip + 踢线 34 + 不存盘销毁)。
 	static void RequestTravelEnterScene(Guid playerId);
 
 	// 交接的 EnterScene 应答(DispatchEnterSceneReply 分到 kTravelHandoff / kLegacyTravelHandoff 才会进来,
@@ -1007,11 +1108,16 @@ private:
 	// 首次挂的看门狗不取消、总是先于重挂的到期:它带进去的 kNoReply 会被交接组件上记下的应答证据覆盖
 	// (travel_outcome::EffectiveEvidence),所以重挂那个随后多半是代际不符的 no-op,这是预期行为。
 	// 只按值捕获 playerId + 代际 + 证据 + 原因文本,回调里按 id 回查实体(§11.7)。
+	// 预算 travel_freeze_cap::kReplyBudget(30s):muduo 定时器唤醒(按墙钟),按单调截止时刻复核 —— 提前 1s 以上醒来
+	// 就按剩余时间重挂(计 watchdog_early_fire),容差 1s 以内直接执行。重挂次数不封顶,整段冻结由冻结硬上限封顶。
 	static void ArmTravelReplyWatchdog(Guid playerId, uint64_t requestedAtMs, travel_outcome::Evidence evidence,
 									   std::string reason);
 
 	// 存盘阶段看门狗:覆盖"已冻结、存盘在途、交接还没发起(requestedAtMs == 0)"这一段 ——
-	// 应答看门狗要到 EnterScene 发出才挂,Redis 长时间不可用时这一段没有别的兜底。
+	// 应答看门狗要到 EnterScene 发出才挂,Redis 长时间不可用时本看门狗是这一段的主兜底;它没能按时触发时
+	// (例如墙钟回拨推迟了 muduo 定时器),存盘晚于 35s 才落地的由晚发闸(BeginTravelHandoff 的 set_mark 阶段)
+	// 拦下不写标记,一直不落地的由 70s 冻结上限的"标记未发出 → 解冻"分支(ExpireTravelFreeze)收住。
 	// 到期仍未发起就直接 AbortTravelHandoff(标记没写,不可能已被放行)。代际用 PlayerFrozenComp.frozenAtMs。
+	// 预算 travel_freeze_cap::kSaveBudget(30s),与应答看门狗同样按单调截止时刻复核(容差 1s)。
 	static void ArmTravelSaveWatchdog(Guid playerId, int64_t frozenAtMs);
 };

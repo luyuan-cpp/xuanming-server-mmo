@@ -63,6 +63,7 @@
 #include <iterator>
 #include <limits>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -161,16 +162,14 @@ namespace
 		return gateNodeInfo != nullptr ? gateNodeInfo->node_uuid() : std::string{};
 	}
 
-	// 传送交接的 EnterScene 应答预算。生成的 gRPC 客户端在 status 非 OK 时**不调**应答处理器,
-	// 而 scene_manager 不可达 / 连接被重置就是这种情况 —— 没有这道看门狗,玩家会以冻结态
-	// 永远挂在本节点。取值远大于 EnterScene 的正常耗时(压测 P99 亚秒),只兜真正的丢应答。
-	// scene_manager 的 zrpc 服务端超时(本地 5s;K8s 未配时取 go-zero 默认 2s,不大于 Kafka 写超时)同样
-	// 表现为"没有应答":handler 超时后调用方拿到 DeadlineExceeded,不回调,源端只能等本看门狗。
-	// 下限约束(别为了缩短"应答丢失时源实体冻结着留在场景里"的时间把它调小):必须远大于 scene_manager
-	// "铸造 epoch → Kafka 路由 ACK / 失败回滚"这段窗口(KafkaWriteTimeoutSeconds,默认 5s)。看门狗按
-	// owner_epoch 变没变裁决去留,落在窗口里会读到一个即将被回滚的新 epoch:实体销毁之后 location 又
-	// 指回本节点,玩家在线却没有实体。
-	constexpr double kTravelReplyBudgetSec = 30.0;
+	// 交接的两道看门狗预算(存盘 30s / EnterScene 应答 30s)、冻结硬上限(70s)与晚发窗口(35s)统一定义在
+	// travel_freeze_cap.h(kSaveBudget / kReplyBudget / kFreezeCap / kDispatchWindow),应答预算的下限约束也写在那里:
+	// 几个常量之间有 static_assert 守着的时序关系,拆开放会让改一个忘改另一个。
+
+	// 交接组件上的单调冻结起点必须与 travel_freeze_cap 用同一只时钟:组件头为了不依赖系统头直接写了
+	// std::chrono::steady_clock,两边若走散,ElapsedSinceFreeze 的减法会编译不过或静默换算错。
+	static_assert(std::is_same_v<decltype(PlayerTravelHandoffComp::frozenAtSteady), travel_freeze_cap::Clock::time_point>,
+				  "PlayerTravelHandoffComp::frozenAtSteady 必须是 travel_freeze_cap::Clock::time_point");
 
 	// PlayerSceneChangeInFlightComp 的有效期。EnterScene 正常亚秒返回;应答丢失时(scene_manager
 	// 不可达,生成的 gRPC 客户端不回调)不能把玩家永久挡在换图之外,过了这个时间就放下一条请求。
@@ -182,7 +181,7 @@ namespace
 	// [TravelHandoff] 汇总行的周期,与 RedisSystem 的 [DirtySave] / [OwnerEpoch] 同为 30s。
 	constexpr double kTravelHandoffStatsIntervalSec = 30.0;
 
-	// 一次交接走到终态(放行 / 就地解决 / 未成)时调用:终态计数 +1,并累计这次交接的冻结时长。
+	// 一次交接走到终态(放行 / 就地解决 / 未成 / 标记已发出而销毁)时调用:终态计数 +1,并累计这次交接的冻结时长。
 	// 必须在摘 PlayerFrozenComp **之前**调 —— 冻结起点只记在那个组件上。
 	// 时钟回拨(now < frozenAtMs)按 0 计,不让一个负数把累计值冲成天文数字。
 	void ObserveTravelHandoffEnded(entt::entity player, std::atomic<uint64_t> &outcomeCounter)
@@ -266,7 +265,80 @@ namespace
 					 << " withdraw_expired=" << stats.withdrawExpired
 					 << " granted_client_reset=" << stats.grantedClientReset
 					 << " reply_uncorrelated=" << stats.replyUncorrelated
-					 << " reply_unmatched=" << stats.replyUnmatched;
+					 << " reply_unmatched=" << stats.replyUnmatched
+					 << " freeze_cap_reached=" << stats.freezeCapReached
+					 << " dispatch_window_closed=" << stats.dispatchWindowClosed
+					 << " mark_sent_destroyed=" << stats.markSentDestroyed
+					 << " mark_sent_client_reset=" << stats.markSentClientReset
+					 << " destroy_deferred_unsettled_save=" << stats.destroyDeferredUnsettledSave
+					 << " freeze_unstamped=" << stats.freezeUnstamped
+					 << " watchdog_early_fire=" << stats.watchdogEarlyFire
+					 << " handoff_fastpath_forced=" << stats.handoffFastpathForced;
+		});
+	}
+
+	// 在 muduo 定时器上挂一个"按单调截止时刻 dueAt 执行 fn"的一次性任务。当前线程没有 EventLoop(单测宿主)时
+	// 什么都不挂、返回 false,调用方自己决定怎么记录。
+	//
+	// 为什么要复核:muduo 的定时器按 Timestamp::now 到期,Windows 上那是 gettimeofday → system_clock(墙钟),
+	// 与 steady_clock 是两只独立的时钟。墙钟向前跳(对时 / 人工改时间)会让 runAfter 提前醒来,看门狗提前裁决 ——
+	// 应答看门狗落进 scene_manager "铸造 → 路由 / 回滚"窗口就会读到一个即将被回滚的 epoch(见 kReplyBudget 的下限约束)。
+	// 所以醒来后按 steady_clock 再看一眼:离 dueAt 还差超过 travel_freeze_cap::kEarlyFireTolerance(1s)就按剩余时间
+	// 重挂并计 watchdog_early_fire;差 1s 以内(含两只时钟的频率差与微秒截断造成的毫秒级伪提前)直接执行,
+	// 正常运行不会抬高这个计数。每次重挂的剩余时间严格变小,次数有界。
+	// 墙钟**回拨**会把定时器推迟,这里管不了(引擎级残余,见 travel_freeze_cap.h 文件头)。
+	// 回调只按值捕获截止时刻与 fn,不绑任何对象(AGENTS §11.7);fn 自己也只能按值捕获 id 与代际。
+	bool RunAtMonotonic(travel_freeze_cap::Clock::time_point dueAt, std::function<void()> fn)
+	{
+		auto *loop = muduo::net::EventLoop::getEventLoopOfCurrentThread();
+		if (loop == nullptr)
+		{
+			return false;
+		}
+		const auto remaining = travel_freeze_cap::RemainingUntil(dueAt, travel_freeze_cap::Clock::now());
+		loop->runAfter(std::chrono::duration<double>(remaining).count(), [dueAt, fn = std::move(fn)]()
+		{
+			const auto now = travel_freeze_cap::Clock::now();
+			if (travel_freeze_cap::ShouldRearmEarlyFire(dueAt, now))
+			{
+				travel_handoff_stats::Inc(travel_handoff_stats::Get().watchdogEarlyFire);
+				LOG_WARN << "[ZoneTravel] handoff watchdog fired "
+						 << std::chrono::duration_cast<std::chrono::milliseconds>(
+								travel_freeze_cap::RemainingUntil(dueAt, now)).count()
+						 << "ms before its monotonic deadline (wall clock stepped forward?); re-arming"
+						 << " (metric=watchdog_early_fire)";
+				// 回调跑在 loop 线程上,当前线程必有 loop,重挂不会失败。
+				RunAtMonotonic(dueAt, fn);
+				return;
+			}
+			fn();
+		});
+		return true;
+	}
+
+	// 冻结硬上限的 1s 扫描(PlayerLifecycleSystem::EnforceTravelFreezeCaps)。写法同 EnsureTravelHandoffStatsTimer:
+	// 第一次发起交接时在当前线程的 EventLoop 上挂一次(thread_local armed 防重复),没有 loop(单测宿主)直接返回;
+	// 回调不捕获任何对象、只按 id 回查实体,loop 析构时定时器随之销毁,不需要保存 TimerId 去取消。
+	// 为什么自挂、不借 RedisSystem 的 1s 节拍:那条节拍上的"不分家"(cross-zone-scene-travel.md §12.6.10 第 16 条)
+	// 针对的是 Redis 命令的重试(撤回、A2′)—— 它们要与重连回调成对驱动、排在加载重试之前。本扫描是生命周期截止时刻:
+	// 不发 Redis 命令、不需要重连回调,也不该随 RedisSystem::BeginShutdown / Shutdown 一起被取消(Redis 不可用恰恰
+	// 是上限要兜的情形)。平时交接实体为 0 到几个,空扫描只是一次空 view。
+	void EnsureTravelFreezeCapTimer()
+	{
+		static thread_local bool armed = false;
+		if (armed)
+		{
+			return;
+		}
+		auto *loop = muduo::net::EventLoop::getEventLoopOfCurrentThread();
+		if (loop == nullptr)
+		{
+			return; // 单测 / 无 loop 的宿主:单测直接调 EnforceTravelFreezeCaps 并注入时间
+		}
+		armed = true;
+		loop->runEvery(std::chrono::duration<double>(travel_freeze_cap::kSweepInterval).count(), []()
+		{
+			PlayerLifecycleSystem::EnforceTravelFreezeCaps(travel_freeze_cap::Clock::now());
 		});
 	}
 
@@ -537,6 +609,39 @@ namespace
 	{
 		const auto &playerRedis = tlsRedisSystem.GetPlayerDataRedis();
 		return playerRedis != nullptr && playerRedis->HasUnsettledSave(playerId);
+	}
+
+	// 这次交接已冻结了多久(单调时钟)。冻结上限扫描与两个晚发闸都只经这里取冻结时长。
+	// frozenAtSteady 没打点(缺省值 = 时钟纪元,某条挂交接组件的路径漏写了它):就地补记为 now、计 freeze_unstamped、
+	// 打 ERROR,返回 0 —— 不当作到期。偏安全的一侧:漏打点只会让处置最多晚 kFreezeCap,不会下一拍就被销毁 / 拦下。
+	// now 早于起点(调用方传入的时刻比打点早,只可能出现在单测注入时间时)按 0 计,不返回负值。
+	travel_freeze_cap::Clock::duration ElapsedSinceFreeze(PlayerTravelHandoffComp &travel, Guid playerId,
+														  travel_freeze_cap::Clock::time_point now)
+	{
+		if (travel.frozenAtSteady == travel_freeze_cap::Clock::time_point{})
+		{
+			travel.frozenAtSteady = now;
+			travel_handoff_stats::Inc(travel_handoff_stats::Get().freezeUnstamped);
+			LOG_ERROR << "[ZoneTravel][FreezeCap] handoff of player " << playerId
+					  << " has no monotonic freeze stamp; stamping it now (metric=freeze_unstamped)";
+			return travel_freeze_cap::Clock::duration::zero();
+		}
+		return now >= travel.frozenAtSteady ? now - travel.frozenAtSteady : travel_freeze_cap::Clock::duration::zero();
+	}
+
+	// 该玩家的 gate 会话是否还活着:会话快照在、gate_session_id 有效、且 SessionMap 仍把它映射到本玩家
+	// (与 player_team.cpp HasLiveSession 同一判法)。StartTravelHandoff 的发起校验与 ConcludeHandoffAfterMarkSent
+	// 的"要不要踢线"共用这一把尺子:断线宽限期内的实体拿旧会话去请求会改写离线玩家的 location,
+	// 往已被取代 / 已解绑的会话发 34 则可能踢掉别人。
+	bool HasLiveGateSession(entt::entity player, Guid playerId)
+	{
+		const auto *session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(player);
+		if (session == nullptr || session->gate_session_id() == 0 || session->gate_session_id() == kInvalidSessionId)
+		{
+			return false;
+		}
+		const auto sessionIt = SessionMap().find(session->gate_session_id());
+		return sessionIt != SessionMap().end() && sessionIt->second == playerId;
 	}
 } // namespace
 
@@ -2349,7 +2454,8 @@ bool PlayerLifecycleSystem::SavePlayerToRedisImpl(entt::entity player, bool allo
 	// when the in-memory state diverged from Redis during a load path
 	// we don't fully trust.
 	//
-	// allowSkipWhenPersisted = false(只有退出流程的 M4 分支这么传):不走快路径,一定写盘。
+	// allowSkipWhenPersisted = false:不走快路径,一定写盘。只有两处这么传:退出流程的 M4 分支
+	// (exit_fastpath_deferred),以及 StartTravelHandoff 的快路径补写(handoff_fastpath_forced)。
 	if (auto* snap = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
 		allowSkipWhenPersisted && snap != nullptr && snap->HasSnapshot() &&
 		dirty_save::IsEqual(*message, *snap->snapshot))
@@ -2568,6 +2674,11 @@ void PlayerLifecycleSystem::DestroyDeposedPlayer(Guid playerId, const char *reas
 //   同 zone 重发后落回本节点时,进场路由可能先于应答到达(应答也可能丢):EnterScene 3.2 步不等应答,
 //   直接走 ResolveTravelOutcome 静默解冻。
 //   交接途中玩家退出:退出优先(FinishExitAfterPersist),标记已写则一并撤回。
+//   冻结有硬上限(travel_freeze_cap.h,单调时钟):
+//     冻结满 70s 仍无结论 ──▶ EnforceTravelFreezeCaps(1s 扫描):handoff 标记没发出 → AbortTravelHandoff(解冻 + tip);
+//                              已发出 → ConcludeHandoffAfterMarkSent(tip + 踢线 34 + 不存盘销毁)
+//     35s 晚发闸:set_mark 阶段(BeginTravelHandoff,SET 未发)→ Abort;enter_scene 阶段(RequestTravelEnterScene,
+//                SET 已 OK)→ Conclude。SET 已 OK 之后发现没有 gate 会话 / 没有 scene_manager 同样走 Conclude。
 //
 // 为什么同 zone 换图是"被拒之后才交接"而不是每次都先存盘:scene 节点事先不知道目标场景在不在
 // 本节点(频道由 scene_manager 挑),同节点换图占绝大多数且不需要冻结 / 存盘 / 销毁。只在收到 18
@@ -2696,14 +2807,16 @@ uint32_t PlayerLifecycleSystem::StartTravelHandoff(entt::entity player, uint32_t
 	}
 	// gate 会话必须活着:交接的 EnterScene 要用它路由 / 重定向;断线宽限期内的实体拿旧会话去请求,
 	// 会改写离线玩家的 location(与 player_team.cpp HasLiveSession 同一判法)。
-	const auto *session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(player);
-	if (session == nullptr || session->gate_session_id() == 0 || session->gate_session_id() == kInvalidSessionId)
+	if (!HasLiveGateSession(player, playerId))
 	{
 		return genericFailTip;
 	}
-	if (const auto sessionIt = SessionMap().find(session->gate_session_id());
-		sessionIt == SessionMap().end() || sessionIt->second != playerId)
+	// scene_manager 必须可达。handoff 标记的 SET 一旦发出就不许解冻(骨架),SET 之后才发现没有 SM 只能按
+	// "标记已发出"销毁并踢线(ConcludeHandoffAfterMarkSent)。所以在改任何状态之前先挡住常见情形(请求时 SM
+	// 就不在),仍然只回失败 tip;剩下的只有"SM 恰好在 SET 往返那几毫秒里消失"的极窄窗口。
+	if (GetSceneManagerEntity(playerId) == entt::null)
 	{
+		LOG_WARN << "[ZoneTravel] handoff not started for player " << playerId << ": no SceneManager node reachable";
 		return genericFailTip;
 	}
 
@@ -2717,6 +2830,9 @@ uint32_t PlayerLifecycleSystem::StartTravelHandoff(entt::entity player, uint32_t
 	travel.sceneId = sceneId;
 	travel.sceneConfigId = sceneConfigId;
 	travel.requestedAtMs = 0; // 0 = 等这次存盘落地;BeginTravelHandoff 写标记时才占代际
+	// 冻结硬上限 / 晚发窗口从这一刻起算(单调时钟,与下面挂 PlayerFrozenComp 同一刻),之后不改。
+	travel.frozenAtSteady = travel_freeze_cap::Clock::now();
+	travel.destroyDeferralReported = false;
 
 	// 先冻结再存盘:冻结之后状态不再变,这次存盘(或快路径判定的"盘上已是同一份")才代表
 	// 玩家交接那一刻的最终态。同一 key 只发布最新快照的完成回调(redis_client.h EnqueueSave /
@@ -2735,6 +2851,7 @@ uint32_t PlayerLifecycleSystem::StartTravelHandoff(entt::entity player, uint32_t
 		travel_handoff_stats::Inc(travel_handoff_stats::Get().startedCrossZone);
 	}
 	EnsureTravelHandoffStatsTimer();
+	EnsureTravelFreezeCapTimer();
 
 	LOG_INFO << "[ZoneTravel] handoff started for player " << playerId
 			 << " target_zone=" << targetZoneId << (crossZone ? " (cross-zone)" : " (same-zone cross-node)")
@@ -2744,10 +2861,37 @@ uint32_t PlayerLifecycleSystem::StartTravelHandoff(entt::entity player, uint32_t
 	// 会接手;返回 false = 快路径没写盘、回调永远不会来,必须自己调。
 	// BeginTravelHandoff 内部的失败分支(无 epoch / Redis 断连)会同步解冻并回 tip,这里仍返回
 	// "已受理":对调用方而言就是"受理后未成",与异步失败同一种形态。
-	if (SavePlayerToRedis(player))
+	bool savePending = SavePlayerToRedis(player);
+	// 快路径只比了"上次落地的快照",没看同 key 还有没有在途 / 排队中的存盘 —— 与退出链 M4(HandleExitGameNode)
+	// 同一个问题、同一写法。例如一笔更早的、内容不同的周期存盘 X 正在退避重试(redis_client 在 Redis 不可用时无限
+	// 重试,从不放弃):这时直接写标记,X 之后仍可能以当前 epoch 落地 —— 放行前落地,目标节点读到的就是 X;交接未成
+	// 而实体被不存盘销毁时,X 就成了永久状态。改走一次真实存盘:新值排在 X 之后(同 key 排队值永远比在途值新,完成回调
+	// 只对最新值发布),只有它落地才回调 HandlePlayerAsyncSaved → BeginTravelHandoff。这保证了"SET 发出 ⇒ Redis ⊇
+	// 冻结内存"(骨架 I1),放行路径也跟着受益。此刻 requestedAtMs 仍为 0,不会被 SavePlayerToRedisImpl 的
+	// "交接已发起不得再写"跳过。
+	if (!savePending && HasUnsettledPlayerSave(playerId))
+	{
+		travel_handoff_stats::Inc(travel_handoff_stats::Get().handoffFastpathForced);
+		LOG_INFO << "[ZoneTravel] handoff of player " << playerId
+				 << " matches its last persisted snapshot but still has an unsettled save; forcing a real save"
+				 << " before writing the handoff mark (metric=handoff_fastpath_forced)";
+		savePending = SavePlayerToRedisImpl(player, /*allowSkipWhenPersisted=*/false);
+		if (!savePending)
+		{
+			// 不可达(实体有效、requestedAtMs 刚置 0 时强制存盘必然写盘)。fail-closed:有未落地的存盘就不许写标记;
+			// SET 还没发,解冻是安全的(不变量 I0)。
+			LOG_ERROR << "[ZoneTravel] handoff of player " << playerId
+					  << " could not force a save while an older save is unsettled; not writing the handoff mark";
+			AbortTravelHandoff(playerId, "could not force a save before writing the handoff mark");
+			return kTravelAccepted;
+		}
+	}
+	if (savePending)
 	{
 		// 存盘在途。Redis 断连时这次写会留在重试队列里,落地回调可能很久都不来,而应答看门狗要到
-		// EnterScene 发出之后才挂 —— 这一段没人兜底的话,玩家会以冻结态一直等下去。
+		// EnterScene 发出之后才挂 —— 存盘看门狗是这一段的主兜底;它没能按时触发时(例如墙钟回拨推迟了 muduo
+		// 定时器),存盘晚于 35s 才落地的由晚发闸(set_mark 阶段)拦下不写标记,一直不落地的由 70s 冻结上限的
+		// "标记未发出 → 解冻"分支收住。
 		ArmTravelSaveWatchdog(playerId, frozenAtMs);
 	}
 	else
@@ -2759,14 +2903,11 @@ uint32_t PlayerLifecycleSystem::StartTravelHandoff(entt::entity player, uint32_t
 
 void PlayerLifecycleSystem::ArmTravelSaveWatchdog(Guid playerId, int64_t frozenAtMs)
 {
-	auto *loop = muduo::net::EventLoop::getEventLoopOfCurrentThread();
-	if (loop == nullptr)
-	{
-		// 单测 / 无 loop 的宿主:同 ArmTravelReplyWatchdog,只靠落地回调与"退出优先"收敛。
-		return;
-	}
 	// 只捕获 id + 代际(frozenAtMs:这一段 requestedAtMs 还是 0,分不出是哪一次交接)。不保存 TimerId、不取消。
-	loop->runAfter(kTravelReplyBudgetSec, [playerId, frozenAtMs]()
+	// 截止时刻按单调时钟定,muduo(按墙钟)提前唤醒时由 RunAtMonotonic 按剩余时间重挂。
+	// 单测 / 无 loop 的宿主挂不上(RunAtMonotonic 返回 false):同 ArmTravelReplyWatchdog,只靠落地回调与
+	// "退出优先"收敛;生产节点另有冻结上限兜底。
+	RunAtMonotonic(travel_freeze_cap::Clock::now() + travel_freeze_cap::kSaveBudget, [playerId, frozenAtMs]()
 	{
 		const auto entity = tlsEcs.GetPlayer(playerId);
 		if (!tlsEcs.actorRegistry.valid(entity))
@@ -3058,6 +3199,24 @@ void PlayerLifecycleSystem::BeginTravelHandoff(Guid playerId)
 		return;
 	}
 
+	// 晚发闸(set_mark 阶段):冻结已超过 travel_freeze_cap::kDispatchWindow(35s)就不再写标记。此刻 SET 还没发出,
+	// 不可能已被放行(不变量 I0),解冻安全。这一步保证之后发出的 SET / EnterScene 都来得及在冻结上限(70s)之前被
+	// 应答看门狗 + 一次核实收敛。存盘看门狗(30s ≤ 35s)正常会先到并解冻,这里是纵深防御:只在它没能按时触发
+	// (墙钟回拨把 muduo 定时器推迟了等)时才会生效。排在 epoch 检查之前:窗口已关时不论别的条件如何都不写。
+	{
+		const auto now = travel_freeze_cap::Clock::now();
+		const auto frozenFor = ElapsedSinceFreeze(*travel, playerId, now);
+		if (!travel_freeze_cap::IsDispatchWindowOpen(frozenFor))
+		{
+			travel_handoff_stats::Inc(travel_handoff_stats::Get().dispatchWindowClosed);
+			LOG_WARN << "[ZoneTravel][DispatchWindow] player=" << playerId << " stage=set_mark frozen_ms="
+					 << std::chrono::duration_cast<std::chrono::milliseconds>(frozenFor).count()
+					 << ": handoff save landed too late to verify ownership before the freeze cap; not writing the mark";
+			AbortTravelHandoff(playerId, "handoff dispatch window closed before the mark was sent");
+			return;
+		}
+	}
+
 	uint64_t ownerEpoch = 0;
 	if (const auto *epochComp = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(playerEntity))
 	{
@@ -3167,18 +3326,45 @@ void PlayerLifecycleSystem::RequestTravelEnterScene(Guid playerId)
 		return;
 	}
 
+	// 走到这里 SET 已经拿到 OK:handoff 标记确定已写,scene_manager 随时可能凭它放行(不经本节点的落点也算 ——
+	// 玩家断线后重登落到别的节点,IsSceneChangeBusy 拦不住,见 handoff_mark_withdraw.h 契约第二条)。按骨架,
+	// 下面三种不发 EnterScene 的情形都**不许解冻**(AbortTravelHandoff 会违反不变量 I2 / I3),一律走
+	// ConcludeHandoffAfterMarkSent:tip(会话活着时)+ 踢线 34 + 不存盘销毁。每个 return 之后都不再碰 travel 指针。
+	const auto now = travel_freeze_cap::Clock::now();
+
+	// 晚发闸(enter_scene 阶段):SET 的应答晚于 kDispatchWindow(35s)才到,说明 zone Redis 已严重异常,再发
+	// EnterScene 其核实大概率赶不上冻结上限。本节点没发出过 EnterScene,不可能是本次交接放行的,会话仍绑在这里 ——
+	// 立即收口,客户端约 35s 就能拿到结论而不是等到 70s;不踢的话就是一条哑连接,所以同 zone 也要踢。
+	if (const auto frozenFor = ElapsedSinceFreeze(*travel, playerId, now);
+		!travel_freeze_cap::IsDispatchWindowOpen(frozenFor))
+	{
+		travel_handoff_stats::Inc(travel_handoff_stats::Get().dispatchWindowClosed);
+		LOG_WARN << "[ZoneTravel][DispatchWindow] player=" << playerId << " stage=enter_scene frozen_ms="
+				 << std::chrono::duration_cast<std::chrono::milliseconds>(frozenFor).count()
+				 << ": handoff mark reply arrived too late to verify ownership before the freeze cap;"
+				 << " not sending EnterScene";
+		ConcludeHandoffAfterMarkSent(playerId, travel_freeze_cap::MarkSentSite::kDispatchWindow, now);
+		return;
+	}
+
 	// 传送中实体还活着,gate / session 直接从实体上取,不需要像疏散那样提前抄票据。
 	const auto *session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(playerEntity);
 	if (session == nullptr || session->gate_session_id() == kInvalidSessionId)
 	{
-		AbortTravelHandoff(playerId, "no live gate session");
+		// 没有会话:只销毁不踢(Conclude 自己按 HasLiveGateSession 判,这里判不到活会话)。
+		LOG_WARN << "[ZoneTravel] no live gate session for player " << playerId
+				 << " after the handoff mark was written; not sending EnterScene";
+		ConcludeHandoffAfterMarkSent(playerId, travel_freeze_cap::MarkSentSite::kNoGateSession, now);
 		return;
 	}
 
 	const auto smEntity = GetSceneManagerEntity(playerId);
 	if (smEntity == entt::null)
 	{
-		AbortTravelHandoff(playerId, "no SceneManager node reachable");
+		// StartTravelHandoff 已在冻结之前预检过 SM:走到这里只剩"SM 恰好在 SET 往返那几毫秒里消失"的窄窗口。
+		LOG_WARN << "[ZoneTravel] no SceneManager node reachable for player " << playerId
+				 << " after the handoff mark was written; not sending EnterScene";
+		ConcludeHandoffAfterMarkSent(playerId, travel_freeze_cap::MarkSentSite::kNoSceneManager, now);
 		return;
 	}
 
@@ -3222,17 +3408,12 @@ void PlayerLifecycleSystem::RequestTravelEnterScene(Guid playerId)
 void PlayerLifecycleSystem::ArmTravelReplyWatchdog(Guid playerId, uint64_t requestedAtMs,
 												   travel_outcome::Evidence evidence, std::string reason)
 {
-	auto *loop = muduo::net::EventLoop::getEventLoopOfCurrentThread();
-	if (loop == nullptr)
-	{
-		// 单测 / 无 loop 的宿主:没有看门狗,只靠应答与"退出优先"收敛。生产节点必有 loop。
-		LOG_WARN << "[ZoneTravel] no event loop on this thread; EnterScene reply watchdog not armed for player "
-				 << playerId;
-		return;
-	}
 	// 只按值捕获 id + 代际 + 证据 + 原因文本,不绑任何对象(§11.7)。不保存 TimerId、不取消:到期时代际
-	// 不符即 no-op,比维护一张定时器表更简单。
-	loop->runAfter(kTravelReplyBudgetSec, [playerId, requestedAtMs, evidence, reason = std::move(reason)]()
+	// 不符即 no-op,比维护一张定时器表更简单。截止时刻按单调时钟定,muduo(按墙钟)提前唤醒时由 RunAtMonotonic
+	// 按剩余时间重挂(重挂时 lambda 随 std::function 复制,reason 一并复制)。
+	const bool armed = RunAtMonotonic(
+		travel_freeze_cap::Clock::now() + travel_freeze_cap::kReplyBudget,
+		[playerId, requestedAtMs, evidence, reason = std::move(reason)]()
 	{
 		const auto entity = tlsEcs.GetPlayer(playerId);
 		if (!tlsEcs.actorRegistry.valid(entity))
@@ -3252,6 +3433,13 @@ void PlayerLifecycleSystem::ArmTravelReplyWatchdog(Guid playerId, uint64_t reque
 		travel_handoff_stats::Inc(travel_handoff_stats::Get().replyWatchdogFired);
 		ResolveTravelOutcome(playerId, requestedAtMs, reason.c_str(), evidence);
 	});
+	if (!armed)
+	{
+		// 单测 / 无 loop 的宿主:没有看门狗(也没有 1s 上限扫描,单测直接调 EnforceTravelFreezeCaps),只靠应答与
+		// "退出优先"收敛。生产节点必有 loop。
+		LOG_WARN << "[ZoneTravel] no event loop on this thread; EnterScene reply watchdog not armed for player "
+				 << playerId;
+	}
 }
 
 void PlayerLifecycleSystem::ResolveTravelOutcome(Guid playerId, uint64_t requestedAtMs, const char *reason,
@@ -3637,6 +3825,172 @@ void PlayerLifecycleSystem::SetNodeIdentityProbe(std::function<bool()> probe)
 	tlsNodeIdentityProbe = std::move(probe);
 }
 
+void PlayerLifecycleSystem::EnforceTravelFreezeCaps(travel_freeze_cap::Clock::time_point now)
+{
+	// 先收集、后处置:处置会摘组件 / 销毁实体,遍历 view 时改 registry 是未定义行为。
+	// 不排除退出中的实体:骨架没有给退出开例外。原先想排除它的理由(退出链 M4 可能正在等一笔更早的未落地存盘)
+	// 由 ConcludeHandoffAfterMarkSent 的"有未落地存盘就推迟销毁"覆盖。
+	// 只读写已有组件的字段(ElapsedSinceFreeze 可能补记打点),不 emplace、不 get_or_emplace。
+	std::vector<Guid> due;
+	auto view = tlsEcs.actorRegistry.view<PlayerTravelHandoffComp>();
+	for (const auto entity : view)
+	{
+		const auto *guid = tlsEcs.actorRegistry.try_get<Guid>(entity);
+		if (guid == nullptr)
+		{
+			// 交接组件只由 StartTravelHandoff 挂,那里要求实体有 Guid;没有 Guid 的实体既回查不到也处置不了。
+			continue;
+		}
+		auto &travel = view.get<PlayerTravelHandoffComp>(entity);
+		if (ElapsedSinceFreeze(travel, *guid, now) < travel_freeze_cap::kFreezeCap)
+		{
+			continue;
+		}
+		due.push_back(*guid);
+	}
+	for (const Guid playerId : due)
+	{
+		ExpireTravelFreeze(playerId, now);
+	}
+}
+
+void PlayerLifecycleSystem::ExpireTravelFreeze(Guid playerId, travel_freeze_cap::Clock::time_point now)
+{
+	// 按 id 重查、重算、重判:收集之后前一个玩家的处置可能已经改了 registry,不信任收集阶段的结论。
+	const auto playerEntity = tlsEcs.GetPlayer(playerId);
+	if (!tlsEcs.actorRegistry.valid(playerEntity))
+	{
+		return;
+	}
+	auto *travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(playerEntity);
+	if (travel == nullptr)
+	{
+		return;
+	}
+	const auto frozenFor = ElapsedSinceFreeze(*travel, playerId, now);
+	const auto action =
+		travel_freeze_cap::DecideFreezeCap(frozenFor, travel_freeze_cap::IsHandoffMarkSent(travel->requestedAtMs));
+	switch (action)
+	{
+	case travel_freeze_cap::FreezeCapAction::kNone:
+		return;
+	case travel_freeze_cap::FreezeCapAction::kUnfreeze:
+		// 标记从没发出:不可能已被放行(I0),解冻 + 失败 tip。30s 存盘看门狗正常早就处理了,这一支应恒不出现;
+		// 出现说明存盘看门狗没能按时触发(墙钟回拨推迟了 muduo 定时器等)。
+		travel_handoff_stats::Inc(travel_handoff_stats::Get().freezeCapReached);
+		LOG_WARN << "[ZoneTravel][FreezeCap] player=" << playerId << " action="
+				 << travel_freeze_cap::FreezeCapActionName(action) << " target_zone=" << travel->targetZoneId
+				 << " frozen_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(frozenFor).count()
+				 << ": handoff mark was never sent; unfreezing with a failure tip";
+		// travel 指针到此为止不再使用:Abort 会摘组件。
+		AbortTravelHandoff(playerId, "handoff freeze cap reached before the handoff mark was sent");
+		return;
+	case travel_freeze_cap::FreezeCapAction::kDestroy:
+		// 标记已发出:归属在本节点核实不了,永不解冻。推迟销毁(有未落地存盘)时不计数,下一拍再判。
+		if (ConcludeHandoffAfterMarkSent(playerId, travel_freeze_cap::MarkSentSite::kFreezeCap, now))
+		{
+			travel_handoff_stats::Inc(travel_handoff_stats::Get().freezeCapReached);
+		}
+		return;
+	case travel_freeze_cap::FreezeCapAction::kCount:
+		break;
+	}
+	LOG_ERROR << "[ZoneTravel][FreezeCap] player=" << playerId << " unexpected freeze cap action "
+			  << static_cast<uint32_t>(action) << "; leaving the handoff to the next sweep";
+}
+
+bool PlayerLifecycleSystem::ConcludeHandoffAfterMarkSent(Guid playerId, travel_freeze_cap::MarkSentSite site,
+														 travel_freeze_cap::Clock::time_point now)
+{
+	const auto playerEntity = tlsEcs.GetPlayer(playerId);
+	if (!tlsEcs.actorRegistry.valid(playerEntity))
+	{
+		return true; // 已被别的路径收尾(退出 / 放行 / 废黜),幂等
+	}
+	auto *travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(playerEntity);
+	if (travel == nullptr)
+	{
+		return true;
+	}
+	const char *siteName = travel_freeze_cap::MarkSentSiteName(site);
+
+	// 前置条件被破坏(调用方以为 SET 已发出,其实没有):SET 未发出一侧解冻是安全的(I0),不能反过来销毁一个
+	// 本可以原地恢复的玩家。
+	if (!travel_freeze_cap::IsHandoffMarkSent(travel->requestedAtMs))
+	{
+		LOG_ERROR << "[ZoneTravel][MarkSentDestroy] player=" << playerId << " site=" << siteName
+				  << ": called although the handoff mark was never sent (requested_at_ms=0); unfreezing instead";
+		AbortTravelHandoff(playerId, "mark-sent conclusion reached without a sent handoff mark");
+		return true;
+	}
+
+	// 有未落地的存盘:此刻不存盘销毁,那笔在途 / 排队的写随后落地会把盘改回中间态,成为永久状态(与退出链 M4
+	// 同一个顾虑)。数据一致性优先于活性:推迟,返回 false,由下一拍上限扫描重判。StartTravelHandoff 的快路径补写
+	// 落地之后这里不可达(SET 发出后本节点不再产生新的存盘,发出前已确认没有未落地的存盘),它是冻结硬上限唯一允许的
+	// 例外 —— redis_client 在 Redis 不可用时无限重试,推迟可能没有上界,所以每次交接只告警一次。
+	if (HasUnsettledPlayerSave(playerId))
+	{
+		if (!travel->destroyDeferralReported)
+		{
+			travel->destroyDeferralReported = true;
+			travel_handoff_stats::Inc(travel_handoff_stats::Get().destroyDeferredUnsettledSave);
+			LOG_ERROR << "[ZoneTravel][MarkSentDestroy] player=" << playerId << " site=" << siteName
+					  << ": unsettled save still pending; deferring destroy until it lands"
+					  << " (metric=destroy_deferred_unsettled_save)";
+		}
+		return false;
+	}
+
+	// 先抄后毁:DestroyDeposedPlayer 会摘组件、销毁实体。
+	const uint32_t targetZoneId = travel->targetZoneId;
+	const bool crossZone = targetZoneId != GetZoneId();
+	const std::string markValue = player_ownership::HandoffRedisValue(travel->markEpoch, travel->requestedAtMs);
+	const uint64_t enterSceneCorrelationId = travel->enterSceneCorrelationId;
+	const char *evidenceName =
+		travel->hasRecordedEvidence
+			? travel_outcome::EvidenceName(static_cast<travel_outcome::Evidence>(travel->recordedEvidence))
+			: "none";
+	const auto frozenMs =
+		std::chrono::duration_cast<std::chrono::milliseconds>(ElapsedSinceFreeze(*travel, playerId, now)).count();
+	const bool exiting = tlsEcs.actorRegistry.any_of<UnregisterPlayer>(playerEntity);
+	// 退出中的实体客户端已断开,会话由退出流程收尾;会话已被取代 / 解绑时发 34 可能踢掉别人。
+	const bool kick = !exiting && HasLiveGateSession(playerEntity, playerId);
+
+	// 上限这一支是"两道看门狗与晚发闸都没能收敛"的信号,打 ERROR;其余三支是已知的窄窗口,打 WARN。
+	// "(ownership UNKNOWN, not confirmed moved)" 是给 runbook 判读的:随后 DestroyDeposedPlayer 那行沿用下来的
+	// "(ownership moved away)" 在这里不成立。字段顺序与原文是 runbook 的 grep 依据,改动要同步 runbook。
+	const std::string detail =
+		std::string("[ZoneTravel][MarkSentDestroy] player=") + std::to_string(playerId) + " site=" + siteName +
+		" target_zone=" + std::to_string(targetZoneId) + (crossZone ? "(cross-zone)" : "(same-zone)") +
+		" mark=" + markValue + " enter_scene_sent=" + (enterSceneCorrelationId != 0 ? "1" : "0") +
+		" corr=" + std::to_string(enterSceneCorrelationId) + " evidence=" + evidenceName +
+		" frozen_ms=" + std::to_string(frozenMs) + " exiting=" + (exiting ? "1" : "0") + " kick=" + (kick ? "1" : "0") +
+		": handoff mark already sent and ownership cannot be verified here; destroying without persisting"
+		" (ownership UNKNOWN, not confirmed moved)";
+	if (site == travel_freeze_cap::MarkSentSite::kFreezeCap)
+	{
+		LOG_ERROR << detail;
+	}
+	else
+	{
+		LOG_WARN << detail;
+	}
+
+	// 必须先踢再销毁:DestroyDeposedPlayer 会摘会话(RemovePlayerSession),之后 tip 与 34 都发不出去。
+	// 34 的 reason.id 就是这个 tip 码,客户端用 DescribeKickReason 显示原因后回选服重登。
+	if (kick)
+	{
+		travel_handoff_stats::Inc(travel_handoff_stats::Get().markSentClientReset);
+		SendTipAndKickToClient(playerEntity, crossZone ? static_cast<uint32_t>(kZoneTravelTargetBusy)
+													   : static_cast<uint32_t>(kEnterSceneFailed));
+	}
+	// 终态计数排在摘 PlayerFrozenComp 之前(要读冻结起点)。travel 指针到此为止不再使用。
+	ObserveTravelHandoffEnded(playerEntity, travel_handoff_stats::Get().markSentDestroyed);
+	// 不发任何 Redis 命令、不撤回标记:理由见头文件。销毁之后标记起断线释放标记(A1′)的作用。
+	DestroyDeposedPlayer(playerId, siteName);
+	return true;
+}
+
 void PlayerLifecycleSystem::AbortTravelHandoff(Guid playerId, const char *reason, bool notifyFailure)
 {
 	const auto playerEntity = tlsEcs.GetPlayer(playerId);
@@ -3692,7 +4046,8 @@ void PlayerLifecycleSystem::AbortTravelHandoff(Guid playerId, const char *reason
 	// 让客户端收起"传送中 / 切换中"遮罩。跨 zone 传送未成一律归"目标区繁忙"(含目标区不存在、
 	// 无可用 gate、scene_manager 拒绝、应答超时):这些在 scene 侧分不清,也都是"稍后再试"。
 	// 同 zone 换图未成沿用通用的进场失败码。
-	// 玩家在交接期间退出的情形到不了这里:退出流程(FinishExitAfterPersist)会先作废交接并销毁实体。
+	// 退出中的实体只可能经存盘看门狗或冻结上限的"标记未发出"分支走到这里(其余情形由退出流程先作废交接并销毁
+	// 实体):tip 发往已断开的会话,无害。
 	PlayerTipSystem::SendToPlayer(playerEntity,
 								  crossZone ? static_cast<uint32_t>(kZoneTravelTargetBusy)
 											: static_cast<uint32_t>(kEnterSceneFailed),

@@ -1,10 +1,12 @@
 ﻿#pragma once
 
+#include <optional>
 #include <unordered_map>
 
 #include "muduo/net/TcpConnection.h"
 #include "engine/core/type_define/type_define.h"
 #include "message_limiter/message_limiter.h"
+#include "pending_scene_entry_comp.h"
 
 struct SessionInfo
 {
@@ -56,17 +58,26 @@ struct SessionInfo
 	std::weak_ptr<muduo::net::TcpConnection> conn;
 	MessageLimiter messageLimiter;
 	uint32_t sessionVersion{UINT32_MAX};
-	uint32_t pendingEnterGsType{0}; // Pending login type to forward to Scene once scene node is assigned
+	uint32_t pendingEnterGsType{0}; // Pending login type to forward to Scene once scene node is assigned;转发失败后由 pendingSceneEntry 驱动补发
 	uint64_t sceneId{0};            // Scene instance GUID from SceneManager (RoutePlayerEvent)
 
 	// 跨 zone 归属与所有权 epoch(cross-zone-scene-travel.md CZ-3 / CZ-4,scene-owner-reentry-barrier.md §3.3)。
 	// 两项都来自 RoutePlayerEvent,由 scene_manager 在每次路由决策时下发;gate 不生产、不校验,只透传进
 	// PlayerEnterGameNodeRequest。之所以要存进会话而不是在 RoutePlayer 里用完即弃:向 scene 的转发有两个入口
 	// (RoutePlayerEventHandler / BindSessionEventHandler),BindSession 晚到时的补发读不到路由事件,只能从会话取。
-	// 同一会话再次收到 RoutePlayerEvent 时整体覆盖:每次改派都铸新 epoch,旧值留着只会让补发带上已被废黜的 epoch。
+	// 同一会话再次收到 RoutePlayerEvent 时,每次路由决策都整体覆盖(同落点重连不铸造新 epoch、沿用观察值,
+	// 改派才铸新值),旧值留着只会让补发带上已被废黜的 epoch。
 	// 会话销毁即随之消失,不需要额外清理路径。
 	uint32_t homeZoneId{0}; // 玩家归属 zone;0 = 未知(旧版 scene_manager 未填),scene 侧 fail-closed 落进程 zone 并计数
 	uint64_t ownerEpoch{0}; // 本次路由的归属 epoch;0 = 旧版未铸造(兼容窗口),scene 侧存盘跳过 CAS 并计数
+
+	// 最近一次 RoutePlayerEvent 的决策(CPP-2);每次到达无条件覆盖,与是否转发成功无关。
+	// 只供 BindSession 晚到时按 node_id 重建欠账(scene_route_helper.h EntryForLateLoginBinding):
+	// 不从已提交的节点实体反查 NodeInfo —— 已提交的指向可能已被节点摘除置无效,或因同 uuid 重注册而悬空。
+	SceneRouteTarget lastSceneRoute;
+	// CPP-2 进场转发欠账:路由到了 gate 却还没交给 scene。放在会话里 = 会话 erase 即取消,
+	// 也不怕 session_id 复用;只由 nodes/gate/handler/event/scene_entry_dispatch.cpp 读写(单测直接调纯函数)。
+	std::optional<PendingSceneEntry> pendingSceneEntry;
 
 	// 重定向票据的持票者与目标 zone(cross-zone-scene-travel.md CZ-8)。DispatchTokenVerify 验签通过后
 	// 写入,会话存续期内不变;gate 只把它们透传进 SessionDetails,主判定在 login EnterGame

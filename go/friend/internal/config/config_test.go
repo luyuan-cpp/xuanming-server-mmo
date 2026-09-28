@@ -113,6 +113,31 @@ func TestEtcYamlContractValues(t *testing.T) {
 	}
 }
 
+// TestRecommendAnchorWindowCoversExclusionBudget:data.RecommendAnchorWindow 必须装得下"有配置上限的排除全部顶满
+// + 一次要的人数"(推导见该常量的注释)。
+// 只用测试守 etc/friend.yaml,不进 Validate 拒启:超预算的后果只是排除者扎堆于 pivot 之后时推荐偏少,不会推荐出
+// 错人;推荐是可降级展示功能,不值得为它把"运维调大好友上限"变成启动失败。这条红了:去 internal/data/recommend_repo.go
+// 调大 RecommendAnchorWindow,并同步复核其注释里的读数上界与 data 包 TestRecommendAnchor_WindowCoversBoundedExclusionBudget 的字面量。
+func TestRecommendAnchorWindowCoversExclusionBudget(t *testing.T) {
+	var c Config
+	if err := conf.Load(etcYaml, &c); err != nil {
+		t.Fatalf("load %s: %v", etcYaml, err)
+	}
+	f := c.Friend
+	// conf.Load 已跑过 Validate(阈值为 0 会被拒),RecommendMaxLimit ≥ 1,下面减 1 不会下溢。
+	excluded := uint64(1) + // 自己
+		uint64(f.MaxFriends) + uint64(f.MaxBlocks) +
+		uint64(f.MaxPendingRequests) + uint64(f.MaxIncomingRequests) +
+		uint64(f.RecommendMaxExclude) +
+		uint64(f.RecommendMaxLimit) - 1 // mutual 已选中、追加进 exclude 的至多 RecommendMaxLimit-1 个
+	need := excluded + uint64(f.RecommendMaxLimit)
+	t.Logf("窗口预算:排除 %d + 需要 %d = %d,窗口 %d", excluded, f.RecommendMaxLimit, need, data.RecommendAnchorWindow)
+	if need > uint64(data.RecommendAnchorWindow) {
+		t.Errorf("etc/friend.yaml 的阈值合计需要窗口 %d,超过 data.RecommendAnchorWindow=%d:排除者扎堆时 random 兜底会推荐偏少",
+			need, data.RecommendAnchorWindow)
+	}
+}
+
 // TestEtcYamlZoneRewriteAnchors 钉住 go_services.ps1 -Zone 改写依赖的 yaml **文本形状**(契约 §7)。
 // 形状一变,派生 yaml 就静默不位移端口 / 不改 zone —— 双 zone 联调时表现为两个 zone 抢同一个端口,
 // 或者 zone 2 的 friend 注册进 zone 1 的路径。这些都不会报错。

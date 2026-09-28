@@ -29,25 +29,38 @@ spec:
       interval: 30s
       rules:
         # --- Pool health ---------------------------------------------------
-        # 这两条原先写的是 `sum by (zone_id) (scene_manager_nodes_by_role{role="..."}) == 0`,
-        # 恒为空向量、永远不会响:nodes_by_role **从不发布 0 值**。SetNodesByRole 先 Reset()
-        # 再只写 counts 里出现过的 (zone, role)(go/scene_manager/internal/metrics/metrics.go
-        # SetNodesByRole),而 counts 只由 `++` 产生(internal/logic/load_reporter.go
-        # refreshLoadScores)——某个 role 的池子空了 = 该序列直接消失,不是变成 0。
-        # 现写法:"这个 zone 还有存活的 scene 节点,却没有一个能承载该用途的"。左侧给出仍有节点
-        # 的 zone,unless 去掉已有对应承载节点的 zone。
-        #   - role 取值与 constants.IsInstanceHostingType / IsWorldHostingType 对齐
+        # 两条 PoolEmpty 都由两支 `or on (zone_id)` 组成:
+        #   左支(旧写法,原样保留):"这个 zone 还有存活的 scene 节点,却没有一个能承载该用途的"。
+        #     左侧给出仍有节点(> 0)的 zone,unless 去掉已有对应承载节点的 zone。
+        #     role 取值与 constants.IsInstanceHostingType / IsWorldHostingType 对齐
         #     (instance|instance_cross、main_world|main_world_cross):节点选择按 MatchesPurpose
         #     过滤,只有 cross 型节点的 zone 同样能服务,不该误报。
-        #   - `> 0` 让表达式在将来 Go 侧改为发布 0 值后依然成立。
-        #   - 阈值 / for / severity 沿用原值。
-        # 已知盲区:zone 内**所有** scene 节点都消失时,该 zone 在本指标里一条序列都不剩,两条
-        # 告警都无从按 zone 触发。要覆盖它得让 Go 侧为已知 zone 发布 0 值(行为改动,本次未做)。
+        #   右支(整 zone 全灭):`sum by (zone_id) (...) == 0`。Go 侧现在为「有存活节点的 zone」与
+        #     「本 scene_manager 自己配置的 ZoneId」发布四种声明角色的 0 值(metrics.go SetNodesByRole,
+        #     load_reporter.go refreshLoadScores)。zone 内所有 scene 节点都消失时左支为空,右支由该
+        #     zone 自己的 SM 补的 0 求和为 0,触发。
+        # 语义与兼容:
+        #   - 池子空了但别的角色还有节点:左支触发(与旧行为一致);
+        #   - 整个 zone 全灭:右支触发;
+        #   - Go 回滚 / 只有旧二进制在跑:右支没有序列,退化为旧行为 —— 两条 critical 不会因此静默失效;
+        #   - 多副本、以及别的 zone 的 SM 也在发布同一 zone:用 sum 而不是 min,只要有一个 > 0 就不触发。
+        # 残余盲区:
+        #   - 该 zone 自己的 SM 也全挂了,或它的 ZoneId 配错(配错还会误报一个空 zone);
+        #   - 某个 SM 卡在 fullSync 的 3s 重试循环(etcd 不可达)时不再走 refreshLoadScores,它最后一次
+        #     发布的 > 0 旧值会一直留着,压住这两条告警。这种形态下 scene 节点同样无法注册 / 续租,应由
+        #     etcd / SM 存活类告警覆盖,本文件没有;
+        #   - 新 zone 开服、整 zone 维护:2 分钟后两条 critical 都会响(新行为),事先对该 zone_id 加
+        #     silence,步骤见 docs/ops/scene-node-role-split.md。
+        # 阈值 / for / severity 沿用原值。
         - alert: SceneManagerInstancePoolEmpty
           expr: |
-            count by (zone_id) (scene_manager_nodes_by_role > 0)
-            unless on (zone_id)
-            count by (zone_id) (scene_manager_nodes_by_role{role=~"instance|instance_cross"} > 0)
+            (
+              count by (zone_id) (scene_manager_nodes_by_role > 0)
+              unless on (zone_id)
+              count by (zone_id) (scene_manager_nodes_by_role{role=~"instance|instance_cross"} > 0)
+            )
+            or on (zone_id)
+            (sum by (zone_id) (scene_manager_nodes_by_role) == 0)
           for: 2m
           labels:
             severity: critical
@@ -59,13 +72,19 @@ spec:
               With StrictNodeTypeSeparation=true, CreateScene for dungeons/battlegrounds
               will return ErrNoNodeForPurpose until at least one instance pod appears.
               Scale up scene-instance-z{{ $labels.zone_id }} or check pod Ready state.
+              或该 zone 的 scene 节点已全灭(由该 zone 自己的 scene_manager 显式发布 0);
+              新 zone 开服 / 整 zone 维护期间属预期,应事先对该 zone_id 加 silence。
             runbook_url: docs/ops/scene-node-role-split.md
 
         - alert: SceneManagerWorldPoolEmpty
           expr: |
-            count by (zone_id) (scene_manager_nodes_by_role > 0)
-            unless on (zone_id)
-            count by (zone_id) (scene_manager_nodes_by_role{role=~"main_world|main_world_cross"} > 0)
+            (
+              count by (zone_id) (scene_manager_nodes_by_role > 0)
+              unless on (zone_id)
+              count by (zone_id) (scene_manager_nodes_by_role{role=~"main_world|main_world_cross"} > 0)
+            )
+            or on (zone_id)
+            (sum by (zone_id) (scene_manager_nodes_by_role) == 0)
           for: 2m
           labels:
             severity: critical
@@ -76,6 +95,8 @@ spec:
               in zone {{ $labels.zone_id }}, while other scene nodes are still alive there. Persistent
               world channels cannot be served; EnterScene will reject new players. Scale up
               scene-world-z{{ $labels.zone_id }} immediately.
+              或该 zone 的 scene 节点已全灭(由该 zone 自己的 scene_manager 显式发布 0);
+              新 zone 开服 / 整 zone 维护期间属预期,应事先对该 zone_id 加 silence。
             runbook_url: docs/ops/scene-node-role-split.md
 
         # --- Load imbalance ------------------------------------------------
@@ -191,6 +212,8 @@ spec:
         #                                 客户端每一次跨节点换图的第一跳都注定拿到它:源 scene 收到 18 才
         #                                 冻结 → 存盘 → 写 handoff 标记 → 重发(docs/design/
         #                                 cross-zone-scene-travel.md §11.2)。它的速率只反映换图有多频繁。
+        #                                 比值告警(no_marker / 落点次数)的口径与校准步骤见
+        #                                 cross-zone-scene-travel.md「P3 收尾」一节,待压测基线后再落。
         #   handoff_pending_stale_marker  有标记,但不是当前归属代际(或写坏了)。异常来源:源 scene 重发后
         #                                 仍过不了门 = 它缓存的 epoch 已被废黜。常规来源:跨 zone 放行 /
         #                                 疏散改派不删标记,旧标记在 EX 300 内被下一次跨节点换图的第一跳
@@ -384,6 +407,36 @@ spec:
               节点上,玩家挂在哑连接上,要等客户端自己断线重登(已知限制);重登若被 18 挡住,等断线租约到期。
               处置:先查 Redis(连接数、慢日志、主从切换)与 Kafka broker 是否同时异常;scene_manager 日志
               搜 "[RouteRollback] outcome=redis_error" 拿到 player 与 epoch,必要时按 location 人工核对。
+            runbook_url: docs/ops/cross-zone-failure-test-runbook.md
+
+        # --- 死节点推迟摘除(scene_manager_node_detach_deferred_total,GO-6)------
+        # 已判死的 scene 节点写不进 death_at(再入屏障的死亡时刻)或摘不出负载集时,scene_manager
+        # 不再照样摘除,而是把节点留在负载集里(按存活处理)进推迟队列,每 5s 重试
+        # (internal/logic/reentry_barrier.go「推迟的摘除」)。outcome:
+        #   deferred / recovered / dropped  正常自愈或节点重新注册 / 领导权变化,不告警;
+        #   expired    满一个屏障仍写不进 death_at,不带标记摘除 —— 安全(推迟期间屏障已兜满),
+        #              但说明 Redis 在拒 SET;
+        #   abandoned  10 分钟仍摘不出负载集,放弃 —— 死节点留在负载集,CreateScene / EnterScene
+        #              可能被派到它上面,直到下一次 fullSync。
+        # 健康时这两个事件恒为 0,不是需要基线校准的阈值:任一次即告警(> 0),不设 for,写法同
+        # SceneManagerEnterSceneRollbackRedisError。代码从未编译、未实测。
+        - alert: SceneManagerNodeDetachWithoutDeathMark
+          expr: |
+            sum by (zone_id) (increase(scene_manager_node_detach_deferred_total{outcome=~"expired|abandoned"}[10m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "zone {{ $labels.zone_id }} 有死节点在 death_at 写不进或摘不出负载集的情况下被处理(10 分钟内 {{ $value }} 次)"
+            description: |
+              expired:scene 节点判死后,自首次尝试起满一个再入屏障(默认 20s)仍写不进
+              node:zone:{z}:{n}:death_at,scene_manager 不带标记把它摘出了负载集。推迟期间节点留在负载集、
+              改派全部被拒,所以这一步本身是安全的,但说明 Redis 在拒绝 SET(内存写满 / 只读 / 熔断)。
+              abandoned:自首次尝试起 10 分钟仍摘不出负载集,scene_manager 放弃推迟。死节点留在负载集里
+              按存活处理,CreateScene / EnterScene 可能被派到它上面(RPC 失败回滚 / 玩家挂在哑连接上),
+              直到下一次 fullSync(watch 重连 / 领导权变化 / 进程重启)重扫。
+              处置:查 Redis(used_memory 与 maxmemory、慢日志、连接数、go-zero 熔断日志);scene_manager
+              日志搜 "[ReentryBarrier][DeferDetach]" 看是哪个节点、哪一步失败;遇到 abandoned 且 Redis 已恢复,
+              可以重启 scene_manager 领导者,触发 fullSync 重扫。
             runbook_url: docs/ops/cross-zone-failure-test-runbook.md
 
         - alert: SceneManagerSceneOrphanReconcileSpike

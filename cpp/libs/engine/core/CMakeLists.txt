@@ -65,6 +65,7 @@ set(SOURCE_FILES
     node/system/node/node.cpp
     node/system/node/node_allocator.cpp
     node/system/node/node_connector.cpp
+    node/system/grpc_call_deadline.cpp
     node/system/node/node_util.cpp
     node/system/registration/registration_manager.cpp
     node/system/discovery/service_discovery_manager.cpp

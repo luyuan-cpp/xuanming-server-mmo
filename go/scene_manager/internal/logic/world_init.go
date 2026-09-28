@@ -158,7 +158,8 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 	// 本轮里 RPC 不可达(拒连 / 超时)的节点:后续场景不再对它白等一次超时 ——
 	// 本段在 zone 锁内,黑洞节点每个场景等 5s 会把持锁时长顶过 TTL。
 	// **不可达 ≠ 已死**:高负载下一个只是慢了的活节点同样会超时,所以这张表只用来
-	// 「本轮跳过」,改写场景归属还要另看 etcd 注册表(见下面两处 isNodeGoneFromRegistry)。
+	// 「本轮跳过」,改写场景归属还要另看 etcd 注册表与负载集(见下面两处 isNodeGoneFromRegistry
+	// 与 !IsNodeAlive)。
 	unreachableNodes := make(map[string]struct{})
 	liveNodes := make([]string, len(nodes))
 	copy(liveNodes, nodes)
@@ -260,9 +261,17 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 				// 首次同步)。此时改写归属并在别的节点上建同一个 scene_id,会让同一个世界频道
 				// 在两个节点上各有一份活副本:老节点上的玩家与新进来的玩家互相不可见,
 				// 路由与 PlayerLocation 也对不上。归属不动,本轮跳过;节点若真死了,etcd 注销
-				// 路径会先写 death_at 再摘负载集,之后的 rebalance / 下一轮 init 再按屏障改派。
+				// 路径会先写 death_at 再摘负载集(写不进时推迟摘除,GO-6;改派同时要求已摘出
+				// 负载集,见下一段),之后的 rebalance / 下一轮 init 再按屏障改派。
 				if !isNodeGoneFromRegistry(zoneId, targetNode) {
 					logx.Infof("[World] Scene %d stays on node %s: unreachable this round but still registered in etcd", sceneId, targetNode)
+					continue
+				}
+				// 注册表里没了,但还在负载集里:领导者还没处理这次注销,或 death_at 写不进、摘除被推迟(GO-6),
+				// 或本进程不是持有推迟队列的那个领导者(CreateScene 慢路径会在任意副本上跑到这里)。
+				// 负载集成员资格是「death_at 已落地或已满一个屏障」唯一跨进程可见的证据,没摘就不改派。
+				if IsNodeAlive(svcCtx, zoneId, targetNode) {
+					logx.Infof("[World] Scene %d stays on node %s: gone from etcd but still in the load set (death_at not landed yet)", sceneId, targetNode)
 					continue
 				}
 				if len(liveNodes) == 0 {
@@ -297,9 +306,10 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 				// 记为本轮不可达,剩下的场景不再对它白等。
 				if isNodeUnreachableError(rpcErr) {
 					markNodeUnreachable(zoneId, targetNode, unreachableNodes, &liveNodes)
-					// 只有节点已确认从 etcd 注册表消失,才把这个场景改派到活节点并重试一次;
-					// 仅仅超时/拒连不是死亡证据(理由同上面 RPC 之前的那段)。
-					if isNodeGoneFromRegistry(zoneId, targetNode) && len(liveNodes) > 0 {
+					// 只有节点已确认从 etcd 注册表消失、且领导者已把它摘出负载集,才把这个场景
+					// 改派到活节点并重试一次;仅仅超时/拒连不是死亡证据,「注册表没了但还在负载集」
+					// 说明 death_at 可能还没落地(GO-6)。理由同上面 RPC 之前的那两段。
+					if isNodeGoneFromRegistry(zoneId, targetNode) && !IsNodeAlive(svcCtx, zoneId, targetNode) && len(liveNodes) > 0 {
 						newNode := assignNodeByHash(confId*1000+uint64(ensured), liveNodes)
 						logx.Infof("[World] Retrying scene %d on live node %s after dead node %s", sceneId, newNode, targetNode)
 						// 屏障未到就连重试都不做:归属没改,发 CreateScene 只会
@@ -623,7 +633,8 @@ func isNodeUnreachableError(err error) bool {
 // 而再入屏障对没有 death_at 的节点一律放行;旧实现(markNodeDead)在一次 5s 超时后就
 // ZREM,于是一个只是慢了的活节点会在负载上报把它加回来之前(最长一个 LoadReportInterval)
 // 被 rebalance / 孤儿清理当成死节点,名下场景被改派或销毁。节点真死时,负载集由 etcd
-// 注销路径(removeNodeFromRedis / 周期巡检)负责摘除,那条路径会先写 death_at。
+// 注销路径(removeNodeFromRedis / 周期巡检)负责摘除,那条路径会先写 death_at;写不进时
+// 推迟摘除(GO-6),本文件的改派同时要求节点已摘出负载集。
 func markNodeUnreachable(zoneId uint32, nodeId string, unreachableNodes map[string]struct{}, liveNodes *[]string) {
 	if _, already := unreachableNodes[nodeId]; already {
 		return

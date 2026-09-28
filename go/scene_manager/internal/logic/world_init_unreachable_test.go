@@ -140,11 +140,12 @@ func TestInitWorldScenes_NodeGoneFromRegistryIsReassignedToLiveNode(t *testing.T
 	ctx := context.Background()
 	before := seedWorldOnTwoRegisteredNodes(t, ctx, sc, mr)
 
-	// 模拟 etcd DELETE:节点从注册表镜像里消失。本用例没有写 death_at,
-	// 再入屏障按「没观察到近期死亡」放行,与生产里屏障已过的状态等价。
+	// 模拟领导者处理 etcd DELETE:注册表镜像删掉、负载集摘除(同 integration_test.go killNode;
+	// world_init 的改派要求节点已摘出负载集,见 GO-6)。本用例没写 death_at,屏障按已过处理。
 	knownNodesMu.Lock()
 	delete(knownNodes, "world-init-test/"+worldInitDownNode)
 	knownNodesMu.Unlock()
+	mr.ZRem(nodeLoadKey(testZoneId), worldInitDownNode)
 	require.True(t, isNodeGoneFromRegistry(testZoneId, worldInitDownNode))
 
 	sceneNodeDownForTest(t, testZoneId, worldInitDownNode)

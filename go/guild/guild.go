@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	"guild/internal/activity"
 	"guild/internal/config"
 	"guild/internal/constants"
 	"guild/internal/data"
@@ -99,6 +100,12 @@ func main() {
 	// 退避基数查成 0 = 重投循环构造失败。它内部会先重跑 validateGuildTables,与上一条重复无害。
 	if err := logic.ValidateEconomyTables(); err != nil {
 		logx.Must(fmt.Errorf("guild economy tables invalid: %w", err))
+	}
+	// 帮会活动(B6a)配表:GuildActivity 全表 + GuildRule 的三列活动参数(06-activities.md §6.2.4、90 X-16)。
+	// 同样拒启不降级:同类型两行档期重叠 = 帮会资金发两次;奖励物品不在 Item 表 = scene 永久拒收而帮贡已经发出。
+	// 这类错误在运行期只会静默发生、且不可逆。
+	if err := activity.ValidateTables(); err != nil {
+		logx.Must(fmt.Errorf("guild activity tables invalid: %w", err))
 	}
 
 	// 表结构不对的实例不能对外服务,也不能注册进 etcd:建表 / 核对放在节点注册之前。
@@ -284,6 +291,26 @@ func main() {
 		economy.Loop = assetPipe.Loop
 	}
 
+	// ── 帮会活动(B6a:元宵灯会 / 中秋团圆,docs/design/guild-phase2/06-activities.md §6.6)──
+	// **无条件装配,不设配置开关**:活动开不开由配表决定(GuildActivity.enabled 与档期),关着时写 RPC 回
+	// kGuildActivityNotOpen、视图显示 DISABLED,客户端看到的是一句明确的提示。反过来不装配,五个 RPC 会回
+	// gRPC Unavailable,客户端把它当传输错误进重连隔离 —— 所以"关活动"只许改表(紧急止血另有 killswitch)。
+	// 物品奖励与经济共用同一条资产通道:同一个 Loop(AssetOp.Enabled=false 时为 nil → 带物品的活动在发号前
+	// 回 kGuildAssetPending,不带物品的灯会照常)、同一个 op_id 发号器、同一个插行租约。
+	activityRepo, err := data.NewActivityRepo(repo)
+	if err != nil {
+		logx.Must(fmt.Errorf("guild activity repo: %w", err))
+	}
+	activities := logic.ActivityDeps{
+		Repo:       activityRepo,
+		Loop:       economy.Loop,
+		OpIDs:      assetOpIDs,
+		Now:        time.Now,
+		SyncBudget: economySyncBudget,
+		Lease:      economy.Lease,
+	}
+	logx.Infof("[guild] 帮会活动已装配(元宵灯会 / 中秋团圆;同道历练为 B6a 桩): 物品奖励通道=%t", activities.Loop != nil)
+
 	// 合服闸门(可选):没配 MergeMarkerRedis 时 NewRedisMergeFence 返回 nil 指针,
 	// 必须显式转成 nil **接口** 再传下去 —— 直接传一个 nil 的具体类型指针,
 	// GuildLogic 里的 `l.mergeFence == nil` 会是 false,于是每次建帮都去调一个
@@ -320,7 +347,8 @@ func main() {
 		logic.WithNotifier(logic.NewGuildNotifier(svcCtx.KafkaWriter, svcCtx.GateCommandBuilder, svcCtx.PlayerLocatorRedisClient)),
 		logic.WithApplyPushGate(repo.TryMarkApplyPush),
 		logic.WithPlayerNames(playerNames),
-		logic.WithEconomy(economy))
+		logic.WithEconomy(economy),
+		logic.WithActivities(activities))
 
 	// 终结推送回调。必须在重投循环与 gRPC server 启动**之前**赋值:此后只读,不需要同步。
 	// 晚于它们赋值 = 启动初期被循环终结的行不推送,且与读它的 worker 构成数据竞争。

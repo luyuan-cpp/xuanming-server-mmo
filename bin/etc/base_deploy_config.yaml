@@ -200,3 +200,20 @@ IdSegments:
     InitialStep: 2000
     MinStep: 200
     MaxStep: 100000
+
+# C++ 节点发出的每次 unary gRPC 调用的 deadline(毫秒),按**目标**节点类型配,键 = ENodeType 枚举名。
+# 设计与预算表:docs/design/grpc-client-deadline-failure-callback.md §4。两条不等式(上游比下游宽,
+# docs/design/microservice-zone-contract-20260914.md §3):
+#   1. deadline > 目标服务的服务端超时(+2000 余量):下游先超时,C++ 才收得到带真实错误码的应答;
+#   2. 依赖调用结果的 C++ 看门狗 > deadline:号段 fetchTimeout、换图在途 TTL 都从这里派生,不另写常数。
+# 没列出的类型用内置默认 10000(grpc_client/grpc_call_tag.h kDefaultGrpcCallDeadlineMs);
+# 不认识的键、0(= 不限时)被忽略并记 ERROR。改服务端超时时同步改这里。流式调用(etcd Watch / KeepAlive)不设。
+GrpcClient:
+  CallDeadlineMs:
+    SceneManagerNodeService: 10000     # scene_manager_service.yaml Timeout 8000(归属查询 1500 + Kafka 写 5000 + 1500)
+    DataServiceNodeService: 2500       # data_service.yaml 没写 Timeout = go-zero 默认 2000
+    ClientRpcRouterNodeService: 8000   # client_rpc_router.yaml Timeout 6000(> ForwardTimeoutMs 5000)
+    MatchNodeService: 7000             # match_service.yaml Timeout 5000(gate 直连模式)
+    LoginNodeService: 102000           # login.yaml Timeout 100000,注释却写 10s,疑为笔误,待拍板(设计文档 §4.3)
+    BattleNodeService: 5000            # C++ battle gRPC 同步处理,无服务端超时(gate 直连模式)
+    EtcdNodeService: 5000              # etcd 无服务端超时;须 < etcd_service 的 Txn 看门狗 / LeaseGrant 重试 10s

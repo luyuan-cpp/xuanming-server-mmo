@@ -161,6 +161,17 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 		}
 	}
 
+	// C++ 节点 unary gRPC 调用的 deadline(见 config.proto GrpcClientConfig)。可以不写:缺席 = 全部用内置默认。
+	// 这里只原样读入;键名是否认识、值是否为 0 由 grpc_call_deadline::Apply 校验(那里知道 ENodeType)。
+	if (root["GrpcClient"] && root["GrpcClient"]["CallDeadlineMs"])
+	{
+		auto &deadlines = *baseConfig.mutable_grpc_client()->mutable_call_deadline_ms();
+		for (const auto &entry : root["GrpcClient"]["CallDeadlineMs"])
+		{
+			deadlines[entry.first.as<std::string>()] = entry.second.as<uint32_t>();
+		}
+	}
+
 	// Kafka config
 	if (root["Kafka"])
 	{

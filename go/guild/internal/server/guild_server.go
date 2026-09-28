@@ -102,6 +102,29 @@ func (s *GuildServer) BuyGuildShopGoods(ctx context.Context, req *pb.BuyGuildSho
 	return s.logic.BuyGuildShopGoods(ctx, req)
 }
 
+// ── 帮会活动(B6a:元宵灯会 / 中秋团圆)────────────────────────────
+// 同道历练的两个写 RPC 在 B6a 已占好消息号与准入,logic 里是恒回"未开放"的桩;B6b 只换 logic 实现,这里不动。
+
+func (s *GuildServer) GetGuildActivities(ctx context.Context, req *pb.GetGuildActivitiesRequest) (*pb.GetGuildActivitiesResponse, error) {
+	return s.logic.GetGuildActivities(ctx, req)
+}
+
+func (s *GuildServer) LightGuildLantern(ctx context.Context, req *pb.LightGuildLanternRequest) (*pb.LightGuildLanternResponse, error) {
+	return s.logic.LightGuildLantern(ctx, req)
+}
+
+func (s *GuildServer) ClaimGuildReunion(ctx context.Context, req *pb.ClaimGuildReunionRequest) (*pb.ClaimGuildReunionResponse, error) {
+	return s.logic.ClaimGuildReunion(ctx, req)
+}
+
+func (s *GuildServer) StartGuildTrial(ctx context.Context, req *pb.StartGuildTrialRequest) (*pb.StartGuildTrialResponse, error) {
+	return s.logic.StartGuildTrial(ctx, req)
+}
+
+func (s *GuildServer) RespondGuildTrialInvite(ctx context.Context, req *pb.RespondGuildTrialInviteRequest) (*pb.RespondGuildTrialInviteResponse, error) {
+	return s.logic.RespondGuildTrialInvite(ctx, req)
+}
+
 // NotifyGuildChanged 只是推送的 message id 占位(下行走 Kafka gate PushToPlayerEvent,
 // 与 match 的 NotifyChallenge* 同形)。客户端调用在 session 拦截器就被 PermissionDenied
 // 挡下,内部调用也无意义,所以这里恒返回空,不进 logic。

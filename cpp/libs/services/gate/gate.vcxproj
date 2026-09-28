@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="session\comp\session_info_comp.h" />
+    <ClInclude Include="session\comp\pending_scene_entry_comp.h" />
     <ClInclude Include="session\manager\session_manager.h" />
     <ClInclude Include="session\system\session_identity_fence.h" />
   </ItemGroup>

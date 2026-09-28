@@ -31,6 +31,7 @@
 #include "network/traffic_statistics.h"
 #include <boost/algorithm/string.hpp>
 #include "node/system/etcd/etcd_service.h"
+#include "node/system/grpc_call_deadline.h"
 #include "node/system/node/node_connector.h"
 #include "thread_context/node_context_manager.h"
 #include <node_config_manager.h>
@@ -465,6 +466,9 @@ void Node::Initialize()
 	RegisterEventHandlers();
 	LoadConfigs();
 	InitLogSystem();
+	// 生成的 gRPC 客户端的 deadline 必须在发出第一个请求(InitEtcdService 里的 etcd Range / LeaseGrant)之前就位;
+	// 放在 InitLogSystem 之后,被忽略的配置项与生效值才进日志文件。
+	grpc_call_deadline::Apply(tlsNodeConfigManager.GetBaseDeployConfig().grpc_client());
 	InitRpcServer();
 	LoadAllConfigData();
 	InitKafka();

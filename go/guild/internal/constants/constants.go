@@ -134,6 +134,42 @@ const (
 	ErrShopLimit = uint32(table.GuildError_kGuildShopLimit)
 	// ErrContributionInsufficient:可用帮贡(contribution_balance)不足以兑换。
 	ErrContributionInsufficient = uint32(table.GuildError_kGuildContributionInsufficient)
+
+	// ── 帮会二期 B6a(帮会活动)新增的 10 个 ──
+	// 同道历练(B6b)要用的 5 个也在这里一次加齐:Tip.xlsx 的行与发号在 B6a 已经落下(90 Y-05),
+	// 常量拆到 B6b 再加只会让两批各改一次本文件与护栏测试。
+	// 除 ErrTrialServiceBusy 外全是业务拒绝(fault 列留空):参与失败都有玩家看得懂、可以等一等再来的原因,
+	// 回 gRPC 错误会让客户端进重连隔离。
+
+	// ErrActivityNotOpen:活动没开 —— 配表行不存在、未启用、不在档期内,或不是该类型当前选中的那一行
+	// (客户端伪造同类型另一行的 id 也回它)。B6a 期间历练的两个写 RPC 是桩,同样回它。
+	ErrActivityNotOpen = uint32(table.GuildError_kGuildActivityNotOpen)
+	// ErrActivityAlreadyClaimed:本人今日(游戏日,UTC+8 05:00 切日)参与次数已用完。
+	// 计数挂在玩家身上,退帮换帮当天仍算已参与 —— 否则换一次帮就能再领一次。
+	ErrActivityAlreadyClaimed = uint32(table.GuildError_kGuildActivityAlreadyClaimed)
+	// ErrActivityThresholdNotReached:中秋团圆本档期未锁存,且"入帮满 N 小时的在线成员"不足阈值。
+	// parameters = [在线人数, 阈值]。
+	ErrActivityThresholdNotReached = uint32(table.GuildError_kGuildActivityThresholdNotReached)
+	// ErrActivityLevelTooLow:帮会等级低于该活动的 min_guild_level;parameters = [min_level]。
+	// 不复用 ErrShopLevelTooLow:两者文案不同,客户端按码选文案。
+	ErrActivityLevelTooLow = uint32(table.GuildError_kGuildActivityLevelTooLow)
+	// ErrActivityJoinTooRecent:入帮未满 GuildRule.activity_join_min_hours 小时;parameters = [N]。
+	// 挡的是"一个帮领完再换帮领"与"拉小号进帮凑团圆人数"。
+	ErrActivityJoinTooRecent = uint32(table.GuildError_kGuildActivityJoinTooRecent)
+	// ErrTrialTeamInvalid(B6b):历练名单不合法(人数越界、重复、不含发起人、有人离线 / 在战斗 / 不在本帮);
+	// parameters = [原因, player_id],客户端据此点名是哪一位。
+	ErrTrialTeamInvalid = uint32(table.GuildError_kGuildTrialTeamInvalid)
+	// ErrTrialInviteExpired(B6b):邀请房间不存在、已过期、已结束,或调用者不在名单里。
+	// 几种情况对玩家都是"这张邀请已经不能用了",分得更细只会泄露别人的房间状态。
+	ErrTrialInviteExpired = uint32(table.GuildError_kGuildTrialInviteExpired)
+	// ErrTrialInviteDeclined(B6b):有人拒绝或发起人取消,房间已解散;作为房间结束原因写进视图的 end_tip_id。
+	ErrTrialInviteDeclined = uint32(table.GuildError_kGuildTrialInviteDeclined)
+	// ErrTrialInviteCooldown(B6b):同一发起人两次建房间隔不足 trial_invite_cooldown_seconds;parameters = [剩余秒数]。
+	ErrTrialInviteCooldown = uint32(table.GuildError_kGuildTrialInviteCooldown)
+	// ErrTrialServiceBusy(B6b):match 不可用、超时、出错,或本请求剩余预算不够调它。
+	// 本组唯一 fault=1 的码:要进故障指标让人看见;但仍以 tip 回客户端而不是 gRPC 错误,
+	// 否则一次 match 抖动就让整个帮会界面进重连隔离(06 契约偏差 16)。
+	ErrTrialServiceBusy = uint32(table.GuildError_kGuildTrialServiceBusy)
 )
 
 // MaxShopBuyCount:帮会商店单次兑换的份数上限(05-economy.md §5.11.2)。

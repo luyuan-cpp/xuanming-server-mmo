@@ -16,54 +16,12 @@
 #include "node/system/node/node_util.h"
 #include "battle_binding_helper.h"
 #include "scene_route_helper.h"
+#include "scene_entry_dispatch.h"
 
-// Forward player entry from Gate to Scene via gRPC PlayerEnterGameNode.
-// Gate is the bridge: it holds the TCP session and routes the RPC to the
-// correct Scene node using the entity ID from RoutePlayerEvent.
-//
-// playerId / homeZoneId / ownerEpoch 一律从会话取:两个调用点(RoutePlayer、晚到的 BindSession)
-// 都已把最新路由决策写进会话,由这里统一读取,避免其中一个入口漏传导致 scene 拿到 0 而静默走兼容分支。
-// sceneId 仍显式传入:ApplyRoute 只在转发成功后才提交 session.sceneId,调用时会话里还是旧图。
-static bool ForwardPlayerToScene(SessionId sessionId, uint32_t enterGsType,
-                                 uint64_t sceneNodeId, const SessionInfo &session, uint64_t sceneId)
-{
-    // LOGIN_NONE 用于已登录角色换图;调用方负责区分无需入场与换图。
+#include <chrono>
 
-    const auto playerId = session.playerId;
-
-    auto &sceneRegistry = tlsNodeContextManager.GetRegistry(SceneNodeService);
-    entt::entity sceneEntity{sceneNodeId};
-    if (!sceneRegistry.valid(sceneEntity))
-    {
-        LOG_ERROR << "ForwardPlayerToScene: scene node entity invalid, scene_node_id=" << sceneNodeId;
-        return false;
-    }
-
-    const auto *rpcClient = sceneRegistry.try_get<RpcClientPtr>(sceneEntity);
-    if (!rpcClient || !*rpcClient)
-    {
-        LOG_ERROR << "ForwardPlayerToScene: RpcClient not found for scene_node_id=" << sceneNodeId;
-        return false;
-    }
-
-    PlayerEnterGameNodeRequest req;
-    req.set_player_id(playerId);
-    req.set_session_id(sessionId);
-    req.set_enter_gs_type(enterGsType);
-    req.set_scene_id(sceneId);
-    // 归属 zone 与 epoch 原样透传(cross-zone-scene-travel.md CZ-3 / CZ-4):gate 不做任何校验或补默认值,
-    // 0 也照发——它是 scene 侧"兼容窗口/未知"的信号,gate 擅自填进程 zone 会把 fail-closed 变成静默落错库。
-    req.set_home_zone_id(session.homeZoneId);
-    req.set_owner_epoch(session.ownerEpoch);
-
-    (*rpcClient)->CallRemoteMethod(ScenePlayerEnterGameNodeMessageId, req);
-
-    LOG_DEBUG << "ForwardPlayerToScene: sent PlayerEnterGameNode to scene_node=" << sceneNodeId
-              << " player=" << playerId << " session=" << sessionId
-              << " scene_id=" << sceneId << " enter_gs_type=" << enterGsType
-              << " home_zone_id=" << session.homeZoneId << " owner_epoch=" << session.ownerEpoch;
-    return true;
-}
+// 向 scene 转发进场(ForwardPlayerToScene)、欠账补发与超限收口都在 scene_entry_dispatch.cpp(CPP-2);
+// 下面 RoutePlayer / BindSession 的守护段只做会话字段的写入并委托过去。
 ///<<< END WRITING YOUR CODE
 void GateEventHandler::Register()
 {
@@ -117,50 +75,34 @@ void GateEventHandler::RoutePlayerEventHandler(const contracts::kafka::RoutePlay
         return;
     }
 
-    const auto targetNodeEntity = NodeUtils::FindNodeEntityByNodeId(SceneNodeService, targetNodeId);
-    if (!targetNodeEntity)
-    {
-        LOG_ERROR << "RoutePlayer: scene node not found in registry, session_id=" << sessionId
-                  << " scene_node_id=" << targetNodeId;
-        return;
-    }
-
-    // 改写节点指向的同时得出"有没有换节点"(先比较后覆盖,收在 scene_route_helper.h 的 RebindSceneNode 里)。
-    // 同 scene_id 换节点真实存在(world rebalance 迁频道沿用原 scene_id),漏转发的后果是玩家在新旧
-    // 节点上都没有实体。旧指向已因节点摘除被置无效的会话同样算换了节点;首登不受影响,
-    // 入场仍由 pendingEnterGsType 驱动。
-    const auto targetNodeEntityId = entt::to_integral(*targetNodeEntity);
-    const auto sceneNodeChange = gate_scene_route::RebindSceneNode(it->second, targetNodeEntityId);
+    auto &session = it->second;
 
     // Use player_id from the event if session doesn't have it yet (BindSession may not have arrived).
-    if (event.player_id() != 0 && it->second.playerId == kInvalidGuid)
+    if (event.player_id() != 0 && session.playerId == kInvalidGuid)
     {
-        it->second.playerId = event.player_id();
+        session.playerId = event.player_id();
     }
 
-    // 归属 zone 与 epoch 跟节点实体一样属于"本次路由决策",在转发之前就无条件覆盖旧值:
+    // 归属 zone 与 epoch 属于"本次路由决策",在转发之前就无条件覆盖旧值:
     // 两次改派挨近时只有后到事件的 epoch 与 Redis 相等,旧值不能保留;转发若因节点未就绪失败,
     // 重投或晚到的 BindSession 补发时也必须带的是这份最新值,所以不能只在转发成功后才提交。
-    it->second.homeZoneId = event.home_zone_id();
-    it->second.ownerEpoch = event.owner_epoch();
+    // 节点暂时交不出去时,之后的补发也必须带这份值(补发从会话取,不再读路由事件)。
+    session.homeZoneId = event.home_zone_id();
+    session.ownerEpoch = event.owner_epoch();
 
-    LOG_DEBUG << "RoutePlayer: assigned scene node, session_id=" << sessionId
-              << " scene_node_id=" << targetNodeId
-              << " scene_entity=" << targetNodeEntityId
-              << " scene_node_changed=" << (sceneNodeChange == gate_scene_route::SceneNodeChange::kChanged)
+    LOG_DEBUG << "RoutePlayer: route decision, session_id=" << sessionId
+              << " target_node_id=" << targetNodeId
               << " scene_id=" << event.scene_id()
               << " home_zone_id=" << event.home_zone_id()
               << " owner_epoch=" << event.owner_epoch();
 
-    // 登录后仍须把目标场景通知 scene;只修改 gate 路由会让角色停留旧地图。
-    // 换了节点而 scene_id 没变时同样必须通知:新节点上还没有这名玩家的实体。
-    // 已知局限(另案,不在本次改动内):节点指向在上面已提交,转发若失败,同一事件重投时
-    // 会被判成"节点未变化",同 scene_id 换节点这一支不会再补发。
-    gate_scene_route::ApplyRoute(it->second, event.scene_id(), sceneNodeChange, [&](const uint32_t enterType)
-    {
-        return ForwardPlayerToScene(sessionId, enterType, targetNodeEntityId,
-                                    it->second, event.scene_id());
-    });
+    // 路由(sceneId 与 scene 节点指向)只在转发成功后才整体提交,见 scene_route_helper.h 的
+    // AttemptPendingSceneEntry;交不出去时记欠账、按单调时钟有上限地补发,超限推 kEnterSceneFailed 并踢线
+    // (scene_entry_dispatch.cpp)。原先"先提交指向、转发失败后重投判成节点未变化"的已知局限随之消失,
+    // 节点暂未发现也不再直接作废这条路由。
+    gate_scene_entry::OnRouteDecision(sessionId, session,
+                                      SceneRouteTarget{event.player_id(), targetNodeId, event.scene_id()},
+                                      std::chrono::steady_clock::now());
 ///<<< END WRITING YOUR CODE
 }
 void GateEventHandler::KickPlayerEventHandler(const contracts::kafka::KickPlayerEvent& event)
@@ -274,19 +216,15 @@ void GateEventHandler::BindSessionEventHandler(const contracts::kafka::BindSessi
     it->second.playerId = playerId;
     it->second.sessionVersion = event.session_version();
 
-    // If scene node already assigned (same-Gate reconnect), forward immediately.
-    if (it->second.HasEntityId(SceneNodeService) && it->second.sceneId != 0 && enterGsType != 0)
+    // 登录类型先落进会话,再交给 CPP-2 的欠账逻辑(scene_entry_dispatch.cpp OnLoginTypeBound):
+    // 以前只在"已提交节点指向 && sceneId != 0"时按已提交的指向立即补发,转发失败就只把登录类型留在会话里;
+    // 指向随后被节点摘除置无效、或因同 uuid 重注册而悬空时,登录类型会永远挂着。现在按最近一次路由的
+    // node_id 重新解析,建一笔有上限的欠账(超限推 kEnterSceneFailed 并踢线);还没收到路由时什么都不做,
+    // 等路由到达时由 RoutePlayer 一并转发。归属 zone / epoch 仍取会话里 RoutePlayer 先前存下的那份。
+    if (enterGsType != 0)
     {
-        const auto sceneNodeId = it->second.GetEntityId(SceneNodeService);
-        // 节点连接暂未就绪时保留待入场类型,后续路由重投仍能补发。
-        // 这里读不到 RoutePlayerEvent,归属 zone / epoch 只能取会话里 RoutePlayer 先前存下的那份。
-        it->second.pendingEnterGsType = ForwardPlayerToScene(sessionId, enterGsType, sceneNodeId,
-                                                            it->second, it->second.sceneId) ? 0 : enterGsType;
-    }
-    else if (enterGsType != 0)
-    {
-        // Scene not yet assigned — store for RoutePlayerEvent to consume.
         it->second.pendingEnterGsType = enterGsType;
+        gate_scene_entry::OnLoginTypeBound(sessionId, it->second, std::chrono::steady_clock::now());
     }
 
     LOG_DEBUG << "BindSession: bound session_id=" << sessionId

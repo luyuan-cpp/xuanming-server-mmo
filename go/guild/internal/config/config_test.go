@@ -193,6 +193,26 @@ func TestValidateRequiresGuildDatabase(t *testing.T) {
 	}
 }
 
+// TestValidateRejectsClientFoundRows(06-activities.md §6.11.2、契约偏差 14、90 Y-20):
+// 活动与经济的计数 upsert 以 RowsAffected=0 判定"已达上限",clientFoundRows=true 会让它恒为非 0,
+// 超限的参与被当成成功。显式打开必须拒启,错误文案不得带出口令;显式写 false 与不写都放行。
+func TestValidateRejectsClientFoundRows(t *testing.T) {
+	c := loadMinimal(t)
+	c.MySQL.DataSource = "u:p4ss@tcp(127.0.0.1:3306)/mmorpg_guild?clientFoundRows=true"
+	err := c.Validate()
+	if err == nil || !strings.Contains(err.Error(), "clientFoundRows") {
+		t.Fatalf("clientFoundRows=true 必须拒启,得到 %v", err)
+	}
+	if strings.Contains(err.Error(), "p4ss") {
+		t.Fatalf("错误文案泄露了口令: %v", err)
+	}
+
+	c.MySQL.DataSource = "u:p4ss@tcp(127.0.0.1:3306)/mmorpg_guild?clientFoundRows=false"
+	if err := c.Validate(); err != nil {
+		t.Fatalf("clientFoundRows=false 应通过: %v", err)
+	}
+}
+
 func TestEtcYamlPassesValidate(t *testing.T) {
 	var c Config
 	if err := conf.Load("../../etc/guild.yaml", &c); err != nil {

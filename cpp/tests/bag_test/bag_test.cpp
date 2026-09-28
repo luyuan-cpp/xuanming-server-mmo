@@ -3494,6 +3494,39 @@ TEST(GuidSegmentClientTest, LateResponseAfterTimeoutIsUsedAndSurplusIsDropped)
     EXPECT_EQ(20u, rest.back());
 }
 
+// 传输失败(生成的 gRPC 客户端在 status 非 OK 时回调失败处理器)立即按退避重试,不必等 fetchTimeout;
+// 本次发送挂着的 fetchTimeout 随后开火时已不在途,不得再记一次失败。修复前生成客户端对非 OK 只打日志,
+// 失败只能靠 fetchTimeout 发现(docs/design/grpc-client-deadline-failure-callback.md §5 #7)。
+TEST(GuidSegmentClientTest, TransportFailureRetriesWithoutWaitingForFetchTimeout)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 10);
+    client.Warm();
+    ASSERT_EQ(1u, t.requests.size());
+
+    client.OnTransportFailure("gRPC DataService.AllocateIdSegment code=4 msg=Deadline Exceeded");
+    auto s = client.GetStats();
+    EXPECT_FALSE(s.inflight);
+    EXPECT_TRUE(s.retryPending);
+    EXPECT_EQ(1u, s.fetchErrors);
+    EXPECT_EQ(0u, s.timeouts) << "失败通知先到,不算超时";
+
+    EXPECT_GT(t.Fire(SegKind::kFetchTimeout), 0.0);
+    EXPECT_EQ(1u, client.GetStats().fetchErrors) << "过期的 fetchTimeout 不重复计失败";
+    EXPECT_EQ(0u, client.GetStats().timeouts);
+
+    EXPECT_DOUBLE_EQ(0.5, t.Fire(SegKind::kRetry));
+    ASSERT_EQ(2u, t.requests.size());
+    client.OnResponse(0, 1, 11);
+    EXPECT_TRUE(client.IsReady());
+
+    // 不在途时的失败通知(fetchTimeout 已先判过 / 响应已到)是空操作
+    client.OnTransportFailure("late");
+    EXPECT_EQ(1u, client.GetStats().fetchErrors);
+    EXPECT_FALSE(client.GetStats().retryPending);
+}
+
 TEST(GuidSegmentClientTest, ShutdownStopsFetchingButKeepsIssuingWhatIsInHand)
 {
     SegClient client;

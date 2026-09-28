@@ -45,9 +45,10 @@
 //
 // # 传输不可靠的处理
 //
-// 生成的 gRPC 客户端在 status 非 OK 时只打日志、不回调 handler,所以每次发送都配一个
-// fetchTimeout 定时器:到期即当失败,退避(500ms → ×2 → 5s 封顶)重试。晚到的响应
-// 只要范围校验通过仍然收下(没浪费),放不下(两段都满)才丢弃。
+// 传输层失败(gRPC status 非 OK:deadline 到期 / 连接不可用)由传输经 OnTransportFailure 报进来,
+// 立即按退避(500ms → ×2 → 5s 封顶)重试。每次发送另配一个 fetchTimeout 定时器兜底"完成通知
+// 永远不来"的情况,期限从 DataService 的 gRPC deadline 派生、比它宽(scene 侧 ConfigureGuidSegmentClients),
+// 正常情况下失败通知先到。晚到的响应只要范围校验通过仍然收下(没浪费),放不下(两段都满)才丢弃。
 //
 // # 服务端范围校验(fail-closed)
 //
@@ -94,7 +95,8 @@ public:
     };
 
     // 发一次领段请求。返回 false = 此刻发不出去(没有已连接的 DataService 节点 / 共享通道忙),
-    // 由客户端按退避重试;返回 true 后响应经 OnResponse 送回,或由 fetchTimeout 兜底。
+    // 由客户端按退避重试;返回 true 后响应经 OnResponse 送回、传输失败经 OnTransportFailure 报回,
+    // 两者都没来则由 fetchTimeout 兜底。
     using SendFn = std::function<bool(const std::string &bizTag, uint32_t step)>;
 
     enum class TimerKind : uint8_t
@@ -167,6 +169,12 @@ public:
     // AllocateIdSegment 的响应入口(scene 侧的传输层按请求编号转调到对应实例)。
     // errorCode 0 = 成功,[lo, hi) 半开;其余取值来自 data_service 自己的错误码轴。
     void OnResponse(uint32_t errorCode, uint64_t lo, uint64_t hi);
+
+    // 本次在途请求在传输层失败了(gRPC status 非 OK),传输层已按请求编号确认归属。
+    // 与 fetchTimeout 到期同一种后果:这次没领到段,按退避重试。服务端可能其实已经发出过那一段
+    // (deadline 到期时 CAS 已提交)—— 号段本来就不回收,那一段直接作废,浪费但无害。
+    // 不在途(fetchTimeout 已先判过失败、或已收到响应)时是空操作,不重复计失败。
+    void OnTransportFailure(const std::string &why);
 
     [[nodiscard]] Stats GetStats() const;
     [[nodiscard]] std::string Describe() const;

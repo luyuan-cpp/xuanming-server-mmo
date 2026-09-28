@@ -94,6 +94,23 @@ func TestGrpcInitTemplateSupportsMultipleServicesForSameNodeType(t *testing.T) {
 	if completionStart < 0 || initStart < 0 || completionStart >= initStart {
 		t.Fatal("expected completion and init functions in rendered output")
 	}
+	// deadline 按目标节点类型分发:同一节点类型的两个文件都要收到,分支互相独立(与 InitGrpcNode 同理)。
+	deadlineStart := strings.Index(output, "void SetGrpcCallDeadline(")
+	if deadlineStart < 0 || deadlineStart >= completionStart {
+		t.Fatal("expected SetGrpcCallDeadline before HandleCompletedQueueMessage in rendered output")
+	}
+	deadlineOutput := output[deadlineStart:completionStart]
+	if strings.Contains(deadlineOutput, "else if") {
+		t.Fatal("deadline dispatch for same-node gRPC clients must use independent branches")
+	}
+	if count := strings.Count(deadlineOutput, "if (static_cast<uint32_t>(test::eNodeType::BattleNodeService) == nodeType)"); count != 2 {
+		t.Fatalf("expected two independent Battle node deadline branches, got %d", count)
+	}
+	if !strings.Contains(deadlineOutput, "::SetBattleNodeCallDeadline(deadline)") ||
+		!strings.Contains(deadlineOutput, "::SetPlayerBattleCallDeadline(deadline)") {
+		t.Fatal("expected both same-node gRPC clients to receive the call deadline")
+	}
+
 	completionOutput := output[completionStart:initStart]
 	if !strings.Contains(completionOutput, "messageId == 159u || messageId == 160u") {
 		t.Fatal("expected completion dispatch to aggregate methods from both services in battle_node.proto")

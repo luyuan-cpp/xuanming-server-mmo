@@ -19,8 +19,13 @@
 // 摘掉的时机(全部在 player_lifecycle.cpp):
 //   * 放行        DestroyDeposedPlayer(随实体一起销毁,不存盘);
 //   * 未成        AbortTravelHandoff(解冻,按情形回 tip);
-//   * 玩家途中退出 HandlePlayerAsyncSaved / FinishExitAfterPersist 的"退出优先"分支。
-// 应答丢失由 ArmTravelReplyWatchdog + ResolveTravelOutcome 兜底,不会永久冻结。
+//   * 玩家途中退出 HandlePlayerAsyncSaved / FinishExitAfterPersist 的"退出优先"分支;
+//   * 到冻结上限 / 晚发闸触发  handoff 标记没发出 → AbortTravelHandoff 解冻;已发出 →
+//                 ConcludeHandoffAfterMarkSent(tip + 踢线 34 + 不存盘销毁,随实体一起消失)。
+// 冻结一定有界:两道 30s 看门狗(存盘 / EnterScene 应答,按单调时钟复核)之外,还有冻结硬上限
+// travel_freeze_cap::kFreezeCap(70s,单调时钟,PlayerLifecycleSystem::EnforceTravelFreezeCaps 每秒扫描),
+// 保证 zone Redis 不可用或半开时冻结同样有界。唯一的例外是"标记已发出、但还有未落地的存盘"时推迟销毁
+// (数据一致性优先于活性,见 ConcludeHandoffAfterMarkSent)。
 //
 // 历史:它原本是 player_migrate 搬数据链(Kafka 搬 PlayerAllData + ACK + CrossZoneReaper 重发)的
 // 在途标记。那条链按 cross-zone-scene-travel.md CZ-1 已下线(全仓从无触发点,且与"数据不搬家"

@@ -17,17 +17,20 @@ package data
 // 那是已登记的假绿,这里不许重蹈。本文件的纪律:
 //
 //   - 每个"应被排除的人"都**同时满足成为候选的全部条件**(mutual:是我好友的好友;anchor:在 friend 表里
-//     有出边且 id ≥ pivot),他不出现的**唯一**原因只能是那一条排除子句;
+//     有出边、id ≥ pivot,且落在 pivot 起的前 RecommendAnchorWindow 个去重 id 内 —— seedAnchorGraph 的池只有
+//     十来个人、远小于 W,扫描上界回归用例的关系人都紧贴 pivot,都在窗口里),他不出现的**唯一**原因只能是那一条排除子句;
 //   - 断言的是**整个结果集**(ElementsMatch / Equal),不是"不包含某人":后者在查询整体返回空时照绿;
 //   - 旁边放**反向对照**:别人之间的拉黑 / pending、我与他之间**已终态**的申请,都不许把人排除掉 ——
 //     否则"把 NOT EXISTS 写成恒真"这种坏实现也能通过"被排除的人没出现"。
 //
 // # RecommendRandom 的 pivot 是随机的,怎么写出确定的断言
 //
-// pivot 在 [MIN(player_id), MAX(player_id)] 里随机,结果是"id ≥ pivot 的合格候选"。所以:
+// pivot 在 [MIN(player_id), MAX(player_id)] 里随机,结果是"pivot 起前 RecommendAnchorWindow 个去重 id 里的合格候选"
+// (RecommendRandom 用例的池至多 4 个玩家、远小于 W,在这些用例里就等于"id ≥ pivot 的合格候选")。所以:
 //   - 排除集与排序 / 截断的精确断言,直接调 recommendAnchor 并**显式给 pivot**(同包可见);
 //   - 经 RecommendRandom 走的那一组,让被考察的人恰好是表里 **id 最大**的玩家 —— 无论 pivot 落在哪,
-//     `player_id >= pivot` 都覆盖他,于是"他在不在结果里"与随机数无关,红绿都是确定的。
+//     `player_id >= pivot` 都覆盖他、池远小于 W 所以窗口也一定够到他,于是"他在不在结果里"与随机数无关,
+//     红绿都是确定的。
 //
 // 本文件只读不写业务状态(直写造数据,不经 ensure),所以不调 assertFriendInvariants ——
 // 这里的 friend 边没有配套的容量行,那条不变量断言会因为夹具而不是被测代码变红。
@@ -377,7 +380,9 @@ func TestRecommendRandom_SinglePlayerRange(t *testing.T) {
 // TestRecommendRandom_ExclusionsHoldForTheMaxIDPlayer 经 RecommendRandom 的完整入口再验一遍四类排除
 // 与调用方 exclude(入口自己也会出错:参数传反、exclude 没往下传,直接调 recommendAnchor 验不到)。
 //
-// 被考察的人 subject 恒为表里 id 最大的玩家,所以无论 pivot 随机到哪,他都在扫描范围内(见文件头)。
+// 被考察的人 subject 恒为表里 id 最大的玩家,所以无论 pivot 随机到哪,他都在扫描范围内:id ≥ 任何 pivot,
+// 且池里至多 4 个玩家(filler / hub / subject,"已是好友"一例再加 me)、远小于 RecommendAnchorWindow,
+// 窗口一定够到他(见文件头)。
 // 第一行是**对照**:subject 与 me 毫无关系时必须每次都被推荐 —— 没有它,"subject 从不出现"在
 // "夹具没把他放进候选池"的情况下也照绿。
 func TestRecommendRandom_ExclusionsHoldForTheMaxIDPlayer(t *testing.T) {
@@ -444,4 +449,338 @@ func TestRecommendRandom_ExclusionsHoldForTheMaxIDPlayer(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ── 扫描上界回归(2026-09-28 缺陷:recommendAnchor 的扫描量随 pivot 之后的玩家数线性增长)──────
+
+func recommendIDRange(first uint64, n int) []uint64 {
+	ids := make([]uint64, n)
+	for i := range ids {
+		ids[i] = first + uint64(i)
+	}
+	return ids
+}
+
+// recommendPairsTo 把每个 id 变成 (id, to);recommendPairsFrom 变成 (from, id)。
+func recommendPairsTo(ids []uint64, to uint64) [][2]uint64 {
+	pairs := make([][2]uint64, 0, len(ids))
+	for _, id := range ids {
+		pairs = append(pairs, [2]uint64{id, to})
+	}
+	return pairs
+}
+
+func recommendPairsFrom(from uint64, ids []uint64) [][2]uint64 {
+	pairs := make([][2]uint64, 0, len(ids))
+	for _, id := range ids {
+		pairs = append(pairs, [2]uint64{from, id})
+	}
+	return pairs
+}
+
+// 批量直写的前缀与单行模板:只有两个 id 走占位符,其余列用字面量。
+const (
+	recommendBulkFriendPrefix  = "INSERT INTO friend (player_id, friend_player_id, since_ms) VALUES "
+	recommendBulkBlockPrefix   = "INSERT INTO friend_block (player_id, blocked_player_id, since_ms) VALUES "
+	recommendBulkPendingPrefix = "INSERT INTO friend_request (from_player_id, to_player_id, request_time_ms, status, updated_ms) VALUES "
+	recommendBulkPairRow       = "(?, ?, 1)"
+	recommendBulkPendingRow    = "(?, ?, 1, 1, 1)" // status=1 即 pending,与 seedPending 同值
+)
+
+// bulkInsertRecommendPairs 用每批 1000 行的多行 INSERT 直写 (a, b) 对:上界回归要造上万行,逐行 INSERT 会慢一个数量级。
+// 每批 2000 个占位符,远低于预处理语句 65535 的上限。
+func bulkInsertRecommendPairs(t *testing.T, ctx context.Context, db *sql.DB, prefix, row string, pairs [][2]uint64) {
+	t.Helper()
+	const batch = 1000
+	for start := 0; start < len(pairs); start += batch {
+		end := min(start+batch, len(pairs))
+		var sb strings.Builder
+		sb.WriteString(prefix)
+		args := make([]any, 0, 2*(end-start))
+		for i := start; i < end; i++ {
+			if i > start {
+				sb.WriteString(",")
+			}
+			sb.WriteString(row)
+			args = append(args, pairs[i][0], pairs[i][1])
+		}
+		_, err := db.ExecContext(ctx, sb.String(), args...)
+		require.NoError(t, err)
+	}
+}
+
+// seedRecommendUnrelatedExclusionRows 给两张排除表各放两行与被测玩家无关的数据:
+// 空表可能被优化器当成 const 表整段消掉,那样测的就不是生产形态。
+func seedRecommendUnrelatedExclusionRows(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	seedBlock(t, ctx, db, 3, 4)
+	seedBlock(t, ctx, db, 4, 3)
+	seedPending(t, ctx, db, 3, 4)
+	seedRequestRow(t, ctx, db, 5, 6, testStatusRejected, 1)
+}
+
+// analyzeRecommendTables 显式刷新统计信息:InnoDB 持久统计异步重算,批量直写后不刷新,计划会随"统计赶没赶上"而变。
+func analyzeRecommendTables(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	_, err := db.ExecContext(ctx, "ANALYZE TABLE friend, friend_block, friend_request")
+	require.NoError(t, err)
+}
+
+// sessionHandlerReads 读当前会话的 CONNECTION_ID 与 Handler_read_* 各项之和。
+// 不用 FLUSH STATUS(要 RELOAD 权限);SHOW SESSION STATUS 与 SELECT CONNECTION_ID() 本身不产生 Handler_read
+// (2026-09-28 在 MySQL 26.7.0 上核对)。
+func sessionHandlerReads(t *testing.T, ctx context.Context, db *sql.DB) (connID, total uint64) {
+	t.Helper()
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT CONNECTION_ID()").Scan(&connID))
+	rows, err := db.QueryContext(ctx, "SHOW SESSION STATUS LIKE 'Handler_read%'")
+	require.NoError(t, err)
+	defer rows.Close()
+	items := 0
+	for rows.Next() {
+		var name string
+		var value uint64
+		require.NoError(t, rows.Scan(&name, &value))
+		total += value
+		items++
+	}
+	require.NoError(t, rows.Err())
+	require.NotZero(t, items, "SHOW SESSION STATUS 没有返回 Handler_read 行:不是 MySQL,读数断言无从成立")
+	return connID, total
+}
+
+// recommendAnchorWithReads 调一次 recommendAnchor,返回结果与这一次在会话上产生的 Handler_read_* 增量。
+// Handler 计数按会话统计:先把连接池钉成一条连接,并在前后各读一次 CONNECTION_ID —— 两次不同(连接被重建)
+// 说明计数跨了会话,直接判失败,不给出一个假数。
+func recommendAnchorWithReads(t *testing.T, ctx context.Context, db *sql.DB, repo *FriendRepo,
+	me uint64, exclude []uint64, pivot uint64, limit uint32) ([]RecommendCandidate, uint64) {
+	t.Helper()
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	connBefore, readsBefore := sessionHandlerReads(t, ctx, db)
+	got, err := repo.recommendAnchor(ctx, me, exclude, pivot, limit)
+	require.NoError(t, err)
+	connAfter, readsAfter := sessionHandlerReads(t, ctx, db)
+	require.Equal(t, connBefore, connAfter, "Handler 计数跨了会话(连接被重建),本次读数无效")
+	return got, readsAfter - readsBefore
+}
+
+// explainTraditionalRows 跑 EXPLAIN FORMAT=TRADITIONAL,返回全部行(列名 → 值,NULL 记为空串)。
+// friend_guard_lock_order_mysql_test.go 的 explainTraditional 只取第一行(那边都是单表语句),这里是多表计划。
+func explainTraditionalRows(t *testing.T, ctx context.Context, db *sql.DB, stmt string) []map[string]string {
+	t.Helper()
+	rows, err := db.QueryContext(ctx, "EXPLAIN FORMAT=TRADITIONAL "+stmt)
+	require.NoError(t, err, "EXPLAIN 失败: %s", stmt)
+	defer rows.Close()
+	cols, err := rows.Columns()
+	require.NoError(t, err)
+	var plan []map[string]string
+	for rows.Next() {
+		vals := make([]sql.NullString, len(cols))
+		ptrs := make([]any, len(cols))
+		for i := range vals {
+			ptrs[i] = &vals[i]
+		}
+		require.NoError(t, rows.Scan(ptrs...))
+		row := make(map[string]string, len(cols))
+		for i, c := range cols {
+			row[c] = vals[i].String
+		}
+		plan = append(plan, row)
+	}
+	require.NoError(t, rows.Err())
+	require.NotEmpty(t, plan, "EXPLAIN 没有返回任何行: %s", stmt)
+	return plan
+}
+
+// TestRecommendAnchor_ReadsBoundedByWindowNotPoolSize 是 2026-09-28 缺陷的确定性回归(先红后绿)。
+// 缺陷:旧写法的 GROUP BY 去重落成临时表,LIMIT 无法提前终止,扫描量 = pivot 之后的全部玩家数。
+// 夹具:池里 16×W 个单边玩家,pivot 放在正中(前后各 8×W 人);me 不在池里。
+// 断言:结果 = pivot 起的前 20 个;会话 Handler_read_* 增量 ≤ 8×W。
+//   - 旧实现:结果对,读数 40,967(2026-09-28 实测,ANALYZE 前后一致)→ 红在读数断言;
+//   - 新实现:2,150 ≈ 2.1×W。上界取 8×W:单边夹具的理论最坏是 7×W+3(窗口 W+1、物化表扫描 W+1、点查 5×W)。
+//
+// pivot 放在正中而不是表头:窗口若退化成"从索引开头全扫再过滤"(EXPLAIN type=index),会把 pivot 之前的 8×W 人
+// 也读一遍,同样越界。断言的是行操作计数,不看墙钟。
+func TestRecommendAnchor_ReadsBoundedByWindowNotPoolSize(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+	w := int(RecommendAnchorWindow)
+	const (
+		me   uint64 = 56001 // 没有出边:不在候选池里
+		sink uint64 = 1     // 所有出边的另一端;自己没有出边,也不在池里
+		base uint64 = 56100000
+	)
+	poolSize := 16 * w
+	pivot := base + uint64(poolSize/2)
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkFriendPrefix, recommendBulkPairRow,
+		recommendPairsTo(recommendIDRange(base, poolSize), sink))
+	seedRecommendUnrelatedExclusionRows(t, ctx, db)
+	analyzeRecommendTables(t, ctx, db)
+
+	got, reads := recommendAnchorWithReads(t, ctx, db, repo, me, []uint64{me}, pivot, 20)
+	require.Equal(t, recommendIDRange(pivot, 20), recommendCandidateIDs(got), "没有任何排除时,结果必须是 pivot 起的前 20 个")
+	t.Logf("recommendAnchor 会话 Handler_read_* 增量 = %d(上界 8×W = %d;池 %d 人,pivot 之后 %d 人)",
+		reads, 8*w, poolSize, poolSize/2)
+	assert.LessOrEqual(t, reads, uint64(8*w),
+		"扫描量越过了窗口上界:recommendAnchor 又在随 pivot 之后的玩家数线性增长(2026-09-28 缺陷复发)")
+}
+
+// TestRecommendAnchor_StopsAtWindowWhenSaturated 钉住上界的可观察后果(先红后绿):
+// pivot 之后紧挨着 2×W 个"拉黑了我"的人(唯一没有配置上限的排除类),窗口被他们占满;窗口之外再放 5 个合格者。
+//   - 新实现只看前 W 个去重 id → 返回空;每个候选 ≤5 次主键点查 → 读数 ≤ 8×W(2026-09-28 实测 7,170)。
+//   - 旧实现一直扫到凑满 → 返回那 5 个 → 红在 assert.Empty。任何正确执行旧 SQL 的计划都必须返回他们,
+//     所以这条红与执行计划、引擎都无关。(旧实现在本夹具上读数实测 8,217,只是恰好略超上界,不作为红的依据 ——
+//     旧写法的代价主要花在 hash antijoin (no condition) 的内存比较上,Handler 计数看不见。)
+//
+// "返回空"是有意的降级(推荐是可降级展示功能),不是漏人;写成断言,是为了让"窗口被删掉 / 被绕过"必然变红。
+func TestRecommendAnchor_StopsAtWindowWhenSaturated(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+	w := int(RecommendAnchorWindow)
+	const (
+		me    uint64 = 57001
+		sink  uint64 = 1
+		pivot uint64 = 57100000
+	)
+	blockers := recommendIDRange(pivot, 2*w)
+	tail := recommendIDRange(pivot+uint64(2*w), 5)
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkFriendPrefix, recommendBulkPairRow, recommendPairsTo(blockers, sink))
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkFriendPrefix, recommendBulkPairRow, recommendPairsTo(tail, sink))
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkBlockPrefix, recommendBulkPairRow, recommendPairsTo(blockers, me))
+	analyzeRecommendTables(t, ctx, db)
+
+	// 正向对照:尾部 5 人确实在池里且合格。没有它,"返回空"在夹具没造对时也照绿。
+	control, err := repo.recommendAnchor(ctx, me, []uint64{me}, tail[0], 5)
+	require.NoError(t, err)
+	require.Equal(t, tail, recommendCandidateIDs(control), "前置条件:窗口之外的 5 人必须是合格候选")
+
+	got, reads := recommendAnchorWithReads(t, ctx, db, repo, me, []uint64{me}, pivot, 5)
+	t.Logf("饱和窗口:会话 Handler_read_* 增量 = %d(上界 8×W = %d)", reads, 8*w)
+	assert.Empty(t, recommendCandidateIDs(got),
+		"窗口(前 %d 个去重 id)全被'拉黑了我'的人占满时必须返回空:返回了窗口之外的人,说明扫描越过了窗口上界", w)
+	assert.LessOrEqual(t, reads, uint64(8*w), "每个候选的排除判定必须是 ≤5 次主键点查")
+}
+
+// TestRecommendAnchor_WindowCoversBoundedExclusionBudget 钉住 RecommendAnchorWindow 的取值依据(新旧实现都绿):
+// 所有"有配置上限"的排除全部顶满、且全部紧贴 pivot 时,窗口里仍装得下 20 个合格者,结果与不设窗口时逐条相同。
+// 数量用字面量(data 不能 import config),右侧注释是 etc/friend.yaml 的默认值;对账在 config 包的
+// TestRecommendAnchorWindowCoversExclusionBudget。实测(2026-09-28):窗口 754 通过、753 只返回 19 个。
+func TestRecommendAnchor_WindowCoversBoundedExclusionBudget(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+	const (
+		me   uint64 = 58000000 // 同时是 pivot:me 与好友有双向边,自己也在池里、占一个窗口位
+		sink uint64 = 1
+	)
+	friends := recommendIDRange(me+1, 200)       // Friend.MaxFriends
+	blockedByMe := recommendIDRange(me+201, 200) // Friend.MaxBlocks
+	pendingOut := recommendIDRange(me+401, 50)   // Friend.MaxPendingRequests(出站)
+	pendingIn := recommendIDRange(me+451, 200)   // Friend.MaxIncomingRequests(入站)
+	// 调用方 exclude:客户端回传 RecommendMaxExclude = 64 个 + mutual 已选中后追加的 RecommendMaxLimit-1 = 19 个。
+	callerExcluded := recommendIDRange(me+651, 83)
+	eligible := recommendIDRange(me+734, 25) // 1+200+200+50+200+83 = 734 个排除者之后
+
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkFriendPrefix, recommendBulkPairRow,
+		append(recommendPairsFrom(me, friends), recommendPairsTo(friends, me)...))
+	var others []uint64
+	for _, group := range [][]uint64{blockedByMe, pendingOut, pendingIn, callerExcluded, eligible} {
+		others = append(others, group...)
+	}
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkFriendPrefix, recommendBulkPairRow, recommendPairsTo(others, sink))
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkBlockPrefix, recommendBulkPairRow, recommendPairsFrom(me, blockedByMe))
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkPendingPrefix, recommendBulkPendingRow,
+		append(recommendPairsFrom(me, pendingOut), recommendPairsTo(pendingIn, me)...))
+	// 反向对照(都在应返回的前 20 人里):eligible[0] 与我只有终态申请;eligible[1] 与别人互相拉黑且有 pending。
+	seedRequestRow(t, ctx, db, me, eligible[0], testStatusRejected, 1)
+	seedRequestRow(t, ctx, db, eligible[0], me, testStatusAccepted, 1)
+	seedBlock(t, ctx, db, eligible[1], 2)
+	seedBlock(t, ctx, db, 2, eligible[1])
+	seedPending(t, ctx, db, 2, eligible[1])
+
+	exclude := append(append([]uint64{}, callerExcluded...), me)
+	got, err := repo.recommendAnchor(ctx, me, exclude, me, 20)
+	require.NoError(t, err)
+	assert.Equal(t, eligible[:20], recommendCandidateIDs(got),
+		"有上限的排除全部顶满时,窗口 %d 仍须装得下 20 个合格者(预算 734 + 20 = 754)", RecommendAnchorWindow)
+}
+
+// TestRecommendAnchor_PlanIsPerRowPrimaryKeyLookups 钉住上界成立所依赖的计划形状:五个排除子查询各自是
+// eq_ref / PRIMARY / key_len=16 / possible_keys 只有 PRIMARY(完整主键单行点查),计划里没有任何 MATERIALIZED
+// 子查询;派生表窗口走 PRIMARY。
+// 夹具刻意是"窗口大(W 个候选)、me 的关系集小":这种数据会诱使优化器改成先物化排除集。2026-09-28 实测:
+// 去掉 SEMIJOIN(FIRSTMATCH) 后 b_in 被物化成 friend_block 主键全索引扫描(type=index)、r_in 被物化成
+// friend_request 全表扫描(type=ALL);两个提示都去掉时 r_out 被物化成 idx_status_updated 上 status=1 的全服
+// pending 扫描。三者都与玩家总数成正比,在测试的小表上读数看不出来,只有计划看得出来,所以单独守。
+// 只去掉子查询上的 FORCE INDEX 时,本夹具上计划不变、只是 possible_keys 多出二级索引:possible_keys 那条断言
+// 守的是防线(防统计变化后改选二级索引),不是已实测到的退化。
+//
+// 计划按生产上限 limit=20 取;顺带核对结果时 limit 取 30:按 id 升序,前 20 个合格者到 pivot+26 就截止,
+// 够不到放在 +30..+33 的申请关系人,那样 r_out / r_in 的排除失效、或 status=1 的过滤丢了都照样绿。
+// 取 30 后比较范围到 pivot+38:f(+10..+12)、b_out(+20/+21)、b_in(+22/+23)、r_out(+30)、r_in(+32)
+// 必须被排除,+31 / +33 只有终态申请、必须出现。
+func TestRecommendAnchor_PlanIsPerRowPrimaryKeyLookups(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+	w := int(RecommendAnchorWindow)
+	const (
+		me   uint64 = 56001
+		sink uint64 = 1
+		base uint64 = 56100000
+	)
+	poolSize := 16 * w
+	pivot := base + uint64(poolSize/2)
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkFriendPrefix, recommendBulkPairRow,
+		recommendPairsTo(recommendIDRange(base, poolSize), sink))
+	myFriends := recommendIDRange(pivot+10, 3)
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkFriendPrefix, recommendBulkPairRow,
+		append(recommendPairsFrom(me, myFriends), recommendPairsTo(myFriends, me)...))
+	seedBlock(t, ctx, db, me, pivot+20)
+	seedBlock(t, ctx, db, me, pivot+21)
+	seedBlock(t, ctx, db, pivot+22, me)
+	seedBlock(t, ctx, db, pivot+23, me)
+	seedPending(t, ctx, db, me, pivot+30)
+	seedRequestRow(t, ctx, db, me, pivot+31, testStatusRejected, 1)
+	seedPending(t, ctx, db, pivot+32, me)
+	seedRequestRow(t, ctx, db, pivot+33, me, testStatusAccepted, 1)
+	seedRecommendUnrelatedExclusionRows(t, ctx, db)
+	analyzeRecommendTables(t, ctx, db)
+
+	query, args := recommendAnchorStatement(me, []uint64{me}, pivot, 20)
+	plan := explainTraditionalRows(t, ctx, db, inlineNumericArgs(t, query, args...))
+	seen := map[string]bool{"f": false, "b_out": false, "b_in": false, "r_out": false, "r_in": false}
+	for _, row := range plan {
+		table := row["table"]
+		assert.NotEqual(t, "MATERIALIZED", row["select_type"],
+			"排除子查询被物化了(表 %s,type=%s key=%s):扫描量会跟着被物化的集合走,不再由窗口封顶", table, row["type"], row["key"])
+		assert.False(t, strings.HasPrefix(table, "<subquery"), "计划里出现了物化子查询 %s", table)
+		if row["select_type"] == "DERIVED" {
+			assert.Equal(t, "PRIMARY", row["key"], "窗口必须走 friend 主键(player_id 前缀)")
+		}
+		if _, ok := seen[table]; ok {
+			seen[table] = true
+			assert.Equal(t, "eq_ref", row["type"], "%s 必须是每个候选一次单行点查", table)
+			assert.Equal(t, "PRIMARY", row["key"], "%s 必须走主键", table)
+			assert.Equal(t, "16", row["key_len"], "%s 必须用满两列主键", table)
+			assert.Equal(t, "PRIMARY", row["possible_keys"], "%s 的 FORCE INDEX (PRIMARY) 丢了:优化器又能挑二级索引去建排除集", table)
+		}
+	}
+	for alias, ok := range seen {
+		assert.True(t, ok, "计划里缺了排除子查询 %s(别名被改了,或被物化成 <subqueryN>)", alias)
+	}
+
+	const resultLimit = 30
+	got, err := repo.recommendAnchor(ctx, me, []uint64{me}, pivot, resultLimit)
+	require.NoError(t, err)
+	excluded := map[uint64]bool{pivot + 10: true, pivot + 11: true, pivot + 12: true, pivot + 20: true, pivot + 21: true,
+		pivot + 22: true, pivot + 23: true, pivot + 30: true, pivot + 32: true}
+	want := make([]uint64, 0, resultLimit)
+	for id := pivot; len(want) < resultLimit; id++ {
+		if !excluded[id] {
+			want = append(want, id)
+		}
+	}
+	// 自检:期望列表必须越过 pivot+33,否则 r_out / r_in 与终态申请又落到了比较范围之外(改夹具或 limit 时会触发)。
+	require.Greater(t, want[len(want)-1], pivot+33, "结果核对的范围没有覆盖到 pivot+30..+33 的申请关系人")
+	assert.Equal(t, want, recommendCandidateIDs(got),
+		"pivot+31 / pivot+33 只有终态申请,必须出现;f / b_out / b_in / r_out(+30)/ r_in(+32)的关系人必须被排除")
 }

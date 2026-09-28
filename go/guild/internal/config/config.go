@@ -283,6 +283,13 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("MySQL.DataSource 的库名必须是 %q(得到 %q):帮会表只建在独占库(port-decisions D-14)",
 			data.DatabaseName, dsn.DBName)
 	}
+	// 帮会活动(B6a)与经济的每日计数都是"带上限的 upsert",靠 RowsAffected 区分新插(1)/ 累加(2)/ 已达上限(0)。
+	// clientFoundRows=true 会把"值没变"也报成匹配行数 1:达上限后的再一次参与被当成成功,帮贡与物品多发。
+	// data.WithLockWaitTimeout 建池时已强制关掉它(90-consistency Y-20 的防御);这里仍在启动期拒绝显式打开的配置,
+	// 让"配置写的"与"实际生效的"不一致暴露在部署时,而不是被静默改写、日后有人照着配置去排障。
+	if dsn.ClientFoundRows {
+		return errors.New("MySQL.DataSource 不得设置 clientFoundRows=true:帮会计数 upsert 以 RowsAffected=0 判定已达上限,开启后会多发奖励(原文含口令,不打印)")
+	}
 
 	// 资产通道(B5b)。关着时一概不查,见 AssetOpConf 的说明。
 	if c.AssetOp.Enabled {

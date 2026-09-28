@@ -10,6 +10,7 @@
     <ClCompile Include="node\system\node\node.cpp" />
     <ClCompile Include="node\system\node\node_allocator.cpp" />
     <ClCompile Include="node\system\node\node_connector.cpp" />
+    <ClCompile Include="node\system\grpc_call_deadline.cpp" />
     <ClCompile Include="node\system\node\node_util.cpp" />
     <ClCompile Include="node\system\registration\registration_manager.cpp" />
     <ClCompile Include="node\system\discovery\service_discovery_manager.cpp" />
@@ -96,6 +97,7 @@
     <ClInclude Include="utils\stat\stat.h" />
     <ClInclude Include="utils\proto\message_util.h" />
     <ClInclude Include="node\system\grpc_channel_cache.h" />
+    <ClInclude Include="node\system\grpc_call_deadline.h" />
     <ClInclude Include="node\system\node\node_kafka_command_handler.h" />
     <ClInclude Include="node\system\node\node_entry.h" />
     <ClInclude Include="node\system\node\thread_observability.h" />

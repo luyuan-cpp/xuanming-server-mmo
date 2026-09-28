@@ -20,12 +20,17 @@
 #include "grpc_client/grpc_init_client.h"
 #include "session/system/session.h"
 #include "session/manager/session_manager.h"
+#include "network/network_utils.h"
+#include "proto/common/base/session.pb.h"
+#include "table/proto/tip/common_error_tip.pb.h"
 #include "proto/scene_manager/scene_manager_service.pb.h"
 #include "proto/contracts/kafka/gate_command.pb.h"
 #include "proto/common/base/message.pb.h"
 #include "rpc/service_metadata/rpc_event_registry.h"
 #include "handler/event/gate_kafka_command_router.h"
+#include "handler/event/scene_entry_dispatch.h"
 
+#include <chrono>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -134,6 +139,9 @@ namespace
         RpcClientSessionHandler rpcClientHandler;
         DependencyGate dependencyGate;
         TimerTaskComp playerCountReportTimer;
+        // CPP-2 进场转发欠账的到期补发(handler/event/scene_entry_dispatch.cpp)。回调不捕获任何对象;
+        // TimerTaskComp 自带存活令牌(AGENTS.md §11.7)。定时器只负责唤醒,截止判断用 steady_clock。
+        TimerTaskComp sceneEntryRetryTimer;
 
         GateRuntimeContext()
             : protobufDispatcher([](const TcpConnectionPtr &conn, const MessagePtr &msg, Timestamp)
@@ -304,6 +312,41 @@ int main(int argc, char *argv[])
                 mc.set_message_id(typeIt->second);
                 context.rpcClientHandler.SendMessageToClient(clientConn, mc); });
 
+            // gRPC 调用失败 -> 客户端(docs/design/grpc-client-deadline-failure-callback.md §5 #8/#9)。
+            //
+            // 失败时服务端没有回写 initial metadata,上面按 GetSessionDetailsByClientContext 找会话的路走不通;
+            // 会话从本次**发出**的 x-session-detail-bin 找回(生成的客户端保存了 Send 传入的原值,未经 Base64)。
+            // 回 kServiceUnavailable 而不是具体业务码:传输失败 = 结果未知,下游可能已经执行(有副作用的 C2S
+            // 靠 Go 侧幂等键兜重试)。会话已不在(断线通知 Login.Disconnect、客户端已断开)就只留日志。
+            // 不带会话 metadata 的调用(gate 自己的 etcd 请求)与生成代码的默认行为一致:记 ERROR。
+            // 下游整体不可用时失败频率 = 在线玩家的 gRPC 消息频率,日志按 1024 条采样(同 SendViaRouter)。
+            SetIfEmptyFailedHandler([](const GrpcCallFailure &failure, const ::google::protobuf::Message & /*request*/)
+                                    {
+                const std::string *sessionBin = failure.FindSentMetadata(kSessionBinMetaKey);
+                if (sessionBin == nullptr) {
+                    LOG_ERROR << "gRPC " << failure.method << " failed: code=" << static_cast<int>(failure.status.error_code())
+                              << " msg=" << failure.status.error_message();
+                    return;
+                }
+                SessionDetails sessionDetails;
+                if (!sessionDetails.ParseFromString(*sessionBin)) {
+                    LOG_ERROR << "gRPC " << failure.method << " failed and its session metadata does not parse; client not notified";
+                    return;
+                }
+                static uint64_t failedCount = 0;
+                if ((failedCount++ & 0x3FF) == 0) {
+                    LOG_WARN << "gRPC client call failed (sampled): method=" << failure.method
+                             << " code=" << static_cast<int>(failure.status.error_code())
+                             << " msg=" << failure.status.error_message()
+                             << " latest_session_id=" << sessionDetails.session_id()
+                             << " failed_total=" << failedCount;
+                }
+                const auto it = tlsSessionManager.sessions().find(sessionDetails.session_id());
+                if (it == tlsSessionManager.sessions().end()) return;
+                const auto clientConn = it->second.conn.lock();
+                if (!clientConn) return;
+                RpcClientSessionHandler::SendTipToClient(clientConn, kServiceUnavailable); });
+
             // Post-startup: attach client TCP callbacks + initialize session ID generator.
             // Override connection/message callbacks BEFORE WaitAndRun so that any
             // client connecting while dependencies are still pending gets the correct
@@ -344,6 +387,13 @@ int main(int argc, char *argv[])
                             [&context](const TcpConnectionPtr& conn, muduo::net::Buffer* buf, Timestamp ts) {
                                 context.codec.onMessage(conn, buf, ts);
                             });
+
+                        // 进场转发补发的扫描紧跟客户端回调装上、不放进依赖门的回调里:客户端连进来之后就可能
+                        // 有会话与路由,依赖迟迟不就绪时欠账也不能因为没人扫而错过截止收口。
+                        // 正常情况下欠账索引为空,每轮只做一次 empty()。
+                        context.sceneEntryRetryTimer.RunEvery(gate_scene_entry::kSweepIntervalSeconds, [] {
+                            gate_scene_entry::RetryDueSceneEntries(std::chrono::steady_clock::now());
+                        });
 
                         // 依赖门:路由模式下等的是路由服而不是 login —— gate 这时根本不连
                         // login,等它永远等不到;Scene(TCP 中继)两种模式都要等。

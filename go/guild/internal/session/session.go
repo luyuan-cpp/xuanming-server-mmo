@@ -67,6 +67,14 @@ var ClientMethods = map[string]struct{}{
 	pb.GuildService_UpgradeGuild_FullMethodName:          {},
 	pb.GuildService_GetGuildShop_FullMethodName:          {},
 	pb.GuildService_BuyGuildShopGoods_FullMethodName:     {},
+	// 帮会活动(B6a 一次登记五个)。历练两个在 B6a 是恒回"未开放"的桩,但准入与消息号、限流一起先占好:
+	// B6b 去桩时只换 logic 实现,不必再改这张安全白名单。B6b 新增的 match 内部服务(MatchInternal)
+	// 不属于 GuildService,永远不进本表。
+	pb.GuildService_GetGuildActivities_FullMethodName:      {},
+	pb.GuildService_LightGuildLantern_FullMethodName:       {},
+	pb.GuildService_ClaimGuildReunion_FullMethodName:       {},
+	pb.GuildService_StartGuildTrial_FullMethodName:         {},
+	pb.GuildService_RespondGuildTrialInvite_FullMethodName: {},
 }
 
 // WithDetails 把已校验的会话放进 ctx。

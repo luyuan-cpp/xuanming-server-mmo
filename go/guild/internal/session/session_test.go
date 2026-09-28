@@ -118,3 +118,24 @@ func TestNotifyPlaceholdersAreNeverClientCallable(t *testing.T) {
 		}
 	}
 }
+
+// TestActivityMethodsAreClientCallable 钉死 B6a 登记的五个活动 RPC 走客户端准入,且拿到的是会话里的 player_id。
+// TestClientMethodsCoverEveryRPCExceptScoreWrites 只守"每个方法要么进白名单、要么进 internalOnly";
+// 这里守另一侧的具体决定:历练两个在 B6a 虽是桩,也必须已对客户端开放 —— B6b 去桩时不该再有人去动安全白名单。
+func TestActivityMethodsAreClientCallable(t *testing.T) {
+	md := metadata.Pairs(MetadataKey, encodeSession(t, &base.SessionDetails{SessionId: 7, PlayerId: 42}))
+	for _, method := range []string{
+		pb.GuildService_GetGuildActivities_FullMethodName,
+		pb.GuildService_LightGuildLantern_FullMethodName,
+		pb.GuildService_ClaimGuildReunion_FullMethodName,
+		pb.GuildService_StartGuildTrial_FullMethodName,
+		pb.GuildService_RespondGuildTrialInvite_FullMethodName,
+	} {
+		result := call(md, method)
+
+		require.NoError(t, result.err, method)
+		assert.True(t, result.handlerCalled, method)
+		assert.True(t, result.fromClient, method)
+		assert.Equal(t, uint64(42), result.playerID, method)
+	}
+}

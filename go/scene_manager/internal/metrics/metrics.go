@@ -50,10 +50,11 @@ var (
 		Help:      "Composite load score used for scheduling (lower = more attractive).",
 	}, []string{"node_id", "zone_id", "role"})
 
+	// nodesByRole:补 0 规则见 SetNodesByRole 的注释(告警 SceneManager*PoolEmpty 依赖它)。
 	nodesByRole = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: subsystem,
 		Name:      "nodes_by_role",
-		Help:      "Count of live scene nodes per zone and declared role.",
+		Help:      "Count of live scene nodes per zone and declared role. Every declared role of every zone with live nodes, plus this instance's configured ZoneId, is published (0 when empty).",
 	}, []string{"zone_id", "role"})
 
 	// isLeaderGauge:1 = 本副本是变更类后台循环的领导者,0 = 跟随者。
@@ -308,6 +309,21 @@ var (
 		Help:      "Dead scene nodes whose orphan-scene reconciliation is deferred by the re-entry barrier.",
 	}, []string{"zone_id"})
 
+	// nodeDetachDeferredTotal:已判死的 scene 节点因为 death_at 写不进、或摘负载集(ZREM)失败,
+	// 被**留在负载集里**推迟摘除(GO-6,internal/logic/reentry_barrier.go 的「推迟的摘除」一段)。
+	// outcome 取 NodeDetachOutcome* 常量:
+	//   deferred   进入推迟队列(每个节点每次死亡只记一次)
+	//   recovered  补写 death_at 成功后摘除(正常自愈)
+	//   expired    自首次尝试起满一个再入屏障仍写不进 death_at,不带标记摘除(安全,但说明 Redis 在拒 SET)
+	//   abandoned  自首次尝试起满 10 分钟仍摘不出负载集,放弃;死节点留在负载集里,等下一次 fullSync 重扫
+	//   dropped    推迟期间节点重新注册,或本副本失去领导权,任务丢弃
+	// 健康时恒 0;告警见 deploy/k8s/scene-manager-alerts.yaml SceneManagerNodeDetachWithoutDeathMark。
+	nodeDetachDeferredTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "node_detach_deferred_total",
+		Help:      "Dead scene nodes kept in the load set because writing death_at or the load-set ZREM failed, by outcome (deferred|recovered|expired|abandoned|dropped).",
+	}, []string{"zone_id", "outcome"})
+
 	registerOnce sync.Once
 )
 
@@ -341,8 +357,34 @@ func register() {
 			reentryBarrierBlockedTotal, deadNodeReconcilePending,
 			enterSceneOwnerDeadTakeoverTotal,
 			homeZoneLookupTotal,
+			nodeDetachDeferredTotal,
 		)
 	})
+}
+
+// node_detach_deferred_total 的 outcome 标签取值。**必须是常量**:它们直接变成 Prometheus label。
+const (
+	NodeDetachOutcomeDeferred  = "deferred"
+	NodeDetachOutcomeRecovered = "recovered"
+	NodeDetachOutcomeExpired   = "expired"
+	NodeDetachOutcomeAbandoned = "abandoned"
+	NodeDetachOutcomeDropped   = "dropped"
+)
+
+// ObserveNodeDetachDeferred 记一次推迟摘除(GO-6)的状态变化,outcome 取 NodeDetachOutcome*。
+//
+// 进入推迟(deferred)时先给同一 zone 的 expired / abandoned 预建值为 0 的序列:告警用
+// increase(...[10m]) > 0,而 increase() 看不到序列从「不存在」到 1 的第一次跳变 —— 不预建的话,
+// 进程生命周期里第一次 expired / abandoned 会被静默漏掉。残余:抓取间隔 > 一个屏障(默认 20s)时,
+// 预建的 0 可能还没被抓到就已经变成 1,第一次 expired 仍可能漏报;abandoned 要 10 分钟后才发生,不受影响。
+func ObserveNodeDetachDeferred(zoneID uint32, outcome string) {
+	register()
+	zoneStr := strconv.FormatUint(uint64(zoneID), 10)
+	if outcome == NodeDetachOutcomeDeferred {
+		nodeDetachDeferredTotal.WithLabelValues(zoneStr, NodeDetachOutcomeExpired).Add(0)
+		nodeDetachDeferredTotal.WithLabelValues(zoneStr, NodeDetachOutcomeAbandoned).Add(0)
+	}
+	nodeDetachDeferredTotal.WithLabelValues(zoneStr, outcome).Inc()
 }
 
 // 归属 zone 查询结果标签取值,见 homeZoneLookupTotal 的注释。
@@ -626,15 +668,51 @@ func ForgetNode(nodeID string, zoneID uint32, role uint32) {
 	loadScore.DeleteLabelValues(nodeID, zoneStr, roleStr)
 }
 
+// declaredSceneNodeRoles 是 SetNodesByRole 补 0 时覆盖的四种声明角色。不含 unknown:它只在
+// 配置出错时出现,由告警 SceneManagerUnknownSceneNodeType 按 > 0 盯着,补 0 没有意义。
+var declaredSceneNodeRoles = [...]uint32{
+	constants.SceneNodeTypeMainWorld,
+	constants.SceneNodeTypeInstance,
+	constants.SceneNodeTypeMainWorldCross,
+	constants.SceneNodeTypeInstanceCross,
+}
+
 // SetNodesByRole publishes the live count of nodes per (zone, role). Called
 // on the LoadReporter tick after all per-node observations are complete so
 // the snapshot is internally consistent.
+//
+// 补 0 规则:Reset 之后,对「counts 里出现过的 zone」与「expectedZones 里非 0 的 zone」两者的并集,
+// 每个 zone 的四种声明角色先写 0,再用 counts 覆盖实际值。
+//   - 为什么补 0(cross-zone-scene-travel.md §12.3 告警盲区):以前只写 counts 里出现过的组合,
+//     某个池子空了 = 序列消失而不是变成 0;整个 zone 的 scene 节点全灭时该 zone 一条序列都不剩,
+//     两条 PoolEmpty 告警无从按 zone 触发。expectedZones 由调用方传本进程配置的 ZoneId:部署来服务
+//     zone Z 的 scene_manager 期待 Z 里有 scene 节点,这是现成的事实,不需要新配置项。
+//   - 为什么不做 sticky zone(见过一次就永远补 0):合服下线的 zone 会让 critical 永远误报 pager,
+//     而且进程重启后记忆清空,又回到盲区 —— 两头都不对。
+//   - zone 0 跳过:不是合法 zone,单测的 config.Config{} 里 ZoneId 就是 0,补出来只会污染序列。
 func SetNodesByRole(counts map[struct {
 	ZoneID uint32
 	Role   uint32
-}]int) {
+}]int, expectedZones []uint32) {
 	register()
 	nodesByRole.Reset()
+
+	zones := make(map[uint32]struct{}, len(counts)+len(expectedZones))
+	for k := range counts {
+		zones[k.ZoneID] = struct{}{}
+	}
+	for _, z := range expectedZones {
+		if z != 0 {
+			zones[z] = struct{}{}
+		}
+	}
+	for z := range zones {
+		zoneStr := strconv.FormatUint(uint64(z), 10)
+		for _, role := range declaredSceneNodeRoles {
+			nodesByRole.WithLabelValues(zoneStr, RoleLabel(role)).Set(0)
+		}
+	}
+
 	for k, v := range counts {
 		nodesByRole.WithLabelValues(
 			strconv.FormatUint(uint64(k.ZoneID), 10),
