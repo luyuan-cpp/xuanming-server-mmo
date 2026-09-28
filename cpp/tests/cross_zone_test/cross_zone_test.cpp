@@ -1800,6 +1800,116 @@ TEST(EnterSceneReplyEcs, NoWaiterAndGonePlayerAreSilent)
         << "player_id 为 0 的应答在计 reply_uncorrelated 之前就返回";
 }
 
+// ----------------------------------------------------------------------------
+// EnterScene 传输失败(PlayerLifecycleSystem::DispatchEnterSceneTransportFailure,
+// docs/design/grpc-client-deadline-failure-callback.md §5 #1 / #2)。修复前生成的 gRPC 客户端对非 OK 只打日志,
+// 这些路径根本走不到:普通换图的槽位只能等 TTL 过期,客户端收不到任何提示。
+// ----------------------------------------------------------------------------
+#include "node/system/grpc_call_deadline.h" // 在途换图 TTL 从 SceneManager 的 deadline 派生
+
+namespace
+{
+::scene_manager::EnterSceneRequest MakeFailedRequest(Guid playerId, uint64_t correlationId)
+{
+    ::scene_manager::EnterSceneRequest req;
+    req.set_player_id(playerId);
+    req.set_correlation_id(correlationId);
+    return req;
+}
+
+constexpr char kTransportFailureReason[] = "SceneManager.EnterScene code=4 msg=Deadline Exceeded";
+} // namespace
+
+TEST(EnterSceneTransportFailureEcs, HandoffFailureIsNotEvidence)
+{
+    // 结果未知:scene_manager 可能已放行。不解冻、不记证据、不提前核实,留给应答看门狗 / 冻结上限。
+    const auto player = MakeReplyTestPlayer();
+    AttachHandoff(player, /*correlationId=*/42);
+    const auto before = travel_handoff_stats::Read();
+
+    PlayerLifecycleSystem::DispatchEnterSceneTransportFailure(MakeFailedRequest(kExitPlayerId, 42),
+                                                              kTransportFailureReason);
+
+    const auto after = travel_handoff_stats::Read();
+    const auto* travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(player);
+    ASSERT_NE(travel, nullptr);
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
+    EXPECT_FALSE(travel->hasRecordedEvidence) << "传输失败不是 scene_manager 的拒绝";
+    EXPECT_EQ(after.aborted, before.aborted);
+    EXPECT_EQ(after.verifyRearmed, before.verifyRearmed) << "不提前进 ResolveTravelOutcome";
+    EXPECT_EQ(after.granted, before.granted);
+}
+
+TEST(EnterSceneTransportFailureEcs, OwnSceneChangeFailureReleasesTheSlot)
+{
+    const auto player = MakeReplyTestPlayer();
+    AttachSceneChange(player, /*sceneId=*/777, /*playerRequested=*/true, /*correlationId=*/9);
+    const auto before = travel_handoff_stats::Read();
+
+    // 别的请求(被顶替的)的失败不动当前等待者。
+    PlayerLifecycleSystem::DispatchEnterSceneTransportFailure(MakeFailedRequest(kExitPlayerId, 8),
+                                                              kTransportFailureReason);
+    {
+        const auto* pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(player);
+        ASSERT_NE(pending, nullptr);
+        EXPECT_EQ(pending->correlationId, 9u);
+    }
+
+    PlayerLifecycleSystem::DispatchEnterSceneTransportFailure(MakeFailedRequest(kExitPlayerId, 9),
+                                                              kTransportFailureReason);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player)) << "自己的失败摘槽位";
+    EXPECT_FALSE(PlayerLifecycleSystem::IsSceneChangeBusy(player)) << "玩家可以立刻重试";
+    const auto after = travel_handoff_stats::Read();
+    EXPECT_EQ(after.started, before.started) << "传输失败不是 18,不起交接";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(player));
+}
+
+TEST(EnterSceneTransportFailureEcs, FollowFailureReleasesTheSlotToo)
+{
+    const auto player = MakeReplyTestPlayer();
+    AttachSceneChange(player, /*sceneId=*/2, /*playerRequested=*/false, /*correlationId=*/20);
+
+    PlayerLifecycleSystem::DispatchEnterSceneTransportFailure(MakeFailedRequest(kExitPlayerId, 20),
+                                                              kTransportFailureReason);
+
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(player));
+}
+
+TEST(EnterSceneTransportFailureEcs, UncorrelatedFailureNeverFallsBackToPlayerId)
+{
+    // 应答号为 0 会退回按 player_id(旧版 SM);失败号为 0 只能是绕过统一出口的发送,不能照搬那条退路。
+    const auto player = MakeReplyTestPlayer();
+    AttachSceneChange(player, /*sceneId=*/2, /*playerRequested=*/true, /*correlationId=*/20);
+
+    PlayerLifecycleSystem::DispatchEnterSceneTransportFailure(MakeFailedRequest(kExitPlayerId, 0),
+                                                              kTransportFailureReason);
+    // 不在本节点的玩家:静默。
+    PlayerLifecycleSystem::DispatchEnterSceneTransportFailure(MakeFailedRequest(kExitPlayerId + 1, 21),
+                                                              kTransportFailureReason);
+
+    const auto* pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(player);
+    ASSERT_NE(pending, nullptr);
+    EXPECT_EQ(pending->correlationId, 20u);
+}
+
+TEST(EnterSceneTransportFailureEcs, InFlightTtlCoversTheSceneManagerDeadline)
+{
+    // 上游比下游宽:deadline 到期时失败通知才到,槽位必须还在;TTL 只兜"完成通知永远不来"。
+    const auto player = MakeReplyTestPlayer();
+    const uint64_t deadlineMs =
+        static_cast<uint64_t>(grpc_call_deadline::Get(eNodeType::SceneManagerNodeService).count());
+    AttachSceneChange(player, /*sceneId=*/2, /*playerRequested=*/true, /*correlationId=*/30);
+    auto& pending = tlsEcs.actorRegistry.get<PlayerSceneChangeInFlightComp>(player);
+    const uint64_t nowMs = TimeSystem::NowMillisecondsUTC();
+
+    pending.sentAtMs = nowMs - deadlineMs;
+    EXPECT_TRUE(PlayerLifecycleSystem::IsSceneChangeBusy(player)) << "deadline 刚到时槽位不得已过期";
+
+    pending.sentAtMs = nowMs - deadlineMs - 2000;
+    EXPECT_FALSE(PlayerLifecycleSystem::IsSceneChangeBusy(player)) << "deadline + 余量之后放下一条请求";
+}
+
 // ============================================================================
 // 12. TravelFreezeCap —— 交接冻结硬上限 + 晚发闸 +「标记已发出」统一收口(travel_freeze_cap.h、
 //     PlayerLifecycleSystem::EnforceTravelFreezeCaps / BeginTravelHandoff):纯常量关系与纯判定,

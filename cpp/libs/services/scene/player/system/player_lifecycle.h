@@ -499,7 +499,7 @@ namespace travel_outcome
 	{
 		kSucceeded,        // 同 zone 放行的成功应答(无 redirect),或进场路由已把交接中的玩家就地放进本节点的新场景
 		kFailed,           // scene_manager 的显式失败应答(任何非 0 error_code)
-		kNoReply,          // 应答看门狗到期(scene_manager 不可达 / zrpc 服务端超时,生成的 gRPC 客户端不回调)
+		kNoReply,          // 应答看门狗到期(scene_manager 不可达 / zrpc 服务端超时:传输失败对交接只记日志,不当证据)
 		kMarkWriteUnknown, // 写 handoff 标记的 SET 结果未知(连接断开,空 reply):EnterScene 根本没发出去
 		kAnomalous,        // 跨 zone 却"成功且无 redirect":协议异常(典型是 scene_manager 版本错配)
 
@@ -822,7 +822,7 @@ public:
 	static uint32_t StartTravelHandoff(entt::entity player, uint32_t targetZoneId, uint64_t sceneId, uint32_t sceneConfigId);
 
 	// 普通 EnterScene(客户端换图 / 镜像自动进场 / 队伍跟随)的发送侧闸:交接在途,或上一条
-	// EnterScene 的应答还没回来(短 TTL 内)时为真,调用方不得再发。应答已按 correlation_id 对号、不再串号;
+	// EnterScene 的应答 / 传输失败还没回来(TTL = SceneManager 的 gRPC deadline + 1s 内)时为真,调用方不得再发。应答已按 correlation_id 对号、不再串号;
 	// 闸仍然必要,理由是在途记录只有一个槽(第二次登记会覆盖第一次的号,第一次的 18 就对不上号而被丢弃),
 	// 以及旧版 scene_manager 不回显时仍按 player_id 对应答。详见 PlayerSceneChangeInFlightComp。
 	// 该玩家有一份作废交接留下的 handoff 标记还没确认撤回时同样为真(按 player_id 判,见
@@ -869,6 +869,20 @@ public:
 	//                                                    本代请求会被拒,由 ResolveTravelOutcome 按 epoch 收敛;
 	//   * kNoWaiter                                    → LOG_DEBUG no-op。
 	static void DispatchEnterSceneReply(const ::scene_manager::EnterSceneResponse& resp);
+
+	// 每一条 EnterScene 传输失败(gRPC status 非 OK:deadline 到期 / scene_manager 不可达 / 服务端超时)的入口,
+	// 由 rpc_replies/scene_manager_response_handler.cpp 的失败处理器调用;req 是生成的客户端保存的发出请求,
+	// reason 是调用方拼好的方法名 + 状态码 + 消息(只用于日志,本系统不依赖 gRPC 头文件)。
+	// 传输失败 = **结果未知**(scene_manager 可能已执行),只做不依赖对端结果的事
+	// (docs/design/grpc-client-deadline-failure-callback.md §5 #1 / #2):
+	//   * 按 req.correlation_id 走同一个 enter_scene_reply::Classify,**不按 player_id**;号为 0 → LOG_ERROR 丢弃;
+	//   * 实体已不在(疏散 / 排空的发送、途中退出)→ LOG_INFO no-op;
+	//   * kTravelHandoff                    → 只记日志:不当失败证据、不提前核实,去留仍由应答看门狗 / 冻结上限裁决;
+	//   * kSceneChange                      → 先按值抄、再摘在途换图组件;playerRequested 回 kServiceUnavailable
+	//                                         (不断言换图失败:路由事件可能随后到达),队伍跟随只记日志;
+	//   * kSceneChangeDuringHandoff         → 不变量被破坏,LOG_ERROR 丢弃;
+	//   * kUnmatched / kNoWaiter            → 记日志,不动任何等待者。
+	static void DispatchEnterSceneTransportFailure(const ::scene_manager::EnterSceneRequest& req, const std::string& reason);
 
 	// 交接是否已经发起(handoff 标记已写、EnterScene 已发)。此后本实体的去留只由 EnterScene 应答与
 	// 看门狗裁决:ReleasePlayer 不得把它推进退出流程(见 scene_node_service.cpp HandleReleasePlayer)。

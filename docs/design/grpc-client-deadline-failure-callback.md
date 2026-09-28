@@ -1,6 +1,7 @@
 # C++ 生成 gRPC 客户端:每次调用设 deadline + 失败也回调(2026-09-28)
 
-> 状态:设计定稿,分两批落地(§8)。**全部未编译、未测试**,编译与单测交 Codex(AGENTS.md §10.1),步骤见 §9。
+> 状态(2026-09-28):两批均已落码,第一批 regen 已完成(897ac8241)。**全部未编译、未测试**,编译与单测交 Codex
+> (AGENTS.md §10.1),步骤见 §9.2。
 > 相关:`docs/design/microservice-zone-contract-20260914.md` §3「超时预算」、`docs/design/cross-zone-scene-travel.md` §12.2、
 > `tools/proto_generator/protogen/internal/template/grpc_async_client.{h,cpp}.tmpl`、`grpc_init_total.{h,cpp}.tmpl`。
 
@@ -122,7 +123,7 @@ GrpcClient:
 | 目标节点类型 | C++ deadline | 下游服务端超时 | 从它派生的 C++ 上游预算 |
 |---|---|---|---|
 | SceneManagerNodeService | 10000 | `scene_manager_service.yaml` Timeout 8000(= 归属查询 1500 + Kafka 写 5000 + 1500) | 在途换图 TTL = deadline + 1000(第二批);交接应答看门狗 30s(不变,> deadline) |
-| DataServiceNodeService | 2500 | `data_service.yaml` 未写 Timeout = go-zero 默认 2000 | 号段 `fetchTimeoutSec` = deadline + 1s(第一批) |
+| DataServiceNodeService | 4000 | `data_service.yaml` 未写 Timeout = go-zero 默认 2000 | 号段 `fetchTimeoutSec` = deadline + 1s = 5s(第一批) |
 | ClientRpcRouterNodeService | 8000 | 路由服 Timeout 6000(> ForwardTimeoutMs 5000 > 业务 4000) | 无(客户端自己等) |
 | MatchNodeService(gate 直连模式) | 7000 | `match_service.yaml` Timeout 5000 | 无 |
 | BattleNodeService(gate 直连模式) | 5000 | C++ battle 服务端同步处理,无服务端超时 | 无 |
@@ -191,16 +192,38 @@ node ConfigMap 以 readOnly 整目录挂载,**完全遮蔽**镜像里的 `base_d
 
 - **第一批(本次)**:生成器模板 4 个、`grpc_call_tag.h`、生成器 Go 单测断言;`config.proto` 字段 21 + `config.cpp` + `base_deploy_config.yaml`;`core/node/system/grpc_call_deadline.{h,cpp}`(+ core 工程登记)与 `node.cpp` 应用;gate 通用失败桥(#8/#9/直连);号段(#7)+ `GuidSegmentClient::OnTransportFailure` + 回归单测;全量 regen。
   第一批单独可编译:失败处理器与 deadline 都是"可选装",没装的方法行为与今天一致(只多 deadline)。
+  分工会话的复核发现首版 DataService 取 2500 只有 500ms 余量,违反本块自己的 +2000 规则,改为 4000(yaml 由该会话改)。
 - **第二批(跨 zone 线提交后)**:`PlayerLifecycleSystem::DispatchEnterSceneTransportFailure` + TTL 派生(#1/#2);`scene_manager_response_handler.cpp` 装 EnterScene / CreateScene 失败处理器(#6);`k8s_deploy.ps1` 镜像 GrpcClient 块 + 契约断言(§4.4);更新 `cross-zone-scene-travel.md` §12.2 与 `scene_manager_service.yaml` 注释里"生成客户端非 OK 不回调"的表述。
 
 ## 9. regen 与验证
 
-regen:用 `enable_unity_client: false` 的配置副本跑现成的 `proto-gen.exe`(09-16 构建;`.tmpl` 运行时从磁盘读,本次不改生成器 Go 源码,**不需要重编**),不写 `../mmorpg-client`。regen 前备份所有脏文件;regen 后:
-1. 只保留预期产物:`cpp/generated/grpc_client/**`、`cpp/generated/proto/common/base/config.pb.{h,cc}`、`go/proto/common/base/config.pb.go`(逐字节拷到 `robot/vendor/proto/common/base/`)。其余与 HEAD 不同的、regen 前干净的生成物还原;regen 前就脏的文件从备份恢复。
-2. 核对 `cpp/nodes/scene/handler/grpc/scene_node_service.cpp` 的 Agones `AcquireCreatePermitBlocking` 块仍在(09-16 起在守护段内;被吃则从 git 恢复)。
-3. 核对 `rpc_event_registry.h` 的 `kMaxRpcMethodCount` = `proto/message_id.txt` 最大 id + 1,且 message_id.txt 无变化(组队 201..215 等旧号被客户端按值引用)。
+### 9.1 regen(已完成)
 
-Codex 编译 / 测试步骤见本次 PROGRESS.md 条目(串行 `/m:1`)。
+由会话「C++ 完全不连接 Go 服务的设计」在本会话撞额度期间代跑(用户授权),产物随每小时自动保存 897ac8241 进 main:
+- 用 `enable_unity_client: false` 的配置副本跑现成的 `proto-gen.exe`(09-16 构建;`.tmpl` 运行时从磁盘读,本次不改生成器 Go 源码,**不需要重编**),不写 `../mmorpg-client`。
+- 在隔离的临时 worktree 里跑:当时 HEAD 上帮会会话的 guild.proto / guild_db.proto 多了 5 个尚未 regen 的 RPC(会分到消息号 239–243),跑之前把这两份 proto 退回上次 regen 时的内容,不占帮会的号。
+- 拷回主仓库的只有 40 个文件:`cpp/generated/grpc_client/**`(34)、`cpp/generated/proto/common/base/config.pb.{h,cc}`、`generated/proto/{_unified,db,login}/proto/common/base/config.proto`、`go/proto/common/base/config.pb.go` 与逐字节同步的 `robot/vendor/proto/common/base/config.pb.go`。
+- 已核:`proto/message_id.txt`、`rpc_event_registry.*`、`cpp/nodes/scene/handler/grpc/scene_node_service.cpp` 的 Agones 块都没动。
+- 本会话复核生成物:34 个客户端文件与当前模板一致;etcd 的 Watch / LeaseKeepAlive 两个流式方法没有失败处理器、不设 deadline;`SetGrpcCallDeadline` 对同一节点类型的多个文件用独立的 if。
+
+### 9.2 交给 Codex 的编译 / 测试(串行)
+
+工作目录均为仓库根 `E:\work\xuanming-server-mmo`。MSBuild 路径 `D:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Current\Bin\MSBuild.exe`,**一律 `/m:1`**(并发会报假的 C1041 / LNK1104)。
+
+1. 生成器模板单测(Go 1.26.5,`GOTOOLCHAIN=local`,`GOPROXY=https://goproxy.cn,https://mirrors.aliyun.com/goproxy/,direct`):
+   `cd tools/proto_generator/protogen && go test ./internal/generator/cpp/ -run TestGrpcInitTemplateSupportsMultipleServicesForSameNodeType -count=1 -v`
+   通过标准:PASS(新增断言:`SetGrpcCallDeadline` 两个 Battle 分支互相独立、两个文件都收到 deadline)。
+2. 全量编译:`MSBuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`。
+   本次改动面:`proto`(config.pb 新增字段 21)→ `grpc_client`(34 个生成文件)→ `core`(新增 `node/system/grpc_call_deadline.cpp`,已登记 vcxproj / filters / CMakeLists)→ `modules`(`guid_segment_client`)→ `scene` 库(`player_lifecycle`)→ gate / scene / battle 三个节点 → 测试工程。
+   通过标准:exit 0;`bin` 下 gate.exe / scene.exe / battle.exe 的 mtime 晚于 `lib` 下所有 .lib(防"新 grpc_client.lib + 旧 core.lib"混装)。
+   失败时保留:第一条 `error C` / `LNK` 及其前后 20 行。重点怀疑点:`GrpcCallFailure` 聚合初始化(含引用成员)、`Send…(registry, node, request, {}, {})` 的重载决议、`google::protobuf::Map` 的 `operator[]`(`config.cpp`)。
+3. 单测:`pwsh tools/scripts/run_cpp_tests.ps1 -Filter bag_test`、`pwsh tools/scripts/run_cpp_tests.ps1 -Filter cross_zone_test`。
+   通过标准:新增 `GuidSegmentClientTest.TransportFailureRetriesWithoutWaitingForFetchTimeout` 与 `EnterSceneTransportFailureEcs.*`(5 条)全部 PASS;其余用例与本次改动前的基线一致(bag_test 09-28 基线里有 8 条他人在途区域的既有失败,见 PROGRESS.md 09-28 防御 / 法力条目)。
+4. 联机冒烟(有本地栈时):起 gate / scene 后,
+   - 日志里应有一行 `[GrpcClient] unary call deadlines (ms): default=10000 ...`(`LogLevel` 为 0 / 1 时可见;本地默认 2 = WARN 看不到,可临时调低),没有 `CallDeadlineMs entry ignored`;
+   - 跑任意一条换图冒烟,不得出现 `reply dropped: Async...Handler is not installed`;
+   - 停掉 scene_manager 后在客户端发一次换图:10s 内收到 tip 1003(服务不可用),再发一次不应被"切换中"(3014)挡住;
+   - 路由模式下停掉路由服后发任意 gRPC 类消息:客户端收到 tip 1003,gate 日志有采样的 `gRPC client call failed (sampled)`。
 
 ## 10. 残留与后续
 

@@ -259,6 +259,11 @@ Claude 未运行任何构建 / 测试 / regen(AGENTS §10.1)。按顺序执行,�
 - **对存量号开放跨 zone 传送之前,必须先跑完 `tools/merge_zone -backfill-home-zone`。** 12.1-B 之后,没有 `player:zone` 映射的玩家发起传送会被 20 拒绝(tip 后解冻,不受损)。新建角色由 `createplayerlogic.go` fail-closed 登记,不受影响;受影响的只有 2026-09-08 建角登记修复之前的号,以及映射 Redis 丢失的情形。
 - dev 旁路 `AllowGateZoneAsHomeZone=true` 会绕过上述全部检查,在第二条腿上把访客记成目标 zone 归属,**只许单 zone 本地联调用**。
 - **(2026-09-21 新增)K8s 的 scene-manager ConfigMap 必须配 zrpc `Timeout` ≥ `KafkaWriteTimeoutSeconds` + 回滚余量(例如 `Timeout: 8000`),或用 `MethodTimeouts` 只放宽 `EnterScene`。** 现状:本地 `go/scene_manager/etc/scene_manager_service.yaml:3` 是 `Timeout: 5000`;`tools/scripts/k8s_deploy.ps1` 生成的 scene-manager ConfigMap 没写 `Timeout`,落到 go-zero 默认 2000ms。两者都不大于 `KafkaWriteTimeoutSeconds: 5`(同一 yaml `:32`)。zrpc 服务端超时后调用方拿到 DeadlineExceeded,C++ 生成的 gRPC 客户端对非 OK 状态只打日志、不回调(`cpp/generated/grpc_client/scene_manager/scene_manager_service_grpc_client.cpp:141-153`),所以**任何超过 2s 的第一条腿**都会让源 scene 冻满 30s 应答看门狗;若此时 gate(A) 对 gate-cmd 的消费又滞后超过 30s,一次"迟到但成功"的传送会被 §12.5.6 的踢线抢先踢回选服。`tools/scripts/k8s_deploy.ps1` 由有权限的会话去改,**本轮未改**。
+- **(2026-09-28 更新)C++ 生成的 gRPC 客户端已改为"每次调用设 deadline + 非 OK 也回调失败处理器"**(`docs/design/grpc-client-deadline-failure-callback.md`)。本节与 §12.5.6 里"C++ 生成客户端对非 OK 只打日志、不回调""C++ 调用不设 deadline"的表述以此为准更新:
+  - SceneManager 的 C++ deadline = `bin/etc/base_deploy_config.yaml` 的 `GrpcClient.CallDeadlineMs.SceneManagerNodeService`(10000),须 ≥ zrpc `Timeout`(8000)+ 2000。
+  - **交接**的 EnterScene 传输失败 = 结果未知:`PlayerLifecycleSystem::DispatchEnterSceneTransportFailure` 按请求的 correlation_id 分发,命中交接只记日志,不当失败证据、不提前核实 —— 源 scene 仍由 30s 应答看门狗 / 70s 冻结上限按 owner_epoch 裁决,上面"冻满 30s 看门狗"的后果对交接**不变**。
+  - **普通换图**的传输失败:摘在途槽,玩家发起的回 `kServiceUnavailable`(不断言失败,路由事件可能随后到达),队伍跟随只记日志;在途 TTL 改为 SceneManager deadline + 1s。
+  - **镜像 CreateScene** 的传输失败:按请求 `creator_ids` 给本节点上的创建者回 `kServiceUnavailable`。
 
 ### 12.3 审计存活、本轮未修(已知限制)
 

@@ -5814,3 +5814,22 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
 期望全部 PASS。kind 上实测:`zone-up` 后 `kubectl -n <zone> get deploy login -o jsonpath='{.spec.template.spec.containers[0].env}'` 应含 `KAFKA_COMMAND_TOPIC_GENERATION=2`;login 启动日志 `kafkacmd: control-plane command topic contract partitions=256 generation=2`;登录一个号后 gate 能收到 BindSession(能进场景即证明)。
 
 **协作**:「C++ 完全不连 Go」会话原本也要做这件事,已确认归本会话;它随后会在同一脚本里加 GrpcClient 镜像进 node ConfigMap 与 C++ deadline 断言,并改 `base_deploy_config.yaml` 的 DataService 超时 —— 那些不在本条范围。
+
+## 2026-09-28 C++ 生成 gRPC 客户端:每次调用设 deadline + 失败也回调(Claude,未编译)
+
+设计与全部细节:`docs/design/grpc-client-deadline-failure-callback.md`(§5 九个调用点逐个结论、§6 自动注册评估、§9.2 Codex 步骤)。
+
+- **缺陷**:生成的 C++ 异步客户端只在 `status.ok()` 时调应答处理器,非 OK 只打一行日志;而且从不设 deadline。业务层因此各写看门狗兜底(换图在途 5s、交接 30s、号段 fetchTimeout),镜像 CreateScene / 玩家换图 / gate 转发在 gRPC 失败时客户端什么也收不到。
+- **做法**(选"另加失败处理器",不改现有应答处理器签名):
+  - 模板 `grpc_async_client.{h,cpp}.tmpl`:unary 调用存请求副本与发出的 metadata,`set_deadline`;非 OK 调 `Async<Svc><Method>FailedHandler(const GrpcCallFailure&, const Req&)`,未装时打带方法名与状态码的 ERROR;应答到了而应答处理器为空时每方法每线程 ERROR 一次(防 2026-04 那种静默丢应答)。流式(etcd Watch / KeepAlive)不变。
+  - 总表 `grpc_init_total.{h,cpp}.tmpl`:`SetFailedHandler` / `SetIfEmptyFailedHandler` / `SetGrpcCallDeadline(nodeType, ms)`;生成器 Go 单测补断言。
+  - `cpp/generated/grpc_client/grpc_call_tag.h`(手工维护的支撑头):`GrpcCallFailure`、`GrpcSentMetadata`、内置默认 deadline 10000ms。
+  - 配置:`config.proto` `BaseDeployConfig.grpc_client = 21`(`map<string,uint32> call_deadline_ms`,键 = ENodeType 枚举名);`config.cpp` 读 `GrpcClient.CallDeadlineMs`;`bin/etc/base_deploy_config.yaml` 按「上游比下游宽」配 SceneManager 10000 / DataService 4000(分工会话改) / 路由服 8000 / Match 7000 / Battle 5000 / Login 102000 / etcd 5000。`core/node/system/grpc_call_deadline.{h,cpp}` 在 `Node::Initialize` 里应用并提供 `Get(nodeType)` 给业务派生预算。
+  - gate:`SetIfEmptyFailedHandler` 从发出的 `x-session-detail-bin` 找回会话,回 tip 1003(服务不可用),日志 1024 采样。
+  - 号段:失败按发出的 `x-idseg-seq` 精确归属 → `GuidSegmentClient::OnTransportFailure` 立即退避重试;`fetchTimeoutSec` = DataService deadline + 1s。
+  - scene 第二批:`PlayerLifecycleSystem::DispatchEnterSceneTransportFailure` 按请求 correlation_id 走 `enter_scene_reply::Classify`(不按 player_id);交接只记日志、不当证据、不提前核实;普通换图摘在途槽,玩家发起的回 1003、跟随只记日志;在途 TTL 改为 SceneManager deadline + 1s。`scene_manager_response_handler.cpp` 装 EnterScene / CreateScene 失败处理器(CreateScene 按请求 `creator_ids` 回 1003)。
+- **提交落点**:第一批手写代码与模板被每小时自动保存 `09f71f9d5` 带走;regen 由会话「C++ 完全不连接 Go 服务的设计」在隔离 worktree 代跑,40 个产物随 `897ac8241` 进库(message_id / rpc_event_registry / Agones 块未动,已核);第二批与文档见本条所在提交。
+- **分工**:`k8s_deploy.ps1` 镜像 GrpcClient 块 + deadline ≥ Timeout+2000 契约断言、DataService 改 4000、`GetSceneManagerEntity` 只挑活通道、删 `SendMessageToPlayerOnGrpcNode` 由上述会话做,不在本条。
+- **给 Codex**(设计文档 §9.2,串行):① `tools/proto_generator/protogen` 下 `go test ./internal/generator/cpp/ -run TestGrpcInitTemplateSupportsMultipleServicesForSameNodeType -count=1 -v`;② `MSBuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`,核 bin 下三个 exe 晚于所有 lib;③ `pwsh tools/scripts/run_cpp_tests.ps1 -Filter bag_test` 与 `-Filter cross_zone_test`,新增 `GuidSegmentClientTest.TransportFailureRetriesWithoutWaitingForFetchTimeout`、`EnterSceneTransportFailureEcs.*`(5 条)须 PASS;④ 有栈时按 §9.2 第 4 步做停 scene_manager / 停路由服的联机检查。
+- **待拍板**:① `go/login/etc/login.yaml` 与 K8s 的 `Timeout: 100000`(注释写 10s)是否笔误 —— 是则改 10000、gate 直连 login 的 deadline 改 12000;② 换图传输失败回「服务不可用」(可能先提示、后被路由搬走)还是只释放槽不提示。
+- **残留**:etcd 流 `!ok` 分支泄漏 tag / 提前 return / 不重建;etcd 一元调用未接失败处理器(接时必须走"取 pending key 重发",不能走 `OnTxnFailed`);scene_manager 的 CreateScene 业务错误应答不回显 `creator_ids`;生成器自动注册应答处理器(评估见设计文档 §6)。

@@ -175,7 +175,9 @@ struct PlayerTravelHandoffComp
 // 跟随的应答仍会按 player_id 摘掉客户端那条换图的记录,那条随后到达的 18 找不到目标、同 zone
 // 交接不发起。挂上之后同一玩家的普通 EnterScene 始终串行。
 // 疏散 / 排空发的 EnterScene 不挂它(发完实体就销毁了,没有等待者)。
-// 应答到达即摘;应答丢失时靠 sentAtMs 的短 TTL 自然失效,不需要定时器。
+// 应答或传输失败到达即摘(DispatchEnterSceneReply / DispatchEnterSceneTransportFailure;生成的 gRPC 客户端
+// 保证每次调用在 deadline 内以其一收场);完成通知永远不来时靠 sentAtMs 的 TTL(SceneManager deadline + 1s)
+// 自然失效,不需要定时器。
 //
 // correlationId    本次 EnterScene 的关联号(EnterSceneRequest.correlation_id),由
 //                  PlayerLifecycleSystem::RequestSceneChange 写入,经它登记的恒非 0;默认值 0 = 未登记。

@@ -3,9 +3,11 @@ ListenOn: 127.0.0.1:60300
 # zrpc 服务端超时(毫秒)。必须为正,且 >= HomeZoneLookupTimeoutMs + KafkaWriteTimeoutSeconds*1000 + 1500
 # (现 1500 + 5000 + 1500 = 8000;1500 是读 location、预占频道、铸造 / CAS Lua、失败回滚 Lua 等 Redis 往返的余量)。
 # EnterScene 第一条腿依次做归属查询、Kafka 同步写、失败回滚,然后回 7;服务端先超时的话调用方只拿到 DeadlineExceeded,
-# 而 C++ 生成客户端对非 OK 只打日志、不回调,源 scene 要冻满 30s 看门狗(docs/design/cross-zone-scene-travel.md §12.2)。
-# C++ 调用不设 deadline,本值是唯一上限,也是源 scene 还可能收到 EnterScene 应答的最晚时刻(从本服务收到请求起算),
-# 须远小于 C++ 的 30s 应答看门狗。<=0 = go-zero 不装超时拦截器(应答时刻无上界)。不要用 MethodTimeouts 只放宽
+# C++ 把它当"结果未知"的传输失败:交接只记日志,源 scene 仍要冻到 30s 应答看门狗(docs/design/cross-zone-scene-travel.md §12.2)。
+# C++ 每次调用的 deadline 是 bin/etc/base_deploy_config.yaml 的 GrpcClient.CallDeadlineMs.SceneManagerNodeService(10000),
+# 必须 >= 本值 + 2000(上游比下游宽,docs/design/grpc-client-deadline-failure-callback.md §4.2)。本值也是源 scene 还可能
+# 收到带真实错误码的 EnterScene 应答的最晚时刻(从本服务收到请求起算),须远小于 C++ 的 30s 应答看门狗。
+# <=0 = go-zero 不装超时拦截器(应答时刻无上界)。不要用 MethodTimeouts 只放宽
 # EnterScene:tools/scripts/k8s_deploy.ps1 只镜像标量 Timeout,K8s 上会静默退回全局值。以上由
 # tools/scripts/tests/k8s_deploy_contract.tests.ps1 守着。8000 只覆盖不触发同步建场景的正常路径:懒改派 / 死节点改派里
 # 挂在请求 ctx 上的 CreateScene 同步 RPC 不在预算内,超时会被截断。K8s ConfigMap 由 k8s_deploy.ps1 从这里取值。

@@ -48,12 +48,12 @@ namespace travel_freeze_cap
 	// 就解冻。这一段 handoff 标记还没写,解冻是安全的。
 	inline constexpr std::chrono::seconds kSaveBudget{30};
 
-	// EnterScene 应答看门狗(PlayerLifecycleSystem::ArmTravelReplyWatchdog)。生成的 gRPC 客户端在 status 非 OK 时
-	// **不调**应答处理器,而 scene_manager 不可达 / 连接被重置就是这种情况 —— 没有这道看门狗,玩家会以冻结态挂到
-	// 冻结上限。取值远大于 EnterScene 的正常耗时(压测 P99 亚秒),只兜真正的丢应答。
-	// scene_manager 的 zrpc 服务端超时(scene_manager_service.yaml 的 Timeout: 8000,本地与 K8s 同值,K8s ConfigMap
-	// 由 k8s_deploy.ps1 从 yaml 取)同样表现为"没有应答":handler 超时后调用方拿到 DeadlineExceeded,不回调,
-	// 源端只能等本看门狗。
+	// EnterScene 应答看门狗(PlayerLifecycleSystem::ArmTravelReplyWatchdog)。scene_manager 不可达 / 连接被重置 /
+	// zrpc 服务端超时(scene_manager_service.yaml 的 Timeout: 8000)/ C++ 侧 gRPC deadline 到期(base_deploy_config.yaml
+	// GrpcClient.CallDeadlineMs,SceneManager 10000)时,生成的客户端会调失败处理器,但传输失败 = 结果未知:
+	// 对交接只记日志、不当证据(PlayerLifecycleSystem::DispatchEnterSceneTransportFailure),源端仍只能等本看门狗
+	// 按 owner_epoch 裁决 —— 没有这道看门狗,玩家会以冻结态挂到冻结上限。取值远大于 EnterScene 的正常耗时
+	// (压测 P99 亚秒)与 gRPC deadline,只兜真正的丢应答。
 	// 下限约束(别为了缩短"应答丢失时源实体冻结着留在场景里"的时间把它调小):必须远大于 scene_manager
 	// "铸造 epoch → Kafka 路由 ACK / 失败回滚"这段窗口(KafkaWriteTimeoutSeconds,默认 5s)。看门狗按
 	// owner_epoch 变没变裁决去留,落在窗口里会读到一个即将被回滚的新 epoch:实体销毁之后 location 又

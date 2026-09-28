@@ -149,7 +149,7 @@ void SceneNodeGrpcImpl::HandleReleasePlayer(const ::scene_node::ReleasePlayerReq
     // scene_manager 的铸造 Lua 到达 —— 等于源端自己把即将发生的放行撤回。
     //
     // 已知副作用(预期现象,压测时别当 bug 追):交接被放行到别的节点、而 EnterScene 应答又丢了
-    // (scene_manager 在路由 ACK 之后重启 / 断连,生成的 gRPC 客户端 status 非 OK 不回调)时,
+    // (scene_manager 在路由 ACK 之后重启 / 断连:传输失败对交接只记日志、不当证据)时,
     // 本节点的源实体要等 30s 应答看门狗才销毁(日志 "travel_granted_without_reply")。这 30s 里它
     // 以冻结态留在源场景的 AOI 内,周围玩家会看到一个不动的分身;真身已在目标节点。数据安全:
     // 交接发起后本实体不再存盘,玩家再被派回本节点时 DiscardStaleHandoffEntity 会先销毁它再重载。

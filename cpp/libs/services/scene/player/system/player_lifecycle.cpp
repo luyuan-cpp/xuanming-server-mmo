@@ -26,6 +26,8 @@
 #include "player/system/player_data_loader.h"
 #include "engine/core/type_define/type_define.h"
 #include "table/proto/tip/cross_server_error_tip.pb.h"
+#include "table/proto/tip/common_error_tip.pb.h" // kServiceUnavailable:EnterScene 传输失败时回给客户端
+#include "node/system/grpc_call_deadline.h"      // 在途换图 TTL 从 SceneManager 的 gRPC deadline 派生
 #include "player_tip.h"
 #include "modules/scene/comp/scene_comp.h"
 #include "modules/scene/comp/scene_node_comp.h"
@@ -171,12 +173,22 @@ namespace
 	static_assert(std::is_same_v<decltype(PlayerTravelHandoffComp::frozenAtSteady), travel_freeze_cap::Clock::time_point>,
 				  "PlayerTravelHandoffComp::frozenAtSteady 必须是 travel_freeze_cap::Clock::time_point");
 
-	// PlayerSceneChangeInFlightComp 的有效期。EnterScene 正常亚秒返回;应答丢失时(scene_manager
-	// 不可达,生成的 gRPC 客户端不回调)不能把玩家永久挡在换图之外,过了这个时间就放下一条请求。
-	// 超过它才到的迟到应答按 correlation_id 对号(DispatchEnterSceneReply):号与下一条请求记下的不同,
-	// 直接丢弃,不会再被记到下一条请求头上。旧版 scene_manager 不回显号时退回按 player_id 对应答,
-	// 这一残余仍在,后果只是一次换图失败或多余的交接,不会双主 —— 去留始终由 owner_epoch 比对裁决。
-	constexpr uint64_t kSceneChangeInFlightTtlMs = 5000;
+	// PlayerSceneChangeInFlightComp 的有效期 = SceneManager 的 gRPC deadline + 1s,运行期取值
+	// (docs/design/grpc-client-deadline-failure-callback.md §4.2「上游比下游宽」)。
+	// 生成的 gRPC 客户端保证每次调用在 deadline 内以应答或失败收场,两者都会摘掉在途组件
+	// (DispatchEnterSceneReply / DispatchEnterSceneTransportFailure);TTL 只兜"完成通知永远不来"
+	// (例如 SceneManager 节点在调用途中被摘除),不能把玩家永久挡在换图之外。
+	// 必须比 deadline 宽:否则应答 / 失败通知到达之前槽位已过期、被下一次登记覆盖,号就对不上了。
+	// 超过它才到的迟到应答按 correlation_id 对号:号与下一条请求记下的不同,直接丢弃。旧版 scene_manager
+	// 不回显号时退回按 player_id 对应答,这一残余仍在,后果只是一次换图失败或多余的交接,不会双主 ——
+	// 去留始终由 owner_epoch 比对裁决。
+	constexpr uint64_t kSceneChangeInFlightMarginMs = 1000;
+
+	uint64_t SceneChangeInFlightTtlMs()
+	{
+		return static_cast<uint64_t>(grpc_call_deadline::Get(eNodeType::SceneManagerNodeService).count()) +
+			   kSceneChangeInFlightMarginMs;
+	}
 
 	// [TravelHandoff] 汇总行的周期,与 RedisSystem 的 [DirtySave] / [OwnerEpoch] 同为 30s。
 	constexpr double kTravelHandoffStatsIntervalSec = 30.0;
@@ -1660,8 +1672,9 @@ void PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	// 3.2 同 zone 交接"重发后落回本节点"的就地收尾:同样不等 gRPC 应答。
 	//     交接重发的 EnterScene 若被 scene_manager 重新挑频道挑回了本节点(同物理节点不铸造 epoch),
 	//     路由走到这里时实体还带着 PlayerFrozenComp:玩家人已在新场景,输入却全被冻结闸丢弃。应答
-	//     正常到达时只差几毫秒;应答丢失(scene_manager 在路由 ACK 之后重启 / 断连,生成的 gRPC 客户端
-	//     status 非 OK 不回调)时要冻到 30s 看门狗,看门狗还会按"失败"回一条假的 kEnterSceneFailed。
+	//     正常到达时只差几毫秒;应答丢失(scene_manager 在路由 ACK 之后重启 / 断连:传输失败对交接只记日志、
+	//     不当证据,见 DispatchEnterSceneTransportFailure)时要冻到应答看门狗,看门狗还会按"失败"回一条假的
+	//     kEnterSceneFailed。
 	//     判据:交接已发起、目标是本 zone 且没指定场景实例、路由带来的 epoch 非 0 且与路由到达前缓存的
 	//     是同一代。
 	//       * 指定了实例(sceneId != 0)的交接落不回本节点:实例所在节点是固定的,它在本节点的话
@@ -2958,7 +2971,7 @@ bool PlayerLifecycleSystem::IsSceneChangeBusy(entt::entity player)
 	}
 	// 时钟回拨(now < sentAtMs)按已过期处理:宁可多放一条请求,也不能把玩家长期挡在换图之外。
 	const uint64_t nowMs = TimeSystem::NowMillisecondsUTC();
-	return nowMs >= pending->sentAtMs && nowMs - pending->sentAtMs < kSceneChangeInFlightTtlMs;
+	return nowMs >= pending->sentAtMs && nowMs - pending->sentAtMs < SceneChangeInFlightTtlMs();
 }
 
 uint64_t PlayerLifecycleSystem::RequestSceneChange(entt::entity player, entt::entity smEntity,
@@ -3091,6 +3104,100 @@ void PlayerLifecycleSystem::DispatchEnterSceneReply(const ::scene_manager::Enter
 			  << " without an in-flight handoff or scene change; ignoring corr=" << replyTag
 			  << " route=" << enter_scene_reply::RouteName(route) << " error_code=" << resp.error_code()
 			  << " has_redirect=" << resp.has_redirect();
+}
+
+void PlayerLifecycleSystem::DispatchEnterSceneTransportFailure(const ::scene_manager::EnterSceneRequest &req,
+															   const std::string &reason)
+{
+	using enter_scene_reply::Route;
+
+	const Guid playerId = req.player_id();
+	const uint64_t requestTag = req.correlation_id();
+	if (requestTag == 0)
+	{
+		// 本进程的 EnterScene 全经 SendCorrelatedEnterScene 发出、号恒非 0。号为 0 只能是有发送点绕过了统一出口:
+		// 不退回按 player_id 对 —— 那会把"吃掉别的请求"的串号带回来。交给各等待者自己的兜底(TTL / 看门狗)。
+		LOG_ERROR << "[EnterSceneReply] EnterScene transport failure without correlation_id for player " << playerId
+				  << " (a send bypassed SendCorrelatedEnterScene); ignoring (" << reason << ")";
+		return;
+	}
+
+	const auto playerEntity = tlsEcs.GetPlayer(playerId);
+	if (!tlsEcs.actorRegistry.valid(playerEntity))
+	{
+		// 疏散 / 排空发的 EnterScene(发完实体就销毁了),或玩家在途中退出。
+		LOG_INFO << "[EnterSceneReply] EnterScene transport failure for player " << playerId
+				 << " but entity is gone; ignoring corr=" << requestTag << " (" << reason << ")";
+		return;
+	}
+
+	const auto *travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(playerEntity);
+	const auto *pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(playerEntity);
+	const bool handoffInFlight = travel != nullptr;
+	const uint64_t handoffTag = handoffInFlight ? travel->enterSceneCorrelationId : 0;
+	const bool sceneChangeInFlight = pending != nullptr;
+	const uint64_t sceneChangeTag = sceneChangeInFlight ? pending->correlationId : 0;
+	const Route route =
+		enter_scene_reply::Classify(requestTag, handoffInFlight, handoffTag, sceneChangeInFlight, sceneChangeTag);
+
+	switch (route)
+	{
+	case Route::kTravelHandoff:
+	case Route::kLegacyTravelHandoff:
+		// 结果未知,不是"被拒":scene_manager 可能已铸造 epoch、正走 Kafka 路由 / 回滚窗口。不当失败证据去解冻
+		// (已被放行时解冻并带新 epoch 存盘 = 回档),也不提前核实(读到窗口中间的 epoch,见 travel_freeze_cap.h
+		// kReplyBudget 的下限约束)。去留照旧由应答看门狗 / 冻结上限按 owner_epoch 裁决。
+		LOG_WARN << "[ZoneTravel] handoff EnterScene transport failure for player " << playerId
+				 << " corr=" << requestTag << " (" << reason
+				 << "); outcome unknown, leaving the verdict to the reply watchdog / freeze cap";
+		return;
+
+	case Route::kSceneChange:
+	case Route::kLegacySceneChange:
+	{
+		// 先抄后摘:与 DispatchEnterSceneReply 同一纪律。槽位释放后玩家可以重试。
+		const PlayerSceneChangeInFlightComp target = *pending;
+		tlsEcs.actorRegistry.remove<PlayerSceneChangeInFlightComp>(playerEntity);
+		if (!target.playerRequested)
+		{
+			// 队伍跟随:玩家没在等,只记日志(team-system.md DV-6;组队线约定)。
+			LOG_INFO << "[ZoneTravel] team-follow EnterScene transport failure for player " << playerId
+					 << " scene_id=" << target.sceneId << " corr=" << requestTag << " (" << reason
+					 << "); player stays in the current scene";
+			return;
+		}
+		// 回「服务不可用」而不是 kEnterSceneFailed:传输失败时 scene_manager 可能已执行、路由事件随后到达,
+		// 断言"换图失败"会出现先报失败后被搬走。不回任何提示则客户端一直等一个不会来的 EnterSceneS2C
+		// (EnterSceneC2S 的同步应答早已返回"已受理")。取舍见设计文档 §5 #2。
+		LOG_WARN << "[ZoneTravel] EnterScene transport failure for player " << playerId
+				 << " scene_id=" << target.sceneId << " scene_conf_id=" << target.sceneConfigId
+				 << " corr=" << requestTag << " (" << reason << "); notifying the client";
+		PlayerTipSystem::SendToPlayer(playerEntity, kServiceUnavailable, {});
+		return;
+	}
+
+	case Route::kSceneChangeDuringHandoff:
+		// 按构造不可达(见 DispatchEnterSceneReply 同一分支)。丢弃:走普通换图分支会在交接中给客户端补一条 tip。
+		LOG_ERROR << "[EnterSceneReply] invariant broken: scene-change transport failure while a handoff is in flight,"
+				  << " player=" << playerId << " corr=" << requestTag << " handoff_tag=" << handoffTag
+				  << " scene_change_tag=" << sceneChangeTag << " (" << reason << "); dropping";
+		return;
+
+	case Route::kUnmatched:
+		// 被顶替的请求(过了 TTL 又发了一条)或上一代交接的请求:不是当前等待者的,不动它。
+		LOG_INFO << "[EnterSceneReply] transport failure of a superseded EnterScene for player " << playerId
+				 << " corr=" << requestTag << " handoff_tag=" << handoffTag << " scene_change_tag=" << sceneChangeTag
+				 << " (" << reason << "); ignoring";
+		return;
+
+	case Route::kNoWaiter:
+	case Route::kCount:
+		break;
+	}
+	// kNoWaiter:路由已先落地(EnterScene 3.1 已摘在途组件)之后才到的失败,或没有等待者的发送。
+	LOG_INFO << "[EnterSceneReply] EnterScene transport failure for player " << playerId
+			 << " without an in-flight handoff or scene change; ignoring corr=" << requestTag << " route="
+			 << enter_scene_reply::RouteName(route) << " (" << reason << ")";
 }
 
 bool PlayerLifecycleSystem::IsHandoffRequested(entt::entity player)
