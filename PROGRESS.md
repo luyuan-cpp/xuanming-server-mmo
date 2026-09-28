@@ -5833,3 +5833,17 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
 - **给 Codex**(设计文档 §9.2,串行):① `tools/proto_generator/protogen` 下 `go test ./internal/generator/cpp/ -run TestGrpcInitTemplateSupportsMultipleServicesForSameNodeType -count=1 -v`;② `MSBuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`,核 bin 下三个 exe 晚于所有 lib;③ `pwsh tools/scripts/run_cpp_tests.ps1 -Filter bag_test` 与 `-Filter cross_zone_test`,新增 `GuidSegmentClientTest.TransportFailureRetriesWithoutWaitingForFetchTimeout`、`EnterSceneTransportFailureEcs.*`(5 条)须 PASS;④ 有栈时按 §9.2 第 4 步做停 scene_manager / 停路由服的联机检查。
 - **待拍板**:① `go/login/etc/login.yaml` 与 K8s 的 `Timeout: 100000`(注释写 10s)是否笔误 —— 是则改 10000、gate 直连 login 的 deadline 改 12000;② 换图传输失败回「服务不可用」(可能先提示、后被路由搬走)还是只释放槽不提示。
 - **残留**:etcd 流 `!ok` 分支泄漏 tag / 提前 return / 不重建;etcd 一元调用未接失败处理器(接时必须走"取 pending key 重发",不能走 `OnTxnFailed`);scene_manager 的 CreateScene 业务错误应答不回显 `creator_ids`;生成器自动注册应答处理器(评估见设计文档 §6)。
+
+## 2026-09-28(续)防御 ×12 / 法力 ×4:用当前源码重编机器人重跑验收,去掉两处将就(Claude)
+
+- 承接同日上一条。上一轮有两处为兼容旧机器人做的将就:① 冒烟用 09-22 编的 `robot-battle.exe`;② 数值验收用 09-16 的 `numeric-robot-final.exe` + 裁掉新列的表副本。**本轮全部去掉,结论不变:全过。**
+- 起因是发现本机其实有 Go:`C:\Users\luyua\go\pkg\mod\golang.org\toolchain@v0.0.1-go1.26.5.windows-amd64\bin\go.exe`(1.26.5,不在 PATH,上一轮据此误判「本机无 Go」)。
+- 重编:`CGO_ENABLED=0 GOTOOLCHAIN=local go build -mod=vendor`,在 `robot/` 下出两个二进制(均 exit 0,落在 `run/verify-attribute-20260928/`):`robot-current.exe`(当前源码原样)、`robot-numeric-current.exe`(带数值断言 overlay)。
+  数值 overlay 刷新:09-16 的 `numeric-overlay.json` 替换三个文件,其中 `attribute_smoke_scenario.go` / `battle_smoke_scenario.go` 的 SHA256 与 09-16 快照**逐位一致**(未变),只有 `login.go` 变过;把 09-16 overlay 相对原版的那 3 处插入(登录回包里记录 `class_id`)重新套到当前 `login.go`,新 overlay 在 `run/verify-attribute-20260928/overlay/`。
+- 重跑(本地一区,`start_game.ps1` 本轮 **6/6 全过**,含第 6 步网关,trade 也起来了;读 `generated/tables` 真实表,无任何裁剪):
+  - 三条冒烟 `clean-attribute` / `clean-pet` / `clean-battle`:exit 0,`ATTRIBUTE_SMOKE_OK` / `PET_SMOKE_OK` / `BATTLE_SMOKE_OK`。
+  - 数值战斗:exit 0,1 级新号 `max_mana` 840(= 800 + 40 × 1)、副本 1 **9 回合 `SIDE_A_WIN`**、`NUMERIC_BATTLE_BASELINE_OK` / `NUMERIC_BATTLE_OK`。
+  - 数值属性:第一次因 `step=login reason=wait scene ready: context deadline exceeded` 失败 —— 紧接在同账号 `robot_9101` 的 clean-attribute 之后跑,上一次会话在场景里尚未释放;隔开后重跑 exit 0,`full_defense` **5610**、`full_mana` **4830**、`points_checked` **0->1->425**、`NUMERIC_ATTRIBUTE_FIRST_POINT_OK` / `NUMERIC_ATTRIBUTE_RESTORED` / `NUMERIC_ATTRIBUTE_OK` 齐全。失败那次日志保留为 `numeric-attribute.attempt1-login-timeout.stderr.log`。**同账号连跑两个机器人要隔开**,这是冒烟可重复性的已知坑。
+- 仍未覆盖:**丹心(class 3)满投体质 5712** 那条分支 —— 固定冒烟账号 `robot_9101` 是 class 1,线上跑不到。该档由纯规则单测覆盖(`AllocFormulaTest.FullInvestmentMatchesDesignerTable` 的 0.12 档 = 612 增量,`EveryAllocatedPointRaisesEachStatByAtLeastOne` 含丹心比例),不再单独造号。
+- 证据同目录 `run/verify-attribute-20260928/`(gitignore,不入库):`robot-current.exe` / `robot-numeric-current.exe`、`overlay/`、`clean-*.log`、`numeric-*.log`、`*-results.json`;上一轮的裁剪表副本与其日志改名为 `stripped-*` / `tables-numeric/` 保留对照。
+- 本地一区与网关**仍在运行**,未停服。
