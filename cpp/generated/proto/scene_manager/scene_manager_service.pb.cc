@@ -1494,8 +1494,8 @@ const char descriptor_table_protodef_proto_2fscene_5fmanager_2fscene_5fmanager_5
     "\"\000\022S\n\nEnterScene\022 .scene_manager.EnterSc"
     "eneRequest\032!.scene_manager.EnterSceneRes"
     "ponse\"\000\0228\n\nLeaveScene\022 .scene_manager.Le"
-    "aveSceneRequest\032\006.Empty\"\000B\025Z\023proto/scene"
-    "_managerb\006proto3"
+    "aveSceneRequest\032\006.Empty\"\000B\035Z\033scene_manag"
+    "er/scene_managerb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_5fmanager_2fscene_5fmanager_5fservice_2eproto_deps[3] = {
@@ -1507,7 +1507,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_5fmanager_2fscene_5fmana
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_5fmanager_2fscene_5fmanager_5fservice_2eproto = {
     false,
     false,
-    1616,
+    1624,
     descriptor_table_protodef_proto_2fscene_5fmanager_2fscene_5fmanager_5fservice_2eproto,
     "proto/scene_manager/scene_manager_service.proto",
     &descriptor_table_proto_2fscene_5fmanager_2fscene_5fmanager_5fservice_2eproto_once,
