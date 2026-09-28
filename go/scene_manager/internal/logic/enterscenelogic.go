@@ -98,7 +98,17 @@ func errResp(code uint32, msg string) *scene_manager.EnterSceneResponse {
 }
 
 func enterSceneRequestFingerprint(in *scene_manager.EnterSceneRequest) (string, error) {
-	payload, err := (proto.MarshalOptions{Deterministic: true}).Marshal(in)
+	// correlation_id 不参与去重:它是"这一次发送"的标识,每次发送都不同;若进指纹,同一
+	// request_id 的合法重试会被判成 IdempotencyConflict。只对副本清零,不改入参(外层 defer
+	// 还要从 in 回显它)。为 0 时直接序列化——proto3 不序列化零值,不带它的请求(login)
+	// 指纹与加字段之前逐字节相同。
+	target := in
+	if in.CorrelationId != 0 {
+		clone := proto.Clone(in).(*scene_manager.EnterSceneRequest)
+		clone.CorrelationId = 0
+		target = clone
+	}
+	payload, err := (proto.MarshalOptions{Deterministic: true}).Marshal(target)
 	if err != nil {
 		return "", err
 	}
@@ -110,9 +120,15 @@ func enterSceneRequestFingerprint(in *scene_manager.EnterSceneRequest) (string, 
 func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (response *scene_manager.EnterSceneResponse, returnErr error) {
 	// 回显 player_id:scene 节点的异步应答回调靠它把结果对回发起玩家(传送 / 疏散要据此
 	// 收尾)。放在 defer 里覆盖所有返回路径,包括去重缓存的重放。
+	//
+	// correlation_id 同理放在这里回显,而且必须放在这里:这个 defer 最先注册、最后执行(LIFO),
+	// 晚于下面去重 defer 的缓存写入,所以缓存里不含它,重放时回显的是本次请求的值——
+	// scene 节点只认"这一次发送"的号。GO-2 的 owner_epoch 恰好相反:它属于"那一次执行的结果",
+	// 必须跟着缓存一起重放,不许放在这个 defer 里。
 	defer func() {
 		if response != nil {
 			response.PlayerId = in.PlayerId
+			response.CorrelationId = in.CorrelationId
 		}
 	}()
 	// 能在任何 Redis 预占或 location 写入之前判定的路由错误先判掉。
@@ -232,7 +248,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 				}
 				if decodeErr == nil && cached.ErrorCode == 0 {
 					metrics.ObserveEnterSceneStage(in.GateZoneId, metrics.EnterSceneStageDedup, time.Since(dedupStart))
-					l.Logger.Infof("重放 EnterScene 完整成功响应: request_id=%s player=%d", in.RequestId, in.PlayerId)
+					l.Logger.Infof("重放 EnterScene 完整成功响应: request_id=%s player=%d corr=%d", in.RequestId, in.PlayerId, in.CorrelationId)
 					return cached, nil
 				}
 				l.Logger.Errorf("EnterScene 去重缓存损坏，将清理后重新执行: key=%s err=%v", dedupeKey, decodeErr)

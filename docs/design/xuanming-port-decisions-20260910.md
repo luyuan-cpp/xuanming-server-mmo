@@ -343,8 +343,15 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
    - TiDB 方言只用 proto 选项 500021-500024 表达,业务代码不手写 `/*T!*/`。
    - 列形状受 proto2mysql 表达力约束:
      - 主键只用整数列:id_segment 或 snowflake 发的 `uint64`,或由整数、枚举列组成的复合键。**禁止 string/bytes 主键。**
-     - string 列可以进索引或唯一键,但应用层必须限长 ≤191 字符,因为库只按 191 前缀建索引。
-     - 每表最多一个 `UNIQUE KEY`。
+       (2026-09-28 补:proto2mysql `v0.2.0` 起库本身已支持 string/bytes 主键,放宽条件见第 7 条末项已满足;但**本条对新建表服务仍然有效**——`go/schemamigrate/plan.go` 照旧拒绝非整数主键。要放宽须另行拍板,并同批改 plan.go 与其测试、评估 TiDB NONCLUSTERED/SHARD 方案。)
+     - ~~string 列可以进索引或唯一键,但应用层必须限长 ≤191 字符,因为库只按 191 前缀建索引。~~ —— 2026-09-28 随 `v0.2.0` 修订:
+       主键/唯一键里的 string/bytes 列建成 `VARCHAR(N) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL DEFAULT ''` /
+       `VARBINARY(N) NOT NULL DEFAULT ''` **整列索引**,N 默认 191,可用 proto2mysql 的 `max_length`(字段号 600101)调
+       (string 1..768、bytes 1..3072,单索引合计 ≤3072 字节)。比较**区分大小写和尾部空格**。经 proto2mysql 写入时超长或非法
+       UTF-8 返回 `ErrInvalidKeyValue`(不截断);手写 SQL 写入在严格模式下报 1406 —— 所以应用层**仍须先限长**。
+       普通索引里的非键 string 仍是 MEDIUMTEXT + 191 前缀。旧形态键列(前缀索引、`*_ci` 或 PAD SPACE 排序规则)
+       不会被自动改写:库的同步入口返回 `ErrLegacyKeyColumn` 并附迁移 SQL,schemamigrate 报「列类型漂移」退出码 4。
+     - 每表最多一个 `UNIQUE KEY`。(`v0.2.0` 仍成立。)
    - 超出上述约束时,要在该服务的设计文档里书面申请「手写预建 DDL + 列存在性漂移检查」例外(照 `id_segment` 先例),不许默默手写。
 3. **迁移器取 go/db runner 的语义,不取 data_service 的 `CreateOrUpdateTable` 形态**
    - 把 `go/db/internal/migrate` 的 `plan.go` 和 `runner.go` 抽成独立 module `go/schemamigrate`。只保留 `ProtoSource`,不做 `SQLSource`。
@@ -376,6 +383,12 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
    - 各服务共用 `appuser`,它对多个库有 ALL 权限,所以「不跨库访问」目前**只是约定**,机械防线是第 3 条的库名断言。每服务独立账号在 TiDB 用户体系重议时再定。
 7. **proto2mysql 版本口径**
    - `go/schemamigrate` 必须 require 一个**未被移动过、至少含 TiDB 选项和 191 索引前缀**的 tag(≥ `v0.1.1`)。
+   - **2026-09-28 起全仓统一 `v0.2.0`**(tag → `588c30869859ae87d3b8fc30bfc88836cf48d1fb`):7 个主调用模块
+     `go/db`、`go/data_service`、`go/schemamigrate`、`go/friend`、`go/guild`、`go/trade`、`tools/proto_generator/protogen`
+     一律 `require github.com/luyuancpp/proto2mysql v0.2.0` + `replace github.com/luyuancpp/proto2mysql v0.2.0 => github.com/luyuan-cpp/proto2mysql v0.2.0`;
+     go.sum 只有两行:`github.com/luyuan-cpp/proto2mysql v0.2.0 h1:uLFpdq+Qik8MMqUmIBe3MOM3/4Wn2WgqGoSf6DaoOBQ=` 与
+     `.../go.mod h1:090lbeAkv2cZ++KKKNpVaaP89Z4cQe0n9/ZrGN+saVQ=`(`v0.2.0` 的 go.mod 与 `v0.1.1` 逐字相同,依赖图不变)。
+     `v0.1.1` 与 `go/db` 的 f3b308f 伪版本退役;f3b308f 是 588c308 的祖先,旧伪版本仍可解析。
    - 不许 require `v0.1.0`:这个 tag 被移动过。
    - **2026-09-16 实测补充**:旧 module 路径 `github.com/luyuancpp/proto2mysql@v0.1.1` 的代理缓存仍是无 TiDB / unknown-fields 解码的旧内容,不能仅按版本字符串验收。`go/schemamigrate` 与主调用模块 `go/trade` 均保留旧 import/require,使用版本限定的远程映射 `replace github.com/luyuancpp/proto2mysql v0.1.1 => github.com/luyuan-cpp/proto2mysql v0.1.1`。新仓名发布包由官方 Go 代理核验到 `e90a5f0360eaf65794550713514a77f5a57c52a8`,包校验值 `h1:GsmiAKiXCiGjZaRCVutAsrlpShyZRcz71mVrAf+7U5A=`;两份 go.sum 由正常 tidy 生成,不关闭校验。以后新增主调用模块也须声明这条映射,因为依赖 module 的 replace 不传递。
    - **2026-09-20 补:`tools/proto_generator/protogen` 也是主调用模块,当时漏了**(`internal/generator/go/db_model.go` 用 `NewDB` / `RegisterTable` / `GetCreateTableSQL`)。它一直 require `v0.1.0`,go.sum 在两台机器之间来回改(`c149b7c57` 改 `JrtG…`、`d5f5a32ed` 改回 `da7Y…`,后者才是 sumdb 记录的原文)。缓存里没有 zip 的新机器,代理对该版本返回 404,只能回落 direct 拉移动后的 tag,每次都报 `SECURITY ERROR`。已改为 require `v0.1.1`,加同一条 replace,go.sum 换成 `GsmiAK…` / `090lb…` 两行。v0.1.1 的 go.mod 与 v0.1.0 逐字相同,依赖图不变,无需 tidy。换版本不改变任何入库文件:SQL 落盘分支因路径拼接问题从不执行,只在控制台多出 3 行 unique-key 警告。新加任何 import proto2mysql 的 module,先 `git grep -n proto2mysql -- '*go.mod'` 对齐这条映射。
@@ -384,7 +397,11 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
      proto2mysql(例如 `=> github.com/luyuan-cpp/proto2mysql v0.1.1`),依赖它的建表服务 module(trade、guild)
      必须写逐字相同的 replace,并让各自 `go.sum` 的 `h1:` 与 schemamigrate 一致;schemamigrate 改为 require
      正式 tag 后同步删除。这不属于"replace 到仓库外目录"。
-   - 本地主键 `VARCHAR(191)` 修复只在未推送的分支上。它进入某个 tag 之前,第 2 条的「禁止 string 主键」不放宽。打 tag 需要人执行(AGENTS.md §9)。
+     (2026-09-28 更正:「改 require 正式 tag 后删除 replace」的前提不成立——`v0.2.0` 仍声明旧 module 路径
+     `github.com/luyuancpp/proto2mysql`,仓库在 `luyuan-cpp`,旧路径的代理缓存不可信。replace 继续保留;只有库改 module 路径时才同批删除。)
+   - ~~本地主键 `VARCHAR(191)` 修复只在未推送的分支上。它进入某个 tag 之前,第 2 条的「禁止 string 主键」不放宽。打 tag 需要人执行(AGENTS.md §9)。~~
+     —— 2026-09-28:该修复已随 `v0.2.0` 进 tag(整列 `VARCHAR/VARBINARY(N)` + `utf8mb4_0900_bin`,唯一键同样整列),放宽前提已满足;
+     是否放宽第 2 条的「禁止 string 主键」**待用户拍板**,拍板前 schemamigrate 保持拒绝。
 8. **存量不动,guild 除外**(2026-09-17 修订,帮会二期 B1,用户决策)
    - friend 表与 gateway 的 `zone_config` 表留在 `mmorpg`,不变量按 D-10 保留。
    - **guild 例外**:项目未上线、无存量数据,`guild` / `guild_member` 与帮会二期新表迁入独占库 `mmorpg_guild`,

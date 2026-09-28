@@ -1,6 +1,11 @@
 Name: scenemanagerservice.rpc
 ListenOn: 127.0.0.1:60300
-Timeout: 5000
+# zrpc 服务端超时(毫秒),0 = 不设。必须 >= HomeZoneLookupTimeoutMs + KafkaWriteTimeoutSeconds*1000 + 余量
+# (现 1500 + 5000 + 1500 = 8000):EnterScene 第一条腿依次做归属查询、Kafka 同步写、失败回滚,然后回 7。
+# 服务端先超时的话调用方只拿到 DeadlineExceeded,而 C++ 生成客户端对非 OK 只打日志、不回调,源 scene
+# 要冻满 30s 看门狗(docs/design/cross-zone-scene-travel.md §12.2)。C++ 调用不设 deadline,本值就是唯一上限。
+# K8s ConfigMap 由 tools/scripts/k8s_deploy.ps1 从这里取值,不等式由 tools/scripts/tests/k8s_deploy_contract.tests.ps1 守着。
+Timeout: 8000
 Etcd:
   Hosts:
     - 127.0.0.1:2379

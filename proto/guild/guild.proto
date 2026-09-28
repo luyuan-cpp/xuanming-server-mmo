@@ -338,6 +338,141 @@ message BuyGuildShopGoodsResponse {
   uint64 contribution_balance  = 3;  // 提交后的余额(REJECTED 时已退回)
 }
 
+// ── 帮会活动(B6a / B6b):元宵灯会 / 中秋团圆 / 同道历练 ─────────────────
+// 设计:docs/design/guild-phase2/06-activities.md §6.4。
+// - 五个 RPC 在 B6a 一次加齐:消息号、gate 白名单、路由表、MessageLimiter、客户端 MessageIds 只需各处理一次。
+//   StartGuildTrial / RespondGuildTrialInvite 在 B6b 落地前固定回 kGuildActivityNotOpen,视图里历练恒为 DISABLED。
+// - 请求体同样不带 player_id / guild_id:身份一律取 gate 会话,无会话回 gRPC PermissionDenied(与 B5 同口径)。
+// - 周期口径(README §3 U1):个人次数按游戏日(UTC+8 每天 05:00 重置);帮会级进度(点灯阈值、团圆锁存、
+//   资金只发一次)按活动档期。两个键都下发(period_key / guild_period_key),客户端不自己算切点。
+// - 写 RPC 成功只回本活动的视图;帮贡、资金变了由客户端排队再拉 GetPlayerGuild(06 §6.49 #4)。
+// - 刻意不 import asset_op.proto:奖励物品用本段的 GuildRewardItem,免得把内部资产通道的 schema 带进客户端包。
+// - 与 B5 相同,"物品待发放"不是错误,用视图字段表达,不进 error_message。
+
+enum GuildActivityType {
+  GUILD_ACTIVITY_TYPE_UNSPECIFIED = 0;
+  GUILD_ACTIVITY_TYPE_LANTERN     = 1;  // 元宵灯会
+  GUILD_ACTIVITY_TYPE_REUNION     = 2;  // 中秋团圆
+  GUILD_ACTIVITY_TYPE_TRIAL       = 3;  // 同道历练
+}
+
+// 数值与 go/guild/internal/activity 的 State 常量一致(服务端按值直接转换)。
+enum GuildActivityState {
+  GUILD_ACTIVITY_STATE_UNSPECIFIED = 0;
+  GUILD_ACTIVITY_STATE_DISABLED    = 1;  // 配表关闭(界面显示"未开放")
+  GUILD_ACTIVITY_STATE_UPCOMING    = 2;  // 档期未到
+  GUILD_ACTIVITY_STATE_OPEN        = 3;
+  GUILD_ACTIVITY_STATE_ENDED       = 4;  // 档期已过
+}
+
+enum GuildTrialLobbyState {
+  GUILD_TRIAL_LOBBY_STATE_UNSPECIFIED = 0;
+  GUILD_TRIAL_LOBBY_STATE_PENDING     = 1;  // 等待被邀请人确认
+  GUILD_TRIAL_LOBBY_STATE_LAUNCHING   = 2;  // 全员已同意,正在开战(≤5s)
+  GUILD_TRIAL_LOBBY_STATE_LAUNCHED    = 3;  // 已开战,battle_id 有效
+  GUILD_TRIAL_LOBBY_STATE_ENDED       = 4;  // 已解散(拒绝 / 超时 / 开战失败),原因见 end_tip_id
+}
+
+// 视图里的一项奖励物品(由配表 reward_id 展开、按 item_id 合并后升序)。
+message GuildRewardItem {
+  uint32 item_id = 1;
+  uint32 count   = 2;
+}
+
+// 同道历练的邀请房间(B6b)。历练改为邀请确认制:StartGuildTrial 只建房,
+// 被邀请人亲自同意后才开战,任何成员都不能把别人强拉进战斗(06 §6.49 #2)。
+message GuildTrialLobbyView {
+  uint64 lobby_id                    = 1;
+  uint64 initiator_player_id         = 2;
+  repeated uint64 member_player_ids   = 3;  // 含发起人,发起人在首位
+  repeated uint64 accepted_player_ids = 4;  // 已同意者(发起人建房即同意)
+  GuildTrialLobbyState state         = 5;  // 服务端已按 expire / launch 截止时刻折算成有效状态,客户端不再自己判超时
+  uint64 expire_at_ms                = 6;  // PENDING 截止时刻(服务端时钟,Unix 毫秒)
+  uint64 battle_id                   = 7;  // LAUNCHED 时非 0
+  // ENDED 原因:kGuildTrialInviteDeclined / kGuildTrialInviteExpired / kGuildTrialTeamInvalid /
+  // kGuildTrialServiceBusy / kGuildActivityAlreadyClaimed / kGuildActivityNotOpen
+  uint32 end_tip_id                  = 8;
+  repeated string end_parameters     = 9;  // 原因 tip 的参数
+}
+
+// 一个活动的完整视图(配表行 + 帮会进度 + 本人状态)。客户端不加载配表,一切展示数据只能由服务端下发。
+message GuildActivityView {
+  uint32 activity_id            = 1;   // GuildActivity.id;写 RPC 必须回传它
+  GuildActivityType type        = 2;
+  string name                   = 3;
+  GuildActivityState state      = 4;
+  uint64 start_at_ms            = 5;   // start / end 都为 0 = 常开(仅开发配表)
+  uint64 end_at_ms              = 6;
+  uint32 min_guild_level        = 7;
+  uint32 period_key             = 8;   // 当前游戏日 YYYYMMDD(个人次数键)
+  uint64 next_reset_ms          = 9;   // 下一次游戏日切点(UTC+8 05:00),Unix 毫秒
+  uint64 server_time_ms         = 10;  // 生成视图时的服务端时钟;客户端倒计时以它为基准,不信本机时钟
+  uint64 personal_contribution  = 11;  // 每次参与(点灯 / 领奖 / 历练胜利)个人所得帮贡
+  uint64 guild_funds            = 12;  // 灯会 / 团圆:本档期达阈值时发一次;历练:每个计资金的胜场发一次
+  uint32 guild_threshold        = 13;  // 团圆为生效值(已套 GuildRule 兜底);历练为每日计资金胜场上限
+  repeated GuildRewardItem reward_items = 14;
+  uint32 daily_limit            = 15;  // 每人每游戏日可参与(得奖)次数
+  uint32 my_used_count          = 16;  // 本人本游戏日已参与(得奖)次数
+  uint32 progress               = 17;  // 灯会:本档期点灯人次;团圆:锁存前为当前合格在线人数,锁存后为 0;历练:今日已计资金胜场
+  bool   threshold_reached      = 18;  // 灯会 / 团圆:本档期已达阈值(团圆一经达成即锁存,之后不必再凑人)
+  bool   funds_granted          = 19;  // 灯会 / 团圆:本档期资金已发
+  uint32 blocked_tip_id         = 20;  // 0 = 本人现在可参与(不含在线、战斗等瞬时条件);否则为第一个不满足项的 tip
+  uint32 dungeon_id             = 21;  // 仅历练:DungeonTable id
+  uint32 team_size_min          = 22;  // 仅历练:含发起人的人数范围
+  uint32 team_size_max          = 23;
+  uint64 my_trial_battle_id     = 24;  // 本人 battle:lock 指向的、仍为 STARTED 的历练对局;0 = 无
+  // 本人本活动仍在发放中的物品奖励数(PENDING 指令行 + 历练待入队行)。背包满时奖励保持待发放、腾出空间后
+  // 自动到账,所以这里只报"还在路上",不报错。
+  uint32 my_pending_reward_count      = 25;
+  uint32 my_pending_reason_tip_id     = 26;  // 最早一条待发放行最近一次的暂时原因(如 kAssetBagFull);0 = 正常排队
+  uint32 my_last_reward_reject_tip_id = 27;  // 近 24h 最近一次永久拒绝(封禁 / 非法包)的原因;0 = 无
+  uint32 join_min_hours         = 28;  // 参与所需最短入帮时长(GuildRule.activity_join_min_hours)
+  uint32 guild_period_key       = 29;  // 帮会进度键:灯会 / 团圆 = 档期键;历练 = 游戏日键
+  GuildTrialLobbyView trial_lobby = 30;  // 仅历练:本人所在、属于本活动的房间;无则不填
+}
+
+message GetGuildActivitiesRequest {}
+message GetGuildActivitiesResponse {
+  TipInfoMessage error_message         = 1;
+  repeated GuildActivityView activities = 2;  // 每种类型至多一条,按 type 升序
+}
+
+message LightGuildLanternRequest {
+  uint32 activity_id = 1;
+}
+message LightGuildLanternResponse {
+  TipInfoMessage error_message = 1;
+  GuildActivityView activity   = 2;  // 本活动提交后的视图
+}
+
+message ClaimGuildReunionRequest {
+  uint32 activity_id = 1;
+}
+message ClaimGuildReunionResponse {
+  TipInfoMessage error_message = 1;
+  GuildActivityView activity   = 2;
+}
+
+// 建邀请房间(不直接开战);member_player_ids 须含发起人。
+message StartGuildTrialRequest {
+  uint32 activity_id                = 1;
+  repeated uint64 member_player_ids = 2;
+}
+message StartGuildTrialResponse {
+  TipInfoMessage error_message = 1;
+  GuildActivityView activity   = 2;
+}
+
+// 被邀请人同意 / 拒绝;发起人 accept=false = 取消房间。
+message RespondGuildTrialInviteRequest {
+  uint64 lobby_id = 1;
+  bool   accept   = 2;
+}
+message RespondGuildTrialInviteResponse {
+  TipInfoMessage error_message = 1;
+  GuildActivityView activity   = 2;
+}
+
 // ── Ranking ───────────────────────────────────────────────────
 
 // Guild summary in ranking (without full member list)
@@ -430,4 +565,12 @@ service GuildService {
   rpc UpgradeGuild (UpgradeGuildRequest) returns (UpgradeGuildResponse);
   rpc GetGuildShop (GetGuildShopRequest) returns (GetGuildShopResponse);
   rpc BuyGuildShopGoods (BuyGuildShopGoodsRequest) returns (BuyGuildShopGoodsResponse);
+
+  // 帮会活动(B6a 一次加齐五个)。都是客户端方法,进 go/guild session.ClientMethods;身份一律取会话。
+  // 历练两个在 B6b 落地前固定回 kGuildActivityNotOpen(占好消息号,B6b 不再动协议与白名单)。
+  rpc GetGuildActivities (GetGuildActivitiesRequest) returns (GetGuildActivitiesResponse);
+  rpc LightGuildLantern (LightGuildLanternRequest) returns (LightGuildLanternResponse);
+  rpc ClaimGuildReunion (ClaimGuildReunionRequest) returns (ClaimGuildReunionResponse);
+  rpc StartGuildTrial (StartGuildTrialRequest) returns (StartGuildTrialResponse);
+  rpc RespondGuildTrialInvite (RespondGuildTrialInviteRequest) returns (RespondGuildTrialInviteResponse);
 }

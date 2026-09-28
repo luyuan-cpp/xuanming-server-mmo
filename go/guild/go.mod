@@ -69,7 +69,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
-	github.com/luyuancpp/proto2mysql v0.1.1 // indirect
+	github.com/luyuancpp/proto2mysql v0.2.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -133,4 +133,4 @@ replace schemamigrate => ../schemamigrate
 // 与 go/schemamigrate/go.mod 的 proto2mysql replace 逐字一致:replace 只在主模块生效,
 // go/guild 作为主模块继承不到 schemamigrate 的 replace(docs/design/guild-phase2/01-storage.md §7.1)。
 // schemamigrate 改为 require 正式 tag(≥ v0.1.2)并删掉 replace 后,这里同步删除。
-replace github.com/luyuancpp/proto2mysql v0.1.1 => github.com/luyuan-cpp/proto2mysql v0.1.1
+replace github.com/luyuancpp/proto2mysql v0.2.0 => github.com/luyuan-cpp/proto2mysql v0.2.0

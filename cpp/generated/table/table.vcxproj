@@ -44,6 +44,9 @@
     <ClInclude Include="code\dungeon_table_fk.h" />
     <ClInclude Include="code\globalvariable_table.h" />
     <ClInclude Include="code\globalvariable_table_comp.h" />
+    <ClInclude Include="code\guildactivity_table.h" />
+    <ClInclude Include="code\guildactivity_table_comp.h" />
+    <ClInclude Include="code\guildactivity_table_fk.h" />
     <ClInclude Include="code\guilddonate_table.h" />
     <ClInclude Include="code\guilddonate_table_comp.h" />
     <ClInclude Include="code\guildlevel_table.h" />
@@ -110,6 +113,7 @@
     <ClInclude Include="proto\cooldown_table.pb.h" />
     <ClInclude Include="proto\dungeon_table.pb.h" />
     <ClInclude Include="proto\globalvariable_table.pb.h" />
+    <ClInclude Include="proto\guildactivity_table.pb.h" />
     <ClInclude Include="proto\guilddonate_table.pb.h" />
     <ClInclude Include="proto\guildlevel_table.pb.h" />
     <ClInclude Include="proto\guildrule_table.pb.h" />
@@ -170,6 +174,8 @@
     <ClCompile Include="code\dungeon_table.cpp" />
     <ClCompile Include="code\dungeon_table_fk.cpp" />
     <ClCompile Include="code\globalvariable_table.cpp" />
+    <ClCompile Include="code\guildactivity_table.cpp" />
+    <ClCompile Include="code\guildactivity_table_fk.cpp" />
     <ClCompile Include="code\guilddonate_table.cpp" />
     <ClCompile Include="code\guildlevel_table.cpp" />
     <ClCompile Include="code\guildrule_table.cpp" />
@@ -211,6 +217,7 @@
     <ClCompile Include="proto\cooldown_table.pb.cc" />
     <ClCompile Include="proto\dungeon_table.pb.cc" />
     <ClCompile Include="proto\globalvariable_table.pb.cc" />
+    <ClCompile Include="proto\guildactivity_table.pb.cc" />
     <ClCompile Include="proto\guilddonate_table.pb.cc" />
     <ClCompile Include="proto\guildlevel_table.pb.cc" />
     <ClCompile Include="proto\guildrule_table.pb.cc" />

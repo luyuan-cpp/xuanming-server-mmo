@@ -1,6 +1,6 @@
 module friend
 
-// go 1.26.5:schemamigrate(proto2mysql v0.1.1)要求 1.26.5,依赖它的 module 只能跟着抬
+// go 1.26.5:schemamigrate(proto2mysql v0.2.0)要求 1.26.5,依赖它的 module 只能跟着抬
 // (D-14 理由 3)。friend 自带 `-migrate` 入口,所以必须与 trade / schemamigrate 同版本线。
 go 1.26.5
 
@@ -84,7 +84,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
-	github.com/luyuancpp/proto2mysql v0.1.1 // indirect
+	github.com/luyuancpp/proto2mysql v0.2.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -150,4 +150,4 @@ require (
 // 不要手改;tidy 之后按上面 go-redis 那条验收判据看一眼直接依赖块。
 
 // replace 不随依赖传递:与 schemamigrate 同步固定迁名后的发布包,保留旧 module/import 身份。
-replace github.com/luyuancpp/proto2mysql v0.1.1 => github.com/luyuan-cpp/proto2mysql v0.1.1
+replace github.com/luyuancpp/proto2mysql v0.2.0 => github.com/luyuan-cpp/proto2mysql v0.2.0

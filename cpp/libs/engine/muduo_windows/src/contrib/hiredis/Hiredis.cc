@@ -235,6 +235,17 @@ int Hiredis::command(const CommandCallback& cb, muduo::StringArg cmd, ...)
   va_start(args, cmd);
   int ret = ::redisvAsyncCommand(context_, commandCallback, p, cmd.c_str(), args);
   va_end(args);
+  if (ret != REDIS_OK)
+  {
+    // hiredis 1.2 只在返回 REDIS_OK 的路径上登记回调(deps/hiredis/async.c __redisAsyncCommand):
+    // DISCONNECTING / FREEING 拒收、命令格式化失败、登记回调时 OOM,都在登记之前就返回,此后不会再拿
+    // 这个 privdata 回调,释放责任回到这里,不删就泄漏。典型触发:~Hiredis 里 redisAsyncFree 先用空应答
+    // 回调挂起命令、后注销 Channel,那段时间 connected() 仍为真,回调里再发的命令会撞 FREEING。
+    // 唯一例外是多频道 (P)SUBSCRIBE 中途 OOM(已写进订阅字典的频道仍持有 p),但本封装不支持订阅
+    // (commandCallback 每次回调后都 delete)。升级 hiredis 时必须重核这条前提。
+    // 本文件与 tools/archived/muduo_linux_overlay/contrib/hiredis/Hiredis.cc 必须逐字节一致(Linux 镜像编那一份)。
+    delete p;
+  }
   return ret;
 }
 

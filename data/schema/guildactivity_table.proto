@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+// GuildActivity 表的权威 schema。源表 data/GuildActivity.xlsx。
+// 设计:docs/design/guild-phase2/06-activities.md §6.2(B6a-srv)。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 导表报"这些权威 schema 没有对应的源表:GuildActivity"= 源表缺失(schema 与 xlsx 必须成对,
+// 只有一边会让整批导表失败、产物一个字节不落盘):两个文件必须同批提交。
+//
+// 帮会活动:一行 = 一个活动档期。只由 go/guild 读取(C++ 节点照例全量加载)。
+//
+// 两种周期(用户拍板 U1,README §3):
+//   - 个人次数按**游戏日**(UTC+8 每天 05:00 重置):daily_limit 在这个口径下计数,换帮不重置。
+//   - 帮会级进度按**活动档期**:点灯阈值、团圆锁存、资金只发一次,都以 start_at_ms 那天的游戏日为档期键;
+//     0/0 常开行退化为当天游戏日(仅供开发)。
+//
+// 时间为 UTC Unix 毫秒,开放区间 [start_at_ms, end_at_ms);两者都为 0 = 常开(仅供开发,上线前填真实档期)。
+// 同 type 且 enabled 的行时间窗不得重叠(0/0 视为全时段):写 RPC 只接受该类型"当前选中行",
+// 重叠会让同一时刻有两行都能计进度、资金可能发两次。
+//
+// 启动校验(go/guild activity.ValidateTables,fail-closed,错误信息含表名与行 id)见各列注释的取值范围;
+// 坏表拒绝启动,而不是带着坏数值去发奖。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message GuildActivityTable {
+  option (cfg_sheet)       = "GuildActivity";
+  option (cfg_source_file) = "GuildActivity.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 活动 id
+  uint32 id = 1;
+  // 界面显示名(非空)
+  string name = 2;
+  // 活动类型:1 元宵灯会 / 2 中秋团圆 / 3 同道历练
+  // 决定走哪个 RPC;同一类型同一时刻只允许一行启用
+  uint32 type = 3;
+  // 是否启用:false = 关闭(界面显示"未开放")
+  bool enabled = 4;
+  // 档期开始,UTC Unix 毫秒;与 end_at_ms 同为 0 = 常开(仅开发)
+  // 帮会级进度的档期键取这一天的游戏日,改它等于开新一期、旧进度不再计入
+  uint64 start_at_ms = 5;
+  // 档期结束,UTC Unix 毫秒(不含);非 0 时必须 > start_at_ms
+  uint64 end_at_ms = 6;
+  // 帮会等级下限(GuildLevel.id),>=1
+  uint32 min_guild_level = 7;
+  // 每次参与个人所得帮贡(点灯 / 领奖 / 历练胜利)
+  // 与计数同一事务写入 guild_member,不会出现次数扣了帮贡没到
+  uint64 personal_contribution = 8;
+  // 帮会资金:灯会、团圆 = 本档期达阈值时只发一次;历练 = 每个计资金的胜场发一次
+  // 0 = 不发资金(团圆默认 0,用户决策 3 只给团圆设个人奖)
+  uint64 guild_funds = 9;
+  // 阈值:灯会 = 本档期点灯人次(>=1);团圆 = 同时在线人数(0 = 用 GuildRule.reunion_min_online_members 兜底);历练 = 每游戏日计资金胜场上限(>=1)
+  uint32 guild_threshold = 10;
+  // 物品奖励。FK -> Reward.id,0 = 无
+  // 非 0 时奖励包必须非空、每项数量 >=1、物品种类 <=16(资产通道单次发放上限)
+  uint32 reward_id = 11 [(cfg_fk) = "Reward"];
+  // 仅历练:副本。FK -> Dungeon.id(= battle_config_id);灯会、团圆必须填 0
+  uint32 dungeon_id = 12 [(cfg_fk) = "Dungeon"];
+  // 仅历练:含发起人的最少人数;灯会、团圆必须填 0。历练要求 2 <= min <= max <= 5
+  uint32 team_size_min = 13;
+  // 仅历练:含发起人的最多人数;灯会、团圆必须填 0
+  uint32 team_size_max = 14;
+  // 每人每游戏日可参与(得奖)次数,>=1
+  uint32 daily_limit = 15;
+}

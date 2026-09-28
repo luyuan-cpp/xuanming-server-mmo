@@ -127,8 +127,12 @@ func buildTable(msg proto.Message) (tableSpec, error) {
 		return spec, err
 	}
 
-	ddl := strings.TrimSpace(proto2mysql.GenerateCreateTableSQL(msg))
-	ddl = strings.TrimSpace(strings.TrimSuffix(ddl, ";"))
+	// 表选项不合法(如主键引用不存在的字段)时 proto2mysql 不产出 DDL,Checked 版本带回原因。
+	ddl, err := proto2mysql.GenerateCreateTableSQLChecked(msg)
+	if err != nil {
+		return spec, fmt.Errorf("schemamigrate: 消息 %s 无法映射成表 %s: %w", md.FullName(), name, err)
+	}
+	ddl = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(ddl), ";"))
 	m := createTableNameRe.FindStringSubmatch(ddl)
 	if m == nil {
 		return spec, fmt.Errorf("schemamigrate: 表名守卫:无法从消息 %s 的建表语句中解析表名: %s", md.FullName(), collapse(ddl))
@@ -172,7 +176,7 @@ func buildTable(msg proto.Message) (tableSpec, error) {
 // checkFieldKinds 拒绝没有 MySQL 列类型映射的字段(sint* / fixed* / sfixed*)。
 //
 // proto2mysql 的 GetCreateTableSQL 对这些类型静默回落成 TEXT,建表一路成功,第一次写入才失败,
-// 那时列已经建出来了。它自己的校验(validateFieldKinds)不对外暴露,所以这里按同一张映射表再拦一次。
+// 那时列已经建出来了。v0.2.0 的 GenerateCreateTableSQLChecked 也会拒绝,这里先按同一张映射表拦一次,给出带字段名的中文报错。
 func checkFieldKinds(md protoreflect.MessageDescriptor, table string) error {
 	fields := md.Fields()
 	for i := 0; i < fields.Len(); i++ {

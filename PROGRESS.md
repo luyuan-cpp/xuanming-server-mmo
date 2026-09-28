@@ -5686,6 +5686,41 @@ friend 移植会话(机器 A,`E:\work\xuanming-server-mmo`)写交接文档写到
 - **给 Codex 的编译项**(只改了一个 .cpp,无新文件、无工程登记变化):`msbuild cpp/libs/engine/infra/infra.vcxproj /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`,随后照 09-19 条目编 `kafka_command_test` 并跑 19 个策略单测(本次没改策略头文件,单测应不受影响)。
 - **至此 09-19 交接单 B 里仍开着的只剩需要人来做的**:全量编译与测试;`docker restart kafka` 专项;Redis release 档实测;kind 上验证 gate / scene 就绪;架构决策(Kafka 3 broker、MySQL / Redis 高可用);两个独立安全测试要不要进 CI。09-17 审计里「控制面与恢复路径」(零 Secret / 零 TLS、HMAC 密钥明文进 ConfigMap、etcd 零备份、恢复全局库会倒回发号水位)不在这份交接单范围内,仍然没有 owner。
 
+## 2026-09-28 服务器全仓 proto2mysql 切到 v0.2.0 + 本地库键列核对(Claude)
+
+proto2mysql 在 09-22 已收成单 `main` 并打 `v0.2.0`(`588c308`,f3b308f / release 线 / 字符串键列三条线全部并入)。本条把服务器 7 个主调用模块从 `v0.1.1` 和 go/db 的 f3b308f 伪版本统一到 `v0.2.0`。
+
+**取代的旧表述**(历史条目不改,以本条为准):4738 行「v0.1.2 预备分支」——从未打 tag,`E:\work\proto2mysql-release` 工作树已删除;4742-4745 行人工步骤 1-4——第 4 步「上游 main 拒绝字符串主键」已由 v0.2.0 解决;4848 行「proto2mysql 注意」;5026 行 B1 硬前置里的 v0.1.2 口径。
+
+### 改动(16 个文件,未提交)
+
+- `go/{db,data_service,schemamigrate,friend,guild,trade}/go.mod|go.sum`、`tools/proto_generator/protogen/go.mod|go.sum`:require 与 replace 两侧都改为 `v0.2.0`。go.sum 只换两行,即 `h1:uLFpdq…` 和 `/go.mod h1:090lb…`;除 proto2mysql 外没有依赖版本变化。go.mod 里提到旧版本的注释同步更新。guild 的 go.mod/go.sum 只改了 proto2mysql 行,go mod tidy 顺手产生的无关调整已还原。
+- `go/schemamigrate/plan.go`:建表 DDL 改用 `GenerateCreateTableSQLChecked`。原因:v0.2.0 遇到非法表选项(如主键引用不存在的字段)时,`GenerateCreateTableSQL` 返回空串,原代码会误报成「无法解析表名」。现在会把库给出的原因(`ErrInvalidTableOption`)用 `%w` 带出来。`plan_test.go` 里「主键不是字段」用例的期望文案相应改为「引用了不存在的字段」。
+- `docs/design/xuanming-port-decisions-20260910.md` D-14:第 2 条补 v0.2.0 键列口径(整列 VARCHAR/VARBINARY + `utf8mb4_0900_bin`、区分大小写、应用层仍须限长),「禁止 string 主键」对新建表服务**仍有效**;第 7 条改为全仓统一 v0.2.0 并附哈希,更正「打正式 tag 后可删 replace」,「主键修复进 tag 前不放宽」标记为前提已满足、是否放宽**待用户拍板**。
+
+### 验证
+
+- **运行证据(Claude 执行,违反了 AGENTS.md §10.1 分工,当时没加载本仓规则;须由 Codex 复验)**:
+  - 真仓库工作区,`GOFLAGS=-mod=readonly`,Go 1.26.5(模块缓存 `C:\Users\luyua\go\pkg\mod\golang.org\toolchain@v0.0.1-go1.26.5.windows-amd64\bin\go.exe`):7 个模块 `go build ./...`、`go vet ./...`、`go test -count=1 ./...` 全部 OK。
+  - 升级前的基线副本里,只有 schemamigrate「主键不是字段」一条是升级引入的失败,已修。
+  - go/db 的 `TestRegisteredTableSchemaContract` 覆盖 9 张正式表,升级前后都通过。
+  - proto2mysql 库 `v0.2.0`:根模块与 `tools/proto2sql` 的 `go vet` + `go test -short` 通过。
+- **Codex 复验命令**(工作目录分别为 `go/schemamigrate`、`go/db`、`go/data_service`、`go/friend`、`go/guild`、`go/trade`、`tools/proto_generator/protogen`;`GOPROXY=https://goproxy.cn,https://mirrors.aliyun.com/goproxy/,direct`,`GOFLAGS=-mod=readonly`):`go build ./... && go vet ./... && go test -count=1 ./...`。通过标准:全绿,且 `git diff -- '*go.mod' '*go.sum'` 除上述 14 个文件外无变化。
+- **本地库只读比对**(用 v0.2.0 的 `GenerateMigrationSQL` / `schemamigrate.Plan`,不执行 DDL):
+  - `testdb` 三张自动同步表(transaction_log / player_snapshot / rollback_audit_log)与 v0.2.0 一致,data_service 升级不影响号段发放。
+  - `mmorpg_friend` 干净;`mmorpg_trade` 新旧两版输出逐字节相同(只有聚宝斋两张新表待建,与本次无关)。
+  - `zone_1_db` / `zone_2_db` 的 `user_oauth`、`user_phone`、`user_accounts`、`account_share_database` 被判为旧形态键列(`varchar(191) utf8mb4_unicode_ci`),四张表都是 0 行。
+  - `mmorpg_guild.guild.name_norm` 是 `mediumtext` 加 `uk_guild(name_norm(191))`,v0.2.0 版 schemamigrate 报「列类型漂移」,退出码 4(0 行)。
+
+### 运行期注意
+
+- **guild 必须和表迁移同一批升级**:v0.2.0 编出的 guild.exe 遇到旧表会拒启;表迁移后,bin 里旧的 v0.1.1 guild.exe 也会拒启。顺序:Codex 用 v0.2.0 重编 `bin/go_services/guild.exe` → 停 guild → 在 `mmorpg_guild` 同一个会话里执行:
+  `SET SESSION sql_mode = CONCAT_WS(',', NULLIF(@@SESSION.sql_mode, ''), 'STRICT_ALL_TABLES'); ALTER TABLE guild DROP INDEX uk_guild; UPDATE guild SET name_norm='' WHERE name_norm IS NULL; ALTER TABLE guild MODIFY COLUMN name_norm VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL DEFAULT '' COMMENT 'pb:11'; ALTER TABLE guild ADD UNIQUE KEY uk_guild (name_norm);`
+  → 启动新 guild。索引名必须保持 `uk_guild`,因为 `guild_repo.go` 按这个名字判断撞名。表是空的,也可以直接 DROP 掉 mmorpg_guild 的表和 schema_migrations,让 `guild -migrate` 重建。
+- db / data_service / friend / trade 用 v0.2.0 重编后可以直接换:db 默认 `AutoMigrateSchema=false`,不做 DDL;其余三个库已比对通过。
+- 迁移后账号类键列**区分大小写**(`utf8mb4_0900_bin`):口令登录的账号名必须大小写完全一致。如果要不区分大小写,需要在 login 侧统一转小写(DB 查询、Redis key、password_admin 三处一起改),未做。
+- go/db 升到 v0.2.0 后,启动时每张表会多打一行「没有声明 table_name 选项」的 warning,共 9 行。原因是这些 db 消息没有 proto package,全名恰好等于表名,库的判断条件 `tableName == FullName` 误报(`proto2mysql.go:3683`);v0.1.1 起就有这行,f3b308f 没有。表名解析本身正确(契约测试已核),可以忽略。
+
 ## 2026-09-28 防御 ×12 / 法力 ×4 联机验收通过(Claude,按用户指示代 Codex 执行)
 
 - 用户 09-18 / 09-25 两次指示「不用等 Codex,你帮他做完」。本轮把 2026-09-15 更正一节清单里最后剩下的联机项跑完:**全部通过**。本轮没有改任何代码或表,只补这条记录。

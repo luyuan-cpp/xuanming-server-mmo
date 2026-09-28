@@ -7,7 +7,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.36.1
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
-	github.com/luyuancpp/proto2mysql v0.1.1-0.20260914130151-f3b308f37020
+	github.com/luyuancpp/proto2mysql v0.2.0
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-zero v1.10.0
@@ -127,6 +127,6 @@ replace shared => ../shared
 
 replace proto => ../proto
 
-// 存量字符串/二进制主键依赖 f3b308f 的 VARCHAR(191)/VARBINARY(191) 完整列修复，v0.1.1 不含该修复。
+// v0.2.0 起 string/bytes 主键与唯一键为 VARCHAR/VARBINARY(191) 整列索引 + utf8mb4_0900_bin(f3b308f 的主键修复已并入)。
 // 固定 canonical 远程提交的伪版本，保留校验，不依赖仓库外目录。
-replace github.com/luyuancpp/proto2mysql v0.1.1-0.20260914130151-f3b308f37020 => github.com/luyuan-cpp/proto2mysql v0.1.1-0.20260914130151-f3b308f37020
+replace github.com/luyuancpp/proto2mysql v0.2.0 => github.com/luyuan-cpp/proto2mysql v0.2.0

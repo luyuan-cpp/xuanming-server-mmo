@@ -1949,6 +1949,15 @@ function New-GoSvcConfigMapYaml {
 	# 同样从服务自己的 yaml 取,不在这里另写一份常数。
 	$sceneManagerLeaseTTL   = Get-AuthoritativeScalar -RelativePath 'go/scene_manager/etc/scene_manager_service.yaml' -KeyPath 'LeaseTTL'
 
+	# zrpc 服务端 Timeout 连同它必须盖住的两段预算(归属查询、Kafka 同步写)一起从服务 yaml 取。
+	# 不写 Timeout 就会落到 go-zero 默认 2000ms,比 Kafka 写超时还短:EnterScene 的失败应答回不到 C++ 源 scene
+	# (生成客户端对非 OK 只打日志),源端冻满 30s 看门狗(cross-zone-scene-travel.md §12.2)。
+	# 三者之间的不等式由 tests/k8s_deploy_contract.tests.ps1 守着。
+	$sceneManagerYaml                  = 'go/scene_manager/etc/scene_manager_service.yaml'
+	$sceneManagerTimeout               = Get-AuthoritativeScalar -RelativePath $sceneManagerYaml -KeyPath 'Timeout'
+	$sceneManagerKafkaWriteTimeout     = Get-AuthoritativeScalar -RelativePath $sceneManagerYaml -KeyPath 'KafkaWriteTimeoutSeconds'
+	$sceneManagerHomeZoneLookupTimeout = Get-AuthoritativeScalar -RelativePath $sceneManagerYaml -KeyPath 'HomeZoneLookupTimeoutMs'
+
 	# match 的时间窗口全是"多实例 / 崩溃自愈"语义(锁 TTL、票据 TTL、战斗时限),
 	# 生成器里另抄一份就是又一处会漂移的常数,一律从服务自己的 yaml 取。
 	$matchYaml                  = 'go/match/etc/match_service.yaml'
@@ -2507,6 +2516,9 @@ Lease:
 @"
 Name: scenemanagerservice.rpc
 ListenOn: 0.0.0.0:60000
+# zrpc 服务端超时(毫秒),取自 scene_manager_service.yaml。以前不写,落到 go-zero 默认 2000ms,
+# 任何超过 2s 的第一条腿都会让源 scene 冻满 30s 看门狗(cross-zone-scene-travel.md §12.2)。
+Timeout: ${sceneManagerTimeout}
 Etcd:
   Hosts:
     - "etcd.${InfraNamespace}:2379"
@@ -2519,6 +2531,8 @@ Redis:
 Kafka:
   Brokers:
     - "kafka.${InfraNamespace}:9092"
+# Kafka 同步写超时(秒)。以前不写、落 Go 默认 5;显式镜像 yaml,让上面 Timeout 的不等式能在 ConfigMap 里核对。
+KafkaWriteTimeoutSeconds: ${sceneManagerKafkaWriteTimeout}
 # ZoneId / LeaseTTL 都在 Go config 顶层(config.go 默认 1 / 60)。以前这份模板没有 ZoneId,
 # 于是每个 zone 的 scene-manager 都按 zone 1 注册到 SceneManagerNodeService.rpc/zone/1/,
 # zone 102 的 scene 节点找不到自己的 SceneManager(node-id-overhaul-plan-20260908.md §2.0a)。
@@ -2551,7 +2565,7 @@ DataServiceRpc:
   NonBlock: true
   Middlewares:
     Breaker: false
-HomeZoneLookupTimeoutMs: 1500
+HomeZoneLookupTimeoutMs: ${sceneManagerHomeZoneLookupTimeout}
 "@
 		}
 		"match" {

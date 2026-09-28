@@ -147,6 +147,41 @@ Test-Case "scene-manager ConfigMap 必须带 GateTokenSecret(否则跨 zone 重�
     Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($v)) -Because "gate_redirect.go 在空值时直接返回 'GateTokenSecret not configured'"
 }
 
+Test-Case "scene-manager ConfigMap 的 Timeout / KafkaWriteTimeoutSeconds / HomeZoneLookupTimeoutMs == go/scene_manager/etc/scene_manager_service.yaml" {
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "go-svc-scene-manager-config")
+    foreach ($key in @('Timeout', 'KafkaWriteTimeoutSeconds', 'HomeZoneLookupTimeoutMs')) {
+        $expected = Get-EtcValue -RelativePath 'go/scene_manager/etc/scene_manager_service.yaml' -KeyPath $key
+        $actual = Get-FlatValue -Flat $flat -KeyPath "data.scene_manager_service.yaml.$key"
+        Assert-Equal -Expected $expected -Actual $actual -Because "$key 必须与 scene_manager_service.yaml 一致(生成器不得自带常数)"
+    }
+}
+
+Test-Case "scene-manager 的 zrpc Timeout 必须盖住归属查询 + Kafka 同步写 + 1000ms 余量(否则 EnterScene 的失败应答回不到 C++ 源 scene)" {
+    # 本地 yaml 与 K8s 产物各算一遍:以后谁调大 KafkaWriteTimeoutSeconds 或 HomeZoneLookupTimeoutMs
+    # 而忘了同步调 Timeout,这里点名失败(cross-zone-scene-travel.md §12.2)。
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "go-svc-scene-manager-config")
+    $yamlPath = 'go/scene_manager/etc/scene_manager_service.yaml'
+    $views = @(
+        @{
+            Name     = 'K8s ConfigMap'
+            Timeout  = Get-FlatValue -Flat $flat -KeyPath 'data.scene_manager_service.yaml.Timeout'
+            Kafka    = Get-FlatValue -Flat $flat -KeyPath 'data.scene_manager_service.yaml.KafkaWriteTimeoutSeconds'
+            HomeZone = Get-FlatValue -Flat $flat -KeyPath 'data.scene_manager_service.yaml.HomeZoneLookupTimeoutMs'
+        }
+        @{
+            Name     = $yamlPath
+            Timeout  = Get-EtcValue -RelativePath $yamlPath -KeyPath 'Timeout'
+            Kafka    = Get-EtcValue -RelativePath $yamlPath -KeyPath 'KafkaWriteTimeoutSeconds'
+            HomeZone = Get-EtcValue -RelativePath $yamlPath -KeyPath 'HomeZoneLookupTimeoutMs'
+        }
+    )
+    foreach ($v in $views) {
+        $timeout = [int]$v.Timeout
+        $need = [int]$v.HomeZone + [int]$v.Kafka * 1000 + 1000
+        Assert-True -Condition ($timeout -eq 0 -or $timeout -ge $need) -Because ("{0}:Timeout={1} 必须为 0 或 >= HomeZoneLookupTimeoutMs({2}) + KafkaWriteTimeoutSeconds({3})*1000 + 1000 = {4}" -f $v.Name, $timeout, $v.HomeZone, $v.Kafka, $need)
+    }
+}
+
 Test-Case "node ConfigMap 必须带 GateTokenSecret(否则 gate 在 prod 运行模式下拒绝启动)" {
     $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "node-config")
     $v = Get-FlatValue -Flat $flat -KeyPath 'data.base_deploy_config.yaml.GateTokenSecret'

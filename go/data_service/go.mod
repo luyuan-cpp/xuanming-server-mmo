@@ -6,7 +6,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.37.0
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
-	github.com/luyuancpp/proto2mysql v0.1.1
+	github.com/luyuancpp/proto2mysql v0.2.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/segmentio/kafka-go v0.4.47
@@ -124,6 +124,6 @@ replace proto => ../proto
 
 replace shared => ../shared
 
-// 按 D-14 固定新仓名的 v0.1.1 发布包:旧仓名代理缓存不含 TiDB 选项。
+// 按 D-14 固定新仓名的 v0.2.0 发布包:旧仓名代理缓存不含 TiDB 选项。
 // replace 不随依赖传递,本服务作为主 module 单独声明,不依赖仓库外目录。
-replace github.com/luyuancpp/proto2mysql v0.1.1 => github.com/luyuan-cpp/proto2mysql v0.1.1
+replace github.com/luyuancpp/proto2mysql v0.2.0 => github.com/luyuan-cpp/proto2mysql v0.2.0

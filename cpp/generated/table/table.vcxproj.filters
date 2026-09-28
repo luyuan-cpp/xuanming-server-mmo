@@ -39,6 +39,9 @@
     <ClInclude Include="code\globalvariable_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="code\guildactivity_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="code\guilddonate_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -180,6 +183,9 @@
     <ClInclude Include="proto\globalvariable_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="proto\guildactivity_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="proto\guilddonate_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -274,6 +280,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\globalvariable_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\guildactivity_table_comp.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\guilddonate_table_comp.h">
@@ -402,6 +411,9 @@
     <ClInclude Include="code\dungeon_table_fk.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="code\guildactivity_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="code\guildshop_table_fk.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -429,6 +441,12 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="code\globalvariable_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\guildactivity_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\guildactivity_table_fk.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="code\guilddonate_table.cpp">
@@ -579,6 +597,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\globalvariable_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\guildactivity_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\guilddonate_table.pb.cc">

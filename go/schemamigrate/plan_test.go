@@ -80,7 +80,7 @@ func TestBuildSchemaRejectsInvalidTableLists(t *testing.T) {
 		{"表名含非法字符", []proto.Message{badName.build(t)}, "非法"},
 		{"string 主键", []proto.Message{stringPK.build(t)}, "只允许整数或枚举列"},
 		{"缺主键", []proto.Message{noPK.build(t)}, "未声明 OptionPrimaryKey"},
-		{"主键不是字段", []proto.Message{unknownPK.build(t)}, "不是消息"},
+		{"主键不是字段", []proto.Message{unknownPK.build(t)}, "引用了不存在的字段"},
 		{"字段类型没有列映射", []proto.Message{sint.build(t)}, "没有 MySQL 列类型映射"},
 	}
 	for _, tc := range cases {
