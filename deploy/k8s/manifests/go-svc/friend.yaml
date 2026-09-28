@@ -22,17 +22,11 @@
 # 所以默认部署下这份 Deployment 起得来、探针绿,但玩家够不着;以 -GateRouterMode 1 部署之后才算真正可用。
 # 与 chat / trade 是同一个存量缺口,不是 friend 引入的。
 #
-# ⚠ Kafka 命令 topic 的分区契约(gate-cmd_g<N>,friend 的 S2C 推送经它到目标 zone 的 gate):
-#   **本文件刻意不写 KAFKA_COMMAND_TOPIC_PARTITIONS / KAFKA_COMMAND_TOPIC_GENERATION**,
-#   与 match.yaml / trade.yaml / chat.yaml / login.yaml 逐字一致 —— 全仓没有任何 go-svc manifest 注入这两个变量,
-#   go/shared/kafkacmd 因此在 K8s 上一律回落到编译期默认值(partitions=256 / generation=1)。
-#   在这里单独写一份值会把"部署级常量"复制成第二份真相,下次换代号必漏改(kafkacmd 注释里的四处同拍纪律)。
-#   ⚠ 但这意味着一个**存量的全仓缺口**:bin/etc/base_deploy_config.yaml 当前是 CommandTopicGeneration: 2,
-#   kafka-topic-init 预建的是 gate-cmd_g2、C++ gate 消费的也是 g2,而 Go 侧默认仍是 g1 ——
-#   K8s 上 Go 服务(login / scene_manager / player_locator / guild / friend)发出的 gate 命令会落到 gate-cmd_g1,
-#   没有消费者,静默丢失。本地 start_game.ps1 会注入这两个变量所以本机与 robot 冒烟不受影响。
-#   正确的修法是让 k8s_deploy.ps1 从 base_deploy_config.yaml 统一注入到所有 go-svc Deployment(一处真相),
-#   不是在 friend 这里补一行。详见交付说明与 docs/design/friend-port-20260918.md 的「已知缺口」。
+# Kafka 命令 topic 的分区契约(gate-cmd_g<N>,friend 的 S2C 推送经它到目标 zone 的 gate):
+#   **本文件不写 KAFKA_COMMAND_TOPIC_PARTITIONS / KAFKA_COMMAND_TOPIC_GENERATION** —— 这两个变量由
+#   k8s_deploy.ps1 的 Add-GoSvcCommandTopicEnv 从 bin/etc/base_deploy_config.yaml 统一注入到下面唯一的 env: 段
+#   (所有 go-svc 同一处真相;manifest 里手写会被部署脚本拒绝)。2026-09-28 之前没有这一步,Go 侧在 K8s 上
+#   回落到 kafkacmd 的编译期默认 generation=1,而 C++ gate 消费 g2,推送静默丢失 —— 那个缺口已修。
 #
 # 连接数:ConfigMap 的 MySQL.MaxOpenConn × replicas(外加 migrate Job 的连接)要算进 MySQL 的 max_connections。
 apiVersion: v1

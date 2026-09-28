@@ -5790,3 +5790,27 @@ proto 重生成已跑(`proto-gen-run -UseBinary`),产物核对通过;新 `.pb.cc
 - Go 1.26.5 overlay 验证：完整 friend `go test ./... -count=1`、`go vet ./...`、`go build` 全部通过。首次空页测试因 miniredis 忽略 SCAN COUNT 未触发预算而失败，改用公开 RESP 接缝模拟合法空批次后通过；未改变生产分页算法。
 - 实际运行环境更新和客户端联机验收由主任务执行；以上仅证明代码、单测与构建通过。设计与契约补充见 `docs/design/friend-client-spec-20260920.md` 末节。
 - 同轮邀请可用性回归：GetFriendList 改为可靠在线状态读取，Redis/解码/缺读取器故障回既有 ErrStorage，避免客户端误标全员离线并禁邀；普通推荐保持旧降级。三类真实夹具测试先红后绿，完整 friend test/vet 通过，overlay构建明确关闭VCS戳后成功。
+
+## 2026-09-28 K8s 上 go-svc 统一注入控制面命令 topic 契约(修 Go 写 gate-cmd_g1、C++ 读 g2)(Claude,未跑测试、未上集群)
+
+**缺口**(09-18 friend 移植时记在 `deploy/k8s/README.md` 与 `friend.yaml` 注释里,09-28「C++ 完全不连 Go」评审再次确认,一直没人修):`go/shared/kafkacmd` 只从环境变量 `KAFKA_COMMAND_TOPIC_PARTITIONS` / `KAFKA_COMMAND_TOPIC_GENERATION` 取命令 topic 契约,不配就回落到编译期默认 256 / **1**;而 `bin/etc/base_deploy_config.yaml` 是 `CommandTopicGeneration: 2`,C++ gate / scene 消费 `gate-cmd_g2` / `scene-cmd_g2`,`kafka-topic-init` 也只预建 g2。K8s 上没有任何 go-svc 注入这两个变量,所以 login 的会话绑定 / 顶号踢人、scene-manager 的换场景、player-locator、match、friend(以及上了清单之后的 guild)发给 gate / scene 的命令全部落进 `*_g1` —— 没人消费,**静默丢失**,Kafka 不报错。本机 `start_game.ps1` 一直注入,所以本机与 robot 冒烟从来看不到。
+
+**修法**(`tools/scripts/k8s_deploy.ps1`,按 README 早已写明的「一处真相」方案):
+- 新增 `Get-GoSvcCommandTopicContract`:从 `bin/etc/base_deploy_config.yaml` 读 `Kafka.CommandTopicPartitions` / `CommandTopicGeneration`(与 C++ node ConfigMap、`kafka-topic-init` 同一来源),非正整数即 throw。
+- 新增 `Add-GoSvcCommandTopicEnv`:把两个变量插进 go-svc manifest **唯一**的 `env:` 段最前面,条目缩进沿用该段第一条已有条目(跳过注释),保留原换行风格。fail-closed:manifest 手写了这两个变量(第二份真相)、`env:` 段不是恰好一个、`env:` 下第一条不是列表项,都直接拒绝部署。
+- `Apply-OneGoSvc`(zone 服务与全局服务共用)在**任何集群写操作之前**先把主 manifest 渲染完(镜像占位 + 契约注入);渲染失败不会留下只有 ConfigMap / 迁移 Job 的半截部署。所有 go-svc 都注入,不只是今天的生产者 —— 新服务发 gate 命令不需要来这里登记。
+- 10 个 go-svc manifest(chat / client-rpc-router / data-service / db / friend / login / match / player-locator / scene-manager / trade)结构一致:单容器、恰好一个 `env:`、无 initContainer。已用与脚本相同的算法逐个插入并 `yaml.safe_load`,容器 env 恰好多出这两项、值 256 / 2。
+- 文档:`deploy/k8s/README.md` 缺口段标为已修并补上换代号流程说明;`friend.yaml` 头部注释、`docs/design/mail-system.md` 的「继承缺口」一句同步更正(mail 的 manifest 仍然不写这两个变量,但必须恰好有一个 `env:` 段)。
+
+**测试(已写,未跑)**:
+- `tools/scripts/tests/k8s_deploy_contract.tests.ps1`:zone 内 login / player-locator / scene-manager / db / data-service 的 Deployment 必须带这两个变量且值 == `base_deploy_config.yaml`、只有一份(按「kind: Deployment + metadata 名字」挑块,避开 ConfigMap 里 go-zero 的 `Name:`)。
+- `tools/scripts/tests/k8s_migrate_gate.tests.ps1`:`Reset-MigrateFixture` 补抽 `Add-GoSvcCommandTopicEnv`、Mock `Get-GoSvcCommandTopicContract`(代号给 7,证明值来自契约不是写死);新用例覆盖 friend / trade(全局服务)注入、契约读取失败时零集群写、缩进沿用(含紧凑列表写法与 CRLF)、四种形状拒绝。
+
+**给 Codex**(工作目录仓库根,都不连集群):
+```
+pwsh -NoProfile -File tools/scripts/tests/k8s_migrate_gate.tests.ps1
+pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
+```
+期望全部 PASS。kind 上实测:`zone-up` 后 `kubectl -n <zone> get deploy login -o jsonpath='{.spec.template.spec.containers[0].env}'` 应含 `KAFKA_COMMAND_TOPIC_GENERATION=2`;login 启动日志 `kafkacmd: control-plane command topic contract partitions=256 generation=2`;登录一个号后 gate 能收到 BindSession(能进场景即证明)。
+
+**协作**:「C++ 完全不连 Go」会话原本也要做这件事,已确认归本会话;它随后会在同一脚本里加 GrpcClient 镜像进 node ConfigMap 与 C++ deadline 断言,并改 `base_deploy_config.yaml` 的 DataService 超时 —— 那些不在本条范围。

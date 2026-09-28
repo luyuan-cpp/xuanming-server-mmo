@@ -3244,6 +3244,83 @@ function Apply-GoSvcManifests {
 	}
 }
 
+# 控制面命令 topic 的寻址契约(gate-cmd_g<N> / scene-cmd_g<N>,partition = node_id % P,
+# docs/design/control-plane-topic-partitioning-20260908.md)。与 C++ 节点 ConfigMap(New-NodeConfigMapYaml)、
+# kafka-topic-init 预建读的是同一处真相:bin/etc/base_deploy_config.yaml 的 Kafka.CommandTopicPartitions / CommandTopicGeneration。
+function Get-GoSvcCommandTopicContract {
+	$partitionsRaw = Get-AuthoritativeScalar -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'Kafka.CommandTopicPartitions'
+	$generationRaw = Get-AuthoritativeScalar -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'Kafka.CommandTopicGeneration'
+	$partitions = 0
+	$generation = 0
+	if (-not [int]::TryParse($partitionsRaw, [ref]$partitions) -or $partitions -le 0 -or
+		-not [int]::TryParse($generationRaw, [ref]$generation) -or $generation -le 0) {
+		throw "bin/etc/base_deploy_config.yaml 的 Kafka.CommandTopicPartitions / CommandTopicGeneration 必须是正整数(实际 '$partitionsRaw' / '$generationRaw');fail-closed:这是 gate / scene 命令的寻址协议"
+	}
+	return [pscustomobject]@{ Partitions = $partitions; Generation = $generation }
+}
+
+# 把命令 topic 契约以环境变量注入 go-svc manifest 唯一的那个 env: 段(go/shared/kafkacmd 只认这两个变量,
+# 不配就回落到编译期默认 256 / 1)。
+#
+# 为什么必须注入:C++ gate / scene 按 base_deploy_config.yaml 消费 gate-cmd_g<N>(当前 N=2),kafka-topic-init
+# 也只预建 g<N>;Go 侧(login 的会话绑定 / 顶号踢人、scene-manager 的换场景、player-locator、match、friend、guild 的推送)
+# 若回落到 g1,命令落进一个没人消费的 topic,**静默丢失**,Kafka 不报错。本机 start_game.ps1 一直注入这两个变量,
+# 所以本机与 robot 冒烟从来看不到这个缺口。
+#
+# 为什么在这里统一注入而不是写进各 manifest:代号是部署级常量,只能有一处真相;每个 manifest 各写一份,
+# 下次换代号必漏改(kafkacmd 注释里的「四处同拍」纪律)。所以 manifest 里手写这两个变量会被拒绝。
+#
+# 对 manifest 形状 fail-closed:必须恰好一个 env: 段(go-svc 都是单容器),且它下面第一条非注释内容是列表项;
+# 插入的条目沿用那一项的缩进,不假设「env 缩进 + 2」。所有 go-svc 都注入,不只是今天的生产者 ——
+# 新加一个会发 gate 命令的服务时不需要记得来这里登记。
+function Add-GoSvcCommandTopicEnv {
+	param(
+		[Parameter(Mandatory = $true)][string]$SvcName,
+		[Parameter(Mandatory = $true)][string]$ManifestContent,
+		[Parameter(Mandatory = $true)][int]$Partitions,
+		[Parameter(Mandatory = $true)][int]$Generation
+	)
+
+	if ($ManifestContent -cmatch '(?m)^[ \t]*(-[ \t]+)?name:[ \t]*"?KAFKA_COMMAND_TOPIC_(PARTITIONS|GENERATION)"?[ \t]*\r?$') {
+		throw "Go service $SvcName 的 manifest 手写了 KAFKA_COMMAND_TOPIC_*:这两个变量由 k8s_deploy.ps1 从 bin/etc/base_deploy_config.yaml 统一注入,请从 manifest 里删掉(一处真相,见 Add-GoSvcCommandTopicEnv 注释)"
+	}
+
+	$envMatches = [regex]::Matches($ManifestContent, '(?m)^(?<indent>[ ]*)env:[ \t]*\r?$')
+	if ($envMatches.Count -ne 1) {
+		throw "Go service $SvcName 的 manifest 应当恰好有 1 个 env: 段(实际 $($envMatches.Count) 个),无法注入命令 topic 契约。多容器或无 env 的 manifest 需要先在 Add-GoSvcCommandTopicEnv 里明确注入目标"
+	}
+	$envMatch = $envMatches[0]
+	$envIndent = $envMatch.Groups['indent'].Value
+	# (?m) 下的 $ 停在 \n 之前(\r 已被 \r? 吃掉),所以 env: 行之后紧跟的必须是 \n。
+	$lineEnd = $envMatch.Index + $envMatch.Length
+	if ($lineEnd -ge $ManifestContent.Length -or $ManifestContent[$lineEnd] -ne "`n") {
+		throw "Go service $SvcName 的 manifest 在 env: 之后没有内容,无法注入命令 topic 契约"
+	}
+	$insertAt = $lineEnd + 1
+
+	$itemIndent = $null
+	foreach ($line in ($ManifestContent.Substring($insertAt) -split "`r?`n")) {
+		$trimmed = $line.Trim()
+		if ($trimmed.Length -eq 0 -or $trimmed.StartsWith('#')) { continue }
+		if ($line -match '^(?<indent>[ ]*)-[ ]') { $itemIndent = $Matches['indent'] }
+		break
+	}
+	if ($null -eq $itemIndent -or $itemIndent.Length -lt $envIndent.Length) {
+		throw "Go service $SvcName 的 manifest 里 env: 下第一条内容不是列表项,无法注入命令 topic 契约"
+	}
+
+	$newline = if ($ManifestContent.Contains("`r`n")) { "`r`n" } else { "`n" }
+	$valueIndent = $itemIndent + '  '
+	$injected = @(
+		"${itemIndent}# 由 k8s_deploy.ps1 从 bin/etc/base_deploy_config.yaml 注入(Add-GoSvcCommandTopicEnv),manifest 里不要手写",
+		"${itemIndent}- name: KAFKA_COMMAND_TOPIC_PARTITIONS",
+		"${valueIndent}value: `"$Partitions`"",
+		"${itemIndent}- name: KAFKA_COMMAND_TOPIC_GENERATION",
+		"${valueIndent}value: `"$Generation`""
+	) -join $newline
+	return $ManifestContent.Substring(0, $insertAt) + $injected + $newline + $ManifestContent.Substring($insertAt)
+}
+
 # 单个 Go 服务的 ConfigMap + 主 manifest apply。zone 循环与全局循环共用同一段逻辑。
 function Apply-OneGoSvc {
 	param(
@@ -3265,12 +3342,18 @@ function Apply-OneGoSvc {
 		return
 	}
 
+	# 主 manifest 先在本地渲染完(镜像占位 + 控制面命令 topic 契约注入),再做任何集群写操作:
+	# 注入对 manifest 形状 fail-closed,形状不对要在 ConfigMap / 迁移 Job 落地之前就拦下,不留半截部署。
+	$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
+	$manifestContent = (Get-Content $manifestPath -Raw) -replace 'PLACEHOLDER_IMAGE', $svcImage
+	$manifestContent = $manifestContent -replace 'PLACEHOLDER_PULL_POLICY', $svcPullPolicy
+	$commandTopic = Get-GoSvcCommandTopicContract
+	$manifestContent = Add-GoSvcCommandTopicEnv -SvcName $SvcName -ManifestContent $manifestContent `
+		-Partitions $commandTopic.Partitions -Generation $commandTopic.Generation
+
 	# Apply ConfigMap
 	$cmYaml = New-GoSvcConfigMapYaml -SvcName $SvcName -CurrentZoneId $CurrentZoneId -CurrentClusterId $CurrentClusterId
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $cmYaml
-
-	# Apply manifest with image placeholder replaced
-	$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
 
 	# 建表服务(目录条目带 MigrateJob,port-decisions D-14 第 4 条):<svc>-migrate Job 与 Deployment 同镜像、同 ConfigMap,
 	# 必须排在上面的 ConfigMap 之后、下面的 Deployment 之前;门禁生效时(staging/prod 恒生效,dev 仅 -WaitReady)
@@ -3279,8 +3362,6 @@ function Apply-OneGoSvc {
 		Apply-GoSvcMigrateJob -SvcName $SvcName -Namespace $Namespace -SvcImage $svcImage -PullPolicy $svcPullPolicy
 	}
 
-	$manifestContent = (Get-Content $manifestPath -Raw) -replace 'PLACEHOLDER_IMAGE', $svcImage
-	$manifestContent = $manifestContent -replace 'PLACEHOLDER_PULL_POLICY', $svcPullPolicy
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $manifestContent
 
 	Write-Host "  [applied] $SvcName -> $svcImage (port $($info.Port) pullPolicy=$svcPullPolicy)"

@@ -544,13 +544,16 @@ friend 与 trade 同形:全局池服务(`$GoSvcCatalogue.friend`,`Global = $true
   按库恢复时必须把 `mmorpg_friend` 一起列上,否则恢复完 friend 是空库,玩家的好友关系凭空消失且没有任何报错。
   恢复顺序上它没有 `id_segment` 那种水位约束,但见上面「恢复全局库」一条的孤儿边提醒。
 - **连接数**:`MySQL.MaxOpenConn`(20)× 2 个副本(外加 Job 的连接)要算进 MySQL 的 `max_connections`。
-- **⚠ Kafka 命令 topic 代号不一致(存量全仓缺口,不是 friend 引入的)**:friend 的 S2C 推送经 `gate-cmd_g<N>` 到目标 zone 的 gate。
+- **Kafka 命令 topic 代号不一致(存量全仓缺口,2026-09-28 已修,下面保留原记录)**:friend 的 S2C 推送经 `gate-cmd_g<N>` 到目标 zone 的 gate。
   `bin/etc/base_deploy_config.yaml` 当前是 `CommandTopicGeneration: 2`,`kafka-topic-init` 预建 `gate-cmd_g2`、C++ gate 也消费 g2;
   而 **没有任何 go-svc manifest 注入 `KAFKA_COMMAND_TOPIC_PARTITIONS` / `KAFKA_COMMAND_TOPIC_GENERATION`**,
   `go/shared/kafkacmd` 因此在 K8s 上回落到编译期默认 256 / **1**,Go 侧(login / scene-manager / player-locator / guild / friend)
   发出的 gate 命令落到 `gate-cmd_g1`,无人消费、静默丢失。本地 `start_game.ps1` 会注入这两个变量,所以本机与 robot 冒烟看不到这个问题。
   修法是让 `k8s_deploy.ps1` 从 `base_deploy_config.yaml` 统一注入到所有 go-svc Deployment(一处真相),
   **不要**在单个 manifest 里补一行写死的值 —— 那会把部署级常量复制成第二份真相,下次换代号必漏改。
+  **已按此修复**:`Apply-OneGoSvc` 在任何集群写操作之前调用 `Add-GoSvcCommandTopicEnv`,把两个变量插进每个 go-svc
+  唯一的 `env:` 段;manifest 手写这两个变量、没有 / 多于一个 `env:` 段都会让部署直接失败(fail-closed)。
+  契约测试 `k8s_deploy_contract.tests.ps1` 钉住 zone 内服务的注入值,`k8s_migrate_gate.tests.ps1` 覆盖全局服务与形状校验。
 - **上线前未做(P3)**:`mmorpg_friend` 的 audit auditor;`-GateRouterMode` 默认仍是 `"0"`(与 chat / trade 同一缺口);
   `dev_tools.ps1` 的 `k8s-*` 包装不透传 `-GateRouterMode`。合服:friend 三张表里没有 `zone_id` / `home_zone` 列,
   合服后行自动存活,`tools/merge_zone` 只需把审计连到 `mmorpg_friend`,不需要改写数据。
@@ -615,7 +618,8 @@ topic 就被自动建成 1 分区,EnsureTopics 从此永远报 `partition contra
   换一批新 topic,绝不原地 `--alter --partitions`(会把 `node_id % P` 重映射,命令落到没人 assign
   的分区上,静默全丢而且 Kafka 不报错)。改的时候四处必须同拍:`bin/etc/base_deploy_config.yaml`、
   `go/shared/kafkacmd/command_topic.go` 的默认值(或 `KAFKA_COMMAND_TOPIC_PARTITIONS` /
-  `KAFKA_COMMAND_TOPIC_GENERATION` 环境变量)、`deploy/docker-compose.yml` 的
+  `KAFKA_COMMAND_TOPIC_GENERATION` 环境变量;K8s 上的 go-svc 由 `Add-GoSvcCommandTopicEnv` 从 base_deploy_config
+  自动注入,本机由 `start_game.ps1` 注入,都不用单独改)、`deploy/docker-compose.yml` 的
   `KAFKA_INIT_COMMAND_*`、以及本 Job(值由 `Apply-KafkaTopicInitJob` 从 base_deploy_config 读)。
 - **消费端有门禁**:gate/scene 启动时向 broker 核对该 topic 的分区数,不等于契约就**起不来**
   (`KafkaConsumer::init` 的 `partition contract mismatch`)。所以 topic 被生产者抢先 auto-create 成
