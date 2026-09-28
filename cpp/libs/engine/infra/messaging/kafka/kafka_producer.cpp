@@ -23,7 +23,8 @@ namespace {
 // 概率很低,目前接受。刻意不加 PURGE_NON_BLOCKING:它只让 purge 这一步不等,随后的销毁仍要 join
 // 同一个卡住的线程,最坏停顿不会变短,反而可能让在途消息来不及出失败回执、漏计 DeliveryFailed。
 // 真要让停顿有界,得把旧实例交给后台线程去销毁(已核实 rd_kafka_destroy 不回调 dr_cb),
-// 并处理进程退出时该线程仍在运行的情况 —— 需要能编译、能实测时再做。
+// 并处理进程退出时该线程仍在运行的情况 —— 需要能编译、能实测时再做。重建结束的日志行带分步耗时
+// (purge / drain / destroy / create),整次超过 2 × kPurgeDrainTimeoutMs 时升为 ERROR,先拿它量出真实停顿。
 constexpr uint32_t kPurgeDrainTimeoutMs = 200;
 } // namespace
 
@@ -204,14 +205,32 @@ bool KafkaProducer::rebuildAfterFatal(const char* trigger) {
 		<< ", reason=" << reason << "). Messages still queued in the old instance are lost and will be"
 		<< " reported as delivery failures.";
 
+	// 分步计时:整次重建都停在调用 send() 的线程上(scene 即 loop 线程),下面四步里只有 drain 有上限。
+	// 「要不要把旧实例交给后台线程销毁」取决于 destroy 这一步实测有多长 —— 那样做会引入进程退出时
+	// 后台线程仍在 rd_kafka_destroy 里的新故障面(vendored librdkafka 链接 OpenSSL,后者在 atexit 里做全局
+	// 清理),没有实测数据不值得换。数字打在重建结束的那一行日志里,fatal 专项实测时直接读。
+	using RebuildClock = std::chrono::steady_clock;
+	const auto elapsedMs = [](RebuildClock::time_point from, RebuildClock::time_point to) {
+		return std::chrono::duration_cast<std::chrono::milliseconds>(to - from).count();
+	};
+	const auto rebuildStart = RebuildClock::now();
+	long long purgeMs = 0;
+	long long drainMs = 0;
+	long long destroyMs = 0;
+
 	const std::string brokers = brokers_;
 	if (producer_) {
 		// purge 让旧实例队列里的消息立刻以失败回执收场(计入 DeliveryFailed、带 key 记日志),
 		// 而不是陪着析构一起等到超时;rebuilding_ 期间涌出来的失败回执不代表新的 fatal。
 		rebuilding_ = true;
+		const auto purgeStart = RebuildClock::now();
 		producer_->purge(RdKafka::Producer::PURGE_QUEUE | RdKafka::Producer::PURGE_INFLIGHT);
+		const auto drainStart = RebuildClock::now();
 		producer_->flush(kPurgeDrainTimeoutMs);
+		const auto drainEnd = RebuildClock::now();
 		rebuilding_ = false;
+		purgeMs = elapsedMs(purgeStart, drainStart);
+		drainMs = elapsedMs(drainStart, drainEnd);
 		// flush 到点仍未派发完的回执:这些消息同样丢了,只是没机会逐条经过 dr_cb。一次性补记,
 		// 让 DeliveryFailed 仍然等于「确定没送到的条数」。
 		if (const int abandoned = producer_->outq_len(); abandoned > 0) {
@@ -224,18 +243,38 @@ bool KafkaProducer::rebuildAfterFatal(const char* trigger) {
 		if (const std::uint64_t suppressed = failureLogThrottle_.TakeSuppressed(); suppressed > 0) {
 			logSuppressedSummary(suppressed);
 		}
+		const auto destroyStart = RebuildClock::now();
 		producer_.reset();
+		destroyMs = elapsedMs(destroyStart, RebuildClock::now());
 	}
 	fatalPending_ = false;
 
-	if (!createProducer(brokers)) {
+	const auto createStart = RebuildClock::now();
+	const bool created = createProducer(brokers);
+	const auto rebuildEnd = RebuildClock::now();
+	const long long createMs = elapsedMs(createStart, rebuildEnd);
+	const long long stallMs = elapsedMs(rebuildStart, rebuildEnd);
+
+	if (!created) {
 		// 留给下一次 send() 经 ensureInitialized() 惰性重试。
 		pendingBrokers_ = brokers;
-		LOG_ERROR << "[Kafka] Producer rebuild failed; will retry lazily on the next send()";
+		LOG_ERROR << "[Kafka] Producer rebuild failed; will retry lazily on the next send()"
+			<< " (caller thread stalled " << stallMs << "ms: purge=" << purgeMs << " drain=" << drainMs
+			<< " destroy=" << destroyMs << " create=" << createMs << ")";
 		return false;
 	}
 
-	LOG_INFO << "[Kafka] Producer rebuilt after fatal error, brokers: " << brokers;
+	// 整次停顿超过 drain 预算的两倍,说明 purge / destroy 里有步骤卡住了(典型是 broker 线程卡在 DNS 解析),
+	// 升到 ERROR 让它在日志台上能被搜到;正常情况是几十毫秒,留在 INFO。
+	if (stallMs > 2LL * kPurgeDrainTimeoutMs) {
+		LOG_ERROR << "[Kafka] Producer rebuilt after fatal error, but the caller thread stalled " << stallMs
+			<< "ms (purge=" << purgeMs << " drain=" << drainMs << " destroy=" << destroyMs
+			<< " create=" << createMs << "), brokers: " << brokers;
+	}
+	else {
+		LOG_INFO << "[Kafka] Producer rebuilt after fatal error in " << stallMs << "ms (purge=" << purgeMs
+			<< " drain=" << drainMs << " destroy=" << destroyMs << " create=" << createMs << "), brokers: " << brokers;
+	}
 	return true;
 }
 

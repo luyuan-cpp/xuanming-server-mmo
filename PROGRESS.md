@@ -5672,3 +5672,16 @@ friend 移植会话(机器 A,`E:\work\xuanming-server-mmo`)写交接文档写到
   1. `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(工作目录为仓库根),期望全部 PASS;重点看新增的「gate 就绪探针…」「scene(Deployment)就绪探针…」两条,以及 battle 端口用例、Java gateway 冷启动用例。
   2. 本机 kind 上 `zone-up` 一次(Deployment 模式),`kubectl -n <zone> get pod -l app=gate` / `-l app=scene` 应在 C++ 节点注册进 etcd 后变 `1/1 Ready`;再 `kubectl rollout restart deployment/gate` 看滚动能正常推进。若 scene 一直 NotReady,先查 50000 是否在 POD_IP 上 listen(`RegisterGrpcService` 是否仍在 `cpp/nodes/scene/main.cpp:92`)。
 - 仍然缺的:依赖门语义的就绪(需要 C++ 注册 `grpc.health.v1`);gate / scene 的 startupProbe(需要先在 kind 上量一次启动日志里 `RPC server listen addr=` 的耗时);Agones 模式下 `health.initialDelaySeconds` 默认 30 是否够(scene 要 etcd 注册 + StartRpcServer 完成后才开始 Ready / Health,未测)。
+
+## 2026-09-28 单点加固收尾:Agones 心跳时机核实不改 + Kafka 重建分步计时(Claude,未编译)
+
+接 09-19 交接单 B 与 09-25 探针条目里剩下的两项纯代码层面的尾巴。
+
+- **Agones:scene 要等 SetAfterStart 才开始 Ready / Health,会不会超出 Fleet 的健康预算 —— 核实后不改。** Fleet 默认 `health.initialDelaySeconds 30` + `periodSeconds 10 × failureThreshold 3`,约 60s 内收不到心跳就判 Unhealthy(`restartPolicy: Never`,等于销毁重建)。本机最近 6 次 scene 启动日志(`bin/logs/cpp_nodes/scene.2026092{3,4,5}-*.log`),进程第一行到 `Agones lifecycle ...`(`main.cpp:281`,即 SetAfterStart 里生命周期启动的那一刻)只用了 **0.5–1.7s**,`RPC server listen addr=` 在它之前 0.1–0.2s。按 10 倍放大估算 K8s 也远在 60s 内;Agones 模式每个 GameServer 是新 Pod、新 IP,不会撞上同 Pod 重启的 180s 旧注册等待。结论:默认 30s 足够,不动 `$AgonesHealthInitialDelaySeconds`,也不把心跳提前到进程启动(那样会让 Agones 失去「启动卡死」的检出能力)。
+- **gate / scene 的 startupProbe 同样结论:不加。** 启动本身只要一两秒,真正的长等待只有同 Pod 重启时的 180s 租约;而两者都没有 livenessProbe,startupProbe 的唯一作用就是「启动超时就杀」,对 etcd 不可用这类原因杀了也起不来,只会多一轮 CrashLoopBackOff。
+- **Kafka fatal 重建:加分步计时,后台销毁暂缓。**(`kafka_producer.cpp` 的 `rebuildAfterFatal`)
+  - 重建结束的那行日志现在带 `purge / drain / destroy / create` 四步耗时与整次停顿;整次超过 `2 × kPurgeDrainTimeoutMs`(400ms)升为 ERROR,正常留 INFO。日志前缀 `[Kafka] Producer rebuilt after fatal error` 不变(09-19 条目的专项步骤按这个前缀找)。
+  - **为什么不直接把旧实例交给后台线程销毁**:那会引入「进程退出时后台线程还在 `rd_kafka_destroy` 里」的新故障面。vendored librdkafka 链接 OpenSSL(`third_party/openssl`),OpenSSL 1.1+ 在 atexit 里做全局清理,退出时撞上正在释放 SSL 上下文的后台线程可能崩在退出路径上。当前的同步销毁只在「fatal」与「broker 线程卡在 DNS 解析」同时发生时才长时间停顿,本身已很罕见;在拿到实测停顿之前,用一个新的、无法静态排除的退出期崩溃换它,不划算。
+  - **怎么拿数据**:按 09-19 条目 C.2 的专项做 `docker restart kafka`,若出现重建,直接读这行日志的 `destroy=` 数值。常态几十毫秒 → 维持现状;出现秒级 → 再做后台销毁,并同时处理退出期(停机 barrier 里有界等待后台线程)。
+- **给 Codex 的编译项**(只改了一个 .cpp,无新文件、无工程登记变化):`msbuild cpp/libs/engine/infra/infra.vcxproj /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`,随后照 09-19 条目编 `kafka_command_test` 并跑 19 个策略单测(本次没改策略头文件,单测应不受影响)。
+- **至此 09-19 交接单 B 里仍开着的只剩需要人来做的**:全量编译与测试;`docker restart kafka` 专项;Redis release 档实测;kind 上验证 gate / scene 就绪;架构决策(Kafka 3 broker、MySQL / Redis 高可用);两个独立安全测试要不要进 CI。09-17 审计里「控制面与恢复路径」(零 Secret / 零 TLS、HMAC 密钥明文进 ConfigMap、etcd 零备份、恢复全局库会倒回发号水位)不在这份交接单范围内,仍然没有 owner。
