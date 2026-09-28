@@ -54,13 +54,18 @@ enum FriendRequestStatus {
 
 // FriendEntry / FriendRequest / FriendRequestStatus 的字段号一律不动:它们是
 // 列表返回体,改号会让"客户端已适配"的部分白做。
-// 这里刻意不加 display_name(昵称):昵称的权威来源属帮会二期的玩家档案,
-// 那套落地后在这里 append 新字段即可,提前占号反而会占出一个永远填不满的字段。
+// 展示资料来自玩家档案缓存；缺失昵称经 data_service 批量回源。
 message FriendEntry {
   uint64 friend_player_id = 1;
   int64  since_ms         = 2;  // 结为好友的时刻
   int64  last_active_ms   = 3;
   bool   is_online        = 4;
+  string name = 5;
+  uint32 level = 6;
+  uint32 class_id = 7;
+  uint32 gender = 8;
+  string appearance_id = 9;
+  uint32 zone_id = 10;
 }
 
 message FriendRequest {
@@ -184,6 +189,11 @@ message ListBlocksResponse {
 message RecommendFriendsRequest {
   uint32 limit = 1;
   repeated uint64 exclude_player_ids = 2;
+  // 在线组队目录：直接读当前会话，不走好友关系/随机推荐；包含已是好友的玩家。
+  bool online_only = 3;
+  // 在线目录的不透明分页游标；首次/刷新/更换搜索词传空。列表不是跨页快照。
+  string cursor = 4;
+  string query = 5; // 在线目录昵称或编号筛选，最多 64 个 Unicode 字符。
 }
 
 message RecommendEntry {
@@ -191,11 +201,19 @@ message RecommendEntry {
   uint32 mutual_friends      = 2;  // 共同好友数,排序权重
   bool   is_online           = 3;
   int64  last_active_ms      = 4;
+  string name = 5;
+  uint32 level = 6;
+  uint32 class_id = 7;
+  uint32 gender = 8;
+  string appearance_id = 9;
+  uint32 zone_id = 10; // 在线目录仅返回与调用者相同 home zone 的玩家。
 }
 
 message RecommendFriendsResponse {
   TipInfoMessage error_message = 1;
   repeated RecommendEntry candidates = 2;
+  string next_cursor = 3; // 非空表示还能继续，允许本页为空；空表示本次遍历结束。
+  bool online_directory = 4; // 客户端必须见 true 才能当作在线目录，防止旧服静默忽略 online_only。
 }
 
 // ── 服务端推送(S2C) ─────────────────────────────────────────────────

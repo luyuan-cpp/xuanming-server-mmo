@@ -126,14 +126,19 @@ func (FriendEventReason) EnumDescriptor() ([]byte, []int) {
 
 // FriendEntry / FriendRequest / FriendRequestStatus 的字段号一律不动:它们是
 // 列表返回体,改号会让"客户端已适配"的部分白做。
-// 这里刻意不加 display_name(昵称):昵称的权威来源属帮会二期的玩家档案,
-// 那套落地后在这里 append 新字段即可,提前占号反而会占出一个永远填不满的字段。
+// 展示资料来自玩家档案缓存；缺失昵称经 data_service 批量回源。
 type FriendEntry struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	FriendPlayerId uint64                 `protobuf:"varint,1,opt,name=friend_player_id,json=friendPlayerId,proto3" json:"friend_player_id,omitempty"`
 	SinceMs        int64                  `protobuf:"varint,2,opt,name=since_ms,json=sinceMs,proto3" json:"since_ms,omitempty"` // 结为好友的时刻
 	LastActiveMs   int64                  `protobuf:"varint,3,opt,name=last_active_ms,json=lastActiveMs,proto3" json:"last_active_ms,omitempty"`
 	IsOnline       bool                   `protobuf:"varint,4,opt,name=is_online,json=isOnline,proto3" json:"is_online,omitempty"`
+	Name           string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	Level          uint32                 `protobuf:"varint,6,opt,name=level,proto3" json:"level,omitempty"`
+	ClassId        uint32                 `protobuf:"varint,7,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"`
+	Gender         uint32                 `protobuf:"varint,8,opt,name=gender,proto3" json:"gender,omitempty"`
+	AppearanceId   string                 `protobuf:"bytes,9,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`
+	ZoneId         uint32                 `protobuf:"varint,10,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -194,6 +199,48 @@ func (x *FriendEntry) GetIsOnline() bool {
 		return x.IsOnline
 	}
 	return false
+}
+
+func (x *FriendEntry) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *FriendEntry) GetLevel() uint32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *FriendEntry) GetClassId() uint32 {
+	if x != nil {
+		return x.ClassId
+	}
+	return 0
+}
+
+func (x *FriendEntry) GetGender() uint32 {
+	if x != nil {
+		return x.Gender
+	}
+	return 0
+}
+
+func (x *FriendEntry) GetAppearanceId() string {
+	if x != nil {
+		return x.AppearanceId
+	}
+	return ""
+}
+
+func (x *FriendEntry) GetZoneId() uint32 {
+	if x != nil {
+		return x.ZoneId
+	}
+	return 0
 }
 
 type FriendRequest struct {
@@ -1118,8 +1165,13 @@ type RecommendFriendsRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Limit            uint32                 `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"`
 	ExcludePlayerIds []uint64               `protobuf:"varint,2,rep,packed,name=exclude_player_ids,json=excludePlayerIds,proto3" json:"exclude_player_ids,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 在线组队目录：直接读当前会话，不走好友关系/随机推荐；包含已是好友的玩家。
+	OnlineOnly bool `protobuf:"varint,3,opt,name=online_only,json=onlineOnly,proto3" json:"online_only,omitempty"`
+	// 在线目录的不透明分页游标；首次/刷新/更换搜索词传空。列表不是跨页快照。
+	Cursor        string `protobuf:"bytes,4,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	Query         string `protobuf:"bytes,5,opt,name=query,proto3" json:"query,omitempty"` // 在线目录昵称或编号筛选，最多 64 个 Unicode 字符。
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RecommendFriendsRequest) Reset() {
@@ -1166,12 +1218,39 @@ func (x *RecommendFriendsRequest) GetExcludePlayerIds() []uint64 {
 	return nil
 }
 
+func (x *RecommendFriendsRequest) GetOnlineOnly() bool {
+	if x != nil {
+		return x.OnlineOnly
+	}
+	return false
+}
+
+func (x *RecommendFriendsRequest) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+func (x *RecommendFriendsRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
 type RecommendEntry struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	CandidatePlayerId uint64                 `protobuf:"varint,1,opt,name=candidate_player_id,json=candidatePlayerId,proto3" json:"candidate_player_id,omitempty"`
 	MutualFriends     uint32                 `protobuf:"varint,2,opt,name=mutual_friends,json=mutualFriends,proto3" json:"mutual_friends,omitempty"` // 共同好友数,排序权重
 	IsOnline          bool                   `protobuf:"varint,3,opt,name=is_online,json=isOnline,proto3" json:"is_online,omitempty"`
 	LastActiveMs      int64                  `protobuf:"varint,4,opt,name=last_active_ms,json=lastActiveMs,proto3" json:"last_active_ms,omitempty"`
+	Name              string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	Level             uint32                 `protobuf:"varint,6,opt,name=level,proto3" json:"level,omitempty"`
+	ClassId           uint32                 `protobuf:"varint,7,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"`
+	Gender            uint32                 `protobuf:"varint,8,opt,name=gender,proto3" json:"gender,omitempty"`
+	AppearanceId      string                 `protobuf:"bytes,9,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`
+	ZoneId            uint32                 `protobuf:"varint,10,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"` // 在线目录仅返回与调用者相同 home zone 的玩家。
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -1234,12 +1313,56 @@ func (x *RecommendEntry) GetLastActiveMs() int64 {
 	return 0
 }
 
+func (x *RecommendEntry) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *RecommendEntry) GetLevel() uint32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *RecommendEntry) GetClassId() uint32 {
+	if x != nil {
+		return x.ClassId
+	}
+	return 0
+}
+
+func (x *RecommendEntry) GetGender() uint32 {
+	if x != nil {
+		return x.Gender
+	}
+	return 0
+}
+
+func (x *RecommendEntry) GetAppearanceId() string {
+	if x != nil {
+		return x.AppearanceId
+	}
+	return ""
+}
+
+func (x *RecommendEntry) GetZoneId() uint32 {
+	if x != nil {
+		return x.ZoneId
+	}
+	return 0
+}
+
 type RecommendFriendsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	Candidates    []*RecommendEntry      `protobuf:"bytes,2,rep,name=candidates,proto3" json:"candidates,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage    *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Candidates      []*RecommendEntry      `protobuf:"bytes,2,rep,name=candidates,proto3" json:"candidates,omitempty"`
+	NextCursor      string                 `protobuf:"bytes,3,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`                 // 非空表示还能继续，允许本页为空；空表示本次遍历结束。
+	OnlineDirectory bool                   `protobuf:"varint,4,opt,name=online_directory,json=onlineDirectory,proto3" json:"online_directory,omitempty"` // 客户端必须见 true 才能当作在线目录，防止旧服静默忽略 online_only。
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RecommendFriendsResponse) Reset() {
@@ -1284,6 +1407,20 @@ func (x *RecommendFriendsResponse) GetCandidates() []*RecommendEntry {
 		return x.Candidates
 	}
 	return nil
+}
+
+func (x *RecommendFriendsResponse) GetNextCursor() string {
+	if x != nil {
+		return x.NextCursor
+	}
+	return ""
+}
+
+func (x *RecommendFriendsResponse) GetOnlineDirectory() bool {
+	if x != nil {
+		return x.OnlineDirectory
+	}
+	return false
 }
 
 // 事件体刻意只带 reason + by_player_id + ts_ms:推送不做数据同步,客户端收到后
@@ -1352,12 +1489,19 @@ var File_proto_friend_friend_proto protoreflect.FileDescriptor
 
 const file_proto_friend_friend_proto_rawDesc = "" +
 	"\n" +
-	"\x19proto/friend/friend.proto\x12\bfriendpb\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\"\x95\x01\n" +
+	"\x19proto/friend/friend.proto\x12\bfriendpb\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\"\xb0\x02\n" +
 	"\vFriendEntry\x12(\n" +
 	"\x10friend_player_id\x18\x01 \x01(\x04R\x0efriendPlayerId\x12\x19\n" +
 	"\bsince_ms\x18\x02 \x01(\x03R\asinceMs\x12$\n" +
 	"\x0elast_active_ms\x18\x03 \x01(\x03R\flastActiveMs\x12\x1b\n" +
-	"\tis_online\x18\x04 \x01(\bR\bisOnline\"\xb6\x01\n" +
+	"\tis_online\x18\x04 \x01(\bR\bisOnline\x12\x12\n" +
+	"\x04name\x18\x05 \x01(\tR\x04name\x12\x14\n" +
+	"\x05level\x18\x06 \x01(\rR\x05level\x12\x19\n" +
+	"\bclass_id\x18\a \x01(\rR\aclassId\x12\x16\n" +
+	"\x06gender\x18\b \x01(\rR\x06gender\x12#\n" +
+	"\rappearance_id\x18\t \x01(\tR\fappearanceId\x12\x17\n" +
+	"\azone_id\x18\n" +
+	" \x01(\rR\x06zoneId\"\xb6\x01\n" +
 	"\rFriendRequest\x12$\n" +
 	"\x0efrom_player_id\x18\x01 \x01(\x04R\ffromPlayerId\x12 \n" +
 	"\fto_player_id\x18\x02 \x01(\x04R\n" +
@@ -1403,20 +1547,34 @@ const file_proto_friend_friend_proto_rawDesc = "" +
 	"\bsince_ms\x18\x02 \x01(\x03R\asinceMs\"x\n" +
 	"\x12ListBlocksResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12,\n" +
-	"\x06blocks\x18\x02 \x03(\v2\x14.friendpb.BlockEntryR\x06blocks\"]\n" +
+	"\x06blocks\x18\x02 \x03(\v2\x14.friendpb.BlockEntryR\x06blocks\"\xac\x01\n" +
 	"\x17RecommendFriendsRequest\x12\x14\n" +
 	"\x05limit\x18\x01 \x01(\rR\x05limit\x12,\n" +
-	"\x12exclude_player_ids\x18\x02 \x03(\x04R\x10excludePlayerIds\"\xaa\x01\n" +
+	"\x12exclude_player_ids\x18\x02 \x03(\x04R\x10excludePlayerIds\x12\x1f\n" +
+	"\vonline_only\x18\x03 \x01(\bR\n" +
+	"onlineOnly\x12\x16\n" +
+	"\x06cursor\x18\x04 \x01(\tR\x06cursor\x12\x14\n" +
+	"\x05query\x18\x05 \x01(\tR\x05query\"\xc5\x02\n" +
 	"\x0eRecommendEntry\x12.\n" +
 	"\x13candidate_player_id\x18\x01 \x01(\x04R\x11candidatePlayerId\x12%\n" +
 	"\x0emutual_friends\x18\x02 \x01(\rR\rmutualFriends\x12\x1b\n" +
 	"\tis_online\x18\x03 \x01(\bR\bisOnline\x12$\n" +
-	"\x0elast_active_ms\x18\x04 \x01(\x03R\flastActiveMs\"\x8a\x01\n" +
+	"\x0elast_active_ms\x18\x04 \x01(\x03R\flastActiveMs\x12\x12\n" +
+	"\x04name\x18\x05 \x01(\tR\x04name\x12\x14\n" +
+	"\x05level\x18\x06 \x01(\rR\x05level\x12\x19\n" +
+	"\bclass_id\x18\a \x01(\rR\aclassId\x12\x16\n" +
+	"\x06gender\x18\b \x01(\rR\x06gender\x12#\n" +
+	"\rappearance_id\x18\t \x01(\tR\fappearanceId\x12\x17\n" +
+	"\azone_id\x18\n" +
+	" \x01(\rR\x06zoneId\"\xd6\x01\n" +
 	"\x18RecommendFriendsResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x128\n" +
 	"\n" +
 	"candidates\x18\x02 \x03(\v2\x18.friendpb.RecommendEntryR\n" +
-	"candidates\"|\n" +
+	"candidates\x12\x1f\n" +
+	"\vnext_cursor\x18\x03 \x01(\tR\n" +
+	"nextCursor\x12)\n" +
+	"\x10online_directory\x18\x04 \x01(\bR\x0fonlineDirectory\"|\n" +
 	"\x0eFriendEventS2C\x123\n" +
 	"\x06reason\x18\x01 \x01(\x0e2\x1b.friendpb.FriendEventReasonR\x06reason\x12 \n" +
 	"\fby_player_id\x18\x02 \x01(\x04R\n" +
@@ -1443,7 +1601,7 @@ const file_proto_friend_friend_proto_rawDesc = "" +
 	"\n" +
 	"ListBlocks\x12\x1b.friendpb.ListBlocksRequest\x1a\x1c.friendpb.ListBlocksResponse\x12Y\n" +
 	"\x10RecommendFriends\x12!.friendpb.RecommendFriendsRequest\x1a\".friendpb.RecommendFriendsResponse\x125\n" +
-	"\x11NotifyFriendEvent\x12\x18.friendpb.FriendEventS2C\x1a\x06.Empty\x1a\x05\x88\xa8\xc3\x01\x01B\x0eZ\fproto/friendb\x06proto3"
+	"\x11NotifyFriendEvent\x12\x18.friendpb.FriendEventS2C\x1a\x06.Empty\x1a\x05\x88\xa8\xc3\x01\x01B\x15Z\x13friend/proto/friendb\x06proto3"
 
 var (
 	file_proto_friend_friend_proto_rawDescOnce sync.Once

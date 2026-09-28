@@ -5781,3 +5781,12 @@ proto2mysql 在 09-22 已收成单 `main` 并打 `v0.2.0`(`588c308`,f3b308f / re
 proto 重生成已跑(`proto-gen-run -UseBinary`),产物核对通过;新 `.pb.cc` 手工登记进
 `cpp/generated/proto/CMakeLists.txt` 与 `proto.vcxproj`(生成器不自动登记新 proto **文件**)。
 部分改动被仓库每小时 WIP 提交(`c4b8c0914`、`1ad634443`、`24dd3e6c5`,后者含 go/db 表结构闸与 robot vendor)先行收走,余下的在本条对应的提交里。
+
+## 2026-09-28 四类组队邀请与在线目录（Codex）
+
+- 客户端复用原 Team 邀请事务添加聊天、好友、附近和在线入口；friend 的 RecommendFriends 新增显式 online_only 分支、分页游标和姓名/编号筛选，在线目录不走随机推荐，并以 online_directory 回包能力位防止旧服误识别。
+- 在线名单从权威 ONLINE 会话读，归属区经 data_service 查询，只返回同区且资料可用的玩家；有分页/扫描预算、限流、失效资料过滤。好友列表追加真实角色资料，缺失昵称批量回源。
+- 使用正式 protoc 定向生成 Go 与 C# Friend 协议；无新消息号，无存储结构迁移。data_service grpc 连接由 friend ServiceContext 创建/幂等关闭。
+- Go 1.26.5 overlay 验证：完整 friend `go test ./... -count=1`、`go vet ./...`、`go build` 全部通过。首次空页测试因 miniredis 忽略 SCAN COUNT 未触发预算而失败，改用公开 RESP 接缝模拟合法空批次后通过；未改变生产分页算法。
+- 实际运行环境更新和客户端联机验收由主任务执行；以上仅证明代码、单测与构建通过。设计与契约补充见 `docs/design/friend-client-spec-20260920.md` 末节。
+- 同轮邀请可用性回归：GetFriendList 改为可靠在线状态读取，Redis/解码/缺读取器故障回既有 ErrStorage，避免客户端误标全员离线并禁邀；普通推荐保持旧降级。三类真实夹具测试先红后绿，完整 friend test/vet 通过，overlay构建明确关闭VCS戳后成功。

@@ -36,13 +36,11 @@ import (
 //     (internal/logic/push.go 有同一个 key 的单条读法,两处刻意各写一份短 fmt.Sprintf,
 //     而不是抽一个跨包常量 —— 抽了反而会让人以为 friend 拥有这个 key 的定义权。)
 //
-// # 失败语义:降级为"全部离线",不让好友列表整个失败
+// # 失败语义:可靠查询与可降级展示分开
 //
-// 在线状态是**展示字段**。共享 Redis 抖一下就让 GetFriendList 整体报错,比返回一份
-// "全部灰着"的列表更糟(玩家会以为好友系统坏了)。所以本文件内部把所有读失败都吃掉:
-// 计 metrics.ObserveOnlineLookup(OutcomeError) + 打**限流**日志,并让对应玩家在结果里缺席
-// (缺席 == 调用方读 map 拿到零值 == 离线)。包内保留 BatchOnlineStatus 的 err 供将来的
-// 调用方使用;logic 走的是 FillOnlineStatus,err 在那里被吃掉,理由见该方法。
+// BatchOnlineStatus 报告 Redis / 解码 / 身份故障，供 GetFriendList 明确回错；
+// 邀请入口不能把未知状态标成离线并禁邀。FillOnlineStatus 保留普通推荐的原有
+// 降级：忽略错误并使用仍然健康的条目。计数与限流日志只在本实现记录。
 // 无论走哪个入口,调用方都**不要**再计指标(会双计)。
 
 // playerSessionKeyPrefix 见文件头的契约说明:写者是 player_locator,friend 只读。
@@ -97,13 +95,15 @@ func NewSessionReader(sharedRdb *redis.Redis, batchSize uint32) *SessionReader {
 
 // BatchOnlineStatus 返回这批玩家的在线态。
 //
-// 返回的 map **只包含读到会话的玩家**:没有会话(没登录)、会话解不开、或者 Redis 故障的玩家
-// 都不出现在结果里。调用方按"缺席 = 离线"用即可(Go 里读 nil map 与缺 key 都得到零值)。
-// err 非 nil 表示至少有一批 MGET 失败;此时 map 里仍可能有成功批次的结果,
-// 调用方可以直接丢掉(照 logic 的 onlineStates)也可以用,两种都安全。
+// 返回的 map 只包含确实 ONLINE 的玩家。err=nil 时缺席才代表离线；err!=nil 表示
+// 存储、解码或身份故障，可能同时返回健康条目的部分结果。邀请列表须拒绝这一
+// 不完整结果，普通推荐可通过 FillOnlineStatus 显式选择降级。
 func (s *SessionReader) BatchOnlineStatus(ctx context.Context, playerIDs []uint64) (map[uint64]OnlineStatus, error) {
-	if s == nil || s.rdb == nil || len(playerIDs) == 0 {
+	if len(playerIDs) == 0 {
 		return nil, nil
+	}
+	if s == nil || s.rdb == nil {
+		return nil, fmt.Errorf("好友在线状态 Redis 句柄未配置")
 	}
 
 	// 去重:好友列表里不会有重复 id,但推荐候选 / 调用方拼出来的批次可能有。
@@ -185,6 +185,7 @@ func (s *SessionReader) readChunk(ctx context.Context, ids []uint64, states map[
 		return fmt.Errorf("mget player sessions: got %d values for %d keys", len(values), len(ids))
 	}
 
+	var firstErr error
 	for i, raw := range values {
 		playerID := ids[i]
 		if raw == "" {
@@ -195,10 +196,23 @@ func (s *SessionReader) readChunk(ctx context.Context, ids []uint64, states map[
 		}
 		session := &plpb.PlayerSession{}
 		if err := proto.Unmarshal([]byte(raw), session); err != nil {
-			// 解不开是真问题(写者换了格式 / key 被别人覆盖),但**不能**让一条坏值毁掉整张列表:
-			// 计 error、当离线、继续。它会在指标上持续冒头,而不是变成一次偶发的 500。
+			// 继续读完健康条目，但把故障交给需要可靠在线状态的调用者。
+			// 普通推荐使用 FillOnlineStatus，仍保留按条目降级的原语义。
 			metrics.ObserveOnlineLookup(metrics.OutcomeError)
-			s.logLookupFailure(ctx, 1, fmt.Errorf("玩家 %d 的 PlayerSession 解码失败: %w", playerID, err))
+			decodeErr := fmt.Errorf("玩家 %d 的 PlayerSession 解码失败: %w", playerID, err)
+			s.logLookupFailure(ctx, 1, decodeErr)
+			if firstErr == nil {
+				firstErr = decodeErr
+			}
+			continue
+		}
+		if session.GetPlayerId() != playerID {
+			identityErr := fmt.Errorf("玩家 %d 的 PlayerSession 身份不符", playerID)
+			metrics.ObserveOnlineLookup(metrics.OutcomeError)
+			s.logLookupFailure(ctx, 1, identityErr)
+			if firstErr == nil {
+				firstErr = identityErr
+			}
 			continue
 		}
 		// **只认 SESSION_STATE_ONLINE**:DISCONNECTING 是"断线等重连"的租约期,
@@ -213,7 +227,7 @@ func (s *SessionReader) readChunk(ctx context.Context, ids []uint64, states map[
 			LastActiveMs: session.GetLastActiveTs(),
 		}
 	}
-	return nil
+	return firstErr
 }
 
 // logLookupFailure 按 onlineLookupLogInterval 限流地打一条错误日志。
