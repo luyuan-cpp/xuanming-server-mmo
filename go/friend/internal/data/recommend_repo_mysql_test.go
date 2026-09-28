@@ -639,8 +639,7 @@ func TestRecommendAnchor_ReadsBoundedByWindowNotPoolSize(t *testing.T) {
 //   - 新实现只看前 W 个去重 id → 返回空;每个候选 ≤5 次主键点查 → 读数 ≤ 8×W(2026-09-28 实测 7,170)。
 //   - 旧实现一直扫到凑满 → 返回那 5 个 → 红在 assert.Empty。任何正确执行旧 SQL 的计划都必须返回他们,
 //     所以这条红与执行计划、引擎都无关。(旧实现在本夹具上的读数随计划浮动,实测多为 8,217、也见过 622,
-//     不作为红的依据 ——
-//     旧写法的代价主要花在 hash antijoin (no condition) 的内存比较上,Handler 计数看不见。)
+//     不作为红的依据 —— 旧写法的代价主要花在 hash antijoin (no condition) 的内存比较上,Handler 计数看不见。)
 //
 // "返回空"是有意的降级(推荐是可降级展示功能),不是漏人;写成断言,是为了让"窗口被删掉 / 被绕过"必然变红。
 func TestRecommendAnchor_StopsAtWindowWhenSaturated(t *testing.T) {
