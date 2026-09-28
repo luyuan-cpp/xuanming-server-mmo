@@ -191,7 +191,11 @@ go run ./cmd/migrate -f <该 zone 的 db.yaml> -command up
 
 顺序是 migrate → 重启 go/db → 重启 scene。同一条检查也适用于之后每一个加在 `player_database` 上的新列(如资产通道的 `asset_op_ledger`)。
 
-漏跑迁移的兜底(2026-09-28 起):启动期 DDL 关闭时,go/db 在 `InitDB` 里对本 zone 库做一次**只读**列核对(`proto_sql.assertSchemaUpToDate`,复用 `internal/migrate` 的 Drift,不下发任何 DDL)。缺 proto 声明的列会直接拒启,panic 信息形如 `库 zone_<id>_db 缺 N 个 proto 声明的列 ... : player_database.settlement_ledger`,照提示对**同一份配置**跑上面的 `-command up` 后重启即可;类型漂移 / 多余列 / 缺主键只打 `SCHEMA-DRIFT:` 错误日志、不阻断启动(本地已知的 `user_oauth.provider_id`、`user_phone.phone` 会每次启动各打一行)。
+漏跑迁移的兜底(2026-09-28 起):启动期 DDL 关闭时,go/db 在 `InitDB` 里对本 zone 库做一次**只读**核对(`proto_sql.assertSchemaUpToDate`,复用 `internal/migrate` 的 LoadColumns / Drift,不下发任何 DDL)。两种情况直接拒启:缺 proto 声明的列(panic 信息形如 `库 zone_<id>_db 缺 N 个 proto 声明的列 ... : player_database.settlement_ledger`);缺表且台账 `schema_migrations` 里没有干净的基线(预建的**空库**就是这种,信息形如 `库 zone_<id>_db 缺 N 张 proto 声明的表 ...`)。两种都照提示对**同一份配置**跑上面的 `-command up` 后重启即可。基线已应用后才缺的表 up 建不出来,只打 `SCHEMA-DRIFT: ... 缺表` 错误日志、不阻断,需人工建表;类型漂移 / 多余列 / 缺主键同样只打 `SCHEMA-DRIFT:` 错误日志(本地已知的 `user_oauth.provider_id`、`user_phone.phone` 会每次启动各打一行)。
+
+`-command up` 的退出码别读错:**exit 4 = 迁移已成功执行,只是有 NEEDS-REVIEW 待人工过目**(上面那两条已知类型漂移在本地库上一直在,所以本地补列后几乎总是 4),照常重启 go/db;exit 1 = 迁移失败(含台账 dirty),exit 3 = 另一个进程正持有同库的迁移锁,这两种才不能重启。脚本里别写 `migrate up && 启动`,会把 4 当失败。
+
+K8s 上 db Pod 因此 CrashLoop 时,集群里没有 db-migrate Job,db 镜像也不带源码和 Go 工具链,只能从工作站跑:`kubectl port-forward -n mmorpg-infra svc/mysql 13306:3306`;把 `go/db/etc/db.yaml` 复制到仓库**外**,改 `ZoneId` 为该 zone、`Database.Hosts` 为 `127.0.0.1:13306`、账号密码填集群 MySQL 的(从 Secret 取,不进 git);设 `DB_ALLOWED_DATABASES=zone_<id>_db`,在 go/db 目录跑 `go run ./cmd/migrate -f <那份副本> -command plan` 核对只有 `CREATE TABLE IF NOT EXISTS` / `ADD COLUMN`,再 `-command up`,然后让 Pod 重启。**不要**用 `DB_AUTO_MIGRATE_SCHEMA=1` 绕过:proto2mysql 的 CreateOrUpdateTable 会顺手对类型漂移列执行无人批准的 MODIFY COLUMN。
 
 **工具自己的兜底**:步骤 1 **按列名**拷贝(`INSERT INTO dst (列…) SELECT 列… FROM src`),不再依赖两库列序一致——列序不同照常拷贝,不会串列。两库**列名集合**不一致时,工具在**任何一张表开始写之前**以 `SCHEMA MISMATCH ... only_in_src=[...] only_in_dst=[...]` 中止,一行都不写;照报错跑齐两边的迁移后用原命令重跑即可。dry-run 同样会做这条检查,所以 §7.2 的彩排就能把它暴露出来。
 

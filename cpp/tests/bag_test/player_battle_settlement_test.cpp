@@ -180,7 +180,8 @@ TEST_F(PlayerBattleSettlementTest, ReloginOldPendingDoesNotPayAgainOrRemoveNewBa
 }
 
 // 进程内缓存说应用过、实体账本里却没有:只可能是那次应用没落盘、实体被重建过 ——
-// 资产也没落盘,这一局必须重新应用一次(不是当成重复吞掉),而且只能一次。
+// 资产也没落盘,这一局必须在**这一次**投递就重新应用(登录钩子只投这一次,不能指望下一次),
+// 而且只能一次。
 TEST_F(PlayerBattleSettlementTest, CacheHitButLedgerMissReappliesExactlyOnce) {
     ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
     ASSERT_EQ(kills.size(), 2u);
@@ -188,11 +189,7 @@ TEST_F(PlayerBattleSettlementTest, CacheHitButLedgerMissReappliesExactlyOnce) {
     CreatePlayerEntity();  // 从「没落盘」的旧 blob 重建:没有这一局的金币,也没有账本条目
     RegisterPlayer();
 
-    PlayerBattleSettlementTestAccess::ApplyPending(player, settlement);  // 缓存与账本不一致:重置缓存,本轮不应用
-    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 0u);
-    EXPECT_EQ(kills.size(), 2u);
-
-    PlayerBattleSettlementTestAccess::ApplyPending(player, settlement);  // 下一次投递:真正应用
+    PlayerBattleSettlementTestAccess::ApplyPending(player, settlement);  // 按账本清掉陈旧缓存,当场应用
     EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
     EXPECT_EQ(kills.size(), 4u);
     EXPECT_TRUE(battle_settlement::HasApplied(

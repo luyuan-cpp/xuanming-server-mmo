@@ -5737,3 +5737,47 @@ proto2mysql 在 09-22 已收成单 `main` 并打 `v0.2.0`(`588c308`,f3b308f / re
 - 证据在 `run/verify-attribute-20260928/`(`run/` 被 gitignore,不入库):`build-*.log` 与 exitcode、两个 gtest XML、`original-*.log`、`numeric-*.log`、`numeric-results.json`、`tables-numeric/`。
 - 收尾:本地一区与 Java 网关**仍在运行**,未停服(并行会话可能在用)。trade 端口问题与上述 8 条他人用例失败均未修,留给对应会话。
 - 至此 2026-09-15 更正一节的 Codex 清单 **8 步全部完成**,防御 ×12 / 法力 ×4 这条线收工。
+
+## 2026-09-25 ~ 09-28 回合制战斗:结算幂等基底持久化(落码,**未编译**)
+
+`docs/design/turn-battle-gap-closure.md` §9.3 记录的那个「待拍板」缺陷,用户拍板要求做完,已落码并经两轮对抗评审修订。
+
+**原缺陷**:结算的幂等基底是 `thread_local SettlementApplicationCache`,进程内、重启即空。于是
+「应用 → 当场销账 → 周期存盘(默认 300s)前崩溃」会把奖励永久吞掉 —— 掉落没了,而
+`transaction_log` 记着发放成功。把销账挪到存盘之后又会开出反向的复制窗口。两个窗口不能靠调顺序同时堵住。
+
+**修法**:让「这一局已应用」与资产写进**同一份 blob、同一次落盘**,于是同生共死 ——
+崩溃则一起没(pending 还在 → 重投重发,不丢);落盘则一起在(重投/重登被挡掉,不复制)。
+
+- 新 `proto/common/component/battle_settlement_ledger_comp.proto`,`player_database.settlement_ledger = 17`
+  (已按 `guild-phase2/90-consistency.md` G-03 登记,**帮会剩余批次取号从 18 起**);Marshal/Unmarshal 紧挨
+  `asset_op_ledger`,同一条不变量 I3。
+- 两条**分开**的判据:`HasApplied`(实体上的活账本)判「别再发一次奖」;`IsSettlementDurable`(只看
+  `PlayerLastPersistedSnapshotComp` 里**确实写进 Redis** 的那份字节)判「可以销账」。
+- 销账收归唯一入口 `AckSettlementPending`;本节点没有活实体时不猜,留给登录钩子。
+- **锁留到落盘**:应用后只摘 `InBattleComp`,`battle:lock` 续到 ≥180s 并留到落盘确认,再与 pending 在同一条 Lua 里
+  条件删,删锁后补一次组队跟随检查。存盘后在同连接上紧跟 PING 走快路径,排下一场只多等一次往返。
+- 按锁重建冻结前先查账本;登录补应用后补一次按锁重建;销账延后时已有未落地存盘就不再压。
+- go/db:`AutoMigrateSchema=false` 时启动期只读核对表结构,缺列拒启并打印补列命令(09-22 缺列事故的根治)。
+- robot vendor 同步了新 `battle_settlement_ledger_comp.pb.go`;帮会交接手册允许 migrate plan 出现 `settlement_ledger`,
+  并注明结算账本相关的编译/测试失败不归帮会批次处理。
+
+**评审**:设计评审 `wvo7qkttt` 判第一版 broken(4 blocker);实现评审 `wne803bj5`(5 维度 × 2 反驳者 + 批评者)
+9 条全部确认、0 条驳回、编译维度 0 条 —— 主结论是「锁删早了」:原代码把「锁不在」当作废证据,而应用当下就删锁,
+于是「应用了没落盘就崩」会被误判作废、删掉唯一 pending;同一个根还让玩家能提前开下一场覆盖单槽 pending、
+重登漏重建下一场冻结。第二轮实现评审 `w0zw729x1` 又确认 3 条(离线分支读锁/写 pending 不原子会重复发奖、
+解析失败分支误重建冻结、登录时缓存与账本不一致会丢唯一一次投递),编译与单测维度 0 条。全部已修,
+细节与残留风险见 §9.3。
+
+**未验证**(AGENTS.md §10.1,交 Codex):
+
+1. **MySQL 加列必须先跑**:`cd go/db && go run ./cmd/migrate -f etc/db.yaml -command plan` → 确认只含
+   `settlement_ledger`(本地库若还缺 15/16 号列会一起出现)→ `-command up`(不加 `-allow-modify`)→
+   每个 zone 库 `SHOW COLUMNS FROM player_database LIKE 'settlement_ledger'` 各 1 行。不跑的话新编的 go/db 会拒启。
+2. 编译 go/db(`go build ./...` / `go vet ./...`),编译 scene 相关工程与 `bag_test`(MSBuild `/m:1`)。
+3. `bag_test` 全绿(`player_battle_settlement_test.cpp` 共 20 个用例)。
+4. `battle-smoke` + 杀进程验两个窗口 + 重登冻结,步骤见 §9.3 验证清单第 4–6 步。
+
+proto 重生成已跑(`proto-gen-run -UseBinary`),产物核对通过;新 `.pb.cc` 手工登记进
+`cpp/generated/proto/CMakeLists.txt` 与 `proto.vcxproj`(生成器不自动登记新 proto **文件**)。
+部分改动被仓库每小时 WIP 提交(`c4b8c0914`、`1ad634443`、`24dd3e6c5`,后者含 go/db 表结构闸与 robot vendor)先行收走,余下的在本条对应的提交里。

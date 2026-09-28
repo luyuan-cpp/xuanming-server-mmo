@@ -281,10 +281,12 @@ blob、同一次落盘**,于是两者同生共死:崩溃 → 一起没 → pendi
 | **锁留到落盘** | 三条应用路径(在线、按锁匹配、登录补应用)只摘 `InBattleComp`,**不删 `battle:lock`**,并把锁续到至少 `kSettlementLockHoldSec = 180s`(发件箱重投窗口 120s + 余量)。落盘确认后,销账与删锁在**同一条 Lua**(`kAckSettlementScript`)里条件执行,删锁后补一次组队跟随检查 |
 | 快路径 | 真正压出一笔存盘后,在同一条连接上紧跟一条 `PING`;玩家存盘客户端与 `tlsRedis.GetZoneRedis()` 是同一个 hiredis 连接,回复按序处理,落地回调同步更新快照 —— PING 回包时当场判落盘、销账放锁,下一场排队只多等一次往返 |
 | 双存盘闸 | 销账延后时,若该玩家已有未落地的存盘(`HasUnsettledSave`)就不再压:排队值永远是最新的一份,必然带着账本 |
-| 按锁重建前查账本 | `RestoreBattleFreezeOnLogin` / `RebuildBattleFreezeFromLock`:锁指向的局已在活账本里 → 不重建冻结,改推进销账。登录补应用成功后再补一次按锁重建(下一场的冻结不再被旧 pending 挡掉) |
+| 按锁重建前查账本 | `RestoreBattleFreezeOnLogin` / `RebuildBattleFreezeFromLock`:锁指向的局已在活账本里 → 不重建冻结,改推进销账。登录补应用成功后再补一次按锁重建(下一场的冻结不再被旧 pending 挡掉);pending 解析失败的分支**不**重建(那把锁多半就是这条坏记录的那一局) |
+| 离线暂存原子化 | 离线分支(玩家不在本节点或正在退出)「锁值 == 本局才写 pending」合成一条 Lua(`kStorePendingIfLockMatchScript`),返回 锁不在 / 已写 / 锁属于别的局。锁留到落盘之后,「看到锁 == 本局」不再证明本局没应用;先 GET 再 SET 的两步之间若插进一次销账,会把已销账的 pending 写回来、下次登录再发一次奖 |
+| 缓存让位于账本 | `ApplySettlementToEntity` 在账本未命中时,先清掉进程内缓存里这一局的陈旧已完成项再应用 —— 当场应用,不再「本轮不应用、等下一次投递」(登录钩子只投这一次) |
 | 条目回收 | 销账 EVAL **成功回调**里才 `ForgetApplied`。所以账本只登记"已应用但销账未确认"的局,稳态长度 0~1 |
 | 排空兜底 | reaper(30s)第二遍扫账本补 Ack —— 不依赖 battle 发件箱(它只重投 12 轮 120s 就放弃) |
-| 加列强制 | go/db 在 `AutoMigrateSchema=false` 时启动期只读核对表结构,缺列就拒启并打印补列命令(见验证清单第 1 步) |
+| 加列强制 | go/db 在 `AutoMigrateSchema=false` 时启动期只读核对表结构(`proto_sql.assertSchemaUpToDate`):缺 proto 声明的列、或缺表且迁移台账没有干净基线(预建的空库)就拒启并打印补列命令;类型漂移只打 `SCHEMA-DRIFT:` 日志不阻断。操作细节见 [merge-zone-runbook.md](../ops/merge-zone-runbook.md) §4 |
 
 #### 为什么两条判据必须分开
 
@@ -343,14 +345,22 @@ blob、同一次落盘**,于是两者同生共死:崩溃 → 一起没 → pendi
    编译维度 0 条。主结论就是上面的"锁留到落盘";其余为双存盘、测试一处必挂(物品版重复应用仍断言 false)、
    重登用例没带账本(测的不是它声称的东西)、销账规则零覆盖、加列无强制、robot vendor 未同步、帮会交接手册会把新列当异常。
    全部已修。
+3. 对"锁留到落盘"这轮修改再做**第二轮实现评审**(`w0zw729x1`,编译 / 锁生命周期 / 销账时序 / 单测 4 个维度):
+   编译与单测维度 0 条;确认 3 个问题 —— 离线分支读锁与写 pending 不原子(锁留到落盘后会把已销账的 pending 写回、
+   造成重复发奖,major)、pending 解析失败分支按锁重建会冻进已结束的战斗、登录时"缓存判重复但账本无"会丢掉唯一一次投递。
+   全部已修(见上表"离线暂存原子化""缓存让位于账本"两行与"按锁重建前查账本"一行的补充)。
 
 #### 验证清单(全部未执行)
 
-1. **MySQL 加列必须先跑**:`cd go/db && go run ./cmd/migrate -f etc/db.yaml -command plan`,计划应只含
-   `player_database` 加列 `settlement_ledger`(若本地库还缺 `profile_component` / `asset_op_ledger`,一起出现是正常的);
-   确认后 `-command up`(不加 `-allow-modify`)。本地多 zone 时对启动器实际用的每份 db 配置各跑一次。
-   随后每个 zone 库 `SHOW COLUMNS FROM player_database LIKE 'settlement_ledger'` 返回 1 行。
+1. **MySQL 加列必须先跑**:`cd go/db && go run ./cmd/migrate -f etc/db.yaml -command plan`。计划里允许出现的
+   `player_database` 加列只有 `profile_component` / `asset_op_ledger` / `settlement_ledger` 三条(与
+   [guild-phase2/90-consistency.md](./guild-phase2/90-consistency.md) G-03 同一口径;已迁移过的不会再出现,**也可能为空**),
+   其余语句先停下核对。确认后 `-command up`(不加 `-allow-modify`)。**退出码 4 = 迁移已成功、只是有 NEEDS-REVIEW**
+   (本地库上已知的 `user_oauth.provider_id` / `user_phone.phone` 类型漂移会一直触发),不是失败;1 / 3 才是失败。
+   本地多 zone 时对启动器实际用的每份 db 配置各跑一次;随后每个 zone 库
+   `SHOW COLUMNS FROM player_database LIKE 'settlement_ledger'` 返回 1 行。
    **漏这一步,新编的 go/db 会拒启并打印这条命令**(改造前是静默地让全服玩家回写全部失败)。
+   本地启动器(`go_services.ps1` / `start_game.ps1`)和 K8s 都**不会**替你跑迁移,清过 MySQL 的环境同样要先跑一次。
 2. 编译 go/db(`go build ./...`、`go vet ./...`),编译 scene 相关工程与 `bag_test`(MSBuild 串行 `/m:1`)。
 3. `bag_test` 全绿,重点看本节的用例:账本登记 / 重启后不重复发 / 冻结与交接整笔延后 / 三条纯规则 /
    缓存命中但账本缺失只补发一次 / 销账在未落盘时延后、落盘后才销账;以及契约变更后更新过的
