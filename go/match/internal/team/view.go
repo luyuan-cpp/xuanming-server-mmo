@@ -91,11 +91,13 @@ func teamViewFor(viewer uint64, rec *teampb.TeamRecord, version, epoch, nowMs ui
 	return view
 }
 
-// memberView 一名玩家的展示视图；外观和性别复用存档资料，name 暂未接线。
+// memberView 一名玩家的展示视图;昵称、外观和性别都取自同一份存档资料(PlayerProfileComp)。
+// 申请列表的 TeamApplicationView 也内嵌它,所以队员与申请者的昵称走同一条路径。
 func memberView(playerId uint64, zone, joinSeq uint32, leader uint64, dc displayCache) *teampb.TeamMemberView {
 	d := dc[playerId]
 	return &teampb.TeamMemberView{
 		PlayerId:     playerId,
+		Name:         d.Name,
 		Level:        d.Level,
 		ClassId:      d.ClassId,
 		AppearanceId: d.AppearanceId,

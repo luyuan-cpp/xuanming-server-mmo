@@ -121,7 +121,7 @@ enum TeamMatchState {
 
 message TeamMemberView {
   uint64 player_id = 1;
-  string name = 2;       // 仓库暂无昵称,恒为 ""(§G.2)
+  string name = 2;       // 从玩家存档资料(PlayerProfileComp.name)读取;未取名 / 旧存档为 "",由客户端兜底显示
   uint32 level = 3;      // 尽力而为,0 = 未知
   uint32 class_id = 4;   // 尽力而为,0 = 未知
   uint32 gender = 5;     // 从玩家存档资料读取；旧存档未补齐时为 0。
