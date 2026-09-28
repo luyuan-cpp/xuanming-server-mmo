@@ -29,6 +29,10 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/map.h"  // IWYU pragma: export
+#include "google/protobuf/map_type_handler.h"  // IWYU pragma: export
+#include "google/protobuf/map_entry.h"
+#include "google/protobuf/map_field.h"
 #include "google/protobuf/unknown_field_set.h"
 // @@protoc_insertion_point(includes)
 
@@ -76,6 +80,22 @@ extern GameConfig_ZoneRedisConfigGlobalsTypeInternal GameConfig_ZoneRedisConfig_
 extern const ::google::protobuf::internal::ClassDataFull GameConfig_ZoneRedisConfig_class_data_;
 #else
 extern const GameConfig_ZoneRedisConfigGlobalsTypeInternal GameConfig_ZoneRedisConfig_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GrpcClientConfig;
+struct GrpcClientConfigGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GrpcClientConfigGlobalsTypeInternal GrpcClientConfig_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GrpcClientConfig_class_data_;
+#else
+extern const GrpcClientConfigGlobalsTypeInternal GrpcClientConfig_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GrpcClientConfig_CallDeadlineMsEntry_DoNotUse;
+struct GrpcClientConfig_CallDeadlineMsEntry_DoNotUseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GrpcClientConfig_CallDeadlineMsEntry_DoNotUseGlobalsTypeInternal GrpcClientConfig_CallDeadlineMsEntry_DoNotUse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GrpcClientConfig_CallDeadlineMsEntry_DoNotUse_class_data_;
+#else
+extern const GrpcClientConfig_CallDeadlineMsEntry_DoNotUseGlobalsTypeInternal GrpcClientConfig_CallDeadlineMsEntry_DoNotUse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class IdSegmentConfig;
 struct IdSegmentConfigGlobalsTypeInternal;
@@ -926,6 +946,55 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IdSegmentKindConfig final : public 
 };
 // -------------------------------------------------------------------
 
+class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrpcClientConfig_CallDeadlineMsEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::std::string, ::uint32_t,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32> {
+ public:
+  using SuperType =
+      ::google::protobuf::internal::MapEntry<::std::string, ::uint32_t,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32>;
+  GrpcClientConfig_CallDeadlineMsEntry_DoNotUse();
+  template <typename = void>
+  explicit constexpr GrpcClientConfig_CallDeadlineMsEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+  explicit GrpcClientConfig_CallDeadlineMsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_message_globals() {
+    return &GrpcClientConfig_CallDeadlineMsEntry_DoNotUse_globals_;
+  }
+
+
+  static constexpr auto InternalGenerateClassData_(
+      const ::google::protobuf::MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+ private:
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_proto_2fcommon_2fbase_2fconfig_2eproto;
+  friend ::google::protobuf::internal::PrivateAccess;
+  friend GrpcClientConfig_CallDeadlineMsEntry_DoNotUseGlobalsTypeInternal;
+
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 48,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig_ZoneRedisConfig final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:GameConfig.ZoneRedisConfig) */ {
  public:
@@ -982,7 +1051,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig_ZoneRedisConfig final : 
   [[nodiscard]] static const GameConfig_ZoneRedisConfig& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GameConfig_ZoneRedisConfig>(&GameConfig_ZoneRedisConfig_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(GameConfig_ZoneRedisConfig& a, GameConfig_ZoneRedisConfig& b) { a.Swap(&b); }
   inline void Swap(GameConfig_ZoneRedisConfig* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1385,6 +1454,213 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IdSegmentConfig final : public ::go
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrpcClientConfig final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:GrpcClientConfig) */ {
+ public:
+  inline GrpcClientConfig() : GrpcClientConfig(nullptr) {}
+  ~GrpcClientConfig() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GrpcClientConfig* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GrpcClientConfig));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GrpcClientConfig(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GrpcClientConfig(const GrpcClientConfig& from) : GrpcClientConfig(nullptr, from) {}
+  inline GrpcClientConfig(GrpcClientConfig&& from) noexcept : GrpcClientConfig(nullptr, ::std::move(from)) {}
+  inline GrpcClientConfig& operator=(const GrpcClientConfig& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GrpcClientConfig& operator=(GrpcClientConfig&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GrpcClientConfig& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GrpcClientConfig>(&GrpcClientConfig_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 5;
+  friend void swap(GrpcClientConfig& a, GrpcClientConfig& b) { a.Swap(&b); }
+  inline void Swap(GrpcClientConfig* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GrpcClientConfig* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GrpcClientConfig* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GrpcClientConfig>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GrpcClientConfig& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GrpcClientConfig& from) { GrpcClientConfig::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GrpcClientConfig* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "GrpcClientConfig"; }
+
+  explicit GrpcClientConfig(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GrpcClientConfig(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GrpcClientConfig& from);
+  GrpcClientConfig(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GrpcClientConfig&& from) noexcept
+      : GrpcClientConfig(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCallDeadlineMsFieldNumber = 1,
+  };
+  // map<string, uint32> call_deadline_ms = 1;
+  [[nodiscard]] int call_deadline_ms_size()
+      const;
+  private:
+  int _internal_call_deadline_ms_size() const;
+
+  public:
+  void clear_call_deadline_ms() ;
+  [[nodiscard]] const ::google::protobuf::Map<::std::string, ::uint32_t>& call_deadline_ms() const;
+  [[nodiscard]] ::google::protobuf::Map<::std::string, ::uint32_t>* PROTOBUF_NONNULL mutable_call_deadline_ms();
+
+  private:
+  const ::google::protobuf::Map<::std::string, ::uint32_t>& _internal_call_deadline_ms() const;
+  ::google::protobuf::Map<::std::string, ::uint32_t>* PROTOBUF_NONNULL _internal_mutable_call_deadline_ms();
+
+  public:
+  // @@protoc_insertion_point(class_scope:GrpcClientConfig)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          1, 41,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GrpcClientConfig& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::MapField<GrpcClientConfig_CallDeadlineMsEntry_DoNotUse, ::std::string, ::uint32_t> call_deadline_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fbase_2fconfig_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:GameConfig) */ {
  public:
@@ -1441,7 +1717,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig final : public ::google:
   [[nodiscard]] static const GameConfig& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GameConfig>(&GameConfig_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(GameConfig& a, GameConfig& b) { a.Swap(&b); }
   inline void Swap(GameConfig* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1673,7 +1949,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
   [[nodiscard]] static const BaseDeployConfig& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BaseDeployConfig>(&BaseDeployConfig_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(BaseDeployConfig& a, BaseDeployConfig& b) { a.Swap(&b); }
   inline void Swap(BaseDeployConfig* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1776,6 +2052,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
     kBattleTokenSecretFieldNumber = 16,
     kKafkaFieldNumber = 9,
     kIdSegmentFieldNumber = 19,
+    kGrpcClientFieldNumber = 21,
     kLogLevelFieldNumber = 2,
     kKeepAliveIntervalFieldNumber = 5,
     kNodeTtlSecondsFieldNumber = 7,
@@ -1983,6 +2260,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
   ::IdSegmentConfig* PROTOBUF_NONNULL _internal_mutable_id_segment();
 
   public:
+  // .GrpcClientConfig grpc_client = 21;
+  [[nodiscard]] bool has_grpc_client()
+      const;
+  void clear_grpc_client() ;
+  [[nodiscard]] const ::GrpcClientConfig& grpc_client() const;
+  [[nodiscard]] ::GrpcClientConfig* PROTOBUF_NULLABLE release_grpc_client();
+  ::GrpcClientConfig* PROTOBUF_NONNULL mutable_grpc_client();
+  void set_allocated_grpc_client(::GrpcClientConfig* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_grpc_client(::GrpcClientConfig* PROTOBUF_NULLABLE value);
+  ::GrpcClientConfig* PROTOBUF_NULLABLE unsafe_arena_release_grpc_client();
+
+  private:
+  const ::GrpcClientConfig& _internal_grpc_client() const;
+  ::GrpcClientConfig* PROTOBUF_NONNULL _internal_mutable_grpc_client();
+
+  public:
   // uint32 log_level = 2;
   void clear_log_level() ;
   [[nodiscard]] ::uint32_t log_level() const;
@@ -2077,8 +2370,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 20,
-                          3, 189,
+      ::google::protobuf::internal::TcParseTable<5, 21,
+                          4, 189,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2117,6 +2410,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
     ::google::protobuf::internal::ArenaStringPtr battle_token_secret_;
     ::KafkaConfig* PROTOBUF_NULLABLE kafka_;
     ::IdSegmentConfig* PROTOBUF_NULLABLE id_segment_;
+    ::GrpcClientConfig* PROTOBUF_NULLABLE grpc_client_;
     ::uint32_t log_level_;
     ::uint32_t keep_alive_interval_;
     ::uint32_t node_ttl_seconds_;
@@ -2873,6 +3167,43 @@ IdSegmentConfig::_internal_mutable_kinds() {
 
 // -------------------------------------------------------------------
 
+// -------------------------------------------------------------------
+
+// GrpcClientConfig
+
+// map<string, uint32> call_deadline_ms = 1;
+inline int GrpcClientConfig::_internal_call_deadline_ms_size() const {
+  return _internal_call_deadline_ms().size();
+}
+inline int GrpcClientConfig::call_deadline_ms_size() const {
+  return _internal_call_deadline_ms_size();
+}
+inline void GrpcClientConfig::clear_call_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.call_deadline_ms_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::google::protobuf::Map<::std::string, ::uint32_t>& GrpcClientConfig::_internal_call_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.call_deadline_ms_.GetMap();
+}
+inline const ::google::protobuf::Map<::std::string, ::uint32_t>& GrpcClientConfig::call_deadline_ms() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:GrpcClientConfig.call_deadline_ms)
+  return _internal_call_deadline_ms();
+}
+inline ::google::protobuf::Map<::std::string, ::uint32_t>* PROTOBUF_NONNULL GrpcClientConfig::_internal_mutable_call_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.call_deadline_ms_.MutableMap();
+}
+inline ::google::protobuf::Map<::std::string, ::uint32_t>* PROTOBUF_NONNULL GrpcClientConfig::mutable_call_deadline_ms()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_map:GrpcClientConfig.call_deadline_ms)
+  return _internal_mutable_call_deadline_ms();
+}
+
+// -------------------------------------------------------------------
+
 // BaseDeployConfig
 
 // repeated string etcd_hosts = 1;
@@ -2951,7 +3282,7 @@ BaseDeployConfig::_internal_mutable_etcd_hosts() {
 inline void BaseDeployConfig::clear_log_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.log_level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t BaseDeployConfig::log_level() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.log_level)
@@ -2959,7 +3290,7 @@ inline ::uint32_t BaseDeployConfig::log_level() const {
 }
 inline void BaseDeployConfig::set_log_level(::uint32_t value) {
   _internal_set_log_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.log_level)
 }
 inline ::uint32_t BaseDeployConfig::_internal_log_level() const {
@@ -3102,7 +3433,7 @@ BaseDeployConfig::_internal_mutable_service_discovery_prefixes() {
 inline void BaseDeployConfig::clear_keep_alive_interval() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.keep_alive_interval_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t BaseDeployConfig::keep_alive_interval() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.keep_alive_interval)
@@ -3110,7 +3441,7 @@ inline ::uint32_t BaseDeployConfig::keep_alive_interval() const {
 }
 inline void BaseDeployConfig::set_keep_alive_interval(::uint32_t value) {
   _internal_set_keep_alive_interval(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.keep_alive_interval)
 }
 inline ::uint32_t BaseDeployConfig::_internal_keep_alive_interval() const {
@@ -3190,7 +3521,7 @@ inline void BaseDeployConfig::set_allocated_deployservice_prefix(::std::string* 
 inline void BaseDeployConfig::clear_node_ttl_seconds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.node_ttl_seconds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t BaseDeployConfig::node_ttl_seconds() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.node_ttl_seconds)
@@ -3198,7 +3529,7 @@ inline ::uint32_t BaseDeployConfig::node_ttl_seconds() const {
 }
 inline void BaseDeployConfig::set_node_ttl_seconds(::uint32_t value) {
   _internal_set_node_ttl_seconds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.node_ttl_seconds)
 }
 inline ::uint32_t BaseDeployConfig::_internal_node_ttl_seconds() const {
@@ -3214,7 +3545,7 @@ inline void BaseDeployConfig::_internal_set_node_ttl_seconds(::uint32_t value) {
 inline void BaseDeployConfig::clear_health_check_interval() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.health_check_interval_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t BaseDeployConfig::health_check_interval() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.health_check_interval)
@@ -3222,7 +3553,7 @@ inline ::uint32_t BaseDeployConfig::health_check_interval() const {
 }
 inline void BaseDeployConfig::set_health_check_interval(::uint32_t value) {
   _internal_set_health_check_interval(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.health_check_interval)
 }
 inline ::uint32_t BaseDeployConfig::_internal_health_check_interval() const {
@@ -3528,7 +3859,7 @@ inline void BaseDeployConfig::set_allocated_table_data_format(::std::string* PRO
 inline void BaseDeployConfig::clear_node_removal_grace_seconds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.node_removal_grace_seconds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t BaseDeployConfig::node_removal_grace_seconds() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.node_removal_grace_seconds)
@@ -3536,7 +3867,7 @@ inline ::uint32_t BaseDeployConfig::node_removal_grace_seconds() const {
 }
 inline void BaseDeployConfig::set_node_removal_grace_seconds(::uint32_t value) {
   _internal_set_node_removal_grace_seconds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.node_removal_grace_seconds)
 }
 inline ::uint32_t BaseDeployConfig::_internal_node_removal_grace_seconds() const {
@@ -3616,7 +3947,7 @@ inline void BaseDeployConfig::set_allocated_data_root_directory(::std::string* P
 inline void BaseDeployConfig::clear_gate_max_connections() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gate_max_connections_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t BaseDeployConfig::gate_max_connections() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.gate_max_connections)
@@ -3624,7 +3955,7 @@ inline ::uint32_t BaseDeployConfig::gate_max_connections() const {
 }
 inline void BaseDeployConfig::set_gate_max_connections(::uint32_t value) {
   _internal_set_gate_max_connections(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.gate_max_connections)
 }
 inline ::uint32_t BaseDeployConfig::_internal_gate_max_connections() const {
@@ -3704,7 +4035,7 @@ inline void BaseDeployConfig::set_allocated_battle_token_secret(::std::string* P
 inline void BaseDeployConfig::clear_battle_max_connections() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_max_connections_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint32_t BaseDeployConfig::battle_max_connections() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.battle_max_connections)
@@ -3712,7 +4043,7 @@ inline ::uint32_t BaseDeployConfig::battle_max_connections() const {
 }
 inline void BaseDeployConfig::set_battle_max_connections(::uint32_t value) {
   _internal_set_battle_max_connections(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.battle_max_connections)
 }
 inline ::uint32_t BaseDeployConfig::_internal_battle_max_connections() const {
@@ -3728,7 +4059,7 @@ inline void BaseDeployConfig::_internal_set_battle_max_connections(::uint32_t va
 inline void BaseDeployConfig::clear_cluster_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cluster_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint32_t BaseDeployConfig::cluster_id() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.cluster_id)
@@ -3736,7 +4067,7 @@ inline ::uint32_t BaseDeployConfig::cluster_id() const {
 }
 inline void BaseDeployConfig::set_cluster_id(::uint32_t value) {
   _internal_set_cluster_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.cluster_id)
 }
 inline ::uint32_t BaseDeployConfig::_internal_cluster_id() const {
@@ -3850,7 +4181,7 @@ inline void BaseDeployConfig::set_allocated_id_segment(::IdSegmentConfig* PROTOB
 inline void BaseDeployConfig::clear_audit_topic_generation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.audit_topic_generation_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint32_t BaseDeployConfig::audit_topic_generation() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.audit_topic_generation)
@@ -3858,7 +4189,7 @@ inline ::uint32_t BaseDeployConfig::audit_topic_generation() const {
 }
 inline void BaseDeployConfig::set_audit_topic_generation(::uint32_t value) {
   _internal_set_audit_topic_generation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.audit_topic_generation)
 }
 inline ::uint32_t BaseDeployConfig::_internal_audit_topic_generation() const {
@@ -3868,6 +4199,104 @@ inline ::uint32_t BaseDeployConfig::_internal_audit_topic_generation() const {
 inline void BaseDeployConfig::_internal_set_audit_topic_generation(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.audit_topic_generation_ = value;
+}
+
+// .GrpcClientConfig grpc_client = 21;
+inline bool BaseDeployConfig::has_grpc_client() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000800U);
+  PROTOBUF_ASSUME(!value || _impl_.grpc_client_ != nullptr);
+  return value;
+}
+inline void BaseDeployConfig::clear_grpc_client() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.grpc_client_ != nullptr) _impl_.grpc_client_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline const ::GrpcClientConfig& BaseDeployConfig::_internal_grpc_client() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::GrpcClientConfig* p = _impl_.grpc_client_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::GrpcClientConfig>(&::GrpcClientConfig_globals_);
+}
+inline const ::GrpcClientConfig& BaseDeployConfig::grpc_client() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BaseDeployConfig.grpc_client)
+  return _internal_grpc_client();
+}
+inline void BaseDeployConfig::unsafe_arena_set_allocated_grpc_client(
+    ::GrpcClientConfig* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.grpc_client_);
+  }
+  _impl_.grpc_client_ = reinterpret_cast<::GrpcClientConfig*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BaseDeployConfig.grpc_client)
+}
+inline ::GrpcClientConfig* PROTOBUF_NULLABLE BaseDeployConfig::release_grpc_client() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ::GrpcClientConfig* released = _impl_.grpc_client_;
+  _impl_.grpc_client_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::GrpcClientConfig* PROTOBUF_NULLABLE BaseDeployConfig::unsafe_arena_release_grpc_client() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BaseDeployConfig.grpc_client)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ::GrpcClientConfig* temp = _impl_.grpc_client_;
+  _impl_.grpc_client_ = nullptr;
+  return temp;
+}
+inline ::GrpcClientConfig* PROTOBUF_NONNULL BaseDeployConfig::_internal_mutable_grpc_client() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.grpc_client_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::GrpcClientConfig>(GetArena());
+    _impl_.grpc_client_ = reinterpret_cast<::GrpcClientConfig*>(p);
+  }
+  return _impl_.grpc_client_;
+}
+inline ::GrpcClientConfig* PROTOBUF_NONNULL BaseDeployConfig::mutable_grpc_client()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ::GrpcClientConfig* _msg = _internal_mutable_grpc_client();
+  // @@protoc_insertion_point(field_mutable:BaseDeployConfig.grpc_client)
+  return _msg;
+}
+inline void BaseDeployConfig::set_allocated_grpc_client(::GrpcClientConfig* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.grpc_client_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  }
+
+  _impl_.grpc_client_ = reinterpret_cast<::GrpcClientConfig*>(value);
+  // @@protoc_insertion_point(field_set_allocated:BaseDeployConfig.grpc_client)
 }
 
 // -------------------------------------------------------------------

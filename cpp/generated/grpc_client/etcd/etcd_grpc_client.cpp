@@ -3,11 +3,21 @@
 #include "etcd_grpc_client.h"
 #include "proto/common/constants/etcd_grpc.pb.h"
 #include "core/utils/encode/base64.h"
+#include <atomic>
+#include <chrono>
 #include <boost/pool/object_pool.hpp>
 #include "grpc_call_tag.h"
 
 namespace {
 boost::object_pool<GrpcTag> tagPool;
+// 本文件所有 unary 调用的 deadline(毫秒)。启动时 SetEtcdCallDeadline 按目标节点类型写入
+// (Node::Initialize → grpc_call_deadline::Apply);原子量:与应答处理器一样是进程级全局。
+std::atomic<uint32_t> callDeadlineMs{kDefaultGrpcCallDeadlineMs};
+
+std::chrono::system_clock::time_point NextCallDeadline() {
+    return std::chrono::system_clock::now() +
+        std::chrono::milliseconds(callDeadlineMs.load(std::memory_order_relaxed));
+}
 }
 
 namespace etcdserverpb {
@@ -19,6 +29,7 @@ boost::object_pool<AsyncKVRangeGrpcClient> KVRangePool;
 using AsyncKVRangeHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::RangeResponse&)>;
 AsyncKVRangeHandlerFunctionType AsyncKVRangeHandler;
+AsyncKVRangeFailedHandlerFunctionType AsyncKVRangeFailedHandler;
 
 void AsyncCompleteGrpcKVRange(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -26,9 +37,22 @@ void AsyncCompleteGrpcKVRange(entt::registry& registry, entt::entity nodeEntity,
     if (call->status.ok()) {
         if (AsyncKVRangeHandler) {
             AsyncKVRangeHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC KV.Range reply dropped: AsyncKVRangeHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncKVRangeFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "KV.Range", call->context, call->status, call->sentMetadata};
+        AsyncKVRangeFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC KV.Range failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	KVRangePool.destroy(call);
@@ -36,15 +60,7 @@ void AsyncCompleteGrpcKVRange(entt::registry& registry, entt::entity nodeEntity,
 
 void SendKVRange(entt::registry& registry, entt::entity nodeEntity, const ::etcdserverpb::RangeRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(KVRangePool.construct());
-    call->response_reader = registry
-        .get<KVStubPtr>(nodeEntity)
-        ->PrepareAsyncRange(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(KVRangeMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendKVRange(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -54,13 +70,17 @@ void SendKVRange(entt::registry& registry, entt::entity nodeEntity, const ::etcd
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<KVStubPtr>(nodeEntity)
-        ->PrepareAsyncRange(&call->context, request,
+        ->PrepareAsyncRange(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(KVRangeMessageId, (void*)call));
@@ -78,6 +98,7 @@ boost::object_pool<AsyncKVPutGrpcClient> KVPutPool;
 using AsyncKVPutHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::PutResponse&)>;
 AsyncKVPutHandlerFunctionType AsyncKVPutHandler;
+AsyncKVPutFailedHandlerFunctionType AsyncKVPutFailedHandler;
 
 void AsyncCompleteGrpcKVPut(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -85,9 +106,22 @@ void AsyncCompleteGrpcKVPut(entt::registry& registry, entt::entity nodeEntity, g
     if (call->status.ok()) {
         if (AsyncKVPutHandler) {
             AsyncKVPutHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC KV.Put reply dropped: AsyncKVPutHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncKVPutFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "KV.Put", call->context, call->status, call->sentMetadata};
+        AsyncKVPutFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC KV.Put failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	KVPutPool.destroy(call);
@@ -95,15 +129,7 @@ void AsyncCompleteGrpcKVPut(entt::registry& registry, entt::entity nodeEntity, g
 
 void SendKVPut(entt::registry& registry, entt::entity nodeEntity, const ::etcdserverpb::PutRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(KVPutPool.construct());
-    call->response_reader = registry
-        .get<KVStubPtr>(nodeEntity)
-        ->PrepareAsyncPut(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(KVPutMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendKVPut(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -113,13 +139,17 @@ void SendKVPut(entt::registry& registry, entt::entity nodeEntity, const ::etcdse
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<KVStubPtr>(nodeEntity)
-        ->PrepareAsyncPut(&call->context, request,
+        ->PrepareAsyncPut(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(KVPutMessageId, (void*)call));
@@ -137,6 +167,7 @@ boost::object_pool<AsyncKVDeleteRangeGrpcClient> KVDeleteRangePool;
 using AsyncKVDeleteRangeHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::DeleteRangeResponse&)>;
 AsyncKVDeleteRangeHandlerFunctionType AsyncKVDeleteRangeHandler;
+AsyncKVDeleteRangeFailedHandlerFunctionType AsyncKVDeleteRangeFailedHandler;
 
 void AsyncCompleteGrpcKVDeleteRange(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -144,9 +175,22 @@ void AsyncCompleteGrpcKVDeleteRange(entt::registry& registry, entt::entity nodeE
     if (call->status.ok()) {
         if (AsyncKVDeleteRangeHandler) {
             AsyncKVDeleteRangeHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC KV.DeleteRange reply dropped: AsyncKVDeleteRangeHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncKVDeleteRangeFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "KV.DeleteRange", call->context, call->status, call->sentMetadata};
+        AsyncKVDeleteRangeFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC KV.DeleteRange failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	KVDeleteRangePool.destroy(call);
@@ -154,15 +198,7 @@ void AsyncCompleteGrpcKVDeleteRange(entt::registry& registry, entt::entity nodeE
 
 void SendKVDeleteRange(entt::registry& registry, entt::entity nodeEntity, const ::etcdserverpb::DeleteRangeRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(KVDeleteRangePool.construct());
-    call->response_reader = registry
-        .get<KVStubPtr>(nodeEntity)
-        ->PrepareAsyncDeleteRange(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(KVDeleteRangeMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendKVDeleteRange(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -172,13 +208,17 @@ void SendKVDeleteRange(entt::registry& registry, entt::entity nodeEntity, const 
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<KVStubPtr>(nodeEntity)
-        ->PrepareAsyncDeleteRange(&call->context, request,
+        ->PrepareAsyncDeleteRange(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(KVDeleteRangeMessageId, (void*)call));
@@ -196,6 +236,7 @@ boost::object_pool<AsyncKVTxnGrpcClient> KVTxnPool;
 using AsyncKVTxnHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::TxnResponse&)>;
 AsyncKVTxnHandlerFunctionType AsyncKVTxnHandler;
+AsyncKVTxnFailedHandlerFunctionType AsyncKVTxnFailedHandler;
 
 void AsyncCompleteGrpcKVTxn(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -203,9 +244,22 @@ void AsyncCompleteGrpcKVTxn(entt::registry& registry, entt::entity nodeEntity, g
     if (call->status.ok()) {
         if (AsyncKVTxnHandler) {
             AsyncKVTxnHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC KV.Txn reply dropped: AsyncKVTxnHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncKVTxnFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "KV.Txn", call->context, call->status, call->sentMetadata};
+        AsyncKVTxnFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC KV.Txn failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	KVTxnPool.destroy(call);
@@ -213,15 +267,7 @@ void AsyncCompleteGrpcKVTxn(entt::registry& registry, entt::entity nodeEntity, g
 
 void SendKVTxn(entt::registry& registry, entt::entity nodeEntity, const ::etcdserverpb::TxnRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(KVTxnPool.construct());
-    call->response_reader = registry
-        .get<KVStubPtr>(nodeEntity)
-        ->PrepareAsyncTxn(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(KVTxnMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendKVTxn(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -231,13 +277,17 @@ void SendKVTxn(entt::registry& registry, entt::entity nodeEntity, const ::etcdse
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<KVStubPtr>(nodeEntity)
-        ->PrepareAsyncTxn(&call->context, request,
+        ->PrepareAsyncTxn(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(KVTxnMessageId, (void*)call));
@@ -255,6 +305,7 @@ boost::object_pool<AsyncKVCompactGrpcClient> KVCompactPool;
 using AsyncKVCompactHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::CompactionResponse&)>;
 AsyncKVCompactHandlerFunctionType AsyncKVCompactHandler;
+AsyncKVCompactFailedHandlerFunctionType AsyncKVCompactFailedHandler;
 
 void AsyncCompleteGrpcKVCompact(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -262,9 +313,22 @@ void AsyncCompleteGrpcKVCompact(entt::registry& registry, entt::entity nodeEntit
     if (call->status.ok()) {
         if (AsyncKVCompactHandler) {
             AsyncKVCompactHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC KV.Compact reply dropped: AsyncKVCompactHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncKVCompactFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "KV.Compact", call->context, call->status, call->sentMetadata};
+        AsyncKVCompactFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC KV.Compact failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	KVCompactPool.destroy(call);
@@ -272,15 +336,7 @@ void AsyncCompleteGrpcKVCompact(entt::registry& registry, entt::entity nodeEntit
 
 void SendKVCompact(entt::registry& registry, entt::entity nodeEntity, const ::etcdserverpb::CompactionRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(KVCompactPool.construct());
-    call->response_reader = registry
-        .get<KVStubPtr>(nodeEntity)
-        ->PrepareAsyncCompact(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(KVCompactMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendKVCompact(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -290,13 +346,17 @@ void SendKVCompact(entt::registry& registry, entt::entity nodeEntity, const ::et
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<KVStubPtr>(nodeEntity)
-        ->PrepareAsyncCompact(&call->context, request,
+        ->PrepareAsyncCompact(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(KVCompactMessageId, (void*)call));
@@ -402,6 +462,7 @@ boost::object_pool<AsyncLeaseLeaseGrantGrpcClient> LeaseLeaseGrantPool;
 using AsyncLeaseLeaseGrantHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::LeaseGrantResponse&)>;
 AsyncLeaseLeaseGrantHandlerFunctionType AsyncLeaseLeaseGrantHandler;
+AsyncLeaseLeaseGrantFailedHandlerFunctionType AsyncLeaseLeaseGrantFailedHandler;
 
 void AsyncCompleteGrpcLeaseLeaseGrant(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -409,9 +470,22 @@ void AsyncCompleteGrpcLeaseLeaseGrant(entt::registry& registry, entt::entity nod
     if (call->status.ok()) {
         if (AsyncLeaseLeaseGrantHandler) {
             AsyncLeaseLeaseGrantHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC Lease.LeaseGrant reply dropped: AsyncLeaseLeaseGrantHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncLeaseLeaseGrantFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "Lease.LeaseGrant", call->context, call->status, call->sentMetadata};
+        AsyncLeaseLeaseGrantFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC Lease.LeaseGrant failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	LeaseLeaseGrantPool.destroy(call);
@@ -419,15 +493,7 @@ void AsyncCompleteGrpcLeaseLeaseGrant(entt::registry& registry, entt::entity nod
 
 void SendLeaseLeaseGrant(entt::registry& registry, entt::entity nodeEntity, const ::etcdserverpb::LeaseGrantRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(LeaseLeaseGrantPool.construct());
-    call->response_reader = registry
-        .get<LeaseStubPtr>(nodeEntity)
-        ->PrepareAsyncLeaseGrant(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(LeaseLeaseGrantMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendLeaseLeaseGrant(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -437,13 +503,17 @@ void SendLeaseLeaseGrant(entt::registry& registry, entt::entity nodeEntity, cons
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<LeaseStubPtr>(nodeEntity)
-        ->PrepareAsyncLeaseGrant(&call->context, request,
+        ->PrepareAsyncLeaseGrant(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(LeaseLeaseGrantMessageId, (void*)call));
@@ -461,6 +531,7 @@ boost::object_pool<AsyncLeaseLeaseRevokeGrpcClient> LeaseLeaseRevokePool;
 using AsyncLeaseLeaseRevokeHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::LeaseRevokeResponse&)>;
 AsyncLeaseLeaseRevokeHandlerFunctionType AsyncLeaseLeaseRevokeHandler;
+AsyncLeaseLeaseRevokeFailedHandlerFunctionType AsyncLeaseLeaseRevokeFailedHandler;
 
 void AsyncCompleteGrpcLeaseLeaseRevoke(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -468,9 +539,22 @@ void AsyncCompleteGrpcLeaseLeaseRevoke(entt::registry& registry, entt::entity no
     if (call->status.ok()) {
         if (AsyncLeaseLeaseRevokeHandler) {
             AsyncLeaseLeaseRevokeHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC Lease.LeaseRevoke reply dropped: AsyncLeaseLeaseRevokeHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncLeaseLeaseRevokeFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "Lease.LeaseRevoke", call->context, call->status, call->sentMetadata};
+        AsyncLeaseLeaseRevokeFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC Lease.LeaseRevoke failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	LeaseLeaseRevokePool.destroy(call);
@@ -478,15 +562,7 @@ void AsyncCompleteGrpcLeaseLeaseRevoke(entt::registry& registry, entt::entity no
 
 void SendLeaseLeaseRevoke(entt::registry& registry, entt::entity nodeEntity, const ::etcdserverpb::LeaseRevokeRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(LeaseLeaseRevokePool.construct());
-    call->response_reader = registry
-        .get<LeaseStubPtr>(nodeEntity)
-        ->PrepareAsyncLeaseRevoke(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(LeaseLeaseRevokeMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendLeaseLeaseRevoke(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -496,13 +572,17 @@ void SendLeaseLeaseRevoke(entt::registry& registry, entt::entity nodeEntity, con
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<LeaseStubPtr>(nodeEntity)
-        ->PrepareAsyncLeaseRevoke(&call->context, request,
+        ->PrepareAsyncLeaseRevoke(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(LeaseLeaseRevokeMessageId, (void*)call));
@@ -608,6 +688,7 @@ boost::object_pool<AsyncLeaseLeaseTimeToLiveGrpcClient> LeaseLeaseTimeToLivePool
 using AsyncLeaseLeaseTimeToLiveHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::LeaseTimeToLiveResponse&)>;
 AsyncLeaseLeaseTimeToLiveHandlerFunctionType AsyncLeaseLeaseTimeToLiveHandler;
+AsyncLeaseLeaseTimeToLiveFailedHandlerFunctionType AsyncLeaseLeaseTimeToLiveFailedHandler;
 
 void AsyncCompleteGrpcLeaseLeaseTimeToLive(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -615,9 +696,22 @@ void AsyncCompleteGrpcLeaseLeaseTimeToLive(entt::registry& registry, entt::entit
     if (call->status.ok()) {
         if (AsyncLeaseLeaseTimeToLiveHandler) {
             AsyncLeaseLeaseTimeToLiveHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC Lease.LeaseTimeToLive reply dropped: AsyncLeaseLeaseTimeToLiveHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncLeaseLeaseTimeToLiveFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "Lease.LeaseTimeToLive", call->context, call->status, call->sentMetadata};
+        AsyncLeaseLeaseTimeToLiveFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC Lease.LeaseTimeToLive failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	LeaseLeaseTimeToLivePool.destroy(call);
@@ -625,15 +719,7 @@ void AsyncCompleteGrpcLeaseLeaseTimeToLive(entt::registry& registry, entt::entit
 
 void SendLeaseLeaseTimeToLive(entt::registry& registry, entt::entity nodeEntity, const ::etcdserverpb::LeaseTimeToLiveRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(LeaseLeaseTimeToLivePool.construct());
-    call->response_reader = registry
-        .get<LeaseStubPtr>(nodeEntity)
-        ->PrepareAsyncLeaseTimeToLive(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(LeaseLeaseTimeToLiveMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendLeaseLeaseTimeToLive(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -643,13 +729,17 @@ void SendLeaseLeaseTimeToLive(entt::registry& registry, entt::entity nodeEntity,
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<LeaseStubPtr>(nodeEntity)
-        ->PrepareAsyncLeaseTimeToLive(&call->context, request,
+        ->PrepareAsyncLeaseTimeToLive(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(LeaseLeaseTimeToLiveMessageId, (void*)call));
@@ -667,6 +757,7 @@ boost::object_pool<AsyncLeaseLeaseLeasesGrpcClient> LeaseLeaseLeasesPool;
 using AsyncLeaseLeaseLeasesHandlerFunctionType =
     std::function<void(const ClientContext&, const ::etcdserverpb::LeaseLeasesResponse&)>;
 AsyncLeaseLeaseLeasesHandlerFunctionType AsyncLeaseLeaseLeasesHandler;
+AsyncLeaseLeaseLeasesFailedHandlerFunctionType AsyncLeaseLeaseLeasesFailedHandler;
 
 void AsyncCompleteGrpcLeaseLeaseLeases(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -674,9 +765,22 @@ void AsyncCompleteGrpcLeaseLeaseLeases(entt::registry& registry, entt::entity no
     if (call->status.ok()) {
         if (AsyncLeaseLeaseLeasesHandler) {
             AsyncLeaseLeaseLeasesHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC Lease.LeaseLeases reply dropped: AsyncLeaseLeaseLeasesHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncLeaseLeaseLeasesFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "Lease.LeaseLeases", call->context, call->status, call->sentMetadata};
+        AsyncLeaseLeaseLeasesFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC Lease.LeaseLeases failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	LeaseLeaseLeasesPool.destroy(call);
@@ -684,15 +788,7 @@ void AsyncCompleteGrpcLeaseLeaseLeases(entt::registry& registry, entt::entity no
 
 void SendLeaseLeaseLeases(entt::registry& registry, entt::entity nodeEntity, const ::etcdserverpb::LeaseLeasesRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(LeaseLeaseLeasesPool.construct());
-    call->response_reader = registry
-        .get<LeaseStubPtr>(nodeEntity)
-        ->PrepareAsyncLeaseLeases(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(LeaseLeaseLeasesMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendLeaseLeaseLeases(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -702,13 +798,17 @@ void SendLeaseLeaseLeases(entt::registry& registry, entt::entity nodeEntity, con
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<LeaseStubPtr>(nodeEntity)
-        ->PrepareAsyncLeaseLeases(&call->context, request,
+        ->PrepareAsyncLeaseLeases(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(LeaseLeaseLeasesMessageId, (void*)call));
@@ -823,6 +923,52 @@ void SetEtcdIfEmptyHandler(const std::function<void(const ClientContext&, const 
     if (!AsyncLeaseLeaseLeasesHandler) {
         AsyncLeaseLeaseLeasesHandler = handler;
     }
+}
+
+void SetEtcdFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler) {
+    AsyncKVRangeFailedHandler = handler;
+    AsyncKVPutFailedHandler = handler;
+    AsyncKVDeleteRangeFailedHandler = handler;
+    AsyncKVTxnFailedHandler = handler;
+    AsyncKVCompactFailedHandler = handler;
+    AsyncLeaseLeaseGrantFailedHandler = handler;
+    AsyncLeaseLeaseRevokeFailedHandler = handler;
+    AsyncLeaseLeaseTimeToLiveFailedHandler = handler;
+    AsyncLeaseLeaseLeasesFailedHandler = handler;
+}
+
+void SetEtcdIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler) {
+    if (!AsyncKVRangeFailedHandler) {
+        AsyncKVRangeFailedHandler = handler;
+    }
+    if (!AsyncKVPutFailedHandler) {
+        AsyncKVPutFailedHandler = handler;
+    }
+    if (!AsyncKVDeleteRangeFailedHandler) {
+        AsyncKVDeleteRangeFailedHandler = handler;
+    }
+    if (!AsyncKVTxnFailedHandler) {
+        AsyncKVTxnFailedHandler = handler;
+    }
+    if (!AsyncKVCompactFailedHandler) {
+        AsyncKVCompactFailedHandler = handler;
+    }
+    if (!AsyncLeaseLeaseGrantFailedHandler) {
+        AsyncLeaseLeaseGrantFailedHandler = handler;
+    }
+    if (!AsyncLeaseLeaseRevokeFailedHandler) {
+        AsyncLeaseLeaseRevokeFailedHandler = handler;
+    }
+    if (!AsyncLeaseLeaseTimeToLiveFailedHandler) {
+        AsyncLeaseLeaseTimeToLiveFailedHandler = handler;
+    }
+    if (!AsyncLeaseLeaseLeasesFailedHandler) {
+        AsyncLeaseLeaseLeasesFailedHandler = handler;
+    }
+}
+
+void SetEtcdCallDeadline(std::chrono::milliseconds deadline) {
+    callDeadlineMs.store(static_cast<uint32_t>(deadline.count()), std::memory_order_relaxed);
 }
 
 void InitEtcdGrpcNode(const std::shared_ptr<::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity) {

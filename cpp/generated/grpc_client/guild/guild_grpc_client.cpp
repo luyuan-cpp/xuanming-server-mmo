@@ -3,11 +3,21 @@
 #include "guild_grpc_client.h"
 #include "proto/common/constants/etcd_grpc.pb.h"
 #include "core/utils/encode/base64.h"
+#include <atomic>
+#include <chrono>
 #include <boost/pool/object_pool.hpp>
 #include "grpc_call_tag.h"
 
 namespace {
 boost::object_pool<GrpcTag> tagPool;
+// 本文件所有 unary 调用的 deadline(毫秒)。启动时 SetGuildCallDeadline 按目标节点类型写入
+// (Node::Initialize → grpc_call_deadline::Apply);原子量:与应答处理器一样是进程级全局。
+std::atomic<uint32_t> callDeadlineMs{kDefaultGrpcCallDeadlineMs};
+
+std::chrono::system_clock::time_point NextCallDeadline() {
+    return std::chrono::system_clock::now() +
+        std::chrono::milliseconds(callDeadlineMs.load(std::memory_order_relaxed));
+}
 }
 
 namespace guildpb {
@@ -19,6 +29,7 @@ boost::object_pool<AsyncGuildServiceCreateGuildGrpcClient> GuildServiceCreateGui
 using AsyncGuildServiceCreateGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::CreateGuildResponse&)>;
 AsyncGuildServiceCreateGuildHandlerFunctionType AsyncGuildServiceCreateGuildHandler;
+AsyncGuildServiceCreateGuildFailedHandlerFunctionType AsyncGuildServiceCreateGuildFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceCreateGuild(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -26,9 +37,22 @@ void AsyncCompleteGrpcGuildServiceCreateGuild(entt::registry& registry, entt::en
     if (call->status.ok()) {
         if (AsyncGuildServiceCreateGuildHandler) {
             AsyncGuildServiceCreateGuildHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.CreateGuild reply dropped: AsyncGuildServiceCreateGuildHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceCreateGuildFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.CreateGuild", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceCreateGuildFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.CreateGuild failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceCreateGuildPool.destroy(call);
@@ -36,15 +60,7 @@ void AsyncCompleteGrpcGuildServiceCreateGuild(entt::registry& registry, entt::en
 
 void SendGuildServiceCreateGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::CreateGuildRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceCreateGuildPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncCreateGuild(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceCreateGuildMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceCreateGuild(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -54,13 +70,17 @@ void SendGuildServiceCreateGuild(entt::registry& registry, entt::entity nodeEnti
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncCreateGuild(&call->context, request,
+        ->PrepareAsyncCreateGuild(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceCreateGuildMessageId, (void*)call));
@@ -78,6 +98,7 @@ boost::object_pool<AsyncGuildServiceGetGuildGrpcClient> GuildServiceGetGuildPool
 using AsyncGuildServiceGetGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::GetGuildResponse&)>;
 AsyncGuildServiceGetGuildHandlerFunctionType AsyncGuildServiceGetGuildHandler;
+AsyncGuildServiceGetGuildFailedHandlerFunctionType AsyncGuildServiceGetGuildFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceGetGuild(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -85,9 +106,22 @@ void AsyncCompleteGrpcGuildServiceGetGuild(entt::registry& registry, entt::entit
     if (call->status.ok()) {
         if (AsyncGuildServiceGetGuildHandler) {
             AsyncGuildServiceGetGuildHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.GetGuild reply dropped: AsyncGuildServiceGetGuildHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceGetGuildFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.GetGuild", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceGetGuildFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.GetGuild failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceGetGuildPool.destroy(call);
@@ -95,15 +129,7 @@ void AsyncCompleteGrpcGuildServiceGetGuild(entt::registry& registry, entt::entit
 
 void SendGuildServiceGetGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceGetGuildPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetGuild(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceGetGuildMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceGetGuild(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -113,13 +139,17 @@ void SendGuildServiceGetGuild(entt::registry& registry, entt::entity nodeEntity,
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetGuild(&call->context, request,
+        ->PrepareAsyncGetGuild(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceGetGuildMessageId, (void*)call));
@@ -137,6 +167,7 @@ boost::object_pool<AsyncGuildServiceGetPlayerGuildGrpcClient> GuildServiceGetPla
 using AsyncGuildServiceGetPlayerGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::GetPlayerGuildResponse&)>;
 AsyncGuildServiceGetPlayerGuildHandlerFunctionType AsyncGuildServiceGetPlayerGuildHandler;
+AsyncGuildServiceGetPlayerGuildFailedHandlerFunctionType AsyncGuildServiceGetPlayerGuildFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceGetPlayerGuild(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -144,9 +175,22 @@ void AsyncCompleteGrpcGuildServiceGetPlayerGuild(entt::registry& registry, entt:
     if (call->status.ok()) {
         if (AsyncGuildServiceGetPlayerGuildHandler) {
             AsyncGuildServiceGetPlayerGuildHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.GetPlayerGuild reply dropped: AsyncGuildServiceGetPlayerGuildHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceGetPlayerGuildFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.GetPlayerGuild", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceGetPlayerGuildFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.GetPlayerGuild failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceGetPlayerGuildPool.destroy(call);
@@ -154,15 +198,7 @@ void AsyncCompleteGrpcGuildServiceGetPlayerGuild(entt::registry& registry, entt:
 
 void SendGuildServiceGetPlayerGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetPlayerGuildRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceGetPlayerGuildPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetPlayerGuild(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceGetPlayerGuildMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceGetPlayerGuild(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -172,13 +208,17 @@ void SendGuildServiceGetPlayerGuild(entt::registry& registry, entt::entity nodeE
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetPlayerGuild(&call->context, request,
+        ->PrepareAsyncGetPlayerGuild(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceGetPlayerGuildMessageId, (void*)call));
@@ -196,6 +236,7 @@ boost::object_pool<AsyncGuildServiceLeaveGuildGrpcClient> GuildServiceLeaveGuild
 using AsyncGuildServiceLeaveGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::LeaveGuildResponse&)>;
 AsyncGuildServiceLeaveGuildHandlerFunctionType AsyncGuildServiceLeaveGuildHandler;
+AsyncGuildServiceLeaveGuildFailedHandlerFunctionType AsyncGuildServiceLeaveGuildFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceLeaveGuild(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -203,9 +244,22 @@ void AsyncCompleteGrpcGuildServiceLeaveGuild(entt::registry& registry, entt::ent
     if (call->status.ok()) {
         if (AsyncGuildServiceLeaveGuildHandler) {
             AsyncGuildServiceLeaveGuildHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.LeaveGuild reply dropped: AsyncGuildServiceLeaveGuildHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceLeaveGuildFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.LeaveGuild", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceLeaveGuildFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.LeaveGuild failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceLeaveGuildPool.destroy(call);
@@ -213,15 +267,7 @@ void AsyncCompleteGrpcGuildServiceLeaveGuild(entt::registry& registry, entt::ent
 
 void SendGuildServiceLeaveGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::LeaveGuildRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceLeaveGuildPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncLeaveGuild(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceLeaveGuildMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceLeaveGuild(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -231,13 +277,17 @@ void SendGuildServiceLeaveGuild(entt::registry& registry, entt::entity nodeEntit
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncLeaveGuild(&call->context, request,
+        ->PrepareAsyncLeaveGuild(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceLeaveGuildMessageId, (void*)call));
@@ -255,6 +305,7 @@ boost::object_pool<AsyncGuildServiceDisbandGuildGrpcClient> GuildServiceDisbandG
 using AsyncGuildServiceDisbandGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::DisbandGuildResponse&)>;
 AsyncGuildServiceDisbandGuildHandlerFunctionType AsyncGuildServiceDisbandGuildHandler;
+AsyncGuildServiceDisbandGuildFailedHandlerFunctionType AsyncGuildServiceDisbandGuildFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceDisbandGuild(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -262,9 +313,22 @@ void AsyncCompleteGrpcGuildServiceDisbandGuild(entt::registry& registry, entt::e
     if (call->status.ok()) {
         if (AsyncGuildServiceDisbandGuildHandler) {
             AsyncGuildServiceDisbandGuildHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.DisbandGuild reply dropped: AsyncGuildServiceDisbandGuildHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceDisbandGuildFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.DisbandGuild", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceDisbandGuildFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.DisbandGuild failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceDisbandGuildPool.destroy(call);
@@ -272,15 +336,7 @@ void AsyncCompleteGrpcGuildServiceDisbandGuild(entt::registry& registry, entt::e
 
 void SendGuildServiceDisbandGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::DisbandGuildRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceDisbandGuildPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncDisbandGuild(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceDisbandGuildMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceDisbandGuild(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -290,13 +346,17 @@ void SendGuildServiceDisbandGuild(entt::registry& registry, entt::entity nodeEnt
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncDisbandGuild(&call->context, request,
+        ->PrepareAsyncDisbandGuild(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceDisbandGuildMessageId, (void*)call));
@@ -314,6 +374,7 @@ boost::object_pool<AsyncGuildServiceSetAnnouncementGrpcClient> GuildServiceSetAn
 using AsyncGuildServiceSetAnnouncementHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::SetAnnouncementResponse&)>;
 AsyncGuildServiceSetAnnouncementHandlerFunctionType AsyncGuildServiceSetAnnouncementHandler;
+AsyncGuildServiceSetAnnouncementFailedHandlerFunctionType AsyncGuildServiceSetAnnouncementFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceSetAnnouncement(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -321,9 +382,22 @@ void AsyncCompleteGrpcGuildServiceSetAnnouncement(entt::registry& registry, entt
     if (call->status.ok()) {
         if (AsyncGuildServiceSetAnnouncementHandler) {
             AsyncGuildServiceSetAnnouncementHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.SetAnnouncement reply dropped: AsyncGuildServiceSetAnnouncementHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceSetAnnouncementFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.SetAnnouncement", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceSetAnnouncementFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.SetAnnouncement failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceSetAnnouncementPool.destroy(call);
@@ -331,15 +405,7 @@ void AsyncCompleteGrpcGuildServiceSetAnnouncement(entt::registry& registry, entt
 
 void SendGuildServiceSetAnnouncement(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::SetAnnouncementRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceSetAnnouncementPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncSetAnnouncement(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceSetAnnouncementMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceSetAnnouncement(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -349,13 +415,17 @@ void SendGuildServiceSetAnnouncement(entt::registry& registry, entt::entity node
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncSetAnnouncement(&call->context, request,
+        ->PrepareAsyncSetAnnouncement(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceSetAnnouncementMessageId, (void*)call));
@@ -373,6 +443,7 @@ boost::object_pool<AsyncGuildServiceSetGuildMemberRoleGrpcClient> GuildServiceSe
 using AsyncGuildServiceSetGuildMemberRoleHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::SetGuildMemberRoleResponse&)>;
 AsyncGuildServiceSetGuildMemberRoleHandlerFunctionType AsyncGuildServiceSetGuildMemberRoleHandler;
+AsyncGuildServiceSetGuildMemberRoleFailedHandlerFunctionType AsyncGuildServiceSetGuildMemberRoleFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceSetGuildMemberRole(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -380,9 +451,22 @@ void AsyncCompleteGrpcGuildServiceSetGuildMemberRole(entt::registry& registry, e
     if (call->status.ok()) {
         if (AsyncGuildServiceSetGuildMemberRoleHandler) {
             AsyncGuildServiceSetGuildMemberRoleHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.SetGuildMemberRole reply dropped: AsyncGuildServiceSetGuildMemberRoleHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceSetGuildMemberRoleFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.SetGuildMemberRole", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceSetGuildMemberRoleFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.SetGuildMemberRole failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceSetGuildMemberRolePool.destroy(call);
@@ -390,15 +474,7 @@ void AsyncCompleteGrpcGuildServiceSetGuildMemberRole(entt::registry& registry, e
 
 void SendGuildServiceSetGuildMemberRole(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::SetGuildMemberRoleRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceSetGuildMemberRolePool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncSetGuildMemberRole(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceSetGuildMemberRoleMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceSetGuildMemberRole(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -408,13 +484,17 @@ void SendGuildServiceSetGuildMemberRole(entt::registry& registry, entt::entity n
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncSetGuildMemberRole(&call->context, request,
+        ->PrepareAsyncSetGuildMemberRole(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceSetGuildMemberRoleMessageId, (void*)call));
@@ -432,6 +512,7 @@ boost::object_pool<AsyncGuildServiceKickGuildMemberGrpcClient> GuildServiceKickG
 using AsyncGuildServiceKickGuildMemberHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::KickGuildMemberResponse&)>;
 AsyncGuildServiceKickGuildMemberHandlerFunctionType AsyncGuildServiceKickGuildMemberHandler;
+AsyncGuildServiceKickGuildMemberFailedHandlerFunctionType AsyncGuildServiceKickGuildMemberFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceKickGuildMember(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -439,9 +520,22 @@ void AsyncCompleteGrpcGuildServiceKickGuildMember(entt::registry& registry, entt
     if (call->status.ok()) {
         if (AsyncGuildServiceKickGuildMemberHandler) {
             AsyncGuildServiceKickGuildMemberHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.KickGuildMember reply dropped: AsyncGuildServiceKickGuildMemberHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceKickGuildMemberFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.KickGuildMember", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceKickGuildMemberFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.KickGuildMember failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceKickGuildMemberPool.destroy(call);
@@ -449,15 +543,7 @@ void AsyncCompleteGrpcGuildServiceKickGuildMember(entt::registry& registry, entt
 
 void SendGuildServiceKickGuildMember(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::KickGuildMemberRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceKickGuildMemberPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncKickGuildMember(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceKickGuildMemberMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceKickGuildMember(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -467,13 +553,17 @@ void SendGuildServiceKickGuildMember(entt::registry& registry, entt::entity node
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncKickGuildMember(&call->context, request,
+        ->PrepareAsyncKickGuildMember(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceKickGuildMemberMessageId, (void*)call));
@@ -491,6 +581,7 @@ boost::object_pool<AsyncGuildServiceTransferGuildLeaderGrpcClient> GuildServiceT
 using AsyncGuildServiceTransferGuildLeaderHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::TransferGuildLeaderResponse&)>;
 AsyncGuildServiceTransferGuildLeaderHandlerFunctionType AsyncGuildServiceTransferGuildLeaderHandler;
+AsyncGuildServiceTransferGuildLeaderFailedHandlerFunctionType AsyncGuildServiceTransferGuildLeaderFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceTransferGuildLeader(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -498,9 +589,22 @@ void AsyncCompleteGrpcGuildServiceTransferGuildLeader(entt::registry& registry, 
     if (call->status.ok()) {
         if (AsyncGuildServiceTransferGuildLeaderHandler) {
             AsyncGuildServiceTransferGuildLeaderHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.TransferGuildLeader reply dropped: AsyncGuildServiceTransferGuildLeaderHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceTransferGuildLeaderFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.TransferGuildLeader", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceTransferGuildLeaderFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.TransferGuildLeader failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceTransferGuildLeaderPool.destroy(call);
@@ -508,15 +612,7 @@ void AsyncCompleteGrpcGuildServiceTransferGuildLeader(entt::registry& registry, 
 
 void SendGuildServiceTransferGuildLeader(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::TransferGuildLeaderRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceTransferGuildLeaderPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncTransferGuildLeader(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceTransferGuildLeaderMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceTransferGuildLeader(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -526,13 +622,17 @@ void SendGuildServiceTransferGuildLeader(entt::registry& registry, entt::entity 
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncTransferGuildLeader(&call->context, request,
+        ->PrepareAsyncTransferGuildLeader(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceTransferGuildLeaderMessageId, (void*)call));
@@ -550,6 +650,7 @@ boost::object_pool<AsyncGuildServiceApplyJoinGuildGrpcClient> GuildServiceApplyJ
 using AsyncGuildServiceApplyJoinGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::ApplyJoinGuildResponse&)>;
 AsyncGuildServiceApplyJoinGuildHandlerFunctionType AsyncGuildServiceApplyJoinGuildHandler;
+AsyncGuildServiceApplyJoinGuildFailedHandlerFunctionType AsyncGuildServiceApplyJoinGuildFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceApplyJoinGuild(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -557,9 +658,22 @@ void AsyncCompleteGrpcGuildServiceApplyJoinGuild(entt::registry& registry, entt:
     if (call->status.ok()) {
         if (AsyncGuildServiceApplyJoinGuildHandler) {
             AsyncGuildServiceApplyJoinGuildHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.ApplyJoinGuild reply dropped: AsyncGuildServiceApplyJoinGuildHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceApplyJoinGuildFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.ApplyJoinGuild", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceApplyJoinGuildFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.ApplyJoinGuild failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceApplyJoinGuildPool.destroy(call);
@@ -567,15 +681,7 @@ void AsyncCompleteGrpcGuildServiceApplyJoinGuild(entt::registry& registry, entt:
 
 void SendGuildServiceApplyJoinGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ApplyJoinGuildRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceApplyJoinGuildPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncApplyJoinGuild(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceApplyJoinGuildMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceApplyJoinGuild(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -585,13 +691,17 @@ void SendGuildServiceApplyJoinGuild(entt::registry& registry, entt::entity nodeE
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncApplyJoinGuild(&call->context, request,
+        ->PrepareAsyncApplyJoinGuild(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceApplyJoinGuildMessageId, (void*)call));
@@ -609,6 +719,7 @@ boost::object_pool<AsyncGuildServiceCancelGuildApplicationGrpcClient> GuildServi
 using AsyncGuildServiceCancelGuildApplicationHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::CancelGuildApplicationResponse&)>;
 AsyncGuildServiceCancelGuildApplicationHandlerFunctionType AsyncGuildServiceCancelGuildApplicationHandler;
+AsyncGuildServiceCancelGuildApplicationFailedHandlerFunctionType AsyncGuildServiceCancelGuildApplicationFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceCancelGuildApplication(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -616,9 +727,22 @@ void AsyncCompleteGrpcGuildServiceCancelGuildApplication(entt::registry& registr
     if (call->status.ok()) {
         if (AsyncGuildServiceCancelGuildApplicationHandler) {
             AsyncGuildServiceCancelGuildApplicationHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.CancelGuildApplication reply dropped: AsyncGuildServiceCancelGuildApplicationHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceCancelGuildApplicationFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.CancelGuildApplication", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceCancelGuildApplicationFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.CancelGuildApplication failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceCancelGuildApplicationPool.destroy(call);
@@ -626,15 +750,7 @@ void AsyncCompleteGrpcGuildServiceCancelGuildApplication(entt::registry& registr
 
 void SendGuildServiceCancelGuildApplication(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::CancelGuildApplicationRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceCancelGuildApplicationPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncCancelGuildApplication(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceCancelGuildApplicationMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceCancelGuildApplication(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -644,13 +760,17 @@ void SendGuildServiceCancelGuildApplication(entt::registry& registry, entt::enti
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncCancelGuildApplication(&call->context, request,
+        ->PrepareAsyncCancelGuildApplication(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceCancelGuildApplicationMessageId, (void*)call));
@@ -668,6 +788,7 @@ boost::object_pool<AsyncGuildServiceListMyGuildApplicationsGrpcClient> GuildServ
 using AsyncGuildServiceListMyGuildApplicationsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::ListMyGuildApplicationsResponse&)>;
 AsyncGuildServiceListMyGuildApplicationsHandlerFunctionType AsyncGuildServiceListMyGuildApplicationsHandler;
+AsyncGuildServiceListMyGuildApplicationsFailedHandlerFunctionType AsyncGuildServiceListMyGuildApplicationsFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceListMyGuildApplications(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -675,9 +796,22 @@ void AsyncCompleteGrpcGuildServiceListMyGuildApplications(entt::registry& regist
     if (call->status.ok()) {
         if (AsyncGuildServiceListMyGuildApplicationsHandler) {
             AsyncGuildServiceListMyGuildApplicationsHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.ListMyGuildApplications reply dropped: AsyncGuildServiceListMyGuildApplicationsHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceListMyGuildApplicationsFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.ListMyGuildApplications", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceListMyGuildApplicationsFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.ListMyGuildApplications failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceListMyGuildApplicationsPool.destroy(call);
@@ -685,15 +819,7 @@ void AsyncCompleteGrpcGuildServiceListMyGuildApplications(entt::registry& regist
 
 void SendGuildServiceListMyGuildApplications(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ListMyGuildApplicationsRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceListMyGuildApplicationsPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncListMyGuildApplications(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceListMyGuildApplicationsMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceListMyGuildApplications(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -703,13 +829,17 @@ void SendGuildServiceListMyGuildApplications(entt::registry& registry, entt::ent
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncListMyGuildApplications(&call->context, request,
+        ->PrepareAsyncListMyGuildApplications(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceListMyGuildApplicationsMessageId, (void*)call));
@@ -727,6 +857,7 @@ boost::object_pool<AsyncGuildServiceListGuildApplicationsGrpcClient> GuildServic
 using AsyncGuildServiceListGuildApplicationsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::ListGuildApplicationsResponse&)>;
 AsyncGuildServiceListGuildApplicationsHandlerFunctionType AsyncGuildServiceListGuildApplicationsHandler;
+AsyncGuildServiceListGuildApplicationsFailedHandlerFunctionType AsyncGuildServiceListGuildApplicationsFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceListGuildApplications(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -734,9 +865,22 @@ void AsyncCompleteGrpcGuildServiceListGuildApplications(entt::registry& registry
     if (call->status.ok()) {
         if (AsyncGuildServiceListGuildApplicationsHandler) {
             AsyncGuildServiceListGuildApplicationsHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.ListGuildApplications reply dropped: AsyncGuildServiceListGuildApplicationsHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceListGuildApplicationsFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.ListGuildApplications", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceListGuildApplicationsFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.ListGuildApplications failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceListGuildApplicationsPool.destroy(call);
@@ -744,15 +888,7 @@ void AsyncCompleteGrpcGuildServiceListGuildApplications(entt::registry& registry
 
 void SendGuildServiceListGuildApplications(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ListGuildApplicationsRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceListGuildApplicationsPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncListGuildApplications(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceListGuildApplicationsMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceListGuildApplications(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -762,13 +898,17 @@ void SendGuildServiceListGuildApplications(entt::registry& registry, entt::entit
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncListGuildApplications(&call->context, request,
+        ->PrepareAsyncListGuildApplications(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceListGuildApplicationsMessageId, (void*)call));
@@ -786,6 +926,7 @@ boost::object_pool<AsyncGuildServiceReviewGuildApplicationGrpcClient> GuildServi
 using AsyncGuildServiceReviewGuildApplicationHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::ReviewGuildApplicationResponse&)>;
 AsyncGuildServiceReviewGuildApplicationHandlerFunctionType AsyncGuildServiceReviewGuildApplicationHandler;
+AsyncGuildServiceReviewGuildApplicationFailedHandlerFunctionType AsyncGuildServiceReviewGuildApplicationFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceReviewGuildApplication(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -793,9 +934,22 @@ void AsyncCompleteGrpcGuildServiceReviewGuildApplication(entt::registry& registr
     if (call->status.ok()) {
         if (AsyncGuildServiceReviewGuildApplicationHandler) {
             AsyncGuildServiceReviewGuildApplicationHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.ReviewGuildApplication reply dropped: AsyncGuildServiceReviewGuildApplicationHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceReviewGuildApplicationFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.ReviewGuildApplication", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceReviewGuildApplicationFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.ReviewGuildApplication failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceReviewGuildApplicationPool.destroy(call);
@@ -803,15 +957,7 @@ void AsyncCompleteGrpcGuildServiceReviewGuildApplication(entt::registry& registr
 
 void SendGuildServiceReviewGuildApplication(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ReviewGuildApplicationRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceReviewGuildApplicationPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncReviewGuildApplication(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceReviewGuildApplicationMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceReviewGuildApplication(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -821,13 +967,17 @@ void SendGuildServiceReviewGuildApplication(entt::registry& registry, entt::enti
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncReviewGuildApplication(&call->context, request,
+        ->PrepareAsyncReviewGuildApplication(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceReviewGuildApplicationMessageId, (void*)call));
@@ -845,6 +995,7 @@ boost::object_pool<AsyncGuildServiceNotifyGuildChangedGrpcClient> GuildServiceNo
 using AsyncGuildServiceNotifyGuildChangedHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 AsyncGuildServiceNotifyGuildChangedHandlerFunctionType AsyncGuildServiceNotifyGuildChangedHandler;
+AsyncGuildServiceNotifyGuildChangedFailedHandlerFunctionType AsyncGuildServiceNotifyGuildChangedFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceNotifyGuildChanged(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -852,9 +1003,22 @@ void AsyncCompleteGrpcGuildServiceNotifyGuildChanged(entt::registry& registry, e
     if (call->status.ok()) {
         if (AsyncGuildServiceNotifyGuildChangedHandler) {
             AsyncGuildServiceNotifyGuildChangedHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.NotifyGuildChanged reply dropped: AsyncGuildServiceNotifyGuildChangedHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceNotifyGuildChangedFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.NotifyGuildChanged", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceNotifyGuildChangedFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.NotifyGuildChanged failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceNotifyGuildChangedPool.destroy(call);
@@ -862,15 +1026,7 @@ void AsyncCompleteGrpcGuildServiceNotifyGuildChanged(entt::registry& registry, e
 
 void SendGuildServiceNotifyGuildChanged(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GuildChangedS2C& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceNotifyGuildChangedPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncNotifyGuildChanged(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceNotifyGuildChangedMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceNotifyGuildChanged(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -880,13 +1036,17 @@ void SendGuildServiceNotifyGuildChanged(entt::registry& registry, entt::entity n
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncNotifyGuildChanged(&call->context, request,
+        ->PrepareAsyncNotifyGuildChanged(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceNotifyGuildChangedMessageId, (void*)call));
@@ -904,6 +1064,7 @@ boost::object_pool<AsyncGuildServiceUpdateGuildScoreGrpcClient> GuildServiceUpda
 using AsyncGuildServiceUpdateGuildScoreHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::UpdateGuildScoreResponse&)>;
 AsyncGuildServiceUpdateGuildScoreHandlerFunctionType AsyncGuildServiceUpdateGuildScoreHandler;
+AsyncGuildServiceUpdateGuildScoreFailedHandlerFunctionType AsyncGuildServiceUpdateGuildScoreFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceUpdateGuildScore(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -911,9 +1072,22 @@ void AsyncCompleteGrpcGuildServiceUpdateGuildScore(entt::registry& registry, ent
     if (call->status.ok()) {
         if (AsyncGuildServiceUpdateGuildScoreHandler) {
             AsyncGuildServiceUpdateGuildScoreHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.UpdateGuildScore reply dropped: AsyncGuildServiceUpdateGuildScoreHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceUpdateGuildScoreFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.UpdateGuildScore", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceUpdateGuildScoreFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.UpdateGuildScore failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceUpdateGuildScorePool.destroy(call);
@@ -921,15 +1095,7 @@ void AsyncCompleteGrpcGuildServiceUpdateGuildScore(entt::registry& registry, ent
 
 void SendGuildServiceUpdateGuildScore(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::UpdateGuildScoreRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceUpdateGuildScorePool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncUpdateGuildScore(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceUpdateGuildScoreMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceUpdateGuildScore(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -939,13 +1105,17 @@ void SendGuildServiceUpdateGuildScore(entt::registry& registry, entt::entity nod
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncUpdateGuildScore(&call->context, request,
+        ->PrepareAsyncUpdateGuildScore(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceUpdateGuildScoreMessageId, (void*)call));
@@ -963,6 +1133,7 @@ boost::object_pool<AsyncGuildServiceGetGuildRankGrpcClient> GuildServiceGetGuild
 using AsyncGuildServiceGetGuildRankHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::GetGuildRankResponse&)>;
 AsyncGuildServiceGetGuildRankHandlerFunctionType AsyncGuildServiceGetGuildRankHandler;
+AsyncGuildServiceGetGuildRankFailedHandlerFunctionType AsyncGuildServiceGetGuildRankFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceGetGuildRank(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -970,9 +1141,22 @@ void AsyncCompleteGrpcGuildServiceGetGuildRank(entt::registry& registry, entt::e
     if (call->status.ok()) {
         if (AsyncGuildServiceGetGuildRankHandler) {
             AsyncGuildServiceGetGuildRankHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.GetGuildRank reply dropped: AsyncGuildServiceGetGuildRankHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceGetGuildRankFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.GetGuildRank", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceGetGuildRankFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.GetGuildRank failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceGetGuildRankPool.destroy(call);
@@ -980,15 +1164,7 @@ void AsyncCompleteGrpcGuildServiceGetGuildRank(entt::registry& registry, entt::e
 
 void SendGuildServiceGetGuildRank(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildRankRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceGetGuildRankPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetGuildRank(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceGetGuildRankMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceGetGuildRank(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -998,13 +1174,17 @@ void SendGuildServiceGetGuildRank(entt::registry& registry, entt::entity nodeEnt
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetGuildRank(&call->context, request,
+        ->PrepareAsyncGetGuildRank(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceGetGuildRankMessageId, (void*)call));
@@ -1022,6 +1202,7 @@ boost::object_pool<AsyncGuildServiceGetGuildRankByGuildGrpcClient> GuildServiceG
 using AsyncGuildServiceGetGuildRankByGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::GetGuildRankByGuildResponse&)>;
 AsyncGuildServiceGetGuildRankByGuildHandlerFunctionType AsyncGuildServiceGetGuildRankByGuildHandler;
+AsyncGuildServiceGetGuildRankByGuildFailedHandlerFunctionType AsyncGuildServiceGetGuildRankByGuildFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceGetGuildRankByGuild(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -1029,9 +1210,22 @@ void AsyncCompleteGrpcGuildServiceGetGuildRankByGuild(entt::registry& registry, 
     if (call->status.ok()) {
         if (AsyncGuildServiceGetGuildRankByGuildHandler) {
             AsyncGuildServiceGetGuildRankByGuildHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.GetGuildRankByGuild reply dropped: AsyncGuildServiceGetGuildRankByGuildHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceGetGuildRankByGuildFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.GetGuildRankByGuild", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceGetGuildRankByGuildFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.GetGuildRankByGuild failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceGetGuildRankByGuildPool.destroy(call);
@@ -1039,15 +1233,7 @@ void AsyncCompleteGrpcGuildServiceGetGuildRankByGuild(entt::registry& registry, 
 
 void SendGuildServiceGetGuildRankByGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildRankByGuildRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceGetGuildRankByGuildPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetGuildRankByGuild(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceGetGuildRankByGuildMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceGetGuildRankByGuild(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -1057,13 +1243,17 @@ void SendGuildServiceGetGuildRankByGuild(entt::registry& registry, entt::entity 
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetGuildRankByGuild(&call->context, request,
+        ->PrepareAsyncGetGuildRankByGuild(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceGetGuildRankByGuildMessageId, (void*)call));
@@ -1081,6 +1271,7 @@ boost::object_pool<AsyncGuildServiceGetGuildDonateOptionsGrpcClient> GuildServic
 using AsyncGuildServiceGetGuildDonateOptionsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::GetGuildDonateOptionsResponse&)>;
 AsyncGuildServiceGetGuildDonateOptionsHandlerFunctionType AsyncGuildServiceGetGuildDonateOptionsHandler;
+AsyncGuildServiceGetGuildDonateOptionsFailedHandlerFunctionType AsyncGuildServiceGetGuildDonateOptionsFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceGetGuildDonateOptions(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -1088,9 +1279,22 @@ void AsyncCompleteGrpcGuildServiceGetGuildDonateOptions(entt::registry& registry
     if (call->status.ok()) {
         if (AsyncGuildServiceGetGuildDonateOptionsHandler) {
             AsyncGuildServiceGetGuildDonateOptionsHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.GetGuildDonateOptions reply dropped: AsyncGuildServiceGetGuildDonateOptionsHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceGetGuildDonateOptionsFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.GetGuildDonateOptions", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceGetGuildDonateOptionsFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.GetGuildDonateOptions failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceGetGuildDonateOptionsPool.destroy(call);
@@ -1098,15 +1302,7 @@ void AsyncCompleteGrpcGuildServiceGetGuildDonateOptions(entt::registry& registry
 
 void SendGuildServiceGetGuildDonateOptions(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildDonateOptionsRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceGetGuildDonateOptionsPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetGuildDonateOptions(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceGetGuildDonateOptionsMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceGetGuildDonateOptions(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -1116,13 +1312,17 @@ void SendGuildServiceGetGuildDonateOptions(entt::registry& registry, entt::entit
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetGuildDonateOptions(&call->context, request,
+        ->PrepareAsyncGetGuildDonateOptions(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceGetGuildDonateOptionsMessageId, (void*)call));
@@ -1140,6 +1340,7 @@ boost::object_pool<AsyncGuildServiceDonateToGuildGrpcClient> GuildServiceDonateT
 using AsyncGuildServiceDonateToGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::DonateToGuildResponse&)>;
 AsyncGuildServiceDonateToGuildHandlerFunctionType AsyncGuildServiceDonateToGuildHandler;
+AsyncGuildServiceDonateToGuildFailedHandlerFunctionType AsyncGuildServiceDonateToGuildFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceDonateToGuild(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -1147,9 +1348,22 @@ void AsyncCompleteGrpcGuildServiceDonateToGuild(entt::registry& registry, entt::
     if (call->status.ok()) {
         if (AsyncGuildServiceDonateToGuildHandler) {
             AsyncGuildServiceDonateToGuildHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.DonateToGuild reply dropped: AsyncGuildServiceDonateToGuildHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceDonateToGuildFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.DonateToGuild", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceDonateToGuildFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.DonateToGuild failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceDonateToGuildPool.destroy(call);
@@ -1157,15 +1371,7 @@ void AsyncCompleteGrpcGuildServiceDonateToGuild(entt::registry& registry, entt::
 
 void SendGuildServiceDonateToGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::DonateToGuildRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceDonateToGuildPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncDonateToGuild(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceDonateToGuildMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceDonateToGuild(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -1175,13 +1381,17 @@ void SendGuildServiceDonateToGuild(entt::registry& registry, entt::entity nodeEn
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncDonateToGuild(&call->context, request,
+        ->PrepareAsyncDonateToGuild(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceDonateToGuildMessageId, (void*)call));
@@ -1199,6 +1409,7 @@ boost::object_pool<AsyncGuildServiceUpgradeGuildGrpcClient> GuildServiceUpgradeG
 using AsyncGuildServiceUpgradeGuildHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::UpgradeGuildResponse&)>;
 AsyncGuildServiceUpgradeGuildHandlerFunctionType AsyncGuildServiceUpgradeGuildHandler;
+AsyncGuildServiceUpgradeGuildFailedHandlerFunctionType AsyncGuildServiceUpgradeGuildFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceUpgradeGuild(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -1206,9 +1417,22 @@ void AsyncCompleteGrpcGuildServiceUpgradeGuild(entt::registry& registry, entt::e
     if (call->status.ok()) {
         if (AsyncGuildServiceUpgradeGuildHandler) {
             AsyncGuildServiceUpgradeGuildHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.UpgradeGuild reply dropped: AsyncGuildServiceUpgradeGuildHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceUpgradeGuildFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.UpgradeGuild", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceUpgradeGuildFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.UpgradeGuild failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceUpgradeGuildPool.destroy(call);
@@ -1216,15 +1440,7 @@ void AsyncCompleteGrpcGuildServiceUpgradeGuild(entt::registry& registry, entt::e
 
 void SendGuildServiceUpgradeGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::UpgradeGuildRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceUpgradeGuildPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncUpgradeGuild(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceUpgradeGuildMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceUpgradeGuild(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -1234,13 +1450,17 @@ void SendGuildServiceUpgradeGuild(entt::registry& registry, entt::entity nodeEnt
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncUpgradeGuild(&call->context, request,
+        ->PrepareAsyncUpgradeGuild(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceUpgradeGuildMessageId, (void*)call));
@@ -1258,6 +1478,7 @@ boost::object_pool<AsyncGuildServiceGetGuildShopGrpcClient> GuildServiceGetGuild
 using AsyncGuildServiceGetGuildShopHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::GetGuildShopResponse&)>;
 AsyncGuildServiceGetGuildShopHandlerFunctionType AsyncGuildServiceGetGuildShopHandler;
+AsyncGuildServiceGetGuildShopFailedHandlerFunctionType AsyncGuildServiceGetGuildShopFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceGetGuildShop(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -1265,9 +1486,22 @@ void AsyncCompleteGrpcGuildServiceGetGuildShop(entt::registry& registry, entt::e
     if (call->status.ok()) {
         if (AsyncGuildServiceGetGuildShopHandler) {
             AsyncGuildServiceGetGuildShopHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.GetGuildShop reply dropped: AsyncGuildServiceGetGuildShopHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceGetGuildShopFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.GetGuildShop", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceGetGuildShopFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.GetGuildShop failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceGetGuildShopPool.destroy(call);
@@ -1275,15 +1509,7 @@ void AsyncCompleteGrpcGuildServiceGetGuildShop(entt::registry& registry, entt::e
 
 void SendGuildServiceGetGuildShop(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildShopRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceGetGuildShopPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetGuildShop(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceGetGuildShopMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceGetGuildShop(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -1293,13 +1519,17 @@ void SendGuildServiceGetGuildShop(entt::registry& registry, entt::entity nodeEnt
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetGuildShop(&call->context, request,
+        ->PrepareAsyncGetGuildShop(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceGetGuildShopMessageId, (void*)call));
@@ -1317,6 +1547,7 @@ boost::object_pool<AsyncGuildServiceBuyGuildShopGoodsGrpcClient> GuildServiceBuy
 using AsyncGuildServiceBuyGuildShopGoodsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::guildpb::BuyGuildShopGoodsResponse&)>;
 AsyncGuildServiceBuyGuildShopGoodsHandlerFunctionType AsyncGuildServiceBuyGuildShopGoodsHandler;
+AsyncGuildServiceBuyGuildShopGoodsFailedHandlerFunctionType AsyncGuildServiceBuyGuildShopGoodsFailedHandler;
 
 void AsyncCompleteGrpcGuildServiceBuyGuildShopGoods(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -1324,9 +1555,22 @@ void AsyncCompleteGrpcGuildServiceBuyGuildShopGoods(entt::registry& registry, en
     if (call->status.ok()) {
         if (AsyncGuildServiceBuyGuildShopGoodsHandler) {
             AsyncGuildServiceBuyGuildShopGoodsHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.BuyGuildShopGoods reply dropped: AsyncGuildServiceBuyGuildShopGoodsHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncGuildServiceBuyGuildShopGoodsFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.BuyGuildShopGoods", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceBuyGuildShopGoodsFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC GuildService.BuyGuildShopGoods failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	GuildServiceBuyGuildShopGoodsPool.destroy(call);
@@ -1334,15 +1578,7 @@ void AsyncCompleteGrpcGuildServiceBuyGuildShopGoods(entt::registry& registry, en
 
 void SendGuildServiceBuyGuildShopGoods(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::BuyGuildShopGoodsRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceBuyGuildShopGoodsPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncBuyGuildShopGoods(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceBuyGuildShopGoodsMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendGuildServiceBuyGuildShopGoods(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -1352,13 +1588,17 @@ void SendGuildServiceBuyGuildShopGoods(entt::registry& registry, entt::entity no
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncBuyGuildShopGoods(&call->context, request,
+        ->PrepareAsyncBuyGuildShopGoods(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(GuildServiceBuyGuildShopGoodsMessageId, (void*)call));
@@ -1569,6 +1809,108 @@ void SetGuildIfEmptyHandler(const std::function<void(const ClientContext&, const
     if (!AsyncGuildServiceBuyGuildShopGoodsHandler) {
         AsyncGuildServiceBuyGuildShopGoodsHandler = handler;
     }
+}
+
+void SetGuildFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler) {
+    AsyncGuildServiceCreateGuildFailedHandler = handler;
+    AsyncGuildServiceGetGuildFailedHandler = handler;
+    AsyncGuildServiceGetPlayerGuildFailedHandler = handler;
+    AsyncGuildServiceLeaveGuildFailedHandler = handler;
+    AsyncGuildServiceDisbandGuildFailedHandler = handler;
+    AsyncGuildServiceSetAnnouncementFailedHandler = handler;
+    AsyncGuildServiceSetGuildMemberRoleFailedHandler = handler;
+    AsyncGuildServiceKickGuildMemberFailedHandler = handler;
+    AsyncGuildServiceTransferGuildLeaderFailedHandler = handler;
+    AsyncGuildServiceApplyJoinGuildFailedHandler = handler;
+    AsyncGuildServiceCancelGuildApplicationFailedHandler = handler;
+    AsyncGuildServiceListMyGuildApplicationsFailedHandler = handler;
+    AsyncGuildServiceListGuildApplicationsFailedHandler = handler;
+    AsyncGuildServiceReviewGuildApplicationFailedHandler = handler;
+    AsyncGuildServiceNotifyGuildChangedFailedHandler = handler;
+    AsyncGuildServiceUpdateGuildScoreFailedHandler = handler;
+    AsyncGuildServiceGetGuildRankFailedHandler = handler;
+    AsyncGuildServiceGetGuildRankByGuildFailedHandler = handler;
+    AsyncGuildServiceGetGuildDonateOptionsFailedHandler = handler;
+    AsyncGuildServiceDonateToGuildFailedHandler = handler;
+    AsyncGuildServiceUpgradeGuildFailedHandler = handler;
+    AsyncGuildServiceGetGuildShopFailedHandler = handler;
+    AsyncGuildServiceBuyGuildShopGoodsFailedHandler = handler;
+}
+
+void SetGuildIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler) {
+    if (!AsyncGuildServiceCreateGuildFailedHandler) {
+        AsyncGuildServiceCreateGuildFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceGetGuildFailedHandler) {
+        AsyncGuildServiceGetGuildFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceGetPlayerGuildFailedHandler) {
+        AsyncGuildServiceGetPlayerGuildFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceLeaveGuildFailedHandler) {
+        AsyncGuildServiceLeaveGuildFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceDisbandGuildFailedHandler) {
+        AsyncGuildServiceDisbandGuildFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceSetAnnouncementFailedHandler) {
+        AsyncGuildServiceSetAnnouncementFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceSetGuildMemberRoleFailedHandler) {
+        AsyncGuildServiceSetGuildMemberRoleFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceKickGuildMemberFailedHandler) {
+        AsyncGuildServiceKickGuildMemberFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceTransferGuildLeaderFailedHandler) {
+        AsyncGuildServiceTransferGuildLeaderFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceApplyJoinGuildFailedHandler) {
+        AsyncGuildServiceApplyJoinGuildFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceCancelGuildApplicationFailedHandler) {
+        AsyncGuildServiceCancelGuildApplicationFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceListMyGuildApplicationsFailedHandler) {
+        AsyncGuildServiceListMyGuildApplicationsFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceListGuildApplicationsFailedHandler) {
+        AsyncGuildServiceListGuildApplicationsFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceReviewGuildApplicationFailedHandler) {
+        AsyncGuildServiceReviewGuildApplicationFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceNotifyGuildChangedFailedHandler) {
+        AsyncGuildServiceNotifyGuildChangedFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceUpdateGuildScoreFailedHandler) {
+        AsyncGuildServiceUpdateGuildScoreFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceGetGuildRankFailedHandler) {
+        AsyncGuildServiceGetGuildRankFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceGetGuildRankByGuildFailedHandler) {
+        AsyncGuildServiceGetGuildRankByGuildFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceGetGuildDonateOptionsFailedHandler) {
+        AsyncGuildServiceGetGuildDonateOptionsFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceDonateToGuildFailedHandler) {
+        AsyncGuildServiceDonateToGuildFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceUpgradeGuildFailedHandler) {
+        AsyncGuildServiceUpgradeGuildFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceGetGuildShopFailedHandler) {
+        AsyncGuildServiceGetGuildShopFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceBuyGuildShopGoodsFailedHandler) {
+        AsyncGuildServiceBuyGuildShopGoodsFailedHandler = handler;
+    }
+}
+
+void SetGuildCallDeadline(std::chrono::milliseconds deadline) {
+    callDeadlineMs.store(static_cast<uint32_t>(deadline.count()), std::memory_order_relaxed);
 }
 
 void InitGuildGrpcNode(const std::shared_ptr<::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity) {

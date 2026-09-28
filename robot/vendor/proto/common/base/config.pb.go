@@ -316,6 +316,55 @@ func (x *IdSegmentConfig) GetKinds() []*IdSegmentKindConfig {
 	return nil
 }
 
+// C++ 节点发出的 unary gRPC 调用的 deadline(docs/design/grpc-client-deadline-failure-callback.md §4)。
+// 按**目标**节点类型配;没配到的类型用生成代码里的 kDefaultGrpcCallDeadlineMs(grpc_client/grpc_call_tag.h)。
+// 取值遵守「上游比下游宽」:大于目标服务的服务端超时,小于依赖这次调用结果的 C++ 看门狗。
+type GrpcClientConfig struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// key = ENodeType 枚举名(SceneManagerNodeService / DataServiceNodeService …),value = 毫秒。
+	// 不认识的键、值为 0(= 不限时,违反超时预算)都被忽略并记 ERROR,该类型保持默认。
+	CallDeadlineMs map[string]uint32 `protobuf:"bytes,1,rep,name=call_deadline_ms,json=callDeadlineMs,proto3" json:"call_deadline_ms,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GrpcClientConfig) Reset() {
+	*x = GrpcClientConfig{}
+	mi := &file_proto_common_base_config_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GrpcClientConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GrpcClientConfig) ProtoMessage() {}
+
+func (x *GrpcClientConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_base_config_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GrpcClientConfig.ProtoReflect.Descriptor instead.
+func (*GrpcClientConfig) Descriptor() ([]byte, []int) {
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GrpcClientConfig) GetCallDeadlineMs() map[string]uint32 {
+	if x != nil {
+		return x.CallDeadlineMs
+	}
+	return nil
+}
+
 // Base deploy config
 type BaseDeployConfig struct {
 	state                    protoimpl.MessageState `protogen:"open.v1"`
@@ -383,13 +432,15 @@ type BaseDeployConfig struct {
 	// 到期时被静默吃掉。2026-09-09 之前这个后缀是 C++ 编译期常量,换代要手改两个头文件并重出镜像;
 	// 现在收敛成这一个部署键(k8s 侧由 k8s_deploy.ps1 从 data_service.yaml 镜像进 node ConfigMap)。
 	AuditTopicGeneration uint32 `protobuf:"varint,20,opt,name=audit_topic_generation,json=auditTopicGeneration,proto3" json:"audit_topic_generation,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// C++ 节点 unary gRPC 调用的 deadline(见 GrpcClientConfig)。可以不写:缺席 = 全部用内置默认。
+	GrpcClient    *GrpcClientConfig `protobuf:"bytes,21,opt,name=grpc_client,json=grpcClient,proto3" json:"grpc_client,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BaseDeployConfig) Reset() {
 	*x = BaseDeployConfig{}
-	mi := &file_proto_common_base_config_proto_msgTypes[4]
+	mi := &file_proto_common_base_config_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -401,7 +452,7 @@ func (x *BaseDeployConfig) String() string {
 func (*BaseDeployConfig) ProtoMessage() {}
 
 func (x *BaseDeployConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_base_config_proto_msgTypes[4]
+	mi := &file_proto_common_base_config_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -414,7 +465,7 @@ func (x *BaseDeployConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BaseDeployConfig.ProtoReflect.Descriptor instead.
 func (*BaseDeployConfig) Descriptor() ([]byte, []int) {
-	return file_proto_common_base_config_proto_rawDescGZIP(), []int{4}
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *BaseDeployConfig) GetEtcdHosts() []string {
@@ -557,6 +608,13 @@ func (x *BaseDeployConfig) GetAuditTopicGeneration() uint32 {
 	return 0
 }
 
+func (x *BaseDeployConfig) GetGrpcClient() *GrpcClientConfig {
+	if x != nil {
+		return x.GrpcClient
+	}
+	return nil
+}
+
 // Game config
 type GameConfig struct {
 	state         protoimpl.MessageState      `protogen:"open.v1"`
@@ -569,7 +627,7 @@ type GameConfig struct {
 
 func (x *GameConfig) Reset() {
 	*x = GameConfig{}
-	mi := &file_proto_common_base_config_proto_msgTypes[5]
+	mi := &file_proto_common_base_config_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -581,7 +639,7 @@ func (x *GameConfig) String() string {
 func (*GameConfig) ProtoMessage() {}
 
 func (x *GameConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_base_config_proto_msgTypes[5]
+	mi := &file_proto_common_base_config_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -594,7 +652,7 @@ func (x *GameConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GameConfig.ProtoReflect.Descriptor instead.
 func (*GameConfig) Descriptor() ([]byte, []int) {
-	return file_proto_common_base_config_proto_rawDescGZIP(), []int{5}
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *GameConfig) GetSceneNodeType() uint32 {
@@ -631,7 +689,7 @@ type GameConfig_ZoneRedisConfig struct {
 
 func (x *GameConfig_ZoneRedisConfig) Reset() {
 	*x = GameConfig_ZoneRedisConfig{}
-	mi := &file_proto_common_base_config_proto_msgTypes[6]
+	mi := &file_proto_common_base_config_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -643,7 +701,7 @@ func (x *GameConfig_ZoneRedisConfig) String() string {
 func (*GameConfig_ZoneRedisConfig) ProtoMessage() {}
 
 func (x *GameConfig_ZoneRedisConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_base_config_proto_msgTypes[6]
+	mi := &file_proto_common_base_config_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -656,7 +714,7 @@ func (x *GameConfig_ZoneRedisConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GameConfig_ZoneRedisConfig.ProtoReflect.Descriptor instead.
 func (*GameConfig_ZoneRedisConfig) Descriptor() ([]byte, []int) {
-	return file_proto_common_base_config_proto_rawDescGZIP(), []int{5, 0}
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{6, 0}
 }
 
 func (x *GameConfig_ZoneRedisConfig) GetHost() string {
@@ -711,7 +769,12 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\bmin_step\x18\x04 \x01(\rR\aminStep\x12\x19\n" +
 	"\bmax_step\x18\x05 \x01(\rR\amaxStep\"=\n" +
 	"\x0fIdSegmentConfig\x12*\n" +
-	"\x05kinds\x18\x01 \x03(\v2\x14.IdSegmentKindConfigR\x05kinds\"\xb2\a\n" +
+	"\x05kinds\x18\x01 \x03(\v2\x14.IdSegmentKindConfigR\x05kinds\"\xa6\x01\n" +
+	"\x10GrpcClientConfig\x12O\n" +
+	"\x10call_deadline_ms\x18\x01 \x03(\v2%.GrpcClientConfig.CallDeadlineMsEntryR\x0ecallDeadlineMs\x1aA\n" +
+	"\x13CallDeadlineMsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xe6\a\n" +
 	"\x10BaseDeployConfig\x12\x1d\n" +
 	"\n" +
 	"etcd_hosts\x18\x01 \x03(\tR\tetcdHosts\x12\x1b\n" +
@@ -736,7 +799,9 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"cluster_id\x18\x12 \x01(\rR\tclusterId\x12/\n" +
 	"\n" +
 	"id_segment\x18\x13 \x01(\v2\x10.IdSegmentConfigR\tidSegment\x124\n" +
-	"\x16audit_topic_generation\x18\x14 \x01(\rR\x14auditTopicGeneration\"\xf0\x01\n" +
+	"\x16audit_topic_generation\x18\x14 \x01(\rR\x14auditTopicGeneration\x122\n" +
+	"\vgrpc_client\x18\x15 \x01(\v2\x11.GrpcClientConfigR\n" +
+	"grpcClient\"\xf0\x01\n" +
 	"\n" +
 	"GameConfig\x12&\n" +
 	"\x0fscene_node_type\x18\x01 \x01(\rR\rsceneNodeType\x12\x17\n" +
@@ -761,27 +826,31 @@ func file_proto_common_base_config_proto_rawDescGZIP() []byte {
 	return file_proto_common_base_config_proto_rawDescData
 }
 
-var file_proto_common_base_config_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_proto_common_base_config_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_proto_common_base_config_proto_goTypes = []any{
 	(*ServiceConfig)(nil),              // 0: ServiceConfig
 	(*KafkaConfig)(nil),                // 1: KafkaConfig
 	(*IdSegmentKindConfig)(nil),        // 2: IdSegmentKindConfig
 	(*IdSegmentConfig)(nil),            // 3: IdSegmentConfig
-	(*BaseDeployConfig)(nil),           // 4: BaseDeployConfig
-	(*GameConfig)(nil),                 // 5: GameConfig
-	(*GameConfig_ZoneRedisConfig)(nil), // 6: GameConfig.ZoneRedisConfig
+	(*GrpcClientConfig)(nil),           // 4: GrpcClientConfig
+	(*BaseDeployConfig)(nil),           // 5: BaseDeployConfig
+	(*GameConfig)(nil),                 // 6: GameConfig
+	nil,                                // 7: GrpcClientConfig.CallDeadlineMsEntry
+	(*GameConfig_ZoneRedisConfig)(nil), // 8: GameConfig.ZoneRedisConfig
 }
 var file_proto_common_base_config_proto_depIdxs = []int32{
 	2, // 0: IdSegmentConfig.kinds:type_name -> IdSegmentKindConfig
-	0, // 1: BaseDeployConfig.services:type_name -> ServiceConfig
-	1, // 2: BaseDeployConfig.kafka:type_name -> KafkaConfig
-	3, // 3: BaseDeployConfig.id_segment:type_name -> IdSegmentConfig
-	6, // 4: GameConfig.zone_redis:type_name -> GameConfig.ZoneRedisConfig
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	7, // 1: GrpcClientConfig.call_deadline_ms:type_name -> GrpcClientConfig.CallDeadlineMsEntry
+	0, // 2: BaseDeployConfig.services:type_name -> ServiceConfig
+	1, // 3: BaseDeployConfig.kafka:type_name -> KafkaConfig
+	3, // 4: BaseDeployConfig.id_segment:type_name -> IdSegmentConfig
+	4, // 5: BaseDeployConfig.grpc_client:type_name -> GrpcClientConfig
+	8, // 6: GameConfig.zone_redis:type_name -> GameConfig.ZoneRedisConfig
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_base_config_proto_init() }
@@ -795,7 +864,7 @@ func file_proto_common_base_config_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_base_config_proto_rawDesc), len(file_proto_common_base_config_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

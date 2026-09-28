@@ -3,11 +3,21 @@
 #include "scene_node_service_grpc_client.h"
 #include "proto/common/constants/etcd_grpc.pb.h"
 #include "core/utils/encode/base64.h"
+#include <atomic>
+#include <chrono>
 #include <boost/pool/object_pool.hpp>
 #include "grpc_call_tag.h"
 
 namespace {
 boost::object_pool<GrpcTag> tagPool;
+// 本文件所有 unary 调用的 deadline(毫秒)。启动时 SetSceneNodeServiceCallDeadline 按目标节点类型写入
+// (Node::Initialize → grpc_call_deadline::Apply);原子量:与应答处理器一样是进程级全局。
+std::atomic<uint32_t> callDeadlineMs{kDefaultGrpcCallDeadlineMs};
+
+std::chrono::system_clock::time_point NextCallDeadline() {
+    return std::chrono::system_clock::now() +
+        std::chrono::milliseconds(callDeadlineMs.load(std::memory_order_relaxed));
+}
 }
 
 namespace scene_node {
@@ -19,6 +29,7 @@ boost::object_pool<AsyncSceneNodeGrpcCreateSceneGrpcClient> SceneNodeGrpcCreateS
 using AsyncSceneNodeGrpcCreateSceneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::CreateSceneResponse&)>;
 AsyncSceneNodeGrpcCreateSceneHandlerFunctionType AsyncSceneNodeGrpcCreateSceneHandler;
+AsyncSceneNodeGrpcCreateSceneFailedHandlerFunctionType AsyncSceneNodeGrpcCreateSceneFailedHandler;
 
 void AsyncCompleteGrpcSceneNodeGrpcCreateScene(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -26,9 +37,22 @@ void AsyncCompleteGrpcSceneNodeGrpcCreateScene(entt::registry& registry, entt::e
     if (call->status.ok()) {
         if (AsyncSceneNodeGrpcCreateSceneHandler) {
             AsyncSceneNodeGrpcCreateSceneHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC SceneNodeGrpc.CreateScene reply dropped: AsyncSceneNodeGrpcCreateSceneHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncSceneNodeGrpcCreateSceneFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "SceneNodeGrpc.CreateScene", call->context, call->status, call->sentMetadata};
+        AsyncSceneNodeGrpcCreateSceneFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC SceneNodeGrpc.CreateScene failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	SceneNodeGrpcCreateScenePool.destroy(call);
@@ -36,15 +60,7 @@ void AsyncCompleteGrpcSceneNodeGrpcCreateScene(entt::registry& registry, entt::e
 
 void SendSceneNodeGrpcCreateScene(entt::registry& registry, entt::entity nodeEntity, const ::CreateSceneRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(SceneNodeGrpcCreateScenePool.construct());
-    call->response_reader = registry
-        .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncCreateScene(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcCreateSceneMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendSceneNodeGrpcCreateScene(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -54,13 +70,17 @@ void SendSceneNodeGrpcCreateScene(entt::registry& registry, entt::entity nodeEnt
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncCreateScene(&call->context, request,
+        ->PrepareAsyncCreateScene(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcCreateSceneMessageId, (void*)call));
@@ -78,6 +98,7 @@ boost::object_pool<AsyncSceneNodeGrpcDestroySceneGrpcClient> SceneNodeGrpcDestro
 using AsyncSceneNodeGrpcDestroySceneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 AsyncSceneNodeGrpcDestroySceneHandlerFunctionType AsyncSceneNodeGrpcDestroySceneHandler;
+AsyncSceneNodeGrpcDestroySceneFailedHandlerFunctionType AsyncSceneNodeGrpcDestroySceneFailedHandler;
 
 void AsyncCompleteGrpcSceneNodeGrpcDestroyScene(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -85,9 +106,22 @@ void AsyncCompleteGrpcSceneNodeGrpcDestroyScene(entt::registry& registry, entt::
     if (call->status.ok()) {
         if (AsyncSceneNodeGrpcDestroySceneHandler) {
             AsyncSceneNodeGrpcDestroySceneHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC SceneNodeGrpc.DestroyScene reply dropped: AsyncSceneNodeGrpcDestroySceneHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncSceneNodeGrpcDestroySceneFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "SceneNodeGrpc.DestroyScene", call->context, call->status, call->sentMetadata};
+        AsyncSceneNodeGrpcDestroySceneFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC SceneNodeGrpc.DestroyScene failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	SceneNodeGrpcDestroyScenePool.destroy(call);
@@ -95,15 +129,7 @@ void AsyncCompleteGrpcSceneNodeGrpcDestroyScene(entt::registry& registry, entt::
 
 void SendSceneNodeGrpcDestroyScene(entt::registry& registry, entt::entity nodeEntity, const ::DestroySceneRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(SceneNodeGrpcDestroyScenePool.construct());
-    call->response_reader = registry
-        .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncDestroyScene(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcDestroySceneMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendSceneNodeGrpcDestroyScene(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -113,13 +139,17 @@ void SendSceneNodeGrpcDestroyScene(entt::registry& registry, entt::entity nodeEn
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncDestroyScene(&call->context, request,
+        ->PrepareAsyncDestroyScene(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcDestroySceneMessageId, (void*)call));
@@ -137,6 +167,7 @@ boost::object_pool<AsyncSceneNodeGrpcReleasePlayerGrpcClient> SceneNodeGrpcRelea
 using AsyncSceneNodeGrpcReleasePlayerHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 AsyncSceneNodeGrpcReleasePlayerHandlerFunctionType AsyncSceneNodeGrpcReleasePlayerHandler;
+AsyncSceneNodeGrpcReleasePlayerFailedHandlerFunctionType AsyncSceneNodeGrpcReleasePlayerFailedHandler;
 
 void AsyncCompleteGrpcSceneNodeGrpcReleasePlayer(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -144,9 +175,22 @@ void AsyncCompleteGrpcSceneNodeGrpcReleasePlayer(entt::registry& registry, entt:
     if (call->status.ok()) {
         if (AsyncSceneNodeGrpcReleasePlayerHandler) {
             AsyncSceneNodeGrpcReleasePlayerHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC SceneNodeGrpc.ReleasePlayer reply dropped: AsyncSceneNodeGrpcReleasePlayerHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncSceneNodeGrpcReleasePlayerFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "SceneNodeGrpc.ReleasePlayer", call->context, call->status, call->sentMetadata};
+        AsyncSceneNodeGrpcReleasePlayerFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC SceneNodeGrpc.ReleasePlayer failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	SceneNodeGrpcReleasePlayerPool.destroy(call);
@@ -154,15 +198,7 @@ void AsyncCompleteGrpcSceneNodeGrpcReleasePlayer(entt::registry& registry, entt:
 
 void SendSceneNodeGrpcReleasePlayer(entt::registry& registry, entt::entity nodeEntity, const ::scene_node::ReleasePlayerRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(SceneNodeGrpcReleasePlayerPool.construct());
-    call->response_reader = registry
-        .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncReleasePlayer(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcReleasePlayerMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendSceneNodeGrpcReleasePlayer(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -172,13 +208,17 @@ void SendSceneNodeGrpcReleasePlayer(entt::registry& registry, entt::entity nodeE
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncReleasePlayer(&call->context, request,
+        ->PrepareAsyncReleasePlayer(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcReleasePlayerMessageId, (void*)call));
@@ -196,6 +236,7 @@ boost::object_pool<AsyncSceneNodeGrpcPrepareBattleGrpcClient> SceneNodeGrpcPrepa
 using AsyncSceneNodeGrpcPrepareBattleHandlerFunctionType =
     std::function<void(const ClientContext&, const ::PrepareBattleResponse&)>;
 AsyncSceneNodeGrpcPrepareBattleHandlerFunctionType AsyncSceneNodeGrpcPrepareBattleHandler;
+AsyncSceneNodeGrpcPrepareBattleFailedHandlerFunctionType AsyncSceneNodeGrpcPrepareBattleFailedHandler;
 
 void AsyncCompleteGrpcSceneNodeGrpcPrepareBattle(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -203,9 +244,22 @@ void AsyncCompleteGrpcSceneNodeGrpcPrepareBattle(entt::registry& registry, entt:
     if (call->status.ok()) {
         if (AsyncSceneNodeGrpcPrepareBattleHandler) {
             AsyncSceneNodeGrpcPrepareBattleHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC SceneNodeGrpc.PrepareBattle reply dropped: AsyncSceneNodeGrpcPrepareBattleHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncSceneNodeGrpcPrepareBattleFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "SceneNodeGrpc.PrepareBattle", call->context, call->status, call->sentMetadata};
+        AsyncSceneNodeGrpcPrepareBattleFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC SceneNodeGrpc.PrepareBattle failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	SceneNodeGrpcPrepareBattlePool.destroy(call);
@@ -213,15 +267,7 @@ void AsyncCompleteGrpcSceneNodeGrpcPrepareBattle(entt::registry& registry, entt:
 
 void SendSceneNodeGrpcPrepareBattle(entt::registry& registry, entt::entity nodeEntity, const ::PrepareBattleRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(SceneNodeGrpcPrepareBattlePool.construct());
-    call->response_reader = registry
-        .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncPrepareBattle(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcPrepareBattleMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendSceneNodeGrpcPrepareBattle(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -231,13 +277,17 @@ void SendSceneNodeGrpcPrepareBattle(entt::registry& registry, entt::entity nodeE
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncPrepareBattle(&call->context, request,
+        ->PrepareAsyncPrepareBattle(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcPrepareBattleMessageId, (void*)call));
@@ -255,6 +305,7 @@ boost::object_pool<AsyncSceneNodeGrpcCancelBattlePrepareGrpcClient> SceneNodeGrp
 using AsyncSceneNodeGrpcCancelBattlePrepareHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 AsyncSceneNodeGrpcCancelBattlePrepareHandlerFunctionType AsyncSceneNodeGrpcCancelBattlePrepareHandler;
+AsyncSceneNodeGrpcCancelBattlePrepareFailedHandlerFunctionType AsyncSceneNodeGrpcCancelBattlePrepareFailedHandler;
 
 void AsyncCompleteGrpcSceneNodeGrpcCancelBattlePrepare(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -262,9 +313,22 @@ void AsyncCompleteGrpcSceneNodeGrpcCancelBattlePrepare(entt::registry& registry,
     if (call->status.ok()) {
         if (AsyncSceneNodeGrpcCancelBattlePrepareHandler) {
             AsyncSceneNodeGrpcCancelBattlePrepareHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC SceneNodeGrpc.CancelBattlePrepare reply dropped: AsyncSceneNodeGrpcCancelBattlePrepareHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncSceneNodeGrpcCancelBattlePrepareFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "SceneNodeGrpc.CancelBattlePrepare", call->context, call->status, call->sentMetadata};
+        AsyncSceneNodeGrpcCancelBattlePrepareFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC SceneNodeGrpc.CancelBattlePrepare failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	SceneNodeGrpcCancelBattlePreparePool.destroy(call);
@@ -272,15 +336,7 @@ void AsyncCompleteGrpcSceneNodeGrpcCancelBattlePrepare(entt::registry& registry,
 
 void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& registry, entt::entity nodeEntity, const ::CancelBattlePrepareRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(SceneNodeGrpcCancelBattlePreparePool.construct());
-    call->response_reader = registry
-        .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncCancelBattlePrepare(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcCancelBattlePrepareMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendSceneNodeGrpcCancelBattlePrepare(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -290,13 +346,17 @@ void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& registry, entt::entity
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncCancelBattlePrepare(&call->context, request,
+        ->PrepareAsyncCancelBattlePrepare(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcCancelBattlePrepareMessageId, (void*)call));
@@ -314,6 +374,7 @@ boost::object_pool<AsyncSceneNodeGrpcAssetDebitGrpcClient> SceneNodeGrpcAssetDeb
 using AsyncSceneNodeGrpcAssetDebitHandlerFunctionType =
     std::function<void(const ClientContext&, const ::AssetOpResponse&)>;
 AsyncSceneNodeGrpcAssetDebitHandlerFunctionType AsyncSceneNodeGrpcAssetDebitHandler;
+AsyncSceneNodeGrpcAssetDebitFailedHandlerFunctionType AsyncSceneNodeGrpcAssetDebitFailedHandler;
 
 void AsyncCompleteGrpcSceneNodeGrpcAssetDebit(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -321,9 +382,22 @@ void AsyncCompleteGrpcSceneNodeGrpcAssetDebit(entt::registry& registry, entt::en
     if (call->status.ok()) {
         if (AsyncSceneNodeGrpcAssetDebitHandler) {
             AsyncSceneNodeGrpcAssetDebitHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC SceneNodeGrpc.AssetDebit reply dropped: AsyncSceneNodeGrpcAssetDebitHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncSceneNodeGrpcAssetDebitFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "SceneNodeGrpc.AssetDebit", call->context, call->status, call->sentMetadata};
+        AsyncSceneNodeGrpcAssetDebitFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC SceneNodeGrpc.AssetDebit failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	SceneNodeGrpcAssetDebitPool.destroy(call);
@@ -331,15 +405,7 @@ void AsyncCompleteGrpcSceneNodeGrpcAssetDebit(entt::registry& registry, entt::en
 
 void SendSceneNodeGrpcAssetDebit(entt::registry& registry, entt::entity nodeEntity, const ::AssetOpRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(SceneNodeGrpcAssetDebitPool.construct());
-    call->response_reader = registry
-        .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncAssetDebit(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcAssetDebitMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendSceneNodeGrpcAssetDebit(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -349,13 +415,17 @@ void SendSceneNodeGrpcAssetDebit(entt::registry& registry, entt::entity nodeEnti
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncAssetDebit(&call->context, request,
+        ->PrepareAsyncAssetDebit(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcAssetDebitMessageId, (void*)call));
@@ -373,6 +443,7 @@ boost::object_pool<AsyncSceneNodeGrpcAssetAbortDebitGrpcClient> SceneNodeGrpcAss
 using AsyncSceneNodeGrpcAssetAbortDebitHandlerFunctionType =
     std::function<void(const ClientContext&, const ::AssetOpResponse&)>;
 AsyncSceneNodeGrpcAssetAbortDebitHandlerFunctionType AsyncSceneNodeGrpcAssetAbortDebitHandler;
+AsyncSceneNodeGrpcAssetAbortDebitFailedHandlerFunctionType AsyncSceneNodeGrpcAssetAbortDebitFailedHandler;
 
 void AsyncCompleteGrpcSceneNodeGrpcAssetAbortDebit(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -380,9 +451,22 @@ void AsyncCompleteGrpcSceneNodeGrpcAssetAbortDebit(entt::registry& registry, ent
     if (call->status.ok()) {
         if (AsyncSceneNodeGrpcAssetAbortDebitHandler) {
             AsyncSceneNodeGrpcAssetAbortDebitHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC SceneNodeGrpc.AssetAbortDebit reply dropped: AsyncSceneNodeGrpcAssetAbortDebitHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncSceneNodeGrpcAssetAbortDebitFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "SceneNodeGrpc.AssetAbortDebit", call->context, call->status, call->sentMetadata};
+        AsyncSceneNodeGrpcAssetAbortDebitFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC SceneNodeGrpc.AssetAbortDebit failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	SceneNodeGrpcAssetAbortDebitPool.destroy(call);
@@ -390,15 +474,7 @@ void AsyncCompleteGrpcSceneNodeGrpcAssetAbortDebit(entt::registry& registry, ent
 
 void SendSceneNodeGrpcAssetAbortDebit(entt::registry& registry, entt::entity nodeEntity, const ::AssetOpRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(SceneNodeGrpcAssetAbortDebitPool.construct());
-    call->response_reader = registry
-        .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncAssetAbortDebit(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcAssetAbortDebitMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendSceneNodeGrpcAssetAbortDebit(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -408,13 +484,17 @@ void SendSceneNodeGrpcAssetAbortDebit(entt::registry& registry, entt::entity nod
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncAssetAbortDebit(&call->context, request,
+        ->PrepareAsyncAssetAbortDebit(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcAssetAbortDebitMessageId, (void*)call));
@@ -432,6 +512,7 @@ boost::object_pool<AsyncSceneNodeGrpcAssetCreditGrpcClient> SceneNodeGrpcAssetCr
 using AsyncSceneNodeGrpcAssetCreditHandlerFunctionType =
     std::function<void(const ClientContext&, const ::AssetOpResponse&)>;
 AsyncSceneNodeGrpcAssetCreditHandlerFunctionType AsyncSceneNodeGrpcAssetCreditHandler;
+AsyncSceneNodeGrpcAssetCreditFailedHandlerFunctionType AsyncSceneNodeGrpcAssetCreditFailedHandler;
 
 void AsyncCompleteGrpcSceneNodeGrpcAssetCredit(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -439,9 +520,22 @@ void AsyncCompleteGrpcSceneNodeGrpcAssetCredit(entt::registry& registry, entt::e
     if (call->status.ok()) {
         if (AsyncSceneNodeGrpcAssetCreditHandler) {
             AsyncSceneNodeGrpcAssetCreditHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC SceneNodeGrpc.AssetCredit reply dropped: AsyncSceneNodeGrpcAssetCreditHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncSceneNodeGrpcAssetCreditFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "SceneNodeGrpc.AssetCredit", call->context, call->status, call->sentMetadata};
+        AsyncSceneNodeGrpcAssetCreditFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC SceneNodeGrpc.AssetCredit failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	SceneNodeGrpcAssetCreditPool.destroy(call);
@@ -449,15 +543,7 @@ void AsyncCompleteGrpcSceneNodeGrpcAssetCredit(entt::registry& registry, entt::e
 
 void SendSceneNodeGrpcAssetCredit(entt::registry& registry, entt::entity nodeEntity, const ::AssetOpRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(SceneNodeGrpcAssetCreditPool.construct());
-    call->response_reader = registry
-        .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncAssetCredit(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcAssetCreditMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendSceneNodeGrpcAssetCredit(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -467,13 +553,17 @@ void SendSceneNodeGrpcAssetCredit(entt::registry& registry, entt::entity nodeEnt
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<SceneNodeGrpcStubPtr>(nodeEntity)
-        ->PrepareAsyncAssetCredit(&call->context, request,
+        ->PrepareAsyncAssetCredit(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcAssetCreditMessageId, (void*)call));
@@ -564,6 +654,48 @@ void SetSceneNodeServiceIfEmptyHandler(const std::function<void(const ClientCont
     if (!AsyncSceneNodeGrpcAssetCreditHandler) {
         AsyncSceneNodeGrpcAssetCreditHandler = handler;
     }
+}
+
+void SetSceneNodeServiceFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler) {
+    AsyncSceneNodeGrpcCreateSceneFailedHandler = handler;
+    AsyncSceneNodeGrpcDestroySceneFailedHandler = handler;
+    AsyncSceneNodeGrpcReleasePlayerFailedHandler = handler;
+    AsyncSceneNodeGrpcPrepareBattleFailedHandler = handler;
+    AsyncSceneNodeGrpcCancelBattlePrepareFailedHandler = handler;
+    AsyncSceneNodeGrpcAssetDebitFailedHandler = handler;
+    AsyncSceneNodeGrpcAssetAbortDebitFailedHandler = handler;
+    AsyncSceneNodeGrpcAssetCreditFailedHandler = handler;
+}
+
+void SetSceneNodeServiceIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler) {
+    if (!AsyncSceneNodeGrpcCreateSceneFailedHandler) {
+        AsyncSceneNodeGrpcCreateSceneFailedHandler = handler;
+    }
+    if (!AsyncSceneNodeGrpcDestroySceneFailedHandler) {
+        AsyncSceneNodeGrpcDestroySceneFailedHandler = handler;
+    }
+    if (!AsyncSceneNodeGrpcReleasePlayerFailedHandler) {
+        AsyncSceneNodeGrpcReleasePlayerFailedHandler = handler;
+    }
+    if (!AsyncSceneNodeGrpcPrepareBattleFailedHandler) {
+        AsyncSceneNodeGrpcPrepareBattleFailedHandler = handler;
+    }
+    if (!AsyncSceneNodeGrpcCancelBattlePrepareFailedHandler) {
+        AsyncSceneNodeGrpcCancelBattlePrepareFailedHandler = handler;
+    }
+    if (!AsyncSceneNodeGrpcAssetDebitFailedHandler) {
+        AsyncSceneNodeGrpcAssetDebitFailedHandler = handler;
+    }
+    if (!AsyncSceneNodeGrpcAssetAbortDebitFailedHandler) {
+        AsyncSceneNodeGrpcAssetAbortDebitFailedHandler = handler;
+    }
+    if (!AsyncSceneNodeGrpcAssetCreditFailedHandler) {
+        AsyncSceneNodeGrpcAssetCreditFailedHandler = handler;
+    }
+}
+
+void SetSceneNodeServiceCallDeadline(std::chrono::milliseconds deadline) {
+    callDeadlineMs.store(static_cast<uint32_t>(deadline.count()), std::memory_order_relaxed);
 }
 
 void InitSceneNodeServiceGrpcNode(const std::shared_ptr<::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity) {

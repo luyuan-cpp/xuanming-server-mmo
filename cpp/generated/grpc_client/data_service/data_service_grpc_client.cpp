@@ -3,11 +3,21 @@
 #include "data_service_grpc_client.h"
 #include "proto/common/constants/etcd_grpc.pb.h"
 #include "core/utils/encode/base64.h"
+#include <atomic>
+#include <chrono>
 #include <boost/pool/object_pool.hpp>
 #include "grpc_call_tag.h"
 
 namespace {
 boost::object_pool<GrpcTag> tagPool;
+// 本文件所有 unary 调用的 deadline(毫秒)。启动时 SetDataServiceCallDeadline 按目标节点类型写入
+// (Node::Initialize → grpc_call_deadline::Apply);原子量:与应答处理器一样是进程级全局。
+std::atomic<uint32_t> callDeadlineMs{kDefaultGrpcCallDeadlineMs};
+
+std::chrono::system_clock::time_point NextCallDeadline() {
+    return std::chrono::system_clock::now() +
+        std::chrono::milliseconds(callDeadlineMs.load(std::memory_order_relaxed));
+}
 }
 
 namespace data_service {
@@ -19,6 +29,7 @@ boost::object_pool<AsyncDataServiceLoadPlayerDataGrpcClient> DataServiceLoadPlay
 using AsyncDataServiceLoadPlayerDataHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::LoadPlayerDataResponse&)>;
 AsyncDataServiceLoadPlayerDataHandlerFunctionType AsyncDataServiceLoadPlayerDataHandler;
+AsyncDataServiceLoadPlayerDataFailedHandlerFunctionType AsyncDataServiceLoadPlayerDataFailedHandler;
 
 void AsyncCompleteGrpcDataServiceLoadPlayerData(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -26,9 +37,22 @@ void AsyncCompleteGrpcDataServiceLoadPlayerData(entt::registry& registry, entt::
     if (call->status.ok()) {
         if (AsyncDataServiceLoadPlayerDataHandler) {
             AsyncDataServiceLoadPlayerDataHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.LoadPlayerData reply dropped: AsyncDataServiceLoadPlayerDataHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceLoadPlayerDataFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.LoadPlayerData", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceLoadPlayerDataFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.LoadPlayerData failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceLoadPlayerDataPool.destroy(call);
@@ -36,15 +60,7 @@ void AsyncCompleteGrpcDataServiceLoadPlayerData(entt::registry& registry, entt::
 
 void SendDataServiceLoadPlayerData(entt::registry& registry, entt::entity nodeEntity, const ::data_service::LoadPlayerDataRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceLoadPlayerDataPool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncLoadPlayerData(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceLoadPlayerDataMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceLoadPlayerData(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -54,13 +70,17 @@ void SendDataServiceLoadPlayerData(entt::registry& registry, entt::entity nodeEn
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncLoadPlayerData(&call->context, request,
+        ->PrepareAsyncLoadPlayerData(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceLoadPlayerDataMessageId, (void*)call));
@@ -78,6 +98,7 @@ boost::object_pool<AsyncDataServiceSavePlayerDataGrpcClient> DataServiceSavePlay
 using AsyncDataServiceSavePlayerDataHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::SavePlayerDataResponse&)>;
 AsyncDataServiceSavePlayerDataHandlerFunctionType AsyncDataServiceSavePlayerDataHandler;
+AsyncDataServiceSavePlayerDataFailedHandlerFunctionType AsyncDataServiceSavePlayerDataFailedHandler;
 
 void AsyncCompleteGrpcDataServiceSavePlayerData(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -85,9 +106,22 @@ void AsyncCompleteGrpcDataServiceSavePlayerData(entt::registry& registry, entt::
     if (call->status.ok()) {
         if (AsyncDataServiceSavePlayerDataHandler) {
             AsyncDataServiceSavePlayerDataHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.SavePlayerData reply dropped: AsyncDataServiceSavePlayerDataHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceSavePlayerDataFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.SavePlayerData", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceSavePlayerDataFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.SavePlayerData failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceSavePlayerDataPool.destroy(call);
@@ -95,15 +129,7 @@ void AsyncCompleteGrpcDataServiceSavePlayerData(entt::registry& registry, entt::
 
 void SendDataServiceSavePlayerData(entt::registry& registry, entt::entity nodeEntity, const ::data_service::SavePlayerDataRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceSavePlayerDataPool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncSavePlayerData(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceSavePlayerDataMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceSavePlayerData(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -113,13 +139,17 @@ void SendDataServiceSavePlayerData(entt::registry& registry, entt::entity nodeEn
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncSavePlayerData(&call->context, request,
+        ->PrepareAsyncSavePlayerData(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceSavePlayerDataMessageId, (void*)call));
@@ -137,6 +167,7 @@ boost::object_pool<AsyncDataServiceGetPlayerFieldGrpcClient> DataServiceGetPlaye
 using AsyncDataServiceGetPlayerFieldHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::GetPlayerFieldResponse&)>;
 AsyncDataServiceGetPlayerFieldHandlerFunctionType AsyncDataServiceGetPlayerFieldHandler;
+AsyncDataServiceGetPlayerFieldFailedHandlerFunctionType AsyncDataServiceGetPlayerFieldFailedHandler;
 
 void AsyncCompleteGrpcDataServiceGetPlayerField(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -144,9 +175,22 @@ void AsyncCompleteGrpcDataServiceGetPlayerField(entt::registry& registry, entt::
     if (call->status.ok()) {
         if (AsyncDataServiceGetPlayerFieldHandler) {
             AsyncDataServiceGetPlayerFieldHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.GetPlayerField reply dropped: AsyncDataServiceGetPlayerFieldHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceGetPlayerFieldFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.GetPlayerField", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceGetPlayerFieldFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.GetPlayerField failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceGetPlayerFieldPool.destroy(call);
@@ -154,15 +198,7 @@ void AsyncCompleteGrpcDataServiceGetPlayerField(entt::registry& registry, entt::
 
 void SendDataServiceGetPlayerField(entt::registry& registry, entt::entity nodeEntity, const ::data_service::GetPlayerFieldRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceGetPlayerFieldPool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetPlayerField(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceGetPlayerFieldMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceGetPlayerField(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -172,13 +208,17 @@ void SendDataServiceGetPlayerField(entt::registry& registry, entt::entity nodeEn
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetPlayerField(&call->context, request,
+        ->PrepareAsyncGetPlayerField(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceGetPlayerFieldMessageId, (void*)call));
@@ -196,6 +236,7 @@ boost::object_pool<AsyncDataServiceSetPlayerFieldGrpcClient> DataServiceSetPlaye
 using AsyncDataServiceSetPlayerFieldHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::SetPlayerFieldResponse&)>;
 AsyncDataServiceSetPlayerFieldHandlerFunctionType AsyncDataServiceSetPlayerFieldHandler;
+AsyncDataServiceSetPlayerFieldFailedHandlerFunctionType AsyncDataServiceSetPlayerFieldFailedHandler;
 
 void AsyncCompleteGrpcDataServiceSetPlayerField(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -203,9 +244,22 @@ void AsyncCompleteGrpcDataServiceSetPlayerField(entt::registry& registry, entt::
     if (call->status.ok()) {
         if (AsyncDataServiceSetPlayerFieldHandler) {
             AsyncDataServiceSetPlayerFieldHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.SetPlayerField reply dropped: AsyncDataServiceSetPlayerFieldHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceSetPlayerFieldFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.SetPlayerField", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceSetPlayerFieldFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.SetPlayerField failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceSetPlayerFieldPool.destroy(call);
@@ -213,15 +267,7 @@ void AsyncCompleteGrpcDataServiceSetPlayerField(entt::registry& registry, entt::
 
 void SendDataServiceSetPlayerField(entt::registry& registry, entt::entity nodeEntity, const ::data_service::SetPlayerFieldRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceSetPlayerFieldPool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncSetPlayerField(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceSetPlayerFieldMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceSetPlayerField(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -231,13 +277,17 @@ void SendDataServiceSetPlayerField(entt::registry& registry, entt::entity nodeEn
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncSetPlayerField(&call->context, request,
+        ->PrepareAsyncSetPlayerField(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceSetPlayerFieldMessageId, (void*)call));
@@ -255,6 +305,7 @@ boost::object_pool<AsyncDataServiceRegisterPlayerZoneGrpcClient> DataServiceRegi
 using AsyncDataServiceRegisterPlayerZoneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::google::protobuf::Empty&)>;
 AsyncDataServiceRegisterPlayerZoneHandlerFunctionType AsyncDataServiceRegisterPlayerZoneHandler;
+AsyncDataServiceRegisterPlayerZoneFailedHandlerFunctionType AsyncDataServiceRegisterPlayerZoneFailedHandler;
 
 void AsyncCompleteGrpcDataServiceRegisterPlayerZone(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -262,9 +313,22 @@ void AsyncCompleteGrpcDataServiceRegisterPlayerZone(entt::registry& registry, en
     if (call->status.ok()) {
         if (AsyncDataServiceRegisterPlayerZoneHandler) {
             AsyncDataServiceRegisterPlayerZoneHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.RegisterPlayerZone reply dropped: AsyncDataServiceRegisterPlayerZoneHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceRegisterPlayerZoneFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.RegisterPlayerZone", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceRegisterPlayerZoneFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.RegisterPlayerZone failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceRegisterPlayerZonePool.destroy(call);
@@ -272,15 +336,7 @@ void AsyncCompleteGrpcDataServiceRegisterPlayerZone(entt::registry& registry, en
 
 void SendDataServiceRegisterPlayerZone(entt::registry& registry, entt::entity nodeEntity, const ::data_service::RegisterPlayerZoneRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceRegisterPlayerZonePool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncRegisterPlayerZone(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceRegisterPlayerZoneMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceRegisterPlayerZone(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -290,13 +346,17 @@ void SendDataServiceRegisterPlayerZone(entt::registry& registry, entt::entity no
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncRegisterPlayerZone(&call->context, request,
+        ->PrepareAsyncRegisterPlayerZone(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceRegisterPlayerZoneMessageId, (void*)call));
@@ -314,6 +374,7 @@ boost::object_pool<AsyncDataServiceGetPlayerHomeZoneGrpcClient> DataServiceGetPl
 using AsyncDataServiceGetPlayerHomeZoneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::GetPlayerHomeZoneResponse&)>;
 AsyncDataServiceGetPlayerHomeZoneHandlerFunctionType AsyncDataServiceGetPlayerHomeZoneHandler;
+AsyncDataServiceGetPlayerHomeZoneFailedHandlerFunctionType AsyncDataServiceGetPlayerHomeZoneFailedHandler;
 
 void AsyncCompleteGrpcDataServiceGetPlayerHomeZone(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -321,9 +382,22 @@ void AsyncCompleteGrpcDataServiceGetPlayerHomeZone(entt::registry& registry, ent
     if (call->status.ok()) {
         if (AsyncDataServiceGetPlayerHomeZoneHandler) {
             AsyncDataServiceGetPlayerHomeZoneHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.GetPlayerHomeZone reply dropped: AsyncDataServiceGetPlayerHomeZoneHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceGetPlayerHomeZoneFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.GetPlayerHomeZone", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceGetPlayerHomeZoneFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.GetPlayerHomeZone failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceGetPlayerHomeZonePool.destroy(call);
@@ -331,15 +405,7 @@ void AsyncCompleteGrpcDataServiceGetPlayerHomeZone(entt::registry& registry, ent
 
 void SendDataServiceGetPlayerHomeZone(entt::registry& registry, entt::entity nodeEntity, const ::data_service::GetPlayerHomeZoneRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceGetPlayerHomeZonePool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetPlayerHomeZone(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceGetPlayerHomeZoneMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceGetPlayerHomeZone(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -349,13 +415,17 @@ void SendDataServiceGetPlayerHomeZone(entt::registry& registry, entt::entity nod
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetPlayerHomeZone(&call->context, request,
+        ->PrepareAsyncGetPlayerHomeZone(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceGetPlayerHomeZoneMessageId, (void*)call));
@@ -373,6 +443,7 @@ boost::object_pool<AsyncDataServiceBatchGetPlayerHomeZoneGrpcClient> DataService
 using AsyncDataServiceBatchGetPlayerHomeZoneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::BatchGetPlayerHomeZoneResponse&)>;
 AsyncDataServiceBatchGetPlayerHomeZoneHandlerFunctionType AsyncDataServiceBatchGetPlayerHomeZoneHandler;
+AsyncDataServiceBatchGetPlayerHomeZoneFailedHandlerFunctionType AsyncDataServiceBatchGetPlayerHomeZoneFailedHandler;
 
 void AsyncCompleteGrpcDataServiceBatchGetPlayerHomeZone(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -380,9 +451,22 @@ void AsyncCompleteGrpcDataServiceBatchGetPlayerHomeZone(entt::registry& registry
     if (call->status.ok()) {
         if (AsyncDataServiceBatchGetPlayerHomeZoneHandler) {
             AsyncDataServiceBatchGetPlayerHomeZoneHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.BatchGetPlayerHomeZone reply dropped: AsyncDataServiceBatchGetPlayerHomeZoneHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceBatchGetPlayerHomeZoneFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.BatchGetPlayerHomeZone", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceBatchGetPlayerHomeZoneFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.BatchGetPlayerHomeZone failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceBatchGetPlayerHomeZonePool.destroy(call);
@@ -390,15 +474,7 @@ void AsyncCompleteGrpcDataServiceBatchGetPlayerHomeZone(entt::registry& registry
 
 void SendDataServiceBatchGetPlayerHomeZone(entt::registry& registry, entt::entity nodeEntity, const ::data_service::BatchGetPlayerHomeZoneRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceBatchGetPlayerHomeZonePool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncBatchGetPlayerHomeZone(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceBatchGetPlayerHomeZoneMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceBatchGetPlayerHomeZone(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -408,13 +484,17 @@ void SendDataServiceBatchGetPlayerHomeZone(entt::registry& registry, entt::entit
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncBatchGetPlayerHomeZone(&call->context, request,
+        ->PrepareAsyncBatchGetPlayerHomeZone(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceBatchGetPlayerHomeZoneMessageId, (void*)call));
@@ -432,6 +512,7 @@ boost::object_pool<AsyncDataServiceRemapHomeZoneForMergeGrpcClient> DataServiceR
 using AsyncDataServiceRemapHomeZoneForMergeHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::RemapHomeZoneForMergeResponse&)>;
 AsyncDataServiceRemapHomeZoneForMergeHandlerFunctionType AsyncDataServiceRemapHomeZoneForMergeHandler;
+AsyncDataServiceRemapHomeZoneForMergeFailedHandlerFunctionType AsyncDataServiceRemapHomeZoneForMergeFailedHandler;
 
 void AsyncCompleteGrpcDataServiceRemapHomeZoneForMerge(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -439,9 +520,22 @@ void AsyncCompleteGrpcDataServiceRemapHomeZoneForMerge(entt::registry& registry,
     if (call->status.ok()) {
         if (AsyncDataServiceRemapHomeZoneForMergeHandler) {
             AsyncDataServiceRemapHomeZoneForMergeHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.RemapHomeZoneForMerge reply dropped: AsyncDataServiceRemapHomeZoneForMergeHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceRemapHomeZoneForMergeFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.RemapHomeZoneForMerge", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceRemapHomeZoneForMergeFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.RemapHomeZoneForMerge failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceRemapHomeZoneForMergePool.destroy(call);
@@ -449,15 +543,7 @@ void AsyncCompleteGrpcDataServiceRemapHomeZoneForMerge(entt::registry& registry,
 
 void SendDataServiceRemapHomeZoneForMerge(entt::registry& registry, entt::entity nodeEntity, const ::data_service::RemapHomeZoneForMergeRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceRemapHomeZoneForMergePool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncRemapHomeZoneForMerge(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceRemapHomeZoneForMergeMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceRemapHomeZoneForMerge(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -467,13 +553,17 @@ void SendDataServiceRemapHomeZoneForMerge(entt::registry& registry, entt::entity
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncRemapHomeZoneForMerge(&call->context, request,
+        ->PrepareAsyncRemapHomeZoneForMerge(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceRemapHomeZoneForMergeMessageId, (void*)call));
@@ -491,6 +581,7 @@ boost::object_pool<AsyncDataServiceDeletePlayerDataGrpcClient> DataServiceDelete
 using AsyncDataServiceDeletePlayerDataHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::DeletePlayerDataResponse&)>;
 AsyncDataServiceDeletePlayerDataHandlerFunctionType AsyncDataServiceDeletePlayerDataHandler;
+AsyncDataServiceDeletePlayerDataFailedHandlerFunctionType AsyncDataServiceDeletePlayerDataFailedHandler;
 
 void AsyncCompleteGrpcDataServiceDeletePlayerData(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -498,9 +589,22 @@ void AsyncCompleteGrpcDataServiceDeletePlayerData(entt::registry& registry, entt
     if (call->status.ok()) {
         if (AsyncDataServiceDeletePlayerDataHandler) {
             AsyncDataServiceDeletePlayerDataHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.DeletePlayerData reply dropped: AsyncDataServiceDeletePlayerDataHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceDeletePlayerDataFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.DeletePlayerData", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceDeletePlayerDataFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.DeletePlayerData failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceDeletePlayerDataPool.destroy(call);
@@ -508,15 +612,7 @@ void AsyncCompleteGrpcDataServiceDeletePlayerData(entt::registry& registry, entt
 
 void SendDataServiceDeletePlayerData(entt::registry& registry, entt::entity nodeEntity, const ::data_service::DeletePlayerDataRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceDeletePlayerDataPool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncDeletePlayerData(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceDeletePlayerDataMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceDeletePlayerData(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -526,13 +622,17 @@ void SendDataServiceDeletePlayerData(entt::registry& registry, entt::entity node
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncDeletePlayerData(&call->context, request,
+        ->PrepareAsyncDeletePlayerData(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceDeletePlayerDataMessageId, (void*)call));
@@ -550,6 +650,7 @@ boost::object_pool<AsyncDataServiceCreatePlayerSnapshotGrpcClient> DataServiceCr
 using AsyncDataServiceCreatePlayerSnapshotHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::CreatePlayerSnapshotResponse&)>;
 AsyncDataServiceCreatePlayerSnapshotHandlerFunctionType AsyncDataServiceCreatePlayerSnapshotHandler;
+AsyncDataServiceCreatePlayerSnapshotFailedHandlerFunctionType AsyncDataServiceCreatePlayerSnapshotFailedHandler;
 
 void AsyncCompleteGrpcDataServiceCreatePlayerSnapshot(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -557,9 +658,22 @@ void AsyncCompleteGrpcDataServiceCreatePlayerSnapshot(entt::registry& registry, 
     if (call->status.ok()) {
         if (AsyncDataServiceCreatePlayerSnapshotHandler) {
             AsyncDataServiceCreatePlayerSnapshotHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.CreatePlayerSnapshot reply dropped: AsyncDataServiceCreatePlayerSnapshotHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceCreatePlayerSnapshotFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.CreatePlayerSnapshot", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceCreatePlayerSnapshotFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.CreatePlayerSnapshot failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceCreatePlayerSnapshotPool.destroy(call);
@@ -567,15 +681,7 @@ void AsyncCompleteGrpcDataServiceCreatePlayerSnapshot(entt::registry& registry, 
 
 void SendDataServiceCreatePlayerSnapshot(entt::registry& registry, entt::entity nodeEntity, const ::data_service::CreatePlayerSnapshotRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceCreatePlayerSnapshotPool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncCreatePlayerSnapshot(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceCreatePlayerSnapshotMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceCreatePlayerSnapshot(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -585,13 +691,17 @@ void SendDataServiceCreatePlayerSnapshot(entt::registry& registry, entt::entity 
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncCreatePlayerSnapshot(&call->context, request,
+        ->PrepareAsyncCreatePlayerSnapshot(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceCreatePlayerSnapshotMessageId, (void*)call));
@@ -609,6 +719,7 @@ boost::object_pool<AsyncDataServiceListPlayerSnapshotsGrpcClient> DataServiceLis
 using AsyncDataServiceListPlayerSnapshotsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::ListPlayerSnapshotsResponse&)>;
 AsyncDataServiceListPlayerSnapshotsHandlerFunctionType AsyncDataServiceListPlayerSnapshotsHandler;
+AsyncDataServiceListPlayerSnapshotsFailedHandlerFunctionType AsyncDataServiceListPlayerSnapshotsFailedHandler;
 
 void AsyncCompleteGrpcDataServiceListPlayerSnapshots(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -616,9 +727,22 @@ void AsyncCompleteGrpcDataServiceListPlayerSnapshots(entt::registry& registry, e
     if (call->status.ok()) {
         if (AsyncDataServiceListPlayerSnapshotsHandler) {
             AsyncDataServiceListPlayerSnapshotsHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.ListPlayerSnapshots reply dropped: AsyncDataServiceListPlayerSnapshotsHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceListPlayerSnapshotsFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.ListPlayerSnapshots", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceListPlayerSnapshotsFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.ListPlayerSnapshots failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceListPlayerSnapshotsPool.destroy(call);
@@ -626,15 +750,7 @@ void AsyncCompleteGrpcDataServiceListPlayerSnapshots(entt::registry& registry, e
 
 void SendDataServiceListPlayerSnapshots(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ListPlayerSnapshotsRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceListPlayerSnapshotsPool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncListPlayerSnapshots(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceListPlayerSnapshotsMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceListPlayerSnapshots(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -644,13 +760,17 @@ void SendDataServiceListPlayerSnapshots(entt::registry& registry, entt::entity n
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncListPlayerSnapshots(&call->context, request,
+        ->PrepareAsyncListPlayerSnapshots(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceListPlayerSnapshotsMessageId, (void*)call));
@@ -668,6 +788,7 @@ boost::object_pool<AsyncDataServiceGetPlayerSnapshotDiffGrpcClient> DataServiceG
 using AsyncDataServiceGetPlayerSnapshotDiffHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::GetPlayerSnapshotDiffResponse&)>;
 AsyncDataServiceGetPlayerSnapshotDiffHandlerFunctionType AsyncDataServiceGetPlayerSnapshotDiffHandler;
+AsyncDataServiceGetPlayerSnapshotDiffFailedHandlerFunctionType AsyncDataServiceGetPlayerSnapshotDiffFailedHandler;
 
 void AsyncCompleteGrpcDataServiceGetPlayerSnapshotDiff(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -675,9 +796,22 @@ void AsyncCompleteGrpcDataServiceGetPlayerSnapshotDiff(entt::registry& registry,
     if (call->status.ok()) {
         if (AsyncDataServiceGetPlayerSnapshotDiffHandler) {
             AsyncDataServiceGetPlayerSnapshotDiffHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.GetPlayerSnapshotDiff reply dropped: AsyncDataServiceGetPlayerSnapshotDiffHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceGetPlayerSnapshotDiffFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.GetPlayerSnapshotDiff", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceGetPlayerSnapshotDiffFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.GetPlayerSnapshotDiff failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceGetPlayerSnapshotDiffPool.destroy(call);
@@ -685,15 +819,7 @@ void AsyncCompleteGrpcDataServiceGetPlayerSnapshotDiff(entt::registry& registry,
 
 void SendDataServiceGetPlayerSnapshotDiff(entt::registry& registry, entt::entity nodeEntity, const ::data_service::GetPlayerSnapshotDiffRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceGetPlayerSnapshotDiffPool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetPlayerSnapshotDiff(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceGetPlayerSnapshotDiffMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceGetPlayerSnapshotDiff(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -703,13 +829,17 @@ void SendDataServiceGetPlayerSnapshotDiff(entt::registry& registry, entt::entity
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncGetPlayerSnapshotDiff(&call->context, request,
+        ->PrepareAsyncGetPlayerSnapshotDiff(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceGetPlayerSnapshotDiffMessageId, (void*)call));
@@ -727,6 +857,7 @@ boost::object_pool<AsyncDataServiceRollbackPlayerGrpcClient> DataServiceRollback
 using AsyncDataServiceRollbackPlayerHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::RollbackPlayerResponse&)>;
 AsyncDataServiceRollbackPlayerHandlerFunctionType AsyncDataServiceRollbackPlayerHandler;
+AsyncDataServiceRollbackPlayerFailedHandlerFunctionType AsyncDataServiceRollbackPlayerFailedHandler;
 
 void AsyncCompleteGrpcDataServiceRollbackPlayer(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -734,9 +865,22 @@ void AsyncCompleteGrpcDataServiceRollbackPlayer(entt::registry& registry, entt::
     if (call->status.ok()) {
         if (AsyncDataServiceRollbackPlayerHandler) {
             AsyncDataServiceRollbackPlayerHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.RollbackPlayer reply dropped: AsyncDataServiceRollbackPlayerHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceRollbackPlayerFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.RollbackPlayer", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceRollbackPlayerFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.RollbackPlayer failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceRollbackPlayerPool.destroy(call);
@@ -744,15 +888,7 @@ void AsyncCompleteGrpcDataServiceRollbackPlayer(entt::registry& registry, entt::
 
 void SendDataServiceRollbackPlayer(entt::registry& registry, entt::entity nodeEntity, const ::data_service::RollbackPlayerRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceRollbackPlayerPool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncRollbackPlayer(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceRollbackPlayerMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceRollbackPlayer(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -762,13 +898,17 @@ void SendDataServiceRollbackPlayer(entt::registry& registry, entt::entity nodeEn
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncRollbackPlayer(&call->context, request,
+        ->PrepareAsyncRollbackPlayer(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceRollbackPlayerMessageId, (void*)call));
@@ -786,6 +926,7 @@ boost::object_pool<AsyncDataServiceRollbackZoneGrpcClient> DataServiceRollbackZo
 using AsyncDataServiceRollbackZoneHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::RollbackZoneResponse&)>;
 AsyncDataServiceRollbackZoneHandlerFunctionType AsyncDataServiceRollbackZoneHandler;
+AsyncDataServiceRollbackZoneFailedHandlerFunctionType AsyncDataServiceRollbackZoneFailedHandler;
 
 void AsyncCompleteGrpcDataServiceRollbackZone(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -793,9 +934,22 @@ void AsyncCompleteGrpcDataServiceRollbackZone(entt::registry& registry, entt::en
     if (call->status.ok()) {
         if (AsyncDataServiceRollbackZoneHandler) {
             AsyncDataServiceRollbackZoneHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.RollbackZone reply dropped: AsyncDataServiceRollbackZoneHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceRollbackZoneFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.RollbackZone", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceRollbackZoneFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.RollbackZone failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceRollbackZonePool.destroy(call);
@@ -803,15 +957,7 @@ void AsyncCompleteGrpcDataServiceRollbackZone(entt::registry& registry, entt::en
 
 void SendDataServiceRollbackZone(entt::registry& registry, entt::entity nodeEntity, const ::data_service::RollbackZoneRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceRollbackZonePool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncRollbackZone(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceRollbackZoneMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceRollbackZone(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -821,13 +967,17 @@ void SendDataServiceRollbackZone(entt::registry& registry, entt::entity nodeEnti
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncRollbackZone(&call->context, request,
+        ->PrepareAsyncRollbackZone(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceRollbackZoneMessageId, (void*)call));
@@ -845,6 +995,7 @@ boost::object_pool<AsyncDataServiceRollbackAllGrpcClient> DataServiceRollbackAll
 using AsyncDataServiceRollbackAllHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::RollbackAllResponse&)>;
 AsyncDataServiceRollbackAllHandlerFunctionType AsyncDataServiceRollbackAllHandler;
+AsyncDataServiceRollbackAllFailedHandlerFunctionType AsyncDataServiceRollbackAllFailedHandler;
 
 void AsyncCompleteGrpcDataServiceRollbackAll(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -852,9 +1003,22 @@ void AsyncCompleteGrpcDataServiceRollbackAll(entt::registry& registry, entt::ent
     if (call->status.ok()) {
         if (AsyncDataServiceRollbackAllHandler) {
             AsyncDataServiceRollbackAllHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.RollbackAll reply dropped: AsyncDataServiceRollbackAllHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceRollbackAllFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.RollbackAll", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceRollbackAllFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.RollbackAll failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceRollbackAllPool.destroy(call);
@@ -862,15 +1026,7 @@ void AsyncCompleteGrpcDataServiceRollbackAll(entt::registry& registry, entt::ent
 
 void SendDataServiceRollbackAll(entt::registry& registry, entt::entity nodeEntity, const ::data_service::RollbackAllRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceRollbackAllPool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncRollbackAll(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceRollbackAllMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceRollbackAll(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -880,13 +1036,17 @@ void SendDataServiceRollbackAll(entt::registry& registry, entt::entity nodeEntit
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncRollbackAll(&call->context, request,
+        ->PrepareAsyncRollbackAll(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceRollbackAllMessageId, (void*)call));
@@ -904,6 +1064,7 @@ boost::object_pool<AsyncDataServiceBatchRecallItemsGrpcClient> DataServiceBatchR
 using AsyncDataServiceBatchRecallItemsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::BatchRecallItemsResponse&)>;
 AsyncDataServiceBatchRecallItemsHandlerFunctionType AsyncDataServiceBatchRecallItemsHandler;
+AsyncDataServiceBatchRecallItemsFailedHandlerFunctionType AsyncDataServiceBatchRecallItemsFailedHandler;
 
 void AsyncCompleteGrpcDataServiceBatchRecallItems(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -911,9 +1072,22 @@ void AsyncCompleteGrpcDataServiceBatchRecallItems(entt::registry& registry, entt
     if (call->status.ok()) {
         if (AsyncDataServiceBatchRecallItemsHandler) {
             AsyncDataServiceBatchRecallItemsHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.BatchRecallItems reply dropped: AsyncDataServiceBatchRecallItemsHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceBatchRecallItemsFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.BatchRecallItems", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceBatchRecallItemsFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.BatchRecallItems failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceBatchRecallItemsPool.destroy(call);
@@ -921,15 +1095,7 @@ void AsyncCompleteGrpcDataServiceBatchRecallItems(entt::registry& registry, entt
 
 void SendDataServiceBatchRecallItems(entt::registry& registry, entt::entity nodeEntity, const ::data_service::BatchRecallItemsRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceBatchRecallItemsPool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncBatchRecallItems(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceBatchRecallItemsMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceBatchRecallItems(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -939,13 +1105,17 @@ void SendDataServiceBatchRecallItems(entt::registry& registry, entt::entity node
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncBatchRecallItems(&call->context, request,
+        ->PrepareAsyncBatchRecallItems(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceBatchRecallItemsMessageId, (void*)call));
@@ -963,6 +1133,7 @@ boost::object_pool<AsyncDataServiceQueryTransactionLogGrpcClient> DataServiceQue
 using AsyncDataServiceQueryTransactionLogHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::QueryTransactionLogResponse&)>;
 AsyncDataServiceQueryTransactionLogHandlerFunctionType AsyncDataServiceQueryTransactionLogHandler;
+AsyncDataServiceQueryTransactionLogFailedHandlerFunctionType AsyncDataServiceQueryTransactionLogFailedHandler;
 
 void AsyncCompleteGrpcDataServiceQueryTransactionLog(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -970,9 +1141,22 @@ void AsyncCompleteGrpcDataServiceQueryTransactionLog(entt::registry& registry, e
     if (call->status.ok()) {
         if (AsyncDataServiceQueryTransactionLogHandler) {
             AsyncDataServiceQueryTransactionLogHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.QueryTransactionLog reply dropped: AsyncDataServiceQueryTransactionLogHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceQueryTransactionLogFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.QueryTransactionLog", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceQueryTransactionLogFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.QueryTransactionLog failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceQueryTransactionLogPool.destroy(call);
@@ -980,15 +1164,7 @@ void AsyncCompleteGrpcDataServiceQueryTransactionLog(entt::registry& registry, e
 
 void SendDataServiceQueryTransactionLog(entt::registry& registry, entt::entity nodeEntity, const ::data_service::QueryTransactionLogRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceQueryTransactionLogPool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncQueryTransactionLog(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceQueryTransactionLogMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceQueryTransactionLog(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -998,13 +1174,17 @@ void SendDataServiceQueryTransactionLog(entt::registry& registry, entt::entity n
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncQueryTransactionLog(&call->context, request,
+        ->PrepareAsyncQueryTransactionLog(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceQueryTransactionLogMessageId, (void*)call));
@@ -1022,6 +1202,7 @@ boost::object_pool<AsyncDataServiceCreateEventSnapshotGrpcClient> DataServiceCre
 using AsyncDataServiceCreateEventSnapshotHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::CreateEventSnapshotResponse&)>;
 AsyncDataServiceCreateEventSnapshotHandlerFunctionType AsyncDataServiceCreateEventSnapshotHandler;
+AsyncDataServiceCreateEventSnapshotFailedHandlerFunctionType AsyncDataServiceCreateEventSnapshotFailedHandler;
 
 void AsyncCompleteGrpcDataServiceCreateEventSnapshot(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -1029,9 +1210,22 @@ void AsyncCompleteGrpcDataServiceCreateEventSnapshot(entt::registry& registry, e
     if (call->status.ok()) {
         if (AsyncDataServiceCreateEventSnapshotHandler) {
             AsyncDataServiceCreateEventSnapshotHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.CreateEventSnapshot reply dropped: AsyncDataServiceCreateEventSnapshotHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceCreateEventSnapshotFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.CreateEventSnapshot", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceCreateEventSnapshotFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.CreateEventSnapshot failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceCreateEventSnapshotPool.destroy(call);
@@ -1039,15 +1233,7 @@ void AsyncCompleteGrpcDataServiceCreateEventSnapshot(entt::registry& registry, e
 
 void SendDataServiceCreateEventSnapshot(entt::registry& registry, entt::entity nodeEntity, const ::data_service::CreateEventSnapshotRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceCreateEventSnapshotPool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncCreateEventSnapshot(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceCreateEventSnapshotMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceCreateEventSnapshot(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -1057,13 +1243,17 @@ void SendDataServiceCreateEventSnapshot(entt::registry& registry, entt::entity n
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncCreateEventSnapshot(&call->context, request,
+        ->PrepareAsyncCreateEventSnapshot(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceCreateEventSnapshotMessageId, (void*)call));
@@ -1081,6 +1271,7 @@ boost::object_pool<AsyncDataServiceAllocateIdSegmentGrpcClient> DataServiceAlloc
 using AsyncDataServiceAllocateIdSegmentHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::AllocateIdSegmentResponse&)>;
 AsyncDataServiceAllocateIdSegmentHandlerFunctionType AsyncDataServiceAllocateIdSegmentHandler;
+AsyncDataServiceAllocateIdSegmentFailedHandlerFunctionType AsyncDataServiceAllocateIdSegmentFailedHandler;
 
 void AsyncCompleteGrpcDataServiceAllocateIdSegment(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -1088,9 +1279,22 @@ void AsyncCompleteGrpcDataServiceAllocateIdSegment(entt::registry& registry, ent
     if (call->status.ok()) {
         if (AsyncDataServiceAllocateIdSegmentHandler) {
             AsyncDataServiceAllocateIdSegmentHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.AllocateIdSegment reply dropped: AsyncDataServiceAllocateIdSegmentHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceAllocateIdSegmentFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.AllocateIdSegment", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceAllocateIdSegmentFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.AllocateIdSegment failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceAllocateIdSegmentPool.destroy(call);
@@ -1098,15 +1302,7 @@ void AsyncCompleteGrpcDataServiceAllocateIdSegment(entt::registry& registry, ent
 
 void SendDataServiceAllocateIdSegment(entt::registry& registry, entt::entity nodeEntity, const ::data_service::AllocateIdSegmentRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceAllocateIdSegmentPool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncAllocateIdSegment(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceAllocateIdSegmentMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceAllocateIdSegment(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -1116,13 +1312,17 @@ void SendDataServiceAllocateIdSegment(entt::registry& registry, entt::entity nod
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncAllocateIdSegment(&call->context, request,
+        ->PrepareAsyncAllocateIdSegment(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceAllocateIdSegmentMessageId, (void*)call));
@@ -1140,6 +1340,7 @@ boost::object_pool<AsyncDataServiceReservePlayerNameGrpcClient> DataServiceReser
 using AsyncDataServiceReservePlayerNameHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::ReservePlayerNameResponse&)>;
 AsyncDataServiceReservePlayerNameHandlerFunctionType AsyncDataServiceReservePlayerNameHandler;
+AsyncDataServiceReservePlayerNameFailedHandlerFunctionType AsyncDataServiceReservePlayerNameFailedHandler;
 
 void AsyncCompleteGrpcDataServiceReservePlayerName(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -1147,9 +1348,22 @@ void AsyncCompleteGrpcDataServiceReservePlayerName(entt::registry& registry, ent
     if (call->status.ok()) {
         if (AsyncDataServiceReservePlayerNameHandler) {
             AsyncDataServiceReservePlayerNameHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.ReservePlayerName reply dropped: AsyncDataServiceReservePlayerNameHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceReservePlayerNameFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.ReservePlayerName", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceReservePlayerNameFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.ReservePlayerName failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceReservePlayerNamePool.destroy(call);
@@ -1157,15 +1371,7 @@ void AsyncCompleteGrpcDataServiceReservePlayerName(entt::registry& registry, ent
 
 void SendDataServiceReservePlayerName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ReservePlayerNameRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceReservePlayerNamePool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncReservePlayerName(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceReservePlayerNameMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceReservePlayerName(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -1175,13 +1381,17 @@ void SendDataServiceReservePlayerName(entt::registry& registry, entt::entity nod
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncReservePlayerName(&call->context, request,
+        ->PrepareAsyncReservePlayerName(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceReservePlayerNameMessageId, (void*)call));
@@ -1199,6 +1409,7 @@ boost::object_pool<AsyncDataServiceReleasePlayerNameGrpcClient> DataServiceRelea
 using AsyncDataServiceReleasePlayerNameHandlerFunctionType =
     std::function<void(const ClientContext&, const ::google::protobuf::Empty&)>;
 AsyncDataServiceReleasePlayerNameHandlerFunctionType AsyncDataServiceReleasePlayerNameHandler;
+AsyncDataServiceReleasePlayerNameFailedHandlerFunctionType AsyncDataServiceReleasePlayerNameFailedHandler;
 
 void AsyncCompleteGrpcDataServiceReleasePlayerName(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -1206,9 +1417,22 @@ void AsyncCompleteGrpcDataServiceReleasePlayerName(entt::registry& registry, ent
     if (call->status.ok()) {
         if (AsyncDataServiceReleasePlayerNameHandler) {
             AsyncDataServiceReleasePlayerNameHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.ReleasePlayerName reply dropped: AsyncDataServiceReleasePlayerNameHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceReleasePlayerNameFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.ReleasePlayerName", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceReleasePlayerNameFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.ReleasePlayerName failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceReleasePlayerNamePool.destroy(call);
@@ -1216,15 +1440,7 @@ void AsyncCompleteGrpcDataServiceReleasePlayerName(entt::registry& registry, ent
 
 void SendDataServiceReleasePlayerName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ReleasePlayerNameRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceReleasePlayerNamePool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncReleasePlayerName(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceReleasePlayerNameMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceReleasePlayerName(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -1234,13 +1450,17 @@ void SendDataServiceReleasePlayerName(entt::registry& registry, entt::entity nod
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncReleasePlayerName(&call->context, request,
+        ->PrepareAsyncReleasePlayerName(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceReleasePlayerNameMessageId, (void*)call));
@@ -1258,6 +1478,7 @@ boost::object_pool<AsyncDataServiceBatchGetPlayerNameGrpcClient> DataServiceBatc
 using AsyncDataServiceBatchGetPlayerNameHandlerFunctionType =
     std::function<void(const ClientContext&, const ::data_service::BatchGetPlayerNameResponse&)>;
 AsyncDataServiceBatchGetPlayerNameHandlerFunctionType AsyncDataServiceBatchGetPlayerNameHandler;
+AsyncDataServiceBatchGetPlayerNameFailedHandlerFunctionType AsyncDataServiceBatchGetPlayerNameFailedHandler;
 
 void AsyncCompleteGrpcDataServiceBatchGetPlayerName(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -1265,9 +1486,22 @@ void AsyncCompleteGrpcDataServiceBatchGetPlayerName(entt::registry& registry, en
     if (call->status.ok()) {
         if (AsyncDataServiceBatchGetPlayerNameHandler) {
             AsyncDataServiceBatchGetPlayerNameHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC DataService.BatchGetPlayerName reply dropped: AsyncDataServiceBatchGetPlayerNameHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncDataServiceBatchGetPlayerNameFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "DataService.BatchGetPlayerName", call->context, call->status, call->sentMetadata};
+        AsyncDataServiceBatchGetPlayerNameFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC DataService.BatchGetPlayerName failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	DataServiceBatchGetPlayerNamePool.destroy(call);
@@ -1275,15 +1509,7 @@ void AsyncCompleteGrpcDataServiceBatchGetPlayerName(entt::registry& registry, en
 
 void SendDataServiceBatchGetPlayerName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::BatchGetPlayerNameRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(DataServiceBatchGetPlayerNamePool.construct());
-    call->response_reader = registry
-        .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncBatchGetPlayerName(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(DataServiceBatchGetPlayerNameMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendDataServiceBatchGetPlayerName(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -1293,13 +1519,17 @@ void SendDataServiceBatchGetPlayerName(entt::registry& registry, entt::entity no
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<DataServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncBatchGetPlayerName(&call->context, request,
+        ->PrepareAsyncBatchGetPlayerName(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(DataServiceBatchGetPlayerNameMessageId, (void*)call));
@@ -1502,6 +1732,104 @@ void SetDataServiceIfEmptyHandler(const std::function<void(const ClientContext&,
     if (!AsyncDataServiceBatchGetPlayerNameHandler) {
         AsyncDataServiceBatchGetPlayerNameHandler = handler;
     }
+}
+
+void SetDataServiceFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler) {
+    AsyncDataServiceLoadPlayerDataFailedHandler = handler;
+    AsyncDataServiceSavePlayerDataFailedHandler = handler;
+    AsyncDataServiceGetPlayerFieldFailedHandler = handler;
+    AsyncDataServiceSetPlayerFieldFailedHandler = handler;
+    AsyncDataServiceRegisterPlayerZoneFailedHandler = handler;
+    AsyncDataServiceGetPlayerHomeZoneFailedHandler = handler;
+    AsyncDataServiceBatchGetPlayerHomeZoneFailedHandler = handler;
+    AsyncDataServiceRemapHomeZoneForMergeFailedHandler = handler;
+    AsyncDataServiceDeletePlayerDataFailedHandler = handler;
+    AsyncDataServiceCreatePlayerSnapshotFailedHandler = handler;
+    AsyncDataServiceListPlayerSnapshotsFailedHandler = handler;
+    AsyncDataServiceGetPlayerSnapshotDiffFailedHandler = handler;
+    AsyncDataServiceRollbackPlayerFailedHandler = handler;
+    AsyncDataServiceRollbackZoneFailedHandler = handler;
+    AsyncDataServiceRollbackAllFailedHandler = handler;
+    AsyncDataServiceBatchRecallItemsFailedHandler = handler;
+    AsyncDataServiceQueryTransactionLogFailedHandler = handler;
+    AsyncDataServiceCreateEventSnapshotFailedHandler = handler;
+    AsyncDataServiceAllocateIdSegmentFailedHandler = handler;
+    AsyncDataServiceReservePlayerNameFailedHandler = handler;
+    AsyncDataServiceReleasePlayerNameFailedHandler = handler;
+    AsyncDataServiceBatchGetPlayerNameFailedHandler = handler;
+}
+
+void SetDataServiceIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler) {
+    if (!AsyncDataServiceLoadPlayerDataFailedHandler) {
+        AsyncDataServiceLoadPlayerDataFailedHandler = handler;
+    }
+    if (!AsyncDataServiceSavePlayerDataFailedHandler) {
+        AsyncDataServiceSavePlayerDataFailedHandler = handler;
+    }
+    if (!AsyncDataServiceGetPlayerFieldFailedHandler) {
+        AsyncDataServiceGetPlayerFieldFailedHandler = handler;
+    }
+    if (!AsyncDataServiceSetPlayerFieldFailedHandler) {
+        AsyncDataServiceSetPlayerFieldFailedHandler = handler;
+    }
+    if (!AsyncDataServiceRegisterPlayerZoneFailedHandler) {
+        AsyncDataServiceRegisterPlayerZoneFailedHandler = handler;
+    }
+    if (!AsyncDataServiceGetPlayerHomeZoneFailedHandler) {
+        AsyncDataServiceGetPlayerHomeZoneFailedHandler = handler;
+    }
+    if (!AsyncDataServiceBatchGetPlayerHomeZoneFailedHandler) {
+        AsyncDataServiceBatchGetPlayerHomeZoneFailedHandler = handler;
+    }
+    if (!AsyncDataServiceRemapHomeZoneForMergeFailedHandler) {
+        AsyncDataServiceRemapHomeZoneForMergeFailedHandler = handler;
+    }
+    if (!AsyncDataServiceDeletePlayerDataFailedHandler) {
+        AsyncDataServiceDeletePlayerDataFailedHandler = handler;
+    }
+    if (!AsyncDataServiceCreatePlayerSnapshotFailedHandler) {
+        AsyncDataServiceCreatePlayerSnapshotFailedHandler = handler;
+    }
+    if (!AsyncDataServiceListPlayerSnapshotsFailedHandler) {
+        AsyncDataServiceListPlayerSnapshotsFailedHandler = handler;
+    }
+    if (!AsyncDataServiceGetPlayerSnapshotDiffFailedHandler) {
+        AsyncDataServiceGetPlayerSnapshotDiffFailedHandler = handler;
+    }
+    if (!AsyncDataServiceRollbackPlayerFailedHandler) {
+        AsyncDataServiceRollbackPlayerFailedHandler = handler;
+    }
+    if (!AsyncDataServiceRollbackZoneFailedHandler) {
+        AsyncDataServiceRollbackZoneFailedHandler = handler;
+    }
+    if (!AsyncDataServiceRollbackAllFailedHandler) {
+        AsyncDataServiceRollbackAllFailedHandler = handler;
+    }
+    if (!AsyncDataServiceBatchRecallItemsFailedHandler) {
+        AsyncDataServiceBatchRecallItemsFailedHandler = handler;
+    }
+    if (!AsyncDataServiceQueryTransactionLogFailedHandler) {
+        AsyncDataServiceQueryTransactionLogFailedHandler = handler;
+    }
+    if (!AsyncDataServiceCreateEventSnapshotFailedHandler) {
+        AsyncDataServiceCreateEventSnapshotFailedHandler = handler;
+    }
+    if (!AsyncDataServiceAllocateIdSegmentFailedHandler) {
+        AsyncDataServiceAllocateIdSegmentFailedHandler = handler;
+    }
+    if (!AsyncDataServiceReservePlayerNameFailedHandler) {
+        AsyncDataServiceReservePlayerNameFailedHandler = handler;
+    }
+    if (!AsyncDataServiceReleasePlayerNameFailedHandler) {
+        AsyncDataServiceReleasePlayerNameFailedHandler = handler;
+    }
+    if (!AsyncDataServiceBatchGetPlayerNameFailedHandler) {
+        AsyncDataServiceBatchGetPlayerNameFailedHandler = handler;
+    }
+}
+
+void SetDataServiceCallDeadline(std::chrono::milliseconds deadline) {
+    callDeadlineMs.store(static_cast<uint32_t>(deadline.count()), std::memory_order_relaxed);
 }
 
 void InitDataServiceGrpcNode(const std::shared_ptr<::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity) {

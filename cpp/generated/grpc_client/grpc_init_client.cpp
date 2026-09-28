@@ -1,5 +1,7 @@
 #pragma once
 
+#include <chrono>
+#include <cstdint>
 #include <functional>
 #include "entt/src/entt/entity/registry.hpp"
 #include <grpcpp/grpcpp.h>
@@ -25,17 +27,26 @@ namespace NodeUtils
 
     void SetBattleNodeHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetBattleNodeIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetBattleNodeFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetBattleNodeIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetBattleNodeCallDeadline(std::chrono::milliseconds deadline);
     void InitBattleNodeGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void HandleBattleNodeCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 
     void SetPlayerBattleHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetPlayerBattleIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetPlayerBattleFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetPlayerBattleIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetPlayerBattleCallDeadline(std::chrono::milliseconds deadline);
     void InitPlayerBattleGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void HandlePlayerBattleCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 
 namespace chatpb {
     void SetChatHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetChatIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetChatFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetChatIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetChatCallDeadline(std::chrono::milliseconds deadline);
     void InitChatGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void HandleChatCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
@@ -43,6 +54,9 @@ namespace chatpb {
 namespace client_rpc_router {
     void SetClientRpcRouterHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetClientRpcRouterIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetClientRpcRouterFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetClientRpcRouterIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetClientRpcRouterCallDeadline(std::chrono::milliseconds deadline);
     void InitClientRpcRouterGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void HandleClientRpcRouterCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
@@ -50,6 +64,9 @@ namespace client_rpc_router {
 namespace data_service {
     void SetDataServiceHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetDataServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetDataServiceFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetDataServiceIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetDataServiceCallDeadline(std::chrono::milliseconds deadline);
     void InitDataServiceGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void HandleDataServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
@@ -57,6 +74,9 @@ namespace data_service {
 namespace etcdserverpb {
     void SetEtcdHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetEtcdIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetEtcdFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetEtcdIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetEtcdCallDeadline(std::chrono::milliseconds deadline);
     void InitEtcdGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void HandleEtcdCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
@@ -64,6 +84,9 @@ namespace etcdserverpb {
 namespace friendpb {
     void SetFriendHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetFriendIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetFriendFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetFriendIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetFriendCallDeadline(std::chrono::milliseconds deadline);
     void InitFriendGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void HandleFriendCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
@@ -71,6 +94,9 @@ namespace friendpb {
 namespace guildpb {
     void SetGuildHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetGuildIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetGuildFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetGuildIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetGuildCallDeadline(std::chrono::milliseconds deadline);
     void InitGuildGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void HandleGuildCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
@@ -78,6 +104,9 @@ namespace guildpb {
 namespace loginpb {
     void SetLoginHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetLoginIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetLoginFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetLoginIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetLoginCallDeadline(std::chrono::milliseconds deadline);
     void InitLoginGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void HandleLoginCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
@@ -85,6 +114,9 @@ namespace loginpb {
 namespace match {
     void SetMatchServiceHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetMatchServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetMatchServiceFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetMatchServiceIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetMatchServiceCallDeadline(std::chrono::milliseconds deadline);
     void InitMatchServiceGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void HandleMatchServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
@@ -92,6 +124,9 @@ namespace match {
 namespace scene_manager {
     void SetSceneManagerServiceHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetSceneManagerServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetSceneManagerServiceFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetSceneManagerServiceIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetSceneManagerServiceCallDeadline(std::chrono::milliseconds deadline);
     void InitSceneManagerServiceGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void HandleSceneManagerServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
@@ -99,6 +134,9 @@ namespace scene_manager {
 namespace scene_node {
     void SetSceneNodeServiceHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetSceneNodeServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetSceneNodeServiceFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetSceneNodeServiceIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetSceneNodeServiceCallDeadline(std::chrono::milliseconds deadline);
     void InitSceneNodeServiceGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void HandleSceneNodeServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
@@ -106,6 +144,9 @@ namespace scene_node {
 namespace teampb {
     void SetTeamHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetTeamIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetTeamFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetTeamIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetTeamCallDeadline(std::chrono::milliseconds deadline);
     void InitTeamGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void HandleTeamCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
@@ -113,6 +154,9 @@ namespace teampb {
 namespace trade {
     void SetJubaozhaiHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetJubaozhaiIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetJubaozhaiFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetJubaozhaiIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetJubaozhaiCallDeadline(std::chrono::milliseconds deadline);
     void InitJubaozhaiGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void HandleJubaozhaiCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
@@ -120,6 +164,9 @@ namespace trade {
 namespace trade {
     void SetTradeAdminHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetTradeAdminIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetTradeAdminFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetTradeAdminIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);
+    void SetTradeAdminCallDeadline(std::chrono::milliseconds deadline);
     void InitTradeAdminGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void HandleTradeAdminCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
@@ -190,6 +237,122 @@ void SetHandler(const std::function<void(const ClientContext&, const ::google::p
 
     trade::SetTradeAdminHandler(handler);
 
+}
+
+void SetIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler){
+
+    ::SetBattleNodeIfEmptyFailedHandler(handler);
+
+    ::SetPlayerBattleIfEmptyFailedHandler(handler);
+
+    chatpb::SetChatIfEmptyFailedHandler(handler);
+
+    client_rpc_router::SetClientRpcRouterIfEmptyFailedHandler(handler);
+
+    data_service::SetDataServiceIfEmptyFailedHandler(handler);
+
+    etcdserverpb::SetEtcdIfEmptyFailedHandler(handler);
+
+    friendpb::SetFriendIfEmptyFailedHandler(handler);
+
+    guildpb::SetGuildIfEmptyFailedHandler(handler);
+
+    loginpb::SetLoginIfEmptyFailedHandler(handler);
+
+    match::SetMatchServiceIfEmptyFailedHandler(handler);
+
+    scene_manager::SetSceneManagerServiceIfEmptyFailedHandler(handler);
+
+    scene_node::SetSceneNodeServiceIfEmptyFailedHandler(handler);
+
+    teampb::SetTeamIfEmptyFailedHandler(handler);
+
+    trade::SetJubaozhaiIfEmptyFailedHandler(handler);
+
+    trade::SetTradeAdminIfEmptyFailedHandler(handler);
+
+}
+
+void SetFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler){
+
+    ::SetBattleNodeFailedHandler(handler);
+
+    ::SetPlayerBattleFailedHandler(handler);
+
+    chatpb::SetChatFailedHandler(handler);
+
+    client_rpc_router::SetClientRpcRouterFailedHandler(handler);
+
+    data_service::SetDataServiceFailedHandler(handler);
+
+    etcdserverpb::SetEtcdFailedHandler(handler);
+
+    friendpb::SetFriendFailedHandler(handler);
+
+    guildpb::SetGuildFailedHandler(handler);
+
+    loginpb::SetLoginFailedHandler(handler);
+
+    match::SetMatchServiceFailedHandler(handler);
+
+    scene_manager::SetSceneManagerServiceFailedHandler(handler);
+
+    scene_node::SetSceneNodeServiceFailedHandler(handler);
+
+    teampb::SetTeamFailedHandler(handler);
+
+    trade::SetJubaozhaiFailedHandler(handler);
+
+    trade::SetTradeAdminFailedHandler(handler);
+
+}
+
+void SetGrpcCallDeadline(uint32_t nodeType, std::chrono::milliseconds deadline){
+    if (static_cast<uint32_t>(common::base::eNodeType::BattleNodeService) == nodeType) {
+        ::SetBattleNodeCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::BattleNodeService) == nodeType) {
+        ::SetPlayerBattleCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::ChatNodeService) == nodeType) {
+        chatpb::SetChatCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::ClientRpcRouterNodeService) == nodeType) {
+        client_rpc_router::SetClientRpcRouterCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::DataServiceNodeService) == nodeType) {
+        data_service::SetDataServiceCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::EtcdNodeService) == nodeType) {
+        etcdserverpb::SetEtcdCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::FriendNodeService) == nodeType) {
+        friendpb::SetFriendCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::GuildNodeService) == nodeType) {
+        guildpb::SetGuildCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::LoginNodeService) == nodeType) {
+        loginpb::SetLoginCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::MatchNodeService) == nodeType) {
+        match::SetMatchServiceCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::SceneManagerNodeService) == nodeType) {
+        scene_manager::SetSceneManagerServiceCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::SceneManagerNodeService) == nodeType) {
+        scene_node::SetSceneNodeServiceCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::TeamNodeService) == nodeType) {
+        teampb::SetTeamCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::TradeNodeService) == nodeType) {
+        trade::SetJubaozhaiCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::TradeNodeService) == nodeType) {
+        trade::SetTradeAdminCallDeadline(deadline);
+    }
 }
 
 void HandleCompletedQueueMessage(entt::registry& registry){

@@ -62,6 +62,15 @@ message IdSegmentConfig {
     repeated IdSegmentKindConfig kinds = 1;
 }
 
+// C++ 节点发出的 unary gRPC 调用的 deadline(docs/design/grpc-client-deadline-failure-callback.md §4)。
+// 按**目标**节点类型配;没配到的类型用生成代码里的 kDefaultGrpcCallDeadlineMs(grpc_client/grpc_call_tag.h)。
+// 取值遵守「上游比下游宽」:大于目标服务的服务端超时,小于依赖这次调用结果的 C++ 看门狗。
+message GrpcClientConfig {
+    // key = ENodeType 枚举名(SceneManagerNodeService / DataServiceNodeService …),value = 毫秒。
+    // 不认识的键、值为 0(= 不限时,违反超时预算)都被忽略并记 ERROR,该类型保持默认。
+    map<string, uint32> call_deadline_ms = 1;
+}
+
 // Base deploy config
 message BaseDeployConfig {
     repeated string etcd_hosts = 1;
@@ -140,6 +149,9 @@ message BaseDeployConfig {
     // 到期时被静默吃掉。2026-09-09 之前这个后缀是 C++ 编译期常量,换代要手改两个头文件并重出镜像;
     // 现在收敛成这一个部署键(k8s 侧由 k8s_deploy.ps1 从 data_service.yaml 镜像进 node ConfigMap)。
     uint32 audit_topic_generation = 20;
+
+    // C++ 节点 unary gRPC 调用的 deadline(见 GrpcClientConfig)。可以不写:缺席 = 全部用内置默认。
+    GrpcClientConfig grpc_client = 21;
 }
 
 // Game config

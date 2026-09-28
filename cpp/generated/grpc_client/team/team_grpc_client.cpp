@@ -3,11 +3,21 @@
 #include "team_grpc_client.h"
 #include "proto/common/constants/etcd_grpc.pb.h"
 #include "core/utils/encode/base64.h"
+#include <atomic>
+#include <chrono>
 #include <boost/pool/object_pool.hpp>
 #include "grpc_call_tag.h"
 
 namespace {
 boost::object_pool<GrpcTag> tagPool;
+// 本文件所有 unary 调用的 deadline(毫秒)。启动时 SetTeamCallDeadline 按目标节点类型写入
+// (Node::Initialize → grpc_call_deadline::Apply);原子量:与应答处理器一样是进程级全局。
+std::atomic<uint32_t> callDeadlineMs{kDefaultGrpcCallDeadlineMs};
+
+std::chrono::system_clock::time_point NextCallDeadline() {
+    return std::chrono::system_clock::now() +
+        std::chrono::milliseconds(callDeadlineMs.load(std::memory_order_relaxed));
+}
 }
 
 namespace teampb {
@@ -19,6 +29,7 @@ boost::object_pool<AsyncClientPlayerTeamCreateTeamGrpcClient> ClientPlayerTeamCr
 using AsyncClientPlayerTeamCreateTeamHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 AsyncClientPlayerTeamCreateTeamHandlerFunctionType AsyncClientPlayerTeamCreateTeamHandler;
+AsyncClientPlayerTeamCreateTeamFailedHandlerFunctionType AsyncClientPlayerTeamCreateTeamFailedHandler;
 
 void AsyncCompleteGrpcClientPlayerTeamCreateTeam(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -26,9 +37,22 @@ void AsyncCompleteGrpcClientPlayerTeamCreateTeam(entt::registry& registry, entt:
     if (call->status.ok()) {
         if (AsyncClientPlayerTeamCreateTeamHandler) {
             AsyncClientPlayerTeamCreateTeamHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC ClientPlayerTeam.CreateTeam reply dropped: AsyncClientPlayerTeamCreateTeamHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncClientPlayerTeamCreateTeamFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "ClientPlayerTeam.CreateTeam", call->context, call->status, call->sentMetadata};
+        AsyncClientPlayerTeamCreateTeamFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC ClientPlayerTeam.CreateTeam failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	ClientPlayerTeamCreateTeamPool.destroy(call);
@@ -36,15 +60,7 @@ void AsyncCompleteGrpcClientPlayerTeamCreateTeam(entt::registry& registry, entt:
 
 void SendClientPlayerTeamCreateTeam(entt::registry& registry, entt::entity nodeEntity, const ::teampb::CreateTeamRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(ClientPlayerTeamCreateTeamPool.construct());
-    call->response_reader = registry
-        .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncCreateTeam(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamCreateTeamMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendClientPlayerTeamCreateTeam(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -54,13 +70,17 @@ void SendClientPlayerTeamCreateTeam(entt::registry& registry, entt::entity nodeE
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncCreateTeam(&call->context, request,
+        ->PrepareAsyncCreateTeam(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamCreateTeamMessageId, (void*)call));
@@ -78,6 +98,7 @@ boost::object_pool<AsyncClientPlayerTeamGetMyTeamGrpcClient> ClientPlayerTeamGet
 using AsyncClientPlayerTeamGetMyTeamHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 AsyncClientPlayerTeamGetMyTeamHandlerFunctionType AsyncClientPlayerTeamGetMyTeamHandler;
+AsyncClientPlayerTeamGetMyTeamFailedHandlerFunctionType AsyncClientPlayerTeamGetMyTeamFailedHandler;
 
 void AsyncCompleteGrpcClientPlayerTeamGetMyTeam(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -85,9 +106,22 @@ void AsyncCompleteGrpcClientPlayerTeamGetMyTeam(entt::registry& registry, entt::
     if (call->status.ok()) {
         if (AsyncClientPlayerTeamGetMyTeamHandler) {
             AsyncClientPlayerTeamGetMyTeamHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC ClientPlayerTeam.GetMyTeam reply dropped: AsyncClientPlayerTeamGetMyTeamHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncClientPlayerTeamGetMyTeamFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "ClientPlayerTeam.GetMyTeam", call->context, call->status, call->sentMetadata};
+        AsyncClientPlayerTeamGetMyTeamFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC ClientPlayerTeam.GetMyTeam failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	ClientPlayerTeamGetMyTeamPool.destroy(call);
@@ -95,15 +129,7 @@ void AsyncCompleteGrpcClientPlayerTeamGetMyTeam(entt::registry& registry, entt::
 
 void SendClientPlayerTeamGetMyTeam(entt::registry& registry, entt::entity nodeEntity, const ::teampb::GetMyTeamRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(ClientPlayerTeamGetMyTeamPool.construct());
-    call->response_reader = registry
-        .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncGetMyTeam(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamGetMyTeamMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendClientPlayerTeamGetMyTeam(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -113,13 +139,17 @@ void SendClientPlayerTeamGetMyTeam(entt::registry& registry, entt::entity nodeEn
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncGetMyTeam(&call->context, request,
+        ->PrepareAsyncGetMyTeam(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamGetMyTeamMessageId, (void*)call));
@@ -137,6 +167,7 @@ boost::object_pool<AsyncClientPlayerTeamApplyJoinTeamGrpcClient> ClientPlayerTea
 using AsyncClientPlayerTeamApplyJoinTeamHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 AsyncClientPlayerTeamApplyJoinTeamHandlerFunctionType AsyncClientPlayerTeamApplyJoinTeamHandler;
+AsyncClientPlayerTeamApplyJoinTeamFailedHandlerFunctionType AsyncClientPlayerTeamApplyJoinTeamFailedHandler;
 
 void AsyncCompleteGrpcClientPlayerTeamApplyJoinTeam(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -144,9 +175,22 @@ void AsyncCompleteGrpcClientPlayerTeamApplyJoinTeam(entt::registry& registry, en
     if (call->status.ok()) {
         if (AsyncClientPlayerTeamApplyJoinTeamHandler) {
             AsyncClientPlayerTeamApplyJoinTeamHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC ClientPlayerTeam.ApplyJoinTeam reply dropped: AsyncClientPlayerTeamApplyJoinTeamHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncClientPlayerTeamApplyJoinTeamFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "ClientPlayerTeam.ApplyJoinTeam", call->context, call->status, call->sentMetadata};
+        AsyncClientPlayerTeamApplyJoinTeamFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC ClientPlayerTeam.ApplyJoinTeam failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	ClientPlayerTeamApplyJoinTeamPool.destroy(call);
@@ -154,15 +198,7 @@ void AsyncCompleteGrpcClientPlayerTeamApplyJoinTeam(entt::registry& registry, en
 
 void SendClientPlayerTeamApplyJoinTeam(entt::registry& registry, entt::entity nodeEntity, const ::teampb::ApplyJoinTeamRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(ClientPlayerTeamApplyJoinTeamPool.construct());
-    call->response_reader = registry
-        .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncApplyJoinTeam(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamApplyJoinTeamMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendClientPlayerTeamApplyJoinTeam(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -172,13 +208,17 @@ void SendClientPlayerTeamApplyJoinTeam(entt::registry& registry, entt::entity no
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncApplyJoinTeam(&call->context, request,
+        ->PrepareAsyncApplyJoinTeam(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamApplyJoinTeamMessageId, (void*)call));
@@ -196,6 +236,7 @@ boost::object_pool<AsyncClientPlayerTeamHandleApplicationGrpcClient> ClientPlaye
 using AsyncClientPlayerTeamHandleApplicationHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 AsyncClientPlayerTeamHandleApplicationHandlerFunctionType AsyncClientPlayerTeamHandleApplicationHandler;
+AsyncClientPlayerTeamHandleApplicationFailedHandlerFunctionType AsyncClientPlayerTeamHandleApplicationFailedHandler;
 
 void AsyncCompleteGrpcClientPlayerTeamHandleApplication(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -203,9 +244,22 @@ void AsyncCompleteGrpcClientPlayerTeamHandleApplication(entt::registry& registry
     if (call->status.ok()) {
         if (AsyncClientPlayerTeamHandleApplicationHandler) {
             AsyncClientPlayerTeamHandleApplicationHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC ClientPlayerTeam.HandleApplication reply dropped: AsyncClientPlayerTeamHandleApplicationHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncClientPlayerTeamHandleApplicationFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "ClientPlayerTeam.HandleApplication", call->context, call->status, call->sentMetadata};
+        AsyncClientPlayerTeamHandleApplicationFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC ClientPlayerTeam.HandleApplication failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	ClientPlayerTeamHandleApplicationPool.destroy(call);
@@ -213,15 +267,7 @@ void AsyncCompleteGrpcClientPlayerTeamHandleApplication(entt::registry& registry
 
 void SendClientPlayerTeamHandleApplication(entt::registry& registry, entt::entity nodeEntity, const ::teampb::HandleApplicationRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(ClientPlayerTeamHandleApplicationPool.construct());
-    call->response_reader = registry
-        .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncHandleApplication(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamHandleApplicationMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendClientPlayerTeamHandleApplication(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -231,13 +277,17 @@ void SendClientPlayerTeamHandleApplication(entt::registry& registry, entt::entit
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncHandleApplication(&call->context, request,
+        ->PrepareAsyncHandleApplication(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamHandleApplicationMessageId, (void*)call));
@@ -255,6 +305,7 @@ boost::object_pool<AsyncClientPlayerTeamInviteToTeamGrpcClient> ClientPlayerTeam
 using AsyncClientPlayerTeamInviteToTeamHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 AsyncClientPlayerTeamInviteToTeamHandlerFunctionType AsyncClientPlayerTeamInviteToTeamHandler;
+AsyncClientPlayerTeamInviteToTeamFailedHandlerFunctionType AsyncClientPlayerTeamInviteToTeamFailedHandler;
 
 void AsyncCompleteGrpcClientPlayerTeamInviteToTeam(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -262,9 +313,22 @@ void AsyncCompleteGrpcClientPlayerTeamInviteToTeam(entt::registry& registry, ent
     if (call->status.ok()) {
         if (AsyncClientPlayerTeamInviteToTeamHandler) {
             AsyncClientPlayerTeamInviteToTeamHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC ClientPlayerTeam.InviteToTeam reply dropped: AsyncClientPlayerTeamInviteToTeamHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncClientPlayerTeamInviteToTeamFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "ClientPlayerTeam.InviteToTeam", call->context, call->status, call->sentMetadata};
+        AsyncClientPlayerTeamInviteToTeamFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC ClientPlayerTeam.InviteToTeam failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	ClientPlayerTeamInviteToTeamPool.destroy(call);
@@ -272,15 +336,7 @@ void AsyncCompleteGrpcClientPlayerTeamInviteToTeam(entt::registry& registry, ent
 
 void SendClientPlayerTeamInviteToTeam(entt::registry& registry, entt::entity nodeEntity, const ::teampb::InviteToTeamRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(ClientPlayerTeamInviteToTeamPool.construct());
-    call->response_reader = registry
-        .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncInviteToTeam(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamInviteToTeamMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendClientPlayerTeamInviteToTeam(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -290,13 +346,17 @@ void SendClientPlayerTeamInviteToTeam(entt::registry& registry, entt::entity nod
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncInviteToTeam(&call->context, request,
+        ->PrepareAsyncInviteToTeam(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamInviteToTeamMessageId, (void*)call));
@@ -314,6 +374,7 @@ boost::object_pool<AsyncClientPlayerTeamRespondInviteGrpcClient> ClientPlayerTea
 using AsyncClientPlayerTeamRespondInviteHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 AsyncClientPlayerTeamRespondInviteHandlerFunctionType AsyncClientPlayerTeamRespondInviteHandler;
+AsyncClientPlayerTeamRespondInviteFailedHandlerFunctionType AsyncClientPlayerTeamRespondInviteFailedHandler;
 
 void AsyncCompleteGrpcClientPlayerTeamRespondInvite(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -321,9 +382,22 @@ void AsyncCompleteGrpcClientPlayerTeamRespondInvite(entt::registry& registry, en
     if (call->status.ok()) {
         if (AsyncClientPlayerTeamRespondInviteHandler) {
             AsyncClientPlayerTeamRespondInviteHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC ClientPlayerTeam.RespondInvite reply dropped: AsyncClientPlayerTeamRespondInviteHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncClientPlayerTeamRespondInviteFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "ClientPlayerTeam.RespondInvite", call->context, call->status, call->sentMetadata};
+        AsyncClientPlayerTeamRespondInviteFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC ClientPlayerTeam.RespondInvite failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	ClientPlayerTeamRespondInvitePool.destroy(call);
@@ -331,15 +405,7 @@ void AsyncCompleteGrpcClientPlayerTeamRespondInvite(entt::registry& registry, en
 
 void SendClientPlayerTeamRespondInvite(entt::registry& registry, entt::entity nodeEntity, const ::teampb::RespondInviteRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(ClientPlayerTeamRespondInvitePool.construct());
-    call->response_reader = registry
-        .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncRespondInvite(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamRespondInviteMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendClientPlayerTeamRespondInvite(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -349,13 +415,17 @@ void SendClientPlayerTeamRespondInvite(entt::registry& registry, entt::entity no
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncRespondInvite(&call->context, request,
+        ->PrepareAsyncRespondInvite(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamRespondInviteMessageId, (void*)call));
@@ -373,6 +443,7 @@ boost::object_pool<AsyncClientPlayerTeamListMyInvitesGrpcClient> ClientPlayerTea
 using AsyncClientPlayerTeamListMyInvitesHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::ListMyInvitesResponse&)>;
 AsyncClientPlayerTeamListMyInvitesHandlerFunctionType AsyncClientPlayerTeamListMyInvitesHandler;
+AsyncClientPlayerTeamListMyInvitesFailedHandlerFunctionType AsyncClientPlayerTeamListMyInvitesFailedHandler;
 
 void AsyncCompleteGrpcClientPlayerTeamListMyInvites(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -380,9 +451,22 @@ void AsyncCompleteGrpcClientPlayerTeamListMyInvites(entt::registry& registry, en
     if (call->status.ok()) {
         if (AsyncClientPlayerTeamListMyInvitesHandler) {
             AsyncClientPlayerTeamListMyInvitesHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC ClientPlayerTeam.ListMyInvites reply dropped: AsyncClientPlayerTeamListMyInvitesHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncClientPlayerTeamListMyInvitesFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "ClientPlayerTeam.ListMyInvites", call->context, call->status, call->sentMetadata};
+        AsyncClientPlayerTeamListMyInvitesFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC ClientPlayerTeam.ListMyInvites failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	ClientPlayerTeamListMyInvitesPool.destroy(call);
@@ -390,15 +474,7 @@ void AsyncCompleteGrpcClientPlayerTeamListMyInvites(entt::registry& registry, en
 
 void SendClientPlayerTeamListMyInvites(entt::registry& registry, entt::entity nodeEntity, const ::teampb::ListMyInvitesRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(ClientPlayerTeamListMyInvitesPool.construct());
-    call->response_reader = registry
-        .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncListMyInvites(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamListMyInvitesMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendClientPlayerTeamListMyInvites(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -408,13 +484,17 @@ void SendClientPlayerTeamListMyInvites(entt::registry& registry, entt::entity no
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncListMyInvites(&call->context, request,
+        ->PrepareAsyncListMyInvites(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamListMyInvitesMessageId, (void*)call));
@@ -432,6 +512,7 @@ boost::object_pool<AsyncClientPlayerTeamLeaveTeamGrpcClient> ClientPlayerTeamLea
 using AsyncClientPlayerTeamLeaveTeamHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 AsyncClientPlayerTeamLeaveTeamHandlerFunctionType AsyncClientPlayerTeamLeaveTeamHandler;
+AsyncClientPlayerTeamLeaveTeamFailedHandlerFunctionType AsyncClientPlayerTeamLeaveTeamFailedHandler;
 
 void AsyncCompleteGrpcClientPlayerTeamLeaveTeam(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -439,9 +520,22 @@ void AsyncCompleteGrpcClientPlayerTeamLeaveTeam(entt::registry& registry, entt::
     if (call->status.ok()) {
         if (AsyncClientPlayerTeamLeaveTeamHandler) {
             AsyncClientPlayerTeamLeaveTeamHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC ClientPlayerTeam.LeaveTeam reply dropped: AsyncClientPlayerTeamLeaveTeamHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncClientPlayerTeamLeaveTeamFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "ClientPlayerTeam.LeaveTeam", call->context, call->status, call->sentMetadata};
+        AsyncClientPlayerTeamLeaveTeamFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC ClientPlayerTeam.LeaveTeam failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	ClientPlayerTeamLeaveTeamPool.destroy(call);
@@ -449,15 +543,7 @@ void AsyncCompleteGrpcClientPlayerTeamLeaveTeam(entt::registry& registry, entt::
 
 void SendClientPlayerTeamLeaveTeam(entt::registry& registry, entt::entity nodeEntity, const ::teampb::LeaveTeamRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(ClientPlayerTeamLeaveTeamPool.construct());
-    call->response_reader = registry
-        .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncLeaveTeam(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamLeaveTeamMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendClientPlayerTeamLeaveTeam(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -467,13 +553,17 @@ void SendClientPlayerTeamLeaveTeam(entt::registry& registry, entt::entity nodeEn
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncLeaveTeam(&call->context, request,
+        ->PrepareAsyncLeaveTeam(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamLeaveTeamMessageId, (void*)call));
@@ -491,6 +581,7 @@ boost::object_pool<AsyncClientPlayerTeamKickMemberGrpcClient> ClientPlayerTeamKi
 using AsyncClientPlayerTeamKickMemberHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 AsyncClientPlayerTeamKickMemberHandlerFunctionType AsyncClientPlayerTeamKickMemberHandler;
+AsyncClientPlayerTeamKickMemberFailedHandlerFunctionType AsyncClientPlayerTeamKickMemberFailedHandler;
 
 void AsyncCompleteGrpcClientPlayerTeamKickMember(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -498,9 +589,22 @@ void AsyncCompleteGrpcClientPlayerTeamKickMember(entt::registry& registry, entt:
     if (call->status.ok()) {
         if (AsyncClientPlayerTeamKickMemberHandler) {
             AsyncClientPlayerTeamKickMemberHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC ClientPlayerTeam.KickMember reply dropped: AsyncClientPlayerTeamKickMemberHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncClientPlayerTeamKickMemberFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "ClientPlayerTeam.KickMember", call->context, call->status, call->sentMetadata};
+        AsyncClientPlayerTeamKickMemberFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC ClientPlayerTeam.KickMember failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	ClientPlayerTeamKickMemberPool.destroy(call);
@@ -508,15 +612,7 @@ void AsyncCompleteGrpcClientPlayerTeamKickMember(entt::registry& registry, entt:
 
 void SendClientPlayerTeamKickMember(entt::registry& registry, entt::entity nodeEntity, const ::teampb::KickMemberRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(ClientPlayerTeamKickMemberPool.construct());
-    call->response_reader = registry
-        .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncKickMember(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamKickMemberMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendClientPlayerTeamKickMember(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -526,13 +622,17 @@ void SendClientPlayerTeamKickMember(entt::registry& registry, entt::entity nodeE
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncKickMember(&call->context, request,
+        ->PrepareAsyncKickMember(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamKickMemberMessageId, (void*)call));
@@ -550,6 +650,7 @@ boost::object_pool<AsyncClientPlayerTeamTransferLeaderGrpcClient> ClientPlayerTe
 using AsyncClientPlayerTeamTransferLeaderHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 AsyncClientPlayerTeamTransferLeaderHandlerFunctionType AsyncClientPlayerTeamTransferLeaderHandler;
+AsyncClientPlayerTeamTransferLeaderFailedHandlerFunctionType AsyncClientPlayerTeamTransferLeaderFailedHandler;
 
 void AsyncCompleteGrpcClientPlayerTeamTransferLeader(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -557,9 +658,22 @@ void AsyncCompleteGrpcClientPlayerTeamTransferLeader(entt::registry& registry, e
     if (call->status.ok()) {
         if (AsyncClientPlayerTeamTransferLeaderHandler) {
             AsyncClientPlayerTeamTransferLeaderHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC ClientPlayerTeam.TransferLeader reply dropped: AsyncClientPlayerTeamTransferLeaderHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncClientPlayerTeamTransferLeaderFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "ClientPlayerTeam.TransferLeader", call->context, call->status, call->sentMetadata};
+        AsyncClientPlayerTeamTransferLeaderFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC ClientPlayerTeam.TransferLeader failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	ClientPlayerTeamTransferLeaderPool.destroy(call);
@@ -567,15 +681,7 @@ void AsyncCompleteGrpcClientPlayerTeamTransferLeader(entt::registry& registry, e
 
 void SendClientPlayerTeamTransferLeader(entt::registry& registry, entt::entity nodeEntity, const ::teampb::TransferLeaderRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(ClientPlayerTeamTransferLeaderPool.construct());
-    call->response_reader = registry
-        .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncTransferLeader(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamTransferLeaderMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendClientPlayerTeamTransferLeader(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -585,13 +691,17 @@ void SendClientPlayerTeamTransferLeader(entt::registry& registry, entt::entity n
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncTransferLeader(&call->context, request,
+        ->PrepareAsyncTransferLeader(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamTransferLeaderMessageId, (void*)call));
@@ -609,6 +719,7 @@ boost::object_pool<AsyncClientPlayerTeamDisbandTeamGrpcClient> ClientPlayerTeamD
 using AsyncClientPlayerTeamDisbandTeamHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 AsyncClientPlayerTeamDisbandTeamHandlerFunctionType AsyncClientPlayerTeamDisbandTeamHandler;
+AsyncClientPlayerTeamDisbandTeamFailedHandlerFunctionType AsyncClientPlayerTeamDisbandTeamFailedHandler;
 
 void AsyncCompleteGrpcClientPlayerTeamDisbandTeam(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -616,9 +727,22 @@ void AsyncCompleteGrpcClientPlayerTeamDisbandTeam(entt::registry& registry, entt
     if (call->status.ok()) {
         if (AsyncClientPlayerTeamDisbandTeamHandler) {
             AsyncClientPlayerTeamDisbandTeamHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC ClientPlayerTeam.DisbandTeam reply dropped: AsyncClientPlayerTeamDisbandTeamHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncClientPlayerTeamDisbandTeamFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "ClientPlayerTeam.DisbandTeam", call->context, call->status, call->sentMetadata};
+        AsyncClientPlayerTeamDisbandTeamFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC ClientPlayerTeam.DisbandTeam failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	ClientPlayerTeamDisbandTeamPool.destroy(call);
@@ -626,15 +750,7 @@ void AsyncCompleteGrpcClientPlayerTeamDisbandTeam(entt::registry& registry, entt
 
 void SendClientPlayerTeamDisbandTeam(entt::registry& registry, entt::entity nodeEntity, const ::teampb::DisbandTeamRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(ClientPlayerTeamDisbandTeamPool.construct());
-    call->response_reader = registry
-        .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncDisbandTeam(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamDisbandTeamMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendClientPlayerTeamDisbandTeam(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -644,13 +760,17 @@ void SendClientPlayerTeamDisbandTeam(entt::registry& registry, entt::entity node
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncDisbandTeam(&call->context, request,
+        ->PrepareAsyncDisbandTeam(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamDisbandTeamMessageId, (void*)call));
@@ -668,6 +788,7 @@ boost::object_pool<AsyncClientPlayerTeamStartTeamMatchGrpcClient> ClientPlayerTe
 using AsyncClientPlayerTeamStartTeamMatchHandlerFunctionType =
     std::function<void(const ClientContext&, const ::teampb::TeamResponse&)>;
 AsyncClientPlayerTeamStartTeamMatchHandlerFunctionType AsyncClientPlayerTeamStartTeamMatchHandler;
+AsyncClientPlayerTeamStartTeamMatchFailedHandlerFunctionType AsyncClientPlayerTeamStartTeamMatchFailedHandler;
 
 void AsyncCompleteGrpcClientPlayerTeamStartTeamMatch(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -675,9 +796,22 @@ void AsyncCompleteGrpcClientPlayerTeamStartTeamMatch(entt::registry& registry, e
     if (call->status.ok()) {
         if (AsyncClientPlayerTeamStartTeamMatchHandler) {
             AsyncClientPlayerTeamStartTeamMatchHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC ClientPlayerTeam.StartTeamMatch reply dropped: AsyncClientPlayerTeamStartTeamMatchHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncClientPlayerTeamStartTeamMatchFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "ClientPlayerTeam.StartTeamMatch", call->context, call->status, call->sentMetadata};
+        AsyncClientPlayerTeamStartTeamMatchFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC ClientPlayerTeam.StartTeamMatch failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	ClientPlayerTeamStartTeamMatchPool.destroy(call);
@@ -685,15 +819,7 @@ void AsyncCompleteGrpcClientPlayerTeamStartTeamMatch(entt::registry& registry, e
 
 void SendClientPlayerTeamStartTeamMatch(entt::registry& registry, entt::entity nodeEntity, const ::teampb::StartTeamMatchRequest& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(ClientPlayerTeamStartTeamMatchPool.construct());
-    call->response_reader = registry
-        .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncStartTeamMatch(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamStartTeamMatchMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendClientPlayerTeamStartTeamMatch(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -703,13 +829,17 @@ void SendClientPlayerTeamStartTeamMatch(entt::registry& registry, entt::entity n
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncStartTeamMatch(&call->context, request,
+        ->PrepareAsyncStartTeamMatch(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamStartTeamMatchMessageId, (void*)call));
@@ -727,6 +857,7 @@ boost::object_pool<AsyncClientPlayerTeamNotifyTeamSnapshotGrpcClient> ClientPlay
 using AsyncClientPlayerTeamNotifyTeamSnapshotHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 AsyncClientPlayerTeamNotifyTeamSnapshotHandlerFunctionType AsyncClientPlayerTeamNotifyTeamSnapshotHandler;
+AsyncClientPlayerTeamNotifyTeamSnapshotFailedHandlerFunctionType AsyncClientPlayerTeamNotifyTeamSnapshotFailedHandler;
 
 void AsyncCompleteGrpcClientPlayerTeamNotifyTeamSnapshot(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -734,9 +865,22 @@ void AsyncCompleteGrpcClientPlayerTeamNotifyTeamSnapshot(entt::registry& registr
     if (call->status.ok()) {
         if (AsyncClientPlayerTeamNotifyTeamSnapshotHandler) {
             AsyncClientPlayerTeamNotifyTeamSnapshotHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC ClientPlayerTeam.NotifyTeamSnapshot reply dropped: AsyncClientPlayerTeamNotifyTeamSnapshotHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncClientPlayerTeamNotifyTeamSnapshotFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "ClientPlayerTeam.NotifyTeamSnapshot", call->context, call->status, call->sentMetadata};
+        AsyncClientPlayerTeamNotifyTeamSnapshotFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC ClientPlayerTeam.NotifyTeamSnapshot failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	ClientPlayerTeamNotifyTeamSnapshotPool.destroy(call);
@@ -744,15 +888,7 @@ void AsyncCompleteGrpcClientPlayerTeamNotifyTeamSnapshot(entt::registry& registr
 
 void SendClientPlayerTeamNotifyTeamSnapshot(entt::registry& registry, entt::entity nodeEntity, const ::teampb::TeamSnapshotS2C& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(ClientPlayerTeamNotifyTeamSnapshotPool.construct());
-    call->response_reader = registry
-        .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncNotifyTeamSnapshot(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamNotifyTeamSnapshotMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendClientPlayerTeamNotifyTeamSnapshot(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -762,13 +898,17 @@ void SendClientPlayerTeamNotifyTeamSnapshot(entt::registry& registry, entt::enti
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncNotifyTeamSnapshot(&call->context, request,
+        ->PrepareAsyncNotifyTeamSnapshot(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamNotifyTeamSnapshotMessageId, (void*)call));
@@ -786,6 +926,7 @@ boost::object_pool<AsyncClientPlayerTeamNotifyTeamInviteGrpcClient> ClientPlayer
 using AsyncClientPlayerTeamNotifyTeamInviteHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 AsyncClientPlayerTeamNotifyTeamInviteHandlerFunctionType AsyncClientPlayerTeamNotifyTeamInviteHandler;
+AsyncClientPlayerTeamNotifyTeamInviteFailedHandlerFunctionType AsyncClientPlayerTeamNotifyTeamInviteFailedHandler;
 
 void AsyncCompleteGrpcClientPlayerTeamNotifyTeamInvite(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -793,9 +934,22 @@ void AsyncCompleteGrpcClientPlayerTeamNotifyTeamInvite(entt::registry& registry,
     if (call->status.ok()) {
         if (AsyncClientPlayerTeamNotifyTeamInviteHandler) {
             AsyncClientPlayerTeamNotifyTeamInviteHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC ClientPlayerTeam.NotifyTeamInvite reply dropped: AsyncClientPlayerTeamNotifyTeamInviteHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncClientPlayerTeamNotifyTeamInviteFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "ClientPlayerTeam.NotifyTeamInvite", call->context, call->status, call->sentMetadata};
+        AsyncClientPlayerTeamNotifyTeamInviteFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC ClientPlayerTeam.NotifyTeamInvite failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	ClientPlayerTeamNotifyTeamInvitePool.destroy(call);
@@ -803,15 +957,7 @@ void AsyncCompleteGrpcClientPlayerTeamNotifyTeamInvite(entt::registry& registry,
 
 void SendClientPlayerTeamNotifyTeamInvite(entt::registry& registry, entt::entity nodeEntity, const ::teampb::TeamInviteS2C& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(ClientPlayerTeamNotifyTeamInvitePool.construct());
-    call->response_reader = registry
-        .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncNotifyTeamInvite(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamNotifyTeamInviteMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendClientPlayerTeamNotifyTeamInvite(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -821,13 +967,17 @@ void SendClientPlayerTeamNotifyTeamInvite(entt::registry& registry, entt::entity
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncNotifyTeamInvite(&call->context, request,
+        ->PrepareAsyncNotifyTeamInvite(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamNotifyTeamInviteMessageId, (void*)call));
@@ -845,6 +995,7 @@ boost::object_pool<AsyncClientPlayerTeamNotifyTeamEventGrpcClient> ClientPlayerT
 using AsyncClientPlayerTeamNotifyTeamEventHandlerFunctionType =
     std::function<void(const ClientContext&, const ::Empty&)>;
 AsyncClientPlayerTeamNotifyTeamEventHandlerFunctionType AsyncClientPlayerTeamNotifyTeamEventHandler;
+AsyncClientPlayerTeamNotifyTeamEventFailedHandlerFunctionType AsyncClientPlayerTeamNotifyTeamEventFailedHandler;
 
 void AsyncCompleteGrpcClientPlayerTeamNotifyTeamEvent(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
@@ -852,9 +1003,22 @@ void AsyncCompleteGrpcClientPlayerTeamNotifyTeamEvent(entt::registry& registry, 
     if (call->status.ok()) {
         if (AsyncClientPlayerTeamNotifyTeamEventHandler) {
             AsyncClientPlayerTeamNotifyTeamEventHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC ClientPlayerTeam.NotifyTeamEvent reply dropped: AsyncClientPlayerTeamNotifyTeamEventHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
         }
+    } else if (AsyncClientPlayerTeamNotifyTeamEventFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "ClientPlayerTeam.NotifyTeamEvent", call->context, call->status, call->sentMetadata};
+        AsyncClientPlayerTeamNotifyTeamEventFailedHandler(failure, call->request);
     } else {
-        LOG_ERROR << call->status.error_message();
+        LOG_ERROR << "gRPC ClientPlayerTeam.NotifyTeamEvent failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
     }
 
 	ClientPlayerTeamNotifyTeamEventPool.destroy(call);
@@ -862,15 +1026,7 @@ void AsyncCompleteGrpcClientPlayerTeamNotifyTeamEvent(entt::registry& registry, 
 
 void SendClientPlayerTeamNotifyTeamEvent(entt::registry& registry, entt::entity nodeEntity, const ::teampb::TeamEventS2C& request) {
 
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(ClientPlayerTeamNotifyTeamEventPool.construct());
-    call->response_reader = registry
-        .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncNotifyTeamEvent(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamNotifyTeamEventMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+    SendClientPlayerTeamNotifyTeamEvent(registry, nodeEntity, request, {}, {});
 
 }
 
@@ -880,13 +1036,17 @@ void SendClientPlayerTeamNotifyTeamEvent(entt::registry& registry, entt::entity 
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
     }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
 
     call->response_reader = registry
         .get<ClientPlayerTeamStubPtr>(nodeEntity)
-        ->PrepareAsyncNotifyTeamEvent(&call->context, request,
+        ->PrepareAsyncNotifyTeamEvent(&call->context, call->request,
                                            &cq);
     call->response_reader->StartCall();
     GrpcTag* got_tag(tagPool.construct(ClientPlayerTeamNotifyTeamEventMessageId, (void*)call));
@@ -1033,6 +1193,76 @@ void SetTeamIfEmptyHandler(const std::function<void(const ClientContext&, const 
     if (!AsyncClientPlayerTeamNotifyTeamEventHandler) {
         AsyncClientPlayerTeamNotifyTeamEventHandler = handler;
     }
+}
+
+void SetTeamFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler) {
+    AsyncClientPlayerTeamCreateTeamFailedHandler = handler;
+    AsyncClientPlayerTeamGetMyTeamFailedHandler = handler;
+    AsyncClientPlayerTeamApplyJoinTeamFailedHandler = handler;
+    AsyncClientPlayerTeamHandleApplicationFailedHandler = handler;
+    AsyncClientPlayerTeamInviteToTeamFailedHandler = handler;
+    AsyncClientPlayerTeamRespondInviteFailedHandler = handler;
+    AsyncClientPlayerTeamListMyInvitesFailedHandler = handler;
+    AsyncClientPlayerTeamLeaveTeamFailedHandler = handler;
+    AsyncClientPlayerTeamKickMemberFailedHandler = handler;
+    AsyncClientPlayerTeamTransferLeaderFailedHandler = handler;
+    AsyncClientPlayerTeamDisbandTeamFailedHandler = handler;
+    AsyncClientPlayerTeamStartTeamMatchFailedHandler = handler;
+    AsyncClientPlayerTeamNotifyTeamSnapshotFailedHandler = handler;
+    AsyncClientPlayerTeamNotifyTeamInviteFailedHandler = handler;
+    AsyncClientPlayerTeamNotifyTeamEventFailedHandler = handler;
+}
+
+void SetTeamIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler) {
+    if (!AsyncClientPlayerTeamCreateTeamFailedHandler) {
+        AsyncClientPlayerTeamCreateTeamFailedHandler = handler;
+    }
+    if (!AsyncClientPlayerTeamGetMyTeamFailedHandler) {
+        AsyncClientPlayerTeamGetMyTeamFailedHandler = handler;
+    }
+    if (!AsyncClientPlayerTeamApplyJoinTeamFailedHandler) {
+        AsyncClientPlayerTeamApplyJoinTeamFailedHandler = handler;
+    }
+    if (!AsyncClientPlayerTeamHandleApplicationFailedHandler) {
+        AsyncClientPlayerTeamHandleApplicationFailedHandler = handler;
+    }
+    if (!AsyncClientPlayerTeamInviteToTeamFailedHandler) {
+        AsyncClientPlayerTeamInviteToTeamFailedHandler = handler;
+    }
+    if (!AsyncClientPlayerTeamRespondInviteFailedHandler) {
+        AsyncClientPlayerTeamRespondInviteFailedHandler = handler;
+    }
+    if (!AsyncClientPlayerTeamListMyInvitesFailedHandler) {
+        AsyncClientPlayerTeamListMyInvitesFailedHandler = handler;
+    }
+    if (!AsyncClientPlayerTeamLeaveTeamFailedHandler) {
+        AsyncClientPlayerTeamLeaveTeamFailedHandler = handler;
+    }
+    if (!AsyncClientPlayerTeamKickMemberFailedHandler) {
+        AsyncClientPlayerTeamKickMemberFailedHandler = handler;
+    }
+    if (!AsyncClientPlayerTeamTransferLeaderFailedHandler) {
+        AsyncClientPlayerTeamTransferLeaderFailedHandler = handler;
+    }
+    if (!AsyncClientPlayerTeamDisbandTeamFailedHandler) {
+        AsyncClientPlayerTeamDisbandTeamFailedHandler = handler;
+    }
+    if (!AsyncClientPlayerTeamStartTeamMatchFailedHandler) {
+        AsyncClientPlayerTeamStartTeamMatchFailedHandler = handler;
+    }
+    if (!AsyncClientPlayerTeamNotifyTeamSnapshotFailedHandler) {
+        AsyncClientPlayerTeamNotifyTeamSnapshotFailedHandler = handler;
+    }
+    if (!AsyncClientPlayerTeamNotifyTeamInviteFailedHandler) {
+        AsyncClientPlayerTeamNotifyTeamInviteFailedHandler = handler;
+    }
+    if (!AsyncClientPlayerTeamNotifyTeamEventFailedHandler) {
+        AsyncClientPlayerTeamNotifyTeamEventFailedHandler = handler;
+    }
+}
+
+void SetTeamCallDeadline(std::chrono::milliseconds deadline) {
+    callDeadlineMs.store(static_cast<uint32_t>(deadline.count()), std::memory_order_relaxed);
 }
 
 void InitTeamGrpcNode(const std::shared_ptr<::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity) {
