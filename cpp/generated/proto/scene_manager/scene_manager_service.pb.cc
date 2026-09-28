@@ -407,11 +407,11 @@ constexpr EnterSceneRequest::ParseTableT_ EnterSceneRequest::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(EnterSceneRequest, _impl_._has_bits_),
       0, // no _extensions_
-      9, 120,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966784,  // skipmap
+      4294966272,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
+      10,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -455,10 +455,13 @@ constexpr EnterSceneRequest::ParseTableT_ EnterSceneRequest::InternalGeneratePar
        {64, 7, 0,
         PROTOBUF_FIELD_OFFSET(EnterSceneRequest, _impl_.scene_conf_id_)}},
       // uint32 gate_zone_id = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EnterSceneRequest, _impl_.gate_zone_id_), 8>(),
-       {72, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EnterSceneRequest, _impl_.gate_zone_id_), 9>(),
+       {72, 9, 0,
         PROTOBUF_FIELD_OFFSET(EnterSceneRequest, _impl_.gate_zone_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 correlation_id = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EnterSceneRequest, _impl_.correlation_id_), 8>(),
+       {80, 8, 0,
+        PROTOBUF_FIELD_OFFSET(EnterSceneRequest, _impl_.correlation_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -484,7 +487,9 @@ constexpr EnterSceneRequest::ParseTableT_ EnterSceneRequest::InternalGeneratePar
       // uint64 scene_conf_id = 8;
       {PROTOBUF_FIELD_OFFSET(EnterSceneRequest, _impl_.scene_conf_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 gate_zone_id = 9;
-      {PROTOBUF_FIELD_OFFSET(EnterSceneRequest, _impl_.gate_zone_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EnterSceneRequest, _impl_.gate_zone_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 correlation_id = 10;
+      {PROTOBUF_FIELD_OFFSET(EnterSceneRequest, _impl_.correlation_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -516,6 +521,7 @@ inline constexpr EnterSceneRequest::Impl_::Impl_(
         session_id_{0u},
         zone_id_{0u},
         scene_conf_id_{::uint64_t{0u}},
+        correlation_id_{::uint64_t{0u}},
         gate_zone_id_{0u} {}
 
 template <typename>
@@ -1149,11 +1155,11 @@ constexpr EnterSceneResponse::ParseTableT_ EnterSceneResponse::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(EnterSceneResponse, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967248,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1163,13 +1169,10 @@ constexpr EnterSceneResponse::ParseTableT_ EnterSceneResponse::InternalGenerateP
       ::_pbi::TcParser::GetTable<::scene_manager::EnterSceneResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 player_id = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EnterSceneResponse, _impl_.player_id_), 2>(),
-       {32, 2, 0,
-        PROTOBUF_FIELD_OFFSET(EnterSceneResponse, _impl_.player_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 error_code = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EnterSceneResponse, _impl_.error_code_), 3>(),
-       {8, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EnterSceneResponse, _impl_.error_code_), 4>(),
+       {8, 4, 0,
         PROTOBUF_FIELD_OFFSET(EnterSceneResponse, _impl_.error_code_)}},
       // string error_message = 2;
       {::_pbi::TcParser::FastUS1,
@@ -1179,17 +1182,29 @@ constexpr EnterSceneResponse::ParseTableT_ EnterSceneResponse::InternalGenerateP
       {::_pbi::TcParser::FastMtS1,
        {26, 1, 0,
         PROTOBUF_FIELD_OFFSET(EnterSceneResponse, _impl_.redirect_)}},
+      // uint64 player_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EnterSceneResponse, _impl_.player_id_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(EnterSceneResponse, _impl_.player_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 correlation_id = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EnterSceneResponse, _impl_.correlation_id_), 3>(),
+       {48, 3, 0,
+        PROTOBUF_FIELD_OFFSET(EnterSceneResponse, _impl_.correlation_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 error_code = 1;
-      {PROTOBUF_FIELD_OFFSET(EnterSceneResponse, _impl_.error_code_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EnterSceneResponse, _impl_.error_code_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string error_message = 2;
       {PROTOBUF_FIELD_OFFSET(EnterSceneResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // .scene_manager.RedirectToGateInfo redirect = 3;
       {PROTOBUF_FIELD_OFFSET(EnterSceneResponse, _impl_.redirect_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 player_id = 4;
       {PROTOBUF_FIELD_OFFSET(EnterSceneResponse, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 correlation_id = 6;
+      {PROTOBUF_FIELD_OFFSET(EnterSceneResponse, _impl_.correlation_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1216,6 +1231,7 @@ inline constexpr EnterSceneResponse::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         redirect_{nullptr},
         player_id_{::uint64_t{0u}},
+        correlation_id_{::uint64_t{0u}},
         error_code_{0u} {}
 
 template <typename>
@@ -1357,7 +1373,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::scene_manager::EnterSceneRequest, _impl_._has_bits_),
-        12, // hasbit index offset
+        13, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::scene_manager::EnterSceneRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::scene_manager::EnterSceneRequest, _impl_.scene_id_),
         PROTOBUF_FIELD_OFFSET(::scene_manager::EnterSceneRequest, _impl_.session_id_),
@@ -1367,6 +1383,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::scene_manager::EnterSceneRequest, _impl_.zone_id_),
         PROTOBUF_FIELD_OFFSET(::scene_manager::EnterSceneRequest, _impl_.scene_conf_id_),
         PROTOBUF_FIELD_OFFSET(::scene_manager::EnterSceneRequest, _impl_.gate_zone_id_),
+        PROTOBUF_FIELD_OFFSET(::scene_manager::EnterSceneRequest, _impl_.correlation_id_),
         3,
         4,
         5,
@@ -1375,18 +1392,21 @@ const ::uint32_t
         2,
         6,
         7,
+        9,
         8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::scene_manager::EnterSceneResponse, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::scene_manager::EnterSceneResponse, _impl_.error_code_),
         PROTOBUF_FIELD_OFFSET(::scene_manager::EnterSceneResponse, _impl_.error_message_),
         PROTOBUF_FIELD_OFFSET(::scene_manager::EnterSceneResponse, _impl_.redirect_),
         PROTOBUF_FIELD_OFFSET(::scene_manager::EnterSceneResponse, _impl_.player_id_),
-        3,
+        PROTOBUF_FIELD_OFFSET(::scene_manager::EnterSceneResponse, _impl_.correlation_id_),
+        4,
         0,
         1,
         2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::scene_manager::RedirectToGateInfo, _impl_._has_bits_),
         8, // hasbit index offset
@@ -1419,9 +1439,9 @@ static const ::_pbi::MigrationSchema
         {17, sizeof(::scene_manager::CreateSceneResponse)},
         {30, sizeof(::scene_manager::DestroySceneRequest)},
         {37, sizeof(::scene_manager::EnterSceneRequest)},
-        {58, sizeof(::scene_manager::EnterSceneResponse)},
-        {69, sizeof(::scene_manager::RedirectToGateInfo)},
-        {82, sizeof(::scene_manager::LeaveSceneRequest)},
+        {60, sizeof(::scene_manager::EnterSceneResponse)},
+        {73, sizeof(::scene_manager::RedirectToGateInfo)},
+        {86, sizeof(::scene_manager::LeaveSceneRequest)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1448,32 +1468,33 @@ const char descriptor_table_protodef_proto_2fscene_5fmanager_2fscene_5fmanager_5
     "cene_id\030\001 \001(\004\022\017\n\007node_id\030\002 \001(\t\022\022\n\nerror_"
     "code\030\003 \001(\r\022\025\n\rerror_message\030\004 \001(\t\022\023\n\013cre"
     "ator_ids\030\005 \003(\004\"8\n\023DestroySceneRequest\022\020\n"
-    "\010scene_id\030\001 \001(\004\022\017\n\007zone_id\030\002 \001(\r\"\311\001\n\021Ent"
+    "\010scene_id\030\001 \001(\004\022\017\n\007zone_id\030\002 \001(\r\"\341\001\n\021Ent"
     "erSceneRequest\022\021\n\tplayer_id\030\001 \001(\004\022\020\n\010sce"
     "ne_id\030\002 \001(\004\022\022\n\nsession_id\030\003 \001(\r\022\022\n\nreque"
     "st_id\030\004 \001(\t\022\017\n\007gate_id\030\005 \001(\t\022\030\n\020gate_ins"
     "tance_id\030\006 \001(\t\022\017\n\007zone_id\030\007 \001(\r\022\025\n\rscene"
-    "_conf_id\030\010 \001(\004\022\024\n\014gate_zone_id\030\t \001(\r\"\207\001\n"
-    "\022EnterSceneResponse\022\022\n\nerror_code\030\001 \001(\r\022"
-    "\025\n\rerror_message\030\002 \001(\t\0223\n\010redirect\030\003 \001(\013"
-    "2!.scene_manager.RedirectToGateInfo\022\021\n\tp"
-    "layer_id\030\004 \001(\004\"\216\001\n\022RedirectToGateInfo\022\026\n"
-    "\016target_gate_ip\030\001 \001(\t\022\030\n\020target_gate_por"
-    "t\030\002 \001(\r\022\025\n\rtoken_payload\030\003 \001(\014\022\027\n\017token_"
-    "signature\030\004 \001(\014\022\026\n\016token_deadline\030\005 \001(\003\""
-    "]\n\021LeaveSceneRequest\022\021\n\tplayer_id\030\001 \001(\004\022"
-    "\020\n\010scene_id\030\002 \001(\004\022\022\n\nrequest_id\030\003 \001(\t\022\017\n"
-    "\007zone_id\030\004 \001(\r*[\n\tSceneType\022\032\n\026SCENE_TYP"
-    "E_UNSPECIFIED\020\000\022\031\n\025SCENE_TYPE_MAIN_WORLD"
-    "\020\001\022\027\n\023SCENE_TYPE_INSTANCE\020\0022\263\002\n\014SceneMan"
-    "ager\022V\n\013CreateScene\022!.scene_manager.Crea"
-    "teSceneRequest\032\".scene_manager.CreateSce"
-    "neResponse\"\000\022<\n\014DestroyScene\022\".scene_man"
-    "ager.DestroySceneRequest\032\006.Empty\"\000\022S\n\nEn"
-    "terScene\022 .scene_manager.EnterSceneReque"
-    "st\032!.scene_manager.EnterSceneResponse\"\000\022"
-    "8\n\nLeaveScene\022 .scene_manager.LeaveScene"
-    "Request\032\006.Empty\"\000B\035Z\033scene_manager/scene"
+    "_conf_id\030\010 \001(\004\022\024\n\014gate_zone_id\030\t \001(\r\022\026\n\016"
+    "correlation_id\030\n \001(\004\"\237\001\n\022EnterSceneRespo"
+    "nse\022\022\n\nerror_code\030\001 \001(\r\022\025\n\rerror_message"
+    "\030\002 \001(\t\0223\n\010redirect\030\003 \001(\0132!.scene_manager"
+    ".RedirectToGateInfo\022\021\n\tplayer_id\030\004 \001(\004\022\026"
+    "\n\016correlation_id\030\006 \001(\004\"\216\001\n\022RedirectToGat"
+    "eInfo\022\026\n\016target_gate_ip\030\001 \001(\t\022\030\n\020target_"
+    "gate_port\030\002 \001(\r\022\025\n\rtoken_payload\030\003 \001(\014\022\027"
+    "\n\017token_signature\030\004 \001(\014\022\026\n\016token_deadlin"
+    "e\030\005 \001(\003\"]\n\021LeaveSceneRequest\022\021\n\tplayer_i"
+    "d\030\001 \001(\004\022\020\n\010scene_id\030\002 \001(\004\022\022\n\nrequest_id\030"
+    "\003 \001(\t\022\017\n\007zone_id\030\004 \001(\r*[\n\tSceneType\022\032\n\026S"
+    "CENE_TYPE_UNSPECIFIED\020\000\022\031\n\025SCENE_TYPE_MA"
+    "IN_WORLD\020\001\022\027\n\023SCENE_TYPE_INSTANCE\020\0022\263\002\n\014"
+    "SceneManager\022V\n\013CreateScene\022!.scene_mana"
+    "ger.CreateSceneRequest\032\".scene_manager.C"
+    "reateSceneResponse\"\000\022<\n\014DestroyScene\022\".s"
+    "cene_manager.DestroySceneRequest\032\006.Empty"
+    "\"\000\022S\n\nEnterScene\022 .scene_manager.EnterSc"
+    "eneRequest\032!.scene_manager.EnterSceneRes"
+    "ponse\"\000\0228\n\nLeaveScene\022 .scene_manager.Le"
+    "aveSceneRequest\032\006.Empty\"\000B\025Z\023proto/scene"
     "_managerb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
@@ -1486,7 +1507,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_5fmanager_2fscene_5fmana
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_5fmanager_2fscene_5fmanager_5fservice_2eproto = {
     false,
     false,
-    1576,
+    1616,
     descriptor_table_protodef_proto_2fscene_5fmanager_2fscene_5fmanager_5fservice_2eproto,
     "proto/scene_manager/scene_manager_service.proto",
     &descriptor_table_proto_2fscene_5fmanager_2fscene_5fmanager_5fservice_2eproto_once,
@@ -2608,7 +2629,11 @@ PROTOBUF_NOINLINE void EnterSceneRequest::Clear() {
         reinterpret_cast<char*>(&_impl_.scene_conf_id_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.scene_conf_id_));
   }
-  _impl_.gate_zone_id_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.correlation_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.gate_zone_id_) -
+        reinterpret_cast<char*>(&_impl_.correlation_id_)) + sizeof(_impl_.gate_zone_id_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -2708,11 +2733,20 @@ PROTOBUF_NOINLINE void EnterSceneRequest::Clear() {
   }
 
   // uint32 gate_zone_id = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_gate_zone_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           9, this_._internal_gate_zone_id(), target);
+    }
+  }
+
+  // uint64 correlation_id = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_correlation_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_correlation_id(), target);
     }
   }
 
@@ -2799,9 +2833,16 @@ PROTOBUF_NOINLINE void EnterSceneRequest::Clear() {
       }
     }
   }
-   {
-    // uint32 gate_zone_id = 9;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    // uint64 correlation_id = 10;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_correlation_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_correlation_id());
+      }
+    }
+    // uint32 gate_zone_id = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_gate_zone_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_gate_zone_id());
@@ -2879,9 +2920,16 @@ void EnterSceneRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_gate_zone_id() != 0) {
-      _this->_impl_.gate_zone_id_ = from._impl_.gate_zone_id_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_correlation_id() != 0) {
+        _this->_impl_.correlation_id_ = from._impl_.correlation_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_gate_zone_id() != 0) {
+        _this->_impl_.gate_zone_id_ = from._impl_.gate_zone_id_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -3038,7 +3086,7 @@ PROTOBUF_NOINLINE void EnterSceneResponse::Clear() {
       _impl_.redirect_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001cU)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.error_code_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.error_code_));
@@ -3067,7 +3115,7 @@ PROTOBUF_NOINLINE void EnterSceneResponse::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 error_code = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_error_code() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3101,6 +3149,15 @@ PROTOBUF_NOINLINE void EnterSceneResponse::Clear() {
     }
   }
 
+  // uint64 correlation_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_correlation_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_correlation_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3126,7 +3183,7 @@ PROTOBUF_NOINLINE void EnterSceneResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // string error_message = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_error_message().empty()) {
@@ -3146,8 +3203,15 @@ PROTOBUF_NOINLINE void EnterSceneResponse::Clear() {
             this_._internal_player_id());
       }
     }
-    // uint32 error_code = 1;
+    // uint64 correlation_id = 6;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_correlation_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_correlation_id());
+      }
+    }
+    // uint32 error_code = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_error_code() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_error_code());
@@ -3172,7 +3236,7 @@ void EnterSceneResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_error_message().empty()) {
         _this->_internal_set_error_message(from._internal_error_message());
@@ -3196,6 +3260,11 @@ void EnterSceneResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_correlation_id() != 0) {
+        _this->_impl_.correlation_id_ = from._impl_.correlation_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_error_code() != 0) {
         _this->_impl_.error_code_ = from._impl_.error_code_;
       }

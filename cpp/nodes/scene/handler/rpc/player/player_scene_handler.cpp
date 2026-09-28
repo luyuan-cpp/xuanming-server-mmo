@@ -60,8 +60,8 @@ void SceneSceneClientPlayerHandler::EnterScene(entt::entity player,const ::Enter
 	}
 
 	// 发送侧闸:归属交接在途(已冻结,盘上那份才是真值),或上一条 EnterScene 的应答还没回来。
-	// scene_manager 的应答只回显 player_id、不带请求内容,同一玩家两条 EnterScene 同时在途时
-	// 应答会串到对方头上:客户端连点产生的迟到 18 会被当成交接重发的失败应答。
+	// 应答已按 correlation_id 对号、不再串号;闸仍然必要,因为在途记录只有一个槽:第二条会覆盖第一条的号,
+	// 第一条随后到达的 18 就对不上号而被丢弃(旧版 scene_manager 不回显号时还会按 player_id 串号)。
 	// 放在镜像分支之前:冻结中的玩家同样不该去创建镜像。
 	if (PlayerLifecycleSystem::IsSceneChangeBusy(player))
 	{
@@ -146,7 +146,6 @@ void SceneSceneClientPlayerHandler::EnterScene(entt::entity player,const ::Enter
 	}
 
 	// Build EnterSceneRequest for SceneManager
-	auto &smRegistry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
 	::scene_manager::EnterSceneRequest req;
 	req.set_player_id(playerSessionPB->player_id());
 	req.set_scene_id(scene_info.scene_id());
@@ -157,15 +156,16 @@ void SceneSceneClientPlayerHandler::EnterScene(entt::entity player,const ::Enter
 	req.set_gate_zone_id(GetZoneId());
 	req.set_zone_id(GetZoneId());
 
-	// 发送之前记下"这次要去哪"。目标场景若在别的节点,生产配置下 scene_manager 会先以 18 暂拒
-	// (它要求源 scene 先存盘并出示标记),应答里只有 player_id —— 靠这条记录才能用同一个目标
-	// 起交接并重发(PlayerLifecycleSystem::HandleTravelEnterSceneReply)。
-	PlayerLifecycleSystem::NoteSceneChangeRequested(player, scene_info.scene_id(), scene_info.scene_config_id());
-	scene_manager::SendSceneManagerEnterScene(smRegistry, smEntity, req);
+	// RequestSceneChange 在发送之前把"这次要去哪"与关联号记进单槽在途记录,再经统一出口带号发出。
+	// 目标场景若在别的节点,生产配置下 scene_manager 会先以 18 暂拒(它要求源 scene 先存盘并出示标记),
+	// 应答不带请求内容 —— 按 correlation_id 对回这条记录,才能用同一个目标起交接并重发
+	// (PlayerLifecycleSystem::DispatchEnterSceneReply)。
+	const uint64_t correlationId = PlayerLifecycleSystem::RequestSceneChange(player, smEntity, req);
 
 	LOG_TRACE << "EnterSceneC2S: Sent EnterScene to SceneManager for player " << playerSessionPB->player_id()
 			  << ", scene_config_id=" << scene_info.scene_config_id()
-			  << ", scene_id=" << scene_info.scene_id();
+			  << ", scene_id=" << scene_info.scene_id()
+			  << ", corr=" << correlationId;
 	///<<< END WRITING YOUR CODE
 
 }

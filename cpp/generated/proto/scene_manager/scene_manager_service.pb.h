@@ -837,6 +837,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneRequest final : public ::
     kSessionIdFieldNumber = 3,
     kZoneIdFieldNumber = 7,
     kSceneConfIdFieldNumber = 8,
+    kCorrelationIdFieldNumber = 10,
     kGateZoneIdFieldNumber = 9,
   };
   // string request_id = 4;
@@ -934,6 +935,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneRequest final : public ::
   void _internal_set_scene_conf_id(::uint64_t value);
 
   public:
+  // uint64 correlation_id = 10;
+  void clear_correlation_id() ;
+  [[nodiscard]] ::uint64_t correlation_id() const;
+  void set_correlation_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_correlation_id() const;
+  void _internal_set_correlation_id(::uint64_t value);
+
+  public:
   // uint32 gate_zone_id = 9;
   void clear_gate_zone_id() ;
   [[nodiscard]] ::uint32_t gate_zone_id() const;
@@ -948,7 +959,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneRequest final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
+      ::google::protobuf::internal::TcParseTable<4, 10,
                           0, 81,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -985,6 +996,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneRequest final : public ::
     ::uint32_t session_id_;
     ::uint32_t zone_id_;
     ::uint64_t scene_conf_id_;
+    ::uint64_t correlation_id_;
     ::uint32_t gate_zone_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -1916,6 +1928,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneResponse final : public :
     kErrorMessageFieldNumber = 2,
     kRedirectFieldNumber = 3,
     kPlayerIdFieldNumber = 4,
+    kCorrelationIdFieldNumber = 6,
     kErrorCodeFieldNumber = 1,
   };
   // string error_message = 2;
@@ -1959,6 +1972,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneResponse final : public :
   void _internal_set_player_id(::uint64_t value);
 
   public:
+  // uint64 correlation_id = 6;
+  void clear_correlation_id() ;
+  [[nodiscard]] ::uint64_t correlation_id() const;
+  void set_correlation_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_correlation_id() const;
+  void _internal_set_correlation_id(::uint64_t value);
+
+  public:
   // uint32 error_code = 1;
   void clear_error_code() ;
   [[nodiscard]] ::uint32_t error_code() const;
@@ -1973,7 +1996,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneResponse final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           1, 54,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2005,6 +2028,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneResponse final : public :
     ::google::protobuf::internal::ArenaStringPtr error_message_;
     ::scene_manager::RedirectToGateInfo* PROTOBUF_NULLABLE redirect_;
     ::uint64_t player_id_;
+    ::uint64_t correlation_id_;
     ::uint32_t error_code_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2866,7 +2890,7 @@ inline void EnterSceneRequest::_internal_set_scene_conf_id(::uint64_t value) {
 inline void EnterSceneRequest::clear_gate_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gate_zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t EnterSceneRequest::gate_zone_id() const {
   // @@protoc_insertion_point(field_get:scene_manager.EnterSceneRequest.gate_zone_id)
@@ -2874,7 +2898,7 @@ inline ::uint32_t EnterSceneRequest::gate_zone_id() const {
 }
 inline void EnterSceneRequest::set_gate_zone_id(::uint32_t value) {
   _internal_set_gate_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:scene_manager.EnterSceneRequest.gate_zone_id)
 }
 inline ::uint32_t EnterSceneRequest::_internal_gate_zone_id() const {
@@ -2886,6 +2910,30 @@ inline void EnterSceneRequest::_internal_set_gate_zone_id(::uint32_t value) {
   _impl_.gate_zone_id_ = value;
 }
 
+// uint64 correlation_id = 10;
+inline void EnterSceneRequest::clear_correlation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.correlation_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t EnterSceneRequest::correlation_id() const {
+  // @@protoc_insertion_point(field_get:scene_manager.EnterSceneRequest.correlation_id)
+  return _internal_correlation_id();
+}
+inline void EnterSceneRequest::set_correlation_id(::uint64_t value) {
+  _internal_set_correlation_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:scene_manager.EnterSceneRequest.correlation_id)
+}
+inline ::uint64_t EnterSceneRequest::_internal_correlation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.correlation_id_;
+}
+inline void EnterSceneRequest::_internal_set_correlation_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.correlation_id_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // EnterSceneResponse
@@ -2894,7 +2942,7 @@ inline void EnterSceneRequest::_internal_set_gate_zone_id(::uint32_t value) {
 inline void EnterSceneResponse::clear_error_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.error_code_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t EnterSceneResponse::error_code() const {
   // @@protoc_insertion_point(field_get:scene_manager.EnterSceneResponse.error_code)
@@ -2902,7 +2950,7 @@ inline ::uint32_t EnterSceneResponse::error_code() const {
 }
 inline void EnterSceneResponse::set_error_code(::uint32_t value) {
   _internal_set_error_code(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:scene_manager.EnterSceneResponse.error_code)
 }
 inline ::uint32_t EnterSceneResponse::_internal_error_code() const {
@@ -3098,6 +3146,30 @@ inline ::uint64_t EnterSceneResponse::_internal_player_id() const {
 inline void EnterSceneResponse::_internal_set_player_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = value;
+}
+
+// uint64 correlation_id = 6;
+inline void EnterSceneResponse::clear_correlation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.correlation_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t EnterSceneResponse::correlation_id() const {
+  // @@protoc_insertion_point(field_get:scene_manager.EnterSceneResponse.correlation_id)
+  return _internal_correlation_id();
+}
+inline void EnterSceneResponse::set_correlation_id(::uint64_t value) {
+  _internal_set_correlation_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:scene_manager.EnterSceneResponse.correlation_id)
+}
+inline ::uint64_t EnterSceneResponse::_internal_correlation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.correlation_id_;
+}
+inline void EnterSceneResponse::_internal_set_correlation_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.correlation_id_ = value;
 }
 
 // -------------------------------------------------------------------

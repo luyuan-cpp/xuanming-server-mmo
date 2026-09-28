@@ -330,7 +330,15 @@ type EnterSceneRequest struct {
 	// Used to resolve the actual scene instance from main_scene_channels.
 	SceneConfId uint64 `protobuf:"varint,8,opt,name=scene_conf_id,json=sceneConfId,proto3" json:"scene_conf_id,omitempty"`
 	// Zone ID of the player's current Gate. Used to detect cross-zone transitions.
-	GateZoneId    uint32 `protobuf:"varint,9,opt,name=gate_zone_id,json=gateZoneId,proto3" json:"gate_zone_id,omitempty"`
+	GateZoneId uint32 `protobuf:"varint,9,opt,name=gate_zone_id,json=gateZoneId,proto3" json:"gate_zone_id,omitempty"`
+	// 应答关联号:scene_manager 只在 EnterSceneResponse.correlation_id 里原样回显它。
+	//   - 不进 request_id 的去重与指纹(算指纹前清零),不参与任何路由判定。它和 request_id 语义相反:
+	//     幂等键要求同一逻辑操作重试时取同一个值,关联号要求每次发送取不同的值、只认最新一次,
+	//     所以不能复用 request_id(复用会让每条交接请求多一次 SETNX/EVAL,还会带出假的"执行中")。
+	//   - 取值是发送方线程内的单调号:scene 进程所有 EnterScene 都经统一出口发出,恒非 0;
+	//     0 表示调用方不需要按请求对应答(如 login)。
+	//   - 请求侧后续新字段从 11 起用。
+	CorrelationId uint64 `protobuf:"varint,10,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -428,6 +436,13 @@ func (x *EnterSceneRequest) GetGateZoneId() uint32 {
 	return 0
 }
 
+func (x *EnterSceneRequest) GetCorrelationId() uint64 {
+	if x != nil {
+		return x.CorrelationId
+	}
+	return 0
+}
+
 type EnterSceneResponse struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
 	ErrorCode    uint32                 `protobuf:"varint,1,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
@@ -437,7 +452,13 @@ type EnterSceneResponse struct {
 	Redirect *RedirectToGateInfo `protobuf:"bytes,3,opt,name=redirect,proto3" json:"redirect,omitempty"`
 	// 原样回显请求里的 player_id。scene 节点的 EnterScene 是异步 gRPC,应答回调里没有
 	// 请求上下文;传送 / 疏散这类"发起方还要根据结果收尾"的调用靠它把应答对回玩家。
-	PlayerId      uint64 `protobuf:"varint,4,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerId uint64 `protobuf:"varint,4,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	// 5:留给 GO-2 的 owner_epoch 回显。
+	// 原样回显 EnterSceneRequest.correlation_id。scene 节点靠它把应答对回"哪一次发送"
+	// (player_id 只用来找实体):只有号匹配的应答才算本代传送交接的证据。
+	// 去重重放时回显的是本次请求的值,不是被缓存那次的值。
+	// 0 表示请求没带,或者 scene_manager 是旧版没回显;此时 scene 退回按 player_id 对应答。
+	CorrelationId uint64 `protobuf:"varint,6,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -496,6 +517,13 @@ func (x *EnterSceneResponse) GetRedirect() *RedirectToGateInfo {
 func (x *EnterSceneResponse) GetPlayerId() uint64 {
 	if x != nil {
 		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *EnterSceneResponse) GetCorrelationId() uint64 {
+	if x != nil {
+		return x.CorrelationId
 	}
 	return 0
 }
@@ -671,7 +699,7 @@ const file_proto_scene_manager_scene_manager_service_proto_rawDesc = "" +
 	"creatorIds\"I\n" +
 	"\x13DestroySceneRequest\x12\x19\n" +
 	"\bscene_id\x18\x01 \x01(\x04R\asceneId\x12\x17\n" +
-	"\azone_id\x18\x02 \x01(\rR\x06zoneId\"\xab\x02\n" +
+	"\azone_id\x18\x02 \x01(\rR\x06zoneId\"\xd2\x02\n" +
 	"\x11EnterSceneRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x19\n" +
 	"\bscene_id\x18\x02 \x01(\x04R\asceneId\x12\x1d\n" +
@@ -684,13 +712,16 @@ const file_proto_scene_manager_scene_manager_service_proto_rawDesc = "" +
 	"\azone_id\x18\a \x01(\rR\x06zoneId\x12\"\n" +
 	"\rscene_conf_id\x18\b \x01(\x04R\vsceneConfId\x12 \n" +
 	"\fgate_zone_id\x18\t \x01(\rR\n" +
-	"gateZoneId\"\xb4\x01\n" +
+	"gateZoneId\x12%\n" +
+	"\x0ecorrelation_id\x18\n" +
+	" \x01(\x04R\rcorrelationId\"\xdb\x01\n" +
 	"\x12EnterSceneResponse\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x12#\n" +
 	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12=\n" +
 	"\bredirect\x18\x03 \x01(\v2!.scene_manager.RedirectToGateInfoR\bredirect\x12\x1b\n" +
-	"\tplayer_id\x18\x04 \x01(\x04R\bplayerId\"\xd9\x01\n" +
+	"\tplayer_id\x18\x04 \x01(\x04R\bplayerId\x12%\n" +
+	"\x0ecorrelation_id\x18\x06 \x01(\x04R\rcorrelationId\"\xd9\x01\n" +
 	"\x12RedirectToGateInfo\x12$\n" +
 	"\x0etarget_gate_ip\x18\x01 \x01(\tR\ftargetGateIp\x12(\n" +
 	"\x10target_gate_port\x18\x02 \x01(\rR\x0etargetGatePort\x12#\n" +

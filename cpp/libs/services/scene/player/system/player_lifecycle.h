@@ -16,8 +16,11 @@
 #include "services/scene/player/system/player_exit_intent.h"
 #include "services/scene/player/system/exit_release_mark.h"
 
-namespace scene_manager { class EnterSceneResponse; }
+namespace scene_manager { class EnterSceneRequest; class EnterSceneResponse; }
 namespace storage { class PlayerLocation; }
+// 按值传给 PlayerLifecycleSystem::HandleSceneChangeEnterSceneReply;定义在 player/comp/player_ownership_comp.h。
+// 只前置声明:函数声明里的按值参数不要求完整类型,定义与调用都在 player_lifecycle.cpp(那里包含了组件头)。
+struct PlayerSceneChangeInFlightComp;
 
 // player:{id}:location 的解析(键名见 player_ownership_comp.h 的 LocationRedisKey)。全 C++ 只此一份,
 // 读 location 的地方(ResolveTravelOutcome、队伍跟随)一律调它,不许再各抄一份。
@@ -161,6 +164,13 @@ namespace owner_epoch_stats
 //                          "退出优先"销毁,走不到这里,所以它基本等于真正被踢回选服的人数。
 //                          例外:gate-cmd 消费滞后超过 30s 时,一次"迟到但成功"的传送也会被踢回选服
 //                          (踢线走 scene→gate TCP 直达,先于 Kafka 上的 124 到达)。应接近 0
+//   reply_uncorrelated     EnterScene 应答没带 correlation_id(号为 0)、退回按 player_id 对应答的次数
+//                          (见 enter_scene_reply)。scene_manager 全部升级后应恒为 0;非 0 = 有 scene_manager
+//                          没升级,或有发送点绕过了统一出口(SendCorrelatedEnterScene)
+//   reply_unmatched        被丢弃的可疑外来应答:有等待者、号对不上,且是拒绝 / 重定向 / 发生在交接期间
+//                          (enter_scene_reply::IsSuspiciousUnmatched)——正是过去会被错吃成交接证据的那一类。
+//                          基线接近 0,与"换图后立刻再换图 / 交接作废后立刻换图"的频率相关,只看突增。
+//                          路由先到之后才到的纯成功迟到应答是常态,不计
 //
 // started 减去各终态 = 仍在途的 + 交接期间被存盘 CAS 拒而销毁的(后者已计入
 // owner_epoch_stats::StaleOwnerWriteRejected)。
@@ -183,6 +193,8 @@ namespace travel_handoff_stats
 		std::atomic<uint64_t> withdrawDeferred{0};
 		std::atomic<uint64_t> withdrawExpired{0};
 		std::atomic<uint64_t> grantedClientReset{0};
+		std::atomic<uint64_t> replyUncorrelated{0};
+		std::atomic<uint64_t> replyUnmatched{0};
 	};
 
 	inline Counters& Get()
@@ -222,6 +234,8 @@ namespace travel_handoff_stats
 		uint64_t withdrawDeferred{0};
 		uint64_t withdrawExpired{0};
 		uint64_t grantedClientReset{0};
+		uint64_t replyUncorrelated{0};
+		uint64_t replyUnmatched{0};
 
 		bool operator==(const Snapshot&) const = default;
 	};
@@ -245,6 +259,8 @@ namespace travel_handoff_stats
 		snapshot.withdrawDeferred = counters.withdrawDeferred.load(std::memory_order_relaxed);
 		snapshot.withdrawExpired = counters.withdrawExpired.load(std::memory_order_relaxed);
 		snapshot.grantedClientReset = counters.grantedClientReset.load(std::memory_order_relaxed);
+		snapshot.replyUncorrelated = counters.replyUncorrelated.load(std::memory_order_relaxed);
+		snapshot.replyUnmatched = counters.replyUnmatched.load(std::memory_order_relaxed);
 		return snapshot;
 	}
 } // namespace travel_handoff_stats
@@ -502,6 +518,114 @@ namespace travel_outcome
 	}
 } // namespace travel_outcome
 
+// EnterScene 应答的分发(PlayerLifecycleSystem::DispatchEnterSceneReply)。
+//
+// 为什么需要:应答回调里没有请求上下文。只按 player_id 对应答时,传送在途期间到达的**任何**一条 EnterScene
+// 应答(组队跟随 / 疏散 / 镜像自动进场 / 普通换图的迟到应答)都会被当成交接证据:证据被污染、标记被 DEL 撤回、
+// 跨 zone 时还可能被误判成"已放行却没收到应答"而踢线。
+//
+// 契约:scene 进程内所有 EnterScene 都经统一出口发出(player_lifecycle.cpp 的 SendCorrelatedEnterScene),
+// 每条都带一个非 0 的线程内单调号(EnterSceneRequest.correlation_id),scene_manager 原样回显在
+// EnterSceneResponse.correlation_id。因此:
+//   应答号非 0 ⇔ 它一定是本线程某一次具体发送的应答,只有号与等待者记下的号相等才归那个等待者;
+//   应答号为 0 ⇔ scene_manager 没回显(旧版)。此时退回今天按 player_id 对应答的行为,不 fail-closed:
+//                fail-closed 会让滚动窗口内每次交接的失败都冻满 30s 看门狗、同 zone 放行后源端冻结实体的 AOI
+//                消息串到新场景的客户端(gate 栅栏只比 player_id)、看门狗无条件 DEL 误删新节点的标记、
+//                exit_wins 失真 —— 换来的只是窗口期内没有今天的串号 bug(cross-zone-scene-travel.md
+//                「EnterScene 应答关联号」)。
+// 等待者只有两种:交接(PlayerTravelHandoffComp.enterSceneCorrelationId,0 = 交接的 EnterScene 还没发)与
+// 普通换图(PlayerSceneChangeInFlightComp.correlationId)。二者按构造不共存:StartTravelHandoff 摘在途换图组件,
+// 发送侧闸 IsSceneChangeBusy 挡住交接期间的普通换图。
+//
+// 底层类型 uint8_t 数的是去向种类数(现 7 种)。纯内存使用,不进协议、不落库。kCount 固定为最后一项。
+namespace enter_scene_reply
+{
+	enum class Route : uint8_t
+	{
+		kTravelHandoff,            // 号匹配本代交接 → 交接裁决(correlated = true,GO-2 只采纳这一种应答回显的 epoch)
+		kLegacyTravelHandoff,      // 旧版 SM 没回显、交接的 EnterScene 已发 → 交接裁决(correlated = false,同今天)
+		kSceneChange,              // 号匹配在途换图 → 普通换图收尾(18 起同 zone 交接 / 失败回 tip / 跟随只记日志)
+		kLegacySceneChange,        // 旧版 SM 没回显、有在途换图 → 普通换图收尾(同今天,§11.2 的 18 链不断)
+		kSceneChangeDuringHandoff, // 交接在途时号匹配在途换图:按构造不可达。丢弃 + LOG_ERROR,不走普通换图分支
+								   // (否则会在交接中给客户端补一条失败 tip)
+		kUnmatched,                // 有等待者但号对不上,或交接的 EnterScene 还没发:不是它的,丢弃
+		kNoWaiter,                 // 既无交接也无在途换图(路由先到后的迟到应答、疏散 / 退出后重建的实体):no-op
+
+		kCount
+	};
+
+	constexpr std::size_t kRouteCount = static_cast<std::size_t>(Route::kCount);
+
+	// 只给日志用的名字,与枚举一一对应。数组长度由初始化项推导,漏加 / 多加一行都会被 static_assert 拦下。
+	inline constexpr const char *kRouteNames[] = {
+		"travel_handoff",
+		"legacy_travel_handoff",
+		"scene_change",
+		"legacy_scene_change",
+		"scene_change_during_handoff",
+		"unmatched",
+		"no_waiter",
+	};
+	static_assert(std::size(kRouteNames) == kRouteCount, "kRouteNames 必须与 Route 一一对应");
+
+	constexpr const char *RouteName(Route route)
+	{
+		const auto index = static_cast<std::size_t>(route);
+		return index < kRouteCount ? kRouteNames[index] : "?";
+	}
+
+	// 一条应答归谁。replyTag = 应答回显的号(0 = 旧版 SM 没回显);handoffTag / sceneChangeTag = 等待者记下的号。
+	// 参数拆开传,单测不必构造组件。
+	//   * 交接在途时只有本代交接自己的号能进交接段。handoffTag == 0(交接的 EnterScene 还没发,SET 在途或存盘在途)
+	//     时任何应答都不可能是它的 —— 这也堵上了"requestedAtMs 在 SET 发出前就已置位"留下的错吃窗口;
+	//   * 旧版 SM 下(replyTag == 0)退回按 player_id:有等待者就归等待者,与今天等价。
+	constexpr Route Classify(uint64_t replyTag, bool handoffInFlight, uint64_t handoffTag, bool sceneChangeInFlight,
+							 uint64_t sceneChangeTag)
+	{
+		if (handoffInFlight)
+		{
+			if (handoffTag != 0 && replyTag == handoffTag)
+			{
+				return Route::kTravelHandoff;
+			}
+			if (replyTag == 0)
+			{
+				return handoffTag != 0 ? Route::kLegacyTravelHandoff : Route::kUnmatched;
+			}
+			if (sceneChangeInFlight && replyTag == sceneChangeTag)
+			{
+				return Route::kSceneChangeDuringHandoff;
+			}
+			return Route::kUnmatched;
+		}
+		if (sceneChangeInFlight)
+		{
+			if (replyTag == 0)
+			{
+				return Route::kLegacySceneChange;
+			}
+			return replyTag == sceneChangeTag ? Route::kSceneChange : Route::kUnmatched;
+		}
+		return Route::kNoWaiter;
+	}
+
+	// 被丢弃的应答要不要计 reply_unmatched、打 INFO。只有"有等待者、号不符,并且是拒绝 / 重定向 / 发生在交接期间"
+	// 的应答才是过去会被错吃的那一类;路由先到(EnterScene 3.1 已摘在途组件)之后才到、又撞上新一条换图的纯成功迟到
+	// 应答是常态,计进来会让这个计数只反映换图频率,失去告警意义 —— 只打 DEBUG。
+	constexpr bool IsSuspiciousUnmatched(Route route, bool handoffInFlight, bool rejected, bool hasRedirect)
+	{
+		if (route == Route::kSceneChangeDuringHandoff)
+		{
+			return true;
+		}
+		if (route == Route::kUnmatched)
+		{
+			return handoffInFlight || rejected || hasRedirect;
+		}
+		return false;
+	}
+} // namespace enter_scene_reply
+
 class PlayerLifecycleSystem
 {
 public:
@@ -618,7 +742,7 @@ public:
 
 	// scene_manager.EnterScene 的"暂拒"码:玩家已有位置记录、这次要换到别的节点,但源 scene 还没为
 	// 当前归属代际写出落盘标记。对普通换图来说它不是错误,而是"请先存盘并出示标记再来" ——
-	// HandleTravelEnterSceneReply 据此起同 zone 交接。
+	// HandleSceneChangeEnterSceneReply 据此起同 zone 交接。
 	// 数值手抄自 go/scene_manager/internal/constants/errors.go 的 ErrHandoffPending:它走的是
 	// scene_manager 自己的 error_code 轴(不是 tip 轴),Go 与 C++ 之间没有共享的生成物,
 	// 改那边必须同步这里。全 C++ 只此一处定义,别处一律引用它,不许再写字面量 18。
@@ -640,14 +764,16 @@ public:
 
 	// 发起一次归属交接的**唯一入口**:挂 PlayerTravelHandoffComp + PlayerFrozenComp,然后存盘;
 	// 落地后由 BeginTravelHandoff 接手。两个调用方:RequestZoneTravel(跨 zone),以及
-	// HandleTravelEnterSceneReply 收到 18 时(同 zone 跨节点换图,targetZoneId = 本 zone)。
+	// HandleSceneChangeEnterSceneReply 收到 18 时(同 zone 跨节点换图,targetZoneId = 本 zone)。
 	// 返回 kTravelAccepted = 已进入交接;非 0 = tip id,且未改任何状态。
 	// 自带一份最小校验(实体有效 / 未在退出 / 未在交接 / 不在战斗 / 会话活着):18 到达时离发请求
 	// 已经隔了一个往返,玩家可能刚进备战或刚断线,不能只信发请求那一刻的检查。
 	static uint32_t StartTravelHandoff(entt::entity player, uint32_t targetZoneId, uint64_t sceneId, uint32_t sceneConfigId);
 
 	// 普通 EnterScene(客户端换图 / 镜像自动进场 / 队伍跟随)的发送侧闸:交接在途,或上一条
-	// EnterScene 的应答还没回来(短 TTL 内)时为真,调用方不得再发。理由见 PlayerSceneChangeInFlightComp。
+	// EnterScene 的应答还没回来(短 TTL 内)时为真,调用方不得再发。应答已按 correlation_id 对号、不再串号;
+	// 闸仍然必要,理由是在途记录只有一个槽(第二次登记会覆盖第一次的号,第一次的 18 就对不上号而被丢弃),
+	// 以及旧版 scene_manager 不回显时仍按 player_id 对应答。详见 PlayerSceneChangeInFlightComp。
 	// 该玩家有一份作废交接留下的 handoff 标记还没确认撤回时同样为真(按 player_id 判,见
 	// handoff_mark_withdraw.h):标记可能还带着当前 owner_epoch,这时发跨节点 EnterScene 会免存盘过门。
 	static bool IsSceneChangeBusy(entt::entity player);
@@ -658,13 +784,32 @@ public:
 	// 表为空时零开销。没有初始化 RedisSystem 的宿主(单测)只登记、不重试。
 	static void RetryPendingHandoffWithdrawals(bool reconnected);
 
-	// 发出普通 EnterScene **之前**调用,记下这次要去哪。应答只回显 player_id,18 到达时靠它起交接。
-	// 凡是替在线玩家发普通 EnterScene 的调用点都必须成对调用 IsSceneChangeBusy + 本函数:漏掉的那
-	// 一条,它的应答会把别人记下的在途目标摘掉。
+	// 替在线玩家发普通 EnterScene(客户端换图 / 镜像自动进场 / 队伍跟随)的**唯一入口**:取一个关联号 →
+	// 登记在途换图(PlayerSceneChangeInFlightComp:目标、发送时刻、playerRequested、号)→ 经统一出口带号发出 →
+	// 返回号(只供调用方打日志)。应答回来时 DispatchEnterSceneReply 只把号相等的那条交给普通换图收尾
+	// (18 起同 zone 交接 / 失败回 tip);旧版 scene_manager 不回显时退回按 player_id。
+	// 在途目标直接取自 req(scene_id、scene_conf_id 窄化成 uint32):"记下的目标"与"发出的目标"只有一个来源。
+	// 前置条件(入口内不重复判):调用方已过 IsSceneChangeBusy,且 smEntity 非空(已查 GetSceneManagerEntity)。
+	// 实体无效时不登记、照样发出(与旧的"登记函数 + 直调生成发送函数"两步写法行为一致)。req 会被写入 correlation_id。
 	// playerRequested = false:服务器替玩家发的(队伍跟随),被拒只记日志,不起交接、不回 tip
 	// (见 PlayerSceneChangeInFlightComp)。
-	static void NoteSceneChangeRequested(entt::entity player, uint64_t sceneId, uint32_t sceneConfigId,
-										 bool playerRequested = true);
+	// 取代旧的在途登记函数:旧名删除而不是保留,漏改的调用点在所有编译配置下都是硬错误(不依赖 /WX)。
+	static uint64_t RequestSceneChange(entt::entity player, entt::entity smEntity, ::scene_manager::EnterSceneRequest& req,
+									   bool playerRequested = true);
+
+	// 每一条 EnterScene 应答的入口,由 rpc_replies/scene_manager_response_handler.cpp 无条件调用(那里只做适配)。
+	// 分发规则见 enter_scene_reply::Classify:
+	//   * player_id == 0(更老的 scene_manager 连 player_id 都不回显)→ LOG_DEBUG no-op;
+	//   * correlation_id == 0 → reply_uncorrelated +1,本线程首次 LOG_WARN,随后按 player_id 退回旧行为;
+	//   * 实体已不在(玩家在途中断线,退出优先;疏散 / 排空改派的应答)→ LOG_INFO no-op;
+	//   * kTravelHandoff / kLegacyTravelHandoff        → HandleTravelEnterSceneReply(交接裁决);
+	//   * kSceneChange / kLegacySceneChange            → 先按值抄、再摘在途换图组件,交给 HandleSceneChangeEnterSceneReply;
+	//   * kSceneChangeDuringHandoff(不变量被破坏)     → 丢弃,LOG_ERROR,reply_unmatched +1;
+	//   * kUnmatched                                   → 丢弃;可疑的(IsSuspiciousUnmatched)reply_unmatched +1 并 LOG_INFO,
+	//                                                    其余 LOG_DEBUG。外来的 redirect 也只记录、不销毁:SM 若真放行了,
+	//                                                    本代请求会被拒,由 ResolveTravelOutcome 按 epoch 收敛;
+	//   * kNoWaiter                                    → LOG_DEBUG no-op。
+	static void DispatchEnterSceneReply(const ::scene_manager::EnterSceneResponse& resp);
 
 	// 交接是否已经发起(handoff 标记已写、EnterScene 已发)。此后本实体的去留只由 EnterScene 应答与
 	// 看门狗裁决:ReleasePlayer 不得把它推进退出流程(见 scene_node_service.cpp HandleReleasePlayer)。
@@ -683,35 +828,11 @@ public:
 	// 与退出流程的 FinishExitAfterPersist 是同一种"落地后再收尾"的双路径约定。
 	//
 	// 动作:异步 SET player:{id}:handoff "{epoch}:{now_ms}" EX 300 → 回调里向 scene_manager
-	// 请求 EnterScene(ZoneId=目标, SceneId, SceneConfId) → 应答见 HandleTravelEnterSceneReply。
+	// 请求 EnterScene(ZoneId=目标, SceneId, SceneConfId) → 应答经 DispatchEnterSceneReply 按号分到
+	// HandleTravelEnterSceneReply。
 	// 幂等:requestedAtMs 已非 0(交接已发起)则直接返回,不重复写标记、不重复请求。
 	// 失败分支(无 epoch / Redis 断连 / 无 gate 会话 / 无 scene_manager)一律解冻回 tip,不悬挂。
 	static void BeginTravelHandoff(Guid playerId);
-
-	// 每一条 EnterScene 应答的入口。scene_manager 在 EnterSceneResponse.player_id 里回显发起玩家,
-	// 应答处理方(rpc_replies/scene_manager_response_handler.cpp)对**每一条**应答都会调进来。
-	//
-	// 第一段 —— 实体上没有交接(PlayerTravelHandoffComp),看 PlayerSceneChangeInFlightComp:
-	//   * 没有                          → 疏散等别处发的请求,静默 no-op;
-	//   * 有,但 playerRequested=false  → 队伍跟随的应答:摘在途组件,被拒只记日志,到此为止;
-	//   * error_code == 18              → 目标场景在别的节点:用记下的目标 StartTravelHandoff(本 zone);
-	//   * 其它非 0                      → 换图失败,回 kEnterSceneFailed tip(此前客户端对失败毫无感知);
-	//   * 0                             → 同节点换图成功,只摘在途组件。
-	// 第二段 —— 交接在途:
-	//   * requestedAtMs == 0            → 存盘还没落地,这是交接之前那条请求的迟到应答,忽略;
-	//   * error_code != 0               → 不能直接解冻:失败应答不证明 scene_manager 没铸造过 epoch
-	//                                     (例如路由发送失败后的回滚本身也可能失败)。以证据 kFailed 走
-	//                                     ResolveTravelOutcome 核实后再决定解冻还是销毁;跨 zone 且确认已被
-	//                                     放行时,销毁之前先回失败 tip 并紧跟踢线 34(客户端没拿到重定向,
-	//                                     不踢就挂在哑连接上);
-	//   * 带 redirect                   → 跨 zone 放行,scene_manager 已推进 epoch,本节点不再持有该玩家:
-	//                                     与退出同款销毁(摘场景 / 摘会话 / 销毁实体),**不再存盘**;
-	//   * 无错无 redirect、目标是本 zone → 同 zone 放行的正常形态。是交给了别的节点还是重发后落回了
-	//                                     本节点,应答本身分不出来,以 kSucceeded 走 ResolveTravelOutcome 按 epoch 判;
-	//   * 无错无 redirect、目标是别的 zone → 协议异常,LOG_ERROR 后以 kAnomalous 走 ResolveTravelOutcome
-	//                                     (已被放行时只销毁、不踢线)。
-	// 实体已不存在(玩家在途中断线,退出优先)或已无交接标记(看门狗先到)时为幂等 no-op。
-	static void HandleTravelEnterSceneReply(Guid playerId, const ::scene_manager::EnterSceneResponse& resp);
 
 	// ── 节点身份冲突时的紧急疏散 ────────────────────────────────────────────
 	// 本节点的 etcd 身份失效(租约过期 / node_id 被别人抢走)时调用。
@@ -847,7 +968,38 @@ private:
 
 	// handoff 标记落地后向 scene_manager 请求 EnterScene(目标 zone / 场景)。gate / session 从实体上现取
 	// (与 DispatchEmergencyRelocate 不同:交接中实体还活着,不需要提前抄票据)。
+	// 发送前取关联号写进 PlayerTravelHandoffComp.enterSceneCorrelationId:只有回显这个号的应答才算本代交接的应答。
 	static void RequestTravelEnterScene(Guid playerId);
+
+	// 交接的 EnterScene 应答(DispatchEnterSceneReply 分到 kTravelHandoff / kLegacyTravelHandoff 才会进来,
+	// 调用时实体有效、交接组件在)。
+	//   * requestedAtMs == 0 / 组件不在   → 不可达(号只在 SET 回调里、requestedAtMs 置位之后才写),防御性 LOG_ERROR 后返回;
+	//   * error_code != 0               → 不能直接解冻:失败应答不证明 scene_manager 没铸造过 epoch
+	//                                     (例如路由发送失败后的回滚本身也可能失败)。以证据 kFailed 走
+	//                                     ResolveTravelOutcome 核实后再决定解冻还是销毁;跨 zone 且确认已被
+	//                                     放行时,销毁之前先回失败 tip 并紧跟踢线 34(客户端没拿到重定向,
+	//                                     不踢就挂在哑连接上);
+	//   * 带 redirect                   → 跨 zone 放行,scene_manager 已推进 epoch,本节点不再持有该玩家:
+	//                                     与退出同款销毁(摘场景 / 摘会话 / 销毁实体),**不再存盘**;
+	//   * 无错无 redirect、目标是本 zone → 同 zone 放行的正常形态。是交给了别的节点还是重发后落回了
+	//                                     本节点,应答本身分不出来,以 kSucceeded 走 ResolveTravelOutcome 按 epoch 判;
+	//   * 无错无 redirect、目标是别的 zone → 协议异常,LOG_ERROR 后以 kAnomalous 走 ResolveTravelOutcome
+	//                                     (已被放行时只销毁、不踢线)。
+	// correlated:true = 应答号与本代交接记下的号相等(kTravelHandoff);false = 旧版 SM 没回显、按 player_id
+	// 退回来的(kLegacyTravelHandoff)。这是给 GO-2 的接缝:应答回显的 owner_epoch 只在 correlated 为 true 时采纳
+	// (旧版 SM 本来也不带那个字段),"外来 epoch 进入裁决"在任何版本组合下都不会发生。本项只用于日志。
+	static void HandleTravelEnterSceneReply(entt::entity playerEntity, Guid playerId,
+											const ::scene_manager::EnterSceneResponse& resp, bool correlated);
+
+	// 普通换图的 EnterScene 应答(DispatchEnterSceneReply 分到 kSceneChange / kLegacySceneChange 才会进来;
+	// 在途组件已由 Dispatch 按值抄下并摘掉,target 按值传入,从类型上排除 remove 之后引用悬空):
+	//   * playerRequested=false          → 队伍跟随的应答:被拒只记日志,到此为止(跟随不跨节点拉人,team-system.md DV-6);
+	//   * error_code == 18               → 目标场景在别的节点:用记下的目标 StartTravelHandoff(本 zone)——§11.2 被动交接链;
+	//   * 其它非 0                       → 换图失败,回 kEnterSceneFailed tip(EnterSceneC2S 的同步应答早已返回"已受理");
+	//   * 0                              → 同节点换图成功,组件已摘,无事可做。
+	static void HandleSceneChangeEnterSceneReply(entt::entity playerEntity, Guid playerId,
+												 PlayerSceneChangeInFlightComp target,
+												 const ::scene_manager::EnterSceneResponse& resp);
 
 	// EnterScene 应答看门狗:一次性定时器,到期时若同一代(requestedAtMs 相同)的交接仍在途,
 	// 带着挂载时给的证据与原因走 ResolveTravelOutcome。RequestTravelEnterScene 首次挂载传 kNoReply;

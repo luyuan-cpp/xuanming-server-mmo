@@ -17,7 +17,7 @@
 #include "modules/scene/comp/scene_comp.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"
-#include "player/system/player_lifecycle.h" // IsSceneChangeBusy / NoteSceneChangeRequested:普通 EnterScene 的发送侧闸
+#include "player/system/player_lifecycle.h" // IsSceneChangeBusy / RequestSceneChange:普通 EnterScene 的发送侧闸与唯一发送入口
 
 #include "grpc_client/scene_manager/scene_manager_service_grpc_client.h"
 #include "proto/common/component/player_comp.pb.h"
@@ -66,8 +66,8 @@ namespace
 	//   PlayerTravelHandoffComp —— 交接意图(存盘在途,或 handoff 标记已写、EnterScene 已发)。
 	// 此刻本节点手里的状态已落盘且不得再写,再替他发一次 EnterScene 会把刚交接出去的玩家按
 	// "同节点换图"重新落回本节点(scene_manager 对同物理节点的落点不过换手门、不铸 epoch,
-	// 见 enterscenelogic.go samePhysicalNode 分支),与在途的交接互相覆盖;应答还会被
-	// scene_manager_response_handler 当成传送应答喂给 HandleTravelEnterSceneReply。
+	// 见 enterscenelogic.go samePhysicalNode 分支),与在途的交接互相覆盖。应答虽已按 correlation_id
+	// 对号、不会再被当成传送应答,这道闸仍然必需:要挡住的是这次同节点重落本身把交接覆盖掉。
 	// 与仓库里其它业务系统按 PlayerFrozenComp 拦写(buff / skill / afk / 属性同步)同一道闸。
 	bool IsOwnershipInFlight(entt::entity player)
 	{
@@ -76,8 +76,8 @@ namespace
 	}
 
 	// 该玩家已有一条普通 EnterScene 在途(客户端换图 / 镜像自动进场 / 上一次跟随),应答还没回来。
-	// EnterSceneResponse 只回显 player_id:两条同时在途,跟随的应答会把客户端那条记下的目标
-	// (PlayerSceneChangeInFlightComp)摘掉,客户端那条随后到达的 18 找不到目标、同 zone 交接不发起,
+	// 在途记录(PlayerSceneChangeInFlightComp)只有一个槽,应答按 correlation_id 对号:跟随若此时再登记,
+	// 会覆盖客户端那条的目标与号,客户端那条随后到达的 18 对不上号而被丢弃、同 zone 交接不发起,
 	// 玩家既没换成图也收不到任何提示。与 EnterSceneC2S / 镜像自动进场共用同一道发送侧闸,
 	// 玩家主动换图优先:跟随让路,下一次刷新信号(队长再换图 / 自己进场)会再查一遍。
 	bool IsSceneChangeInFlight(entt::entity player)
@@ -471,7 +471,6 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 						 << " leader_scene_id=" << leaderSceneId;
 				return;
 			}
-			auto& smRegistry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
 
 			::scene_manager::EnterSceneRequest request;
 			request.set_player_id(playerId);
@@ -484,17 +483,16 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 			// 不设 request_id:同 player_lifecycle.cpp DispatchEmergencyRelocate 的理由,
 			// SceneManager 的 60s 去重会吞掉同一玩家短时间内的第二次合法跟随
 
-			// 发送之前登记在途(与上面的 IsSceneChangeInFlight 成对):跟随在途期间客户端再发换图会被
-			// EnterSceneC2S 以"切换中"拒掉,两条应答不会串号。playerRequested=false:玩家没在等这条
-			// 请求的结果,被拒只记日志,不起交接、不回 tip(见 PlayerSceneChangeInFlightComp)。
-			// 应答 / 进场路由到达即摘;应答丢失靠短 TTL 失效。
-			PlayerLifecycleSystem::NoteSceneChangeRequested(player, leaderSceneId, /*sceneConfigId=*/0,
-															/*playerRequested=*/false);
-			scene_manager::SendSceneManagerEnterScene(smRegistry, smEntity, request);
+			// RequestSceneChange 在发送之前登记单槽在途记录(与上面的 IsSceneChangeInFlight 成对):跟随在途
+			// 期间客户端再发换图会被 EnterSceneC2S 以"切换中"拒掉,不会覆盖这条记录;应答按 correlation_id
+			// 对号。playerRequested=false:玩家没在等这条请求的结果,被拒只记日志,不起交接、不回 tip
+			// (见 PlayerSceneChangeInFlightComp)。应答 / 进场路由到达即摘;应答丢失靠短 TTL 失效。
+			const uint64_t correlationId = PlayerLifecycleSystem::RequestSceneChange(player, smEntity, request,
+																					 /*playerRequested=*/false);
 
 			// SceneManager 拒绝时只在其回包处理里记日志,队员留在原场景
 			LOG_INFO << "[PlayerTeam] 请求跟随队长切场景: player_id=" << playerId << " leader_id=" << leaderId
-					 << " leader_scene_id=" << leaderSceneId;
+					 << " leader_scene_id=" << leaderSceneId << " corr=" << correlationId;
 		},
 		(std::string("MGET %s ") + kBattleLockKeyFmt).c_str(), leaderLocationKey.c_str(), playerId);
 }

@@ -174,8 +174,9 @@ namespace
 
 	// PlayerSceneChangeInFlightComp 的有效期。EnterScene 正常亚秒返回;应答丢失时(scene_manager
 	// 不可达,生成的 gRPC 客户端不回调)不能把玩家永久挡在换图之外,过了这个时间就放下一条请求。
-	// 代价:超过它才到的迟到应答可能被记到下一条请求头上(见 PlayerSceneChangeInFlightComp 的说明),
-	// 后果只是一次换图失败或多余的交接,不会双主 —— 去留始终由 owner_epoch 比对裁决。
+	// 超过它才到的迟到应答按 correlation_id 对号(DispatchEnterSceneReply):号与下一条请求记下的不同,
+	// 直接丢弃,不会再被记到下一条请求头上。旧版 scene_manager 不回显号时退回按 player_id 对应答,
+	// 这一残余仍在,后果只是一次换图失败或多余的交接,不会双主 —— 去留始终由 owner_epoch 比对裁决。
 	constexpr uint64_t kSceneChangeInFlightTtlMs = 5000;
 
 	// [TravelHandoff] 汇总行的周期,与 RedisSystem 的 [DirtySave] / [OwnerEpoch] 同为 30s。
@@ -215,12 +216,16 @@ namespace
 		SendMessageToClientViaGate(SceneClientPlayerCommonKickPlayerMessageId, kick, player);
 	}
 
-	// 第一次有交接发起时,在当前线程的 EventLoop 上挂一个 30s 周期定时器,把 travel_handoff_stats
-	// 打成一行 [TravelHandoff]。前缀与 key=value 布局是给 stress_summarize.ps1 之类的脚本解析用的,
-	// 改格式要同步解析方(目前还没有解析方)。
+	// 在当前线程的 EventLoop 上挂一个 30s 周期定时器,把 travel_handoff_stats 打成一行 [TravelHandoff]。
+	// 挂的时机有两种,哪个先到算哪个:第一次发起交接(StartTravelHandoff),或第一次给 reply_uncorrelated /
+	// reply_unmatched 计数(DispatchEnterSceneReply)。前缀与 key=value 布局是给 stress_summarize.ps1 之类的
+	// 脚本解析用的,改格式要同步解析方(目前还没有解析方)。
 	//
 	// 为什么挂在这里而不是 RedisSystem 那个 30s 快照定时器里:这些计数只属于本文件的交接链,
-	// 从没发生过交接的进程(单节点部署、dev 旁路、单测宿主)不需要这个定时器,也不该多一行日志。
+	// 既没交接过、也没收到过异常 EnterScene 应答的进程(dev 旁路、单测宿主)不需要这个定时器,也不该多一行日志。
+	// 从没交接过的节点(例如只跑普通换图的单节点部署)一旦出现那两项计数也要挂上:reply_uncorrelated 非 0
+	// 说明 scene_manager 没升级(没回显 correlation_id)或有发送点绕过了统一出口,reply_unmatched 非 0 说明有
+	// 外来 / 迟到应答被丢弃 —— 这两件事与本节点是否发起过交接无关,不打出来运维就看不见。
 	// 回调不捕获任何对象、只读进程级原子计数,loop 析构时定时器随之销毁,不需要保存 TimerId 去取消
 	// (AGENTS §11.7 管的是"绑了对象的回调",这里没有对象)。
 	// 有变化才打:值都是累计值,长时间没有交接时不重复刷同一行。
@@ -259,8 +264,49 @@ namespace
 					 << " frozen_ms_max=" << stats.frozenMsMax
 					 << " withdraw_deferred=" << stats.withdrawDeferred
 					 << " withdraw_expired=" << stats.withdrawExpired
-					 << " granted_client_reset=" << stats.grantedClientReset;
+					 << " granted_client_reset=" << stats.grantedClientReset
+					 << " reply_uncorrelated=" << stats.replyUncorrelated
+					 << " reply_unmatched=" << stats.replyUnmatched;
 		});
+	}
+
+	// ── EnterScene 关联号(EnterSceneRequest.correlation_id,契约见 player_lifecycle.h 的 enter_scene_reply)──
+	//
+	// 线程内计数器。应答只回到发出它的那个进程、那条线程的完成队列(生成的 gRPC 客户端在同一线程上发送与回调),
+	// 所以线程内唯一就够了;进程重启后从 1 重来无害 —— 旧进程发出的请求,其应答回不到新进程。
+	// 号只在进程内有意义,排障时要与 player_id 一起看。
+	thread_local uint64_t tlsEnterSceneCorrelationSeq = 0;
+
+	// 本线程是否已经为"scene_manager 没回显 correlation_id"打过 WARN。滚动升级窗口里每条应答都会这样,
+	// 只打一次,趋势看 reply_uncorrelated。
+	thread_local bool tlsWarnedUncorrelatedReply = false;
+
+	// 取下一个关联号:前置自增,从 1 开始,恒非 0(uint64 在进程寿命内不会回绕)。
+	uint64_t NextEnterSceneCorrelationId()
+	{
+		return ++tlsEnterSceneCorrelationSeq;
+	}
+
+	// scene 进程内 EnterScene 的**唯一**发送出口:全仓(cpp/generated 之外)只有这里直接调生成的
+	// EnterScene 发送函数(cpp/generated/grpc_client/scene_manager)。由它保证每条请求都带非 0 关联号,DispatchEnterSceneReply 才能把
+	// "应答号为 0"读成"scene_manager 是旧版、没回显"。有等待者的发送走 PlayerLifecycleSystem::RequestSceneChange
+	// (或本文件的交接 RequestTravelEnterScene),无等待者的(疏散 / 排空)直接调本函数。绕过它直调生成函数的发送点,
+	// 在新版 scene_manager 下应答号为 0,会退回按 player_id 对应答,并让 reply_uncorrelated 非 0。
+	// 前置条件:correlationId ≠ 0(调用方用 NextEnterSceneCorrelationId 取号、先记到等待者上再调本函数)、
+	// smEntity 非空(调用方已查 GetSceneManagerEntity)。
+	void SendCorrelatedEnterScene(entt::entity smEntity, ::scene_manager::EnterSceneRequest &req, uint64_t correlationId)
+	{
+		if (correlationId == 0)
+		{
+			// 违反前置条件是调用方的 bug。宁可换一个新号也不发 0:发 0 等于自称"旧版 SM 没回显",
+			// 应答会被按 player_id 配给别的等待者。
+			correlationId = NextEnterSceneCorrelationId();
+			LOG_ERROR << "[EnterSceneReply] SendCorrelatedEnterScene called with correlation_id 0 for player "
+					  << req.player_id() << "; sending with corr=" << correlationId << " instead";
+		}
+		req.set_correlation_id(correlationId);
+		auto &smRegistry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
+		scene_manager::SendSceneManagerEnterScene(smRegistry, smEntity, req);
 	}
 
 	// [ExitPersist] 与 [ExitRelease] 两行汇总(计数含义见 player_lifecycle.h 的 exit_persist_stats /
@@ -1896,7 +1942,7 @@ void PlayerLifecycleSystem::FinishExitAfterPersist(Guid playerId)
 
 	// 归属交接在途(PlayerTravelHandoffComp):退出优先。交接只在"状态已落盘 + 输入已冻结"
 	// 之后发起,盘上就是最新状态,本地实体没有任何目的地还要等的东西 —— 直接按普通退出销毁。
-	// scene_manager 那边的应答随后到达时实体已不在,HandleTravelEnterSceneReply 幂等忽略;
+	// scene_manager 那边的应答随后到达时实体已不在,DispatchEnterSceneReply 幂等忽略;
 	// 它若已放行,location 已指向目标(跨 zone 时 node 为空),下次登录按 Offline-Return 规则处理。
 	if (tlsEcs.actorRegistry.valid(playerEntity) &&
 		tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(playerEntity))
@@ -2143,8 +2189,6 @@ void PlayerLifecycleSystem::SendEmergencyRelocateEnterScene(Guid playerId, const
 				  << " keeps its gate session and has to re-enter through the normal login flow";
 		return;
 	}
-	auto &smRegistry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
-
 	::scene_manager::EnterSceneRequest req;
 	req.set_player_id(playerId);
 	// scene_id / scene_conf_id 都留 0:让 SceneManager 按它自己的世界频道表挑一个
@@ -2160,10 +2204,14 @@ void PlayerLifecycleSystem::SendEmergencyRelocateEnterScene(Guid playerId, const
 	// 就会被静默丢掉,玩家卡在原地。这里本来也不需要去重:票据在发送前就已经从
 	// tlsEmergencyRelocateTickets 里删掉了,每张票最多发一次,也没有重试。
 	// 其它 EnterScene 调用点(player_scene.cpp)同样不带 request_id。
-	scene_manager::SendSceneManagerEnterScene(smRegistry, smEntity, req);
+	// 关联号照取(统一出口要求每条都带非 0 号),但不登记等待者:发出时本地实体已销毁(或随即销毁),
+	// 应答到达时是 no-op;实体若已在本节点重建,它的应答对不上任何等待者的号(kNoWaiter / kUnmatched)。
+	// 号只进日志,供与 reply 日志对照。
+	const uint64_t correlationId = NextEnterSceneCorrelationId();
+	SendCorrelatedEnterScene(smEntity, req, correlationId);
 
 	LOG_INFO << "[EmergencyRelocate] requested main-world re-home for player " << playerId
-			 << " (session=" << ticket.sessionId << ", gate=" << ticket.gateNodeId << ")";
+			 << " (session=" << ticket.sessionId << ", gate=" << ticket.gateNodeId << ", corr=" << correlationId << ")";
 }
 
 entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &playerAllData, const PlayerEnterContext &ctx)
@@ -2502,12 +2550,14 @@ void PlayerLifecycleSystem::DestroyDeposedPlayer(Guid playerId, const char *reas
 //
 // 两个入口,同一条链:
 //   跨 zone 传送        客户端 TravelToZone ──▶ RequestZoneTravel(CZ-6 校验)──▶ StartTravelHandoff
-//   同 zone 跨节点换图  普通 EnterScene 被 scene_manager 以 18 暂拒
-//                       ──▶ HandleTravelEnterSceneReply ──▶ StartTravelHandoff(目标 = 本 zone)
+//   同 zone 跨节点换图  普通 EnterScene(RequestSceneChange,带关联号)被 scene_manager 以 18 暂拒
+//                       ──▶ DispatchEnterSceneReply(号匹配在途换图)──▶ HandleSceneChangeEnterSceneReply
+//                       ──▶ StartTravelHandoff(目标 = 本 zone)
 //
 //   StartTravelHandoff:挂 PlayerTravelHandoffComp + PlayerFrozenComp ──▶ SavePlayerToRedis
 //   存盘落地 ──▶ BeginTravelHandoff:SET player:{id}:handoff "{epoch}:{now}" EX 300
-//            ──▶ RequestTravelEnterScene:scene_manager.EnterScene(ZoneId=目标, SceneId, SceneConfId)
+//            ──▶ RequestTravelEnterScene:取号记到交接组件 → scene_manager.EnterScene(ZoneId=目标, SceneId, SceneConfId)
+//            ──▶ DispatchEnterSceneReply(号匹配本代交接;旧版 SM 不回显时按 player_id)
 //            ──▶ HandleTravelEnterSceneReply:Redirect(跨 zone 放行)      → DestroyDeposedPlayer
 //                                             成功无 Redirect(同 zone 放行) → ResolveTravelOutcome:
 //                                                 epoch 已变 → DestroyDeposedPlayer;没变 → 静默解冻
@@ -2770,20 +2820,136 @@ bool PlayerLifecycleSystem::IsSceneChangeBusy(entt::entity player)
 	return nowMs >= pending->sentAtMs && nowMs - pending->sentAtMs < kSceneChangeInFlightTtlMs;
 }
 
-void PlayerLifecycleSystem::NoteSceneChangeRequested(entt::entity player, uint64_t sceneId, uint32_t sceneConfigId,
-													 bool playerRequested)
+uint64_t PlayerLifecycleSystem::RequestSceneChange(entt::entity player, entt::entity smEntity,
+												   ::scene_manager::EnterSceneRequest &req, bool playerRequested)
 {
-	if (!tlsEcs.actorRegistry.valid(player))
+	// 先取号、先登记,再发:应答是异步的,不会在发送返回之前回来,但"等待者记下的号"必须在发出之前就位。
+	const uint64_t correlationId = NextEnterSceneCorrelationId();
+	if (tlsEcs.actorRegistry.valid(player))
 	{
+		// 一次换图请求一次,不是 per-tick 路径,emplace_or_replace 合规(AGENTS §7.5)。
+		// replace 语义是有意的:TTL 过期后放行的下一条请求要覆盖上一条的目标与号 —— 上一条的迟到应答因此
+		// 对不上号而被丢弃,不会再摘掉这一条的记录。
+		// 目标直接取自 req:18 起交接时用的就是真正发出去的那个目标,不会与记下的分叉。
+		// scene_conf_id 窄化成 uint32,与 StartTravelHandoff / PlayerTravelHandoffComp.sceneConfigId 同一类型。
+		auto &pending = tlsEcs.actorRegistry.emplace_or_replace<PlayerSceneChangeInFlightComp>(player);
+		pending.sceneId = req.scene_id();
+		pending.sceneConfigId = static_cast<uint32_t>(req.scene_conf_id());
+		pending.sentAtMs = TimeSystem::NowMillisecondsUTC();
+		pending.playerRequested = playerRequested;
+		pending.correlationId = correlationId;
+	}
+	SendCorrelatedEnterScene(smEntity, req, correlationId);
+	return correlationId;
+}
+
+void PlayerLifecycleSystem::DispatchEnterSceneReply(const ::scene_manager::EnterSceneResponse &resp)
+{
+	using enter_scene_reply::Route;
+
+	const Guid playerId = resp.player_id();
+	const uint64_t replyTag = resp.correlation_id();
+	if (playerId == 0)
+	{
+		// 更老的 scene_manager 连 player_id 都不回显:对不回玩家,交接只能靠应答看门狗收敛。
+		LOG_DEBUG << "[EnterSceneReply] reply without player_id (scene_manager too old to echo it); ignoring"
+				  << " corr=" << replyTag << " error_code=" << resp.error_code();
 		return;
 	}
-	// 一次换图请求一次,不是 per-tick 路径,emplace_or_replace 合规(AGENTS §7.5)。
-	// replace 语义是有意的:TTL 过期后放行的下一条请求要覆盖上一条的目标。
-	auto &pending = tlsEcs.actorRegistry.emplace_or_replace<PlayerSceneChangeInFlightComp>(player);
-	pending.sceneId = sceneId;
-	pending.sceneConfigId = sceneConfigId;
-	pending.sentAtMs = TimeSystem::NowMillisecondsUTC();
-	pending.playerRequested = playerRequested;
+	if (replyTag == 0)
+	{
+		// 本进程的 EnterScene 全经 SendCorrelatedEnterScene 发出、号恒非 0,所以号为 0 = scene_manager 没回显
+		// (旧版)或有发送点绕过了统一出口。退回按 player_id 对应答(Classify 的 legacy 分支),不 fail-closed
+		// (理由见头文件 enter_scene_reply)。计数让运维看得见这个状态;WARN 每线程只打一次,免得滚动窗口里刷屏。
+		travel_handoff_stats::Inc(travel_handoff_stats::Get().replyUncorrelated);
+		EnsureTravelHandoffStatsTimer();
+		if (!tlsWarnedUncorrelatedReply)
+		{
+			tlsWarnedUncorrelatedReply = true;
+			LOG_WARN << "[EnterSceneReply] scene_manager 未回显 correlation_id,退回按 player_id 对应答(首见 player="
+					 << playerId << ");此后同类应答只计 reply_uncorrelated,不再逐条告警";
+		}
+	}
+
+	const auto playerEntity = tlsEcs.GetPlayer(playerId);
+	if (!tlsEcs.actorRegistry.valid(playerEntity))
+	{
+		LOG_INFO << "[ZoneTravel] EnterScene reply for player " << playerId
+				 << " but entity is gone (exited during travel); ignoring corr=" << replyTag
+				 << " error_code=" << resp.error_code();
+		return;
+	}
+
+	const auto *travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(playerEntity);
+	const auto *pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(playerEntity);
+	const bool handoffInFlight = travel != nullptr;
+	const uint64_t handoffTag = handoffInFlight ? travel->enterSceneCorrelationId : 0;
+	const bool sceneChangeInFlight = pending != nullptr;
+	const uint64_t sceneChangeTag = sceneChangeInFlight ? pending->correlationId : 0;
+	const Route route =
+		enter_scene_reply::Classify(replyTag, handoffInFlight, handoffTag, sceneChangeInFlight, sceneChangeTag);
+
+	switch (route)
+	{
+	case Route::kTravelHandoff:
+	case Route::kLegacyTravelHandoff:
+		HandleTravelEnterSceneReply(playerEntity, playerId, resp, /*correlated=*/route == Route::kTravelHandoff);
+		return;
+
+	case Route::kSceneChange:
+	case Route::kLegacySceneChange:
+	{
+		// 先抄后摘:按值交给处理函数。remove 之后 pending 指针即失效,StartTravelHandoff 也会摘这个组件。
+		const PlayerSceneChangeInFlightComp target = *pending;
+		tlsEcs.actorRegistry.remove<PlayerSceneChangeInFlightComp>(playerEntity);
+		HandleSceneChangeEnterSceneReply(playerEntity, playerId, target, resp);
+		return;
+	}
+
+	case Route::kSceneChangeDuringHandoff:
+		// 按构造不可达:StartTravelHandoff 起交接时摘掉在途换图组件,交接期间 IsSceneChangeBusy 挡住新的普通换图。
+		// 出现即说明有路径破坏了这条不变量。丢弃而不是走普通换图分支:那会在交接中给客户端补一条失败 tip,
+		// 18 还会试图再起一次交接。
+		travel_handoff_stats::Inc(travel_handoff_stats::Get().replyUnmatched);
+		EnsureTravelHandoffStatsTimer();
+		LOG_ERROR << "[EnterSceneReply] invariant broken: scene-change reply while a handoff is in flight, player="
+				  << playerId << " corr=" << replyTag << " handoff_tag=" << handoffTag
+				  << " scene_change_tag=" << sceneChangeTag << " error_code=" << resp.error_code()
+				  << " has_redirect=" << resp.has_redirect() << "; dropping";
+		return;
+
+	case Route::kUnmatched:
+		// 不是任何等待者的应答(上一代交接 / 被顶替的请求 / 过了 TTL 才到的,或交接的 EnterScene 还没发)。
+		// 外来的 redirect 也只记录、不销毁:scene_manager 若真凭本代标记放行了它,本代自己的请求会被拒,
+		// 由 ResolveTravelOutcome 按 epoch 收敛。
+		if (enter_scene_reply::IsSuspiciousUnmatched(route, handoffInFlight, resp.error_code() != 0,
+													 resp.has_redirect()))
+		{
+			travel_handoff_stats::Inc(travel_handoff_stats::Get().replyUnmatched);
+			EnsureTravelHandoffStatsTimer();
+			LOG_INFO << "[EnterSceneReply] dropped unmatched reply player=" << playerId << " corr=" << replyTag
+					 << " route=" << enter_scene_reply::RouteName(route) << " handoff_tag=" << handoffTag
+					 << " scene_change_tag=" << sceneChangeTag << " error_code=" << resp.error_code()
+					 << " has_redirect=" << resp.has_redirect();
+		}
+		else
+		{
+			// 路由先到(EnterScene 3.1 已摘在途组件)之后才到、又撞上新一条换图的纯成功迟到应答:常态,不计数。
+			LOG_DEBUG << "[EnterSceneReply] late success reply for an older request, player=" << playerId
+					  << " corr=" << replyTag << " scene_change_tag=" << sceneChangeTag << "; ignoring";
+		}
+		return;
+
+	case Route::kNoWaiter:
+	case Route::kCount:
+		break;
+	}
+	// kNoWaiter:疏散 / 退出后重建的实体、路由已先落地(EnterScene 3.1 已摘)的成功应答,或看门狗已先
+	// 核实过的迟到应答。没有事可做。(kCount 不会由 Classify 返回,一并落到这里。)
+	LOG_DEBUG << "[ZoneTravel] EnterScene reply for player " << playerId
+			  << " without an in-flight handoff or scene change; ignoring corr=" << replyTag
+			  << " route=" << enter_scene_reply::RouteName(route) << " error_code=" << resp.error_code()
+			  << " has_redirect=" << resp.has_redirect();
 }
 
 bool PlayerLifecycleSystem::IsHandoffRequested(entt::entity player)
@@ -2995,7 +3161,7 @@ void PlayerLifecycleSystem::RequestTravelEnterScene(Guid playerId)
 	{
 		return;
 	}
-	const auto *travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(playerEntity);
+	auto *travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(playerEntity);
 	if (travel == nullptr)
 	{
 		return;
@@ -3015,7 +3181,6 @@ void PlayerLifecycleSystem::RequestTravelEnterScene(Guid playerId)
 		AbortTravelHandoff(playerId, "no SceneManager node reachable");
 		return;
 	}
-	auto &smRegistry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
 
 	::scene_manager::EnterSceneRequest req;
 	req.set_player_id(playerId);
@@ -3036,8 +3201,13 @@ void PlayerLifecycleSystem::RequestTravelEnterScene(Guid playerId)
 	// 刻意不设 request_id:理由同 DispatchEmergencyRelocate(60s SETNX 去重会吞掉玩家
 	// 短时间内的第二次传送)。幂等由 requestedAtMs 代际 + scene_manager 的 handoff 比对保证。
 
-	// 应答靠 EnterSceneResponse.player_id 回显对回玩家(见 HandleTravelEnterSceneReply)。
-	scene_manager::SendSceneManagerEnterScene(smRegistry, smEntity, req);
+	// 应答按 correlation_id 对号(DispatchEnterSceneReply):先把号记到交接组件上再发,只有回显这个号的应答
+	// 才算本代交接的证据。发送之前号为 0 = 交接的 EnterScene 还没发,这段时间到达的任何应答都不可能是它的。
+	// 每代交接只走到这里一次(BeginTravelHandoff 的 SET 回调按 requestedAtMs 代际守着),看门狗只核实、不重发。
+	const uint64_t correlationId = NextEnterSceneCorrelationId();
+	travel->enterSceneCorrelationId = correlationId;
+	SendCorrelatedEnterScene(smEntity, req, correlationId);
+	// travel 指针在这里仍有效:发送只把请求交给 gRPC,不碰 registry。
 	ArmTravelReplyWatchdog(playerId, travel->requestedAtMs, travel_outcome::Evidence::kNoReply,
 						   "EnterScene reply timed out");
 
@@ -3045,7 +3215,8 @@ void PlayerLifecycleSystem::RequestTravelEnterScene(Guid playerId)
 			 << " target_zone=" << travel->targetZoneId
 			 << " scene_id=" << travel->sceneId
 			 << " scene_conf_id=" << travel->sceneConfigId
-			 << " session=" << session->gate_session_id();
+			 << " session=" << session->gate_session_id()
+			 << " corr=" << correlationId;
 }
 
 void PlayerLifecycleSystem::ArmTravelReplyWatchdog(Guid playerId, uint64_t requestedAtMs,
@@ -3249,81 +3420,61 @@ void PlayerLifecycleSystem::ResolveTravelOutcome(Guid playerId, uint64_t request
 	}
 }
 
-void PlayerLifecycleSystem::HandleTravelEnterSceneReply(Guid playerId, const ::scene_manager::EnterSceneResponse &resp)
+void PlayerLifecycleSystem::HandleSceneChangeEnterSceneReply(entt::entity playerEntity, Guid playerId,
+															 PlayerSceneChangeInFlightComp target,
+															 const ::scene_manager::EnterSceneResponse &resp)
 {
-	const auto playerEntity = tlsEcs.GetPlayer(playerId);
-	if (!tlsEcs.actorRegistry.valid(playerEntity))
+	if (!target.playerRequested)
 	{
-		LOG_INFO << "[ZoneTravel] EnterScene reply for player " << playerId
-				 << " but entity is gone (exited during travel); ignoring";
-		return;
-	}
-	const auto *travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(playerEntity);
-
-	// ── 第一段:没有交接在途 —— 这是一条普通 EnterScene 的应答 ──
-	if (travel == nullptr)
-	{
-		const auto *pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(playerEntity);
-		if (pending == nullptr)
-		{
-			// 疏散等不挂在途组件的请求、路由已先落地(EnterScene 3.1 已摘)的成功应答,或看门狗已先
-			// 核实过的迟到应答。没有事可做。
-			LOG_DEBUG << "[ZoneTravel] EnterScene reply for player " << playerId
-					  << " without an in-flight handoff or scene change; ignoring"
-					  << " error_code=" << resp.error_code() << " has_redirect=" << resp.has_redirect();
-			return;
-		}
-		// 先抄后摘:StartTravelHandoff 也会摘这个组件,之后 pending 指针即失效。
-		const PlayerSceneChangeInFlightComp target = *pending;
-		tlsEcs.actorRegistry.remove<PlayerSceneChangeInFlightComp>(playerEntity);
-
-		if (!target.playerRequested)
-		{
-			// 服务器替他发的队伍跟随:玩家没在等结果。被拒(含理论上不该出现的 18:跟随只发本节点上的
-			// 场景)只记日志、队员留在原场景,不起交接、不回 tip —— 跟随不跨节点拉人(team-system.md DV-6)。
-			if (resp.error_code() != 0)
-			{
-				LOG_INFO << "[ZoneTravel] team-follow EnterScene for player " << playerId
-						 << " was rejected by scene_manager code=" << resp.error_code()
-						 << " scene_id=" << target.sceneId << "; player stays in the current scene";
-			}
-			return;
-		}
-
-		if (resp.error_code() == kSmErrHandoffPending)
-		{
-			// 目标场景在别的节点。18 的语义是"请先存盘并出示标记":按同一个目标起同 zone 交接,
-			// 落盘、写标记之后由 RequestTravelEnterScene 重发。scene_manager 被拒时未改任何状态。
-			LOG_INFO << "[ZoneTravel] EnterScene for player " << playerId
-					 << " needs a cross-node handoff (scene_manager code=" << resp.error_code()
-					 << "); starting same-zone handoff scene_id=" << target.sceneId
-					 << " scene_conf_id=" << target.sceneConfigId;
-			if (const uint32_t tip = StartTravelHandoff(playerEntity, GetZoneId(), target.sceneId, target.sceneConfigId);
-				tip != kTravelAccepted)
-			{
-				// 起不了交接(刚进备战 / 刚断线 …):玩家留在原场景,告诉客户端这次换图没成。
-				LOG_WARN << "[ZoneTravel] same-zone handoff not started for player " << playerId << " tip=" << tip;
-				PlayerTipSystem::SendToPlayer(playerEntity, tip, {});
-			}
-			return;
-		}
+		// 服务器替他发的队伍跟随:玩家没在等结果。被拒(含理论上不该出现的 18:跟随只发本节点上的
+		// 场景)只记日志、队员留在原场景,不起交接、不回 tip —— 跟随不跨节点拉人(team-system.md DV-6)。
 		if (resp.error_code() != 0)
 		{
-			// 普通换图失败。EnterSceneC2S 的同步应答早已返回"已受理",不补这条 tip 客户端会一直等
-			// 一个永远不来的 EnterSceneS2C。
-			PlayerTipSystem::SendToPlayer(playerEntity, kEnterSceneFailed, {});
+			LOG_INFO << "[ZoneTravel] team-follow EnterScene for player " << playerId
+					 << " was rejected by scene_manager code=" << resp.error_code()
+					 << " scene_id=" << target.sceneId << " corr=" << resp.correlation_id()
+					 << "; player stays in the current scene";
 		}
 		return;
 	}
 
-	// ── 第二段:交接在途 ──
-	if (travel->requestedAtMs == 0)
+	if (resp.error_code() == kSmErrHandoffPending)
 	{
-		// 存盘还没落地、交接的 EnterScene 还没发:这只能是交接之前那条请求的迟到应答
-		// (例如客户端连点,第一条的 18 已经起了交接,第二条的应答这时才到)。不动交接。
-		LOG_INFO << "[ZoneTravel] late EnterScene reply for player " << playerId
-				 << " while the handoff save is still in flight; ignoring"
-				 << " error_code=" << resp.error_code();
+		// 目标场景在别的节点。18 的语义是"请先存盘并出示标记":按同一个目标起同 zone 交接,
+		// 落盘、写标记之后由 RequestTravelEnterScene 重发。scene_manager 被拒时未改任何状态。
+		LOG_INFO << "[ZoneTravel] EnterScene for player " << playerId
+				 << " needs a cross-node handoff (scene_manager code=" << resp.error_code()
+				 << "); starting same-zone handoff scene_id=" << target.sceneId
+				 << " scene_conf_id=" << target.sceneConfigId << " corr=" << resp.correlation_id();
+		if (const uint32_t tip = StartTravelHandoff(playerEntity, GetZoneId(), target.sceneId, target.sceneConfigId);
+			tip != kTravelAccepted)
+		{
+			// 起不了交接(刚进备战 / 刚断线 …):玩家留在原场景,告诉客户端这次换图没成。
+			LOG_WARN << "[ZoneTravel] same-zone handoff not started for player " << playerId << " tip=" << tip;
+			PlayerTipSystem::SendToPlayer(playerEntity, tip, {});
+		}
+		return;
+	}
+	if (resp.error_code() != 0)
+	{
+		// 普通换图失败。EnterSceneC2S 的同步应答早已返回"已受理",不补这条 tip 客户端会一直等
+		// 一个永远不来的 EnterSceneS2C。
+		PlayerTipSystem::SendToPlayer(playerEntity, kEnterSceneFailed, {});
+	}
+}
+
+void PlayerLifecycleSystem::HandleTravelEnterSceneReply(entt::entity playerEntity, Guid playerId,
+														const ::scene_manager::EnterSceneResponse &resp, bool correlated)
+{
+	const auto *travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(playerEntity);
+	if (travel == nullptr || travel->requestedAtMs == 0)
+	{
+		// 防御性检查,不可达:Dispatch 只在交接在途、且交接的 EnterScene 已发(号已记,非 0)时才分到这里,
+		// 而号只在 BeginTravelHandoff 的 SET 回调里(requestedAtMs 置位之后)才写。走到这里说明不变量被破坏:
+		// 不拿这条应答当证据,不动交接,交给看门狗收敛。
+		LOG_ERROR << "[ZoneTravel] invariant broken: travel reply routed without an issued handoff EnterScene, player="
+				  << playerId << " has_travel=" << (travel != nullptr) << " corr=" << resp.correlation_id()
+				  << " correlated=" << correlated << " error_code=" << resp.error_code() << "; ignoring";
 		return;
 	}
 	const uint64_t requestedAtMs = travel->requestedAtMs;
@@ -3332,7 +3483,8 @@ void PlayerLifecycleSystem::HandleTravelEnterSceneReply(Guid playerId, const ::s
 	if (resp.error_code() != 0)
 	{
 		LOG_WARN << "[ZoneTravel] EnterScene rejected for player " << playerId
-				 << " code=" << resp.error_code() << " msg=" << resp.error_message();
+				 << " code=" << resp.error_code() << " msg=" << resp.error_message()
+				 << " corr=" << resp.correlation_id() << " correlated=" << correlated;
 		ResolveTravelOutcome(playerId, requestedAtMs, "scene_manager rejected", travel_outcome::Evidence::kFailed);
 		return;
 	}
@@ -3344,13 +3496,16 @@ void PlayerLifecycleSystem::HandleTravelEnterSceneReply(Guid playerId, const ::s
 			//   a) 目标在别的节点:scene_manager 已铸造新 epoch、路由已发,本节点不再持有该玩家;
 			//   b) 重发时 scene_manager 重新挑频道挑回了本节点:同物理节点不铸造,场景就地切换。
 			// 交给 ResolveTravelOutcome 按 epoch 判。b) 也必须过它的 DEL(理由见头文件)。
+			LOG_INFO << "[ZoneTravel] same-zone handoff reply for player " << playerId
+					 << " corr=" << resp.correlation_id() << " correlated=" << correlated << "; verifying outcome";
 			ResolveTravelOutcome(playerId, requestedAtMs, "same-zone placement", travel_outcome::Evidence::kSucceeded);
 			return;
 		}
 		// 跨 zone 放行了却没有票据:协议异常。是否已推进 epoch 由 ResolveTravelOutcome 查清楚;
 		// 证据 kAnomalous:已被放行时只销毁、不踢线(这条应答说明不了客户端没拿到结果)。
 		LOG_ERROR << "[ZoneTravel] EnterScene reply for player " << playerId
-				  << " has neither error nor redirect; verifying outcome";
+				  << " has neither error nor redirect; verifying outcome corr=" << resp.correlation_id()
+				  << " correlated=" << correlated;
 		ResolveTravelOutcome(playerId, requestedAtMs, "reply without redirect", travel_outcome::Evidence::kAnomalous);
 		return;
 	}
@@ -3358,9 +3513,11 @@ void PlayerLifecycleSystem::HandleTravelEnterSceneReply(Guid playerId, const ::s
 	// 跨 zone 放行:scene_manager 已 INCR owner_epoch 并把 location 指向目标 zone,客户端会经
 	// Kafka RedirectToGateEvent → gate msg 124 → RedirectFlow 连到目标 zone。
 	// 本节点从这一刻起不再持有该玩家,且手里的 epoch 已旧 —— 不能再存盘,只能销毁。
+	// 这条分支不经核实,所以只接受本代交接的应答(Dispatch 按号分发;旧版 SM 下退回按 player_id,同今天)。
 	LOG_INFO << "[ZoneTravel] handoff granted for player " << playerId
 			 << " -> gate " << resp.redirect().target_gate_ip() << ":" << resp.redirect().target_gate_port()
-			 << "; destroying source-side entity";
+			 << "; destroying source-side entity"
+			 << " corr=" << resp.correlation_id() << " correlated=" << correlated;
 	ObserveTravelHandoffEnded(playerEntity, travel_handoff_stats::Get().granted);
 	DestroyDeposedPlayer(playerId, "travel_redirect", /*routine=*/true);
 }

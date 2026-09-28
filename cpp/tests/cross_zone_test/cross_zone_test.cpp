@@ -59,6 +59,21 @@
 //                                 and the "location is this handoff's awaiting
 //                                 placement" predicate. Pure functions; the MGET
 //                                 glue in ResolveTravelOutcome is not covered.
+//   9. ExitPersist              — Z1 exit-save convergence (§12.6.3 step 1): the
+//                                 exit-intent predicates plus ECS-level regressions
+//                                 that drive HandlePlayerAsyncSaved /
+//                                 HandleExitGameNode in a host without Redis.
+//   10. ExitRelease             — A1′ release mark / A2′ inherited-mark clear
+//                                 (§12.6.3 steps 2/3): pure decisions, the Lua
+//                                 fragments that matter, and the no-Redis ECS seams.
+//   11. EnterSceneReplyRoute    — EnterScene replies are routed by the echoed
+//                                 correlation_id (enter_scene_reply::Classify /
+//                                 IsSuspiciousUnmatched), plus ECS-level cases that
+//                                 drive PlayerLifecycleSystem::DispatchEnterSceneReply:
+//                                 a foreign reply never becomes handoff evidence,
+//                                 the §11.2 "18 starts a same-zone handoff" chain
+//                                 still works, and an old scene_manager (no echo,
+//                                 corr 0) falls back to today's player_id matching.
 //
 // History: these cases were written for the player_migrate data-moving chain
 // (Kafka PlayerMigrationEvent + ACK + CrossZoneReaper). That chain was
@@ -1434,6 +1449,310 @@ TEST(ExitReleaseEcs, FailingClearKeepsTheLoadThenRefusesWhenExhausted)
     EXPECT_EQ(PlayerLifecycleSystem::GetPendingEnterMap().count(kReleasePlayerId), 0u) << "重发耗尽:拒建实体";
     EXPECT_EQ(tlsEcs.playerList.count(kReleasePlayerId), 0u);
     EXPECT_EQ(exit_release_stats::Read().inheritRefused, before.inheritRefused + 1);
+}
+
+// ============================================================================
+// 11. EnterSceneReply —— EnterScene 应答按 correlation_id 分发(player_lifecycle.h 的 enter_scene_reply、
+//     PlayerLifecycleSystem::DispatchEnterSceneReply):纯函数 Classify / IsSuspiciousUnmatched,
+//     加无 Redis 宿主里的 ECS 级接缝 —— 外来应答不得变成交接证据、§11.2 的 18 链不断、
+//     旧版 scene_manager(不回显,号为 0)退回今天按 player_id 的行为。
+// ============================================================================
+#include "proto/scene_manager/scene_manager_service.pb.h"
+#include "network/node_utils.h" // GetNodeInfo:tlsEcs.Clear() 会清 globalRegistry,zone 要在每个用例里重设
+#include "time/system/time.h"   // TimeSystem::NowMillisecondsUTC:在途换图组件的 sentAtMs
+
+namespace esr = enter_scene_reply;
+
+TEST(EnterSceneReplyRoute, HandoffTagMatch)
+{
+    EXPECT_EQ(esr::Classify(42, true, 42, false, 0), esr::Route::kTravelHandoff);
+}
+
+TEST(EnterSceneReplyRoute, ForeignTagDuringHandoffIsUnmatched)
+{
+    EXPECT_EQ(esr::Classify(41, true, 42, false, 0), esr::Route::kUnmatched) << "上一代 / 别的请求的号";
+    EXPECT_EQ(esr::Classify(7, true, 0, false, 0), esr::Route::kUnmatched)
+        << "交接的 EnterScene 还没发(号 0):任何应答都不可能是它的";
+}
+
+TEST(EnterSceneReplyRoute, SceneChangeTagDuringHandoffIsDropped)
+{
+    EXPECT_EQ(esr::Classify(9, true, 42, true, 9), esr::Route::kSceneChangeDuringHandoff)
+        << "按构造不可达的共存:丢弃,不走普通换图分支(否则交接中会补一条失败 tip)";
+}
+
+TEST(EnterSceneReplyRoute, UncorrelatedDuringHandoffFallsBackOnlyAfterSend)
+{
+    EXPECT_EQ(esr::Classify(0, true, 42, false, 0), esr::Route::kLegacyTravelHandoff) << "旧版 SM:退回按 player_id";
+    EXPECT_EQ(esr::Classify(0, true, 42, true, 9), esr::Route::kLegacyTravelHandoff);
+    EXPECT_EQ(esr::Classify(0, true, 0, false, 0), esr::Route::kUnmatched)
+        << "旧版 SM 下也要求交接的 EnterScene 已经发出:SET 在途窗口里的应答不是它的";
+}
+
+TEST(EnterSceneReplyRoute, SceneChangeTagMatch)
+{
+    EXPECT_EQ(esr::Classify(9, false, 0, true, 9), esr::Route::kSceneChange);
+    EXPECT_EQ(esr::Classify(8, false, 0, true, 9), esr::Route::kUnmatched) << "上一条换图的迟到应答";
+    EXPECT_EQ(esr::Classify(5, false, 0, true, 0), esr::Route::kUnmatched);
+}
+
+TEST(EnterSceneReplyRoute, UncorrelatedSceneChangeFallsBack)
+{
+    EXPECT_EQ(esr::Classify(0, false, 0, true, 9), esr::Route::kLegacySceneChange) << "旧版 SM:§11.2 的 18 链不断";
+}
+
+TEST(EnterSceneReplyRoute, NoWaiter)
+{
+    EXPECT_EQ(esr::Classify(0, false, 0, false, 0), esr::Route::kNoWaiter);
+    EXPECT_EQ(esr::Classify(5, false, 0, false, 0), esr::Route::kNoWaiter);
+}
+
+TEST(EnterSceneReplyRoute, SuspiciousUnmatched)
+{
+    EXPECT_FALSE(esr::IsSuspiciousUnmatched(esr::Route::kUnmatched, false, false, false))
+        << "路由先到之后才到的纯成功迟到应答是常态,不计数";
+    EXPECT_TRUE(esr::IsSuspiciousUnmatched(esr::Route::kUnmatched, false, true, false)) << "拒绝";
+    EXPECT_TRUE(esr::IsSuspiciousUnmatched(esr::Route::kUnmatched, false, false, true)) << "重定向";
+    EXPECT_TRUE(esr::IsSuspiciousUnmatched(esr::Route::kUnmatched, true, false, false)) << "发生在交接期间";
+    EXPECT_TRUE(esr::IsSuspiciousUnmatched(esr::Route::kSceneChangeDuringHandoff, false, false, false));
+    EXPECT_FALSE(esr::IsSuspiciousUnmatched(esr::Route::kNoWaiter, true, true, true));
+    EXPECT_FALSE(esr::IsSuspiciousUnmatched(esr::Route::kTravelHandoff, true, true, true));
+}
+
+TEST(EnterSceneReplyRoute, RouteNamesCoverEveryValue)
+{
+    for (std::size_t i = 0; i < esr::kRouteCount; ++i)
+    {
+        EXPECT_STRNE(esr::RouteName(static_cast<esr::Route>(i)), "?") << "route=" << i;
+    }
+    EXPECT_STREQ(esr::RouteName(esr::Route::kCount), "?") << "越界不能读出数组外";
+}
+
+// ── ECS 级接缝:直接驱动 PlayerLifecycleSystem::DispatchEnterSceneReply ──
+// 宿主里没有 zone Redis(tlsRedis.GetZoneRedis() 为空)也没有 EventLoop:ResolveTravelOutcome 判不清就保持冻结、
+// 计 verify_rearmed,看门狗挂不上(只打 WARN)。所以"应答进了交接裁决"的可观察结果是证据被记下 + verify_rearmed +1。
+namespace
+{
+constexpr uint32_t kReplyTestZone = 7;
+constexpr uint32_t kReplyTargetZone = 8;
+constexpr uint32_t kSmErrSomeRejection = 5; // 任意非 18 的 scene_manager 错误码
+
+// 在线玩家 + 本节点 zone + "盘上已是同一份"(SavePlayerToRedis 走快路径,不碰 Redis)。
+// zone 必须在 MakeOnlinePlayer 之后设:它里面的 tlsEcs.Clear() 会清 globalRegistry,GetZoneId() 回到 0,
+// 而 StartTravelHandoff 对 targetZoneId == 0 直接拒绝。
+entt::entity MakeReplyTestPlayer()
+{
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    GetNodeInfo().set_zone_id(kReplyTestZone);
+    MarkPersisted(player);
+    return player;
+}
+
+// 交接在途:handoff 标记的 SET 已发(requestedAtMs 非 0)。correlationId 0 = 交接的 EnterScene 还没发。
+// markEpoch 0:本用例不关心撤回,AbortTravelHandoff 也就不登记待撤回表。
+void AttachHandoff(entt::entity player, uint64_t correlationId)
+{
+    auto& travel = tlsEcs.actorRegistry.emplace<PlayerTravelHandoffComp>(player);
+    travel.targetZoneId = kReplyTargetZone;
+    travel.requestedAtMs = 1000;
+    travel.markEpoch = 0;
+    travel.enterSceneCorrelationId = correlationId;
+    auto& frozen = tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+    frozen.frozenAtMs = 1000;
+    frozen.toZoneId = kReplyTargetZone;
+}
+
+void AttachSceneChange(entt::entity player, uint64_t sceneId, bool playerRequested, uint64_t correlationId)
+{
+    auto& pending = tlsEcs.actorRegistry.emplace<PlayerSceneChangeInFlightComp>(player);
+    pending.sceneId = sceneId;
+    pending.sceneConfigId = 0;
+    pending.sentAtMs = TimeSystem::NowMillisecondsUTC();
+    pending.playerRequested = playerRequested;
+    pending.correlationId = correlationId;
+}
+
+::scene_manager::EnterSceneResponse MakeReply(Guid playerId, uint32_t errorCode, uint64_t correlationId,
+                                              bool withRedirect = false)
+{
+    ::scene_manager::EnterSceneResponse resp;
+    resp.set_player_id(playerId);
+    resp.set_error_code(errorCode);
+    resp.set_correlation_id(correlationId);
+    if (withRedirect)
+    {
+        resp.mutable_redirect()->set_target_gate_ip("10.2.0.8");
+        resp.mutable_redirect()->set_target_gate_port(7001);
+    }
+    return resp;
+}
+} // namespace
+
+TEST(EnterSceneReplyEcs, ForeignTaggedReplyDuringHandoffLeavesEvidenceUntouched)
+{
+    // 今天的缺陷:交接在途时任何一条 EnterScene 应答都照单全收 —— 污染证据、DEL 撤回标记、跨 zone 还可能踢线。
+    const auto player = MakeReplyTestPlayer();
+    AttachHandoff(player, /*correlationId=*/42);
+    const auto before = travel_handoff_stats::Read();
+
+    PlayerLifecycleSystem::DispatchEnterSceneReply(MakeReply(kExitPlayerId, kSmErrSomeRejection, 41));
+    PlayerLifecycleSystem::DispatchEnterSceneReply(MakeReply(kExitPlayerId, 0, 41));
+    PlayerLifecycleSystem::DispatchEnterSceneReply(MakeReply(kExitPlayerId, 0, 41, /*withRedirect=*/true));
+
+    const auto after = travel_handoff_stats::Read();
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "外来 redirect 只记录、不销毁";
+    const auto* travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(player);
+    ASSERT_NE(travel, nullptr);
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
+    EXPECT_FALSE(travel->hasRecordedEvidence) << "外来应答不得记成交接证据";
+    EXPECT_EQ(after.aborted, before.aborted);
+    EXPECT_EQ(after.verifyRearmed, before.verifyRearmed) << "没有进 ResolveTravelOutcome";
+    EXPECT_EQ(after.granted, before.granted);
+    EXPECT_EQ(after.replyUnmatched, before.replyUnmatched + 3) << "交接期间的外来应答全算可疑";
+    EXPECT_EQ(after.replyUncorrelated, before.replyUncorrelated);
+}
+
+TEST(EnterSceneReplyEcs, ReplyBeforeHandoffSendIsIgnoredEvenWhenUncorrelated)
+{
+    // requestedAtMs 在 SET 发出前就已置位:今天 SET 在途期间到达的外来应答会被吃成交接证据。改后丢弃。
+    const auto player = MakeReplyTestPlayer();
+    AttachHandoff(player, /*correlationId=*/0);
+    const auto before = travel_handoff_stats::Read();
+
+    PlayerLifecycleSystem::DispatchEnterSceneReply(MakeReply(kExitPlayerId, kSmErrSomeRejection, 0));
+
+    const auto after = travel_handoff_stats::Read();
+    const auto* travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(player);
+    ASSERT_NE(travel, nullptr);
+    EXPECT_FALSE(travel->hasRecordedEvidence);
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
+    EXPECT_EQ(after.replyUncorrelated, before.replyUncorrelated + 1);
+    EXPECT_EQ(after.replyUnmatched, before.replyUnmatched + 1);
+}
+
+TEST(EnterSceneReplyEcs, OwnReplyReachesTravelOutcome)
+{
+    const auto player = MakeReplyTestPlayer();
+    AttachHandoff(player, /*correlationId=*/42);
+    const auto before = travel_handoff_stats::Read();
+
+    PlayerLifecycleSystem::DispatchEnterSceneReply(MakeReply(kExitPlayerId, kSmErrSomeRejection, 42));
+
+    const auto after = travel_handoff_stats::Read();
+    const auto* travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(player);
+    ASSERT_NE(travel, nullptr) << "Redis 不可用判不清:保持交接,不解冻";
+    EXPECT_TRUE(travel->hasRecordedEvidence);
+    EXPECT_EQ(travel->recordedEvidence, static_cast<uint8_t>(travel_outcome::Evidence::kFailed));
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
+    EXPECT_EQ(after.verifyRearmed, before.verifyRearmed + 1);
+    EXPECT_EQ(after.replyUnmatched, before.replyUnmatched);
+}
+
+TEST(EnterSceneReplyEcs, UncorrelatedReplyAfterSendFallsBackToLegacy)
+{
+    // 旧版 SM 不回显:交接的 EnterScene 已发,就按 player_id 退回今天的行为(不 fail-closed)。
+    const auto player = MakeReplyTestPlayer();
+    AttachHandoff(player, /*correlationId=*/42);
+    const auto before = travel_handoff_stats::Read();
+
+    PlayerLifecycleSystem::DispatchEnterSceneReply(MakeReply(kExitPlayerId, kSmErrSomeRejection, 0));
+
+    const auto after = travel_handoff_stats::Read();
+    const auto* travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(player);
+    ASSERT_NE(travel, nullptr);
+    EXPECT_TRUE(travel->hasRecordedEvidence);
+    EXPECT_EQ(travel->recordedEvidence, static_cast<uint8_t>(travel_outcome::Evidence::kFailed));
+    EXPECT_EQ(after.replyUncorrelated, before.replyUncorrelated + 1);
+    EXPECT_EQ(after.verifyRearmed, before.verifyRearmed + 1);
+}
+
+TEST(EnterSceneReplyEcs, SceneChange18StillStartsSameZoneHandoff)
+{
+    // §11.2 回归:普通换图被 18 暂拒 → 用记下的目标起同 zone 交接。对号的依据从 player_id 换成了关联号。
+    const auto player = MakeReplyTestPlayer();
+    AttachSceneChange(player, /*sceneId=*/777, /*playerRequested=*/true, /*correlationId=*/9);
+    const auto before = travel_handoff_stats::Read();
+
+    PlayerLifecycleSystem::DispatchEnterSceneReply(
+        MakeReply(kExitPlayerId, PlayerLifecycleSystem::kSmErrHandoffPending, 10));
+    const auto afterForeign = travel_handoff_stats::Read();
+    EXPECT_EQ(afterForeign.started, before.started) << "别的请求的 18 不起交接";
+    const auto* pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(player);
+    ASSERT_NE(pending, nullptr) << "对不上号的应答不得摘掉在途记录";
+    EXPECT_EQ(pending->correlationId, 9u);
+    EXPECT_EQ(afterForeign.replyUnmatched, before.replyUnmatched + 1);
+
+    PlayerLifecycleSystem::DispatchEnterSceneReply(
+        MakeReply(kExitPlayerId, PlayerLifecycleSystem::kSmErrHandoffPending, 9));
+    const auto after = travel_handoff_stats::Read();
+    EXPECT_EQ(after.started, before.started + 1) << "号匹配的 18 起同 zone 交接";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
+    // 宿主里没有 owner_epoch(按 0):BeginTravelHandoff 就地 Abort,交接与冻结成对摘掉。
+    EXPECT_EQ(after.aborted, before.aborted + 1);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
+}
+
+TEST(EnterSceneReplyEcs, LegacySceneChange18StillStartsHandoff)
+{
+    // 旧版 SM 不回显号:§11.2 的 18 链照样接得上(按 player_id 退回)。
+    const auto player = MakeReplyTestPlayer();
+    AttachSceneChange(player, /*sceneId=*/777, /*playerRequested=*/true, /*correlationId=*/9);
+    const auto before = travel_handoff_stats::Read();
+
+    PlayerLifecycleSystem::DispatchEnterSceneReply(
+        MakeReply(kExitPlayerId, PlayerLifecycleSystem::kSmErrHandoffPending, 0));
+
+    const auto after = travel_handoff_stats::Read();
+    EXPECT_EQ(after.started, before.started + 1);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
+    EXPECT_EQ(after.replyUncorrelated, before.replyUncorrelated + 1);
+}
+
+TEST(EnterSceneReplyEcs, StaleFollowReplyDoesNotConsumeNewerRequest)
+{
+    // 过了 TTL 才到的上一条请求的应答,今天会摘掉新请求的在途记录。
+    const auto player = MakeReplyTestPlayer();
+    AttachSceneChange(player, /*sceneId=*/2, /*playerRequested=*/false, /*correlationId=*/20);
+    const auto before = travel_handoff_stats::Read();
+
+    PlayerLifecycleSystem::DispatchEnterSceneReply(MakeReply(kExitPlayerId, kSmErrSomeRejection, 19));
+    {
+        const auto* pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(player);
+        ASSERT_NE(pending, nullptr);
+        EXPECT_EQ(pending->sceneId, 2u);
+        EXPECT_EQ(pending->correlationId, 20u);
+    }
+    const auto afterRejected = travel_handoff_stats::Read();
+    EXPECT_EQ(afterRejected.replyUnmatched, before.replyUnmatched + 1) << "对不上号的拒绝算可疑";
+
+    PlayerLifecycleSystem::DispatchEnterSceneReply(MakeReply(kExitPlayerId, 0, 19));
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
+    EXPECT_EQ(travel_handoff_stats::Read().replyUnmatched, afterRejected.replyUnmatched)
+        << "路由先到之后的纯成功迟到应答是常态,不计数";
+
+    PlayerLifecycleSystem::DispatchEnterSceneReply(MakeReply(kExitPlayerId, kSmErrSomeRejection, 20));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player)) << "自己的应答摘组件";
+    EXPECT_EQ(travel_handoff_stats::Read().started, before.started) << "跟随被拒只记日志,不起交接";
+}
+
+TEST(EnterSceneReplyEcs, NoWaiterAndGonePlayerAreSilent)
+{
+    const auto player = MakeReplyTestPlayer();
+    const auto before = travel_handoff_stats::Read();
+
+    PlayerLifecycleSystem::DispatchEnterSceneReply(MakeReply(kExitPlayerId, 0, 5));
+    PlayerLifecycleSystem::DispatchEnterSceneReply(MakeReply(kExitPlayerId, kSmErrSomeRejection, 5));
+    // 不在本节点的玩家。
+    PlayerLifecycleSystem::DispatchEnterSceneReply(MakeReply(kExitPlayerId + 1, kSmErrSomeRejection, 6));
+    // 更老的 SM:连 player_id 都没有。
+    PlayerLifecycleSystem::DispatchEnterSceneReply(MakeReply(0, kSmErrSomeRejection, 0));
+
+    const auto after = travel_handoff_stats::Read();
+    EXPECT_TRUE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_EQ(after.replyUnmatched, before.replyUnmatched);
+    EXPECT_EQ(after.replyUncorrelated, before.replyUncorrelated)
+        << "player_id 为 0 的应答在计 reply_uncorrelated 之前就返回";
 }
 
 // ============================================================================

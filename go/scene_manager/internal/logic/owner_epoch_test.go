@@ -1113,6 +1113,92 @@ func TestEnterScene_ResponseEchoesPlayerID(t *testing.T) {
 	assert.Equal(t, playerID, rejected.PlayerId, "失败应答同样要能对回玩家")
 }
 
+// correlation_id 与 player_id 同在最外层 defer 回显,每条返回路径(含去重的提前返回与跨 zone
+// 重定向)都要带回本次请求的号:scene 节点只凭它判断"这是不是我这一次发送的应答",
+// 某条路径漏回显 = 那条路径的应答在新 scene 上退回按 player_id 对号(reply_uncorrelated 非 0)。
+// 每条路径用不同的号,防止串用上一条的值也能蒙混过关。
+func TestEnterScene_ResponseEchoesCorrelationID(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	capturingKafkaWriter(sc)
+	ctx := context.Background()
+	const (
+		playerID       = uint64(6130)
+		targetID       = uint64(7130)
+		redirectPlayer = uint64(6131)
+		remoteID       = uint64(7131)
+		remoteConf     = uint64(3331)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "0")
+
+	// 成功落点。
+	ok, err := NewEnterSceneLogic(ctx, sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test", CorrelationId: 7001,
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), ok.ErrorCode)
+	assert.Equal(t, uint64(7001), ok.CorrelationId)
+	assert.Equal(t, playerID, ok.PlayerId)
+
+	// GateId 非法的提前拒绝。
+	rejected, err := NewEnterSceneLogic(ctx, sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "not-a-number", GateInstanceId: "gate-uuid-test", CorrelationId: 7002,
+	})
+	require.NoError(t, err)
+	require.NotEqual(t, uint32(0), rejected.ErrorCode)
+	assert.Equal(t, uint64(7002), rejected.CorrelationId)
+	assert.Equal(t, playerID, rejected.PlayerId)
+
+	// 去重:同指纹 pending → 执行中。
+	pendingReq := &scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId, RequestId: "corr-echo-pending",
+	}
+	fingerprint, err := enterSceneRequestFingerprint(pendingReq)
+	require.NoError(t, err)
+	pendingKey := fmt.Sprintf("enter_scene:dedup:%d:%s", playerID, pendingReq.RequestId)
+	mr.Set(pendingKey, "pending:"+fingerprint+":first-owner")
+	mr.SetTTL(pendingKey, time.Minute)
+	pendingReq.CorrelationId = 7003
+	inProgress, err := NewEnterSceneLogic(ctx, sc).EnterScene(pendingReq)
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrEnterSceneInProgress, inProgress.ErrorCode)
+	assert.Equal(t, uint64(7003), inProgress.CorrelationId)
+	assert.Equal(t, playerID, inProgress.PlayerId)
+
+	// 去重:不同指纹 pending → 冲突。
+	conflictReq := &scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId, RequestId: "corr-echo-conflict",
+		CorrelationId: 7004,
+	}
+	conflictKey := fmt.Sprintf("enter_scene:dedup:%d:%s", playerID, conflictReq.RequestId)
+	mr.Set(conflictKey, "pending:some-other-fingerprint:other-owner")
+	mr.SetTTL(conflictKey, time.Minute)
+	conflict, err := NewEnterSceneLogic(ctx, sc).EnterScene(conflictReq)
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrEnterSceneIdempotencyConflict, conflict.ErrorCode)
+	assert.Equal(t, uint64(7004), conflict.CorrelationId)
+	assert.Equal(t, playerID, conflict.PlayerId)
+
+	// 跨 zone 重定向(另一名没有位置记录的玩家,只送连接)。
+	mr.SAdd(worldChannelsKey(2, remoteConf), fmt.Sprintf("%d", remoteID))
+	seedSceneOnNode(mr, 2, remoteID, "20", "2")
+	mr.Set(nodePlayerCountKey(2, "20"), "2")
+	redirectLogic := NewEnterSceneLogic(ctx, sc)
+	redirectLogic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
+	}
+	redirected, err := redirectLogic.EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: redirectPlayer, SceneConfId: remoteConf, ZoneId: 2, GateZoneId: testZoneId,
+		CorrelationId: 7005,
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), redirected.ErrorCode)
+	require.NotNil(t, redirected.Redirect)
+	assert.Equal(t, uint64(7005), redirected.CorrelationId)
+	assert.Equal(t, redirectPlayer, redirected.PlayerId)
+}
+
 // 不铸造的落点回滚:只退 location,epoch 键不动(键不存在时也不能凭空写出 "0")。
 func TestRollbackUnmintedPlacementLeavesEpochUntouched(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)

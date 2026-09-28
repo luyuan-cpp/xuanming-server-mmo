@@ -2,8 +2,10 @@ package logic
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1416,6 +1418,144 @@ func TestEnterScene_RequestIDIsScopedByPlayer(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrNoAvailableNode, resp.ErrorCode)
 	assert.NotEqual(t, constants.ErrEnterSceneInProgress, resp.ErrorCode)
+}
+
+// --- correlation_id:只回显、不去重 -------------------------------------------------
+//
+// scene 节点靠 correlation_id 把应答对回"哪一次发送",所以重放必须回显本次请求的号;
+// 缓存写入早于最外层回显 defer(LIFO),缓存里不含它。这条顺序一旦被改反,重放会把上一次
+// 发送的号带回来,scene 节点就会把它当成别人的应答丢掉(或反过来错吃)。
+
+func TestEnterScene_ReplayEchoesCurrentCorrelationNotCached(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	ctx := context.Background()
+	writer := &countingKafkaWriter{}
+	sc.Kafka = writer
+	sc.Config.KafkaWriteTimeoutSeconds = 1
+
+	const targetID = uint64(2218)
+	mr.ZAdd(nodeLoadKey(testZoneId), 0, "10")
+	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, targetID), "10")
+	mr.Set(fmt.Sprintf(InstancePlayerCountKey, targetID), "0")
+	base := &scene_manager.EnterSceneRequest{
+		PlayerId: 5116, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test", RequestId: "corr-replay",
+	}
+
+	firstReq := gproto.Clone(base).(*scene_manager.EnterSceneRequest)
+	firstReq.CorrelationId = 101
+	first, err := NewEnterSceneLogic(ctx, sc).EnterScene(firstReq)
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), first.ErrorCode)
+	assert.Equal(t, 1, writer.count())
+
+	// 删除目标映射：若第二次还进入解析路径就会失败；成功只能来自完整响应重放。
+	mr.Del(fmt.Sprintf(SceneNodeKeyFmt, targetID))
+	secondReq := gproto.Clone(base).(*scene_manager.EnterSceneRequest)
+	secondReq.CorrelationId = 202
+	second, err := NewEnterSceneLogic(ctx, sc).EnterScene(secondReq)
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), second.ErrorCode)
+	assert.Equal(t, 1, writer.count(), "第二次必须是重放,不得再次发送 Gate 路由")
+	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	assert.Equal(t, "1", count, "重放不得再次增加目标场景人数")
+
+	assert.Equal(t, uint64(101), first.CorrelationId)
+	assert.Equal(t, uint64(202), second.CorrelationId, "重放回显的是本次请求的号,不是被缓存那次的")
+	assert.Equal(t, base.PlayerId, second.PlayerId)
+
+	firstBody := gproto.Clone(first).(*scene_manager.EnterSceneResponse)
+	secondBody := gproto.Clone(second).(*scene_manager.EnterSceneResponse)
+	firstBody.CorrelationId = 0
+	secondBody.CorrelationId = 0
+	assert.True(t, gproto.Equal(firstBody, secondBody), "除关联号外,重放必须与首次应答逐字段相同")
+
+	// 锁住"缓存写入早于外层 defer":done 条目里既没有 correlation_id,也没有 player_id。
+	dedupeKey := fmt.Sprintf("enter_scene:dedup:%d:%s", base.PlayerId, base.RequestId)
+	raw, getErr := mr.Get(dedupeKey)
+	require.NoError(t, getErr)
+	fingerprint, fpErr := enterSceneRequestFingerprint(base)
+	require.NoError(t, fpErr)
+	donePrefix := enterSceneDedupeDonePrefix + fingerprint + ":"
+	require.True(t, strings.HasPrefix(raw, donePrefix), "done 条目格式应为 done:<fp>:<b64>,实际 %q", raw)
+	payload, decodeErr := base64.StdEncoding.DecodeString(strings.TrimPrefix(raw, donePrefix))
+	require.NoError(t, decodeErr)
+	cached := &scene_manager.EnterSceneResponse{}
+	require.NoError(t, gproto.Unmarshal(payload, cached))
+	assert.Equal(t, uint64(0), cached.CorrelationId, "关联号不得进去重缓存")
+	assert.Equal(t, uint64(0), cached.PlayerId, "player_id 同样由外层 defer 回显,不进缓存")
+}
+
+func TestEnterSceneFingerprint_IgnoresCorrelationID(t *testing.T) {
+	base := &scene_manager.EnterSceneRequest{
+		PlayerId: 5117, SceneId: 2219, ZoneId: testZoneId, RequestId: "fp-corr",
+	}
+	want, err := enterSceneRequestFingerprint(base)
+	require.NoError(t, err)
+
+	for _, corr := range []uint64{1, 999} {
+		req := gproto.Clone(base).(*scene_manager.EnterSceneRequest)
+		req.CorrelationId = corr
+		got, fpErr := enterSceneRequestFingerprint(req)
+		require.NoError(t, fpErr)
+		assert.Equal(t, want, got, "correlation_id=%d 不得改变指纹", corr)
+		assert.Equal(t, corr, req.CorrelationId, "算指纹不得原地修改入参(外层 defer 还要回显它)")
+	}
+
+	other := gproto.Clone(base).(*scene_manager.EnterSceneRequest)
+	other.SceneId++
+	otherFingerprint, err := enterSceneRequestFingerprint(other)
+	require.NoError(t, err)
+	assert.NotEqual(t, want, otherFingerprint, "业务字段不同必须仍然区分指纹")
+}
+
+func TestEnterScene_SameRequestIDDifferentCorrelationIsInProgressNotConflict(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	base := &scene_manager.EnterSceneRequest{
+		PlayerId: 5118, SceneId: 2220, ZoneId: testZoneId, RequestId: "corr-in-progress",
+	}
+	fingerprint, err := enterSceneRequestFingerprint(base)
+	require.NoError(t, err)
+	key := fmt.Sprintf("enter_scene:dedup:%d:%s", base.PlayerId, base.RequestId)
+	owner := "pending:" + fingerprint + ":first-owner"
+	mr.Set(key, owner)
+	mr.SetTTL(key, time.Minute)
+
+	retry := gproto.Clone(base).(*scene_manager.EnterSceneRequest)
+	retry.CorrelationId = 7
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(retry)
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrEnterSceneInProgress, resp.ErrorCode,
+		"只差 correlation_id 的同一 request_id 是同一逻辑操作,不是冲突")
+	value, getErr := sc.Redis.Get(key)
+	require.NoError(t, getErr)
+	assert.Equal(t, owner, value, "并发命中者不得删除首个请求的 owner")
+	assert.Equal(t, uint64(7), resp.CorrelationId)
+}
+
+func TestEnterScene_CorrelationWithoutRequestIDNeverTouchesDedupe(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	writer := &countingKafkaWriter{}
+	sc.Kafka = writer
+	sc.Config.KafkaWriteTimeoutSeconds = 1
+
+	const targetID = uint64(2221)
+	mr.ZAdd(nodeLoadKey(testZoneId), 0, "10")
+	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, targetID), "10")
+	mr.Set(fmt.Sprintf(InstancePlayerCountKey, targetID), "0")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: 5119, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test", CorrelationId: 9,
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), resp.ErrorCode)
+	assert.Equal(t, uint64(9), resp.CorrelationId)
+	assert.Equal(t, 1, writer.count())
+	for _, key := range mr.Keys() {
+		assert.False(t, strings.HasPrefix(key, "enter_scene:dedup:"),
+			"没有 request_id 时关联号不得触发任何去重键: %s", key)
+	}
 }
 
 func TestEnterScene_FirstLandingCrossZoneReachesRedirectPath(t *testing.T) {

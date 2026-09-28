@@ -123,6 +123,12 @@ struct PlayerOwnerEpochComp
 //               PlayerLifecycleSystem::ResolveTravelOutcome 在入口记下:应答 / 路由落点带来的证据若因 Redis
 //               不可用没能当场裁决,首次挂的 kNoReply 看门狗(不取消)会先到期,裁决时必须用这里的证据,
 //               否则同 zone 成功会补假失败 tip、跨 zone 协议异常会被当成"没收到应答"踢线。纯内存,随组件销毁。
+// enterSceneCorrelationId
+//               本代交接那条 EnterScene 的关联号(EnterSceneRequest.correlation_id),由 RequestTravelEnterScene
+//               在发送时取号写入;0 = 交接的 EnterScene 还没发(SET 在途或还没开始)。只有回显号与它相等的
+//               应答才算本代交接的应答(PlayerLifecycleSystem::DispatchEnterSceneReply)——requestedAtMs 在
+//               SET 发出前就已置位,拿它当"已发"判据会把 SET 在途期间到达的外来应答错吃成交接证据。
+//               每代只写一次;若被重写,只认最新一次。
 struct PlayerTravelHandoffComp
 {
 	uint32_t targetZoneId{0};
@@ -132,21 +138,28 @@ struct PlayerTravelHandoffComp
 	uint64_t markEpoch{0};
 	bool hasRecordedEvidence{false};
 	uint8_t recordedEvidence{0};
+	uint64_t enterSceneCorrelationId{0};
 };
 
 // 本节点替在线玩家发出、应答还没回来的**普通** EnterScene(客户端换图 / 镜像创建后的自动进场 /
 // 队伍跟随)。
 //
-// 为什么需要:EnterSceneResponse 只回显 player_id,不带请求内容。scene_manager 以 18 暂拒时,
-// 只有靠它才知道"刚才要去哪"、才能用同一个目标起交接(StartTravelHandoff)。
-// 同时兼作发送侧的重复请求闸(IsSceneChangeBusy):同一玩家两条 EnterScene 同时在途,应答会
-// 串到对方头上 —— 客户端连点产生的迟到 18 会被当成交接重发的失败应答。
+// 为什么需要:EnterSceneResponse 不带请求内容(只回显 player_id 与 correlation_id)。scene_manager
+// 以 18 暂拒时,只有靠它才知道"刚才要去哪"、才能用同一个目标起交接(StartTravelHandoff)。
+// 应答按 correlation_id 对号(PlayerLifecycleSystem::DispatchEnterSceneReply),只有号相等的应答才会
+// 摘它、起交接或回 tip,不再串号:过了 TTL 才到的迟到应答、上一次请求的应答对不上号,直接丢弃。
 //
-// 队伍跟随也必须挂:它自己只发同节点换图、拿不到 18,但不挂的话它的应答会把客户端那条换图的
-// 在途记录摘掉,客户端那条随后到达的 18 找不到目标、同 zone 交接不发起,玩家既没换成图也收不到
-// 任何提示(应答只回显 player_id,两条请求分不开,只能在发送侧互斥)。
-// 疏散 / 排空发的 EnterScene 不挂它(发完实体就销毁了)。
+// 发送侧互斥(IsSceneChangeBusy)仍然必要,理由是**组件只有一个槽**:第二次登记会覆盖第一次的号,
+// 第一次随后到达的 18 就对不上号而被丢弃,玩家既没换成图也收不到提示。旧版 scene_manager 不回显
+// correlation_id(应答号为 0)时退回按 player_id 匹配,两条请求分不开,同样只能靠这道闸。
+// 队伍跟随也必须挂:不挂的话发送侧闸看不见它,客户端换图会与它同时在途;旧版 scene_manager 下
+// 跟随的应答仍会按 player_id 摘掉客户端那条换图的记录,那条随后到达的 18 找不到目标、同 zone
+// 交接不发起。挂上之后同一玩家的普通 EnterScene 始终串行。
+// 疏散 / 排空发的 EnterScene 不挂它(发完实体就销毁了,没有等待者)。
 // 应答到达即摘;应答丢失时靠 sentAtMs 的短 TTL 自然失效,不需要定时器。
+//
+// correlationId    本次 EnterScene 的关联号(EnterSceneRequest.correlation_id),由
+//                  PlayerLifecycleSystem::RequestSceneChange 写入,经它登记的恒非 0;默认值 0 = 未登记。
 //
 // playerRequested  这次换图是不是玩家自己要的。true(默认)= 客户端在等结果:18 要起交接,其它失败
 //                  要回 tip。false = 服务器替他发的队伍跟随:玩家没在等,被拒只记日志、队员留在原
@@ -158,4 +171,5 @@ struct PlayerSceneChangeInFlightComp
 	uint32_t sceneConfigId{0};
 	uint64_t sentAtMs{0};
 	bool playerRequested{true};
+	uint64_t correlationId{0};
 };

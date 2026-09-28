@@ -17,29 +17,26 @@ void InitSceneManagerReply()
     scene_manager::AsyncSceneManagerEnterSceneHandler =
         [](const grpc::ClientContext& /*ctx*/, const ::scene_manager::EnterSceneResponse& resp)
     {
-        // 应答回调里没有请求上下文,靠 scene_manager 回显的 player_id 把结果对回玩家。
-        // 归属交接(跨 zone 传送 / 同 zone 跨节点换图)的源端要据此收尾(放行 → 销毁本地实体;
-        // 失败 → 核实后解冻),普通换图要据此得知"目标在别的节点,先存盘再来"(18)或失败,
-        // 所以成功与失败都要送到;既无交接也无在途换图的玩家在里面是 no-op。
-        // player_id == 0 = 旧版 scene_manager 未回显,交接只能靠应答看门狗收敛。
-        if (resp.player_id() != 0)
-        {
-            PlayerLifecycleSystem::HandleTravelEnterSceneReply(resp.player_id(), resp);
-        }
+        // 应答回调里没有请求上下文:按 correlation_id 分发,见 PlayerLifecycleSystem::DispatchEnterSceneReply
+        // (player_id 只用来找实体;player_id == 0 / correlation_id == 0 的旧版 scene_manager 应答也在里面处理)。
+        // 成功与失败都要送到:交接的源端要据此收尾,普通换图要据此得知 18 或失败。本处只做适配。
+        PlayerLifecycleSystem::DispatchEnterSceneReply(resp);
 
         if (resp.error_code() != 0)
         {
             // ErrHandoffPending(18,定义与出处见 PlayerLifecycleSystem::kSmErrHandoffPending):
-            // 生产配置下每次跨节点换图的第一条请求都会拿到它,随后由 HandleTravelEnterSceneReply
+            // 生产配置下每次跨节点换图的第一条请求都会拿到它,随后由 DispatchEnterSceneReply
             // 起交接并重发 —— 这是常规路径,不是错误,打 ERROR 会把真正的失败淹没。
             if (resp.error_code() == PlayerLifecycleSystem::kSmErrHandoffPending)
             {
                 LOG_INFO << "SceneManager.EnterScene deferred (handoff pending): player=" << resp.player_id()
+                         << " corr=" << resp.correlation_id()
                          << " code=" << resp.error_code()
                          << " msg=" << resp.error_message();
                 return;
             }
             LOG_ERROR << "SceneManager.EnterScene error: player=" << resp.player_id()
+                      << " corr=" << resp.correlation_id()
                       << " code=" << resp.error_code()
                       << " msg=" << resp.error_message();
             return;
@@ -49,7 +46,8 @@ void InitSceneManagerReply()
         {
             LOG_INFO << "SceneManager.EnterScene returned cross-zone redirect to "
                      << resp.redirect().target_gate_ip() << ":"
-                     << resp.redirect().target_gate_port();
+                     << resp.redirect().target_gate_port()
+                     << " player=" << resp.player_id() << " corr=" << resp.correlation_id();
         }
     };
 
@@ -89,7 +87,6 @@ void InitSceneManagerReply()
                         "for scene " << resp.scene_id();
             return;
         }
-        auto& smRegistry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
 
         for (int i = 0; i < resp.creator_ids_size(); ++i)
         {
@@ -116,8 +113,9 @@ void InitSceneManagerReply()
             }
 
             // 与 EnterSceneC2S 同一道发送侧闸。镜像创建是异步的,这期间玩家可能已经起了归属交接
-            // (已冻结,盘上那份才是真值)或又发了一次换图:再替他发一条 EnterScene,应答会与在途的
-            // 那条串号(应答只回显 player_id)。放弃这次自动进场,镜像由 scene_manager 按空场景回收。
+            // (已冻结,盘上那份才是真值)或又发了一次换图:在途记录只有一个槽,再替他发一条 EnterScene
+            // 会覆盖在途那条的号,那条随后到达的 18 就对不上号而被丢弃。放弃这次自动进场,镜像由
+            // scene_manager 按空场景回收。
             if (PlayerLifecycleSystem::IsSceneChangeBusy(playerEntity))
             {
                 LOG_WARN << "CreateScene reply: creator " << playerId
@@ -146,14 +144,15 @@ void InitSceneManagerReply()
             req.set_gate_zone_id(GetZoneId());
             req.set_zone_id(GetZoneId());
 
-            // 镜像"尽量"与源场景同节点,但不保证:落到别的节点时 scene_manager 会先以 18 暂拒,
-            // 发送之前记下目标,应答回来才能用同一个 scene_id 起交接并重发(见 EnterSceneC2S)。
-            PlayerLifecycleSystem::NoteSceneChangeRequested(playerEntity, resp.scene_id(), 0);
-            scene_manager::SendSceneManagerEnterScene(smRegistry, smEntity, req);
+            // 镜像"尽量"与源场景同节点,但不保证:落到别的节点时 scene_manager 会先以 18 暂拒。
+            // RequestSceneChange 在发送之前把目标与关联号记进单槽在途记录,应答按号对回来,才能用同一个
+            // scene_id 起交接并重发(见 EnterSceneC2S)。
+            const uint64_t correlationId = PlayerLifecycleSystem::RequestSceneChange(playerEntity, smEntity, req);
 
             LOG_INFO << "CreateScene reply: dispatched EnterScene player=" << playerId
                      << " mirror_scene=" << resp.scene_id()
-                     << " mirror_node=" << resp.node_id();
+                     << " mirror_node=" << resp.node_id()
+                     << " corr=" << correlationId;
         }
     };
 }
