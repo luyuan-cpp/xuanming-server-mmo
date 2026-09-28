@@ -18,7 +18,11 @@ package data
 //
 //   - 每个"应被排除的人"都**同时满足成为候选的全部条件**(mutual:是我好友的好友;anchor:在 friend 表里
 //     有出边、id ≥ pivot,且落在 pivot 起的前 RecommendAnchorWindow 个去重 id 内 —— seedAnchorGraph 的池只有
-//     十来个人、远小于 W,扫描上界回归用例的关系人都紧贴 pivot,都在窗口里),他不出现的**唯一**原因只能是那一条排除子句;
+//     十来个人、远小于 W;WindowCoversBoundedExclusionBudget 与 PlanIsPerRowPrimaryKeyLookups 的关系人都紧贴
+//     pivot、都在窗口里),他不出现的**唯一**原因只能是那一条排除子句;
+//   - 例外:TestRecommendAnchor_StopsAtWindowWhenSaturated **有意**把一半"拉黑了我"的人(pivot+W..pivot+2W-1)
+//     和 5 个合格者放在窗口之外。它断言的是窗口语义(窗口外的人一律不看、不推荐),不是某条排除子句,
+//     所以不受上一条"唯一原因"纪律约束;它自己的正向对照(从窗口外那 5 人起扫必须全部返回)另行保证夹具造对了;
 //   - 断言的是**整个结果集**(ElementsMatch / Equal),不是"不包含某人":后者在查询整体返回空时照绿;
 //   - 旁边放**反向对照**:别人之间的拉黑 / pending、我与他之间**已终态**的申请,都不许把人排除掉 ——
 //     否则"把 NOT EXISTS 写成恒真"这种坏实现也能通过"被排除的人没出现"。
@@ -596,11 +600,16 @@ func explainTraditionalRows(t *testing.T, ctx context.Context, db *sql.DB, stmt 
 // 缺陷:旧写法的 GROUP BY 去重落成临时表,LIMIT 无法提前终止,扫描量 = pivot 之后的全部玩家数。
 // 夹具:池里 16×W 个单边玩家,pivot 放在正中(前后各 8×W 人);me 不在池里。
 // 断言:结果 = pivot 起的前 20 个;会话 Handler_read_* 增量 ≤ 8×W。
-//   - 旧实现:结果对,读数 40,967(2026-09-28 实测,ANALYZE 前后一致)→ 红在读数断言;
-//   - 新实现:2,150 ≈ 2.1×W。上界取 8×W:单边夹具的理论最坏是 7×W+3(窗口 W+1、物化表扫描 W+1、点查 5×W)。
+//   - 旧实现:结果对 → 红在读数断言。读数随计划浮动:2026-09-28 本夹具多数实测为 40,967(first 1 / key 16,387 /
+//     next 16,386 / rnd_next 8,193),另一轮 52 次 ANALYZE 重采样里也见过 12,334–27,521。下限来自 GROUP BY 临时表
+//     回读 pivot 之后全部 8×W 个分组的 rnd_next 8,193:只要旧写法仍落临时表,读数就恒 > 8×W,但最坏余量只有约 1.5 倍;
+//   - 新实现:2,150 ≈ 2.1×W。上界取 8×W:理论最坏是 7×W+3 = 窗口生产 ≤ W+2(跳跃扫描是 W+1 次定位 + 1 次
+//     read_last;本夹具每人一条边,实测走范围扫描,是 1 次定位 + W 次 next = W+1)+ 物化表扫描 W+1 + 点查 5×W。
 //
 // pivot 放在正中而不是表头:窗口若退化成"从索引开头全扫再过滤"(EXPLAIN type=index),会把 pivot 之前的 8×W 人
-// 也读一遍,同样越界。断言的是行操作计数,不看墙钟。
+// 也读一遍,同样越界(2026-09-28 实测:给派生表加 GROUP_INDEX(friend PRIMARY) 提示后本夹具读 10,343 次)。
+// 夹具先 ANALYZE 再测,所以这条守的是"统计新鲜时 SQL / 提示的改动造成的这种退化";统计本身退化(持久统计 ≤1 行)
+// 在用例里进不来,是登记在案的剩余风险,见 recommend_repo.go 文件头第 2 条的 ⚠。断言的是行操作计数,不看墙钟。
 func TestRecommendAnchor_ReadsBoundedByWindowNotPoolSize(t *testing.T) {
 	db, ctx := openFriendTestDB(t)
 	repo, _ := newFriendTestRepo(t, db)
@@ -629,7 +638,8 @@ func TestRecommendAnchor_ReadsBoundedByWindowNotPoolSize(t *testing.T) {
 // pivot 之后紧挨着 2×W 个"拉黑了我"的人(唯一没有配置上限的排除类),窗口被他们占满;窗口之外再放 5 个合格者。
 //   - 新实现只看前 W 个去重 id → 返回空;每个候选 ≤5 次主键点查 → 读数 ≤ 8×W(2026-09-28 实测 7,170)。
 //   - 旧实现一直扫到凑满 → 返回那 5 个 → 红在 assert.Empty。任何正确执行旧 SQL 的计划都必须返回他们,
-//     所以这条红与执行计划、引擎都无关。(旧实现在本夹具上读数实测 8,217,只是恰好略超上界,不作为红的依据 ——
+//     所以这条红与执行计划、引擎都无关。(旧实现在本夹具上的读数随计划浮动,实测多为 8,217、也见过 622,
+//     不作为红的依据 ——
 //     旧写法的代价主要花在 hash antijoin (no condition) 的内存比较上,Handler 计数看不见。)
 //
 // "返回空"是有意的降级(推荐是可降级展示功能),不是漏人;写成断言,是为了让"窗口被删掉 / 被绕过"必然变红。
@@ -665,6 +675,10 @@ func TestRecommendAnchor_StopsAtWindowWhenSaturated(t *testing.T) {
 // 所有"有配置上限"的排除全部顶满、且全部紧贴 pivot 时,窗口里仍装得下 20 个合格者,结果与不设窗口时逐条相同。
 // 数量用字面量(data 不能 import config),右侧注释是 etc/friend.yaml 的默认值;对账在 config 包的
 // TestRecommendAnchorWindowCoversExclusionBudget。实测(2026-09-28):窗口 754 通过、753 只返回 19 个。
+//
+// 本夹具比生产可达的组合更严:它让"mutual 已追加进 exclude 的 19 个"与"want = 20"同时顶满,而 logic 层
+// RecommendFriends 里两者之和恒等于 limit ≤ RecommendMaxLimit(mutual 每选中一人,random 的 want 就少一个)。
+// 可达组合的真实需求是 735(见 RecommendAnchorWindow 的注释);按更严的 754 验,窗口留的余量只会更多、不会更少。
 func TestRecommendAnchor_WindowCoversBoundedExclusionBudget(t *testing.T) {
 	db, ctx := openFriendTestDB(t)
 	repo, _ := newFriendTestRepo(t, db)
@@ -706,7 +720,14 @@ func TestRecommendAnchor_WindowCoversBoundedExclusionBudget(t *testing.T) {
 
 // TestRecommendAnchor_PlanIsPerRowPrimaryKeyLookups 钉住上界成立所依赖的计划形状:五个排除子查询各自是
 // eq_ref / PRIMARY / key_len=16 / possible_keys 只有 PRIMARY(完整主键单行点查),计划里没有任何 MATERIALIZED
-// 子查询;派生表窗口走 PRIMARY。
+// 子查询;派生表窗口走 PRIMARY 上的 range 访问。
+// 派生表那行断言 type=range 而不只看 key:跳跃扫描(Using index for group-by)与范围扫描在 traditional EXPLAIN 里
+// 都是 range,两者互相翻转不会让这条变红;而从索引开头全扫(type=index,key 仍是 PRIMARY)会把 pivot 之前的人
+// 也读一遍。2026-09-28 实测:给派生表加 GROUP_INDEX(friend PRIMARY) 提示(统计新鲜)后,本夹具的派生表行变成
+// type=index、key=PRIMARY,五个排除子查询仍全是 eq_ref / PRIMARY —— 只断言 key 的话这里全绿;读数 10,368 > 8×W。
+// 本用例先 ANALYZE 再 EXPLAIN,所以这条只守"统计新鲜时 SQL / 提示的改动让窗口失去 range 访问"。持久统计退化到
+// ≤1 行也会得到同样的 type=index 计划(把 friend 的统计冻结在 n_rows=1 时本夹具读 10,364),但那个状态用例里
+// 进不来,生产上只靠 InnoDB auto_recalc,是登记在案的剩余风险(见 recommend_repo.go 文件头第 2 条的 ⚠)。
 // 夹具刻意是"窗口大(W 个候选)、me 的关系集小":这种数据会诱使优化器改成先物化排除集。2026-09-28 实测:
 // 去掉 SEMIJOIN(FIRSTMATCH) 后 b_in 被物化成 friend_block 主键全索引扫描(type=index)、r_in 被物化成
 // friend_request 全表扫描(type=ALL);两个提示都去掉时 r_out 被物化成 idx_status_updated 上 status=1 的全服
@@ -755,6 +776,8 @@ func TestRecommendAnchor_PlanIsPerRowPrimaryKeyLookups(t *testing.T) {
 		assert.False(t, strings.HasPrefix(table, "<subquery"), "计划里出现了物化子查询 %s", table)
 		if row["select_type"] == "DERIVED" {
 			assert.Equal(t, "PRIMARY", row["key"], "窗口必须走 friend 主键(player_id 前缀)")
+			assert.Equal(t, "range", row["type"],
+				"窗口必须是从 pivot 起的 range 访问(跳跃扫描也显示为 range);type=index 是从索引开头全扫,读数随 pivot 之前的行数增长")
 		}
 		if _, ok := seen[table]; ok {
 			seen[table] = true

@@ -32,6 +32,18 @@ import (
 //       friend_request 的行数、"拉黑我的人数"、全服 pending 数都无关;典型 2.1–3.1×W。窗口生产随计划不同:
 //       跳跃扫描约 W+1 次定位,范围扫描要读完窗口里 W 个人的全部出边(最坏 ≈ W×MaxFriends ≈ 20.5 万次,
 //       见 RecommendAnchorWindow 的"代价")。
+//       ⚠ SQL 结构(派生表的 LIMIT)封住的只是"pivot 之后最多读 W 个分组";"不从索引开头扫、只读 pivot 之后"
+//       靠的是优化器对 `player_id >= ?` 选 range 访问(EXPLAIN type=range,跳跃扫描也显示为 range)。
+//       统计声称 friend 表只有 ≤1 行时这一点不成立:2026-09-28 实测退回 type=index、从索引开头全扫,读数随
+//       pivot 之前的行数增长(84 万边 / 30 万人的库上 643,575 次;16×W 单边夹具、pivot 居中时 10,343 次);
+//       统计声称 ≥2 行时即回到 range。复现到这个状态的做法都是:该表关掉 STATS_AUTO_RECALC 后批量灌数,
+//       再 FLUSH TABLE 让 ≤1 行的旧持久统计被重新读回。
+//       **这是登记在案的剩余风险,没有测试或运行期兜底**:TestRecommendAnchor_ReadsBoundedByWindowNotPoolSize 的
+//       读数断言和 TestRecommendAnchor_PlanIsPerRowPrimaryKeyLookups 的 type=range 断言都在夹具 ANALYZE 之后才测,
+//       守的只是"统计新鲜时,SQL 或提示的改动让窗口退化成 type=index"(例如给派生表加 GROUP_INDEX 提示,见下);
+//       统计退化本身在用例里复现不了,生产上只靠 InnoDB auto_recalc(默认开启,约 10% 的行变化后后台重算)。
+//       不要拿 GROUP_INDEX(friend PRIMARY) 之类的提示去"钉住"窗口:2026-09-28 实测它在统计新鲜时反而把窗口变成
+//       从索引开头的 type=index 全扫(5 万玩家 / 100 万边的库 pivot=1025000 读 521,607 次,不加提示 2,151 次)。
 //     - mutual(RecommendByMutual):外层行数由 friend 表 player_id 前缀给出(我的好友 → 好友的好友),上界 MaxFriends²;
 //       ⚠ 但它的两条 OR 形 NOT EXISTS 仍可能被做成"每个 FOF 行扫一遍全服 pending",2026-09-28 在对抗数据上实测过
 //       (见 RecommendByMutual 的注释),属已登记待修项,**目前不满足本条**。
@@ -139,11 +151,21 @@ LIMIT ?`
 // 逐条相同"(2026-09-28 实测:754 恰好凑满 20、753 只有 19)。取 1024,多出的 270 个位置留给唯一没有配置上限的
 // 一类("拉黑了我的人":MaxBlocks 只限拉黑方自己的名单)和超出上限的历史行。
 //
+// 754 是**保守上界**:它把"mutual 已选中后追加进 exclude 的 19 个"和"want = 20"各按最大值算了一次,而这两者走不到
+// 一起 —— logic/recommend.go 的 RecommendFriends 里 mutual 每选中一人就追加一个 exclude,random 的 want 是
+// limit 减去已选中数,所以"mutual 已追加数 + want"恒等于 limit ≤ RecommendMaxLimit。可达组合的真实最大需求是
+// 1 + 200 + 200 + 50 + 200 + 64 + 20 = 735。按 754 算只会让 config 包那条对账测试比实际早 19 个名额变红,不会漏判。
+//
 // 代价随 W 线性,但系数取决于派生表生产窗口时选了哪种计划 —— 由采样统计决定,同一份数据上两种都会出现:
-//   - 跳跃扫描(EXPLAIN ANALYZE 显示 Covering index skip scan for deduplication):约 W+1 次定位,
-//     单次调用典型 ≈ 2.1×W 次 Handler 读(约 3 ms);窗口里全是被排除者时 ≈ 7×W(W 个候选的 5 次点查全部做满);
+//   - 跳跃扫描(EXPLAIN ANALYZE 显示 Covering index skip scan for deduplication):窗口生产 W+2 次读
+//     (W+1 次定位 + 1 次 read_last),单次调用典型 ≈ 2.1×W 次 Handler 读(约 3 ms)。
+//     窗口里全是被排除者时 ≤ 7×W+3 = 窗口生产 W+2 + 物化表扫描 W+1 + 点查 5×W。嵌套循环反连接在候选命中第一条
+//     排除时就丢弃它、后面几层点查不再做,所以命中的那条排在第 k 层时约 (2+k)×W;连接顺序由优化器按统计排,
+//     2026-09-28 实测:4,099(k=2)/ 5,123(k=3)/ 6,147(k=4)/ 7,171(k=5,即 7×W+3)。
 //   - 范围扫描 + 流式分组(Covering index range scan + Group (no aggregates)):要读完窗口里 W 个人的全部出边,
-//     每人 2 条边时约 3.1×W;最坏是窗口里全是满好友的人,≈ W×MaxFriends ≈ 20.5 万次索引读
+//     每人 1 条边时窗口生产 W+1(1 次定位 + W 次 next),全被排除时约 (2+k)×W+2(TestRecommendAnchor_StopsAtWindowWhenSaturated
+//     夹具:b_in 在第 5 层,实测 7,170 = 7×W+2);
+//     每人 2 条边时典型约 3.1×W;最坏是窗口里全是满好友的人,≈ W×MaxFriends ≈ 20.5 万次索引读
 //     (AcceptFriend 对双方都查 MaxFriends,单人出边数由它封顶;超出上限的历史行按实际行数算)。
 //
 // 2026-09-28 实测(MySQL 26.7.0;50 万人每人 2 条边,另有 pivot 起 2000 人每人 202 条边):同一条查询,
@@ -210,7 +232,11 @@ func (r *FriendRepo) RecommendRandom(ctx context.Context, playerID uint64, exclu
 //     先把它物化,候选生产在第 W 个分组处停下(跳跃扫描约 W+1 次定位;或范围扫描 + 流式分组,最多
 //     W×MaxFriends 条索引项 —— 两种计划随采样统计翻转,实测数字见 RecommendAnchorWindow 的"代价")。
 //     去掉这个 LIMIT 就退回旧缺陷:2026-09-28 实测退回扫 49,900 个分组、99,903 次读。
-//     派生表上的 FORCE INDEX (PRIMARY) 排除"拿 friend_player_id 二级索引全扫再去重"这条路。
+//     派生表上的 FORCE INDEX (PRIMARY) 排除"拿 friend_player_id 二级索引全扫再去重"这条路,但**不**排除
+//     对 PRIMARY 做 type=index 的全索引扫描:LIMIT 只封住 pivot 之后的分组数,"不从索引开头扫"靠的是优化器
+//     对 `player_id >= ?` 选 range 访问 —— 统计声称表只有 ≤1 行时这一点不成立(2026-09-28 实测,见文件头第 2 条的 ⚠)。
+//     计划守卫用例的 type=range 断言与读数上界用例都先 ANALYZE 再测,只守"统计新鲜时 SQL / 提示的改动让窗口失去
+//     range 访问";统计退化本身用例进不去,生产上只靠 InnoDB auto_recalc,是登记在案的剩余风险。
 //  2. **DISTINCT 负责去重**(取代旧写法的 GROUP BY):friend 表一条边一行,一个有 N 个好友的玩家出现 N 次,
 //     不去重会让同一候选重复 N 遍、还把窗口与 limit 名额吃光。
 //  3. **外层列一律写派生表别名 `c.player_id`**:子查询里 friend / friend_block 也有 player_id 列,
@@ -232,10 +258,14 @@ func (r *FriendRepo) RecommendRandom(ctx context.Context, playerID uint64, exclu
 //     TiDB 不认 SEMIJOIN 提示(警告 8061 后忽略;v8.5.2 上实测计划仍有界),迁移时要按它自己的计划重新核对。
 //
 // 上界(与表规模无关):Handler 读 ≤ 窗口生产 + (W+1)(物化表扫描)+ 5×W(点查),外加 ≤ W 行的内存排序。
+// 窗口生产随计划而变(见 RecommendAnchorWindow 的"代价"):跳跃扫描下 ≤ W+2,整条上界 7×W+3 = 7,171;
+// 范围扫描下按窗口里 W 个人的出边数计(最坏约 W×MaxFriends),7×W+3 **不是**上界 —— 例如下面这个库
+// pivot=1049629、me=1049999 时(窗口里只有 371 人、每人 20 条边),窗口生产就读了 7,420 条出边,合计 7,898 次。
 // 2026-09-28 实测(MySQL 26.7.0,服务端预处理语句):5 万玩家 / 100 万边的库上 pivot=1000100 / 1025000 / 1030000
-// 都是 2,151 次(旧写法依次 149,725 / 75,055 / 60,055);对抗库(5 万玩家,窗口里塞满 734 个有上限的排除
-// + 100 个拉黑我的)4,301 次,旧写法超过 120 s 被 MAX_EXECUTION_TIME 中断;窗口被 2 万个"拉黑我的"占满时 6,147 次、返回空
-// (旧写法约 22.8 s 后返回窗口外的 10 个)。
+// 都是 2,151 次(跳跃扫描;旧写法依次 149,725 / 75,055 / 60,055);对抗库(5 万玩家,窗口里塞满 734 个有上限的排除
+// + 100 个拉黑我的)4,301 次,旧写法超过 120 s 被 MAX_EXECUTION_TIME 中断;窗口被 2 万个"拉黑我的"占满时返回空
+// (旧写法约 22.8 s 后返回窗口外的 10 个)。后者的读数随优化器把 b_in 排在嵌套循环第几层(k)而变,同形库几次实测
+// 都走跳跃扫描:4,099(k=2)/ 5,123(k=3)/ 6,147(k=4),即 (2+k)×W+3,都在 7×W+3 之内。
 //
 // 窗口里合格者不足 limit 时返回偏少(可能为空),见 RecommendRandom 的"代价"。
 func (r *FriendRepo) recommendAnchor(ctx context.Context, playerID uint64, exclude []uint64, pivot uint64, limit uint32) ([]RecommendCandidate, error) {

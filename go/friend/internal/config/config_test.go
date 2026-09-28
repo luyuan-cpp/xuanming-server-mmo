@@ -118,6 +118,11 @@ func TestEtcYamlContractValues(t *testing.T) {
 // 只用测试守 etc/friend.yaml,不进 Validate 拒启:超预算的后果只是排除者扎堆于 pivot 之后时推荐偏少,不会推荐出
 // 错人;推荐是可降级展示功能,不值得为它把"运维调大好友上限"变成启动失败。这条红了:去 internal/data/recommend_repo.go
 // 调大 RecommendAnchorWindow,并同步复核其注释里的读数上界与 data 包 TestRecommendAnchor_WindowCoversBoundedExclusionBudget 的字面量。
+//
+// 下面的 need 是**保守上界**:它把"mutual 已选中、追加进 exclude 的 RecommendMaxLimit-1 个"与"want = RecommendMaxLimit"
+// 各按最大值算了一次,而 logic/recommend.go 的 RecommendFriends 里两者之和恒等于 limit ≤ RecommendMaxLimit。
+// 可达组合的真实需求是 1+MaxFriends+MaxBlocks+MaxPendingRequests+MaxIncomingRequests+RecommendMaxExclude+RecommendMaxLimit
+// (默认 735,比 need 少 RecommendMaxLimit-1 = 19)。所以这条会比实际需要早 19 个名额变红;偏保守不会漏判,算式有意不收紧。
 func TestRecommendAnchorWindowCoversExclusionBudget(t *testing.T) {
 	var c Config
 	if err := conf.Load(etcYaml, &c); err != nil {
