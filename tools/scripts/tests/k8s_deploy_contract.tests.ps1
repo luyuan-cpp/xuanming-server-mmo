@@ -156,30 +156,84 @@ Test-Case "scene-manager ConfigMap 的 Timeout / KafkaWriteTimeoutSeconds / Home
     }
 }
 
-Test-Case "scene-manager 的 zrpc Timeout 必须盖住归属查询 + Kafka 同步写 + 1000ms 余量(否则 EnterScene 的失败应答回不到 C++ 源 scene)" {
-    # 本地 yaml 与 K8s 产物各算一遍:以后谁调大 KafkaWriteTimeoutSeconds 或 HomeZoneLookupTimeoutMs
-    # 而忘了同步调 Timeout,这里点名失败(cross-zone-scene-travel.md §12.2)。
-    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "go-svc-scene-manager-config")
+# EnterScene 第一条腿在"归属查询 + Kafka 同步写"之外的 Redis 往返余量(毫秒):读 location、预占频道、铸造 / CAS Lua、
+# 路由失败时的回滚 Lua。口径 = cross-zone-scene-travel.md §12.2,与 scene_manager_service.yaml 的 Timeout 注释
+# (8000 = 1500 + 5000 + 1500)是同一个数;全仓只在这里做判定。
+$SceneManagerEnterSceneMarginMs = 1500
+
+# scene-manager 超时预算判定。$Scalars = ConvertFrom-YamlToFlatMap 的 Scalars;$KeyPrefix 对 ConfigMap 是
+# 'data.scene_manager_service.yaml.',对服务 yaml 是 ''。返回违例文本数组,空 = 通过。
+function Get-SceneManagerTimeoutBudgetViolations {
+    param(
+        [Parameter(Mandatory = $true)][System.Collections.IDictionary]$Scalars,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$KeyPrefix
+    )
+    $violations = New-Object System.Collections.Generic.List[string]
+
+    # go-zero(zrpc/server.go)只在 Timeout > 0 时装超时拦截器并带上 MethodTimeouts;k8s_deploy.ps1 只镜像标量 Timeout、
+    # 不搬 MethodTimeouts。用它只放宽 EnterScene 时本地生效、K8s 静默退回全局值 —— 真要用,先在生成器里整块镜像
+    # (Get-AuthoritativeYamlBlock)再改这里。
+    $methodKeys = @($Scalars.Keys | Where-Object { $_ -like "${KeyPrefix}MethodTimeouts*" })
+    if ($methodKeys.Count -gt 0) {
+        $violations.Add("出现 MethodTimeouts($($methodKeys -join ', ')):k8s_deploy.ps1 不镜像它,只许用全局 Timeout")
+    }
+
+    # 三项都要显式正整数:Timeout <= 0 = 不装超时拦截器,EnterScene 应答时刻无上界;另两项 <= 0 时运行期回落默认值
+    # (svc/servicecontext.go、logic/home_zone.go),这里不另抄一份默认值去猜。
+    $values = @{}
+    foreach ($key in @('Timeout', 'KafkaWriteTimeoutSeconds', 'HomeZoneLookupTimeoutMs')) {
+        $raw = $Scalars["$KeyPrefix$key"]
+        $parsed = [long]0
+        if ($null -eq $raw -or -not [long]::TryParse([string]$raw, [ref]$parsed) -or $parsed -le 0) {
+            $violations.Add("$key='$raw' 必须是正整数")
+            continue
+        }
+        $values[$key] = $parsed
+    }
+    if ($values.Count -eq 3) {
+        $need = $values['HomeZoneLookupTimeoutMs'] + $values['KafkaWriteTimeoutSeconds'] * 1000 + $SceneManagerEnterSceneMarginMs
+        if ($values['Timeout'] -lt $need) {
+            $violations.Add(("Timeout={0} < HomeZoneLookupTimeoutMs({1}) + KafkaWriteTimeoutSeconds({2})*1000 + {3} = {4}" -f $values['Timeout'], $values['HomeZoneLookupTimeoutMs'], $values['KafkaWriteTimeoutSeconds'], $SceneManagerEnterSceneMarginMs, $need))
+        }
+    }
+    return $violations.ToArray()
+}
+
+Test-Case "scene-manager 的 zrpc Timeout 必须为正、盖住归属查询 + Kafka 同步写 + 1500ms 余量且不用 MethodTimeouts(否则 EnterScene 的失败应答回不到 C++ 源 scene)" {
+    # 服务 yaml 与 K8s 产物各算一遍:以后谁调大 KafkaWriteTimeoutSeconds / HomeZoneLookupTimeoutMs 而忘了同步调
+    # Timeout,或改用 MethodTimeouts,这里点名失败(cross-zone-scene-travel.md §12.2)。
     $yamlPath = 'go/scene_manager/etc/scene_manager_service.yaml'
     $views = @(
-        @{
-            Name     = 'K8s ConfigMap'
-            Timeout  = Get-FlatValue -Flat $flat -KeyPath 'data.scene_manager_service.yaml.Timeout'
-            Kafka    = Get-FlatValue -Flat $flat -KeyPath 'data.scene_manager_service.yaml.KafkaWriteTimeoutSeconds'
-            HomeZone = Get-FlatValue -Flat $flat -KeyPath 'data.scene_manager_service.yaml.HomeZoneLookupTimeoutMs'
-        }
-        @{
-            Name     = $yamlPath
-            Timeout  = Get-EtcValue -RelativePath $yamlPath -KeyPath 'Timeout'
-            Kafka    = Get-EtcValue -RelativePath $yamlPath -KeyPath 'KafkaWriteTimeoutSeconds'
-            HomeZone = Get-EtcValue -RelativePath $yamlPath -KeyPath 'HomeZoneLookupTimeoutMs'
-        }
+        @{ Name = 'K8s ConfigMap go-svc-scene-manager-config'; Prefix = 'data.scene_manager_service.yaml.'
+           Scalars = (ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "go-svc-scene-manager-config")).Scalars }
+        @{ Name = $yamlPath; Prefix = ''
+           Scalars = (ConvertFrom-YamlToFlatMap -Text (Get-Content -LiteralPath (Join-Path (Get-RepoRoot) $yamlPath) -Raw)).Scalars }
     )
     foreach ($v in $views) {
-        $timeout = [int]$v.Timeout
-        $need = [int]$v.HomeZone + [int]$v.Kafka * 1000 + 1000
-        Assert-True -Condition ($timeout -eq 0 -or $timeout -ge $need) -Because ("{0}:Timeout={1} 必须为 0 或 >= HomeZoneLookupTimeoutMs({2}) + KafkaWriteTimeoutSeconds({3})*1000 + 1000 = {4}" -f $v.Name, $timeout, $v.HomeZone, $v.Kafka, $need)
+        $violations = @(Get-SceneManagerTimeoutBudgetViolations -Scalars $v.Scalars -KeyPrefix $v.Prefix)
+        Assert-True -Condition ($violations.Count -eq 0) -Because ("{0}:{1}" -f $v.Name, ($violations -join ';'))
     }
+}
+
+Test-Case "自检:scene-manager 超时预算判定对 5000 / 2000 / 7999 / 0 / 缺键 / MethodTimeouts 报违例、对 8000 通过(守卫不得静默放行)" {
+    $pass = (ConvertFrom-YamlToFlatMap -Text "Timeout: 8000`nKafkaWriteTimeoutSeconds: 5`nHomeZoneLookupTimeoutMs: 1500").Scalars
+    $got = @(Get-SceneManagerTimeoutBudgetViolations -Scalars $pass -KeyPrefix '')
+    Assert-True -Condition ($got.Count -eq 0) -Because ("8000 = 1500 + 5000 + 1500 应通过,实际报:{0}" -f ($got -join ';'))
+    $cases = @(
+        @{ Why = '改前本地值 5000'; Text = "Timeout: 5000`nKafkaWriteTimeoutSeconds: 5`nHomeZoneLookupTimeoutMs: 1500" }
+        @{ Why = '改前 K8s 落的 go-zero 默认 2000'; Text = "Timeout: 2000`nKafkaWriteTimeoutSeconds: 5`nHomeZoneLookupTimeoutMs: 1500" }
+        @{ Why = '差 1ms(余量是 1500 不是 1000)'; Text = "Timeout: 7999`nKafkaWriteTimeoutSeconds: 5`nHomeZoneLookupTimeoutMs: 1500" }
+        @{ Why = 'Timeout 0 = 不装超时拦截器'; Text = "Timeout: 0`nKafkaWriteTimeoutSeconds: 5`nHomeZoneLookupTimeoutMs: 1500" }
+        @{ Why = '缺 Timeout 键(go-zero 会落默认 2000)'; Text = "KafkaWriteTimeoutSeconds: 5`nHomeZoneLookupTimeoutMs: 1500" }
+        @{ Why = 'KafkaWriteTimeoutSeconds 0(运行期回落 5s,判定不猜)'; Text = "Timeout: 8000`nKafkaWriteTimeoutSeconds: 0`nHomeZoneLookupTimeoutMs: 1500" }
+        @{ Why = 'MethodTimeouts 只放宽 EnterScene(K8s 不镜像)'; Text = "Timeout: 8000`nKafkaWriteTimeoutSeconds: 5`nHomeZoneLookupTimeoutMs: 1500`nMethodTimeouts:`n  - FullMethod: /scene_manager.SceneManager/EnterScene`n    Timeout: 8s" }
+    )
+    foreach ($c in $cases) {
+        $got = @(Get-SceneManagerTimeoutBudgetViolations -Scalars (ConvertFrom-YamlToFlatMap -Text $c.Text).Scalars -KeyPrefix '')
+        Assert-True -Condition ($got.Count -gt 0) -Because "$($c.Why) 必须报违例"
+    }
+    $prefixed = [ordered]@{ 'data.scene_manager_service.yaml.Timeout' = '7999'; 'data.scene_manager_service.yaml.KafkaWriteTimeoutSeconds' = '5'; 'data.scene_manager_service.yaml.HomeZoneLookupTimeoutMs' = '1500' }
+    Assert-True -Condition (@(Get-SceneManagerTimeoutBudgetViolations -Scalars $prefixed -KeyPrefix 'data.scene_manager_service.yaml.').Count -gt 0) -Because "ConfigMap 前缀下的 7999 也必须报违例"
 }
 
 Test-Case "node ConfigMap 必须带 GateTokenSecret(否则 gate 在 prod 运行模式下拒绝启动)" {

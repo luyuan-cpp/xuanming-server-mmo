@@ -74,6 +74,8 @@ protected:
             server_->start();   // 在 loop 线程上 runInLoop 即时 listen,下面的 connect 不会撞拒连
 
             redis_ = std::make_unique<hiredis::Hiredis>(loop_, muduo::net::InetAddress("127.0.0.1", port));
+            // 各回调只捕获夹具 this 与值:redis_ 在 TearDown / DestroyRedis 里先于夹具销毁,
+            // 属于 AGENTS.md §11.7 允许的同寿命例外。
             redis_->setConnectCallback([this](hiredis::Hiredis*, int status) {
                 if (!connectSignalled_)
                 {
