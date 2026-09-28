@@ -293,8 +293,10 @@ func main() {
 
 	// ── 帮会活动(B6a:元宵灯会 / 中秋团圆,docs/design/guild-phase2/06-activities.md §6.6)──
 	// **无条件装配,不设配置开关**:活动开不开由配表决定(GuildActivity.enabled 与档期),关着时写 RPC 回
-	// kGuildActivityNotOpen、视图显示 DISABLED,客户端看到的是一句明确的提示。反过来不装配,五个 RPC 会回
-	// gRPC Unavailable,客户端把它当传输错误进重连隔离 —— 所以"关活动"只许改表(紧急止血另有 killswitch)。
+	// kGuildActivityNotOpen、视图显示 DISABLED,客户端看到的是一句明确的提示。依赖经 WithActivities 写进
+	// GuildLogic.activities 字段(90 Y-02,不是包级状态)。反过来不装配,五个 RPC 虽也回 kGuildActivityNotOpen
+	// (logic.activitiesNotWiredTip),但那是"装配被改坏"的兜底:每次打 ERROR、活动页整页拿不到、故障指标看不见 ——
+	// 它不是开关,"关活动"只许改表(紧急止血另有 killswitch)。
 	// 物品奖励与经济共用同一条资产通道:同一个 Loop(AssetOp.Enabled=false 时为 nil → 带物品的活动在发号前
 	// 回 kGuildAssetPending,不带物品的灯会照常)、同一个 op_id 发号器、同一个插行租约。
 	activityRepo, err := data.NewActivityRepo(repo)

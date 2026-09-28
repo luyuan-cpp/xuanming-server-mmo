@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -324,26 +325,149 @@ func TestEconomyRPCsRequireClientSession(t *testing.T) {
 	}
 }
 
-// TestEconomyRPCsRefuseWhenSnapshotLacksCaller:映射说他在帮、快照里却没有他 → 未入帮,
+// TestEconomyRPCsRefuseWhenSnapshotLacksCaller:映射说他在帮、缓存快照里却没有他、MySQL 说他不在任何帮 → 未入帮,
 // 且发生在碰经济仓储之前(Repo 为 nil,走到就崩)。不查归属 zone(R4):homeZones 为 nil 也不影响。
 // 这一支还必须以 MySQL 复核映射(Y-01):MySQL 替身说他不在任何帮,映射键就得被失效 ——
-// 不复核的话,非 0 的陈旧映射在整个 TTL 内都纠正不了。每个子用例重新写映射,保证五个入口都真的走到这一支。
+// 不复核的话,非 0 的陈旧映射在整个 TTL 内都纠正不了。
+//
+// 每个子用例用自己的缓存与 MySQL 替身,重新写映射**和快照**:坏路径会把可疑快照失效掉(ResolvePlayerGuild),
+// 共用一份缓存、只重写映射的话,从第二个子用例起缓存里已经没有 9 号帮的快照、MySQL 又说帮会行不存在,
+// 走的就成了"帮已不存在"那一支(由 TestEconomyRPCsRefuseWhenMappedGuildGone 单独覆盖),用例照样变绿却不再测它名字说的事。
+// 帮会行读数为 0 把分支钉死:快照只可能取自缓存,即"快照缺本人"。
 func TestEconomyRPCsRefuseWhenSnapshotLacksCaller(t *testing.T) {
-	repo, mr := newNoMembershipRepo(t)
-	seedGuild(t, mr, data.GuildData{GuildID: 9, ZoneID: 2, Level: 1, Members: []data.MemberData{
-		{PlayerID: 7, Role: constants.RoleLeader},
-	}}, 0)
-	l := newEconomyLogic(repo, EconomyDeps{})
-
 	for _, tc := range economyRPCs() {
 		t.Run(tc.name, func(t *testing.T) {
-			seedMembership(t, mr, 42, 9)
+			fake := &resolveScriptedMySQL{player: 42, memberships: []uint64{0}}
+			repo, mr := newResolveScriptedRepo(t, fake)
+			seedEconomyStaleSnapshot(t, mr, 9)
+			l := newEconomyLogic(repo, EconomyDeps{})
 
 			id, err := tc.run(l, clientCtx(42))
 
 			require.NoError(t, err)
 			assert.Equal(t, constants.ErrNotInGuild, id)
+			assert.Zero(t, fake.guildRowReadCount(), "快照必须取自缓存:走的是'快照缺本人',不是'帮已不存在'")
+			assert.Equal(t, 1, fake.membershipReadCount(), "以 MySQL 复核映射(Y-01),且只复核一次")
 			assert.False(t, mr.Exists("player_guild:v2:42"), "陈旧映射必须经 MySQL 复核后失效")
+			assert.False(t, mr.Exists("guild:v2:9"), "可疑快照必须被失效,下一个读者才会回源")
+		})
+	}
+}
+
+// TestEconomyRPCsRefuseWhenMappedGuildGone:映射指着一个缓存里没有、MySQL 里也不存在的帮(帮已解散),
+// 他也不在任何别的帮 → 未入帮,映射经 MySQL 复核后失效。帮会行读数为正说明快照确实回源过、确实查无此帮,
+// 与上一个用例的"快照缺本人"是两条分支。
+func TestEconomyRPCsRefuseWhenMappedGuildGone(t *testing.T) {
+	for _, tc := range economyRPCs() {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &resolveScriptedMySQL{player: 42, memberships: []uint64{0}}
+			repo, mr := newResolveScriptedRepo(t, fake)
+			seedMembership(t, mr, 42, 9)
+			l := newEconomyLogic(repo, EconomyDeps{})
+
+			id, err := tc.run(l, clientCtx(42))
+
+			require.NoError(t, err)
+			assert.Equal(t, constants.ErrNotInGuild, id)
+			assert.Positive(t, fake.guildRowReadCount(), "缓存里没有快照:必须回源读帮会行,并读到'不存在'")
+			assert.Equal(t, 1, fake.membershipReadCount(), "以 MySQL 复核映射(Y-01),且只复核一次")
+			assert.False(t, mr.Exists("player_guild:v2:42"), "指向已解散帮会的映射必须经 MySQL 复核后失效")
+		})
+	}
+}
+
+// TestEconomyCallerHealsFromAuthoritativeSnapshot(回归,B5b 自愈路径):坏路径上他其实**在**帮里,
+// economyCaller 必须回 MySQL 直读的权威快照,而不是未入帮。
+//
+// 第一例是这条自愈路径存在的理由:映射是对的、帮会快照是旧的(审批通过后快照失效失败)。只纠映射的旧实现
+// 在这里纠了等于没纠,刚入帮的玩家会在整个快照 TTL 里捐献 / 兑换 / 打开商店全部回"未入帮"。
+// 后两例是映射本身陈旧的两种形态,确认同一条路径把它们也纠正过来。
+// 缓存旧快照是 1 级、MySQL 是 3 级:回带快照的等级为 3,证明它取自 MySQL 而不是那份旧缓存。
+func TestEconomyCallerHealsFromAuthoritativeSnapshot(t *testing.T) {
+	cases := []struct {
+		name string
+		// cachedGuild 是缓存映射指向的帮;staleSnapshot 为 true 时缓存里有它一份不含本人的快照。
+		cachedGuild   uint64
+		staleSnapshot bool
+	}{
+		{"映射对、快照旧:刚入帮时快照失效失败", 9, true},
+		{"映射陈旧、旧帮快照不含本人:离帮后入了别的帮", 8, true},
+		{"映射指向已不存在的帮:旧帮解散后入了别的帮", 8, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &resolveScriptedMySQL{player: 42, memberships: []uint64{9}, guilds: map[uint64]data.GuildData{
+				9: economyMySQLGuildNine(true),
+			}}
+			repo, mr := newResolveScriptedRepo(t, fake)
+			if tc.staleSnapshot {
+				seedEconomyStaleSnapshot(t, mr, tc.cachedGuild)
+			} else {
+				seedMembership(t, mr, 42, tc.cachedGuild)
+			}
+			l := newEconomyLogic(repo, EconomyDeps{})
+
+			playerID, g, tip, err := l.economyCaller(clientCtx(42))
+
+			require.NoError(t, err)
+			require.Nil(t, tip, "他在 9 号帮里:不能回未入帮")
+			require.NotNil(t, g)
+			assert.Equal(t, uint64(42), playerID)
+			assert.Equal(t, uint64(9), g.GuildID)
+			_, ok := memberOf(g, 42)
+			assert.True(t, ok, "回带的快照必须含本人")
+			assert.Equal(t, uint32(3), g.Level, "回带的必须是 MySQL 的权威快照,不是缓存里那份旧的")
+			assert.False(t, mr.Exists(fmt.Sprintf("guild:v2:%d", tc.cachedGuild)), "可疑快照必须被失效,下一个读者才会回源")
+		})
+	}
+}
+
+// TestEconomyRPCsKickedWhileResolvingIsNotAFault:ResolvePlayerGuild 用 uk_guild_member 复核映射之后、
+// 绕过缓存直读快照之前,玩家恰好被踢(或退帮)。直读到的快照里没有他,ResolvePlayerGuild 回的是与
+// "两份 MySQL 数据互相矛盾"同一个不带哨兵的错误。这是业务态变化,必须回未入帮 tip(文件头纪律 4);
+// 抛成 gRPC 错误会把刚被踢的人推进重连隔离。
+//
+// 替身让映射复核第一次答"在 9 号帮"(被 ResolvePlayerGuild 用掉)、之后答"不在任何帮",9 号帮的成员行里已经没有他 ——
+// 正是那个窗口,不靠真库与真并发就能稳定复现。
+func TestEconomyRPCsKickedWhileResolvingIsNotAFault(t *testing.T) {
+	for _, tc := range economyRPCs() {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &resolveScriptedMySQL{player: 42, memberships: []uint64{9, 0}, guilds: map[uint64]data.GuildData{
+				9: economyMySQLGuildNine(false),
+			}}
+			repo, mr := newResolveScriptedRepo(t, fake)
+			seedEconomyStaleSnapshot(t, mr, 9)
+			l := newEconomyLogic(repo, EconomyDeps{})
+
+			id, err := tc.run(l, clientCtx(42))
+
+			require.NoError(t, err, "复核窗口里被踢是业务态变化,不是故障")
+			assert.Equal(t, constants.ErrNotInGuild, id)
+			assert.Equal(t, 2, fake.membershipReadCount(),
+				"前提:ResolvePlayerGuild 复核时他还在帮(第一次),报错之后再复核一次才看到他已离帮(第二次)")
+			assert.False(t, mr.Exists("player_guild:v2:42"), "离帮后的映射必须失效")
+		})
+	}
+}
+
+// TestEconomyRPCsFailClosedOnMembershipContradiction:uk_guild_member 始终说他在 9 号帮,9 号帮的成员行里却始终没有他 ——
+// 两份 MySQL 数据互相矛盾,是真故障。必须回 gRPC 错误(fail-closed),不能被上一个用例的"复核之后被踢"答复吞成未入帮:
+// 那会让玩家在损坏的数据上去建第二个帮。复核仍然做了一次(第二次读),只是它仍说他在帮。
+func TestEconomyRPCsFailClosedOnMembershipContradiction(t *testing.T) {
+	for _, tc := range economyRPCs() {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &resolveScriptedMySQL{player: 42, memberships: []uint64{9}, guilds: map[uint64]data.GuildData{
+				9: economyMySQLGuildNine(false),
+			}}
+			repo, mr := newResolveScriptedRepo(t, fake)
+			seedEconomyStaleSnapshot(t, mr, 9)
+			l := newEconomyLogic(repo, EconomyDeps{})
+
+			id, err := tc.run(l, clientCtx(42))
+
+			require.Error(t, err, "两份 MySQL 数据互相矛盾是故障,不能降级成 tip")
+			assert.Zero(t, id, "故障不带 tip")
+			assert.Equal(t, 2, fake.membershipReadCount(), "报错之后复核过一次,且复核仍说他在帮")
 		})
 	}
 }
@@ -403,6 +527,219 @@ func newNoMembershipRepo(t *testing.T) (*data.GuildRepo, *miniredis.Miniredis) {
 	mr := miniredis.RunT(t)
 	rdb := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
 	db := sql.OpenDB(noMembershipMySQL{})
+	t.Cleanup(func() {
+		db.Close()
+		rdb.Close()
+	})
+	return data.NewGuildRepo(rdb, db, time.Minute), mr
+}
+
+// seedEconomyStaleSnapshot 布置坏路径的缓存:映射说 42 在 guildID,缓存里 guildID 的快照(1 级)却只有 7 号帮主。
+func seedEconomyStaleSnapshot(t *testing.T, mr *miniredis.Miniredis, guildID uint64) {
+	t.Helper()
+	seedGuild(t, mr, data.GuildData{GuildID: guildID, ZoneID: 2, Level: 1, Members: []data.MemberData{
+		{PlayerID: 7, Role: constants.RoleLeader},
+	}}, 0)
+	seedMembership(t, mr, 42, guildID)
+}
+
+// economyMySQLGuildNine 是 MySQL 替身里的 9 号帮:3 级(缓存旧快照是 1 级,用例靠这个差别认出回带的是哪一份),
+// 帮主 7;withCaller 决定成员行里有没有 42。成员按 player_id 升序,与 loadGuild 的 ORDER BY 一致。
+func economyMySQLGuildNine(withCaller bool) data.GuildData {
+	g := data.GuildData{GuildID: 9, Name: "青云门", LeaderID: 7, Level: 3, MaxMembers: 50, ZoneID: 2, Members: []data.MemberData{
+		{PlayerID: 7, Role: constants.RoleLeader},
+	}}
+	if withCaller {
+		g.Members = append(g.Members, data.MemberData{PlayerID: 42, Role: constants.RoleMember})
+	}
+	return g
+}
+
+// resolveScriptedMySQL 是按 SQL 作答的只读 MySQL 替身,为 economyCaller 的坏路径(ResolvePlayerGuild 及其后的复核)
+// 布置"MySQL 此刻的真相"。与 noMembershipMySQL 的区别:那个只会回"查无此行";这个能回"他在 9 号帮""9 号帮的成员有谁",
+// 还能让同一条映射复核前后答得不一样 —— 这是复现"复核之后、直读之前被踢"唯一不靠真库与真并发的办法。
+//
+// 只认 data 包 guild_repo.go 的三类读(按 SQL 片段匹配:loadPlayerGuildFromMySQL 与 loadGuild 的两条),
+// 其余查询一律报错并带出 SQL:路径被改得去碰别的表时当场失败,而不是悄悄回空、让用例变味。
+// data 包改了这几条 SQL 的写法时,这里的片段要跟着改。任何写(Begin / Exec)都回错误:经济前置只读。
+// 加锁:database/sql 的连接池允许并发取连接,计数与脚本游标不能靠"通常不会并发"。
+type resolveScriptedMySQL struct {
+	// player 是唯一允许被复核映射的玩家;问到别人说明身份取错了,当场报错。
+	player uint64
+	// memberships 是映射复核(SELECT guild_id FROM guild_member WHERE player_id = ?)的逐次答案,0 = 不在任何帮;
+	// 用完后停在最后一个值。只布一个值 = 答案始终不变。至少布一个。
+	memberships []uint64
+	// guilds 是帮会行与成员行的权威数据;不在表里的帮按"帮会行不存在"作答。
+	guilds map[uint64]data.GuildData
+
+	mu              sync.Mutex
+	membershipReads int
+	guildRowReads   int
+}
+
+// 按 SQL 片段分派的三类读。片段取自 guild_repo.go,注意 "FROM guild WHERE" 与 "FROM guild_member WHERE" 互不包含。
+const (
+	resolveScriptedSQLMembership = "FROM guild_member WHERE player_id = ?"
+	resolveScriptedSQLGuildRow   = "FROM guild WHERE guild_id = ?"
+	resolveScriptedSQLMembers    = "FROM guild_member WHERE guild_id = ?"
+)
+
+func (s *resolveScriptedMySQL) Connect(context.Context) (driver.Conn, error) {
+	return &resolveScriptedConn{db: s}, nil
+}
+
+func (s *resolveScriptedMySQL) Driver() driver.Driver {
+	return s
+}
+
+func (s *resolveScriptedMySQL) Open(string) (driver.Conn, error) {
+	return &resolveScriptedConn{db: s}, nil
+}
+
+// membershipReadCount:映射复核被问了几次。用例靠它证明真的走到了预期的那一步(复核了、复核了几次)。
+func (s *resolveScriptedMySQL) membershipReadCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.membershipReads
+}
+
+// guildRowReadCount:帮会行被回源读了几次。为 0 说明快照全部取自缓存。
+func (s *resolveScriptedMySQL) guildRowReadCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.guildRowReads
+}
+
+// answer 按 SQL 片段作答。参数经 database/sql 的默认转换后是 int64(uint64 高位为 0 时)。
+func (s *resolveScriptedMySQL) answer(query string, args []driver.Value) (driver.Rows, error) {
+	id, err := resolveScriptedIDArg(args)
+	if err != nil {
+		return nil, fmt.Errorf("fake mysql: %q: %w", query, err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch {
+	case strings.Contains(query, resolveScriptedSQLMembership):
+		if id != s.player {
+			return nil, fmt.Errorf("fake mysql: membership of unexpected player %d (scripted for %d)", id, s.player)
+		}
+		if len(s.memberships) == 0 {
+			return nil, errors.New("fake mysql: memberships not scripted")
+		}
+		s.membershipReads++
+		guildID := s.memberships[min(s.membershipReads, len(s.memberships))-1]
+		rows := &resolveScriptedRows{cols: []string{"guild_id"}}
+		if guildID != 0 {
+			rows.data = [][]driver.Value{{int64(guildID)}}
+		}
+		return rows, nil
+	case strings.Contains(query, resolveScriptedSQLGuildRow):
+		s.guildRowReads++
+		rows := &resolveScriptedRows{cols: []string{
+			"guild_id", "name", "leader_id", "level", "announcement", "create_time_ms", "max_members", "zone_id", "score", "funds",
+		}}
+		if g, ok := s.guilds[id]; ok {
+			rows.data = [][]driver.Value{{
+				int64(id), g.Name, int64(g.LeaderID), int64(g.Level), g.Announcement,
+				int64(g.CreateTimeMs), int64(g.MaxMembers), int64(g.ZoneID), g.Score, int64(g.Funds),
+			}}
+		}
+		return rows, nil
+	case strings.Contains(query, resolveScriptedSQLMembers):
+		rows := &resolveScriptedRows{cols: []string{
+			"player_id", "role", "join_time_ms", "last_active_ms", "contribution_total", "contribution_balance",
+		}}
+		for _, m := range s.guilds[id].Members {
+			rows.data = append(rows.data, []driver.Value{
+				int64(m.PlayerID), int64(m.Role), int64(m.JoinTimeMs), int64(m.LastActiveMs),
+				int64(m.ContributionTotal), int64(m.ContributionBalance),
+			})
+		}
+		return rows, nil
+	}
+	return nil, fmt.Errorf("fake mysql: unexpected query %q", query)
+}
+
+// resolveScriptedIDArg 取三类读共有的唯一参数(player_id 或 guild_id)。
+func resolveScriptedIDArg(args []driver.Value) (uint64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("want exactly 1 arg, got %d", len(args))
+	}
+	switch v := args[0].(type) {
+	case int64:
+		return uint64(v), nil
+	case uint64:
+		return v, nil
+	}
+	return 0, fmt.Errorf("unexpected arg type %T", args[0])
+}
+
+type resolveScriptedConn struct {
+	db *resolveScriptedMySQL
+}
+
+func (c *resolveScriptedConn) Prepare(query string) (driver.Stmt, error) {
+	return &resolveScriptedStmt{db: c.db, query: query}, nil
+}
+
+func (c *resolveScriptedConn) Close() error {
+	return nil
+}
+
+func (c *resolveScriptedConn) Begin() (driver.Tx, error) {
+	return nil, errors.New("fake mysql: no writes expected on this path")
+}
+
+type resolveScriptedStmt struct {
+	db    *resolveScriptedMySQL
+	query string
+}
+
+func (s *resolveScriptedStmt) Close() error {
+	return nil
+}
+
+func (s *resolveScriptedStmt) NumInput() int {
+	return -1
+}
+
+func (s *resolveScriptedStmt) Exec([]driver.Value) (driver.Result, error) {
+	return nil, errors.New("fake mysql: no writes expected on this path")
+}
+
+func (s *resolveScriptedStmt) Query(args []driver.Value) (driver.Rows, error) {
+	return s.db.answer(s.query, args)
+}
+
+type resolveScriptedRows struct {
+	cols []string
+	data [][]driver.Value
+	next int
+}
+
+func (r *resolveScriptedRows) Columns() []string {
+	return r.cols
+}
+
+func (r *resolveScriptedRows) Close() error {
+	return nil
+}
+
+func (r *resolveScriptedRows) Next(dest []driver.Value) error {
+	if r.next >= len(r.data) {
+		return io.EOF
+	}
+	copy(dest, r.data[r.next])
+	r.next++
+	return nil
+}
+
+// newResolveScriptedRepo:缓存走 miniredis,MySQL 是 fake。每个用例一份,计数与脚本游标互不串。
+func newResolveScriptedRepo(t *testing.T, fake *resolveScriptedMySQL) (*data.GuildRepo, *miniredis.Miniredis) {
+	t.Helper()
+	mr := miniredis.RunT(t)
+	rdb := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
+	db := sql.OpenDB(fake)
 	t.Cleanup(func() {
 		db.Close()
 		rdb.Close()

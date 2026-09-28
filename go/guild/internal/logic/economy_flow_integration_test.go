@@ -59,6 +59,7 @@ import (
 // economyFlowDropTables:本服务全部表 + schemamigrate 台账,逆锁序。新增表时同步追加
 // (resetEconomyFlowSchema 按 len(data.Tables())+1 守数量,漏加即红)。
 var economyFlowDropTables = []string{
+	"guild_activity_progress", // B6a 活动进度:全序末尾 P,逆锁序排最前
 	"guild_daily_counter", "guild_asset_op", "guild_player_op_seq",
 	"guild_application", "guild_member", "guild_player_state", "guild", "schema_migrations",
 }

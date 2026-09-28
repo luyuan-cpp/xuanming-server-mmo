@@ -118,8 +118,10 @@ func TestUpdateAnnouncementAuthorizedRejectsStalePrivilegedCache(t *testing.T) {
 	assert.Equal(t, "published", announcement)
 }
 
-// guildTestDropTables:本服务全部表 + schemamigrate 台账。新增表时同步追加(TestDropListCoversTables 守数量)。
+// guildTestDropTables:本服务全部表 + schemamigrate 台账,按**逆锁序**排(tables.go 的 Tables() 倒过来)。
+// 新增表时同步追加(TestDropListCoversTables 守数量);漏了新表,复用 guild_test 库时上一轮的行会残留到下一轮。
 var guildTestDropTables = []string{
+	"guild_activity_progress",                                      // B6a 活动进度(全序末尾 P)
 	"guild_daily_counter", "guild_asset_op", "guild_player_op_seq", // B5a 资产三表
 	"guild_application", "guild_member", "guild_player_state", "guild", "schema_migrations",
 }

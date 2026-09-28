@@ -13,6 +13,32 @@
 
 **硬前置(不满足不开工)**:go/guild 实际解析到的 proto2mysql 必须含 `TextIndexPrefixLength = 191` 与 TiDB 表选项(§1 第 1–3 行、第 7 部分 §18 第 0 步)。
 
+> **2026-09-28 落码修正(proto2mysql 已切到 v0.2.0)**:出处是 `PROGRESS.md`「2026-09-28 服务器全仓 proto2mysql 切到 v0.2.0 + 本地库键列核对」条目。
+> 服务器全仓的 proto2mysql 已统一到 `v0.2.0`,包括 go/guild 与 go/schemamigrate。go/guild 的 replace 是
+> `github.com/luyuancpp/proto2mysql v0.2.0 => github.com/luyuan-cpp/proto2mysql v0.2.0`,与 schemamigrate 逐字一致,§7.1 的规则不变。
+>
+> v0.2.0 对主键 / 唯一键里的 string 列改了建法:建成**整列 `VARCHAR(N) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL DEFAULT ''`**,
+> 没声明 `max_length` 时 N = `DefaultKeyColumnLength` = 191;不再是 MEDIUMTEXT 加 191 前缀。落到 `guild.name_norm` 上:
+> - **旧口径**:`MEDIUMTEXT` 可空,加 `UNIQUE KEY uk_guild (name_norm(191))`;`information_schema.STATISTICS` 里 `SUB_PART=191`。
+> - **新口径**:`name_norm VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL DEFAULT ''`,加 `UNIQUE KEY uk_guild (name_norm)`(整列索引);STATISTICS 里 `SUB_PART=NULL`。
+>   索引名仍是 `uk_guild`,因为 `guild_repo.go` 按这个名字判断撞名。
+>
+> **哪些地方要按新口径验收**:本文凡是按"191 前缀 / `name_norm(191)` / SUB_PART=191"验收的地方都改,即 §5 的"选项格式来源"段、§6.1、§6.2、§16.2、§18 第 0 / 6 步、§22。各处另有就地的落码修正指回这里。
+> 本节的硬前置改为:**go/guild 与 go/schemamigrate 解析到同一个 `v0.2.0`,go.sum 的 h1 相同**。
+> v0.2.0 仍然有 `TextIndexPrefixLength = 191` 这个常量,但它只管非键的 TEXT / BLOB 列,已经不决定 uk_guild 的形状。
+>
+> 影响:
+> - **帮名判重规则不变**:唯一性仍只看 Go 侧的 `GuildNameNorm`(NFKC → TrimSpace → 小写,≤ 48 rune);48 小于 191,整列装得下全值。
+>   `utf8mb4_0900_bin` 按码点做二进制比较,区分大小写。由于写入前已经转成小写,判重只会比 `utf8mb4_unicode_ci` 更准:
+>   §6.3 / §22 提到的误判重名("é 与 e"、U+10000 以上字符之间)不再出现。
+> - **存量表必须迁移,而且要与新 guild.exe 同一批**。旧形态的表会被 v0.2.0 的 schemamigrate 判为列类型漂移(旧形态键列,退出码 4),新 guild 拒启;
+>   迁移之后,旧的 v0.1.1 guild.exe 也会拒启。迁移 SQL 与顺序见上述 PROGRESS 条目「运行期注意」第 1 条。
+>   本地 `mmorpg_guild.guild` 核对时是 0 行,也可以直接删表连同 `schema_migrations`,让 `guild -migrate` 重建。
+> - **代码注释还没同步**:`proto/guild/guild_db.proto` 文件头 D-14 §2 那一行和 `name_norm` 字段注释,以及 `go/guild/internal/data/guild_repo.go` 中 `MaxGuildNameNormRunes` 的注释,仍写着"191 前缀"。
+>   这些归代码持有者改(改 proto 注释后要重跑生成),本文只登记。
+> - **现状核对**:2026-09-28 在 go/guild 里 grep `SUB_PART` 零命中。§16.2 设计的 `TestSchemaMigrateProducesExpectedGuildShape` 目前没有落成代码,
+>   也就没有现成用例按 SUB_PART=191 断言 uk_guild;将来补这条用例时按 `SUB_PART=NULL` 写。
+
 B1 只做存储地基,不改客户端协议。手改文件 23 个(第 6 部分 §17):
 1. 新建 `proto/guild/guild_db.proto`,只含 B1/B2 立即要用的 4 张表:`guild`、`guild_member`、`guild_application`、`guild_player_state`。`guild_player_op_seq`、`guild_asset_op`、`guild_daily_counter`、`guild_activity_progress`、`guild_trial_battle` 由 B5/B6a/B6b 在各自 PR 里加 message 和 `Tables()` 条目,schemamigrate 会补建后加的表(§1 第 12 行)。
 2. go/guild 接入 schemamigrate:新增 `-migrate` 入口;启动期按 `Schema.AutoMigrate` 执行 Up 或 Plan;锁忙重试;缺索引拒启;go 指令升到 1.26.5;proto2mysql 解析方式与 schemamigrate 逐字一致。
@@ -229,6 +255,9 @@ message GuildApplicationRecord {
 
 **选项格式来源**:`OptionIndex` 用 `;` 分组、`,` 分列,复合 `OptionPrimaryKey` 的写法,均照 `proto/trade/trade_table.proto:29-35,60-65`。`OptionUniqueKey` 的选项号为 500012(`proto/db/proto_option.proto:89`)。索引序号取 `OptionIndex` 分组的切片下标,从 0 开始(见第 1 部分 §1 第 2 行)。go/guild 是首个使用 `OptionUniqueKey` 的服务,因此 §18 第 5 步要核对 `UNIQUE KEY uk_guild (name_norm(191))`。
 
+> **2026-09-28 落码修正**:proto2mysql 切到 v0.2.0 之后,核对目标改为 ``UNIQUE KEY `uk_guild` (`name_norm`)``(整列,不带 `(191)`),
+> 并且 `name_norm` 列是 `varchar(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL DEFAULT ''`。实际核对落在 §18 第 6 步。详见 §0 的落码修正。
+
 **proto-gen**:`proto_gen.yaml:410-418` 以整个 `proto/guild/` 目录为源,新文件自动编译,Go 产物是 `go/proto/guild/guild_db.pb.go`,C++ 产物是 `cpp/generated/proto/guild/guild_db.pb.cc/.h`(可能还有空的 `guild_db.grpc.pb.*`)。C++ 按 trade 先例只登记 `.pb.cc/.pb.h`(第 6 部分 §17 第 21–23 项)。客户端 `mmorpg-client/tools/gen_proto.ps1:38` 按文件逐个列出 proto,不扫目录,因此客户端无需改动。本文件不含 service,不分配 message id。
 
 ## 6. 表形状核对
@@ -244,6 +273,9 @@ message GuildApplicationRecord {
 
 四张表都满足约束,不需要书面例外。
 
+> **2026-09-28 落码修正**:上表 guild 行的"name_norm,191 前缀(值 ≤48 rune,前缀覆盖全值)"改为"**name_norm,整列 `VARCHAR(191) utf8mb4_0900_bin`,SUB_PART=NULL**(值 ≤48 rune,远小于列长)",依据是 proto2mysql v0.2.0,见 §0 的落码修正。
+> D-14 §2 已补上 v0.2.0 的键列口径("禁止 string 主键"对新建表的服务仍然有效),见 PROGRESS 同一条目。
+
 ### 6.2 与旧手写 DDL 的差异
 
 | 列 / 键 | 旧 | 新 | 处理 |
@@ -256,12 +288,24 @@ message GuildApplicationRecord {
 | guild.funds | 无 | `bigint unsigned NOT NULL DEFAULT 0` | 新增 |
 | 键名 | `uk_name` / `uk_player` / `idx_leader` / `idx_zone` | `uk_guild` / `uk_guild_member` / `idx_guild_1` / `idx_guild_0` | `guildNameUniqueKey` 改为 `"uk_guild"`;业务 SQL 不引用普通索引名 |
 
+> **2026-09-28 落码修正**:上表 `guild.name_norm` 一行的"新"列在 proto2mysql v0.2.0 下改为
+> **`VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL DEFAULT ''` + `uk_guild(name_norm)`**:不再可空,改成整列索引。
+> repo 在 CreateGuild 内总是写入计算出的值,所以 NOT NULL 对写路径没有影响。
+> 已按旧形态建出来的表要按 §0 落码修正里的迁移步骤处理,并且与新 guild.exe 同批。
+> `name` 与 `announcement` 不在任何键里,仍是 `MEDIUMTEXT`。
+
 ### 6.3 帮名唯一性:Go 侧规范化
 
 - `data.GuildNameNorm(display string) (string, bool)`:`strings.ToLower(strings.TrimSpace(norm.NFKC.String(display)))`,用 `golang.org/x/text/unicode/norm`(guild go.mod 已有 v0.32.0 indirect,tidy 后变为直接依赖)。结果为空或超过 `MaxGuildNameNormRunes = 48` 时返回 false。48 的来由:展示名上限 24 rune,NFKC 在正常文字上不膨胀;少数兼容字符会展开(如 `㍿`),给一倍余量,并保证不超过 191 前缀。
 - 与契约 §3.4 player `name_norm` 使用同一公式(NFKC + 小写)。当前不共用代码,原因:B1 不依赖 B3a 的 `go/shared/playername`,而且帮名规则(24 rune、允许符号)与角色名不同。B3a 合入后可以把公式抽成 `playername.Key`,两边共用(§21 偏差 3)。
 - 唯一性以 `name_norm` 为准。"青云门"与"青云门 "、"ABC"与"abc"、"ＡＢＣ"与"abc"都判为重名,不依赖表的排序规则。
 - 现行 `utf8mb4_unicode_ci` 会带来**额外**的误判重名(`é` 与 `e`、所有 U+10000 以上字符之间),只会误拒,不会漏判。proto2mysql 升级到键列 `VARCHAR … utf8mb4_0900_bin`(7dbda68)后,这些误判消失。但升级后 schemamigrate 会对现有 MEDIUMTEXT 键列报 `ErrLegacyKeyColumn`,guild 拒绝启动;未上线期间按 §6.4 删库重建,并给 `name_norm` 加 `max_length`。
+
+> **2026-09-28 落码修正**:上一条描述的升级已经发生(proto2mysql v0.2.0,见 §0 的落码修正)。与上文的不同之处:
+> - 键列形态是 `VARCHAR(191) utf8mb4_0900_bin NOT NULL DEFAULT ''`。`name_norm` **没有加 `max_length`**,N 取 v0.2.0 的缺省值 191;
+>   帮名上限仍由 Go 侧的 `MaxGuildNameNormRunes = 48` 把关。
+> - 存量表的处理是"迁移 SQL 与新 guild.exe 同批",删库重建只是备选,步骤见 PROGRESS「2026-09-28 服务器全仓 proto2mysql 切到 v0.2.0」条目的「运行期注意」第 1 条。
+> - 本条所说的 `utf8mb4_unicode_ci` 额外误判,迁移后消失。
 
 ### 6.4 开发期改表纪律(按 schemamigrate 实际行为)
 
@@ -812,6 +856,11 @@ func resetGuildSchemaViaMigrate(t *testing.T, ctx context.Context, db *sql.DB) {
     - `guild_application`:`PRIMARY`(1,guild_id)(2,player_id);`idx_guild_application_0`(1,player_id);`idx_guild_application_1`(1,expire_ms)。
   - `COLUMNS`:`guild.funds` 为 `bigint unsigned`;`guild.name_norm` 存在;`guild_member` 有 `contribution_total`/`contribution_balance`、没有 `contribution`;`guild_member.join_time_ms` 为 `bigint unsigned`。
   - 再跑一次 Up:`len(report.Statements)==0` 且 `len(report.Warnings)==0`。
+
+  > **2026-09-28 落码修正**:proto2mysql 切到 v0.2.0 后,`uk_guild` 的期望行改为 `(1,name_norm,NON_UNIQUE=0,SUB_PART=NULL)`,因为现在是整列索引。
+  > `COLUMNS` 断言补上:`guild.name_norm` 的 `COLUMN_TYPE='varchar(191)'`、`COLLATION_NAME='utf8mb4_0900_bin'`、`IS_NULLABLE='NO'`。详见 §0 的落码修正。
+  > 现状:代码里还没有这条用例(2026-09-28 在 go/guild 里 grep `SUB_PART` 零命中);补写时直接按新口径写,不要照上面的 191。
+
 - `rank_zone_integration_test.go`(`//go:build integration`):删除 `createGuildTables`(第 102-136 行,含 `uk_name`/`uk_player` DDL);一次性库 `guild_it_<pid>_<n>` 建好后,改为对该库调 `resetGuildSchemaViaMigrate`。`seedGuild`(第 138-150 行)的 guild INSERT 加 `name_norm`(传 `strings.ToLower(name)`),guild_member 列改为 `contribution_total, contribution_balance`。yaml 切到 appuser 后,appuser 建不了库,这组测试会 Skip;验证时必须把 `GUILD_IT_MYSQL_DSN` 设为 root。
 
 ### 16.3 friend / B1b 工具
@@ -885,6 +934,10 @@ func resetGuildSchemaViaMigrate(t *testing.T, ctx context.Context, db *sql.DB) {
    rg -n "proto2mysql" go.sum                                       # 记录 h1 行;不得是 h1:s5du1n…
    go test ./... -count=1                                           # plan_test 的 TiDB 方言断言必须通过
    ```
+   > **2026-09-28 落码修正**:proto2mysql 已切到 v0.2.0。这一步的核对口径改为以下三条:
+   > - `go list -m -json` 的 Version 是 `v0.2.0`,Replace 指向 `github.com/luyuan-cpp/proto2mysql v0.2.0`,go/guild 与 go/schemamigrate 两边一致。
+   > - go.sum 的 h1 行与 PROGRESS「2026-09-28 服务器全仓 proto2mysql 切到 v0.2.0」条目记的一致(`h1:uLFpdq…`)。
+   > - `rg TextIndexPrefixLength` 仍会命中,但它只管非键 TEXT / BLOB 列,**不再是 uk_guild 形状的依据**。键列形状改看第 6 步。
 1. **proto-gen**(与其他会话串行):照本仓库现行入口重生成 proto。
    - 期望生成 `go/proto/guild/guild_db.pb.go`,含 `GuildRecord`、`GuildPlayerStateRecord`、`GuildMemberRecord`、`GuildApplicationRecord`;生成 `cpp/generated/proto/guild/guild_db.pb.cc/.h`。
    - `git diff --stat proto/message_id.txt` 为空。
@@ -915,6 +968,10 @@ func resetGuildSchemaViaMigrate(t *testing.T, ctx context.Context, db *sql.DB) {
    - 执行 `go run . -f etc/guild.yaml -migrate; $LASTEXITCODE`:退出码 0,输出 4 条 `CREATE TABLE IF NOT EXISTS`,没有 `warning:` 行。
    - 再执行一次:退出码 0,输出 `0 statement(s)`。
    - 执行 `docker --context desktop-linux exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SHOW TABLES FROM mmorpg_guild; SHOW CREATE TABLE mmorpg_guild.guild\G"'`:应有 5 张表(4 张业务表 + schema_migrations);建表语句含 ``UNIQUE KEY `uk_guild` (`name_norm`(191))``、`` `funds` bigint unsigned``。完整输出保留为证据。
+   > **2026-09-28 落码修正**:proto2mysql 切到 v0.2.0 后,建表语句应含 ``UNIQUE KEY `uk_guild` (`name_norm`)``(整列,**不带** `(191)`),
+   > 以及 `` `name_norm` varchar(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL DEFAULT ''``;`` `funds` bigint unsigned`` 不变。
+   > 如果看到的仍是 `mediumtext` 加 `(name_norm(191))`,说明这是旧形态的表,要按 §0 落码修正里的迁移步骤处理,并且与新 guild.exe 同批。
+   > 表数"5 张"是 B1 当时的口径;B5a / B6a 加表之后,以 `Tables()` 的长度加 1 为准。
 7. **friend**,在 `go/friend` 下执行:`go build ./...; go vet ./...; go test ./... -count=1`;然后设置 `$env:FRIEND_TEST_MYSQL_DSN='appuser:apppass123@tcp(127.0.0.1:3306)/friend_test?parseTime=true&charset=utf8mb4'`,执行 `go test ./internal/data/ -count=1 -v -run 'TestAcceptFriend_ConcurrentHardLimit|TestFriendCapacityMissingRowUsesAuthoritativeCount'`。
 8. **静态检查(B1)**:
    - `rg -n "guild_schema_migration|MigrateLegacyRankScores|friend_capacity_backfill" go deploy` → 0 条。
@@ -983,6 +1040,14 @@ func resetGuildSchemaViaMigrate(t *testing.T, ctx context.Context, db *sql.DB) {
 - proto2mysql 当前靠 trade 会话**未提交**的 replace 才能拿到 191 前缀和 TiDB 选项;B1 不能先于它提交(§18 第 0 步)。正式 tag 需要人来打(AGENTS §9)。
 - 上游 7dbda68 一旦进入 tag 并被 schemamigrate 采用,现有 MEDIUMTEXT 唯一键会被判 `ErrLegacyKeyColumn`,guild 拒绝启动;未上线期间按 §6.4 删库重建,上线后必须先完成迁移设计。
 - `utf8mb4_unicode_ci` 会把 U+10000 以上字符全部视为相等,含 emoji 等字符的帮名会误判重名(只误拒不漏判),等 proto2mysql 升级后消失。
+
+> **2026-09-28 落码修正**:本节前三条已随 proto2mysql 切到 v0.2.0 而关闭或改变,详见 §0 的落码修正。
+> - 第 1 条(靠未提交的 replace 拿 191 前缀):已关闭。全仓已统一为 v0.2.0,不再依赖 191 前缀。
+>   go.mod / go.sum 随 09-28 的每小时 WIP 提交进了 main;PROGRESS 同一条目要求的 Codex 复验还没做。
+> - 第 2 条(旧 MEDIUMTEXT 唯一键被判 `ErrLegacyKeyColumn`):已兑现。本地 `mmorpg_guild.guild` 当时的形态正是这种,
+>   处理办法是迁移 SQL 与新 guild.exe 同批上线(本地也可删表重建)。上线后再遇到同类改动,要先完成迁移设计。
+> - 第 3 条(`unicode_ci` 误判):迁移后消失。
+> - 新增风险:迁移后键列区分大小写。帮名的 `name_norm` 已在 Go 侧转成小写,不受影响;账号类键列受影响,见 PROGRESS 同一条目。
 - GET_LOCK 与 KILL QUERY 在 TiDB 上的语义尚未验证(`schemamigrate.go:75-80`);§2.1 规则 3 关于 TiDB 锁不存在键的描述,来自 TiDB 悲观事务的文档语义,未在本项目的 TiDB v8.5.2 集群实测。
 - Go 1.26.5 工具链是否可用取决于 Codex 环境;CI(`go-modules-ci.yml`)检出时必须包含 `go/schemamigrate`,并能访问替换源。
 - 本文行号在并行会话持续改动下会漂移,落码时以函数名为准。

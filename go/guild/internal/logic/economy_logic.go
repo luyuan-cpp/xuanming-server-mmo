@@ -200,6 +200,10 @@ func isSyncDelivery(ctx context.Context) bool {
 // 客户端 GetPlayerGuild 走的是同一个函数(guild_logic.go),两处对"我在哪个帮"的回答因此一致。
 // 代价只落在坏路径:几次缓存读 + 两三次主键 / 唯一索引点查。授权仍一律在事务里按锁住的行复核,这里的快照只用于预判与展示。
 //
+// ResolvePlayerGuild 报错时不直接当故障抛出,先经 leftGuildWhileResolving 以 MySQL 再判一次"此刻还在不在帮":
+// 复核映射与直读快照之间恰好被踢 / 退帮,它回的错误与真矛盾长得一样,见该函数注释。
+// 整条坏路径只有普通读(不加锁读)与缓存失效,不开事务,不影响任何事务的取锁顺序。
+//
 // 返回约定同 clientWrite:err 非 nil = 故障;tip 非 nil = 业务拒绝;两者都为 nil 时 g 非 nil 且快照里有本人。
 func (l *GuildLogic) economyCaller(ctx context.Context) (uint64, *data.GuildData, *base.TipInfoMessage, error) {
 	who := callerOf(ctx, 0)
@@ -219,6 +223,9 @@ func (l *GuildLogic) economyCaller(ctx context.Context) (uint64, *data.GuildData
 	}
 	fresh, err := l.repo.ResolvePlayerGuild(ctx, who.playerID)
 	if err != nil {
+		if tip = l.leftGuildWhileResolving(ctx, who.playerID, guildID, err); tip != nil {
+			return who.playerID, nil, tip, nil
+		}
 		return who.playerID, nil, nil, fmt.Errorf("resolve guild of player %d (cached guild %d): %w", who.playerID, guildID, err)
 	}
 	if fresh == nil {
@@ -228,6 +235,41 @@ func (l *GuildLogic) economyCaller(ctx context.Context) (uint64, *data.GuildData
 		logx.Infof("[GuildEconomy] player %d guild mapping healed from stale %d to %d", who.playerID, guildID, fresh.GuildID)
 	}
 	return who.playerID, fresh, nil, nil
+}
+
+// leftGuildWhileResolving:ResolvePlayerGuild 报错之后,以 MySQL 再复核一次"他此刻还在不在帮",
+// 把"复核窗口里刚被踢 / 刚退帮"这种业务态变化从故障里分出来。返回非 nil = 按未入帮答复;nil = 调用方原错误照回。
+// 调用方有三处,答复口径必须一致:经济前置 economyCaller、活动前置 activityPrelude、客户端 GetPlayerGuild
+// (后者没有缓存里的帮会 id,cachedGuildID 传 0)。
+//
+// 为什么要在这里分:ResolvePlayerGuild 先用 uk_guild_member 复核映射(VerifyPlayerGuildID),再绕过缓存直读帮会快照
+// (loadGuild:帮会行与成员行是两条独立的普通读,不在同一个一致性快照里)。玩家恰好在复核之后、成员行读到之前
+// 被踢或退帮时,直读到的快照里没有他,它回的是与"两份 MySQL 数据互相矛盾"**同一个**不带哨兵的错误
+// (guild_manage_repo.go 的 ResolvePlayerGuild 末尾),从错误本身分不出两者。原样抛成 gRPC 错误,
+// 一次正常的踢人 / 退帮就会把当事人的客户端推进重连隔离(文件头纪律 4)。
+// 同一窗口里帮会被解散时 ResolvePlayerGuild 回 (nil, nil),本来就走未入帮,不经过这里。
+//
+// 判据只认 uk_guild_member 唯一索引点查(一次,只发生在报错路径上;普通读,不加锁,不开事务):
+//   - 此刻不在任何帮 → 回未入帮。即使原错误真是矛盾,"他此刻不在帮"也已是 MySQL 的真相 ——
+//     矛盾的前提是 guild_member 说他在帮,这条前提已不成立,不会诱导他在损坏的数据上建出第二个帮;
+//   - 此刻仍在某个帮 → 原错误照回(fail-closed)。真矛盾必须以故障暴露;"被踢后瞬间又入了别的帮"这种
+//     极罕见的并发也落在这一支,代价只是客户端重连一次,换来的是真矛盾不会被吞成 tip;
+//   - 复核本身失败 → 原错误照回,不把故障降级成业务答复。
+//
+// cachedGuildID 作 VerifyPlayerGuildID 的比对值:不一致(他已离帮)时它顺手失效映射键,下一次读映射直接拿到 0。
+// 风险:MySQL 整体故障时,坏路径上的每个请求会多一次注定失败的点查;坏路径本身罕见,可以接受。
+func (l *GuildLogic) leftGuildWhileResolving(ctx context.Context, playerID, cachedGuildID uint64, resolveErr error) *base.TipInfoMessage {
+	actual, err := l.repo.VerifyPlayerGuildID(ctx, playerID, cachedGuildID)
+	if err != nil {
+		// 只记 Info:原错误会原样回给调用方并按故障计数,这里再记 Error 只是同一次故障的第二行。
+		logx.Infof("[Guild] membership recheck of player %d failed after resolve error: %v (resolve: %v)", playerID, err, resolveErr)
+		return nil
+	}
+	if actual != 0 {
+		return nil
+	}
+	logx.Infof("[Guild] player %d is in no guild on recheck (cached guild %d), answering not-in-guild (resolve: %v)", playerID, cachedGuildID, resolveErr)
+	return tipErr(constants.ErrNotInGuild, "not in any guild")
 }
 
 // memberOf 在快照里找某人。只用于展示与"省一次事务"的预判,授权一律在事务里复核。

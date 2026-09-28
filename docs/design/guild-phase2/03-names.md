@@ -807,6 +807,12 @@ public static class RoleNameRules
   - 池 B(60):尘忌衫歌雪河烟舟道霄澜川岚溪泉峰岳林萧瑶璃珏琳瑜璇华辰曦阳光影声心意情仪然真虚空渊宸翎翊珩砚笙箫弦诗棠蘅芷蔚蕴菡萱茗荷萝
   - 算法:`s = 姓[rng.Next(80)]`;`rng.Next(5) == 0` → `s + B[rng.Next(60)]`,否则 `s + A[rng.Next(60)] + B[rng.Next(60)]`。
 
+> **2026-09-28 落码修正(B3b 客户端)**:`RetryableCreateHint` 覆盖的三个码不变(`KLoginDataSerializeFailed`、`KLoginInProgress`、`KLoginRedisSetFailed`),
+> 文案改为 **"服务繁忙，请稍后再试创建角色"**(全角逗号,与界面其它文案一致),不再说"角色未创建"。
+> 原因:写账号 blob 的结果未知时,服务端自己也不确定角色建没建成(§3.11 第 7 步宁可保留登记)。
+> 玩家照原样再点创建是安全的:同名、同职业、同性别的重试会被服务端认作"上次响应丢失"(§3.11 第 6c' 步),直接返回已建好的角色。
+> 出处:`mmorpg-client/Assets/Scripts/Game/Role/RoleNameRules.cs` 的 `RetryableCreateHint` 注释。未编译,EditMode 未跑。
+
 ### `Assets/Scripts/Game/GameClient.cs`
 1. `PlayerChoice`(:155)增 `public string Name;`、`public string RejectHint;`。
 2. `CreatePlayerCo`(:551)签名改 `(int gen, uint classId, uint gender, string name, RepeatedField<AccountSimplePlayerWrapper> known, Action<ulong> onCreated, Action<string> onRetryableReject, Action<string> onError)`;请求 `new CreatePlayerRequest { ClassId = classId, Gender = gender, Name = name ?? "" }`;:567 tip 分支在 `FailPipeline` 前插入:`var hint = RoleNameRules.TipText(id, cpResp.ErrorMessage.Parameters) ?? RoleNameRules.RetryableCreateHint(id); if (hint != null && onRetryableReject != null) { onRetryableReject(hint); yield break; }`。传输错误(Call 的错误回调、断线、15s 超时)仍 FailPipeline。无 UI 分支(:527)改 `CreatePlayerCo(gen, 0, 0, "", loginResp.Players, id => newId = id, null, onError)`(服务端生成名)。
@@ -857,6 +863,24 @@ while (true)
 - 角色卡(:227-229):名字行改 `DisplayName(player)`;新增 `public static string DisplayName(AccountSimplePlayer p) => string.IsNullOrWhiteSpace(p.Name) ? CharacterName(p.ClassId, p.Gender) : p.Name;`。
 - `RefreshPreview`(:278)加参数 `string roleName`:`_previewTitle.text = string.IsNullOrWhiteSpace(roleName) ? CharacterName(classId, gender) : roleName;`;`PreviewPlayer` 传 `player.Name`,`RefreshCreateHighlights` 传 null。
 
+> **2026-09-28 落码修正(B3b 客户端;出处 `mmorpg-client/Assets/Scripts/UI/Ugui/Role/RoleFlowUi.cs`;未编译,EditMode 未跑)**:上面几条的实际落法如下。
+> 1. **名字输入框与"随机"按钮不占 PreviewTitle 的位置**。两者挂在 `_createRoot` 下,放在详情窗(x1920–2430、y174–830)"修行方向"那一行之下、窗内底部。
+>    由 `BuildCreateRoot` 末尾调用 `BuildNameEntry()` 创建:
+>    - `_nameInput = CreateInputField("RoleNameInput", _createRoot, 1940f, **724f**, 330f, 84f, "请输入角色名", RoleNameRules.StructuralMaxChars * 2, …)`,即 (1940, 724, 330×84)。
+>      另外关闭了 `richText`(名字不走富文本),并挂上 `onValueChanged` 做输入即预检。
+>    - `TextButton("RandomRoleName", _createRoot, 2276f, **710f**, 150f, "随机", false, 26f)`,即 (2276, 710)。
+>      竖直中心 724 + 84/2 = 710 + 112/2 = 766,与输入框对齐。
+> 2. **建角模式下 PreviewTitle 不隐藏**。`ShowCreateMode` / `ShowSelectMode` 都不再切换 `_previewTitle` 的显隐。
+>    原因:外观验收 `DevRoleUiDriver.PreviewMatches` 只找**激活中**的 `PreviewTitle`,并按标题比对外观名(`QdaoCharacterCatalog.Find(appearanceId).Name`);
+>    建角时把它藏起来,验收就找不到标题、判失败。
+>    因此 `RefreshPreview` 的标题**始终**是 `CharacterName(classId, gender, appearanceId)`。`roleName` 参数写进选角模式下单独一行的 `_roleNameValue`
+>    (`DetailRow("RoleName", "角色名", 736f, …, _selectRoot)`,只在选角时可见;空名显示"未命名";开了 auto-size,字号 18–32),**不写标题**。
+> 3. **正常路径默认填一个随机名**。`Choose` 的非退回分支调用 `SetNameWithoutNotify(RoleNameRules.RandomName(_rng))`,不再"清空输入框"。
+>    玩家可以改,也可以清空;清空后点"创建"会被本地预检拦下,提示"请输入角色名"。
+>    所以 §3.24 手动验收的"输入框留空点创建"**要先手动清空**默认名。
+>    被服务端退回的分支由 `RestoreRejectedCreation` 恢复职业、性别、外观 id 与上次的名字,与上文一致。
+> 4. 输入即预检(`RefreshNameHint`)只提示本地能判的问题:无效字符、超长、字符集。空着不提示,点"创建"时再拦;字数、重名等只有服务端能判,本地不猜。
+
 ### 头顶名 / 会话昵称
 `Assets/Scripts/UI/AppBootstrap.cs` `ResolveActorDisplayName`(:127):取到 `playerId` 后先 `var n = client.ResolveRoleName(playerId); if (!string.IsNullOrWhiteSpace(n)) return n;`,再走原 `GatewayPlayerInfo.name` 与 `SessionModel.RoleNickname`。`SessionModel.RoleNickname`(:60)默认值 `"云行客"` 改 `""`。
 
@@ -875,6 +899,17 @@ while (true)
   - `RoleFlowUi.DisplayName`:空名回落职业名、有名用名字。
 - `Assets/Tests/EditMode/Guild/GuildUiTests.cs` 加 `MemberDisplayNameFallsBackToIdWhenNameMissing`、`MemberDisplayNameUsesServerName`。
 
+> **2026-09-28 落码修正(B3b 客户端)**:字符向量的反序列化类型按服务端文件的实际形状写。
+> `go/shared/playername/testdata/charset_vectors.json` 的 `allowed` / `rejected` 是 **`{cp, why}` 对象数组**,不是字符串数组:
+> `cp` 是十六进制码点,不带 `U+` 前缀,大写,至少 4 位;`why` 写明这个码点为什么允许或拒绝。客户端副本要求与服务端逐字节相同,所以测试的类型照抄这个形状:
+> ```csharp
+> [Serializable] private sealed class CharsetVectors { public string source; public CodePointVector[] allowed; public CodePointVector[] rejected; }
+> [Serializable] private sealed class CodePointVector { public string cp; public string why; }
+> ```
+> 上文的 `string[] allowed/rejected` 写法作废:`JsonUtility` 读对象数组进 `string[]` 会得到空或 null,测试就什么都没测到。
+> 断言用 `IsAllowedCodePoint(Convert.ToInt32(v.cp, 16))`,失败信息带上 `U+{cp}` 与 `why`。另外断言 `source` 以 `go/shared/playername/testdata/charset_vectors.json` 结尾,两个数组都非空。
+> 出处:`mmorpg-client/Assets/Tests/EditMode/Role/RoleNameRulesTests.cs`。未编译,EditMode 未跑。
+
 ## 3.23 B3b 文件清单(手改 19)
 服务端 7:`proto/guild/guild.proto`(B2 已加字段则不计)、`go/guild/guild.go`、`go/guild/internal/logic/guild_logic.go`、`go/guild/internal/logic/player_name_resolver.go`(新)、`go/guild/internal/logic/player_name_resolver_test.go`(新)、`go/guild/internal/logic/guild_logic_names_test.go`(新)、`robot/guild_smoke_scenario.go`。
 客户端 12:`tools/gen_proto.ps1`、`Assets/Scripts/Game/Role/RoleNameRules.cs`(新)、`Assets/Scripts/Game/GameClient.cs`、`Assets/Scripts/UI/Ugui/Role/RoleFlowUi.cs`、`Assets/Scripts/UI/AppBootstrap.cs`、`Assets/Scripts/UI/SessionModel.cs`、`Assets/Scripts/UI/Ugui/Guild/GuildWindow.cs`、`Assets/Tests/EditMode/Role/MmorpgClient.Tests.EditMode.Role.asmdef`(新)、`Assets/Tests/EditMode/Role/RoleNameCharsetVectors.json`(新)、`Assets/Tests/EditMode/Role/RoleNameRulesTests.cs`(新)、`Assets/Tests/EditMode/Guild/GuildUiTests.cs`;`.meta` 由编辑器生成,不计。(若 `RoleFlowUi.cs` 所在 asmdef 对测试不可见,在测试 asmdef 的 references 里加它,同文件计数内。)
@@ -892,6 +927,16 @@ cd E:\work\mmorpg-client; git status --short Assets/Scripts/Game Assets/Scripts/
 # 手动/出包:输入框留空点创建 → 停在建角页提示"请输入角色名";输入"云中君"成功;第二个账号再输同名 → 停在建角页提示"已被使用"且输入框保留"云中君";
 #   输入"云" → 提示"角色名需为 2–12 个字…";点"随机"连点 20 次无明显重复;帮会成员列表显示名字
 ```
+
+> **2026-09-28 落码修正(B3b 客户端)**:上面的序列有三处要改。
+> 1. **`gen_proto.ps1` 必须带 `-ProtoRoot`**:在 `E:\work\mmorpg-client` 下执行 `pwsh -File tools/gen_proto.ps1 -ProtoRoot E:\work\xuanming-server-mmo`。
+>    原因:脚本的默认值 `$ProtoRoot = (Resolve-Path "$PSScriptRoot/../../..").Path` 从 `tools` 目录往上退三级。在本机布局(`E:\work\mmorpg-client\tools`)下会解析成 `E:\`,protoc 在那里找不到 proto。
+>    **生成 `LoginErrorTip.cs` 之前,客户端整体编不过**:`RoleNameRules` 引用了 `login_error` 枚举。所以这一步必须排在 `client_compile_check.ps1` 之前。
+>    (核对记录:机器 A 的客户端仓里,2026-09-28 已有 `Assets/Scripts/Proto/Generated/LoginErrorTip.cs`,含 B3b 用到的 6 个码;换机或清过生成物时仍要先跑这一步。)
+> 2. **"输入框留空点创建"要先手动清空**:正常路径进建角页时,输入框已经默认填了一个随机名(§3.22 的落码修正第 3 条)。
+>    清空后点创建,应停在建角页并提示"请输入角色名"。
+> 3. **服务端可重试失败的提示文案**是"服务繁忙，请稍后再试创建角色"(§3.22 的落码修正),停在建角页,并保留职业、性别、外观与名字。
+>    外观验收(`DevRoleUiDriver`)在建角模式下仍按 `PreviewTitle` 比对外观名,标题不再显示角色名。
 
 <!-- s3_names_part9.md -->
 

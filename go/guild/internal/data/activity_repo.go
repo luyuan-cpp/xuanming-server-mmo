@@ -33,12 +33,15 @@ package data
 //  3. Q 在 M 之后:seq 行的全部建行者都先持本人成员行(ensureSeqRowTx 的守卫不变量,死锁复核 C2)。
 //     **没有物品奖励也锁 Q**:计数行的每个悲观写者都要先持同一 (p, 流) 的 seq 行(economy_repo.go 文件头第 2 条、
 //     asset_store.go 文件头"计数行上的写者与取锁全序",死锁复核 C6);活动计数行归 GUILD_CREDIT —— 活动发奖走的那条流。
-//     MySQL 上它还顺带把同一玩家的计数 upsert(重复键检查取的 next-key X)与兑换预留插新计数行排成一列。
+//     MySQL 上它还顺带把同一玩家的计数 upsert 与兑换预留插新计数行排成一列(C6 本身只在 TiDB 成环;MySQL READ COMMITTED 下
+//     计数行 upsert 在聚簇主键上的重复键检查只加记录锁 LOCK_REC_NOT_GAP、不锁间隙,排成一列不是为了挡间隙锁冲突)。
 //  4. O 只插新行;C 是带上限 upsert,不"锁不存在的行再插";两者都在 Q 之后,与 T-D / T-S / 终结同向。
 //  5. P 在 C 之后。P 上的死锁由一条不变量挡住:**P 的任一锁定者 / 写者都先持同一 guild_id 的 G 行锁**(tables.go)。
 //     同一帮的 P 行永远只有一个持锁者在推进,所以"先 upsert、再主键点锁读回"不会在 TiDB 上与别人各持一半
-//     ({行 key, PRIMARY key} 在语句末尾并行加锁也没有第二个竞争者),MySQL 上 upsert 的重复键 next-key 也只挡别帮的插入
-//     (单向等待:本事务此后只再写已持有的行)。
+//     ({行 key, PRIMARY key} 在语句末尾并行加锁也没有第二个竞争者)。MySQL READ COMMITTED 下,upsert 命中已有行时
+//     聚簇主键的重复键检查只加**记录锁**(LOCK_X | LOCK_REC_NOT_GAP),不锁间隙、不跨到相邻行;本表除主键外没有任何
+//     二级索引(更没有二级唯一键,guild_db.proto),插新行也只在聚簇记录上留隐式锁 —— 别帮在相邻主键上插行时的插入意向锁
+//     不受影响。结论不变:落在 P 上的等待只可能单向(本事务此后只再写已持有的行、不再新取锁),不成环。
 //  6. P 之后对 G / M 的写都是本事务已持有行的再写,不是新的取锁位置;funds、帮贡两列不在任何二级索引里,
 //     两条 UPDATE 都是完整主键等值、新值由锁内读到的旧值在 Go 里算好(溢出在 Go 里判,不靠 SQL 的无符号减法)。
 
@@ -306,7 +309,8 @@ func (r *ActivityRepo) ClaimReunionTx(ctx context.Context, in ActivityTxInput, o
 
 // participate 是点灯与团圆共用的事务体,两者只在进度行那一步不同(灯会 +1、团圆只保证行存在)
 // 与"是否达标"的判定函数不同(activity.LanternOutcome / activity.ReunionOutcome)。
-// 语句顺序即取锁顺序,由 activity_repo_integration_test.go 的 TestActivityLockOrderInSource 按源码顺序钉住。
+// 语句顺序即取锁顺序,由 activity_repo_static_test.go(不带 build tag,普通 go test 必跑)的 TestActivityLockOrderInSource
+// 按源码顺序钉住。
 func (r *ActivityRepo) participate(ctx context.Context, in ActivityTxInput, typ uint32, observed bool) (ActivityTxResult, error) {
 	if err := in.validate(typ); err != nil {
 		return ActivityTxResult{}, err
@@ -536,8 +540,13 @@ func scanActivityProgress(row *sql.Row) (activity.Progress, bool, error) {
 // 候选集完整:P 行的插入者(点灯 / 团圆,B6b 的历练结算)都先锁同一帮的 guild 行,解散持有它直到提交;
 // RC 下候选读发生在拿到 guild 行锁之后,看得见此前已提交的全部行。同一把锁下没人能并发删它们,
 // 点删影响 0 行不会发生;真出现也只说明行已不在,不作错误。
-// 行数量级:v1 不清理旧期(06 §6.14),每帮每天至多 3 行(常开开发行按天各一行,正式档期每届一行),解散时逐行删,
-// 远在 txBudgetDisband 之内;v1.1 按 period_key 清理旧期后更少。
+// 行数量级(**未经测量,是已登记的风险**):v1 不清理旧期(06 §6.14),本帮的进度行只增不减 —— 常开开发行按游戏日各一行,
+// 正式档期每届一行,B6b 的历练进度按游戏日各一行(正式环境也逐日增长),每帮每天至多 3 行,所以解散要删的行数随帮会
+// 存在的天数线性增长(上限约每年千行量级),每行一次候选读项加一条点删往返。同一个 txBudgetDisband(guild_manage_repo.go)
+// 还要容纳全员 S / M 的点锁与点删、申请删除、提前截止,"远在预算之内"在不清理旧期时没有依据。
+// 上线前要在真库回归里测"满员帮 + N 天进度行"(N 至少取预期的最长帮会寿命)的解散 p99,再定预算或提前做 v1.1 旧期清理
+// (按 period_key 删已不可能再被写的旧期,需给本表补 period_key 索引,见 guild_db.proto 本表注释)。
+// 超预算的后果是解散整事务回滚、玩家看到"繁忙请重试"且重试也一样 —— 不丢数据,但帮会解散不掉。
 func deleteGuildActivityProgress(ctx context.Context, tx *sql.Tx, guildID uint64) error {
 	keys, err := readActivityProgressKeys(ctx, tx, guildID)
 	if err != nil {
@@ -632,7 +641,7 @@ type RewardStatus struct {
 	// PendingCount:仍在发放中的指令行数(PENDING)。
 	PendingCount uint32
 
-	// PendingReasonTipID:最早一条 PENDING 行的 last_reason(如 27001 背包满);0 = 正常排队。
+	// PendingReasonTipID:最早一条 PENDING 行的 last_reason(如 assetop.ReasonBagFull 背包满);0 = 正常排队。
 	PendingReasonTipID uint32
 
 	// LastRejectTipID:近 24h 最近一次永久拒绝(封禁 / 非法包)的原因;0 = 无。

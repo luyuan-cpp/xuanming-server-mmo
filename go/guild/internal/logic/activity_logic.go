@@ -28,7 +28,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -55,7 +54,7 @@ import (
 // 暂不放 LocatorRedis / Lobby / Match —— 它们只有 B6b 的历练用,现在加上只会是一组永远为 nil 的字段,
 // 由 B6b-srv2 与去桩一起追加。
 type ActivityDeps struct {
-	// Repo 是活动事务与读查询的唯一入口。nil → WithActivities 不装配(五个 RPC 回 Unavailable)。
+	// Repo 是活动事务与读查询的唯一入口。nil → WithActivities 不装配(五个 RPC 回 kGuildActivityNotOpen,见 activitiesNotWiredTip)。
 	Repo *data.ActivityRepo
 	// Loop 是资产重投循环,同步投递与后台重投共用(与 EconomyDeps.Loop 是同一个实例)。
 	// nil = 资产通道关闭(AssetOp.Enabled=false,92 §12.1 裁决 D):带物品奖励的活动在发号之前回 kGuildAssetPending;
@@ -71,7 +70,13 @@ type ActivityDeps struct {
 	Lease time.Duration
 }
 
-// WithActivities 注入活动依赖。d.Repo 为 nil 时**不装配**(五个 RPC 回 Unavailable):
+// WithActivities 注入活动依赖,写进 GuildLogic.activities(90 Y-02 的函数式 Option,与 WithEconomy / WithPlayerNames 同一写法)。
+//
+// 依赖挂在实例字段上、而不是包级表里:包级可变表(以 *GuildLogic 为键)写入后永不删除,每 new 一个 GuildLogic 就泄漏一条,
+// 还让"这个实例有没有接线"变成隐式的全局状态(AGENTS.md §11.2 显式依赖)。字段只在 NewGuildLogic 执行 Option 时写一次,
+// 之后只读,并发 RPC 读它不需要同步。
+//
+// d.Repo 为 nil 时**不装配**(字段保持 nil,五个 RPC 回 kGuildActivityNotOpen,见 activitiesNotWiredTip):
 // 半装配的依赖比不装配更危险 —— 那会在某条分支上 nil 解引用,而不是明明白白地拒绝(同 WithEconomy)。
 func WithActivities(d ActivityDeps) Option {
 	return func(l *GuildLogic) {
@@ -88,37 +93,21 @@ func WithActivities(d ActivityDeps) Option {
 		if deps.Lease <= 0 {
 			deps.Lease = defaultInsertLease
 		}
-		l.setActivityDeps(&deps)
+		l.activities = &deps
 	}
 }
 
-// activityDepsByLogic 保存每个 GuildLogic 实例的活动依赖(key: *GuildLogic,value: *ActivityDeps)。
+// activitiesNotWiredTip 是活动依赖未注入(guild.go 没传 WithActivities,或传进来的 Repo 为 nil)时五个 RPC 的统一答复。
 //
-// 为什么不是 GuildLogic 上的字段:Go 的结构体字段只能在声明它的文件(guild_logic.go)里加,而 B6a-srv 的文件清单
-// (06 §6.45)不含 guild_logic.go,并行会话也在改它。整个包**只经** activityDeps / setActivityDeps 访问这张表;
-// 日后在 GuildLogic 上加 `activities *ActivityDeps` 字段时,只改这两个函数体并删掉本变量,其余代码不动。
-// 写只发生在 NewGuildLogic 里(Option 执行期),之后只读;sync.Map 让并发 RPC 的读无需加锁。
-var activityDepsByLogic sync.Map
-
-func (l *GuildLogic) setActivityDeps(d *ActivityDeps) {
-	activityDepsByLogic.Store(l, d)
-}
-
-// activityDeps 返回本实例的活动依赖;nil = 未接线。
-func (l *GuildLogic) activityDeps() *ActivityDeps {
-	if l == nil {
-		return nil
-	}
-	v, ok := activityDepsByLogic.Load(l)
-	if !ok {
-		return nil
-	}
-	d, _ := v.(*ActivityDeps)
-	return d
-}
-
-func errActivitiesNotEnabled() error {
-	return status.Error(codes.Unavailable, "guild activities not enabled")
+// 为什么回 tip 而不是 gRPC 错误:gRPC 错误会让客户端把整个帮会界面当传输故障进重连隔离;对玩家而言"活动用不了"
+// 与"活动没开"是同一件事,回 kGuildActivityNotOpen 让界面停在一句明确的提示上(与 guild.go 无条件装配的理由一致)。
+// fail-closed:在任何仓储读写之前返回,什么都不写,也不看会话(未接线时连身份校验都没有意义)。
+//
+// 风险与补偿:这个码是业务拒绝(Tip 表 fault 列为空),故障指标看不见它,result label 也会记成 not_open。
+// 生产由 guild.go 无条件装配、装配失败直接退出进程,走到这里只可能是装配代码被改坏 —— 所以每次都打 ERROR,让人看见。
+func activitiesNotWiredTip(rpc string) *base.TipInfoMessage {
+	logx.Errorf("[GuildActivity] %s refused: activity deps not wired (logic.WithActivities missing or Repo nil)", rpc)
+	return tipErr(constants.ErrActivityNotOpen, "guild activities not wired")
 }
 
 // activityNow 取本次请求唯一的"现在",并截到毫秒。
@@ -173,6 +162,11 @@ func (l *GuildLogic) activityPrelude(ctx context.Context, readPath bool) (activi
 	if !ok {
 		fresh, err := l.repo.ResolvePlayerGuild(ctx, who.playerID)
 		if err != nil {
+			// 与经济前置同一口径(见 economy_logic.go 的 leftGuildWhileResolving):复核窗口里刚被踢 / 刚退帮
+			// 是业务态变化,回未入帮 tip;只有 MySQL 仍说他在某个帮时才按故障抛出(fail-closed)。
+			if tip := l.leftGuildWhileResolving(ctx, who.playerID, guildID, err); tip != nil {
+				return activityActor{}, tip, nil
+			}
 			return activityActor{}, nil, fmt.Errorf("resolve guild of player %d (cached guild %d): %w", who.playerID, guildID, err)
 		}
 		if member, ok = memberOf(fresh, who.playerID); !ok {
@@ -679,9 +673,9 @@ func (l *GuildLogic) GetGuildActivities(ctx context.Context, req *pb.GetGuildAct
 }
 
 func (l *GuildLogic) getGuildActivities(ctx context.Context, _ *pb.GetGuildActivitiesRequest) (*pb.GetGuildActivitiesResponse, error) {
-	d := l.activityDeps()
+	d := l.activities
 	if d == nil {
-		return nil, errActivitiesNotEnabled()
+		return &pb.GetGuildActivitiesResponse{ErrorMessage: activitiesNotWiredTip("GetGuildActivities")}, nil
 	}
 	now := activityNow(d)
 	a, tip, err := l.activityPrelude(ctx, true)
@@ -712,9 +706,9 @@ func (l *GuildLogic) LightGuildLantern(ctx context.Context, req *pb.LightGuildLa
 }
 
 func (l *GuildLogic) lightGuildLantern(ctx context.Context, req *pb.LightGuildLanternRequest) (*pb.LightGuildLanternResponse, error) {
-	d := l.activityDeps()
+	d := l.activities
 	if d == nil {
-		return nil, errActivitiesNotEnabled()
+		return &pb.LightGuildLanternResponse{ErrorMessage: activitiesNotWiredTip("LightGuildLantern")}, nil
 	}
 	now := activityNow(d)
 	nowMs := uint64(now.UnixMilli())
@@ -763,9 +757,9 @@ func (l *GuildLogic) ClaimGuildReunion(ctx context.Context, req *pb.ClaimGuildRe
 }
 
 func (l *GuildLogic) claimGuildReunion(ctx context.Context, req *pb.ClaimGuildReunionRequest) (*pb.ClaimGuildReunionResponse, error) {
-	d := l.activityDeps()
+	d := l.activities
 	if d == nil {
-		return nil, errActivitiesNotEnabled()
+		return &pb.ClaimGuildReunionResponse{ErrorMessage: activitiesNotWiredTip("ClaimGuildReunion")}, nil
 	}
 	now := activityNow(d)
 	nowMs := uint64(now.UnixMilli())
@@ -834,7 +828,7 @@ func (l *GuildLogic) claimGuildReunion(ctx context.Context, req *pb.ClaimGuildRe
 // StartGuildTrial:B6a 桩。公共前置照常走完(无会话、未入帮的答复与 B6b 落地后一致),然后恒回未开放。
 // 消息号、白名单、限流已在 B6a 一次占好,B6b 只替换函数体。
 func (l *GuildLogic) StartGuildTrial(ctx context.Context, _ *pb.StartGuildTrialRequest) (*pb.StartGuildTrialResponse, error) {
-	tip, err := l.trialNotOpenYet(ctx)
+	tip, err := l.trialNotOpenYet(ctx, "StartGuildTrial")
 	var resp *pb.StartGuildTrialResponse
 	if err == nil {
 		resp = &pb.StartGuildTrialResponse{ErrorMessage: tip}
@@ -845,7 +839,7 @@ func (l *GuildLogic) StartGuildTrial(ctx context.Context, _ *pb.StartGuildTrialR
 
 // RespondGuildTrialInvite:B6a 桩,同 StartGuildTrial。
 func (l *GuildLogic) RespondGuildTrialInvite(ctx context.Context, _ *pb.RespondGuildTrialInviteRequest) (*pb.RespondGuildTrialInviteResponse, error) {
-	tip, err := l.trialNotOpenYet(ctx)
+	tip, err := l.trialNotOpenYet(ctx, "RespondGuildTrialInvite")
 	var resp *pb.RespondGuildTrialInviteResponse
 	if err == nil {
 		resp = &pb.RespondGuildTrialInviteResponse{ErrorMessage: tip}
@@ -854,10 +848,10 @@ func (l *GuildLogic) RespondGuildTrialInvite(ctx context.Context, _ *pb.RespondG
 	return resp, err
 }
 
-// trialNotOpenYet 是两个历练写 RPC 的共同桩体:返回 (tip, err),tip 恒非 nil 当 err 为 nil。
-func (l *GuildLogic) trialNotOpenYet(ctx context.Context) (*base.TipInfoMessage, error) {
-	if l.activityDeps() == nil {
-		return nil, errActivitiesNotEnabled()
+// trialNotOpenYet 是两个历练写 RPC 的共同桩体:返回 (tip, err),tip 恒非 nil 当 err 为 nil。rpc 只进日志。
+func (l *GuildLogic) trialNotOpenYet(ctx context.Context, rpc string) (*base.TipInfoMessage, error) {
+	if l.activities == nil {
+		return activitiesNotWiredTip(rpc), nil
 	}
 	_, tip, err := l.activityPrelude(ctx, false)
 	if err != nil {

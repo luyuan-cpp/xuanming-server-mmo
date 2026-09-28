@@ -52,6 +52,10 @@ type GuildLogic struct {
 	// economy 是捐献 / 升级 / 商店的依赖(economy_logic.go 的 EconomyDeps),经 WithEconomy 注入。
 	// nil = 未接线:五个经济 RPC 一律回 codes.Unavailable,其余 RPC 不受影响。
 	economy *EconomyDeps
+	// activities 是帮会活动(灯会 / 团圆 / 历练桩)的依赖(activity_logic.go 的 ActivityDeps),经 WithActivities 注入
+	// (90 Y-02:依赖只经函数式 Option 一次装配)。只在 NewGuildLogic 执行 Option 时写一次,之后只读,并发 RPC 读它无需加锁。
+	// nil = 未接线:五个活动 RPC 一律回 kGuildActivityNotOpen 并打 ERROR(activitiesNotWiredTip),不碰任何仓储。
+	activities *ActivityDeps
 }
 
 // Option 是 NewGuildLogic 的可选项。
@@ -370,6 +374,11 @@ func (l *GuildLogic) GetPlayerGuild(ctx context.Context, req *pb.GetPlayerGuildR
 	if who.fromClient {
 		guild, err := l.repo.ResolvePlayerGuild(ctx, who.playerID)
 		if err != nil {
+			// 与经济 / 活动前置同一口径:解析途中刚被踢或退帮回未入帮,其余照原错误回(fail-closed)。
+			// 这条路径没有"缓存里的帮会 id",比对值传 0 —— MySQL 说他此刻不在任何帮即回未入帮。
+			if tip := l.leftGuildWhileResolving(ctx, who.playerID, 0, err); tip != nil {
+				return &pb.GetPlayerGuildResponse{ErrorMessage: tip}, nil
+			}
 			return nil, err
 		}
 		if guild == nil {

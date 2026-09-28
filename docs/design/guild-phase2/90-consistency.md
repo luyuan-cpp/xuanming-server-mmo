@@ -66,6 +66,22 @@ B5c 先以默认参数形式改签名,B6a-cli 只插一行,两批的 `GuildUiRoo
 **X-13 计数器"锁不存在的行再插入"(阻断:违反 S1 规则 3)**。S5 §5.16/§5.17 先 `SELECT … FOR UPDATE` 计数行、无行再 INSERT 并靠 1062 重试。改用 S6 §6.11.2 d 步的带上限 upsert;商店:`INSERT … VALUES(…, ?count, …) ON DUPLICATE KEY UPDATE updated_ms=IF(used_count+?c<=?lim,?now,updated_ms), used_count=IF(used_count+?c<=?lim,used_count+?c,used_count)`,首次插入前在 Go 里先判 `count > limit_count`;RowsAffected=0 → 限购。重试集合去掉 1062。
 
 **X-14 解散事务的位置与步骤(阻断:改错文件)**。B2 已把解散实现为 `guild_manage_repo.go` 的 `DisbandGuild`;S6 §6.14 与 B6a-srv #18 写 `guild_repo.go deleteGuildFromMySQL`。最终步骤:锁 guild → 锁全部成员 → 删 `guild_application`(本帮 + I3)→ **B5** 提前截止捐献 → 删 `guild_member` → **B6a** 删 `guild_activity_progress` → **B6b** 删 `guild_trial_battle` → 删 `guild`。成员 IN 占位符上限统一 100(S5 写 500 作废)。
+> **2026-09-28 落码修正(B6a-srv)**:上面的步骤顺序已被 09-21 死锁修复(92-handoff §12.4)与 B6a 落码改写。以 `guild_manage_repo.go` 的 `DisbandGuild` 函数头为准,实际顺序是:
+> 1. 锁 guild(FOR UPDATE),按行里的 `zone_id` 查合服闸门。
+> 2. 按 player_id 升序锁全体成员的 `guild_player_state`。
+> 3. 按主键升序逐行点锁全体成员的 `guild_member`,**随即逐行删**。删成员行前移到删申请之前,是为了避免与审批 / 建帮在 uk_guild_member 上成环,理由见函数头。
+> 4. 删 `guild_application`(本帮的,加上成员在别帮的 I3),合并后按主键升序逐行点删。
+> 5. **B5** 提前截止捐献(O,点锁后带复核点改)。
+> 6. **B6a 删 `guild_activity_progress`**:先普通读本帮候选,再按主键 `(guild_id, activity_id, period_key)` 升序**逐行点删**(`deleteGuildActivityProgress`)。
+> 7. **B6b** 删 `guild_trial_battle`,接在 P 之后。
+> 8. 删 `guild`。
+>
+> - **删 P 的位置**:在删 `guild_member` 之后、删 `guild` 之前;更准确地说,在**提前截止之后**。
+>   只满足"删 guild_member 之后"不够:排到删申请或提前截止前面,就成了持着 P 回头取 A / O,违反表间全序 `G < S < M < A < Q < O < C < P`(92 §12.2 第 1 条)。
+> - **为什么不写前缀范围删 `DELETE … WHERE guild_id = ?`**:它的锁集随执行计划变化;逐行完整主键点删的锁集只由循环本身决定。
+> - **候选集为什么完整**:P 的插入者(点灯 / 团圆,以及 B6b 的历练结算)都先锁同一帮的 guild 行,解散一直持有这把锁到提交。
+> - **不删的东西**:计数行(挂在玩家名下)与 ACTIVITY_REWARD 指令行(物品属于玩家,解散后照常投递),06 §6.14。
+> - **位置订正**:S6 §6.14 与 B6a-srv #18 写的 `guild_repo.go deleteGuildFromMySQL` 作废,实际落在 `guild_manage_repo.go` 的 `DisbandGuild`。
 
 **X-15 部分发放没有客户端状态(阻断:视图丢信息)**。S4 新增状态 APPLIED_PARTIAL,S5 `GuildAssetOrderStatus` 只有 0–4。B5a 追加 `GUILD_ASSET_ORDER_STATUS_APPLIED_PARTIAL = 5`;B5c 文案"已部分发放,客服将补偿";客户端 reason 常量补 27007、27008。
 
@@ -223,6 +239,16 @@ S6 `ActivityDeps` 删 `Notifier`(用 `l.notify`),`OpIDs` 类型改 `data.OpIDMin
 **Y-07 B3b 漏了申请视图的名字(重要)**。B2 的 `ListGuildApplications`(`GuildApplicantView.name`)与 `ListMyGuildApplications`(`GuildApplicationView.leader_name`)在 `guild_manage_logic.go`;S3 §3.21 说要复用 resolver,但 B3b 清单没有该文件。B3b 清单 +1(共 20)。
 
 **Y-08 帮会成员页文案与 B2c 衔接(次要)**。B2c 已把标签改"按编号查找"(316,3,230,58)并在成员行、申请行内联了"道友 · id"兜底;B3b 用 `GuildWindow.MemberDisplayName` 替换这两处内联,标签改"按名字或编号查找"(字号不变,宽 230 放不下时改 26 号),输入框占位"输入名字或编号"。S6 `GuildClient.MemberDisplayName(ulong)` 内部改调该静态方法,避免两份兜底规则。
+> **2026-09-28 落码修正(B3b 客户端)**:"宽 230 放不下时改 26 号"这条路走不通。`GuildUiArt.Text` 会把字号抬到至少 30:
+> 它为 2560 宽画布缩到 1280 时的可读性做了 `size = Mathf.Max(30, size)`,传 26 进去也不会变小。
+> 8 个字在 30 号下约 240 宽,230 宽放不下。
+> 实际落法:
+> - 标签"按名字或编号查找":宽 230 → **260**,位置 (316, 3)、高 58、传入字号 27 都不变。
+> - 输入框 `GuildMemberSearch`:由 (556, 0, 470, 66) 改为 **(586, 0, 440, 66)**,即右移 30、收窄 30,右缘 1026 不动;"查找"按钮位置不变。
+> - 占位文案"输入名字或编号"照本条。
+>
+> 兜底名字的规则只有一份:`GuildWindow` 的静态方法 `MemberDisplayName(ulong playerId, string name)` 与 `MemberDisplayName(GuildMember)`。
+> 出处:`mmorpg-client/Assets/Scripts/UI/Ugui/Guild/GuildWindow.cs` 的 `RenderMemberToolbar`(代码注释写了原因)、`GuildUiArt.cs` 的 `Text`。未编译,EditMode 未跑。
 
 **Y-09 robot 账号与清理(次要)**。账号登记:B2c 9211–9213、B5c 9214–9215、B6a-cli 9216–9219、B4b 资产冒烟 9501(契约 §6 补一行"95xx 归资产通道冒烟")。S3 §3.20 端到端清理的 `DEL account:*` 追加 9211–9219、9501;S3 §3.21 `member-names` 失败文案追加 9211–9219。S5 默认值已是 9214/9215(S6 的提醒已满足)。
 

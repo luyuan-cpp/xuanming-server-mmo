@@ -7,6 +7,7 @@
 
 > **2026-09-20 更新**:换机接手后又落了 **B3a-2** 与 **B3b 的服务端部分**,现状以 §8 为准(含客户端仓与本机 Python 两个阻塞)。
 > **2026-09-20 更新(二)**:**B5a 的 18 个非 xlsx 文件已落码**(4 个 xlsx 的内容与步骤已写成幂等脚本,待依赖装齐后执行),**B5d 详细设计已写**(`07-rollback-fail-closed.md`)。现状以 **§10** 为准;**导表前必须先跑 `guild_b5a_xlsx_patch.py new-tables`**(§10.0)。
+> **2026-09-28 更新**:机器 A(`E:\work\xuanming-server-mmo`)接续落了 **B3b 客户端**与 **B6a-srv**(均**未编译、未导表、未 proto-gen**),表间全序末尾追加了 P(§12.2 第 1 条)。现状与待办以 **§13** 为准。
 
 帮会二期 20 个批次里,**6 批已落码**(B1、B1b、B2s、B2c、B3a-1、B4a-client),
 资产通道 **B4a-1 / B4b 由聚宝斋会话按本期设计落码**;**全部未编译、未跑测试、未跑导表器与 proto-gen**。
@@ -66,6 +67,8 @@
 - **B3b**(成员显示名):Y-07 要求清单 +1(`guild_manage_logic.go` —— `ListGuildApplications` 的
   `GuildApplicantView.name` 与 `ListMyGuildApplications` 的 `leader_name` 也要走批量取名)。
   Y-08:成员页标签从"按编号查找"改成"按名字或编号",宽 230 放不下时字号改 26。
+  > **2026-09-28 落码修正**:"改 26 号字"不可行 —— `GuildUiArt.Text` 会把字号抬到至少 30。实际落法是标签宽 260、
+  > 输入框 (586, 440),右缘不动,见 `90-consistency.md` Y-08 的落码修正。
 - **B5a**(资产三表 + 经济 RPC):表定义**以 `90-consistency.md` part2 §1 为准**(X-01:各节都没给全定义)。
   索引名 `idx_<表>_<n>` **从 0 起**(X-02),第三组是 `idx_guild_asset_op_2`。
   状态枚举要有 `APPLIED_PARTIAL = 5`(X-15)。**D2:不要退款分支**(不加 `GUILD_ASSET_OP_KIND_DONATE_REFUND`、
@@ -83,6 +86,9 @@
 - **B6a**(灯会/团圆):U1 —— 个人次数按**游戏日**(UTC+8 每天 05:00 重置),帮会级进度按**活动档期**。
   X-14:解散事务要在删成员之前删 `guild_activity_progress`(B6a)与 `guild_trial_battle`(B6b),
   位置在 `guild_manage_repo.go` 的 `DisbandGuild`(**不是** `guild_repo.go`)。
+  > **2026-09-28 落码修正**:上面"在删成员之前"已被 09-21 死锁修复推翻。删成员行已前移到锁成员之后,
+  > 删 P 的实际位置在**提前截止(O)之后、删 guild 之前**,做法是逐行点删。如果排到删申请或提前截止前面,
+  > 就成了持着 P 回头取 A / O,违反表间全序。以 §12.4 解散一行与 `90-consistency.md` X-14 的落码修正为准。
   Y-03/Y-04:`changeKindLabel` 与 `invalidateAfterCommit` 的集合 B2s 已经一次写全,**B6 只调用不改**。
 - **B6b**(同道历练):U2 —— **阵亡也得奖**,`candidates = team 0 − fled_player_ids`(不再减 `dead_player_ids`,
   该字段保留供统计)。
@@ -832,7 +838,7 @@ xlsx 脚本 5 条(1 major:发号机制的注释写错;4 minor:幂等判定、核
 
 ### 12.2 死锁修复:统一口径(以代码注释为准,这里是索引)
 
-1. **表间全序** G(guild) < S(guild_player_state,player_id 升序,**0 号哨兵最小**) < M(guild_member) < A(guild_application) < Q(guild_player_op_seq) < O(guild_asset_op) < C(guild_daily_counter)。登记过的例外(均已论证不成环,见 `guild_repo.go` / `guild_manage_repo.go` 函数头):CreateGuild 的**新** guild 行放在最后插;审批通过在锁 A(G,p) 之后插 M(G,p);Disband 最后删 guild 行、Transfer 改 leader_id 时才碰 guild 的二级项。
+1. **表间全序** G(guild) < S(guild_player_state,player_id 升序,**0 号哨兵最小**) < M(guild_member) < A(guild_application) < Q(guild_player_op_seq) < O(guild_asset_op) < C(guild_daily_counter) **< P(guild_activity_progress)**(P 于 2026-09-28 随 B6a 追加)。登记过的例外(均已论证不成环,见 `guild_repo.go` / `guild_manage_repo.go` 函数头):CreateGuild 的**新** guild 行放在最后插;审批通过在锁 A(G,p) 之后插 M(G,p);Disband 最后删 guild 行、Transfer 改 leader_id 时才碰 guild 的二级项;**P 只在持有同帮 G 行锁时写,因此豁免第 6 条"多 key 写之前先完整主键点锁"**(2026-09-28 追加,见 `tables.go` / `activity_repo.go` 函数头)。
 2. **锁定语句只做完整主键等值点操作**;`guild_member`(主键 (guild_id, player_id) 另有 uk(player_id))上的锁定 SELECT / UPDATE 一律 `FORCE INDEX (PRIMARY)`;`IN (?,?)` 拆成按主键升序的点查;需要按二级条件找行时"普通读候选 → 按主键升序逐行点锁 → 带复核条件点改 / 点删"。
 3. **玩家守卫**:插 / 删成员行的事务(建帮、审批通过、踢人、退帮、解散)先锁该玩家的 S(p);解散按 player_id 升序锁全体成员的 S。
 4. **全局插入守卫 S(0)**:`guild_player_state` 里 player_id=0 的哨兵行。持有者只有三类 —— 建帮、审批通过(唯一二级索引查重插入者,消除 next-key S 与插入意向互等,审计 G-OUT1)、首次建状态行的短事务(消除首插者回滚后的锁继承互等,G-C3)。启动期 `EnsureGlobalInsertGuard` 在 `GET_LOCK` 下建行,缺行即拒启;运行期缺行 fail-closed。**这是数据约定变更**:`guild_player_state` 不再是"每玩家一行"(proto 注释与 01-storage.md 待改,见 12.7)。
@@ -841,6 +847,24 @@ xlsx 脚本 5 条(1 major:发号机制的注释写错;4 minor:幂等判定、核
 7. **其余**:连接串显式 `transaction_isolation='READ-COMMITTED'`(autocommit 语句也走 RC);`DisbandGuild` 在事务内按 `guild.zone_id` 查合服闸门(内部 / GM 路径也挡住);清理任务改为"普通读候选 → 每行一个短事务点锁再点删",计数行截止至少保留 8 天(上一周期的行切换后至少再留 24h,避开跨切点的兑换预留);申请后的本帮过期清理移出事务、每次最多 10 行;`EnsureSeqRowRetry` 已不再使用。
 
 对应 friend / 死锁审计会话的编号:#2(申请表二级索引)、#3(本帮过期清理跨帮扫描)、#5 / #10(提前截止)、#6(建帮 uk 回滚)、#16(seq 首插者回滚)、#17-6(解散闸门)全部已修;#4 / #15 由共享库修法 A 解决。本会话审计另查出并修掉:离帮删成员行 ‖ 别帮审批同一玩家(缺玩家守卫)、G-C2(TiDB 乐观 autocommit 与悲观写者 TTL 级互等)、G-OUT1、G-C3、C1(启动期多副本建哨兵)、C2(seq 首插者)、C5 / C6(TiDB 计数行)、V1 / V2(TiDB 多 key 写前无点锁)、计数行清理与跨切周预留。反驳成立(不修):G-C1(8.0.29 起已持 S 再升 X 可越过排队的 X,Bug #11745929)。
+
+> **2026-09-28 落码修正(B6a-srv)**:第 1 条的表间全序末尾追加 **P**(`guild_activity_progress`),现为
+> `G < S < M < A < Q < O < C < P`;B6b 的 `guild_trial_battle` 与 `guild_trial_reward_owed` 再依次接在 P 之后(`tables.go` 的 `Tables()` 注释)。
+> "登记过的例外"新增一条:**P 只在持有同帮 G 行锁时写,因此豁免第 6 条"多 key 写之前先完整主键点锁"**。
+> 豁免的是这两处写法:点灯 / 团圆先 upsert P、再按主键点锁读回;解散先普通读候选、再按主键升序逐行点删。两处写之前都没有单独的主键点锁。
+> P 是 TiDB 非聚簇主键表,一次写要锁 {行 key, PRIMARY key} 两个 key。
+> - **为什么能豁免**:P 的每个锁定者和写者,第一把锁都是同一 guild_id 的 G 行 `FOR UPDATE`,所以同一帮的 P 行任何时刻只有一个持锁者在推进。
+>   TiDB 在语句末尾并行锁那两个 key 时没有第二个竞争者,不会各持一半互等。MySQL READ COMMITTED 下,upsert 命中已有行只在聚簇主键上加
+>   **记录锁**(LOCK_REC_NOT_GAP),不锁间隙、不挡别帮插入;本事务此后只再写已持有的行,所以只有单向等待(与 `activity_repo.go` 文件头第 5 条一致)。
+> - **后续改代码必须守的约束**(违反任一条,豁免即失效,第 6 条重新适用):
+>   ① 只在已持有该帮 G 行锁(FOR UPDATE)的事务里锁或写 P。捐献、兑换只普通读 G,**不得**碰 P。
+>   ② 锁定语句只做完整主键 `(guild_id, activity_id, period_key)` 等值点操作,不写 `DELETE … WHERE guild_id = ?` 这类前缀范围删。
+>   ③ 读路径(`GetGuildActivities`、团圆预检)只用普通读。
+>   ④ 将来不持 G 行锁的旧期清理(v1.1)**不享受豁免**:照计数行清理的做法,逐行 RC 短事务"主键点锁 → 带复核点删",
+>   而且只删已不可能再被写的旧期行。
+> - **风险**:`activity_repo_static_test.go`(不带 build tag,普通 `go test ./...` 必跑)的 `TestActivityLockOrderInSource` 按源码顺序钉住现有事务的语句次序,但钉不住"有人新增一条不先锁 G 的 P 写路径"。评审时要人工对照约束 ①。
+> - **出处**:`go/guild/internal/data/tables.go` 的 `Tables()` 注释;`activity_repo.go` 文件头的"取锁序列 / 为什么不成环",以及 `deleteGuildActivityProgress` 函数头。
+>   本条只登记现状,**没有改动任何事务的取锁顺序**。
 
 ### 12.3 本批未提交的文件(死锁修复,`9cef7b2ec` 之后)
 
@@ -859,15 +883,29 @@ xlsx 脚本 5 条(1 major:发号机制的注释写错;4 minor:幂等判定、核
 | 审批拒绝 / 过期 / 撤回 | G → M(审批人) → A(G,p) 点锁 → 删 / 撤回:A(G,p) 点锁 → 条件删 |
 | 申请 | G → S(p) → 本人过期 A↑ 点锁点删 → A(G,p) FOR UPDATE → 刷新或 IODKU;提交后本帮过期 ≤10 行各一短事务 |
 | 踢人 / 退帮 | [预读] G → S(t) → M↑ → 删 M → A(*,t)↑ → O↑(点锁 → 带复核点改) |
-| 解散 | G → 闸门 → S(全员↑) → M(全员↑) → 删 M → A↑ → O↑ → 删 G |
+| 解散 | G → 闸门 → S(全员↑) → M(全员↑) → 删 M → A↑ → O↑ → P↑ 逐行点删 → 删 G |
 | 任免 / 转让 / 公告 / 升级 / 积分 | G → [M↑] → UPDATE |
 | 捐献 / 兑换预留 | G 普通读 → M(G,p) → [缺行插 Q] → Q FOR UPDATE → 插 O → C(IODKU) |
+| 点灯 / 团圆(B6a,2026-09-28 追加) | G FOR UPDATE → 闸门 → M(G,p) 点锁 → [缺行插 Q] → Q(p,GUILD_CREDIT) FOR UPDATE(有物品奖励由 AllocateSeq 锁,否则守卫点锁)→ [插 O] → C(带上限 IODKU) → P(G,活动,期键) IODKU → P 点锁读回 → 再写已持有的 G.funds / P 锁存 / M 帮贡 |
 | 终结 / 人工终结 | 捐献 APPLIED:G → M → O 点锁 → CAS;被拒 / 中止:[M] → Q → O 点锁 → CAS → 退 C |
 | 重排 / 毒行 | 事务:O 点锁 → 带 lease_token 复核的 UPDATE |
 | Claim | autocommit,只改无索引列 |
 | 清理 | 每行一短事务:点锁 O / C → 带复核点删 |
 
 收敛检查(最后一轮,两路独立视角从零找环):**[结论见 PROGRESS 同日条目与本节 12.8]**。
+
+> **2026-09-28 落码修正(B6a-srv)**:上表有两处改动。
+> 1. **新增"点灯 / 团圆"一行**,序列照 `activity_repo.go` 文件头"取锁序列"与 `participate` 的语句次序抄录。要点:
+>    - 闸门在锁住 G 之后、用行里的 `zone_id` 判定,与解散同形。
+>    - 没有物品奖励时也锁 Q(`sqlLockSeqGuard`)。计数行的每个悲观写者都要先持同一 (p, 流) 的 seq 行(死锁复核 C6)。
+>      活动计数行归 GUILD_CREDIT 流,也就是活动发奖走的那条流。
+>    - 团圆在未锁存且人数不达标时回 `ErrActivityThresholdNotReached`,整体回滚,进度行也不留。
+>    - P 之后对 G / M 的写,是本事务对已持有行的再写,不算新的取锁位置。
+> 2. **解散一行**在 `O↑` 与 `删 G` 之间插入 `P↑ 逐行点删`(`DisbandGuild` 调 `deleteGuildActivityProgress`,做法是普通读候选、再按主键升序逐行点删)。
+>    这一步必须排在提前截止之后。如果排到删申请或提前截止之前,就成了持着 P 回头取 A / O。
+> 
+> 上面"收敛检查"的结论出自 09-21,**不覆盖 P**。P 相关事务不成环的论证目前只有 `activity_repo.go` 文件头的静态推演(逐条对照 §12.2)。
+> 真库证据要等 §12.6 补的 `TestActivity` 并发回归跑出来,在那之前不能宣称 P 无死锁。本条没有改动任何既有事务的取锁顺序。
 
 ### 12.5 仍需用户 / 别的会话拍板或处理
 
@@ -902,9 +940,26 @@ xlsx 脚本 5 条(1 major:发号机制的注释写错;4 minor:幂等判定、核
 ```
 失败时保留:失败用例名与断言、`-v` 输出、`SHOW ENGINE INNODB STATUS` 的 LATEST DETECTED DEADLOCK 段、MySQL 版本。
 
+> **2026-09-28 落码修正(B6a-srv)**:在第 5 步之后补一步帮会活动的真库并发回归。要求同第 5 步:串行执行、独占实例、MySQL ≥ 8.0.29。
+> ```
+> 5b) $env:GUILD_IT_MYSQL_DSN = "<有 CREATE/DROP DATABASE 与 PROCESS 权限的账号>@tcp(127.0.0.1:3306)/"   # 口令不写进任何文件;库名被忽略
+>     go test -tags=integration -p 1 -count=1 -v -run TestActivity ./internal/data
+> ```
+> - **通过标准**:全部 PASS,**不许出现 SKIP**。用例只在 DSN 未设置时 Skip;设置了却连不上或建不了库会直接红,不能当 Skip 处理。
+> - **判据**:并发用例(`TestActivityIT_LanternConcurrent*`、`TestActivityIT_ConcurrentLanternVersusDisband`、`TestActivityIT_ConcurrentLanternVersusShopSamePlayer`)
+>   比对 InnoDB 的 LATEST DETECTED DEADLOCK 段来判死锁。原因是 `inTx` 会吸收 1213 并重跑,只看返回值看不见死锁。
+>   `-p 1` 是为了防止别的包的并发测试覆盖死锁现场。
+> - **隔离**:每个用例自建一次性库 `guild_it_<pid>_<n>`,结束时 DROP,不碰 `mmorpg_guild`。
+> - **失败时保留**:内容同上。
+> - **工作目录**:`go\guild`(机器 A 为 `E:\work\xuanming-server-mmo\go\guild`)。
+> - **前置**:B6a 的导表与 proto-gen 已跑完(§13.2 ①)。否则 `go/proto/guild` 里没有 `GuildActivityProgressRecord`,包在编译阶段就失败。
+
 ### 12.7 文档待同步(本批只改了本节与 05 §5.42 第 7 步)
 
 01-storage.md §2.1 规则 4("判定用加锁读")→ 守卫之下 RC 普通读;§2.1 补 P2 / P3 / P4、全局插入守卫与 CreateGuild / 审批通过两个例外;"guild_player_state 每玩家一行"→ 另有 0 号哨兵(proto 注释同改,需重生);02-management.md §6.1"操作者与目标用一条语句 IN (?,?)"→ 两次点锁、§6.2a 补 transaction_isolation、I3 锁序加 S、CancelApplication 改 RC 短事务;05-economy.md §5.15 / §5.20 / §5.22(seq 行在事务内建、提前截止与清理改点锁点删);90 X-14 的解散顺序改为"删成员 → 删申请 → 提前截止";`docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md` §7.2 的 guild 三行标为已修;运维节补 assetopfix 与告警(见 12.8)。
+
+> **2026-09-28 落码修正**:"90 X-14 的解散顺序"这一项已同步,见 X-14 的落码修正。同步后的顺序是:删成员 → 删申请 → 提前截止 → **删 P**(B6a 新增,逐行点删)→ 删 G。
+> 本清单里其余各项本轮没有处理,仍然待同步。
 
 ### 12.8 运维要点
 
@@ -912,4 +967,71 @@ xlsx 脚本 5 条(1 major:发号机制的注释写错;4 minor:幂等判定、核
 - **告警**(建议,BK8s 落规则):`increase(assetop_unknown_total{service="guild"}[10m]) > 0`;`assetop_pending_oldest_age_seconds{service="guild",stream="2"} > 86400`;`increase(assetop_partial_total{service="guild"}[1h]) > 0`(部分发放需人工补偿);`increase(guild_tx_deadlock_total[10m]) > 0`(本批的验收指标:应恒为 0);`guild_cache_invalidate_failed_total`、`guild_asset_orphan_total` 持续上升。
 - **密钥**:只从环境变量 `MMORPG_ASSET_OP_SECRET_GUILD` 读(≥32 字节,缺失 / 过短且 `AssetOp.Enabled=true` 即拒启);本机由 `go_services.ps1` / `start_game.ps1` 从 `run/secrets/assetop-dev.env` 注入。
 - **门禁**:共享 / 预发环境开启 `AssetOp.Enabled` 前满足 08 §8.3 六条。
+
+---
+
+## 13. 2026-09-28 本会话(机器 A)接续(**全部未编译、未导表、未 proto-gen,待 Codex 验证**)
+
+工作目录是 `E:\work\xuanming-server-mmo`(机器 A)。§8–§12 写于机器 B(`D:\luyuan\wuxingqitan\mmorpg`),照做时把命令里的路径换成本机路径。客户端仓在 `E:\work\mmorpg-client`。
+
+### 13.0 先看这几条
+
+- **硬要求"go/guild 不能有死锁"仍然有效**。本轮只在表间全序**末尾**接上 P,并登记了 P 对 §12.2 第 6 条的豁免(见 §12.2 的落码修正)。
+  **没有改动任何既有事务的取锁顺序**:§12.4 里,解散一行只是在 O 与删 G 之间插入 P 这一步,点灯 / 团圆是新增的一行。
+- 本轮只做了静态落码和文档同步(AGENTS §10.1),构建、测试、生成命令一条都没跑。在 Codex 跑出结果之前,不得宣称"编译通过""测试绿"或"P 无死锁"。
+
+### 13.1 已落码(未编译)
+
+| 批次 | 状态 | 与设计的偏差记在哪 |
+|---|---|---|
+| B3b 客户端 | 已落码。未编译,EditMode 未跑 | `03-names.md` §3.22 / §3.24 的 2026-09-28 落码修正:名字输入框与"随机"按钮的位置、建角模式不隐藏 PreviewTitle、正常路径默认填随机名、可重试提示文案、字符向量改为 `{cp,why}` 对象数组、`gen_proto.ps1` 必须带 `-ProtoRoot`。帮会成员页的偏差见 `90-consistency.md` Y-08 的落码修正 |
+| B6a-srv | 已落码,文件清单见 `06-activities.md` §6.45。未编译、**未导表、未 proto-gen** | P 进入表间全序及其豁免见 §12.2;取锁序列见 §12.4;真库回归见 §12.6 第 5b 步与 06 §6.46 的落码修正。解散删 P 的实际位置在 `guild_manage_repo.go` 的 `DisbandGuild`(`90-consistency.md` X-14 落码修正;06 §6.45 第 18 项写的 `guild_repo.go` 作废) |
+| B5b(已保留) | `economyCaller` 的自愈路径保持不变 | `05-economy.md` §5.24 落码修正:快照里没有本人时,经 `ResolvePlayerGuild` 以 MySQL 复核,并绕过缓存直读,不再直接回"未入帮"。B6a 的 `activityPrelude`(`activity_logic.go`)也走同一条路径,所以两处对"我在哪个帮"的回答一致 |
+
+### 13.2 待办(按顺序;全部交 Codex 或用户执行)
+
+① **导表 + proto-gen**(仓库根目录)。B6a 的 `proto/guild/guild.proto`、`proto/guild/guild_db.proto` 与 `GuildActivity` 表还没生成:
+   `go/proto/guild/guild.pb.go` 的内容仍停在 09-20 那次提交,没有任何 `GuildActivity*` 类型;
+   `generated/tables/guildactivity.json`、`go/shared/generated/table/guildactivity_table.go` 也都不存在。
+   步骤与通过标准见 06 §6.46 B6a-srv 第 1、2 步。**没生成之前,go/guild 编译必然失败,这是预期,不是缺陷。**
+   导表与 proto-gen 期间不要和别的会话并发跑发号器(§5)。
+
+② **回填 `data/MessageLimiter.xlsx` 的活动 5 行**。先等 ① 发出消息号,再填:`GetGuildActivities` 10/1s,
+   其余四个(`LightGuildLantern`、`ClaimGuildReunion`、`StartGuildTrial`、`RespondGuildTrialInvite`)各 5/1s。
+   填完**重跑一次导表**(06 §6.46 B6a-srv 第 3 步)。
+   xlsx 必须用 openpyxl 按 `load → 改行 → save` 修改,**禁止整表写回**:二进制文件不能 3-way 合并,整表写回等于删掉别人的行(§4)。
+
+③ **`robot` 执行 `go mod vendor`**(90 Y-10:B6a-srv 属于必须 vendor 的批次)。要排在 ①② 之后,保证 vendor 拿到的是最终生成物。
+   执行后跑 `git status --short robot/vendor`,只允许出现本批 proto 与表生成物路径,预期在 `robot/vendor/proto/guild/` 与 `robot/vendor/shared/generated/` 下。
+   如果 `modules.txt` 有变化,要写明原因。**出现别的会话的路径就停下报告**,不要连带提交。
+
+④ **重生成配表索引**:执行 `py tools/data_table_exporter/tools/gen_schema_index.py`,重生成 `data/AGENTS.md` 的配表索引。
+   那一段在 `<!-- BEGIN GENERATED: schema-index -->` 与 `<!-- END GENERATED -->` 之间,是生成块,**不要手改**。
+   目前索引里还没有 `GuildActivity`(§6"合计 N 张表"那条欠账同理)。
+
+⑤ **客户端**(`E:\work\mmorpg-client`):执行 `pwsh -File tools/gen_proto.ps1 -ProtoRoot E:\work\xuanming-server-mmo`,**必须带 `-ProtoRoot`**。
+   原因:默认值是 `$PSScriptRoot/../../..`,从 `tools` 目录往上退三级,在本机会解析成 `E:\`,protoc 在那里找不到 proto。
+   **生成 `LoginErrorTip.cs` 之前,客户端整体编不过**:B3b 的 `RoleNameRules` 引用了 `login_error` 枚举。
+   (核对记录:机器 A 的客户端仓里,2026-09-28 已有 `Assets/Scripts/Proto/Generated/LoginErrorTip.cs`,含 B3b 用到的 6 个码。换机或清过生成物时,仍要先跑这一步。)
+   之后照 `03-names.md` §3.24 跑 `client_compile_check.ps1` 与 EditMode。B6a-cli 另外还要跑 `gen_messageids.ps1`(06 §6.46)。
+
+⑥ **proto2mysql 已切到 v0.2.0**(见 `PROGRESS.md`「2026-09-28 服务器全仓 proto2mysql 切到 v0.2.0 + 本地库键列核对」条目)。
+   **新编的 guild.exe 必须与 guild 表的 `name_norm` 迁移同一批上线**。两边的旧版本都会拒启:
+   v0.2.0 编出的 guild.exe 遇到旧表(`mediumtext` + `uk_guild(name_norm(191))`)会报列类型漂移,schemamigrate 退出码 4;
+   表迁移之后,bin 里旧的 v0.1.1 guild.exe 也会拒启。
+   顺序:用 v0.2.0 重编 `bin/go_services/guild.exe` → 停 guild → 执行 PROGRESS 该条目「运行期注意」第 1 条的迁移 SQL(索引名必须保持 `uk_guild`,`guild_repo.go` 按这个名字判断撞名)→ 启动新 guild。
+   验收口径的变化见 `01-storage.md` 的 2026-09-28 落码修正:uk_guild 从 SUB_PART=191 改为 SUB_PART=NULL。
+
+### 13.3 验证入口(全部未执行)
+
+- **B6a-srv**:06 §6.46 B6a-srv(含落码修正:两个 DSN 都要设,或收窄 `-run`;补上 robot vendor 一步)。完成后跑本文件 §12.6 全序列与第 5b 步。
+- **B3b 客户端**:`03-names.md` §3.24(含落码修正:`gen_proto.ps1` 带 `-ProtoRoot`;"输入框留空点创建"之前要先手动清空默认的随机名)。
+- 失败时先看文件归属:go/guild 上还叠着 B2s / B3b / B5b / 死锁修复 / B6a 等从未编译过的批次。
+
+### 13.4 本轮查出、未在本轮处理的事
+
+- 设计文档里还有旧写法:06 §6.45 第 18 项把"解散删进度行"写在 `guild_repo.go`,实际在 `guild_manage_repo.go`(`activity_repo.go` 的哨兵注释已说明清单不含 `guild_repo.go`);
+  06 正文写于死锁修复之前,凡与 §12.2 / §12.4 冲突的,以本文件与代码函数头为准(`activity_repo.go` 文件头已声明这个效力顺序)。
+- 代码注释里残留"191 前缀"的旧口径:`proto/guild/guild_db.proto` 文件头的 D-14 §2 那一行和 `name_norm` 字段注释,以及 `go/guild/internal/data/guild_repo.go` 中 `MaxGuildNameNormRunes` 的注释。
+  v0.2.0 下 `name_norm` 是整列 `VARCHAR(191)`,48 rune 的上限仍然成立,只是理由变成"远小于列长"。改这些注释归代码持有者;改 proto 注释后需要重跑生成。本轮只登记。
 

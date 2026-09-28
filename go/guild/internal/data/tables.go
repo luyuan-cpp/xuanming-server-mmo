@@ -17,6 +17,8 @@ const DatabaseName = "mmorpg_guild"
 // (G guild < S guild_player_state < M guild_member < A guild_application < Q guild_player_op_seq
 // < O guild_asset_op < C guild_daily_counter,B6a 起接 P guild_activity_progress)。
 // 下游写事务按这里的先后取锁:任何事务都不得在持有靠后表的行锁之后回头去锁靠前的表。
+// 本文件预先登记了一条例外:B6b 历练结算的"逐人 (Q → O)",理由与复核要求见下方 B6a 注释块里的"例外:新插 O 行";
+// 它只在那条理由成立时才不成环,不是"回头锁"的通用许可。
 //
 // 新增表 = guild_db.proto 加 message 并在这里按锁序位置追加(schemamigrate 会补建后加的表),
 // 同时追加两份删表清单(逆锁序,数量由测试按 len(Tables())+1 守着,漏加即红):
@@ -38,11 +40,21 @@ func Tables() []proto.Message {
 		// (先用计数行 upsert 的 RowsAffected 判定"本人今天还能不能参与",再给帮会进度 +1);01-storage.md §2.1
 		// 与 90-consistency.md part2 §1 也已按位置 8 登记。取完 P 之后对 G / M 行的资金、帮贡 UPDATE 是对**已持有行**
 		// 的再写(与升级、捐献终结记资金同形),不算新的取锁位置。各事务的取锁序列:
-		//   - 点灯 / 团圆(op=activity):G FOR UPDATE → M(G,p) 主键点锁 → [Q(p, GUILD_CREDIT) → 有物品奖励时插 O]
-		//     → C(p, ACTIVITY, activity_id, 游戏日) 带上限 upsert → P(G, activity_id, 档期键) upsert + 主键点锁;
-		//     (无物品奖励时 C 的写者是否也先持 Q 作守卫,按 asset_store.go 文件头"计数行上的写者与取锁全序"判定,与 P 的位置无关)
-		//   - 历练结算(B6b,op=trial_settle):G FOR UPDATE → M(候选人主键升序逐行点锁)→ 按 player_id 升序逐人 (Q → O)
-		//     → C(升序)→ P → guild_trial_battle → guild_trial_reward_owed;
+		//   - 点灯 / 团圆(op=activity):G FOR UPDATE → 闸门 → M(G,p) 主键点锁 → [缺行插 Q]
+		//     → Q(p, GUILD_CREDIT) FOR UPDATE(有物品奖励时由 AllocateSeq 锁,没有物品奖励也由 sqlLockSeqGuard 点锁 ——
+		//       **恒锁 Q**,它是计数行 C 的写者守卫)→ [有物品奖励时插 O]
+		//     → C(p, ACTIVITY, activity_id, 游戏日) 带上限 upsert → P(G, activity_id, 档期键) upsert + 主键点锁读回;
+		//   - 历练结算(B6b,op=trial_settle,**预先登记、尚未落码**):G FOR UPDATE → M(候选人主键升序逐行点锁)
+		//     → 按 player_id 升序逐人 (Q → O) → C(升序)→ P → guild_trial_battle → guild_trial_reward_owed。
+		//     从第二人起,这是持着前一人**新插**的 O 行去锁下一人的 Q,字面上违反上面"不得回头锁靠前的表",
+		//     只靠下面这条例外才不成环:
+		//     例外:新插 O 行。本事务插入的 O 行在提交前,任何其他加锁者都拿不到它的 op_id 或索引项 ——
+		//     Claim / ListDue / 提前截止都是先普通读出候选、再按 op_id 主键点锁**已提交**的行,AllocateSeq 数未决行是普通读,
+		//     本库对 guild_asset_op 的锁定 / 写语句全部以 op_id 主键等值定位(asset_store.go、economy_repo.go),没有锁定范围扫描;
+		//     同一 (p, 流) 的其他插入者又都先排在 Q(p) 上,而 Q(p) 已在本事务手里。所以没有人会在持有后一人的 Q 时
+		//     等前一人的新 O 行,等待链闭合不了,不成环。
+		//     **此例外需在 B6b 落码时于 92-handoff §12.2 登记并复核**:届时若任何路径新增了对 guild_asset_op 的锁定范围扫描、
+		//     或按 (player_id, stream) 等索引前缀锁行,本例外即失效,结算必须改成"先按 player_id 升序锁全部 Q,再逐人插 O";
 		//   - 解散(guild_manage_repo.go 的 DisbandGuild,X-14):G → 闸门 → S(全员↑)→ M(全员↑,锁后即删)→ A↑
 		//     → O↑(提前截止)→ **删 P** →(B6b:删 guild_trial_battle)→ 删 G。删 P 必须插在提前截止之后、删 guild 行之前;
 		//     只做到"删 guild_member 之后"不够 —— 排到删申请 / 提前截止前面,就是持着 P 回头取 A / O,违反全序。

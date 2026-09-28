@@ -406,6 +406,8 @@ type ActivityDeps struct {
     MatchBudget   time.Duration                  // 1500ms(= MatchRpc.Timeout)
 }
 func (l *GuildLogic) EnableActivities(d ActivityDeps)   // guild.go 在 EnableEconomy 之后调用一次
+// 2026-09-28 落码修正:以 90 Y-02 为准,实际是函数式选项 logic.WithActivities(d ActivityDeps),
+// 依赖存在 GuildLogic.activities 字段上,在 guild.go 装配;不存在 EnableActivities 方法,也没有包级表。
 ```
 
 **预算规则**(每个写 RPC 进入时 `start := d.Now()`):
@@ -1190,7 +1192,7 @@ func runTrialResultConsumer(ctx context.Context, r trialReader, handle TrialResu
    - 返回**暂时性**错误(MySQL 驱动错误、1213/1205 重试耗尽、Redis 错误、号段不可用)→ 按 1s、2s、4s… 退避(上限 30s)重调,不提交;ctx 结束则退出不提交;
    - handler 内部已把**确定性**错误(`errActivityPoison`)转成 Poison 终态并返回 nil error,消费者照常提交。
 
-启动:`guild.go` 在 `EnableActivities` 之后、`TrialResultActive()` 为真时启动;首次失败(Kafka 未就绪)照 `match_service.go:78-98` 每 30s 重试,不拒绝启动。
+启动:`guild.go` 装配 `logic.WithActivities` 之后(2026-09-28 落码修正,原文写 `EnableActivities`)、`TrialResultActive()` 为真时启动;首次失败(Kafka 未就绪)照 `match_service.go:78-98` 每 30s 重试,不拒绝启动。
 
 ## 6.29 结算 `GuildLogic.SettleTrialResult(ctx, ev) (TrialSettleOutcome, error)`
 
@@ -1725,7 +1727,7 @@ TEST(BattleResultActivity, ClassifyRetryOrder)             // (false,99,30)→kD
 | 23 | `go/guild/internal/server/guild_server.go` | 五个委托 |
 | 24–25 | `go/guild/internal/session/{session.go,session_test.go}` | 白名单 |
 | 26–27 | `go/guild/internal/constants/{constants.go,constants_test.go}` | tip 常量(含 B6b 用的四个,一次加齐) |
-| 28 | `go/guild/guild.go` | `ValidateTables` + `EnableActivities` |
+| 28 | `go/guild/guild.go` | `ValidateTables` + `logic.WithActivities`(原文 `EnableActivities`,按 90 Y-02 改为函数式选项) |
 | 29–30 | `go/guild/internal/config/{config.go,config_test.go}` | DSN 不含 `clientFoundRows=true` |
 
 (原稿的 `go/shared/gameday` 改动删除:复用 B5 的 `NextDailyReset`。)
@@ -1772,6 +1774,39 @@ TEST(BattleResultActivity, ClassifyRetryOrder)             // (false,99,30)→kD
 4. C++:MSBuild Debug x64 `/m:1` 编 `cpp/generated/table/table.vcxproj` 与 gate 工程,0 error;Linux CMake 构建 table 目标。
 5. Go:`cd go/guild; go build ./...; go vet ./...; go test -count=1 ./internal/activity ./internal/logic ./internal/session ./internal/constants ./internal/config`;设 `$env:GUILD_IT_MYSQL_DSN` 后 `go test -tags=integration -count=1 -v -run "Activity|Lantern|Reunion|Disband" ./internal/data`,输出不得有 SKIP;`go build -o ../../bin/go_services/guild.exe .`;`cd go/client_rpc_router; go build -o ../../bin/go_services/client_rpc_router.exe .; go test -count=1 ./...`。
 6. 部署顺序:路由服 → gate(重载 MessageLimiter)→ guild;启动日志无 `ValidateTables` 报错。
+
+> **2026-09-28 落码修正(B6a-srv 已落码,未编译、未导表、未 proto-gen)**:第 5 步有两处要改。
+>
+> **(1)第 5 步只设了 `GUILD_IT_MYSQL_DSN`,不够。**
+> 带上 `-tags=integration` 后,同一包里未打标签的老用例也会参与编译和匹配。`-run "Activity|Lantern|Reunion|Disband"` 除了 `activity_repo_integration_test.go` 的 `TestActivity*`,还会匹配这些读 `GUILD_TEST_MYSQL_DSN` 的老用例:
+> - `TestDisbandGuild_*`、`TestGuildLockOrder_*Disband*`
+> - `TestAccelerate_LeaveKickDisbandPullDeadlineToNow`
+> - `TestFinalize_ActivityRewardOnlyCAS`
+>
+> 只设一个变量,这些用例会 SKIP,"不得有 SKIP"就无法满足。
+> 另外,`TestDisbandPath_*`(`rank_zone_integration_test.go`)先读 `GUILD_IT_MYSQL_DSN`,没设时回落到 `etc/guild.yaml` 的 DSN;那个账号没有建库权限时同样会 SKIP。二选一:
+>   - **两个都设**(推荐,解散路径的老回归一并覆盖):
+>     ```
+>     $env:GUILD_TEST_MYSQL_DSN = "<本地 dev 账号>@tcp(127.0.0.1:3306)/guild_test?parseTime=true&charset=utf8mb4"   # 库名只能 guild_test / guild_it_<pid>_<n>
+>     $env:GUILD_IT_MYSQL_DSN   = "<有 CREATE/DROP DATABASE 与 PROCESS 权限的账号>@tcp(127.0.0.1:3306)/"
+>     go test -tags=integration -p 1 -count=1 -v -run "Activity|Lantern|Reunion|Disband" ./internal/data
+>     ```
+>   - **或者收窄 `-run`**,只跑本批用例:`$env:GUILD_IT_MYSQL_DSN=…; go test -tags=integration -p 1 -count=1 -v -run TestActivity ./internal/data`。
+>     这与 92-handoff §12.6 第 5b 步是同一条命令。
+>
+> 两种写法都要加 `-p 1`:并发用例用 InnoDB 的 LATEST DETECTED DEADLOCK 判死锁,别的包的并发测试会覆盖现场。
+> 口令不写进任何文件。通过标准不变:全部 PASS,**不得出现 SKIP**。
+>
+> **(2)补上 90 Y-10 规定的 robot vendor 步骤**(B6a-srv 是必须 vendor 的批次)。放在第 3 步(回填 MessageLimiter 后重跑导表)之后、第 5 步之前,保证 vendor 拿到的是最终生成物:
+> ```
+> cd robot; go mod vendor; git status --short vendor
+> ```
+> 只允许出现本批 proto 与表生成物路径(预期在 `robot/vendor/proto/guild/` 与 `robot/vendor/shared/generated/` 下);`modules.txt` 如有变化要写明原因。**出现别的会话的路径就停下报告。**
+>
+> **其它与正文不同的落点**:
+> - 解散删进度行落在 `guild_manage_repo.go` 的 `DisbandGuild`,位置在提前截止之后、删 guild 之前,做法是逐行点删(90 X-14 落码修正)。§6.45 第 18 项写的 `guild_repo.go` 作废。
+> - 活动事务的锁序以 92-handoff §12.2 / §12.4 为准:P 接在 C 之后,并豁免第 6 条"先点锁再写"。
+> - 现状与待办(MessageLimiter 回填、`gen_schema_index.py`、proto2mysql v0.2.0 同批迁移)见 92-handoff §13。
 
 ### B6a-cli
 1. `mmorpg-client` 下 `pwsh tools/gen_messageids.ps1`,再跑 `client_compile_check.ps1`。

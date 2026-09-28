@@ -54,7 +54,9 @@ message GuildActivityTable {
   // 帮会资金:灯会、团圆 = 本档期达阈值时只发一次;历练 = 每个计资金的胜场发一次
   // 0 = 不发资金(团圆默认 0,用户决策 3 只给团圆设个人奖)
   uint64 guild_funds = 9;
-  // 阈值:灯会 = 本档期点灯人次(>=1);团圆 = 同时在线人数(0 = 用 GuildRule.reunion_min_online_members 兜底);历练 = 每游戏日计资金胜场上限(>=1)
+  // 阈值:灯会 = 本档期点灯人次(>=1);历练 = 每游戏日计资金胜场上限(>=1)
+  // 团圆 = 同时在线人数,生效值取"本行值"与 GuildRule.reunion_min_online_members 两者较大(activity.ReunionThreshold)
+  // GuildRule 那列是下限:本行填 0 即按它;本行填得比它低也按它,只有填得更高才加码。两者都为 0 拒绝启动
   uint32 guild_threshold = 10;
   // 物品奖励。FK -> Reward.id,0 = 无
   // 非 0 时奖励包必须非空、每项数量 >=1、物品种类 <=16(资产通道单次发放上限)

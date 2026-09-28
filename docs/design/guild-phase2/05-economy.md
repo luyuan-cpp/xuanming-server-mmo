@@ -820,6 +820,22 @@ func WithEconomy(d EconomyDeps) Option { return func(l *GuildLogic) { l.economy 
 3. `guild := repo.GetGuild`;为 nil → 先 `RefreshPlayerGuildID`,再回 `ErrNotInGuild`(同 LeaveGuild 处理悬挂映射的做法,`guild_logic.go:361-373`)。
 4. 缓存里没有本人成员 → 同样回 `ErrNotInGuild`(事务内还会复核)。
 
+> **2026-09-28 落码修正(B5b,本轮复核后保留)**:第 1、2 步已按 90 Y-01 改为 `callerOf` + `l.operatorGuild`(缓存读到 0 时用 MySQL 复核)。
+> 实际签名是 `economyCaller(ctx) (uint64, *data.GuildData, *base.TipInfoMessage, error)`,tip 不是 `uint32`。
+> **第 3、4 步不再"直接回未入帮"**:两种情况都交给 `repo.ResolvePlayerGuild(ctx, playerID)` 以 MySQL 复核。
+> 两种情况是:映射指着已不存在的帮(`GetGuild` 为 nil),以及快照里没有本人。
+> `ResolvePlayerGuild` 会先失效可疑的帮会快照,再用 `VerifyPlayerGuildID` 纠正映射,然后**绕过缓存**直读权威快照。
+> 读回 nil 才回 `ErrNotInGuild`;读到快照就用它继续。帮号与缓存里的不同时,记一条 Info 日志"guild mapping healed"。
+> 还有一种情况:`guild_member` 说玩家在 G,G 的直读快照里却没有他。这说明两份 MySQL 数据互相矛盾,此时 `ResolvePlayerGuild` **回内部错误**(fail-closed),
+> 不当作"未入帮"处理。否则玩家会在数据损坏的状态下去建新帮,把一处矛盾扩大成两个帮。
+> - **原因**:这条坏路径有两种成因,只纠正映射只能治好其中一种。
+>   - 映射陈旧(离帮后入了别的帮,审批提交后映射失效失败):纠正映射就够了。
+>   - **映射是对的,快照陈旧**(审批通过后帮会快照失效失败):映射本来就对,纠了等于没纠。
+>     刚入帮的玩家会在整个快照 TTL(30 分钟)里捐献、兑换、打开商店全部回"未入帮",而且没有任何自愈路径。
+> - **一致性**:客户端 `GetPlayerGuild`(`guild_logic.go`)与 B6a 的 `activityPrelude`(`activity_logic.go`)走的是同一个函数,三处对"我在哪个帮"的回答一致。
+> - **代价与边界**:额外开销只落在坏路径上,是几次缓存读加两三次主键或唯一索引点查。授权仍然一律在事务里按锁住的行复核,这里读到的快照只用于预判和展示。
+> - **出处**:`go/guild/internal/logic/economy_logic.go` 的 `economyCaller` 函数头。未编译,未跑测试。
+
 **repo 错误的统一映射** `economyTip(err)`:`ErrEconomyNotMember` → `ErrNotInGuild`(并 `RefreshPlayerGuildID`);`ErrEconomyGuildGone` → `ErrGuildNotFound`;`ErrZoneMerging` → `GuildZoneMerging`;`ErrEconomyTooManyPending`、`ErrEconomyBusy` → `GuildAssetPending`;`ErrEconomyLevelTooLow` → `GuildShopLevelTooLow`;`ErrEconomyDailyLimit` → `GuildDonateLimit`;`ErrEconomyShopLimit` → `GuildShopLimit`;`ErrEconomyContributionInsufficient` → `GuildContributionInsufficient`;`ErrEconomyRankTooLow` → `GuildRankTooLow`;`ErrEconomyMaxLevel` → `GuildMaxLevel`;`ErrEconomyFundsInsufficient` → `GuildFundsInsufficient`;其它错误 → `return nil, err`。
 
 ## 5.25 DonateToGuild

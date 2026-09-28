@@ -53,6 +53,9 @@ var activityTestNow = time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
 
 func activityTestNowMs() uint64 { return uint64(activityTestNow.UnixMilli()) }
 
+// activityTestClock 是注入给 ActivityDeps.Now 与 assetop.Loop 的固定时钟:用例的结论不随真实墙钟变化(AGENTS.md §11.4)。
+func activityTestClock() time.Time { return activityTestNow }
+
 // longAgoJoinMs:入帮已满任何合法 activity_join_min_hours(上限 720 小时)。
 func longAgoJoinMs() uint64 { return activityTestNowMs() - 800*3_600_000 }
 
@@ -194,7 +197,7 @@ func newActivityFixture(t *testing.T, g data.GuildData, deps ActivityDeps, homeZ
 	require.NoError(t, err)
 	deps.Repo = activityRepo
 	if deps.Now == nil {
-		deps.Now = func() time.Time { return activityTestNow }
+		deps.Now = activityTestClock
 	}
 	l := NewGuildLogic(repo, nil, NewOnlineStatusResolver(srdb), nil, &fakeHomeZones{zone: homeZone}, WithActivities(deps))
 	return &activityFixture{l: l, sessions: sessions}
@@ -263,16 +266,17 @@ func activityRPCs() []managementCall {
 // ── 接线与公共前置 ────────────────────────────────────────────
 
 // TestWithActivities:Repo 为 nil 不装配(半装配比不装配更危险);零值字段补默认;显式值原样保留。
+// 依赖落在 GuildLogic.activities 字段上(90 Y-02 的函数式 Option),不经任何包级状态。
 func TestWithActivities(t *testing.T) {
 	t.Run("Repo 为 nil 不装配", func(t *testing.T) {
 		l := NewGuildLogic(nil, nil, nil, nil, nil, WithActivities(ActivityDeps{SyncBudget: time.Second}))
 
-		assert.Nil(t, l.activityDeps())
+		assert.Nil(t, l.activities)
 	})
 	t.Run("零值字段补默认", func(t *testing.T) {
 		l := NewGuildLogic(nil, nil, nil, nil, nil, WithActivities(ActivityDeps{Repo: &data.ActivityRepo{}}))
 
-		d := l.activityDeps()
+		d := l.activities
 		require.NotNil(t, d)
 		assert.NotNil(t, d.Now)
 		assert.Equal(t, 2500*time.Millisecond, d.SyncBudget)
@@ -282,32 +286,28 @@ func TestWithActivities(t *testing.T) {
 	})
 	t.Run("显式值原样保留", func(t *testing.T) {
 		l := NewGuildLogic(nil, nil, nil, nil, nil, WithActivities(ActivityDeps{
-			Repo: &data.ActivityRepo{}, SyncBudget: time.Second, Lease: 30 * time.Second,
+			Repo: &data.ActivityRepo{}, Now: activityTestClock, SyncBudget: time.Second, Lease: 30 * time.Second,
 		}))
 
-		d := l.activityDeps()
+		d := l.activities
 		require.NotNil(t, d)
+		assert.Equal(t, activityTestNow, d.Now(), "注入的时钟原样保留,不被换成 time.Now")
 		assert.Equal(t, time.Second, d.SyncBudget)
 		assert.Equal(t, 30*time.Second, d.Lease)
 	})
-	t.Run("依赖按实例隔离", func(t *testing.T) {
-		wired := NewGuildLogic(nil, nil, nil, nil, nil, WithActivities(ActivityDeps{Repo: &data.ActivityRepo{}}))
-		bare := NewGuildLogic(nil, nil, nil, nil, nil)
-
-		assert.NotNil(t, wired.activityDeps())
-		assert.Nil(t, bare.activityDeps(), "别的实例的装配不能串到这里")
-	})
 }
 
-// TestActivityRPCsUnavailableWithoutDeps:未接线时五个 RPC 回 Unavailable,而不是 nil 解引用崩掉整个进程。
-func TestActivityRPCsUnavailableWithoutDeps(t *testing.T) {
+// TestActivityRPCsRefuseWithoutDeps:未接线时五个 RPC 回明确的 tip(kGuildActivityNotOpen),不回 gRPC 错误、
+// 更不 nil 解引用崩掉整个进程。repo 为 nil:判定若排在任何仓储读之后,这里会当场 panic。
+func TestActivityRPCsRefuseWithoutDeps(t *testing.T) {
 	l := NewGuildLogic(nil, nil, nil, nil, nil)
 
 	for _, tc := range activityRPCs() {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := tc.run(l, clientCtx(42))
+			tipID, err := tc.run(l, clientCtx(42))
 
-			assert.Equal(t, codes.Unavailable, status.Code(err))
+			require.NoError(t, err, "未接线回 tip,不回 gRPC 错误(否则客户端进重连隔离)")
+			assert.Equal(t, constants.ErrActivityNotOpen, tipID)
 		})
 	}
 }
@@ -316,7 +316,7 @@ func TestActivityRPCsUnavailableWithoutDeps(t *testing.T) {
 // 请求体里没有 player_id,内部调用拿不出可信身份;repo 为 nil,越过这一步就会 panic。
 func TestActivityNoSessionPermissionDenied(t *testing.T) {
 	l := NewGuildLogic(nil, nil, nil, nil, nil)
-	l.setActivityDeps(&ActivityDeps{Now: time.Now})
+	l.activities = &ActivityDeps{Now: activityTestClock}
 
 	for _, tc := range activityRPCs() {
 		t.Run(tc.name, func(t *testing.T) {
@@ -335,7 +335,7 @@ func TestTrialStubsB6a(t *testing.T) {
 	seedMembership(t, mr, 42, 9)
 	seedMembership(t, mr, 43, 9)
 	l := NewGuildLogic(repo, nil, nil, nil, nil)
-	l.setActivityDeps(&ActivityDeps{Now: time.Now})
+	l.activities = &ActivityDeps{Now: activityTestClock}
 
 	start, err := l.StartGuildTrial(clientCtx(42), &pb.StartGuildTrialRequest{ActivityId: 3, MemberPlayerIds: []uint64{42, 43}})
 	require.NoError(t, err)
@@ -350,7 +350,7 @@ func TestTrialStubsB6a(t *testing.T) {
 func TestTrialStubsAnswerNotInGuildFirst(t *testing.T) {
 	repo, _ := newNoMembershipRepo(t)
 	l := NewGuildLogic(repo, nil, nil, nil, nil)
-	l.setActivityDeps(&ActivityDeps{Now: time.Now})
+	l.activities = &ActivityDeps{Now: activityTestClock}
 
 	resp, err := l.StartGuildTrial(clientCtx(42), &pb.StartGuildTrialRequest{ActivityId: 3})
 
@@ -675,7 +675,7 @@ func TestActivityTxTipMapping(t *testing.T) {
 func TestActivityResultOf(t *testing.T) {
 	assert.Equal(t, activityResultOK, activityResultOf(nil, nil))
 	assert.Equal(t, activityResultDenied, activityResultOf(nil, status.Error(codes.PermissionDenied, "x")))
-	assert.Equal(t, activityResultUnavailable, activityResultOf(nil, errActivitiesNotEnabled()))
+	assert.Equal(t, activityResultUnavailable, activityResultOf(nil, status.Error(codes.Unavailable, "x")))
 	assert.Equal(t, activityResultError, activityResultOf(nil, errors.New("x")))
 	assert.Equal(t, activityResultNotOpen, activityResultOf(tipErr(constants.ErrActivityNotOpen, "x"), nil))
 	assert.Equal(t, activityResultHomeZone, activityResultOf(tipErr(constants.ErrHomeZoneUnknown, "x"), nil))
@@ -710,15 +710,19 @@ func (a *deadlineApplier) snapshot() (int, []time.Time) {
 	return a.calls, append([]time.Time(nil), a.deadlines...)
 }
 
-// TestLanternSyncBudget:请求只剩 900ms 时扣掉 1000ms 尾巴预算为负 → 不投、Loop 不碰 Store(行保持插行租约,
-// 到期交给重投循环);余量充足 → 恰好投一次,且投递 ctx 的截止不超过 SyncBudget(2500ms)。
+// TestLanternSyncBudget:预算 = min(SyncBudget, ctx 剩余 − 1000ms 尾巴),不足 300ms 就不投、Loop 不碰 Store
+// (行保持插行租约,到期交给重投循环);余量充足 → 恰好投一次,投递 ctx 的截止 = 建 ctx 那一刻 + SyncBudget。
+//
+// 确定性(AGENTS.md §11.4):父 ctx 的截止由用例注入(已过 / 至多 900ms / 没有截止),Loop 的时钟注入固定值,
+// 断言只用"单调钟只进不退"推得出的不等式,结论与机器快慢、调度时延无关 ——
+//   - 跳过:注入的截止要么已过、要么离建 ctx 至多 900ms;此后时间只会流逝,扣掉 1000ms 尾巴恒为负,恒跳过。
+//   - 投递:SyncBudget 取 500ms,小于 Loop 自己给投递的上限(OpBudget − settleBudget = 1800ms),所以 Do 看到的截止
+//     恰是"deliverActivityReward 建 ctx 那一刻 + 500ms"。那一刻夹在调用前后两次读钟之间,截止也就恒落在
+//     [before+500ms, after+500ms] 里;预算若没取 SyncBudget(取大了或取小了),两端必有一端不成立。
+//     旧写法断言"截止 − 调用前读钟 ≤ SyncBudget",成立与否取决于调用前后隔了多久,是调度时延决定的结论。
+//
+// clampSyncBudget 本身的边界(恰好 300ms、差 1ms)由 economy_logic_test.go 的 TestClampSyncBudget 以注入的剩余时长覆盖。
 func TestLanternSyncBudget(t *testing.T) {
-	applier := &deadlineApplier{}
-	store := &countingAssetStore{}
-	loop, err := assetop.NewLoop(assetop.DefaultLoopConfig(), store, applier, nil, time.Now)
-	require.NoError(t, err)
-	l := NewGuildLogic(nil, nil, nil, nil, nil)
-	d := &ActivityDeps{Loop: loop, SyncBudget: defaultSyncBudget}
 	op := assetop.Op{
 		OpID:          1,
 		PlayerID:      42,
@@ -730,22 +734,55 @@ func TestLanternSyncBudget(t *testing.T) {
 		Bundle:        &assetpb.AssetBundle{Items: []*assetpb.ItemGrant{{ConfigId: 1001, Count: 4}}},
 		LeaseToken:    1,
 	}
+	newDeps := func(t *testing.T, syncBudget time.Duration) (*ActivityDeps, *deadlineApplier, *countingAssetStore) {
+		t.Helper()
+		applier := &deadlineApplier{}
+		store := &countingAssetStore{}
+		loop, err := assetop.NewLoop(assetop.DefaultLoopConfig(), store, applier, nil, activityTestClock)
+		require.NoError(t, err)
+		return &ActivityDeps{Loop: loop, SyncBudget: syncBudget}, applier, store
+	}
+	l := NewGuildLogic(nil, nil, nil, nil, nil)
 
-	short, cancel := context.WithTimeout(context.Background(), 900*time.Millisecond)
-	defer cancel()
-	l.deliverActivityReward(short, d, op)
+	skips := []struct {
+		name string
+		ctx  func() (context.Context, context.CancelFunc)
+	}{
+		{"截止已过", func() (context.Context, context.CancelFunc) {
+			return context.WithDeadline(context.Background(), time.Unix(0, 0))
+		}},
+		{"只剩至多 900ms", func() (context.Context, context.CancelFunc) {
+			return context.WithTimeout(context.Background(), 900*time.Millisecond)
+		}},
+	}
+	for _, tc := range skips {
+		t.Run(tc.name+":不投、不碰 Store", func(t *testing.T) {
+			d, applier, store := newDeps(t, defaultSyncBudget)
+			ctx, cancel := tc.ctx()
+			defer cancel()
 
-	calls, _ := applier.snapshot()
-	assert.Zero(t, calls, "预算不足必须跳过同步投递")
-	assert.Zero(t, store.count(), "跳过时 Loop 不写行")
+			l.deliverActivityReward(ctx, d, op)
 
-	before := time.Now()
-	l.deliverActivityReward(context.Background(), d, op)
+			calls, _ := applier.snapshot()
+			assert.Zero(t, calls, "预算不足必须跳过同步投递")
+			assert.Zero(t, store.count(), "跳过时 Loop 不写行,行保持插行时的租约")
+		})
+	}
 
-	calls, deadlines := applier.snapshot()
-	require.Equal(t, 1, calls, "满额预算时同步投递恰好一次")
-	require.Len(t, deadlines, 1)
-	assert.LessOrEqual(t, deadlines[0].Sub(before), defaultSyncBudget, "投递 ctx 的截止不能超过 SyncBudget")
+	t.Run("余量充足:恰投一次,截止 = 建 ctx 时刻 + SyncBudget", func(t *testing.T) {
+		const syncBudget = 500 * time.Millisecond
+		d, applier, _ := newDeps(t, syncBudget)
+
+		before := time.Now()
+		l.deliverActivityReward(context.Background(), d, op)
+		after := time.Now()
+
+		calls, deadlines := applier.snapshot()
+		require.Equal(t, 1, calls, "满额预算时同步投递恰好一次")
+		require.Len(t, deadlines, 1)
+		assert.False(t, deadlines[0].Before(before.Add(syncBudget)), "投递预算不能小于 SyncBudget(截止 %v,调用前 %v)", deadlines[0], before)
+		assert.False(t, deadlines[0].After(after.Add(syncBudget)), "投递预算不能大于 SyncBudget(截止 %v,调用后 %v)", deadlines[0], after)
+	})
 }
 
 // TestDeliverActivityRewardWithoutLoop:Loop 未接线时只记日志,不 panic(预检本应已拒绝,这里是防御)。
@@ -830,23 +867,37 @@ func TestBatchResolveStrictFailsClosed(t *testing.T) {
 }
 
 // TestBatchResolveStrictHasOwnTimeout(92-handoff §8.2 的旧问题):Redis 收下连接却一直不回话时,
-// 严格版在自己的上限内返回,而不是陪着套接字等满 ReadTimeout(locator 客户端没开 ContextTimeoutEnabled,
-// ctx 截止管不住套接字读)。用例耗时接近 3s = 独立超时失效,必须当失败处理。
+// 严格版靠自己的上限返回,而不是陪着套接字等(locator 客户端没开 ContextTimeoutEnabled,ctx 截止管不住套接字读)。
+//
+// 确定性(AGENTS.md §11.4):不量耗时。stalledRedis 的客户端**关掉了套接字读超时**,假 Redis 又永不回话,
+// 所以 MGET 那一路永远不会自己返回;父 ctx 没有截止、也不取消 —— 能让 BatchResolveStrict 返回、并带上
+// context.DeadlineExceeded 的,只剩它自己的独立上限这一条路。独立上限一旦失效,调用就永不返回,
+// 下面的兜底等待必然触发(它只防整个测试进程挂死,离 50ms 的上限有三个数量级的余量,不是结论的一部分)。
+// 旧写法断言"耗时 < 1s",结论取决于机器负载与调度时延;而且在读超时打开时,go-redis 3s 后的重试退避也会回
+// DeadlineExceeded,单看错误类型分不出是谁超的时 —— 关掉读超时正是为了排除这条旁路。
 func TestBatchResolveStrictHasOwnTimeout(t *testing.T) {
 	r := NewOnlineStatusResolver(stalledRedis(t))
 	r.strictTimeout = 50 * time.Millisecond
 
-	start := time.Now()
-	_, err := r.BatchResolveStrict(context.Background(), []uint64{1, 2})
-	elapsed := time.Since(start)
+	done := make(chan error, 1)
+	go func() {
+		_, err := r.BatchResolveStrict(context.Background(), []uint64{1, 2})
+		done <- err
+	}()
 
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(time.Minute):
+		t.Fatal("BatchResolveStrict 没有返回:独立上限失效,调用方会陪着一个不回话的 Redis 一直等下去")
+	}
 	require.ErrorIs(t, err, ErrOnlineStateUnknown)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
-	assert.Less(t, elapsed, time.Second)
+	assert.ErrorIs(t, err, context.DeadlineExceeded, "返回必须来自自己的独立上限(父 ctx 没有截止)")
 }
 
-// stalledRedis 返回一个连到"只收连接、永不回话"的假 Redis 的客户端。t.Cleanup 关掉监听与全部连接,
-// 被丢下的 MGET 协程随之拿到读错误退出。
+// stalledRedis 返回一个连到"只收连接、永不回话"的假 Redis 的客户端。客户端关掉套接字读 / 写超时(-1 = 一直阻塞):
+// 这样 MGET 自己永远不会返回,任何返回都只能来自调用方的 ctx 或独立上限,用例的结论不依赖读超时与重试退避的时长。
+// t.Cleanup 关掉监听与全部连接,被丢下的 MGET 协程随之拿到读错误(EOF)退出,不会泄漏到别的用例。
 func stalledRedis(t *testing.T) *goredis.Client {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -866,7 +917,7 @@ func stalledRedis(t *testing.T) *goredis.Client {
 			mu.Unlock()
 		}
 	}()
-	rdb := goredis.NewClient(&goredis.Options{Addr: ln.Addr().String()})
+	rdb := goredis.NewClient(&goredis.Options{Addr: ln.Addr().String(), ReadTimeout: -1, WriteTimeout: -1})
 	t.Cleanup(func() {
 		_ = ln.Close()
 		mu.Lock()

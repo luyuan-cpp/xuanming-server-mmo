@@ -310,7 +310,8 @@ func (l *GuildLogic) mapWriteErr(ctx context.Context, actor, logGuildID, cachedG
 	case errors.Is(err, data.ErrApplicationQueueFull):
 		return tipErr(constants.ErrApplicationQueueFull, "guild application queue is full"), nil
 	case errors.Is(err, data.ErrZoneMerging):
-		// 事务内的合服闸门拒绝(目前只有解散在事务里判;经济事务先经 economyTip 截走,走不到这里)。
+		// 事务内的合服闸门拒绝:解散、帮会活动(点灯 / 团圆,activityTxTip 不截它)都落到这里;
+		// 经济事务先经 economyTip 截走,走不到这里。改这一支前先确认两个调用方都还成立。
 		// 与事务外的 mergeFenceTip 同一答复:合服是可预期的运维窗口,回 tip 而不是 gRPC 错误。
 		return tipErr(constants.ErrZoneMerging, "zone merging"), nil
 	case errors.Is(err, data.ErrWriteConflict):
