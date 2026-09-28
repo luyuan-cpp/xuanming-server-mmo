@@ -108,6 +108,12 @@ public:
 	// battle:lock 的 EX 在 deadline 之上的余量(秒):锁必须活得比 InBattleComp 久,
 	// 避免"组件还在、锁先没了"让 match 放进第二场。
 	static constexpr uint32_t kLockExtraTtlSec = 60;
+	// 结算应用后锁至少续到的秒数:锁要留到这一局落盘销账才删(见 player_battle.cpp 的
+	// ReleaseFreezeKeepLock),在那之前不能自然过期,否则重投会把「锁不在」读成「已作废」。
+	// 取值 = battle 发件箱重投窗口(battle_room_manager.h:kSettlementRetryIntervalSec 10s ×
+	// kSettlementRetryMaxAttempts 12 = 120s)+ 60s 余量。发件箱窗口改了这里要跟着改。
+	// 正常路径下锁在落盘后一次 Redis 往返内就被删掉,这个值只在「应用后、落盘前进程崩溃」时起作用。
+	static constexpr uint32_t kSettlementLockHoldSec = 180;
 	// 离线挂起结算 TTL:7 天(设计文档 §6)。
 	static constexpr uint32_t kPendingSettlementTtlSec = 7 * 24 * 3600;
 

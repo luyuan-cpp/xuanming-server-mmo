@@ -191,6 +191,8 @@ go run ./cmd/migrate -f <该 zone 的 db.yaml> -command up
 
 顺序是 migrate → 重启 go/db → 重启 scene。同一条检查也适用于之后每一个加在 `player_database` 上的新列(如资产通道的 `asset_op_ledger`)。
 
+漏跑迁移的兜底(2026-09-28 起):启动期 DDL 关闭时,go/db 在 `InitDB` 里对本 zone 库做一次**只读**列核对(`proto_sql.assertSchemaUpToDate`,复用 `internal/migrate` 的 Drift,不下发任何 DDL)。缺 proto 声明的列会直接拒启,panic 信息形如 `库 zone_<id>_db 缺 N 个 proto 声明的列 ... : player_database.settlement_ledger`,照提示对**同一份配置**跑上面的 `-command up` 后重启即可;类型漂移 / 多余列 / 缺主键只打 `SCHEMA-DRIFT:` 错误日志、不阻断启动(本地已知的 `user_oauth.provider_id`、`user_phone.phone` 会每次启动各打一行)。
+
 **工具自己的兜底**:步骤 1 **按列名**拷贝(`INSERT INTO dst (列…) SELECT 列… FROM src`),不再依赖两库列序一致——列序不同照常拷贝,不会串列。两库**列名集合**不一致时,工具在**任何一张表开始写之前**以 `SCHEMA MISMATCH ... only_in_src=[...] only_in_dst=[...]` 中止,一行都不写;照报错跑齐两边的迁移后用原命令重跑即可。dry-run 同样会做这条检查,所以 §7.2 的彩排就能把它暴露出来。
 
 ---

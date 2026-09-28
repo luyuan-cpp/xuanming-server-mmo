@@ -19,6 +19,7 @@
 #include "services/scene/battle/system/battle_settlement_ledger.h"
 #include "services/scene/player/comp/player_frozen_comp.h"
 #include "services/scene/player/comp/player_ownership_comp.h"
+#include "services/scene/player/comp/last_persisted_snapshot_comp.h"
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/event/battle_event.pb.h"
 #include "proto/common/event/mission_event.pb.h"
@@ -61,6 +62,7 @@ protected:
         static uint64_t nextPlayer = 9876500;
         playerId = ++nextPlayer;
         CreatePlayerEntity();
+        RegisterPlayer();
         settlement.set_player_id(playerId);
         settlement.set_battle_id(701);
         settlement.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
@@ -76,9 +78,16 @@ protected:
         gPersistCalls = 0;
         PlayerBattleSystem::SetPersistFnForTest(&CountingPersist);
     }
+    // 销账入口 AckSettlementPending 按 player_id 现取实体(tlsEcs.GetPlayer),不登记就走不到
+    // 「活实体 + 账本」那几条规则。重建实体后必须重新登记。
+    void RegisterPlayer() {
+        tlsEcs.playerList.erase(playerId);
+        tlsEcs.playerList.emplace(playerId, player);
+    }
     void TearDown() override {
         tlsEcs.dispatcher.sink<ConditionEvent>().disconnect<&PlayerBattleSettlementTest::OnCondition>(*this);
         PlayerBattleSystem::SetPersistFnForTest(nullptr);
+        tlsEcs.playerList.erase(playerId);
         if (tlsEcs.actorRegistry.valid(player)) tlsEcs.actorRegistry.destroy(player);
     }
     void CreatePlayerEntity() {
@@ -143,21 +152,55 @@ TEST_F(PlayerBattleSettlementTest, CurrencyFailureLeavesPendingSideEffectsUntouc
     EXPECT_EQ(kills.size(), 2u);
 }
 
+// 真实重登:资产与账本来自同一份落盘 blob(不变量 I3),所以账本要和金币一起带过去。
+// 登录补应用与 10s 后发件箱的再一次投递都必须被账本挡住,且不能摘掉玩家新一局的冻结。
 TEST_F(PlayerBattleSettlementTest, ReloginOldPendingDoesNotPayAgainOrRemoveNewBattle) {
     ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
     const auto currency = tlsEcs.actorRegistry.get<CurrencyComp>(player);
     const auto attributes = tlsEcs.actorRegistry.get<BaseAttributesComp>(player);
+    const auto ledger = tlsEcs.actorRegistry.get<BattleSettlementLedgerComp>(player);
     tlsEcs.actorRegistry.destroy(player);
     CreatePlayerEntity();
+    RegisterPlayer();
     tlsEcs.actorRegistry.get<CurrencyComp>(player) = currency;
     tlsEcs.actorRegistry.get<BaseAttributesComp>(player) = attributes;
+    tlsEcs.actorRegistry.emplace<BattleSettlementLedgerComp>(player, ledger);
     tlsEcs.actorRegistry.emplace<InBattleComp>(player).set_battle_id(702);
-    PlayerBattleSettlementTestAccess::ApplyPending(player, settlement);
-    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
+    gPersistCalls = 0;
+    for (int delivery = 0; delivery < 2; ++delivery) {
+        PlayerBattleSettlementTestAccess::ApplyPending(player, settlement);
+        EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u) << "delivery " << delivery;
+        EXPECT_EQ(kills.size(), 2u) << "delivery " << delivery;
+        const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
+        ASSERT_NE(current, nullptr);
+        EXPECT_EQ(current->battle_id(), 702u);
+    }
+    // 两次都是「已应用、未落盘」:不销账,各压一次存盘把账本推上盘。
+    EXPECT_EQ(gPersistCalls, 2);
+}
+
+// 进程内缓存说应用过、实体账本里却没有:只可能是那次应用没落盘、实体被重建过 ——
+// 资产也没落盘,这一局必须重新应用一次(不是当成重复吞掉),而且只能一次。
+TEST_F(PlayerBattleSettlementTest, CacheHitButLedgerMissReappliesExactlyOnce) {
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    ASSERT_EQ(kills.size(), 2u);
+    tlsEcs.actorRegistry.destroy(player);
+    CreatePlayerEntity();  // 从「没落盘」的旧 blob 重建:没有这一局的金币,也没有账本条目
+    RegisterPlayer();
+
+    PlayerBattleSettlementTestAccess::ApplyPending(player, settlement);  // 缓存与账本不一致:重置缓存,本轮不应用
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 0u);
     EXPECT_EQ(kills.size(), 2u);
-    const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
-    ASSERT_NE(current, nullptr);
-    EXPECT_EQ(current->battle_id(), 702u);
+
+    PlayerBattleSettlementTestAccess::ApplyPending(player, settlement);  // 下一次投递:真正应用
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
+    EXPECT_EQ(kills.size(), 4u);
+    EXPECT_TRUE(battle_settlement::HasApplied(
+        tlsEcs.actorRegistry.get<BattleSettlementLedgerComp>(player), settlement.battle_id()));
+
+    PlayerBattleSettlementTestAccess::ApplyPending(player, settlement);  // 再投一次:账本挡住
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
+    EXPECT_EQ(kills.size(), 4u);
 }
 
 TEST_F(PlayerBattleSettlementTest, MissingAttributesCanRetryWithoutPrematureGoldCredit) {
@@ -249,6 +292,36 @@ TEST_F(PlayerBattleSettlementTest, TravelHandoffDefersWholeSettlement) {
     EXPECT_FALSE(battle_settlement::HasApplied(
         tlsEcs.actorRegistry.get<BattleSettlementLedgerComp>(player), settlement.battle_id()));
 }
+
+// 「已应用但未落盘」时销账必须延后:这一刻销账,崩溃即永久丢奖励(§9.3)。
+// 可观察的证据是销账入口又压了一次存盘(应用时一次 + 销账延后一次),账本条目也不能被摘。
+TEST_F(PlayerBattleSettlementTest, AckDefersClearWhileAppliedButNotDurable) {
+    tlsEcs.actorRegistry.emplace<InBattleComp>(player).set_battle_id(settlement.battle_id());
+    PlayerBattleSettlementTestAccess::ApplyPending(player, settlement);
+
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
+    EXPECT_EQ(gPersistCalls, 2);
+    EXPECT_TRUE(battle_settlement::HasApplied(
+        tlsEcs.actorRegistry.get<BattleSettlementLedgerComp>(player), settlement.battle_id()));
+    // 冻结照常解除(锁留到落盘,但组件当场摘):玩家不会被卡在已结束的战斗里
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<InBattleComp>(player));
+}
+
+// 落盘快照里已有这一局 = 字节确实在盘上:走销账分支,不再额外压存盘。
+TEST_F(PlayerBattleSettlementTest, AckClearsOnceLedgerEntryIsDurable) {
+    PlayerAllData persisted;
+    persisted.mutable_player_database_data()->mutable_settlement_ledger()->add_applied()->set_battle_id(
+        settlement.battle_id());
+    tlsEcs.actorRegistry.emplace<PlayerLastPersistedSnapshotComp>(player).Replace(persisted);
+
+    PlayerBattleSettlementTestAccess::ApplyPending(player, settlement);
+
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
+    EXPECT_EQ(gPersistCalls, 1);  // 只有应用时那一次
+}
+
+// 「已有未落地存盘就不再压」依赖真实 Redis 客户端的队列状态,单测里客户端为空,
+// 留给 battle-smoke 按日志核对(每场结算只应出现一次结算存盘)。
 
 // ── 账本纯规则(无 ECS、无 Redis)────────────────────────────────────────────
 
@@ -388,8 +461,11 @@ TEST_F(PlayerBattleSettlementItemTest, RepeatedApplyDoesNotDoubleConsumeOrDouble
     SetGained(kSettlementDropItem, 3);
 
     ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
-    // 同 (player, battle_id) 的重投由应用缓存挡掉:道具不能再扣一次、也不能再发一次
-    EXPECT_FALSE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    // 同 (player, battle_id) 的重投由持久账本(BattleSettlementLedgerComp)挡掉:返回 true 并报告
+    // alreadyApplied,道具不能再扣一次、也不能再发一次
+    bool alreadyApplied = false;
+    EXPECT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement, alreadyApplied));
+    EXPECT_TRUE(alreadyApplied);
 
     EXPECT_EQ(Inventory().GetTotalItemCount(kSettlementStackItem), 3u);
     EXPECT_EQ(Inventory().GetTotalItemCount(kSettlementDropItem), 3u);

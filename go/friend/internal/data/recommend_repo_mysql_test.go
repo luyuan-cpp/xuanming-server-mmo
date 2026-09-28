@@ -6,7 +6,7 @@ package data
 //
 // recommend_repo.go 的四类业务排除(自己 / 已是好友 / 任一方向拉黑 / 任一方向仍 pending 的申请)
 // **内联写在两条 query 字符串里、各一份**,列名还不一样:RecommendByMutual 用 `f2.friend_player_id`,
-// recommendAnchor 在两处 NOT EXISTS 里必须写全限定的 `friend.player_id`(裸 `player_id` 会解析到
+// recommendAnchor 在五处 NOT EXISTS 里必须写派生表别名的全限定 `c.player_id`(裸 `player_id` 会解析到
 // 子查询自己的表上,条件变成"自己拉黑自己",排除静默失效)。拼错列名在 Go 侧完全静态无感,
 // 编译、vet、mock 都看不见 —— 只有让 MySQL 真的解析并执行这两条 SQL 才验得到。
 // 所以两条 query **分别**验一遍,不因为"长得一样"就只验一条。
@@ -38,6 +38,7 @@ package data
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -273,7 +274,7 @@ func seedAnchorGraph(t *testing.T, ctx context.Context, db *sql.DB) (c recommend
 		c.rejected, c.bystander} {
 		seedRecommendFriendship(t, ctx, db, hub, id)
 	}
-	// plain 再多两条出边:friend 表一条边一行,没有 GROUP BY 去重时 plain 会在结果里出现 3 次、
+	// plain 再多两条出边:friend 表一条边一行,没有 DISTINCT 去重时 plain 会在结果里出现 3 次、
 	// 还会把 limit 名额吃光。
 	seedRecommendFriendship(t, ctx, db, c.plain, c.rejected)
 	seedRecommendFriendship(t, ctx, db, c.plain, c.bystander)
@@ -300,7 +301,7 @@ func TestRecommendAnchor_AppliesAllFourExclusions(t *testing.T) {
 
 	// 顺序与去重:严格按 player_id 升序、每人一次(Equal 同时钉住这两件事)。
 	assert.Equal(t, []uint64{hub, c.plain, c.rejected, c.bystander}, recommendCandidateIDs(got),
-		"anchor 必须按 player_id 升序返回且每个候选只出现一次(GROUP BY 去重)")
+		"anchor 必须按 player_id 升序返回且每个候选只出现一次(DISTINCT 窗口去重)")
 	for _, cand := range got {
 		assert.Zero(t, cand.MutualFriends, "random 兜底候选的共同好友数恒为 0(候选 %d)", cand.CandidatePlayerID)
 	}
@@ -337,7 +338,7 @@ func TestRecommendAnchor_HonorsPivotExcludeAndLimit(t *testing.T) {
 	assert.Equal(t, []uint64{hub, c.plain, c.rejected}, recommendCandidateIDs(got),
 		"limit 数的是去重后的候选,不是 friend 表的行")
 
-	// pivot、exclude、limit 三段同时在场:占位符顺序是 pivot → 6 个 playerID → exclude → LIMIT。
+	// pivot、exclude、limit 三段同时在场:占位符顺序是 pivot → 窗口 W → 6 个 playerID → exclude → LIMIT。
 	got, err = repo.recommendAnchor(ctx, c.me, []uint64{c.plain}, c.plain, 1)
 	require.NoError(t, err)
 	assert.Equal(t, []uint64{c.rejected}, recommendCandidateIDs(got))

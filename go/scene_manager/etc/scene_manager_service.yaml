@@ -1,10 +1,14 @@
 Name: scenemanagerservice.rpc
 ListenOn: 127.0.0.1:60300
-# zrpc 服务端超时(毫秒),0 = 不设。必须 >= HomeZoneLookupTimeoutMs + KafkaWriteTimeoutSeconds*1000 + 余量
-# (现 1500 + 5000 + 1500 = 8000):EnterScene 第一条腿依次做归属查询、Kafka 同步写、失败回滚,然后回 7。
-# 服务端先超时的话调用方只拿到 DeadlineExceeded,而 C++ 生成客户端对非 OK 只打日志、不回调,源 scene
-# 要冻满 30s 看门狗(docs/design/cross-zone-scene-travel.md §12.2)。C++ 调用不设 deadline,本值就是唯一上限。
-# K8s ConfigMap 由 tools/scripts/k8s_deploy.ps1 从这里取值,不等式由 tools/scripts/tests/k8s_deploy_contract.tests.ps1 守着。
+# zrpc 服务端超时(毫秒)。必须为正,且 >= HomeZoneLookupTimeoutMs + KafkaWriteTimeoutSeconds*1000 + 1500
+# (现 1500 + 5000 + 1500 = 8000;1500 是读 location、预占频道、铸造 / CAS Lua、失败回滚 Lua 等 Redis 往返的余量)。
+# EnterScene 第一条腿依次做归属查询、Kafka 同步写、失败回滚,然后回 7;服务端先超时的话调用方只拿到 DeadlineExceeded,
+# 而 C++ 生成客户端对非 OK 只打日志、不回调,源 scene 要冻满 30s 看门狗(docs/design/cross-zone-scene-travel.md §12.2)。
+# C++ 调用不设 deadline,本值是唯一上限,也是源 scene 还可能收到 EnterScene 应答的最晚时刻(从本服务收到请求起算),
+# 须远小于 C++ 的 30s 应答看门狗。<=0 = go-zero 不装超时拦截器(应答时刻无上界)。不要用 MethodTimeouts 只放宽
+# EnterScene:tools/scripts/k8s_deploy.ps1 只镜像标量 Timeout,K8s 上会静默退回全局值。以上由
+# tools/scripts/tests/k8s_deploy_contract.tests.ps1 守着。8000 只覆盖不触发同步建场景的正常路径:懒改派 / 死节点改派里
+# 挂在请求 ctx 上的 CreateScene 同步 RPC 不在预算内,超时会被截断。K8s ConfigMap 由 k8s_deploy.ps1 从这里取值。
 Timeout: 8000
 Etcd:
   Hosts:
@@ -34,6 +38,7 @@ Kafka:
 
 # Gate 路由/重定向的一次同步 produce 使用 RequireOne ACK；该值是 writer 侧
 # 超时（秒）。不使用 caller context 取消，避免 WriteMessages 返回后仍继续投递。
+# 调大它必须同步调大文件头的 Timeout(不等式见那里,契约测试守)。
 KafkaWriteTimeoutSeconds: 5
 
 # 开发旁路:true 时跨节点切场景 / 已有位置的跨区重定向不再要求源 scene 先写出
@@ -78,6 +83,7 @@ DataServiceRpc:
 
 # EnterScene 里那一次 GetPlayerHomeZone 的预算(毫秒)。串在每次进场景上,超时按
 # 「归属未知」拒绝(可重试),不能太长;与 login 的 EnterLookupTimeout 对齐。
+# 调大它必须同步调大文件头的 Timeout(不等式见那里,契约测试守)。
 HomeZoneLookupTimeoutMs: 1500
 
 # Directory containing exported table JSON files (e.g. World.json).

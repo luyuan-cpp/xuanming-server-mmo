@@ -243,7 +243,7 @@ int Hiredis::command(const CommandCallback& cb, muduo::StringArg cmd, ...)
     // 回调挂起命令、后注销 Channel,那段时间 connected() 仍为真,回调里再发的命令会撞 FREEING。
     // 唯一例外是多频道 (P)SUBSCRIBE 中途 OOM(已写进订阅字典的频道仍持有 p),但本封装不支持订阅
     // (commandCallback 每次回调后都 delete)。升级 hiredis 时必须重核这条前提。
-    // 本文件与 tools/archived/muduo_linux_overlay/contrib/hiredis/Hiredis.cc 必须逐字节一致(Linux 镜像编那一份)。
+    // cpp/libs/engine/muduo_windows/src/contrib/hiredis/Hiredis.cc(Windows 编)与 tools/archived/muduo_linux_overlay/contrib/hiredis/Hiredis.cc(Linux 镜像编)必须逐字节一致。
     delete p;
   }
   return ret;

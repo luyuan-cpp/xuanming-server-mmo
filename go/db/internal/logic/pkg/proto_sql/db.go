@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"db/internal/config"
 	"db/internal/dbguard"
+	"db/internal/migrate"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -284,10 +285,171 @@ func assertConnectedDatabase(handle *sql.DB) error {
 	return nil
 }
 
+// schemaDriftCheckTimeout 是启动期只读 schema 核对的总预算。
+// 核对只有几条 information_schema / 台账的只读查询,正常是毫秒级;给 30s 是为了实例繁忙时
+// 不误拒启,同时不让「库卡住」变成进程无限挂在启动阶段。
+const schemaDriftCheckTimeout = 30 * time.Second
+
+// migrateRemedyCommand 是缺列 / 缺表拒启时打印给运维的补救命令(在 go/db 目录下执行)。
+// -f 必须是本进程启动时用的同一份配置:库名由其中的 ZoneId 现拼,指错就补到别的 zone 库上。
+const migrateRemedyCommand = "go run ./cmd/migrate -f <本进程使用的 db 配置> -command up"
+
+// addColumnStmtRe 从 migrate.ProtoSource.Drift 产出的补列语句里解出「表、列」,只用于拼报错。
+// 语句形状由 internal/migrate/plan.go 的 Drift 固定为 ALTER TABLE `表` ADD COLUMN `列` <类型>;
+// 解不出来时原样带上整条语句 —— 报错难看一点可以,漏报不行。
+var addColumnStmtRe = regexp.MustCompile("^ALTER TABLE `([^`]+)` ADD COLUMN `([^`]+)`")
+
+// assertSchemaUpToDate 是启动期 DDL 关闭时的只读 schema 闸:库里缺 proto 声明的列,或缺表且
+// `cmd/migrate -command up` 能建出来时,就拒启。
+//
+// 为什么缺列必须拒启:消费者 Save 按 proto descriptor 写全部列、FindOneByWhereClause 按全部列
+// SELECT,库里少一列,该表的每一条 db_task 都是 Error 1054 → 进死信,玩家加载也全部失败。
+// 2026-09-22 zone 库缺 profile_component / asset_op_ledger 就是这样:进程照常打印
+// STARTED SUCCESSFULLY,故障拖到玩家登录时才以 EnterGame preload failed 暴露。
+//
+// 缺表(Error 1146,后果同上)按台账分两种:
+//   - 台账里没有干净的基线(空库、历史 AutoMigrate 建出来的库、基线跑到一半留了 dirty):
+//     up 会先跑基线(全是 CREATE TABLE IF NOT EXISTS,幂等)再补列,所以拒启并给补救命令。
+//     zone 库由 deploy/mysql-init 预建成**空库**,本地启动器与 K8s 都不跑迁移,这是最可能的真实故障;
+//   - 基线已干净应用:runner 不重跑基线(基线 checksum 只算表名集合,表清单变了也只告警),
+//     up 建不出这张表,拦下来给不出能执行的补救命令,所以只打 SCHEMA-DRIFT 错误日志、不阻断。
+//
+// 其余漂移(类型不一致 / 多余列 / 缺主键)只打 SCHEMA-DRIFT 日志:
+//   - 类型漂移有已知的历史存量(user_oauth.provider_id、user_phone.phone),拦下来本地库全起不来;
+//   - Drift 只对缺列生成语句,up 不处理这几类,拦下来同样给不出能执行的补救命令。
+//
+// 全程只读:只跑 information_schema 的 SELECT 与一条台账计数 SELECT,不 SET SESSION、不取 GET_LOCK、
+// 不建台账,所以不需要 Migration 段的锁超时配置,多副本同时启动也互不影响。
+func assertSchemaUpToDate(ctx context.Context, q migrate.Queryer, model *proto2mysql.DB, database string, tables []proto.Message) error {
+	if err := assertDriftKeysArePhysicalNames(tables); err != nil {
+		return err
+	}
+	existing, err := migrate.LoadColumns(ctx, q, database)
+	if err != nil {
+		return schemaCheckFailed(database, err)
+	}
+	present := make([]proto.Message, 0, len(tables))
+	var missingTables []string
+	for _, t := range tables {
+		name := proto2mysql.GetTableName(t)
+		if _, ok := existing[name]; ok {
+			present = append(present, t)
+			continue
+		}
+		missingTables = append(missingTables, name)
+	}
+	if len(missingTables) > 0 {
+		applied, err := cleanBaselineApplied(ctx, q, existing)
+		if err != nil {
+			return schemaCheckFailed(database, err)
+		}
+		if !applied {
+			return fmt.Errorf("库 %s 缺 %d 张 proto 声明的表且台账 %s 里没有干净的基线,拒绝启动(启动期 DDL 已关闭,缺表会让对应表的每条 db_task 以 Error 1146 进死信);"+
+				"在 go/db 目录执行 `%s`(先跑基线建表再补列;报 dirty 时按它的提示人工核对)后重启: %s",
+				database, len(missingTables), migrate.SchemaMigrationsTable, migrateRemedyCommand, strings.Join(missingTables, ", "))
+		}
+		for _, name := range missingTables {
+			logx.Errorf("SCHEMA-DRIFT: 库 %s 缺表 %s,但基线已应用、`cmd/migrate -command up` 不会重建它(不阻断启动);该表的每条 db_task 会以 Error 1146 进死信,需人工建表",
+				database, name)
+		}
+	}
+
+	// 缺的表已在上面处理过,只把存在的表交给 Drift,免得它再报一遍含义不同的「查不到表」告警。
+	src := &migrate.ProtoSource{Model: model, Tables: present}
+	drift, warnings, err := src.Drift(ctx, q, database)
+	if err != nil {
+		return schemaCheckFailed(database, err)
+	}
+	for _, w := range warnings {
+		logx.Errorf("SCHEMA-DRIFT: 库 %s 需人工过目(不阻断启动): %s", database, w)
+	}
+	if drift.Empty() {
+		if len(missingTables) > 0 {
+			logx.Errorf("schema drift check NOT clean: database=%s tables=%d missing_tables=%s review_warnings=%d(缺表未阻断启动,见上)",
+				database, len(tables), strings.Join(missingTables, ","), len(warnings))
+			return nil
+		}
+		logx.Infof("schema drift check passed: database=%s tables=%d review_warnings=%d",
+			database, len(tables), len(warnings))
+		return nil
+	}
+
+	missing := make([]string, 0, len(drift.Statements))
+	for _, stmt := range drift.Statements {
+		if m := addColumnStmtRe.FindStringSubmatch(stmt); m != nil {
+			missing = append(missing, m[1]+"."+m[2])
+			continue
+		}
+		missing = append(missing, stmt)
+	}
+	return fmt.Errorf("库 %s 缺 %d 个 proto 声明的列,拒绝启动(启动期 DDL 已关闭,缺列会让对应表的每条 db_task 以 Error 1054 进死信);"+
+		"在 go/db 目录执行 `%s`(不加 -allow-modify)后重启: %s",
+		database, len(missing), migrateRemedyCommand, strings.Join(missing, ", "))
+}
+
+// schemaCheckFailed 包装「核对本身做不成」的错误。
+// 与 friend / trade 的 ensureSchema 同口径:查不了库结构也拒启,不按「没查出问题」放行。
+func schemaCheckFailed(database string, err error) error {
+	return fmt.Errorf("启动期 schema 核对失败(库 %s),拒绝启动;确认库可达后在 go/db 目录执行 `%s`: %w",
+		database, migrateRemedyCommand, err)
+}
+
+// cleanBaselineApplied 报告台账里是否有一条干净(dirty=0)的基线记录,即 up 是否还会跑基线建表。
+//
+// existing 是 LoadColumns 的结果:台账表本身不在里面(空库 / 历史 AutoMigrate 建的库)时
+// 直接视为未应用,不去查一张不存在的表。基线 dirty 同样算未应用 —— 那说明建表跑到一半,
+// 库结构未知,up 会以 ErrDirtySchema 拒绝并给出人工核对的提示,正是该让人看见的时候。
+func cleanBaselineApplied(ctx context.Context, q migrate.Queryer, existing map[string]map[string]string) (bool, error) {
+	if _, ok := existing[migrate.SchemaMigrationsTable]; !ok {
+		return false, nil
+	}
+	rows, err := q.QueryContext(ctx,
+		fmt.Sprintf("SELECT COUNT(*) FROM `%s` WHERE version = ? AND dirty = 0", migrate.SchemaMigrationsTable),
+		migrate.BaselineVersion)
+	if err != nil {
+		return false, fmt.Errorf("read baseline from %s: %w", migrate.SchemaMigrationsTable, err)
+	}
+	defer func() { _ = rows.Close() }()
+	var count int64
+	if rows.Next() {
+		if err := rows.Scan(&count); err != nil {
+			return false, fmt.Errorf("scan baseline count from %s: %w", migrate.SchemaMigrationsTable, err)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("iterate baseline count from %s: %w", migrate.SchemaMigrationsTable, err)
+	}
+	return count > 0, nil
+}
+
+// assertDriftKeysArePhysicalNames 守住 Drift 的查表键,在查库之前执行。
+//
+// internal/migrate 的 Drift 拿 proto2mysql.GetTableName(= proto full name)去 information_schema
+// 里找表,而真实表名是 OptionTableName。两者今天相等,只因为 mysql_database_table.proto 没写
+// package;一旦加了 package,每张表都会变成「查不到」,缺列核对对全部表静默失效,这道闸永远放行。
+// 所以不一致就拒启,逼改 proto 的人先让 Drift 改按物理表名取表。
+func assertDriftKeysArePhysicalNames(tables []proto.Message) error {
+	for _, t := range tables {
+		key := proto2mysql.GetTableName(t)
+		physical, ok := proto2mysql.TableNameFromDescriptor(t.ProtoReflect().Descriptor())
+		if !ok {
+			// 没声明 OptionTableName 时 proto2mysql 按 full name 建表,与查表键天然一致
+			// (RegisterTables 的表名守卫另行拒绝这种表)。
+			continue
+		}
+		if key != physical {
+			return fmt.Errorf("表名守卫: 消息 %s 的 proto full name 与 OptionTableName %q 不一致;internal/migrate 的 Drift 按 full name 查 information_schema,"+
+				"启动期 schema 核对会对这张表静默失效,拒绝启动(给表 proto 加 package 前,先让 Drift 改按 OptionTableName 取表名)", key, physical)
+		}
+	}
+	return nil
+}
+
 // InitDB 建连接、断言库白名单、注册表映射。
 //
 // **默认不跑任何 DDL**。历史实现在这里逐张跑 CreateOrUpdateTable,
-// 见 DDLPolicy 的注释。
+// 见 DDLPolicy 的注释。DDL 关闭时改为只读核对库结构,缺列、或缺表且迁移能补上时
+// 直接返回错误(见 assertSchemaUpToDate),调用方据此拒绝启动。
 func InitDB() error {
 	policy := ResolveDDLPolicy()
 	logx.Infof("db DDL policy: createDatabase=%v createOrUpdateTable=%v source=%s",
@@ -307,7 +469,9 @@ func InitDB() error {
 
 	if !policy.AllowCreateOrUpdateTable {
 		logx.Infof("startup-path DDL disabled; %d tables registered without schema changes", len(tables))
-		return nil
+		ctx, cancel := context.WithTimeout(context.Background(), schemaDriftCheckTimeout)
+		defer cancel()
+		return assertSchemaUpToDate(ctx, DB.DB, DB.SqlModel, config.AppConfig.ServerConfig.Database.DBName, tables)
 	}
 	logx.Errorf("STARTUP-DDL: 启动路径正在跑建表/补列(policy=%s)。这是 dev/兼容开关,生产应改用 cmd/migrate",
 		policy.Source)

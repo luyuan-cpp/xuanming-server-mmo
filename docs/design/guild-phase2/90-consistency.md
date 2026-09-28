@@ -277,7 +277,9 @@ S6 `ActivityDeps` 删 `Notifier`(用 `l.notify`),`OpIDs` 类型改 `data.OpIDMin
   与本节其余两批同一条纪律:生成物落地后、任何新 go/db / scene 启动前跑
   `cmd/migrate plan → up → SHOW COLUMNS`;若与帮会某批同日落地可合并为一次迁移,
   但 plan 必须只含这几条 ADD COLUMN。
-- 两批各自在生成物落地后、任何新 go/db / scene 启动前,对每份 zone 的 db 配置跑 `cmd/migrate plan → up → SHOW COLUMNS`(S3 §3.15a、S4 4.42 第 1b 步);若两批同一天连续落地,可合并为一次迁移,但 plan 必须只含这一或两条 ADD COLUMN。
+- 两批各自在生成物落地后、任何新 go/db / scene 启动前,对每份 zone 的 db 配置跑 `cmd/migrate plan → up → SHOW COLUMNS`(S3 §3.15a、S4 4.42 第 1b 步);若两批同一天连续落地,可合并为一次迁移。`-command up` 按 plan 整条执行、不能挑列,所以 15 / 16 / 17 这三列的迁移(B3a-1、B4a-1、回合制战斗 §9.3,不论哪一方先跑),plan 允许出现的只有 `profile_component` / `asset_op_ledger` / `settlement_ledger` 三条 ADD COLUMN 中尚未迁移的那几条(后者见上一条,属回合制战斗);三列都已迁移过时 plan 为空,up 可跳过。SHOW COLUMNS 三列各返回 1 行;出现这三条之外的任何语句先停下核对。
+- 上一条的放行清单截至 17 号。之后任何批次给 `player_database` 新增字段(18 起),须在同一次改动里把新列追加进上一条、03 §3.15a 与 92 步骤 4 的放行清单,否则那一批的 operator 会按上一条在自己的新列上停下。
+- 两处较早写下的单列清单作废,以上面的三列清单为准(原文暂未改):S4 4.42 第 1b 步"计划只含 `player_database` 加列 `asset_op_ledger`"及其只查 `asset_op_ledger` 一列的 SHOW COLUMNS;[turn-battle-gap-closure.md](../turn-battle-gap-closure.md) §9.3 验证清单第 1 步"计划应只含 `player_database` 加列 `settlement_ledger`"及其只查 `settlement_ledger` 一列的 SHOW COLUMNS。两边照三列清单放行、三列都查。
 - B3a-2 的 merge_zone"按列名拷贝"必须先于任何带新列的合服演练。
 
 ## G-04 本地启动脚本与运行环境
@@ -296,7 +298,7 @@ S6 `ActivityDeps` 删 `Notifier`(用 `l.notify`),`OpIDs` 类型改 `data.OpIDMin
 
 ## G-05 K8s 上线批 BK8s(本期不落地,单独授权;各节零散"上线项"汇总)
 
-guild:Deployment + ConfigMap(DSN 库 `mmorpg_guild`、appuser、`Schema.AutoMigrate=false`、`Timeout 4000`、`DataServiceRpc.Timeout 2000`、`AssetOp`、`MatchRpc`、`Activity`、`PlayerLocatorRedis` 指 SharedRedis)、`guild-migrate` Job(照 trade-migrate);密钥 `MMORPG_ASSET_OP_SECRET_GUILD/_TRADE`(`Resolve-InjectedSecret -MinLength 32`,注入 guild、trade、scene);NetworkPolicy(scene gRPC 只放 scene_manager/match/guild/trade;match gRPC 只放路由服与 guild);db migrate Job 先于 db/scene 滚动(两条新列);data-service ConfigMap 的 BootstrapTags;mysql-init ConfigMap 含 `mmorpg_guild`;TiDB BR 按库恢复清单加 `mmorpg_guild`;scene 永不设 `MMORPG_ALLOW_CLIENT_GM`;告警规则上线(G-07,含 `deploy/k8s/owner-epoch-alerts.yaml`);**Loki ruler 接线**(挂载规则目录 + `alertmanager_url`;仓库里 ruler 已配 local 存储但未挂规则、未接告警),接上后把 `docs/ops/cross-zone-failure-test-runbook.md` §9 的三条 LogQL 转为规则(2026-09-21 B4c 补)。前置:B4c 已落地(D8;**2026-09-21 起为 [08](./08-save-owner-fence.md) §8.3 六条**)。
+guild:Deployment + ConfigMap(DSN 库 `mmorpg_guild`、appuser、`Schema.AutoMigrate=false`、`Timeout 4000`、`DataServiceRpc.Timeout 2000`、`AssetOp`、`MatchRpc`、`Activity`、`PlayerLocatorRedis` 指 SharedRedis)、`guild-migrate` Job(照 trade-migrate);密钥 `MMORPG_ASSET_OP_SECRET_GUILD/_TRADE`(`Resolve-InjectedSecret -MinLength 32`,注入 guild、trade、scene);NetworkPolicy(scene gRPC 只放 scene_manager/match/guild/trade;match gRPC 只放路由服与 guild);db migrate Job 先于 db/scene 滚动(帮会两条新列,加上回合制战斗的 `settlement_ledger` 共三条,见 G-03);data-service ConfigMap 的 BootstrapTags;mysql-init ConfigMap 含 `mmorpg_guild`;TiDB BR 按库恢复清单加 `mmorpg_guild`;scene 永不设 `MMORPG_ALLOW_CLIENT_GM`;告警规则上线(G-07,含 `deploy/k8s/owner-epoch-alerts.yaml`);**Loki ruler 接线**(挂载规则目录 + `alertmanager_url`;仓库里 ruler 已配 local 存储但未挂规则、未接告警),接上后把 `docs/ops/cross-zone-failure-test-runbook.md` §9 的三条 LogQL 转为规则(2026-09-21 B4c 补)。前置:B4c 已落地(D8;**2026-09-21 起为 [08](./08-save-owner-fence.md) §8.3 六条**)。
 
 ## G-06 proto-gen 容量
 

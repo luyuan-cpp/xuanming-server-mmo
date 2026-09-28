@@ -296,13 +296,17 @@
 步骤 4|§3.15a zone 库加列。阻断项:必须在任何新版 go/db 或 scene 启动之前做。
 - 工作目录:go/db。
 - 命令:`go run ./cmd/migrate -f etc/db.yaml -command plan`。
-  - 期望只出现 `ALTER TABLE player_database ADD COLUMN profile_component ...`。
-  - 若 B4a 的 asset_op_ledger 列也未迁移,允许再多这一条(G-03)。出现其它语句先停下核对。
+  - plan 里只允许出现下面三条 `ALTER TABLE player_database ADD COLUMN ...`(G-03),已经迁移过的列不会再出现,所以实际可能只有其中一两条,也可能为空(B4a 或回合制战斗那边已先跑过 up):
+    - `profile_component`(15,本批);
+    - `asset_op_ledger`(16,B4a);
+    - `settlement_ledger`(17,回合制战斗结算幂等,来自 docs/design/turn-battle-gap-closure.md §9.3,不属于帮会批次)。
+  - 为什么要放行 settlement_ledger:`-command up` 按 plan 整条执行,不能挑列;17 号字段已在 proto 和生成物里,这列不加,新版 go/db 存盘同样 unknown column 失败。
+  - 这三条之外出现任何语句(别的列、别的表、MODIFY / DROP)先停下核对。
   - 库名白名单拒绝时,按 cmd/migrate/main.go 的注释设置 DB_ALLOWED_DATABASES。
-- 然后跑 `-command up`。
-- 每个 zone 库核对:`SHOW COLUMNS FROM player_database LIKE 'profile_component';` 返回 1 行。
+- 然后跑 `-command up`。plan 为空时这一步可跳过,直接做下面的核对。
+- 每个 zone 库核对:对 profile_component、asset_op_ledger、settlement_ledger 各跑一次 `SHOW COLUMNS FROM player_database LIKE '<列名>';`,各返回 1 行。
 - 本机多 zone 时,对每份 zone 的 db 配置重复一遍。run/etc/go_services/z<N>_db.yaml 由启动脚本生成,当前机器上还没有这个目录,以实际存在的配置为准。
-- 通过标准:plan 只含允许的 ADD COLUMN,up 退出码 0,每个库 SHOW COLUMNS 返回 1 行。
+- 通过标准:plan 只含上面三条里的 ADD COLUMN(或为空),跑了 up 的话退出码 0,每个库三次 SHOW COLUMNS 各返回 1 行。
 - 失败保留:plan 全文和 up 输出。
 
 步骤 5|go/login 静态检查。
@@ -378,9 +382,16 @@
 - 通过标准:
   - 0 error;
   - PlayerFeaturePersistenceTest 全过,含新增的 ProfileNameRoundTripsThroughDatabaseRecord 和 MissingProfileComponentLoadsEmptyName;
-  - bag_test 其余用例无回归。
+  - bag_test 其余用例无回归。cpp/tests/bag_test/player_battle_settlement_test.cpp 整个文件属于回合制战斗(docs/design/turn-battle-gap-closure.md),不属于本批:
+    - PlayerBattleSettlementTest.* 里"2026-09-25 §9.3"注释段下的 4 个,加上 BattleSettlementLedgerRule.*,是 §9.3 新增;
+    - PlayerBattleSettlementItemTest.* 是 G1/G3(该文 §4);
+    - PlayerBattleSettlementTest.* 其余 5 个更早,但测试夹具和所测的 player_battle.cpp 之后又被 G 系列和 §9.3 改过。
+    - 这个文件的当前版本连同它测的代码从未编译、从未跑过,所以哪一个都谈不上"回归"。失败时照样保留输出并报告,按上面的划分记到 turn-battle-gap-closure.md 对应小节,不算本批不通过,也不算本批的回归。
 - no-raw-pointer-member 因缺工具 SKIP,不计为静态检查通过。
-- 归因:本批只动了 player_database_loader.cpp、player_battle.cpp、player_feature_persistence_test.cpp 三个文件。错误落在 player_lifecycle、asset_op_system、cross_zone_test 等文件时,属于其它会话。
+- 归因:本批只动了 player_database_loader.cpp、player_battle.cpp、player_feature_persistence_test.cpp 三个文件,且只动了其中与名字(profile_component)相关的行。
+  - player_database_loader.cpp、player_battle.cpp 里其余的回合制战斗改动都来自 docs/design/turn-battle-gap-closure.md,不是本批的:§9.3 结算幂等(settlement_ledger 的 Marshal / Unmarshal、结算账本、AckSettlementPending 销账等,连同 battle_settlement_ledger.h),以及 player_battle.cpp 里更早的 G1/G3 道具结算(该文 §4)。cpp/tests/bag_test/player_battle_settlement_test.cpp 整个文件同样属于回合制战斗,划分见上面 bag_test 那条。
+  - 编译错误或测试失败落在这些改动上时,保留首个 error / FAIL 原样报告,帮会这边不要动手修。
+  - 错误落在 player_lifecycle、asset_op_system、cross_zone_test 等文件时,属于其它会话。
 - 失败保留:msbuild 日志里首个 error 前后 30 行,gtest 的 XML 或控制台输出。
 
 步骤 12|stress_summarize 脚本体检(只读,不是压测)。

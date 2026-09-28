@@ -252,7 +252,7 @@ D48 立的不变量是"闸只放入口层,日后新增的扣减入口必须各�
 常态化刷屏,那就是信号)。闸加在寄售的**客户端入口 handler**,不要加进 `BagService`
 (理由见 D48:结算入账时 `InBattleComp` 还挂着,下沉会把结算自己挡住)。
 
-### 9.3 结算幂等基底持久化(**2026-09-25 已落码,未编译**)
+### 9.3 结算幂等基底持久化(**2026-09-25 落码,09-28 按实现评审修订,未编译**)
 
 原缺陷(既有,G1-G9 把影响面从"金币"扩大到"金币 + 掉落"):幂等基底是
 `thread_local battle_settlement::SettlementApplicationCache`,**纯进程内**,重启即空;
@@ -275,12 +275,16 @@ blob、同一次落盘**,于是两者同生共死:崩溃 → 一起没 → pendi
 | 存档字段 | `player_database.settlement_ledger = 17`(下一个空闲号;已按 G-03 登记,帮会剩余批次从 18 起) |
 | 存盘接线 | `player_database_loader.cpp` 的 Marshal / Unmarshal 各一行,紧挨 `asset_op_ledger` —— 同一条**不变量 I3**:必须与 currency / bag_component 同记录同一次落盘 |
 | 纯规则 | `battle_settlement_ledger.h`(header-only,无 ECS/Redis/时钟):`HasApplied` / `RecordApplied` / `ForgetApplied` |
-| 去重判据 | `ApplySettlementToEntity` 开头先查**活账本**:命中 = 奖已发过,不再发第二次 |
+| 去重判据 | `ApplySettlementToEntity` 开头先查**活账本**:命中 = 奖已发过,不再发第二次(返回 true + `alreadyApplied`,调用方不再推结算面板) |
 | 销账判据 | `IsSettlementDurable` 只看 `PlayerLastPersistedSnapshotComp` —— 上一次**确实写进 Redis** 的那份 `PlayerAllData`。条目出现在这份字节里,才允许销账 |
-| 销账收口 | 新增 `AckSettlementPending(playerId, battleId)` 为**唯一销账入口**,原先 7 个 `ClearPendingSettlementIfMatch` 调用点全部改走它 |
-| 条目回收 | 条件删 EVAL **成功回调**里才 `ForgetApplied`。所以账本只登记"已应用但销账未确认"的局,稳态长度 0~1 |
+| 销账收口 | `AckSettlementPending` 是**唯一销账入口**,原先 7 个 `ClearPendingSettlementIfMatch` 调用点全部改走它。三条规则:活实体 + 账本有 → 落盘才销账;活实体 + 账本无 → 判废,立即销账;**本节点没有活实体 → 不猜**,只有调用方正面证明"锁已被另一局持有"才销账,否则留给登录钩子 |
+| **锁留到落盘** | 三条应用路径(在线、按锁匹配、登录补应用)只摘 `InBattleComp`,**不删 `battle:lock`**,并把锁续到至少 `kSettlementLockHoldSec = 180s`(发件箱重投窗口 120s + 余量)。落盘确认后,销账与删锁在**同一条 Lua**(`kAckSettlementScript`)里条件执行,删锁后补一次组队跟随检查 |
+| 快路径 | 真正压出一笔存盘后,在同一条连接上紧跟一条 `PING`;玩家存盘客户端与 `tlsRedis.GetZoneRedis()` 是同一个 hiredis 连接,回复按序处理,落地回调同步更新快照 —— PING 回包时当场判落盘、销账放锁,下一场排队只多等一次往返 |
+| 双存盘闸 | 销账延后时,若该玩家已有未落地的存盘(`HasUnsettledSave`)就不再压:排队值永远是最新的一份,必然带着账本 |
+| 按锁重建前查账本 | `RestoreBattleFreezeOnLogin` / `RebuildBattleFreezeFromLock`:锁指向的局已在活账本里 → 不重建冻结,改推进销账。登录补应用成功后再补一次按锁重建(下一场的冻结不再被旧 pending 挡掉) |
+| 条目回收 | 销账 EVAL **成功回调**里才 `ForgetApplied`。所以账本只登记"已应用但销账未确认"的局,稳态长度 0~1 |
 | 排空兜底 | reaper(30s)第二遍扫账本补 Ack —— 不依赖 battle 发件箱(它只重投 12 轮 120s 就放弃) |
-| 压缩窗口 | 应用成功后立刻 `SavePlayerToRedis`(经 `SetPersistFnForTest` 注入点,与资产通道同形状),把"已应用未落盘"从一个周期存盘压到一次 Redis 往返 |
+| 加列强制 | go/db 在 `AutoMigrateSchema=false` 时启动期只读核对表结构,缺列就拒启并打印补列命令(见验证清单第 1 步) |
 
 #### 为什么两条判据必须分开
 
@@ -290,57 +294,74 @@ blob、同一次落盘**,于是两者同生共死:崩溃 → 一起没 → pendi
 - `HasApplied(实体上的活账本)` → **别再发一次奖**;
 - `IsSettlementDurable(落盘快照里的账本)` → **可以销账**。
 
-#### 顺带修掉的两个真缺陷
+#### 为什么锁要留到落盘(实现评审 wne803bj5 的主结论)
 
-1. **销账绕过点**:应用成功后紧接着 `ClearBattleFreeze`(删锁 + 摘 `InBattleComp`),于是发件箱
-   10s 后的第一次重投必然落进"无 `InBattleComp` 且锁不在"那一支 —— 那里**不经过**
-   `ApplySettlementToEntity`,改造前会当场销账,把延后的努力全部作废。收归单一入口后这些分支
-   一并受持久判据保护:账本里有 = 已应用 → 等落盘;账本里没有 = 真作废 → 立即销账(行为不变)。
-2. **冻结闸只看 gold/items**:一笔"只有 HP + 宝宝 + 击杀事实、没有金币也没有掉落"的 PVE 结算
-   (打空怪,完全正常)会穿过闸门 —— 任务进度被推、宝宝被改,而此刻存盘被硬性跳过,改动随实体
-   销毁一起没,账本却记成已应用。现在改为整笔判据 `IsSettlementApplicable`,并补上
-   `PlayerTravelHandoffComp` / `UnregisterPlayer`(这两个窗口里 `SavePlayerToRedis` 开头直接跳过
-   写盘,应用了也落不了盘)。刻意**不**含资产通道的 `HasFencedOwnership`,理由写在函数注释里。
+原先代码把"锁不在"当作"这一局已作废"的证据,而应用当下就删锁、早于落盘。于是"锁不在 + 账本里没有"
+既可能是真作废,也可能是"应用了、没落盘就崩了/被废黜" —— 后者会被误判作废,唯一的 pending 被删,
+奖励永久丢失。同一个根还带出两个问题:
+
+- 玩家能在上一局 pending 还没销账时开下一场,battle 对下一局的**无条件 SET 覆盖掉上一局唯一的 pending**;
+- 重登时登录钩子读到旧 pending,走了"补应用"分支而**漏掉下一场的冻结重建**,玩家在战斗中被解冻。
+
+让锁一直留到落盘,这三件事一起消失:锁在,match 就不放下一场;重投窗口内"锁不在"只剩"已作废/已销账"两种含义。
+
+#### 顺带修掉的真缺陷
+
+1. **销账绕过点**:应用成功后紧接着删锁 + 摘 `InBattleComp`,发件箱 10s 后的第一次重投必然落进
+   "无 `InBattleComp` 且锁不在"那一支 —— 那里**不经过** `ApplySettlementToEntity`,改造前会当场销账。
+   收归单一入口后这些分支一并受持久判据保护。
+2. **冻结闸只看 gold/items**:一笔"只有 HP + 宝宝 + 击杀事实"的 PVE 结算会在冻结期穿过闸门。
+   改为整笔判据 `IsSettlementApplicable`,并补上 `PlayerTravelHandoffComp` / `UnregisterPlayer`
+   (这两个窗口里 `SavePlayerToRedis` 开头直接跳过写盘)。刻意**不**含资产通道的 `HasFencedOwnership`,理由写在函数注释里。
+3. **离线分支在锁 TTL 过期后删掉合法 pending**(既有):锁 TTL 是 deadline+60s,离线玩家的结算常常晚于它到达。
+   这与在线分支注释里"按锁 gating 会把合法离线结算判掉"的判断自相矛盾。现在离线分支"锁不在"一律不销账,留给登录钩子。
+4. **一场结算连存两次盘**:应用时压一次,紧接着的销账延后又压一次(脏比较对的是上次**落地**的快照,拦不住)。
 
 #### 残留与代价(已知、刻意接受)
 
-- **每场战斗多一次存盘 + 一轮重投**:durable 判定要等异步存盘落地,应用当下探测必为假,所以销账
-  通常发生在发件箱 10s 后的那一次重投(或 reaper 的 30s 扫描)。这是照搬通用资产通道"触发存盘、
-  如实回报、由上游重试追平"的口径,不新造等待机制。
-- **pending 每玩家单槽**(`battle:settlement:pending:{player_id}`,无条件 SET):延后销账把槽位
-  占得更久,连打两场时后一场会覆盖前一场的 payload。靠"应用后立刻存盘"把窗口压到一次 Redis
-  往返来规避;**彻底修法是 pending 改成按 (player, battle) 一条**,那要动两端 key 契约,未做。
+- **落盘确认前不能排下一场**:正常是一次 Redis 往返(快路径);存盘排在同玩家另一笔在途存盘之后、或写失败进重试时,
+  退到发件箱 10s / reaper 30s。battle-smoke 若在战斗结束后**立刻**重新排队,可能偶发被锁挡一次。
+- **离线玩家被判废的局会在登录时补发**:离线分支不再以"锁不在"判废,而登录钩子本来就不看锁。能判废 FIGHTING 的只有
+  reaper 且它要实体在场,所以只有"退出存盘在途的实体恰好被 reaper 判废、随后迟到的结算"会走到这里,属于既有语义的一致化。
+- **reaper 判废 FIGHTING 没有宽限**(既有,未改):`deadline_ms < now` 即判废,恰在 deadline 结算的超时平局可能输给一次
+  reaper tick,随后被当作作废丢弃。概率约为"结算传输耗时 / 30s"。
+- **崩溃 + 停机超过锁的续期(180s)**:此后若有重投恰好在登录钩子读 pending 之前打到新实体,"锁不在 + 账本无"仍会被判废。
+  发件箱 120s 窗口已过,只剩登录钩子这一条路,它不看锁,所以实际只在"重登恰好撞上最后一次重投"时发生。
+- **pending 每玩家单槽**(`battle:settlement:pending:{player_id}`,无条件 SET):锁留到落盘后,下一局在上一局销账前开不了,
+  单槽覆盖只剩"锁自然过期"一种来路。彻底修法是 pending 改成按 (player, battle) 一条,要动两端 key 契约,未做。
 - **"落盘"指写进 Redis,不是 MySQL**:与全仓既有口径一致(Redis 是在线权威存储,MySQL 在其下游)。
-- **回档会把账本退回旧值**,而 pending 不参与回档、活 7 天 → 已发的奖可能被重发。但回档同时把
-  资产也退回了,重发与回档语义自洽,不额外加机制。
-- **账本容量 `kMaxAppliedRecords = 64` 是异常兜底不是常规容量**:条目销账一确认就摘,要堆到 64
-  意味着连续 64 局条件删全失败(Redis 已不可用)。溢出淘汰最旧项并打
-  `metric=battle_settlement_ledger_evicted`。
+- **回档会把账本退回旧值**,而 pending 不参与回档、活 7 天 → 已发的奖可能被重发。但回档同时把资产也退回了,
+  重发与回档语义自洽,不额外加机制。
+- **账本容量 `kMaxAppliedRecords = 64` 是异常兜底不是常规容量**:条目销账一确认就摘,要堆到 64 意味着连续 64 局
+  条件删全失败(Redis 已不可用)。溢出淘汰最旧项并打 `metric=battle_settlement_ledger_evicted`。
 
 #### 设计过程(留痕)
 
-第一版设计挂 `HandlePlayerAsyncSaved` 回调 + 一个独立"待确认集合",被对抗评审(3 个评审面、
-`wvo7qkttt`)判 **broken**,4 个 blocker:销账点只搬了 1 个、账本成员被当成已落盘、pending 单槽、
-整集合清空会 ACK 掉没落盘的局。现方案逐条规避,且**不再需要新挂点** ——
-`PlayerLastPersistedSnapshotComp` 本来就是"刚写进 Redis 的那份字节",跨区传送线预留的
-`HandlePlayerAsyncSaved` 挂点**不再需要**,那个文件一行未动。
+1. 第一版设计挂 `HandlePlayerAsyncSaved` 回调 + 一个独立"待确认集合",被设计评审(`wvo7qkttt`)判 **broken**,
+   4 个 blocker。第二版改为只认落盘快照字节,不需要新挂点,`player_lifecycle.cpp` 一行未动。
+2. 第二版落码后做了**实现评审**(`wne803bj5`,5 个维度 × 每条 2 名反驳者 + 完整性批评者):9 条全部被确认、0 条被驳回,
+   编译维度 0 条。主结论就是上面的"锁留到落盘";其余为双存盘、测试一处必挂(物品版重复应用仍断言 false)、
+   重登用例没带账本(测的不是它声称的东西)、销账规则零覆盖、加列无强制、robot vendor 未同步、帮会交接手册会把新列当异常。
+   全部已修。
 
 #### 验证清单(全部未执行)
 
-1. **MySQL 加列**(导表/生成之后、任何新 go/db 或 scene 启动之前,冒烟之前必须):
-   `cd go/db && go run ./cmd/migrate -f etc/db.yaml -command plan`,计划应只含 `player_database`
-   加列 `settlement_ledger`;确认后 `-command up`(不加 `-allow-modify`)。本地多 zone 时对启动器
-   实际用的每份 db 配置各跑一次。随后每个 zone 库 `SHOW COLUMNS FROM player_database LIKE
-   'settlement_ledger'` 返回 1 行。**漏这一步会让全服玩家回写全部失败**
-   (`AutoMigrateSchema: false`,`key_ordered_consumer.go` 按 descriptor 写全部列)。
-2. 编译 scene 相关工程与 `bag_test`。
-3. `bag_test` 全绿,重点看本节新增的 7 个用例(账本登记 / 重启后不重复发 / 冻结与交接整笔延后 /
-   三条纯规则),以及**契约变更后更新过的**
-   `DuplicateSuccessfulCallbacksAndReentryPayAndProgressOnce`。
-4. `battle-smoke` 端到端:打一场有掉落的战斗 → 看日志出现一次"结算已应用"、随后出现
-   "销账延后"、再在下一轮重投或 reaper 后出现销账落地;`battle:settlement:pending:{id}` 最终消失。
-5. 杀进程验丢失窗口:应用之后、存盘之前 kill scene → 重启 → 登录应重新发一次掉落(不丢);
-   人为让条件删失败 + 重启 → 登录**不得**重复发(不复制)。
+1. **MySQL 加列必须先跑**:`cd go/db && go run ./cmd/migrate -f etc/db.yaml -command plan`,计划应只含
+   `player_database` 加列 `settlement_ledger`(若本地库还缺 `profile_component` / `asset_op_ledger`,一起出现是正常的);
+   确认后 `-command up`(不加 `-allow-modify`)。本地多 zone 时对启动器实际用的每份 db 配置各跑一次。
+   随后每个 zone 库 `SHOW COLUMNS FROM player_database LIKE 'settlement_ledger'` 返回 1 行。
+   **漏这一步,新编的 go/db 会拒启并打印这条命令**(改造前是静默地让全服玩家回写全部失败)。
+2. 编译 go/db(`go build ./...`、`go vet ./...`),编译 scene 相关工程与 `bag_test`(MSBuild 串行 `/m:1`)。
+3. `bag_test` 全绿,重点看本节的用例:账本登记 / 重启后不重复发 / 冻结与交接整笔延后 / 三条纯规则 /
+   缓存命中但账本缺失只补发一次 / 销账在未落盘时延后、落盘后才销账;以及契约变更后更新过的
+   `DuplicateSuccessfulCallbacksAndReentryPayAndProgressOnce`、`RepeatedApplyDoesNotDoubleConsumeOrDoubleDrop`、
+   `ReloginOldPendingDoesNotPayAgainOrRemoveNewBattle`。
+4. `battle-smoke` 端到端:打一场有掉落的战斗 → 日志依次出现"结算已应用"、"销账延后"、随后很快(快路径)销账;
+   `battle:settlement:pending:{id}` 与 `battle:lock:{id}` 在同一刻消失;每场结算只出现一次结算存盘(不应连存两次);
+   战斗结束后立刻重新排队应在一次往返后放行;组队跟随在删锁后恢复。
+5. 杀进程验两个窗口:应用之后、存盘之前 kill scene → 重启 → 登录应重发一次(不丢);人为让销账 EVAL 失败 + 重启 →
+   登录**不得**重复发(不复制)。再加一条:应用后 kill,**不登录**,等发件箱把剩余重投打完 → pending 仍在,之后登录补发。
+6. 重登冻结:玩家 A 打完 X、销账前开了 Y(可人为让 X 的锁过期)再断线重登 → 应重建 Y 的冻结并重绑 gate。
 
 ### 9.2 仍然没做
 

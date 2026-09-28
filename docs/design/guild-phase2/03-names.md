@@ -595,12 +595,18 @@ go/db 启动期 DDL 默认关闭:`go/db/etc/db.yaml:62 AutoMigrateSchema: false`
 cd E:\work\xuanming-server-mmo\go\db
 go run ./cmd/migrate -f etc/db.yaml -command plan                          # zone 1
 go run ./cmd/migrate -f ..\..\run\etc\go_services\z2_db.yaml -command plan # zone 2(本机多 zone 时)
-#   期望:只有 ALTER TABLE `player_database` ADD COLUMN `profile_component` ...;出现其它语句先停下核对
+#   期望:只有 ALTER TABLE `player_database` ADD COLUMN,且列名只能是下面三个里尚未迁移的(90 清单 G-03):
+#     `profile_component`(15,本批)/ `asset_op_ledger`(16,B4a)/
+#     `settlement_ledger`(17,回合制战斗结算幂等,turn-battle-gap-closure.md §9.3,非帮会批次)
+#   -command up 按 plan 整条执行、不能挑列,所以后两条若在 plan 里就一并放行;出现其它语句先停下核对
+#   三列都已迁移过(B4a 或回合制战斗那边先跑了 up)时 plan 为空:可跳过下面两条 up,直接做 SHOW COLUMNS 核对
 go run ./cmd/migrate -f etc/db.yaml -command up
 go run ./cmd/migrate -f ..\..\run\etc\go_services\z2_db.yaml -command up
 # 库名白名单拒绝时按 cmd/migrate/main.go 注释设置 DB_ALLOWED_DATABASES
 # 核对(每个 zone 库):SHOW COLUMNS FROM player_database LIKE 'profile_component';  → 1 行
+#                     asset_op_ledger、settlement_ledger 同样各查一次            → 各 1 行
 ```
+`settlement_ledger` 由回合制战斗结算幂等引入,见 [turn-battle-gap-closure.md](../turn-battle-gap-closure.md) §9.3。该文验证清单第 1 步写的"计划应只含 `settlement_ledger`"没有考虑三列并存,放行哪些列以 90 清单 G-03 的三列清单为准。
 然后重启 go/db、scene。k8s:在新 db / scene 镜像滚动前跑 go/db migrate(k8s_deploy.ps1:1616 注释所述"部署阶段 cmd/migrate up"),顺序 migrate → go/db → scene。合服前置检查同样核这一列(3.16)。
 
 ## 3.16 合服 / 回档 / 摘角色
@@ -699,7 +705,8 @@ $env:DATA_SERVICE_IT_MYSQL_USER='root'; go test -tags=integration ./internal/sto
 cd ../login; go build ./...; cd ../match; go build ./...; cd ../guild; go build ./...; cd ../db; go build ./...
 cd ../../robot; go mod vendor; go build ./...
 # C++(Debug x64,/m:1):proto → table → core → scene 库 → scene 节点 → battle 节点
-# 3.15a:每个 zone 库 cmd/migrate plan(只允许 ADD COLUMN profile_component)→ up → SHOW COLUMNS 1 行
+# 3.15a:每个 zone 库 cmd/migrate plan(只允许 ADD COLUMN profile_component / asset_op_ledger / settlement_ledger,
+#        后者属回合制战斗 turn-battle-gap-closure.md §9.3;可能为空)→ up(plan 为空可跳过)→ SHOW COLUMNS 三列各 1 行
 # ── B3a-2 ──
 cd E:\work\xuanming-server-mmo\go\login; go vet ./...; go test ./internal/logic/clientplayerlogin/... ./internal/logic/pkg/playernamereg/... ./internal/logic/admin/...
 cd ../../robot; go mod vendor; go build ./...
