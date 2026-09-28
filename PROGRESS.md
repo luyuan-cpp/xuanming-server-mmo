@@ -5685,3 +5685,20 @@ friend 移植会话(机器 A,`E:\work\xuanming-server-mmo`)写交接文档写到
   - **怎么拿数据**:按 09-19 条目 C.2 的专项做 `docker restart kafka`,若出现重建,直接读这行日志的 `destroy=` 数值。常态几十毫秒 → 维持现状;出现秒级 → 再做后台销毁,并同时处理退出期(停机 barrier 里有界等待后台线程)。
 - **给 Codex 的编译项**(只改了一个 .cpp,无新文件、无工程登记变化):`msbuild cpp/libs/engine/infra/infra.vcxproj /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`,随后照 09-19 条目编 `kafka_command_test` 并跑 19 个策略单测(本次没改策略头文件,单测应不受影响)。
 - **至此 09-19 交接单 B 里仍开着的只剩需要人来做的**:全量编译与测试;`docker restart kafka` 专项;Redis release 档实测;kind 上验证 gate / scene 就绪;架构决策(Kafka 3 broker、MySQL / Redis 高可用);两个独立安全测试要不要进 CI。09-17 审计里「控制面与恢复路径」(零 Secret / 零 TLS、HMAC 密钥明文进 ConfigMap、etcd 零备份、恢复全局库会倒回发号水位)不在这份交接单范围内,仍然没有 owner。
+
+## 2026-09-28 防御 ×12 / 法力 ×4 联机验收通过(Claude,按用户指示代 Codex 执行)
+
+- 用户 09-18 / 09-25 两次指示「不用等 Codex,你帮他做完」。本轮把 2026-09-15 更正一节清单里最后剩下的联机项跑完:**全部通过**。本轮没有改任何代码或表,只补这条记录。
+- **编译**:MSBuild `game.sln` + `turn_battle_engine_test` + `bag_test`,Debug|x64 `/m:1 /nr:false`,三项均 exit 0。(09-25 第一次全量编译因并行会话同时在编,链接期 `config.lib` / `core.lib` / `configuration_table_test.exe` 报 LNK1104 文件占用而失败;本轮无并发,同样的树编译通过 —— 说明一周未编译的代码本身能编过。)
+- **单测**:`turn_battle_engine_test` 124/125、`bag_test` 247/254。**属性 / 伤害线全绿**:`AllocFormulaTest.*`(含 `EveryAllocatedPointRaisesEachStatByAtLeastOne`)、`CombatDamageRulesTest.*`(含 `DefenseUnitScaleKeepsReceivedRatio`、`TargetLevelIsClamped` 480 / 10560)、`DerivedDefenseReducesIncomingDamageProportionally`、`PvpDirectDamageIsScaled`、`MonsterRowWithoutStatsFallsBackToDefaults`(10 回合)。
+  8 条失败全部在他人在途区域、与防御 / 法力无关,未修:`BagRemoveByGuidTest` 6 条、`PlayerBattleSettlementItemTest.RepeatedApplyDoesNotDoubleConsumeOrDoubleDrop`(工作区有该会话未提交的结算存盘守卫改动)、`TurnBattleEngineTest.SilenceBlocksGeneralSkillButAllowsBasicAttack`。
+- **本地一区**:`start_game.ps1` 起到 5/6 后中止,原因是 trade 起不来(`listen tcp 127.0.0.1:50800: bind: ... forbidden by its access permissions`,Windows 保留端口段,与本改动无关);其余 10 个服务已起。按启动器同样的方式单独拉起 Java 网关(`/actuator/health` = UP、`/api/server-list` 一区 OPEN)后继续验收。
+- **冒烟三条全过**:`ATTRIBUTE_SMOKE_OK` / `PET_SMOKE_OK` / `BATTLE_SMOKE_OK`,exit 均 0。
+  用的是 `run/builds/social-ready-20260922/.../robot-battle.exe`(09-22 编译)。09-16 那版机器人(`run-smokes.ps1` 默认)已读不了当前表:Item 表 09-17 加了 `battle_usable` / `battle_heal_hp` / `battle_heal_mp`,旧机器人 JSON 解析直接报 unknown field;本机没有 Go 工具链,无法重编机器人。
+- **数值验收**(`numeric-robot-final.exe`,09-16):exit 0,标记齐全。
+  - 85 级全投体质:防御 **5610**;全投灵力:法力上限 **4830**;逐点 `0->1->425` 全部通过(`NUMERIC_ATTRIBUTE_FIRST_POINT_OK` / `NUMERIC_ATTRIBUTE_RESTORED` / `NUMERIC_ATTRIBUTE_OK`)。账号 `class_id=1`,**丹心 5712 这条分支本轮未覆盖**(固定冒烟账号不是丹心)。
+  - 1 级新号:法力 840/840(= 800 + 40 × 1,新单位);打副本 1 **9 回合 `SIDE_A_WIN`**,与设计文档 §8 推算的「约 9 回合胜」一致(`NUMERIC_BATTLE_BASELINE_OK` / `NUMERIC_BATTLE_OK`)。
+  - 数值机器人同为 09-16 版,同样读不了新表列。做法:把 `generated/tables` 整份复制到 `run/verify-attribute-20260928/tables-numeric`,**只删掉 09-16 之后新增的** `item.battle_usable` / `battle_heal_hp` / `battle_heal_mp` 与 `monster.drop`(共 86 个键),其余原样;属性相关值(Class 800 / 120 / 240、Monster armor 36 / 48 / 60 …)逐项核对未变。这是为兼容旧机器人做的输入裁剪,**没有改仓库里的表**。
+- 证据在 `run/verify-attribute-20260928/`(`run/` 被 gitignore,不入库):`build-*.log` 与 exitcode、两个 gtest XML、`original-*.log`、`numeric-*.log`、`numeric-results.json`、`tables-numeric/`。
+- 收尾:本地一区与 Java 网关**仍在运行**,未停服(并行会话可能在用)。trade 端口问题与上述 8 条他人用例失败均未修,留给对应会话。
+- 至此 2026-09-15 更正一节的 Codex 清单 **8 步全部完成**,防御 ×12 / 法力 ×4 这条线收工。
