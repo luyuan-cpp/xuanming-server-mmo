@@ -1277,6 +1277,15 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
   - (a) fullSync 出错时外层循环不进 watch,ticker、rebalance、PUT/DELETE 处理会一起停住;
   - (c) 两条路径做的是同一个动作,应共用一个队列和一组单测。
   - 原先的理由 (b)(持续拒 SET)已更正为前瞻理由:K8s 目前没设 maxmemory,本地是 allkeys-lfu;将来定上限时必须用 noeviction,那时才会出现拒 SET 而放行 ZREM。
+- **失败分支**:
+  - 写失败、但 Redis 其实正常:下一拍补写成功,再摘除,记 recovered。
+  - 写一直失败:满一个屏障后不带标记摘除,记 expired。
+  - death_at 已写、ZREM 失败(Redis 挂了或熔断打开):进队列;节点留在负载集、类型镜像保留、不入收尾队列。每拍"重写 death_at + ZREM",成功记 recovered,10 分钟仍不成功记 abandoned。
+  - SETEX 超时但其实已执行:下次重试再写一次(屏障只会往后推),然后再摘。
+  - 推迟期间重新注册:PUT 触发 cancel,快照交收尾队列,不写 death_at、不摘,记 dropped;万一漏了 PUT,重试时在 knownNodes 里看到它,走同一个函数。
+  - 失去领导权:丢掉全部任务,不碰 Redis,记 dropped;新领导者的 sweep 会在负载集里重扫到它,首次观察时刻用新领导者自己的(更晚,方向保守)。
+  - 同一节点被重扫又失败:保留最早的首次观察时刻和最早的快照。
+  - 进程重启:队列丢失;节点仍在负载集,新进程首次 fullSync 会重扫到它。
 - **可用性代价**:推迟期间死节点仍在负载集(默认 ≤20s,ZREM 失败时 ≤10 分钟):CreateScene 可能选中它;进它名下场景的 EnterScene 会落成 CPP-2 那种哑连接;新频道可能铺到它上面。这与"进程已死、租约未到期"那段既有窗口同性质,按 AGENTS §11 接受。
 - **指标与日志**:
   - `scene_manager_node_detach_deferred_total{zone_id,outcome}`,outcome 取 `deferred / recovered / expired / abandoned / dropped`。deferred 时对 expired / abandoned 预建 0 序列。
@@ -1459,7 +1468,7 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
 
 ### 13.7 GO-2 根治:owner_epoch 严格单调(设计已定稿,落码中)
 
-GO-2 在制代码和 proto 注释里引用的 `cross-zone-scene-travel.md §12.8`,指的就是本小节。落码完成后,本小节要按代码实情补上落点与偏差。
+GO-2 在制代码和 proto 注释里引用的 `cross-zone-scene-travel.md §12.8`,指的就是本小节。落码完成后,本小节要按代码实情补上落点与偏差。2026-09-29 工作树里已能看到的只有两个 proto 字段(`rollback_receipt = 7`、`owner_epoch_after_rollback = 5`)和 `go/scene_manager` 的在制改动(均未提交);下文其余函数名、日志前缀、计数名、site 名都取自定稿规格,**以落码后的代码为准**。
 
 **问题**(§12.3 GO-2 行与 §10.3,核实后确认三条伤害):
 1. 路由失败回滚把 owner_epoch 从 N+1 退回 N,而被收回的 N+1 已被目标节点拿去落了 DBTask。db 的 applied_epoch 被毒化,合法持有者之后的每笔 DBTask(N) 都被判 stale。
@@ -1541,6 +1550,8 @@ GO-2 在制代码和 proto 注释里引用的 `cross-zone-scene-travel.md §12.8
 - §13.2 残余里"SET 回调 ERROR 分支不校验代际"一条,由本判定表的属主决定是否收进代际判断。
 
 ### 13.8 CPP-3 疏散 / 排空改派的待确认表(设计已定稿,落码中)
+
+2026-09-29 工作树里还没有 CPP-3 的代码;本小节的文件名、用例名、结局名(`kick_verified`、`push_gate_gone` 等)都取自定稿规格,**以落码后的代码为准**。
 
 **问题**:§12.3 CPP-3 行。改派 EnterScene 是 fire-and-forget:票据发送前就删,发完立刻摘会话、销毁实体。被拒或没有应答时,gate 会话还连着,却指向一个已经没有实体的节点,没有 tip,也不踢线。
 
