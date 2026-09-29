@@ -115,8 +115,20 @@ type PlayerLocation struct {
 	// 第一条腿放行时写入,第二条腿(目标 zone 的 login 发来的 EnterScene 不带地图)由 scene_manager
 	// 自己读出来选频道。不经票据 / login / 客户端转手,目标地图不会被持票者改写。0 = 默认大世界。
 	PendingSceneConfId uint64 `protobuf:"varint,6,opt,name=pending_scene_conf_id,json=pendingSceneConfId,proto3" json:"pending_scene_conf_id,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// 路由 / 重定向投递失败后的回滚回执(GO-2 根治,cross-zone-scene-travel.md §12.8)。
+	//   - 只由 scene_manager 的回滚 Lua(owner_epoch.go luaRollbackPlayerPlacement)写入,值为被回滚那次
+	//     铸造所凭的 handoff 标记原文 "{epoch}:{saved_at_ms}"。
+	//   - 与这条恢复出来的 location、INCR 之后的 owner_epoch 在同一段 Lua 里原子写入;此时本条的
+	//     owner_epoch 字段等于 INCR 后的键值。
+	//   - 空值 = 不是回滚恢复出来的,或被回滚的那次铸造不凭标记。任何新落点都整条重写 location,回执随之
+	//     消失;不铸造的回滚(keep)按原字节恢复,可能带回更早的回执 —— 那份回执对不上任何在途交接
+	//     (每次交接的 saved_at_ms 都是新值),无害。
+	//   - 唯一消费者是源 scene 的 ResolveTravelOutcome:只认与自己本次交接标记原文逐字节相同的回执。
+	//     其它读 location 的服务一律忽略这个字段。
+	//   - GO-3 的新字段从 8 起取。
+	RollbackReceipt string `protobuf:"bytes,7,opt,name=rollback_receipt,json=rollbackReceipt,proto3" json:"rollback_receipt,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *PlayerLocation) Reset() {
@@ -191,6 +203,13 @@ func (x *PlayerLocation) GetPendingSceneConfId() uint64 {
 	return 0
 }
 
+func (x *PlayerLocation) GetRollbackReceipt() string {
+	if x != nil {
+		return x.RollbackReceipt
+	}
+	return ""
+}
+
 var File_proto_scene_manager_storage_proto protoreflect.FileDescriptor
 
 const file_proto_scene_manager_storage_proto_rawDesc = "" +
@@ -203,7 +222,7 @@ const file_proto_scene_manager_storage_proto_rawDesc = "" +
 	"\vcreate_time\x18\x04 \x01(\x03R\n" +
 	"createTime\x12\x1d\n" +
 	"\n" +
-	"scene_type\x18\x05 \x01(\rR\tsceneType\"\xd2\x01\n" +
+	"scene_type\x18\x05 \x01(\rR\tsceneType\"\xfd\x01\n" +
 	"\x0ePlayerLocation\x12\x19\n" +
 	"\bscene_id\x18\x01 \x01(\x04R\asceneId\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x1f\n" +
@@ -212,7 +231,8 @@ const file_proto_scene_manager_storage_proto_rawDesc = "" +
 	"\azone_id\x18\x04 \x01(\rR\x06zoneId\x12\x1f\n" +
 	"\vowner_epoch\x18\x05 \x01(\x04R\n" +
 	"ownerEpoch\x121\n" +
-	"\x15pending_scene_conf_id\x18\x06 \x01(\x04R\x12pendingSceneConfIdB\x15Z\x13proto/scene_managerb\x06proto3"
+	"\x15pending_scene_conf_id\x18\x06 \x01(\x04R\x12pendingSceneConfId\x12)\n" +
+	"\x10rollback_receipt\x18\a \x01(\tR\x0frollbackReceiptB\x15Z\x13proto/scene_managerb\x06proto3"
 
 var (
 	file_proto_scene_manager_storage_proto_rawDescOnce sync.Once

@@ -486,6 +486,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerLocation final : public ::goo
   // accessors -------------------------------------------------------
   enum : int {
     kNodeIdFieldNumber = 2,
+    kRollbackReceiptFieldNumber = 7,
     kSceneIdFieldNumber = 1,
     kUpdateTimeFieldNumber = 3,
     kOwnerEpochFieldNumber = 5,
@@ -505,6 +506,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerLocation final : public ::goo
   const ::std::string& _internal_node_id() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_node_id(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_node_id();
+
+  public:
+  // string rollback_receipt = 7;
+  void clear_rollback_receipt() ;
+  [[nodiscard]] const ::std::string& rollback_receipt() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_rollback_receipt(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_rollback_receipt();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_rollback_receipt();
+  void set_allocated_rollback_receipt(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_rollback_receipt() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_rollback_receipt(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_rollback_receipt();
 
   public:
   // uint64 scene_id = 1;
@@ -561,8 +577,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerLocation final : public ::goo
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
-                          0, 38,
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          0, 54,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -591,6 +607,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerLocation final : public ::goo
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr node_id_;
+    ::google::protobuf::internal::ArenaStringPtr rollback_receipt_;
     ::uint64_t scene_id_;
     ::uint64_t update_time_;
     ::uint64_t owner_epoch_;
@@ -786,7 +803,7 @@ inline void SceneInfo::_internal_set_scene_type(::uint32_t value) {
 inline void PlayerLocation::clear_scene_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scene_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t PlayerLocation::scene_id() const {
   // @@protoc_insertion_point(field_get:storage.PlayerLocation.scene_id)
@@ -794,7 +811,7 @@ inline ::uint64_t PlayerLocation::scene_id() const {
 }
 inline void PlayerLocation::set_scene_id(::uint64_t value) {
   _internal_set_scene_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:storage.PlayerLocation.scene_id)
 }
 inline ::uint64_t PlayerLocation::_internal_scene_id() const {
@@ -874,7 +891,7 @@ inline void PlayerLocation::set_allocated_node_id(::std::string* PROTOBUF_NULLAB
 inline void PlayerLocation::clear_update_time() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.update_time_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t PlayerLocation::update_time() const {
   // @@protoc_insertion_point(field_get:storage.PlayerLocation.update_time)
@@ -882,7 +899,7 @@ inline ::uint64_t PlayerLocation::update_time() const {
 }
 inline void PlayerLocation::set_update_time(::uint64_t value) {
   _internal_set_update_time(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:storage.PlayerLocation.update_time)
 }
 inline ::uint64_t PlayerLocation::_internal_update_time() const {
@@ -898,7 +915,7 @@ inline void PlayerLocation::_internal_set_update_time(::uint64_t value) {
 inline void PlayerLocation::clear_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t PlayerLocation::zone_id() const {
   // @@protoc_insertion_point(field_get:storage.PlayerLocation.zone_id)
@@ -906,7 +923,7 @@ inline ::uint32_t PlayerLocation::zone_id() const {
 }
 inline void PlayerLocation::set_zone_id(::uint32_t value) {
   _internal_set_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:storage.PlayerLocation.zone_id)
 }
 inline ::uint32_t PlayerLocation::_internal_zone_id() const {
@@ -922,7 +939,7 @@ inline void PlayerLocation::_internal_set_zone_id(::uint32_t value) {
 inline void PlayerLocation::clear_owner_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_epoch_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t PlayerLocation::owner_epoch() const {
   // @@protoc_insertion_point(field_get:storage.PlayerLocation.owner_epoch)
@@ -930,7 +947,7 @@ inline ::uint64_t PlayerLocation::owner_epoch() const {
 }
 inline void PlayerLocation::set_owner_epoch(::uint64_t value) {
   _internal_set_owner_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:storage.PlayerLocation.owner_epoch)
 }
 inline ::uint64_t PlayerLocation::_internal_owner_epoch() const {
@@ -946,7 +963,7 @@ inline void PlayerLocation::_internal_set_owner_epoch(::uint64_t value) {
 inline void PlayerLocation::clear_pending_scene_conf_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pending_scene_conf_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t PlayerLocation::pending_scene_conf_id() const {
   // @@protoc_insertion_point(field_get:storage.PlayerLocation.pending_scene_conf_id)
@@ -954,7 +971,7 @@ inline ::uint64_t PlayerLocation::pending_scene_conf_id() const {
 }
 inline void PlayerLocation::set_pending_scene_conf_id(::uint64_t value) {
   _internal_set_pending_scene_conf_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:storage.PlayerLocation.pending_scene_conf_id)
 }
 inline ::uint64_t PlayerLocation::_internal_pending_scene_conf_id() const {
@@ -964,6 +981,70 @@ inline ::uint64_t PlayerLocation::_internal_pending_scene_conf_id() const {
 inline void PlayerLocation::_internal_set_pending_scene_conf_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pending_scene_conf_id_ = value;
+}
+
+// string rollback_receipt = 7;
+inline void PlayerLocation::clear_rollback_receipt() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rollback_receipt_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& PlayerLocation::rollback_receipt() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:storage.PlayerLocation.rollback_receipt)
+  return _internal_rollback_receipt();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerLocation::set_rollback_receipt(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.rollback_receipt_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:storage.PlayerLocation.rollback_receipt)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerLocation::mutable_rollback_receipt()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_rollback_receipt();
+  // @@protoc_insertion_point(field_mutable:storage.PlayerLocation.rollback_receipt)
+  return _s;
+}
+inline const ::std::string& PlayerLocation::_internal_rollback_receipt() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rollback_receipt_.Get();
+}
+inline void PlayerLocation::_internal_set_rollback_receipt(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rollback_receipt_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerLocation::_internal_mutable_rollback_receipt() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.rollback_receipt_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerLocation::release_rollback_receipt() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:storage.PlayerLocation.rollback_receipt)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.rollback_receipt_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.rollback_receipt_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerLocation::set_allocated_rollback_receipt(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.rollback_receipt_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.rollback_receipt_.IsDefault()) {
+    _impl_.rollback_receipt_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:storage.PlayerLocation.rollback_receipt)
 }
 
 #ifdef __GNUC__

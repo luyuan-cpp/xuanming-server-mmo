@@ -453,7 +453,15 @@ type EnterSceneResponse struct {
 	// 原样回显请求里的 player_id。scene 节点的 EnterScene 是异步 gRPC,应答回调里没有
 	// 请求上下文;传送 / 疏散这类"发起方还要根据结果收尾"的调用靠它把应答对回玩家。
 	PlayerId uint64 `protobuf:"varint,4,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	// 5:留给 GO-2 的 owner_epoch 回显。
+	// GO-2 回显(cross-zone-scene-travel.md §12.8):本请求铸造的 owner_epoch 在推路由 / 重定向失败后
+	// 已被原子回滚,且回滚方式是再 INCR 一格(bump)时,这里填回滚后的值(= 铸出值 + 1,只升不降)。
+	//   - 只出现在 ErrKafkaRoute 应答里;错误应答不进 request_id 去重缓存,不存在"跟缓存重放"。
+	//   - 0 = 本应答不对 epoch 做任何断言(没回滚、keep 回滚、回滚未确认、旧版 scene_manager)。
+	//   - 只用于日志和排障,**绝不是采纳凭证**:回滚会同时把交接标记转写到新 epoch,源 scene 必须经
+	//     ResolveTravelOutcome 的原子脚本先删掉本次交接这一族标记、并读到 PlayerLocation.rollback_receipt
+	//     与自己本次标记原文逐字节相同,才能采纳新 epoch。凭回显采纳会在"第三方已凭转写标记铸出更新值"
+	//     时造成双持有。
+	OwnerEpochAfterRollback uint64 `protobuf:"varint,5,opt,name=owner_epoch_after_rollback,json=ownerEpochAfterRollback,proto3" json:"owner_epoch_after_rollback,omitempty"`
 	// 原样回显 EnterSceneRequest.correlation_id。scene 节点靠它把应答对回"哪一次发送"
 	// (player_id 只用来找实体):只有号匹配的应答才算本代传送交接的证据。
 	// 去重重放时回显的是本次请求的值,不是被缓存那次的值。
@@ -517,6 +525,13 @@ func (x *EnterSceneResponse) GetRedirect() *RedirectToGateInfo {
 func (x *EnterSceneResponse) GetPlayerId() uint64 {
 	if x != nil {
 		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *EnterSceneResponse) GetOwnerEpochAfterRollback() uint64 {
+	if x != nil {
+		return x.OwnerEpochAfterRollback
 	}
 	return 0
 }
@@ -714,13 +729,14 @@ const file_proto_scene_manager_scene_manager_service_proto_rawDesc = "" +
 	"\fgate_zone_id\x18\t \x01(\rR\n" +
 	"gateZoneId\x12%\n" +
 	"\x0ecorrelation_id\x18\n" +
-	" \x01(\x04R\rcorrelationId\"\xdb\x01\n" +
+	" \x01(\x04R\rcorrelationId\"\x98\x02\n" +
 	"\x12EnterSceneResponse\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x12#\n" +
 	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12=\n" +
 	"\bredirect\x18\x03 \x01(\v2!.scene_manager.RedirectToGateInfoR\bredirect\x12\x1b\n" +
-	"\tplayer_id\x18\x04 \x01(\x04R\bplayerId\x12%\n" +
+	"\tplayer_id\x18\x04 \x01(\x04R\bplayerId\x12;\n" +
+	"\x1aowner_epoch_after_rollback\x18\x05 \x01(\x04R\x17ownerEpochAfterRollback\x12%\n" +
 	"\x0ecorrelation_id\x18\x06 \x01(\x04R\rcorrelationId\"\xd9\x01\n" +
 	"\x12RedirectToGateInfo\x12$\n" +
 	"\x0etarget_gate_ip\x18\x01 \x01(\tR\ftargetGateIp\x12(\n" +
