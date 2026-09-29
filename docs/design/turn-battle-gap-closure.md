@@ -373,8 +373,20 @@ blob、同一次落盘**,于是两者同生共死:崩溃 → 一起没 → pendi
    登录**不得**重复发(不复制)。再加一条:应用后 kill,**不登录**,等发件箱把剩余重投打完 → pending 仍在,之后登录补发。
 6. 重登冻结:玩家 A 打完 X、销账前开了 Y(可人为让 X 的锁过期)再断线重登 → 应重建 Y 的冻结并重绑 gate。
 
-### 9.2 仍然没做
+### 9.2 仍然没做 → 09-28 已有一次真实编译运行(09-29 补记)
 
-编译、18 个新单测、`battle_smoke` —— 用户 09-18 明确跳过,至今未做。**这批代码从落码到现在
-从未被编译器看过**,而期间引擎、节点、背包、scene 四个文件都被别的会话改过(含一次 IDE 批量
-删头文件)。真要验证,§7 第 3–6 步照跑;风险排序:能不能编过 > 单测是否真绿 > 端到端是否跑通。
+编译、18 个新单测、`battle_smoke` —— 用户 09-18 明确跳过。**09-28 03:41 属性数值线代 Codex 做过一次
+真实编译 + 单测 + 冒烟**(证据在本机 `run/verify-attribute-20260928/`,见 PROGRESS「防御 ×12 / 法力 ×4
+联机验收通过」一节):`game.sln`、`turn_battle_engine_test`、`bag_test` 均编译通过,`BATTLE_SMOKE_OK`。
+那次跑的是 §9.3 第一版(账本 v1,锁留到落盘之前)的代码,与本节 G1-G9 相关的结果:
+
+| 用例 | 结果 | 处理 |
+|---|---|---|
+| G1-G9 引擎新用例(含掉落、PVP 道具上限、快照 buff 剔除) | 通过 | — |
+| §9.3 第一版结算/账本用例 16 条 | 通过 | — |
+| `PlayerBattleSettlementItemTest.RepeatedApplyDoesNotDoubleConsumeOrDoubleDrop` | 失败 | 实现评审 wne803bj5 已预言并修正(账本命中改为返回 true + alreadyApplied) |
+| `TurnBattleEngineTest.SilenceBlocksGeneralSkillButAllowsBasicAttack` | 失败 | **是 G 系列 D49 弄挂的**(验收记录里被归为"他人在途",不对):用例从战前快照带入沉默,而 D49 规定快照里的控制类 buff 一律剔除。09-29 改为开战后经 `TurnBattleEngineDeathTestAccess::AddBuff` 在局内挂沉默,用例意图(沉默挡技能、不挡普攻)不变 |
+| `BagRemoveByGuidTest.*` 6 条 | 失败 | 不是本线:聚宝斋 P2 / 帮会 B4 的按 guid 扣物用例,入包那一步 `AddItem` 就返回 `kBagAddItemInvalidParam`(6004)。该测试 09-18 才加,写的时候已含本线 09-17 的背包改动,之后 `bag_system` 未再改,本线新增的 3 个背包用例同批通过。留给资产通道那条线 |
+
+**仍未验证的**:§9.3 的"锁留到落盘"及之后两轮修订(09-28 04:40 以后的代码)还没被编译过;
+`battle_smoke` 通过的那次也是旧版结算逻辑。按 §9.3 验证清单重跑。

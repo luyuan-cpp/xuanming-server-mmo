@@ -5854,3 +5854,23 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
 - 仍未覆盖:**丹心(class 3)满投体质 5712** 那条分支 —— 固定冒烟账号 `robot_9101` 是 class 1,线上跑不到。该档由纯规则单测覆盖(`AllocFormulaTest.FullInvestmentMatchesDesignerTable` 的 0.12 档 = 612 增量,`EveryAllocatedPointRaisesEachStatByAtLeastOne` 含丹心比例),不再单独造号。
 - 证据同目录 `run/verify-attribute-20260928/`(gitignore,不入库):`robot-current.exe` / `robot-numeric-current.exe`、`overlay/`、`clean-*.log`、`numeric-*.log`、`*-results.json`;上一轮的裁剪表副本与其日志改名为 `stripped-*` / `tables-numeric/` 保留对照。
 - 本地一区与网关**仍在运行**,未停服。
+
+## 2026-09-29 gRPC 失败回调收尾:换图入口"没有 SceneManager"改回服务不可用 + 设计文档对齐(Claude,未编译)
+
+- `player_scene_handler.cpp`(守护段内):`GetSceneManagerEntity` 返回 null(注册表里一个 SceneManager 都没有)时,提示由 `kEnterSceneParamError` 改为 `kServiceUnavailable`(1003),与 EnterScene 传输失败(`DispatchEnterSceneTransportFailure`)回的是同一个提示。建议来自分工会话。
+- `docs/design/grpc-client-deadline-failure-callback.md`:§5 #3 结论、§8 补记分工会话承担的部分(K8s 部署门禁 `Assert-GrpcClientDeadlineBudget` + GrpcClient 块镜像、`GetSceneManagerEntity` 挑活通道、删 `SendMessageToPlayerOnGrpcNode`,均在该会话工作区、以它的 PROGRESS 条目为准)、§10 第 4 条标注已删。
+- 静态复核(不是运行证据):① `grpc_call_tag.h` 新引入 grpcpp 头,所有包含方(`grpc_init_client.*`、各生成客户端头、`grpc_call_deadline.cpp`)本来就带 gRPC 包含路径;② 所有链接 `scene.lib` 的节点 / 测试工程都同时链接 `core.lib` 与 `grpc_client.lib`,`player_lifecycle` 新依赖 `grpc_call_deadline` 不会产生未解析符号;③ 分工会话的部署门禁口径与设计 §4.2 一致(拍平函数会剥行尾注释;login 102000 = 100000 + 2000 恰好通过)。
+- 给 Codex:沿用 09-28 条目与设计文档 §9.2 的串行步骤,本条只多一个 scene 节点源文件,不新增工程登记。
+
+## 2026-09-29 回合制战斗:一条被 G 系列弄挂的引擎用例已修;09-28 那次真实编译运行的归属核对
+
+- 09-28 属性数值线代 Codex 跑的那次编译 + 单测里,`turn_battle_engine_test` 124/125、`bag_test` 247/254。
+  逐条核对归属(证据 `run/verify-attribute-20260928/*.xml`):
+  - `TurnBattleEngineTest.SilenceBlocksGeneralSkillButAllowsBasicAttack` **是回合制战斗 G 系列弄挂的**,不是他人在途:
+    用例从战前快照带入沉默,而决策 D49 规定快照控制类 buff 一律剔除。已改为开战后经测试入口在局内挂沉默,意图不变。
+  - `PlayerBattleSettlementItemTest.RepeatedApplyDoesNotDoubleConsumeOrDoubleDrop` 是结算账本第一版的已知失败,09-28 已修。
+  - `BagRemoveByGuidTest.*` 6 条属于聚宝斋 P2 / 帮会 B4 的按 guid 扣物,入包即返回 6004,**不是本线**,留给那条线。
+- 同一次运行里,§9.3 第一版的 16 条结算/账本用例和 G1-G9 引擎新用例全部通过,说明那版代码能编译、行为正确;
+  「锁留到落盘」及其后两轮修订仍未编译,验证按 `turn-battle-gap-closure.md` §9.3 验证清单。
+- go/db 启动期表结构闸补做了一轮独立对抗评审(编译 / 启动行为 / 自带测试三个维度),0 条。
+- 未编译、未跑测试(AGENTS.md §10.1)。本条改动:`turn_battle_engine_test.cpp` 一条用例、设计文档 §9.2。
