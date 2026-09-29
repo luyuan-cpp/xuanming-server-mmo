@@ -295,6 +295,7 @@ func AllocationKey(prefix string, nodeType, nodeId uint32) string
 - 内部调用只有两条路:
   - Kafka(以 db_task 为样板,带幂等键);
   - 直连 gRPC,配一个专用选择器:不比 zone、只挑 READY 的实例(照 `PickReadyDataServiceNode`,不照 `GetSceneManagerEntity`)。同时要补 `nodeTypeNameMap`、两份前缀表、scene 白名单。
+    - 2026-09-29 补:`GetSceneManagerEntity` 已改为按通道状态分级(READY → IDLE/CONNECTING → 坏通道 → 无通道,只在注册表为空时返回 null,见 `node_utils.cpp` 的 `scene_manager_selector::Pick`)。新写选择器时按**调用方的失败语义**二选一:调用方会退避重试的(号段),只认 READY;挑不到就立刻失败、给玩家回提示的(换图),用分级规则 —— 通道创建后是 IDLE、空闲一段时间也会回 IDLE,立即失败型调用方若只认 READY,会在这两种正常情形下一个都挑不到。
 - 为什么:给路由服开「无会话放行」等于给所有客户端开了伪造内部调用的口子(D-9 的同一类风险)。
 
 ---
