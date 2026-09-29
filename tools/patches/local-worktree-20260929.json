@@ -1,0 +1,34 @@
+{
+  "scope": "Local dependency revisions and preserved source patches; this is not a build acceptance record.",
+  "dependencies": [
+    {
+      "path": "third_party/boost",
+      "local_revision": "87db1d0dfa4986d223cc5966e29d4a17312fa3f9",
+      "local_origin": "https://github.com/luyuancpp/boost.git",
+      "tracked_worktree_patch": null,
+      "recorded_revision": "c89e6267665516192015a9e40955e154466f4f68",
+      "status": "Keep upstream recorded revision: local fork is unavailable with existing credentials; do not publish an unreachable gitlink."
+    },
+    {
+      "path": "third_party/librdkafka",
+      "local_revision": "f1b831e7ce01283119ef60a55e1a214787d9707b",
+      "local_origin": "https://github.com/confluentinc/librdkafka.git",
+      "tracked_worktree_patch": "tools/patches/librdkafka/local-worktree-20260914.patch",
+      "status": "Tracked source edits are preserved by the referenced patch; build outputs remain local."
+    },
+    {
+      "path": "third_party/ue5navmesh",
+      "local_revision": "bea0cedd649d6b195168869845c8b8880f72d35a",
+      "local_origin": "https://github.com/luyuancpp/ue5navmesh.git",
+      "tracked_worktree_patch": "tools/patches/ue5navmesh/local-worktree-20260914.patch",
+      "status": "Tracked source edits are preserved by the referenced patch; build outputs remain local."
+    },
+    {
+      "path": "third_party/grpc/third_party/boringssl-with-bazel",
+      "local_revision": "2b44a3701a4788e1ef866ddc7f143060a3d196c9",
+      "local_origin": "https://github.com/google/boringssl.git",
+      "tracked_worktree_patch": "tools/patches/grpc/v1.83.0-boringssl-windows-x509-name.patch",
+      "status": "Tracked source edits are preserved by the referenced patch; build outputs remain local."
+    }
+  ]
+}

@@ -1,3 +1,52 @@
+diff --git a/src-cpp/HeadersImpl.cpp b/src-cpp/HeadersImpl.cpp
+index 2b29488dc533cdc49bd8c0d55de1d23da7b9749f..a38fca93091a9582ad62879e232259a86fcfbf84 100644
+--- a/src-cpp/HeadersImpl.cpp
++++ b/src-cpp/HeadersImpl.cpp
+@@ -29,7 +29,6 @@
+ #include <iostream>
+ #include <string>
+ #include <list>
+-#include <cerrno>
+ 
+ #include "rdkafkacpp_int.h"
+ 
+diff --git a/src-cpp/MessageImpl.cpp b/src-cpp/MessageImpl.cpp
+index 8261b1f6e1f7c16b9c1da8054341acb6d31d0253..eb177eef1ef0a378bd509028f729e3a78b6d9c22 100644
+--- a/src-cpp/MessageImpl.cpp
++++ b/src-cpp/MessageImpl.cpp
+@@ -26,7 +26,6 @@
+  * POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#include <iostream>
+ #include <string>
+ #include <list>
+ #include <cerrno>
+diff --git a/src-cpp/ProducerImpl.cpp b/src-cpp/ProducerImpl.cpp
+index 88752156c11040d69527cbd2ac4d7791da40ee2f..4f2ab8a316ab0795778a77b967e2398b1c12ece7 100644
+--- a/src-cpp/ProducerImpl.cpp
++++ b/src-cpp/ProducerImpl.cpp
+@@ -29,7 +29,6 @@
+ #include <iostream>
+ #include <string>
+ #include <list>
+-#include <cerrno>
+ 
+ #include "rdkafkacpp_int.h"
+ 
+diff --git a/src-cpp/QueueImpl.cpp b/src-cpp/QueueImpl.cpp
+index 7148d72011db208ceda0ad718e786ad752e86eec..de0ace428041687c2639b65fb10d1c993635fbb0 100644
+--- a/src-cpp/QueueImpl.cpp
++++ b/src-cpp/QueueImpl.cpp
+@@ -26,8 +26,6 @@
+  * POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#include <cerrno>
+-
+ #include "rdkafkacpp_int.h"
+ 
+ RdKafka::Queue::~Queue() {
 diff --git a/win32/interceptor_test/interceptor_test.vcxproj b/win32/interceptor_test/interceptor_test.vcxproj
 index e6828b2aaa285d226be0dc33df8f0e0bef5bbcd1..ada91f4869a4fea3e861e87e5c562aea1d4bde8b 100644
 --- a/win32/interceptor_test/interceptor_test.vcxproj
