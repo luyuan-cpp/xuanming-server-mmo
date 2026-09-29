@@ -5874,10 +5874,3 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
   「锁留到落盘」及其后两轮修订仍未编译,验证按 `turn-battle-gap-closure.md` §9.3 验证清单。
 - go/db 启动期表结构闸补做了一轮独立对抗评审(编译 / 启动行为 / 自带测试三个维度),0 条。
 - 未编译、未跑测试(AGENTS.md §10.1)。本条改动:`turn_battle_engine_test.cpp` 一条用例、设计文档 §9.2。
-
-## 2026-09-29 gRPC 失败回调收尾:换图入口"没有 SceneManager"改回服务不可用 + 设计文档对齐(Claude,未编译)
-
-- `player_scene_handler.cpp`(守护段内):`GetSceneManagerEntity` 返回 null(注册表里一个 SceneManager 都没有)时,提示由 `kEnterSceneParamError` 改为 `kServiceUnavailable`(1003),与 EnterScene 传输失败(`DispatchEnterSceneTransportFailure`)回的是同一个提示。建议来自分工会话。
-- `docs/design/grpc-client-deadline-failure-callback.md`:§5 #3 结论、§8 补记分工会话承担的部分(K8s 部署门禁 `Assert-GrpcClientDeadlineBudget` + GrpcClient 块镜像、`GetSceneManagerEntity` 挑活通道、删 `SendMessageToPlayerOnGrpcNode`,均在该会话工作区、以它的 PROGRESS 条目为准)、§10 第 4 条标注已删。
-- 静态复核(不是运行证据):① `grpc_call_tag.h` 新引入 grpcpp 头,所有包含方(`grpc_init_client.*`、各生成客户端头、`grpc_call_deadline.cpp`)本来就带 gRPC 包含路径;② 所有链接 `scene.lib` 的节点 / 测试工程都同时链接 `core.lib` 与 `grpc_client.lib`,`player_lifecycle` 新依赖 `grpc_call_deadline` 不会产生未解析符号;③ 分工会话的部署门禁口径与设计 §4.2 一致(拍平函数会剥行尾注释;login 102000 = 100000 + 2000 恰好通过)。
-- 给 Codex:沿用 09-28 条目与设计文档 §9.2 的串行步骤,本条只多一个 scene 节点源文件,不新增工程登记。
