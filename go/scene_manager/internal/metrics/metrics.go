@@ -252,20 +252,26 @@ var (
 		Help:      "Terminal async Kafka message delivery outcomes (acked|failed).",
 	}, []string{"outcome"})
 
-	// enterSceneRollbackTotal 统计 EnterScene 推路由 / 重定向失败之后,把本次落点(location +
-	// owner_epoch)精确值回滚的结果(internal/logic/owner_epoch.go rollbackPlayerPlacement):
-	//   rolled_back          本次回滚成功
-	//   already_rolled_back  go-redis 重发 EVAL 时首发其实已回滚(只对铸造过的落点识别)
+	// enterSceneRollbackTotal 统计 EnterScene 推路由 / 重定向失败之后,撤掉本次落点的结果
+	// (internal/logic/owner_epoch.go rollbackPlayerPlacement;GO-2 根治后是单调回滚,
+	// docs/design/cross-zone-scene-travel.md §12.8):
+	//   rolled_back          本次回滚成功:location 已恢复;铸造过的 epoch 再前进一格(bump,凭标记时
+	//                        同时写回执、转写标记),没铸造的 / 同节点 epoch 0 的铸造不动 epoch(keep)
+	//   already_rolled_back  go-redis 重发 EVAL 时首发其实已回滚(只对 bump 识别)
+	//   marker_gone          凭标记铸造,回滚时所凭标记已不在(目标节点 A2′ 已消费令牌,或源 scene 已取证 /
+	//                        撤回):一个字节不动,保留本次落点。与 Kafka「报错但已投递」、源端提前取证的竞态
+	//                        同频,偶发属正常;无基线,暂不配告警。分辨两种来源的方法见 runbook
 	//   superseded           位置或 epoch 已被并发请求推进,什么都没改(偶发 = 顶号等并发)
-	//   redis_error          go-redis 重试耗尽仍出错:Redis 里可能留着本次落点。跨 zone 第一条腿上
-	//                        源 scene 会重置客户端(tip + 踢线 34);同 zone 路由失败上玩家会挂在哑连接上
+	//   redis_error          go-redis 重试耗尽仍出错(或返回值无法解读):Redis 里可能留着本次落点。跨 zone
+	//                        第一条腿上源 scene 会重置客户端(tip + 踢线 34);同 zone 路由失败上玩家会挂在哑连接上
+	//   plan_error           回滚计划构造失败(按构造不可达),没有回滚,终态同 redis_error;应恒 0,出现即代码缺陷
 	// 分母是「推路由 / 重定向失败」的次数,本身就该很少;redis_error 应恒 0,告警见
 	// deploy/k8s/scene-manager-alerts.yaml SceneManagerEnterSceneRollbackRedisError。
 	// 只按 outcome 分,不带 zone_id / player_id。
 	enterSceneRollbackTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "enter_scene_rollback_total",
-		Help:      "EnterScene placement rollbacks after a failed gate route/redirect push, by outcome (rolled_back|already_rolled_back|superseded|redis_error).",
+		Help:      "EnterScene placement rollbacks after a failed gate route/redirect push, by outcome (rolled_back|already_rolled_back|marker_gone|superseded|redis_error|plan_error). rolled_back = location restored; a minted owner_epoch moves forward one more step, never back.",
 	}, []string{"outcome"})
 
 	// enterSceneMintReplayRecognizedTotal 统计铸造 owner_epoch 的 EVAL 被 go-redis 原样重发

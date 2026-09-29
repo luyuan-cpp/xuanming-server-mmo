@@ -117,6 +117,9 @@
     <ClInclude Include="service_metadata\guild_service_metadata.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="service_metadata\guild_internal_service_metadata.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="service_metadata\jubaozhai_service_metadata.h">
       <Filter>头文件</Filter>
     </ClInclude>

@@ -42,8 +42,10 @@ import (
 	"github.com/zeromicro/go-zero/zrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -144,15 +146,18 @@ func main() {
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		matchpb.RegisterMatchServiceServer(grpcServer, server.NewMatchServiceServer(svcCtx))
+		// 内部服务(帮会同道历练开局,guild-phase2 §6.18.3):只给 go/guild 调;
+		// 客户端来源由 sessionInterceptor 拒绝(PermissionDenied)。
+		matchpb.RegisterMatchInternalServer(grpcServer, server.NewMatchInternalServer(svcCtx))
 		teampb.RegisterClientPlayerTeamServer(grpcServer, team.NewServer(teamService))
 
 		if c.Mode == service.DevMode || c.Mode == service.TestMode {
 			reflection.Register(grpcServer)
 		}
 	})
-	// 拦截器链作用于同一 server 上的全部 service(MatchService 与 ClientPlayerTeam),顺序不变:
-	// sessionInterceptor 最外层把 x-session-detail-bin 解进 ctx(team 的调用者身份只从这里取,
-	// 缺失即 fail-closed 回 4001);grpcstats 在内层计流量。
+	// 拦截器链作用于同一 server 上的全部 service(MatchService、MatchInternal 与 ClientPlayerTeam),顺序不变:
+	// sessionInterceptor 最外层先挡"带会话调 MatchInternal.*"(PermissionDenied),再把 x-session-detail-bin
+	// 解进 ctx(team 的调用者身份只从这里取,缺失即 fail-closed 回 4001);grpcstats 在内层计流量。
 	// zrpc 顶层 Timeout 保持 5000:改小会截断 WatchBattle 同步链;team 在每个方法入口自设 3500ms 预算(§A.3 第 7 条)。
 	s.AddUnaryInterceptors(
 		sessionInterceptor,
@@ -331,11 +336,22 @@ func nodeInfoValueBuilder(nodeType base.ENodeType, zoneId uint32, host string, p
 	}
 }
 
+// sessionMetadataKey 是 gate 写入、路由服透传的会话元数据键,值 = base64(proto SessionDetails)。
+const sessionMetadataKey = "x-session-detail-bin"
+
+// matchInternalMethodPrefix 是 MatchInternal 全部方法的 FullMethod 前缀("/match.MatchInternal/"),
+// 由生成的 ServiceDesc 派生,不手写服务名。
+var matchInternalMethodPrefix = "/" + matchpb.MatchInternal_ServiceDesc.ServiceName + "/"
+
 // sessionInterceptor 解出 gate 附带的 x-session-detail-bin(base64 protobuf
 // SessionDetails)放进 ctx —— 客户端直达协议的权威 player_id 从这里取,
 // 请求体里的 player_id 仅供内部调用(照 login 的 SessionInterceptor 模式;
 // match 不修改会话,无需回写响应 header)。ClientPlayerTeam 的请求体里没有 player_id,
 // 解不出会话时 team 直接回 4001(team-system.md §D.2)。
+//
+// MatchInternal 是内部服务(guild-phase2 §6.18.3,照 trade 的 TradeAdmin):带会话 metadata 即客户端来源,
+// 不论能否解码一律 PermissionDenied、不进 handler;无会话 = 内部调用(guild 直连)放行。
+// v1 只靠这一条 + 部署层 NetworkPolicy 收口,调用方不验签(契约偏差 13)。
 func sessionInterceptor(
 	ctx context.Context,
 	req any,
@@ -343,8 +359,12 @@ func sessionInterceptor(
 	handler grpc.UnaryHandler,
 ) (any, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
+	if ok && strings.HasPrefix(info.FullMethod, matchInternalMethodPrefix) && len(md.Get(sessionMetadataKey)) > 0 {
+		logx.WithContext(ctx).Errorf("[match] 拒绝带会话调用内部方法 %s", info.FullMethod)
+		return nil, status.Errorf(codes.PermissionDenied, "%s is not callable by clients", info.FullMethod)
+	}
 	if ok {
-		if vals, exists := md["x-session-detail-bin"]; exists && len(vals) > 0 {
+		if vals, exists := md[sessionMetadataKey]; exists && len(vals) > 0 {
 			bin, err := base64.StdEncoding.DecodeString(vals[0])
 			if err != nil {
 				logx.Errorf("[match] session metadata base64 解码失败: %v", err)

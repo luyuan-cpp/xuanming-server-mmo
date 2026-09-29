@@ -31,7 +31,7 @@
 Name: login.rpc
 Mode: dev
 ListenOn: 0.0.0.0:51000
-Timeout: 100000
+Timeout: 10000 # 与 go/login/etc/login.yaml 同值(2026-09-29 由笔误 100000 改正;gate 的 C++ deadline 12000 = 本值 + 2000)
 
 Etcd:
   Hosts:

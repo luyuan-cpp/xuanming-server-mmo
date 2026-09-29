@@ -1093,6 +1093,9 @@ func TestEnterScene_KafkaRouteFailureRollsBackFirstLanding(t *testing.T) {
 	loc, locErr := GetPlayerLocation(context.Background(), sc, playerID)
 	assert.Nil(t, loc)
 	assert.NoError(t, locErr)
+	// GO-2 单调回滚:首次落点铸出 1,回滚再进一格到 2(不回到 0 或 1,1 永远不会被铸第二次),并回显 2。
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+	assert.Equal(t, uint64(2), resp.OwnerEpochAfterRollback)
 	exists, existsErr := sc.Redis.Exists(fmt.Sprintf("enter_scene:dedup:%d:route-broker-failure", playerID))
 	require.NoError(t, existsErr)
 	assert.False(t, exists, "broker 未 ACK 时不得缓存假成功")

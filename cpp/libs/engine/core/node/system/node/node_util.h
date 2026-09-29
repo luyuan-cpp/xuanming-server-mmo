@@ -117,7 +117,7 @@ namespace NodeUtils
 	bool IsZoneScopedNodeType(uint32_t nodeType);
 
 	// 全局池节点类型:实例不分 zone,任一 zone 的调用方都可以路由过去。
-	// PickRandomNode / PickRandomNodeEntity 对这两类**不比对 zone**(设计文档
+	// gate 的 PickRandomNode 对这两类**不比对 zone**(设计文档
 	// cross-zone-matchmaking.md D11):match 是无状态编排者、battle 是纯内存房间,
 	// 排队池 / 房间池全服共享。只列明确的全局池类型,不扩大到其他非 zone-scoped
 	// 服务(friend/guild/chat 的路由语义保持原样)。

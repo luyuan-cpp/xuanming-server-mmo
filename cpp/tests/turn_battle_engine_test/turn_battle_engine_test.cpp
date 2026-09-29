@@ -487,13 +487,12 @@ TEST(TurnBattleEngineTest, SnapshotRegenBuffHealsAtRoundEnd) {
 TEST(TurnBattleEngineTest, SilenceBlocksGeneralSkillButAllowsBasicAttack) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9011, turnbattle::kMatchModePveSolo, 1);
-    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 120);
-    auto* silenceEntry = snapshot->add_buffs();
-    silenceEntry->set_buff_id(902);
-    silenceEntry->set_buff_table_id(kBuffSilence);
-    silenceEntry->set_layer(1);
-    silenceEntry->set_remain_rounds(2);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 120);
     ASSERT_TRUE(engine.Initialize(request));
+    // 沉默必须在局内挂上:决策 D49 规定战前快照里的控制类 buff(眩晕/冰冻/沉默)一律剔除
+    // (见 SnapshotBuffsDropControlInstantUnknownAndSanitizeCaster),从快照带入的沉默不会生效。
+    ASSERT_TRUE(turnbattle::TurnBattleEngineDeathTestAccess::AddBuff(
+        engine, kPlayerA, kBuffSilence, kMonsterId));
 
     // 沉默中:普通施放类技能被许可表拦下,不落账
     EXPECT_FALSE(engine.SubmitAction(kPlayerA,

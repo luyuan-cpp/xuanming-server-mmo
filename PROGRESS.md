@@ -5711,12 +5711,20 @@ proto2mysql 在 09-22 已收成单 `main` 并打 `v0.2.0`(`588c308`,f3b308f / re
   - `mmorpg_friend` 干净;`mmorpg_trade` 新旧两版输出逐字节相同(只有聚宝斋两张新表待建,与本次无关)。
   - `zone_1_db` / `zone_2_db` 的 `user_oauth`、`user_phone`、`user_accounts`、`account_share_database` 被判为旧形态键列(`varchar(191) utf8mb4_unicode_ci`),四张表都是 0 行。
   - `mmorpg_guild.guild.name_norm` 是 `mediumtext` 加 `uk_guild(name_norm(191))`,v0.2.0 版 schemamigrate 报「列类型漂移」,退出码 4(0 行)。
+- **zone 库账号键列已迁移(11:2x 执行)**:
+  - 执行前的检查:本地栈已停(仓内 0 个进程、两个 zone 库 0 个业务连接);线上结构与生成迁移 SQL 时存档的 `SHOW CREATE TABLE` 逐字一致;8 张表合计 0 行。
+  - 执行:每个库一个 mysql 会话,顺序执行 v0.2.0 `GenerateMigrationSQL` 给出的 17 条语句。user_oauth/user_accounts/account_share_database 走影子表加 RENAME,user_phone 原地 4 步。
+  - 执行后核对(information_schema):两个库 10 个键列全部是 `varchar(191) utf8mb4_0900_bin NOT NULL DEFAULT ''`;`uk_user_oauth`、`uk_user_phone` 与三个主键都是整列、没有 SUB_PART。随后删掉了 6 张空的 `__p2m_old`,没有残留。
+  - 对 go/db 的影响:09-28 新加的启动期 schema 闸(`assertSchemaUpToDate`)只对缺列、缺表拒启,类型差异只记日志;迁移没有改动任何列名和表名,不会触发拒启。
+  - mmorpg_guild **没有迁**,原因见下条。
+- 本条的 16 个文件已由 `9da27f9a4 WIP: hourly save` 自动提交(非人工提交)。
 
 ### 运行期注意
 
 - **guild 必须和表迁移同一批升级**:v0.2.0 编出的 guild.exe 遇到旧表会拒启;表迁移后,bin 里旧的 v0.1.1 guild.exe 也会拒启。顺序:Codex 用 v0.2.0 重编 `bin/go_services/guild.exe` → 停 guild → 在 `mmorpg_guild` 同一个会话里执行:
   `SET SESSION sql_mode = CONCAT_WS(',', NULLIF(@@SESSION.sql_mode, ''), 'STRICT_ALL_TABLES'); ALTER TABLE guild DROP INDEX uk_guild; UPDATE guild SET name_norm='' WHERE name_norm IS NULL; ALTER TABLE guild MODIFY COLUMN name_norm VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL DEFAULT '' COMMENT 'pb:11'; ALTER TABLE guild ADD UNIQUE KEY uk_guild (name_norm);`
   → 启动新 guild。索引名必须保持 `uk_guild`,因为 `guild_repo.go` 按这个名字判断撞名。表是空的,也可以直接 DROP 掉 mmorpg_guild 的表和 schema_migrations,让 `guild -migrate` 重建。
+  - **09-29 补:这一步并入帮会「导表 + proto-gen 之后第一次重编 guild.exe」的批次。** 用户批准过由 Claude 代 Codex 执行,但 05:0x 核对时有两个阻塞,所以没有执行:① HEAD 的 go/guild 编不过——B6a 引用的 `guildpb.GuildActivityView` 等类型要等导表和 proto-gen 之后才会生成;② 本地整栈 05:17 起在跑,guild.exe 也在其中。当前是「旧 guild.exe + 旧表」,两者兼容,可以正常用。db / data_service / trade 的 exe 也保持旧版:三个库都已比对兼容,下次例行重编时自然换成 v0.2.0,不需要额外步骤。friend.exe 已由别的会话在 09-28 10:43 编成 v0.2.0。
 - db / data_service / friend / trade 用 v0.2.0 重编后可以直接换:db 默认 `AutoMigrateSchema=false`,不做 DDL;其余三个库已比对通过。
 - 迁移后账号类键列**区分大小写**(`utf8mb4_0900_bin`):口令登录的账号名必须大小写完全一致。如果要不区分大小写,需要在 login 侧统一转小写(DB 查询、Redis key、password_admin 三处一起改),未做。
 - go/db 升到 v0.2.0 后,启动时每张表会多打一行「没有声明 table_name 选项」的 warning,共 9 行。原因是这些 db 消息没有 proto package,全名恰好等于表名,库的判断条件 `tableName == FullName` 误报(`proto2mysql.go:3683`);v0.1.1 起就有这行,f3b308f 没有。表名解析本身正确(契约测试已核),可以忽略。
@@ -6020,3 +6028,149 @@ proto 重生成已跑(`proto-gen-run -UseBinary`),产物核对通过;新 `.pb.cc
   - 告警规则(`stale_topic`、`frozen_deferred`、`recheck_moved`、`home_zone_merging`)未落进 `deploy/k8s/*-alerts.yaml`;
   - `go/test.ps1` 的 L1 清单还没加 go/db 的 `proto_sql` / `config` / `migrate` 三个 hermetic 测试包。
 - **真实集群演练从未跑过**:pin 合服、relocate、反向 relocate 都没有。
+## 2026-09-28 四类组队邀请与在线目录（Codex）
+
+- 客户端复用原 Team 邀请事务添加聊天、好友、附近和在线入口；friend 的 RecommendFriends 新增显式 online_only 分支、分页游标和姓名/编号筛选，在线目录不走随机推荐，并以 online_directory 回包能力位防止旧服误识别。
+- 在线名单从权威 ONLINE 会话读，归属区经 data_service 查询，只返回同区且资料可用的玩家；有分页/扫描预算、限流、失效资料过滤。好友列表追加真实角色资料，缺失昵称批量回源。
+- 使用正式 protoc 定向生成 Go 与 C# Friend 协议；无新消息号，无存储结构迁移。data_service grpc 连接由 friend ServiceContext 创建/幂等关闭。
+- Go 1.26.5 overlay 验证：完整 friend `go test ./... -count=1`、`go vet ./...`、`go build` 全部通过。首次空页测试因 miniredis 忽略 SCAN COUNT 未触发预算而失败，改用公开 RESP 接缝模拟合法空批次后通过；未改变生产分页算法。
+- 实际运行环境更新和客户端联机验收由主任务执行；以上仅证明代码、单测与构建通过。设计与契约补充见 `docs/design/friend-client-spec-20260920.md` 末节。
+- 同轮邀请可用性回归：GetFriendList 改为可靠在线状态读取，Redis/解码/缺读取器故障回既有 ErrStorage，避免客户端误标全员离线并禁邀；普通推荐保持旧降级。三类真实夹具测试先红后绿，完整 friend test/vet 通过，overlay构建明确关闭VCS戳后成功。
+
+## 2026-09-28 K8s 上 go-svc 统一注入控制面命令 topic 契约(修 Go 写 gate-cmd_g1、C++ 读 g2)(Claude,未跑测试、未上集群)
+
+**缺口**(09-18 friend 移植时记在 `deploy/k8s/README.md` 与 `friend.yaml` 注释里,09-28「C++ 完全不连 Go」评审再次确认,一直没人修):`go/shared/kafkacmd` 只从环境变量 `KAFKA_COMMAND_TOPIC_PARTITIONS` / `KAFKA_COMMAND_TOPIC_GENERATION` 取命令 topic 契约,不配就回落到编译期默认 256 / **1**;而 `bin/etc/base_deploy_config.yaml` 是 `CommandTopicGeneration: 2`,C++ gate / scene 消费 `gate-cmd_g2` / `scene-cmd_g2`,`kafka-topic-init` 也只预建 g2。K8s 上没有任何 go-svc 注入这两个变量,所以 login 的会话绑定 / 顶号踢人、scene-manager 的换场景、player-locator、match、friend(以及上了清单之后的 guild)发给 gate / scene 的命令全部落进 `*_g1` —— 没人消费,**静默丢失**,Kafka 不报错。本机 `start_game.ps1` 一直注入,所以本机与 robot 冒烟从来看不到。
+
+**修法**(`tools/scripts/k8s_deploy.ps1`,按 README 早已写明的「一处真相」方案):
+- 新增 `Get-GoSvcCommandTopicContract`:从 `bin/etc/base_deploy_config.yaml` 读 `Kafka.CommandTopicPartitions` / `CommandTopicGeneration`(与 C++ node ConfigMap、`kafka-topic-init` 同一来源),非正整数即 throw。
+- 新增 `Add-GoSvcCommandTopicEnv`:把两个变量插进 go-svc manifest **唯一**的 `env:` 段最前面,条目缩进沿用该段第一条已有条目(跳过注释),保留原换行风格。fail-closed:manifest 手写了这两个变量(第二份真相)、`env:` 段不是恰好一个、`env:` 下第一条不是列表项,都直接拒绝部署。
+- `Apply-OneGoSvc`(zone 服务与全局服务共用)在**任何集群写操作之前**先把主 manifest 渲染完(镜像占位 + 契约注入);渲染失败不会留下只有 ConfigMap / 迁移 Job 的半截部署。所有 go-svc 都注入,不只是今天的生产者 —— 新服务发 gate 命令不需要来这里登记。
+- 10 个 go-svc manifest(chat / client-rpc-router / data-service / db / friend / login / match / player-locator / scene-manager / trade)结构一致:单容器、恰好一个 `env:`、无 initContainer。已用与脚本相同的算法逐个插入并 `yaml.safe_load`,容器 env 恰好多出这两项、值 256 / 2。
+- 文档:`deploy/k8s/README.md` 缺口段标为已修并补上换代号流程说明;`friend.yaml` 头部注释、`docs/design/mail-system.md` 的「继承缺口」一句同步更正(mail 的 manifest 仍然不写这两个变量,但必须恰好有一个 `env:` 段)。
+
+**测试(已写,未跑)**:
+- `tools/scripts/tests/k8s_deploy_contract.tests.ps1`:zone 内 login / player-locator / scene-manager / db / data-service 的 Deployment 必须带这两个变量且值 == `base_deploy_config.yaml`、只有一份(按「kind: Deployment + metadata 名字」挑块,避开 ConfigMap 里 go-zero 的 `Name:`)。
+- `tools/scripts/tests/k8s_migrate_gate.tests.ps1`:`Reset-MigrateFixture` 补抽 `Add-GoSvcCommandTopicEnv`、Mock `Get-GoSvcCommandTopicContract`(代号给 7,证明值来自契约不是写死);新用例覆盖 friend / trade(全局服务)注入、契约读取失败时零集群写、缩进沿用(含紧凑列表写法与 CRLF)、四种形状拒绝。
+
+**给 Codex**(工作目录仓库根,都不连集群):
+```
+pwsh -NoProfile -File tools/scripts/tests/k8s_migrate_gate.tests.ps1
+pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
+```
+期望全部 PASS。kind 上实测:`zone-up` 后 `kubectl -n <zone> get deploy login -o jsonpath='{.spec.template.spec.containers[0].env}'` 应含 `KAFKA_COMMAND_TOPIC_GENERATION=2`;login 启动日志 `kafkacmd: control-plane command topic contract partitions=256 generation=2`;登录一个号后 gate 能收到 BindSession(能进场景即证明)。
+
+**协作**:「C++ 完全不连 Go」会话原本也要做这件事,已确认归本会话;它随后会在同一脚本里加 GrpcClient 镜像进 node ConfigMap 与 C++ deadline 断言,并改 `base_deploy_config.yaml` 的 DataService 超时 —— 那些不在本条范围。
+
+## 2026-09-28 C++ 生成 gRPC 客户端:每次调用设 deadline + 失败也回调(Claude,未编译)
+
+设计与全部细节:`docs/design/grpc-client-deadline-failure-callback.md`(§5 九个调用点逐个结论、§6 自动注册评估、§9.2 Codex 步骤)。
+
+- **缺陷**:生成的 C++ 异步客户端只在 `status.ok()` 时调应答处理器,非 OK 只打一行日志;而且从不设 deadline。业务层因此各写看门狗兜底(换图在途 5s、交接 30s、号段 fetchTimeout),镜像 CreateScene / 玩家换图 / gate 转发在 gRPC 失败时客户端什么也收不到。
+- **做法**(选"另加失败处理器",不改现有应答处理器签名):
+  - 模板 `grpc_async_client.{h,cpp}.tmpl`:unary 调用存请求副本与发出的 metadata,`set_deadline`;非 OK 调 `Async<Svc><Method>FailedHandler(const GrpcCallFailure&, const Req&)`,未装时打带方法名与状态码的 ERROR;应答到了而应答处理器为空时每方法每线程 ERROR 一次(防 2026-04 那种静默丢应答)。流式(etcd Watch / KeepAlive)不变。
+  - 总表 `grpc_init_total.{h,cpp}.tmpl`:`SetFailedHandler` / `SetIfEmptyFailedHandler` / `SetGrpcCallDeadline(nodeType, ms)`;生成器 Go 单测补断言。
+  - `cpp/generated/grpc_client/grpc_call_tag.h`(手工维护的支撑头):`GrpcCallFailure`、`GrpcSentMetadata`、内置默认 deadline 10000ms。
+  - 配置:`config.proto` `BaseDeployConfig.grpc_client = 21`(`map<string,uint32> call_deadline_ms`,键 = ENodeType 枚举名);`config.cpp` 读 `GrpcClient.CallDeadlineMs`;`bin/etc/base_deploy_config.yaml` 按「上游比下游宽」配 SceneManager 10000 / DataService 4000(分工会话改) / 路由服 8000 / Match 7000 / Battle 5000 / Login 102000 / etcd 5000。`core/node/system/grpc_call_deadline.{h,cpp}` 在 `Node::Initialize` 里应用并提供 `Get(nodeType)` 给业务派生预算。
+  - gate:`SetIfEmptyFailedHandler` 从发出的 `x-session-detail-bin` 找回会话,回 tip 1003(服务不可用),日志 1024 采样。
+  - 号段:失败按发出的 `x-idseg-seq` 精确归属 → `GuidSegmentClient::OnTransportFailure` 立即退避重试;`fetchTimeoutSec` = DataService deadline + 1s。
+  - scene 第二批:`PlayerLifecycleSystem::DispatchEnterSceneTransportFailure` 按请求 correlation_id 走 `enter_scene_reply::Classify`(不按 player_id);交接只记日志、不当证据、不提前核实;普通换图摘在途槽,玩家发起的回 1003、跟随只记日志;在途 TTL 改为 SceneManager deadline + 1s。`scene_manager_response_handler.cpp` 装 EnterScene / CreateScene 失败处理器(CreateScene 按请求 `creator_ids` 回 1003)。
+- **提交落点**:第一批手写代码与模板被每小时自动保存 `09f71f9d5` 带走;regen 由会话「C++ 完全不连接 Go 服务的设计」在隔离 worktree 代跑,40 个产物随 `897ac8241` 进库(message_id / rpc_event_registry / Agones 块未动,已核);第二批与文档见本条所在提交。
+- **分工**:`k8s_deploy.ps1` 镜像 GrpcClient 块 + deadline ≥ Timeout+2000 契约断言、DataService 改 4000、`GetSceneManagerEntity` 只挑活通道、删 `SendMessageToPlayerOnGrpcNode` 由上述会话做,不在本条。
+- **给 Codex**(设计文档 §9.2,串行):① `tools/proto_generator/protogen` 下 `go test ./internal/generator/cpp/ -run TestGrpcInitTemplateSupportsMultipleServicesForSameNodeType -count=1 -v`;② `MSBuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`,核 bin 下三个 exe 晚于所有 lib;③ `pwsh tools/scripts/run_cpp_tests.ps1 -Filter bag_test` 与 `-Filter cross_zone_test`,新增 `GuidSegmentClientTest.TransportFailureRetriesWithoutWaitingForFetchTimeout`、`EnterSceneTransportFailureEcs.*`(5 条)须 PASS;④ 有栈时按 §9.2 第 4 步做停 scene_manager / 停路由服的联机检查。
+- **待拍板**:① `go/login/etc/login.yaml` 与 K8s 的 `Timeout: 100000`(注释写 10s)是否笔误 —— 是则改 10000、gate 直连 login 的 deadline 改 12000;② 换图传输失败回「服务不可用」(可能先提示、后被路由搬走)还是只释放槽不提示。
+- **残留**:etcd 流 `!ok` 分支泄漏 tag / 提前 return / 不重建;etcd 一元调用未接失败处理器(接时必须走"取 pending key 重发",不能走 `OnTxnFailed`);scene_manager 的 CreateScene 业务错误应答不回显 `creator_ids`;生成器自动注册应答处理器(评估见设计文档 §6)。
+
+## 2026-09-28(续)防御 ×12 / 法力 ×4:用当前源码重编机器人重跑验收,去掉两处将就(Claude)
+
+- 承接同日上一条。上一轮有两处为兼容旧机器人做的将就:① 冒烟用 09-22 编的 `robot-battle.exe`;② 数值验收用 09-16 的 `numeric-robot-final.exe` + 裁掉新列的表副本。**本轮全部去掉,结论不变:全过。**
+- 起因是发现本机其实有 Go:`C:\Users\luyua\go\pkg\mod\golang.org\toolchain@v0.0.1-go1.26.5.windows-amd64\bin\go.exe`(1.26.5,不在 PATH,上一轮据此误判「本机无 Go」)。
+- 重编:`CGO_ENABLED=0 GOTOOLCHAIN=local go build -mod=vendor`,在 `robot/` 下出两个二进制(均 exit 0,落在 `run/verify-attribute-20260928/`):`robot-current.exe`(当前源码原样)、`robot-numeric-current.exe`(带数值断言 overlay)。
+  数值 overlay 刷新:09-16 的 `numeric-overlay.json` 替换三个文件,其中 `attribute_smoke_scenario.go` / `battle_smoke_scenario.go` 的 SHA256 与 09-16 快照**逐位一致**(未变),只有 `login.go` 变过;把 09-16 overlay 相对原版的那 3 处插入(登录回包里记录 `class_id`)重新套到当前 `login.go`,新 overlay 在 `run/verify-attribute-20260928/overlay/`。
+- 重跑(本地一区,`start_game.ps1` 本轮 **6/6 全过**,含第 6 步网关,trade 也起来了;读 `generated/tables` 真实表,无任何裁剪):
+  - 三条冒烟 `clean-attribute` / `clean-pet` / `clean-battle`:exit 0,`ATTRIBUTE_SMOKE_OK` / `PET_SMOKE_OK` / `BATTLE_SMOKE_OK`。
+  - 数值战斗:exit 0,1 级新号 `max_mana` 840(= 800 + 40 × 1)、副本 1 **9 回合 `SIDE_A_WIN`**、`NUMERIC_BATTLE_BASELINE_OK` / `NUMERIC_BATTLE_OK`。
+  - 数值属性:第一次因 `step=login reason=wait scene ready: context deadline exceeded` 失败 —— 紧接在同账号 `robot_9101` 的 clean-attribute 之后跑,上一次会话在场景里尚未释放;隔开后重跑 exit 0,`full_defense` **5610**、`full_mana` **4830**、`points_checked` **0->1->425**、`NUMERIC_ATTRIBUTE_FIRST_POINT_OK` / `NUMERIC_ATTRIBUTE_RESTORED` / `NUMERIC_ATTRIBUTE_OK` 齐全。失败那次日志保留为 `numeric-attribute.attempt1-login-timeout.stderr.log`。**同账号连跑两个机器人要隔开**,这是冒烟可重复性的已知坑。
+- 仍未覆盖:**丹心(class 3)满投体质 5712** 那条分支 —— 固定冒烟账号 `robot_9101` 是 class 1,线上跑不到。该档由纯规则单测覆盖(`AllocFormulaTest.FullInvestmentMatchesDesignerTable` 的 0.12 档 = 612 增量,`EveryAllocatedPointRaisesEachStatByAtLeastOne` 含丹心比例),不再单独造号。
+- 证据同目录 `run/verify-attribute-20260928/`(gitignore,不入库):`robot-current.exe` / `robot-numeric-current.exe`、`overlay/`、`clean-*.log`、`numeric-*.log`、`*-results.json`;上一轮的裁剪表副本与其日志改名为 `stripped-*` / `tables-numeric/` 保留对照。
+- 本地一区与网关**仍在运行**,未停服。
+
+## 2026-09-29 gRPC 失败回调收尾:换图入口"没有 SceneManager"改回服务不可用 + 设计文档对齐(Claude,未编译)
+
+- `player_scene_handler.cpp`(守护段内):`GetSceneManagerEntity` 返回 null(注册表里一个 SceneManager 都没有)时,提示由 `kEnterSceneParamError` 改为 `kServiceUnavailable`(1003),与 EnterScene 传输失败(`DispatchEnterSceneTransportFailure`)回的是同一个提示。建议来自分工会话。
+- `docs/design/grpc-client-deadline-failure-callback.md`:§5 #3 结论、§8 补记分工会话承担的部分(K8s 部署门禁 `Assert-GrpcClientDeadlineBudget` + GrpcClient 块镜像、`GetSceneManagerEntity` 挑活通道、删 `SendMessageToPlayerOnGrpcNode`,均在该会话工作区、以它的 PROGRESS 条目为准)、§10 第 4 条标注已删。
+- 静态复核(不是运行证据):① `grpc_call_tag.h` 新引入 grpcpp 头,所有包含方(`grpc_init_client.*`、各生成客户端头、`grpc_call_deadline.cpp`)本来就带 gRPC 包含路径;② 所有链接 `scene.lib` 的节点 / 测试工程都同时链接 `core.lib` 与 `grpc_client.lib`,`player_lifecycle` 新依赖 `grpc_call_deadline` 不会产生未解析符号;③ 分工会话的部署门禁口径与设计 §4.2 一致(拍平函数会剥行尾注释;login 102000 = 100000 + 2000 恰好通过)。
+- 给 Codex:沿用 09-28 条目与设计文档 §9.2 的串行步骤,本条只多一个 scene 节点源文件,不新增工程登记。
+
+## 2026-09-29 回合制战斗:一条被 G 系列弄挂的引擎用例已修;09-28 那次真实编译运行的归属核对
+
+- 09-28 属性数值线代 Codex 跑的那次编译 + 单测里,`turn_battle_engine_test` 124/125、`bag_test` 247/254。
+  逐条核对归属(证据 `run/verify-attribute-20260928/*.xml`):
+  - `TurnBattleEngineTest.SilenceBlocksGeneralSkillButAllowsBasicAttack` **是回合制战斗 G 系列弄挂的**,不是他人在途:
+    用例从战前快照带入沉默,而决策 D49 规定快照控制类 buff 一律剔除。已改为开战后经测试入口在局内挂沉默,意图不变。
+  - `PlayerBattleSettlementItemTest.RepeatedApplyDoesNotDoubleConsumeOrDoubleDrop` 是结算账本第一版的已知失败,09-28 已修。
+  - `BagRemoveByGuidTest.*` 6 条属于聚宝斋 P2 / 帮会 B4 的按 guid 扣物,入包即返回 6004,**不是本线**,留给那条线。
+- 同一次运行里,§9.3 第一版的 16 条结算/账本用例和 G1-G9 引擎新用例全部通过,说明那版代码能编译、行为正确;
+  「锁留到落盘」及其后两轮修订仍未编译,验证按 `turn-battle-gap-closure.md` §9.3 验证清单。
+- go/db 启动期表结构闸补做了一轮独立对抗评审(编译 / 启动行为 / 自带测试三个维度),0 条。
+- 未编译、未跑测试(AGENTS.md §10.1)。本条改动:`turn_battle_engine_test.cpp` 一条用例、设计文档 §9.2。
+
+## 2026-09-29 防御 ×12 / 法力 ×4:补上丹心(class 3)满投档的线上验收(Claude)
+
+- 上一条留的唯一缺口:丹心满投体质 **5712** 此前只有纯规则单测覆盖,线上没跑到 —— 固定冒烟账号 `robot_9101` 是 class 1,而**职业只能在建角时定,全仓没有改职业的 GM 接口**(`CreatePlayerRequest.class_id`,0 = 取配表第一个职业;机器人一直发空请求,所以永远是破军)。
+- 做法:在数值 overlay 上再叠一层丹心变体(`run/verify-attribute-20260928/overlay-danxin/`):账号换成 `robot_danxin_0929`,建角时**只对该账号**发 `CreatePlayerRequest{ClassId: 3}`,其余账号仍发空请求;断言一行没改 —— 09-16 的 overlay 本来就有 `if classID == 3 { wantDefense = 5712 }` 这条分支,职业取自登录回包。用当前源码编出 `robot-numeric-danxin.exe`。
+- 结果(本地一区、读真实表):exit 0,`class_id` **3**、`full_defense` **5712**、`full_mana` **4830**、`points_checked` **0->1->425**,`NUMERIC_ATTRIBUTE_FIRST_POINT_OK` / `NUMERIC_ATTRIBUTE_RESTORED` / `NUMERIC_ATTRIBUTE_OK` 齐全。至此设计表里的两个防御档(非对应职业 5610、丹心 5712)线上都已验过,法力两档同为 15% 已由 4830 覆盖。
+- 本轮 `start_game.ps1` 又在 5/6 因 trade 起不来中止(50800 撞 Windows 保留端口段),Java 网关仍需按它的命令手动起;与本线无关,未修。
+- 证据:`run/verify-attribute-20260928/` 下 `danxin-attribute.{log,stderr.log}`、`overlay-danxin/`、`robot-numeric-danxin.exe`。
+- **防御 ×12 / 法力 ×4 这条线到此全部收尾**:表、代码、单测、三条冒烟、两职业档数值验收、副本回合基线均已实跑通过。
+
+## 2026-09-29 C++↔Go 边界加固(V0+)分工部分:K8s deadline 门禁、SceneManager 选实例、删死代码(Claude,未编译、未跑测试)
+
+背景:09-28 评审「C++ 是否应完全不连 Go」的结论是**不做 V1/V2/V3**,保留窄白名单并加固(V0+)。gRPC 失败回调的两批由原会话提交(09f71f9d5 / b85f13c07 / 9df79e5b8,见上面 09-28、09-29 两条)。K8s 命令主题代号注入由单点加固会话提交(2e2763a62)。本条只记本会话负责的部分。
+
+- **gRPC 客户端 regen(替撞额度的原会话代跑,产物在 897ac8241)**
+  - 用 `enable_unity_client: false` 的配置副本、现成的 `proto-gen.exe` 在**隔离 git worktree** 里跑。
+  - 原因:HEAD 上帮会的 `guild.proto` / `guild_db.proto` 多了 5 个还没 regen 的 RPC,直接在主仓跑会顺带分走消息号 239–243。所以在 worktree 里把这两份退回到 `generated/proto/_unified` 暂存副本的内容(即上次 regen 时的版本)再跑。
+  - 只拷回 40 个文件:`cpp/generated/grpc_client/**`、`common/base/config.pb.{h,cc}`、三份暂存 `config.proto`、`config.pb.go` 及 robot/vendor 副本。
+  - `message_id.txt`、`rpc_event_registry`、Agones 块都没动。
+- **K8s(`tools/scripts/k8s_deploy.ps1`、`tools/scripts/tests/k8s_deploy_contract.tests.ps1`、`deploy/k8s/README.md`、`bin/etc/base_deploy_config.yaml`)**
+  - GrpcClient 块:`New-NodeConfigMapYaml` 用 `Get-AuthoritativeYamlBlock -Key 'GrpcClient'` 原样搬进 node-config 与 battle-node-config。
+  - 部署门禁:新增 `Get-GrpcClientDeadlineBudgetViolations`(纯函数)与 `Assert-GrpcClientDeadlineBudget`,挂在 zone-up / infra-up / all-up 写集群之前。规则如下:
+    - 每项 C++ deadline ≥ 对应服务 yaml 的 zrpc `Timeout` + 2000;
+    - SceneManager / DataService / ClientRpcRouter / Match / Login 五项必须显式写成正整数;
+    - 服务 yaml 缺 `Timeout` 时按 go-zero 默认 2000 计(v1.10.0 `RpcServerConf` `default=2000`,已核源码);
+    - `Timeout` 为 0 或非数字、或出现 `MethodTimeouts`,都拒绝部署并点名是哪一项。
+  - `DataServiceNodeService` 2500 → **4000**:原值违反该块自己写的「+2000 余量」。号段 `fetchTimeoutSec` 由 deadline + 1s 派生,变为 5s。
+  - login ConfigMap 的 `Timeout` 原先写死 100000,改为从 `go/login/etc/login.yaml` 镜像;读不到或不是正整数时,生成期直接 throw。今天两边的值相同,行为不变。
+  - 契约测试新增约 7 条(门禁放行 / 先于 kubectl / 块逐项相等 / 生成物满足不等式 / 8 种自检违例 / DataService 退回 2500 必须 throw / battle-node-config),另外把 login `Timeout` 并进 login 键对表。
+- **`GetSceneManagerEntity`(`cpp/libs/engine/core/network/node_utils.{h,cpp}`)**
+  - 签名和调用点都不变。规则抽成纯函数 `scene_manager_selector::Pick`,逐级挑选:
+    1. READY;
+    2. IDLE / CONNECTING(`GetState(true)` 触发连接);
+    3. ③a 挂了通道但处于 TRANSIENT_FAILURE / SHUTDOWN;
+    4. ③b 没挂通道的实体(TCP 握手声明 node_type=SceneManager 时会出现;挑中会在发送处断言,所以排在最末级)。
+  - **只在注册表为空时返回 null**,不新增 null 窗口(与跨 zone 会话约定:SM 全体抖动时照旧发出请求,由失败回调 / 30s 看门狗裁决,不让交接提前走 `ConcludeHandoffAfterMarkSent`)。
+  - 落到 ③ 时打 `[SceneManagerSelect] … last-resort pick` 告警,每 10s 最多一行(thread_local + steady_clock)。
+  - 每一级内部按 splitmix64 打散后的 playerId 取模。原因:bwmarrin 布局的 PlayerId 低 9 位是 step,大多为 0,旧的 `playerId % N` 在 2 / 4 个实例时几乎全落第 0 个。
+  - **运维影响**:多副本 scene_manager 的流量会从「几乎全压第 0 个」变成大致均分,`deploy/k8s/scene-manager-alerts.yaml` 里按副本设的阈值需要重看。正确性不受影响,按玩家的状态都在 Redis 里(已核 go/scene_manager 没有按玩家驻留在进程内存的状态)。
+  - 新增 `cpp/tests/routing_identity_test/scene_manager_selector_test.cpp`(11 条),已登记 vcxproj。
+- **删死代码**:`SendMessageToPlayerOnGrpcNode` 两个重载、只被它使用的 `PickRandomNodeEntity`、两处多余 include(`player_message_utils.{h,cpp}`),全仓零调用。`node_util.h:120` 的注释同步改掉。
+- **给 Codex 的验证步骤**(仓库根,MSBuild 一律 `/m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`):
+  1. `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`,退出码 0,`fail=0`。再跑 `pwsh -NoProfile -File tools/scripts/tests/k8s_migrate_gate.tests.ps1`,退出码 0。
+  2. `pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command zone-up -ZoneName contract-test -ZoneId 101 -DryRun -GoSvcRegistry registry.invalid/test -JavaSvcRegistry registry.invalid/test`,检查三点:
+     - 「GrpcClient deadline budget OK …」一行出现在第一条 `[dry-run] kubectl` 之前;
+     - node-config 末尾有 GrpcClient 七项(DataService 4000);
+     - go-svc-login-config 里 `Timeout: 100000` 不是空值。
+  3. `game.sln` 全量编译。node_utils.h 被广泛包含,core 以下都会重编;编完核对 bin 下 exe 的 mtime 晚于 core.lib。
+  4. `routing_identity_test` 不在 `run_cpp_tests.ps1` 表里,要先单独编 `cpp\tests\routing_identity_test\routing_identity_test.vcxproj`,先跑一次 `run_cpp_tests.ps1` 同步 DLL,再跑 `build\cpp\tests\routing_identity_test.exe --gtest_filter=SceneManagerSelector.*`(11 条全 PASS),然后不带 filter 全量跑一次,结果应与基线一致。
+  5. `pwsh tools/scripts/run_cpp_tests.ps1 -Filter cross_zone_test`:`EnterSceneReplyEcs.*` 应保持绿(假 SceneManager 节点落 ③b,仍能被挑中)。
+  6. 联机(有本地栈时):
+     - 刚起栈就换图,要成功;
+     - 停掉 scene_manager 后换图,应收到 tip 1003,scene 日志出现节流的 last-resort 告警;
+     - 两个 scene_manager 实例时,EnterScene 计数大致均分;kill -9 其中一个,在租约 60s 到期前换图仍全部成功。
+- **待拍板**:`go/login/etc/login.yaml` 的 `Timeout: 100000`,行尾注释写的是 10s,疑为笔误。要改成 10000 的话,需同时把 `LoginNodeService` 改为 12000;`deploy/login-stack.linux/login.yaml:34` 也有一份。ConfigMap 会自动跟随。暂不改:CreatePlayer 链路预算约 9s 以上,改成 10s 会误伤慢请求;路由服模式下实际受 `ForwardTimeoutMs` 5000 约束。
+
+## 2026-09-29 login 服务端超时笔误改正:Timeout 100000 → 10000,gate 直连 deadline 102000 → 12000(Claude,用户拍板,未验证)
+
+- 用户确认 `go/login/etc/login.yaml` 的 `Timeout: 100000` 是笔误(旧注释写 10s)。改:`go/login/etc/login.yaml`、`deploy/login-stack.linux/login.yaml` → 10000;`bin/etc/base_deploy_config.yaml` `GrpcClient.CallDeadlineMs.LoginNodeService` → 12000(= 10000 + 2000,部署门禁恰好通过);K8s login ConfigMap 从 login.yaml 镜像,自动跟随;`deploy/k8s/README.md` 表格与说明、`docs/design/grpc-client-deadline-failure-callback.md` §2 / §4.2 / §4.3 / §8 / §10 同步。
+- 10s 是否够(静态核对,见设计文档 §4.3):CreatePlayer 常态最坏 9s(三次 3s gRPC)装得下;EnterGame 预加载链异步(5min),不受影响;Login 快路径的 etcd 探测自带 30s,etcd 卡 >10s 时这次 Login 以 DeadlineExceeded 结束、客户端收 1003 重试。
+- **给 Codex**:① 部署门禁纯函数回归:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(仓库根),全部 PASS;② 本地起 login(直连模式)跑一次 robot 登录冒烟(login-test),通过标准与改动前一致;③ 需要时压测对比 CreatePlayer / Login 的 P99 与 DeadlineExceeded 计数,确认 10s 不截断常态请求。login 与 C++ 都只改配置,不用重编。

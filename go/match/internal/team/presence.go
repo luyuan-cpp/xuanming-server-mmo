@@ -20,7 +20,7 @@ import (
 //
 //	player:session:<id>      player_locator  在线态唯一真值(只有 SESSION_STATE_ONLINE 算在线)
 //	battle:lock:<id>         C++ scene       咨询性"战斗中"(值是 battle_id,非空)
-//	<PlayerAllData 全名>:<id> login / db      等级、职业(尽力而为,缺失或解析失败填 0)
+//	<PlayerAllData 全名>:<id> login / db      等级、职业、昵称、外观、性别(尽力而为,缺失或解析失败填零值)
 //
 // 失败语义:任何一次 MGET 失败只让对应字段按"离线 / 不在战斗 / 0"处理并记日志,
 // 不让 RPC 失败(照 guild online_status_resolver)。惰性转让用的 SessionLoader 例外:
@@ -32,6 +32,7 @@ type memberDisplay struct {
 	InBattle     bool
 	Level        uint32
 	ClassId      uint32
+	Name         string
 	AppearanceId string
 	Gender       uint32
 }
@@ -96,7 +97,7 @@ func (p presenceReader) loadDisplay(ctx context.Context, playerIds []uint64) dis
 			d.InBattle = locks[i] != ""
 		}
 		if blobs != nil {
-			d.Level, d.ClassId, d.AppearanceId, d.Gender = parsePlayerBrief(ctx, id, blobs[i])
+			d.Level, d.ClassId, d.Name, d.AppearanceId, d.Gender = parsePlayerBrief(ctx, id, blobs[i])
 		}
 		dc[id] = d
 	}
@@ -124,23 +125,25 @@ func (p presenceReader) mget(ctx context.Context, ids []uint64, keyOf func(uint6
 	return values
 }
 
-// parsePlayerBrief 从 PlayerAllData 取等级与职业(读法照 login player_class_backfill.go)。
-// 缺失、解析失败、player_id 不匹配都返回 0(尽力而为,§G.2 / J-11)。
-func parsePlayerBrief(ctx context.Context, playerId uint64, raw string) (level, classId uint32, appearanceId string, gender uint32) {
+// parsePlayerBrief 从 PlayerAllData 取等级、职业、昵称、外观与性别(读法照 login player_class_backfill.go)。
+// 缺失、解析失败、player_id 不匹配都返回零值(尽力而为,§G.2 / J-11);昵称为空时由客户端兜底显示,
+// 服务端不编造名字。
+func parsePlayerBrief(ctx context.Context, playerId uint64, raw string) (level, classId uint32, name, appearanceId string, gender uint32) {
 	if raw == "" {
-		return 0, 0, "", 0
+		return 0, 0, "", "", 0
 	}
 	data := &dbpb.PlayerAllData{}
 	if err := proto.Unmarshal([]byte(raw), data); err != nil {
 		logx.WithContext(ctx).Infof("[team] PlayerAllData 解析失败,展示字段填 0 player=%d: %v", playerId, err)
-		return 0, 0, "", 0
+		return 0, 0, "", "", 0
 	}
 	player := data.GetPlayerDatabaseData()
 	if player.GetPlayerId() != playerId {
-		return 0, 0, "", 0
+		return 0, 0, "", "", 0
 	}
+	profile := player.GetProfileComponent()
 	return player.GetLevelComponent().GetLevel(), player.GetUint32PbComponent().GetClass(),
-		player.GetProfileComponent().GetAppearanceId(), player.GetProfileComponent().GetGender()
+		profile.GetName(), profile.GetAppearanceId(), profile.GetGender()
 }
 
 // uniqueIds 去掉 0 与重复,保持首次出现顺序。

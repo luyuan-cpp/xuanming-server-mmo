@@ -2,6 +2,10 @@ syntax = "proto3";
 package data_service;
 
 import "google/protobuf/empty.proto";
+// 本文件第一次 import 仓内 proto(docs/design/guild-phase2/07-rollback-fail-closed.md §7.11-U4)。
+// 生成链能解析:Go 统一生成把整棵 proto/ 拷进暂存区、以其父目录为 --proto_path;C++ 以仓库根为
+// --proto_path,且 asset_op_ledger_comp.pb.cc 早已登记在 cpp/generated/proto 工程里。
+import "proto/common/component/asset_op_ledger_comp.proto";
 
 option go_package = "data_service/data_service";
 
@@ -53,6 +57,12 @@ service DataService {
   rpc ReservePlayerName(ReservePlayerNameRequest) returns (ReservePlayerNameResponse) {}
   rpc ReleasePlayerName(ReleasePlayerNameRequest) returns (google.protobuf.Empty) {}
   rpc BatchGetPlayerName(BatchGetPlayerNameRequest) returns (BatchGetPlayerNameResponse) {}
+
+  // ── 资产通道:已落盘账本只读 ─────────────────────────────────
+  // 读 zone Redis 里 scene 写的 PlayerAllData blob 的 asset_op_ledger 子字段。只读、不鉴权(与
+  // BatchGetPlayerName 同级)。实现 go/shared/assetop 的 LedgerReader。
+  // 设计见 docs/design/guild-phase2/07-rollback-fail-closed.md §7.8。
+  rpc GetPlayerAssetOpLedger(GetPlayerAssetOpLedgerRequest) returns (GetPlayerAssetOpLedgerResponse) {}
 }
 
 // ── Load / Save ────────────────────────────────────────────────
@@ -235,6 +245,34 @@ message GetPlayerSnapshotDiffResponse {
 
 // ── Single player rollback ─────────────────────────────────────
 
+// ── 回档的帮会资产闸(docs/design/guild-phase2/07-rollback-fail-closed.md)──────────
+//
+// 三个 Rollback* 在写任何玩家数据(含回档前安全快照)之前,先问 guild:"这些玩家自各自快照时刻以来,
+// 有没有已经终结为已应用的帮会资产操作?"有 → 默认拒绝(error_code = RollbackGuildDivergence);问不到
+// → 同样拒绝且放行无效(RollbackGuildCheckFailed)。错误码走本服务自己的码轴
+// (go/data_service/internal/constants/error_codes.go),proto 里不写数字。
+//
+// 鉴权:三个 Rollback* 一律要求 metadata `x-admin-token`(07 §7.6.3 Q2 = ②),与 RemapHomeZoneForMerge
+// 同一套 AdminToken;没配 AdminToken = 回档 RPC 整体停用。
+//
+// 放行(accept_guild_divergence = true)只覆盖"guild 答了,答案是有分歧 / 快照早于保留期证明不了",
+// 不覆盖"guild 没答";且要求 reason 与 operator 非空。放行时每一条分歧先以 ERROR 日志写出
+// (`[Rollback][GuildDivergence] accepted …`),供事后按 op_id 人工补偿。
+
+// 回档被帮会资产分歧拦下(或被放行)时的摘要行。与 guildpb.GuildAssetOpBrief 同义;刻意不 import
+// guild 的 proto,避免 data_service 的 C++/Go 生成闭包依赖 guild。kind / status 是 guild_db.proto 里
+// GuildAssetOpKind / GuildAssetOpStatus 的数值(status 只会是 APPLIED 或 APPLIED_PARTIAL)。
+message RollbackGuildDivergence {
+  uint64 op_id = 1;
+  uint64 player_id = 2;
+  uint64 guild_id = 3;              // 发起时绑定的帮会;该帮会可能已解散
+  uint32 kind = 4;
+  uint32 status = 5;
+  uint64 funds_delta = 6;
+  uint64 contribution_delta = 7;
+  uint64 updated_ms = 8;            // guild 侧终结时刻(毫秒,guild 的墙钟)
+}
+
 message RollbackPlayerRequest {
   uint64 player_id = 1;
   uint64 snapshot_id = 2;    // specific snapshot; 0 = use target_time
@@ -243,6 +281,9 @@ message RollbackPlayerRequest {
   repeated string fields = 5; // only for ROLLBACK_PARTIAL
   string reason = 6;
   string operator = 7;
+  // true = 明知帮会资产有分歧(或快照早于帮会流水保留期、无法证明)仍要回档;要求 reason 与 operator 非空。
+  // 默认 false = 有分歧即拒绝。ROLLBACK_PARTIAL 同样过闸。
+  bool accept_guild_divergence = 8;
 }
 
 message RollbackPlayerResponse {
@@ -250,6 +291,12 @@ message RollbackPlayerResponse {
   uint64 snapshot_id_used = 2;
   uint64 pre_rollback_snapshot_id = 3; // safety snapshot created before rollback
   repeated string fields_restored = 4;
+  // 帮会资产分歧条数(已按逐玩家快照时刻过滤)。error_code = RollbackGuildDivergedAfterWrite 时是写后复查
+  // 新发现的条数。
+  uint32 guild_divergence_count = 5;
+  repeated RollbackGuildDivergence guild_divergences = 6; // 按 op_id 升序的前 20 条
+  // 快照早于帮会流水保留期、无法证明的玩家数(是谁看 `[Rollback][GuildDivergence] unprovable` 日志)。
+  uint32 guild_unprovable_player_count = 7;
 }
 
 // ── Zone rollback ──────────────────────────────────────────────
@@ -259,6 +306,7 @@ message RollbackZoneRequest {
   uint64 target_time = 2;
   string reason = 3;
   string operator = 4;
+  bool accept_guild_divergence = 5;  // 语义同 RollbackPlayerRequest.accept_guild_divergence
 }
 
 message RollbackZoneResponse {
@@ -271,6 +319,9 @@ message RollbackZoneResponse {
   // data, zone mapping, or account relationship is deleted.
   repeated uint64 orphan_player_ids = 5;
   uint32 orphans_cleaned = 6;
+  uint32 guild_divergence_count = 7;                       // 语义同 RollbackPlayerResponse
+  repeated RollbackGuildDivergence guild_divergences = 8;  // 按 op_id 升序的前 20 条
+  uint32 guild_unprovable_player_count = 9;
 }
 
 // ── Full server rollback ───────────────────────────────────────
@@ -279,6 +330,7 @@ message RollbackAllRequest {
   uint64 target_time = 1;
   string reason = 2;
   string operator = 3;
+  bool accept_guild_divergence = 4;  // 语义同 RollbackPlayerRequest.accept_guild_divergence
 }
 
 message RollbackAllResponse {
@@ -286,6 +338,9 @@ message RollbackAllResponse {
   uint32 zones_processed = 2;
   uint32 players_affected = 3;
   uint32 players_failed = 4;
+  uint32 guild_divergence_count = 5;                       // 全部 zone 合并检查一次(语义同 RollbackPlayerResponse)
+  repeated RollbackGuildDivergence guild_divergences = 6;  // 按 op_id 升序的前 20 条
+  uint32 guild_unprovable_player_count = 7;
 }
 
 // ── Batch Recall ───────────────────────────────────────────────
@@ -446,4 +501,21 @@ message BatchGetPlayerNameRequest {
 // 但 SQL 失败时不回部分结果:半份结果无法与"这些 id 确实没名字"区分。
 message BatchGetPlayerNameResponse {
   map<uint64, string> names = 1;
+}
+
+// ── 资产通道:已落盘账本 ───────────────────────────────────────
+//
+// 语义(07 §7.8.2):读的是 `<PlayerAllData 全名>:{player_id}`(scene 存盘写的那份 blob),
+// **不是** data_service 自己那套 player:{id}:<field>(那里没有账本)。不回退读 MySQL:MySQL
+// 落库是异步 DBTask,可能更旧,会把已记账的 seq 误判为未见。
+// 读不成一律走 gRPC 错误,**绝不**用 found=false 顶替:
+//   - home_zone 查不到(无映射 / 映射库出错 / zone 未配 Redis)→ Unavailable;
+//   - zone Redis 读失败 → Internal;blob 在但反序列化失败、或 player_id 与请求不符 → Internal;
+//   - player_id = 0 → InvalidArgument。
+
+message GetPlayerAssetOpLedgerRequest { uint64 player_id = 1; }
+
+message GetPlayerAssetOpLedgerResponse {
+  bool found = 1;                          // false = 该玩家在 zone Redis 里没有 blob(从未入场,或 Redis 丢数据)
+  PlayerAssetOpLedgerComp ledger = 2;      // found=true 且玩家从未有过资产操作时为空消息(不是缺席)
 }

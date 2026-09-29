@@ -359,10 +359,19 @@ func main() {
 	// Start gRPC server
 	s := zrpc.MustNewServer(config.AppConfig.RpcServerConf, func(grpcServer *grpc.Server) {
 		pb.RegisterGuildServiceServer(grpcServer, server.NewGuildServer(guildLogic))
+		// 帮会内部服务(B5d-2a,docs/design/guild-phase2/07-rollback-fail-closed.md §7.4.4):data_service 回档前检查用的只读 RPC。
+		// 方法不进 session.ClientMethods,客户端来源一律 PermissionDenied;拦截器链对它同样生效。
+		// assetStore 在上面无条件建好(logx.Must 兜底),与通道开关无关:回档检查读的是历史终态行,通道关着也要答得出来。
+		// 保留期取清理配置同一个换算(svc.CleanupConfFrom),它是"可证明窗口"的下界。
+		pb.RegisterGuildInternalServer(grpcServer, server.NewGuildInternalServer(assetStore,
+			svc.CleanupConfFrom(config.AppConfig.AssetOp).TerminalRetention, time.Now))
 		if config.AppConfig.Mode == service.DevMode || config.AppConfig.Mode == service.TestMode {
 			reflection.Register(grpcServer)
 		}
 	})
+	// 必须在 MustNewServer 之后:go-zero 指标的全局开关由它内部的 SetUp → StartAgent 打开,之前写的样本会被丢弃
+	// (理由与告警口径见 server.PrimeGuildInternalMetrics)。
+	server.PrimeGuildInternalMetrics()
 	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget())...)
 	defer s.Stop()
 

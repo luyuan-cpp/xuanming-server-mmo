@@ -122,13 +122,12 @@ type FriendStore interface {
 // 它是跨运行时契约 key 的唯一读法:friend 自己**不再**维护 friend:online(F1 已确认零调用方,
 // 写者随 NotifyOnline/Offline 一起删了)。
 //
-// **只有一个返回值,没有 error**:分批(按 ListReadHardLimit 切 MGET)、限流日志、
-// metrics.ObserveOnlineLookup 与"读失败降级为全部离线"全在实现内部。
-// 在线态是展示字段,调用方拿到的"id 不在 map 里"就是最终答案(= 离线且无活跃记录),
-// 没有需要它决策的失败分支 —— 把 error 抬到这里只会让每个调用点重复同一段降级代码,
-// 还有重复计指标的风险。
+// 分批读取、限流日志和指标由实现持有。普通推荐使用 FillOnlineStatus 保留原降级；
+// GetFriendList 的在线状态控制组队邀请，使用带错误的 BatchOnlineStatus。
 type SessionStore interface {
 	FillOnlineStatus(ctx context.Context, playerIDs []uint64) map[uint64]data.OnlineStatus
+	// 组队邀请按钮依赖在线状态，未知不得伪装成离线；普通推荐仍可用上面的降级入口。
+	BatchOnlineStatus(ctx context.Context, playerIDs []uint64) (map[uint64]data.OnlineStatus, error)
 }
 
 // Deps 是 logic 层的依赖集合。main 装配一次、整进程共用(有状态的东西都在 SvcCtx 里)。
@@ -236,17 +235,16 @@ func (l *FriendLogic) storageFailure(ctx context.Context, method string, err err
 	return tipErr(constants.ErrStorage, "storage unavailable")
 }
 
-// onlineStatuses 批量取在线状态。句柄缺失时返回 nil ——
-// Go 里读 nil map 合法且取到零值,零值恰好等于"离线 + 无活跃记录"。
-//
-// 在线状态是**展示字段**:查不到就全当离线继续返回列表,不让好友列表整个失败 ——
-// 共享 Redis 抖一下就看不到好友,比看到一份"全部灰着"的列表更糟。
-// 降级日志与 metrics.ObserveOnlineLookup 在 SessionStore 的实现里打,这里不重复计(会双计)。
-func (l *FriendLogic) onlineStatuses(ctx context.Context, playerIDs []uint64) map[uint64]data.OnlineStatus {
-	if len(playerIDs) == 0 || l.deps.Sessions == nil {
-		return nil
+// onlineStatuses 用于好友邀请列表：存储故障或坏会话必须显式返回错误，
+// 否则客户端会把未知在线状态标成离线并禁邀。只有确实不存在的会话才算离线。
+func (l *FriendLogic) onlineStatuses(ctx context.Context, playerIDs []uint64) (map[uint64]data.OnlineStatus, error) {
+	if len(playerIDs) == 0 {
+		return nil, nil
 	}
-	return l.deps.Sessions.FillOnlineStatus(ctx, playerIDs)
+	if l.deps.Sessions == nil {
+		return nil, errors.New("好友在线状态读取器未配置")
+	}
+	return l.deps.Sessions.BatchOnlineStatus(ctx, playerIDs)
 }
 
 func (l *FriendLogic) AddFriend(ctx context.Context, req *pb.AddFriendRequest) (*pb.AddFriendResponse, error) {
@@ -449,7 +447,10 @@ func (l *FriendLogic) GetFriendList(ctx context.Context, req *pb.GetFriendListRe
 	for _, f := range friends {
 		friendIDs = append(friendIDs, f.FriendPlayerID)
 	}
-	statuses := l.onlineStatuses(ctx, friendIDs)
+	statuses, err := l.onlineStatuses(ctx, friendIDs)
+	if err != nil {
+		return &pb.GetFriendListResponse{ErrorMessage: l.storageFailure(ctx, method, err)}, nil
+	}
 
 	pbFriends := make([]*pb.FriendEntry, 0, len(friends))
 	for _, f := range friends {
@@ -466,6 +467,11 @@ func (l *FriendLogic) GetFriendList(ctx context.Context, req *pb.GetFriendListRe
 			entry.LastActiveMs = st.LastActiveMs
 		}
 		pbFriends = append(pbFriends, entry)
+	}
+	// 展示补全失败不隐藏真实好友关系；返回可用字段并记录故障。
+	directory := data.OnlineDirectory{Redis: l.deps.SvcCtx.SharedRedis, DataService: l.deps.SvcCtx.DataService}
+	if err := directory.FillFriendProfiles(ctx, pbFriends); err != nil {
+		logx.WithContext(ctx).Errorf("[friend] 好友展示资料补全失败: %v", err)
 	}
 	return &pb.GetFriendListResponse{Friends: pbFriends}, nil
 }

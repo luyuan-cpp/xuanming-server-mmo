@@ -6,7 +6,7 @@
 > 「存量容量回填门禁」(标为已退役)、「错误处理」(改按 RPC 映射)、Online/Offline(改拉模型)、
 > 「与 S2C 推送的分工」(新增)。其余段落(与玩家数据的对比、dirty-flag、上限方案对比、
 > 未来分片)**未改动,仍是原文**。
-> ⚠ 相关代码**未编译、未运行测试**,行为以验证结果为准。
+> ⚠ 相关代码**未编译、未运行测试**,行为以验证结果为准。〔2026-09-28 更正:已过期 —— 09-21 首次编译通过,真 MySQL 26.7.0 上全部包 314 PASS / 0 FAIL / 0 SKIP(首跑抓到的锁序真死锁已修,见下文「锁序纪律」末条);09-25 空库迁移 + 常驻启动 + 两区 `friend-smoke` 通过。证据见 `friend-handoff-20260920.md` §9.4。〕
 
 ## Data Characteristics
 - **Global cross-zone**: friend 全服一份、多副本、进程无状态;业务代码禁止读 `cfg.ZoneId` 做分支,ZoneId 只影响 etcd 注册路径
@@ -73,13 +73,20 @@ dirty-flag 解决的是"写太频繁，需要攒批"的问题。Friend/Guild 每
 -- 形成 insert-intention 死锁。缺行时按 friend 表的权威边数算初值,绝不猜 0。
 -- (示意;实现是 COUNT 与 INSERT 两条语句,不是一条 INSERT…SELECT:后者在连接默认 RR 下会对 friend 表
 --  加共享 next-key 锁,违反下一节的锁序。created_ms 自 2026-09-20 收尾批起写入,见「容量行回收」。)
-INSERT IGNORE INTO friend_capacity (player_id, friend_count, created_ms)
-  VALUES (?, <SELECT COUNT(*) FROM friend WHERE player_id = ?>, <now_ms>);
+-- 〔2026-09-28 更正:补行已由 INSERT IGNORE 改为 ODKU(2026-09-21 数据层死锁审计,正式提交 ff39a13f1),
+--   主键重复时直接取 X、不走 S→X 升级;原写法是 INSERT IGNORE INTO friend_capacity …〕
+-- 〔2026-09-29 更正:这处 ODKU 的代码先随 9cef7b2ec(09-21 08:52 自动保存)进库;ff39a13f1 对 friend_repo.go
+--   只改了注释,它给 friend 补的是拉黑写入 ODKU(insertBlockRowSQL)与 DSN 层 RC。与 handoff §5.6 (b) 一致。〕
+INSERT INTO friend_capacity (player_id, friend_count, created_ms)
+  VALUES (?, <SELECT COUNT(*) FROM friend WHERE player_id = ?>, <now_ms>)
+  ON DUPLICATE KEY UPDATE player_id = player_id;
 
-BEGIN;  -- READ COMMITTED
+BEGIN;  -- READ COMMITTED(2026-09-21 起连接池也在 DSN 层设 RC,见 svc/servicecontext.go 的 BuildDSN)
 -- ① 容量守卫必须是事务里的第一把锁(见下一节的锁序纪律)
-SELECT player_id, friend_count FROM friend_capacity
- WHERE player_id IN (A, B) ORDER BY player_id FOR UPDATE;
+-- 〔2026-09-28 更正:原写法是一条 `WHERE player_id IN (A, B) ORDER BY player_id FOR UPDATE`,真库上被规划成
+--   PRIMARY 全索引扫描;现为按 player_id 升序逐行主键点锁(lockCapacityRowSQL),点查顺序即取锁顺序〕
+SELECT friend_count FROM friend_capacity WHERE player_id = <较小者> FOR UPDATE;
+SELECT friend_count FROM friend_capacity WHERE player_id = <较大者> FOR UPDATE;
 -- ② 守卫之后才做判定读,且一律是 FOR UPDATE 当前读:
 --    双向拉黑(friend_block)、双向好友边(friend)、申请行(friend_request)、双方 friend_count
 -- ③ 写入
@@ -128,6 +135,8 @@ COMMIT;
 
 ### 容量行回收(2026-09-20 收尾批新增,未编译未运行)
 
+〔2026-09-28 更正:标题里的"未编译未运行"已过期 —— 本节代码随 09-21 首次编译与真库回归一并验证(`TestCapacityRowReclaimRacesWithGuardedWrites` 等 8 个并发锁序场景连跑 5 轮 40/40 PASS);09-28 在 5 万玩家的一次性库上 `EXPLAIN ANALYZE` 确认候选读走 `(friend_count, created_ms)` 覆盖索引 `range`、实际读 1000 行即止。〕
+
 `AddFriend` 为了拿守卫会给**任意** target 建一行 `friend_capacity`(friend 没有玩家名册,验证不了 target
 是否存在),`Block → Unblock` 反复换目标同理;这张表原先没有 TTL、不在 sweep 范围内,增长可由客户端驱动,
 唯一的闸(每分钟配额)在 Redis 故障时按设计 fail-open。现在由 sweep 回收:
@@ -146,10 +155,15 @@ COMMIT;
   `errCapacityRowsMissing`)时回到事务外重新 ensure 再跑,上限 3 遍 —— 每行至多被回收一次(重建的行
   `created_ms` 是当前时刻,DELETE 在提交点复核它),一次写至多两行,所以第三遍必过;三遍仍缺行才是
   不变量破裂,照旧 fail-closed(`ErrStorage`)。缺行只可能出现在事务的第一条语句,重跑没有副作用。
-- **回收带来的两条新约束**(评审轮推演出来的,前一条未在真库复现):
+- **回收带来的两条新约束**(评审轮推演出来的,前一条未在真库复现〔2026-09-28 更正:前一条已于 2026-09-21 在真库复现,见下〕):
   1. 事务外的 ensure 可能吃 1213 —— 一方对某条主键记录持 X(回收的 DELETE,或别的事务的守卫),至少两个
      `INSERT IGNORE` 同时排队等它的 S,X 释放后同时拿到 S 又都要升 X。ensure 因此对每个玩家的
      COUNT + INSERT 做有上限的 1213 重试(自动提交、幂等,重试安全)。事务 body 里的 1213 仍不重试。
+     〔2026-09-28 更正:① 09-21 真库回归**复现**了这个环(WARN `ensure 容量行撞上 1213 … attempt=1/3`,被重试吸收,
+     见 `docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md` §6.3);② 补行随后已改为
+     `INSERT … ON DUPLICATE KEY UPDATE player_id = player_id`(`ensureCapacityRowSQL`,数据层死锁审计,正式提交 `ff39a13f1`〔2026-09-29 更正:代码先随 `9cef7b2ec` 进库,`ff39a13f1` 对这处只补了注释;DSN 层 RC 与拉黑写入 ODKU 才是 `ff39a13f1` 新增的〕):
+     主键重复时直接取 X,从根上消掉 S→X 升级;连接池同时在 DSN 层设 RC,自动提交语句不再拿 next-key 锁。
+     上面的有限重试保留,作为 InnoDB 固有残余环的兜底。〕
   2. ensure 的 COUNT 与 INSERT 不原子:COUNT 读到 1 → `RemoveFriend` 提交(count→0)→ 回收删掉这行
      老行 → INSERT 用陈旧的 1 建行,`friend_count` 从此**永久偏大 1**且无自愈。所以
      `deleteFriendEdges` 减计数时一并刷新 `created_ms`,让刚减过计数的行在一个保留期内不可回收。
@@ -269,6 +283,11 @@ GetFriendList / RecommendFriends
 **失败语义:降级为"全部离线",不让好友列表整个失败。** 在线状态是展示态,为它让整个面板打不开不划算;
 代价是"好友其实在线却显示离线"。这不是静默降级 —— 每个受影响的玩家都会计
 `friend_online_lookup_total{outcome="error"}` 并打限流日志(AGENTS §11.3)。
+〔2026-09-28 更正(以代码为准,Codex 同日「四类组队邀请与在线目录」):这条降级现在**只对推荐**成立。
+`GetFriendList` 的在线状态开始控制组队邀请按钮,改调带错误的 `BatchOnlineStatus`:Redis 读取 / 会话解码 /
+身份不符 / 缺读取器等故障一律回既有 `ErrStorage`,不再成功返回"全部离线"(否则客户端会误把全员标离线并禁邀);
+会话不存在或非 ONLINE 仍正常显示离线。`RecommendFriends` 的普通推荐继续用 `FillOnlineStatus` 按条目降级。
+见 `go/friend/internal/data/session_reader.go` 与 `internal/logic/friend_logic.go` 的 `SessionStore` 注释。〕
 
 ⚠ 一条容易写错的:**MGET 的返回长度与入参长度不等时必须整批判离线**,不能按下标取值 ——
 错位会把 A 的在线状态贴到 B 身上,那比"全部离线"严重得多。

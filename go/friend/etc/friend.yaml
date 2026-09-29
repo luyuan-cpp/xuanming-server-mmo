@@ -118,7 +118,8 @@ Kafka:
 # (一次列表读要回几万行),写小了玩家加不上好友。改动必须同步 k8s ConfigMap。
 # 每一项为 0 都会被 config.Validate 拒绝(为 0 时的静默故障见 config.go 各字段注释)。
 Friend:
-  # 单玩家好友数硬上限(friend_capacity.friend_count 的封顶值)。
+  # 单玩家好友数硬上限(friend_capacity.friend_count 的封顶值)。config.Validate 另有硬天花板 300:
+  # 好友推荐的二度关系查询约读 8×MaxFriends² 行,开销按平方增长(推导与实测见 config.go 的 maxFriendsCeiling)。
   MaxFriends: 200
   # 出站 pending 申请上限:挡"一个人给全服发好友申请"。
   MaxPendingRequests: 50
@@ -129,8 +130,8 @@ Friend:
   MaxBlocks: 200
   # RecommendFriends 请求 limit=0 时返回多少候选。
   RecommendDefaultLimit: 10
-  # RecommendFriends 的 limit 上限(超出钳到它)。config.Validate 另有硬天花板 20:
-  # 单次推荐要算二度关系,这是压测确认能装进 RequestBudget(Timeout−500ms)的最大值。
+  # RecommendFriends 的 limit 上限(超出钳到它)。config.Validate 另有硬天花板 20(契约 F1 §3.1)。
+  # 它只线性影响返回条数、random 兜底要凑的人数与在线状态查询;二度关系的开销由 MaxFriends² 决定,见上面 MaxFriends。
   RecommendMaxLimit: 20
   # 请求里 exclude_player_ids 的条数上限:客户端可控数组必须封顶,
   # 否则一次请求能塞十万个 id 让服务端做十万次集合运算。

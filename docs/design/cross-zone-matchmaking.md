@@ -71,7 +71,7 @@ C++ 侧 `cpp/libs/engine/infra/storage/redis_client/redis_client.h` 基于 hired
 但**路由**客户端消息时两处随机选节点都硬过滤 `node.zone_id() == 本 zone`:
 
 - `cpp/nodes/gate/handler/rpc/client_message_processor.cpp:50-74` `PickRandomNode`;
-- `cpp/libs/engine/core/network/player_message_utils.cpp:267-287` `PickRandomNodeEntity`。
+- `cpp/libs/engine/core/network/player_message_utils.cpp:267-287` `PickRandomNodeEntity`。(2026-09-29 已删:它只被零调用方的 `SendMessageToPlayerOnGrpcNode` 使用,二者一起删除;C++ 侧只剩 gate 的 `PickRandomNode`。)
 
 后果:只部署一个 zone_id=1 的 match 时,zone 2 的 gate 把候选全部剔除,JoinQueue/WatchBattle 直接
 `kServiceUnavailable`("Node not found ... message id: 157")。这与 D2(battle 全局池)/ §5.4(match 全局池)矛盾,
@@ -99,7 +99,7 @@ C++ 侧 `cpp/libs/engine/infra/storage/redis_client/redis_client.h` 基于 hired
 | D8 | metrics:`queue_depth` 不加 zone 标签(队列本就不分 zone);新增 `gather_zone_mix_total{mode,mix=single|cross}` | 低基数,直接回答"跨 zone 对局占比" |
 | D9 | 客户端零改动 | 协议未变;对手 zone 展示留二期(要动 `BattleActorState` + C# regen) |
 | D10 | 部署:match 作为**全局池**部署一次(K8s 放 `mmorpg-infra`,replicas≥2);本地 `dev-start-zones` 继续每 zone 起一份(等价于多实例) | 与 battle 同形态;zone 标签只影响 etcd 注册路径 |
-| D11 | **gate 随机路由对全局池类型豁免 zone 过滤**:新增 `NodeUtils::IsGlobalPoolNodeType`(仅 BattleNodeService / MatchNodeService),`PickRandomNode` 与 `PickRandomNodeEntity` 对这两类不比对 zone;其余类型(friend/guild/chat/login…)路由语义不变 | §1.5 的硬门与全局池设计矛盾;只豁免明确的全局池类型,不扩大爆炸半径。任一 zone 的 match 实例挂了,该 zone 的 gate 自动落到其他 zone 的实例 —— 这是"容错不降级"在入口层的体现 |
+| D11 | **gate 随机路由对全局池类型豁免 zone 过滤**:新增 `NodeUtils::IsGlobalPoolNodeType`(仅 BattleNodeService / MatchNodeService),`PickRandomNode` 与 `PickRandomNodeEntity`(后者 2026-09-29 已随死代码删除)对这两类不比对 zone;其余类型(friend/guild/chat/login…)路由语义不变 | §1.5 的硬门与全局池设计矛盾;只豁免明确的全局池类型,不扩大爆炸半径。任一 zone 的 match 实例挂了,该 zone 的 gate 自动落到其他 zone 的实例 —— 这是"容错不降级"在入口层的体现 |
 | D12 | **SharedRedis 必须是全服单一实例**(不是 per-zone/per-region 分片):`player:{id}:location`(scene_manager)、`player:session:{id}`(player_locator)、`battle:lock:{id}`(C++ scene)三类契约 key 的写者都以它为准 | 当前本地/K8s 都是一个共享 Redis,满足;data_service 有 Regions→Redis 分片设计草案,若将来采纳,match 需要按 region 路由 SharedRedis 读取(二期,§10)。本轮在 match 启动日志打印 SharedRedis 地址并在文档钉死这条不变量 |
 | D13 | **`PrepareBattleRequest.prepare_deadline_ms` = now + 本组 matched TTL**(`matchedTicketTTLFor(组人数)`,2 人 30s / 5 人 48s / 10 人 78s);`deadline_ms` 语义不变(战斗作废期限) | §5 "已冻结成员受 `battle:lock` 窗口约束"的二期项落地(match 侧):备战期限与票据 matched TTL 同一窗口,弹组实例在 gather 中崩溃时,未冻结者靠票据过期、已冻结者靠 scene 在 PREPARING 态按该期限解冻并收窄锁 EX,两边同一时刻放行。scene 侧读取该字段的实现见 turn-based-battle-server.md 对应条目;旧版 scene 忽略该字段(0/未知 = 沿用 `deadline_ms`),向后兼容 |
 | D14 | **配表指纹比对**:scene 在 `PrepareBattleResponse.table_fingerprint` 回报本节点六张战斗表内容指纹(解析后确定性序列化的 sha256 前 16 字节 hex),match 收齐全员后比对;**全员非空且两两一致**才写进 `CreateBattleRequest.table_fingerprint`(battle 再与自身核对)。不一致或部分为空按 `TableFingerprintMode`(`off`/`warn`/`enforce`,默认 `warn`):`off` 不比对不透传;`warn` 只记 Error 日志 + `match_table_fingerprint_mismatch_total{mode}`,照常开局、不透传;`enforce` 视为 prepare 失败走既有补偿(已冻结者逐个解冻,肇事者出局删票,幸存者回队首),肇事者 = 与多数派不一致者(多数派只在非空指纹里选,平票取弹出序靠前者;全员皆空记第一位) | §10 "配表版本一致性"落地:灰度/回滚会让同一场战斗按不同数值表入场,快照与判定各按各的表算。灰度期用 `warn` 看指标确认各 zone 表版本对齐后再切 `enforce`;`enforce` 下不回报指纹的旧版 scene 会被一律拒绝,所以它不是默认值 |

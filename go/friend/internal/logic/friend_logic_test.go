@@ -172,11 +172,17 @@ func (f *fakeFriendStore) RecommendRandom(_ context.Context, _ uint64, exclude [
 type fakeSessionStore struct {
 	states map[uint64]data.OnlineStatus
 	calls  int
+	err    error
 }
 
 func (f *fakeSessionStore) FillOnlineStatus(_ context.Context, _ []uint64) map[uint64]data.OnlineStatus {
 	f.calls++
 	return f.states
+}
+
+func (f *fakeSessionStore) BatchOnlineStatus(_ context.Context, _ []uint64) (map[uint64]data.OnlineStatus, error) {
+	f.calls++
+	return f.states, f.err
 }
 
 // ── 夹具 ────────────────────────────────────────────────────────
@@ -1048,18 +1054,16 @@ func TestGetFriendListFillsOnlineFromSessions(t *testing.T) {
 	assert.Zero(t, resp.GetFriends()[1].GetLastActiveMs())
 }
 
-// TestGetFriendListDegradesWhenSessionsUnavailable:共享 Redis 读不到时全部按离线返回,
-// **不让好友列表整个失败**。抖一下就看不到好友,比看到一份"全部灰着"的列表更糟。
-func TestGetFriendListDegradesWhenSessionsUnavailable(t *testing.T) {
+// 组队邀请使用在线状态决定可否邀请，读取故障不能误报成全员离线。
+func TestGetFriendListRejectsWhenSessionsUnavailable(t *testing.T) {
 	f := newFixture(t, nil)
 	f.store.friends = []data.FriendEntry{{FriendPlayerID: 8003, SinceMs: 1}}
-	f.sessions.states = nil // 真实现读失败时就是这个形态(接口没有 error)
+	f.sessions.err = errors.New("shared redis unavailable")
 
 	resp, err := f.logic().GetFriendList(playerCtx(5101), &pb.GetFriendListRequest{})
 	require.NoError(t, err)
-	assert.Zero(t, resp.GetErrorMessage().GetId(), "在线状态是展示字段,查不到不该让整个列表失败")
-	require.Len(t, resp.GetFriends(), 1)
-	assert.False(t, resp.GetFriends()[0].GetIsOnline())
+	assert.Equal(t, constants.ErrStorage, resp.GetErrorMessage().GetId())
+	require.Empty(t, resp.GetFriends())
 }
 
 // TestListBlocksCarriesNoOnlineState:黑名单刻意不带在线状态。

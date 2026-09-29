@@ -137,6 +137,15 @@ kubectl exec mysql-shadow -- mysql -uroot -pshadow \
 
 # 7a. 若仅是抽取单个玩家:从影子库 dump 该玩家行 → 导回生产
 # 7b. 若是全库回档:停生产 mysql,把影子 PVC 推上去
+#     ⚠ 全库回档 = 连同 mmorpg_global 里 id_segment 的发号水位一起倒回目标时刻,这是 ID 安全事件。
+#     MySQL 里的消费表虽然一起回档,但 Kafka 里的 tx_id / snapshot_id、Redis 里在线玩家 blob 的物品 guid、
+#     各进程内存里已经领走的号段都不会回退;不处理,下一次领段就把用过的号再发一遍
+#     (login 的 ON DUPLICATE KEY UPDATE 静默覆盖别人的角色行,流水表 INSERT IGNORE 静默丢新流水)。
+#     推上去之后、放开流量之前,按 deploy/k8s/README.md「恢复全局库前须先核对 id_segment.max_id」三步做完:
+#       ① 停 data-service,重启所有持有号段的进程(login / guild / scene);
+#       ② 逐个 biz_tag 拿消费侧最大号(含各 zone 库、Kafka 两个 topic、mmorpg_trade / mmorpg_guild 独占库);
+#       ③ max_id 不大于该最大号的,抬到「最大号 + 1 + 至少一个 step」。
+#     7a 的单玩家抽取不涉及水位,不需要这一步。
 ```
 
 ### 4.2 单玩家 / 单 zone 数据抽取(更常见)

@@ -25,6 +25,11 @@ message CreateBattleRequest {
   uint64 created_at_ms = 6;                // Unix 毫秒
   uint64 deadline_ms = 7;                  // 战斗最长期限,超时 battle 强制平局收尾
   string table_fingerprint = 8;            // match 确认的全员一致指纹;battle 与自身指纹不一致按配置拒开局/告警
+  // 活动对局上下文(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.17/§6.19)。
+  // 可空:普通对局不填(等价 kind == NONE)。match 的 RunActivityGather 原样填入;battle 存进房间,
+  // 结算时回显进 BattleResultEvent.activity_context,并且 kind != NONE 时先落 SharedRedis
+  // battle:activity_result:{battle_id} 再发 Kafka(未被 guild 销账就重发)。battle 不解释其余字段。
+  BattleActivityContext activity_context = 9;
 }
 
 // error_message 非零 = 未建房。签不出参战票据时回 kServiceUnavailable(turn-based §22 D70 fail-closed):

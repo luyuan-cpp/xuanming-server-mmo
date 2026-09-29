@@ -18,6 +18,7 @@
 #include "proto/battle/battle_node.pb.h"
 #include "proto/battle/player_battle.pb.h"
 #include "proto/common/base/session.pb.h"
+#include "proto/contracts/kafka/match_event.pb.h"
 
 // 回合制战斗房间管理器(设计文档 §5.2)。
 //
@@ -43,6 +44,8 @@
 //             scene 据此 PREPARING→FIGHTING 并把作废期限切到正式 deadline,同上信封);
 //   对局结果 → contracts.kafka.BattleResultEvent,topic=match-results(全局无 zone 段),
 //             key=battle_id;只在真实打完(FinishBattle)时发,Destroy/Abort 作废不发。
+//             带活动上下文(帮会同道历练)的局先落 zone Redis battle:activity_result:{battle_id}
+//             再发,guild 销账前每 10s 重发(docs/design/guild-phase2/06-activities.md §6.19–§6.21)。
 //
 // 客户端直连(设计文档 §18,D23-D28;收缩见 turn-based §22):直连是战斗唯一通路 ——
 // 上行只从直连面(BattleClientEdge)进来,下行分两个显式出口:战斗帧 PushBattleFrame
@@ -161,6 +164,9 @@ private:
         // 开局参数副本(BattleResultEvent 回流给 match 用;引擎内的请求副本是私有的)
         uint32_t matchMode = 0;
         uint32_t battleConfigId = 0;
+        // CreateBattleRequest.activity_context 原样副本(缺省 = kind NONE = 普通对局)。
+        // battle 不解释业务字段,只在 FinishBattle 回显进 BattleResultEvent 并据 kind 选结果通道。
+        ::BattleActivityContext activityContext;
         turnbattle::TurnBattleEngine engine;
         // player_id → 路由信息副本(快照携带,battle 不查 etcd 定位对端)。
         // 有序容器:广播与结算的遍历顺序稳定,日志/回放可复现。
@@ -207,7 +213,8 @@ private:
 
     // 战斗收尾:每参与者 BattleEndS2C(战斗帧,只走直连)→ BattleSettlementEvent(先落库后投递);
     // 观众按 spectateReason 推 SpectateEndS2C(§10.5);终局包排队后关闭房间全部直连;
-    // 最后向 match-results 发一条 BattleResultEvent(评分回流)。
+    // 最后向 match-results 发一条 BattleResultEvent(评分回流;带活动上下文的局改走
+    // DispatchActivityResultDurably 的持久化通道)。
     // 只组装与发送,不动 rooms_(房间由调用方随后移除)。
     void FinishBattle(BattleRoom &room, ::eBattleOutcome outcome,
                       ::eSpectateEndReason spectateReason);
@@ -313,6 +320,40 @@ private:
     // outbox 空了就停表:battle 常态下没有未销账记录,不该留一个每 10s 空转的定时器。
     void StopSettlementRetryTimerIfIdle();
 
+    // ---- 活动结果发件箱(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.19–§6.21)----
+    //
+    // 与上面的 R07 结算发件箱同一纪律(先落库、后投递、未销账则重投),区别只在销账方:
+    // 这里由 guild 在该局进入终态后 DEL battle:activity_result:{battle_id}。
+    // 判定与常量在 services/battle/system/battle_result_activity.h(纯函数,单测直接盯)。
+    struct PendingActivityResult
+    {
+        // 序列化好的 BattleResultEvent:与 Redis 里的记录逐字节相同,重发原样再发、不重算。
+        std::string payload;
+        // 已重发的次数(首发不计)。
+        uint32_t attempts = 0;
+    };
+
+    // 活动局结果的唯一出口。顺序是硬要求:SET 记录 → (成功回调里)发 Kafka → 登记待销账。
+    // 反过来先发后写,guild 可能先结算并 DEL(此刻记录还不存在,DEL 是空操作),迟到的 SET
+    // 落地后就留下一条孤儿记录,battle 会对一局已结算的对局一直重发到次数用尽。
+    // Redis 不可用 / SET 失败:降级为只发一次并报 ERROR(§6.21 R6,与改造前行为一致)。
+    void DispatchActivityResultDurably(const contracts::kafka::BattleResultEvent &result);
+    // SET 成功后登记一条待销账记录,并保证重发定时器已装填。
+    void EnqueuePendingActivityResult(uint64_t battleId, std::string payload);
+    // 定时器回调:对每条未销账的记录探测一次。
+    void RetryPendingActivityResults();
+    // 单条记录的一轮处理:EXISTS → 按判定重发 / 摘除。
+    void ProbeActivityResultOne(uint64_t battleId);
+    // outbox 空了就停表(常态下没有进行中的活动局结果)。
+    void StopActivityResultRetryTimerIfIdle();
+
+    // 绑进定时器 / hiredis 回调的 weak_ptr<自己>(AGENTS.md §11.7)。
+    // 本类是进程级单例(Instance() 里的函数静态对象),不由 shared_ptr 持有,拿不到 weak_from_this();
+    // 这里用别名构造把 this 挂在 lifeToken_ 的控制块上:lifeToken_ 随本对象析构,之后 lock() 必然失败。
+    // 实际上单例寿命覆盖整个 loop(tlsRedis 是 thread_local,先于静态对象析构),这层是按 §11.7
+    // "只绑 weak_ptr<自己>"写的防线,不是在修某个已知的悬垂路径。R07 结算发件箱沿用裸 this,本批不动。
+    std::weak_ptr<BattleRoomManager> WeakSelf() { return std::shared_ptr<BattleRoomManager>(lifeToken_, this); }
+
     BattleClientEdge *edge_ = nullptr;
 
     std::unordered_map<uint64_t, std::unique_ptr<BattleRoom>> rooms_;
@@ -320,4 +361,12 @@ private:
     // key = (battle_id, player_id);量级 = 未销账的结算条数,常态为 0。
     std::map<std::pair<uint64_t, uint64_t>, PendingSettlement> settlementOutbox_;
     TimerTaskComp settlementRetryTimer_;
+
+    // key = battle_id;量级 = 未被 guild 销账的活动局结果数,常态为 0。
+    // 有序容器:与 settlementOutbox_ 同口径,重发遍历与日志顺序稳定。
+    std::map<uint64_t, PendingActivityResult> activityResultOutbox_;
+    TimerTaskComp activityResultRetryTimer_;
+
+    // WeakSelf() 的存活令牌。声明在最后 = 最先析构:析构期间任何迟到回调都已 lock 不到本对象。
+    std::shared_ptr<char> lifeToken_ = std::make_shared<char>();
 };

@@ -51,9 +51,11 @@ function New-MockPod {
 function Reset-MigrateFixture {
     foreach ($name in @('Apply-OneGoSvc', 'Apply-GoSvcMigrateJob', 'Get-GoSvcMigrateJobState',
         'Wait-GoSvcMigrateJobSettled', 'Assert-GoSvcMigrateJobNotInFlight', 'Wait-ForGoSvcMigrateJob',
-        'Write-GoSvcMigrateJobDiagnostics')) {
+        'Write-GoSvcMigrateJobDiagnostics', 'Add-GoSvcCommandTopicEnv')) {
         Restore-ProductionFunction $name
     }
+    $script:DeploymentContent = $null
+    $script:CommandTopicContractError = $null
     $script:Calls = [Collections.Generic.List[object]]::new()
     $script:Events = [Collections.Generic.List[string]]::new()
     $script:JobJson = New-MockJob
@@ -91,6 +93,11 @@ function Reset-MigrateFixture {
         return "kind: ConfigMap`nmetadata:`n  name: go-svc-trade-config"
     }
     Set-Item Function:script:Resolve-ImagePullPolicy { param($ImageRef) return 'IfNotPresent' }
+    # 真实实现读 bin/etc/base_deploy_config.yaml;这里给一个仓库里不会出现的代号 7,证明注入值来自契约而不是写死。
+    Set-Item Function:script:Get-GoSvcCommandTopicContract {
+        if ($script:CommandTopicContractError) { throw $script:CommandTopicContractError }
+        return [pscustomobject]@{ Partitions = 256; Generation = 7 }
+    }
     Set-Item Function:script:Wait-ForDeploymentReady {
         param($Namespace, $DeploymentName)
         $script:Events.Add("ready:$DeploymentName")
@@ -103,6 +110,7 @@ function Reset-MigrateFixture {
             $script:JobApplied = $true
         } elseif ($InputContent -match '(?m)^kind: Deployment\s*$') {
             $script:Events.Add('apply:Deployment')
+            $script:DeploymentContent = $InputContent
         } elseif ($InputContent -match '(?m)^kind: ConfigMap\s*$') {
             $script:Events.Add('apply:ConfigMap')
         } else { throw '未识别的模拟 apply 内容' }
@@ -177,6 +185,59 @@ Test-Case 'friend 的迁移门禁与 trade 同链路：ConfigMap → Job → Dep
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because 'friend-migrate Job 要读取先前创建的 ConfigMap'
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'staging/prod 的 Schema.AutoMigrate=false，表没建出来 friend 会拒启，迁移必须先于 Deployment'
     Assert-True -Condition ($events -contains 'query:Job') -Because '成功必须来自 Job 查询，不能因为是新服务就直接放行'
+}
+
+# 控制面命令 topic 契约(KAFKA_COMMAND_TOPIC_*)统一注入。背景:go/shared/kafkacmd 不配这两个变量就回落到 256 / 1,
+# 而 C++ gate / scene 消费的是 base_deploy_config.yaml 的代号,不一致时 Go 发给 gate / scene 的命令静默丢失。
+foreach ($svc in @('trade', 'friend')) {
+    Test-Case "$svc 的 Deployment 带上注入的命令 topic 契约,且只有一份" {
+        Reset-MigrateFixture
+        $script:JobAbsentBeforeApply = $true
+        Apply-OneGoSvc -SvcName $svc -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0
+        $content = $script:DeploymentContent
+        Assert-True -Condition ($null -ne $content) -Because '必须真正走到 Deployment 的 apply'
+        Assert-Match -Text $content -Pattern '- name: KAFKA_COMMAND_TOPIC_PARTITIONS\s+value: "256"' -Because '分区数来自契约'
+        Assert-Match -Text $content -Pattern '- name: KAFKA_COMMAND_TOPIC_GENERATION\s+value: "7"' -Because '代号来自契约,不是 kafkacmd 的编译期默认 1'
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($content, 'name: KAFKA_COMMAND_TOPIC_GENERATION').Count) -Because '重复的 env 名会让其中一份静默失效'
+        Assert-NotMatch -Text $content -Pattern 'PLACEHOLDER_' -Because '注入不能打乱原有占位替换'
+    }
+}
+
+Test-Case '契约读取失败时不做任何集群写操作' {
+    Reset-MigrateFixture
+    $script:CommandTopicContractError = 'contract unavailable'
+    $failure = Get-ThrownMessage { Apply-OneGoSvc -SvcName trade -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0 }
+    Assert-Match -Text $failure -Pattern 'contract unavailable' -Because '必须是契约错误本身,不是别的模拟故障'
+    Assert-Equal -Expected 0 -Actual $script:Events.Count -Because '主 manifest 渲染在 ConfigMap / 迁移 Job 之前,渲染失败不能留下半截部署'
+}
+
+Test-Case 'Add-GoSvcCommandTopicEnv:沿用已有条目的缩进,插在 env 列表最前' {
+    Reset-MigrateFixture
+    $manifest = "kind: Deployment`nspec:`n  template:`n    spec:`n      containers:`n        - name: x`n          env:`n            # 注释行要跳过`n            - name: A`n              value: b`n          args: []`n"
+    $out = Add-GoSvcCommandTopicEnv -SvcName x -ManifestContent $manifest -Partitions 256 -Generation 3
+    Assert-Match -Text $out -Pattern '(?m)^          env:\n            # [^\n]*\n            - name: KAFKA_COMMAND_TOPIC_PARTITIONS\n              value: "256"\n            - name: KAFKA_COMMAND_TOPIC_GENERATION\n              value: "3"\n            # 注释行要跳过\n            - name: A' -Because '条目缩进必须与已有条目一致,否则 YAML 列表断裂'
+    $compact = "containers:`n  - name: x`n    env:`n    - name: A`n      value: b`n"
+    $compactOut = Add-GoSvcCommandTopicEnv -SvcName x -ManifestContent $compact -Partitions 256 -Generation 3
+    Assert-Match -Text $compactOut -Pattern '(?m)^    env:\n    # [^\n]*\n    - name: KAFKA_COMMAND_TOPIC_PARTITIONS\n      value: "256"' -Because '与 env 同缩进的紧凑列表写法也要沿用原缩进'
+    $crlf = "containers:`r`n  - name: x`r`n    env:`r`n      - name: A`r`n        value: b`r`n"
+    $crlfOut = Add-GoSvcCommandTopicEnv -SvcName x -ManifestContent $crlf -Partitions 256 -Generation 3
+    Assert-Equal -Expected 0 -Actual ([regex]::Matches($crlfOut, '(?<!\r)\n').Count) -Because 'CRLF 文件插入后不能混进裸 LF'
+}
+
+Test-Case 'Add-GoSvcCommandTopicEnv:manifest 形状不对或手写了变量一律拒绝' {
+    Reset-MigrateFixture
+    $handWritten = "containers:`n  - name: x`n    env:`n      - name: KAFKA_COMMAND_TOPIC_GENERATION`n        value: `"1`"`n"
+    $failure = Get-ThrownMessage { Add-GoSvcCommandTopicEnv -SvcName x -ManifestContent $handWritten -Partitions 256 -Generation 2 }
+    Assert-Match -Text $failure -Pattern 'KAFKA_COMMAND_TOPIC_\*' -Because '手写一份值就是第二份真相,下次换代号必漏改'
+    $noEnv = "containers:`n  - name: x`n    args: []`n"
+    $failure = Get-ThrownMessage { Add-GoSvcCommandTopicEnv -SvcName x -ManifestContent $noEnv -Partitions 256 -Generation 2 }
+    Assert-Match -Text $failure -Pattern '恰好有 1 个 env' -Because '没有 env 段时不能悄悄不注入'
+    $twoEnv = "containers:`n  - name: a`n    env:`n      - name: A`n        value: b`n  - name: c`n    env:`n      - name: C`n        value: d`n"
+    $failure = Get-ThrownMessage { Add-GoSvcCommandTopicEnv -SvcName x -ManifestContent $twoEnv -Partitions 256 -Generation 2 }
+    Assert-Match -Text $failure -Pattern '恰好有 1 个 env' -Because '多容器时不能猜注入目标'
+    $notList = "containers:`n  - name: x`n    env:`n    args: []`n"
+    $failure = Get-ThrownMessage { Add-GoSvcCommandTopicEnv -SvcName x -ManifestContent $notList -Partitions 256 -Generation 2 }
+    Assert-Match -Text $failure -Pattern '不是列表项' -Because 'env 下不是列表时插入会产出非法 YAML'
 }
 
 foreach ($condition in @('Complete', 'Failed', 'FailureTarget')) {

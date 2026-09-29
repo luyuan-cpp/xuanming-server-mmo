@@ -29,6 +29,8 @@
 #include "data/battle_table_fingerprint.h"
 // 结算发件箱的纯判定 + Redis key/Lua 契约(R07)。
 #include "settlement/settlement_outbox.h"
+// 活动局结果的回显组装 + 持久记录键/重发判定(帮会同道历练,guild-phase2 §6.19–§6.21)。
+#include "system/battle_result_activity.h"
 
 // player:{id}:location 是 scene_manager 写的跨运行时契约 key(单一共享 Redis,
 // cross-zone-matchmaking.md D12),重投时用它重新解析玩家当前所在的 scene。
@@ -276,15 +278,22 @@ namespace
     // 该 topic 无目标实例语义(任一 match 实例消费即可),不适用不变量 2 的 target_instance_id。
     constexpr char kMatchResultsTopic[] = "match-results";
 
-    void SendBattleResultEvent(const contracts::kafka::BattleResultEvent &event)
+    // 发一条已序列化的 BattleResultEvent。活动局首发与重发都走这里,保证 Kafka 上的字节与
+    // Redis 持久记录逐字节相同(guild 巡检器从记录结算与消费者从 topic 结算看到的是同一份结果)。
+    void SendMatchResultPayload(const uint64_t battleId, const std::string &payload)
     {
-        const auto err = KafkaProducer::Instance().send(kMatchResultsTopic, event.SerializeAsString(),
-                                                        std::to_string(event.battle_id()));
+        const auto err = KafkaProducer::Instance().send(kMatchResultsTopic, payload,
+                                                        std::to_string(battleId));
         if (err != RdKafka::ERR_NO_ERROR)
         {
             LOG_ERROR << "battle 对局结果发送失败: topic=" << kMatchResultsTopic
-                      << " battle_id=" << event.battle_id() << " err=" << err;
+                      << " battle_id=" << battleId << " err=" << err;
         }
+    }
+
+    void SendBattleResultEvent(const contracts::kafka::BattleResultEvent &event)
+    {
+        SendMatchResultPayload(event.battle_id(), event.SerializeAsString());
     }
 
     // ---- 配表指纹校验开关(cross-zone-matchmaking.md §10) ----
@@ -503,6 +512,8 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     room->battleId = battleId;
     room->matchMode = request.match_mode();
     room->battleConfigId = request.battle_config_id();
+    // 活动上下文原样保存(未填 = kind NONE);FinishBattle 回显并据此选结果通道(§6.20)
+    room->activityContext = request.activity_context();
     if (!room->engine.Initialize(request))
     {
         LOG_ERROR << "CreateBattle 引擎初始化失败(快照/表数据非法): battle_id=" << battleId
@@ -592,7 +603,10 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
              << " players=" << request.players_size()
              << " battle_config_id=" << request.battle_config_id()
              << " match_mode=" << request.match_mode()
-             << " deadline_ms=" << deadlineMs;
+             << " deadline_ms=" << deadlineMs
+             << " activity_kind=" << ::eBattleActivityKind_Name(request.activity_context().kind())
+             << " activity_id=" << request.activity_context().activity_id()
+             << " guild_id=" << request.activity_context().guild_id();
 }
 
 void BattleRoomManager::HandleDestroyBattle(const ::DestroyBattleRequest &request)
@@ -1091,6 +1105,9 @@ void BattleRoomManager::FinishBattle(BattleRoom &room, const ::eBattleOutcome ou
     // 对局结果回流 match:按 team_index 归组玩家(routingByPlayer 只有玩家,天然不含怪物)
     std::map<uint32_t, std::vector<uint64_t>> playersByTeam;
     uint32_t totalRounds = 0;
+    // 结果事件回显的逃跑 / 阵亡名单(所有对局都填;guild 同道历练按 team 0 − 逃跑发奖,U2)
+    std::vector<uint64_t> fledPlayerIds;
+    std::vector<uint64_t> deadPlayerIds;
 
     for (const auto &[playerId, routing] : room.routingByPlayer)
     {
@@ -1101,6 +1118,14 @@ void BattleRoomManager::FinishBattle(BattleRoom &room, const ::eBattleOutcome ou
 
         playersByTeam[settlement.player_team_index()].push_back(playerId);
         totalRounds = settlement.total_rounds();
+        if (settlement.fled())
+        {
+            fledPlayerIds.push_back(playerId);
+        }
+        if (settlement.is_dead())
+        {
+            deadPlayerIds.push_back(playerId);
+        }
 
         // 顺序:终局包先于关直连(下面 CloseDirectConnections 在全部终局包排队之后)。
         // 终局包是战斗帧,只走直连(turn-based §22 D68);没有直连的玩家收不到它,
@@ -1140,13 +1165,27 @@ void BattleRoomManager::FinishBattle(BattleRoom &room, const ::eBattleOutcome ou
     }
     result.set_total_rounds(totalRounds);
     result.set_finished_at_ms(TimeSystem::NowMillisecondsUTC());
-    SendBattleResultEvent(result);
+    turnbattle::FillBattleResultActivityFields(room.activityContext, std::move(fledPlayerIds),
+                                               std::move(deadPlayerIds), result);
+    // 活动局(帮会同道历练)丢一条就是整局帮贡 / 资金 / 物品永久丢失,走持久化通道;
+    // 普通对局丢一条只影响评分,保持原来的发一次(§6.19)。
+    if (result.has_activity_context())
+    {
+        DispatchActivityResultDurably(result);
+    }
+    else
+    {
+        SendBattleResultEvent(result);
+    }
 
     LOG_INFO << "战斗结束: battle_id=" << room.battleId
              << " outcome=" << ::eBattleOutcome_Name(outcome)
              << " players=" << room.routingByPlayer.size()
              << " teams=" << playersByTeam.size()
-             << " total_rounds=" << totalRounds;
+             << " total_rounds=" << totalRounds
+             << " fled=" << result.fled_player_ids_size()
+             << " dead=" << result.dead_player_ids_size()
+             << " activity_kind=" << ::eBattleActivityKind_Name(room.activityContext.kind());
 }
 
 void BattleRoomManager::BroadcastTurnResult(const BattleRoom &room, const ::TurnResultS2C &result)
@@ -1758,6 +1797,188 @@ void BattleRoomManager::ProbeAndRetryOne(const uint64_t battleId, const uint64_t
                 "GET player:%llu:location", playerId);
         },
         (std::string("GET ") + battle_settlement::kPendingSettlementIdKeyFmt).c_str(), playerId);
+}
+
+// ---- 活动局结果持久化 + 有界重发(帮会同道历练,guild-phase2 §6.19–§6.21) ----
+//
+// 崩溃窗口(§6.21):
+//   R1/R2 战斗中或 SET 回调之前崩溃 → 无记录,guild 巡检器按超期把该局判 EXPIRED(无人得奖,口径一致);
+//   R3 SET 成功、Kafka flush 前崩溃 → 记录在,guild 巡检器 GET 记录直接结算(内存 outbox 随进程丢失无妨);
+//   R4 Kafka 投递失败 → 本类每 10s 重发,最多 30 次,之后巡检器兜底;
+//   R5 guild 已结算但 DEL 失败 → 继续重发,guild 按 battle_id 判重后再 DEL;最坏 TTL 7 天自然过期;
+//   R6 Redis 不可用 → 降级只发一次,metric=battle_activity_result_not_durable,须告警。
+// 同一 battle_id 可能被投递多次(重发 / R5),match-results 的消费方必须按 battle_id 幂等(proto 注释已写明)。
+
+void BattleRoomManager::DispatchActivityResultDurably(const contracts::kafka::BattleResultEvent &result)
+{
+    const uint64_t battleId = result.battle_id();
+
+    std::string payload;
+    if (!result.SerializeToString(&payload))
+    {
+        // 不可恢复:没有字节可落库也没有字节可发。guild 巡检器会把该局判 EXPIRED 并告警。
+        LOG_ERROR << "metric=battle_activity_result_serialize_failed battle_id=" << battleId
+                  << ",活动局结果序列化失败,既不落库也不投递";
+        return;
+    }
+
+    if (!RedisReady())
+    {
+        // R6:落不了库就只发一次 —— 与改造前的行为一致,不是新增的退化,但必须响一声。
+        LOG_ERROR << "metric=battle_activity_result_not_durable battle_id=" << battleId
+                  << ",Redis 不可用,活动局结果未落库直接投递一次(投递丢失即该局帮会奖励丢失)";
+        SendMatchResultPayload(battleId, payload);
+        return;
+    }
+
+    // 成功回调里才投递,保证"记录先于事件存在"(见头文件 DispatchActivityResultDurably 的说明)。
+    const std::string key = turnbattle::ActivityResultKey(battleId);
+    const int rc = tlsRedis.GetZoneRedis()->command(
+        [weakSelf = WeakSelf(), battleId, payload](hiredis::Hiredis *, redisReply *reply)
+        {
+            const bool stored = reply != nullptr && reply->type != REDIS_REPLY_ERROR;
+            if (!stored)
+            {
+                // 回复为空(连接断开 / 停机释放)或出错:记录可能落了也可能没落,都不登记重发 ——
+                // 没有记录就没有"是否已销账"可探测。发一次,剩下交给 guild 巡检器(有记录则结算,无则 EXPIRED)。
+                LOG_ERROR << "metric=battle_activity_result_not_durable battle_id=" << battleId
+                          << " redis_error="
+                          << (reply != nullptr && reply->str != nullptr ? std::string(reply->str, reply->len)
+                                                                        : std::string("null reply"))
+                          << ",活动局结果落库失败,仍投递一次(投递丢失即该局帮会奖励丢失)";
+                SendMatchResultPayload(battleId, payload);
+                return;
+            }
+            SendMatchResultPayload(battleId, payload);
+            if (const auto self = weakSelf.lock())
+            {
+                self->EnqueuePendingActivityResult(battleId, payload);
+            }
+        },
+        "SET %s %b EX %u", key.c_str(), payload.data(), payload.size(),
+        turnbattle::kActivityResultTtlSec);
+    if (rc != REDIS_OK)
+    {
+        // 命令没发出去(连接恰在断开 / 释放中,Hiredis::command 在登记回调前就返回):回调永远不会来,
+        // 不在这里补发这局结果就静默丢了。按 R6 降级只发一次。
+        LOG_ERROR << "metric=battle_activity_result_not_durable battle_id=" << battleId
+                  << ",活动局结果 SET 未能发出,未落库直接投递一次(投递丢失即该局帮会奖励丢失)";
+        SendMatchResultPayload(battleId, payload);
+    }
+}
+
+void BattleRoomManager::EnqueuePendingActivityResult(const uint64_t battleId, std::string payload)
+{
+    PendingActivityResult entry;
+    entry.payload = std::move(payload);
+    // 同 battle_id 覆盖:FinishBattle 每房间只走一次,正常不会重复;万一重复,以最新一份为准并重置次数。
+    activityResultOutbox_[battleId] = std::move(entry);
+
+    if (!activityResultRetryTimer_.IsActive())
+    {
+        activityResultRetryTimer_.RunEvery(static_cast<double>(turnbattle::kActivityResultRetryIntervalSec),
+                                           [weakSelf = WeakSelf()]
+                                           {
+                                               if (const auto self = weakSelf.lock())
+                                               {
+                                                   self->RetryPendingActivityResults();
+                                               }
+                                           });
+    }
+}
+
+void BattleRoomManager::StopActivityResultRetryTimerIfIdle()
+{
+    if (activityResultOutbox_.empty() && activityResultRetryTimer_.IsActive())
+    {
+        activityResultRetryTimer_.Cancel();
+    }
+}
+
+void BattleRoomManager::RetryPendingActivityResults()
+{
+    if (activityResultOutbox_.empty())
+    {
+        StopActivityResultRetryTimerIfIdle();
+        return;
+    }
+    if (!RedisReady())
+    {
+        // 探测不了销账就不能判定,更不能盲目重发:等下一轮,次数也不消耗(与 R07 同一取舍)。
+        LOG_WARN << "battle 活动局结果重发本轮跳过(Redis 未连接), pending=" << activityResultOutbox_.size();
+        return;
+    }
+
+    // 回调里会改 activityResultOutbox_,先把本轮要处理的键抄一份。
+    std::vector<uint64_t> battleIds;
+    battleIds.reserve(activityResultOutbox_.size());
+    for (const auto &[battleId, entry] : activityResultOutbox_)
+    {
+        battleIds.push_back(battleId);
+    }
+    for (const auto battleId : battleIds)
+    {
+        ProbeActivityResultOne(battleId);
+    }
+}
+
+void BattleRoomManager::ProbeActivityResultOne(const uint64_t battleId)
+{
+    const std::string key = turnbattle::ActivityResultKey(battleId);
+    tlsRedis.GetZoneRedis()->command(
+        [weakSelf = WeakSelf(), battleId](hiredis::Hiredis *, redisReply *reply)
+        {
+            const auto self = weakSelf.lock();
+            if (!self)
+            {
+                return;
+            }
+            auto &outbox = self->activityResultOutbox_;
+            const auto it = outbox.find(battleId);
+            if (it == outbox.end())
+            {
+                return; // 回调期间已被别的路径摘掉(例如上一轮的迟到回调)
+            }
+            auto &entry = it->second;
+
+            if (reply == nullptr)
+            {
+                // 空回复 = 连接断开 / 停机释放,什么也没问到:本轮不判定、不重发、不消耗次数,
+                // 下一轮再探(与 RetryPendingActivityResults 里 Redis 未连接时的取舍一致)。
+                LOG_WARN << "battle 活动局结果探测无回复(Redis 连接断开),本轮跳过: battle_id=" << battleId;
+                return;
+            }
+            // 只有明确读到 0 才算已销账;回复出错(或类型不对)一律按"仍在"处理 —— 宁可多发一次
+            // (guild 按 battle_id 判重),也不能把没销账的局当成已送达。
+            const bool recordGone = reply->type == REDIS_REPLY_INTEGER && reply->integer == 0;
+            const auto action = turnbattle::ClassifyActivityResultRetry(
+                !recordGone, entry.attempts, turnbattle::kActivityResultRetryMaxAttempts);
+
+            switch (action)
+            {
+            case turnbattle::ActivityResultRetryAction::kDone:
+                LOG_INFO << "battle 活动局结果已销账: battle_id=" << battleId << " resends=" << entry.attempts;
+                outbox.erase(it);
+                self->StopActivityResultRetryTimerIfIdle();
+                return;
+            case turnbattle::ActivityResultRetryAction::kResend:
+                ++entry.attempts;
+                LOG_WARN << "metric=battle_activity_result_resend battle_id=" << battleId
+                         << " attempt=" << entry.attempts
+                         << ",活动局结果未被 guild 销账,按原字节重发";
+                SendMatchResultPayload(battleId, entry.payload);
+                return;
+            case turnbattle::ActivityResultRetryAction::kExhausted:
+                // 响亮但不致命:记录仍在 Redis(TTL 7 天),guild 巡检器超期扫描时从记录直接结算。
+                LOG_ERROR << "metric=battle_activity_result_undelivered battle_id=" << battleId
+                          << " resends=" << entry.attempts
+                          << ",活动局结果重发次数用尽仍未销账;持久记录保留,由 guild 巡检器兜底结算";
+                outbox.erase(it);
+                self->StopActivityResultRetryTimerIfIdle();
+                return;
+            }
+        },
+        "EXISTS %s", key.c_str());
 }
 
 void BattleRoomManager::HandleIssueBattleTicket(const ::IssueBattleTicketRequest &request,

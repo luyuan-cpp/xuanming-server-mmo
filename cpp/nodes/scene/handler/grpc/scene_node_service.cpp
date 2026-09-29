@@ -142,23 +142,29 @@ void SceneNodeGrpcImpl::HandleReleasePlayer(const ::scene_node::ReleasePlayerReq
     // 落点或路由随后失败(Lua 撤回 / epoch 冲突 / Kafka 路由失败并回滚)时,location 与 gate 会话都
     // 还指向本节点;若这里已按"退出优先"把实体销毁,玩家的消息全部落空,只能重登。
     // 交接中的实体去留只由 EnterScene 应答与看门狗裁决(PlayerLifecycleSystem::ResolveTravelOutcome):
-    // 放行了它会销毁实体,没放行它会解冻,两头都不需要这条通知。盘上已是最新状态,不存在
+    // 放行了它会销毁实体,没放行(或被回滚到本节点)它会解冻,两头都不需要这条通知。盘上已是最新状态,不存在
     // "不退出就丢存盘"的问题。
     //
-    // **不要**在这里调 ResolveTravelOutcome:它第一步是 DEL handoff 标记,而 ReleasePlayer 可能早于
-    // scene_manager 的铸造 Lua 到达 —— 等于源端自己把即将发生的放行撤回。
+    // **不要**在这里调 ResolveTravelOutcome:它的原子取证会删掉本次交接这一族 handoff 标记,而 ReleasePlayer
+    // 可能早于 scene_manager 的铸造 Lua 到达 —— 等于源端自己把即将发生的放行撤回。
     //
     // 已知副作用(预期现象,压测时别当 bug 追):交接被放行到别的节点、而 EnterScene 应答又丢了
-    // (scene_manager 在路由 ACK 之后重启 / 断连,生成的 gRPC 客户端 status 非 OK 不回调)时,
+    // (scene_manager 在路由 ACK 之后重启 / 断连:传输失败对交接只记日志、不当证据)时,
     // 本节点的源实体要等 30s 应答看门狗才销毁(日志 "travel_granted_without_reply")。这 30s 里它
     // 以冻结态留在源场景的 AOI 内,周围玩家会看到一个不动的分身;真身已在目标节点。数据安全:
     // 交接发起后本实体不再存盘,玩家再被派回本节点时 DiscardStaleHandoffEntity 会先销毁它再重载。
     // **也不要**改成"收到 ReleasePlayer 后几秒只读一次 owner_epoch、变了就销毁"来缩短它:
     // scene_manager 是先铸造 epoch、后发 Kafka 路由,路由失败(KafkaWriteTimeoutSeconds,默认 5s)
-    // 会把 epoch 与 location 一起回滚到本节点。探测落在这段窗口里会读到一个即将被回滚的新 epoch,
-    // 销毁实体之后 location 又指回本节点 —— 玩家在线却没有实体,只能重登;用一个观感问题换来
-    // 一个卡死问题。应答路径没有这个竞态(scene_manager 在路由 ACK / 回滚完成之后才回应答),
-    // 看门狗的 30s 则远大于那段窗口。
+    // 会把 location 回滚到本节点、epoch 再前进一格(E+1 → E+2,只进不退,并在 location 里写本次回执,
+    // GO-2 §12.8)。探测落在这段窗口里会读到一个随后本该被回滚的新 epoch,销毁实体之后 location 又指回
+    // 本节点 —— 玩家在线却没有实体,只能重登;用一个观感问题换来一个卡死问题。应答路径没有这个竞态
+    // (scene_manager 在路由 ACK / 回滚完成之后才回应答),看门狗的 30s 则远大于那段窗口。
+    //
+    // 已登记的残余(采纳后迟到的 ReleasePlayer):scene_manager 在落点之前异步发 ReleasePlayer,失败时按 1s / 3s
+    // 退避重试,总长约 7s。它可能在源端按回执采纳 E+2 并解冻(约 5-8s)之后才到:此时 IsHandoffRequested 为假,
+    // 下面会按 kReleasedByTransfer 让实体退出,而 location 仍指向本节点,会话变哑、要重登。不违反 Battle 的
+    // 不变量(实体进入退出态,战斗侧视同离线),改动前解冻之后同样如此。根治要让 ReleasePlayerRequest 携带
+    // 预期 owner_epoch(本节点缓存值 ≠ 预期即忽略),属 proto 变更,另案处理。
     if (PlayerLifecycleSystem::IsHandoffRequested(playerIt->second))
     {
         LOG_INFO << "[gRPC] ReleasePlayer: player " << playerId

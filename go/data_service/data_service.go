@@ -108,6 +108,9 @@ func main() {
 	// Surfaces per-RPC outcome / latency, lock contention, version mismatch,
 	// rollback counts. See internal/metrics/metrics.go.
 	metrics.Start(c.MetricsListenAddr)
+	// 回档帮会闸的 27 条告警序列启动即预置为 0(docs/design/guild-phase2/07-rollback-fail-closed.md §7.9.1):
+	// 放行回档 / 写后分歧一辈子可能只发生一次,序列不预先存在的话 `increase(...) > 0` 恰好漏掉那一次。
+	metrics.PrimeRollbackGuildCheck()
 
 	// ── 热关停(killswitch)────────────────────────────────────────────
 	// data_service 是玩家权威数据的读写入口,真出事时最缺的是"秒级止血阀":
@@ -178,6 +181,11 @@ func main() {
 	// RegisterPlayerZone 的响应体是 emptypb.Empty、RemapHomeZoneForMerge 的拒绝走 gRPC status,
 	// 都没有 in-band 的 error_code 字段可读。它们的可见性由 handler 里的 logx.Errorf 提供
 	// (每一条都带调用方身份),外加 grpcstats 那层按 gRPC code 统计的失败率。
+	// 回档帮会闸三个码(27..29,docs/design/guild-phase2/07-rollback-fail-closed.md §7.3.3)里算故障的两个:
+	//   ErrCodeRollbackGuildCheckFailed(28)       —— 帮会检查没做成(guild 未配 / 不可达 / 超时 / 预算耗尽…),
+	//                                                此时**所有**回档都被拒,不告警就等于回档工具悄悄失灵
+	//   ErrCodeRollbackGuildDivergedAfterWrite(29) —— 数据已写、写后复查发现新分歧或复查失败,紧急人工
+	// ErrCodeRollbackGuildDivergence(27) 刻意不算:那是闸在正常工作(规则拒绝,口径同 PlayerOnline)。
 	s.AddUnaryInterceptors(serverbase.UnaryInterceptor(serverbase.Options{
 		ErrorCodeClassifier: serverbase.FaultCodeSet(
 			constants.ErrCodeRedis,
@@ -186,6 +194,8 @@ func main() {
 			constants.ErrCodeIdSegmentDBError,
 			constants.ErrCodeIdSegmentExhausted,
 			constants.ErrCodeIdSegmentUnknownTag,
+			constants.ErrCodeRollbackGuildCheckFailed,
+			constants.ErrCodeRollbackGuildDivergedAfterWrite,
 		),
 	}))
 	defer s.Stop()

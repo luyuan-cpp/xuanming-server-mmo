@@ -430,6 +430,136 @@ function Get-AuthoritativeYamlBlock {
 	return ($out -join "`r`n")
 }
 
+# ─────────────────────────────────────────────────────────────────
+# C++ gRPC 客户端 deadline 预算(docs/design/grpc-client-deadline-failure-callback.md §4.2 / §4.4)
+# ─────────────────────────────────────────────────────────────────
+
+<#
+.SYNOPSIS
+	纯函数:核对「C++ deadline ≥ 目标 Go 服务的 zrpc Timeout + 2000」(上游比下游宽),返回违例文本数组,空 = 通过。
+
+.DESCRIPTION
+	为什么是部署门禁而不只是注释:两个数分属两份配置(bin/etc 的 GrpcClient 块与 go/<svc>/etc 的 Timeout),
+	改一边忘另一边不会有任何报错。C++ deadline 不比服务端超时宽时,C++ 先按自己的 DeadlineExceeded 收尾,
+	拿不到服务端带真实错误码的应答,而服务端可能仍在执行 —— 本可确定的结果变成「结果未知」(设计 §3.3)。
+
+	判定口径(每一项都是违例,不是警告):
+	  - 目标必须在 GrpcClient.CallDeadlineMs 里显式写成正整数:缺席 / 0 在 C++ 侧落到内置默认 10000
+	    (grpc_call_tag.h kDefaultGrpcCallDeadlineMs),预算不能依赖一个只写在 C++ 头文件里的隐式值。
+	  - 服务 yaml 不写 Timeout = go-zero 默认 2000(go.mod 钉的 v1.9.2 / v1.10.0 的 zrpc/config.go 里
+	    RpcServerConf.Timeout 都是 `default=2000`);写了就必须是正整数 —— 0 = go-zero 不装超时拦截器
+	    (zrpc/server.go 只在 Timeout > 0 时装),服务端没有上界,「下游先超时」无从成立。
+	  - 出现 MethodTimeouts:它能把个别方法的服务端超时放宽到全局 Timeout 之上,而这里只按全局 Timeout 核对;
+	    真要用,先把它纳入本函数。
+
+	只接收已拍平的 yaml(release_common.ps1 ConvertFrom-YamlToFlatMap 的 Scalars),不读文件,
+	契约测试直接喂构造值验证每条口径(tools/scripts/tests/k8s_deploy_contract.tests.ps1)。
+
+.PARAMETER DeployScalars
+	bin/etc/base_deploy_config.yaml 拍平后的 Scalars,键形如 GrpcClient.CallDeadlineMs.SceneManagerNodeService。
+
+.PARAMETER Targets
+	有序字典:目标节点类型(ENodeType 枚举名)→ @{ Source = <服务 yaml 路径,只用于报错>; Scalars = <该 yaml 拍平后的 Scalars> }。
+#>
+function Get-GrpcClientDeadlineBudgetViolations {
+	param(
+		[Parameter(Mandatory = $true)][System.Collections.IDictionary]$DeployScalars,
+		[Parameter(Mandatory = $true)][System.Collections.IDictionary]$Targets
+	)
+
+	# 余量与 go-zero 默认值是这条契约本身(设计 §4.2 不等式 1),不是调参旋钮,所以不开参数。
+	$marginMs = 2000
+	$goZeroDefaultServerTimeoutMs = 2000
+
+	$violations = New-Object System.Collections.Generic.List[string]
+	foreach ($target in $Targets.Keys) {
+		$source = $Targets[$target].Source
+		$serviceScalars = $Targets[$target].Scalars
+
+		$deadlineRaw = [string]$DeployScalars["GrpcClient.CallDeadlineMs.$target"]
+		$deadline = [long]0
+		if (-not [long]::TryParse($deadlineRaw, [ref]$deadline) -or $deadline -le 0) {
+			$violations.Add("${target}:GrpcClient.CallDeadlineMs.$target='$deadlineRaw' 必须显式写成正整数(缺席 / 0 在 C++ 侧落到内置默认 10000,预算无从核对)")
+			continue
+		}
+
+		$methodKeys = @($serviceScalars.Keys | Where-Object { $_ -like 'MethodTimeouts*' })
+		if ($methodKeys.Count -gt 0) {
+			$violations.Add("${target}:$source 出现 MethodTimeouts($($methodKeys -join ', ')),个别方法的服务端超时可能高于 C++ deadline;这里只按全局 Timeout 核对,要用先把它纳入 Get-GrpcClientDeadlineBudgetViolations")
+			continue
+		}
+
+		$serverTimeout = [long]$goZeroDefaultServerTimeoutMs
+		$serverTimeoutText = "未写 Timeout(go-zero 默认 $goZeroDefaultServerTimeoutMs)"
+		if ($serviceScalars.Contains('Timeout')) {
+			$timeoutRaw = [string]$serviceScalars['Timeout']
+			if (-not [long]::TryParse($timeoutRaw, [ref]$serverTimeout) -or $serverTimeout -le 0) {
+				$violations.Add("${target}:$source 的 Timeout='$timeoutRaw' 必须是正整数(0 = go-zero 不装超时拦截器,服务端没有上界,下游先超时无从成立)")
+				continue
+			}
+			$serverTimeoutText = "Timeout $serverTimeout"
+		}
+
+		$requiredMs = $serverTimeout + $marginMs
+		if ($deadline -lt $requiredMs) {
+			$violations.Add("${target}:C++ deadline $deadline < $source $serverTimeoutText + $marginMs = $requiredMs(改 bin/etc/base_deploy_config.yaml 的 GrpcClient.CallDeadlineMs.$target,或同步调该服务的 Timeout)")
+		}
+	}
+	return $violations.ToArray()
+}
+
+<#
+.SYNOPSIS
+	部署门禁:读 GrpcClient 块与各目标 Go 服务的 yaml,按 Get-GrpcClientDeadlineBudgetViolations 核对,不满足即 throw 并逐项点名。
+
+.DESCRIPTION
+	只在写路径(zone-up / infra-up / all-up)的入口调用、先于任何集群写操作:node ConfigMap 会把 GrpcClient 块
+	原样搬进集群(New-NodeConfigMapYaml),预算不成立时宁可在这里拒绝,也不产出一份让 C++ 比服务端先放弃的配置。
+	*-down / *-status 不经过这里,止血与排查路径不受影响。
+
+	核对的目标(键 = C++ 发往的 ENodeType 枚举名)与各自服务端超时的真源:
+	  SceneManagerNodeService    ← go/scene_manager/etc/scene_manager_service.yaml
+	  DataServiceNodeService     ← go/data_service/etc/data_service.yaml(不写 Timeout,按 go-zero 默认)
+	  ClientRpcRouterNodeService ← go/client_rpc_router/etc/client_rpc_router.yaml
+	  MatchNodeService           ← go/match/etc/match_service.yaml(gate 直连模式)
+	  LoginNodeService           ← go/login/etc/login.yaml(gate 直连模式)
+	Battle / Etcd 没有 Go 服务端超时,不在表里;chat / friend / guild / team / trade 不在 C++ 节点白名单里,只经路由服到达。
+	比对的是服务 yaml:scene-manager / match / 路由服 / login 的 go-svc ConfigMap 都从它镜像 Timeout
+	(New-GoSvcConfigMapYaml);data-service 的 ConfigMap 不写 Timeout(= go-zero 默认 2000)—— 生成物同样满足
+	这条不等式,由契约测试另外钉住(防镜像被改回常数、ConfigMap 键改名)。
+#>
+function Assert-GrpcClientDeadlineBudget {
+	$deployPath = 'bin/etc/base_deploy_config.yaml'
+	$targetSources = [ordered]@{
+		SceneManagerNodeService    = 'go/scene_manager/etc/scene_manager_service.yaml'
+		DataServiceNodeService     = 'go/data_service/etc/data_service.yaml'
+		ClientRpcRouterNodeService = 'go/client_rpc_router/etc/client_rpc_router.yaml'
+		MatchNodeService           = 'go/match/etc/match_service.yaml'
+		LoginNodeService           = 'go/login/etc/login.yaml'
+	}
+
+	# 与 Get-AuthoritativeScalar 同一条纪律:文件缺席就 throw,不替你猜一个超时。
+	$readScalars = {
+		param([string]$RelativePath)
+		$full = Join-Path $RepoRoot ($RelativePath -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+		if (-not (Test-Path -LiteralPath $full)) {
+			throw "gRPC deadline 预算核对失败:找不到 $RelativePath(fail-closed:不替你猜一个超时)"
+		}
+		return (ConvertFrom-YamlToFlatMap -Text (Get-Content -LiteralPath $full -Raw)).Scalars
+	}
+
+	$targets = [ordered]@{}
+	foreach ($target in $targetSources.Keys) {
+		$targets[$target] = @{ Source = $targetSources[$target]; Scalars = (& $readScalars $targetSources[$target]) }
+	}
+	$violations = @(Get-GrpcClientDeadlineBudgetViolations -DeployScalars (& $readScalars $deployPath) -Targets $targets)
+	if ($violations.Count -gt 0) {
+		throw ("C++ gRPC 客户端 deadline 预算不成立,拒绝部署(上游比下游宽:C++ deadline ≥ Go zrpc Timeout + 2000," +
+			"docs/design/grpc-client-deadline-failure-callback.md §4.2):`n  - " + ($violations -join "`n  - "))
+	}
+	Write-Host ("GrpcClient deadline budget OK (C++ deadline >= Go zrpc Timeout + 2000): {0}" -f ($targetSources.Keys -join ', '))
+}
+
 # Go micro-service catalogue: name → { configMapName, manifestFile, port, configFlag, configFileName }
 #   Global = $true 的条目是**全局池**服务:只在 infra-up / all-up 的基础设施阶段部署到
 #   $InfraNamespace 一次,zone-up 跳过(见 Apply-GlobalGoSvcManifests)。
@@ -769,6 +899,12 @@ function New-NodeConfigMapYaml {
 	# 键名 / 结构必须与 C++ 读法逐字对上(见下面模板处的注释),抄一份就是等着漂移。
 	$idSegmentsBlock = Get-AuthoritativeYamlBlock -RelativePath 'bin/etc/base_deploy_config.yaml' -Key 'IdSegments'
 
+	# C++ unary gRPC 调用的 deadline(docs/design/grpc-client-deadline-failure-callback.md §4.4)。与 IdSegments 同法整块搬运:
+	# 这份 ConfigMap 遮蔽镜像里的 bin/etc,不搬 = K8s 上所有目标都落回 C++ 内置默认 10000,而号段 fetchTimeout、
+	# 换图在途 TTL 都从 deadline 派生,会跟着偏离仓库口径。预算不等式(≥ 服务端 Timeout + 2000)由写路径入口的
+	# Assert-GrpcClientDeadlineBudget 核过,这里只负责逐字搬运;缺 GrpcClient 块则生成期直接 throw(fail-closed)。
+	$grpcClientBlock = Get-AuthoritativeYamlBlock -RelativePath 'bin/etc/base_deploy_config.yaml' -Key 'GrpcClient'
+
 	# 审计 topic 世代号。**真源取 data_service 那份而不是 bin/etc 那份**:C++ 是
 	# transaction_log / player_snapshot 唯一的生产者,go/data_service 是唯一的消费者,
 	# 消费者那边的 Kafka.TopicGeneration 同时还喂着 Apply-KafkaTopicInitJob 预建 topic 的名字
@@ -873,6 +1009,12 @@ Kafka:
 # 注:Kind 名要与 data-service 的 IdSegment.BootstrapTags 及 id_segment 表的种子行一一对应
 # (生产缺行 = ErrCodeIdSegmentUnknownTag,不自动补种)。
 ${idSegmentsBlock}
+# C++ 节点每次 unary gRPC 调用的 deadline(毫秒),键 = 目标 ENodeType 枚举名(docs/design/grpc-client-deadline-failure-callback.md §4)。
+# config.cpp::readBaseDeployConfig 读 GrpcClient.CallDeadlineMs,grpc_call_deadline::Apply 校验后写进生成的客户端;
+# 不认识的键 / 0 记 ERROR 后该类型按内置默认 10000。gate / scene / battle 共用这一块(battle-node-config 同样生成)。
+# 下面整块由 Get-AuthoritativeYamlBlock 从 bin/etc/base_deploy_config.yaml 原样搬运,单一真相在那份文件;
+# 「deadline ≥ 目标 Go 服务的 zrpc Timeout + 2000」在部署入口由 Assert-GrpcClientDeadlineBudget 核对,不满足即拒绝部署。
+${grpcClientBlock}
 "@) -replace "`t", "  "
 
 	# SceneNodeType 在这里只是**文件基线**,gate / scene 共用同一份 ConfigMap。
@@ -1953,6 +2095,16 @@ function New-GoSvcConfigMapYaml {
 	# PlayerId 号段长度(node-id-overhaul-plan §6.2:按「10 分钟峰值建角量」配)。IdSegment.Enabled 与
 	# FallbackToSnowflake **不**从 yaml 取:那两个是部署决策,在 login 模板里显式写死并注释。
 	$loginIdSegmentStep     = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'IdSegment.Step'
+	# zrpc 服务端 Timeout(毫秒)从服务 yaml 镜像,与 scene-manager / match 同一条纪律。以前模板里写死 100000:
+	# 部署门禁 Assert-GrpcClientDeadlineBudget 核对的是 login.yaml,两边一分家,门禁放行的就不是集群里真正生效的值。
+	# 非正整数在这里就拒 —— 0 = go-zero 不装超时拦截器(服务端没有上界),非数字 go-zero 起服即失败,都不该写进 ConfigMap。
+	# 值本身 2026-09-29 已由笔误 100000 改正为 10000(LoginNodeService 同步 12000,见 grpc-client-deadline-failure-callback.md §4.3);
+	# 以后再改只需动 login.yaml 与 bin/etc 的 GrpcClient.CallDeadlineMs.LoginNodeService 两处,这里自动跟随,不用动生成器。
+	$loginTimeout           = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Timeout'
+	$loginTimeoutMs         = [long]0
+	if (-not [long]::TryParse($loginTimeout, [ref]$loginTimeoutMs) -or $loginTimeoutMs -le 0) {
+		throw "生成 ConfigMap 失败:go/login/etc/login.yaml 的 Timeout='$loginTimeout' 必须是正整数毫秒(0 = go-zero 不装超时拦截器,服务端没有上界;fail-closed:不替你猜一个超时)"
+	}
 
 	# data-service 全局库落库消费者(node-id-overhaul-plan §2.0c):topic 名必须与 C++ 生产者一致,
 	# 分区数是不可变契约(kafkautil.EnsureTopics 会拒绝与 broker 现状不一致的值),一律从服务 yaml 取。
@@ -1982,9 +2134,11 @@ function New-GoSvcConfigMapYaml {
 	$sceneManagerLeaseTTL   = Get-AuthoritativeScalar -RelativePath 'go/scene_manager/etc/scene_manager_service.yaml' -KeyPath 'LeaseTTL'
 
 	# zrpc 服务端 Timeout 连同它必须盖住的两段预算(归属查询、Kafka 同步写)一起从服务 yaml 取。
-	# 不写 Timeout 就会落到 go-zero 默认 2000ms,比 Kafka 写超时还短:EnterScene 的失败应答回不到 C++ 源 scene
-	# (生成客户端对非 OK 只打日志),源端冻满 30s 看门狗(cross-zone-scene-travel.md §12.2)。
-	# 三者之间的不等式由 tests/k8s_deploy_contract.tests.ps1 守着。
+	# 不写 Timeout 就会落到 go-zero 默认 2000ms,比 Kafka 写超时还短:服务端先超时,EnterScene 的业务失败应答回不到
+	# C++ 源 scene,只剩一个「结果未知」的传输失败,交接仍要等满 30s 看门狗裁决(cross-zone-scene-travel.md §12.2;
+	# 失败语义见 grpc-client-deadline-failure-callback.md §3.3)。三者之间的不等式由 tests/k8s_deploy_contract.tests.ps1 守着;
+	# 反方向的 C++ deadline(GrpcClient.CallDeadlineMs.SceneManagerNodeService)≥ 本 Timeout + 2000 由写路径入口的
+	# Assert-GrpcClientDeadlineBudget 守着 —— 调大这里的 Timeout 必须同步调那边,否则部署被拒。
 	$sceneManagerYaml                  = 'go/scene_manager/etc/scene_manager_service.yaml'
 	$sceneManagerTimeout               = Get-AuthoritativeScalar -RelativePath $sceneManagerYaml -KeyPath 'Timeout'
 	$sceneManagerKafkaWriteTimeout     = Get-AuthoritativeScalar -RelativePath $sceneManagerYaml -KeyPath 'KafkaWriteTimeoutSeconds'
@@ -2397,7 +2551,7 @@ Kafka:
 @"
 Name: login.rpc
 ListenOn: 0.0.0.0:50000
-Timeout: 100000
+Timeout: ${loginTimeout}
 ${loginModeLine}
 Etcd:
   Hosts:
@@ -2881,12 +3035,10 @@ Etcd:
 # 这是 zrpc.RpcServerConf 自带的 Redis(RedisKeyConf)段:Key 仅在 Auth=true 时使用,但字段不是 optional,
 # Redis 段存在时必须**显式写空串**,否则加载期报 "Redis.Key" is not set,同样 CrashLoop(与上面 Etcd.Key 同一个坑)。
 # 不写 DB(契约 §4):契约 key 由多个运行时共写,DB 号必须全仓一致 = 默认 0。
-# ⚠ 本段**刻意不写 Pass**:deploy/k8s/manifests/infra/redis.yaml 当前没有 requirepass
-#   (args 只有 redis-server --appendonly yes),与 chat / match 的同形段一致 —— 这是省略不是遗漏。
-#   向一个没设密码的 Redis 发 AUTH 会被直接拒("ERR Client sent AUTH, but no password is set"),
-#   只给 friend 补 Pass 反而会让 friend 成为唯一起不来的服务。
-#   哪天给共享 Redis 开了 requirepass,必须**同批**给 chat / match / friend 三处都补 Pass ——
-#   只补一处会让另外两个起不来。
+# 密码:自 2df78d4a5(2026-09-19)起共享 Redis 的密码走可选 Secret redis-auth —— 注入的密码非空时
+#   infra/redis.yaml 才加 --requirepass,这里与 chat / match / scene-manager 等共享库段**同批**写 Pass;
+#   dev 档密码为空时两边都不设密码。改密码或开关 requirepass 时这些段必须同拍:只改服务端,客户端全线 NOAUTH;
+#   只给客户端配密码,向无密码的 Redis 发 AUTH 会被直接拒("ERR Client sent AUTH, but no password is set")。
 Redis:
   Host: redis.${InfraNamespace}:6379
   Type: node
@@ -3284,6 +3436,83 @@ function Apply-GoSvcManifests {
 	}
 }
 
+# 控制面命令 topic 的寻址契约(gate-cmd_g<N> / scene-cmd_g<N>,partition = node_id % P,
+# docs/design/control-plane-topic-partitioning-20260908.md)。与 C++ 节点 ConfigMap(New-NodeConfigMapYaml)、
+# kafka-topic-init 预建读的是同一处真相:bin/etc/base_deploy_config.yaml 的 Kafka.CommandTopicPartitions / CommandTopicGeneration。
+function Get-GoSvcCommandTopicContract {
+	$partitionsRaw = Get-AuthoritativeScalar -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'Kafka.CommandTopicPartitions'
+	$generationRaw = Get-AuthoritativeScalar -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'Kafka.CommandTopicGeneration'
+	$partitions = 0
+	$generation = 0
+	if (-not [int]::TryParse($partitionsRaw, [ref]$partitions) -or $partitions -le 0 -or
+		-not [int]::TryParse($generationRaw, [ref]$generation) -or $generation -le 0) {
+		throw "bin/etc/base_deploy_config.yaml 的 Kafka.CommandTopicPartitions / CommandTopicGeneration 必须是正整数(实际 '$partitionsRaw' / '$generationRaw');fail-closed:这是 gate / scene 命令的寻址协议"
+	}
+	return [pscustomobject]@{ Partitions = $partitions; Generation = $generation }
+}
+
+# 把命令 topic 契约以环境变量注入 go-svc manifest 唯一的那个 env: 段(go/shared/kafkacmd 只认这两个变量,
+# 不配就回落到编译期默认 256 / 1)。
+#
+# 为什么必须注入:C++ gate / scene 按 base_deploy_config.yaml 消费 gate-cmd_g<N>(当前 N=2),kafka-topic-init
+# 也只预建 g<N>;Go 侧(login 的会话绑定 / 顶号踢人、scene-manager 的换场景、player-locator、match、friend、guild 的推送)
+# 若回落到 g1,命令落进一个没人消费的 topic,**静默丢失**,Kafka 不报错。本机 start_game.ps1 一直注入这两个变量,
+# 所以本机与 robot 冒烟从来看不到这个缺口。
+#
+# 为什么在这里统一注入而不是写进各 manifest:代号是部署级常量,只能有一处真相;每个 manifest 各写一份,
+# 下次换代号必漏改(kafkacmd 注释里的「四处同拍」纪律)。所以 manifest 里手写这两个变量会被拒绝。
+#
+# 对 manifest 形状 fail-closed:必须恰好一个 env: 段(go-svc 都是单容器),且它下面第一条非注释内容是列表项;
+# 插入的条目沿用那一项的缩进,不假设「env 缩进 + 2」。所有 go-svc 都注入,不只是今天的生产者 ——
+# 新加一个会发 gate 命令的服务时不需要记得来这里登记。
+function Add-GoSvcCommandTopicEnv {
+	param(
+		[Parameter(Mandatory = $true)][string]$SvcName,
+		[Parameter(Mandatory = $true)][string]$ManifestContent,
+		[Parameter(Mandatory = $true)][int]$Partitions,
+		[Parameter(Mandatory = $true)][int]$Generation
+	)
+
+	if ($ManifestContent -cmatch '(?m)^[ \t]*(-[ \t]+)?name:[ \t]*"?KAFKA_COMMAND_TOPIC_(PARTITIONS|GENERATION)"?[ \t]*\r?$') {
+		throw "Go service $SvcName 的 manifest 手写了 KAFKA_COMMAND_TOPIC_*:这两个变量由 k8s_deploy.ps1 从 bin/etc/base_deploy_config.yaml 统一注入,请从 manifest 里删掉(一处真相,见 Add-GoSvcCommandTopicEnv 注释)"
+	}
+
+	$envMatches = [regex]::Matches($ManifestContent, '(?m)^(?<indent>[ ]*)env:[ \t]*\r?$')
+	if ($envMatches.Count -ne 1) {
+		throw "Go service $SvcName 的 manifest 应当恰好有 1 个 env: 段(实际 $($envMatches.Count) 个),无法注入命令 topic 契约。多容器或无 env 的 manifest 需要先在 Add-GoSvcCommandTopicEnv 里明确注入目标"
+	}
+	$envMatch = $envMatches[0]
+	$envIndent = $envMatch.Groups['indent'].Value
+	# (?m) 下的 $ 停在 \n 之前(\r 已被 \r? 吃掉),所以 env: 行之后紧跟的必须是 \n。
+	$lineEnd = $envMatch.Index + $envMatch.Length
+	if ($lineEnd -ge $ManifestContent.Length -or $ManifestContent[$lineEnd] -ne "`n") {
+		throw "Go service $SvcName 的 manifest 在 env: 之后没有内容,无法注入命令 topic 契约"
+	}
+	$insertAt = $lineEnd + 1
+
+	$itemIndent = $null
+	foreach ($line in ($ManifestContent.Substring($insertAt) -split "`r?`n")) {
+		$trimmed = $line.Trim()
+		if ($trimmed.Length -eq 0 -or $trimmed.StartsWith('#')) { continue }
+		if ($line -match '^(?<indent>[ ]*)-[ ]') { $itemIndent = $Matches['indent'] }
+		break
+	}
+	if ($null -eq $itemIndent -or $itemIndent.Length -lt $envIndent.Length) {
+		throw "Go service $SvcName 的 manifest 里 env: 下第一条内容不是列表项,无法注入命令 topic 契约"
+	}
+
+	$newline = if ($ManifestContent.Contains("`r`n")) { "`r`n" } else { "`n" }
+	$valueIndent = $itemIndent + '  '
+	$injected = @(
+		"${itemIndent}# 由 k8s_deploy.ps1 从 bin/etc/base_deploy_config.yaml 注入(Add-GoSvcCommandTopicEnv),manifest 里不要手写",
+		"${itemIndent}- name: KAFKA_COMMAND_TOPIC_PARTITIONS",
+		"${valueIndent}value: `"$Partitions`"",
+		"${itemIndent}- name: KAFKA_COMMAND_TOPIC_GENERATION",
+		"${valueIndent}value: `"$Generation`""
+	) -join $newline
+	return $ManifestContent.Substring(0, $insertAt) + $injected + $newline + $ManifestContent.Substring($insertAt)
+}
+
 # 单个 Go 服务的 ConfigMap + 主 manifest apply。zone 循环与全局循环共用同一段逻辑。
 function Apply-OneGoSvc {
 	param(
@@ -3305,12 +3534,18 @@ function Apply-OneGoSvc {
 		return
 	}
 
+	# 主 manifest 先在本地渲染完(镜像占位 + 控制面命令 topic 契约注入),再做任何集群写操作:
+	# 注入对 manifest 形状 fail-closed,形状不对要在 ConfigMap / 迁移 Job 落地之前就拦下,不留半截部署。
+	$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
+	$manifestContent = (Get-Content $manifestPath -Raw) -replace 'PLACEHOLDER_IMAGE', $svcImage
+	$manifestContent = $manifestContent -replace 'PLACEHOLDER_PULL_POLICY', $svcPullPolicy
+	$commandTopic = Get-GoSvcCommandTopicContract
+	$manifestContent = Add-GoSvcCommandTopicEnv -SvcName $SvcName -ManifestContent $manifestContent `
+		-Partitions $commandTopic.Partitions -Generation $commandTopic.Generation
+
 	# Apply ConfigMap
 	$cmYaml = New-GoSvcConfigMapYaml -SvcName $SvcName -CurrentZoneId $CurrentZoneId -CurrentClusterId $CurrentClusterId
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $cmYaml
-
-	# Apply manifest with image placeholder replaced
-	$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
 
 	# 建表服务(目录条目带 MigrateJob,port-decisions D-14 第 4 条):<svc>-migrate Job 与 Deployment 同镜像、同 ConfigMap,
 	# 必须排在上面的 ConfigMap 之后、下面的 Deployment 之前;门禁生效时(staging/prod 恒生效,dev 仅 -WaitReady)
@@ -3319,8 +3554,6 @@ function Apply-OneGoSvc {
 		Apply-GoSvcMigrateJob -SvcName $SvcName -Namespace $Namespace -SvcImage $svcImage -PullPolicy $svcPullPolicy
 	}
 
-	$manifestContent = (Get-Content $manifestPath -Raw) -replace 'PLACEHOLDER_IMAGE', $svcImage
-	$manifestContent = $manifestContent -replace 'PLACEHOLDER_PULL_POLICY', $svcPullPolicy
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $manifestContent
 
 	Write-Host "  [applied] $SvcName -> $svcImage (port $($info.Port) pullPolicy=$svcPullPolicy)"
@@ -4246,6 +4479,9 @@ if ($Command -in @("zone-up", "all-up", "infra-up")) {
 	Assert-ImmutableReleaseImages
 	Invoke-ReleasePreflight
 	Initialize-InjectedSecrets
+	# C++ gRPC deadline ≥ 目标 Go 服务 zrpc Timeout + 2000(上游比下游宽)。放在任何集群写操作之前:
+	# 不成立就整条拒绝,不留半截部署(见 Assert-GrpcClientDeadlineBudget)。
+	Assert-GrpcClientDeadlineBudget
 }
 
 switch ($Command) {

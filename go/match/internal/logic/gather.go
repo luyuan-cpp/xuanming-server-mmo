@@ -104,8 +104,43 @@ func RunTeamGather(svcCtx *svc.ServiceContext, battleConfigId uint32, roster []u
 	return runGather(svcCtx, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, battleConfigId, roster, false, true, tickets)
 }
 
+// RunActivityGather 是活动开局(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.18)的 gather,
+// 与 RunChallengeGather / RunTeamGather 同级,由 MatchInternal.StartActivityBattle 异步调用:
+//   - battleID 由调用方预先生成并已同步回给 guild(guild 据此登记 guild_trial_battle),gather 不再发号;
+//   - actx 原样放进 CreateBattleRequest.activity_context,battle 结算时回显进 BattleResultEvent;
+//     调用方负责先深拷贝(本函数与 battle 节点都不改它);
+//   - 模式固定 PVE_TEAM(全员 team 0),requeueOnFail=false:失败时全员按 tickets 做 CAS 删票、不回队列。
+//
+// 契约:members 原样作为站位 / 快照顺序(发起人在首位),不重排;tickets 是建 matched 票时记下的
+// 每人 ticket id。同步执行,返回是否开局成功;调用方负责放进后台 goroutine。
+func RunActivityGather(svcCtx *svc.ServiceContext, battleConfigId uint32, members []uint64,
+	tickets map[uint64]string, battleID uint64, actx *battlepb.BattleActivityContext,
+) bool {
+	return runGatherWithOptions(svcCtx, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, battleConfigId, members,
+		false, true, tickets, gatherOptions{presetBattleID: battleID, activityContext: actx})
+}
+
+// gatherOptions 活动开局的附加参数(§6.18.1)。零值 = 原有行为:gather 自己发 battle_id、
+// CreateBattleRequest 不带活动上下文。
+type gatherOptions struct {
+	// presetBattleID 非 0:调用方已用 svcCtx.BattleIDGen 生成 battle_id,gather 直接用它。
+	presetBattleID uint64
+	// activityContext 非空:原样放进 CreateBattleRequest.activity_context。
+	activityContext *battlepb.BattleActivityContext
+}
+
+// runGather 是原有全部入口(队列 / PVE_SOLO / 切磋 / 整队)的 gather,签名与行为不变:
+// 等价于零值 gatherOptions 的 runGatherWithOptions。
 func runGather(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleConfigId uint32,
 	members []uint64, requeueOnFail bool, withTickets bool, tickets map[uint64]string,
+) bool {
+	return runGatherWithOptions(svcCtx, mode, battleConfigId, members, requeueOnFail, withTickets, tickets, gatherOptions{})
+}
+
+// runGatherWithOptions 是 gather 管线本体(步骤与补偿见 RunGather 注释)。opts 只影响两处:
+// 第 1 步 battle_id 的来源(presetBattleID 非 0 时不发号)与第 4 步 CreateBattleRequest.activity_context。
+func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleConfigId uint32,
+	members []uint64, requeueOnFail bool, withTickets bool, tickets map[uint64]string, opts gatherOptions,
 ) bool {
 	start := time.Now()
 	modeName := mode.String()
@@ -143,10 +178,15 @@ func runGather(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleConfigI
 
 	// 1. battle_id:只能由 match 节点生产(宪法 §7 SnowFlake 节点隔离)。
 	//    ErrFenced/ErrBorrowLimitExceeded 一律 fail-closed,不得用 0 顶替。
-	battleId, err := svcCtx.BattleIDGen.Generate()
-	if err != nil {
-		logx.Errorf("[gather] battle_id 生成失败 mode=%s members=%v: %v", modeName, members, err)
-		return fail("internal", 0, nil, 0)
+	//    活动开局由调用方预先发号(opts.presetBattleID,同一个生成器),这里不再发。
+	battleId := opts.presetBattleID
+	if battleId == 0 {
+		var err error
+		battleId, err = svcCtx.BattleIDGen.Generate()
+		if err != nil {
+			logx.Errorf("[gather] battle_id 生成失败 mode=%s members=%v: %v", modeName, members, err)
+			return fail("internal", 0, nil, 0)
+		}
 	}
 
 	// 2. 选 battle 节点(全局池,v1 随机;负载上报二期)。
@@ -231,6 +271,7 @@ func runGather(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleConfigI
 		CreatedAtMs:      createdAtMs,
 		DeadlineMs:       deadlineMs,
 		TableFingerprint: tableFingerprint,
+		ActivityContext:  opts.activityContext,
 	}); err != nil {
 		logx.Errorf("[gather] CreateBattle 失败 battle=%d node=%d(%s): %v",
 			battleId, battleNode.NodeId, battleNode.Endpoint, err)

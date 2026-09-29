@@ -199,11 +199,35 @@ type GuildSmokeConfig struct {
 	ZoneA uint32 `yaml:"zone_a"`
 	// ZoneB 仅 cross_zone=true 时使用,必须非 0 且与 ZoneA 不同。
 	ZoneB uint32 `yaml:"zone_b"`
+
+	// Economy 打开经济段(帮会二期 B5c,robot/guild_economy_smoke.go):GUILD_SMOKE_OK 之后
+	// 由 EconomyLeader(帮主)与 EconomyMember(成员)在 zone_a 另建帮会跑捐献 / 升级 / 兑换。
+	// 两个账号必须首次在 zone_a 建角;缺省 robot_9214 / robot_9215(号段见 90-consistency Y-09)。
+	Economy       bool   `yaml:"economy"`
+	EconomyLeader string `yaml:"economy_leader"`
+	EconomyMember string `yaml:"economy_member"`
 }
+
+// 经济段的缺省账号。与管理段(9201–9203、9211–9213)错开,两段同时跑时账号不会撞车。
+const (
+	defaultGuildEconomyLeader = "robot_9214"
+	defaultGuildEconomyMember = "robot_9215"
+)
 
 func (c *GuildSmokeConfig) validate() error {
 	if c.ZoneA == 0 {
 		return fmt.Errorf("zone_a must be set (non-zero)")
+	}
+	if c.Economy {
+		if c.EconomyLeader == "" {
+			c.EconomyLeader = defaultGuildEconomyLeader
+		}
+		if c.EconomyMember == "" {
+			c.EconomyMember = defaultGuildEconomyMember
+		}
+		if c.EconomyLeader == c.EconomyMember {
+			return fmt.Errorf("economy_leader and economy_member must differ (got %q)", c.EconomyLeader)
+		}
 	}
 	if !c.CrossZone {
 		return nil

@@ -15,6 +15,7 @@
 // ── 为什么需要 ──
 // 交接冻结(PlayerFrozenComp)期间玩家什么都做不了,客户端挂着"传送中"遮罩。原先的冻结只靠两道 30s 看门狗
 // 收敛,但有三段没有上限,zone Redis 不可用 / 半开连接时玩家会一直冻着:
+//   (U1 / U3 按当时的写法描述;GO-2 起核实是一次原子取证 EVAL,失败形态与处置相同)
 //   U1  ResolveTravelOutcome 核实归属时 Redis 不可用 / MGET 应答形状不对 / 命令发不出去,三处都重挂 30s 应答
 //       看门狗,次数与总时长都不封顶;
 //   U2  BeginTravelHandoff 先写 requestedAtMs 再发 SET,只有 SET 的成功回调才会走到 RequestTravelEnterScene;
@@ -26,14 +27,16 @@
 //   存盘看门狗 kSaveBudget 30s ≤ 晚发窗口 kDispatchWindow 35s:存盘阶段先由存盘看门狗收敛,
 //       set_mark 阶段的晚发闸只是纵深防御;
 //   kDispatchWindow 35 + kReplyBudget 30 + kVerifyMargin 5 ≤ kFreezeCap 70:窗口内发出的 EnterScene,它的应答
-//       看门狗 + 一次 DEL/MGET 核实一定在上限之前做完,只有"归属确实核实不了"时才轮到上限;
+//       看门狗 + 一次原子取证核实一定在上限之前做完,只有"归属确实核实不了"时才轮到上限;
 //   kFreezeCap 70 + 扫描周期 kSweepInterval 1 = 71 < 客户端预算 kClientAcceptedHandoffBudget 75:服务端最迟 71s
 //       给出结论(解冻 + tip,或 tip + 踢线 34),客户端遮罩还没超时。
 //
 // ── 骨架的第一刀:handoff 标记的 SET 发没发出去(IsHandoffMarkSent)──
 //   没发出 → 不可能已被放行(不变量 I0),解冻 + 失败 tip(AbortTravelHandoff);
-//   已发出 → 归属可能已交出去,**永不解冻**:tip + 踢线 34 + 不存盘销毁(ConcludeHandoffAfterMarkSent)。
-//   唯一的解冻例外"读到与自己标记原文一致的回滚回执"只存在于 ResolveTravelOutcome(GO-2 判定表),本文件不涉及。
+//   已发出 → 归属可能已交出去,本文件的处置**永不解冻**:tip + 踢线 34 + 不存盘销毁(ConcludeHandoffAfterMarkSent)。
+//   SET 发出后的解冻只有 ResolveTravelOutcome 的两类正向证据(GO-2 判定表 B4 / B5,cross-zone-scene-travel.md §12.8):
+//   在同一段原子脚本里删掉本次交接这一族标记之后读到 owner_epoch 未变;或读到本次标记原文的回滚回执、且其余交叉校验
+//   成立(采纳回滚后的 epoch 再解冻)。本文件不涉及。
 //
 // ── 单调时钟管到哪里 ──
 //   判定(到没到上限、窗口关没关、看门狗是不是提前醒了)全部按 steady_clock;触发仍靠 muduo 定时器,而 muduo 按
@@ -48,19 +51,19 @@ namespace travel_freeze_cap
 	// 就解冻。这一段 handoff 标记还没写,解冻是安全的。
 	inline constexpr std::chrono::seconds kSaveBudget{30};
 
-	// EnterScene 应答看门狗(PlayerLifecycleSystem::ArmTravelReplyWatchdog)。生成的 gRPC 客户端在 status 非 OK 时
-	// **不调**应答处理器,而 scene_manager 不可达 / 连接被重置就是这种情况 —— 没有这道看门狗,玩家会以冻结态挂到
-	// 冻结上限。取值远大于 EnterScene 的正常耗时(压测 P99 亚秒),只兜真正的丢应答。
-	// scene_manager 的 zrpc 服务端超时(scene_manager_service.yaml 的 Timeout: 8000,本地与 K8s 同值,K8s ConfigMap
-	// 由 k8s_deploy.ps1 从 yaml 取)同样表现为"没有应答":handler 超时后调用方拿到 DeadlineExceeded,不回调,
-	// 源端只能等本看门狗。
+	// EnterScene 应答看门狗(PlayerLifecycleSystem::ArmTravelReplyWatchdog)。scene_manager 不可达 / 连接被重置 /
+	// zrpc 服务端超时(scene_manager_service.yaml 的 Timeout: 8000)/ C++ 侧 gRPC deadline 到期(base_deploy_config.yaml
+	// GrpcClient.CallDeadlineMs,SceneManager 10000)时,生成的客户端会调失败处理器,但传输失败 = 结果未知:
+	// 对交接只记日志、不当证据(PlayerLifecycleSystem::DispatchEnterSceneTransportFailure),源端仍只能等本看门狗
+	// 按 owner_epoch 裁决 —— 没有这道看门狗,玩家会以冻结态挂到冻结上限。取值远大于 EnterScene 的正常耗时
+	// (压测 P99 亚秒)与 gRPC deadline,只兜真正的丢应答。
 	// 下限约束(别为了缩短"应答丢失时源实体冻结着留在场景里"的时间把它调小):必须远大于 scene_manager
 	// "铸造 epoch → Kafka 路由 ACK / 失败回滚"这段窗口(KafkaWriteTimeoutSeconds,默认 5s)。看门狗按
-	// owner_epoch 变没变裁决去留,落在窗口里会读到一个即将被回滚的新 epoch:实体销毁之后 location 又
-	// 指回本节点,玩家在线却没有实体。
+	// owner_epoch 变没变裁决去留,落在窗口里会读到一个随后本该被回滚的新 epoch:取证已原子删掉本族标记,
+	// 迟到的回滚只能回 marker_gone、保留落点 —— 源实体已销毁,location 却停在从未载入的目标上,玩家在线却没有实体。
 	inline constexpr std::chrono::seconds kReplyBudget{30};
 
-	// 一次 DEL + MGET 核实往返的余量。
+	// 一次核实往返(ResolveTravelOutcome 的原子取证 EVAL:删本族标记 + 读 owner_epoch / location)的余量。
 	inline constexpr std::chrono::seconds kVerifyMargin{5};
 
 	// 冻结硬上限(从 StartTravelHandoff 冻结那一刻起,按单调时钟)。到期不再等 Redis:标记没发出 → 解冻 + tip;
@@ -122,13 +125,14 @@ namespace travel_freeze_cap
 	}
 
 	// "handoff 标记已发出"之后的统一收口(ConcludeHandoffAfterMarkSent)是从哪个点进来的。
-	// 底层类型 uint8_t 数的是收口点个数(现 4 个)。
+	// 底层类型 uint8_t 数的是收口点个数(现 5 个)。
 	enum class MarkSentSite : uint8_t
 	{
 		kFreezeCap,       // 冻结满 kFreezeCap 仍无结论(EnforceTravelFreezeCaps)
 		kDispatchWindow,  // SET 的 OK 应答晚于 kDispatchWindow 才到,不再发 EnterScene(RequestTravelEnterScene)
 		kNoGateSession,   // SET 已 OK,却发现没有 gate 会话可带(RequestTravelEnterScene)
 		kNoSceneManager,  // SET 已 OK,却发现没有可达的 scene_manager(RequestTravelEnterScene)
+		kReceiptAnomaly,  // 取证读到本次标记原文的回滚回执,其余交叉校验却不成立(ResolveTravelOutcome,GO-2 判定表 B6)
 
 		kCount
 	};
@@ -142,6 +146,7 @@ namespace travel_freeze_cap
 		"travel_dispatch_window",
 		"travel_no_gate_session",
 		"travel_no_scene_manager",
+		"travel_receipt_anomaly",
 	};
 	static_assert(std::size(kMarkSentSiteNames) == kMarkSentSiteCount,
 				  "kMarkSentSiteNames 必须与 MarkSentSite 一一对应");

@@ -21,6 +21,12 @@
 #   .\robot.exe -c etc/guild_smoke.yaml
 # 退出码 0 = 全部断言通过(日志有 GUILD_SMOKE_OK guild_id=… 一行);退出码 1 = 任一步失败(GUILD_SMOKE_FAIL step=…)。
 # 可重复运行:预备段先把三个账号带出任何帮会,帮名带随机后缀。
+#
+# 经济段(economy: true,帮会二期 B5c,robot/guild_economy_smoke.go):GUILD_SMOKE_OK 之后由 robot_9214(帮主)
+# 与 robot_9215(成员)在 zone_a 另建帮会跑 捐献 → 升级 → 兑换,通过打印 GUILD_ECONOMY_SMOKE_OK mode=full|degraded。
+#   额外前置:guild 的 AssetOp.Enabled=true(关着时经济写 RPC 一律回 kGuildAssetPending);scene 为 dev 运行模式、
+#   GM 客户端消息放行(cpp/nodes/gate/SECURITY.md §3);robot_9214 / 9215 首次在 zone_a 建角。
+#   次数按玩家按游戏日(UTC+8 05:00)记、解散清不掉:同一游戏日首跑为 full,再跑为 degraded(只断言拒绝类)。
 
 gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
 zone_id: 1 # 本模式不用此字段选区(A/B 登 guild_smoke.zone_a,C 登 zone_b)
@@ -38,5 +44,6 @@ guild_smoke:
   cross_zone: true # false = 只跑同区步骤(不登录 C,跳过第 4 步)
   zone_a: 1 # A(帮主)与 B(成员)登录的 zone
   zone_b: 2 # C 登录的 zone;cross_zone=true 时必须与 zone_a 不同
+  economy: true # 经济段;缺省账号 economy_leader=robot_9214、economy_member=robot_9215
 
 auth_type: "password"

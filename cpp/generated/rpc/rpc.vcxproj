@@ -44,6 +44,7 @@
     <ClInclude Include="service_metadata\player_lifecycle_service_metadata.h" />
     <ClInclude Include="service_metadata\scene_admin_service_metadata.h" />
     <ClInclude Include="service_metadata\guild_service_metadata.h" />
+    <ClInclude Include="service_metadata\guild_internal_service_metadata.h" />
     <ClInclude Include="service_metadata\jubaozhai_service_metadata.h" />
     <ClInclude Include="service_metadata\trade_admin_service_metadata.h" />
     <ClInclude Include="service_metadata\player_currency_service_metadata.h" />

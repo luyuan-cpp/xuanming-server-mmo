@@ -622,6 +622,37 @@ func (s *SnapshotStore) GetSnapshotPlayerIDsByZone(ctx context.Context, zoneID u
 	return ids, rows.Err()
 }
 
+// GetSnapshotPlayerTimesByZone 返回 zone 内每个在 beforeTime(含)之前有 source=0 快照的玩家,
+// 以及他在**这个 zone 下**最新那份快照的 created_at(秒):player_id → MAX(created_at)。
+//
+// 用途是 zone / 全服回档的"计划"(docs/design/guild-phase2/07-rollback-fail-closed.md §7.5.3-1):
+// 一条 SQL 拿到清单与每人的快照时刻,作为帮会检查的 since 起点,替代逐人读整份快照 blob。
+//
+// 与执行期的关系(R5):执行期 GetLatestSnapshotBefore **不带** zone_id 条件,选中的快照只会
+// 等于或晚于这里的值(玩家在别的 zone 另有更新的快照时)。计划值更早 = since 更早 = 多查,方向安全;
+// 反过来(执行期更早)只可能来自快照被并发删除,调用方据此拒绝写该玩家。
+// 走 (zone_id, created_at) 索引,与 GetSnapshotPlayerIDsByZone 同一过滤条件。
+func (s *SnapshotStore) GetSnapshotPlayerTimesByZone(ctx context.Context, zoneID uint32, beforeTime uint64) (map[uint64]uint64, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT player_id, MAX(created_at) FROM player_snapshot
+		 WHERE zone_id = ? AND created_at <= ? AND source = ?
+		 GROUP BY player_id`, zoneID, beforeTime, SnapshotSourceDataService)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	times := make(map[uint64]uint64)
+	for rows.Next() {
+		var pid, createdAt uint64
+		if err := rows.Scan(&pid, &createdAt); err != nil {
+			return nil, err
+		}
+		times[pid] = createdAt
+	}
+	return times, rows.Err()
+}
+
 // SceneSnapshotMeta 是 source=1(C++ scene)快照的元数据,给将来的 GM 列表 / 恢复路径用。
 type SceneSnapshotMeta struct {
 	ID            uint64 // player_snapshot.id(自增)

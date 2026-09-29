@@ -12,22 +12,32 @@
 // 三个组件都是纯运行时标记:不入 PlayerAllData、不序列化、不跨进程。它们描述的
 // 是"这份数据归谁、由谁持有、正在交给谁",而这三件事只由 scene_manager 的
 // EnterScene 闸口决定,节点只缓存、只校验、不铸造。
+// 唯一的非路由写入口(GO-2 §12.8 判定表 B5):源端 ResolveTravelOutcome 在交接被 scene_manager 单调回滚到本节点时,
+// 采纳 Redis 里回滚后的 owner_epoch(E+2)。三条前提写死,缺一不可:同一段原子脚本先删掉本次交接这一族标记;
+// location.rollback_receipt 逐字节等于本次标记原文;location 指回本节点本 zone(且 epoch 恰好前进两格)。
+// 以后任何"读 Redis 采纳 epoch"的新代码都必须同时满足这三条(scene-owner-reentry-barrier.md §3.3)。
 //
 // ── Redis 键契约(Go 与 C++ 两边必须一字不差,改任何一边都要同步另一边)──
 //   player:{player_id}:owner_epoch  纯十进制整数字符串。只由 scene_manager 用 INCR
-//                                    铸造,单调递增。节点存盘时用它做 CAS 守卫。
+//                                    推进,单调递增、只进不退 —— 推路由失败后的回滚也是再 INCR 一格(N+1 → N+2),
+//                                    任何值都不会被铸两次。节点存盘时用它做 CAS 守卫。
 //   player:{player_id}:handoff      值 "{epoch}:{saved_at_ms}",语义 = 这一刻的状态已落盘、写它的节点
-//                                    不再持有;EX 300 秒。scene_manager 只比对不删除。
+//                                    不再持有;EX 300 秒。scene_manager 只比对、从不删除。
 //                                    **写入方与删除方不止一处**(完整清单与理由见 exit_release_mark.h 开头):
 //                                    写:BeginTravelHandoff(交接,存盘落地回调之后)、DispatchEmergencyRelocate
-//                                        (疏散 / 排空改派)、A1′(干净退出收敛、实体销毁前,owner_epoch 条件写)、
-//                                        A2′ 放弃补写(载入被放弃时把删掉的当前代际写回,owner_epoch 条件写)。
-//                                    删:WithdrawHandoffMark(按原文条件删)、ResolveTravelOutcome(DEL)、
+//                                        (疏散 / 排空改派,owner_epoch 条件写)、A1′(干净退出收敛、实体销毁前,
+//                                        owner_epoch 条件写)、A2′ 放弃补写(载入被放弃时把删掉的当前代际写回,
+//                                        owner_epoch 条件写)、scene_manager 回滚转写(推路由失败的 bump 回滚,只在
+//                                        所凭原标记原样还在时,把它转写成 "{N+2}:{同一 saved_at_ms}",后缀逐字节不变)。
+//                                    删:WithdrawHandoffMark(按原文条件删)、ResolveTravelOutcome(原子取证脚本按
+//                                        saved_at_ms 只删本次交接这一族:"E:t" 与转写出来的 "E+2:t")、
 //                                        A2′(新载入建实体之前,核对 owner_epoch 后删代际 ≤N 的;路由不带
 //                                        owner_epoch 时删 ≤ 当前 owner_epoch 的)。
 //                                    不要假设"同节点新实体上不可能有有效标记":上一任的 A1′ 就写在同节点上,
 //                                    只有 A2′ 能保证新持有期间不留有效标记。
-//   player:{player_id}:location     PlayerLocation proto 二进制(Go 写),含 owner_epoch。
+//   player:{player_id}:location     PlayerLocation proto 二进制(Go 写),含 owner_epoch;路由失败回滚恢复出的那一条
+//                                    还带 rollback_receipt(被回滚那次铸造所凭的标记原文,与 INCR 同一段 Lua 原子写入,
+//                                    任何新落点整条重写 location 时随之消失)。C++ 只有 ResolveTravelOutcome 读它。
 //
 // ── epoch 的 0 语义 ──
 //   0 = 未知 / 旧版 Go 未铸造。这是滚动升级的兼容窗口:校验一律跳过并计数
@@ -82,6 +92,8 @@ struct PlayerHomeZoneComp
 // epoch == 0:旧版 Go 未铸造(兼容窗口),存盘走无守卫的旧 Save,并计数。
 // 重连 / 顶号路径若请求带非 0 epoch,取 max 更新:epoch 单调,Redis 当前值 ≥ 见过的最大值,
 // 取 max 能挡住两条乱序到达的路由请求把缓存值倒退、进而把自己误判成被废黜。
+// 写入口只有两个:路由(EnterScene 的 ctx.ownerEpoch)与 ResolveTravelOutcome 的 B5 采纳(同样取 max,
+// 前提见文件头"唯一的非路由写入口")。
 struct PlayerOwnerEpochComp
 {
 	uint64_t epoch{0};
@@ -118,7 +130,8 @@ struct PlayerOwnerEpochComp
 //               scene_manager 随时可能放行并 INCR epoch,再写只会被 CAS 拒、徒增
 //               stale_owner_write_rejected 噪声。也是 EnterScene 应答超时看门狗的代际:
 //               看门狗到期时 requestedAtMs 若已变化,说明是另一次交接,不动。
-// markEpoch     BeginTravelHandoff 写 handoff 标记时用的 owner_epoch;0 = 写标记的 SET 没发出去过。
+// markEpoch     BeginTravelHandoff 写 handoff 标记时用的 owner_epoch;0 = 写标记的 SET 没发出去过,或已确定盘上没有
+//               这份标记(SET 收到 ERROR 应答;ResolveTravelOutcome 的取证脚本已原子删掉本族标记,判定表 B4 / B5)。
 //               与 requestedAtMs 一起还原标记原文 "{markEpoch}:{requestedAtMs}",交接作废时按原文
 //               条件撤回(PlayerLifecycleSystem::WithdrawHandoffMark)。不能到撤回时再去读
 //               PlayerOwnerEpochComp:重连 / 顶号路径会把它取 max 更新,读到的未必是写标记那一刻的值。
@@ -175,7 +188,9 @@ struct PlayerTravelHandoffComp
 // 跟随的应答仍会按 player_id 摘掉客户端那条换图的记录,那条随后到达的 18 找不到目标、同 zone
 // 交接不发起。挂上之后同一玩家的普通 EnterScene 始终串行。
 // 疏散 / 排空发的 EnterScene 不挂它(发完实体就销毁了,没有等待者)。
-// 应答到达即摘;应答丢失时靠 sentAtMs 的短 TTL 自然失效,不需要定时器。
+// 应答或传输失败到达即摘(DispatchEnterSceneReply / DispatchEnterSceneTransportFailure;生成的 gRPC 客户端
+// 保证每次调用在 deadline 内以其一收场);完成通知永远不来时靠 sentAtMs 的 TTL(SceneManager deadline + 1s)
+// 自然失效,不需要定时器。
 //
 // correlationId    本次 EnterScene 的关联号(EnterSceneRequest.correlation_id),由
 //                  PlayerLifecycleSystem::RequestSceneChange 写入,经它登记的恒非 0;默认值 0 = 未登记。

@@ -1,0 +1,54 @@
+syntax = "proto3";
+package match;
+
+import "proto/db/proto_option.proto";
+import "proto/battle/battle_data.proto";
+
+option go_package = "match/match";
+option cc_generic_services = false;
+option (OptionFileDefaultNode) = NODE_MATCH;
+
+// match 内部服务(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.16–§6.18)。
+// 唯一合法调用方是 go/guild(全员同意邀请后确认开战);客户端与组队服务都不得直接调用。
+// 照 proto/trade/trade_admin.proto 的隔离做法:
+//   - 刻意不标 OptionIsClientProtocolService,且与客户端协议 match_service.proto 分文件:
+//     gate 的 IsClientMessageId 不收这些消息号,客户端发来直接丢弃;
+//   - 路由服对 ClientProtocol=false 的条目回信封拒绝;
+//   - match 的会话拦截器对"带会话 metadata 调 MatchInternal.*"回 gRPC PermissionDenied;
+//   - v1 只靠上一条 + 部署层 NetworkPolicy(只放行 gate 路由服与 guild 访问 match gRPC 端口)收口,
+//     v1.1 把 callerauth 提到 go/shared 后要求 guild 签名(契约偏差 13);
+//   - 客户端 tools/gen_proto.ps1 不列本文件,内部 schema 不进客户端包。
+
+// 拒绝原因。业务拒绝一律走响应里的 reject,不回 gRPC 错误;
+// gRPC 错误只用于 PermissionDenied(带会话调用)与传输层故障,guild 统一映射为 GuildTrialServiceBusy。
+enum ActivityBattleReject {
+  ACTIVITY_BATTLE_REJECT_NONE = 0;               // 成功:battle_id 非 0,gather 已异步启动
+  ACTIVITY_BATTLE_REJECT_INVALID_ARGUMENT = 1;   // 人数越界 / 0 或重复 id / battle_config_id 为 0 / 上下文缺失或字段为 0 / 发起人不在首位
+  ACTIVITY_BATTLE_REJECT_MEMBER_OFFLINE = 2;     // offender 无在线会话
+  ACTIVITY_BATTLE_REJECT_MEMBER_IN_BATTLE = 3;   // offender 持有 battle:lock(已在战斗中)
+  ACTIVITY_BATTLE_REJECT_MEMBER_NOT_READY = 4;   // offender 无场景位置 / 有未自愈的在途票据 / 建 matched 票失败
+  ACTIVITY_BATTLE_REJECT_INTERNAL = 5;           // match 内部故障:发号失败 / Redis 读写出错(guild 映射为 GuildTrialServiceBusy)
+}
+
+message StartActivityBattleRequest {
+  uint32 battle_config_id = 1;                 // DungeonTable id(= GuildActivity.dungeon_id);非 0
+  // 站位顺序即队伍顺序,发起人在首位;1..kMaxBattleTeamSize(5)人、非 0、不重复。
+  // 名单是 guild 邀请房间里全员已同意的同帮成员,match 只做在线 / 战斗锁 / 位置 / 在途票的只读预检,不复核帮会归属。
+  repeated uint64 member_player_ids = 2;
+  // 活动上下文:kind 必须非 NONE,guild_id / activity_id / period_key / guild_period_key 非 0,
+  // initiator_player_id == member_player_ids[0]。match 深拷贝后原样放进 CreateBattleRequest.activity_context。
+  BattleActivityContext activity_context = 3;
+}
+
+message StartActivityBattleResponse {
+  ActivityBattleReject reject = 1;
+  uint64 offender_player_id = 2;   // reject 为 MEMBER_OFFLINE / MEMBER_IN_BATTLE / MEMBER_NOT_READY 时非 0(名单顺序里第一个不满足的人);其余为 0
+  // reject == NONE 时非 0:match 同步生成(shared/snowflake,battle_id 唯一生产者)并已为全员建好 matched 票、
+  // 异步启动 gather;guild 据此登记 guild_trial_battle。gather 之后失败时全员删票、不回队列,
+  // 该 battle_id 不会产生结果事件,由 guild 巡检器兜底判 EXPIRED。
+  uint64 battle_id = 3;
+}
+
+service MatchInternal {
+  rpc StartActivityBattle(StartActivityBattleRequest) returns (StartActivityBattleResponse);
+}

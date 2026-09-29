@@ -78,6 +78,9 @@ func (l *FriendLogic) RecommendFriends(ctx context.Context, req *pb.RecommendFri
 		return reject(constants.ErrInvalidParameter, "too many exclude_player_ids")
 	}
 	limit := recommendLimit(req.GetLimit(), cfg.RecommendDefaultLimit, cfg.RecommendMaxLimit)
+	if req.GetOnlineOnly() {
+		return l.listOnlinePlayers(ctx, me, req, limit)
+	}
 	if limit == 0 {
 		// 只有"两个阈值都被配成 0"才会走到这里(config.Validate 会先拒掉)。
 		// 回空候选而不是报错:这是配置问题,不是玩家或存储的问题。

@@ -26,7 +26,10 @@ import (
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
+	"github.com/zeromicro/go-zero/zrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"google.golang.org/grpc"
+	dspb "proto/data_service"
 )
 
 const (
@@ -76,6 +79,9 @@ type ServiceContext struct {
 	// 两套超时与断路器语义,排障时对不上账。
 	SharedRedis *redis.Redis
 	FriendRedis *redis.Redis
+	// 在线组队目录按权威 home zone 过滤；映射库不一定与 SharedRedis 同库。
+	DataService   dspb.DataServiceClient
+	directoryConn *grpc.ClientConn
 
 	// FriendRedisTarget 是 FriendRedis 实际落点的可读描述,启动横幅打印用
 	// (排障第一问永远是"好友缓存到底写到哪个库了")。
@@ -112,6 +118,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 
 	friendRds, sharedRds, target := NewRedisHandles(c)
+	directoryClient, directoryConn := newDirectoryDataService(c)
 
 	return &ServiceContext{
 		Config:             c,
@@ -119,10 +126,21 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		DB:                 db,
 		SharedRedis:        sharedRds,
 		FriendRedis:        friendRds,
+		DataService:        directoryClient,
+		directoryConn:      directoryConn,
 		FriendRedisTarget:  target,
 		KafkaWriter:        newKafkaWriter(c),
 		GateCommandBuilder: friendkafka.NewGateCommandBuilder(),
 	}
+}
+
+// 沿用全局 dataservice.rpc 注册键与本服务 etcd 集群；非阻塞连接保证好友功能
+// 不因目录的请求期依赖不可达而无法启动。归属区查询使用调用者的整体请求预算。
+func newDirectoryDataService(c config.Config) (dspb.DataServiceClient, *grpc.ClientConn) {
+	rpcConf := zrpc.RpcClientConf{Etcd: c.Etcd, Timeout: 1500, NonBlock: true}
+	rpcConf.Etcd.Key = "dataservice.rpc"
+	conn := zrpc.MustNewClient(rpcConf).Conn()
+	return dspb.NewDataServiceClient(conn), conn
 }
 
 // NewRedisHandles 按配置建立 (FriendRedis, SharedRedis) 两个句柄,并返回 FriendRedis 落点描述。
@@ -163,6 +181,7 @@ func NewRedisHandles(c config.Config) (friendRds, sharedRds *redis.Redis, target
 //   - 排队中的间隙锁请求会挡住别人的插入意向锁,是 RR 下经典的插入死锁源;
 //   - ensure 的"主键重复 → ODKU 取 X"在 RR 下拿的是 next-key,两个并发 ensure 撞上刚被回收的行时
 //     仍可能互等(2026-09-21 死锁事故的后续,docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md)。
+//
 // RC 下只剩记录锁,friend 全部锁定语句又都是完整主键点查 / 点更新,于是不存在可成环的间隙。
 // 自动提交语句每条各取新快照,读语义与 RR 下相同,不影响任何业务判定。
 //
@@ -251,6 +270,11 @@ func newKafkaWriter(c config.Config) *kafkago.Writer {
 // 并让 watch 撞上已关闭的 client。
 func (sc *ServiceContext) Stop() {
 	sc.stopOnce.Do(func() {
+		if sc.directoryConn != nil {
+			if err := sc.directoryConn.Close(); err != nil {
+				logx.Errorf("[friend] 在线目录 data_service 连接关闭失败: %v", err)
+			}
+		}
 		if sc.KafkaWriter != nil {
 			if err := sc.KafkaWriter.Close(); err != nil {
 				logx.Errorf("[friend] Kafka writer close/flush failed: %v", err)

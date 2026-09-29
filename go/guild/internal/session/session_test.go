@@ -139,3 +139,27 @@ func TestActivityMethodsAreClientCallable(t *testing.T) {
 		assert.Equal(t, uint64(42), result.playerID, method)
 	}
 }
+
+// TestGuildInternalMethodsAreNeverClientCallable(G10,07 §7.4.4):GuildInternal 是服务间内部服务(回档前检查),
+// 它的方法全部不在 ClientMethods 里;带会话 metadata 的调用一律 PermissionDenied、进不了 handler;
+// 不带会话的按内部调用放行。session.go 不需要为它改任何东西 —— "白名单外一律拒"本身就是这道闸,
+// 这里钉住的是"没人把它顺手登记进白名单"。
+func TestGuildInternalMethodsAreNeverClientCallable(t *testing.T) {
+	service := pb.GuildInternal_ServiceDesc
+	require.NotEmpty(t, service.Methods)
+	md := metadata.Pairs(MetadataKey, encodeSession(t, &base.SessionDetails{SessionId: 7, PlayerId: 42}))
+	for _, method := range service.Methods {
+		fullMethod := "/" + service.ServiceName + "/" + method.MethodName
+		_, allowed := ClientMethods[fullMethod]
+		assert.False(t, allowed, "%s 是内部方法,绝不能对客户端开放", fullMethod)
+
+		assertRejected(t, call(md, fullMethod), codes.PermissionDenied)
+
+		internal := call(nil, fullMethod)
+		require.NoError(t, internal.err, fullMethod)
+		assert.True(t, internal.handlerCalled, "%s 不带会话 = 内部调用,应放行", fullMethod)
+		assert.False(t, internal.fromClient, fullMethod)
+	}
+	assert.Equal(t, "/guildpb.GuildInternal/ListAppliedAssetOpsSince", pb.GuildInternal_ListAppliedAssetOpsSince_FullMethodName,
+		"方法全名是路由表与 data_service 客户端共同依赖的契约")
+}

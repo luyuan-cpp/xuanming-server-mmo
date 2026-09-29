@@ -371,7 +371,7 @@ ON DUPLICATE KEY UPDATE read_ms = IF(read_ms = 0, VALUES(read_ms), read_ms), …
 - 纪律照 friend F13:推送函数不返回 error;失败只打日志 + `mail_push_total{outcome}`;绝不影响 RPC 结果;at-most-once(契约 §5 三个丢失窗口),**红点真相是 `ListMails` 返回的 `unread_count`**。
 - **先找到收件人所在 gate**(评审第 4 / 14 条;契约 §5"调用方负责查会话"):`MailAdmin` 的调用方不是收件人,没有收件人的会话 metadata。推送前经 **SharedRedis** 读 `player:session:{recipient}`(值为 proto 编码的 `plpb.PlayerSession`,写者是 player_locator,mail **只读**;SharedRedis 禁 Cluster),`proto.Unmarshal` 后**只推 `SESSION_STATE_ONLINE`**,用其中的 gate id / gate instance id 组 `PlayerGateInfo`。照 friend 的 `internal/data/session_reader.go` 与 `internal/logic/push.go`:键名用常量前缀拼接,测试与写者共用前缀;无会话 / 非 ONLINE = 离线 = 不推,计 `mail_push_total{outcome="offline"}`;读 Redis 失败计 `outcome="session_error"`,同样不影响 RPC 结果。
 - `gate_instance_id` 为空时 fail-closed 拒发(`kafkautil.PushToPlayer` 既有行为)。
-- 继承 K8s 存量缺口:K8s 上 Go 服务不注入 `KAFKA_COMMAND_TOPIC_*`,推送落 `gate-cmd_g1` 而 gate 消费 g2,**静默丢失**(friend manifest 注释已记)。mail manifest 与 friend / trade / match 逐字一致地**不写**这两个变量 —— 这是全仓缺口,不在 mail 里打补丁。
+- ~~继承 K8s 存量缺口~~(2026-09-28 已修):K8s 上 Go 服务原先不注入 `KAFKA_COMMAND_TOPIC_*`,推送落 `gate-cmd_g1` 而 gate 消费 g2,**静默丢失**。现在由 `k8s_deploy.ps1` 的 `Add-GoSvcCommandTopicEnv` 从 `bin/etc/base_deploy_config.yaml` 统一注入到每个 go-svc 唯一的 `env:` 段。mail manifest 仍与 friend / trade / match 一致地**不写**这两个变量(手写会被部署脚本拒绝),但**必须恰好有一个 `env:` 段**,否则部署 fail-closed。
 
 ### 4.6 过期 sweep(照 friend 纪律)
 

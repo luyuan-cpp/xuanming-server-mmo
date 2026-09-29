@@ -10,7 +10,20 @@
 #include "proto/common/component/player_network_comp.pb.h"
 #include "proto/scene_manager/scene_manager_service.pb.h"
 #include "services/scene/player/system/player_lifecycle.h"
+#include "services/scene/player/system/player_tip.h"
+#include "table/proto/tip/common_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
+
+#include <string>
+
+namespace
+{
+    std::string DescribeGrpcFailure(const GrpcCallFailure& failure)
+    {
+        return std::string(failure.method) + " code=" + std::to_string(static_cast<int>(failure.status.error_code())) +
+               " msg=" + failure.status.error_message();
+    }
+} // namespace
 
 void InitSceneManagerReply()
 {
@@ -49,6 +62,14 @@ void InitSceneManagerReply()
                      << resp.redirect().target_gate_port()
                      << " player=" << resp.player_id() << " corr=" << resp.correlation_id();
         }
+    };
+
+    // EnterScene 传输失败(gRPC deadline 到期 / scene_manager 不可达 / 服务端超时):生成的客户端交回发出的请求,
+    // 按它的 correlation_id 分发,语义见 PlayerLifecycleSystem::DispatchEnterSceneTransportFailure。本处只做适配。
+    scene_manager::AsyncSceneManagerEnterSceneFailedHandler =
+        [](const GrpcCallFailure& failure, const ::scene_manager::EnterSceneRequest& req)
+    {
+        PlayerLifecycleSystem::DispatchEnterSceneTransportFailure(req, DescribeGrpcFailure(failure));
     };
 
     // CreateScene response handler. Currently only used for the mirror flow:
@@ -153,6 +174,28 @@ void InitSceneManagerReply()
                      << " mirror_scene=" << resp.scene_id()
                      << " mirror_node=" << resp.node_id()
                      << " corr=" << correlationId;
+        }
+    };
+
+    // CreateScene 传输失败。镜像的自动进场由**应答**驱动(上面按回显的 creator_ids 发 EnterScene),应答没了
+    // 这次就一定不会自动进场:按发出请求里的 creator_ids 告诉本节点上的创建者,否则客户端一直等一个不会来的
+    // EnterSceneS2C(EnterSceneC2S 早已回"已受理")。回 kServiceUnavailable 而不是"创建失败":结果未知,
+    // 镜像若其实已经建好,由 scene_manager 按空场景回收。
+    // 注:scene_manager 的**业务**失败应答(error_code != 0)不回显 creator_ids,那条路径今天仍告诉不了创建者
+    // (docs/design/grpc-client-deadline-failure-callback.md §7)。
+    scene_manager::AsyncSceneManagerCreateSceneFailedHandler =
+        [](const GrpcCallFailure& failure, const ::scene_manager::CreateSceneRequest& req)
+    {
+        LOG_WARN << "SceneManager.CreateScene transport failure: " << DescribeGrpcFailure(failure)
+                 << " creators=" << req.creator_ids_size() << " mirror_config=" << req.mirror_config_id();
+        for (const uint64_t playerId : req.creator_ids())
+        {
+            const auto playerEntity = tlsEcs.GetPlayer(playerId);
+            if (playerEntity == entt::null)
+            {
+                continue; // 创建者已不在本节点(断线 / 已换节点),没有客户端可提示
+            }
+            PlayerTipSystem::SendToPlayer(playerEntity, kServiceUnavailable, {});
         }
     };
 }

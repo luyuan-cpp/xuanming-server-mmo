@@ -18,6 +18,29 @@ Etcd:
 ZoneId: 1
 LeaseTTL: 60
 
+# Prometheus /metrics(internal/metrics/metrics.go)。留空 = 不开端口。
+# 回档帮会闸的告警(docs/design/guild-phase2/07-rollback-fail-closed.md §7.9.2)依赖它:
+# data_service_rollback_guild_check_total{scope,result} 等。9260 不与其它服务撞号
+# (login 9101 / scene_manager 9150 / db 9160 / match 9170 / friend 9180 / player_locator 9190 /
+#  路由服 9200 / chat 9210 / guild 9220 / trade 9230 / mail 9240 / rank 9250)。
+# 必须保持顶层单行:go_services.ps1 -Zone 按与 ListenOn 相同的规则位移它。k8s ConfigMap 本批不镜像(07 §7.9.1 前提缺口)。
+MetricsListenAddr: ":9260"
+
+# 三个回档 RPC 的服务端超时(go-zero 默认 2000ms,帮会闸的沉降 30s + 检查预算 120s 远超它,
+# 不配的话批量回档恒被截断成 DeadlineExceeded)。07 §7.5.3-3:
+#   RollbackPlayer:沉降 30 + 检查预算 120 + 复查等待 10 + 复查预算 120 = 280,余 20s 给单人写。
+#   RollbackZone / RollbackAll:起始值,没有写耗时实测(回档今天在生产整体停用);落码后按本地 zone 回档实测订正。
+# 配小了的后果:调用方拿到 DeadlineExceeded、拿不到响应体;写后阶段靠脱钩 ctx 照常跑完,结论以 RESULT 审计与日志为准。
+# 调大 GuildCheckBudgetSeconds 时同步调大这里。k8s_deploy.ps1 只镜像标量 Timeout,不镜像这张表 ——
+# k8s 里今天也没配 GuildInternalRpc(回档一律被拒),接上 guild 时再一并处理。
+MethodTimeouts:
+  - FullMethod: /data_service.DataService/RollbackPlayer
+    Timeout: 300s
+  - FullMethod: /data_service.DataService/RollbackZone
+    Timeout: 3600s
+  - FullMethod: /data_service.DataService/RollbackAll
+    Timeout: 14400s
+
 # Global mapping Redis: stores player_id → home_zone_id (player:zone:{id}),
 # 以及合服闸门 merge:in_progress:{zone}(见 internal/routing/router.go)。
 #
@@ -107,7 +130,31 @@ LoginAdminRpc:
 #
 # 光有 token 还不够:remap 还要求源 zone 已立 merge:in_progress:{source} 标记
 # (见 internal/routing/router.go 的合服闸门契约),两道闸都过才执行。
+# 三个 Rollback* 同样一律要求这个 token(docs/design/guild-phase2/07-rollback-fail-closed.md §7.6.3 Q2 = ②):
+# 不配 = 回档 RPC 整体停用。
 # AdminToken: ""
+
+# 回档的帮会资产闸(docs/design/guild-phase2/07-rollback-fail-closed.md §7.5.5):回档写任何玩家数据之前,
+# 先问 guild "这些玩家自快照以来有没有已应用的帮会资产操作",有就拒绝(可带 accept_guild_divergence 放行)。
+# **这一段不写 = 回档一律被拒**(ErrCodeRollbackGuildCheckFailed),不是"跳过检查"。
+# 直连 guild 的 gRPC 端口(07 §7.11-U10 选 (c)),= go/guild/etc/guild.yaml 的 ListenOn;guild 换端口要同步改这里。
+# **只认 Endpoints / Target**:guild 刻意不写 go-zero 的 Etcd.Key(D-13),按 etcd 找不到它;而且本段的 Etcd
+# 会继承顶层 Etcd(Key=dataservice.rpc)拨到自己身上,所以只写 Etcd 的配置按"没配"处理。
+# NonBlock:guild 不在线不得阻塞 data_service 启动(代码里也强制了一遍)。
+# Breaker 关:与 guild.yaml 对 DataServiceRpc 同取舍 —— 本链路不重试、一次失败即整体拒绝,熔断器帮不上忙,
+# 只会把"guild 抖了一下"在日志里变成 breaker 错误,误导排障。
+GuildInternalRpc:
+  Endpoints:
+    - 127.0.0.1:50300
+  Timeout: 3000        # 单次调用上限(毫秒);ValidateGuildCheck 限 [500, 3500](guild 服务端 Timeout 4000 − 500 回包余量)
+  NonBlock: true
+  Middlewares:
+    Breaker: false
+# since_ms = 快照时刻×1000 − 本值。盖住跨机时钟差 + guild 终结时刻可早于落盘的一个 OpBudget;
+# 限 [5000, 3600000],0 与 4999 一律拒绝(回档闸不装配)。默认 300000,与 ±300s 服务间时钟承诺同口径。
+GuildClockSkewMarginMs: 300000
+# 检查阶段(沉降等待之后、第一笔写之前)总预算,秒;只罩检查阶段。限 [1, 3600]。
+GuildCheckBudgetSeconds: 120
 
 # 全局库五张表(transaction_log / player_snapshot / rollback_audit_log / id_segment / player_name)的建表策略。
 # 其中 id_segment 与 player_name 走 schema.go 里手写的 bootstrap DDL(proto2mysql 把 string 渲染成

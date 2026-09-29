@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"data_service/internal/config"
+	"data_service/internal/guildcheck"
 	"data_service/internal/routing"
 	"data_service/internal/store"
 
+	guildpb "proto/guild"
 	loginpb "proto/login"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -26,6 +28,9 @@ type SnapshotStore interface {
 	GetLatestSnapshotBefore(context.Context, uint64, uint64) (*store.SnapshotRow, error)
 	ListSnapshotsMeta(context.Context, uint64, uint64, uint32) ([]*store.SnapshotMeta, error)
 	GetSnapshotPlayerIDsByZone(context.Context, uint32, uint64) ([]uint64, error)
+	// GetSnapshotPlayerTimesByZone 是 zone / 全服回档的计划:player_id → 该 zone 下最新快照的 created_at(秒)。
+	// 帮会检查的 since 起点与执行期 R5 断言的下界都来自它(docs/design/guild-phase2/07-rollback-fail-closed.md §7.5.3-1)。
+	GetSnapshotPlayerTimesByZone(context.Context, uint32, uint64) (map[uint64]uint64, error)
 	InsertAuditLog(context.Context, *store.AuditLogRow) error
 }
 
@@ -85,6 +90,17 @@ type ServiceContext struct {
 	PlayerNameStore  PlayerNameStore // nil = 名字注册表不可用,Reserve/Release/BatchGet 全部 fail-closed
 	RollbackFence    RollbackFence
 	LoginAdminClient loginpb.LoginAdminClient // nil when not configured
+
+	// GuildDivergence 是回档闸问 guild 的接缝(docs/design/guild-phase2/07-rollback-fail-closed.md §7.5.1)。
+	//
+	// ⚠ **nil = 未配置 = 三个 Rollback* 一律拒绝**(ErrCodeRollbackGuildCheckFailed,零写入,放行无效)。
+	// 这与上一行 LoginAdminClient 的先例(nil = 跳过孤儿清理)**方向相反**:照抄那个先例写成
+	// "没配就不查",就是让回档在 guild 缺席时复制资产(fail-open)。测试 D2 钉住。
+	GuildDivergence guildcheck.GuildDivergenceChecker
+
+	// GuildCheckSleep 是回档闸两段等待(沉降 30s、写后复查前 10s,07 §7.7)的注入点。
+	// nil = 真实计时器等待(可被 ctx 取消);单测注入,既不真睡,也能断言"检查发生在沉降之后"(AGENTS §11.4)。
+	GuildCheckSleep func(ctx context.Context, d time.Duration) error
 }
 
 // autoMigrateTimeout 启动路径建表/补列的总时限。CreateOrUpdateTable 对存量大表的
@@ -198,7 +214,37 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		IdSegmentStore:   idSegmentStore,
 		PlayerNameStore:  playerNameStore,
 		LoginAdminClient: loginClient,
+		GuildDivergence:  newGuildDivergenceChecker(c),
 	}
+}
+
+// newGuildDivergenceChecker 装配回档闸问 guild 的接缝(07 §7.5.1、§7.5.5)。
+//
+// 返回 nil = 回档一律被拒,**不是**"跳过检查"(与 LoginAdminClient 的 nil 语义相反,见 ServiceContext.GuildDivergence)。
+// 任何失败都只记日志、不拒启:这三项配置只关系到回档,而 guild 启动要用 data_service(领号段、查归属),
+// 这里再反向阻塞就是启动死锁(07 §7.5.5)。
+func newGuildDivergenceChecker(c config.Config) guildcheck.GuildDivergenceChecker {
+	if err := c.ValidateGuildCheck(); err != nil {
+		logx.Errorf("[ServiceContext] guild check config invalid; every Rollback* will be rejected (ErrCodeRollbackGuildCheckFailed): %v", err)
+		return nil
+	}
+	if !c.HasGuildInternalRpc() {
+		// 合法形态(k8s 今天就是这样:guild 还没有 manifest,07 §7.5.5 末条),所以是 Info;
+		// 每次回档被拒时 logic 会再打一条带 "guild check unavailable: not configured" 的 ERROR。
+		logx.Infof("[ServiceContext] GuildInternalRpc has no Endpoints/Target; every Rollback* will be rejected (guild check unavailable: not configured)")
+		return nil
+	}
+	// 强制 NonBlock,不信 yaml:guild 不在线时 zrpc 默认的阻塞拨号会把 data_service 的启动按住。
+	// 追加在 NewClient 内部由 yaml 决定的选项之后,后者被覆盖。
+	cli, err := zrpc.NewClient(c.GuildInternalRpc, zrpc.WithNonBlock())
+	if err != nil {
+		logx.Errorf("[ServiceContext] GuildInternalRpc client build failed; every Rollback* will be rejected (ErrCodeRollbackGuildCheckFailed): %v", err)
+		return nil
+	}
+	logx.Infof("[ServiceContext] guild divergence checker ready: endpoints=%v target=%q timeout=%dms margin=%dms budget=%ds",
+		c.GuildInternalRpc.Endpoints, c.GuildInternalRpc.Target, c.GuildInternalRpc.Timeout,
+		c.GuildClockSkewMarginMs, c.GuildCheckBudgetSeconds)
+	return guildcheck.New(guildpb.NewGuildInternalClient(cli.Conn()))
 }
 
 // Close releases every store and the router. nil-safe on each member.

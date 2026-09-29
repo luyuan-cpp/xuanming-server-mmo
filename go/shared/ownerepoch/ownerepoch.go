@@ -13,12 +13,20 @@
 //
 // 键与值(与 C++ 一字不差):
 //
-//	player:{player_id}:owner_epoch   纯十进制整数字符串。只由 scene_manager 用 INCR
-//	                                  铸造,单调递增;不存在 / "0" 表示旧版未铸造,
-//	                                  校验方一律跳过比对并计数(兼容窗口)。
+//	player:{player_id}:owner_epoch   纯十进制整数字符串。只经 scene_manager 的 INCR 前进,
+//	                                  单调递增:铸造用 INCR,路由失败的回滚也用 INCR(再进
+//	                                  一格,从不退回旧值,cross-zone-scene-travel.md §12.8);
+//	                                  键缺失时的补种只按已记录的值补回(scene_manager 按
+//	                                  location 记录值 SETNX、C++ guard 存盘按缓存值)。
+//	                                  不存在 / "0" 表示旧版未铸造,校验方一律跳过比对并计数
+//	                                  (兼容窗口)。
 //	player:{player_id}:handoff       "{epoch}:{saved_at_ms}"。源 scene 在 Redis 落地
-//	                                  回调之后写,EX 300 秒;scene_manager 只比对不删除,
-//	                                  放行之后它自然过时,靠 TTL 回收。
+//	                                  回调之后写,EX 300 秒。scene_manager 是另一个写入方,
+//	                                  只在一处:路由失败回滚凭标记铸造的落点时,**只在原标记
+//	                                  原样还在时**把它转写为 "{新 epoch}:{同一 saved_at_ms}"
+//	                                  (后缀逐字节不变,同一 Lua 原子步骤,EX 同为 HandoffTTL)。
+//	                                  scene_manager 仍然从不删除这个键;放行之后它自然过时,
+//	                                  靠 TTL 回收。
 //
 // 本包刻意只依赖标准库:db 与 scene_manager 用的 Redis 客户端不同(go-redis vs
 // go-zero),键名与解析放在这里,读写各自用自己的客户端。
@@ -32,8 +40,9 @@ import (
 	"time"
 )
 
-// HandoffTTL 是 handoff 标记的存活时间。写标记的是 C++ 源 scene(EX 300),这里
-// 镜像一份只为让 Go 侧的测试与文档有唯一出处;scene_manager 从不写这个键。
+// HandoffTTL 是 handoff 标记的存活时间。写标记的主要是 C++ 源 scene(EX 300,与这里
+// 一致);scene_manager 只在路由失败回滚时转写标记(原标记原样还在才写),EX 取的就是它。
+// 两边改值必须同拍。
 const HandoffTTL = 300 * time.Second
 
 // OwnerEpochKey 返回 player:{id}:owner_epoch。

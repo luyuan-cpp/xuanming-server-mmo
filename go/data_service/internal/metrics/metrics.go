@@ -145,7 +145,80 @@ var (
 			"negative_hit (cache remembers the row is absent) | miss (falls through to MySQL).",
 	}, []string{"result"})
 
+	// ── 资产通道:已落盘账本读取(docs/design/guild-phase2/07-rollback-fail-closed.md §7.9.1)──
+	//
+	// 调用方是 guild 重投循环的离线读账本(LedgerReadMinAttempts 之后才读),量很小。
+	// absent 持续偏高 = 被问到的玩家在 zone Redis 里没有 blob(从未入场或 Redis 丢数据);
+	// error 非零 = 路由 / Redis / blob 矛盾,详情看同一时刻的 ERROR 日志。
+	assetOpLedgerReadTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "asset_op_ledger_read_total",
+		Help:      "GetPlayerAssetOpLedger outcomes: found (blob read, ledger returned) | absent (no PlayerAllData blob) | error (routing, Redis or corrupt blob).",
+	}, []string{"result"})
+
+	// ── 回档的帮会资产闸(docs/design/guild-phase2/07-rollback-fail-closed.md §7.9.1)──
+	//
+	// 告警口径(07 §7.9.2):divergent_accepted → 通知(有人放行了,必须有人认领补偿单);
+	// post_write_* → 紧急;unavailable|budget → 警告;retention → 通知;divergent_rejected 不告警(闸在正常工作)。
+	// 这些都是"进程一辈子可能只发生一次"的事件,所以序列必须在启动时预置为 0(PrimeRollbackGuildCheck),
+	// 否则 increase(...) > 0 恰好漏掉第一次。
+	rollbackGuildCheckTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "rollback_guild_check_total",
+		Help: "Rollback guild-asset gate outcomes by scope (player|zone|server) and result " +
+			"(clean|divergent_rejected|divergent_accepted|unavailable|retention|truncated|budget|post_write_divergent|post_write_recheck_failed). " +
+			"The check phase counts exactly one result per rollback RPC; a post-write problem adds one post_write_* on top.",
+	}, []string{"scope", "result"})
+
+	rollbackGuildDivergenceRows = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "rollback_guild_divergence_rows",
+		Help:      "Guild asset divergence rows seen by the rollback gate (after per-player since filtering), by scope and whether the rollback was accepted anyway.",
+	}, []string{"scope", "accepted"})
+
+	// 桶按"一次检查翻完所有块所有页"的量级铺:零命中的单人回档是一两次 RPC(几十毫秒),
+	// 全服回档是成百上千次串行 RPC;上限对齐默认检查预算 120s。
+	rollbackGuildCheckSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: subsystem,
+		Name:      "rollback_guild_check_seconds",
+		Help:      "Wall time of one rollback guild check (all chunks and pages, excluding the settle wait).",
+		Buckets:   []float64{0.01, 0.05, 0.1, 0.5, 1, 5, 15, 30, 60, 120},
+	}, []string{"scope"})
+
 	registerOnce sync.Once
+)
+
+// 回档帮会闸指标的 label 取值(封闭集合,PrimeRollbackGuildCheck 逐个预置;新增取值必须同时加进下面两个切片)。
+const (
+	RollbackGuildScopePlayer = "player"
+	RollbackGuildScopeZone   = "zone"
+	RollbackGuildScopeServer = "server"
+
+	RollbackGuildResultClean                  = "clean"
+	RollbackGuildResultDivergentRejected      = "divergent_rejected"
+	RollbackGuildResultDivergentAccepted      = "divergent_accepted"
+	RollbackGuildResultUnavailable            = "unavailable"
+	RollbackGuildResultRetention              = "retention"
+	RollbackGuildResultTruncated              = "truncated"
+	RollbackGuildResultBudget                 = "budget"
+	RollbackGuildResultPostWriteDivergent     = "post_write_divergent"
+	RollbackGuildResultPostWriteRecheckFailed = "post_write_recheck_failed"
+)
+
+var (
+	rollbackGuildScopes = []string{RollbackGuildScopePlayer, RollbackGuildScopeZone, RollbackGuildScopeServer}
+
+	rollbackGuildResults = []string{
+		RollbackGuildResultClean,
+		RollbackGuildResultDivergentRejected,
+		RollbackGuildResultDivergentAccepted,
+		RollbackGuildResultUnavailable,
+		RollbackGuildResultRetention,
+		RollbackGuildResultTruncated,
+		RollbackGuildResultBudget,
+		RollbackGuildResultPostWriteDivergent,
+		RollbackGuildResultPostWriteRecheckFailed,
+	}
 )
 
 func register() {
@@ -159,8 +232,49 @@ func register() {
 			kafkaConsumerUp, kafkaConsumerMessagesTotal,
 			idSegmentAllocateTotal,
 			playerNameOpsTotal, playerNameOpSeconds, playerNameCacheTotal,
+			assetOpLedgerReadTotal,
+			rollbackGuildCheckTotal, rollbackGuildDivergenceRows, rollbackGuildCheckSeconds,
 		)
 	})
+}
+
+// PrimeRollbackGuildCheck 把 rollback_guild_check_total 的 scope × result 封闭集合(3 × 9 = 27 条)
+// 逐个预置为 0。**必须在启动时调**(data_service.go 里紧跟 metrics.Start):
+// CounterVec 的子序列在首次 WithLabelValues 之前不存在,`increase(...) > 0` 对"从无到 1"的序列
+// 在窗口内只有一个样本,恰好漏掉第一次 —— 而放行回档与写后分歧正是一辈子可能只发生一次的事件
+// (92-handoff:184-189 踩过的坑;同仓先例 SetKafkaConsumerUp 预注册 0)。
+// 本包是直连 prometheus/client_golang 的懒注册,不受 go-zero core/metric 那个全局开关影响,
+// 所以调用时机只要求"在第一次 scrape 之前",MetricsListenAddr 留空时调用也无害。
+func PrimeRollbackGuildCheck() {
+	register()
+	for _, scope := range rollbackGuildScopes {
+		for _, result := range rollbackGuildResults {
+			rollbackGuildCheckTotal.WithLabelValues(scope, result).Add(0)
+		}
+	}
+}
+
+// ObserveRollbackGuildCheck 记一次回档帮会闸的结论。scope / result 取上面的常量(封闭集合),本函数不校验。
+// 一次回档 RPC 的检查阶段只记一个 result;写后复查出问题时再额外记一个 post_write_*。
+func ObserveRollbackGuildCheck(scope, result string) {
+	register()
+	rollbackGuildCheckTotal.WithLabelValues(scope, result).Inc()
+}
+
+// AddRollbackGuildDivergenceRows 累加检查阶段看到的分歧行数(过滤后)。n <= 0 直接返回。
+// **不要**把 player_id / op_id 加成 label(AGENTS.md §9),逐行明细在 `[Rollback][GuildDivergence]` 日志里。
+func AddRollbackGuildDivergenceRows(scope string, accepted bool, n int) {
+	if n <= 0 {
+		return
+	}
+	register()
+	rollbackGuildDivergenceRows.WithLabelValues(scope, strconv.FormatBool(accepted)).Add(float64(n))
+}
+
+// ObserveRollbackGuildCheckSeconds 记一次检查(全部块、全部页,不含沉降等待)的耗时。
+func ObserveRollbackGuildCheckSeconds(scope string, d time.Duration) {
+	register()
+	rollbackGuildCheckSeconds.WithLabelValues(scope).Observe(d.Seconds())
 }
 
 // SetKafkaConsumerUp flips the up gauge for one consumer ("transaction_log" | "player_snapshot").
@@ -214,6 +328,14 @@ func ObservePlayerNameCache(result string, n int) {
 	}
 	register()
 	playerNameCacheTotal.WithLabelValues(result).Add(float64(n))
+}
+
+// ObserveAssetOpLedgerRead 记一次 GetPlayerAssetOpLedger 的结果。
+// result 是 "found" | "absent" | "error",取值集合由调用方(logic 的 assetOpLedgerRead* 常量)封闭,
+// 本函数不做校验。**不要**把 player_id 加成 label(AGENTS.md §9),排障信息进日志。
+func ObserveAssetOpLedgerRead(result string) {
+	register()
+	assetOpLedgerReadTotal.WithLabelValues(result).Inc()
 }
 
 // ── Observe helpers ─────────────────────────────────────────────────

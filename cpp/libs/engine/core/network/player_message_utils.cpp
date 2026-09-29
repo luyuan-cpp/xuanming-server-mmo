@@ -6,12 +6,10 @@
 #include "muduo/base/Logging.h"
 #include "network_utils.h"
 #include "network/rpc_session.h"
-#include "rpc/service_metadata/rpc_event_registry.h"
 #include "network/node_utils.h"
 #include "node/system/node/node_util.h"
 #include <rpc/service_metadata/scene_service_metadata.h>
 #include "thread_context/node_context_manager.h"
-#include "utils/random/random.h"
 #include <thread_context/ecs_context.h>
 #include "broadcast_target_codec.h"
 
@@ -236,82 +234,6 @@ void BroadcastMessageToAll(uint32_t messageId, const google::protobuf::Message &
 		auto &gateSession = view.get<RpcSession>(entity);
 		gateSession.SendRequest(GateBroadcastToAllMessageId, request);
 	}
-}
-
-void SendMessageToPlayerOnGrpcNode(uint32_t messageId, const google::protobuf::Message &message, Guid playerId)
-{
-	SendMessageToPlayerOnGrpcNode(messageId, message, tlsEcs.GetPlayer(playerId));
-}
-
-inline entt::entity PickRandomNodeEntity(uint32_t nodeType)
-{
-	auto &registry = tlsNodeContextManager.GetRegistry(nodeType);
-	auto view = registry.view<NodeInfo>();
-	std::vector<entt::entity> candidates;
-	const auto zoneId = GetNodeInfo().zone_id();
-	// 全局池类型(match / battle)不比对 zone(设计文档 cross-zone-matchmaking.md D11)。
-	const bool globalPool = NodeUtils::IsGlobalPoolNodeType(nodeType);
-	for (auto entity : view)
-	{
-		const auto &node = view.get<NodeInfo>(entity);
-		if (globalPool || node.zone_id() == zoneId)
-		{
-			candidates.push_back(entity);
-		}
-	}
-	if (candidates.empty())
-	{
-		LOG_ERROR << "No available node for type: " << nodeType;
-		return entt::null;
-	}
-	return candidates[tlsRandom.Rand<size_t>(0, candidates.size() - 1)];
-}
-
-void SendMessageToPlayerOnGrpcNode(uint32_t messageId, const google::protobuf::Message &message, entt::entity playerEntity)
-{
-	if (!tlsEcs.actorRegistry.valid(playerEntity))
-	{
-		LOG_ERROR << "Player entity is not valid";
-		return;
-	}
-
-	if (messageId >= gRpcMethodRegistry.size())
-	{
-		LOG_WARN << "Message dropped, messageId out of range: " << messageId
-				 << " (max: " << gRpcMethodRegistry.size() << ")";
-		return;
-	}
-
-	auto &rpcHandlerMeta = gRpcMethodRegistry[messageId];
-
-	const auto *playerSessionSnapshotPB = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(playerEntity);
-	if (!playerSessionSnapshotPB)
-	{
-		LOG_ERROR << "Player node info not found for player entity";
-		return;
-	}
-
-	SessionDetails sessionDetails;
-	sessionDetails.set_session_id(playerSessionSnapshotPB->gate_session_id());
-	sessionDetails.set_player_id(tlsEcs.actorRegistry.get<Guid>(playerEntity));
-
-	if (!rpcHandlerMeta.sender)
-	{
-		LOG_ERROR << "Message sender not found for message ID: " << messageId;
-		return;
-	}
-
-	auto node = PickRandomNodeEntity(rpcHandlerMeta.targetNodeType);
-	if (node == entt::null || !tlsNodeContextManager.GetRegistry(rpcHandlerMeta.targetNodeType).valid(node))
-	{
-		LOG_ERROR << "Node not found for type: " << rpcHandlerMeta.targetNodeType;
-		return;
-	}
-	rpcHandlerMeta.sender(tlsNodeContextManager.GetRegistry(rpcHandlerMeta.targetNodeType),
-						  node,
-						  *rpcHandlerMeta.requestProto,
-						  {kSessionBinMetaKey},
-						  SerializeSessionDetails(sessionDetails));
 }
 
 void SendMessageToPlayerOnSceneNode(uint32_t messageId,

@@ -454,3 +454,23 @@ friend 仍按本规格挂进 GameClient 构造函数,理由是首拉不依赖 UI
 
   **〔已查清,2026-09-20 晚〕第 1 件**:这批产物来自服务端 **2026-09-20 22:10:40 的一次 proto-gen**(与服务端 `proto/message_id.txt` 同一秒写入)。那次用的是 09-09 的陈旧 `proto-gen.exe`(生成器因 proto2mysql 校验和没重编成功),在服务端吞掉了 `scene_node_service.cpp` 的 Agones 块,事故与恢复步骤见 `friend-handoff-20260920.md` §9.4 第 3 步。**对客户端的结论:留着,不用丢**。Unity handler 与 robot handler 的模板自 09-09 起没有变过,这批桩的内容与正确的生成器产出相同;Unity 桩和 `HandlerRegistry.cs` 每次运行都会整份重写,下一次正确的 `dev.bat proto` 会覆盖它们,消息号按服务端 `message_id.txt` 保留(Friend 的 11 个号已在 22:10 定下:2 / 7 / 11 / 12 / 119 与 230–238 之间的新号,以生成物为准)。`Friend.cs` 与 `FriendErrorTip.cs` 由客户端 `tools/gen_proto.ps1`(§1.4 第 6 步)生成,那一步本来就排在服务端导表与 proto-gen 之后。
   另:`generated/code/proto/tip/friend_error_tip.proto` 已照 trade / team 的形状补进客户端 `gen_proto.ps1`(在 `friend.proto` 之后,未提交),§1.2 / §5 的"要补"已完成。
+
+## 2026-09-28 组队邀请入口与在线目录
+
+客户端组队面板统一提供聊天、好友、周围玩家和在线玩家邀请，实际邀请仍使用 `ClientPlayerTeam.InviteToTeam(target_player_id, expected_team_id)`，接收/拒绝仍走原邀请事务。目录展示不代替队长、队伍容量、在线状态、归属区等提交校验。
+
+- 原 `RecommendFriends` RPC 追加 `online_only`、`cursor`、`query`。默认 false 保持原随机/共同好友推荐；true 进入在线组队目录，包含已是好友的在线玩家。没有新增 RPC 或消息号。
+- 回包必须有 `online_directory=true` 才能当作在线目录。旧服务会忽略未知请求字段，客户端不得把它返回的普通推荐当在线玩家。
+- 在线目录仅返回与调用者相同 home zone、会话为 ONLINE 且有可用角色资料的玩家；DISCONNECTING、空资料、错身份和归属区缺失均不显示。SharedRedis 的 `player:session:*` 是唯一在线事实源；归属区经现有 `dataservice.rpc` 的 `BatchGetPlayerHomeZone` 查询，不假定映射 Redis 与共享库相同。
+- 游标为不透明字符串，首次/刷新/换查询词用空。每页最多四轮 SCAN（COUNT=64），最多返回 50 人，未消费的批次按游标+页内偏移保留。空页仍可有 `next_cursor`；仅空游标表示结束。SCAN 不保证跨页快照，客户端按 uint64 ID 去重；上下线或 Redis rehash 时应允许刷新。
+- 限流为每位调用者每分钟 60 页，与好友申请额度分离；共享请求预算覆盖扫描、批读、归属区 RPC。非法/超长游标与超过 64 Unicode 字符的搜索词拒绝，存储/依赖失败回原 Friend ErrStorage，不回落随机推荐。
+- FriendEntry 与 RecommendEntry 追加 name、level、class_id、gender、appearance_id、zone_id；好友列表批量补资料，离线玩家缺失名字按档案契约经 BatchGetPlayerName 回源。未知等级/外观留空，保留真实好友关系，客户端不得伪造资料。
+- friend 的 data_service 连接使用现有 etcd 集群与标准 dataservice.rpc 注册键非阻塞创建，由 ServiceContext 持有并在 Stop 中关闭。
+
+验证：Go 1.26.5，`go test ./... -count=1`、`go vet ./...`、`go build` 均通过（使用 Go overlay 映射审核目录，未向运行仓库写入）。新增测试覆盖同区与在线过滤、完整分页/末批剩余、空页继续、uint64 最大游标、非法输入、取消/依赖故障、限流和离线好友姓名回源。Go/C# 字段由 protoc 生成，未手改生成代码。运行服需要更新 friend 二进制后在线目录才可用；此次单元/构建验证不等于线上联机验证。
+
+### 同轮回归修复：好友在线状态必须可判定
+
+GetFriendList 的在线状态用于邀请按钮，因此现在调用带错误的 BatchOnlineStatus。Redis读取、会话解码/身份不符、缺失读取器等故障统一返回既有 ErrStorage，不能成功返回“全部离线”。真实不存在或非 ONLINE 的会话仍正常显示离线；普通推荐继续用 FillOnlineStatus 保留原有按条目降级。
+
+新增真实 miniredis 回归先复现三种故障（Redis错误、坏会话、读取器缺失）被误报成功，再修复并跑完整 friend 单测与 vet 通过。审核二进制使用 `-buildvcs=false`，避免 Go overlay 构建误盖原仓旧提交号；编译成功，无协议再变更。

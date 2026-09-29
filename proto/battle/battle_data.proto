@@ -208,3 +208,22 @@ message BattlePetSettlementData {
   uint64 mana = 3;
   bool is_dead = 4;
 }
+
+// ---- 活动对局上下文(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.17) ----
+// 流向:guild 组装 → match MatchInternal.StartActivityBattle 校验后原样放进 CreateBattleRequest.activity_context
+//       → battle 存进房间、结算时原样回显进 contracts.kafka.BattleResultEvent.activity_context → guild 消费结算。
+// battle / scene 不解释其中任何业务字段(只看 kind 是否为 NONE 来决定是否走持久化结果通道,§6.19)。
+// 本段只在文件末尾追加(属性会话也在改本文件)。
+enum eBattleActivityKind {
+  BATTLE_ACTIVITY_KIND_NONE = 0;          // 普通对局:不回显上下文,结果事件照旧只发一次
+  BATTLE_ACTIVITY_KIND_GUILD_TRIAL = 1;   // 帮会同道历练:go/guild 以消费组 guild-trial 消费 match-results 结算
+}
+
+message BattleActivityContext {
+  eBattleActivityKind kind = 1;     // 非 NONE 才是活动对局;match 拒绝 NONE(INVALID_ARGUMENT)
+  uint64 guild_id = 2;              // 发起帮会(SnowFlake 17-bit 布局);guild 写、guild 读
+  uint32 activity_id = 3;           // GuildActivity 表 id;guild 写、guild 读
+  uint32 period_key = 4;            // 确认开战时的游戏日键 YYYYMMDD(gameday.DayKey,UTC+8 05:00 换日),用于个人每日次数
+  uint64 initiator_player_id = 5;   // 发起人;match 校验它等于 StartActivityBattleRequest.member_player_ids[0]
+  uint32 guild_period_key = 6;      // 确认开战时的帮会期键(activity.GuildPeriodKey;历练即游戏日),用于每日计资金胜场上限
+}

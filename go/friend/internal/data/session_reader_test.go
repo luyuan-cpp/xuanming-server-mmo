@@ -201,11 +201,9 @@ func TestSessionReader_MissingOrEmptyValueMeansOffline(t *testing.T) {
 	assert.False(t, states[neverLoggedIn].Online)
 }
 
-// TestSessionReader_UndecodablePayloadOnlyDegradesThatPlayer:一条解不开的值只能把**那一名玩家**
-// 降级成离线,不得把同批其它玩家拖成离线,也不得让整次调用报错。
+// 坏会话必须报告错误，同时保留健康条目供显式选择降级的普通推荐使用。
 //
-// 在线态是展示字段:一条坏值(写者换了格式 / key 被别人覆盖)让 GetFriendList 整体失败,
-// 比"这个人显示成灰的"糟得多。坏值夹在两个好值**中间**,是为了同时钉住
+// 坏值夹在两个好值中间，是为了同时钉住
 // "解码失败后 continue 而不是 break / return"。
 func TestSessionReader_UndecodablePayloadOnlyDegradesThatPlayer(t *testing.T) {
 	reader, mr := newSessionReaderOnMiniredis(t, 0)
@@ -221,7 +219,7 @@ func TestSessionReader_UndecodablePayloadOnlyDegradesThatPlayer(t *testing.T) {
 	putPlayerSession(t, mr, after, plpb.PlayerSessionState_SESSION_STATE_ONLINE, 33)
 
 	states, err := reader.BatchOnlineStatus(context.Background(), []uint64{before, corrupt, after})
-	require.NoError(t, err, "单条解码失败在内部降级(计 error 指标 + 限流日志),不上抛")
+	require.Error(t, err, "可靠在线状态读取必须暴露解码故障；普通推荐仍可忽略错误使用健康条目")
 
 	assert.NotContains(t, states, corrupt, "解不开的会话按离线处理")
 	assert.Equal(t, OnlineStatus{Online: true, LastActiveMs: 11}, states[before])
@@ -284,17 +282,16 @@ func TestSessionReader_RedisFailureDegradesToOffline(t *testing.T) {
 	assert.False(t, filled[6002].Online)
 }
 
-// TestSessionReader_NilReaderAndEmptyInputAreSafe:nil 接收者 / nil 句柄 / 空入参都返回空结果。
-// 调用方(logic 的 onlineStates)不做判空,靠的就是这条。
+// nil 接收者/句柄明确报错，空入参正常返回；三种情况都不得 panic。
 func TestSessionReader_NilReaderAndEmptyInputAreSafe(t *testing.T) {
 	var nilReader *SessionReader
 	states, err := nilReader.BatchOnlineStatus(context.Background(), []uint64{1})
-	require.NoError(t, err)
+	require.Error(t, err)
 	assert.False(t, states[1].Online)
 
 	noHandle := NewSessionReader(nil, 10)
 	states, err = noHandle.BatchOnlineStatus(context.Background(), []uint64{1})
-	require.NoError(t, err)
+	require.Error(t, err)
 	assert.Empty(t, states)
 
 	reader, _ := newSessionReaderOnMiniredis(t, 10)

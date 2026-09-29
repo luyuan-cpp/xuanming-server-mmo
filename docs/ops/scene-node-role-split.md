@@ -32,6 +32,7 @@ K8s Deployment (scene-world)     K8s Deployment (scene-instance)
 | `StrictNodeTypeSeparation` | `true` → routing never crosses pools; `false` → falls back to any pod if the matching pool is empty (useful during rollout) |
 | `WorldChannelCountByConfId` | Per-confId channel override, independent of the role split |
 | `NodeLoadWeightSceneCount` / `NodeLoadWeightPlayerCount` | Composite load score tuning |
+| `Timeout` | zrpc 服务端超时(毫秒),现 `8000`。与角色拆分无关,列在这里是提醒:§3 里改 yaml / 重新 apply ConfigMap 时**别动它**。必须为正,且 ≥ `HomeZoneLookupTimeoutMs` + `KafkaWriteTimeoutSeconds`×1000 + 1500(现 1500 + 5000 + 1500);不许改用 `MethodTimeouts`(`k8s_deploy.ps1` 只镜像标量 `Timeout`,K8s 上会静默退回全局值)。K8s ConfigMap 的 `Timeout` / `KafkaWriteTimeoutSeconds` / `HomeZoneLookupTimeoutMs` 三项由 `k8s_deploy.ps1` 从本 yaml 镜像,不等式由 `tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的 `Get-SceneManagerTimeoutBudgetViolations` 对服务 yaml 与 ConfigMap 各判一次;调大它还要同步调大 `bin/etc/base_deploy_config.yaml` 的 `GrpcClient.CallDeadlineMs.SceneManagerNodeService`(现 10000,须 ≥ 本值 + 2000,部署入口 `Assert-GrpcClientDeadlineBudget` 不满足即拒绝部署)。为什么是 8000 见 `docs/design/cross-zone-scene-travel.md` §12.2。2026-09-28 落码,契约测试未跑 |
 
 ## 2. C++ override knobs
 
@@ -138,7 +139,10 @@ routing again. This way the switch does not race with pod readiness.
 - Flip `StrictNodeTypeSeparation` back to `false` and scale the instance
   Deployment to zero. Existing main-world scenes are untouched; the
   LoadReporter will clean up the instance pods' Redis entries within
-  `LoadReporterInterval` (default 10s).
+  one `LoadReportInterval`(代码常量 5s,`go/scene_manager/internal/logic/load_reporter.go`,
+  不可配置;这里以前写的 `LoadReporterInterval` / 默认 10s 与代码不符,与 §4.2「`refreshLoadScores`(5s 一拍)」
+  是同一个节拍)。Redis 拒写时 GO-6 的推迟摘除会让死节点在负载集里多留若干拍,见 §7
+  `SceneManagerNodeDetachWithoutDeathMark`。
 
 ## 4. Observability
 
@@ -164,21 +168,54 @@ Set `MetricsListenAddr: ":9150"` in `scene_manager_service.yaml` to expose
 | `scene_manager_node_player_count` | Mirrors `node:zone:{zoneId}:{nodeId}:player_count` |
 | `scene_manager_node_scene_count` | Mirrors `node:zone:{zoneId}:{nodeId}:scene_count` |
 | `scene_manager_node_load_score` | Composite score actually used for scheduling |
-| `scene_manager_nodes_by_role{zone_id,role}` | Live-node count per role — use for alerting when a role pool empties |
+| `scene_manager_nodes_by_role{zone_id,role}` | Live-node count per role — use for alerting when a role pool empties. 空池发布 0 而不是序列消失(2026-09-28 起,补 0 的范围见下方 Recommended alerts 第一条) |
 
 Recommended alerts:
 - Instance (or world) pool empty while strict mode is on — paging alert. Use
   the rules that ship in `deploy/k8s/scene-manager-alerts.yaml`
-  (`SceneManagerInstancePoolEmpty` / `SceneManagerWorldPoolEmpty`), which are
-  written as `count by (zone_id) (scene_manager_nodes_by_role > 0) unless on
-  (zone_id) count by (zone_id) (scene_manager_nodes_by_role{role=~"..."} > 0)`.
-  Do **not** write `sum by (zone_id) (scene_manager_nodes_by_role{role="instance"}) == 0`:
-  this gauge never publishes a 0 value (`SetNodesByRole` resets the vector and
-  only sets `(zone, role)` pairs that currently have nodes), so an emptied
-  pool makes the series disappear instead of dropping to 0 and the `== 0`
-  form is a permanently empty vector that never fires. Known blind spot,
-  documented in the alerts file: when **every** scene node of a zone is gone,
-  no series is left for that zone and neither rule can fire per zone.
+  (`SceneManagerInstancePoolEmpty` / `SceneManagerWorldPoolEmpty`)。两条都由两支
+  `or on (zone_id)` 组成(World 那条把 role 换成 `main_world|main_world_cross`):
+  ```
+  (
+    count by (zone_id) (scene_manager_nodes_by_role > 0)
+    unless on (zone_id)
+    count by (zone_id) (scene_manager_nodes_by_role{role=~"instance|instance_cross"} > 0)
+  )
+  or on (zone_id)
+  (sum by (zone_id) (scene_manager_nodes_by_role) == 0)
+  ```
+  - **补 0 语义**(2026-09-28 落码,未编译、未测试):`metrics.go` 的 `SetNodesByRole` 每次 Reset 之后,
+    对「当前有存活节点的 zone」与「本 scene_manager 自己配置的 `ZoneId`」两者的并集,四种声明角色
+    (`main_world` / `instance` / `main_world_cross` / `instance_cross`)都先写 0,再用实际计数覆盖;
+    调用点是 `load_reporter.go` 的 `refreshLoadScores`(5s 一拍)。`unknown` 不补 0(由
+    `SceneManagerUnknownSceneNodeType` 按 > 0 盯着)。本进程配置的 `ZoneId` 为 0 时不为它补(单测的
+    默认配置就是 0);有节点注册的 zone 一律补,包括注册成 zone 0 的节点所在的 zone 0。
+  - **两支各管什么**:左支(旧写法,原样保留)抓「zone 里还有别的角色存活、却没有承载该用途的节点」;
+    右支抓整 zone 全灭 —— 该 zone 的 scene 节点都没了时左支为空,右支由该 zone 自己的 scene_manager
+    补的 0 求和为 0,触发。用 `sum` 不用 `min`:多副本、以及别的 zone 的 scene_manager 也在发布同一 zone 时,
+    只要有一份 > 0 就不触发。
+  - **新旧二进制都有效**:旧版 Go 不补 0,右支没有序列,整条退化为旧行为,两条 critical 不会因此失效。
+    这里以前写的「不要写 `sum … == 0`」只在旧版 Go 下成立(那时池子空了是序列消失、`== 0` 永远是空向量);
+    新版 Go 下 `== 0` 能触发,但左支仍保留 `count … > 0 unless …` 的写法,正是为了兼容仍在跑的旧二进制。
+  - **残余盲区**(alerts 文件注释里同样记着):
+    1. 该 zone 自己的 scene_manager 也全挂了,或它的 `ZoneId` 配错(配错还会给那个空 zone 误报)——
+       整 zone 全灭只在这两种情况下仍不响;
+    2. 某个 scene_manager 卡在 fullSync 的 3s 重试循环(etcd 不可达)时不再走 `refreshLoadScores`,它最后一次
+       发布的 > 0 旧值会一直留着、压住这两条告警(左右两支都受影响)。这种形态应由 etcd / scene_manager
+       存活类告警覆盖,alerts 文件里没有。
+  - **静默(silence)步骤**:补 0 之后,「zone 里一个 scene 节点都没有」本身 2 分钟后就会同时触发两条 critical。
+    下面两种是预期内的,要事先在 Alertmanager 对该 `zone_id` 加 silence:
+    1. **新 zone 开服**:在 `k8s-zone-up`(或含该 zone 的 `k8s-all-up`)之前加。该 zone 的 scene_manager 进入
+       watch 循环后的第一拍(5s)起就为自己的 `ZoneId` 发布 0,scene Pod 还没注册时两条都会响。确认 `scene_manager_nodes_by_role{zone_id="<zoneId>"}` 里
+       world 类(`main_world` / `main_world_cross`)与 instance 类(`instance` / `instance_cross`)都有 > 0 之后再解除。
+    2. **整 zone 维护**(scene 全停、scene_manager 仍在跑):停 scene 之前加,维护结束后按同一判据确认再解除。
+
+    matcher 取 `zone_id="<zoneId>"` 加 `alertname=~"SceneManager(Instance|World)PoolEmpty"`,只压这两条,
+    不要把同 zone 的其它告警一起压掉;时长按预计窗口给,宁短勿长(不够再续)。amtool 示例:
+    ```bash
+    amtool silence add 'zone_id="<zoneId>"' 'alertname=~"SceneManager(Instance|World)PoolEmpty"' \
+      --duration=2h --comment="zone <zoneId> 开服 / 维护" --alertmanager.url=<alertmanager-url>
+    ```
 - `node:zone:{zoneId}:{nodeId}:player_count` stays ≥ 90% of expected cap for > 5 min on
   any world pod → consider bumping `WorldChannelCountByConfId`.
 - ZSET score dispersion on `scene_nodes:zone:{zoneId}:load` < 10% →
@@ -259,17 +296,20 @@ deploy alongside stable), otherwise leave it on.
 
 ## 7. Pre-packaged alerts
 
-`deploy/k8s/scene-manager-alerts.yaml` ships a PrometheusRule covering:
+`deploy/k8s/scene-manager-alerts.yaml` ships a PrometheusRule covering(下表只列部分规则,不是全量;
+文件里现有 19 条,以 `grep -c -- '- alert:' deploy/k8s/scene-manager-alerts.yaml` 为准):
 
 | Alert | Severity | Trigger |
 |-------|----------|---------|
-| `SceneManagerInstancePoolEmpty` | critical | no instance-hosting pods in zone for 2 min |
-| `SceneManagerWorldPoolEmpty` | critical | no world-hosting pods in zone for 2 min |
+| `SceneManagerInstancePoolEmpty` | critical | no instance-hosting pods in zone for 2 min(zone 里还有别的角色存活,或整 zone 全灭;后者靠补 0,新 zone 开服 / 整 zone 维护要先静默,见 §4.2 Recommended alerts) |
+| `SceneManagerWorldPoolEmpty` | critical | no world-hosting pods in zone for 2 min(同上) |
 | `SceneManagerWorldNodeSaturated` | warning | max player_count > 1800 for 10 min |
 | `SceneManagerLoadScoreDispersionLow` | info | stddev/mean of load_score < 0.1 for 15 min |
 | `SceneManagerRebalanceStalled` | warning | urgent migration queue non-zero for 5 min |
 | `SceneManagerRebalanceFailureRate` | warning | >50% migration failure rate for 10 min |
 | `SceneManagerUnknownSceneNodeType` | warning | any pod publishes scene_node_type outside {0,1,2,3} |
+| `SceneManagerNodeDetachWithoutDeathMark` | warning | 10 分钟内 `scene_manager_node_detach_deferred_total` 的 `outcome` 为 `expired` 或 `abandoned` 的计数有增加,不设 for、任一次即告警(2026-09-28 落码,未编译、未实测)。背景(GO-6):已判死的 scene 节点写不进 `death_at` 或摘不出负载集时,scene_manager 不再照样摘除,而是把它留在负载集里(按存活处理)、每 5s 重试。`expired` = 自首次尝试起满一个再入屏障(默认 20s)仍写不进 `death_at`,不带标记摘除 —— 这一步本身安全,但说明 Redis 在拒 SET;`abandoned` = 10 分钟仍摘不出负载集、放弃,死节点留在负载集里,`CreateScene` / `EnterScene` 可能被派到它上面,直到下一次 fullSync。健康时恒为 0。处置:查 Redis(内存与 maxmemory、慢日志、连接、go-zero 熔断),scene_manager 日志搜 `[ReentryBarrier][DeferDetach]`;`abandoned` 且 Redis 已恢复时可重启 scene_manager 领导者触发 fullSync 重扫。判读细节见 alerts 文件注释与 `docs/ops/cross-zone-failure-test-runbook.md` |
+| `SceneManagerSceneOrphanReconcileSpike` | warning | 单 zone 孤儿场景对账 `scene_manager_scene_orphans_reconciled_total` 超过 50 个/分钟、持续 5 分钟 —— 多半是某个 scene 节点 Pod 挂了(CrashLoopBackOff / OOMKilled);反复出现说明节点在抖。那些实例里的玩家已被断开,预期随后有一波重连 |
 
 Apply with:
 

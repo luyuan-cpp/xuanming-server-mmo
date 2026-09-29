@@ -118,6 +118,8 @@ func TestEtcYamlContractValues(t *testing.T) {
 // 只用测试守 etc/friend.yaml,不进 Validate 拒启:超预算的后果只是排除者扎堆于 pivot 之后时推荐偏少,不会推荐出
 // 错人;推荐是可降级展示功能,不值得为它把"运维调大好友上限"变成启动失败。这条红了:去 internal/data/recommend_repo.go
 // 调大 RecommendAnchorWindow,并同步复核其注释里的读数上界与 data 包 TestRecommendAnchor_WindowCoversBoundedExclusionBudget 的字面量。
+// 如果红是因为调大了 MaxFriends,调窗口之前先复核 mutual 召回的平方开销:单次 RecommendByMutual 约读 8×MaxFriends² 行,
+// Validate 用 maxFriendsCeiling 封顶它(推导与实测见那个常量)—— 只调窗口、不看这笔账,推荐会在好友满员的玩家身上超时。
 //
 // 下面的 need 是**保守上界**:它把"mutual 已选中、追加进 exclude 的 RecommendMaxLimit-1 个"与"want = RecommendMaxLimit"
 // 各按最大值算了一次,而 logic/recommend.go 的 RecommendFriends 里两者之和恒等于 limit ≤ RecommendMaxLimit。
@@ -254,6 +256,15 @@ func TestValidateAcceptsBaseline(t *testing.T) {
 	}
 }
 
+// TestValidateAcceptsMaxFriendsAtCeiling:天花板本身是合法值(闭区间),拒绝的只是超出它的配置。
+func TestValidateAcceptsMaxFriendsAtCeiling(t *testing.T) {
+	c := validConfig()
+	c.Friend.MaxFriends = maxFriendsCeiling
+	if err := c.Validate(); err != nil {
+		t.Fatalf("MaxFriends = maxFriendsCeiling(%d)应通过校验: %v", maxFriendsCeiling, err)
+	}
+}
+
 // TestValidateAcceptsOptionalSections 证明"整段可缺失"的几段真的可以缺:
 // Schema 缺失 = 自动建表;FriendRedis 缺失 = 回落共享库;Kafka.Brokers 缺失 = 不推送。
 // 这三条都是本地 / 冒烟环境的常态,不能被 Validate 拒。
@@ -317,6 +328,7 @@ func TestValidateRejects(t *testing.T) {
 
 		{"RecommendDefaultLimit>RecommendMaxLimit", func(c *Config) { c.Friend.RecommendDefaultLimit = 21 }},
 		{"RecommendMaxLimit 超过硬天花板 20", func(c *Config) { c.Friend.RecommendMaxLimit = 21 }},
+		{"MaxFriends 超过硬天花板(推荐的二度关系开销按平方增长)", func(c *Config) { c.Friend.MaxFriends = maxFriendsCeiling + 1 }},
 		{"Friend.CacheTTL=0(等于永不过期)", func(c *Config) { c.Friend.CacheTTL = 0 }},
 		{"Friend.CacheTTL 为负", func(c *Config) { c.Friend.CacheTTL = -time.Second }},
 
