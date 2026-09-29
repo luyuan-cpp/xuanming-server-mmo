@@ -755,7 +755,7 @@ Runbook 版本: v2.5(首跑 = 校准轮;与实际不符处已回改 runbook:是 
 
 | 场景 | 结果 | 备注(实际现象、耗时、与 runbook 不符处) |
 |---|---|---|
-| 基线 travel-smoke | OK / FAIL | 第二条腿 epoch 实际 = E+? |
+| 基线 travel-smoke | OK / FAIL | 第二条腿 epoch 实际 = E+?;(v2.5)`corr` 是否前后一致、`[TravelHandoff]` 新计数是否全 0、每个 gate 的 `scene link ready` 行数 vs scene 节点数、login-test 通过数与 `giving up` 条数 |
 | A 存盘后写标记前崩溃(等价类) | PASS / FAIL | 租约窗口内是 18 还是路由到死节点(G7);锁定总时长 |
 | B1 应答丢失-未放行 | PASS / FAIL / K-SM 无效 | 冻结时长 |
 | B2 应答丢失-已放行 | PASS / FAIL / SKIP(注入不出来) | 走的是踢线还是退出优先 |

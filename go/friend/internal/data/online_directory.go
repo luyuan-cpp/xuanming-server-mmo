@@ -200,7 +200,9 @@ func (d OnlineDirectory) readEntries(ctx context.Context, keys []string, skip ma
 			continue
 		}
 		name := strings.TrimSpace(player.GetProfileComponent().GetName())
-		if name == "" || player.GetLevelComponent().GetLevel() == 0 || player.GetUint32PbComponent().GetClass() == 0 {
+		// PlayerAllData 是存盘快照；新角色先在 Scene 内存设为 1 级，首次存盘前
+		// 缓存等级仍可为 0。等级只供展示，不能把未知等级当作不在线而漏掉玩家。
+		if name == "" || player.GetUint32PbComponent().GetClass() == 0 {
 			continue
 		}
 		if query != "" && !strings.Contains(strings.ToLower(name), query) && !strings.Contains(strconv.FormatUint(id, 10), query) {

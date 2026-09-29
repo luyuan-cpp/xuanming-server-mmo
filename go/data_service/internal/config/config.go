@@ -72,6 +72,88 @@ type Config struct {
 	// 与 scene_manager / match 同形(顶层键、默认 60)。租约丢失 = C++ 侧看到 data_service
 	// 消失,scene 的号段续段会失败(手里两段能顶 10~20 分钟),noderegistry 会 CAS 重夺 / 重分配 node_id。
 	LeaseTTL int64 `json:",default=60"`
+
+	// ── 回档的帮会资产闸(docs/design/guild-phase2/07-rollback-fail-closed.md §7.5.5)──────
+	// 三项都只影响三个 Rollback*,配错 / 没配的后果一律是"回档被拒"(fail-closed),不拖累 Load/Save。
+
+	// GuildInternalRpc 是回档前问 guild "这些玩家自快照以来有没有已应用的资产操作"的客户端
+	// (guildpb.GuildInternal/ListAppliedAssetOpsSince)。
+	//
+	// **不配 = 回档一律被拒**(ErrCodeRollbackGuildCheckFailed),不是"跳过检查"。
+	//
+	// 只认 Endpoints / Target 直连(07 §7.11-U10 选 (c)),见 HasGuildInternalRpc:
+	//   - guild 刻意不写 go-zero 的 Etcd.Key(port-decisions D-13),按 etcd 发现永远找不到它;
+	//   - RpcClientConf.Etcd 带 `inherit`:块在但没写 Etcd(或只写了 Hosts)时会继承顶层 Etcd 的
+	//     Key=dataservice.rpc —— 拨到 data_service 自己身上。所以只有 Etcd 的配置按"没配"处理。
+	//
+	// 单次调用上限就是这里的 Timeout(ValidateGuildCheck 限 [500, 3500] ms),**不另设旋钮**:
+	// zrpc 客户端自带超时拦截器,再立一个 CallTimeoutMs 只会得到两个旋钮、小的那个悄悄生效。
+	GuildInternalRpc zrpc.RpcClientConf `json:",optional"`
+
+	// GuildClockSkewMarginMs:每个玩家查询的起点 since_ms = 快照时刻(秒)×1000 − 本值(07 §7.2)。
+	// 它要盖住两件事:data_service 与 guild 两台机器的墙钟差,**加上** guild 记下的终结时刻其实是
+	// ProcessOne 的**开始**时刻、可早于 scene 实际落盘最多一个 OpBudget(2500ms)。所以即使同机部署、
+	// 时钟差为零,它也**不得为 0**:小于"快照时刻 − 终结时刻"的余量会漏掉"快照不含这笔扣款、guild 却记在
+	// 快照之前"的行 = 回档复制资产(fail-open)。
+	// 合法区间 [MinGuildClockSkewMarginMs, MaxGuildClockSkewMarginMs];默认 300000(5 分钟,与 04 §4.32
+	// 的 ±300s 服务间时钟承诺同口径)。代价是多拒:快照前 5 分钟内终结、其实已含在快照里的行也会被列出。
+	GuildClockSkewMarginMs int64 `json:",default=300000"`
+
+	// GuildCheckBudgetSeconds:帮会检查阶段(沉降等待之后、第一笔写之前)的总预算,单调时钟。
+	// **只罩检查阶段**,不罩写阶段,也不罩写后复查(那段有自己的常量预算)。耗尽 = CheckFailed、零写入,
+	// 不重试:重试只会把"guild 正在抖"伪装成"慢"。玩家很多的全服回档检查不完时调大它,并同步调大
+	// yaml 里对应方法的 MethodTimeouts。
+	GuildCheckBudgetSeconds int64 `json:",default=120"`
+}
+
+// 回档帮会闸的配置边界(07 §7.2、§7.5.3-3)。
+const (
+	// MinGuildClockSkewMarginMs = OpBudget(2500ms)× 2:终结时刻可早于落盘一个 OpBudget,再留一倍给时钟差。
+	// 0 与 4999 一律拒绝,理由见 Config.GuildClockSkewMarginMs。
+	MinGuildClockSkewMarginMs int64 = 5000
+	// MaxGuildClockSkewMarginMs:1 小时。再大就不是"时钟差"了,而是把整段历史都当成分歧,放行日志失去照单补偿的价值。
+	MaxGuildClockSkewMarginMs int64 = 3_600_000
+
+	// MinGuildInternalRpcTimeoutMs:下限防止写 0(go-zero 把 0 当成"不设客户端超时")。
+	MinGuildInternalRpcTimeoutMs int64 = 500
+	// MaxGuildInternalRpcTimeoutMs = guild 服务端 Timeout 4000(go/guild/etc/guild.yaml)− 500 回包余量:
+	// 客户端比服务端等得久,拿到的只会是服务端的 DeadlineExceeded,多等的那段没有意义。
+	MaxGuildInternalRpcTimeoutMs int64 = 3500
+
+	// MaxGuildCheckBudgetSeconds:检查阶段总预算的上限。一小时仍检查不完的回档应当缩小范围分批做;
+	// 也防止把一个秒数误填成毫秒后 Duration 乘法溢出。
+	MaxGuildCheckBudgetSeconds int64 = 3600
+)
+
+// HasGuildInternalRpc:是否配置了回档帮会检查的 guild 客户端。只认 Endpoints / Target,
+// 不认 Etcd(理由见 Config.GuildInternalRpc:guild 不注册 go-zero key,且 Etcd 会继承顶层 dataservice.rpc)。
+func (c Config) HasGuildInternalRpc() bool {
+	return len(c.GuildInternalRpc.Endpoints) > 0 || c.GuildInternalRpc.Target != ""
+}
+
+// ValidateGuildCheck 检查回档帮会闸的三项配置。返回非 nil = 回档闸不装配(svc.NewServiceContext),
+// 三个 Rollback* 一律 ErrCodeRollbackGuildCheckFailed;logic 每次回档前还会再调一次(纵深防御:
+// 单测与未来的装配点绕过 NewServiceContext 时,也不会拿一个非法余量去做检查)。
+//
+// 配错**拒绝而不是纠正**,理由同 PlayerNameConfig.Validate:余量是安全边界,被悄悄改成默认值
+// 谁都不知道;拒绝的症状是回档当场全部被拒,启动日志里写清是哪个键。
+// 不拒启整个进程:这三项只关系到回档,不能为它们让 Load/Save 这条玩家数据热路径停摆。
+func (c Config) ValidateGuildCheck() error {
+	if c.GuildClockSkewMarginMs < MinGuildClockSkewMarginMs || c.GuildClockSkewMarginMs > MaxGuildClockSkewMarginMs {
+		return fmt.Errorf("GuildClockSkewMarginMs(%d)必须在 [%d, %d] 内:终结时刻是 ProcessOne 的开始时刻,可早于落盘一个 OpBudget,余量为 0 会漏行(回档复制资产)",
+			c.GuildClockSkewMarginMs, MinGuildClockSkewMarginMs, MaxGuildClockSkewMarginMs)
+	}
+	if c.GuildCheckBudgetSeconds <= 0 || c.GuildCheckBudgetSeconds > MaxGuildCheckBudgetSeconds {
+		return fmt.Errorf("GuildCheckBudgetSeconds(%d)必须在 [1, %d] 内", c.GuildCheckBudgetSeconds, MaxGuildCheckBudgetSeconds)
+	}
+	if c.HasGuildInternalRpc() {
+		t := c.GuildInternalRpc.Timeout
+		if t < MinGuildInternalRpcTimeoutMs || t > MaxGuildInternalRpcTimeoutMs {
+			return fmt.Errorf("GuildInternalRpc.Timeout(%d ms)必须在 [%d, %d] 内:0 = 不设客户端超时;上限 = guild 服务端 Timeout 4000 − 500 回包余量",
+				t, MinGuildInternalRpcTimeoutMs, MaxGuildInternalRpcTimeoutMs)
+		}
+	}
+	return nil
 }
 
 // IdSegmentConfig 号段行的种植策略。
