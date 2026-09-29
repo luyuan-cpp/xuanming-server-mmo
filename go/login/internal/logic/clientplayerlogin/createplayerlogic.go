@@ -700,13 +700,19 @@ func (l *CreatePlayerLogic) readBackAccountBlob(accountDataKey string, playerID 
 // tip 复用发号失败那条 kLoginDataSerializeFailed:两者语义同档(「服务端此刻建不了角,
 // 稍后重试」),客户端对它的处理正是我们要的;而 Tip 码轴按段由导表器发号,
 // 这里不手写数字、也不为这一个分支去申请新码。
+//
+// 落点(docs/design/player-storage-placement.md §8.3):Placement.PinOnCreate 打开时,
+// 同一次 RPC 带上 storage_id,由 data_service 与 player:zone 原子一起钉落点;关着时 storage_id=0,
+// 请求与落点设计之前逐字节相同。钉落点失败与登记失败是同一次写,自然同样 fail-closed。
 func (l *CreatePlayerLogic) registerHomeZone(account string, playerID uint64) *login_proto_common.TipInfoMessage {
 	zone := config.AppConfig.Node.ZoneId
-	if err := l.svcCtx.HomeZone.RegisterPlayerZone(l.ctx, playerID, zone); err != nil {
+	storageID := config.AppConfig.Placement.StorageIDForNewPlayer(zone)
+	if err := l.svcCtx.HomeZone.RegisterPlayerZone(l.ctx, playerID, zone, storageID); err != nil {
 		logx.Errorf("Refusing to create player: player:zone registration failed "+
-			"(account=%s player_id=%d zone=%d): %v", account, playerID, zone, err)
+			"(account=%s player_id=%d zone=%d storage_id=%d): %v", account, playerID, zone, storageID, err)
 		return &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginDataSerializeFailed)}
 	}
-	logx.Infof("[home-zone] registered player:zone player_id=%d zone=%d (account=%s)", playerID, zone, account)
+	logx.Infof("[home-zone] registered player:zone player_id=%d zone=%d storage_id=%d (account=%s)",
+		playerID, zone, storageID, account)
 	return nil
 }

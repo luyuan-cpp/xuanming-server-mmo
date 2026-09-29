@@ -4829,6 +4829,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RegisterPlayerZoneRequest final : p
   enum : int {
     kPlayerIdFieldNumber = 1,
     kHomeZoneIdFieldNumber = 2,
+    kStorageIdFieldNumber = 3,
   };
   // uint64 player_id = 1;
   void clear_player_id() ;
@@ -4850,11 +4851,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RegisterPlayerZoneRequest final : p
   void _internal_set_home_zone_id(::uint32_t value);
 
   public:
+  // uint32 storage_id = 3;
+  void clear_storage_id() ;
+  [[nodiscard]] ::uint32_t storage_id() const;
+  void set_storage_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_storage_id() const;
+  void _internal_set_storage_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:data_service.RegisterPlayerZoneRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4885,6 +4896,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RegisterPlayerZoneRequest final : p
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t player_id_;
     ::uint32_t home_zone_id_;
+    ::uint32_t storage_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6332,6 +6344,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerHomeZoneResponse final : p
   // accessors -------------------------------------------------------
   enum : int {
     kHomeZoneIdFieldNumber = 1,
+    kHomeZoneMergingFieldNumber = 2,
   };
   // uint32 home_zone_id = 1;
   void clear_home_zone_id() ;
@@ -6343,11 +6356,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerHomeZoneResponse final : p
   void _internal_set_home_zone_id(::uint32_t value);
 
   public:
+  // bool home_zone_merging = 2;
+  void clear_home_zone_merging() ;
+  [[nodiscard]] bool home_zone_merging() const;
+  void set_home_zone_merging(bool value);
+
+  private:
+  bool _internal_home_zone_merging() const;
+  void _internal_set_home_zone_merging(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:data_service.GetPlayerHomeZoneResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -6377,6 +6400,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerHomeZoneResponse final : p
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t home_zone_id_;
+    bool home_zone_merging_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -12594,6 +12618,30 @@ inline void RegisterPlayerZoneRequest::_internal_set_home_zone_id(::uint32_t val
   _impl_.home_zone_id_ = value;
 }
 
+// uint32 storage_id = 3;
+inline void RegisterPlayerZoneRequest::clear_storage_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.storage_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t RegisterPlayerZoneRequest::storage_id() const {
+  // @@protoc_insertion_point(field_get:data_service.RegisterPlayerZoneRequest.storage_id)
+  return _internal_storage_id();
+}
+inline void RegisterPlayerZoneRequest::set_storage_id(::uint32_t value) {
+  _internal_set_storage_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:data_service.RegisterPlayerZoneRequest.storage_id)
+}
+inline ::uint32_t RegisterPlayerZoneRequest::_internal_storage_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.storage_id_;
+}
+inline void RegisterPlayerZoneRequest::_internal_set_storage_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.storage_id_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // GetPlayerHomeZoneRequest
@@ -12648,6 +12696,30 @@ inline ::uint32_t GetPlayerHomeZoneResponse::_internal_home_zone_id() const {
 inline void GetPlayerHomeZoneResponse::_internal_set_home_zone_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.home_zone_id_ = value;
+}
+
+// bool home_zone_merging = 2;
+inline void GetPlayerHomeZoneResponse::clear_home_zone_merging() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.home_zone_merging_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline bool GetPlayerHomeZoneResponse::home_zone_merging() const {
+  // @@protoc_insertion_point(field_get:data_service.GetPlayerHomeZoneResponse.home_zone_merging)
+  return _internal_home_zone_merging();
+}
+inline void GetPlayerHomeZoneResponse::set_home_zone_merging(bool value) {
+  _internal_set_home_zone_merging(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:data_service.GetPlayerHomeZoneResponse.home_zone_merging)
+}
+inline bool GetPlayerHomeZoneResponse::_internal_home_zone_merging() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.home_zone_merging_;
+}
+inline void GetPlayerHomeZoneResponse::_internal_set_home_zone_merging(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.home_zone_merging_ = value;
 }
 
 // -------------------------------------------------------------------

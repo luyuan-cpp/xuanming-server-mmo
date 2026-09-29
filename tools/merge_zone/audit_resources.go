@@ -36,6 +36,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -100,10 +101,12 @@ type auditConfig struct {
 	timeout time.Duration // per-query timeout — keep short, audit must be fast
 
 	// expectedSrcPlayers: T-1 彩排记下来的源区玩家数,-1 = 未提供。
-	// -verify-merged 用它把「行数够不够」从软提示变成硬断言。
+	// -verify-merged 用它与清单人数互相核对(拿错清单的最后一道拦截)。
 	expectedSrcPlayers int64
-	// tableCandidates: go/db 建表清单里的表名全集,用于发现玩家表。
-	tableCandidates []string
+	// manifest / manifestErr:-verify-merged 逐 id 核对用的那份清单(A6),由 runAuditEntry 按 -manifest-path 读。
+	// 读不出 / 是 dry-run 预览 / src-dst 对不上时 manifest 为 nil、manifestErr 说明原因,相关断言报 INFRA。
+	manifest    *mergeManifest
+	manifestErr error
 	// topicGeneration: db_task topic 的代号(go/db/etc/db.yaml Kafka.TopicGeneration)。
 	topicGeneration uint32
 	// tradeSchema / skipTrade:聚宝斋库名与跳过声明(-trade-schema / -skip-trade-mysql)。
@@ -113,10 +116,25 @@ type auditConfig struct {
 	// guildSchema:帮会独占库名(-guild-schema,默认 mmorpg_guild)。帮会表不在
 	// -mysql-dsn 的默认库里(D-14 §8),所有帮会 SQL 都要按「库名.表名」限定。
 	guildSchema string
+	// skipGuild:运维声明这里没有部署帮会服务(-skip-guild-mysql 与 -skip-guild-rank 同时给出,与合服前置
+	// P1 同一口径)。guild_member、verify:guild_zone、verify:guild_rank 三行审计都据此报 SKIPPED(warn),
+	// 不伪装成通过,也不因为查不到表而报 INFRA。
+	skipGuild bool
 	// friendSchema:好友独占库名(-friend-schema,默认 mmorpg_friend,port-decisions D-14)。
 	// 与 tradeSchema 同一口径:经同一个 -mysql-dsn 以「库名.表名」访问,flag 只为集成测试
 	// 的一次性库留口子(否则集成测试只能去动真实的 mmorpg_friend)。
 	friendSchema string
+}
+
+// verifyManifest 返回 -verify-merged 逐 id 核对用的清单;没有可用清单时返回原因(调用方报 INFRA)。
+func (c auditConfig) verifyManifest() (*mergeManifest, error) {
+	if c.manifestErr != nil {
+		return nil, c.manifestErr
+	}
+	if c.manifest == nil {
+		return nil, errors.New("no manifest loaded (-verify-merged requires -manifest-path)")
+	}
+	return c.manifest, nil
 }
 
 // auditEntryParams is the pure-data input for runAuditEntry. main.go owns
@@ -148,11 +166,12 @@ type auditEntryParams struct {
 	dataDB    int
 
 	verifyMerged       bool
+	manifestPath       string
 	expectedSrcPlayers int64
-	tableCandidates    []string
 	topicGeneration    uint32
 	tradeSchema        string
 	skipTrade          bool
+	skipGuild          bool
 	guildSchema        string
 	friendSchema       string
 }
@@ -238,12 +257,21 @@ func runAuditEntry(p auditEntryParams) {
 		verify:             p.verifyMerged,
 		timeout:            30 * time.Second,
 		expectedSrcPlayers: p.expectedSrcPlayers,
-		tableCandidates:    p.tableCandidates,
 		topicGeneration:    p.topicGeneration,
 		tradeSchema:        p.tradeSchema,
 		skipTrade:          p.skipTrade,
+		skipGuild:          p.skipGuild,
 		guildSchema:        p.guildSchema,
 		friendSchema:       p.friendSchema,
+	}
+	if p.verifyMerged {
+		// 读不出不整个退出:其余断言照跑,逐 id 那两条报 INFRA,整个审计以 exit 2 结束(结论不可信)。
+		cfg.manifest, cfg.manifestErr = loadVerifyManifest(p.manifestPath, p.src, p.dst)
+		if cfg.manifestErr != nil {
+			log.Printf("ERROR: %v — the per-player verifications will report INFRA", cfg.manifestErr)
+		} else {
+			log.Printf("verify: manifest %s (run_id=%s, %d players)", p.manifestPath, cfg.manifest.RunID, len(cfg.manifest.PlayerIDs))
+		}
 	}
 
 	mode := "pre-merge"
@@ -315,10 +343,11 @@ func runAuditMode(ctx context.Context, cfg auditConfig) []ResourceAudit {
 		// 合服后验证:runbook §5 Step 5 的那张表,逐条 block 级断言。
 		auditors = append(auditors,
 			verifyMappingDrained,
+			verifyManifestMapping, // 清单里每个玩家的 player:zone == dst(A6,取代「dst 总数 >= 期望值」的下界)
 			verifyGuildZoneDrained,
 			verifyGuildRankZSets,
 			verifyTradeMarketZoneDrained, // trade_listing.market_zone=src 必须为 0(trade_step.go)
-			verifyTargetZoneRows,
+			verifyManifestRows,           // 清单里每个玩家的主数据行在该在的库里(A6,取代 verify:target_zone_rows)
 			verifySourceHotStateGone,
 			verifyFenceReleased,
 		)
@@ -480,7 +509,7 @@ const defaultFriendSchema = "mmorpg_friend"
 // (-guild-schema / -trade-schema / -friend-schema)防的是同一件事(「是不是一个朴素
 // 标识符」),抄三份迟早会漂移成三套注入防线。
 // (本函数原先引用的是 trade_step.go 的 tradeSchemaNamePattern;帮会二期 B1b 把那份
-//  正则提到了 player_rows.go 并改名为 schemaNamePattern,合并后旧名已不存在。)
+// 正则提到了 player_rows.go 并改名为 schemaNamePattern,合并后旧名已不存在。)
 func validateFriendSchemaName(schema string) error {
 	if !schemaNamePattern.MatchString(schema) {
 		return fmt.Errorf("-friend-schema %q is not a plain identifier ([A-Za-z0-9_], 1-64 chars)", schema)
@@ -570,8 +599,19 @@ func auditFriendRequest(ctx context.Context, cfg auditConfig) ResourceAudit {
 // reference the same guild_id. We just count to give ops a sanity
 // number and verify there's no guild_member pointing at a guild that
 // no longer exists post-merge (orphan defensive check).
+//
+// 失败口径(2026-09-28,player-storage-placement.md §12 A9):帮会没被声明跳过时,库 / 表查不到与孤儿查询
+// 出错一律 INFRA(exit 2)。此前计数失败降级成 info「table not present」、孤儿查询的错误被 `_ =` 吞掉:
+// 帮会是常驻服务,「查不到」与「没有成员」在结果上分不开(-mysql-dsn 指错实例也是同一症状),本文件
+// 2026-05-23 的教训正是「优雅降级」把审计读成了干净通过。运维显式声明没有帮会服务(-skip-guild-mysql
+// -skip-guild-rank)时报 SKIPPED(warn):没查就不能看起来像通过。
 func auditGuildMembers(ctx context.Context, cfg auditConfig) ResourceAudit {
 	r := ResourceAudit{Name: "guild_member", UniqueScope: "global"}
+	if cfg.skipGuild {
+		r.Severity = "warn"
+		r.Notes = "SKIPPED (-skip-guild-mysql -skip-guild-rank): the guild service is declared absent here — guild_member was not checked"
+		return r
+	}
 	if cfg.db == nil {
 		return infraAudit(r.Name, "no MySQL handle")
 	}
@@ -580,17 +620,18 @@ func auditGuildMembers(ctx context.Context, cfg auditConfig) ResourceAudit {
 	}
 	memberTable := guildQualified(cfg.guildSchema, guildMemberTable)
 	if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+memberTable).Scan(&r.SourceCount); err != nil {
-		r.Severity = "info"
-		r.Notes = memberTable + " table not present"
-		return r
+		return infraAudit(r.Name, "count %s failed: %v (帮会表住独占库 %s:库没建 / 表没建跑 guild -f etc/guild.yaml -migrate;"+
+			"确实没部署帮会服务才给 -skip-guild-mysql -skip-guild-rank)", memberTable, err, cfg.guildSchema)
 	}
 	r.TargetCount = r.SourceCount
 	// Orphan check: members pointing at non-existent guilds.
 	var orphans int64
-	_ = cfg.db.QueryRowContext(ctx,
+	if err := cfg.db.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM "+memberTable+" m"+
 			" LEFT JOIN "+guildQualified(cfg.guildSchema, guildTable)+" g ON m.guild_id = g.guild_id"+
-			" WHERE g.guild_id IS NULL").Scan(&orphans)
+			" WHERE g.guild_id IS NULL").Scan(&orphans); err != nil {
+		return infraAudit(r.Name, "orphan check on %s failed: %v", memberTable, err)
+	}
 	r.ConflictCount = orphans
 	if orphans > 0 {
 		r.Severity = "warn"

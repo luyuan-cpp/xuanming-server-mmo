@@ -88,8 +88,11 @@ func (s *DataServiceServer) SetPlayerField(ctx context.Context, req *data_servic
 //   - 已存在且不同             → AlreadyExists + ErrCodeZoneMappingConflict,消息带既有 zone
 //   - 目标 zone 正在合服        → FailedPrecondition + ErrCodeZoneMergeInProgress
 //   - mapping Redis 故障        → Unavailable(闸门查询失败也走这里:fail-closed)
+//
+// storage_id != 0 时与映射同一段 Lua 原子钉落点记录(player-storage-placement.md §8.1);
+// 上面四种结果的语义不变 —— 只有映射这次真的写成才会写落点,幂等 / 冲突 / 被围栏拒绝都不碰它。
 func (s *DataServiceServer) RegisterPlayerZone(ctx context.Context, req *data_service.RegisterPlayerZoneRequest) (*emptypb.Empty, error) {
-	err := s.svcCtx.Router.RegisterPlayerZone(ctx, req.PlayerId, req.HomeZoneId)
+	err := s.svcCtx.Router.RegisterPlayerZone(ctx, req.GetPlayerId(), req.GetHomeZoneId(), req.GetStorageId())
 	if err == nil {
 		return &emptypb.Empty{}, nil
 	}
@@ -113,9 +116,13 @@ func (s *DataServiceServer) RegisterPlayerZone(ctx context.Context, req *data_se
 }
 
 // GetPlayerHomeZone 的线上契约(proto 注释不归本服务改,以此处为准):
-//   - 映射存在           → HomeZoneId=归属 zone, err=nil
+//   - 映射存在           → HomeZoneId=归属 zone, HomeZoneMerging=该 zone 是否在合服围栏内, err=nil
 //   - 映射不存在         → codes.NotFound,消息含 "no home zone mapping"
 //   - mapping Redis 故障 → codes.Unavailable
+//
+// HomeZoneMerging 与 HomeZoneId 同一段 Lua 读出(见 routing.GetPlayerHomeZoneAndMergeFence);
+// 围栏读失败按 true 返回(fail-closed)。scene_manager 据此在任何写之前拒绝进场(§8.2 / A16);
+// 旧版 data_service 不填该字段,调用方读到 false,行为与今天一致。
 //
 // 为什么「不存在」要用一个**专门的码**而不是 HomeZoneId=0 + nil:调用方必须能把
 // 「这名玩家确实没有映射」和「我没查到,因为 Redis 挂了」分开。前者是数据状态
@@ -128,7 +135,7 @@ func (s *DataServiceServer) RegisterPlayerZone(ctx context.Context, req *data_se
 // 老版本的 Unknown + 文案,两种服务端可以在滚动升级期间并存;所以 NotFound 的
 // 消息必须继续包含 "no home zone mapping" 这段文本,不能改写。
 func (s *DataServiceServer) GetPlayerHomeZone(ctx context.Context, req *data_service.GetPlayerHomeZoneRequest) (*data_service.GetPlayerHomeZoneResponse, error) {
-	zoneID, err := s.svcCtx.Router.GetPlayerHomeZone(ctx, req.PlayerId)
+	zoneID, merging, err := s.svcCtx.Router.GetPlayerHomeZoneAndMergeFence(ctx, req.GetPlayerId())
 	if err != nil {
 		if errors.Is(err, routing.ErrHomeZoneNotMapped) {
 			// err.Error() 形如 "no home zone mapping for player 42";文案是契约,见上。
@@ -136,7 +143,7 @@ func (s *DataServiceServer) GetPlayerHomeZone(ctx context.Context, req *data_ser
 		}
 		return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRedis, err)
 	}
-	return &data_service.GetPlayerHomeZoneResponse{HomeZoneId: zoneID}, nil
+	return &data_service.GetPlayerHomeZoneResponse{HomeZoneId: zoneID, HomeZoneMerging: merging}, nil
 }
 
 // BatchGetPlayerHomeZone 与单查刻意不同:**缺席的 id 直接不出现在 map 里**,不是错误。

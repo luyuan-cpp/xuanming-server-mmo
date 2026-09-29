@@ -6,11 +6,17 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"proto/battle"
+	"proto/common/base"
 	"proto/scene"
 	"robot/config"
 	"robot/generated/pb/game"
 	"robot/logic/gameobject"
+	"robot/metrics"
+
+	tiptable "shared/generated/pb/table"
 )
 
 func TestFeatureBattleIsExplicitAndInvalidOptionsStopBeforeConnecting(t *testing.T) {
@@ -70,6 +76,47 @@ func TestFeatureBattleWaiterHonorsFreshErrorSourceAndIgnoresStaleResponse(t *tes
 	close(closed)
 	if _, err := waitFeatureBattleResponse(ctx, p, closed, cursor, endID); err == nil {
 		t.Fatal("stale battle end became success")
+	}
+}
+
+// 直连上的自动战斗应答与拒绝进大厅同一套 waiter(turn-based §22 D73):callVia 经给定的发送函数发出,
+// 直连回来的拒绝变成 featureServerError 而不是超时;直连上未认领的信封错误(如补拉应答)只丢弃,
+// 不产生 feature 快照、也不交给通用分发(client 为 nil 仍不 panic)。
+func TestFeatureBattleDirectRepliesShareTheLobbyWaiter(t *testing.T) {
+	p := gameobject.NewPlayer(44)
+	s := &featureSmokeSession{player: p, stats: metrics.NewStats(), done: make(chan struct{})}
+	unavailable := uint32(tiptable.CommonError_kServiceUnavailable)
+
+	before := p.FeatureSequence()
+	s.onFeatureBattleDirectMessage(nil, &base.MessageContent{MessageId: game.BattleClientPlayerGetBattleStateMessageId,
+		ErrorMessage: &base.TipInfoMessage{Id: unavailable}})
+	if p.FeatureSequence() != before {
+		t.Fatal("unclaimed direct envelope error became a feature snapshot")
+	}
+
+	sent := 0
+	rejectingSend := func(id uint32, _ proto.Message) error {
+		sent++
+		s.onFeatureBattleDirectMessage(nil, &base.MessageContent{MessageId: id, ErrorMessage: &base.TipInfoMessage{Id: unavailable}})
+		return nil
+	}
+	_, err := s.callVia(rejectingSend, game.BattleClientPlayerSetAutoBattleMessageId, &battle.SetAutoBattleRequest{BattleId: 7, Enabled: true})
+	var server *featureServerError
+	if sent != 1 || !errors.As(err, &server) || server.MessageID != game.BattleClientPlayerSetAutoBattleMessageId || server.TipID != unavailable {
+		t.Fatalf("direct auto-battle rejection not surfaced: sent=%d err=%v", sent, err)
+	}
+
+	acceptingSend := func(id uint32, _ proto.Message) error {
+		body, err := proto.Marshal(&battle.SetAutoBattleResponse{})
+		if err != nil {
+			return err
+		}
+		s.onFeatureBattleDirectMessage(nil, &base.MessageContent{MessageId: id, SerializedMessage: body})
+		return nil
+	}
+	resp, err := s.callVia(acceptingSend, game.BattleClientPlayerSetAutoBattleMessageId, &battle.SetAutoBattleRequest{BattleId: 7, Enabled: true})
+	if err != nil || resp == nil {
+		t.Fatalf("direct auto-battle acceptance lost: resp=%v err=%v", resp, err)
 	}
 }
 

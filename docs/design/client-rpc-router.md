@@ -2,7 +2,7 @@
 
 **Created:** 2026-09-05
 **状态:** 决策已定,实施中(D29–D34);验证清单见 §7
-**关联:** [ARCH.md](./ARCH.md)(总拓扑)、[turn-based-battle-server.md §18](./turn-based-battle-server.md)(战斗直连;本文是它的"收缩阶段")、[player_login_flow.md](./player_login_flow.md)、[gate-scene-relay-architecture.md](./gate-scene-relay-architecture.md)
+**关联:** [ARCH.md](./ARCH.md)(总拓扑)、[turn-based-battle-server.md §18](./turn-based-battle-server.md)(战斗直连;本文是它的"收缩阶段")、[player_login_flow.md](./player_login_flow.md)、[gate-scene-relay-architecture.md](./gate-scene-relay-architecture.md)、[client-access-band-routing.md](./client-access-band-routing.md)(续篇:gate 按号段整体转发、路由服为唯一白名单,D51–D64,修订本文 D30/D31/D33/D34 的部分表述,见其 §20)
 
 ## 0. 一句话
 

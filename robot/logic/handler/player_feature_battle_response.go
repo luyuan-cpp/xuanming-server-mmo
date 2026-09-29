@@ -11,6 +11,8 @@ import (
 
 // 仅 features-smoke 显式战斗模式调用，其他模式保留已有收包行为。
 // 排队/自动战斗拒绝与通知解码失败写入专用 waiter，绝不把空错误包当成功。
+// 大厅连接与战斗直连两个 RecvLoop 都会调(turn-based §22 D73):开局在大厅,自动战斗应答与回合结算
+// 只在直连,终局包两边都可能到(Player 上的状态都有锁,重复终局只生效一次)。
 func HandleFeatureBattleMessage(player *gameobject.Player, message *base.MessageContent) bool {
 	if player == nil || message == nil {
 		return false
@@ -34,7 +36,8 @@ func HandleFeatureBattleMessage(player *gameobject.Player, message *base.Message
 		player.SetFeatureSnapshot(message.MessageId, nil, tip, reason)
 	}
 	if tip := message.GetErrorMessage().GetId(); tip != 0 {
-		fail(tip, "gate rejected feature battle request")
+		// 信封拒绝可能来自大厅(gate / 路由服,如 JoinQueue),也可能来自战斗直连(如 SetAutoBattle,turn-based §22 D73)。
+		fail(tip, "envelope rejected feature battle request")
 		return true
 	}
 	if err := proto.Unmarshal(message.SerializedMessage, response); err != nil {

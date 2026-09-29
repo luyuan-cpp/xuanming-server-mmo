@@ -681,3 +681,76 @@ obot.exe -c etc/battle_smoke_cross_zone.yaml` → `CROSS_ZONE_MATCH_OK … a_dir
 - G9(结算路由固定在开局)已由 2026-09-08 的 R07 结算出箱修掉主体,本轮只更正文档口径,
   残留是首投最多约 10s 的延迟。§3.2 / §6 / §7 对 `battle:settlement:pending:*` 写者的描述仍是
   R07 之前的旧口径(写者不只 scene,battle 节点也先写),待一并订正。
+
+## 21. 直连收缩现状核对(2026-09-29,静态阅读)
+
+> 用户 2026-09-29 问「battle 为什么不经 gate、客户端有几条连接」,本节是顺带核对出的现状快照。
+> 原理与问答见 [battle-transport-decision.md §8](./battle-transport-decision.md)。
+> 没有编译,没有运行,没有读客户端仓。行号以 2026-09-29 工作树为准。
+
+### 21.1 三处默认值不一样
+
+开关是 `GATE_CLIENT_RPC_ROUTER`。
+
+| 环境 | 开关默认 | gate 怎么处理战斗消息 | 客户端实际连接数 |
+|---|---|---|---|
+| C++ 裸跑(未设环境变量) | 关,即旧模式(`gate_router_mode.h:34-54`) | 按 `BindBattleEvent` 建立的绑定,经 gRPC 中继给 battle | 直连成功时 2 条;直连失败时回落 gate 中继,1 条 |
+| 本地 `start_game.ps1` | `'1'`,即路由模式(`start_game.ps1:20`) | 直接回 `kServiceUnavailable`(`client_message_processor.cpp:812-821`);路由服同样拒绝(`forwardlogic.go:133-137`) | 战斗期间 2 条,而且只能走直连 |
+| K8s `k8s_deploy.ps1` | `"0"`,即旧模式(`k8s_deploy.ps1:153`) | 中继 | 【推】battle 对外通告的是 POD_IP(`k8s_deploy.ps1:4027-4028`),集群外连不上;直连失败后回落 gate 中继,实际只有 1 条 |
+
+### 21.2 D37 收缩清单:一项都没删
+
+battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参与编译,只是被开关隔开了:
+
+- `cpp/nodes/gate/handler/event/battle_binding_helper.cpp`(Bind / Unbind / `ClearBattleRecord`),以及 `gate_event_handler.cpp` 对 Bind/UnbindBattleEvent 的订阅;
+- gate 出站白名单里旧模式分支的 `BattleNodeService`(`gate/main.cpp:214-217`);
+- `HandleGrpcNodeMessage` 对 Battle 的「必须先绑定」规则;
+- `ClearBattleRecord` 的两个调用点:断线时一处,`OnNodeRemove` 的 battle 分支一处;
+- battle 侧的 `BattleClientPlayerGrpcImpl`(读 `x-session-detail-bin`),以及 gate 端按应答类型反查消息号的桥接;
+- scene 换会话时经 Kafka 重发 `BindBattleEvent`(`player_battle.cpp`)。
+
+删码门槛仍是 D36/D37:「K8s 上以路由模式跑通 battle-smoke」。PROGRESS 里没有通过记录。
+
+### 21.3 D39 没落码,由此出现的不对称
+
+- `BattleRoomManager::PushToPlayer`(`battle_room_manager.cpp:1267-1289`)对**所有**消息号都是「有直连就直发,否则经 Kafka → gate 回落」,没有按 D39 收窄。
+- 路由模式下,没建成直连的玩家处于不对称状态:
+  - 下行战斗帧仍能经 gate 收到;
+  - 上行出手被 gate 拒绝,每回合只能等超时后默认普攻。
+- 以下两条在路由模式下都不成立,只在旧模式下成立,结果同上:
+  - D26「签不出票只记 WARN,该玩家全程走 gate 中继」;
+  - §18.2 的「回落」条款。
+- D26 要不要改成 fail-closed(签不出票就拒绝开局),待决策。
+
+### 21.4 Unity 客户端(只依据本仓文档)
+
+- 客户端提交 `b5cf6ef` 已接入 `BattleDirectLink` 和 `DirectRoutingBattleTransport`。09-17 的 EditMode 回归里,BattleDirectLink 有 38 条通过(PROGRESS)。
+- Unity 实机连真 battle 的端到端直连**没跑过**(§19.3 第 4 步)。09-03 的 Unity 双播放器实测早于直连落码,当时战斗走的是 gate 中继。
+- 真正端到端验证过直连的只有 robot:09-05 跑了两轮 `BATTLE_SMOKE_OK`,`a_direct_turns == 总回合数`。
+
+### 21.5 调研中发现的风险(待核实或待决策)
+
+1. **停机路径可能丢终局包。**
+   - 顺序:`SetBeforeShutdown` 先调 `AbortAllRooms`,把房间直连的 shutdown 推迟一轮;紧接着同步调 `DisconnectAll`,把仍处于 `connected()` 的房间直连 `forceClose`;排队的延迟 shutdown 随后被跳过。
+   - 后果:终局包如果还积压在用户态输出缓冲里,可能丢失。
+   - `DisconnectAll` 的注释「这些连接 connected()==false」已经过时(`battle/main.cpp:224-230`)。
+2. **补签依赖观战索引。**
+   - `spectate:battle:{id}` 在 CreateBattle 之后才写,写失败只打日志,理由是「只影响可观战」。
+   - 但 `RequestBattleTicket` 也靠这个索引定位节点。索引缺失时,补签会回「战斗不存在或已结束」(`go/match/internal/logic/spectate.go`、`requestbattleticketlogic.go`)。
+3. **§11.7 回调绑定。**
+   - `BattleClientEdge::Install` 往 `TcpServer` 的回调里绑的是裸 `this`,edge 比 TcpServer 活得长只靠 node_entry 里的声明顺序保证。
+   - `BattleRoomManager::edge_` 是裸指针。事故审计建议在 before-shutdown 里调 `SetClientEdge(nullptr)`,目前没做。
+4. **两个冒烟场景的战斗步骤可能被拒。**
+   - `team-smoke` 要求路由模式,但它的 `SetAutoBattle` 故意经 gate 发;`features-smoke` 的战斗也走 gate 连接。
+   - 按路由模式的规则,这些上行会被拒。PROGRESS 里也找不到 `TEAM_SMOKE_OK` / `FEATURES_BATTLE_OK` 的通过记录。
+5. **路由模式下,战斗中的路由自愈不会触发。**
+   - `RefreshRoutingFromSession` 只采信带 `gate_instance_id` 的会话身份,而直连面合成的 `SessionDetails` 不带这个字段。
+   - 战斗中换 gate 之后,Kafka 回落推送会投到旧会话,恢复只能靠客户端补签后重连。D38 认可这种做法。
+6. **本地端口冲突。** scene 和 battle 共用端口基址 20000,分配器的重试路径会以 fail-closed 方式死循环,本地是给 battle 设 `RPC_PORT=20010` 绕过去的。
+
+### 21.6 待用户决策
+
+- K8s 上 battle 的集群外入口形态:hostPort / NodePort / 外部 L4 / Agones。
+- D26 要不要改成 fail-closed。
+- D39 要不要先于 D37 单独落地。
+- §21.5 第 1、2 条要不要修。

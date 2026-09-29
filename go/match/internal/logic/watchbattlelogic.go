@@ -29,14 +29,21 @@ func NewWatchBattleLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Watch
 }
 
 // WatchBattle 观战入口(设计文档 §10.2,决策 D9/D11):
-//   - 互斥检查:持有 match ticket / battle:lock → 拒绝(观众绑定与参战绑定共用
-//     SessionInfo 的 BattleNodeService 槽位,互斥杜绝绑定覆盖竞态);已在观战
-//     则先清退旧场再接入新场(服务端换场语义,客户端无需先 StopWatchBattle);
+//   - 互斥检查:持有 match ticket / battle:lock → 拒绝(一名玩家同一时刻只保留一条
+//     battle 直连 —— 客户端单条链路,battle 房间 directConnByPlayer 按 player_id 单槽,
+//     观战与参战不能并存);已在观战则先清退旧场再接入新场(服务端换场语义,
+//     客户端无需先 StopWatchBattle);
 //   - battle_id=0 随机挑一场;AddObserver 报房间不存在时懒剔除索引并换一场重试一次;
 //   - 观众是否为该场参战者由 battle 侧校验(房间成员名单只有 battle 有权威),
 //     这里不重复;
-//   - 成功即返回,观战首帧(NotifySpectateState)由 battle 节点经 Kafka gate 推送,
-//     客户端收到首帧才算进入观战。
+//   - AddObserver 的其余拒绝(观众满 / 参战者 / 签不出票 kServiceUnavailable,
+//     turn-based §22 D70)一律回滚观战标记、不动索引、不换场;签票失败时 battle 侧
+//     不会留下该观众(新观众不登记,幂等重推路径摘出名单并关其直连),match 不必再发
+//     RemoveObserver;
+//   - 成功即返回:落点分配(NotifyBattleAssigned)由 battle 推给客户端(尚无直连时经
+//     Kafka→gate,turn-based §22 D68),
+//     客户端凭票直连 battle,观战首帧(NotifySpectateState)随直连握手下发
+//     (turn-based §22 D69),收到首帧才算进入观战。
 func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb.WatchBattleResponse, error) {
 	playerId := authoritativePlayerID(l.ctx, in.PlayerId)
 	if playerId == 0 {
@@ -80,7 +87,7 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 		return internalErr("读观战标记", err)
 	}
 	if watchingRaw != "" {
-		// "已在观战"不拒绝,懒清退旧场后放行:StopWatchBattle 走 gate→battle 直达
+		// "已在观战"不拒绝,懒清退旧场后放行:StopWatchBattle 经 battle 直连直达
 		// 不经 match,战斗收尾 battle 也不回写 Redis,标记只能靠 TTL 自灭,一律
 		// 拒绝会把玩家卡死整个 TTL 窗口。metrics 在此仅计数懒清退;该标签的
 		// 拒绝出口只剩后方 SetnxEx 并发抢占失败一处。
@@ -89,7 +96,7 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 			// 标记值非法:删掉残留后按新请求继续。
 			deleteSpectateWatching(l.svcCtx, playerId)
 		} else if in.BattleId != 0 && in.BattleId == prevBattleId {
-			// 重看同一场:仅删标记,重推首帧/换会话重绑由 battle 侧 AddObserver
+			// 重看同一场:仅删标记,重推分配与首帧 / 换会话关旧直连由 battle 侧 AddObserver
 			// 幂等分支负责;勿发 removeObserver,免得给仍存活的旧会话推假 SpectateEnd。
 			deleteSpectateWatching(l.svcCtx, playerId)
 		} else {
@@ -100,8 +107,9 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 		// 三种情况都不 return:后续成功路径的 SetnxEx 会为新场原子抢占标记。
 	}
 
-	// 观众必须在线:观众路由(session/gate)从 player:session 组装,首帧经
-	// gate 推送,不在线没有可路由的会话。
+	// 观众必须在线:观众路由(session/gate)从 player:session 组装,观众尚无直连时
+	// 落点分配(NotifyBattleAssigned)经 gate 推送(turn-based §22 D68 大厅公告),
+	// 不在线没有可路由的会话。
 	session, err := loadPlayerSession(l.svcCtx, playerId)
 	if err != nil {
 		return internalErr("读会话", err)
@@ -160,7 +168,7 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 			}, nil
 		}
 
-		// 先原子抢占互斥标记(SETNX+EX)再 AddObserver:标记必须先于绑定生效,
+		// 先原子抢占互斥标记(SETNX+EX)再 AddObserver:标记必须先于观众登记生效,
 		// 否则并发的 JoinQueue 会漏掉清退;入口已清掉本玩家旧标记,抢占失败只可能
 		// 是并发 WatchBattle,由 SetnxEx 一锤定音拒绝。AddObserver 失败回滚 DEL。
 		if beforeAcquireWatchingHook != nil {
@@ -181,10 +189,11 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 			playerId, session.Account, routing)
 		if err == nil {
 			// double-check 收尾:关『检查→写标记』TOCTOU 的另一半窗口——上方
-			// 『标记先于绑定』只保证标记落地之后的 JoinQueue 能看到并清退;若并发
+			// 『标记先于登记』只保证标记落地之后的 JoinQueue 能看到并清退;若并发
 			// gather(尤其 PVE_SOLO 即时凑单)在入口 ticket 检查之后、标记落地之前
-			// 已完成清退,观众绑定仍可能晚于参战绑定落地。复查命中即自我清退;
-			// gate 侧 Unbind 按 battle_id 匹配,补偿解绑不会误伤参战绑定。
+			// 已完成清退,观众登记仍可能晚于参战开局落地。复查命中即自我清退;
+			// RemoveObserver 按 battle_id 定位房间,只摘该场观众名单并关该场直连,
+			// 不会误伤玩家在另一场的参战直连。
 			recheckTicket, terr := loadTicket(l.svcCtx, playerId)
 			if terr != nil {
 				// 复查读 Redis 失败不阻断成功返回:双检是尽力收窄,不引入新失败面。

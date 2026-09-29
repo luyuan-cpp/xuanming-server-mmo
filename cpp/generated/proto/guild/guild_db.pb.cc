@@ -43,6 +43,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fguild_2fguild_5fdb_2eproto, /* tracker*/ nullptr,},
         // ::guildpb::GuildDailyCounterRecord
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fguild_2fguild_5fdb_2eproto, /* tracker*/ nullptr,},
+        // ::guildpb::GuildActivityProgressRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fguild_2fguild_5fdb_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -1462,6 +1464,190 @@ const ::_pbi::ClassData* GuildApplicationRecord_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class GuildActivityProgressRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GuildActivityProgressRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_._has_bits_);
+};
+
+constexpr GuildActivityProgressRecord::ParseTableT_ GuildActivityProgressRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      7, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967168,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      7,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::guildpb::GuildActivityProgressRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 guild_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildActivityProgressRecord, _impl_.guild_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.guild_id_)}},
+      // uint32 activity_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildActivityProgressRecord, _impl_.activity_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.activity_id_)}},
+      // uint32 period_key = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildActivityProgressRecord, _impl_.period_key_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.period_key_)}},
+      // uint32 progress_count = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildActivityProgressRecord, _impl_.progress_count_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.progress_count_)}},
+      // uint64 threshold_reached_ms = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildActivityProgressRecord, _impl_.threshold_reached_ms_), 3>(),
+       {40, 3, 0,
+        PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.threshold_reached_ms_)}},
+      // uint32 funds_granted = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildActivityProgressRecord, _impl_.funds_granted_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.funds_granted_)}},
+      // uint64 updated_ms = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildActivityProgressRecord, _impl_.updated_ms_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.updated_ms_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 guild_id = 1;
+      {PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.guild_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 activity_id = 2;
+      {PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.activity_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 period_key = 3;
+      {PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.period_key_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 progress_count = 4;
+      {PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.progress_count_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 threshold_reached_ms = 5;
+      {PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.threshold_reached_ms_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 funds_granted = 6;
+      {PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.funds_granted_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 updated_ms = 7;
+      {PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.updated_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GuildActivityProgressRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        guild_id_{::uint64_t{0u}},
+        activity_id_{0u},
+        period_key_{0u},
+        threshold_reached_ms_{::uint64_t{0u}},
+        progress_count_{0u},
+        funds_granted_{0u},
+        updated_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr GuildActivityProgressRecord::GuildActivityProgressRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GuildActivityProgressRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GuildActivityProgressRecord(arena);
+}
+constexpr auto GuildActivityProgressRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GuildActivityProgressRecord), alignof(GuildActivityProgressRecord));
+}
+constexpr auto GuildActivityProgressRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GuildActivityProgressRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GuildActivityProgressRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GuildActivityProgressRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GuildActivityProgressRecord>(), &GuildActivityProgressRecord::ByteSizeLong,
+              &GuildActivityProgressRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[7],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fguild_2fguild_5fdb_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GuildActivityProgressRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GuildActivityProgressRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GuildActivityProgressRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GuildActivityProgressRecord::InternalGenerateClassData_(
+            _default, &GuildActivityProgressRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GuildActivityProgressRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GuildActivityProgressRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GuildActivityProgressRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GuildActivityProgressRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GuildActivityProgressRecordGlobalsTypeInternal GuildActivityProgressRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GuildActivityProgressRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GuildActivityProgressRecord_globals_.GetClassData();
+#else
+  return GuildActivityProgressRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace guildpb
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
     file_level_enum_descriptors_proto_2fguild_2fguild_5fdb_2eproto[3];
@@ -1617,6 +1803,23 @@ const ::uint32_t
         3,
         4,
         5,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildActivityProgressRecord, _impl_._has_bits_),
+        10, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildActivityProgressRecord, _impl_.guild_id_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildActivityProgressRecord, _impl_.activity_id_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildActivityProgressRecord, _impl_.period_key_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildActivityProgressRecord, _impl_.progress_count_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildActivityProgressRecord, _impl_.threshold_reached_ms_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildActivityProgressRecord, _impl_.funds_granted_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildActivityProgressRecord, _impl_.updated_ms_),
+        0,
+        1,
+        2,
+        4,
+        3,
+        5,
+        6,
 };
 
 static const ::_pbi::MigrationSchema
@@ -1628,6 +1831,7 @@ static const ::_pbi::MigrationSchema
         {60, sizeof(::guildpb::GuildPlayerOpSeqRecord)},
         {73, sizeof(::guildpb::GuildAssetOpRecord)},
         {132, sizeof(::guildpb::GuildDailyCounterRecord)},
+        {147, sizeof(::guildpb::GuildActivityProgressRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1638,6 +1842,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::guildpb::GuildPlayerOpSeqRecord_globals_,
         &::guildpb::GuildAssetOpRecord_globals_,
         &::guildpb::GuildDailyCounterRecord_globals_,
+        &::guildpb::GuildActivityProgressRecord_globals_,
 };
 const char descriptor_table_protodef_proto_2fguild_2fguild_5fdb_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -1695,22 +1900,29 @@ const char descriptor_table_protodef_proto_2fguild_2fguild_5fdb_2eproto[] ABSL_A
     "\022\022\n\nupdated_ms\030\006 \001(\004:c\212\222\364\001\023guild_daily_c"
     "ounter\222\222\364\001(player_id,counter_kind,ref_id"
     ",period_key\332\222\364\001\nperiod_key\250\223\364\001\001\260\223\364\001\004\270\223\364\001"
-    "\004*\363\001\n\022GuildAssetOpStatus\022%\n!GUILD_ASSET_"
-    "OP_STATUS_UNSPECIFIED\020\000\022!\n\035GUILD_ASSET_O"
-    "P_STATUS_PENDING\020\001\022!\n\035GUILD_ASSET_OP_STA"
-    "TUS_APPLIED\020\002\022\"\n\036GUILD_ASSET_OP_STATUS_R"
-    "EJECTED\020\003\022!\n\035GUILD_ASSET_OP_STATUS_ABORT"
-    "ED\020\004\022)\n%GUILD_ASSET_OP_STATUS_APPLIED_PA"
-    "RTIAL\020\005*\236\001\n\020GuildAssetOpKind\022#\n\037GUILD_AS"
-    "SET_OP_KIND_UNSPECIFIED\020\000\022\036\n\032GUILD_ASSET"
-    "_OP_KIND_DONATE\020\001\022\034\n\030GUILD_ASSET_OP_KIND"
-    "_SHOP\020\002\022\'\n#GUILD_ASSET_OP_KIND_ACTIVITY_"
-    "REWARD\020\003*\260\001\n\025GuildDailyCounterKind\022(\n$GU"
-    "ILD_DAILY_COUNTER_KIND_UNSPECIFIED\020\000\022#\n\037"
-    "GUILD_DAILY_COUNTER_KIND_DONATE\020\001\022!\n\035GUI"
-    "LD_DAILY_COUNTER_KIND_SHOP\020\002\022%\n!GUILD_DA"
-    "ILY_COUNTER_KIND_ACTIVITY\020\003B\023Z\021guild/pro"
-    "to/guildb\006proto3"
+    "\004\"\212\002\n\033GuildActivityProgressRecord\022\020\n\010gui"
+    "ld_id\030\001 \001(\004\022\023\n\013activity_id\030\002 \001(\r\022\022\n\nperi"
+    "od_key\030\003 \001(\r\022\026\n\016progress_count\030\004 \001(\r\022\034\n\024"
+    "threshold_reached_ms\030\005 \001(\004\022\025\n\rfunds_gran"
+    "ted\030\006 \001(\r\022\022\n\nupdated_ms\030\007 \001(\004:O\212\222\364\001\027guil"
+    "d_activity_progress\222\222\364\001\037guild_id,activit"
+    "y_id,period_key\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004*\363\001\n\022Guild"
+    "AssetOpStatus\022%\n!GUILD_ASSET_OP_STATUS_U"
+    "NSPECIFIED\020\000\022!\n\035GUILD_ASSET_OP_STATUS_PE"
+    "NDING\020\001\022!\n\035GUILD_ASSET_OP_STATUS_APPLIED"
+    "\020\002\022\"\n\036GUILD_ASSET_OP_STATUS_REJECTED\020\003\022!"
+    "\n\035GUILD_ASSET_OP_STATUS_ABORTED\020\004\022)\n%GUI"
+    "LD_ASSET_OP_STATUS_APPLIED_PARTIAL\020\005*\236\001\n"
+    "\020GuildAssetOpKind\022#\n\037GUILD_ASSET_OP_KIND"
+    "_UNSPECIFIED\020\000\022\036\n\032GUILD_ASSET_OP_KIND_DO"
+    "NATE\020\001\022\034\n\030GUILD_ASSET_OP_KIND_SHOP\020\002\022\'\n#"
+    "GUILD_ASSET_OP_KIND_ACTIVITY_REWARD\020\003*\260\001"
+    "\n\025GuildDailyCounterKind\022(\n$GUILD_DAILY_C"
+    "OUNTER_KIND_UNSPECIFIED\020\000\022#\n\037GUILD_DAILY"
+    "_COUNTER_KIND_DONATE\020\001\022!\n\035GUILD_DAILY_CO"
+    "UNTER_KIND_SHOP\020\002\022%\n!GUILD_DAILY_COUNTER"
+    "_KIND_ACTIVITY\020\003B\023Z\021guild/proto/guildb\006p"
+    "roto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_deps[1] = {
@@ -1720,13 +1932,13 @@ static ::absl::once_flag descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_onc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fguild_2fguild_5fdb_2eproto = {
     false,
     false,
-    2776,
+    3045,
     descriptor_table_protodef_proto_2fguild_2fguild_5fdb_2eproto,
     "proto/guild/guild_db.proto",
     &descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_once,
     descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_deps,
     1,
-    7,
+    8,
     schemas,
     file_message_globals,
     TableStruct_proto_2fguild_2fguild_5fdb_2eproto::offsets,
@@ -4532,6 +4744,339 @@ void GuildDailyCounterRecord::InternalSwap(GuildDailyCounterRecord* PROTOBUF_RES
 }
 
 ::google::protobuf::Metadata GuildDailyCounterRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GuildActivityProgressRecord::GuildActivityProgressRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GuildActivityProgressRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:guildpb.GuildActivityProgressRecord)
+}
+GuildActivityProgressRecord::GuildActivityProgressRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GuildActivityProgressRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GuildActivityProgressRecord_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE GuildActivityProgressRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GuildActivityProgressRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, guild_id_),
+           0,
+           offsetof(Impl_, updated_ms_) -
+               offsetof(Impl_, guild_id_) +
+               sizeof(Impl_::updated_ms_));
+}
+GuildActivityProgressRecord::~GuildActivityProgressRecord() {
+  // @@protoc_insertion_point(destructor:guildpb.GuildActivityProgressRecord)
+  SharedDtor(*this);
+}
+inline void GuildActivityProgressRecord::SharedDtor(MessageLite& self) {
+  GuildActivityProgressRecord& this_ = static_cast<GuildActivityProgressRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GuildActivityProgressRecord_class_data_ =
+        GuildActivityProgressRecord::InternalGenerateClassData_(GuildActivityProgressRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GuildActivityProgressRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GuildActivityProgressRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GuildActivityProgressRecord_class_data_.tc_table);
+  return GuildActivityProgressRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GuildActivityProgressRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GuildActivityProgressRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GuildActivityProgressRecord_globals_));
+  return GuildActivityProgressRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GuildActivityProgressRecord::ParseTableT_
+    GuildActivityProgressRecord::_table_ =
+        GuildActivityProgressRecord::InternalGenerateParseTable_(GuildActivityProgressRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GuildActivityProgressRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:guildpb.GuildActivityProgressRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    ::memset(&_impl_.guild_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.updated_ms_) -
+        reinterpret_cast<char*>(&_impl_.guild_id_)) + sizeof(_impl_.updated_ms_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GuildActivityProgressRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GuildActivityProgressRecord& this_ = static_cast<const GuildActivityProgressRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GuildActivityProgressRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GuildActivityProgressRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:guildpb.GuildActivityProgressRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 guild_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_guild_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_guild_id(), target);
+    }
+  }
+
+  // uint32 activity_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_activity_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_activity_id(), target);
+    }
+  }
+
+  // uint32 period_key = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_period_key() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_period_key(), target);
+    }
+  }
+
+  // uint32 progress_count = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_progress_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_progress_count(), target);
+    }
+  }
+
+  // uint64 threshold_reached_ms = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_threshold_reached_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_threshold_reached_ms(), target);
+    }
+  }
+
+  // uint32 funds_granted = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_funds_granted() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_funds_granted(), target);
+    }
+  }
+
+  // uint64 updated_ms = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_updated_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_updated_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:guildpb.GuildActivityProgressRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GuildActivityProgressRecord::ByteSizeLong(const MessageLite& base) {
+  const GuildActivityProgressRecord& this_ = static_cast<const GuildActivityProgressRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GuildActivityProgressRecord::ByteSizeLong() const {
+  const GuildActivityProgressRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:guildpb.GuildActivityProgressRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    // uint64 guild_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_guild_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_guild_id());
+      }
+    }
+    // uint32 activity_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_activity_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_activity_id());
+      }
+    }
+    // uint32 period_key = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_period_key() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_period_key());
+      }
+    }
+    // uint64 threshold_reached_ms = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_threshold_reached_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_threshold_reached_ms());
+      }
+    }
+    // uint32 progress_count = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_progress_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_progress_count());
+      }
+    }
+    // uint32 funds_granted = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_funds_granted() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_funds_granted());
+      }
+    }
+    // uint64 updated_ms = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_updated_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_updated_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GuildActivityProgressRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GuildActivityProgressRecord*>(&to_msg);
+  auto& from = static_cast<const GuildActivityProgressRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:guildpb.GuildActivityProgressRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_guild_id() != 0) {
+        _this->_impl_.guild_id_ = from._impl_.guild_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_activity_id() != 0) {
+        _this->_impl_.activity_id_ = from._impl_.activity_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_period_key() != 0) {
+        _this->_impl_.period_key_ = from._impl_.period_key_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_threshold_reached_ms() != 0) {
+        _this->_impl_.threshold_reached_ms_ = from._impl_.threshold_reached_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_progress_count() != 0) {
+        _this->_impl_.progress_count_ = from._impl_.progress_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_funds_granted() != 0) {
+        _this->_impl_.funds_granted_ = from._impl_.funds_granted_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_updated_ms() != 0) {
+        _this->_impl_.updated_ms_ = from._impl_.updated_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GuildActivityProgressRecord::CopyFrom(const GuildActivityProgressRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:guildpb.GuildActivityProgressRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GuildActivityProgressRecord::InternalSwap(GuildActivityProgressRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.updated_ms_)
+      + sizeof(GuildActivityProgressRecord::_impl_.updated_ms_)
+      - PROTOBUF_FIELD_OFFSET(GuildActivityProgressRecord, _impl_.guild_id_)>(
+          reinterpret_cast<char*>(&_impl_.guild_id_),
+          reinterpret_cast<char*>(&other->_impl_.guild_id_));
+}
+
+::google::protobuf::Metadata GuildActivityProgressRecord::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

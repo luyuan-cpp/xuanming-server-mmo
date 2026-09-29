@@ -209,6 +209,11 @@ namespace guildpb{void SendGuildServiceDonateToGuild(entt::registry& , entt::ent
 namespace guildpb{void SendGuildServiceUpgradeGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceGetGuildShop(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceBuyGuildShopGoods(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceGetGuildActivities(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceLightGuildLantern(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceClaimGuildReunion(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceStartGuildTrial(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceRespondGuildTrialInvite(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace loginpb{void SendClientPlayerLoginLogin(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace loginpb{void SendClientPlayerLoginCreatePlayer(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace loginpb{void SendClientPlayerLoginEnterGame(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
@@ -264,7 +269,7 @@ namespace trade{void SendTradeAdminSeedListing(entt::registry& , entt::entity , 
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 239,
+static_assert(kMaxRpcMethodCount == 244,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -776,6 +781,31 @@ void InitMessageInfo()
         std::make_unique<::guildpb::BuyGuildShopGoodsRequest>(),
         std::make_unique<::guildpb::BuyGuildShopGoodsResponse>(),
         nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceBuyGuildShopGoods};
+    gRpcMethodRegistry[GuildServiceGetGuildActivitiesMessageId] = RpcMethodMeta{
+        "GuildService", "GetGuildActivities",
+        std::make_unique<::guildpb::GetGuildActivitiesRequest>(),
+        std::make_unique<::guildpb::GetGuildActivitiesResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceGetGuildActivities};
+    gRpcMethodRegistry[GuildServiceLightGuildLanternMessageId] = RpcMethodMeta{
+        "GuildService", "LightGuildLantern",
+        std::make_unique<::guildpb::LightGuildLanternRequest>(),
+        std::make_unique<::guildpb::LightGuildLanternResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceLightGuildLantern};
+    gRpcMethodRegistry[GuildServiceClaimGuildReunionMessageId] = RpcMethodMeta{
+        "GuildService", "ClaimGuildReunion",
+        std::make_unique<::guildpb::ClaimGuildReunionRequest>(),
+        std::make_unique<::guildpb::ClaimGuildReunionResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceClaimGuildReunion};
+    gRpcMethodRegistry[GuildServiceStartGuildTrialMessageId] = RpcMethodMeta{
+        "GuildService", "StartGuildTrial",
+        std::make_unique<::guildpb::StartGuildTrialRequest>(),
+        std::make_unique<::guildpb::StartGuildTrialResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceStartGuildTrial};
+    gRpcMethodRegistry[GuildServiceRespondGuildTrialInviteMessageId] = RpcMethodMeta{
+        "GuildService", "RespondGuildTrialInvite",
+        std::make_unique<::guildpb::RespondGuildTrialInviteRequest>(),
+        std::make_unique<::guildpb::RespondGuildTrialInviteResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceRespondGuildTrialInvite};
 
     // --- ClientPlayerLogin ---
     gRpcMethodRegistry[ClientPlayerLoginLoginMessageId] = RpcMethodMeta{
@@ -1584,6 +1614,11 @@ bool IsClientMessageId(uint32_t messageId)
 	case GuildServiceUpgradeGuildMessageId:
 	case GuildServiceGetGuildShopMessageId:
 	case GuildServiceBuyGuildShopGoodsMessageId:
+	case GuildServiceGetGuildActivitiesMessageId:
+	case GuildServiceLightGuildLanternMessageId:
+	case GuildServiceClaimGuildReunionMessageId:
+	case GuildServiceStartGuildTrialMessageId:
+	case GuildServiceRespondGuildTrialInviteMessageId:
 	case ClientPlayerLoginLoginMessageId:
 	case ClientPlayerLoginCreatePlayerMessageId:
 	case ClientPlayerLoginEnterGameMessageId:

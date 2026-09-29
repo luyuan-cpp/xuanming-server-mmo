@@ -2,9 +2,12 @@ package routing
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"data_service/internal/config"
+
+	"shared/placement"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
@@ -36,7 +39,7 @@ func TestRegisterAndGetPlayerZone(t *testing.T) {
 	r, _ := newTestRouter(t)
 	ctx := context.Background()
 
-	err := r.RegisterPlayerZone(ctx, 1001, 5)
+	err := r.RegisterPlayerZone(ctx, 1001, 5, 0)
 	assert.NoError(t, err)
 
 	zone, err := r.GetPlayerHomeZone(ctx, 1001)
@@ -52,9 +55,9 @@ func TestRegisterPlayerZone_NeverOverwritesDifferentZone(t *testing.T) {
 	r, _ := newTestRouter(t)
 	ctx := context.Background()
 
-	require.NoError(t, r.RegisterPlayerZone(ctx, 7001, 3))
+	require.NoError(t, r.RegisterPlayerZone(ctx, 7001, 3, 0))
 
-	err := r.RegisterPlayerZone(ctx, 7001, 9)
+	err := r.RegisterPlayerZone(ctx, 7001, 9, 0)
 	require.Error(t, err)
 	var conflict *HomeZoneConflictError
 	require.ErrorAs(t, err, &conflict, "冲突必须是可判定的类型,调用方才能翻成专属错误码")
@@ -75,8 +78,8 @@ func TestRegisterPlayerZone_SameZoneIsIdempotent(t *testing.T) {
 	r, _ := newTestRouter(t)
 	ctx := context.Background()
 
-	require.NoError(t, r.RegisterPlayerZone(ctx, 7002, 4))
-	require.NoError(t, r.RegisterPlayerZone(ctx, 7002, 4))
+	require.NoError(t, r.RegisterPlayerZone(ctx, 7002, 4, 0))
+	require.NoError(t, r.RegisterPlayerZone(ctx, 7002, 4, 0))
 
 	zone, err := r.GetPlayerHomeZone(ctx, 7002)
 	require.NoError(t, err)
@@ -90,7 +93,7 @@ func TestRegisterPlayerZone_RefusedWhileZoneIsMerging(t *testing.T) {
 	// 合服工具立标记:键存在即封锁,值只是给人看的。
 	require.NoError(t, mr.Set(MergeFenceKey(12), `{"started_at":1757000000}`))
 
-	err := r.RegisterPlayerZone(ctx, 7003, 12)
+	err := r.RegisterPlayerZone(ctx, 7003, 12, 0)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrZoneMergeInProgress)
 
@@ -99,11 +102,11 @@ func TestRegisterPlayerZone_RefusedWhileZoneIsMerging(t *testing.T) {
 	assert.ErrorIs(t, err, ErrHomeZoneNotMapped)
 
 	// 别的 zone 不受影响 —— 闸门是按 zone 的,不是全局的。
-	require.NoError(t, r.RegisterPlayerZone(ctx, 7004, 13))
+	require.NoError(t, r.RegisterPlayerZone(ctx, 7004, 13, 0))
 
 	// 标记清除后恢复放行(工具跑完 DEL,或 TTL 到期)。
 	mr.Del(MergeFenceKey(12))
-	require.NoError(t, r.RegisterPlayerZone(ctx, 7003, 12))
+	require.NoError(t, r.RegisterPlayerZone(ctx, 7003, 12, 0))
 }
 
 func TestIsMergeInProgress(t *testing.T) {
@@ -122,6 +125,241 @@ func TestIsMergeInProgress(t *testing.T) {
 	assert.True(t, fenced)
 }
 
+// ── 落点记录(player-storage-placement.md §8.1)────────────────────
+
+// TestKeyContractsMatchSharedPlacement:本包自己拼的 player:zone / merge:in_progress 键
+// 必须与 shared/placement 逐字节相同 —— go/db 与搬库工具按那一份读,两边一旦分叉,
+// 合服围栏与落点选库就各看各的键,且全程零报错。
+func TestKeyContractsMatchSharedPlacement(t *testing.T) {
+	for _, pid := range []uint64{1, 7001, 18446744073709551615} {
+		assert.Equal(t, placement.HomeZoneKey(pid), mappingKey(pid))
+	}
+	for _, zone := range []uint32{1, 42, 4294967295} {
+		assert.Equal(t, placement.MergeFenceKey(zone), MergeFenceKey(zone))
+		// getHomeZoneAndMergeFenceScript 在 Lua 里用「前缀 .. home 原始值」拼围栏键。
+		assert.Equal(t, placement.MergeFenceKey(zone), mergeFenceKeyPrefix+strconv.FormatUint(uint64(zone), 10))
+	}
+}
+
+// TestRegisterPlayerZone_WithStorageIDPinsPlacement:storage_id 非 0 时,映射与稳定态落点
+// "{storage_id}:1" 一起写下。
+func TestRegisterPlayerZone_WithStorageIDPinsPlacement(t *testing.T) {
+	r, mr := newTestRouter(t)
+	ctx := context.Background()
+
+	require.NoError(t, r.RegisterPlayerZone(ctx, 8001, 5, placement.DefaultGlobalStorageID))
+
+	home, err := mr.Get(mappingKey(8001))
+	require.NoError(t, err)
+	assert.Equal(t, "5", home)
+	raw, err := mr.Get(placement.Key(8001))
+	require.NoError(t, err)
+	assert.Equal(t, placement.StableValue(placement.DefaultGlobalStorageID, 1), raw)
+	rec, err := placement.Parse(raw)
+	require.NoError(t, err, "写下的值必须能被 go/db 用同一份契约解析")
+	assert.Equal(t, placement.Record{StorageID: placement.DefaultGlobalStorageID, Version: 1}, rec)
+}
+
+// TestRegisterPlayerZone_WithoutStorageIDWritesNoPlacement:storage_id=0 是旧行为,
+// 不许顺手留下落点记录(有效落点应回落 home_zone)。
+func TestRegisterPlayerZone_WithoutStorageIDWritesNoPlacement(t *testing.T) {
+	r, mr := newTestRouter(t)
+	ctx := context.Background()
+
+	require.NoError(t, r.RegisterPlayerZone(ctx, 8002, 5, 0))
+	assert.True(t, mr.Exists(mappingKey(8002)))
+	assert.False(t, mr.Exists(placement.Key(8002)))
+}
+
+// TestRegisterPlayerZone_ExistingHomeLeavesPlacementUntouched 是原子性的核心:home 已存在时,
+// 无论同值幂等还是冲突,落点键都不许被写 —— 否则一次带 storage_id 的重试或误登记
+// 就能把玩家的数据指针挪走。
+func TestRegisterPlayerZone_ExistingHomeLeavesPlacementUntouched(t *testing.T) {
+	r, mr := newTestRouter(t)
+	ctx := context.Background()
+
+	// 旧号(登记时没钉落点)被带 storage_id 的请求重登:幂等成功,落点仍缺席。
+	require.NoError(t, r.RegisterPlayerZone(ctx, 8003, 5, 0))
+	require.NoError(t, r.RegisterPlayerZone(ctx, 8003, 5, placement.DefaultGlobalStorageID))
+	assert.False(t, mr.Exists(placement.Key(8003)), "home 已存在时同值重试不得补写落点")
+
+	// 冲突:拒绝且两键零变更。
+	err := r.RegisterPlayerZone(ctx, 8003, 9, placement.DefaultGlobalStorageID)
+	var conflict *HomeZoneConflictError
+	require.ErrorAs(t, err, &conflict)
+	assert.False(t, mr.Exists(placement.Key(8003)), "冲突的登记不得留下落点")
+	home, err := mr.Get(mappingKey(8003))
+	require.NoError(t, err)
+	assert.Equal(t, "5", home)
+
+	// 已钉过落点的号用另一个 storage_id 重试:幂等成功,原落点原样保留。
+	require.NoError(t, r.RegisterPlayerZone(ctx, 8004, 5, 102))
+	require.NoError(t, r.RegisterPlayerZone(ctx, 8004, 5, placement.DefaultGlobalStorageID))
+	raw, err := mr.Get(placement.Key(8004))
+	require.NoError(t, err)
+	assert.Equal(t, "102:1", raw)
+}
+
+// TestRegisterPlayerZone_FencedWritesNeitherKey:合服围栏拒绝时,带 storage_id 也一样零变更。
+func TestRegisterPlayerZone_FencedWritesNeitherKey(t *testing.T) {
+	r, mr := newTestRouter(t)
+	ctx := context.Background()
+	require.NoError(t, mr.Set(MergeFenceKey(12), `{"started_at":1757000000}`))
+
+	err := r.RegisterPlayerZone(ctx, 8005, 12, placement.DefaultGlobalStorageID)
+	require.ErrorIs(t, err, ErrZoneMergeInProgress)
+	assert.False(t, mr.Exists(mappingKey(8005)))
+	assert.False(t, mr.Exists(placement.Key(8005)))
+}
+
+// TestRegisterPlayerZone_FenceRecheckedAtCommitPoint:预检放行之后、写入脚本执行之前
+// merge_zone 立起围栏(先立围栏再收集清单),提交点的脚本复核必须拒绝,两键零变更 ——
+// 否则这名玩家不在合服清单里,映射合服后仍指向源区。
+// 直接调用提交点 registerPlayerZoneFenced 来模拟「预检之后才立围栏」的时序。
+func TestRegisterPlayerZone_FenceRecheckedAtCommitPoint(t *testing.T) {
+	r, mr := newTestRouter(t)
+	ctx := context.Background()
+	require.NoError(t, mr.Set(MergeFenceKey(12), `{"started_at":1757000000}`))
+
+	for _, tc := range []struct {
+		name      string
+		playerID  uint64
+		storageID uint32
+	}{
+		{"with storage_id", 8007, placement.DefaultGlobalStorageID},
+		{"without storage_id", 8008, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := r.registerPlayerZoneFenced(ctx, tc.playerID, 12, tc.storageID)
+			require.ErrorIs(t, err, ErrZoneMergeInProgress)
+			assert.False(t, mr.Exists(mappingKey(tc.playerID)), "围栏内不得写 player:zone")
+			assert.False(t, mr.Exists(placement.Key(tc.playerID)), "围栏内不得写 player:placement")
+		})
+	}
+
+	// 围栏只拦它自己的 zone:别的 zone 照常登记。
+	require.NoError(t, r.registerPlayerZoneFenced(ctx, 8009, 13, placement.DefaultGlobalStorageID))
+	home, err := mr.Get(mappingKey(8009))
+	require.NoError(t, err)
+	assert.Equal(t, "13", home)
+	assert.True(t, mr.Exists(placement.Key(8009)))
+
+	// 撤掉围栏后同一玩家可以登记,且围栏期间的拒绝没有留下任何半截状态。
+	mr.Del(MergeFenceKey(12))
+	require.NoError(t, r.registerPlayerZoneFenced(ctx, 8007, 12, placement.DefaultGlobalStorageID))
+	raw, err := mr.Get(placement.Key(8007))
+	require.NoError(t, err)
+	assert.Equal(t, placement.StableValue(placement.DefaultGlobalStorageID, 1), raw)
+}
+
+// TestRegisterPlayerZone_FenceCheckPrecedesConflict:围栏内即使 home 已存在(同值或异值),
+// 也回 ErrZoneMergeInProgress,不回冲突/幂等成功,且既有映射不动。
+func TestRegisterPlayerZone_FenceCheckPrecedesConflict(t *testing.T) {
+	r, mr := newTestRouter(t)
+	ctx := context.Background()
+	require.NoError(t, r.RegisterPlayerZone(ctx, 8010, 12, 0))
+	require.NoError(t, mr.Set(MergeFenceKey(12), `{"started_at":1757000000}`))
+
+	require.ErrorIs(t, r.registerPlayerZoneFenced(ctx, 8010, 12, 0), ErrZoneMergeInProgress)
+	home, err := mr.Get(mappingKey(8010))
+	require.NoError(t, err)
+	assert.Equal(t, "12", home)
+}
+
+// TestRegisterPlayerZone_KeepsPreexistingPlacement:home 缺席但落点记录已在(映射曾被删),
+// home 照常写入,落点不被请求里的 storage_id 覆盖 —— 那条记录指向数据真正所在的库。
+func TestRegisterPlayerZone_KeepsPreexistingPlacement(t *testing.T) {
+	r, mr := newTestRouter(t)
+	ctx := context.Background()
+	require.NoError(t, mr.Set(placement.Key(8006), "7:3"))
+
+	require.NoError(t, r.RegisterPlayerZone(ctx, 8006, 5, placement.DefaultGlobalStorageID))
+	home, err := mr.Get(mappingKey(8006))
+	require.NoError(t, err)
+	assert.Equal(t, "5", home)
+	raw, err := mr.Get(placement.Key(8006))
+	require.NoError(t, err)
+	assert.Equal(t, "7:3", raw)
+}
+
+// ── GetPlayerHomeZoneAndMergeFence(A16)──────────────────────────
+
+func TestGetPlayerHomeZoneAndMergeFence(t *testing.T) {
+	r, mr := newTestRouter(t)
+	ctx := context.Background()
+
+	_, _, err := r.GetPlayerHomeZoneAndMergeFence(ctx, 8101)
+	require.ErrorIs(t, err, ErrHomeZoneNotMapped, "缺席的口径必须与 GetPlayerHomeZone 相同")
+
+	require.NoError(t, r.RegisterPlayerZone(ctx, 8101, 12, 0))
+	zone, merging, err := r.GetPlayerHomeZoneAndMergeFence(ctx, 8101)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(12), zone)
+	assert.False(t, merging)
+
+	// 别的 zone 的围栏不影响本玩家:围栏是按 home 查的。
+	require.NoError(t, mr.Set(MergeFenceKey(13), `{"started_at":1757000000}`))
+	_, merging, err = r.GetPlayerHomeZoneAndMergeFence(ctx, 8101)
+	require.NoError(t, err)
+	assert.False(t, merging)
+
+	require.NoError(t, mr.Set(MergeFenceKey(12), `{"started_at":1757000000}`))
+	zone, merging, err = r.GetPlayerHomeZoneAndMergeFence(ctx, 8101)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(12), zone, "合服中也要照常返回 home,调用方据 merging 拒绝")
+	assert.True(t, merging)
+}
+
+// TestGetPlayerHomeZoneAndMergeFence_RedisFailureIsError:脚本整体失败(拿不到 home)时是
+// 普通错误,不能伪装成「没有映射」。
+func TestGetPlayerHomeZoneAndMergeFence_RedisFailureIsError(t *testing.T) {
+	r, mr := newTestRouter(t)
+	ctx := context.Background()
+	require.NoError(t, r.RegisterPlayerZone(ctx, 8102, 12, 0))
+
+	mr.Close()
+	_, _, err := r.GetPlayerHomeZoneAndMergeFence(ctx, 8102)
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrHomeZoneNotMapped)
+}
+
+// TestDecodeHomeZoneAndMergeFenceReply 覆盖脚本回复的每一种形态。「围栏读失败」只能在这里测:
+// miniredis 没法让脚本里单条 EXISTS 失败(真 Redis 上它会在 Cluster 跨 slot / ACL 拒绝时发生)。
+func TestDecodeHomeZoneAndMergeFenceReply(t *testing.T) {
+	zone, merging, err := decodeHomeZoneAndMergeFenceReply(1, []any{"12", int64(0)})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(12), zone)
+	assert.False(t, merging)
+
+	zone, merging, err = decodeHomeZoneAndMergeFenceReply(1, []any{"12", int64(1)})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(12), zone)
+	assert.True(t, merging)
+
+	// 围栏读失败 → fail-closed:当作正在合服,home 照常返回。
+	zone, merging, err = decodeHomeZoneAndMergeFenceReply(1, []any{"12", mergeFenceUnreadable})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(12), zone)
+	assert.True(t, merging, "围栏读失败必须按正在合服处理")
+
+	// 意料之外的围栏值同样当封锁。
+	_, merging, err = decodeHomeZoneAndMergeFenceReply(1, []any{"12", int64(7)})
+	require.NoError(t, err)
+	assert.True(t, merging)
+
+	_, _, err = decodeHomeZoneAndMergeFenceReply(1, []any{"", int64(0)})
+	assert.ErrorIs(t, err, ErrHomeZoneNotMapped)
+
+	_, _, err = decodeHomeZoneAndMergeFenceReply(1, []any{"abc", int64(0)})
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrHomeZoneNotMapped, "畸形值是故障,不是缺席")
+
+	for _, bad := range []any{nil, int64(1), []any{"12"}, []any{int64(12), int64(0)}, []any{"12", "0"}} {
+		_, _, err = decodeHomeZoneAndMergeFenceReply(1, bad)
+		assert.Error(t, err, "reply=%v", bad)
+	}
+}
+
 func TestGetPlayerHomeZone_NotFound(t *testing.T) {
 	r, _ := newTestRouter(t)
 	ctx := context.Background()
@@ -135,9 +373,9 @@ func TestBatchGetPlayerHomeZone(t *testing.T) {
 	r, _ := newTestRouter(t)
 	ctx := context.Background()
 
-	_ = r.RegisterPlayerZone(ctx, 1, 10)
-	_ = r.RegisterPlayerZone(ctx, 2, 20)
-	_ = r.RegisterPlayerZone(ctx, 3, 30)
+	_ = r.RegisterPlayerZone(ctx, 1, 10, 0)
+	_ = r.RegisterPlayerZone(ctx, 2, 20, 0)
+	_ = r.RegisterPlayerZone(ctx, 3, 30, 0)
 
 	result, err := r.BatchGetPlayerHomeZone(ctx, []uint64{1, 2, 3, 999})
 	assert.NoError(t, err)
@@ -152,7 +390,7 @@ func TestDeletePlayerZone(t *testing.T) {
 	r, _ := newTestRouter(t)
 	ctx := context.Background()
 
-	_ = r.RegisterPlayerZone(ctx, 500, 7)
+	_ = r.RegisterPlayerZone(ctx, 500, 7, 0)
 	zone, err := r.GetPlayerHomeZone(ctx, 500)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(7), zone)
@@ -168,7 +406,7 @@ func TestClientForPlayer_DevMode(t *testing.T) {
 	r, _ := newTestRouter(t)
 	ctx := context.Background()
 
-	_ = r.RegisterPlayerZone(ctx, 42, 1)
+	_ = r.RegisterPlayerZone(ctx, 42, 1, 0)
 	client, err := r.ClientForPlayer(ctx, 42)
 	assert.NoError(t, err)
 	assert.NotNil(t, client)
@@ -186,9 +424,9 @@ func TestRemapHomeZoneForMerge_DryRun(t *testing.T) {
 	r, mr := newTestRouter(t)
 	ctx := context.Background()
 
-	_ = r.RegisterPlayerZone(ctx, 101, 10)
-	_ = r.RegisterPlayerZone(ctx, 102, 10)
-	_ = r.RegisterPlayerZone(ctx, 103, 20)
+	_ = r.RegisterPlayerZone(ctx, 101, 10, 0)
+	_ = r.RegisterPlayerZone(ctx, 102, 10, 0)
+	_ = r.RegisterPlayerZone(ctx, 103, 20, 0)
 	// 闸门先立起来:remap(含 dry-run)要求源 zone 已被封锁,见下面的
 	// TestRemapHomeZoneForMerge_RefusedWithoutFence。
 	require.NoError(t, mr.Set(MergeFenceKey(10), `{"started_at":1757000000}`))
@@ -206,8 +444,8 @@ func TestRemapHomeZoneForMerge_Apply(t *testing.T) {
 	r, mr := newTestRouter(t)
 	ctx := context.Background()
 
-	_ = r.RegisterPlayerZone(ctx, 201, 7)
-	_ = r.RegisterPlayerZone(ctx, 202, 8)
+	_ = r.RegisterPlayerZone(ctx, 201, 7, 0)
+	_ = r.RegisterPlayerZone(ctx, 202, 8, 0)
 	require.NoError(t, mr.Set(MergeFenceKey(7), `{"started_at":1757000000}`))
 
 	matched, updated, err := r.RemapHomeZoneForMerge(ctx, 7, 11, false)
@@ -227,7 +465,7 @@ func TestRemapHomeZoneForMerge_RefusedWithoutFence(t *testing.T) {
 	r, _ := newTestRouter(t)
 	ctx := context.Background()
 
-	_ = r.RegisterPlayerZone(ctx, 301, 5)
+	_ = r.RegisterPlayerZone(ctx, 301, 5, 0)
 
 	for _, dryRun := range []bool{true, false} {
 		matched, updated, err := r.RemapHomeZoneForMerge(ctx, 5, 6, dryRun)

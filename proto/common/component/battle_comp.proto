@@ -15,7 +15,7 @@ enum eInBattleState {
 
 message InBattleComp {
   uint64 battle_id = 1;
-  uint32 battle_node_id = 2;   // 重连时重发 BindBattleEvent 用
+  uint32 battle_node_id = 2;   // 战斗所在 battle 节点(日志/排障;也随 battle:ctx 持久化)。重连不再用它:客户端凭 battle_id 补签
   uint64 deadline_ms = 3;      // 作废期限(Unix 毫秒);reaper 过期即解冻
   eInBattleState state = 4;
   uint64 prepare_deadline_ms = 5;  // PREPARING 态的作废期限;收到 BattleConfirmedEvent 后升级为 FIGHTING 并以 deadline_ms 为准

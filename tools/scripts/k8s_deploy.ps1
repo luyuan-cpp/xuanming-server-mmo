@@ -136,21 +136,29 @@ param(
 	[int]$GateServicePort = 18000,
 	# gate 的客户端 RPC 路由模式:写进 gate Deployment 的环境变量 GATE_CLIENT_RPC_ROUTER
 	# (cpp/nodes/gate/gate_router_mode.h;docs/design/client-rpc-router.md D34)。
-	#   "1" = gate 只连路由服 client-rpc-router,chat 等只承诺路由模式的服务才可达;
-	#   "0" = 旧的逐服务直连,chat 不可达。
-	# **默认 "0",在 K8s 上以路由模式跑通一次 battle-smoke 之前不翻默认值**。路由服部署链已登记齐:
-	# go_svc_image.ps1 镜像、$GoSvcCatalogue 条目、New-GoSvcConfigMapYaml 的 client-rpc-router case、
+	#   "1" = gate 只连路由服 client-rpc-router,chat / friend / trade 等只承诺路由模式的服务经它可达
+	#         (guild / team 等没登记进 $GoSvcCatalogue 的服务,K8s 上本来就不部署,与本开关无关);
+	#   "0" = 旧的逐服务直连,只作回退:chat / friend / trade 不可达(gate 直连白名单里没有它们)。
+	# 两种模式下战斗都只走客户端 ↔ battle 直连,gate 不中继战斗(turn-based §22 D66),所以本开关与战斗无关。
+	# **默认 "1"**(turn-based §22 D75,2026-09-29 用户拍板):豁免 D-12 / D36 / D37 的前提①
+	# 「先在 K8s 上以路由模式跑通一次 battle-smoke」,改为事后补验;D-12 的前提②③(路由服 manifest 已落地、
+	# 路由服按 POD_IP 通告)已满足。翻转只落在部署层:C++ 进程默认值(gate_router_mode.h 未设变量即直连)
+	# 与 gate_security_test 的默认值断言一字不改(docs/design/xuanming-port-decisions-20260910.md D-12 及其修订)。
+	# 前置(翻转后 gate 硬依赖它):infra-up 必须已把 client-rpc-router 部署就绪 —— 不带 -SkipGoSvc,且给了 -GoSvcRegistry。
+	# 路由模式下 gate 的依赖门等的是 ClientRpcRouter + Scene 而不是 Login(gate/main.cpp requiredDependencies),
+	# 路由服不在就过不了依赖门,登录 / 匹配 / 聊天全部 no_target;对一个没有路由服的旧 infra 只跑 zone-up 同理。
+	# 路由服部署链:go_svc_image.ps1 镜像、$GoSvcCatalogue 条目、New-GoSvcConfigMapYaml 的 client-rpc-router case、
 	# manifests/go-svc/client-rpc-router.yaml(注入 POD_IP)、node-config service_discovery_prefixes 的
 	# ClientRpcRouterNodeService.rpc;路由服按 POD_IP 通告对外地址(client_rpc_router_service.go advertisedHost)。
-	# 以上都还没在 K8s 上实跑过(未编译、未部署),开 "1" 前要先确认路由服 Deployment 就绪,
-	# 否则 gate 白名单里唯一的 gRPC 目标拨不通,登录 / 匹配 / 聊天全部 no_target。
-	# 开启前置(docs/design/xuanming-port-decisions-20260910.md D-12):路由服镜像构建通过、infra-up 部署就绪,
-	# 并在 K8s 上以路由模式跑通一次 battle-smoke 之后再翻默认值。反向回退到 "0" = chat 及所有只承诺路由模式的服务同时不可达,
-	# 回退前先 killswitch 关 chat 方法并公告。
+	# 回退到 "0" = chat 及所有只承诺路由模式的服务同时不可达,回退前先 killswitch 关这些方法并公告(D-12)。
+	# 回退态不粘滞:本值每次部署都原样重写进 gate env,脚本不从集群读回旧值。以 "0" 回退运行的 zone,之后每一次
+	# 重新部署(日常 zone-up / release-zone、合服后的 zone-up、k8s_zone_rollback.ps1 的 Step 6,以及经 dev_tools.ps1 /
+	# k8s_image.ps1 等包装入口)都必须显式再传 -GateRouterMode 0,否则静默落回默认 "1";回退的原因(如路由服不可用)
+	# 若仍在,gate 就卡在依赖门,登录 / 匹配全部 no_target。
 	# 只收 "0" / "1":gate 侧除 1/true/on 以外一律当关,拼错会静默落回直连,不如在脚本入口就拒。
 	# 用字符串而不是 [bool]/[switch]:值原样写进 env,两边字面值一致,kubectl 里看到的就是传进来的。
 	[ValidateSet("0", "1")]
-	[string]$GateRouterMode = "0",
+	[string]$GateRouterMode = "1",
 
 	[switch]$SkipInfra,
 	[switch]$SkipGoSvc,
@@ -435,18 +443,18 @@ $GoSvcCatalogue = @{
 	# 与 battle 池同形态。gate 发现它走非 zone-scoped 前缀,所以放 infra namespace 一份即可。
 	match           = @{ ConfigMap = "go-svc-match-config";           Manifest = "match.yaml";           Port = 50500; ConfigFlag = "-f";              ConfigFile = "match_service.yaml";            ImageName = "mmorpg-match"; Global = $true }
 	# 全局聊天 chat v1:世界频道全服唯一、私聊 key 不含 zone,表里天然有跨 zone 的行,所以是全局池(Global),
-	# 与 match 同形态放 infra namespace 一份。客户端只经 gate → client-rpc-router 到达它;路由服在 K8s 上
-	# 真正跑起来之前(见下一条与 -GateRouterMode 参数注释),它「部署得起来但玩家不可达」,是已知缺口而不是配置错误。
+	# 与 match 同形态放 infra namespace 一份。客户端只经 gate → client-rpc-router 到达它:-GateRouterMode 默认 "1" 下可达
+	# (K8s 上路由模式整链待事后补验,turn-based §22 D75);以 "0" 回退时「部署得起来但玩家不可达」,见下一条与参数注释。
 	chat            = @{ ConfigMap = "go-svc-chat-config";            Manifest = "chat.yaml";            Port = 50700; ConfigFlag = "-f";              ConfigFile = "chat.yaml";                     ImageName = "mmorpg-chat"; Global = $true }
 	# 客户端 RPC 路由服(契约 zone_contract_v1 §1 路由服部署链):GATE_CLIENT_RPC_ROUTER=1 时 gate 唯一的 gRPC 目标。
 	# 全局池(node_util.cpp IsGlobalPoolNodeType 含 ClientRpcRouter),与 match / chat 同放 infra namespace。
 	# 端口 50600 与 go/client_rpc_router/etc/client_rpc_router.yaml、go_services.ps1 一致;metrics 9200。
 	# manifest 在 deploy/k8s/manifests/go-svc/client-rpc-router.yaml(照 match.yaml:replicas 2 + podAntiAffinity + PDB,
 	# 50600/9200,注入 POD_IP);路由服写进 NodeInfo 的是 POD_IP 而不是 ListenOn 的 0.0.0.0(client_rpc_router_service.go advertisedHost)。
-	# 部署了不等于 gate 会用它:gate 是否只连路由服由 -GateRouterMode 决定,默认 "0"。
+	# gate 是否只连路由服由 -GateRouterMode 决定:默认 "1" 下它是 gate 唯一的 gRPC 目标、依赖门等它就绪;以 "0" 回退时 gate 不连它。
 	"client-rpc-router" = @{ ConfigMap = "go-svc-client-rpc-router-config"; Manifest = "client-rpc-router.yaml"; Port = 50600; ConfigFlag = "-f"; ConfigFile = "client_rpc_router.yaml"; ImageName = "mmorpg-client-rpc-router"; Global = $true }
 	# 聚宝斋 trade(docs/design/jubaozhai-market.md,P1):商品表天然有跨 zone 的行,所以是全局池(Global),与 chat 同放 infra namespace。
-	# 客户端只经 gate → client-rpc-router 可达;-GateRouterMode 默认 "0" 下「部署得起来但玩家不可达」,与 chat 同一已知缺口。
+	# 客户端只经 gate → client-rpc-router 可达:-GateRouterMode 默认 "1" 下可达;以 "0" 回退时「部署得起来但玩家不可达」,与 chat 同口径。
 	# 端口 50800 / metrics 9230 与 go/trade/etc/trade.yaml、go_services.ps1 一致;ImageName 与 go_svc_image.ps1 的 trade 条目一致。
 	# 独占库 mmorpg_trade(port-decisions D-14):库由 mysql-init-sql 带入的 deploy/mysql-init/00_init_zone_dbs.sql 预建(建库只登记那一处);
 	# 表由 MigrateJob 登记的 trade-migrate Job 建 —— Apply-OneGoSvc 在 ConfigMap 之后、Deployment 之前 delete + apply 它
@@ -454,7 +462,7 @@ $GoSvcCatalogue = @{
 	trade           = @{ ConfigMap = "go-svc-trade-config";           Manifest = "trade.yaml";           Port = 50800; ConfigFlag = "-f";              ConfigFile = "trade.yaml";                    ImageName = "mmorpg-trade"; Global = $true; MigrateJob = "trade-migrate.yaml" }
 	# 好友 friend(docs/design/friend-port-20260918.md):好友关系天然跨 zone(表里一行的两个 player_id 可能分属不同区),
 	# 所以是全局池(Global),与 chat / trade 同放 infra namespace 一份。客户端只经 gate → client-rpc-router 可达;
-	# -GateRouterMode 默认 "0" 下「部署得起来但玩家不可达」,与 chat / trade 同一已知缺口。
+	# -GateRouterMode 默认 "1" 下可达;以 "0" 回退时「部署得起来但玩家不可达」,与 chat / trade 同口径。
 	# 注意本目录的 Global 与 go_services.ps1 $ServiceCatalogue 的字段集**语义不同**:这里的 Global 决定
 	# 「infra namespace 部署一份、zone-up 跳过」(Get-GlobalGoSvcNames → Apply-GlobalGoSvcManifests);
 	# 那边没有 Global 字段这一说,本地双 zone 仍每 zone 起一份进程。所以 friend 在这里标 Global、在那边不标,不矛盾。
@@ -773,6 +781,22 @@ function New-NodeConfigMapYaml {
 		$auditTopicGeneration = $auditGen.Value
 	}
 
+	# 玩家存盘 DBTask topic 世代号(player-storage-placement.md §7)。**真源取 go/db 那份**:C++ scene
+	# 按 home_zone 往 db_task_zone_{zone}[_g<N>] 写存盘,go/db 是唯一的消费者,go-svc-db ConfigMap 也是从
+	# 同一个键镜像($dbTopicGeneration)。login 读写同一组 topic,三方必须相等,这里顺带钉住 login ——
+	# 分家不报任何错:换代后 scene 仍写旧代 topic,存盘静默积压在没人消费的旧 topic 里。
+	# 与 AuditTopicGeneration 不同,这里用 Get-AuthoritativeScalar(查不到就 throw):go-svc-db ConfigMap
+	# 本来就强制要这一键,不存在"yaml 可以不写"的窗口,宽容只会让两份 ConfigMap 各取各的默认值。
+	$dbTaskTopicGeneration = Get-AuthoritativeScalar -RelativePath 'go/db/etc/db.yaml' -KeyPath 'ServerConfig.Kafka.TopicGeneration'
+	$loginDbTaskTopicGeneration = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Kafka.TopicGeneration'
+	$dbTaskGenNumber = 0L
+	if (-not [long]::TryParse($dbTaskTopicGeneration, [ref]$dbTaskGenNumber) -or $dbTaskGenNumber -le 0 -or $dbTaskGenNumber -gt [uint32]::MaxValue) {
+		throw "生成 node ConfigMap 失败:go/db/etc/db.yaml 的 ServerConfig.Kafka.TopicGeneration 必须是 1..4294967295 的整数(当前 '$dbTaskTopicGeneration')。"
+	}
+	if ($loginDbTaskTopicGeneration -cne $dbTaskTopicGeneration) {
+		throw "生成 node ConfigMap 失败:go/db ServerConfig.Kafka.TopicGeneration($dbTaskTopicGeneration)与 go/login Kafka.TopicGeneration($loginDbTaskTopicGeneration)不一致;db_task topic 换代必须 login/db/C++ 三方同一次改。"
+	}
+
 	$baseDeployConfig = (@"
 Etcd:
   Hosts:
@@ -796,8 +820,10 @@ service_discovery_prefixes:
   - "GateNodeService.rpc"
   - "LoginNodeService.rpc"
   # 与 bin/etc/base_deploy_config.yaml 对齐(2026-09-02 跨 zone 匹配审计发现此处只有三条):
-  # 缺 BattleNodeService/MatchNodeService 时 gate 发现不到 battle/match,BindBattle 不落地、
-  # JoinQueue 报 "Node not found ... message id: 157";这份 ConfigMap 以只读整目录挂载覆盖镜像里的 bin/etc。
+  # 缺 MatchNodeService 时直连模式("0")的 gate 发现不到 match,JoinQueue 报 "Node not found ... message id: 157"。
+  # BattleNodeService 已不供 gate 使用(两种模式下 gate 都不连 battle、不中继战斗,turn-based §22 D66);保留它是因为
+  # battle-node-config 也由本模板生成,battle 按这些前缀 watch 自己的节点键(etcd_service 劫持检测与注册自检)。
+  # 这份 ConfigMap 以只读整目录挂载覆盖镜像里的 bin/etc。
   - "SceneManagerNodeService.rpc"
   - "BattleNodeService.rpc"
   # 客户端 RPC 路由服(Go-Zero,全局池):GATE_CLIENT_RPC_ROUTER=1 时 gate 唯一的 gRPC 目标(契约 zone_contract_v1 §1)。
@@ -817,6 +843,11 @@ service_discovery_prefixes:
 # 缺这一键 C++ 回落成第一代(_g1),消费者若已换代就是"生产者写进没人消费的 topic",
 # 不报任何错,流水 / 快照静默积压到保留期(30 天)被删。
 AuditTopicGeneration: ${auditTopicGeneration}
+# 玩家存盘 DBTask topic 世代号:<= 1 → db_task_zone_{zone}(第一代不带后缀),>= 2 → db_task_zone_{zone}_g<N>
+# (与审计 topic 第一代就带 _g1 不同)。读法见 config.cpp::readBaseDeployConfig 的 DbTaskTopicGeneration 分支 +
+# services/scene/player/constants/player.h。值从 go/db/etc/db.yaml 的 ServerConfig.Kafka.TopicGeneration 取
+# (生成期已核对与 login 相等):缺这一键 C++ 回落第一代,go/db 若已换代就是存盘写进没人消费的旧 topic。
+DbTaskTopicGeneration: ${dbTaskTopicGeneration}
 Kafka:
   Brokers:
     - "kafka.${InfraNamespace}:9092"
@@ -928,10 +959,10 @@ function New-NodeDeploymentYaml {
 	# 什么也不做,统一注入省一个分支。
 	$extraEnvLines += "`t`t`t- name: SNOWFLAKE_CACHE_DIR"
 	$extraEnvLines += "`t`t`t  value: `"$SnowflakeCacheDir`""
-	# 客户端 RPC 路由模式(脚本参数 -GateRouterMode,默认 "0";开启前置见参数处注释)。只给 gate 注入:
-	# scene 不读这个变量,写进 scene 的 Deployment 只会让人误以为它也分模式。
-	# "0" 也显式写出而不是省略:`kubectl get deploy gate -o yaml` 一眼就能看出这个 zone 的 gate 跑在哪个模式,
-	# 不必再去翻 C++ 默认值;将来翻转默认值时 diff 里也看得见。
+	# 客户端 RPC 路由模式(脚本参数 -GateRouterMode,默认 "1";前置与回退见参数处注释)。只给 gate 注入:
+	# scene / battle 不读这个变量,写进它们的 Deployment 只会让人误以为它们也分模式。
+	# 两个值都显式写出而不是省略:`kubectl get deploy gate -o yaml` 一眼就能看出这个 zone 的 gate 跑在哪个模式,
+	# 不必再去翻 C++ 默认值 —— 部署层默认 "1" 与 C++ 进程默认(未设即直连)刻意不同(D-12),省略 "1" 就会落回直连。
 	if ($NodeName -eq 'gate') {
 		$extraEnvLines += "`t`t`t- name: GATE_CLIENT_RPC_ROUTER"
 		$extraEnvLines += "`t`t`t  value: `"$GateRouterMode`""
@@ -942,7 +973,8 @@ function New-NodeDeploymentYaml {
 	# 三个角色共同的约束:
 	#  - C++ 尚未注册 grpc.health.v1,只能用 tcpSocket 探**实际在监听**的口;端口一律写数字,不写端口名。
 	#  - 两个口都在 etcd 注册完成之后才 listen,所以 tcpSocket 通 = 「已发布进 etcd」,**不等于**依赖门
-	#    (gate 等 Login / Scene,scene 等 SceneManager 与号段首段)已过。readiness 只能表达前者。
+	#    (gate 等 ClientRpcRouter / Scene —— -GateRouterMode "0" 回退时是 Login / Scene,scene 等 SceneManager 与号段首段)已过。
+	#    readiness 只能表达前者。
 	#  - 不加 livenessProbe:tcpSocket 看不出 EventLoop 卡死(内核照样完成握手),加了只多一条杀容器的路。
 	#  - startupProbe 会杀容器,预算必须越过 etcd 租约:同 Pod 重启时 POD_IP 不变,旧进程的注册要等
 	#    NodeTTLSeconds(180s,bin/etc/base_deploy_config.yaml)到期才消失,在此之前新进程命中
@@ -2275,6 +2307,10 @@ ${dbAllowedDatabasesYaml}
     Hosts: "redis.${InfraNamespace}:6379"
     DefaultTTLSeconds: 3600
     Password: "${redisPassword}"
+    # 这个 RedisClient 同时是按落点选库读 player:placement / player:zone 的句柄(player-storage-placement.md §6.2):
+    # 顶层 Placement 段不写 = 整段取缺省(AllowStoreFamilies=true、Required=false、Redis 复用本段)。
+    # 所以它必须与 data-service ConfigMap 的 MappingRedis 同实例、DB 0 —— 读错库 = 读不到任何记录与 home_zone,
+    # 全员按本 zone 选库,被钉到别处的玩家会写错库。契约测试钉住两者同址。
     DB: 0
 "@
 		}
@@ -2286,11 +2322,15 @@ Etcd:
   Hosts:
     - "etcd.${InfraNamespace}:2379"
   Key: dataservice.rpc
+# MappingRedis 刻意不写 DB 键:go-zero 的 redis.RedisConf 没有 DB 字段,以前这里的 `DB: 15` 被静默忽略,
+# 映射一直落在 DB 0(与 go/data_service/etc/data_service.yaml 的注释同一结论)。留着它只会误导运维按 15 去查 /
+# 给 merge_zone 填 -mapping-redis-db 15,让合服围栏与改映射打进 data_service 从不读的库。
+# player:zone / player:placement / merge:in_progress / db:capability:zone 都在这个实例的 DB 0;
+# go/db 的 Placement.Redis 缺省复用它自己的 RedisClient(同一实例、DB 0),所以 go-svc-db ConfigMap 不写 Placement 段。
 MappingRedis:
   Host: redis.${InfraNamespace}:6379
   Type: node
   Pass: "${redisPassword}"
-  DB: 15
 Regions:
   - Id: 1
     Zones: [1]

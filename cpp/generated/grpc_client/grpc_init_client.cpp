@@ -398,7 +398,7 @@ void HandleCompletedQueueMessage(entt::registry& registry){
                 friendpb::HandleFriendCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::GuildNodeService == nodeType &&
-                (messageId == 8u || messageId == 15u || messageId == 19u || messageId == 27u || messageId == 29u || messageId == 35u || messageId == 38u || messageId == 39u || messageId == 52u || messageId == 53u || messageId == 60u || messageId == 76u || messageId == 120u || messageId == 216u || messageId == 217u || messageId == 218u || messageId == 219u || messageId == 220u || messageId == 221u || messageId == 222u || messageId == 223u || messageId == 228u || messageId == 233u)) {
+                (messageId == 8u || messageId == 15u || messageId == 19u || messageId == 27u || messageId == 29u || messageId == 35u || messageId == 38u || messageId == 39u || messageId == 52u || messageId == 53u || messageId == 60u || messageId == 76u || messageId == 120u || messageId == 216u || messageId == 217u || messageId == 218u || messageId == 219u || messageId == 220u || messageId == 221u || messageId == 222u || messageId == 223u || messageId == 228u || messageId == 233u || messageId == 239u || messageId == 240u || messageId == 241u || messageId == 242u || messageId == 243u)) {
                 guildpb::HandleGuildCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::LoginNodeService == nodeType &&

@@ -96,6 +96,33 @@ var (
 		Help:      "Write tasks dropped because their owner_epoch is older than the max epoch already applied for this (topic,key,msg_type) — Redis key consumer:applied_epoch:* (reentry-barrier 6.3 / cross-zone-scene-travel R3). Must stay 0 under stress.",
 	})
 
+	// placementGuardTotal 是按落点选库(player-storage-placement.md §6.2)与落库后复核(§6.3)的
+	// 全量分类计数:每条 read / write 任务选库时记一次,复核不通过或复核读失败时再记一次。
+	// 上线观察口径见设计 §13:stale_topic 应恒 0(非 0 先查 C++ home_zone_unknown);
+	// frozen_deferred 持续上涨 = 搬库工具冻结后没有切换 / 解冻(工具崩溃),应告警。
+	//
+	// outcome 取值**必须**与下面 Placement* 常量一一对应,改常量同改 Help —— 理由同 ownerEpochGuardTotal。
+	placementGuardTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "placement_guard_total",
+		Help:      "Player storage placement routing verdicts (player-storage-placement.md 6.2/6.3). op: read | write. outcome: placed | home | legacy | stale_topic | frozen_deferred | missing_required | lookup_error | recheck_moved.",
+	}, []string{"op", "outcome"})
+
+	// placementStoreOpenTotal 记每一次**真正发生**的按需打开落点库(§6.1);打开失败后的冷却期内
+	// 直接复用上次错误的请求不重复计数,所以 error 的速率就是「每个冷却期一次」,不会被任务量放大。
+	placementStoreOpenTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "placement_store_open_total",
+		Help:      "On-demand placement store opens (player-storage-placement.md 6.1). result: ok | error (ping / schema gate / unknown database) | rejected (neither in the allow list nor admitted by AllowStoreFamilies).",
+	}, []string{"result"})
+
+	// placementOpenStores 是本进程当前常驻的落点库个数(含本 zone 库)。
+	placementOpenStores = prometheus.NewGauge(prometheus.GaugeOpts{
+		Subsystem: subsystem,
+		Name:      "placement_open_stores",
+		Help:      "Placement stores (MySQL databases) currently open in this db process, including the zone's own database.",
+	})
+
 	registerOnce sync.Once
 )
 
@@ -112,8 +139,47 @@ var blobBuckets = []float64{
 func register() {
 	registerOnce.Do(func() {
 		prometheus.MustRegister(taskStageSeconds, taskResultTotal, blobBytes, blobRowBytes, blobGuardTotal,
-			ownerEpochGuardTotal, staleOwnerWriteRejectedTotal)
+			ownerEpochGuardTotal, staleOwnerWriteRejectedTotal,
+			placementGuardTotal, placementStoreOpenTotal, placementOpenStores)
 	})
+}
+
+// 落点选库的 outcome label 取值(player-storage-placement.md §6.2 表的 outcome 列 + §14 的 recheck_moved)。
+// 集合有界(8 个),op 只有 read / write,不含 player_id 等高基数维度(AGENTS.md §9)。
+const (
+	PlacementPlaced          = "placed"           // 有落点记录:落记录指向的库(读任务的冻结记录也算这一格)
+	PlacementHome            = "home"             // 无记录、有 home_zone:落 home 库(写任务此时 home 必然 == 本进程 zone)
+	PlacementLegacy          = "legacy"           // 无记录、无 home_zone:落本进程 zone 库(旧语义)
+	PlacementStaleTopic      = "stale_topic"      // 写任务所在 topic 的 zone ≠ 玩家 home_zone:进死信,不落库(P-6)
+	PlacementFrozenDeferred  = "frozen_deferred"  // 记录处于搬库冻结:写延后重试,不耗重试次数
+	PlacementMissingRequired = "missing_required" // Placement.Required=true 且无记录:写进死信,读回失败
+	PlacementLookupError     = "lookup_error"     // MGET 失败或值畸形:按可重试错误处理(耗重试次数),fail-closed
+	PlacementRecheckMoved    = "recheck_moved"    // 落库后复核发现路由变化(或写任务遇到冻结):不标记游标、不写共享缓存,重试
+)
+
+// 按需打开落点库的 result label 取值。
+const (
+	StoreOpenOK       = "ok"
+	StoreOpenError    = "error"
+	StoreOpenRejected = "rejected"
+)
+
+// CountPlacementGuard 记一次选库 / 复核判定。op 为 "read" / "write",outcome 用上面的 Placement* 常量。
+func CountPlacementGuard(op, outcome string) {
+	register()
+	placementGuardTotal.WithLabelValues(op, outcome).Inc()
+}
+
+// CountPlacementStoreOpen 记一次按需打开落点库的结果,result 用 StoreOpen* 常量。
+func CountPlacementStoreOpen(result string) {
+	register()
+	placementStoreOpenTotal.WithLabelValues(result).Inc()
+}
+
+// SetPlacementOpenStores 更新常驻落点库个数。
+func SetPlacementOpenStores(n int) {
+	register()
+	placementOpenStores.Set(float64(n))
 }
 
 // 归属 epoch 守卫的 outcome label 取值。与 internal/kafka 的守卫判定一一对应;

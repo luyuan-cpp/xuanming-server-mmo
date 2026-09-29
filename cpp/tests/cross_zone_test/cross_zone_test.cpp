@@ -2096,6 +2096,42 @@ TEST(TravelFreezeCapEcs, BeginTravelHandoffInsideWindowIsNotRefusedByTheGate)
 }
 
 // ============================================================================
+// DBTask topic 世代号(player-storage-placement.md §7 / §12 A14)
+// ============================================================================
+// CZ-2 让存盘按 home_zone 选 topic;这里钉住 topic 名里的世代号规则。C++ scene 是生产者、go/db 是
+// 唯一的消费者,两边规则一旦漂移不报任何错,存盘静默写进没人消费的 topic —— 所以期望值逐条抄自
+// go/db/internal/config 与 go/login/internal/config 的 DbTaskTopicForGeneration,不从 C++ 实现反推。
+#include "player/constants/player.h"
+
+TEST(DbTaskTopicGeneration, FirstGenerationKeepsLegacyNameWithoutSuffix)
+{
+    // 第一代的名字在引入世代号前就已上线,不能补 _g1(与审计 topic 第一代就带 _g1 刻意不同)。
+    EXPECT_EQ(GetDbTaskTopic(1, 1), "db_task_zone_1");
+    EXPECT_EQ(GetDbTaskTopic(42, 1), "db_task_zone_42");
+}
+
+TEST(DbTaskTopicGeneration, ZeroMeansUnconfiguredAndEqualsFirstGeneration)
+{
+    // proto3 没有 presence:yaml 不写 DbTaskTopicGeneration 就是 0,必须与第一代同名,存量部署不改也能起。
+    EXPECT_EQ(GetDbTaskTopic(3, 0), GetDbTaskTopic(3, 1));
+    EXPECT_EQ(GetDbTaskTopic(3, 0), "db_task_zone_3");
+}
+
+TEST(DbTaskTopicGeneration, LaterGenerationsAppendSuffix)
+{
+    EXPECT_EQ(GetDbTaskTopic(1, 2), "db_task_zone_1_g2");
+    EXPECT_EQ(GetDbTaskTopic(7, 10), "db_task_zone_7_g10");
+    EXPECT_EQ(GetDbTaskTopic(4294967295u, 4294967295u), "db_task_zone_4294967295_g4294967295");
+}
+
+TEST(DbTaskTopicGeneration, GenerationDoesNotChangeZoneRouting)
+{
+    // 世代号只改名字后缀,不改按 zone 分 topic 的路由:不同 zone 同世代必然不同名。
+    EXPECT_NE(GetDbTaskTopic(1, 2), GetDbTaskTopic(2, 2));
+    EXPECT_NE(GetDbTaskTopic(1, 1), GetDbTaskTopic(1, 2));
+}
+
+// ============================================================================
 // Test bootstrap
 // ============================================================================
 int main(int argc, char** argv)

@@ -62,7 +62,8 @@ func NewRequestBattleTicketLogic(ctx context.Context, svcCtx *svc.ServiceContext
 //   - battle 的 error_message / assignment 原样搬进响应,不改写语义(不在名单 = kInvalidParameter,
 //     签不出票 = kServiceUnavailable,均由 battle 决定)。
 //
-// 为什么走 match 而不是 gate→battle 直达:路由服不转发 battle 消息(D33),而票据发放必须由已鉴权的
+// 为什么走 match 而不是 gate→battle 直达:gate 两种路由模式都不中继 battle 消息(D33;
+// turn-based §22 D66),而票据发放必须由已鉴权的
 // 大厅会话背书 —— match 是客户端协议里唯一同时掌握"会话身份 + 房间所在节点"的服务。
 func (l *RequestBattleTicketLogic) RequestBattleTicket(in *battlepb.RequestBattleTicketRequest) (*battlepb.RequestBattleTicketResponse, error) {
 	detail, ok := ctxkeys.GetSessionDetails(l.ctx)

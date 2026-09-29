@@ -23,6 +23,11 @@ package main
 //      (zone_id==0 的旧数据按 scene:{scene_id}:zone 反查)。玩家清单优先用
 //      合服第 0 步收集的 home_zone==S 列表;列表为空(重跑 / 已 remap)则
 //      SCAN player:*:location 兜底。
+//   1b. 走清单时,再对清单之外的全量 player:*:location 补扫一遍 zone_id==0 的旧记录
+//      (2026-09-28,player-storage-placement.md §12 A11)。zone_id==0 只能靠 scene:{id}:zone
+//      反查归属,而第 2 步正要删这些键:清单外玩家(目标区原住民、跨区访客)留在源区场景里的
+//      旧记录,错过这一步就永远判不出归属,只能按「undecided」一直留着。zone_id 非 0 的记录
+//      自带归属、不受场景键影响,补扫不碰。全量兜底时第 1 步已经扫过全部 location,不再补扫。
 //   2. scene:{id}:zone == S 的场景:DEL scene:{id}:{zone,node,mirror,source,mirrors}
 //      + instance:{id}:player_count;再 DEL instances:zone:{S}:active。
 //   3. world_channels:zone:{S}:* / world_channels:{draining,cooldown}:zone:{S}:*
@@ -69,24 +74,73 @@ type hotStateClearReport struct {
 	LocationsMatched   int // zone_id==S(含反查命中)的 location 数
 	LocationsDeleted   int
 	LocationsUndecided int // zone_id==0 且 scene:{id}:zone 已不存在:无法证明归属,保留
-	ScenesMatched      int // scene:{id}:zone == S 的场景数
-	SceneKeysDeleted   int
-	WorldChannelKeys   int // 匹配到的 world_channels* 键数
-	WorldChannelDel    int
-	NodeKeys           int // node:zone:{S}:* + 负载集
-	NodeKeysDeleted    int
-	ActiveSetDeleted   int
+	// ZoneZero* 是第 1b 步(清单外全量补扫 zone_id==0 旧记录,A11)的计数,口径同上面四项。
+	ZoneZeroChecked   int
+	ZoneZeroMatched   int
+	ZoneZeroDeleted   int
+	ZoneZeroUndecided int
+	ScenesMatched     int // scene:{id}:zone == S 的场景数
+	SceneKeysDeleted  int
+	WorldChannelKeys  int // 匹配到的 world_channels* 键数
+	WorldChannelDel   int
+	NodeKeys          int // node:zone:{S}:* + 负载集
+	NodeKeysDeleted   int
+	ActiveSetDeleted  int
 }
 
 func (r hotStateClearReport) String() string {
-	return fmt.Sprintf("locations(checked=%d matched=%d deleted=%d undecided=%d) scenes(matched=%d keys_deleted=%d) world_channels(keys=%d deleted=%d) node_keys(found=%d deleted=%d) active_set_deleted=%d",
+	return fmt.Sprintf("locations(checked=%d matched=%d deleted=%d undecided=%d) zone0_sweep(checked=%d matched=%d deleted=%d undecided=%d) "+
+		"scenes(matched=%d keys_deleted=%d) world_channels(keys=%d deleted=%d) node_keys(found=%d deleted=%d) active_set_deleted=%d",
 		r.LocationsChecked, r.LocationsMatched, r.LocationsDeleted, r.LocationsUndecided,
+		r.ZoneZeroChecked, r.ZoneZeroMatched, r.ZoneZeroDeleted, r.ZoneZeroUndecided,
 		r.ScenesMatched, r.SceneKeysDeleted, r.WorldChannelKeys, r.WorldChannelDel,
 		r.NodeKeys, r.NodeKeysDeleted, r.ActiveSetDeleted)
 }
 
-// errSourceZoneStillLive 表示源区负载集非空,zone-down 未完成。
-var errSourceZoneStillLive = errors.New("source zone still has live scene nodes")
+// locationCounts 是一轮 location 清理的计数,由调用方按轮次记进报告的对应字段。
+type locationCounts struct {
+	Checked, Matched, Deleted, Undecided int
+}
+
+func (c *locationCounts) add(o locationCounts) {
+	c.Checked += o.Checked
+	c.Matched += o.Matched
+	c.Deleted += o.Deleted
+	c.Undecided += o.Undecided
+}
+
+func (r *hotStateClearReport) addLocations(c locationCounts) {
+	r.LocationsChecked += c.Checked
+	r.LocationsMatched += c.Matched
+	r.LocationsDeleted += c.Deleted
+	r.LocationsUndecided += c.Undecided
+}
+
+func (r *hotStateClearReport) addZoneZeroSweep(c locationCounts) {
+	r.ZoneZeroChecked += c.Checked
+	r.ZoneZeroMatched += c.Matched
+	r.ZoneZeroDeleted += c.Deleted
+	r.ZoneZeroUndecided += c.Undecided
+}
+
+// locationScope 决定一轮 location 清理看哪些记录。
+type locationScope int
+
+const (
+	// allLocations:zone_id==S 直接删,zone_id==0 按 scene:{id}:zone 反查。清单玩家与全量兜底用它。
+	allLocations locationScope = iota
+	// zoneZeroLocationsOnly:只看 zone_id==0 的旧记录(按 scene:{id}:zone 反查),zone_id 非 0 的一律不碰。
+	// 第 1b 步(A11)用它:清单外玩家的记录只有 zone_id==0 这一类会因为场景键被删而失去判定依据。
+	zoneZeroLocationsOnly
+)
+
+// locationInScope 是纯判定:一条已解码的 location 是否参与本轮清理。
+func locationInScope(loc playerLocation, scope locationScope) bool {
+	return scope == allLocations || loc.ZoneID == 0
+}
+
+// errZoneStillLive 表示那个 zone 的负载集非空,zone-down 未完成。合服查源区,撤销查目标区(preflight.go)。
+var errZoneStillLive = errors.New("zone still has live scene nodes")
 
 // playerLocation 是 proto/scene_manager/storage.proto PlayerLocation 的最小镜像:
 //
@@ -269,23 +323,24 @@ func sourceZoneFixedKeys(src uint32) []string {
 
 // ── Redis 执行层 ─────────────────────────────────────────────────
 
-// assertSourceZoneDown 是前置门禁:负载集非空即拒绝。
-func assertSourceZoneDown(ctx context.Context, rdb redis.UniversalClient, src uint32) error {
-	n, err := rdb.ZCard(ctx, fmt.Sprintf(sceneNodeLoadKeyFmt, src)).Result()
+// assertZoneDown 是前置门禁:zone 的负载集非空即拒绝。
+func assertZoneDown(ctx context.Context, rdb redis.UniversalClient, zone uint32) error {
+	key := fmt.Sprintf(sceneNodeLoadKeyFmt, zone)
+	n, err := rdb.ZCard(ctx, key).Result()
 	if err != nil {
-		return fmt.Errorf("zcard %s: %w", fmt.Sprintf(sceneNodeLoadKeyFmt, src), err)
+		return fmt.Errorf("zcard %s: %w", key, err)
 	}
 	if n > 0 {
-		return fmt.Errorf("%w: %s has %d members — finish zone-down first", errSourceZoneStillLive, fmt.Sprintf(sceneNodeLoadKeyFmt, src), n)
+		return fmt.Errorf("%w: %s has %d members — finish zone-down first", errZoneStillLive, key, n)
 	}
 	return nil
 }
 
-// clearSourceZoneHotState 执行全部四步;任何 Redis 错误立即返回(已删的部分
+// clearSourceZoneHotState 执行全部步骤;任何 Redis 错误立即返回(已删的部分
 // 不回滚 —— 每一步都是幂等的删除,重跑即可补齐)。
 func clearSourceZoneHotState(ctx context.Context, rdb redis.UniversalClient, src uint32, playerIDs []uint64, dryRun bool) (hotStateClearReport, error) {
 	var rep hotStateClearReport
-	if err := assertSourceZoneDown(ctx, rdb, src); err != nil {
+	if err := assertZoneDown(ctx, rdb, src); err != nil {
 		return rep, err
 	}
 
@@ -300,31 +355,27 @@ func clearSourceZoneHotState(ctx context.Context, rdb redis.UniversalClient, src
 			for _, pid := range playerIDs[start:end] {
 				keys = append(keys, fmt.Sprintf(playerLocationKeyFmt, pid))
 			}
-			if err := clearLocationBatch(ctx, rdb, src, keys, dryRun, &rep); err != nil {
+			c, err := clearLocationBatch(ctx, rdb, src, keys, allLocations, dryRun)
+			rep.addLocations(c)
+			if err != nil {
 				return rep, err
 			}
 		}
+		// 1b) 删场景键之前,清单外全量补扫 zone_id==0 的旧记录(A11,理由见文件头)。
+		c, err := sweepZoneZeroLocations(ctx, rdb, src, playerIDs, dryRun)
+		rep.addZoneZeroSweep(c)
+		if err != nil {
+			return rep, err
+		}
 	} else {
 		log.Printf("Hot-state: player list empty (already remapped?) — falling back to SCAN %s", playerLocationScanPattern)
-		var cur uint64
-		for {
-			keys, next, err := rdb.Scan(ctx, cur, playerLocationScanPattern, hotStateScanCount).Result()
-			if err != nil {
-				return rep, fmt.Errorf("scan %s: %w", playerLocationScanPattern, err)
-			}
-			valid := keys[:0]
-			for _, k := range keys {
-				if _, ok := parsePlayerIDFromLocationKey(k); ok {
-					valid = append(valid, k)
-				}
-			}
-			if err := clearLocationBatch(ctx, rdb, src, valid, dryRun, &rep); err != nil {
-				return rep, err
-			}
-			cur = next
-			if cur == 0 {
-				break
-			}
+		err := scanLocationKeys(ctx, rdb, nil, func(keys []string) error {
+			c, err := clearLocationBatch(ctx, rdb, src, keys, allLocations, dryRun)
+			rep.addLocations(c)
+			return err
+		})
+		if err != nil {
+			return rep, err
 		}
 	}
 
@@ -430,10 +481,13 @@ func clearSourceZoneHotState(ctx context.Context, rdb redis.UniversalClient, src
 	return rep, nil
 }
 
-// clearLocationBatch 读一批 location、解码、按归属删除。
-func clearLocationBatch(ctx context.Context, rdb redis.UniversalClient, src uint32, keys []string, dryRun bool, rep *hotStateClearReport) error {
+// clearLocationBatch 读一批 location、解码、按归属删除;scope 决定看哪些记录(见 locationScope)。
+// 不在本轮范围内的记录原样保留、不计数。返回本轮计数(出错时也返回已累计的部分)。
+func clearLocationBatch(ctx context.Context, rdb redis.UniversalClient, src uint32, keys []string,
+	scope locationScope, dryRun bool) (locationCounts, error) {
+	var c locationCounts
 	if len(keys) == 0 {
-		return nil
+		return c, nil
 	}
 	pipe := rdb.Pipeline()
 	gets := make([]*redis.StringCmd, len(keys))
@@ -441,7 +495,7 @@ func clearLocationBatch(ctx context.Context, rdb redis.UniversalClient, src uint
 		gets[i] = pipe.Get(ctx, k)
 	}
 	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
-		return fmt.Errorf("pipeline get locations: %w", err)
+		return c, fmt.Errorf("pipeline get locations: %w", err)
 	}
 
 	type pending struct {
@@ -455,13 +509,18 @@ func clearLocationBatch(ctx context.Context, rdb redis.UniversalClient, src uint
 		if err != nil {
 			continue // 不存在
 		}
-		rep.LocationsChecked++
 		loc, derr := decodePlayerLocation([]byte(raw))
 		if derr != nil {
+			// 解不开就判断不了 zone_id,两种范围都算作「看过、判不出」,留给人查。
 			log.Printf("WARN: %s: undecodable PlayerLocation (%v) — kept", k, derr)
-			rep.LocationsUndecided++
+			c.Checked++
+			c.Undecided++
 			continue
 		}
+		if !locationInScope(loc, scope) {
+			continue
+		}
+		c.Checked++
 		switch decideLocationZone(loc, src, "") {
 		case locationDelete:
 			direct = append(direct, k)
@@ -470,7 +529,7 @@ func clearLocationBatch(ctx context.Context, rdb redis.UniversalClient, src uint
 			if loc.SceneID != 0 {
 				lookups = append(lookups, pending{key: k, loc: loc})
 			} else {
-				rep.LocationsUndecided++
+				c.Undecided++
 			}
 		}
 	}
@@ -481,7 +540,7 @@ func clearLocationBatch(ctx context.Context, rdb redis.UniversalClient, src uint
 			zones[i] = pipe.Get(ctx, fmt.Sprintf("scene:%d:zone", p.loc.SceneID))
 		}
 		if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
-			return fmt.Errorf("pipeline get scene zones for legacy locations: %w", err)
+			return c, fmt.Errorf("pipeline get scene zones for legacy locations: %w", err)
 		}
 		for i, p := range lookups {
 			sz, _ := zones[i].Result() // Nil → ""
@@ -489,17 +548,59 @@ func clearLocationBatch(ctx context.Context, rdb redis.UniversalClient, src uint
 			case locationDelete:
 				direct = append(direct, p.key)
 			case locationUndecided:
-				rep.LocationsUndecided++
+				c.Undecided++
 			}
 		}
 	}
-	rep.LocationsMatched += len(direct)
+	c.Matched += len(direct)
 	n, err := deleteKeysBatched(ctx, rdb, direct, dryRun)
-	if err != nil {
-		return err
+	c.Deleted += n
+	return c, err
+}
+
+// scanLocationKeys SCAN 全量 player:*:location,把形状合法、且玩家不在 skip 里的键按批交给 fn。
+func scanLocationKeys(ctx context.Context, rdb redis.UniversalClient, skip map[uint64]struct{}, fn func(keys []string) error) error {
+	var cur uint64
+	for {
+		keys, next, err := rdb.Scan(ctx, cur, playerLocationScanPattern, hotStateScanCount).Result()
+		if err != nil {
+			return fmt.Errorf("scan %s: %w", playerLocationScanPattern, err)
+		}
+		valid := keys[:0]
+		for _, k := range keys {
+			pid, ok := parsePlayerIDFromLocationKey(k)
+			if !ok {
+				continue
+			}
+			if _, done := skip[pid]; done {
+				continue
+			}
+			valid = append(valid, k)
+		}
+		if err := fn(valid); err != nil {
+			return err
+		}
+		cur = next
+		if cur == 0 {
+			return nil
+		}
 	}
-	rep.LocationsDeleted += n
-	return nil
+}
+
+// sweepZoneZeroLocations 是第 1b 步(A11):删场景键之前,对清单之外的全量 location 补扫一遍 zone_id==0 的
+// 旧记录,归属源区的删掉。清单玩家在第 1 步已经按全部口径判过,这里跳过,计数不重复。
+func sweepZoneZeroLocations(ctx context.Context, rdb redis.UniversalClient, src uint32, manifestIDs []uint64, dryRun bool) (locationCounts, error) {
+	skip := make(map[uint64]struct{}, len(manifestIDs))
+	for _, id := range manifestIDs {
+		skip[id] = struct{}{}
+	}
+	var total locationCounts
+	err := scanLocationKeys(ctx, rdb, skip, func(keys []string) error {
+		c, err := clearLocationBatch(ctx, rdb, src, keys, zoneZeroLocationsOnly, dryRun)
+		total.add(c)
+		return err
+	})
+	return total, err
 }
 
 // deleteKeysBatched 按 pipeline 批量 DEL;dry-run 返回 0(不写)。

@@ -18,6 +18,51 @@ type Config struct {
 	// runs can scrape per-task stage histograms alongside login :9101
 	// and scene_manager :9150.
 	MetricsListenAddr string `json:"MetricsListenAddr,optional"`
+
+	// Placement 是按玩家存储落点选库的参数(docs/design/player-storage-placement.md §6)。
+	// 整块可缺省,缺省语义见 PlacementConfig。
+	Placement PlacementConfig `json:"Placement,optional"`
+}
+
+// PlacementConfig 控制 go/db 如何按 player:placement:{id} / player:zone:{id} 选库。
+//
+// **整块缺省必须等价于 AllowStoreFamilies=true、Required=false**。go-zero 对整段 optional 且
+// 未出现的嵌套结构不回填内层 default 标签,所以这里不写 default:
+//   - AllowStoreFamilies 用 *bool,nil(没写)按 true 读,经 StoreFamiliesAllowed 取值;
+//   - Required 的零值 false 本身就是安全方向(缺席即旧语义,P-5);
+//   - 连接池大小由 Normalize 回填。
+type PlacementConfig struct {
+	// AllowStoreFamilies 为 nil 或 true 时,名字属于 zone_{1..999999}_db / player_store_{>=1000000}_db
+	// 两个家族之一的落点库即使不在库名白名单里也允许按需打开(§6.1)。按需打开只 Ping + 只读 schema 闸,
+	// 从不建库,白名单「防 ZoneId 填错静默建新库」的语义不受影响。显式 false 时只认白名单。
+	AllowStoreFamilies *bool `json:"AllowStoreFamilies,optional"`
+
+	// Required=true:没有落点记录的玩家一律 fail-closed —— 写进死信、读回失败(§6.2)。
+	// 打开前提(§13):全部 login 已 PinOnCreate=true,且各 zone 已 -mode pin-placement 钉完存量。
+	Required bool `json:"Required,optional"`
+
+	// ExtraStoreMaxOpenConn / ExtraStoreMaxIdleConn 是**每个**额外落点库的连接池(0 = 默认 8 / 2)。
+	// 本 zone 库仍用 ServerConfig.Database.MaxOpenConn / MaxIdleConn。
+	ExtraStoreMaxOpenConn int `json:"ExtraStoreMaxOpenConn,optional"`
+	ExtraStoreMaxIdleConn int `json:"ExtraStoreMaxIdleConn,optional"`
+
+	// Redis 指向落点记录所在的 Redis(与 player:zone 同库:data_service 的 MappingRedis,恒 DB 0)。
+	// nil = 复用 ServerConfig.RedisClient。两者不是同一实例 / 同一 DB 时**必须**显式填:
+	// 读错库 = 读不到任何记录与 home_zone,全员按本进程 zone 选库,被钉到别处的玩家会写错库。
+	// 必须是主节点而不是只读副本:落库后复核(§6.3)要读到搬库工具最新写下的冻结 / 切换。
+	Redis *PlacementRedisConfig `json:"Redis,optional"`
+}
+
+// PlacementRedisConfig 是落点记录所在 Redis 的连接参数。段出现时 Hosts 必填。
+type PlacementRedisConfig struct {
+	Hosts    string `json:"Hosts"`
+	Password string `json:"Password,optional"`
+	DB       int    `json:"DB,optional"`
+}
+
+// StoreFamiliesAllowed 返回是否按家族放行落点库;没写(nil)按 true。
+func (p PlacementConfig) StoreFamiliesAllowed() bool {
+	return p.AllowStoreFamilies == nil || *p.AllowStoreFamilies
 }
 
 // ServerConfig holds core service settings.
@@ -194,6 +239,16 @@ const (
 	DefaultBlobWarnRatio      float64 = 0.8
 )
 
+// 额外落点库连接池默认值(player-storage-placement.md §6.1)。
+//
+// 每个被按需打开的库各自一个池,库数不设上限,所以单库默认给小:合服 pin 之后一个 zone 的 go/db
+// 可能同时指向若干源区库,每库 8 条在 MySQL 默认 max_connections=151 下仍留得出余量。
+// Phase 2 大部分玩家搬进全局库后,全局库这一个池会成为瓶颈,届时按压测结论显式调大。
+const (
+	DefaultPlacementExtraStoreMaxOpenConn = 8
+	DefaultPlacementExtraStoreMaxIdleConn = 2
+)
+
 // Normalize 回填零值默认项。
 //
 // go-zero 对「标了 optional 且 yaml 里整段缺失」的嵌套结构不会走 default 标签,
@@ -224,6 +279,14 @@ func (c *Config) Normalize() {
 	if b.WarnRatio <= 0 || b.WarnRatio > 1 {
 		b.WarnRatio = DefaultBlobWarnRatio
 	}
+
+	p := &c.Placement
+	if p.ExtraStoreMaxOpenConn <= 0 {
+		p.ExtraStoreMaxOpenConn = DefaultPlacementExtraStoreMaxOpenConn
+	}
+	if p.ExtraStoreMaxIdleConn <= 0 {
+		p.ExtraStoreMaxIdleConn = DefaultPlacementExtraStoreMaxIdleConn
+	}
 }
 
 // DbTaskTopic returns the zone-specific Kafka topic for DB tasks.
@@ -240,6 +303,8 @@ func DbTaskTopicForGeneration(zoneId, generation uint32) string {
 }
 
 // ZoneDBName returns the zone-specific MySQL database name.
+// 与 shared/placement.StoreDBName 的 zone 家族同规则:落点库注册表把本 zone 库登记为落点 ZoneId,
+// 两边拼出的名字不一致时 proto_sql.NewStoreRegistry 拒启。
 func ZoneDBName(zoneId uint32) string {
 	return fmt.Sprintf("zone_%d_db", zoneId)
 }

@@ -103,3 +103,109 @@ gate 的出站白名单已含 BattleNodeService(`gate/main.cpp:198`),每个 gate
 - `battle_client_edge.h:3`、`battle_security.h:11` 引用 turn-based 文档「§18 D23-D28」,该文档止于 §17。
 - turn-based 文档 §8 承诺 K8s Deployment,`deploy/k8s/manifests` 无 battle;`Dockerfile.cpp` 只出 gate + scene。
 - `table_expression.h` 在 exprtk 里注册了基于 `rand()` 的 `random` 函数,策划在伤害表达式里一用就绕过引擎的种子 RNG,破坏确定性。
+
+## 8. 问答:客户端有几条连接,battle 为什么不经 gate,scene 为什么经 gate(2026-09-29)
+
+> 起因:用户 2026-09-29 提问「为什么我的 battle 节点不经过 gate,现在客户端有几条连接,为什么这么设计」。
+> 依据:四路静态调研,关键结论逐条对过代码。没有读客户端仓(AGENTS §9),Unity 侧只转述本仓文档;没有编译,没有运行。
+> 行号以 2026-09-29 工作树为准(HEAD `766cb037c`)。
+> 本节只回答「是什么、为什么」。**各环境实际走到哪一步**,见 [turn-based-battle-server.md §21](./turn-based-battle-server.md)。
+
+### 8.1 客户端有几条连接
+
+**平时 1 条长连接(gate);参战或观战期间 2 条(gate + battle)。** 登录前后另有打给 Java 网关的 HTTP 短请求,不算长连接。
+
+| 阶段 | 对端 | 传输 | 生命周期 | 承载 | 鉴权 |
+|---|---|---|---|---|---|
+| 登录前后 | Java 网关(本地 `:8081`) | HTTP 短请求 | 按请求 | `GET /api/server-list`(只在未指定 zone 时调)、`POST /api/assign-gate`(排队时轮询 `/api/queue-status`)、会话期间 `POST /api/refresh-token` | 无 / access token |
+| ① 大厅 | gate(本地 zone1 `:10000`) | muduo TCP,ProtobufCodec | 登录到登出 | Login / CreatePlayer / EnterGame;scene 的全部客户端消息;chat / guild / friend / team / trade / match 等 Go 服务经 `client_rpc_router`;战斗的分配包、开战包、重连提示 | 首包 `ClientTokenVerifyRequest`(gate token,login 签发,有效期 10 分钟) |
+| ② 战斗 | battle 节点自己的 TCP 端口(`NodeInfo.endpoint`,本地 `RPC_PORT=20010`) | muduo TCP,**与 gate 同一套 codec** | 每局一条;终局、作废或观众被清退时,服务端推完终局包再关 | 上行只放 4 个消息号(`SubmitBattleAction` / `GetBattleState` / `StopWatchBattle` / `SetAutoBattle`);下行是回合结果、终局、观战帧 | 首包 `BattleTokenVerifyRequest`(battle 自签的票据,寿命等于房间 deadline,重连可重复使用) |
+
+- **第 ② 条连接怎么来的**:
+  - battle 在 CreateBattle / AddObserver 时自签票据,组成 `BattleAssignedS2C{host, port, token_payload, token_signature, expire_at_ms, role}`,经 Kafka → gate → 大厅连接推给客户端(`battle_room_manager.cpp:562-577, 1291-1360`)。
+  - 客户端据此建第二条连接(`robot/battle_direct_conn.go:1-10`)。
+  - 票据丢了,客户端经大厅调 `MatchService.RequestBattleTicket`,match 再调 `BattleNode.IssueBattleTicket`,由 battle 补签。
+- **两条连接共用一张 handler 表**:客户端不关心 S2C 来自哪条连接(turn-based §18.2 契约)。
+- **同一时刻最多一条有效的 battle 直连**:
+  - 同一房间内:重连即替换旧连接(`BattleRoomManager::AttachDirectConnection`)。
+  - 跨房间:由 match 的互斥保证。持有 `battle:lock` 或匹配票时不许观战;`spectate:watching` 用 SETNX 保证同时只观一场。
+  - 重连替换或换场观战的瞬间,旧连接可能还没关完,会短暂重叠。
+- **跨 zone 传送是替换 gate 连接**:先连新 gate,再关旧 gate(`robot/pkg/redirect.go`),连接数不增加。
+- 没有单独的聊天、世界频道或语音连接。
+
+### 8.2 battle 为什么不经 gate(按分量排序)
+
+1. **gate 是全体玩家共用的漏斗。** 战斗是最高频的流量,而 gate 的客户端面只有一个 IO 线程。如果中继:
+   - gate 每条消息都要 parse 进 prototype、组 `SessionDetails`,再走 gRPC;
+   - battle 收到后再解一次;
+   - 应答回来,gate 还要按 response 类型全名反查 message_id。
+
+   证据见 `client_message_processor.cpp:726-798`、`gate/main.cpp:268-313`。参照项目实测,网关这个漏斗在 69 房时卡死([moba-battle-target-architecture.md](./moba-battle-target-architecture.md) §四)。
+2. **battle 是全局池,经 gate 中继必然 N×M。**
+   - scene 按 zone 划分,gate 只连本 zone 的 scene,连接数有上限。
+   - battle 不分 zone(`node_util.cpp` `IsGlobalPoolNodeType`)。中继就要求每个 gate 对每个 battle 建 channel + CompletionQueue + stub(`node_connector.cpp:39-82`),应答还要等 5ms 的 CQ 排空定时器。
+   - 旧模式下,这张 N×M 的连接网至今还在。
+3. **一局只活在一个进程的内存里。** 客户端必须连到持有房间的那一台。票据签给具体实例(`battle_node_id` + 实例 UUID `battle_instance_id`),battle 在本地验签,不回头问大厅(§4)。
+4. **battle 要能随时被杀。** gate 与 battle 之间没有连接,battle 崩溃、扩缩容、换版本都不会牵动 gate,gate 也不用再保存战斗绑定状态(`boundBattleIdBySession`)。这是会话制对局的判据(moba 目标文档)。
+5. **改造成本低。** gate 客户端面的整套能力原样搬进了 battle(turn-based D27):ProtobufCodec、HMAC 验签、握手期限、体积上限、限速、消息号白名单、非法包阈值、输出高水位。客户端的第二条连接复用同一套 codec 和 handler 表,不需要第二套协议栈。
+6. **按平面拆传输。** match → battle 的控制面每局只有一两次调用,留在 gRPC;客户端面是热路径,不进 gRPC(§2、§3.1);结算走 Kafka。
+7. **票据由 battle 自签,不由 match 签**(turn-based D24):
+   - 只有 battle 知道房间名单;
+   - 分配包和开战包由同一个生产者按同一个 key 发出,才能保证先后顺序;
+   - 少一个持有密钥的服务。
+
+### 8.3 scene 为什么仍经 gate
+
+- **scene 不能随时被杀。** 它常驻、按 zone 划分,是玩家权威数据的唯一写入方。按 battle 的方式把它抽出来是范畴错误([session-extractability-mmo-slg.md](./session-extractability-mmo-slg.md))。
+- **换场景对客户端无感。** 玩家频繁换场景,gate 按 Kafka `RoutePlayer` 改写会话绑定即可,客户端连接不变。如果直连 scene,每次换图都要重建连接。
+- **连接数有上限。** gate 只连本 zone 的 scene;跨 zone 由客户端换 gate(RedirectToGate)。
+- **安全层只做一份。** gate 是 scene 面的安全层(逐个消息号白名单、限速、非法包计数)。直连 scene,就要把这层复制到每个 scene。
+
+### 8.4 这个例外在什么条件下成立
+
+业界标准是「客户端只连一个接入层」(见 [client-access-band-routing.md](./client-access-band-routing.md) 第一部分)。battle 直连属于这个标准允许的唯一一类例外:**权威实时服,凭短期票据**。xuanming 的第二条连接同样连的是 DS。
+
+新服务想让客户端直连,必须同时满足以下 6 条:
+
+1. 会话形状:有始有终,入口一份快照,出口一份结果,中间状态外界不需要;
+2. 不写玩家库,进程可以随时被杀;
+3. 票据本地验签,不回头问大厅;
+4. 直连面按 gate 的标准同等设防;
+5. 每个落点都有客户端能访问的入口;
+6. 流量高到值得绕开共享漏斗。
+
+chat / guild / friend / trade 等业务服不满足,一律经 gate + `client_rpc_router`。2026-09-28 已否决「客户端直连各业务服」。
+
+### 8.5 代价
+
+- 客户端要分别管两条连接的生命周期:断线重连、票据过期补签,两条连接互不干扰。
+- 每个 battle 落点都需要客户端能访问的入口(hostPort / NodePort / 外部 L4),K8s 上还没解决。
+- 多了一个对公网开放的端口。票据的风险:
+  - 走明文 TCP,只有 adler32 校验;
+  - 不绑定客户端 IP,整局有效;
+  - 一旦泄露,别人就能冒名接入,并借重连替换把正主挤掉;
+  - 要吊销只能销毁房间(turn-based §18.7 已列为不做)。
+- 收缩到位后(D39),连不上 battle 端口的客户端就不能战斗。
+
+### 8.6 §7 漂移复核(2026-09-29)
+
+| §7 条目 | 现状 |
+|---|---|
+| `IsTcpNodeType` 含 BattleNodeService | 仍在(`proto_util.cpp`)。根因是生成模板对全部 `eNodeType` 一律输出,要修得改 `tools/proto_generator` 模板,不能手改生成物 |
+| ARCH §6.1 / §6.3 把 gate↔scene 写成 gRPC | 仍在(`ARCH.md:225`)。`gate-scene-relay-architecture.md` 全文同样按 gRPC 叙述。实际上 scene 客户端方法是 `protocol=0`(muduo TCP) |
+| 引用「§18 D23-D28」而文档止于 §17 | 已解决:turn-based 文档已写到 §21 |
+| 没有 battle 的 K8s Deployment / 镜像 | 部分解决:`Dockerfile.cpp` 已构建 battle,`k8s_deploy.ps1` 有 `Apply-BattlePool` 和密钥注入。集群外入口仍缺(对外通告的是 POD_IP),turn-based §18.6 的文字已过时 |
+| exprtk 的 `random` 基于 `rand()` | 仍在(`table_expression.h`) |
+
+新增漂移:
+
+- **本文 §2.1「battle → gate 没有这条边」写的是目标形态,不是现状。** 当前:
+  - battle 仍经 Kafka 给 gate 发 `BindBattleEvent`;
+  - 没有直连时,所有 S2C 都回落到 Kafka → gate;
+  - 旧模式下 gate 仍持有 battle 的 stub。
+- **本文 §3.1、§3.3 引用的行号已经漂移:**
+  - `client_message_processor.cpp:634-707` 现为 `:726-798`;
+  - `gate/main.cpp:198` 现为 `:199-217`;
+  - `grpc_init_client.cpp:213-221` 现为 `:436-444`。
+- `proto/battle/player_battle.proto` 的头注释仍写「客户端协议经 gate 以 gRPC 直达、下行走 Kafka」。
+- ARCH §1 总体拓扑图里没有 battle 节点,也没有客户端的第二条连接。

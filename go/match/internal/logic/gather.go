@@ -166,8 +166,9 @@ func runGather(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleConfigI
 	prepareDeadlineMs := nowMs() + uint64(matchedTicketTTLFor(svcCtx, uint32(len(members))))*1000
 
 	// 2.5 观战互斥清退(设计决策 D11 / 不变量 8):进 gather 的玩家必须先从
-	//     观战中摘除,杜绝观众绑定与随后的参战 BindBattleEvent 抢占 SessionInfo
-	//     槽位的竞态;尽力而为,失败只记日志不阻断开局。
+	//     观战中摘除 —— 一名玩家同一时刻只保留一条 battle 直连(客户端单条链路,
+	//     battle 房间 directConnByPlayer 按 player_id 单槽),观战直连与随后的参战
+	//     直连不能并存;尽力而为,失败只记日志不阻断开局。
 	for _, playerId := range members {
 		stopWatchingIfAny(svcCtx, playerId, "enter_gather")
 	}
@@ -234,6 +235,11 @@ func runGather(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleConfigI
 		logx.Errorf("[gather] CreateBattle 失败 battle=%d node=%d(%s): %v",
 			battleId, battleNode.NodeId, battleNode.Endpoint, err)
 		// 半成功兜底:RPC 超时时战斗可能已建成,先尽力 DestroyBattle 再解冻。
+		// battle 明确拒绝(tip≠0,如 turn-based §22 D70 预签票失败回 kServiceUnavailable)
+		// 时房间必未建成,DestroyBattle 送达时在 battle 侧幂等命中,随后照常解冻、回队首或删票;
+		// 若 DestroyBattle 本身失败(createBattle 目前不区分 RPC 失败与明确拒绝),仍走下方
+		// 保守分支:不解冻、不回队,冻结等 scene 侧 prepare_deadline_ms 到期解除,票据留
+		// matched 由 TTL 自愈。
 		if !destroyBattle(battleNode, battleId, "gather_rollback") {
 			// DestroyBattle 也失败 → 房间可能仍活着且已向 scene 发出 BattleConfirmedEvent。
 			// 此时再逐人 CancelBattlePrepare 会出现"Cancel 先于 Confirm 到达、锁被删、随后

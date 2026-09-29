@@ -39,7 +39,7 @@ const (
 )
 
 // enter_scene_rejected_total 的 reason 取值(本文件发出的:归属交接 / 跨 zone 传送,外加 scene_gone;
-// 归属查询的两种 home_zone_* 在 home_zone.go)。
+// 归属查询的三种 home_zone_* 在 home_zone.go)。
 // 全部是固定字符串,低基数;玩家 id、标记原文只进日志。
 //
 // 换手门的 18 拆成三种,前缀统一为 handoff_pending:看总量用 reason=~"handoff_pending.*",
@@ -400,7 +400,9 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		// 收到错误应答后 epoch 未变 → 解冻并回 tip(player_lifecycle.cpp ResolveTravelOutcome),玩家
 		// 不受损。放在换手门之前:它是纯只读的前置条件,与标记就没就绪无关,没理由让一个注定过不去的
 		// 请求先拿一次 18。查到的值本身用不上(第二条腿自己再查),这里只要「有映射」。
-		// 未映射 / 映射为 0 / 查询失败都回 ErrHomeZoneUnavailable;只读,一个字节都不改。
+		// 未映射 / 映射为 0 / 查询失败都回 ErrHomeZoneUnavailable;归属 zone 正在合服(home_zone_merging)
+		// 回 ErrHomeZoneMerging —— 放行的话第二条腿必被 3b 以同一理由拒,而玩家那时已被源 scene 销毁。
+		// 只读,一个字节都不改。
 		// 只送连接的重定向(!leavingZone,含 login 首登的 RedirectOnEnter)不动归属,不查。
 		// 有意**不看** in.GateId(与 3b「没有 GateId 就不查」不同):3b 查的是要写进路由事件的值,没有
 		// GateId 就没有消费者;这里查的是放行的前提 —— 等待落点无论有没有 GateId 都会写
@@ -490,6 +492,64 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	samePhysicalNode := currentLoc != nil && currentLoc.NodeId != "" && currentLoc.NodeId == nodeId &&
 		currentZoneID != 0 && targetZoneId != 0 && currentZoneID == targetZoneId
 	crossNodeHandoff := currentLoc != nil && !awaitingPlacement && !samePlacement && !samePhysicalNode
+	// 换手门与 3b 归属查询都排在下面的同节点 owner_epoch 补种之前 —— 补种是本路径上对
+	// location / owner_epoch 的**第一次写**,而 3b 的合服围栏拒绝(ErrHomeZoneMerging)必须发生在
+	// 任何这类写之前(player-storage-placement.md §8.2)。换手门只读(checkHandoffCommitted 只 GET
+	// 标记),且与补种互斥(crossNodeHandoff 要求 !samePhysicalNode,补种要求 samePhysicalNode),
+	// 挪到补种前面不改变任何一条请求的结局;放行凭据先记在 handoffGrant,guard 建好之后再套上。
+	// 换手门仍在 3b 之前:跨节点换图的第一跳注定拿 18,没理由先为它查一次归属。
+	var handoffGrant handoffVerdict
+	if crossNodeHandoff {
+		resp, grant := l.requireHandoffCommitted(in, currentLoc, currentZoneID, targetZoneId, observedEpoch, "场景交接")
+		if resp != nil {
+			// 自动选择大世界频道会在 resolveSceneForEnter 内原子预占人数；拒绝
+			// 请求时必须成对释放，不能让失败请求污染调度负载。
+			if reserved {
+				DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
+			}
+			return resp, nil
+		}
+		handoffGrant = grant
+	}
+
+	// 3b. 归属 zone:随 RoutePlayerEvent 下发,scene 节点据此选存盘 topic(CZ-3)。
+	//     只有真的要发路由事件时才查;查不到(data_service 不可用)按可重试拒绝,
+	//     不能带着 home_zone_id=0 把人派下去让节点落进程 zone 库。
+	//     「未映射 = 首登,按 gate zone」只对 gate zone 就是玩家所在 zone 的落点成立:没有任何位置
+	//     记录的首次落点,或已有同 zone 位置记录的换图 / 重连(未回填的存量号一直这么存盘)。
+	//     正在消费「等待落点」= 跨 zone 传送的第二条腿,gate zone 是目标 zone,未映射必须拒绝
+	//     (纵深防御:第一条腿已经前置拒过,走到这里是两条腿之间映射丢了,或旧版本留下的记录)。
+	//     过期的等待落点只要还被采用就同样拒:玩家此刻从哪个 zone 的 gate 进来都证明不了那就是他的
+	//     归属。「被采用」= 没在上面被 playerLocationOwnerGone 过滤掉;等待落点所在 zone 已无任何
+	//     存活节点时 currentLoc 已是 nil,这里按首次落点回落 gate zone(该旁路只对未映射且已有
+	//     等待落点的玩家可达,即旧版本遗留 / 映射丢失)。
+	//     归属 zone 正在合服(home_zone_merging)时 resolveHomeZone 回 ErrHomeZoneMerging:同区落点、
+	//     同落点重连、第二条腿一律拒。走到这里之前本请求只动过去重占位与场景预占(下面成对释放),
+	//     location / owner_epoch 一个字节都没写。
+	//     已知缺口(player-storage-placement.md §8.2「不覆盖的入口」):上面「拒绝先于任何写」只对带
+	//     GateId 的请求成立。没有 GateId 的请求不查归属,也就不过合服围栏,但下面的第 5b 步
+	//     (跨节点时派发 ReleasePlayer)、第 6 步(铸 epoch + CAS 写 location)与第 6b 步(扣旧场景人数)
+	//     照常执行。当前能接受,前提是所有生产调用方都带 GateId(login entergamelogic.go 与 C++ 侧
+	//     全部 EnterSceneRequest 构造点)。新增不带 GateId 的调用方(疏散 / GM / 机器人)之前,必须先把
+	//     围栏从这个 GateId 条件里拆出来:不带 GateId 时也调 resolveHomeZone、只采用它的拒绝结果,
+	//     并放在同节点补种与第 5b 步之前。TestEnterScene_HomeZoneNotQueriedWithoutGateRoute 钉住的
+	//     「不带 GateId 不发归属 RPC」届时要一并改。
+	var homeZoneID uint32
+	if in.GateId != "" {
+		unmappedPolicy := homeZoneUnmappedFallsBackToGateZone
+		if awaitingPlacement {
+			unmappedPolicy = homeZoneUnmappedRejectsTravel
+		}
+		hz, hzResp := l.resolveHomeZone(in, unmappedPolicy)
+		if hzResp != nil {
+			if reserved {
+				DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
+			}
+			return hzResp, nil
+		}
+		homeZoneID = hz
+	}
+
 	// guard.mint:持有者换了才铸造。同节点换图持有者没换 —— 铸了,持有节点要等路由
 	// 事件绕一圈才知道新值,窗口内它的周期 / 退出存盘会被 C++ CAS 拒掉,合法持有者
 	// 被当成废黜销毁(踢人 + 回档)。跨节点交接:过了标记门才铸;dev 旁路下无标记
@@ -558,43 +618,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	sameNodeZeroMint := samePhysicalNode && observedEpoch == 0 && currentLoc.GetOwnerEpoch() == 0
 	guard := placementGuard{observedEpoch: observedEpoch, mint: !samePhysicalNode || sameNodeZeroMint}
 	if crossNodeHandoff {
-		resp, grant := l.requireHandoffCommitted(in, currentLoc, currentZoneID, targetZoneId, observedEpoch, "场景交接")
-		if resp != nil {
-			// 自动选择大世界频道会在 resolveSceneForEnter 内原子预占人数；拒绝
-			// 请求时必须成对释放，不能让失败请求污染调度负载。
-			if reserved {
-				DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
-			}
-			return resp, nil
-		}
-		guard.mint, guard.requiredMarker = grant.committed, grant.marker
-	}
-
-	// 3b. 归属 zone:随 RoutePlayerEvent 下发,scene 节点据此选存盘 topic(CZ-3)。
-	//     只有真的要发路由事件时才查;查不到(data_service 不可用)按可重试拒绝,
-	//     不能带着 home_zone_id=0 把人派下去让节点落进程 zone 库。
-	//     「未映射 = 首登,按 gate zone」只对 gate zone 就是玩家所在 zone 的落点成立:没有任何位置
-	//     记录的首次落点,或已有同 zone 位置记录的换图 / 重连(未回填的存量号一直这么存盘)。
-	//     正在消费「等待落点」= 跨 zone 传送的第二条腿,gate zone 是目标 zone,未映射必须拒绝
-	//     (纵深防御:第一条腿已经前置拒过,走到这里是两条腿之间映射丢了,或旧版本留下的记录)。
-	//     过期的等待落点只要还被采用就同样拒:玩家此刻从哪个 zone 的 gate 进来都证明不了那就是他的
-	//     归属。「被采用」= 没在上面被 playerLocationOwnerGone 过滤掉;等待落点所在 zone 已无任何
-	//     存活节点时 currentLoc 已是 nil,这里按首次落点回落 gate zone(该旁路只对未映射且已有
-	//     等待落点的玩家可达,即旧版本遗留 / 映射丢失)。
-	var homeZoneID uint32
-	if in.GateId != "" {
-		unmappedPolicy := homeZoneUnmappedFallsBackToGateZone
-		if awaitingPlacement {
-			unmappedPolicy = homeZoneUnmappedRejectsTravel
-		}
-		hz, hzResp := l.resolveHomeZone(in, unmappedPolicy)
-		if hzResp != nil {
-			if reserved {
-				DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
-			}
-			return hzResp, nil
-		}
-		homeZoneID = hz
+		guard.mint, guard.requiredMarker = handoffGrant.committed, handoffGrant.marker
 	}
 
 	// 4. IDEMPOTENCY CHECK: Is player already in the same scene on the same node?

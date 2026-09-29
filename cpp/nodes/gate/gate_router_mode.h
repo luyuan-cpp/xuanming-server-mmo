@@ -4,11 +4,12 @@
 // (设计文档 docs/design/client-rpc-router.md D34)。
 //
 // 两种模式:
-//   * 关(默认):行为与改前完全一致 —— gate 对 login / scene_manager / battle /
-//     match 每类各持 gRPC stub,按 message_id 用 typed sender 直连业务服务;
+//   * 关(默认):除战斗外行为与改前一致 —— gate 对 login / scene_manager / match
+//     每类各持 gRPC stub,按 message_id 用 typed sender 直连业务服务;
 //   * 开:gate 对 Go 业务服务**零 stub**,gRPC 类客户端消息与断线通知一律原包
-//     转给路由服(ClientRpcRouterNodeService),连接数 = 路由服副本数;
-//     BindBattle / UnbindBattle 事件忽略(战斗流量走客户端直连,D33)。
+//     转给路由服(ClientRpcRouterNodeService),连接数 = 路由服副本数。
+// 战斗与本开关无关:两种模式下 gate 都不中继战斗、不连 battle,BattleClientPlayer 号
+// 一律回 kServiceUnavailable,战斗只走客户端直连(turn-based §22 D66)。
 //
 // 为什么单独一个头,并且**不依赖 muduo / protobuf / 引擎**:与 gate_security.h
 // 同一条纪律 —— 这里全是纯函数(输入 -> 结论),能在没有整套 C++ 引擎的机器上直接

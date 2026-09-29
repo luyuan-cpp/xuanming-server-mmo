@@ -18,7 +18,7 @@ void BattleNodeImpl::HandleCreateBattle(const ::CreateBattleRequest* request,
 
 void BattleNodeImpl::HandleDestroyBattle(const ::DestroyBattleRequest* request)
 {
-    // 幂等销毁,只解绑不结算(补偿/回滚路径),委托手写房间管理器
+    // 幂等销毁,不结算(补偿/回滚路径),委托手写房间管理器
     BattleRoomManager::Instance().HandleDestroyBattle(*request);
 }
 

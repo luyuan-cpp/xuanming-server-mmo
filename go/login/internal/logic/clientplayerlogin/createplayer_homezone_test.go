@@ -292,6 +292,47 @@ func TestCreatePlayer_ReleasesLockOnHomeZoneFailure(t *testing.T) {
 	}
 }
 
+// registerHomeZone 带的 storage_id 由 Placement 开关决定(player-storage-placement.md §8.3):
+// 关 → 0(与落点设计之前逐字节相同);开且 NewPlayerStorageId=0 → 本 login 的 Node.ZoneId;
+// 开且显式填了 → 原样透传(Phase 2 全局库 1000000)。home_zone 在三种情形下都不变。
+func TestRegisterHomeZonePlacementStorageID(t *testing.T) {
+	savedZone, savedPlacement := config.AppConfig.Node.ZoneId, config.AppConfig.Placement
+	t.Cleanup(func() {
+		config.AppConfig.Node.ZoneId = savedZone
+		config.AppConfig.Placement = savedPlacement
+	})
+	config.AppConfig.Node.ZoneId = hzZoneID
+
+	cases := map[string]struct {
+		placement   config.PlacementConf
+		wantStorage uint32
+	}{
+		"pin off":                           {placement: config.PlacementConf{}, wantStorage: 0},
+		"pin off ignores storage id":        {placement: config.PlacementConf{NewPlayerStorageId: 1000000}, wantStorage: 0},
+		"pin on, storage 0 uses login zone": {placement: config.PlacementConf{PinOnCreate: true}, wantStorage: hzZoneID},
+		"pin on, global storage 1000000":    {placement: config.PlacementConf{PinOnCreate: true, NewPlayerStorageId: 1000000}, wantStorage: 1000000},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			config.AppConfig.Placement = tc.placement
+			fake := &fakeRegisterClient{}
+			l := NewCreatePlayerLogic(context.Background(), &svc.ServiceContext{HomeZone: homezone.New(fake, 0, 0, 0)})
+			if tip := l.registerHomeZone(hzAccount, hzPlayerID); tip != nil {
+				t.Fatalf("unexpected tip %v", tip)
+			}
+			if fake.calls != 1 {
+				t.Fatalf("RegisterPlayerZone calls = %d, want 1", fake.calls)
+			}
+			if got := fake.last.GetHomeZoneId(); got != hzZoneID {
+				t.Fatalf("home_zone_id = %d, want %d (placement must never change home zone)", got, hzZoneID)
+			}
+			if got := fake.last.GetStorageId(); got != tc.wantStorage {
+				t.Fatalf("storage_id = %d, want %d", got, tc.wantStorage)
+			}
+		})
+	}
+}
+
 // registerHomeZone 单测:成功返回 nil;任何失败都返回既有的 kLoginDataSerializeFailed。
 func TestRegisterHomeZone(t *testing.T) {
 	config.AppConfig.Node.ZoneId = hzZoneID

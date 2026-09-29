@@ -25,13 +25,18 @@ import (
 
 // fakeGatherRPCs 记录 gather 发出的四类 RPC;fingerprints 决定各玩家 PrepareBattle
 // 响应里的 table_fingerprint(缺项 = 空串,模拟旧版 scene 不回报)。
+// createTip 非 0 时 CreateBattle 回该 tip 拒绝建房(模拟 battle 侧 turn-based §22 D70
+// fail-closed:预签票据失败回 kServiceUnavailable、不建房),请求记进 createRejected;
+// created 只记 battle 接受建房的请求。
 type fakeGatherRPCs struct {
-	mu           sync.Mutex
-	fingerprints map[uint64]string
-	prepares     []*scenepb.PrepareBattleRequest
-	cancelled    []uint64
-	created      []*battlepb.CreateBattleRequest
-	destroyed    []uint64
+	mu             sync.Mutex
+	fingerprints   map[uint64]string
+	createTip      uint32
+	prepares       []*scenepb.PrepareBattleRequest
+	cancelled      []uint64
+	created        []*battlepb.CreateBattleRequest
+	createRejected []*battlepb.CreateBattleRequest
+	destroyed      []uint64
 }
 
 func stubGatherRPCs(t *testing.T, fingerprints map[uint64]string) *fakeGatherRPCs {
@@ -60,6 +65,13 @@ func stubGatherRPCs(t *testing.T, fingerprints map[uint64]string) *fakeGatherRPC
 	createBattleFn = func(endpoint string, req *battlepb.CreateBattleRequest) (*battlepb.CreateBattleResponse, error) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
+		if f.createTip != 0 {
+			f.createRejected = append(f.createRejected, req)
+			return &battlepb.CreateBattleResponse{
+				BattleId:     req.BattleId,
+				ErrorMessage: tipErr(f.createTip, "battle 拒绝建房"),
+			}, nil
+		}
 		f.created = append(f.created, req)
 		return &battlepb.CreateBattleResponse{BattleId: req.BattleId}, nil
 	}

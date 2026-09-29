@@ -39,6 +39,8 @@ type fakeHomeZoneClient struct {
 	zone  uint32
 	err   error
 	calls int
+	// merging 原样填进 GetPlayerHomeZoneResponse.home_zone_merging(归属 zone 正在合服)。
+	merging bool
 	// onCall 非 nil 时在每次查询里先跑一遍。归属查询夹在「解析场景」与「预占人数」之间,
 	// 用例借它在这个窗口里改 Redis(destroy-while-entering)。
 	onCall func()
@@ -52,7 +54,7 @@ func (f *fakeHomeZoneClient) GetPlayerHomeZone(_ context.Context, _ *dspb.GetPla
 	if f.err != nil {
 		return nil, f.err
 	}
-	return &dspb.GetPlayerHomeZoneResponse{HomeZoneId: f.zone}, nil
+	return &dspb.GetPlayerHomeZoneResponse{HomeZoneId: f.zone, HomeZoneMerging: f.merging}, nil
 }
 
 // capturingKafkaWriter 把发出的消息原样留下,供解码 RoutePlayerEvent。

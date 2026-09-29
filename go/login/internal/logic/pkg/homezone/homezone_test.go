@@ -201,11 +201,20 @@ func TestHomeZone_UnmappedContracts(t *testing.T) {
 // (建角侧据此 fail-closed)。
 func TestRegisterPlayerZone(t *testing.T) {
 	ok := &fakeDataService{}
-	if err := newResolver(ok).RegisterPlayerZone(context.Background(), 42, 3); err != nil {
+	if err := newResolver(ok).RegisterPlayerZone(context.Background(), 42, 3, 0); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if ok.regCalls != 1 || ok.lastReg.GetPlayerId() != 42 || ok.lastReg.GetHomeZoneId() != 3 {
-		t.Fatalf("register call = %d/%v, want 1 call with player 42 → zone 3", ok.regCalls, ok.lastReg)
+	if ok.regCalls != 1 || ok.lastReg.GetPlayerId() != 42 || ok.lastReg.GetHomeZoneId() != 3 || ok.lastReg.GetStorageId() != 0 {
+		t.Fatalf("register call = %d/%v, want 1 call with player 42 → zone 3, storage 0", ok.regCalls, ok.lastReg)
+	}
+
+	// storage_id 原样透传(0 = 不钉;非 0 由 data_service 与 player:zone 原子一起钉落点)。
+	pinned := &fakeDataService{}
+	if err := newResolver(pinned).RegisterPlayerZone(context.Background(), 42, 3, 1000000); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if pinned.regCalls != 1 || pinned.lastReg.GetHomeZoneId() != 3 || pinned.lastReg.GetStorageId() != 1000000 {
+		t.Fatalf("register call = %d/%v, want zone 3 + storage 1000000", pinned.regCalls, pinned.lastReg)
 	}
 
 	failing := map[string]struct {
@@ -222,7 +231,7 @@ func TestRegisterPlayerZone(t *testing.T) {
 	}
 	for name, tc := range failing {
 		t.Run(name, func(t *testing.T) {
-			if err := tc.r.RegisterPlayerZone(context.Background(), tc.player, tc.zone); err == nil {
+			if err := tc.r.RegisterPlayerZone(context.Background(), tc.player, tc.zone, 0); err == nil {
 				t.Fatal("want error")
 			}
 			if tc.wantNoCall && tc.r != nil && tc.r.Client != nil && tc.r.Client.(*fakeDataService).regCalls != 0 {

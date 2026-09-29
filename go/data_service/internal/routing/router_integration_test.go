@@ -28,6 +28,8 @@ import (
 
 	"data_service/internal/config"
 
+	"shared/placement"
+
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,7 +47,7 @@ const (
 )
 
 // itKeyPatterns 是用例会碰的所有键模式:跑前要求它们为空,跑后按模式清理。
-var itKeyPatterns = []string{"player:zone:*", "merge:in_progress:*"}
+var itKeyPatterns = []string{"player:zone:*", "merge:in_progress:*", "player:placement:*"}
 
 // newIntegrationRouter 接一个指向真 Redis 的 Router(DB 恒 0,见文件顶部)。
 func newIntegrationRouter(t *testing.T) (*Router, *goredis.Client) {
@@ -67,7 +69,7 @@ func newIntegrationRouter(t *testing.T) (*Router, *goredis.Client) {
 		}
 		if len(keys) > 0 {
 			raw.Close()
-			t.Skipf("Redis %s DB0 已有 %s 键(%v ...):本用例要独占这两个前缀,先清干净或换一个空实例",
+			t.Skipf("Redis %s DB0 已有 %s 键(%v ...):本用例要独占这些前缀,先清干净或换一个空实例",
 				host, pattern, keys)
 		}
 	}
@@ -140,16 +142,16 @@ func TestRegisterPlayerZone_RealRedisNeverOverwrites(t *testing.T) {
 	r, raw := newIntegrationRouter(t)
 	ctx := context.Background()
 
-	require.NoError(t, r.RegisterPlayerZone(ctx, 90001, 3))
+	require.NoError(t, r.RegisterPlayerZone(ctx, 90001, 3, 0))
 	val, err := raw.Get(ctx, "player:zone:90001").Result()
 	require.NoError(t, err)
 	assert.Equal(t, "3", val)
 
 	// 同 zone 幂等(CreatePlayer 允许重试)
-	require.NoError(t, r.RegisterPlayerZone(ctx, 90001, 3))
+	require.NoError(t, r.RegisterPlayerZone(ctx, 90001, 3, 0))
 
 	// 异 zone 拒绝,且零变更
-	err = r.RegisterPlayerZone(ctx, 90001, 9)
+	err = r.RegisterPlayerZone(ctx, 90001, 9, 0)
 	require.Error(t, err)
 	var conflict *HomeZoneConflictError
 	require.ErrorAs(t, err, &conflict)
@@ -166,9 +168,9 @@ func TestMergeFence_RealRedisBlocksRegisterAndGatesRemap(t *testing.T) {
 	r, raw := newIntegrationRouter(t)
 	ctx := context.Background()
 
-	require.NoError(t, r.RegisterPlayerZone(ctx, 90010, 31))
-	require.NoError(t, r.RegisterPlayerZone(ctx, 90011, 31))
-	require.NoError(t, r.RegisterPlayerZone(ctx, 90012, 32))
+	require.NoError(t, r.RegisterPlayerZone(ctx, 90010, 31, 0))
+	require.NoError(t, r.RegisterPlayerZone(ctx, 90011, 31, 0))
+	require.NoError(t, r.RegisterPlayerZone(ctx, 90012, 32, 0))
 
 	// 没有标记时 remap 一律拒绝(线上误调用的防线)。
 	_, _, err := r.RemapHomeZoneForMerge(ctx, 31, 32, true)
@@ -183,7 +185,7 @@ func TestMergeFence_RealRedisBlocksRegisterAndGatesRemap(t *testing.T) {
 	assert.True(t, fenced)
 
 	// 封锁期间不接受新映射 —— 否则它会跑在 SCAN 游标后面,合服完仍指向源 zone。
-	require.ErrorIs(t, r.RegisterPlayerZone(ctx, 90013, 31), ErrZoneMergeInProgress)
+	require.ErrorIs(t, r.RegisterPlayerZone(ctx, 90013, 31, 0), ErrZoneMergeInProgress)
 
 	matched, updated, err := r.RemapHomeZoneForMerge(ctx, 31, 32, true)
 	require.NoError(t, err)
@@ -202,7 +204,56 @@ func TestMergeFence_RealRedisBlocksRegisterAndGatesRemap(t *testing.T) {
 
 	// 工具跑完删标记(TTL 只是兜底);之后源 zone 恢复放行。
 	require.NoError(t, raw.Del(ctx, MergeFenceKey(31)).Err())
-	require.NoError(t, r.RegisterPlayerZone(ctx, 90013, 31))
+	require.NoError(t, r.RegisterPlayerZone(ctx, 90013, 31, 0))
+}
+
+// TestPlacementScripts_RealRedis 是两段落点相关 Lua 的真 Redis 验证:miniredis 的 gopher-lua
+// 仿真里「不带 storage_id 时 KEYS[3] 为 nil」「pcall 回整数」「SET NX 失败回 false」「EXISTS 回整数 1」
+// 几处都可能与真 Redis 不同,而它们恰好决定「home 已存在时落点不被写」「围栏存在时 merging=true」
+// 与「提交点复核围栏时两键都不写」这几条语义。
+func TestPlacementScripts_RealRedis(t *testing.T) {
+	r, raw := newIntegrationRouter(t)
+	ctx := context.Background()
+
+	// 带 storage_id:两键一起写下。
+	require.NoError(t, r.RegisterPlayerZone(ctx, 90101, 41, placement.DefaultGlobalStorageID))
+	val, err := raw.Get(ctx, placement.Key(90101)).Result()
+	require.NoError(t, err)
+	assert.Equal(t, placement.StableValue(placement.DefaultGlobalStorageID, 1), val)
+
+	// 不带 storage_id:只写 home。
+	require.NoError(t, r.RegisterPlayerZone(ctx, 90102, 41, 0))
+	n, err := raw.Exists(ctx, placement.Key(90102)).Result()
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, n)
+
+	// home 已存在:同值重试与冲突都不写落点。
+	require.NoError(t, r.RegisterPlayerZone(ctx, 90102, 41, placement.DefaultGlobalStorageID))
+	var conflict *HomeZoneConflictError
+	require.ErrorAs(t, r.RegisterPlayerZone(ctx, 90102, 42, placement.DefaultGlobalStorageID), &conflict)
+	n, err = raw.Exists(ctx, placement.Key(90102)).Result()
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, n, "真 Redis 上 home 已存在时也不许写落点")
+
+	// 围栏:home 与 merging 同一段脚本读出。
+	zone, merging, err := r.GetPlayerHomeZoneAndMergeFence(ctx, 90101)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(41), zone)
+	assert.False(t, merging)
+	require.NoError(t, raw.Set(ctx, MergeFenceKey(41), `{"started_at":1757000000}`, time.Minute).Err())
+	zone, merging, err = r.GetPlayerHomeZoneAndMergeFence(ctx, 90101)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(41), zone)
+	assert.True(t, merging)
+
+	// 提交点复核:绕过预检直接打写入脚本(模拟「预检之后才立围栏」),围栏内两键都不写。
+	require.ErrorIs(t, r.registerPlayerZoneFenced(ctx, 90103, 41, placement.DefaultGlobalStorageID), ErrZoneMergeInProgress)
+	n, err = raw.Exists(ctx, mappingKey(90103), placement.Key(90103)).Result()
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, n, "真 Redis 上围栏内提交点也不许写 player:zone / player:placement")
+
+	_, _, err = r.GetPlayerHomeZoneAndMergeFence(ctx, 90199)
+	require.ErrorIs(t, err, ErrHomeZoneNotMapped)
 }
 
 // TestGetPlayerHomeZone_RealRedisMissingIsTyped:真 Redis 上"键不存在"同样只归到

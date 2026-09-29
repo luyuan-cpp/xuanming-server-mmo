@@ -204,12 +204,18 @@ func (p *Pipeline) Start(ctx context.Context) {
 //
 // 步骤(顺序固定):
 //  1. 号段发 op_id —— 发不出就当场失败,绝不自造 id;
-//  2. **事务外**建 seq 行(并发首次建行在事务内会死锁,§4.19);
-//  3. 一个事务里:分配 seq(FOR UPDATE + I5 未决数守卫)→ 插 outbox 行。P3 的商品状态迁移
-//     必须并进这同一个事务,否则会出现"扣了但商品没进 ESCROWING";
-//  4. 提交后同步投一次(复用重投循环的同一个 ProcessOne,不另写一条路径)。
+//  2. 一个事务里,按 trade 的全局取锁顺序:按需建 seq 行(EnsureSeqRowsTx:普通读 →(仅缺行时)
+//     锁哨兵守卫行 → INSERT IGNORE)→ 分配 seq(FOR UPDATE + I5 未决数守卫)→ 插 outbox 行。
+//     P3 的商品状态迁移必须并进这同一个事务(否则会出现"扣了但商品没进 ESCROWING"),
+//     且商品 / 订单行的锁要排在 EnsureSeqRowsTx **之前**(全序见 data.AssetOpRepo 的守卫一节);
+//  3. 提交后同步投一次(复用重投循环的同一个 ProcessOne,不另写一条路径)。
 //
-// 第 4 步失败不回滚第 3 步:行已在 outbox,循环会接着投。只有 1–3 步失败才算本次上架失败。
+// 建行为什么从"事务外自动提交"挪进了事务(2026-09-28,死锁审计 #16 在 trade 的同形):事务外建行
+// 只剩一种 1213 —— 首个插入者回滚时,排在它未提交记录后面的多个插入者继承间隙锁后互等 —— 旧代码
+// 靠有界重试吸收。挪进事务、排在一行已提交的哨兵守卫行之下,同一时刻最多一个插入者,环从 SQL 层消掉。
+// 完整论证与"守卫行选谁"见 data.AssetOpRepo 上方的守卫一节。
+//
+// 第 3 步失败不回滚第 2 步:行已在 outbox,循环会接着投。只有 1–2 步失败才算本次上架失败。
 func (p *Pipeline) EnqueueEscrowDebit(ctx context.Context, req EscrowRequest) (EscrowResult, error) {
 	// 空接收者 = 降级形态(密钥缺失,svc 没建管线)。以错误返回而不是 panic:
 	// 调用方本来就要处理"托管失败",多一种 panic 只会让整个请求线程炸掉。
@@ -233,13 +239,16 @@ func (p *Pipeline) EnqueueEscrowDebit(ctx context.Context, req EscrowRequest) (E
 	}
 
 	const stream = assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT
-	nowMs := p.nowMs()
-	if err := p.ops.EnsureSeqRow(ctx, req.SellerPlayerID, stream, nowMs); err != nil {
-		return EscrowResult{}, err
-	}
 
 	var alloc assetop.Alloc
 	txErr := assetop.WithTxRetry(ctx, p.ops.DB(), 2, data.IsRetryableTxError, func(tx *sql.Tx) error {
+		// 建行必须在本事务的第一次 AllocateSeq **之前**,并把本事务要用到的全部 (player, stream)
+		// 一次传进去 —— 否则会出现"持玩家 seq 行、等守卫行"的事务,与"持守卫行、等玩家 seq 行"反序成环。
+		// 本批只有卖家一条 DEBIT 流;P3 的交付会是买家 + 卖家两个 key,仍然一次传进来。
+		// 纪元取本次尝试的当前毫秒(建行时刻),重试时重新取:上一次尝试的建行随事务一起回滚了。
+		if err := p.ops.EnsureSeqRowsTx(ctx, tx, p.nowMs(), data.SeqKey{PlayerID: req.SellerPlayerID, Stream: stream}); err != nil {
+			return err
+		}
 		// 每次重试都重新分配:上一次尝试的 seq 随事务一起回滚了,复用会写出空洞。
 		a, err := assetop.AllocateSeq(ctx, tx, p.ops.Tables(), req.SellerPlayerID, stream, assetop.DefaultLimits, p.nowMs())
 		if err != nil {

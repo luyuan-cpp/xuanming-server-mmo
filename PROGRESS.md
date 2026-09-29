@@ -5781,3 +5781,242 @@ proto2mysql 在 09-22 已收成单 `main` 并打 `v0.2.0`(`588c308`,f3b308f / re
 proto 重生成已跑(`proto-gen-run -UseBinary`),产物核对通过;新 `.pb.cc` 手工登记进
 `cpp/generated/proto/CMakeLists.txt` 与 `proto.vcxproj`(生成器不自动登记新 proto **文件**)。
 部分改动被仓库每小时 WIP 提交(`c4b8c0914`、`1ad634443`、`24dd3e6c5`,后者含 go/db 表结构闸与 robot vendor)先行收走,余下的在本条对应的提交里。
+
+## 2026-09-28 客户端接入标准形态评估 + gate 号段整体转发设计(纯设计,未落码)
+
+- 用户问能否像 xuanming-server 一样"客户端直连各服务、C++ 不再转发给 Go"。结论:**不照搬**。xuanming 实际是"客户端 → Envoy 网关 → 各服务",多出的连接是连 UE DS 的;业界标准是"客户端只连一个接入层,网关按消息号路由、不解析 body、后端不暴露公网",本仓 gate + `client_rpc_router` 已是这个形态。三方案(照搬 / 保持路由服 / 按域混合)的评估与现存缺口 K1–K9 见设计文档第一部分。
+- 设计:**gate 按号段整体转发给路由服**,见 [docs/design/client-access-band-routing.md](docs/design/client-access-band-routing.md)(D51–D64)。
+  - 消息号数轴按大区切分:NODE / ROUTER / GO_DOWNLINK / GO_INTERNAL;
+  - gate 只认大区常量,ROUTER 段整段不透明转发;
+  - 路由服按方法级 `OptionMethodVisibility` 生成的 `ClientRouteTable` 做唯一白名单;
+  - 断线通知改走专用 RPC `NotifySessionClosed`,gate 不再认识任何 Go 号、不再链接 Go 业务 pb;
+  - 发号器改为 axis + state、只增不复用。
+  - 推荐路径是"前置缺陷分步修(阶段 0/1),号轴一次停服切换(阶段 2)"。项目未上线,开发期允许改号。
+- 过程:三轮 agent 工作流(接入评估 11 个 agent;号段设计 10 个;定稿核验 4 个)。核验推翻了旧稿"login 改用 metadata session_id 能关闭伪造 Disconnect"的论断:该改动必须与 58 号离开客户端可达集同批生效。
+- 顺带发现的现存缺陷(未修,已登记):
+  - C++ 不签 `x-caller-*`,而 login 在 pro 档强制验签;
+  - Disconnect 丢失 = 会话永久 ONLINE;
+  - 发号器复用空号;
+  - 注册表今天已有空槽 id=3,`game_channel.cpp:356-358/455-456/511-513` 与 `scene_handler.cpp` 遇到空槽会构造 `std::string(nullptr)`;
+  - 节点摘除时在途 gRPC 调用永久丢失。
+- **未编译、未测试、未改任何代码**。实施须按 AGENTS §10.2 先报告取得授权(远超 30 文件,且涉及客户端仓 §9 授权);验证清单在设计文档 §18,交 Codex 执行。
+
+## 2026-09-28 玩家存储落点(placement)+ 合服工具缺口修复 落码(全部未编译、未测试)
+
+- **设计**:[docs/design/player-storage-placement.md](docs/design/player-storage-placement.md)(v2.2)。
+  - 拆开 home_zone(归属)与落点记录 `player:placement:{id}`(主数据所在库),选库只在 go/db 按当前记录做。
+  - 合服默认 pin 模式:只改归属、不搬玩家行。
+  - 新增冻结式单玩家 / 批量搬库;Phase 2 全局库落成「多一种落点库」。
+  - 同批修 `tools/merge_zone` 的 A1–A16。
+  - v2.1 按各组件实现汇报修订了与实现不符之处,各节标「实现口径(v2.1)」,汇总见 §16。
+  - v2.2 同步同批复核修复的行为变化(见下方「复核修复」),各节标「v2.2」。
+- **Go 侧共享契约**:`go/shared/placement/placement.go`(键名、值编解码、StoreDBName、CapabilityKey、EffectiveStorage、ParseHomeZone、MergeFenceKey)。`tools/merge_zone/placement_codec.go` 是它的镜像,测试向量逐字相同。
+- **proto**(只追加字段号,生成器**未运行**):
+  - `proto/data_service/data_service.proto`:`RegisterPlayerZoneRequest.storage_id = 3`、`GetPlayerHomeZoneResponse.home_zone_merging = 2`;
+  - `proto/common/base/config.proto`:`BaseDeployConfig.db_task_topic_generation = 22`。
+
+### 各组件改动
+
+- **data_service**
+  - 改动:`router.go`、`dataserviceserver.go`、`cmd/debug_import`,以及 routing / server / logic 单测和 integration 测试。
+  - `RegisterPlayerZone` 带 storage_id 时,在同一段 Lua 里原子钉落点;落点已存在则保留原值并打 ERROR。
+  - `GetPlayerHomeZone` RPC 一段 Lua 同时读 home 与合服围栏;围栏读失败按合服中处理。内部路由仍用单 GET。
+- **scene_manager**
+  - 改动:`constants/errors.go`、`home_zone.go`、`enterscenelogic.go`、`metrics.go`,新测试 `home_zone_merging_test.go`。
+  - 新错误码 `ErrHomeZoneMerging = 21`(A16),在任何 location / owner_epoch 写之前拒绝。
+  - 同区路径把换手门与 3b 前移到同节点补种之前。
+  - 指标 `enter_scene_rejected_total{reason="home_zone_merging"}`。
+- **login**
+  - 改动:`config.go`(新增 `placement_conf_test.go`)、`homezone.go`、`createplayerlogic.go`、`svc/home_zone.go`、`etc/login.yaml`、`deploy/login-stack.linux/login.yaml`。
+  - 新配置块 `Placement`:`PinOnCreate`(默认 false)、`NewPlayerStorageId`(默认 0 = 本 zone),整块零值即关闭。
+  - 启动日志 `[placement] pin_on_create=... new_player_storage_id=...`。
+- **go/db**
+  - 改动:`db.go`、`etc/db.yaml`、`cmd/migrate`、`internal/config`、`internal/kafka`(新增 `placement_route.go`)、`proto_sql`(新增 `store_registry.go`)、`metrics`、`svc`。
+  - 多库注册表:按需打开 + singleflight,按家族 / 白名单放行,打开预算与失败冷却各 10s。
+  - 按记录选库(§6.2 每一格);落库后复核(§6.3,无记录时连 home 一起比)。
+  - 能力标记 `db:capability:zone:{Z}=placement-routing-v1`。
+  - 新配置 `Placement`:`AllowStoreFamilies`、`Required`、`ExtraStoreMaxOpenConn` / `ExtraStoreMaxIdleConn`(8 / 2)、`Redis`。
+  - 新指标 `db_placement_guard_total{op,outcome}`、`db_placement_store_open_total{result}`、`db_placement_open_stores`。
+  - `cmd/migrate` 新增 `-storage-id`。
+- **C++ / 部署**
+  - 改动:`config.proto`、`config.cpp`、`player.h`、`player_lifecycle.cpp`、`cross_zone_test.cpp`、`bin/etc/base_deploy_config.yaml`、`k8s_deploy.ps1`、`start_game.ps1`、`k8s_deploy_contract.tests.ps1`、`db-task-kafka-partition-contract.md`。
+  - db_task topic 世代号 `DbTaskTopicGeneration`(A14);C++ / go/db / login 三方相等,由启动脚本与契约测试钉住。
+  - 换代时启动顺序 db → login → scene。
+- **merge_zone 第一段**(A1–A11、A15;新增 `merged_into.go`、`gap_fixes_test.go`)
+  - 围栏先于收集;清单落盘前的拒绝释放围栏,之后保留。
+  - 映射按清单逐键 CAS 改写。
+  - dry-run 只写 `.dryrun.json`。
+  - 撞号预检前移;续跑认逐列相同。
+  - `-verify-merged` 要求清单,逐 id 核对。
+  - 撤销按目标区口径跑 P2~P7。
+  - 新增 `merge:merged_into` 标记。
+  - 补扫 zone_id=0 的 location。
+  - 每个 id 一个显式悲观短事务。
+- **merge_zone 第二段**(新增 `placement_codec.go`、`placement_ops.go`、`pin_placement.go`、`relocate*.go`、`storage_audit.go` 及单测 / 集成测试)
+  - 新参数:`-player-rows-mode pin|copy`(默认 pin)、`-db-capability-zones`、`-relocate-lock-wait`(默认 150s)。
+  - 新模式:`pin-placement` / `relocate` / `relocate-abort` / `storage-audit`。
+  - 清单新字段 `player_rows_mode` / `placement_scanned` / `placement_existing`;搬库清单 `kind=relocate`。
+- **运维脚本**
+  - 改动:`dev_tools.ps1`、`k8s_deploy.ps1`、`k8s_deploy_contract.tests.ps1`,新增 `tests/dev_tools_merge_zone_contract.tests.ps1`。
+  - 新增 4 个命令;补齐帮会跳过开关、撤销的 Kafka 门禁、`-VerifyMerged` 清单等转发。
+  - 删掉 K8s data-service ConfigMap 里无效的 `DB: 15`。
+  - 契约测试钉住:go/db 读落点的 Redis 与 MappingRedis 同址、DB 0。
+- **文档**(本条)
+  - `docs/ops/merge-zone-runbook.md` v3,覆盖:
+    - P7 组队门禁与解散前置;
+    - T-1 只做与在线无关的检查,N 取 T-0 zone-down 后第一次 dry-run;
+    - zone-down 前先排空源区 db_task;
+    - K8s 无 guild 的用法;
+    - `RollbackPlayer` 不可用及替代;
+    - pin / copy 与能力标记;
+    - A16 合服窗口拒绝进场;
+    - dry-run 清单改名;
+    - 映射丢失按清单重放;
+    - 落点运维新章 §14。
+  - `server-merge-gap-fixes.md`:B2 / B4 / B6 闭合,新增 C / C' 表。
+  - `server_merge_design.md`:顶部加修订标注。
+  - `global-data-layer-tidb-decision.md`:文首加状态说明。
+  - `cross-zone-scene-travel.md`:CZ-2 补一句读路径。
+
+### 复核修复(同批,全部未编译、未测试)
+
+- **go/db**(`placement_route.go`、`key_ordered_consumer.go`、`db.go`、`etc/db.yaml`,测试在 `placement_route_test.go`)
+  - 能力标记改为 `SET … EX 90s`,每 30s 心跳续写(`KeepPlacementCapability`),进程退出不 DEL,由 TTL 收尾。回退或进程停止后,标记 90s 内消失。
+  - 心跳管不住两个窗口,只能靠部署纪律:滚动发布新旧 Pod 重叠期间;回退后 TTL 到期之前(设计 §13、runbook §5.1 / §14)。
+  - 冻结期间重试任务的重排改打 DEBUG `retry task rescheduled (placement frozen)`;落点库不可用等其他原因仍打 ERROR。
+- **data_service**(`router.go` 与测试):`RegisterPlayerZone` 的合服围栏改为「预检 + 提交点原子复核」,写入脚本开头 EXISTS 围栏,命中回 `ErrZoneMergeInProgress`,两键都不写(设计 §8.1)。
+- **scene_manager**(`enterscenelogic.go` 只加注释):没有 GateId 的 EnterScene 照常铸 epoch、写 location、可能派发 ReleasePlayer,不过合服围栏。前提是所有生产调用方都带 GateId(设计 §8.2)。
+- **login**(`config.go`、`placement_conf_test.go`、两份 `login.yaml` 注释)
+  - 新增必填探针 `placementKeysProbe`,守住 yaml 段名 / 键名拼写。
+  - 注释写明:`PinOnCreate=false` 只在 go/db 未开 `Required` 时是安全方向,`Required` 打开后的回退禁令见设计 §13。
+- **merge_zone**(`merge_run.go`、`unmerge.go`、`fence.go`、`main.go`、`merged_into.go`、`guild_step.go`、`manifest.go`、`placement_ops.go`、`audit_checks.go`、`audit_resources.go` 及测试)
+  - 续跑(清单已存在且步骤 7 未完成)时,清单落盘前的拒绝保留围栏;续跑的三项清单校验挪到围栏之下(R2 段)。
+  - 撤销在半撤销状态(已有清单玩家 `player:zone == src`)下的 P / S 拒绝同样保留围栏。
+  - 新增 X 段:`merge:merged_into` 冲突在第一次写之前拒绝。
+  - 步骤 4:源榜为空不写;目标榜 `ZADD NX`;清单加 `rank_members_unwritten`;详情改为 `source_gone`。
+  - `-verify-merged` 的 `verify:guild_zone` / `verify:guild_rank` 在两个帮会跳过开关同时给出时报 SKIPPED。
+  - unmerge 对「落点记录 ≠ src」的人要求 src 能力标记。
+  - `gofmt -l .` 已为空。
+- **运维脚本**(`dev_tools.ps1`、`tests/dev_tools_merge_zone_contract.tests.ps1`):merge-zone* 退出码透传。`Invoke-MergeZoneGo` 先 `go build` 到 GUID 临时路径,直接执行产物后显式 `exit $code`,编译失败为 2。修复前经 `pwsh -File` 恒为 0。
+- **文档**:设计 v2.2、runbook v3.1、`server-merge-gap-fixes.md` C / C' 表同步。
+- **文档同步时新发现**:能力标记改为 TTL 后,与 runbook T-0 先 zone-down src / dst 的流程冲突。pin 合服的缺省 `-db-capability-zones src,dst` 在 T-0 必被拒;dst 的能力只能在 zone-up 之后核对;只有两个 zone 的环境在 T-0 没有可列的 zone。runbook §5.1 / §8 Step 6 给了操作口径,工具默认值与检查口径待负责人决定(gap-fixes C'7)。
+- **负责人决定落码(C'7,未编译、未测试)**:`tools/merge_zone` 的 `-db-capability-zones` 去掉缺省值与 `src` / `dst` 记号,改为「仍在跑的 zone 号或 `none`」(pin 合服 / pin 撤销 / copy 合服有记录者必填可 none;relocate 必填不接受 none);新增只读 `-mode capability-check`(`capability_check.go`,exit 0 / 1 / 2),dev_tools 新命令 `merge-zone-capability-check`,runbook v3.2 §8 Step 6 开服前必须 exit 0;单测 `placement_ops_test.go`(`TestParseCapabilityZoneSpec` / `TestRequireCapabilityZones` / `TestMergeAndUnmergeCapabilityFlag` / `TestCapabilityDownZonesHint`)、`capability_check_test.go`,集成测试与 ps1 契约测试同步;`go/test.ps1` 的 L1 清单加入 `db` 的 `proto_sql` / `config` / `cmd/migrate` 与 `shared/placement`(按 module 分组执行)。验证:`cd tools/merge_zone && gofmt -l . && go vet ./... && go vet -tags merge_integration ./... && go test -count=1 ./...`;`pwsh -NoProfile -File tools/scripts/tests/dev_tools_merge_zone_contract.tests.ps1`(fail=0);`go/test.bat -Race` 输出 `L1_TESTS_OK`;集成测试同第 11 条。
+
+### 未验证项
+
+- ~~全部未编译,未跑任何测试~~:2026-09-29 已按用户指示运行,结果见下方「运行验证」。仍未验证的只剩 `-race`(本机无 gcc)、整方案 C++ 编译(被两处既有问题挡住)。
+- proto2mysql v0.2.0 已经 goproxy.cn 下载进本机模块缓存。
+- 压测未做:go/db 每条任务多两次 MGET,按 AGENTS §6 出对比表之前不下性能结论。
+
+### 交 Codex 的验证清单
+
+按依赖排序执行。下面的目录都相对仓库根 `D:\luyuan\wuxingqitan\mmorpg`。
+
+1. **proto 生成**
+   - Go 侧:`cd go && build.bat`(rpc/proto 产物)。
+   - C++ 侧:`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -UseBinary`(沿用 `turn-battle-gap-closure.md` §8.1 的 regen 口径);robot vendor 的 `config.pb.go` 按惯例同步。
+   - 通过标准:
+     - Go 生成物里有 `RegisterPlayerZoneRequest.StorageId` / `GetStorageId()` 和 `GetPlayerHomeZoneResponse.HomeZoneMerging` / `GetHomeZoneMerging()`;
+     - `config.pb.go` 里有 `DbTaskTopicGeneration` / `GetDbTaskTopicGeneration()`;
+     - `config.pb.h` 里有 `db_task_topic_generation()` / `set_db_task_topic_generation(`。
+   - **不得改 go.mod / go.sum**;如果 build 要求改,停下报告。
+2. **go/shared**
+   - `cd go/shared && go test -count=1 ./placement/...` → ok。
+3. **go/data_service**
+   - `gofmt -l ./internal/routing ./internal/server ./internal/logic` 无输出;`./cmd/debug_import/main.go` 的结构体 tag 对齐问题在 HEAD 上就有,不是本批引入。
+   - `go vet ./...` 与 `go build ./...` 退出码 0。
+   - `go test ./... -count=1` 全绿。重点用例:
+     - routing:`TestKeyContractsMatchSharedPlacement`、`TestRegisterPlayerZone_*`(含复核修复新增的 `TestRegisterPlayerZone_FenceRecheckedAtCommitPoint`、`TestRegisterPlayerZone_FenceCheckPrecedesConflict`)、`TestGetPlayerHomeZoneAndMergeFence*`、`TestDecodeHomeZoneAndMergeFenceReply`;
+     - server:`TestGetPlayerHomeZone_ReportsMergeFence`、`TestRegisterPlayerZone_StorageIdPinsPlacementOnlyOnFirstWrite`。
+   - 可选(需要本地 Redis,且 DB0 里 `player:zone:*` / `merge:in_progress:*` / `player:placement:*` 都为空):
+     `go test -tags=integration ./internal/routing/... -run "TestPlacementScripts_RealRedis|TestRegisterPlayerZone_RealRedisNeverOverwrites|TestMergeFence_RealRedisBlocksRegisterAndGatesRemap" -count=1 -v`
+     必须是 PASS,不能是 SKIP。
+4. **go/scene_manager**
+   - `go build ./...`、`go vet ./internal/...` 通过,`gofmt -l ./internal` 无输出。
+   - `go test ./internal/logic/ -run "HomeZoneMerging" -count=1 -v`:5 个新用例(含子用例)PASS。
+   - 回归:`go test ./internal/logic/ -run "EnterScene|HomeZone|Handoff|Reseed|OwnerEpoch" -count=1`,再跑 `go test ./... -count=1`,全绿。
+   - EnterScene 顺序调整过,重点看同节点补种与 handoff 相关用例。
+5. **go/login**
+   - `gofmt -l ./internal/config` 无输出。`./internal` 整体会列出若干 HEAD 既有文件(如 `homezone_test.go` 第 226-230 行的 map 对齐、`dataloader`、`loginqueue` 下的文件),不是本批引入。
+   - `go vet ./internal/config/... ./internal/logic/pkg/homezone/... ./internal/logic/clientplayerlogin/... ./internal/svc/...` 通过。
+   - 定向测试:
+     - `go test ./internal/config/... -run "Placement|EtcYaml|LoginYaml" -count=1 -v`:`TestLoginYamlSpellsOutPlacementKeys` 两个子测试、`TestPlacementKeysProbeRejectsTypos` 的四个反例与正例、`TestEtcYamlPlacementBlockIsOff`、`TestPlacementBlockMissingMeansOff`、`TestPlacementStorageIDForNewPlayer` 全部 PASS;
+     - `go test ./internal/logic/pkg/homezone/... -run TestRegisterPlayerZone -count=1 -v`;
+     - `go test ./internal/logic/clientplayerlogin/... -run "RegisterHomeZone|CreatePlayer" -count=1`。
+   - 最后 `go build ./... && go test ./... -count=1`,全绿。
+6. **go/db**
+   - `gofmt -l db.go cmd/migrate internal/config internal/kafka internal/logic/pkg/proto_sql internal/metrics internal/svc` 无输出(`internal/locker/locker.go` 是 HEAD 既有问题,不在范围内)。
+   - 复核修复定向:`go test ./internal/kafka/ -run 'TestMarkPlacementCapability|TestPlacementCapabilityHeartbeat|TestRetryReschedule_FrozenLogsDebugStoreDownLogsError|TestFrozenDeferral|TestStoreUnavailable' -count=1`。
+   - `go vet ./...` 通过;`go build ./...` 通过,cmd/migrate、verifier、data_stress 都要编过。
+   - `go test -count=1 ./internal/kafka/... ./internal/logic/pkg/proto_sql/... ./internal/config/... ./cmd/migrate/... ./internal/dbguard/... ./internal/migrate/... ./internal/stresstest/...` 全 ok,既有 TC1–TC7 仍 PASS。
+   - `go test -count=1 -race ./internal/kafka/... ./internal/logic/pkg/proto_sql/...` 无 DATA RACE。
+   - 在 `go/` 下跑 `test.bat -Race`,输出 `L1_TESTS_OK`。
+7. **其余 Go module**
+   - `cd go && go build ./...`,以及 robot 模块的 build,0 错误。
+8. **C++**(MSBuild 必须串行 `/m:1`)
+   - 编译顺序:先编 config.lib、scene.lib 等受影响的库,再编 scene 与 gate 节点,最后编测试工程:
+     `msbuild cpp/tests/cross_zone_test/cross_zone_test.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`,0 error。
+   - `cross_zone_test.exe --gtest_filter=DbTaskTopicGeneration.*`:4 个用例全绿;再不带 filter 全量跑一遍。
+9. **运维脚本契约**(pwsh 7)
+   - `pwsh -NoProfile -File tools/scripts/tests/dev_tools_merge_zone_contract.tests.ps1`:total=16 fail=0(含复核修复新增的退出码子进程用例与 capability-check 用例)。
+   - `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`:fail=0,且新增的两条 PASS(DbTaskTopicGeneration 三方一致;MappingRedis 与落点 Redis 同址)。
+   - `pwsh -NoProfile -File tools/scripts/tests/start_game_command_contract.tests.ps1`:exit 0。
+   - `dev_tools.ps1 -Command help` 的输出里有「Player storage placement commands」一节。
+   - 用真实 go 各跑一次 `pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeSourceZone <s> -MergeTargetZone <d>` 的 block 场景与 INFRA 场景,进程退出码应分别为 1 和 2(复核修复后改为透传,runbook §7.1 已按此写)。
+10. **tools/merge_zone**(在该目录下执行)
+    - `gofmt -l .`:无输出(复核修复已处理 `audit_resources.go` 与 `lock_order_test.go`)。
+    - `go vet ./...`、`go vet -tags merge_integration ./...`、`go build ./...`、`go test -count=1 ./...` 全部通过。
+    - 测试向量同步(仓库根,bash):
+      `diff <(sed -n '/^var codecVectors/,/^}/p;/^var malformedVectors/,/^}/p' go/shared/placement/placement_test.go) <(sed -n '/^var codecVectors/,/^}/p;/^var malformedVectors/,/^}/p' tools/merge_zone/placement_codec_test.go)`
+      应无输出。
+11. **merge_zone 集成测试**
+    - 前置:用户手动启动 Docker。
+      - MySQL 8.0 在 127.0.0.1:3306,root 账号,需要 CREATE/DROP DATABASE、TRIGGER、performance_schema 权限;
+      - Redis 在 127.0.0.1:6379,DB 9/10/11 为空。
+    - 命令:`go test -tags merge_integration -count=1 -v ./... 2>&1 | Tee-Object -FilePath $env:TEMP\merge_zone_it.log`
+    - 通过标准:
+      - exit 0,且日志里**没有 `SKIP:`**;
+      - `TestIT_*` 全部 PASS,重点是:
+        - `TestIT_Gap_*`(18 个,含复核修复新增的 `ResumeRefusalKeepsTheFence`、`MergedIntoIsCheckedBeforeAnyWrite`、`Unmerge_HalfUndoneRefusalKeepsTheFence`、三条 `MergeGuildRank` / `MergeRankZSET` 用例);
+        - `TestIT_Placement_*`(9 个,含 `UnmergeRequiresSourceCapabilityForOffSourceRecords`);
+        - `TestIT_Relocate_*`(7 个,含 EXPLAIN `key=PRIMARY`、`key_len=8`);
+        - `TestIT_StorageAudit_*`;
+        - 改成 copy 模式的既有端到端用例。
+    - 失败时保留日志。
+
+### 运行验证(2026-09-29,按用户指示由 Claude 执行,偏离 AGENTS.md §10.1)
+
+- **proto 生成**:`proto-gen-run -UseBinary` 通过。本机 PATH 没有 protoc,用仓库自带、与既有产物同版本的 `third_party/grpc/install_vs2026_dbg/bin/protoc.exe`(libprotoc 35.1)临时加进进程 PATH;`install_vs2026/bin` 那份是 31.1,不能用。
+  生成器顺带补齐了帮会二期已提交 proto 源但未生成的产物(guild 协议、各服务 `message_id.go`、`proto/message_id.txt` 新分配 239–243),不属于本批。
+- **Go**(进程级 `GOPROXY=https://goproxy.cn,direct`,go.mod / go.sum 未变):
+  - go/shared、data_service、scene_manager、login、db:`go build` / `go vet` / `go test ./...` 全过;`go/test.ps1` 输出 `L1_TESTS_OK`。
+  - 其余模块与 robot `go build` 全过,**go/guild 除外**:`internal/constants/constants.go` 引用的 7 个 `table.GuildError_kGuildActivity*` / `kGuildTrial*` 码在 Tip.xlsx 里不存在(HEAD 既有,帮会二期未导表)。
+  - `-race` 未跑:本机没有 gcc,cgo 起不来。
+- **tools/merge_zone**:gofmt / build / vet(含 `-tags merge_integration`)/ 单测全过;测试向量与 go/shared 逐字一致;
+  集成测试(docker 的 mysql + redis,DB 9/10/11)`TestIT_*` 83 个顶层用例全 PASS、0 SKIP,跑完无残留库与键。
+- **data_service Redis 集成测试**:共享 Redis DB0 里有 `player:zone:101`(他人开发数据,未动),改用临时容器 `redis:7.2`(6390 端口,`DATA_SERVICE_IT_REDIS_HOST=127.0.0.1:6390`)跑 `-tags=integration ./internal/routing/...`,31 个用例全 PASS、0 SKIP,容器已删除。
+- **PowerShell 契约**:`dev_tools_merge_zone_contract` 16/16、`k8s_deploy_contract` 54/54、`start_game_command_contract` 14/14。
+- **C++**(MSBuild Debug x64 `/m:1`):
+  - 整方案**未通过**,两处都是既有问题:`core` 的裸指针成员检查报 `node.h:235`、`node.h:271`(09-14 以来未改);`table.vcxproj` 登记了尚未生成的 `guildactivity_table.cpp` / `_fk.cpp`(帮会二期未导表)。
+  - 为验证本批,诊断编译加了 `-p:SkipNoRawPointerMemberCheck=true`,并对 scene 库、scene / gate 节点、`cross_zone_test`、`bag_test` 用 `-p:BuildProjectReferences=false` 链接现有 `table.lib`:全部编译链接通过。
+  - `cross_zone_test`:105/105 PASS(含 `DbTaskTopicGeneration.*` 4 个)。
+  - `bag_test`(须在 `bin/` 下运行):252 PASS、6 FAIL,全在 `BagRemoveByGuidTest`,单跑均 PASS —— 前序用例把物品 GUID 号段留在「已围栏」状态导致的顺序依赖,与本批无关。
+- **仍未做**:压测、真实集群演练、`-race`。
+
+### 剩余风险
+
+- **pin 合服与多 data Redis 集群不兼容。** data_service 按 home_zone 选 data Redis 集群,src / dst 分属不同集群时,pin 合服后 blob 读不到。工具在 pin 模式下拒绝 `-migrate-player-blobs`,这类部署只能用 copy。**已定(负责人,09-28)**:保留设计 §10.1 第 3 条与这道拒绝 —— 现有 dev / K8s 部署都配了 DevRedis,Regions 分片从未生效,`player:{id}:*` 也不在生产读写链上。
+- **钉到全局库的新号在 Redis 整体丢失后无法恢复**:不在任何清单里,zone 库里也没有行。依赖 TiDB 决策 D1 兜底表。映射丢失的重放目前没有工具,按 runbook §9.2 手工执行。
+- ~~`-verify-merged` 的帮会两条断言不认 `-skip-guild-*`~~、~~续跑时在清单落盘之前被拒绝会释放围栏~~:已在复核修复中处理,待 Codex 验证。
+- ~~能力标记 TTL 与合服 T-0 流程冲突~~:已定并落码(见上方「负责人决定落码(C'7)」):`-db-capability-zones` 只列仍在跑的 zone 或 `none`,dst 起服后、开服前用 `-mode capability-check` 核对,待 Codex 验证。
+- `merge-zone-capability-check` 经 dev_tools 调用而漏给 `-MergeDbCapabilityZones` 时,ps1 在调工具前 throw,进程退出码是 1(与「missing」同码);runbook §8 Step 6 已写明按报错文案区分。
+- **能力标记管不住两个窗口**:go/db 滚动发布新旧 Pod 重叠期间;回退后 90s 内。只能靠部署纪律。
+- **没有 GateId 的 EnterScene 不过合服围栏**:靠「所有生产调用方都带 GateId」这一前提,新增此类调用方之前必须先改代码(设计 §8.2)。
+- **`DeletePlayerZone*` 不删 `player:placement`**:删号流程与落点记录的关系待定。
+- **跨 zone 共享缓存 `{MsgType}:{pid}` 的读写竞态**:既有问题,本批只是缩小了窗口。
+- **写过落点记录之后,禁止回退 go/db。** 上线顺序按设计 §13:`Required=true` 之前,必须全部 login 开 `PinOnCreate`、全部 zone 跑完 pin-placement。
+- **合服默认 pin**:go/db 未升级、没有能力标记的环境会在 C 阶段被拒,要显式传 `-MergePlayerRowsMode copy`。
+- **监控与测试清单未跟上**:
+  - 告警规则(`stale_topic`、`frozen_deferred`、`recheck_moved`、`home_zone_merging`)未落进 `deploy/k8s/*-alerts.yaml`;
+  - `go/test.ps1` 的 L1 清单还没加 go/db 的 `proto_sql` / `config` / `migrate` 三个 hermetic 测试包。
+- **真实集群演练从未跑过**:pin 合服、relocate、反向 relocate 都没有。

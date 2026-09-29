@@ -8,7 +8,6 @@
 // handler/grpc/battle_node.h(class BattleNodeImpl,形态同 scene 的
 // handler/grpc/scene_node_service.h:runInLoop + promise 投递到 loop 线程)。
 #include "handler/grpc/battle_node.h"
-#include "handler/grpc/battle_client_player_service.h"
 #include "logic/battle_room_manager.h"
 #include "client/battle_client_edge.h"
 #include "battle_security.h"
@@ -34,15 +33,15 @@ using namespace muduo::net;
 namespace
 {
 
-    // battle 节点运行时状态:两个 gRPC 服务实现。
+    // battle 节点运行时状态:match 控制面 gRPC 服务 + 客户端直连面。
     // 房间状态本身在 BattleRoomManager 单例里(纯内存,崩溃即战斗作废,设计文档 §8)。
+    // gate → battle 的客户端消息 gRPC 中继(BattleClientPlayerGrpcImpl)已随收缩删除
+    // (turn-based §22 D66/D67):直连是战斗唯一通路。
     struct BattleRuntimeContext
     {
-        // match → battle 内部 gRPC(CreateBattle / DestroyBattle)
+        // match → battle 内部 gRPC(CreateBattle / DestroyBattle / AddObserver / RemoveObserver /
+        // IssueBattleTicket)
         std::unique_ptr<BattleNodeImpl> battleNodeService;
-        // gate → battle 客户端消息(SubmitBattleAction / GetBattleState,
-        // 会话权威身份从 x-session-detail-bin metadata 解出)
-        std::unique_ptr<BattleClientPlayerGrpcImpl> clientPlayerService;
         // 客户端直连面(设计文档 §18):装在节点自身 TCP 端口上,票据握手 + 战斗消息就地派发
         std::unique_ptr<BattleClientEdge> clientEdge;
     };
@@ -169,16 +168,17 @@ namespace
 
         // 刻意不声明 KafkaCommandType:battle 不消费 battle-{id} topic。
         //
-        // 上下行的当前口径(§18 直连落地后,D6 已降级为回落路径):
-        //   * 客户端上行:优先走本节点 TCP 端口上的直连面(BattleClientEdge);
-        //     没有直连的玩家才经 gate→BattleClientPlayer gRPC 中继进来。
-        //   * 客户端下行:BattleRoomManager::PushToPlayer 有直连即直发,否则回落
-        //     Kafka gate-{id} 的 PushToPlayerEvent。
+        // 上下行的当前口径(直连收缩后,turn-based §22 D66-D68):
+        //   * 客户端上行:只有本节点 TCP 端口上的直连面(BattleClientEdge);gate 与路由服
+        //     都拒绝 BattleClientPlayer 的上行,不再有 gRPC 中继。
+        //   * 客户端下行:战斗帧 BattleRoomManager::PushBattleFrame 只走直连,无活直连即丢弃;
+        //     只有 NotifyBattleAssigned / NotifyBattleStart 经 PushLobbyAnnouncement 在无直连时
+        //     回落 Kafka gate-cmd 的 PushToPlayerEvent(它们发生在直连建立之前)。
         //   * 控制面(match→battle 的 CreateBattle/DestroyBattle/AddObserver/
         //     RemoveObserver/IssueBattleTicket):恒走 gRPC,不受直连影响 —— 调用方是
         //     Go 服务,而自家 RPC0 信封没有请求关联 id,配不出应答
         //     (选型定谳见 docs/design/battle-transport-decision.md)。
-        //   * 结算 / 绑定事件:仍恒走 Kafka producer。
+        //   * 结算 / 确认 / 对局结果事件:恒走 Kafka producer;不再有任何 gate 绑定事件。
     };
 
 } // namespace
@@ -187,7 +187,7 @@ int main(int argc, char *argv[])
 {
     return node::entry::RunSimpleNodeMainWithOwnedContext<BattleHandler, BattleRuntimeContext, BattleNodeHooks>(
         common::base::BattleNodeService,
-        // battle 无出站拨号:入站是 match/gate 的 gRPC,出站全走 Kafka producer,
+        // battle 无出站拨号:入站是 match 的 gRPC + 客户端直连 TCP,出站除直连外全走 Kafka producer,
         // 对端路由信息(gate/scene 实例)全部由 BattlePlayerSnapshot 携带,不查 etcd 定位。
         Node::CanConnectNodeTypeList{},
         [](Node &node, BattleRuntimeContext &context)
@@ -196,9 +196,7 @@ int main(int argc, char *argv[])
             // 非空才会派生 gRPC 端口(TCP + 30000)并在 server 就绪后发布服务发现
             // (node_allocator.cpp / PublishDiscoveryAfterGrpcReady)。
             context.battleNodeService = std::make_unique<BattleNodeImpl>(*node.GetLoop());
-            context.clientPlayerService = std::make_unique<BattleClientPlayerGrpcImpl>(*node.GetLoop());
             node.RegisterGrpcService(context.battleNodeService.get());
-            node.RegisterGrpcService(context.clientPlayerService.get());
 
             // 客户端直连面(设计文档 §18):先过安全门禁,再装配。
             ValidateBattleClientEdgeConfigOrDie();
@@ -218,9 +216,9 @@ int main(int argc, char *argv[])
                          << " max_connections=" << gNodeConfigManager.GetBaseDeployConfig().battle_max_connections()
                          << " run_mode=" << battle_security::RunModeName(battle_security::CurrentRunMode()); });
 
-            // 停机收尾:所有在打战斗作废(只解绑 gate 会话,不发结算;
+            // 停机收尾:所有在打战斗作废(不发结算;观众收 ABORTED;
             // scene 侧 reaper 按 InBattleComp.deadline_ms 解冻,设计文档 §3.2),
-            // 随后断开全部客户端直连。框架随后 flush Kafka producer,解绑事件不会丢在队列里。
+            // 随后断开全部客户端直连。框架随后 flush Kafka producer。
             node.SetBeforeShutdown([&context](Node &)
                                    {
                 BattleRoomManager::Instance().AbortAllRooms("node_shutdown");

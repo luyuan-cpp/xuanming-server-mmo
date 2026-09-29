@@ -20,6 +20,18 @@
                                      Scene-side probe also reproduces, plus
                                      the round-trip / tampering tests.
 
+    Player storage placement (docs/design/player-storage-placement.md), all
+    hermetic — no broker / MySQL / Redis; SQL goes through the in-memory
+    driver db/internal/dbtest, files read are repo files only:
+
+      * db/internal/logic/pkg/proto_sql – StoreRegistry (on-demand open,
+                                     admission, backoff), schema gate and
+                                     the table-schema contract.
+      * db/internal/config         – Placement block parsing + etc/db.yaml.
+      * db/cmd/migrate             – -storage-id target resolution.
+      * shared/placement           – key / value codec vectors (separate
+                                     go module, run from go/shared).
+
     Anything that imports a real broker (sarama integration tests) is left
     out — those go in the chaos_test.ps1 path instead.
 
@@ -43,13 +55,27 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $GoRoot = $PSScriptRoot
-$DbDir  = Join-Path $GoRoot 'db'
 
-# Packages that make up the L1 green set. Add to this list ONLY when the
-# new package is hermetic (no live broker/db) and consistently green.
-$L1Packages = @(
-    './internal/kafka/...'
-    './internal/stresstest/...'
+# Packages that make up the L1 green set, grouped by go module (each module
+# is tested from its own directory). Add to this list ONLY when the new
+# package is hermetic (no live broker/db) and consistently green.
+$L1Suites = @(
+    @{
+        Dir      = Join-Path $GoRoot 'db'
+        Packages = @(
+            './internal/kafka/...'
+            './internal/stresstest/...'
+            './internal/logic/pkg/proto_sql/...'
+            './internal/config/...'
+            './cmd/migrate/...'
+        )
+    }
+    @{
+        Dir      = Join-Path $GoRoot 'shared'
+        Packages = @(
+            './placement/...'
+        )
+    }
 )
 
 $flags = @()
@@ -58,16 +84,19 @@ if ($Race)    { $flags += '-race' }
 # `-count=1` defeats the test cache so a green build genuinely re-runs.
 $flags += '-count=1'
 
-Push-Location $DbDir
-try {
-    Write-Host ">>> go test L1 ($($L1Packages -join ' '))" -ForegroundColor Cyan
-    & go test @flags @L1Packages
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "L1_TESTS_FAIL exit=$LASTEXITCODE" -ForegroundColor Red
-        exit $LASTEXITCODE
+foreach ($suite in $L1Suites) {
+    $packages = $suite.Packages
+    Push-Location $suite.Dir
+    try {
+        Write-Host ">>> go test L1 [$(Split-Path -Leaf $suite.Dir)] ($($packages -join ' '))" -ForegroundColor Cyan
+        & go test @flags @packages
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "L1_TESTS_FAIL exit=$LASTEXITCODE" -ForegroundColor Red
+            exit $LASTEXITCODE
+        }
     }
-    Write-Host "L1_TESTS_OK" -ForegroundColor Green
+    finally {
+        Pop-Location
+    }
 }
-finally {
-    Pop-Location
-}
+Write-Host "L1_TESTS_OK" -ForegroundColor Green

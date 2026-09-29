@@ -141,11 +141,55 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 }
 
-// StartAssetChannel 起 scene 节点镜像与资产重投循环。ctx 取消即两者退出。
+// StartAssetChannel 先补 seq 表的哨兵守卫行,再起 scene 节点镜像与资产重投循环。ctx 取消即后两者退出。
 // 放在起 gRPC 之前调用:循环只依赖 MySQL 与 etcd,早一点开始把积压的 outbox 投出去。
-// AssetOp.Enabled=false 时 Assets 为 nil,这里是空操作(不起任何后台 goroutine)。
+// AssetOp.Enabled=false 时 Assets 为 nil,这里整体是空操作(不建行、不起任何后台 goroutine)。
 func (sc *ServiceContext) StartAssetChannel(ctx context.Context) {
+	sc.bootstrapAssetOpSeqGuardRow(ctx)
 	sc.Assets.Start(ctx, sc.Etcd)
+}
+
+// seqGuardBootstrapTimeout 是补哨兵守卫行的启动期预算。只发一条 INSERT IGNORE(带 assetop 的
+// 有界重试与退避),给 5s 与 mysqlPingTimeout 同量级;超了就按失败处理,不拖住起服。
+const seqGuardBootstrapTimeout = 5 * time.Second
+
+// bootstrapAssetOpSeqGuardRow 补 trade_player_op_seq 的哨兵守卫行 (player_id=0, stream=0)。
+//
+// 这一行是"首次建 seq 行"的串行化载体:业务事务里缺行时先锁它再 INSERT IGNORE,所有首次建行者
+// 因此排在一行已提交的记录锁上,而不是排在别人未提交的 seq 记录上(那会在首插者回滚时让排队者继承
+// 间隙锁、互等 1213)。完整论证见 data.AssetOpRepo 上方的守卫一节。
+//
+// 为什么在这里建、而不是在 schemamigrate 里:那一层只按 proto 出 DDL、不播种业务行。这里跑在
+// trade.go 的 ensureSchema **之后**,表一定已经在;语句幂等,多副本同时启动都跑一遍没有副作用。
+//
+// 失败**不拒启**,只打 ERROR:
+//   - 请求路径已经 fail-closed —— 守卫行不在时 EnsureSeqRowsTx 回 data.ErrSeqGuardRowMissing,
+//     首次上架当场失败,既不会绕过守卫建行、也不会写进任何库(与"能签名却投不出去"那种拒启理由不同,
+//     那一种会把托管写进 outbox 再永远卡在 ESCROWING);
+//   - 浏览 / 详情 / 收藏不依赖它,为一条补行语句把只读流量一起带下线不划算。
+//
+// 所以这条 ERROR 日志是唯一的提前信号,文案要能直接指向补救动作。
+func (sc *ServiceContext) bootstrapAssetOpSeqGuardRow(ctx context.Context) {
+	if sc.Assets == nil || sc.Assets.Ops == nil {
+		return // AssetOp.Enabled=false:通道整体没装配
+	}
+	bootCtx, cancel := context.WithTimeout(ctx, seqGuardBootstrapTimeout)
+	defer cancel()
+	nowMs := time.Now().UnixMilli()
+	if nowMs <= 0 {
+		// 纪元必须为正(assetop 的硬前置)。系统时钟早于 1970 只会出现在配置坏掉的机器上。
+		logx.Errorf("[trade] 系统时钟异常(UnixMilli=%d),不补 trade_player_op_seq 的哨兵守卫行:"+
+			"首次上架会以 seq 守卫行缺失失败。先校准机器时钟再重启本服务", nowMs)
+		return
+	}
+	if err := sc.Assets.Ops.EnsureSeqGuardRow(bootCtx, uint64(nowMs)); err != nil {
+		logx.Errorf("[trade] 补 trade_player_op_seq 的哨兵守卫行失败: %v —— "+
+			"在补上之前,每个玩家**首次**上架托管都会以 seq 守卫行缺失失败(已建过 seq 行的玩家不受影响);"+
+			"浏览 / 详情 / 收藏不受影响。先确认 mmorpg_trade 可写且 trade_player_op_seq 已建表"+
+			"(trade -f etc/trade.yaml -migrate),再重启本服务", err)
+		return
+	}
+	logx.Info("[trade] trade_player_op_seq 的哨兵守卫行已就绪(首次建 seq 行的串行化载体)")
 }
 
 // BuildDSN 拼 mmorpg_trade 的 DSN,与 go/data_service/internal/store/mysql.go buildDSN 同口径:
@@ -154,7 +198,8 @@ func (sc *ServiceContext) StartAssetChannel(ctx context.Context) {
 //
 // transaction_isolation=%27READ-COMMITTED%27 把整个连接池的会话隔离级别设成 RC(驱动建连时发 SET),
 // 与 go/friend 的 BuildDSN 同口径。显式事务本来就经 assetop.WithTxRetry 固定 RC;这一项管的是事务**之外**的
-// 自动提交语句(Claim / Reschedule / 毒行的主键 UPDATE、InsertListing、DeleteFavorite、EnsureSeqRow 的 INSERT),
+// 自动提交语句(Claim / Reschedule / 毒行的主键 UPDATE、InsertListing、DeleteFavorite、
+// EnsureSeqGuardRow 的哨兵行 INSERT —— 玩家 seq 行的建行 2026-09-28 起已挪进业务事务),
 // 它们原先落在服务器全局默认的 REPEATABLE-READ 上,删不到行 / 撞上删除标记时会拿间隙锁或 next-key 锁,
 // 与别人的插入意向锁互等。RC 下只剩记录锁。自动提交语句每条各取新快照,读语义与 RR 下相同。
 // 前提同 WithTxRetry:binlog_format=ROW。

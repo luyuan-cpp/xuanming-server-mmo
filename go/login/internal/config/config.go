@@ -96,6 +96,54 @@ type Config struct {
 	// (internal/logic/pkg/homezone 包注释)。整块可缺省,缺省 = 角色列表刷新开、
 	// 进游戏重定向关(见 HomeZoneConf 各字段)。
 	HomeZone HomeZoneConf `json:"HomeZone,optional"`
+
+	// Placement 控制建角时是否顺手钉「存储落点」(docs/design/player-storage-placement.md §8.3)。
+	// 整块可缺省,缺省 = 不钉;在 go/db 未开 Placement.Required 的前提下与落点设计上线前完全一致
+	// (Required 开着时不钉 = 新号不可用,见 PlacementConf)。
+	Placement PlacementConf `json:"Placement,optional"`
+}
+
+// PlacementConf 是建角钉落点的开关(docs/design/player-storage-placement.md §8.3 / §13)。
+//
+// **整块零值 = 关闭**,理由同 KillSwitchConf:go-zero 对整块缺失的 optional 结构体不填内层
+// default,所以这里不写任何 default。零值是安全方向**仅在 go/db 的 Placement.Required=false
+// 的前提下成立**:PinOnCreate=false 时 RegisterPlayerZone 带 storage_id=0,data_service
+// 只写 player:zone,不写 player:placement,go/db 对无记录玩家按 home_zone 选库
+// (设计 P-5「缺席即旧语义」)。
+//
+// 打开顺序(§13):data_service / go/db 新版全部就绪、能力标记齐全之后才允许 PinOnCreate=true;
+// go/db 的 Placement.Required=true 必须在 PinOnCreate=true **之后**才能开——否则新建角色
+// 没有落点记录,Required 下它们的每一条存盘都会进死信。
+//
+// 关闭 / 回退顺序与之相反(反向约束):任一 go/db 已开 Required=true 时,
+//   - 禁止把 PinOnCreate 改回 false(它**不是**回滚开关);
+//   - 禁止把 NewPlayerStorageId 改成没有 go/db 能打开的库;
+//   - 禁止把 login 回退到不带 storage_id 的旧版。
+//
+// 违反时建角照常成功、login 侧零报错,但新号只有 player:zone 没有 player:placement:
+// 进游戏时预加载秒级失败(§6.2 读任务 Success=false),存盘全部进死信(missing_required)。
+// 要关这些,先把全部 go/db 的 Required 关掉。
+type PlacementConf struct {
+	// PinOnCreate=true:建角时在同一次 RegisterPlayerZone 里原子钉 player:placement = "{storage}:1"。
+	PinOnCreate bool `json:"PinOnCreate,optional"`
+	// NewPlayerStorageId 是新角色钉到的落点库编号(§4.2):0 = 本 login 所在 zone(Node.ZoneId);
+	// 1..999999 = zone_{id}_db;>=1000000 = player_store_{id}_db(Phase 2 全局库填 1000000)。
+	// 只在 PinOnCreate=true 时生效。
+	NewPlayerStorageId uint32 `json:"NewPlayerStorageId,optional"`
+}
+
+// StorageIDForNewPlayer 返回建角时要传给 RegisterPlayerZone 的 storage_id。
+// 返回 0 表示「不钉」(开关关着)—— 这是 data_service 侧约定的缺省语义,不是错误。
+// loginZone 为本 login 的 Node.ZoneId,NewPlayerStorageId 为 0 时用它兜底,
+// 与「建角 home = login 所在 zone」的既有约定一致,钉下去的有效落点与不钉时相同。
+func (c PlacementConf) StorageIDForNewPlayer(loginZone uint32) uint32 {
+	if !c.PinOnCreate {
+		return 0
+	}
+	if c.NewPlayerStorageId != 0 {
+		return c.NewPlayerStorageId
+	}
+	return loginZone
 }
 
 // HomeZoneConf 是合服后 zone 归属修正的开关。

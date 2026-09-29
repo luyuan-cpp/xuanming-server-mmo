@@ -10,8 +10,8 @@ package main
 // 积压检查是可注入的(kafkaLagSource),这里注入假的。
 //
 // 隔离策略:
-//   - MySQL:只用一次性库 zone_901_db / zone_902_db / merge_zone_it_db,
-//     TestMain 建、结束时 DROP。真实的 mmorpg / zone_1_db / zone_2_db 一个字节不碰。
+//   - MySQL:只用一次性库 zone_901_db / zone_902_db / player_store_1000901_db(非 zone 落点库,搬库用例用)/
+//     merge_zone_it_db,TestMain 建、结束时 DROP。真实的 mmorpg / zone_1_db / zone_2_db 一个字节不碰。
 //     merge_zone_it_db 只是 -mysql-dsn 的默认库(负责连上实例),里面不建表 ——
 //     帮会 / 聚宝斋 / 好友三套表各住下面的独占库。
 //   - MySQL(帮会):一次性库 merge_zone_it_guild,经 -guild-schema 指过去。帮会表自
@@ -61,7 +61,19 @@ const (
 	itGuildRD   = 10
 	itSharedRD  = 11
 	itSceneRD   = itSharedRD // scene_manager 生产上也是 DB 0,与 shared 同库
+
+	// itStoreID 是一次性的非 zone 落点库(player-storage-placement.md §4.2:>= 1000000 → player_store_{id}_db),
+	// 搬库用例往里搬。编号故意不用 Phase 2 默认的 1000000:测试实例上若真有那个库,这里一个字节不碰。
+	itStoreID = uint32(1000901)
 )
+
+// itStoreDB 是 itStoreID 派生的库名(与 go/db 同一条规则)。
+var itStoreDB, _ = storeDBName(itStoreID)
+
+// itPlayerSchemas 是建玩家表的一次性库:两个 zone 库 + 一个非 zone 落点库,表结构相同。
+func itPlayerSchemas() []string {
+	return []string{zoneDBName(itSrcZone), zoneDBName(itDstZone), itStoreDB}
+}
 
 var itBinary string
 
@@ -120,7 +132,7 @@ func TestMain(m *testing.M) {
 }
 
 func itDropAll(db *sql.DB) {
-	for _, s := range []string{zoneDBName(itSrcZone), zoneDBName(itDstZone), itDefaultDB, itGuildDB, itTradeDB, itFriendDB} {
+	for _, s := range append(itPlayerSchemas(), itDefaultDB, itGuildDB, itTradeDB, itFriendDB) {
 		_, _ = db.Exec("DROP DATABASE IF EXISTS " + s)
 	}
 	ctx := context.Background()
@@ -140,6 +152,7 @@ func itCreateAll(db *sql.DB) error {
 		"CREATE DATABASE " + itGuildDB,
 		"CREATE DATABASE " + zoneDBName(itSrcZone),
 		"CREATE DATABASE " + zoneDBName(itDstZone),
+		"CREATE DATABASE " + itStoreDB,
 		"CREATE DATABASE " + itTradeDB,
 		"CREATE DATABASE " + itFriendDB,
 		// 只建合服步骤读写的列。完整形状由 go/schemamigrate 按 proto/guild/guild_db.proto
@@ -171,8 +184,7 @@ func itCreateAll(db *sql.DB) error {
 			market_zone INT UNSIGNED NOT NULL DEFAULT 0, seller_zone_at_listing INT UNSIGNED NOT NULL DEFAULT 0,
 			PRIMARY KEY (listing_id), KEY idx_market_zone (market_zone), KEY idx_seller (seller_player_id, listing_id))`,
 	}
-	for _, zone := range []uint32{itSrcZone, itDstZone} {
-		s := zoneDBName(zone)
+	for _, s := range itPlayerSchemas() {
 		stmts = append(stmts,
 			`CREATE TABLE `+s+`.player_database (
 				player_id BIGINT UNSIGNED NOT NULL, transform MEDIUMBLOB, currency MEDIUMBLOB,
@@ -224,9 +236,9 @@ func itReset(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
 	db := itOpen(t)
-	for _, zone := range []uint32{itSrcZone, itDstZone} {
+	for _, schema := range itPlayerSchemas() {
 		for _, tbl := range []string{"player_database", "player_database_1", "player_centre_database", "user"} {
-			if _, err := db.Exec("DELETE FROM " + zoneDBName(zone) + "." + tbl); err != nil {
+			if _, err := db.Exec("DELETE FROM " + schema + "." + tbl); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -367,7 +379,7 @@ func TestIT_CopyPlayerRows_CopiesEveryTableAndVerifiesCounts(t *testing.T) {
 	}
 
 	tables := []string{"player_centre_database", "player_database", "player_database_1"}
-	rep, err := copyPlayerRows(ctx, db, zoneDBName(itSrcZone), zoneDBName(itDstZone), tables, ids, false)
+	rep, err := copyPlayerRows(ctx, db, zoneDBName(itSrcZone), zoneDBName(itDstZone), tables, ids, refuseExistingTargetRows, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -407,7 +419,7 @@ func TestIT_CopyPlayerRows_RefusesWhenTargetAlreadyHoldsTheId(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := copyPlayerRows(ctx, db, zoneDBName(itSrcZone), zoneDBName(itDstZone),
-		[]string{"player_database"}, ids, false)
+		[]string{"player_database"}, ids, refuseExistingTargetRows, false)
 	if err == nil {
 		t.Fatal("expected an ID-safety refusal")
 	}
@@ -431,7 +443,7 @@ func TestIT_CopyPlayerRows_DryRunWritesNothing(t *testing.T) {
 	ids := []uint64{9201, 9202}
 	itSeedPlayers(t, ids, false)
 	rep, err := copyPlayerRows(ctx, db, zoneDBName(itSrcZone), zoneDBName(itDstZone),
-		[]string{"player_database"}, ids, true)
+		[]string{"player_database"}, ids, refuseExistingTargetRows, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -450,7 +462,7 @@ func TestIT_DeletePlayerRows_OnlyRemovesByteIdenticalCopies(t *testing.T) {
 	ids := []uint64{9301, 9302}
 	itSeedPlayers(t, ids, false)
 	if _, err := copyPlayerRows(ctx, db, zoneDBName(itSrcZone), zoneDBName(itDstZone),
-		[]string{"player_database"}, ids, false); err != nil {
+		[]string{"player_database"}, ids, refuseExistingTargetRows, false); err != nil {
 		t.Fatal(err)
 	}
 	// 9302 在合服后被玩过 —— 目标区那一行已经不是拷贝了。
@@ -539,23 +551,23 @@ func TestIT_CollectAndRemapMapping(t *testing.T) {
 		t.Fatalf("collected %v, want sorted [9501 9502 9503]", ids)
 	}
 
-	matched, updated, err := remapPlayerMapping(ctx, m, itSrcZone, itDstZone, true)
+	rep, err := remapPlayerMapping(ctx, m, ids, itSrcZone, itDstZone, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if matched != 3 || updated != 0 {
-		t.Errorf("dry-run: matched=%d updated=%d want 3/0", matched, updated)
+	if rep.Changed != 3 || rep.Already != 0 {
+		t.Errorf("dry-run: %+v, want changed=3 (would change) already=0", rep)
 	}
 	if v, _ := m.Get(ctx, playerZoneKeyPrefix+"9501").Result(); v != "901" {
 		t.Fatalf("dry-run wrote: %q", v)
 	}
 
-	matched, updated, err = remapPlayerMapping(ctx, m, itSrcZone, itDstZone, false)
+	rep, err = remapPlayerMapping(ctx, m, ids, itSrcZone, itDstZone, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if matched != 3 || updated != 3 {
-		t.Errorf("apply: matched=%d updated=%d want 3/3", matched, updated)
+	if rep.Changed != 3 || rep.complete(len(ids)) != nil {
+		t.Errorf("apply: %+v, want changed=3 and complete", rep)
 	}
 	if v, _ := m.Get(ctx, playerZoneKeyPrefix+"9599").Result(); v != "903" {
 		t.Errorf("a third zone's player was remapped: %q", v)
@@ -563,6 +575,51 @@ func TestIT_CollectAndRemapMapping(t *testing.T) {
 	after, _ := collectPlayerIDsWithHomeZone(ctx, m, itDstZone)
 	if len(after) != 5 {
 		t.Errorf("target zone now has %d players, want 5", len(after))
+	}
+
+	// 续跑:已经是 dst 的按「已是 dst」计,人数照样对得上。
+	rep, err = remapPlayerMapping(ctx, m, ids, itSrcZone, itDstZone, false)
+	if err != nil || rep.Changed != 0 || rep.Already != 3 || rep.complete(len(ids)) != nil {
+		t.Errorf("re-run: %+v err=%v, want already=3 and complete", rep, err)
+	}
+}
+
+// TestIT_Gap_RemapPlayerMapping_CASTouchesOnlyManifestKeys(A2):改映射只按清单逐键 CAS。清单外仍指向源区的
+// 人一个不动(旧写法全量扫描、见 src 就改,把行从没拷过的人也翻到 dst);清单里的人键丢了或指向第三个 zone
+// 时人数对不上,步骤不能标记完成。
+func TestIT_Gap_RemapPlayerMapping_CASTouchesOnlyManifestKeys(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	m := itRedis(t, itMappingRD)
+	for _, id := range []uint64{9521, 9522, 9523} {
+		m.Set(ctx, playerZoneKey(id), "901", 0)
+	}
+	manifest := []uint64{9521, 9522, 9523, 9524, 9525}
+	m.Set(ctx, playerZoneKey(9525), "903", 0) // 清单里的人被改到了第三个 zone;9524 的键丢了
+	m.Set(ctx, playerZoneKey(9529), "901", 0) // 清单之外、立围栏之前漏进源区的人
+
+	rep, err := remapPlayerMapping(ctx, m, manifest, itSrcZone, itDstZone, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Changed != 3 || rep.Missing != 1 || rep.Foreign != 1 {
+		t.Fatalf("report = %+v, want changed=3 missing=1 foreign=1", rep)
+	}
+	if err := rep.complete(len(manifest)); err == nil {
+		t.Fatal("a manifest player left behind must fail the completeness check")
+	}
+	if v, _ := m.Get(ctx, playerZoneKey(9529)).Result(); v != "901" {
+		t.Errorf("a player outside the manifest was remapped: %q", v)
+	}
+	if v, _ := m.Get(ctx, playerZoneKey(9525)).Result(); v != "903" {
+		t.Errorf("the CAS overwrote a third zone's value: %q", v)
+	}
+	if n, _ := m.Exists(ctx, playerZoneKey(9524)).Result(); n != 0 {
+		t.Error("the CAS must not create a missing key")
+	}
+	outside, err := playersOutsideManifestWithHomeZone(ctx, m, itSrcZone, manifest)
+	if err != nil || fmt.Sprint(outside) != "[9529]" {
+		t.Errorf("outside-manifest warning set = %v (err=%v), want [9529]", outside, err)
 	}
 }
 
@@ -588,6 +645,44 @@ func TestIT_BackfillHomeZone_NeverOverwritesAnExistingMapping(t *testing.T) {
 	}
 	if v, _ := m.Get(ctx, playerZoneKeyPrefix+"9601").Result(); v != "901" {
 		t.Errorf("backfill did not seed 9601: %q", v)
+	}
+}
+
+// TestIT_Gap_Backfill_RefusesAZoneThatWasMergedAway(A10):源区被合走之后(merge:merged_into:{src} 在),
+// 映射丢了也不能靠回填恢复 —— 回填会把人钉回死区。dry-run 同样拒绝;撤销删掉标记后回填恢复正常。
+func TestIT_Gap_Backfill_RefusesAZoneThatWasMergedAway(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	m := itRedis(t, itMappingRD)
+	itSeedPlayers(t, []uint64{9611, 9612}, false) // 行还在源库(冷副本),映射「丢了」
+	db := itOpen(t)
+
+	if err := markMergedInto(ctx, m, itSrcZone, itDstZone, "run-a10", false); err != nil {
+		t.Fatal(err)
+	}
+	for _, dry := range []bool{true, false} {
+		_, err := backfillHomeZone(ctx, m, newMySQLPlayerIDSource(db, itSrcZone), itSrcZone, dry)
+		if err == nil || !strings.Contains(err.Error(), "merged away") {
+			t.Fatalf("dry=%v: backfilling a merged-away zone must be refused, got %v", dry, err)
+		}
+	}
+	if n, _ := m.Exists(ctx, playerZoneKey(9611), playerZoneKey(9612)).Result(); n != 0 {
+		t.Fatalf("a refused backfill wrote %d mappings", n)
+	}
+	// 另一个 dst 的标记不能被覆盖(源区不会被合进两个区)。
+	if err := markMergedInto(ctx, m, itSrcZone, 903, "run-other", false); err == nil {
+		t.Error("a merged_into marker pointing at another zone must not be overwritten")
+	}
+	// 撤销:只删 dst 与 run_id 都对得上的那一把。
+	if cleared, err := clearMergedInto(ctx, m, itSrcZone, itDstZone, "run-someone-else", false); err != nil || cleared {
+		t.Fatalf("a marker from another run must be left alone: cleared=%v err=%v", cleared, err)
+	}
+	if cleared, err := clearMergedInto(ctx, m, itSrcZone, itDstZone, "run-a10", false); err != nil || !cleared {
+		t.Fatalf("the unmerge of the same run must clear the marker: cleared=%v err=%v", cleared, err)
+	}
+	rep, err := backfillHomeZone(ctx, m, newMySQLPlayerIDSource(db, itSrcZone), itSrcZone, false)
+	if err != nil || rep.Created != 2 {
+		t.Fatalf("after the unmerge the zone backfills again: rep=%+v err=%v", rep, err)
 	}
 }
 
@@ -633,6 +728,154 @@ func TestIT_MergeRankZSET_IsAtomicAndRoundTripsThroughUnmerge(t *testing.T) {
 	}
 	if s, _ := g.ZScore(ctx, dst, "21").Result(); s != 70 {
 		t.Errorf("native member disturbed: %v", s)
+	}
+}
+
+// TestIT_Gap_MergeGuildRank_UsesTheSourceReadUnderTheLock(A8):步骤 4 以维护锁内重读的源榜为准,清单阶段的
+// 快照(分数旧、少了之后进榜的成员)从不写进目标榜;写之前先把撤销依据交给清单。
+func TestIT_Gap_MergeGuildRank_UsesTheSourceReadUnderTheLock(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	g := itRedis(t, itGuildRD)
+	src, dst := guildZoneRankKey(itSrcZone), guildZoneRankKey(itDstZone)
+	// 清单阶段的快照:只有 11,分数 90。之后 guild 服把 11 涨到 100,12 进了源榜。
+	snapshot := []manifestRankMember{{Member: "11", Score: 90}}
+	g.ZAdd(ctx, src, redis.Z{Member: "11", Score: 100}, redis.Z{Member: "12", Score: 50})
+	g.ZAdd(ctx, dst, redis.Z{Member: "21", Score: 70})
+
+	var recorded []manifestRankMember
+	record := func(ms []manifestRankMember) error {
+		// 清单先于写:这一刻源榜必须还在(MULTI/EXEC 还没跑)。
+		if n, _ := g.Exists(ctx, src).Result(); n != 1 {
+			t.Error("recordBeforeWrite ran after the rank was already merged")
+		}
+		recorded = ms
+		return nil
+	}
+	members, sourceGone, err := mergeGuildRank(ctx, g, itSrcZone, itDstZone, snapshot, false, false, record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sourceGone || len(members) != 2 || fmt.Sprint(recorded) != fmt.Sprint(members) {
+		t.Fatalf("members=%v sourceGone=%v recorded=%v, want the 2 re-read members recorded before the write",
+			members, sourceGone, recorded)
+	}
+	if s, _ := g.ZScore(ctx, dst, "11").Result(); s != 100 {
+		t.Errorf("guild 11 score in the target rank = %v, want the re-read 100 (not the stale snapshot 90)", s)
+	}
+	if _, err := g.ZScore(ctx, dst, "12").Result(); err != nil {
+		t.Errorf("guild 12 joined the source rank after the snapshot and must be merged too: %v", err)
+	}
+	if n, _ := g.Exists(ctx, src).Result(); n != 0 {
+		t.Error("the source rank survived the merge")
+	}
+
+	// 续跑(上一次 MULTI/EXEC 成功、persist 之前中止):这期间 guild 服已把目标榜上 11 的分数更新到 120。
+	// 源榜已不在 —— 不写,目标榜不被上一次记下的快照回退;撤销依据沿用上一次写入之前落盘的那一份。
+	g.ZAdd(ctx, dst, redis.Z{Member: "11", Score: 120})
+	members, sourceGone, err = mergeGuildRank(ctx, g, itSrcZone, itDstZone, recorded, true, false,
+		func(ms []manifestRankMember) error { recorded = ms; return nil })
+	if err != nil || !sourceGone || len(members) != 2 || len(recorded) != 2 {
+		t.Fatalf("resume: members=%v sourceGone=%v recorded=%v err=%v", members, sourceGone, recorded, err)
+	}
+	if s, _ := g.ZScore(ctx, dst, "11").Result(); s != 120 {
+		t.Errorf("guild 11 score in the target rank = %v after the resume, want 120 (not rolled back by the snapshot)", s)
+	}
+	if n, _ := g.ZCard(ctx, dst).Result(); n != 3 {
+		t.Errorf("target ZCARD after the resume = %d, want 3", n)
+	}
+
+	// 清单落盘失败 = 一个字节都不写。
+	g.ZAdd(ctx, src, redis.Z{Member: "13", Score: 1})
+	boom := fmt.Errorf("disk full")
+	if _, _, err := mergeGuildRank(ctx, g, itSrcZone, itDstZone, nil, false, false, func([]manifestRankMember) error { return boom }); !errors.Is(err, boom) {
+		t.Fatalf("a failed manifest write must abort the step: %v", err)
+	}
+	if _, err := g.ZScore(ctx, dst, "13").Result(); err == nil {
+		t.Error("the rank was merged although the manifest write failed")
+	}
+	if n, _ := g.Exists(ctx, guildRankLockKey).Result(); n != 0 {
+		t.Error("the maintenance lock must be released on every path")
+	}
+}
+
+// TestIT_Gap_MergeGuildRank_EmptiedSourceNeverResurrects:清单阶段之后、步骤 4 之前源榜被 guild 服合法清空
+// (公会全部解散,或 RebuildRanks 按 MySQL 重建、目标榜里已是新分数)。清单快照从没写过,步骤 4 不得把它写进目标榜,
+// 撤销依据记为空(撤销不再把可能已解散的公会 ZADD 回源区)。
+func TestIT_Gap_MergeGuildRank_EmptiedSourceNeverResurrects(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	g := itRedis(t, itGuildRD)
+	dst := guildZoneRankKey(itDstZone)
+	// 清单阶段的快照:11(之后被 RebuildRanks 按 MySQL 挪进目标榜、分数 130)与 12(之后解散)。
+	snapshot := []manifestRankMember{{Member: "11", Score: 90}, {Member: "12", Score: 50}}
+	g.ZAdd(ctx, dst, redis.Z{Member: "21", Score: 70}, redis.Z{Member: "11", Score: 130})
+
+	recordCalled := false
+	var recorded []manifestRankMember
+	members, sourceGone, err := mergeGuildRank(ctx, g, itSrcZone, itDstZone, snapshot, false, false,
+		func(ms []manifestRankMember) error { recordCalled, recorded = true, ms; return nil })
+	if err != nil || !sourceGone {
+		t.Fatalf("sourceGone=%v err=%v", sourceGone, err)
+	}
+	if !recordCalled || len(recorded) != 0 || len(members) != 0 {
+		t.Errorf("an unwritten snapshot must be dropped from the unmerge basis: called=%v recorded=%v members=%v",
+			recordCalled, recorded, members)
+	}
+	if s, _ := g.ZScore(ctx, dst, "11").Result(); s != 130 {
+		t.Errorf("guild 11 score in the target rank = %v, want the rebuilt 130 (not the stale snapshot 90)", s)
+	}
+	if _, err := g.ZScore(ctx, dst, "12").Result(); err == nil {
+		t.Error("disbanded guild 12 was resurrected into the target rank from the stale snapshot")
+	}
+	if n, _ := g.ZCard(ctx, dst).Result(); n != 2 {
+		t.Errorf("target ZCARD = %d, want 2", n)
+	}
+}
+
+// TestIT_Gap_MergeGuildRank_ResumeDoesNotRewriteADisbandedMember:续跑前某个已并进目标榜的成员被 ZREM(解散),
+// 续跑不得把它写回目标榜。
+func TestIT_Gap_MergeGuildRank_ResumeDoesNotRewriteADisbandedMember(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	g := itRedis(t, itGuildRD)
+	dst := guildZoneRankKey(itDstZone)
+	recorded := []manifestRankMember{{Member: "11", Score: 100}, {Member: "12", Score: 50}}
+	// 上一次 MULTI/EXEC 已合走(源榜不在),之后 12 解散被 ZREM。
+	g.ZAdd(ctx, dst, redis.Z{Member: "21", Score: 70}, redis.Z{Member: "11", Score: 100})
+	if _, _, err := mergeGuildRank(ctx, g, itSrcZone, itDstZone, recorded, true, false,
+		func([]manifestRankMember) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.ZScore(ctx, dst, "12").Result(); err == nil {
+		t.Error("the resume wrote disbanded guild 12 back into the target rank")
+	}
+}
+
+// TestIT_Gap_MergeRankZSET_KeepsNewerTargetScores:步骤 3 之后 guild 服已往目标榜写了某个源区公会的新分数,
+// 源榜里还是旧的 —— ZADD NX 不覆盖目标榜里的新分数。
+func TestIT_Gap_MergeRankZSET_KeepsNewerTargetScores(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	g := itRedis(t, itGuildRD)
+	src, dst := guildZoneRankKey(itSrcZone), guildZoneRankKey(itDstZone)
+	g.ZAdd(ctx, src, redis.Z{Member: "11", Score: 100}, redis.Z{Member: "12", Score: 50})
+	g.ZAdd(ctx, dst, redis.Z{Member: "11", Score: 150})
+	members, err := readZoneRankMembers(ctx, g, itSrcZone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mergeRankZSET(ctx, g, itSrcZone, itDstZone, members, false); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := g.ZScore(ctx, dst, "11").Result(); s != 150 {
+		t.Errorf("guild 11 score = %v, want the newer target score 150", s)
+	}
+	if s, _ := g.ZScore(ctx, dst, "12").Result(); s != 50 {
+		t.Errorf("guild 12 score = %v, want 50", s)
+	}
+	if n, _ := g.Exists(ctx, src).Result(); n != 0 {
+		t.Error("the source rank survived the merge")
 	}
 }
 
@@ -875,18 +1118,24 @@ func TestIT_ZonePointUpdatesArePrimaryKeyPointLookups(t *testing.T) {
 	itSeedListing(t, db, 7002, 9902, itSrcZone, itSrcZone)
 	itSeedListing(t, db, 7101, 9950, itDstZone, itDstZone)
 
+	guild := guildQualified(itGuildDB, guildTable)
+	trade := tradeListingQualified(itTradeDB)
 	cases := []struct {
 		name string
 		stmt string
-		pk   uint64 // 已存在的行
+		args []uint64 // 已存在的行;顺序与 rewriteZoneByPrimaryKey 的绑定一致
 	}{
-		{"guild zone_id", zonePointUpdateSQL(guildQualified(itGuildDB, guildTable), guildPKColumn, guildZoneColumn), 11},
-		{"trade_listing market_zone", zonePointUpdateSQL(tradeListingQualified(itTradeDB), tradeListingPKColumn, tradeMarketZoneColumn), 7001},
+		// UPDATE 的参数:(to, pk, from)。
+		{"guild zone_id update", zonePointUpdateSQL(guild, guildPKColumn, guildZoneColumn), []uint64{uint64(itDstZone), 11, uint64(itSrcZone)}},
+		{"trade_listing market_zone update", zonePointUpdateSQL(trade, tradeListingPKColumn, tradeMarketZoneColumn),
+			[]uint64{uint64(itDstZone), 7001, uint64(itSrcZone)}},
+		// 单行事务的第一句(A15):SELECT … FOR UPDATE 的参数只有 (pk)。
+		{"guild zone_id lock select", zoneLockSelectSQL(guild, guildPKColumn, guildZoneColumn), []uint64{11}},
+		{"trade_listing market_zone lock select", zoneLockSelectSQL(trade, tradeListingPKColumn, tradeMarketZoneColumn), []uint64{7001}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			// 参数顺序与 rewriteZoneByPrimaryKey 一致:(to, pk, from)。
-			plan := itExplain(t, db, itInlineUintArgs(t, c.stmt, uint64(itDstZone), c.pk, uint64(itSrcZone)))
+			plan := itExplain(t, db, itInlineUintArgs(t, c.stmt, c.args...))
 			if plan["key"] != "PRIMARY" || plan["key_len"] != "8" {
 				t.Fatalf("%s: plan key=%q key_len=%q type=%q, want PRIMARY/8 — the zone rewrite must lock the primary key "+
 					"first, never walk the zone secondary index. SQL: %s", c.name, plan["key"], plan["key_len"], plan["type"], c.stmt)
@@ -940,9 +1189,11 @@ func isITDeadlock(err error) bool {
 //	     锁 (901,12) 的二级项 → 回表请求主键 12,被 T2 挡住(此时 T1 持有二级项 (901,12));
 //	T2 `DELETE FROM guild WHERE guild_id = 12` 要 delete-mark idx_guild_0 的 (901,12),撞上 T1 的显式 X → 1213。
 //
-// 修复后 T1 逐条主键点更新:改完 11 即提交,轮到 12 时在主键上排队、此前什么都不持有;T2 的 DELETE
+// 修复后 T1 逐条按主键改:改完 11 即提交,轮到 12 时在主键上排队、此前什么都不持有;T2 的 DELETE
 // 立即完成,提交后 T1 等到的是已删除的行,影响 0 行。编排:T2 先锁住 12 → 起 T1 → 在 data_lock_waits
 // 里**看见** T1 排进 guild 表的锁等待队列 → T2 DELETE + 提交 → 两边都不得 1213。
+// 2026-09-28 起(A15)T1 的每一行是一个显式短事务,排队发生在第一句 `SELECT … WHERE guild_id = 12 FOR UPDATE`
+// 上(同样只等主键、什么都不持有);等到的行已删除 = 锁读读不到行,不写、回滚,仍计 0 行。
 // 这里 T2 直接执行与 guild_manage_repo.go(sqlLockGuild / DisbandGuild)同形的两条语句:merge_zone 是独立
 // module,不能 import go/guild;环只取决于这两条语句的锁模式,与事务里其余的删申请 / 删成员无关。
 func TestIT_MigrateGuildZone_ConcurrentDisbandDoesNotDeadlock(t *testing.T) {
@@ -1235,7 +1486,7 @@ func itPreflightDeps(t *testing.T, lag kafkaLagSource) preflightDeps {
 }
 
 func itPreflightParams(ids []uint64) preflightParams {
-	return preflightParams{src: itSrcZone, dst: itDstZone, kafkaGroup: defaultKafkaGroup, topicGeneration: 1, playerIDs: ids}
+	return preflightParams{zone: itSrcZone, scope: "source", kafkaGroup: defaultKafkaGroup, topicGeneration: 1, playerIDs: ids}
 }
 
 func TestIT_Preflight_PassesOnACleanZone(t *testing.T) {
@@ -1314,10 +1565,13 @@ func TestIT_GuardPlayerSet_RefusesEmptyMappingAndIncompleteBackfill(t *testing.T
 	itReset(t)
 	ctx := context.Background()
 	db := itOpen(t)
+	m := itRedis(t, itMappingRD)
 	base := options{sourceZone: itSrcZone, mappingAddr: itRedisAddr, mappingDB: itMappingRD, expectedSrcPlayers: -1}
+	rows := newMySQLPlayerIDSource(db, itSrcZone)
+	mapped := redisMappingPresence(m)
 
 	// (a) 一个玩家都没收集到 —— 空库时也算,因为「跑了等于没跑」。
-	err := guardPlayerSet(ctx, db, zoneDBName(itSrcZone), nil, base, false)
+	err := guardPlayerSet(ctx, rows, mapped, nil, base, false)
 	if err == nil {
 		t.Fatal("an empty player set must be refused (silent no-op merge)")
 	}
@@ -1327,28 +1581,39 @@ func TestIT_GuardPlayerSet_RefusesEmptyMappingAndIncompleteBackfill(t *testing.T
 	// -allow-empty-source 明确放行。
 	permissive := base
 	permissive.allowEmptySource = true
-	if err := guardPlayerSet(ctx, db, zoneDBName(itSrcZone), nil, permissive, false); err != nil {
+	if err := guardPlayerSet(ctx, rows, mapped, nil, permissive, false); err != nil {
 		t.Fatalf("-allow-empty-source should permit an empty zone: %v", err)
 	}
 
 	// (b) 库里 3 个玩家,mapping 只覆盖 2 个 → 必须让人先跑回填。
 	itSeedPlayers(t, []uint64{9801, 9802, 9803}, false)
-	err = guardPlayerSet(ctx, db, zoneDBName(itSrcZone), []uint64{9801, 9802}, base, false)
+	m.Set(ctx, playerZoneKey(9801), "901", 0)
+	m.Set(ctx, playerZoneKey(9802), "901", 0)
+	err = guardPlayerSet(ctx, rows, mapped, []uint64{9801, 9802}, base, false)
 	if err == nil {
 		t.Fatal("an incomplete mapping must be refused")
 	}
-	if !strings.Contains(err.Error(), "backfill-home-zone") {
-		t.Errorf("the refusal must point at the backfill: %v", err)
+	if !strings.Contains(err.Error(), "backfill-home-zone") || !strings.Contains(err.Error(), "9803") {
+		t.Errorf("the refusal must point at the backfill and name the unmapped player: %v", err)
 	}
-	// 覆盖齐了就放行。
-	if err := guardPlayerSet(ctx, db, zoneDBName(itSrcZone), []uint64{9801, 9802, 9803}, base, false); err != nil {
+
+	// (b') A1 回归:「有映射、没有行」的 9804 抵消不了「有行、没映射」的 9803。旧守卫只比行数(3 <= 3)会放行。
+	m.Set(ctx, playerZoneKey(9804), "901", 0)
+	if err := guardPlayerSet(ctx, rows, mapped, []uint64{9801, 9802, 9804}, base, false); err == nil ||
+		!strings.Contains(err.Error(), "9803") {
+		t.Fatalf("an unmapped row must be refused even when a mapped player without a row balances the count: %v", err)
+	}
+
+	// 覆盖齐了就放行;映射指向别区的(早先合出去的冷副本)也算有归属。
+	m.Set(ctx, playerZoneKey(9803), "903", 0)
+	if err := guardPlayerSet(ctx, rows, mapped, []uint64{9801, 9802, 9804}, base, false); err != nil {
 		t.Fatalf("a complete mapping was refused: %v", err)
 	}
 
 	// (c) T-1 记的人数与现在不一致 = zone-down 不彻底。
 	rehearsed := base
 	rehearsed.expectedSrcPlayers = 5
-	if err := guardPlayerSet(ctx, db, zoneDBName(itSrcZone), []uint64{9801, 9802, 9803}, rehearsed, false); err == nil {
+	if err := guardPlayerSet(ctx, rows, mapped, []uint64{9801, 9802, 9804}, rehearsed, false); err == nil {
 		t.Fatal("a player-count drift since the rehearsal must abort the merge")
 	}
 }
@@ -1413,7 +1678,9 @@ func TestIT_EndToEnd_MergeVerifyUnmerge(t *testing.T) {
 	itSeedListing(t, db, 7101, 9950, itDstZone, itDstZone)
 
 	manifest := filepath.Join(t.TempDir(), "merge.json")
-	zoneArgs := []string{"-source-zone", "901", "-target-zone", "902", "-manifest-path", manifest}
+	// 本用例走拷行语义(copy 模式):目标库行数、缓存失效、撤销删行都是它的断言。pin 模式的端到端见
+	// placement_integration_test.go 的 TestIT_Placement_PinMergeVerifyUnmerge。
+	zoneArgs := []string{"-source-zone", "901", "-target-zone", "902", "-manifest-path", manifest, "-player-rows-mode", "copy"}
 
 	// 1) dry-run 不写。
 	out, code := itRun(t, append(append([]string{}, zoneArgs...), "-dry-run")...)
@@ -1432,11 +1699,24 @@ func TestIT_EndToEnd_MergeVerifyUnmerge(t *testing.T) {
 	if n := itCount(t, db, itTradeDB+".trade_listing WHERE market_zone = 901"); n != 2 {
 		t.Fatalf("dry-run rewrote trade listings: %d left in the source zone", n)
 	}
+	// A3:dry-run 只写 <path>.dryrun.json(标 dry_run),-manifest-path 一个字节不碰。
+	if _, err := os.Stat(manifest); !os.IsNotExist(err) {
+		t.Fatalf("dry-run wrote -manifest-path itself (stat err=%v) — the T-0 apply would resume from the rehearsal's list", err)
+	}
+	if raw, err := os.ReadFile(dryRunManifestPath(manifest)); err != nil || !strings.Contains(string(raw), `"dry_run": true`) {
+		t.Fatalf("dry-run preview missing or not marked (err=%v):\n%s", err, raw)
+	}
+	if n, _ := mapRdb.Exists(ctx, mergedIntoKey(itSrcZone)).Result(); n != 0 {
+		t.Fatal("dry-run wrote the merged_into marker")
+	}
 
 	// 2) apply。
 	out, code = itRun(t, append(append([]string{}, zoneArgs...), "-apply", "-expected-src-players", "3")...)
 	if code != 0 {
 		t.Fatalf("apply exit=%d\n%s", code, out)
+	}
+	if strings.Contains(out, "RESUME") {
+		t.Errorf("the first apply resumed from something — the dry-run preview must never be consumed:\n%s", out)
 	}
 	if n := itCount(t, db, zoneDBName(itDstZone)+".player_database"); n != 4 {
 		t.Errorf("target player_database has %d rows, want 4 (3 merged + 1 native)", n)
@@ -1501,18 +1781,34 @@ func TestIT_EndToEnd_MergeVerifyUnmerge(t *testing.T) {
 	if fmt.Sprint(man.TradeListingIDs) != "[7001 7002]" {
 		t.Errorf("manifest trade listing ids = %v, want [7001 7002]", man.TradeListingIDs)
 	}
+	// A10:改映射之前写的合走标记,值是 {dst, run_id(清单的)}。
+	raw, err := mapRdb.Get(ctx, mergedIntoKey(itSrcZone)).Result()
+	if err != nil {
+		t.Fatalf("merge:merged_into:901 missing after the merge: %v", err)
+	}
+	var marker mergedIntoValue
+	if err := json.Unmarshal([]byte(raw), &marker); err != nil || marker.Dst != itDstZone || marker.RunID != man.RunID {
+		t.Errorf("merged_into = %s (err=%v), want dst=%d run_id=%s", raw, err, itDstZone, man.RunID)
+	}
 
-	// 3) -verify-merged 全绿。
+	// 3) -verify-merged 全绿;没有 -manifest-path 直接拒绝(A6:逐 id 核对需要清单)。
 	out, code = itRun(t, "-mode", "audit", "-source-zone", "901", "-target-zone", "902",
 		"-verify-merged", "-expected-src-players", "3")
+	if code == 0 || !strings.Contains(out, "requires -manifest-path") {
+		t.Fatalf("-verify-merged without -manifest-path must be refused (exit=%d):\n%s", code, out)
+	}
+	out, code = itRun(t, "-mode", "audit", "-source-zone", "901", "-target-zone", "902",
+		"-verify-merged", "-expected-src-players", "3", "-manifest-path", manifest)
 	if code != 0 {
 		t.Fatalf("verify exit=%d\n%s", code, out)
 	}
 	if !strings.Contains(out, "0 block(s)") {
 		t.Errorf("post-merge verification reported blockers:\n%s", out)
 	}
-	if !strings.Contains(out, "verify:trade_listing") {
-		t.Errorf("post-merge verification did not check trade_listing:\n%s", out)
+	for _, want := range []string{"verify:trade_listing", "verify:manifest_mapping", "verify:manifest_rows"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("post-merge verification did not run %s:\n%s", want, out)
+		}
 	}
 
 	// 4) 重跑 -apply 是幂等的(读清单,不重新扫描)。
@@ -1530,10 +1826,18 @@ func TestIT_EndToEnd_MergeVerifyUnmerge(t *testing.T) {
 		t.Errorf("the re-run changed trade listings: %d in the target zone", n)
 	}
 
-	// 5) unmerge 撤回,只碰清单里的对象。
+	// 5) unmerge 撤回,只碰清单里的对象。合服之后有人经目标区读过 9901:共享缓存里是目标库的那份,
+	// 路由改回源区之后它必须失效(A7)。
+	shared.Set(ctx, "PlayerAllData:9901", "read-from-the-target-zone", 0)
 	out, code = itRun(t, "-mode", "unmerge", "-manifest-path", manifest, "-apply")
 	if code != 0 {
 		t.Fatalf("unmerge exit=%d\n%s", code, out)
+	}
+	if n, _ := shared.Exists(ctx, "PlayerAllData:9901").Result(); n != 0 {
+		t.Error("the unmerge left a player cache read from the target zone")
+	}
+	if n, _ := mapRdb.Exists(ctx, mergedIntoKey(itSrcZone)).Result(); n != 0 {
+		t.Error("the unmerge left merge:merged_into:901 behind — the source zone could never be backfilled again")
 	}
 	if v, _ := mapRdb.Get(ctx, playerZoneKeyPrefix+"9901").Result(); v != "901" {
 		t.Errorf("mapping not restored: %q", v)
@@ -1568,14 +1872,29 @@ func TestIT_EndToEnd_MergeVerifyUnmerge(t *testing.T) {
 
 func TestIT_EndToEnd_RefusesEmptySourceAndSkipPlayerRowsWithoutAttestation(t *testing.T) {
 	itReset(t)
-	// 空 mapping:合服会是静默 no-op,必须拒绝。
-	out, code := itRun(t, "-source-zone", "901", "-target-zone", "902", "-apply",
-		"-manifest-path", filepath.Join(t.TempDir(), "m.json"))
+	// 空 mapping:合服会是静默 no-op,必须拒绝。下面停在空源区守卫上的几次都给 -player-rows-mode copy:
+	// 默认的 pin 模式会先在能力标记(C)上拒绝(这里没有 go/db 写标记),到不了守卫。
+	emptyManifest := filepath.Join(t.TempDir(), "m.json")
+	out, code := itRun(t, "-source-zone", "901", "-target-zone", "902", "-apply", "-manifest-path", emptyManifest,
+		"-player-rows-mode", "copy")
 	if code == 0 {
 		t.Fatalf("an empty source zone was merged:\n%s", out)
 	}
 	if !strings.Contains(out, "silent no-op") {
 		t.Errorf("the refusal should explain why:\n%s", out)
+	}
+	// A2:守卫在围栏之下跑,拒绝时本次什么都没写 —— 围栏必须正常释放,不能挂到 TTL;清单也不能落盘。
+	mapRdb := itRedis(t, itMappingRD)
+	for _, z := range []uint32{itSrcZone, itDstZone} {
+		if n, _ := mapRdb.Exists(context.Background(), mergeFenceKey(z)).Result(); n != 0 {
+			t.Errorf("a guard refusal left the merge fence for zone %d behind", z)
+		}
+	}
+	if !strings.Contains(out, "merge fence was released") {
+		t.Errorf("the refusal should say the fence was released:\n%s", out)
+	}
+	if _, err := os.Stat(emptyManifest); !os.IsNotExist(err) {
+		t.Errorf("a refusal before the first write must not leave a manifest behind (stat err=%v)", err)
 	}
 
 	// -skip-player-rows 不带声明 = 拒绝。
@@ -1589,8 +1908,10 @@ func TestIT_EndToEnd_RefusesEmptySourceAndSkipPlayerRowsWithoutAttestation(t *te
 
 	// 聚宝斋库不在 = 拒绝(fail-closed),在任何写之前;报错要点名迁移命令与 -skip-trade-mysql。
 	// 后给的 -trade-schema 覆盖 itRun 基础参数里的那个。
+	// 以下几次都给 -player-rows-mode copy:pin 模式在入口就要求 -db-capability-zones(没有缺省值),会先于这些门禁拒绝。
 	out, code = itRun(t, "-source-zone", "901", "-target-zone", "902", "-dry-run",
-		"-trade-schema", "merge_zone_it_no_such_trade", "-manifest-path", filepath.Join(t.TempDir(), "m2.json"))
+		"-trade-schema", "merge_zone_it_no_such_trade", "-manifest-path", filepath.Join(t.TempDir(), "m2.json"),
+		"-player-rows-mode", "copy")
 	if code == 0 {
 		t.Fatalf("a merge without the trade schema was accepted:\n%s", out)
 	}
@@ -1599,7 +1920,8 @@ func TestIT_EndToEnd_RefusesEmptySourceAndSkipPlayerRowsWithoutAttestation(t *te
 	}
 	// 显式 -skip-trade-mysql:越过 trade 门禁,停在后面的空源区守卫上 —— 证明跳过确实生效、且只跳过 trade。
 	out, code = itRun(t, "-source-zone", "901", "-target-zone", "902", "-dry-run", "-skip-trade-mysql",
-		"-trade-schema", "merge_zone_it_no_such_trade", "-manifest-path", filepath.Join(t.TempDir(), "m3.json"))
+		"-trade-schema", "merge_zone_it_no_such_trade", "-manifest-path", filepath.Join(t.TempDir(), "m3.json"),
+		"-player-rows-mode", "copy")
 	if code == 0 {
 		t.Fatalf("an empty source zone was accepted:\n%s", out)
 	}
@@ -1609,7 +1931,8 @@ func TestIT_EndToEnd_RefusesEmptySourceAndSkipPlayerRowsWithoutAttestation(t *te
 
 	// 帮会库不在 = 拒绝(fail-closed),在任何写之前;报错要点名迁移命令与两个跳过开关。
 	out, code = itRun(t, "-source-zone", "901", "-target-zone", "902", "-dry-run",
-		"-guild-schema", "merge_zone_it_no_such_guild", "-manifest-path", filepath.Join(t.TempDir(), "m4.json"))
+		"-guild-schema", "merge_zone_it_no_such_guild", "-manifest-path", filepath.Join(t.TempDir(), "m4.json"),
+		"-player-rows-mode", "copy")
 	if code == 0 {
 		t.Fatalf("a merge without the guild schema was accepted:\n%s", out)
 	}
@@ -1618,7 +1941,8 @@ func TestIT_EndToEnd_RefusesEmptySourceAndSkipPlayerRowsWithoutAttestation(t *te
 	}
 	// 只给一个跳过开关不够:榜单步同样读 guild 表,门禁必须照拦。
 	out, code = itRun(t, "-source-zone", "901", "-target-zone", "902", "-dry-run", "-skip-guild-mysql",
-		"-guild-schema", "merge_zone_it_no_such_guild", "-manifest-path", filepath.Join(t.TempDir(), "m5.json"))
+		"-guild-schema", "merge_zone_it_no_such_guild", "-manifest-path", filepath.Join(t.TempDir(), "m5.json"),
+		"-player-rows-mode", "copy")
 	if code == 0 {
 		t.Fatalf("-skip-guild-mysql alone slipped past the guild gate:\n%s", out)
 	}
@@ -1628,7 +1952,8 @@ func TestIT_EndToEnd_RefusesEmptySourceAndSkipPlayerRowsWithoutAttestation(t *te
 	// 两个都给:越过帮会门禁,停在后面的空源区守卫上。
 	out, code = itRun(t, "-source-zone", "901", "-target-zone", "902", "-dry-run",
 		"-skip-guild-mysql", "-skip-guild-rank",
-		"-guild-schema", "merge_zone_it_no_such_guild", "-manifest-path", filepath.Join(t.TempDir(), "m6.json"))
+		"-guild-schema", "merge_zone_it_no_such_guild", "-manifest-path", filepath.Join(t.TempDir(), "m6.json"),
+		"-player-rows-mode", "copy")
 	if code == 0 {
 		t.Fatalf("an empty source zone was accepted:\n%s", out)
 	}
@@ -1730,8 +2055,9 @@ func TestIT_TradeMarketZone_ResidualAbortKeepsFenceThenResumesAfterDEL(t *testin
 	t.Cleanup(func() { _, _ = db.Exec("DROP TRIGGER IF EXISTS " + trigger) })
 
 	manifest := filepath.Join(t.TempDir(), "merge.json")
+	// copy 模式:触发器挂在步骤 1 往目标库插玩家行上(pin 模式不拷行,触发器不会响)。
 	args := []string{"-source-zone", "901", "-target-zone", "902", "-manifest-path", manifest,
-		"-apply", "-expected-src-players", "1"}
+		"-apply", "-expected-src-players", "1", "-player-rows-mode", "copy"}
 	srcFence, dstFence := mergeFenceKey(itSrcZone), mergeFenceKey(itDstZone)
 
 	// 1) 首跑:步骤 1 的触发器落下 7003;3b 只搬清单里的 7001,复查剩 1 条 → 中止。
@@ -1851,8 +2177,9 @@ func TestIT_GuildZone_ResidualAbortKeepsFenceThenResumesAfterDEL(t *testing.T) {
 	t.Cleanup(func() { _, _ = db.Exec("DROP TRIGGER IF EXISTS " + trigger) })
 
 	manifest := filepath.Join(t.TempDir(), "merge.json")
+	// copy 模式:触发器挂在步骤 1 往目标库插玩家行上(pin 模式不拷行,触发器不会响)。
 	args := []string{"-source-zone", "901", "-target-zone", "902", "-manifest-path", manifest,
-		"-apply", "-expected-src-players", "1"}
+		"-apply", "-expected-src-players", "1", "-player-rows-mode", "copy"}
 	srcFence, dstFence := mergeFenceKey(itSrcZone), mergeFenceKey(itDstZone)
 
 	// 1) 首跑:步骤 1 的触发器建出公会 13;步骤 3 只改清单里的 11,复查剩 1 个 → 中止。
@@ -1974,5 +2301,578 @@ func TestIT_Audit_OnlineGateActuallyBlocks(t *testing.T) {
 	}
 	if !strings.Contains(out, "online_presence") {
 		t.Errorf("the online gate did not fire:\n%s", out)
+	}
+}
+
+// ── player-storage-placement.md §12 缺口修复(第一段)────────────────
+// 纯判定的单测在 gap_fixes_test.go / lock_order_test.go / scene_hot_state_test.go;这里对着真库与真二进制。
+
+// itAssertNoFence 断言两把合服围栏都不在(拒绝发生在本次第一次写之前时,围栏必须已正常释放)。
+func itAssertNoFence(t *testing.T, why string) {
+	t.Helper()
+	m := itRedis(t, itMappingRD)
+	for _, z := range []uint32{itSrcZone, itDstZone} {
+		if n, _ := m.Exists(context.Background(), mergeFenceKey(z)).Result(); n != 0 {
+			t.Errorf("%s left the merge fence for zone %d behind", why, z)
+		}
+	}
+}
+
+// itAssertFenceKept 断言两把合服围栏都还在、挂在同一个 run_id 上,且中止文案给出了这个 run_id 与保留说明
+// (续跑 / 半撤销状态下的拒绝:上一次运行已写到一半,围栏不能释放)。返回该 run_id。
+func itAssertFenceKept(t *testing.T, out, why string) string {
+	t.Helper()
+	m := itRedis(t, itMappingRD)
+	runID := ""
+	for _, z := range []uint32{itSrcZone, itDstZone} {
+		raw, err := m.Get(context.Background(), mergeFenceKey(z)).Result()
+		if err != nil {
+			t.Fatalf("%s must leave the merge fence for zone %d in place: %v\n%s", why, z, err, out)
+		}
+		var v mergeInProgressValue
+		if err := json.Unmarshal([]byte(raw), &v); err != nil {
+			t.Fatalf("fence value for zone %d: %v", z, err)
+		}
+		if runID != "" && v.RunID != runID {
+			t.Errorf("%s: the two fences belong to different runs (%s / %s)", why, runID, v.RunID)
+		}
+		runID = v.RunID
+	}
+	if runID == "" || !strings.Contains(out, "run_id="+runID) {
+		t.Errorf("%s: the abort message does not name the run_id %q that holds the fence:\n%s", why, runID, out)
+	}
+	if !strings.Contains(out, "LEFT IN PLACE") || strings.Contains(out, "fence was released") {
+		t.Errorf("%s: the message must say the fence is LEFT IN PLACE, not released:\n%s", why, out)
+	}
+	return runID
+}
+
+// TestIT_Gap_RefusalsUnderTheFenceReleaseIt(A2):收集、守卫、预检都在围栏之下做;它们拒绝时本次什么都没写,
+// 围栏必须正常释放(旧写法 log.Fatalf 不跑 defer,围栏挂到 TTL,两个 zone 白白封几个小时),清单不落盘,
+// 修好之后原命令直接能重跑。
+func TestIT_Gap_RefusalsUnderTheFenceReleaseIt(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	db := itOpen(t)
+	mapRdb := itRedis(t, itMappingRD)
+	itSeedPlayers(t, []uint64{9761, 9762}, true)
+	manifest := filepath.Join(t.TempDir(), "merge.json")
+	// copy 模式:默认的 pin 模式会先在能力标记(C,围栏之前)上拒绝,测不到围栏之下的拒绝。
+	args := []string{"-source-zone", "901", "-target-zone", "902", "-manifest-path", manifest, "-apply", "-player-rows-mode", "copy"}
+
+	// (a) 守卫:源库有一行没有任何映射(A1)。
+	if _, err := db.Exec("INSERT INTO " + zoneDBName(itSrcZone) + ".player_database (player_id) VALUES (9769)"); err != nil {
+		t.Fatal(err)
+	}
+	out, code := itRun(t, args...)
+	if code == 0 || !strings.Contains(out, "NO player:zone mapping") || !strings.Contains(out, "9769") {
+		t.Fatalf("an unmapped source row must be refused (exit=%d):\n%s", code, out)
+	}
+	itAssertNoFence(t, "a guard refusal")
+	if _, err := os.Stat(manifest); !os.IsNotExist(err) {
+		t.Errorf("a refusal before the first write left a manifest behind (stat err=%v)", err)
+	}
+	if _, err := db.Exec("DELETE FROM " + zoneDBName(itSrcZone) + ".player_database WHERE player_id = 9769"); err != nil {
+		t.Fatal(err)
+	}
+
+	// (b) 预检:清单玩家还在线(P6)。
+	shared := itRedis(t, itSharedRD)
+	shared.Set(ctx, "player:session:9762", "gate-1", time.Minute)
+	out, code = itRun(t, args...)
+	if code == 0 || !strings.Contains(out, "P6") {
+		t.Fatalf("an online player must be refused (exit=%d):\n%s", code, out)
+	}
+	itAssertNoFence(t, "a pre-flight refusal")
+	if v, _ := mapRdb.Get(ctx, playerZoneKey(9761)).Result(); v != "901" {
+		t.Errorf("a refused merge remapped 9761: %q", v)
+	}
+
+	// (c) 修好之后原命令直接重跑成功:没有残留围栏要人工 DEL。
+	shared.Del(ctx, "player:session:9762")
+	out, code = itRun(t, args...)
+	if code != 0 {
+		t.Fatalf("the re-run after fixing the cause must succeed without clearing any fence (exit=%d):\n%s", code, out)
+	}
+	if v, _ := mapRdb.Get(ctx, playerZoneKey(9762)).Result(); v != "902" {
+		t.Errorf("mapping not remapped by the re-run: %q", v)
+	}
+}
+
+// TestIT_Gap_DryRunPreviewIsNeverConsumed(A3):dry-run 的预览(<path>.dryrun.json,dry_run=true)只给人看,
+// -apply 续跑、-mode unmerge、-verify-merged 一律拒读 —— 按后缀拒一次,被改名后按内容再拒一次。
+func TestIT_Gap_DryRunPreviewIsNeverConsumed(t *testing.T) {
+	itReset(t)
+	itSeedPlayers(t, []uint64{9771}, true)
+	dir := t.TempDir()
+	manifest := filepath.Join(dir, "merge.json")
+	preview := dryRunManifestPath(manifest)
+
+	out, code := itRun(t, "-source-zone", "901", "-target-zone", "902", "-manifest-path", manifest, "-dry-run",
+		"-player-rows-mode", "copy")
+	if code != 0 {
+		t.Fatalf("dry-run exit=%d\n%s", code, out)
+	}
+	if _, err := os.Stat(manifest); !os.IsNotExist(err) {
+		t.Fatalf("dry-run wrote -manifest-path (stat err=%v)", err)
+	}
+	raw, err := os.ReadFile(preview)
+	if err != nil {
+		t.Fatalf("dry-run preview missing: %v\n%s", err, out)
+	}
+
+	// 预览路径本身:按后缀拒。
+	for _, args := range [][]string{
+		{"-source-zone", "901", "-target-zone", "902", "-manifest-path", preview, "-apply", "-player-rows-mode", "copy"},
+		{"-mode", "unmerge", "-manifest-path", preview, "-apply"},
+	} {
+		if out, code := itRun(t, args...); code == 0 || !strings.Contains(out, "reserved for dry-run previews") {
+			t.Errorf("%v must refuse the preview path (exit=%d):\n%s", args, code, out)
+		}
+	}
+	// 被改名放到普通路径上:按内容里的 dry_run 拒。
+	renamed := filepath.Join(dir, "renamed.json")
+	if err := os.WriteFile(renamed, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, code := itRun(t, "-source-zone", "901", "-target-zone", "902", "-manifest-path", renamed, "-apply",
+		"-player-rows-mode", "copy"); code == 0 ||
+		!strings.Contains(out, "dry-run preview") {
+		t.Errorf("-apply must refuse a renamed preview (exit=%d):\n%s", code, out)
+	}
+	if v, _ := itRedis(t, itMappingRD).Get(context.Background(), playerZoneKey(9771)).Result(); v != "901" {
+		t.Errorf("a refused run remapped 9771: %q", v)
+	}
+	// 合服后验证拿到预览:逐 id 核对无从谈起 —— INFRA(exit 2),不是通过。
+	if out, code := itRun(t, "-mode", "audit", "-source-zone", "901", "-target-zone", "902", "-verify-merged",
+		"-manifest-path", renamed); code != 2 {
+		t.Errorf("-verify-merged with a preview must exit 2 (exit=%d):\n%s", code, out)
+	}
+}
+
+// TestIT_Gap_CopyPlayerRows_PrechecksEveryTableBeforeAnyWrite(A4):撞号预检对全部表在任何写之前做完。
+// 旧写法逐表查,排在后面的表撞号时,排在前面的表(player_centre_database 按字母序最先)已经提交进目标库。
+func TestIT_Gap_CopyPlayerRows_PrechecksEveryTableBeforeAnyWrite(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	db := itOpen(t)
+	ids := []uint64{9151, 9152}
+	itSeedPlayers(t, ids, false)
+	// 撞号只在最后一张表(player_database_1)上。
+	if _, err := db.Exec("INSERT INTO "+zoneDBName(itDstZone)+".player_database_1 (player_id, stress_test_probe) VALUES (?,?)",
+		9152, []byte("native")); err != nil {
+		t.Fatal(err)
+	}
+	tables := []string{"player_centre_database", "player_database", "player_database_1"}
+	_, err := copyPlayerRows(ctx, db, zoneDBName(itSrcZone), zoneDBName(itDstZone), tables, ids, refuseExistingTargetRows, false)
+	if err == nil || !strings.Contains(err.Error(), "ID SAFETY") || !strings.Contains(err.Error(), "player_database_1") {
+		t.Fatalf("a collision on the last table must be refused: %v", err)
+	}
+	for _, tbl := range []string{"player_centre_database", "player_database"} {
+		if n := itCount(t, db, zoneDBName(itDstZone)+"."+tbl); n != 0 {
+			t.Errorf("%s got %d rows before the refusal — the pre-check must finish for every table before any write", tbl, n)
+		}
+	}
+}
+
+// TestIT_Gap_CopyPlayerRows_ResumeAcceptsOnlyIdenticalCopies(A4):续跑时目标库里「与源行逐列相同、且没有目标
+// 独有行」的表是上次拷完的,跳过;被改过的行、目标独有行照旧按 ID 安全事件拒绝。
+func TestIT_Gap_CopyPlayerRows_ResumeAcceptsOnlyIdenticalCopies(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	db := itOpen(t)
+	src, dst := zoneDBName(itSrcZone), zoneDBName(itDstZone)
+	ids := []uint64{9161, 9162}
+	itSeedPlayers(t, ids, false)
+	tables := []string{"player_centre_database", "player_database", "player_database_1"}
+
+	// 上一次运行拷完第一张表就中止了(一表一事务:要么整表在,要么整表不在)。
+	if _, err := copyPlayerRows(ctx, db, src, dst, tables[:1], ids, refuseExistingTargetRows, false); err != nil {
+		t.Fatal(err)
+	}
+	// 首跑口径下这就是撞号 —— 这正是旧版续跑永远过不去的原因。
+	if _, err := copyPlayerRows(ctx, db, src, dst, tables, ids, refuseExistingTargetRows, false); err == nil {
+		t.Fatal("the fresh-run policy must still refuse existing target rows")
+	}
+	rep, err := copyPlayerRows(ctx, db, src, dst, tables, ids, acceptIdenticalTargetRows, false)
+	if err != nil {
+		t.Fatalf("a resume must accept the table the previous run already copied: %v", err)
+	}
+	if !rep.AlreadyCopied["player_centre_database"] || rep.AlreadyCopied["player_database"] || rep.CopiedRows["player_database"] != 2 {
+		t.Errorf("report = %s, want player_centre_database already copied and the other two copied now", rep)
+	}
+	for _, tbl := range tables {
+		if n := itCount(t, db, dst+"."+tbl); n != 2 {
+			t.Errorf("%s.%s has %d rows, want 2", dst, tbl, n)
+		}
+	}
+	// 再续跑一次:三张表都认得出来,什么都不写。
+	if rep, err := copyPlayerRows(ctx, db, src, dst, tables, ids, acceptIdenticalTargetRows, false); err != nil ||
+		len(rep.AlreadyCopied) != 3 {
+		t.Fatalf("a second resume must recognise every table: rep=%s err=%v", rep, err)
+	}
+
+	// 目标行在上次之后被改过:不是拷贝了,拒绝。
+	if _, err := db.Exec("UPDATE "+dst+".player_database SET currency = ? WHERE player_id = 9162", []byte("changed")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := copyPlayerRows(ctx, db, src, dst, tables, ids, acceptIdenticalTargetRows, false); err == nil ||
+		!strings.Contains(err.Error(), "resumed run") {
+		t.Fatalf("a changed target row must be refused on resume: %v", err)
+	}
+
+	// 目标独有行:源库这张表没有 9171 的行,目标库却有 —— 不是这次拷过去的,拒绝(而且一张表都不写)。
+	itReset(t)
+	itSeedPlayers(t, []uint64{9171}, false)
+	if _, err := db.Exec("DELETE FROM " + src + ".player_database_1 WHERE player_id = 9171"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO "+dst+".player_database_1 (player_id, stress_test_probe) VALUES (?,?)", 9171, []byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := copyPlayerRows(ctx, db, src, dst, tables, []uint64{9171}, acceptIdenticalTargetRows, false); err == nil {
+		t.Fatal("a target-only row must be refused on resume")
+	}
+	if n := itCount(t, db, dst+".player_centre_database"); n != 0 {
+		t.Errorf("player_centre_database got %d rows although the pre-check refused", n)
+	}
+}
+
+// TestIT_Gap_ResumeRefusesAChangedPlayerTableSet(A5):清单落盘之后两库又加了玩家表,续跑拒绝(清单的表是
+// 拷贝与撤销删行的唯一依据);清单一个字节不改。续跑的清单校验在围栏之下做、拒绝时围栏保留(上一次运行已写过)。
+func TestIT_Gap_ResumeRefusesAChangedPlayerTableSet(t *testing.T) {
+	itReset(t)
+	itSeedPlayers(t, []uint64{9781}, true)
+	manifest := filepath.Join(t.TempDir(), "merge.json")
+	m := newMergeManifest("run-a5", itSrcZone, itDstZone, "it", time.Now())
+	m.PlayerIDs = []uint64{9781}
+	m.Tables = []string{"player_database"}
+	m.markStep(stepPlayerRows, "copied by an earlier run")
+	if err := saveManifest(manifest, m); err != nil {
+		t.Fatal(err)
+	}
+	// 清单没有 player_rows_mode(= copy):续跑必须同模式,否则先被模式校验拒掉,到不了表集合校验。
+	out, code := itRun(t, "-source-zone", "901", "-target-zone", "902", "-manifest-path", manifest, "-apply",
+		"-player-rows-mode", "copy")
+	if code == 0 || !strings.Contains(out, "player table set changed") ||
+		!strings.Contains(out, "only_discovered_now=[player_centre_database player_database_1]") {
+		t.Fatalf("a changed table set must refuse the resume (exit=%d):\n%s", code, out)
+	}
+	itAssertFenceKept(t, out, "a table-set refusal of a resume")
+	back, err := loadManifest(manifest)
+	if err != nil || back == nil || fmt.Sprint(back.Tables) != "[player_database]" {
+		t.Errorf("the refused resume rewrote the manifest's tables: %+v err=%v", back, err)
+	}
+}
+
+// TestIT_Gap_VerifyMerged_ChecksEveryManifestPlayer(A6):逐 id 核对。构造一个旧断言全绿、实际有人没过来的
+// 状态:9782 的映射被改到了第三个 zone(源区计数照样是 0),目标库也没有它的行,而目标区原住民 9790
+// 把「dst 人数 / 目标库行数 >= -expected-src-players」两条下界都撑了过去。
+func TestIT_Gap_VerifyMerged_ChecksEveryManifestPlayer(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	db := itOpen(t)
+	mapRdb := itRedis(t, itMappingRD)
+	for _, id := range []uint64{9781, 9790} {
+		if _, err := db.Exec("INSERT INTO "+zoneDBName(itDstZone)+".player_database (player_id) VALUES (?)", id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mapRdb.Set(ctx, playerZoneKey(9781), "902", 0)
+	mapRdb.Set(ctx, playerZoneKey(9782), "903", 0)
+	mapRdb.Set(ctx, playerZoneKey(9790), "902", 0)
+	manifest := filepath.Join(t.TempDir(), "merge.json")
+	m := newMergeManifest("run-a6", itSrcZone, itDstZone, "it", time.Now())
+	m.PlayerIDs = []uint64{9781, 9782}
+	m.Tables = []string{"player_centre_database", "player_database", "player_database_1"}
+	m.markStep(stepPlayerRows, "x")
+	if err := saveManifest(manifest, m); err != nil {
+		t.Fatal(err)
+	}
+	verify := func(expected string) (string, int) {
+		return itRun(t, "-mode", "audit", "-source-zone", "901", "-target-zone", "902", "-verify-merged",
+			"-manifest-path", manifest, "-expected-src-players", expected)
+	}
+
+	out, code := verify("2")
+	if code != 1 {
+		t.Fatalf("a manifest player who did not arrive must block (exit=%d):\n%s", code, out)
+	}
+	for _, want := range []string{"verify:manifest_mapping", "verify:manifest_rows", "9782"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("verification output is missing %q:\n%s", want, out)
+		}
+	}
+	// 拿错清单(人数与 T-1 记录不符):block。
+	if out, code := verify("3"); code != 1 || !strings.Contains(out, "is this the manifest") {
+		t.Errorf("a manifest whose player count differs from -expected-src-players must block (exit=%d):\n%s", code, out)
+	}
+	// 9782 真的过来之后全绿。
+	mapRdb.Set(ctx, playerZoneKey(9782), "902", 0)
+	if _, err := db.Exec("INSERT INTO " + zoneDBName(itDstZone) + ".player_database (player_id) VALUES (9782)"); err != nil {
+		t.Fatal(err)
+	}
+	if out, code := verify("2"); code != 0 || !strings.Contains(out, "0 block(s)") {
+		t.Errorf("verification must pass once every manifest player arrived (exit=%d):\n%s", code, out)
+	}
+}
+
+// TestIT_Gap_Unmerge_RefusesALiveTargetZoneBeforeAnyWrite(A7):撤销复用预检、按目标区口径 —— 目标区还有节点、
+// 清单玩家还在线时,在第一次写之前拒绝:映射、公告标记原封不动,围栏正常释放。
+func TestIT_Gap_Unmerge_RefusesALiveTargetZoneBeforeAnyWrite(t *testing.T) {
+	ctx := context.Background()
+	for _, c := range []struct {
+		name   string
+		setup  func(t *testing.T)
+		expect string
+	}{
+		{"live target scene node", func(t *testing.T) {
+			itRedis(t, itSceneRD).ZAdd(ctx, fmt.Sprintf(sceneNodeLoadKeyFmt, itDstZone), redis.Z{Member: "7"})
+		}, "P2"},
+		{"manifest player still online", func(t *testing.T) {
+			itRedis(t, itSharedRD).Set(ctx, "player:session:9791", "gate-2", time.Minute)
+		}, "P6"},
+		{"target retry queue not drained", func(t *testing.T) {
+			itRedis(t, itSharedRD).RPush(ctx, dbRetryQueueKey(dbTaskTopic(itDstZone, 1)), "payload")
+		}, "P4"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			itReset(t)
+			mapRdb := itRedis(t, itMappingRD)
+			shared := itRedis(t, itSharedRD)
+			mapRdb.Set(ctx, playerZoneKey(9791), "902", 0)
+			shared.Set(ctx, mergeNoticeKeyPrefix+"9791", "1", 0)
+			manifest := filepath.Join(t.TempDir(), "merge.json")
+			m := newMergeManifest("run-a7", itSrcZone, itDstZone, "it", time.Now())
+			m.PlayerIDs = []uint64{9791}
+			if err := saveManifest(manifest, m); err != nil {
+				t.Fatal(err)
+			}
+			c.setup(t)
+
+			out, code := itRun(t, "-mode", "unmerge", "-manifest-path", manifest, "-apply")
+			if code == 0 || !strings.Contains(out, c.expect) {
+				t.Fatalf("%s must refuse the unmerge with %s (exit=%d):\n%s", c.name, c.expect, code, out)
+			}
+			if !strings.Contains(out, "unmerge refused") {
+				t.Errorf("the refusal must say it happened before the unmerge wrote anything:\n%s", out)
+			}
+			if v, _ := mapRdb.Get(ctx, playerZoneKey(9791)).Result(); v != "902" {
+				t.Errorf("the refused unmerge restored the mapping: %q", v)
+			}
+			if n, _ := shared.Exists(ctx, mergeNoticeKeyPrefix+"9791").Result(); n != 1 {
+				t.Error("the refused unmerge cleared the post-merge notice")
+			}
+			itAssertNoFence(t, "a refused unmerge")
+		})
+	}
+}
+
+// TestIT_Gap_ResumeRefusalKeepsTheFence(A2 续跑):清单已存在(上一次 -apply 已过 M、写到一半)时,清单更新之前的
+// 拒绝不得释放围栏 —— 否则两个 zone 在半合服状态下重新放开建号 / 建帮 / 进场。只有清单已标记步骤 7 完成
+// (上一次已跑完全程,dst 可能已开服)时才照常释放。
+func TestIT_Gap_ResumeRefusalKeepsTheFence(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	mapRdb := itRedis(t, itMappingRD)
+	shared := itRedis(t, itSharedRD)
+	ids := []uint64{9721, 9722}
+	itSeedPlayers(t, ids, true)
+	manifest := filepath.Join(t.TempDir(), "merge.json")
+	m := newMergeManifest("run-resume-fence", itSrcZone, itDstZone, "it", time.Now())
+	m.PlayerIDs = ids
+	m.PlayerRowsMode = playerRowsModeCopy
+	m.markStep(stepGuildMySQL, "moved by the previous run")
+	if err := saveManifest(manifest, m); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"-source-zone", "901", "-target-zone", "902", "-manifest-path", manifest, "-apply", "-player-rows-mode", "copy"}
+
+	// (a) 半合服:清单玩家在线(P6)→ 拒绝,围栏留在本次 run_id 上。
+	shared.Set(ctx, "player:session:9722", "gate-1", time.Minute)
+	out, code := itRun(t, args...)
+	if code == 0 || !strings.Contains(out, "P6") {
+		t.Fatalf("an online manifest player must refuse the resume (exit=%d):\n%s", code, out)
+	}
+	if runID := itAssertFenceKept(t, out, "a P6 refusal of a half-done merge"); runID == m.RunID {
+		t.Errorf("the kept fence must belong to this run, not to the manifest's first run (%s)", runID)
+	}
+	if v, _ := mapRdb.Get(ctx, playerZoneKey(9721)).Result(); v != "901" {
+		t.Errorf("a refused resume remapped 9721: %q", v)
+	}
+
+	// (b) 清单已标记步骤 7 完成(上一次已跑完全程):同样的拒绝照常释放围栏。
+	if err := mapRdb.Del(ctx, mergeFenceKey(itSrcZone), mergeFenceKey(itDstZone)).Err(); err != nil {
+		t.Fatal(err)
+	}
+	m.markStep(stepPostMerge, "finished by the previous run")
+	if err := saveManifest(manifest, m); err != nil {
+		t.Fatal(err)
+	}
+	out, code = itRun(t, args...)
+	if code == 0 || !strings.Contains(out, "P6") {
+		t.Fatalf("an online manifest player must refuse the re-run (exit=%d):\n%s", code, out)
+	}
+	itAssertNoFence(t, "a P6 refusal of a re-run over a finished manifest")
+}
+
+// TestIT_Gap_MergedIntoIsCheckedBeforeAnyWrite(A10):源区已被合进别的 zone、或目标区自己已被合走时,合服在清单
+// 落盘之前(第一次写之前)拒绝 —— 旧写法到步骤 5 才查,那时公会 / 商品 / 榜单 / 玩家行都已改到 dst。
+func TestIT_Gap_MergedIntoIsCheckedBeforeAnyWrite(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	db := itOpen(t)
+	mapRdb := itRedis(t, itMappingRD)
+	guildRdb := itRedis(t, itGuildRD)
+	itSeedPlayers(t, []uint64{9731}, true)
+	if _, err := db.Exec("INSERT INTO " + itGuildDB + ".guild (guild_id, name, zone_id) VALUES (11,'src-a',901)"); err != nil {
+		t.Fatal(err)
+	}
+	itSeedListing(t, db, 7001, 9731, itSrcZone, itSrcZone)
+	guildRdb.ZAdd(ctx, guildZoneRankKey(itSrcZone), redis.Z{Member: "11", Score: 100})
+	manifest := filepath.Join(t.TempDir(), "merge.json")
+	args := []string{"-source-zone", "901", "-target-zone", "902", "-manifest-path", manifest, "-apply", "-player-rows-mode", "copy"}
+
+	assertNothingWritten := func(why string) {
+		t.Helper()
+		var zone uint32
+		if err := db.QueryRow("SELECT zone_id FROM " + itGuildDB + ".guild WHERE guild_id = 11").Scan(&zone); err != nil || zone != itSrcZone {
+			t.Errorf("%s: guild 11 zone_id = %d (err=%v), want %d", why, zone, err, itSrcZone)
+		}
+		if mz, _ := itListingZones(t, db, 7001); mz != itSrcZone {
+			t.Errorf("%s: listing 7001 market_zone = %d, want %d", why, mz, itSrcZone)
+		}
+		if n := itCount(t, db, zoneDBName(itDstZone)+".player_database"); n != 0 {
+			t.Errorf("%s: %d player rows copied into the target zone", why, n)
+		}
+		if n, _ := guildRdb.Exists(ctx, guildZoneRankKey(itSrcZone)).Result(); n != 1 {
+			t.Errorf("%s: the source rank was merged", why)
+		}
+		if v, _ := mapRdb.Get(ctx, playerZoneKey(9731)).Result(); v != "901" {
+			t.Errorf("%s: mapping changed: %q", why, v)
+		}
+		if _, err := os.Stat(manifest); !os.IsNotExist(err) {
+			t.Errorf("%s: a manifest was written (stat err=%v)", why, err)
+		}
+		itAssertNoFence(t, why)
+	}
+
+	// (a) 源区早先已合进 903。
+	mapRdb.Set(ctx, mergedIntoKey(itSrcZone), `{"dst":903,"run_id":"older"}`, 0)
+	out, code := itRun(t, args...)
+	if code == 0 || !strings.Contains(out, "already merged into zone 903") {
+		t.Fatalf("a source zone already merged elsewhere must be refused (exit=%d):\n%s", code, out)
+	}
+	assertNothingWritten("source merged elsewhere")
+
+	// (b) 目标区自己已被合走。
+	mapRdb.Del(ctx, mergedIntoKey(itSrcZone))
+	mapRdb.Set(ctx, mergedIntoKey(itDstZone), `{"dst":903,"run_id":"older"}`, 0)
+	out, code = itRun(t, args...)
+	if code == 0 || !strings.Contains(out, "retired zone") {
+		t.Fatalf("a target zone that was itself merged away must be refused (exit=%d):\n%s", code, out)
+	}
+	assertNothingWritten("target merged away")
+}
+
+// TestIT_Gap_Unmerge_HalfUndoneRefusalKeepsTheFence:上一次撤销在 5' 之后中止、运维 DEL 围栏后重跑,已有清单玩家
+// 被改回源区(半撤销状态)。此时门禁拒绝不得释放围栏(否则半撤销状态下放开两个 zone 的建号 / 建帮)。
+// 未进入半撤销状态的拒绝照常释放,见 TestIT_Gap_Unmerge_RefusesALiveTargetZoneBeforeAnyWrite。
+func TestIT_Gap_Unmerge_HalfUndoneRefusalKeepsTheFence(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	mapRdb := itRedis(t, itMappingRD)
+	shared := itRedis(t, itSharedRD)
+	mapRdb.Set(ctx, playerZoneKey(9741), "901", 0) // 上一次撤销已改回
+	mapRdb.Set(ctx, playerZoneKey(9742), "902", 0) // 还没轮到
+	manifest := filepath.Join(t.TempDir(), "merge.json")
+	m := newMergeManifest("run-half-undo", itSrcZone, itDstZone, "it", time.Now())
+	m.PlayerIDs = []uint64{9741, 9742}
+	if err := saveManifest(manifest, m); err != nil {
+		t.Fatal(err)
+	}
+	shared.Set(ctx, "player:session:9741", "gate-1", time.Minute)
+
+	out, code := itRun(t, "-mode", "unmerge", "-manifest-path", manifest, "-apply")
+	if code == 0 || !strings.Contains(out, "P6") {
+		t.Fatalf("an online manifest player must refuse the unmerge (exit=%d):\n%s", code, out)
+	}
+	itAssertFenceKept(t, out, "a P6 refusal of a half-done unmerge")
+	if v, _ := mapRdb.Get(ctx, playerZoneKey(9742)).Result(); v != "902" {
+		t.Errorf("the refused unmerge restored 9742: %q", v)
+	}
+}
+
+// TestIT_Gap_AuditGuildMembers_UncheckableIsInfra(A9):没声明跳过帮会时,guild_member 查不成 = INFRA(exit 2),
+// 不再降级成 info「table not present」;声明跳过时报 SKIPPED。
+func TestIT_Gap_AuditGuildMembers_UncheckableIsInfra(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	db := itOpen(t)
+	if r := auditGuildMembers(ctx, auditConfig{db: db, guildSchema: itGuildDB}); r.Severity != "info" {
+		t.Fatalf("an existing guild schema must audit cleanly: %+v", r)
+	}
+	r := auditGuildMembers(ctx, auditConfig{db: db, guildSchema: "merge_zone_it_no_such_guild"})
+	if r.Severity != "block" || !isInfraAudit(r) {
+		t.Fatalf("a guild_member table that cannot be read must be INFRA, got %+v", r)
+	}
+	r = auditGuildMembers(ctx, auditConfig{db: db, guildSchema: "merge_zone_it_no_such_guild", skipGuild: true})
+	if r.Severity != "warn" || !strings.Contains(r.Notes, "SKIPPED") {
+		t.Fatalf("a declared guild skip must be SKIPPED (warn), got %+v", r)
+	}
+}
+
+// TestIT_Gap_ClearHotState_SweepsZoneZeroLocationsBeforeDeletingScenes(A11):清单外玩家的 zone_id=0 旧 location
+// 只能靠 scene:{id}:zone 反查,而第 2 步正要删这些键 —— 删之前补扫一遍,归属源区的删掉;zone_id 非 0 的不碰。
+func TestIT_Gap_ClearHotState_SweepsZoneZeroLocationsBeforeDeletingScenes(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	scene := itRedis(t, itSceneRD)
+	seed := func() {
+		scene.Set(ctx, "scene:501:zone", "901", 0)
+		scene.Set(ctx, "scene:502:zone", "902", 0)
+		for pid, loc := range map[uint64]playerLocation{
+			9801: {SceneID: 501, NodeID: "n1", ZoneID: 901}, // 清单玩家
+			9802: {SceneID: 501, NodeID: "n1"},              // 清单外,zone_id=0,场景属源区 → 补扫删
+			9803: {SceneID: 502, NodeID: "n2"},              // 清单外,zone_id=0,场景属目标区 → 留
+			9804: {SceneID: 501, NodeID: "n1", ZoneID: 901}, // 清单外,显式源区 → 补扫不碰
+		} {
+			scene.Set(ctx, fmt.Sprintf(playerLocationKeyFmt, pid), encodePlayerLocation(loc, false), 0)
+		}
+	}
+	exists := func(pid uint64) bool {
+		n, _ := scene.Exists(ctx, fmt.Sprintf(playerLocationKeyFmt, pid)).Result()
+		return n == 1
+	}
+	seed()
+
+	rep, err := clearSourceZoneHotState(ctx, scene, itSrcZone, []uint64{9801}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.ZoneZeroChecked != 2 || rep.ZoneZeroMatched != 1 || rep.ZoneZeroDeleted != 0 {
+		t.Errorf("dry-run sweep = %s, want checked=2 matched=1 deleted=0", rep)
+	}
+	if !exists(9802) {
+		t.Fatal("dry-run deleted a location")
+	}
+
+	rep, err = clearSourceZoneHotState(ctx, scene, itSrcZone, []uint64{9801}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.LocationsDeleted != 1 || rep.ZoneZeroDeleted != 1 {
+		t.Errorf("report = %s, want 1 manifest location and 1 swept zone_id=0 location deleted", rep)
+	}
+	for pid, want := range map[uint64]bool{9801: false, 9802: false, 9803: true, 9804: true} {
+		if exists(pid) != want {
+			t.Errorf("player %d location exists=%v, want %v", pid, exists(pid), want)
+		}
+	}
+	if n, _ := scene.Exists(ctx, "scene:501:zone").Result(); n != 0 {
+		t.Error("the source-zone scene keys were not deleted")
+	}
+	if n, _ := scene.Exists(ctx, "scene:502:zone").Result(); n != 1 {
+		t.Error("a target-zone scene key was deleted")
 	}
 }

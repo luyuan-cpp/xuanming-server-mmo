@@ -29,8 +29,9 @@ import (
 //     所以这条测的其实是"我们没有退回先查后插";
 //  4. Release 的条件删除:player_id 与 name_norm 都要对上,窗口外必须拒绝;
 //  5. 锁模式(审计 #12):未提交的 Release 后面排着两个同名 Reserve,按"持锁现场 × player_id 顺序"逐一摆出
-//     (文件末尾一节,红绿对照 + 产品路径):竞争者都大于原主人时不成环、零重试;反之可能成环(Reserve「残余 B」),
-//     终局仍正确、至多一次重试,实际行为写进日志。以及 Release 先锁唯一键、后锁聚簇(EXPLAIN)。
+//     (文件末尾一节,红绿对照 + 产品路径):竞争者都大于原主人时不成环、零重试;都小于时**必然**成环
+//     (Reserve「残余 B」形状 1)、恰好一次重试;一大一小时看授予顺序,零重试只允许出现在胜者 id 大于原主人的那一路。
+//     终局在三种顺序下都必须正确。以及 Release 先锁唯一键、后锁聚簇(EXPLAIN)。
 
 // newPlayerNameStore 开一个指向一次性库的 store,用例结束自动关。
 func newPlayerNameStore(t *testing.T, db *storetest.DB) *store.PlayerNameStore {
@@ -322,9 +323,15 @@ func TestPlayerName_BatchGetSkipsAbsentAndRejectsOversize(t *testing.T) {
 //   - ODKU(绿):重复检查取 **X**,排队者一个一个过。
 //     (a) 两种现场都必须零 1213,且后完成者在先完成者提交**之前**被观察到在排队 —— 这是强制判据,写法被改回
 //     普通 INSERT 时第二种现场的 (a) 稳定变红。
-//     (b)(c) 取决于引擎是否把"排队中的请求"算作插入意向锁的冲突(见 Reserve「残余 B」的正反两方面说明):算 →
-//     (b) 恰好一个 1213,(c) 看授予顺序;不算 → 与 (a) 同形。用例对两种都只判定"终局正确、至多一个 1213",
-//     并把本轮属于哪一种、MySQL 版本写进日志 —— 这是决定要不要上报改 schema 的依据,真库跑完必须抄回来。
+//     (b) **确定成环**,恰好一个 1213:胜者的新项插在删除标记项之前,插入意向锁检查后继记录时,把对方**排队中**的
+//     X 请求算作冲突(Reserve 的证据 E3),而"插入意向锁越过排队者"是被 E4 写死禁止的(CAN_BYPASS 分支的前提是
+//     !(type_mode & LOCK_INSERT_INTENTION),另有 ut_a(!conflicting.bypassed) 钉死)。所以这里**不是**"取决于引擎版本",
+//     没成环就是推演与本版本不符,用例必须判红,不许当作合法通过路径。
+//     (c) 取决于谁先被授予删除标记项上的 X:先被授予的那位 id > 原主人 → 插在它之后 → 不成环、它就是胜者;
+//     先被授予的那位 id < 原主人 → 成环。**只有一个方向可断言:零 1213 时胜者的 id 必须大于原主人。**
+//     反向不成立 —— 成环后牺牲者若是先被授予的那位(4001),剩下的 6001 照样插在删除标记项之后并成为胜者,
+//     于是"胜者 id 大于原主人"也可能伴随一次 1213。牺牲者由权重定,手册只承诺"tries to pick small transactions",
+//     而两个竞争者卡在二级唯一键之前都已插完各自的聚簇行,在"改了几行"这条判据上打平(见 Reserve 的 lockRetries 注释)。
 //
 // # 为什么排队者用会话默认隔离级,而不是显式 READ COMMITTED
 //
@@ -339,8 +346,10 @@ func TestPlayerName_BatchGetSkipsAbsentAndRejectsOversize(t *testing.T) {
 // 记录。不挡的话,purge 抢在排队者之前清掉记录时,锁会被继承成后继记录上的间隙锁,形状就变成 Reserve 注释「残余」A
 // 那类 InnoDB 固有情形(由有界重试兜住),结论不再确定。
 //
-// (InnoDB 的取锁细节是按手册与 row_ins_scan_sec_index_for_duplicate / lock_rec_insert_check_and_lock 的已知行为推演的,
-// 以真库上跑出来的结果为准。)
+// (InnoDB 的取锁细节来自手册与 mysql-server 源码,逐条列在 Reserve 注释的 E1–E6:row0ins.cc 的
+// row_ins_scan_sec_index_for_duplicate、lock0lock.cc 的 lock_rec_insert_check_and_lock 与 rec_lock_check_conflict,
+// 在 8.0 / 8.4 / trunk 三个分支上逐字相同。证据已落定,真库跑的是**复现**而不是定性 —— 上面的判据哪一条跑不出来,
+// 都是"编排或推演有误"要停下重核,不是"以真库结果为准"改结论。)
 
 // legacyPlainInsertPlayerNameSQL 是 2026-09-21 之前 Reserve 用的普通 INSERT。生产代码里已经没有它;这里留一份
 // **只**给红对照用:证明编排确实走到了会成环的形状,绿用例的"不成环"才有证明力。
@@ -636,8 +645,10 @@ func nameOwner(t *testing.T, sc *nameRaceScene) uint64 {
 //   - (a) 竞争者都大于原主人:必须零 1213、恰好一方插入(受影响 1 行)、另一方撞键(受影响 0 行,no-op),而且后者是
 //     **在前者提交之前**被观察到卡在锁等待里的 —— ODKU 的重复检查取 X,两个排队者不可能并行。
 //     playerNameReserveSQL 被改回普通 INSERT / INSERT IGNORE 时,第二种现场的 (a) 稳定变红(1213)。
-//   - (b)(c):至多一个 1213;没有 1213 时判据同 (a);有 1213 时幸存者必须插入成功。两种情形都把结果与 MySQL 版本
-//     写进日志(见本节头注「放锁之后的推演与判据」)。
+//   - (b) 竞争者都小于原主人:**必须**恰好一方收到 1213(E2/E3/E4 已把"插入意向锁被排队中的请求挡住"钉死,
+//     且"越过排队者"被 E4 明确禁止),幸存者必须插入成功。没成环即判红:那说明推演与本版本不符,要停下重核证据。
+//   - (c) 一大一小:两条路都合法,但零 1213 时胜者的 player_id **必须**大于原主人(否则等于插入意向锁越过了
+//     对方排队中的请求 = E4 判死的 CAN_BYPASS);成环时胜者是谁取决于牺牲者选择,只记日志不判定。
 //
 // 三种顺序的终局都必须是:名字归插入成功的那一方、表里一行、另一方一个字节都没写进去。
 func TestPlayerName_ReleaseRacesTwoReservesConverges(t *testing.T) {
@@ -661,15 +672,26 @@ func TestPlayerName_ReleaseRacesTwoReservesConverges(t *testing.T) {
 
 		var winner, loser *nameStmt
 		if victim == nil {
+			if oc.order == orderBothBelow {
+				t.Fatalf("残余 B 未复现(MySQL %s):两个竞争者都小于原主人 %d,胜者的新项必然插在删除标记项之前,"+
+					"插入意向锁必然被对方排队中的 X 请求挡住(E3),而「越过排队者」被 E4 写死禁止 —— "+
+					"本轮却零 1213。E2/E3/E4 的推演与本版本不符,停下重核证据,不要把它当成合法通过路径",
+					sc.mysqlVersion, racePrevOwner)
+			}
 			// 排队形状:X 一个一个过。
 			require.Equalf(t, int64(1), first.affected, "先完成者 %s 应插入成功(受影响 1 行)", first.label)
 			require.Truef(t, queued, "%s 在 %s 提交之前就返回了:重复检查没有取 X、两者并行了 —— 写法被改了?", second.label, first.label)
 			require.Equalf(t, int64(0), second.affected, "后完成者 %s 应撞键走 no-op(受影响 0 行),不许改任何数据", second.label)
 			require.NoError(t, second.tx.Commit())
 			winner, loser = first, second
-			if oc.order != orderBothAbove {
-				t.Logf("本轮未成环(MySQL %s):胜者 %s 插入时没有被排队中的 %s 挡住 —— 本版本不把被自己已授予锁挡住的排队请求"+
-					"算作插入意向锁的冲突,Reserve「残余 B」形状 1 在此现场不出现", sc.mysqlVersion, first.label, second.label)
+			if oc.order == orderMixed {
+				// 没成环 ⇒ 先被授予的那位插在删除标记项**之后** ⇒ 它的 id 必然大于原主人。反之即 CAN_BYPASS(E4 判死)。
+				require.Greaterf(t, first.player, racePrevOwner,
+					"零 1213 却由 player=%d(小于原主人 %d)胜出:它的新项插在删除标记项之前,插入意向锁本该被 %s 排队中的 "+
+						"X 请求挡住(E3/E4)。MySQL %s 上没挡住 = 推演与本版本不符,停下重核证据",
+					first.player, racePrevOwner, second.label, sc.mysqlVersion)
+				t.Logf("(c) 本轮未成环(MySQL %s):胜者 %s > 原主人 %d,新项插在删除标记项之后",
+					sc.mysqlVersion, first.label, racePrevOwner)
 			}
 		} else {
 			require.NotEqualf(t, orderBothAbove, oc.order,
@@ -682,8 +704,9 @@ func TestPlayerName_ReleaseRacesTwoReservesConverges(t *testing.T) {
 			loser = victim
 			require.Equalf(t, int64(1), winner.affected, "幸存者 %s 应插入成功(受影响 1 行)", winner.label)
 			require.NoError(t, winner.tx.Commit())
-			t.Logf("本轮成环(MySQL %s):%s 收到 1213,%s 插入成功 —— Reserve「残余 B」形状 1 在本版本上存在,"+
-				"生产路径由有界重试兜住,是否改 schema 须上报决策", sc.mysqlVersion, victim.label, winner.label)
+			t.Logf("本轮成环(MySQL %s):%s 收到 1213,%s 插入成功(胜者 player=%d,原主人 %d)—— Reserve「残余 B」形状 1 "+
+				"在本版本上存在,生产路径由有界重试兜住,是否改 schema 须上报决策",
+				sc.mysqlVersion, victim.label, winner.label, winner.player, racePrevOwner)
 		}
 
 		assert.Equal(t, winner.player, nameOwner(t, sc), "名字归插入成功的一方")
@@ -740,9 +763,13 @@ func TestPlayerName_LegacyPlainInsertDeadlocksBehindPendingRelease(t *testing.T)
 
 // TestPlayerName_ReserveBehindPendingReleaseOutcome 走完整的产品路径 store.Reserve(自动提交,与生产同一隔离级):
 // 所有现场与顺序下都必须恰好一个 Inserted、一个 Taken 且 owner 是赢家,返回值里不许出现 error。
-// 锁冲突重试次数(LockRetriesForTest 的增量)按顺序分开判:
-//   - (a) 必须为 0 —— 证明这里结果正确不是靠重试把 1213 吸收掉换来的;
-//   - (b)(c) 至多 1(Reserve「残余 B」可能成环一次,由有界重试兜住,通常一次重来即收敛),实际次数写进日志。
+// 锁冲突重试次数(LockRetriesForTest 的增量)按顺序分开判,判据与 Reserve 的 lockRetries 注释逐字对齐:
+//   - (a) 必须**恰好 0** —— 证明这里结果正确不是靠重试把 1213 吸收掉换来的;
+//   - (b) 必须**恰好 1** —— 下界证明「残余 B」形状 1 真的成了环(E2/E3/E4),不是"本来就没环"蒙对了终局;
+//     上界证明收敛论证成立(牺牲方退避后的下一轮就看见活行)。
+//   - (c) 只判一个方向:**零重试时胜者的 player_id 必须大于原主人**。反向("胜者大于原主人 ⇒ 零重试")不成立,
+//     因为牺牲者若是先被授予的那位(4001),剩下的 6001 照样插在删除标记项之后胜出,于是胜者大于原主人也会伴随一次重试。
+//     上界仍判 ≤1。实际次数与胜者写进日志。
 func TestPlayerName_ReserveBehindPendingReleaseOutcome(t *testing.T) {
 	forEachNameRace(t, func(t *testing.T, holder nameRaceHolder, oc nameRaceOrderCase) {
 		sc := setupNameRace(t, holder)
@@ -799,13 +826,31 @@ func TestPlayerName_ReserveBehindPendingReleaseOutcome(t *testing.T) {
 		}
 
 		retries := sc.st.LockRetriesForTest() - retriesBefore
-		if oc.order == orderBothAbove {
+		switch oc.order {
+		case orderBothAbove:
 			assert.Equal(t, uint64(0), retries,
-				"竞争者都大于原主人时排队抢名字的路径上发生了锁冲突重试:ODKU 下这里不该成环(见 Reserve 的注释)")
-		} else {
+				"竞争者都大于原主人时排队抢名字的路径上发生了锁冲突重试:新项一律插在删除标记项之后,"+
+					"插入意向锁打在后继记录上、那里只有胜者自己的锁,ODKU 下这里不该成环(见 Reserve 的注释)")
+		case orderBothBelow:
+			// 下界与上界分开断言,失败时能一眼看出是"环没成"还是"收敛没成"。
+			assert.GreaterOrEqualf(t, retries, uint64(1),
+				"竞争者都小于原主人(%d)却零锁冲突重试(MySQL %s):胜者的新项必然插在删除标记项之前,"+
+					"插入意向锁必然被对方排队中的 X 请求挡住(E3),「越过排队者」被 E4 写死禁止 —— "+
+					"本轮零 1213 说明推演与本版本不符,停下重核证据,不要放过",
+				racePrevOwner, sc.mysqlVersion)
 			assert.LessOrEqualf(t, retries, uint64(1),
 				"锁冲突重试 %d 次:「残余 B」一次环只该让牺牲方重来一次,超过说明收敛论证不成立", retries)
-			t.Logf("锁冲突重试 %d 次(MySQL %s;1 = 本版本上「残余 B」成环并被有界重试吸收,0 = 未成环)", retries, sc.mysqlVersion)
+		case orderMixed:
+			if retries == 0 {
+				assert.Greaterf(t, winner, racePrevOwner,
+					"零锁冲突重试却由 player=%d(小于原主人 %d)胜出(MySQL %s):它的新项插在删除标记项之前,"+
+						"插入意向锁本该被对方排队中的 X 请求挡住(E3/E4)—— 没挡住 = 推演与本版本不符,停下重核证据",
+					winner, racePrevOwner, sc.mysqlVersion)
+			}
+			assert.LessOrEqualf(t, retries, uint64(1),
+				"锁冲突重试 %d 次:「残余 B」一次环只该让牺牲方重来一次,超过说明收敛论证不成立", retries)
+			t.Logf("(c) 胜者 player=%d(原主人 %d),锁冲突重试 %d 次(MySQL %s;1 = 先被授予 X 的那位小于原主人、成环后由有界重试吸收,"+
+				"0 = 先被授予的那位大于原主人、新项插在删除标记项之后)", winner, racePrevOwner, retries, sc.mysqlVersion)
 		}
 		assert.Equal(t, winner, nameOwner(t, sc))
 		assert.Equal(t, int64(1), sc.db.Count(t, store.PlayerNameTableName, "name_norm = ?", raceContestedNorm))
@@ -815,8 +860,10 @@ func TestPlayerName_ReserveBehindPendingReleaseOutcome(t *testing.T) {
 // TestPlayerName_ReleaseStatementLocksUniqueKeyFirst 钉住 Release 的取锁顺序(见 Release 的「锁序」):
 // Reserve 的 ODKU 撞唯一键时先锁 uk_player_name、后锁聚簇记录,Release 必须同序,否则两者在占用者那一行上
 // 反序成环。锁序只取决于执行计划,并发用例只能按概率撞上,而 EXPLAIN 每次都答得出来。
-// 对生产代码里**同一个 SQL 常量**做 EXPLAIN,断言 key = uk_player_name;有人去掉 FORCE INDEX 或改回单表按主键删,
-// 本用例就会变红。先插一行:命中已存在的行时计划才显示真实的索引。
+// 对生产代码里**同一个 SQL 常量**做 EXPLAIN,断言 key = uk_player_name **且访问类型是单行点查**;有人去掉
+// FORCE INDEX、改回单表按主键删、或把 name_norm 等值条件从 WHERE 里拿掉(FORCE INDEX 会把它退化成全索引扫描,
+// key 不变、锁覆盖面却从一条记录放大到整张唯一索引),本用例都会变红。
+// 先插一行:命中已存在的行时计划才显示真实的索引。
 func TestPlayerName_ReleaseStatementLocksUniqueKeyFirst(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
 	st := newPlayerNameStore(t, db)
@@ -855,6 +902,18 @@ func TestPlayerName_ReleaseStatementLocksUniqueKeyFirst(t *testing.T) {
 		plan[c] = vals[i].String
 	}
 	t.Logf("Release 的执行计划: %v", plan)
-	assert.Equal(t, "uk_player_name", plan["key"],
+	assert.Equal(t, store.PlayerNameUniqueKey, plan["key"],
 		"Release 必须先锁唯一键项、后锁聚簇记录(与 Reserve 的 ODKU 同序):FORCE INDEX (uk_player_name) 被去掉或没生效")
+
+	// 光看 key 不够:WHERE 里丢掉 name_norm 等值条件之后,FORCE INDEX 会退化成**全索引扫描**(type=index),
+	// key 仍是 uk_player_name、上面那条断言照样绿,而运行期会对索引上每一项取 next-key ——
+	// 锁覆盖面从一条记录变成整张唯一索引,是比反序取锁严重得多的死锁面。所以访问类型也要钉住。
+	assert.Containsf(t, []string{"const", "eq_ref", "ref"}, plan["type"],
+		"Release 的访问类型是 %q,不在 {const, eq_ref, ref} 之内:退化成索引扫描会把锁覆盖面从一条记录放大到整张唯一索引,"+
+			"检查 WHERE 是不是丢了 name_norm 等值条件。完整计划: %v", plan["type"], plan)
+	// ref 与 rows 二选一即可:MySQL 对 type=const 的行在 ref 列填 "const"、rows 填 "1",
+	// 但多表 DELETE 的计划在不同小版本上这两列的填法有出入,任一成立都说明落到了单行点查上。
+	assert.Truef(t, plan["ref"] != "" || plan["rows"] == "1",
+		"Release 的 EXPLAIN 既没有 ref、rows 也不是 1:等值条件没落到 %s 上,只是被 FORCE INDEX 拉着扫索引。完整计划: %v",
+		store.PlayerNameUniqueKey, plan)
 }

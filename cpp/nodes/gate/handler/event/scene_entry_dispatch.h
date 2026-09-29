@@ -15,7 +15,7 @@ struct SceneRouteTarget;
 //
 // 生成式 handler 的守护段(gate_event_handler.cpp 的 RoutePlayer / BindSession、
 // rpc_replies/scene_response_handler.cpp 的 SceneNodeHandshake 应答)只放一行委托,逻辑集中在本手写文件,
-// 重生成时不受影响(照 battle_binding_helper.h 的写法)。判定逻辑本身是 scene_route_helper.h 里的纯函数,
+// 重生成时不受影响(守护段只放委托的惯例)。判定逻辑本身是 scene_route_helper.h 里的纯函数,
 // 本文件只负责接注册表、连接、定时器与日志。
 //
 // 契约:

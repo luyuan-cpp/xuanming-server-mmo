@@ -30,10 +30,11 @@ package main
 //   - 请求/回包:同 guild_smoke_scenario.go,按消息号在本场景的 RecvLoop 回调里认领回包,信封拒绝与业务 tip 分开断言;
 //   - 推送:组队、换场景、战斗推送都按到达顺序留底(pushes),每步在触发动作**之前**记下标 mark,
 //     之后从 mark 起扫描 —— 推送先于等待到达也不会漏,上一步的推送也不会被这一步误认;
-//   - 战斗:不复用 gameobject.Player 的 WaitBattleStart/WaitBattleEnd。那两组信号是 sync.Once 一次性广播,
-//     而本场景同一会话要打多场(S7、S8、X2),第二场起会直接读到上一场的旧信号。也因此不开战斗直连
-//     (openBattleDirectConn 依赖同一组一次性信号),战斗消息全程经 gate 中继(D23 回落路径,
-//     battle-smoke 的 skip_direct_connect=true 已覆盖其完整性)。
+//   - 战斗:不复用 gameobject.Player 的 WaitBattleStart/WaitBattleEnd/WaitBattleAssigned。那几组信号是
+//     sync.Once 一次性广播,而本场景同一会话要打多场(S7、S8、X2),第二场起会直接读到上一场的旧信号。
+//     战斗直连是唯一战斗通路(turn-based §22 D73:gate 拒绝战斗上行,战斗帧只走直连),所以每场都从留底里
+//     按 battle_id 找 NotifyBattleAssigned,用 dialBattleDirect 建直连(不走依赖一次性信号的
+//     openBattleDirectConn);直连的回调就是 onMessage,直连推送并入同一份 pushes,在直连上开自动战斗。
 
 import (
 	"context"
@@ -449,11 +450,21 @@ func RunTeamSmoke(cfg *config.Config) {
 	if err != nil {
 		fail("S8-b-solo-battle", "%v", err)
 	}
-	// B 尚未开自动战斗,对局停在第一回合等出招;scene 在 PrepareBattle 时已落 battle:lock(先于 CreateBattle / BattleStart)。
+	// 开战即直连(同 battle-smoke A,见 connectBattle 注释):下面的拒绝断言最长会重试 teamSmokeSettleTimeout(20s),
+	// 远超一回合 kRoundDurationMs(6s);先断言后建直连,期间超时结算的回合没有活直连全被丢弃,
+	// 单人 PVE 甚至可能先打完。
+	bSoloDirect, err := b.connectBattle(bSoloMark, bSoloBattle)
+	if err != nil {
+		fail("S8-b-solo-connect", "%v", err)
+	}
+	// B 已建直连、尚未开自动战斗;scene 在 PrepareBattle 时已落 battle:lock(先于 CreateBattle / BattleStart)。
 	if err := teamSmokeExpectMemberInBattle(a, tid, sc.BattleConfigId, b.gc.PlayerId); err != nil {
 		fail("S8-in-battle-reject", "%v", err)
 	}
-	if _, err := b.finishBattle(bSoloMark, bSoloBattle); err != nil {
+	_, err = b.finishBattleOn(bSoloDirect, bSoloMark, bSoloBattle)
+	// 显式关而不是 defer:defer 要到 RunTeamSmoke 返回才执行,直连会一路活过 X1/X2/S9;fail 走 os.Exit,defer 本就不跑。
+	bSoloDirect.Close()
+	if err != nil {
 		fail("S8-b-solo-finish", "%v", err)
 	}
 	zap.L().Info("[team-smoke] S8: StartTeamMatch rejected while B was in battle", zap.Uint64("b_battle_id", bSoloBattle))
@@ -656,7 +667,7 @@ func (b *teamSmokeBot) pace() {
 	}
 }
 
-// send 发一个不按消息号认领回包的请求(换场景、JoinQueue、SetAutoBattle)。
+// send 经大厅连接发一个不按消息号认领回包的请求(换场景、JoinQueue;SetAutoBattle 只能走直连,见 finishBattleOn)。
 func (b *teamSmokeBot) send(messageId uint32, request proto.Message) error {
 	b.pace()
 	if err := b.gc.SendRequest(messageId, request); err != nil {
@@ -871,14 +882,45 @@ func (b *teamSmokeBot) startSoloBattle(battleConfigId, zoneId uint32) (int, uint
 	}
 }
 
-// finishBattle 对 since 之后开始的对局 battleId 开自动战斗(经 gate 中继),等同一 battle_id 的终局,返回回合结算条数。
-func (b *teamSmokeBot) finishBattle(since int, battleId uint64) (int, error) {
-	if err := b.send(game.BattleClientPlayerSetAutoBattleMessageId, &battle.SetAutoBattleRequest{
+// connectBattle 对 since 之后开始的对局 battleId 建战斗直连,返回的直连由调用方 Close。
+//
+// 直连是唯一战斗通路(turn-based §22 D73):落点分配按 battle_id 从 since 起的留底里找(先于 BattleStart
+// 经大厅下发,D70),必须是参战票据。开战后就要立刻调用:回合按 kRoundDurationMs(6s)超时、由 battle
+// 替未出招者填默认普攻结算,而回合结算只走直连(D68),没有活直连的那几回合直接丢弃 —— 拖得越久,
+// 丢的回合越多;单人 PVE 甚至可能在直连建起来之前打完,房间销毁后握手会被拒(同 battle-smoke A 的
+// "开战即直连")。
+func (b *teamSmokeBot) connectBattle(since int, battleId uint64) (*battleDirectConn, error) {
+	assigned, err := teamSmokeWaitPush(b, since, game.BattleClientPlayerNotifyBattleAssignedMessageId, teamSmokePushTimeout,
+		func() *battle.BattleAssignedS2C { return &battle.BattleAssignedS2C{} },
+		func(a *battle.BattleAssignedS2C) bool { return a.GetBattleId() == battleId })
+	if err != nil {
+		return nil, fmt.Errorf("%s 等 battle_id=%d 的 BattleAssigned: %w", b.name, battleId, err)
+	}
+	if assigned.GetRole() != battle.EBattleTicketRole_BATTLE_TICKET_ROLE_PARTICIPANT {
+		return nil, fmt.Errorf("%s battle_id=%d 的 BattleAssigned role=%s,期望参战票据", b.name, battleId, assigned.GetRole())
+	}
+	// stats 传 nil:onMessage 自己计 MsgRecv,避免重复计数。直连推送经 onMessage 并入同一份 pushes。
+	direct, err := dialBattleDirect(b.account, b.gc.PlayerId, assigned, nil, b.onMessage)
+	if err != nil {
+		return nil, fmt.Errorf("%s 直连 battle_id=%d: %w", b.name, battleId, err)
+	}
+	return direct, nil
+}
+
+// finishBattleOn 在 connectBattle 建好的直连上开自动战斗,等同一 battle_id 的终局,返回回合结算条数。
+// 不关直连(归调用方)。
+//
+// 回合结算只走直连(D68),开战到直连就绪之间超时结算的回合不会补发,所以只统计直连就绪之后的回合。
+// 终局包无论来自直连还是 scene 结算后的大厅推送,都落进同一份 pushes。
+func (b *teamSmokeBot) finishBattleOn(direct *battleDirectConn, since int, battleId uint64) (int, error) {
+	// 直连有独立的消息号限速,不走大厅连接的 pace。
+	if err := direct.Send(game.BattleClientPlayerSetAutoBattleMessageId, &battle.SetAutoBattleRequest{
 		BattleId: battleId,
 		Enabled:  true,
 	}); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("%s 经直连发 SetAutoBattle(battle_id=%d): %w", b.name, battleId, err)
 	}
+	b.stats.MsgSent()
 	if _, err := teamSmokeWaitPush(b, since, game.BattleClientPlayerNotifyBattleEndMessageId, teamSmokeBattleEndTimeout,
 		func() *battle.BattleEndS2C { return &battle.BattleEndS2C{} },
 		// 按 battle_id 过滤:登录补推的上一局结算、上一场的终局都不算(同 Player.SignalBattleEnd 的口径)。
@@ -886,6 +928,8 @@ func (b *teamSmokeBot) finishBattle(since int, battleId uint64) (int, error) {
 		return 0, fmt.Errorf("%s 等 battle_id=%d 的 BattleEnd: %w", b.name, battleId, err)
 	}
 	turns := b.countTurnResults(since, battleId)
+	zap.L().Info("[team-smoke] battle direct-connect delivery",
+		zap.String("bot", b.name), zap.Uint64("battle_id", battleId), zap.String("counts", direct.summary()))
 	if turns < 1 {
 		return turns, fmt.Errorf("%s 在 battle_id=%d 里收到 %d 条回合结算,期望 >= 1", b.name, battleId, turns)
 	}
@@ -1061,7 +1105,7 @@ func teamSmokeTeamBattle(leader *teamSmokeBot, tid uint64, battleConfigId uint32
 		}
 	}
 
-	// 每人一个 goroutine 跑"等开战 → 自动战斗 → 等终局";goroutine 内只驱动自己那个机器人。
+	// 每人一个 goroutine 跑"等开战 → 建直连 → 直连上自动战斗 → 等终局";goroutine 内只驱动自己那个机器人。
 	type fightResult struct {
 		battleId uint64
 		turns    int
@@ -1079,7 +1123,13 @@ func teamSmokeTeamBattle(leader *teamSmokeBot, tid uint64, battleConfigId uint32
 				return
 			}
 			results[idx].battleId = start.GetBattleId()
-			results[idx].turns, results[idx].err = bot.finishBattle(marks[idx], start.GetBattleId())
+			direct, err := bot.connectBattle(marks[idx], start.GetBattleId())
+			if err != nil {
+				results[idx].err = err
+				return
+			}
+			defer direct.Close()
+			results[idx].turns, results[idx].err = bot.finishBattleOn(direct, marks[idx], start.GetBattleId())
 		}(i, fighter)
 	}
 	wg.Wait()
@@ -1151,6 +1201,7 @@ func teamSmokeIsTeamPush(messageId uint32) bool {
 }
 
 // teamSmokeIsRecordedMessage:需要按到达顺序留底的消息(组队推送 + 换场景 + 战斗 + JoinQueue 回包)。
+// 战斗里的 NotifyBattleAssigned 是 connectBattle 按 battle_id 找直连落点用的。
 func teamSmokeIsRecordedMessage(messageId uint32) bool {
 	if teamSmokeIsTeamPush(messageId) {
 		return true
@@ -1158,6 +1209,7 @@ func teamSmokeIsRecordedMessage(messageId uint32) bool {
 	switch messageId {
 	case game.SceneSceneClientPlayerNotifyEnterSceneMessageId,
 		game.SceneSceneClientPlayerEnterSceneMessageId,
+		game.BattleClientPlayerNotifyBattleAssignedMessageId,
 		game.BattleClientPlayerNotifyBattleStartMessageId,
 		game.BattleClientPlayerNotifyTurnResultMessageId,
 		game.BattleClientPlayerNotifyBattleEndMessageId,

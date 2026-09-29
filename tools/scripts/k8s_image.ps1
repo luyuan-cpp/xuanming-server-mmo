@@ -55,7 +55,12 @@ param(
     # 尤其 CppLogSidecarImage 透传空串会让生成的清单出现空 image:,Pod 建不起来。
     [switch]$NoCppLogSidecar,
     [string]$CppLogSidecarImage = "",
-    [string]$LokiPushUrl = ""
+    [string]$LokiPushUrl = "",
+    # gate 客户端 RPC 路由模式,透传给 k8s_deploy.ps1 -GateRouterMode(release-zone / release-all 生效)。
+    # 默认留空 = 用 k8s_deploy.ps1 自己的默认值("1",turn-based §22 D75),非空才透传;
+    # 默认值只留在 k8s_deploy.ps1 一处。回退到 "0" 的后果与前置见那边的参数注释。
+    [ValidateSet("", "0", "1")]
+    [string]$GateRouterMode = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -355,6 +360,9 @@ function Invoke-K8sDeploy {
     }
     if (-not [string]::IsNullOrWhiteSpace($LokiPushUrl)) {
         $args.LokiPushUrl = $LokiPushUrl
+    }
+    if (-not [string]::IsNullOrWhiteSpace($GateRouterMode)) {
+        $args.GateRouterMode = $GateRouterMode
     }
     if ($WaitReady) {
         $args.WaitReady = $true

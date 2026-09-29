@@ -1611,6 +1611,351 @@ void SendGuildServiceBuyGuildShopGoods(entt::registry& registry, entt::entity no
     SendGuildServiceBuyGuildShopGoods(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
+#pragma region GuildServiceGetGuildActivities
+boost::object_pool<AsyncGuildServiceGetGuildActivitiesGrpcClient> GuildServiceGetGuildActivitiesPool;
+using AsyncGuildServiceGetGuildActivitiesHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::GetGuildActivitiesResponse&)>;
+AsyncGuildServiceGetGuildActivitiesHandlerFunctionType AsyncGuildServiceGetGuildActivitiesHandler;
+AsyncGuildServiceGetGuildActivitiesFailedHandlerFunctionType AsyncGuildServiceGetGuildActivitiesFailedHandler;
+
+void AsyncCompleteGrpcGuildServiceGetGuildActivities(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncGuildServiceGetGuildActivitiesGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncGuildServiceGetGuildActivitiesHandler) {
+            AsyncGuildServiceGetGuildActivitiesHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.GetGuildActivities reply dropped: AsyncGuildServiceGetGuildActivitiesHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
+        }
+    } else if (AsyncGuildServiceGetGuildActivitiesFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.GetGuildActivities", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceGetGuildActivitiesFailedHandler(failure, call->request);
+    } else {
+        LOG_ERROR << "gRPC GuildService.GetGuildActivities failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
+    }
+
+	GuildServiceGetGuildActivitiesPool.destroy(call);
+}
+
+void SendGuildServiceGetGuildActivities(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildActivitiesRequest& request) {
+
+    SendGuildServiceGetGuildActivities(registry, nodeEntity, request, {}, {});
+
+}
+
+void SendGuildServiceGetGuildActivities(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildActivitiesRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(GuildServiceGetGuildActivitiesPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
+    }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
+
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncGetGuildActivities(&call->context, call->request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceGetGuildActivitiesMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceGetGuildActivities(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::guildpb::GetGuildActivitiesRequest& derived = static_cast<const ::guildpb::GetGuildActivitiesRequest&>(message);
+    SendGuildServiceGetGuildActivities(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region GuildServiceLightGuildLantern
+boost::object_pool<AsyncGuildServiceLightGuildLanternGrpcClient> GuildServiceLightGuildLanternPool;
+using AsyncGuildServiceLightGuildLanternHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::LightGuildLanternResponse&)>;
+AsyncGuildServiceLightGuildLanternHandlerFunctionType AsyncGuildServiceLightGuildLanternHandler;
+AsyncGuildServiceLightGuildLanternFailedHandlerFunctionType AsyncGuildServiceLightGuildLanternFailedHandler;
+
+void AsyncCompleteGrpcGuildServiceLightGuildLantern(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncGuildServiceLightGuildLanternGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncGuildServiceLightGuildLanternHandler) {
+            AsyncGuildServiceLightGuildLanternHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.LightGuildLantern reply dropped: AsyncGuildServiceLightGuildLanternHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
+        }
+    } else if (AsyncGuildServiceLightGuildLanternFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.LightGuildLantern", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceLightGuildLanternFailedHandler(failure, call->request);
+    } else {
+        LOG_ERROR << "gRPC GuildService.LightGuildLantern failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
+    }
+
+	GuildServiceLightGuildLanternPool.destroy(call);
+}
+
+void SendGuildServiceLightGuildLantern(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::LightGuildLanternRequest& request) {
+
+    SendGuildServiceLightGuildLantern(registry, nodeEntity, request, {}, {});
+
+}
+
+void SendGuildServiceLightGuildLantern(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::LightGuildLanternRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(GuildServiceLightGuildLanternPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
+    }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
+
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncLightGuildLantern(&call->context, call->request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceLightGuildLanternMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceLightGuildLantern(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::guildpb::LightGuildLanternRequest& derived = static_cast<const ::guildpb::LightGuildLanternRequest&>(message);
+    SendGuildServiceLightGuildLantern(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region GuildServiceClaimGuildReunion
+boost::object_pool<AsyncGuildServiceClaimGuildReunionGrpcClient> GuildServiceClaimGuildReunionPool;
+using AsyncGuildServiceClaimGuildReunionHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::ClaimGuildReunionResponse&)>;
+AsyncGuildServiceClaimGuildReunionHandlerFunctionType AsyncGuildServiceClaimGuildReunionHandler;
+AsyncGuildServiceClaimGuildReunionFailedHandlerFunctionType AsyncGuildServiceClaimGuildReunionFailedHandler;
+
+void AsyncCompleteGrpcGuildServiceClaimGuildReunion(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncGuildServiceClaimGuildReunionGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncGuildServiceClaimGuildReunionHandler) {
+            AsyncGuildServiceClaimGuildReunionHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.ClaimGuildReunion reply dropped: AsyncGuildServiceClaimGuildReunionHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
+        }
+    } else if (AsyncGuildServiceClaimGuildReunionFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.ClaimGuildReunion", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceClaimGuildReunionFailedHandler(failure, call->request);
+    } else {
+        LOG_ERROR << "gRPC GuildService.ClaimGuildReunion failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
+    }
+
+	GuildServiceClaimGuildReunionPool.destroy(call);
+}
+
+void SendGuildServiceClaimGuildReunion(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ClaimGuildReunionRequest& request) {
+
+    SendGuildServiceClaimGuildReunion(registry, nodeEntity, request, {}, {});
+
+}
+
+void SendGuildServiceClaimGuildReunion(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ClaimGuildReunionRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(GuildServiceClaimGuildReunionPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
+    }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
+
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncClaimGuildReunion(&call->context, call->request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceClaimGuildReunionMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceClaimGuildReunion(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::guildpb::ClaimGuildReunionRequest& derived = static_cast<const ::guildpb::ClaimGuildReunionRequest&>(message);
+    SendGuildServiceClaimGuildReunion(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region GuildServiceStartGuildTrial
+boost::object_pool<AsyncGuildServiceStartGuildTrialGrpcClient> GuildServiceStartGuildTrialPool;
+using AsyncGuildServiceStartGuildTrialHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::StartGuildTrialResponse&)>;
+AsyncGuildServiceStartGuildTrialHandlerFunctionType AsyncGuildServiceStartGuildTrialHandler;
+AsyncGuildServiceStartGuildTrialFailedHandlerFunctionType AsyncGuildServiceStartGuildTrialFailedHandler;
+
+void AsyncCompleteGrpcGuildServiceStartGuildTrial(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncGuildServiceStartGuildTrialGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncGuildServiceStartGuildTrialHandler) {
+            AsyncGuildServiceStartGuildTrialHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.StartGuildTrial reply dropped: AsyncGuildServiceStartGuildTrialHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
+        }
+    } else if (AsyncGuildServiceStartGuildTrialFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.StartGuildTrial", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceStartGuildTrialFailedHandler(failure, call->request);
+    } else {
+        LOG_ERROR << "gRPC GuildService.StartGuildTrial failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
+    }
+
+	GuildServiceStartGuildTrialPool.destroy(call);
+}
+
+void SendGuildServiceStartGuildTrial(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::StartGuildTrialRequest& request) {
+
+    SendGuildServiceStartGuildTrial(registry, nodeEntity, request, {}, {});
+
+}
+
+void SendGuildServiceStartGuildTrial(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::StartGuildTrialRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(GuildServiceStartGuildTrialPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
+    }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
+
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncStartGuildTrial(&call->context, call->request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceStartGuildTrialMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceStartGuildTrial(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::guildpb::StartGuildTrialRequest& derived = static_cast<const ::guildpb::StartGuildTrialRequest&>(message);
+    SendGuildServiceStartGuildTrial(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region GuildServiceRespondGuildTrialInvite
+boost::object_pool<AsyncGuildServiceRespondGuildTrialInviteGrpcClient> GuildServiceRespondGuildTrialInvitePool;
+using AsyncGuildServiceRespondGuildTrialInviteHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::RespondGuildTrialInviteResponse&)>;
+AsyncGuildServiceRespondGuildTrialInviteHandlerFunctionType AsyncGuildServiceRespondGuildTrialInviteHandler;
+AsyncGuildServiceRespondGuildTrialInviteFailedHandlerFunctionType AsyncGuildServiceRespondGuildTrialInviteFailedHandler;
+
+void AsyncCompleteGrpcGuildServiceRespondGuildTrialInvite(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncGuildServiceRespondGuildTrialInviteGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncGuildServiceRespondGuildTrialInviteHandler) {
+            AsyncGuildServiceRespondGuildTrialInviteHandler(call->context, call->reply);
+        } else {
+            // 应答到了却没人收:2026-04 起换图应答就是这样静默丢了约 5 个月。每个方法每线程报一次;
+            // 确实不需要应答的调用方显式装一个空处理器。
+            thread_local bool reportedMissingHandler = false;
+            if (!reportedMissingHandler) {
+                reportedMissingHandler = true;
+                LOG_ERROR << "gRPC GuildService.RespondGuildTrialInvite reply dropped: AsyncGuildServiceRespondGuildTrialInviteHandler is not installed"
+                          << " (install one, or an empty one if the reply is intentionally ignored)";
+            }
+        }
+    } else if (AsyncGuildServiceRespondGuildTrialInviteFailedHandler) {
+        const GrpcCallFailure failure{call->messageId, "GuildService.RespondGuildTrialInvite", call->context, call->status, call->sentMetadata};
+        AsyncGuildServiceRespondGuildTrialInviteFailedHandler(failure, call->request);
+    } else {
+        LOG_ERROR << "gRPC GuildService.RespondGuildTrialInvite failed: code=" << static_cast<int>(call->status.error_code())
+                  << " msg=" << call->status.error_message();
+    }
+
+	GuildServiceRespondGuildTrialInvitePool.destroy(call);
+}
+
+void SendGuildServiceRespondGuildTrialInvite(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::RespondGuildTrialInviteRequest& request) {
+
+    SendGuildServiceRespondGuildTrialInvite(registry, nodeEntity, request, {}, {});
+
+}
+
+void SendGuildServiceRespondGuildTrialInvite(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::RespondGuildTrialInviteRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(GuildServiceRespondGuildTrialInvitePool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    call->sentMetadata.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+        call->sentMetadata.emplace_back(metaKeys[i], metaValues[i]);
+    }
+    call->request = request;
+    call->context.set_deadline(NextCallDeadline());
+
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncRespondGuildTrialInvite(&call->context, call->request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceRespondGuildTrialInviteMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceRespondGuildTrialInvite(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::guildpb::RespondGuildTrialInviteRequest& derived = static_cast<const ::guildpb::RespondGuildTrialInviteRequest&>(message);
+    SendGuildServiceRespondGuildTrialInvite(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
 
 void HandleGuildCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag) {
         switch (grpcTag->messageId) {
@@ -1706,6 +2051,26 @@ void HandleGuildCompletedQueueMessage(entt::registry& registry, entt::entity nod
             AsyncCompleteGrpcGuildServiceBuyGuildShopGoods(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
+        case GuildServiceGetGuildActivitiesMessageId:
+            AsyncCompleteGrpcGuildServiceGetGuildActivities(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case GuildServiceLightGuildLanternMessageId:
+            AsyncCompleteGrpcGuildServiceLightGuildLantern(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case GuildServiceClaimGuildReunionMessageId:
+            AsyncCompleteGrpcGuildServiceClaimGuildReunion(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case GuildServiceStartGuildTrialMessageId:
+            AsyncCompleteGrpcGuildServiceStartGuildTrial(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case GuildServiceRespondGuildTrialInviteMessageId:
+            AsyncCompleteGrpcGuildServiceRespondGuildTrialInvite(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
         default:
             break;
         }
@@ -1736,6 +2101,11 @@ void SetGuildHandler(const std::function<void(const ClientContext&, const ::goog
     AsyncGuildServiceUpgradeGuildHandler = handler;
     AsyncGuildServiceGetGuildShopHandler = handler;
     AsyncGuildServiceBuyGuildShopGoodsHandler = handler;
+    AsyncGuildServiceGetGuildActivitiesHandler = handler;
+    AsyncGuildServiceLightGuildLanternHandler = handler;
+    AsyncGuildServiceClaimGuildReunionHandler = handler;
+    AsyncGuildServiceStartGuildTrialHandler = handler;
+    AsyncGuildServiceRespondGuildTrialInviteHandler = handler;
 }
 
 void SetGuildIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler) {
@@ -1809,6 +2179,21 @@ void SetGuildIfEmptyHandler(const std::function<void(const ClientContext&, const
     if (!AsyncGuildServiceBuyGuildShopGoodsHandler) {
         AsyncGuildServiceBuyGuildShopGoodsHandler = handler;
     }
+    if (!AsyncGuildServiceGetGuildActivitiesHandler) {
+        AsyncGuildServiceGetGuildActivitiesHandler = handler;
+    }
+    if (!AsyncGuildServiceLightGuildLanternHandler) {
+        AsyncGuildServiceLightGuildLanternHandler = handler;
+    }
+    if (!AsyncGuildServiceClaimGuildReunionHandler) {
+        AsyncGuildServiceClaimGuildReunionHandler = handler;
+    }
+    if (!AsyncGuildServiceStartGuildTrialHandler) {
+        AsyncGuildServiceStartGuildTrialHandler = handler;
+    }
+    if (!AsyncGuildServiceRespondGuildTrialInviteHandler) {
+        AsyncGuildServiceRespondGuildTrialInviteHandler = handler;
+    }
 }
 
 void SetGuildFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler) {
@@ -1835,6 +2220,11 @@ void SetGuildFailedHandler(const std::function<void(const GrpcCallFailure&, cons
     AsyncGuildServiceUpgradeGuildFailedHandler = handler;
     AsyncGuildServiceGetGuildShopFailedHandler = handler;
     AsyncGuildServiceBuyGuildShopGoodsFailedHandler = handler;
+    AsyncGuildServiceGetGuildActivitiesFailedHandler = handler;
+    AsyncGuildServiceLightGuildLanternFailedHandler = handler;
+    AsyncGuildServiceClaimGuildReunionFailedHandler = handler;
+    AsyncGuildServiceStartGuildTrialFailedHandler = handler;
+    AsyncGuildServiceRespondGuildTrialInviteFailedHandler = handler;
 }
 
 void SetGuildIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler) {
@@ -1906,6 +2296,21 @@ void SetGuildIfEmptyFailedHandler(const std::function<void(const GrpcCallFailure
     }
     if (!AsyncGuildServiceBuyGuildShopGoodsFailedHandler) {
         AsyncGuildServiceBuyGuildShopGoodsFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceGetGuildActivitiesFailedHandler) {
+        AsyncGuildServiceGetGuildActivitiesFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceLightGuildLanternFailedHandler) {
+        AsyncGuildServiceLightGuildLanternFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceClaimGuildReunionFailedHandler) {
+        AsyncGuildServiceClaimGuildReunionFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceStartGuildTrialFailedHandler) {
+        AsyncGuildServiceStartGuildTrialFailedHandler = handler;
+    }
+    if (!AsyncGuildServiceRespondGuildTrialInviteFailedHandler) {
+        AsyncGuildServiceRespondGuildTrialInviteFailedHandler = handler;
     }
 }
 

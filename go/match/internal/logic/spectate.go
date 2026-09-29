@@ -37,8 +37,8 @@ const (
 
 // battle 侧 AddObserver 的房间不存在信号 = table.CommonError_kEntityIsNull
 // (与 battle_room_manager.cpp AddObserver 契约对齐,match 据此懒剔除索引);
-// 观众满=kRateLimitExceeded、观众是参战者=kInvalidParameter 不触发剔除
-// —— 那两种情况战斗仍在打,索引是好的。
+// 观众满=kRateLimitExceeded、观众是参战者=kInvalidParameter、签不出票=
+// kServiceUnavailable(turn-based §22 D70)不触发剔除 —— 这些情况战斗仍在打,索引是好的。
 
 func spectateBattleKey(battleId uint64) string {
 	return fmt.Sprintf("spectate:battle:%d", battleId)
@@ -59,7 +59,13 @@ func spectateTTLSeconds(svcCtx *svc.ServiceContext) int {
 }
 
 // registerSpectateBattle 把开局成功的战斗登记进观战索引(gather 成功收尾时调,
-// 设计决策 D9)。失败只记日志:索引缺失只是该场不可观战,不反悔已建成的战斗。
+// 设计决策 D9)。失败只记日志、不反悔已建成的战斗,但代价不止"该场不可观战":
+// 丢票补签 RequestBattleTicket(turn-based §18 D25)同样按这条记录定位 battle 节点,
+// 而 gate 已不中继战斗(turn-based §22 D66)。持票断线可凭原票重连(D25 同票可重用,
+// 期限 = 房间作废期限),不依赖本索引;但丢票(客户端重启 / 重登,或大厅断线连带拆掉
+// 直连)、同票重试失败或握手被拒之后,补签是回到本局的唯一通路。索引缺失时这类参战者
+// 补签只会拿到「战斗不存在或已结束」(kInvalidParameter),无法重新接入。
+// 独立的 battle_id → 落点路由键另起任务(turn-based §21.5 第 2 条),本函数语义暂不变。
 func registerSpectateBattle(svcCtx *svc.ServiceContext, battleId uint64, battleNodeId uint32,
 	mode matchpb.MatchMode, battleConfigId uint32, playerNames []string, createdAtMs uint64,
 ) {
@@ -166,9 +172,11 @@ func pickRandomBattle(svcCtx *svc.ServiceContext) (uint64, error) {
 }
 
 // stopWatchingIfAny 观战互斥清退(设计决策 D11 / 不变量 8):玩家进 gather 前
-// 把他从观战中摘除,杜绝观众绑定与随后的参战 BindBattleEvent 抢 SessionInfo
-// 槽位的竞态。整条路径尽力而为:任何失败只记日志不阻断开局 —— RemoveObserver
-// 丢了,观众绑定也会被参战绑定覆盖,battle 侧观众推送则因防僵尸校验自然失效。
+// 把他从观战中摘除 —— 一名玩家同一时刻只保留一条 battle 直连(客户端单条链路,
+// battle 房间 directConnByPlayer 按 player_id 单槽),观战直连与随后的参战直连
+// 不能并存。整条路径尽力而为:任何失败只记日志不阻断开局 —— RemoveObserver 丢了,
+// 客户端收到参战的 NotifyBattleAssigned 会关掉观战直连、改连参战落点,旧场对该观众
+// 的战斗帧因无活直连被丢弃(turn-based §22 D68),名单残留随该场结束清理。
 func stopWatchingIfAny(svcCtx *svc.ServiceContext, playerId uint64, reason string) {
 	raw, err := svcCtx.MatchRedis.Get(spectateWatchingKey(playerId))
 	if err != nil {
@@ -238,7 +246,7 @@ func removeObserverRPC(endpoint string, req *battlepb.RemoveObserverRequest) err
 
 // addObserver 调 battle 节点挂观众。返回 roomMissing=true 表示 battle 回
 // "房间不存在"(战斗已收尾),调用方据此懒剔除索引;其余错误(节点定位失败/
-// RPC 失败/满员/观众是参战者)不动索引。
+// RPC 失败/满员/观众是参战者/签不出票)不动索引。
 func addObserver(svcCtx *svc.ServiceContext, battleNodeId uint32, battleId, observerId uint64,
 	observerName string, routing *battlepb.BattleRouting,
 ) (roomMissing bool, err error) {

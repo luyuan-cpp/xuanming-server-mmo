@@ -354,6 +354,11 @@ void BattleClientEdge::OnTokenVerify(const muduo::net::TcpConnectionPtr &conn,
              << " role=" << ::eBattleTicketRole_Name(payload.role())
              << " peer=" << conn->peerAddress().toIpPort()
              << " signature_checked=" << (verdict == battle_security::TokenSecretVerdict::kEnforce);
+
+    // snapshot on connect(turn-based §22 D69):观众的观战首帧紧跟在握手应答之后经本直连下发。
+    // 必须在 SendVerifyReply 之后 —— 客户端握手读到的第一个包必须是应答。
+    BattleRoomManager::Instance().OnDirectConnectionVerified(payload.battle_id(), payload.player_id(),
+                                                             payload.role());
 }
 
 // ---- 业务消息 ----
@@ -426,8 +431,8 @@ void BattleClientEdge::DispatchVerifiedRequest(DirectSession &session,
                                                const muduo::net::TcpConnectionPtr &conn,
                                                const ::ClientRequest &request)
 {
-    // 权威身份来自已验证的票据,不信请求体;session_id 回填 gate 会话号供日志对齐。
-    // 这份合成的 SessionDetails 与 gate 经 gRPC 注入的形态一致,Handle* 零改动。
+    // 直连是战斗唯一的上行入口(turn-based §22 D66):权威身份来自已验证的票据,不信请求体;
+    // session_id 只是登记时的大厅会话号,仅供日志对齐。Handle* 仍收 SessionDetails(D28 零改动)。
     ::SessionDetails sessionDetails;
     sessionDetails.set_player_id(session.playerId);
     sessionDetails.set_session_id(session.gateSessionId);

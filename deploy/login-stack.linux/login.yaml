@@ -132,6 +132,27 @@ IdSegment:
   Step: 100
   FallbackToSnowflake: false
 
+# ─────────────────────────────────────────────────────────────────────────
+# 建角钉存储落点(docs/design/player-storage-placement.md §8.3 / §13)
+#
+# PinOnCreate:true = CreatePlayer 在同一次 RegisterPlayerZone 里让 data_service 与 player:zone
+#   原子一起写 player:placement = "{storage}:1";false(默认,整块不写也一样)= 只登记归属、不钉,
+#   在 go/db 未开 Placement.Required 时与落点设计上线前完全一致(Required 开着时见下方第 3 条)。
+# NewPlayerStorageId:新号钉到哪个落点库;0 = 本 login 所在 zone(Node.ZoneId);
+#   1..999999 = zone_{id}_db,>=1000000 = player_store_{id}_db(Phase 2 全局库填 1000000)。
+#   只在 PinOnCreate=true 时生效。
+# 打开顺序(§13,反了会出事):
+#   1) data_service / scene_manager / go/db 新版全部上线、各 zone 的 db:capability 标记齐全,才允许开 PinOnCreate;
+#   2) go/db 的 Placement.Required=true **必须**在全部 login 都 PinOnCreate=true 之后(且各 zone 已
+#      pin-placement 钉完存量)才能打开 —— 否则新号没有落点记录,Required 下它的每一条存盘都进死信。
+#   3) 关闭 / 回退顺序相反:go/db 任一 zone 已开 Required=true 时,禁止把 PinOnCreate 改回 false、
+#      禁止把 NewPlayerStorageId 改成没有 go/db 能打开的库、也禁止回退到不带 storage_id 的 login;
+#      否则建角照常成功、login 零报错,但新号进游戏预加载秒级失败、存盘全进死信。要关,先关全部 go/db 的 Required。
+#   启动日志 "[placement] pin_on_create=..." 是核对依据。
+Placement:
+  PinOnCreate: false
+  NewPlayerStorageId: 0
+
 GateTokenSecret: "change-me-in-production-use-a-strong-random-key"
 TableDir: "/app/data"
 

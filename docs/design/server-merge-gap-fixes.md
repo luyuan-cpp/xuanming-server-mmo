@@ -1,8 +1,10 @@
 # 合服 — 差距修复方案
 
-> **生成日期**: 2026-05-17;**状态更新 2026-09-08**
+> **生成日期**: 2026-05-17;**状态更新 2026-09-08、2026-09-28**
 > **⚠️ 先读**:本文靠前的「**状态更新(2026-09-08)**」一节 ——
 > 它取代了下面那张 2026-05-23 的 Reality Check 表,按「已闭合 A1~A6 / 仍开着 B1~B8」重新分列。
+> 2026-09-28 的更新就地标在该节的 B 表里,并新增 C 表,登记 [player-storage-placement.md](./player-storage-placement.md) §12 那一批(A1~A16)。
+> 注意两处编号不是一回事:本文 A 表的 A1~A6 是 09-08 的已闭合项,C 表按那份设计文档的 A 编号。
 > 本文其余部分是 2026-05 的原始决策记录,保留原样。
 > **前置阅读**: [`cross-server-rollback-merge-audit.md`](./cross-server-rollback-merge-audit.md)
 >
@@ -52,21 +54,60 @@
 | **A2** | **`player:zone:{id}` 在生产从来没被写过** | 建号时不注册映射 ⇒ 合服按「值==source」改写时**根本扫不到人** ⇒ 合服「成功」但玩家全留在死区。这是整条链上最致命的一条,而且完全静默 | 两头都补上了:①`go/login` 的 `CreatePlayer` 现在**fail-closed** 地注册 `player:zone`(注册失败 ⇒ 建角失败,不允许产出没有映射的号);②存量玩家由 `merge_zone -backfill-home-zone -zone <id>` 回填(`SET NX`,从 `zone_<N>_db.player_database` 取真源)。③合服工具加了守卫:空映射 / 映射不全一律拒绝执行,并在报文里直接点名要先跑回填 |
 | **A3** | **合服公告 flag 写进了错的 Redis** | `player_merge_notice:{pid}` / `player_force_rename:{pid}` 被写进 **mapping 句柄**(当时默认 DB 15),而读它们的 `entergamelogic.go::consumePostMergeFlags` 用的是 login 的 `RedisClient`(**DB 0**)。**写 15 读 0 ⇒ 合服公告 UI 从来没有触发过一次**,而且失败完全静默(`redis.Nil` 被当成「这个玩家没有 flag」的正常情况) | 打标改由独立的 `-notice-redis-addr` / `-notice-redis-db` 指定,默认 **DB 0**,与 login 同库。撤销(`-mode unmerge`)会把这两把键删掉 |
 | **A4** | **审计里的 block 级门禁从设计上就拦不住任何东西** | 旧 `auditOnlineKeys` 在 **mapping Redis** 上查 `friend:online:{pid}`,而这把键由 go/friend 写在**它自己的 DB 3** ⇒ 恒查不到 ⇒ 恒「全部离线 ✅」;pipeline 错误还被 `_, _ = pipe.Exec(ctx)` 吞掉;文档写了「exit 2 = 基础设施错误」但 `runAuditEntry` 从来没返回过 2(连不上 Redis 只打一行 WARN 然后「通过」)。**一个不可能返回 block 的 block 级门禁,比没有门禁更危险** | 四个库各一个句柄(mapping 0 / guild 2 / friend 3 / shared 0);扫描失败一律 `Severity=block` 并标 `INFRA:`;句柄缺失让整个审计以 **exit 2** 结束(与 exit 1「查到了真问题」区分开)。pre-merge 现在有四条真能拦住 `-apply` 的门禁:`source_scene_nodes` / `online_presence` / `player_locks` / `kafka_db_task_queues` |
-| **A5** | **`-verify-merged` 是个空壳** | 它只是把报告标题从 "pre-merge" 换成 "POST-MERGE VERIFICATION",**一条断言都没有** | 现在是六条真断言:`verify:mapping_src`(源区必须排空 + 目标区不少于 `-expected-src-players`)、`verify:guild_zone`、`verify:guild_rank`(源 ZSET 消失 **且** 目标 ZCARD == MySQL 公会数)、`verify:target_zone_rows`(目标库 `player_database` 行数 >= 合入人数;没给期望值就降级成 warn 并明说是弱断言)、`verify:source_hot_state`(warn)、`verify:merge_fence`(围栏没清 = 建号建帮被永久拒绝) |
+| **A5** | **`-verify-merged` 是个空壳** | 它只是把报告标题从 "pre-merge" 换成 "POST-MERGE VERIFICATION",**一条断言都没有** | *(2026-09-28:下界断言 `verify:target_zone_rows` 已删,改为要求清单并逐 id 核对的 `verify:manifest_mapping` / `verify:manifest_rows`,见 C 表 A6)* 现在是六条真断言:`verify:mapping_src`(源区必须排空 + 目标区不少于 `-expected-src-players`)、`verify:guild_zone`、`verify:guild_rank`(源 ZSET 消失 **且** 目标 ZCARD == MySQL 公会数)、`verify:target_zone_rows`(目标库 `player_database` 行数 >= 合入人数;没给期望值就降级成 warn 并明说是弱断言)、`verify:source_hot_state`(warn)、`verify:merge_fence`(围栏没清 = 建号建帮被永久拒绝) |
 | **A6** | 玩家主数据不搬 / 无并发保护 / 无回滚 | —— | 合服现在会逐表拷 `zone_src_db → zone_dst_db` 并失效共享 DB 0 上的缓存;`merge:in_progress:{zone}` 围栏挡住 data_service 建映射与 guild 建帮;清单在第一次写之前落盘,`-mode unmerge` 可按清单逐对象撤销 |
 
 ### B. 仍然开着(必须知道,合服前逐条确认)
 
+> 2026-09-28 核对:B2、B4、B6 已闭合(行首标 ✅ 并写明闭合依据);其余仍开着。新发现的开口登记在 C 表之后的「C'」。
+
 | # | 缺口 | 后果 | 现在怎么办 |
 |---|---|---|---|
 | **B1** | **Unity 客户端不处理 `RedirectToGate`** | 服务端已经能在登录期把玩家重定向到归属 zone 的 gate(robot 已实测能跟随:连目标 gate → 校验 token → 重跑 Login + EnterGame),**但 Unity 客户端接不住这个包** | **`HomeZone.RedirectOnEnterEnabled` 必须在生产保持 `false`**(`go/login/etc/login.yaml` 默认就是 false,`config.go` 里也是 `default=false` 的正向命名)。合服后原 source 玩家靠「角色列表按现时 `player:zone` 解析」进对服,而不是靠进场重定向。**客户端接上之前不要打开这个开关** |
-| **B2** | **C++ 侧 Kafka 审计 topic 的世代后缀是编译期常量** | `cpp/libs/modules/transaction_log/transaction_log_system.h` 的 `kTransactionLogTopic = "transaction_log_topic_g1"` 与 `cpp/libs/modules/snapshot/snapshot_system.h` 的 `kPlayerSnapshotTopic = "player_snapshot_topic_g1"` **把 `_g1` 写死在字符串里**;Go 侧(`data_service/internal/config`)是 `基名 + "_g" + Kafka.TopicGeneration` **配置组合**出来的。改 yaml 不会改 C++ | **世代号变更必须是一次协同改动**:改 C++ 两个常量 + 重建并推 C++ 镜像 + 同步 Go 的 `TopicGeneration`,三件一起做、一起发。只改 yaml 会让两端写进**不同的 topic**,审计流从此对不上,而且没有任何报错 |
-| **B3** | **真实集群的合服演练一次都没跑过** | 目前所有结论来自代码审查 + 单测 / 集成测试(miniredis + 本地 MySQL)。「在真集群上端到端跑通过」这件事**从未发生** | 首次生产合服之前,在 staging 用生产快照恢复出两个 zone,跑一次完整的 `runbook §8`(含 `-VerifyMerged`)**再加一次 `§10` 的 `merge-zone-unmerge` 撤销**,并记录耗时与缺陷 |
-| **B4** | **`dev_tools.ps1` 不转发 `-kafka-group` / `-kafka-topic-generation`** | `Kafka.TopicGeneration ≠ 1` 或改过 GroupID 的环境里,P3 积压门禁会去查一个**不存在的 topic** | 这类环境绕过 ps1,在 `tools/merge_zone/` 目录内直接 `go run . -kafka-topic-generation <n> -kafka-group <g> ...`。(`dev_tools.ps1` 的参数块注释里 mapping 那行还写着「DB 15」,与实现不符,见 B6) |
+| ✅ **B2**(已闭合) | **C++ 侧 Kafka 审计 topic 的世代后缀是编译期常量** *(2026-09-09 已改为配置:`BaseDeployConfig.audit_topic_generation` / yaml `AuditTopicGeneration`,见 `cpp/libs/modules/audit/audit_topic.h`;db_task topic 的世代号由本批 C 表 A14 补齐)* | `cpp/libs/modules/transaction_log/transaction_log_system.h` 的 `kTransactionLogTopic = "transaction_log_topic_g1"` 与 `cpp/libs/modules/snapshot/snapshot_system.h` 的 `kPlayerSnapshotTopic = "player_snapshot_topic_g1"` **把 `_g1` 写死在字符串里**;Go 侧(`data_service/internal/config`)是 `基名 + "_g" + Kafka.TopicGeneration` **配置组合**出来的。改 yaml 不会改 C++ | **世代号变更必须是一次协同改动**:改 C++ 两个常量 + 重建并推 C++ 镜像 + 同步 Go 的 `TopicGeneration`,三件一起做、一起发。只改 yaml 会让两端写进**不同的 topic**,审计流从此对不上,而且没有任何报错 |
+| **B3** | **真实集群的合服演练一次都没跑过**(2026-09-28 起还包括 pin 模式与搬库) | 目前所有结论来自代码审查 + 单测 / 集成测试(miniredis + 本地 MySQL)。「在真集群上端到端跑通过」这件事**从未发生** | 首次生产合服之前,在 staging 用生产快照恢复出两个 zone,跑一次完整的 `runbook §8`(含 `-VerifyMerged`)**再加一次 `§10` 的 `merge-zone-unmerge` 撤销**,并记录耗时与缺陷 |
+| ✅ **B4**(已闭合) | **`dev_tools.ps1` 不转发 `-kafka-group` / `-kafka-topic-generation`** *(现已转发:`Get-MergeZoneArgs` 从 `go/db/etc/db.yaml` 现读 GroupID / TopicGeneration,`-MergeKafkaGroup` / `-MergeKafkaTopicGeneration` 可覆盖;「绕过 ps1 手敲 go run」的变通不再需要。帮会跳过开关与撤销的 Kafka 门禁也由本批 A12 补上转发)* | `Kafka.TopicGeneration ≠ 1` 或改过 GroupID 的环境里,P3 积压门禁会去查一个**不存在的 topic** | 这类环境绕过 ps1,在 `tools/merge_zone/` 目录内直接 `go run . -kafka-topic-generation <n> -kafka-group <g> ...`。(`dev_tools.ps1` 的参数块注释里 mapping 那行还写着「DB 15」,与实现不符,见 B6) |
 | **B5** | **guild 的 `MergeMarkerRedis` 可以整段缺失** | 缺失 = 建帮闸门**不生效**,合服窗口内玩家仍能在源 zone 建帮,那个公会不会被 `merge_zone` 搬走(它诞生在清单定稿之后) | 合服前确认 `go/guild/etc/guild.yaml` 的 `MergeMarkerRedis.Host` 指向 mapping Redis 且 `DB: 0`。这是刻意的可选项(guild 与 data_service 平时没有连线,强制它连会让没配的环境起不来),但**合服窗口里它是必需品** |
-| **B6** | **`tools/scripts/dev_tools.ps1` 参数块注释仍写「mapping DB 15」** | 纯文档漂移:实际兜底逻辑取 **0**(`Get-MergeZoneArgs` 里注释也已更正为 0),但参数块顶部那张速查表还是旧的,照它手填 `-MergeMappingRedisDB 15` 会让合服静默空转 | 待修(本轮不改 `tools/scripts/**`)。在它被改掉之前,**以本文与 `merge-zone-runbook.md §2` 的库地图为准** |
+| ✅ **B6**(已闭合,本批 A12,未验证) | **`tools/scripts/dev_tools.ps1` 参数块注释仍写「mapping DB 15」** *(速查表早已是 DB 0;残留的是 `Get-MergeMappingRedis` 注释里的「今天是 15」,已删,并由 `tools/scripts/tests/dev_tools_merge_zone_contract.tests.ps1` 钉住不再出现;K8s data-service ConfigMap 里无效的 `DB: 15` 也已删,由 `k8s_deploy_contract.tests.ps1` 钉住)* | 纯文档漂移:实际兜底逻辑取 **0**(`Get-MergeZoneArgs` 里注释也已更正为 0),但参数块顶部那张速查表还是旧的,照它手填 `-MergeMappingRedisDB 15` 会让合服静默空转 | 待修(本轮不改 `tools/scripts/**`)。在它被改掉之前,**以本文与 `merge-zone-runbook.md §2` 的库地图为准** |
 | **B7** | 客户端未接 `EnterGameResponse` 的合服字段 | 服务端已把 `player_merge_notice:{pid}` 写进 login Redis(DB 0)并在首登时消费下发,但**客户端没有弹窗** | 客户端接上即可生效。`force_rename_required` 当前无机会触发(项目没有昵称字段),属 future-proof |
 | **B8** | `tools/data_consistency_check/` 没在生产 / staging 真跑过 | P2-K 的四个 invariant build 通过但没有真实运行证据 | 与 B3 一起在 staging 演练时跑一次 |
+
+### C. 2026-09-28 本批:合服工具缺口修复(**代码未编译、未测试**)
+
+出处与修法详见 [player-storage-placement.md](./player-storage-placement.md) §12(含「实现口径(v2.1)」)。操作口径已同步进 [merge-zone-runbook.md](../ops/merge-zone-runbook.md) v3。下表的「闭合」都以 Codex 验证通过为前提,验证清单在 PROGRESS.md「2026-09-28 玩家存储落点」条目。
+
+| # | 缺口 | 状态 |
+|---|---|---|
+| A1 | 映射完整性守卫只比行数,可被「有映射无行」抵消 | 已修:集合比较,源库任何一行没有映射即拒绝 |
+| A2 | 围栏晚于收集;改映射全量扫描、不受清单约束 | 已修:围栏先于收集;首跑时清单落盘前的拒绝释放围栏,之后保留;续跑(清单已存在且步骤 7 未完成)与半撤销时,清单落盘前 / 门禁的拒绝也保留围栏;改映射按清单逐键 CAS |
+| A3 | dry-run 写清单,apply 同路径被当续跑 | 已修:dry-run 只写 `<path>.dryrun.json`,三处加载器拒读预览。升级后第一次 `-apply` 前要删旧版彩排留下的同路径文件 |
+| A4 | 步骤 1 半途失败重跑被 ID SAFETY 卡死;公会重名断言在写之后 | 已修:全表撞号预检在任何写之前;续跑认逐列相同;重名断言挪到清单之前 |
+| A5 | 清单 Tables 每次被覆盖 | 已修:续跑时表集合变化即拒绝 |
+| A6 | `-verify-merged` 下界断言含目标区原住民 | 已修:必须带清单,逐 id 核对映射与主数据行 |
+| A7 | unmerge 无前置门禁、不失效玩家缓存 | 已修:按目标区口径复用 P2~P7;copy 模式补缓存失效 |
+| A8 | 公会榜快照可能陈旧 | 已修:维护锁内重读源榜;重读为空时不写(不复活已解散的公会),目标榜 `ZADD NX`,清单加 `rank_members_unwritten` |
+| A9 | 审计 guild_member 失败降级为 info | 已修:INFRA;同时跳过两个 guild 开关时报 SKIPPED;`-verify-merged` 的 `verify:guild_zone` / `verify:guild_rank` 同一口径 |
+| A10 | 合服后映射丢失时回填会把人钉回源区 | 已修:`merge:merged_into:{src}` 标记,合服在清单落盘之前(X 段)先查冲突;映射丢失按清单重放(runbook §9.2,无工具) |
+| A11 | 清热状态时 zone_id=0 的旧 location 失去反查依据 | 已修:删场景键之前补扫 |
+| A12 | dev_tools 不转发 guild 跳过开关;DB 15 残留 | 已修(同时闭合 B4 余项与 B6);merge-zone 系列退出码改为透传(见 C'5) |
+| A13 | runbook / 设计文档口径过时 | 已修:runbook v3、本文、player-storage-placement v2.1、server_merge_design 顶部标注 |
+| A14 | C++ db_task topic 无世代号 | 已修:`BaseDeployConfig.db_task_topic_generation`,三方相等由启动脚本与契约测试钉住 |
+| A15 | TiDB 上步骤 3 / 3b 及撤销的自动提交点更新与 DisbandGuild 互等 | 已修:每个 id 一个显式悲观 RC 短事务 |
+| **A16** | 合服窗口内源区归属玩家仍可从别区进场,往已排空的源 topic 写 | 已修:data_service `GetPlayerHomeZone` 返回 `home_zone_merging`,scene_manager 回可重试码 21;要 data_service 与 scene_manager 都上线才生效 |
+
+另:合服新增 **pin 模式**(默认,只改归属、不搬玩家行)与落点运维(`pin-placement` / `relocate` / `relocate-abort` / `storage-audit`)。pin 合服后源区库仍是真源,不能下线。
+
+### C'. 本批新登记、仍开着的口子
+
+| # | 缺口 | 后果 | 现在怎么办 |
+|---|---|---|---|
+| ~~C'1~~ | `-verify-merged` 的 `verify:guild_zone` / `verify:guild_rank` 不认 `-skip-guild-*` | — | 已修(2026-09-28,未经运行验证):两个开关同时给出时报 SKIPPED(warn) |
+| ~~C'2~~ | 续跑时在围栏之下、清单落盘之前被拒绝会释放围栏 | — | 已修(2026-09-28,未经运行验证):续跑与半撤销时的拒绝保留围栏(player-storage-placement §12 A2) |
+| C'3 | pin 模式与多 data Redis 集群不兼容 | data_service 按 home 选 data Redis 集群,pin 不拷 blob | 多集群用 copy 模式;待设计拍板 |
+| C'4 | 映射丢失无重放工具;钉到全局库的新号无法恢复 | Redis 整体丢失时靠人工按清单重放,Phase 2 新号丢归属 | runbook §9.2;依赖 TiDB 决策 D1 映射持久化兜底表 |
+| ~~C'5~~ | 经 `dev_tools.ps1`(`go run`)跑时退出码 1 / 2 区分不开 | — | 已修(2026-09-28,未经运行验证):先 `go build` 再执行产物并显式 `exit`,0 / 1 / 2 原样透传,编译失败为 2;验证前仍以报告表 `INFRA:` 行交叉核对 |
+| ~~C'6~~ | `lock_order_test.go` / `audit_resources.go` 的 gofmt 问题 | — | 已修:`tools/merge_zone` 下 `gofmt -l .` 为空 |
+| ~~C'7~~ | go/db 能力标记改为 90s TTL 心跳后,runbook T-0 先 zone-down src / dst,两区标记随之消失 | — | 已修(2026-09-28,负责人决定,未经运行验证):`-db-capability-zones` 去掉缺省值与 `src` / `dst` 记号,写仍在跑的 zone 或 `none`(搬库不接受 none);新增只读 `-mode capability-check`(exit 0 / 1 / 2),dst zone-up 之后、开服之前必须 exit 0(player-storage-placement §4.3,runbook §5.1 / §8 Step 6) |
 
 ---
 

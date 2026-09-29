@@ -9,7 +9,8 @@
 //   2) 只返回结论不打日志,FATAL / WARN / 拒连由调用点决定。
 //
 // 票据契约(设计文档 turn-based-battle-server.md §18 D24/D25):
-//   * 签发者 = battle 节点本身(CreateBattle / AddObserver 成功后),密钥
+//   * 签发者 = battle 节点本身(CreateBattle / AddObserver 登记之前预签,签不出即拒绝,
+//     turn-based §22 D70;另有 IssueBattleTicket 补签),密钥
 //     BaseDeployConfig.battle_token_secret,全部 battle 实例共享;
 //   * 签名 = hex(HMAC-SHA256(secret, BattleTicketPayload 序列化字节)),
 //     与 gate 令牌(GateTokenPayload)完全同口径,客户端两条连接可复用同一份握手代码;

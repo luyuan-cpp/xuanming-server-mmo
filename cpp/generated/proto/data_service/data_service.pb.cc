@@ -3018,11 +3018,11 @@ constexpr RegisterPlayerZoneRequest::ParseTableT_ RegisterPlayerZoneRequest::Int
     {
       PROTOBUF_FIELD_OFFSET(RegisterPlayerZoneRequest, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -3032,14 +3032,19 @@ constexpr RegisterPlayerZoneRequest::ParseTableT_ RegisterPlayerZoneRequest::Int
       ::_pbi::TcParser::GetTable<::data_service::RegisterPlayerZoneRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 home_zone_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RegisterPlayerZoneRequest, _impl_.home_zone_id_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(RegisterPlayerZoneRequest, _impl_.home_zone_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RegisterPlayerZoneRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(RegisterPlayerZoneRequest, _impl_.player_id_)}},
+      // uint32 home_zone_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RegisterPlayerZoneRequest, _impl_.home_zone_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(RegisterPlayerZoneRequest, _impl_.home_zone_id_)}},
+      // uint32 storage_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RegisterPlayerZoneRequest, _impl_.storage_id_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(RegisterPlayerZoneRequest, _impl_.storage_id_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -3047,6 +3052,8 @@ constexpr RegisterPlayerZoneRequest::ParseTableT_ RegisterPlayerZoneRequest::Int
       {PROTOBUF_FIELD_OFFSET(RegisterPlayerZoneRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 home_zone_id = 2;
       {PROTOBUF_FIELD_OFFSET(RegisterPlayerZoneRequest, _impl_.home_zone_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 storage_id = 3;
+      {PROTOBUF_FIELD_OFFSET(RegisterPlayerZoneRequest, _impl_.storage_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -3060,7 +3067,8 @@ inline constexpr RegisterPlayerZoneRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         player_id_{::uint64_t{0u}},
-        home_zone_id_{0u} {}
+        home_zone_id_{0u},
+        storage_id_{0u} {}
 
 template <typename>
 constexpr RegisterPlayerZoneRequest::RegisterPlayerZoneRequest(::_pbi::ConstantInitialized,
@@ -4147,11 +4155,11 @@ constexpr GetPlayerHomeZoneResponse::ParseTableT_ GetPlayerHomeZoneResponse::Int
     {
       PROTOBUF_FIELD_OFFSET(GetPlayerHomeZoneResponse, _impl_._has_bits_),
       0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
+      2, 8,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
+      4294967292,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -4161,6 +4169,10 @@ constexpr GetPlayerHomeZoneResponse::ParseTableT_ GetPlayerHomeZoneResponse::Int
       ::_pbi::TcParser::GetTable<::data_service::GetPlayerHomeZoneResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      // bool home_zone_merging = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetPlayerHomeZoneResponse, _impl_.home_zone_merging_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerHomeZoneResponse, _impl_.home_zone_merging_)}},
       // uint32 home_zone_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetPlayerHomeZoneResponse, _impl_.home_zone_id_), 0>(),
        {8, 0, 0,
@@ -4170,6 +4182,8 @@ constexpr GetPlayerHomeZoneResponse::ParseTableT_ GetPlayerHomeZoneResponse::Int
     }}, {{
       // uint32 home_zone_id = 1;
       {PROTOBUF_FIELD_OFFSET(GetPlayerHomeZoneResponse, _impl_.home_zone_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool home_zone_merging = 2;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerHomeZoneResponse, _impl_.home_zone_merging_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -4182,7 +4196,8 @@ inline constexpr GetPlayerHomeZoneResponse::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        home_zone_id_{0u} {}
+        home_zone_id_{0u},
+        home_zone_merging_{false} {}
 
 template <typename>
 constexpr GetPlayerHomeZoneResponse::GetPlayerHomeZoneResponse(::_pbi::ConstantInitialized,
@@ -8326,11 +8341,13 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::RegisterPlayerZoneRequest, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::data_service::RegisterPlayerZoneRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::data_service::RegisterPlayerZoneRequest, _impl_.home_zone_id_),
+        PROTOBUF_FIELD_OFFSET(::data_service::RegisterPlayerZoneRequest, _impl_.storage_id_),
         0,
         1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerHomeZoneRequest, _impl_._has_bits_),
         4, // hasbit index offset
@@ -8338,9 +8355,11 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerHomeZoneResponse, _impl_._has_bits_),
-        4, // hasbit index offset
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerHomeZoneResponse, _impl_.home_zone_id_),
+        PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerHomeZoneResponse, _impl_.home_zone_merging_),
         0,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::BatchGetPlayerHomeZoneRequest, _impl_._has_bits_),
         4, // hasbit index offset
@@ -8751,45 +8770,45 @@ static const ::_pbi::MigrationSchema
         {60, sizeof(::data_service::SetPlayerFieldRequest)},
         {71, sizeof(::data_service::SetPlayerFieldResponse)},
         {78, sizeof(::data_service::RegisterPlayerZoneRequest)},
-        {85, sizeof(::data_service::GetPlayerHomeZoneRequest)},
-        {90, sizeof(::data_service::GetPlayerHomeZoneResponse)},
-        {95, sizeof(::data_service::BatchGetPlayerHomeZoneRequest)},
-        {100, sizeof(::data_service::BatchGetPlayerHomeZoneResponse_PlayerZoneMapEntry_DoNotUse)},
-        {107, sizeof(::data_service::BatchGetPlayerHomeZoneResponse)},
-        {112, sizeof(::data_service::RemapHomeZoneForMergeRequest)},
-        {121, sizeof(::data_service::RemapHomeZoneForMergeResponse)},
-        {130, sizeof(::data_service::DeletePlayerDataRequest)},
-        {137, sizeof(::data_service::DeletePlayerDataResponse)},
-        {144, sizeof(::data_service::CreatePlayerSnapshotRequest)},
-        {155, sizeof(::data_service::CreatePlayerSnapshotResponse)},
-        {164, sizeof(::data_service::ListPlayerSnapshotsRequest)},
-        {173, sizeof(::data_service::SnapshotInfo)},
-        {194, sizeof(::data_service::ListPlayerSnapshotsResponse)},
-        {201, sizeof(::data_service::GetPlayerSnapshotDiffRequest)},
-        {210, sizeof(::data_service::FieldDiff)},
-        {223, sizeof(::data_service::GetPlayerSnapshotDiffResponse)},
-        {234, sizeof(::data_service::RollbackPlayerRequest)},
-        {251, sizeof(::data_service::RollbackPlayerResponse)},
-        {262, sizeof(::data_service::RollbackZoneRequest)},
-        {273, sizeof(::data_service::RollbackZoneResponse)},
-        {288, sizeof(::data_service::RollbackAllRequest)},
-        {297, sizeof(::data_service::RollbackAllResponse)},
-        {308, sizeof(::data_service::BatchRecallItemsRequest)},
-        {329, sizeof(::data_service::RecallResult)},
-        {344, sizeof(::data_service::BatchRecallItemsResponse)},
-        {357, sizeof(::data_service::QueryTransactionLogRequest)},
-        {376, sizeof(::data_service::TransactionLogRow)},
-        {407, sizeof(::data_service::QueryTransactionLogResponse)},
-        {416, sizeof(::data_service::CreateEventSnapshotRequest)},
-        {427, sizeof(::data_service::CreateEventSnapshotResponse)},
-        {436, sizeof(::data_service::AllocateIdSegmentRequest)},
-        {443, sizeof(::data_service::AllocateIdSegmentResponse)},
-        {452, sizeof(::data_service::ReservePlayerNameRequest)},
-        {459, sizeof(::data_service::ReservePlayerNameResponse)},
-        {466, sizeof(::data_service::ReleasePlayerNameRequest)},
-        {473, sizeof(::data_service::BatchGetPlayerNameRequest)},
-        {478, sizeof(::data_service::BatchGetPlayerNameResponse_NamesEntry_DoNotUse)},
-        {485, sizeof(::data_service::BatchGetPlayerNameResponse)},
+        {87, sizeof(::data_service::GetPlayerHomeZoneRequest)},
+        {92, sizeof(::data_service::GetPlayerHomeZoneResponse)},
+        {99, sizeof(::data_service::BatchGetPlayerHomeZoneRequest)},
+        {104, sizeof(::data_service::BatchGetPlayerHomeZoneResponse_PlayerZoneMapEntry_DoNotUse)},
+        {111, sizeof(::data_service::BatchGetPlayerHomeZoneResponse)},
+        {116, sizeof(::data_service::RemapHomeZoneForMergeRequest)},
+        {125, sizeof(::data_service::RemapHomeZoneForMergeResponse)},
+        {134, sizeof(::data_service::DeletePlayerDataRequest)},
+        {141, sizeof(::data_service::DeletePlayerDataResponse)},
+        {148, sizeof(::data_service::CreatePlayerSnapshotRequest)},
+        {159, sizeof(::data_service::CreatePlayerSnapshotResponse)},
+        {168, sizeof(::data_service::ListPlayerSnapshotsRequest)},
+        {177, sizeof(::data_service::SnapshotInfo)},
+        {198, sizeof(::data_service::ListPlayerSnapshotsResponse)},
+        {205, sizeof(::data_service::GetPlayerSnapshotDiffRequest)},
+        {214, sizeof(::data_service::FieldDiff)},
+        {227, sizeof(::data_service::GetPlayerSnapshotDiffResponse)},
+        {238, sizeof(::data_service::RollbackPlayerRequest)},
+        {255, sizeof(::data_service::RollbackPlayerResponse)},
+        {266, sizeof(::data_service::RollbackZoneRequest)},
+        {277, sizeof(::data_service::RollbackZoneResponse)},
+        {292, sizeof(::data_service::RollbackAllRequest)},
+        {301, sizeof(::data_service::RollbackAllResponse)},
+        {312, sizeof(::data_service::BatchRecallItemsRequest)},
+        {333, sizeof(::data_service::RecallResult)},
+        {348, sizeof(::data_service::BatchRecallItemsResponse)},
+        {361, sizeof(::data_service::QueryTransactionLogRequest)},
+        {380, sizeof(::data_service::TransactionLogRow)},
+        {411, sizeof(::data_service::QueryTransactionLogResponse)},
+        {420, sizeof(::data_service::CreateEventSnapshotRequest)},
+        {431, sizeof(::data_service::CreateEventSnapshotResponse)},
+        {440, sizeof(::data_service::AllocateIdSegmentRequest)},
+        {447, sizeof(::data_service::AllocateIdSegmentResponse)},
+        {456, sizeof(::data_service::ReservePlayerNameRequest)},
+        {463, sizeof(::data_service::ReservePlayerNameResponse)},
+        {470, sizeof(::data_service::ReleasePlayerNameRequest)},
+        {477, sizeof(::data_service::BatchGetPlayerNameRequest)},
+        {482, sizeof(::data_service::BatchGetPlayerNameResponse_NamesEntry_DoNotUse)},
+        {489, sizeof(::data_service::BatchGetPlayerNameResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -8867,181 +8886,183 @@ const char descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2ep
     "\004\022\r\n\005field\030\002 \001(\t\022\r\n\005value\030\003 \001(\014\022\030\n\020expec"
     "ted_version\030\004 \001(\004\"A\n\026SetPlayerFieldRespo"
     "nse\022\022\n\nerror_code\030\001 \001(\r\022\023\n\013new_version\030\002"
-    " \001(\004\"D\n\031RegisterPlayerZoneRequest\022\021\n\tpla"
-    "yer_id\030\001 \001(\004\022\024\n\014home_zone_id\030\002 \001(\r\"-\n\030Ge"
-    "tPlayerHomeZoneRequest\022\021\n\tplayer_id\030\001 \001("
-    "\004\"1\n\031GetPlayerHomeZoneResponse\022\024\n\014home_z"
-    "one_id\030\001 \001(\r\"3\n\035BatchGetPlayerHomeZoneRe"
-    "quest\022\022\n\nplayer_ids\030\001 \003(\004\"\260\001\n\036BatchGetPl"
-    "ayerHomeZoneResponse\022X\n\017player_zone_map\030"
-    "\002 \003(\0132\?.data_service.BatchGetPlayerHomeZ"
-    "oneResponse.PlayerZoneMapEntry\0324\n\022Player"
-    "ZoneMapEntry\022\013\n\003key\030\001 \001(\004\022\r\n\005value\030\002 \001(\r"
-    ":\0028\001\"_\n\034RemapHomeZoneForMergeRequest\022\026\n\016"
-    "source_zone_id\030\001 \001(\r\022\026\n\016target_zone_id\030\002"
-    " \001(\r\022\017\n\007dry_run\030\003 \001(\010\"e\n\035RemapHomeZoneFo"
-    "rMergeResponse\022\022\n\nerror_code\030\001 \001(\r\022\027\n\017pl"
-    "ayers_matched\030\002 \001(\r\022\027\n\017players_updated\030\003"
-    " \001(\r\"I\n\027DeletePlayerDataRequest\022\021\n\tplaye"
-    "r_id\030\001 \001(\004\022\033\n\023delete_zone_mapping\030\002 \001(\010\""
-    "D\n\030DeletePlayerDataResponse\022\022\n\nerror_cod"
-    "e\030\001 \001(\r\022\024\n\014keys_deleted\030\002 \001(\r\"|\n\033CreateP"
-    "layerSnapshotRequest\022\021\n\tplayer_id\030\001 \001(\004\022"
-    "(\n\004type\030\002 \001(\0162\032.data_service.SnapshotTyp"
-    "e\022\016\n\006reason\030\003 \001(\t\022\020\n\010operator\030\004 \001(\t\"[\n\034C"
-    "reatePlayerSnapshotResponse\022\022\n\nerror_cod"
-    "e\030\001 \001(\r\022\023\n\013snapshot_id\030\002 \001(\004\022\022\n\ncreated_"
-    "at\030\003 \001(\004\"S\n\032ListPlayerSnapshotsRequest\022\021"
-    "\n\tplayer_id\030\001 \001(\004\022\023\n\013before_time\030\002 \001(\004\022\r"
-    "\n\005limit\030\003 \001(\r\"\320\001\n\014SnapshotInfo\022\023\n\013snapsh"
-    "ot_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\017\n\007zone_i"
-    "d\030\003 \001(\r\022(\n\004type\030\004 \001(\0162\032.data_service.Sna"
-    "pshotType\022\022\n\ncreated_at\030\005 \001(\004\022\016\n\006reason\030"
-    "\006 \001(\t\022\020\n\010operator\030\007 \001(\t\022\027\n\017data_size_byt"
-    "es\030\010 \001(\r\022\016\n\006fields\030\t \003(\t\"`\n\033ListPlayerSn"
-    "apshotsResponse\022\022\n\nerror_code\030\001 \001(\r\022-\n\ts"
-    "napshots\030\002 \003(\0132\032.data_service.SnapshotIn"
-    "fo\"[\n\034GetPlayerSnapshotDiffRequest\022\021\n\tpl"
-    "ayer_id\030\001 \001(\004\022\023\n\013snapshot_id\030\002 \001(\004\022\023\n\013ta"
-    "rget_time\030\003 \001(\004\"|\n\tFieldDiff\022\r\n\005field\030\001 "
-    "\001(\t\022\026\n\016snapshot_value\030\002 \001(\014\022\025\n\rcurrent_v"
-    "alue\030\003 \001(\014\022\030\n\020only_in_snapshot\030\004 \001(\010\022\027\n\017"
-    "only_in_current\030\005 \001(\010\"\214\001\n\035GetPlayerSnaps"
-    "hotDiffResponse\022\022\n\nerror_code\030\001 \001(\r\022\030\n\020s"
-    "napshot_id_used\030\002 \001(\004\022\025\n\rsnapshot_time\030\003"
-    " \001(\004\022&\n\005diffs\030\004 \003(\0132\027.data_service.Field"
-    "Diff\"\262\001\n\025RollbackPlayerRequest\022\021\n\tplayer"
-    "_id\030\001 \001(\004\022\023\n\013snapshot_id\030\002 \001(\004\022\023\n\013target"
-    "_time\030\003 \001(\004\022*\n\005scope\030\004 \001(\0162\033.data_servic"
-    "e.RollbackScope\022\016\n\006fields\030\005 \003(\t\022\016\n\006reaso"
-    "n\030\006 \001(\t\022\020\n\010operator\030\007 \001(\t\"\201\001\n\026RollbackPl"
-    "ayerResponse\022\022\n\nerror_code\030\001 \001(\r\022\030\n\020snap"
-    "shot_id_used\030\002 \001(\004\022 \n\030pre_rollback_snaps"
-    "hot_id\030\003 \001(\004\022\027\n\017fields_restored\030\004 \003(\t\"]\n"
-    "\023RollbackZoneRequest\022\017\n\007zone_id\030\001 \001(\r\022\023\n"
-    "\013target_time\030\002 \001(\004\022\016\n\006reason\030\003 \001(\t\022\020\n\010op"
-    "erator\030\004 \001(\t\"\253\001\n\024RollbackZoneResponse\022\022\n"
-    "\nerror_code\030\001 \001(\r\022\030\n\020players_affected\030\002 "
-    "\001(\r\022\026\n\016players_failed\030\003 \001(\r\022\031\n\021failed_pl"
-    "ayer_ids\030\004 \003(\004\022\031\n\021orphan_player_ids\030\005 \003("
-    "\004\022\027\n\017orphans_cleaned\030\006 \001(\r\"K\n\022RollbackAl"
-    "lRequest\022\023\n\013target_time\030\001 \001(\004\022\016\n\006reason\030"
-    "\002 \001(\t\022\020\n\010operator\030\003 \001(\t\"t\n\023RollbackAllRe"
-    "sponse\022\022\n\nerror_code\030\001 \001(\r\022\027\n\017zones_proc"
-    "essed\030\002 \001(\r\022\030\n\020players_affected\030\003 \001(\r\022\026\n"
-    "\016players_failed\030\004 \001(\r\"\307\001\n\027BatchRecallIte"
-    "msRequest\022\022\n\nplayer_ids\030\001 \003(\004\022\026\n\016item_co"
-    "nfig_id\030\002 \001(\r\022\025\n\rcurrency_type\030\003 \001(\r\022\022\n\n"
-    "time_start\030\004 \001(\004\022\020\n\010time_end\030\005 \001(\004\022\020\n\010tx"
-    "_types\030\006 \003(\r\022\016\n\006reason\030\007 \001(\t\022\020\n\010operator"
-    "\030\010 \001(\t\022\017\n\007dry_run\030\t \001(\010\"\203\001\n\014RecallResult"
-    "\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\titem_uuid\030\002 \001(\004\022\026"
-    "\n\016item_config_id\030\003 \001(\r\022\016\n\006amount\030\004 \001(\004\022\017"
-    "\n\007success\030\005 \001(\010\022\024\n\014error_detail\030\006 \001(\t\"\240\001"
-    "\n\030BatchRecallItemsResponse\022\022\n\nerror_code"
-    "\030\001 \001(\r\022\025\n\rtotal_matched\030\002 \001(\r\022\026\n\016total_r"
-    "ecalled\030\003 \001(\r\022\024\n\014total_failed\030\004 \001(\r\022+\n\007r"
-    "esults\030\005 \003(\0132\032.data_service.RecallResult"
-    "\"\265\001\n\032QueryTransactionLogRequest\022\021\n\tplaye"
-    "r_id\030\001 \001(\004\022\022\n\ntime_start\030\002 \001(\004\022\020\n\010time_e"
-    "nd\030\003 \001(\004\022\020\n\010tx_types\030\004 \003(\r\022\026\n\016item_confi"
-    "g_id\030\005 \001(\r\022\025\n\rcurrency_type\030\006 \001(\r\022\r\n\005lim"
-    "it\030\007 \001(\r\022\016\n\006offset\030\010 \001(\004\"\265\002\n\021Transaction"
-    "LogRow\022\r\n\005tx_id\030\001 \001(\004\022\021\n\ttimestamp\030\002 \001(\004"
-    "\022\017\n\007tx_type\030\003 \001(\r\022\023\n\013from_player\030\004 \001(\004\022\021"
-    "\n\tto_player\030\005 \001(\004\022\021\n\titem_uuid\030\006 \001(\004\022\026\n\016"
-    "item_config_id\030\007 \001(\r\022\025\n\ritem_quantity\030\010 "
-    "\001(\r\022\025\n\rcurrency_type\030\t \001(\r\022\026\n\016currency_d"
-    "elta\030\n \001(\003\022\026\n\016balance_before\030\013 \001(\004\022\025\n\rba"
-    "lance_after\030\014 \001(\004\022\026\n\016correlation_id\030\r \001("
-    "\004\022\r\n\005extra\030\016 \001(\t\"u\n\033QueryTransactionLogR"
-    "esponse\022\022\n\nerror_code\030\001 \001(\r\022-\n\004rows\030\002 \003("
-    "\0132\037.data_service.TransactionLogRow\022\023\n\013to"
-    "tal_count\030\003 \001(\r\"\214\001\n\032CreateEventSnapshotR"
-    "equest\022\021\n\tplayer_id\030\001 \001(\004\0223\n\nevent_type\030"
-    "\002 \001(\0162\037.data_service.SnapshotEventType\022\024"
-    "\n\014event_detail\030\003 \001(\t\022\020\n\010operator\030\004 \001(\t\"Z"
-    "\n\033CreateEventSnapshotResponse\022\022\n\nerror_c"
-    "ode\030\001 \001(\r\022\023\n\013snapshot_id\030\002 \001(\004\022\022\n\ncreate"
-    "d_at\030\003 \001(\004\"9\n\030AllocateIdSegmentRequest\022\017"
-    "\n\007biz_tag\030\001 \001(\t\022\014\n\004step\030\002 \001(\r\"G\n\031Allocat"
-    "eIdSegmentResponse\022\022\n\nerror_code\030\001 \001(\r\022\n"
-    "\n\002lo\030\002 \001(\004\022\n\n\002hi\030\003 \001(\004\";\n\030ReservePlayerN"
-    "ameRequest\022\021\n\tplayer_id\030\001 \001(\004\022\014\n\004name\030\002 "
-    "\001(\t\"D\n\031ReservePlayerNameResponse\022\016\n\006resu"
-    "lt\030\001 \001(\r\022\027\n\017owner_player_id\030\002 \001(\004\";\n\030Rel"
-    "easePlayerNameRequest\022\021\n\tplayer_id\030\001 \001(\004"
-    "\022\014\n\004name\030\002 \001(\t\"/\n\031BatchGetPlayerNameRequ"
-    "est\022\022\n\nplayer_ids\030\001 \003(\004\"\216\001\n\032BatchGetPlay"
-    "erNameResponse\022B\n\005names\030\001 \003(\01323.data_ser"
-    "vice.BatchGetPlayerNameResponse.NamesEnt"
-    "ry\032,\n\nNamesEntry\022\013\n\003key\030\001 \001(\004\022\r\n\005value\030\002"
-    " \001(\t:\0028\001*\207\001\n\014SnapshotType\022\023\n\017SNAPSHOT_MA"
-    "NUAL\020\000\022\025\n\021SNAPSHOT_PERIODIC\020\001\022\034\n\030SNAPSHO"
-    "T_PRE_MAINTENANCE\020\002\022\031\n\025SNAPSHOT_PRE_ROLL"
-    "BACK\020\003\022\022\n\016SNAPSHOT_LOGIN\020\004*8\n\rRollbackSc"
-    "ope\022\021\n\rROLLBACK_FULL\020\000\022\024\n\020ROLLBACK_PARTI"
-    "AL\020\001*\212\001\n\021SnapshotEventType\022\033\n\027EVENT_LARG"
-    "E_TRANSACTION\020\000\022\022\n\016EVENT_RECHARGE\020\001\022\031\n\025E"
-    "VENT_PRE_MAINTENANCE\020\002\022\022\n\016EVENT_LEVEL_UP"
-    "\020\003\022\025\n\021EVENT_FIRST_LOGIN\020\0042\316\021\n\013DataServic"
-    "e\022]\n\016LoadPlayerData\022#.data_service.LoadP"
-    "layerDataRequest\032$.data_service.LoadPlay"
-    "erDataResponse\"\000\022]\n\016SavePlayerData\022#.dat"
-    "a_service.SavePlayerDataRequest\032$.data_s"
-    "ervice.SavePlayerDataResponse\"\000\022]\n\016GetPl"
-    "ayerField\022#.data_service.GetPlayerFieldR"
-    "equest\032$.data_service.GetPlayerFieldResp"
-    "onse\"\000\022]\n\016SetPlayerField\022#.data_service."
-    "SetPlayerFieldRequest\032$.data_service.Set"
-    "PlayerFieldResponse\"\000\022W\n\022RegisterPlayerZ"
-    "one\022\'.data_service.RegisterPlayerZoneReq"
-    "uest\032\026.google.protobuf.Empty\"\000\022f\n\021GetPla"
-    "yerHomeZone\022&.data_service.GetPlayerHome"
-    "ZoneRequest\032\'.data_service.GetPlayerHome"
-    "ZoneResponse\"\000\022u\n\026BatchGetPlayerHomeZone"
-    "\022+.data_service.BatchGetPlayerHomeZoneRe"
-    "quest\032,.data_service.BatchGetPlayerHomeZ"
-    "oneResponse\"\000\022r\n\025RemapHomeZoneForMerge\022*"
-    ".data_service.RemapHomeZoneForMergeReque"
-    "st\032+.data_service.RemapHomeZoneForMergeR"
-    "esponse\"\000\022c\n\020DeletePlayerData\022%.data_ser"
-    "vice.DeletePlayerDataRequest\032&.data_serv"
-    "ice.DeletePlayerDataResponse\"\000\022o\n\024Create"
-    "PlayerSnapshot\022).data_service.CreatePlay"
-    "erSnapshotRequest\032*.data_service.CreateP"
-    "layerSnapshotResponse\"\000\022l\n\023ListPlayerSna"
-    "pshots\022(.data_service.ListPlayerSnapshot"
-    "sRequest\032).data_service.ListPlayerSnapsh"
-    "otsResponse\"\000\022r\n\025GetPlayerSnapshotDiff\022*"
-    ".data_service.GetPlayerSnapshotDiffReque"
-    "st\032+.data_service.GetPlayerSnapshotDiffR"
-    "esponse\"\000\022]\n\016RollbackPlayer\022#.data_servi"
-    "ce.RollbackPlayerRequest\032$.data_service."
-    "RollbackPlayerResponse\"\000\022W\n\014RollbackZone"
-    "\022!.data_service.RollbackZoneRequest\032\".da"
-    "ta_service.RollbackZoneResponse\"\000\022T\n\013Rol"
-    "lbackAll\022 .data_service.RollbackAllReque"
-    "st\032!.data_service.RollbackAllResponse\"\000\022"
-    "c\n\020BatchRecallItems\022%.data_service.Batch"
-    "RecallItemsRequest\032&.data_service.BatchR"
-    "ecallItemsResponse\"\000\022l\n\023QueryTransaction"
-    "Log\022(.data_service.QueryTransactionLogRe"
-    "quest\032).data_service.QueryTransactionLog"
-    "Response\"\000\022l\n\023CreateEventSnapshot\022(.data"
-    "_service.CreateEventSnapshotRequest\032).da"
-    "ta_service.CreateEventSnapshotResponse\"\000"
-    "\022f\n\021AllocateIdSegment\022&.data_service.All"
-    "ocateIdSegmentRequest\032\'.data_service.All"
-    "ocateIdSegmentResponse\"\000\022f\n\021ReservePlaye"
-    "rName\022&.data_service.ReservePlayerNameRe"
-    "quest\032\'.data_service.ReservePlayerNameRe"
-    "sponse\"\000\022U\n\021ReleasePlayerName\022&.data_ser"
-    "vice.ReleasePlayerNameRequest\032\026.google.p"
-    "rotobuf.Empty\"\000\022i\n\022BatchGetPlayerName\022\'."
-    "data_service.BatchGetPlayerNameRequest\032("
-    ".data_service.BatchGetPlayerNameResponse"
-    "\"\000B\033Z\031data_service/data_serviceb\006proto3"
+    " \001(\004\"X\n\031RegisterPlayerZoneRequest\022\021\n\tpla"
+    "yer_id\030\001 \001(\004\022\024\n\014home_zone_id\030\002 \001(\r\022\022\n\nst"
+    "orage_id\030\003 \001(\r\"-\n\030GetPlayerHomeZoneReque"
+    "st\022\021\n\tplayer_id\030\001 \001(\004\"L\n\031GetPlayerHomeZo"
+    "neResponse\022\024\n\014home_zone_id\030\001 \001(\r\022\031\n\021home"
+    "_zone_merging\030\002 \001(\010\"3\n\035BatchGetPlayerHom"
+    "eZoneRequest\022\022\n\nplayer_ids\030\001 \003(\004\"\260\001\n\036Bat"
+    "chGetPlayerHomeZoneResponse\022X\n\017player_zo"
+    "ne_map\030\002 \003(\0132\?.data_service.BatchGetPlay"
+    "erHomeZoneResponse.PlayerZoneMapEntry\0324\n"
+    "\022PlayerZoneMapEntry\022\013\n\003key\030\001 \001(\004\022\r\n\005valu"
+    "e\030\002 \001(\r:\0028\001\"_\n\034RemapHomeZoneForMergeRequ"
+    "est\022\026\n\016source_zone_id\030\001 \001(\r\022\026\n\016target_zo"
+    "ne_id\030\002 \001(\r\022\017\n\007dry_run\030\003 \001(\010\"e\n\035RemapHom"
+    "eZoneForMergeResponse\022\022\n\nerror_code\030\001 \001("
+    "\r\022\027\n\017players_matched\030\002 \001(\r\022\027\n\017players_up"
+    "dated\030\003 \001(\r\"I\n\027DeletePlayerDataRequest\022\021"
+    "\n\tplayer_id\030\001 \001(\004\022\033\n\023delete_zone_mapping"
+    "\030\002 \001(\010\"D\n\030DeletePlayerDataResponse\022\022\n\ner"
+    "ror_code\030\001 \001(\r\022\024\n\014keys_deleted\030\002 \001(\r\"|\n\033"
+    "CreatePlayerSnapshotRequest\022\021\n\tplayer_id"
+    "\030\001 \001(\004\022(\n\004type\030\002 \001(\0162\032.data_service.Snap"
+    "shotType\022\016\n\006reason\030\003 \001(\t\022\020\n\010operator\030\004 \001"
+    "(\t\"[\n\034CreatePlayerSnapshotResponse\022\022\n\ner"
+    "ror_code\030\001 \001(\r\022\023\n\013snapshot_id\030\002 \001(\004\022\022\n\nc"
+    "reated_at\030\003 \001(\004\"S\n\032ListPlayerSnapshotsRe"
+    "quest\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013before_time\030"
+    "\002 \001(\004\022\r\n\005limit\030\003 \001(\r\"\320\001\n\014SnapshotInfo\022\023\n"
+    "\013snapshot_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\017\n"
+    "\007zone_id\030\003 \001(\r\022(\n\004type\030\004 \001(\0162\032.data_serv"
+    "ice.SnapshotType\022\022\n\ncreated_at\030\005 \001(\004\022\016\n\006"
+    "reason\030\006 \001(\t\022\020\n\010operator\030\007 \001(\t\022\027\n\017data_s"
+    "ize_bytes\030\010 \001(\r\022\016\n\006fields\030\t \003(\t\"`\n\033ListP"
+    "layerSnapshotsResponse\022\022\n\nerror_code\030\001 \001"
+    "(\r\022-\n\tsnapshots\030\002 \003(\0132\032.data_service.Sna"
+    "pshotInfo\"[\n\034GetPlayerSnapshotDiffReques"
+    "t\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013snapshot_id\030\002 \001("
+    "\004\022\023\n\013target_time\030\003 \001(\004\"|\n\tFieldDiff\022\r\n\005f"
+    "ield\030\001 \001(\t\022\026\n\016snapshot_value\030\002 \001(\014\022\025\n\rcu"
+    "rrent_value\030\003 \001(\014\022\030\n\020only_in_snapshot\030\004 "
+    "\001(\010\022\027\n\017only_in_current\030\005 \001(\010\"\214\001\n\035GetPlay"
+    "erSnapshotDiffResponse\022\022\n\nerror_code\030\001 \001"
+    "(\r\022\030\n\020snapshot_id_used\030\002 \001(\004\022\025\n\rsnapshot"
+    "_time\030\003 \001(\004\022&\n\005diffs\030\004 \003(\0132\027.data_servic"
+    "e.FieldDiff\"\262\001\n\025RollbackPlayerRequest\022\021\n"
+    "\tplayer_id\030\001 \001(\004\022\023\n\013snapshot_id\030\002 \001(\004\022\023\n"
+    "\013target_time\030\003 \001(\004\022*\n\005scope\030\004 \001(\0162\033.data"
+    "_service.RollbackScope\022\016\n\006fields\030\005 \003(\t\022\016"
+    "\n\006reason\030\006 \001(\t\022\020\n\010operator\030\007 \001(\t\"\201\001\n\026Rol"
+    "lbackPlayerResponse\022\022\n\nerror_code\030\001 \001(\r\022"
+    "\030\n\020snapshot_id_used\030\002 \001(\004\022 \n\030pre_rollbac"
+    "k_snapshot_id\030\003 \001(\004\022\027\n\017fields_restored\030\004"
+    " \003(\t\"]\n\023RollbackZoneRequest\022\017\n\007zone_id\030\001"
+    " \001(\r\022\023\n\013target_time\030\002 \001(\004\022\016\n\006reason\030\003 \001("
+    "\t\022\020\n\010operator\030\004 \001(\t\"\253\001\n\024RollbackZoneResp"
+    "onse\022\022\n\nerror_code\030\001 \001(\r\022\030\n\020players_affe"
+    "cted\030\002 \001(\r\022\026\n\016players_failed\030\003 \001(\r\022\031\n\021fa"
+    "iled_player_ids\030\004 \003(\004\022\031\n\021orphan_player_i"
+    "ds\030\005 \003(\004\022\027\n\017orphans_cleaned\030\006 \001(\r\"K\n\022Rol"
+    "lbackAllRequest\022\023\n\013target_time\030\001 \001(\004\022\016\n\006"
+    "reason\030\002 \001(\t\022\020\n\010operator\030\003 \001(\t\"t\n\023Rollba"
+    "ckAllResponse\022\022\n\nerror_code\030\001 \001(\r\022\027\n\017zon"
+    "es_processed\030\002 \001(\r\022\030\n\020players_affected\030\003"
+    " \001(\r\022\026\n\016players_failed\030\004 \001(\r\"\307\001\n\027BatchRe"
+    "callItemsRequest\022\022\n\nplayer_ids\030\001 \003(\004\022\026\n\016"
+    "item_config_id\030\002 \001(\r\022\025\n\rcurrency_type\030\003 "
+    "\001(\r\022\022\n\ntime_start\030\004 \001(\004\022\020\n\010time_end\030\005 \001("
+    "\004\022\020\n\010tx_types\030\006 \003(\r\022\016\n\006reason\030\007 \001(\t\022\020\n\010o"
+    "perator\030\010 \001(\t\022\017\n\007dry_run\030\t \001(\010\"\203\001\n\014Recal"
+    "lResult\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\titem_uuid\030"
+    "\002 \001(\004\022\026\n\016item_config_id\030\003 \001(\r\022\016\n\006amount\030"
+    "\004 \001(\004\022\017\n\007success\030\005 \001(\010\022\024\n\014error_detail\030\006"
+    " \001(\t\"\240\001\n\030BatchRecallItemsResponse\022\022\n\nerr"
+    "or_code\030\001 \001(\r\022\025\n\rtotal_matched\030\002 \001(\r\022\026\n\016"
+    "total_recalled\030\003 \001(\r\022\024\n\014total_failed\030\004 \001"
+    "(\r\022+\n\007results\030\005 \003(\0132\032.data_service.Recal"
+    "lResult\"\265\001\n\032QueryTransactionLogRequest\022\021"
+    "\n\tplayer_id\030\001 \001(\004\022\022\n\ntime_start\030\002 \001(\004\022\020\n"
+    "\010time_end\030\003 \001(\004\022\020\n\010tx_types\030\004 \003(\r\022\026\n\016ite"
+    "m_config_id\030\005 \001(\r\022\025\n\rcurrency_type\030\006 \001(\r"
+    "\022\r\n\005limit\030\007 \001(\r\022\016\n\006offset\030\010 \001(\004\"\265\002\n\021Tran"
+    "sactionLogRow\022\r\n\005tx_id\030\001 \001(\004\022\021\n\ttimestam"
+    "p\030\002 \001(\004\022\017\n\007tx_type\030\003 \001(\r\022\023\n\013from_player\030"
+    "\004 \001(\004\022\021\n\tto_player\030\005 \001(\004\022\021\n\titem_uuid\030\006 "
+    "\001(\004\022\026\n\016item_config_id\030\007 \001(\r\022\025\n\ritem_quan"
+    "tity\030\010 \001(\r\022\025\n\rcurrency_type\030\t \001(\r\022\026\n\016cur"
+    "rency_delta\030\n \001(\003\022\026\n\016balance_before\030\013 \001("
+    "\004\022\025\n\rbalance_after\030\014 \001(\004\022\026\n\016correlation_"
+    "id\030\r \001(\004\022\r\n\005extra\030\016 \001(\t\"u\n\033QueryTransact"
+    "ionLogResponse\022\022\n\nerror_code\030\001 \001(\r\022-\n\004ro"
+    "ws\030\002 \003(\0132\037.data_service.TransactionLogRo"
+    "w\022\023\n\013total_count\030\003 \001(\r\"\214\001\n\032CreateEventSn"
+    "apshotRequest\022\021\n\tplayer_id\030\001 \001(\004\0223\n\neven"
+    "t_type\030\002 \001(\0162\037.data_service.SnapshotEven"
+    "tType\022\024\n\014event_detail\030\003 \001(\t\022\020\n\010operator\030"
+    "\004 \001(\t\"Z\n\033CreateEventSnapshotResponse\022\022\n\n"
+    "error_code\030\001 \001(\r\022\023\n\013snapshot_id\030\002 \001(\004\022\022\n"
+    "\ncreated_at\030\003 \001(\004\"9\n\030AllocateIdSegmentRe"
+    "quest\022\017\n\007biz_tag\030\001 \001(\t\022\014\n\004step\030\002 \001(\r\"G\n\031"
+    "AllocateIdSegmentResponse\022\022\n\nerror_code\030"
+    "\001 \001(\r\022\n\n\002lo\030\002 \001(\004\022\n\n\002hi\030\003 \001(\004\";\n\030Reserve"
+    "PlayerNameRequest\022\021\n\tplayer_id\030\001 \001(\004\022\014\n\004"
+    "name\030\002 \001(\t\"D\n\031ReservePlayerNameResponse\022"
+    "\016\n\006result\030\001 \001(\r\022\027\n\017owner_player_id\030\002 \001(\004"
+    "\";\n\030ReleasePlayerNameRequest\022\021\n\tplayer_i"
+    "d\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\"/\n\031BatchGetPlayerN"
+    "ameRequest\022\022\n\nplayer_ids\030\001 \003(\004\"\216\001\n\032Batch"
+    "GetPlayerNameResponse\022B\n\005names\030\001 \003(\01323.d"
+    "ata_service.BatchGetPlayerNameResponse.N"
+    "amesEntry\032,\n\nNamesEntry\022\013\n\003key\030\001 \001(\004\022\r\n\005"
+    "value\030\002 \001(\t:\0028\001*\207\001\n\014SnapshotType\022\023\n\017SNAP"
+    "SHOT_MANUAL\020\000\022\025\n\021SNAPSHOT_PERIODIC\020\001\022\034\n\030"
+    "SNAPSHOT_PRE_MAINTENANCE\020\002\022\031\n\025SNAPSHOT_P"
+    "RE_ROLLBACK\020\003\022\022\n\016SNAPSHOT_LOGIN\020\004*8\n\rRol"
+    "lbackScope\022\021\n\rROLLBACK_FULL\020\000\022\024\n\020ROLLBAC"
+    "K_PARTIAL\020\001*\212\001\n\021SnapshotEventType\022\033\n\027EVE"
+    "NT_LARGE_TRANSACTION\020\000\022\022\n\016EVENT_RECHARGE"
+    "\020\001\022\031\n\025EVENT_PRE_MAINTENANCE\020\002\022\022\n\016EVENT_L"
+    "EVEL_UP\020\003\022\025\n\021EVENT_FIRST_LOGIN\020\0042\316\021\n\013Dat"
+    "aService\022]\n\016LoadPlayerData\022#.data_servic"
+    "e.LoadPlayerDataRequest\032$.data_service.L"
+    "oadPlayerDataResponse\"\000\022]\n\016SavePlayerDat"
+    "a\022#.data_service.SavePlayerDataRequest\032$"
+    ".data_service.SavePlayerDataResponse\"\000\022]"
+    "\n\016GetPlayerField\022#.data_service.GetPlaye"
+    "rFieldRequest\032$.data_service.GetPlayerFi"
+    "eldResponse\"\000\022]\n\016SetPlayerField\022#.data_s"
+    "ervice.SetPlayerFieldRequest\032$.data_serv"
+    "ice.SetPlayerFieldResponse\"\000\022W\n\022Register"
+    "PlayerZone\022\'.data_service.RegisterPlayer"
+    "ZoneRequest\032\026.google.protobuf.Empty\"\000\022f\n"
+    "\021GetPlayerHomeZone\022&.data_service.GetPla"
+    "yerHomeZoneRequest\032\'.data_service.GetPla"
+    "yerHomeZoneResponse\"\000\022u\n\026BatchGetPlayerH"
+    "omeZone\022+.data_service.BatchGetPlayerHom"
+    "eZoneRequest\032,.data_service.BatchGetPlay"
+    "erHomeZoneResponse\"\000\022r\n\025RemapHomeZoneFor"
+    "Merge\022*.data_service.RemapHomeZoneForMer"
+    "geRequest\032+.data_service.RemapHomeZoneFo"
+    "rMergeResponse\"\000\022c\n\020DeletePlayerData\022%.d"
+    "ata_service.DeletePlayerDataRequest\032&.da"
+    "ta_service.DeletePlayerDataResponse\"\000\022o\n"
+    "\024CreatePlayerSnapshot\022).data_service.Cre"
+    "atePlayerSnapshotRequest\032*.data_service."
+    "CreatePlayerSnapshotResponse\"\000\022l\n\023ListPl"
+    "ayerSnapshots\022(.data_service.ListPlayerS"
+    "napshotsRequest\032).data_service.ListPlaye"
+    "rSnapshotsResponse\"\000\022r\n\025GetPlayerSnapsho"
+    "tDiff\022*.data_service.GetPlayerSnapshotDi"
+    "ffRequest\032+.data_service.GetPlayerSnapsh"
+    "otDiffResponse\"\000\022]\n\016RollbackPlayer\022#.dat"
+    "a_service.RollbackPlayerRequest\032$.data_s"
+    "ervice.RollbackPlayerResponse\"\000\022W\n\014Rollb"
+    "ackZone\022!.data_service.RollbackZoneReque"
+    "st\032\".data_service.RollbackZoneResponse\"\000"
+    "\022T\n\013RollbackAll\022 .data_service.RollbackA"
+    "llRequest\032!.data_service.RollbackAllResp"
+    "onse\"\000\022c\n\020BatchRecallItems\022%.data_servic"
+    "e.BatchRecallItemsRequest\032&.data_service"
+    ".BatchRecallItemsResponse\"\000\022l\n\023QueryTran"
+    "sactionLog\022(.data_service.QueryTransacti"
+    "onLogRequest\032).data_service.QueryTransac"
+    "tionLogResponse\"\000\022l\n\023CreateEventSnapshot"
+    "\022(.data_service.CreateEventSnapshotReque"
+    "st\032).data_service.CreateEventSnapshotRes"
+    "ponse\"\000\022f\n\021AllocateIdSegment\022&.data_serv"
+    "ice.AllocateIdSegmentRequest\032\'.data_serv"
+    "ice.AllocateIdSegmentResponse\"\000\022f\n\021Reser"
+    "vePlayerName\022&.data_service.ReservePlaye"
+    "rNameRequest\032\'.data_service.ReservePlaye"
+    "rNameResponse\"\000\022U\n\021ReleasePlayerName\022&.d"
+    "ata_service.ReleasePlayerNameRequest\032\026.g"
+    "oogle.protobuf.Empty\"\000\022i\n\022BatchGetPlayer"
+    "Name\022\'.data_service.BatchGetPlayerNameRe"
+    "quest\032(.data_service.BatchGetPlayerNameR"
+    "esponse\"\000B\033Z\031data_service/data_serviceb\006"
+    "proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_deps[1] = {
@@ -9051,7 +9072,7 @@ static ::absl::once_flag descriptor_table_proto_2fdata_5fservice_2fdata_5fservic
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto = {
     false,
     false,
-    7839,
+    7886,
     descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
     "proto/data_service/data_service.proto",
     &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_once,
@@ -11308,9 +11329,9 @@ inline void RegisterPlayerZoneRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABL
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, home_zone_id_) -
+           offsetof(Impl_, storage_id_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::home_zone_id_));
+               sizeof(Impl_::storage_id_));
 }
 RegisterPlayerZoneRequest::~RegisterPlayerZoneRequest() {
   // @@protoc_insertion_point(destructor:data_service.RegisterPlayerZoneRequest)
@@ -11360,10 +11381,10 @@ PROTOBUF_NOINLINE void RegisterPlayerZoneRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.home_zone_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.home_zone_id_));
+        reinterpret_cast<char*>(&_impl_.storage_id_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.storage_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -11406,6 +11427,15 @@ PROTOBUF_NOINLINE void RegisterPlayerZoneRequest::Clear() {
     }
   }
 
+  // uint32 storage_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_storage_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_storage_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -11431,7 +11461,7 @@ PROTOBUF_NOINLINE void RegisterPlayerZoneRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // uint64 player_id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -11444,6 +11474,13 @@ PROTOBUF_NOINLINE void RegisterPlayerZoneRequest::Clear() {
       if (this_._internal_home_zone_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_home_zone_id());
+      }
+    }
+    // uint32 storage_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_storage_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_storage_id());
       }
     }
   }
@@ -11464,7 +11501,7 @@ void RegisterPlayerZoneRequest::MergeImpl(::google::protobuf::MessageLite& to_ms
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
@@ -11473,6 +11510,11 @@ void RegisterPlayerZoneRequest::MergeImpl(::google::protobuf::MessageLite& to_ms
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_home_zone_id() != 0) {
         _this->_impl_.home_zone_id_ = from._impl_.home_zone_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_storage_id() != 0) {
+        _this->_impl_.storage_id_ = from._impl_.storage_id_;
       }
     }
   }
@@ -11494,8 +11536,8 @@ void RegisterPlayerZoneRequest::InternalSwap(RegisterPlayerZoneRequest* PROTOBUF
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(RegisterPlayerZoneRequest, _impl_.home_zone_id_)
-      + sizeof(RegisterPlayerZoneRequest::_impl_.home_zone_id_)
+      PROTOBUF_FIELD_OFFSET(RegisterPlayerZoneRequest, _impl_.storage_id_)
+      + sizeof(RegisterPlayerZoneRequest::_impl_.storage_id_)
       - PROTOBUF_FIELD_OFFSET(RegisterPlayerZoneRequest, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));
@@ -11722,7 +11764,12 @@ PROTOBUF_NDEBUG_INLINE GetPlayerHomeZoneResponse::Impl_::Impl_(
 
 inline void GetPlayerHomeZoneResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.home_zone_id_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, home_zone_id_),
+           0,
+           offsetof(Impl_, home_zone_merging_) -
+               offsetof(Impl_, home_zone_id_) +
+               sizeof(Impl_::home_zone_merging_));
 }
 GetPlayerHomeZoneResponse::~GetPlayerHomeZoneResponse() {
   // @@protoc_insertion_point(destructor:data_service.GetPlayerHomeZoneResponse)
@@ -11771,7 +11818,12 @@ PROTOBUF_NOINLINE void GetPlayerHomeZoneResponse::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  _impl_.home_zone_id_ = 0u;
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.home_zone_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.home_zone_merging_) -
+        reinterpret_cast<char*>(&_impl_.home_zone_id_)) + sizeof(_impl_.home_zone_merging_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -11804,6 +11856,15 @@ PROTOBUF_NOINLINE void GetPlayerHomeZoneResponse::Clear() {
     }
   }
 
+  // bool home_zone_merging = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_home_zone_merging() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_home_zone_merging(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -11827,13 +11888,20 @@ PROTOBUF_NOINLINE void GetPlayerHomeZoneResponse::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-   {
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // uint32 home_zone_id = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_home_zone_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_home_zone_id());
+      }
+    }
+    // bool home_zone_merging = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_home_zone_merging() != 0) {
+        total_size += 2;
       }
     }
   }
@@ -11854,9 +11922,16 @@ void GetPlayerHomeZoneResponse::MergeImpl(::google::protobuf::MessageLite& to_ms
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (from._internal_home_zone_id() != 0) {
-      _this->_impl_.home_zone_id_ = from._impl_.home_zone_id_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_home_zone_id() != 0) {
+        _this->_impl_.home_zone_id_ = from._impl_.home_zone_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_home_zone_merging() != 0) {
+        _this->_impl_.home_zone_merging_ = from._impl_.home_zone_merging_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -11876,7 +11951,12 @@ void GetPlayerHomeZoneResponse::InternalSwap(GetPlayerHomeZoneResponse* PROTOBUF
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  swap(_impl_.home_zone_id_, other->_impl_.home_zone_id_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GetPlayerHomeZoneResponse, _impl_.home_zone_merging_)
+      + sizeof(GetPlayerHomeZoneResponse::_impl_.home_zone_merging_)
+      - PROTOBUF_FIELD_OFFSET(GetPlayerHomeZoneResponse, _impl_.home_zone_id_)>(
+          reinterpret_cast<char*>(&_impl_.home_zone_id_),
+          reinterpret_cast<char*>(&other->_impl_.home_zone_id_));
 }
 
 ::google::protobuf::Metadata GetPlayerHomeZoneResponse::GetMetadata() const {

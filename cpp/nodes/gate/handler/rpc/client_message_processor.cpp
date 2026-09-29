@@ -32,7 +32,6 @@
 #include <session/manager/session_manager.h>
 #include <network/node_utils.h>
 #include <node_config_manager.h>
-#include "handler/event/battle_binding_helper.h"
 
 // BytesToHex / HmacSha256Hex 原来是本文件匿名 namespace 里的两个静态函数,
 // 已经提到 gate_security.h —— GM 面鉴权(gate_service_handler.cpp)要复用同一份
@@ -56,7 +55,7 @@ static std::optional<entt::entity> PickRandomNode(uint32_t nodeType)
 	std::vector<entt::entity> candidates;
 	auto &registry = tlsNodeContextManager.GetRegistry(nodeType);
 	auto view = registry.view<NodeInfo>();
-	// 全局池类型(match / battle)不比对 zone:任一 zone 的实例都能服务本 zone 玩家,
+	// 全局池类型(如 match)不比对 zone:任一 zone 的实例都能服务本 zone 玩家,
 	// 某 zone 的实例全挂时自动落到其他 zone(设计文档 cross-zone-matchmaking.md D11)。
 	const bool globalPool = NodeUtils::IsGlobalPoolNodeType(nodeType);
 	const auto selfZoneId = GetNodeInfo().zone_id();
@@ -483,8 +482,6 @@ void RpcClientSessionHandler::HandleConnectionDisconnection(const muduo::net::Tc
 	}
 
 	sessions.erase(sessionId);
-	// 会话没了,battle_id 绑定记录一并清理(战斗侧照打,重连由 scene 重发 Bind)。
-	gate_battle_binding::ClearBattleRecord(sessionId);
 
 	if (hasBoundPlayer)
 	{
@@ -758,15 +755,15 @@ void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &reque
 	{
 		// 路由规则(保持向后兼容):
 		//   1. 会话对目标 nodeType 已有绑定(SessionInfo.SetEntityId 过)→ 一律走绑定实体;
-		//   2. 无绑定时,有状态节点(Scene / Battle)不能随机路由 —— Scene 的玩家实体、
-		//      Battle 的战斗房间都只在特定节点上,随机挑一个只会得到"玩家/战斗不存在";
-		//      ResolveSessionTargetNode 对无绑定会话返回 nullopt,统一落到下面的错误应答;
+		//   2. 无绑定时,有状态节点(Scene)不能随机路由 —— 玩家实体只在特定 scene 节点上,
+		//      随机挑一个只会得到"玩家不存在";ResolveSessionTargetNode 对无绑定会话返回 nullopt,
+		//      统一落到下面的错误应答;
 		//   3. 其余 nodeType(login/guild/friend/chat 等无状态 Go 服务)维持 PickRandomNode 现状。
-		// Battle 的绑定由 BindBattleEvent/UnbindBattleEvent 维护(battle_binding_helper.cpp)。
+		// 战斗消息(BattleNodeService)到不了这里:DispatchClientRpcMessage 在分派之前已统一拒绝
+		// (turn-based §22 D66),gate 也不再连 battle。
 		std::optional<entt::entity> node;
 		const bool requiresSessionBinding =
-			rpcHandlerMeta.targetNodeType == eNodeType::SceneNodeService ||
-			rpcHandlerMeta.targetNodeType == eNodeType::BattleNodeService;
+			rpcHandlerMeta.targetNodeType == eNodeType::SceneNodeService;
 		if (requiresSessionBinding || sessionIt->second.HasEntityId(rpcHandlerMeta.targetNodeType))
 		{
 			node = ResolveSessionTargetNode(sessionId, rpcHandlerMeta.targetNodeType);
@@ -802,24 +799,11 @@ void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &reque
 //   * 不解析 body —— gRpcMethodRegistry 里的共享原型 requestProto 完全不被触碰,
 //     原包字节交给路由服,由目标 Go 服务自己解;
 //   * 不挑业务实例 —— 只挑路由服实例。
-// 三道闸(IsClientMessageId / 体积 / 限速)仍在调用方 DispatchClientRpcMessage 里,
-// 顺序与直连模式完全相同;本函数只在闸门全部通过后被调用。
+// 三道闸(IsClientMessageId / 体积 / 限速)、GM 闸与战斗消息拒绝仍在调用方
+// DispatchClientRpcMessage 里,顺序与直连模式完全相同;本函数只在闸门全部通过后被调用。
 static void HandleRouterForward(SessionId sessionId, const RpcClientMessagePtr &request, const muduo::net::TcpConnectionPtr &conn)
 {
 	assert(request->message_id() < gRpcMethodRegistry.size());
-	const auto &rpcHandlerMeta = gRpcMethodRegistry[request->message_id()];
-
-	// D33:战斗只走客户端直连(turn-based-battle-server.md §18),不经路由服。
-	// battle 的会话绑定只有 gate 知道,路由服不该复制这份状态;而路由模式下 gate
-	// 又不再持 battle stub —— 所以在这里就拒,不劳路由服再拒一次。
-	// skip_direct_connect 的回落路径在路由模式下预期失败,是设计而非缺陷(设计文档 §7.5)。
-	if (rpcHandlerMeta.targetNodeType == eNodeType::BattleNodeService)
-	{
-		LOG_DEBUG << "路由模式拒绝经 gate 的战斗消息(战斗只走直连), session_id=" << sessionId
-				  << ", message_id=" << request->message_id();
-		RpcClientSessionHandler::SendTipToClient(conn, kServiceUnavailable);
-		return;
-	}
 
 	const auto sessionIt = tlsSessionManager.sessions().find(sessionId);
 	if (sessionIt == tlsSessionManager.sessions().end())
@@ -949,6 +933,22 @@ void RpcClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpConn
 	}
 
 	auto &messageInfo = gRpcMethodRegistry[request->message_id()];
+
+	// 战斗消息 gate 两种模式都不中继(turn-based §22 D66):BattleClientPlayer 的上行只走客户端
+	// 直连 battle;gate 出站白名单里没有 BattleNodeService,也不维护会话到 battle 的绑定。
+	// 这组号仍在 IsClientMessageId 里(它们同时是直连面与 Notify* 下行的协议号,不能摘掉
+	// OptionIsClientProtocolService),所以放在上面几道闸之后、按协议分派之前一处拦下,
+	// 同时覆盖直连模式与路由模式,HandleGrpcNodeMessage / HandleRouterForward 都见不到它们。
+	// 回 kServiceUnavailable、不计非法包、不断连:这是合法协议号(旧客户端或误走大厅),
+	// 踢线会把大厅连接一起拆掉。逐条只打 DEBUG,与上面几道闸的明细日志同一口径。
+	if (messageInfo.targetNodeType == eNodeType::BattleNodeService)
+	{
+		LOG_DEBUG << "拒绝经 gate 的战斗消息(战斗只走客户端直连), session_id=" << sessionId
+				  << ", message_id=" << request->message_id();
+		SendTipToClient(conn, kServiceUnavailable);
+		return;
+	}
+
 	if (messageInfo.protocol == PROTOCOL_TCP)
 	{
 		HandleTcpNodeMessage(session, request, sessionId, conn);
@@ -956,7 +956,7 @@ void RpcClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpConn
 	else if (messageInfo.protocol == PROTOCOL_GRPC)
 	{
 		// 路由模式(GATE_CLIENT_RPC_ROUTER=1):原包交给路由服,不解析、不挑业务实例;
-		// 直连模式:typed sender 直发业务服务,与引入路由服之前完全一致(D34)。
+		// 直连模式:typed sender 直发业务服务,除战斗(上面已拒)外与引入路由服之前一致(D34)。
 		if (gate_router_mode::IsRouterModeEnabled())
 		{
 			HandleRouterForward(sessionId, request, conn);
@@ -1109,12 +1109,5 @@ void RpcClientSessionHandler::OnNodeRemoveEventHandler(const OnNodeRemoveEvent &
 		if (session.second.GetEntityId(pb.node_type()) != pb.entity())
 			continue;
 		session.second.SetEntityId(pb.node_type(), SessionInfo::kInvalidEntityId);
-		// battle 节点被摘除 = 该节点上的战斗全部作废(节点无持久状态,设计文档 §8),
-		// 同步清掉 battle_id 记录,避免迟到的 UnbindBattleEvent 去匹配一条僵尸记录;
-		// 玩家解冻由 scene reaper 按 InBattleComp.deadline_ms 兜底。
-		if (pb.node_type() == eNodeType::BattleNodeService)
-		{
-			gate_battle_binding::ClearBattleRecord(session.first);
-		}
 	}
 }

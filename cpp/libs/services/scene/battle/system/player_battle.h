@@ -7,7 +7,7 @@
 //   - ConfirmBattle:battle 节点 CreateBattle 成功后的确认事件,PREPARING -> FIGHTING
 //     并把作废期限从 prepare_deadline_ms 切到正式 deadline_ms(cross-zone-matchmaking.md §10);
 //   - ApplySettlement:battle 节点结算事件的唯一应用者(宪法 §7 新增不变量 4);
-//   - OnPlayerEnterScene:登录/重连后置钩子(先应用离线挂起结算,再处理战斗中重连的重绑);
+//   - OnPlayerEnterScene:登录/重连后置钩子(先应用离线挂起结算,再给战斗中换会话的客户端推重连提示);
 //   - reaper:低频扫描 InBattleComp,PREPARING 看 prepare_deadline_ms、FIGHTING 看 deadline_ms,
 //     过期即作废解冻(§3.2 补偿矩阵)。
 //
@@ -83,8 +83,9 @@ public:
 	// 登录/重连后置钩子(player_lifecycle.cpp EnterScene 末尾调用):
 	//   1) 查 Redis 挂起结算,有则应用并清理(先应用挂起结算再放开排队,§3.2);
 	//      没有挂起结算且无 InBattleComp -> 读 battle:lock + ctx,锁在则重建 InBattleComp,
-	//      FIGHTING 且 battle_node_id 已知时向 gate 重发 BindBattleEvent + 推 BattleReconnectS2C;
-	//   2) RECONNECT 且仍有 InBattleComp -> 向 gate 重发 BindBattleEvent + 推 BattleReconnectS2C。
+	//      FIGHTING 时推 BattleReconnectS2C;
+	//   2) RECONNECT / REPLACE 且仍有 InBattleComp -> 推 BattleReconnectS2C。
+	//   只推提示(turn-based §22 D72):客户端凭 battle_id 补签票据、重建直连后 GetBattleState 补拉。
 	static void OnPlayerEnterScene(entt::entity player, uint32_t enterGsType);
 
 	// 冻结拦截查询:InBattleComp 存在即在战(切场景/跨 zone 等入口用)。
@@ -131,20 +132,20 @@ private:
 	static bool ApplySettlementToEntity(entt::entity player, const ::BattleSettlementData& settlement,
 										bool* alreadyAppliedOut = nullptr);
 
-	// RECONNECT 重绑:经 Kafka gate-{gate_id} 发 BindBattleEvent(GateCommand,
-	// target_instance_id 必填,宪法 §7 不变量 2),并推 BattleReconnectS2C。
-	static void RebindBattleOnReconnect(entt::entity player);
+	// 战斗中换会话 / 登录重建为 FIGHTING:经大厅会话推 BattleReconnectS2C{battle_id}
+	// (scene→gate TCP,不经 Kafka)。gate 不中继战斗,没有绑定要重建(turn-based §22 D72);
+	// 客户端凭 battle_id 经 MatchService.RequestBattleTicket 补签并重建直连。无 InBattleComp 时 no-op。
+	static void NotifyBattleReconnectToClient(entt::entity player);
 
 	// 应用挂起结算并清理 pending key + 锁(登录钩子的 Redis 回调侧)。
 	static void ApplyPendingSettlement(entt::entity player, const ::BattleSettlementEvent& event);
 
 	// 按锁值匹配重建 FIGHTING 冻结(迟到确认 / 在线无组件路径):锁值==battleId 才读 ctx 重建
-	// InBattleComp、条件续期并覆写 ctx;deadlineMsHint 非 0 时覆盖 ctx 的 deadline;
-	// rebindGate 为真时重建后向 gate 重发 BindBattleEvent。reason 只进日志。
+	// InBattleComp、条件续期并覆写 ctx;deadlineMsHint 非 0 时覆盖 ctx 的 deadline。reason 只进日志。
 	static void RebuildBattleFreezeFromLock(entt::entity player, uint64_t playerId, uint64_t battleId,
-											uint64_t deadlineMsHint, bool rebindGate, const char* reason);
+											uint64_t deadlineMsHint, const char* reason);
 
 	// 登录重建:读 battle:lock + ctx(不预设 battle_id),锁在则按 ctx 重建 InBattleComp;
-	// FIGHTING 且 battle_node_id 已知时重绑 gate。只在无挂起结算且无 InBattleComp 时调用。
+	// FIGHTING 时推重连提示(不要求 battle_node_id 已知)。只在无挂起结算且无 InBattleComp 时调用。
 	static void RestoreBattleFreezeOnLogin(entt::entity player, uint64_t playerId);
 };

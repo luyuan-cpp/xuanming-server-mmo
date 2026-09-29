@@ -63,11 +63,12 @@ const (
 	// 其余一律立即返回。
 	//
 	// **下限是 2,不许调成 1**(player_name_store_test.go 机械守住):
-	//   - 写法改成 ODKU(playerNameReserveSQL)只拆掉了"两个排队者都已持 S、再互等插入意向锁"那一种环,
-	//     Reserve 仍会收到 1213,来源有两类(见 Reserve 的「残余」):A = InnoDB 固有的锁继承;B = 新项要插在
-	//     唯一键的删除标记项**之前**(胜者 player_id < 删除标记原主人,号段 id 抢存量角色释放的名字时是常态),
-	//     按源码静态推演会成环、未经真库确认。两类里被牺牲方都要靠**至少一次**重来才能拿到正确终局 Taken;
-	//     上限为 1 时 1213 会直接作为存储错误(RPC 失败)返回给 login,玩家看到的是建角失败而不是"名字已被占用"。
+	//   - 写法改成 ODKU(playerNameReserveSQL)拆掉了"两个排队者的 S 同时被授予、再互等插入意向锁"那一半,
+	//     但 Reserve 仍会收到 1213,来源有三类(见 Reserve 的「残余」):A = InnoDB 固有的锁继承;
+	//     B = 胜者 player_id < 唯一键上删除标记项的原主人(号段 id 抢存量角色释放的名字时是常态)时,新项插在
+	//     该项**之前**,插入意向锁被排队者的 next-key 请求挡住 —— 已按 MySQL 源码确认会成环、且与版本无关
+	//     (证据 E2/E3/E4);C = 跨名字的相邻删除标记项。三类里被牺牲方都要靠**至少一次**重来才能拿到正确终局
+	//     Taken;上限为 1 时 1213 会直接作为存储错误(RPC 失败)返回给 login,玩家看到的是建角失败而不是"名字已被占用"。
 	//   - "撞键后行已消失"的重插与锁冲突重试共用这一个预算,两者叠加在同一次调用里时只剩一次重来;
 	//     所以取 3 而不是恰好 2,留一次余量。
 	playerNameReserveAttempts = 3
@@ -97,11 +98,24 @@ const (
 const playerNameReserveSQL = "INSERT INTO player_name (player_id, name, name_norm, created_ms) VALUES (?, ?, ?, ?)" +
 	" ON DUPLICATE KEY UPDATE player_id = player_id"
 
+// PlayerNameUniqueKey 是 name_norm 上那条唯一键的**索引名**。playerNameReleaseSQL 的 FORCE INDEX
+// 点的就是它,NewPlayerNameStore 建店时探的也是它 —— 两处引用同一个常量,不各写一份字面量。
+//
+// 另一份真相在 schema.go 的 playerNameBootstrapDDL(建表语句)里。两处漂移(存量库上这条唯一性
+// 建成了别的名字、或干脆是建在 name_norm 上的单列主键 —— schema.go 的 bootstrapUniqueColumns 只看
+// 列与 NON_UNIQUE、不看索引名,那种表形状照样能过启动检查)时,由 NewPlayerNameStore 的探测
+// fail-closed,不让它拖到运行期每一条 Release 都以 1176 失败。
+const PlayerNameUniqueKey = "uk_player_name"
+
 // playerNameReleaseSQL 是 Release 的条件删除。强制走 uk_player_name(先锁唯一键项、后锁聚簇记录),
 // 与 Reserve 撞唯一键时的取锁顺序一致;单表 DELETE 不接受索引提示,所以写成多表 DELETE 语法,
 // 删除语义与受影响行数与单表写法相同。理由见 Release 的「锁序」,真库用例用 EXPLAIN 钉住。
-const playerNameReleaseSQL = "DELETE player_name FROM player_name FORCE INDEX (uk_player_name)" +
+const playerNameReleaseSQL = "DELETE player_name FROM player_name FORCE INDEX (" + PlayerNameUniqueKey + ")" +
 	" WHERE player_id = ? AND name_norm = ? AND created_ms >= ?"
+
+// playerNameUniqueKeyProbeTimeout 是建 store 时探一次索引名的时限(与 SnapshotStore 的
+// uniqueGuidKeyProbeTimeout 同口径):一条 INFORMATION_SCHEMA 点查,不该把服务启动拖住。
+const playerNameUniqueKeyProbeTimeout = 5 * time.Second
 
 var (
 	// ErrPlayerNameInvalidArgument 入参在库层就被拒:player_id=0 或 name_norm 为空。
@@ -189,19 +203,60 @@ type PlayerNameStore struct {
 
 	// lockRetries 累计 Reserve / Release 因 1213/1205 重来的次数(按实例,不是全局状态)。
 	// 只给日志与真库回归用例用:只看"最终结果正确"分不清是写法真的不成环,还是环被重试悄悄吸收了。
-	// 用例据此区分:竞争者 player_id 都大于删除标记原主人时必须一次都没有;反之(Reserve 的「残余 B」)
-	// 允许至多一次,并记录实际次数。
+	//
+	// 真库用例 TestPlayerName_ReserveBehindPendingReleaseOutcome 据此分三条判据,记 P_old = 删除标记项的原主人:
+	//   (a) 两个竞争者 id 都 > P_old:**恰好 0 次**。新项一律插在删除标记项之后,插入意向锁打在后继记录上,
+	//       那里只有胜者自己的锁,不可能成环。
+	//   (b) 都 < P_old:**恰好 1 次**。「残余 B」形状 1 必然成环(E2/E3/E4),下界证明环真的成了
+	//       (不是"本来就没环"蒙对了终局),上界证明收敛论证成立(牺牲方退避后的下一轮看见活行即收敛)。
+	//   (c) 一大一小:只有一个方向是确定的 —— **0 次时胜者的 id 必须 > P_old**。胜者 id < P_old 而零重试,
+	//       等于说插入意向锁越过了对方排队中的请求,那正是 E4 判死的 CAN_BYPASS。
+	//       反向(胜者 id > P_old ⇒ 0 次)**不成立**,不要写成双向断言:4001 先被授予 → 成环 → 若 InnoDB 挑中
+	//       4001 当牺牲者,6001 接着插在删除标记项之后并提交,结果就是"胜者 6001 且重试 1 次"。
+	//       牺牲者是谁由权重定,手册只承诺"tries to pick small transactions … determined by the number of rows
+	//       inserted, updated, or deleted"(innodb-deadlock-detection.html),而两个竞争者卡在二级唯一键之前
+	//       **都已经插完了自己的聚簇行**(各 1 行),在这条判据上打平,剩下的由锁结构数等实现细节决定 —— 不可断言。
 	lockRetries atomic.Uint64
 }
 
-// NewPlayerNameStore 在全局库上开自己的池(与其它 store 同一套 openMySQL)。
+// NewPlayerNameStore 在全局库上开自己的池(与其它 store 同一套 openMySQL),并探一次
+// PlayerNameUniqueKey 是否存在 —— 探不到就**建不出 store**(fail-closed)。
+//
+// 为什么要探:playerNameReleaseSQL 写死了 FORCE INDEX (uk_player_name)(锁序,见 Release),
+// 而启动期的结构守卫(schema.go 的 bootstrapUniqueColumns)只要求 name_norm 上有单列唯一约束、
+// **不要求索引名** —— 单列主键建在 name_norm 上一样满足它。在那种表形状上 uk_player_name 根本不存在,
+// 启动检查全过,此后每一条 Release 都以 ER_KEY_DOES_NOT_EXIST(1176)失败:建角补偿释放全线失效,
+// 孤儿名字只涨不消。宁可在建 store 时一次性拒绝(调用方把 store 置 nil,CreatePlayer 当场拒绝并打日志),
+// 也不要让它变成运行期每次都错、错到孤儿堆起来才被发现。
+//
+// 探测走 hasUniqueIndex(要求 NON_UNIQUE=0):一条**同名的非唯一索引**能让 FORCE INDEX 生效、
+// 锁序也对,但唯一性约束不在了 —— 那才是最坏的一种(并发建角重名且零报错),所以它返回错误、这里照样拒绝。
 func NewPlayerNameStore(cfg MySQLConfig) (*PlayerNameStore, error) {
 	db, err := openMySQL(cfg)
 	if err != nil {
 		return nil, err
 	}
-	logx.Infof("[PlayerNameStore] connected to %s/%s max_open_conn=%d max_idle_conn=%d",
-		cfg.Host, cfg.DBName, cfg.MaxOpenConn, cfg.MaxIdleConn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), playerNameUniqueKeyProbeTimeout)
+	defer cancel()
+	hasKey, err := hasUniqueIndex(ctx, db, cfg.DBName, PlayerNameTableName, PlayerNameUniqueKey)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("player_name: 探测 %s.%s 失败(Release 的 FORCE INDEX 依赖它): %w",
+			PlayerNameTableName, PlayerNameUniqueKey, err)
+	}
+	if !hasKey {
+		_ = db.Close()
+		return nil, fmt.Errorf("player_name: %s.%s 不存在。Release 的语句写死 FORCE INDEX (%s)(取锁顺序必须与 Reserve 的 "+
+			"ON DUPLICATE KEY 一致,否则两方反序成环),索引名缺失时每一条 Release 都会以 1176 失败、建角补偿释放全线失效。"+
+			"存量库上 name_norm 的唯一性可能是由别名索引或单列主键承担的(启动期结构守卫只看列、不看索引名):"+
+			"先 `SHOW INDEX FROM %s` 确认,再 `ALTER TABLE %s ADD UNIQUE KEY %s (name_norm)` 补上并重启本服务",
+			PlayerNameTableName, PlayerNameUniqueKey, PlayerNameUniqueKey,
+			PlayerNameTableName, PlayerNameTableName, PlayerNameUniqueKey)
+	}
+
+	logx.Infof("[PlayerNameStore] connected to %s/%s max_open_conn=%d max_idle_conn=%d (%s.%s 已确认存在)",
+		cfg.Host, cfg.DBName, cfg.MaxOpenConn, cfg.MaxIdleConn, PlayerNameTableName, PlayerNameUniqueKey)
 	return &PlayerNameStore{db: db}, nil
 }
 
@@ -242,25 +297,71 @@ func (s *PlayerNameStore) Close() error {
 //     MySQL 8 默认 ROW,deploy/k8s/manifests/infra/mysql.yaml 显式写了 binlog_format = ROW。
 //  3. 迁 TiDB 时要回归行数口径与 ODKU 语义(按文档与 MySQL 同口径,未实测)。
 //
-// # 为什么是 ODKU:重复检查从 S 改成 X(审计 #12)—— 只拆掉了一半
+// # 为什么是 ODKU:重复检查从 S 改成 X(审计 #12)
 //
-// 改写前是普通 INSERT,重复检查取 **S**。MySQL 手册里那条三方交错:Release 的 DELETE 持着 'abc' 的 X
-// 尚未提交,两个同名 Reserve 的重复检查都排在它后面等 S;DELETE 一提交,两边**同时**拿到 'abc'(已是
-// 删除标记记录)上的 S next-key,再各自申请插入意向锁,被对方**已授予**的 S 挡住 → 1213,而且与 player_id
-// 的大小顺序无关。ODKU 的重复检查直接取 **X**(next-key):排队者只能一个一个拿到,"两边都已持锁、再互等插入
-// 意向锁"这一种形状不再出现。
+// 下面的每一条都在 2026-09-28 按下列来源核实过(不是凭源码记忆)。lock0lock.cc 的三段在
+// mysql-server 的 8.0 / 8.4 / trunk 三个分支上**逐字相同**,所以结论覆盖本仓部署的两个版本
+// (deploy/k8s/manifests/infra/mysql.yaml 的 mysql:8.0 与 deploy/docker-compose.yml 的 mysql:latest):
 //
-// **这不等于删除标记项上的环都没了。** 后到者的 X 请求**正在排队**时,先到者插入的新项若落在删除标记项之前,
-// 插入意向锁仍会被这个排队中的请求挡住,两方成环 —— 见「残余 B」。不许把本节读成"S→X 环已消失"。
-// 相比普通 INSERT,ODKU 在任何 player_id 顺序下都不更差(普通 INSERT 两种顺序都会成环,ODKU 只剩「残余 B」
-// 那种顺序),所以保留;要在 SQL 层根除须改 schema,见「残余 B」。
+//	E1 手册 "Locks Set by Different SQL Statements in InnoDB"
+//	   (https://dev.mysql.com/doc/refman/8.0/en/innodb-locks-set.html):
+//	   普通 INSERT 撞键时"a shared lock on the duplicate index record is set",并给出三会话例
+//	   (建在 `CREATE TABLE t1 (i INT, PRIMARY KEY (i))` 上:S1 INSERT 未提交 → S2 S3 撞键排队要 S →
+//	   S1 ROLLBACK 放掉 X 之后两个 S **同时**被授予 → "Neither can acquire an exclusive lock for the row
+//	   because of the shared lock held by the other" → 死锁)。这就是审计 #12 的原形 —— 注意它走的是**聚簇主键**,
+//	   互挡的是就地改写那一行所需的 X **记录**锁,形状与本表二级唯一键路径不同(见 E5),结论同为死锁。
+//	   同页对 ODKU:"an exclusive lock rather than a shared lock is placed on the row
+//	   to be updated when a duplicate-key error occurs. An exclusive index-record lock is taken for a duplicate
+//	   primary key value. An exclusive next-key lock is taken for a duplicate unique key value."
+//	   —— 撞主键只拿记录锁(不带间隙),撞唯一键拿 X next-key。
+//	E2 源码 storage/innobase/row/row0ins.cc row_ins_scan_sec_index_for_duplicate:
+//	   allow_duplicates(= REPLACE / ODKU)那一支取 row_ins_set_rec_lock(LOCK_X, lock_type, ...),
+//	   lock_type = skip_gap_locks ? LOCK_REC_NOT_GAP : LOCK_ORDINARY;skip_gap_locks 只对 DD / SDI 表为真
+//	   (include/dict0mem.h 的注释"GAP locks are skipped for DD tables and SDI tables"),所以本表拿的是
+//	   **X next-key**。普通 INSERT 那一支取 LOCK_S,并且对"第一条不相等的记录"只取 LOCK_GAP,源码注释原话:
+//	   "We don't need to lock the first unequal record after the gap, just the gap before it."(差别见「残余 C」)
+//	E3 源码 storage/innobase/lock/lock0lock.cc lock_rec_insert_check_and_lock:
+//	   "If another transaction has an explicit lock request which locks the gap, waiting or granted, on the
+//	   successor, the insert has to wait." 唯一例外是对方那把锁本身是为了插入而排队的间隙锁(插入意向锁)。
+//	   **"排队中的请求"算冲突** —— 这一句正是前两轮争执、谁都没核实的那一点。
+//	E4 源码 lock0lock.cc rec_lock_check_conflict:能让请求方"越过"排队者的 CAN_BYPASS / has_granted_blocker
+//	   那一支,前提写死成 !(type_mode & LOCK_INSERT_INTENTION),注释原话:"This is very important that
+//	   LOCK_INSERT_INTENTION should not overtake a WAITING Gap or Next-Key lock on the same heap_no, because
+//	   the following insertion of the record would split the gap duplicating the waiting lock, violating the rule
+//	   that a transaction can have at most one waiting lock."lock_rec_insert_check_and_lock 还用
+//	   ut_a(!conflicting.bypassed) 把它钉成硬断言。所以"新版本也许让插入意向锁越过排队者、于是残余 B 不成环"
+//	   的猜测是**错的**:那是被设计明确禁止的,不是版本差异。
+//	E5 手册 "InnoDB Locking"(https://dev.mysql.com/doc/refman/8.0/en/innodb-locking.html):间隙锁
+//	   "purely inhibitive"、"Gap locks can co-exist"、S 与 X 间隙锁"do not conflict with each other"。
+//	   因果要分清两段,不要合并成一句:两个 S next-key 能在持锁方放锁那一刻**同时**被授予,靠的是 S 与 S
+//	   模式相容(与"间隙锁可以共存"无关);随后在**本表的二级唯一键**路径上,两者各自申请插入意向锁,
+//	   被对方已授予的 S 挡住(E3)—— uk_player_name 的项是 (name_norm, player_id),不同 player_id 是真插入,
+//	   所以走的是插入意向锁。E1 手册那个例子走的是聚簇主键,同键就是同一行、是就地改写,互挡的是 X 记录锁,不是插入意向锁。
+//	E6 源码 row0ins.cc row_ins_sec_index_entry_low:重复扫描只在
+//	   dict_index_is_unique(index) && (cursor.low_match >= n_unique || cursor.up_match >= n_unique) 时才调用。
+//	   名字在唯一键上连删除标记项都没有时,一把重复检查锁都不取,只有插入本身。
+//
+// # 结论:同名竞争的三种 player_id 顺序下,ODKU 都不比普通 INSERT 差,且拆掉了其中一半
+//
+// 记 P_old = 唯一键上那条删除标记项的原主人,P_new = 胜者。uk_player_name 的二级索引项实际按
+// (name_norm, player_id) 排序,所以 P_new > P_old 时新项插在删除标记项**之后**(插入意向锁打在它的后继记录上),
+// P_new < P_old 时插在它**之前**(插入意向锁打在删除标记项自己那一条上)。
+//   - 普通 INSERT:两个排队者的 S next-key 在持锁方提交那一刻**同时**被授予(E1/E5),随后各自申请插入意向锁,
+//     被对方**已授予**的 S 挡住(E3) → **两种顺序都成环**。
+//   - ODKU:X next-key 一个一个过(E1/E2),"两边都已持锁再互等"这一形状不再出现。P_new > P_old → 插入意向锁打在
+//     后继记录上,那里只有胜者自己的锁 → 不成环;P_new < P_old → 插入意向锁打在删除标记项上,而落败者的 X 请求
+//     正排在那一项上(E3/E4) → 成环(「残余 B」)。
+//
+// 也就是说 ODKU 消掉了 P_new > P_old 那一半,剩下的一半普通 INSERT 同样有:**同名竞争上没有新增任何一类环**。
+// 唯一新增的是跨名字的「残余 C」,代价与概率见那一节。要在 SQL 层根除须改 schema,见最后一节。
 //
 // # 锁序:先唯一键、后聚簇 —— Release 必须同序
 //
-// 撞唯一键时 ODKU 先在 uk_player_name 上取 X(重复检查),再按唯一键读回占用者那一行、取它**聚簇**记录的 X
-// (要对它执行那条 no-op 更新)。所以同表另一个写者 Release 也必须"先唯一键、后聚簇";按主键删(先聚簇、
-// 后唯一键)会与这里反序 —— Release 持占用者的聚簇 X 等唯一键,Reserve 持唯一键 X 等聚簇 → 1213,
-// 而且只要两方就够。playerNameReleaseSQL 因此强制走 uk_player_name(见 Release)。撞主键时只碰聚簇记录。
+// 撞唯一键时 ODKU 先在 uk_player_name 上取 X next-key(重复检查,E1/E2),再按唯一键读回占用者那一行、取它
+// **聚簇**记录的 X(要对它执行那条 no-op 更新)。所以同表另一个写者 Release 也必须"先唯一键、后聚簇";按主键删
+// (先聚簇、后唯一键)会与这里反序 —— Release 持占用者的聚簇 X 等唯一键,Reserve 持唯一键 X 等聚簇 → 1213,
+// 而且只要两方就够。playerNameReleaseSQL 因此强制走 uk_player_name(见 Release)。撞主键时只拿聚簇记录的
+// X 记录锁、不带间隙(E1 原话:"An exclusive index-record lock is taken for a duplicate primary key value")。
 //
 // # 与其它写者的交错(本表的写者只有 Reserve / Release;三条读都是不加锁的一致性读)
 //   - Release(P_old,'abc') 未提交 + 两个 Reserve 抢 'abc':X 排队。先拿到 X 的胜者 player_id > P_old 时,新项插在
@@ -268,50 +369,71 @@ func (s *PlayerNameStore) Close() error {
 //   - Release(Q,'abc') 与撞上 Q 那一行(活行)的 Reserve:两边都先唯一键后聚簇,只会单向等。
 //   - Release 走唯一键碰上未 purge 的删除标记项(名字已被释放过,例如 login 的第二次补偿 Release 赶上 purge 滞后):
 //     在该项上排队,可能与正持有该项、要插在它前面的 Reserve 成环 →「残余 B」形状 2。
-//   - 两个 Reserve 抢同一个名字:唯一键上**没有**这个名字的任何项(连删除标记项也没有)时,先插入者的新项带隐式锁,
-//     后到者的重复检查单向等它提交 → no-op → Taken。名字刚被释放、删除标记项还没被 purge 时,**不需要**有待提交的
-//     Release,两个 Reserve 自己就会排在删除标记项上,与第一条同形(胜者 < P_old 时落入「残余 B」形状 1)。
+//   - 两个 Reserve 抢同一个名字:唯一键上**没有**这个名字的任何项(连删除标记项也没有)时,一把重复检查锁都不取
+//     (E6),先插入者的新项带隐式锁,后到者的重复检查单向等它提交 → no-op → Taken。名字刚被释放、删除标记项还没被
+//     purge 时,**不需要**有待提交的 Release,两个 Reserve 自己就会排在删除标记项上,与第一条同形(胜者 < P_old 时
+//     落入「残余 B」形状 1)。
+//   - Reserve('abc') 与 Release(Q,'xyz'):'xyz' 是唯一键上紧跟 'abc' 的下一个名字时,ODKU 的重复扫描会连这条
+//     不相等的记录一起取 X next-key(E2),于是 Reserve 要等 Release 放掉 'xyz' 的记录锁 —— 单向等,不成环
+//     (Release 只碰自己那一个名字的唯一键项与聚簇行,不会反过来等 'abc')。普通 INSERT 在那里只取间隙锁、
+//     与记录锁相容(E5),所以这一等是 ODKU 新增的;它变成环要再凑齐一堆条件,见「残余 C」。
 //   - 同一 player_id 的并发 Reserve / Release:都要这一行的聚簇 X(Release 先唯一键,Reserve 撞主键时不碰
 //     唯一键),单向等。
 //   - Reserve 插入成功时先插自己的新聚簇记录、后碰唯一键;没有别的写者会持着唯一键去等这条新记录
 //     (能指向它的唯一键项只能是它自己刚插的,或已是删除标记 —— 加锁读会跳过删除标记项,不回表)。
 //
-// # 残余:两类 1213,都由有界重试兜住
+// # 残余:三类 1213,都由有界重试兜住
 //
-// A. 锁继承(InnoDB 固有,SQL 层去不掉)。排队者都在等某条记录上的锁时,这条记录被**物理删除** —— 先到的插入者
-// 回滚(ctx 取消断连、被选为别处死锁的牺牲者),或 purge 在排队期间清掉了删除标记记录 —— InnoDB 会把它上面的锁
-// 继承成后继记录上的**间隙锁**(RR 下;间隙锁彼此兼容,X / S 都一样),于是 ≥2 个排队者各持间隙锁、再互等插入
-// 意向锁 → 1213。这是手册"Locks Set by Different SQL Statements"三会话例的同类,与写法无关。
+// A. 锁继承(InnoDB 固有,SQL 层去不掉,与写法无关)。排队者都在等某条记录上的锁时,这条记录被**物理删除** ——
+// 先到的插入者回滚(ctx 取消断连、被选为别处死锁的牺牲者),或 purge 在排队期间清掉了删除标记记录 —— InnoDB 会把
+// 它上面的锁继承成后继记录上的**间隙锁**(RR 下;间隙锁彼此兼容,X / S 都一样,E5),于是 ≥2 个排队者各持间隙锁、
+// 再互等插入意向锁 → 1213。这是 E1 三会话例的同类。
 //
-// B. 新项插在删除标记项之前(按 InnoDB 源码静态推演,**未经真库确认**,在确认前一律按"会成环"对待)。
-// uk_player_name 的二级索引项实际按 (name_norm, player_id) 排序。胜者 T1 在删除标记项 ('abc', P_old) 上拿到
-// X next-key 之后要插 ('abc', P_new):P_new < P_old 时,插入位置的后继记录正是 ('abc', P_old)。插入意向锁检查
-// 后继记录时,把别的事务在其上的 next-key 请求当作冲突,不管它已授予还是**还在等待**(lock_rec_insert_check_and_lock
-// 源码注释的原话是 "waiting or granted");而那个排队中的请求等的正是 T1 已授予的 X → 两方成环。REPLACE 与 ODKU
-// 的重复检查都取 X、走同一条路径,已知的"并发 REPLACE INTO 撞删除标记记录"死锁与此同形。三种形状:
+// B. 新项插在删除标记项之前(**已按 E2/E3/E4 确认会成环,不是推测,也不随 MySQL 版本变**)。
+// 胜者 T1 在删除标记项 ('abc', P_old) 上拿到 X next-key 之后要插 ('abc', P_new):P_new < P_old 时,插入位置的后继
+// 记录正是 ('abc', P_old);插入意向锁检查后继记录时把别的事务在其上的 next-key 请求算作冲突,不管它已授予还是
+// **还在排队**(E3),而那个排队中的请求等的正是 T1 已授予的 X → 两方成环。三种形状:
 //  1. 另一个抢同名的 Reserve 排在该删除标记项上,胜者 player_id < 原主人(有无待提交的 Release 都一样);
 //  2. Release 走唯一键排在该删除标记项上(见 Release 的「锁序」);
-//  3. 跨名字:相邻两个名字都是删除标记,抢前一个名字的 Reserve 扫到后继名字的删除标记项时排在抢后一个名字的
-//     Reserve 后面,而后者的插入位置正好在这一项之前。
+//  3. 同一个名字上并发的 Reserve 多于两个时,前两者成环、其余顺延,不改变形状。
 //
-// 这在生产里是常态,不是罕见交错:号段发出的 player_id 都 < 2^55(IdSegmentCap),存量 snowflake id 都 > 2^55,
+// 形状 1 在生产里是常态,不是罕见交错:号段发出的 player_id 都 < 2^55(IdSegmentCap),存量 snowflake id 都 > 2^55,
 // 新玩家抢老角色释放的名字时 P_new < P_old 恒成立;不同 login 实例各持一个号段,彼此的大小顺序也是任意的。
-// 反方向的可能:较新的 MySQL 8.0 在"请求方自己已授予的锁正挡着那个排队请求"时允许越过它(源码中的
-// has_granted_blocker / CAN_BYPASS,Bug#11745929 一线),那样 B 不成环 —— 这一点凭源码记忆、版本边界未核实,
-// 以真库用例 TestPlayerName_ReleaseRacesTwoReservesConverges 的 (b)(c) 子用例在所部署版本上的实际结果为准。
-// SQL 层能根除 B 的路线要改 schema(把名字放进以 name_norm 为聚簇主键的表:聚簇索引撞删除标记记录是原地改写,
-// 不需要插入意向锁);按名字 GET_LOCK 串行化消不掉形状 3。是否改 schema 由用户决策(超出本组范围),决策前
-// 靠下面的有界重试兜住。
+// **但普通 INSERT 在同一现场的两种顺序都成环**(见上一节),所以 B 不是 ODKU 引入的,回退写法只会把它变多。
 //
-// 处理(A、B 相同):isRetryableMySQL 命中时按 playerNameLockRetryBackoffMin/Max 抖动退避(ctx 可取消)后重来,
+// C. 跨名字的相邻删除标记项(ODKU 相对普通 INSERT **唯一**新增的一类,代价明确记在这里)。ODKU 的重复扫描连
+// "第一条不相等的记录"也取 X next-key,普通 INSERT 在那里只取间隙锁(E2)。单独看只是多一次单向等
+// (见上一节最后一条);现场是:唯一键上相邻的两个名字 'A' < 'B' **都**是未 purge 的删除标记项,同时有人抢 'A'、
+// 有人抢 'B'。两人的重复扫描都要 ('B', P_oldB) 上的 X next-key(抢 'B' 的把它当同键记录,抢 'A' 的把它当"第一条
+// 不相等的记录"),所以一定有先后。成环条件是**析取**,两个方向都要算上:
+//   - 抢 'B' 的先拿到 ('B', P_oldB),且它的新 id < P_oldB:它要插在这一项之前,插入意向锁被抢 'A' 的那位
+//     **排队中**的请求挡住(E3/E4) → 成环。
+//   - 抢 'A' 的先拿到 ('B', P_oldB),且它的新 id > P_oldA:它的插入位置的后继记录正是 ('B', P_oldB),
+//     插入意向锁被抢 'B' 的那位排队中的请求挡住 → 同样成环。
+//
+// 普通 INSERT 在同一现场需要两个条件**同时**成立(合取)才成环:它在后继记录上只取间隙锁,间隙锁之间不冲突,
+// 两人都能拿到、谁也不排队,于是必须抢 'A' 的要插在 ('B', P_oldB) 之前(新 id > P_oldA)**且**抢 'B' 的也要插在
+// 这一项之前(新 id < P_oldB),才互挡。所以 ODKU 在 C 上确实更差(析取比合取容易命中),在同名竞争上更好。
+// 但需要两个相邻名字同时处于"已释放、未 purge"且同时被人抢,概率仍远低于同名竞争;用它换掉同名竞争一半的环是净收益。
+//
+// 处理(A、B、C 相同):isRetryableMySQL 命中时按 playerNameLockRetryBackoffMin/Max 抖动退避(ctx 可取消)后重来,
 // 总次数不超过 playerNameReserveAttempts。收敛论证:被牺牲方的语句自动提交,整条回滚、锁全部放掉;另一方随即
 // 前进 —— B 里若牺牲的是排队者,插入者完成插入并提交;若牺牲的是插入者,排队者接过删除标记项上的 X、自己插入
 // 并提交。牺牲方退避几十毫秒后的下一轮看见活行 → no-op → Taken(Release 则看到行已不属于自己 → Absent),
-// 通常一次重来即收敛。要再成环,必须在这几十毫秒里**又**出现一个被抢的删除标记项加一个排队者、或又一次先到者
-// 回滚 / purge 恰好清掉排队中的记录;每成一次环都有一方前进,有界;预算用尽按存储错误返回(login fail-closed,
-// 拒绝建角),不无限转。
+// 通常一次重来即收敛 —— 退避正是为此:被唤醒的那一方只需几十微秒就能插完并提交,牺牲方再回来时环的另一条边已经没了。
+// 要再成环,必须在这几十毫秒里**又**出现一个被抢的删除标记项加一个排队者、或又一次先到者回滚 / purge 恰好清掉
+// 排队中的记录;每成一次环都有一方前进,有界;预算用尽按存储错误返回(login fail-closed,拒绝建角),不无限转。
 //
-// TiDB(悲观事务)没有间隙锁与插入意向锁,A、B 两类形状都不存在(按文档推断,未在 TiDB 上实测)。
+// # 要在 SQL 层根除,只能改 schema(已上报,等用户决策)
+//
+// 聚簇索引的重复检查取的是 LOCK_REC_NOT_GAP(row0ins.cc row_ins_duplicate_error_in_clust,ODKU 下是 X),
+// **不带间隙**;而且撞上同键的删除标记记录时走 row_ins_must_modify_rec → row_ins_clust_index_entry_by_modify,
+// 是**原地改写**,根本不申请插入意向锁。所以把名字表改成以 name_norm 为聚簇主键(player_id 退成普通列 + 自己的
+// 唯一键)之后,A / B / C 三类形状在"名字"这条轴上全部消失 —— 这是唯一能真正消掉环、而不是靠重试兜住的路线。
+// 按名字 GET_LOCK 串行化做不到(消不掉 C,也把单点争用换到了别处)。是否改 schema 超出本层范围,由用户决策;
+// 决策前靠上面的有界重试兜住,且 B / C 的实际发生次数可由 lockRetries 观察。
+//
+// TiDB(悲观事务)没有间隙锁与插入意向锁,A / B / C 三类形状都不存在(按文档推断,未在 TiDB 上实测)。
 func (s *PlayerNameStore) Reserve(ctx context.Context, playerID uint64, name, norm string, nowMs uint64) (ReserveOutcome, uint64, error) {
 	if playerID == 0 || norm == "" {
 		return 0, 0, fmt.Errorf("%w (player_id=%d name_norm=%q)", ErrPlayerNameInvalidArgument, playerID, norm)
@@ -401,14 +523,20 @@ func (s *PlayerNameStore) Reserve(ctx context.Context, playerID uint64, name, no
 // 多表 DELETE 语法,删除语义与受影响行数不变。真库用例 TestPlayerName_ReleaseStatementLocksUniqueKeyFirst
 // 用 EXPLAIN 钉住 key = uk_player_name。
 // 走唯一键时,按唯一键上碰到的项分三种:
-//   - 活行:在唯一键项与聚簇记录上各取 X(记录锁);player_id / created_ms 两个条件在读到那一行之后判定,
+//   - 活行:在唯一键项与聚簇记录上各取 X **记录锁、不带间隙** —— 手册 "Locks Set by Different SQL Statements in
+//     InnoDB" 对 DELETE 的原话是 "sets an exclusive next-key lock on every record the search encounters. However,
+//     only an index record lock is required for statements that lock rows using a unique index to search for a
+//     unique row",这里正是"唯一索引 + 唯一等值条件"。所以它挡不住别人往相邻间隙插入(也就不会与 Reserve 的
+//     插入意向锁互挡),只会与要改同一行的写者单向排队。player_id / created_ms 两个条件在读到那一行之后判定,
 //     不匹配时 RR 下那两把锁持有到语句结束(自动提交,极短),不删任何东西。
-//   - 名字完全不存在(唯一键上连删除标记项都没有):RR 下只在唯一键上留一把间隙锁,插入者只会单向等它。
-//   - **未 purge 的删除标记项**(名字已被释放过):在该项上取 X next-key、在后继记录上取 X 间隙锁,并可能在该项上
-//     **排队**。改写前按主键删只碰聚簇记录,碰不到这一项;uk 优先是为了消掉上面那个两方反序环,代价是 Release 自己
-//     可能成为 Reserve「残余 B」形状 2 的一方:正持有这一项、且新项要插在它前面(新 player_id < 该项原主人)的
-//     Reserve,插入意向锁会被本条排队中的请求挡住 → 两方成环。典型触发是 login 约 10s 后的第二次补偿 Release
-//     赶上 purge 滞后(文件头「崩溃窗口」)。由下面的有界重试兜住;是否从 schema 上根除见 Reserve 的「残余 B」。
+//   - 名字完全不存在(唯一键上连删除标记项都没有):没有"唯一行"可锁,退回一般规则,RR 下在唯一键上留间隙锁,
+//     插入者只会单向等它。
+//   - **未 purge 的删除标记项**(名字已被释放过):同样没有可见的唯一行,退回一般规则 —— 在该项上取 X next-key、
+//     在后继记录上取间隙锁,并可能在该项上**排队**。改写前按主键删只碰聚簇记录,碰不到这一项;uk 优先是为了消掉
+//     上面那个两方反序环,代价是 Release 自己可能成为 Reserve「残余 B」形状 2 的一方:正持有这一项、且新项要插在
+//     它前面(新 player_id < 该项原主人)的 Reserve,插入意向锁会被本条**排队中**的请求挡住(Reserve 的证据 E3/E4)
+//     → 两方成环。典型触发是 login 约 10s 后的第二次补偿 Release 赶上 purge 滞后(文件头「崩溃窗口」)。
+//     由下面的有界重试兜住;是否从 schema 上根除见 Reserve 最后一节。
 //
 // 锁冲突(1213/1205)按 playerNameLockRetryBackoffMin/Max 抖动退避后重来(ctx 可取消),次数不超过
 // playerNameReleaseAttempts。DELETE 幂等,重来安全;形状 2 里被牺牲的若是本条 Release,它要删的行早已不在,

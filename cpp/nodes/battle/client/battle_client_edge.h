@@ -4,7 +4,8 @@
 //
 // 职责:在节点自身的 TCP 端口(NodeInfo.endpoint,框架已分配并发布到 etcd)上接受
 // 客户端第二条连接,完成票据握手,把战斗客户端消息就地派发给 BattleRoomManager,
-// 并把 S2C 直接写回连接 —— 战斗流量从此零字节经过 gate。
+// 并把 S2C 直接写回连接 —— 战斗流量从此零字节经过 gate。收缩后这是战斗的唯一通路
+// (turn-based §22 D66/D68):gate 不再中继战斗上行,战斗帧也不再回落大厅。
 //
 // 线协议与 gate 的客户端面完全一致(ProtobufCodec 帧;上行 ClientRequest,下行
 // MessageContent;握手首包 BattleTokenVerifyRequest ↔ BattleTokenVerifyResponse),

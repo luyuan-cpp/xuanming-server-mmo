@@ -24,7 +24,8 @@ import static org.mockito.Mockito.*;
  * AdminWhitelistController 的契约测试(死锁审计 #18 的控制器侧)。
  *
  * <p>只验控制器自己的承诺:按业务键 upsert、忽略请求体 id、缺键 400、remove 恒 204、只对 1213 做有上限的重试。
- * 「ODKU 在真库上不成环」是锁行为,由 {@code ZoneWhitelistUpsertLockOrderMySqlTest} 在真 MySQL 上验,这里替代不了。
+ * 「ODKU 在真库上不成环」是锁行为,由 {@code ZoneWhitelistUpsertLockOrderMySqlTest} 在真 MySQL 上验,这里替代不了;
+ * 重试与死锁分类器的契约由 {@link InnoDbDeadlockRetryTest} 验(逻辑在 {@link InnoDbDeadlockRetry})。
  *
  * <p>事务用 {@link TransactionOperations#withoutTransaction()} 直通:这里不验事务边界,只验重试把整段
  * 「upsert + 回读」当作一个单元重跑。重试路径会真实退避(10ms、20ms 量级),断言不依赖时长。
@@ -97,7 +98,7 @@ class AdminWhitelistControllerTest {
                 assertThrows(CannotAcquireLockException.class, () -> controller.add(request(ZONE, ACCOUNT, "n")));
 
         assertSame(dl, thrown, "用尽重试后原样抛出,不包装、不吞");
-        verify(repo, times(AdminWhitelistController.DEADLOCK_MAX_ATTEMPTS)).upsert(ZONE, ACCOUNT, "n");
+        verify(repo, times(InnoDbDeadlockRetry.MAX_ATTEMPTS)).upsert(ZONE, ACCOUNT, "n");
         verify(repo, never()).findByZoneIdAndAccountId(anyLong(), anyLong());
     }
 
@@ -148,16 +149,6 @@ class AdminWhitelistControllerTest {
         assertEquals(HttpStatus.NO_CONTENT, controller.remove(ZONE, ACCOUNT).getStatusCode());
         verify(repo).deleteByZoneIdAndAccountId(ZONE, ACCOUNT);
         verifyNoMoreInteractions(repo);
-    }
-
-    @Test
-    void deadlockClassifierLooksThroughWrappersAndIgnoresOtherCodes() {
-        assertTrue(AdminWhitelistController.isDeadlockVictim(deadlock()));
-        assertTrue(AdminWhitelistController.isDeadlockVictim(
-                new RuntimeException("outer", new RuntimeException("mid", mysqlDeadlockSqlException()))));
-        assertFalse(AdminWhitelistController.isDeadlockVictim(
-                new RuntimeException(new SQLException("dup", "23000", 1062))));
-        assertFalse(AdminWhitelistController.isDeadlockVictim(new RuntimeException("no sql cause")));
     }
 
     private static CannotAcquireLockException deadlock() {

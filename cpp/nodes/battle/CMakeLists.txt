@@ -47,7 +47,6 @@ set(SOURCE_FILES
     # handler/grpc/battle_node.cpp 由 proto 生成器写出(gRPC handler 骨架,
     # 守护段内容见任务返回的 guard_fills),生成前本工程不可编译。
     handler/grpc/battle_node.cpp
-    handler/grpc/battle_client_player_service.cpp
     handler/rpc/battle_handler.cpp
     handler/rpc/player/player_service_interface.cpp
     logic/battle_room_manager.cpp

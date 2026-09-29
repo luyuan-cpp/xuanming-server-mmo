@@ -942,6 +942,112 @@ func (x *GuildDailyCounterRecord) GetUpdatedMs() uint64 {
 	return 0
 }
 
+// ── 帮会活动(B6a)────────────────────────────────────────────────
+// 设计:docs/design/guild-phase2/06-activities.md §6.5(表)、§6.11–§6.14(事务与解散)。
+// 周期口径(README §3 U1):个人次数不在本表,挂在 guild_daily_counter(counter_kind = ACTIVITY,按游戏日,
+// 换帮不重置);本表只记**帮会级**进度,按活动档期 —— 点灯阈值、团圆锁存、资金只发一次,都以这一行为准。
+//
+// 锁序位置 8:guild_daily_counter(7)之后,B6b 的 guild_trial_battle(9)/ guild_trial_reward_owed(10)之前。
+// 本表任一行的锁定者 / 写者都必须先持有同一 guild_id 的 guild 行锁(灯会、团圆、历练结算、解散的第一把锁都是它),
+// 本表的行因此在帮会粒度上被 guild 行串行。取锁序列与理由见 go/guild/internal/data/tables.go。
+//
+// 刻意没有二级索引:读写都是完整主键点操作或 guild_id 主键前缀(视图读、解散删)。v1 不清理旧期行
+// (每帮每天至多 3 行);v1.1 若按 period_key 清理需要加 OptionIndex = "period_key" —— schemamigrate 对已存在的表
+// 不补建普通索引(只告警),上线前要么定下来、要么开发期删库重建。
+type GuildActivityProgressRecord struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	GuildId    uint64                 `protobuf:"varint,1,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
+	ActivityId uint32                 `protobuf:"varint,2,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"` // GuildActivity.id
+	// 帮会期键 activity.GuildPeriodKey:灯会 / 团圆 = 档期 start_at_ms 当天的游戏日键(一届活动跨多天仍是同一行);
+	// start / end 都为 0 的常开行(仅开发)退化为当天游戏日键;历练 = 开战时的游戏日键(每日计资金胜场上限)。
+	PeriodKey          uint32 `protobuf:"varint,3,opt,name=period_key,json=periodKey,proto3" json:"period_key,omitempty"`
+	ProgressCount      uint32 `protobuf:"varint,4,opt,name=progress_count,json=progressCount,proto3" json:"progress_count,omitempty"`                  // 灯会:本档期点灯人次;历练:本游戏日已计资金胜场;团圆不用(恒 0)
+	ThresholdReachedMs uint64 `protobuf:"varint,5,opt,name=threshold_reached_ms,json=thresholdReachedMs,proto3" json:"threshold_reached_ms,omitempty"` // 0 = 未达;非 0 = 首次达成时刻。锁存:写一次后不再改,团圆据此跨游戏日仍可领
+	FundsGranted       uint32 `protobuf:"varint,6,opt,name=funds_granted,json=fundsGranted,proto3" json:"funds_granted,omitempty"`                     // 0/1:本期帮会资金已发。与阈值判定在同一把 guild 行锁下读改,保证只发一次
+	UpdatedMs          uint64 `protobuf:"varint,7,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`                              // 追加区:从 8 起。
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *GuildActivityProgressRecord) Reset() {
+	*x = GuildActivityProgressRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildActivityProgressRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildActivityProgressRecord) ProtoMessage() {}
+
+func (x *GuildActivityProgressRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildActivityProgressRecord.ProtoReflect.Descriptor instead.
+func (*GuildActivityProgressRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GuildActivityProgressRecord) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *GuildActivityProgressRecord) GetActivityId() uint32 {
+	if x != nil {
+		return x.ActivityId
+	}
+	return 0
+}
+
+func (x *GuildActivityProgressRecord) GetPeriodKey() uint32 {
+	if x != nil {
+		return x.PeriodKey
+	}
+	return 0
+}
+
+func (x *GuildActivityProgressRecord) GetProgressCount() uint32 {
+	if x != nil {
+		return x.ProgressCount
+	}
+	return 0
+}
+
+func (x *GuildActivityProgressRecord) GetThresholdReachedMs() uint64 {
+	if x != nil {
+		return x.ThresholdReachedMs
+	}
+	return 0
+}
+
+func (x *GuildActivityProgressRecord) GetFundsGranted() uint32 {
+	if x != nil {
+		return x.FundsGranted
+	}
+	return 0
+}
+
+func (x *GuildActivityProgressRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
 var File_proto_guild_guild_db_proto protoreflect.FileDescriptor
 
 const file_proto_guild_guild_db_proto_rawDesc = "" +
@@ -1034,7 +1140,18 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"used_count\x18\x05 \x01(\rR\tusedCount\x12\x1d\n" +
 	"\n" +
 	"updated_ms\x18\x06 \x01(\x04R\tupdatedMs:c\x8a\x92\xf4\x01\x13guild_daily_counter\x92\x92\xf4\x01(player_id,counter_kind,ref_id,period_keyڒ\xf4\x01\n" +
-	"period_key\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xf3\x01\n" +
+	"period_key\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xe6\x02\n" +
+	"\x1bGuildActivityProgressRecord\x12\x19\n" +
+	"\bguild_id\x18\x01 \x01(\x04R\aguildId\x12\x1f\n" +
+	"\vactivity_id\x18\x02 \x01(\rR\n" +
+	"activityId\x12\x1d\n" +
+	"\n" +
+	"period_key\x18\x03 \x01(\rR\tperiodKey\x12%\n" +
+	"\x0eprogress_count\x18\x04 \x01(\rR\rprogressCount\x120\n" +
+	"\x14threshold_reached_ms\x18\x05 \x01(\x04R\x12thresholdReachedMs\x12#\n" +
+	"\rfunds_granted\x18\x06 \x01(\rR\ffundsGranted\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\a \x01(\x04R\tupdatedMs:O\x8a\x92\xf4\x01\x17guild_activity_progress\x92\x92\xf4\x01\x1fguild_id,activity_id,period_key\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xf3\x01\n" +
 	"\x12GuildAssetOpStatus\x12%\n" +
 	"!GUILD_ASSET_OP_STATUS_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dGUILD_ASSET_OP_STATUS_PENDING\x10\x01\x12!\n" +
@@ -1066,18 +1183,19 @@ func file_proto_guild_guild_db_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_guild_guild_db_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_guild_guild_db_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_proto_guild_guild_db_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_proto_guild_guild_db_proto_goTypes = []any{
-	(GuildAssetOpStatus)(0),         // 0: guildpb.GuildAssetOpStatus
-	(GuildAssetOpKind)(0),           // 1: guildpb.GuildAssetOpKind
-	(GuildDailyCounterKind)(0),      // 2: guildpb.GuildDailyCounterKind
-	(*GuildRecord)(nil),             // 3: guildpb.GuildRecord
-	(*GuildPlayerStateRecord)(nil),  // 4: guildpb.GuildPlayerStateRecord
-	(*GuildMemberRecord)(nil),       // 5: guildpb.GuildMemberRecord
-	(*GuildApplicationRecord)(nil),  // 6: guildpb.GuildApplicationRecord
-	(*GuildPlayerOpSeqRecord)(nil),  // 7: guildpb.GuildPlayerOpSeqRecord
-	(*GuildAssetOpRecord)(nil),      // 8: guildpb.GuildAssetOpRecord
-	(*GuildDailyCounterRecord)(nil), // 9: guildpb.GuildDailyCounterRecord
+	(GuildAssetOpStatus)(0),             // 0: guildpb.GuildAssetOpStatus
+	(GuildAssetOpKind)(0),               // 1: guildpb.GuildAssetOpKind
+	(GuildDailyCounterKind)(0),          // 2: guildpb.GuildDailyCounterKind
+	(*GuildRecord)(nil),                 // 3: guildpb.GuildRecord
+	(*GuildPlayerStateRecord)(nil),      // 4: guildpb.GuildPlayerStateRecord
+	(*GuildMemberRecord)(nil),           // 5: guildpb.GuildMemberRecord
+	(*GuildApplicationRecord)(nil),      // 6: guildpb.GuildApplicationRecord
+	(*GuildPlayerOpSeqRecord)(nil),      // 7: guildpb.GuildPlayerOpSeqRecord
+	(*GuildAssetOpRecord)(nil),          // 8: guildpb.GuildAssetOpRecord
+	(*GuildDailyCounterRecord)(nil),     // 9: guildpb.GuildDailyCounterRecord
+	(*GuildActivityProgressRecord)(nil), // 10: guildpb.GuildActivityProgressRecord
 }
 var file_proto_guild_guild_db_proto_depIdxs = []int32{
 	1, // 0: guildpb.GuildAssetOpRecord.kind:type_name -> guildpb.GuildAssetOpKind
@@ -1101,7 +1219,7 @@ func file_proto_guild_guild_db_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_guild_guild_db_proto_rawDesc), len(file_proto_guild_guild_db_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
