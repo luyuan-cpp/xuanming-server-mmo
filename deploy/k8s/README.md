@@ -852,9 +852,12 @@ C++ 节点(gate / scene / battle)发出的每次 unary gRPC 调用现在都带 d
 - **DataService 2500 → 4000(2026-09-28)**:第一批落码时写的是 2500,与该块自己注释的「+2000 余量」不符(data_service 服务端默认 2000);
   改为 4000 后号段 `fetchTimeoutSec` 从 3.5s 变成 5s。login 的 `Timeout: 100000` 疑为笔误(行尾注释写 10s),待拍板,
   见 `docs/design/grpc-client-deadline-failure-callback.md` §4.3;改成 10000 时 `LoginNodeService` 同步改 12000。
+- **login ConfigMap 的 `Timeout` 改为镜像 `go/login/etc/login.yaml`(2026-09-29)**:以前 `New-GoSvcConfigMapYaml` 在模板里写死 `100000`,
+  而预算门禁核对的是 login.yaml,两边一分家,门禁放行的就不是集群里生效的值。现在与 scene-manager / match / 路由服同法镜像,
+  读不到或不是正整数时生成期直接 throw;今天两边都是 100000,行为不变。上面那条待拍板的值定下来后,改 login.yaml 与 `LoginNodeService` 两处即可,生成器不用动。
 - 契约测试:`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的「C++ gRPC 客户端 deadline 预算」一节 —— 两份 node ConfigMap 的块与权威文件逐项相等、
-  门禁先于任何 `kubectl` 写操作、K8s 生成物(login 写死的 Timeout、data-service 不写 Timeout)同样满足不等式、判定口径自检,
-  以及把 DataService 改回 2500 的配置副本必须被拒并只点名这一项。
+  门禁先于任何 `kubectl` 写操作、K8s 生成物(login 镜像 login.yaml 的 Timeout、data-service 不写 Timeout)同样满足不等式、判定口径自检,
+  以及把 DataService 改回 2500 的配置副本必须被拒并只点名这一项;login ConfigMap 的 `Timeout` == login.yaml 在「login ConfigMap 关键值」用例的键对表里逐键钉住。
 
 ## Kafka:StatefulSet + PVC(2026-09-08,routing-identity-audit-20260908.md R06)
 

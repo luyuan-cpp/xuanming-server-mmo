@@ -5883,3 +5883,49 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
 - 本轮 `start_game.ps1` 又在 5/6 因 trade 起不来中止(50800 撞 Windows 保留端口段),Java 网关仍需按它的命令手动起;与本线无关,未修。
 - 证据:`run/verify-attribute-20260928/` 下 `danxin-attribute.{log,stderr.log}`、`overlay-danxin/`、`robot-numeric-danxin.exe`。
 - **防御 ×12 / 法力 ×4 这条线到此全部收尾**:表、代码、单测、三条冒烟、两职业档数值验收、副本回合基线均已实跑通过。
+
+## 2026-09-29 C++↔Go 边界加固(V0+)分工部分:K8s deadline 门禁、SceneManager 选实例、删死代码(Claude,未编译、未跑测试)
+
+背景:09-28 评审「C++ 是否应完全不连 Go」的结论是**不做 V1/V2/V3**,保留窄白名单并加固(V0+)。gRPC 失败回调的两批由原会话提交(09f71f9d5 / b85f13c07 / 9df79e5b8,见上面 09-28、09-29 两条)。K8s 命令主题代号注入由单点加固会话提交(2e2763a62)。本条只记本会话负责的部分。
+
+- **gRPC 客户端 regen(替撞额度的原会话代跑,产物在 897ac8241)**
+  - 用 `enable_unity_client: false` 的配置副本、现成的 `proto-gen.exe` 在**隔离 git worktree** 里跑。
+  - 原因:HEAD 上帮会的 `guild.proto` / `guild_db.proto` 多了 5 个还没 regen 的 RPC,直接在主仓跑会顺带分走消息号 239–243。所以在 worktree 里把这两份退回到 `generated/proto/_unified` 暂存副本的内容(即上次 regen 时的版本)再跑。
+  - 只拷回 40 个文件:`cpp/generated/grpc_client/**`、`common/base/config.pb.{h,cc}`、三份暂存 `config.proto`、`config.pb.go` 及 robot/vendor 副本。
+  - `message_id.txt`、`rpc_event_registry`、Agones 块都没动。
+- **K8s(`tools/scripts/k8s_deploy.ps1`、`tools/scripts/tests/k8s_deploy_contract.tests.ps1`、`deploy/k8s/README.md`、`bin/etc/base_deploy_config.yaml`)**
+  - GrpcClient 块:`New-NodeConfigMapYaml` 用 `Get-AuthoritativeYamlBlock -Key 'GrpcClient'` 原样搬进 node-config 与 battle-node-config。
+  - 部署门禁:新增 `Get-GrpcClientDeadlineBudgetViolations`(纯函数)与 `Assert-GrpcClientDeadlineBudget`,挂在 zone-up / infra-up / all-up 写集群之前。规则如下:
+    - 每项 C++ deadline ≥ 对应服务 yaml 的 zrpc `Timeout` + 2000;
+    - SceneManager / DataService / ClientRpcRouter / Match / Login 五项必须显式写成正整数;
+    - 服务 yaml 缺 `Timeout` 时按 go-zero 默认 2000 计(v1.10.0 `RpcServerConf` `default=2000`,已核源码);
+    - `Timeout` 为 0 或非数字、或出现 `MethodTimeouts`,都拒绝部署并点名是哪一项。
+  - `DataServiceNodeService` 2500 → **4000**:原值违反该块自己写的「+2000 余量」。号段 `fetchTimeoutSec` 由 deadline + 1s 派生,变为 5s。
+  - login ConfigMap 的 `Timeout` 原先写死 100000,改为从 `go/login/etc/login.yaml` 镜像;读不到或不是正整数时,生成期直接 throw。今天两边的值相同,行为不变。
+  - 契约测试新增约 7 条(门禁放行 / 先于 kubectl / 块逐项相等 / 生成物满足不等式 / 8 种自检违例 / DataService 退回 2500 必须 throw / battle-node-config),另外把 login `Timeout` 并进 login 键对表。
+- **`GetSceneManagerEntity`(`cpp/libs/engine/core/network/node_utils.{h,cpp}`)**
+  - 签名和调用点都不变。规则抽成纯函数 `scene_manager_selector::Pick`,逐级挑选:
+    1. READY;
+    2. IDLE / CONNECTING(`GetState(true)` 触发连接);
+    3. ③a 挂了通道但处于 TRANSIENT_FAILURE / SHUTDOWN;
+    4. ③b 没挂通道的实体(TCP 握手声明 node_type=SceneManager 时会出现;挑中会在发送处断言,所以排在最末级)。
+  - **只在注册表为空时返回 null**,不新增 null 窗口(与跨 zone 会话约定:SM 全体抖动时照旧发出请求,由失败回调 / 30s 看门狗裁决,不让交接提前走 `ConcludeHandoffAfterMarkSent`)。
+  - 落到 ③ 时打 `[SceneManagerSelect] … last-resort pick` 告警,每 10s 最多一行(thread_local + steady_clock)。
+  - 每一级内部按 splitmix64 打散后的 playerId 取模。原因:bwmarrin 布局的 PlayerId 低 9 位是 step,大多为 0,旧的 `playerId % N` 在 2 / 4 个实例时几乎全落第 0 个。
+  - **运维影响**:多副本 scene_manager 的流量会从「几乎全压第 0 个」变成大致均分,`deploy/k8s/scene-manager-alerts.yaml` 里按副本设的阈值需要重看。正确性不受影响,按玩家的状态都在 Redis 里(已核 go/scene_manager 没有按玩家驻留在进程内存的状态)。
+  - 新增 `cpp/tests/routing_identity_test/scene_manager_selector_test.cpp`(11 条),已登记 vcxproj。
+- **删死代码**:`SendMessageToPlayerOnGrpcNode` 两个重载、只被它使用的 `PickRandomNodeEntity`、两处多余 include(`player_message_utils.{h,cpp}`),全仓零调用。`node_util.h:120` 的注释同步改掉。
+- **给 Codex 的验证步骤**(仓库根,MSBuild 一律 `/m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`):
+  1. `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`,退出码 0,`fail=0`。再跑 `pwsh -NoProfile -File tools/scripts/tests/k8s_migrate_gate.tests.ps1`,退出码 0。
+  2. `pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command zone-up -ZoneName contract-test -ZoneId 101 -DryRun -GoSvcRegistry registry.invalid/test -JavaSvcRegistry registry.invalid/test`,检查三点:
+     - 「GrpcClient deadline budget OK …」一行出现在第一条 `[dry-run] kubectl` 之前;
+     - node-config 末尾有 GrpcClient 七项(DataService 4000);
+     - go-svc-login-config 里 `Timeout: 100000` 不是空值。
+  3. `game.sln` 全量编译。node_utils.h 被广泛包含,core 以下都会重编;编完核对 bin 下 exe 的 mtime 晚于 core.lib。
+  4. `routing_identity_test` 不在 `run_cpp_tests.ps1` 表里,要先单独编 `cpp\tests\routing_identity_test\routing_identity_test.vcxproj`,先跑一次 `run_cpp_tests.ps1` 同步 DLL,再跑 `build\cpp\tests\routing_identity_test.exe --gtest_filter=SceneManagerSelector.*`(11 条全 PASS),然后不带 filter 全量跑一次,结果应与基线一致。
+  5. `pwsh tools/scripts/run_cpp_tests.ps1 -Filter cross_zone_test`:`EnterSceneReplyEcs.*` 应保持绿(假 SceneManager 节点落 ③b,仍能被挑中)。
+  6. 联机(有本地栈时):
+     - 刚起栈就换图,要成功;
+     - 停掉 scene_manager 后换图,应收到 tip 1003,scene 日志出现节流的 last-resort 告警;
+     - 两个 scene_manager 实例时,EnterScene 计数大致均分;kill -9 其中一个,在租约 60s 到期前换图仍全部成功。
+- **待拍板**:`go/login/etc/login.yaml` 的 `Timeout: 100000`,行尾注释写的是 10s,疑为笔误。要改成 10000 的话,需同时把 `LoginNodeService` 改为 12000;`deploy/login-stack.linux/login.yaml:34` 也有一份。ConfigMap 会自动跟随。暂不改:CreatePlayer 链路预算约 9s 以上,改成 10s 会误伤慢请求;路由服模式下实际受 `ForwardTimeoutMs` 5000 约束。

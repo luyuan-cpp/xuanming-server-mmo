@@ -97,12 +97,15 @@ Test-Case "db ConfigMap 的 Kafka/Database 关键值 == go/db/etc/db.yaml" {
     }
 }
 
-Test-Case "login ConfigMap 的 Node/Locker/Kafka 关键值 == go/login/etc/login.yaml" {
+Test-Case "login ConfigMap 的 Timeout/Node/Locker/Kafka 关键值 == go/login/etc/login.yaml" {
     $block = Select-ManifestByName -Output $devOut -Name "go-svc-login-config"
     Assert-True -Condition ($null -ne $block) -Because "DryRun 输出里应当有 go-svc-login-config"
     $flat = ConvertTo-FlatManifest -Block $block
 
+    # Timeout:C++ deadline 预算门禁(Assert-GrpcClientDeadlineBudget)核对的是 login.yaml,ConfigMap 必须是同一个值,
+    # 否则门禁放行的不是集群里真正生效的那份(生成器以前在模板里写死 100000)。
     $pairs = @(
+        @{ Gen = 'data.login.yaml.Timeout';                Etc = 'Timeout' }
         @{ Gen = 'data.login.yaml.Node.SessionExpireMin';  Etc = 'Node.SessionExpireMin' }
         @{ Gen = 'data.login.yaml.Node.MaxLoginDevices';   Etc = 'Node.MaxLoginDevices' }
         @{ Gen = 'data.login.yaml.Node.LeaseTTL';          Etc = 'Node.LeaseTTL' }
@@ -327,9 +330,11 @@ Test-Case "node ConfigMap 的 GrpcClient.CallDeadlineMs 逐项 == bin/etc/base_d
     Assert-GrpcClientBlockMirrored -Output $devOut -ConfigMapName 'node-config'
 }
 
-Test-Case "K8s 生成物同样满足 deadline 预算:node-config 的 GrpcClient × zone 内 go-svc ConfigMap 实际写出的 Timeout(login 写死、data-service 不写)" {
-    # 部署门禁比对的是服务 yaml;这里再按集群里真正生效的那份核一遍 —— login 的 ConfigMap Timeout 是生成器写死的,
-    # data-service 的 ConfigMap 不写 Timeout(= go-zero 默认 2000),两者都可能与服务 yaml 分家。
+Test-Case "K8s 生成物同样满足 deadline 预算:node-config 的 GrpcClient × zone 内 go-svc ConfigMap 实际写出的 Timeout(login 镜像 login.yaml、data-service 不写)" {
+    # 部署门禁比对的是服务 yaml;这里再按集群里真正生效的那份核一遍不等式,防的是生成器与门禁悄悄分家:
+    # scene-manager / login 的 Timeout 镜像被改回常数(login 以前就是模板里写死 100000),或 data-service 的 ConfigMap
+    # 某天写出一个服务 yaml 里没有的 Timeout(它现在不写 = go-zero 默认 2000)。ConfigMap 键改名会让 Timeout 落回
+    # 默认 2000、本条反而放行 —— 那一类由上面 login / scene-manager 的「ConfigMap 值 == 服务 yaml」逐键用例兜住(查不到键即失败)。
     # 全局服务(match / 路由服)不在 zone-up 产物里,它们的 ConfigMap Timeout 由 Get-AuthoritativeScalar 镜像服务 yaml,已被上面的门禁用例覆盖。
     $deployScalars = ConvertTo-UnprefixedScalars -Scalars (ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name 'node-config')).Scalars -Prefix 'data.base_deploy_config.yaml.'
     $targets = [ordered]@{}

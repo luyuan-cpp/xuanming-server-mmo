@@ -145,6 +145,17 @@ var (
 			"negative_hit (cache remembers the row is absent) | miss (falls through to MySQL).",
 	}, []string{"result"})
 
+	// ── 资产通道:已落盘账本读取(docs/design/guild-phase2/07-rollback-fail-closed.md §7.9.1)──
+	//
+	// 调用方是 guild 重投循环的离线读账本(LedgerReadMinAttempts 之后才读),量很小。
+	// absent 持续偏高 = 被问到的玩家在 zone Redis 里没有 blob(从未入场或 Redis 丢数据);
+	// error 非零 = 路由 / Redis / blob 矛盾,详情看同一时刻的 ERROR 日志。
+	assetOpLedgerReadTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "asset_op_ledger_read_total",
+		Help:      "GetPlayerAssetOpLedger outcomes: found (blob read, ledger returned) | absent (no PlayerAllData blob) | error (routing, Redis or corrupt blob).",
+	}, []string{"result"})
+
 	registerOnce sync.Once
 )
 
@@ -159,6 +170,7 @@ func register() {
 			kafkaConsumerUp, kafkaConsumerMessagesTotal,
 			idSegmentAllocateTotal,
 			playerNameOpsTotal, playerNameOpSeconds, playerNameCacheTotal,
+			assetOpLedgerReadTotal,
 		)
 	})
 }
@@ -214,6 +226,14 @@ func ObservePlayerNameCache(result string, n int) {
 	}
 	register()
 	playerNameCacheTotal.WithLabelValues(result).Add(float64(n))
+}
+
+// ObserveAssetOpLedgerRead 记一次 GetPlayerAssetOpLedger 的结果。
+// result 是 "found" | "absent" | "error",取值集合由调用方(logic 的 assetOpLedgerRead* 常量)封闭,
+// 本函数不做校验。**不要**把 player_id 加成 label(AGENTS.md §9),排障信息进日志。
+func ObserveAssetOpLedgerRead(result string) {
+	register()
+	assetOpLedgerReadTotal.WithLabelValues(result).Inc()
 }
 
 // ── Observe helpers ─────────────────────────────────────────────────

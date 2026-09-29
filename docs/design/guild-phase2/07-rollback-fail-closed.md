@@ -129,6 +129,9 @@ service GuildInternal {
 
 - `kind / status / stream` 用 `uint32` 而不是枚举:避免本文件 import `guild_db.proto`(那是库表 schema,带 proto2mysql 选项,不该进一个 RPC 文件的依赖闭包)。Go 侧用 `uint32(pb.GuildAssetOpStatus_…)` 赋值,**不写数字字面量**。
 - 节点归属的退路:若验证步 3 发现 `GuildInternal` 的路由条目没落到 guild 节点(三级回落对第二个 service 失手),再补 `import "proto/db/proto_option.proto"` + `option (OptionFileDefaultNode) = NODE_GUILD;`(枚举值已存在,`proto/db/proto_option.proto:35`),并同步核 `guild.proto` 的条目未受影响。**未能确认**回落对同目录第二个 service 的行为(未读 `internal/model.go`),所以留这条退路。
+
+> **2026-09-28 落码修正(B5d-2a)**:已读 `tools/proto_generator/protogen/internal/model.go:167` 的 `NodeServiceForCpp` 确认:它对每个 service 独立求值、不带文件级状态,依次试 `GuildInternalNodeService`、`GuildpbNodeService`(都不在 eNodeType),落到目录名 `guild` → `GuildNodeService`(`proto/common/base/node.proto:20`),与 `GuildService` 同一结果。所以**不补** `OptionFileDefaultNode`,上面的退路作废;验证步 3 仍核一眼路由条目的节点类型。
+> 落码的 proto 注释与上面全文有两处文字差异(字段、消息、service 形状逐字一致):去掉了 `APPLIED(2) / APPLIED_PARTIAL(5)` 的数值(数值只以 `guild_db.proto` 的枚举为准)和对 `guild.proto` 的行号引用,并把上面这条确认写进了文件头。
 - 响应**没有** `TipInfoMessage`:内部 RPC 的拒绝全部走 gRPC status(§7.4.4),不占 tip 号段,不动 `Tip.xlsx`。
 
 ### 7.3.2 `proto/data_service/data_service.proto` 增量
@@ -241,6 +244,13 @@ SELECT o.op_id, o.player_id, o.guild_id, o.stream, o.kind, o.status,
 - 保留期判定**放在 guild**:`TerminalRetentionDays` 是 guild 的配置(05:881),data_service 读不到,也不该复制一份(DRY)。所以下界由 guild **在拒绝里带回**(`cutoff_ms`),data_service 据此钳位重查(§7.5.3-2b)。
   - 用 status message 传一个数是权宜:给定的响应形状里没有放它的字段,形状不许改;gRPC status details 要为一个整数引入 `errdetails` 依赖,不值。格式由 guild 侧一个导出常量 + data_service 侧一个解析函数各自持有,**解析失败 = `CheckFailed`**(不可放行),所以格式漂移的方向仍是拒绝。测试 G8 / D15 两端各钉一次同一条样例字符串。
   - data_service 对其它任何非 OK 的 gRPC status 一视同仁地拒绝(§7.6.4)。
+
+> **2026-09-28 落码修正(B5d-2a)**:落在 `go/guild/internal/server/guild_internal_server.go`,与上表的差异与补充:
+> 1. message 格式由导出常量 `RetentionRejectedMessagePrefix`(`"since_ms older than terminal retention; cutoff_ms="`)与导出函数 `RetentionRejectedMessage(cutoffMs)` 持有;`RetentionSafetyMs` 是同文件的导出常量。G8 钉的样例串是 `since_ms older than terminal retention; cutoff_ms=1697411600000`(now = 1700000000000、保留 30 天),D15 请用同一条。
+> 2. 保留期取 `svc.CleanupConfFrom(AssetOp).TerminalRetention`(即 `AssetOp.TerminalRetentionDays`,与清理同一换算)。**表外补一行**:该值 ≤ 0 视同未配置,与"Store 未装配"一并回 `Unavailable`(fail-closed)。`CleanupEnabled=false` 时 config 不校验这个值、终态行也不删,按配置值判定只会多拒,方向安全。
+> 3. 判定顺序:入参(`InvalidArgument`)→ 装配(`Unavailable`)→ 保留期(`FailedPrecondition`)→ 查询。
+> 4. **表外补一行**:查询失败时,ctx 超时回 `DeadlineExceeded`,取消回 `Canceled`,其余回 `Internal`。库错误原文只进日志,不外发,计 `result="error"`。data_service 对这几种一视同仁地拒绝。
+> 5. 查询不另设子预算(不像 `asset_store.go` 的后台方法那样套 `storeReadBudget`),只受 RPC 整请求预算(`Timeout − 500ms`,`guild.go` 的 `requestBudgetInterceptor`)约束。
 
 ### 7.4.3 `zone_id` 的语义(偏差 1)
 
@@ -501,6 +511,8 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
 - **不回退读 MySQL**:04:1532 只承认"已在 Redis 即 durable";MySQL 落库是异步 DBTask,可能更旧,会把已记账的 seq 误判为未见。
 - 只读、不鉴权(与 `BatchGetPlayerName` 同级,`dataserviceserver.go:598`)。账本是位图 + 少量拒绝码,不含资产数额。
 
+> **2026-09-28 落码修正(B5d-1)**:落在 `go/data_service/internal/logic/asset_op_ledger_logic.go`,与上表的差异与补充:① 上表第三行按逐项对应落码——home_zone 查不到(无映射 / 映射库出错 / zone 未配 Redis,即 `ClientForPlayer` 的任何错误)→ `Unavailable`,zone Redis `GET` 出错(非 `redis.Nil`)→ `Internal`;② 补三行:`player_id == 0` → `InvalidArgument`(否则缺席的 `player_database_data` 会因 `GetPlayerId()==0` 与请求"相符"而蒙混过关);调用方已取消 / 超时 → 如实回 `Canceled / DeadlineExceeded`(guild 适配器自带 300ms,那不是本服务故障,不记 ERROR);`Router` 未装配 → `Unavailable`;③ `player_database_data` 缺席按"`player_id` 不符"处理(`Internal`);④ 本 RPC 没有 in-band `error_code`,gRPC code 就是契约,所以语义表与 code **在 logic 里一处定义**、handler 原样搬运(未照 `playerNameStatus` 在 server 层再映射一次),L3 / L4 因此直接对 code 断言;⑤ key 前缀用包级变量 `playerAllDataKeyPrefix`(写法同 `go/match/internal/team/presence.go:50`),今天的值是 `PlayerAllData`(`player_cache.proto` 无 package)。测试在 L1–L5 之外补了语义表其余四行(入参 0、无映射 / zone 未配、Redis 注入错误、已取消 ctx),都断言"绝不回 `found=false`"。
+
 ### 7.8.3 `Loop.Ledger` 接线(Y-06)
 
 - **适配器放 `go/shared/assetop/ledger_dataservice.go`**:`type DataServiceLedger struct{ Client dspb.DataServiceClient; Timeout time.Duration }`,实现 `ReadPersistedLedger`(签名以磁盘为准,`reconcile.go:173-175`)。放 shared 是因为 trade 也留着同一个空位(`go/trade/internal/reconcile/pipeline.go:165-186` 只设了 `Manual`),两个服务各写一份迟早分叉。shared 已依赖 `proto` 模块,不引新依赖。
@@ -509,6 +521,8 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
 - guild 装配:B5b 建 `assetop.Loop` 的那个文件(**落码时以磁盘为准**,B5b 尚未落码;trade 的对应物是 `internal/reconcile/pipeline.go`)里,把 `loop.Ledger = nil` 换成 `&assetop.DataServiceLedger{Client: svcCtx.DataServiceClient, Timeout: 300ms}`。`DataServiceClient` 为 nil(未配 `DataServiceRpc`)时保持 `Ledger = nil` 并打一条 INFO——离线读账本是优化,不是正确性路径。
 - `LedgerReadMinAttempts`(默认 3,`reconcile.go:280`):一行至少重投失败 3 次才去读账本,避免每个刚下线的玩家都打一次 data_service。不改。
 - trade 的接线**不在本批**(不碰别的会话的服务),只在交付说明里点一句"适配器已在 shared,可直接用"。
+
+> **2026-09-28 落码修正(B5d-1)**:B5b 建 Loop 的是 `go/guild/internal/svc/asset_op.go` 的包级函数 `NewAssetPipeline(c, retryBase, locatorRedis, store)`,**拿不到** `svcCtx.DataServiceClient`,上文"原地把 `loop.Ledger = nil` 换掉"做不到;改签名又要同时改 `guild.go` 与 `asset_op_test.go` 两处调用方(前者此刻归 B5d-2a)。所以改为新增方法 `(*AssetPipeline).AttachPersistedLedger(client dspb.DataServiceClient)`(`asset_op.go:208`):client 为 nil → `Ledger` 保持 nil + 一条 INFO;否则装 `&assetop.DataServiceLedger{Client: client, Timeout: 300ms}`(常量 `persistedLedgerReadTimeout`,`:56`);在 `Start / Stop` 之后调用只打 ERROR、不生效(`Loop.Ledger` 无锁,worker 起来之后再写是数据竞争)。**接线要生效还差 `go/guild/guild.go` 一行**(本批不碰该文件):紧跟 `svc.NewAssetPipeline(...)` 成功之后、`economy.Loop = assetPipe.Loop` 与服务开始监听之前,加 `assetPipe.AttachPersistedLedger(svcCtx.DataServiceClient)`——同步投递路径的 `ProcessOne` 同样会读 `Ledger`,晚于它们设置即为竞态。那一行落地之前,guild 的行为与 B5b 相同(`Ledger = nil`),无害。`go/guild/internal/config/config.go:144` 注释"B5d 接 Ledger 之前不生效"待那一行落地后同步订正。
 
 ---
 
@@ -597,6 +611,21 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
 | R8 | `cpp/generated/rpc/rpc.vcxproj.filters` | 同上(`:117` 之后) |
 
 生成文件的**确切文件名以 proto-gen 的实际产物为准**(上表按 `trade_admin` 的命名规律推定,未跑生成,**未能确认**);先跑生成、`git status` 看到新文件名之后再登记。动手前对这 8 个文件单独 `git status`——`cpp/generated/table/*` 此刻有别的会话在途改动,这三个工程也可能有。
+
+> **2026-09-28 落码修正(B5d-2a)**:8 个登记文件在落码时都没有别人的在途改动,已按下面的文件名登记。每处只追加,紧跟在 guild 既有条目之后:
+> - R1:CMake 的 `guild/guild_internal.grpc.pb.cc`、`guild/guild_internal.pb.cc`,在 `:123-124`。
+> - R2/R3:`guild\guild_internal.{grpc.pb,pb}.{cc,h}` 共四项;filters 里 `.cc` 归"源文件"、`.h` 归"头文件"。
+> - R4–R6:`guild/guild_internal_grpc_client.{cpp,h}`。
+> - R7/R8:`service_metadata\guild_internal_service_metadata.h`。
+>
+> 文件名这次是**读生成器代码推定**的,没有跑生成:
+> - `.pb` 与 `.grpc.pb`:protoc 按 proto 文件名产出。同目录没有 service 的 `guild_db` 现在也有 `guild_db.grpc.pb.{cc,h}` 生成在盘上。
+> - grpc 客户端:`LogicalPath()`(`guild/guild_internal`)加 `_grpc_client.{h,cpp}`。依据 `internal/generator/cpp/grpc_process.go:156-167`、`internal/model.go:189`、`etc/proto_gen.yaml:113-115`。
+> - service metadata:`FileBaseNameNoEx()` 加 `_service_metadata.h`。依据 `internal/model.go:102-104`、`etc/proto_gen.yaml:126`。
+>
+> 仍以步 2a 的 `git status` 为准,对不上就改登记。
+> `rpc_event_registry.cpp` 是生成物(`internal/generator/cpp/service_register_info.go:390` 由模板渲染),本批不改。
+> 本节表里写的行号已下移 1–2 行,以磁盘为准。
 
 **B5d-2b data_service 回档闸(15 个;纯 Go)**
 
@@ -688,6 +717,7 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
 - **U2 复合游标**:单个 `after_op_id` 表达不了索引序游标,本文以"按 `op_id` 排 + filesort"绕开(§7.4.1)。若将来回档窗口内的行数大到 filesort 成为问题,最小修补 = 请求追加 `uint64 after_next_attempt_ms`、响应追加 `next_after_next_attempt_ms`(只追加,不破坏现形状)。现在不做。
 - **U3 已知误报**:`F > S` 但 scene 的应用早于快照的行会被误判为分歧(§7.2)。最小修补 = `GuildAssetOpBrief` 追加 `seq = 10`、`stream_epoch = 11`,data_service 用**快照里的账本**跑一次 `ClassifyPersisted`,已见者剔除。需要快照里存有 PlayerAllData blob——今天没有(T3),所以现在做不了,先记着。
 - **U4 `data_service.proto` 首次 import 仓内 proto**:今天它只 import `google/protobuf/empty.proto`(`:4`)。Go 侧 guild 已经 `import dspb "proto/data_service"`,与 `proto/common/component` 同在 `proto` 模块,**推断**生成链能处理;C++ 侧的 `cpp/generated/data_service`(`tools/proto_generator/protogen/etc/proto_gen.yaml:364-376`)是否需要额外 include 路径**未能确认**(未读生成器代码)。若生成失败,退路 = `bytes ledger = 2`(序列化后的 `PlayerAssetOpLedgerComp`)+ 适配器里 `proto.Unmarshal`;这改变了 04:1558 给定的字段类型,须用户点头。
+  > **2026-09-28 落码修正(B5d-1)**:已读生成器代码,**结论:两侧都能解析,采用 import 方案,不需要 bytes 退路,也不需要额外的 C++ 工程登记**。① Go:`internal/generator/go/unified.go:47` 把整棵 `proto/` 拷进暂存区、`:87` 以暂存区父目录为 `--proto_path`,`import "proto/common/component/…"` 与 `mysql_database_table.proto:6` 的既有写法同路解析;生成物 `go/proto/data_service` 将 import `proto/common/component`,该包不反向依赖 data_service,无 Go 包环。② C++:`internal/generator/cpp/gen.go:111`(`.pb.cc`)与 `:223`(`.grpc.pb.cc`)都以仓库根(`OutputRoot`)为 `--proto_path`,描述符生成(`internal/prototools/descriptor.go:137-147`)同样;`asset_op_ledger_comp.pb.cc` 与 `data_service.pb.cc` 早已同在 `cpp/generated/proto` 工程(`CMakeLists.txt:54、:103`,`proto.vcxproj:33、:174`),include 根一致。③ `GetPlayerAssetOpLedger` 只是既有 service 追加一个方法,生成物落在既有文件里(`data_service.grpc.pb.cc`、`grpc_client/data_service/data_service_grpc_client.cpp`、`rpc_event_registry.cpp`),不产生新文件。④ 仍未实跑生成,以验证步 2a / 4 为准;若 C++ 真出 C1083,先查 include 根,再议 bytes 退路(须用户点头)。
 - **U5 `ResolveManually` 是否同写 `next_attempt_ms`**:04:1547 的原文没写。属 B5b 范围,本文只提要求(§7.4.1 末)并在 G5 钉住。
 - **U5b `Store.Finalize` 同写 `next_attempt_ms`**(§7.4.1):05:690 写了,`go/shared/assetop/reconcile.go:136-138` 的契约注释没写。属 B5b / shared/assetop 持有会话的范围;B5d 只提硬要求并由 G5b 钉住。**漏了是 fail-open**,比 U5 严重,B5b 交付前请点名核对。
 - **U9 保留期不可证明能否被放行覆盖**(R2b、§7.5.4):本文定为**能**(同一个开关、同样要 token + reason + operator),依据是 90:191 的"**默认**拒绝"与"不给出口就逼出绕闸"。这比前稿放宽了一档,请确认。若你要维持"不可覆盖":最小改法 = §7.6.4 表里"有不可证明玩家"一行改回 `CheckFailed`、放行无效,钳位重查与 `guild_unprovable_player_count` 保留(让运维至少看得见是谁挡的);**不改的风险** = 开服满 30 天后 `RollbackZone / RollbackAll` 基本不可用,只剩逐玩家回档。

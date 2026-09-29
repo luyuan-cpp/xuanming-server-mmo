@@ -516,9 +516,9 @@ function Get-GrpcClientDeadlineBudgetViolations {
 	  MatchNodeService           ← go/match/etc/match_service.yaml(gate 直连模式)
 	  LoginNodeService           ← go/login/etc/login.yaml(gate 直连模式)
 	Battle / Etcd 没有 Go 服务端超时,不在表里;chat / friend / guild / team / trade 不在 C++ 节点白名单里,只经路由服到达。
-	比对的是服务 yaml:scene-manager / match / 路由服的 go-svc ConfigMap 从它镜像 Timeout;login 的 ConfigMap 目前写死
-	Timeout(New-GoSvcConfigMapYaml)、data-service 的 ConfigMap 不写 Timeout —— 这两份生成物也满足同一不等式,
-	由契约测试另外钉住。
+	比对的是服务 yaml:scene-manager / match / 路由服 / login 的 go-svc ConfigMap 都从它镜像 Timeout
+	(New-GoSvcConfigMapYaml);data-service 的 ConfigMap 不写 Timeout(= go-zero 默认 2000)—— 生成物同样满足
+	这条不等式,由契约测试另外钉住(防镜像被改回常数、ConfigMap 键改名)。
 #>
 function Assert-GrpcClientDeadlineBudget {
 	$deployPath = 'bin/etc/base_deploy_config.yaml'
@@ -2063,6 +2063,16 @@ function New-GoSvcConfigMapYaml {
 	# PlayerId 号段长度(node-id-overhaul-plan §6.2:按「10 分钟峰值建角量」配)。IdSegment.Enabled 与
 	# FallbackToSnowflake **不**从 yaml 取:那两个是部署决策,在 login 模板里显式写死并注释。
 	$loginIdSegmentStep     = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'IdSegment.Step'
+	# zrpc 服务端 Timeout(毫秒)从服务 yaml 镜像,与 scene-manager / match 同一条纪律。以前模板里写死 100000:
+	# 部署门禁 Assert-GrpcClientDeadlineBudget 核对的是 login.yaml,两边一分家,门禁放行的就不是集群里真正生效的值。
+	# 非正整数在这里就拒 —— 0 = go-zero 不装超时拦截器(服务端没有上界),非数字 go-zero 起服即失败,都不该写进 ConfigMap。
+	# 值本身(100000 疑为笔误,行尾注释写 10s)待拍板(grpc-client-deadline-failure-callback.md §4.3);定下来后改 login.yaml 与
+	# bin/etc 的 GrpcClient.CallDeadlineMs.LoginNodeService 两处即可,这里自动跟随,不用动生成器。
+	$loginTimeout           = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Timeout'
+	$loginTimeoutMs         = [long]0
+	if (-not [long]::TryParse($loginTimeout, [ref]$loginTimeoutMs) -or $loginTimeoutMs -le 0) {
+		throw "生成 ConfigMap 失败:go/login/etc/login.yaml 的 Timeout='$loginTimeout' 必须是正整数毫秒(0 = go-zero 不装超时拦截器,服务端没有上界;fail-closed:不替你猜一个超时)"
+	}
 
 	# data-service 全局库落库消费者(node-id-overhaul-plan §2.0c):topic 名必须与 C++ 生产者一致,
 	# 分区数是不可变契约(kafkautil.EnsureTopics 会拒绝与 broker 现状不一致的值),一律从服务 yaml 取。
@@ -2501,7 +2511,7 @@ Kafka:
 @"
 Name: login.rpc
 ListenOn: 0.0.0.0:50000
-Timeout: 100000
+Timeout: ${loginTimeout}
 ${loginModeLine}
 Etcd:
   Hosts:

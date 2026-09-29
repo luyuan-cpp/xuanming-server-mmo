@@ -120,6 +120,8 @@ set(SOURCE_FILES
     guild/guild.grpc.pb.cc
     guild/guild.pb.cc
     guild/guild_db.pb.cc
+    guild/guild_internal.grpc.pb.cc
+    guild/guild_internal.pb.cc
     trade/jubaozhai.grpc.pb.cc
     trade/jubaozhai.pb.cc
     trade/trade_admin.grpc.pb.cc

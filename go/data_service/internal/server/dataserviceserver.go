@@ -605,6 +605,20 @@ func (s *DataServiceServer) BatchGetPlayerName(ctx context.Context, req *data_se
 	return &data_service.BatchGetPlayerNameResponse{Names: names}, nil
 }
 
+// GetPlayerAssetOpLedger 读玩家**已落盘**的资产账本(docs/design/guild-phase2/07-rollback-fail-closed.md §7.8.2),
+// 供 guild 重投循环对长期离线的玩家提前终结已记账的行(go/shared/assetop.DataServiceLedger)。
+//
+// 只读、不鉴权,与 BatchGetPlayerName 同级:账本是 seq 位图 + 少量拒绝码,不含资产数额。
+// 本 RPC 没有 in-band error_code,契约就是 gRPC code;语义表与 code 全在 logic 里一处定义,
+// logic 返回的 error 已经是 status,这里只做搬运 —— 不要在这里再包一层映射。
+func (s *DataServiceServer) GetPlayerAssetOpLedger(ctx context.Context, req *data_service.GetPlayerAssetOpLedgerRequest) (*data_service.GetPlayerAssetOpLedgerResponse, error) {
+	ledger, found, err := logic.GetPlayerAssetOpLedger(ctx, s.svcCtx, req.GetPlayerId())
+	if err != nil {
+		return nil, err
+	}
+	return &data_service.GetPlayerAssetOpLedgerResponse{Found: found, Ledger: ledger}, nil
+}
+
 // hasAdminTokenMetadata 只判"这次调用**声称**自己是运维调用",不做任何校验。
 // 校验一律交给 authorizeAdmin(常数时间比较 + 未配置即停用)。
 //

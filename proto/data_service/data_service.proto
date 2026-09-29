@@ -2,6 +2,10 @@ syntax = "proto3";
 package data_service;
 
 import "google/protobuf/empty.proto";
+// 本文件第一次 import 仓内 proto(docs/design/guild-phase2/07-rollback-fail-closed.md §7.11-U4)。
+// 生成链能解析:Go 统一生成把整棵 proto/ 拷进暂存区、以其父目录为 --proto_path;C++ 以仓库根为
+// --proto_path,且 asset_op_ledger_comp.pb.cc 早已登记在 cpp/generated/proto 工程里。
+import "proto/common/component/asset_op_ledger_comp.proto";
 
 option go_package = "data_service/data_service";
 
@@ -53,6 +57,12 @@ service DataService {
   rpc ReservePlayerName(ReservePlayerNameRequest) returns (ReservePlayerNameResponse) {}
   rpc ReleasePlayerName(ReleasePlayerNameRequest) returns (google.protobuf.Empty) {}
   rpc BatchGetPlayerName(BatchGetPlayerNameRequest) returns (BatchGetPlayerNameResponse) {}
+
+  // ── 资产通道:已落盘账本只读 ─────────────────────────────────
+  // 读 zone Redis 里 scene 写的 PlayerAllData blob 的 asset_op_ledger 子字段。只读、不鉴权(与
+  // BatchGetPlayerName 同级)。实现 go/shared/assetop 的 LedgerReader。
+  // 设计见 docs/design/guild-phase2/07-rollback-fail-closed.md §7.8。
+  rpc GetPlayerAssetOpLedger(GetPlayerAssetOpLedgerRequest) returns (GetPlayerAssetOpLedgerResponse) {}
 }
 
 // ── Load / Save ────────────────────────────────────────────────
@@ -439,4 +449,21 @@ message BatchGetPlayerNameRequest {
 // 但 SQL 失败时不回部分结果:半份结果无法与"这些 id 确实没名字"区分。
 message BatchGetPlayerNameResponse {
   map<uint64, string> names = 1;
+}
+
+// ── 资产通道:已落盘账本 ───────────────────────────────────────
+//
+// 语义(07 §7.8.2):读的是 `<PlayerAllData 全名>:{player_id}`(scene 存盘写的那份 blob),
+// **不是** data_service 自己那套 player:{id}:<field>(那里没有账本)。不回退读 MySQL:MySQL
+// 落库是异步 DBTask,可能更旧,会把已记账的 seq 误判为未见。
+// 读不成一律走 gRPC 错误,**绝不**用 found=false 顶替:
+//   - home_zone 查不到(无映射 / 映射库出错 / zone 未配 Redis)→ Unavailable;
+//   - zone Redis 读失败 → Internal;blob 在但反序列化失败、或 player_id 与请求不符 → Internal;
+//   - player_id = 0 → InvalidArgument。
+
+message GetPlayerAssetOpLedgerRequest { uint64 player_id = 1; }
+
+message GetPlayerAssetOpLedgerResponse {
+  bool found = 1;                          // false = 该玩家在 zone Redis 里没有 blob(从未入场,或 Redis 丢数据)
+  PlayerAssetOpLedgerComp ledger = 2;      // found=true 且玩家从未有过资产操作时为空消息(不是缺席)
 }

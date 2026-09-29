@@ -4,10 +4,14 @@ option go_package = "contracts/kafka";
 
 import "proto/battle/battle_data.proto";
 
-// battle -> match:对局结果(评分回流,二期 MMR)。
+// battle -> match(评分回流,二期 MMR,消费组 match-rating)/ guild(帮会同道历练结算,消费组 guild-trial)。
 // Kafka 投递:topic = match-results(全局,无 zone 段),key = battle_id(同局保序即可);
-// 无目标实例语义(任一 match 实例消费即可,消费组 match-rating)。
+// 无目标实例语义(任一 match / guild 实例消费即可)。
 // battle 作废(DestroyBattle / AbortAllRooms)不发本事件:评分只按真实打完的局更新。
+// 带活动上下文(activity_context.kind != NONE)的事件另有持久记录:battle 先把本事件序列化字节写入
+// SharedRedis battle:activity_result:{battle_id}(TTL 7 天)再发 Kafka,每 10s 查键、仍在则按原字节重发(≤30 次);
+// guild 该局进入终态后 DEL 销账。见 docs/design/guild-phase2/06-activities.md §6.19。
+// 因此同一 battle_id 的带上下文事件可能被投递多次,消费方必须按 battle_id 幂等。
 message BattleResultTeam {
   uint32 team_index = 1;
   repeated uint64 player_ids = 2;
@@ -22,4 +26,10 @@ message BattleResultEvent {
   repeated BattleResultTeam teams = 6;
   uint32 total_rounds = 7;
   uint64 finished_at_ms = 8;
+  // ---- 帮会同道历练(docs/design/guild-phase2/06-activities.md §6.17.3);battle 写,guild 读,match 评分忽略 ----
+  BattleActivityContext activity_context = 9;   // 开局时 CreateBattleRequest.activity_context 的原样回显;普通对局(kind == NONE)不填
+  repeated uint64 fled_player_ids = 10;         // 结算时 BattleSettlementData.fled == true 的玩家,升序去重;所有对局都填
+  // 结算时 BattleSettlementData.is_dead == true 的玩家,升序去重;所有对局都填。
+  // 用户决策 U2(阵亡也得奖):guild 发奖候选 = team 0 − fled_player_ids,本字段不参与过滤,只供统计与日后回退。
+  repeated uint64 dead_player_ids = 11;
 }

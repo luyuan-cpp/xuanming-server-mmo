@@ -123,8 +123,10 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	//
 	// correlation_id 同理放在这里回显,而且必须放在这里:这个 defer 最先注册、最后执行(LIFO),
 	// 晚于下面去重 defer 的缓存写入,所以缓存里不含它,重放时回显的是本次请求的值——
-	// scene 节点只认"这一次发送"的号。GO-2 的 owner_epoch 恰好相反:它属于"那一次执行的结果",
-	// 必须跟着缓存一起重放,不许放在这个 defer 里。
+	// scene 节点只认"这一次发送"的号。
+	// GO-2 的回滚回显(owner_epoch_after_rollback)**不**在这里填:它属于"那一次执行的结果",只出现在
+	// ErrKafkaRoute 应答上,由两处回滚调用点直接写进应答。错误应答不进去重缓存(下面的去重 defer 只缓存
+	// ErrorCode==0),所以它也不存在"跟缓存一起重放"的问题。它只供日志排障,不是源端的采纳凭证。
 	defer func() {
 		if response != nil {
 			response.PlayerId = in.PlayerId
@@ -709,18 +711,19 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		routeStart := time.Now()
 		if err := l.routePlayerToGate(in, nodeId, sceneId, homeZoneID, placed.epoch); err != nil {
 			l.Logger.Errorf("Failed to route player %d to gate, rolling back location/epoch/counts: %v", in.PlayerId, err)
-			// 同节点 epoch 0 的铸造回滚时 epoch 不退,只退 location:持有者没换,epoch 本来就不需要退。
-			// 没投递到 —— 持有节点缓存仍是 0,存盘不带 guard,新值拒不了它;kafka-go 报错但 broker 其实
-			// 已投递 —— 缓存已是新值,退回 "0" 反而让它之后带 guard 的存盘被拒、实体被当废黜销毁。
-			// 其余铸造按 rollbackEpochFor 退回旧持有者手里的值。
-			restoreEpoch := rollbackEpochFor(currentLoc, placed)
-			if sameNodeZeroMint {
-				restoreEpoch = placed.epoch
-			}
-			l.rollbackEnterSceneAfterRouteFailure(in.PlayerId, currentLoc, currentLocRaw, placed, restoreEpoch,
-				currentZoneID, targetZoneId, sceneId)
+			// 回滚:location 退回本次之前的值,epoch 只进不退(GO-2,cross-zone-scene-travel.md §12.8)。
+			// 铸造过的再 INCR 一格(bump);凭标记铸造的以「所凭标记原样还在」为前提,并写回执、转写标记,
+			// 源 scene 凭回执采纳新值;标记已被目标节点消费 / 源端取走时保留本次落点(marker_gone)。
+			// 同节点 epoch 0 的铸造走 keep(sameNodeZeroMint:epoch 保留铸出的 1,只退 location):路由的目标
+			// 就是持有节点本身。没投递到 —— 持有节点缓存仍是 0,存盘不带 guard,1 拒不了它;kafka-go 报错但
+			// broker 其实已投递 —— 缓存已是 1,再 INCR 会让它之后带 guard 的存盘被拒、实体被当废黜销毁。
+			// 回显只在 bump 回滚确认生效时非 0,只供源端日志,不是采纳凭证。
+			resp := errResp(constants.ErrKafkaRoute, fmt.Sprintf("route player to gate failed: %v", err))
+			_, echo := l.rollbackEnterSceneAfterRouteFailure(in.PlayerId, currentLoc, currentLocRaw, currentZoneID,
+				placed, guard.requiredMarker, sameNodeZeroMint, targetZoneId, sceneId)
+			resp.OwnerEpochAfterRollback = echo
 			metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageRouteGate, time.Since(routeStart))
-			return errResp(constants.ErrKafkaRoute, fmt.Sprintf("route player to gate failed: %v", err)), nil
+			return resp, nil
 		}
 		metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageRouteGate, time.Since(routeStart))
 	} else {
@@ -1031,11 +1034,20 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 	if in.GateId != "" {
 		if err := l.sendRedirectToGate(in, redirect); err != nil {
 			l.Logger.Errorf("Failed to push redirect to gate (placed=%v), rolling back location/epoch: %v", placement.place, err)
-			if placement.place && rollbackPlayerPlacement(l.svcCtx, l.Logger, in.PlayerId, placed, currentLocRaw,
-				rollbackEpochFor(currentLoc, placed)) && currentLoc != nil && currentLoc.SceneId != 0 {
-				IncrInstancePlayerCount(l.svcCtx, currentZoneID, currentLoc.SceneId)
+			resp := errResp(constants.ErrKafkaRoute, fmt.Sprintf("redirect to gate failed: %v", err))
+			if placement.place {
+				// 与同 zone 第 7 步同一套单调回滚(GO-2,§12.8);第一条腿不存在同节点 epoch 0 的铸造,
+				// keepMintedEpoch 恒 false(dev 旁路不铸造,自然走 keep)。
+				// 回滚、还人数、回显三件事分开写:回显只看 echo,不能像以前串在一个 && 里那样被旧场景的
+				// SceneId 条件短路掉(等待落点再次重定向时旧 location 的 SceneId 就是 0)。
+				restored, echo := rollbackPlacementAfterPushFailure(l.svcCtx, l.Logger, in.PlayerId,
+					currentLoc, currentLocRaw, currentZoneID, placed, placement.guard.requiredMarker, false)
+				if restored && currentLoc != nil && currentLoc.SceneId != 0 {
+					IncrInstancePlayerCount(l.svcCtx, currentZoneID, currentLoc.SceneId)
+				}
+				resp.OwnerEpochAfterRollback = echo
 			}
-			return errResp(constants.ErrKafkaRoute, fmt.Sprintf("redirect to gate failed: %v", err)), nil
+			return resp, nil
 		}
 	}
 
@@ -1051,17 +1063,22 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 	}, nil
 }
 
-// rollbackEnterSceneAfterRouteFailure restores the state visible before this
-// request. Redis operations are best-effort because the route failure is
-// already the primary error; every rollback failure is logged for repair.
+// rollbackEnterSceneAfterRouteFailure 撤掉同 zone 第 7 步推路由失败的落点,并在回滚确认生效后把人数退回去
+// (目标场景的预占退回、旧场景的人数还回去)。Redis 操作尽力而为:路由失败本身才是主错误,回滚的每一种
+// 失败都已记日志供修复。
 //
-// location 与 owner_epoch 一起退回(理由见 luaRollbackPlayerPlacement):路由没发
-// 出去,目标节点不会拿到新 epoch,而旧节点仍持有玩家并缓存着旧 epoch。
-// restoreEpoch 由调用方决定(通常是 rollbackEpochFor(old, placed);同节点 epoch 0 的铸造原样保留)。
+// location 回退,epoch 只进不退(理由见 luaRollbackPlayerPlacement):铸造过的再 INCR 一格;没铸造的落点与
+// 同节点 epoch 0 的铸造(keepMintedEpoch)只退 location。requiredMarker 是本次铸造所凭的交接标记原文。
+// 返回 (restored, echo):restored 为 false(marker_gone / superseded / redis_error / plan_error)时人数一个都
+// 不动 —— 本次落点仍在 Redis 里,目标场景的预占与旧场景的扣减正对应它;echo 由调用方填进
+// EnterSceneResponse.owner_epoch_after_rollback。
 func (l *EnterSceneLogic) rollbackEnterSceneAfterRouteFailure(playerID uint64, old *scene_manager.PlayerLocation, oldRaw string,
-	placed placedLocation, restoreEpoch uint64, oldZoneID, newZoneID uint32, newSceneID uint64) {
-	if !rollbackPlayerPlacement(l.svcCtx, l.Logger, playerID, placed, oldRaw, restoreEpoch) {
-		return
+	oldZoneID uint32, placed placedLocation, requiredMarker string, keepMintedEpoch bool,
+	newZoneID uint32, newSceneID uint64) (bool, uint64) {
+	restored, echo := rollbackPlacementAfterPushFailure(l.svcCtx, l.Logger, playerID, old, oldRaw, oldZoneID,
+		placed, requiredMarker, keepMintedEpoch)
+	if !restored {
+		return false, echo
 	}
 
 	DecrInstancePlayerCount(l.svcCtx, newZoneID, newSceneID)
@@ -1070,6 +1087,7 @@ func (l *EnterSceneLogic) rollbackEnterSceneAfterRouteFailure(playerID uint64, o
 		// scene:{id}:zone 解析出旧 zone，必须用解析结果恢复 zone-scoped aggregate。
 		IncrInstancePlayerCount(l.svcCtx, oldZoneID, old.SceneId)
 	}
+	return true, echo
 }
 
 func (l *EnterSceneLogic) deleteEnterSceneDedupeIfValue(key, expected string) error {

@@ -297,6 +297,12 @@
     <ClCompile Include="guild\guild_db.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="guild\guild_internal.grpc.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="guild\guild_internal.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="trade\jubaozhai.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -633,6 +639,12 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="guild\guild_db.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="guild\guild_internal.grpc.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="guild\guild_internal.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="trade\jubaozhai.grpc.pb.h">

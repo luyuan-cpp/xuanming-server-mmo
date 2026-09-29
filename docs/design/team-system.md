@@ -2152,6 +2152,7 @@ cd robot && .\robot.exe -c etc\team_smoke.yaml          # 形态一:expect_cross
 
 1. `cpp/libs/services/scene/player/system/player_team.cpp` —— 新增匿名命名空间辅助 `IsOwnershipInFlight(player)`(`PlayerFrozenComp` 或 `PlayerTravelHandoffComp` 任一存在即真),在 `CheckFollowLeader` 的**入口**与 **MGET 回调内**各加一道守卫,跳过时记 `metric=team_follow_skipped reason=ownership_in_flight`。
    理由:交接发起后本节点状态已落盘且**不得再写**(`SavePlayerToRedis` 会直接跳过),此时再替他发一次 `EnterScene`,scene_manager 会按"同物理节点落点"处理 —— 不过换手门、不铸 epoch、直接改写 `location`(`enterscenelogic.go` 的 `samePhysicalNode` 分支),与在途交接互相覆盖;应答还会被 `scene_manager_response_handler.cpp` 当成传送应答喂给 `HandleTravelEnterSceneReply`。
+   *(2026-09-28 补注,未编译、未测试:后半句的前提已被 EnterScene 应答关联号推翻(提交 4e409c5c3)—— 应答现在由 `PlayerLifecycleSystem::DispatchEnterSceneReply` 按 correlation_id 分发,跟随的应答不会再被当成传送应答。这道闸仍然必需,理由只剩前半句:要挡住的是这次同节点重落本身把在途交接覆盖掉(`player_team.cpp` `IsOwnershipInFlight` 上方注释已同步改写)。另注:跟随在交接发起**之前**已发出、其进场路由在交接发起**之后**才到的情形,这道闸挡不住,见下方「未修、需要决策的」第一条的 2026-09-28 补注残余 ②。)*
    这与仓库既有约定一致:`buff.cpp` / `skill.cpp` / `afk.cpp` / 属性同步都按 `PlayerFrozenComp` 拦写,组队是唯一漏掉的新业务路径。
    刻意**不**拦 `RefreshMembership`:`TeamId` 是纯运行时组件(不入 `PlayerAllData`),交接失败解冻后还要接着用;拦掉只会让解冻后的成员关系变陈旧。
 2. `go/match/internal/team/service.go` —— `preflightMatch` 在 `loc == nil` 之后补一条:`loc.GetNodeId() == ""`(等待落点)按 `ErrMemberNotReady` 拒绝。
@@ -2160,6 +2161,7 @@ cd robot && .\robot.exe -c etc\team_smoke.yaml          # 形态一:expect_cross
 ### 未修、需要决策的
 
 - **EnterScene 应答没有相关性标识**:`scene_manager_response_handler.cpp` 只能靠 `resp.player_id()` 把应答对回玩家,于是同一玩家在传送在途期间收到的**任何**一条 EnterScene 应答(跟随、紧急疏散、镜像副本建好后的自动进场)都会被 `HandleTravelEnterSceneReply` 当成传送应答。方向是安全的(会走 `ResolveTravelOutcome` 核实 epoch,最坏是白撤回一次交接、玩家留在源节点),但会造成"传送莫名失败"。上面的守卫已消除组队这一侧的同期来源,残留窗口是"跟随请求先发、传送后起、应答后到"。彻底修需要在 `EnterSceneRequest/Response` 上加一个回显的 correlation id(proto 改动 + regen),属产品/接口决策,未动。
+  *(2026-09-28 补注:**已由关联号解决,未编译、未测试**。`EnterSceneRequest.correlation_id = 10` / `EnterSceneResponse.correlation_id = 6`,scene_manager 只原样回显(不复用 `request_id`);scene 内所有 EnterScene 都经 `SendCorrelatedEnterScene` 带非 0 号发出,应答由 `PlayerLifecycleSystem::DispatchEnterSceneReply` 按号分发,号与等待者对不上的一律丢弃,不再进 `HandleTravelEnterSceneReply`。组队跟随改走 `RequestSceneChange(..., playerRequested = false)`,行为不变(被拒只记日志、不弹 tip、不进传送裁决)。上面"跟随请求先发、传送后起、应答后到"里**应答被当成传送应答**的这一半随之关闭。仍有两条残余:① 应答串号只剩旧版 scene_manager 不回显(号为 0)的滚动升级窗口,此时退回按 player_id 对号的旧行为(计入 `reply_uncorrelated`);② 同一场景还有一条**不带号**的证据路径 —— 进场路由:`player_lifecycle.cpp` `EnterScene` 第 3.2 步只要同 zone 交接在途、交接没指定场景实例(`sceneId == 0`)、路由带来的 owner_epoch 非 0 且与路由到达前相同,就以 `travel_outcome::Evidence::kSucceeded` 调 `ResolveTravelOutcome`,不看 correlation_id。所以同节点跟随或换图的路由(走 Kafka → gate,常晚于 gRPC 应答)若在同 zone 交接发起后才到,仍会撤掉标记、静默解冻,这次传送作废(不回档,玩家留在本节点;跨 zone 传送不走这一步)。根治要让进场路由(`RoutePlayerEvent` / `PlayerEnterGameNodeRequest`)带关联号,需改 Kafka / gate 契约,本轮不做。提交 9da27f9a4 + 4e409c5c3 + 935ec83b1,详见 `cross-zone-scene-travel.md` 的「EnterScene 应答关联号」一节(按标题引用,不写死节号;该节随设计文档更新落地,落地后再核对一次标题)。)*
 - **生成物滞后**:`proto/scene_manager/storage.proto` 的 `PlayerLocation.owner_epoch`、`EnterSceneResponse.player_id` 都还没 regen(`go/proto/scene_manager/storage.pb.go` 无 `OwnerEpoch`,`cpp/generated/proto/scene_manager/storage.pb.h` 无 `owner_epoch`)。这是 `1f2bdd01c` 自己写明的"未 regen"状态,不是合并引入的;但 scene_manager 与 scene 在 regen 之前都编不过,组队的验证清单要排在 regen 之后。
 
 ---
@@ -2214,6 +2216,7 @@ cd robot && .\robot.exe -c etc\team_smoke.yaml          # 形态一:expect_cross
 ### 本轮未做、需要决策的
 
 - **EnterScene 应答没有相关性标识**(D 项已记入上一节"未修、需要决策的"):彻底修需要在 `EnterSceneRequest/Response` 加一个原样回显的 correlation id(proto 改动 + regen + 三处调用点),属接口决策。
+  *(2026-09-28 补注:**已落码,未编译、未测试**,待 Codex 验证 —— 提交 9da27f9a4 + 4e409c5c3 + 935ec83b1,`EnterSceneRequest.correlation_id = 10` / `EnterSceneResponse.correlation_id = 6`。落码内容与仍有的两条残余(旧版 scene_manager 滚动窗口;进场路由第 3.2 步的证据不带号)见上一节「未修、需要决策的」第一条的 2026-09-28 补注。)*
 - **单人排队路径有与组队同形的缺口**:`JoinQueue` / `gather` 对"等待落点"(`location.node_id` 为空)也没有早拒,只会在 `gather.go:289` 的 `EndpointOf(zone, "")` 上失败。与组队无关,建议单独立项。
 - **既有工程登记缺口**(B 项只报告未补):`proto.vcxproj` 的失效登记 `proto\guild\guild_db.pb.cc`;`cpp/generated/proto/CMakeLists.txt` 相对 `proto.vcxproj` 仍缺 18 个 `.cc`;`cpp/libs/services/scene/CMakeLists.txt` 仍缺 4 个 Windows 侧在编的 `.cpp`;`rpc.vcxproj{,.filters}` 仍有 12 个 `ClInclude` 缺口;`scene.vcxproj.filters` 没有 `battle\system\player_battle.cpp` 条目(纯 IDE 显示)。
 - **客户端 UI 整块**(§H.2–§H.5):Team 传输适配器、单飞守卫、按 `(membership_epoch, version)` 应用快照(DV-7)、`TeamUiState.Complete` 的覆盖语义修正、`RequestTimeoutSeconds` 提到 ≥15s、错误码文案 —— 全部未做。

@@ -49,6 +49,11 @@ const (
 
 	// assetOpIDWarmTimeout 启动时同步领第一段 op_id 的预算,与 guildIDWarmTimeout 同值。
 	assetOpIDWarmTimeout = 5 * time.Second
+
+	// persistedLedgerReadTimeout 离线读已落盘账本(data_service.GetPlayerAssetOpLedger)的单次上限
+	// (docs/design/guild-phase2/07-rollback-fail-closed.md §7.8.3)。调用方传入的是投递预算的剩余部分,
+	// 读账本只是"可能省一次卡死"的优化,不值得吃掉其中的大头;data_service 一次 Redis GET 远小于它。
+	persistedLedgerReadTimeout = 300 * time.Millisecond
 )
 
 // ErrAssetSecretMissing:没配 AssetOpSecretEnv,或密钥去首尾空白后短于 32 字节。
@@ -183,10 +188,40 @@ func NewAssetPipeline(c config.AssetOpConf, retryBase time.Duration, locatorRedi
 		conns.Close()
 		return nil, fmt.Errorf("guild: 资产重投循环参数非法(AssetOp 段 + GuildRule.asset_op_retry_base_ms): %w", err)
 	}
-	// Loop.Ledger 留 nil:读已落盘账本(data_service.GetPlayerAssetOpLedger)由 B5d 接(Y-06)。
+	// Loop.Ledger 在这里先留 nil,由装配方在 Start 之前调 AttachPersistedLedger 接上(B5d-1,Y-06):
+	// 本函数拿不到 data_service 客户端(它挂在 ServiceContext 上),不为此改签名。
 	// Loop.Manual 不挂:人工终结 v1 只做离线 CLI(90 清单 D4),进程里没有调用者;
 	// assetopfix 走包级 assetop.ResolveManually,不经 Loop。
 	return &AssetPipeline{Loop: loop, watcher: watcher, conns: conns}, nil
+}
+
+// AttachPersistedLedger 给重投循环接上离线读账本(docs/design/guild-phase2/07-rollback-fail-closed.md §7.8.3):
+// 投递连续失败 LedgerReadMinAttempts 次之后,Loop 经 data_service.GetPlayerAssetOpLedger 读玩家已落盘的
+// 账本,读到"已应用 / 已拒绝"就提前终结,不必等玩家再上线。
+//
+// 必须紧跟 NewAssetPipeline 调用:在 Start 之前,也在把 Loop 交给同步投递路径(EconomyDeps.Loop,
+// 其 ProcessOne 同样会读账本)与 gRPC 开始服务之前。Loop.Ledger 是无锁字段,有 goroutine 读它之后
+// 再写就是数据竞争。本方法只能拦住"Start / Stop 之后"这一种误用(打 ERROR、不生效);nil 接收者安全。
+//
+// client 为 nil(没配 DataServiceRpc)时保持 Ledger = nil 并打一条 INFO:离线读账本是优化,
+// 不是正确性路径 —— 没有它,长期离线玩家的行照常退避重投,玩家上线后由在线投递终结(不变量 I7)。
+func (p *AssetPipeline) AttachPersistedLedger(client dspb.DataServiceClient) {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.started || p.stopped {
+		logx.Error("[guild] AttachPersistedLedger 在资产通道 Start / Stop 之后调用,已忽略:Loop.Ledger 只能在 Start 之前设置")
+		return
+	}
+	if client == nil {
+		logx.Info("[guild] 未配置 DataServiceRpc:资产重投循环不读已落盘账本(Loop.Ledger=nil)," +
+			"长期离线玩家的行照常退避重投,待玩家上线后终结")
+		return
+	}
+	p.Loop.Ledger = &assetop.DataServiceLedger{Client: client, Timeout: persistedLedgerReadTimeout}
+	logx.Infof("[guild] 资产重投循环已接离线读账本:data_service.GetPlayerAssetOpLedger(单次上限 %v)", persistedLedgerReadTimeout)
 }
 
 // Start 起 scene 节点镜像与重投循环两个后台 goroutine。ctx 取消或 Stop 都会让两者退出;

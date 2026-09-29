@@ -122,6 +122,8 @@
     <ClCompile Include="guild\guild.grpc.pb.cc" />
     <ClCompile Include="guild\guild.pb.cc" />
     <ClCompile Include="guild\guild_db.pb.cc" />
+    <ClCompile Include="guild\guild_internal.grpc.pb.cc" />
+    <ClCompile Include="guild\guild_internal.pb.cc" />
     <ClCompile Include="trade\jubaozhai.grpc.pb.cc" />
     <ClCompile Include="trade\jubaozhai.pb.cc" />
     <ClCompile Include="trade\trade_admin.grpc.pb.cc" />
@@ -241,6 +243,8 @@
     <ClInclude Include="guild\guild.grpc.pb.h" />
     <ClInclude Include="guild\guild.pb.h" />
     <ClInclude Include="guild\guild_db.pb.h" />
+    <ClInclude Include="guild\guild_internal.grpc.pb.h" />
+    <ClInclude Include="guild\guild_internal.pb.h" />
     <ClInclude Include="trade\jubaozhai.grpc.pb.h" />
     <ClInclude Include="trade\jubaozhai.pb.h" />
     <ClInclude Include="trade\trade_admin.grpc.pb.h" />

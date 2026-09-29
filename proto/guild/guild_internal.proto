@@ -1,0 +1,51 @@
+syntax = "proto3";
+package guildpb;
+
+option go_package = "guild/proto/guild";
+
+// 本文件不使用任何自定义 option,所以不 import proto_option.proto。
+// 注意 guild.proto **有**该 import,那只是为了服务级 OptionIsClientProtocolService;
+// 它同样没写 `option (OptionFileDefaultNode)`。节点类型由 protogen 的三级回落派生
+// (tools/proto_generator/protogen/internal/model.go 的 NodeServiceForCpp:服务名 → package → 目录名),
+// 该函数对每个 service 独立求值、不带文件级状态:GuildInternalNodeService、GuildpbNodeService 都不在
+// eNodeType 里,落到目录名 guild → GuildNodeService(proto/common/base/node.proto),与 GuildService 同一个节点。
+// 理由与代价同 proto/friend/friend.proto 文件头。
+
+// 帮会内部服务(docs/design/guild-phase2/07-rollback-fail-closed.md §7.3.1)。
+// 刻意不标 OptionIsClientProtocolService,且与客户端协议分文件(照 proto/trade/trade_admin.proto):
+//   - gate 的 IsClientMessageId 不收这些消息号;
+//   - 路由服对 ClientProtocol=false 的条目回信封拒绝;
+//   - guild 会话拦截器对带会话 metadata 的调用回 PermissionDenied(白名单外一律拒);
+//   - 客户端 gen_proto.ps1 不列本文件。
+// 占消息号,不进 MessageLimiter,不进客户端白名单(90 G-10)。
+// 拒绝一律走 gRPC status(07 §7.4.2),响应里没有 TipInfoMessage,不占 tip 号段。
+
+// 已终结为"已应用"的资产操作摘要。只读,不含 payload。
+message GuildAssetOpBrief {
+  uint64 op_id = 1;
+  uint64 player_id = 2;
+  uint64 guild_id = 3;              // 发起时绑定的帮会;该帮会可能已解散
+  uint32 stream = 4;                // AssetOpStream 数值(与 guild_db.proto 一致,不 import asset_op.proto)
+  uint32 kind = 5;                  // GuildAssetOpKind 数值
+  uint32 status = 6;                // GuildAssetOpStatus 数值;只会是 APPLIED 或 APPLIED_PARTIAL
+  uint64 funds_delta = 7;
+  uint64 contribution_delta = 8;
+  uint64 updated_ms = 9;
+}
+
+message ListAppliedAssetOpsSinceRequest {
+  uint32 zone_id = 1;               // 0 = 不按 zone 收窄(data_service 恒传 0,理由见 07 §7.4.3)
+  repeated uint64 player_ids = 2;   // 必填,1..100,不得含 0、不得重复
+  uint64 since_ms = 3;              // 必填 > 0;只返回终结时刻严格晚于它的行
+  uint64 after_op_id = 4;           // 游标;首页传 0
+  uint32 limit = 5;                 // 0 → 500;> 500 → InvalidArgument
+}
+
+message ListAppliedAssetOpsSinceResponse {
+  repeated GuildAssetOpBrief ops = 1;   // 按 op_id 升序
+  uint64 next_after_op_id = 2;          // 0 = 已查尽;否则 = 本页最后一行的 op_id
+}
+
+service GuildInternal {
+  rpc ListAppliedAssetOpsSince (ListAppliedAssetOpsSinceRequest) returns (ListAppliedAssetOpsSinceResponse);
+}

@@ -75,12 +75,14 @@ func UpdatePlayerLocation(ctx context.Context, svcCtx *svc.ServiceContext, playe
 	return err
 }
 
-// placedLocation 是一次成功落点留下的精确值,供路由失败时做 exact-value 回滚。
+// placedLocation 是一次成功落点留下的精确值,供路由失败时做 exact-value 回滚(回滚 Lua 以「location 仍是
+// raw、epoch 仍是 epoch」为前提,见 owner_epoch.go luaRollbackPlayerPlacement)。
 type placedLocation struct {
 	// epoch 是写进 location、并随 RoutePlayerEvent 下发的 owner_epoch:
 	// 铸造时 = 观察值 + 1,不铸造时 = 观察值本身。
 	epoch uint64
-	// minted 记录本次是否推进了 epoch,回滚据此决定要不要把 epoch 键退回去。
+	// minted 记录本次是否推进了 epoch,回滚据此选择 bump(再 INCR 一格,epoch 只进不退)或 keep
+	// (epoch 键不动,只退 location);见 planRouteRollback。
 	minted bool
 	// raw 是写进 player:{id}:location 的精确 protobuf 字节。
 	raw string

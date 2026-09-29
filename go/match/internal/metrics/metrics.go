@@ -1,5 +1,5 @@
 // Package metrics 暴露 match 服务的 Prometheus 指标:排队入口、matcher 凑单、
-// gather 开局管线与挑战(切磋)链路的低基数计数,节点发现缓存的规模,
+// gather 开局管线、挑战(切磋)链路与活动开局(MatchInternal)的低基数计数,节点发现缓存的规模,
 // 以及同进程组队模块(team_* 前缀,docs/design/team-system.md §G.3)的计数。
 // 端口约定见 CLAUDE.md §6:9101=login / 9150=scene_manager / 9160=db / 9170=match。
 // 注意:player_id / battle_id / team_id 一律只进日志,不进指标 label(高基数会爆)。
@@ -143,6 +143,18 @@ var (
 		Help:      "Rated battles whose win/loss outcome was settled as a draw because total_rounds hit the round cap, by mode.",
 	}, []string{"mode"})
 
+	// ---- 活动开局(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.18.3)----
+
+	// activityBattleTotal MatchInternal.StartActivityBattle 的结果。result 分两类:
+	//   - 同步出口(每个请求恰好记一个):started / invalid / offline / in_battle / not_ready / internal;
+	//   - started 之后异步 gather 的终态:gather_ok / gather_failed(失败细分看 match_gather_total{mode="MATCH_MODE_PVE_TEAM"})。
+	// kind = 活动类型短名(guild_trial / none / unknown),由调用方从枚举收敛,**不含** player_id / guild_id / battle_id。
+	activityBattleTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "activity_battle_total",
+		Help:      "MatchInternal.StartActivityBattle results by activity kind and result (started|invalid|offline|in_battle|not_ready|internal|gather_ok|gather_failed).",
+	}, []string{"kind", "result"})
+
 	// ---- 组队(team-system.md §G.3)----
 	// label 只允许固定枚举:method = ClientPlayerTeam 的 RPC 名,outcome / op / kind =
 	// 调用方代码里写死的短字符串。**禁止**传 player_id / team_id / 错误文本(高基数)。
@@ -220,6 +232,7 @@ func register() {
 			waitSeconds,
 			starvedAnchorWait,
 			ratingRoundCapDraw,
+			activityBattleTotal,
 			teamRPCTotal,
 			teamCommitRetryTotal,
 			teamHealTotal,
@@ -339,6 +352,18 @@ func ObserveWatchBattle(outcome string) {
 // ObserveRequestBattleTicket 记录一次 RequestBattleTicket(丢票补签)请求结果。
 func ObserveRequestBattleTicket(outcome string) {
 	requestBattleTicketTotal.WithLabelValues(outcome).Inc()
+}
+
+// ---- 活动开局(guild-phase2 §6.18.3)----
+
+// ObserveActivityBattle 记录一次活动开局的同步出口或异步 gather 终态(label 取值见 activityBattleTotal)。
+func ObserveActivityBattle(kind string, result string) {
+	activityBattleTotal.WithLabelValues(kind, result).Inc()
+}
+
+// ActivityBattleValue 读回某 (kind, result) 的活动开局计数,只给单测断言用。
+func ActivityBattleValue(kind string, result string) float64 {
+	return counterVecValue(activityBattleTotal, kind, result)
 }
 
 // ---- 组队(team-system.md §G.3)----

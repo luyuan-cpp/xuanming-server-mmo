@@ -47,6 +47,7 @@ import (
 	"database/sql"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -92,17 +93,17 @@ func (c recommendCast) castRole(id uint64) string {
 	case c.me:
 		return "me 自己(`<> ?` 自排除子句失效)"
 	case c.myFriend:
-		return "已是好友(NOT IN 好友子查询失效)"
+		return "已是好友(NOT EXISTS f 子句失效)"
 	case c.blockedByMe:
-		return "我拉黑的人(friend_block 子句的 me→他 方向失效)"
+		return "我拉黑的人(NOT EXISTS b_out 子句失效)"
 	case c.blockedMe:
-		return "拉黑了我的人(friend_block 子句的 他→me 方向失效)"
+		return "拉黑了我的人(NOT EXISTS b_in 子句失效)"
 	case c.pendingOut:
-		return "我已向其发出 pending 申请的人(friend_request 子句的 me→他 方向失效)"
+		return "我已向其发出 pending 申请的人(NOT EXISTS r_out 子句失效)"
 	case c.pendingIn:
-		return "已向我发出 pending 申请的人(friend_request 子句的 他→me 方向失效)"
+		return "已向我发出 pending 申请的人(NOT EXISTS r_in 子句失效)"
 	case c.rejected:
-		return "只有终态申请的人(应当出现;没出现说明 r.status = 1 的过滤丢了)"
+		return "只有终态申请的人(应当出现;没出现说明 r_out / r_in 的 status = 1 过滤丢了)"
 	case c.plain:
 		return "无关系的普通候选(应当出现)"
 	case c.bystander:
@@ -805,4 +806,341 @@ func TestRecommendAnchor_PlanIsPerRowPrimaryKeyLookups(t *testing.T) {
 	require.Greater(t, want[len(want)-1], pivot+33, "结果核对的范围没有覆盖到 pivot+30..+33 的申请关系人")
 	assert.Equal(t, want, recommendCandidateIDs(got),
 		"pivot+31 / pivot+33 只有终态申请,必须出现;f / b_out / b_in / r_out(+30)/ r_in(+32)的关系人必须被排除")
+}
+
+// ── RecommendByMutual 扫描上界回归(2026-09-28 评审缺陷:OR 形 NOT EXISTS 让每个 FOF 行扫一遍全服 pending)──────
+//
+// 四类排除 + 调用方 exclude + COUNT 排序的语义由上面的 TestRecommendByMutual_AppliesAllFourExclusions /
+// TestRecommendByMutual_HonorsCallerExcludeAndLimit 覆盖(它们走的就是生产 SQL,改写后原样适用),这里不重复;
+// 下面三条守的是改写本身:读数上界、计划形状、统计陈旧时的连接顺序。三条共用 seedMutualAdversarialGraph,
+// 读数上界用例顺带在这份大夹具上把全量结果逐人核对一遍。
+
+// recommendBulkRejectedRow 是一条终态申请行:status=3 即 rejected,与 testStatusRejected 同值。
+const recommendBulkRejectedRow = "(?, ?, 1, 3, 1)"
+
+// seedMutualAdversarialGraph 的规模与 id 段(与其它用例的 id 段不重叠)。
+const (
+	mutualAdvMe              uint64 = 60000000
+	mutualAdvFriendBase      uint64 = 60000001 // 我的好友 60000001..60000030
+	mutualAdvCandBase        uint64 = 60100000 // FOF 候选 60100000..60100299
+	mutualAdvBlockerBase     uint64 = 61000000 // 拉黑我的局外人 61000000..61019999
+	mutualAdvPendingBase     uint64 = 62000000 // 与我无关的 pending:62000000+k → 62100000+k
+	mutualAdvFriends                = 30
+	mutualAdvCandidates             = 300
+	mutualAdvPerFriend              = 20 // 好友 i 连候选 (i*10+j) mod 300,j < 20:每个候选恰好经 2 个好友可达
+	mutualAdvBlockers               = 20000
+	mutualAdvGlobalPending          = 15000
+	mutualAdvStarIndex              = 99 // star 与全部 30 个好友都是好友:共同好友数 30,必须排第一
+	mutualAdvProductionLimit        = 20 // Friend.RecommendMaxLimit 的默认值:读数与计划都按生产上限取
+)
+
+// mutualAdversarialGraph 是评审对抗库的缩小版:"每个 FOF 候选都要走完排除判定、全服 pending 与拉黑我的人都很多"。
+//   - 我有 F=30 个好友;每个好友连 20 个候选(每个候选经 2 个好友可达),star 经全部 30 个好友可达;好友 0 与好友 1
+//     互为好友(二者因此也是 FOF,必须被"已是好友"排除)。FOF 行数 R = 30×20 + 28(star 补的边)+ 30(好友→我)+ 2 = 660。
+//   - 四类排除各放在 FOF 候选上(每人都同时满足成为候选的全部条件,不出现的唯一原因是那条子句),外加调用方 exclude;
+//     终态申请两个方向各一人作反向对照(必须出现)。
+//   - 2 万个局外人拉黑我,且他们发给我的申请都已是终态(Block 会把双方 pending 置终态;这批终态行让
+//     (to_player_id, status) 上的 to=me 区间变大,旧写法因此改走 status=1 的全服扫描 —— 评审库就是这个形状);
+//     全服另有 1.5 万条与我无关的 pending。这两个集合都与 FOF 不相交,只贡献"规模"。
+type mutualAdversarialGraph struct {
+	me            uint64
+	star          uint64
+	callerExclude []uint64
+	want          map[uint64]uint32 // 合格候选 → 期望的共同好友数
+	excluded      map[uint64]string // 身在 FOF 里、应被排除的人 → 靠哪条子句
+	friendCount   uint64            // F:f1 行数
+	fofRows       uint64            // R:f2 行数(含"候选就是我自己"的那 F 行)
+	blockersOfMe  uint64
+	globalPending uint64
+}
+
+func seedMutualAdversarialGraph(t *testing.T, ctx context.Context, db *sql.DB) mutualAdversarialGraph {
+	t.Helper()
+	me := mutualAdvMe
+	friends := recommendIDRange(mutualAdvFriendBase, mutualAdvFriends)
+	cands := recommendIDRange(mutualAdvCandBase, mutualAdvCandidates)
+	star := cands[mutualAdvStarIndex]
+
+	// 好友边一律双向写(与 AcceptFriend 落库的形状一致)。
+	var edges [][2]uint64
+	link := func(a, b uint64) { edges = append(edges, [2]uint64{a, b}, [2]uint64{b, a}) }
+	for _, f := range friends {
+		link(me, f)
+	}
+	linked := make(map[[2]uint64]bool)
+	for i, f := range friends {
+		for j := 0; j < mutualAdvPerFriend; j++ {
+			c := cands[(i*10+j)%mutualAdvCandidates]
+			link(f, c)
+			linked[[2]uint64{f, c}] = true
+		}
+	}
+	for _, f := range friends {
+		if !linked[[2]uint64{f, star}] {
+			link(f, star)
+		}
+	}
+	link(friends[0], friends[1])
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkFriendPrefix, recommendBulkPairRow, edges)
+
+	callerExcluded := cands[60]
+	excluded := map[uint64]string{
+		me:             "我自己(`<> ?` 自排除失效)",
+		friends[0]:     "已是我的好友,经好友 1 可达(NOT EXISTS f 失效)",
+		friends[1]:     "已是我的好友,经好友 0 可达(NOT EXISTS f 失效)",
+		cands[10]:      "我拉黑的人(NOT EXISTS b_out 失效)",
+		cands[11]:      "我拉黑的人(NOT EXISTS b_out 失效)",
+		cands[20]:      "拉黑了我的人(NOT EXISTS b_in 失效)",
+		cands[21]:      "拉黑了我的人(NOT EXISTS b_in 失效)",
+		cands[30]:      "我发出的 pending(NOT EXISTS r_out 失效)",
+		cands[40]:      "发给我的 pending(NOT EXISTS r_in 失效)",
+		callerExcluded: "调用方 exclude(NOT IN 拼接失效)",
+	}
+	seedBlock(t, ctx, db, me, cands[10])
+	seedBlock(t, ctx, db, me, cands[11])
+	seedBlock(t, ctx, db, cands[20], me)
+	seedBlock(t, ctx, db, cands[21], me)
+	seedPending(t, ctx, db, me, cands[30])
+	seedPending(t, ctx, db, cands[40], me)
+	// 反向对照:与我只有终态申请,必须出现(status = 1 的过滤丢了就会被误排除)。
+	seedRequestRow(t, ctx, db, me, cands[50], testStatusRejected, 1)
+	seedRequestRow(t, ctx, db, cands[51], me, testStatusAccepted, 1)
+
+	blockers := recommendIDRange(mutualAdvBlockerBase, mutualAdvBlockers)
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkBlockPrefix, recommendBulkPairRow, recommendPairsTo(blockers, me))
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkPendingPrefix, recommendBulkRejectedRow, recommendPairsTo(blockers, me))
+	pending := make([][2]uint64, 0, mutualAdvGlobalPending)
+	for k := uint64(0); k < mutualAdvGlobalPending; k++ {
+		pending = append(pending, [2]uint64{mutualAdvPendingBase + k, mutualAdvPendingBase + 100000 + k})
+	}
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkPendingPrefix, recommendBulkPendingRow, pending)
+
+	want := make(map[uint64]uint32, len(cands))
+	for _, c := range cands {
+		if _, bad := excluded[c]; !bad {
+			want[c] = 2
+		}
+	}
+	want[star] = mutualAdvFriends
+
+	g := mutualAdversarialGraph{
+		me:            me,
+		star:          star,
+		callerExclude: []uint64{me, callerExcluded}, // logic 层总会把 me 自己放进 exclude
+		want:          want,
+		excluded:      excluded,
+		friendCount:   uint64(mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend WHERE player_id = ?", me)),
+		fofRows: uint64(mustCount(t, ctx, db,
+			"SELECT COUNT(*) FROM friend f1 JOIN friend f2 ON f2.player_id = f1.friend_player_id WHERE f1.player_id = ?", me)),
+		blockersOfMe:  uint64(mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend_block WHERE blocked_player_id = ?", me)),
+		globalPending: uint64(mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend_request WHERE status = 1")),
+	}
+	// 前置自检:每个"应被排除的人"都确实是 FOF 候选,否则对应的排除断言没有鉴别力(假绿)。
+	for id, reason := range excluded {
+		require.NotZero(t, mustCount(t, ctx, db,
+			"SELECT COUNT(*) FROM friend f1 JOIN friend f2 ON f2.player_id = f1.friend_player_id WHERE f1.player_id = ? AND f2.friend_player_id = ?",
+			me, id), "前置条件:%d(%s)必须是我好友的好友", id, reason)
+	}
+	return g
+}
+
+// readBound 是 RecommendByMutual 注释里推出的 Handler 读上界 8R + 2F + 2 + limit,只由我的好友数与 FOF 行数决定。
+func (g mutualAdversarialGraph) readBound(limit uint32) uint64 {
+	return 8*g.fofRows + 2*g.friendCount + 2 + uint64(limit)
+}
+
+// assertCandidates 逐人核对结果:不重复、不含任何应被排除的人、共同好友数对;wantAll 时还要求一个合格者都不缺。
+func (g mutualAdversarialGraph) assertCandidates(t *testing.T, got []RecommendCandidate, wantAll bool) {
+	t.Helper()
+	seen := make(map[uint64]bool, len(got))
+	for _, c := range got {
+		id := c.CandidatePlayerID
+		if !assert.False(t, seen[id], "候选 %d 重复出现:GROUP BY 去重丢了", id) {
+			continue
+		}
+		seen[id] = true
+		if reason, bad := g.excluded[id]; bad {
+			t.Errorf("结果里多出 %d:%s", id, reason)
+			continue
+		}
+		wantMutual, ok := g.want[id]
+		if !assert.True(t, ok, "结果里多出 %d:不在夹具的 FOF 候选里", id) {
+			continue
+		}
+		assert.Equal(t, wantMutual, c.MutualFriends, "候选 %d 的共同好友数", id)
+	}
+	if wantAll {
+		for id := range g.want {
+			if !seen[id] {
+				t.Errorf("结果里缺了合格候选 %d", id)
+			}
+		}
+	}
+}
+
+// recommendByMutualWithReads 与 recommendAnchorWithReads 同一套做法(钉成单连接、前后核对 CONNECTION_ID),
+// 调的是 RecommendByMutual。
+func recommendByMutualWithReads(t *testing.T, ctx context.Context, db *sql.DB, repo *FriendRepo,
+	me uint64, exclude []uint64, limit uint32) ([]RecommendCandidate, uint64) {
+	t.Helper()
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	connBefore, readsBefore := sessionHandlerReads(t, ctx, db)
+	got, err := repo.RecommendByMutual(ctx, me, exclude, limit)
+	require.NoError(t, err)
+	connAfter, readsAfter := sessionHandlerReads(t, ctx, db)
+	require.Equal(t, connBefore, connAfter, "Handler 计数跨了会话(连接被重建),本次读数无效")
+	return got, readsAfter - readsBefore
+}
+
+// assertMutualReadsAndResult 按生产上限 limit=20 调一次,断言结果与读数上界;M1 与 M2b 共用。
+func assertMutualReadsAndResult(t *testing.T, ctx context.Context, db *sql.DB, repo *FriendRepo, g mutualAdversarialGraph) {
+	t.Helper()
+	const limit = mutualAdvProductionLimit
+	bound := g.readBound(limit)
+	// 自检:拉黑我的人数与全服 pending 数都要大于上界 —— 任何"把这两个集合之一读一遍"的计划都必然越界,
+	// 读数断言才对"退回按集合做排除"有鉴别力。
+	require.Greater(t, g.blockersOfMe, bound, "前置条件:拉黑我的人数必须大于读数上界")
+	require.Greater(t, g.globalPending, bound, "前置条件:全服 pending 数必须大于读数上界")
+
+	got, reads := recommendByMutualWithReads(t, ctx, db, repo, g.me, g.callerExclude, limit)
+	t.Logf("RecommendByMutual 会话 Handler_read_* 增量 = %d(上界 8R+2F+2+limit = %d;F=%d R=%d;拉黑我 %d 人,全服 pending %d 条)",
+		reads, bound, g.friendCount, g.fofRows, g.blockersOfMe, g.globalPending)
+	require.Len(t, got, limit, "合格候选远多于 limit,必须取满")
+	assert.Equal(t, g.star, got[0].CandidatePlayerID, "共同好友数最多的 star 必须排第一(ORDER BY mutual DESC)")
+	g.assertCandidates(t, got, false)
+	assert.LessOrEqual(t, reads, bound,
+		"读数越过了由好友数与 FOF 行数推出的上界:排除判定又在按全服 pending / 拉黑我的人的集合做了(2026-09-28 缺陷复发)")
+}
+
+// assertMutualPlanIsPerRowPrimaryKeyLookups 对生产 SQL 原文(recommendByMutualStatement 的产物)做 EXPLAIN,
+// 断言上界所依赖的计划形状:恰好 f1 / f2 / f / b_out / b_in / r_out / r_in 七张表;f1 是驱动表,按 player_id = 常量做
+// 主键前缀 ref;f2 紧随其后,按 f1.friend_player_id 做主键前缀 ref;五个排除都是 eq_ref / PRIMARY / key_len=16;
+// 七张表的 possible_keys 都只有 PRIMARY;没有 MATERIALIZED、没有 <subqueryN>、没有 hash join。
+func assertMutualPlanIsPerRowPrimaryKeyLookups(t *testing.T, ctx context.Context, db *sql.DB, g mutualAdversarialGraph) {
+	t.Helper()
+	query, args := recommendByMutualStatement(g.me, g.callerExclude, mutualAdvProductionLimit)
+	plan := explainTraditionalRows(t, ctx, db, inlineNumericArgs(t, query, args...))
+	tables := make([]string, 0, len(plan))
+	for _, row := range plan {
+		tables = append(tables, row["table"])
+	}
+	assert.ElementsMatch(t, []string{"f1", "f2", "f", "b_out", "b_in", "r_out", "r_in"}, tables,
+		"计划里的表必须恰好是这七个别名:多出 <subqueryN> 是排除被物化,缺了是别名被改")
+	require.GreaterOrEqual(t, len(plan), 2)
+	assert.Equal(t, "f1", plan[0]["table"], "驱动表必须是 f1(我的好友,≤ MaxFriends 行);从 f2 起步就是全扫 friend 表")
+	assert.Equal(t, "f2", plan[1]["table"], "f2 必须紧跟 f1:排除点查要以 f2 的每一行为单位")
+	for _, row := range plan {
+		table := row["table"]
+		assert.NotEqual(t, "MATERIALIZED", row["select_type"],
+			"表 %s 被物化了(type=%s key=%s):扫描量会跟着被物化的集合走,不再由 FOF 行数封顶", table, row["type"], row["key"])
+		assert.NotContains(t, row["Extra"], "join buffer", "表 %s 走了 hash join:那是对整个集合做反连接", table)
+		assert.Equal(t, "PRIMARY", row["key"], "%s 必须走主键", table)
+		assert.Equal(t, "PRIMARY", row["possible_keys"], "%s 的 FORCE INDEX (PRIMARY) 丢了:优化器又能挑二级索引", table)
+		switch table {
+		case "f1":
+			assert.Equal(t, "ref", row["type"], "f1 必须是主键前缀 ref")
+			assert.Equal(t, "8", row["key_len"], "f1 只用主键第一列 player_id")
+			assert.Equal(t, "const", row["ref"], "f1 的 player_id 必须是常量 me")
+		case "f2":
+			assert.Equal(t, "ref", row["type"], "f2 必须是主键前缀 ref")
+			assert.Equal(t, "8", row["key_len"], "f2 只用主键第一列 player_id")
+			assert.True(t, strings.HasSuffix(row["ref"], ".f1.friend_player_id"),
+				"f2 必须按 f1.friend_player_id 定位,实际 ref=%s", row["ref"])
+		default:
+			assert.Equal(t, "eq_ref", row["type"], "%s 必须是每个 FOF 行一次单行点查", table)
+			assert.Equal(t, "16", row["key_len"], "%s 必须用满两列主键", table)
+		}
+	}
+}
+
+// TestRecommendByMutual_ReadsBoundedByFOFRowsNotGlobalSets(M1)是 2026-09-28 评审缺陷的确定性回归(先红后绿)。
+// 缺陷:旧写法的两条 OR 形 NOT EXISTS 没有完整主键等值,friend_request 那条被做成"每个 FOF 行按 status=1 扫一遍全服
+// pending"、friend_block 那条被做成对"我拉黑的 + 拉黑我的"全集的 hash antijoin,读数 ≈ FOF 行数 × 全服 pending 数。
+// 断言:limit=20 的结果正确;会话 Handler_read_* 增量 ≤ 8R + 2F + 2 + limit(本夹具 F=30、R=660,上界 5,362)——
+// 生产上 F ≤ MaxFriends、R ≤ MaxFriends²,上界与全服 pending 数、拉黑我的人数无关。再把 limit 放大、核对全量结果。
+//   - 旧写法为何必红:2026-09-29 在同形数据上重放旧 SQL(服务端预处理语句),计划是 idx_status_updated 上 status=1 的
+//     逐行 ref,读 9,274,150 次(Handler_read_next 9,231,954,即约 600 个 FOF 行各扫一遍 1.5 万条 pending)、3.2–4.6 s;
+//     结果与新写法相同,所以红在读数断言。统计不同时旧写法也可能改走 index_merge + hash join(friend_explain_scratch 上就是),
+//     那样 union 要把"拉黑我的人"整个读一遍,读数 ≥ 2 万,照样越界 —— 自检保证这两个集合都大于上界。
+//     OR 形条件没有完整主键可点查,旧写法做不出"每行常数次点查"的计划,所以不论走哪种计划都红。
+//   - 新写法:4,739 次(key 3,755 / next 690 / rnd_next 294)、约 6 ms。
+//
+// 断言的是行操作计数,不看墙钟。
+func TestRecommendByMutual_ReadsBoundedByFOFRowsNotGlobalSets(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+	g := seedMutualAdversarialGraph(t, ctx, db)
+	analyzeRecommendTables(t, ctx, db)
+
+	assertMutualReadsAndResult(t, ctx, db, repo, g)
+
+	// 全量核对:limit 放大到装得下全部合格者,每个合格者一个不缺、共同好友数都对,应排除的一个不出现。
+	all, err := repo.RecommendByMutual(ctx, g.me, g.callerExclude, uint32(len(g.want)+10))
+	require.NoError(t, err)
+	assert.Len(t, all, len(g.want))
+	g.assertCandidates(t, all, true)
+}
+
+// TestRecommendByMutual_PlanIsPerRowPrimaryKeyLookups(M2)钉住上界成立所依赖的计划形状(统计新鲜时),
+// 断言见 assertMutualPlanIsPerRowPrimaryKeyLookups。夹具与 M1 相同:"FOF 行多、me 的关系集小"会诱使优化器先物化排除集。
+//   - 旧写法为何必红(结构性的,与统计无关):OR 形子查询没有完整主键等值,friend_block / friend_request 不可能是
+//     key_len=16 的 eq_ref;好友 NOT IN 被物化成 <subquery2>;表名集合也对不上。2026-09-29 在本夹具上实测:
+//     <subquery2> MATERIALIZED、b 是 index_merge + hash join、r 是 idx_status_updated 上 status=1 的 ref。
+//   - 只去掉 SEMIJOIN(FIRSTMATCH):f / b_out / r_out 被物化 → 红;两个提示都去掉:再多一个 r_in 被物化 → 红;
+//     去掉任何一处 FORCE INDEX (PRIMARY):possible_keys 多出二级索引 → 红(这一条守的是防线,不是已实测到的退化,
+//     见 RecommendByMutual 注释第 3 条)。
+//   - 去掉 STRAIGHT_JOIN:统计新鲜时计划不变,本用例照绿 —— 那一条由 TestRecommendByMutual_JoinOrderSurvivesStaleStatistics 守。
+func TestRecommendByMutual_PlanIsPerRowPrimaryKeyLookups(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	g := seedMutualAdversarialGraph(t, ctx, db)
+	analyzeRecommendTables(t, ctx, db)
+
+	assertMutualPlanIsPerRowPrimaryKeyLookups(t, ctx, db, g)
+}
+
+// TestRecommendByMutual_JoinOrderSurvivesStaleStatistics(M2b)钉住 STRAIGHT_JOIN(先红后绿):持久统计陈旧时,
+// 计划仍是"先 f1 后 f2 + 逐行主键点查",读数仍在上界内。
+//
+// 陈旧统计的造法:建表后、灌数前关掉三张表的 STATS_AUTO_RECALC,灌完不 ANALYZE —— 持久统计停在建表时的空表状态
+// (n_diff = 0),优化器把 f1 的前缀 ref 估成整表行数。不需要改 mysql.innodb_*_stats,也不需要 FLUSH(RELOAD 权限)。
+// 用例先自检:把生产 SQL 的 STRAIGHT_JOIN 换回普通 JOIN 再 EXPLAIN,驱动表必须变成 f2 —— 证明夹具确实造出了会让
+// 连接顺序翻转的陈旧统计;没有这一步,"f1 在前"在统计没造坏时也照绿(假绿)。
+//   - 旧写法为何必红:2026-09-29 在本夹具上,旧 SQL 的驱动表是 f2(idx_friend_player 上的 range),红在"驱动表必须是 f1";
+//     读数 9,275,651 次,也红在读数断言。
+//   - 新写法去掉 STRAIGHT_JOIN:驱动表变成 f2(PRIMARY 全索引扫描,type=index)、f1 变成 eq_ref → 红;读数 6,931 > 上界 5,362。
+//     本夹具 friend 表只有 1,318 行,所以读数差距不大;116 万边的库上同一退化是 1,529,004 次(见 RecommendByMutual 注释第 1 条)。
+//   - 新写法去掉 SEMIJOIN 与 FORCE INDEX:b_in 被物化成 idx_blocked_player 上"拉黑我的 2 万人"的读取,24,785 次 → 计划与读数两处都红。
+//   - 新写法:计划与统计新鲜时相同,4,739 次。
+func TestRecommendByMutual_JoinOrderSurvivesStaleStatistics(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+	tables := []string{"friend", "friend_block", "friend_request"}
+	for _, table := range tables {
+		_, err := db.ExecContext(ctx, "ALTER TABLE "+table+" STATS_AUTO_RECALC=0")
+		require.NoError(t, err)
+	}
+	// 恢复默认,不把"关掉自动重算"的表留给后来的人工排障(下一条用例反正会 DROP 重建)。
+	// t.Cleanup 是 LIFO:这里在 openFriendTestDB 的 TRUNCATE / Close 之后注册,所以先于它们执行,连接还开着。
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		for _, table := range tables {
+			if _, err := db.ExecContext(cleanupCtx, "ALTER TABLE "+table+" STATS_AUTO_RECALC=DEFAULT"); err != nil {
+				t.Logf("恢复 %s 的 STATS_AUTO_RECALC 失败(不影响本次结论): %v", table, err)
+			}
+		}
+	})
+	g := seedMutualAdversarialGraph(t, ctx, db)
+	// 刻意不 ANALYZE。
+
+	query, args := recommendByMutualStatement(g.me, g.callerExclude, mutualAdvProductionLimit)
+	probe := strings.Replace(query, "STRAIGHT_JOIN", "JOIN", 1)
+	probePlan := explainTraditionalRows(t, ctx, db, inlineNumericArgs(t, probe, args...))
+	require.Equal(t, "f2", probePlan[0]["table"],
+		"前置条件:去掉 STRAIGHT_JOIN 的同一条 SQL 在陈旧统计下必须改由 f2 驱动,否则夹具没造出陈旧统计、本用例没有鉴别力"+
+			"(先核对 innodb_stats_persistent 是否为 ON)")
+
+	assertMutualPlanIsPerRowPrimaryKeyLookups(t, ctx, db, g)
+	assertMutualReadsAndResult(t, ctx, db, repo, g)
 }
