@@ -123,7 +123,7 @@ GrpcClient:
 | 目标节点类型 | C++ deadline | 下游服务端超时 | 从它派生的 C++ 上游预算 |
 |---|---|---|---|
 | SceneManagerNodeService | 10000 | `scene_manager_service.yaml` Timeout 8000(= 归属查询 1500 + Kafka 写 5000 + 1500) | 在途换图 TTL = deadline + 1000(第二批);交接应答看门狗 30s(不变,> deadline) |
-| DataServiceNodeService | 4000 | `data_service.yaml` 未写 Timeout = go-zero 默认 2000 | 号段 `fetchTimeoutSec` = deadline + 1s = 5s(第一批) |
+| DataServiceNodeService | 4000 | `data_service.yaml` 未写 Timeout = go-zero 默认 2000 | 号段 `fetchTimeoutSec` = deadline + 1s = 5s(第一批;首版 deadline 2500 时为 3.5s) |
 | ClientRpcRouterNodeService | 8000 | 路由服 Timeout 6000(> ForwardTimeoutMs 5000 > 业务 4000) | 无(客户端自己等) |
 | MatchNodeService(gate 直连模式) | 7000 | `match_service.yaml` Timeout 5000 | 无 |
 | BattleNodeService(gate 直连模式) | 5000 | C++ battle 服务端同步处理,无服务端超时 | 无 |
@@ -133,11 +133,16 @@ GrpcClient:
 
 ### 4.3 需要拍板:login 的 Timeout
 
-`go/login/etc/login.yaml:7` 与 K8s ConfigMap(`k8s_deploy.ps1` 约 2360 行)都是 `Timeout: 100000`,注释写"(10s)"。按规则 gate 直连 login 的 deadline 只能取 > 100s,本方案取 102000,"守规则"但几乎等于不设。若 100000 是笔误,改成 10000 后本表 login 行改 12000。路由模式下 login 实际受路由服 `ForwardTimeoutMs 5000` 约束,不受此影响。
+`go/login/etc/login.yaml:7` 是 `Timeout: 100000`(K8s 的 login ConfigMap 由 `New-GoSvcConfigMapYaml` 从它镜像,不另存一份),注释写"(10s)"。按规则 gate 直连 login 的 deadline 只能取 ≥ 100000 + 2000,本方案取 102000,"守规则"但几乎等于不设。若 100000 是笔误,改成 10000 后本表 login 行改 12000(`bin/etc/base_deploy_config.yaml` 的 `GrpcClient.CallDeadlineMs.LoginNodeService`),K8s ConfigMap 自动跟随;`deploy/login-stack.linux/login.yaml:34` 另有一份 `Timeout: 100000`,要一起改。路由模式下 login 实际受路由服 `ForwardTimeoutMs 5000` 约束,不受此影响。
 
 ### 4.4 K8s
 
-node ConfigMap 以 readOnly 整目录挂载,**完全遮蔽**镜像里的 `base_deploy_config.yaml`。第二批在 `k8s_deploy.ps1` 用 `Get-AuthoritativeYamlBlock -Key 'GrpcClient'` 原样搬运(与 IdSegments 同法),并加一条契约断言:每个 C++ deadline ≥ 对应服务 yaml 的 Timeout + 2000。第一批落地后、第二批之前,K8s 上全部目标取默认 10000:scene_manager / 路由服 / match 仍满足不等式 1;etcd 10000 与 Txn 看门狗 10s 相等(比今天的"无限"好,但没有余量);号段 fetchTimeout 从 deadline 派生为 11s,仍自洽。
+**已落地,未测**(分工会话,2026-09-29;大部分随 hourly save `ccfc40291` 进库,审查后的修正随其后的 hourly save,详见 PROGRESS.md「2026-09-29 C++↔Go 边界加固(V0+)分工部分」):
+- node ConfigMap 以 readOnly 整目录挂载,**完全遮蔽**镜像里的 `base_deploy_config.yaml`。`k8s_deploy.ps1` 用 `Get-AuthoritativeYamlBlock -Key 'GrpcClient'` 把整块原样搬进 node-config 与 battle-node-config(与 IdSegments 同法),缺块则生成期 throw。
+- 部署门禁 `Assert-GrpcClientDeadlineBudget`:挂在 zone-up / infra-up / all-up 写集群之前,核对 SceneManager / DataService / ClientRpcRouter / Match / Login 五个目标「C++ deadline ≥ 服务 yaml 的 zrpc Timeout + 2000」。五项必须在 `GrpcClient.CallDeadlineMs` 里显式写成正整数;服务 yaml 没写 Timeout 按 go-zero 默认 2000 计;Timeout 为 0 / 非数字、或出现 `MethodTimeouts`,都拒绝部署并逐项点名。纯函数 `Get-GrpcClientDeadlineBudgetViolations` 由契约测试喂构造值覆盖。*-down / *-status 不经过门禁。
+- login 的 go-svc ConfigMap 改为从 `go/login/etc/login.yaml` 镜像 Timeout(原来写死)。
+
+历史说明:第一批落地后、上述改动之前,K8s 上全部目标取内置默认 10000 —— scene_manager / 路由服 / match 仍满足不等式 1;etcd 10000 与 Txn 看门狗 10s 相等(比原来的"无限"好,但没有余量);号段 fetchTimeout 从 deadline 派生为 11s,仍自洽。
 
 ## 5. 调用点逐个结论
 
@@ -195,9 +200,9 @@ node ConfigMap 以 readOnly 整目录挂载,**完全遮蔽**镜像里的 `base_d
   分工会话的复核发现首版 DataService 取 2500 只有 500ms 余量,违反本块自己的 +2000 规则,改为 4000(yaml 由该会话改)。
 - **第二批(跨 zone 线提交后)**:`PlayerLifecycleSystem::DispatchEnterSceneTransportFailure` + TTL 派生(#1/#2);`scene_manager_response_handler.cpp` 装 EnterScene / CreateScene 失败处理器(#6);`k8s_deploy.ps1` 镜像 GrpcClient 块 + 契约断言(§4.4);更新 `cross-zone-scene-travel.md` §12.2 与 `scene_manager_service.yaml` 注释里"生成客户端非 OK 不回调"的表述。
   scene 侧已提交 b85f13c07;09-29 补:换图入口"没有 SceneManager"改回 `kServiceUnavailable`(§5 #3)。
-- **分工会话(「C++ 完全不连接 Go 服务的设计」)承担的部分**(09-29 在其工作区,未编译,提交号与 Codex 步骤见它的 PROGRESS 条目):
+- **分工会话(「C++ 完全不连接 Go 服务的设计」)承担的部分**(09-29,未编译;大部分随 hourly save `ccfc40291` 进库,Codex 步骤见 PROGRESS.md「2026-09-29 C++↔Go 边界加固(V0+)分工部分」):
   - K8s:`GrpcClient` 块原样搬进 node / battle-node ConfigMap;写路径入口的部署门禁 `Assert-GrpcClientDeadlineBudget` 核对 SceneManager / DataService / 路由服 / Match / Login 五个目标「C++ deadline ≥ zrpc Timeout + 2000」,五项必须显式写成正整数,没写 Timeout 按 go-zero 默认 2000,出现 `MethodTimeouts` 即拒绝;login 的 ConfigMap 改为从 `login.yaml` 镜像 Timeout。本会话复核过口径:拍平函数会剥行尾注释,login 102000 恰好等于 100000 + 2000,通过。
-  - `GetSceneManagerEntity` 只在注册表为空时返回 null,挑选顺序 READY → IDLE / CONNECTING → 其余兜底,playerId 先 splitmix64 打散再取模(bwmarrin PlayerId 低位多为 0,原来的 `% N` 几乎全落第 0 个)。SceneManager 全挂时换图因此走 UNAVAILABLE → 失败处理器 → tip 1003,与 §9.2 第 4 步的预期一致。
+  - `GetSceneManagerEntity`(签名与调用点不变,规则抽成纯函数 `scene_manager_selector::Pick`,单测 `cpp/tests/routing_identity_test/scene_manager_selector_test.cpp`)分级挑选:① 通道 READY → ② IDLE / CONNECTING(`GetState(true)` 顺手触发连接)→ ③a 挂了通道但 TRANSIENT_FAILURE / SHUTDOWN → ③b 没挂通道的实体。③b 可以由 TCP 握手声明 `node_type = SceneManager` 造出来(`IsTcpNodeType` 含 SceneManagerNodeService),挑中后会在发送处断言,所以排最末,只为兼容旧行为与单测里的假节点。**只在注册表为空时返回 null**(与原来一致,不新增 null 窗口)。落到 ③ 时打 `[SceneManagerSelect]` LOG_WARN,每 10s 最多一行并带上被压掉的次数。取模前用 splitmix64 打散 playerId(bwmarrin PlayerId 低位多为 0,原来的 `% N` 在 2 / 4 个实例时几乎全落第 0 个)。SceneManager 全挂时换图因此走 UNAVAILABLE → 失败处理器 → tip 1003,与 §9.2 第 4 步的预期一致。
   - 删除无调用方的 `SendMessageToPlayerOnGrpcNode`(§10 第 4 条)。
 
 ## 9. regen 与验证
