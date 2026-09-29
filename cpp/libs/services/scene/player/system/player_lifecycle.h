@@ -932,7 +932,8 @@ public:
 	//     之后紧跟踢线 KickPlayer(34),实体销毁而不是解冻,客户端断线回选服重登(见 ResolveTravelOutcome)。
 	//     handoff 标记已发出、但归属在本节点核实不了时同样是 tip + 34 + 不存盘销毁:冻结满 70s
 	//     (travel_freeze_cap::kFreezeCap)、SET 的 OK 晚于 35s 晚发窗口才到,或 SET 之后才发现没有 gate 会话 /
-	//     没有 scene_manager(ConcludeHandoffAfterMarkSent)。所以受理之后服务端最迟约 71s 一定给出结论。
+	//     没有 scene_manager,或取证读到本次回滚回执却交叉校验不成立(ConcludeHandoffAfterMarkSent)。
+	//     所以受理之后服务端最迟约 71s 一定给出结论。
 	// 非 0 = 拒绝的 tip id,未改任何状态。
 	// 目标 zone 是否真的存在由 scene_manager 判(C++ 侧没有 zone 表):不存在时走"受理后未成"。
 	// sceneConfigId:0 = 由目标 zone 挑默认大世界;非 0 必须是 World 表登记的世界图,否则同步拒绝
@@ -1105,6 +1106,8 @@ private:
 
 	// 向 SceneManager 请求把该玩家改派到大世界频道。只在疏散票据存在时生效,
 	// 消费即删除(幂等)。返回 true = 本次消费了票据(改派自己写 handoff 标记,A1′ 不得再写)。
+	// 标记是 owner_epoch 条件写(与 A1′ 同一段 exit_release_mark::kLuaWriteIfOwnerEpoch):epoch 已被回滚推进时不写,
+	// 不覆盖 scene_manager 转写出来的 "E+2:t"(GO-2 §12.8);写没写成都照常发改派。
 	static bool DispatchEmergencyRelocate(Guid playerId);
 
 	// 抄改派票据 + 推进退出流程。整节点疏散与单场景排空共用。

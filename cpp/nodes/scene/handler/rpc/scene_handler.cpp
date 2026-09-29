@@ -179,6 +179,9 @@ void SceneHandler::PlayerEnterGameNode(::google::protobuf::RpcController* contro
 	// 归属字段(gate 从 RoutePlayerEvent 透传):home_zone 决定落库 topic,owner_epoch 是存盘 CAS 的
 	// 期望值。必须跟着"这一次路由决策"走,节点不得自己读 Redis(cross-zone-scene-travel.md CZ-3、
 	// reentry-barrier §3.3)。0 = 上游未填,EnterScene 里不覆盖已有值。
+	// 唯一例外(GO-2 §12.8 判定表 B5):源端 ResolveTravelOutcome 在交接被 scene_manager 单调回滚到本节点时采纳
+	// Redis 里的 owner_epoch(E+2)。三条前提写死:同一段原子脚本先删掉本次交接这一族标记;location.rollback_receipt
+	// 逐字节等于本次标记原文;location 指回本节点本 zone。别处新增"读 Redis 采纳 epoch"必须同时满足这三条。
 	ctx.homeZoneId = request->home_zone_id();
 	ctx.ownerEpoch = request->owner_epoch();
 
@@ -186,6 +189,8 @@ void SceneHandler::PlayerEnterGameNode(::google::protobuf::RpcController* contro
 	//     那次交接其实已被放行(EnterScene 应答丢了,30s 看门狗还没到期),玩家在别的节点 / zone
 	//     玩过之后又被派回本节点。旧实体的内存态停在交接那一刻,复用它 = 回档。
 	//     按"被废黜"销毁(不存盘),然后落到第 3 步从盘上重新加载。
+	//     更新的 epoch 也可能是"交接被 scene_manager 单调回滚到本节点"之后的同落点重连(E+2,本节点还没取证采纳):
+	//     同样销毁重载,交接发起后实体不再写盘、Redis 包含冻结内存,零损失。
 	//     epoch 相等(同 zone 重发后落回本节点)或为 0(上游未填)时返回 false,照旧复用实体。
 	if (playerIt != tlsEcs.playerList.end() &&
 		PlayerLifecycleSystem::DiscardStaleHandoffEntity(playerIt->second, ctx.ownerEpoch))

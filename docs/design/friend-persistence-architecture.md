@@ -75,6 +75,8 @@ dirty-flag 解决的是"写太频繁，需要攒批"的问题。Friend/Guild 每
 --  加共享 next-key 锁,违反下一节的锁序。created_ms 自 2026-09-20 收尾批起写入,见「容量行回收」。)
 -- 〔2026-09-28 更正:补行已由 INSERT IGNORE 改为 ODKU(2026-09-21 数据层死锁审计,正式提交 ff39a13f1),
 --   主键重复时直接取 X、不走 S→X 升级;原写法是 INSERT IGNORE INTO friend_capacity …〕
+-- 〔2026-09-29 更正:这处 ODKU 的代码先随 9cef7b2ec(09-21 08:52 自动保存)进库;ff39a13f1 对 friend_repo.go
+--   只改了注释,它给 friend 补的是拉黑写入 ODKU(insertBlockRowSQL)与 DSN 层 RC。与 handoff §5.6 (b) 一致。〕
 INSERT INTO friend_capacity (player_id, friend_count, created_ms)
   VALUES (?, <SELECT COUNT(*) FROM friend WHERE player_id = ?>, <now_ms>)
   ON DUPLICATE KEY UPDATE player_id = player_id;
@@ -159,7 +161,7 @@ COMMIT;
      COUNT + INSERT 做有上限的 1213 重试(自动提交、幂等,重试安全)。事务 body 里的 1213 仍不重试。
      〔2026-09-28 更正:① 09-21 真库回归**复现**了这个环(WARN `ensure 容量行撞上 1213 … attempt=1/3`,被重试吸收,
      见 `docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md` §6.3);② 补行随后已改为
-     `INSERT … ON DUPLICATE KEY UPDATE player_id = player_id`(`ensureCapacityRowSQL`,数据层死锁审计,正式提交 `ff39a13f1`):
+     `INSERT … ON DUPLICATE KEY UPDATE player_id = player_id`(`ensureCapacityRowSQL`,数据层死锁审计,正式提交 `ff39a13f1`〔2026-09-29 更正:代码先随 `9cef7b2ec` 进库,`ff39a13f1` 对这处只补了注释;DSN 层 RC 与拉黑写入 ODKU 才是 `ff39a13f1` 新增的〕):
      主键重复时直接取 X,从根上消掉 S→X 升级;连接池同时在 DSN 层设 RC,自动提交语句不再拿 next-key 锁。
      上面的有限重试保留,作为 InnoDB 固有残余环的兜底。〕
   2. ensure 的 COUNT 与 INSERT 不原子:COUNT 读到 1 → `RemoveFriend` 提交(count→0)→ 回收删掉这行

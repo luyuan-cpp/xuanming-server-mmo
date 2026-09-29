@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -707,4 +708,66 @@ func TestBatchGetPlayerName_SqlErrorReturnsNoPartialResult(t *testing.T) {
 	st, _ := status.FromError(err)
 	assert.Equal(t, codes.Unavailable, st.Code())
 	assert.Contains(t, st.Message(), errCodeTag(constants.ErrCodePlayerNameDBError))
+}
+
+// ── 三个 Rollback* 一律要 x-admin-token(docs/design/guild-phase2/07-rollback-fail-closed.md §7.6.3 Q2 = ②,D8 的 token 半边)──
+
+// TestRollbackRPCs_RequireAdminToken:没配 AdminToken = 回档 RPC 整体停用;配了则缺 / 错 token 一律 PermissionDenied +
+// ErrCodeAdminAuthRequired,**在任何 logic 之前**(不碰栅栏、不写审计、不读快照),带不带放行开关都一样 ——
+// 否则无凭据的调用方发一次不带放行的回档,就能读到目标玩家的资产流水样本,还能把整个 zone 挡在登录外几分钟。
+// 带对 token 才进入 logic(这里 SnapshotStore 未装配,回 in-band 的 SnapshotDBError,证明鉴权已放行)。
+func TestRollbackRPCs_RequireAdminToken(t *testing.T) {
+	type rollbackCall func(s *DataServiceServer, ctx context.Context, accept bool) (uint32, error)
+	calls := map[string]rollbackCall{
+		"RollbackPlayer": func(s *DataServiceServer, ctx context.Context, accept bool) (uint32, error) {
+			resp, err := s.RollbackPlayer(ctx, &data_service.RollbackPlayerRequest{
+				PlayerId: 42, SnapshotId: 1, Reason: "r", Operator: "ops", AcceptGuildDivergence: accept,
+			})
+			return resp.GetErrorCode(), err
+		},
+		"RollbackZone": func(s *DataServiceServer, ctx context.Context, accept bool) (uint32, error) {
+			resp, err := s.RollbackZone(ctx, &data_service.RollbackZoneRequest{
+				ZoneId: 1, TargetTime: 1, Reason: "r", Operator: "ops", AcceptGuildDivergence: accept,
+			})
+			return resp.GetErrorCode(), err
+		},
+		"RollbackAll": func(s *DataServiceServer, ctx context.Context, accept bool) (uint32, error) {
+			resp, err := s.RollbackAll(ctx, &data_service.RollbackAllRequest{
+				TargetTime: 1, Reason: "r", Operator: "ops", AcceptGuildDivergence: accept,
+			})
+			return resp.GetErrorCode(), err
+		},
+	}
+
+	disabled, _ := newHomeZoneTestServer(t) // AdminToken 留空 = 停用
+	enabled, _ := newMergeAdminServer(t)
+	denied := map[string]struct {
+		s   *DataServiceServer
+		ctx context.Context
+	}{
+		"没配 AdminToken(带 token 也拒)": {disabled, adminCtx(testAdminToken)},
+		"完全没有 metadata":             {enabled, context.Background()},
+		"token 不对":                  {enabled, adminCtx("wrong-token")},
+		"token 为空":                  {enabled, adminCtx("")},
+	}
+
+	for rpc, call := range calls {
+		for name, tc := range denied {
+			for _, accept := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/accept=%t", rpc, name, accept), func(t *testing.T) {
+					_, err := call(tc.s, tc.ctx, accept)
+					require.Error(t, err)
+					st, _ := status.FromError(err)
+					assert.Equal(t, codes.PermissionDenied, st.Code())
+					assert.Contains(t, st.Message(), errCodeTag(constants.ErrCodeAdminAuthRequired))
+					assert.NotContains(t, st.Message(), testAdminToken, "错误消息不能回显正确 token")
+				})
+			}
+		}
+		t.Run(rpc+"/带对 token 才进入 logic", func(t *testing.T) {
+			code, err := call(enabled, adminCtx(testAdminToken), false)
+			require.NoError(t, err)
+			assert.Equal(t, constants.ErrCodeSnapshotDBError, code)
+		})
+	}
 }

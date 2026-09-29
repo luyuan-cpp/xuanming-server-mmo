@@ -47,7 +47,9 @@ import (
 //     - mutual(RecommendByMutual):外层行数由 friend 主键前缀给出(f1 我的好友 F ≤ MaxFriends → f2 好友的好友,
 //       FOF 行数 R ≤ MaxFriends²),STRAIGHT_JOIN 钉住"先 f1 后 f2";每个 FOF 行的排除判定是 ≤5 次完整主键单行点查
 //       (与 recommendAnchor 同一套 FORCE INDEX (PRIMARY) + SEMIJOIN(FIRSTMATCH))。单次调用 Handler 读
-//       ≤ 8R + 2F + 2 + limit(默认上限下 ≤ 320,422),与全服 pending 数、"拉黑我的人数"都无关。
+//       ≤ 8R + 2F + 2 + limit(GROUP BY 临时表留在内存时成立;默认上限下 ≤ 320,422),与全服 pending 数、"拉黑我的人数"都无关。
+//       这个上界按 MaxFriends 的平方增长,所以 config.Validate 把 MaxFriends 硬封顶在 300(config 包 maxFriendsCeiling:
+//       ≤ 72 万次读,2026-09-29 实测 0.81–1.05 s)。
 //       2026-09-28 评审实测的旧写法(两条 OR 形 NOT EXISTS,被做成"每个 FOF 行扫一遍全服 pending")已于 2026-09-29 修掉,
 //       推导与新旧实测数字见 RecommendByMutual 的注释。
 //       与 recommendAnchor 不同,这条的"统计退化"风险已由 SQL 结构(STRAIGHT_JOIN)消掉,不是剩余风险。
@@ -107,10 +109,16 @@ func recommendExcludeClause(col string, exclude []uint64) (string, []any) {
 //  1. **外层行数由 friend 主键前缀给出,STRAIGHT_JOIN 钉住"先 f1 后 f2"**。f1 是 `player_id = me` 的前缀 ref
 //     (F ≤ MaxFriends 行),f2 按 f1.friend_player_id 做前缀 ref(每个 f1 ≤ MaxFriends 行),FOF 行数 R ≤ MaxFriends²
 //     (默认 200×200 = 4 万;AcceptFriend 对双方都查 MaxFriends,单人出边数由它封顶,超出上限的历史行按实际行数算)。
-//     STRAIGHT_JOIN 是承重的:持久统计陈旧(n_diff 还停在建表时的 0)时,优化器把"f1 的前缀 ref"估成整表行数,
-//     改成"f2 全索引扫描 + f1 主键点查",读数随 friend 表总行数增长。2026-09-29 实测:200×200 最坏库(116 万边)
-//     把三张表的持久统计冻结在 1 行时,不加 STRAIGHT_JOIN 读 1,529,004 次、约 1.0–2.4 s,加上后 319,002 次、约 0.37 s
-//     (与统计新鲜时相同);TestRecommendByMutual_JoinOrderSurvivesStaleStatistics 的夹具上 6,931 次对 4,739 次。
+//     STRAIGHT_JOIN 是承重的:持久统计陈旧时,优化器会把连接顺序翻成"f2 全索引扫描驱动 + f1 主键点查",读数随 friend
+//     表总行数增长。被估错的是 **f2 那一侧,不是 f1** —— f1 是 `player_id = 常量` 的前缀 ref,走 index dive,估得准。
+//     (i) 持久统计的 n_diff 还是 0(建表后关掉 STATS_AUTO_RECALC 再灌数、不 ANALYZE)时,按 f1.friend_player_id 做的
+//     f2 前缀 ref 每次都被估成整表行数(n_diff = 0 时 rec_per_key 取表行数),"先 f1 后 f2"的成本被放大 F 倍;
+//     (ii) 持久统计被重新读回、n_rows ≤ 1(上一种状态再 FLUSH TABLE 一次)时,则是 f2 的全索引扫描本身被估成约 1 行。
+//     2026-09-29 在 TestRecommendByMutual_JoinOrderSurvivesStaleStatistics 的夹具上逐条复核:前一种状态 EXPLAIN 为 f1 rows=30、
+//     f2 rows=1,318(= friend 整表),后一种为 f1 rows=30、f2 rows=1;两种状态下去掉 STRAIGHT_JOIN 都改由 f2 驱动
+//     (读 6,931 / 5,669 次,都越过该夹具的上界 5,362),加上后都是 4,739 次、计划与统计新鲜时相同。
+//     200×200 最坏库(116 万边)把三张表的持久统计冻结在 1 行时,不加 STRAIGHT_JOIN 读 1,529,004 次、约 1.0–2.4 s,
+//     加上后 319,002 次、约 0.37 s(与统计新鲜时相同)。
 //     这与 recommendAnchor 登记在案的"统计退化"剩余风险同源,但在这里可以用 SQL 结构消掉,所以消掉。
 //  2. **五条 NOT EXISTS 按方向拆开,每条都是完整主键等值**(f 我的好友 / b_out 我拉黑的 / b_in 拉黑我的 /
 //     r_out 我发出的 pending / r_in 发给我的 pending),与 recommendAnchor 第 4 条同理:旧写法
@@ -118,7 +126,7 @@ func recommendExcludeClause(col string, exclude []uint64) (string, []any) {
 //     拆开逻辑等价:NOT EXISTS(A OR B) ≡ NOT EXISTS(A) AND NOT EXISTS(B);"已是好友"从 NOT IN 改成
 //     NOT EXISTS 也等价(两边的列都是 NOT NULL)。
 //  3. **SEMIJOIN(FIRSTMATCH) 是承重的,FORCE INDEX (PRIMARY) 是防线**,两者一起把每条排除钉成"每个 FOF 行一次主键
-//     单行点查"。2026-09-29 在 TestRecommendByMutual_ReadsBoundedByFOFRowsNotGlobalSets 同形数据上实测(EXPLAIN FORMAT=TRADITIONAL):
+//     单行点查"。2026-09-29 按 TestRecommendByMutual_ReadsBoundedByFOFRowsNotGlobalSets 的夹具逐行重建后实测(EXPLAIN FORMAT=TRADITIONAL):
 //     (a) 两个提示都不加:f / b_out / r_out / r_in 四条被物化(r_in 走 (to_player_id, status) 二级索引);
 //     (b) 只加 FORCE INDEX:f / b_out / r_out 三条被物化。统计新鲜时被物化的都是 per-me 的小集合(我的好友 / 我拉黑的 /
 //     我发出的申请 / 发给我的 pending),本夹具上读数没有越界 —— 但物化哪几条由统计决定:同一份数据换成陈旧统计(TestRecommendByMutual_JoinOrderSurvivesStaleStatistics
@@ -138,23 +146,39 @@ func recommendExcludeClause(col string, exclude []uint64) (string, []any) {
 //	          = 8R + 2F + 2 + limit;默认上限下(F ≤ 200、R ≤ 40,000、limit ≤ 20)≤ 320,422,
 //
 // 外加 ≤ R 行的内存分组与 ORDER BY RAND() 的 top-limit 排序。嵌套循环反连接在某行命中第一条排除时就丢弃它,
-// 所以 5R 是一条都不命中时的值;f2 里"候选就是我自己"的 F 行被 `<> ?` 先滤掉,不做点查。把 MaxFriends 调大到几千时
-// 这条查询会先出问题(R 按平方长),改那个阈值的人必须知道这件事。
+// 所以 5R 是一条都不命中时的值;f2 里"候选就是我自己"的 F 行被 `<> ?` 先滤掉,不做点查。
+// 式子里"分组临时表定位 + 临时表扫描"两项假定 GROUP BY 的临时表留在内存(TempTable 引擎,单表上限 tmp_table_size,
+// MySQL 默认 16 MiB)。候选分组多到放不下时临时表转存磁盘,读数越过这个式子(仍只随 R 增长,与全服集合无关):
+// 2026-09-29 实测约 16 万个分组仍在内存,约 22 万个已转存(Created_tmp_disk_tables = 1,Handler_read_rnd_next 近乎翻倍)。
+//
+// **单次推荐能否守住 RequestBudget(默认 Timeout 4000 − 500 = 3500 ms)只取决于 MaxFriends**:R 按它的平方增长,
+// RecommendMaxLimit 只贡献 +limit。所以 config.Validate 把 MaxFriends 硬封顶在 config 包的 maxFriendsCeiling = 300。
+// 2026-09-29 在最坏形状(每个好友的好友互不相同,R = F²;2 万人拉黑我、全服 15,250 条 pending;exclude 65 个、limit 20)
+// 上实测,本机同时有别的会话负载,约 1.1–1.6 µs/次读:
+//
+//	F=200:   319,002 次读,0.44–0.51 s         F=300:   718,502 次,0.81–1.05 s
+//	F=400: 1,278,002 次,1.39–1.68 s           F=470: 1,961,415 次,2.4–4.0 s(临时表已转存磁盘,越过 8R+2F+2+limit)
+//	F=600: 3,073,565 次,4.3–7.5 s(越过 3500 ms 预算)
+//
+// 调大 maxFriendsCeiling 之前必须在目标库上重测这张表,并确认候选分组数仍装得进内存临时表。
 //
 // 2026-09-28 评审在对抗库上实测旧写法(两条 OR 形 NOT EXISTS + 好友 NOT IN):friend_request 那条被做成"每个 FOF 行按
 // status=1 扫一遍全服 pending"、friend_block 那条被做成对"我拉黑的 + 拉黑我的"全集的 hash antijoin,9,215,314 次读、
-// 4.6–5.1 s,超过 RPC 超时。2026-09-29 修复后实测(MySQL 26.7.0,服务端预处理语句;旧 → 新):
-//   - 读数上界用例同形夹具(F=30、R=660;2 万人拉黑我,他们发给我的申请都已是终态;全服 15,002 条 pending):
-//     9,274,150 次、3.2–4.6 s → 4,739 次、约 6 ms(上界 5,362);
-//   - 5 万玩家 / 100 万边的对抗库(F=30、R=610;20,100 人拉黑我,其中 2 万人发给我的申请是终态;全服 15,250 条 pending、
-//     另有 20 万条终态申请):3,557,377 次、约 1.4 s → 2,363 次、约 6 ms(上界 4,962);
+// 4.6–5.1 s,超过 RPC 超时。2026-09-29 修复后复测(MySQL 26.7.0,服务端预处理语句,读数是会话 Handler_read_* 增量;旧 → 新):
+//   - 按 TestRecommendByMutual_ReadsBoundedByFOFRowsNotGlobalSets 的夹具逐行重建(F=30、R=660;2 万人拉黑我,他们发给我的
+//     申请都已是终态;全服 15,002 条 pending):旧写法约 930 万次(统计新鲜 9,334,150、陈旧 9,335,651,评审另测到 9,085,699 ——
+//     随 pending 行在 idx_status_updated 里的位置与计划浮动)、3.4–4.8 s → 4,739 次、约 6 ms(上界 5,362);
+//   - 5 万玩家 / 100 万边的对抗库(按评审的造法:F=30、R=610;20,101 人拉黑我,其中 2 万人发给我的申请是终态;
+//     全服 15,250 条 pending):4,688,713 次、1.5–1.6 s → 2,654 次、约 4 ms(上界 4,962);那 2 万条终态申请加进去之前,
+//     旧写法走 index_merge + hash join,63,152 次 —— 要把"拉黑我的人"整个读一遍;
 //   - friend_explain_scratch(5 万玩家 / 100 万边,F=20、R=400;每人的拉黑 / 申请集合都很小):旧写法走 index_merge +
-//     hash join,1,003 次;新写法 1,928 次(上界 3,262),两者都约 4 ms —— 集合小的库上新写法读数反而多,换来的是上界;
-//   - 200×200 最坏库(R=40,000;全服 50,500 条 pending,2 万人拉黑我):旧写法 60 s 被 max_execution_time 中断;新写法
-//     319,002 次(39,800 个候选互不相同)/ 279,401 次(200 个好友共用同一批 199 人),约 0.3–0.4 s。
+//     hash join,1,003 次;新写法 2,472 次(上界 3,262),两者都在 2–7 ms —— 集合小的库上新写法读数反而多,换来的是上界;
+//   - 200×200 最坏库(R=40,000;全服 15,250 条 pending,2 万人拉黑我):旧写法读到约 1.25 亿次时被 60 s 的
+//     MAX_EXECUTION_TIME 中断;新写法 319,002 次(39,800 个候选互不相同)/ 279,401 次(200 个好友共用同一批 199 人),
+//     0.13–0.51 s。
 //
-// 各库上新写法的全量结果(limit 放大到装得下全部候选)按 (mutual, id) 排序后与旧写法逐行相同;最坏库上旧写法跑不完,
-// 改与"按五个 per-me 集合做差"的参照 SQL 比对,同样逐行相同。
+// 各库上新写法的全量结果(limit 放大到装得下全部候选)按 (mutual, id) 排序后,与旧写法、与"按五个 per-me 集合做差"的
+// 参照查询逐行相同;最坏库上旧写法跑不完,只与参照查询比对。
 func (r *FriendRepo) RecommendByMutual(ctx context.Context, playerID uint64, exclude []uint64, limit uint32) ([]RecommendCandidate, error) {
 	query, args := recommendByMutualStatement(playerID, exclude, limit)
 	return r.scanRecommendCandidates(ctx, "mutual", playerID, query, args)

@@ -194,6 +194,8 @@ message RollbackGuildDivergence {
 
 放行但没带合法 `x-admin-token`:复用现成的 `ErrCodeAdminAuthRequired` + gRPC `PermissionDenied`(`authorizeAdmin`,`dataserviceserver.go:163-185`),不新增码。
 
+> **2026-09-28 落码修正(B5d-2b)**:① 三个码落在 `go/data_service/internal/constants/error_codes.go` 末尾,按"末码 +1 连号":`ErrCodeRollbackGuildDivergence = 27`、`ErrCodeRollbackGuildCheckFailed = 28`、`ErrCodeRollbackGuildDivergedAfterWrite = 29`(落码时末码仍是 `ErrCodePlayerNameConflict = 26`);28、29 进 `FaultCodeSet`(`data_service.go`)。② 用户拍板 Q2 = ②:三个 `Rollback*` **一律**先过 `authorizeAdmin`(在任何 logic 之前),所以上一句"放行但没带 token"实际是"任何回档没带 token",拒绝形状不变。③ 三个请求字段、九个响应字段按 §7.3.2 表里的号落码,均未被占用、无顺延;`RollbackGuildDivergence` 放在 `RollbackPlayerRequest` 之前。
+
 ---
 
 ## 7.4 guild 侧实现
@@ -305,6 +307,8 @@ type GuildCheckResult struct {
 - `ServiceContext.GuildDivergence GuildDivergenceChecker`:**nil = 未配置 = 拒绝回档**。⚠️ 这与同文件 `LoginAdminClient` 的先例(`servicecontext.go:186-190`,nil = 跳过)**方向相反**,照抄会做成 fail-open;代码注释必须写明,并由测试 D2 钉住。
 - `ROLLBACK_PARTIAL`(`rollback_logic.go:242-251`)同样过闸:今天的字段粒度是 Redis key,无法证明"只恢复的那几个 key 不含资产";将来回档接上 PlayerAllData 单 blob 后,部分恢复更不可能把 currency 与账本拆开(R6)。
 
+> **2026-09-28 落码修正(B5d-2b)**:接缝**不能**放在 `internal/logic`:`svc.ServiceContext` 要持有并装配它,而 logic import svc,放 logic 就成环。照 `internal/noderegistry` 的先例单独成包 **`go/data_service/internal/guildcheck`**(`guild_divergence.go` + `guild_divergence_test.go`,替代表中的 `internal/logic/guild_divergence*.go`);类型名照上文不变(`guildcheck.GuildDivergenceChecker` / `GuildCheckResult` / `GuildDivergence`),生产实现 `guildcheck.New(guildpb.GuildInternalClient)`,client 为 nil 时返回 nil 接口。分块、翻页、保留期钳位、逐玩家过滤、`maxDivergenceRows`(导出为 `guildcheck.MaxDivergenceRows`,超限返回 `guildcheck.ErrTooManyDivergences`)在该包;裁决、日志、审计、指标在 `logic/rollback_logic.go`。另两处补充:① checker 对 guild 答复做自洽校验 —— 越界的 `player_id`、行不按 `op_id` 升序、游标不前进、保留期拒绝给的 `cutoff_ms` 不晚于块 since,一律按查不成(error)处理,免得 guild 的 bug 变成死循环或静默吞行;② 两段等待的注入点放在 `ServiceContext.GuildCheckSleep func(ctx, d) error`(nil = 真实计时器),与 `GuildDivergence` 同处装配层。
+
 ### 7.5.2 检查在流程中的位置
 
 ```
@@ -358,6 +362,13 @@ type GuildCheckResult struct {
 6. **RollbackAll**:把 `rollbackZoneWithFenceHeld` 拆成 `planZoneRollback`(清单 + 时刻 + 帮会检查,只读)与 `executeZoneRollback`(今天的循环 + 孤儿报告)。`RollbackAll` 先对 `AllZoneIDs()` 全部 plan,**全部通过**才开始 execute 第一个 zone(R4)。理由:逐 zone 边查边写,会出现 zone 1 已回档、zone 2 被拒的半截全服回档。内存:每玩家 16 字节,百万玩家 16 MB,可接受。
    - 每个 zone 的 STARTED / RESULT 审计保持现状(写在 zone 级函数里);plan 阶段被拒的 zone,其 RESULT 审计带拒绝码,未轮到的 zone 不写审计。
 
+> **2026-09-28 落码修正(B5d-2b)**:
+> 1. **RollbackAll 的帮会检查是全部 zone 合并一次**(scope = `server`),不是逐 zone 各查一次:逐 zone STARTED 审计 + 取清单(`zoneRollback.plan`,只读)→ 把各 zone 的"玩家 → 快照时刻"合并(同一玩家出现在多个 zone 的清单里时取**最早**的时刻,since 更早 = 多查,方向安全)→ 沉降一次 → 检查一次 → 全部通过才执行第一个 zone(R4 不变)。理由:一次回档 RPC 只该有一个裁决、一条指标 result、一条 ACCEPTED 审计(server 级);`maxDivergenceRows` 按全服计才对得上"上万行没人能照单补偿"的本意(超了就按 zone 分批)。拒绝时每个已写 STARTED 的 zone 补一条 RESULT(带拒绝码、附注 `not executed`),取清单阶段失败时后面未轮到的 zone 不写审计(与上一行一致)。执行阶段某 zone 失败即停(原样),其后已 plan 但未执行的 zone 同样补 RESULT。zone 按 id 升序处理(`AllZoneIDs` 来自 map 遍历,顺序不定)。
+> 2. **RESULT 审计用独立的脱钩 ctx**(`context.WithoutCancel` + 30s,`detachedAuditContext`),不与复查共用 `guildRecheckDelay + guildRecheckBudget` 那个:复查耗尽预算(D18(c))时共用 ctx 已到点,RESULT 审计会跟着写不进。三个回档的 RESULT 审计(含写前拒绝路径)一律走它,调用方断开也不留悬空的 STARTED。
+> 3. **写后复查只在有玩家走到写 Redis 之后才做**(`writeAttempted`;写 Redis 报错也算,结果未知):被拒、零玩家、全员在安全快照前失败时不白等 10s。
+> 4. **响应码优先级**(三个 RPC 一致):RESULT 审计写不进(`SnapshotDBError`)> 写后分歧(`DivergedAfterWrite`,此时 err 置空让计数与样本带得出去,执行期原错误进日志)> 执行失败。写后分歧时 `guild_divergence_count / guild_divergences` 换成**新行**。
+> 5. 装配预检(`GuildDivergence == nil`、配置非法)放在 STARTED 审计之后、沉降之前:注定被拒的回档不先持栅栏白等 30s,且照样留 STARTED + 带码的 RESULT。
+
 ### 7.5.4 拒绝与放行
 
 - **上限 `maxDivergenceRows = 10000`**(常量)。过滤后的分歧超过它 → `ErrCodeRollbackGuildCheckFailed`,**放行开关也不管用**,日志提示"缩小范围分批回档"。先例:`BatchRecallItems` 超上限回 `ErrCodeResultTruncated`、零变更(`recall_logic.go:140-157`)。理由:上万行 ERROR 日志既进不全 Loki,也没人能照单补偿。
@@ -376,6 +387,8 @@ type GuildCheckResult struct {
   未放行的拒绝路径也写(`rejected`,WARN 级)——运维要靠它知道是谁挡住了;放行时 ERROR 级。不可证明的玩家数**不设上限**:逐人没有可补偿的清单,上限只会把"老 zone 永远回不了档"的问题搬回来;`maxDivergenceRows` 只管分歧行。
   - 放行"不可证明"意味着什么,手册要写白(§7.9.3-6):保留期之前那段的帮会流水已被清理,**系统给不出补偿单**,放行人自担核帐责任。
 - **审计**:放行时在 STARTED 与 RESULT 之间追加一条 `Reason = "GUILD_DIVERGENCE_ACCEPTED count=<n> unprovable_players=<m>: <reason>"`(复用 `AuditLogRow`,**不改表结构**);写不进 → 拒绝(R3)。
+
+> **2026-09-28 落码修正(B5d-2b)**:① Q2 = ② 已拍板,"未鉴权只回计数"的分支**不存在**:拒绝响应总是带计数 + ≤20 条样本;合法放行成功的响应同样带(便于核对)。② **ACCEPTED 审计先于逐行日志**(§7.5.2 流程写的是"逐行 ERROR 日志 + 审计"):审计写不进就拒绝,此时不能已经留下一批 `accepted` 日志,否则有人会照着它去补偿一次根本没发生的回档;两者都仍在第一笔玩家数据写之前(D9 钉住)。③ go-zero `logx` 没有 WARN 级别,`unprovable rejected` 取 ERROR(同 `dataserviceserver.go` `playerNameStatus` 的先例);拒绝路径另打一条 INFO 汇总 `[Rollback][GuildDivergence] rejected … total=<n> unprovable_players=<m>`,分歧行不逐行打。④ 日志里 `operator / reason` 用 `%q` 输出(自报字符串,防换行伪造日志行);`caller` 由 server 层的 `callerIdentity` 传入;单人回档另带 `player=<id>`。⑤ 放行的纵深校验:reason / operator 在入口(`validateGuildAccept`,早于栅栏与任何审计)验一次,裁决处再断言一次;`TrimSpace` 后为空也算空。
 
 ### 7.5.5 配置(`internal/config/config.go`,全部 `json:",optional"`)
 
@@ -405,6 +418,13 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
                          # 熔断器帮不上忙,只会把"guild 抖了一下"在日志里变成 breaker 错误,误导排障
   ```
 - k8s ConfigMap **本批不改**:guild 在 k8s 还没有 manifest(06:1825 D-14 遗留),data_service 在 k8s 里配了也拨不通;不配 = 拒绝 = 安全。
+
+> **2026-09-28 落码修正(B5d-2b)**:
+> 1. **"启动即拒"落为"装配即拒"**:`Config.ValidateGuildCheck()` 不过 → 回档闸不装配(`GuildDivergence = nil`,ERROR 日志写明哪个键)→ 三个 `Rollback*` 一律 `CheckFailed`;**进程照常起**。理由同 `PlayerName.Validate` 的先例:这三项只关系到回档,不能为它们让 Load/Save 热路径停摆。logic 每次回档前再调一次 `ValidateGuildCheck`(纵深:单测与将来的装配点绕过 `NewServiceContext` 时也不会拿非法余量去查)。C1 断言的就是这个函数。
+> 2. **"已配 `GuildInternalRpc`"只认 `Endpoints` / `Target`**(`Config.HasGuildInternalRpc`)。`zrpc.RpcClientConf.Etcd` 带 `inherit`:块在但没写 Etcd(或只写了 `Hosts`)时会继承顶层 `Etcd.Key = dataservice.rpc`,拨到 data_service 自己身上(结果是 `Unimplemented` → 拒绝,方向安全但排障误导);而 guild 本来就不注册 go-zero key(D-13)。所以只写 Etcd 的配置按"没配"处理(Info 日志,回档被拒)。
+> 3. 追加 `GuildCheckBudgetSeconds` 的 Validate:`[1, 3600]`(0 = 检查必超时;上限防秒数误填成毫秒后 Duration 溢出)。
+> 4. `zrpc.NewClient(c.GuildInternalRpc, zrpc.WithNonBlock())`:代码里再强制一次 NonBlock,不只靠 yaml。
+> 5. yaml:`MetricsListenAddr: ":9260"`(顶层单行,`go_services.ps1 -Zone` 按 ListenOn 同规则位移;9260 未被任何服务占用);三条 `MethodTimeouts` 照 §7.5.3-3;`GuildInternalRpc` 片段照上文,另写 `GuildClockSkewMarginMs: 300000`、`GuildCheckBudgetSeconds: 120` 两个显式值。`k8s_deploy.ps1` 只镜像标量 `Timeout`、不镜像 `MethodTimeouts`,k8s 接 guild 时要一并处理(今天 k8s 不配 `GuildInternalRpc` = 回档被拒,无影响)。
 
 ---
 
@@ -539,6 +559,8 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
 
 > **前提缺口**:`etc/data_service.yaml` 与 k8s ConfigMap 都没配 `MetricsListenAddr`(`config.go:42`;`data_service.go:110`),data_service 的 `/metrics` 今天是关的。本批在 dev yaml 里补上该项;k8s 侧随 D-14 一起。**在那之前告警以日志关键字为准**(下表第二列)。
 
+> **2026-09-28 落码修正(B5d-2b)**:① "一次回档只计一个 result"落为:**检查阶段**恰好计一个(含装配预检失败 → `unavailable`、沉降被调用方取消 → `budget`);写后复查出问题时**再额外**计一个 `post_write_*`(复查干净不计)。否则"放行后又出写后分歧"的那次回档只能二选一,两条告警必哑一条。快照解析失败等"没走到检查"的回档不计。② `rollback_guild_divergence_rows` 只累加检查阶段的行(`accepted` = 是否合法放行,ACCEPTED 审计写不进按 `false` 计)。③ label 取值是 `internal/metrics` 的导出常量 `RollbackGuildScope*` / `RollbackGuildResult*`,`PrimeRollbackGuildCheck` 按同一份切片预置,logic 只用这些常量。④ `rollback_guild_check_seconds` 只计检查调用本身(不含沉降),桶 10ms–120s。
+
 ### 7.9.2 告警
 
 | 口径 | 指标表达式 | 日志关键字(Loki) | 级别 |
@@ -647,6 +669,8 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
 | 14 | `go/data_service/internal/metrics/metrics.go` | 三个回档指标 + `PrimeRollbackGuildCheck` |
 | 15 | `go/data_service/internal/metrics/metrics_test.go` | M1(已有文件,追加) |
 
+> **2026-09-28 落码修正(B5d-2b)**:实际手改 16 个。① #2 / #3 改为 `go/data_service/internal/guildcheck/guild_divergence.go`、`guild_divergence_test.go`(新包,原因见 §7.5.1 的落码修正)。② **+1 `go/data_service/internal/server/dataserviceserver_test.go`(已有文件,追加)**:D8 的 token 半边(Q2 = ② 下三个 `Rollback*` 缺 / 错 token、未配 AdminToken 一律 `PermissionDenied`)只能在 server 层测,logic 层的 `rollback_recall_test.go` 碰不到 `authorizeAdmin`。③ #5 `rollback_recall_test.go` 除追加用例外,给既有的 `fakeSnapshotStore` 补了 `GetSnapshotPlayerTimesByZone`(接口新增方法)与两个回调钩子,并给三个既有用例(`NoSnapshotsStillReportsCurrentPlayers`、`SafetySnapshotFailureStopsBeforeOverwrite`、`ResultAuditFailureIsReturned`)各加一行装帮会闸 —— 否则它们按 R2 被 `CheckFailed` 拦下,测不到原本要测的东西;断言一条没改。④ 文档另改 `docs/design/zone_data_rollback.md`(追加说明,§7.9.3-7)。
+
 - **为什么拆成 2a / 2b 而不是硬塞 18**:逐项列清后回档闸是 22 个手改 + 8 个登记,一批放不下。按服务切开恰好对上部署顺序(guild 先、data_service 后,§7.10.4):2a 合入后 guild 多一个没人调的只读 RPC,无害;2b 不碰 C++ 工程(`data_service.proto` 只追加字段,重生的 `.pb.cc` 早已在工程里)。两批各自 ≤18。
 - **不改**:`session.go`、`tables.go`、`Tip.xlsx`、`MessageLimiter.xlsx`、`k8s_deploy.ps1`、`guild.yaml`(按 U10 选 (c))、手写的 C++ 源码、客户端仓。
 - **Y-14 串行**:`config.go`、`etc/data_service.yaml`、`id_segment_store.go` 此刻有 B5a 的在途改动(`git status`)。B5d 落码前必须等 B5a 提交,动手前再 `git status` + ListAgents 报文件范围;提交只用 `git commit -- <显式路径>`。
@@ -674,6 +698,14 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
 **shared**
 - A1 `found=false → (nil,nil)`。A2 gRPC error → `(nil, err)`。A3 超时生效(fake 阻塞 → `DeadlineExceeded`)。
 
+> **2026-09-28 落码修正(B5d-2b)**:用例落点 ——
+> - `internal/guildcheck/guild_divergence_test.go`:D1、D3、D4(含 Unimplemented / PermissionDenied 等各 code 不重试)、D5(10000 过、10001 拒)、D6(已到点的 ctx 一次 RPC 都不发)、D15(与 guild G8 同一条样例串 `since_ms older than terminal retention; cutoff_ms=1697411600000`)、D16(解析不出 / 重查仍拒 / 下界不晚于 since / 非首页被拒),另加翻页(1201 行三页)、第二块失败、guild 答复自相矛盾三类、`ParseRetentionCutoffMs` 格式表。
+> - `internal/logic/rollback_recall_test.go`(`TestRollbackGuildGate_*`):D2、D7、D8(reason / operator 半边)、D9、D10、D11(真实 `guildcheck` + 假 RPC)、D12(两 zone 的 Regions 路由)、D13、D14、D17、D18(a)(b)(c),另加 R6(`ROLLBACK_PARTIAL` 同样过闸)、沉降被取消 / 超上限、`guildSinceMs` 边界。日志断言用 go-zero `logx/logtest` 收集器。
+> - `internal/server/dataserviceserver_test.go`:D8 的 token 半边(`TestRollbackRPCs_RequireAdminToken`)。
+> - `internal/config/config_test.go`:C1 全部 + 默认值、只写 Etcd 不算已配、预算边界、仓库 yaml 的 `GuildInternalRpc` / `MetricsListenAddr` / 三条 `MethodTimeouts`(RollbackPlayer ≥ 30 + 预算 + 10 + 120 秒)。
+> - `internal/metrics/metrics_test.go`:M1。
+> - D18(c) 没法让单测真的等满 130s:用 fake 在复查调用里断言 ctx 带截止时间、再回 `DeadlineExceeded`,验证"复查超预算 → DivergedAfterWrite + `post-write recheck failed` 日志";截止时间 ≤ `guildRecheckDelay + guildRecheckBudget` 由 D18(b) 断言。
+
 ### 7.10.3 给用户 / Codex 的验证序列(Claude 不执行;未编译,待验证)
 
 前置:B5a、B5b 已合入;本机已装 Python(proto-gen 需要);MySQL / Redis 本地可用(repo 测试)。protoc 与 protoc-gen-go 在 PATH。**B5d-2a 涉及 C++ 工程**(新 proto 文件的生成物要登记并编译,§7.10.1);MSBuild 必须串行 `/m:1 /nr:false`,同一时刻只允许一个构建方(90 G-08),开跑前与其它会话确认没人在跑导表 / proto-gen / MSBuild。B5d-1、B5d-2b 只追加字段与方法,不新增 C++ 文件,但重生的 `.pb.cc` 同样要过步 4 的编译。
@@ -695,6 +727,8 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
 | 12 | 本地联调 | 停掉 guild,调 `RollbackPlayer` | 今天仍是 `ErrCodeNotImplemented`(栅栏为 nil,先于本闸返回)——**这是预期**;本闸的端到端只能靠单测里注入 fake 栅栏验证,直到栅栏有生产实现 | — |
 
 按子批裁剪:B5d-1 跑 1、2a、2b、3、4、5、8(L 系列);B5d-2a 跑 1–4、6、7、9、10(guild 半边);B5d-2b 跑 1–4、8、10–12。
+
+> **2026-09-28 落码修正(B5d-2b)**:① 步 8 的包范围 `./internal/...` 已含新包 `internal/guildcheck`(D1–D6、D15–D16 在那里)与 `internal/server`(D8 token 半边)。② 步 11 的地址是 dev yaml 的 `MetricsListenAddr: ":9260"`(`-Zone N` 时按 `go_services.ps1` 规则位移)。③ 步 12 在 Q2 = ② 之后分两种:dev yaml 默认**不配** `AdminToken` → 回 gRPC `PermissionDenied` + `error_code=23`(`ErrCodeAdminAuthRequired`,回档 RPC 整体停用,先于栅栏);临时配上 `AdminToken` 并带 `x-admin-token` 调 → 才是 `ErrCodeNotImplemented`(栅栏为 nil,先于本闸)。两者都是预期。④ 步 10 另看 data_service 启动日志有 `guild divergence checker ready: endpoints=[127.0.0.1:50300]`,没有 `guild check config invalid` / `client build failed`。⑤ 步 2a 之后 `go\data_service` 才编得过:`servicecontext.go`、`guildcheck`、`rollback_logic.go` 用到 `guildpb.GuildInternalClient` / `NewGuildInternalClient` / `ListAppliedAssetOpsSinceRequest`(B5d-2a 的生成物),`dataserviceserver.go` 用到本批新增的 proto 字段。
 
 没有 Codex / 用户的运行结果之前,不得写"编译通过""测试绿"。
 

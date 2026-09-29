@@ -82,7 +82,18 @@
 //                                 EnforceTravelFreezeCaps (unfreeze only when the
 //                                 handoff mark was never sent, otherwise tip + kick +
 //                                 destroy without persisting) and the set_mark-stage
-//                                 gate in BeginTravelHandoff.
+//                                 gate in BeginTravelHandoff; plus the handoff-mark SET
+//                                 ERROR reply only aborting its own generation
+//                                 (HandleTravelMarkWriteRejected).
+//   13. TravelOwnership         — GO-2 source-side verdict (§12.8 decision table
+//                                 B4–B9): travel_outcome::ClassifyOwnership (unchanged
+//                                 epoch wins, only this handoff's rollback receipt with a
+//                                 full cross-check is adopted, the returned-after-grant
+//                                 counterexample is never adopted) and the shape of
+//                                 kLuaJudgeTravelOutcome (#!lua, MGET only, deletes only
+//                                 its own lineage). The script's Redis behaviour is
+//                                 covered by the Go cross-language golden test
+//                                 go/scene_manager/internal/logic/owner_epoch_crosslang_test.go.
 //
 // History: these cases were written for the player_migrate data-moving chain
 // (Kafka PlayerMigrationEvent + ACK + CrossZoneReaper). That chain was
@@ -105,6 +116,10 @@
 //       * the "unsettled save → defer destroy" branch of
 //         ConcludeHandoffAfterMarkSent (same reason);
 //       * RunAtMonotonic re-arming on an early muduo wake-up (needs an EventLoop).
+//   - GO-2 (section 13) pieces that need a Redis reply: the judge-script callback
+//     (JudgeTravelOutcomeReply: adopt → unfreeze → forced save, receipt anomaly →
+//     ConcludeHandoffAfterMarkSent) and the conditional evacuation mark write in
+//     DispatchEmergencyRelocate — runbook B4a / B4b / B5 and the evacuation drill only.
 // ---------------------------------------------------------------------------
 
 namespace
@@ -2026,7 +2041,8 @@ TEST(TravelFreezeCap, NamesCoverEveryValue)
         EXPECT_STRNE(tfc::FreezeCapActionName(action), "?") << "action=" << static_cast<uint32_t>(action);
     }
     for (const auto site : {tfc::MarkSentSite::kFreezeCap, tfc::MarkSentSite::kDispatchWindow,
-                            tfc::MarkSentSite::kNoGateSession, tfc::MarkSentSite::kNoSceneManager})
+                            tfc::MarkSentSite::kNoGateSession, tfc::MarkSentSite::kNoSceneManager,
+                            tfc::MarkSentSite::kReceiptAnomaly})
     {
         EXPECT_STRNE(tfc::MarkSentSiteName(site), "?") << "site=" << static_cast<uint32_t>(site);
     }
@@ -2034,6 +2050,8 @@ TEST(TravelFreezeCap, NamesCoverEveryValue)
     EXPECT_STREQ(tfc::MarkSentSiteName(tfc::MarkSentSite::kCount), "?");
     EXPECT_STREQ(tfc::MarkSentSiteName(tfc::MarkSentSite::kFreezeCap), "travel_freeze_cap")
         << "runbook 按这段原文 grep(也是 DestroyDeposedPlayer 的 reasonTag)";
+    EXPECT_STREQ(tfc::MarkSentSiteName(tfc::MarkSentSite::kReceiptAnomaly), "travel_receipt_anomaly")
+        << "GO-2 判定表 B6 的收口点,runbook 同样按原文 grep";
 }
 
 TEST(TravelFreezeCap, RemainingUntilNeverNegative)
@@ -2203,6 +2221,221 @@ TEST(TravelFreezeCapEcs, BeginTravelHandoffInsideWindowIsNotRefusedByTheGate)
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(player));
     EXPECT_EQ(after.aborted, before.aborted + 1);
     EXPECT_EQ(after.dispatchWindowClosed, before.dispatchWindowClosed);
+}
+
+TEST(TravelFreezeCapEcs, LateMarkSetErrorOfOlderGenerationLeavesNewHandoffFrozen)
+{
+    // 冻结上限审查留下的问题:SET 回调的 ERROR 分支只在代际匹配时清 markEpoch,随后的 Abort 却不看代际。
+    // 旧一代被上限销毁后同节点重登、又发起了新一代(SET 已发出:requestedAtMs = 456,markEpoch = 7),旧一代(123)
+    // 的 ERROR 应答迟到时不得动新一代:不解冻(骨架 I2 / I3),也不按新一代的 markEpoch 登记撤回。
+    const auto player = MakeFrozenHandoffPlayer(kCapSelfZone + 1, /*requestedAtMs=*/456, /*markEpoch=*/7, kT0);
+    const auto before = Stats();
+
+    PlayerLifecycleSystem::HandleTravelMarkWriteRejected(kCapPlayerId, /*requestedAtMs=*/123, "READONLY");
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    const auto* travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(player);
+    ASSERT_NE(travel, nullptr) << "旧一代的 ERROR 应答不得解冻新一代";
+    EXPECT_EQ(travel->requestedAtMs, uint64_t{456});
+    EXPECT_EQ(travel->markEpoch, uint64_t{7}) << "也不得清新一代的 markEpoch";
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
+    EXPECT_EQ(Stats().aborted, before.aborted);
+    EXPECT_EQ(Stats().resolvedInPlace, before.resolvedInPlace);
+
+    // 对照:本代的 ERROR 应答照旧解冻 + 回 tip;标记确定不存在,不登记撤回。
+    PlayerLifecycleSystem::HandleTravelMarkWriteRejected(kCapPlayerId, /*requestedAtMs=*/456, "READONLY");
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
+    EXPECT_EQ(Stats().aborted, before.aborted + 1);
+    EXPECT_FALSE(PlayerLifecycleSystem::IsSceneChangeBusy(player)) << "markEpoch 已清 0:不登记撤回";
+
+    // 实体已不在时同样 no-op(不崩、不计数)。
+    tlsEcs.Clear();
+    PlayerLifecycleSystem::HandleTravelMarkWriteRejected(kCapPlayerId, /*requestedAtMs=*/456, "READONLY");
+    EXPECT_EQ(Stats().aborted, before.aborted + 1);
+}
+
+// ============================================================================
+// 13. TravelOwnership —— GO-2 根治的源端判定(player_lifecycle.h 的 travel_outcome::ClassifyOwnership 与
+// kLuaJudgeTravelOutcome;cross-zone-scene-travel.md §12.8 判定表 B4–B9)。纯函数,不需要 Redis / 场景宿主。
+// 取证脚本在 Redis 上的行为(只删本族标记、读到回执、与 A2′ / 回滚 Lua 的互斥)由 Go 侧跨语言金样
+// go/scene_manager/internal/logic/owner_epoch_crosslang_test.go 在 miniredis 上覆盖;采纳路径的 ECS 级行为
+// (采纳 → 解冻 → 强制存盘)要 Redis 应答才走得到,只能靠 runbook B4a / B4b 实跑。
+// ============================================================================
+namespace
+{
+constexpr to::Ownership kAllOwnership[] = {
+    to::Ownership::kUnchanged,       to::Ownership::kRolledBackToSelf, to::Ownership::kReceiptAnomaly,
+    to::Ownership::kReturnedToSelf,  to::Ownership::kMovedElsewhere,   to::Ownership::kLocationUnknown,
+};
+static_assert(std::size(kAllOwnership) == to::kOwnershipCount, "新增结论时补进这张表,并补判定用例");
+
+// B5 的标准形态:缓存 5、标记 "5:t"、回滚之后 7,location 指回本节点本 zone 且记 7,回执是本次标记原文。
+constexpr to::OwnershipFacts RolledBackToSelfFacts()
+{
+    to::OwnershipFacts facts;
+    facts.cachedEpoch = 5;
+    facts.markEpoch = 5;
+    facts.redisEpoch = 7;
+    facts.locationParsed = true;
+    facts.locationOnSelf = true;
+    facts.locationOwnerEpoch = 7;
+    facts.receiptIsMine = true;
+    return facts;
+}
+} // namespace
+
+TEST(TravelOwnership, UnchangedEpochWinsRegardlessOfLocation)
+{
+    // B4:epoch 未变最先判。取证脚本已原子删掉本族标记,"未变"= 此前没放行、此后放不出去 —— location 与回执怎样都不影响。
+    for (const bool parsed : {false, true})
+    {
+        for (const bool onSelf : {false, true})
+        {
+            for (const bool receipt : {false, true})
+            {
+                to::OwnershipFacts facts;
+                facts.cachedEpoch = 5;
+                facts.markEpoch = 5;
+                facts.redisEpoch = 5;
+                facts.locationParsed = parsed;
+                facts.locationOnSelf = parsed && onSelf;
+                facts.locationOwnerEpoch = 7;
+                facts.receiptIsMine = parsed && receipt;
+                EXPECT_EQ(to::ClassifyOwnership(facts), to::Ownership::kUnchanged)
+                    << "parsed=" << parsed << " onSelf=" << onSelf << " receipt=" << receipt;
+            }
+        }
+    }
+}
+
+TEST(TravelOwnership, ReceiptOfThisHandoffIsAdopted)
+{
+    static_assert(to::ClassifyOwnership(RolledBackToSelfFacts()) == to::Ownership::kRolledBackToSelf,
+                  "判定必须能在编译期求值(纯函数)");
+    EXPECT_EQ(to::ClassifyOwnership(RolledBackToSelfFacts()), to::Ownership::kRolledBackToSelf)
+        << "回执是本次原文,epoch 恰好前进两格且与 location 一致,location 指回本节点:采纳";
+}
+
+TEST(TravelOwnership, ReturnedAfterGrantIsNotMistakenForRollback)
+{
+    // 反例原样(§12.8 第五节):先放行给 B(6),A 的应答丢失;B 又以 "6:u" 交接回 A(7,location 写回 A 的新字节,
+    // 没有回执)。与上一条数值完全相同,只差回执:永远不采纳,销毁(不回档、不双持有)。
+    auto facts = RolledBackToSelfFacts();
+    facts.receiptIsMine = false;
+    EXPECT_EQ(to::ClassifyOwnership(facts), to::Ownership::kReturnedToSelf);
+    EXPECT_NE(to::ClassifyOwnership(facts), to::Ownership::kRolledBackToSelf);
+}
+
+TEST(TravelOwnership, ReceiptWithFailedCrossCheckIsAnomaly)
+{
+    struct Case
+    {
+        const char *name;
+        to::OwnershipFacts facts;
+    };
+    std::vector<Case> cases;
+    {
+        auto facts = RolledBackToSelfFacts();
+        facts.redisEpoch = 6; // 只前进一格(不是 bump 回滚的形态)
+        facts.locationOwnerEpoch = 6;
+        cases.push_back({"redis=6", facts});
+    }
+    {
+        auto facts = RolledBackToSelfFacts();
+        facts.redisEpoch = 8; // 回滚之后又前进过
+        facts.locationOwnerEpoch = 8;
+        cases.push_back({"redis=8", facts});
+    }
+    {
+        auto facts = RolledBackToSelfFacts();
+        facts.locationOwnerEpoch = 6; // location 记的 epoch 与键不一致(键被淘汰后补种 / 写坏)
+        cases.push_back({"locEpoch=6", facts});
+    }
+    {
+        auto facts = RolledBackToSelfFacts();
+        facts.locationOnSelf = false; // location 不指回本节点本 zone
+        cases.push_back({"onSelf=false", facts});
+    }
+    {
+        auto facts = RolledBackToSelfFacts();
+        facts.markEpoch = 4; // 写标记用的 epoch 不是缓存值
+        cases.push_back({"markEpoch=4", facts});
+    }
+    {
+        auto facts = RolledBackToSelfFacts();
+        facts.markEpoch = 0; // SET 没发出去过,不可能有本次回执
+        cases.push_back({"markEpoch=0", facts});
+    }
+    for (const auto &c : cases)
+    {
+        EXPECT_EQ(to::ClassifyOwnership(c.facts), to::Ownership::kReceiptAnomaly) << c.name;
+    }
+}
+
+TEST(TravelOwnership, MovedElsewhereUnknownAndEvictedKey)
+{
+    to::OwnershipFacts moved;
+    moved.cachedEpoch = 5;
+    moved.markEpoch = 5;
+    moved.redisEpoch = 6;
+    moved.locationParsed = true;
+    moved.locationOnSelf = false;
+    moved.locationOwnerEpoch = 6;
+    EXPECT_EQ(to::ClassifyOwnership(moved), to::Ownership::kMovedElsewhere) << "B8:已放行到别处";
+
+    auto unknown = moved;
+    unknown.locationParsed = false;
+    unknown.locationOnSelf = false;
+    EXPECT_EQ(to::ClassifyOwnership(unknown), to::Ownership::kLocationUnknown) << "B9:location 缺失 / 写坏";
+
+    auto evicted = moved;
+    evicted.redisEpoch = 0; // owner_epoch 键被淘汰读成 0
+    evicted.locationOnSelf = true;
+    evicted.locationOwnerEpoch = 5;
+    EXPECT_EQ(to::ClassifyOwnership(evicted), to::Ownership::kReturnedToSelf) << "B7:键被淘汰,不采纳";
+
+    auto evictedWithReceipt = evicted;
+    evictedWithReceipt.receiptIsMine = true;
+    EXPECT_EQ(to::ClassifyOwnership(evictedWithReceipt), to::Ownership::kReceiptAnomaly)
+        << "B6:回执对上但 epoch 读成 0,交叉校验不成立";
+
+    for (const auto &facts : {moved, unknown, evicted, evictedWithReceipt})
+    {
+        EXPECT_NE(to::ClassifyOwnership(facts), to::Ownership::kRolledBackToSelf);
+    }
+}
+
+TEST(TravelOwnership, NameTableCoversEveryVerdict)
+{
+    for (const auto ownership : kAllOwnership)
+    {
+        const std::string name = to::OwnershipName(ownership);
+        EXPECT_FALSE(name.empty()) << "ownership=" << static_cast<uint32_t>(ownership);
+        EXPECT_NE(name, "?") << "ownership=" << static_cast<uint32_t>(ownership);
+    }
+    EXPECT_STREQ(to::OwnershipName(to::Ownership::kCount), "?") << "越界不能读出数组外";
+}
+
+TEST(TravelOwnership, JudgeScriptKeepsShebangAndMget)
+{
+    const std::string lua = to::kLuaJudgeTravelOutcome;
+    EXPECT_EQ(lua.rfind("#!lua\n", 0), 0u)
+        << "必须以 #!lua 开头:只读副本 / MISCONF / OOM 下整体被拒,不会出现删除失败而读取成功";
+    EXPECT_EQ(lua.find("no-writes"), std::string::npos) << "不得声明 no-writes:那会让只读副本上照样读成功";
+    EXPECT_EQ(lua.find("'GET'"), std::string::npos) << "只用 MGET:GET 遇到类型不对的键会抛 WRONGTYPE,取证永远出不来";
+    EXPECT_EQ(lua.find("'SET'"), std::string::npos) << "取证只删不写";
+    const auto del = lua.find("redis.call('DEL', KEYS[1])");
+    const auto read = lua.find("return redis.call('MGET', KEYS[2], KEYS[3])");
+    ASSERT_NE(del, std::string::npos);
+    ASSERT_NE(read, std::string::npos);
+    EXPECT_LT(del, read) << "先删本族标记,再在同一段脚本里读 epoch 与 location";
+    EXPECT_NE(lua.find("string.match(v, '^%d+:(%d+)$') == ARGV[1]"), std::string::npos)
+        << "只删后缀(saved_at_ms)与本次 requestedAtMs 逐字节相同的那一族,别人的标记不碰";
+    EXPECT_EQ(lua.find("DEL', KEYS[2]"), std::string::npos) << "不删 owner_epoch";
+    EXPECT_EQ(lua.find("DEL', KEYS[3]"), std::string::npos) << "不删 location";
 }
 
 // ============================================================================

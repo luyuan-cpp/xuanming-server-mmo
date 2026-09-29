@@ -252,10 +252,9 @@ func guildSinceMs(createdAtSec uint64, marginMs int64) (uint64, error) {
 // err 只在"故障"(CheckFailed、ACCEPTED 审计写不进)时非 nil;规则拒绝(Divergence)err 为 nil,
 // 否则 handler 只回 error_code、分歧计数与样本带不出去。
 type guildVerdict struct {
-	code     uint32
-	err      error
-	check    guildcheck.GuildCheckResult
-	accepted bool
+	code  uint32
+	err   error
+	check guildcheck.GuildCheckResult
 }
 
 func guildSleep(svcCtx *svc.ServiceContext) func(context.Context, time.Duration) error {
@@ -387,7 +386,7 @@ func runGuildGate(ctx context.Context, svcCtx *svc.ServiceContext, checker guild
 		g.logFields(), divergent, unprovable, divergenceKindSummary(res.Divergences), g.reason)
 	metrics.AddRollbackGuildDivergenceRows(g.scope, true, divergent)
 	metrics.ObserveRollbackGuildCheck(g.scope, metrics.RollbackGuildResultDivergentAccepted)
-	return guildVerdict{code: constants.ErrCodeOK, check: res, accepted: true}
+	return guildVerdict{code: constants.ErrCodeOK, check: res}
 }
 
 // recheckGuildAfterWrite 是写后复查(07 §7.7 处置二),只在至少一个玩家走到写 Redis 之后调用,且必须在栅栏释放之前

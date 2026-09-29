@@ -532,8 +532,8 @@ func analyzeRecommendTables(t *testing.T, ctx context.Context, db *sql.DB) {
 }
 
 // sessionHandlerReads 读当前会话的 CONNECTION_ID 与 Handler_read_* 各项之和。
-// 不用 FLUSH STATUS(要 RELOAD 权限);SHOW SESSION STATUS 与 SELECT CONNECTION_ID() 本身不产生 Handler_read
-// (2026-09-28 在 MySQL 26.7.0 上核对)。
+// 不用 FLUSH STATUS:它要 RELOAD 权限,而且会把同一实例上**所有**活动会话的计数一起清零(见 measureSessionHandlerReads)。
+// SHOW SESSION STATUS 与 SELECT CONNECTION_ID() 本身不产生 Handler_read(2026-09-28 / 09-29 在 MySQL 26.7.0 上核对)。
 func sessionHandlerReads(t *testing.T, ctx context.Context, db *sql.DB) (connID, total uint64) {
 	t.Helper()
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT CONNECTION_ID()").Scan(&connID))
@@ -553,20 +553,51 @@ func sessionHandlerReads(t *testing.T, ctx context.Context, db *sql.DB) (connID,
 	return connID, total
 }
 
-// recommendAnchorWithReads 调一次 recommendAnchor,返回结果与这一次在会话上产生的 Handler_read_* 增量。
-// Handler 计数按会话统计:先把连接池钉成一条连接,并在前后各读一次 CONNECTION_ID —— 两次不同(连接被重建)
+// measureSessionHandlerReads 在一条钉住的连接上执行纯读的 call,返回结果与**单次**调用在会话上产生的 Handler_read_* 增量。
+//
+// Handler 计数按会话统计:先把连接池钉成一条连接,并在每次测量前后各读一次 CONNECTION_ID —— 两次不同(连接被重建)
 // 说明计数跨了会话,直接判失败,不给出一个假数。
+//
+// 先空跑一次、再连测两次并要求两次读数相同,防的是**别的会话的 FLUSH STATUS**:它会把同一实例上所有活动会话的计数
+// 一起清零(2026-09-29 评审在 MySQL 26.7.0 上实测,约 30 次重放里有 5 次被别的会话打低)。清在两次 SHOW 之间,后读数
+// 小于前读数 —— 不拦的话 uint64 差值回绕成约 1.8e19,被误报成"缺陷复发";清在查询中途,读数偏小,可能掩盖回退。
+// 同一条纯读查询在同一份数据、同一份统计上的读数是确定的(本文件各用例 2026-09-28 / 09-29 的 SQL 级重放逐次相同),
+// 所以两次不同只能是测量被干扰。空跑让表首次打开时的十几次额外 read_key(冷表)不落进任何一次测量。
+// 返回第一次测量的结果。
+func measureSessionHandlerReads(t *testing.T, ctx context.Context, db *sql.DB,
+	call func() ([]RecommendCandidate, error)) ([]RecommendCandidate, uint64) {
+	t.Helper()
+	const disturbed = "会话 Handler 计数被外部干扰(最可能是同一实例上别的会话执行了 FLUSH STATUS,它会清零所有会话的计数)," +
+		"本次读数无效:确认没有并发的 FLUSH STATUS 后重跑,不要放宽断言"
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	_, err := call() // 空跑,不计数
+	require.NoError(t, err)
+	var got []RecommendCandidate
+	var reads [2]uint64
+	for i := range reads {
+		connBefore, readsBefore := sessionHandlerReads(t, ctx, db)
+		res, err := call()
+		require.NoError(t, err)
+		connAfter, readsAfter := sessionHandlerReads(t, ctx, db)
+		require.Equal(t, connBefore, connAfter, "Handler 计数跨了会话(连接被重建),本次读数无效")
+		require.GreaterOrEqual(t, readsAfter, readsBefore, "第 %d 次测量:后读数小于前读数。%s", i+1, disturbed)
+		reads[i] = readsAfter - readsBefore
+		if i == 0 {
+			got = res
+		}
+	}
+	require.Equal(t, reads[0], reads[1], "同一条纯读查询连测两次读数不同。%s", disturbed)
+	return got, reads[0]
+}
+
+// recommendAnchorWithReads 用 measureSessionHandlerReads 测一次 recommendAnchor。
 func recommendAnchorWithReads(t *testing.T, ctx context.Context, db *sql.DB, repo *FriendRepo,
 	me uint64, exclude []uint64, pivot uint64, limit uint32) ([]RecommendCandidate, uint64) {
 	t.Helper()
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	connBefore, readsBefore := sessionHandlerReads(t, ctx, db)
-	got, err := repo.recommendAnchor(ctx, me, exclude, pivot, limit)
-	require.NoError(t, err)
-	connAfter, readsAfter := sessionHandlerReads(t, ctx, db)
-	require.Equal(t, connBefore, connAfter, "Handler 计数跨了会话(连接被重建),本次读数无效")
-	return got, readsAfter - readsBefore
+	return measureSessionHandlerReads(t, ctx, db, func() ([]RecommendCandidate, error) {
+		return repo.recommendAnchor(ctx, me, exclude, pivot, limit)
+	})
 }
 
 // explainTraditionalRows 跑 EXPLAIN FORMAT=TRADITIONAL,返回全部行(列名 → 值,NULL 记为空串)。
@@ -843,15 +874,16 @@ const (
 //     (to_player_id, status) 上的 to=me 区间变大,旧写法因此改走 status=1 的全服扫描 —— 评审库就是这个形状);
 //     全服另有 1.5 万条与我无关的 pending。这两个集合都与 FOF 不相交,只贡献"规模"。
 type mutualAdversarialGraph struct {
-	me            uint64
-	star          uint64
-	callerExclude []uint64
-	want          map[uint64]uint32 // 合格候选 → 期望的共同好友数
-	excluded      map[uint64]string // 身在 FOF 里、应被排除的人 → 靠哪条子句
-	friendCount   uint64            // F:f1 行数
-	fofRows       uint64            // R:f2 行数(含"候选就是我自己"的那 F 行)
-	blockersOfMe  uint64
-	globalPending uint64
+	me             uint64
+	star           uint64
+	callerExcluded uint64            // 调用方 exclude 里唯一的"真候选"
+	callerExclude  []uint64          // 生产形状的 exclude:logic 层总会把 me 自己也放进去
+	want           map[uint64]uint32 // 合格候选 → 期望的共同好友数
+	excluded       map[uint64]string // 身在 FOF 里、应被排除的人 → 靠哪条子句
+	friendCount    uint64            // F:f1 行数
+	fofRows        uint64            // R:f2 行数(含"候选就是我自己"的那 F 行)
+	blockersOfMe   uint64
+	globalPending  uint64
 }
 
 func seedMutualAdversarialGraph(t *testing.T, ctx context.Context, db *sql.DB) mutualAdversarialGraph {
@@ -885,7 +917,10 @@ func seedMutualAdversarialGraph(t *testing.T, ctx context.Context, db *sql.DB) m
 
 	callerExcluded := cands[60]
 	excluded := map[uint64]string{
-		me:             "我自己(`<> ?` 自排除失效)",
+		// me 不完全满足文件头"唯一原因"的纪律:按生产形状把 me 放进 exclude 的调用里,`<> ?` 与 NOT IN 两处都会排除他。
+		// M1 的全量核对因此另跑一遍 exclude 不含 me 的,那一遍里 `<> ?` 是他不出现的唯一原因;
+		// TestRecommendByMutual_AppliesAllFourExclusions(exclude = nil)也单独守着这一条。
+		me:             "我自己(`<> ?` 自排除失效;exclude 里含 me 时还要 NOT IN 同时失效才会出现)",
 		friends[0]:     "已是我的好友,经好友 1 可达(NOT EXISTS f 失效)",
 		friends[1]:     "已是我的好友,经好友 0 可达(NOT EXISTS f 失效)",
 		cands[10]:      "我拉黑的人(NOT EXISTS b_out 失效)",
@@ -924,12 +959,13 @@ func seedMutualAdversarialGraph(t *testing.T, ctx context.Context, db *sql.DB) m
 	want[star] = mutualAdvFriends
 
 	g := mutualAdversarialGraph{
-		me:            me,
-		star:          star,
-		callerExclude: []uint64{me, callerExcluded}, // logic 层总会把 me 自己放进 exclude
-		want:          want,
-		excluded:      excluded,
-		friendCount:   uint64(mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend WHERE player_id = ?", me)),
+		me:             me,
+		star:           star,
+		callerExcluded: callerExcluded,
+		callerExclude:  []uint64{me, callerExcluded},
+		want:           want,
+		excluded:       excluded,
+		friendCount:    uint64(mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend WHERE player_id = ?", me)),
 		fofRows: uint64(mustCount(t, ctx, db,
 			"SELECT COUNT(*) FROM friend f1 JOIN friend f2 ON f2.player_id = f1.friend_player_id WHERE f1.player_id = ?", me)),
 		blockersOfMe:  uint64(mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend_block WHERE blocked_player_id = ?", me)),
@@ -978,19 +1014,13 @@ func (g mutualAdversarialGraph) assertCandidates(t *testing.T, got []RecommendCa
 	}
 }
 
-// recommendByMutualWithReads 与 recommendAnchorWithReads 同一套做法(钉成单连接、前后核对 CONNECTION_ID),
-// 调的是 RecommendByMutual。
+// recommendByMutualWithReads 用 measureSessionHandlerReads 测一次 RecommendByMutual。
 func recommendByMutualWithReads(t *testing.T, ctx context.Context, db *sql.DB, repo *FriendRepo,
 	me uint64, exclude []uint64, limit uint32) ([]RecommendCandidate, uint64) {
 	t.Helper()
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	connBefore, readsBefore := sessionHandlerReads(t, ctx, db)
-	got, err := repo.RecommendByMutual(ctx, me, exclude, limit)
-	require.NoError(t, err)
-	connAfter, readsAfter := sessionHandlerReads(t, ctx, db)
-	require.Equal(t, connBefore, connAfter, "Handler 计数跨了会话(连接被重建),本次读数无效")
-	return got, readsAfter - readsBefore
+	return measureSessionHandlerReads(t, ctx, db, func() ([]RecommendCandidate, error) {
+		return repo.RecommendByMutual(ctx, me, exclude, limit)
+	})
 }
 
 // assertMutualReadsAndResult 按生产上限 limit=20 调一次,断言结果与读数上界;M1 与 M2b 共用。
@@ -1059,12 +1089,17 @@ func assertMutualPlanIsPerRowPrimaryKeyLookups(t *testing.T, ctx context.Context
 // pending"、friend_block 那条被做成对"我拉黑的 + 拉黑我的"全集的 hash antijoin,读数 ≈ FOF 行数 × 全服 pending 数。
 // 断言:limit=20 的结果正确;会话 Handler_read_* 增量 ≤ 8R + 2F + 2 + limit(本夹具 F=30、R=660,上界 5,362)——
 // 生产上 F ≤ MaxFriends、R ≤ MaxFriends²,上界与全服 pending 数、拉黑我的人数无关。再把 limit 放大、核对全量结果。
-//   - 旧写法为何必红:2026-09-29 在同形数据上重放旧 SQL(服务端预处理语句),计划是 idx_status_updated 上 status=1 的
-//     逐行 ref,读 9,274,150 次(Handler_read_next 9,231,954,即约 600 个 FOF 行各扫一遍 1.5 万条 pending)、3.2–4.6 s;
+//   - 旧写法为何必红:2026-09-29 按本夹具逐行重建(含 seedPending 的 updated_ms = 当前时间)后重放旧 SQL(服务端预处理
+//     语句),计划是 idx_status_updated 上 status=1 的逐行 ref,读 9,334,150 次(Handler_read_next 9,291,954,即约 620 个
+//     FOF 行各扫一遍 1.5 万条 pending;评审独立复测同一数字)、3.4–4.8 s。读数随 pending 行在 idx_status_updated 里的位置
+//     与计划浮动(把两条 seedPending 行的 updated_ms 改成 1 就是 9,274,150),但都是"FOF 行数 × 全服 pending 数"的量级,
+//     约为上界的 1,700 倍。
 //     结果与新写法相同,所以红在读数断言。统计不同时旧写法也可能改走 index_merge + hash join(friend_explain_scratch 上就是),
 //     那样 union 要把"拉黑我的人"整个读一遍,读数 ≥ 2 万,照样越界 —— 自检保证这两个集合都大于上界。
 //     OR 形条件没有完整主键可点查,旧写法做不出"每行常数次点查"的计划,所以不论走哪种计划都红。
 //   - 新写法:4,739 次(key 3,755 / next 690 / rnd_next 294)、约 6 ms。
+//   - 全量核对跑两遍:一遍按生产形状(exclude 含 me),一遍 exclude 不含 me —— 后一遍里 me 不出现的唯一原因是 `<> ?`,
+//     删掉那条子句就红在"结果里多出 me"(2026-09-29 SQL 级重放:294 行、含 me;保留时两遍都是同样的 293 行)。
 //
 // 断言的是行操作计数,不看墙钟。
 func TestRecommendByMutual_ReadsBoundedByFOFRowsNotGlobalSets(t *testing.T) {
@@ -1076,10 +1111,12 @@ func TestRecommendByMutual_ReadsBoundedByFOFRowsNotGlobalSets(t *testing.T) {
 	assertMutualReadsAndResult(t, ctx, db, repo, g)
 
 	// 全量核对:limit 放大到装得下全部合格者,每个合格者一个不缺、共同好友数都对,应排除的一个不出现。
-	all, err := repo.RecommendByMutual(ctx, g.me, g.callerExclude, uint32(len(g.want)+10))
-	require.NoError(t, err)
-	assert.Len(t, all, len(g.want))
-	g.assertCandidates(t, all, true)
+	for _, exclude := range [][]uint64{g.callerExclude, {g.callerExcluded}} {
+		all, err := repo.RecommendByMutual(ctx, g.me, exclude, uint32(len(g.want)+10))
+		require.NoError(t, err)
+		assert.Len(t, all, len(g.want), "exclude=%v", exclude)
+		g.assertCandidates(t, all, true)
+	}
 }
 
 // TestRecommendByMutual_PlanIsPerRowPrimaryKeyLookups(M2)钉住上界成立所依赖的计划形状(统计新鲜时),
@@ -1103,11 +1140,13 @@ func TestRecommendByMutual_PlanIsPerRowPrimaryKeyLookups(t *testing.T) {
 // 计划仍是"先 f1 后 f2 + 逐行主键点查",读数仍在上界内。
 //
 // 陈旧统计的造法:建表后、灌数前关掉三张表的 STATS_AUTO_RECALC,灌完不 ANALYZE —— 持久统计停在建表时的空表状态
-// (n_diff = 0),优化器把 f1 的前缀 ref 估成整表行数。不需要改 mysql.innodb_*_stats,也不需要 FLUSH(RELOAD 权限)。
+// (n_diff = 0)。n_diff = 0 时,按 f1.friend_player_id 做的 f2 前缀 ref 每次都被估成整表行数(rec_per_key 取表行数;
+// f1 是常量前缀 ref,走 index dive,估得准),优化器于是改成"f2 全索引扫描驱动 + f1 主键点查"。2026-09-29 在本夹具上
+// EXPLAIN 生产 SQL:f1 rows=30、f2 rows=1,318(= friend 整表)。不需要改 mysql.innodb_*_stats,也不需要 FLUSH(RELOAD 权限)。
 // 用例先自检:把生产 SQL 的 STRAIGHT_JOIN 换回普通 JOIN 再 EXPLAIN,驱动表必须变成 f2 —— 证明夹具确实造出了会让
 // 连接顺序翻转的陈旧统计;没有这一步,"f1 在前"在统计没造坏时也照绿(假绿)。
 //   - 旧写法为何必红:2026-09-29 在本夹具上,旧 SQL 的驱动表是 f2(idx_friend_player 上的 range),红在"驱动表必须是 f1";
-//     读数 9,275,651 次,也红在读数断言。
+//     读数约 930 万次(实测 9,335,651;评审另测到 9,085,699,随计划浮动),也红在读数断言。
 //   - 新写法去掉 STRAIGHT_JOIN:驱动表变成 f2(PRIMARY 全索引扫描,type=index)、f1 变成 eq_ref → 红;读数 6,931 > 上界 5,362。
 //     本夹具 friend 表只有 1,318 行,所以读数差距不大;116 万边的库上同一退化是 1,529,004 次(见 RecommendByMutual 注释第 1 条)。
 //   - 新写法去掉 SEMIJOIN 与 FORCE INDEX:b_in 被物化成 idx_blocked_player 上"拉黑我的 2 万人"的读取,24,785 次 → 计划与读数两处都红。

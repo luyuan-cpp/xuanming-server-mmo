@@ -3458,7 +3458,7 @@ void PlayerLifecycleSystem::HandleTravelMarkWriteRejected(Guid playerId, uint64_
 		// 的 markEpoch 登记撤回、删掉它刚写下的标记。
 		LOG_WARN << "[ZoneTravel] SET handoff mark failed for player " << playerId << " requested_at_ms=" << requestedAtMs
 				 << " err=" << errText << ", but that handoff generation is no longer in flight (current="
-				 << (travel != nullptr ? travel->requestedAtMs : 0) << "); ignoring the late reply";
+				 << (travel != nullptr ? travel->requestedAtMs : uint64_t{0}) << "); ignoring the late reply";
 		return;
 	}
 	LOG_ERROR << "[ZoneTravel] SET handoff mark failed for player " << playerId << " requested_at_ms=" << requestedAtMs
@@ -4003,6 +4003,8 @@ void PlayerLifecycleSystem::HandleTravelEnterSceneReply(entt::entity playerEntit
 	// Kafka RedirectToGateEvent → gate msg 124 → RedirectFlow 连到目标 zone。
 	// 本节点从这一刻起不再持有该玩家,且手里的 epoch 已旧 —— 不能再存盘,只能销毁。
 	// 这条分支不经核实,所以只接受本代交接的应答(Dispatch 按号分发;旧版 SM 下退回按 player_id,同今天)。
+	// GO-2 的回滚只发生在推重定向 / 路由失败的路径上(那时回的是 ErrKafkaRoute),成功且带 Redirect 的应答说明
+	// 第一条腿确已放行(判定表 B10)。
 	LOG_INFO << "[ZoneTravel] handoff granted for player " << playerId
 			 << " -> gate " << resp.redirect().target_gate_ip() << ":" << resp.redirect().target_gate_port()
 			 << "; destroying source-side entity"
@@ -4334,8 +4336,9 @@ void PlayerLifecycleSystem::AbortTravelHandoff(Guid playerId, const char *reason
 	// 留着它会让之后某次跨节点 EnterScene 误以为盘上是最新的(回档)。与 scene_manager 只比对不删的
 	// 契约不冲突:这是源端撤回自己写的标记。撤回没确认之前 IsSceneChangeBusy 对该玩家返回 true ——
 	// 解冻照常,只是暂时不替他发 EnterScene,不再是"删不掉就靠 TTL 兜底"。
-	// markEpoch == 0 = 写标记的 SET 从没发出去过(存盘看门狗 / epoch 未知 / Redis 未连接 / 命令没发出去),
-	// 盘上没有这份标记,不登记,免得一个根本不存在的标记把玩家挡在换图之外。
+	// markEpoch == 0 = 盘上没有这份标记:写标记的 SET 从没发出去过(存盘看门狗 / epoch 未知 / Redis 未连接 / 命令没
+	// 发出去)、SET 收到 ERROR 应答(HandleTravelMarkWriteRejected),或 ResolveTravelOutcome 的取证脚本已在同一原子
+	// 步骤里删掉了本族标记(判定表 B4 / B5)。不登记,免得一个根本不存在的标记把玩家挡在换图之外。
 	if (handoffMarkEpoch != 0 && handoffRequestedAtMs != 0)
 	{
 		WithdrawHandoffMark(playerId, handoffMarkEpoch, handoffRequestedAtMs, "abort");

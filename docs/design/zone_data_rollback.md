@@ -61,6 +61,16 @@ Zone 数据回档分两个层面：
 - 即使存在时间差异（如玩家回档到加入公会前，但 guild_member 表仍有记录），
   这类不一致通过正常的 guild/friend 操作即可自愈（退出重进、重新申请等）
 
+> **2026-09-28 追加(帮会二期 B5d-2b)**:上面"不需要回档、可自愈"只对**关系**数据(成员、好友)成立,
+> **不适用于帮会资产**。捐献 / 帮会商店 / 活动发奖是玩家与帮会两边各记一笔的资产操作:回档把玩家的钱包
+> 换回快照,帮会资金、帮贡、限购与领奖记录却不在快照里 —— 捐献方向变成资产复制,商店 / 发奖方向变成
+> 玩家白亏,这不会自愈。现在三个 `Rollback*` 在写任何玩家数据之前都要过"帮会资产闸":先问 guild 这些玩家
+> 自快照以来有没有已应用的资产操作,有就默认拒绝(`ErrCodeRollbackGuildDivergence`,可带
+> `accept_guild_divergence` + `x-admin-token` + reason/operator 放行并留逐行日志供人工补偿),问不到就
+> 拒绝且不可放行(`ErrCodeRollbackGuildCheckFailed`),写完 10s 后复查一次
+> (`ErrCodeRollbackGuildDivergedAfterWrite`)。三个 `Rollback*` 也因此一律要求 `x-admin-token`。
+> 设计与运维手册见 [guild-phase2/07-rollback-fail-closed.md](./guild-phase2/07-rollback-fail-closed.md)。
+
 ### 无快照角色处理（fail-closed）
 
 `RollbackZone` **不会再自动删除任何无快照角色**。快照只在 GM、事件和回档

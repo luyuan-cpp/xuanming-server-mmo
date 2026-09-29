@@ -15,6 +15,7 @@
 // ── 为什么需要 ──
 // 交接冻结(PlayerFrozenComp)期间玩家什么都做不了,客户端挂着"传送中"遮罩。原先的冻结只靠两道 30s 看门狗
 // 收敛,但有三段没有上限,zone Redis 不可用 / 半开连接时玩家会一直冻着:
+//   (U1 / U3 按当时的写法描述;GO-2 起核实是一次原子取证 EVAL,失败形态与处置相同)
 //   U1  ResolveTravelOutcome 核实归属时 Redis 不可用 / MGET 应答形状不对 / 命令发不出去,三处都重挂 30s 应答
 //       看门狗,次数与总时长都不封顶;
 //   U2  BeginTravelHandoff 先写 requestedAtMs 再发 SET,只有 SET 的成功回调才会走到 RequestTravelEnterScene;

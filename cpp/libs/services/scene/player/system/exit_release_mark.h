@@ -28,10 +28,16 @@
 // 第二个持有者,所以这一段不需要 -1 闸;闸门同样等它确认后才建实体。
 //
 // ── handoff 键的写入方 / 删除方(与 player_ownership_comp.h 的键契约一起看)──
-//   写:BeginTravelHandoff(交接)、DispatchEmergencyRelocate(疏散 / 排空改派)、A1′(本文件,干净退出)、
-//       A2′ 放弃补写(本文件,载入被放弃时把删掉的那一份写回)。
-//   删:WithdrawHandoffMark(按原文条件删)、ResolveTravelOutcome(DEL)、A2′(本文件,核对 owner_epoch 后删 ≤N;
-//       路由不带 owner_epoch 时删 ≤ 当前 owner_epoch)。
+//   写:BeginTravelHandoff(交接)、DispatchEmergencyRelocate(疏散 / 排空改派,owner_epoch 条件写,与 A1′ 同一段
+//       kLuaWriteIfOwnerEpoch)、A1′(本文件,干净退出)、A2′ 放弃补写(本文件,载入被放弃时把删掉的那一份写回)、
+//       scene_manager 回滚转写(GO-2 §12.8:推路由失败的 bump 回滚只在所凭原标记原样还在时,把 "N:t" 转写成
+//       "N+2:t",后缀逐字节不变;scene_manager 从不删除这个键)。
+//   删:WithdrawHandoffMark(按原文条件删)、ResolveTravelOutcome(原子取证脚本按 saved_at_ms 只删本次交接这一族,
+//       含转写形态,见 player_lifecycle.h travel_outcome::kLuaJudgeTravelOutcome)、A2′(本文件,核对 owner_epoch
+//       后删 ≤N,转写标记同样在内;路由不带 owner_epoch 时删 ≤ 当前 owner_epoch)。
+//   A2′ 与回滚互斥(令牌):两段都是同一 Redis 上的原子 Lua,A2′ 在先 → 标记已删,回滚回 marker_gone、归属留给
+//   目标节点;回滚在先 → owner_epoch 已是 N+2 ≠ N+1,A2′ 回 -1、目标节点拒建实体。修改 kLuaInheritClear 时
+//   同步 go/scene_manager/internal/logic/owner_epoch_crosslang_test.go 里的逐字副本。
 namespace exit_release_mark
 {
 	// ── A1′:退出收尾时写不写 ─────────────────────────────────────────────────
@@ -157,7 +163,8 @@ namespace exit_release_mark
 		return ExitReleaseDecision::kWrite;
 	}
 
-	// A1′ 与 A2′ 放弃补写共用的条件写:owner_epoch 仍等于调用方缓存的 E 才写标记。
+	// A1′、A2′ 放弃补写与疏散 / 排空改派(DispatchEmergencyRelocate)共用的条件写:owner_epoch 仍等于调用方缓存的 E
+	// 才写标记。改派用它是为了不覆盖 scene_manager 回滚转写出来的 "E+2:t"(GO-2 §12.8)。
 	//   KEYS[1] = player:{id}:owner_epoch   KEYS[2] = player:{id}:handoff
 	//   ARGV[1] = E(十进制,与 INCR 的文本格式一致)  ARGV[2] = 标记原文 "E:now_ms"  ARGV[3] = TTL 秒
 	// 返回 1 = 写了;0 = owner_epoch 已不是 E(含缺键:GET 返回 false,与字符串永不相等)。
@@ -237,6 +244,8 @@ namespace exit_release_mark
 	// ── A2′:新载入前"先核归属再删"继承来的标记 ─────────────────────────────────
 
 	// KEYS[1] = player:{id}:owner_epoch   KEYS[2] = player:{id}:handoff   ARGV[1] = N(本次路由的 owner_epoch,非 0)
+	// **Go 跨语言金样逐字复制了本脚本**(go/scene_manager/internal/logic/owner_epoch_crosslang_test.go,锁住它与
+	// scene_manager 回滚 Lua 的互斥):改这里必须同步改那边。
 	// 先比 owner_epoch(缺键按 0):≠ N 立即返回 -1,一个标记都不删(M2)。相等时:
 	//   0 = 没有标记;1 = 删掉的是更旧代际(epoch < N);2 = 删掉的恰好是 epoch == N;
 	//   3 = 标记代际比 N 新,保留(只删 ≤N);4 = 标记写坏了(不是 "数字:数字"),一并删掉。
