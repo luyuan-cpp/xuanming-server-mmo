@@ -251,7 +251,7 @@ Claude 未运行任何构建 / 测试 / regen(AGENTS §10.1)。按顺序执行,�
 | A. handoff 标记撤回不再只靠 TTL | `FinishExitAfterPersist` 的"退出优先"分支与 `AbortTravelHandoff` 撤回标记用的是被 `redis->connected()` 守着的空回调 DEL:Redis 抖动时静默跳过,标记带着当前 epoch 残活 300s。**复核后的准确触发面**:① 断线退出后 30s 租约内重连回同一节点(同落点不铸造,epoch 仍是 E),之后 300s 内第一次跨节点换图凭旧标记免存盘过门 → 回档;② 更糟的在线变体——`AbortTravelHandoff` 的 DEL 被跳过后玩家就地解冻继续玩,不用重登就能命中。正常登出 / 租约到期后重登**不**受影响(location 已清,首次落点必铸新 epoch,旧标记自然失配) | 新增纯头文件 `handoff_mark_withdraw.h`(待撤回表 + 按标记原文的条件删除 Lua);两个撤回点统一走 `WithdrawHandoffMark`:先登记后发命令,同时检查 `connected()` 与 `command()` 返回值,只有整数应答才销账;`RedisSystem` 的重连回调与 1s 定时器重试,截止时刻 = 单调时钟上的"标记 TTL + 5s";未确认期间 `IsSceneChangeBusy` 对该玩家返回 true。`PlayerTravelHandoffComp.markEpoch` 只在 SET 派发成功后才写、SET 收到 ERROR 应答时清零,保证"确定没写的标记"不登记。计数 `withdraw_deferred` / `withdraw_expired` 进 `[TravelHandoff]` 汇总行。单测 7 个(`cross_zone_test` 的 `HandoffMarkWithdrawQueue.*`) |
 | B. 未映射玩家跨 zone 传送会把访客存盘写进目标 zone 的库(审计 GO-1,违反 §6 不变量 2) | `resolveHomeZone` 把"未映射 / 映射为 0"一律当首登、回落 `GateZoneId`;第二条腿的 gate zone 就是目标 zone,第一条腿完全不查归属。全程只有一条 INFO | 第一条腿(`leavingZone` 为真)在过门、铸 epoch、写等待落点**之前**先查归属,未映射 / 查询失败 → 20,源 scene 据此解冻回 tip;第二条腿(`awaitingPlacement`)未映射同样回 20(纵深防御)。"未映射 = 首登"只保留给无位置记录的首次落点与同 zone 已有位置的换图。新 reason `home_zone_unmapped_travel` + 告警 `SceneManagerHomeZoneUnmappedTravel`。单测 7 组 |
 | C. gate 对"同 scene_id、不同节点"的路由不转发进场(审计 CPP-1) | `ApplyRoute` 只按 `pendingEnterGsType` 与 scene_id 是否变化决定转发;world rebalance 迁频道沿用原 scene_id,规划与执行之间的竞态下玩家会落到"会话指向新节点、新旧节点上都没有实体",只能重登 | `RebindSceneNode` 把"比较旧指向 + 覆盖新指向"收进一个函数并返回 `SceneNodeChange`;节点变了也以 `enterType=0` 转发。旧指向无效(节点被摘除过)一律算换了节点。单测 `SceneRouteEntry` 共 16 个。*2026-09-28(CPP-2,§13.3,未编译):生产路径改为 `CompareSceneNode` + `AttemptPendingSceneEntry`,转发成功后才提交指向;`RebindSceneNode` 只留给已有用例钉住原语语义;`SceneRouteEntry` 现 17 个* |
-| D. 告警与指标 | `SceneManagerEnterSceneRejectedSpike` 钉在无人发射的 `reason="scene_gone"`,恒空且 Prometheus 不报错;**另查出两条 critical 的 `*PoolEmpty` 同样恒空**(`nodes_by_role` 这个 gauge 从不发布 0 值,`== 0` 永远匹配不到,两条 pager 从未响过) | 按真实发射的 reason 拆成 5 条告警;`PoolEmpty` 改成 `count … unless on (zone_id) count …`;恢复 destroy-while-entering 分支的 `scene_gone` 发射点并配回原告警;`metrics.go` 的 Help / 注释与发射点对齐。现共 17 条规则,**未经 promtool 校验** |
+| D. 告警与指标 | `SceneManagerEnterSceneRejectedSpike` 钉在无人发射的 `reason="scene_gone"`,恒空且 Prometheus 不报错;**另查出两条 critical 的 `*PoolEmpty` 同样恒空**(`nodes_by_role` 这个 gauge 从不发布 0 值,`== 0` 永远匹配不到,两条 pager 从未响过) | 按真实发射的 reason 拆成 5 条告警;`PoolEmpty` 改成 `count … unless on (zone_id) count …`;恢复 destroy-while-entering 分支的 `scene_gone` 发射点并配回原告警;`metrics.go` 的 Help / 注释与发射点对齐。现共 17 条规则,**未经 promtool 校验**。*2026-09-28(§13.4,未编译):问题列"`nodes_by_role` 从不发布 0 值"说的是当时的状况。现在 `metrics.SetNodesByRole(counts, expectedZones)` 为有节点的 zone 与本实例 `ZoneId` 的四种角色补 0;两条 `PoolEmpty` 在 `count … unless on (zone_id) count …` 之外追加了 `or on (zone_id) (sum by (zone_id) (scene_manager_nodes_by_role) == 0)` 整 zone 全灭分支。规则数:§12.5.6 后 18 条,§13.4 后 19 条,以 `grep -c -- "- alert:"` 为准* |
 | F. **scene 从不装 SceneManager 的 gRPC 应答处理器**(端到端闭环核查发现的 P0,详见 §12.5.1) | `InitSceneManagerReply()` 无任何调用点,`AsyncSceneManagerEnterScene/CreateSceneHandler` 恒为空,生成客户端静默跳过每一条应答。后果:同 zone 跨节点换图彻底失效(18 到不了 handler,玩家卡住零提示)、副本 / 镜像场景进入完全失效、跨 zone 传送源实体要冻满 30s、失败 tip 迟到 30s。**与本轮新代码无关,2026-04-16 的一次 regen 丢的** | 在 `cpp/nodes/scene/main.cpp` 装(生成物不能改,且生成器永远不会写它——谓词只收 `cc_generic_services`,scene_manager 是 grpc)。形状照 `id_segment_bootstrap.cpp` 的 `InitDataServiceReply()` |
 | E. 文档 | `docs/ops/cross-zone-failure-test-runbook.md` 写着"每个版本上线前必跑",四个场景却全在测已删除的 reaper 链;`enter-scene-zone-routing.md` 教运维合服时手工清 location | runbook 重写为 v2(面向现行链路的 A–F 场景,观测点逐个 grep 核对,文件头声明"静态编写、未实跑");路由文档逐句核对改写,新增"合服后残留 location"小节;约 20 份旧设计文档与 12 个代码文件里把已删行为当现状的文字加了状态标注 / 改成实情(只动注释) |
 
@@ -854,7 +854,7 @@ Go 两包:scene_manager 的用例 `ZeroZoneOverLocationInGateZoneBehavesLikeExpl
 | 13.4 | P3 收尾:GO-6 / GO-4 残余 / 告警盲区 | 已落码 | `09f71f9d5` |
 | 13.5 | Hiredis ERR 泄漏 / scene-manager zrpc Timeout / robot 空文件 | 已落码 | `9da27f9a4` 与 `24dd3e6c5`(均为自动保存)、`6941e7344` |
 | 13.6 | 客户端 CL-6 / CL-8 | 已落码(客户端仓) | `mmorpg-client` 分支 `crosszone/client-cl6-cl8` 的 `54034fe`(基于 `8b21583`) |
-| 13.7 | GO-2 根治(owner_epoch 严格单调) | 设计已定稿,落码中 | — |
+| 13.7 | GO-2 根治(owner_epoch 严格单调) | 设计已定稿,落码中 | 部分已随自动保存进入 main:`ccafe300c`(proto 与 Go)、`907a6b752`(C++ scene 侧大部分);其余在工作树 |
 | 13.8 | CPP-3 疏散 / 排空改派的待确认表 | 设计已定稿,落码中 | — |
 | 13.9 | GO-3、`handoff_pending_no_marker` 比值告警,以及其余推迟项 | 本轮不落 | — |
 
@@ -865,8 +865,14 @@ Go 两包:scene_manager 的用例 `ZeroZoneOverLocationInGateZoneBehavesLikeExpl
   - `deploy/k8s/scene-manager-alerts.yaml` 里 no_marker 注释引用的「P3 收尾」一节,即 §13.4;
   - `player_lifecycle.h` 的 `enter_scene_reply` 注释和 `team-system.md` 引用的「EnterScene 应答关联号」,即 §13.1。
 - **按暂定号引用的,与本节编号不一致,需要改**:
-  - GO-2 在制的 `proto/scene_manager/storage.proto`(`rollback_receipt` 的注释)、`proto/scene_manager/scene_manager_service.proto`(`owner_epoch_after_rollback` 的注释),以及 `go/scene_manager/internal/logic/owner_epoch.go`、`enterscenelogic.go`、`internal/metrics/metrics.go` 里写的 `cross-zone-scene-travel.md §12.8`,实际对应本文 §13.7;
-  - `handoff-crosszone-20260920.md` 里写的「设计文档 §12.5.7」(CL-6 / CL-8),实际对应本文 §13.6。
+  - GO-2 代码与 proto 注释里写的 `§12.8`(多数写成 `cross-zone-scene-travel.md §12.8`,也有只写 `GO-2 §12.8` 的),实际对应本文 §13.7。2026-09-29 按 HEAD 核过,涉及:
+    - proto:`proto/scene_manager/storage.proto`(`rollback_receipt` 的注释)、`proto/scene_manager/scene_manager_service.proto`(`owner_epoch_after_rollback` 的注释);
+    - Go:`go/scene_manager/internal/logic/owner_epoch.go`、`enterscenelogic.go`、`internal/metrics/metrics.go`、`go/shared/ownerepoch/ownerepoch.go`;
+    - 部署:`deploy/k8s/scene-manager-alerts.yaml`(落点回滚那段注释);
+    - C++:`cpp/libs/services/scene/player/system/player_lifecycle.{h,cpp}`、`travel_freeze_cap.h`。
+
+    GO-2 仍在落码,清单会变,改之前以 `git grep -n '§12\.8'` 的结果为准。
+  - ~~`handoff-crosszone-20260920.md` 里写的「设计文档 §12.5.7」(CL-6 / CL-8),实际对应本文 §13.6。~~ 已在 `f9b6a255d` 里改成 §13.6。服务端仓和客户端仓里都已没有 §12.5.7 的引用。
   - 本文没有 §12.8,也没有 §12.5.7。
 
 **跨会话约定**:
@@ -1014,7 +1020,7 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
    |---|---|---|
    | `kSaveBudget` | 30s | 存盘看门狗 |
    | `kReplyBudget` | 30s | 应答看门狗;原 `kTravelReplyBudgetSec` 的下限约束注释搬到了这里 |
-   | `kVerifyMargin` | 5s | 一次 DEL + MGET 核实往返的余量 |
+   | `kVerifyMargin` | 5s | 一次 DEL + MGET 核实往返的余量。*GO-2 落码后(`907a6b752`,未编译)头文件注释已改为"一次核实往返(`ResolveTravelOutcome` 的原子取证 EVAL:删本族标记 + 读 owner_epoch / location)的余量",值不变,见 §13.7* |
    | `kFreezeCap` | 70s | 冻结硬上限 |
    | `kDispatchWindow` | 70 − 30 − 5 = 35s | 晚发闸 |
    | `kSweepInterval` | 1s | 上限扫描的周期 |
@@ -1034,6 +1040,7 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
      - `travel_dispatch_window`:`RequestTravelEnterScene` 发现冻结已超过 35s。这时 SET 已 OK,但 EnterScene 还没发。
      - `travel_no_gate_session`:`RequestTravelEnterScene` 发现 gate 会话已不在。
      - `travel_no_scene_manager`:`RequestTravelEnterScene` 发现没有可达的 SceneManager。
+     - 以上是冻结上限落码时(`09f71f9d5`)的四个点。GO-2 落码时追加了第五个 site `travel_receipt_anomaly`(`907a6b752`,未编译),由 `ResolveTravelOutcome` 的判定表 B6 使用,也会踢线,见 §13.7。`travel_freeze_cap.h` 里 `MarkSentSite` 的注释现写"现 5 个"。
    - 收口的动作:
      - 会话还活着、且实体不在退出中时,先 tip 再踢线 34。跨区用 `kZoneTravelTargetBusy`,同区用 `kEnterSceneFailed`。34 的 reason.id 就是这个 tip 码。
      - 然后不存盘销毁。
@@ -1075,7 +1082,7 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
      - `[ZoneTravel][MarkSentDestroy] player=… site=… target_zone=…(cross-zone|same-zone) mark=… enter_scene_sent=… corr=… evidence=… frozen_ms=… exiting=… kick=…: … (ownership UNKNOWN, not confirmed moved)`。site 为 `travel_freeze_cap` 时打 ERROR,其余打 WARN。
    - 随后 `DestroyDeposedPlayer` 会打出 `[<site>] local entity for player <P> destroyed without persisting (ownership moved away)`。这是沿用下来的原文,在这里的实际含义是"归属未知",判读以前一行 MarkSentDestroy 为准。
 9. **与相邻机制的交互**
-   - I0 的三处机制都没动:`IsSceneChangeBusy`、`ResolveTravelOutcome` 在同一连接上先 DEL 后 MGET、落点 Lua 复核标记原文。本项也不往待撤回表加任何条目。
+   - I0 的三处机制都没动:`IsSceneChangeBusy`、`ResolveTravelOutcome` 在同一连接上先 DEL 后 MGET、落点 Lua 复核标记原文。本项也不往待撤回表加任何条目。*这句对本项落码时(`09f71f9d5`)成立。GO-2 落码后(`907a6b752`,未编译),第二处已改为一条原子 EVAL `travel_outcome::kLuaJudgeTravelOutcome`,由脚本本身保证"拿到有效应答 ⇒ 本族标记已删",不再依赖同一连接上的执行顺序,见 §13.7。*
    - 原有两处"SET 已 OK 却解冻"的违例改走销毁,I2 / I3 的违例面只减不增,`IsCrossZoneFrozen` 没改。
    - 与 GO-2 判定表的分工:ConcludeHandoffAfterMarkSent 在上限到期时**不读回执**。GO-2 定稿的判定表 B3 行也写的是"上限到期不读、判不清、销毁 + 34",不变量清单里"除非有匹配回执"那一句以 §13.7 的表为准。
    - 如果以后有设计要在受理(kTravelAccepted)与冻结之间插入异步等待,只能二选一:在受理之前等;或先 emplace 交接组件、在受理时刻就写 `frozenAtSteady`。否则客户端 75s 的前提会失效。
@@ -1131,7 +1138,7 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
 - **销毁后迟到的 Redis 命令**:
   - 在途的 DEL(U3)可能才执行,把标记删掉,之后跨节点重登回 18,要等断线租约。只影响活性。
   - 半开连接里滞留的 SET 可能在 A2′ 之后才落地,与 §12.6.4 M13 同类。
-- **SET 回调 ERROR 分支的代际问题**(复审发现,既有代码):它只在 `requestedAtMs` 相等时清 `markEpoch`,但随后的 `AbortTravelHandoff(playerId, "handoff mark write failed")` 不校验代际。上限销毁后,若玩家在同节点重登并发起新一代交接,旧 SET 迟到的 ERROR 会把新一代解冻并登记撤回,违反 I2 / I3。上限让这个前提变得可达,交 GO-2 判定表的属主定(§13.7)。
+- ~~**SET 回调 ERROR 分支的代际问题**(复审发现,既有代码):它只在 `requestedAtMs` 相等时清 `markEpoch`,但随后的 `AbortTravelHandoff(playerId, "handoff mark write failed")` 不校验代际。上限销毁后,若玩家在同节点重登并发起新一代交接,旧 SET 迟到的 ERROR 会把新一代解冻并登记撤回,违反 I2 / I3。上限让这个前提变得可达,交 GO-2 判定表的属主定(§13.7)。~~ **已由 GO-2 落码修复**(`907a6b752`,未编译):SET 回调收到 ERROR 时改调 `HandleTravelMarkWriteRejected(playerId, requestedAtMs, err)`。它先查交接组件,不在或 `requestedAtMs` 不等,就打 WARN(`… that handoff generation is no longer in flight … ignoring the late reply`)直接返回;只有同一代交接才清 `markEpoch` 并 Abort。
 - **`RequestTravelEnterScene` 的会话判断仍比 `HasLiveGateSession` 弱**(既有):会话 id 有效、但 SessionMap 已不映射到本玩家时,照样发 EnterScene。
 - **计数双计**:enter_scene 阶段的晚发闸先计 `dispatch_window_closed` 再调 Conclude;Conclude 若推迟,之后还会被上限扫描再计一次 `freeze_cap_reached`。按推理不可达。
 - robot 的 60s 预算覆盖不到上限分支;C++ 计数只进汇总行,不进 Prometheus(runbook G1)。
@@ -1356,7 +1363,7 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
   - hiredis 1.2 对非订阅命令的所有 ERR 路径都不登记 privdata,所以 ERR 分支的 delete 不会造成二次释放。这些路径是:`async.c` 的 DISCONNECTING / FREEING、未订阅时的 UNSUBSCRIBE、OOM、格式串非法。
   - 更正 §12.3 原文"断开期间"的说法:出错断连时 hiredis 先 `_EL_CLEANUP`,适配器清空 channel_,`connected()` 已为假,`command()` 在 new 之前就返回,不会漏。
   - 真正会漏的是四种情形:`~Hiredis` → `redisAsyncFree` 回调期间(FREEING)、显式 `disconnect()` 之后、格式串非法、OOM。
-- **不变量**:对调用方来说,"ERR 时回调不会被调用"与改动前相同。I0 机制 2(DEL 与 MGET 走同一条不重放的连接)不受影响。
+- **不变量**:对调用方来说,"ERR 时回调不会被调用"与改动前相同。I0 机制 2(DEL 与 MGET 走同一条不重放的连接)不受影响。*GO-2 落码后(`907a6b752`,未编译),I0 机制 2 已改由一条原子 EVAL `travel_outcome::kLuaJudgeTravelOutcome` 保证,不再依赖两条命令走同一连接,见 §13.7。代码注释要求:以后若拆回两条命令,仍必须走这条不重放的连接。*
 - **回归用例**:`cpp/tests/rpc_controller_test/hiredis_command_lifecycle_test.cpp`,共 4 个 `HiredisCommandLifecycle.*`:
   - `FormatErrorReleasesCallbackCopy`
   - `CommandFromNullReplyCallbackDuringFreeReleasesCallbackCopy`
@@ -1468,7 +1475,22 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
 
 ### 13.7 GO-2 根治:owner_epoch 严格单调(设计已定稿,落码中)
 
-GO-2 在制代码和 proto 注释里引用的 `cross-zone-scene-travel.md §12.8`,指的就是本小节。落码完成后,本小节要按代码实情补上落点与偏差。2026-09-29 工作树里已能看到的只有两个 proto 字段(`rollback_receipt = 7`、`owner_epoch_after_rollback = 5`)和 `go/scene_manager` 的在制改动(均未提交);下文其余函数名、日志前缀、计数名、site 名都取自定稿规格,**以落码后的代码为准**。
+GO-2 在制代码和 proto 注释里引用的 `cross-zone-scene-travel.md §12.8`,指的就是本小节。落码完成后,本小节要按代码实情补上落点与偏差。
+
+**落码进度(2026-09-29 按 HEAD 核对)**:GO-2 仍在落码中,**未编译、未测试**。
+- proto 与 Go 部分已随每小时自动保存 `ccafe300c` 进入 main,包括:两份 proto、`go/scene_manager` 的 `owner_epoch.go` / `enterscenelogic.go` / `changesceneutil.go` / `metrics.go` / `logic_test.go`、`go/shared/ownerepoch/ownerepoch.go`,以及 `deploy/k8s/scene-manager-alerts.yaml` 的注释。
+- C++ scene 侧大部分已随 `907a6b752` 进入 main,包括 `player_lifecycle.{h,cpp}` 与 `travel_freeze_cap.h`。
+- 其余仍在工作树(未提交),例如 `player_ownership_comp.h`、`exit_release_mark.h`,以及跨语言金样 `go/scene_manager/internal/logic/owner_epoch_crosslang_test.go`。
+
+下文名字已核对到 HEAD 的有:
+- 日志前缀 `[ZoneTravel][RollbackAdopt]`;
+- 取证脚本 `travel_outcome::kLuaJudgeTravelOutcome`(带 `#!lua`);
+- `DispatchEmergencyRelocate` 改用条件写 `exit_release_mark::kLuaWriteIfOwnerEpoch`(脚本本身 09-21 就有,本次新增的是这一处调用);
+- site `travel_receipt_anomaly`;
+- 三个新计数 `rolled_back_adopted` / `returned_after_grant` / `rollback_receipt_anomaly`;
+- rollback outcome 新增的 `marker_gone` / `plan_error`。
+
+`TestSourceJudgeScript*` 等用例名、其余未提交部分的名字,**以落码后的代码为准**。
 
 **问题**(§12.3 GO-2 行与 §10.3,核实后确认三条伤害):
 1. 路由失败回滚把 owner_epoch 从 N+1 退回 N,而被收回的 N+1 已被目标节点拿去落了 DBTask。db 的 applied_epoch 被毒化,合法持有者之后的每笔 DBTask(N) 都被判 stale。
@@ -1491,10 +1513,10 @@ GO-2 在制代码和 proto 注释里引用的 `cross-zone-scene-travel.md §12.8
    - `EnterSceneResponse.owner_epoch_after_rollback = 5`,只出现在 `ErrKafkaRoute` 应答里,**只用于日志,绝不是采纳凭证**。
    - 原因:回滚之后,第三方可以凭转写标记铸出更新的值,号码匹配的应答却照样带着 E+2,凭它解冻就会双持有。
 4. **C++ 源端的原子取证**
-   - `ResolveTravelOutcome` 现在的"DEL + MGET 两条命令",换成一段带 `#!lua` 的原子脚本:只删本次交接这一族标记(按 saved_at_ms 等于本次 `requestedAtMs` 识别,原标记与转写标记都覆盖),再在同一脚本里 MGET epoch 与 location。
+   - `ResolveTravelOutcome` 原来的"DEL + MGET 两条命令",换成一段带 `#!lua` 的原子脚本(*2026-09-29:已随 `907a6b752` 换好,即 `travel_outcome::kLuaJudgeTravelOutcome`,`ResolveTravelOutcome` 里发 `EVAL %s 3 …`,未编译*):只删本次交接这一族标记(按 saved_at_ms 等于本次 `requestedAtMs` 识别,原标记与转写标记都覆盖),再在同一脚本里 MGET epoch 与 location。
    - `#!lua` 的作用(Redis ≥7,全环境都是 7.2):在只读副本、MISCONF、OOM 下,整段脚本被拒绝。这样就不会出现"DEL 失败而读成功、带着活标记解冻"。
    - 用 MGET 而不用 GET:遇到类型错误的键时 MGET 返回 nil,不会抛 WRONGTYPE 而让取证永久失败。
-   - **关于 I0 机制 2 的注释**:今天"拿到有效 MGET 应答 ⇒ DEL 已执行"依赖两条命令走同一条不重放的 hiredis 连接;任何一侧改成可重放的接口,都会无声地打破它。改成单个原子脚本后,这一点由脚本本身保证。落码时在脚本旁写明,并注明旧的两条命令写法依赖的前提。
+   - **关于 I0 机制 2 的注释**:今天"拿到有效 MGET 应答 ⇒ DEL 已执行"依赖两条命令走同一条不重放的 hiredis 连接;任何一侧改成可重放的接口,都会无声地打破它。改成单个原子脚本后,这一点由脚本本身保证。落码时在脚本旁写明,并注明旧的两条命令写法依赖的前提。*(2026-09-29:已写进 `player_lifecycle.h` 中 `kLuaJudgeTravelOutcome` 旁的注释,以及 `ResolveTravelOutcome` 调用处的注释,`907a6b752`。)*
    - infra 转交的"DEL 忽略 `command()` 返回值"一项,随之由原子脚本取代。
 5. **判定表**
    - 第一刀用 `IsHandoffMarkSent`。
@@ -1547,7 +1569,7 @@ GO-2 在制代码和 proto 注释里引用的 `cross-zone-scene-travel.md §12.8
   - "疏散撤回在回滚之前 + 路由失败"这一三重巧合下,改派会回 18;
   - B 先消费令牌、又放弃载入时,A 会被销毁,而不是解冻;
   - DEL 型回滚的重放识别,可能因 LeaveScene 误报,导致人数多还一次。
-- §13.2 残余里"SET 回调 ERROR 分支不校验代际"一条,由本判定表的属主决定是否收进代际判断。
+- ~~§13.2 残余里"SET 回调 ERROR 分支不校验代际"一条,由本判定表的属主决定是否收进代际判断。~~ 已处理:GO-2 落码时收进了代际判断(`907a6b752` 的 `HandleTravelMarkWriteRejected`,未编译),见 §13.2 残余。
 
 ### 13.8 CPP-3 疏散 / 排空改派的待确认表(设计已定稿,落码中)
 
