@@ -5874,3 +5874,12 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
   「锁留到落盘」及其后两轮修订仍未编译,验证按 `turn-battle-gap-closure.md` §9.3 验证清单。
 - go/db 启动期表结构闸补做了一轮独立对抗评审(编译 / 启动行为 / 自带测试三个维度),0 条。
 - 未编译、未跑测试(AGENTS.md §10.1)。本条改动:`turn_battle_engine_test.cpp` 一条用例、设计文档 §9.2。
+
+## 2026-09-29 防御 ×12 / 法力 ×4:补上丹心(class 3)满投档的线上验收(Claude)
+
+- 上一条留的唯一缺口:丹心满投体质 **5712** 此前只有纯规则单测覆盖,线上没跑到 —— 固定冒烟账号 `robot_9101` 是 class 1,而**职业只能在建角时定,全仓没有改职业的 GM 接口**(`CreatePlayerRequest.class_id`,0 = 取配表第一个职业;机器人一直发空请求,所以永远是破军)。
+- 做法:在数值 overlay 上再叠一层丹心变体(`run/verify-attribute-20260928/overlay-danxin/`):账号换成 `robot_danxin_0929`,建角时**只对该账号**发 `CreatePlayerRequest{ClassId: 3}`,其余账号仍发空请求;断言一行没改 —— 09-16 的 overlay 本来就有 `if classID == 3 { wantDefense = 5712 }` 这条分支,职业取自登录回包。用当前源码编出 `robot-numeric-danxin.exe`。
+- 结果(本地一区、读真实表):exit 0,`class_id` **3**、`full_defense` **5712**、`full_mana` **4830**、`points_checked` **0->1->425**,`NUMERIC_ATTRIBUTE_FIRST_POINT_OK` / `NUMERIC_ATTRIBUTE_RESTORED` / `NUMERIC_ATTRIBUTE_OK` 齐全。至此设计表里的两个防御档(非对应职业 5610、丹心 5712)线上都已验过,法力两档同为 15% 已由 4830 覆盖。
+- 本轮 `start_game.ps1` 又在 5/6 因 trade 起不来中止(50800 撞 Windows 保留端口段),Java 网关仍需按它的命令手动起;与本线无关,未修。
+- 证据:`run/verify-attribute-20260928/` 下 `danxin-attribute.{log,stderr.log}`、`overlay-danxin/`、`robot-numeric-danxin.exe`。
+- **防御 ×12 / 法力 ×4 这条线到此全部收尾**:表、代码、单测、三条冒烟、两职业档数值验收、副本回合基线均已实跑通过。
