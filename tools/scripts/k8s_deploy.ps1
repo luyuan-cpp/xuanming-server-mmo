@@ -2066,8 +2066,8 @@ function New-GoSvcConfigMapYaml {
 	# zrpc 服务端 Timeout(毫秒)从服务 yaml 镜像,与 scene-manager / match 同一条纪律。以前模板里写死 100000:
 	# 部署门禁 Assert-GrpcClientDeadlineBudget 核对的是 login.yaml,两边一分家,门禁放行的就不是集群里真正生效的值。
 	# 非正整数在这里就拒 —— 0 = go-zero 不装超时拦截器(服务端没有上界),非数字 go-zero 起服即失败,都不该写进 ConfigMap。
-	# 值本身(100000 疑为笔误,行尾注释写 10s)待拍板(grpc-client-deadline-failure-callback.md §4.3);定下来后改 login.yaml 与
-	# bin/etc 的 GrpcClient.CallDeadlineMs.LoginNodeService 两处即可,这里自动跟随,不用动生成器。
+	# 值本身 2026-09-29 已由笔误 100000 改正为 10000(LoginNodeService 同步 12000,见 grpc-client-deadline-failure-callback.md §4.3);
+	# 以后再改只需动 login.yaml 与 bin/etc 的 GrpcClient.CallDeadlineMs.LoginNodeService 两处,这里自动跟随,不用动生成器。
 	$loginTimeout           = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Timeout'
 	$loginTimeoutMs         = [long]0
 	if (-not [long]::TryParse($loginTimeout, [ref]$loginTimeoutMs) -or $loginTimeoutMs -le 0) {

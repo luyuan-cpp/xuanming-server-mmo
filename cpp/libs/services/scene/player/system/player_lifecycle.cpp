@@ -2495,8 +2495,9 @@ bool PlayerLifecycleSystem::SavePlayerToRedisImpl(entt::entity player, bool allo
 	// when the in-memory state diverged from Redis during a load path
 	// we don't fully trust.
 	//
-	// allowSkipWhenPersisted = false:不走快路径,一定写盘。只有两处这么传:退出流程的 M4 分支
-	// (exit_fastpath_deferred),以及 StartTravelHandoff 的快路径补写(handoff_fastpath_forced)。
+	// allowSkipWhenPersisted = false:不走快路径,一定写盘。只有三处这么传:退出流程的 M4 分支
+	// (exit_fastpath_deferred)、StartTravelHandoff 的快路径补写(handoff_fastpath_forced),以及跨 zone 交接
+	// 被回滚到本节点后的采纳(JudgeTravelOutcomeReply B5,rolled_back_adopted)。
 	if (auto* snap = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
 		allowSkipWhenPersisted && snap != nullptr && snap->HasSnapshot() &&
 		dirty_save::IsEqual(*message, *snap->snapshot))
@@ -3777,9 +3778,12 @@ void PlayerLifecycleSystem::JudgeTravelOutcomeReply(Guid playerId, uint64_t requ
 			LOG_ERROR << "[ZoneTravel][RollbackAdopt] player " << playerId << " was rolled back to this node (receipt="
 					  << location.rollback_receipt() << ") but has no PlayerOwnerEpochComp to adopt owner_epoch "
 					  << redisEpoch << " into; concluding as a receipt anomaly (metric=rollback_receipt_anomaly)";
-			travel_handoff_stats::Inc(travel_handoff_stats::Get().rollbackReceiptAnomaly);
-			ConcludeHandoffAfterMarkSent(playerId, travel_freeze_cap::MarkSentSite::kReceiptAnomaly,
-										 travel_freeze_cap::Clock::now());
+			// 推迟销毁(有未落地存盘)时不计数,由看门狗 / 冻结上限重判(同冻结上限那一支的写法)。
+			if (ConcludeHandoffAfterMarkSent(playerId, travel_freeze_cap::MarkSentSite::kReceiptAnomaly,
+											 travel_freeze_cap::Clock::now()))
+			{
+				travel_handoff_stats::Inc(travel_handoff_stats::Get().rollbackReceiptAnomaly);
+			}
 			return;
 		}
 		LOG_WARN << "[ZoneTravel][RollbackAdopt] player " << playerId
@@ -3816,10 +3820,13 @@ void PlayerLifecycleSystem::JudgeTravelOutcomeReply(Guid playerId, uint64_t requ
 				  << " location_epoch=" << facts.locationOwnerEpoch << " location_on_self=" << facts.locationOnSelf
 				  << " (" << reasonText << ", evidence=" << travel_outcome::EvidenceName(evidence)
 				  << "); not adopting (metric=rollback_receipt_anomaly)";
-		travel_handoff_stats::Inc(travel_handoff_stats::Get().rollbackReceiptAnomaly);
-		// current 指针到此为止不再使用:Conclude 会销毁实体(有未落地存盘时推迟,由冻结上限扫描重判)。
-		ConcludeHandoffAfterMarkSent(playerId, travel_freeze_cap::MarkSentSite::kReceiptAnomaly,
-									 travel_freeze_cap::Clock::now());
+		// current 指针到此为止不再使用:Conclude 会销毁实体(有未落地存盘时推迟,由看门狗 / 冻结上限扫描重判)。
+		// 推迟时不计数:看门狗重判会再次走到这里,只在真正收口的那一次计数(同冻结上限那一支的写法)。
+		if (ConcludeHandoffAfterMarkSent(playerId, travel_freeze_cap::MarkSentSite::kReceiptAnomaly,
+										 travel_freeze_cap::Clock::now()))
+		{
+			travel_handoff_stats::Inc(travel_handoff_stats::Get().rollbackReceiptAnomaly);
+		}
 		return;
 
 	case Ownership::kReturnedToSelf:

@@ -854,7 +854,8 @@ C++ 节点(gate / scene / battle)发出的每次 unary gRPC 调用现在都带 d
   2026-09-29 确认是笔误,改为 10000,`LoginNodeService` 同步由 102000 改为 12000(`docs/design/grpc-client-deadline-failure-callback.md` §4.3)。
 - **login ConfigMap 的 `Timeout` 改为镜像 `go/login/etc/login.yaml`(2026-09-29)**:以前 `New-GoSvcConfigMapYaml` 在模板里写死 `100000`,
   而预算门禁核对的是 login.yaml,两边一分家,门禁放行的就不是集群里生效的值。现在与 scene-manager / match / 路由服同法镜像,
-  读不到或不是正整数时生成期直接 throw;今天两边都是 100000,行为不变。上面那条待拍板的值定下来后,改 login.yaml 与 `LoginNodeService` 两处即可,生成器不用动。
+  读不到或不是正整数时生成期直接 throw。镜像落地时两边都是 100000,行为不变;随后值已改正为 10000(见上一条),ConfigMap 自动跟随。
+  以后再改只需动 login.yaml 与 `LoginNodeService` 两处,生成器不用动。
 - 契约测试:`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的「C++ gRPC 客户端 deadline 预算」一节 —— 两份 node ConfigMap 的块与权威文件逐项相等、
   门禁先于任何 `kubectl` 写操作、K8s 生成物(login 镜像 login.yaml 的 Timeout、data-service 不写 Timeout)同样满足不等式、判定口径自检,
   以及把 DataService 改回 2500 的配置副本必须被拒并只点名这一项;login ConfigMap 的 `Timeout` == login.yaml 在「login ConfigMap 关键值」用例的键对表里逐键钉住。
