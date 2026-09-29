@@ -601,7 +601,8 @@ topic 就被自动建成 1 分区,EnsureTopics 从此永远报 `partition contra
 
 同一个 `kafka-topic-init` 现在还预建两个**控制面命令 topic**:`gate-cmd_g<N>` 与 `scene-cmd_g<N>`,
 分区数取自 `bin/etc/base_deploy_config.yaml` 的 `Kafka.CommandTopicPartitions`(当前 256)/
-`Kafka.CommandTopicGeneration`(当前 1),`retention.ms=3600000`(1 小时)。
+`Kafka.CommandTopicGeneration`(当前 2),`retention.ms=3600000`(1 小时)。
+Go 服务侧的同一对值由 `k8s_deploy.ps1` 的 `Add-GoSvcCommandTopicEnv` 从同一文件注入(见上面 friend 一节「Kafka 命令 topic 代号」条)。
 完整论证见 `docs/design/control-plane-topic-partitioning-20260908.md`。
 
 - **`gate-{id}` / `scene-{id}` / `centre-{id}` 这些 per-node topic 不再被创建**。compose 里那三个

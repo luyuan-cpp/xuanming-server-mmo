@@ -2985,12 +2985,10 @@ Etcd:
 # 这是 zrpc.RpcServerConf 自带的 Redis(RedisKeyConf)段:Key 仅在 Auth=true 时使用,但字段不是 optional,
 # Redis 段存在时必须**显式写空串**,否则加载期报 "Redis.Key" is not set,同样 CrashLoop(与上面 Etcd.Key 同一个坑)。
 # 不写 DB(契约 §4):契约 key 由多个运行时共写,DB 号必须全仓一致 = 默认 0。
-# ⚠ 本段**刻意不写 Pass**:deploy/k8s/manifests/infra/redis.yaml 当前没有 requirepass
-#   (args 只有 redis-server --appendonly yes),与 chat / match 的同形段一致 —— 这是省略不是遗漏。
-#   向一个没设密码的 Redis 发 AUTH 会被直接拒("ERR Client sent AUTH, but no password is set"),
-#   只给 friend 补 Pass 反而会让 friend 成为唯一起不来的服务。
-#   哪天给共享 Redis 开了 requirepass,必须**同批**给 chat / match / friend 三处都补 Pass ——
-#   只补一处会让另外两个起不来。
+# 密码:自 2df78d4a5(2026-09-19)起共享 Redis 的密码走可选 Secret redis-auth —— ${redisPassword} 非空时
+#   infra/redis.yaml 才加 --requirepass,这里与 chat / match / scene-manager 等共享库段**同批**写 Pass;
+#   dev 档密码为空时两边都不设密码。改密码或开关 requirepass 时这些段必须同拍:只改服务端,客户端全线 NOAUTH;
+#   只给客户端配密码,向无密码的 Redis 发 AUTH 会被直接拒("ERR Client sent AUTH, but no password is set")。
 Redis:
   Host: redis.${InfraNamespace}:6379
   Type: node
