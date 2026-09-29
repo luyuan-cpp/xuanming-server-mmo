@@ -111,4 +111,31 @@ const (
 	// 与 ErrCodePlayerNameDBError 分开:那个是"库坏了,重试可能好";这个是数据已经
 	// 互相矛盾,重试一万次都是同一个答案。
 	ErrCodePlayerNameConflict uint32 = 26
+
+	// ── 回档的帮会资产闸(docs/design/guild-phase2/07-rollback-fail-closed.md §7.3.3)────────
+	//
+	// 三个码的分工一句话:Divergence = "带合法放行能过";CheckFailed = "放行也过不了,先修环境或缩小范围";
+	// DivergedAfterWrite = "数据已经写了,需要人工"。
+
+	// ErrCodeRollbackGuildDivergence:回档目标玩家在各自快照时刻之后,帮会侧有已终结为已应用的资产操作
+	// (回档会复制资产或让玩家白亏),**或**有玩家的快照早于帮会流水保留期、无法证明没有(07 R2b),
+	// 且请求未合法放行。零玩家数据写入。两种原因靠响应里的 guild_divergence_count 与
+	// guild_unprovable_player_count 区分。
+	//
+	// 规则拒绝,口径同 ErrCodePlayerOnline,不算故障(不进 FaultCodeSet):闸在正常工作。
+	ErrCodeRollbackGuildDivergence uint32 = 27
+
+	// ErrCodeRollbackGuildCheckFailed:帮会检查**没做成** —— guild 客户端未配置 / 不可达 / 超时 /
+	// Unimplemented(旧版 guild)/ 任一页失败 / 保留期拒绝但解析不出下界 / 过滤后分歧超过上限 /
+	// 检查预算耗尽 / 执行期快照早于计划值(07 R5)。零玩家数据写入,**放行开关无效**:不存在"问不到就当没有"。
+	//
+	// 算故障(进 FaultCodeSet):否则 guild 挂了导致的全部回档被拒只会被记成业务拒绝,没人被叫醒。
+	ErrCodeRollbackGuildCheckFailed uint32 = 28
+
+	// ErrCodeRollbackGuildDivergedAfterWrite:回档**已经写完**,写后复查发现了检查阶段没有的新分歧,
+	// 或复查本身没做成(无法证明没有新分歧)。数据不自动撤销(07 §7.6.3 Q3 = ①):按日志
+	// `[Rollback][GuildDivergence] post-write` 逐行人工补偿,或用响应里的 pre_rollback_snapshot_id 撤销这次回档。
+	//
+	// 算故障(进 FaultCodeSet):这是紧急告警口径。
+	ErrCodeRollbackGuildDivergedAfterWrite uint32 = 29
 )
