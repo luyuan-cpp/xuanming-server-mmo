@@ -147,7 +147,7 @@ node ConfigMap 以 readOnly 整目录挂载,**完全遮蔽**镜像里的 `base_d
 |---|---|---|---|---|---|
 | 1 | `player_lifecycle.cpp:2211` `SendEmergencyRelocateEnterScene`(旧 :2163)与 `RequestTravelEnterScene`(交接) | EnterScene,经唯一出口 `SendCorrelatedEnterScene`(:297) | 交接:**结果未知**,不能当失败证据 | 失败处理器按**请求里的 correlation_id** 走 `enter_scene_reply::Classify`;命中交接只记日志,继续由 30s 看门狗 / owner_epoch 裁决;疏散无等待者,只记日志 | 二 |
 | 2 | `player_lifecycle.cpp:2842` `RequestSceneChange`(旧 :3040) | EnterScene | 普通换图:释放单槽在途记录;玩家发起的给提示 | 同上 Classify;命中换图:先抄后摘在途组件;`playerRequested` 回 `kServiceUnavailable`(「服务不可用」,不断言"换图失败",见下),队伍跟随只记日志;TTL 改为 SceneManager deadline + 1000 | 二 |
-| 3 | `player_scene_handler.cpp:163`(旧 :164)玩家换图 | 经 #2 | 同 #2 | 调用点不改 | — |
+| 3 | `player_scene_handler.cpp:163`(旧 :164)玩家换图 | 经 #2 | 同 #2 | 调用点不改;同文件里"一个 SceneManager 都没注册"的分支原回 `kEnterSceneParamError`,改为 `kServiceUnavailable`,与传输失败同一提示(09-29) | 二 |
 | 4 | `player_team.cpp:490`(旧 :493)队伍跟随 | 经 #2,`playerRequested=false` | 只记日志、释放槽、不回 tip(组队线约定) | 调用点不改 | — |
 | 5 | `scene_manager_response_handler.cpp:150`(旧 :152)镜像自动进场 | 经 #2 | 同 #2 | 调用点不改 | — |
 | 6 | `player_scene.cpp:196` 镜像副本 CreateScene | CreateScene | 自动进场由**应答**驱动,传输失败 = 这次一定不会自动进场 | 装 `AsyncSceneManagerCreateSceneFailedHandler`:按请求 `creator_ids` 找本节点上的玩家,回 `kServiceUnavailable`;镜像若其实已建,由 scene_manager 按空场景回收 | 二 |
@@ -194,6 +194,11 @@ node ConfigMap 以 readOnly 整目录挂载,**完全遮蔽**镜像里的 `base_d
   第一批单独可编译:失败处理器与 deadline 都是"可选装",没装的方法行为与今天一致(只多 deadline)。
   分工会话的复核发现首版 DataService 取 2500 只有 500ms 余量,违反本块自己的 +2000 规则,改为 4000(yaml 由该会话改)。
 - **第二批(跨 zone 线提交后)**:`PlayerLifecycleSystem::DispatchEnterSceneTransportFailure` + TTL 派生(#1/#2);`scene_manager_response_handler.cpp` 装 EnterScene / CreateScene 失败处理器(#6);`k8s_deploy.ps1` 镜像 GrpcClient 块 + 契约断言(§4.4);更新 `cross-zone-scene-travel.md` §12.2 与 `scene_manager_service.yaml` 注释里"生成客户端非 OK 不回调"的表述。
+  scene 侧已提交 b85f13c07;09-29 补:换图入口"没有 SceneManager"改回 `kServiceUnavailable`(§5 #3)。
+- **分工会话(「C++ 完全不连接 Go 服务的设计」)承担的部分**(09-29 在其工作区,未编译,提交号与 Codex 步骤见它的 PROGRESS 条目):
+  - K8s:`GrpcClient` 块原样搬进 node / battle-node ConfigMap;写路径入口的部署门禁 `Assert-GrpcClientDeadlineBudget` 核对 SceneManager / DataService / 路由服 / Match / Login 五个目标「C++ deadline ≥ zrpc Timeout + 2000」,五项必须显式写成正整数,没写 Timeout 按 go-zero 默认 2000,出现 `MethodTimeouts` 即拒绝;login 的 ConfigMap 改为从 `login.yaml` 镜像 Timeout。本会话复核过口径:拍平函数会剥行尾注释,login 102000 恰好等于 100000 + 2000,通过。
+  - `GetSceneManagerEntity` 只在注册表为空时返回 null,挑选顺序 READY → IDLE / CONNECTING → 其余兜底,playerId 先 splitmix64 打散再取模(bwmarrin PlayerId 低位多为 0,原来的 `% N` 几乎全落第 0 个)。SceneManager 全挂时换图因此走 UNAVAILABLE → 失败处理器 → tip 1003,与 §9.2 第 4 步的预期一致。
+  - 删除无调用方的 `SendMessageToPlayerOnGrpcNode`(§10 第 4 条)。
 
 ## 9. regen 与验证
 
@@ -230,6 +235,6 @@ node ConfigMap 以 readOnly 整目录挂载,**完全遮蔽**镜像里的 `base_d
 1. 流(etcd Watch / LeaseKeepAlive)的 `!ok` 分支:泄漏 tag、提前 return 跳过本轮其余事件、流不重建(KeepAlive 死后约每个 TTL 重注册一轮)。另立项。
 2. etcd 一元调用若要接失败处理器:传输失败必须走与 `OnTxnTimeout` 等价的"取出 pending key 重发",**不能**走 `OnTxnFailed`(在 `kReRegisterExisting` 下会让节点因一次 etcd 抖动自杀),且要用请求里的 key 核对 `pendingTxnKey`。
 3. 纯服务端流方法会被模板误生成成 unary(今天 proto 里没有此类方法)。
-4. `SendMessageToPlayerOnGrpcNode`(`player_message_utils.cpp:270-315`)无调用方,且发的是 `*requestProto` 而非入参。
+4. ~~`SendMessageToPlayerOnGrpcNode`(`player_message_utils.cpp:270-315`)无调用方,且发的是 `*requestProto` 而非入参。~~ 分工会话 09-29 删除(§8)。
 5. login Timeout 待拍板(§4.3);CreateScene 错误应答回显 `creator_ids`(§7)。
 6. 生成器自动注册(§6)。

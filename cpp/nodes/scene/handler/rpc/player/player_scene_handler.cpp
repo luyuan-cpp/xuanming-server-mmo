@@ -5,6 +5,7 @@
 
 #include "node/system/node/node.h"
 #include "table/proto/tip/scene_error_tip.pb.h"
+#include "table/proto/tip/common_error_tip.pb.h"
 #include "modules/scene/comp/scene_comp.h"
 #include "proto/common/base/node.pb.h"
 #include "proto/common/component/player_network_comp.pb.h"
@@ -141,7 +142,9 @@ void SceneSceneClientPlayerHandler::EnterScene(entt::entity player,const ::Enter
 	if (smEntity == entt::null)
 	{
 		LOG_ERROR << "EnterSceneC2S: No SceneManager node available for player " << playerSessionPB->player_id();
-		SetTip(kEnterSceneParamError);
+		// 一个 SceneManager 都没注册:是服务不可用,不是客户端参数错。与 EnterScene 传输失败
+		// (PlayerLifecycleSystem::DispatchEnterSceneTransportFailure)回的是同一个提示。
+		SetTip(kServiceUnavailable);
 		return;
 	}
 
