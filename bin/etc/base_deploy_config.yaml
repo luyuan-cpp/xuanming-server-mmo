@@ -208,10 +208,14 @@ IdSegments:
 #   2. 依赖调用结果的 C++ 看门狗 > deadline:号段 fetchTimeout、换图在途 TTL 都从这里派生,不另写常数。
 # 没列出的类型用内置默认 10000(grpc_client/grpc_call_tag.h kDefaultGrpcCallDeadlineMs);
 # 不认识的键、0(= 不限时)被忽略并记 ERROR。改服务端超时时同步改这里。流式调用(etcd Watch / KeepAlive)不设。
+# 第 1 条对下面有 Go 服务端的五个目标(SceneManager / DataService / ClientRpcRouter / Match / Login)是部署门禁:
+# k8s_deploy.ps1 的 Assert-GrpcClientDeadlineBudget 在 zone-up / infra-up / all-up 写集群之前核对
+# deadline ≥ 对应服务 yaml 的 zrpc Timeout + 2000(没写 Timeout 按 go-zero 默认 2000),这五项必须显式列出,
+# 不满足就拒绝部署并点名是哪一项。本块由 k8s_deploy.ps1 原样搬进 node ConfigMap(Get-AuthoritativeYamlBlock)。
 GrpcClient:
   CallDeadlineMs:
     SceneManagerNodeService: 10000     # scene_manager_service.yaml Timeout 8000(归属查询 1500 + Kafka 写 5000 + 1500)
-    DataServiceNodeService: 2500       # data_service.yaml 没写 Timeout = go-zero 默认 2000
+    DataServiceNodeService: 4000       # data_service.yaml 没写 Timeout = go-zero 默认 2000(RpcServerConf default=2000),+2000 余量;号段 fetchTimeout 由此派生为 5s
     ClientRpcRouterNodeService: 8000   # client_rpc_router.yaml Timeout 6000(> ForwardTimeoutMs 5000)
     MatchNodeService: 7000             # match_service.yaml Timeout 5000(gate 直连模式)
     LoginNodeService: 102000           # login.yaml Timeout 100000,注释却写 10s,疑为笔误,待拍板(设计文档 §4.3)

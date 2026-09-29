@@ -3,7 +3,7 @@
 - **日期**:2026-09-21(机器 B,`D:\luyuan\wuxingqitan\mmorpg`,时间为本地 -04:00)
 - **级别**:P1(产品缺陷,可稳定复现的死锁)。**线上影响:无** —— friend 服务从未部署,本次是它第一次在真 MySQL 上跑并发回归。
 - **发现方式**:交接文档 `docs/design/friend-handoff-20260920.md` §2 第 6 步"真 MySQL 并发回归"首跑。
-- **状态**:已修复,真库验证通过;**截至本文写入时修复代码尚未提交**(以 `git log -- go/friend/internal/data/friend_repo.go` 为准)。
+- **状态**:已修复,真库验证通过;**截至本文写入时修复代码尚未提交**(以 `git log -- go/friend/internal/data/friend_repo.go` 为准)。〔2026-09-28 更正:✅ **已提交** —— §5.2 的 6 个代码文件与本报告随 2026-09-21 08:52 的自动保存提交 `9cef7b2ec` 进库(`git show 9cef7b2ec` 可见 `lockCapacityRowSQL` / `lockBlockRowSQL` / `lockFriendEdgeRowSQL` / `cancelPendingRequestSQL` / `deleteTerminalRequestSQL` 与 `TestLockingStatementsArePrimaryKeyPointLookups`);同日 22:49 的全仓数据层死锁审计 `ff39a13f1` 在其上补了容量行 / 拉黑写入 ODKU 与 DSN 层 READ COMMITTED。09-25 第 7–9 步已跑通,09-28 已在真实数据量上复核 `EXPLAIN`(见 §7.3 / §7.5)。〕
 - **一句话**:好友服务的几条 `SELECT ... FOR UPDATE` 写成了 `OR` / `IN`,优化器把它们规划成索引全扫描,锁到了**别的玩家对**的行上,与那一对玩家"先主键后二级索引"的 `DELETE` 取锁顺序相反,成环。守卫只串行化"这一对玩家",所以锁集一旦越界,守卫就失去了意义。
 
 ---
@@ -160,9 +160,10 @@ Record lock, heap no 5 …
 
 ## 7. 遗留与后续
 
-### 7.1 【待提交】修复代码尚未提交
+### 7.1 【待提交】修复代码尚未提交 〔2026-09-28:✅ 已提交〕
 
 6 个文件见 §5.2。交接文档与 `PROGRESS.md` 可能先于代码进库,以 `git log -- go/friend/internal/data/friend_repo.go` 为准。
+〔2026-09-28 更正:✅ 已按上面的判据核实 —— `git log -- go/friend/internal/data/friend_repo.go` 里 `9cef7b2ec`(2026-09-21 08:52,自动保存提交「WIP：保存跨服释放、角色外观、公会经济与好友锁序改动」)包含 §5.2 全部 6 个代码文件与本报告;后续 `ff39a13f1`(2026-09-21 22:49,「数据层死锁审计修复(#2–#18)」)再补 ODKU 与 DSN 层 RC。〕
 
 ### 7.2 【待核,不属本服务】其它 Go 服务里同类形状的锁定语句
 
@@ -180,14 +181,16 @@ Record lock, heap no 5 …
 ### 7.3 【说明】规模上的结论
 
 修复后的锁定语句都是完整主键等值,执行计划与数据量无关。**非锁定**的候选读(sweep 的两条候选 `SELECT`)在小表上同样被规划成全索引扫描,只影响性能不影响正确性;上线后应在真实数据量下再 `EXPLAIN` 一次,确认走 `(status, updated_ms)` / `(friend_count, created_ms)` 的范围。
+〔2026-09-28 更正:✅ 已在真实数据量下完成(未等上线)—— 一次性库 5 万玩家 / 100 万好友边 / 25 万申请 / 5 万拉黑,MySQL 26.7.0:**全部锁定语句都是 PRIMARY 完整主键等值**(SELECT … FOR UPDATE 为 `const`,UPDATE / DELETE 为 `key=PRIMARY` 用满主键列、`rows=1`);两条候选读分别走 `idx_friend_request_1 (status, updated_ms)` 与 `idx_friend_capacity_0 (friend_count, created_ms)` 的覆盖索引 `range`,实际都读 1000 行(`LIMIT`)即止。同一次核对还发现好友推荐的两条查询(不属本事故的锁定语句)扫描量无界,已另行修复 / 修复中。结果表见 `docs/design/friend-handoff-20260920.md` §9.4 末段「2026-09-28 执行结果」。〕
 
 ### 7.4 【已修,非产品缺陷】`TestAcceptFriend_RejectsBlockedPair` 夹具自相矛盾
 
 原移植即有。夹具直写 `friend_block`、绕过 `Block()`,故意造出"拉黑与 pending 并存"去测 `AcceptFriend` ② 的守卫内拉黑复核,末尾却调用含"拉黑后不得有 pending"的 `assertFriendInvariants` —— 断言的是夹具自己造的状态。改为逐条调用其余三条不变量,并显式断言"被拒的 `AcceptFriend` 整体回滚、申请行仍为 pending"。
 
-### 7.5 【未做】交接文档 §2 第 7–9 步
+### 7.5 【未做】交接文档 §2 第 7–9 步 〔2026-09-28:✅ 已完成〕
 
 `-migrate` + 常驻启动、缓存手工核对、两区 robot `friend-smoke` 尚未运行。
+〔2026-09-28 更正:✅ 已于 2026-09-25 完成(机器 A):第 7a 步空库 `-migrate` 建出 5 张表、零 UNIQUE、二次迁移 0 条语句;第 7b 步常驻启动横幅、`:9180/metrics` 五个指标预建 0 值、etcd NodeInfo 双填、真 Ctrl+C 3.4 s 内优雅退出;第 8 步由单测 `TestVersionedCache_FillsWhenGenerationKeyNeverWritten` 覆盖(09-21 PASS);第 9 步两区 `friend-smoke` 退出 0、`FRIEND_SMOKE_OK … cross_zone=true`,连跑第二轮同样通过。详见 `docs/design/friend-handoff-20260920.md` §9.4「进度续(2026-09-25)」。〕
 
 ## 8. 教训
 

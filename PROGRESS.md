@@ -5711,6 +5711,13 @@ proto2mysql 在 09-22 已收成单 `main` 并打 `v0.2.0`(`588c308`,f3b308f / re
   - `mmorpg_friend` 干净;`mmorpg_trade` 新旧两版输出逐字节相同(只有聚宝斋两张新表待建,与本次无关)。
   - `zone_1_db` / `zone_2_db` 的 `user_oauth`、`user_phone`、`user_accounts`、`account_share_database` 被判为旧形态键列(`varchar(191) utf8mb4_unicode_ci`),四张表都是 0 行。
   - `mmorpg_guild.guild.name_norm` 是 `mediumtext` 加 `uk_guild(name_norm(191))`,v0.2.0 版 schemamigrate 报「列类型漂移」,退出码 4(0 行)。
+- **zone 库账号键列已迁移(11:2x 执行)**:
+  - 执行前的检查:本地栈已停(仓内 0 个进程、两个 zone 库 0 个业务连接);线上结构与生成迁移 SQL 时存档的 `SHOW CREATE TABLE` 逐字一致;8 张表合计 0 行。
+  - 执行:每个库一个 mysql 会话,顺序执行 v0.2.0 `GenerateMigrationSQL` 给出的 17 条语句。user_oauth/user_accounts/account_share_database 走影子表加 RENAME,user_phone 原地 4 步。
+  - 执行后核对(information_schema):两个库 10 个键列全部是 `varchar(191) utf8mb4_0900_bin NOT NULL DEFAULT ''`;`uk_user_oauth`、`uk_user_phone` 与三个主键都是整列、没有 SUB_PART。随后删掉了 6 张空的 `__p2m_old`,没有残留。
+  - 对 go/db 的影响:09-28 新加的启动期 schema 闸(`assertSchemaUpToDate`)只对缺列、缺表拒启,类型差异只记日志;迁移没有改动任何列名和表名,不会触发拒启。
+  - mmorpg_guild **没有迁**,原因见下条。
+- 本条的 16 个文件已由 `9da27f9a4 WIP: hourly save` 自动提交(非人工提交)。
 
 ### 运行期注意
 

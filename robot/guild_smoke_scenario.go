@@ -39,6 +39,10 @@ package main
 //	管理段全过 → `GUILD_MGMT_OK guild_id=… leader=… officer=… kicked=… rejected=…`;
 //	全过 → 再加一行 `GUILD_SMOKE_OK guild_id=… zone_a=… player_a=… player_b=… player_c=…`,退出码 0;
 //	任一步失败 → `GUILD_SMOKE_FAIL step=… reason=…`,退出码 1(管理段的 step 形如 `mgmt-M6`)。
+//
+// 经济段(B5c,guild_smoke.economy=true 时):GUILD_SMOKE_OK 之后由 robot_9214 / 9215 另建一个帮会跑
+// 捐献 / 升级 / 兑换,通过打印 `GUILD_ECONOMY_SMOKE_OK mode=full|degraded …`,失败的 step 形如 `economy-7-silver`。
+// 步骤与两种模式见 guild_economy_smoke.go 文件头。
 
 import (
 	"context"
@@ -699,6 +703,10 @@ func RunGuildSmoke(cfg *config.Config) {
 	zap.L().Info(fmt.Sprintf("GUILD_SMOKE_OK guild_id=%d zone_a=%d player_a=%d player_b=%d player_c=%d",
 		guildID, sc.ZoneA, a.gc.PlayerId, b.gc.PlayerId, playerC), zap.Bool("cross_zone", sc.CrossZone))
 	cleanup()
+	// 经济段用自己的两个账号另开会话,放在管理段的会话全部收尾之后:两段互不共享帮会与限流窗口。
+	if sc.Economy {
+		runGuildEconomySmoke(cfg, stats)
+	}
 	_ = zap.L().Sync()
 }
 
@@ -765,7 +773,8 @@ func (b *guildSmokeBot) onMessage(client *pkg.GameClient, msg *base.MessageConte
 		b.mu.Unlock()
 		return
 	}
-	if guildSmokeIsGuildMessage(msg.GetMessageId()) {
+	// 经济段自己发的 scene 请求(读背包、GM 货币)同样按消息号认领,见 guildEconomyIsSceneMessage。
+	if guildSmokeIsGuildMessage(msg.GetMessageId()) || guildEconomyIsSceneMessage(msg.GetMessageId()) {
 		b.mu.Lock()
 		if _, seen := b.replies[msg.GetMessageId()]; !seen {
 			b.replies[msg.GetMessageId()] = msg
@@ -978,7 +987,13 @@ func guildSmokeIsGuildMessage(messageId uint32) bool {
 		game.GuildServiceReviewGuildApplicationMessageId,
 		game.GuildServiceUpdateGuildScoreMessageId,
 		game.GuildServiceGetGuildRankMessageId,
-		game.GuildServiceGetGuildRankByGuildMessageId:
+		game.GuildServiceGetGuildRankByGuildMessageId,
+		// 经济(B5):捐献 / 升级 / 商店。
+		game.GuildServiceGetGuildDonateOptionsMessageId,
+		game.GuildServiceDonateToGuildMessageId,
+		game.GuildServiceUpgradeGuildMessageId,
+		game.GuildServiceGetGuildShopMessageId,
+		game.GuildServiceBuyGuildShopGoodsMessageId:
 		return true
 	}
 	return false

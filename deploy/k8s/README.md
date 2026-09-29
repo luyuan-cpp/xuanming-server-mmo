@@ -821,6 +821,40 @@ kubectl logs -n mmorpg-zone-<name> deploy/data-service | grep NodeRegistry
 #  → [NodeRegistry] DataService registered: ... endpoint=<POD_IP>:9000 lease_ttl=60s
 ```
 
+## C++ gRPC 客户端 deadline:GrpcClient 块搬运 + 预算门禁(2026-09-28,grpc-client-deadline-failure-callback.md §4.4)
+
+C++ 节点(gate / scene / battle)发出的每次 unary gRPC 调用现在都带 deadline,按**目标**节点类型配在
+`bin/etc/base_deploy_config.yaml` 的顶层 `GrpcClient.CallDeadlineMs`(键 = `ENodeType` 枚举名,单位毫秒)。
+没列出的类型、`0`、不认识的键都落到 C++ 内置默认 10000(`grpc_call_tag.h` 的 `kDefaultGrpcCallDeadlineMs`,后两者另记 ERROR)。
+
+- **node ConfigMap 整块搬运**:`node-config` 与 `battle-node-config` 以 readOnly 整目录挂到 `/app/bin/etc`,**完全遮蔽**镜像里那份。
+  `New-NodeConfigMapYaml` 用 `Get-AuthoritativeYamlBlock -Key 'GrpcClient'` 把整块(含行尾注释)逐行原样搬进去,与 `IdSegments` 同法;
+  文件里没有 `GrpcClient:` 则生成期直接 throw。漏搬的症状是静默的:K8s 上所有目标落回 10000,而号段 `fetchTimeoutSec`
+  (= DataService deadline + 1s)、换图在途 TTL(= SceneManager deadline + 1000)都从 deadline 派生,会跟着偏离仓库口径。
+- **预算门禁(上游比下游宽)**:`zone-up` / `infra-up` / `all-up` 在任何集群写操作之前调用 `Assert-GrpcClientDeadlineBudget`,
+  核对「C++ deadline ≥ 目标 Go 服务 zrpc `Timeout` + 2000」,不满足就拒绝部署并逐项点名;`*-down` / `*-status` 不经过它。
+
+  | 目标(`CallDeadlineMs` 键) | 服务端超时的真源 | 当前 deadline / 服务端 Timeout |
+  |---|---|---|
+  | `SceneManagerNodeService` | `go/scene_manager/etc/scene_manager_service.yaml` | 10000 / 8000 |
+  | `DataServiceNodeService` | `go/data_service/etc/data_service.yaml`(不写 = go-zero 默认 2000) | 4000 / 2000 |
+  | `ClientRpcRouterNodeService` | `go/client_rpc_router/etc/client_rpc_router.yaml` | 8000 / 6000 |
+  | `MatchNodeService` | `go/match/etc/match_service.yaml`(gate 直连模式) | 7000 / 5000 |
+  | `LoginNodeService` | `go/login/etc/login.yaml`(gate 直连模式) | 102000 / 100000 |
+
+  判定口径:这五项必须在 `CallDeadlineMs` 里显式写成正整数(缺席 / 0 = 落到隐式默认,不算数);服务 yaml 不写 `Timeout` 按
+  go-zero `RpcServerConf.Timeout` 的 `default=2000` 算(go.mod 钉的 v1.9.2 / v1.10.0 相同),写了就必须是正整数(0 = go-zero 不装超时拦截器,
+  服务端没有上界);服务 yaml 出现 `MethodTimeouts` 一律拒(门禁只按全局 `Timeout` 核对)。`Battle` / `Etcd` 没有 Go 服务端超时,不在表里;
+  chat / friend / guild / team / trade 不在 C++ 节点白名单里,只经路由服。
+- **改服务端超时 = 两处同拍**:调大上表任一服务的 `Timeout` 必须同时调 `CallDeadlineMs` 对应项,否则下一次 `*-up` 被门禁拒绝。
+  改完重跑 `zone-up`(以及 `infra-up`,battle 用的是 `battle-node-config`)重新生成 ConfigMap,并滚更 C++ 节点让它们重新读配置。
+- **DataService 2500 → 4000(2026-09-28)**:第一批落码时写的是 2500,与该块自己注释的「+2000 余量」不符(data_service 服务端默认 2000);
+  改为 4000 后号段 `fetchTimeoutSec` 从 3.5s 变成 5s。login 的 `Timeout: 100000` 疑为笔误(行尾注释写 10s),待拍板,
+  见 `docs/design/grpc-client-deadline-failure-callback.md` §4.3;改成 10000 时 `LoginNodeService` 同步改 12000。
+- 契约测试:`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的「C++ gRPC 客户端 deadline 预算」一节 —— 两份 node ConfigMap 的块与权威文件逐项相等、
+  门禁先于任何 `kubectl` 写操作、K8s 生成物(login 写死的 Timeout、data-service 不写 Timeout)同样满足不等式、判定口径自检,
+  以及把 DataService 改回 2500 的配置副本必须被拒并只点名这一项。
+
 ## Kafka:StatefulSet + PVC(2026-09-08,routing-identity-audit-20260908.md R06)
 
 `manifests/infra/kafka.yaml` 现在是:ClusterIP Service `kafka`(仍是 `kafka.<InfraNamespace>:9092`,所有 ConfigMap /

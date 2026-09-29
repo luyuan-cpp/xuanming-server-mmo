@@ -422,6 +422,136 @@ function Get-AuthoritativeYamlBlock {
 	return ($out -join "`r`n")
 }
 
+# ─────────────────────────────────────────────────────────────────
+# C++ gRPC 客户端 deadline 预算(docs/design/grpc-client-deadline-failure-callback.md §4.2 / §4.4)
+# ─────────────────────────────────────────────────────────────────
+
+<#
+.SYNOPSIS
+	纯函数:核对「C++ deadline ≥ 目标 Go 服务的 zrpc Timeout + 2000」(上游比下游宽),返回违例文本数组,空 = 通过。
+
+.DESCRIPTION
+	为什么是部署门禁而不只是注释:两个数分属两份配置(bin/etc 的 GrpcClient 块与 go/<svc>/etc 的 Timeout),
+	改一边忘另一边不会有任何报错。C++ deadline 不比服务端超时宽时,C++ 先按自己的 DeadlineExceeded 收尾,
+	拿不到服务端带真实错误码的应答,而服务端可能仍在执行 —— 本可确定的结果变成「结果未知」(设计 §3.3)。
+
+	判定口径(每一项都是违例,不是警告):
+	  - 目标必须在 GrpcClient.CallDeadlineMs 里显式写成正整数:缺席 / 0 在 C++ 侧落到内置默认 10000
+	    (grpc_call_tag.h kDefaultGrpcCallDeadlineMs),预算不能依赖一个只写在 C++ 头文件里的隐式值。
+	  - 服务 yaml 不写 Timeout = go-zero 默认 2000(go.mod 钉的 v1.9.2 / v1.10.0 的 zrpc/config.go 里
+	    RpcServerConf.Timeout 都是 `default=2000`);写了就必须是正整数 —— 0 = go-zero 不装超时拦截器
+	    (zrpc/server.go 只在 Timeout > 0 时装),服务端没有上界,「下游先超时」无从成立。
+	  - 出现 MethodTimeouts:它能把个别方法的服务端超时放宽到全局 Timeout 之上,而这里只按全局 Timeout 核对;
+	    真要用,先把它纳入本函数。
+
+	只接收已拍平的 yaml(release_common.ps1 ConvertFrom-YamlToFlatMap 的 Scalars),不读文件,
+	契约测试直接喂构造值验证每条口径(tools/scripts/tests/k8s_deploy_contract.tests.ps1)。
+
+.PARAMETER DeployScalars
+	bin/etc/base_deploy_config.yaml 拍平后的 Scalars,键形如 GrpcClient.CallDeadlineMs.SceneManagerNodeService。
+
+.PARAMETER Targets
+	有序字典:目标节点类型(ENodeType 枚举名)→ @{ Source = <服务 yaml 路径,只用于报错>; Scalars = <该 yaml 拍平后的 Scalars> }。
+#>
+function Get-GrpcClientDeadlineBudgetViolations {
+	param(
+		[Parameter(Mandatory = $true)][System.Collections.IDictionary]$DeployScalars,
+		[Parameter(Mandatory = $true)][System.Collections.IDictionary]$Targets
+	)
+
+	# 余量与 go-zero 默认值是这条契约本身(设计 §4.2 不等式 1),不是调参旋钮,所以不开参数。
+	$marginMs = 2000
+	$goZeroDefaultServerTimeoutMs = 2000
+
+	$violations = New-Object System.Collections.Generic.List[string]
+	foreach ($target in $Targets.Keys) {
+		$source = $Targets[$target].Source
+		$serviceScalars = $Targets[$target].Scalars
+
+		$deadlineRaw = [string]$DeployScalars["GrpcClient.CallDeadlineMs.$target"]
+		$deadline = [long]0
+		if (-not [long]::TryParse($deadlineRaw, [ref]$deadline) -or $deadline -le 0) {
+			$violations.Add("${target}:GrpcClient.CallDeadlineMs.$target='$deadlineRaw' 必须显式写成正整数(缺席 / 0 在 C++ 侧落到内置默认 10000,预算无从核对)")
+			continue
+		}
+
+		$methodKeys = @($serviceScalars.Keys | Where-Object { $_ -like 'MethodTimeouts*' })
+		if ($methodKeys.Count -gt 0) {
+			$violations.Add("${target}:$source 出现 MethodTimeouts($($methodKeys -join ', ')),个别方法的服务端超时可能高于 C++ deadline;这里只按全局 Timeout 核对,要用先把它纳入 Get-GrpcClientDeadlineBudgetViolations")
+			continue
+		}
+
+		$serverTimeout = [long]$goZeroDefaultServerTimeoutMs
+		$serverTimeoutText = "未写 Timeout(go-zero 默认 $goZeroDefaultServerTimeoutMs)"
+		if ($serviceScalars.Contains('Timeout')) {
+			$timeoutRaw = [string]$serviceScalars['Timeout']
+			if (-not [long]::TryParse($timeoutRaw, [ref]$serverTimeout) -or $serverTimeout -le 0) {
+				$violations.Add("${target}:$source 的 Timeout='$timeoutRaw' 必须是正整数(0 = go-zero 不装超时拦截器,服务端没有上界,下游先超时无从成立)")
+				continue
+			}
+			$serverTimeoutText = "Timeout $serverTimeout"
+		}
+
+		$requiredMs = $serverTimeout + $marginMs
+		if ($deadline -lt $requiredMs) {
+			$violations.Add("${target}:C++ deadline $deadline < $source $serverTimeoutText + $marginMs = $requiredMs(改 bin/etc/base_deploy_config.yaml 的 GrpcClient.CallDeadlineMs.$target,或同步调该服务的 Timeout)")
+		}
+	}
+	return $violations.ToArray()
+}
+
+<#
+.SYNOPSIS
+	部署门禁:读 GrpcClient 块与各目标 Go 服务的 yaml,按 Get-GrpcClientDeadlineBudgetViolations 核对,不满足即 throw 并逐项点名。
+
+.DESCRIPTION
+	只在写路径(zone-up / infra-up / all-up)的入口调用、先于任何集群写操作:node ConfigMap 会把 GrpcClient 块
+	原样搬进集群(New-NodeConfigMapYaml),预算不成立时宁可在这里拒绝,也不产出一份让 C++ 比服务端先放弃的配置。
+	*-down / *-status 不经过这里,止血与排查路径不受影响。
+
+	核对的目标(键 = C++ 发往的 ENodeType 枚举名)与各自服务端超时的真源:
+	  SceneManagerNodeService    ← go/scene_manager/etc/scene_manager_service.yaml
+	  DataServiceNodeService     ← go/data_service/etc/data_service.yaml(不写 Timeout,按 go-zero 默认)
+	  ClientRpcRouterNodeService ← go/client_rpc_router/etc/client_rpc_router.yaml
+	  MatchNodeService           ← go/match/etc/match_service.yaml(gate 直连模式)
+	  LoginNodeService           ← go/login/etc/login.yaml(gate 直连模式)
+	Battle / Etcd 没有 Go 服务端超时,不在表里;chat / friend / guild / team / trade 不在 C++ 节点白名单里,只经路由服到达。
+	比对的是服务 yaml:scene-manager / match / 路由服的 go-svc ConfigMap 从它镜像 Timeout;login 的 ConfigMap 目前写死
+	Timeout(New-GoSvcConfigMapYaml)、data-service 的 ConfigMap 不写 Timeout —— 这两份生成物也满足同一不等式,
+	由契约测试另外钉住。
+#>
+function Assert-GrpcClientDeadlineBudget {
+	$deployPath = 'bin/etc/base_deploy_config.yaml'
+	$targetSources = [ordered]@{
+		SceneManagerNodeService    = 'go/scene_manager/etc/scene_manager_service.yaml'
+		DataServiceNodeService     = 'go/data_service/etc/data_service.yaml'
+		ClientRpcRouterNodeService = 'go/client_rpc_router/etc/client_rpc_router.yaml'
+		MatchNodeService           = 'go/match/etc/match_service.yaml'
+		LoginNodeService           = 'go/login/etc/login.yaml'
+	}
+
+	# 与 Get-AuthoritativeScalar 同一条纪律:文件缺席就 throw,不替你猜一个超时。
+	$readScalars = {
+		param([string]$RelativePath)
+		$full = Join-Path $RepoRoot ($RelativePath -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+		if (-not (Test-Path -LiteralPath $full)) {
+			throw "gRPC deadline 预算核对失败:找不到 $RelativePath(fail-closed:不替你猜一个超时)"
+		}
+		return (ConvertFrom-YamlToFlatMap -Text (Get-Content -LiteralPath $full -Raw)).Scalars
+	}
+
+	$targets = [ordered]@{}
+	foreach ($target in $targetSources.Keys) {
+		$targets[$target] = @{ Source = $targetSources[$target]; Scalars = (& $readScalars $targetSources[$target]) }
+	}
+	$violations = @(Get-GrpcClientDeadlineBudgetViolations -DeployScalars (& $readScalars $deployPath) -Targets $targets)
+	if ($violations.Count -gt 0) {
+		throw ("C++ gRPC 客户端 deadline 预算不成立,拒绝部署(上游比下游宽:C++ deadline ≥ Go zrpc Timeout + 2000," +
+			"docs/design/grpc-client-deadline-failure-callback.md §4.2):`n  - " + ($violations -join "`n  - "))
+	}
+	Write-Host ("GrpcClient deadline budget OK (C++ deadline >= Go zrpc Timeout + 2000): {0}" -f ($targetSources.Keys -join ', '))
+}
+
 # Go micro-service catalogue: name → { configMapName, manifestFile, port, configFlag, configFileName }
 #   Global = $true 的条目是**全局池**服务:只在 infra-up / all-up 的基础设施阶段部署到
 #   $InfraNamespace 一次,zone-up 跳过(见 Apply-GlobalGoSvcManifests)。
@@ -761,6 +891,12 @@ function New-NodeConfigMapYaml {
 	# 键名 / 结构必须与 C++ 读法逐字对上(见下面模板处的注释),抄一份就是等着漂移。
 	$idSegmentsBlock = Get-AuthoritativeYamlBlock -RelativePath 'bin/etc/base_deploy_config.yaml' -Key 'IdSegments'
 
+	# C++ unary gRPC 调用的 deadline(docs/design/grpc-client-deadline-failure-callback.md §4.4)。与 IdSegments 同法整块搬运:
+	# 这份 ConfigMap 遮蔽镜像里的 bin/etc,不搬 = K8s 上所有目标都落回 C++ 内置默认 10000,而号段 fetchTimeout、
+	# 换图在途 TTL 都从 deadline 派生,会跟着偏离仓库口径。预算不等式(≥ 服务端 Timeout + 2000)由写路径入口的
+	# Assert-GrpcClientDeadlineBudget 核过,这里只负责逐字搬运;缺 GrpcClient 块则生成期直接 throw(fail-closed)。
+	$grpcClientBlock = Get-AuthoritativeYamlBlock -RelativePath 'bin/etc/base_deploy_config.yaml' -Key 'GrpcClient'
+
 	# 审计 topic 世代号。**真源取 data_service 那份而不是 bin/etc 那份**:C++ 是
 	# transaction_log / player_snapshot 唯一的生产者,go/data_service 是唯一的消费者,
 	# 消费者那边的 Kafka.TopicGeneration 同时还喂着 Apply-KafkaTopicInitJob 预建 topic 的名字
@@ -842,6 +978,12 @@ Kafka:
 # 注:Kind 名要与 data-service 的 IdSegment.BootstrapTags 及 id_segment 表的种子行一一对应
 # (生产缺行 = ErrCodeIdSegmentUnknownTag,不自动补种)。
 ${idSegmentsBlock}
+# C++ 节点每次 unary gRPC 调用的 deadline(毫秒),键 = 目标 ENodeType 枚举名(docs/design/grpc-client-deadline-failure-callback.md §4)。
+# config.cpp::readBaseDeployConfig 读 GrpcClient.CallDeadlineMs,grpc_call_deadline::Apply 校验后写进生成的客户端;
+# 不认识的键 / 0 记 ERROR 后该类型按内置默认 10000。gate / scene / battle 共用这一块(battle-node-config 同样生成)。
+# 下面整块由 Get-AuthoritativeYamlBlock 从 bin/etc/base_deploy_config.yaml 原样搬运,单一真相在那份文件;
+# 「deadline ≥ 目标 Go 服务的 zrpc Timeout + 2000」在部署入口由 Assert-GrpcClientDeadlineBudget 核对,不满足即拒绝部署。
+${grpcClientBlock}
 "@) -replace "`t", "  "
 
 	# SceneNodeType 在这里只是**文件基线**,gate / scene 共用同一份 ConfigMap。
@@ -1950,9 +2092,11 @@ function New-GoSvcConfigMapYaml {
 	$sceneManagerLeaseTTL   = Get-AuthoritativeScalar -RelativePath 'go/scene_manager/etc/scene_manager_service.yaml' -KeyPath 'LeaseTTL'
 
 	# zrpc 服务端 Timeout 连同它必须盖住的两段预算(归属查询、Kafka 同步写)一起从服务 yaml 取。
-	# 不写 Timeout 就会落到 go-zero 默认 2000ms,比 Kafka 写超时还短:EnterScene 的失败应答回不到 C++ 源 scene
-	# (生成客户端对非 OK 只打日志),源端冻满 30s 看门狗(cross-zone-scene-travel.md §12.2)。
-	# 三者之间的不等式由 tests/k8s_deploy_contract.tests.ps1 守着。
+	# 不写 Timeout 就会落到 go-zero 默认 2000ms,比 Kafka 写超时还短:服务端先超时,EnterScene 的业务失败应答回不到
+	# C++ 源 scene,只剩一个「结果未知」的传输失败,交接仍要等满 30s 看门狗裁决(cross-zone-scene-travel.md §12.2;
+	# 失败语义见 grpc-client-deadline-failure-callback.md §3.3)。三者之间的不等式由 tests/k8s_deploy_contract.tests.ps1 守着;
+	# 反方向的 C++ deadline(GrpcClient.CallDeadlineMs.SceneManagerNodeService)≥ 本 Timeout + 2000 由写路径入口的
+	# Assert-GrpcClientDeadlineBudget 守着 —— 调大这里的 Timeout 必须同步调那边,否则部署被拒。
 	$sceneManagerYaml                  = 'go/scene_manager/etc/scene_manager_service.yaml'
 	$sceneManagerTimeout               = Get-AuthoritativeScalar -RelativePath $sceneManagerYaml -KeyPath 'Timeout'
 	$sceneManagerKafkaWriteTimeout     = Get-AuthoritativeScalar -RelativePath $sceneManagerYaml -KeyPath 'KafkaWriteTimeoutSeconds'
@@ -4287,6 +4431,9 @@ if ($Command -in @("zone-up", "all-up", "infra-up")) {
 	Assert-ImmutableReleaseImages
 	Invoke-ReleasePreflight
 	Initialize-InjectedSecrets
+	# C++ gRPC deadline ≥ 目标 Go 服务 zrpc Timeout + 2000(上游比下游宽)。放在任何集群写操作之前:
+	# 不成立就整条拒绝,不留半截部署(见 Assert-GrpcClientDeadlineBudget)。
+	Assert-GrpcClientDeadlineBudget
 }
 
 switch ($Command) {
