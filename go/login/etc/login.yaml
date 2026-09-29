@@ -4,7 +4,13 @@ Name: login.rpc
 # 生产部署走 deploy/ 下的受管配置,不复用本文件。
 Mode: dev
 ListenOn: 127.0.0.1:53000
-Timeout: 100000 # Max server-side timeout per request (10s)
+# zrpc 服务端超时(毫秒)。2026-09-29 由 100000 改为 10000:原值与本行旧注释「(10s)」不符,确认是多写了一个 0。
+# 下限:同步路径里最慢的 CreatePlayer 持锁后串行三次跨进程 gRPC,各 3s = 9s(见下方 Locker 注释),常态 Redis
+# 毫秒级,10s 装得下;EnterGame 的预加载链在 RPC 返回之后后台跑(chainBudget 5min),不受本值约束。
+# 上限约束(上游比下游宽):gate 直连 login 的 C++ deadline = bin/etc/base_deploy_config.yaml 的
+# GrpcClient.CallDeadlineMs.LoginNodeService(12000),必须 >= 本值 + 2000,由 tools/scripts/k8s_deploy.ps1 的
+# Assert-GrpcClientDeadlineBudget 在部署前核对。K8s ConfigMap 从这里镜像;deploy/login-stack.linux/login.yaml 另有一份,同步改。
+Timeout: 10000
 
 # Canonical go-zero RPC registration/discovery settings.
 Etcd:

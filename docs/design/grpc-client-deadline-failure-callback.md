@@ -27,7 +27,7 @@
 
 非目标:
 - 双向流(etcd Watch / LeaseKeepAlive)**不设 deadline、不接失败回调**:两条流在 `InitEtcdGrpcNode` 里建一次、进程内不重建,设 deadline 等于让它们到期即永久死亡。流的失败处理是另一件事(§10)。
-- 不改任何 Go 服务的超时值(login 的疑似笔误只报告,§4.3)。
+- 不改任何 Go 服务的超时值。例外:login 的 `Timeout: 100000` 经用户确认是笔误,2026-09-29 改为 10000(§4.3)。
 - 不做生成器自动注册(评估见 §6)。
 
 ## 3. 接口设计
@@ -127,13 +127,21 @@ GrpcClient:
 | ClientRpcRouterNodeService | 8000 | 路由服 Timeout 6000(> ForwardTimeoutMs 5000 > 业务 4000) | 无(客户端自己等) |
 | MatchNodeService(gate 直连模式) | 7000 | `match_service.yaml` Timeout 5000 | 无 |
 | BattleNodeService(gate 直连模式) | 5000 | C++ battle 服务端同步处理,无服务端超时 | 无 |
-| LoginNodeService(gate 直连模式) | 102000 | `login.yaml` Timeout **100000**(行尾注释写 10s) | 无 |
+| LoginNodeService(gate 直连模式) | 12000 | `login.yaml` Timeout 10000(09-29 由笔误 100000 改正,原 deadline 102000) | 无 |
 | EtcdNodeService | 5000 | etcd 无服务端超时 | etcd Txn 看门狗 10s、LeaseGrant 重试 10s(`etcd_service.cpp`,不变,> deadline) |
 | 其余(Chat / Friend / Guild / Team / Trade) | 默认 10000 | 4000 | C++ 不直连(节点白名单里没有),只经路由服 |
 
-### 4.3 需要拍板:login 的 Timeout
+### 4.3 已拍板:login 的 Timeout(2026-09-29)
 
-`go/login/etc/login.yaml:7` 是 `Timeout: 100000`(K8s 的 login ConfigMap 由 `New-GoSvcConfigMapYaml` 从它镜像,不另存一份),注释写"(10s)"。按规则 gate 直连 login 的 deadline 只能取 ≥ 100000 + 2000,本方案取 102000,"守规则"但几乎等于不设。若 100000 是笔误,改成 10000 后本表 login 行改 12000(`bin/etc/base_deploy_config.yaml` 的 `GrpcClient.CallDeadlineMs.LoginNodeService`),K8s ConfigMap 自动跟随;`deploy/login-stack.linux/login.yaml:34` 另有一份 `Timeout: 100000`,要一起改。路由模式下 login 实际受路由服 `ForwardTimeoutMs 5000` 约束,不受此影响。
+`go/login/etc/login.yaml:7` 原为 `Timeout: 100000`,行尾注释却写"(10s)"。按规则 gate 直连 login 的 deadline 只能取 ≥ 100000 + 2000,首版取 102000,"守规则"但几乎等于不设。用户确认是笔误:
+- `go/login/etc/login.yaml` 与 `deploy/login-stack.linux/login.yaml` 改为 `Timeout: 10000`;K8s 的 login ConfigMap 由 `New-GoSvcConfigMapYaml` 从前者镜像,自动跟随。
+- `bin/etc/base_deploy_config.yaml` 的 `GrpcClient.CallDeadlineMs.LoginNodeService` 改为 12000(= 10000 + 2000,部署门禁 `Assert-GrpcClientDeadlineBudget` 恰好通过)。
+
+10s 够不够(静态核对,未压测):
+- 同步路径里最慢的 CreatePlayer:持锁后串行三次跨进程 gRPC,各有 3s 硬预算(发号 / 名字登记 / player:zone 登记)= 9s,常态 Redis 毫秒级,装得下。Redis 卡死时单条命令可重发到约 12.5s(`login.yaml` Locker 注释),这时服务端先超时、客户端收 1003;建角的正确性靠账号 blob 的围栏写 + 回读,不靠超时。另:服务端 ctx 截止时间从 100s 变成 10s 后,`createplayerlogic.go` 里 `hasBudget` 类判断会更早放弃重试 —— 慢的时候早失败,是预期效果。
+- EnterGame:应答"已受理"后,预加载链在后台 `chainBudget = 5min` 里跑,`TaskWaitTimeout: 30s` 的浪涌余量不受本值影响。
+- Login 快路径挑 gate 时的 etcd 探测(`NodeWatcher.FetchAllNodes`)自带 30s、不跟请求 ctx。etcd 卡住超过 10s 时,这次 Login 以 DeadlineExceeded 结束(客户端收 1003 重试);2026-05-24 压测记录的是"偶发 >5s",仍在 10s 内。
+- 路由模式下 login 实际受路由服 `ForwardTimeoutMs 5000` 约束,不受此改动影响。
 
 ### 4.4 K8s
 
@@ -201,7 +209,7 @@ GrpcClient:
 - **第二批(跨 zone 线提交后)**:`PlayerLifecycleSystem::DispatchEnterSceneTransportFailure` + TTL 派生(#1/#2);`scene_manager_response_handler.cpp` 装 EnterScene / CreateScene 失败处理器(#6);`k8s_deploy.ps1` 镜像 GrpcClient 块 + 契约断言(§4.4);更新 `cross-zone-scene-travel.md` §12.2 与 `scene_manager_service.yaml` 注释里"生成客户端非 OK 不回调"的表述。
   scene 侧已提交 b85f13c07;09-29 补:换图入口"没有 SceneManager"改回 `kServiceUnavailable`(§5 #3)。
 - **分工会话(「C++ 完全不连接 Go 服务的设计」)承担的部分**(09-29,未编译;大部分随 hourly save `ccfc40291` 进库,Codex 步骤见 PROGRESS.md「2026-09-29 C++↔Go 边界加固(V0+)分工部分」):
-  - K8s:`GrpcClient` 块原样搬进 node / battle-node ConfigMap;写路径入口的部署门禁 `Assert-GrpcClientDeadlineBudget` 核对 SceneManager / DataService / 路由服 / Match / Login 五个目标「C++ deadline ≥ zrpc Timeout + 2000」,五项必须显式写成正整数,没写 Timeout 按 go-zero 默认 2000,出现 `MethodTimeouts` 即拒绝;login 的 ConfigMap 改为从 `login.yaml` 镜像 Timeout。本会话复核过口径:拍平函数会剥行尾注释,login 102000 恰好等于 100000 + 2000,通过。
+  - K8s:`GrpcClient` 块原样搬进 node / battle-node ConfigMap;写路径入口的部署门禁 `Assert-GrpcClientDeadlineBudget` 核对 SceneManager / DataService / 路由服 / Match / Login 五个目标「C++ deadline ≥ zrpc Timeout + 2000」,五项必须显式写成正整数,没写 Timeout 按 go-zero 默认 2000,出现 `MethodTimeouts` 即拒绝;login 的 ConfigMap 改为从 `login.yaml` 镜像 Timeout。本会话复核过口径:拍平函数会剥行尾注释,login 当时 102000 恰好等于 100000 + 2000,通过;09-29 改为 12000 / 10000 后同样恰好通过。
   - `GetSceneManagerEntity`(签名与调用点不变,规则抽成纯函数 `scene_manager_selector::Pick`,单测 `cpp/tests/routing_identity_test/scene_manager_selector_test.cpp`)分级挑选:① 通道 READY → ② IDLE / CONNECTING(`GetState(true)` 顺手触发连接)→ ③a 挂了通道但 TRANSIENT_FAILURE / SHUTDOWN → ③b 没挂通道的实体。③b 可以由 TCP 握手声明 `node_type = SceneManager` 造出来(`IsTcpNodeType` 含 SceneManagerNodeService),挑中后会在发送处断言,所以排最末,只为兼容旧行为与单测里的假节点。**只在注册表为空时返回 null**(与原来一致,不新增 null 窗口)。落到 ③ 时打 `[SceneManagerSelect]` LOG_WARN,每 10s 最多一行并带上被压掉的次数。取模前用 splitmix64 打散 playerId(bwmarrin PlayerId 低位多为 0,原来的 `% N` 在 2 / 4 个实例时几乎全落第 0 个)。SceneManager 全挂时换图因此走 UNAVAILABLE → 失败处理器 → tip 1003,与 §9.2 第 4 步的预期一致。
   - 删除无调用方的 `SendMessageToPlayerOnGrpcNode`(§10 第 4 条)。
 
@@ -241,5 +249,5 @@ GrpcClient:
 2. etcd 一元调用若要接失败处理器:传输失败必须走与 `OnTxnTimeout` 等价的"取出 pending key 重发",**不能**走 `OnTxnFailed`(在 `kReRegisterExisting` 下会让节点因一次 etcd 抖动自杀),且要用请求里的 key 核对 `pendingTxnKey`。
 3. 纯服务端流方法会被模板误生成成 unary(今天 proto 里没有此类方法)。
 4. ~~`SendMessageToPlayerOnGrpcNode`(`player_message_utils.cpp:270-315`)无调用方,且发的是 `*requestProto` 而非入参。~~ 分工会话 09-29 删除(§8)。
-5. login Timeout 待拍板(§4.3);CreateScene 错误应答回显 `creator_ids`(§7)。
+5. ~~login Timeout 待拍板(§4.3)~~ 09-29 已改;CreateScene 错误应答回显 `creator_ids`(§7)。
 6. 生成器自动注册(§6)。

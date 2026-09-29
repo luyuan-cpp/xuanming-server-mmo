@@ -841,7 +841,7 @@ C++ 节点(gate / scene / battle)发出的每次 unary gRPC 调用现在都带 d
   | `DataServiceNodeService` | `go/data_service/etc/data_service.yaml`(不写 = go-zero 默认 2000) | 4000 / 2000 |
   | `ClientRpcRouterNodeService` | `go/client_rpc_router/etc/client_rpc_router.yaml` | 8000 / 6000 |
   | `MatchNodeService` | `go/match/etc/match_service.yaml`(gate 直连模式) | 7000 / 5000 |
-  | `LoginNodeService` | `go/login/etc/login.yaml`(gate 直连模式) | 102000 / 100000 |
+  | `LoginNodeService` | `go/login/etc/login.yaml`(gate 直连模式) | 12000 / 10000 |
 
   判定口径:这五项必须在 `CallDeadlineMs` 里显式写成正整数(缺席 / 0 = 落到隐式默认,不算数);服务 yaml 不写 `Timeout` 按
   go-zero `RpcServerConf.Timeout` 的 `default=2000` 算(go.mod 钉的 v1.9.2 / v1.10.0 相同),写了就必须是正整数(0 = go-zero 不装超时拦截器,
@@ -850,8 +850,8 @@ C++ 节点(gate / scene / battle)发出的每次 unary gRPC 调用现在都带 d
 - **改服务端超时 = 两处同拍**:调大上表任一服务的 `Timeout` 必须同时调 `CallDeadlineMs` 对应项,否则下一次 `*-up` 被门禁拒绝。
   改完重跑 `zone-up`(以及 `infra-up`,battle 用的是 `battle-node-config`)重新生成 ConfigMap,并滚更 C++ 节点让它们重新读配置。
 - **DataService 2500 → 4000(2026-09-28)**:第一批落码时写的是 2500,与该块自己注释的「+2000 余量」不符(data_service 服务端默认 2000);
-  改为 4000 后号段 `fetchTimeoutSec` 从 3.5s 变成 5s。login 的 `Timeout: 100000` 疑为笔误(行尾注释写 10s),待拍板,
-  见 `docs/design/grpc-client-deadline-failure-callback.md` §4.3;改成 10000 时 `LoginNodeService` 同步改 12000。
+  改为 4000 后号段 `fetchTimeoutSec` 从 3.5s 变成 5s。login 的 `Timeout` 原为 100000(行尾注释写 10s),
+  2026-09-29 确认是笔误,改为 10000,`LoginNodeService` 同步由 102000 改为 12000(`docs/design/grpc-client-deadline-failure-callback.md` §4.3)。
 - **login ConfigMap 的 `Timeout` 改为镜像 `go/login/etc/login.yaml`(2026-09-29)**:以前 `New-GoSvcConfigMapYaml` 在模板里写死 `100000`,
   而预算门禁核对的是 login.yaml,两边一分家,门禁放行的就不是集群里生效的值。现在与 scene-manager / match / 路由服同法镜像,
   读不到或不是正整数时生成期直接 throw;今天两边都是 100000,行为不变。上面那条待拍板的值定下来后,改 login.yaml 与 `LoginNodeService` 两处即可,生成器不用动。

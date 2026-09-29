@@ -218,6 +218,6 @@ GrpcClient:
     DataServiceNodeService: 4000       # data_service.yaml 没写 Timeout = go-zero 默认 2000(RpcServerConf default=2000),+2000 余量;号段 fetchTimeout 由此派生为 5s
     ClientRpcRouterNodeService: 8000   # client_rpc_router.yaml Timeout 6000(> ForwardTimeoutMs 5000)
     MatchNodeService: 7000             # match_service.yaml Timeout 5000(gate 直连模式)
-    LoginNodeService: 102000           # login.yaml Timeout 100000,注释却写 10s,疑为笔误,待拍板(设计文档 §4.3)
+    LoginNodeService: 12000            # login.yaml Timeout 10000(gate 直连模式;09-29 由笔误 100000 改正,原 deadline 102000)
     BattleNodeService: 5000            # C++ battle gRPC 同步处理,无服务端超时(gate 直连模式)
     EtcdNodeService: 5000              # etcd 无服务端超时;须 < etcd_service 的 Txn 看门狗 / LeaseGrant 重试 10s

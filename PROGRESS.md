@@ -5929,3 +5929,9 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
      - 停掉 scene_manager 后换图,应收到 tip 1003,scene 日志出现节流的 last-resort 告警;
      - 两个 scene_manager 实例时,EnterScene 计数大致均分;kill -9 其中一个,在租约 60s 到期前换图仍全部成功。
 - **待拍板**:`go/login/etc/login.yaml` 的 `Timeout: 100000`,行尾注释写的是 10s,疑为笔误。要改成 10000 的话,需同时把 `LoginNodeService` 改为 12000;`deploy/login-stack.linux/login.yaml:34` 也有一份。ConfigMap 会自动跟随。暂不改:CreatePlayer 链路预算约 9s 以上,改成 10s 会误伤慢请求;路由服模式下实际受 `ForwardTimeoutMs` 5000 约束。
+
+## 2026-09-29 login 服务端超时笔误改正:Timeout 100000 → 10000,gate 直连 deadline 102000 → 12000(Claude,用户拍板,未验证)
+
+- 用户确认 `go/login/etc/login.yaml` 的 `Timeout: 100000` 是笔误(旧注释写 10s)。改:`go/login/etc/login.yaml`、`deploy/login-stack.linux/login.yaml` → 10000;`bin/etc/base_deploy_config.yaml` `GrpcClient.CallDeadlineMs.LoginNodeService` → 12000(= 10000 + 2000,部署门禁恰好通过);K8s login ConfigMap 从 login.yaml 镜像,自动跟随;`deploy/k8s/README.md` 表格与说明、`docs/design/grpc-client-deadline-failure-callback.md` §2 / §4.2 / §4.3 / §8 / §10 同步。
+- 10s 是否够(静态核对,见设计文档 §4.3):CreatePlayer 常态最坏 9s(三次 3s gRPC)装得下;EnterGame 预加载链异步(5min),不受影响;Login 快路径的 etcd 探测自带 30s,etcd 卡 >10s 时这次 Login 以 DeadlineExceeded 结束、客户端收 1003 重试。
+- **给 Codex**:① 部署门禁纯函数回归:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(仓库根),全部 PASS;② 本地起 login(直连模式)跑一次 robot 登录冒烟(login-test),通过标准与改动前一致;③ 需要时压测对比 CreatePlayer / Login 的 P99 与 DeadlineExceeded 计数,确认 10s 不截断常态请求。login 与 C++ 都只改配置,不用重编。
