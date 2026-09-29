@@ -216,7 +216,7 @@
 ```text
 你在接手「跨 zone 场景传送」的收尾。先按 AGENTS.md 的会话启动门禁读完必读文件,再读
 docs/design/handoff-crosszone-20260920.md(先看文件头"验证现状"和 §0 最后一条)、
-docs/design/cross-zone-scene-travel.md 的 §12 与 §13(验证顺序),
+docs/design/cross-zone-scene-travel.md 的 §12 与 §13(各小节的验证清单),
 以及 docs/design/grpc-client-deadline-failure-callback.md。
 注意:
 1. 编译与测试现状:
@@ -224,8 +224,10 @@ docs/design/cross-zone-scene-travel.md 的 §12 与 §13(验证顺序),
    - 09-28 本轮的服务端代码全部未编译、未测试,包括关联号、冻结硬上限、CPP-2、
      scene_manager 三条 P3、Hiredis / zrpc Timeout;Go 侧同样没有任何 build / test 证据。
    - 你不许编译 / 跑测试 / regen(AGENTS §10.1),改完给出可执行命令。
-   - 验证顺序按 §13;Hiredis 与 k8s 契约测试的红态必须在任何 game.sln 全量构建之前、
-     在 c2c5ec505 上取。
+   - 验证顺序按交接说明 §4 末尾的「验证顺序」(设计文档 §13 没有统一顺序,只有各小节的验证清单)。
+   - Hiredis 红态:任何 game.sln 全量构建之前,只构建 rpc_controller_test、链接 09-25 的 muduo.lib
+     (hiredis_command_lifecycle_test.cpp 在 c2c5ec505 上不存在);
+     k8s 契约测试红态:在 c2c5ec505 的临时 worktree 上取。
 2. GO-2 根治(owner_epoch 严格单调 + 回滚回执)和 CPP-3(疏散改派待确认表)可能仍在别的会话落码。
    它们改 player_lifecycle.* / owner_epoch.go / enterscenelogic.go / proto/scene_manager/*。
    先用 git log 和 git status 看是否已提交;没提交之前不要碰这些文件。
@@ -236,8 +238,9 @@ docs/design/cross-zone-scene-travel.md 的 §12 与 §13(验证顺序),
    - 不 stash / reset / checkout / rebase。
 5. 客户端:
    - C-1 / C-2 / C-3 已在客户端远端 main 修好。
-   - CL-6 / CL-8 在机器 A 的客户端分支 crosszone/client-cl6-cl8(54034fe,基于 8b21583),
-     先 git -C ../mmorpg-client ls-remote origin 确认它有没有推上去。
+   - CL-6 / CL-8 落在客户端分支 crosszone/client-cl6-cl8(54034fe,基于 8b21583),
+     09-29 已随合并提交 96d36da 推到客户端 origin/main(按机器 A 的本机跟踪引用);
+     先 git -C ../mmorpg-client ls-remote origin 复核它确实在远端 main 上。
    - 客户端仓的改动需要用户单独授权(AGENTS §9),未获授权时只读。
 6. 交接说明里标「上一会话报出,未核实」的条目,先在代码上核实再动手,不要默认它成立。
    「2026-09-28 起 C++ 生成客户端有失败回调」这件事推翻了旧文档里"非 OK 不回调"的前提;
@@ -246,6 +249,7 @@ docs/design/cross-zone-scene-travel.md 的 §12 与 §13(验证顺序),
 - 你在哪台机器上;
 - origin/main 与本地 HEAD 各是什么;
 - GO-2 / CPP-3 是否已提交、GO-2 的窄面 regen 做了没有;
-- 客户端远端 main 是什么、crosszone/client-cl6-cl8 在不在远端。
+- 客户端远端 main 是什么、CL-6 / CL-8 的 54034fe 在不在远端 main 上
+  (分支 crosszone/client-cl6-cl8 本身按本机跟踪引用没有推成远端分支,提交是经合并提交 96d36da 进的 main)。
 然后给出你打算做的第一件事。
 ```

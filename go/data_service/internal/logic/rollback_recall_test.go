@@ -26,10 +26,22 @@ type fakeSnapshotStore struct {
 	auditErr     error
 	auditErrs    []error
 	audits       []*store.AuditLogRow
+
+	// 帮会闸(07)用:zone → (player → 该 zone 下最新快照 created_at)。
+	playerTimesByZone map[uint32]map[uint64]uint64
+	timesErr          error
+	// auditCtxErrs 记下每次写审计时 ctx 的状态:RESULT 审计必须在脱钩 ctx 上写(07 §7.5.3-3)。
+	auditCtxErrs []error
+	// onAudit / onInsert 在写审计 / 写快照(回档前安全快照 = 第一笔写)的那一刻回调,用来断言"先于第一笔写"。
+	onAudit  func(row *store.AuditLogRow)
+	onInsert func()
 }
 
 func (f *fakeSnapshotStore) Close() error { return nil }
 func (f *fakeSnapshotStore) InsertSnapshot(_ context.Context, row *store.SnapshotRow) (uint64, error) {
+	if f.onInsert != nil {
+		f.onInsert()
+	}
 	f.insertCalls++
 	if f.insertErr != nil {
 		return 0, f.insertErr
@@ -63,7 +75,21 @@ func (f *fakeSnapshotStore) ListSnapshotsMeta(context.Context, uint64, uint64, u
 func (f *fakeSnapshotStore) GetSnapshotPlayerIDsByZone(context.Context, uint32, uint64) ([]uint64, error) {
 	return append([]uint64(nil), f.playerIDs...), f.listErr
 }
-func (f *fakeSnapshotStore) InsertAuditLog(_ context.Context, row *store.AuditLogRow) error {
+func (f *fakeSnapshotStore) GetSnapshotPlayerTimesByZone(_ context.Context, zoneID uint32, _ uint64) (map[uint64]uint64, error) {
+	if f.timesErr != nil {
+		return nil, f.timesErr
+	}
+	out := make(map[uint64]uint64, len(f.playerTimesByZone[zoneID]))
+	for pid, at := range f.playerTimesByZone[zoneID] {
+		out[pid] = at
+	}
+	return out, nil
+}
+func (f *fakeSnapshotStore) InsertAuditLog(ctx context.Context, row *store.AuditLogRow) error {
+	f.auditCtxErrs = append(f.auditCtxErrs, ctx.Err())
+	if f.onAudit != nil {
+		f.onAudit(row)
+	}
 	callIndex := len(f.audits)
 	f.audits = append(f.audits, row)
 	if callIndex < len(f.auditErrs) {
@@ -146,6 +172,7 @@ func TestRollbackZone_NoSnapshotsStillReportsCurrentPlayers(t *testing.T) {
 	snapshots := &fakeSnapshotStore{}
 	svcCtx.SnapshotStore = snapshots
 	svcCtx.RollbackFence = &fakeRollbackFence{}
+	enableGuildGate(svcCtx, cleanGuildChecker())
 
 	resp, err := RollbackZone(ctx, svcCtx, &RollbackZoneReq{
 		ZoneID:     9,
@@ -226,6 +253,7 @@ func TestRollbackPlayer_SafetySnapshotFailureStopsBeforeOverwrite(t *testing.T) 
 	fence := &fakeRollbackFence{}
 	svcCtx.SnapshotStore = snapshots
 	svcCtx.RollbackFence = fence
+	enableGuildGate(svcCtx, cleanGuildChecker())
 
 	resp, err := RollbackPlayer(ctx, svcCtx, &RollbackPlayerReq{PlayerID: 812, SnapshotID: 1})
 	require.Error(t, err)
@@ -279,6 +307,7 @@ func TestRollbackPlayer_ResultAuditFailureIsReturned(t *testing.T) {
 	}
 	svcCtx.SnapshotStore = snapshots
 	svcCtx.RollbackFence = &fakeRollbackFence{}
+	enableGuildGate(svcCtx, cleanGuildChecker())
 
 	resp, err := RollbackPlayer(ctx, svcCtx, &RollbackPlayerReq{PlayerID: 814, SnapshotID: 1})
 	require.Error(t, err)

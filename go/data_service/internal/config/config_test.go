@@ -381,3 +381,165 @@ func TestShippedYamlPlayerNameMatchesDefaults(t *testing.T) {
 		t.Fatalf("shipped PlayerName block must validate: %v", err)
 	}
 }
+
+// ── 回档帮会闸(docs/design/guild-phase2/07-rollback-fail-closed.md §7.5.5,测试 C1)──────────
+
+// TestGuildCheckDefaultsWhenKeysAbsent:三项都不写时,余量与预算取文档默认值且合法;
+// GuildInternalRpc 缺席 = 未配置(回档闸不装配 → 回档一律被拒),而不是"跳过检查"。
+func TestGuildCheckDefaultsWhenKeysAbsent(t *testing.T) {
+	c := loadYaml(t, minimalYaml)
+	if c.GuildClockSkewMarginMs != 300000 {
+		t.Fatalf("GuildClockSkewMarginMs default = %d, want 300000", c.GuildClockSkewMarginMs)
+	}
+	if c.GuildCheckBudgetSeconds != 120 {
+		t.Fatalf("GuildCheckBudgetSeconds default = %d, want 120", c.GuildCheckBudgetSeconds)
+	}
+	if c.HasGuildInternalRpc() {
+		t.Fatal("an absent GuildInternalRpc block must read as not configured")
+	}
+	if err := c.ValidateGuildCheck(); err != nil {
+		t.Fatalf("defaults must validate: %v", err)
+	}
+}
+
+// TestGuildClockSkewMarginBounds 是 C1 的前半:余量 0 / 4999 拒绝,5000 过。
+// 下界 = OpBudget × 2:guild 记下的终结时刻是 ProcessOne 的开始时刻,可早于落盘一个 OpBudget;
+// 余量为 0 时"快照不含这笔扣款、guild 却记在快照之前"的行会漏掉 = 回档复制资产。
+func TestGuildClockSkewMarginBounds(t *testing.T) {
+	cases := []struct {
+		margin  int64
+		wantErr bool
+	}{
+		{-1, true}, {0, true}, {4999, true}, {5000, false}, {300000, false}, {3600000, false}, {3600001, true},
+	}
+	for _, tc := range cases {
+		c := loadYaml(t, minimalYaml)
+		c.GuildClockSkewMarginMs = tc.margin
+		if err := c.ValidateGuildCheck(); (err != nil) != tc.wantErr {
+			t.Fatalf("GuildClockSkewMarginMs=%d: err=%v, wantErr=%t", tc.margin, err, tc.wantErr)
+		}
+	}
+}
+
+// TestGuildInternalRpcTimeoutBounds 是 C1 的后半:已配 GuildInternalRpc 时 Timeout 499 / 3501 拒绝,
+// 500 / 3500 过;块里不写 Timeout 时取 go-zero 默认 2000,同样合法。
+func TestGuildInternalRpcTimeoutBounds(t *testing.T) {
+	c := loadYaml(t, minimalYaml+`
+GuildInternalRpc:
+  Endpoints:
+    - 127.0.0.1:50300
+`)
+	if !c.HasGuildInternalRpc() {
+		t.Fatal("Endpoints must count as configured")
+	}
+	if err := c.ValidateGuildCheck(); err != nil {
+		t.Fatalf("default Timeout (%d) must validate: %v", c.GuildInternalRpc.Timeout, err)
+	}
+	cases := []struct {
+		timeout int64
+		wantErr bool
+	}{
+		{0, true}, {499, true}, {500, false}, {3000, false}, {3500, false}, {3501, true},
+	}
+	for _, tc := range cases {
+		cc := c
+		cc.GuildInternalRpc.Timeout = tc.timeout
+		if err := cc.ValidateGuildCheck(); (err != nil) != tc.wantErr {
+			t.Fatalf("GuildInternalRpc.Timeout=%d: err=%v, wantErr=%t", tc.timeout, err, tc.wantErr)
+		}
+	}
+}
+
+// TestGuildInternalRpcEtcdOnlyIsNotConfigured:只写了 Etcd(或什么目标都没写)的块按"没配"处理。
+// RpcClientConf.Etcd 带 inherit,块里不写 Etcd 时会继承顶层 Etcd 的 Key=dataservice.rpc,拨到自己身上;
+// 而 guild 本来就不注册 go-zero key(D-13)。两种都不能被当成"配好了"。
+func TestGuildInternalRpcEtcdOnlyIsNotConfigured(t *testing.T) {
+	c := loadYaml(t, minimalYaml+`
+Etcd:
+  Hosts:
+    - 127.0.0.1:2379
+  Key: dataservice.rpc
+GuildInternalRpc:
+  Timeout: 3000
+`)
+	if c.HasGuildInternalRpc() {
+		t.Fatalf("a GuildInternalRpc block without Endpoints/Target must not count as configured (etcd=%+v)", c.GuildInternalRpc.Etcd)
+	}
+
+	c = loadYaml(t, minimalYaml+`
+GuildInternalRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: guild.rpc
+`)
+	if c.HasGuildInternalRpc() {
+		t.Fatal("etcd discovery of guild is not supported (guild registers no go-zero key); it must read as not configured")
+	}
+}
+
+// TestGuildCheckBudgetBounds:检查预算 [1, 3600] 秒。
+func TestGuildCheckBudgetBounds(t *testing.T) {
+	cases := []struct {
+		budget  int64
+		wantErr bool
+	}{
+		{-1, true}, {0, true}, {1, false}, {120, false}, {3600, false}, {3601, true},
+	}
+	for _, tc := range cases {
+		c := loadYaml(t, minimalYaml)
+		c.GuildCheckBudgetSeconds = tc.budget
+		if err := c.ValidateGuildCheck(); (err != nil) != tc.wantErr {
+			t.Fatalf("GuildCheckBudgetSeconds=%d: err=%v, wantErr=%t", tc.budget, err, tc.wantErr)
+		}
+	}
+}
+
+// TestShippedYamlGuildCheck 钉住仓库里那份 dev yaml 的回档闸配置(07 §7.5.5、§7.5.3-3、§7.9.1):
+// 直连 guild 的 ListenOn、单次超时合法、NonBlock、Breaker 关;MetricsListenAddr 已开;三个 Rollback* 配了
+// MethodTimeouts,且 RollbackPlayer 的值盖得住"沉降 30 + 检查预算 + 复查等待 10 + 复查预算 120"
+// (三个常量在 internal/logic/rollback_logic.go;本包不能 import logic,这里照抄数值)。
+func TestShippedYamlGuildCheck(t *testing.T) {
+	var c Config
+	if err := conf.Load("../../etc/data_service.yaml", &c); err != nil {
+		t.Fatalf("load etc/data_service.yaml: %v", err)
+	}
+	if !c.HasGuildInternalRpc() {
+		t.Fatal("etc/data_service.yaml must configure GuildInternalRpc (otherwise every local rollback is rejected)")
+	}
+	if got := c.GuildInternalRpc.Endpoints; len(got) != 1 || got[0] != "127.0.0.1:50300" {
+		t.Fatalf("GuildInternalRpc.Endpoints = %v, want [127.0.0.1:50300] (= go/guild/etc/guild.yaml ListenOn)", got)
+	}
+	if !c.GuildInternalRpc.NonBlock {
+		t.Fatal("GuildInternalRpc.NonBlock must be true: guild being down must not block data_service startup")
+	}
+	if c.GuildInternalRpc.Middlewares.Breaker {
+		t.Fatal("GuildInternalRpc.Middlewares.Breaker must be false: the check never retries, a breaker only muddies the error")
+	}
+	if err := c.ValidateGuildCheck(); err != nil {
+		t.Fatalf("shipped guild check config must validate: %v", err)
+	}
+	if c.MetricsListenAddr == "" {
+		t.Fatal("MetricsListenAddr must be set: the rollback guild alerts need /metrics")
+	}
+
+	want := map[string]time.Duration{
+		"/data_service.DataService/RollbackPlayer": 0,
+		"/data_service.DataService/RollbackZone":   0,
+		"/data_service.DataService/RollbackAll":    0,
+	}
+	for _, mt := range c.MethodTimeouts {
+		if _, ok := want[mt.FullMethod]; ok {
+			want[mt.FullMethod] = mt.Timeout
+		}
+	}
+	for method, got := range want {
+		if got <= 0 {
+			t.Fatalf("MethodTimeouts has no entry for %s (go-zero's 2000ms default would cut every rollback short)", method)
+		}
+	}
+	minPlayer := 30*time.Second + time.Duration(c.GuildCheckBudgetSeconds)*time.Second + 10*time.Second + 120*time.Second
+	if got := want["/data_service.DataService/RollbackPlayer"]; got < minPlayer {
+		t.Fatalf("RollbackPlayer MethodTimeout %v < settle + check budget + recheck delay + recheck budget = %v", got, minPlayer)
+	}
+}

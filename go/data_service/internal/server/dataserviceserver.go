@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"data_service/internal/constants"
+	"data_service/internal/guildcheck"
 	"data_service/internal/logic"
 	"data_service/internal/routing"
 	"data_service/internal/store"
@@ -353,71 +354,139 @@ func (s *DataServiceServer) GetPlayerSnapshotDiff(ctx context.Context, req *data
 	}, nil
 }
 
+// ── 三个 Rollback*:一律要求 x-admin-token(docs/design/guild-phase2/07-rollback-fail-closed.md §7.6.3 Q2 = ②)──
+//
+// 为什么不是"只有 accept_guild_divergence=true 才要 token":三个 handler 原先零鉴权、operator 是自报字符串,
+// 任何能拨到 data_service 的进程发一次不带放行的 Rollback* 就能 (i) 从拒绝响应里读到目标玩家的资产流水样本,
+// (ii) 让目标玩家 / 整个 zone 被栅栏挡住登录最长"沉降 30s + 检查预算"。一律要 token 两条都没有了,
+// 也就不需要"未鉴权只回计数"的分支。口径同 RemapHomeZoneForMerge:没配 AdminToken = 回档 RPC 整体停用。
+// 鉴权在任何 logic(栅栏、审计、快照读)之前;拒绝走 gRPC status(PermissionDenied + ErrCodeAdminAuthRequired)。
+//
+// 响应:logic 对规则拒绝(RollbackGuildDivergence)与写后分歧(RollbackGuildDivergedAfterWrite)不返回 err,
+// 分歧计数与前 20 条样本才带得出去;返回 err 的是故障,只回 error_code(原样)。
+
 func (s *DataServiceServer) RollbackPlayer(ctx context.Context, req *data_service.RollbackPlayerRequest) (*data_service.RollbackPlayerResponse, error) {
+	const rpcName = "RollbackPlayer"
+	if err := s.authorizeAdmin(ctx, rpcName); err != nil {
+		return nil, err
+	}
+	caller := callerIdentity(ctx)
+	logx.Infof("[admin] %s authorized: player_id=%d snapshot_id=%d target_time=%d scope=%d accept_guild_divergence=%t operator=%q %s",
+		rpcName, req.GetPlayerId(), req.GetSnapshotId(), req.GetTargetTime(), req.GetScope(), req.GetAcceptGuildDivergence(), req.GetOperator(), caller)
 	if s.svcCtx.SnapshotStore == nil {
 		return &data_service.RollbackPlayerResponse{ErrorCode: constants.ErrCodeSnapshotDBError}, nil
 	}
 	resp, err := logic.RollbackPlayer(ctx, s.svcCtx, &logic.RollbackPlayerReq{
-		PlayerID:   req.PlayerId,
-		SnapshotID: req.SnapshotId,
-		TargetTime: req.TargetTime,
-		Scope:      uint32(req.Scope),
-		Fields:     req.Fields,
-		Reason:     req.Reason,
-		Operator:   req.Operator,
+		PlayerID:              req.PlayerId,
+		SnapshotID:            req.SnapshotId,
+		TargetTime:            req.TargetTime,
+		Scope:                 uint32(req.Scope),
+		Fields:                req.Fields,
+		Reason:                req.Reason,
+		Operator:              req.Operator,
+		AcceptGuildDivergence: req.GetAcceptGuildDivergence(),
+		Caller:                caller,
 	})
 	if err != nil {
 		return &data_service.RollbackPlayerResponse{ErrorCode: resp.ErrorCode}, nil
 	}
 	return &data_service.RollbackPlayerResponse{
-		ErrorCode:             resp.ErrorCode,
-		SnapshotIdUsed:        resp.SnapshotIDUsed,
-		PreRollbackSnapshotId: resp.PreRollbackSnapshotID,
-		FieldsRestored:        resp.FieldsRestored,
+		ErrorCode:                  resp.ErrorCode,
+		SnapshotIdUsed:             resp.SnapshotIDUsed,
+		PreRollbackSnapshotId:      resp.PreRollbackSnapshotID,
+		FieldsRestored:             resp.FieldsRestored,
+		GuildDivergenceCount:       resp.GuildDivergenceCount,
+		GuildDivergences:           toProtoGuildDivergences(resp.GuildDivergences),
+		GuildUnprovablePlayerCount: resp.GuildUnprovablePlayerCount,
 	}, nil
 }
 
 func (s *DataServiceServer) RollbackZone(ctx context.Context, req *data_service.RollbackZoneRequest) (*data_service.RollbackZoneResponse, error) {
+	const rpcName = "RollbackZone"
+	if err := s.authorizeAdmin(ctx, rpcName); err != nil {
+		return nil, err
+	}
+	caller := callerIdentity(ctx)
+	logx.Infof("[admin] %s authorized: zone=%d target_time=%d accept_guild_divergence=%t operator=%q %s",
+		rpcName, req.GetZoneId(), req.GetTargetTime(), req.GetAcceptGuildDivergence(), req.GetOperator(), caller)
 	if s.svcCtx.SnapshotStore == nil {
 		return &data_service.RollbackZoneResponse{ErrorCode: constants.ErrCodeSnapshotDBError}, nil
 	}
 	resp, err := logic.RollbackZone(ctx, s.svcCtx, &logic.RollbackZoneReq{
-		ZoneID:     req.ZoneId,
-		TargetTime: req.TargetTime,
-		Reason:     req.Reason,
-		Operator:   req.Operator,
+		ZoneID:                req.ZoneId,
+		TargetTime:            req.TargetTime,
+		Reason:                req.Reason,
+		Operator:              req.Operator,
+		AcceptGuildDivergence: req.GetAcceptGuildDivergence(),
+		Caller:                caller,
 	})
 	if err != nil {
 		return &data_service.RollbackZoneResponse{ErrorCode: resp.ErrorCode}, nil
 	}
 	return &data_service.RollbackZoneResponse{
-		ErrorCode:       resp.ErrorCode,
-		PlayersAffected: resp.PlayersAffected,
-		PlayersFailed:   resp.PlayersFailed,
-		FailedPlayerIds: resp.FailedPlayerIDs,
-		OrphanPlayerIds: resp.OrphanPlayerIDs,
-		OrphansCleaned:  resp.OrphansCleaned,
+		ErrorCode:                  resp.ErrorCode,
+		PlayersAffected:            resp.PlayersAffected,
+		PlayersFailed:              resp.PlayersFailed,
+		FailedPlayerIds:            resp.FailedPlayerIDs,
+		OrphanPlayerIds:            resp.OrphanPlayerIDs,
+		OrphansCleaned:             resp.OrphansCleaned,
+		GuildDivergenceCount:       resp.GuildDivergenceCount,
+		GuildDivergences:           toProtoGuildDivergences(resp.GuildDivergences),
+		GuildUnprovablePlayerCount: resp.GuildUnprovablePlayerCount,
 	}, nil
 }
 
 func (s *DataServiceServer) RollbackAll(ctx context.Context, req *data_service.RollbackAllRequest) (*data_service.RollbackAllResponse, error) {
+	const rpcName = "RollbackAll"
+	if err := s.authorizeAdmin(ctx, rpcName); err != nil {
+		return nil, err
+	}
+	caller := callerIdentity(ctx)
+	logx.Infof("[admin] %s authorized: target_time=%d accept_guild_divergence=%t operator=%q %s",
+		rpcName, req.GetTargetTime(), req.GetAcceptGuildDivergence(), req.GetOperator(), caller)
 	if s.svcCtx.SnapshotStore == nil {
 		return &data_service.RollbackAllResponse{ErrorCode: constants.ErrCodeSnapshotDBError}, nil
 	}
 	resp, err := logic.RollbackAll(ctx, s.svcCtx, &logic.RollbackAllReq{
-		TargetTime: req.TargetTime,
-		Reason:     req.Reason,
-		Operator:   req.Operator,
+		TargetTime:            req.TargetTime,
+		Reason:                req.Reason,
+		Operator:              req.Operator,
+		AcceptGuildDivergence: req.GetAcceptGuildDivergence(),
+		Caller:                caller,
 	})
 	if err != nil {
 		return &data_service.RollbackAllResponse{ErrorCode: resp.ErrorCode}, nil
 	}
 	return &data_service.RollbackAllResponse{
-		ErrorCode:       resp.ErrorCode,
-		ZonesProcessed:  resp.ZonesProcessed,
-		PlayersAffected: resp.PlayersAffected,
-		PlayersFailed:   resp.PlayersFailed,
+		ErrorCode:                  resp.ErrorCode,
+		ZonesProcessed:             resp.ZonesProcessed,
+		PlayersAffected:            resp.PlayersAffected,
+		PlayersFailed:              resp.PlayersFailed,
+		GuildDivergenceCount:       resp.GuildDivergenceCount,
+		GuildDivergences:           toProtoGuildDivergences(resp.GuildDivergences),
+		GuildUnprovablePlayerCount: resp.GuildUnprovablePlayerCount,
 	}, nil
+}
+
+// toProtoGuildDivergences 把帮会闸的分歧样本搬进 proto(logic 已截到前 20 条)。
+func toProtoGuildDivergences(rows []guildcheck.GuildDivergence) []*data_service.RollbackGuildDivergence {
+	if len(rows) == 0 {
+		return nil
+	}
+	out := make([]*data_service.RollbackGuildDivergence, 0, len(rows))
+	for _, d := range rows {
+		out = append(out, &data_service.RollbackGuildDivergence{
+			OpId:              d.OpID,
+			PlayerId:          d.PlayerID,
+			GuildId:           d.GuildID,
+			Kind:              d.Kind,
+			Status:            d.Status,
+			FundsDelta:        d.FundsDelta,
+			ContributionDelta: d.ContributionDelta,
+			UpdatedMs:         d.UpdatedMs,
+		})
+	}
+	return out
 }
 
 // ── Batch Recall / Transaction Log Query / Event Snapshot ──────

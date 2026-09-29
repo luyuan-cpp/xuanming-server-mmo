@@ -193,6 +193,14 @@ namespace owner_epoch_stats
 //                          非 0 = 墙钟向前跳过 ≥1s(对时 / 人工改时间)
 //   handoff_fastpath_forced 交接快路径判"盘上已是同一份"、但该 key 还有在途 / 排队中的存盘,改走一次真实存盘再写标记的
 //                          次数(与退出链的 exit_fastpath_deferred 同一写法)。趋势值
+//   ── GO-2 根治:源端原子取证的三种新结论(travel_outcome::Ownership,cross-zone-scene-travel.md §12.8 判定表)──
+//   rolled_back_adopted    B5:取证读到本次交接标记原文的回滚回执(scene_manager 推路由失败、单调回滚到本节点),
+//                          采纳回滚后的 epoch(E+2)、解冻并强制存盘一次。同时计入 aborted(或 resolved_in_place)。
+//                          基线 0,非 0 = 出现过 Kafka 路由失败,对照 scene_manager 的 [RouteRollback] 日志
+//   returned_after_grant   B7:epoch 变了、没有本次回执,location 却指回本节点本 zone(已放行后又回到本节点 / 回滚链 /
+//                          owner_epoch 键被淘汰读成 0)。不解冻,沿用"已放行"分支不存盘销毁,同时计入 granted。基线 0
+//   rollback_receipt_anomaly B6:回执是本次标记原文,其余交叉校验却不成立(键被淘汰后补种 / 新旧 scene_manager 混跑 /
+//                          数据写坏)。按"标记已发出"收口(ConcludeHandoffAfterMarkSent,同时计入 mark_sent_destroyed)。应恒 0
 //
 // started 减去 (granted + resolved_in_place + aborted + exit_wins + mark_sent_destroyed) = 仍在途的 + 交接期间被存盘
 // CAS 拒而销毁的(后者已计入 owner_epoch_stats::StaleOwnerWriteRejected)。
@@ -225,6 +233,9 @@ namespace travel_handoff_stats
 		std::atomic<uint64_t> freezeUnstamped{0};
 		std::atomic<uint64_t> watchdogEarlyFire{0};
 		std::atomic<uint64_t> handoffFastpathForced{0};
+		std::atomic<uint64_t> rolledBackAdopted{0};
+		std::atomic<uint64_t> returnedAfterGrant{0};
+		std::atomic<uint64_t> rollbackReceiptAnomaly{0};
 	};
 
 	inline Counters& Get()
@@ -274,6 +285,9 @@ namespace travel_handoff_stats
 		uint64_t freezeUnstamped{0};
 		uint64_t watchdogEarlyFire{0};
 		uint64_t handoffFastpathForced{0};
+		uint64_t rolledBackAdopted{0};
+		uint64_t returnedAfterGrant{0};
+		uint64_t rollbackReceiptAnomaly{0};
 
 		bool operator==(const Snapshot&) const = default;
 	};
@@ -307,6 +321,9 @@ namespace travel_handoff_stats
 		snapshot.freezeUnstamped = counters.freezeUnstamped.load(std::memory_order_relaxed);
 		snapshot.watchdogEarlyFire = counters.watchdogEarlyFire.load(std::memory_order_relaxed);
 		snapshot.handoffFastpathForced = counters.handoffFastpathForced.load(std::memory_order_relaxed);
+		snapshot.rolledBackAdopted = counters.rolledBackAdopted.load(std::memory_order_relaxed);
+		snapshot.returnedAfterGrant = counters.returnedAfterGrant.load(std::memory_order_relaxed);
+		snapshot.rollbackReceiptAnomaly = counters.rollbackReceiptAnomaly.load(std::memory_order_relaxed);
 		return snapshot;
 	}
 } // namespace travel_handoff_stats
@@ -562,6 +579,107 @@ namespace travel_outcome
 		return locationNodeEmpty && targetZoneId != 0 && locationZoneId == targetZoneId && redisOwnerEpoch != 0 &&
 			   locationOwnerEpoch == redisOwnerEpoch;
 	}
+
+	// ── GO-2 根治:源端原子取证(cross-zone-scene-travel.md §12.8 判定表)──────────────────────────────
+	//
+	// 取证脚本。KEYS[1] = player:{id}:handoff   KEYS[2] = player:{id}:owner_epoch   KEYS[3] = player:{id}:location
+	//          ARGV[1] = 本次交接的 requestedAtMs(std::to_string,即本次标记 "{E}:{t}" 里的 t)
+	// 先删掉本次交接**这一族**标记,再在同一段脚本里 MGET owner_epoch 与 location,返回两元素数组(缺键 / 类型不对为 nil)。
+	//
+	// 为什么只删本族(值形如 "数字:t" 且 t 与 ARGV[1] 逐字节相同):本次的原标记 "E:t" 与 scene_manager 回滚转写出来的
+	//   "E+2:t"(后缀逐字节不变,见 go/scene_manager/internal/logic/owner_epoch.go luaRollbackPlayerPlacement)都能删到;
+	//   别人的标记(后缀不同)一律不碰 —— 过期源的看门狗若无条件 DEL,会删掉现任持有者的活标记,把它那次路由失败的回滚
+	//   变成 marker_gone,玩家在任何节点都没有实体。这不削弱保证:epoch == E 的标记只能由 E 的唯一持有者(本节点)写出,
+	//   别人的标记本来就不可能凭它把本节点的玩家放走。ms 恰好相同的碰撞,后果只是删了别人的标记(只伤活性),与改动前相同。
+	// 为什么带 "#!lua"(Redis ≥ 7,全环境 7.2):不声明 no-writes 的带 shebang 脚本,在只读副本 / MISCONF / min-replicas
+	//   不满足 / OOM 时**整体被拒**、返回 ERROR —— 不会出现"删除失败而读取成功"(旧写法里回调为空的 DEL 碰上 READONLY /
+	//   MISCONF 会失败、MGET 照样成功,源端带着活标记解冻),也不会在本族标记恰好不在时从滞后副本读到旧 epoch。
+	//   代价:OOM 时取证失败,保持冻结,由冻结硬上限收口。**不得**加 flags=no-writes,也不得去掉 shebang。
+	// 为什么用 MGET 读而不用 GET:MGET 遇到类型不对的键返回 nil;GET 会抛 WRONGTYPE,脚本报错时删除已执行,
+	//   之后每 30s 重挂一次、永远出不来。
+	// 为什么是一段脚本(不变量 I0 机制 2):删除与读取在同一段原子脚本里,"拿到有效应答 ⇒ 本族标记已删、读数是删除之后
+	//   那一刻的",不依赖连接的执行顺序。它**取代**了改动前"同一条不重放连接上先 DEL 后 MGET"的顺序保证。以后若拆回
+	//   两条命令,**必须**走不重放的同一连接(tlsRedis.GetZoneRedis() 的 muduo hiredis::Hiredis:command() 是
+	//   redisvAsyncCommand 的薄封装,无队列、无重放);改走 redis_client.h 那类带重试队列的接口会无声地打破这条保证。
+	// 跨语言金样 go/scene_manager/internal/logic/owner_epoch_crosslang_test.go 逐字复制了本脚本(去掉首行 #!lua,
+	// miniredis 不认 shebang):**改这里必须同步改那边**。
+	inline constexpr const char *kLuaJudgeTravelOutcome =
+		"#!lua\n"
+		"local v = redis.call('MGET', KEYS[1])[1] "
+		"if v and string.match(v, '^%d+:(%d+)$') == ARGV[1] then redis.call('DEL', KEYS[1]) end "
+		"return redis.call('MGET', KEYS[2], KEYS[3])";
+
+	// 取证脚本成功之后,读数说明了什么(判定表 B4–B9)。纯判定,不依赖 hiredis / entt,单测见 cross_zone_test 的
+	// TravelOwnership.*。底层类型 uint8_t 数的是结论种类数(现 6 种)。纯内存使用,不进协议、不落库。kCount 固定为最后一项。
+	enum class Ownership : uint8_t
+	{
+		kUnchanged,        // B4:owner_epoch == 缓存值 → 解冻
+		kRolledBackToSelf, // B5:回执 == 本次标记原文,且其余交叉校验全部成立 → 采纳回滚后的 epoch、解冻、强制存盘
+		kReceiptAnomaly,   // B6:回执 == 本次标记原文,其余交叉校验任一不成立 → 判不清,按"标记已发出"收口
+		kReturnedToSelf,   // B7:epoch 变了、没有本次回执,location 却指回本节点本 zone → 不存盘销毁(沿用已放行分支)
+		kMovedElsewhere,   // B8:epoch 变了,location 在别的节点 / 别的 zone / 是等待落点 → 已放行
+		kLocationUnknown,  // B9:epoch 变了,location 缺失 / 解析失败 / 类型不对 → 已放行(location 已删或写坏)
+
+		kCount
+	};
+
+	constexpr std::size_t kOwnershipCount = static_cast<std::size_t>(Ownership::kCount);
+
+	// 只给日志用的名字,与枚举一一对应。数组长度由初始化项推导,漏加 / 多加一行都会被 static_assert 拦下。
+	inline constexpr const char *kOwnershipNames[] = {
+		"unchanged",
+		"rolled_back_to_self",
+		"receipt_anomaly",
+		"returned_to_self",
+		"moved_elsewhere",
+		"location_unknown",
+	};
+	static_assert(std::size(kOwnershipNames) == kOwnershipCount, "kOwnershipNames 必须与 Ownership 一一对应");
+
+	constexpr const char *OwnershipName(Ownership ownership)
+	{
+		const auto index = static_cast<std::size_t>(ownership);
+		return index < kOwnershipCount ? kOwnershipNames[index] : "?";
+	}
+
+	// ClassifyOwnership 的输入,由 ResolveTravelOutcome 的取证回调从交接组件与脚本应答里采集。字段拆开传,单测不必链 proto。
+	struct OwnershipFacts
+	{
+		uint64_t cachedEpoch{0};        // 发起这次取证时实体缓存的 owner_epoch(PlayerOwnerEpochComp)
+		uint64_t markEpoch{0};          // 本次交接写标记用的 epoch(PlayerTravelHandoffComp.markEpoch;0 = SET 没发出去过)
+		uint64_t redisEpoch{0};         // 脚本读到的 owner_epoch(缺键按 0)
+		bool locationParsed{false};     // location 存在且能解析
+		bool locationOnSelf{false};     // location 指回本节点本 zone(与 player_team.cpp 队伍跟随同一判法)
+		uint64_t locationOwnerEpoch{0}; // location 里记的 owner_epoch
+		bool receiptIsMine{false};      // location.rollback_receipt 非空,且与本次标记原文 "{markEpoch}:{requestedAtMs}" 逐字节相同
+	};
+
+	// 判定顺序即优先级,每一步都只可能落向更保守的一侧:
+	//   1. epoch 未变最先判,不看 location 与回执:脚本已在同一原子步骤里删掉本族标记,"未变"同时证明此前从未放行
+	//      (epoch 只经 INCR 前进,回滚也是 INCR)、此后也再放不出去;
+	//   2. location 解析不了就不看回执(回执就存在 location 里);
+	//   3. 回执是本次原文时,只有"回滚之后再无任何落点"的全部交叉校验成立才采纳:markEpoch 就是缓存值、epoch 恰好前进两格
+	//      (本次铸造一格 + bump 回滚一格)、location 记的 epoch 与键一致、location 指回本节点本 zone。任一不成立即异常,不采纳;
+	//   4. 其余按 location 指向分"回到本节点"与"在别处"。回执对不上时没有任何一条会走到采纳。
+	constexpr Ownership ClassifyOwnership(const OwnershipFacts &facts)
+	{
+		if (facts.redisEpoch == facts.cachedEpoch)
+		{
+			return Ownership::kUnchanged;
+		}
+		if (!facts.locationParsed)
+		{
+			return Ownership::kLocationUnknown;
+		}
+		if (facts.receiptIsMine)
+		{
+			const bool consistent = facts.markEpoch != 0 && facts.markEpoch == facts.cachedEpoch &&
+									facts.redisEpoch == facts.markEpoch + 2 &&
+									facts.locationOwnerEpoch == facts.redisEpoch && facts.locationOnSelf;
+			return consistent ? Ownership::kRolledBackToSelf : Ownership::kReceiptAnomaly;
+		}
+		return facts.locationOnSelf ? Ownership::kReturnedToSelf : Ownership::kMovedElsewhere;
+	}
 } // namespace travel_outcome
 
 // EnterScene 应答的分发(PlayerLifecycleSystem::DispatchEnterSceneReply)。
@@ -588,7 +706,7 @@ namespace enter_scene_reply
 {
 	enum class Route : uint8_t
 	{
-		kTravelHandoff,            // 号匹配本代交接 → 交接裁决(correlated = true,GO-2 只采纳这一种应答回显的 epoch)
+		kTravelHandoff,            // 号匹配本代交接 → 交接裁决(correlated = true;GO-2 从不凭应答回显的 epoch 采纳,回显只进日志)
 		kLegacyTravelHandoff,      // 旧版 SM 没回显、交接的 EnterScene 已发 → 交接裁决(correlated = false,同今天)
 		kSceneChange,              // 号匹配在途换图 → 普通换图收尾(18 起同 zone 交接 / 失败回 tip / 跟随只记日志)
 		kLegacySceneChange,        // 旧版 SM 没回显、有在途换图 → 普通换图收尾(同今天,§11.2 的 18 链不断)
@@ -764,6 +882,16 @@ public:
 	// 名字里的 CrossZone 是历史遗留(最早只服务 player_migrate 搬数据链,该链已按
 	// cross-zone-scene-travel.md CZ-1 下线);现在跨 zone 传送与同 zone 跨节点换图都走它。
 	// 调用点有二十来处,不为改名去动它们。
+	//
+	// 不变量 I3(Battle 结算闸 player_battle.cpp IsSettlementApplicable 依赖它,签名与语义不改):对不在退出中的实体,
+	// 本函数为 false 的任何时刻,本节点一定仍是属主。能摘掉 PlayerFrozenComp 又保留实体的出口只有三类
+	// (cross-zone-scene-travel.md §12.8 第十节):
+	//   A1  本次交接没写出任何标记(SET 未发出 / 确定没写)—— 换手门只凭 epoch 等于观察值的标记放行,E 代标记只有本节点能写;
+	//   B4  取证脚本原子删掉本族标记后读到 epoch == 缓存值 —— 此前没放行、此后放不出去;
+	//   B5  同一脚本读到本次标记原文的回滚回执,且 epoch == 标记 epoch + 2 == location.owner_epoch、location 指回本节点本 zone
+	//       —— 采纳回滚后的 epoch 与解冻在同一回调里完成。
+	// 其余摘冻结的路径(DestroyDeposedPlayer、ConcludeHandoffAfterMarkSent、存盘被 CAS 拒、B7–B11)都同时销毁实体;
+	// "退出优先"只作用于带 UnregisterPlayer 的实体,战斗侧把它视同离线。新增任何解冻路径都必须重过这条论证。
 	static bool IsCrossZoneFrozen(entt::entity player);
 
 	static entt::entity InitPlayerFromAllData(const PlayerAllData& playerAllData, const PlayerEnterContext& ctx);
@@ -798,7 +926,8 @@ public:
 	// 校验 CZ-6(战斗 / 备战在途、组队在途不可传送)与参数,通过后调 StartTravelHandoff。
 	// 返回 kTravelAccepted = 已受理(玩家已冻结、存盘已发起),**不代表已到达**。受理之后客户端只会看到三种结局之一:
 	//   * 到达:随后收到 RedirectToGate;
-	//   * 未成、原地恢复:随后收到 SendTipToClient,且已解冻(owner_epoch 没动,玩家仍在本节点);
+	//   * 未成、原地恢复:随后收到 SendTipToClient,且已解冻(owner_epoch 没动;或 scene_manager 推路由失败、已把归属
+	//     单调回滚到本节点并留下本次回执,本节点采纳回滚后的 epoch —— 两种都是玩家仍在本节点);
 	//   * 未成、无法原地恢复(owner_epoch 已被推进、玩家已不在本节点,又没收到放行应答):SendTipToClient
 	//     之后紧跟踢线 KickPlayer(34),实体销毁而不是解冻,客户端断线回选服重登(见 ResolveTravelOutcome)。
 	//     handoff 标记已发出、但归属在本节点核实不了时同样是 tip + 34 + 不存盘销毁:冻结满 70s
@@ -906,10 +1035,20 @@ public:
 	// 幂等:requestedAtMs 已非 0(交接已发起)则直接返回,不重复写标记、不重复请求。
 	// 失败分支按"handoff 标记的 SET 发没发出去"分两类(travel_freeze_cap::IsHandoffMarkSent):
 	//   * SET 发出之前(冻结已超过 35s 晚发窗口 / 无 epoch / Redis 断连 / 命令没发出去),以及 SET 收到 ERROR 应答
-	//     (确定没写)→ 一律 AbortTravelHandoff 解冻回 tip,不悬挂;
+	//     (确定没写,只处置同一代交接,见 HandleTravelMarkWriteRejected)→ 一律 AbortTravelHandoff 解冻回 tip,不悬挂;
 	//   * SET 之后在 RequestTravelEnterScene 里(SET 的 OK 晚于晚发窗口才到 / 无 gate 会话 / 无 scene_manager)→
 	//     一律 ConcludeHandoffAfterMarkSent(tip + 踢线 34 + 不存盘销毁),不解冻。
 	static void BeginTravelHandoff(Guid playerId);
+
+	// handoff 标记的 SET 收到 ERROR 应答(Redis 明确没执行)。只由 BeginTravelHandoff 的 SET 回调调用;公开只为单测
+	// 能直接验证代际判断,业务代码不要调。requestedAtMs = 发出这条 SET 的那一代交接(回调按值捕获)。
+	// 只有实体上的交接组件仍是**同一代**(requestedAtMs 相等)才清 markEpoch(标记确定不存在,不登记撤回)并
+	// AbortTravelHandoff;代际不符 / 组件不在 / 实体不在一律只记日志、什么都不动。
+	// 为什么必须比代际:冻结硬上限让"销毁后同节点重登、再发起新一代交接"成为可能。旧一代 SET 的 ERROR 应答迟到时,
+	// 新一代的 SET 可能已经发出 —— 不看代际就 Abort 会把新一代错误解冻(违反骨架 I2 / I3),还会按新一代的
+	// markEpoch 登记撤回、删掉它刚写下的标记。今天 SET、A2′ 与取证走同一条 FIFO 连接,旧 ERROR 应当先于新实体的 A2′
+	// 应答到达(新实体还建不出来),但那是连接实现的性质,不是这里可以依赖的契约。
+	static void HandleTravelMarkWriteRejected(Guid playerId, uint64_t requestedAtMs, const char *err);
 
 	// ── 节点身份冲突时的紧急疏散 ────────────────────────────────────────────
 	// 本节点的 etcd 身份失效(租约过期 / node_id 被别人抢走)时调用。
@@ -975,10 +1114,13 @@ private:
 
 	// SavePlayerToRedis 的本体。allowSkipWhenPersisted = false 时跳过 dirty-save 快路径、一定写盘
 	// (交接已发起时的"不得再写"仍然生效)。快路径判"盘上已是同一份",但同 key 还有在途 / 排队中的存盘时,
-	// 必须改走一次真实存盘、等落地回调收尾。只有两个调用方:
+	// 必须改走一次真实存盘、等落地回调收尾。只有三个调用方:
 	//   * 退出流程的 M4 分支(HandleExitGameNode,exit_fastpath_deferred,§12.6.4 M4);
 	//   * StartTravelHandoff 的快路径补写(handoff_fastpath_forced):保证写 handoff 标记之前没有更早的未落地存盘,
-	//     也就是"SET 发出 ⇒ Redis ⊇ 冻结内存"(骨架 I1)。
+	//     也就是"SET 发出 ⇒ Redis ⊇ 冻结内存"(骨架 I1);
+	//   * ResolveTravelOutcome 的 B5 采纳(rolled_back_adopted,GO-2 §12.8):采纳回滚后的 epoch(E+2)、解冻之后立即写一次。
+	//     一是让 DBTask(E+2) 立刻越过兼容窗口里幽灵持有者可能落下的 DBTask(E+1);二是恢复"快照 == Redis"的前提 ——
+	//     兼容窗口里旧版目标节点若在回滚前写过一份 Redis blob,不强制写的话 dirty-save 快路径会误判"盘上已是同一份"。
 	// 不给 SavePlayerToRedis 加默认参数:它以函数指针形式被引用(asset_op_system.cpp 的 PersistFn)。
 	static bool SavePlayerToRedisImpl(entt::entity player, bool allowSkipWhenPersisted);
 
@@ -988,7 +1130,8 @@ private:
 
 	// "我已被废黜"的统一销毁:不存盘、不改派(疏散票据作废)、摘冻结 / 交接标记、摘场景、摘会话、销毁实体。
 	// 入口:存盘被 epoch CAS 拒(HandlePlayerSaveRejected)、交接被放行(EnterScene 应答 Redirect /
-	// ResolveTravelOutcome 判出 epoch 已变)、进场路由撞上过期的交接实体(DiscardStaleHandoffEntity)、
+	// ResolveTravelOutcome 判出 epoch 已变 —— 含 B7:epoch 变了、没有本次回滚回执、location 却指回本节点,
+	// 同样不解冻而销毁)、进场路由撞上过期的交接实体(DiscardStaleHandoffEntity)、
 	// handoff 标记已发出但归属核实不了(ConcludeHandoffAfterMarkSent,reasonTag = travel_freeze_cap::MarkSentSiteName)。
 	// 最后这个入口下 routine=false 打出的原文 "(ownership moved away)" 是沿用下来的,实际含义是"归属未知";
 	// 判读以它前一行的 [ZoneTravel][MarkSentDestroy](ownership UNKNOWN)为准。
@@ -1008,8 +1151,10 @@ private:
 	// 交接未成 **且已确认没有被放行**:摘 PlayerTravelHandoffComp + PlayerFrozenComp、撤回 handoff
 	// 标记(WithdrawHandoffMark)、按情形回 tip。只有两类调用方:
 	//   * handoff 标记的 SET 没发出(或确定没写)的失败分支 —— 此时不可能被放行(不变量 I0):BeginTravelHandoff 里的
-	//     各分支(含 set_mark 阶段的晚发闸)、存盘阶段看门狗、冻结上限的"标记未发出"分支(ExpireTravelFreeze);
-	//   * ResolveTravelOutcome 核实过的分支。
+	//     各分支(含 set_mark 阶段的晚发闸、同一代 SET 的 ERROR 应答 HandleTravelMarkWriteRejected)、存盘阶段看门狗、
+	//     冻结上限的"标记未发出"分支(ExpireTravelFreeze);
+	//   * ResolveTravelOutcome 核实过的两类正向证据(判定表 B4 epoch 未变 / B5 采纳回滚回执),调用前都已把 markEpoch 清 0
+	//     (取证脚本已删掉本族标记,不再登记撤回)。
 	// RequestTravelEnterScene 已不再调用它(那里 SET 已 OK,走 ConcludeHandoffAfterMarkSent)。已无交接意图时幂等 no-op。
 	//   notifyFailure = true  → 回失败 tip 让客户端收起遮罩:跨 zone 传送未成 kZoneTravelTargetBusy,
 	//                           同 zone 换图未成 kEnterSceneFailed(按组件里的 targetZoneId 自己分);
@@ -1017,37 +1162,56 @@ private:
 	//                           PlayerEnterGameNode → EnterScene 就地切换,再发失败 tip 是误报。
 	static void AbortTravelHandoff(Guid playerId, const char *reason, bool notifyFailure = true);
 
-	// EnterScene 请求已经发出之后,凡是"应答本身不足以判定去留"的情形都走这里,先判清楚有没有被放行:
-	//   1. DEL player:{id}:handoff —— scene_manager 的铸造 Lua 要求标记原样还在,DEL 之后
-	//      不可能再有凭这份标记的放行;
-	//   2. MGET player:{id}:owner_epoch player:{id}:location(单条命令,两个值是同一时刻的)——
-	//      owner_epoch 与缓存值相等 = 归属没动 → AbortTravelHandoff(解冻);
-	//      不相等 = 已被放行 → DestroyDeposedPlayer,玩家已在去目标节点 / zone 的路上。
-	//      location 只用来决定已放行时要不要踢线(见下)。
-	// 两条命令在同一条 Redis 连接上顺序发出,判定没有竞态窗口。Redis 不可用 / 应答异常时保持冻结并
-	// 重新挂看门狗(证据原样透传),直到冻结硬上限(travel_freeze_cap::kFreezeCap,EnforceTravelFreezeCaps 按
-	// "标记已发出"销毁 + 踢线):解冻一个可能已被放行的玩家 = 同一名玩家在两处同时活着。
-	// requestedAtMs 是交接代际,回调到达时不符即 no-op。
+	// handoff 标记的 SET 发出之后(requestedAtMs != 0),凡是"应答本身不足以判定去留"的情形都走这里,先判清楚有没有被
+	// 放行(GO-2 判定表,cross-zone-scene-travel.md §12.8)。取证是**一次** EVAL travel_outcome::kLuaJudgeTravelOutcome:
+	// 在同一原子步骤里只删本次交接这一族标记("E:t" 与回滚转写出来的 "E+2:t"),再读 owner_epoch 与 location。
+	// 删除之后 scene_manager 的铸造 Lua(要求标记原样还在)与回滚 Lua(凭标记时同样要求)都再也不可能凭这一族标记动手,
+	// 所以读到的就是终局。结论由 travel_outcome::ClassifyOwnership 给出;SET 发出后**只有两种正向证据能解冻**,
+	// 其余一律不存盘销毁:
+	//   B2  Redis 未连接 / 命令发不出 / 脚本 ERROR(含只读副本、MISCONF、OOM,#!lua 让它们整体被拒)/ 应答形状不对
+	//       → 判不清:保持冻结,带原证据重挂应答看门狗,终局交给冻结硬上限(ConcludeHandoffAfterMarkSent)。
+	//       解冻一个可能已被放行的玩家 = 同一名玩家在两处同时活着;销毁也没意义(重登同样要读 Redis)。
+	//   B4  kUnchanged        epoch == 缓存值 → 正向证据一:markEpoch 清 0(脚本已删本族标记,不再登记撤回 —— 否则撤回
+	//                         应答之前 Redis 一断,IsSceneChangeBusy 会把玩家挡 ~305s),AbortTravelHandoff 解冻
+	//                         (kSucceeded 静默,其余回失败 tip)。
+	//   B5  kRolledBackToSelf 回执 == 本次标记原文、markEpoch == 缓存值、epoch == markEpoch+2 == location.owner_epoch、
+	//                         location 指回本节点本 zone → 正向证据二:采纳 epoch(PlayerOwnerEpochComp 取 max)→ markEpoch 清 0
+	//                         → rolled_back_adopted +1 → AbortTravelHandoff 解冻 → SavePlayerToRedisImpl(强制写一次)。
+	//                         这是"节点不得自己读 Redis 取 epoch"(CZ-3)的唯一例外,三条前提写死:原子脚本先删本族标记;
+	//                         回执逐字节等于本次标记原文;location 指回本节点本 zone。
+	//   B6  kReceiptAnomaly   回执是本次原文,B5 其余条件任一不成立(键被淘汰后补种 / 新旧 SM 混跑 / 数据写坏)→ 判不清:
+	//                         rollback_receipt_anomaly +1,ConcludeHandoffAfterMarkSent(kReceiptAnomaly,tip + 34 + 不存盘销毁)。
+	//                         可以踢:回执是本次原文说明回滚之后再无新落点,能用本会话发 EnterScene 的只有冻结中的本节点。
+	//   B7  kReturnedToSelf   epoch 变了、无本次回执,location 却指回本节点本 zone(放行后又回来 / 回滚链 / 键被淘汰读成 0)
+	//                         → returned_after_grant +1,沿用下面"已放行"分支不存盘销毁;不踢(会话可能正合法地绑在本节点)。
+	//   B8  kMovedElsewhere / B9 kLocationUnknown → "已放行"分支(不变)。
+	// "已放行"分支:kSucceeded 是同 zone 放行的正常收尾(granted,routine 销毁);其它证据计 granted_without_reply 后销毁,
+	// 此时若同时满足下面全部条件,**销毁之前**先回失败 tip(kZoneTravelTargetBusy)并紧跟踢线 34,让客户端断线回选服重登:
+	//   a) travel_outcome::ShouldResetClientOnGrant(跨 zone,且证据是 kFailed / kNoReply);
+	//   b) 实体上没有 UnregisterPlayer(玩家已在退出,会话由退出流程收尾;纵深防御);
+	//   c) location 能解析,且是本次交接的等待落点(travel_outcome::IsAwaitingPlacementOfHandoff)。
+	//   任一不满足只销毁,并 LOG_WARN 说明为何不踢。location 在回调里只解析一次,判定与这里的判据共用。
+	// 应答回显的 owner_epoch_after_rollback 绝不参与判定(应答可能丢;回滚后第三方可凭转写标记铸出更新的 epoch,
+	// 号码匹配的应答照样带着旧回显)。requestedAtMs 是交接代际,回调到达时不符即 no-op。
 	//
 	// evidence(不给默认值,调用方必须说清凭什么进来)。入口处非 kNoReply 的证据记到交接组件上;实际裁决
-	// 用 travel_outcome::EffectiveEvidence(组件上记下的优先),MGET 回调里按回调那一刻的组件再取一次 ——
+	// 用 travel_outcome::EffectiveEvidence(组件上记下的优先),取证回调里按回调那一刻的组件再取一次 ——
 	// 应答在看门狗那次核实已发出、尚未回来时到达,同样以应答证据为准:
 	//   kSucceeded:同 zone 放行的成功应答(无 redirect),或进场路由已经把交接中的玩家就地放进了新场景
 	//               (EnterScene 3.2 步,不等应答 —— 应答可能丢)。归属没动 = 重发后落回了本节点
 	//               (同物理节点不铸造 epoch),静默解冻;归属已动 = 正常放行。
-	//               这条路也必须经过第 1 步的 DEL:否则标记会带着没变的 epoch 再活 300s,玩家解冻后继续
+	//               这条路也必须经过取证脚本的删除:否则标记会带着没变的 epoch 再活 300s,玩家解冻后继续
 	//               产生新状态,下一次跨节点 EnterScene 会凭这份旧标记被直接放行,新节点读到的是旧档。
-	//   其它:归属没动 = 交接未成,解冻并回失败 tip;归属已动 = 放行了却没收到放行应答,计
-	//               granted_without_reply 后销毁。此时若同时满足下面全部条件,**销毁之前**先回失败 tip
-	//               (kZoneTravelTargetBusy)并紧跟踢线 34,让客户端断线回选服重登 —— 受理后未成且无法在
-	//               原地恢复,实体销毁而不是解冻:
-	//                 a) travel_outcome::ShouldResetClientOnGrant(跨 zone,且证据是 kFailed / kNoReply);
-	//                 b) 实体上没有 UnregisterPlayer(玩家已在退出,会话由退出流程收尾;纵深防御,
-	//                    不依赖退出流程"交接中立即销毁"的具体实现);
-	//                 c) location 能解析,且是本次交接的等待落点(travel_outcome::IsAwaitingPlacementOfHandoff)。
-	//               任一不满足只销毁,并 LOG_WARN 说明为何不踢。
+	//   其它:归属没动 = 交接未成,解冻并回失败 tip;归属已动按上面各行。
 	static void ResolveTravelOutcome(Guid playerId, uint64_t requestedAtMs, const char *reason,
 									 travel_outcome::Evidence evidence);
+
+	// ResolveTravelOutcome 取证脚本应答的处置(判定表 B2 形状非法 / B4–B9),只由它的 EVAL 回调调用。
+	// 参数都是回调按值捕获的:id + 代际 + 发起取证时的缓存 epoch + 原因文本 + 发起时的证据(§11.7,不绑对象)。
+	// 回调到达时实体不在 / 代际不符即 no-op;reply 为空(连接断开)按 B2 处理。
+	static void JudgeTravelOutcomeReply(Guid playerId, uint64_t requestedAtMs, uint64_t cachedEpoch,
+										const std::string &reasonText, travel_outcome::Evidence dispatchedEvidence,
+										const redisReply *reply);
 
 	// 冻结上限到期的单个处置(EnforceTravelFreezeCaps 收集阶段之后逐个调)。按 id 重查实体与交接组件、重算冻结时长、
 	// 重新 DecideFreezeCap,不信任收集阶段的判定(前一个玩家的处置可能已经改了 registry)。
@@ -1063,14 +1227,16 @@ private:
 	//     同 zone kEnterSceneFailed),再 DestroyDeposedPlayer(不存盘),返回 true。**必须先踢再销毁**:
 	//     DestroyDeposedPlayer 会摘会话,之后两条都发不出去。
 	// 为什么不解冻:标记已发出,scene_manager 随时可能(或已经)凭它放行并推进 epoch,解冻 = 同一玩家两处同时活着
-	//   (骨架:SET 发出之后唯一的解冻出口是读到与自己标记原文一致的回滚回执,只在 ResolveTravelOutcome)。
+	//   (SET 发出后只有 ResolveTravelOutcome 的两类正向证据能解冻:原子删掉本族标记后读到 epoch 未变,或读到本次标记
+	//   原文的回滚回执且交叉校验成立。本函数手里两样都没有)。
 	// 为什么不发任何 Redis 命令、不撤回标记:走到这里多半就是 Redis 不可用;销毁之后"标记时刻的状态已落盘、本节点
 	//   不再持有"成了事实,标记与断线释放标记 A1′ 同义 —— 重登挑到别的节点凭它过换手门,同节点重登由 A2′ 删掉;
 	//   撤回只会伤活性(18 循环)。
 	// 为什么同 zone 也踢:此刻 epoch 状态未知(已放行且会话已改绑 / 已放行但路由丢了 / 没放行 / 铸造后又回滚),
 	//   后三种不踢就是一条哑连接,scene 又没有强制 gate 断开的 RPC;只有第一种会多踢一次,数据安全。
 	// 调用点(site 只进日志、并作 DestroyDeposedPlayer 的 reasonTag):冻结上限(ExpireTravelFreeze)、enter_scene 阶段
-	// 晚发闸、SET 之后发现没有 gate 会话、SET 之后发现没有 scene_manager(后三处都在 RequestTravelEnterScene)。
+	// 晚发闸、SET 之后发现没有 gate 会话、SET 之后发现没有 scene_manager(这三处都在 RequestTravelEnterScene)、
+	// 取证读到本次回执但交叉校验不成立(JudgeTravelOutcomeReply,判定表 B6)。
 	static bool ConcludeHandoffAfterMarkSent(Guid playerId, travel_freeze_cap::MarkSentSite site,
 											 travel_freeze_cap::Clock::time_point now);
 
@@ -1090,8 +1256,9 @@ private:
 	// 调用时实体有效、交接组件在)。
 	//   * requestedAtMs == 0 / 组件不在   → 不可达(号只在 SET 回调里、requestedAtMs 置位之后才写),防御性 LOG_ERROR 后返回;
 	//   * error_code != 0               → 不能直接解冻:失败应答不证明 scene_manager 没铸造过 epoch
-	//                                     (例如路由发送失败后的回滚本身也可能失败)。以证据 kFailed 走
-	//                                     ResolveTravelOutcome 核实后再决定解冻还是销毁;跨 zone 且确认已被
+	//                                     (例如路由发送失败后的回滚本身也可能失败,或回滚已把 epoch 推进两格)。
+	//                                     日志带上 owner_epoch_after_rollback 回显,然后以证据 kFailed 走
+	//                                     ResolveTravelOutcome 核实后再决定解冻 / 采纳回滚 / 销毁;跨 zone 且确认已被
 	//                                     放行时,销毁之前先回失败 tip 并紧跟踢线 34(客户端没拿到重定向,
 	//                                     不踢就挂在哑连接上);
 	//   * 带 redirect                   → 跨 zone 放行,scene_manager 已推进 epoch,本节点不再持有该玩家:
@@ -1101,8 +1268,9 @@ private:
 	//   * 无错无 redirect、目标是别的 zone → 协议异常,LOG_ERROR 后以 kAnomalous 走 ResolveTravelOutcome
 	//                                     (已被放行时只销毁、不踢线)。
 	// correlated:true = 应答号与本代交接记下的号相等(kTravelHandoff);false = 旧版 SM 没回显、按 player_id
-	// 退回来的(kLegacyTravelHandoff)。这是给 GO-2 的接缝:应答回显的 owner_epoch 只在 correlated 为 true 时采纳
-	// (旧版 SM 本来也不带那个字段),"外来 epoch 进入裁决"在任何版本组合下都不会发生。本项只用于日志。
+	// 退回来的(kLegacyTravelHandoff)。本项只用于日志。GO-2 **从不凭应答回显采纳** epoch —— correlated 为 true 也不采纳:
+	// EnterSceneResponse.owner_epoch_after_rollback 只进日志,采纳只认 ResolveTravelOutcome 原子取证读到的 Redis 回执
+	// (判定表 B5),"外来 epoch 进入裁决"在任何版本组合下都不会发生。
 	static void HandleTravelEnterSceneReply(entt::entity playerEntity, Guid playerId,
 											const ::scene_manager::EnterSceneResponse& resp, bool correlated);
 

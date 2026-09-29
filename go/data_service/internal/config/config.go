@@ -33,6 +33,10 @@ type Config struct {
 	// 不放进 yaml 明文的话可以用 k8s Secret 挂成环境变量再由 ConfigMap 引用;
 	// 无论哪种,它都只与 remap 这一个接口有关,泄露的后果止于"能在已封锁的 zone 上
 	// 跑一次 remap"——闸门标记仍是第二道锁(见 RemapHomeZoneForMerge 的前置条件)。
+	//
+	// 2026-09-28 起三个回档 RPC(RollbackPlayer / RollbackZone / RollbackAll)也一律要求它
+	// (docs/design/guild-phase2/07-rollback-fail-closed.md §7.6.3 Q2 = ②):没配 = 回档 RPC 同样整体停用。
+	// 回档还有自己的后续闸(跨服务离线栅栏、帮会资产闸),token 泄露不等于能静默回档。
 	AdminToken string `json:",optional"`
 
 	// Prometheus /metrics HTTP listen address (host:port). Empty = disabled.
