@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"trade/internal/config"
+	"trade/internal/data"
 
 	dspb "proto/data_service"
 
@@ -162,13 +163,19 @@ const seqGuardBootstrapTimeout = 5 * time.Second
 // 为什么在这里建、而不是在 schemamigrate 里:那一层只按 proto 出 DDL、不播种业务行。这里跑在
 // trade.go 的 ensureSchema **之后**,表一定已经在;语句幂等,多副本同时启动都跑一遍没有副作用。
 //
-// 失败**不拒启**,只打 ERROR:
-//   - 请求路径已经 fail-closed —— 守卫行不在时 EnsureSeqRowsTx 回 data.ErrSeqGuardRowMissing,
+// 失败**不拒启**,只打 ERROR + 计一次 trade_assetop_seq_guard_bootstrap_failures_total:
+//   - 请求路径已经 fail-closed —— 守卫行不在时 data.EnsureSeqRows 回 data.ErrSeqGuardRowMissing,
 //     首次上架当场失败,既不会绕过守卫建行、也不会写进任何库(与"能签名却投不出去"那种拒启理由不同,
 //     那一种会把托管写进 outbox 再永远卡在 ESCROWING);
 //   - 浏览 / 详情 / 收藏不依赖它,为一条补行语句把只读流量一起带下线不划算。
 //
-// 所以这条 ERROR 日志是唯一的提前信号,文案要能直接指向补救动作。
+// 日志是**启动那一刻**的信号,几小时后没人会去翻;所以两条失败分支都同时打点,让"全集群首次上架
+// 静默失败"在监控里有一条现在时的序列(AGENTS §11.3)。
+//
+// 失败原因要分叉,不能一律说"行不存在":EnsureSeqGuardRow 发的 INSERT IGNORE 在撞重复键时要在那条
+// 索引记录上取 S(MySQL 手册 "Locks Set by Different SQL Statements in InnoDB"),所以滚动重启时,
+// 只要集群里有别的副本正持着哨兵行的 X(有人在首次建行),本次 bootstrap 就会排队等它提交;
+// 5s 预算等超了,事实是"行在、只是被锁着",而不是"没建表"。照"去跑 -migrate"那条文案排查是白跑。
 func (sc *ServiceContext) bootstrapAssetOpSeqGuardRow(ctx context.Context) {
 	if sc.Assets == nil || sc.Assets.Ops == nil {
 		return // AssetOp.Enabled=false:通道整体没装配
@@ -178,11 +185,22 @@ func (sc *ServiceContext) bootstrapAssetOpSeqGuardRow(ctx context.Context) {
 	nowMs := time.Now().UnixMilli()
 	if nowMs <= 0 {
 		// 纪元必须为正(assetop 的硬前置)。系统时钟早于 1970 只会出现在配置坏掉的机器上。
+		data.ObserveSeqGuardBootstrapFailure()
 		logx.Errorf("[trade] 系统时钟异常(UnixMilli=%d),不补 trade_player_op_seq 的哨兵守卫行:"+
 			"首次上架会以 seq 守卫行缺失失败。先校准机器时钟再重启本服务", nowMs)
 		return
 	}
 	if err := sc.Assets.Ops.EnsureSeqGuardRow(bootCtx, uint64(nowMs)); err != nil {
+		data.ObserveSeqGuardBootstrapFailure()
+		if isLockContentionErr(err) {
+			logx.Errorf("[trade] 在 %v 内没能确认 trade_player_op_seq 的哨兵守卫行(锁冲突 / 预算用尽): %v —— "+
+				"**这不代表行不存在**:很可能它已经在库里,只是被在途事务(别的副本正在首次建行)锁住,"+
+				"本次没能确认。不要照着'去跑 -migrate'排查。先看 mmorpg_trade 上 %s 的锁等待"+
+				"(performance_schema.data_lock_waits),压力过去后重启本服务即可;在确认之前,"+
+				"本副本上每个玩家**首次**上架托管都会以 seq 守卫行缺失失败",
+				seqGuardBootstrapTimeout, err, "trade_player_op_seq")
+			return
+		}
 		logx.Errorf("[trade] 补 trade_player_op_seq 的哨兵守卫行失败: %v —— "+
 			"在补上之前,每个玩家**首次**上架托管都会以 seq 守卫行缺失失败(已建过 seq 行的玩家不受影响);"+
 			"浏览 / 详情 / 收藏不受影响。先确认 mmorpg_trade 可写且 trade_player_op_seq 已建表"+
@@ -192,14 +210,27 @@ func (sc *ServiceContext) bootstrapAssetOpSeqGuardRow(ctx context.Context) {
 	logx.Info("[trade] trade_player_op_seq 的哨兵守卫行已就绪(首次建 seq 行的串行化载体)")
 }
 
+// isLockContentionErr 判断 bootstrap 的失败是不是"锁冲突 / 等不到"这一类 —— 那一类的事实是
+// "行可能已经在,只是被锁着",与"行不存在"正好相反,运维动作也完全不同。
+//
+// 判据只取两类,刻意窄:data.IsRetryableTxError 认的那几个码(1213 / 1205 / 9007),
+// 以及 ctx 超时(EnsureSeqRowRetry 的退避可取消,等不到就带着 ctx 错误返回)。
+// 判不出来时走原来那条"行不存在"的文案 —— 宁可措辞保守,也不要把真的没建表说成锁冲突。
+func isLockContentionErr(err error) bool {
+	return data.IsRetryableTxError(err) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, context.Canceled)
+}
+
 // BuildDSN 拼 mmorpg_trade 的 DSN,与 go/data_service/internal/store/mysql.go buildDSN 同口径:
 // sql_mode=%27STRICT_TRANS_TABLES%27 强制会话级严格模式(%27 是转义的单引号)。标题 / 描述是自由文本,
 // 非严格模式下超长写入会**静默截断且无报错**,在连接层兜底。
 //
 // transaction_isolation=%27READ-COMMITTED%27 把整个连接池的会话隔离级别设成 RC(驱动建连时发 SET),
-// 与 go/friend 的 BuildDSN 同口径。显式事务本来就经 assetop.WithTxRetry 固定 RC;这一项管的是事务**之外**的
-// 自动提交语句(Claim / Reschedule / 毒行的主键 UPDATE、InsertListing、DeleteFavorite、
-// EnsureSeqGuardRow 的哨兵行 INSERT —— 玩家 seq 行的建行 2026-09-28 起已挪进业务事务),
+// 与 go/friend 的 BuildDSN 同口径。显式事务本来就经 assetop.WithTxRetry 固定 RC(建 seq 行的短事务
+// 与业务事务都走它);这一项管的是事务**之外**的自动提交语句(Claim / Reschedule / 毒行的主键 UPDATE、
+// InsertListing、DeleteFavorite、EnsureSeqGuardRow 的哨兵行 INSERT,以及 data.EnsureSeqRows 那条
+// 自动提交的普通读探针 —— 玩家 seq 行的建行 2026-09-29 起在它自己的 RC 短事务里),
 // 它们原先落在服务器全局默认的 REPEATABLE-READ 上,删不到行 / 撞上删除标记时会拿间隙锁或 next-key 锁,
 // 与别人的插入意向锁互等。RC 下只剩记录锁。自动提交语句每条各取新快照,读语义与 RR 下相同。
 // 前提同 WithTxRetry:binlog_format=ROW。

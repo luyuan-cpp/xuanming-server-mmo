@@ -1,10 +1,12 @@
 package data
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	assetpb "proto/common/asset"
@@ -13,6 +15,8 @@ import (
 	"shared/assetop"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -46,8 +50,9 @@ func PendingStatus() uint32 { return uint32(tradepb.TradeAssetOpStatus_TRADE_ASS
 // MySQL 实现,同时满足 assetop.Store。
 //
 // 契约:
-//   - 除 InsertOp / EnsureSeqRowsTx 之外的方法自带 opTimeout 上限,调用方 ctx 更早到期时以 ctx 为准;
-//   - InsertOp / EnsureSeqRowsTx 只在调用方给的事务里执行,不自带超时(事务的预算由调用方统一给);
+//   - 除 InsertOp / AllocateSeqsTx 之外的方法自带 opTimeout 上限,调用方 ctx 更早到期时以 ctx 为准
+//     (EnsureSeqRows 自己开短事务,所以也带 opTimeout);
+//   - InsertOp / AllocateSeqsTx 只在调用方给的事务里执行,不自带超时(事务的预算由调用方统一给);
 //   - 返回的 error 一律是存储故障,唯一的例外是 Claim 的 assetop.ErrPoisonRow(payload 解不开)。
 type AssetOpRepo struct {
 	db        *sql.DB
@@ -81,39 +86,83 @@ func (r *AssetOpRepo) bounded(ctx context.Context) (context.Context, context.Can
 }
 
 // ---------------------------------------------------------------------------
-// seq 行的建行守卫(2026-09-21 死锁审计 #16 在 trade 的同形,2026-09-28 根治)
+// seq 行的建行守卫
+// (2026-09-21 死锁审计 #16 在 trade 的同形;2026-09-28 落哨兵守卫行;
+//  2026-09-29 把"锁哨兵 + 建行"从业务事务里拆出来,放进它自己的 RC 短事务)
 // ---------------------------------------------------------------------------
 //
 // # trade 的全局取锁顺序(唯一事实源;新增任何写路径先回来对一遍)
 //
-//	trade_listing → trade_order(P3 未落) → trade_player_op_seq 的哨兵守卫行 (0, 0)
-//	  → trade_player_op_seq 的玩家行 (player_id, stream) → trade_asset_op
+// 两段,**分属两个事务**,前一段提交之后后一段才开始:
 //
-// 落码时(2026-09-28)对全部写路径逐条核对的结论:
+//	[短事务 A:建 seq 行]  trade_player_op_seq 的哨兵守卫行 (0, 0)
+//	                        → trade_player_op_seq 的缺失玩家行
+//	                          (按 (player_id, stream) **升序** INSERT IGNORE)
+//	                        ── COMMIT ──
+//	[业务事务 B]            trade_listing → trade_order(P3 未落)
+//	                        → trade_player_op_seq 的玩家行
+//	                          (按 (player_id, stream) **升序** FOR UPDATE)
+//	                        → trade_asset_op
+//
+// **消环的关键性质**:哨兵行只出现在事务 A 里,而 A 去拿它的时候手上一把锁都没有 ——
+// A 的前置探针是 RC 普通读(不取行锁),哨兵行是 A 取的第一把锁,取到之后 A 只再碰它要插的那几行,
+// 插完立刻提交。事务 B 一次都不碰哨兵行。于是全仓画不出"持业务锁 → 等哨兵行"这条反向边,
+// "哨兵行 → 玩家 seq 行"与全序同向。
+//
+// 逐条核对(2026-09-29 重做了一遍,新增写路径必须回来补):
 //   - InsertListing / InsertFavorite / DeleteFavorite(listing_repo.go):单表单语句,整份文件
 //     一条 FOR UPDATE 都没有,也不在同一事务里碰 seq / outbox —— 不参与本条全序。
-//   - EnqueueEscrowDebit(reconcile/pipeline.go):**唯一**同时碰 seq 与 outbox 的事务。顺序是
-//     EnsureSeqRowsTx(普通读 →(仅缺行时)守卫行 FOR UPDATE → INSERT IGNORE)
-//     → AllocateSeq(玩家 seq 行 FOR UPDATE + 未决行普通读)→ InsertOp(插 outbox 行)。
+//   - EnqueueEscrowDebit(reconcile/pipeline.go):**唯一**同时碰 seq 与 outbox 的路径。它先调
+//     EnsureSeqRows(事务 A,自带提交),再开事务 B 调 AllocateSeqsTx(确认读 → 升序 FOR UPDATE)
+//     与 InsertOp。事务 B 里没有任何语句提到哨兵键。
+//   - EnsureSeqGuardRow(启动期 bootstrap):自动提交的单条 INSERT IGNORE,只碰哨兵行本身,
+//     跑在任何业务事务之外。
 //   - Finalize / ResolveManually:事务里只有一条 trade_asset_op 的主键 CAS,不碰 seq 表。
 //   - Claim / Reschedule / markPoison:自动提交的单行主键 UPDATE(RC,见 svc.BuildDSN)。
 //   - ListDue / OldestPendingCreatedMs / getOp:不加锁读。
 //
-// **没有任何路径在拿到守卫行之后再去取业务行锁,也没有任何路径先拿玩家 seq 行再拿守卫行**,
-// 所以本次新增的那一条边("守卫行 → 玩家 seq 行")与全序同向 —— 不是用新环换旧环。
-// P3 落订单与卖家账时,商品 / 订单行的锁必须排在 EnsureSeqRowsTx **之前**(全序第一、二段)。
+// P3 落订单与卖家账时:商品 / 订单行的锁排在事务 B 的最前面(全序第一、二段),
+// **而 EnsureSeqRows 要排在事务 B 之外、之前**(它自己就是事务 A)。
 //
 // # 为什么要守卫行(旧写法哪里错)
 //
-// 旧写法在**业务事务之外**用自动提交 INSERT IGNORE 建 seq 行。seq 行建出后永不删除(本服务对
-// trade_player_op_seq 没有任何 DELETE),所以并发补行的后到者拿 S 看到的是**已提交**的重复键、
-// 判重即结束,不会升 X。只剩一种 1213:首个插入者在提交前回滚(连接被 KILL、刷盘失败、实例关闭、
-// 上层 ctx 到期),排在它那条未提交记录后面做重复键检查的多个 INSERT 会同时继承到同一段间隙上的锁,
-// 随后各自申请插入意向锁、被对方的间隙锁挡住,InnoDB 牺牲其一。
+// 最早的写法在业务事务之外用自动提交 INSERT IGNORE 建 seq 行,没有任何串行化载体。seq 行建出后
+// 永不删除,所以并发补行的后到者拿 S 看到的是**已提交**的重复键、判重即结束,不会升 X。
+// 只剩一种 1213:首个插入者在提交前回滚(连接被 KILL、刷盘失败、实例关闭、上层 ctx 到期),
+// 排在它那条未提交记录后面做重复键检查的多个 INSERT 会同时继承到同一段间隙上的锁,随后各自申请
+// 插入意向锁、被对方的间隙锁挡住,InnoDB 牺牲其一。
 //
-// 有界重试能把它吸收掉(旧代码就是这么兜的),但**能从 SQL 层消掉的环不该用重试兜底**:让所有首次
-// 建行者先排在一行**已存在、已提交**的守卫行上,同一时刻最多一个插入者,排队的是守卫行上的记录锁;
-// 守卫持有者回滚只是放锁,不会把锁继承成间隙锁。环被消掉,正确性不再取决于重试次数够不够。
+// 有界重试能把它吸收掉(更早的代码就是这么兜的),但**能从 SQL 层消掉的环不该用重试兜底**:让所有
+// 首次建行者先排在一行**已存在、已提交**的守卫行上,同一时刻最多一个插入者,排队的是守卫行上的
+// 记录锁;守卫持有者回滚只是放锁,不会把锁继承成间隙锁。环被消掉,正确性不再取决于重试次数够不够。
+//
+// # 为什么把"锁哨兵 + 建行"拆进独立的短事务(2026-09-29)
+//
+// 消环的性质来自"所有首次建行者排在同一行**已提交、永不删除**的记录锁上",与这把锁是否与业务写
+// 同处一个事务**无关**。同事务的代价是哨兵行的 X 要一直持到业务事务提交 —— 中间还夹着 AllocateSeq
+// (玩家 seq 行 FOR UPDATE + 对 trade_asset_op 的未决行普通读)和插 outbox 行。开服 / 新区首日几乎
+// 每一次上架都是首次建行,那段窗口里**全服托管入队串行**在这一行上;而且 op 表未决行查询的执行计划
+// 一旦退化,局部变慢会立刻变成全局停摆。
+//
+// 拆开之后,哨兵行的持锁时间被压到"一次主键点查 + 每个缺失键一条 INSERT IGNORE",与业务 RPC、
+// outbox 写入、事务重试退避全部无关。稳态更省:EnsureSeqRows 的前置探针命中时连事务都不开。
+//
+// # 拆开之后为什么仍然正确:短事务提交之后、业务事务开始之前,seq 行不可能消失
+//
+//  1. 事务 A 是**提交**过的,不是"写了就算"。提交之后那几行是已提交数据,业务事务 B 回滚只回滚
+//     它自己,碰不到 A 写下的行。
+//  2. 全仓对 trade_player_op_seq **没有任何 DELETE / TRUNCATE / DROP**,所以行不会被业务代码删掉。
+//     这条前提不靠人记:asset_op_seq_guard_test.go 的 TestSeqTableRowsAreNeverDeleted 扫 **trade
+//     模块**全部非测试源码,出现 DELETE 就判红(判据范围与本段措辞必须一致,改一处要改另一处)。
+//  3. 于是事务 B 里的确认读(同一条 sqlSeqRowExists)在 RC 下必然命中:RC 每条语句取一份新快照,
+//     而 A 在 B 的 BeginTx **之前**就已经提交。
+//  4. 万一真读不到(只可能是有人在库上手工删了行,或将来有人加了清理路径),**fail-closed**:
+//     回 ErrSeqRowMissingInTx、计一次 trade_assetop_seq_row_missing_in_tx_total,本次上架失败。
+//     绝不在事务 B 里就地补行 —— 那正是"持业务锁再去拿哨兵锁"那条反向边。
+//
+// ⚠ 第 3 条的前提是"单个 MySQL 主库、同一个连接池"(本服务就是这么连的,见 svc.OpenMySQL)。
+// 将来若把读切到从库 / follower read,确认读可能落在落后的快照上,这一条要重新论证。
+// **本组未连库,以上全部是静态论证,未在真库验证。**
 //
 // # 守卫行选谁:哨兵行 (player_id=0, stream=0)
 //
@@ -125,26 +174,60 @@ func (r *AssetOpRepo) bounded(ctx context.Context) (context.Context, context.Can
 // 所以守卫行取 seq 表自己的哨兵行 (player_id=0, stream=0):
 //   - player_id=0 不可能是真玩家:PlayerId 由 login 的 bwmarrin/snowflake 发,不发 0(AGENTS §7 不变量 1);
 //   - stream=0 是 ASSET_OP_STREAM_UNSPECIFIED,不是 trade 独占的两条流之一,assetop 永不给它分配 seq;
-//   - 全仓对 trade_player_op_seq 只有三条语句,**全是完整主键等值**:assetop.AllocateSeq 的
-//     `FOR UPDATE` 点查与 `UPDATE ... WHERE player_id = ? AND stream = ?` 点更新,以及本文件的
-//     sqlSeqRowExists 普通读。没有任何 COUNT / MIN / 范围扫描 / 巡检会把哨兵行算进去
-//     (grep 证据:`trade_player_op_seq` 与 `AssetOpSeqTableName` 的全部出现处)。
-//     **新增任何按 stream 分组或全表聚合的查询时必须显式排除 (0, 0)**,并补一条断言。
+//   - 全仓对 trade_player_op_seq 只有**五条**语句,全是完整主键等值,各自的锁语义如下
+//     (2026-09-29 重数;上一版写"三条"并漏掉了后两条,清单自己不全就等于没人能"对一遍"):
+//     1. assetop.AllocateSeq 的 `SELECT next_seq, epoch ... FOR UPDATE` 点查 —— 玩家行上的 X 记录锁;
+//     2. assetop.AllocateSeq 的 `UPDATE ... SET next_seq ... WHERE player_id = ? AND stream = ?`
+//     点更新 —— 同一行的 X;
+//     3. 本文件 sqlSeqRowExists 普通读(探针 / 确认读两处共用)—— RC 下不取行锁;
+//     4. 本文件 sqlLockSeqGuardRow(`FOR UPDATE`)—— X,锁集只落哨兵行;
+//     5. assetop.ensureSeqRowFormat 的 `INSERT IGNORE` —— 插入意向锁,撞重复键时在那条索引记录上取 S。
+//     没有任何 COUNT / MIN / 范围扫描 / 巡检会把哨兵行算进去。
+//     **新增任何按 stream 分组或全表聚合的查询时必须显式排除 (0, 0)**,并补一条断言
+//     (机械守卫:TestNoAggregateQueryOverSeqTable)。
 //
-// 代价:所有**首次**建行全局串行在这一行上,且持锁到业务事务提交。这只发生在"某玩家某条流的第一笔"
-// (每玩家每流一次,行建出后永不再走这条分支),不是稳态路径;稳态下普通读直接命中,连守卫行都不碰。
+// # 多个 key 时为什么必须按 (player_id, stream) 升序
+//
+// 哨兵行串行化的只是"**建行**",不是"**分配**"。玩家 seq 行一旦建出,后续所有分配都只是普通读命中 +
+// 玩家行 FOR UPDATE,全程不碰哨兵行。P3 的交付要在同一个事务里给买家 CREDIT 和卖家 CREDIT,两笔
+// 交易若以相反顺序去锁两条**都已存在**的玩家行(买家A/卖家B 与 买家B/卖家A),就直接在
+// trade_player_op_seq 上成环,守卫行帮不上任何忙。
+//
+// 所以本文件把顺序钉死在**一个确定性全序**上:(player_id, stream) 升序,建行(事务 A)与分配
+// (事务 B)都按它走,并且只由 EnsureSeqRows / AllocateSeqsTx 两个方法内部排序 —— 调用方拿不到
+// 乱序的机会(机械守卫:TestSeqKeysAreProcessedInAscendingOrder)。
+//
+// # TiDB 口径(迁库后这一段要重新算账)
+//
+// AGENTS §1 的目标库是 TiDB,而 **TiDB 没有间隙锁**,本节要消的那个环在那边本来就不存在。
+// 迁过去之后哨兵行不再是"消环的载体",只剩"一个所有首次建行都要写/锁的全局热行":悲观事务下
+// 是同一个 Region 的一行上排队,乐观事务下是反复的写冲突(9007)重试。短事务化已经把这个热点的
+// 持有窗口压到最短,但没有消掉它。迁库时的处置意向(二选一,届时按实测定):
+//   - 保留守卫,作为 MySQL / TiDB 两边一致的锁序,接受热行代价;
+//   - 或把建行彻底前置(建角 / 首次登录时就把两条流的 seq 行建好),让上架路径永远走不到缺行分支,
+//     哨兵行随之退化成一条谁也不碰的历史数据。
+//
+// 以上 TiDB 行为取自 TiDB 文档的公开描述,**本组未在 TiDB 上实测**。
 //
 // # 滚动升级窗口
 //
-// 旧版本副本仍在事务外自动提交建行,不经守卫。新旧混跑期间原环仍可能出现(与 guild 同一条结论),
-// 所以本项要停服切换或按 zone 逐个切换,不能新旧副本长期并存。
+// 旧版本副本仍在事务外、不经守卫地自动提交建行。新旧混跑期间原环仍可能出现(与 guild 同一条结论),
+// 而且有一层放大:新副本的事务 A 持着哨兵行 X 去插同一条 seq 行,旧副本那条未提交记录一回滚,
+// 事务 A 就可能成为旧环的牺牲者或长等待者 —— 它倒下之前一直握着全局哨兵行,影响面是
+// **首次建行全局停摆一个锁等待周期**,不是"偶发一个请求 1213"。
+// 短事务化把这个窗口压短了(A 里不再夹着 RPC 与 outbox 写),但没有消除它。
+// 所以本项要停服切换或按 zone 逐个切换,不能新旧副本长期并存;这条约束必须落到发布单上,
+// 不能只活在这段注释里。当前 AssetOp.Enabled 默认 false 且 EnqueueEscrowDebit 还没有生产调用方,
+// 所以它是"开启前的前置条件",不是当下的线上风险。
 const (
 	// seqGuardPlayerID / seqGuardStream 是哨兵守卫行的完整主键。理由见上文。
 	seqGuardPlayerID uint64                = 0
 	seqGuardStream   assetpb.AssetOpStream = assetpb.AssetOpStream_ASSET_OP_STREAM_UNSPECIFIED
 
-	// sqlSeqRowExists 是 EnsureSeqRowsTx 的前置**普通读**(完整主键等值,不带任何锁定子句;RC 下不取行锁)。
-	// seq 行建出后永不删除,常态直接命中、不必再发 INSERT,也就不必去碰守卫行。
+	// sqlSeqRowExists 是**普通读**(完整主键等值,不带任何锁定子句;RC 下不取行锁),两处共用:
+	//   - EnsureSeqRows 的前置探针:seq 行建出后永不删除,常态直接命中,连短事务都不必开;
+	//   - AllocateSeqsTx 的确认读:业务事务里只用它确认行在,不在业务事务里建行。
+	// 给它加任何锁定子句都等于取消整个守卫,理由见 TestSeqRowExistsProbeTakesNoLocks 的头注。
 	sqlSeqRowExists = "SELECT 1 FROM " + AssetOpSeqTableName + " WHERE `player_id` = ? AND `stream` = ?"
 
 	// sqlLockSeqGuardRow 是守卫行的**锁定点查**:完整主键等值 + FOR UPDATE(EXPLAIN 应为
@@ -158,11 +241,60 @@ const (
 // 调 EnsureSeqGuardRow)失败或被跳过时会看到它。fail-closed:首次上架失败,而不是绕过守卫建行。
 var ErrSeqGuardRowMissing = errors.New("trade: trade_player_op_seq 的哨兵守卫行 (player_id=0, stream=0) 不存在")
 
+// ErrSeqRowMissingInTx:业务事务里确认 seq 行时读不到 —— 而 EnsureSeqRows 的短事务刚刚提交过它。
+// 按守卫一节第 3 条的论证这不可能发生,能走到这里只剩两种解释:有人在库上手工删了行,
+// 或者将来有人给这张表加了清理路径(那种情况下整套锁分析都要重做,见 TestSeqTableRowsAreNeverDeleted)。
+// 所以这里**不就地补行**(那会把"持业务锁再拿哨兵锁"的反向边画回来),直接 fail-closed。
+var ErrSeqRowMissingInTx = errors.New("trade: 业务事务里确认 trade_player_op_seq 行时行不存在")
+
 // SeqKey 是一条 seq 行的键。取名不叫 SeqRow 是因为它只是键,不含 next_seq / epoch。
+//
+// 它同时是本文件那条确定性全序的比较键:所有多 key 路径都按 (PlayerID, Stream) **升序**处理,
+// 理由见守卫一节"多个 key 时为什么必须按 (player_id, stream) 升序"。
 type SeqKey struct {
 	PlayerID uint64
 	Stream   assetpb.AssetOpStream
 }
+
+// ---------------------------------------------------------------------------
+// 守卫路径的低基数指标
+// ---------------------------------------------------------------------------
+//
+// 这三条分支都是 fail-closed 的**静默**分支:错误沿调用栈返回给玩家,除了日志没有别的信号。
+// 全集群 bootstrap 失败时,"每个玩家首次上架都失败"的唯一线索会是几小时前启动日志里的一行 ERROR
+// (AGENTS §11.3:关键路径要有低基数指标)。
+//
+// 注册在 prometheus.DefaultRegisterer 上,与 svc.assetChannelMetrics 里的 assetop / scenenode 指标、
+// 以及 svc 自己的 trade_* 计数器同一个 registry,由 svc.StartMetrics 的 promhttp.Handler() 一起暴露
+// —— **不另起一套 registry**。本该挂进 assetop.Metrics,但那些字段与 inc* 方法都未导出,
+// 而 shared/assetop 不在本组可改文件范围内,所以退而挂在同一个默认 registry 上,形状与口径保持一致。
+//
+// 一律**无 label**:这三件事都与具体玩家无关,player_id 只进日志(AGENTS §9)。
+// 用普通 Counter 而不是 CounterVec:Counter 一注册就有一条值为 0 的序列,
+// "从未发生"与"指标不存在"在告警规则里不会长得一样。
+//
+// 包级变量只初始化一次,所以 promauto 的 MustRegister 不会因重复注册 panic(单测里同样安全)。
+var (
+	seqGuardBootstrapFailuresTotal = promauto.With(prometheus.DefaultRegisterer).NewCounter(prometheus.CounterOpts{
+		Subsystem: "trade",
+		Name:      "assetop_seq_guard_bootstrap_failures_total",
+		Help:      "启动期补 trade_player_op_seq 哨兵守卫行失败的次数;>0 表示本副本的首次上架托管会全部失败。",
+	})
+	seqGuardMissingTotal = promauto.With(prometheus.DefaultRegisterer).NewCounter(prometheus.CounterOpts{
+		Subsystem: "trade",
+		Name:      "assetop_seq_guard_missing_total",
+		Help:      "建 seq 行时发现哨兵守卫行不存在(fail-closed,本次上架失败)的次数。",
+	})
+	seqRowMissingInTxTotal = promauto.With(prometheus.DefaultRegisterer).NewCounter(prometheus.CounterOpts{
+		Subsystem: "trade",
+		Name:      "assetop_seq_row_missing_in_tx_total",
+		Help:      "业务事务确认 seq 行时读不到(短事务刚建过)的次数;>0 说明有人删了 seq 行,按数据事故处理。",
+	})
+)
+
+// ObserveSeqGuardBootstrapFailure 记一次启动期 bootstrap 失败。
+// 导出给装配层(svc)调:那一层拿得到失败原因,但 data 才是这张表与这条指标的归属方。
+func ObserveSeqGuardBootstrapFailure() { seqGuardBootstrapFailuresTotal.Inc() }
 
 // EnsureSeqGuardRow 建哨兵守卫行 (0, 0)。**启动期 bootstrap 专用**,不在请求路径上调。
 //
@@ -170,7 +302,7 @@ type SeqKey struct {
 // svcCtx.StartAssetChannel)。刻意不放进 schemamigrate:那一层只按 proto 出 DDL、不播种业务行,
 // 放进去会让"补一行数据"和"改表结构"共用一份需要人工确认的迁移台账。
 //
-// 为什么这里可以用有界重试(而守卫路径不许):它自己就是"事务外同键并发插入 + 首插者回滚"那一种
+// 为什么这里可以用有界重试(哨兵行自己没有守卫可排):它自己就是"事务外同键并发插入 + 首插者回滚"那一种
 // 1213 —— 守卫行自己没有守卫可排,这是 InnoDB 固有、SQL 层去不掉的情形。收敛论证:语句幂等
 // (行已存在是空操作,不改纪元)、跑在自动提交里、没有任何副作用要复位,所以整体重跑安全;牺牲者重跑时
 // 要么撞上胜者已提交的行(空操作成功),要么自己插入成功 —— 两种都终止。退避带 ±20% 抖动且可取消
@@ -186,51 +318,132 @@ func (r *AssetOpRepo) EnsureSeqGuardRow(ctx context.Context, nowMs uint64) error
 	return nil
 }
 
-// EnsureSeqRowsTx 在**调用方的业务事务内**按需建 seq 行:先普通读,缺行才锁守卫行 + 建行。
+// normalizeSeqKeys 校验、去重并按 (PlayerID, Stream) **升序**排序。
 //
-// 契约(违反即把死锁装回去):
-//   - 调用方事务必须是 READ COMMITTED(assetop.WithTxRetry 的默认值)。普通读要看得见前一个
-//     建行者已提交的行,靠的正是 RC 的"每条语句一份新快照";RR 下快照固定在事务第一条普通读,
-//     会看不见而多走一次(无害但白锁守卫行)。
-//   - **必须在本事务的第一次 assetop.AllocateSeq 之前调用,并把本事务要用到的全部 (player, stream)
-//     一次传进来**。这不是风格问题:keys 分两次传的话,第二次很可能发生在已经拿到某个玩家 seq 行 X 锁
-//     之后 —— 于是出现"持玩家 seq 行、等守卫行"的事务,与"持守卫行、等玩家 seq 行"的事务正好反序成环。
-//     P3 的交付要同时给买家 CREDIT 和卖家 CREDIT,正是这种两个 key 的形状,所以这里收成一次调用、
-//     由本函数保证"守卫行永远排在任何玩家 seq 行之前"。
-//   - 调用方不得把哨兵键 (0, 0) 混进 keys:那等于拿守卫行当业务流用。这里直接拒。
+// 排序是正确性的一部分,不是整洁癖:它是本服务对多把玩家 seq 行锁的确定性全序,理由见守卫一节
+// "多个 key 时为什么必须按 (player_id, stream) 升序"。去重是因为同一个 key 传两次会在事务里
+// 对同一行取两次锁 —— 无害但会让语句序列的机械断言失真。
 //
-// 返回 ErrSeqGuardRowMissing 表示 bootstrap 没做成(见 EnsureSeqGuardRow),本次业务写失败。
-func (r *AssetOpRepo) EnsureSeqRowsTx(ctx context.Context, tx *sql.Tx, nowMs uint64, keys ...SeqKey) error {
-	if tx == nil {
-		return errors.New("trade: EnsureSeqRowsTx 必须在调用方的业务事务里执行(tx 为 nil)")
-	}
-	missing := make([]SeqKey, 0, len(keys))
+// 哨兵键 (0, 0) 在这里直接拒:放行的话同一个事务会先锁守卫行、再把它当玩家 seq 行读写,
+// AllocateSeq 还会推进它的 next_seq,守卫行从此带上业务语义。
+func normalizeSeqKeys(keys []SeqKey) ([]SeqKey, error) {
+	out := make([]SeqKey, 0, len(keys))
 	for _, k := range keys {
 		if k.PlayerID == seqGuardPlayerID || k.Stream == seqGuardStream {
-			return fmt.Errorf("trade: 非法的 seq 行键 (player=%d stream=%d):player_id=0 与 stream=0 是哨兵守卫行的键",
+			return nil, fmt.Errorf("trade: 非法的 seq 行键 (player=%d stream=%d):player_id=0 与 stream=0 是哨兵守卫行的键",
 				k.PlayerID, int32(k.Stream))
 		}
+		out = append(out, k)
+	}
+	slices.SortFunc(out, func(a, b SeqKey) int {
+		if c := cmp.Compare(a.PlayerID, b.PlayerID); c != 0 {
+			return c
+		}
+		return cmp.Compare(int32(a.Stream), int32(b.Stream))
+	})
+	return slices.Compact(out), nil
+}
+
+// seqRowReader 是 *sql.DB 与 *sql.Tx 的公共子集,只为让"自动提交探针"与"事务内确认读"
+// 共用同一段实现、同一条 SQL 常量。
+type seqRowReader interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// missingSeqRows 用 sqlSeqRowExists(普通读,RC 下不取行锁)挑出还不存在的行,保持入参顺序。
+func (r *AssetOpRepo) missingSeqRows(ctx context.Context, q seqRowReader, keys []SeqKey) ([]SeqKey, error) {
+	missing := make([]SeqKey, 0, len(keys))
+	for _, k := range keys {
 		var exists int
-		switch err := tx.QueryRowContext(ctx, sqlSeqRowExists, k.PlayerID, uint32(k.Stream)).Scan(&exists); {
+		switch err := q.QueryRowContext(ctx, sqlSeqRowExists, k.PlayerID, uint32(k.Stream)).Scan(&exists); {
 		case err == nil:
-			continue // 常态:行早已建出,不碰守卫行、不发写语句
+			continue
 		case errors.Is(err, sql.ErrNoRows):
 			missing = append(missing, k)
 		default:
-			return fmt.Errorf("读 %s 行 (player=%d stream=%d): %w", AssetOpSeqTableName, k.PlayerID, int32(k.Stream), err)
+			return nil, fmt.Errorf("读 %s 行 (player=%d stream=%d): %w",
+				AssetOpSeqTableName, k.PlayerID, int32(k.Stream), err)
 		}
+	}
+	return missing, nil
+}
+
+// EnsureSeqRows 按需把 keys 的 seq 行建出来,**在它自己的 RC 短事务里完成并提交**。
+//
+// 它是全序里的"事务 A",必须在业务事务(事务 B)**开始之前**调用,不能塞进业务事务里
+// (那正是 2026-09-29 拆掉的形态,理由见守卫一节"为什么把'锁哨兵 + 建行'拆进独立的短事务")。
+//
+// 形状:
+//  1. 自动提交的普通读探针(每个 key 一条主键点查)。全部命中就**连事务都不开**、一条写语句都不发
+//     —— 这是稳态路径(每玩家每流只有第一笔会缺行)。
+//  2. 有缺行才开短事务:事务内再探一次(期间别的副本可能已经建出来了,那就连守卫都不必锁)
+//     → 锁哨兵守卫行 FOR UPDATE → 按升序逐个 INSERT IGNORE → 提交。
+//
+// 这里用 assetop.WithTxRetry(RC + 有界重试)。**它不是用来兜死锁的**:环已经由哨兵行从 SQL 层
+// 消掉了。它吸收的是 1205(锁等待超时:哨兵行被别人短暂持有)与 9007(TiDB 写冲突),以及滚动升级
+// 混跑窗口里旧副本造成的 1213。整段是幂等的(探针只读、INSERT IGNORE 撞行是空操作、不改纪元),
+// 没有任何内存副作用要复位,所以整体重跑安全。
+//
+// 预算:自带 opTimeout(constants.StoreOpTimeout),调用方 ctx 更早到期时以 ctx 为准。超时按失败返回,
+// 本次上架失败 —— 宁可让玩家看见一个明确的失败,也不要让一次上架无界地挂在全局守卫行上。
+//
+// 返回 ErrSeqGuardRowMissing 表示启动期 bootstrap 没做成(见 EnsureSeqGuardRow),本次业务写失败,
+// 并记一次 trade_assetop_seq_guard_missing_total。
+func (r *AssetOpRepo) EnsureSeqRows(ctx context.Context, nowMs uint64, keys ...SeqKey) error {
+	ordered, err := normalizeSeqKeys(keys)
+	if err != nil {
+		return err
+	}
+	if len(ordered) == 0 {
+		return nil
+	}
+	ctx, cancel := r.bounded(ctx)
+	defer cancel()
+
+	missing, err := r.missingSeqRows(ctx, r.db, ordered)
+	if err != nil {
+		return err
+	}
+	if len(missing) == 0 {
+		return nil // 稳态:不开事务、不碰守卫行
+	}
+
+	return assetop.WithTxRetry(ctx, r.db, txRetryAttempts, IsRetryableTxError, func(tx *sql.Tx) error {
+		return r.ensureSeqRowsTx(ctx, tx, nowMs, missing)
+	})
+}
+
+// ensureSeqRowsTx 是短事务 A 的事务体:普通读 →(仅缺行时)锁哨兵守卫行 → 按升序建行。
+//
+// 刻意不导出:它只有在"调用方持有的这个事务马上就会提交、而且这个事务里不会再碰任何业务行"的
+// 前提下才是安全的,而这个前提没法从签名上表达。唯一的生产调用方是 EnsureSeqRows;
+// 集成测试在同包里直接调它,只为把"插了先别提交"的持锁方摆出来。
+//
+// 契约:tx 必须是 READ COMMITTED。前置探针要看得见前一个建行者已提交的行,靠的正是 RC 的
+// "每条语句一份新快照";RR 下快照固定在事务第一条普通读,会看不见而多走一次(无害但白锁守卫行)。
+// keys 必须已经过 normalizeSeqKeys(升序、去重、无哨兵键)。
+func (r *AssetOpRepo) ensureSeqRowsTx(ctx context.Context, tx *sql.Tx, nowMs uint64, keys []SeqKey) error {
+	if tx == nil {
+		return errors.New("trade: ensureSeqRowsTx 必须在一个事务里执行(tx 为 nil)")
+	}
+	missing, err := r.missingSeqRows(ctx, tx, keys)
+	if err != nil {
+		return err
 	}
 	if len(missing) == 0 {
 		return nil
 	}
 
 	// 守卫行必须在**任何**建行之前拿到:所有首次建行者由此串行,插入者一回滚也只是放掉一把记录锁。
+	// 这是本事务取的第一把锁 —— 取它的时候手上没有任何别的锁,所以画不出反向边。
 	var guard int
 	switch err := tx.QueryRowContext(ctx, sqlLockSeqGuardRow, seqGuardPlayerID, uint32(seqGuardStream)).Scan(&guard); {
 	case err == nil:
 	case errors.Is(err, sql.ErrNoRows):
+		seqGuardMissingTotal.Inc()
 		return fmt.Errorf("%w:启动期 bootstrap 未完成(svc.ServiceContext.StartAssetChannel 调 "+
-			"EnsureSeqGuardRow,失败会打 ERROR 日志)。本次不绕过守卫建行:那会把并发首次建行的 1213 装回去", ErrSeqGuardRowMissing)
+			"EnsureSeqGuardRow,失败会打 ERROR 日志并记 trade_assetop_seq_guard_bootstrap_failures_total)。"+
+			"本次不绕过守卫建行:那会把并发首次建行的 1213 装回去", ErrSeqGuardRowMissing)
 	default:
 		return fmt.Errorf("锁 %s 的哨兵守卫行失败: %w", AssetOpSeqTableName, err)
 	}
@@ -244,6 +457,56 @@ func (r *AssetOpRepo) EnsureSeqRowsTx(ctx context.Context, tx *sql.Tx, nowMs uin
 		}
 	}
 	return nil
+}
+
+// AllocateSeqsTx 在**调用方的业务事务(事务 B)里**确认 seq 行在,并按 (player_id, stream) 升序
+// 逐个分配 seq。返回 key → 分配结果。
+//
+// 为什么把"确认"和"分配"收进同一个方法:这两步的顺序与**多把玩家 seq 行锁之间的顺序**就是本服务
+// 全序的最后一段,而顺序错了的表现是并发下偶发 1213,不是响亮的失败。收进来之后调用方拿不到乱序的
+// 机会 —— P3 要同时给买家 CREDIT 和卖家 CREDIT,那正是最容易写反的形状。
+//
+// 契约:
+//   - 事务必须是 READ COMMITTED(assetop.WithTxRetry 的默认值;AllocateSeq 自己也是这条硬契约);
+//   - **必须先调过 EnsureSeqRows 且它已经返回成功**。本方法只做普通读确认,一行都不建;
+//   - 本事务里的业务行锁(P3 的 trade_listing / trade_order)要排在本方法**之前**;
+//   - 调用方不得把哨兵键 (0, 0) 混进 keys(直接拒)。
+//
+// 确认读读不到时回 ErrSeqRowMissingInTx 并计数,绝不就地补行(理由见 ErrSeqRowMissingInTx)。
+// 确认全部做完才开始取第一把 X:这样"行没了"能在一把锁都没拿之前就失败。
+func (r *AssetOpRepo) AllocateSeqsTx(ctx context.Context, tx *sql.Tx, nowMs uint64, keys ...SeqKey) (map[SeqKey]assetop.Alloc, error) {
+	if tx == nil {
+		return nil, errors.New("trade: AllocateSeqsTx 必须在调用方的业务事务里执行(tx 为 nil)")
+	}
+	ordered, err := normalizeSeqKeys(keys)
+	if err != nil {
+		return nil, err
+	}
+	if len(ordered) == 0 {
+		return map[SeqKey]assetop.Alloc{}, nil
+	}
+
+	missing, err := r.missingSeqRows(ctx, tx, ordered)
+	if err != nil {
+		return nil, err
+	}
+	if len(missing) > 0 {
+		seqRowMissingInTxTotal.Inc()
+		return nil, fmt.Errorf("%w (player=%d stream=%d):EnsureSeqRows 的短事务刚刚提交过它。"+
+			"只可能是有人删了 seq 行或新加了清理路径 —— 本次不就地补行(那会把守卫的锁序反过来),"+
+			"先查 %s 的数据与近期变更",
+			ErrSeqRowMissingInTx, missing[0].PlayerID, int32(missing[0].Stream), AssetOpSeqTableName)
+	}
+
+	out := make(map[SeqKey]assetop.Alloc, len(ordered))
+	for _, k := range ordered {
+		a, err := assetop.AllocateSeq(ctx, tx, r.tables, k.PlayerID, k.Stream, assetop.DefaultLimits, nowMs)
+		if err != nil {
+			return nil, err
+		}
+		out[k] = a
+	}
+	return out, nil
 }
 
 // InsertOp 在调用方的事务里插入一行 outbox。主键冲突按故障返回:op_id 来自号段,撞号说明

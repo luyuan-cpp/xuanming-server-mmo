@@ -1124,40 +1124,73 @@ func TestGuardedWrites_SucceedAfterCapacityRowsWereReclaimed(t *testing.T) {
 //
 // # 怎么确定性地造出"ensure 成功、行却不在"
 //
-// 给 friend_capacity 临时加一条 CHECK (player_id <> 49001)。INSERT IGNORE 违反 CHECK(错误 3819)时
-// MySQL 的行为是"降成告警并跳过该行",于是 ensure 返回 nil、49001 的行永远建不出来,每一遍守卫都缺行。
-// CHECK **只是测试注入手段**,生产表没有任何 CHECK 约束。TiDB 默认不启用 CHECK 约束
-// (tidb_enable_check_constraint=OFF 时 ADD CONSTRAINT 被解析后忽略),本用例只对 MySQL DSN 有意义;
-// 在 TiDB 上它会停在下面的"夹具前提"断言上,红因一眼可辨,不会被误读成产品缺陷。
+// 给 friend_capacity 临时加一个 BEFORE INSERT 触发器,把 player_id == blocked 的**待插入行**改写到一个
+// 与任何业务断言都无关的回收槽 id(sink)上。于是 ensure 的那条 INSERT 照常成功 —— 第一遍建出回收槽行,
+// 以后各遍撞回收槽的主键走 ODKU 的 no-op 更新 —— 而 blocked 的行**永远**建不出来,每一遍守卫都缺行。
+//
+// 原先这里的注入手段是"CHECK 约束 + INSERT IGNORE 把 3819 降成告警"。2026-09-29 真库实测(MySQL 26.7.0)
+// 证明那条路已经断了:死锁修复把 ensure 从 INSERT IGNORE 换成了 ODKU(ensureCapacityRowSQL,理由见
+// ensureFriendCapacityRow —— 主键重复时 INSERT IGNORE 拿 S、ODKU 直接拿 X),而 **ODKU 不吞 CHECK 违例**,
+// 用例停在 `Error 3819 Check constraint 'chk_block_49001' is violated`。换成触发器之后,注入不再依赖
+// ensure 用的是哪一种"忽略"语义:它对普通 INSERT / INSERT IGNORE / ODKU 一视同仁,ensure 的语句将来再改
+// 也不会把这条用例带走。用例要钉的行为(守卫行始终缺失 → fail-closed)一个字没放宽。
+//
+// 触发器**只是测试注入手段**,生产表没有任何触发器。依据与未验之处:
+//   - BEFORE 触发器里 `SET NEW.col = …` 改列(含主键列)是 MySQL 8.0 手册 "Trigger Syntax and Examples"
+//     明文允许的(只要有该列的 UPDATE 权限)。
+//   - ODKU 下的触发顺序手册没有逐字写(insert-on-duplicate 页不提触发器)。"重复键检查拿的是触发器改完
+//     之后的行"是推演(否则查的不是真正要插的那一行),**未单独实测**;下面三条"夹具前提"断言会在它不成立
+//     时当场把用例停住,不会伪装成产品缺陷。
+//   - TiDB 把 Triggers 列在 Unsupported features(PingCAP MySQL 兼容性文档),所以本用例只对 MySQL DSN
+//     有意义;在 TiDB 上它停在 CREATE TRIGGER 那一步,红因一眼可辨。
+//   - 权限:要 TRIGGER 权限;而且本机 binlog 是开的,按 MySQL 8.0 手册 "Stored Program Binary Logging",
+//     binlog 开启时建触发器还要 SUPER / SET_USER_ID,否则报 1419(报错文案里会提 log_bin_trust_function_creators)。
+//     验收用 root 就都满足;换成库级授权的应用账号会停在 CREATE TRIGGER 这一步。
 func TestRunGuardedWrite_ExhaustedMissingRowsFailClosed(t *testing.T) {
 	db, ctx := openFriendTestDB(t)
 	repo, _ := newFriendTestRepo(t, db)
 
-	const blocked, other uint64 = 49001, 49002
-	_, err := db.ExecContext(ctx,
-		"ALTER TABLE friend_capacity ADD CONSTRAINT chk_block_49001 CHECK (player_id <> 49001)")
-	require.NoError(t, err, "夹具:给 friend_capacity 加测试用 CHECK 约束")
-	// 下一条用例的 resetFriendIntegrationSchema 会整表重建,这里仍然自己摘掉:用例结束后表是留着的
-	// (只 TRUNCATE),一条来历不明的 CHECK 会误导人工排障。t.Cleanup 是 LIFO,这一步先于连接关闭执行。
+	// sink 是触发器的回收槽:ensure 为 blocked 发出的那条 INSERT 落到这个 id 上。取一个本包其它夹具
+	// 都不用的号,断言里看到它就知道是注入的副产物,不是业务行。
+	const blocked, other, sink uint64 = 49001, 49002, 49000
+	const triggerName = "trg_friend_capacity_divert_49001"
+
+	// DDL 不吃占位符,所以用 Sprintf 拼常量(全是包内 const,没有外部输入)。
+	_, err := db.ExecContext(ctx, fmt.Sprintf(
+		"CREATE TRIGGER %s BEFORE INSERT ON friend_capacity FOR EACH ROW"+
+			" SET NEW.player_id = IF(NEW.player_id = %d, %d, NEW.player_id)",
+		triggerName, blocked, sink))
+	require.NoError(t, err, "夹具:给 friend_capacity 加测试用 BEFORE INSERT 触发器"+
+		"(TiDB 不支持触发器,本用例只对 MySQL DSN 有意义;建触发器还要 TRIGGER 权限)")
+	// 下一条用例的 resetFriendIntegrationSchema 会 DROP TABLE、触发器随表消失,这里仍然自己摘掉:用例结束后
+	// 表是留着的(只 TRUNCATE),一个来历不明的触发器不只会误导人工排障,还会静默改写后续手工插入的 player_id。
+	// t.Cleanup 是 LIFO,这一步先于连接关闭执行。
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		if _, err := db.ExecContext(cleanupCtx, "ALTER TABLE friend_capacity DROP CHECK chk_block_49001"); err != nil {
-			t.Logf("摘除测试用 CHECK 约束失败(下一条用例会重建整表,不影响结论): %v", err)
+		if _, err := db.ExecContext(cleanupCtx, "DROP TRIGGER IF EXISTS "+triggerName); err != nil {
+			t.Logf("摘除测试用触发器失败(下一条用例会重建整表,不影响结论): %v", err)
 		}
 	})
 
-	// 夹具前提(不可省):ensure 必须**静默**跳过被 CHECK 拦住的那一行。若这个 MySQL 版本让 INSERT IGNORE
-	// 直接报错,下面的主断言会以"不是 errCapacityRowsMissing"这种误导性的方式红,所以先在这里把话说清楚。
-	if err := repo.ensureFriendCapacityRows(ctx, blocked, other); err != nil {
-		t.Fatalf("夹具前提不成立:INSERT IGNORE 未静默跳过 CHECK 违例(ensure 返回了 error,本用例的注入手段在这个库上不可用): %v", err)
+	// 夹具前提(不可省):ensure 必须**成功**,而 blocked 的行必须**建不出来**。两者缺一,下面的主断言都会以
+	// "不是 errCapacityRowsMissing"这种误导性的方式红,所以先在这里把话说清楚。
+	// 跑两遍:第一遍走改写后的**插入**分支(建出回收槽行),第二遍走**重复键**分支(撞回收槽主键 → ODKU 的
+	// no-op 更新)。守卫的三遍重试两种分支都会走到,所以两种都要先证明它不报错。
+	for attempt := 1; attempt <= 2; attempt++ {
+		if err := repo.ensureFriendCapacityRows(ctx, blocked, other); err != nil {
+			t.Fatalf("夹具前提不成立:ensure 第 %d 遍报错,本用例的注入手段在这个库上不可用"+
+				"(多半是 ODKU 的重复键分支与 BEFORE INSERT 触发器的交互与推演不符): %v", attempt, err)
+		}
 	}
 	if got := capacityRowCount(t, ctx, db, blocked); got != 0 {
-		t.Fatalf("夹具前提不成立:INSERT IGNORE 未静默跳过 CHECK 违例(player %d 的容量行居然建出来了,got %d 行;"+
-			"多半是该库没有启用 CHECK 约束,例如 TiDB 默认配置)", blocked, got)
+		t.Fatalf("夹具前提不成立:BEFORE INSERT 触发器没有把 player %d 的待插入行改写走(got %d 行;"+
+			"多半是这个库不执行触发器)", blocked, got)
 	}
-	require.Equal(t, int64(1), capacityRowCount(t, ctx, db, other), "夹具前提:未被 CHECK 拦住的那一行必须照常建出来")
-	require.Equal(t, int64(1), totalCapacityRows(t, ctx, db))
+	require.Equal(t, int64(1), capacityRowCount(t, ctx, db, other), "夹具前提:未被改写的那一行必须照常建出来")
+	require.Equal(t, int64(1), capacityRowCount(t, ctx, db, sink),
+		"夹具前提:被改写的行必须落在回收槽上,且恒为一行(第二遍 ensure 走的是 ODKU 的 no-op 更新)")
+	require.Equal(t, int64(2), totalCapacityRows(t, ctx, db))
 
 	// 主断言。子 ctx 只给 5s(不吃满用例的 60s 预算):无界重试会在这里以 context deadline exceeded 返回,
 	// 而不是 errCapacityRowsMissing —— "遍数有界"就是这样被钉住的。
@@ -1173,7 +1206,8 @@ func TestRunGuardedWrite_ExhaustedMissingRowsFailClosed(t *testing.T) {
 		"重试用尽后必须把缺行哨兵原样上抛(logic 据此定性 ErrStorage);若这里是 context deadline exceeded,说明重试没有上限")
 	assert.Zero(t, bodyCalls, "缺行时 body 一次都不许执行:哪怕只在最后一遍放行,好友硬上限也被凭空放宽了一轮")
 	assert.Zero(t, capacityRowCount(t, ctx, db, blocked))
-	assert.Equal(t, int64(1), totalCapacityRows(t, ctx, db), "重试不得凭空多造容量行")
+	assert.Equal(t, int64(2), totalCapacityRows(t, ctx, db),
+		"重试不得凭空多造容量行:恒为回收槽与 other 两行(每一遍 ensure 撞回收槽主键走的都是 ODKU 的 no-op 更新)")
 	assert.Zero(t, mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend"), "fail-closed 的写不得留下好友边")
 	assert.Zero(t, mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend_request"), "fail-closed 的写不得留下申请行")
 
