@@ -6448,8 +6448,10 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
 ## 2026-09-30 续:收缩与集群外入口的全局一致性评审收口(Claude,未编译未测试)
 
 > 接上条 09-29「battle 直连收缩一次做完 + gate/battle 集群外入口」。**未编译、未测试、未上集群,待 Codex 验证**(AGENTS §10.1)。
-> 本条的代码与测试改动已由他人会话随本仓 `1a896b128` / `bf14e85d9`、客户端仓 `a5e0527` 提交;工作树里只剩
-> `k8s-client-entry.md`、`turn-based-battle-server.md` 两份文档的收尾改动未提交。行号取自 2026-09-30 工作树,以函数名 / 用例名为锚。
+> 本条的代码与测试改动、`k8s-client-entry.md` / `turn-based-battle-server.md` 两份设计文档的收尾改动,连同本条自身,都已由他人会话提交:
+> 本仓 main 上是 `bf0a356ea`,客户端仓是 `a5e0527`。**(2026-09-30 评审订正)** 初稿引用的 `1a896b128` / `bf14e85d9`(及随后收录本条的
+> `4d8313e41`)在 main 历史重写后已不在 main 上,只留在 `refs/codex/publish-recovery/20260930-4d8313e41072`,相关文件的内容与
+> `bf0a356ea` 一致;初稿「工作树里只剩两份文档未提交」一句只在写下时成立,已作废。行号取自 2026-09-30 工作树,以函数名 / 用例名为锚。
 
 - **评审规模**:按跨语言契约、构建清单与生成物、端到端走查、文档与代码一致性四个维度,共 18 条发现,独立复核确认 17 条、误报 1 条。
   误报是 contracts-3(「路由服信封级 kInvalidParameter 会让补签被判 BattleGone」):补签消息 179 自路由服诞生的 `c149b7c57` 起
@@ -6460,14 +6462,20 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
     残留模板 `{…}` 现在 fail-closed。Agones 下发的 `advertised.host` 没纳入复核(IPv6 / 尾点形态待确认,贸然收紧会让原本能发布的节点启动失败)。
   - **排空脚本 fail-closed**(contracts-2 / -4,`k8s_gate_drain.ps1`):
     - 沿用已有 draining 标记时,值必须落在 `[Redis TIME - MaxDrainTtlSeconds, Redis TIME]`(86400,与 `-DrainTtlSeconds` 的 ValidateRange 上限相等,由测试钉住)。
-      过小的值(如手工 `SET gate:3:draining 1`)直接 throw,不再让 login 立刻按 deadline 放行、`-DeletePod` 把在线玩家全踢掉;
+      过小的值(如手工 `SET gate:3:draining 1`)直接 throw:脚本不再沿用它、不再去等 login 按 deadline 写下的 drained,
+      带 `-DeletePod` 时也就不会把在线玩家全踢掉。**login 本身不受影响**:`EvaluateDrainingGates` 遇到这种值仍会算出超大的等待时长,
+      照常写 `drained=deadline`(见下「未修,尚未登记」第 1 项);
     - `Wait-GateDrained` 新增必填 `-MarkValue`,轮询中 draining 被改写即中止,不删 Pod;
     - 描述 login 行为的契约注释改正:login 拿不到正的剩余 TTL 时跳过,不再按 1h 兜底补写 drained;
-    - login 侧(`gatedrain_monitor.go`)对非整数值放行的那一半,本批没改。
+    - login 侧(`gatedrain_monitor.go`)本批没改,修复单第 5 项(非整数值 fail-open)转入下面「未修,尚未登记」。
   - **scene 换会话窗口补推重连提示**(e2e-1,`player_battle.cpp`):
     - PREPARING 期间换会话不再推提示(房间未建成,补签只会拿到 BattleGone);
     - `PrepareBattle` 记下备战时的会话号(运行时组件 `BattlePrepareSessionComp`,不入库,随 `RemoveInBattleComp` 一起摘);`ConfirmBattle`
       升级到 FIGHTING 时,会话号变过或组件缺失(登录重建)就补推 `NotifyBattleReconnect`;late_confirm 重建后玩家在线即推。turn-based §22.5 第 3 条已同步。
+    - **本修复没有回归用例**(AGENTS §11.4 要求写明):`BattlePrepareSessionComp` 在 `player_battle.cpp` 的匿名命名空间里,只能按行为观察;
+      「同会话不推 / 换会话推」要先走完整个 `PrepareBattle`。替代验证目前只有 scene 编译与冒烟。最便宜的补法:直接给在线实体挂
+      PREPARING 的 `InBattleComp`、不挂 `BattlePrepareSessionComp`、当前会话号非 0,调 `ConfirmBattle` 后断言经 gate 推了 `BattleReconnectS2C`;
+      另两种要把组件移到 `battle/comp/` 的头文件,或经 `PlayerBattleSettlementTestAccess` 暴露。
   - **客户端本局 Superseded 重新补签**(e2e-2,`BattleClient.cs` 的 `HandleChannelLost`):参战中晚到的观战分配包(WatchBattle double-check
     自我清退竞态)会劫走唯一的直连。现在本局未收场时收到 `Superseded` 就 `EnsureBattle` 要回链路,相位 / 错误 / 失败事件都不动;
     观战方收到 Superseded 只收敛回 None,不会乒乓。
@@ -6481,13 +6489,16 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
       (TTL 上限相等、标记早于 `TIME - MaxDrainTtlSeconds`、轮询中被改写);
     - k8s-client-entry「上线之前」第 4 步与 turn-based §22.7 第 7 步都恢复严格的退出码 0、fail=0。
   - 回归用例:`client_endpoint_test` 覆盖白名单的 static / agones 两条路径(Agones 下发值改用 RFC 5737 的 `198.51.100.9`,
-    不与白名单输入撞值);`BattleClientStateMachineTests` 新增 `ChannelSuperseded_ForActiveBattle_EnsuresBattle`。
+    不与白名单输入撞值);`BattleClientStateMachineTests` 新增三条(客户端 `a5e0527`):`ChannelSuperseded_ForActiveBattle_EnsuresBattle`、
+    `ChannelSuperseded_AfterBattleEnd_DoesNotEnsureBattle`、`ChannelSuperseded_AfterBattleGone_DoesNotEnsureBattle_LateSettlementStillDelivered`
+    (**2026-09-30 评审订正**:初稿只列了第一条)。仍缺真 `BattleDirectLink` + `BattleClient` + `SpectateClient` 的集成用例。
+    e2e-1(scene)没有回归用例,见上。
   - C++ 验证顺序两份文档统一为「proto 重生 → `game.sln` 全量 `/m:1` → `run_cpp_tests.ps1 -Build`」
     (docs-1:k8s-client-entry「上线之前」第 3 步、turn-based §22.7 第 5 步)。
   - 其余订正:`go/shared/nodeinfo/unmarshal_test.go` 的失败提示不再指向 `cd go && build.bat`(build-3);battle-transport-decision §8.1
     的行号改为条目锚点(docs-3);turn-based 白名单引用改为 `gate/main.cpp:219`(docs-4),§22.3 与 §22.7 第 9.1 步补
     `a-/b-direct-delivery` 断言(docs-6),§22.5 指标名补 `match_` 前缀(docs-7);上条 IsTcpNodeType 根因那一行已由修复者
-    原位改为「生成器的 Go 判定」(docs-5,随 `1a896b128`)。
+    原位改为「生成器的 Go 判定」(docs-5,main 上随 `bf0a356ea`,原提交 `1a896b128` 见文首订正)。
 - **对上条 09-29 的行号订正**(旧条目不改):
   - `k8s-client-entry.md` 在「上线之前:代码验证」第 3 步插入 14 行、「已知会红」删 1 行,上条引用的行号整体后移:
     `:714` → `:728`;`:744-747`(「已知会红的测试」)→ `:758-760`,原 `:747` 的内容已并入 `:760`。
@@ -6503,8 +6514,29 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
     与 ChatRedis 共用的 redis-match-cluster 里;内存吃紧时会被静默淘汰,补签回 kInvalidParameter,客户端判 BattleGone。
     淘汰策略归 handoff-backlog D-03 / P2-D1,**待用户拍板**,拍板前不改 yaml;风险与「新路由键不得放在会淘汰的实例上」的约束
     已写进 turn-based §22.5 第 4 条、§22.6 与 handoff-backlog。
-  - 客户端链路一侧的纵深防御(`BattleDirectLink` 的 `HandleAssigned` 换局分支与 `RestartWithReissue` 只拆连接、不 `FailPending`
-    在途调用)已移交纵深防御包,不在本条。
-- **给 Codex**:沿用上条的验证总顺序,不另起口径。本条相关的三份 ps1 测试与 `client_endpoint_test` 一律 fail=0;
-  Unity EditMode `MmorpgClient.Tests.EditMode.Battle` 以 results.xml 为准;scene 相关工程 MSBuild 串行 `/m:1`。
+- **未修,尚未登记到任何设计文档**(**2026-09-30 评审订正**:初稿把第 2 项写成「已移交纵深防御包」,但仓库与本批记录里都找不到
+  这个包的登记或结果,e2e-2 修复者的原话是「可选的纵深防御 (b)……这次没做」。两项都已交接,待编排方确认是否派出;
+  派出前应先登记进 turn-based §22.6 / k8s-client-entry「剩余风险」,本条不改那两份文档):
+  1. **login 排空判定对非整数 draining 值 fail-open**(contracts-2 修复单第 5 项):`gatedrain_monitor.go:136` 的
+     `markedAt, _ := strconv.ParseInt(...)` 解析失败得 0,等待时长按「现在 - 0」算,远超 `GateDrain.Deadline`;只要 draining 带正的 TTL、
+     在线人数高于 `DrainedBelowPlayers`,下一轮就写 `drained=deadline`(打 ERROR 日志)。过小的整数值(如 `1`)结果相同。
+     排空脚本已拒绝沿用这两类标记,经脚本不会删 Pod;但只看 `drained` 做判断的人工操作或其他工具会被误导。
+     修法待属主定,原则是解析失败不能落成 0(fail-closed)。
+  2. **客户端链路一侧的纵深防御**:`BattleDirectLink.cs` 的 `HandleAssigned` 换局分支(`:226` 起)与 `RestartWithReissue`(`:638`)
+     只拆连接、不对在途调用调 `FailPending`(客户端 `a5e0527` 已核实);e2e-2 已在 `BattleClient` 一侧兜住本局 `Superseded`。
+- **待属主同步的文档 / 注释漂移**(本条不改,已交接):
+  - `player_battle.h` 三处接口注释没跟上 e2e-1:`OnPlayerEnterScene` 第 2 步(约 `:87`)仍写 RECONNECT / REPLACE 且有 `InBattleComp`
+    就推,实际只在 FIGHTING 推;`ConfirmBattle`(约 `:66-72`)没写「升级时换过会话就补推」;`RebuildBattleFreezeFromLock`(约 `:142-144`)
+    没写「重建后在线即推」。
+  - turn-based §22.5 第 10 条仍写「EditMode 回归用例待补」,实际三条已随 `a5e0527` 补上,只剩集成用例;§22.7 第 7 步仍写测试「未提交」,
+    实际已提交(main 上为 `bf0a356ea`)。`k8s-client-entry.md` 的「已知会红」小节(约 `:760`)也引用了已不在 main 上的
+    `bf14e85d9` / `1a896b128`。
+- **给 Codex**:总顺序沿用上条,但**以下三处覆盖上条**(上条是旧条目,不改):
+  - C++ 按「proto 重生 → `game.sln` 全量 `/m:1` → `pwsh -File tools/scripts/run_cpp_tests.ps1 -Build`」执行。上条第 4 步的
+    `run_cpp_tests.ps1` **必须带 `-Build`**,不带时只跑已有的旧 exe(docs-1 修的正是这个缺陷;口径以 k8s-client-entry「上线之前」
+    第 3 步、turn-based §22.7 第 5 步为准)。
+  - 上条第 0 步的「会红,须测试属主先修」与「不红但须同批补」两小节**作废**:所列各项都已改好,已知会红清单为空。
+  - 上条第 5 步的 ps1 契约测试一律严格按退出码 0、fail=0 判定,没有按预期放过的例外,任何红都是真实问题。
+  - 另:本条相关的 `client_endpoint_test` 同样要求 fail=0;e2e-1 没有单测,scene 只能验证编译,行为留给冒烟;
+    Unity EditMode `MmorpgClient.Tests.EditMode.Battle` 以 results.xml 为准;scene 相关工程 MSBuild 串行 `/m:1`。
 - **Java 版(AGENTS §12)**:D72 口径细化为「PREPARING 不推重连提示,升级到 FIGHTING 时按会话号补推」,Java 版做战斗时按此对齐。
