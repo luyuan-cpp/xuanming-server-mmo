@@ -474,3 +474,18 @@ Kafka:
                         # 旧值 300000 (5min) 会让 db service 卡住超过 5 分钟时丢数据,
                         # 24h 给运维处理事故留出充足窗口。详见
                         # docs/notes/redis-oom-data-safety-qa-record.md P1 章节。
+
+# 下发 gate 地址时是否必须用 gate 自报的客户端可达地址(NodeInfo.clientEndpoint,集群外入口 D78)。
+# false = gate 没自报就回落 endpoint(PodIP),本地开发 / podip 模式用它;
+# true = 没自报的 gate 直接跳过(external 模式)。K8s 下由 k8s_deploy.ps1 按 -ClientEntryMode 覆盖。
+# 打开前先确认本 zone 所有 gate 都已带 clientEndpoint,否则登录会无 gate 可分。
+RequireClientEndpoint: false
+
+# gate 排空判定(集群外入口 D87):已标 gate:{id}:draining 的 gate 在线掉到阈值或等到期限后,
+# login 写上 gate:{id}:drained,k8s_gate_drain.ps1 看到它才删 Pod。整块可缺省,缺省即下面这组值。
+# Deadline 必须小于 draining 标记的 TTL(k8s_gate_drain.ps1 -DrainTtlSeconds,默认 1800s),
+# 否则 draining 先过期、drained 永远等不到。
+GateDrain:
+  Interval: 5s            # 判定周期;0 = 关闭(排空脚本只能等到超时)
+  DrainedBelowPlayers: 0  # 在线 <= 它即判定排空
+  Deadline: 25m           # 从标 draining 起等这么久还剩人也判定可缩容(打 ERROR);0 = 只认人走干净

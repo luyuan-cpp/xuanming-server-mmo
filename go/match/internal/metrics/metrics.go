@@ -40,7 +40,7 @@ var (
 	gatherTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "gather_total",
-		Help:      "Gather pipeline runs by mode and outcome (success|no_battle_node|no_location|prepare_failed|fingerprint_mismatch|create_failed|internal).",
+		Help:      "Gather pipeline runs by mode and outcome (success|no_battle_node|no_location|prepare_failed|fingerprint_mismatch|create_failed|create_failed_room_alive|not_allocatable|index_failed|internal).",
 	}, []string{"mode", "outcome"})
 
 	// tableFingerprintMismatch 记录 gather 收齐快照后配表指纹不一致(含部分为空)
@@ -296,6 +296,11 @@ func ObserveJoinQueue(mode string, outcome string) {
 func ObserveGather(mode string, outcome string, elapsed time.Duration) {
 	gatherTotal.WithLabelValues(mode, outcome).Inc()
 	gatherDuration.WithLabelValues(mode).Observe(elapsed.Seconds())
+}
+
+// GatherValue 读回某 (mode, outcome) 的 gather 终态计数,只给单测断言用。
+func GatherValue(mode string, outcome string) float64 {
+	return counterVecValue(gatherTotal, mode, outcome)
 }
 
 // ObserveGatherZoneMix 记录一组成员的 zone 组成(mix = single|cross)。

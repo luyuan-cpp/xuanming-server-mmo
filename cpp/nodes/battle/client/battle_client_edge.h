@@ -3,7 +3,8 @@
 // battle 节点的客户端直连面(设计文档 turn-based-battle-server.md §18,D23-D28)。
 //
 // 职责:在节点自身的 TCP 端口(NodeInfo.endpoint,框架已分配并发布到 etcd)上接受
-// 客户端第二条连接,完成票据握手,把战斗客户端消息就地派发给 BattleRoomManager,
+// 客户端第二条连接(集群外客户端按票据里的 NodeInfo.client_endpoint 经 hostPort / Agones
+// 端口映射到达这个端口,集群外入口 D76/D81),完成票据握手,把战斗客户端消息就地派发给 BattleRoomManager,
 // 并把 S2C 直接写回连接 —— 战斗流量从此零字节经过 gate。收缩后这是战斗的唯一通路
 // (turn-based §22 D66/D68):gate 不再中继战斗上行,战斗帧也不再回落大厅。
 //

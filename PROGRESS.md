@@ -6174,3 +6174,273 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
 - 用户确认 `go/login/etc/login.yaml` 的 `Timeout: 100000` 是笔误(旧注释写 10s)。改:`go/login/etc/login.yaml`、`deploy/login-stack.linux/login.yaml` → 10000;`bin/etc/base_deploy_config.yaml` `GrpcClient.CallDeadlineMs.LoginNodeService` → 12000(= 10000 + 2000,部署门禁恰好通过);K8s login ConfigMap 从 login.yaml 镜像,自动跟随;`deploy/k8s/README.md` 表格与说明、`docs/design/grpc-client-deadline-failure-callback.md` §2 / §4.2 / §4.3 / §8 / §10 同步。
 - 10s 是否够(静态核对,见设计文档 §4.3):CreatePlayer 常态最坏 9s(三次 3s gRPC)装得下;EnterGame 预加载链异步(5min),不受影响;Login 快路径的 etcd 探测自带 30s,etcd 卡 >10s 时这次 Login 以 DeadlineExceeded 结束、客户端收 1003 重试。
 - **给 Codex**:① 部署门禁纯函数回归:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(仓库根),全部 PASS;② 本地起 login(直连模式)跑一次 robot 登录冒烟(login-test),通过标准与改动前一致;③ 需要时压测对比 CreatePlayer / Login 的 P99 与 DeadlineExceeded 计数,确认 10s 不截断常态请求。login 与 C++ 都只改配置,不用重编。
+
+## 2026-09-29 数据层死锁审计收口:player_name 改聚簇主键根治 + 真库受控实验推翻两次静态推演(Claude,已跑真库)
+
+- **背景**:09-21 friend 真库首跑抓到 1213 后做的全仓审计(18 条)分四轮修完,前三轮全是静态推演 + 文档核对,一次真库都没跑。09-29 本机 Docker 起来后补跑,结果推翻了其中两条关键结论。
+- **受控实验(独立探针,真 MySQL 26.7.0,全局 RR,每格重复 5~20 次)**,完整数据见 `docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md` §9.1:
+  - 现场一(唯一键撞删除标记记录):现行 `PK(player_id)+UK(name_norm)` 下 **ODKU 并没有消环** —— "竞争者 id 都小于原主人"(号段 id 抢存量 snowflake 角色释放的名字 = 生产常态)5/5 成环;唯一 0/15 全清的是 `PK(name_norm)+UK(player_id)` **配 ODKU**,两个条件缺一不可。
+  - 现场二(先到者回滚):普通 INSERT / INSERT IGNORE / ODKU × 聚簇主键 / 二级唯一索引,**六格全 10/10 成环** —— 成因是回滚时的锁继承,与写法无关,ODKU 拆不掉;唯一消法是让首次插入者先排在一行已提交的守卫记录上(trade 哨兵行)。
+  - 现场三(改主键是否引入新环):两种结构各 0/20,未复现。
+- **落码**:`#12` 按根治做 —— `player_name` 主键改 `name_norm`、`player_id` 转 `uk_player_name_owner`,Reserve 保持 ODKU,Release 改钉 `FORCE INDEX(PRIMARY)`,配幂等可重跑可回滚的单条 ALTER 迁移(含旧形态探测与双语句路径,回滚 DDL 写在注释里);`#11` 生成列 `snapshot_guid_nz` + `uk_snapshot_guid_nz` + 去重迁移,并补上生成列形状校验(列名被普通列占用时 fail-closed);`#16` trade 用哨兵守卫行 + `assetop.EnsureSeqRowTx` 在事务内建 seq 行;gateway 重试逻辑抽成 `InnoDbDeadlockRetry`。
+- **真库结果**:friend `internal/data` 124s **零 FAIL 零 SKIP**(开 `FRIEND_REQUIRE_MYSQL_TESTS=1`);data_service 全部通过,只剩 `TestMigrateSchema_UpgradesLegacyHandWrittenTables` —— 已在**干净 HEAD worktree 上复现同样失败**,与本批无关;gateway 12/12;assetop 09-29 早绿。
+- **可 grep 的判据**(推广用):当被争抢的键是二级唯一索引、且新记录主键可能小于删除标记那条的主键时,ODKU 不够用。按此扫全仓:`zone_whitelist` / `zone_config` / `trade_favorite` / friend 各表安全;`guild`(PK guild_id + uk name_norm)安全性**依赖 guild_id 单调递增**,改号段分配则环回来 —— 已知会帮会会话。
+- **未完成 / 给 Codex**:① `go/trade`、`go/shared/assetop` 真库回归没跑完 —— HEAD 编不过(`ledger_dataservice.go` 调的 `GetPlayerAssetOpLedger` 缺 proto 生成产物,`ccafe300c` 带入),先 `cd go && build.bat` 重生成再跑 `go test -tags=integration ./internal/...`;② merge_zone 真库并发用例未跑(工具归搬迁会话);③ TiDB 一次没测,`#11` 的唯一键在 TiDB 上建不出来且 `NOT EXISTS` 退路在 TiDB 上不成立,迁库前必须解决;④ `player_name` 改主键的发布口径:回滚镜像之前必须先回滚 DDL(旧二进制 + 新表会让 Release 以 1176 失败)。
+
+## 2026-09-29 Java 版服务器启动：登录 → 进场景竖切（Java 仓库，端到端已验证）
+
+- **决定（用户）**：服务器出 Java 版，放 `github.com/luyuan-java/xuanming-server-mmo`（本机 `D:\luyuan\wuxingqitan\xuanming-server-mmo-java`，push 由用户执行）；**以后所有功能两个版本都要做**，对账本在 Java 仓库 `PARITY.md`，本仓库 `AGENTS.md` 新增 §12。Java 版按 Java 惯用方式重写、目录与模块自定，只与本仓库共享客户端契约（帧格式、客户端可见 proto、消息号、tip、配置表数据）；选库优先 GitHub ≥ 2 万 star 且同类取最高（Netty、Spring Boot、Dubbo、Nacos、Redisson、MyBatis、Druid、Guava、Protobuf）。
+- **基线**：本仓库 `766cb037c`（契约经 Java 仓库 `tools/ContractSync.java` 同步，源 commit 记在其 `contract/SOURCE.properties`）。Java 版本 `0.1.0-SNAPSHOT`。
+- **Java 仓库内容**：12 个 Maven 模块（xm-proto / xm-table / xm-net / xm-common / xm-api / xm-discovery / xm-player-store / xm-gateway / xm-gate / xm-login / xm-scene-manager / xm-scene），设计见其 `docs/design/`，从本仓库提取的客户端契约见其 `docs/reference/`。
+- **验证（Java 仓库，按用户授权由 Claude 执行）**：离线全量 `./mvnw install` 385 个测试 0 失败（4 个真 Redis 集成测试默认跳过，另跑过一次全绿）；本机 MySQL/Redis 上拉起 5 个进程，用本仓库 robot（`robot_smoke.yaml` 形状，3 账号）实测：新号建角进场、stress AI 75s、老号重登、断开后立即重登四种情况均 `login_ok=3 enter_ok=3`、0 失败，服务端 0 ERROR。另做了一轮 4 视角对抗评审，15 条中高严重度发现全部证实并修复（主要是玩家数据归属的写回丢失竞态、Dubbo 端口无鉴权、进场失败后会话状态、背压）。
+- **偏离 §10.1**：为做 Java 版端到端验收，在 scratchpad 里离线编译了本仓库的 robot（`GOFLAGS=-mod=vendor GOPROXY=off go build`，产物不在本仓库，本仓库文件未改）。
+- **本仓库待跟进**：Java 版对 `LeaveGame` 后「回选角」与本仓库行为不同（见 Java `PARITY.md`），做客户端回选角前两版需要统一口径；Java 版尚未同步 `766cb037c` 之后新增的帮会消息号（239–243）。
+
+## 2026-09-29 battle 直连收缩一次做完 + gate/battle 集群外入口(Claude,全部未编译、未测试)
+
+> 状态:代码、脚本、客户端与文档均已落盘;**未编译、未测试、未上集群,待 Codex 验证**(AGENTS §10.1)。本条只做索引,
+> 决策与逐行证据以 `docs/design/turn-based-battle-server.md` §22(D65–D75)和 `docs/design/k8s-client-entry.md`(D76–D93)为准;
+> 行号取自 2026-09-29 工作树,共用工作树会漂移,以函数名 / 决策号为锚。
+
+- **起因**:用户问「battle 为什么不经 gate、客户端有几条连接」。静态核对的现状快照见 turn-based §21(已被 §22 取代,勘误在 §22.8):
+  gate 仍中继战斗、D39 未落码、上行被拒而下行照送;K8s 上三个地址出口都下发 POD_IP,集群外客户端 gate 与 battle 都连不上
+  (早先「K8s 上直连失败回落 gate、只剩 1 条连接」的推断不成立,k8s-client-entry.md「背景与问题」第 4 条)。
+- **用户三项拍板**:
+  1. **收缩一次全做,事后验**(D65):豁免 D36 / D37 / D-12 前提①「K8s 路由模式 battle-smoke 先跑通」,理由是项目未上线、没有老客户端。
+  2. **集群外入口按最标准做**:battle = Agones Fleet(portPolicy Dynamic),gate = StatefulSet + 每序号 Service,进程自报客户端地址(D76–D93)。
+  3. **授权改客户端仓** `../mmorpg-client`(AGENTS §9 的客户端任务授权)。本批改动面超过 §10.2 的 30 文件门槛,用户已一并授权。
+- **收缩落码摘要(D65–D75,turn-based §22.1–§22.3)**:
+  - 连接形态:平时 1 条 gate 长连接;参战 / 观战时每局再加 1 条 battle 直连,**直连是战斗唯一通路**;大厅只承载
+    `NotifyBattleAssigned` / `NotifyBattleStart`(battle 发,可 Kafka 回落)与 scene 发的 `NotifyBattleReconnect`、结算 `NotifyBattleEnd`。
+  - D66:gate 两种路由模式都不中继战斗,`DispatchClientRpcMessage` 统一回 tip 1003,不计非法包、不断连
+    (`cpp/nodes/gate/handler/rpc/client_message_processor.cpp:937-950`);删 `battle_binding_helper.{h,cpp}`,出站白名单去掉 `BattleNodeService`。
+  - D67:删 Kafka `BindBattleEvent` / `UnbindBattleEvent`;event_id 生成器已加自动墓碑,**regen 后** 43 / 44 将改写为 `N=reserved:<原名>`、永不复用
+    (当前 `proto/event_id.txt` 仍是活名 `43=ContractsKafkaBindBattleEvent` / `44=ContractsKafkaUnbindBattleEvent`,待下面 Codex 第 2 步);
+    单次新增墓碑超过 4 条需 `PROTOGEN_ALLOW_MASS_EVENT_TOMBSTONE=1`。
+  - D68 / D69:下行拆成 `PushBattleFrame`(只走直连,无直连即丢)和 `PushLobbyAnnouncement`(只管 Assigned / Start);观众首帧改为握手后直连推快照。
+  - D70:`CreateBattle` / `AddObserver` 先预签票,签不出 fail-closed 回 1003,不建房、不登记。D71:删 `RefreshRoutingFromSession`。
+    D72:scene 换会话只推 `NotifyBattleReconnect`(`NotifyBattleReconnectToClient`)。
+  - D73:robot 删 `skip_direct_connect`,各冒烟都走直连。D74:Unity 新增 `IBattleChannel`;直连未就绪时本地快速失败,不走大厅;
+    关闭原因结构化;补签每局 3 次,1 / 2 / 4s 退避;失败横幅 + 重新连接按钮;PullState 按有上限的退避自动重拉。
+  - D75:`k8s_deploy.ps1 -GateRouterMode` 默认改为 `"1"`(`tools/scripts/k8s_deploy.ps1:164`);C++ 默认值与 `gate_security_test` 不改(D-12 修订)。
+    `dev_tools` / `k8s_image` 留空即不覆盖;`k8s_zone_rollback -Apply` 留空时在停服前读集群里 gate 当前的模式,
+    读不到或与 `k8s_deploy.ps1` 默认值不一致即拒绝,要求显式传 0 / 1(fail-closed,turn-based §22 D75)。
+- **集群外入口摘要(D76–D93,k8s-client-entry.md「最终决策」)**:
+  - D76–D79:`NodeInfo.client_endpoint = 11` 由进程在发布到 etcd 之前自报,`endpoint` 仍是集群内身份。所有 NodeInfo 解析方忽略未知字段
+    (Go 9 处统一走 `go/shared/nodeinfo`,C++ 3 处)。三个出口 login / scene_manager / battle 用同一选择规则
+    (`go/shared/clientendpoint.Select`、C++ `client_endpoint::ClientFacing`);login / scene_manager 按有效客户端地址去重
+    (battle 只下发自己的地址,无需去重;k8s-client-entry.md:59)。static / agones 地址来源在发布前同步解析,失败 fail-closed。
+  - D80:两个正交开关 `-ClientEntryMode podip|external`(默认 podip)与 `-BattleOrchestrator deployment|agones`(默认 deployment)。
+    模式参数不粘滞,切换形态要加 `-AllowDisruptiveSwitch`。
+  - D81–D86(battle):Agones Fleet,端口名 `client`,Dynamic。`CreateBattle` 在任何副作用之前依次过准入闸 → 分配许可 → loop 内复核 → 预签 → 插表,
+    前三道拒绝回 gRPC `UNAVAILABLE "battle_not_allocatable"`,预签失败回 gRPC OK + tip 1003(D70)(`cpp/nodes/battle/handler/grpc/battle_node.cpp:56-124`)。
+    match 遇到它不发 DestroyBattle,用 `PickRandomExcept` 换节点重试一次(`outcome=not_allocatable`)。排空标签 `mmorpg.io/drain`;
+    Health 绑 EventLoop 心跳;Agones 代码下沉到 `cpp/libs/engine/infra/agones/` 并泛化,scene 只做机械改名;Deployment + hostPort 形态只用于验证与回退。
+  - D87–D90(gate):StatefulSet(Parallel、OnDelete、PDB `maxUnavailable: 0`)+ 每序号 Service `gate-<i>`(NodePort `base+i`,或 LoadBalancer + 模板),
+    `externalTrafficPolicy` 默认 Local;排空走 `tools/scripts/k8s_gate_drain.ps1`;`gate-entry` 只在 podip 且单副本时生成。
+  - D91–D93:Java gateway 的 Ingress 只路由 `/api`,`-GatewayTrustedProxies` 必填;`admin.api-key` 经 Secret 注入,非 dev 档缺失、占位或过短则拒绝部署。
+    新 env 只用 `CLIENT_ENDPOINT_*` / `HOST_IP` / `POD_NAME`。本地验证用单节点 kind、独立 kubeconfig、阶段 A / B,Agones 端口段 7100–7109。
+  - 同批附带:
+    - `-LoginDevPasswordAuth` 只允许 dev 档;
+    - match 在建房**之前**写观战记录(fail-closed,写不进去记 `outcome=index_failed`);
+    - 时长口径:matched ticket TTL 1 / 2 / 5 / 10 人 = 42 / 48 / 66 / 96s,5 人开战锁 101s,team `endMatchMaxDuration` 110s,battle 确认补发窗口 180s;
+    - Agones allocate 晚到后永不回 Ready 的修复;
+    - login 排空的 `drained` TTL 跟随 `draining` 剩余 TTL。
+- **主要改动(按模块归纳)**。收缩批主体已随用户提交入库:本仓 `ba8621a75`(`ec260bd49` 合并远端时保留);
+  客户端仓 `f86a3b6`(首批:新增 `IBattleChannel` / `FakeBattleChannel` 及其 `.meta`,改 `DirectRoutingBattleTransport`、`IBattleTransport`、
+  `BattleClient`、`SpectateClient`、`BattleDirectLink`、`GameClient` 与 5 个 Battle EditMode 用例)/ `727450d`(续改 `BattleClient`、`BattleDirectLink` 与 UI);
+  两者都是与 Qdao 角色改动同批的提交,与 turn-based-battle-server.md:934-935 一致。
+  `9c9c012b7` 是死锁治理会话的提交(只含 go/friend、go/trade 与 Java gateway 的 `InnoDbDeadlockRetry` / `ZoneWhitelist` 共 8 个文件),与本批无关。
+  集群外入口批和各收尾批目前还是两仓工作树里未提交的改动。
+  - **proto 与生成器**:`proto/common/base/common.proto`(`client_endpoint = 11`);`proto/battle/{player_battle,battle_node}.proto`;
+    `proto/common/component/battle_comp.proto`、`proto/scene/scene.proto`(注释);`proto/contracts/kafka/gate_event.proto`(删 Bind / Unbind);
+    `tools/proto_generator/protogen/internal/{message_id.go,generator/cpp/event_id.go}` 及单测(墓碑)。
+  - **C++ engine**:core 新增 `node/system/node/client_endpoint.{h,cpp}`;改 `node.{h,cpp}`、`node_entry.h`(THooks `ClientEndpointSourceFactory`)、
+    `etcd_service.cpp`、`service_discovery_manager.cpp`(宽松解析)、`node_util.{h,cpp}`(注释);infra 新增 `agones/` 下 4 组源文件:
+    `agones_rest_client`、`agones_gameserver_lifecycle`(原 `agones_scene_lifecycle`)由 `cpp/nodes/scene/agones/` 下沉,原目录删除;
+    `agones_gameserver_status`、`agones_client_endpoint_source` 为新写(D85,k8s-client-entry.md:125);同步 core / infra 构建清单、`game.sln`、`run_cpp_tests.ps1`;
+    测试 `cpp/tests/client_endpoint_test`(新增)、`agones_lifecycle_test`。
+  - **C++ nodes**:
+    - gate:`client_message_processor.cpp`、`main.cpp`、`gate_router_mode.h`(只改注释);删 `battle_binding_helper.*`;`gate_event_handler.cpp` 只改守护段;
+    - battle:`battle_room_manager.{h,cpp}`、`battle_node.{h,cpp}`、`battle_client_edge.{h,cpp}`、`main.cpp`;新增 `battle_push_policy.h`、
+      `battle_admission_gate.h`、`battle_room_table.h`,以及对应的三份独立 gtest `cpp/nodes/battle/tests/*`(不进 vcxproj);
+      删 `handler/grpc/battle_client_player_service.{h,cpp}`(`BattleClientPlayerGrpcImpl`,gate 中继在 battle 侧的入口,与 gate 删
+      `battle_binding_helper.*` 对称;已在 `ba8621a75`,构建清单同步;非生成物,regen 不会恢复;turn-based-battle-server.md:854);
+    - scene:`main.cpp` 与三个 handler 机械改名;scene lib 的 `player_battle.{h,cpp}`、`player_lifecycle.cpp`(D72)。
+  - **Go**:
+    - 新增 `go/shared/nodeinfo`、`go/shared/clientendpoint`;
+    - login:出口选择、`RequireClientEndpoint`、GateDrain 监控;scene_manager:`gate_redirect.go`;
+    - match:gather / spectate / watchbattle / queue / team / `discovery/node_watcher.go` / metrics;
+    - player_locator、guild、data_service、client_rpc_router:只放宽 NodeInfo 解析。
+  - **robot**:`battle_direct_conn.go`,battle / 跨 zone / team / features 各冒烟场景,`config/config.go`,`etc/{battle_smoke,team_smoke}.yaml`,两个 handler。
+  - **部署与脚本**:
+    - `tools/scripts/`:`k8s_deploy.ps1`、`lib/k8s_client_entry.ps1`(新增)、`k8s_gate_drain.ps1`(新增)、`k8s_zone_rollback.ps1`、
+      `dev_tools.ps1`、`k8s_image.ps1`、`start_game.ps1`;
+    - 测试:`k8s_client_entry_contract` / `k8s_gate_drain` / `k8s_zone_rollback_gate_router_mode`(新增)、`k8s_deploy_contract`、`k8s_migrate_gate`、`lib/deploy_capture.ps1`;
+    - `deploy/k8s/`:`kind-config.yaml`(新增)、`zones.*` 样例,`manifests/go-svc/` 下的 client-rpc-router / chat / trade / friend;
+    - `bin/etc/base_deploy_config.yaml`。
+  - **客户端仓**(`D:\luyuan\wuxingqitan\mmorpg-client`):
+    - `Assets/Scripts/Net/BattleDirectLink.cs`;
+    - `Game/Battle/` 下 `IBattleChannel`(新增)、`DirectRoutingBattleTransport`、`IBattleTransport`、`BattleClient`、`SpectateClient`;`GameClient.cs`;
+    - `UI/Ugui/Battle/` 下 `BattleScreen` / `BattleHud` / `BattleHudLogic` / `BattleUiRoot`;`App/DevAutoPilot.cs`;
+    - `tools/{run_crosszone_pair,gen_proto,gen_messageids}.ps1`、`README.md`、`.gitignore`;
+    - `Assets/Tests/EditMode/Battle/` 下 7 组用例与 `FakeBattleChannel`(两个 `.meta` 为手写)。
+  - **设计文档**:权威两份见上;同批订正了以下文档,旧文原样保留,在旁加「已被 §22 / D6x 取代」或「(2026-09-29 更正)」标注:
+    - `battle-transport-decision.md`、`ARCH.md`、`client-rpc-router.md`;
+    - `xuanming-port-decisions-20260910.md`(文末「D-12 修订(2026-09-29)」)、`cross-zone-matchmaking.md`;
+    - `moba-battle-target-architecture.md`、`session-extractability-mmo-slg.md`、`gate-connection-admission-control.md`、`k8s_gate_exposure_guidance*.md`;
+    - `gate-load-balancing-design.md`、`gateway-k8s-deployment.md`、`agones-scene-node-high-density.md`、`microservice-zone-contract-20260914.md`;
+    - `zone_data_rollback.md`、`leaderboard-system.md`、`docs/ops/merge-zone-runbook.md`、`deploy/k8s/{README,AGENTS}.md`;
+    - 路由模式默认翻 `"1"`(D75)引起的原因订正:`friend-port-20260918.md`(F17)、`guild-zone-client-access.md`(G9)、`jubaozhai-market.md`、
+      `mail-system.md`(结论仍不可达,原因改为未登记进 K8s 部署);
+    - 时长与 kind 订正:`team-system.md`(5 人锁 83→101s、单调兜底 90→110s)、`handoff-backlog-2026-09-05.md`(P2-03,kind-config 已存在)。
+    - 以上清单按 2026-09-29 的 `git status` 与各包记录核对;提交前仍以 `git diff` 逐文件确认。`docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md`
+      的 §9 是死锁治理会话的改动,**不属本批**。
+  - **提交约束(由用户决定何时提交)**:
+    - 下列新增文件目前都**未被 git 跟踪**,提交时须一并纳入:`docs/design/k8s-client-entry.md`、`deploy/k8s/kind-config.yaml`、
+      `tools/scripts/lib/k8s_client_entry.ps1`、`tools/scripts/k8s_gate_drain.ps1`、`go/shared/{nodeinfo,clientendpoint}/*`、
+      `cpp/libs/engine/infra/agones/*`、`client_endpoint.*` 及其测试工程、battle 的 `battle_admission_gate.h` / `battle_room_table.h` 与两份新测试、
+      `tools/scripts/tests/` 下三份新测试脚本;以及入口 2a–2c 批的 9 份 Go 新测试(ingress2a/2b/2c 记录):
+      - `go/login/internal/config/gate_drain_conf_test.go`、`go/login/internal/svc/{candidates_client_endpoint_test,gate_drain_monitor_wiring_test}.go`;
+      - `go/match/internal/discovery/node_watcher_pick_test.go`、
+        `go/match/internal/logic/{gather_not_allocatable_test,gather_spectate_index_test,watchbattle_create_window_test}.go`;
+      - `go/player_locator/internal/logic/session_reconciler_unknown_field_test.go`、
+        `go/scene_manager/internal/logic/gate_redirect_client_endpoint_test.go`。
+    - 同为未跟踪、但**不属本批**:`go/data_service/internal/store/snapshot_guid_key_shape_integration_test.go`、
+      `go/trade/internal/reconcile/pipeline_lock_order_test.go`,是死锁治理 / 数据层会话的文件,不要随本批提交。
+    - **硬约束**:`k8s-client-entry.md` 不得晚于任何引用它的文件提交。引用方远不止 `ARCH.md`、`battle-transport-decision.md`、
+      `turn-based-battle-server.md`,还有 moba-battle-target-architecture / cross-zone-matchmaking / gate-connection-admission-control /
+      gate-load-balancing-design / `k8s_gate_exposure_guidance{,_zh,_en}` / xuanming-port-decisions-20260910 / agones-scene-node-high-density、
+      `deploy/k8s/{README,AGENTS}.md`、`deploy/k8s/kind-config.yaml` 以及多处脚本和代码注释;完整清单见 `docs/design/k8s-client-entry.md:9-13`。
+      任一引用方先于它提交都会留下悬空链接。
+    - 工作树里另有其他会话的在途改动(data_service / trade / friend 死锁治理、Java gateway 等),提交时需按路径分拣。
+    - **客户端仓 `../mmorpg-client` 同样要按路径分拣**:
+      - 本批仍未提交的收尾改动:`Assets/Scripts/Game/Battle/BattleClient.cs`;`UI/Ugui/Battle/` 下 `BattleHud` / `BattleHudLogic` / `BattleScreen` / `BattleUiRoot`;
+        `App/DevAutoPilot.cs`;`Assets/Tests/EditMode/Battle/` 下 `BattleClientStateMachineTests` / `BattleHudLogicTests` / `BattleUiLayoutTests`;
+        `README.md`、`.gitignore`、`tools/{run_crosszone_pair,gen_proto,gen_messageids}.ps1`;
+      - 混在一起的他人会话(Qdao 角色接入)改动,**不要随本批提交**:`UI/Ugui/Role/RoleFlowUi.cs`、`World/QdaoCharacterCatalog.cs`、
+        `Assets/Tests/PlayMode/QdaoRoleIdentityPlayModeTests.cs`、`Docs/Qdao*.md`、`tools/import_original_v14_mixed_delivery.py`,
+        以及全部未跟踪的 Qdao 资源、脚本与测试(`QdaoOriginalRosterV14/*`、`QdaoLocalPlaytestContract.cs`、`tools/character_deliveries/*` 等)。
+      - 以上按 2026-09-29 的客户端 `git status` 核对;提交前以 `git diff` 逐文件确认。
+- **给 Codex 的验证总顺序**:任一步红即停,不重试、不改判据。命令与通过标准以 turn-based §22.7 和 k8s-client-entry.md 的
+  「上线之前:代码验证」「kind 端到端验证」两节为准,本条只列顺序与要点。工作目录为仓库根。
+  0. **前置**(本条不改下列测试文件):
+     - **静态核对**(§22.7 第 0 步,随时可跑):
+       `rg -n "PushToPlayer\(|SendBindBattle|SendUnbindBattle|SelfNodeId|RefreshRoutingFromSession|NotifySpectateEndAndUnbind|RebindBattleOnReconnect|rebindGate|ContractsKafka(Bind|Unbind)BattleEvent" cpp/nodes/battle cpp/libs/services/scene`
+       → 0 命中;`rg -n "battle_binding_helper|ClearBattleRecord" cpp/nodes/gate` → 0 命中;
+       `rg -n "skip_direct_connect" robot -g '!vendor/**'` → 只剩 `config/config.go` 的说明注释。
+     - **会红,须测试属主先修**(均已按磁盘核实):
+       - `tools/scripts/tests/k8s_zone_rollback_gate_router_mode.tests.ps1:343` 的沙箱只拷了 `lib/release_common.ps1`,要补拷 `lib/k8s_client_entry.ps1`:
+         `k8s_zone_rollback.ps1:227` 在 `:217` 的 `$ErrorActionPreference = "Stop"` 下 dot-source 它,不补则全部沙箱用例在启动时就失败;
+       - 同文件 `:776`、`:820` 两个旧负向用例要按新的透传行为改写(dev_tools 现在透传这两个参数);
+       - `tools/scripts/tests/k8s_deploy_contract.tests.ps1:922` 的正则要改成带引号的
+         `mmorpg\.io/cpp-log-sidecar-config-hash: "[0-9a-f]{12}"`:`k8s_deploy.ps1:1573`、`:2155` 生成的注解值已加 YAML 双引号。
+     - **不红但须同批补**:同文件 `:363-367` 的假 dev_tools 参数表补 `[switch]$AllowDisruptiveSwitch`。现有用例不受影响,
+       以后新增「回滚直调带 `-AllowDisruptiveSwitch`」的用例时才会报「找不到参数」(k8s-client-entry.md:747)。
+     - 与设计文档的差异:k8s-client-entry.md:744-747 的「已知会红的测试」只收录了 `:776` / `:820`,**没有** `:343` 与 `:922`;
+       两者已核实会红,已交接给该文档属主补录(见下「尚未派出的跟进项」)。
+  1. **生成器单测**(`tools/proto_generator/protogen`,即 §22.7 第 1–2 步):event_id 与 message_id 的 vet / test。
+     **必须在 proto 重生之前全绿**,否则重生会给 11 个 Go 服务写入非法标识符(§22.7 第 2 步的门禁,所以排在重生之前)。
+  2. **proto 重生**。注意**不是** `cd go && build.bat`,它只包装 goctl,不产出 pb。正确步骤:
+     - 把 `third_party\grpc\install_vs2026_dbg\bin` 放到 PATH 最前,`protoc --version` 必须是 `libprotoc 35.1`;
+     - `protoc-gen-go` / `protoc-gen-go-grpc` 要在 PATH 上且与现有产物头部一致(v1.36.10 / v1.6.0),不一致即停下报告(§22.7 第 3.1 步);
+     - 核对 `../mmorpg-client/tools/gen_proto.ps1` 收录了 team / jubaozhai / friend 三行,缺任何一行就改用 `enable_unity_client: false` 的配置副本;
+     - `dev_tools.ps1 -Command proto-gen-build` → `proto-gen-run -UseBinary -ConfigPath tools/proto_generator/protogen/etc/proto_gen.yaml`;
+     - 不设 `PROTOGEN_ALLOW_MASS_EVENT_TOMBSTONE`;完成后在 robot 目录 `go mod vendor`;
+     - 验收不信退出码,用 grep:`proto/event_id.txt` 的 43 / 44 恰为两条墓碑;`go/proto/common/base/common.pb.go` 有 `ClientEndpoint`,
+       `cpp/generated/proto/common/base/common.pb.h` 有 `client_endpoint`;再跑一次生成是不动点(没有新 diff);
+     - 全量重生会把其他会话在途的 proto 改动一并带进来,要先与相关会话约定时段。
+  3. **Go**:
+     - `go/proto` 与 11 个服务各自 `go build ./...`;
+     - shared / login / scene_manager / player_locator / match 跑单测,guild / data_service / client_rpc_router 跑 build + vet;
+     - robot:gofmt / vet / test;
+     - 仓库根 `rg "protojson\.Unmarshal\(" go -g '!**/generated/**' -g '!*_test.go'` 零命中。
+  4. **C++**:Debug x64,msbuild **串行 `/m:1`**。
+     - 重生之前只有 scene lib 可以单独编;battle 与 core 依赖新字段 `client_endpoint`,只能在重生之后编;
+     - 重生之后按 core → infra → battle → gate → scene → client_endpoint_test → agones_lifecycle_test 的顺序编,再全量编 `game.sln`;
+     - 然后跑 `run_cpp_tests.ps1` 与 `check_no_raw_pointer_member.ps1`;
+     - 独立 gtest `battle_push_policy_test` / `battle_room_table_test` / `battle_admission_gate_test` 按各自文件头的命令编译运行;
+     - 回归 `gate_security_test`、`battle_ticket_test`;
+     - 可选 Linux:`build_linux.sh`,再 `ldd bin/battle | grep libcurl`。
+  5. **ps1 契约测试**(`pwsh -NoProfile -NonInteractive -File`,串行跑,要求 fail=0):
+     - `k8s_client_entry_contract`、`k8s_deploy_contract`、`k8s_gate_drain`、`k8s_migrate_gate`;
+     - `k8s_zone_rollback_gate_router_mode`、`dev_tools_merge_zone_contract`、`start_game_command_contract`;
+     - 另对 `k8s_zone_rollback.ps1`、`k8s_deploy.ps1` 做 ParseFile 语法检查。
+  6. **客户端 EditMode**:
+     - `tools/client_compile_check.ps1`;
+     - Unity 6000.6.0f1 跑 `MmorpgClient.Tests.EditMode.Battle`,再跑 Net / Guild / Social / Jubaozhai;
+     - 三个 tools ps1 做语法解析。
+  7. **本地整栈冒烟**:前置 `kafka-offset-reset` + `redis-cli FLUSHALL`。
+     - battle-smoke 在 `-GateRouterMode 1` 与 `0` 下各跑一次;再跑跨 zone、team-smoke、features-smoke;
+     - 可选 D66 负向用例:发送节奏要低于 MessageLimiter 的限速,否则会出假红;
+     - 之后 Unity 实机(客户端仓):先 `tools/build_crosszone_player.ps1 -UnityExe <6000.6.0f1 的 Unity.exe 路径>` 重出播放器
+       (必须显式传,脚本默认值指向 6000.5.8f1,`build_crosszone_player.ps1:16`),再 `tools/run_crosszone_pair.ps1`(turn-based §22.7 第 10 步)。
+  8. **kind**:
+     - 先阶段 A(不装 Agones:gate StatefulSet + battle hostPort),再阶段 B(Agones 1.58.0 Fleet);
+     - 所有命令 fail-closed 指定 `kind-mmorpg` 与独立 kubeconfig;
+     - C++ 日志在容器内的 `/app/bin/logs/cpp_nodes/*.log`,不在 `kubectl logs` 里;
+     - 失败时按 k8s-client-entry「失败时保留的证据」一节取证。
+- **须用户决策或授权**:
+  1. **安装 kind v0.33.0、Agones 1.58.0、ingress-nginx**(版本钉在发布 tag 上)。这属于 §10.2 的「安装工具」,要单独授权;实现者没有安装任何东西。
+  2. **AGENTS.md §4.1 的重生命令已过时**:`AGENTS.md:42` 仍写 `cd go && build.bat`,正确命令见上面第 2 步。要用户确认后才能更正,本批不改 AGENTS.md。
+  3. **`docs/design/client-access-band-routing.md` 的两类表述要由其作者会话更新**(不在本批改动范围):
+     - `:60` 与 K7(`:114`)仍写「K8s 默认 `"0"`」。现为 `"1"`(`k8s_deploy.ps1:164`);chat / friend / trade 按设计可达,待补验;
+       guild / team 没有 K8s 部署,仍不可达;
+     - `:326`、`:546` 仍以 `skip_direct_connect` 回落为前提,该开关已由 D73 删除。
+  4. **D65 的事后补验**:K8s 路由模式下的 battle-smoke 由谁、在哪个环境跑(kind 某个 namespace,还是用户指定的集群),待用户定。
+  5. **提交**:以上改动何时提交、如何按路径分拣,由用户决定(见上面的提交约束)。
+- **已登记为独立任务、本批不做**:
+  - Java `AdminApiKeyFilter` 的路径规范化与常量时间比较;
+  - 回滚 Step 6 复用回滚目标版本(GoSvcTag / JavaSvcTag)及其余部署参数;
+  - Agones lifecycle 增加默认拒绝许可的 NotStarted 状态。battle 已由准入闸兜住启动窗口,scene 仍有这个窗口;
+  - 停机路径 `DisconnectAll` 强关房间直连。直接去掉 forceClose 会撞 `TcpConnection.cc:71` 的 assert,需要另行设计;
+  - D40 `SubmitBattleAction` 回合号幂等。
+- **尚未派出的跟进项**(各文档包 / 代码包交接下来的,不在本条范围):
+  - 文档:
+    - `gate-scene-relay-architecture.md` 仍把 gate↔scene 写成 gRPC,实际是 muduo TCP RPC;
+    - `cpp/AGENTS.md:29`、`:70-74` 的 agones 路径还是 `nodes/scene/agones/`;
+    - ops runbook / `tools/scripts/README.md` 要同步 gateNodePortBase 与 kind 用法;
+    - `java/AGENTS.md` 与 release checklist 要写明 `MMORPG_GATEWAY_ADMIN_API_KEY`;
+    - `docs/design/ARCH.md:430` 仍有「同批文档新建」括注;
+    - `docs/design/k8s-client-entry.md:744-747` 的「已知会红的测试」要补录 `k8s_zone_rollback_gate_router_mode.tests.ps1:343`(沙箱缺
+      `lib/k8s_client_entry.ps1`)与 `k8s_deploy_contract.tests.ps1:922`(正则不认带引号的注解值),由该文档属主处理。
+  - 代码与配置:
+    - `k8s_deploy.ps1:1946`、`:1959` 的注释写的是「kind 1.37」;
+    - `bin/etc/base_deploy_config.yaml:233` 的 `BattleNodeService: 5000` 已没有调用方;
+    - `release_preflight.ps1` 缺 battle 目标;
+    - IsTcpNodeType 的根因在生成器模板 `node_util.cpp.tmpl` → `GetProtocolByEnum`(`service_register_info.go:223`);
+    - preflight 对「external + `-ClientPublicHost` + 多副本」的组合不告警,尚未实现。
+- **剩余风险**(节选;完整清单以 turn-based §22.5 与 k8s-client-entry「剩余风险」为准,本条未列的条目只在设计文档里):
+  - 全部未编译、未测试、未上集群。
+  - K8s 路由模式从没实跑过。默认改为 `"1"` 之后,gate 硬依赖 infra 里的 client-rpc-router:`-SkipGoSvc`、没给 `-GoSvcRegistry`,
+    或走 `k8s_image.ps1` 发布路径时,gate 都会卡在依赖门,目前没有运行时拦截。
+  - 不向后兼容:没有直连的客户端收不到战斗帧。gate / scene / battle 要同批停机换版。
+  - 大厅公告的路由固定在开局快照时刻(D71)。
+  - D70 没有 C++ 单测:CreateBattle 预签拒绝与 AddObserver 三条签票失败路径只由代码评审、match 回归测试与冒烟覆盖(turn-based §22.5 第 7 条)。
+  - 停机时积压在用户态缓冲里的观众 `SpectateEnd` 可能丢失。
+  - Agones 链路第一次上集群,以下几点只有阶段 B 能验证:
+    - GameServer JSON 的真实形状;
+    - `allocationOverflow` 是否作用于旧的 GameServerSet;
+    - Fleet 就绪判据依赖的「GameServerSet 模板 metadata 与 Fleet 一致」这一推断(未实证,k8s-client-entry.md:714);
+    - FleetAllocationOverflow 特性是否启用;
+    - us-docker.pkg.dev 的镜像能否拉到;
+    - Fleet health 预算里 20s 的余量也没有实测。
+  - `-ClientPublicHost` 若误用于多节点,所有实例会自报同一主机,preflight 不告警。
+  - battle 票据不绑定 IP。
+  - `admin.api-key` 由 Spring 绑定这件事没有运行期证据。第一次 zone-up 会让 gateway 滚动一次;
+    口令指纹注解暴露了 48 位截断哈希,读得到 Deployment 的人可以离线校验弱口令。
+  - 事件号墓碑不可逆:proto 输入不完整时运行生成器,又绕过批量闸,会永久烧掉事件号。
+  - 以下时长常量靠人工对齐,没有机械守卫:确认补发窗口 180s ↔ `MatchedTicketTTLSeconds`,`endMatchMaxDuration` 110s。
+  - Unity:SYN 黑洞下最长约 91s 才判定 Unreachable;两个 `.meta` 是手写的,以 Unity 导入结果为准。
+- **Java 版(AGENTS §12)**:**待做**。
+  - Java 版 `0.1.0-SNAPSHOT` 目前只有「登录 → 进场景」竖切,没有 battle / match;其 `PARITY.md`「gate 接入与路由」一行已把「战斗直连」列为待做。
+  - 本批客户端可见的**行为**变化(2026-09-29 更正:初稿写成「只有两条」,漏了后四条):
+    - D66:gate 对 `BattleClientPlayer` 上行一律回 tip 1003(`kServiceUnavailable`),不计非法包、不断连;
+    - D68:战斗帧只走直连,无直连即丢;
+    - D69:观众首帧改为直连握手回复之后推 `SpectateStateS2C`,`AddObserver` 的新观众路径不再推;
+    - D70:`CreateBattle` / `AddObserver` 签不出票即 fail-closed 回 1003,开局可能失败、`WatchBattle` 可能被拒
+      (match `spectate.go` 把 AddObserver 的非零 tip 当作拒绝);
+    - D72:FIGHTING 中换会话时 scene 总推 `NotifyBattleReconnect`,不再要求 `battle_node_id != 0`;
+    - D76:`BattleAssignedS2C.host/port` 与 login / scene_manager 下发的 gate 地址,语义改为「客户端可达地址」。
+  - 消息号与客户端可见字段没有变;`client_endpoint` 是服务间 NodeInfo 字段。
+  - Java 版以后做 gate / 战斗相关功能时,按上述 D66–D76 口径对齐。`PARITY.md` 的登记由 Java 仓会话负责,本条没有改它。

@@ -160,7 +160,9 @@ message BattleTokenVerifyResponse {
 // 观众 AddObserver 成功后只收本消息,SpectateStateS2C 首帧在直连握手成功后经直连下发(turn-based §22 D69)。
 message BattleAssignedS2C {
   uint64 battle_id = 1;
-  string host = 2;             // battle 节点客户端面地址(NodeInfo.endpoint)
+  // battle 客户端可达地址(NodeInfo.client_endpoint,缺省回落 endpoint;集群外入口 D76/D78)。
+  // host 可以是 IPv4 字面量或 DNS 名;port 可能是 hostPort / Agones 分配端口,与 endpoint.port 不同。
+  string host = 2;
   uint32 port = 3;
   bytes token_payload = 4;     // 序列化的 BattleTicketPayload,原样放进 BattleTokenVerifyRequest.payload
   bytes token_signature = 5;   // 原样放进 BattleTokenVerifyRequest.signature

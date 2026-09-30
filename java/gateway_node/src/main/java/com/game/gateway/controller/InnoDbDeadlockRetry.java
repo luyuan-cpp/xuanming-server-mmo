@@ -24,25 +24,41 @@ import java.util.function.Supplier;
  * <b>先到者回滚</b>,或 purge 恰在排队期间清掉删除标记记录 —— 排队者挂在那条记录上的锁被继承成后继记录上的
  * 间隙锁,两个排队者的插入意向互相挡住,InnoDB 牺牲其一。
  *
- * <p><b>「ODKU 取代普通 INSERT」不是一条通用的消环结论。</b>2026-09-29 的真库探针(MySQL 26.7.0,全局 RR,
- * {@code innodb_deadlock_detect=ON},编排与本包的 {@code MySqlLockOrderFixture} 同形)对同一个时序跑出来的是:
+ * <p><b>「ODKU 取代普通 INSERT」不是一条通用的消环结论</b>,而且<b>本类两个调用方能只兜「固有情形」的理由并不
+ * 相同</b> —— 别把其中一个的理由安给另一个。下面按 2026-09-29 的真库探针(MySQL 26.7.0,全局 RR,
+ * {@code innodb_deadlock_detect=ON},编排与本包的 {@code MySqlLockOrderFixture} 同形,每格重复 5 次)逐条写明:
  * <ul>
- *   <li>{@code zone_whitelist} 那种形状(自增代理主键 + 业务唯一索引,新行的唯一键项必然排在删除标记项<b>之后</b>):
- *       ODKU 0/5 成环 —— 这才是本类的两个调用方能只兜「固有情形」的原因;</li>
- *   <li>「新行主键<b>小于</b>删除标记那条记录的主键」的形状(go/login 的 {@code player_name}:主键 player_id +
+ *   <li>{@link AdminWhitelistController#add} 写的 {@code zone_whitelist}:自增代理主键 + 业务唯一索引
+ *       {@code uk_zone_account},争抢的键是<b>二级唯一索引</b>,新行的唯一键项必然排在删除标记项<b>之后</b>
+ *       —— 这一路 ODKU <b>0/5</b> 成环;</li>
+ *   <li>{@link AdminZoneController#create} 写的 {@code zone_config}:它走的是<b>另一条</b>安全路径,与「新项排在
+ *       后面」毫无关系。这张表只有 {@code zone_id INT UNSIGNED PRIMARY KEY}(见 schema.sql),主键由请求体传入、
+ *       <b>不是</b>自增,也没有任何二级唯一索引;争抢的键就是<b>聚簇主键</b>,而 {@link
+ *       com.game.gateway.repository.ZoneConfigRepository#UPSERT_SQL} 是 ODKU —— 两个条件凑齐,重复键才走原地改写。
+ *       探针 {@code probe-results.md} 第 54 行正是把它与 {@code trade_favorite}、friend 各表归在这一类;</li>
+ *   <li>反例 ——「新行主键<b>小于</b>删除标记那条记录的主键」的形状(go/login 的 {@code player_name}:主键 player_id +
  *       唯一索引 name_norm,号段发的新 id 小于存量 snowflake id):同一条 ODKU <b>5/5 成环</b>。</li>
  * </ul>
- * 也就是说,消环靠的是「ODKU 直接取 X,不走 S→X」<b>加上</b>「新项必然排在后面」两个条件,缺一不可。新的调用方
- * 接进来之前,必须先按自己那张表的主键生成方式重新判一次,不能因为这里写着「有重试兜底」就把它当成安全网 ——
- * 能消的环必须在 SQL 层消掉(AGENTS.md §11.3)。
+ * 新的调用方接进来之前,必须先按自己那张表的主键生成方式重新判一次,不能因为这里写着「有重试兜底」就把它当成
+ * 安全网 —— 能消的环必须在 SQL 层消掉(AGENTS.md §11.3)。判据有两条,<b>满足其一</b>即可:
+ * <ol>
+ *   <li>争抢的键<b>就是聚簇主键</b>,<b>且</b>写法是 ODKU(直接取 X、不走 S→X)—— {@code zone_config} 这一路,
+ *       <b>两个条件缺一不可</b>。「重复键撞上原地改写、不经过二级唯一索引的重复键检查」是这两个条件<b>凑齐之后
+ *       的结果</b>,不是条件本身:同一张聚簇主键的表配<b>普通 INSERT</b>,探针三种主键顺序全是 <b>5/5 成环</b>
+ *       (聚簇记录上的重复检查取 S,两个 S 同时被授予之后各自要升级成 X,互相挡住 —— 手册那个三会话例就建在
+ *       聚簇主键上);换成 ODKU 才是 <b>0/5</b>。见 {@code probe-results.md} 第 36-38 行;</li>
+ *   <li>争抢的键是二级唯一索引,<b>新行的唯一键项必然排在删除标记项之后</b>,<b>且</b>写法是 ODKU(直接取 X、
+ *       不走 S→X)—— {@code zone_whitelist} 这一路,同样<b>两个条件缺一不可</b>。</li>
+ * </ol>
+ * 两条都不满足的表落在上面的反例那一路,环消不掉,重试兜不住。
  *
  * <h2>收敛论证</h2>
  * 牺牲者整事务回滚、手里的锁全部释放,幸存者完成写入并提交;牺牲者重试时撞上的是已提交的活行,走 ODKU 的 UPDATE
  * 分支,只会排队。要再次成环,须再叠上一次「同键并发写入 + 先到者回滚 / purge 恰在窗口内」,每次都是独立的小概率
  * 事件,{@value #MAX_ATTEMPTS} 次足以收敛;用尽则原样抛出(500),不吞错、不包装。
  *
- * <p>这段论证<b>只对上面第一种形状成立</b>,而且它<b>至今没有真库证据</b>:两个调用方的表上都还没有观察到过一次
- * 1213 被重试吸收。别把它当成已验证的结论。
+ * <p>这段论证<b>只对满足上面判据 1 或 2 的表成立</b>(即当前两个调用方各自那一路),对反例那一路不成立;而且它
+ * <b>至今没有真库证据</b>:两个调用方的表上都还没有观察到过一次 1213 被重试吸收。别把它当成已验证的结论。
  *
  * <p>只重试 1213,不重试 1205(锁等待超时):1205 说明有人持锁超过了 innodb_lock_wait_timeout(默认 50s),
  * 立刻重试只会再等一轮,管理接口的调用方早已超时,直接报错更诚实。
@@ -104,8 +120,10 @@ final class InnoDbDeadlockRetry {
      * <p>遍历有<b>深度上限</b>({@value #MAX_CAUSE_DEPTH}):{@code Throwable.initCause} 只拒绝 {@code cause == this},
      * A→B→A 这种两节点环是能构造出来的,而本方法跑在 Servlet 请求线程上(客户端断开不会中断它),一旦转成死循环
      * 就是一个永不返回的 /admin 请求。深度上限同时覆盖自环与任意长度的环,比「只判自环」的写法更简单也更完整
-     * (JDK 自己的 {@code printStackTrace} 用 seen-set,同一意图)。真实的 Connector/J + Spring 异常链只有几层,
-     * 上限不可能误伤;真被截断时按「不是死锁」处理 —— 不重试,错误原样抛出,方向偏保守。
+     * (JDK 自己的 {@code printStackTrace} 用 seen-set,同一意图)。观察到的 Connector/J + Spring 异常链只有几层,
+     * {@value #MAX_CAUSE_DEPTH} 远高于此,误伤在实践中没见过(<b>未实测</b>,没有量过真实链长的分布);真被截断时
+     * 按「不是死锁」处理 —— 不重试,错误原样抛出,方向偏保守(代价是第 {@value #MAX_CAUSE_DEPTH} 层以外的 1213
+     * 会被判成非死锁 → 不重试 → 500)。
      */
     static boolean isDeadlockVictim(Throwable e) {
         Throwable t = e;

@@ -643,6 +643,17 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up `
   -ZoneName <DST_NAME> -ZoneId <DST_ID> -WaitReady
 ```
 
+- **(2026-09-29 更正)上面的命令只适用于"dst 一直以默认参数部署"的情况**。部署参数不粘滞:`k8s-zone-up` 每次按本次参数重新生成 gate 等工作负载,
+  不从集群读回旧值,而 dst 的 namespace 在 Step 2 已被删掉,`k8s_deploy.ps1` 的集群现状预检面对的是空 namespace,**拦不住漏传**。所以必须照 dst 上一次部署的记录补齐:
+  - dst 以 `"0"` 回退运行(gate 直连):**必须补 `-GateRouterMode 0`**,否则静默落回 K8s 默认的 `"1"`(turn-based §22 D75);若回退原因(如路由服不可用)仍在,gate 卡在依赖门,登录 / 匹配全部 `no_target`。
+    路由模式(`"1"`)的前置:infra 里 `client-rpc-router` 已部署就绪。
+  - dst 以集群外入口运行:补 `-ClientEntryMode external`、`-GateServiceType`、`-GateNodePortBase`、`-ClientPublicHost` 或 `-GateClientHostTemplate`、`-GateExternalTrafficPolicy`
+    (切 external 的窗口期还有 `-RequireClientEndpoint`);漏传会把 dst 重建成 podip,客户端拿到 PodIP,集群外玩家全部连不上且不报错。
+  - dst 经 Ingress 对外:补 `-GatewayIngressHost` 与 `-GatewayTrustedProxies`(及 ClassName / TlsSecret);留空不会重建 Ingress。
+  - staging / prod:补 `-ReleaseProfile`(`dev_tools.ps1` 默认 dev 档),并设好 `MMORPG_GATEWAY_ADMIN_API_KEY` 等注入密钥的环境变量;dev 依赖开发口令登录时补 `-LoginDevPasswordAuth`。
+  - 指定集群:`-KubeContext` / `-KubeConfig`。
+  - 先加 `-DryRun` 跑一遍同一条命令核对渲染结果(DryRun 只本地渲染、不调 kubectl),再去掉 `-DryRun` 执行。参数口径见 `deploy/k8s/README.md` Optional Flags。
+  以上补充未经运行验证,待 Codex / 下一次合服彩排(§7)核对。
 - **核对 dst 的能力标记(pin 模式必做;copy 模式在 Step 4.2 的 `placement scan OK: ... K already have a record` 里 K > 0 时也必做)**。T-0 的 C 阶段没有查 dst(§5.1),zone-up 之后、Step 7 的机器人与 `/open` **之前**执行:
   ```powershell
   pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-capability-check -MergeDbCapabilityZones <DST_ID>
@@ -792,7 +803,7 @@ S   清单玩家不得有冻结的落点记录(与搬库互斥);有「落点记�
 - **1' 只删逐字节相同的行**。任何一行在合服后被改过(玩家登录过、打过一场、领过邮件)就**拒绝删除并报出来**:那时删掉的不是「拷贝」,而是合服后产生的唯一一份数据。源库的行从来没删过,所以留一份多余副本是安全的(mapping 已经指回源区,不会被读到)。
 - `player:{id}:*` blob **不自动删**。mapping 指回源区后没人读它们;确认源副本无误后再手动清。
 
-撤销完成后:`k8s-zone-up` 把 source 与 target 都拉起来;pin 模式清单的撤销,在两区 `/open` 之前跑 `merge-zone-capability-check -MergeDbCapabilityZones <SRC_ID>,<DST_ID>`,**必须 exit 0**,否则不开服、先把对应 zone 的 go/db 换成新版。之后再发「合服延期」公告。
+撤销完成后:`k8s-zone-up` 把 source 与 target 都拉起来(2026-09-29:两区各自照传上一次部署的 `-GateRouterMode` / 集群外入口 / Ingress / `-ReleaseProfile` 参数,口径同 §8 Step 6);pin 模式清单的撤销,在两区 `/open` 之前跑 `merge-zone-capability-check -MergeDbCapabilityZones <SRC_ID>,<DST_ID>`,**必须 exit 0**,否则不开服、先把对应 zone 的 go/db 换成新版。之后再发「合服延期」公告。
 
 ### 10.2 什么时候 unmerge 不够
 
@@ -882,10 +893,10 @@ S   清单玩家不得有冻结的落点记录(与搬库互斥);有「落点记�
 | 落点库审计 | `dev_tools.ps1 -Command merge-zone-storage-audit -MergeAuditStorage <id>` |
 | 预建落点库 | `go/db` 目录:`go run ./cmd/migrate -f <db.yaml> -storage-id <id> -command up -create-database`(§14.5) |
 | zone-down(**会删 namespace**) | `dev_tools.ps1 -Command k8s-zone-down -ZoneName <name>` |
-| zone-up | `dev_tools.ps1 -Command k8s-zone-up -ZoneName <name> -ZoneId <id> -WaitReady` |
+| zone-up | `dev_tools.ps1 -Command k8s-zone-up -ZoneName <name> -ZoneId <id> -WaitReady`(2026-09-29:照传该 zone 上一次部署的 `-GateRouterMode` / 集群外入口 / Ingress / `-ReleaseProfile` 参数,见 §8 Step 6) |
 | 触发 MySQL 备份 | `kubectl create job -n mmorpg-infra --from=cronjob/mysql-backup mysql-backup-manual-$(date +%s)` |
 | 网关置维护 / 开服 | `POST /admin/zones/<id>/maintenance` / `POST /admin/zones/<id>/open`(头 `X-Admin-Key`) |
-| 整 zone PITR 回档 | `tools/scripts/k8s_zone_rollback.ps1 -ZoneName <n> -ZoneId <i> -TargetTime <iso>` |
+| 整 zone PITR 回档 | `tools/scripts/k8s_zone_rollback.ps1 -ZoneName <n> -ZoneId <i> -TargetTime <iso>`(2026-09-29:回滚脚本新增第 0 步停服前预检;以 `"0"` 回退、external、经 Ingress 对外或 staging / prod 档运行的 zone 须照传 `-GateRouterMode` / `-ClientEntryMode` / `-GatewayIngressHost` / `-ReleaseProfile` 等,清单见 `docs/design/zone_data_rollback.md`「## 3. 整 Zone 灾难恢复级回档」下的「2026-09-29 修订」) |
 | 查围栏 / 标记 / 落点 | `redis-cli -h <mapping-redis> -n 0 GET merge:in_progress:<zone>` / `GET merge:merged_into:<zone>` / `GET db:capability:zone:<zone>`(`TTL` 同键,正常 60~90)/ `GET player:placement:<pid>` |
 
 **merge-zone 系列的全部 dev_tools.ps1 参数**(`Get-MergeZoneArgs` + `Get-MergeZoneCommandArgs`;转发契约由 `tools/scripts/tests/dev_tools_merge_zone_contract.tests.ps1` 钉住):

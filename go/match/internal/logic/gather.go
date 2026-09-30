@@ -4,6 +4,7 @@ import (
 	"context"
 	cryptorand "crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"time"
 
@@ -17,6 +18,8 @@ import (
 	smpb "proto/scene_manager"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // gather 各跳 RPC 的超时。
@@ -53,6 +56,18 @@ type preparedMember struct {
 	tableFingerprint string
 }
 
+// battleNotAllocatableMessage 是 battle 节点 CreateBattle 被节点级准入拒绝时回的 gRPC 状态消息:
+// 建房准入闸未开 / 已关(节点启动未完成 / 停机中),或拿不到分配许可(Agones 未就绪 / 排空中 /
+// 许可被拒)。它与 codes.Unavailable 的**组合**是跨语言字符串契约(k8s-client-entry D82,C++ 侧
+// cpp/nodes/battle/handler/grpc/battle_node.cpp 的 kBattleNotAllocatableMessage):battle 在 gRPC
+// 线程上、runInLoop 之前查准入闸并取许可,loop 内插表前再复核一次准入闸,任一处拒绝都保证
+// 没有任何副作用(没插表、没发确认事件)。
+const battleNotAllocatableMessage = "battle_not_allocatable"
+
+// errBattleNotAllocatable 由 createBattle 包装返回,标记"节点级准入拒绝、房间必未建成"
+// (调用方用 errors.Is 判定,据此跳过 DestroyBattle、换节点重试)。
+var errBattleNotAllocatable = errors.New("battle 节点暂不可分配(" + battleNotAllocatableMessage + ")")
+
 // gather 对 scene / battle 节点的四个 gRPC 调用抽成包级函数变量:生产走
 // *RPC 实现(DialEndpoint 连接缓存 + 各自超时),测试换成 fake —— 现有
 // runGatherFn 只能绕开整条 gather,验证指纹比对 / 补偿路径要让 gather 真跑。
@@ -73,6 +88,11 @@ var (
 // 失败补偿(§3.2 补偿矩阵):
 //   - 任一步失败 → 对已冻结者逐个 Scene.CancelBattlePrepare;
 //   - CreateBattle 半成功 → BattleNode.DestroyBattle(尽力而为);
+//   - CreateBattle 被节点级准入拒绝(Unavailable + battle_not_allocatable,k8s-client-entry D82)
+//     → 不发 DestroyBattle,换一个没试过的节点重试一次;仍被拒 / 无节点可换则直接补偿;
+//   - 观战记录(丢票补签定位 battle 节点的唯一来源)在 CreateBattle **之前**写,有界重试后仍写不进去
+//     → 不建房,直接补偿(集群外入口 2b 第 9 条,理由见 writeSpectateRecord);建房失败路径在补偿
+//     之后尽力删掉预写的记录;
 //   - requeueOnFail=true 时(队列凑单场景)幸存成员按原序回队首,
 //     肇事成员删票出局;false 时(solo/切磋)统一删票收场。
 //
@@ -258,11 +278,13 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 		return fail("internal", 0, prepared, battleId)
 	}
 	snapshots := make([]*battlepb.BattlePlayerSnapshot, 0, len(prepared))
+	playerNames := make([]string, 0, len(prepared))
 	for _, p := range prepared {
 		snapshots = append(snapshots, p.snapshot)
+		playerNames = append(playerNames, p.snapshot.GetPlayerName())
 	}
 	createdAtMs := nowMs()
-	if err := createBattle(battleNode, &battlepb.CreateBattleRequest{
+	createReq := &battlepb.CreateBattleRequest{
 		BattleId:         battleId,
 		BattleConfigId:   battleConfigId,
 		Players:          snapshots,
@@ -272,27 +294,86 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 		DeadlineMs:       deadlineMs,
 		TableFingerprint: tableFingerprint,
 		ActivityContext:  opts.activityContext,
-	}); err != nil {
+	}
+
+	// failDropRecord 是"房间必未建成 / 已确认销毁"时的失败出口:按 outcome 补偿(解冻、回队首或删票;
+	// 没有肇事者 —— 节点不可分配、Redis 故障、battle 拒绝都不是玩家的错),之后尽力删掉 4.1 预写的
+	// 观战记录。删记录放在补偿之后,不占 matched 票据的关键路径;删不掉也无害(见 dropSpectateRecord)。
+	failDropRecord := func(outcome string) bool {
+		fail(outcome, 0, prepared, battleId)
+		dropSpectateRecord(svcCtx, battleId)
+		return false
+	}
+
+	// 4.1 先写观战记录,再建房(集群外入口 2b 第 9 条)。spectate:battle:{id} 是丢票补签定位 battle 节点
+	//     的唯一来源,写不进去就不开这局(理由见 writeSpectateRecord)。必须写在建房**之前**:battle 在
+	//     CreateBattle 回包之前就已向各参战者的 scene 发出 BattleConfirmedEvent 并周期补发,scene 升到
+	//     FIGHTING 后拒绝 CancelBattlePrepare(metric=battle_cancel_rejected_fighting)—— 建房之后才发现
+	//     写不进去,解冻基本不生效:冻结拖到 deadline_ms,回队首的人下一轮 PrepareBattle 被拒、被误判为
+	//     肇事者删票。建房之前失败则是无副作用的干净失败:不发 DestroyBattle,解冻必然有效(outcome=index_failed)。
+	//     记录先于房间存在的窗口:活跃集合要等开局成功才加入(第 6 步),battle_id 此刻只有活动开局的
+	//     调用方知道;窗口里被按 battle_id 观战懒剔除的记录由第 6 步补写。
+	record := newSpectateRecord(battleId, battleNode.NodeId, mode, battleConfigId, playerNames, createdAtMs)
+	if err := writeSpectateRecord(svcCtx, record); err != nil {
+		logx.Errorf("[gather] 观战记录写不进去,不建房 battle=%d node=%d(%s) members=%v: %v",
+			battleId, battleNode.NodeId, battleNode.Endpoint, members, err)
+		return failDropRecord("index_failed")
+	}
+
+	err = createBattle(battleNode, createReq)
+	if errors.Is(err, errBattleNotAllocatable) {
+		// 4.2 节点级准入拒绝(k8s-client-entry D82):battle 在 gRPC 线程上、runInLoop 之前取分配
+		//     许可,拿不到即回 Unavailable + battle_not_allocatable,保证没插表、没发确认事件。
+		//     所以不发 DestroyBattle,换一个没试过的节点重试**一次**:一次足以绕开正在排空 / 缩容
+		//     的那台;整池都不可分配时多试只会把 gather 拖出 matched 票据 TTL 的预算。
+		//     观战记录先改指到重试节点再建房(同样 fail-closed,改写失败即干净失败):建成之后才改,
+		//     中间窗口里的补签会被导向首选节点。这条路径比常规路径多一次 CreateBattle 与一次记录改写,
+		//     matched 票据 TTL 预算要计入 createBattleTimeout + spectateRecordWriteWorst。
+		//     PrepareBattle 已把首选节点 id 写进 scene InBattleComp.battle_node_id,那里只作日志 /
+		//     排障(turn-based §22 D72),换节点不影响路由;观战记录指的是实际建房的节点。
+		next, found := svcCtx.BattleNodes.PickRandomExcept(map[string]bool{battleNode.Endpoint: true})
+		if found {
+			logx.Infof("[gather] battle 节点暂不可分配,换节点重试一次 battle=%d from=%d(%s) to=%d(%s)",
+				battleId, battleNode.NodeId, battleNode.Endpoint, next.NodeId, next.Endpoint)
+			record.BattleNodeId = next.NodeId
+			if werr := writeSpectateRecord(svcCtx, record); werr != nil {
+				logx.Errorf("[gather] 换节点前改写观战记录失败,不再重试建房 battle=%d to=%d(%s) members=%v: %v",
+					battleId, next.NodeId, next.Endpoint, members, werr)
+				return failDropRecord("index_failed")
+			}
+			battleNode = next
+			err = createBattle(battleNode, createReq)
+		} else {
+			logx.Errorf("[gather] battle 节点暂不可分配且没有其他可选节点 battle=%d node=%d(%s)",
+				battleId, battleNode.NodeId, battleNode.Endpoint)
+		}
+	}
+	if err != nil {
 		logx.Errorf("[gather] CreateBattle 失败 battle=%d node=%d(%s): %v",
 			battleId, battleNode.NodeId, battleNode.Endpoint, err)
+		if errors.Is(err, errBattleNotAllocatable) {
+			// 最后一次尝试仍是准入拒绝:房间必未建成,跳过 DestroyBattle,直接补偿。
+			return failDropRecord("not_allocatable")
+		}
 		// 半成功兜底:RPC 超时时战斗可能已建成,先尽力 DestroyBattle 再解冻。
 		// battle 明确拒绝(tip≠0,如 turn-based §22 D70 预签票失败回 kServiceUnavailable)
 		// 时房间必未建成,DestroyBattle 送达时在 battle 侧幂等命中,随后照常解冻、回队首或删票;
-		// 若 DestroyBattle 本身失败(createBattle 目前不区分 RPC 失败与明确拒绝),仍走下方
-		// 保守分支:不解冻、不回队,冻结等 scene 侧 prepare_deadline_ms 到期解除,票据留
-		// matched 由 TTL 自愈。
+		// 若 DestroyBattle 本身失败(createBattle 不区分 RPC 失败与明确拒绝),仍走下方
+		// 保守分支:不解冻、不回队,冻结等 scene 侧期限到期解除,票据留 matched 由 TTL 自愈。
 		if !destroyBattle(battleNode, battleId, "gather_rollback") {
 			// DestroyBattle 也失败 → 房间可能仍活着且已向 scene 发出 BattleConfirmedEvent。
 			// 此时再逐人 CancelBattlePrepare 会出现"Cancel 先于 Confirm 到达、锁被删、随后
 			// Confirm 因锁不在无法重建冻结"的交错(C++ 复审),留下"房间活着、玩家无冻结"。
 			// 所以不解冻、不回队:scene 侧 FIGHTING 态由 Confirm 升级并按正式 deadline 收尾,
 			// 房间按 deadline_ms 强制结束并回流结算;票据留 matched 由 TTL 自愈。
+			// 预写的观战记录保留:房间若真活着,丢票补签靠它回到本局;若没活着,补签拿到
+			// "房间不存在",语义正确,随 TTL 自清(它不在活跃集合里,不进观战列表)。
 			logx.Errorf("[gather] CreateBattle 失败且 DestroyBattle 失败,房间可能仍活着,放弃解冻交给 scene/battle 期限收尾 battle=%d members=%v",
 				battleId, members)
 			metrics.ObserveGather(modeName, "create_failed_room_alive", time.Since(start))
 			return false
 		}
-		return fail("create_failed", 0, prepared, battleId)
+		return failDropRecord("create_failed")
 	}
 
 	// 5. 成功收尾:ticket 推进 ready(短 TTL 自清),后续状态由
@@ -303,13 +384,9 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 		}
 	}
 
-	// 登记观战索引(设计决策 D9:只有 match 知道战斗在哪个 battle 节点;
-	// score/created_at 与 CreateBattleRequest 同一时刻取值,过期判定对齐 deadline)。
-	playerNames := make([]string, 0, len(prepared))
-	for _, p := range prepared {
-		playerNames = append(playerNames, p.snapshot.GetPlayerName())
-	}
-	registerSpectateBattle(svcCtx, battleId, battleNode.NodeId, mode, battleConfigId, playerNames, createdAtMs)
+	// 6. 公开这场战斗:同值补写记录 + 入活跃集合(best-effort,见 publishSpectateBattle)。
+	//    放在推进 ready 之后,不占 matched 票据的关键路径。
+	publishSpectateBattle(svcCtx, record)
 	logx.Infof("[gather] 开局成功 battle=%d mode=%s config=%d node=%d members=%v 耗时=%s",
 		battleId, modeName, battleConfigId, battleNode.NodeId, members, time.Since(start))
 	metrics.ObserveGather(modeName, "success", time.Since(start))
@@ -479,10 +556,16 @@ func cancelBattlePrepareRPC(endpoint string, req *scenepb.CancelBattlePrepareReq
 	return err
 }
 
-// createBattle 调 battle 节点建房。
+// createBattle 调 battle 节点建房。返回的错误分三类:
+//   - 包装了 errBattleNotAllocatable(errors.Is 可判):节点级准入拒绝,battle 侧无副作用;
+//   - 其余 RPC 失败:请求可能已送达、房间可能已建成,调用方必须 DestroyBattle 兜底;
+//   - battle 业务拒绝(tip≠0):房间未建成,仍走通用补偿(DestroyBattle 在 battle 侧幂等命中)。
 func createBattle(node discovery.NodeEntry, req *battlepb.CreateBattleRequest) error {
 	resp, err := createBattleFn(node.Endpoint, req)
 	if err != nil {
+		if isBattleNotAllocatable(err) {
+			return fmt.Errorf("battle 节点拒绝分配 node=%d: %w", node.NodeId, errBattleNotAllocatable)
+		}
 		return fmt.Errorf("CreateBattle RPC 失败: %w", err)
 	}
 	if resp.GetErrorMessage().GetId() != 0 {
@@ -491,7 +574,17 @@ func createBattle(node discovery.NodeEntry, req *battlepb.CreateBattleRequest) e
 	return nil
 }
 
-// createBattleRPC 是 createBattleFn 的生产实现。
+// isBattleNotAllocatable 判定 CreateBattle 的 gRPC 错误是否为节点级准入拒绝(k8s-client-entry D82):
+// 状态码 Unavailable 与消息 battle_not_allocatable 必须**同时精确**匹配。只看 Unavailable 不够 ——
+// 连接断开、对端重启同样回 Unavailable,那时请求可能已送达、房间可能已建成,必须走 DestroyBattle。
+// 判不中一律按普通 RPC 失败处理(多发一次幂等的 DestroyBattle),偏向安全一侧。
+func isBattleNotAllocatable(err error) bool {
+	st, ok := status.FromError(err)
+	return ok && st.Code() == codes.Unavailable && st.Message() == battleNotAllocatableMessage
+}
+
+// createBattleRPC 是 createBattleFn 的生产实现。gRPC 状态错误必须原样返回、不在这里包装:
+// 包装后 status.FromError 取到的消息是整段错误文本,isBattleNotAllocatable 判不中。
 func createBattleRPC(endpoint string, req *battlepb.CreateBattleRequest) (*battlepb.CreateBattleResponse, error) {
 	conn, err := discovery.DialEndpoint(endpoint)
 	if err != nil {

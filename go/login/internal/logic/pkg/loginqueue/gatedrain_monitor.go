@@ -42,6 +42,12 @@ const (
 	DrainReasonDeadline = "deadline"
 )
 
+// go-redis 对 TTL 的两个特殊回复不乘精度,原样返回 Duration(-2) / Duration(-1)。
+const (
+	redisTTLKeyMissing time.Duration = -2 // 键不存在
+	redisTTLNoExpiry   time.Duration = -1 // 键存在但没有过期时间
+)
+
 func gateDrainedKey(nodeID uint32) string {
 	return "gate:" + strconv.FormatUint(uint64(nodeID), 10) + ":drained"
 }
@@ -138,10 +144,39 @@ func EvaluateDrainingGates(
 		}
 
 		// drained 标记跟着 draining 标记同寿:draining 一过期,这台 gate 就
-		// 重新接客了,drained 不能比它活得久。
+		// 重新接客了,drained 不能比它活得久。所以 drained 的 TTL 只能取 draining 的
+		// 剩余 TTL;拿不到正值就跳过本轮写入,**不能**回落成固定时长补写 —— 那样 drained
+		// 会比 draining 活得久,之后同一 node_id 再标 draining 时,残留的 drained 会被读成
+		// "已排空"。
+		//
+		// 仍有一个窗口:读到正的剩余 TTL 之后、SET 之前 draining 被删,drained 会带着读到的
+		// 剩余 TTL 落下。该 node_id 仍在快照里时,下一轮走上面"没在排空"分支清掉;不在时最多
+		// 活到那个剩余 TTL,不超过原 draining 的寿命。k8s_gate_drain.ps1 标记前先 DEL drained,
+		// 且每轮与 draining 一起 MGET,draining 不在就中止,不会据这条残留删 Pod。
 		ttl, err := rdb.TTL(ctx, gateDrainingKey(g.NodeID)).Result()
-		if err != nil || ttl <= 0 {
-			ttl = time.Hour
+		switch {
+		case err != nil:
+			// 查询失败:下一轮再判。排空判定晚一个周期无害,补写一个猜的 TTL 有害。
+			logx.Errorf("[GateDrain] gate %d: read draining TTL failed, skip marking drained this round: %v",
+				g.NodeID, err)
+			continue
+		case ttl == redisTTLKeyMissing:
+			// draining 在本轮 GET 之后被删(脚本清标记 / 运维取消)或恰好过期:gate 已重新接客,
+			// 按"没在排空"处理,同样顺手清掉残留的 drained。
+			rdb.Del(ctx, gateDrainedKey(g.NodeID))
+			logx.Infof("[GateDrain] gate %d: draining mark vanished during evaluation, not marking drained",
+				g.NodeID)
+			continue
+		case ttl == redisTTLNoExpiry:
+			// draining 必须带 TTL(见 GateDrainingKeyFmt):不带就是有人手工 SET 漏了 EX,这台
+			// gate 会被永久排除。drained 跟着永不过期只会放大误操作,所以不写,打 ERROR 让人处理。
+			logx.Errorf("[GateDrain] gate %d: %s has no TTL (it must expire), not marking drained — "+
+				"set a TTL on it or DEL it to cancel the drain", g.NodeID, gateDrainingKey(g.NodeID))
+			continue
+		case ttl <= 0:
+			// 剩余 TTL 按秒取整后为 0:draining 马上过期,写 drained 没有意义;
+			// 而且 go-redis 的 Set 过期传 0 表示永不过期,绝不能落到下面。
+			continue
 		}
 		if err := rdb.Set(ctx, gateDrainedKey(g.NodeID), st.Reason, ttl).Err(); err != nil {
 			logx.Errorf("[GateDrain] gate %d: failed to mark drained: %v", g.NodeID, err)

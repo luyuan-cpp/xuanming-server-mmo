@@ -78,11 +78,11 @@ include_directories(
 # Agones 生命周期适配器只在 Linux 构建里接 libcurl。
 # MMORPG_AGONES_CURL 没定义时,MakeDefaultHttpTransport() 返回 nullptr,
 # 整套逻辑退化成 Disabled(Windows / 本地开发构建走的就是这条路)。
+# 2026-09-29 起 Agones 源码下沉到 libs/engine/infra/agones/(随 -linfra 链入),
+# 本节点只保留这个宏和下面的 CURL::libcurl 链接。
 add_definitions(-DMMORPG_AGONES_CURL=1)
 
 set(SOURCE_FILES
-    agones/agones_rest_client.cpp
-    agones/agones_scene_lifecycle.cpp
     handler/event/scene_kafka_command_router.cpp
     handler/event/actor_combat_state_event_handler.cpp
     handler/event/actor_event_handler.cpp

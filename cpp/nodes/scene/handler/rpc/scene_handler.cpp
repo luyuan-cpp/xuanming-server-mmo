@@ -3,7 +3,7 @@
 
 ///<<< BEGIN WRITING YOUR CODE
 
-#include "agones/agones_scene_lifecycle.h"
+#include "infra/agones/agones_gameserver_lifecycle.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "node/system/node/node.h"
 #include "player/system/player_lifecycle.h"
@@ -866,11 +866,11 @@ void SceneHandler::CreateScene(::google::protobuf::RpcController* controller, co
 	// away; this create fails closed and the caller's retry normally lands
 	// after the process is already Allocated. (SceneManager uses the gRPC
 	// path, which does get the bounded blocking variant.)
-	auto createPermit = agones::SceneLifecycle::Instance().AcquireCreatePermitNonBlocking();
+	auto createPermit = agones::GameServerLifecycle::Instance().AcquireAllocationPermitNonBlocking();
 	if (!createPermit)
 	{
 		LOG_ERROR << "CreateScene: rejected, Agones allocate not confirmed yet (state="
-				  << agones::ToString(agones::SceneLifecycle::Instance().State())
+				  << agones::ToString(agones::GameServerLifecycle::Instance().State())
 				  << "), scene_id=" << request->scene_id() << "; retry expected";
 		return;
 	}

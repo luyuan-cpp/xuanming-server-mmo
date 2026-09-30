@@ -188,7 +188,9 @@ MapService 同时扮演 MOBA 模型里的 Allocator(打包快照)与结算服(�
 
 1. **结算模型**。现在是 D4 的「每玩家最多一单在途,幂等去重退化为每人记最近一个 battle_id」+ deadline reaper。MOBA 15~40 分钟长局下,deadline 必须 ≥ 最长时长,battle 第 2 分钟崩掉则**全体玩家被冻结到 deadline**(不能排队/交易/切场景);且 reaper 与迟到的真结算竞态,reaper 先到则真结算被当「重复」丢弃、**无账本可重放**。改为判据表自己写的标准:`match_results` 按 `match_id` put_unique 先落地 + 逐人 `grant_once` + battle 心跳(15s)超时判 abandoned **提前解冻**。
 2. **控制面补存活/排空边**,并把 D26「签不出票不阻断开局、全程走 gate 中继」的 fail-open 改为 fail-closed。
+   - **(2026-09-29 现状,已落码、未编译未测试)** D26 已改 fail-closed:`CreateBattle` 在任何副作用之前为全体参战者预签票据,任一失败回 `kServiceUnavailable`、不建房;`AddObserver` 同口径(turn-based §22 D70)。排空边:battle 的节点级准入(分配许可;启动未完成 / 停机中 / 带排空标签 `mmorpg.io/drain` 时回 gRPC `UNAVAILABLE "battle_not_allocatable"`,match 换节点重试一次)与 Agones 排空已落码(集群外入口 D82 / D83,`battle_node.cpp:60-83`)。存活边:只有 Agones 形态下 health 绑 EventLoop 心跳(D84,opt-in);match → battle 仍无独立的存活探测,长局所需的「心跳超时判 abandoned 提前解冻」仍未做。
 3. **直连收缩**:删 Kafka→gate 回落(其合理性来自「每回合一条消息」,实时下不成立),并先修 RECONNECT/REPLACE 场景下重绑断链的问题。
+   - **(2026-09-29 现状,已落码、未编译未测试)** 回落已收窄而非全删:战斗帧只走直连、无直连即丢弃;只有大厅公告 `NotifyBattleAssigned` / `NotifyBattleStart` 仍可经 Kafka → gate 回落(turn-based §22 D68)。gate 两种路由模式都不中继战斗(D66),Kafka Bind/Unbind 契约已删(D67)。RECONNECT / REPLACE:scene 换会话只推 `BattleReconnectS2C`,客户端据此经 `RequestBattleTicket` 补签重建直连(§19 D38 → §22 D72),不再有「重绑」这一步,原断链问题随之消失。实时化时仍需复核「大厅公告回落」是否保留。
 4. **路由表**:在共享 Redis 增设 `battle_id → 落点` 契约 key(带 TTL)。现在只有 match 私有的 `spectate:*` 观战索引 + 写在 scene 快照里的路由,不满足红线 3「路由表进共享存储」。
 
 ### 4.4 落点粒度不需要重拍
@@ -232,9 +234,20 @@ MapService 同时扮演 MOBA 模型里的 Allocator(打包快照)与结算服(�
 | 6 | 目标架构 §四 / §六历史段的文案同步 | 文档 |
 | 7 | (若做 SLG)MapService 消费 `battle_result` 的状态门 + 恢复补发前查 `battle_id` | SLG 设计稿 |
 
+> **状态标注(2026-09-29)**:
+> - #4 **未做**:列为后续项(turn-based §22.6「另起任务做独立的 `battle_id → 落点` 路由键」,`turn-based-battle-server.md:1020`),尚未登记为独立任务。补签目前仍依赖 match 私有的观战索引 `spectate:battle:{id}`,该索引写失败已改 fail-closed:有界重试后按开局失败处理。
+> - #5 **部分**:「D26 改 fail-closed」已落码(turn-based §22 D70,未编译未测试);结算 put_unique + grant_once + 心跳 abandoned 未做。
+> - #6 **部分**:目标架构 §六 的现状表与缺口 1 / 2、§七判据已于 2026-09-29 同步;§四「未实测单房 tick 成本前不拍死」与 §六 2026-08-31 历史段的指向句仍未改。
+> - #1、#2、#3、#7 本次未核对,状态以各自文档为准。
+
 ### 5.3 引用本文时必须一并说明的前提
 
 **回合制「已抽出去」本身只过了编译 / 单测 / 静态评审**:整栈冒烟未跑(缺本机基础设施)、[moba-battle-target-architecture.md](./moba-battle-target-architecture.md) §七验收判据零打勾、gate 仍中继、battle 无 K8s manifest。上述对 MMO/SLG 的推演,是照着一个**尚未整栈验证**的样板。
+
+> **(2026-09-29 按现状标注)** 上段两处已过时,其余不变:
+> - 「gate 仍中继」→ 已落码删除:gate 两种路由模式都不中继战斗,直连是战斗唯一通路(turn-based §22 D65–D68)。
+> - 「battle 无 K8s manifest」→ 已有:`k8s_deploy.ps1` 由写路径入口 `Assert-ClientEntryDeployPreflight`(`:900`)调 `New-BattleWorkloadManifest`(`:5254`)渲染 battle 工作负载,`Apply-BattlePool`(`:5276`)只负责 apply(见 `:306` 注释);battle 密钥经 `New-NodeConfigMapYaml -IncludeBattleSettings`(`:1333`、`:5329`)注入(battle-transport-decision §8.6);集群外入口落码后还可生成 Agones Fleet(`lib/k8s_client_entry.ps1:988` `New-BattleFleetYaml`,D76–D93)。
+> - 仍然成立:以上全部**未编译、未测试、未上集群**;整栈冒烟与 K8s 路由模式 battle-smoke 未跑;[moba-battle-target-architecture.md](./moba-battle-target-architecture.md) §七验收判据仍零打勾。
 
 ---
 

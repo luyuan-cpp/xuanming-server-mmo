@@ -101,6 +101,47 @@ type Config struct {
 	// 整块可缺省,缺省 = 不钉;在 go/db 未开 Placement.Required 的前提下与落点设计上线前完全一致
 	// (Required 开着时不钉 = 新号不可用,见 PlacementConf)。
 	Placement PlacementConf `json:"Placement,optional"`
+
+	// RequireClientEndpoint 控制下发 gate 地址时是否**必须**用 gate 自报的客户端可达地址
+	// (NodeInfo.client_endpoint,集群外入口 D78/D79,规则见 shared/clientendpoint.Select)。
+	//
+	//   - false(默认,podip 模式与滚动过渡期):gate 没自报就回落 endpoint(PodIP),与改动前一致;
+	//   - true(external 模式):没自报客户端地址的 gate 直接跳过,不再把集群外连不上的 PodIP 发给玩家。
+	//
+	// 这是消费方的纵深防御,不是主闸:生产方(gate 进程)在 external 模式下缺地址会直接起不来。
+	// 打开顺序:确认 etcd 里本 zone 所有 gate 都带 clientEndpoint 之后再置 true;回退时先把它置回 false。
+	// 置 true 而 gate 全都缺地址 = 本 zone 无 gate 可分,登录整体失败(mmorpg_client_endpoint_select_total
+	// {result="rejected"} 会持续增长)。K8s 下由 k8s_deploy.ps1 按 -ClientEntryMode 写进 ConfigMap。
+	RequireClientEndpoint bool `json:"RequireClientEndpoint,default=false"`
+
+	// GateDrain 是 gate 排空判定循环(loginqueue.StartGateDrainMonitor)的参数:已标
+	// gate:{id}:draining 的 gate 在线掉到阈值或等到期限后,由它写上 gate:{id}:drained,
+	// k8s_gate_drain.ps1 看到标记才删 Pod(集群外入口 D87)。
+	//
+	// **刻意不标 optional**:go-zero 对整块缺失的 optional 结构体不填内层 default(见 KillSwitchConf),
+	// 而 K8s 的 login ConfigMap 由 k8s_deploy.ps1 另写模板、不含这一块。标了 optional,集群上就会拿到
+	// 零值 Interval = 监控关闭,drained 永远等不到。不标 optional 且内层字段全带 default 时,go-zero
+	// 判定该结构体「非必填」,整块缺失 = 全部取默认值(gate_drain_conf_test.go 钉住这一点)。
+	GateDrain GateDrainConf `json:"GateDrain"`
+}
+
+// GateDrainConf 是 gate 排空判定的参数,判定逻辑与标记语义见 loginqueue/gatedrain_monitor.go。
+//
+// **每个字段都必须带 default**:任一字段变成必填,整块缺失的旧配置(包括 K8s ConfigMap)会起服失败;
+// 变成 optional 不带 default,缺失时拿零值。两种都会让 Config.GateDrain 的「缺省即默认值」失效。
+type GateDrainConf struct {
+	// Interval 是判定周期。<=0 关闭监控(启动时打 ERROR):drained 永远不出现,排空脚本只能等到超时。
+	// 每轮一次 etcd 前缀读 + 每台 gate 一次 Redis GET,5s 对 etcd / Redis 都可忽略。
+	Interval time.Duration `json:"Interval,default=5s"`
+	// DrainedBelowPlayers:在线数 <= 它即判定排空。默认 0 = 必须一个人都不剩。
+	DrainedBelowPlayers uint32 `json:"DrainedBelowPlayers,default=0"`
+	// Deadline:从标 draining 起等这么久,无论还剩多少人都判定可缩容(理由记 deadline,打 ERROR);
+	// 0 = 永不因超时放行,只认人走干净。判定只产出信号,删不删 Pod 仍由运维带不带 -DeletePod 决定。
+	//
+	// 默认 25m 必须**小于** draining 标记的 TTL(k8s_gate_drain.ps1 -DrainTtlSeconds,默认 1800s)
+	// 与脚本的等待上限(-WaitTimeoutSeconds,默认 1800s):期限不早于 TTL 时 draining 先过期,
+	// 这台 gate 重新接客,drained 永远等不到。调小脚本的 TTL 时同步调小这里。
+	Deadline time.Duration `json:"Deadline,default=25m"`
 }
 
 // PlacementConf 是建角钉落点的开关(docs/design/player-storage-placement.md §8.3 / §13)。

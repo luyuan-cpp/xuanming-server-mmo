@@ -792,7 +792,7 @@ func (b *teamSmokeBot) leaveAnyTeam() error {
 			return fmt.Errorf("leave leftover team %d: %w", tid, err)
 		}
 		if tip == tipTeamInMatch {
-			return fmt.Errorf("残留队伍 %d 的开战锁仍有效(tip=%d,上一轮死在开战途中;锁最长约 83s 自然过期),稍后重跑", tid, tip)
+			return fmt.Errorf("残留队伍 %d 的开战锁仍有效(tip=%d,上一轮死在开战途中;锁最长约 101s 自然过期),稍后重跑", tid, tip)
 		}
 		if tip != 0 {
 			return fmt.Errorf("leave leftover team %d: tip=%d parameters=%v", tid, tip, resp.GetErrorMessage().GetParameters())

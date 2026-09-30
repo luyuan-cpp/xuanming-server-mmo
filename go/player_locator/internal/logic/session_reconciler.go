@@ -8,12 +8,12 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"player_locator/internal/svc"
 	base "proto/common/base"
 	pb "proto/player_locator"
+	"shared/nodeinfo"
 	"shared/safego"
 )
 
@@ -156,20 +156,33 @@ func listLiveGateInstances(ctx context.Context, etcdCli *clientv3.Client) (map[s
 	if err != nil {
 		return nil, err
 	}
-	live := make(map[string]struct{}, len(resp.Kvs))
+	values := make([][]byte, 0, len(resp.Kvs))
 	for _, kv := range resp.Kvs {
+		values = append(values, kv.Value)
+	}
+	return collectLiveGateInstances(values), nil
+}
+
+// collectLiveGateInstances 把 gate 前缀下的 etcd 值归并成存活实例 uuid 集合(纯函数,便于测试)。
+//
+// NodeInfo 必须经 nodeinfo.Unmarshal 宽松解析(忽略未知字段,D77):新版本 gate 写入的
+// 新字段(如 client_endpoint)若让解析失败,就会落进下面的"裸值"分支 —— 整段 JSON 被当成
+// uuid 收进集合,真实 uuid 反而缺席,两轮后该 gate 上的会话全被误打成 DISCONNECTING。
+func collectLiveGateInstances(values [][]byte) map[string]struct{} {
+	live := make(map[string]struct{}, len(values))
+	for _, value := range values {
 		var info base.NodeInfo
-		if err := protojson.Unmarshal(kv.Value, &info); err != nil {
+		if err := nodeinfo.Unmarshal(value, &info); err != nil {
 			// allocated/ 占位 key 的 value 是裸 uuid 而非 NodeInfo JSON,
 			// 解析失败直接把原始值当 uuid 收进存活集 —— 多收不误杀。
-			live[string(kv.Value)] = struct{}{}
+			live[string(value)] = struct{}{}
 			continue
 		}
 		if info.NodeUuid != "" {
 			live[info.NodeUuid] = struct{}{}
 		}
 	}
-	return live, nil
+	return live
 }
 
 // handleSessionKey 处理单个会话键;返回 true 表示本轮把它补投了 DISCONNECTING。

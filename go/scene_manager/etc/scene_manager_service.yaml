@@ -208,3 +208,12 @@ KillSwitchPrefix: ""
 # Enabled by default in dev so stress runs can scrape :9150 alongside
 # login :9101. Disable for prod by setting MetricsListenAddr: "".
 MetricsListenAddr: ":9150"
+
+# --- 集群外客户端入口(docs/design/k8s-client-entry.md D78/D79) -------------------
+#
+# 跨 zone 重定向下发 gate 地址时是否要求 gate 自报客户端可达地址(NodeInfo.client_endpoint)。
+# false(本地 / podip 模式):有 client_endpoint 用它,没有就回落 endpoint(PodIP)。
+# true(external 模式):没有 client_endpoint 的 gate 一律跳过,绝不下发客户端连不上的 PodIP。
+# 与 login.yaml 的同名开关同口径;K8s 上由 k8s_deploy.ps1 按 -ClientEntryMode 写进 ConfigMap。
+# 翻 true 之前必须确认所有 gate 都已带 client_endpoint;回退时先翻回 false。
+RequireClientEndpoint: false

@@ -21,6 +21,7 @@ import (
 
 	"player_locator/internal/config"
 	proto_common "proto/common/base"
+	"shared/nodeinfo"
 	"shared/snowflake"
 )
 
@@ -150,7 +151,8 @@ func scanUsedNodeIDs(ctx context.Context, client *clientv3.Client, prefix string
 			continue
 		}
 		var ni proto_common.NodeInfo
-		if err := protojson.Unmarshal(kv.Value, &ni); err != nil {
+		// 宽松解析(忽略未知字段,D77):新版本实例写入的新字段不能让它的 node_id 漏出 used 集合。
+		if err := nodeinfo.Unmarshal(kv.Value, &ni); err != nil {
 			continue
 		}
 		if ni.NodeId >= nodeIDMin {

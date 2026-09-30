@@ -451,8 +451,14 @@ func (s *Store) PruneInvite(ctx context.Context, playerId, teamId uint64, score 
 const (
 	// endMatchRoundTimeout EndMatch 每一轮(S_READ + 会话读 + S_COMMIT)的独立超时,不继承任何请求 ctx。
 	endMatchRoundTimeout = 2 * time.Second
-	// endMatchMaxDuration 进程内单调时钟兜底上限(5 人锁 83s,§E.1 EndMatch 第 4 步)。
-	endMatchMaxDuration = 90 * time.Second
+	// endMatchMaxDuration 进程内单调时钟兜底上限(§E.1 EndMatch 第 4 步),必须 ≥ 最长的开战锁时长,
+	// 否则 Redis 读写持续失败时循环先于锁截止放弃,全队停在 STARTING 直到锁自然过期。
+	// 依据:锁时长 = logic.TeamBattleStarter.MatchLockTTLSeconds,5 人(Capacity 上限)=
+	// matchedTicketTTLFor(5) 66 + compensationTicketTTLFor(5) 25 + teamMatchLockSlackSeconds 10 = 101s;
+	// EndMatch 在锁提交之后才启动,剩余锁时长不超过 101s。取 110s,再留出一轮 endMatchRoundTimeout(2s)
+	// 加最大退避(1s ±20%)的余量。team 不 import logic,这里只能写死数字:把 MatchedTicketTTLSeconds
+	// 配到 75 以上(锁 > 110s)或改 matched TTL 公式时,这个值要一并上调。
+	endMatchMaxDuration = 110 * time.Second
 	// 冲突 / 故障退避:50ms 起翻倍,上限 1s,±20% 抖动。
 	endMatchBackoffInitial = 50 * time.Millisecond
 	endMatchBackoffMax     = time.Second

@@ -9,8 +9,10 @@ import (
 )
 
 // TestPlayerNameAttemptsFloor 守住 Reserve / Release 两个尝试上限的下限 2(理由见各自的常量注释):
-//   - playerNameReserveAttempts 调成 1 时,「残余」A(锁继承)与 B(新项插在删除标记项之前)两类环里被牺牲的
-//     那一方会把 1213 直接当存储错误返回,玩家看到的是建角失败,而不是"名字已被占用"。
+//   - playerNameReserveAttempts 调成 1 时,「残余」A(锁继承)与 B(同一 player_id 上的并发重名登记)
+//     两类 InnoDB 固有情形里被牺牲的那一方会把 1213 直接当存储错误返回,玩家看到的是建角失败,
+//     而不是"名字已被占用";迁移没跑过的库(主键还是 player_id)上,名字抢注本身也还会成环,
+//     那个窗口里这次重来是唯一的兜底。
 //   - playerNameReleaseAttempts 调成 1 时,Release 的「情形 3」(行在且落在窗口内却没删到 —— 在途 INSERT 在
 //     DELETE 之后才提交)永远不会重删:循环只跑一轮就落到 exhausted 分支返回存储错误。而这正是 login 两次
 //     补偿释放要覆盖的竞态,退化的后果是每撞上一次就留一条孤儿名字行,且是静默的(只有 orphan 计数会涨)。

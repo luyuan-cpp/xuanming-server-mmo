@@ -15,6 +15,7 @@
 #include "muduo/base/Logging.h"
 
 #include "engine/infra/messaging/kafka/kafka_producer.h"
+#include "node/system/node/client_endpoint.h"
 #include "node/system/node/node.h"
 #include "node/system/node/node_command_route.h"
 #include "node_config_manager.h"
@@ -254,10 +255,16 @@ namespace
     }
 
     // 确认事件补发策略(与 scene 侧 player_battle.h 的锁保留期对齐):
-    //   scene 备战期锁 EX = prepare_deadline(2 人 30s / 5 人 48s / 10 人 78s)+ 60s 余量,
-    //   备战到期只摘组件不删锁,锁在期间迟到的确认仍可重建冻结。补发窗口取 150s ≥ 78+60,
-    //   窗口内每 10s 一次(scene 已 FIGHTING 时幂等忽略,开销是每玩家一条小消息)。
-    constexpr uint64_t kConfirmResendWindowMs = 150 * 1000;
+    //   scene 备战期锁 EX = prepare_deadline 剩余秒数 + PlayerBattleSystem::kLockExtraTtlSec(60s),
+    //   备战到期只摘组件不删锁,锁在期间迟到的确认仍可重建冻结。
+    //   prepare_deadline = gather 起点 + match 的 matchedTicketTTLFor(组大小)(go/match queue.go),
+    //   现行公式 ⌈N×6 + 2×(6.1+5) + 3⌉ + 10 → 1/2/5/10 人依次 42/48/66/96s;最大组 10 人(5v5),
+    //   所以锁最晚在 gather 起点 +96+60=156s 过期。补发窗口从建房起算,建房晚于 gather 起点,
+    //   取 180s ≥ 156s,多出的 24s 吸收 match / scene / battle 三方墙钟偏差与锁 EX 的秒级取整。
+    //   依赖:match 改 matchedTicketTTLFor 公式、把 MatchedTicketTTLSeconds 配到公式值之上、放大组
+    //   上限,或 scene 改 kLockExtraTtlSec 时,本窗口必须同步保持 ≥ 最大 TTL + kLockExtraTtlSec。
+    //   窗口内每 10s 一次(scene 已 FIGHTING 时幂等忽略,开销是每玩家一条小消息;收尾即停表)。
+    constexpr uint64_t kConfirmResendWindowMs = 180 * 1000;
     constexpr double kConfirmResendIntervalSec = 10.0;
 
     // 确认:CreateBattle 成功后每玩家一条 BattleConfirmedEvent,scene 据此 PREPARING→FIGHTING
@@ -454,8 +461,26 @@ BattleRoomManager &BattleRoomManager::Instance()
 
 BattleRoomManager::BattleRoom *BattleRoomManager::FindRoom(const uint64_t battleId)
 {
-    const auto it = rooms_.find(battleId);
-    return it == rooms_.end() ? nullptr : it->second.get();
+    return rooms_.Find(battleId);
+}
+
+BattleRoomManager::BattleRoom *BattleRoomManager::EmplaceRoom(std::unique_ptr<BattleRoom> room)
+{
+    const auto battleId = room->battleId;
+    // 先插表后回调(房间表保证):回调方(Agones 单元计数)看到的是"确实已创建"的房间
+    auto *inserted = rooms_.Emplace(battleId, std::move(room));
+    if (inserted == nullptr)
+    {
+        // 表里那间保持原样;按值接管的新房间随形参销毁(插表前没有任何副作用)
+        LOG_ERROR << "EmplaceRoom 重复插表(调用方幂等判定失效),新建的房间对象随之丢弃: battle_id=" << battleId;
+    }
+    return inserted;
+}
+
+void BattleRoomManager::EraseRoom(const uint64_t battleId)
+{
+    // 先移除后回调(房间表保证):最后一个房间移除后 Agones 才能回 Ready,顺序反了会在房间还在时放出容量
+    rooms_.Erase(battleId);
 }
 
 void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
@@ -559,8 +584,15 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
         }
     }
 
-    auto *roomPtr = room.get();
-    rooms_.emplace(battleId, std::move(room));
+    // 插表 = 房间生命周期起点(EmplaceRoom 随即通知 Agones 单元已创建);此前的拒绝路径都没有副作用
+    auto *roomPtr = EmplaceRoom(std::move(room));
+    if (roomPtr == nullptr)
+    {
+        // 开头已判过幂等且同一 loop 任务内无人插表,走到这里是程序缺陷(EmplaceRoom 已打 ERROR)。
+        // 按幂等命中处理:回 OK、不设 error_message。表里那间同 battle_id 的房间是真的在打,
+        // 回错误会诱发 match 的补偿 DestroyBattle(battle_id),把它一起销毁。
+        return;
+    }
 
     roomPtr->battleTimer.RunAfter(static_cast<double>(deadlineMs - nowMs) / 1000.0,
                                   [this, battleId]
@@ -632,7 +664,7 @@ void BattleRoomManager::HandleDestroyBattle(const ::DestroyBattleRequest &reques
     NotifySpectateEndAndClose(*room, ::SPECTATE_END_BATTLE_ABORTED, ::BATTLE_OUTCOME_ONGOING);
     // 作废路径没有终局包可等,直接关直连;客户端凭 GetBattleState 空响应 / 断连收 UI
     CloseDirectConnections(*room, "destroyed");
-    rooms_.erase(battleId);
+    EraseRoom(battleId);
 
     LOG_INFO << "DestroyBattle 完成: battle_id=" << battleId << " reason=" << request.reason();
 }
@@ -696,7 +728,7 @@ void BattleRoomManager::HandleSubmitBattleAction(const ::SessionDetails &session
     if (allReady)
     {
         // 全员就绪提前结算,不等 action_deadline。
-        // 注意:ResolveRound 可能走到 FinishBattle + rooms_.erase,之后 room 悬空 ——
+        // 注意:ResolveRound 可能走到 FinishBattle + EraseRoom,之后 room 悬空 ——
         // 任何依赖 room 的响应字段都必须在这一行之前填完
         ResolveRound(room->battleId);
     }
@@ -1043,7 +1075,7 @@ void BattleRoomManager::ResolveRound(const uint64_t battleId)
     if (outcome != ::BATTLE_OUTCOME_ONGOING)
     {
         FinishBattle(*room, outcome, ::SPECTATE_END_BATTLE_FINISHED);
-        rooms_.erase(battleId);
+        EraseRoom(battleId);
     }
 }
 
@@ -1069,7 +1101,7 @@ void BattleRoomManager::OnBattleDeadline(const uint64_t battleId)
     // 观众侧 deadline 强制收尾归 ABORTED(player_battle.proto 枚举注释口径);
     // outcome 带上强制盖章结果,观众端可与参战者的平局结算对齐展示
     FinishBattle(*room, outcome, ::SPECTATE_END_BATTLE_ABORTED);
-    rooms_.erase(battleId);
+    EraseRoom(battleId);
 }
 
 void BattleRoomManager::ResendBattleConfirmed(const uint64_t battleId)
@@ -1294,24 +1326,30 @@ void BattleRoomManager::NotifySpectateEndAndClose(BattleRoom &room,
 
 void BattleRoomManager::AbortAllRooms(const std::string &reason)
 {
-    if (rooms_.empty())
+    if (rooms_.Empty())
     {
         return;
     }
 
-    LOG_INFO << "作废全部战斗房间: rooms=" << rooms_.size() << " reason=" << reason;
-    for (const auto &entry : rooms_)
+    LOG_INFO << "作废全部战斗房间: rooms=" << rooms_.Size() << " reason=" << reason;
+    // 先抄 battle_id 再逐个 EraseRoom:移除走唯一删除口,每个房间都触发一次 onRemoved
+    // (Agones 单元计数归零);不能边遍历房间表边删。
+    for (const auto battleId : rooms_.Ids())
     {
-        BattleRoom &room = *entry.second;
-        room.roundTimer.Cancel();
-        room.battleTimer.Cancel();
-        room.confirmResendTimer.Cancel();
+        auto *room = FindRoom(battleId);
+        if (room == nullptr)
+        {
+            continue;
+        }
+        room->roundTimer.Cancel();
+        room->battleTimer.Cancel();
+        room->confirmResendTimer.Cancel();
         // 不结算:战斗作废,scene reaper 按 InBattleComp.deadline_ms 解冻(§3.2)。
         // 停机作废无胜负:观众收 ABORTED + ONGOING
-        NotifySpectateEndAndClose(room, ::SPECTATE_END_BATTLE_ABORTED, ::BATTLE_OUTCOME_ONGOING);
-        CloseDirectConnections(room, reason.c_str());
+        NotifySpectateEndAndClose(*room, ::SPECTATE_END_BATTLE_ABORTED, ::BATTLE_OUTCOME_ONGOING);
+        CloseDirectConnections(*room, reason.c_str());
+        EraseRoom(battleId);
     }
-    rooms_.clear();
 }
 
 // ---- 客户端直连(设计文档 §18,D23-D28;下行出口 turn-based §22 D68) ----
@@ -1408,10 +1446,21 @@ bool BattleRoomManager::BuildAssignment(const BattleRoom &room, const uint64_t p
     {
         return false;
     }
+    // 本函数只在 loop 线程执行(Handle* 经 runInLoop 投递):GetNodeInfo() 读 thread_local,
+    // 换到 gRPC 线程会拿到空 NodeInfo、整批静默拒签。
     const auto &self = gNode->GetNodeInfo();
-    if (self.endpoint().ip().empty() || self.endpoint().port() == 0)
+    // 客户端可达地址(集群外入口 D76/D78,规则唯一权威实现在 client_endpoint::ClientFacing):
+    // client_endpoint 可用就用它;否则 required=false 时回落 endpoint(podip 形态),
+    // required=true 或 endpoint 本身不可用时拿不到 —— 拒签,调用方按 D70 fail-closed 回 kServiceUnavailable。
+    const bool required = gNode->ClientEndpointRequired();
+    const auto clientFacing = client_endpoint::ClientFacing(self, required);
+    if (!clientFacing)
     {
-        LOG_ERROR << "battle 票据签发被拒: 本节点客户端面 endpoint 未就绪, battle_id=" << room.battleId;
+        LOG_ERROR << "battle 票据签发被拒: 本节点没有客户端可达地址, battle_id=" << room.battleId
+                  << " player_id=" << playerId
+                  << " endpoint=" << self.endpoint().ip() << ":" << self.endpoint().port()
+                  << " client_endpoint=" << self.client_endpoint().ip() << ":" << self.client_endpoint().port()
+                  << " required=" << (required ? 1 : 0);
         return false;
     }
 
@@ -1439,8 +1488,8 @@ bool BattleRoomManager::BuildAssignment(const BattleRoom &room, const uint64_t p
 
     out.Clear();
     out.set_battle_id(room.battleId);
-    out.set_host(self.endpoint().ip());
-    out.set_port(self.endpoint().port());
+    out.set_host(clientFacing->ip());
+    out.set_port(clientFacing->port());
     out.set_token_payload(payloadBytes);
     out.set_token_signature(signature);
     out.set_expire_at_ms(room.deadlineMs);

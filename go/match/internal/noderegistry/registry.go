@@ -20,6 +20,7 @@ import (
 	"time"
 
 	base "proto/common/base"
+	"shared/nodeinfo"
 	"shared/snowflake"
 
 	"github.com/google/uuid"
@@ -173,7 +174,8 @@ func scanUsedNodeIDs(ctx context.Context, cli *clientv3.Client, prefix string, n
 			continue
 		}
 		var ni base.NodeInfo
-		if err := protojson.Unmarshal(kv.Value, &ni); err != nil {
+		// 宽松解析(忽略未知字段,D77):新版本实例写入的新字段不能让它的 node_id 漏出 used 集合。
+		if err := nodeinfo.Unmarshal(kv.Value, &ni); err != nil {
 			continue
 		}
 		if ni.NodeId >= nodeIDMin {

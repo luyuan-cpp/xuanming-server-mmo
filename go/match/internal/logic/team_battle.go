@@ -58,7 +58,8 @@ func (s *TeamBattleStarter) TeamSizeFor(battleConfigId uint32) uint32 {
 }
 
 // MatchLockTTLSeconds memberCount 人的开战锁时长(秒,§E.1 第 6 步):matched 票 TTL(gather 最坏链路)
-// + 补偿窗口(逐人 CancelBattlePrepare)+ 余量。5 人 = 48 + 25 + 10 = 83s。
+// + 补偿窗口(逐人 CancelBattlePrepare)+ 余量。5 人 = 66 + 25 + 10 = 101s。
+// team 的 EndMatch 兜底上限 endMatchMaxDuration(team/store.go,110s)必须 ≥ 这个值,改公式时一并核对。
 // 锁的绝对截止时间由 team 用 SharedRedis TIME 计算(§C.4),这里只给时长。
 func (s *TeamBattleStarter) MatchLockTTLSeconds(memberCount int) int {
 	return matchedTicketTTLFor(s.svcCtx, uint32(memberCount)) + compensationTicketTTLFor(memberCount) + teamMatchLockSlackSeconds

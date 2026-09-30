@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -88,12 +89,28 @@ var errFakeNameScriptExhausted = errors.New("fake player_name db: 脚本用尽,�
 
 // newFakeNameStore 把假驱动接成一个 PlayerNameStore(同包,直接装字段,生产代码不必为测试开口子),
 // 同时把假库还给用例,用来断言"发了几条什么语句"。
+//
+// releaseSQL 按**新结构**(name_norm 是聚簇主键)装:生产上跑完迁移之后就是这一条。
+// 旧结构那一条由 newFakeLegacyNameStore 装,两者只在 SQL 文本上不同,绑参与分支完全共用。
 func newFakeNameStore(t *testing.T, script fakeNameScript) (*PlayerNameStore, *fakeNameDB) {
+	t.Helper()
+	return newFakeNameStoreWithRelease(t, script, playerNameReleaseSQL)
+}
+
+// newFakeLegacyNameStore 装旧主键形态(迁移没跑过 / TiDB)那一条 Release 语句。
+func newFakeLegacyNameStore(t *testing.T, script fakeNameScript) (*PlayerNameStore, *fakeNameDB) {
+	t.Helper()
+	st, fake := newFakeNameStoreWithRelease(t, script, playerNameReleaseLegacySQL)
+	st.legacyKeyedByPlayerID = true
+	return st, fake
+}
+
+func newFakeNameStoreWithRelease(t *testing.T, script fakeNameScript, releaseSQL string) (*PlayerNameStore, *fakeNameDB) {
 	t.Helper()
 	fake := &fakeNameDB{script: script}
 	db := sql.OpenDB(fakeNameConnector{fake: fake})
 	t.Cleanup(func() { _ = db.Close() })
-	return &PlayerNameStore{db: db}, fake
+	return &PlayerNameStore{db: db, releaseSQL: releaseSQL}, fake
 }
 
 func (f *fakeNameDB) recordExec(stmt fakeNameStmt) (fakeNameExec, error) {
@@ -559,7 +576,24 @@ func TestReserveLockRetryStopsOnCanceledContext(t *testing.T) {
 
 // TestReleaseOutcomeContract 钉住"删了几行 + 行的登记时刻 → 哪个 ReleaseOutcome":
 // Deleted / Absent 都是成功(幂等),OutsideWindow 必须是拒绝(它拦的是"删别人在役角色的名字")。
+//
+// 两种表形态各跑一遍:终局判定、语句条数、实参顺序**都不许因为形态不同而变**,
+// 变的只有 SQL 文本(新结构钉 PRIMARY、旧结构钉 uk_player_name)。这一条正是"改主键不改对外语义"的机械证据。
 func TestReleaseOutcomeContract(t *testing.T) {
+	t.Run("新结构_主键是name_norm", func(t *testing.T) {
+		runReleaseOutcomeContract(t, newFakeNameStore, playerNameReleaseSQL)
+	})
+	t.Run("旧结构_主键还是player_id", func(t *testing.T) {
+		runReleaseOutcomeContract(t, newFakeLegacyNameStore, playerNameReleaseLegacySQL)
+	})
+}
+
+func runReleaseOutcomeContract(
+	t *testing.T,
+	newStore func(*testing.T, fakeNameScript) (*PlayerNameStore, *fakeNameDB),
+	wantSQL string,
+) {
+	t.Helper()
 	const (
 		player       uint64 = 4242
 		norm                = "yunzhongjun"
@@ -655,7 +689,7 @@ func TestReleaseOutcomeContract(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			st, fake := newFakeNameStore(t, tc.script)
+			st, fake := newStore(t, tc.script)
 
 			outcome, err := st.Release(context.Background(), player, norm, tc.minCreatedMs)
 			if tc.wantErr {
@@ -681,8 +715,8 @@ func TestReleaseOutcomeContract(t *testing.T) {
 			wantArgs := []driver.Value{int64(player), norm, int64(tc.minCreatedMs)}
 			for i := 0; i < fake.execCount(); i++ {
 				stmt := fake.execAt(i)
-				if stmt.sql != playerNameReleaseSQL {
-					t.Fatalf("第 %d 条 DELETE 不是 playerNameReleaseSQL:\n got=%q\nwant=%q", i, stmt.sql, playerNameReleaseSQL)
+				if stmt.sql != wantSQL {
+					t.Fatalf("第 %d 条 DELETE 不是本形态该用的语句:\n got=%q\nwant=%q", i, stmt.sql, wantSQL)
 				}
 				if !reflect.DeepEqual(stmt.args, wantArgs) {
 					t.Fatalf("第 %d 条 DELETE 的实参不对:\n got=%#v\nwant=%#v(顺序必须是 player_id, name_norm, min_created_ms)",
@@ -797,8 +831,10 @@ func TestReserveSQLUpdateClauseIsNoOp(t *testing.T) {
 	const marker = "ON DUPLICATE KEY UPDATE"
 	idx := strings.Index(playerNameReserveSQL, marker)
 	if idx < 0 {
-		t.Fatalf("playerNameReserveSQL 不再是 ODKU:%q —— 改回普通 INSERT 会把重复检查从 X 退回 S,"+
-			"同名竞争的两种 player_id 顺序都会成环(见 Reserve 的证据 E1/E2)", playerNameReserveSQL)
+		t.Fatalf("playerNameReserveSQL 不再是 ODKU:%q —— 改回普通 INSERT 会把**聚簇索引**上的重复检查从 X 退回 S,"+
+			"两个 S 同时被授予之后各自要升级成 X、互相挡住(手册 E1 的三会话例就建在聚簇主键上)。"+
+			"2026-09-29 真库探针实测:新结构配普通 INSERT 是 15/15 全成环,三种 player_id 顺序一个都跑不掉 —— "+
+			"「名字是聚簇主键」与「ODKU」两个条件缺一不可", playerNameReserveSQL)
 	}
 	update := strings.TrimSpace(playerNameReserveSQL[idx+len(marker):])
 	if update != "player_id = player_id" {
@@ -809,20 +845,202 @@ func TestReserveSQLUpdateClauseIsNoOp(t *testing.T) {
 	}
 }
 
-// TestReleaseSQLForcesUniqueKeyIndex 钉住 Release 的取锁顺序(见 Release 的「锁序」):
-// 必须 FORCE INDEX (uk_player_name),否则优化器可能挑主键,与 Reserve 的 ODKU 反序取锁,两方即可成环。
+// TestReleaseSQLForcesIndexPerTableShape 钉住 Release 的取锁顺序(见 Release 的「锁序」):
+// 两条语句各自把索引钉死,否则优化器可能挑另一条唯一约束,与 Reserve 的 ODKU 反序取锁,两方即可成环。
 // 真库用例用 EXPLAIN 再验一次执行计划;这一条在没有 Docker 时也能拦住文本被改回去。
-func TestReleaseSQLForcesUniqueKeyIndex(t *testing.T) {
-	if !strings.Contains(playerNameReleaseSQL, "FORCE INDEX (uk_player_name)") {
-		t.Fatalf("playerNameReleaseSQL 丢了 FORCE INDEX (uk_player_name):%q", playerNameReleaseSQL)
+func TestReleaseSQLForcesIndexPerTableShape(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		stmt  string
+		index string
+		why   string
+	}{
+		{
+			name:  "新结构钉PRIMARY",
+			stmt:  playerNameReleaseSQL,
+			index: playerNameReleaseForcedIndex,
+			why: "新结构里 name_norm 是聚簇主键,Reserve 的 ODKU 先锁它;Release 不钉 PRIMARY 时优化器可能挑 " +
+				"uk_player_name_owner(player_id),那就是先二级、后聚簇,与 Reserve 反序",
+		},
+		{
+			name:  "旧结构钉uk_player_name",
+			stmt:  playerNameReleaseLegacySQL,
+			index: PlayerNameLegacyNormUniqueKey,
+			why:   "旧结构里名字是二级唯一索引,Reserve 撞名时先锁它;不钉时优化器会挑主键 player_id,反序",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if !strings.Contains(tc.stmt, "FORCE INDEX ("+tc.index+")") {
+				t.Fatalf("丢了 FORCE INDEX (%s):%q —— %s", tc.index, tc.stmt, tc.why)
+			}
+			if !strings.HasPrefix(tc.stmt, "DELETE player_name FROM player_name") {
+				t.Fatalf("不再是多表 DELETE 语法(单表 DELETE 不接受索引提示):%q", tc.stmt)
+			}
+			for _, col := range []string{"player_id = ?", "name_norm = ?", "created_ms >= ?"} {
+				if !strings.Contains(tc.stmt, col) {
+					t.Fatalf("丢了条件 %q:%q", col, tc.stmt)
+				}
+			}
+		})
 	}
-	if !strings.HasPrefix(playerNameReleaseSQL, "DELETE player_name FROM player_name") {
-		t.Fatalf("playerNameReleaseSQL 不再是多表 DELETE 语法(单表 DELETE 不接受索引提示):%q", playerNameReleaseSQL)
+}
+
+// TestReleaseStatementsShareArgumentOrder:两条 Release 语句由**同一段**绑参代码发出
+// (Release 里的 s.releaseSQL),占位符顺序一旦分叉,就是"删谁"与"时间窗下界"错位 ——
+// 删的还是一行、还是没有语法错误,只是删错了人,而且全程零报错。
+//
+// 判据取"带占位符的条件按在语句里出现的先后排出来,两条必须一模一样",比数一数占位符个数强:
+// 它连"个数对、顺序也对,但某个条件换了一个列"都能拦住。
+func TestReleaseStatementsShareArgumentOrder(t *testing.T) {
+	got, want := releaseConditionOrder(playerNameReleaseLegacySQL), releaseConditionOrder(playerNameReleaseSQL)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("旧结构 Release 的条件顺序 %v 与新结构 %v 不同:两条语句共用同一段绑参代码(Release 里的 s.releaseSQL),"+
+			"顺序分叉 = 实参错位,删掉的是别人的名字、或用错了时间窗下界,而且不会报错", got, want)
 	}
-	for _, col := range []string{"player_id = ?", "name_norm = ?", "created_ms >= ?"} {
-		if !strings.Contains(playerNameReleaseSQL, col) {
-			t.Fatalf("playerNameReleaseSQL 丢了条件 %q:%q", col, playerNameReleaseSQL)
+	if len(want) != 3 {
+		t.Fatalf("Release 的带占位符条件只认出 %v(want 三条:player_id / name_norm / created_ms):"+
+			"条件写法被改过,本用例已经拦不住实参错位了,先修判据", want)
+	}
+	for _, stmt := range []string{playerNameReleaseSQL, playerNameReleaseLegacySQL} {
+		if n := strings.Count(stmt, "?"); n != 3 {
+			t.Fatalf("Release 语句的占位符是 %d 个,want 3:%q", n, stmt)
 		}
+	}
+}
+
+// releaseConditionOrder 把 Release 语句里带占位符的条件按出现先后列出来 —— 也就是实参的绑定顺序。
+func releaseConditionOrder(stmt string) []string {
+	type placed struct {
+		at  int
+		col string
+	}
+	var found []placed
+	for _, col := range []string{"player_id = ?", "name_norm = ?", "created_ms >= ?"} {
+		if i := strings.Index(stmt, col); i >= 0 {
+			found = append(found, placed{at: i, col: col})
+		}
+	}
+	sort.Slice(found, func(i, j int) bool { return found[i].at < found[j].at })
+	out := make([]string, 0, len(found))
+	for _, f := range found {
+		out = append(out, f.col)
+	}
+	return out
+}
+
+// TestBootstrapDDLMatchesStoreAssumptions 把 schema.go 的建表语句与本 store 的假设钉在一起。
+//
+// 这两份真相分处两个文件:store 假定"名字是聚簇主键、player_id 上另有一条唯一键",
+// 而真正建表的是 schema.go 的 playerNameBootstrapDDL。漂移的症状分两种,都不好查 ——
+// 主键漂回 player_id:NewPlayerNameStore 会探到旧形态并静默退回旧语句(功能对,但死锁根治没了);
+// player_id 的唯一键没了:Reserve 的 ID 复用检测与 ownedNormOf 一起静默失效。
+// 本用例不连库,是这两处漂移在 `go test ./...` 里唯一的拦截点。
+func TestBootstrapDDLMatchesStoreAssumptions(t *testing.T) {
+	if !strings.Contains(playerNameBootstrapDDL, "PRIMARY KEY (`name_norm`)") {
+		t.Fatalf("playerNameBootstrapDDL 的主键不是 name_norm:%q —— 名字抢注的死锁根治(真库实测 0/15)"+
+			"的全部前提就是「名字是聚簇主键」,改回二级唯一索引会让生产常态那一路重新 5/5 成环", playerNameBootstrapDDL)
+	}
+	if !strings.Contains(playerNameBootstrapDDL, "UNIQUE KEY `"+PlayerNameOwnerUniqueKey+"` (`player_id`)") {
+		t.Fatalf("playerNameBootstrapDDL 里没有 UNIQUE KEY %s(player_id):"+
+			"Reserve 靠它把「这个 player_id 已经有别的名字」变成受影响 0 行(→ ReserveConflict),"+
+			"ownedNormOf 也靠它保证最多一行。键没了这两处都会静默失效", PlayerNameOwnerUniqueKey)
+	}
+	if strings.Contains(playerNameBootstrapDDL, "`"+PlayerNameLegacyNormUniqueKey+"`") {
+		t.Fatalf("playerNameBootstrapDDL 里又出现了 %s:name_norm 上**不能**再有二级唯一索引 —— "+
+			"ODKU 的重复扫描会连带在它上面取 X next-key,把根治掉的那条环原样带回来",
+			PlayerNameLegacyNormUniqueKey)
+	}
+	if !strings.Contains(playerNameBootstrapDDL, "COLLATE=utf8mb4_bin") {
+		t.Fatalf("playerNameBootstrapDDL 丢了 utf8mb4_bin:归一化在 Go 侧做,库必须逐字节比较;" +
+			"主键建在 name_norm 上之后,collation 同时决定「库认为哪两个名字是同一个主键」")
+	}
+	// player_id 也必须进启动期的唯一性守卫,否则上面那条 UNIQUE KEY 被人从存量库上 DROP 掉时没人会发现。
+	var guarded bool
+	for _, col := range bootstrapUniqueColumns[PlayerNameTableName] {
+		if col == "player_id" {
+			guarded = true
+		}
+	}
+	if !guarded {
+		t.Fatalf("bootstrapUniqueColumns[%s] = %v,没把 player_id 列进去:"+
+			"存量库上 %s 被 DROP 之后启动检查照样全过,而 Reserve 的 ID 复用检测已经静默失效",
+			PlayerNameTableName, bootstrapUniqueColumns[PlayerNameTableName], PlayerNameOwnerUniqueKey)
+	}
+}
+
+// TestStrayNameNormUniqueIndexNames 钉住"哪些索引算 name_norm 上多余的唯一键"这条判据。
+//
+// 它同时被两条**相反**的路径用(见 strayNameNormUniqueIndexNames 的注释):旧形态下这些索引承担着
+// 名字唯一、换主键时必须全删;目标形态下它们是残留、同样要删。判错的后果各不相同但都很坏 ——
+// 把 PRIMARY 算进去会让迁移去 DROP 主键,把组合键 / 前缀键算进去会删掉别人有用的索引,
+// 而漏掉一条就留下"主键对了、形状没收敛"的中间态(死锁悄悄回来,功能全对、零报错)。
+// 顺序也在判据里:DDL 不能因为 map 遍历顺序不同而在两次运行里生成不同的语句。
+func TestStrayNameNormUniqueIndexNames(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   map[string]uniqueIndexColumns
+		want []string
+	}{
+		{
+			name: "目标形态:只有主键,没有多余的",
+			in: map[string]uniqueIndexColumns{
+				"PRIMARY":                {cols: []string{"name_norm"}},
+				PlayerNameOwnerUniqueKey: {cols: []string{"player_id"}},
+			},
+		},
+		{
+			name: "旧形态:承担名字唯一的那条要被找出来",
+			in: map[string]uniqueIndexColumns{
+				"PRIMARY":                     {cols: []string{"player_id"}},
+				PlayerNameLegacyNormUniqueKey: {cols: []string{"name_norm"}},
+			},
+			want: []string{PlayerNameLegacyNormUniqueKey},
+		},
+		{
+			name: "中间态:主键已是 name_norm,旧键还残留着 —— 必须被认出来",
+			in: map[string]uniqueIndexColumns{
+				"PRIMARY":                     {cols: []string{"name_norm"}},
+				PlayerNameLegacyNormUniqueKey: {cols: []string{"name_norm"}},
+				PlayerNameOwnerUniqueKey:      {cols: []string{"player_id"}},
+			},
+			want: []string{PlayerNameLegacyNormUniqueKey},
+		},
+		{
+			name: "多条时按名字排序全部返回(DDL 要一次收敛干净,且语句必须确定)",
+			in: map[string]uniqueIndexColumns{
+				"PRIMARY":                     {cols: []string{"name_norm"}},
+				"zz_name_norm_copy":           {cols: []string{"name_norm"}},
+				PlayerNameLegacyNormUniqueKey: {cols: []string{"name_norm"}},
+			},
+			want: []string{PlayerNameLegacyNormUniqueKey, "zz_name_norm_copy"},
+		},
+		{
+			name: "组合唯一键与前缀键都不算:删掉它们既不必要也可能误伤",
+			in: map[string]uniqueIndexColumns{
+				"PRIMARY":      {cols: []string{"name_norm"}},
+				"uk_composite": {cols: []string{"name_norm", "player_id"}},
+				"uk_prefixed":  {cols: []string{"name_norm"}, prefixed: true},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := strayNameNormUniqueIndexNames(tc.in)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("strayNameNormUniqueIndexNames = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMigrateOptionsPlayerNameLegacyDefaultsToMigrating:跳过换主键的逃生口默认必须是**关**的。
+//
+// 它打开之后 player_name 会停在旧形态 —— 功能正确,但名字抢注在生产常态那一路仍然成环(真库实测 5/5),
+// 只能靠有界 1213 重试吸收。这种"明知会成环"的形态是用户明确不接受的,只能由运维在窗口不够时显式选择,
+// 不允许任何代码路径顺手置 true(与 AllowMissingGuidUniqueKey 同口径)。
+func TestMigrateOptionsPlayerNameLegacyDefaultsToMigrating(t *testing.T) {
+	if (MigrateOptions{}).AllowLegacyPlayerNamePrimaryKey {
+		t.Fatal("AllowLegacyPlayerNamePrimaryKey 的零值成了 true:默认必须执行换主键迁移," +
+			"否则存量库会静默停在「生产常态那一路 5/5 成环、靠重试兜」的旧形态上")
 	}
 }
 

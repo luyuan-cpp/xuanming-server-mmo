@@ -1,6 +1,9 @@
 package store
 
-import "context"
+import (
+	"context"
+	"database/sql"
+)
 
 // 仅供同目录 store_test 包(真库集成用例)使用的只读出口;_test.go 文件不进生产二进制。
 
@@ -57,13 +60,34 @@ const SnapshotGuidNzExprForTest = snapshotGuidNzExpr
 
 // PlayerNameReserveSQLForTest / PlayerNameReleaseSQLForTest 让用例用与生产**同一段文本**扮演并发的
 // Reserve / 未提交的 Release(生产路径是自动提交,停不在提交之前,编排时只能把同一条语句放进显式事务)。
+// PlayerNameReleaseLegacySQLForTest 是旧主键形态下的那一条(迁移未跑 / TiDB 的窗口)。
 const (
-	PlayerNameReserveSQLForTest = playerNameReserveSQL
-	PlayerNameReleaseSQLForTest = playerNameReleaseSQL
+	PlayerNameReserveSQLForTest       = playerNameReserveSQL
+	PlayerNameReleaseSQLForTest       = playerNameReleaseSQL
+	PlayerNameReleaseLegacySQLForTest = playerNameReleaseLegacySQL
+	// PlayerNameReleaseForcedIndexForTest 是新结构下 Release 钉死的索引名(EXPLAIN 回归拿它当期望值)。
+	PlayerNameReleaseForcedIndexForTest = playerNameReleaseForcedIndex
 )
 
 // LockRetriesForTest 返回本 store 的 Reserve / Release 因 1213/1205 重来的累计次数。
 func (s *PlayerNameStore) LockRetriesForTest() uint64 { return s.lockRetries.Load() }
+
+// LegacyKeyedByPlayerIDForTest 返回建 store 时探到的表形态:true = 主键还是 player_id(迁移没跑过 / TiDB)。
+// 真库用例靠它确认自己跑在哪一种结构上 —— 新结构的"零死锁"判据在旧结构上并不成立。
+func (s *PlayerNameStore) LegacyKeyedByPlayerIDForTest() bool { return s.legacyKeyedByPlayerID }
+
+// ReleaseSQLForTest 返回本实例实际在用的 Release 语句(按形态选定)。
+func (s *PlayerNameStore) ReleaseSQLForTest() string { return s.releaseSQL }
+
+// PlayerNamePKShapeIsByNameForTest 给用例判断一组主键列是不是目标形态(name_norm)。
+func PlayerNamePKShapeIsByNameForTest(pkCols []string) bool {
+	return playerNamePKShapeOf(pkCols) == playerNamePKByName
+}
+
+// PrimaryKeyColumnsForTest 读一张表主键的列序,给真库用例断言迁移结果用。
+func PrimaryKeyColumnsForTest(ctx context.Context, db *sql.DB, dbName, tableName string) ([]string, error) {
+	return primaryKeyColumns(ctx, db, dbName, tableName)
+}
 
 // MySQLErrDeadlockForTest / MySQLErrDupEntryForTest 让真库用例按错误号判定时引用本包唯一的权威定义
 // (mysqlErrDeadlock 在 id_segment_store.go、mysqlErrDupEntry 在 player_name_store.go),不在用例里再写一份字面量。

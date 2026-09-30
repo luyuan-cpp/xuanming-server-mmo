@@ -37,6 +37,7 @@ include_directories(
     ../../../generated/
     ../common/
     ../config/
+    ../core/
     ../third_party/
     ../third_party/boost/
     ../third_party/lua/src/
@@ -55,6 +56,10 @@ include_directories(
 )
 
 set(SOURCE_FILES
+    agones/agones_client_endpoint_source.cpp
+    agones/agones_gameserver_lifecycle.cpp
+    agones/agones_gameserver_status.cpp
+    agones/agones_rest_client.cpp
     messaging/kafka/kafka_consumer.cpp
     messaging/kafka/kafka_manager.cpp
     messaging/kafka/kafka_producer.cpp

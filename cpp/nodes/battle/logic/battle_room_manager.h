@@ -4,12 +4,13 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "muduo/net/TcpConnection.h"
 #include "time/comp/timer_task_comp.h"
+
+#include "battle_room_table.h"
 
 // 回合引擎(cpp/libs/services/battle,纯逻辑库,API 见设计文档 §5.1)
 #include "system/turn_battle_engine.h"
@@ -64,6 +65,23 @@ class BattleRoomManager
 public:
     static BattleRoomManager &Instance();
 
+    // ---- 房间生命周期回调(集群外入口 D82 / D85;main.cpp 装配,转发给 Agones GameServerLifecycle) ----
+    //
+    // 房间 = Agones 的"单元":第一个房间建出之前要 allocate、最后一个房间移除之后回 Ready。
+    // 契约:
+    //   onCreated(battle_id):房间**已插表之后**调用(单元确实创建成功);
+    //   onRemoved(battle_id):房间**已从表里移除之后**调用(单元确实销毁)。
+    //   每个 battle_id 在一次插表 / 移除上各恰好调用一次 —— 由房间表类型保证(battle_room_table.h:
+    //   底层容器私有,只能经 Emplace / Erase 增删,两者各自触发回调;单测 tests/battle_room_table_test.cpp)。
+    //   本类所有插入 / 删除路径(开局、正常结束、整场期限回收、DestroyBattle、AbortAllRooms)
+    //   经私有的 EmplaceRoom / EraseRoom 调它。
+    // 线程模型:只在 loop 线程调用;回调必须快速返回(GameServerLifecycle 只拿一把短锁,不做 I/O)。
+    // 未设置的回调 = 不通知(本地 / 测试)。
+    using RoomLifecycleHooks = battle_room_table::Hooks;
+
+    // 只在 Node 构造完成、EventLoop 开始 loop() 之前调用一次(main 的 configure 回调)。
+    void SetRoomLifecycleHooks(RoomLifecycleHooks hooks) { rooms_.SetHooks(std::move(hooks)); }
+
     // ---- 客户端直连面(main.cpp 装配;BattleClientEdge 生命周期由 main 的运行时上下文持有) ----
 
     void SetClientEdge(BattleClientEdge *edge) { edge_ = edge; }
@@ -95,6 +113,8 @@ public:
     void HandleIssueBattleTicket(const ::IssueBattleTicketRequest &request,
                                  ::IssueBattleTicketResponse &response);
 
+    // 节点级准入(建房准入闸、Agones 分配许可)在调用方 BattleNodeImpl::CreateBattle,先于本函数;
+    // 本函数只剩业务判定。
     // 幂等:同 battle_id 重复创建直接回 OK(match 补偿路径可能重试)。
     // fail-closed(turn-based §22 D70):插表、装定时器、发任何事件之前先为全体参战者预签票据,
     // 任一人签不出即回 kServiceUnavailable —— 此时保证没有建房、没有推送、没有确认事件,
@@ -142,6 +162,9 @@ public:
                              ::SetAutoBattleResponse &response);
 
     // 停机收尾:全部房间作废(不结算;观众收 ABORTED,关闭房间直连),供 SetBeforeShutdown 调用。
+    // 调用方必须在同一个 loop 任务里先关建房准入闸(BattleNodeImpl::CloseAdmission):gRPC drain
+    // 期间已排进 loop 的 CreateBattle 仍会执行,不关闸它们会在作废之后照常建房。关闸之后房间表
+    // 保持为空,AddObserver / IssueBattleTicket 因房间不存在自然被拒(kEntityIsNull / kInvalidParameter)。
     void AbortAllRooms(const std::string &reason);
 
     // ---- 结算重投的调参(测试与运维需要看得见,故放公开区)----
@@ -184,7 +207,8 @@ private:
         // BattleConfirmedEvent 补发:开局后 kConfirmResendWindowMs 内每 kConfirmResendIntervalSec
         // 向全部参战玩家重发一次(scene 幂等)。没有 scene→battle 的确认回执通道(proto 已定),
         // 用有界周期补发覆盖"首发 produce 失败 / Kafka 积压 / scene 消费者 rebalance"这类
-        // 单次投递丢失或迟到;窗口按 scene 侧锁保留期(prepare TTL 最长 78s + 60s 余量)取整。
+        // 单次投递丢失或迟到;窗口按 scene 侧锁保留期取 180s:prepare TTL(match matchedTicketTTLFor,
+        // 最长 10 人 96s)+ kLockExtraTtlSec 60s = 156s,再留余量(推导见 .cpp kConfirmResendWindowMs)。
         TimerTaskComp confirmResendTimer;
         uint64_t confirmResendUntilMs = 0;
         // player_id(参战者或观众)→ 已验证的客户端直连;缺项 = 该玩家没有活直连:
@@ -197,6 +221,17 @@ private:
     };
 
     BattleRoom *FindRoom(uint64_t battleId);
+
+    // 房间插表(键 = room->battleId):成功后房间表触发一次 onCreated,返回表内的房间。
+    // 所有权:room 按值接管。battle_id 已存在时返回 nullptr、不触发回调、打 LOG_ERROR,
+    // 表里那间保持原样,room 随形参一起销毁 —— 调用方必须保证此前没有装定时器、推送或发事件
+    // (HandleCreateBattle 在插表之前只做纯计算与预签)。调用方在同一 loop 任务里已判过幂等,
+    // 走到这里说明是程序缺陷。
+    BattleRoom *EmplaceRoom(std::unique_ptr<BattleRoom> room);
+
+    // 房间移除:房间表移除并销毁房间后触发一次 onRemoved;房间不存在时 no-op(不触发)。
+    // 调用之后该房间的引用 / 指针全部悬空。
+    void EraseRoom(uint64_t battleId);
 
     // 确认事件周期补发(confirmResendTimer 回调):窗口已过则停表,否则对全员重发。
     void ResendBattleConfirmed(uint64_t battleId);
@@ -215,7 +250,7 @@ private:
     // 观众按 spectateReason 推 SpectateEndS2C(§10.5);终局包排队后关闭房间全部直连;
     // 最后向 match-results 发一条 BattleResultEvent(评分回流;带活动上下文的局改走
     // DispatchActivityResultDurably 的持久化通道)。
-    // 只组装与发送,不动 rooms_(房间由调用方随后移除)。
+    // 只组装与发送,不动 rooms_(房间由调用方随后 EraseRoom)。
     void FinishBattle(BattleRoom &room, ::eBattleOutcome outcome,
                       ::eSpectateEndReason spectateReason);
 
@@ -262,9 +297,12 @@ private:
     void PushLobbyAnnouncement(const BattleRoom &room, uint64_t playerId, const ::BattleRouting &routing,
                                uint32_t messageId, const ::google::protobuf::Message &message) const;
 
-    // 签票据并组装落点分配包。false = 签不出(空密钥 + prod / OpenSSL 失败 / 本节点
-    // endpoint 未就绪),调用方必须拒绝开局 / 拒绝观战(turn-based §22 D70 fail-closed),
+    // 签票据并组装落点分配包。false = 签不出(空密钥 + prod / OpenSSL 失败 / 本节点没有
+    // 客户端可达地址),调用方必须拒绝开局 / 拒绝观战(turn-based §22 D70 fail-closed),
     // 不能放玩家进一场连不上的战斗。expire_at_ms = room.deadlineMs(调用前必须已落到房间上)。
+    // host/port 取 client_endpoint::ClientFacing(集群外入口 D78):client_endpoint 可用就用它,
+    // 否则 required=false 时回落 endpoint,required=true(CLIENT_ENDPOINT_REQUIRED=1)时拒签。
+    // 只能在 loop 线程调用:ClientFacing 的 NodeInfo 取自 thread_local 的 gNode->GetNodeInfo()。
     bool BuildAssignment(const BattleRoom &room, uint64_t playerId, ::eBattleTicketRole role,
                          ::BattleAssignedS2C &out) const;
 
@@ -356,7 +394,9 @@ private:
 
     BattleClientEdge *edge_ = nullptr;
 
-    std::unordered_map<uint64_t, std::unique_ptr<BattleRoom>> rooms_;
+    // 房间表:增删与生命周期回调(SetRoomLifecycleHooks)绑死在 RoomTable 里,本类只经
+    // EmplaceRoom / EraseRoom 调它的 Emplace / Erase,其余路径只读(FindRoom / AbortAllRooms 抄 id)。
+    battle_room_table::RoomTable<BattleRoom> rooms_;
 
     // key = (battle_id, player_id);量级 = 未销账的结算条数,常态为 0。
     std::map<std::pair<uint64_t, uint64_t>, PendingSettlement> settlementOutbox_;

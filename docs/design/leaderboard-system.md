@@ -395,7 +395,7 @@ message GetRankPageResponse {
 | C++ `nodeTypeNameMap` / `base_deploy_config.yaml` / K8s C++ 前缀 / scene 白名单 / READY 选择器 | **v1 不改**:这是契约 §8"C++ 直连 gRPC"那条路的清单,v1 写分走 Kafka、客户端走路由服,均不需要 | friend 登记了前两处但依据未核到(§9.2#1) |
 | 路由服 | 无配置改动:`TargetNodeTypes(game.RouteTable)` 从生成的路由表自动派生要 watch 的 `RankNodeService.rpc/`;重生成后重部署即可 | `go/client_rpc_router/internal/svc/servicecontext.go` |
 | gate 直连白名单 | **不补**(D-12);客户端只承诺路由服模式 | `cpp/nodes/gate/main.cpp` |
-| **K8s 可达性** | **K8s 上 rank 默认对客户端不可达**:`k8s_deploy.ps1 -GateRouterMode` 默认 `"0"`(直连),翻成 1 的前置(D-12:K8s 上以路由模式跑通一次 battle-smoke、路由服 manifest 落地、POD_IP 通告)尚未满足。在那之前 rank 在 K8s 上只能消费写榜,Pod Ready、指标正常但玩家请求一个都到不了 —— 与 chat / trade / friend 同一已知缺口,是设计内行为。上线公告与验收**不能**拿 K8s 当可达环境 | D-12;`k8s_deploy.ps1` 目录注释 |
+| **K8s 可达性** | **K8s 上 rank 默认对客户端不可达**:`k8s_deploy.ps1 -GateRouterMode` 默认 `"0"`(直连),翻成 1 的前置(D-12:K8s 上以路由模式跑通一次 battle-smoke、路由服 manifest 落地、POD_IP 通告)尚未满足。在那之前 rank 在 K8s 上只能消费写榜,Pod Ready、指标正常但玩家请求一个都到不了 —— 与 chat / trade / friend 同一已知缺口,是设计内行为。上线公告与验收**不能**拿 K8s 当可达环境。**〔2026-09-29 更正原因,结论不变〕** K8s 的 `-GateRouterMode` 默认已翻为 `"1"`(turn-based §22 D75,`tools/scripts/k8s_deploy.ps1:163-164`;battle-smoke 改为事后补验),路由模式不再是障碍。rank 在 K8s 上仍**不可达**,原因改为 **rank 尚未登记进 K8s 部署**:2026-09-29 按磁盘核对,`$GoSvcCatalogue` 里没有 `rank` 条目、`deploy/k8s/manifests/go-svc/rank.yaml` 不存在(§5.2 五处登记第 3、4 行 —— `k8s_deploy.ps1` 目录条目、`manifests/go-svc/rank.yaml` —— 尚未落地),部署脚本根本不会拉起它。仍然不能拿 K8s 当验收环境 | D-12;`k8s_deploy.ps1` 目录注释 |
 | 库归属(D-14) | **不触发**:D-14 适用于"要建表的新全局服务";v1 零 MySQL,照 chat v1 先例。因此**不需要** `mmorpg_rank` 库、`00_init_zone_dbs.sql`、`start_game.ps1` 库预检、`rank-migrate` Job、`MigrateJob` 字段。私有 Redis 按契约 §4 走独立句柄 `RankRedis` | 契约 §4 "chat v1 零 MySQL" |
 | 号段 biz_tag | **不开**:榜条目的身份就是 player_id,没有需要永久 guid 的新实体 | 四处 tag 清单(`DefaultIdSegmentBootstrapTags` 等)不动 |
 | `Etcd.Key`(D-13) | 顶层 `Etcd.Key: ""`(显式空串,不能省略整行,否则 go-zero `conf.MustLoad` Fatal);`config.Validate` 拒绝非空;唯一的 `RpcClient` 是 `DataServiceRpc`(`Key: dataservice.rpc`,按 zone 部署,D-13 允许) | `go/chat/etc/chat.yaml` |
@@ -494,6 +494,7 @@ Claude 不跑任何构建 / 测试(`AGENTS.md §10.1`),以下由 Codex 执行。
 ### 8.2 冒烟(R2b,robot `rank-smoke`)
 
 **R 系列只在本地、路由服模式下验收**;K8s 默认 `GateRouterMode="0"`,rank 在 K8s 上对客户端不可达(§5.3),不能拿 K8s 当验收环境。
+(2026-09-29 更正原因:K8s 默认已为 `"1"`(D75);rank 仍不可达,是因为尚未登记进 K8s 部署(无目录条目、无 manifest),见 §5.3 的更正。)
 
 **双 zone 栈怎么起**:`start_game.ps1` 固定 `-Zone 1`,**不能**用它起双 zone。用 `$env:GATE_CLIENT_RPC_ROUTER = '1'` 后 `pwsh tools/scripts/dev_tools.ps1 -Command dev-start-zones -Zones 1,2`(每个 zone 经 `go_services.ps1 -Zone <N>` 派生 yaml / 端口,gate 从父 shell 继承路由模式)。`dev-start-zones` 不起 Java 网关,网关与基础设施按既有 friend 双 zone 冒烟的步骤起(确切步骤见 §9.2#5)。本地开关按 §5.4 改 `match_service.yaml` 为 `true`,跑完改回、不提交。
 
@@ -570,6 +571,6 @@ rank 与 match 的 stdout / stderr 摘要、`:9250/metrics` 与 `:9170/metrics` 
 7. **start_game.ps1 只加 `$services` 不会启动 rank**,必须三行都加(§5.2 #5)。
 8. **R1 与 R2a 都被同一次 proto-gen 卡住**,拆出 R1p 契约批先行(§7)。
 9. **测试不能照抄**:T5 期望值与公会分页相反;T7 无会话是拦截器放行 + in-band 码,不是"handler 前被拒";T9 不能在 go/rank 里跑 guild 重建;R2 / R8 原判据结构性恒绿(§8)。
-10. **K8s 上 rank 默认对客户端不可达**(`GateRouterMode="0"`),不能拿 K8s 当验收环境(§5.3、§8.2)。
+10. **K8s 上 rank 默认对客户端不可达**(`GateRouterMode="0"`),不能拿 K8s 当验收环境(§5.3、§8.2)。(2026-09-29 更正原因:现为 rank 未登记进 K8s 部署,不再是路由模式默认值;K8s 默认已为 `"1"`)
 
 其余已定稿:错误码 `kInvalidParameter`(1005,非故障)/ `kServiceUnavailable`(1003,故障)(§4.5);Tier = 1、进 `$optionalServices`(§5.2);K8s ConfigMap 形状补全(§5.2 #3);发布顺序不再依赖部署先后、开关改为 `k8s_deploy.ps1` 显式参数(§5.4);合服无关结论(§3.4);offset 重放恢复 runbook(§3.5、R9);告警文件(§3.7、L-21);事件删 `match_mode`、响应删 `server_now_ms`(§2.4、§4.2);R0 验收改为"§9.1 全部拍板";R2b 端口判据改为限定范围的精确集合;R1 / R2a 文件数按逐文件清单重估并拆分。

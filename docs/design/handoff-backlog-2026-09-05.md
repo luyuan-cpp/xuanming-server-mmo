@@ -898,15 +898,28 @@ infra-up DryRun 是否在 Ensure-KubectlAvailable(:466-467 DryRun 放行)之后�
 
 **领域** k8s-deploy · **工作量** S · **状态** open
 
+> **(2026-09-29 更正,仍 open)** 下文"全仓无 kind 配置文件""新建 `deploy/k8s/kind-config.yaml`"两句已过时:集群外入口 WP11 已新建该文件
+> (单 control-plane、`nodes[0].image` 钉 `kindest/node:v1.35.8@sha256:…`、`podSubnet 10.244.0.0/16`、15 条 `extraPortMappings`),README 也已改用
+> `kind create cluster --name mmorpg --config deploy/k8s/kind-config.yaml --kubeconfig "$env:TEMP\kind-mmorpg.kubeconfig"`(独立 kubeconfig,kind 钉 v0.33.0)。
+> 本项落地时**在已有的 `kind-config.yaml` 上追加 `kubeadmConfigPatches`,不得重写该文件、不得改动 `extraPortMappings`**(那是集群外入口 kind 验收的端口契约,
+> 与 `k8s_deploy.ps1` 参数和 Agones helm 端口段 7100–7109 一一对应)。
+> - 方案优先用 `kind: KubeletConfiguration` 的 `imagePullCredentialsVerificationPolicy: NeverVerify`(配置字段,不是 feature gate),
+>   不用下文步骤 1 的 `featureGates: {KubeletEnsureSecretPulledImages: false}`:节点现在是 v1.35.8,该 gate 在此版本已默认开启,可能已锁定,设 false 有可能让 kubelet 起不来。
+> - 节点版本从下文记录的 v1.37.0 变为 v1.35.8,问题依旧存在;落地前仍要按本项验收标准用 `docker restart mmorpg-control-plane` 实测。
+> - 下文所有 `kind create cluster --config ...` / `kubectl ...` 命令一律补 `--kubeconfig "$env:TEMP\kind-mmorpg.kubeconfig"` / `--context kind-mmorpg`(fail-closed,本机默认 context 是别的项目的集群)。
+> - 重建 kind 会丢全部 PVC 数据,须执行者确认。以上未运行,待 Codex / 用户验证。
+
 **背景与证据**
 `deploy/k8s/README.md:346-351`(k8s 1.33+ 同一镜像 ID 换仓库名必须重新验证拉取权限,换 alpine:3.20 占位才正常)、`:378-380`(宿主重启后 gateway 两副本卡 ErrImagePull 40 分钟,`kubectl delete pod -l app=gateway` 重建)、`:302-303`(kind load 后老 Pod 仍卡 → delete pod)。全仓 grep `kubeadmConfigPatches|imagePullCredentialsVerificationPolicy|KubeletEnsureSecretPulledImages` 只在 README 出现,无 kind 配置文件(README:288 `kind create cluster --name mmorpg` 无 --config);`docs/ops/k8s-docker-desktop-troubleshooting.md:85-86` 不含 kind/feature gate;scratchpad `full_restart.ps1:1` 明确跳过 kind 节点。机器夜间重启是常态。
 
 **要改的文件**
 - 新建 `deploy/k8s/kind-config.yaml`;`deploy/k8s/README.md`;`docs/ops/k8s-docker-desktop-troubleshooting.md`
+  (2026-09-29 更正:`kind-config.yaml` 已存在,改为在其上追加 `kubeadmConfigPatches`,见上方更正块)
 - 新建 `tools/scripts/k8s_kind_recover.ps1`(或 `k8s_deploy.ps1 -Command kind-recover`);scratchpad `full_restart.ps1`(入库后)
 
 **步骤**
 1. 新建 `kind-config.yaml`:`kind: Cluster / apiVersion: kind.x-k8s.io/v1alpha4 / name: mmorpg / featureGates: {KubeletEnsureSecretPulledImages: false}`(或 kubeadmConfigPatches 里 KubeletConfiguration `imagePullCredentialsVerificationPolicy: NeverVerify`,二选一,先用 featureGates 最简单)。README:288 改 `kind create cluster --config deploy/k8s/kind-config.yaml`。
+   **(2026-09-29 已被取代)**:文件已存在,只在其上追加 `kubeadmConfigPatches`(优先 `NeverVerify`,不用 featureGates);README 的建集群命令已改,不必再改。
 2. 重建 kind:`kind delete cluster --name mmorpg && kind create cluster --config deploy/k8s/kind-config.yaml`,按 README A/B 档重新 kind load 全部镜像并 infra-up/zone-up(约 20 分钟;镜像已在宿主 docker)。
 3. 兜底脚本 `k8s_kind_recover.ps1`:`kubectl get pods -A -o json` 找 waiting.reason ∈ {ErrImagePull, ImagePullBackOff} 且镜像 registry 为 `local/` 的 Pod → delete pod;打印每个被删 Pod。`full_restart.ps1` 在 Docker 起来后若 `docker ps` 有 mmorpg-control-plane 则调用。
 4. 验证:`docker restart mmorpg-control-plane` 模拟节点重启,5 分钟内所有 Pod 回 Running。

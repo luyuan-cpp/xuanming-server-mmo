@@ -54,7 +54,9 @@ func NewRequestBattleTicketLogic(ctx context.Context, svcCtx *svc.ServiceContext
 // RequestBattleTicket 丢票补签(turn-based §18 D25;改道见 client-rpc-router.md D33):
 //   - player_id 只取 gate 注入的会话身份(x-session-detail-bin → ctxkeys);请求体没有也不该有
 //     player_id。没有会话身份即不可信来源,fail-closed;
-//   - 按 battle_id 读观战索引 spectate:battle:{battle_id}(gather 成功登记,TTL = 战斗时限 + 60s)
+//   - 按 battle_id 读观战索引 spectate:battle:{battle_id}(gather 在 CreateBattle 之前写入、写不进去
+//     就不建房(fail-closed),开局成功后同值重写,建房失败补偿后删除 —— 仅 CreateBattle 与
+//     DestroyBattle 都失败、房间可能仍活着时保留;TTL = 战斗时限 + 60s)
 //     取 battle_node_id;索引不存在 = 房间已结束 / 作废,回 kInvalidParameter —— 与 battle 侧
 //     "房间不存在"同一 tip,客户端据此丢弃本地战斗 UI;
 //   - 定位 battle 节点 gRPC 地址(EndpointOfNode;未发现 / 身份歧义 = kServiceUnavailable),

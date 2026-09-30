@@ -54,6 +54,12 @@ function Reset-MigrateFixture {
         'Write-GoSvcMigrateJobDiagnostics', 'Add-GoSvcCommandTopicEnv')) {
         Restore-ProductionFunction $name
     }
+    # Add-GoSvcEnvEntries:Add-GoSvcCommandTopicEnv / Add-GoSvcSecretEnv 共用的 env 注入助手,由 k8s_deploy 属主从两者中抽出。
+    # 抽出之前部署脚本里还没有它,所以按"存在才恢复"处理;抽出之后调用方依赖它,若它缺席或改名,
+    # 调用处会报"命令未找到",Add-GoSvcCommandTopicEnv 与 Apply-OneGoSvc 的用例随之变红,不会静默通过。
+    if ($script:ProductionFunctions.ContainsKey('Add-GoSvcEnvEntries')) {
+        Restore-ProductionFunction 'Add-GoSvcEnvEntries'
+    }
     $script:DeploymentContent = $null
     $script:CommandTopicContractError = $null
     $script:Calls = [Collections.Generic.List[object]]::new()

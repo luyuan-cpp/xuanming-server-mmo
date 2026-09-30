@@ -363,7 +363,7 @@ func TestLockWaitsQueryErrorClassification(t *testing.T) {
 // 每轮用 barrier 同时放行两个写者、等两者都结束再进下一轮:胜者不会紧接着再写下一条,所以被牺牲方的一次
 // 重跑必然收敛(见 InsertSnapshotIfGuidAbsent 的收敛论证),对 err 的断言是确定的。某一轮是否真的撞上 1213
 // 取决于调度,只记日志不断言 —— 确定性的证据分在两处:
-// 唯一键路径看 TestSnapshotStore_SameGuidQueueDoesNotDeadlock 与
+// 唯一键路径看 TestSnapshotStore_SameGuidQueueDeadlockIsAbsorbed 与
 // TestSnapshotStore_DistinctGuidDoesNotWaitOnUncommittedNeighbour,退路看
 // TestSnapshotStore_LegacyGapDeadlockIsAbsorbedInPlace。
 func TestSnapshotStore_ConcurrentWritersNeverSurfaceDeadlock(t *testing.T) {
@@ -847,26 +847,32 @@ func TestSnapshotStore_DistinctGuidsNeverDeadlock(t *testing.T) {
 	assert.Equal(t, int64(rounds*writers), db.Count(t, store.PlayerSnapshotTableName, "source = 1"))
 }
 
-// TestSnapshotStore_SameGuidQueueDoesNotDeadlock 摆出 MySQL 手册那个经典的 S→X 升级环,
-// 证明它在 ODKU 形态下**根本不会成环** —— 不是"成了环再被重试吸收"。
+// TestSnapshotStore_SameGuidQueueDeadlockIsAbsorbed 摆出"首个插入者**回滚**"这一类现场,
+// 证明它**被有界重试吸收、结局正确** —— 这一类环 ODKU 拆不掉,不要把它当成消环的证据。
 //
-// 这条用例此前叫 ...DeadlockIsAbsorbedInPlace,断言的是 `retries >= 1`,等于把"本可消掉的环"
-// 写成了规格。复审按手册核实后改成消环(见 insertSnapshotOnDuplicateKeepSQL),断言随之翻面。
+// 这条用例的断言翻过两次,原因记在这里免得再翻第三次:
+//   - 最初叫 ...DeadlockIsAbsorbedInPlace,断言 `retries >= 1`;
+//   - 第四轮复审按手册推演,认为 ODKU 取 X 就能消环,改成 `retries == 0`;
+//   - 2026-09-29 真库实测推翻了那次推演:**期望 0 实际 1**,这条用例因此变红。
+//     随后用独立探针做了受控实验(每格 10 次重复,MySQL 26.7.0):首个插入者回滚、两个后到者排在它后面时,
+//     **10/10 全部成环**,而且与写法、与键的位置都无关 —— 普通 INSERT / INSERT IGNORE / ODKU 三种写法,
+//     聚簇主键 / 二级唯一索引两种位置,六格全是 10/10。
+//     机理:等待中的锁在回滚时被**继承成间隙锁**,两个后到者随后各自申请插入意向锁、互相挡住。
+//     这与"两个 S 同时被授予再各自升 X"是**两类**现场;ODKU 消掉的是后者(删除标记记录上的 S→X 升级),
+//     对前者无能为力。要消掉前者只有一条路:别让两个插入者同时排在同一条未提交记录后面
+//     (trade 的哨兵守卫行就是这么做的,见 go/trade/internal/data/asset_op_repo.go)。
 //
 // 编排(MySQL 手册 "Locks Set by Different SQL Statements in InnoDB" 三会话例的形态):
 //  1. A = 显式事务,用**普通 INSERT** 插 guid=G 且不提交 —— 在唯一键上持有这条新索引记录的 X 锁;
-//  2. B、C = 两个被测写者(走生产的 ODKU 语句),各插同一个 guid=G:重复键检查撞上 A 那条未提交记录。
-//     手册:普通 INSERT 在这一步申请 **S**,而 ODKU 申请 **X**("an exclusive lock rather than a
-//     shared lock is placed on the row to be updated when a duplicate-key error occurs")。
-//     两人都排队等 A —— 在 performance_schema.data_lock_waits 里**看见**两个等待者才走下一步;
-//  3. A **回滚**。S 形态下 B、C 会被**同时**授予 S,随后互等 X 而成环(手册原例);
-//     X 形态下只有一人被授予,另一人继续单向等待 —— 不成环。
-//  4. 先拿到 X 的那个插入并自动提交;另一个随后看到一条**已提交**的同 guid 记录,
-//     ODKU 判为重放(affected=0,一列不改),回出同一个 id。
+//  2. B、C = 两个被测写者(走生产的 ODKU 语句),各插同一个 guid=G,都排队等 A ——
+//     在 performance_schema.data_lock_waits 里**看见**两个等待者才走下一步;
+//  3. A **回滚** → B、C 的等待锁被继承成间隙锁,随后互等插入意向锁,InnoDB 牺牲其一(1213);
+//  4. 牺牲者由 InsertSnapshotIfGuidAbsent 的就地有界重试重跑:此时胜者已提交,ODKU 判为重放
+//     (affected=0,一列不改),回出同一个 id。
 //
-// 判据:B、C 都 err == nil,恰好一个 inserted=true、两人 id 相同,该 guid 恰好一行,
-// 并且就地重跑计数 **一次都不涨** —— 涨了就说明环还在,ODKU 没有起到消环的作用。
-func TestSnapshotStore_SameGuidQueueDoesNotDeadlock(t *testing.T) {
+// 判据:B、C 都 err == nil(说明 1213 没冒泡给调用方)、恰好一个 inserted=true、两人 id 相同、
+// 该 guid 恰好一行。重试次数只记录不断言。
+func TestSnapshotStore_SameGuidQueueDeadlockIsAbsorbed(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
 	requireDeadlockDetect(t, db.Raw)
 	ss := newSnapshotStore(t, db)
@@ -929,13 +935,10 @@ func TestSnapshotStore_SameGuidQueueDoesNotDeadlock(t *testing.T) {
 		assert.Equalf(t, winnerID, r.id, "写者 %d 回出的 id 与实际落库那行不一致", i)
 	}
 	assert.Equal(t, int64(1), db.Count(t, store.PlayerSnapshotTableName, "snapshot_guid = ?", guid))
+	// 重试次数只记录、不断言:理由见本函数头注释(首个插入者回滚那一类环 ODKU 拆不掉,实测 10/10)。
 	retries := ss.DeadlockRetriesForTest() - retriesBefore
-	t.Logf("同 guid 排队 + 先到者回滚:就地重跑的 1213 共 %d 次(期望 0)", retries)
-	assert.Equal(t, uint64(0), retries,
-		"两个后到者之间仍然成环了:ODKU 的重复键检查应当取 X 而不是 S,后到者因此被串行化"+
-			"(手册 innodb-locks-set:\"an exclusive lock rather than a shared lock is placed on the row "+
-			"to be updated when a duplicate-key error occurs\")。写入语句是不是被改回普通 INSERT 了?"+
-			"见 insertSnapshotOnDuplicateKeepSQL")
+	t.Logf("同 guid 排队 + 先到者回滚:就地重跑的 1213 共 %d 次(固有情形,0 或更多都正常;"+
+		"关键是上面的 require.NoError —— 它没冒泡就说明有界重试把它吸收了)", retries)
 }
 
 // TestSnapshotStore_LegacyWriterCoexistsWithUniqueKey 钉住滚动升级窗口的行为:

@@ -844,6 +844,9 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
        match_lock_token=uuid、match_lock_roster = roster 的 player_id 集合、
        match_lock_expire_at_ms = nowMs + (matchedTicketTTLFor(n) + compensationTicketTTLFor(n) + 10)s
        (queue.go:327-338、:342-344;5 人 = 48 + 25 + 10 = 83s)
+       (2026-09-29 更正:matched TTL 公式加了 gatherCreateStageWorst 项(观战记录先写 + D82 换节点重试),
+        现行位置 queue.go:342、:367-380(matchedTicketTTLFor)、:382-386(compensationTicketTTLFor),
+        **5 人 = 66 + 25 + 10 = 101s**;公式见 cross-zone-matchmaking.md D5 更正、logic/team_battle.go:60-66)
        - Go 序列化前防御性断言 set(roster) == set(rec.members);真正的保证是 ver CAS:
          预检期间任何名单变化(LeaveTeam、队外被邀请人自己 RespondInvite 接受)都会让 ver+1
        - {0} → 整轮重来;{-2} → 按 Mutate 规则修复后整轮重来;{1} → 推全员 MATCH_STARTED(match_state=STARTING)
@@ -874,11 +877,11 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
     9. 回 TeamResponse{team(match_state=STARTING)}
 ```
 
-`EndMatch(tid, token, ok, tip)`:**专用循环，不复用 Mutate 的 3 次上限**。锁期间允许队外玩家申请、被邀请，每次都让 ver+1,数量不受本队控制;3 次就放弃会让锁白挂到 83s、全员停在 STARTING。
+`EndMatch(tid, token, ok, tip)`:**专用循环，不复用 Mutate 的 3 次上限**。锁期间允许队外玩家申请、被邀请，每次都让 ver+1,数量不受本队控制;3 次就放弃会让锁白挂到 101s(2026-09-29 更正,原 83s)、全员停在 STARTING。
 1. S_READ(bindTarget 本队)得到 ver、记录、nowMs。
 2. 记录不存在、`match_lock_token ≠ token`(已被清或已重新加锁)、或 `nowMs ≥ match_lock_expire_at_ms`(锁已自然过期)→ 停止，不写。
 3. 否则清空锁的三个字段，按 `expectedVer=ver` 提交。`{1}` → 推 `MATCH_ENDED` 或 `MATCH_FAILED`,结束;`{0}` → 退避(50ms 起翻倍，上限 1s,±20% 抖动)后回第 1 步。
-4. 截止时间就是锁的 `match_lock_expire_at_ms`(每轮用 S_READ 的 nowMs 比较);另设进程内单调时钟 90s 上限兜底。Redis 调用用 `context.Background()` 加单次超时。
+4. 截止时间就是锁的 `match_lock_expire_at_ms`(每轮用 S_READ 的 nowMs 比较);另设进程内单调时钟 110s(2026-09-29 更正,原 90s;须 ≥ 5 人锁 101s,`team/store.go:454-461` `endMatchMaxDuration`)上限兜底。Redis 调用用 `context.Background()` 加单次超时。
 5. 因第 2 步或截止而没有提交时，仍尽力给 lockRoster 推一次当前视图(match_state 按锁是否有效算)和结果原因，保证客户端不停在 STARTING。
 
 没选"只 CAS 锁字段、不要求整条记录 ver 一致的专用 Lua":锁字段在 pb 里，Lua 解不了 pb,要把锁挪成 hash 字段，改动面更大。
@@ -894,12 +897,12 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
 
 | 窗口 | 残留 | 自愈 |
 |---|---|---|
-| 第 6 步开战锁 EVAL 结果未知(回复超时 / 断连;go-redis 重发同一条 EVAL) | 可能已落锁，也可能没有 | 报错 → 后台按 token EndMatch(false);未提交 → 重来前按 token 同步确认一轮，确认不了转后台(§E.1 第 6 步)。可接受窗口缩小为：补偿前**进程崩溃**(锁 83s 过期);以及迟到的 EVAL 恰好在补偿读之后才执行的极窄时序(同上) |
-| 第 6 步提交后、第 7 步建票前崩溃 | 开战锁 | 锁 83s 后过期，视为无锁 |
-| 第 7 步建了一部分票后崩溃 | 部分 matched 票 + 锁 | 票 48s 后 TTL 过期，锁 83s 过期。在此之前队员单人 JoinQueue 会回 AlreadyQueued,因为 matched 态不自愈(`joinqueuelogic.go:238-239`) |
-| 第 7 步某人建票返回 err(超时、断连、集群重试) | 该成员可能已有 matched 票(结果未知) | 回滚集合包含它，按本次 ticket id CAS 删;删票本身也失败时，票靠 TTL(5 人 48s)过期，期间该成员单排回 AlreadyQueued |
-| gather 途中崩溃 | matched 票 + 锁 + scene 可能已冻结 | 票靠 TTL;scene 按 `prepare_deadline_ms` 解冻(`gather.go:147-154`);锁 83s 过期 |
-| gather 完成、EndMatch 之前崩溃 | 锁 | 83s 过期;成功的战斗照常进行 |
+| 第 6 步开战锁 EVAL 结果未知(回复超时 / 断连;go-redis 重发同一条 EVAL) | 可能已落锁，也可能没有 | 报错 → 后台按 token EndMatch(false);未提交 → 重来前按 token 同步确认一轮，确认不了转后台(§E.1 第 6 步)。可接受窗口缩小为：补偿前**进程崩溃**(锁 101s 过期;2026-09-29 更正,原 83s);以及迟到的 EVAL 恰好在补偿读之后才执行的极窄时序(同上) |
+| 第 6 步提交后、第 7 步建票前崩溃 | 开战锁 | 锁 101s(2026-09-29 更正,原 83s)后过期，视为无锁 |
+| 第 7 步建了一部分票后崩溃 | 部分 matched 票 + 锁 | 票 66s 后 TTL 过期，锁 101s 过期(2026-09-29 更正,原票 48s / 锁 83s)。在此之前队员单人 JoinQueue 会回 AlreadyQueued,因为 matched 态不自愈(`joinqueuelogic.go:238-239`) |
+| 第 7 步某人建票返回 err(超时、断连、集群重试) | 该成员可能已有 matched 票(结果未知) | 回滚集合包含它，按本次 ticket id CAS 删;删票本身也失败时，票靠 TTL(5 人 66s;2026-09-29 更正,原 48s)过期，期间该成员单排回 AlreadyQueued |
+| gather 途中崩溃 | matched 票 + 锁 + scene 可能已冻结 | 票靠 TTL;scene 按 `prepare_deadline_ms` 解冻(`gather.go:147-154`);锁 101s 过期(2026-09-29 更正,原 83s) |
+| gather 完成、EndMatch 之前崩溃 | 锁 | 101s 过期(2026-09-29 更正,原 83s);成功的战斗照常进行 |
 | gather 途中有队员下线 | — | `preparePlayer` 读不到位置 → `no_location` → 整组删票(`gather.go:167-178`)→ `MATCH_FAILED` |
 
 ### E.4 名单变更、离线、战斗结束
@@ -1470,7 +1473,7 @@ cd robot && go mod vendor && go build ./...
 | C-4 | minor | expectedVer="0" 兼作"必须不存在",非建队重试会复活已解散队伍 | **采纳** | 原 Lua 在 `ARGV[1]=="0"` 且 cur 为 nil 时放行 | §C.5 哨兵改 `"new"`,非建队遇记录缺失一律 `{0}`;Mutate 第 1 步记录缺失不进 S_COMMIT;§D.5 CreateTeam 行(本轮顺手修掉残留的 `expectedVer=0`);§I.3 #19 |
 | C-5 | minor | S_COMMIT 先 ZADD 后 ZREM,过期后重邀同一人会丢反查索引 | **采纳** | 过期清理进 ID、重邀进 IA,两集合可重叠 | §C.5 Go 侧 `ID := ID \ IA`,Lua 先 ZREM 后 ZADD(双保险);§D.5 前言;§I.3 #20 |
 | C-6 | minor | ListMyInvites 读后删会误删新索引;ZCARD 上限预检非原子 | **采纳** | 两处都是 Lua 外"先读后写" | §C.5 新增 S_INVITE_LIST / S_INVITE_PRUNE(score 不变才删);上限移入 S_COMMIT(`{-3,i}`);§D.1;§D.5 InviteToTeam / ListMyInvites 行;§I.3 #21、#23 |
-| C-7 | minor | EndMatch 复用 3 次重试，锁期间申请/邀请持续 ver+1 会饿死 | **采纳** | 锁期间允许申请与邀请(§E.4) | §E.1 EndMatch 专用循环(token 不符 / 锁过期即停，退避+抖动，截止 = 锁过期时刻，另设 90s 单调上限);§I.3 #30。未选"只 CAS 锁字段的 Lua":锁字段在 pb 里，Lua 解不了 pb,要改存储形态 |
+| C-7 | minor | EndMatch 复用 3 次重试，锁期间申请/邀请持续 ver+1 会饿死 | **采纳** | 锁期间允许申请与邀请(§E.4) | §E.1 EndMatch 专用循环(token 不符 / 锁过期即停，退避+抖动，截止 = 锁过期时刻，另设 110s 单调上限(2026-09-29 更正,原 90s));§I.3 #30。未选"只 CAS 锁字段的 Lua":锁字段在 pb 里，Lua 解不了 pb,要改存储形态 |
 | C-8 | minor | 过期时间用各实例 Go 墙钟，违背 §11.3 | **采纳** | match 全服多实例，偏快实例会提前放行名单变更 | §C.4 "唯一时钟源"= SharedRedis `TIME`;S_READ/S_COMMIT/S_INVITE_LIST 返回 nowMs;§B.1 字段注释;§I.3 #22 |
 | C-9 | minor | 建票报错(结果未知)的成员不回滚;补偿继承 RPC ctx 会失败 | **采纳** | `queue.go:246-263` 出错时是否已写入未知;`joinqueuelogic.go:238-239` matched 态不自愈 | §E.1 第 7 步回滚集合含"返回 err 的成员"、按本次 ticket id CAS 删，补偿用独立 ctx;§E.3 新行;§A.3 第 7 条;§I.3 #29 |
 | I-1 | major | team 不 import logic,却要用 logic 未导出的契约 key/读取/推送函数 | **采纳** | `logic/keys.go:134-150`、`location.go:17`、`push.go:26/42/51`、`queue.go:206` 全部小写未导出 | §A.2 新增叶子包 `go/match/internal/playercontract`(不叫 sharedkeys,因为除 key 外还有读取和推送封装)与依赖图;§F.3;§I.1 批 1 #16–21 |
@@ -1632,9 +1635,9 @@ cd robot && go mod vendor && go build ./...
 - **编排位置改到 team 包**:§A.2 / §E.1 原定 `logic/team_battle.go` 编排第 1–9 步和 EndMatch(`logic → team`)。实际 logic 不能 import team(team 依赖 proto/team 生成物,import 会让 logic 在 regen 前连带编不过),所以编排在 `team/service.go StartTeamMatch` + `store.go CommitMatchLock/EndMatch` + `rules.go LockMatch/ReleaseMatchLock`;`logic.TeamBattleStarter` 只实现 5 个方法的票据域端口 `team.BattleStarter`(签名只用内建类型)。依赖方向:`team → BattleStarter 接口 ← logic`,`match_service.go` 注入时编译期保证接口一致。
 - 清单外新增 `team/team_battle_test.go`(需要 team 包内未导出的测试缝)。`team.Capacity == kMaxBattleTeamSize` 改为两边测试各自钉住字面量 5。
 - 预检的会话 / 战斗锁 / 位置在 team 里经 playercontract 读,只有票据自愈经端口调 `logic.healOrphanTicket`;读会话 / 读位置出错回 Internal(设计未写)。
-- 建票失败时 EndMatch **异步**执行(设计写的是先 EndMatch 再回包;EndMatch 最长 90s,同步会击穿 3500ms 预算)。回包视图可能仍是 STARTING,随后到达的 MATCH_FAILED 版本更高。
+- 建票失败时 EndMatch **异步**执行(设计写的是先 EndMatch 再回包;EndMatch 最长 110s(2026-09-29 更正,原 90s),同步会击穿 3500ms 预算)。回包视图可能仍是 STARTING,随后到达的 MATCH_FAILED 版本更高。
 - EndMatch 未提交时的兜底推送对象 = S_READ_MEMBERS 读到的 `tid==本队` 的成员(不是字面 lockRoster),保证 epoch 同源。
-- EndMatch 每轮一个 2s 独立 ctx;Redis 故障与版本冲突一样退避重试,直到 90s。
+- EndMatch 每轮一个 2s 独立 ctx;Redis 故障与版本冲突一样退避重试,直到 110s(2026-09-29 更正,原 90s)。
 - `RepairRemoveMember` 移除成员时同步从 `match_lock_roster` 去掉他,保持锁期间 roster == members。
 - `TicketBlocked` / `healOrphanTicket` 沿用 JoinQueue 的无 ctx Redis 调用,只在入口查 ctx(偏离 §A.3 第 7 条"一律 Ctx 版本");建票与回滚用 `EvalCtx`。
 - 只有整队票写 `team_id` 字段;单人票字段集不变。`TeamSizeFor` 复用 `matcher.requiredPlayers`。
@@ -1667,6 +1670,7 @@ cd robot && go mod vendor && go build ./...
 
 **robot 与合服(批 4)**
 - 不复用 `gameobject.Player` 的 WaitBattleStart/WaitBattleEnd,也不开战斗直连:那两组信号是 `sync.Once` 一次性广播,同一会话多场战斗会读到旧信号。战斗消息全程经 gate 中继。
+  - **(2026-09-29 更正,已被 turn-based §22 D73 取代)** gate 两种路由模式都不再中继战斗(D66),直连是战斗唯一通路。team-smoke 仍不复用那几组一次性信号,但**每场都建战斗直连**:按 `battle_id` 在大厅推送里找 `NotifyBattleAssigned`(`robot/team_smoke_scenario.go:893-900`),用 `dialBattleDirect` 建直连(`:903`,不走依赖一次性信号的 `openBattleDirectConn`),`SetAutoBattle` 只在直连上发(`:917-921`),直连推送并入同一份 pushes 列表(文件头说明 `:33-37`)。未编译、未运行,待 Codex 验证。
 - S2 只断言成员集合与 join_seq,version 只记日志;S6 / X2 的换图目标从候选列表 `follow_scene_config_ids` 里挑;新增 `cross_zone` 开关;S7/S8/X2 对"上一场结算未落地"的过渡态有界重试(20s)。
 - J-6 原文"会影响 battle_smoke 的陌生人凑单人数"**不成立**:battle_smoke 用 PVE_SOLO,cross_zone 用 1V1,全仓 robot 没有 PVE_TEAM 调用方;`rating_match_test.go:222` 自己注入 `{"1": 3}`。`"1"` 已按拍板改为 5。
 - merge_zone 没有 miniredis 依赖,P7 只能放在 `merge_integration` build tag 的集成测试里,默认 `go test` 不覆盖。
@@ -1796,7 +1800,7 @@ cd robot && go mod vendor && go build ./...
 1. **全部未编译**。R.2 的生成物名字靠读生成器模板和同类生成物推断,生成后可能要改引用方;C++ 没有任何语法检查工具可用。
 2. **跨节点 / 登录时序的跟随正确性只能靠端到端验证**:队长换图时 `player:<id>:location` 是否已被 scene_manager 写成新场景,决定队员的 MGET 读到的是新 scene_id 还是旧的;`HasLiveSession` 新守卫是否会误伤正常在线队员。都要等 team_smoke S6 实测。
 3. **StartTeamMatch 的预检不是全 ctx 化**:`TicketBlocked` 的票据读取与自愈用无 ctx 的 MatchRedis 调用,Redis 卡顿时可能超出 3500ms 预算。改它会触及 JoinQueue 共用路径,本次没动。预检逐成员串行,5 人约 20 次 Redis 往返,未压测。
-4. **EndMatch 与进程退出**:match 退出(包括 snowflake 失租强退)时不等后台 EndMatch,开战锁只能靠自然过期(5 人 83s);90s 截止或持续故障时同样如此。这期间队伍显示 STARTING、回 TeamInMatch。
+4. **EndMatch 与进程退出**:match 退出(包括 snowflake 失租强退)时不等后台 EndMatch,开战锁只能靠自然过期(5 人 101s;2026-09-29 更正,原 83s);110s 截止(2026-09-29 更正,原 90s)或持续故障时同样如此。这期间队伍显示 STARTING、回 TeamInMatch。
 5. **会话批量读失败时的错误码有误导性**:SessionLoader 整批失败时全员是 SessionUnknown,TransferLeader 回 TeamMemberOffline,实际是 Redis 故障。修正要在规则层区分 Unknown(核心层范围)。
 6. **展示信息的 SharedRedis 负载**:每次提交会批量 MGET 三组 key(会话、战斗锁、PlayerAllData blob);blob 体积(J-11)与 K8s 上是否同实例都未核实,不同实例时 level/class 恒为 0(不影响正确性)。GetMyTeam 每次都跑一轮 Refresh Mutate。
 7. **本地多 zone 的 data_service 配对**:`go_services.ps1` 把 `DataServiceRpc.Etcd.Key` 派生为 `dataservice.rpc.z<N>`,某个 zone 只起 match 不起 data_service 时,路由到该实例的组队请求一律 TeamInternal。
@@ -1829,7 +1833,7 @@ cd robot && go mod vendor && go build ./...
 | 1 | 索引 key 缺失时 S_READ 回 epoch `"0"`,空视图被客户端按 §H.3 丢弃 | 整队 24h 空闲过期后，GetMyTeam、LeaveTeam、DisbandTeam 等回包的空视图 epoch=0,小于客户端手里的旧 epoch,界面永远卡在已不存在的队伍上 | **已修**(与 #3 合并):S_READ 先取 TIME,缺失时回 `nowMs`,只读不写。见 §C.4、R.3 |
 | 2 | 同一队 ≥2 名成员索引错位时 `{-2}` 修复活锁 | Lua 只回报第一个错位下标，修复提交自身又 `{-2}`;Mutate 重读得到同一 ver、同一个第一错位者，直到回 `TeamStateChanged`。队伍所有写操作与开战、EndMatch 都卡死 | **已修**:`RepairRemoveMembers` + `store.repairIndexMismatch`,在同一 expectedVer 上级联移出，没有用链式单人修复(那样 `Left` 会漏人)。见 §C.5、§C.6 |
 | 3 | 起种值等于同毫秒读路径回报值 | #1 的修法若起种仍为 `nowms`,同一毫秒"先读空视图、再建队"会得到 epoch 相等、team_id 不同的两份视图，触发 §H.3 冲突判定，客户端反复重拉 | **已修**:S_COMMIT `setIdx` 与 S_HEAL_ORPHAN 起种改为 `nowms + 1` |
-| 4 | 开战锁提交结果未知时不补偿 | EVAL 已执行但回复超时 / 断连，或 go-redis 重发同一条 EVAL(第二次回 `{0}`):锁白挂到自然过期(5 人 83s),期间全队名单操作回 `TeamInMatch`;重发情形下本次请求还会被自己的锁挡掉 | **已修**:报错 → 后台按 token `EndMatch(false)`;Retry → 同步 `ReleaseMatchLockOnce` 一轮，确认不了转后台。新测试缝 `beforeCommitEvalHook`。见 §E.1 第 6 步、§E.3 |
+| 4 | 开战锁提交结果未知时不补偿 | EVAL 已执行但回复超时 / 断连，或 go-redis 重发同一条 EVAL(第二次回 `{0}`):锁白挂到自然过期(5 人 101s;2026-09-29 更正,原 83s),期间全队名单操作回 `TeamInMatch`;重发情形下本次请求还会被自己的锁挡掉 | **已修**:报错 → 后台按 token `EndMatch(false)`;Retry → 同步 `ReleaseMatchLockOnce` 一轮，确认不了转后台。新测试缝 `beforeCommitEvalHook`。见 §E.1 第 6 步、§E.3 |
 | 5 | 建票失败推给队员的 MATCH_FAILED 不带原因 tip | 队员只看到"开战失败"，不知道是谁、为什么;与 §E.1 第 7 步 `EndMatch(token,false,TeamMemberNotReady(pid))` 不一致 | **已修**:`CommitResult.PushTip`,建票失败带 `TeamMemberNotReady` + 出问题的成员，gather 结果不带 |
 | 6 | 组队推送被计入 `match_kafka_push_total`,离线队友被记为 error | `playercontract.PushToPlayer` 内部记挑战链路指标，team 直接调用它：组队推送混进挑战链路指标，队员离线还被记为 error,挑战推送的 ok / error 比例失真 | **已修**:playercontract 不再记指标;`logic.pushToPlayer` 包装按抽包前口径记;team 只记 `team_push_total` |
 | 7 | 默认配置跑 `dev.bat proto` / `dev.bat gen` 会往客户端仓写 `ClientPlayerTeam*` C# 桩，客户端 CS0246 | team 块已在默认 `proto_gen.yaml`,Unity 生成器没有按域开关，客户端 `gen_proto.ps1` 还没收录 team.proto | **已修(文档 / 注释门禁)**:`proto_gen.yaml` team 块注释、§B.5、§I.6、R.4 ①/③/④/⑧、PROGRESS.md 加"客户端合并门禁";只改表时改用 `dev.bat export`;客户端核对口径收窄到 `Assets/Scripts/Net/Generated`。team 块与 `enable_unity_client` 按 DV-5 保持不动 |
@@ -1856,7 +1860,7 @@ cd robot && go mod vendor && go build ./...
 2. **客户端合并门禁**(mmorpg-client 仓，本仓库不能改):由客户端侧按 §H.1 把 `proto/team/team.proto` 与 `generated/code/proto/tip/team_error_tip.proto` 加进 `tools/gen_proto.ps1` 的 `$files` 并生成 C#;做到之前任何人不得用默认 `proto_gen.yaml` 跑 `dev.bat proto` / `dev.bat gen`。
 3. **主工作区已前进**:`main` 在 `2a2b793f8`(比基点 `4069f33b0` 多 4 个提交),与本分支重叠 `player_battle.cpp`、`go/match/match_service.go`、`tools/scripts/k8s_deploy.ps1`、`PROGRESS.md`。regen 前先合并。
 4. **暂存状态**:评审修复在工作区未暂存;`go/match/internal/logic/push_test.go` 未跟踪。合并 / 提交时要一起 `git add`,否则会丢测试。
-5. **开战锁补偿的残余窗口**:补偿前进程崩溃(锁靠 83s 过期);迟到的 EVAL 恰好在补偿读之后才被 Redis 执行(连接已判坏但请求已在服务端缓冲)。都靠锁自然过期，不再加代码。
+5. **开战锁补偿的残余窗口**:补偿前进程崩溃(锁靠 101s 过期;2026-09-29 更正,原 83s);迟到的 EVAL 恰好在补偿读之后才被 Redis 执行(连接已判坏但请求已在服务端缓冲)。都靠锁自然过期，不再加代码。
 6. **EVAL 重发已落锁时的客户端观感**:会先收到一条 MATCH_FAILED(tip 为空)、随后 MATCH_STARTED 与 MATCH_ENDED。按 `(epoch, version)` 排序最终状态正确，但 UI 若对 MATCH_FAILED 弹失败提示会闪一下。交给客户端契约(§H)决定是否只在本地处于 STARTING 时提示。
 7. **生成前置**:本机 `grpc_cpp_plugin` 不在 PATH 时 protogen 只记 Warn,不生成 `*.grpc.pb.*`(基点里 trade 已缺)。regen 前先确认插件可用，否则 proto 工程编不过时不要误判为组队问题。
 8. R.5 的 1–10 仍然有效。

@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"errors"
 	"strconv"
 
 	"match/internal/constants"
@@ -12,6 +13,7 @@ import (
 	matchpb "proto/match"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 type WatchBattleLogic struct {
@@ -34,6 +36,9 @@ func NewWatchBattleLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Watch
 //     观战与参战不能并存);已在观战则先清退旧场再接入新场(服务端换场语义,
 //     客户端无需先 StopWatchBattle);
 //   - battle_id=0 随机挑一场;AddObserver 报房间不存在时懒剔除索引并换一场重试一次;
+//     指定场先查活跃集合、再读记录:读记录前未公开且仍在建房窗口内(gather 先写记录后建房,
+//     D82 还会改写记录),只回"不存在"、不剔除(roomMayBeCreating);记录已不在时只摘活跃集合
+//     残留成员、不 DEL;
 //   - 观众是否为该场参战者由 battle 侧校验(房间成员名单只有 battle 有权威),
 //     这里不重复;
 //   - AddObserver 的其余拒绝(观众满 / 参战者 / 签不出票 kServiceUnavailable,
@@ -142,6 +147,10 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 	}
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		battleId := in.BattleId
+		// published / checkedAtMs 是建房窗口判定(roomMayBeCreating)的输入,必须取在读记录**之前**:
+		// 记录可能在读之后被 gather 改写(D82 换节点)。随机模式挑的就是活跃集合成员,天然已公开。
+		published := true
+		var checkedAtMs uint64
 		if randomMode {
 			battleId, err = pickRandomBattle(l.svcCtx)
 			if err != nil {
@@ -150,6 +159,9 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 			if battleId == 0 {
 				break // 无可观战战斗
 			}
+		} else {
+			checkedAtMs = nowMs()
+			published = l.spectateBattlePublished(battleId)
 		}
 
 		record, err := loadSpectateBattle(l.svcCtx, battleId)
@@ -157,8 +169,12 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 			return internalErr("读观战记录", err)
 		}
 		if record == nil {
-			// 记录 TTL 已清但 ZSET 可能残留:懒剔除。
-			removeSpectateBattle(l.svcCtx, battleId)
+			// 记录已不在(TTL 到期 / 已被剔除 / gather 还没预写)。只摘活跃集合里的残留成员,不 DEL:
+			// GET 已读到空,此刻 DEL 只可能删掉 GET 之后才预写的记录(gather 第 4.1 步),无效或有害。
+			// 读记录前不在活跃集合的场什么都不写,免得误摘随后才公开(ZADD)的成员。
+			if published {
+				l.removeActiveMember(battleId)
+			}
 			if randomMode {
 				continue
 			}
@@ -220,10 +236,16 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 		}
 		deleteSpectateWatching(l.svcCtx, playerId)
 		if roomMissing {
-			l.Infof("[spectate] 观战目标已收尾,懒剔除 player=%d battle=%d: %v", playerId, battleId, err)
-			removeSpectateBattle(l.svcCtx, battleId)
-			if randomMode {
-				continue
+			if roomMayBeCreating(record, published, checkedAtMs) {
+				// 房间可能还在建:只回未找到,记录与活跃集合都不动。
+				l.Infof("[spectate] 指定场报房间不存在但记录仍在建房窗口内,不剔除索引 player=%d battle=%d created_at_ms=%d: %v",
+					playerId, battleId, record.GetSummary().GetCreatedAtMs(), err)
+			} else {
+				l.Infof("[spectate] 观战目标已收尾,懒剔除 player=%d battle=%d: %v", playerId, battleId, err)
+				removeSpectateBattle(l.svcCtx, battleId)
+				if randomMode {
+					continue
+				}
 			}
 			metrics.ObserveWatchBattle("not_found")
 			return &matchpb.WatchBattleResponse{
@@ -256,4 +278,61 @@ func (l *WatchBattleLogic) observerZoneId(playerId uint64) uint32 {
 		return 0
 	}
 	return loc.ZoneId
+}
+
+// roomMayBeCreating 判定 AddObserver 回"房间不存在"时,是否可能只是房间还没建好 —— 是则不能懒剔除
+// 索引。published 与 checkedAtMs 必须在**读记录之前**取得(WatchBattle 选场处),本函数不碰 Redis。
+//
+// 背景:gather 在 CreateBattle **之前**写观战记录(集群外入口 2b 第 9 条),记录存在 ≠ 房间存在;
+// D82 换节点时还会把记录改写到重试节点。按 battle_id 观战(帮会历练的 battle_id 在开局前就已可见)
+// 落进建房窗口时 battle 回房间不存在,懒剔除会删掉一场即将开打的战斗的记录,而丢票补签
+// (RequestBattleTicket)靠它定位节点。开局成功后 gather 会同值补写(publishSpectateBattle),但卡住的
+// WatchBattle 若在补写之后才执行 DEL,记录就真丢了。
+//
+// 两个条件同时成立才算"可能在建":
+//  1. 读记录之前这场还不在活跃集合里。publishSpectateBattle 先写最终记录、后 ZADD,所以读记录前已在
+//     集合里 ⇒ 读到的必是实际建房节点的最终记录,而且房间在公开前就已建成,此时的"房间不存在"是
+//     真收尾。先读记录、后查集合则不成立:可能读到指向首选节点的旧记录,随后 gather 改写记录、在
+//     重试节点建房并公开,查集合命中,AddObserver 却打到首选节点。
+//  2. checkedAtMs 距记录的 created_at_ms 不超过 gatherCreateStageWorst(gather 从写记录到最后一次
+//     CreateBattle 返回的最坏耗时,含 D82 改写)。出了窗口,读记录时 D82 改写必已完成(读到的是最终
+//     记录),房间还没建成则 gather 按预算已放弃(失败路径自己删记录),剔除正确;超出预算的极端
+//     Redis 卡顿不在保证之内(见 spectate.go spectateRedisOpWorst)。
+//
+// 查活跃集合失败时调用方按"未公开"传入,窗口内就不剔除:误留的记录指向不存在的房间,补签 / 观战拿到
+// 的仍是"房间不存在",随 TTL 自清;误删则可能让进行中的战斗丢票后回不去。created_at_ms 由另一个 match
+// 实例的墙钟写入,实例间时钟偏差只让窗口平移同样的量:偏窄退回旧行为(懒剔除 + 开局补写兜底),
+// 偏宽只是晚些剔除。created_at_ms 为 0(旧记录)按窗口外处理。
+func roomMayBeCreating(record *matchpb.SpectateBattleRecord, published bool, checkedAtMs uint64) bool {
+	if published {
+		return false
+	}
+	createdAtMs := record.GetSummary().GetCreatedAtMs()
+	if createdAtMs == 0 {
+		return false
+	}
+	if checkedAtMs > createdAtMs && checkedAtMs-createdAtMs > uint64(gatherCreateStageWorst.Milliseconds()) {
+		return false
+	}
+	return true
+}
+
+// spectateBattlePublished 查一场是否已在活跃集合(已公开)。查询失败按未公开处理并记日志
+// (后果见 roomMayBeCreating 末段:窗口内不剔除,记录缺失时也不摘集合成员)。
+func (l *WatchBattleLogic) spectateBattlePublished(battleId uint64) bool {
+	_, err := l.svcCtx.MatchRedis.Zscore(spectateBattlesActiveKey, strconv.FormatUint(battleId, 10))
+	if err == nil {
+		return true
+	}
+	if !errors.Is(err, redis.Nil) {
+		l.Errorf("[spectate] 查活跃集合失败,按未公开处理 battle=%d: %v", battleId, err)
+	}
+	return false
+}
+
+// removeActiveMember 只从活跃集合摘掉一个残留成员(记录已不在时用),不碰记录键。
+func (l *WatchBattleLogic) removeActiveMember(battleId uint64) {
+	if _, err := l.svcCtx.MatchRedis.Zrem(spectateBattlesActiveKey, strconv.FormatUint(battleId, 10)); err != nil {
+		l.Errorf("[spectate] 观战索引 ZREM 失败 battle=%d: %v", battleId, err)
+	}
 }

@@ -1131,9 +1131,12 @@ func TestGuardedWrites_SucceedAfterCapacityRowsWereReclaimed(t *testing.T) {
 // 原先这里的注入手段是"CHECK 约束 + INSERT IGNORE 把 3819 降成告警"。2026-09-29 真库实测(MySQL 26.7.0)
 // 证明那条路已经断了:死锁修复把 ensure 从 INSERT IGNORE 换成了 ODKU(ensureCapacityRowSQL,理由见
 // ensureFriendCapacityRow —— 主键重复时 INSERT IGNORE 拿 S、ODKU 直接拿 X),而 **ODKU 不吞 CHECK 违例**,
-// 用例停在 `Error 3819 Check constraint 'chk_block_49001' is violated`。换成触发器之后,注入不再依赖
-// ensure 用的是哪一种"忽略"语义:它对普通 INSERT / INSERT IGNORE / ODKU 一视同仁,ensure 的语句将来再改
-// 也不会把这条用例带走。用例要钉的行为(守卫行始终缺失 → fail-closed)一个字没放宽。
+// 用例停在 `Error 3819 Check constraint 'chk_block_49001' is violated`。换成触发器之后,注入**不再**要求
+// ensure 吞 CHECK 违例 —— 但依赖并没有消失,只是换了一种:回收槽(sink)是一行**真实存在**的行,第一遍
+// ensure 把它建出来,此后每一遍 ensure 发出的 INSERT 都会撞上 sink 的主键。所以注入仍然要求 ensure 对
+// **重复主键**是容忍的:INSERT IGNORE 与 ODKU 都行,裸 INSERT 会在第二遍拿 1062。
+// 若将来 ensure 换成裸 INSERT,用例会停在下面"ensure 第 2 遍报错"那条夹具前提上、当场指名原因,
+// 不会伪装成产品缺陷。用例要钉的行为(守卫行始终缺失 → fail-closed)一个字没放宽。
 //
 // 触发器**只是测试注入手段**,生产表没有任何触发器。依据与未验之处:
 //   - BEFORE 触发器里 `SET NEW.col = …` 改列(含主键列)是 MySQL 8.0 手册 "Trigger Syntax and Examples"

@@ -262,7 +262,15 @@ func (p *Pipeline) EnqueueEscrowDebit(ctx context.Context, req EscrowRequest) (E
 		if err != nil {
 			return err
 		}
-		alloc = allocs[sellerKey]
+		a, ok := allocs[sellerKey]
+		if !ok || a.Epoch == 0 {
+			// 不可达的防御:AllocateSeqsTx 给每个传进去的 key 都填结果,纪元为 0 时它自己就报错了。
+			// 但 map 取值失手拿到零值是**静默**的,而零值会写出一行 seq=0 / stream_epoch=0 的 outbox,
+			// scene 侧只会把它判成坏行并吃掉一次投递 —— 宁可在这里响亮地失败。
+			return fmt.Errorf("trade: seq 分配结果缺 (player=%d stream=%d),不写 outbox",
+				sellerKey.PlayerID, int32(sellerKey.Stream))
+		}
+		alloc = a
 		return p.ops.InsertOp(ctx, tx, p.newEscrowRecord(req, opID, alloc, payload))
 	})
 	if txErr != nil {

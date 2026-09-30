@@ -192,7 +192,7 @@ func (c *seqFakeConn) QueryContext(_ context.Context, query string, args []drive
 }
 
 func (c *seqFakeConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
-	c.s.record(query)
+	c.s.recordKeyed(query, args)
 	c.s.mu.Lock()
 	defer c.s.mu.Unlock()
 	switch {
@@ -368,7 +368,7 @@ func TestSeqTableRowsAreNeverDeleted(t *testing.T) {
 		if strings.Contains(strings.ToUpper(line), "DELETE") {
 			t.Errorf("%s 出现了针对 %s 的 DELETE:%s\n"+
 				"删 seq 行会造出已提交的删除标记记录,并发补行在它上面 S→X 成环,守卫行拦不住;"+
-				"而且会让"短事务提交后行不会消失"这条论证作废 —— 见本用例头注,加清理之前先重做锁分析",
+				"而且会让「短事务提交后行不会消失」这条论证作废 —— 见本用例头注,加清理之前先重做锁分析",
 				file, AssetOpSeqTableName, line)
 		}
 	}
@@ -626,7 +626,7 @@ func TestSeqKeysAreProcessedInAscendingOrder(t *testing.T) {
 		if err := repo.EnsureSeqRows(context.Background(), guardTestNowMs, shuffled...); err != nil {
 			t.Fatalf("EnsureSeqRows: %v", err)
 		}
-		assertKeyOrder(t, s.recorded(), "INSERT IGNORE INTO "+AssetOpSeqTableName, wantOrder)
+		assertKeyOrder(t, s, "INSERT IGNORE INTO "+AssetOpSeqTableName, wantOrder)
 	})
 
 	t.Run("分配(事务 B)按升序 FOR UPDATE", func(t *testing.T) {
@@ -644,30 +644,25 @@ func TestSeqKeysAreProcessedInAscendingOrder(t *testing.T) {
 		if len(allocs) != len(wantOrder) {
 			t.Fatalf("分配结果 %d 条,应为 %d 条(重复键必须去重)", len(allocs), len(wantOrder))
 		}
-		assertKeyOrder(t, s.recorded(), "SELECT next_seq, epoch FROM "+AssetOpSeqTableName, wantOrder)
+		assertKeyOrder(t, s, "SELECT next_seq, epoch FROM "+AssetOpSeqTableName, wantOrder)
 	})
 }
 
-// assertKeyOrder 从录音带里挑出所有以 prefix 打头的语句,断言它们携带的 (player, stream)
-// 恰好等于 want 这个序列。录制驱动只记语句文本、不记实参,所以这里靠"语句出现的次序 + 每个 key
-// 只被处理一次"来判定:先按 prefix 数出条数,再用 script 的实参回放顺序比对。
-//
-// 实参回放用的是 seqScript 里已经写下的 existing/nextSeq 副作用不够用(它们是无序 map),
-// 所以这里改用一份专门的顺序记录:orderedKeys。
-func assertKeyOrder(t *testing.T, stmts []string, prefix string, want []SeqKey) {
+// assertKeyOrder 断言所有以 prefix 打头的语句作用的 (player_id, stream) 恰好是 want 这个序列
+// (条数相同、顺序相同)。实参由录制驱动逐条记下,所以这里比的是真正发出去的顺序,
+// 不是"应该是什么顺序"的复述。
+func assertKeyOrder(t *testing.T, s *seqScript, prefix string, want []SeqKey) {
 	t.Helper()
-	got := 0
-	for _, s := range stmts {
-		if strings.HasPrefix(s, prefix) {
-			got++
+	got := s.keysOf(prefix)
+	if len(got) != len(want) {
+		t.Fatalf("以 %q 打头的语句有 %d 条,应为 %d 条(重复键必须去重):\n%s",
+			prefix, len(got), len(want), strings.Join(s.recorded(), "\n"))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("第 %d 条 %q 作用在 %+v,按 (player_id, stream) 升序应当是 %+v:\n  got  %+v\n  want %+v",
+				i, prefix, got[i], want[i], got, want)
 		}
-	}
-	if got != len(want) {
-		t.Fatalf("以 %q 打头的语句有 %d 条,应为 %d 条:\n%s", prefix, got, len(want), strings.Join(stmts, "\n"))
-	}
-	if !seqKeyOrderRecorder.matches(want) {
-		t.Fatalf("处理顺序不是 (player_id, stream) 升序:\n  got  %v\n  want %v",
-			seqKeyOrderRecorder.snapshot(), want)
 	}
 }
 

@@ -69,6 +69,9 @@ type Config struct {
 	// (玩家会一直被 ErrAlreadyQueued 拒绝);短 TTL 让玩家在该窗口后可重排,
 	// scene 侧冻结由 InBattleComp.deadline_ms reaper 兜底(设计决策 D5)。
 	// 开局成功走 ReadyTicketTTLSeconds,失败回队首恢复 TicketTTLSeconds。
+	// 该值只是下限:实际 TTL 取 max(该值, 按组大小算的 gather 最坏链路),见 logic/queue.go
+	// matchedTicketTTLFor。缺省 30s 已低于公式最小值 42s(1 人组),所以按缺省配置不起作用,
+	// 只有往上调(超过对应组大小的公式值)时才生效;上调还会拉长组队开战锁与 battle 补发窗口的要求。
 	MatchedTicketTTLSeconds int64 `json:",default=30"`
 
 	// ReadyTicketTTLSeconds:开局成功后 ticket 停留在 READY 态的 TTL(秒)。

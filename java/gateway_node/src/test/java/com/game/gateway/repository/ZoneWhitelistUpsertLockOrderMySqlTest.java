@@ -61,6 +61,24 @@ import static org.junit.jupiter.api.Assertions.*;
  * 代价写明白:<b>本用例不再能证明「1213 在本机复现得出来」。</b>真要那份证据,跑探针
  * ({@code <scratchpad>/lockprobe-keep/}),或在「新行主键更小」的形状上编排 —— 那一路是 5/5,才适合做强断言。
  *
+ * <p>顺带把「这个绿用例到底拦得住什么」写准,免得读者高估或低估它(2026-09-29 复审据代码实际行为改):
+ * <ul>
+ *   <li><b>改回普通 INSERT:确定性地拦得住。</b>绿用例遍历 outcomes 时并不是只看 1213 —— 命中 1213 报一条专门的
+ *       信息,<b>其余任何</b>非空 {@link SQLException} 同样 {@code fail}(「第 N 个 upsert 出现非预期错误」)。
+ *       而对照组 {@link #legacyPlainInsertBehindPendingDeleteLosesOneWriter} 已经确定性地证明:同一时序下普通
+ *       INSERT <b>必有且只有一个写者失败</b>,只是失败码在 1213 与 1062 之间随时序摆动。所以探针那个
+ *       <b>2/5</b> 决定的是<b>报哪个错误码</b>,不是<b>会不会报错</b>;把两者混为一谈,就会得出「每跑一次只有约
+ *       四成概率能红」这种与代码不符的说法。</li>
+ *   <li><b>改成 {@code INSERT IGNORE}:这里只是不确定性地拦得住,等于拦不住。</b>撞唯一键的那个写者会被
+ *       {@code IGNORE} 把 1062 降级成警告、写 0 行、<b>不抛异常</b>,留下的行仍是两个写者之一写的 —— 本用例三条
+ *       断言(零错误 / 恰好一行 / note ∈ {w1,w2})全都通过。只有它恰好成了 1213 牺牲者的那些轮次才会红
+ *       (1213 是事务级错误,{@code IGNORE} 吞不掉),而那是概率事件,不能当回归门禁。</li>
+ * </ul>
+ * 「purge 挡板关掉了固有情形,所以这条断言是确定性的」说的是「不会无缘无故红」,与「能不能挡住回归」仍是两件事。
+ * 真正覆盖全部写法回归(含 {@code INSERT IGNORE})的是
+ * {@link ZoneWhitelistRepositoryWiringTest#upsertInsertsThenOnlyUpdatesNoteOnSameNaturalKey}:它跑在 H2 上、
+ * <b>不需要真库</b>(本用例没配 MySQL 就整体跳过),同键第二次 upsert 必须改原行、不另插一行,与时序无关。
+ *
  * <h2>运行条件</h2>
  * 见 {@link MySqlLockOrderFixture}:配 {@code GATEWAY_TEST_MYSQL_URL} 等环境变量,且库名必须以 _it / _test 结尾
  * (专用测试库),否则跳过;设了 {@code GATEWAY_REQUIRE_MYSQL_TESTS} 时跳过一律判红。

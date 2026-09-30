@@ -34,8 +34,14 @@ param(
     [int]$SceneInstanceReplicas = -1,
     [ValidateSet("deployment", "agones")]
     [string]$SceneOrchestrator = "deployment",
-    [ValidateSet("ClusterIP", "NodePort", "LoadBalancer")]
-    [string]$GateServiceType = "LoadBalancer",
+    # 默认留空 = 用 k8s_deploy.ps1 自己的默认值(NodePort),非空才透传;默认值只留在 k8s_deploy.ps1 一处。
+    # 以前这里默认 "LoadBalancer",与 k8s_deploy.ps1 的 "NodePort" 不一致(dev_tools.ps1 现在同样留空不传)。本脚本默认
+    # -OpsProfile managed-cloud,k8s_deploy.ps1 的 Apply-OpsProfileDefaults 反正强制 LoadBalancer(bare-metal 强制 NodePort),
+    # 差异只在 -OpsProfile custom 时暴露:同一条 custom 命令经本脚本得到 LoadBalancer(还带 custom+LB 警告),
+    # 直接调 k8s_deploy.ps1 得到 NodePort,与 deploy/k8s/README.md「custom 未显式指定时解析为 NodePort」矛盾。
+    # 位置不动、只改默认值与 ValidateSet,不影响位置参数绑定。
+    [ValidateSet("", "ClusterIP", "NodePort", "LoadBalancer")]
+    [string]$GateServiceType = "",
     [int]$GateServicePort = 18000,
     [switch]$SkipInfra,
     [switch]$WaitReady,
@@ -60,7 +66,45 @@ param(
     # 默认留空 = 用 k8s_deploy.ps1 自己的默认值("1",turn-based §22 D75),非空才透传;
     # 默认值只留在 k8s_deploy.ps1 一处。回退到 "0" 的后果与前置见那边的参数注释。
     [ValidateSet("", "0", "1")]
-    [string]$GateRouterMode = ""
+    [string]$GateRouterMode = "",
+    # 集群外客户端入口,透传给 k8s_deploy.ps1 同名参数(语义见那边参数注释与 docs/design/k8s-client-entry.md
+    # 集群外入口 D80 / D88 / D89 / D91)。写法同 -GateRouterMode:一律默认留空 = 用 k8s_deploy.ps1 自己的默认值,
+    # 非空才透传;枚举型保留 ValidateSet,拼错在本入口就拒。
+    # 生效范围:gate 侧参数(ClientEntryMode / ClientPublicHost / GateClientHostTemplate / GateNodePortBase /
+    # GateExternalTrafficPolicy)对 release-zone / release-all 生效;battle 是全局池,只在 infra-up 路径部署,
+    # 所以 -BattleOrchestrator 只对 release-all(不带 -SkipInfra)生效,-ClientEntryMode 在 release-zone 下也只改 gate。
+    # 本脚本不部署 Go / Java 服务(Invoke-K8sDeploy 不传 -GoSvcRegistry / -JavaSvcRegistry,k8s_deploy.ps1 会跳过它们),
+    # 所以 k8s_deploy.ps1 的 -Gateway*(gateway Ingress 由 zone-up 随 gateway 生成)与 -LoginDevPasswordAuth 刻意不在这里声明:
+    # 声明了也只会是静默空操作(AGENTS §11.3)。-RequireClientEndpoint 例外地声明在参数块末尾(见那里的注释):
+    # 它经本脚本只参与 k8s_deploy.ps1 的组合预检,给了会打告警说明不改写 ConfigMap,不是静默空操作。
+    # 需要它们真正生效请用 dev_tools.ps1 k8s-zone-up / k8s-all-up 或直接调 k8s_deploy.ps1。
+    # 注意本脚本默认 -OpsProfile managed-cloud,k8s_deploy.ps1 会把 GateServiceType 强制成 LoadBalancer,
+    # 所以 -ClientEntryMode external 时必须同时给 -GateClientHostTemplate(D88),否则被 k8s_deploy.ps1 的预检拒绝。
+    # 模式不粘滞:每次发布都按本次参数重新生成 gate / battle 工作负载,以 external 运行的环境每次都要再传同一组参数;
+    # 漏传或改了地址时 k8s_deploy.ps1 按集群现状在任何写操作之前拒绝(镜像此时已推送,集群未改),确要切换加 -AllowDisruptiveSwitch。
+    [ValidateSet("", "podip", "external")]
+    [string]$ClientEntryMode = "",
+    [string]$ClientPublicHost = "",
+    [string]$GateClientHostTemplate = "",
+    # -1 = 未指定(不透传,由 k8s_deploy.ps1 默认值 / zones.json 每个 zone 的 gateNodePortBase 决定);其余值原样透传,由下游校验。
+    [int]$GateNodePortBase = -1,
+    [ValidateSet("", "Local", "Cluster")]
+    [string]$GateExternalTrafficPolicy = "",
+    [ValidateSet("", "deployment", "agones")]
+    [string]$BattleOrchestrator = "",
+    # 确认本次就是要切换入口形态(-ClientEntryMode / -BattleOrchestrator 换值)或改 gate / battle 的客户端地址来源
+    # (会踢人、在打的战斗作废),透传给 k8s_deploy.ps1 同名参数,语义见那边参数注释;switch 只在被指定时透传,
+    # 只在维护窗口里显式加。release-zone 只重建 gate,release-all(不带 -SkipInfra)还有 battle。
+    [switch]$AllowDisruptiveSwitch,
+    # login / scene_manager ConfigMap 的 RequireClientEndpoint,透传给 k8s_deploy.ps1 同名参数(取值口径与上线窗口见那边参数注释)。
+    # 写法同 -GateRouterMode:默认留空 = 用 k8s_deploy.ps1 自己的默认值(auto),非空才透传;与 dev_tools.ps1 同一 ValidateSet。
+    # 生效范围:本脚本不部署 login / scene_manager,经这里只参与 k8s_deploy.ps1 的组合预检(-ClientEntryMode podip 配 true
+    # 在写操作之前拒绝,external 配 false 告警),不改写它们的 ConfigMap —— release-zone / release-all 给了就在脚本入口
+    # (构建镜像之前)打一行告警说明,不静默吞掉(AGENTS §11.3)。要改写 ConfigMap 请用 dev_tools.ps1 k8s-zone-up / k8s-all-up
+    # 或直接调 k8s_deploy.ps1。
+    # 追加在末尾,理由同上方"新参数一律追加在末尾"。
+    [ValidateSet("", "auto", "true", "false")]
+    [string]$RequireClientEndpoint = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -334,7 +378,6 @@ function Invoke-K8sDeploy {
         SceneWorldReplicas = $SceneWorldReplicas
         SceneInstanceReplicas = $SceneInstanceReplicas
         SceneOrchestrator = $SceneOrchestrator
-        GateServiceType = $GateServiceType
         GateServicePort = $GateServicePort
         WaitTimeoutSeconds = $WaitTimeoutSeconds
     }
@@ -351,6 +394,10 @@ function Invoke-K8sDeploy {
     if ($SkipInfra) {
         $args.SkipInfra = $true
     }
+    # 留空不传,由 k8s_deploy.ps1 的默认值接管(见参数注释);OpsProfile 为 managed-cloud / bare-metal 时下游还会再强制改写。
+    if (-not [string]::IsNullOrWhiteSpace($GateServiceType)) {
+        $args.GateServiceType = $GateServiceType
+    }
     # switch 只在被指定时传下去,字符串非空才传:无条件传 $false / 空串会覆盖下游默认值。
     if ($NoCppLogSidecar) {
         $args.NoCppLogSidecar = $true
@@ -364,6 +411,17 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($GateRouterMode)) {
         $args.GateRouterMode = $GateRouterMode
     }
+    # 集群外入口参数同一口径:字符串非空才传,GateNodePortBase 非 -1 才传。
+    if (-not [string]::IsNullOrWhiteSpace($ClientEntryMode)) { $args.ClientEntryMode = $ClientEntryMode }
+    if (-not [string]::IsNullOrWhiteSpace($ClientPublicHost)) { $args.ClientPublicHost = $ClientPublicHost }
+    if (-not [string]::IsNullOrWhiteSpace($GateClientHostTemplate)) { $args.GateClientHostTemplate = $GateClientHostTemplate }
+    if ($GateNodePortBase -ne -1) { $args.GateNodePortBase = $GateNodePortBase }
+    if (-not [string]::IsNullOrWhiteSpace($GateExternalTrafficPolicy)) { $args.GateExternalTrafficPolicy = $GateExternalTrafficPolicy }
+    if (-not [string]::IsNullOrWhiteSpace($BattleOrchestrator)) { $args.BattleOrchestrator = $BattleOrchestrator }
+    if ($AllowDisruptiveSwitch) { $args.AllowDisruptiveSwitch = $true }
+    # 同一口径留空不透传。本函数从不传 -GoSvcRegistry,k8s_deploy.ps1 因此不部署 login / scene_manager,
+    # 这个值只进它的组合预检、不写进 ConfigMap;"不生效"的告警在脚本入口打(见 switch ($Command) 之前),这里只透传。
+    if (-not [string]::IsNullOrWhiteSpace($RequireClientEndpoint)) { $args.RequireClientEndpoint = $RequireClientEndpoint }
     if ($WaitReady) {
         $args.WaitReady = $true
     }
@@ -376,6 +434,13 @@ function Invoke-K8sDeploy {
     }
 
     & $scriptPath @args
+}
+
+# -RequireClientEndpoint 经本脚本不改写 login / scene_manager 的 ConfigMap(见参数注释)。在入口、镜像构建与推送之前就告警,
+# 不让操作者等几分钟进了 Invoke-K8sDeploy 才发现它不生效。只有 release-zone / release-all 会把它传下去,只对这两个命令告警。
+# 若 k8s_deploy.ps1 日后按 Test-ZoneLoginDeployed 自己告警"本次不部署 login,该值不生效",删掉这里,保持单一来源。
+if ($Command -in @("release-zone", "release-all") -and -not [string]::IsNullOrWhiteSpace($RequireClientEndpoint)) {
+    Write-Warning "-RequireClientEndpoint $RequireClientEndpoint 经 k8s_image.ps1 只参与 k8s_deploy.ps1 的组合预检:本脚本不部署 login / scene_manager(不传 -GoSvcRegistry),它们 ConfigMap 里的 RequireClientEndpoint 不会被改写。要改写请用 dev_tools.ps1 k8s-zone-up / k8s-all-up 或直接调 k8s_deploy.ps1。"
 }
 
 switch ($Command) {

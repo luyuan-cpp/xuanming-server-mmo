@@ -2,12 +2,14 @@ package com.game.gateway.controller;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.support.TransactionOperations;
 
 import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -47,9 +49,21 @@ class InnoDbDeadlockRetryTest {
         assertFalse(InnoDbDeadlockRetry.isDeadlockVictim(null));
     }
 
+    /**
+     * 环形 cause 链不许把分类器转成死循环 —— 自环({@code getCause() == this})与 A→B→A 两节点环都要钉住。
+     *
+     * <p>两节点环是这条用例的重点:{@code Throwable.initCause} 只拒绝 {@code cause == this},A→B→A 构造得出来,
+     * 而「只判自环」的旧写法(一个三目)挡不住它,{@link InnoDbDeadlockRetry#isDeadlockVictim} 会永不返回。分类器
+     * 跑在 Servlet 请求线程上(客户端断开不会中断它),死循环就是一个永不返回的 /admin 请求,所以这里要的是
+     * 「返回 false」而不只是「不崩」。现在的实现改成了沿 cause 链的深度上限,自环与任意长度的环一并覆盖。
+     *
+     * <p>{@code threadMode = SEPARATE_THREAD} 不是装饰:回归(去掉深度上限)时本用例的表现是<b>挂死</b>而不是
+     * 失败,而 {@code @Timeout} 默认的 SAME_THREAD 只在用例<b>跑完之后</b>比时长 —— 永不返回就永远比不上,CI 会
+     * 卡住而不是变红。SEPARATE_THREAD 到点直接判红(JUnit 5.9+)。
+     */
     @Test
-    void classifierSurvivesSelfReferencingCauseChain() {
-        // getCause() == this 的自环异常不许把分类器转成死循环(循环里那个三目就是为它写的)。
+    @Timeout(value = 5, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void classifierSurvivesCyclicCauseChain() {
         SQLException selfCaused = new SQLException("self", "HY000", 1062) {
             @Override
             public synchronized Throwable getCause() {
@@ -57,6 +71,11 @@ class InnoDbDeadlockRetryTest {
             }
         };
         assertFalse(InnoDbDeadlockRetry.isDeadlockVictim(selfCaused));
+
+        SQLException a = new SQLException("a", "HY000", 1062);
+        SQLException b = new SQLException("b", "HY000", 1062, a);
+        a.initCause(b); // 构造 A→B→A:a 是用三参构造器建的,cause 尚未初始化,initCause 只拒绝 cause == this
+        assertFalse(InnoDbDeadlockRetry.isDeadlockVictim(a), "两节点环必须走完深度上限后判为非死锁,不得死循环");
     }
 
     @Test

@@ -41,6 +41,12 @@ include_directories(
     /usr/local/include
 )
 
+# Agones(集群外入口 D81–D85):生命周期与客户端地址来源在 libs/engine/infra/agones/(随 -linfra 链入),
+# 只在 Linux 构建里接 libcurl。MMORPG_AGONES_CURL 没定义时 MakeDefaultHttpTransport() 返回 nullptr,
+# lifecycle 退化成 Disabled、agones 地址来源工厂返回 nullptr(Windows / 本地开发构建走的就是这条路)。
+# 与 scene 同口径;Linux 正式构建由 tools/archived/vcxproj2cmake.py 重生成本文件,同一宏与 curl 链接在生成器里。
+add_definitions(-DMMORPG_AGONES_CURL=1)
+
 set(SOURCE_FILES
     client/battle_client_edge.cpp
     handler/event/event_handler.cpp
@@ -59,6 +65,8 @@ set(SOURCE_FILES
 find_package(absl CONFIG REQUIRED)
 find_package(protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
+# 用系统 libcurl(与 scene 相同:deps 阶段 apt 装的 libcurl4-openssl-dev),只供 Agones sidecar 的回环 REST。
+find_package(CURL REQUIRED)
 
 link_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/../../../lib"
@@ -87,6 +95,7 @@ target_link_libraries(battle
     gRPC::grpc++_reflection
     gRPC::grpc
     gRPC::gpr
+    CURL::libcurl
     protobuf::libprotobuf
     muduo_net
     muduo_base

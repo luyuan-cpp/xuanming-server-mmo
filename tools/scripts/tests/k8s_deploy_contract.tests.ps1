@@ -546,6 +546,9 @@ $ProdEnv = @{
     MMORPG_INTERNAL_AUTH_SECRET = 'contract-test-internal-auth-0123456789abcdef'
     # db 库名白名单:三个来源全空时 db 在默认 strict 档下拒启。
     MMORPG_DB_ALLOWED_DATABASES = 'zone_1_db,zone_2_db'
+    # gateway 管理面口令(k8s-client-entry D91 纵深防御):非 dev 档缺失即拒绝部署;
+    # 取 ≥32 位非占位串,且与上面各密钥都不同。
+    MMORPG_GATEWAY_ADMIN_API_KEY = 'contract-test-gw-admin-key-0123456789abcdef'
 }
 $ProdArgs = $BaseArgs + @(
     "-ReleaseProfile", "prod",
@@ -958,5 +961,127 @@ Test-Case 'Java gateway 必须显式限制 JVM 堆并为 native 内存保留容�
     Assert-Match -Text $block -Pattern 'name: JAVA_TOOL_OPTIONS\s+value: "-Xms64m -Xmx384m"' -Because '不能依赖本机 JRE 对 cgroup 内存限制的自动识别'
     Assert-Match -Text $block -Pattern 'requests:\s+cpu: 200m\s+memory: 512Mi' -Because '调度请求必须覆盖已观测的启动期常驻内存'
     Assert-Match -Text $block -Pattern 'limits:\s+cpu: "1"\s+memory: 1Gi' -Because '堆外内存包括 metaspace、线程栈与直接缓冲区，不能把最大堆等同容器内存'
+}
+
+# ─────────────────────────────────────────────────────────────────
+# gateway 管理面口令(admin.api-key)只经 Secret 进容器(k8s-client-entry D91 纵深防御)
+# ─────────────────────────────────────────────────────────────────
+# 链路:环境变量 MMORPG_GATEWAY_ADMIN_API_KEY → zone namespace 的 Secret gateway-admin-api-key(key api-key)→ gateway 容器
+# env ADMIN_APIKEY(secretKeyRef)→ 挂载的 application.yaml 里 admin.api-key: "${ADMIN_APIKEY}"。实现在 k8s_deploy.ps1 的
+# Initialize-InjectedSecrets / New-JavaSvcConfigMapYaml / Apply-JavaSvcManifests / Apply-InjectedSecret / Add-PodTemplateAnnotation /
+# Get-InjectedSecretFingerprint;这里只断 DryRun 的可观察输出。非 DryRun(假 kubectl)下缺失 / 占位 / 过短的整句报错与"零写操作"
+# 由 k8s_client_entry_contract.tests.ps1 钉住,本节补 DryRun 路径与产物形状。
+# 两次 dev 运行都显式给出该变量(空串 = 未设置,回落占位值),结论不受跑测机器上残留的同名环境变量影响;
+# 都带 -SkipGoSvc:本节只看 Java 服务的产物。
+$AdminKeyDevArgs = $BaseArgs + @('-SkipGoSvc')
+$adminDevPlaceholderRun = Invoke-DeployDryRun -Arguments $AdminKeyDevArgs -Env @{ MMORPG_GATEWAY_ADMIN_API_KEY = '' }
+$adminDevSameKeyRun = Invoke-DeployDryRun -Arguments $AdminKeyDevArgs -Env @{ MMORPG_GATEWAY_ADMIN_API_KEY = $ProdEnv.MMORPG_GATEWAY_ADMIN_API_KEY }
+
+# 取 gateway Deployment Pod 模板上的口令指纹注解值。形状不对(缺失 / 多于一处 / 不在 template.metadata.annotations 下 /
+# 没加双引号 / 不是 12 位小写十六进制)一律 throw,不返回半截结果。
+function Get-GatewayAdminApiKeyHash {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Output,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    $block = Select-ManifestByName -Output $Output -Name 'gateway'
+    if ($null -eq $block) { throw "${Label}:DryRun 输出里没有 gateway 的 manifest" }
+    $count = [regex]::Matches($block, 'mmorpg\.io/gateway-admin-api-key-hash').Count
+    if ($count -ne 1) { throw "${Label}:gateway manifest 里口令指纹注解应恰好 1 处,实际 $count 处" }
+    # Add-PodTemplateAnnotation 紧跟 template: 下的 metadata: 插入(前面可有一行生成说明注释)。值必须带双引号:
+    # 12 位十六进制可能全是数字或形如 1e5…,不加引号会被 YAML 当成数字,而注解值只能是字符串,kubectl 拒收。
+    # Get-ManifestBlocks 已把块内换行统一成 LF,所以这里按 \n 逐行锚定。
+    $m = [regex]::Match($block, '(?m)^[ ]+template:[ ]*\n[ ]+metadata:[ ]*\n(?:[ ]*#[^\n]*\n)*[ ]+annotations:[ ]*\n[ ]+mmorpg\.io/gateway-admin-api-key-hash: "(?<hash>[0-9a-f]{12})"[ ]*$')
+    if (-not $m.Success) { throw "${Label}:口令指纹注解必须在 Pod 模板 metadata.annotations 下,值为加双引号的 12 位小写十六进制" }
+    return $m.Groups['hash'].Value
+}
+
+Test-Case '负向:prod 档位部署 gateway 却缺 MMORPG_GATEWAY_ADMIN_API_KEY 必须在任何写操作之前拒绝并点名该变量' {
+    $env2 = @{} + $ProdEnv
+    $env2['MMORPG_GATEWAY_ADMIN_API_KEY'] = ''
+    $run = Invoke-DeployDryRun -Arguments $ProdArgs -Env $env2
+
+    Assert-True -Condition ($run.ExitCode -ne 0) -Because "缺管理面口令必须阻断:否则 /admin/** 用 git 里公开的 change-me-in-production 鉴权。输出: $($run.Output)"
+    # 其余生产密钥都已给齐($ProdEnv 基线能出产物),拒绝只能来自这一把;断 Resolve-InjectedSecret"未设置"分支的原文开头。
+    Assert-Match -Text $run.Output -Pattern 'ReleaseProfile=prod 要求从环境变量 MMORPG_GATEWAY_ADMIN_API_KEY' -Because '错误必须点名缺哪个环境变量,且说清是注入缺失而不是别的失败'
+    Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because '口令解析(Initialize-InjectedSecrets)先于任何写操作,不留半截部署'
+    Assert-NotMatch -Text $run.Output -Pattern '# Secret gateway-admin-api-key' -Because '拒绝之后不得再写管理面口令 Secret'
+}
+
+Test-Case 'dev 档未设 MMORPG_GATEWAY_ADMIN_API_KEY:回落占位值并打警告,Secret gateway-admin-api-key 只打隐值的 dry-run 行,gateway 经 secretKeyRef 注入 ADMIN_APIKEY' {
+    $run = $adminDevPlaceholderRun
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "dev 档允许回落占位值,不能拒绝(本地栈要能一键起)。输出: $($run.Output)"
+    # 只断警告里不含空格的一段:Write-Warning 若被 ConsoleHost 按窗口宽度折行(重定向下是否折行未实测),折点在空格处;这一段连同前缀
+    # "WARNING: gateway " 止于第 64 显示列(中文按 2 列),≥ 约 65 列的控制台不会把它拆开。旧写法连到"未设置或仍是占位串",
+    # 而其后直到 "/admin/**" 是一整段无空格 token(止于约第 113 列),窗口不足约 114 列就会在"未设置"前折断。
+    Assert-Match -Text $run.Output -Pattern '管理面口令是占位值\(MMORPG_GATEWAY_ADMIN_API_KEY' -Because '回落占位值必须明说:此时 /admin/** 用公开常量鉴权,只允许本地 dev'
+    # DryRun 下 Apply-InjectedSecret 只打一行隐去值的意图,不走会把整份 YAML(含明文 stringData)打出来的 Invoke-KubectlWithInputFile。
+    Assert-Match -Text $run.Output -Pattern '(?m)^\[dry-run\] kubectl apply -n \S+ -f -\s+# Secret gateway-admin-api-key\(key api-key,值已隐去\)\s*$' -Because 'Secret 的 dry-run 行要点名 Secret 名与 key,且声明值已隐去'
+
+    $gateway = Select-ManifestByName -Output $run.Output -Name 'gateway'
+    Assert-True -Condition ($null -ne $gateway) -Because 'DryRun 输出里应当有 gateway 的 manifest'
+    # 不写 optional(= false):Secret 缺失时 Pod 卡在 CreateContainerConfigError,而不是带着空口令起来。
+    Assert-Match -Text $gateway -Pattern '- name: ADMIN_APIKEY\s+valueFrom:\s+secretKeyRef:\s+name: gateway-admin-api-key\s+key: api-key[ ]*\n(?![ ]+optional:)' -Because 'ADMIN_APIKEY 必须经 secretKeyRef 取 Secret gateway-admin-api-key 的 api-key,且不得 optional'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($gateway, 'name: ADMIN_APIKEY').Count) -Because 'ADMIN_APIKEY 只能注入一份,重复的 env 键以哪条为准不该交给 kubelet 决定'
+    Assert-NotMatch -Text $gateway -Pattern 'name: ADMIN_APIKEY\s+value:' -Because '口令不得以明文 value 写进 Deployment'
+}
+
+Test-Case 'gateway ConfigMap 的 admin.api-key 只写 ${ADMIN_APIKEY} 引用(dev / prod 同形),DryRun 输出里没有口令明文' {
+    # 显式写引用而不靠 Spring 宽松绑定,设计意图是:env 注入一旦被删 / 改名,占位符解析不了 gateway 直接拒启(fail-closed),
+    # 而不是静默回落到 jar 内公开的 change-me-in-production。
+    # (Spring 运行期行为未验证:外部 ./config 覆盖 jar 内配置、嵌套占位符解析不了即拒启,都只按 Spring Boot 文档核对过,
+    # 见 ingress2d 批 fix:deploy-hardening 的 RISKS;待部署后对 /admin 实测。本用例只断 ConfigMap 文本。)
+    foreach ($case in @(@{ Label = 'dev'; Output = $devOut }, @{ Label = 'prod'; Output = $prodRun.Output })) {
+        $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $case.Output -Name 'java-svc-gateway-config')
+        # 用 -ceq 而不是 Assert-Equal:后者按 -ne 比较、不区分大小写,生成器模板漂成 ${admin_apikey} 也会放过;
+        # 这里钉的是生成器写出的字面量,与 manifest 注入的 env 名 ADMIN_APIKEY 逐字一致。
+        $apiKeyRef = Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.admin.api-key'
+        Assert-True -Condition ($apiKeyRef -ceq '${ADMIN_APIKEY}') -Because "$($case.Label) 档 java-svc-gateway-config 的 admin.api-key 必须逐字(区分大小写)是对容器 env ADMIN_APIKEY 的引用,不得写口令值(实际 '$apiKeyRef')"
+    }
+    $plain = [regex]::Escape($ProdEnv.MMORPG_GATEWAY_ADMIN_API_KEY)
+    foreach ($case in @(@{ Label = 'prod 基线'; Output = $prodRun.Output }, @{ Label = 'dev 注入同一口令'; Output = $adminDevSameKeyRun.Output })) {
+        Assert-NotMatch -Text $case.Output -Pattern $plain -Because "$($case.Label):口令只经 Secret 进容器,ConfigMap / Secret 意图行 / 指纹注解都不得带明文"
+    }
+}
+
+Test-Case 'gateway Pod 模板带口令指纹注解(加引号的 12 位十六进制):同一口令两次独立运行指纹相同,换口令指纹必变(轮换自动滚动 gateway)' {
+    foreach ($run in @($adminDevPlaceholderRun, $adminDevSameKeyRun)) {
+        Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "dev 档 DryRun 应当成功。输出: $($run.Output)"
+    }
+    $placeholderHash = Get-GatewayAdminApiKeyHash -Output $adminDevPlaceholderRun.Output -Label 'dev 占位口令'
+    $devHash = Get-GatewayAdminApiKeyHash -Output $adminDevSameKeyRun.Output -Label 'dev 注入与 prod 基线相同的口令'
+    $prodHash = Get-GatewayAdminApiKeyHash -Output $prodRun.Output -Label 'prod 基线'
+    # 指纹只由口令(加 Secret 名做域分隔)决定:两次独立子进程、不同档位,同一口令必须得到同一指纹 ——
+    # 否则每次重跑 zone-up 都无故滚动 gateway。
+    Assert-Equal -Expected $prodHash -Actual $devHash -Because '同一口令的指纹必须稳定'
+    # secretKeyRef 只在容器启动时读:只改 Secret 时 Pod 模板逐字节不变,apply 是 no-op,旧口令一直有效、新口令被拒。
+    Assert-True -Condition ($placeholderHash -ne $devHash) -Because "换口令指纹必须变,否则轮换不会触发滚动(两者都是 $devHash)"
+    Assert-NotMatch -Text $adminDevSameKeyRun.Output -Pattern '管理面口令是占位值' -Because '对照:非占位口令不该打占位警告'
+}
+
+Test-Case 'gateway 写入顺序 ConfigMap → Secret → Deployment,Secret 与 Deployment 同 namespace(secretKeyRef 非 optional,Secret 必须先落地)' {
+    $out = $adminDevPlaceholderRun.Output
+    $cm = [regex]::Match($out, '(?m)^  name: java-svc-gateway-config\s*$')
+    $secrets = [regex]::Matches($out, '(?m)^\[dry-run\] kubectl apply -n (?<ns>\S+) -f -\s+# Secret gateway-admin-api-key\(')
+    $deployEnv = [regex]::Match($out, '(?m)^[ ]+- name: ADMIN_APIKEY\s*$')
+    Assert-True -Condition $cm.Success -Because 'DryRun 输出里应当有 java-svc-gateway-config 的 metadata.name'
+    Assert-Equal -Expected 1 -Actual $secrets.Count -Because '单 zone 的 zone-up 只写一次管理面口令 Secret'
+    Assert-True -Condition $deployEnv.Success -Because 'DryRun 输出里应当有注入 ADMIN_APIKEY 的 gateway Deployment'
+    Assert-True -Condition ($cm.Index -lt $secrets[0].Index) -Because 'ConfigMap 先于 Secret(Apply-JavaSvcManifests 注释约定的写序 ConfigMap → Secret → Deployment;Apply-OneGoSvc 的 login 口令 Secret 反而先于 ConfigMap,两者只共享"Secret 先于 Deployment")'
+    Assert-True -Condition ($secrets[0].Index -lt $deployEnv.Index) -Because 'Secret 必须先于引用它的 Deployment:反过来新 Pod 会卡在 CreateContainerConfigError'
+
+    # Deployment 所在的 apply 行 = 它之前最近的一条带 manifest 的 dry-run apply 行(Secret 意图行以注释结尾,不会被这条模式选中)。
+    $deployApply = @([regex]::Matches($out, '(?m)^\[dry-run\] kubectl [^\r\n]*apply -n (?<ns>\S+) -f -\s*$') | Where-Object { $_.Index -lt $deployEnv.Index }) | Select-Object -Last 1
+    Assert-True -Condition ($null -ne $deployApply) -Because 'gateway Deployment 之前应当有它自己的 dry-run apply 行'
+    Assert-Equal -Expected $deployApply.Groups['ns'].Value -Actual $secrets[0].Groups['ns'].Value -Because 'secretKeyRef 只能引用同 namespace 的 Secret'
+}
+
+Test-Case 'Java 服务缺 manifest(目录里的 auth)时连 ConfigMap 也不 apply:DryRun 不含 java-svc-auth-config' {
+    $authManifest = Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/java-svc/auth.yaml'
+    Assert-True -Condition (-not (Test-Path -LiteralPath $authManifest)) -Because '本条前提:auth 在 Java 服务目录里但没有 manifest。有人补上 auth.yaml 后,本条应改为断言它的 ConfigMap 与 Deployment 成对出现'
+    Assert-True -Condition ($null -ne (Select-ManifestByName -Output $devOut -Name 'java-svc-gateway-config')) -Because '对照:Java 服务路径确实走到了(gateway 的 ConfigMap 在),auth 的缺席才有意义'
+    foreach ($case in @(@{ Label = 'dev'; Output = $devOut }, @{ Label = 'prod'; Output = $prodRun.Output })) {
+        Assert-NotMatch -Text $case.Output -Pattern 'java-svc-auth-config' -Because "$($case.Label):没有 Deployment 消费的孤儿 ConfigMap 不该 apply(与 Apply-OneGoSvc 同口径)"
+    }
 }
 exit (Complete-TestRun -SuiteName "k8s_deploy contract")

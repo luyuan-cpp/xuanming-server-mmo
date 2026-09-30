@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"login/internal/config"
 	login_proto "proto/common/base"
+	"shared/nodeinfo"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/namespace"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // NodeWatcher watches node events via etcd.
@@ -39,7 +39,8 @@ func (nw *NodeWatcher) FetchAllNodes() ([]*login_proto.NodeInfo, error) {
 	nodes := make([]*login_proto.NodeInfo, 0, len(resp.Kvs))
 	for _, item := range resp.Kvs {
 		nodeInfo := &login_proto.NodeInfo{}
-		if err := protojson.Unmarshal(item.Value, nodeInfo); err != nil {
+		// 宽松解析(忽略未知字段,D77):新版本 gate 写入的新字段不能让整台 gate 从候选里消失。
+		if err := nodeinfo.Unmarshal(item.Value, nodeInfo); err != nil {
 			logx.Errorf("Invalid NodeInfo JSON for key=%s: %v", string(item.Key), err)
 			continue
 		}

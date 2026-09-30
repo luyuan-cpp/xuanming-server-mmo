@@ -1,4 +1,4 @@
-﻿#include "agones/agones_rest_client.h"
+#include "agones/agones_rest_client.h"
 
 #include <cstdlib>
 #include <mutex>
@@ -223,7 +223,12 @@ namespace agones
 
 	HttpResponse AgonesRestClient::GameServer()
 	{
-		return transport_.Get(baseUrl_ + "/gameserver", timeouts_);
+		return GameServer(timeouts_);
+	}
+
+	HttpResponse AgonesRestClient::GameServer(const HttpTimeouts& timeouts)
+	{
+		return transport_.Get(baseUrl_ + "/gameserver", timeouts);
 	}
 
 } // namespace agones

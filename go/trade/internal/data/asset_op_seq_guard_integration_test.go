@@ -17,13 +17,18 @@ package data
 // 记录后面做重复键检查的多个 INSERT 会同时继承到同一段间隙上的锁,随后各自申请插入意向锁、被对方
 // 挡住,InnoDB 牺牲其一 —— 这正是 MySQL 手册 "Deadlocks in InnoDB" 的三会话例。
 //
-// 修法:建行挪进业务事务,排在一行**已存在、已提交**的哨兵守卫行 (player_id=0, stream=0) 之下。
+// 修法:建行排在一行**已存在、已提交**的哨兵守卫行 (player_id=0, stream=0) 之下。
 // 于是同一时刻最多一个插入者,排队者等的是守卫行上的记录锁;守卫持有者回滚只是放锁,不会把锁继承
 // 成间隙锁。推导与"守卫行为什么选哨兵行"见 asset_op_repo.go 的守卫一节。
 //
+// 2026-09-29 起,"锁哨兵 + 建行"跑在**它自己的 RC 短事务**里(AssetOpRepo.EnsureSeqRows),
+// 在业务事务开始之前提交;业务事务(AllocateSeqsTx)只做普通读确认 + 按升序分配,一次都不碰哨兵行。
+// 消环的性质不变(它来自"排在同一行已提交、永不删除的记录锁上",与是否同事务无关),变的是哨兵行
+// 的持锁时间:从"直到业务事务提交"压到"一次点查 + 几条 INSERT IGNORE"。
+//
 // # 场景清单(新增场景时同步这张表)
 //
-//	(a) TestLegacyEnsureSeqRowDeadlocksWhenFirstInserterRollsBack   **红对照**:旧的事务外 INSERT IGNORE
+//	(a) TestLegacyEnsureSeqRowDeadlocksWhenFirstInserterRollsBack   **红对照**:旧的无守卫 INSERT IGNORE
 //	    在"首插者回滚 + 两个排队者"的编排下必须复现 1213(恰好 1 个牺牲、1 个成功)
 //	(b) TestGuardedEnsureSeqRowsTxSurvivesRolledBackFirstInserter    **绿**:同一编排走产品路径,
 //	    两个排队者都成功、零 1213、终态恰好 1 行,且它们排的是**守卫行**而不是对方未提交的 seq 记录
@@ -32,6 +37,8 @@ package data
 //	(d) TestSeqGuardLockIsPrimaryKeyPointLookupOnRealDB              EXPLAIN 回归:探针与守卫锁定读
 //	    都必须 key=PRIMARY、key_len=12(两列主键用满)
 //	(e) TestEnsureSeqGuardRowIsIdempotent                            bootstrap 幂等:重复跑不改纪元、只有一行
+//	(f) TestEnsureSeqRowsSurvivesBusinessTxRollback                  短事务已提交:业务事务整体回滚之后
+//	    seq 行仍在(这是"拆成两个事务"那条论证的真库对照)
 //
 // (a)(b)(c) 都是**手工编排**时序的(靠 performance_schema 观察锁等待,不靠并发度去撞):要求"两个等待者
 // 同时在队列里",撞出来的概率取决于机器快慢,满足不了"产品错了必然红"。
@@ -215,15 +222,13 @@ func startSeqRowRace(t *testing.T, db *sql.DB, player uint64,
 	return ctx, waiters
 }
 
-// seqRowQuerier 是 *sql.DB 与 *sql.Tx 的公共子集:本文件有些读必须在某个特定事务里发(见 startSeqRowRace 第 1 步)。
-type seqRowQuerier interface {
-	QueryRowContext(context.Context, string, ...any) *sql.Row
-}
-
 // seqRowCount 数某玩家某条流在 seq 表里的行数。
 // 带完整主键等值,所以不会把哨兵行算进来;这条 COUNT 只存在于测试里,与
 // TestNoAggregateQueryOverSeqTable 看守的"生产代码不许对这张表做聚合"不冲突。
-func seqRowCount(t *testing.T, ctx context.Context, q seqRowQuerier, player uint64) int {
+//
+// q 用生产代码里的 seqRowReader(*sql.DB 与 *sql.Tx 的公共子集):本文件有些读必须在某个特定
+// 事务里发(见 startSeqRowRace 第 1 步)。不另抄一份同形接口。
+func seqRowCount(t *testing.T, ctx context.Context, q seqRowReader, player uint64) int {
 	t.Helper()
 	var n int
 	err := q.QueryRowContext(ctx,
@@ -254,10 +259,18 @@ func legacyEnsureSeqRow(player, epochMs uint64) func(context.Context, *sql.Tx) e
 	}
 }
 
-// guardedEnsureSeqRow 是产品路径:普通读 →(缺行时)锁守卫行 → 建行。
+// guardedEnsureSeqRow 是产品路径**短事务 A 的事务体**:普通读 →(缺行时)锁守卫行 → 建行。
+//
+// 为什么调内部的 ensureSeqRowsTx 而不是导出的 EnsureSeqRows:
+//   - 夹具要亲自控制 BEGIN / COMMIT(首插者必须"插了先别提交"),而 EnsureSeqRows 自带事务;
+//   - 更要紧的是 EnsureSeqRows 外面套着 assetop.WithTxRetry,它会把 1213 吞掉重跑一次。
+//     本文件的绿用例判据恰恰是"**零** 1213",套着重试就永远测不出来。
+//
+// 两者的差别只有"谁开的事务 + 外层有没有有界重试",事务体逐字相同,所以这里证到的锁行为
+// 对产品路径成立。
 func guardedEnsureSeqRow(repo *AssetOpRepo, player, epochMs uint64) func(context.Context, *sql.Tx) error {
 	return func(ctx context.Context, tx *sql.Tx) error {
-		return repo.EnsureSeqRowsTx(ctx, tx, epochMs, SeqKey{PlayerID: player, Stream: itSeqStream})
+		return repo.ensureSeqRowsTx(ctx, tx, epochMs, []SeqKey{{PlayerID: player, Stream: itSeqStream}})
 	}
 }
 
@@ -452,29 +465,50 @@ func TestGuardedFirstTimeCreationForDistinctPlayersDoesNotDeadlock(t *testing.T)
 //
 // key_len=12 = player_id(bigint unsigned,8)+ stream(int unsigned,4);两列都 NOT NULL,没有空值字节。
 // 少一列就退化成前缀范围,锁集会越出哨兵行、把别的玩家的 seq 行一起锁进来,与 AllocateSeq 跨玩家成环。
+//
+// 两处必须按 2026-09-29 真库实测修正(上一版在 MySQL 26.7 上稳定假红):
+//  1. **显式 `EXPLAIN FORMAT=TRADITIONAL`**。26.7 的 `EXPLAIN` 默认输出已经是树状格式,按列名取
+//     key / key_len 什么都取不到。写法与 go/friend 的 friend_guard_lock_order_mysql_test.go 一致。
+//  2. **先把被查的那一行建出来**。行不存在时 MySQL 直接优化成
+//     "no matching row in const table"(26.7 的措辞是 Zero rows),key / key_len 都是 NULL ——
+//     那不是计划退化,是表空。这里用产品路径 EnsureSeqGuardRow 播种哨兵行,顺带保证"被 EXPLAIN 的
+//     那一行正是产品要锁的那一行"。
+//
+// 另外参数用字面量内联而不是占位符:EXPLAIN 带 `?` 时计划里看不到常量折叠的结果,
+// const 优化是否生效取决于真实取值。同样与 friend 的写法一致。
 func TestSeqGuardLockIsPrimaryKeyPointLookupOnRealDB(t *testing.T) {
-	db, _ := openSeqGuardDB(t)
+	db, repo := openSeqGuardDB(t)
 	ctx, cancel := context.WithTimeout(context.Background(), seqWaitBudget)
 	defer cancel()
+
+	// 被 EXPLAIN 的行必须存在,否则计划落成 "no matching row in const table"(见头注第 2 点)。
+	bootstrapSeqGuardRow(t, repo)
 
 	for _, tc := range []struct{ name, stmt string }{
 		{"存在性探针(普通读)", sqlSeqRowExists},
 		{"守卫行锁定点查", sqlLockSeqGuardRow},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			plan := explainSeqStmt(t, ctx, db, tc.stmt, seqGuardPlayerID, uint32(seqGuardStream))
-			assert.Equal(t, "PRIMARY", plan["key"], "必须走主键:%s(完整计划 %v)", tc.stmt, plan)
-			assert.Equal(t, "12", plan["key_len"], "主键两列必须用满(8+4):%s(完整计划 %v)", tc.stmt, plan)
+			inlined := inlineSeqArgs(t, tc.stmt, seqGuardPlayerID, uint64(seqGuardStream))
+			plan := explainSeqStmt(t, ctx, db, inlined)
+			assert.Equal(t, "PRIMARY", plan["key"], "必须走主键:%s(完整计划 %v)", inlined, plan)
+			assert.Equal(t, "12", plan["key_len"], "主键两列必须用满(8+4):%s(完整计划 %v)", inlined, plan)
+			// access type 不钉死具体值(const / eq_ref / range 随 MySQL 版本与是否 FOR UPDATE 变化),
+			// 但必须排掉扫描:全索引扫描同样报 key=PRIMARY、key_len=12,只有 type 能把它认出来。
+			assert.NotContains(t, []string{"ALL", "index"}, plan["type"],
+				"执行计划退化成扫描(type=%s):锁集会越出哨兵行,把别的玩家的 seq 行一起锁进来。完整计划 %v",
+				plan["type"], plan)
 		})
 	}
 }
 
-// explainSeqStmt 跑一次 EXPLAIN(传统格式)并返回小写列名 → 值。
+// explainSeqStmt 跑一次 `EXPLAIN FORMAT=TRADITIONAL` 并返回小写列名 → 值(NULL 记为空串)。
+// 这两条语句都只涉及一张表,第一行就是它的计划。
 // 带 FOR UPDATE 的语句照样能 EXPLAIN:优化器只出计划,不取锁。
-func explainSeqStmt(t *testing.T, ctx context.Context, db *sql.DB, stmt string, args ...any) map[string]string {
+func explainSeqStmt(t *testing.T, ctx context.Context, db *sql.DB, stmt string) map[string]string {
 	t.Helper()
-	rows, err := db.QueryContext(ctx, "EXPLAIN "+stmt, args...)
-	require.NoErrorf(t, err, "EXPLAIN %s", stmt)
+	rows, err := db.QueryContext(ctx, "EXPLAIN FORMAT=TRADITIONAL "+stmt)
+	require.NoErrorf(t, err, "EXPLAIN FORMAT=TRADITIONAL %s", stmt)
 	defer func() { _ = rows.Close() }()
 	cols, err := rows.Columns()
 	require.NoError(t, err)
@@ -491,6 +525,61 @@ func explainSeqStmt(t *testing.T, ctx context.Context, db *sql.DB, stmt string, 
 	}
 	require.NoError(t, rows.Err())
 	return out
+}
+
+// inlineSeqArgs 把 SQL 里的 ? 依次换成整数字面量,供 EXPLAIN 使用(同 friend 的 inlineNumericArgs)。
+func inlineSeqArgs(t *testing.T, query string, args ...uint64) string {
+	t.Helper()
+	require.Equalf(t, len(args), strings.Count(query, "?"),
+		"占位符与参数个数不符: %s", query)
+	for _, a := range args {
+		query = strings.Replace(query, "?", fmt.Sprint(a), 1)
+	}
+	return query
+}
+
+// ── 场景 (f):短事务提交之后,业务事务回滚不会带走 seq 行 ─────
+
+// TestEnsureSeqRowsSurvivesBusinessTxRollback 是 2026-09-29 "拆成两个事务"那条论证的真库对照。
+//
+// 论证是:事务 A(EnsureSeqRows)**提交**之后,它建的行就是已提交数据,业务事务 B 回滚只回滚它自己;
+// 加上全仓对这张表没有任何 DELETE(TestSeqTableRowsAreNeverDeleted 机械看着),
+// 所以 B 里的确认读必然命中。把建行塞回业务事务的话,B 一回滚行就没了,本用例会立刻变红。
+//
+// 顺带验两件事:B 回滚之后 next_seq 退回 1(分配确实随 B 一起回滚,不会留空洞),
+// 以及第二次 EnsureSeqRows 是空操作、不改纪元(行已存在,INSERT IGNORE 不复位纪元)。
+func TestEnsureSeqRowsSurvivesBusinessTxRollback(t *testing.T) {
+	const player uint64 = 9_300_201
+	db, repo := openSeqGuardDB(t)
+	bootstrapSeqGuardRow(t, repo)
+
+	ctx, cancel := context.WithTimeout(context.Background(), seqRaceBudget)
+	defer cancel()
+	key := SeqKey{PlayerID: player, Stream: itSeqStream}
+
+	require.NoError(t, repo.EnsureSeqRows(ctx, seqWaiterEpochMs, key), "事务 A:建 seq 行")
+	require.Equal(t, 1, seqRowCount(t, ctx, db, player), "事务 A 提交之后应当已经有这一行")
+
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	require.NoError(t, err)
+	allocs, err := repo.AllocateSeqsTx(ctx, tx, seqWaiterEpochMs, key)
+	require.NoError(t, err, "事务 B:确认读必须命中(短事务刚刚提交过它)")
+	assert.Equal(t, uint64(1), allocs[key].Seq, "第一笔分配从 1 起")
+	assert.Equal(t, seqWaiterEpochMs, allocs[key].Epoch, "纪元应当是事务 A 建行时写下的值")
+	require.NoError(t, tx.Rollback(), "回滚业务事务 B")
+
+	// B 没了,A 建的行还在。
+	assert.Equal(t, 1, seqRowCount(t, ctx, db, player),
+		"业务事务回滚之后 seq 行必须还在 —— 它是事务 A 提交的,不随 B 回滚")
+	epoch, nextSeq := readSeqRow(t, ctx, db, player)
+	assert.Equal(t, seqWaiterEpochMs, epoch, "纪元不该被改写")
+	assert.Equal(t, uint64(1), nextSeq, "分配随 B 一起回滚,next_seq 退回 1(不留空洞)")
+
+	// 再跑一次:行已存在,探针直接命中,既不碰守卫行也不改纪元。
+	require.NoError(t, repo.EnsureSeqRows(ctx, seqHolderEpochMs, key))
+	epoch, nextSeq = readSeqRow(t, ctx, db, player)
+	assert.Equal(t, seqWaiterEpochMs, epoch, "第二次 EnsureSeqRows 必须是空操作,不许改写纪元")
+	assert.Equal(t, uint64(1), nextSeq)
 }
 
 // ── 场景 (e):bootstrap 幂等 ───────────────────────────────

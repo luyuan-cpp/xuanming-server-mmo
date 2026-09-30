@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <chrono>
 #include <memory>
@@ -13,9 +13,14 @@
 //   用 HTTP 反而是依赖最小的选择。
 //
 // 线程约束(重要):
-//   本文件里的所有调用都是**同步阻塞**的。只允许在 SceneLifecycle 的
-//   lifecycle worker 线程里调用,绝对不能进 muduo EventLoop —— 一次网络
-//   抖动就会卡住整帧逻辑。
+//   本文件里的所有调用都是**同步阻塞**的,绝对不能进**正在运行**的 muduo EventLoop ——
+//   一次网络抖动就会卡住整帧逻辑。允许的调用线程只有两种:
+//     - GameServerLifecycle 的 lifecycle worker 线程;
+//     - AgonesClientEndpointSource::Fetch 所在的 Node 构造线程(InitRpcServer 阶段,
+//       此时 EventLoop 还没开始 loop(),阻塞只推迟启动,不卡帧)。
+//
+// 2026-09-29 由 cpp/nodes/scene/agones/ 下沉到 infra(集群外入口 D85),
+// scene 与 battle 共用同一份实现。
 //
 // 参考:https://agones.dev/site/docs/guides/client-sdks/rest/
 
@@ -61,7 +66,7 @@ namespace agones
 	//
 	// 用的是同步 easy API:Agones REST 只有极少量本机回环请求,引入 multi/事件
 	// 循环没有收益,而 easy API 的错误处理路径更少出错。代价是调用会阻塞,所以
-	// 只能跑在 lifecycle worker 线程上。
+	// 只能跑在上面"线程约束"列出的两种线程上。
 	class CurlAgonesHttpTransport final : public HttpTransport
 	{
 	public:
@@ -99,7 +104,7 @@ namespace agones
 
 	AgonesEnv ReadAgonesEnv();
 
-	// Agones REST SDK 的薄封装。不持有传输层所有权。
+	// Agones REST SDK 的薄封装。不持有传输层所有权:transport 必须活得比本对象久。
 	class AgonesRestClient
 	{
 	public:
@@ -109,7 +114,11 @@ namespace agones
 		HttpResponse Health();
 		HttpResponse Allocate();
 		HttpResponse Shutdown();
+		// GET /gameserver:返回自身 GameServer 的 JSON,解析见 agones_gameserver_status.h。
 		HttpResponse GameServer();
+		// 同上,但本次请求改用调用方给的超时。给有总时间预算的调用方把单次超时截到剩余预算
+		// (AgonesClientEndpointSource);两项超时都必须 > 0(curl 的 0 表示不限时)。
+		HttpResponse GameServer(const HttpTimeouts& timeouts);
 
 		const std::string& BaseUrl() const { return baseUrl_; }
 

@@ -153,7 +153,8 @@ const uniqueGuidKeyProbeTimeout = 5 * time.Second
 type SnapshotStore struct {
 	db *sql.DB
 
-	// uniqueGuidKey = 建 store 时探到 player_snapshot 上有 uk_snapshot_guid_nz。
+	// uniqueGuidKey = 建 store 时探到 player_snapshot 上有 uk_snapshot_guid_nz,
+	// **且**它约束的 snapshot_guid_nz 确实是那条表达式算出的 STORED 生成列(两条缺一不可,见 NewSnapshotStore)。
 	//
 	// 为什么要探、而不是直接假设它在:这个键是一次独立的 DDL 迁移(审计 #11 第二步),
 	// 而"迁移还没跑 / 刚回滚 / 对端是 TiDB"这三种局面都真实存在。假设它在的后果是最坏的一种 ——
@@ -188,7 +189,23 @@ func NewSnapshotStore(cfg MySQLConfig) (*SnapshotStore, error) {
 	// 必须用 hasUniqueIndex 而不是"按名字数一下索引在不在":一个**同名的非唯一索引**会让这里探成 true,
 	// 写路径切到 ODKU,而 ODKU 在没有唯一约束的表上永远撞不到重复键 —— 同一 guid 静默落成多行。
 	// 形状不符时它返回错误,下面按"键不在"处理并把原因打出来(退路的去重在有键无键的表上都正确)。
+	//
+	// 索引形状对**还不够**:键可能挂在一个同名的**普通列**上(迁移的 ADD COLUMN 被兼容层降级、
+	// 或有人手工加过这一列),那种列恒为 NULL(约束不到任何行)或恒为 0(第二条 GM 行就撞键)。
+	// 所以列的形状也要探一次,两条都成立才敢把写路径切到 ODKU —— 判据与迁移侧
+	// (ensureNullableUniqueKey 的快路径)逐条一致,免得两处对"键在不在"给出不同答案。
 	hasKey, err := hasUniqueIndex(ctx, db, cfg.DBName, PlayerSnapshotTableName, SnapshotGuidUniqueKey)
+	if err == nil && hasKey {
+		var hasCol bool
+		hasCol, err = hasGeneratedColumn(ctx, db, cfg.DBName, PlayerSnapshotTableName, SnapshotGuidNzColumn, snapshotGuidNzExpr)
+		if err == nil && !hasCol {
+			err = fmt.Errorf("唯一键 %s 在,但它约束的列 %s 不存在(键在、列坏的中间态)",
+				SnapshotGuidUniqueKey, SnapshotGuidNzColumn)
+		}
+		if err != nil {
+			hasKey = false
+		}
+	}
 	if err != nil {
 		logx.Errorf("[SnapshotStore] 探测 %s.%s 失败(%v):按「唯一键不存在」处理,快照去重退回 "+
 			"INSERT...SELECT...NOT EXISTS(功能正确,但并发写者会在 idx(snapshot_guid) 间隙上成环、靠有界 1213 重试吸收)。"+
@@ -288,25 +305,27 @@ func (s *SnapshotStore) InsertSnapshot(ctx context.Context, row *SnapshotRow) (u
 // 而插入意向锁之间是**相容**的。所以不同 guid 的并发写者现在互不相干,这条环随之消失。
 // 回归:TestSnapshotStore_DistinctGuidsNeverDeadlock 断言就地重跑计数一次都不涨。
 //
-// **也被消掉的那一类:同一个 guid 上多个后到者被先到者的回滚 / purge 甩成 S→X 升级环。**
-// 手册 "Locks Set by Different SQL Statements in InnoDB" 的三会话例就是它:
+// **没有被消掉、只能靠有界重试吸收的那一类:先到者回滚,排在它后面的两个后到者互等。**
 //  1. A 插 guid=G 未提交 —— 在唯一键上持有这条新索引记录的 X 锁;
-//  2. B、C 各插 guid=G,重复键检查撞上 A 那条未提交记录 —— **普通 INSERT** 在这一步申请的是 **S 锁**,
-//     两人一起排队等 A;
-//  3. A 回滚(被别处的死锁选为牺牲者、ctx 取消断连、或纯粹是业务失败)。它那条记录变成删除标记记录,
-//     B、C **同时**被授予 S 锁;
-//  4. B 要插入,需要这个位置上的 X(插入意向)—— 被 C 的 S 挡住;C 同理被 B 挡住 → 成环。
+//  2. B、C 各插 guid=G,重复键检查撞上 A 那条未提交记录,两人一起排队等 A;
+//  3. A 回滚(被别处的死锁选为牺牲者、ctx 取消断连、或纯粹是业务失败)——
+//     B、C 等待中的锁被**继承成间隙锁**;
+//  4. 两人随后各自申请插入意向锁,被对方继承来的间隙锁挡住 → 成环,InnoDB 牺牲其一。
 //
-// 环的成因是第 2 步取 S:两人能同时持有,才有第 4 步的互等。ODKU 把这一步换成 **X**
-// (手册:"an exclusive lock rather than a shared lock is placed on the row to be updated when a
-// duplicate-key error occurs"),于是 A 回滚后只有一人被授予、另一人继续单向等待,不成环。
-// 本路径因此走 insertSnapshotOnDuplicateKeepSQL,而不是普通 INSERT + 1062。
-// 回归:TestSnapshotStore_SameGuidQueueDoesNotDeadlock 摆出上面四步,断言就地重跑计数**一次都不涨**。
+// **ODKU 拆不掉这一类**,这是 2026-09-29 对着真 MySQL 26.7.0 做的受控实验结论(每格 10 次重复):
+// 首个插入者回滚、两个后到者排队的现场,**10/10 全部成环**,且与写法、与键的位置都无关 ——
+// 普通 INSERT / INSERT IGNORE / ODKU 三种写法,聚簇主键 / 二级唯一索引两种位置,六格全是 10/10。
+// 成环的是第 3 步的**锁继承**,不是第 2 步取 S 还是取 X。
+// 要真正消掉它只有一条路:别让两个插入者同时排在同一条未提交记录后面 —— 让所有首次插入者先排在
+// 一行**已提交**的守卫记录上(trade 的哨兵行就是这么做的,见 go/trade/internal/data/asset_op_repo.go)。
+// 本表没有这样做:快照写者部署上是单实例(replicas=1 + Recreate),这一类只在多写者并存时出现,
+// 频率低、且被下面的有界重试完整吸收(结局仍是"恰好一行、两人回出同一个 id")。
+// 回归:TestSnapshotStore_SameGuidQueueDeadlockIsAbsorbed。
 //
-// (历史:这段注释曾写着"不能用 ODKU,因为 UPDATE id = id 仍要拿 X 锁并写一次 undo,把什么都不做
-// 写成了一次真实修改",并据此把这个环留给重试。两处都错:取 X 正是消环的**手段**而不是代价;
-// 而手册明写 affected-rows "0 if an existing row is set to its current values" —— 值不变不产生行更新。
-// 2026-09-29 复审按手册核实后改掉,结论见 insertSnapshotOnDuplicateKeepSQL。)
+// (两次翻车都记在这里:先是有注释写"不能用 ODKU,因为 UPDATE id = id 要写一次 undo" —— 错,
+// 手册明写 affected-rows "0 if an existing row is set to its current values";随后第四轮复审按手册
+// 推演出"ODKU 取 X 就能消掉这个环",把用例断言改成 retries == 0 —— 也错,真库一跑就红。
+// 教训:手册那句 X/S 的区别管的是**删除标记记录上的 S→X 升级**那一类,不是回滚继承这一类。)
 //
 // # 有界重试为什么还留着,以及它的收敛论证
 //
@@ -364,10 +383,11 @@ func (s *SnapshotStore) InsertSnapshotIfGuidAbsent(ctx context.Context, row *Sna
 		// 两条路的 1213 成因完全不同,给运维的动作也不同 —— 日志必须分开说,
 		// 否则退路上那个**可以修掉**的环会被照着"InnoDB 固有、忍了"的结论放过。
 		if s.uniqueGuidKey {
-			logx.Errorf("[SnapshotStore] snapshot guid=%d 在**唯一键路径**上因 InnoDB 死锁(1213)就地重跑了 %d 次,结果 err=%v:"+
-				"按推演这条路不该再成环(ODKU 的重复键检查取 X 而不是 S,同 guid 的排队者被串行化,"+
-				"见 insertSnapshotOnDuplicateKeepSQL)。出现它说明还有别的写者在这张表上取了本函数没有考虑到的锁 —— "+
-				"请连同 SHOW ENGINE INNODB STATUS 的 LATEST DETECTED DEADLOCK 一起上报,不要只当成一次偶发重试",
+			logx.Infof("[SnapshotStore] snapshot guid=%d 在**唯一键路径**上因 InnoDB 死锁(1213)就地重跑了 %d 次,结果 err=%v:"+
+				"预期内的固有情形 —— 同一个 guid 有两个写者排在第三个未提交写者后面、而后者回滚时,"+
+				"等待锁被继承成间隙锁再互等插入意向锁(实测与写法无关,ODKU 也拆不掉,见 InsertSnapshotIfGuidAbsent)。"+
+				"结局由重试保证正确。**但本服务部署上是单写者(replicas=1 + Recreate)**,所以这条日志频繁出现"+
+				"说明有第二个写者在跑(本地多开 / 手工改副本数 / 滚动更新新旧并存)——那才是要查的事",
 				row.SnapshotGuid, reruns, err)
 		} else {
 			logx.Errorf("[SnapshotStore] snapshot guid=%d 在**退路**(INSERT...SELECT...NOT EXISTS)上因 InnoDB 死锁(1213)"+

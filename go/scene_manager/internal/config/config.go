@@ -172,6 +172,16 @@ type Config struct {
 	// connection tokens during cross-zone redirect.
 	GateTokenSecret string `json:",optional"`
 
+	// RequireClientEndpoint:跨 zone 重定向(RedirectToGate)下发 gate 地址时,是否要求 gate 自报了
+	// 客户端可达地址 NodeInfo.client_endpoint(k8s-client-entry D78/D79,与 login 同名开关同口径)。
+	//   - false(默认,podip 模式):client_endpoint 可用就下发它,否则回落集群内 endpoint(PodIP);
+	//   - true(external 模式):没有可用 client_endpoint 的 gate 一律跳过,绝不把客户端连不上的
+	//     PodIP 发下去;全 zone 都没有时重定向失败(ErrNoAvailableNode),不改任何状态。
+	// 这只是消费方的纵深防御,生产方 gate 在 CLIENT_ENDPOINT_SOURCE=static 下缺地址会先 fail-closed 退出。
+	// 上线顺序:确认所有 gate 都带 client_endpoint 之后才能翻 true;回退时先翻回 false。
+	// K8s 上由 tools/scripts/k8s_deploy.ps1 按 -ClientEntryMode 写进 ConfigMap。
+	RequireClientEndpoint bool `json:",default=false"`
+
 	// MetricsListenAddr: host:port to serve Prometheus /metrics. Empty
 	// disables the scrape endpoint (default). Typical prod value is
 	// ":9150" — keep it off the gRPC port and scrape it via ServiceMonitor.
