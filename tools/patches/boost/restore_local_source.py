@@ -4,8 +4,10 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import sys
 import zipfile
 
+sys.stdout.reconfigure(encoding='utf-8')
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--output', required=True, help='尚不存在的独立恢复目录')
 args = parser.parse_args()
