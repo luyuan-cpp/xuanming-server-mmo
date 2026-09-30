@@ -664,12 +664,26 @@ Agones 段 7000–7009 → 7100–7109;前置条件新增端口预检、「先�
    - `go/player_locator`、`go/match`:`go test ./...`
    - `go/guild`、`go/data_service`、`go/client_rpc_router`:`go build ./... && go vet ./...`
    - 另在仓库根执行 `rg "protojson\.Unmarshal\(" go -g '!**/generated/**' -g '!*_test.go'`,无任何输出即通过。
-3. **C++(Windows,必须串行 `/m:1`)**:
-   - 依次 msbuild core → infra → battle → gate → scene → client_endpoint_test → agones_lifecycle_test;
-   - 再跑 `pwsh -File tools/scripts/run_cpp_tests.ps1`,以及 `check_no_raw_pointer_member.ps1 -ProjectDir <各工程>`;
+3. **C++(Windows Debug x64,必须串行 `/m:1`,并发会报假的 C1041 / LNK1104;不要用 Release,third_party 全是 Debug 库)**。
+   编译顺序与 [turn-based-battle-server.md](turn-based-battle-server.md) §22.7 第 5 步统一为「重生 → game.sln 全量 → run_cpp_tests -Build」,两份文档口径一致:
+   - **全量(必做,放在第 1 步重生之后)**:仓库根执行 `msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`。
+     sln 的 ProjectDependencies 会先编生成库 proto、proto_helpers、rpc、grpc_client,再编 engine core、infra、scene lib、scene、gate、battle 等 lib 与节点,
+     以及 `client_endpoint_test`、`agones_lifecycle_test`。通过:0 error。失败时保留每个工程第一段错误的前 50 行。
+     重生之前编 battle / engine core 必然报缺 `client_endpoint`,那是生成物未刷新,不是本批代码的问题(见 turn-based §22.7 第 5 步的更正)。
+   - **逐工程(可选,只用于定位错误)**:每条都是 `msbuild <工程全路径> /m:1 /p:Configuration=Debug /p:Platform=x64`。
+     lib 与节点同名(battle / gate / scene 各有两个 vcxproj),必须写全路径,按以下顺序:
+     - 生成库:`cpp\generated\proto\proto.vcxproj` → `cpp\generated\proto_helpers\proto_helpers.vcxproj` → `cpp\generated\rpc\rpc.vcxproj` → `cpp\generated\grpc_client\grpc_client.vcxproj`;
+     - 引擎:`cpp\libs\engine\core\core.vcxproj` → `cpp\libs\engine\infra\infra.vcxproj`;
+     - battle:`cpp\libs\services\battle\battle.vcxproj` → `cpp\nodes\battle\battle.vcxproj`;
+     - gate:`cpp\libs\services\gate\gate.vcxproj` → `cpp\nodes\gate\gate.vcxproj`;
+     - scene:`cpp\libs\services\scene\scene.vcxproj` → `cpp\nodes\scene\scene.vcxproj`;
+     - 测试:`cpp\tests\client_endpoint_test\client_endpoint_test.vcxproj` → `cpp\tests\agones_lifecycle_test\agones_lifecycle_test.vcxproj`。
+   - **C++ 单测(放在全量之后)**:`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build`。必须带 `-Build`:不带时脚本只跑已有 exe,
+     而多数 gtest 工程没进 game.sln 的构建配置,不会针对新的 core 与 proto 重新链接。通过:退出码 0,汇总表里没有「无 exe」行。
+   - `check_no_raw_pointer_member.ps1 -ProjectDir <各工程>`;
    - battle 的两个独立 gtest(`cpp/nodes/battle/tests/battle_room_table_test.cpp`、`battle_admission_gate_test.cpp`)按文件头命令编译运行。
    - Linux:`tools/scripts/build_linux.sh`,`ldd bin/battle | grep libcurl` 应有输出。
-4. **ps1**(`pwsh -NoProfile -NonInteractive -File`):`tools/scripts/tests/` 下的 `k8s_client_entry_contract.tests.ps1`、`k8s_deploy_contract.tests.ps1`、`k8s_gate_drain.tests.ps1`、`k8s_migrate_gate.tests.ps1`、`k8s_zone_rollback_gate_router_mode.tests.ps1`、`dev_tools_merge_zone_contract.tests.ps1`,要求 fail=0。已知会红的,见「剩余风险」。
+4. **ps1**(`pwsh -NoProfile -NonInteractive -File`):`tools/scripts/tests/` 下的 `k8s_client_entry_contract.tests.ps1`、`k8s_deploy_contract.tests.ps1`、`k8s_gate_drain.tests.ps1`、`k8s_migrate_gate.tests.ps1`、`k8s_zone_rollback_gate_router_mode.tests.ps1`、`dev_tools_merge_zone_contract.tests.ps1`,要求 fail=0。**(2026-09-30 更正)** 已知会红清单为空,6 个文件一律严格按退出码 0、fail=0 判定,任何红都是真实问题;原先列过的各项及撤出依据见「剩余风险 → 已知会红的测试」。
 
 ### 上线批次
 
@@ -741,10 +755,9 @@ Agones 段 7000–7009 → 7100–7109;前置条件新增端口预检、「先�
   - 停机时,如果 gRPC drain 取消了在途的 CreateBattle,match 会按普通失败发 DestroyBattle;若 DestroyBattle 也失败,玩家要等 prepare 期限才解冻。
 - **ClientFacing 与 Select** 没有跨语言共享用例,改一边必须同改另一边。
 - **match**:换节点重试后,scene 的 `InBattleComp.battle_node_id` 仍记着首选节点(只用于日志,D72);matched ticket TTL 变长,match 在 gather 中途崩溃时,玩家要多等十几秒才能自愈重排。
-- **已知会红的测试(属预期,待测试属主修)**:
+- **已知会红的测试(2026-09-30 按磁盘静态核对:清单为空,以下各项均已撤出,第 4 步恢复严格 fail=0)**:
   - ~~`k8s_deploy_contract.tests.ps1` 的 prod 基线,要等 `$ProdEnv` 补上 `MMORPG_GATEWAY_ADMIN_API_KEY`(≥32 位,非占位)才会绿;~~ **(2026-09-29 更正)** 这一条已过时,撤出「已知会红」。`$ProdEnv` 已在 `tools/scripts/tests/k8s_deploy_contract.tests.ps1:551` 补上 `MMORPG_GATEWAY_ADMIN_API_KEY`(43 位,非占位串)。该文件还有两条相关用例:prod 缺口令时拒绝(`:999`),dev 用占位值时告警(`:1011`)。prod 基线应当是绿的,**变红就是真实问题**,不能按预期放过。
-  - `k8s_zone_rollback_gate_router_mode.tests.ps1` 里「拒绝 `-AllowDisruptiveSwitch`」「k8s_image 拒绝 `-RequireClientEndpoint`」两个旧负向用例(`:776`、`:820`),需要按新行为改写:dev_tools 现在透传这两个参数,不再拒绝。回滚入口在 `dev_tools.ps1:1601` 透传 `-AllowDisruptiveSwitch`,`Invoke-K8sImage` 在 `:869` 透传 `-RequireClientEndpoint`。2026-09-29 复核时两个旧用例都还在磁盘上,没改;该文件头注释 `:32-33` 也要同步改。
-  - 同一文件 `:363-367` 的假 dev_tools 参数表(`PositionalBinding = $false`)还没有 `[switch]$AllowDisruptiveSwitch`,来源是 ingress2d wrappers-passthrough 的交接。它现在不会让现有用例变红;但以后新增「回滚直调带 `-AllowDisruptiveSwitch`」的用例时,会报「找不到参数」,需要测试属主一并补上。
+  - **(2026-09-30 撤出)** 以下各项测试属主都已改好(连同下面 `k8s_gate_drain.tests.ps1` 一起随 `bf14e85d9` 提交,未经 Codex 运行):`k8s_zone_rollback_gate_router_mode.tests.ps1` 的两个旧负向用例(原 `:776` 拒绝 `-AllowDisruptiveSwitch`、原 `:820` k8s_image 拒绝 `-RequireClientEndpoint`)已按透传行为改写为正向用例,文件头注释同步;原 `:343` 沙箱已补拷 `lib/k8s_client_entry.ps1`,此前 `k8s_zone_rollback.ps1:227` 在 `Stop` 下 dot-source 它,该文件全部沙箱用例都会在启动时失败,而本清单当时漏了这一条;原 `:363-367` 假 dev_tools 参数表已补 `[switch]$AllowDisruptiveSwitch`;`k8s_deploy_contract.tests.ps1` 原 `:922` 的 sidecar 注解哈希正则已改为带不带引号都认;`k8s_gate_drain.tests.ps1` 已按排空脚本修复(评审 contracts-2,`Wait-GateDrained` 的 `-MarkValue` 改为必填,见 `k8s_gate_drain.ps1:822`)给全部 `Wait-GateDrained` 调用补上 `-MarkValue '1790000000'`,并补齐 contracts-2 的回归用例(以用例名为锚):「TTL 上限:-DrainTtlSeconds 的 ValidateRange 上限与 Get-GateDrainContract.MaxDrainTtlSeconds 相等」、「已有标记早于 TIME - MaxDrainTtlSeconds(例如手工 SET 成 1)」、「轮询:等待中 draining 被改写」,以及两条「主流程 -DeletePod」的同类用例,断言文本与 `k8s_gate_drain.ps1` 的 throw 文案(「不早于 TIME-…」「已被改写」)逐字对应。本节早先一版曾按 `1a896b128` 的测试文件把它判为必红,那是按提交判、未看工作树,口径与其余各项不一,已撤回。这三个文件现在应当 fail=0,**变红就是真实问题**。与 [turn-based-battle-server.md](turn-based-battle-server.md) §22.7 第 7 步一致:那边的已知会红清单为空。
 - **共用工作树**:proto 全量重生与 robot `go mod vendor` 会把其他会话在途的改动带进同一份 diff,提交时按路径分拣。
 
 ### 明确不做

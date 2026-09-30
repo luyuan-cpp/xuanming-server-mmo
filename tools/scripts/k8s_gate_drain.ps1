@@ -24,10 +24,13 @@
          全部 draining 时会忽略标记照常分配,单副本 zone 标了也挡不住新玩家。
       4. 取 Redis 服务器时间(TIME),一次原子 EVAL:同 zone 其它候选全部在排空 → 什么都不写并拒绝;
          否则 DEL 残留的 drained,再 SET gate:<id>:draining <整数 Unix 秒> NX EX <ttl>。已有标记沿用
-         (不重置期限),但必须带 TTL,值必须是 (0, Redis TIME] 内的整数 Unix 秒,否则拒绝。
+         (不重置期限),但必须带 TTL,值必须是 [Redis TIME - MaxDrainTtlSeconds, Redis TIME] 内的整数 Unix 秒
+         (本脚本写的标记 TTL 不超过 -DrainTtlSeconds 的上限 MaxDrainTtlSeconds;更早的值不是本脚本写的,
+         login 会立刻按 deadline 放行),否则拒绝。
          写完立即复核 Pod UID 与 etcd 里的 node_id/uuid,变了就撤回本次写入的标记并中止。
       5. 有界轮询 gate:<id>:drained(由 login 的排空判定循环写,值 below_threshold | deadline,
-         TTL 跟随 draining 剩余 TTL)。draining 中途消失 = gate 已重新接客,中止且不删 Pod。
+         TTL 跟随 draining 剩余 TTL)。draining 中途消失 = gate 已重新接客,中止且不删 Pod;
+         draining 的值被改写(不再等于第 4 步确认的值)= login 的判定不再对应本次排空,同样中止且不删 Pod。
          每隔几轮复核被排空进程的 etcd 记录还在不在:进程没了(Pod 被替换 / 重启换了 node_id)就撤回
          本次写入的标记(值比对后再删,原子)并中止 —— 不撤回会挡住之后复用该 node_id 的 gate。
          reason=deadline 时打醒目警告:这台 gate 上还有玩家,删 Pod 会让他们断线重连。
@@ -69,6 +72,7 @@ param(
     # gate:<id>:draining 的 TTL(秒)。到期标记自动消失、gate 重新接客 —— 脚本中途挂了也不会让容量永久蒸发。
     # 必须大于 login 的 GateDrain.Deadline(默认 25m = 1500s)并留出观察窗口:期限不早于 TTL 时
     # draining 先过期,drained 永远等不到。入口校验。
+    # 上限 86400 与 Get-GateDrainContract.MaxDrainTtlSeconds 必须相等(属性参数只能写常量,由测试钉住)。
     [ValidateRange(1, 86400)]
     [int]$DrainTtlSeconds = 1800,
 
@@ -137,6 +141,11 @@ function Get-GateDrainContract {
         IdentityRecheckEveryRounds    = 6
         # 退出码:脚本结束时留下了需要人工清理的排空标记。
         ExitCodeLeftoverMarks         = 3
+        # 本脚本写 draining 的 TTL 上限(秒),必须与 -DrainTtlSeconds 的 ValidateRange 上限相等 ——
+        # 属性参数只能写常量,两处由 tools/scripts/tests/k8s_gate_drain.tests.ps1 钉住,不许只改一处。
+        # 用途:还活着的、由本脚本写下的 draining,值一定不早于 Redis TIME - 本值;更早的值(例如手工
+        # SET 成 1)login 会算出巨大的已排空时长、立刻按 deadline 放行,沿用前必须拒绝。
+        MaxDrainTtlSeconds            = 86400
         # 标记脚本(原子)。KEYS[1] = 本台 draining,KEYS[2] = 本台 drained,KEYS[3..] = 同 zone 其它候选的
         # draining;ARGV[1] = 标记秒,ARGV[2] = TTL。其它候选全部在排空(或一台都没有)→ 返回
         # NoUndrainedPeerReply、什么都不写;否则 DEL 残留 drained,再 SET draining NX EX(已存在返回 nil)。
@@ -702,26 +711,33 @@ function Get-GateDrainKeys {
     }
 }
 
-# draining 的值必须是 (0, NotAfterUnix] 内、int64 范围内的整数 Unix 秒。login 用 strconv.ParseInt 读它
-# 并忽略错误:非数字或 "0" 按 0 算,等于「已经等了 50 多年」,下一个判定周期就按 deadline 放行 —— 替人
-# 做了断线决定;溢出 int64 被夹到 MaxInt64、晚于现在的值被当成「刚标记」,期限都不再按实际经过的时间走。
+# draining 的值必须是 [NotBeforeUnix, NotAfterUnix] 内(且为正)、int64 范围内的整数 Unix 秒。login 用
+# strconv.ParseInt 读它并忽略错误:非数字或 "0" 按 0 算,等于「已经等了 50 多年」,下一个判定周期就按
+# deadline 放行 —— 替人做了断线决定;偏小的正整数(例如手工 SET 成 1)同理;溢出 int64 被夹到 MaxInt64、
+# 晚于现在的值被当成「刚标记」,期限都不再按实际经过的时间走。下界由调用方按 TTL 上限给出
+# (见 Get-GateDrainContract.MaxDrainTtlSeconds)。
 function Test-GateDrainMarkValue {
     param(
         [AllowNull()][AllowEmptyString()][string]$Value,
+        [long]$NotBeforeUnix = 0,
         [long]$NotAfterUnix = [long]::MaxValue
     )
     $seconds = [long]0
     if ($Value -notmatch '^\d{1,19}$' -or -not [long]::TryParse($Value, [ref]$seconds)) { return $false }
-    return ($seconds -gt 0 -and $seconds -le $NotAfterUnix)
+    return ($seconds -gt 0 -and $seconds -ge $NotBeforeUnix -and $seconds -le $NotAfterUnix)
 }
 
 # 标记排空。顺序:
 #   1. TIME:取 Redis 服务器时间作标记值 —— login 拿集群内的时钟去比,不受运维机器时钟漂移影响。只读。
 #   2. 一次 EVAL MarkScript(原子):PeerNodeIds(Select-GateDrainPeers 选出的同 zone 其它候选)全部在排空
-#      → 什么都不写,拒绝;否则 DEL 残留的 drained(例如上一轮清标记时,login 恰好在 draining 被删后按 1h
-#      兜底 TTL 补写的那条;draining 已存在时 login 下一个判定周期按现状重写),再 SET draining NX EX。
+#      → 什么都不写,拒绝;否则 DEL 残留的 drained,再 SET draining NX EX。残留来源:login 读到 draining 的剩余
+#      TTL 之后、SET drained 之前 draining 被删(清标记 / 运维取消),或只删了 draining,而该 node_id 当时不在
+#      login 快照里、没被顺手清掉 —— 这两种残留的寿命都不超过原 draining(login 拿不到正的剩余 TTL 时不写
+#      drained,不再回落成固定时长,见 gatedrain_monitor.go 同段注释)。draining 已存在时,login 下一个判定
+#      周期按现状重写 drained。
 #   3. 已有标记就沿用、不重置期限;但必须带 TTL(否则脚本中止后这台 gate 永久被排除),值必须是
-#      (0, Redis TIME] 内的整数 Unix 秒(见 Test-GateDrainMarkValue)。
+#      [Redis TIME - MaxDrainTtlSeconds, Redis TIME] 内的整数 Unix 秒(见 Test-GateDrainMarkValue):
+#      本脚本写的标记 TTL 不超过 MaxDrainTtlSeconds,还活着就一定不早于这个下界。
 # 返回 Value = draining 的值;Created = 是否本次写入(只有本次写入的才可由本次运行撤回)。
 function Set-GateDrainingMark {
     param(
@@ -756,8 +772,12 @@ function Set-GateDrainingMark {
     if ($ttl -le 0) {
         throw "已有的 $($keys.Draining) TTL=$ttl(-1 = 永不过期,-2 = 已消失):沿用它,脚本中止后这台 gate 会被永久排除。先人工 DEL $($keys.Draining) $($keys.Drained) 再重跑"
     }
-    if (-not (Test-GateDrainMarkValue ([string]$existing) -NotAfterUnix ([long]$now))) {
-        throw "已有的 $($keys.Draining)='$existing' 不是 (0, Redis TIME=$now] 内的整数 Unix 秒:login 按它算出的排空时长不可信(0 / 非数字会立刻按 deadline 放行)。先人工 DEL $($keys.Draining) $($keys.Drained) 再重跑"
+    $notBefore = [long]$now - [long]$contract.MaxDrainTtlSeconds
+    if (-not (Test-GateDrainMarkValue ([string]$existing) -NotBeforeUnix $notBefore -NotAfterUnix ([long]$now))) {
+        throw ("已有的 $($keys.Draining)='$existing' 不是 (0, Redis TIME=$now] 内、且不早于 TIME-$($contract.MaxDrainTtlSeconds)=$notBefore 的整数 Unix 秒:" +
+            "login 按它算出的排空时长不可信 —— 0 / 非数字,以及早于 TIME-$($contract.MaxDrainTtlSeconds) 的值(例如手工 SET 成 1)," +
+            "login 会立刻按 deadline 放行,带 -DeletePod 时就是直接断线。本脚本写的标记 TTL 不超过 $($contract.MaxDrainTtlSeconds)s," +
+            "这样的值不是本脚本写的,不沿用。先人工 DEL $($keys.Draining) $($keys.Drained) 再重跑")
     }
     Write-Warning "已有排空标记 $($keys.Draining)=$existing(已过 $([long]$now - [long]$existing)s,剩余 TTL ${ttl}s),沿用,不重置期限"
     return [pscustomobject]@{ MarkedAt = [long]$existing; Value = [string]$existing; Created = $false }
@@ -781,7 +801,10 @@ function Remove-OwnGateDrainMark {
 
 # 有界轮询 drained。每轮一次 MGET 同时看 draining 与 drained:
 #   draining 消失 → gate 已重新接客(被取消 / TTL 到期),throw,绝不删 Pod;
-#   draining 不是整数秒 → throw(见 Test-GateDrainMarkValue);
+#   draining 的值 ≠ MarkValue(Set-GateDrainingMark 写入或校验后沿用的值)→ 被改写过,login 的期限已不按本次
+#   排空计算(例如被手工 SET 成 1 会立刻按 deadline 放行),throw,绝不删 Pod。按值比对与 ReleaseScript 同一口径,
+#   比每轮重复做区间检查更严:MarkValue 本身已校验过,相等即合法。别人 SET 成恰好相同的值无法区分,但那时
+#   login 算出的期限也与本次相同;
 #   drained ∈ {below_threshold, deadline} → 返回;其它值 → throw;
 #   查询失败 / 回复无法识别 → 只告警计数、继续等,绝不当成 drained。
 # drained 的 TTL 跟随 draining 剩余 TTL,默认只剩约 5 分钟窗口;PollIntervalSeconds 必须明显短于它,
@@ -795,6 +818,8 @@ function Wait-GateDrained {
         [Parameter(Mandatory = $true)]$Login,
         [Parameter(Mandatory = $true)][uint32]$NodeId,
         [Parameter(Mandatory = $true)]$Record,
+        # Set-GateDrainingMark 返回的 Value;轮询期间 draining 必须一直等于它。
+        [Parameter(Mandatory = $true)][ValidatePattern('^\d{1,19}$')][string]$MarkValue,
         [Parameter(Mandatory = $true)][ValidateRange(0.001, 2147483)][double]$TimeoutSeconds,
         [Parameter(Mandatory = $true)][ValidateRange(0.001, 3600)][double]$PollIntervalSeconds
     )
@@ -822,8 +847,10 @@ function Wait-GateDrained {
             if ($null -eq $values[0]) {
                 throw "$($keys.Draining) 已不存在(被取消或 TTL 到期):这台 gate 已重新参与分配,中止,不删 Pod"
             }
-            if (-not (Test-GateDrainMarkValue ([string]$values[0]))) {
-                throw "$($keys.Draining)='$($values[0])' 不是整数 Unix 秒,login 的判定不可信,中止,不删 Pod"
+            if ([string]$values[0] -cne $MarkValue) {
+                throw ("$($keys.Draining) 已被改写:当前值 '$($values[0])' ≠ 本次确认的 '$MarkValue'(被人工 SET / 重新标记," +
+                    "或不是整数 Unix 秒),login 的排空期限不再按本次标记计算,判定不可信,中止,不删 Pod。" +
+                    "确认无人在排空这台 gate 后,人工 DEL $($keys.Draining) $($keys.Drained) 再重跑")
             }
             if ($null -ne $values[1]) {
                 if ([string]$values[1] -notin $reasons) { throw "未知的 $($keys.Drained) 值 '$($values[1])',拒绝据此删 Pod" }
@@ -1165,8 +1192,8 @@ function Invoke-GateDrain {
     }
 
     # 5. 等 drained;期间被排空的进程没了就撤回标记并中止。
-    $drained = Wait-GateDrained -Login $login -NodeId $record.NodeId -Record $record -TimeoutSeconds $WaitTimeoutSeconds `
-        -PollIntervalSeconds $contract.PollIntervalSeconds
+    $drained = Wait-GateDrained -Login $login -NodeId $record.NodeId -Record $record -MarkValue $mark.Value `
+        -TimeoutSeconds $WaitTimeoutSeconds -PollIntervalSeconds $contract.PollIntervalSeconds
     if ($drained.IdentityLost) {
         $reason = ("被排空的 gate 进程(node_id={0} uuid={1})已从 etcd 消失:Pod 被替换或进程重启过,标记已不代表这台 gate," +
             "login 也不会再为它写 drained。中止(不删 Pod);确认新进程注册后重新运行本脚本") -f $record.NodeId, $record.Uuid

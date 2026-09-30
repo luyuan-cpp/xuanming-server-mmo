@@ -919,7 +919,8 @@ Test-Case 'sidecar 必须是 initContainers 里的原生 sidecar(restartPolicy: 
         # 1.28~1.33 会报 containers[N].restartPolicy: Forbidden,整份清单 apply 不上去。
         Assert-Equal -Expected 1 -Actual ([regex]::Matches($block, '- name: log-sidecar').Count) -Because 'sidecar 容器片段只应出现在 initContainers 一处'
         Assert-Match -Text $block -Pattern 'runAsNonRoot: true' -Because '观测容器没有理由把 root 塞回业务 Pod'
-        Assert-Match -Text $block -Pattern 'mmorpg\.io/cpp-log-sidecar-config-hash: [0-9a-f]{12}' -Because '配置只改 ConfigMap 不会让 Alloy 重读,必须靠 pod 模板注解触发滚动'
+        # 值带引号(全数字哈希不加引号会被 YAML 解析成数字、API server 拒收),两种写法都认。
+        Assert-Match -Text $block -Pattern 'mmorpg\.io/cpp-log-sidecar-config-hash: "?[0-9a-f]{12}"?' -Because '配置只改 ConfigMap 不会让 Alloy 重读,必须靠 pod 模板注解触发滚动'
     }
 }
 

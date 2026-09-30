@@ -78,35 +78,34 @@ bool ParsePort(std::string_view raw, uint32_t &out)
     return true;
 }
 
+// 按字节判断,不走 <cctype>:std::isalnum 受 locale 影响,且对负值 char 是未定义行为。
+bool IsAsciiAlnum(char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
+}
+
 // 主机:只接受 IPv4 字面量或 DNS 名这类"裸主机"。带 scheme("http://")、端口(":30000")、
 // 路径、userinfo、空白或控制字符的一律拒绝 —— 它们会原样下发给客户端,客户端只会连不上,
-// 且服务端没有任何报错。这里不做完整的 DNS 语法校验,只挡住会让地址语义变形的字符。
+// 且服务端没有任何报错。
+// 字符白名单与 tools/scripts/lib/k8s_client_entry.ps1 Test-ClientEntryHostName 同口径
+// (^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$,总长 ≤ 253);它能拦住 kubelet 未展开的 `$(VAR)`
+// 和残留的模板占位符 `{…}`。用白名单而非黑名单:黑名单漏掉的字符会让这些字面量被当成合法地址发布,
+// fail-closed 失效。两边改口径必须同步改。
 bool IsBareHost(std::string_view host)
 {
     if (host.empty() || host.size() > kMaxHostLength)
     {
         return false;
     }
+    if (!IsAsciiAlnum(host.front()) || !IsAsciiAlnum(host.back()))
+    {
+        return false;
+    }
     for (const char c : host)
     {
-        const auto uc = static_cast<unsigned char>(c);
-        if (uc <= 0x20 || uc == 0x7f)
+        if (!IsAsciiAlnum(c) && c != '.' && c != '-')
         {
             return false;
-        }
-        switch (c)
-        {
-        case ':':
-        case '/':
-        case '\\':
-        case '@':
-        case '?':
-        case '#':
-        case '[':
-        case ']':
-            return false;
-        default:
-            break;
         }
     }
     return true;

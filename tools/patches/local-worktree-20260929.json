@@ -29,6 +29,13 @@
       "local_origin": "https://github.com/google/boringssl.git",
       "tracked_worktree_patch": "tools/patches/grpc/v1.83.0-boringssl-windows-x509-name.patch",
       "status": "Tracked source edits are preserved by the referenced patch; build outputs remain local."
+    },
+    {
+      "path": "third_party/grpc/third_party/zlib",
+      "local_revision": "f1f503da85d52e56aae11557b4d79a42bcaa2b86",
+      "local_origin": "https://github.com/madler/zlib",
+      "tracked_worktree_patch": "tools/patches/grpc/zlib-local-zconf-removal-20260929.patch",
+      "status": "保存当前受版本控制的 zconf.h 删除差异，不改变上游子模块指针，不修改本地构建目录。"
     }
   ]
 }

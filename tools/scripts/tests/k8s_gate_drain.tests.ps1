@@ -278,6 +278,18 @@ Test-Case '参数块:必备参数齐全,TTL 与等待预算默认 1800' {
     Assert-Equal -Expected 1800 -Actual $params['WaitTimeoutSeconds'].DefaultValue.Value -Because '等待预算默认 1800s'
 }
 
+Test-Case 'TTL 上限:-DrainTtlSeconds 的 ValidateRange 上限与 Get-GateDrainContract.MaxDrainTtlSeconds 相等' {
+    Reset-DrainFixture
+    $param = @($script:DrainAst.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'DrainTtlSeconds' })
+    Assert-Equal -Expected 1 -Actual $param.Count -Because '缺少参数 -DrainTtlSeconds'
+    $range = @($param[0].Attributes | Where-Object { $_ -is [Management.Automation.Language.AttributeAst] -and $_.TypeName.Name -eq 'ValidateRange' })
+    Assert-True -Condition ($range.Count -eq 1 -and $range[0].PositionalArguments.Count -eq 2) -Because '-DrainTtlSeconds 必须有 ValidateRange(min, max)'
+    $max = [long]$range[0].PositionalArguments[1].SafeGetValue()
+    # 属性参数只能写常量,两处各写一份。只调大 ValidateRange:本脚本写的长 TTL 标记活过 MaxDrainTtlSeconds 后
+    # 被下界 TIME - MaxDrainTtlSeconds 误拒;只调小 ValidateRange:下界比实际可能的更宽,放过不是本脚本写的陈旧值。
+    Assert-Equal -Expected $max -Actual ([long](Get-GateDrainContract).MaxDrainTtlSeconds) -Because 'MaxDrainTtlSeconds 必须等于 -DrainTtlSeconds 的 ValidateRange 上限'
+}
+
 Test-Case '脚本入口:只检查 kubectl 后调用 Invoke-GateDrain,以其返回值作退出码' {
     $statements = @($script:DrainAst.EndBlock.Statements | Where-Object { $_ -isnot [Management.Automation.Language.FunctionDefinitionAst] })
     Assert-Equal -Expected 6 -Actual $statements.Count -Because '函数之外只有 $ErrorActionPreference、$ScriptDir、dot-source 与入口三条,主流程不得漏在入口里(测不到)'
@@ -621,6 +633,37 @@ Test-Case '已有合法标记:沿用、不重置期限;无 TTL、0、晚于现�
     Assert-True -Condition (Test-GateDrainMarkValue '9223372036854775807') -Because 'int64 上限本身合法(无上限参数时)'
 }
 
+Test-Case '已有标记早于 TIME - MaxDrainTtlSeconds(例如手工 SET 成 1):拒绝并给出 DEL 指引;下界本身仍沿用' {
+    Reset-DrainFixture
+    $context = Get-FixtureContext
+    $c = Get-GateDrainContract
+    $lower = [long]$script:RedisNow - [long]$c.MaxDrainTtlSeconds   # 1790000000 - 86400 = 1789913600
+    # 这些值 login 会算出巨大的已排空时长、立刻按 deadline 放行;沿用它们,带 -DeletePod 就是直接断线。
+    foreach ($value in @('1', [string]($lower - 1))) {
+        $script:Redis['gate:3:draining'] = $value
+        $script:RedisTtl['gate:3:draining'] = '3000'
+        # login 按这个 draining 已写下的判定。钉住现状:MarkScript 在 SET NX 之前先 DEL drained,所以已有标记
+        # 被判不可信而拒绝时,drained 已经被删 —— 这是拒绝之前唯一的一次写(见 Set-GateDrainingMark 注释第 2 步);
+        # draining 仍在,login 下一个判定周期会按它重写 drained。脚本属主若把已有标记的校验挪到 DEL drained
+        # 之前,这里改为断言 drained 被保留。
+        $script:Redis['gate:3:drained'] = 'deadline'
+        $script:RedisLog.Clear()
+        $failure = Get-ThrownMessage { Set-GateDrainingMark -Login $context.Login -NodeId 3 -PeerNodeIds @(4) -TtlSeconds 1800 }
+        Assert-Match -Text $failure -Pattern "gate:3:draining='$value' 不是 .*不早于 TIME-$($c.MaxDrainTtlSeconds)=$lower 的整数 Unix 秒" -Because "已有标记 '$value' 早于下界,不能沿用"
+        Assert-Match -Text $failure -Pattern '先人工 DEL gate:3:draining gate:3:drained 再重跑' -Because '拒绝要给出人工 DEL 指引'
+        Assert-Equal -Expected $value -Actual $script:Redis['gate:3:draining'] -Because '拒绝时不改动已有标记'
+        Assert-Equal -Expected '3000' -Actual $script:RedisTtl['gate:3:draining'] -Because '拒绝时不重置 TTL'
+        Assert-True -Condition (-not $script:Redis.ContainsKey('gate:3:drained')) -Because '现状:MarkScript 在拒绝之前已 DEL drained(待脚本属主决定是否前移校验)'
+        Assert-True -Condition (@($script:RedisLog | Where-Object { $_ -like 'DEL *' -or $_ -like 'EVAL release *' }).Count -eq 0) -Because '拒绝时不另发 DEL / 撤回命令(MarkScript 内对 drained 的 DEL 见上一条)'
+    }
+    $script:Redis['gate:3:draining'] = [string]$lower
+    $script:RedisTtl['gate:3:draining'] = '1'
+    $mark = Set-GateDrainingMark -Login $context.Login -NodeId 3 -PeerNodeIds @(4) -TtlSeconds 1800 -WarningAction SilentlyContinue
+    Assert-True -Condition (-not $mark.Created -and $mark.MarkedAt -eq $lower -and $mark.Value -eq [string]$lower) -Because '恰好等于下界(闭区间):可能是本脚本以最大 TTL 写下、还没过期的标记,沿用'
+    Assert-True -Condition (-not (Test-GateDrainMarkValue '1' -NotBeforeUnix $lower)) -Because '低于下界的正整数不可信'
+    Assert-True -Condition (Test-GateDrainMarkValue ([string]$lower) -NotBeforeUnix $lower) -Because '下界本身合法'
+}
+
 Test-Case '轮询:drained 出现即返回判定理由;两个理由都认' {
     foreach ($reason in @('below_threshold', 'deadline')) {
         Reset-DrainFixture
@@ -629,7 +672,7 @@ Test-Case '轮询:drained 出现即返回判定理由;两个理由都认' {
         $script:ReasonToWrite = $reason
         # 模拟 login 的判定循环:第 3 次查询前才写上 drained。
         $script:OnMget = { if ($script:MgetCount -ge 3) { $script:Redis['gate:3:drained'] = $script:ReasonToWrite } }
-        $result = Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -TimeoutSeconds 30 -PollIntervalSeconds 0.01
+        $result = Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -MarkValue '1790000000' -TimeoutSeconds 30 -PollIntervalSeconds 0.01
         Assert-Equal -Expected $reason -Actual $result.Reason -Because '返回 login 写的判定理由'
         Assert-True -Condition (-not $result.IdentityLost) -Because '正常排空不是身份丢失'
         Assert-Equal -Expected 3 -Actual $script:MgetCount -Because '一出现就返回,不多等'
@@ -637,10 +680,12 @@ Test-Case '轮询:drained 出现即返回判定理由;两个理由都认' {
     }
 }
 
-Test-Case '轮询:draining 消失、值非法、drained 值未知都中止,不当成已排空' {
+Test-Case '轮询:draining 消失、被改写(含非整数)、drained 值未知都中止,不当成已排空' {
+    # 每个用例预置 draining='1790000000' 并以它作 MarkValue(Set-GateDrainingMark 确认的值);Setup 再改动现场。
     $cases = @(
         @{ Setup = { $script:Redis.Remove('gate:3:draining') }; Pattern = '已不存在' },
-        @{ Setup = { $script:Redis['gate:3:draining'] = 'abc' }; Pattern = '不是整数 Unix 秒' },
+        @{ Setup = { $script:Redis['gate:3:draining'] = 'abc' }; Pattern = "已被改写:当前值 'abc'.*不删 Pod" },
+        @{ Setup = { $script:Redis['gate:3:draining'] = '1790000500' }; Pattern = "已被改写:当前值 '1790000500'.*不删 Pod" },
         @{ Setup = { $script:Redis['gate:3:drained'] = 'maybe' }; Pattern = "未知的 gate:3:drained 值 'maybe'" }
     )
     foreach ($case in $cases) {
@@ -648,9 +693,23 @@ Test-Case '轮询:draining 消失、值非法、drained 值未知都中止,不�
         $context = Get-FixtureContext
         $script:Redis['gate:3:draining'] = '1790000000'
         & $case.Setup
-        $failure = Get-ThrownMessage { Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -TimeoutSeconds 30 -PollIntervalSeconds 0.01 }
+        $failure = Get-ThrownMessage { Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -MarkValue '1790000000' -TimeoutSeconds 30 -PollIntervalSeconds 0.01 }
         Assert-Match -Text $failure -Pattern $case.Pattern -Because "必须中止:$($case.Pattern)"
     }
+}
+
+Test-Case '轮询:等待中 draining 被改写(例如手工 SET 成 1,login 随即写 deadline)即中止,不把这个 deadline 当成排空完成' {
+    Reset-DrainFixture
+    $context = Get-FixtureContext
+    $script:Redis['gate:3:draining'] = '1790000000'
+    # 第 2 次查询前被人工 SET 成 1:login 按它算出「已排空 50 多年」,同一判定周期就写下 drained=deadline。
+    $script:OnMget = { if ($script:MgetCount -ge 2) { $script:Redis['gate:3:draining'] = '1'; $script:Redis['gate:3:drained'] = 'deadline' } }
+    $failure = Get-ThrownMessage { Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -MarkValue '1790000000' -TimeoutSeconds 30 -PollIntervalSeconds 0.01 }
+    Assert-Match -Text $failure -Pattern "已被改写:当前值 '1'.*本次确认的 '1790000000'.*不删 Pod" -Because 'draining 已不是本次确认的值,login 据它写的 deadline 不可信'
+    Assert-Match -Text $failure -Pattern '人工 DEL gate:3:draining gate:3:drained' -Because '中止要给出处理方法'
+    Assert-Equal -Expected 2 -Actual $script:MgetCount -Because '被改写的那一轮立即中止,不再等'
+    Assert-True -Condition (@($script:RedisLog | Where-Object { $_ -notlike 'MGET *' }).Count -eq 0) -Because '中止时不写 Redis'
+    Assert-Equal -Expected '1' -Actual $script:Redis['gate:3:draining'] -Because '被改写的标记不归本次运行处理'
 }
 
 Test-Case '轮询:每隔几轮复核进程仍在 etcd;进程没了返回 IdentityLost,查询失败继续等' {
@@ -663,7 +722,7 @@ Test-Case '轮询:每隔几轮复核进程仍在 etcd;进程没了返回 Identit
     $script:EtcdResponses.Clear()
     $script:EtcdResponses.Enqueue('not json')
     $script:EtcdResponses.Enqueue((ConvertTo-EtcdJson @((New-EtcdGate -NodeId 3 -Ip '10.0.0.21' -Uuid 'uuid-c'))))
-    $result = Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -TimeoutSeconds 30 -PollIntervalSeconds 0.01
+    $result = Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -MarkValue '1790000000' -TimeoutSeconds 30 -PollIntervalSeconds 0.01
     Assert-True -Condition $result.IdentityLost -Because '按 uuid 认进程:同 node_id 的新进程不是被排空的那一个'
     Assert-Equal -Expected (2 * $c.IdentityRecheckEveryRounds) -Actual $script:MgetCount -Because '每 IdentityRecheckEveryRounds 轮复核一次,查询失败不中止'
     Assert-Equal -Expected 2 -Actual @($script:Events | Where-Object { $_ -eq 'etcd:get' }).Count -Because '复核有节制,不是每轮都查 etcd'
@@ -676,7 +735,7 @@ Test-Case '轮询:查询失败只计数继续等;预算耗尽后报超时且不�
     $script:Redis['gate:3:draining'] = '1790000000'
     $script:Redis['gate:3:drained'] = 'below_threshold'
     $script:RedisFailures = 2
-    $result = Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -TimeoutSeconds 30 -PollIntervalSeconds 0.01 -WarningAction SilentlyContinue
+    $result = Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -MarkValue '1790000000' -TimeoutSeconds 30 -PollIntervalSeconds 0.01 -WarningAction SilentlyContinue
     Assert-Equal -Expected 'below_threshold' -Actual $result.Reason -Because '两次失败后第三次查到'
     Assert-Equal -Expected 1 -Actual $script:MgetCount -Because '失败的两次没有到达 Redis'
 
@@ -684,7 +743,7 @@ Test-Case '轮询:查询失败只计数继续等;预算耗尽后报超时且不�
     $context = Get-FixtureContext
     $script:Calls.Clear()
     $script:Redis['gate:3:draining'] = '1790000000'
-    $failure = Get-ThrownMessage { Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -TimeoutSeconds 0.05 -PollIntervalSeconds 0.01 }
+    $failure = Get-ThrownMessage { Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -MarkValue '1790000000' -TimeoutSeconds 0.05 -PollIntervalSeconds 0.01 }
     Assert-Match -Text $failure -Pattern '超过 0.05s 仍未出现.*DEL gate:3:draining gate:3:drained' -Because '超时要给出取消方法'
     Assert-True -Condition (@($script:Events | Where-Object { $_ -like 'delete:*' -or $_ -eq 'redis:DEL' }).Count -eq 0) -Because '超时不删 Pod、不动标记'
     Assert-True -Condition (@($script:Calls | Where-Object { $_.TimeoutSeconds -gt 0.05 -or $_.TimeoutSeconds -le 0 }).Count -eq 0) -Because '每次查询只分到剩余预算'
@@ -993,6 +1052,43 @@ Test-Case '主流程:等 drained 期间进程没了,撤回标记并中止(不空
     Assert-True -Condition (-not $script:Redis.ContainsKey('gate:3:draining')) -Because '撤回本次标记,免得挡住之后复用 node_id 3 的 gate'
     Assert-Equal -Expected (Get-GateDrainContract).IdentityRecheckEveryRounds -Actual $script:MgetCount -Because '第一次复核就发现'
     Assert-Equal -Expected 0 -Actual (Get-DeleteEvents).Count -Because '不删 Pod'
+}
+
+Test-Case '主流程 -DeletePod:已有 draining 被手工 SET 成 1,在等待与删 Pod 之前拒绝' {
+    Reset-DrainFixture
+    Set-FullFlowScenario
+    $script:Redis['gate:3:draining'] = '1'
+    $script:RedisTtl['gate:3:draining'] = '3000'
+    $script:OnMget = { $script:Redis['gate:3:drained'] = 'deadline' }   # login 按 1 算出的判定:立刻 deadline
+    $failure = Get-ThrownMessage { Invoke-DrainForTest -DeletePod }
+    Assert-Match -Text $failure -Pattern "gate:3:draining='1' 不是 .*不早于 TIME-86400=1789913600.*先人工 DEL gate:3:draining gate:3:drained" -Because '过小的已有标记不沿用,并给出人工 DEL 指引'
+    Assert-Equal -Expected 0 -Actual $script:MgetCount -Because '不进入等待,读不到 login 按 1 写下的 deadline'
+    Assert-Equal -Expected 0 -Actual (Get-DeleteEvents).Count -Because '不删 Pod:在线玩家不能因手工改坏的标记断线'
+    Assert-Equal -Expected '1' -Actual $script:Redis['gate:3:draining'] -Because '不改动已有标记'
+}
+
+Test-Case '主流程 -DeletePod:等 drained 期间 draining 被改写成 1、login 随即写 deadline,中止且不删 Pod' {
+    Reset-DrainFixture
+    Set-FullFlowScenario
+    # 本次写入 1790000000;第 2 次查询前被人工 SET 成 1,login 同一周期写下 drained=deadline。
+    $script:OnMget = { if ($script:MgetCount -ge 2) { $script:Redis['gate:3:draining'] = '1'; $script:Redis['gate:3:drained'] = 'deadline' } }
+    $failure = Get-ThrownMessage { Invoke-DrainForTest -DeletePod }
+    Assert-Match -Text $failure -Pattern "已被改写:当前值 '1'.*本次确认的 '1790000000'.*不删 Pod" -Because '被改写后的 deadline 判定不可信'
+    Assert-Equal -Expected 2 -Actual $script:MgetCount -Because '被改写的那一轮立即中止'
+    Assert-Equal -Expected 0 -Actual (Get-DeleteEvents).Count -Because '不删 Pod'
+    Assert-True -Condition (-not ($script:Events -contains 'redis:DEL')) -Because '不清标记'
+    Assert-Equal -Expected '1' -Actual $script:Redis['gate:3:draining'] -Because '被改写的标记不归本次运行处理'
+}
+
+Test-Case '主流程 -DeletePod:沿用已有合法标记时按沿用值轮询,正常完成' {
+    Reset-DrainFixture
+    Set-FullFlowScenario
+    $script:Redis['gate:3:draining'] = '1789999000'
+    $script:RedisTtl['gate:3:draining'] = '800'
+    $code = Invoke-DrainForTest -DeletePod
+    Assert-Equal -Expected 0 -Actual $code -Because 'Wait-GateDrained 拿到的 MarkValue 必须是沿用的 1789999000,不是本次 Redis TIME'
+    Assert-Equal -Expected 1 -Actual (Get-DeleteEvents).Count -Because 'drained 出现后照常删 Pod'
+    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:3:draining')) -Because '删 Pod 后照常清标记'
 }
 
 Test-Case '主流程:删 Pod 后标记没清,先报残留指引;新 Pod 就绪超时也返回 3' {

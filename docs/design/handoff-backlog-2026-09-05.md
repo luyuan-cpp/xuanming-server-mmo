@@ -85,7 +85,7 @@
 |---|---|---|---|
 | D-01 | `go/db` 对宿主仓库外 `proto2mysql` 的 `replace` 归宿 | **A** 删 replace 用远端 tag(需先处理 `E:/work/proto2mysql` 未提交 diff,建议同时把 module 名迁 `luyuan-cpp`);三处同源、Dockerfile 占位 stage 可删;代价:改库要走 tag/bump。**B** `go mod vendor`;离线可构建;代价:仓库体积、与 robot vendor 口径统一。**C** 保持 replace,CI 加第二仓库 checkout;每个消费方都要记得。 | P1-D1 |
 | D-02 | TiDB 迁移 Phase 1 是否继续 | **A** 近期不迁,K8s 生产基线 = MySQL;决策文档 §5/§6 标 deferred,`cmd/migrate` 阻断直接删;代价:16MB 存档/全区全服口径问题继续悬置。**B** 继续:K8s TiDB 清单 + 权限策略 + Dumpling/Lightning + §5 四项验收 + BR/PITR runbook(D8 硬前置);多天工作,本机 kind 资源紧。 | P1-D2 |
-| D-03 | MatchRedis 淘汰策略与本地默认形态 | 策略:**A** 改 `noeviction`(+内存告警),满时报错不丢票据;**B** 保持 `volatile-lru`,改文档,满时静默丢带 TTL 票据。本地:**默认回落共享库**(注掉 yaml MatchRedis 段)vs **默认集群**(dev 脚本自动起 `--profile redis-cluster`)。 | P2-D1 |
+| D-03 | MatchRedis 淘汰策略与本地默认形态 | 策略:**A** 改 `noeviction`(+内存告警),满时报错不丢票据;**B** 保持 `volatile-lru`,改文档,满时静默丢带 TTL 票据。**(2026-09-30 补充,turn-based D66 之后)** gate 不再中继战斗,`spectate:battle:{id}` 成了断线补签的唯一路由来源(fail-closed),且该集群与 ChatRedis 共用:选 **B** 还意味着内存满时静默丢观战索引,进行中的战斗无法补签、客户端判 BattleGone;选 **A** 的前置条件是先把 ChatRedis 移到独立实例,或按 chat 7 天历史的量级重定 maxmemory,否则 chat 写满时 match 的 JoinQueue / gather 全部 fail-closed。两种选择都要配 `redis_memory_used_bytes / redis_memory_max_bytes > 0.8` 告警(见 P2-D1)。本地:**默认回落共享库**(注掉 yaml MatchRedis 段)vs **默认集群**(dev 脚本自动起 `--profile redis-cluster`)。 | P2-D1 |
 | D-04 | 怪物 AI 与数值平衡三项 | ① 减伤改乘法 vs 加法+最低伤害比例下限;② 怪物是否配技能列 + AI 选招规则;③ Skill.damage 表达式按等级重定。策划项,改表触发配表指纹变更。 | P2-D2 |
 | D-05 | 技能等级门槛要不要做 | **A** 不做,删两处 TODO,文档写明解锁靠 Class.skill;**B** Skill 表加 `required_level`,引擎/实时同口径校验 + 新 tip 码。 | P2-D3 |
 | D-06 | 死亡/复活完整流程 | 复活时机(结算即复活 vs 回城复活点)、惩罚(经验/耐久/金币)、原地复活道具是否存在。依赖经验系统与背包;产品未定前不要动现有基线。 | P2-D4 |
@@ -1753,6 +1753,13 @@ pwsh -File <tools>/run_showcase.ps1 -SkipBuild -Width 2340 -Height 1080 -ShotDir
 
 **背景与证据**(剩余部分):① `go/match/internal/svc/servicecontext.go:154-158` NewRedisHandles 在 MatchRedis.Host 为空时静默回落共享句柄,无 RatingEnabled 联动校验;`config.go:21` MatchRedis `json:",optional"`、`:93` RatingEnabled 默认 true——少配一行,评分静默写进 allkeys-lfu 的共享库(`deploy/docker-compose.yml:121`),分丢了无日志;② `redis-match-cluster.yaml:25-28` `maxmemory 512mb / maxmemory-policy volatile-lru`,注释「match 的 key 都是短 TTL」——评分 `match:rating:*` 无 TTL,volatile-lru 不淘汰它们,但满时会静默淘汰带 TTL 的票据/挑战/观战索引(票据被淘汰等价于玩家被踢出队列且无日志),与 §11.9 字面 noeviction 不一致,512mb 未按玩家数估算;③ `deploy/docker-compose.yml:127-152` redis-cluster 为 `profiles: ["redis-cluster"]` 默认不起,开发者不起 profile 时 match 起不来,`tools/scripts` 无 redis-cluster 引用;compose 节点(:159、:173)未配 maxmemory → 默认 noeviction。
 
+**2026-09-30 补充:D66 之后的新后果**(依据 [turn-based-battle-server.md](./turn-based-battle-server.md) §22.5 第 4 条,评审 e2e-4):
+- **补签硬依赖观战索引**:turn-based D66 之后 gate 两种模式都不中继战斗;集群外入口 2b 第 9 条之后,`spectate:battle:{id}` 在建房前写入(fail-closed),成了断线补签 `RequestBattleTicket` 的唯一路由来源。这条记录带 TTL,选 B(保持 `volatile-lru`)意味着内存满时它会被静默淘汰:补签回 `kInvalidParameter`,客户端把进行中的战斗判为 BattleGone,没有任何报错,只能从 `match_request_battle_ticket_total{outcome="not_found"}` 的异常升高看出来。
+- **ChatRedis 共用同一集群**:K8s 档 chat 的 `ChatRedis` 复用 redis-match-cluster(`k8s_deploy.ps1` chat ConfigMap 的 `ChatRedis` 段注释已写明)。chat 的历史 LIST、幂等、限速 key 都带 TTL,和 match 的票据、观战索引争同一个 512mb。
+- **选 A(`noeviction`)的前置条件**:先把 ChatRedis 移到独立实例,或按 chat 7 天 / 200 条历史窗口的量级重定 maxmemory。否则 chat 写满时写命令全部报 OOM,match 的 JoinQueue 与 gather(建房前写观战索引)全部 fail-closed,整个匹配停摆。
+- **两种选择都要配内存告警**:`redis_memory_used_bytes / redis_memory_max_bytes > 0.8`。当前部署清单里没有 redis_exporter,要先给 redis-match-cluster 补抓取,告警才有数据。
+- 拍板前不单独改 `redis-match-cluster.yaml` 的淘汰策略;yaml 第 25-26 行注释里「补签路径对 spectate:* 是硬依赖」一句,等拍板后与淘汰策略一起改。
+
 **要改的文件**
 - `go/match/internal/svc/servicecontext.go`、`servicecontext_test.go`、`go/match/internal/config/config.go`、`go/match/etc/match_service.yaml`
 - `deploy/k8s/manifests/infra/redis-match-cluster.yaml`(25-28)、`deploy/k8s/scene-manager-alerts.yaml`(参考格式)
@@ -1763,7 +1770,7 @@ pwsh -File <tools>/run_showcase.ps1 -SkipBuild -Width 2340 -Height 1080 -ShotDir
 1. 代码门禁(不依赖拍板):config.go 加 `RequireMatchRedis bool json:",default=false"`;servicecontext.go NewRedisHandles 之后新增 `validateRatingStorage(c)`:`if c.RatingEnabled && c.MatchRedis.Host == "" { if c.RequireMatchRedis || c.Mode == "pro" { return error/log.Fatal } else { logx.Errorf("[match] RatingEnabled 但 MatchRedis 缺省:评分落共享库,allkeys-* 淘汰会把评分回落 1500;生产必须配独立 MatchRedis(设计文档 §11.9)") } }`。可选:启动时对 MatchRedis 每个主节点 `CONFIG GET maxmemory-policy`,非 noeviction/volatile-* 时 WARN(托管 Redis 常禁 CONFIG,失败只 WARN)。
 2. servicecontext_test.go 加 3 例:RatingEnabled+缺省+Require=true → 错误;=false → 仅告警;配置齐全 → 通过。
 3. k8s_deploy.ps1 match ConfigMap(:1384-1420)写 `RequireMatchRedis: true`;契约测试加 go-svc-match-config 的 MatchRedis.Host 含 redis-match-cluster 且 Type==cluster、RequireMatchRedis==true。
-4. 拍板淘汰策略。A:`redis-match-cluster.yaml:28` 改 `noeviction`,注释改写(「排队/票据短 TTL + 评分无 TTL」),按 DAU 估算 maxmemory(评分 hash 约 200B/玩家,100 万 ≈ 200MB,建议 1gb 加注释公式),加 Prometheus `redis_memory_used_bytes / redis_memory_max_bytes > 0.8` 告警;B:文档 §4.1/§11.9 改「volatile-lru,评分 key 无 TTL 不受影响;票据可能在满时被淘汰,以 match_queue_depth 与 ErrAlreadyQueued 比例观察」。改 redis.conf ConfigMap 后要 rollout restart StatefulSet。
+4. 拍板淘汰策略(先读上方「2026-09-30 补充」:选 A 须先拆 ChatRedis 或重定 maxmemory,两种选择都要配告警)。A:`redis-match-cluster.yaml:28` 改 `noeviction`,注释改写(「排队/票据短 TTL + 评分无 TTL」),按 DAU 估算 maxmemory(评分 hash 约 200B/玩家,100 万 ≈ 200MB,建议 1gb 加注释公式),加 Prometheus `redis_memory_used_bytes / redis_memory_max_bytes > 0.8` 告警;B:文档 §4.1/§11.9 改「volatile-lru,评分 key 无 TTL 不受影响;票据可能在满时被淘汰,以 match_queue_depth 与 ErrAlreadyQueued 比例观察」。改 redis.conf ConfigMap 后要 rollout restart StatefulSet。
 5. 拍板本地默认形态。「默认回落」:match_service.yaml:23-25 注释掉 MatchRedis 块并给出开 cluster 两步;「默认集群」:dev.bat/go_services.ps1 起 match 前 `docker compose -f deploy/docker-compose.yml --profile redis-cluster up -d` 并等 7000 端口。
 6. `match_service.yaml:86-90` 注释同步 RequireMatchRedis;文档与 README 同步。
 

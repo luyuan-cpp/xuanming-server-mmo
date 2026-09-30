@@ -95,6 +95,13 @@ func (l *RequestBattleTicketLogic) RequestBattleTicket(in *battlepb.RequestBattl
 		}, nil
 	}
 
+	// 节点未注册 / 身份歧义一律按 kServiceUnavailable(可重试)回,不判 BattleGone:
+	// "节点缺席"不是"房间已死"的正面证据(etcd 抖动、滚动重启窗口里战斗可能仍活着),
+	// 按缺席推断会误作废活着的战斗。已知缺口(turn-based §22 后续项):battle 停机 / 崩溃后
+	// 本分支会持续回 no_node,客户端判 Unreachable,直到观战索引 TTL 过期才拿到 BattleGone。
+	// 收敛途径是 battle 优雅停机推作废帧 + scene reaper 到期推作废终局;若要 match 侧提前判死,
+	// 只能凭正面证据——记录里写入建房时的实例 uuid,与当前同 node_id 注册实例的 NodeUuid 不等
+	// 才判 BattleGone(需给 SpectateBattleRecord 加字段并按 AGENTS §4 重生)。
 	endpoint, err := l.svcCtx.BattleNodes.EndpointOfNode(record.GetBattleNodeId())
 	if err != nil {
 		l.Errorf("[ticket] RequestBattleTicket 定位 battle 节点失败 player=%d battle=%d node=%d: %v",

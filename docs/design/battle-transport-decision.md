@@ -174,7 +174,7 @@ gate 的出站白名单已含 BattleNodeService(`gate/main.cpp:198`),每个 gate
     - 进匹配凑单时也会清退观战(`go/match/internal/logic/gather.go:233`)。
     - `RemoveObserver` 失败只记日志,旧场的观众身份和它的直连会一直留到该场结束。
   - 重连替换或换场观战的瞬间,旧连接可能还没关完,会短暂重叠。
-- **跨 zone 传送是替换 gate 连接**:收到 `RedirectToGateNotify`(msg 124)后,先探测新 gate 可达并发起新连接,再关旧 gate(`robot/pkg/redirect.go` → `GameClient.SwapConn`,`robot/pkg/client.go:118`)。muduo 拨号是异步的,关旧连接时新 TCP 不保证已经建好。连接数不增加。服务端与 robot 不会因换 gate 断开 battle 直连;但 Unity 大厅断线仍会拆直连(D74,本批不改,turn-based `:808`、§22 风险第 10 条 `:1007`),跨 zone 换 gate 时 Unity 是否按大厅断线处理,本仓没核。
+- **跨 zone 传送是替换 gate 连接**:收到 `RedirectToGateNotify`(msg 124)后,先探测新 gate 可达并发起新连接,再关旧 gate(`robot/pkg/redirect.go` → `GameClient.SwapConn`,`robot/pkg/client.go:118`)。muduo 拨号是异步的,关旧连接时新 TCP 不保证已经建好。连接数不增加。服务端与 robot 不会因换 gate 断开 battle 直连;但 Unity 大厅断线仍会拆直连(D74,本批不改,见 turn-based §22.2 D74、§22.5 风险第 10 条),跨 zone 换 gate 时 Unity 是否按大厅断线处理,本仓没核。
 - **K8s 上连不连得上,取决于入口形态**(D80):
   - 默认 `-ClientEntryMode podip`:gate 和 battle 都通告 POD_IP,只有集群内的 robot 连得上。
   - 集群外客户端必须用 `-ClientEntryMode external`,见 §4 的现行口径。

@@ -129,6 +129,24 @@ namespace
         return haystack.find(needle) != std::string::npos;
     }
 
+    // 裸主机白名单之外、但旧黑名单(只拦 scheme / 端口 / 路径 / userinfo / 空白)会放行的主机值。
+    // 白名单口径:首尾 ASCII 字母数字、中间只许 [A-Za-z0-9.-]、总长 ≤ 253,
+    // 与 tools/scripts/lib/k8s_client_entry.ps1 Test-ClientEntryHostName 同口径。
+    // 任何一条被放行,都会作为 client_endpoint 原样下发:客户端连不上,服务端零报错。
+    constexpr const char *kHostsOutsideWhitelist[] = {
+        "$(HOST_IP)",                 // kubelet 未展开的 env 引用
+        "gate-{ordinal}.example.com", // 残留的模板占位符
+        "host_name",                  // 下划线不是主机名字符
+        "a%b",                        // 百分号(URL 编码残留)
+        "-gate.example.com",          // 首字符不是字母数字
+        "gate.example.com.",          // 尾字符不是字母数字(FQDN 尾点同样拒绝)
+    };
+
+    // 本文件原有用例里作为合法输入出现过的主机名;白名单收紧后必须仍然合法。
+    constexpr const char *kHostsInsideWhitelist[] = {
+        "127.0.0.1", "203.0.113.7", "172.18.0.2", "gate-1.z1.example.com", "gate-0.example.com",
+    };
+
 } // namespace
 
 // ===========================================================================
@@ -231,6 +249,25 @@ TEST(ClientEndpointParseSettings, AgonesWithHostOverride)
     EXPECT_EQ(outcome.settings.host, "127.0.0.1");
 }
 
+TEST(ClientEndpointParseSettings, WhitelistedHostsAreAcceptedOnBothPaths)
+{
+    // 裸主机校验由黑名单改为白名单后,原有合法主机名在 static 与 agones HOST 覆盖两条路径上都不得被误杀。
+    for (const std::string host : kHostsInsideWhitelist)
+    {
+        FakeEnv staticEnv;
+        staticEnv.Set("CLIENT_ENDPOINT_SOURCE", "static").Set("CLIENT_ENDPOINT_HOST", host).Set("CLIENT_ENDPOINT_PORT", "30000");
+        const auto staticOutcome = Parse(staticEnv);
+        ASSERT_TRUE(staticOutcome.ok) << "static host='" << host << "' error=" << staticOutcome.error;
+        EXPECT_EQ(staticOutcome.settings.host, host);
+
+        FakeEnv agonesEnv;
+        agonesEnv.Set("CLIENT_ENDPOINT_SOURCE", "agones").Set("CLIENT_ENDPOINT_HOST", host);
+        const auto agonesOutcome = Parse(agonesEnv);
+        ASSERT_TRUE(agonesOutcome.ok) << "agones host='" << host << "' error=" << agonesOutcome.error;
+        EXPECT_EQ(agonesOutcome.settings.host, host);
+    }
+}
+
 // ===========================================================================
 // ParseSettings:非法组合(线上 = LOG_FATAL)
 // ===========================================================================
@@ -306,6 +343,31 @@ TEST(ClientEndpointParseSettings, AgonesWithInvalidHostOverrideIsRejected)
     const auto outcome = Parse(env);
     EXPECT_FALSE(outcome.ok);
     EXPECT_TRUE(Contains(outcome.error, "CLIENT_ENDPOINT_HOST")) << outcome.error;
+}
+
+TEST(ClientEndpointParseSettings, StaticHostOutsideWhitelistIsRejected)
+{
+    for (const std::string raw : kHostsOutsideWhitelist)
+    {
+        FakeEnv env;
+        env.Set("CLIENT_ENDPOINT_SOURCE", "static").Set("CLIENT_ENDPOINT_HOST", raw).Set("CLIENT_ENDPOINT_PORT", "30000");
+        const auto outcome = Parse(env);
+        EXPECT_FALSE(outcome.ok) << "static host='" << raw << "' 不应被接受";
+        EXPECT_TRUE(Contains(outcome.error, "CLIENT_ENDPOINT_HOST")) << outcome.error;
+    }
+}
+
+TEST(ClientEndpointParseSettings, AgonesHostOverrideOutsideWhitelistIsRejected)
+{
+    // agones 下不设 PORT,确保判错只可能来自 HOST 覆盖值本身。
+    for (const std::string raw : kHostsOutsideWhitelist)
+    {
+        FakeEnv env;
+        env.Set("CLIENT_ENDPOINT_SOURCE", "agones").Set("CLIENT_ENDPOINT_HOST", raw);
+        const auto outcome = Parse(env);
+        EXPECT_FALSE(outcome.ok) << "agones host override='" << raw << "' 不应被接受";
+        EXPECT_TRUE(Contains(outcome.error, "CLIENT_ENDPOINT_HOST")) << outcome.error;
+    }
 }
 
 TEST(ClientEndpointParseSettings, InvalidRequiredIsRejected)
@@ -501,6 +563,79 @@ TEST(ClientEndpointResolve, AgonesNonBareHostOverrideFailsBeforeFetch)
     EXPECT_FALSE(out.has_value());
     EXPECT_FALSE(error.empty());
     EXPECT_EQ(source->Calls(), 0) << "host 覆盖值非法必须在 Fetch 之前就拒绝";
+}
+
+TEST(ClientEndpointResolve, StaticHostOutsideWhitelistFails)
+{
+    // 手工拼的 Settings 绕过 ParseSettings 时,Resolve 的裸主机复核与 ParseSettings 同一白名单。
+    for (const std::string host : kHostsOutsideWhitelist)
+    {
+        Settings settings;
+        settings.source = SourceKind::kStatic;
+        settings.host = host;
+        settings.port = 30000;
+        std::optional<EndpointComp> out;
+        std::string error;
+        EXPECT_FALSE(client_endpoint::Resolve(settings, nullptr, out, error)) << "static host='" << host << "' 不应被接受";
+        EXPECT_FALSE(out.has_value());
+        EXPECT_FALSE(error.empty());
+    }
+}
+
+TEST(ClientEndpointResolve, AgonesHostOverrideOutsideWhitelistFailsBeforeFetch)
+{
+    for (const std::string host : kHostsOutsideWhitelist)
+    {
+        Settings settings;
+        settings.source = SourceKind::kAgones;
+        settings.host = host;
+        auto source = FakeSource::Succeed("203.0.113.7", 7003);
+        std::optional<EndpointComp> out;
+        std::string error;
+        EXPECT_FALSE(client_endpoint::Resolve(settings, source.get(), out, error))
+            << "agones host override='" << host << "' 不应被接受";
+        EXPECT_FALSE(out.has_value());
+        EXPECT_FALSE(error.empty());
+        EXPECT_EQ(source->Calls(), 0) << "host 覆盖值非法必须在 Fetch 之前就拒绝, host='" << host << "'";
+    }
+}
+
+TEST(ClientEndpointResolve, WhitelistedHostsResolveOnBothPaths)
+{
+    // Agones 下发的地址必须不在 kHostsInsideWhitelist 里:否则某一轮 host 与它相等时,
+    // 「覆盖值生效」和「回落到 Agones 地址」产出同一个 ip,这一轮就证明不了覆盖语义。
+    const std::string agonesAdvertisedHost = "198.51.100.9";
+    for (const std::string host : kHostsInsideWhitelist)
+    {
+        ASSERT_NE(host, agonesAdvertisedHost) << "Agones 下发地址与白名单输入撞值,覆盖断言失去区分力";
+    }
+
+    for (const std::string host : kHostsInsideWhitelist)
+    {
+        Settings staticSettings;
+        staticSettings.source = SourceKind::kStatic;
+        staticSettings.host = host;
+        staticSettings.port = 30000;
+        std::optional<EndpointComp> staticOut;
+        std::string staticError;
+        ASSERT_TRUE(client_endpoint::Resolve(staticSettings, nullptr, staticOut, staticError))
+            << "static host='" << host << "' error=" << staticError;
+        ASSERT_TRUE(staticOut.has_value());
+        EXPECT_EQ(staticOut->ip(), host);
+
+        Settings agonesSettings;
+        agonesSettings.source = SourceKind::kAgones;
+        agonesSettings.host = host;
+        auto source = FakeSource::Succeed(agonesAdvertisedHost, 7005);
+        std::optional<EndpointComp> agonesOut;
+        std::string agonesError;
+        ASSERT_TRUE(client_endpoint::Resolve(agonesSettings, source.get(), agonesOut, agonesError))
+            << "agones host override='" << host << "' error=" << agonesError;
+        ASSERT_TRUE(agonesOut.has_value());
+        EXPECT_EQ(agonesOut->ip(), host);
+        EXPECT_NE(agonesOut->ip(), agonesAdvertisedHost) << "覆盖值未生效,回落到了 Agones 地址, host='" << host << "'";
+        EXPECT_EQ(agonesOut->port(), 7005u);
+    }
 }
 
 // ===========================================================================

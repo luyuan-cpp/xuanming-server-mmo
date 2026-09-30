@@ -125,6 +125,26 @@ namespace
 		return g ? *g : 0;
 	}
 
+	// 备战时写进快照 routing 的大厅会话号(turn-based §22.5 第 3 条)。
+	// match 的 NotifyBattleAssigned 与 battle 的 NotifyBattleStart 都按这份快照路由推送;
+	// PREPARING 期间换了会话(断线重连 / REPLACE / 跨 gate 重定向),新会话收不到这两条,
+	// ConfirmBattle 升级 FIGHTING 时比对它来补推一次重连提示。
+	// 纯运行时组件:不入库,也**不能**并进 InBattleComp —— 后者经 SerializeBattleCtx 落 battle:ctx。
+	// 生命周期:PrepareBattle 与 InBattleComp 同时挂上;ConfirmBattle 升级后即摘;
+	// 其余情况随 RemoveInBattleComp 一并摘除。组件缺失而 InBattleComp 为 PREPARING,
+	// 说明实体是登录重建出来的(RestoreBattleFreezeOnLogin),同样视为换过会话。
+	struct BattlePrepareSessionComp
+	{
+		uint32_t gateSessionId = 0;
+	};
+
+	// 当前大厅会话号;无会话快照(已断线、实体仍在)时返回 0。
+	uint32_t CurrentGateSessionId(entt::entity player)
+	{
+		const auto* session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(player);
+		return session != nullptr ? session->gate_session_id() : 0;
+	}
+
 	// 摘 InBattleComp 的唯一入口(team-system.md §F.2):确实摘掉组件时回调组队系统,
 	// 补一次战斗中被跳过的跟随检查。所有解冻路径(结算、取消、备战作废、战斗作废、
 	// 重建撤销、重复结算销账)都必须走这里,漏一处就漏一次跟随。
@@ -132,7 +152,13 @@ namespace
 	// 删锁先入 hiredis 管道可保证跟随链读到的是删锁之后的状态。
 	bool RemoveInBattleComp(entt::entity player)
 	{
-		if (!tlsEcs.actorRegistry.valid(player) || !tlsEcs.actorRegistry.any_of<InBattleComp>(player))
+		if (!tlsEcs.actorRegistry.valid(player))
+		{
+			return false;
+		}
+		// 备战会话记录只随 InBattleComp 存在:一并摘除(组件缺失时 remove 为空操作)
+		tlsEcs.actorRegistry.remove<BattlePrepareSessionComp>(player);
+		if (!tlsEcs.actorRegistry.any_of<InBattleComp>(player))
 		{
 			return false;
 		}
@@ -1150,6 +1176,10 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 	inBattle.set_deadline_ms(request.deadline_ms());
 	inBattle.set_prepare_deadline_ms(prepareDeadlineMs);
 	inBattle.set_state(IN_BATTLE_STATE_PREPARING);
+	// 记下写进快照 routing 的会话号(BuildBattleSnapshot 已保证非 0),ConfirmBattle 据此判断
+	// 备战期间是否换过会话。emplace_or_replace:正常不会残留(随 RemoveInBattleComp 摘),防御性覆盖。
+	tlsEcs.actorRegistry.emplace_or_replace<BattlePrepareSessionComp>(
+		player, BattlePrepareSessionComp{response.snapshot().routing().session_id()});
 
 	// 指纹与快照同值(match 用响应字段比对,battle 用快照字段比对)
 	response.set_table_fingerprint(turnbattle::BattleTableFingerprint::Current());
@@ -1382,6 +1412,29 @@ void PlayerBattleSystem::ConfirmBattle(const ::BattleConfirmedEvent& event)
 			 << " deadline_ms=" << deadlineMs
 			 << " prepare_deadline_ms=" << inBattle->prepare_deadline_ms()
 			 << " lock_ttl_sec=" << ttlSec;
+
+	// 备战期间换过会话 -> 房间此刻已建成,补推一次重连提示(turn-based §22.5 第 3 条)。
+	// match 的 NotifyBattleAssigned 与 battle 的 NotifyBattleStart 走的是备战快照里的旧会话路由,
+	// 新会话收不到;OnPlayerEnterScene 在 PREPARING 时刻意不推(房间未建成,补签会被判 BattleGone),
+	// 所以这里是换会话后唯一的恢复入口。判据:
+	//   - 无备战会话记录:实体由 RestoreBattleFreezeOnLogin 以 PREPARING 重建(完整重登);
+	//   - 记录的会话号 != 当前会话号:大厅断线重连 / REPLACE / 跨 gate 重定向。
+	// 当前无会话(已断线、实体仍在)不推:之后的 RECONNECT 进场会因已 FIGHTING 在第 2 步推。
+	// 客户端对「同局已有活直连 / 同局补签在途」直接返回,重复提示无害。
+	const auto* prepareSession = tlsEcs.actorRegistry.try_get<BattlePrepareSessionComp>(player);
+	const uint32_t currentSessionId = CurrentGateSessionId(player);
+	const bool sessionChanged =
+		prepareSession == nullptr || prepareSession->gateSessionId != currentSessionId;
+	if (sessionChanged && currentSessionId != 0)
+	{
+		LOG_INFO << "[PlayerBattle] 备战期间换过会话,确认后补推重连提示: player_id=" << playerId
+				 << " battle_id=" << battleId
+				 << " prepare_session_id=" << (prepareSession != nullptr ? prepareSession->gateSessionId : 0u)
+				 << " current_session_id=" << currentSessionId;
+		NotifyBattleReconnectToClient(player);
+	}
+	// 升级完成即摘:之后的换会话由 OnPlayerEnterScene 按 FIGHTING 推提示
+	tlsEcs.actorRegistry.remove<BattlePrepareSessionComp>(player);
 }
 
 void PlayerBattleSystem::RebuildBattleFreezeFromLock(entt::entity player, const uint64_t playerId,
@@ -1455,6 +1508,17 @@ void PlayerBattleSystem::RebuildBattleFreezeFromLock(entt::entity player, const 
 					 << " battle_id=" << battleId << " reason=" << reasonCopy
 					 << " battle_node_id=" << rebuilt.battle_node_id()
 					 << " deadline_ms=" << rebuilt.deadline_ms() << " lock_ttl_sec=" << ttlSec;
+
+			// 重建出的一律是 FIGHTING(房间已建成),而这条路径上 PREPARING->FIGHTING 的升级提示
+			// 从未推过(备战冻结已被 reaper 摘掉 / 实体是新建的),无从判断客户端是否知道这一局:
+			// 在线就无条件推一次重连提示(turn-based §22.5 第 3 条)。客户端对「同局已有活直连 /
+			// 同局补签在途」直接返回,只有直连正在建连时会多一次补签;迟到确认很少发生,可以接受。
+			// 若随后 ConfirmRebuiltFreeze 撤销重建(锁已被结算删掉),补签失败 -> 客户端判 BattleGone,
+			// 与这一局确实已结束一致。当前无会话时不推:之后的 RECONNECT 进场按 FIGHTING 推。
+			if (CurrentGateSessionId(player) != 0)
+			{
+				NotifyBattleReconnectToClient(player);
+			}
 		},
 		(std::string("EVAL %s 2 ") + kBattleLockKeyFmt + " " + kBattleCtxKeyFmt + " %llu").c_str(),
 		kGetCtxIfLockMatchScript, playerId, playerId, battleId);
@@ -1533,7 +1597,8 @@ void PlayerBattleSystem::RestoreBattleFreezeOnLogin(entt::entity player, const u
 					 << " deadline_ms=" << rebuilt.deadline_ms()
 					 << " prepare_deadline_ms=" << rebuilt.prepare_deadline_ms();
 
-			// 战斗中(房间已建成)才提示客户端补签重连;PREPARING 由随后的确认/取消/reaper 处理。
+			// 战斗中(房间已建成)才提示客户端补签重连;PREPARING 由随后的确认/取消/reaper 处理 ——
+			// 重建实体不挂 BattlePrepareSessionComp,确认到达升级 FIGHTING 时 ConfirmBattle 据此补推提示。
 			// 不再要求 battle_node_id 已知(turn-based §22 D72):客户端凭 battle_id 经
 			// MatchService.RequestBattleTicket 补签,用不到节点号;ctx 缺失的降级重建同样要提示。
 			if (rebuilt.state() == IN_BATTLE_STATE_FIGHTING)
@@ -2002,16 +2067,23 @@ void PlayerBattleSystem::OnPlayerEnterScene(entt::entity player, uint32_t enterG
 				 << "(battle:lock 未解,排队仍被挡,下次登录再补)";
 	}
 
-	// 2) 战斗中换了会话:实体仍存活且挂着 InBattleComp -> 提示客户端补签重连(turn-based §22 D72)
+	// 2) 战斗中换了会话:实体仍存活且 InBattleComp 为 FIGHTING -> 提示客户端补签重连(turn-based §22 D72)
 	//    (完整下线再登录的提示走上面的 RestoreBattleFreezeOnLogin 回调)。
 	//    RECONNECT 与 REPLACE 都算换会话:跨 gate 重定向(RedirectToGate)后旧会话通常仍是 Online,
 	//    login 判成 REPLACE 而不是 RECONNECT;只认 RECONNECT 会让重定向后的玩家拿不到
 	//    重连提示,战斗在客户端侧断掉(turn-based-battle-server.md §18.7 / D38)。
 	//    LOGIN_FIRST 不进这里:首登实体是新建的,没有 InBattleComp,由第 1 步按锁 + ctx 重建。
-	if ((enterGsType == LOGIN_RECONNECT || enterGsType == LOGIN_REPLACE) &&
-		tlsEcs.actorRegistry.any_of<InBattleComp>(player))
+	//    PREPARING 不推(§22.5 第 3 条):房间还没建成(观战记录可能也还没写),补签拿到
+	//    kInvalidParameter,客户端会先判 BattleGone、弹「战斗已结束」再被拉回战斗。
+	//    这一局的提示交给 ConfirmBattle:升级 FIGHTING 时比对 BattlePrepareSessionComp 记下的
+	//    备战会话号,换过就补推;确认事件由 battle 侧周期补发兜底。
+	if (enterGsType == LOGIN_RECONNECT || enterGsType == LOGIN_REPLACE)
 	{
-		NotifyBattleReconnectToClient(player);
+		if (const auto* inBattle = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
+			inBattle != nullptr && inBattle->state() == IN_BATTLE_STATE_FIGHTING)
+		{
+			NotifyBattleReconnectToClient(player);
+		}
 	}
 }
 

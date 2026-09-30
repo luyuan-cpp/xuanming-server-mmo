@@ -29,8 +29,9 @@
         throw 或非 0 退出码都在停服之前拒绝(参数组合规则只在 k8s_deploy.ps1 一处,回滚脚本不复制)。
       - -ReleaseProfile / -LoginDevPasswordAuth 只透传到 Step 6(以前 Step 6 恒为 dev 档、开发口令认证被拒绝转发)。
       - dev_tools.ps1 的 k8s-zone-rollback 入口:全部入口参数与 -KubeContext / -KubeConfig 真正转到回滚脚本
-        (以前 -KubeContext 被静默吞掉,回滚落到 kubectl 当前 context),拒绝 -AllowDisruptiveSwitch;
-        Invoke-K8sImage 拒绝 -RequireClientEndpoint / -LoginDevPasswordAuth(k8s_image.ps1 不部署 login)。
+        (以前 -KubeContext 被静默吞掉,回滚落到 kubectl 当前 context);-AllowDisruptiveSwitch 同样转给回滚脚本,
+        由它只透传到 Step 6、不下传 Step 1;Invoke-K8sImage 拒绝 -LoginDevPasswordAuth(k8s_image.ps1 不部署 login),
+        -RequireClientEndpoint 原样透传给 k8s_image.ps1(只参与 k8s_deploy.ps1 的组合预检,不改写 login / scene_manager 的 ConfigMap)。
 
     子进程用例走 dry-run(不带 -Apply):脚本只打印每一步要执行的命令,不调 kubectl / redis-cli / kafka 工具。
     Step 6 在打印前就把透传写进 $upArgs,所以打印出来的那一行就是 -Apply 时真正传下去的参数。
@@ -38,8 +39,8 @@
     也停在交互提示上,把 `pwsh -File` 子进程挂死。
     预检只在 -Apply 下读集群,只能在进程内跑沙箱(见 Invoke-RollbackInSandbox):每一步都落在假下游上,
     即使预检有 bug 没拦住也不碰任何集群、Redis、Kafka。
-    dev_tools.ps1 入口的子进程用例同样不带 -RollbackApply(回滚脚本只打印);Invoke-K8sImage 的拒绝用例按 AST 取出函数、
-    下游换成假 k8s_image.ps1,即使拒绝失效也不会真的构建、推送或部署。
+    dev_tools.ps1 入口的子进程用例同样不带 -RollbackApply(回滚脚本只打印);Invoke-K8sImage 的拒绝 / 透传用例按 AST 取出函数、
+    下游换成假 k8s_image.ps1(只记下收到的参数),即使拒绝失效也不会真的构建、推送或部署。
 
     负向用例断错误文本,不只断退出码(同 k8s_deploy_contract.tests.ps1 的口径:退出码 1 可能来自任何地方)。
     既有「拒绝可变 tag / 接受不可变 tag」两条回滚用例在 k8s_deploy_contract.tests.ps1 第 5 节,本文件不重复。
@@ -295,7 +296,7 @@ function New-KubectlReply {
 
 .DESCRIPTION
     预检只在 -Apply 下读集群,子进程 dry-run 覆盖不到,所以在进程内跑:把被测脚本复制进临时「脚本目录」,
-    旁边放真 lib/release_common.ps1 与假的 dev_tools.ps1 / kafka_offset_reset.ps1 / k8s_deploy.ps1;
+    旁边放真 lib/release_common.ps1、lib/k8s_client_entry.ps1 与假的 dev_tools.ps1 / kafka_offset_reset.ps1 / k8s_deploy.ps1;
     kubectl 与 kafka-consumer-groups.sh 用本函数作用域里的同名函数顶替(函数先于外部命令解析,被测脚本在
     子作用域里按动态作用域找到它们)。于是即使预检有 bug 没拦住,-Apply 的每一步也只落在假下游上:
       第 0 步静态预检 / Step 1 / Step 6 → 假 dev_tools.ps1(记下命令与收到的 GateRouterMode,另记一行全部具名参数;
@@ -341,6 +342,8 @@ function Invoke-RollbackInSandbox {
         $toolsDir = Get-ToolsScriptsDir
         Copy-Item -LiteralPath (Join-Path $toolsDir 'k8s_zone_rollback.ps1') -Destination $sandboxDir
         Copy-Item -LiteralPath (Join-Path $toolsDir 'lib' 'release_common.ps1') -Destination (Join-Path $sandboxDir 'lib')
+        # 被测脚本在 $ErrorActionPreference = "Stop" 下 dot-source 它(取 Get-ClientEntryContract);不拷则启动即终止,沙箱用例全部跑不到被测逻辑。
+        Copy-Item -LiteralPath (Join-Path $toolsDir 'lib' 'k8s_client_entry.ps1') -Destination (Join-Path $sandboxDir 'lib')
         if ($DeployDefault -eq 'real') {
             Copy-Item -LiteralPath (Join-Path $toolsDir 'k8s_deploy.ps1') -Destination $sandboxDir
         }
@@ -363,8 +366,8 @@ function Invoke-RollbackInSandbox {
 [CmdletBinding(PositionalBinding = $false)]
 param($Command, $ZoneName, $ZoneId, $NodeImage, $NamespacePrefix, [switch]$WaitReady, $GateRouterMode = "<unset>", $ReleaseProfile,
     $ClientEntryMode, $ClientPublicHost, $GateClientHostTemplate, $GateNodePortBase, $GateExternalTrafficPolicy, $GateServiceType,
-    $RequireClientEndpoint, [switch]$LoginDevPasswordAuth, $GatewayIngressHost, $GatewayIngressClassName, $GatewayIngressTlsSecret,
-    $GatewayTrustedProxies, $KubeContext, $KubeConfig, [switch]$DryRun)
+    $RequireClientEndpoint, [switch]$LoginDevPasswordAuth, [switch]$AllowDisruptiveSwitch, $GatewayIngressHost, $GatewayIngressClassName,
+    $GatewayIngressTlsSecret, $GatewayTrustedProxies, $KubeContext, $KubeConfig, [switch]$DryRun)
 $label = if ($DryRun) { "$Command/dry-run" } else { $Command }
 Add-Content -LiteralPath '__CALLS__' -Encoding utf8 -Value "$label GateRouterMode=$GateRouterMode"
 $boundParameters = $PSBoundParameters
@@ -749,7 +752,7 @@ Test-Case 'dev_tools k8s-zone-rollback:入口参数与 -KubeContext / -KubeConfi
         Assert-Match -Text $line -Pattern "(^|\s)-$name $value(\s|$)" -Because "dev_tools.ps1 必须把 -$name 转给回滚脚本,再由 Step 6 原样透传"
         Assert-Equal -Expected 1 -Actual ([regex]::Matches($line, "(^|\s)-$name\s").Count) -Because "-$name 只透传一次"
     }
-    Assert-NotMatch -Text $line -Pattern '(^|\s)-(ReleaseProfile|LoginDevPasswordAuth|GateRouterMode)\s' -Because '没给的不转发:dev_tools.ps1 的默认 dev 档不能冒充显式值,默认值只在一处'
+    Assert-NotMatch -Text $line -Pattern '(^|\s)-(ReleaseProfile|LoginDevPasswordAuth|GateRouterMode|AllowDisruptiveSwitch)\s' -Because '没给的不转发:dev_tools.ps1 的默认 dev 档不能冒充显式值,默认值只在一处;切换确认闸没给就不能出现在 Step 6'
     $downLine = @([regex]::Matches($run.Output, '(?m)^[ \t]*dev_tools\.ps1 [^\r\n]*k8s-zone-down[^\r\n]*') | ForEach-Object { $_.Value })
     Assert-Equal -Expected 1 -Actual $downLine.Count -Because "应当恰有一行 Step 1 参数。输出: $($run.Output)"
     Assert-Match -Text $downLine[0] -Pattern '-KubeContext kind-mmorpg' -Because 'Step 1 删 namespace 必须落在指定集群'
@@ -773,11 +776,19 @@ Test-Case 'dev_tools k8s-zone-rollback:-LoginDevPasswordAuth、-RollbackConfirmN
     Assert-Match -Text (Get-ZoneUpArgsLine -Output $staging.Output) -Pattern '(^|\s)-ReleaseProfile staging(\s|$)' -Because '以前这里静默吞掉 -ReleaseProfile,Step 6 恒为 dev 档(安全方向的 fail-open)'
 }
 
-Test-Case '负向:dev_tools k8s-zone-rollback 给 -AllowDisruptiveSwitch,在回滚脚本任何步骤之前拒绝' {
+Test-Case 'dev_tools k8s-zone-rollback:-AllowDisruptiveSwitch 转给回滚脚本,只透传到 Step 6、不下传 Step 1' {
+    # 以前 dev_tools.ps1 在这里拒绝该开关;现在同一口径透传(dev_tools.ps1 的 k8s-zone-rollback 分支),由回滚脚本只转给 Step 6:
+    # 它只在 namespace 没删净、k8s_deploy.ps1 的集群现状闸真的触发时起作用,不豁免第 0 步的停服前核对。
     $run = Invoke-DevToolsRollbackDryRun -ExtraArguments @('-AllowDisruptiveSwitch')
-    Assert-True -Condition ($run.ExitCode -ne 0) -Because "Step 1 删 namespace 后这道闸在 Step 6 无从触发,显式给了必须拒绝而不是静默吞掉。输出: $($run.Output)"
-    Assert-Match -Text $run.Output -Pattern 'k8s-zone-rollback 不转发 -AllowDisruptiveSwitch' -Because '错误文本必须点名被拒的开关,不能把其他执行错误误判为拒绝生效'
-    Assert-NotMatch -Text $run.Output -Pattern 'k8s-zone-rollback \((DRY-RUN|APPLY)\)|Step 1:' -Because '拒绝必须早于调用回滚脚本'
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "经 dev_tools.ps1 的回滚 dry-run 不该失败。输出: $($run.Output)"
+    Assert-Match -Text $run.Output -Pattern 'k8s-zone-rollback \(DRY-RUN\)' -Because '不带 -RollbackApply 必须是 dry-run'
+    Assert-Match -Text $run.Output -Pattern 'switch gate\s*:\s*-AllowDisruptiveSwitch' -Because 'dev_tools.ps1 必须把开关真正转给回滚脚本,不能静默吞掉'
+    $line = Get-ZoneUpArgsLine -Output $run.Output
+    Assert-Match -Text $line -Pattern '(^|\s)-AllowDisruptiveSwitch True(\s|$)' -Because '回滚脚本必须把开关原样透传给 Step 6 的 k8s-zone-up'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($line, '(^|\s)-AllowDisruptiveSwitch\s').Count) -Because '-AllowDisruptiveSwitch 只透传一次'
+    $downLine = @([regex]::Matches($run.Output, '(?m)^[ \t]*dev_tools\.ps1 [^\r\n]*k8s-zone-down[^\r\n]*') | ForEach-Object { $_.Value })
+    Assert-Equal -Expected 1 -Actual $downLine.Count -Because "应当恰有一行 Step 1 参数。输出: $($run.Output)"
+    Assert-NotMatch -Text $downLine[0] -Pattern 'AllowDisruptiveSwitch' -Because 'Step 1 只删 namespace,切换确认闸不下传给 k8s-zone-down'
 }
 
 # dev_tools.ps1 Invoke-K8sImage:按 AST 取出函数,$ScriptDir 指到假 k8s_image.ps1 所在的临时目录(照 k8s_deploy_contract.tests.ps1)。
@@ -794,9 +805,10 @@ function Get-DevToolsFunctionText {
 
 <#
 .SYNOPSIS
-    以给定的脚本级参数值调一次 dev_tools.ps1 的 Invoke-K8sImage -ImageCommand release-zone,返回 @{ Error; DownstreamCalled }。
+    以给定的脚本级参数值调一次 dev_tools.ps1 的 Invoke-K8sImage -ImageCommand release-zone,返回 @{ Error; DownstreamCalled; DownstreamArgs }。
     被测函数按动态作用域读 dev_tools.ps1 的脚本级参数:这里在本函数作用域里设置 -Variables 给的那几个,其余未设即 $null(开关视为未指定)。
-    下游是假 k8s_image.ps1,只留一个"被调过"的标记:即使拒绝失效,也不会真的构建、推送或部署。
+    下游是假 k8s_image.ps1,只把收到的参数($args 以空格拼接)写进标记文件:即使拒绝失效,也不会真的构建、推送或部署。
+    假脚本不声明参数块,splat 进来的具名参数全部落进 $args,形如 "-Name:" 后跟值;没被调到时 DownstreamArgs 为 $null。
 #>
 function Invoke-DevToolsK8sImageWith {
     param([Parameter(Mandatory = $true)][hashtable]$Variables)
@@ -804,29 +816,38 @@ function Invoke-DevToolsK8sImageWith {
     New-Item -ItemType Directory -Path $fakeDir | Out-Null
     try {
         $marker = Join-Path $fakeDir 'k8s_image.called'
-        Set-Content -LiteralPath (Join-Path $fakeDir 'k8s_image.ps1') -Encoding utf8 -Value ("Set-Content -LiteralPath '{0}' -Value called; exit 0" -f $marker.Replace("'", "''"))
+        Set-Content -LiteralPath (Join-Path $fakeDir 'k8s_image.ps1') -Encoding utf8 -Value ('Set-Content -LiteralPath ''{0}'' -Value ($args -join '' ''); exit 0' -f $marker.Replace("'", "''"))
         $ScriptDir = $fakeDir
         foreach ($variableName in $Variables.Keys) { Set-Variable -Name $variableName -Value $Variables[$variableName] }
         . ([scriptblock]::Create((Get-DevToolsFunctionText -FunctionName 'Invoke-K8sImage')))
         $errorText = $null
         try { Invoke-K8sImage -ImageCommand 'release-zone' *>&1 | Out-Null } catch { $errorText = $_.Exception.Message }
-        return [pscustomobject]@{ Error = $errorText; DownstreamCalled = (Test-Path -LiteralPath $marker) }
+        $called = Test-Path -LiteralPath $marker
+        $downstreamArgs = if ($called) { Get-Content -LiteralPath $marker -Raw } else { $null }
+        return [pscustomobject]@{ Error = $errorText; DownstreamCalled = $called; DownstreamArgs = $downstreamArgs }
     }
     finally {
         Remove-Item -LiteralPath $fakeDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
-Test-Case 'dev_tools Invoke-K8sImage:-RequireClientEndpoint / -LoginDevPasswordAuth 经 k8s-release-* 不生效,在调 k8s_image.ps1 之前拒绝' {
+Test-Case 'dev_tools Invoke-K8sImage:-LoginDevPasswordAuth 在调 k8s_image.ps1 之前拒绝;-RequireClientEndpoint 原样透传给 k8s_image.ps1' {
     # 对照组:什么都不给时必须真的调到假下游,否则"没调到"的断言在这套替身下会空转通过。
     $control = Invoke-DevToolsK8sImageWith -Variables @{}
     Assert-True -Condition ($null -eq $control.Error -and $control.DownstreamCalled) -Because "对照组必须调到假 k8s_image.ps1。错误: $($control.Error)"
-    foreach ($case in @(@{ Name = 'RequireClientEndpoint'; Value = 'true' }, @{ Name = 'LoginDevPasswordAuth'; Value = $true })) {
-        $run = Invoke-DevToolsK8sImageWith -Variables @{ $case.Name = $case.Value }
-        Assert-True -Condition ($null -ne $run.Error) -Because "-$($case.Name) 只落在 login / scene_manager 上,k8s_image.ps1 不部署它们,显式给了必须拒绝而不是静默吞掉"
-        Assert-Match -Text $run.Error -Pattern ('k8s-image-\* / k8s-release-\* 不支持 [^:]*-' + $case.Name) -Because "错误文本必须点名 -$($case.Name)"
-        Assert-True -Condition (-not $run.DownstreamCalled) -Because "-$($case.Name):拒绝必须早于调用 k8s_image.ps1(镜像构建与推送都在那边)"
-    }
+    Assert-NotMatch -Text $control.DownstreamArgs -Pattern 'RequireClientEndpoint' -Because '留空不透传,由 k8s_deploy.ps1 的默认值接管(默认值只在一处)'
+
+    # -LoginDevPasswordAuth 只落在 login 上,k8s_image.ps1 不部署 login、也不声明它:显式给了必须拒绝而不是静默吞掉。
+    $reject = Invoke-DevToolsK8sImageWith -Variables @{ LoginDevPasswordAuth = $true }
+    Assert-True -Condition ($null -ne $reject.Error) -Because '-LoginDevPasswordAuth 经 k8s-release-* 不生效,显式给了必须拒绝'
+    Assert-Match -Text $reject.Error -Pattern 'k8s-image-\* / k8s-release-\* 不支持 [^:]*-LoginDevPasswordAuth' -Because '错误文本必须点名 -LoginDevPasswordAuth'
+    Assert-True -Condition (-not $reject.DownstreamCalled) -Because '-LoginDevPasswordAuth:拒绝必须早于调用 k8s_image.ps1(镜像构建与推送都在那边)'
+
+    # -RequireClientEndpoint 以前在这里被拒;现在 k8s_image.ps1 声明并透传它(只参与 k8s_deploy.ps1 的组合预检,
+    # 不改写 login / scene_manager 的 ConfigMap,给了由 k8s_image.ps1 告警说明)。
+    $forward = Invoke-DevToolsK8sImageWith -Variables @{ RequireClientEndpoint = 'true' }
+    Assert-True -Condition ($null -eq $forward.Error -and $forward.DownstreamCalled) -Because "-RequireClientEndpoint 不再拒绝,必须调到 k8s_image.ps1。错误: $($forward.Error)"
+    Assert-Match -Text $forward.DownstreamArgs -Pattern '(^|\s)-RequireClientEndpoint:?\s*true(\s|$)' -Because 'dev_tools.ps1 必须把 -RequireClientEndpoint 原样透传给 k8s_image.ps1,不能静默吞掉'
 }
 
 exit (Complete-TestRun -SuiteName 'k8s_zone_rollback 透传与停服前预检')

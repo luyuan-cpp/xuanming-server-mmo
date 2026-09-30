@@ -56,7 +56,7 @@ func TestUnmarshalKeepsClientEndpoint(t *testing.T) {
 	msg := info.ProtoReflect()
 	fd := msg.Descriptor().Fields().ByName("client_endpoint")
 	if fd == nil {
-		t.Fatal("NodeInfo 缺 client_endpoint(字段 11):先执行 cd go && build.bat 重生 proto")
+		t.Fatal("NodeInfo 缺 client_endpoint(字段 11):proto 未重生。按 docs/design/k8s-client-entry.md「上线之前」第 1 步执行(protoc 35.1 置 PATH 最前 → dev_tools.ps1 -Command proto-gen-build → proto-gen-run -UseBinary -ConfigPath tools/proto_generator/protogen/etc/proto_gen.yaml);注意不是 cd go && build.bat(只跑 goctl,不产出 pb)")
 	}
 	if fd.Number() != 11 || fd.Message() == nil {
 		t.Fatalf("NodeInfo.client_endpoint 应为字段 11 的子消息, 实际 number=%d kind=%s", fd.Number(), fd.Kind())

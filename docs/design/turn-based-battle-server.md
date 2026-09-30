@@ -794,7 +794,7 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
 
 | 连接 | 何时存在 | 承载 |
 |---|---|---|
-| gate 长连接(大厅) | 登录后常驻 | Login / CreatePlayer / EnterGame;scene 的全部客户端消息;Go 服务:路由模式("1")经 `client_rpc_router`,直连模式("0")由 gate 直调 login / scene_manager / match(白名单 `{Scene, Login, SceneManager, Match}`,`gate/main.cpp:216-218`;chat / guild / friend / trade 仅路由模式可达)。补签 `MatchService.RequestBattleTicket` 与 `WatchBattle` 两种模式都能走通;battle 的大厅公告 `NotifyBattleAssigned` / `NotifyBattleStart`(无活直连时经 Kafka→gate 回落,D68);scene 自己下发的 `NotifyBattleReconnect` 与结算后的 `NotifyBattleEnd`。**不承载战斗上行**:四条战斗 RPC 经 gate 一律回 `kServiceUnavailable`(1003),两种路由模式相同(D66) |
+| gate 长连接(大厅) | 登录后常驻 | Login / CreatePlayer / EnterGame;scene 的全部客户端消息;Go 服务:路由模式("1")经 `client_rpc_router`,直连模式("0")由 gate 直调 login / scene_manager / match(白名单 `{Scene, Login, SceneManager, Match}`,`gate/main.cpp:219`;两种模式的整个三元表达式在 `:217-219`;chat / guild / friend / trade 仅路由模式可达)。补签 `MatchService.RequestBattleTicket` 与 `WatchBattle` 两种模式都能走通;battle 的大厅公告 `NotifyBattleAssigned` / `NotifyBattleStart`(无活直连时经 Kafka→gate 回落,D68);scene 自己下发的 `NotifyBattleReconnect` 与结算后的 `NotifyBattleEnd`。**不承载战斗上行**:四条战斗 RPC 经 gate 一律回 `kServiceUnavailable`(1003),两种路由模式相同(D66) |
 | battle 直连 | 参战 / 观战期间,每局一条 | 握手应答;四条战斗 RPC(`SubmitBattleAction` / `GetBattleState` / `StopWatchBattle` / `SetAutoBattle`)及其应答;握手后的全部战斗帧(`NotifyTurnResult` / `NotifyBattleEnd` / `NotifySpectateState` / `NotifySpectateTurnResult` / `NotifySpectateEnd`);观众首帧 = 紧跟握手应答的 `NotifySpectateState`(D69)。**直连是战斗唯一通路**:战斗帧无活直连即丢弃,不回落 gate(D68) |
 | HTTP 短请求(Java 网关) | 登录前后 | `GET /api/server-list`、可选 `POST /api/login`、`POST /api/assign-gate`(排队时轮询 `POST /api/queue-status`)、`POST /api/refresh-token`。这些接口**都不校验 access token**,access token 在 gate TCP 的 `Login` 上出示。不算长连接 |
 
@@ -815,9 +815,9 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
 | D69 | **观众快照随直连下发(snapshot on connect)**。契约写的是「`AttachDirectConnection` 成功且角色为 OBSERVER 时推当前 `SpectateStateS2C`」。**落码偏离一**:触发点不在 `AttachDirectConnection` 里,而是 `BattleClientEdge::OnTokenVerify` 在 `SendVerifyReply` **之后**调新方法 `BattleRoomManager::OnDirectConnectionVerified`(`battle_client_edge.cpp:351-361`、`battle_room_manager.cpp:1576-1593`),线上顺序固定为 `BattleTokenVerifyResponse → NotifySpectateState`;同一连接的重复握手(幂等分支)不再推。**落码偏离二**:`AddObserver` 原先的首帧推送只在**同会话幂等重试**这一条路径保留(`PushSpectateState` → `PushBattleFrame`,有活直连照常直发,否则丢弃,`battle_room_manager.cpp:840-848`);新观众路径与会话已变路径**不推首帧**(`:856-862`、`:888-890`)。参战者握手时不推快照,由客户端在直连就绪时 `GetBattleState` 补拉(robot 与 Unity 同口径) | 偏离一:`AttachDirectConnection` 在握手应答写出之前执行,而 robot 的 `VerifyBattleToken` 要求读到的第一个包是应答,快照抢先会被当成应答吞掉。偏离二:这两条路径结构上不可能有活直连(新观众没有 `directConnByPlayer` 条目;换会话路径刚 `CloseDirectConnectionOf`),照字面调 `PushBattleFrame` 必然丢弃,每次观战接入都给 `battle_frame_dropped_no_direct` 添一条预期内的丢弃,会淹没真信号。可观察行为与字面实现相同(首帧不送达,由握手快照补上),只少一条日志 |
 | D70 | **D26 改 fail-closed**。`HandleCreateBattle` 在插表、装定时器、推送、发确认事件之前为全体参战者预签 `BuildAssignment`;任一失败 → `LOG_ERROR metric=battle_ticket_issue_failed … role=participant` + 回 `kServiceUnavailable`,不建房(`battle_room_manager.cpp:569-585`)。`HandleAddObserver`:新观众在登记前预签,失败不登记(`:873-883`,`path=new`);两条幂等路径先重签,失败 → 从 `routingByObserver` / `observerNames` 摘除、`CloseDirectConnectionOf`、回 `kServiceUnavailable`(`:823-838`,`path=idempotent_same_session` / `idempotent_session_changed`)。`PushAssignment` 只下发调用方预签好的 `BattleAssignedS2C`(`:1500-1507`)。`HandleIssueBattleTicket` 本就 fail-closed,不改。拒绝码复用 `kServiceUnavailable`(1003,已是 fault 码),tip 零新增。match 侧**零逻辑改动**(仅指收缩批范围;集群外入口批另改了 match 的 `gather.go` / `spectate.go` / `queue.go` / `watchbattlelogic.go`,见 k8s-client-entry D82 与 §22.5 第 4、5 条):通用补偿已覆盖(`DestroyBattle` 缺房幂等成功 → 解冻 / 回队首 / 删票;`WatchBattle` 收到任何非缺房 tip 即 DEL 观战标记),只补回归测试。与集群外入口的接缝:`BuildAssignment` 的地址改取 `client_endpoint::ClientFacing`(D76/D78,`:1452-1465`),拿不到客户端可达地址即签票失败,走同一条 fail-closed 路径。建房准入共五步(`battle_node.cpp:56-124` 的 `BattleNodeImpl::CreateBattle`):① 准入闸(gRPC 线程,`:68`)→ ② 分配许可(D82,gRPC 线程,`:83`)→ ③ loop 内复核准入闸(`:107`)→ ④ 预签 `BuildAssignment`(loop 内,`HandleCreateBattle`)→ ⑤ 插表。①–③ 任一道不过 → gRPC `UNAVAILABLE` + `battle_not_allocatable`,match 跳过 `DestroyBattle` 换节点重试一次;④ 失败 → gRPC OK + tip `kServiceUnavailable`(本决策),两类拒绝在 match 侧走不同分支 | 直连是唯一通路:签不出票的玩家连不上这局,放进来只会全程挂机被默认普攻;旧日志「玩家将全程走 gate 中继」在收缩后不成立。预签时房间还是局部对象,拒绝等于什么都没发生;观众侧「摘除 + 关直连」与 match 的回滚口径一致,避免出现「match 认为他已不在观战、房间里却还挂着他」 |
 | D71 | **删除 `RefreshRoutingFromSession`**:直连合成的 `SessionDetails` 不带 `gate_instance_id`,该函数恒为空操作。`BattleRouting` 只在 CreateBattle 快照 / AddObserver 时写入;四个 `Handle*` 保持 `SessionDetails` 入参(D28 零改动) | 空操作函数会让人以为「路由能自愈」;收缩后的恢复通路是 scene 重连提示 → 客户端补签重建直连(D72)。代价:大厅公告的路由固定在快照时刻(§22.5 第 3 条) |
-| D72 | **scene 换会话只推重连提示**:`RebindBattleOnReconnect` 改名 `NotifyBattleReconnectToClient`,函数体只剩 `try_get<InBattleComp>` → 组 `BattleReconnectS2C{battle_id}` → `SendMessageToClientViaGate` → 日志(`player_battle.cpp:1912-1932`);删掉 BindBattleEvent / GateCommand / Kafka / `gate_instance_id` 检查及专用 include,删死参数 `rebindGate`。两个调用点:`OnPlayerEnterScene` 第 2 步(RECONNECT 或 REPLACE 且有 `InBattleComp`,`:2008-2015`,D38 的条件不变);登录重建回调在 FIGHTING 时**总推**,不再要求 `battle_node_id != 0`(`:1536-1542`)。`InBattleComp.battle_node_id`、`PrepareBattleRequest.battle_node_id` 字段保留,只改注释(日志 / 排障用) | gate 已没有绑定可重建;客户端凭 battle_id 经 `MatchService.RequestBattleTicket` 补签,用不到节点号,ctx 缺失的降级重建同样要提示;删字段要动 proto 与持久化,留着零成本 |
+| D72 | **scene 换会话只推重连提示**:`RebindBattleOnReconnect` 改名 `NotifyBattleReconnectToClient`,函数体只剩 `try_get<InBattleComp>` → 组 `BattleReconnectS2C{battle_id}` → `SendMessageToClientViaGate` → 日志(`player_battle.cpp:1912-1932`);删掉 BindBattleEvent / GateCommand / Kafka / `gate_instance_id` 检查及专用 include,删死参数 `rebindGate`。两个调用点:`OnPlayerEnterScene` 第 2 步(RECONNECT 或 REPLACE 且有 `InBattleComp`,`:2008-2015`,D38 的条件不变);登录重建回调在 FIGHTING 时**总推**,不再要求 `battle_node_id != 0`(`:1536-1542`)。**(2026-09-30 更正,评审 e2e-1)** 第 2 步收窄为只在 FIGHTING 推(PREPARING 不推);另加两个调用点:`ConfirmBattle` 的 PREPARING→FIGHTING 升级在备战期间换过会话时补推,late_confirm 重建(`RebuildBattleFreezeFromLock`)后在线即推。口径见 §22.5 第 3 条。`InBattleComp.battle_node_id`、`PrepareBattleRequest.battle_node_id` 字段保留,只改注释(日志 / 排障用) | gate 已没有绑定可重建;客户端凭 battle_id 经 `MatchService.RequestBattleTicket` 补签,用不到节点号,ctx 缺失的降级重建同样要提示;删字段要动 proto 与持久化,留着零成本 |
 | D73 | **robot:直连是战斗唯一通路**。删 `skip_direct_connect`;`battle_direct_conn.go` 拆成 `dialBattleDirect(account, playerId, assigned, stats, onMessage)` + 保留包装 `openBattleDirectConn`;battle-smoke 的 A 在 `WaitBattleStart` 后立即建直连(不等观战屏障),B 维持「等 Assigned(OBSERVER) → 直连 → 由握手快照拿首帧」;跨 zone 两侧无条件直连;team-smoke 每场按 battle_id 找 Assigned 后建直连、在直连上 `SetAutoBattle`,直连推送并入同一个 pushes 列表;features-smoke 战斗段改走直连(`callDirect`,与 `call` 共用 `callVia`)。落码补充:`dialBattleDirect` 在参战者握手成功后自动经直连发一条 `GetBattleState` 就绪补拉(D69 的参战者口径);握手超时分支改为异步 `Close` | robot 是唯一跑过端到端直连的参考客户端,必须与服务端同口径;A 若等观战屏障后才建直连,屏障期间的 TurnResult 会被 D68 丢弃;异步 `Close` 是因为黑洞地址下 vendored muduo 的 `Close` 要等 `net.Dial` 的 OS 超时(Windows 约 21s,Linux 约 127s),同步关会让 10s 预算失效 |
-| D74 | **Unity 客户端**:新增窄接口 `IBattleChannel`(不扩 `IBattleTransport`);四条战斗 RPC 直连未就绪时本地快速失败(`NotReadyError = "link: not ready"`),绝不走大厅;删 `IsRetriableOnLobby`、大厅重发与 `RoutesDirect`;`SendOneWay` 遇战斗号未就绪即丢弃并记日志;`BattleDirectLink` 关闭原因结构化为 `BattleLinkCloseKind { Ended, HostClosed, BattleGone, Unreachable, Superseded }`(`Superseded` 是评审后追加的),补签错误回调带 tipId;新增 `Retry` / `EnsureBattle` / `Abandon`;`BattleClient` 直连就绪时 `GetBattleState` 补拉并补发自动战斗记忆,`SubmitAction` 返回 bool;`SpectateClient` 首帧由握手快照驱动(D69),`StopWatch` 未就绪时本地收敛 + `Abandon`;补签预算、自动重拉、UI 口径见 §22.3「Unity」。大厅断线仍拆直连(本批不改);提示文案是客户端本地字符串,`kServiceUnavailable` / `kInvalidParameter` 用已生成的 `CommonErrorTip`,客户端无需 regen | 窄接口让战斗分流层可替换、可单测,不污染大厅传输接口;大厅重发在收缩后必被 gate 回 1003,留着只会把「直连没好」伪装成「服务端拒绝」;结构化关闭原因让 UI 分得清「本局已结束」与「连不上」 |
+| D74 | **Unity 客户端**:新增窄接口 `IBattleChannel`(不扩 `IBattleTransport`);四条战斗 RPC 直连未就绪时本地快速失败(`NotReadyError = "link: not ready"`),绝不走大厅;删 `IsRetriableOnLobby`、大厅重发与 `RoutesDirect`;`SendOneWay` 遇战斗号未就绪即丢弃并记日志;`BattleDirectLink` 关闭原因结构化为 `BattleLinkCloseKind { Ended, HostClosed, BattleGone, Unreachable, Superseded }`(`Superseded` 是评审后追加的;**2026-09-30 起**,`BattleClient` 收到本局的 `Superseded` 即 `EnsureBattle` 补签要回链路,不再忽略,见 §22.5 第 10 条),补签错误回调带 tipId;新增 `Retry` / `EnsureBattle` / `Abandon`;`BattleClient` 直连就绪时 `GetBattleState` 补拉并补发自动战斗记忆,`SubmitAction` 返回 bool;`SpectateClient` 首帧由握手快照驱动(D69),`StopWatch` 未就绪时本地收敛 + `Abandon`;补签预算、自动重拉、UI 口径见 §22.3「Unity」。大厅断线仍拆直连(本批不改);提示文案是客户端本地字符串,`kServiceUnavailable` / `kInvalidParameter` 用已生成的 `CommonErrorTip`,客户端无需 regen | 窄接口让战斗分流层可替换、可单测,不污染大厅传输接口;大厅重发在收缩后必被 gate 回 1003,留着只会把「直连没好」伪装成「服务端拒绝」;结构化关闭原因让 UI 分得清「本局已结束」与「连不上」 |
 | D75 | **K8s 默认路由模式**:`k8s_deploy.ps1 -GateRouterMode` 默认改 `"1"`(`k8s_deploy.ps1:164`);C++ 默认值与 `gate_security_test` 不改(D-12 修订,见 [xuanming-port-decisions-20260910.md](./xuanming-port-decisions-20260910.md));`dev_tools.ps1` / `k8s_image.ps1` 增加 `-GateRouterMode`,留空即不覆盖、非空才透传;契约测试新增用例。收尾补丁:`k8s_zone_rollback.ps1` 增加同形参数,`-Apply` 且留空时在停服前读集群里 gate 当前的模式,读不到或与 `k8s_deploy.ps1` 默认值不一致即拒绝,要求显式传 0 / 1;`dev_tools.ps1 -Command k8s-zone-rollback` 已透传(`dev_tools.ps1:1603`) | gate 不再中继战斗后,"0" 模式也失去了战斗回退的意义;chat / friend / trade 只经路由服可达。回退态**不粘滞**:以 "0" 回退运行的 zone,每次重新部署(含灾备回滚、合服后的 zone-up)都必须显式再传 `-GateRouterMode 0`,否则静默落回 "1"。集群外部署须与 `-ClientEntryMode external` 在同一窗口启用(上线顺序见 [k8s-client-entry.md](./k8s-client-entry.md)) |
 
 ### 22.3 改动集
@@ -864,6 +864,8 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
 - `battle/system/player_battle.{h,cpp}`:`RebindBattleOnReconnect` → `NotifyBattleReconnectToClient`(D72),删 5 个只为 Bind 服务的 include
   (`RdKafka`、`contracts::`、`ResolveCommandRoute`、`NodeConfigManager` 等在文件内已无引用)与死参数 `rebindGate`;
   登录重建回调在 FIGHTING 时总推提示。日志:`[PlayerBattle] 战斗中换会话,已推重连提示`。
+  **(2026-09-30,评审 e2e-1)** 新增运行时组件 `BattlePrepareSessionComp`(匿名命名空间,不入库),记下备战会话号,
+  供 `ConfirmBattle` 升级时判断是否补推;`OnPlayerEnterScene` 第 2 步只在 FIGHTING 推。细节见 §22.5 第 3 条。
 - `player/system/player_lifecycle.cpp`:只改第 6 步注释(已随 `ba8621a75` 提交,该文件当前没有未提交改动)。
 
 **proto 与生成器**
@@ -920,8 +922,12 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
 - `features_battle_smoke.go` / `features_smoke_scenario.go`:战斗段走 `callDirect`;`config/config.go`、`etc/battle_smoke.yaml`、
   `etc/team_smoke.yaml`:删开关与旧注释;`logic/handler/player_feature_battle_response.go`(信封拒绝文案改为 envelope rejected)、
   `logic/handler/battle_client_player_notify_battle_assigned.go`。
-- 断言口径:直连计数恒 ≥1,不再有 `a_direct_turns=-1` 这类回落输出;A 与跨 zone 两侧的直连须 `state_replies>=1 && turn_results>=1 && battle_ends>=1`;
-  B 的直连 `spectate_states>=1`。
+- 断言口径:直连计数恒 ≥1,不再有 `a_direct_turns=-1` 这类回落输出。
+  - A 与跨 zone 两侧的直连须 `state_replies>=1 && turn_results>=1 && battle_ends>=1`(`a-direct-delivery`,跨 zone 为 `a-` / `b-direct-delivery`;
+    本批新增 `state_replies`)。
+  - B 的直连首帧须是握手快照,即 `spectate_states>=1`(`b-direct-snapshot`,D69);回合结果与观战结束只走直连,
+    即 `spectate_turns>=1 && spectate_ends>=1`(`b-direct-delivery`,D68)。
+  - 两条 `*-direct-delivery` 从「建了直连才断言」改为无条件断言。它们在 c149b7c57(§18)就已存在,不是本批新步骤名,所以不列入下面的清单。
 - 新失败步骤名(输出为 `BATTLE_SMOKE_FAIL step=… reason=…` / `TEAM_SMOKE_FAIL step=…`):
   - `b-wait-battle-assigned`:B 在 15s 内没收到观战票据(`NotifyBattleAssigned`);
   - `b-assigned-role`:观众票据 role ≠ `BATTLE_TICKET_ROLE_OBSERVER`;
@@ -938,7 +944,12 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
   Battle 与 Spectate 共用一个实例)、`GameClient.cs` 接线。
 - `Assets/Scripts/Net/BattleDirectLink.cs`:
   - `BattleLinkCloseKind { Ended, HostClosed, BattleGone, Unreachable, Superseded }`。`Superseded` = 链路改去服务另一局而旧局未终结
-    (旧局从此收不到战斗帧);`SpectateClient` 对自己那局收到 `Superseded` 即收敛回 None,`BattleClient` 忽略它(不是权威终局信号)。
+    (旧局从此收不到战斗帧);`SpectateClient` 对自己那局收到 `Superseded` 即收敛回 None。
+    **(2026-09-30 改,评审 e2e-2)** `BattleClient` 对本局(尚未收到终局包 / `BattleGone`)的 `Superseded` 立即 `EnsureBattle(_battleId)`
+    补签要回链路,相位、错误与失败事件都不动(它不是权威终局信号,参战优先;`BattleClient.cs` 的 `HandleChannelLost`)。
+    链路此时指向另一局,`EnsureBattle` 补签后会对那一局抛 `Superseded`:若那一局是观战,`SpectateClient` 据此收敛,
+    服务端已清退该观众,不会乒乓;真换局(新参战局的分配包先于本局终局包到达)时最多多一次补签,
+    随后新局开局包的 `EnsureBattle` 把链路切回新局。未编译;EditMode 回归用例待补(见 §22.5 第 10 条)。
   - 建连期限 `ConnectTimeoutSeconds = 10`,调用超时 `CallTimeoutSeconds = 15`;同票重连最多 1 次(`MaxSameTicketRetries`,§18.2),等待 1s。
   - **补签预算**:每局 `MaxReissuesPerBattle = 3`。宿主入口(`HandleReconnectHint` / `Retry` / `EnsureBattle`)重置预算并**立即**补签,算第 1 次;
     自动恢复路径(握手被拒、同票重连用尽)第 k 次补签前等 `1s × 2^(k-1) × (1 ± 20%)`,即 1s / 2s / 4s。
@@ -997,26 +1008,45 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
    经大厅收到一份 BattleEnd;被 match 清退且没有直连的观众收不到 SpectateEnd,只能靠自身超时或 FIN 收敛。
    滚动升级窗口里旧 scene 还在发 `GateCommand(event_id=43)` 时,新 gate 每条打一行 WARN(不会误解析);旧 gate 配新 battle / scene 则
    完全没有 BindBattle。建议 gate / scene / battle 同批停换。
-3. **大厅公告路由固定在快照时刻(D71)**:玩家在开房到收到 Assigned / Start 之间换 gate,这两个包会投到旧会话;恢复只能靠
-   scene 重连提示 → 补签,而补签依赖观战索引(第 4 条)。PREPARING 期间换会话同样会推重连提示,此时房间未建成,补签回
-   `kInvalidParameter`,客户端按 `BattleGone` 收敛;若开局包随后投到旧会话,这一局就拿不到票据(改造前同样存在的缺口)。
+3. **大厅公告路由固定在快照时刻(D71)**:玩家在开房到收到 Assigned / Start 之间换会话(大厅断线重连 / REPLACE / 跨 gate 重定向),
+   这两个包会投到旧会话;恢复只能靠 scene 重连提示 → 补签,而补签依赖观战索引(第 4 条)。
+   **(2026-09-30 已修,评审 e2e-1;已落码,未编译、未测试)** 原缺口:PREPARING 期间换会话就推提示,房间未建成(观战记录可能也还没写),
+   补签回 `kInvalidParameter`,客户端判 `BattleGone`;升级到 FIGHTING 时又不再推,整局没有恢复入口。现在按房间是否建成决定提示时机
+   (`player_battle.cpp`,以函数名为锚):
+   - PREPARING **不推**:`OnPlayerEnterScene` 第 2 步只在 `IN_BATTLE_STATE_FIGHTING` 时推;
+   - PREPARING→FIGHTING 升级时按需补推:`PrepareBattle` 挂 `InBattleComp` 的同时挂运行时组件 `BattlePrepareSessionComp`
+     (匿名命名空间,记备战快照的会话号;不入库,`battle:ctx` 不变;所有解冻路径都经 `RemoveInBattleComp` 一并摘除)。
+     `ConfirmBattle` 原地升级时,组件缺失(实体是登录重建的)或记下的会话号与当前不同,就推一次;当前没有会话(会话号 0)不推,
+     交给之后 RECONNECT 进场按 FIGHTING 推;升级后摘掉组件;
+   - late_confirm 重建(`RebuildBattleFreezeFromLock`)后,只要在线就推一次,不比较会话;
+   - 完整重登按 FIGHTING 重建时照旧总推(`RestoreBattleFreezeOnLogin`)。
+   残留:升级时的补推依赖确认事件到达(battle 在确认补发窗口内周期补发);重复提示无害(客户端对同局已有活直连或补签在途直接返回)。
+   match 侧没改。回归测试没写:组件在匿名命名空间里,只能按行为观察;「同会话不推 / 换会话推」要先走完整个 `PrepareBattle`,
+   可把组件挪到 `battle/comp/` 或在 `PlayerBattleSettlementTestAccess` 加入口,交 Codex 评估。
 4. **补签依赖观战索引(§21.5 第 2 条;收缩批不做,已由集群外入口 2b 第 9 条修掉失败路径)**:
    - 原风险「SETEX 写失败 → 开了局却补不了签」**已不存在**。match 现在在 CreateBattle **之前**写 `spectate:battle:{id}`
      (`gather.go:308-321`;`writeSpectateRecord`,`spectate.go:120-145`):有界重试共 2 次,每次 ctx 截止 1s(go-redis 读超时下实际上限 3s),
-     退避 100ms,最坏约 6.1s(`spectate.go:61-82`);仍写不进去就**不建房**,干净失败并记 `gather_total{outcome=index_failed}`。
+     退避 100ms,最坏约 6.1s(`spectate.go:61-82`);仍写不进去就**不建房**,干净失败并记 `match_gather_total{outcome="index_failed"}`。
      D82 换节点前先改写一次(`gather.go:339-343`,失败同样 `index_failed`);开局成功后 `publishSpectateBattle` best-effort 同值补写并 ZADD(`gather.go:389`)。
      CreateBattle 与 DestroyBattle 都失败时记录保留(房间可能活着,补签靠它)。建房窗口里按 battle_id 观战不会懒剔除记录
      (`watchbattlelogic.go` 的 `roomMayBeCreating`)。口径与 [k8s-client-entry.md](./k8s-client-entry.md) D82「建房前写(fail-closed)」一致。
    - 残留风险:补签仍依赖这条记录(TTL = 最长战斗时长 + 60s,`spectateTTLSeconds`);持票断线可凭原票重连,不依赖记录。
      客户端把 `kInvalidParameter` 当作唯一的 BattleGone 信号,match 若在别的失败上误回这个码,客户端会把进行中的战斗收敛回 None。
+   - **(2026-09-30 补充,评审 e2e-4)记录可能被静默淘汰**:`spectate:battle:{id}` 带 TTL,存放在 redis-match-cluster
+     (`deploy/k8s/manifests/infra/redis-match-cluster.yaml:27-28`,`maxmemory 512mb` + `maxmemory-policy volatile-lru`)。
+     这个集群还与 ChatRedis 共用(`k8s_deploy.ps1` chat ConfigMap 的 `ChatRedis` 段);chat 的历史 LIST、幂等、限速 key 都带 TTL,
+     和观战记录争同一份内存。内存吃紧时这条记录会被 LRU 淘汰,丢票玩家补签拿到 `kInvalidParameter`,客户端把进行中的战斗判为
+     `BattleGone`,全程没有报错。收缩后没有中继兜底,只能从 `match_request_battle_ticket_total{outcome="not_found"}` 的异常升高看出来。
+     处置(淘汰策略、ChatRedis 拆分、内存告警)归 [handoff-backlog-2026-09-05.md](./handoff-backlog-2026-09-05.md) D-03 / P2-D1,
+     待用户拍板;拍板前不单独改这个集群的淘汰策略。
    - 以上 match 改动未编译、未测试,待 Codex 验证。
 5. **match 侧**:`createBattle` 不区分 RPC 失败与 tip≠0 明确拒绝,明确拒绝后若 `DestroyBattle` 也失败,会走 `create_failed_room_alive`
    保守分支(不解冻,冻结等 scene 的 `prepare_deadline_ms` 清掉、票据等 matched TTL 自愈);`PickRandom` 不排除坏节点,签票失败的节点
-   可能被反复选中,造成 Prepare / Cancel 空转;`gather_total{outcome=create_failed}` 分不出两类。`WatchBattle` 对 battle 的 1003
+   可能被反复选中,造成 Prepare / Cancel 空转;`match_gather_total{outcome="create_failed"}` 分不出两类。`WatchBattle` 对 battle 的 1003
    一律回 `ErrBattleNotWatchable`,客户端分不出「战斗服暂不可用」。
    **(2026-09-29 补充)** 节点级准入拒绝(gRPC `UNAVAILABLE` + `battle_not_allocatable`)已由集群外入口 D82 单独处理:跳过 `DestroyBattle`,
    用 `PickRandomExcept` 排除已试节点、换节点重试**一次**(`gather.go:324-357`、`discovery/node_watcher.go:317`),仍被拒记
-   `outcome=not_allocatable`(`metrics.go:43`)。上面「不排除坏节点、记 `create_failed`」只对 tip≠0 的明确拒绝(如 D70 签票失败回 1003)
+   `match_gather_total{outcome="not_allocatable"}`(`metrics.go:43`)。上面「不排除坏节点、记 `create_failed`」只对 tip≠0 的明确拒绝(如 D70 签票失败回 1003)
    和 RPC 失败仍然成立。未编译、未测试,待 Codex 验证。
 6. **停机路径未改(§21.5 第 1 条)**:`AbortAllRooms` 之后 `DisconnectAll` 立即 forceClose 房间直连;没有 gate 兜底后,
    停机时积压在用户态缓冲里的观众 `SpectateEnd` 丢了就无法补回。
@@ -1031,8 +1061,13 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
    大厅一份),各场景已按 battle_id 幂等。D72 的「重连提示 → 补签」链路 robot 不覆盖。
 10. **Unity**:SYN 黑洞下从开局到判定 `Unreachable` 最长约 90s(4 张票,每张两次 10s 建连,中间含 1 次同票重连、间隔 1s;
     每张新票都重置同票重连次数,`BattleDirectLink.cs:257`、`ScheduleRecovery` `:621-632`;补签前退避 1 / 2 / 4s ±20%;合计 4×(10+1+10) + 1+2+4 ≈ 91s,另加补签往返),期间出手按钮置灰、
-    服务端每回合替玩家默认出手;陈旧的观众分配包晚于参战分配包到达,会让链路切走本局(`BattleClient` 忽略 `Superseded`,显示「连接中」
-    直到回合超时或终局;Kafka 按 player_id 保序,极少见);大厅断线仍拆直连,战斗中大厅抖动等同直连中断;
+    服务端每回合替玩家默认出手;
+    晚到的观众分配包会劫走唯一的直连:这是 `WatchBattle` double-check 自我清退的竞态——观众登记晚于自己的参战开局落地,
+    `AddObserver` 在清退之前已经推过 `Assigned(OBSERVER)`,链路改去服务那一局,本局收到 `Superseded`。
+    **(2026-09-30 已修,评审 e2e-2)** `BattleClient` 对本局的 `Superseded` 立即 `EnsureBattle` 补签要回链路(见 §22.3「Unity」);
+    代价是多一次补签往返,期间出手按钮置灰。未编译;EditMode 回归用例待补:本局 `Superseded` 触发 `EnsureBattle`,
+    `BattleEnd` / `BattleGone` 收场后不再触发;另需一条真 `BattleDirectLink` + `BattleClient` + `SpectateClient` 的集成用例。
+    大厅断线仍拆直连,战斗中大厅抖动等同直连中断;
     「已提交 → 断直连 → 补拉到新回合 → 按钮复位」的 UI 接线只有人工验证覆盖(EditMode 下 `Object.Destroy` 会报错);
     新增的两个 `.meta` 是手写的,以 Unity 导入结果为准。
 11. **生成与共用工作树**:proto-gen-run 会一并带入他人未提交的 guild / config / data_service 等 proto 改动,并重写有他人未提交修改的
@@ -1047,6 +1082,18 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
   `TcpConnection.cc:71` 的 assert(09-13 gate 事故同款,AGENTS §11.7);要保住终局包,必须同时保证 quit 前每条连接都到 kDisconnected,另行设计。
 - 补签依赖观战索引(§21.5 第 2 条):另起任务做独立的 `battle_id → 落点` 路由键。**(2026-09-29 更正)** 「开了局却补不了签」的失败路径
   已由集群外入口 2b 第 9 条修掉(建房前写、fail-closed,见 §22.5 第 4 条);独立路由键降为可选后续。
+  **(2026-09-30 补充)** 约束:新键不能放在会淘汰的实例上(`maxmemory-policy` 为 `volatile-lru` / `volatile-*` 或 `allkeys-*`),
+  否则只是把 §22.5 第 4 条的静默淘汰风险换个地方;现有 redis-match-cluster 在 D-03 拍板前不满足这一条。
+- **(2026-09-30 登记,评审 e2e-3)battle 停机 / 崩溃后参战者收不到终局信号,补签持续 `no_node`**:`BattleRoomManager::AbortAllRooms`
+  只给观众推 `SPECTATE_END_BATTLE_ABORTED`,参战者只被 `CloseDirectConnections` 关掉直连;进程注销后 match
+  `RequestBattleTicket` 在 etcd 找不到该 node_id,走 `no_node` 分支回 `kServiceUnavailable`(`requestbattleticketlogic.go` 的
+  `EndpointOfNode` 失败分支,注释「已知缺口」即指本条),客户端耗完补签预算判 `Unreachable`,弹「无法连接战斗服务器,本局将由系统自动出手」,
+  而房间其实已不存在;要等观战记录 TTL(`BattleMaxDurationSeconds`+60s,`spectate.go` 的 `spectateTTLSeconds`)过期或同号节点复用后才拿到
+  `BattleGone`。其间 scene 锁到 deadline 才由 reaper 静默解冻,不推消息。结局还取决于进程退出快慢(仍在 gRPC drain 时补签拿到的是 `BattleGone`)。
+  match 侧**不按节点缺席判死**(etcd 抖动 / 滚动重启窗口里战斗可能仍活着)。候选修法按收益排序:① 客户端 `Unreachable` 文案改为中性,
+  不断言「本局由系统出手」;② `AbortAllRooms` 在 `CloseDirectConnections` 之前给参战者推作废帧;③ scene reaper 解冻 FIGHTING 时推
+  `NotifyBattleEnd`;④ `SpectateBattleRecord` 加建房时的实例 uuid,与当前同 node_id 注册实例的 `NodeUuid` 不等才判 `BattleGone`
+  (改 proto,按 AGENTS §4 重生)。
 - D40 `SubmitBattleAction` 回合号幂等(收缩后直连抖动丢一手 = 该回合默认普攻)。
 - 生成器按服务过滤 gate 侧 gRPC 客户端桩。
 - match:`createBattle` 区分明确拒绝与 RPC 失败(明确拒绝时跳过 `DestroyBattle`,新增 `outcome=create_rejected`);`WatchBattle` 是否透传 battle 的 1003。
@@ -1117,6 +1164,9 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
    - 第 3 步之后全量:`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`。通过:proto / rpc / grpc_client / engine core / infra / scene lib / scene / gate /
      battle 0 error(`/WX` 开着),没有 `C1083 battle_binding_helper.h`,没有未解析的 `gate_battle_binding::*`。失败时保留每个工程的第一段错误(前 50 行);
      若 `player_battle.cpp` 因删 include 报错,只补回真正需要的那一个并回报。可选 Linux:`bash tools/scripts/build_linux.sh`(GCC `-Wall -Wextra`)。
+   - **(2026-09-30 补)全量之后**:`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build`。必须带 `-Build`:不带时只跑已有 exe,多数 gtest 工程
+     不在 game.sln 的构建配置里,不会针对新的 core 与 proto 重新链接。通过标准见 k8s-client-entry.md「上线之前:代码验证」第 3 步
+     (退出码 0,汇总表里没有「无 exe」行)。至此 C++ 顺序为「重生(第 3 步)→ `game.sln` 全量 → `run_cpp_tests -Build`」,与该文档一致。
 6. **独立 gtest**(不进 vcxproj):
    - `battle_push_policy_test`,Linux / 带 g++ 的容器:
      `GT=third_party/grpc/third_party/googletest/googletest; g++ -std=c++23 -I cpp/nodes/battle -I "$GT/include" -I "$GT" cpp/nodes/battle/tests/battle_push_policy_test.cpp "$GT/src/gtest-all.cc" "$GT/src/gtest_main.cc" -lpthread -o /tmp/battle_push_policy_test && /tmp/battle_push_policy_test`
@@ -1126,7 +1176,16 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
 7. **PowerShell 契约测试(D75;不依赖 regen,可与任一步并行)**:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`
    (本批新增用例:gate 默认以路由模式部署、`-GateRouterMode 0` 回退仍可生成、负向只收 "0" / "1"、发现前缀、dev_tools / k8s_image 留空不透传);
    `k8s_zone_rollback_gate_router_mode.tests.ps1`、`dev_tools_merge_zone_contract.tests.ps1`、`start_game_command_contract.tests.ps1`。
-   通过:退出码 0、fail=0。集群外入口批对同一批脚本和测试另有改动与期望,冲突时以 k8s-client-entry.md 的验证清单为准。
+   通过:四个文件都是退出码 0、fail=0(严格口径,2026-09-30 恢复)。任何一条红都是真实问题,即停并保留该文件的完整输出。
+   **已知会红:无。** 2026-09-29 登记的四项,2026-09-30 按磁盘静态核对,测试属主都已在工作树里改好(未提交,未经 Codex 运行):
+   - `k8s_zone_rollback_gate_router_mode.tests.ps1` 原 `:343`:沙箱缺拷 `lib/k8s_client_entry.ps1`(`k8s_zone_rollback.ps1:227` 在
+     `$ErrorActionPreference = "Stop"` 下 dot-source 它),现已补拷;
+   - 同文件原 `:776`、`:820` 两个旧负向用例:已按「dev_tools 透传 `-AllowDisruptiveSwitch` / `-RequireClientEndpoint`」改写为正向用例
+     (`-AllowDisruptiveSwitch` 只透传到 Step 6、不下传 Step 1;`-LoginDevPasswordAuth` 仍在调 `k8s_image.ps1` 之前被拒),并补了对照断言;
+     原 `:363-367` 假 dev_tools 参数表已补 `[switch]$AllowDisruptiveSwitch`;
+   - `k8s_deploy_contract.tests.ps1` 原 `:922`:sidecar 注解哈希正则改为 `"?[0-9a-f]{12}"?`,带不带引号都认。
+   k8s-client-entry.md「剩余风险 → 已知会红的测试」对这四个文件同样没有条目,两处一致。
+   除此之外,集群外入口批对同一批脚本和测试另有改动与期望,冲突时以 k8s-client-entry.md 的验证清单为准。
 8. **客户端**(`D:\luyuan\wuxingqitan\mmorpg-client`):
    - 运行时程序集:`pwsh -File tools/client_compile_check.ps1 -ShowErrors 40` → 退出码 0,skipped missing references 为空。
    - EditMode(先关闭打开该工程的 Unity 编辑器,`Temp/UnityLockfile` 不存在;或按 `tools/run_city_tiles_tests.ps1` 用隔离副本):
@@ -1141,7 +1200,8 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
    + `redis-cli FLUSHALL`;在 `robot/` 下执行):
    1. battle-smoke,`start_game.ps1 -GateRouterMode 1`(默认)与 `-GateRouterMode 0` 各起一次栈、各跑一次 `.\robot.exe -c etc/battle_smoke.yaml`
       → `BATTLE_SMOKE_OK … a_direct_turns>=1 b_direct_spectate_turns>=1`;battle 日志两条 `battle 直连握手成功 … signature_checked=1`
-      (role 为 PARTICIPANT 与 OBSERVER 各一);A 的直连 `state_replies>=1`,B 的 `spectate_states>=1`;`metric=battle_ticket_issue_failed` 不出现;
+      (role 为 PARTICIPANT 与 OBSERVER 各一);A 的直连 `state_replies` / `turn_results` / `battle_ends` 均 >=1,B 的 `spectate_states` /
+      `spectate_turns` / `spectate_ends` 均 >=1(均已被 `BATTLE_SMOKE_OK` 隐含);`metric=battle_ticket_issue_failed` 不出现;
       `metric=battle_frame_dropped_no_direct` 只允许零星采样;两种模式下 gate 启动日志 `出站白名单=` 都不含 `BattleNodeService`,
       gate 日志没有 BindBattle / `No node bound`,gate 不连 battle 的 gRPC 端口。
    2. 负向(D66,可选,需临时改 robot 或调试客户端):经 gate 发 `BattleClientPlayer` 上行(如 `SetAutoBattle`)超过
