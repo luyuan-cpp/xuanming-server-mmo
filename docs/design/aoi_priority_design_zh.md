@@ -155,3 +155,11 @@ InterestSystem::UnpinAoiEntity(watcher, target)   // 降级为 kNormal
 - **客户端设置 RPC**：将客户端上报的显示数量接入 `AoiClientCapacityComp`。
 - **滞后/缓冲期**：为在网格边界反复振荡的实体添加一个宽限期，避免频繁添加/移除。
 - **自定义策略**：从配置表数据驱动加载策略。
+
+## 2026-10-01 周围玩家邀请验收：双向视野通知
+
+联机验收发现：新入场者能看到静止玩家，静止玩家的服务器兴趣表也已登记新入场者，但客户端没有收到 ActorListCreate；反向移出时同样缺 ActorListDestroy。原因是 HandleEntityVisibility 只给当前跨格实体发通知，反向关系仅改兴趣表。
+
+修复在反向 AddAoiEntity 成功且原先不可见时立即通知对应观察者，反向移除非 pinned 条目后同步通知销毁。两方向仍独立遵循 CanSee、容量和 pinned 规则；稳定视野不反复发送。
+
+回归在 cpp/tests/aoi_delivery_test，直接编译生产 AOI/Grid/Interest/View，仅在网络发送边界截获收件人和序列化消息。正式入口：`pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter aoi_delivery_test`。覆盖静止观察者收到后来者、移出双向销毁、隐身、容量拒收、pinned 不销毁五项。2026-10-01 原实现 2 项失败、3 项通过，修复及正式入口均 5/5 通过。真实 Scene 完整构建与联网验收结果另见当日 PROGRESS 和组队邀请验收记录。
