@@ -234,6 +234,23 @@ func newGuildPlan(snapAt map[uint64]uint64, marginMs int64) (guildPlan, error) {
 	return plan, nil
 }
 
+// onlyPlayers 返回只含指定玩家的计划,给写后复查用(07 §7.7 处置二)。
+//
+// 为什么要收窄:写后复查找的是"检查之后才终结、而玩家数据已被回退"的行。没走到写 Redis 的玩家
+// (R5 断言失败、安全快照失败、全服回档停在更早的 zone 而没轮到)数据并没有回退,他们在检查之后
+// 新终结的行不是分歧;按完整计划复查会把这些行也报成 post-write,运维照单补偿就多扣一次。
+// "走到写那一步但结果未知"的玩家仍然算在内(可能已经写了一部分),方向 = 多报。
+func (p guildPlan) onlyPlayers(ids []uint64) guildPlan {
+	narrowed := guildPlan{sinceMs: make(map[uint64]uint64, len(ids)), snapAt: make(map[uint64]uint64, len(ids))}
+	for _, pid := range ids {
+		if since, ok := p.sinceMs[pid]; ok {
+			narrowed.sinceMs[pid] = since
+			narrowed.snapAt[pid] = p.snapAt[pid]
+		}
+	}
+	return narrowed
+}
+
 // guildSinceMs = 快照时刻(秒)×1000 − 余量(07 §7.2)。秒转毫秒取该秒的起点(下界),方向 = 多报。
 // 结果 < 1 时钳到 1:guild 把 since_ms == 0 当漏填拒掉;真实快照不会触发,只为小时间戳不下溢。
 // marginMs 由 config.ValidateGuildCheck 保证 > 0。
@@ -396,7 +413,8 @@ func runGuildGate(ctx context.Context, svcCtx *svc.ServiceContext, checker guild
 // 入口 ctx 已死,沿用它的话等待立即返回、复查必失败 → 每一次这样的回档都被误报成紧急的 post-write,真分歧反而查不出。
 // 数据已经写了,这一段必须跑完;它自带 guildRecheckDelay + guildRecheckBudget 的截止时间。
 //
-// 用同一组 since 再查一次,与检查阶段的 op_id 集合做差;不可证明玩家本身不算新分歧(检查阶段已放行过)。
+// 调用方传入的 plan 已收窄到走到写 Redis 那一步的玩家(guildPlan.onlyPlayers;各人的 since 与检查阶段相同)。
+// 再查一次,与检查阶段的 op_id 集合做差;不可证明玩家本身不算新分歧(检查阶段已放行过)。
 // 返回 ErrCodeOK,或 ErrCodeRollbackGuildDivergedAfterWrite + 新行(复查没做成时新行为 nil)。数据不自动撤销(Q3 = ①)。
 func recheckGuildAfterWrite(ctx context.Context, svcCtx *svc.ServiceContext, checker guildcheck.GuildDivergenceChecker, g guildGateRequest, plan guildPlan, before guildcheck.GuildCheckResult) (uint32, []guildcheck.GuildDivergence) {
 	postCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), guildRecheckDelay+guildRecheckBudget)
@@ -513,6 +531,9 @@ type RollbackPlayerResp struct {
 
 	// writeAttempted:走到了写 Redis 那一步(结果未知也算)。写后复查的触发条件;不出响应。
 	writeAttempted bool
+	// written:写 Redis 确认成功。RESULT 审计与指标按它记"恢复了几个人"—— 复查是"走到写那一步"就触发的,
+	// 写失败又被复查标记时响应码同样是 DivergedAfterWrite,不能据响应码把这个玩家算成已恢复。不出响应。
+	written bool
 }
 
 func RollbackPlayer(ctx context.Context, svcCtx *svc.ServiceContext, req *RollbackPlayerReq) (*RollbackPlayerResp, error) {
@@ -554,9 +575,11 @@ func RollbackPlayer(ctx context.Context, svcCtx *svc.ServiceContext, req *Rollba
 		resp = &RollbackPlayerResp{ErrorCode: constants.ErrCodeRollbackFailed}
 	}
 
-	// 写后复查报警时数据已经写了:照样算"恢复了一个玩家"。
+	// 写后复查报警且数据确实写成功了:照样算"恢复了一个玩家"。写失败(或结果未知)又被复查标记时不算 ——
+	// 响应码同样是 DivergedAfterWrite(更紧急的那个),但审计与指标要按真实结果记"恢复 0 人、失败 1 人"。
 	restored := rollbackErr == nil &&
-		(resp.ErrorCode == constants.ErrCodeOK || resp.ErrorCode == constants.ErrCodeRollbackGuildDivergedAfterWrite)
+		(resp.ErrorCode == constants.ErrCodeOK ||
+			(resp.ErrorCode == constants.ErrCodeRollbackGuildDivergedAfterWrite && resp.written))
 	var affected, failed uint32
 	if restored {
 		affected = 1
@@ -649,11 +672,13 @@ func rollbackPlayerWithFenceHeld(ctx context.Context, svcCtx *svc.ServiceContext
 		return resp, execErr
 	}
 
+	// 计划里只有这一个玩家且他已走到写那一步,不需要像 zone / 全服那样先 onlyPlayers 收窄。
 	postCode, fresh := recheckGuildAfterWrite(ctx, svcCtx, checker, g, plan, verdict.check)
 	if postCode == constants.ErrCodeOK {
 		return resp, execErr
 	}
 	// 写后分歧比写失败更紧急:数据可能已经写了一部分。原错误进日志,响应带上新行,err 置空让字段带得出去。
+	// resp.written 保持写阶段的真实结果:RollbackPlayer 据它决定这个玩家记"恢复"还是"失败"。
 	if execErr != nil || resp.ErrorCode != constants.ErrCodeOK {
 		logx.Errorf("[Rollback] player %d: write reported code=%d err=%v, and the post-write guild recheck flagged it",
 			req.PlayerID, resp.ErrorCode, execErr)
@@ -773,6 +798,7 @@ func rollbackSinglePlayer(ctx context.Context, svcCtx *svc.ServiceContext, req *
 		PreRollbackSnapshotID: preRollbackID,
 		FieldsRestored:        restoredFields,
 		writeAttempted:        true,
+		written:               true,
 	}, nil
 }
 
@@ -877,7 +903,8 @@ func rollbackZoneWithFenceHeld(ctx context.Context, svcCtx *svc.ServiceContext, 
 
 	code, execErr := zr.execute(ctx, svcCtx)
 	if zr.wrote {
-		postCode, fresh := recheckGuildAfterWrite(ctx, svcCtx, checker, g, plan, verdict.check)
+		// 只复查走到写那一步的玩家:没写过的玩家在检查之后新终结的行不是分歧(见 guildPlan.onlyPlayers)。
+		postCode, fresh := recheckGuildAfterWrite(ctx, svcCtx, checker, g, plan.onlyPlayers(zr.attempted), verdict.check)
 		if postCode != constants.ErrCodeOK {
 			if execErr != nil || code != constants.ErrCodeOK {
 				logx.Errorf("[Rollback] zone %d: execution reported code=%d err=%v, and the post-write guild recheck flagged it",
@@ -899,7 +926,9 @@ type zoneRollback struct {
 	playerIDs []uint64          // 升序,执行顺序
 	snapAt    map[uint64]uint64 // player → 计划快照时刻 S_p(秒):帮会检查的起点、R5 的下界
 	resp      RollbackZoneResp
-	wrote     bool   // 至少一个玩家走到了写 Redis:写后复查的触发条件
+	wrote     bool // 至少一个玩家走到了写 Redis:写后复查的触发条件
+	// attempted:走到写 Redis 那一步的玩家(结果未知也算),按执行顺序。写后复查只查他们(见 guildPlan.onlyPlayers)。
+	attempted []uint64
 	note      string // RESULT 审计的附注(例如全服回档中止时"没执行")
 }
 
@@ -955,6 +984,7 @@ func (zr *zoneRollback) execute(ctx context.Context, svcCtx *svc.ServiceContext)
 		}, zr.snapAt[pid])
 		if resp.writeAttempted {
 			zr.wrote = true
+			zr.attempted = append(zr.attempted, pid)
 		}
 		if err != nil || resp.ErrorCode != constants.ErrCodeOK {
 			zr.resp.PlayersFailed++
@@ -1259,10 +1289,15 @@ func rollbackAllWithFenceHeld(ctx context.Context, svcCtx *svc.ServiceContext, r
 	// ── 写后复查:一次等待,合并复查(仍持 server 级栅栏)────
 	postCode := constants.ErrCodeOK
 	var fresh []guildcheck.GuildDivergence
-	if slices.ContainsFunc(zones, func(zr *zoneRollback) bool { return zr.wrote }) {
-		postCode, fresh = recheckGuildAfterWrite(ctx, svcCtx, checker, g, plan, verdict.check)
+	// 只复查走到写那一步的玩家(全部 zone 合并):没执行到的 zone、R5 / 安全快照失败的玩家都不在内。
+	var attempted []uint64
+	for _, zr := range zones {
+		attempted = append(attempted, zr.attempted...)
 	}
-	// 把写后问题归到具体 zone:复查没做成时所有写过的 zone 都算;有新行时只算清单里含该玩家的 zone。
+	if len(attempted) > 0 {
+		postCode, fresh = recheckGuildAfterWrite(ctx, svcCtx, checker, g, plan.onlyPlayers(attempted), verdict.check)
+	}
+	// 把写后问题归到具体 zone:复查没做成时所有写过的 zone 都算;有新行时只算在本 zone 里写过该玩家的 zone。
 	flagged := func(zr *zoneRollback) bool {
 		if postCode == constants.ErrCodeOK || !zr.wrote {
 			return false
@@ -1271,8 +1306,7 @@ func rollbackAllWithFenceHeld(ctx context.Context, svcCtx *svc.ServiceContext, r
 			return true
 		}
 		return slices.ContainsFunc(fresh, func(d guildcheck.GuildDivergence) bool {
-			_, ok := zr.snapAt[d.PlayerID]
-			return ok
+			return slices.Contains(zr.attempted, d.PlayerID)
 		})
 	}
 
