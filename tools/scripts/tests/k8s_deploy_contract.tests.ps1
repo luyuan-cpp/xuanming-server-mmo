@@ -150,6 +150,9 @@ Test-Case "zone 内 go-svc Deployment 统一注入控制面命令 topic 契约,�
         Assert-Match -Text $block -Pattern "- name: KAFKA_COMMAND_TOPIC_PARTITIONS\s+value: `"$partitions`"" -Because "$name 的命令分区数必须与 C++ / topic 预建同一契约"
         Assert-Match -Text $block -Pattern "- name: KAFKA_COMMAND_TOPIC_GENERATION\s+value: `"$generation`"" -Because "$name 的命令代号必须与 C++ / topic 预建同一契约"
         Assert-Equal -Expected 1 -Actual ([regex]::Matches($block, 'name: KAFKA_COMMAND_TOPIC_GENERATION').Count) -Because '只能注入一份'
+        # topic 副本数同样统一注入:dev 档是单 broker,所以是 1(多 broker 的取值见下面「Kafka 拓扑」一节)。
+        Assert-Match -Text $block -Pattern '- name: KAFKA_TOPIC_REPLICATION_FACTOR\s+value: "1"' -Because "$name 建 topic 的副本数必须与 broker 数同源,不能各服务各写各的"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($block, 'name: KAFKA_TOPIC_REPLICATION_FACTOR').Count) -Because '只能注入一份'
     }
 }
 
@@ -749,6 +752,115 @@ Test-Case 'Kafka 控制器必须经发布未就绪地址的 headless 自举，�
     Assert-Match -Text $battleInfraRun.Output -Pattern '(?s)name: kafka-headless.*?publishNotReadyAddresses: true' -Because 'headless 必须在 broker 未 Ready 时发布 Pod 地址'
     Assert-NotMatch -Text $battleInfraRun.Output -Pattern 'value: "1@kafka:9093"' -Because '不得保留导致启动死锁的旧自举地址'
 }
+# ─────────────────────────────────────────────────────────────────
+# Kafka 拓扑(docs/design/no-single-node-horizontal-scaling-20261001.md §2):broker 数决定的派生值
+# (选举组成员表 / 副本数 / min.insync.replicas / PDB / podManagementPolicy)只在 k8s_deploy.ps1 的
+# Get-KafkaTopologyFor 里算一次。纯函数按 AST 抽出来直接喂值(与上面 deadline 守卫同一做法),渲染结果用 DryRun 核对。
+$kafkaTopologyFunctionNames = @('Get-KafkaTopologyFor', 'Get-KafkaTopology', 'Get-KafkaTopologyChangeVerdict')
+foreach ($kafkaFnAst in $deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
+    if ($kafkaTopologyFunctionNames -contains $kafkaFnAst.Name) {
+        Set-Item -Path "Function:script:$($kafkaFnAst.Name)" -Value $kafkaFnAst.Body.GetScriptBlock()
+    }
+}
+foreach ($kafkaFnName in $kafkaTopologyFunctionNames) {
+    if (-not (Test-Path "Function:$kafkaFnName")) { throw "k8s_deploy.ps1 缺少函数 $kafkaFnName(Kafka 拓扑计算被删了?后续断言无意义)" }
+}
+
+Test-Case 'Kafka 拓扑:单 broker 与改造前逐字一致,≥3 个 broker 时选举组固定三票、副本数 3、min.insync 2' {
+    $one = Get-KafkaTopologyFor -Brokers 1 -Namespace 'ns'
+    Assert-Equal -Expected '1@kafka-0.kafka-headless.ns.svc.cluster.local:9093' -Actual $one.ControllerQuorumVoters -Because '单 broker 的成员表不能变:PVC 里的元数据日志是按它 format 的'
+    Assert-Equal -Expected '1/1/1/1/OrderedReady' -Actual ('{0}/{1}/{2}/{3}/{4}' -f $one.ControllerCount, $one.ReplicationFactor, $one.MinInsyncReplicas, $one.PdbMinAvailable, $one.PodManagementPolicy) -Because 'OrderedReady 是缺省值,既有单 broker StatefulSet 的不可变字段不能被改到'
+
+    $three = Get-KafkaTopologyFor -Brokers 3 -Namespace 'ns'
+    Assert-Equal -Expected '1@kafka-0.kafka-headless.ns.svc.cluster.local:9093,2@kafka-1.kafka-headless.ns.svc.cluster.local:9093,3@kafka-2.kafka-headless.ns.svc.cluster.local:9093' -Actual $three.ControllerQuorumVoters -Because 'node.id = 序号 + 1,三票'
+    Assert-Equal -Expected '3/3/2/2/Parallel' -Actual ('{0}/{1}/{2}/{3}/{4}' -f $three.ControllerCount, $three.ReplicationFactor, $three.MinInsyncReplicas, $three.PdbMinAvailable, $three.PodManagementPolicy) -Because '三份副本允许一份掉队;OrderedReady 会让选举组与 Pod 就绪互相等'
+
+    $five = Get-KafkaTopologyFor -Brokers 5 -Namespace 'ns'
+    Assert-Equal -Expected $three.ControllerQuorumVoters -Actual $five.ControllerQuorumVoters -Because '加 broker 不能改选举组:成员表变了就不是加副本,而是迁移选举组'
+    Assert-Equal -Expected '3/3/2/4' -Actual ('{0}/{1}/{2}/{3}' -f $five.ControllerCount, $five.ReplicationFactor, $five.MinInsyncReplicas, $five.PdbMinAvailable) -Because '第 4 个起只当 broker;PDB 仍是一次最多驱逐一个'
+
+    foreach ($bad in @(0, 2, -1)) {
+        $thrown = ''
+        try { Get-KafkaTopologyFor -Brokers $bad -Namespace 'ns' | Out-Null } catch { $thrown = $_.Exception.Message }
+        Assert-Match -Text $thrown -Pattern '1 或 ≥3' -Because "broker 数 $bad 必须被拒:两票的选举组挂一个就没有多数派"
+    }
+}
+
+Test-Case 'Kafka 拓扑:缺省 broker 数跟档位走(非 dev 发布档或非 custom 运维档 = 3),显式值优先' {
+    $script:InfraNamespace = 'ns'
+    foreach ($case in @(
+        @{ Brokers = 0; Release = 'dev';     Ops = 'custom';        Want = 1 }
+        @{ Brokers = 0; Release = 'staging'; Ops = 'custom';        Want = 3 }
+        @{ Brokers = 0; Release = 'prod';    Ops = 'custom';        Want = 3 }
+        @{ Brokers = 0; Release = 'dev';     Ops = 'managed-cloud'; Want = 3 }
+        @{ Brokers = 0; Release = 'dev';     Ops = 'bare-metal';    Want = 3 }
+        @{ Brokers = 1; Release = 'prod';    Ops = 'managed-cloud'; Want = 1 }
+        @{ Brokers = 5; Release = 'dev';     Ops = 'custom';        Want = 5 }
+    )) {
+        $script:KafkaBrokers = $case.Brokers
+        $script:ReleaseProfile = $case.Release
+        $script:OpsProfile = $case.Ops
+        Assert-Equal -Expected $case.Want -Actual (Get-KafkaTopology).Brokers -Because "KafkaBrokers=$($case.Brokers) release=$($case.Release) ops=$($case.Ops)"
+    }
+}
+
+Test-Case 'Kafka broker 数变更:只放行「不变」与「已是多 broker 再加」,其余一律拒绝' {
+    foreach ($case in @(
+        @{ Live = $null; Want = 1; Verdict = 'absent' }
+        @{ Live = $null; Want = 3; Verdict = 'absent' }
+        @{ Live = 1; Want = 1; Verdict = 'unchanged' }
+        @{ Live = 3; Want = 3; Verdict = 'unchanged' }
+        @{ Live = 3; Want = 5; Verdict = 'scale-up' }
+        @{ Live = 1; Want = 3; Verdict = 'refuse' }
+        @{ Live = 3; Want = 1; Verdict = 'refuse' }
+        @{ Live = 5; Want = 3; Verdict = 'refuse' }
+        @{ Live = 0; Want = 1; Verdict = 'refuse' }
+        @{ Live = 2; Want = 3; Verdict = 'refuse' }
+    )) {
+        $liveText = if ($null -eq $case.Live) { '<不存在>' } else { [string]$case.Live }
+        Assert-Equal -Expected $case.Verdict -Actual (Get-KafkaTopologyChangeVerdict -LiveReplicas $case.Live -DesiredBrokers $case.Want) -Because "线上 $liveText → 目标 $($case.Want):1 ↔ ≥3 会改选举组成员表,缩容会摘掉仍持有副本的 broker"
+    }
+}
+
+Test-Case 'dev 档 Kafka 清单仍是单 broker:副本数 1,占位全部替换' {
+    $kafka = Select-ManifestByName -Output $battleInfraRun.Output -Name 'kafka'
+    Assert-Match -Text $kafka -Pattern '(?m)^  replicas: 1\s*$' -Because 'dev 档默认单 broker'
+    Assert-Match -Text $kafka -Pattern 'podManagementPolicy: OrderedReady' -Because '单 broker 必须渲染成缺省值,否则既有 StatefulSet apply 时不可变字段冲突'
+    Assert-Match -Text $kafka -Pattern 'name: KAFKA_DEFAULT_REPLICATION_FACTOR\s+value: "1"' -Because '单 broker 只能有一份副本'
+    Assert-Match -Text $kafka -Pattern 'name: KAFKA_MIN_INSYNC_REPLICAS\s+value: "1"' -Because '单 broker 的 min.insync 只能是 1'
+    Assert-Match -Text $kafka -Pattern 'minAvailable: 1' -Because '单 broker 不允许自愿驱逐'
+    Assert-NotMatch -Text $kafka -Pattern 'name: KAFKA_NODE_ID|name: KAFKA_ADVERTISED_LISTENERS' -Because '每个 Pod 不同的身份由启动脚本按序号导出,模板里写死就全体同号'
+    $topicJob = Select-ManifestByName -Output $battleInfraRun.Output -Name 'kafka-topic-init'
+    Assert-Match -Text $topicJob -Pattern 'name: REPLICATION_FACTOR\s+value: "1"' -Because '预建 topic 的副本数与 broker 数同源'
+}
+
+Test-Case '-KafkaBrokers 3:StatefulSet / 选举组 / 副本数 / PDB / 预建 Job 一起变' {
+    $run = Invoke-DeployDryRun -Arguments ($BattleInfraArgs + @('-KafkaBrokers', '3')) -Env $BattleTestEnv
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because '三 broker 的 DryRun 必须成功'
+    Assert-Match -Text $run.Output -Pattern 'Kafka topology: brokers=3 controllers=3 replication_factor=3 min_insync_replicas=2' -Because '解析出的拓扑必须打出来,zone-up 与 infra-up 档位不一致时靠这行发现'
+    $kafka = Select-ManifestByName -Output $run.Output -Name 'kafka'
+    Assert-Match -Text $kafka -Pattern '(?m)^  replicas: 3\s*$' -Because '三个 broker'
+    Assert-Match -Text $kafka -Pattern 'podManagementPolicy: Parallel' -Because 'OrderedReady 下 kafka-0 等多数派、kafka-1 等 kafka-0 Ready,互相等'
+    Assert-Match -Text $kafka -Pattern 'name: KAFKA_CONTROLLER_QUORUM_VOTERS\s+value: "1@kafka-0\.kafka-headless\.contract-battle-infra\.svc\.cluster\.local:9093,2@kafka-1\.kafka-headless\.contract-battle-infra\.svc\.cluster\.local:9093,3@kafka-2\.kafka-headless\.contract-battle-infra\.svc\.cluster\.local:9093"' -Because '三票选举组,地址走发布未就绪地址的 headless'
+    Assert-Match -Text $kafka -Pattern 'name: KAFKA_CONTROLLER_COUNT\s+value: "3"' -Because '启动脚本靠它决定谁兼任 controller、广播哪种地址'
+    foreach ($name in @('KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR', 'KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR', 'KAFKA_DEFAULT_REPLICATION_FACTOR')) {
+        Assert-Match -Text $kafka -Pattern ("name: $name\s+value: `"3`"") -Because "${name}:消费位点等内部 topic 只有一份时,倒一个 broker 照样全体消费者停摆"
+    }
+    Assert-Match -Text $kafka -Pattern 'name: KAFKA_MIN_INSYNC_REPLICAS\s+value: "2"' -Because '三份副本允许一份掉队,不允许只剩一份还照常收写'
+    Assert-Match -Text $kafka -Pattern 'minAvailable: 2' -Because '一次最多自愿驱逐一个 broker'
+    Assert-Match -Text $kafka -Pattern 'PLAINTEXT://\$\{POD_NAME\}\.kafka-headless\.contract-battle-infra\.svc\.cluster\.local:9092' -Because '多 broker 必须每个 Pod 广播自己的 DNS'
+    Assert-NotMatch -Text $run.Output -Pattern '__[A-Z][A-Z0-9_]*__' -Because '占位必须全部替换'
+    $topicJob = Select-ManifestByName -Output $run.Output -Name 'kafka-topic-init'
+    Assert-Match -Text $topicJob -Pattern 'name: REPLICATION_FACTOR\s+value: "3"' -Because '命令 topic 与审计 topic 必须按三份建'
+}
+
+Test-Case '负向:-KafkaBrokers 2 在任何清单生成之前被拒' {
+    $run = Invoke-DeployDryRun -Arguments ($BattleInfraArgs + @('-KafkaBrokers', '2')) -Env $BattleTestEnv
+    Assert-True -Condition ($run.ExitCode -ne 0) -Because '两个 broker 的选举组没有容错,不能部署'
+    Assert-Match -Text $run.Output -Pattern '1 或 ≥3' -Because '错误必须说明原因,而不是别的执行错误'
+    Assert-NotMatch -Text $run.Output -Pattern 'BEGIN MANIFEST' -Because '参数非法时不能已经开始输出清单'
+}
+
 Test-Case '普通 gate/scene Deployment 必须先创建被 emptyDir 遮蔽的日志父目录' {
     foreach ($name in @('gate','scene')) {
         $block = Select-ManifestByName -Output $devOut -Name $name

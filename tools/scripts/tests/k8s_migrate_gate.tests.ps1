@@ -51,7 +51,7 @@ function New-MockPod {
 function Reset-MigrateFixture {
     foreach ($name in @('Apply-OneGoSvc', 'Apply-GoSvcMigrateJob', 'Get-GoSvcMigrateJobState',
         'Wait-GoSvcMigrateJobSettled', 'Assert-GoSvcMigrateJobNotInFlight', 'Wait-ForGoSvcMigrateJob',
-        'Write-GoSvcMigrateJobDiagnostics', 'Add-GoSvcCommandTopicEnv')) {
+        'Write-GoSvcMigrateJobDiagnostics', 'Add-GoSvcEnvEntries', 'Add-GoSvcCommandTopicEnv', 'Add-GoSvcTopicReplicationEnv')) {
         Restore-ProductionFunction $name
     }
     $script:DeploymentContent = $null
@@ -93,6 +93,8 @@ function Reset-MigrateFixture {
         return "kind: ConfigMap`nmetadata:`n  name: go-svc-trade-config"
     }
     Set-Item Function:script:Resolve-ImagePullPolicy { param($ImageRef) return 'IfNotPresent' }
+    # 真实实现按 -KafkaBrokers 与档位算;这里固定成多 broker 的 3,证明注入值来自拓扑而不是写死的 1。
+    Set-Item Function:script:Get-KafkaTopology { return [pscustomobject]@{ ReplicationFactor = 3 } }
     # 真实实现读 bin/etc/base_deploy_config.yaml;这里给一个仓库里不会出现的代号 7,证明注入值来自契约而不是写死。
     Set-Item Function:script:Get-GoSvcCommandTopicContract {
         if ($script:CommandTopicContractError) { throw $script:CommandTopicContractError }
@@ -199,6 +201,8 @@ foreach ($svc in @('trade', 'friend')) {
         Assert-Match -Text $content -Pattern '- name: KAFKA_COMMAND_TOPIC_PARTITIONS\s+value: "256"' -Because '分区数来自契约'
         Assert-Match -Text $content -Pattern '- name: KAFKA_COMMAND_TOPIC_GENERATION\s+value: "7"' -Because '代号来自契约,不是 kafkacmd 的编译期默认 1'
         Assert-Equal -Expected 1 -Actual ([regex]::Matches($content, 'name: KAFKA_COMMAND_TOPIC_GENERATION').Count) -Because '重复的 env 名会让其中一份静默失效'
+        Assert-Match -Text $content -Pattern '- name: KAFKA_TOPIC_REPLICATION_FACTOR\s+value: "3"' -Because 'topic 副本数来自 Kafka 拓扑,多 broker 集群上不能按 1 份建'
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($content, 'name: KAFKA_TOPIC_REPLICATION_FACTOR').Count) -Because '只能注入一份'
         Assert-NotMatch -Text $content -Pattern 'PLACEHOLDER_' -Because '注入不能打乱原有占位替换'
     }
 }
@@ -238,6 +242,17 @@ Test-Case 'Add-GoSvcCommandTopicEnv:manifest 形状不对或手写了变量一�
     $notList = "containers:`n  - name: x`n    env:`n    args: []`n"
     $failure = Get-ThrownMessage { Add-GoSvcCommandTopicEnv -SvcName x -ManifestContent $notList -Partitions 256 -Generation 2 }
     Assert-Match -Text $failure -Pattern '不是列表项' -Because 'env 下不是列表时插入会产出非法 YAML'
+}
+
+Test-Case 'Add-GoSvcTopicReplicationEnv:与命令 topic 契约叠加注入,手写同名变量被拒' {
+    Reset-MigrateFixture
+    $manifest = "containers:`n  - name: x`n    env:`n      - name: A`n        value: b`n"
+    $once = Add-GoSvcCommandTopicEnv -SvcName x -ManifestContent $manifest -Partitions 256 -Generation 2
+    $twice = Add-GoSvcTopicReplicationEnv -SvcName x -ManifestContent $once -ReplicationFactor 3
+    Assert-Match -Text $twice -Pattern '(?m)^    env:\n      # [^\n]*\n      - name: KAFKA_TOPIC_REPLICATION_FACTOR\n        value: "3"\n      # [^\n]*\n      - name: KAFKA_COMMAND_TOPIC_PARTITIONS\n        value: "256"\n      - name: KAFKA_COMMAND_TOPIC_GENERATION\n        value: "2"\n      - name: A' -Because '两组注入都落在同一个 env 列表里,缩进一致'
+    $handWritten = "containers:`n  - name: x`n    env:`n      - name: KAFKA_TOPIC_REPLICATION_FACTOR`n        value: `"1`"`n"
+    $failure = Get-ThrownMessage { Add-GoSvcTopicReplicationEnv -SvcName x -ManifestContent $handWritten -ReplicationFactor 3 }
+    Assert-Match -Text $failure -Pattern 'KAFKA_TOPIC_REPLICATION_FACTOR' -Because '手写一份副本数就是第二份真相:broker 数变了它不会跟着变'
 }
 
 foreach ($condition in @('Complete', 'Failed', 'FailureTarget')) {

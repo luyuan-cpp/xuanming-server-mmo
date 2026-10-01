@@ -864,7 +864,8 @@ C++ 节点(gate / scene / battle)发出的每次 unary gRPC 调用现在都带 d
 
 `manifests/infra/kafka.yaml` 现在是:ClusterIP Service `kafka`(仍是 `kafka.<InfraNamespace>:9092`,所有 ConfigMap /
 `base_deploy_config.yaml` 都不用改)+ headless Service `kafka-headless` + `PodDisruptionBudget minAvailable: 1`
-+ StatefulSet `kafka` **1 副本**、一块 `20Gi` PVC(集群默认 StorageClass),数据目录由 `KAFKA_LOG_DIRS=/var/lib/kafka/data` 显式指定。
++ StatefulSet `kafka`(**1 个或 ≥3 个 broker**,由 `-KafkaBrokers` 决定,见下面「Kafka:多 broker」)、每个 broker 一块 `20Gi` PVC
+(集群默认 StorageClass),数据目录由 `KAFKA_LOG_DIRS=/var/lib/kafka/data` 显式指定。本节其余内容以单 broker(dev 档)为例。
 
 - **为什么**:旧写法是单副本 Deployment + `emptyDir`,broker 一重启(漂移、OOM、升级)**全部 topic、分区元数据与已提交 offset
   一起消失**。消费者随后静默把 topic 自动重建成 1 分区(broker 开着 `auto.create.topics.enable` + `num.partitions=1`),
@@ -879,11 +880,9 @@ C++ 节点(gate / scene / battle)发出的每次 unary gRPC 调用现在都带 d
   **切完必须重跑 `-Command infra-kafka-topics -WaitReady`**(同一次 `infra-up` 里已经跑了一遍;单独止血时用这条),
   否则审计 topic 与 `gate-cmd_g1` / `scene-cmd_g1` 会被抢先的生产者 auto-create 成 1 分区,gate/scene 的分区契约门禁随即让它们起不来。
   切换期间 Kafka 短暂不可用,这段时间产出的控制面命令会丢(与任何一次 broker 重启同性质),建议在没有玩家的窗口做。
-- **刻意保持单 broker**。仓库里所有 topic 都是 `replication-factor 1`(`kafka-topic-init` / compose / `kafkautil.EnsureTopics`),
-  `min.insync.replicas` 用默认值,而 `KAFKA_ADVERTISED_LISTENERS` 广播的是 ClusterIP Service 的 FQDN。
-  **只把 `replicas` 改大 = 没有任何冗余,还会路由错乱**:多 broker 时每个 Pod 必须广播自己的
-  `kafka-<n>.kafka-headless.<ns>` 地址,否则客户端拿到的 leader 地址会随机落到别的 broker 上。要上多 broker 是另一张票,
-  最少要同时改这三处(副本数 / 广播地址 / 全部 topic 的 replication factor + `min.insync.replicas`),不是改一个数字。
+- **dev 档是单 broker,staging / prod 档默认 3 个**(2026-10-01 起,见下一节)。**不要手工把 `replicas` 改大**:
+  多 broker 要同时成立四件事(每个 Pod 广播自己的地址 / 选举组成员表 / 全部 topic 的副本数 / `min.insync.replicas`),
+  它们由 `k8s_deploy.ps1 -KafkaBrokers` 一起渲染;只改一个数字 = 没有任何冗余,还会路由错乱。
 - **PDB 是 `minAvailable: 1`,也就是不允许自愿驱逐**。整个控制面、`db_task` 落库、审计流水都只有这一个 broker,
   自动化的节点排空 / 集群升级顺手赶走它,停机窗口里的命令就没了。代价是 **`kubectl drain <node>` 会挂在这个 Pod 上**;
   真要腾空节点时用 `kubectl delete pod kafka-0 -n mmorpg-infra`(自愿删除不过 PDB,Pod 随即重建)或
@@ -919,6 +918,36 @@ C++ 节点(gate / scene / battle)发出的每次 unary gRPC 调用现在都带 d
   但生产上应该钉一个具体版本。
 - 堆仍是 `-Xms512m -Xmx1g`(`prod-like`)。2×256 个命令分区 + 审计 + 各 zone 的 `db_task` 在 1G 堆上偏紧,
   真上量前应该按分区总数复核一次。
+
+## Kafka:多 broker(2026-10-01,docs/design/no-single-node-horizontal-scaling-20261001.md §2)
+
+`-KafkaBrokers <n>` 决定 broker 数。缺省 0 = 按档位:`-ReleaseProfile` 不是 dev,或 `-OpsProfile` 不是 custom → **3**;其余 → 1。
+只接受 1 或 ≥3。脚本启动时会打一行 `Kafka topology: brokers=… controllers=… replication_factor=… min_insync_replicas=…`。
+
+- **拓扑**:前 3 个 Pod(`kafka-0..2`)兼任 controller,组成 3 票的 KRaft 选举组(挂 1 个仍有多数派);第 4 个起只当 broker。
+  topic 副本数 3、`min.insync.replicas` 2:任何一个 broker 倒下,`acks=all` 的生产者仍然写得进去。
+  PDB 是 `minAvailable: N−1`(一次最多自愿驱逐一个),Pod 之间带 preferred 反亲和(尽量一台机器一个)。
+- **客户端不用改配置**。所有服务仍然只写 `kafka.<InfraNamespace>:9092`:这个 Service 只做 bootstrap 入口,
+  之后客户端按每个 broker 自己广播的 `kafka-<n>.kafka-headless.<ns>.svc.cluster.local:9092` 直连。
+- **zone-up 与 infra-up 必须用同一套档位参数**(或同一个 `-KafkaBrokers`)。Go 服务建自己的 topic(`db_task_*`、`match-results` 等)
+  用的副本数来自注入的 `KAFKA_TOPIC_REPLICATION_FACTOR`;两边对不上时,3 broker 集群上会建出 1 份副本的 topic,
+  随后 `acks=all` 的写入被 broker 以 `NOT_ENOUGH_REPLICAS` 拒掉(有意的 fail-closed)。看启动行的 `replication_factor=` 是否一致。
+- **1 → 3 不能原地切换,必须重建**(脚本会拒绝并提示)。原因:单 broker 的选举组只有 kafka-0 一票,把成员表改成三票并扩容时,
+  两个空白的新节点可以先凑成多数派、用一份空的元数据日志当选,kafka-0 回来时被截断,全部 topic 元数据消失。
+  重建流程(**有停机窗口,Kafka 里的未消费消息全部丢弃**,在没有玩家的窗口做):
+  1. 停掉所有 zone(`all-down` 或逐个 `zone-down`)与全局 Go 服务,确认 `db_task` 已被 db 消费完(否则丢的是玩家存档)。
+  2. `kubectl -n <infra> delete statefulset kafka`,再 `kubectl -n <infra> delete pvc -l app=kafka`(PVC 不删,新集群会读到旧的单票元数据)。
+  3. `k8s_deploy.ps1 -Command infra-up -KafkaBrokers 3 -WaitReady …`(同一次里会重跑 `kafka-topic-init`,按 3 份副本重建契约 topic)。
+  4. 重新 `zone-up`。各服务启动时 `EnsureTopics` 按 3 份副本建自己的 topic。
+- **3 → N 是普通扩容**:只改 `replicas`,新 Pod 只当 broker,不动选举组。但**新 broker 不会自动接手已有 topic 的分区**,
+  要用 `kafka-reassign-partitions.sh` 把副本挪过去。缩容(N → 更小)脚本一律拒绝:被摘掉的 broker 上还有分区副本。
+- **副本数不够的 topic 会被拦下**:`kafka-topic-init` 与 `kafkautil.EnsureTopics` 都读回已存在 topic 的副本数,低于要求即失败。
+  修法:topic 是空的就删掉重建;有数据就用 `kafka-reassign-partitions.sh` 补副本(副本数不参与寻址,可以原地改,不需要换代号)。
+- **上线前必须在 kind 上实测的一件事**:就绪探针用的 `kafka-broker-api-versions.sh` 会逐个询问集群成员。
+  预期是别的 broker 不在时它对那个节点报错、整体仍以 0 退出;若实测发现杀掉一个 broker 会让其余 broker 也变 NotReady,
+  说明这个预期不成立,要把就绪探针换成只看本机的判据。步骤:三 broker 起来后 `kubectl -n <infra> delete pod kafka-1`,
+  观察 `kafka-0` / `kafka-2` 是否保持 `1/1 Ready`,同时跑一轮 robot login-test。
+- **未做**:独立 controller 节点(现在是 combined 模式,Apache 建议关键环境把 controller 拆出去);镜像仍是浮动 tag。
 
 ## Kafka 保留期:一条规则(2026-09-08,routing-identity-audit-20260908.md R11)
 
