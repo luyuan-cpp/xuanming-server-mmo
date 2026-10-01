@@ -131,8 +131,8 @@ docker exec redis redis-cli --no-raw GET "player:${P}:location"   # 二进制,�
   - **其实执行了**(读超时一类:脚本跑完、应答丢了)→ 凭标记的那一支在 location 里留下了回滚回执,源端 `[ZoneTravel][RollbackAdopt] … adopting and unfreezing`,玩家留在原地继续玩,不丢数据(与场景 **B3a** 的源端现象相同,只是 scene_manager 这边记的是 `redis_error`)。
 - `plan_error` = 回滚计划构造失败(`owner_epoch.go` `planRouteRollback`,按构造不可达)。**没有回滚**、不退人数,本次落点留在 Redis,源端走上面"没执行"那一支。出现即代码缺陷:日志搜 `[RouteRollback] outcome=plan_error`,保留现场交开发。
 - `marker_gone` **不触发告警**(没有基线,待有基线后再加比例告警)。它 = 凭标记铸造的回滚发现所凭标记已不是那一份,一个字节没动、本次落点保留。两种来源,分辨方法:
-  - **目标节点已消费令牌**(Kafka"报错但其实已投递",目标节点的 A2′ 抢在回滚之前执行):目标 scene 日志里有这名玩家的 `[ExitRelease][InheritClear] player=<P> epoch=<E+1> result=inherit_deleted_older` 与 `HandlePlayerAsyncLoaded: Loading player <P>`。玩家在目标节点正常游戏;源端取证读到(E+1,指向目标)后销毁自己。
-  - **源端已先取证或撤回**(回滚晚于源端取证 / 退出优先 / 疏散撤回):目标 scene **没有**上面两行;源 scene 有更早的裁决行(`… was granted although the reply was lost/failed … (moved_elsewhere)`,或 `FinishExitAfterPersist: … (exit wins)` + `[ZoneTravel][WithdrawMark] withdrawn …`)。location 停在从未载入的目标上:跨 zone 时那是等待落点,重登直接落地;同 zone 时重登若被挑到别的节点会回 18,直到断线租约到期、location 被 LeaveScene 清掉,或被挑回那个目标节点(只伤活性)。
+  - **目标节点已消费令牌**(Kafka"报错但其实已投递",目标节点的 A2′ 抢在回滚之前执行):目标 scene 日志里有这名玩家的 `[ExitRelease][InheritClear] player=<P> epoch=<E+1> result=inherit_deleted_older`(A2′ 核对过 owner_epoch == E+1,并删掉了这份标记),时间早于 scene_manager 的 `marker_gone` 行。玩家在目标节点正常游戏;源端取证读到(E+1,指向目标)后销毁自己。
+  - **源端已先取证或撤回**(回滚晚于源端取证 / 退出优先 / 疏散撤回):目标 scene **没有** `inherit_deleted_older`(要么没有这名玩家的 InheritClear 行,要么是 `result=inherit_absent` —— 迟到的路由在标记被源端删掉之后才到);源 scene 有更早的裁决行(`… was granted although the reply was lost/failed … (moved_elsewhere)`,或 `FinishExitAfterPersist: … (exit wins)` + `[ZoneTravel][WithdrawMark] withdrawn …`)。location 停在从未载入的目标上:跨 zone 时那是等待落点,重登直接落地;同 zone 时重登若被挑到别的节点会回 18,直到断线租约到期、location 被 LeaveScene 清掉,或被挑回那个目标节点(只伤活性)。
 - **线上注意(v2.6 核对代码时发现,未修,登记待确认)**:`increase()` 看不到一条序列从"不存在"直接出现为 1 的那一次跳变。`node_detach_deferred_total` 为此在进入 `deferred` 时预建了值为 0 的序列(`metrics.go` `ObserveNodeDetachDeferred` 的注释),而 `enter_scene_rollback_total` 没有预建(`ObserveEnterSceneRollback` 只在事件发生时 `WithLabelValues(outcome).Inc()`)—— scene_manager 进程启动后的**第一次** `redis_error` / `plan_error` 可能不触发本告警。本地验收拿注入前后两次 `curl …/metrics` 快照做差,不受影响。
 
 **db**(zone1 `:9160`,zone2 `:10160`):
@@ -278,8 +278,13 @@ v2.5 起 scene 发出的每条 EnterScene 都带 `correlation_id`(scene_manager 
 | `Cross-zone redirect failed for player <P>: no gate nodes available for zone <Z>` | 目标 zone 无 gate,回 1,未改状态 | :844、`gate_redirect.go:44` |
 | `Cross-zone handoff released: player=<P> target_zone=<Z> owner_epoch=<E'> minted=true (awaiting placement)` | 第一条腿放行,location 变成「等待落点」| :888 |
 | `Cross-zone redirect only (ownership unchanged): player=<P> target_zone=<Z>` | 只送连接,不动归属(R7)。v2.4 起(GO-5)访客在重连窗口内从归属区入口重登、location 落在别 zone 的具体节点上时走这里;**等待落点不再走这里**(R8 已被设计文档 §12.7 取代)| :891(v2.4 工作树 `:1030`)|
-| `Failed to push redirect to gate (placed=true), rolling back location/epoch: …` | Kafka 发送失败,回滚,回 7 | :878 |
-| `[RouteRollback] outcome=redis_error 回滚玩家位置/epoch 时 Redis 出错…` / `[RouteRollback] outcome=already_rolled_back 首发回滚已生效(go-redis 重发)…` / `[RouteRollback] outcome=superseded 玩家位置或 epoch 已被并发请求推进…` | 回滚结果(2026-09-21 起统一前缀,**旧原文 `route 回滚玩家位置/epoch CAS 失败` / `route 回滚检测到…` 已不存在,按旧文案 grep 会漏**)。`rolled_back` 只计数不打日志。`redis_error` = Redis 里可能留着本次落点:跨 zone 时源 scene 会发 `[ZoneTravel][ClientReset]`;同 zone 时玩家挂在哑连接上(已知限制)。grep 口径:`"[RouteRollback] outcome="` | `owner_epoch.go:258-283` |
+| `Failed to push redirect to gate (placed=true), rolling back location/epoch: …`(跨 zone 第一条腿)/ `Failed to route player <P> to gate, rolling back location/epoch/counts: …`(同 zone 落点第 7 步)| Kafka 发送失败(同步写、`MaxAttempts=1`、`WriteTimeout` 5s),随后回滚,回 7。应答上的 `owner_epoch_after_rollback` 只在 bump 回滚确认生效时非 0 | `enterscenelogic.go` `handleCrossZoneRedirect` / `EnterScene` 第 7 步(`rollbackEnterSceneAfterRouteFailure`)|
+| `[RouteRollback] outcome=rolled_back mode=bump player=<P> epoch=<E+1>-><E+2> receipt="<E>:<ms>" forwarded="<E+2>:<ms>"` | INFO(GO-2 新增)。铸造过的落点回滚成功:owner_epoch 再 `INCR` 一格、location 退回本次之前的值(记录里的 epoch 写成 E+2)。`receipt` = 本次铸造所凭的 handoff 标记原文,已写进恢复出的 location;`forwarded` = 转写后的标记(毫秒后缀与原标记逐字节相同)。两者都是空串 = 这次铸造不凭标记(首次落点 / 第二条腿 / 死节点接管),只前进 epoch、退(或删)location。**keep 回滚(没铸造的落点、同节点 epoch 0 的铸造)成功时只计数、不打日志** —— v2.5 及以前写的"`rolled_back` 只计数不打日志"现在只对 keep 成立 | `owner_epoch.go` `rollbackPlayerPlacement` |
+| `[RouteRollback] outcome=already_rolled_back 首发回滚已生效(go-redis 重发),按已回滚处理: player=<P> mode=bump epoch=<E+1>-><E+2>` / `[RouteRollback] outcome=superseded 玩家位置或 epoch 已被并发请求推进,跳过旧状态覆盖与人数回滚: …` | 前者 INFO:同一条回滚 EVAL 被 go-redis 原样重发、首发其实已执行(只对 bump 识别;重放分支一个字节都不写,不会把源端已删的转写标记重新写活)。后者 Error:被并发请求推进,什么都没改 | `rollbackPlayerPlacement` |
+| `[RouteRollback] outcome=marker_gone 所凭交接标记已不在(目标节点已消费令牌,或源 scene 已取证 / 撤回),保留本次落点、不退人数: player=<P> epoch=<E+1> required_marker="<E>:<ms>"` | Error 级(go-zero logx 没有 WARN;GO-2 新增)。凭标记铸造的回滚发现标记已不是所凭那一份:**一个字节不动**,owner_epoch 停在 E+1、location 留在本次落点。偶发属正常竞态;两种来源的分辨方法见 §2.3 告警判读 | `rollbackPlayerPlacement` |
+| `[RouteRollback] outcome=redis_error 回滚玩家位置/epoch 时 Redis 出错,不确定是否已执行,本次落点可能仍在: player=<P> mode=… epoch=… epoch_after=… required_marker=… err=…`(另两种 `redis_error`:`… 回滚 Lua 返回值不是整数,按结果未知处理: …` / `… 回滚 Lua 返回了约定之外的值,按结果未知处理: …`)/ `[RouteRollback] outcome=plan_error 回滚计划构造失败(按构造不可达),不回滚、不退人数,本次落点留在 Redis: player=<P> epoch=… minted=… required_marker=… err=…` | Error。回滚结果未知(`redis_error`)/ 根本没回滚(`plan_error`),都触发告警 `SceneManagerEnterSceneRollbackRedisError`,判读见 §2.3。没执行时:跨 zone 源 scene 会发 `[ZoneTravel][ClientReset]`,同 zone 玩家挂在哑连接上(已知限制);其实执行了时:源 scene `[ZoneTravel][RollbackAdopt] … adopting and unfreezing` | `rollbackPlayerPlacement` / `rollbackPlacementAfterPushFailure` |
+| `[RouteRollback] 回滚 Lua 的返回值与计划对不上(Lua 与 Go 的约定被改岔了),按已回滚处理、不回显 epoch: player=<P> mode=… epoch=… epoch_after=… reply=…` | Error,**不该出现**(代码缺陷)。注意这一行**没有** `outcome=`,计数记在 `rolled_back`,应答的 `owner_epoch_after_rollback` 为 0 | `rollbackPlayerPlacement` |
+| (上面各行的 grep 口径)| 回滚日志自 2026-09-21 起统一前缀 `[RouteRollback]`,**旧原文 `route 回滚玩家位置/epoch CAS 失败` / `route 回滚检测到…` 已不存在,按旧文案 grep 会漏**。口径:`"[RouteRollback] outcome="`(漏掉上一行那条没有 `outcome=` 的,另搜 `"[RouteRollback] 回滚 Lua 的返回值与计划对不上"`)| — |
 | `[Travel] 跨 zone 传送被拒:目标 zone 没有这张图的世界频道,未改任何状态` | 第一条腿地图只读预检拒绝,回 1 | `enterscenelogic.go:808` |
 | `[Travel] 等待落点记下的目标地图不可用,回落默认大世界` | 第二条腿地图回落(人必须能落地)| :398 |
 | `位置记录的属主节点已确认死亡且再入屏障已过,按无持有者处理: player=… dead_zone=… dead_node=…` | **属主接管**(§11.5)| :302 |
@@ -346,7 +351,7 @@ gate 收到 RoutePlayerEvent 后,先判断"这条 scene 链路是否已连上**�
 | **K-ROBOT** | `Get-Process robot \| Stop-Process -Force` | 客户端断线。gate 发现 TCP 断开后**立即**通知 scene `ExitGame`(`cpp/nodes/gate/handler/rpc/client_message_processor.cpp:409-436`),不等 login 的 30s 断线租约 | 高 |
 | **R-PAUSE** | `docker exec redis redis-cli CLIENT PAUSE 20000` | Redis 20s 内不处理任何命令,TCP 不断(hiredis `connected()` 仍为真)→ 撑开"存盘已发、未落地"窗口。会同时卡住 login / scene_manager 等所有 Redis 客户端,它们的日志里会有超时噪声 | 中 |
 | **R-STOP** | `docker stop redis` / `docker start redis` | 真断连。本地 redis 开了 AOF + 数据卷(`docker-compose.yml:226-234`),重启后键还在 | 高(hiredis 多久重连上**拿不准**)|
-| **KF-PAUSE** | `docker pause kafka` / `docker unpause kafka` | scene_manager 的路由 / 重定向发送是**同步、`MaxAttempts=1`、`WriteTimeout=5s`**(`svc/servicecontext.go:110-142`)→ 铸造之后卡在 Kafka 上,随后失败并回滚。**用 pause 不用 stop/restart**:本机 Kafka 数据不持久,重启即清空日志 | 低。实际卡多久拿不准(`ReadTimeout` 走 kafka-go 缺省),首跑记录 |
+| **KF-PAUSE** | `docker pause kafka` / `docker unpause kafka` | scene_manager 的路由 / 重定向发送是**同步、`MaxAttempts=1`、`WriteTimeout=5s`**(`svc/servicecontext.go:110-142`)→ 铸造之后卡在 Kafka 上,随后失败并回滚(GO-2 起回滚 = location 退回 + 铸造过的 epoch 再前进一格,场景 B3a)。**用 pause 不用 stop/restart**:本机 Kafka 数据不持久,重启即清空日志。**unpause 之后 broker 可能把那条已被判超时的消息补投出去**("报错但其实已投递":pause 冻住的是 broker 进程,请求字节可能已进它的 socket 缓冲),这是场景 B3c 要看的东西,不是故障 | 低。实际卡多久拿不准(`ReadTimeout` 走 kafka-go 缺省),首跑记录;unpause 后会不会补投同样拿不准 |
 
 恢复:`go-svc-start-exe -GoServices scene_manager -Zone 1`(再 `-Zone 2`);`cpp-node-start -CppNodes scene -Zone 1`(`dev_tools.ps1:972 / :981`;已在跑的实例会被跳过,`cpp_nodes.ps1:337-347`)。
 
@@ -384,13 +389,14 @@ cd robot
 
 - scene(z1):`[ZoneTravel] handoff started … (cross-zone)` → `[SavePlayerToRedis] … (topic=db_task_zone_1, owner_epoch=E)` → `HandlePlayerAsyncSaved: Saving complete` → `[ZoneTravel] requested EnterScene` → `[ZoneTravel] handoff granted … -> gate …` → `[travel_redirect] … destroyed without persisting (ownership handed over)`。
 - scene_manager(第一条腿):`Cross-zone detected: … place=true mint=true` → `Cross-zone handoff released: … owner_epoch=E+1 minted=true (awaiting placement)`。**不应**出现 `[Handoff] 跨区重定向 暂拒`(跨 zone 传送是先写标记后请求)。
-- scene_manager(第二条腿):`Player <P> entered scene … on node … (zone 2, home_zone 1, owner_epoch …)`。第二条腿也铸造(`owner_epoch.go:25-28` 注释),所以 epoch 预期是 E+2——**从注释推的,首跑核对**。
+- scene_manager(第二条腿):`Player <P> entered scene … on node … (zone 2, home_zone 1, owner_epoch …)`。第二条腿也铸造(`owner_epoch.go` 文件头"不变量"一段:首次落点、过了换手门的跨节点交接、放行跨 zone 交接、等待落点的第二条腿),所以 epoch 预期是 E+2——**从注释推的,首跑核对**。
 - scene(z2)此后每次存盘:`topic=db_task_zone_1`(**不是** `db_task_zone_2`)。出现 `db_task_zone_2` = 访客数据落错库(不变量 §6.2),立即停。
 - db(z1):`owner-epoch advance: key=<P>`;`db_stale_owner_write_rejected_total == 0`。
 - 放行后、第二条腿落点之前 `GET player:{P}:handoff` 仍能读到旧标记,但其 epoch **小于** `GET player:{P}:owner_epoch`——正常(scene_manager 只比对不删)。**v2.4 起**第二条腿在 scene(z2) 载入前会跑 A2′:`[ExitRelease][InheritClear] player=<P> epoch=<E+2> result=inherit_deleted_older`,之后该键为 nil(此前靠 TTL 回收)。
 - **v2.4 起** robot 结束(LeaveGame / 断线)后,最后持有它的 scene 会写一份断线释放标记:`[ExitRelease] mark written player=<P> mark=<E'>:<ms> site=exit_release`,`GET player:{P}:handoff` = `"E':<ms>"` 且 E' == 当前 owner_epoch —— 正常,下一次载入由 A2′ 清掉。
 - **(v2.5,关联号)** scene(z1) `[ZoneTravel] requested EnterScene … corr=<N>` 的 `<N>` 与随后 `[ZoneTravel] handoff granted … corr=<N> correlated=1` 一致。
 - **(v2.5)** 基线跑完后各 scene 的 `[TravelHandoff]`:`reply_uncorrelated=0`、`reply_unmatched=0`、`freeze_cap_reached=0`、`dispatch_window_closed=0`、`mark_sent_destroyed=0`、`mark_sent_client_reset=0`、`destroy_deferred_unsettled_save=0`、`freeze_unstamped=0`、`watchdog_early_fire=0`;`handoff_fastpath_forced` 如实记录;全程没有 `[ZoneTravel][MarkSentDestroy]` / `[ZoneTravel][FreezeCap]` / `[ZoneTravel][DispatchWindow]` 行,robot 不出现 `kicked by server`。`reply_uncorrelated` 非 0 = 有 scene_manager 不是本批二进制,先换齐再跑。
+- **(v2.6,GO-2)** 基线跑完后各 scene 的 `[TravelHandoff]`:`rolled_back_adopted=0`、`returned_after_grant=0`、`rollback_receipt_anomaly=0`;全程没有 `[ZoneTravel][RollbackAdopt]` 行、没有 `(metric=returned_after_grant)` 行。两个 zone 的 scene_manager 日志里没有任何 `[RouteRollback]` 行,`scene_manager_enter_scene_rollback_total` 各 outcome 增量为 0(基线不该有 Kafka 推送失败)。基线全程 owner_epoch 每次只走 +1(去程第一条腿 +1、第二条腿 +1,回程同理);看到一次 +2 = 途中发生过一次 bump 回滚,去 scene_manager 日志里找 `[RouteRollback]`。**GO-2 的保证以全栈同一批二进制为前提**:新旧 scene_manager 混跑(旧副本回滚时把 epoch `SET` 回旧值、不查令牌)或目标 scene 是没有 A2′ 的旧版时,下面 B3 的期望不成立(设计文档 §13.7 兼容与升级顺序),先换齐再跑。
 - **(v2.5,CPP-2)** gate:启动后每个 scene 节点各有一行 `[SceneEntry] scene link ready node_id=<n> uuid=<u>`(两个 zone 各看自己的 gate);基线期间**零** `[SceneEntry] giving up`,稳态下也不应有 `failure=handshake_pending` 的 `forward deferred`;`[SceneEntry]` 汇总行要么不出现,要么 `gave_up=0`、`pending=0`。再跑一次 robot `login-test` 模式(`robot/etc/robot.yaml` 的 `mode`),通过数与改动前基准一致(本机记录 23/23),期间同样不得出现 `[SceneEntry] giving up`,尤其不得出现 `last_failure=handshake_pending`(= 就绪章没盖上,全员 20s 后被踢)。
 
 ### 3.4 每个场景前后
@@ -465,27 +471,85 @@ cd robot
 - **已知现象(不是 bug)**:这 30s 里源实体以冻结态留在源场景的 AOI 内,周围玩家看到一个不动的分身(`scene_node_service.cpp:151-160`,设计文档 §11.2 复审 P2)。
 - **通过标准**:✅ 源实体**不存盘**销毁(此后无 `[SavePlayerToRedis] Player <P> saved` 出自源节点);✅ 无 `stale_owner_write_rejected`;✅ 玩家从 zone 1 重登后**落在 zone 1**(等待落点不牵引,设计文档 §12.7;owner_epoch 预期 E+2,`[ExitRelease][InheritClear] … result=inherit_deleted_older`),金币 = 出发值。*v2.4 改期望:此前写的是"按等待落点被送到目标 zone(`Cross-zone redirect only`)",那依赖 R8,已被 GO-5 取代;出现 `Cross-zone redirect only` = scene_manager 或 login 还是旧二进制。*
 
-**B3 —— Kafka 推重定向失败 + 回滚也失败(S3L1-1,第二层出口)**(2026-09-21 新增;对应设计文档 §12.5.6,**代码未编译,本场景未实跑**)
+**B3 —— Kafka 推重定向 / 路由失败之后的回滚(GO-2 单调回滚)**(2026-09-21 新增时是"推重定向失败 + 回滚也失败",对应设计文档 §12.5.6;**v2.6 按 GO-2 落码后的 HEAD 整体重写**,对应设计文档 §13.7;**代码未编译,本场景未实跑**)
 
-> v2.5 注(2026-09-29 按 HEAD 907a6b752 修订):GO-2 根治(owner_epoch 严格单调:回滚再 INCR + 回滚回执 + 源端原子取证脚本)**已进 main**——Go / proto 侧在 ccafe300c,C++ 侧在 907a6b752,**均未编译、未测试**。源端取证已是带 `#!lua` 的 EVAL(`player_lifecycle.h` `travel_outcome::kLuaJudgeTravelOutcome`),`ACL SETUSER default -eval` 会把它一起拦下,**下文"源端的 DEL / MGET 不是 EVAL、不受影响"的前提在 HEAD 二进制上已不成立**:照原步骤跑,ACL 生效期间 scene 只会打 ERROR `[ZoneTravel] travel outcome judge script failed or returned a malformed reply for player <P> (…, err=NOPERM …)` 并保持冻结(`verify_rearmed`+1),第 3 步等的 `[ClientReset]` 不会出现;拖到冻结 70s 时是 `[ZoneTravel][MarkSentDestroy] … site=travel_freeze_cap`(robot 60s 预算多半先断线,走退出优先)。**HEAD 二进制上本场景按原文不执行,§7 记 SKIP**,期望待按 GO-2 判定表(设计文档 §12.8)整体改写。下文保留的是 GO-2 之前二进制的写法。
->
-> 若要在 HEAD 上尽力而为(**从代码推的,未核对**):把第 3 步改成 SM 日志一出现 `[RouteRollback] outcome=redis_error` 就立即 `ACL SETUSER default +eval +evalsha`(再 `docker unpause kafka`)。此后源端下一次看门狗取证才能执行,读到 epoch = E+1、location 是本次交接的等待落点,应仍是 `[ClientReset]` 那一支(证据多为 `failed`,之前那次失败的取证计一次 `verify_rearmed`)。
+**要验证的规则**:scene_manager 铸造之后推 Kafka 失败,要撤掉本次落点。GO-2 起回滚**只进不退**:location 退回本次之前的值,铸造过的 owner_epoch 再 `INCR` 一格(E+1 → E+2,回滚模式 `bump`)。跨 zone 传送的第一条腿是**凭 handoff 标记**铸造的,所以这次回滚另有三件事,与 `INCR` 在同一段 Lua 里原子完成(`owner_epoch.go` `luaRollbackPlayerPlacement`):以"所凭标记原样还在"为前提(不在就一个字节不动,`marker_gone`);把所凭标记原文作为**回滚回执**写进恢复出的 location;把标记**转写**成 `"E+2:<同一 ms>"`。源 scene 的取证(一段原子脚本:先删本族标记,再读 owner_epoch 与 location)因此只有两种结局:
 
-需要让第一条腿已铸造、Kafka 推送失败,而随后的回滚 EVAL 拿到 Redis 错误。手法:Kafka pause 撑住推送,epoch 一变就用 ACL 拒掉 EVAL。go-redis 对 `NOPERM` / `ERR` 不重试,回滚一次即判 `redis_error`;(**仅 GO-2 之前的二进制**)源端的 `DEL` 与 `MGET` 不是 EVAL,不受影响。
+| | 回滚实际执行了 | 回滚没执行 |
+|---|---|---|
+| Redis(源端取证之前)| owner_epoch = E+2;location 指回源节点、带回执 `"E:<ms>"`;handoff = `"E+2:<同一 ms>"`(转写标记)| owner_epoch = E+1;location = 目标 zone 的等待落点;handoff = `"E:<ms>"`(原标记)|
+| 源 scene 的结论 | 判定表 **B5**:采纳 E+2 → 解冻 → 强制存盘一次(`[ZoneTravel][RollbackAdopt] … adopting and unfreezing`)| 判定表 **B8**"已被放行":tip 3027 + 踢线 34 + 不存盘销毁(`[ZoneTravel][ClientReset]`,S3L1-1 第二层出口)|
+| 客户端 | 留在原场景,收到 `kZoneTravelTargetBusy`,**不被踢**,能继续操作 | 收到 3027 后被踢回选服,重登即落地 |
+| 子场景 | **B3a** | **B3b** |
 
-- **前置**:生产口径(§3.1 第 2 步);基线 travel-smoke 能 OK;记下 `$P` 与当前 epoch `$E`(`GET player:${P}:owner_epoch`)。本地 Redis 若不是 `default` 用户,下面的 ACL 命令换成实际用户名。
+与设计文档 §13.7 验证清单的对应:B3a = 那里的"B4b(跨 zone)",B3a 的同 zone 变体 = "B4a",B3c = "B5(迟到投递)"。本文不沿用那套编号,免得和判定表的行号 B4 / B5 撞名。keep 回滚(没铸造的落点、同节点 epoch 0 的铸造:只退 location,不动 epoch、不写回执)不在本场景里:那时源端手里的 epoch 没变,走的是判定表 B4"归属未变 → 解冻",源端现象同 B1。
+
+- **共同前置**:
+  - 生产口径(§3.1 第 2 步);基线 travel-smoke 能 OK 且 GO-2 三个计数为 0(§3.3);记下 `$P` 与当前 epoch `$E`(`GET player:${P}:owner_epoch`)。
+  - **全栈同一批二进制**(§3.3 的 GO-2 一条)。scene 侧看 `[TravelHandoff]` 行末尾有没有 `rolled_back_adopted=`;scene_manager 侧事前没有现成判据,B3a 跑完才看得出 —— GO-2 之前的二进制回滚成功时不打 `[RouteRollback] outcome=rolled_back mode=bump …`,且 owner_epoch 回到 `$E` 而不是 `$E+2`。
+  - **单测先于本场景**(给 Codex 的顺序,前一步不过就不要往下跑):① `gofmt -l go/scene_manager go/shared` 应无输出 —— `owner_epoch.go` 的顶层 doc comment 里有大量列表 / 代码块,落码时没跑过 gofmt,Go 1.19 起 gofmt 会重排这类注释,有输出就先格式化再继续;② 在 `go/scene_manager` 下 `go vet ./...` 与 `go test ./... -count=1`,其中 `owner_epoch_crosslang_test.go` 的 `TestSourceJudgeScriptAndInheritClearCopiesMatchCpp` 读 C++ 头文件里的两段 Lua 字面量与 Go 副本逐字节比,`TestRollbackAndInheritClearAreMutuallyExclusive` 锁回滚与 A2′ 的互斥,`TestSourceJudgeScriptDeletesOnlyItsOwnLineageAndSeesReceipt` 锁取证脚本只删本族;③ C++ 编 scene 库与 `cross_zone_test`(`TravelOwnership.*` 七个用例);④ 本文场景 B1 / B2 / B3 与 §5 不变量。Go 单测跑在 miniredis 上,有三个行为与真 Redis 是否一致**要靠这一轮实跑确认**:Lua 表里的 `false` 转 nil、`SET … EX "300"` 用字符串参数、负数整数应答(回滚 Lua 的 `-after`);取证脚本的 `#!lua` 首行 miniredis 不认,单测里的副本去掉了它,那一条性质只能靠场景 H1c 实跑。
+  - **旁路采样**:robot 失败后会立刻 cleanup(LeaveGame → 源 scene 退出存盘后写 A1′ 标记,location 也可能随 LeaveScene 被删),Redis 的中间态转瞬即逝。另开一个窗口,发起传送之前启动下面的循环,结束后按时间读它的输出(示意,**未执行过**;每轮三次 `docker exec`,实际周期约 0.5s,最短的那一格可能采不到,所以 Redis 直查只作旁证,**主证据是两边的日志**)。用 Unity 客户端做时玩家不会自动退出,可以直接查键。
+
+    ```powershell
+    while ($true) {
+        $t = Get-Date -Format 'HH:mm:ss.fff'
+        $e = docker exec redis redis-cli GET "player:${P}:owner_epoch"
+        $h = docker exec redis redis-cli GET "player:${P}:handoff"
+        $l = docker exec redis redis-cli --no-raw GET "player:${P}:location"
+        "$t epoch=$e handoff=$h location=$l"
+        Start-Sleep -Milliseconds 200
+    }
+    ```
+
+**B3a —— 回滚执行了:源端凭回执采纳解冻(GO-2 的核心验收点)**
+
+- **注入**:`'\[travel-smoke\] at home' = { docker pause kafka }`(KF-PAUSE),不动 Redis。**保持 pause 到 robot 退出之后**(robot 打出 `TRAVEL_SMOKE_FAIL` 时源端必已取证完),先按下面核对,再 `docker unpause kafka`;提前 unpause 就滑进 B3c。
+- **期望(scene_manager,第一条腿;落在哪个 SM 上不确定,G9,两个 zone 的都要看)**:`Cross-zone detected: … place=true mint=true` →(约 5s,Kafka 写超时)`Failed to push redirect to gate (placed=true), rolling back location/epoch: …` → `[RouteRollback] outcome=rolled_back mode=bump player=<P> epoch=<E+1>-><E+2> receipt="<E>:<t>" forwarded="<E+2>:<t>"`。**没有** `Cross-zone handoff released`。指标:`scene_manager_enter_scene_rollback_total{outcome="rolled_back"}` +1,其余 outcome 不动。
+- **期望(scene z1,按序)**:`handoff started … (cross-zone)` → `Saving complete` → `requested EnterScene … corr=<N>` →(约 5–8s 后)`[ZoneTravel] EnterScene rejected for player <P> code=7 msg=redirect to gate failed: … owner_epoch_after_rollback=<E+2> corr=<N> correlated=1` → WARN `[ZoneTravel][RollbackAdopt] player <P> handoff was rolled back to this node (receipt=<E>:<t>, scene_manager rejected, evidence=failed): owner_epoch <E> -> <E+2>; adopting and unfreezing (metric=rolled_back_adopted)` → `[ZoneTravel] handoff aborted for player <P>: scene_manager rejected; unfreezing and keeping player on this node` → `[SavePlayerToRedis] Player <P> saved to Redis, DB write tasks enqueued (topic=db_task_zone_1, owner_epoch=<E+2>)` → `HandlePlayerAsyncSaved: Saving complete for player: <P>`。
+  - **应答丢失的形态**(docker pause 下 kafka-go 的元数据查询不受 5s 写超时约束,可能拖过 zrpc 的 8s 服务端超时;同样算对):没有 `EnterScene rejected` 行,先是 `[ZoneTravel] handoff EnterScene transport failure … outcome unknown …`(gRPC deadline 10s,只记日志),`requested EnterScene` 之后约 30s 才出现 `[RollbackAdopt] … (receipt=<E>:<t>, EnterScene reply timed out, evidence=no_reply): …`,随后的 abort reason 是 `EnterScene reply timed out`。回滚已执行、源端还没取证的这段时间里,`GET player:${P}:handoff` 读到的是转写标记 `"<E+2>:<t>"`。
+  - `[TravelHandoff]` 增量:`started+1 started_cross_zone+1 rolled_back_adopted+1 aborted+1`(应答丢失的形态另有 `reply_watchdog_fired+1`);`granted` / `granted_without_reply` / `granted_client_reset` / `mark_sent_destroyed` / `returned_after_grant` / `rollback_receipt_anomaly` **不变**;`frozen_ms_max` ≈ 5000–8000(应答丢失时 ≈ 30000)。
+- **期望(robot)**:`TRAVEL_SMOKE_FAIL step=travel-out reason=…受理后失败 SendTipToClient tip=3027…`(这条路径上文案里的"scene 已解冻"是对的);**不出现** `kicked by server`。Kafka 仍暂停时 robot cleanup 的 LeaveGame 可能超时,属预期噪声。
+- **GO-2 验收点(逐条核对,缺一条都不算 PASS)**:
+  1. **采纳日志**:源 scene 有且只有一行 `[ZoneTravel][RollbackAdopt] … adopting and unfreezing (metric=rolled_back_adopted)`,其中 `receipt=` 的值 == scene_manager 那行的 `receipt="…"` == 本次交接写出的标记原文(可与旁路采样里铸造之前读到的 handoff 值对上)。
+  2. **计数**:`rolled_back_adopted` +1,且与 `aborted` +1 成对。
+  3. **epoch 多 2**:采纳行里是 `owner_epoch <E> -> <E+2>`;`GET player:${P}:owner_epoch` = `$E+2`(铸造 +1、回滚再 +1)。读到 `$E` = scene_manager 是 GO-2 之前的二进制;读到 `$E+1` = 回滚没执行,按 B3b 判。
+  4. **location 带回执**:旁路采样(或 Unity 下直查)里,回滚之后的 `--no-raw GET player:${P}:location` 输出含本次标记原文 `<E>:<t>` 这串字符。采不到时以第 1 条的日志为准(采纳行只有在取证脚本读到这份回执时才会打)。
+  5. **转写标记已被取证脚本删掉**:采纳之后、玩家退出之前,`GET player:${P}:handoff` 为 nil —— 既不是原标记 `"<E>:<t>"`,也不是转写标记 `"<E+2>:<t>"`。robot 退出后键重新出现为 `"<E+2>:<t'>"`(`<t'>` ≠ `<t>`,对应源 scene 的 `[ExitRelease] mark written player=<P> mark=<E+2>:<t'> site=exit_release`)是 A1′,不是没删掉;这行 `mark written` 本身也是旁证 —— A1′ 是按 owner_epoch 条件写的,写成功说明实体缓存的 epoch 已是 E+2。**读到的恰是 `"<E+2>:<t>"`(毫秒与原标记相同)才是转写标记残留**,保留证据。
+  6. **强制存盘与落库**:采纳之后有 `[SavePlayerToRedis] … owner_epoch=<E+2>`;全程无 `HandlePlayerSaveRejected`、无 `[OwnerEpoch]` 行。unpause 之后 db(z1)出现 `owner-epoch advance: key=<P> … taskEpoch=<E+2> appliedEpoch=<E>`,`db_owner_epoch_guard_total{outcome="advance"}` 有增量(每个 msgType 各记一次,**首跑核对**),`{outcome="stale"}` 与 `db_stale_owner_write_rejected_total` 不动。
+  7. **玩家还在原地、能动**:Unity 客户端下收到失败提示后仍能移动 / 操作(不是哑连接);robot 下以 cleanup 之后源 scene 走完正常退出链(`HandleExitGameNode: Player <P> is exiting the scene node (cause=…)` → `Destroying player: <P>`)为旁证。恢复后基线重跑 OK,金币 = 本轮出发值(没回档,也没重复加)。
+- **判读(出现下面的形态时)**:
+  - scene_manager 是 `outcome=marker_gone`、scene 是 `… was granted although … (moved_elsewhere)` + `[ZoneTravel][ClientReset]`:回滚晚于源端取证(Kafka 写卡过了 30s 看门狗)。结局自洽(不解冻、踢回重登),记为"未命中 B3a",如实记录回滚与取证的先后。
+  - scene 出现 `[RollbackAdopt] … not adopting (metric=rollback_receipt_anomaly)` + `[MarkSentDestroy] … site=travel_receipt_anomaly`:判定表 B6,**不符合预期**,见下面"GO-2 专属验收点"第 2 条,保留全部证据。
+  - scene 是 `handoff aborted … scene_manager rejected`,但**前面没有** `[RollbackAdopt]` 行、owner_epoch 仍是 `$E`:scene_manager 是 GO-2 之前的二进制(回滚把 epoch `SET` 回了旧值,源端按"归属未变"解冻)。换齐二进制重做。
+  - 采纳之后出现 `HandleExitGameNode: … (cause=released_by_transfer)`:迟到的 ReleasePlayer(同 zone 变体才有,已登记残余,§6 GR-3),记录,不算本场景失败。
+- **同 zone 变体(可选;= 设计文档的 B4a)**:zone 1 起两个 scene 节点,用 Unity 客户端(或任何能发起同 zone 跨节点换图的手段)在 Kafka 暂停时换到另一节点上的场景。差别:scene_manager 是 `Failed to route player <P> to gate, rolling back location/epoch/counts: …`;源 scene 是 `handoff started … (same-zone cross-node)`,失败 tip 是 `kEnterSceneFailed`(3023)而不是 3027;其余验收点相同。
+
+**B3b —— 回滚没执行(Redis 拒掉了回滚 EVAL):已放行销毁 + 踢线(S3L1-1 第二层出口)**
+
+需要让第一条腿已铸造、Kafka 推送失败,而随后的回滚 EVAL 拿到 Redis 错误。手法:Kafka pause 撑住推送,epoch 一变(铸造完成)就用 ACL 拒掉 EVAL。go-redis 对 `NOPERM` 不重试,回滚一次即判 `redis_error`;而且 `NOPERM` 是执行之前被拒 —— 回滚**确定没执行**。GO-2 起源端的取证也是 EVAL(`player_lifecycle.h` `travel_outcome::kLuaJudgeTravelOutcome`,带 `#!lua`),ACL 生效期间它同样被拒、源端只会保持冻结;所以 **ACL 必须在回滚失败之后尽快恢复**,让源端下一次取证能执行。*v2.5 及以前写的"源端的 `DEL` / `MGET` 不是 EVAL、不受影响"已作废;照旧步骤把 ACL 一直留到 `[ClientReset]` 出现,在 HEAD 二进制上是等不到的 —— scene 每次取证都打 `… judge script failed … err=NOPERM …`,拖到 robot 60s 预算断线(退出优先)或 70s 冻结上限(`site=travel_freeze_cap`),那是场景 H1c 的现象。*
+
+- **前置**:同上面的"共同前置";本地 Redis 若不是 `default` 用户,下面的 ACL 命令换成实际用户名。
 - **注入**:
   1. `'\[travel-smoke\] at home' = { docker pause kafka }`(KF-PAUSE)。
-  2. 每 100ms 查一次 `GET player:${P}:owner_epoch`,一旦变成 `$E+1`,立即 `docker exec redis redis-cli ACL SETUSER default -eval -evalsha`。
-  3. 保持到 zone 1 的 scene 打出 `[ZoneTravel][ClientReset]`(zrpc 服务端超时 8s ≥ 归属查询 1.5s + Kafka 写超时 5s + 1.5s 余量,2026-09-28 起;Kafka 写在 5s 超时处返回时应答以 7 当场到达,但 docker pause 下 kafka-go 的元数据查询不受写超时约束,仍可能超过 8s、应答丢失,约 30s 后由看门狗裁决),然后 `ACL SETUSER default +eval +evalsha`,再 `docker unpause kafka`。
-  - 已知副作用:`-eval` 期间全服 EVAL 都失败(含 scene 的存盘 Lua、scene_manager 的其它落点),属预期噪声,窗口尽量短;恢复后 scene_manager 的 Redis 熔断器可能还开几秒。
+  2. 每 100ms 查一次 `GET player:${P}:owner_epoch`,一旦变成 `$E+1`(铸造完成),立即 `docker exec redis redis-cli ACL SETUSER default -eval -evalsha`。可用的窗口就是 Kafka 写超时那约 5s。
+  3. 盯两个 zone 的 scene_manager 日志,一出现 `[RouteRollback] outcome=redis_error` 就**立即** `docker exec redis redis-cli ACL SETUSER default +eval +evalsha`。**最迟不晚于 scene 打出 `requested EnterScene` 之后 25s**:第一道 30s 应答看门狗的那次取证必须落在 ACL 恢复之后,否则它也被拒、要再等 30s,robot 的 60s 预算会先到(滑成"退出优先",记 SKIP 重做)。到 25s 还没看到 `redis_error` 也要恢复(Kafka 写卡得比预期久:zrpc 服务端超时 8s ≥ 归属查询 1.5s + Kafka 写超时 5s + 1.5s 余量,但 docker pause 下 kafka-go 的元数据查询不受写超时约束),此后回滚会正常执行,结局落到 B3a 或其"判读"里的 `marker_gone` 一支,记为"未命中 B3b"。
+  4. 等 robot 退出(被踢),按下面核对,再 `docker unpause kafka`。
+  - 已知副作用:`-eval` 期间全服 EVAL 都失败(含 scene 的存盘 Lua、scene_manager 的其它落点、撤回标记的条件删),属预期噪声,窗口尽量短;恢复后 scene_manager 的 Redis 熔断器可能还开几秒。
 - **通过口径(三者都要有)**:
-  - scene(z1):`[ZoneTravel][ClientReset] player <P> (…, evidence=failed|no_reply): owner_epoch <E> -> <E+1>, location awaits placement in zone 2; sending tip 3027 + KickPlayer …`,前一行是 `… was granted although the reply was lost/failed …`,后一行是 `[travel_granted_without_reply]`;`[TravelHandoff]` 增量 `started+1 started_cross_zone+1 granted+1 granted_without_reply+1 granted_client_reset+1`(证据为 `no_reply` 时另有 `reply_watchdog_fired+1`)。
-  - scene_manager:`scene_manager_enter_scene_rollback_total{outcome="redis_error"}` +1,日志 `[RouteRollback] outcome=redis_error …`。第一条腿落在哪个 SM 上不确定(G9),**两个 zone 的 SM 都要看**。
+  - scene(z1),按序:`requested EnterScene … corr=<N>` →(约 5–8s)`[ZoneTravel] EnterScene rejected for player <P> code=7 … owner_epoch_after_rollback=0 corr=<N> correlated=1` → ERROR `[ZoneTravel] travel outcome judge script failed or returned a malformed reply for player <P> (scene_manager rejected, evidence=failed, err=NOPERM …); keeping the player frozen and re-arming the watchdog`(ACL 还没恢复,这次取证被拒,**没有解冻**)→(`requested EnterScene` 之后约 30s,第一道看门狗,此时 ACL 已恢复)WARN `[ZoneTravel] travel for player <P> was granted although the reply was lost/failed (EnterScene reply timed out, evidence=failed): owner_epoch <E> -> <E+1> (moved_elsewhere); destroying source-side entity` → `[ZoneTravel][ClientReset] player <P> (EnterScene reply timed out, evidence=failed): owner_epoch <E> -> <E+1>, location awaits placement in zone 2; sending tip 3027 + KickPlayer so the client re-logs in` → … → `[travel_granted_without_reply] local entity for player <P> destroyed without persisting (ownership moved away)`。
+    - 看门狗那次的 `<reason>` 写的是 `EnterScene reply timed out`,证据却是应答带来的 `failed`(排障以 `evidence=` 为准)。
+    - 两种同样算对的变体:7 号应答丢了(同 B3a 的"应答丢失的形态")→ 没有 `EnterScene rejected` 与 `judge script failed` 两行,证据是 `no_reply`;ACL 恢复得比 7 号应答触发的那次取证还早(脚本化注入时可能)→ 没有 `judge script failed`,`was granted although …` 与 `[ClientReset]` 紧跟在 `EnterScene rejected` 之后、`<reason>` 是 `scene_manager rejected`。
+    - `[TravelHandoff]` 增量:`started+1 started_cross_zone+1 reply_watchdog_fired+1 verify_rearmed+1 granted+1 granted_without_reply+1 granted_client_reset+1`(上面两种变体各自没有 `verify_rearmed+1`,后一种也没有 `reply_watchdog_fired+1`);`rolled_back_adopted` / `aborted` **不变**,全程**没有**任何 `[RollbackAdopt]` 行。
+  - scene_manager:`Failed to push redirect to gate (placed=true), rolling back location/epoch: …` → `[RouteRollback] outcome=redis_error 回滚玩家位置/epoch 时 Redis 出错,不确定是否已执行,本次落点可能仍在: player=<P> mode=bump epoch=<E+1> epoch_after=<E+2> required_marker="<E>:<t>" err=NOPERM …`;`scene_manager_enter_scene_rollback_total{outcome="redis_error"}` +1(拿注入前后两次 `curl …/metrics` 快照做差 —— 这就是告警 `SceneManagerEnterSceneRollbackRedisError` 的表达式盯的那条序列;`plan_error` 序列应不出现或不变)。第一条腿落在哪个 SM 上不确定(G9),**两个 zone 的 SM 都要看**。
   - robot:日志有 `kicked by server` 且 `reason` 含 `3027`。scene 先发 tip 后发 34,但 scene→玩家推送不保证顺序(`player_message_utils.h:7-9`),所以 robot 的 FAIL 文案两种都算命中:`TRAVEL_SMOKE_FAIL … 受理后失败 SendTipToClient tip=3027…`(tip 先到;文案里的"scene 已解冻"对本路径不成立,忽略)或 `TRAVEL_SMOKE_FAIL … 传送途中收到 KickPlayer…`(34 先到)。
-- **状态核对**:`owner_epoch` = `$E+1`;`EXISTS player:${P}:handoff` = 0;`stale_owner_write_rejected` 为 0;无 `[OwnerEpoch]` 行。
+- **状态核对**:`owner_epoch` = `$E+1`(**不是** `$E+2`:回滚没执行);`EXISTS player:${P}:handoff` = 0(源端取证时删掉了原标记;源实体是不存盘销毁的,不走退出链,所以这里不会有 A1′);`stale_owner_write_rejected` 为 0;无 `[OwnerEpoch]` 行。
 - **重登**:恢复后重跑基线,能落地(从 zone 1 进:等待落点无持有者、直接铸造;epoch 预期 `$E+2`,**从代码推的,首跑核对**),金币 = 本轮出发值(冻结时那次存盘就是最终态)。
-- **判定未命中**:SM 日志是 `outcome=rolled_back`、scene 是 `handoff aborted …` = ACL 翻晚了,回滚在 EVAL 被拒之前已成功——最多重试一次,仍不中如实记录。(HEAD / GO-2 二进制上这一形态是 scene 先打 `[ZoneTravel][RollbackAdopt] … owner_epoch <E> -> <E+2>; adopting and unfreezing (metric=rolled_back_adopted)` 再 `handoff aborted …`,`owner_epoch` = `$E+2`。)SM 日志是 `superseded` = 有并发请求,记录现象。scene 出现 `[ClientReset] not resetting client … location is not this handoff's awaiting placement` = 不符合预期,保留全部证据。
+- **未命中 / 异常的判读**:
+  - SM 是 `outcome=rolled_back mode=bump …`、scene 是 `[ZoneTravel][RollbackAdopt] … adopting and unfreezing` 再 `handoff aborted …`、`owner_epoch` = `$E+2` = ACL 翻晚了,回滚在 EVAL 被拒之前已成功 —— 这就是 B3a,把结果记到 B3a 那一栏;B3b 最多重试一次,仍不中如实记录。
+  - SM 是 `redis_error` 但 err 不是 `NOPERM`(读超时 / EOF 一类),scene 却是 `[RollbackAdopt] … adopting and unfreezing`、`owner_epoch` = `$E+2`:回滚其实执行了、只是应答丢了,源端凭回执采纳 —— **合法结局**(§2.3 告警判读),如实记录;ACL 注入造不出这种形态。
+  - SM 是 `outcome=marker_gone`:回滚在源端取证之后才执行(ACL 恢复后 Kafka 写才超时),源端已按"已被放行"销毁,结局与本场景相同,记录先后。
+  - SM 是 `superseded` = 有并发请求,记录现象。
+  - scene 出现 `[ClientReset] not resetting client … location is not this handoff's awaiting placement` = 不符合预期,保留全部证据。
 - **Unity 客户端**(可选,需服务端就位):同一注入下,客户端日志先 `[tip] id=3027` 再 `[gate] kicked by server reason=3027`,选服界面显示"目标区暂时繁忙…请重新登录。",而不是通用的"连接已断开"。
 - **回归**:基线 travel-smoke 通过后 `granted_client_reset` 不变、robot 不出现 `kicked by server`;B1 仍是"解冻 + tip,不踢线"。可选:同 zone 跨节点换图加同样的注入,确认**不踢线**(同 zone 的哑连接是已知限制,设计文档 §12.5.6 残余 1),记录现象。
 

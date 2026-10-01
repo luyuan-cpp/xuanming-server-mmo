@@ -5,7 +5,10 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -17,7 +20,49 @@ type TopicSpec struct {
 	Name          string
 	Partitions    int32
 	RetentionMs   int64 // -1 = use broker default
-	ReplicaFactor int16 // 0 = use default (1)
+	ReplicaFactor int16 // 0 = use the deployment contract (DefaultReplicationFactor)
+}
+
+const (
+	// EnvTopicReplicationFactor 是**部署级**的 topic 副本数契约:broker 有几个、topic 存几份,
+	// 是部署决定的事,不是某个服务的配置。K8s 上由 k8s_deploy.ps1 按 -KafkaBrokers 统一注入到每个
+	// go-svc(单 broker = 1,≥3 个 broker = 3);本机 / docker-compose 是单 broker,不设,取默认 1。
+	//
+	// 为什么不让 broker 的 default.replication.factor 说了算(CreateTopics 传 -1):那需要 CreateTopics v4
+	// (KIP-464),而本仓库钉的 sarama v1.43.1 最高只发 v3,-1 会被 broker 以 InvalidReplicationFactor 拒掉。
+	EnvTopicReplicationFactor = "KAFKA_TOPIC_REPLICATION_FACTOR"
+
+	defaultTopicReplicationFactor int16 = 1
+)
+
+var (
+	topicReplicationOnce sync.Once
+	topicReplication     int16
+)
+
+// DefaultReplicationFactor 读一次 EnvTopicReplicationFactor 并缓存。非法值记 ERROR 后回落到 1:
+// 与 kafkacmd.CommandContract 同一口径 —— 一个打错的环境变量不该让服务起不来,但必须留痕。
+// 回落到 1 之后,若集群实际要求更多副本,下面 ensureTopics 的副本数核对会把它拦下来。
+func DefaultReplicationFactor() int16 {
+	topicReplicationOnce.Do(func() {
+		topicReplication = parseReplicationFactor(os.Getenv(EnvTopicReplicationFactor))
+		logx.Infof("kafkautil: topic replication contract replication_factor=%d", topicReplication)
+	})
+	return topicReplication
+}
+
+func parseReplicationFactor(raw string) int16 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultTopicReplicationFactor
+	}
+	v, err := strconv.ParseInt(raw, 10, 16)
+	if err != nil || v <= 0 {
+		logx.Errorf("kafkautil: invalid %s=%q, falling back to %d",
+			EnvTopicReplicationFactor, raw, defaultTopicReplicationFactor)
+		return defaultTopicReplicationFactor
+	}
+	return int16(v)
 }
 
 // 只暴露初始化需要的管理操作，测试不连接真实 Kafka。
@@ -42,10 +87,11 @@ func EnsureTopics(brokers []string, specs []TopicSpec) error {
 	}
 	defer admin.Close()
 
-	return ensureTopics(admin, specs, time.Now, time.Sleep)
+	return ensureTopics(admin, specs, DefaultReplicationFactor(), time.Now, time.Sleep)
 }
 
-func ensureTopics(admin topicAdmin, specs []TopicSpec, now func() time.Time, sleep func(time.Duration)) error {
+// defaultReplica 是 spec 没有显式写 ReplicaFactor 时用的副本数(生产路径传 DefaultReplicationFactor())。
+func ensureTopics(admin topicAdmin, specs []TopicSpec, defaultReplica int16, now func() time.Time, sleep func(time.Duration)) error {
 	existing, err := admin.ListTopics()
 	if err != nil {
 		return fmt.Errorf("kafka list topics: %w", err)
@@ -60,7 +106,10 @@ func ensureTopics(admin topicAdmin, specs []TopicSpec, now func() time.Time, sle
 		}
 		replica := spec.ReplicaFactor
 		if replica <= 0 {
-			replica = 1
+			replica = defaultReplica
+		}
+		if replica <= 0 {
+			replica = defaultTopicReplicationFactor
 		}
 
 		retentionStr := fmt.Sprintf("%d", spec.RetentionMs)
@@ -78,8 +127,8 @@ func ensureTopics(admin topicAdmin, specs []TopicSpec, now func() time.Time, sle
 			if err := admin.CreateTopic(spec.Name, topicDetail, false); err != nil && !errors.Is(err, sarama.ErrTopicAlreadyExists) {
 				return fmt.Errorf("kafka create topic %s: %w", spec.Name, err)
 			}
-			logx.Infof("kafka topic create requested: %s (partitions=%d, retention=%dms)",
-				spec.Name, spec.Partitions, spec.RetentionMs)
+			logx.Infof("kafka topic create requested: %s (partitions=%d, replication=%d, retention=%dms)",
+				spec.Name, spec.Partitions, replica, spec.RetentionMs)
 
 			// 创建成功不代表每个 broker 已看到新 topic。login/db 并发启动时
 			// AlreadyExists 也需等 metadata 可见，再沿用下面的分区和 marker 校验。
@@ -96,6 +145,15 @@ func ensureTopics(admin topicAdmin, specs []TopicSpec, now func() time.Time, sle
 		if detail.NumPartitions != spec.Partitions {
 			return fmt.Errorf("kafka topic %s partition contract mismatch: broker=%d config=%d; in-place expansion is forbidden, drain the old topic/retry queues and switch both login+db to a new TopicGeneration",
 				spec.Name, detail.NumPartitions, spec.Partitions)
+		}
+		// 副本数不够 = 这个 topic 仍然是单点:唯一持有它的 broker 一倒,消息就写不进、读不出,
+		// 而集群看起来是"多 broker、有冗余"的。不在启动期拦下,就会一直带着假冗余跑到出事那天。
+		// 副本数**多于**契约不算错(运维手工加过副本)。ReplicationFactor==0 表示元数据里没带副本信息,不猜。
+		// 修法:topic 是空的就删掉重建;有数据就用 kafka-reassign-partitions.sh 补副本。副本数可以原地改
+		// (与分区数不同,它不参与寻址),所以这里不要求换 TopicGeneration。
+		if detail.ReplicationFactor > 0 && detail.ReplicationFactor < replica {
+			return fmt.Errorf("kafka topic %s replication contract mismatch: broker=%d config=%d (%s); the topic has fewer replicas than the deployment requires, raise it with kafka-reassign-partitions.sh or recreate the empty topic",
+				spec.Name, detail.ReplicationFactor, replica, EnvTopicReplicationFactor)
 		}
 
 		markerPrefix, expectedMarker := partitionContractMarker(spec.Name, spec.Partitions)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -268,20 +269,25 @@ func TestListDivergences_D6_BudgetExhausted(t *testing.T) {
 	require.Error(t, err)
 }
 
-// D15 保留期钳位:块内 3 个玩家、其中 1 个 since < cutoff;首次答 FailedPrecondition(与 guild G8 同一条样例串)
-// → 第二次调用 since_ms == cutoff、仍是首页;UnprovablePlayerIDs == [该玩家];其余玩家的行照常按各自 since 过滤,
-// 不可证明玩家在保留期内的那段照列不误。
+// D15 保留期钳位:块内 4 个玩家,首次答 FailedPrecondition(与 guild G8 同一条样例串)
+// → 第二次调用 since_ms == cutoff + retentionClampSlackMs、仍是首页;since 早于这个实际查询下界的玩家
+// (早于 cutoff 的 old,以及落在 [cutoff, 下界) 带内的 band)记为不可证明;其余玩家的行照常按各自 since 过滤,
+// 不可证明玩家在下界之后的那段照列不误。
 func TestListDivergences_D15_RetentionClampRequeriesOnce(t *testing.T) {
-	const old, mid, fresh = uint64(101), uint64(102), uint64(103)
+	const old, band, mid, fresh = uint64(101), uint64(102), uint64(103), uint64(104)
+	const clamped = retentionSampleMs + retentionClampSlackMs
 	since := map[uint64]uint64{
 		old:   retentionSampleMs - 100_000, // 早于保留期下界:不可证明
-		mid:   retentionSampleMs + 100_000,
-		fresh: retentionSampleMs + 200_000,
+		band:  retentionSampleMs + 1,       // guild 当时可证明,但 (since, clamped] 这段没查:同样必须记为不可证明
+		mid:   clamped + 100_000,
+		fresh: clamped + 200_000,
 	}
 	table := tableAnswer([]*guildpb.GuildAssetOpBrief{
-		brief(1, old, retentionSampleMs+50_000),    // 下界之后:照列
-		brief(2, mid, retentionSampleMs+50_000),    // 早于 mid 自己的 since:滤掉
-		brief(3, fresh, retentionSampleMs+300_000), // 留
+		brief(1, old, clamped+50_000),    // 实际查询下界之后:照列
+		brief(2, mid, clamped+50_000),    // 早于 mid 自己的 since:滤掉
+		brief(3, fresh, clamped+300_000), // 留
+		brief(4, band, clamped+1),        // 带内玩家在下界之后的行:照列
+		brief(5, band, clamped),          // 不晚于查询下界:guild 不会返回(严格大于)
 	})
 	f := &fakeGuildInternal{answer: func(n int, req *guildpb.ListAppliedAssetOpsSinceRequest) (*guildpb.ListAppliedAssetOpsSinceResponse, error) {
 		if n == 0 {
@@ -294,11 +300,52 @@ func TestListDivergences_D15_RetentionClampRequeriesOnce(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, f.calls, 2)
 	assert.Equal(t, since[old], f.calls[0].sinceMs)
-	assert.Equal(t, retentionSampleMs, f.calls[1].sinceMs, "钳位重查必须用 guild 带回的 cutoff_ms")
+	assert.Equal(t, clamped, f.calls[1].sinceMs, "钳位重查必须用 guild 带回的 cutoff_ms + 钳位余量")
 	assert.Zero(t, f.calls[1].afterOpID, "钳位重查从首页开始")
-	assert.Equal(t, []uint64{old}, res.UnprovablePlayerIDs)
-	assert.Equal(t, retentionSampleMs, res.RetentionCutoffMs)
-	assert.Equal(t, []uint64{1, 3}, opIDs(res.Divergences))
+	assert.Equal(t, []uint64{old, band}, res.UnprovablePlayerIDs, "没查到的那段只要非空就必须记为不可证明")
+	assert.Equal(t, clamped, res.RetentionCutoffMs, "日志里的下界 = 实际查询下界")
+	assert.Equal(t, []uint64{1, 3, 4}, opIDs(res.Divergences))
+}
+
+// 钳位对**真实 guild 的语义**必须走得通:guild 每次调用都用当时的墙钟重算下界(now − 保留期 + 安全余量)并拒绝
+// since_ms < 下界的调用。假 guild 的墙钟每次调用前移 stepMs:
+//   - 前移量在钳位余量之内 → 重查与后续翻页都被接受(拿第一次的 cutoff 原样重查会在这里再被拒,回档永远 CheckFailed);
+//   - 前移量超过余量(时钟差比承诺还大)→ 重查再被拒 → error(方向仍是拒绝)。
+func TestListDivergences_RetentionClampSurvivesMovingCutoff(t *testing.T) {
+	const pid = uint64(7)
+	const now0 = uint64(1_700_000_000_000)
+	const retentionMinusSafetyMs = uint64(30*24*3600*1000 - 3_600_000) // guild:cutoff = now − 30 天 + 1 小时
+	movingGuild := func(stepMs uint64, rows []*guildpb.GuildAssetOpBrief) *fakeGuildInternal {
+		table := tableAnswer(rows)
+		return &fakeGuildInternal{answer: func(n int, req *guildpb.ListAppliedAssetOpsSinceRequest) (*guildpb.ListAppliedAssetOpsSinceResponse, error) {
+			cutoff := now0 + uint64(n)*stepMs - retentionMinusSafetyMs
+			if req.GetSinceMs() < cutoff {
+				return nil, status.Error(codes.FailedPrecondition, retentionRejectedMessagePrefix+strconv.FormatUint(cutoff, 10))
+			}
+			return table(n, req)
+		}}
+	}
+	firstCutoff := now0 - retentionMinusSafetyMs
+	since := map[uint64]uint64{pid: firstCutoff - 5_000_000}
+
+	// 三页(1201 行,全部晚于实际查询下界),每次调用 guild 的墙钟前移 3.5s(= 单次调用上限)。
+	rows := make([]*guildpb.GuildAssetOpBrief, 0, 1201)
+	for op := uint64(1); op <= 1201; op++ {
+		rows = append(rows, brief(op, pid, firstCutoff+retentionClampSlackMs+op))
+	}
+	f := movingGuild(3500, rows)
+	res, err := New(f).ListDivergences(context.Background(), since)
+	require.NoError(t, err, "下界随墙钟前移时,钳位重查与翻页仍必须被 guild 接受")
+	require.Len(t, f.calls, 4, "被拒一次 + 重查三页")
+	assert.Equal(t, firstCutoff+retentionClampSlackMs, f.calls[1].sinceMs)
+	assert.Equal(t, []uint64{pid}, res.UnprovablePlayerIDs)
+	assert.Len(t, res.Divergences, 1201)
+
+	// 墙钟一次前移就超过钳位余量:重查再被拒,不再钳第二次。
+	f = movingGuild(retentionClampSlackMs+1, nil)
+	_, err = New(f).ListDivergences(context.Background(), since)
+	require.Error(t, err)
+	assert.Len(t, f.calls, 2, "每块至多钳位一次")
 }
 
 // D16 message 解析不出 cutoff_ms → error;钳位重查仍 FailedPrecondition → error;下界不晚于块 since(自相矛盾)→ error;

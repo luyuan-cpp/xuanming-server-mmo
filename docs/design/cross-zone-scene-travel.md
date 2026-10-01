@@ -1575,7 +1575,7 @@ C++ 单测只覆盖纯函数与脚本形状。采纳路径的 ECS 级行为(采�
 **定稿设计**
 1. **Go 侧:单调回滚**
    - 铸造过的落点回滚时,不再 SET 回旧值,而是在同一段 Lua 里再 INCR 一格(N+1 → N+2,称为 bump)。
-   - 以下两种情况改用 keep 模式,epoch 保留新值:没铸造过的落点;以及 §12.6.9(c) 的同节点 epoch 0 铸造。
+   - 以下两种情况用 keep 模式,只退 location、epoch 键不动:没铸造过的落点(同物理节点换图、dev 旁路),epoch 保持原值;以及 §12.6.9(c) 的同节点 epoch 0 铸造,epoch 保留铸出的 1(路由的目标就是持有节点本身,再 INCR 会废黜合法持有者)。keep 模式不凭标记、不写新回执(location 按旧记录的原字节退回)、不转写标记、不回显。
    - 回滚的前提是:本次铸造所凭的 handoff 标记必须原样还在。这一条与目标节点的 A2′ 互斥。两段 Lua 在同一个 Redis 上先后执行:
      - A2′ 先执行:回滚返回 3(marker_gone),一个字节都不动。
      - 回滚先执行:B 的 A2′ 返回 -1,拒绝建实体,也就发不出 DBTask(N+1)。
@@ -1627,10 +1627,10 @@ C++ 单测只覆盖纯函数与脚本形状。采纳路径的 ECS 级行为(采�
 | B2 | 任一裁决入口进了 `ResolveTravelOutcome`(应答、应答看门狗、EnterScene 3.2 的路由、SET 空应答) | Redis 未连接;命令发不出;取证脚本回 ERROR(只读副本、MISCONF、OOM、ACL 拒 EVAL);空应答;应答形状不对 | 判不清 | 保持冻结,`verify_rearmed` +1,带原证据重挂应答看门狗;终局交给 B3 | 否(本次) |
 | B3 | 冻结满 70s(`kFreezeCap`)且标记已发出 | 不读 | 判不清,已到终局 | `ConcludeHandoffAfterMarkSent`,site = `travel_freeze_cap` | 同 B1 |
 | B4 | 取证成功,`kUnchanged` | owner_epoch 等于缓存值(最先判,不看 location 与回执) | 未放行,此后也放不出去 | `markEpoch` 清 0(本族标记已被脚本删掉,不再登记撤回)→ `AbortTravelHandoff`;证据是 `kSucceeded` 时静默解冻,其余回失败 tip | 否 |
-| B5 | 取证成功,`kRolledBackToSelf` | location 能解析;回执非空且等于 `HandoffRedisValue(markEpoch, requestedAtMs)`;`markEpoch` 非 0 且等于缓存值;owner_epoch = `markEpoch` + 2 = location 里记的 owner_epoch;location 指回本节点本 zone | 被回滚到本节点 | WARN `[ZoneTravel][RollbackAdopt]` → `PlayerOwnerEpochComp.epoch` 取 max(原值, 读到的值) → `markEpoch` 清 0 → `rolled_back_adopted` +1 → `AbortTravelHandoff` 解冻 → `SavePlayerToRedisImpl(entity, false)` 强制存盘一次 | 否 |
+| B5 | 取证成功,`kRolledBackToSelf` | location 能解析;回执非空且等于 `HandoffRedisValue(markEpoch, requestedAtMs)`;`markEpoch` 非 0 且等于缓存值;owner_epoch = `markEpoch` + 2 = location 里记的 owner_epoch;location 指回本节点本 zone | 被回滚到本节点 | WARN `[ZoneTravel][RollbackAdopt]` → `PlayerOwnerEpochComp.epoch` 取 max(原值, 读到的值) → `markEpoch` 清 0 → `rolled_back_adopted` +1 → `AbortTravelHandoff` 解冻(证据是 `kSucceeded` 时静默,其余回失败 tip)→ `SavePlayerToRedisImpl(entity, false)` 强制存盘一次。拿不到 `PlayerOwnerEpochComp`(按构造不可能)时改按 B6 收口 | 否 |
 | B6 | 取证成功,`kReceiptAnomaly` | 回执是本次标记原文,B5 的其余条件任一不成立(键被淘汰后补种、新旧 scene_manager 混跑、数据写坏) | 判不清 | ERROR 日志 → `ConcludeHandoffAfterMarkSent`,site = `travel_receipt_anomaly`;它返回 true(真正收口)才计 `rollback_receipt_anomaly` +1,因未落地存盘而推迟销毁时不计 | 同 B1 |
 | B7 | 取证成功,`kReturnedToSelf` | owner_epoch 变了;location 能解析且指回本节点本 zone;回执为空或不是本次原文 | 已放行后又回到本节点、回滚链(回执是转写形态),或 owner_epoch 键被淘汰读成 0。不是"本次交接被回滚到我" | WARN,`returned_after_grant` +1,然后走"已放行"分支不存盘销毁 | 否(location 指向具体节点,不满足踢线判据) |
-| B8 | 取证成功,`kMovedElsewhere` | owner_epoch 变了;location 能解析,在别的节点、别的 zone,或是等待落点 | 已放行到别处 | "已放行"分支:证据是 `kSucceeded` 时计 `granted`,按 `scene_handoff_granted` 正常销毁;其余计 `granted_without_reply`,按 `travel_granted_without_reply` 销毁 | 仅当跨 zone、证据是 `kFailed` 或 `kNoReply`、实体不在退出中、location 是本次交接的等待落点,四条都满足(§12.5.6 的判据) |
+| B8 | 取证成功,`kMovedElsewhere` | owner_epoch 变了;location 能解析,在别的节点、别的 zone,或是等待落点 | 已放行到别处 | "已放行"分支:证据是 `kSucceeded` 时计 `granted`,按 `scene_handoff_granted` 正常销毁;其余计 `granted_without_reply` 与 `granted`,按 `travel_granted_without_reply` 销毁 | 仅当跨 zone、证据是 `kFailed` 或 `kNoReply`、实体不在退出中、location 是本次交接的等待落点,四条都满足(§12.5.6 的判据) |
 | B9 | 取证成功,`kLocationUnknown` | owner_epoch 变了;location 缺失、解析失败或类型不对 | 已放行(location 已删或写坏) | 同 B8 的"已放行"分支 | 否(location 解析不了,不满足判据) |
 | B10 | 跨 zone 的成功应答带 Redirect(`HandleTravelEnterSceneReply`) | 不读 | 第一条腿已放行(回滚只发生在回 `ErrKafkaRoute` 的失败路径上) | 计 `granted`,按 `travel_redirect` 正常销毁 | 否 |
 | B11 | 进场路由带来的 epoch 大于缓存值,撞上交接中的实体(`DiscardStaleHandoffEntity`) | 不读 | 已放行后又被派回来;或已回滚到本节点、本节点还没取证,同落点重连的路由带着 E+2 先到 | 计 `granted_without_reply` 与 `granted`,按 `handoff_superseded_by_reentry` 销毁,随后从 Redis 重载,零损失 | 否 |
@@ -1720,13 +1720,13 @@ C++ 单测只覆盖纯函数与脚本形状。采纳路径的 ECS 级行为(采�
 9. **验收口径**:第 1–6 步全部通过,第 7 步的 B1 与 §5 不变量通过,第 8 步至少"同 zone 回滚后采纳"和"跨 zone 第一条腿回滚后采纳"通过、"迟到投递"至少命中一种结局且没有双持有者。缺哪一条,就在结果里如实写"未验证"。全部满足之后,帮会 08 §8.3 第 3 条才能改为"已验证";那一条另外要求本次部署里 scene_manager 以单副本或 Recreate 方式完成升级(定稿设计第 9 条)。
 
 **旧节的同步情况**(2026-10-01)
-- 本文里已同步(历史原文保留,加了带"GO-2(§13.7)起"字样的批注):§10.1 的 scene_manager 一行、§10.2 R5、§10.3 的"非单调"一条、§11.2 的流程图、§12.3 GO-2 行、§12.5.6(单条原子读、回滚三态、`rollbackPlayerPlacement`、指标、告警表达式、残余 7)、§12.6.4 M5、§12.6.8(同值再铸、"跳 ≥2"的前提)、§12.6.9(b 之下的 (c) 两处与文件头注释一条)、§13.0(总览表、编号对照、约定 4 的 I2)、§13.2(U3、MarkSentDestroy 的日志级别、迟到的 DEL)。
+- 本文里已同步(历史原文保留,加了带"GO-2(§13.7)起"字样的批注):§10.1 的 scene_manager 一行、§10.2 R5、§10.3 的"非单调"一条、§11.2 的流程图、§12.3 GO-2 行、§12.5.6(单条原子读、回滚三态、`rollbackPlayerPlacement`、指标、告警表达式、残余 7)、§12.6.4 M5、§12.6.8(同值再铸、"跳 ≥2"的前提)、§12.6.9(三处:"没堵住的三处"里的 (c)、epoch==0 偏差里的 (c)、`owner_epoch.go` 文件头注释那一条)、§13.0(状态段、总览表、编号对照、约定 4 的 I2)、§13.2(U3、MarkSentDestroy 的日志级别、迟到的 DEL)。
 - 还没同步、不在本文里的:`scene-owner-reentry-barrier.md` §3.3 要补"owner_epoch 只经 INCR 前进,路由失败回滚也用 INCR",以及 CZ-3"节点不得自己读 Redis 取 epoch"的唯一例外(B5 采纳)及其三条前提。2026-10-01 核对时该文档里还没有这两处;代码注释(`player_ownership_comp.h` 文件头)已经引用了它。
 
 **设计残余**
 - **不凭标记的铸造做不到 fail-closed。** 首次落点、第二条腿、从等待落点再次重定向、死节点接管,这些铸造没有令牌可查。遇到"kafka-go 报错但 broker 实际已投递"时没有互斥手段:幽灵目标节点在回滚前可以过 A2′、建实体、做一次 CAS 存盘,它的 DBTask(N+1) 也可能先落库;回滚之后它的存盘被拒、自毁,它上面的进度丢失,MySQL 可能短暂领先 Redis(帮会 08 §8.4 已接受的同类残余)。由"账本只读 Redis"契约兜底。根治需要载入认领令牌,或让 C++ 在 CAS 成功后再发 DBTask,另案处理。
 - **新旧 scene_manager 混跑窗口里,三条伤害都还在。** 旧副本把 epoch SET 回旧值、不查令牌;新副本写出的转写标记旧副本也认。处置见定稿设计第 9 条。
-- **新增的损失面。** 不凭标记的铸造(例如首次落点)在路由失败时也会 INCR。受影响的是两类实体:"退出重存超限而被保留"的实体,以及活僵尸。它们以前在这种情况下仍然合法;现在下一次存盘会被 CAS 拒,或在再入时因"跳 ≥2"被丢弃(`IsDeposedOnReentry`),丢掉尚未收敛的那段差额。这是安全方向,没有复制。压测期间 `stale_owner_write_rejected` 与 `exit_deposed_on_reentry` 不再保证恒为 0,§6 不变量 3 的口径要按"只在发生过路由失败回滚时非 0"来读。
+- **新增的损失面。** 不凭标记的铸造(例如首次落点)在路由失败时也会 INCR。受影响的是两类实体:"退出重存超限而被保留"的实体,以及活僵尸。它们以前在这种情况下仍然合法;现在下一次存盘会被 CAS 拒,或在再入时因"跳 ≥2"被丢弃(`IsDeposedOnReentry`),丢掉尚未收敛的那段差额。这是安全方向,没有复制。按规格的分析,压测期间 `stale_owner_write_rejected` 与 `exit_deposed_on_reentry` 不再保证恒为 0;§6 不变量 3 的"压测期恒 0"要读成"没有发生过路由失败回滚时恒 0",非 0 时先对照 scene_manager 的 `[RouteRollback]` 日志。
 - **gate 迟到改绑**(§13.3 L3):unpause 之后 kafka-go 可能补投那条已超时的路由,gate 把会话改绑到目标节点,目标节点的 A2′ 拒建实体;源端已凭回执采纳并解冻,但客户端的输入进的是目标节点,玩家"能看不能动",要重登。重登后回到源节点,数据无损。gate 没有 epoch 栅栏,是既有问题。
 - **采纳之后才到的迟到 ReleasePlayer。** scene_manager 在落点之前异步发 ReleasePlayer,失败时按 1s / 3s 退避重试,总长约 7s,可能在源端采纳并解冻之后才到:实体按 `kReleasedByTransfer` 退出,而 location 仍指向本节点,会话变哑。不违反 I3(实体进入退出态)。根治要让 ReleasePlayerRequest 携带预期 epoch,属 proto 变更,另案。
 - **`marker_gone` 之后 location 停在从未载入的目标上**(回滚晚于源端取证,或目标先消费令牌又放弃载入):重登可能回 18,要等断线租约到期由 LeaveScene 清掉。与 §12.5.6 残余 7 同类。

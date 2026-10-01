@@ -191,34 +191,40 @@ func (r *FriendRepo) RecommendByMutual(ctx context.Context, playerID uint64, exc
 // 而 friend_repo.go 的查询(loadPendingRequestsFromMySQL 等)是把 requestStatusPending 当参数传 —— 两种写法指的是
 // 同一个值。本文件四处字面量(本常量与 recommendAnchorBaseSQL 的 r_out / r_in 各一处)没有改成参数,是因为占位符里
 // 已经有一串同值的 playerID,再插一个不同含义的参数最容易数错位;改 pending 的编号时必须连这四处一起改。
-const recommendByMutualBaseSQL = `SELECT f2.friend_player_id, COUNT(*) AS mutual
-FROM friend f1 FORCE INDEX (PRIMARY)
-STRAIGHT_JOIN friend f2 FORCE INDEX (PRIMARY) ON f2.player_id = f1.friend_player_id
-WHERE f1.player_id = ?
-  AND f2.friend_player_id <> ?
-  AND NOT EXISTS (SELECT /*+ SEMIJOIN(FIRSTMATCH) */ 1 FROM friend f FORCE INDEX (PRIMARY)
-        WHERE f.player_id = ? AND f.friend_player_id = f2.friend_player_id)
+const recommendByMutualBaseSQL = `SELECT c.candidate_id, c.mutual
+FROM (SELECT f2.friend_player_id AS candidate_id, COUNT(*) AS mutual, RAND() AS shuffle
+      FROM friend f1 FORCE INDEX (PRIMARY)
+      STRAIGHT_JOIN friend f2 FORCE INDEX (PRIMARY) ON f2.player_id = f1.friend_player_id
+      WHERE f1.player_id = ?
+        AND f2.friend_player_id <> ?
+      GROUP BY f2.friend_player_id
+      ORDER BY mutual DESC, shuffle
+      LIMIT ?) AS c
+WHERE NOT EXISTS (SELECT /*+ SEMIJOIN(FIRSTMATCH) */ 1 FROM friend f FORCE INDEX (PRIMARY)
+        WHERE f.player_id = ? AND f.friend_player_id = c.candidate_id)
   AND NOT EXISTS (SELECT /*+ SEMIJOIN(FIRSTMATCH) */ 1 FROM friend_block b_out FORCE INDEX (PRIMARY)
-        WHERE b_out.player_id = ? AND b_out.blocked_player_id = f2.friend_player_id)
+        WHERE b_out.player_id = ? AND b_out.blocked_player_id = c.candidate_id)
   AND NOT EXISTS (SELECT /*+ SEMIJOIN(FIRSTMATCH) */ 1 FROM friend_block b_in FORCE INDEX (PRIMARY)
-        WHERE b_in.player_id = f2.friend_player_id AND b_in.blocked_player_id = ?)
+        WHERE b_in.player_id = c.candidate_id AND b_in.blocked_player_id = ?)
   AND NOT EXISTS (SELECT /*+ SEMIJOIN(FIRSTMATCH) */ 1 FROM friend_request r_out FORCE INDEX (PRIMARY)
-        WHERE r_out.from_player_id = ? AND r_out.to_player_id = f2.friend_player_id AND r_out.status = 1)
+        WHERE r_out.from_player_id = ? AND r_out.to_player_id = c.candidate_id AND r_out.status = 1)
   AND NOT EXISTS (SELECT /*+ SEMIJOIN(FIRSTMATCH) */ 1 FROM friend_request r_in FORCE INDEX (PRIMARY)
-        WHERE r_in.from_player_id = f2.friend_player_id AND r_in.to_player_id = ? AND r_in.status = 1)`
+        WHERE r_in.from_player_id = c.candidate_id AND r_in.to_player_id = ? AND r_in.status = 1)`
 
 // recommendByMutualStatement 拼出 RecommendByMutual 的 SQL 与参数。纯函数、不碰库:
 // TestRecommendByMutual_PlanIsPerRowPrimaryKeyLookups 对它的产物做 EXPLAIN,保证计划守卫测的与生产跑的是同一份文本。
 //
-// 参数顺序与 ? 的出现顺序一一对应:playerID ×7(f1 前缀、<> 自排除、f、b_out、b_in、r_out、r_in)→ exclude... → limit。
+// 参数顺序与 ? 的出现顺序一一对应:
+// playerID ×2(f1 前缀、<> 自排除)→ 窗口 W → playerID ×5(f、b_out、b_in、r_out、r_in)→ exclude... → limit。
 func recommendByMutualStatement(playerID uint64, exclude []uint64, limit uint32) (string, []any) {
-	excludeClause, excludeArgs := recommendExcludeClause("f2.friend_player_id", exclude)
-	query := recommendByMutualBaseSQL + excludeClause + "\nGROUP BY f2.friend_player_id\nORDER BY mutual DESC, RAND()\nLIMIT ?"
-	args := make([]any, 0, 7+len(excludeArgs)+1)
-	args = append(args, playerID, playerID, playerID, playerID, playerID, playerID, playerID)
-	args = append(args, excludeArgs...)
-	// LIMIT 显式转 int64:database/sql 的默认参数转换器对 uint32 是走 reflect 的,
+	excludeClause, excludeArgs := recommendExcludeClause("c.candidate_id", exclude)
+	query := recommendByMutualBaseSQL + excludeClause + "\nORDER BY c.mutual DESC, c.shuffle\nLIMIT ?"
+	args := make([]any, 0, 8+len(excludeArgs)+1)
+	// 两个 LIMIT 都显式转 int64:database/sql 的默认参数转换器对 uint32 是走 reflect 的,
 	// 显式给它一个 driver 原生支持的类型,少一层依赖驱动实现细节的地方。
+	args = append(args, playerID, playerID, int64(RecommendAnchorWindow),
+		playerID, playerID, playerID, playerID, playerID)
+	args = append(args, excludeArgs...)
 	args = append(args, int64(limit))
 	return query, args
 }

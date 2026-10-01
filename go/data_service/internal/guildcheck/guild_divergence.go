@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -46,6 +47,24 @@ const (
 	// "since_ms older than terminal retention; cutoff_ms=1697411600000"(guild G8 / 本包 D15)。
 	// 格式漂移的方向是"解析失败 → 调用方 CheckFailed 拒绝",不会放过任何一次回档。
 	retentionRejectedMessagePrefix = "since_ms older than terminal retention; cutoff_ms="
+
+	// retentionClampSlackMs:钳位重查时,在 guild 带回的 cutoff_ms 之上再加的余量(15 分钟)。
+	//
+	// 为什么必须有:guild **每次调用都用当时的墙钟重算下界**(cutoff = now − 保留期 + 安全余量,
+	// go/guild/internal/server/guild_internal_server.go 的 retentionCutoffMs),并拒绝 since_ms < cutoff 的调用。
+	// 拿第一次带回的 cutoff 原样重查,第二次调用哪怕只晚 1ms,下界也已经前移 → 再被拒 → 整次检查按查不成处理:
+	// 钳位在真实 guild 上永远走不通,"保留期不可证明可被合法放行覆盖"(07 R2b / U9)就成了空话
+	// (方向仍是拒绝,但开服满 30 天后 zone / 全服回档会一直 CheckFailed、没有出口)。
+	//
+	// 余量要盖住"第一次被拒 → 该块最后一页"之间 guild 墙钟的前移量:
+	//   - 耗时:重查与翻页都罩在调用方的检查预算里(GuildCheckBudgetSeconds,默认 120s);
+	//   - guild 多副本之间的墙钟差:本仓库对服务间时钟的承诺是各自 ±300s(04 §4.32),两副本之间至多 600s。
+	// 默认配置下合计 720s < 900s。超过它(时钟差比承诺还大,或把检查预算调到 300s 以上且单块真翻了那么久)的后果是
+	// 重查 / 后续页再被拒 → error → CheckFailed,方向仍是拒绝;届时缩小范围分批回档。
+	//
+	// 代价:since 落在 [cutoff, cutoff+余量) 的玩家也被记为不可证明(多拒,可放行;30 天保留期边缘的 15 分钟带)。
+	// 数据侧安全:查询起点只晚不早,仍落在 guild 留的 1 小时安全余量(RetentionSafetyMs)之内。
+	retentionClampSlackMs uint64 = 900_000
 )
 
 // ErrTooManyDivergences:过滤后的分歧行超过 MaxDivergenceRows。调用方据此把指标记成 truncated。
@@ -68,10 +87,12 @@ type GuildDivergence struct {
 type GuildCheckResult struct {
 	// Divergences 已按逐玩家 since 过滤(保留 updated_ms > since[player_id] 的行),按 op_id 升序。
 	Divergences []GuildDivergence
-	// UnprovablePlayerIDs:since 早于 guild 终态流水保留期下界的玩家(升序)。对他们只查得到下界之后的行
-	// (照样在 Divergences 里),更早的那段已被清理、无法证明。它**不是** error:调用方按"可放行的拒绝"处理(07 R2b)。
+	// UnprovablePlayerIDs:since 早于**实际查询下界**的玩家(升序)。实际查询下界 = guild 答复的保留期下界
+	// cutoff_ms + retentionClampSlackMs(钳位重查用的 since_ms)。对他们只查得到该下界之后的行
+	// (照样在 Divergences 里),更早的那段没查(其中保留期之前的已被清理)、无法证明。
+	// 它**不是** error:调用方按"可放行的拒绝"处理(07 R2b)。
 	UnprovablePlayerIDs []uint64
-	// RetentionCutoffMs:guild 答复的保留期下界(多块时取最大值,即最晚的那个)。仅当 UnprovablePlayerIDs 非空时有意义;日志用。
+	// RetentionCutoffMs:钳位后的实际查询下界(多块时取最大值,即最晚的那个)。仅当 UnprovablePlayerIDs 非空时有意义;日志用。
 	RetentionCutoffMs uint64
 }
 
@@ -133,8 +154,10 @@ func (c *rpcChecker) ListDivergences(ctx context.Context, sinceMsByPlayer map[ui
 // 该块的 since_ms = 块内最小的逐玩家 since(07 §7.2);返回后再按各自的 since 过滤,免得一个快照很老的玩家
 // 把同块别人一个月内的操作全拉进分歧清单。
 //
-// 保留期钳位(07 §7.5.3-2b):首页收到 FailedPrecondition → 解析 cutoff_ms → 块内 since < cutoff 的玩家记为
-// 不可证明 → 用 since_ms = cutoff 重查该块一次。这不是重试:换了参数,每块至多一次;重查再被拒即 error。
+// 保留期钳位(07 §7.5.3-2b):首页收到 FailedPrecondition → 解析 cutoff_ms → 取 clamped = cutoff + retentionClampSlackMs
+// (为什么要加余量见该常量)→ 块内 since < clamped 的玩家记为不可证明 → 用 since_ms = clamped 重查该块一次。
+// 不可证明的判据必须是 clamped 而不是 cutoff:(since, clamped] 这段没查,漏记就是静默少查(fail-open)。
+// 这不是重试:换了参数,每块至多一次;重查(或其后任一页)再被拒即 error。
 func (c *rpcChecker) checkChunk(ctx context.Context, ids []uint64, since map[uint64]uint64, res *GuildCheckResult) error {
 	chunkSince := since[ids[0]]
 	for _, id := range ids[1:] {
@@ -167,13 +190,17 @@ func (c *rpcChecker) checkChunk(ctx context.Context, ids []uint64, since map[uin
 					// guild 说"早于保留期",给的下界却不晚于我们的 since:答复自相矛盾,按查不成处理。
 					return fmt.Errorf("guild retention rejection is inconsistent: cutoff_ms=%d not after chunk since_ms=%d", cutoff, chunkSince)
 				}
+				if cutoff > math.MaxUint64-retentionClampSlackMs {
+					return fmt.Errorf("guild retention rejection is inconsistent: cutoff_ms=%d overflows", cutoff)
+				}
+				clampedSince := cutoff + retentionClampSlackMs
 				for _, id := range ids {
-					if since[id] < cutoff {
+					if since[id] < clampedSince {
 						res.UnprovablePlayerIDs = append(res.UnprovablePlayerIDs, id)
 					}
 				}
-				res.RetentionCutoffMs = max(res.RetentionCutoffMs, cutoff)
-				chunkSince = cutoff
+				res.RetentionCutoffMs = max(res.RetentionCutoffMs, clampedSince)
+				chunkSince = clampedSince
 				clamped = true
 				continue
 			}

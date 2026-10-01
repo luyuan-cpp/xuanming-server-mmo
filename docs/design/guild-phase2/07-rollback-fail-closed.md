@@ -368,6 +368,7 @@ type GuildCheckResult struct {
 > 3. **写后复查只在有玩家走到写 Redis 之后才做**(`writeAttempted`;写 Redis 报错也算,结果未知):被拒、零玩家、全员在安全快照前失败时不白等 10s。
 > 4. **响应码优先级**(三个 RPC 一致):RESULT 审计写不进(`SnapshotDBError`)> 写后分歧(`DivergedAfterWrite`,此时 err 置空让计数与样本带得出去,执行期原错误进日志)> 执行失败。写后分歧时 `guild_divergence_count / guild_divergences` 换成**新行**。
 > 5. 装配预检(`GuildDivergence == nil`、配置非法)放在 STARTED 审计之后、沉降之前:注定被拒的回档不先持栅栏白等 30s,且照样留 STARTED + 带码的 RESULT。
+> 6. **钳位重查的 `since_ms = cutoff_ms + 900000`(15 分钟钳位余量,`guildcheck.retentionClampSlackMs`),不是上面 2b 写的 `cutoff_ms` 原值**(10-01 复核订正)。2b 的"重查再得 `FailedPrecondition` 不该发生"论证不成立:guild **每次调用都用当时的墙钟重算下界**并拒绝 `since_ms < cutoff`(`guild_internal_server.go` 的 `retentionCutoffMs`),1 小时安全量保护的是"行还没被清理",不是"下界不动"——拿第一次带回的 `cutoff_ms` 原样重查,第二次调用哪怕只晚 1ms 就再被拒,于是凡是清单里有老快照玩家的回档恒为 `CheckFailed`、放行无效,R2b / U9 在真实 guild 上走不通(方向仍是拒绝,但正是 U9 要避免的"开服 30 天后批量回档无出口")。余量盖住"首次被拒 → 该块最后一页"之间 guild 墙钟的前移:检查预算(默认 120s)+ 两副本墙钟差(各 ±300s,至多 600s)= 720s < 900s;超出(时钟差超承诺,或预算调到 300s 以上且单块真翻了那么久)→ 再被拒 → `CheckFailed`。**不可证明的判据随之改为 `playerSinceMs[p] < cutoff_ms + 余量`**(`(since, 下界]` 这段没查,按 `cutoff_ms` 判会静默少查 = fail-open);代价是保留期边缘 15 分钟带内的玩家被多记为不可证明(多拒,可放行)。`GuildCheckResult.RetentionCutoffMs` 与日志的 `cutoff_ms=` 是**实际查询下界**(含余量)。guild 侧不改。测试 `TestListDivergences_RetentionClampSurvivesMovingCutoff` 用"墙钟每次调用前移"的假 guild 钉住。
 
 ### 7.5.4 拒绝与放行
 
@@ -699,7 +700,7 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
 - A1 `found=false → (nil,nil)`。A2 gRPC error → `(nil, err)`。A3 超时生效(fake 阻塞 → `DeadlineExceeded`)。
 
 > **2026-09-28 落码修正(B5d-2b)**:用例落点 ——
-> - `internal/guildcheck/guild_divergence_test.go`:D1、D3、D4(含 Unimplemented / PermissionDenied 等各 code 不重试)、D5(10000 过、10001 拒)、D6(已到点的 ctx 一次 RPC 都不发)、D15(与 guild G8 同一条样例串 `since_ms older than terminal retention; cutoff_ms=1697411600000`)、D16(解析不出 / 重查仍拒 / 下界不晚于 since / 非首页被拒),另加翻页(1201 行三页)、第二块失败、guild 答复自相矛盾三类、`ParseRetentionCutoffMs` 格式表。
+> - `internal/guildcheck/guild_divergence_test.go`:D1、D3、D4(含 Unimplemented / PermissionDenied 等各 code 不重试)、D5(10000 过、10001 拒)、D6(已到点的 ctx 一次 RPC 都不发)、D15(与 guild G8 同一条样例串 `since_ms older than terminal retention; cutoff_ms=1697411600000`)、D16(解析不出 / 重查仍拒 / 下界不晚于 since / 非首页被拒),另加翻页(1201 行三页)、第二块失败、guild 答复自相矛盾三类、`ParseRetentionCutoffMs` 格式表、钳位余量对"下界随墙钟前移"的假 guild 走得通 / 前移超过余量则拒(§7.5.3 落码修正 6;D15 的断言相应改为重查 `since_ms == cutoff + 余量`、带内玩家同记不可证明)。
 > - `internal/logic/rollback_recall_test.go`(`TestRollbackGuildGate_*`):D2、D7、D8(reason / operator 半边)、D9、D10、D11(真实 `guildcheck` + 假 RPC)、D12(两 zone 的 Regions 路由)、D13、D14、D17、D18(a)(b)(c),另加 R6(`ROLLBACK_PARTIAL` 同样过闸)、沉降被取消 / 超上限、`guildSinceMs` 边界。日志断言用 go-zero `logx/logtest` 收集器。
 > - `internal/server/dataserviceserver_test.go`:D8 的 token 半边(`TestRollbackRPCs_RequireAdminToken`)。
 > - `internal/config/config_test.go`:C1 全部 + 默认值、只写 Etcd 不算已配、预算边界、仓库 yaml 的 `GuildInternalRpc` / `MetricsListenAddr` / 三条 `MethodTimeouts`(RollbackPlayer ≥ 30 + 预算 + 10 + 120 秒)。
