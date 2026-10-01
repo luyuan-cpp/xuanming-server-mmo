@@ -150,13 +150,14 @@ function Get-LocalKafkaContract {
 }
 function Assert-LocalKafkaTopic($Spec) {
     $topic = $Spec.Name
-    $metadata = Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','localhost:9092','--describe','--topic',$topic) 60
+    # Kafka 管理命令需要启动 JVM；本机同时编译时可能超过 60 秒，只延长等待、不放宽契约校验。
+    $metadata = Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','localhost:9092','--describe','--topic',$topic) 180
     $header = [regex]::Match($metadata.Out,'(?m)^\s*Topic:\s+\S+.*?\bPartitionCount:\s*(\d+)\s+ReplicationFactor:\s*(\d+)')
     if ($metadata.Code -ne 0 -or -not $header.Success) { throw "无法读取 Kafka 主题 $topic 的完整元数据。" }
     if ([long]$header.Groups[1].Value -ne $Spec.Partitions -or [int]$header.Groups[2].Value -ne 1) {
         throw "Kafka 主题 $topic 分区或副本契约不符（应为 $($Spec.Partitions) 分区、1 副本）。保留现有主题，必须协调换代，禁止原地扩分区。"
     }
-    $configs = Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-configs.sh','--bootstrap-server','localhost:9092','--entity-type','topics','--entity-name',$topic,'--describe','--all') 60
+    $configs = Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-configs.sh','--bootstrap-server','localhost:9092','--entity-type','topics','--entity-name',$topic,'--describe','--all') 180
     # 锚定行首，只读取有效值，不能误取 synonyms 内的 broker 默认保留期。
     $retention = [regex]::Match($configs.Out,'(?m)^\s*retention\.ms=(-?\d+)\b')
     $cleanup = [regex]::Match($configs.Out,'(?m)^\s*cleanup\.policy=(\S+)')
@@ -165,7 +166,7 @@ function Assert-LocalKafkaTopic($Spec) {
     }
 }
 function Initialize-LocalKafkaTopics($Contract, [string[]]$ComposeArguments) {
-    $listing = Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','localhost:9092','--list') 60
+    $listing = Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','localhost:9092','--list') 180
     if ($listing.Code -ne 0) { throw '无法列出 Kafka 主题，已停止预建。' }
     $existing = @($listing.Out -split '\r?\n' | ForEach-Object { $_.Trim() })
     $missing = @()

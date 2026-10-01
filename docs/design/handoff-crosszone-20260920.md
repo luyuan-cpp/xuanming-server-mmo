@@ -10,6 +10,7 @@
 >   - 所以 **09-21 那批 C++(Z1 / A′,含 M3 探针)已能编译、链接**;同批的 GO-5 与 epoch==0 铸造在 Go 侧(`go/login`、`go/scene_manager`),仍无编译证据。这一条是本文按构建日志和产物时间戳推断的,那次构建不是专门为本线做的。
 >   - `cross_zone_test`、`routing_identity_test` 编译过,但**跨 zone 相关用例一个都没运行过**。实际跑过的只有 `bag_test`(09-21 的 10 个结算用例、09-28 整套)与 09-28 的 `turn_battle_engine_test`(124/125,见 PROGRESS.md 同日条目),都不是跨 zone 用例。
 > - **2026-09-28 本轮落码的全部代码都没有编译证据**(清单见 §0 最后一条),因为它们都晚于上面那次构建。同样没有证据的还有:Go(`go/scene_manager`、`go/login`)的 build / vet / test、Unity 编译与 EditMode 测试、任何联调与故障注入。
+> - **2026-10-01**:GO-2 根治(owner_epoch 严格单调)的代码已全部进 main,同样**没有任何编译、测试证据**,连 `gofmt` 都没跑过。提交号、审查结论、偏离与残余见 §4 第 2 条的 GO-2 一段;设计与判定表见设计文档 §13.7。
 > - 任何"已修 / 已落码"都应读作"已落码,待 Codex 验证"。验证顺序见 §4 末尾的「验证顺序」。
 
 ## 0. 三十秒版
@@ -28,7 +29,12 @@
     - **scene_manager 三条 P3**:GO-6、GO-4 残余、告警盲区。提交 `09f71f9d5`。
     - **infra 三项**:Hiredis ERR 分支 delete 回调;scene-manager zrpc `Timeout` 从 5000 改为 8000;删除 `robot/connected()`。提交 `9da27f9a4`、`24dd3e6c5`、`6941e7344`。
     - **客户端 CL-6 / CL-8**:在客户端分支 `crosszone/client-cl6-cl8` 的提交 `54034fe`,基于客户端 origin/main `8b21583`。已随合并提交 `96d36da`(链为 `54034fe` → `835aa1d` → `96d36da`,合入了 `90c38fd`)推到客户端 `origin/main`(09-29 05:25,按本机跟踪引用;组队线 `835aa1d` 同批进入)。**Unity 未编译、EditMode 未跑**。
-  - **进行中(设计已定稿,落码中)**:GO-2 根治、CPP-3。它们都要改 `player_lifecycle.cpp`,和别的改动串行做。
+    - **GO-2 根治(owner_epoch 严格单调)**:*2026-10-01 按 HEAD 核对,代码已全部进 main,未编译、未测试;设计、判定表与落点见设计文档 §13.7。*
+      - 做法:路由 / 重定向失败回滚时,不再把 epoch SET 回旧值,而是在同一段 Lua 里再 INCR 一格(N+1→N+2),并原子写回旧 location 与回滚回执(`PlayerLocation.rollback_receipt = 7`)。源 scene 用一段 `#!lua` 原子脚本取证;handoff SET 发出之后,只有两种正向证据能解冻:epoch 未变,或读到与本次标记原文逐字节相同的回执(采纳新 epoch 后强制存盘一次)。其余一律不存盘销毁。
+      - 提交:`ccafe300c`(proto 源 + Go)、`907a6b752`(C++ 大部分)、`80a1b0823`(窄面 regen 产物)、`a8c2d44a8`(C++ 余下部分、单测、跨语言 Lua 守卫)、`6b7a59287` 与 `567333aaf`(审查后的修正)。10-01 按本机跟踪引用查:前五个已在 `origin/main`,`567333aaf` 只在本地 main;以 `git ls-remote` 为准。
+      - 三视角审查(编译面静读 / 判定表与不变量 / 规格一致)的结论:**没有必须改项**。
+      - 偏离与残余、给 Codex 的验证顺序:见 §4 第 2 条的 GO-2 一段与 §4 末尾的「验证顺序」第 2 步。
+  - **进行中(设计已定稿,落码中)**:CPP-3。它要改 `player_lifecycle.cpp`,和别的改动串行做。(原先并列在这里的 GO-2 根治已于 2026-10-01 前全部进 main,见上面"已落码"的最后一条。)
   - **本轮不落**:
     - GO-3:需要用户拍板,理由见 §4 第 2 条。
     - `handoff_pending_no_marker` 的比值告警:没有压测基线,推迟到有基线之后。
@@ -36,7 +42,7 @@
     - 「让 C++ gRPC 客户端失败也回调并设超时」会话已落两批:模板 regen 在 `897ac8241`,scene 侧在 `b85f13c07`。它**推翻了**旧文档里"C++ 生成客户端对非 OK 状态只打日志、不回调"的前提,设计见 `docs/design/grpc-client-deadline-failure-callback.md`。交接路径上的传输失败 = 结果未知,只记日志,仍不作为证据。
     - 在途换图的 TTL 曾是 5s,小于服务端 `Timeout` 8s。那时慢但活着的 scene_manager 下,同一玩家可能有两条 EnterScene 并行,安全靠落点 CAS 和关联号丢弃迟到应答。`b85f13c07` 把 TTL 改为 SceneManager deadline + 1s(`SceneChangeInFlightTtlMs()`),这个窗口**已消除**。
     - Battle 结算依赖不变量 I3:`IsCrossZoneFrozen` 为 false 的任何时刻,本节点一定仍是属主。冻结硬上限的两个出口保证了这一点。
-  - **提交状态**(09-29 按本机跟踪引用查):以上服务端提交都已在 `origin/main`;`b85f13c07` 早先只在本地 main,09-29 稍后复查时本机跟踪引用显示它也已在 `origin/main`。以 `git ls-remote` 为准。
+  - **提交状态**(09-29 按本机跟踪引用查):以上服务端提交都已在 `origin/main`;`b85f13c07` 早先只在本地 main,09-29 稍后复查时本机跟踪引用显示它也已在 `origin/main`。以 `git ls-remote` 为准。GO-2 的六个提交不在这句"以上"之内,它们的状态单列在上面 GO-2 那一条里。
 - 最高优先级永远是**把它编出来**(§4),其余一切结论都悬在这上面。编译和测试的先后顺序不能乱,见 §4 末尾的「验证顺序」。
 
 ## 1. 环境事实(不读会踩)
@@ -122,7 +128,8 @@
      - GO-6 / GO-4 残余 / 告警盲区 → 见第 5 条。
      - Hiredis / zrpc Timeout / `robot/connected()` → 见 0e 与第 5 条。
      - 客户端 CL-6 / CL-8 → 见 §2.2 末行。
-   - **进行中(设计已定稿,落码中)**:GO-2 根治、CPP-3,见第 2 条。
+     - GO-2 根治(owner_epoch 严格单调)→ 见第 2 条的 GO-2 一段与设计文档 §13.7。*2026-10-01:已全部进 main,从"进行中"移到这里。*单测是 `cross_zone_test` 的 `TravelOwnership.*`(7 个),Go 侧是 `owner_epoch_test.go` 的新增 / 改写用例与新文件 `owner_epoch_crosslang_test.go`(3 个用例)。
+   - **进行中(设计已定稿,落码中)**:CPP-3,见第 2 条。
    - **不落**:GO-3,见第 2 条;`handoff_pending_no_marker` 比值告警,见第 5 条。
    - **跨会话**:gRPC 失败回调的 scene 侧 `DispatchEnterSceneTransportFailure` 已落地(`b85f13c07`),分发规则如下:
      - 按请求的 `correlation_id` 分发。
@@ -133,15 +140,40 @@
 1. **编译 + 单测 + 冒烟**(阻塞其余一切)。命令、通过标准、失败时保留什么:设计文档 §12.4,在 §9 / §11.4 基础上追加。main 上还叠着组队、战斗 G1–G9、帮会二期、聚宝斋、friend 等多批未编译代码,总顺序见 `turn-battle-gap-closure.md` §7;C++ 必须串行 `msbuild … /m:1 /nr:false`。
 2. **§12.3 的 P2 五条**,每条都写了"为什么没修 / 修法":
    - GO-2 回滚让 epoch 回退、毒化 db 守卫——要改 proto(`EnterSceneResponse` 回显 epoch)或调 C++ 发 DBTask 的时机;
-     **2026-09-28:进行中,设计已定稿,落码中**。
+     **2026-10-01:已全部进 main,未编译、未测试,待 Codex 验证;见设计文档 §13.7。**(09-28 写这一条时的状态是"设计已定稿,落码中"。)
      - 状态注:`EnterSceneResponse` 的回显(`owner_epoch_after_rollback = 5`)**只用于日志和核对,不是采纳凭证**。凭回显采纳,会在第三方已凭转写标记铸出更新值时造成双持有。根治靠回滚回执加交接标记。
      - epoch 严格单调:路由 / 重定向失败回滚时,在同一段 Lua 里再 INCR 一格(N+1→N+2),不再 SET 回旧值。同一段 Lua 还原子写回旧 location 和回滚回执 `PlayerLocation.rollback_receipt = 7`,回执的值是被回滚那次铸造所凭的 handoff 标记原文。
      - 源端取证:C++ 源端改用单个 `#!lua` 原子脚本,只删本次交接这一族标记,并在同一脚本里读 epoch 与 location。只有两种正向证据能解冻:一是 epoch 未变;二是读到与自己标记原文逐字节相同的回执,这时先采纳新 epoch,再强制存盘。其余情况一律不存盘销毁。
      - 与 I0 的关系:I0 机制 2(DEL 与 MGET 走不重放的同一连接)改由这段原子脚本保证。
      - 不做的:次选方案"CAS 成功后再发 DBTask"不做,`go/db` 不改。
-     - 进度:09-29 查,proto 源的字段 5 / 7 已在主工作树上,未提交,也还没做窄面 regen。
-     - 规格:已入档到设计文档 §13.7「GO-2 根治:owner_epoch 严格单调」;落码完成后该节按代码实情补落点与偏差。原始规格 `spec-go2.md` 只在机器 A 主会话的 scratchpad 里,仅作备注。
-     - 下游依赖:帮会 `guild-phase2/08-save-owner-fence.md` §8.3 门禁第 3 条以它为前置;runbook 的 7 号错误说明、B3 的改写也随它落。
+     - 落点提交(2026-10-01 按 HEAD `bbb5bc6bc` 核对;09-29 那条"字段 5 / 7 未提交、还没做窄面 regen"的进度已过时):
+       - `ccafe300c`(自动保存):proto 源两份(`PlayerLocation.rollback_receipt = 7`、`EnterSceneResponse.owner_epoch_after_rollback = 5`);`go/scene_manager` 的 `owner_epoch.go` / `enterscenelogic.go` / `changesceneutil.go` / `metrics.go` 与测试;`go/shared/ownerepoch/ownerepoch.go`;`deploy/k8s/scene-manager-alerts.yaml` 的注释。
+       - `907a6b752`(自动保存):C++ `player_lifecycle.{h,cpp}`、`travel_freeze_cap.h` 的大部分。
+       - `80a1b0823`:两个 proto 字段的窄面 regen 产物,共 12 个文件:三个暂存目录(`_unified` / `db` / `login`)下的 proto 副本、`go/proto/scene_manager` 的两个 `.pb.go`、`cpp/generated/proto/scene_manager` 的两套 `.pb.{h,cc}`。C++ 以仓库根作 proto_path;service 定义没变,grpc 产物不动;`robot/vendor` 不含这个包,所以没有 robot 侧产物。**不需要再 regen。**
+       - `a8c2d44a8`(每小时自动保存):`player_ownership_comp.h`、`exit_release_mark.h`、`player_exit_intent.h`、`player_lifecycle.{h,cpp}` 余下部分、`travel_freeze_cap.h`、`scene_node_service.cpp` 与 `scene_handler.cpp`(守护段内只改注释)、`cross_zone_test.cpp` 的新用例、`go/scene_manager/internal/logic/owner_epoch_crosslang_test.go`(守住 C++ / Go 两份 Lua 逐字节一致的跨语言用例)。
+       - `6b7a59287` + `567333aaf`(自动保存):三视角审查后的修正,内容见下面"审查后的修正"。
+       - 提交状态(10-01 按本机跟踪引用,`origin/main` 指向 `6b7a59287`):前五个已在 `origin/main`,`567333aaf` 只在本地 main。以 `git ls-remote` 为准。
+     - 三视角审查(编译面静读 / 判定表与不变量 / 规格一致)的结论:**没有必须改项**。审查确认的要点:
+       - handoff SET 发出之后,"保留实体又解冻"的出口只有三条。两条是 `JudgeTravelOutcomeReply` 的正向证据:`kUnchanged`(B4)与 `kRolledBackToSelf`(B5)。第三条是同一代 SET 被 Redis 回 ERROR(`HandleTravelMarkWriteRejected`):那时 SET 没执行,按 I0 属于"未发出"。
+       - "放行后又回到本节点"(B7)不会被判成回滚。
+       - 取证是一段原子 `#!lua` 脚本 `travel_outcome::kLuaJudgeTravelOutcome`:按 saved_at_ms 删本族标记,再 MGET owner_epoch 与 location。它取代了原来的"同连接 DEL 再 MGET"。
+       - Go 回滚 Lua `luaRollbackPlayerPlacement` 与目标节点的 A2′ 互斥。
+     - 审查后的修正(`6b7a59287`、`567333aaf`):
+       - B6(回执异常)只在 `ConcludeHandoffAfterMarkSent` 真正收口(返回 true)时才计 `rollback_receipt_anomaly`;推迟销毁时不计。
+       - `SavePlayerToRedisImpl` 强制写的调用方从两处变成三处,新增的是 B5 采纳。
+       - 告警 `SceneManagerEnterSceneRollbackRedisError` 的表达式改成 `outcome=~"redis_error|plan_error"`。`plan_error` 的终态同 `redis_error`,原先没有任何规则覆盖它。
+       - 若干过时注释;runbook 三处同步。
+     - 偏离与残余(一句话版,展开见设计文档 §13.7):
+       1. `ResolveTravelOutcome` 在 `requestedAtMs == 0` 时只打 ERROR 就返回,不按判定表 A1 调 `AbortTravelHandoff`。按构造不可达,由 70s 冻结上限兜底,是安全方向。
+       2. `HandleTravelMarkWriteRejected` 为了单测改成了 public,头文件写明"业务代码不要调"。
+       3. B6(`site=travel_receipt_anomaly`)收口后,Redis 里没有可当 A1′ 用的标记:取证脚本已原子删掉本族标记,含原标记 `E:t` 与转写出来的 `E+2:t`。踢线后重登若被挑到别的节点,会一直回 18(`ErrHandoffPending`),直到 location 被 LeaveScene 清掉或挑回本节点。只伤活性;B6 按设计恒为 0。
+       4. `plan_error` 并入 `redis_error` 的告警规则。规格原说"本批不加规则",审查后改了。
+       5. 代码 / proto / yaml 注释里约 36 处写的是 `cross-zone-scene-travel.md §12.8`,而正文在 §13.7。处理办法不是逐处改注释,而是在设计文档 §12.7 之后加一个只有两三行的编号占位小节 §12.8 指到 §13.7(随同批文档更新做;没看到这个小节时直接读 §13.7)。
+       6. 没跑 `gofmt`:`owner_epoch.go` 的 doc comment 用了大量列表 / 代码块,Go 1.19 起 gofmt 会重排这类注释。另外 miniredis 有三个行为要靠实跑确认:Lua 表里 false 转 nil;`SET … EX "300"` 用字符串参数;负数整数应答。
+     - 原计划"GO-2 落定后顺手改"的 SM 预检日志:原文 `no SceneManager node reachable` **决定不改**。`player_lifecycle.cpp` 里带这段原文的日志共三处,runbook 引的也是这个原文。
+     - 给 Codex 的验证顺序:见本节末尾「验证顺序」第 2 步。
+     - 规格:已入档到设计文档 §13.7「GO-2 根治:owner_epoch 严格单调」。原始规格 `spec-go2.md` 只在机器 A 主会话的 scratchpad 里,仅作备注。
+     - 下游依赖:帮会 `guild-phase2/08-save-owner-fence.md` §8.3 门禁第 3 条以它为前置。代码进 main 不等于门禁通过,要等 Codex 的验证结果。runbook 侧:§2.3 的 `scene_manager_enter_scene_rollback_total` 一行与 §5 不变量第 6 条已按 GO-2 改过(回 7 且已回滚时,铸造过的 epoch 只升不降);§2.2 错误码表的 7 号一行 10-01 查仍写着"location 与 epoch 已回滚",还是旧口径;场景 B3 在 GO-2 二进制上按原文不执行,runbook 自己写着"§7 记 SKIP"。以 runbook 当前文字和它的 Changelog 为准。
    - GO-3 同 node_id 重注册后死节点接管永不触发——要在 `PlayerLocation` 里记进程实例标识(proto);
      **2026-09-28:本轮不落,待用户拍板**。
      - 已有设计:把 C++ 进程的 `node_uuid` 与发现键的 create_revision 盖进 `PlayerLocation`,判"已替换"要四条证据同时成立(第 ④ 条是时序闸:记录写入早于现任进程 launch_time 至少 6s)。
@@ -173,7 +205,7 @@
        - 常量在 `travel_freeze_cap.h`:`kFreezeCap` 70s、`kDispatchWindow` 35s、`kSweepInterval` 1s。`kClientAcceptedHandoffBudget` 75s 镜像客户端的 `AcceptedHandoffBudgetSeconds`。
        - 收口点名表:`travel_freeze_cap` / `travel_dispatch_window` / `travel_no_gate_session` / `travel_no_scene_manager`。收口日志是 `[ZoneTravel][MarkSentDestroy] … site=…`;跨区用 tip 3027,同区用 tip 3023。
        - `[TravelHandoff]` 汇总行新增 8 个 key:`freeze_cap_reached`、`dispatch_window_closed`、`mark_sent_destroyed`、`mark_sent_client_reset`、`destroy_deferred_unsettled_save`、`freeze_unstamped`、`watchdog_early_fire`、`handoff_fastpath_forced`。
-       - 单测是 `cross_zone_test` 的 `TravelFreezeCap.*` 与 `TravelFreezeCapEcs.*`,各 8 个。
+       - 单测是 `cross_zone_test` 的 `TravelFreezeCap.*` 与 `TravelFreezeCapEcs.*`,各 8 个。*2026-10-01:GO-2 在 `a8c2d44a8` 给 `TravelFreezeCapEcs` 加了第 9 个用例 `LateMarkSetErrorOfOlderGenerationLeavesNewHandoffFrozen`。*
        - robot 的 travel-smoke 单跳预算是 60s,短于 70s,所以 robot 看不到上限分支。上限分支(runbook 场景 H)要用 Unity 客户端验。
    - 客户端侧:CL-3 / CL-4(回家入口消失)已随 §12.5.5 修复;~~CL-2 仍未修~~ **CL-2 已落码待验证**(2026-09-21,`ValidateRedirectTarget` 只打日志不拦截,以 gate(B) 验票为准,§12.5.6);CL-7 已入库;CL-5(手动重进无冷却)的根因修复见 0d(已落码待验证,见 0g)。CL-6 / CL-8 已落码待验证,见设计文档 §13.6(客户端分支 `crosszone/client-cl6-cl8` 的 `54034fe`,已随合并提交 `96d36da` 推到客户端 `origin/main`,09-29 05:25,按本机跟踪引用;见本文 §2.2 末行)。
 3. **需要随一次全量 regen 做的**:真删 `proto/common/event/player_migration_event.proto`(整条 DEPRECATED、无调用方,仍占着 event id 27 / 41,清单写在该文件头注释里);`proto/common/database/player_cache.proto:7` 与 `bag_quest_mail_data.proto:7-8` 的注释仍把 `PlayerAllData` 说成"跨 zone 迁移携带的快照"。「Friend 服务移植后续工作」会话计划跑 regen,可与它同批。*2026-09-29 仍未做*:`player_migration_event.proto` 仍在,`player_cache.proto:7` 的注释未改。09-28 gRPC 失败回调那次 regen 是在隔离 worktree 里跑的,只拷回了 40 个文件,不算全量 regen。本轮 proto 一律走窄面 regen,只动 `scene_manager_service.proto` / `storage.proto`。
@@ -196,20 +228,28 @@
    - **`robot/connected()`:删除已随 `9da27f9a4` 提交**。那是 09-28 的每小时自动保存,本机跟踪引用显示已在 `origin/main`。原先写的"已暂存在 index、待带路径 commit"已过时,不需要再执行任何 git 操作。
    - **`handoff_pending_no_marker` 比值告警:本轮不落。** 口径 A / B 的阈值和 `for` 都没有压测基线。等首轮双 zone 压测(`AllowUnsafeCrossNodeHandoff=false`)拿到 p99 后,再以 `severity: info` 起步落码。口径与校准步骤写在「P3 收尾」一节。
 
-**验证顺序(2026-09-29)**:由 Codex 执行,Claude 不跑。设计文档 §13 目前**没有**合并后的统一验证顺序,只有各小节自己的验证清单。细节来源是设计文档 §13 各小节的验证清单(13.1–13.6)与 `grpc-client-deadline-failure-callback.md` §9.2;先后顺序以本节列出的硬约束为准。等 §13 真有了统一顺序小节,再改回指向它。
+**验证顺序(2026-09-29;2026-10-01 按"GO-2 已全部进 main"改了第 2、4、5 步)**:由 Codex 执行,Claude 不跑。设计文档 §13 目前**没有**合并后的统一验证顺序,只有各小节自己的验证清单。细节来源是设计文档 §13 各小节的验证清单(13.1–13.6,GO-2 的在 13.7)与 `grpc-client-deadline-failure-callback.md` §9.2;先后顺序以本节列出的硬约束为准。等 §13 真有了统一顺序小节,再改回指向它。
 
 1. **先取红态,再做任何全量构建。**
    - C++ Hiredis:只构建 `cpp/tests/rpc_controller_test/rpc_controller_test.vcxproj`,**不要构建 muduo**。这样它链接的是 09-25 的 `lib/muduo.lib`(09-29 查 mtime 仍为 2026-09-25 09:45,早于修复的 2026-09-28 03:41)。再跑 `--gtest_filter=HiredisCommandLifecycle.*`,期望前三个 FAIL、`AcceptedCommandCallbackRunsExactlyOnceWithNullReplyOnFree` PASS。任何一次 `game.sln` 全量构建都会重建 muduo,之后这个红态就**永久拿不到**了。
    - k8s 契约测试:红态要在 `c2c5ec505`(= `9da27f9a4^`)的临时 worktree 上取。HEAD 已含修复,在 HEAD 上跑是假绿。
    - Z1 的 Z-pre:见 0g 批注。
-2. **GO-2 根治、CPP-3 还在落码**,都改 `player_lifecycle.cpp`。GO-2 还要对 `scene_manager_service.proto` + `storage.proto` 做窄面 regen,产物在 Go、C++、robot vendor 三处。C++ 窄面 regen 必须用仓库根作 proto_path,`935ec83b1` 就是在修内嵌 go_package 的漂移。整批编译排在它们之前还是之后,目前没有成文的统一决定;执行前先用 `git log` / `git status` 确认 GO-2 / CPP-3 是否已提交、GO-2 的窄面 regen 是否已做,再定。
+2. **GO-2 根治已全部进 main(2026-10-01 按 HEAD 核对),CPP-3 还在落码。**
+   - GO-2 对 `scene_manager_service.proto` + `storage.proto` 的窄面 regen 已随 `80a1b0823` 做完,**不要再 regen**。产物在三处:三个暂存目录下的 proto 副本、`go/proto`、`cpp/generated`;`robot/vendor` 不含这个包,没有产物。以后若再做 C++ 窄面 regen,必须用仓库根作 proto_path,`935ec83b1` 就是在修内嵌 go_package 的漂移。
+   - CPP-3 要改 `player_lifecycle.cpp`。整批编译排在它之前还是之后,目前没有成文的统一决定;执行前先用 `git log` / `git status` 确认 CPP-3 是否已提交,再定。
+   - GO-2 这一项自己的先后顺序如下,细节在设计文档 §13.7 的验证清单:
+     1. 在仓库根跑 `gofmt -l go/scene_manager go/shared`,应无输出。有输出就先处理格式,再往下跑(原因见第 2 条 GO-2 一段的残余 6)。
+     2. 在 `go/scene_manager` 下跑 `go vet ./...` 与 `go test ./... -count=1`。其中 `owner_epoch_crosslang_test.go` 的 `TestSourceJudgeScriptAndInheritClearCopiesMatchCpp` 会读 C++ 头文件(`exit_release_mark.h`、`player_lifecycle.h`)里的 Lua 字面量,与 Go 副本逐字节比。它找不到 C++ 源码时是 **SKIP,不是失败**,所以要在完整仓库里跑,并确认这一条是 PASS。
+     3. C++:编 scene 库(`scene.vcxproj`)与 `cross_zone_test`,跑 `TravelOwnership.*` 与 `TravelFreezeCap*`。
+     4. runbook 场景 B1 / B2 / B3 与 §5 不变量(见第 5 步)。
 3. **C++ MSBuild 一律串行 `/m:1 /nr:false`**,并和其他会话的构建错开,否则会报假的 C1041 / LNK1104。gRPC 失败回调批次的编译和单测(`grpc-client-deadline-failure-callback.md` §9.2)与本线合并在同一次全量编译里做。
 4. **单测**:
-   - `cross_zone_test`:`EnterSceneReplyRoute.*`、`EnterSceneReplyEcs.*`、`EnterSceneTransportFailureEcs.*`、`TravelFreezeCap*`,以及 09-21 那批的 `ExitPersist*` / `ExitRelease*` / `HandoffMarkWithdrawQueue.*` / `TravelOutcomeReset.*`。
+   - `cross_zone_test`:`EnterSceneReplyRoute.*`、`EnterSceneReplyEcs.*`、`EnterSceneTransportFailureEcs.*`、`TravelFreezeCap*`,以及 09-21 那批的 `ExitPersist*` / `ExitRelease*` / `HandoffMarkWithdrawQueue.*` / `TravelOutcomeReset.*`。GO-2 新增 `TravelOwnership.*`(7 个);`HandleTravelMarkWriteRejected` 的代际用例是 `TravelFreezeCapEcs.LateMarkSetErrorOfOlderGenerationLeavesNewHandoffFrozen`。
    - `routing_identity_test`:`SceneRoute*`、`SceneEntry*`、`SceneLinkReady.*`。
-   - `go/scene_manager`:`go test ./... -count=1`。
+   - `go/scene_manager`:`go test ./... -count=1`。GO-2 的用例在 `owner_epoch_test.go`(如 `TestPlanRouteRollback`、`TestClassifyRollbackReply`)与 `owner_epoch_crosslang_test.go`,先后顺序见第 2 步。
    - 客户端:在客户端 `origin/main`(`96d36da` 或之后,已含 CL-6 / CL-8)上跑 Unity 编译 + EditMode;分支 `crosszone/client-cl6-cl8` 已不是唯一落点。生成物只用单个 protoc 核对,**不跑 `gen_proto.ps1` 全量**,全量会漂 6 个文件。
 5. **联调与故障注入**:按 runbook(`docs/ops/cross-zone-failure-test-runbook.md`)。runbook v2.5 已新增场景 H(冻结硬上限)、SE / SE2(CPP-2)、E2(death_at 写失败注入),静态编写、未实跑;以 runbook 的 Changelog 为准。场景 H 要用 Unity 客户端,原因是 robot 的 60s 预算先到,看不到上限分支。
+   - GO-2:跑场景 B1 / B2 / B3,并逐场景核 §5 不变量。B1 的期望仍是"解冻 + tip,不踢线";B3 在 GO-2 二进制上按原文不执行,runbook 写的是"§7 记 SKIP"。回滚采纳的专项注入(设计文档 §13.7 验证清单里的 B4a / B4b / B5)10-01 查时 runbook 里还没有对应场景,步骤与期望只在 §13.7。
 
 ## 5. 给接手会话的开场提示词(可整段粘贴)
 
@@ -223,13 +263,19 @@ docs/design/cross-zone-scene-travel.md 的 §12 与 §13(各小节的验证清�
    - 09-21 那批 C++ 有编译证据,但跨 zone 单测从未运行。
    - 09-28 本轮的服务端代码全部未编译、未测试,包括关联号、冻结硬上限、CPP-2、
      scene_manager 三条 P3、Hiredis / zrpc Timeout;Go 侧同样没有任何 build / test 证据。
+   - GO-2 根治(owner_epoch 严格单调 + 回滚回执)10-01 核对已全部进 main,
+     同样未编译、未测试,连 gofmt 都没跑过。
    - 你不许编译 / 跑测试 / regen(AGENTS §10.1),改完给出可执行命令。
    - 验证顺序按交接说明 §4 末尾的「验证顺序」(设计文档 §13 没有统一顺序,只有各小节的验证清单)。
    - Hiredis 红态:任何 game.sln 全量构建之前,只构建 rpc_controller_test、链接 09-25 的 muduo.lib
      (hiredis_command_lifecycle_test.cpp 在 c2c5ec505 上不存在);
      k8s 契约测试红态:在 c2c5ec505 的临时 worktree 上取。
-2. GO-2 根治(owner_epoch 严格单调 + 回滚回执)和 CPP-3(疏散改派待确认表)可能仍在别的会话落码。
-   它们改 player_lifecycle.* / owner_epoch.go / enterscenelogic.go / proto/scene_manager/*。
+2. GO-2 根治(owner_epoch 严格单调 + 回滚回执)的代码已全部进 main,设计与判定表在设计文档 §13.7
+   (代码注释里写的 §12.8 指的就是它)。提交:ccafe300c、907a6b752、80a1b0823(窄面 regen,不要再 regen)、
+   a8c2d44a8、6b7a59287、567333aaf。三视角审查没有必须改项;偏离与残余见交接说明 §4 第 2 条的 GO-2 一段。
+   给 Codex 的顺序:gofmt -l → go/scene_manager 的 vet / test(跨语言用例要 PASS 不能 SKIP)
+   → C++ 编 scene 库与 cross_zone_test → runbook 场景 B1 / B2 / B3 与 §5 不变量。
+   CPP-3(疏散改派待确认表)可能仍在别的会话落码,它改 player_lifecycle.*。
    先用 git log 和 git status 看是否已提交;没提交之前不要碰这些文件。
 3. GO-3 本轮刻意不落(残余 R1 会违反交接不变量 I0 / I3),等用户拍板,不要自行开工。
 4. 同一个 main 工作树上有别的 Claude 会话在改文件,还有每小时一次的自动保存会把半成品卷进 main:
@@ -248,7 +294,8 @@ docs/design/cross-zone-scene-travel.md 的 §12 与 §13(各小节的验证清�
 现在先告诉我:
 - 你在哪台机器上;
 - origin/main 与本地 HEAD 各是什么;
-- GO-2 / CPP-3 是否已提交、GO-2 的窄面 regen 做了没有;
+- GO-2 的六个提交在不在本地 HEAD 与 origin/main 上(567333aaf 在 10-01 时只在机器 A 的本地 main);
+- CPP-3 是否已提交;
 - 客户端远端 main 是什么、CL-6 / CL-8 的 54034fe 在不在远端 main 上
   (分支 crosszone/client-cl6-cl8 本身按本机跟踪引用没有推成远端分支,提交是经合并提交 96d36da 进的 main)。
 然后给出你打算做的第一件事。
