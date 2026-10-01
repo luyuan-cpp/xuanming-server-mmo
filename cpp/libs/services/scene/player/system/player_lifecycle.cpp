@@ -1688,9 +1688,10 @@ void PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	//       * 跨 zone 传送不在此列:路由落到本节点说明不了那次传送的去留,仍由应答 / 看门狗裁决。
 	//     不直接 AbortTravelHandoff:同一代的路由也可能是交接之前那次同节点换图迟到的路由,或顶号重连
 	//     的同落点路由,此刻重发的那条请求也许正在 scene_manager 里铸造 epoch —— 未经核实就解冻,
-	//     等于同一名玩家在两处同时活着。走 ResolveTravelOutcome:原子删掉本族标记再读 epoch,没变就静默解冻
-	//     (证据 kSucceeded 取的正是"归属没动 = 换图已就地完成,不回失败 tip"这层含义),变了就按
-	//     被废黜销毁(同 zone,不踢线);之后到达的应答 / 看门狗因交接意图已摘而成为 no-op。
+	//     等于同一名玩家在两处同时活着。走 ResolveTravelOutcome:原子删掉本族标记再读 epoch 与 location,按判定表
+	//     裁决 —— 没变就静默解冻(证据 kSucceeded 取的正是"归属没动 = 换图已就地完成,不回失败 tip"这层含义);
+	//     变了且回执是本次标记原文就采纳解冻(B5);回执对不上交叉校验就按"标记已发出"收口(B6);其余按已放行
+	//     销毁(同 zone,不踢线)。之后到达的应答 / 看门狗因交接意图已摘而成为 no-op。
 	if (const auto *travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(player);
 		travel != nullptr && travel->requestedAtMs != 0 && travel->targetZoneId == GetZoneId() &&
 		travel->sceneId == 0 && ctx.ownerEpoch != 0 && ctx.ownerEpoch == epochBeforeRoute)

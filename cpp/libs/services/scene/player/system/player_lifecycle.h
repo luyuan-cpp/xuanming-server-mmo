@@ -1234,7 +1234,9 @@ private:
 	//   原文的回滚回执且交叉校验成立。本函数手里两样都没有)。
 	// 为什么不发任何 Redis 命令、不撤回标记:走到这里多半就是 Redis 不可用;销毁之后"标记时刻的状态已落盘、本节点
 	//   不再持有"成了事实,标记与断线释放标记 A1′ 同义 —— 重登挑到别的节点凭它过换手门,同节点重登由 A2′ 删掉;
-	//   撤回只会伤活性(18 循环)。
+	//   撤回只会伤活性(18 循环)。例外是 B6(site=travel_receipt_anomaly):取证脚本已在同一原子步骤里删掉本族标记
+	//   (原标记 E:t 与转写出来的 E+2:t),Redis 里没有可当 A1′ 用的标记;重登被挑到别的节点会一直回 ErrHandoffPending,
+	//   直到 location 被 LeaveScene 清掉或挑回本节点。只伤活性,B6 按设计应恒为 0。
 	// 为什么同 zone 也踢:此刻 epoch 状态未知(已放行且会话已改绑 / 已放行但路由丢了 / 没放行 / 铸造后又回滚),
 	//   后三种不踢就是一条哑连接,scene 又没有强制 gate 断开的 RPC;只有第一种会多踢一次,数据安全。
 	// 调用点(site 只进日志、并作 DestroyDeposedPlayer 的 reasonTag):冻结上限(ExpireTravelFreeze)、enter_scene 阶段
