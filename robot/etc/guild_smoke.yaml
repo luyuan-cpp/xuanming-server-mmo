@@ -27,6 +27,22 @@
 #   额外前置:guild 的 AssetOp.Enabled=true(关着时经济写 RPC 一律回 kGuildAssetPending);scene 为 dev 运行模式、
 #   GM 客户端消息放行(cpp/nodes/gate/SECURITY.md §3);robot_9214 / 9215 首次在 zone_a 建角。
 #   次数按玩家按游戏日(UTC+8 05:00)记、解散清不掉:同一游戏日首跑为 full,再跑为 degraded(只断言拒绝类)。
+#
+# 活动段(activities: true,帮会二期 B6a-cli,robot/guild_activity_smoke.go):经济段之后由 activity_accounts 的四个账号
+# (依次为帮主 A、成员 B / C / D)在 zone_a 另建帮会跑 元宵灯会 / 中秋团圆(docs/design/guild-phase2/06-activities.md §6.44 的 S1–S8),
+# 通过打印 GUILD_SMOKE_ACTIVITIES_OK guild_id=…;失败打印 GUILD_SMOKE_ACTIVITIES_FAIL step=Sx reason=…,退出码 1。
+#   额外前置:
+#   a. robot_9216 / 9217 / 9218 / 9219 首次在 zone_a 建角(同第 4 条:归属区映射在建角时登记)。
+#   b. 默认配表:GuildActivity 三行常开(灯会 帮贡 20 / 资金 500 / 阈值 3 / 每日 1;团圆 帮贡 30 / 阈值 3 / 物品 1 ×4 / 每日 1),
+#      GuildRule.activity_join_min_hours=0(开发值;填了非 0,刚入帮的机器人一律被拒,S1 会报 kGuildActivityJoinTooRecent)。
+#   c. 团圆带物品奖励:guild 的 AssetOp.Enabled=true(关着时领奖回 kGuildAssetPending,S6 失败并提示)。
+#   d. 活动 5 个消息号的 MessageLimiter 行已回填并重新导表、gate 已重启(06 §6.46 B6a-srv 第 3 步)。
+#   可重复性:个人次数按玩家按游戏日(UTC+8 05:00)记、解散清不掉,同一游戏日重跑会在 S1 失败,
+#   reason 以 same-game-day-rerun 开头并带上填好 player_id 与日期的整条 SQL。重跑前只对这四个账号执行:
+#     DELETE FROM mmorpg_guild.guild_daily_counter WHERE player_id IN (<4 个 player_id>) AND counter_kind=3 AND period_key=<今天的游戏日 YYYYMMDD>;
+#   (帮会进度行由预备段的解散删掉;冒烟本身不碰数据库。)
+#   trial: false = 只跑 S1–S8,并期望历练卡片为"未开放"(B6a 的服务端桩)。S9–S15 随 B6b-cli 落码后再改 true;
+#   在那之前填 true 会在 S9 明确失败。
 
 gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
 zone_id: 1 # 本模式不用此字段选区(A/B 登 guild_smoke.zone_a,C 登 zone_b)
@@ -45,5 +61,8 @@ guild_smoke:
   zone_a: 1 # A(帮主)与 B(成员)登录的 zone
   zone_b: 2 # C 登录的 zone;cross_zone=true 时必须与 zone_a 不同
   economy: true # 经济段;缺省账号 economy_leader=robot_9214、economy_member=robot_9215
+  activities: true # 活动段(灯会 / 团圆,S1–S8)
+  activity_accounts: [robot_9216, robot_9217, robot_9218, robot_9219] # 帮主 A、成员 B / C / D;必须四个且互不相同
+  trial: false # 同道历练段(S9–S15);B6b 落地后再开
 
 auth_type: "password"
