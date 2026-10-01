@@ -99,7 +99,8 @@
         "ZoneTravelTargetZoneNotFound": 3024,
         "ZoneTravelInBattle": 3025,
         "ZoneTravelInTeam": 3026,
-        "ZoneTravelTargetBusy": 3027
+        "ZoneTravelTargetBusy": 3027,
+        "EnterSceneServerBusy": 3028
       }
     },
     "team_error": {

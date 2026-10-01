@@ -11,7 +11,7 @@
 #include "proto/scene_manager/scene_manager_service.pb.h"
 #include "services/scene/player/system/player_lifecycle.h"
 #include "services/scene/player/system/player_tip.h"
-#include "table/proto/tip/common_error_tip.pb.h"
+#include "table/proto/tip/scene_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 
 #include <string>
@@ -179,7 +179,7 @@ void InitSceneManagerReply()
 
     // CreateScene 传输失败。镜像的自动进场由**应答**驱动(上面按回显的 creator_ids 发 EnterScene),应答没了
     // 这次就一定不会自动进场:按发出请求里的 creator_ids 告诉本节点上的创建者,否则客户端一直等一个不会来的
-    // EnterSceneS2C(EnterSceneC2S 早已回"已受理")。回 kServiceUnavailable 而不是"创建失败":结果未知,
+    // EnterSceneS2C(EnterSceneC2S 早已回"已受理")。回 kEnterSceneServerBusy 而不是"创建失败":结果未知,
     // 镜像若其实已经建好,由 scene_manager 按空场景回收。
     // 注:scene_manager 的**业务**失败应答(error_code != 0)不回显 creator_ids,那条路径今天仍告诉不了创建者
     // (docs/design/grpc-client-deadline-failure-callback.md §7)。
@@ -195,7 +195,7 @@ void InitSceneManagerReply()
             {
                 continue; // 创建者已不在本节点(断线 / 已换节点),没有客户端可提示
             }
-            PlayerTipSystem::SendToPlayer(playerEntity, kServiceUnavailable, {});
+            PlayerTipSystem::SendToPlayer(playerEntity, kEnterSceneServerBusy, {});
         }
     };
 }

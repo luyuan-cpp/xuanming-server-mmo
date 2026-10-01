@@ -5936,3 +5936,12 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
 - 用户确认 `go/login/etc/login.yaml` 的 `Timeout: 100000` 是笔误(旧注释写 10s)。改:`go/login/etc/login.yaml`、`deploy/login-stack.linux/login.yaml` → 10000;`bin/etc/base_deploy_config.yaml` `GrpcClient.CallDeadlineMs.LoginNodeService` → 12000(= 10000 + 2000,部署门禁恰好通过);K8s login ConfigMap 从 login.yaml 镜像,自动跟随;`deploy/k8s/README.md` 表格与说明、`docs/design/grpc-client-deadline-failure-callback.md` §2 / §4.2 / §4.3 / §8 / §10 同步。
 - 10s 是否够(静态核对,见设计文档 §4.3):CreatePlayer 常态最坏 9s(三次 3s gRPC)装得下;EnterGame 预加载链异步(5min),不受影响;Login 快路径的 etcd 探测自带 30s,etcd 卡 >10s 时这次 Login 以 DeadlineExceeded 结束、客户端收 1003 重试。
 - **给 Codex**:① 部署门禁纯函数回归:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(仓库根),全部 PASS;② 本地起 login(直连模式)跑一次 robot 登录冒烟(login-test),通过标准与改动前一致;③ 需要时压测对比 CreatePlayer / Login 的 P99 与 DeadlineExceeded 计数,确认 10s 不截断常态请求。login 与 C++ 都只改配置,不用重编。
+
+## 2026-10-01 换图传输失败改用专用提示码 kEnterSceneServerBusy(3028,「服务器繁忙,请稍后再试」)(Claude,用户拍板,未编译)
+
+- **决定**:换图时 gRPC 调用失败保留提示,但不再复用通用的 `kServiceUnavailable`(「服务不可用」:文案生硬,且客户端换图界面不认识这个码,会显示成"传送失败(tip=1003)")。
+- **新码**:`data/tip/Tip.xlsx` scene_error 组末尾加 `EnterSceneServerBusy`(fault=1),导表器发号 **3028**。导表在隔离工作树里跑:HEAD 上帮会有 10 行已提交未导表的 guild_error 码,导表前在工作树副本里去掉,只带回本码的产物 —— `scene_error_tip` 的 proto / C++(两处)/ Go / Java(两处)/ Python、`generated/tables/tip_text.json`、`go/shared/generated/tip/{faults,segments}.go`、`tools/data_table_exporter/state/mapping/tip_enum_ids/tip_enum_ids.json`、robot vendor 同名 pb.go(与 go/ 逐字节相同)。帮会那 10 个码未发号,留给帮会整批导表(届时 14032–14041)。
+- **服务端三处改用新码**:`PlayerLifecycleSystem::DispatchEnterSceneTransportFailure`(普通换图传输失败)、`scene_manager_response_handler.cpp` 的 CreateScene 失败处理器、`player_scene_handler.cpp` "一个 SceneManager 都没注册"分支。gate 的通用失败桥不是换图语义,仍回 1003。三个文件里为 1003 加的 `common_error_tip.pb.h` include 随之去掉 / 换成 `scene_error_tip.pb.h`。
+- **客户端**(`../mmorpg-client`,用户"全部做完"授权):`SceneErrorTip.cs` 用仓内 protoc 35.1 只重生成这一个文件;`GameClient.DescribeTravelTip` 增加文案。不加入 `IsTravelFailureTip`(那是"确定没成"的判据,本码是结果未知)。
+- **文档**:`docs/design/grpc-client-deadline-failure-callback.md` §3.3 / §5 / §8 / §9.2;`docs/design/cross-zone-scene-travel.md` 三处码名。
+- **给 Codex**:沿用设计文档 §9.2 的串行步骤。本条新增的编译面:`cpp/generated/table/table.vcxproj`(scene_error_tip.pb.cc 变了)→ scene 库 → scene 节点;联机检查第 4 步的预期 tip 由 1003 改为 3028。客户端:`pwsh ../mmorpg-client/tools/client_compile_check.ps1`(退出码 0)。

@@ -266,9 +266,9 @@ Claude 未运行任何构建 / 测试 / regen(AGENTS §10.1)。按顺序执行,�
 - **(2026-09-28 更新)C++ 生成的 gRPC 客户端已改为"每次调用设 deadline + 非 OK 也回调失败处理器"**(`docs/design/grpc-client-deadline-failure-callback.md`)。本节与 §12.5.6 里"C++ 生成客户端对非 OK 只打日志、不回调""C++ 调用不设 deadline"的表述以此为准更新:
   - SceneManager 的 C++ deadline = `bin/etc/base_deploy_config.yaml` 的 `GrpcClient.CallDeadlineMs.SceneManagerNodeService`(10000),须 ≥ zrpc `Timeout`(8000)+ 2000。
   - **交接**的 EnterScene 传输失败 = 结果未知:`PlayerLifecycleSystem::DispatchEnterSceneTransportFailure` 按请求的 correlation_id 分发,命中交接只记日志,不当失败证据、不提前核实 —— 源 scene 仍由 30s 应答看门狗 / 70s 冻结上限按 owner_epoch 裁决,上面"冻满 30s 看门狗"的后果对交接**不变**。
-  - **普通换图**的传输失败:摘在途槽,玩家发起的回 `kServiceUnavailable`(不断言失败,路由事件可能随后到达),队伍跟随只记日志;在途 TTL 改为 SceneManager deadline + 1s。
+  - **普通换图**的传输失败:摘在途槽,玩家发起的回 `kEnterSceneServerBusy`(3028,「服务器繁忙,请稍后再试」;2026-10-01 前为 `kServiceUnavailable`;不断言失败,路由事件可能随后到达),队伍跟随只记日志;在途 TTL 改为 SceneManager deadline + 1s。
     - *(2026-09-28 补注)*曾存在、已消除:改之前在途 TTL 是 5s,小于 scene_manager 服务端 Timeout 8s。慢但活着的 scene_manager 下,同一玩家可能两条 EnterScene 并行执行,安全只靠落点 CAS 与关联号丢弃迟到应答(§13.1)。TTL 改为 `SceneChangeInFlightTtlMs()` = deadline 10000 + 1000 之后,这个窗口消除。
-  - **镜像 CreateScene** 的传输失败:按请求 `creator_ids` 给本节点上的创建者回 `kServiceUnavailable`。
+  - **镜像 CreateScene** 的传输失败:按请求 `creator_ids` 给本节点上的创建者回 `kEnterSceneServerBusy`(2026-10-01 前为 `kServiceUnavailable`)。
 
 ### 12.3 审计存活、本轮未修(已知限制)
 
@@ -890,7 +890,7 @@ Go 两包:scene_manager 的用例 `ZeroZoneOverLocationInGateZoneBehavesLikeExpl
    - 每次调用都设 deadline。SceneManager 的 deadline 是 10000ms,取自 `bin/etc/base_deploy_config.yaml` 的 `GrpcClient.CallDeadlineMs.SceneManagerNodeService`,等于 zrpc Timeout 8000 + 2000。
    - 非 OK 时调用失败处理器。scene 侧的 `PlayerLifecycleSystem::DispatchEnterSceneTransportFailure` 按**请求**里的 correlation_id 分发;号为 0 时直接丢弃,不退回按 player_id 匹配。
    - 命中交接:只记日志,不当失败证据,也不提前核实。
-   - 命中普通换图:先抄一份、再摘在途槽。玩家自己发起的,回 `kServiceUnavailable`;队伍跟随只记日志。
+   - 命中普通换图:先抄一份、再摘在途槽。玩家自己发起的,回 `kEnterSceneServerBusy`(2026-10-01 前为 `kServiceUnavailable`);队伍跟随只记日志。
    - 疏散 / 排空的实体已销毁,只记日志。
 
    **在交接路径上,失败回调不作为证据**。所以凡是依赖这个前提推出的结论(源 scene 要等 30s 应答看门狗 / 冻结上限按 owner_epoch 裁决),对交接都不变。历史推理原样保留,只在各处加带日期的批注。

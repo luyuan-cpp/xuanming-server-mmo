@@ -1008,7 +1008,7 @@ public:
 	//   * 按 req.correlation_id 走同一个 enter_scene_reply::Classify,**不按 player_id**;号为 0 → LOG_ERROR 丢弃;
 	//   * 实体已不在(疏散 / 排空的发送、途中退出)→ LOG_INFO no-op;
 	//   * kTravelHandoff                    → 只记日志:不当失败证据、不提前核实,去留仍由应答看门狗 / 冻结上限裁决;
-	//   * kSceneChange                      → 先按值抄、再摘在途换图组件;playerRequested 回 kServiceUnavailable
+	//   * kSceneChange                      → 先按值抄、再摘在途换图组件;playerRequested 回 kEnterSceneServerBusy
 	//                                         (不断言换图失败:路由事件可能随后到达),队伍跟随只记日志;
 	//   * kSceneChangeDuringHandoff         → 不变量被破坏,LOG_ERROR 丢弃;
 	//   * kUnmatched / kNoWaiter            → 记日志,不动任何等待者。

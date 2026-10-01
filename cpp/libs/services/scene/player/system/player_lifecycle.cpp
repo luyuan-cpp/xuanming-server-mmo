@@ -26,7 +26,6 @@
 #include "player/system/player_data_loader.h"
 #include "engine/core/type_define/type_define.h"
 #include "table/proto/tip/cross_server_error_tip.pb.h"
-#include "table/proto/tip/common_error_tip.pb.h" // kServiceUnavailable:EnterScene 传输失败时回给客户端
 #include "node/system/grpc_call_deadline.h"      // 在途换图 TTL 从 SceneManager 的 gRPC deadline 派生
 #include "player_tip.h"
 #include "modules/scene/comp/scene_comp.h"
@@ -3201,13 +3200,15 @@ void PlayerLifecycleSystem::DispatchEnterSceneTransportFailure(const ::scene_man
 					 << "); player stays in the current scene";
 			return;
 		}
-		// 回「服务不可用」而不是 kEnterSceneFailed:传输失败时 scene_manager 可能已执行、路由事件随后到达,
-		// 断言"换图失败"会出现先报失败后被搬走。不回任何提示则客户端一直等一个不会来的 EnterSceneS2C
-		// (EnterSceneC2S 的同步应答早已返回"已受理")。取舍见设计文档 §5 #2。
+		// 回专用码 kEnterSceneServerBusy(「服务器繁忙,请稍后再试」)而不是 kEnterSceneFailed:传输失败时
+		// scene_manager 可能已执行、路由事件随后到达,断言"换图失败"会出现先报失败后被搬走;不回任何提示则
+		// 客户端一直等一个不会来的 EnterSceneS2C(EnterSceneC2S 的同步应答早已返回"已受理")。客户端收到任意
+		// tip 即结束同区换图的等待并按码显示文案(mmorpg-client GameClient.DescribeTravelTip);本码**不**属于
+		// 客户端 IsTravelFailureTip 认的"确定没成",所以不会被当成传送失败证据。取舍见设计文档 §5 #2。
 		LOG_WARN << "[ZoneTravel] EnterScene transport failure for player " << playerId
 				 << " scene_id=" << target.sceneId << " scene_conf_id=" << target.sceneConfigId
 				 << " corr=" << requestTag << " (" << reason << "); notifying the client";
-		PlayerTipSystem::SendToPlayer(playerEntity, kServiceUnavailable, {});
+		PlayerTipSystem::SendToPlayer(playerEntity, kEnterSceneServerBusy, {});
 		return;
 	}
 

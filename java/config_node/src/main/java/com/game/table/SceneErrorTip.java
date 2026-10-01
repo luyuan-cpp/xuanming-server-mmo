@@ -147,6 +147,10 @@ public final class SceneErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kZoneTravelTargetBusy = 3027;</code>
      */
     kZoneTravelTargetBusy(3027),
+    /**
+     * <code>kEnterSceneServerBusy = 3028;</code>
+     */
+    kEnterSceneServerBusy(3028),
     UNRECOGNIZED(-1),
     ;
 
@@ -275,6 +279,10 @@ public final class SceneErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kZoneTravelTargetBusy = 3027;</code>
      */
     public static final int kZoneTravelTargetBusy_VALUE = 3027;
+    /**
+     * <code>kEnterSceneServerBusy = 3028;</code>
+     */
+    public static final int kEnterSceneServerBusy_VALUE = 3028;
 
 
     public final int getNumber() {
@@ -330,6 +338,7 @@ public final class SceneErrorTip extends com.google.protobuf.GeneratedFile {
         case 3025: return kZoneTravelInBattle;
         case 3026: return kZoneTravelInTeam;
         case 3027: return kZoneTravelTargetBusy;
+        case 3028: return kEnterSceneServerBusy;
         default: return null;
       }
     }
@@ -395,7 +404,7 @@ public final class SceneErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025scene_error_tip.proto*\207\007\n\013scene_error\022" +
+      "\n\025scene_error_tip.proto*\243\007\n\013scene_error\022" +
       "\022\n\016kScene_errorOK\020\000\022\030\n\023kEnterSceneNotFou" +
       "nd\020\270\027\022\027\n\022kEnterSceneNotFull\020\271\027\022\030\n\023kEnter" +
       "SceneMainFull\020\272\027\022\032\n\025kEnterNodeUnavailabl" +
@@ -418,8 +427,9 @@ public final class SceneErrorTip extends com.google.protobuf.GeneratedFile {
       "rSceneFailed\020\317\027\022\"\n\035kZoneTravelTargetZone" +
       "NotFound\020\320\027\022\030\n\023kZoneTravelInBattle\020\321\027\022\026\n" +
       "\021kZoneTravelInTeam\020\322\027\022\032\n\025kZoneTravelTarg" +
-      "etBusy\020\323\027B$\n\016com.game.tableZ\022generated/p" +
-      "b/tableb\006proto3"
+      "etBusy\020\323\027\022\032\n\025kEnterSceneServerBusy\020\324\027B$\n" +
+      "\016com.game.tableZ\022generated/pb/tableb\006pro" +
+      "to3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
