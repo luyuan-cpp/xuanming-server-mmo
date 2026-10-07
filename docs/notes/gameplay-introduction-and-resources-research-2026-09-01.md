@@ -100,7 +100,7 @@ Epic 的[官方 GAS 总览](https://dev.epicgames.com/documentation/unreal-engin
 
 - [回合制战斗服务](../design/turn-based-battle-server.md)展示了完整的 Gameplay runtime：匹配编排、备战、房间生命周期、行动窗口、回合结算、掉线与观战都在持续推进同一套玩法状态。
 - [跨区匹配](../design/cross-zone-matchmaking.md)属于玩法外围编排：它决定玩家如何汇合成局，但不替战斗进程执行命中、伤害或胜负规则。
-- [会话制对局目标架构](../design/moba-battle-target-architecture.md)进一步区分大厅、对局和客户端表现；Scene / Battle 节点运行权威状态，客户端负责输入与表现，Go / Java 服务承接登录、匹配、路由等外围能力。
+- [会话制对局目标架构](slg-moba/moba-battle-target-architecture.md)进一步区分大厅、对局和客户端表现；Scene / Battle 节点运行权威状态，客户端负责输入与表现，Go / Java 服务承接登录、匹配、路由等外围能力。
 - 本仓库最值得从外部资料吸收的是“生命周期、状态、事件、反馈、权威边界”；具体规则、数据契约和网络实现仍以本仓库设计文档与代码为准。
 
 ## Unity / 团结引擎样例阅读注意

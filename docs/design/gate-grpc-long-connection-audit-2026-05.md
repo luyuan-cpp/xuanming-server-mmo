@@ -98,7 +98,7 @@ ss -tan state time-wait | wc -l
 
 `robot/` 机器人客户端如果是**每个机器人一个进程 / 每次循环新建 TCP**,那 `Bound=2704` 来自压测机自己的端口耗尽,与 gate 无关。
 
-→ 在 [stress-test-2026-05-ephemeral-port.md](./stress-test-2026-05-ephemeral-port.md) §三 已建议复测确认。
+→ 在 [stress-test-2026-05-ephemeral-port.md](../stress/stress-test-2026-05-ephemeral-port.md) §三 已建议复测确认。
 
 ---
 
@@ -147,7 +147,7 @@ args.SetInt(GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA, 0);
 ## 关联
 - [docs/design/ARCH.md](./ARCH.md) §6 游戏内通信
 - [docs/design/architecture-current-state-vs-gaps-2026-05.md](./architecture-current-state-vs-gaps-2026-05.md) 缺口 #13
-- [docs/design/stress-test-2026-05-ephemeral-port.md](./stress-test-2026-05-ephemeral-port.md) §三 哪台机器
+- [docs/stress/stress-test-2026-05-ephemeral-port.md](../stress/stress-test-2026-05-ephemeral-port.md) §三 哪台机器
 - 代码: `cpp/libs/engine/core/node/system/grpc_channel_cache.h`
 - 代码: `cpp/libs/engine/core/node/system/node/node_connector.cpp` (ConnectToGrpcNode)
 - 代码: `cpp/nodes/gate/handler/rpc/client_message_processor.cpp` (HandleGrpcNodeMessage)

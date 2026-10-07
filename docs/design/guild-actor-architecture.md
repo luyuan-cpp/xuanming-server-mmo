@@ -950,7 +950,7 @@ if config.Actor.Enabled && req.GuildId % 100 < config.Actor.RolloutPercent {
    - 总吞吐
    - DB 写 QPS
    - Redis CPU
-4. **复盘文档**: `docs/design/stress-guild-actor-<date>.md`
+4. **复盘文档**: `docs/stress/stress-guild-actor-<date>.md`
 
 成功标准:
 

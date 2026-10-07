@@ -7,7 +7,7 @@
 - **事实准绳**:以磁盘代码为准。文中「路径:行号」取自 2026-09-29 写作时的磁盘状态,后续改动会让行号漂移,查找时以符号名为准。
 - **冲突处理**:[k8s_gate_exposure_guidance*.md](k8s_gate_exposure_guidance.md)、[gate-load-balancing-design.md](gate-load-balancing-design.md)、[gateway-k8s-deployment.md](gateway-k8s-deployment.md) 与本文冲突的,以本文为准。turn-based §21.1 关于「K8s 上直连失败回落 gate 中继」的推断已被本文取代(见背景第 4 条)。
 - **引用本文的文件**(2026-09-29 更正:初稿只列了 kind-config.yaml,漏了其余按节名引用的位置)。改下列节名时,必须同改对应位置,否则会留下悬空引用:
-  - 「kind 端到端验证」:`deploy/k8s/kind-config.yaml` 第 2、9、60 行;`deploy/k8s/README.md:259`、`:749`。另有不带书名号的提法:`docs/design/turn-based-battle-server.md:1061`、`docs/design/moba-battle-target-architecture.md:229`。
+  - 「kind 端到端验证」:`deploy/k8s/kind-config.yaml` 第 2、9、60 行;`deploy/k8s/README.md:259`、`:749`。另有不带书名号的提法:`docs/design/turn-based-battle-server.md:1061`、`docs/notes/slg-moba/moba-battle-target-architecture.md:229`。
   - 「运维手册」:`deploy/k8s/README.md:259`、`:380`;`docs/design/k8s_gate_exposure_guidance.md:3`、`k8s_gate_exposure_guidance_zh.md:3`、`k8s_gate_exposure_guidance_en.md:4`;`tools/scripts/k8s_gate_drain.ps1:12`。
   - 「模式矩阵」:`docs/design/battle-transport-decision.md:111`。
   - 下列位置只链接全文或引用 D 号,改节名不受影响,改 D 号要同改:`docs/design/ARCH.md:430`、`:504`,以及 turn-based-battle-server.md、moba-battle-target-architecture.md、battle-transport-decision.md、cross-zone-matchmaking.md、gate-connection-admission-control.md、xuanming-port-decisions-20260910.md 等设计文档;代码注释方面有 `tools/scripts/lib/k8s_client_entry.ps1`、`tools/scripts/k8s_deploy.ps1`、`tools/scripts/k8s_image.ps1`、`tools/scripts/dev_tools.ps1`、`tools/scripts/k8s_gate_drain.ps1`、`cpp/nodes/battle/**`、`cpp/libs/engine/infra/agones/**`、`go/match/**`、`go/scene_manager/**`、`go/shared/**`。行号取自 2026-09-29 的 grep。

@@ -8,7 +8,7 @@
 **AI 没有可靠的跨会话记忆。** 每次新会话动手前必须按序读完：
 
 1. `AGENTS.md`（Claude Code 已通过 `CLAUDE.md` 自动导入，无需重复读取）
-2. `PROGRESS.md` —— 当前进度
+2. `docs/PROGRESS.md` —— 当前进度
 3. `.github/copilot-instructions.md` —— 架构、构建与编码细则
 4. `docs/design/<相关服务>.md` —— 任务相关设计
 5. `git log -20 --oneline` —— 最近改动
@@ -20,7 +20,7 @@
 
 - **类型**：MMORPG 服务器，多 zone、AOI、ECS 场景
 - **多语言后端，按职责拆分**：
-  - **C++ 节点**（`cpp/nodes/*`）：scene / gate / centre 运行时进程 + RPC handler
+  - **C++ 节点**（`cpp/nodes/*`）：scene / gate / battle 运行时进程 + RPC handler
   - **C++ 共享逻辑**（`cpp/libs/services/scene/*`）：ECS 域逻辑（`system` / `comp`）
   - **Go 微服务**（`go/login` 等）：go-zero，login / db / scene_manager / friend / guild / chat
   - **Java 网关**（`java/gateway_node`）：Spring Boot，zone 目录 / gate 分配 / admin API
@@ -72,8 +72,12 @@
 
 - 架构级决策 → `docs/design/`（架构总图）
 - 服务级决策 → 对应 `docs/design/<service>.md` 或服务 README
-- 压测结论 → `docs/design/stress-<round>-*.md`
-- 周期进度与流水账 → `PROGRESS.md`（只追加，不删旧条目）
+- 压测结论 → `docs/stress/stress-<round>-*.md`
+- 运维手册与事故复盘 → `docs/ops/`
+- 交接说明与会话小结 → `docs/handoff/`
+- 已过期、仅作历史保留的文档 → `docs/archive/`
+- 周期进度与流水账 → `docs/PROGRESS.md`（只追加，不删旧条目）
+- 文档总索引 → `docs/README.md`（新增文档后在对应分类登记一行）
 
 **没写文档 = 没说过**（下个 AI 不会记得）。
 
@@ -94,7 +98,7 @@
 
 ### 6.2 压测前后强制流程（任何一步漏了都重来）
 
-1. **跑测前** —— 把上一次压测的 `stress_summarize.ps1` 输出存为 `prev-summary.txt`（放在 `docs/design/stress-<round>-<date>.md` 同目录或 commit 到对比 PR 描述里），作为 Round N 的对比基线。`prev-summary.txt` 不存就不许开下一轮。
+1. **跑测前** —— 把上一次压测的 `stress_summarize.ps1` 输出存为 `prev-summary.txt`（放在 `docs/stress/stress-<round>-<date>.md` 同目录或 commit 到对比 PR 描述里），作为 Round N 的对比基线。`prev-summary.txt` 不存就不许开下一轮。
 2. **跑测前** —— 清空所有可能污染数据的日志/缓存：
    - `robot/logs/stress-*` 旧目录（留最近 1 个备查，其余删掉）
    - `bin/log/*` cpp gate/scene 日志
@@ -277,7 +281,7 @@
 （`github.com/luyuan-java/xuanming-server-mmo`，本机 `D:\luyuan\wuxingqitan\xuanming-server-mmo-java`）。
 
 - **以后所有功能两个版本都要做。** 一个功能只在一边落地不算完成；交付说明必须写明另一版的状态（已做 / 待做 + 原因）。
-- **对账本**：Java 仓库根目录 `PARITY.md` 记录「本仓库 commit ↔ Java 版本号」与逐功能对齐状态。任一边完成一个功能都要在 `PARITY.md` 登记一行；本仓库的 `PROGRESS.md` 条目同时注明对应的 Java 版本号。
+- **对账本**：Java 仓库根目录 `PARITY.md` 记录「本仓库 commit ↔ Java 版本号」与逐功能对齐状态。任一边完成一个功能都要在 `PARITY.md` 登记一行；本仓库的 `docs/PROGRESS.md` 条目同时注明对应的 Java 版本号。
 - **两版共享的只有客户端契约**：客户端 ↔ gate 的帧格式与 `proto/` 里客户端可见的消息、tip 码、配置表数据。改这些时两版必须同批改。服务端内部（RPC、注册发现、存储访问）Java 版按 Java 惯用方式实现，不照抄本仓库。
 - **Java 版选型**：第三方库优先 GitHub ≥ 2 万 star 的成熟项目（JDK 与 Spring 自带组件视为事实标准）。选型表与理由见 Java 仓库 `docs/design/`。
 - Java 仓库的构建与测试口径以该仓库自己的 `AGENTS.md` 为准。

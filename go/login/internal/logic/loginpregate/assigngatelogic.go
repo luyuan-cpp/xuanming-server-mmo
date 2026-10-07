@@ -21,7 +21,7 @@ import (
 // cpp gate" under 78k-concurrent ramp. Round 18 observed max=403s on that path
 // with avg=66s after the R1 fix (commit fb0a9e9f9); the previous 5min budget
 // left ~100s of head-room and got eaten by tail-latency spikes — see
-// docs/design/stress-1zone-45k-2026-06-04-round18.md §R2. Raised to 10min so
+// docs/stress/stress-1zone-45k-2026-06-04-round18.md §R2. Raised to 10min so
 // the TTL covers max + a 6x safety margin. Centralized here so the dispatcher
 // (servicecontext.go) and the fast path agree — KEEP THE TWO IN SYNC.
 const gateTokenTTL = 10 * time.Minute

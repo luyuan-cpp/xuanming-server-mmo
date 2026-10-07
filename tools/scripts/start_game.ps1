@@ -15,7 +15,7 @@
     翻转落在部署层、不改 C++ 默认值：gate 进程启动时读一次该变量并缓存，所以只对本次新拉起的 gate 生效；
     已在运行的 gate 保持原模式，换模式要先有序停掉 gate 再启动。
     用 '1'/'0' 字符串而不是 [bool]：根目录 .cmd 经 pwsh -File 原样透传 %*，实参都是字符串，
-    写成 `启动服务器.cmd -GateRouterMode 0` 即可；与 k8s_deploy.ps1 -GateRouterMode 同一口径，
+    写成 `start-server.cmd -GateRouterMode 0` 即可；与 k8s_deploy.ps1 -GateRouterMode 同一口径，
     K8s 默认也是 '1'（turn-based §22 D75）。
 #>
 [CmdletBinding()]

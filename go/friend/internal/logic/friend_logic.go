@@ -1,7 +1,7 @@
 // Package logic 是 friend 的业务层。
 //
 // F2(事务重写 + 四块新能力)与 F3(五处登记、部署链、sweep 接线)均已落码;
-// 收尾项的登记(每条的"为什么"与修法)见 docs/design/friend-handoff-20260920.md §3。
+// 收尾项的登记(每条的"为什么"与修法)见 docs/handoff/friend-handoff-20260920.md §3。
 //
 // # 错误语义(F2-1,本包全部方法一律照此)
 //

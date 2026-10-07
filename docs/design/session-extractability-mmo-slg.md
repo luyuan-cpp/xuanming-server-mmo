@@ -2,7 +2,7 @@
 
 **Created:** 2026-09-06
 **状态:** 架构定谳(判据与适用边界已拍板;各玩法的实现进度以各自文档为准,本文不记录完成度)
-**关联:** [moba-battle-target-architecture.md](./moba-battle-target-architecture.md)(会话制目标形态)、[turn-based-battle-server.md](./turn-based-battle-server.md)(D1-D4 原始决策)、[battle-transport-decision.md](./battle-transport-decision.md)(传输选型)、[moba-ds-server-interview-qa.md](./moba-ds-server-interview-qa.md)(DS 内部设计)、[scene-creation-architecture.md](./scene-creation-architecture.md)(scene 编排)、[player-async-save-loss-windows.md](./player-async-save-loss-windows.md)(scene 存盘链)、[slg-server-complete-framework.md](./slg-server-complete-framework.md) / [slg-server-framework-complete.md](./slg-server-framework-complete.md) / [slg-march-system-complete.md](./slg-march-system-complete.md)(SLG 设计稿)
+**关联:** [moba-battle-target-architecture.md](../notes/slg-moba/moba-battle-target-architecture.md)(会话制目标形态)、[turn-based-battle-server.md](./turn-based-battle-server.md)(D1-D4 原始决策)、[battle-transport-decision.md](./battle-transport-decision.md)(传输选型)、[moba-ds-server-interview-qa.md](../notes/slg-moba/moba-ds-server-interview-qa.md)(DS 内部设计)、[scene-creation-architecture.md](./scene-creation-architecture.md)(scene 编排)、[player-async-save-loss-windows.md](./player-async-save-loss-windows.md)(scene 存盘链)、[slg-server-complete-framework.md](../notes/slg-moba/slg-server-complete-framework.md) / [slg-server-framework-complete.md](../notes/slg-moba/slg-server-framework-complete.md) / [slg-march-system-complete.md](../notes/slg-moba/slg-march-system-complete.md)(SLG 设计稿)
 
 > **一句话:能不能「像 battle 那样抽出去」,看的不是玩法类型,而是玩法里有没有「会话形状」的段——有始有终、入口一份快照、出口一份结果 DTO、中间态外界不需要。**
 > MOBA 整局就是会话,能。MMO 和 SLG 各自一半能一半不能:会话段(副本对局、竞技场、SLG 战斗结算、跨服战场)能;常驻世界段(MMO 主世界、SLG 大地图、城建)按定义不能「可丢」,它们的上限是「随时可杀但不回档」,那是另一套手段。
@@ -23,7 +23,7 @@
 
 ### 1.1 顶层判据是「可丢」,零写权是它的必要条件而不是它的因
 
-[moba-battle-target-architecture.md](./moba-battle-target-architecture.md) 的一句话判据(§开头)是「战斗进程能不能被随时 kill 掉而不损坏任何持久数据」。角色表把「有没有玩家库连接」与「状态可不可以丢」列为**并列两列**,三条存储红线并列服务于同一个判据。
+[moba-battle-target-architecture.md](../notes/slg-moba/moba-battle-target-architecture.md) 的一句话判据(§开头)是「战斗进程能不能被随时 kill 掉而不损坏任何持久数据」。角色表把「有没有玩家库连接」与「状态可不可以丢」列为**并列两列**,三条存储红线并列服务于同一个判据。
 
 所以因果方向是:**「写玩家库 ⇒ 不可丢」**(零写权是维持可丢的必要条件),不是「零写权 ⇒ 可丢」。四条契约并列共同兑现 kill 判据,少任何一条都不成立:
 
@@ -61,7 +61,7 @@ battle 仍然是**有状态、房间钉定**的游戏服务器:一局只活在�
 
 **判定:不能做 battle 式「可丢」。可达目标是「有界 RPO + 可重启恢复」。**
 
-主世界的状态就是产品本身,「打完丢掉」没有意义。[moba-ds-server-interview-qa.md](./moba-ds-server-interview-qa.md) Q1 的对照表已写清:DS 是「结束后状态丢弃」,Scene 是「状态持久化到 DB」。把主世界往「可丢」推是范畴错配。
+主世界的状态就是产品本身,「打完丢掉」没有意义。[moba-ds-server-interview-qa.md](../notes/slg-moba/moba-ds-server-interview-qa.md) Q1 的对照表已写清:DS 是「结束后状态丢弃」,Scene 是「状态持久化到 DB」。把主世界往「可丢」推是范畴错配。
 
 **现状(核实过,别重查):**
 
@@ -153,7 +153,7 @@ MapService 同时扮演 MOBA 模型里的 Allocator(打包快照)与结算服(�
 **判定:能拆成独立进程,但拆出来的不是 battle 那种可丢节点。**
 
 - 对应判据表的**业务服**角色(持久层写方,状态不可整体丢);
-- **部署形态两份文档口径相反,引用时必须指明出处**:[slg-server-complete-framework.md](./slg-server-complete-framework.md) §2.4 建议 Map+Build+Army 合并为一进程、Build/Army/Alliance 单实例、仅 Chat/Rank/Alliance 可选独立;而 [slg-server-framework-complete.md](./slg-server-framework-complete.md) §2.1/2.2 把它们画成经内部 gRPC/Kafka 连接的独立业务微服务并标注「可按玩家/联盟 ID 分片」。后者正是业界通行的「大地图服单实例 + 玩家服按 uid 分片」。
+- **部署形态两份文档口径相反,引用时必须指明出处**:[slg-server-complete-framework.md](../notes/slg-moba/slg-server-complete-framework.md) §2.4 建议 Map+Build+Army 合并为一进程、Build/Army/Alliance 单实例、仅 Chat/Rank/Alliance 可选独立;而 [slg-server-framework-complete.md](../notes/slg-moba/slg-server-framework-complete.md) §2.1/2.2 把它们画成经内部 gRPC/Kafka 连接的独立业务微服务并标注「可按玩家/联盟 ID 分片」。后者正是业界通行的「大地图服单实例 + 玩家服按 uid 分片」。
 - 状态性质是**进程内存权威 + write-behind 异步落盘**(MMO 世界服同型),不是 DB 事务权威。
 - **建筑定时器是从 `finish_time` 派生的缓存,允许丢;不允许丢的是 `finish_time` 本身**。恢复 = 按 finish_time 重挂或惰性结算,不需要行军那种碰撞注册重建。
 - Build 该不该与 Map 同进程,真判据是「建造完成回写 Tile + 视野推送」这个耦合,不是「它有状态」。
@@ -197,7 +197,7 @@ MapService 同时扮演 MOBA 模型里的 Allocator(打包快照)与结算服(�
 
 一进程 N 房是**有理由的自觉分叉**,不是与 DS 文档的冲突:
 
-- [moba-ds-server-interview-qa.md](./moba-ds-server-interview-qa.md) 是通用面试 Q&A;其 Q8 原话是「看资源密度和隔离需求」并把「一进程多局」列为正式方案,「主流商业 MOBA 选一进程一局」是对**重型引擎 DS**(省 200MB+/进程)的描述而非禁令;
+- [moba-ds-server-interview-qa.md](../notes/slg-moba/moba-ds-server-interview-qa.md) 是通用面试 Q&A;其 Q8 原话是「看资源密度和隔离需求」并把「一进程多局」列为正式方案,「主流商业 MOBA 选一进程一局」是对**重型引擎 DS**(省 200MB+/进程)的描述而非禁令;
 - Q9 的「严禁重置状态复用同一进程」禁的是**串行复用**(打完一局清空再接下一局),不是**并发 N 房**;
 - 「PRNG 污染」在本仓不成立:每个引擎实例持有自己的 `std::mt19937_64(seed)`,房间是纯内存对象结束即销毁;
 - 目标文档自己说「标准的核心是角色边界,不是进程数量」。
@@ -242,12 +242,12 @@ MapService 同时扮演 MOBA 模型里的 Allocator(打包快照)与结算服(�
 
 ### 5.3 引用本文时必须一并说明的前提
 
-**回合制「已抽出去」本身只过了编译 / 单测 / 静态评审**:整栈冒烟未跑(缺本机基础设施)、[moba-battle-target-architecture.md](./moba-battle-target-architecture.md) §七验收判据零打勾、gate 仍中继、battle 无 K8s manifest。上述对 MMO/SLG 的推演,是照着一个**尚未整栈验证**的样板。
+**回合制「已抽出去」本身只过了编译 / 单测 / 静态评审**:整栈冒烟未跑(缺本机基础设施)、[moba-battle-target-architecture.md](../notes/slg-moba/moba-battle-target-architecture.md) §七验收判据零打勾、gate 仍中继、battle 无 K8s manifest。上述对 MMO/SLG 的推演,是照着一个**尚未整栈验证**的样板。
 
 > **(2026-09-29 按现状标注)** 上段两处已过时,其余不变:
 > - 「gate 仍中继」→ 已落码删除:gate 两种路由模式都不中继战斗,直连是战斗唯一通路(turn-based §22 D65–D68)。
 > - 「battle 无 K8s manifest」→ 已有:`k8s_deploy.ps1` 由写路径入口 `Assert-ClientEntryDeployPreflight`(`:900`)调 `New-BattleWorkloadManifest`(`:5254`)渲染 battle 工作负载,`Apply-BattlePool`(`:5276`)只负责 apply(见 `:306` 注释);battle 密钥经 `New-NodeConfigMapYaml -IncludeBattleSettings`(`:1333`、`:5329`)注入(battle-transport-decision §8.6);集群外入口落码后还可生成 Agones Fleet(`lib/k8s_client_entry.ps1:988` `New-BattleFleetYaml`,D76–D93)。
-> - 仍然成立:以上全部**未编译、未测试、未上集群**;整栈冒烟与 K8s 路由模式 battle-smoke 未跑;[moba-battle-target-architecture.md](./moba-battle-target-architecture.md) §七验收判据仍零打勾。
+> - 仍然成立:以上全部**未编译、未测试、未上集群**;整栈冒烟与 K8s 路由模式 battle-smoke 未跑;[moba-battle-target-architecture.md](../notes/slg-moba/moba-battle-target-architecture.md) §七验收判据仍零打勾。
 
 ---
 

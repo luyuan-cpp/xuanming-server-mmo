@@ -32,7 +32,7 @@
 | §7「`Etcd:` 只写 `Hosts`,不写 Key」 | **`Key: ""` 显式留空** | go-zero v1.10.0 的 `discov.EtcdConf.Key` 不是 optional。`Etcd` 段存在而缺 Key 时,`conf.MustLoad` 会 Fatal,K8s 上 Pod 会 CrashLoop(见 D-13 证据) |
 | §2「扫描已占 id 时跳过 `/allocated/` 子树」 | **两棵子树的 key 都算占号** | 两棵子树合起来是超集,只会让可用 id 变少,不会撞号;真正防撞号的是 allocKey 上的 CAS(§2.3)。扫描结果只是跳过已占 id 的优化:少跳过一个 id,最多多一次 CAS 失败再试下一个 |
 | §9「幂等:SET NX EX 60」 | **两态幂等键 `pending:<token>` / `done`** | 只有一态时,首发还在写入,重发就会被当成功回,消息实际可能丢了。两态下,读到 `pending` 回限速码让客户端重试(§9.3) |
-| §7 第 5 条「`-GateRouterMode` 默认 `$true`」 | **`[string]`,取值 `'1'` / `'0'`,默认 `'1'`** | 根目录 `启动服务器.cmd` 经 `pwsh -File` 透传的是字符串;与 K8s 同口径 |
+| §7 第 5 条「`-GateRouterMode` 默认 `$true`」 | **`[string]`,取值 `'1'` / `'0'`,默认 `'1'`** | 根目录 `start-server.cmd` 经 `pwsh -File` 透传的是字符串;与 K8s 同口径 |
 
 ---
 
@@ -579,7 +579,7 @@ $env:GATE_CLIENT_RPC_ROUTER = '1'
   - redis-cluster 在跑时,zone 2 的 db 按默认位移到 7000 会撞集群端口。改传 `-ZonePortShift 2000`。
   - zone 2 的 gate / scene 可能卡在预设端口重试死循环。此时按 `$env:RPC_PORT` 逐个显式起。
 - 若 `go_services.ps1 -Command status` 里没有 chat / z2_chat,补起:`& .\tools\scripts\go_services.ps1 -Command start-exe -Services chat -Zone <1|2>`。
-- 只起单 zone 的替代方案:`启动服务器.cmd`(默认 `-GateRouterMode 1`)。它只起 zone 1(`start_game.ps1:405-413`),只能配 `chat_smoke.cross_zone: false` 做弱验收,不能替代本步。
+- 只起单 zone 的替代方案:`start-server.cmd`(默认 `-GateRouterMode 1`)。它只起 zone 1(`start_game.ps1:405-413`),只能配 `chat_smoke.cross_zone: false` 做弱验收,不能替代本步。
 
 **核对**:
 

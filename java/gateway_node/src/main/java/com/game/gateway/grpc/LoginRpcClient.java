@@ -90,7 +90,7 @@ public class LoginRpcClient {
      * which sees zero gate candidates for that zone and replies
      * {@code "no gate available for requested zone"}. Stress run 2026-05-24
      * caught this on the first 3-zone × 15000 attempt — see
-     * {@code docs/design/stress-3zone-2026-05-23-postmortem.md §I}.
+     * {@code docs/stress/stress-3zone-2026-05-23-postmortem.md §I}.
      */
     private final Map<Integer, ManagedChannel> channelByZone = new LinkedHashMap<>();
     private final AtomicInteger rr = new AtomicInteger();

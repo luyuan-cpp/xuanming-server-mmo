@@ -2,7 +2,7 @@
 
 **Created:** 2026-09-05
 **状态:** 架构定谳(结论已拍板;实现进度以 [turn-based-battle-server.md](./turn-based-battle-server.md) 为准,本文不记录完成度)
-**关联:** [turn-based-battle-server.md](./turn-based-battle-server.md)(D2/D6 原始决策)、[moba-battle-target-architecture.md](./moba-battle-target-architecture.md)(会话制目标形态)、[scene-grpc-server-design.md](./scene-grpc-server-design.md)(gRPC vs Kafka 取舍表)、[ARCH.md](./ARCH.md) §6
+**关联:** [turn-based-battle-server.md](./turn-based-battle-server.md)(D2/D6 原始决策)、[moba-battle-target-architecture.md](../notes/slg-moba/moba-battle-target-architecture.md)(会话制目标形态)、[scene-grpc-server-design.md](./scene-grpc-server-design.md)(gRPC vs Kafka 取舍表)、[ARCH.md](./ARCH.md) §6
 **2026-09-29 更新:** 直连收缩(turn-based §22 D65–D75)与 K8s 集群外入口(D76–D93,全文见 [k8s-client-entry.md](./k8s-client-entry.md))已落码。§2.1、§3.1、§3.3、§4、§6 在原文旁加了现状标注,原文未删;§8 按 5 路对抗核验逐条订正,并改写为落码后的口径,订正明细见 §8.7(含改写稿的二次核验)。以上改动均**未编译、未测试、未上集群,待 Codex 验证**。
 
 > **一句话:按平面拆传输,不按节点选传输。客户端面 muduo TCP 直连,Go→battle 控制面 gRPC,battle 保持 C++。**
@@ -189,7 +189,7 @@ gate 的出站白名单已含 BattleNodeService(`gate/main.cpp:198`),每个 gate
    - battle 收到后再解一次;
    - 应答回来,gate 还要按 response 类型全名反查 message_id(`gate/main.cpp:270-279` 建表,`:306-312` 查表)。反查表以类型全名为键,后写覆盖先写,所以两个方法共用同一个 response 类型会串号。
 
-   隔壁 proj_base 项目实测过:房间进程随便加,网关这个共享序列化漏斗在 69 房时卡死。这是转述,见 [moba-battle-target-architecture.md](./moba-battle-target-architecture.md) §五;本仓未复现,实测条件也没有记录。
+   隔壁 proj_base 项目实测过:房间进程随便加,网关这个共享序列化漏斗在 69 房时卡死。这是转述,见 [moba-battle-target-architecture.md](../notes/slg-moba/moba-battle-target-architecture.md) §五;本仓未复现,实测条件也没有记录。
 
    **现状**:收缩后 gate 两种模式都在 `DispatchClientRpcMessage` 里、按协议分派之前拒绝战斗消息(`client_message_processor.cpp:936-950`,D66),上面这些成本不再发生。路由服同样拒绝目标为 battle 的消息(`go/client_rpc_router/internal/logic/forwardlogic.go:133-136`,D33)。
 2. **battle 是全局池,经 gate 中继必然 N×M。**

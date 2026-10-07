@@ -1,6 +1,6 @@
 # Smoke run validating the cpp Node ID hijack fix (etcd_service.cpp HandlePutEvent
 # now skips hijack detection while myInfo.node_id() == 0, see
-# docs/design/stress-3zone-2026-05-23-postmortem.md §E).
+# docs/stress/stress-3zone-2026-05-23-postmortem.md §E).
 #
 # Single zone, 5000 robots — same shape as a third of the full 45k run, but
 # small enough to finish in ~5 minutes and large enough that the open-server

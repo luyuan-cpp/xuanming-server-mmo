@@ -42,7 +42,7 @@
 
 - Go:`go/match/internal/noderegistry/registry.go:60-63` —— `allocationKey` "是跨 zone 的全局占位 key —— 路径里不带 zone,因为两个 zone 的实例不可能同时拿到同一个 (node_type, node_id)";per-zone 的 `rpcPath` 只是发现路径。
 - C++:`cpp/libs/engine/core/node/system/etcd/etcd_service.cpp:253` —— "Lost the race for this (node_type, node_id) globally — another zone …"。
-- 压测实证:3 zone 6 个 gate 落成 `gate-group-{0..5}` 六个独立 group(`docs/design/stress-3zone-2026-05-23-postmortem.md:542`)。
+- 压测实证:3 zone 6 个 gate 落成 `gate-group-{0..5}` 六个独立 group(`docs/stress/stress-3zone-2026-05-23-postmortem.md:542`)。
 - 因此 `node_kafka_command_handler.h:146` 的 `topicPrefix + "-" + node_id` 与 battle 出站的 `"gate-"+gate_node_id` / `"scene-"+scene_node_id` 全局无歧义。`node_connector.cpp:43` "node_id is only unique within a zone" 是防御性注释,与分配器实际行为不符,本轮在设计文档层面纠正,不改代码。
 
 ### 1.3 定位与发现已 zone-aware

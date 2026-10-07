@@ -1,7 +1,7 @@
 # 排行榜(leaderboard / rank)v1 设计
 
 > **本文只是设计,未落码、未编译。** 本文不改任何 proto / yaml / 配表 / 代码;文中出现的文件改动全部是"将来那一批要改什么"的清单。
-> 日期:2026-09-20(同日经三视角评审回修一轮,见 §10)。前情:[`friend-handoff-20260920.md`](friend-handoff-20260920.md) §4.2(leaderboard 一节)、§4.4(A 仓服务对照表中 `runtime/leaderboard` 一行)。
+> 日期:2026-09-20(同日经三视角评审回修一轮,见 §10)。前情:[`friend-handoff-20260920.md`](../handoff/friend-handoff-20260920.md) §4.2(leaderboard 一节)、§4.4(A 仓服务对照表中 `runtime/leaderboard` 一行)。
 > 约束来源:[`microservice-zone-contract-20260914.md`](microservice-zone-contract-20260914.md)(下称"契约")§3 / §4 / §6 / §7 / §8;[`xuanming-port-decisions-20260910.md`](xuanming-port-decisions-20260910.md) D-9 / D-11 / D-12 / D-13 / D-14;仓根 `AGENTS.md` §4 / §7 / §11。
 > **读者**:零上下文的接手人。**先读 §2**,它是全文唯一的硬阻塞;§2 与 §9.1 没拍板,后面各节都不能开工。§9.1 的七项已于 2026-09-20 全部由用户拍板(结果见 §9.1 与 §6),正文里原"待拍板"标记已改为"已拍板"。
 

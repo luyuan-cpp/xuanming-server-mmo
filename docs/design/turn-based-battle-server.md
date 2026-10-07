@@ -554,7 +554,7 @@ B 收到观战结束推送;B 观战中点排队 → 观战被清退(NotifySpecta
 ## 18. 客户端直连 battle 节点:票据入场,战斗流量零字节经 gate(2026-09-05,已落码待验证)
 
 > 状态:**已落码;2026-09-05 静态评审 22 条已修;proto-gen / C++ Debug 全量 0 error / Go / robot / 两份 gtest 全绿;整栈冒烟(§18.8 第 5-6 步)已于 2026-09-05(3) 通过——旧模式与路由模式两轮 `BATTLE_SMOKE_OK`,`a_direct_turns == 总回合数`,战斗帧零回落 gate(PROGRESS.md 同日条目)。Unity 客户端 2026-09-06 提交 `b5cf6ef` 接入(`BattleDirectLink` + `DirectRoutingBattleTransport`),Unity 实机对真 battle 的端到端直连尚未跑过。收缩阶段决策见 §19(2026-09-16);收缩已于 2026-09-29 一次做完,见 §22(D65–D75,未编译待验证)。** 目标形态与判据见
-> [moba-battle-target-architecture.md](./moba-battle-target-architecture.md)(会话制对局标准形态:
+> [moba-battle-target-architecture.md](../notes/slg-moba/moba-battle-target-architecture.md)(会话制对局标准形态:
 > 大厅一条连接走 gate,战斗另一条连接直连 battle,票据入场,battle 可随时 kill)。
 > 本节只写"改了什么、契约是什么、怎么验",不重复目标文档的论证。
 
@@ -676,7 +676,7 @@ obot.exe -c etc/battle_smoke_cross_zone.yaml` → `CROSS_ZONE_MATCH_OK … a_dir
 ### 19.2 本轮改动
 
 - `cpp/libs/services/scene/battle/system/player_battle.cpp` `OnPlayerEnterScene` 第 2 步:条件由 `enterGsType == LOGIN_RECONNECT` 改为 `LOGIN_RECONNECT || LOGIN_REPLACE`(D38)。判据链见 §18.7 原文:跨 gate 重定向后旧会话通常仍 `Online`,login 判 `REPLACE`,原条件漏掉这条路径。`LOGIN_FIRST` 不进该分支(首登实体新建、无 `InBattleComp`,由第 1 步按锁 + ctx 重建)。
-- 文档:§18 状态行改为已冒烟通过;§18.7 待修项标记已修;[moba-battle-target-architecture.md](./moba-battle-target-architecture.md) §六 过时缺口更正。
+- 文档:§18 状态行改为已冒烟通过;§18.7 待修项标记已修;[moba-battle-target-architecture.md](../notes/slg-moba/moba-battle-target-architecture.md) §六 过时缺口更正。
 
 ### 19.3 未编译,待 Codex 验证(按序)
 
@@ -1037,7 +1037,7 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
      这个集群还与 ChatRedis 共用(`k8s_deploy.ps1` chat ConfigMap 的 `ChatRedis` 段);chat 的历史 LIST、幂等、限速 key 都带 TTL,
      和观战记录争同一份内存。内存吃紧时这条记录会被 LRU 淘汰,丢票玩家补签拿到 `kInvalidParameter`,客户端把进行中的战斗判为
      `BattleGone`,全程没有报错。收缩后没有中继兜底,只能从 `match_request_battle_ticket_total{outcome="not_found"}` 的异常升高看出来。
-     处置(淘汰策略、ChatRedis 拆分、内存告警)归 [handoff-backlog-2026-09-05.md](./handoff-backlog-2026-09-05.md) D-03 / P2-D1,
+     处置(淘汰策略、ChatRedis 拆分、内存告警)归 [handoff-backlog-2026-09-05.md](../handoff/handoff-backlog-2026-09-05.md) D-03 / P2-D1,
      待用户拍板;拍板前不单独改这个集群的淘汰策略。
    - 以上 match 改动未编译、未测试,待 Codex 验证。
 5. **match 侧**:`createBattle` 不区分 RPC 失败与 tip≠0 明确拒绝,明确拒绝后若 `DestroyBattle` 也失败,会走 `create_failed_room_alive`

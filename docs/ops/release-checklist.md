@@ -194,7 +194,7 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
 
 **Date:** 2026-05-09
 **目的:** 把"新登录链路"从灰度到全量上线的所有动作 / 阈值 / 回滚 SOP 沉淀成一张清单。
-**前置阅读:** [ARCH.md §11-12](../design/ARCH.md), [open-server-rate-limit-design.md](../design/open-server-rate-limit-design.md), [stress-test-2026-05-http-login.md](../design/stress-test-2026-05-http-login.md)
+**前置阅读:** [ARCH.md §11-12](../design/ARCH.md), [open-server-rate-limit-design.md](../design/open-server-rate-limit-design.md), [stress-test-2026-05-http-login.md](../stress/stress-test-2026-05-http-login.md)
 
 ---
 
@@ -416,7 +416,7 @@ kubectl rollout undo deploy/login -n mmorpg
 #### F.B-3: 1k+ 阶梯压测在 Windows dev 跑不动
 
 - **状态:** 仅 dev,生产 Linux + 多 broker kafka 不会触发
-- **应对:** **1k/2k/5k 必须在 Linux staging 跑**,直接用 `tools/scripts/stress-linux-tier.sh` 跑出 csv,把结果追加到 [stress-test-2026-05-http-login.md](../design/stress-test-2026-05-http-login.md)
+- **应对:** **1k/2k/5k 必须在 Linux staging 跑**,直接用 `tools/scripts/stress-linux-tier.sh` 跑出 csv,把结果追加到 [stress-test-2026-05-http-login.md](../stress/stress-test-2026-05-http-login.md)
   ```bash
   # staging 上(redis-cli 在 PATH,gateway/login/gate 已起):
   ./tools/scripts/stress-linux-tier.sh                  # 默认 1000/2000/5000
@@ -440,5 +440,5 @@ kubectl rollout undo deploy/login -n mmorpg
 - [ARCH.md](../design/ARCH.md) §11-12 决策表 + deprecation 计划
 - [onboarding.md](../design/onboarding.md) 5 分钟上手
 - [open-server-rate-limit-design.md](../design/open-server-rate-limit-design.md) 限流配置参考
-- [stress-test-2026-05-http-login.md](../design/stress-test-2026-05-http-login.md) 压测基线
+- [stress-test-2026-05-http-login.md](../stress/stress-test-2026-05-http-login.md) 压测基线
 - [gate-kernel-tuning-runbook.md](./gate-kernel-tuning-runbook.md) sysctl 完整清单

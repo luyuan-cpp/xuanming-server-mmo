@@ -498,7 +498,7 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
 | `-migrate` flag 形态,跑完即退 | `go/data_service/data_service.go:41-44`、`:225-240` |
 | data-service 随 zone 部署(非 Global),全局库只有一份 | `tools/scripts/k8s_deploy.ps1:387`;`deploy/k8s/README.md:321` |
 | 全局服务模板是多副本 | `deploy/k8s/manifests/go-svc/chat.yaml:41`;`match.yaml:36` |
-| data-service Deployment args 只有 `-f`;K8s 命令集没有 migrate;go/db 同类缺口 open | `data-service.yaml:54`;`k8s_deploy.ps1:8`、`:1495-1496`;`docs/design/handoff-backlog-2026-09-05.md:202` |
+| data-service Deployment args 只有 `-f`;K8s 命令集没有 migrate;go/db 同类缺口 open | `data-service.yaml:54`;`k8s_deploy.ps1:8`、`:1495-1496`;`docs/handoff/handoff-backlog-2026-09-05.md:202` |
 | staging/prod 固定 AutoMigrate=false | `k8s_deploy.ps1:1500-1512` |
 | 一次性 Job 接进部署流程的先例(infra manifest 之后、zone 之前;先 delete 再 apply) | `deploy/k8s/manifests/infra/kafka-topic-init.yaml:15-16`、`:42-57`;`k8s_deploy.ps1:2814-2816` |
 | mysql-init 目录原样打进 K8s ConfigMap;02_ 只因库名与本地不同才生成 | `k8s_deploy.ps1:2597-2601`、`:2620-2632`、`:424-429` |

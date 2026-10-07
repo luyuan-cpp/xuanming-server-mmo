@@ -164,7 +164,7 @@ z3/...
 2. `grep -E "ERROR|FATAL" z*/z*.log` —— 错误集中在哪一步(login / enter / scene_ready)
 3. CSV 的 `msg_recv` 列 —— 应该 >>> `msg_sent`(scene 推送的广播)。如果接近 1:1 说明大量 robot 卡在 scene_ready 之前,profile=stress 没真正跑起来。
 
-发现问题 → 写到 `docs/design/stress-test-3zone-2026-05-<topic>.md`,**不要更新本 runbook**(这是 SOP,不是日志)。
+发现问题 → 写到 `docs/stress/stress-test-3zone-2026-05-<topic>.md`,**不要更新本 runbook**(这是 SOP,不是日志)。
 
 ---
 

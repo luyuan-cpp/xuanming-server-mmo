@@ -73,7 +73,7 @@ gate:
 # Why zone-pinning matters: each go-zero login.rpc only watches its own zone's
 # gate registrations in etcd. A round-robin client misroutes 2-in-3
 # AssignGate calls to a wrong-zone instance and gets "no gate available for
-# requested zone" — see docs/design/stress-3zone-2026-05-23-postmortem.md §I.
+# requested zone" — see docs/stress/stress-3zone-2026-05-23-postmortem.md §I.
 # 多节点自动发现(2026-08):discovery-enabled=true 时,网关每
 # discovery-interval-ms 从 etcd 拉 LoginNodeService.rpc/ 的注册,按 zone
 # 建立动态 channel 池(同 zone 多实例轮询,重试自动换实例);上面的静态

@@ -2,7 +2,7 @@
 
 **Created:** 2026-09-20
 **状态:** **本文只是设计,未落码、未编译、未运行任何测试;导表器与 proto-gen 都没跑过。** 本文提到的 `proto/mail/*`、`go/mail/*`、`mail_error` 段、`mmorpg_mail` 库、`biz_tag = mail` **今天全都不存在**。文中凡"应该 / 期望"都不是实测结论。§11.1 的各项已于 2026-09-20 全部由用户拍板(结果见 §11.1 拍板记录;§8 决策表里对应条目已改标〔已拍板〕)。2026-09-20 经三视角评审回修一轮,见文末「评审记录」。
-**关联:** [friend-handoff-20260920.md](./friend-handoff-20260920.md) §4.1(mail 摸底)/ §4.4(A 仓对照)/ §5(坑);[friend-port-20260918.md](./friend-port-20260918.md)(结构样板);[leaderboard-system.md](./leaderboard-system.md)(发奖出口指向本服务);[microservice-zone-contract-20260914.md](./microservice-zone-contract-20260914.md)(契约 §2–§8);[xuanming-port-decisions-20260910.md](./xuanming-port-decisions-20260910.md) 的 D-9 / D-11 / D-12 / D-13 / D-14;[guild-phase2/04-asset-channel.md](./guild-phase2/04-asset-channel.md)(通用资产通道,I6 流独占);[tip-code-axis.md](./tip-code-axis.md);[snowflake-id-allocation.md](./snowflake-id-allocation.md);`AGENTS.md` §4 / §7 / §10.2 / §11(尤其 §11.6)。
+**关联:** [friend-handoff-20260920.md](../handoff/friend-handoff-20260920.md) §4.1(mail 摸底)/ §4.4(A 仓对照)/ §5(坑);[friend-port-20260918.md](./friend-port-20260918.md)(结构样板);[leaderboard-system.md](./leaderboard-system.md)(发奖出口指向本服务);[microservice-zone-contract-20260914.md](./microservice-zone-contract-20260914.md)(契约 §2–§8);[xuanming-port-decisions-20260910.md](./xuanming-port-decisions-20260910.md) 的 D-9 / D-11 / D-12 / D-13 / D-14;[guild-phase2/04-asset-channel.md](./guild-phase2/04-asset-channel.md)(通用资产通道,I6 流独占);[tip-code-axis.md](./tip-code-axis.md);[snowflake-id-allocation.md](./snowflake-id-allocation.md);`AGENTS.md` §4 / §7 / §10.2 / §11(尤其 §11.6)。
 
 > **A 仓参考不可得,如实说明**:早期摸底稿(`port_plan_mail.json`,含 11 条待拍板)随会话临时目录丢失,A 仓 `services/social/mail` 的源码本轮也拿不到。本文**没有**参考 A 仓的任何做法,全部从 B 仓现有约束(D-14、契约、资产通道、friend / trade 先例、客户端现状)重新推导。凡是"A 仓怎么做的"一律不知道,也不编。
 
@@ -684,7 +684,7 @@ Tip.xlsx 把预留注释行换成组头 `//mail_error base=17000 width=1000`(**`
 ### 7.1 端口:gRPC `50900` / 指标 `:9240`(本轮全仓 grep 复核)
 
 - **复核方法**:Grep `\b(50900|51900|52900|53900|9240|10240|11240)\b`,排除 `third_party/`、`cpp/generated/`、`generated/`、`robot/logs/`、`bin/`、`*.pb.*`。
-- **结果**:只命中 `PROGRESS.md:5361`(friend F1 条目顺带记的一句)与 `docs/design/friend-handoff-20260920.md:668 / 907`;另 `53900` 在 `go/friend/internal/data/recommend_repo_mysql_test.go:266` 作为**玩家 id 常量**出现,不是端口。**没有进任何代码、yaml、脚本、manifest 或契约。**
+- **结果**:只命中 `PROGRESS.md:5361`(friend F1 条目顺带记的一句)与 `docs/handoff/friend-handoff-20260920.md:668 / 907`;另 `53900` 在 `go/friend/internal/data/recommend_repo_mysql_test.go:266` 作为**玩家 id 常量**出现,不是端口。**没有进任何代码、yaml、脚本、manifest 或契约。**
 - **本地位移核验**(`go_services.ps1`:`Port + (Zone−1)*1000 + (Index−1)*1`,再经 `Resolve-BindablePort`;顶层单行 `MetricsListenAddr` 同规则位移):
 
 | zone | gRPC | 指标 | 与 `$ServiceCatalogue` 其它条目 |

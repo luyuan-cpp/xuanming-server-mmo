@@ -1,0 +1,83 @@
+Round 19 orchestrator — phase=summarize  Execute=True  WipeData=False
+
+=== Phase: summarize (R18 vs R19 comparison table) ===
+  [exec] stress_summarize -RunDir robot/logs/stress-round19-20260618-120723
+
+Run directory: F:\work\mmorpg\robot\logs\stress-round19-20260618-120723
+
+=== Robot per-minute stats =============================================
+
+  time   conn        login_ok   enter_ok   enter_fail  recon_fb  max_login  msg/s
+  ----   ----        --------   --------   ----------  --------  ---------  -----
+  1m0s         1,193      1,177      1,177           0         0 845ms      246/s
+
+=== EnterGame end-to-end (entergame_*) =================================
+
+  snapshot                       success  preload_failed  apply_failed  fail%   preload{ok}avg  preload{fail}avg  apply avg
+  --------                       -------  --------------  ------------  -----   --------------  ----------------  ---------
+  t10m_login                       35,346               0             0 0.0%     13.5ms         -                  36.5ms
+  t15m_login                       58,024               0             2 0.0%     13.4ms         -                  37.0ms
+  t18m_login                       71,119               0             2 0.0%     12.9ms         -                  37.8ms
+  t3m_login                         6,293               0             0 0.0%     21.9ms         -                  35.5ms
+  t5m_login                        14,005               0             0 0.0%     14.0ms         -                  36.7ms
+
+=== Dataloader per-stage avg (dataloader_preload_*) ====================
+
+  snapshot                       cache_check  sub_cache  dispatcher  kafka_send  cb_wait{ok}  cb_wait{fail}
+  --------                       -----------  ---------  ----------  ----------  -----------  -------------
+  t10m_login                       1.7ms        3.3ms      0.0ms       5.1ms      28.3ms      -
+  t15m_login                       1.7ms        3.3ms      0.0ms       4.4ms      32.1ms      -
+  t18m_login                       1.7ms        3.4ms      0.0ms       4.1ms      31.8ms      -
+  t3m_login                        1.6ms        3.2ms      0.0ms      11.0ms      21.5ms      -
+  t5m_login                        1.6ms        3.2ms      0.0ms       7.7ms      18.9ms      -
+
+=== SceneManager EnterScene stages (scene_manager_enter_scene_stage_seconds) ===
+
+  snapshot                       dedup     scene_res reserve  upd_loc  route_gt rel_disp cross_zn
+  --------                       --------- --------- -------- -------- -------- -------- --------
+  t10m_sm                        -          24.1ms   -          0.7ms    0.3ms  -        -
+  t15m_sm                        -          24.7ms   -          0.7ms    0.3ms  -        -
+  t18m_sm                        -          25.4ms   -          0.7ms    0.4ms  -        -
+  t3m_sm                         -          22.6ms   -          0.7ms    0.3ms  -        -
+  t5m_sm                         -          23.7ms   -          0.7ms    0.3ms  -        -
+
+=== Dirty-save skip rate (cpp scene LOG_INFO [DirtySave]) ============
+
+  scene_log                      total       skipped     skip_pct
+  ---------                      -----       -------     --------
+  scene.stdout.log                    27,948      13,775  49.2%
+
+=== DB task stages (db_task_stage_seconds, db_task_result_total) ===
+
+  snapshot                       read_total read_hdlr cache_wr publish  | write_total write_hdlr | ok      err
+  --------                       ---------- --------- -------- -------- | ----------- ---------- | ------- ----
+  t10m_db                        -          -         -        -        | -           -          |  35,791    0
+  t15m_db                        -          -         -        -        | -           -          |  54,344    0
+  t18m_db                        -          -         -        -        | -           -          |  64,191    0
+  t3m_db                         -          -         -        -        | -           -          |  11,413    0
+  t5m_db                         -          -         -        -        | -           -          |  17,120    0
+
+=== Kafka consumer lag (live) ==========================================
+
+  partition    current      log_end       lag
+  ---------    -------      -------       ---
+  0            6,846        6,846         0
+  1            6,784        6,784         0
+  2            7,142        7,142         0
+  3            6,986        6,986         0
+  4            6,960        6,960         0
+  5            7,062        7,062         0
+  6            6,944        6,944         0
+  7            6,752        6,752         0
+  8            6,696        6,696         0
+  9            6,948        6,948         0
+
+  TOTAL LAG: 0
+
+
+Compare the table above against baseline: docs/stress/prev-summary.txt
+PASS criteria: token expired -> ~0; login_fail & gave-up down sharply;
+              pipeline stays enter_fail=0 / DB err=0 / Kafka lag=0.
+Do NOT claim "fixed" without this comparison table (CLAUDE §6).
+
+Done (phase=summarize).
