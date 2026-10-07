@@ -1,66 +1,55 @@
-# tools
+# tools/ —— 工具链
 
-This directory hosts developer tooling and generated helper code.
+代码生成器、导表器、运维工具和工程脚本。这里的东西都不随服务端部署,只在开发、构建、运维时使用。
 
-## Layout
+## 目录
 
-- `proto_generator/`: source code of `proto-gen` (historical name: `pbgen`; canonical proto code generator project).
-- `data_table_exporter/`: table export scripts and templates.
-- `robot/`: robot client/tooling code and generated robot protobuf files.
-- `scene_manager/`: generated scene manager Go protobuf artifacts used by tools.
-- `proto/`: legacy binary/tool bundle retained for compatibility.
-- `generated/`: temporary generation workspace (ignored).
-- `github.com/`: generated/imported Go package-style mirror paths used by tooling.
-- `docs/`: tool-related snapshots and tree reports.
-- `scripts/`: utility scripts for developers.
+| 目录 | 语言 | 用途 |
+|------|------|------|
+| [`proto_generator/`](proto_generator/) | Go | 协议生成器 proto-gen:从 `proto/` 生成 C++、Go、机器人、客户端代码 |
+| [`data_table_exporter/`](data_table_exporter/) | Python | 导表器:从 `data/` 生成表数据与各语言的查表代码 |
+| [`scripts/`](scripts/) | PowerShell、Shell、Python | 工程脚本:启动、构建、部署、发布、压测 |
+| `merge_zone/` | Go | 合服与玩家搬库工具 |
+| `data_consistency_check/` | Go | 跨区数据交叉引用巡检 |
+| `navmesh_baker/` | C++ | 场景导航网格烘焙(Recast) |
+| `battle_art_gen/` | Go | 战斗美术素材的程序化生成 |
+| `dev/` | — | [mprocs](https://github.com/pvolok/mprocs) 的进程面板配置 |
+| `patches/` | — | 对第三方子模块的本地补丁 |
+| `docs/` | — | 生成器命名迁移的审计记录 |
+| `archived/` | — | 已退役的脚本,只作参考,不保证能运行 |
 
-## Conventions
+`proto/` 下只有一份弃用说明:旧的预编译生成器放在这里,新代码在 `proto_generator/`。
 
-- Keep runnable source projects in dedicated subdirectories (`proto_generator`, `data_table_exporter`, etc.).
-- Put one-off reports, dumps, and snapshots under `docs/`.
-- Put helper scripts under `scripts/`.
-- Do not commit IDE metadata directories (for example `.idea/`).
-- Keep temporary generation output under ignored paths (`generated/`, temp logs, and local binaries).
+## 常用入口
 
-## Archived Logs
+日常命令统一从 `scripts/dev_tools.ps1` 进,仓库根的 `dev.bat` 是它的菜单封装。
 
-- Historical proto generator run logs are archived in `docs/protogen/`.
-- Keep source directories under `proto_generator/protogen/` focused on code and config.
+```powershell
+pwsh -File tools/scripts/dev_tools.ps1 -Command help              # 全部命令
+pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run     # 重新生成协议代码
+pwsh -File tools/scripts/dev_tools.ps1 -Command go-svc-build      # 编译全部 Go 服务
+pwsh -File tools/scripts/dev_tools.ps1 -Command dev-status        # 本地进程状态
+```
 
-## Quick Start
+| 脚本 | 用途 |
+|------|------|
+| `scripts/start_game.ps1` | 一键启动本地整套服务(根目录 `start-server.cmd` 调它) |
+| `scripts/dev_tools.ps1` | 命令总入口:生成、构建、本地进程、Kubernetes、合服 |
+| `scripts/go_services.ps1`、`scripts/cpp_nodes.ps1` | 本地 Go 服务与 C++ 节点的启停 |
+| `scripts/run_cpp_tests.ps1` | 编译并运行 C++ 测试 |
+| `scripts/build_linux.sh` | C++ 节点的 Linux 构建 |
+| `scripts/k8s_deploy.ps1`、`scripts/k8s_image.ps1` | Kubernetes 部署与镜像 |
+| `scripts/publish_images.ps1`、`scripts/make_release.ps1` | 发布打包 |
+| `scripts/stress_snap.ps1`、`scripts/stress_summarize.ps1` | 压测采样与汇总 |
+| `scripts/gen_docs_index.py` | 刷新 `docs/README.md` 的文档索引 |
 
-- Show tool command help:
-	`pwsh -File tools/scripts/dev_tools.ps1 -Command help`
-- Build proto-gen:
-	`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build`
-- Run proto-gen with default config:
-	`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`
-- Run proto-gen with custom config:
-	`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.yaml`
-- Refresh tree output script:
-	`pwsh -File tools/scripts/dev_tools.ps1 -Command tree`
-- Run local services in one terminal dashboard (mprocs):
-	`mprocs -c tools/dev/mprocs.yaml`
-- Run local services in one terminal dashboard (mprocs, 2 gate + 4 scene):
-	`mprocs -c tools/dev/mprocs.2g4s.yaml`
-- Run local services in one terminal dashboard (mprocs, Go only):
-	`mprocs -c tools/dev/mprocs.go-only.yaml`
-- Run local services in one terminal dashboard (mprocs, C++ only):
-	`mprocs -c tools/dev/mprocs.cpp-only.yaml`
+脚本的详细说明见 [scripts/README.md](scripts/README.md);`scripts/tests/` 下是这些脚本的契约测试,
+改脚本前先看有没有对应的测试。
 
-## Notes
+## 约定
 
-- Existing build/run tasks already target `tools/proto_generator/protogen` and remain unchanged.
-- `tools/proto/protogen` is currently retained for compatibility with existing local toolchains.
-- `dev_tools.ps1` still accepts `pbgen-build` / `pbgen-run` aliases for compatibility.
-- `tools/scripts/dev_tools.ps1` is the preferred shell entry point for common tool commands.
-- See `tools/docs/proto_gen_naming_migration.md` for the explicit migration boundary and future rename checklist.
-- See `tools/docs/proto_gen_naming_audit.md` for the current post-migration audit snapshot.
-- `tools/scripts/dev_mprocs_proc.ps1` is a foreground process wrapper for mprocs. It is intended for log aggregation in a single terminal UI.
-- `tools/scripts/start_mprocs.ps1` checks whether mprocs is installed before launching a dashboard config.
+- 能独立运行的工具各占一个子目录,不在 `tools/` 根下散放脚本。
+- 被维护的脚本放 `scripts/`;一次性的或已退役的放 `archived/`。
+- 生成过程的临时输出放在已忽略的路径下,不入库。
 
-## Naming Policy
-
-- Use `proto-gen` as the primary user-facing name.
-- Use `protogen` as the canonical internal directory/module name.
-- Treat `pbgen` as a historical compatibility alias for commands, binary names, and old environment variables.
+给 AI 协作者的排查入口见 [AGENTS.md](AGENTS.md)。

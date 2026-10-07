@@ -1,65 +1,26 @@
-# `bin/` — C++ Runtime Working Directory
+# bin/ —— C++ 节点的工作目录
 
-`bin/` hosts the C++ executables and the runtime working directory the C++ nodes
-expect when launched locally on Windows. It is **not** a pure build-output dir:
-the C++ exes read `bin/etc/`, `bin/nodes/`, `bin/script/`, and look up tables
-relative to this folder.
+gate、scene、battle 三个节点在本机运行时以这里为当前目录:它们按相对路径读 `etc/` 下的配置,
+并经 `../generated/tables/` 加载配置表。所以这个目录不是纯粹的编译输出目录,里面的配置文件是
+入库的。
 
-## What lives here
+## 入库的内容
 
-| Subpath | Purpose | Tracked in git |
-|---------|---------|-----------|
-| `gate.exe`, `scene.exe`, `centre.exe` | C++ node runtime binaries (copied here by MSVC `PostBuildEvent`; primary build output is `build/cpp/nodes/`) | no |
-| `proto-gen.exe`, `slg_map.exe`, `gate_tp2.exe` | Auxiliary tools | no |
-| `rdkafka*.dll` | Native runtime DLLs needed next to the exes | no |
-| `etc/` | C++ node configs (`base_deploy_config.yaml`, etc.) | yes |
-| `nodes/` | Per-node working data | mixed |
-| `script/` | Helper scripts shipped alongside binaries | yes |
-| `go_services/` | Built Go service binaries (so `cwd=bin` runs everything) | no |
-| `zoneinfo/` | Optional IANA tz data for Linux runtime image | no |
+| 路径 | 内容 |
+|------|------|
+| `etc/base_deploy_config.yaml` | 部署配置:etcd 与 Kafka 地址、配置表目录、日志级别、连接上限等 |
+| `etc/game_config.yaml` | 节点配置:区号、scene 节点角色、区 Redis 地址 |
+| `etc/game_config_instance.yaml` | 副本类 scene 节点的示例配置 |
+| `logs/cpp_nodes/.gitkeep` | 占位:节点的日志库不会自己创建目录,缺了会在启动时直接中止 |
 
-### Build outputs no longer land here
+## 编译和运行后出现的内容(不入库)
 
-Tests, intermediate `.obj`/`.pdb` files, and node `.lib`/`.exp` artifacts now
-live entirely under `build/cpp/`:
+| 路径 | 内容 |
+|------|------|
+| `gate.exe`、`scene.exe`、`battle.exe` | 节点可执行文件,由 MSBuild 的生成后事件复制过来 |
+| `*.dll` | 节点运行需要的动态库(librdkafka、zlib) |
+| `go_services/` | 编译好的 Go 服务,让全部进程都能从这里启动 |
+| `zoneinfo/` | Linux 运行时镜像用的时区数据 |
 
-| Build artifact | Location |
-|----------------|----------|
-| C++ test binaries (`*_test.exe`, `.pdb`, `.lib`, `.exp`) | `build/cpp/tests/` |
-| C++ node binaries (`gate.exe`, `scene.exe`, `centre.exe`, `.lib`, `.exp`, `.pdb`) | `build/cpp/nodes/` (node `.exe` is also copied to `bin/` by `PostBuildEvent`) |
-| MSVC intermediate (`*.obj`, `vc145.pdb`, tlogs) | `build/cpp/intermediate/{tests,nodes,lib}/<project>/` |
-| Static libs (`core.lib`, `muduo_*.lib`, etc.) | `lib/` (unchanged — many projects link against this fixed path) |
-
-## What used to live here but moved
-
-Everything **transient** now lives under `run/` (separate from build outputs):
-
-| Old path | New path |
-|----------|----------|
-| `bin/logs/go_services/` | `run/logs/go_services/` |
-| `bin/logs/cpp_nodes/`   | `run/logs/cpp_nodes/` |
-| `bin/logs/sa_token.log` | `run/logs/sa_token.log` |
-| `bin/robot_logs/`       | `run/logs/robot/` |
-| `bin/go_services.pid.json` | `run/pids/go_services.pid.json` |
-| `bin/cpp_nodes.pid.json`   | `run/pids/cpp_nodes.pid.json` |
-| `bin/sa_token.pid`         | `run/pids/sa_token.pid` |
-| `bin/XMLGoogleTestResults.xml`, `bin/*.testdurations`, `bin/z*_stats.txt`, `bin/redis_*.txt`, `bin/go_*.txt` | `run/scratch/` |
-
-The launcher scripts (`tools/scripts/go_services.ps1`,
-`tools/scripts/cpp_nodes.ps1`, `dev.bat`) still read the legacy pid file
-locations once for backwards compatibility, then rewrite them under `run/`.
-
-## Future work (not done yet)
-
-The remaining cross-platform / deploy items are intentionally deferred:
-
-1. Updating `deploy/k8s/Dockerfile.cpp`, `deploy/k8s/Dockerfile.runtime`, and
-   the K8s ConfigMap mount paths (`/app/bin/etc`, `/app/bin/logs`) to a new
-   layout — coordinated change needed across runtime image and ConfigMaps.
-2. Updating C++ source code that opens config files relative to the working
-   directory (currently assumes `cwd=bin`).
-
-The build/runtime separation captured above already gets the main benefits:
-clean `git status`, safe `rm -rf run/` and `rm -rf build/`, and a clear
-distinction between artifacts that survive a build clean and artifacts
-that don't.
+其余编译产物不在这里:中间文件与测试程序在 `build/cpp/`,静态库在 `lib/`。
+日志、pid 文件等运行时产物在 `run/`,见 [docs/ops/run-directory.md](../docs/ops/run-directory.md)。
