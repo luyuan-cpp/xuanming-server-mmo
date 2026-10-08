@@ -80,7 +80,7 @@ DESIGN_RULES = [
         "grpc-client-deadline-failure-callback.md", "muduo-timer-cancellation-hazards.md",
         "hashed-timing-wheel.md", "double-buffer-queue-optimizations.md",
         "distributed-tracing.md", "error-reporting.md", "traffic-statistics-design.md",
-        "thread-count-monitoring*",
+        "thread-count-monitoring*", "no-single-node-*",
     ]),
     ("移植记录", ["xuanming-port-*"]),
 ]
