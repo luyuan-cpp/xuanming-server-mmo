@@ -6653,3 +6653,10 @@ PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修
 
 - 继续按未改动的`proto/contracts/kafka/match_event.proto`正规生成C++两份既有输出,补齐源中已有的activity_context、逃跑及阵亡玩家字段;独立重复生成逐字节一致。`match_event.pb.cc`使用原proto工程、原检查门禁与/m:1、单编译线程实际编译,0警告0错误。
 - 对10个非guild Go服务逐个执行依赖查询,仅重建7个受影响服务且全部exit0:login/player_locator/scene_manager/match/friend/trade依赖Kafka契约,data_service依赖guild契约。db/client_rpc_router/chat不受影响,guild刚完成验证,其4份EXE SHA均保持。所有模块锁文件未变,不重复已完成的回归测试,未启动任何服务。
+
+### 2026-10-08 本机依赖准备收尾与验收阻塞
+
+- gRPC/Protobuf、GTest/GMock、锁定OpenSSL及librdkafka的本机Debug依赖已构建安装。OpenSSL版本、SHA256(abc)标准向量、TLS1.3套件列举、default provider检查通过;未声称完成完整上游测试或网络TLS握手。librdkafka保留SSL/SASL/ZLIB,使用正式OpenSSL解决先前BoringSSL头冲突,没有修改vendor补丁关闭功能;官方示例在创建生产者前执行配置dump并退出0,未连接Kafka。
+- 隔离启动配置为3个C++进程加入所需DLL目录,5份DLL及30条导入依赖文件核对通过;仅改变进程局部PATH,未修改全局PATH或私有凭据。配置和DLL存在性检查不等于服务器成功运行。
+- C++工程仍缺guild_internal与match_internal两组RPC包装代码;正规包装生成器被Windows CodeIntegrity 3077/3033记录拦截。没有手写替身、改安全策略或换路径绕过。3个节点完整编译/启动尚未完成,不会在已知必要输入缺失时宣称构建通过。
+- 13:01 UTC复查仍为固件虚拟化关闭、Hypervisor未运行;Unity6000.6.0f1已安装,许可证日志仍为0 entitlement。Docker基础设施未启动、数据库未迁移、Unity测试未执行、客户端可玩EXE未生成。后续需用户开启BIOS SVM并重启、在Hub激活有效Unity许可证,以及管理员按现有策略核准生成器,然后继续构建与联机验收。
