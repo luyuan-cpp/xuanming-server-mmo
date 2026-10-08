@@ -460,6 +460,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleResultEvent final : public ::
   // accessors -------------------------------------------------------
   enum : int {
     kTeamsFieldNumber = 6,
+    kFledPlayerIdsFieldNumber = 10,
+    kDeadPlayerIdsFieldNumber = 11,
+    kActivityContextFieldNumber = 9,
     kBattleIdFieldNumber = 1,
     kMatchModeFieldNumber = 2,
     kBattleConfigIdFieldNumber = 3,
@@ -487,6 +490,62 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleResultEvent final : public ::
   private:
   const ::google::protobuf::RepeatedPtrField<::contracts::kafka::BattleResultTeam>& _internal_teams() const;
   ::google::protobuf::RepeatedPtrField<::contracts::kafka::BattleResultTeam>* PROTOBUF_NONNULL _internal_mutable_teams();
+
+  public:
+  // repeated uint64 fled_player_ids = 10;
+  [[nodiscard]] int fled_player_ids_size()
+      const;
+  private:
+  int _internal_fled_player_ids_size() const;
+
+  public:
+  void clear_fled_player_ids() ;
+  [[nodiscard]] ::uint64_t fled_player_ids(int index) const;
+  void set_fled_player_ids(int index, ::uint64_t value);
+  void add_fled_player_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& fled_player_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_fled_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_fled_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_fled_player_ids();
+
+  public:
+  // repeated uint64 dead_player_ids = 11;
+  [[nodiscard]] int dead_player_ids_size()
+      const;
+  private:
+  int _internal_dead_player_ids_size() const;
+
+  public:
+  void clear_dead_player_ids() ;
+  [[nodiscard]] ::uint64_t dead_player_ids(int index) const;
+  void set_dead_player_ids(int index, ::uint64_t value);
+  void add_dead_player_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& dead_player_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_dead_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_dead_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_dead_player_ids();
+
+  public:
+  // .BattleActivityContext activity_context = 9;
+  [[nodiscard]] bool has_activity_context()
+      const;
+  void clear_activity_context() ;
+  [[nodiscard]] const ::BattleActivityContext& activity_context() const;
+  [[nodiscard]] ::BattleActivityContext* PROTOBUF_NULLABLE release_activity_context();
+  ::BattleActivityContext* PROTOBUF_NONNULL mutable_activity_context();
+  void set_allocated_activity_context(::BattleActivityContext* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_activity_context(::BattleActivityContext* PROTOBUF_NULLABLE value);
+  ::BattleActivityContext* PROTOBUF_NULLABLE unsafe_arena_release_activity_context();
+
+  private:
+  const ::BattleActivityContext& _internal_activity_context() const;
+  ::BattleActivityContext* PROTOBUF_NONNULL _internal_mutable_activity_context();
 
   public:
   // uint64 battle_id = 1;
@@ -563,8 +622,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleResultEvent final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
-                          1, 0,
+      ::google::protobuf::internal::TcParseTable<4, 11,
+                          2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -593,6 +652,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleResultEvent final : public ::
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::contracts::kafka::BattleResultTeam > teams_;
+    ::google::protobuf::RepeatedField<::uint64_t> fled_player_ids_;
+    ::google::protobuf::internal::CachedSize _fled_player_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> dead_player_ids_;
+    ::google::protobuf::internal::CachedSize _dead_player_ids_cached_byte_size_;
+    ::BattleActivityContext* PROTOBUF_NULLABLE activity_context_;
     ::uint64_t battle_id_;
     ::uint32_t match_mode_;
     ::uint32_t battle_config_id_;
@@ -705,7 +769,7 @@ BattleResultTeam::_internal_mutable_player_ids() {
 inline void BattleResultEvent::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t BattleResultEvent::battle_id() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.BattleResultEvent.battle_id)
@@ -713,7 +777,7 @@ inline ::uint64_t BattleResultEvent::battle_id() const {
 }
 inline void BattleResultEvent::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:contracts.kafka.BattleResultEvent.battle_id)
 }
 inline ::uint64_t BattleResultEvent::_internal_battle_id() const {
@@ -729,7 +793,7 @@ inline void BattleResultEvent::_internal_set_battle_id(::uint64_t value) {
 inline void BattleResultEvent::clear_match_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_mode_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t BattleResultEvent::match_mode() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.BattleResultEvent.match_mode)
@@ -737,7 +801,7 @@ inline ::uint32_t BattleResultEvent::match_mode() const {
 }
 inline void BattleResultEvent::set_match_mode(::uint32_t value) {
   _internal_set_match_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:contracts.kafka.BattleResultEvent.match_mode)
 }
 inline ::uint32_t BattleResultEvent::_internal_match_mode() const {
@@ -753,7 +817,7 @@ inline void BattleResultEvent::_internal_set_match_mode(::uint32_t value) {
 inline void BattleResultEvent::clear_battle_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t BattleResultEvent::battle_config_id() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.BattleResultEvent.battle_config_id)
@@ -761,7 +825,7 @@ inline ::uint32_t BattleResultEvent::battle_config_id() const {
 }
 inline void BattleResultEvent::set_battle_config_id(::uint32_t value) {
   _internal_set_battle_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:contracts.kafka.BattleResultEvent.battle_config_id)
 }
 inline ::uint32_t BattleResultEvent::_internal_battle_config_id() const {
@@ -777,7 +841,7 @@ inline void BattleResultEvent::_internal_set_battle_config_id(::uint32_t value) 
 inline void BattleResultEvent::clear_outcome() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.outcome_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::eBattleOutcome BattleResultEvent::outcome() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.BattleResultEvent.outcome)
@@ -785,7 +849,7 @@ inline ::eBattleOutcome BattleResultEvent::outcome() const {
 }
 inline void BattleResultEvent::set_outcome(::eBattleOutcome value) {
   _internal_set_outcome(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:contracts.kafka.BattleResultEvent.outcome)
 }
 inline ::eBattleOutcome BattleResultEvent::_internal_outcome() const {
@@ -801,7 +865,7 @@ inline void BattleResultEvent::_internal_set_outcome(::eBattleOutcome value) {
 inline void BattleResultEvent::clear_winner_team_index() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.winner_team_index_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t BattleResultEvent::winner_team_index() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.BattleResultEvent.winner_team_index)
@@ -809,7 +873,7 @@ inline ::uint32_t BattleResultEvent::winner_team_index() const {
 }
 inline void BattleResultEvent::set_winner_team_index(::uint32_t value) {
   _internal_set_winner_team_index(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:contracts.kafka.BattleResultEvent.winner_team_index)
 }
 inline ::uint32_t BattleResultEvent::_internal_winner_team_index() const {
@@ -880,7 +944,7 @@ BattleResultEvent::_internal_mutable_teams() {
 inline void BattleResultEvent::clear_total_rounds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.total_rounds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t BattleResultEvent::total_rounds() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.BattleResultEvent.total_rounds)
@@ -888,7 +952,7 @@ inline ::uint32_t BattleResultEvent::total_rounds() const {
 }
 inline void BattleResultEvent::set_total_rounds(::uint32_t value) {
   _internal_set_total_rounds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:contracts.kafka.BattleResultEvent.total_rounds)
 }
 inline ::uint32_t BattleResultEvent::_internal_total_rounds() const {
@@ -904,7 +968,7 @@ inline void BattleResultEvent::_internal_set_total_rounds(::uint32_t value) {
 inline void BattleResultEvent::clear_finished_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.finished_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t BattleResultEvent::finished_at_ms() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.BattleResultEvent.finished_at_ms)
@@ -912,7 +976,7 @@ inline ::uint64_t BattleResultEvent::finished_at_ms() const {
 }
 inline void BattleResultEvent::set_finished_at_ms(::uint64_t value) {
   _internal_set_finished_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:contracts.kafka.BattleResultEvent.finished_at_ms)
 }
 inline ::uint64_t BattleResultEvent::_internal_finished_at_ms() const {
@@ -922,6 +986,201 @@ inline ::uint64_t BattleResultEvent::_internal_finished_at_ms() const {
 inline void BattleResultEvent::_internal_set_finished_at_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.finished_at_ms_ = value;
+}
+
+// .BattleActivityContext activity_context = 9;
+inline bool BattleResultEvent::has_activity_context() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.activity_context_ != nullptr);
+  return value;
+}
+inline const ::BattleActivityContext& BattleResultEvent::_internal_activity_context() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::BattleActivityContext* p = _impl_.activity_context_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::BattleActivityContext>(&::BattleActivityContext_globals_);
+}
+inline const ::BattleActivityContext& BattleResultEvent::activity_context() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:contracts.kafka.BattleResultEvent.activity_context)
+  return _internal_activity_context();
+}
+inline void BattleResultEvent::unsafe_arena_set_allocated_activity_context(
+    ::BattleActivityContext* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.activity_context_);
+  }
+  _impl_.activity_context_ = reinterpret_cast<::BattleActivityContext*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:contracts.kafka.BattleResultEvent.activity_context)
+}
+inline ::BattleActivityContext* PROTOBUF_NULLABLE BattleResultEvent::release_activity_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::BattleActivityContext* released = _impl_.activity_context_;
+  _impl_.activity_context_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::BattleActivityContext* PROTOBUF_NULLABLE BattleResultEvent::unsafe_arena_release_activity_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:contracts.kafka.BattleResultEvent.activity_context)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::BattleActivityContext* temp = _impl_.activity_context_;
+  _impl_.activity_context_ = nullptr;
+  return temp;
+}
+inline ::BattleActivityContext* PROTOBUF_NONNULL BattleResultEvent::_internal_mutable_activity_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.activity_context_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::BattleActivityContext>(GetArena());
+    _impl_.activity_context_ = reinterpret_cast<::BattleActivityContext*>(p);
+  }
+  return _impl_.activity_context_;
+}
+inline ::BattleActivityContext* PROTOBUF_NONNULL BattleResultEvent::mutable_activity_context()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::BattleActivityContext* _msg = _internal_mutable_activity_context();
+  // @@protoc_insertion_point(field_mutable:contracts.kafka.BattleResultEvent.activity_context)
+  return _msg;
+}
+inline void BattleResultEvent::set_allocated_activity_context(::BattleActivityContext* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.activity_context_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.activity_context_ = reinterpret_cast<::BattleActivityContext*>(value);
+  // @@protoc_insertion_point(field_set_allocated:contracts.kafka.BattleResultEvent.activity_context)
+}
+
+// repeated uint64 fled_player_ids = 10;
+inline int BattleResultEvent::_internal_fled_player_ids_size() const {
+  return _internal_fled_player_ids().size();
+}
+inline int BattleResultEvent::fled_player_ids_size() const {
+  return _internal_fled_player_ids_size();
+}
+inline void BattleResultEvent::clear_fled_player_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.fled_player_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t BattleResultEvent::fled_player_ids(int index) const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.BattleResultEvent.fled_player_ids)
+  return _internal_fled_player_ids().Get(index);
+}
+inline void BattleResultEvent::set_fled_player_ids(int index, ::uint64_t value) {
+  _internal_mutable_fled_player_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:contracts.kafka.BattleResultEvent.fled_player_ids)
+}
+inline void BattleResultEvent::add_fled_player_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_fled_player_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:contracts.kafka.BattleResultEvent.fled_player_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& BattleResultEvent::fled_player_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:contracts.kafka.BattleResultEvent.fled_player_ids)
+  return _internal_fled_player_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL BattleResultEvent::mutable_fled_player_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:contracts.kafka.BattleResultEvent.fled_player_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_fled_player_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+BattleResultEvent::_internal_fled_player_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.fled_player_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+BattleResultEvent::_internal_mutable_fled_player_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.fled_player_ids_;
+}
+
+// repeated uint64 dead_player_ids = 11;
+inline int BattleResultEvent::_internal_dead_player_ids_size() const {
+  return _internal_dead_player_ids().size();
+}
+inline int BattleResultEvent::dead_player_ids_size() const {
+  return _internal_dead_player_ids_size();
+}
+inline void BattleResultEvent::clear_dead_player_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.dead_player_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t BattleResultEvent::dead_player_ids(int index) const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.BattleResultEvent.dead_player_ids)
+  return _internal_dead_player_ids().Get(index);
+}
+inline void BattleResultEvent::set_dead_player_ids(int index, ::uint64_t value) {
+  _internal_mutable_dead_player_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:contracts.kafka.BattleResultEvent.dead_player_ids)
+}
+inline void BattleResultEvent::add_dead_player_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_dead_player_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_add:contracts.kafka.BattleResultEvent.dead_player_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& BattleResultEvent::dead_player_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:contracts.kafka.BattleResultEvent.dead_player_ids)
+  return _internal_dead_player_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL BattleResultEvent::mutable_dead_player_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_mutable_list:contracts.kafka.BattleResultEvent.dead_player_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_dead_player_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+BattleResultEvent::_internal_dead_player_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.dead_player_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+BattleResultEvent::_internal_mutable_dead_player_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.dead_player_ids_;
 }
 
 #ifdef __GNUC__

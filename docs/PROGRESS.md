@@ -6648,3 +6648,8 @@ PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修
 - Windows CodeIntegrity事件3077/3033确认原包装生成器被企业签名级别/应用控制策略拦截,没有通过替换执行路径或修改安全策略绕过;包装产物仍未从失败沙盒采用。
 - 客户端完整宠物动作已Push到`d2658cac`;隔离运行配置仅按新guild源追加MatchRpc与Activity,单独原生配置验证通过。数据库迁移工具已离线构建并通过帮助参数验证,未执行迁移。上述验证不能替代Unity编译、完整节点构建或联机验收。
 - **Java版(AGENTS §12)**:本条继续恢复本仓库原有权威协议的生成物,未新增客户端契约;另一Java服务器仓库未改,业务二期对齐状态沿用远端`43e5a99`的“待做”。
+
+### 同日 Kafka 结果契约与运行产物补充
+
+- 继续按未改动的`proto/contracts/kafka/match_event.proto`正规生成C++两份既有输出,补齐源中已有的activity_context、逃跑及阵亡玩家字段;独立重复生成逐字节一致。`match_event.pb.cc`使用原proto工程、原检查门禁与/m:1、单编译线程实际编译,0警告0错误。
+- 对10个非guild Go服务逐个执行依赖查询,仅重建7个受影响服务且全部exit0:login/player_locator/scene_manager/match/friend/trade依赖Kafka契约,data_service依赖guild契约。db/client_rpc_router/chat不受影响,guild刚完成验证,其4份EXE SHA均保持。所有模块锁文件未变,不重复已完成的回归测试,未启动任何服务。
