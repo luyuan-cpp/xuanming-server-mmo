@@ -206,6 +206,16 @@ type GuildSmokeConfig struct {
 	Economy       bool   `yaml:"economy"`
 	EconomyLeader string `yaml:"economy_leader"`
 	EconomyMember string `yaml:"economy_member"`
+
+	// Activities 打开活动段(帮会二期 B6a-cli,robot/guild_activity_smoke.go):经济段之后由 ActivityAccounts
+	// 的四个账号在 zone_a 另建帮会跑 元宵灯会 / 中秋团圆(docs/design/guild-phase2/06-activities.md §6.44 的 S1–S8)。
+	Activities bool `yaml:"activities"`
+	// ActivityAccounts 依次是帮主 A、成员 B / C / D,必须恰好四个且互不相同(默认配表的阈值按四个机器人能达成来取)。
+	// 四个账号必须首次在 zone_a 建角;缺省 robot_9216–9219(号段见 90-consistency Y-09)。
+	ActivityAccounts []string `yaml:"activity_accounts"`
+	// Trial 打开同道历练段(§6.44 的 S9–S15,B6b-cli 落码),同时决定 S1 对历练卡片的期望:
+	// false = 未开放(B6a 的服务端桩),true = 开放。只在 Activities 为 true 时有意义。
+	Trial bool `yaml:"trial"`
 }
 
 // 经济段的缺省账号。与管理段(9201–9203、9211–9213)错开,两段同时跑时账号不会撞车。
@@ -213,6 +223,16 @@ const (
 	defaultGuildEconomyLeader = "robot_9214"
 	defaultGuildEconomyMember = "robot_9215"
 )
+
+// 活动段的账号数:帮主 + 三名成员。灯会阈值 3、团圆在线阈值 3 都要靠这四个人凑出来,
+// 第四个人还要验"达阈值之后照常受理、资金不重复发",所以多一个少一个都跑不了。
+const guildActivityAccountCount = 4
+
+// 活动段的缺省账号(帮主在首位)。函数而不是包级切片:包级切片是可变的全局状态,
+// 调用方拿到之后一改,下一次取到的"缺省值"就不是缺省值了。
+func defaultGuildActivityAccounts() []string {
+	return []string{"robot_9216", "robot_9217", "robot_9218", "robot_9219"}
+}
 
 func (c *GuildSmokeConfig) validate() error {
 	if c.ZoneA == 0 {
@@ -228,6 +248,29 @@ func (c *GuildSmokeConfig) validate() error {
 		if c.EconomyLeader == c.EconomyMember {
 			return fmt.Errorf("economy_leader and economy_member must differ (got %q)", c.EconomyLeader)
 		}
+	}
+	if c.Activities {
+		if len(c.ActivityAccounts) == 0 {
+			c.ActivityAccounts = defaultGuildActivityAccounts()
+		}
+		if len(c.ActivityAccounts) != guildActivityAccountCount {
+			return fmt.Errorf("activity_accounts must list exactly %d accounts (leader first), got %d",
+				guildActivityAccountCount, len(c.ActivityAccounts))
+		}
+		seen := make(map[string]struct{}, len(c.ActivityAccounts))
+		for i, account := range c.ActivityAccounts {
+			if account == "" {
+				return fmt.Errorf("activity_accounts[%d] is empty", i)
+			}
+			if _, dup := seen[account]; dup {
+				return fmt.Errorf("activity_accounts must be distinct (%q appears twice)", account)
+			}
+			seen[account] = struct{}{}
+		}
+	}
+	// 历练段是活动段的后半程(同一个帮会、同四个账号),单开它没有东西可跑;明确拒绝好过悄悄不跑。
+	if c.Trial && !c.Activities {
+		return fmt.Errorf("trial requires activities: true")
 	}
 	if !c.CrossZone {
 		return nil

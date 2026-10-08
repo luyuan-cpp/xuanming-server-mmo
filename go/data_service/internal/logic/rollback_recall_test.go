@@ -932,6 +932,84 @@ func TestRollbackGuildGate_D14_PostWriteRecheck(t *testing.T) {
 	})
 }
 
+// 写后复查只查走到写 Redis 那一步的玩家:zone 里 601 因 R5 没被写、602 被写。601 在检查之后新终结的行不是分歧
+// (他的数据没有回退),按完整计划复查会把它报成 post-write,运维照单补偿就多扣一次。
+func TestRollbackGuildGate_PostWriteRecheckCoversOnlyWrittenPlayers(t *testing.T) {
+	svcCtx, _ := newTestSvcCtx(t)
+	const notWritten, written = uint64(601), uint64(602)
+	for _, pid := range []uint64{notWritten, written} {
+		setupPlayer(t, svcCtx, pid, 9)
+		_, err := SetPlayerField(context.Background(), svcCtx, pid, "gold", []byte("current"), 0)
+		require.NoError(t, err)
+	}
+	snapshots := &fakeSnapshotStore{
+		// 执行期两人拿到的都是 created_at = gateSnapshotCreatedAt 的那份;601 的计划值更晚 → R5 判他失败、不写。
+		playerTimesByZone: map[uint32]map[uint64]uint64{9: {notWritten: gateSnapshotCreatedAt + 10, written: gateSnapshotCreatedAt}},
+		latest:            &store.SnapshotRow{ID: 5, PlayerID: written, CreatedAt: gateSnapshotCreatedAt, Data: mustSnapshotData(t, map[string][]byte{"gold": []byte("old")})},
+	}
+	svcCtx.SnapshotStore = snapshots
+	svcCtx.RollbackFence = &fakeRollbackFence{}
+	checker := &fakeGuildChecker{answer: func(n int, _ context.Context, since map[uint64]uint64) (guildcheck.GuildCheckResult, error) {
+		if n == 0 {
+			return guildcheck.GuildCheckResult{}, nil
+		}
+		// 与真实 checker 一样只回被查玩家的行:复查若仍带着没写过的 601,他这条新行就会被报成 post-write。
+		var res guildcheck.GuildCheckResult
+		if _, asked := since[notWritten]; asked {
+			res.Divergences = divergenceRows(notWritten, 8)
+		}
+		return res, nil
+	}}
+	rec := enableGuildGate(svcCtx, checker)
+
+	resp, err := RollbackZone(context.Background(), svcCtx, &RollbackZoneReq{ZoneID: 9, TargetTime: gateSnapshotCreatedAt + 100, Operator: "ops", Reason: "narrow"})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrCodeOK, resp.ErrorCode, "没写过的玩家的新行不是写后分歧")
+	assert.Zero(t, resp.GuildDivergenceCount)
+	assert.Equal(t, uint32(1), resp.PlayersAffected)
+	assert.Equal(t, []uint64{notWritten}, resp.FailedPlayerIDs)
+	assert.Equal(t, "current", goldOf(t, svcCtx, notWritten))
+	assert.Equal(t, "old", goldOf(t, svcCtx, written))
+	assert.Equal(t, []time.Duration{guildSettleDelay, guildRecheckDelay}, rec.durations)
+	require.Len(t, checker.since, 2)
+	assert.Len(t, checker.since[0], 2, "检查阶段查整份清单")
+	require.Len(t, checker.since[1], 1, "复查只查走到写那一步的玩家")
+	assert.Contains(t, checker.since[1], written)
+	assert.Equal(t, checker.since[0][written], checker.since[1][written], "复查沿用检查阶段的 since")
+}
+
+// 单人回档:写 Redis 失败之后写后复查又报警 → 响应码是更紧急的 DivergedAfterWrite(带新行),
+// 但 RESULT 审计必须按真实结果记"恢复 0 人、失败 1 人",不能因为响应码是 DivergedAfterWrite 就算成已恢复。
+func TestRollbackGuildGate_PostWriteFlagAfterFailedWriteCountsAsFailed(t *testing.T) {
+	const pid = uint64(828)
+	svcCtx, mr := newTestSvcCtx(t)
+	setupPlayer(t, svcCtx, pid, 9)
+	setResp, err := SetPlayerField(context.Background(), svcCtx, pid, "gold", []byte("current"), 0)
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrCodeOK, setResp.ErrorCode)
+	snapshots := &fakeSnapshotStore{snapshotByID: map[uint64]*store.SnapshotRow{
+		1: {ID: 1, PlayerID: pid, CreatedAt: gateSnapshotCreatedAt, Data: mustSnapshotData(t, map[string][]byte{"gold": []byte("old")})},
+	}}
+	// 回档前安全快照落库之后让 Redis 整体报错:随后的 SavePlayerData 失败,但"走到写那一步"已经成立。
+	// 用非 LOADING / READONLY 的文案,免得 go-redis 当成可重试错误退避重试。
+	snapshots.onInsert = func() { mr.SetError("ERR simulated redis failure") }
+	svcCtx.SnapshotStore = snapshots
+	svcCtx.RollbackFence = &fakeRollbackFence{}
+	enableGuildGate(svcCtx, staticGuildChecker(guildcheck.GuildCheckResult{}, guildcheck.GuildCheckResult{Divergences: divergenceRows(pid, 8)}))
+
+	resp, err := RollbackPlayer(context.Background(), svcCtx, &RollbackPlayerReq{PlayerID: pid, SnapshotID: 1, Operator: "ops", Reason: "r"})
+	require.NoError(t, err, "写后分歧要带出计数与样本,不能走 err")
+	assert.Equal(t, constants.ErrCodeRollbackGuildDivergedAfterWrite, resp.ErrorCode)
+	assert.Equal(t, uint32(1), resp.GuildDivergenceCount)
+	last := snapshots.audits[len(snapshots.audits)-1]
+	assert.Contains(t, last.Reason, codeTag(constants.ErrCodeRollbackGuildDivergedAfterWrite))
+	assert.Zero(t, last.PlayersAffected, "写失败的玩家不能记成已恢复")
+	assert.Equal(t, uint32(1), last.PlayersFailed)
+
+	mr.SetError("")
+	assert.Equal(t, "current", goldOf(t, svcCtx, pid), "写失败,数据没有被覆盖")
+}
+
 // D17:不可证明(快照早于帮会流水保留期)× 放行两态。未放行 → Divergence + 不可证明计数、零写入、unprovable rejected 日志;
 // 合法放行 → unprovable accepted 日志先于第一笔写、写发生、ACCEPTED 审计记下 unprovable_players。
 func TestRollbackGuildGate_D17_UnprovablePlayers(t *testing.T) {
