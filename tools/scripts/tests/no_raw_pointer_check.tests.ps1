@@ -31,7 +31,7 @@ foreach ($case in $cases) {
     $output = (& $CheckerPath $path 2>&1 | Out-String)
     $actual = $LASTEXITCODE
     if ($actual -ne $case.Exit) { throw "$($case.Name): 期望退出码 $($case.Exit)，实际 $actual。输出: $output" }
-    if ($case.Member -and ($output -notmatch "raw pointer member '$($case.Member)'" -or $output -match "raw pointer member 'internal'")) {
+    if ($case.ContainsKey('Member') -and $case.Member -and ($output -notmatch "raw pointer member '$($case.Member)'" -or $output -match "raw pointer member 'internal'")) {
         throw "必须只报告业务成员，不能报告第三方内部成员: $output"
     }
     Write-Host "PASS: $($case.Name)"
@@ -40,7 +40,7 @@ foreach ($case in $cases) {
         $queryExit = $LASTEXITCODE
         $queryResult = Get-ClangQueryExitCode -OutputText $queryOutput -ProcessExitCode $queryExit
         if ($queryResult -ne $case.Exit) { throw "clang-query $($case.Name): 期望 $($case.Exit)，实际 $queryResult。输出: $queryOutput" }
-        if ($case.Member -and ($queryOutput -notmatch [regex]::Escape($case.Member) -or [regex]::Matches($queryOutput, '"root" binds here').Count -ne 1)) {
+        if ($case.ContainsKey('Member') -and $case.Member -and ($queryOutput -notmatch [regex]::Escape($case.Member) -or [regex]::Matches($queryOutput, '"root" binds here').Count -ne 1)) {
             throw "clang-query 必须只报告业务成员: $queryOutput"
         }
         Write-Host "PASS: clang-query $($case.Name)"

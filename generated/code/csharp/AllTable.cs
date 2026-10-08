@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class AllTable
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 34;
+        public const int TableCount = 35;
 
         private static Action s_loadSuccessCallback;
 
@@ -54,6 +54,7 @@ namespace MmorpgClient.Table
                 DungeonTableManager.FileName(useBinary),
                 EquipSlotTableManager.FileName(useBinary),
                 GlobalVariableTableManager.FileName(useBinary),
+                GuildActivityTableManager.FileName(useBinary),
                 GuildDonateTableManager.FileName(useBinary),
                 GuildLevelTableManager.FileName(useBinary),
                 GuildRuleTableManager.FileName(useBinary),
@@ -95,6 +96,7 @@ namespace MmorpgClient.Table
             DungeonTableManager.Instance.Load(configDir, useBinary);
             EquipSlotTableManager.Instance.Load(configDir, useBinary);
             GlobalVariableTableManager.Instance.Load(configDir, useBinary);
+            GuildActivityTableManager.Instance.Load(configDir, useBinary);
             GuildDonateTableManager.Instance.Load(configDir, useBinary);
             GuildLevelTableManager.Instance.Load(configDir, useBinary);
             GuildRuleTableManager.Instance.Load(configDir, useBinary);
@@ -169,6 +171,8 @@ namespace MmorpgClient.Table
                 EquipSlotTableManager.Instance.LoadFromBytes, EquipSlotTableManager.Instance.LoadFromJson);
             LoadOne(GlobalVariableTableManager.FileName(useBinary), byteProvider, useBinary,
                 GlobalVariableTableManager.Instance.LoadFromBytes, GlobalVariableTableManager.Instance.LoadFromJson);
+            LoadOne(GuildActivityTableManager.FileName(useBinary), byteProvider, useBinary,
+                GuildActivityTableManager.Instance.LoadFromBytes, GuildActivityTableManager.Instance.LoadFromJson);
             LoadOne(GuildDonateTableManager.FileName(useBinary), byteProvider, useBinary,
                 GuildDonateTableManager.Instance.LoadFromBytes, GuildDonateTableManager.Instance.LoadFromJson);
             LoadOne(GuildLevelTableManager.FileName(useBinary), byteProvider, useBinary,

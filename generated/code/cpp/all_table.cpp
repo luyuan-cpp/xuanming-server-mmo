@@ -20,6 +20,7 @@
 #include "dungeon_table.h"
 #include "equipslot_table.h"
 #include "globalvariable_table.h"
+#include "guildactivity_table.h"
 #include "guilddonate_table.h"
 #include "guildlevel_table.h"
 #include "guildrule_table.h"
@@ -75,6 +76,8 @@ void LoadTables() {
     EquipSlotTableManager::Instance().Load();
 
     GlobalVariableTableManager::Instance().Load();
+
+    GuildActivityTableManager::Instance().Load();
 
     GuildDonateTableManager::Instance().Load();
 
@@ -146,6 +149,8 @@ void LoadTables() {
 
     GlobalVariableTableManager::Instance().LoadSuccess();
 
+    GuildActivityTableManager::Instance().LoadSuccess();
+
     GuildDonateTableManager::Instance().LoadSuccess();
 
     GuildLevelTableManager::Instance().LoadSuccess();
@@ -189,7 +194,7 @@ void LoadTables() {
 }
 
 void LoadTablesAsync() {
-    static muduo::CountDownLatch latch(34);
+    static muduo::CountDownLatch latch(35);
 
     std::thread ActivityScheduleLoadThread([]() {
         void InitThreadLocalConfig();
@@ -318,6 +323,14 @@ void LoadTablesAsync() {
         latch.countDown();
     });
     GlobalVariableLoadThread.detach();
+
+    std::thread GuildActivityLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        GuildActivityTableManager::Instance().Load();
+        latch.countDown();
+    });
+    GuildActivityLoadThread.detach();
 
     std::thread GuildDonateLoadThread([]() {
         void InitThreadLocalConfig();
@@ -497,6 +510,8 @@ void LoadTablesAsync() {
     EquipSlotTableManager::Instance().LoadSuccess();
 
     GlobalVariableTableManager::Instance().LoadSuccess();
+
+    GuildActivityTableManager::Instance().LoadSuccess();
 
     GuildDonateTableManager::Instance().LoadSuccess();
 

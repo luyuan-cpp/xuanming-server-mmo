@@ -1,0 +1,31 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "GuildActivityTableOuterClass";
+option java_multiple_files = true;
+
+
+message GuildActivityTable {
+	uint32 id = 1;
+	string name = 2;
+	uint32 type = 3;
+	bool enabled = 4;
+	uint64 start_at_ms = 5;
+	uint64 end_at_ms = 6;
+	uint32 min_guild_level = 7;
+	uint64 personal_contribution = 8;
+	uint64 guild_funds = 9;
+	uint32 guild_threshold = 10;
+	uint32 reward_id = 11;
+	uint32 dungeon_id = 12;
+	uint32 team_size_min = 13;
+	uint32 team_size_max = 14;
+	uint32 daily_limit = 15;
+}
+
+message GuildActivityTableData {
+	repeated GuildActivityTable data = 1;
+}

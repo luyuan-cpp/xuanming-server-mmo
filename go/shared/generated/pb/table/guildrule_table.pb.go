@@ -30,6 +30,9 @@ type GuildRuleTable struct {
 	AssetOpDeadlineSeconds          uint32                 `protobuf:"varint,5,opt,name=asset_op_deadline_seconds,json=assetOpDeadlineSeconds,proto3" json:"asset_op_deadline_seconds,omitempty"`
 	AssetOpRetryBaseMs              uint32                 `protobuf:"varint,6,opt,name=asset_op_retry_base_ms,json=assetOpRetryBaseMs,proto3" json:"asset_op_retry_base_ms,omitempty"`
 	ReunionMinOnlineMembers         uint32                 `protobuf:"varint,7,opt,name=reunion_min_online_members,json=reunionMinOnlineMembers,proto3" json:"reunion_min_online_members,omitempty"`
+	ActivityJoinMinHours            uint32                 `protobuf:"varint,8,opt,name=activity_join_min_hours,json=activityJoinMinHours,proto3" json:"activity_join_min_hours,omitempty"`
+	TrialInviteTtlSeconds           uint32                 `protobuf:"varint,9,opt,name=trial_invite_ttl_seconds,json=trialInviteTtlSeconds,proto3" json:"trial_invite_ttl_seconds,omitempty"`
+	TrialInviteCooldownSeconds      uint32                 `protobuf:"varint,10,opt,name=trial_invite_cooldown_seconds,json=trialInviteCooldownSeconds,proto3" json:"trial_invite_cooldown_seconds,omitempty"`
 	unknownFields                   protoimpl.UnknownFields
 	sizeCache                       protoimpl.SizeCache
 }
@@ -113,6 +116,27 @@ func (x *GuildRuleTable) GetReunionMinOnlineMembers() uint32 {
 	return 0
 }
 
+func (x *GuildRuleTable) GetActivityJoinMinHours() uint32 {
+	if x != nil {
+		return x.ActivityJoinMinHours
+	}
+	return 0
+}
+
+func (x *GuildRuleTable) GetTrialInviteTtlSeconds() uint32 {
+	if x != nil {
+		return x.TrialInviteTtlSeconds
+	}
+	return 0
+}
+
+func (x *GuildRuleTable) GetTrialInviteCooldownSeconds() uint32 {
+	if x != nil {
+		return x.TrialInviteCooldownSeconds
+	}
+	return 0
+}
+
 type GuildRuleTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*GuildRuleTable      `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -161,7 +185,7 @@ var File_guildrule_table_proto protoreflect.FileDescriptor
 
 const file_guildrule_table_proto_rawDesc = "" +
 	"\n" +
-	"\x15guildrule_table.proto\"\xa0\x03\n" +
+	"\x15guildrule_table.proto\"\xd3\x04\n" +
 	"\x0eGuildRuleTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x128\n" +
 	"\x18application_expire_hours\x18\x02 \x01(\rR\x16applicationExpireHours\x12L\n" +
@@ -169,7 +193,11 @@ const file_guildrule_table_proto_rawDesc = "" +
 	"\"max_pending_applications_per_guild\x18\x04 \x01(\rR\x1emaxPendingApplicationsPerGuild\x129\n" +
 	"\x19asset_op_deadline_seconds\x18\x05 \x01(\rR\x16assetOpDeadlineSeconds\x122\n" +
 	"\x16asset_op_retry_base_ms\x18\x06 \x01(\rR\x12assetOpRetryBaseMs\x12;\n" +
-	"\x1areunion_min_online_members\x18\a \x01(\rR\x17reunionMinOnlineMembers\"9\n" +
+	"\x1areunion_min_online_members\x18\a \x01(\rR\x17reunionMinOnlineMembers\x125\n" +
+	"\x17activity_join_min_hours\x18\b \x01(\rR\x14activityJoinMinHours\x127\n" +
+	"\x18trial_invite_ttl_seconds\x18\t \x01(\rR\x15trialInviteTtlSeconds\x12A\n" +
+	"\x1dtrial_invite_cooldown_seconds\x18\n" +
+	" \x01(\rR\x1atrialInviteCooldownSeconds\"9\n" +
 	"\x12GuildRuleTableData\x12#\n" +
 	"\x04data\x18\x01 \x03(\v2\x0f.GuildRuleTableR\x04dataB@\n" +
 	"\x0ecom.game.tableB\x18GuildRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

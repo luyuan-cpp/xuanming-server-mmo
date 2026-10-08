@@ -73,4 +73,24 @@ enum guild_error {
 
   kGuildContributionInsufficient = 14031;
 
+  kGuildActivityNotOpen = 14032;
+
+  kGuildActivityAlreadyClaimed = 14033;
+
+  kGuildActivityThresholdNotReached = 14034;
+
+  kGuildTrialTeamInvalid = 14035;
+
+  kGuildActivityLevelTooLow = 14036;
+
+  kGuildActivityJoinTooRecent = 14037;
+
+  kGuildTrialInviteExpired = 14038;
+
+  kGuildTrialInviteDeclined = 14039;
+
+  kGuildTrialInviteCooldown = 14040;
+
+  kGuildTrialServiceBusy = 14041;
+
 };

@@ -59,4 +59,22 @@ public final class GuildRuleTableComp {
         }
     }
 
+    public record Activity_join_min_hours(int value) {
+        public static Activity_join_min_hours from(GuildRuleTable row) {
+            return new Activity_join_min_hours(row.getActivityJoinMinHours());
+        }
+    }
+
+    public record Trial_invite_ttl_seconds(int value) {
+        public static Trial_invite_ttl_seconds from(GuildRuleTable row) {
+            return new Trial_invite_ttl_seconds(row.getTrialInviteTtlSeconds());
+        }
+    }
+
+    public record Trial_invite_cooldown_seconds(int value) {
+        public static Trial_invite_cooldown_seconds from(GuildRuleTable row) {
+            return new Trial_invite_cooldown_seconds(row.getTrialInviteCooldownSeconds());
+        }
+    }
+
 }

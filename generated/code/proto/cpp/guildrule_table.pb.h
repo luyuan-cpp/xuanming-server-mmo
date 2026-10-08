@@ -235,6 +235,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRuleTable final : public ::goo
     kAssetOpDeadlineSecondsFieldNumber = 5,
     kAssetOpRetryBaseMsFieldNumber = 6,
     kReunionMinOnlineMembersFieldNumber = 7,
+    kActivityJoinMinHoursFieldNumber = 8,
+    kTrialInviteTtlSecondsFieldNumber = 9,
+    kTrialInviteCooldownSecondsFieldNumber = 10,
   };
   // uint32 id = 1;
   void clear_id() ;
@@ -306,11 +309,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRuleTable final : public ::goo
   void _internal_set_reunion_min_online_members(::uint32_t value);
 
   public:
+  // uint32 activity_join_min_hours = 8;
+  void clear_activity_join_min_hours() ;
+  [[nodiscard]] ::uint32_t activity_join_min_hours() const;
+  void set_activity_join_min_hours(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_activity_join_min_hours() const;
+  void _internal_set_activity_join_min_hours(::uint32_t value);
+
+  public:
+  // uint32 trial_invite_ttl_seconds = 9;
+  void clear_trial_invite_ttl_seconds() ;
+  [[nodiscard]] ::uint32_t trial_invite_ttl_seconds() const;
+  void set_trial_invite_ttl_seconds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_trial_invite_ttl_seconds() const;
+  void _internal_set_trial_invite_ttl_seconds(::uint32_t value);
+
+  public:
+  // uint32 trial_invite_cooldown_seconds = 10;
+  void clear_trial_invite_cooldown_seconds() ;
+  [[nodiscard]] ::uint32_t trial_invite_cooldown_seconds() const;
+  void set_trial_invite_cooldown_seconds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_trial_invite_cooldown_seconds() const;
+  void _internal_set_trial_invite_cooldown_seconds(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:GuildRuleTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
+      ::google::protobuf::internal::TcParseTable<4, 10,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -346,6 +379,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRuleTable final : public ::goo
     ::uint32_t asset_op_deadline_seconds_;
     ::uint32_t asset_op_retry_base_ms_;
     ::uint32_t reunion_min_online_members_;
+    ::uint32_t activity_join_min_hours_;
+    ::uint32_t trial_invite_ttl_seconds_;
+    ::uint32_t trial_invite_cooldown_seconds_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -746,6 +782,78 @@ inline ::uint32_t GuildRuleTable::_internal_reunion_min_online_members() const {
 inline void GuildRuleTable::_internal_set_reunion_min_online_members(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.reunion_min_online_members_ = value;
+}
+
+// uint32 activity_join_min_hours = 8;
+inline void GuildRuleTable::clear_activity_join_min_hours() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_join_min_hours_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t GuildRuleTable::activity_join_min_hours() const {
+  // @@protoc_insertion_point(field_get:GuildRuleTable.activity_join_min_hours)
+  return _internal_activity_join_min_hours();
+}
+inline void GuildRuleTable::set_activity_join_min_hours(::uint32_t value) {
+  _internal_set_activity_join_min_hours(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:GuildRuleTable.activity_join_min_hours)
+}
+inline ::uint32_t GuildRuleTable::_internal_activity_join_min_hours() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.activity_join_min_hours_;
+}
+inline void GuildRuleTable::_internal_set_activity_join_min_hours(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_join_min_hours_ = value;
+}
+
+// uint32 trial_invite_ttl_seconds = 9;
+inline void GuildRuleTable::clear_trial_invite_ttl_seconds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_invite_ttl_seconds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t GuildRuleTable::trial_invite_ttl_seconds() const {
+  // @@protoc_insertion_point(field_get:GuildRuleTable.trial_invite_ttl_seconds)
+  return _internal_trial_invite_ttl_seconds();
+}
+inline void GuildRuleTable::set_trial_invite_ttl_seconds(::uint32_t value) {
+  _internal_set_trial_invite_ttl_seconds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:GuildRuleTable.trial_invite_ttl_seconds)
+}
+inline ::uint32_t GuildRuleTable::_internal_trial_invite_ttl_seconds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trial_invite_ttl_seconds_;
+}
+inline void GuildRuleTable::_internal_set_trial_invite_ttl_seconds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_invite_ttl_seconds_ = value;
+}
+
+// uint32 trial_invite_cooldown_seconds = 10;
+inline void GuildRuleTable::clear_trial_invite_cooldown_seconds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_invite_cooldown_seconds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t GuildRuleTable::trial_invite_cooldown_seconds() const {
+  // @@protoc_insertion_point(field_get:GuildRuleTable.trial_invite_cooldown_seconds)
+  return _internal_trial_invite_cooldown_seconds();
+}
+inline void GuildRuleTable::set_trial_invite_cooldown_seconds(::uint32_t value) {
+  _internal_set_trial_invite_cooldown_seconds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:GuildRuleTable.trial_invite_cooldown_seconds)
+}
+inline ::uint32_t GuildRuleTable::_internal_trial_invite_cooldown_seconds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trial_invite_cooldown_seconds_;
+}
+inline void GuildRuleTable::_internal_set_trial_invite_cooldown_seconds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_invite_cooldown_seconds_ = value;
 }
 
 // -------------------------------------------------------------------

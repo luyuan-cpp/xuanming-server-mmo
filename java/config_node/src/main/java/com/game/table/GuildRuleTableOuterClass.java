@@ -45,17 +45,19 @@ public final class GuildRuleTableOuterClass extends com.google.protobuf.Generate
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025guildrule_table.proto\"\376\001\n\016GuildRuleTab" +
+      "\n\025guildrule_table.proto\"\350\002\n\016GuildRuleTab" +
       "le\022\n\n\002id\030\001 \001(\r\022 \n\030application_expire_hou" +
       "rs\030\002 \001(\r\022+\n#max_pending_applications_per" +
       "_player\030\003 \001(\r\022*\n\"max_pending_application" +
       "s_per_guild\030\004 \001(\r\022!\n\031asset_op_deadline_s" +
       "econds\030\005 \001(\r\022\036\n\026asset_op_retry_base_ms\030\006" +
       " \001(\r\022\"\n\032reunion_min_online_members\030\007 \001(\r" +
-      "\"3\n\022GuildRuleTableData\022\035\n\004data\030\001 \003(\0132\017.G" +
-      "uildRuleTableB@\n\016com.game.tableB\030GuildRu" +
-      "leTableOuterClassP\001Z\022generated/pb/tableb" +
-      "\006proto3"
+      "\022\037\n\027activity_join_min_hours\030\010 \001(\r\022 \n\030tri" +
+      "al_invite_ttl_seconds\030\t \001(\r\022%\n\035trial_inv" +
+      "ite_cooldown_seconds\030\n \001(\r\"3\n\022GuildRuleT" +
+      "ableData\022\035\n\004data\030\001 \003(\0132\017.GuildRuleTableB" +
+      "@\n\016com.game.tableB\030GuildRuleTableOuterCl" +
+      "assP\001Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -66,7 +68,7 @@ public final class GuildRuleTableOuterClass extends com.google.protobuf.Generate
     internal_static_GuildRuleTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_GuildRuleTable_descriptor,
-        new java.lang.String[] { "Id", "ApplicationExpireHours", "MaxPendingApplicationsPerPlayer", "MaxPendingApplicationsPerGuild", "AssetOpDeadlineSeconds", "AssetOpRetryBaseMs", "ReunionMinOnlineMembers", });
+        new java.lang.String[] { "Id", "ApplicationExpireHours", "MaxPendingApplicationsPerPlayer", "MaxPendingApplicationsPerGuild", "AssetOpDeadlineSeconds", "AssetOpRetryBaseMs", "ReunionMinOnlineMembers", "ActivityJoinMinHours", "TrialInviteTtlSeconds", "TrialInviteCooldownSeconds", });
     internal_static_GuildRuleTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_GuildRuleTableData_fieldAccessorTable = new

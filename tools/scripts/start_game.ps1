@@ -365,7 +365,7 @@ try {
     $java = Find-Program 'java.exe' @($(if ($env:JAVA_HOME) { Join-Path $env:JAVA_HOME 'bin/java.exe' }))
     $javaReply = Invoke-Program $java @('-version')
     if ($javaReply.Code -ne 0 -or ($javaReply.Err + $javaReply.Out) -notmatch 'version "(?<major>\d+)') { throw '无法确认 Java 版本。' }
-    if ([int]$Matches.major -lt 21) { throw '网关需要 Java 21 或更高版本，请调整 JAVA_HOME。' }
+    if ([int]$Matches.major -lt 23) { throw '网关需要 Java 23 或更高版本，请调整 JAVA_HOME。' }
     $jar = Get-ChildItem -LiteralPath (Join-Path $serverRoot 'java/gateway_node/target') -Filter 'gateway-node-*.jar' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if (-not $jar) { throw '缺少已构建的 Java 网关 jar。' }
     foreach ($service in $services) {

@@ -6617,3 +6617,14 @@ PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修
 - 验证:`data_service` 的 `go test -count=1 ./internal/guildcheck` 通过(15.240s),`shared` 的 `go test -count=1 ./nodeinfo` 通过(6.719s);补取并校验 miniredis v2.37.0 后,`match` 的 `go test -count=1 ./internal/logic -run 'Test.*(Activity|Internal|Session)'` 通过(25.243s)。根包原 `match_service_test.go:42` 的重复比较触发 `go vet suspect or`,现拆成协议值固定为10、JSON值等于枚举两条独立断言,保留两项检查;再次测试被 Windows Application Control 拦截测试 exe,因此根包尚未执行通过。没有关闭 vet 或系统防护。构建与失败日志、锁定工具、定向生成及续跑脚本保留在工作区外的 `.codex-docker-setup/`。
 - 运行状态:已装 Docker Desktop 4.93.0、Docker CLI 29.8.1、Compose 5.5.1、WSL 3.0.1;本机本日已重启,但 `VirtualizationFirmwareEnabled=False` 且 `HypervisorPresent=False`,需在 BIOS 开启 SVM。C++ gate/scene/battle、JDK 23 网关产物也尚未具备;原有 3306/6379/9092 监听需隔离。未启动完整服务器、未执行登录入场验收,未重启机器或改动现存游戏数据。
 - **Java 版(AGENTS §12)**:本条只补本仓库既有源契约的 Go 生成物与本机工具,没有新增业务功能或修改客户端契约;Java 对应版本不涉及,未改另一仓库及其 `PARITY.md`。
+
+## 2026-10-08 补齐帮会表生成物、Java 网关与客户端本机环境
+
+- 帮会编译发现 `Tip.xlsx` 已有活动相关10项错误码,但生成代码仍止于14031;`GuildActivity`源表/schema及`GuildRule`三个字段也已存在而未完整导出。用原导表器在独立沙盒读取当前权威数据和state,再原样采用91个必要生成文件,未手改生成代码或修改xlsx/schema。旧tip号与legacy号保持不变,新增14032–14041,仅14041按源表标记故障;清单复用原版本后正规生成19→20、34→35表,35表文件SHA/size/content_digest全部复核。同步C++、Go、Java和表数据,客户端对应5个C#输出在独立客户端仓库提交。
+- `guild.exe`已构建;constants、activity、logic、data四包58个顶层用例、155个含子用例事件通过,0失败/跳过。chat、trade、friend也已构建,本机11个Go服务均有可用构建产物。现有服务及数据库仍未启动或清理;构建产物不代表联机验收。
+- JDK23.0.2已安装,官方SHA256及Oracle签名验证通过;Java网关在最终表生成物上执行Maven `clean verify`成功:18个suite、112项测试,108通过、4项因未配置独立MySQL测试库跳过,0失败/错误。JAR已生成,目标class major67;`start_game.ps1`最低Java检查由21修正为实际所需23。
+- C++依赖按仓库锁定提交恢复,LLVM检查器与支持库逐项校验。严格模式安装检查器时,测试脚本直接访问可选的`Member`键会异常,现对两处访问先检查`ContainsKey`;原10个用例分别由独立检查器及clang-query执行,共20次通过,构建钩子成功缓存和拒绝裸指针反例亦通过。未关闭检查器或其他检查。
+- C++依赖编译仍在进行,不能声称gate/scene/battle已构建。三个既有内部RPC缺失的消息号与wrapper还需正规生成;沙盒修订后的Go生成器执行文件被Windows Application Control拦截,没有关闭策略、绕过拦截或把未经完整验证的沙盒结果落入仓库。
+- 客户端已安装Unity6000.6.0f1,恢复15人物2055张基础运行图、全部运行时脚本与必要场景依赖;既有2940张人物归档动作和114段完整宠物战斗片段保持已提交状态。44协议类+82表文件独立Roslyn类型编译通过。首次人物/宠物53项EditMode测试在许可证检查阶段退出198(无可用登录令牌/许可证),未进入Unity编译或执行测试,未生成可玩EXE。
+- Docker/WSL已安装,本日重启后固件SVM仍关闭、Hypervisor仍未运行;需用户开启BIOS虚拟化。原3306/6379/9092已有服务保持不动,后续启动还需独立端口/数据目录。用户已被提示在Unity Hub激活自己的许可证;未代为接受许可条款。尚无登录、入场或联机战斗验收。
+- **Java版(AGENTS §12)**:本条是本仓库既有权威源的生成物恢复与本机工具准备,没有新增业务契约;本仓Java表同步且网关重新构建通过。另一Java服务器仓库未改,对应版本与`PARITY.md`不涉及本次本机修复。

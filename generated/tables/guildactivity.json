@@ -1,0 +1,55 @@
+{
+ "data": [
+  {
+   "daily_limit": 1,
+   "dungeon_id": 0,
+   "enabled": true,
+   "end_at_ms": 0,
+   "guild_funds": 500,
+   "guild_threshold": 3,
+   "id": 1,
+   "min_guild_level": 1,
+   "name": "元宵灯会",
+   "personal_contribution": 20,
+   "reward_id": 0,
+   "start_at_ms": 0,
+   "team_size_max": 0,
+   "team_size_min": 0,
+   "type": 1
+  },
+  {
+   "daily_limit": 1,
+   "dungeon_id": 0,
+   "enabled": true,
+   "end_at_ms": 0,
+   "guild_funds": 0,
+   "guild_threshold": 3,
+   "id": 2,
+   "min_guild_level": 1,
+   "name": "中秋团圆",
+   "personal_contribution": 30,
+   "reward_id": 1,
+   "start_at_ms": 0,
+   "team_size_max": 0,
+   "team_size_min": 0,
+   "type": 2
+  },
+  {
+   "daily_limit": 2,
+   "dungeon_id": 1,
+   "enabled": true,
+   "end_at_ms": 0,
+   "guild_funds": 300,
+   "guild_threshold": 3,
+   "id": 3,
+   "min_guild_level": 1,
+   "name": "同道历练",
+   "personal_contribution": 50,
+   "reward_id": 2,
+   "start_at_ms": 0,
+   "team_size_max": 5,
+   "team_size_min": 2,
+   "type": 3
+  }
+ ]
+}

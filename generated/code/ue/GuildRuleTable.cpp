@@ -114,6 +114,9 @@ static void GuildRuleTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObj
 	GuildRuleTableCheckNarrowedField(RowObject, TEXT("asset_op_deadline_seconds"), TEXT("asset_op_deadline_seconds"), RowIndex, 2147483647.0, TEXT("uint32"));
 	GuildRuleTableCheckNarrowedField(RowObject, TEXT("asset_op_retry_base_ms"), TEXT("asset_op_retry_base_ms"), RowIndex, 2147483647.0, TEXT("uint32"));
 	GuildRuleTableCheckNarrowedField(RowObject, TEXT("reunion_min_online_members"), TEXT("reunion_min_online_members"), RowIndex, 2147483647.0, TEXT("uint32"));
+	GuildRuleTableCheckNarrowedField(RowObject, TEXT("activity_join_min_hours"), TEXT("activity_join_min_hours"), RowIndex, 2147483647.0, TEXT("uint32"));
+	GuildRuleTableCheckNarrowedField(RowObject, TEXT("trial_invite_ttl_seconds"), TEXT("trial_invite_ttl_seconds"), RowIndex, 2147483647.0, TEXT("uint32"));
+	GuildRuleTableCheckNarrowedField(RowObject, TEXT("trial_invite_cooldown_seconds"), TEXT("trial_invite_cooldown_seconds"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UGuildRuleTable::LoadFromJson(const FString& JsonText, FString& OutError)

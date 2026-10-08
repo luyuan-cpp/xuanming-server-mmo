@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "version": 19,
-  "content_digest": "f33c8003a3ab67c1aab55fac7d2aa38c5be363b21cb41ae0256a49f33ca37e37",
-  "generated_at": "2026-09-21T06:26:19Z",
+  "version": 20,
+  "content_digest": "044b40040b3c08e7bafe1a56990f4b5e71f14264115cc0e97e6e6290a2431620",
+  "generated_at": "2026-10-08T11:08:08Z",
   "source_rev": {
-    "commit": "1bca719e5557801a1274499a254d77893e85d3bb",
-    "data_dirty": true
+    "commit": "699c836d7c01084dc50df6f558b7157f3f21cf79",
+    "data_dirty": false
   },
-  "table_count": 34,
+  "table_count": 35,
   "tables": [
     {
       "name": "ActivitySchedule",
@@ -378,6 +378,29 @@
       ]
     },
     {
+      "name": "GuildActivity",
+      "rows": 3,
+      "source": {
+        "file": "GuildActivity.xlsx",
+        "size": 5915,
+        "sha256": "d3559daa229a81c3a05f25e39a2cc958bd9a77a4117f23e3b2007d7e46d4e6d0"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "guildactivity.json",
+          "size": 1010,
+          "sha256": "91eb84e4a1f20c348987072c5a5e2206c60309cabcb1eba0b5dcfcc71af9997f"
+        },
+        {
+          "kind": "binary",
+          "file": "guildactivity.pb",
+          "size": 106,
+          "sha256": "e7cbc20d1377218ca096468ec0b203457ed6b1a9b572e3e8b3849a80f2d92026"
+        }
+      ]
+    },
+    {
       "name": "GuildDonate",
       "rows": 3,
       "source": {
@@ -428,21 +451,21 @@
       "rows": 1,
       "source": {
         "file": "GuildRule.xlsx",
-        "size": 5263,
-        "sha256": "a78d1c46d307612827f299078d55c703fda649e9de9f08b6793ae6c89610d225"
+        "size": 5483,
+        "sha256": "90f60b1d1530f07c8c168b0a53a442f419703cd8f327f55391274eb311118da1"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "guildrule.json",
-          "size": 269,
-          "sha256": "437adf401d97b29510ae4c0b34bdd4301c08793e87e11683371b786069d1ed24"
+          "size": 377,
+          "sha256": "864d4ebc1963e17962c236f5485340356f66611b216a330f8676e50c8401972f"
         },
         {
           "kind": "binary",
           "file": "guildrule.pb",
-          "size": 18,
-          "sha256": "2301b539e3753b79cfdf1429dd2ad8b45a7b72cec8385e528d3caff395c866f3"
+          "size": 22,
+          "sha256": "2047d097275e79d19ea7adfe8a237952131d50c3723024067013db7d54d04711"
         }
       ]
     },
