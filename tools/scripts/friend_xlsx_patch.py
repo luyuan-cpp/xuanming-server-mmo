@@ -5,7 +5,7 @@
 为什么是脚本而不是手改:
   - data/tip/Tip.xlsx 同时有多个会话在写,它是二进制、不能 3-way 合并,丢行时**零报错**
     (导表器照常跑通,只是少发几个号)。唯一安全的写法是 openpyxl 从磁盘重新载入 →
-    只动自己那一格 / 那一段 → save → 读回来按段核对(docs/design/friend-handoff-20260920.md §5.4)。
+    只动自己那一格 / 那一段 → save → 读回来按段核对(docs/handoff/friend-handoff-20260920.md §5.4)。
   - data/MessageLimiter.xlsx 按**消息号**登记档位,而消息号要等全量 proto-gen 之后才定下来
     (新方法落到哪个空号由 Go map 迭代顺序决定,每次生成都可能不同)。所以这里按**方法名**
     去 proto/message_id.txt 里查号,而不是把号写死在文档里让人抄。

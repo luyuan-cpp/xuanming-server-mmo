@@ -50,7 +50,7 @@ type Stats struct {
 	// gateTokenRetry: VerifyGateToken 失败时,robot 不再消耗 retry / 不算 LoginFail,
 	// 而是关掉本次连接、重新走 AssignGate(下一次 attempt 会拿到全新 token)。这个
 	// 计数器记录"被 token-expired 反弹"的次数,Round 19 用来确认 5min→10min 后
-	// 该路径是否真正归零。详见 docs/design/stress-1zone-45k-2026-06-04-round18.md §R2。
+	// 该路径是否真正归零。详见 docs/stress/stress-1zone-45k-2026-06-04-round18.md §R2。
 	gateTokenRetry atomic.Int64
 
 	mu             sync.Mutex

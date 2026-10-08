@@ -12,7 +12,7 @@
    release manifest 与 release notes;找不到该段或段落为空都会拒绝发布。
 3. 同一个版本号必须四处一致:git tag `vX.Y.Z`、`publish_images.ps1 -Version vX.Y.Z`、
    本文件的 `[X.Y.Z]` 段、镜像自报版本(OCI label `org.opencontainers.image.version` 与 `/app/BUILD_INFO`)。
-4. 每条写"改了什么、对部署/运维有什么影响";过程流水账写 `PROGRESS.md`,不写这里。
+4. 每条写"改了什么、对部署/运维有什么影响";过程流水账写 `docs/PROGRESS.md`,不写这里。
 
 ## [Unreleased]
 

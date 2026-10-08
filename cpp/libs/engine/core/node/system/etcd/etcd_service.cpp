@@ -301,7 +301,7 @@ void EtcdService::HandlePutEvent(const std::string &key, const std::string &valu
 	// Stress run 2026-05-23, third pass: zone-1 launched 6 cpp processes
 	// (2 gate + 4 scene) concurrently, 4 of them committed suicide inside a
 	// 2-second window with this exact symptom (z1_scene_2/3/4 + z1_gate_2;
-	// see docs/design/stress-3zone-2026-05-23-postmortem.md §E). The CAS
+	// see docs/stress/stress-3zone-2026-05-23-postmortem.md §E). The CAS
 	// loser path in NodeAllocator already handles "id taken" by retrying
 	// with the next id, so we don't need Watch-level enforcement during
 	// boot — it's redundant and hostile to concurrent same-zone launches.

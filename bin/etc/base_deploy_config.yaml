@@ -65,7 +65,7 @@ Kafka:
   # zone-2 BindSession could land on z1_gate, where ValidateCommandTarget
   # silently dropped it because target_gate_id != node.GetNodeId(). Stress
   # 2026-05-24 saw this surface as z2/z3 `scene_notified=1` ratios at 5%
-  # while z1 was at 100%; see docs/design/stress-3zone-2026-05-23-postmortem.md
+  # while z1 was at 100%; see docs/stress/stress-3zone-2026-05-23-postmortem.md
   # §J.6.
   #
   # Per-instance groupId means every node only competes for partitions of

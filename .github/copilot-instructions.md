@@ -191,7 +191,7 @@ comments as English to dodge a hazard the build already handled.
 ## High-Level Architecture
 
 - **Polyglot backend split by responsibility**:
-  - **C++ nodes** (`cpp/nodes/*`): runtime node processes (scene/gate/centre) and RPC handlers.
+  - **C++ nodes** (`cpp/nodes/*`): runtime node processes (scene/gate/battle) and RPC handlers.
   - **C++ shared game logic** (`cpp/libs/services/scene/*`): ECS-heavy domain logic, with `system` and `comp` subtrees.
   - **Go services** (`go/login` and peers): go-zero based microservices and grpc servers.
   - **Java gateway/web** (`java/gateway_node`): Spring Boot gateway service (zone directory, gate assignment, admin APIs).

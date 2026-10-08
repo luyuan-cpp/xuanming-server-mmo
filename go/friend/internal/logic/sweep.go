@@ -14,7 +14,7 @@
 // friend 没有玩家名册,验证不了 target 是否真实存在;Block → Unblock 反复换目标同理(Unblock 只删
 // friend_block,不碰容量行)。这张表没有 TTL,于是随"被发起过申请 / 被拉黑过的 id 个数"单调增长,
 // 且增长可由客户端驱动;唯一的闸是每分钟频率配额,而配额在 Redis 故障时按设计 fail-open
-// (见 rate_quota.go 文件头)。详见 docs/design/friend-handoff-20260920.md §3 第 1 条。
+// (见 rate_quota.go 文件头)。详见 docs/handoff/friend-handoff-20260920.md §3 第 1 条。
 //
 // 为什么删了无害:只回收零好友(friend_count = 0)、且距建行或最近一次减计数已超过保留期的行
 // (created_ms 记的是"本行被(重新)建出、或最近一次 friend_count 减少的时刻",不只是建行时刻 ——

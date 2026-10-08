@@ -431,7 +431,7 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 
 ### 对局 / 战斗
 - [turn-based-battle-server.md](./turn-based-battle-server.md) — 回合制 battle 节点设计与决策(§18 票据直连;§22 直连收缩 D65–D75)
-- [moba-battle-target-architecture.md](./moba-battle-target-architecture.md) — 会话制对局目标形态与本仓现状映射、验收判据
+- [moba-battle-target-architecture.md](../notes/slg-moba/moba-battle-target-architecture.md) — 会话制对局目标形态与本仓现状映射、验收判据
 - [cross-zone-matchmaking.md](./cross-zone-matchmaking.md) — 全服跨 zone 匹配、match 全局池与票据自愈
 
 ### 跨服与场景
@@ -466,11 +466,11 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 
 ### 玩法 / ECS / SLG
 - [ecs.md](./ecs.md) / [ecs-component-access-rules.md](./ecs-component-access-rules.md)
-- [slg-server-architecture-design.md](./slg-server-architecture-design.md)
+- [slg-server-architecture-design.md](../notes/slg-moba/slg-server-architecture-design.md)
 - [aoi_priority_design.md](./aoi_priority_design.md)
 
 ### 压测 / 调优
-- [stress-test-progress.md](./stress-test-progress.md)
+- [stress-test-progress.md](../stress/stress-test-progress.md)
 - [cpp_image_optimization.md](./cpp_image_optimization.md)
 - [hashed-timing-wheel.md](./hashed-timing-wheel.md)
 
@@ -495,11 +495,11 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 | 13 | **Gateway 限流**:Bucket4j + Redis,三层叠加(zone/ip/account cooldown)+ 开服波次 | **2026-05-08** | [open-server-rate-limit-design.md](./open-server-rate-limit-design.md) |
 | 14 | **AssignGate 真排队**:权威源放 go-zero login(不是 Java Gateway),Redis ZSET 做有序 FIFO + 单 leader dispatcher;Java AssignGateService 删本地签 HMAC,改成 gRPC 转发;Bucket4j 保留作为前置闸,两层互补 | **2026-05-14** | [login-queue-2026-05.md](./login-queue-2026-05.md) |
 | 15 | **Server-list 走 OSS + CDN 静态发布**:玩家读路径不经过 Java Gateway / MySQL;运维改 zone 后异步生成 json 推 OSS + purge CDN;Gateway `/api/server-list` 仅作降级兜底(Caffeine 30s + Bucket4j);客户端三档:CDN 主 → CDN 备 → Gateway。zone 数据仍存 MySQL `zone_config`,**不进 Excel** | **2026-05-23** | [serverlist-static-publish-2026-05.md](./serverlist-static-publish-2026-05.md) |
-| 16 | **`db_task_zone_{ZoneId}` partition 5→10**:解掉 2026-05-25 §N 基线的 db worker 池容量瓶颈;实测拐点从"开服打开就崩"上移到 **25k conn 之内 100% 干净 / 25k–45k 逐步降级**(单 zone smoke);AUTHORITY 在 `login.yaml`(EnsureTopics),`db.yaml` 是 MIRROR,两处必须同步改否则 worker/partition skew;下一瓶颈不再是 partition 而是 `entergamelogic.go` 里 `player_locker:{playerId}` 的 120s TTL 滞留(异步链没归还锁 + robot 6s 重连节奏命中)— 不是 PreloadPool 池满(实测 dropped=0)| **2026-05-27** | [stress-1zone-45k-2026-05-partition-10.md](./stress-1zone-45k-2026-05-partition-10.md) |
-| 17 | **dispatcher GC tick + dispatcherTaskTTL 联动修复**:用 prometheus histogram 把 EnterGame 异步链全段拆开做实验,定位真凶在 `dataloader_preload_callback_wait`(平均 3 秒,失败 35 秒);三连改动 `dispatcherTaskTTL 30s→5s` + 仪表化 12 个子阶段 + dispatcher GC tick `defaultTTL/2→1s`(原值让 5s TTL 实测变成 12s,因为 sweep 间隔被 ttl 整除而非按 entry 算);单 zone 25k smoke 从 "T+5m 拐点 → T+21m 雪崩冻死" 变成 **23 分钟 client 端打满 125k conn 上限 / robot 视角 0 失败**。**警示**:robot 视角"全成功"有水分,login 后台仍 46% preload_failed,靠 scene-side Redis NIL retry 兜底;下一步要在 db_rpc consumer 端继续打点 | **2026-05-28** | [stress-1zone-25k-2026-05-28-callback-wait.md](./stress-1zone-25k-2026-05-28-callback-wait.md) |
-| 18 | **46% 后台 preload_failed 深挖**:发现真凶不在 login 而在 db 端 — `MaxOpenConn=10` 配 partition=10 = MySQL 连接池满载,稳态 200/s 输入下单 partition 排队 ~9k task / 实测 Kafka lag 91k;scene-side `kMaxLoadRetries=6` + 指数退避 `2/4/8/16/32/60s` = 122s 兜底窗口让 robot 看不见失败,但 robot enter_ok 是 RPC 同步成功不等 scene-ready;失败 preload 时锁正常释放、session 保留、Gate/Scene 不知道玩家来过;审了 6 处其它陷阱(lock heartbeat��saveToRedis 失败、同 playerId in-flight、sub_cache 部分命中、TaskResult LPop、batch coalesce)。**下次先动 `MaxOpenConn 10→30`**,加 db_rpc 子阶段打点验证 | **2026-05-28** | [stress-1zone-25k-2026-05-28-deep-dive.md](./stress-1zone-25k-2026-05-28-deep-dive.md) |
-| 19 | **MaxOpenConn 10→30 实测解一半**:`preload{success} avg` 从 5.14s 暴跌到 **34.6ms**(降 99.3%),fail% 从 46% 降到 29%。但 Kafka backlog 仍 80k —— 反转:db worker 串行才是真天花板,**不是 MySQL 连接池**。深挖 §1 诊断对一半:连接池是 latency 瓶颈,但 throughput 瓶颈在 `worker.start` 单 goroutine 处理 batch 的循环里(`partition=10 × 1 worker × 1 MySQL conn = 10 在用,20 个永远闲着`)。下次试 partition 10→20(简单可逆),A 方案是 worker 内 sub-shard 并行(30 行+单测) | **2026-05-28** | [stress-1zone-25k-2026-05-28-maxopenconn.md](./stress-1zone-25k-2026-05-28-maxopenconn.md) |
-| 20 | **Worker sub-shard(方案 A)**:`worker.start` 改造成 router goroutine + `SubShardCount=4` 个并行 `runSubShard` goroutine,按 `hash(task.Key) % N` 路由,保 per-key 顺序。10×4=40 路实际并发。**实测:robot 23 分钟全跑 0 失败 + max_login 209ms(Round 6: 571ms,-64%) + Kafka final lag 4,233(Round 6: 80,055,-95%) + db consumer throughput ~190/s(Round 6: 73/s,+160%) + entergame fail% 17.8%(Round 6: 29%)**。同时把 stress 复盘脚本化:`tools/scripts/stress_summarize.ps1` 直接吃 RunDir + prom snapshots 出 2KB 二维表,以后压测复盘只读它输出 | **2026-05-28** | [stress-1zone-25k-2026-05-28-subshard.md](./stress-1zone-25k-2026-05-28-subshard.md) |
+| 16 | **`db_task_zone_{ZoneId}` partition 5→10**:解掉 2026-05-25 §N 基线的 db worker 池容量瓶颈;实测拐点从"开服打开就崩"上移到 **25k conn 之内 100% 干净 / 25k–45k 逐步降级**(单 zone smoke);AUTHORITY 在 `login.yaml`(EnsureTopics),`db.yaml` 是 MIRROR,两处必须同步改否则 worker/partition skew;下一瓶颈不再是 partition 而是 `entergamelogic.go` 里 `player_locker:{playerId}` 的 120s TTL 滞留(异步链没归还锁 + robot 6s 重连节奏命中)— 不是 PreloadPool 池满(实测 dropped=0)| **2026-05-27** | [stress-1zone-45k-2026-05-partition-10.md](../stress/stress-1zone-45k-2026-05-partition-10.md) |
+| 17 | **dispatcher GC tick + dispatcherTaskTTL 联动修复**:用 prometheus histogram 把 EnterGame 异步链全段拆开做实验,定位真凶在 `dataloader_preload_callback_wait`(平均 3 秒,失败 35 秒);三连改动 `dispatcherTaskTTL 30s→5s` + 仪表化 12 个子阶段 + dispatcher GC tick `defaultTTL/2→1s`(原值让 5s TTL 实测变成 12s,因为 sweep 间隔被 ttl 整除而非按 entry 算);单 zone 25k smoke 从 "T+5m 拐点 → T+21m 雪崩冻死" 变成 **23 分钟 client 端打满 125k conn 上限 / robot 视角 0 失败**。**警示**:robot 视角"全成功"有水分,login 后台仍 46% preload_failed,靠 scene-side Redis NIL retry 兜底;下一步要在 db_rpc consumer 端继续打点 | **2026-05-28** | [stress-1zone-25k-2026-05-28-callback-wait.md](../stress/stress-1zone-25k-2026-05-28-callback-wait.md) |
+| 18 | **46% 后台 preload_failed 深挖**:发现真凶不在 login 而在 db 端 — `MaxOpenConn=10` 配 partition=10 = MySQL 连接池满载,稳态 200/s 输入下单 partition 排队 ~9k task / 实测 Kafka lag 91k;scene-side `kMaxLoadRetries=6` + 指数退避 `2/4/8/16/32/60s` = 122s 兜底窗口让 robot 看不见失败,但 robot enter_ok 是 RPC 同步成功不等 scene-ready;失败 preload 时锁正常释放、session 保留、Gate/Scene 不知道玩家来过;审了 6 处其它陷阱(lock heartbeat��saveToRedis 失败、同 playerId in-flight、sub_cache 部分命中、TaskResult LPop、batch coalesce)。**下次先动 `MaxOpenConn 10→30`**,加 db_rpc 子阶段打点验证 | **2026-05-28** | [stress-1zone-25k-2026-05-28-deep-dive.md](../stress/stress-1zone-25k-2026-05-28-deep-dive.md) |
+| 19 | **MaxOpenConn 10→30 实测解一半**:`preload{success} avg` 从 5.14s 暴跌到 **34.6ms**(降 99.3%),fail% 从 46% 降到 29%。但 Kafka backlog 仍 80k —— 反转:db worker 串行才是真天花板,**不是 MySQL 连接池**。深挖 §1 诊断对一半:连接池是 latency 瓶颈,但 throughput 瓶颈在 `worker.start` 单 goroutine 处理 batch 的循环里(`partition=10 × 1 worker × 1 MySQL conn = 10 在用,20 个永远闲着`)。下次试 partition 10→20(简单可逆),A 方案是 worker 内 sub-shard 并行(30 行+单测) | **2026-05-28** | [stress-1zone-25k-2026-05-28-maxopenconn.md](../stress/stress-1zone-25k-2026-05-28-maxopenconn.md) |
+| 20 | **Worker sub-shard(方案 A)**:`worker.start` 改造成 router goroutine + `SubShardCount=4` 个并行 `runSubShard` goroutine,按 `hash(task.Key) % N` 路由,保 per-key 顺序。10×4=40 路实际并发。**实测:robot 23 分钟全跑 0 失败 + max_login 209ms(Round 6: 571ms,-64%) + Kafka final lag 4,233(Round 6: 80,055,-95%) + db consumer throughput ~190/s(Round 6: 73/s,+160%) + entergame fail% 17.8%(Round 6: 29%)**。同时把 stress 复盘脚本化:`tools/scripts/stress_summarize.ps1` 直接吃 RunDir + prom snapshots 出 2KB 二维表,以后压测复盘只读它输出 | **2026-05-28** | [stress-1zone-25k-2026-05-28-subshard.md](../stress/stress-1zone-25k-2026-05-28-subshard.md) |
 | 21 | **全区全服数据层 + TiDB**:玩家数据层收敛为单一 TiDB 集群(v8.5 LTS),按 player_id 组织,home_zone 表达逻辑归属;跨区 = 客户端 redirect 重连 + 全局层直读(废弃 player_migrate 的数据搬运职责);合服 = RemapHomeZoneForMerge 零迁移。硬前提:snowflake 主键建表必须 NONCLUSTERED + SHARD_ROW_ID_BITS(写热点)、`txn-entry-size-limit` ≥32MB(16MB 存档默认必炸)、proto2mysql 升新版须逐表锁表名。partition 契约与 L1-L4 验收体系不变 | **2026-08-15** | [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) |
 | 22 | **battle 直连收缩 + 集群外入口一次落地**(用户拍板「一次全做,事后验」,豁免「K8s 路由模式 battle-smoke 先跑通」前提):① gate 两种路由模式都不中继战斗,直连是战斗唯一通路,battle → gate 只剩 Kafka 大厅公告(Assigned / Start,无直连才回落),删 Kafka Bind/Unbind 契约(事件号墓碑不复用),D26 改 fail-closed(签不出票不建房),scene 换会话只推重连提示(D65–D74);② K8s `-GateRouterMode` 默认翻 `"1"`,C++ 进程默认仍直连(D75 / D-12 修订);③ 集群外入口:进程自报 `NodeInfo.client_endpoint`(=11;仅 static / agones 形态,默认 podip 不自报、回落 endpoint),login / scene_manager / battle 三出口同一选择规则,battle = Agones Fleet `portPolicy: Dynamic` + 分配许可与排空标签,gate = StatefulSet + 每序号 Service(D76–D93)。**全部未编译、未测试、未上集群,待 Codex / 用户验证** | **2026-09-29** | [turn-based-battle-server.md](./turn-based-battle-server.md) §22, [k8s-client-entry.md](./k8s-client-entry.md), [battle-transport-decision.md](./battle-transport-decision.md), [xuanming-port-decisions-20260910.md](./xuanming-port-decisions-20260910.md) D-12 修订 |
 
@@ -512,7 +512,7 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 - `POST /api/refresh-token` 独立 HTTP 通道同样上线,robot `runTokenRefresher` 默认走 HTTP(`cfg.GatewayAddr` 非空时)
 - 老路径(客户端 → gate TCP → `ClientPlayerLogin.Login` RPC)继续工作,每次命中记录计数 + 每 60s 打一条 throttled warn
 - robot 新增 `use_http_login` 开关(默认 false,灰度打开)
-- 全栈端到端压测通过(50/100/200/500 bots × 30s,0 fail / 0 stuck,avg 69-101 ms)—— 详见 [stress-test-2026-05-http-login.md](./stress-test-2026-05-http-login.md)
+- 全栈端到端压测通过(50/100/200/500 bots × 30s,0 fail / 0 stuck,avg 69-101 ms)—— 详见 [stress-test-2026-05-http-login.md](../stress/stress-test-2026-05-http-login.md)
 - GateWatcher 过滤 `allocated/*` etcd key,消除每 5s 一次的 NodeInfo JSON 解析告警
 
 **下线步骤**:

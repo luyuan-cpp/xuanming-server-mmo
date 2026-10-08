@@ -144,7 +144,7 @@ done | tee run/logs/stress/gate-watch.log
 
 ## E. 数据回填位(等真实跑完填这里)
 
-> **TODO(staging-ops):** 跑完后,把 csv 第一行加进 [stress-test-2026-05-http-login.md §二](../design/stress-test-2026-05-http-login.md) 的表格,新增一列 `env`(dev/Linux-staging),并把第一档拐点信号写到本文 §D 的"实测"列。
+> **TODO(staging-ops):** 跑完后,把 csv 第一行加进 [stress-test-2026-05-http-login.md §二](../stress/stress-test-2026-05-http-login.md) 的表格,新增一列 `env`(dev/Linux-staging),并把第一档拐点信号写到本文 §D 的"实测"列。
 
 预填的占位结构:
 
@@ -169,7 +169,7 @@ done | tee run/logs/stress/gate-watch.log
 ---
 
 ## 关联文档
-- [stress-test-2026-05-http-login.md](../design/stress-test-2026-05-http-login.md) — Windows dev 基线 + 命中数据
+- [stress-test-2026-05-http-login.md](../stress/stress-test-2026-05-http-login.md) — Windows dev 基线 + 命中数据
 - [release-checklist.md](./release-checklist.md) — 全套上线前 checklist + 回滚 SOP
 - [gate-kernel-tuning-runbook.md](./gate-kernel-tuning-runbook.md) — sysctl 完整清单
 - [open-server-rate-limit-design.md](../design/open-server-rate-limit-design.md) — Bucket4j 真实阈值参考

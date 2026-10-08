@@ -364,7 +364,7 @@ func runRobotOnce(account string, cfg *config.Config, stats *metrics.Stats, stop
 			// R17 R2 收尾(Round 19): gate token 过期不算 robot 的错,也不消耗
 			// retry 预算 —— 让外层重新走 AssignGate 拿一个全新 token。计入
 			// gate_token_retry 计数器以便复盘观测。详见
-			// docs/design/stress-1zone-45k-2026-06-04-round18.md §R2。
+			// docs/stress/stress-1zone-45k-2026-06-04-round18.md §R2。
 			zap.L().Warn("gate token verify failed, will refetch", zap.String("account", account), zap.Error(err))
 			stats.GateTokenRetry()
 			tokenExpired = true

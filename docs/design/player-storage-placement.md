@@ -8,7 +8,7 @@
 > **关联**: [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md)(Phase 2 路线,本文修订其落地方式)、
 > [cross-zone-scene-travel.md](./cross-zone-scene-travel.md)(CZ-2 共享 Redis、owner_epoch)、
 > [server-merge-gap-fixes.md](./server-merge-gap-fixes.md)、[../ops/merge-zone-runbook.md](../ops/merge-zone-runbook.md)、
-> [zone-home-and-physical-storage-conversation-20260924.md](./zone-home-and-physical-storage-conversation-20260924.md)(概念讨论原文)。
+> [zone-home-and-physical-storage-conversation-20260924.md](../handoff/zone-home-and-physical-storage-conversation-20260924.md)(概念讨论原文)。
 
 ---
 

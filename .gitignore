@@ -66,7 +66,6 @@ vsout/
 
 # Runtime artifacts (logs, pid files, scratch dumps) — separate from build outputs in bin/
 run/*
-!run/README.md
 # snowflake 槽位本地缓存(design: node-id-overhaul-plan-20260908.md §3.5)。
 # Go 服务默认写 run/snowflake/(已被 run/* 覆盖);C++ scene 默认写 <cwd>/data/,从 bin 起就是 bin/data/。
 bin/data/snowflake-*.json
@@ -312,3 +311,12 @@ deploy/offline-images/
 # k8s_stage_runtime.ps1 填的 Linux 运行时 staging(Dockerfile.runtime 的 COPY 源;
 # deploy/k8s/runtime/README.md 不在 linux/ 下,仍然跟踪)
 /deploy/k8s/runtime/linux/
+
+# 机器人每次运行重新生成的本地产物,以及 dlv 调试留下的二进制
+robot/__debug_bin*
+robot/login_test_results.csv
+robot/.last_stress_dir.txt
+
+# Claude Code 的本机权限白名单与任务锁:每台机器各一份,不是团队状态
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
