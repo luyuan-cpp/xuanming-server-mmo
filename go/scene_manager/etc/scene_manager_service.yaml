@@ -41,6 +41,7 @@ Kafka:
 # Gate 路由/重定向的一次同步 produce 使用 RequireOne ACK；该值是 writer 侧
 # 超时（秒）。不使用 caller context 取消，避免 WriteMessages 返回后仍继续投递。
 # 调大它必须同步调大文件头的 Timeout(不等式见那里,契约测试守)。
+# 还必须同步 C++ 的 relocate_confirm::kSettleAfterCallDeadline(疏散 / 排空改派的 settle 窗口 = C++ deadline + 本值)。
 KafkaWriteTimeoutSeconds: 5
 
 # 开发旁路:true 时跨节点切场景 / 已有位置的跨区重定向不再要求源 scene 先写出

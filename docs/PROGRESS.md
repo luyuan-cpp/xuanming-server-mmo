@@ -6589,6 +6589,69 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
 - **已知限制**:前 3 个是 combined 模式(controller 与 broker 同进程),独立 controller 节点未做;加 broker 不会自动搬分区;镜像仍是浮动 tag;本机 compose 保持单 broker。
 - **注意**:契约测试基线目前因 deadline 门禁与 `data_service.yaml` 的 `MethodTimeouts` 冲突而失败(09-29 起,与本条无关),要先由相关会话解决,本条的断言才跑得到。
 
+## 2026-10-08 帮会库 `guild.name_norm` 迁到 v0.2.0 键列形态 + 过渡 guild.exe(Claude 执行,须 Codex 复验)
+
+接 09-28「服务器全仓 proto2mysql 切到 v0.2.0」条目「运行期注意」第 1 条与 09-29 补记。用户 10-01 指示「帮我修复完毕」、10-08「继续做完给我」;与帮会二期会话对过归属(三步都归本会话,不碰它的源码)。
+
+### 结果
+
+- 本机 MySQL `mmorpg_guild.guild.name_norm`:`mediumtext` 可空 `utf8mb4_unicode_ci` + `uk_guild(name_norm(191))` → `varchar(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL DEFAULT '' COMMENT 'pb:11'` + 整列 `uk_guild(name_norm)`。索引名未变。表 0 行;其余 7 张表(含 `guild_player_state` 6 行、`schema_migrations` 1 行)未动。本机 TiDB 没有这个库,不涉及。
+- `bin/go_services/guild.exe` 换成过渡版(proto2mysql v0.2.0);09-22 的旧版改名为同目录 `guild.exe.v0.1.1-20260922.bak`。
+- **没有改任何受 git 跟踪的源码**:`bin/go_services/` 与 `run/` 都在 `.gitignore` 里。本条是唯一的仓内改动。
+
+### 过渡 exe 是什么
+
+- 10-08 的 main(`6e79eed12b`)上 go/guild 仍编不过:`RegisterGuildInternalServer` 在 `go/proto` 下 0 定义(guild_internal 没有 Go 生成物),`GuildActivityTable` 在 `go/shared/generated` 下 0 定义(GuildActivity 未导表)。所以按原计划先编过渡版,等帮会线导表 + proto-gen 后重编 main 时直接覆盖。
+- 来源:隔离 worktree 检出 `1ad634443d`(09-28 03:38,B6a 落码前最后一个自洽提交),再从 `9da27f9a4d` 只覆盖 6 个文件:`go/guild/go.mod`、`go/guild/go.sum`、`go/schemamigrate/go.mod`、`go/schemamigrate/go.sum`、`go/schemamigrate/plan.go`、`go/schemamigrate/plan_test.go`。即「B6a 之前的帮会代码 + proto2mysql v0.2.0」。没有任何提交同时满足「能编过」和「已是 v0.2.0」(`9da27f9a4d` 同一次自动保存就带进了 B6a 的未生成符号)。
+- 构建:`tools/scripts/go_services.ps1 -Command build -Services guild`(worktree 内),Go 1.26.5,`GOTOOLCHAIN=local`、`GOFLAGS=-mod=readonly`。版本戳 `version=dev commit=1ad634443d4d-dirty`;`go version -m` 显示 `luyuancpp/proto2mysql v0.2.0 => luyuan-cpp/proto2mysql v0.2.0 h1:uLFpdq…`。SHA256 `EFBF1E0CECD264066D6559FFAB7B58C5763BDF5B8C17B8D07C62CBAC10A1EF74`(旧 exe:`C43A51B1…8267`)。
+- 范围:声明 7 张表,与线上一致。**不含** B6a 活动、GuildInternal 对账服务、`ed75ad177` 及之后的帮会改动。
+- **保质期到帮会线导表为止**:过渡 exe 用旧生成码加载配表(protojson 默认不容忍未知键)。今天 `generated/tables/guildrule.json` 的键与旧生成码一致,能加载;导表给任何已加载的表带出新键后,它会在 `LoadTables` 退出,届时必须同批用 main 重编。重编后的 exe 首次启动会自动补建 `guild_activity_progress` 等新表,name_norm 不用再管。
+
+### 执行的 SQL(同一个 mysql 会话,默认库 `mmorpg_guild`,遇错即停)
+
+与 proto2mysql v0.2.0 `keycolumns.go` 的 `legacyKeyAlterSQL` 产出同形:
+
+```sql
+SET SESSION sql_mode = CONCAT_WS(',', NULLIF(@@SESSION.sql_mode, ''), 'STRICT_ALL_TABLES');
+ALTER TABLE `guild` DROP INDEX `uk_guild`;
+UPDATE `guild` SET `name_norm` = '' WHERE `name_norm` IS NULL;
+ALTER TABLE `guild` MODIFY COLUMN `name_norm` VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL DEFAULT '' COMMENT 'pb:11';
+ALTER TABLE `guild` ADD UNIQUE KEY `uk_guild` (`name_norm`);
+```
+
+执行前:本机 0 个游戏进程、库上 0 个其它连接、`guild` 0 行;`mysqldump` 备份 8 张表。五条全部 `Query OK`。
+
+### 运行证据(Claude 执行,违反 AGENTS §10.1 的分工,用户指示代做;须 Codex 复验)
+
+1. **迁移前,新 exe 对旧表**:`guild -f etc/guild.yaml -migrate` 退出码 **4**,`statements=0 warnings=0 manual=1`,唯一一项是 `guild.name_norm 现为 "mediumtext",proto 期望 "VARCHAR(191) … utf8mb4_0900_bin NOT NULL DEFAULT '' COMMENT 'pb:11'"`。同时说明其余 6 张表的列和索引对 v0.2.0 是干净的。
+2. **迁移后直接查 information_schema**(表结构闸只比基础类型和索引名,排序规则 / 可空 / 前缀它不查,所以这一步不能省):`COLUMN_TYPE=varchar(191)`、`IS_NULLABLE=NO`、`COLUMN_DEFAULT=''`、`COLLATION_NAME=utf8mb4_0900_bin`、`COLUMN_COMMENT=pb:11`;`uk_guild` 的 `NON_UNIQUE=0`、`SUB_PART=NULL`。`SHOW CREATE TABLE` 与 09-28 迁完的 `zone_1_db.user_phone` 同形。
+3. **迁移后,新 exe 对新表**:`-migrate` 退出码 **0**,`statements=0 warnings=0 manual=0`。
+4. **迁移后,旧 exe(v0.1.1)对新表**:`-migrate` 退出码 **4**,`guild.name_norm 现为 "varchar(191)",proto 期望 "MEDIUMTEXT COMMENT 'pb:11'"`。「新旧互斥、必须同批换」由读代码的推断变成了实测。
+5. **真实启动**:`go_services.ps1 -Command start-exe -Services guild`(启动器用的同一条路径)。日志依次为 `schemamigrate up 完成 … statements=0 warnings=0 manual=0` → `数据库版本 26.7.0 满足下限` → `Guild node registered: id=1` → `Starting Guild RPC server at 127.0.0.1:50300`;50300 处于 LISTEN,稳定运行约 4 分钟后用 `-Command stop -Services guild` 停掉。stderr 里只有号段 `AllocateIdSegment … Unavailable`:这次只起了 guild 一个服务,data_service 没起,属预期。
+
+**没做的**:`start_game.ps1` 全栈启动;建帮 / 重名判定等业务冒烟;`go test`(含 `guild_lock_order_mysql_test.go`,它从未在整列唯一键形态下跑过)。
+
+证据在 `run/verify-guild-name-norm-20261001/`(不入库):迁移前后的 `SHOW CREATE TABLE`、两份 dump、`migrate-name_norm.sql` 与执行输出、上面 1/3/4/5 各步的日志、过渡 exe 副本、`rollback-name_norm.sql`。
+
+### 行为变化(知情即可)
+
+- 库层判重从「不区分大小写 / 重音」变成逐字节比较。帮名唯一性本来就由 Go 侧 `GuildNameNorm`(NFKC → TrimSpace → 小写)决定,所以大小写、首尾空格的判定不变;只差重音的名字(`cafe` / `café`)以前被库顺带挡住,现在可以并存。要挡视觉混淆名需在 Go 侧规范化里补。
+- 列从可空变成 `NOT NULL DEFAULT ''`:漏写 `name_norm` 的插入会落成空串,第二行起撞 `uk_guild`。现有插入都显式带值,`GuildNameNorm` 拒绝空串。
+
+### 回退
+
+停 guild → 在 `mmorpg_guild` 执行 `run/verify-guild-name-norm-20261001/rollback-name_norm.sql`(DROP INDEX → `MODIFY COLUMN name_norm MEDIUMTEXT COMMENT 'pb:11'` → `ADD UNIQUE KEY uk_guild (name_norm(191))`)→ 把 `.bak` 改回 `guild.exe`。只在必须退回 v0.1.1 时用。
+
+### 其它环境
+
+另一台机器或 K8s dev 上若已有旧形态的 `mmorpg_guild.guild`,换上 v0.2.0 的 guild 时会同样以退出码 4 拒启,需要先跑上面 5 条。全新库不受影响(直接建成新形态)。
+
+### Codex 复验
+
+- 工作目录 `go/guild`(主工作区),本机 MySQL 在跑、guild 未启动:`..\..\bin\go_services\guild.exe -f etc/guild.yaml -migrate`。通过标准:退出码 0,输出含 `0 statement(s) executed`,无 `MANUAL` 行。
+- 复现过渡 exe:`git worktree add --detach <目录> 1ad634443d` → 在该目录 `git checkout 9da27f9a4d -- go/guild/go.mod go/guild/go.sum go/schemamigrate/go.mod go/schemamigrate/go.sum go/schemamigrate/plan.go go/schemamigrate/plan_test.go` → `$env:GOFLAGS='-mod=readonly'; pwsh -File tools/scripts/go_services.ps1 -Command build -Services guild`。通过标准:`[ok] guild`;`go version -m bin\go_services\guild.exe` 含 `proto2mysql v0.2.0`。同一目录可顺带跑 `cd go/schemamigrate && go vet ./... && go test -count=1 ./...` 与 `cd go/guild && go vet ./... && go test -count=1 ./...`(真库用例需按 92-handoff §12.6 设 DSN)。失败时保留完整输出。
+- 帮会线导表 + proto-gen 之后:用 main 重编 `guild.exe` 覆盖过渡版,再跑第一条命令;预期首次会多出建 `guild_activity_progress` 等新表的语句,退出码仍为 0。
+
 ## 2026-10-08 消除单节点(二):data_service 每区 1 副本 → 2 副本(Claude,未编译、未跑测试、未上集群)
 
 总纲 `docs/design/no-single-node-horizontal-scaling-20261001.md` §4。上一项(Kafka)见同名「(一)」条目。

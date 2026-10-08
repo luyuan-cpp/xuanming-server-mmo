@@ -38,7 +38,10 @@ namespace
         std::size_t lastPendingKafkaMessages = std::numeric_limits<std::size_t>::max();
         std::size_t lastRemainingPlayers = std::numeric_limits<std::size_t>::max();
         std::size_t lastExitReleaseMarks = std::numeric_limits<std::size_t>::max();
+        std::size_t lastRelocateConfirms = std::numeric_limits<std::size_t>::max();
         bool shutdownDrainLogged = false;
+        // 本次停机里"drain 只剩改派待确认表"的逐条清单已经打过(每次停机只打一次)。
+        bool relocateBacklogLogged = false;
 
         explicit SceneRuntimeContext(EventLoop& loop) : grpcService(loop) {}
     };
@@ -206,23 +209,39 @@ int main(int argc, char *argv[])
 			// 断线释放标记(A1′)的条件写在途数(R6):实体销毁之后才发、回调才归零,不等它的话 loop 一退
 			// 回调就再也不会来。受 Node drain 看门狗约束(Redis 卡住时不会无限等)。
 			const std::size_t exitReleaseMarks = PlayerLifecycleSystem::ExitReleaseMarksInFlight();
+			// 疏散 / 排空改派的待确认表(relocate_confirm.h)里还没有结论的改派数。停机前的单场景排空会留下条目:
+			// scene_manager 的拒绝应答、核实读的应答都还在路上,不等它们的话 loop 一退,被拒的玩家就挂在没有实体的
+			// 会话上。等待同样受 Node 的 drain 看门狗(15s)约束;确认阶段只读 Redis、只推 gate,唯一的写(踢线前的
+			// 凭证补写)要过身份闸、且已计入上面的 exitReleaseMarks。看门狗到期时还剩的条目只放弃、不踢。
+			const std::size_t relocateConfirms = PlayerLifecycleSystem::RelocateConfirmsPending();
 			if (pendingPlayerSaves != context->lastPendingPlayerSaves ||
 				pendingKafkaMessages != context->lastPendingKafkaMessages ||
 				remainingPlayers != context->lastRemainingPlayers ||
-				exitReleaseMarks != context->lastExitReleaseMarks)
+				exitReleaseMarks != context->lastExitReleaseMarks ||
+				relocateConfirms != context->lastRelocateConfirms)
 			{
 				LOG_INFO << "Shutdown drain progress: redis_player_saves=" << pendingPlayerSaves
 						 << " kafka_messages=" << pendingKafkaMessages
 						 << " remaining_players=" << remainingPlayers
-						 << " exit_release_marks=" << exitReleaseMarks;
+						 << " exit_release_marks=" << exitReleaseMarks
+						 << " relocate_confirms=" << relocateConfirms;
 				context->lastPendingPlayerSaves = pendingPlayerSaves;
 				context->lastPendingKafkaMessages = pendingKafkaMessages;
 				context->lastRemainingPlayers = remainingPlayers;
 				context->lastExitReleaseMarks = exitReleaseMarks;
+				context->lastRelocateConfirms = relocateConfirms;
 			}
 
-			const bool drained =
-				remainingPlayers == 0 && pendingPlayerSaves == 0 && exitReleaseMarks == 0 && kafkaDrained;
+			const bool drained = remainingPlayers == 0 && pendingPlayerSaves == 0 && exitReleaseMarks == 0 &&
+								 relocateConfirms == 0 && kafkaDrained;
+			// drain 第一次只剩待确认表时把条目逐条打出来(一条 WARN 汇总 + 每条一行 INFO),每次停机只打一次:
+			// 看门狗到期后这些条目被放弃,事后要查得出是哪些玩家的会话可能还挂着。本谓词被周期轮询,所以用标志挡住重复。
+			if (!drained && relocateConfirms > 0 && remainingPlayers == 0 && pendingPlayerSaves == 0 &&
+				exitReleaseMarks == 0 && kafkaDrained && !context->relocateBacklogLogged)
+			{
+				context->relocateBacklogLogged = true;
+				PlayerLifecycleSystem::LogRelocateConfirmBacklog("shutdown_drain");
+			}
 			if (drained && !context->shutdownDrainLogged)
 			{
 				context->shutdownDrainLogged = true;
