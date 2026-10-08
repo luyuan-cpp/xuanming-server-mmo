@@ -94,3 +94,23 @@ constexpr uint32_t GuildServiceGetGuildShopIndex = 21;
 constexpr uint32_t GuildServiceBuyGuildShopGoodsMessageId = 233;
 constexpr uint32_t GuildServiceBuyGuildShopGoodsIndex = 22;
 #define GuildServiceBuyGuildShopGoodsMethod  ::GuildService_Stub::descriptor()->method(22)
+
+constexpr uint32_t GuildServiceGetGuildActivitiesMessageId = 241;
+constexpr uint32_t GuildServiceGetGuildActivitiesIndex = 23;
+#define GuildServiceGetGuildActivitiesMethod  ::GuildService_Stub::descriptor()->method(23)
+
+constexpr uint32_t GuildServiceLightGuildLanternMessageId = 239;
+constexpr uint32_t GuildServiceLightGuildLanternIndex = 24;
+#define GuildServiceLightGuildLanternMethod  ::GuildService_Stub::descriptor()->method(24)
+
+constexpr uint32_t GuildServiceClaimGuildReunionMessageId = 240;
+constexpr uint32_t GuildServiceClaimGuildReunionIndex = 25;
+#define GuildServiceClaimGuildReunionMethod  ::GuildService_Stub::descriptor()->method(25)
+
+constexpr uint32_t GuildServiceStartGuildTrialMessageId = 242;
+constexpr uint32_t GuildServiceStartGuildTrialIndex = 26;
+#define GuildServiceStartGuildTrialMethod  ::GuildService_Stub::descriptor()->method(26)
+
+constexpr uint32_t GuildServiceRespondGuildTrialInviteMessageId = 243;
+constexpr uint32_t GuildServiceRespondGuildTrialInviteIndex = 27;
+#define GuildServiceRespondGuildTrialInviteMethod  ::GuildService_Stub::descriptor()->method(27)

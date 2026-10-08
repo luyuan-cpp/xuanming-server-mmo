@@ -69,6 +69,9 @@
 ### 1.5 M1 的实际价值(如实)
 
 1. **K8s 上玩家不可达**:`k8s_deploy.ps1` 的 `-GateRouterMode` 默认 `"0"`(gate 直连),mail 与 chat / guild / trade / friend 一样只承诺路由服模式(D-12)。在它翻 1 之前,任何已部署环境里玩家都碰不到 mail。
+   〔2026-09-29 更正原因,结论不变:K8s 上玩家仍**不可达**。`-GateRouterMode` 的 K8s 默认已翻为 `"1"`(turn-based §22 D75,`tools/scripts/k8s_deploy.ps1:163-164`,
+   含 gate 的 battle-smoke 为事后补验),所以不可达的原因已不再是路由模式;现在的原因是 **mail 没有登记进 K8s 部署**:`$GoSvcCatalogue` 里没有 mail 条目,
+   `deploy/k8s/manifests/go-svc/` 下也没有 mail 的 manifest / migrate Job(2026-09-29 按磁盘核对),部署脚本根本不会拉起它。补齐部署登记之前,不要把 K8s 当 mail 的可达环境。〕
 2. **生产只能发纯文本**(M-9)。与 Java 的 `AdminAnnouncementController`(公告)相比,差异只在"定向到某一个玩家 + 离线可达 + 已读状态"。
 3. 所以 M1 的主要产出是:**解锁客户端网络层联调**(客户端 UI / 状态机已在,§1.1)、**把数据形状与幂等语义在 M1 定型**(M2 不必迁移存量行)、**dev 下的附件展示联调**。不应把 M1 描述成"上线后运营就能用邮件"。
 4. 这条事实直接影响 §11 第 2 条:若用户接受"M1 只为联调",可以砍掉 `cmd/mailadmin`、令牌注入脚本、`mail-admin-auth` Secret 与令牌四态验证(约 5–6 个文件),生产发件入口与 M2 的 HMAC 一起设计,避免先做共享令牌、M2 再推倒。
@@ -854,7 +857,7 @@ Tip.xlsx 把预留注释行换成组头 `//mail_error base=17000 width=1000`(**`
 | ⑥b | **Mode=pro 四态**(M-9 是 M1 唯一的防资产损失闸门) | pro + 附件 → `MailAttachmentNotOpen`,表中无新行、**号段无消耗**;pro + `sender_kind=ROBOT` → `kInvalidParameter`;dev + 附件 → 成功且 `claim_state=1`;pro + 无附件 `OPS_TOOL` → 成功 | 只在 dev 跑冒烟,pro 分支零覆盖 —— 必须单独起一个 `Mode: pro` 的进程或用 config 注入的单测 |
 | ⑦ | 两区 robot `mail-smoke`(两区 gate 都 `GATE_CLIENT_RPC_ROUTER=1`、`mmorpg_mail` 已建;**必须经 `start_game.ps1` 起栈或先手工导出令牌**,否则 `MailAdmin` 停用、冒烟拿到 `PermissionDenied`) | 输出一行 `MAIL_SMOKE_OK …`。逐步:CLI / robot 发一封系统 + 一封无附件定向 + **一封带 1 条货币附件的定向(dev)**;两区玩家都能在 `ListMails` 看到系统邮件,只有收件人看到定向邮件;带附件那封在 `ListMails` 里 `claim_state=UNCLAIMED`、`claimable_count=1`;定向邮件推送在 10s 内到达(**弱断言**:丢了不算失败,但要打印是否收到);`ReadMail` 后 `unread_count` 减 1;另一玩家 `ReadMail` 别人的定向邮件回 `MailNotFound`;`ClaimMailAttachments` 回 `MailClaimNotOpen`,**再 `ListMails` 该封仍是 `UNCLAIMED`**;`DeleteMails` 带附件那封 → 出现在 `protected_mail_ids`、`deleted_count=0`;`DeleteMails` 无附件那封删两次都成功,且之后 `ListMails` 看不到;**D-9 反向断言**:客户端发 `NotifyMailEvent` 与 `MailAdmin` 的消息号拿不到业务回包,**并在同窗口 mail 日志里看到拒绝记录**(信封不保留原始 gRPC code,只看机器人失败不能证明原因) | **冒烟数据集覆盖不到的断言**:冒烟里系统邮件只有 1 封,"有效集 LIMIT 截断"与"跨两表合并分页"在它上面恒绿 —— 这两条只能靠 ④ 的集成测试(构造 >page_size 的混合数据) |
 | ⑧ | 过期 sweep | API 造不出已过期的信(发件要求 `sent_ms < expire_ms`),所以**用 SQL 直接 INSERT 两行**:A `expire_ms = now − (RetentionDays+1) 天`、B `expire_ms = now − 1 天`,**`RetentionDays` 保持默认 7 不变**(不放开 0)。`report_only` 下 A、B 都在,`mail_sweep_candidate_rows` = 1,`mail_sweep_last_run_unixtime` 前进;切 `delete` 后只删 A、B 保留;`data_consistency_check` 孤儿数为 0 | 三种结果(都在 / 只删 A / 都删)必须可区分;`cutoff ≤ 0` 分支"什么都不做"会让"没删"看起来像"report_only 生效" —— 看日志里的模式与 cutoff 值 |
-| ⑨ | K8s(kind) | 按 §9.5 的顺序:data_service `-migrate` 后 `id_segment` 有 `mail` 行 → `mail-migrate` Job Complete 后 Deployment 才 apply;ConfigMap 里 `Etcd.Key: ""`、`Mode: pro`(staging/prod 档)、`Redis`、`DataServiceRpc`、`IgnoreContentMethods`、Sweep 四键都存在;未注入令牌时横幅恰为 `mail_admin=disabled`,**不期望能发信**;Pod 不 CrashLoop;**不期望**推送到达(g1/g2 存量缺口,§4.5);K8s 上 gate 默认直连,**玩家不可达是设计内的**(D-12) | 把"K8s 上推送没到 / 玩家到不了"当 mail 的缺陷去修 |
+| ⑨ | K8s(kind) | 按 §9.5 的顺序:data_service `-migrate` 后 `id_segment` 有 `mail` 行 → `mail-migrate` Job Complete 后 Deployment 才 apply;ConfigMap 里 `Etcd.Key: ""`、`Mode: pro`(staging/prod 档)、`Redis`、`DataServiceRpc`、`IgnoreContentMethods`、Sweep 四键都存在;未注入令牌时横幅恰为 `mail_admin=disabled`,**不期望能发信**;Pod 不 CrashLoop;**不期望**推送到达(g1/g2 存量缺口,§4.5);K8s 上 gate 默认直连,**玩家不可达是设计内的**(D-12)〔2026-09-29 更正原因:K8s gate 默认已是路由模式 `"1"`(D75);玩家仍不可达,原因改为 mail 尚未登记进 K8s 部署(无 `$GoSvcCatalogue` 条目、无 manifest / migrate Job),本行 ⑨ 须等部署登记补齐后才可执行〕 | 把"K8s 上推送没到 / 玩家到不了"当 mail 的缺陷去修 |
 
 **失败时保留**:导表 / 生成日志;`go test -v` 全文;`SHOW ENGINE INNODB STATUS`;启动日志全文;robot 输出 + 两区 gate / 路由服 / mail 日志;`EXPLAIN` 原文。
 
@@ -954,4 +957,4 @@ Tip.xlsx 把预留注释行换成组头 `//mail_error base=17000 width=1000`(**`
 4. **推送要先读 SharedRedis 的 `player:session:{id}`**;mail.yaml / ConfigMap 必须有共享 Redis 段、`DataServiceRpc` 段与 `Mode`,缺前两者分别是"推不出去"与"领不到号、发件全失败"。
 5. **mail 的 proto-gen 是独立一次**,gate / 路由表 / robot / Unity 必须全部出自这一次;data_service 要先重编并 `-migrate` 出 `mail` 号段行。
 6. **附件协议推荐已从"import asset_op.proto"改为 mail 自有 message**(客户端不收 `common/asset` 已核实)。
-7. **K8s 上默认 `MailAdmin` 停用、玩家不可达**,都是设计内的;冒烟必须经 `start_game.ps1` 起栈。
+7. **K8s 上默认 `MailAdmin` 停用、玩家不可达**,都是设计内的;冒烟必须经 `start_game.ps1` 起栈。(2026-09-29 更正原因:玩家不可达现在是因为 mail 未登记进 K8s 部署,不再是 gate 默认直连 —— K8s 默认已为路由模式,见 §1.5 第 1 条)

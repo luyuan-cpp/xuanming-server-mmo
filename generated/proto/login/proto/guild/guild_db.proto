@@ -195,3 +195,34 @@ message GuildDailyCounterRecord {             // 锁序位置 7
   uint64 updated_ms = 6;
   // 追加区:从 7 起。计数一律用带上限的 upsert 改写,不得"锁不存在的行再插入"(X-13)。
 }
+
+// ── 帮会活动(B6a)────────────────────────────────────────────────
+// 设计:docs/design/guild-phase2/06-activities.md §6.5(表)、§6.11–§6.14(事务与解散)。
+// 周期口径(README §3 U1):个人次数不在本表,挂在 guild_daily_counter(counter_kind = ACTIVITY,按游戏日,
+// 换帮不重置);本表只记**帮会级**进度,按活动档期 —— 点灯阈值、团圆锁存、资金只发一次,都以这一行为准。
+//
+// 锁序位置 8:guild_daily_counter(7)之后,B6b 的 guild_trial_battle(9)/ guild_trial_reward_owed(10)之前。
+// 本表任一行的锁定者 / 写者都必须先持有同一 guild_id 的 guild 行锁(灯会、团圆、历练结算、解散的第一把锁都是它),
+// 本表的行因此在帮会粒度上被 guild 行串行。取锁序列与理由见 go/guild/internal/data/tables.go。
+//
+// 刻意没有二级索引:读写都是完整主键点操作或 guild_id 主键前缀(视图读、解散删)。v1 不清理旧期行
+// (每帮每天至多 3 行);v1.1 若按 period_key 清理需要加 OptionIndex = "period_key" —— schemamigrate 对已存在的表
+// 不补建普通索引(只告警),上线前要么定下来、要么开发期删库重建。
+message GuildActivityProgressRecord {         // 锁序位置 8
+  option(OptionTableName) = "guild_activity_progress";
+  option(OptionPrimaryKey) = "guild_id,activity_id,period_key";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;
+  uint32 activity_id = 2;            // GuildActivity.id
+  // 帮会期键 activity.GuildPeriodKey:灯会 / 团圆 = 档期 start_at_ms 当天的游戏日键(一届活动跨多天仍是同一行);
+  // start / end 都为 0 的常开行(仅开发)退化为当天游戏日键;历练 = 开战时的游戏日键(每日计资金胜场上限)。
+  uint32 period_key = 3;
+  uint32 progress_count = 4;         // 灯会:本档期点灯人次;历练:本游戏日已计资金胜场;团圆不用(恒 0)
+  uint64 threshold_reached_ms = 5;   // 0 = 未达;非 0 = 首次达成时刻。锁存:写一次后不再改,团圆据此跨游戏日仍可领
+  uint32 funds_granted = 6;          // 0/1:本期帮会资金已发。与阈值判定在同一把 guild 行锁下读改,保证只发一次
+  uint64 updated_ms = 7;
+  // 追加区:从 8 起。
+}

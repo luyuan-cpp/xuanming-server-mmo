@@ -48,8 +48,9 @@ func TestTeamBattleSizeAndLockTTL(t *testing.T) {
 	require.Equal(t, uint32(kMaxBattleTeamSize), starter.TeamSizeFor(2), "上限按 kMaxBattleTeamSize 收口,与 PVE_TEAM 排队同口径")
 	require.Zero(t, starter.TeamSizeFor(99), "未配置 = 未开放组队")
 
-	// 5 人:matched 48s + 补偿 25s + 余量 10s(§E.1 第 6 步)。
-	require.Equal(t, 83, starter.MatchLockTTLSeconds(5))
+	// 5 人:matched 66s(含 D82 换节点重试链路,见 matchedWorstCaseSeconds)+ 补偿 25s + 余量 10s
+	// (§E.1 第 6 步)。
+	require.Equal(t, 101, starter.MatchLockTTLSeconds(5))
 	require.Equal(t, matchedWorstCaseSeconds(5)+compensationWorstCaseSeconds(5)+10, starter.MatchLockTTLSeconds(5))
 }
 

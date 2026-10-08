@@ -108,6 +108,9 @@ message SetPlayerFieldResponse {
 message RegisterPlayerZoneRequest {
   uint64 player_id = 1;
   uint32 home_zone_id = 2;
+  // 非 0:与 player:zone 同一段 Lua 原子钉上 player:placement:{id} = "{storage_id}:1"
+  // (player-storage-placement.md §8.1);0 = 不钉落点(旧行为,有效落点 = home_zone)。
+  uint32 storage_id = 3;
 }
 
 message GetPlayerHomeZoneRequest {
@@ -116,6 +119,10 @@ message GetPlayerHomeZoneRequest {
 
 message GetPlayerHomeZoneResponse {
   uint32 home_zone_id = 1;
+  // home_zone 正处于合服围栏内(merge:in_progress:{home_zone_id} 存在),与 home_zone 同一段 Lua 读出。
+  // scene_manager 据此拒绝进场:合服窗口里源区归属玩家不得从任何 zone 进场,否则存盘会写进已排空的
+  // 源 topic(player-storage-placement.md §8 / §12 A16)。旧版 data_service 不填 = false。
+  bool home_zone_merging = 2;
 }
 
 message BatchGetPlayerHomeZoneRequest {

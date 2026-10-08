@@ -2,6 +2,7 @@
 
 #include <grpcpp/grpcpp.h>
 #include <muduo/net/EventLoop.h>
+#include "battle_admission_gate.h"
 #include "proto/battle/battle_node.grpc.pb.h"
 
 // BattleNode 内部控制面 gRPC 实现(match 服务调用)。
@@ -9,12 +10,27 @@
 // cpp/nodes/scene/handler/grpc/scene_node_service.h(runInLoop + promise/future
 // 把请求投递到 muduo loop 线程,阻塞 gRPC 池线程直至处理完成)。
 //
-// 注意:Handle* 在 loop 线程执行 —— 不做阻塞 I/O;错误经 response 字段返回,
-// gRPC status 恒为 OK。
+// 注意:Handle* 在 loop 线程执行 —— 不做阻塞 I/O;业务错误经 response 字段(tip)返回,
+// gRPC status 为 OK。唯一例外是 CreateBattle 的节点级准入拒绝(集群外入口 D82):
+// 建房准入闸未开 / 已关(battle_admission_gate.h),或拿不到 Agones 分配许可,即回
+// grpc::Status(UNAVAILABLE, "battle_not_allocatable"),此时没有任何副作用。
+// 这是节点级"换一台试"信号,发生在业务处理之前,客户端看不到,故不走 tip。
+// 消息字面量是跨语言字符串契约,常量与说明在 battle_node.cpp。
+
 class BattleNodeImpl final : public BattleNode::Service
 {
 public:
     explicit BattleNodeImpl(muduo::net::EventLoop& loop);
+
+    // ---- 建房准入闸(battle_admission_gate.h;只管 CreateBattle,其余 RPC 只作用于已有房间) ----
+    // 两者都只在 loop 线程调用:loop 内复核与 Close 同在 loop 上,才能保证排在关闸之后的建房必被拒。
+
+    // SetAfterStart 里 Agones lifecycle 启动之后调用。返回 false = 没有打开:停机已先开始
+    // (闸已关,不会再开),或重复调用(已经是打开的)。
+    bool OpenAdmission();
+
+    // SetBeforeShutdown 第一句调用(先于 AbortAllRooms)。终态,幂等。
+    void CloseAdmission();
 
     grpc::Status CreateBattle(grpc::ServerContext* context,
         const ::CreateBattleRequest* request,
@@ -50,4 +66,5 @@ private:
     static void HandleIssueBattleTicket(const ::IssueBattleTicketRequest* request, ::IssueBattleTicketResponse* response);
 
     muduo::net::EventLoop& loop_;
+    battle_admission::AdmissionGate admission_;
 };

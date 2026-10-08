@@ -3,6 +3,7 @@
 #include <limits>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -14,12 +15,14 @@
 #include "muduo/base/Logging.h"
 
 #include "engine/infra/messaging/kafka/kafka_producer.h"
+#include "node/system/node/client_endpoint.h"
 #include "node/system/node/node.h"
 #include "node/system/node/node_command_route.h"
 #include "node_config_manager.h"
 #include "thread_context/redis_manager.h"
 #include "time/system/time.h"
 
+#include "battle_push_policy.h"
 #include "battle_security.h"
 #include "client/battle_client_edge.h"
 
@@ -43,10 +46,8 @@
 
 #include "table/proto/tip/common_error_tip.pb.h"
 
-// 事件 id 注册表常量(重生成后出现/更新):
-//   contracts_kafka_gate_event_event_id.h  → ContractsKafkaBindBattleEventEventId /
-//                                            ContractsKafkaUnbindBattleEventEventId /
-//                                            ContractsKafkaPushToPlayerEventEventId
+// 事件 id 注册表常量:
+//   contracts_kafka_gate_event_event_id.h  → ContractsKafkaPushToPlayerEventEventId(大厅公告回落)
 //   common_event_battle_event_event_id.h   → BattleSettlementEventEventId
 #include "rpc/service_metadata/contracts_kafka_gate_event_event_id.h"
 #include "rpc/service_metadata/common_event_battle_event_event_id.h"
@@ -58,14 +59,14 @@
 namespace
 {
 
-    // 单房间观众上限(设计文档 §10.5)。纯内存房间,每观众每回合一条 Kafka 推送,
+    // 单房间观众上限(设计文档 §10.5)。纯内存房间,每观众每回合一条直连推送,
     // 上限约束单房间出站扇出,防观战成为放大器。
     constexpr size_t kMaxObserversPerRoom = 20;
 
     // ---- Kafka 出站(设计文档 D6;不变量:target_instance_id 必填 + key=业务实体 ID) ----
 
     // 发一条 GateCommand 到目标 gate 的 topic。
-    // key=player_id:同一玩家的 S2C/绑定事件在 gate 侧保序(宪法 §7 不变量 3)。
+    // key=player_id:同一玩家的大厅公告在 gate 侧保序(宪法 §7 不变量 3)。
     void SendGateCommand(const ::BattleRouting &routing, const uint64_t playerId,
                          const uint32_t eventId, std::string payload)
     {
@@ -99,8 +100,10 @@ namespace
         }
     }
 
-    // S2C 推送(Kafka→gate 回落路径):MessageContent 包客户端协议消息,经 PushToPlayerEvent
-    // 送到玩家的大厅 TCP 连接。有直连时不走这里 —— 统一出口是 BattleRoomManager::PushToPlayer。
+    // 大厅公告回落(Kafka→gate):MessageContent 包客户端协议消息,经 PushToPlayerEvent
+    // 送到玩家的大厅 TCP 连接。只服务直连建立之前的大厅公告(NotifyBattleAssigned /
+    // NotifyBattleStart,turn-based §22 D68);唯一调用方是 BattleRoomManager::PushLobbyAnnouncement,
+    // 战斗帧绝不走这里。
     void PushMessageViaGate(const ::BattleRouting &routing, const uint64_t playerId,
                             const uint32_t messageId, const google::protobuf::Message &message)
     {
@@ -114,31 +117,22 @@ namespace
                         event.SerializeAsString());
     }
 
-    // 绑定:把 session 的 BattleNodeService 绑定指到本节点(CreateBattle 成功后)。
-    void SendBindBattle(const ::BattleRouting &routing, const uint64_t playerId,
-                        const uint64_t battleId, const uint32_t battleNodeId)
+    // 战斗帧无活直连被丢弃时的采样日志(turn-based §22 D68)。battle 无 Prometheus 端点,
+    // 由日志侧按 metric= 提取计数;每个 messageId 首次必打,之后每 1024 次打一行,防掉线玩家
+    // 每回合一条把日志放大(与直连面 LogRejectionSampled 同口径)。messageId 只可能是
+    // BattleClientPlayer 的几条 Notify 号(进程内常量),键集合有界;单 loop 线程访问,无锁。
+    void LogBattleFrameDroppedSampled(const uint64_t battleId, const uint64_t playerId,
+                                      const uint32_t messageId)
     {
-        contracts::kafka::BindBattleEvent event;
-        event.set_session_id(routing.session_id());
-        event.set_battle_node_id(battleNodeId);
-        event.set_battle_id(battleId);
-        event.set_player_id(playerId);
-
-        SendGateCommand(routing, playerId, ContractsKafkaBindBattleEventEventId,
-                        event.SerializeAsString());
-    }
-
-    // 解绑:战斗结束/作废。gate 侧按 battle_id 匹配当前绑定,迟到的解绑不清新战斗。
-    void SendUnbindBattle(const ::BattleRouting &routing, const uint64_t playerId,
-                          const uint64_t battleId)
-    {
-        contracts::kafka::UnbindBattleEvent event;
-        event.set_session_id(routing.session_id());
-        event.set_battle_id(battleId);
-        event.set_player_id(playerId);
-
-        SendGateCommand(routing, playerId, ContractsKafkaUnbindBattleEventEventId,
-                        event.SerializeAsString());
+        static std::unordered_map<uint32_t, uint64_t> droppedByMessageId;
+        uint64_t &count = droppedByMessageId[messageId];
+        if ((count++ & 0x3FF) == 0)
+        {
+            LOG_INFO << "metric=battle_frame_dropped_no_direct message_id=" << messageId
+                     << " dropped_total=" << count
+                     << " latest_battle_id=" << battleId << " latest_player_id=" << playerId
+                     << ",玩家无活直连,战斗帧不回落 gate(客户端直连就绪后 GetBattleState 补拉)";
+        }
     }
 
     // 底层发送:显式给出 (scene_node_id, scene_instance_id)。
@@ -261,10 +255,16 @@ namespace
     }
 
     // 确认事件补发策略(与 scene 侧 player_battle.h 的锁保留期对齐):
-    //   scene 备战期锁 EX = prepare_deadline(2 人 30s / 5 人 48s / 10 人 78s)+ 60s 余量,
-    //   备战到期只摘组件不删锁,锁在期间迟到的确认仍可重建冻结。补发窗口取 150s ≥ 78+60,
-    //   窗口内每 10s 一次(scene 已 FIGHTING 时幂等忽略,开销是每玩家一条小消息)。
-    constexpr uint64_t kConfirmResendWindowMs = 150 * 1000;
+    //   scene 备战期锁 EX = prepare_deadline 剩余秒数 + PlayerBattleSystem::kLockExtraTtlSec(60s),
+    //   备战到期只摘组件不删锁,锁在期间迟到的确认仍可重建冻结。
+    //   prepare_deadline = gather 起点 + match 的 matchedTicketTTLFor(组大小)(go/match queue.go),
+    //   现行公式 ⌈N×6 + 2×(6.1+5) + 3⌉ + 10 → 1/2/5/10 人依次 42/48/66/96s;最大组 10 人(5v5),
+    //   所以锁最晚在 gather 起点 +96+60=156s 过期。补发窗口从建房起算,建房晚于 gather 起点,
+    //   取 180s ≥ 156s,多出的 24s 吸收 match / scene / battle 三方墙钟偏差与锁 EX 的秒级取整。
+    //   依赖:match 改 matchedTicketTTLFor 公式、把 MatchedTicketTTLSeconds 配到公式值之上、放大组
+    //   上限,或 scene 改 kLockExtraTtlSec 时,本窗口必须同步保持 ≥ 最大 TTL + kLockExtraTtlSec。
+    //   窗口内每 10s 一次(scene 已 FIGHTING 时幂等忽略,开销是每玩家一条小消息;收尾即停表)。
+    constexpr uint64_t kConfirmResendWindowMs = 180 * 1000;
     constexpr double kConfirmResendIntervalSec = 10.0;
 
     // 确认:CreateBattle 成功后每玩家一条 BattleConfirmedEvent,scene 据此 PREPARING→FIGHTING
@@ -450,12 +450,6 @@ namespace
         return true;
     }
 
-    // 本节点 node_id(BindBattleEvent 需要;gNode 在 Node 构造时已就绪)。
-    uint32_t SelfNodeId()
-    {
-        return gNode != nullptr ? gNode->GetNodeId() : 0;
-    }
-
 } // namespace
 
 BattleRoomManager &BattleRoomManager::Instance()
@@ -467,8 +461,26 @@ BattleRoomManager &BattleRoomManager::Instance()
 
 BattleRoomManager::BattleRoom *BattleRoomManager::FindRoom(const uint64_t battleId)
 {
-    const auto it = rooms_.find(battleId);
-    return it == rooms_.end() ? nullptr : it->second.get();
+    return rooms_.Find(battleId);
+}
+
+BattleRoomManager::BattleRoom *BattleRoomManager::EmplaceRoom(std::unique_ptr<BattleRoom> room)
+{
+    const auto battleId = room->battleId;
+    // 先插表后回调(房间表保证):回调方(Agones 单元计数)看到的是"确实已创建"的房间
+    auto *inserted = rooms_.Emplace(battleId, std::move(room));
+    if (inserted == nullptr)
+    {
+        // 表里那间保持原样;按值接管的新房间随形参销毁(插表前没有任何副作用)
+        LOG_ERROR << "EmplaceRoom 重复插表(调用方幂等判定失效),新建的房间对象随之丢弃: battle_id=" << battleId;
+    }
+    return inserted;
+}
+
+void BattleRoomManager::EraseRoom(const uint64_t battleId)
+{
+    // 先移除后回调(房间表保证):最后一个房间移除后 Agones 才能回 Ready,顺序反了会在房间还在时放出容量
+    rooms_.Erase(battleId);
 }
 
 void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
@@ -540,9 +552,6 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
         room->routingByPlayer.emplace(snapshot.player_id(), snapshot.routing());
     }
 
-    auto *roomPtr = room.get();
-    rooms_.emplace(battleId, std::move(room));
-
     // 整场 deadline:超时强制平局收尾(battle_node.proto 契约)。
     // match 没填时按"回合上限 + 2 回合余量"兜底 —— 房间是纯内存对象,
     // 没有整场 deadline 的房间在玩家全部掉线后会靠回合超时一直空转到打满,
@@ -554,6 +563,37 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
         deadlineMs = nowMs + static_cast<uint64_t>(turnbattle::kDefaultMaxRounds + 2) *
                                  turnbattle::kRoundDurationMs;
     }
+    // 票据 expire_at_ms 取房间作废期限,必须在签票之前落到房间上
+    room->deadlineMs = deadlineMs;
+
+    // fail-closed 预签(turn-based §22 D70):直连是战斗唯一通路,签不出票的玩家连不上这局,
+    // 放他进来只会让他全程挂机被默认普攻。所以在插表、装定时器、推送、发确认事件这些副作用
+    // **之前**为全体参战者签好票;任一人签不出就整局拒绝 —— 此刻房间还是没插表的局部对象,
+    // 拒绝等于什么都没发生,match 的通用补偿(DestroyBattle 幂等 → CancelBattlePrepare)即可收尾。
+    std::map<uint64_t, ::BattleAssignedS2C> assignmentByPlayer;
+    for (const auto &[playerId, routing] : room->routingByPlayer)
+    {
+        if (!BuildAssignment(*room, playerId, ::BATTLE_TICKET_ROLE_PARTICIPANT,
+                             assignmentByPlayer[playerId]))
+        {
+            LOG_ERROR << "metric=battle_ticket_issue_failed battle_id=" << battleId
+                      << " player_id=" << playerId << " role=participant"
+                      << ",参战票据签不出,拒绝开局(kServiceUnavailable)";
+            response.mutable_error_message()->set_id(kServiceUnavailable);
+            return;
+        }
+    }
+
+    // 插表 = 房间生命周期起点(EmplaceRoom 随即通知 Agones 单元已创建);此前的拒绝路径都没有副作用
+    auto *roomPtr = EmplaceRoom(std::move(room));
+    if (roomPtr == nullptr)
+    {
+        // 开头已判过幂等且同一 loop 任务内无人插表,走到这里是程序缺陷(EmplaceRoom 已打 ERROR)。
+        // 按幂等命中处理:回 OK、不设 error_message。表里那间同 battle_id 的房间是真的在打,
+        // 回错误会诱发 match 的补偿 DestroyBattle(battle_id),把它一起销毁。
+        return;
+    }
+
     roomPtr->battleTimer.RunAfter(static_cast<double>(deadlineMs - nowMs) / 1000.0,
                                   [this, battleId]
                                   { OnBattleDeadline(battleId); });
@@ -561,8 +601,6 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     // 第一回合行动收集窗口
     ArmRoundTimer(*roomPtr);
 
-    // 每参与者:先绑定(后续 SubmitBattleAction 才能经 gate 路由进来),再推开战包
-    const auto nodeId = SelfNodeId();
     ::BattleStartS2C start;
     start.set_battle_id(battleId);
     *start.mutable_state() = roomPtr->engine.BuildStateSnapshot();
@@ -570,22 +608,18 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     // 引擎无时钟,行动截止由节点按房间 timer 回填
     start.mutable_state()->set_action_deadline_ms(roomPtr->actionDeadlineMs);
 
-    // 票据 expire_at_ms 取房间作废期限,必须在签票之前落到房间上
-    roomPtr->deadlineMs = deadlineMs;
-
     for (const auto &[playerId, routing] : roomPtr->routingByPlayer)
     {
-        SendBindBattle(routing, playerId, battleId, nodeId);
-        // 直连落点分配先于开战包(同 key 保序,D26):客户端拿到票据后建第二条连接,
-        // 此刻还没有直连,两条都经 Kafka→gate 回落下发
-        PushAssignment(*roomPtr, playerId, routing, ::BATTLE_TICKET_ROLE_PARTICIPANT);
+        // 落点分配先于开战包(同 key 保序):两条都是大厅公告 —— 此刻还没有直连,
+        // 经 Kafka→gate 回落下发;客户端拿到票据后建直连,此后的战斗帧只走直连
+        PushAssignment(*roomPtr, playerId, routing, assignmentByPlayer.at(playerId));
         // 每人一份:剔除他人冷却、填本人道具余量(G7)。开局冷却本就是空的,
         // 这里主要是把 self_items 带给客户端,让道具面板一开局就有数
         ::BattleStartS2C personalStart = start;
         RedactStateForViewer(*personalStart.mutable_state(), playerId);
         FillSelfItems(*roomPtr, *personalStart.mutable_state(), playerId);
-        PushToPlayer(*roomPtr, playerId, routing, BattleClientPlayerNotifyBattleStartMessageId,
-                     personalStart);
+        PushLobbyAnnouncement(*roomPtr, playerId, routing, BattleClientPlayerNotifyBattleStartMessageId,
+                              personalStart);
         // 向玩家所在 scene 确认开局:PREPARING→FIGHTING,作废期限切到本房间的正式 deadline
         // (与 battleTimer 同一个值,scene reaper 与房间强制收尾的时限口径一致)
         SendBattleConfirmedEvent(routing, playerId, battleId, deadlineMs);
@@ -619,22 +653,18 @@ void BattleRoomManager::HandleDestroyBattle(const ::DestroyBattleRequest &reques
         return;
     }
 
-    // 补偿/回滚路径:只解绑,不发结算(冻结解除由 match 调 scene CancelBattlePrepare
-    // 或 scene reaper 按 deadline 兜底,设计文档 §3.2)。
+    // 补偿/回滚路径:不发结算(冻结解除由 match 调 scene CancelBattlePrepare
+    // 或 scene reaper 按 deadline 兜底,设计文档 §3.2);推观众终局,并关闭直连。
     // 注意:scene 收到过本房间的确认事件后会拒绝 CancelBattlePrepare(已 FIGHTING 视为过期回滚),
     // 此时玩家冻结要等 reaper 按 deadline_ms 解除 —— 房间已销毁无法再发结算,属已知取舍。
     room->roundTimer.Cancel();
     room->battleTimer.Cancel();
     room->confirmResendTimer.Cancel();
-    for (const auto &[playerId, routing] : room->routingByPlayer)
-    {
-        SendUnbindBattle(routing, playerId, battleId);
-    }
     // 观众同步清退:作废路径无胜负,outcome 留 ONGOING(player_battle.proto 契约)
-    NotifySpectateEndAndUnbind(*room, ::SPECTATE_END_BATTLE_ABORTED, ::BATTLE_OUTCOME_ONGOING);
+    NotifySpectateEndAndClose(*room, ::SPECTATE_END_BATTLE_ABORTED, ::BATTLE_OUTCOME_ONGOING);
     // 作废路径没有终局包可等,直接关直连;客户端凭 GetBattleState 空响应 / 断连收 UI
     CloseDirectConnections(*room, "destroyed");
-    rooms_.erase(battleId);
+    EraseRoom(battleId);
 
     LOG_INFO << "DestroyBattle 完成: battle_id=" << battleId << " reason=" << request.reason();
 }
@@ -643,7 +673,8 @@ void BattleRoomManager::HandleSubmitBattleAction(const ::SessionDetails &session
                                                  const ::SubmitBattleActionRequest &request,
                                                  ::SubmitBattleActionResponse &response)
 {
-    // 权威身份只认 gate 注入的会话 metadata,请求体里没有也不允许有 player_id
+    // 权威身份来自已验证的票据(直连面合成的 SessionDetails,turn-based D28),
+    // 请求体里没有也不允许有 player_id
     const auto playerId = sessionDetails.player_id();
     if (playerId == 0)
     {
@@ -651,8 +682,6 @@ void BattleRoomManager::HandleSubmitBattleAction(const ::SessionDetails &session
         response.mutable_error_message()->set_id(kPlayerNotFoundInSession);
         return;
     }
-    // R10:会话/gate 变过就地刷新路由,否则 Kafka→gate 的回落推送还投向旧会话。
-    RefreshRoutingFromSession(sessionDetails);
 
     auto *room = FindRoom(request.battle_id());
     if (room == nullptr)
@@ -699,7 +728,7 @@ void BattleRoomManager::HandleSubmitBattleAction(const ::SessionDetails &session
     if (allReady)
     {
         // 全员就绪提前结算,不等 action_deadline。
-        // 注意:ResolveRound 可能走到 FinishBattle + rooms_.erase,之后 room 悬空 ——
+        // 注意:ResolveRound 可能走到 FinishBattle + EraseRoom,之后 room 悬空 ——
         // 任何依赖 room 的响应字段都必须在这一行之前填完
         ResolveRound(room->battleId);
     }
@@ -709,10 +738,9 @@ void BattleRoomManager::HandleGetBattleState(const ::SessionDetails &sessionDeta
                                              const ::GetBattleStateRequest &request,
                                              ::BattleStateS2C &response)
 {
+    // 权威身份来自已验证的票据(turn-based D28)。参战者直连就绪后的第一条包就是它
+    // (§22 D69:参战者不在握手时推快照,由这里补拉)
     const auto playerId = sessionDetails.player_id();
-    // R10:重连后客户端必发的第一条包就是 GetBattleState —— 这里刷新等于让路由
-    // 在"客户端一回来"的那一刻自愈。
-    RefreshRoutingFromSession(sessionDetails);
     auto *room = FindRoom(request.battle_id());
     // 参战者与观众都放行(观众重进观战画面补拉同一份快照,§10.5)
     const bool isMember =
@@ -759,7 +787,8 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
         return;
     }
 
-    // fail-closed:gate_instance_id 缺失时对该观众的一切出站都会被防僵尸校验丢弃,
+    // fail-closed:落点分配包是大厅公告,观众还没有直连时只能经 Kafka→gate 回落送达;
+    // gate_instance_id 缺失会被防僵尸校验丢弃,观众永远拿不到票据、建不了直连,
     // 登记进来也是聋子观众,直接拒绝让 match 重组路由
     if (observerId == 0 || request.routing().gate_instance_id().empty())
     {
@@ -770,8 +799,8 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
         return;
     }
 
-    // 参战者不能观战自己所在的战斗:观众绑定与参战绑定共用 SessionInfo 槽位,
-    // 放行会让观众解绑把参战绑定打掉(D11 互斥的房间侧兜底)
+    // 参战者不能观战自己所在的战斗:directConnByPlayer 按 player_id 只有一个槽位,
+    // 参战和观战共用,放行会让观战直连顶掉参战直连(D11 互斥的房间侧兜底)
     if (room->routingByPlayer.find(observerId) != room->routingByPlayer.end())
     {
         LOG_WARN << "AddObserver 观众是参战者: battle_id=" << battleId
@@ -782,7 +811,7 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
 
     // 幂等:match gRPC 超时重试命中存量登记。但 match 超时回滚(DEL 观战标记)后
     // 玩家可能换会话重试(重连换 gate/session),存量路由指向的是旧会话:
-    // 不比对就重推,首帧和后续推送全打到旧会话,新会话也永远收不到绑定。
+    // 不比对就重推,落点分配包打到旧会话,新会话永远拿不到票据。
     if (const auto it = room->routingByObserver.find(observerId);
         it != room->routingByObserver.end())
     {
@@ -790,29 +819,46 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
             it->second.session_id() == request.routing().session_id() &&
             it->second.gate_node_id() == request.routing().gate_node_id() &&
             it->second.gate_instance_id() == request.routing().gate_instance_id();
-        if (sameSession)
+
+        // 两条幂等路径都先重签(turn-based §22 D70 fail-closed)。签不出票 = 这名观众连不上直连、
+        // 看不到任何战斗帧;而 match 收到任何错误都会 DEL 观战标记(watchbattlelogic),
+        // 房间侧必须同步摘除并关其直连,否则 match 认为他已不在观战、房间里却还挂着他。
+        ::BattleAssignedS2C assigned;
+        if (!BuildAssignment(*room, observerId, ::BATTLE_TICKET_ROLE_OBSERVER, assigned))
         {
-            // 同会话重试:绑定仍有效,只重推首帧即可
-            LOG_INFO << "AddObserver 幂等命中,重推首帧: battle_id=" << battleId
-                     << " observer=" << observerId;
-            PushAssignment(*room, observerId, it->second, ::BATTLE_TICKET_ROLE_OBSERVER);
-            PushSpectateState(*room, observerId, it->second);
+            LOG_ERROR << "metric=battle_ticket_issue_failed battle_id=" << battleId
+                      << " player_id=" << observerId << " role=observer"
+                      << " path=" << (sameSession ? "idempotent_same_session" : "idempotent_session_changed")
+                      << ",观战票据签不出,摘除观众并拒绝(kServiceUnavailable)";
+            room->routingByObserver.erase(it);
+            room->observerNames.erase(observerId);
+            CloseDirectConnectionOf(*room, observerId, "observer_ticket_issue_failed");
+            response.mutable_error_message()->set_id(kServiceUnavailable);
             return;
         }
-        LOG_INFO << "AddObserver 幂等命中但会话已变,刷新路由重绑: battle_id=" << battleId
+
+        if (sameSession)
+        {
+            // 同会话重试:重推落点分配;观战快照是战斗帧,已有活直连时照常直发,
+            // 否则丢弃,由客户端建直连时握手快照补上(§22 D69)
+            LOG_INFO << "AddObserver 幂等命中,重推落点分配: battle_id=" << battleId
+                     << " observer=" << observerId;
+            PushAssignment(*room, observerId, it->second, assigned);
+            PushSpectateState(*room, observerId);
+            return;
+        }
+        LOG_INFO << "AddObserver 幂等命中但会话已变,刷新路由: battle_id=" << battleId
                  << " observer=" << observerId
                  << " old_session_id=" << it->second.session_id()
                  << " new_session_id=" << request.routing().session_id();
         it->second = request.routing();
         room->observerNames[observerId] = request.observer_name();
         // 会话变了 = 旧客户端实例已不在(崩溃 / 换网):它留下的直连很可能半开,内核尚未
-        // 感知、connected() 仍为 true,分配包和首帧会被写进死 socket 而不是回落到新会话。
-        // 先关旧直连,让下面两条推送走 Kafka→gate 到新会话;新客户端凭新票重新挂接。
+        // 感知、connected() 仍为 true,落点分配包会被写进死 socket 而不是回落到新会话。
+        // 先关旧直连,让分配包走 Kafka→gate 到新会话;新客户端凭新票重新挂接,
+        // 观战首帧随握手下发(§22 D69),这里不推 —— 直连刚关,推了也只会被战斗帧出口丢弃。
         CloseDirectConnectionOf(*room, observerId, "observer_session_changed");
-        // 先绑定后首帧:同 topic 同 key(player_id),gate 必先建绑定再下发首帧(D10)
-        SendBindBattle(request.routing(), observerId, battleId, SelfNodeId());
-        PushAssignment(*room, observerId, it->second, ::BATTLE_TICKET_ROLE_OBSERVER);
-        PushSpectateState(*room, observerId, it->second);
+        PushAssignment(*room, observerId, it->second, assigned);
         return;
     }
 
@@ -824,14 +870,24 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
         return;
     }
 
+    // fail-closed 预签(turn-based §22 D70):登记之前签票,签不出不登记 ——
+    // 观众连不上直连就看不到任何战斗帧,登记进来只会占一个观众名额
+    ::BattleAssignedS2C assigned;
+    if (!BuildAssignment(*room, observerId, ::BATTLE_TICKET_ROLE_OBSERVER, assigned))
+    {
+        LOG_ERROR << "metric=battle_ticket_issue_failed battle_id=" << battleId
+                  << " player_id=" << observerId << " role=observer path=new"
+                  << ",观战票据签不出,拒绝观战(kServiceUnavailable)";
+        response.mutable_error_message()->set_id(kServiceUnavailable);
+        return;
+    }
+
     room->routingByObserver.emplace(observerId, request.routing());
     room->observerNames.emplace(observerId, request.observer_name());
 
-    // 先绑定后首帧:同 topic 同 key(player_id),gate 必先建绑定再下发首帧(D10)
-    SendBindBattle(request.routing(), observerId, battleId, SelfNodeId());
-    // 观众同样先收落点分配再收首帧(D26)
-    PushAssignment(*room, observerId, request.routing(), ::BATTLE_TICKET_ROLE_OBSERVER);
-    PushSpectateState(*room, observerId, request.routing());
+    // 只下发落点分配(大厅公告)。观战首帧随直连握手下发(§22 D69 snapshot on connect):
+    // 此刻观众一定还没有直连,在这里推首帧只会被战斗帧出口丢弃
+    PushAssignment(*room, observerId, request.routing(), assigned);
 
     LOG_INFO << "AddObserver 成功: battle_id=" << battleId
              << " observer=" << observerId << " name=" << request.observer_name()
@@ -855,13 +911,13 @@ void BattleRoomManager::HandleRemoveObserver(const ::RemoveObserverRequest &requ
         return;
     }
 
-    // 被动清退(去排队互斥等):先告知原因再解绑,客户端据 reason 关观战 UI
+    // 被动清退(去排队互斥等):先告知原因再关直连,客户端据 reason 关观战 UI。
+    // 战斗帧只走直连:观众没有直连时不回落,客户端只能靠自身超时 / 直连 FIN 收起观战 UI
     ::SpectateEndS2C end;
     end.set_battle_id(battleId);
     end.set_outcome(::BATTLE_OUTCOME_ONGOING);
     end.set_reason(::SPECTATE_END_REMOVED);
-    PushToPlayer(*room, observerId, it->second, BattleClientPlayerNotifySpectateEndMessageId, end);
-    SendUnbindBattle(it->second, observerId, battleId);
+    PushBattleFrame(*room, observerId, BattleClientPlayerNotifySpectateEndMessageId, end);
 
     room->routingByObserver.erase(it);
     room->observerNames.erase(observerId);
@@ -876,7 +932,7 @@ void BattleRoomManager::HandleStopWatchBattle(const ::SessionDetails &sessionDet
                                               const ::StopWatchBattleRequest &request,
                                               ::StopWatchBattleResponse &response)
 {
-    // 权威身份只认 gate 注入的会话 metadata(请求体里的 battle_id 可伪造,
+    // 权威身份来自已验证的票据(请求体里的 battle_id 可伪造,
     // 但只用来查房,身份不经它)
     const auto playerId = sessionDetails.player_id();
     if (playerId == 0)
@@ -885,7 +941,6 @@ void BattleRoomManager::HandleStopWatchBattle(const ::SessionDetails &sessionDet
         response.mutable_error_message()->set_id(kPlayerNotFoundInSession);
         return;
     }
-    RefreshRoutingFromSession(sessionDetails); // R10
 
     auto *room = FindRoom(request.battle_id());
     if (room == nullptr)
@@ -901,7 +956,6 @@ void BattleRoomManager::HandleStopWatchBattle(const ::SessionDetails &sessionDet
     }
 
     // 主动退出不推 SpectateEnd:是客户端自己发起的动作,回包即确认
-    SendUnbindBattle(it->second, playerId, room->battleId);
     room->routingByObserver.erase(it);
     room->observerNames.erase(playerId);
     // 退出请求可能就是从这条直连来的,应答由直连面在本函数返回后写出;关闭已推迟到本轮
@@ -923,7 +977,6 @@ void BattleRoomManager::HandleSetAutoBattle(const ::SessionDetails &sessionDetai
         response.mutable_error_message()->set_id(kPlayerNotFoundInSession);
         return;
     }
-    RefreshRoutingFromSession(sessionDetails); // R10
 
     auto *room = FindRoom(request.battle_id());
     if (room == nullptr)
@@ -1022,7 +1075,7 @@ void BattleRoomManager::ResolveRound(const uint64_t battleId)
     if (outcome != ::BATTLE_OUTCOME_ONGOING)
     {
         FinishBattle(*room, outcome, ::SPECTATE_END_BATTLE_FINISHED);
-        rooms_.erase(battleId);
+        EraseRoom(battleId);
     }
 }
 
@@ -1048,7 +1101,7 @@ void BattleRoomManager::OnBattleDeadline(const uint64_t battleId)
     // 观众侧 deadline 强制收尾归 ABORTED(player_battle.proto 枚举注释口径);
     // outcome 带上强制盖章结果,观众端可与参战者的平局结算对齐展示
     FinishBattle(*room, outcome, ::SPECTATE_END_BATTLE_ABORTED);
-    rooms_.erase(battleId);
+    EraseRoom(battleId);
 }
 
 void BattleRoomManager::ResendBattleConfirmed(const uint64_t battleId)
@@ -1106,23 +1159,22 @@ void BattleRoomManager::FinishBattle(BattleRoom &room, const ::eBattleOutcome ou
             deadPlayerIds.push_back(playerId);
         }
 
-        // 顺序即协议:客户端先收终局包,scene 再应用结算,最后 gate 解绑(§3.1)
+        // 顺序:终局包先于关直连(下面 CloseDirectConnections 在全部终局包排队之后)。
+        // 终局包是战斗帧,只走直连(turn-based §22 D68);没有直连的玩家收不到它,
+        // 但 scene 应用结算后会经大厅再推一份 BattleEndS2C(scene 自己的下行,不归 D39 管),
+        // 客户端两条通道都挂 NotifyBattleEnd 并按 battle_id 幂等。
         ::BattleEndS2C end;
         end.set_battle_id(room.battleId);
         end.set_outcome(outcome);
         *end.mutable_settlement() = settlement;
-        PushToPlayer(room, playerId, routing, BattleClientPlayerNotifyBattleEndMessageId, end);
+        PushBattleFrame(room, playerId, BattleClientPlayerNotifyBattleEndMessageId, end);
 
         // R07:先落库、后投递、未销账则重投(重投时重新解析目标)。
-        // 投递被推迟到 Redis 落库回调里,所以它现在**晚于**下面这条解绑发出。
-        // 这不破坏 §3.1 的顺序协议:那条协议约束的是"客户端先收终局包",而解绑走
-        // gate topic、结算走 scene topic,跨 topic 本来就没有顺序保证。真正要保的是
-        // "结算在被投递之前已经持久化",那正是这次调整的目的。
+        // 投递被推迟到 Redis 落库回调里;真正要保的是"结算在被投递之前已经持久化"。
         DispatchSettlementDurably(routing, playerId, settlement);
-        SendUnbindBattle(routing, playerId, room.battleId);
     }
 
-    NotifySpectateEndAndUnbind(room, spectateReason, outcome);
+    NotifySpectateEndAndClose(room, spectateReason, outcome);
     // 终局包已全部排队,直连从此没有存在意义:shutdown 让它们先 flush 再 FIN(D23)
     CloseDirectConnections(room, "battle_finished");
 
@@ -1170,8 +1222,8 @@ void BattleRoomManager::FinishBattle(BattleRoom &room, const ::eBattleOutcome ou
 
 void BattleRoomManager::BroadcastTurnResult(const BattleRoom &room, const ::TurnResultS2C &result)
 {
-    // 每玩家一条 PushToPlayerEvent,key=player_id:保证同一玩家的
-    // TurnResult 与随后的 BattleEnd 在 gate 侧有序(宪法 §7 不变量 3)。
+    // 战斗帧只走直连(turn-based §22 D68):每玩家一条,同一条 TCP 连接天然保证
+    // TurnResult 先于随后的 BattleEnd;没有活直连的玩家这一帧直接丢弃,直连就绪后 GetBattleState 补拉。
     // 每人一份拷贝:事件流(events/action_order)人人相同,只有 state 按视角裁剪(G7)。
     // 本来就是每个收信人各序列化一次,这里只多一次消息对象拷贝。
     for (const auto &[playerId, routing] : room.routingByPlayer)
@@ -1179,8 +1231,7 @@ void BattleRoomManager::BroadcastTurnResult(const BattleRoom &room, const ::Turn
         ::TurnResultS2C personal = result;
         RedactStateForViewer(*personal.mutable_state(), playerId);
         FillSelfItems(room, *personal.mutable_state(), playerId);
-        PushToPlayer(room, playerId, routing, BattleClientPlayerNotifyTurnResultMessageId,
-                     personal);
+        PushBattleFrame(room, playerId, BattleClientPlayerNotifyTurnResultMessageId, personal);
     }
     // 观众版只做一份(全员冷却都剔除、不带任何人的道具余量),消息号不同
     //(D8:客户端观战/参战两套状态机互不干扰)
@@ -1190,8 +1241,8 @@ void BattleRoomManager::BroadcastTurnResult(const BattleRoom &room, const ::Turn
         RedactStateForViewer(*spectate.mutable_state(), 0);
         for (const auto &[observerId, routing] : room.routingByObserver)
         {
-            PushToPlayer(room, observerId, routing,
-                         BattleClientPlayerNotifySpectateTurnResultMessageId, spectate);
+            PushBattleFrame(room, observerId, BattleClientPlayerNotifySpectateTurnResultMessageId,
+                            spectate);
         }
     }
 }
@@ -1229,8 +1280,7 @@ void BattleRoomManager::FillSelfItems(const BattleRoom &room, ::BattleStateS2C &
     }
 }
 
-void BattleRoomManager::PushSpectateState(const BattleRoom &room, const uint64_t observerId,
-                                          const ::BattleRouting &routing) const
+void BattleRoomManager::PushSpectateState(const BattleRoom &room, const uint64_t observerId) const
 {
     ::SpectateStateS2C state;
     *state.mutable_state() = room.engine.BuildStateSnapshot();
@@ -1241,12 +1291,12 @@ void BattleRoomManager::PushSpectateState(const BattleRoom &room, const uint64_t
     RedactStateForViewer(*state.mutable_state(), 0);
     state.set_observer_count(static_cast<uint32_t>(room.routingByObserver.size()));
 
-    PushToPlayer(room, observerId, routing, BattleClientPlayerNotifySpectateStateMessageId, state);
+    PushBattleFrame(room, observerId, BattleClientPlayerNotifySpectateStateMessageId, state);
 }
 
-void BattleRoomManager::NotifySpectateEndAndUnbind(BattleRoom &room,
-                                                   const ::eSpectateEndReason reason,
-                                                   const ::eBattleOutcome outcome)
+void BattleRoomManager::NotifySpectateEndAndClose(BattleRoom &room,
+                                                  const ::eSpectateEndReason reason,
+                                                  const ::eBattleOutcome outcome)
 {
     if (room.routingByObserver.empty())
     {
@@ -1258,12 +1308,11 @@ void BattleRoomManager::NotifySpectateEndAndUnbind(BattleRoom &room,
     end.set_outcome(outcome);
     end.set_reason(reason);
 
-    // 同 key(player_id)先推终局包再解绑:gate 侧保证观众先看到结束原因
+    // 同一条直连先推终局包再关(关闭推迟到本轮 loop 之后,shutdown 等输出缓冲排空再 FIN):
+    // 观众先看到结束原因。没有直连的观众收不到它(战斗帧不回落,§22 D68)
     for (const auto &[observerId, routing] : room.routingByObserver)
     {
-        PushToPlayer(room, observerId, routing,
-                     BattleClientPlayerNotifySpectateEndMessageId, end);
-        SendUnbindBattle(routing, observerId, room.battleId);
+        PushBattleFrame(room, observerId, BattleClientPlayerNotifySpectateEndMessageId, end);
         CloseDirectConnectionOf(room, observerId, "spectate_end");
     }
 
@@ -1277,54 +1326,107 @@ void BattleRoomManager::NotifySpectateEndAndUnbind(BattleRoom &room,
 
 void BattleRoomManager::AbortAllRooms(const std::string &reason)
 {
-    if (rooms_.empty())
+    if (rooms_.Empty())
     {
         return;
     }
 
-    LOG_INFO << "作废全部战斗房间: rooms=" << rooms_.size() << " reason=" << reason;
-    for (auto &[battleId, room] : rooms_)
+    LOG_INFO << "作废全部战斗房间: rooms=" << rooms_.Size() << " reason=" << reason;
+    // 先抄 battle_id 再逐个 EraseRoom:移除走唯一删除口,每个房间都触发一次 onRemoved
+    // (Agones 单元计数归零);不能边遍历房间表边删。
+    for (const auto battleId : rooms_.Ids())
     {
+        auto *room = FindRoom(battleId);
+        if (room == nullptr)
+        {
+            continue;
+        }
         room->roundTimer.Cancel();
         room->battleTimer.Cancel();
         room->confirmResendTimer.Cancel();
-        // 只解绑不结算:战斗作废,scene reaper 按 InBattleComp.deadline_ms 解冻(§3.2)
-        for (const auto &[playerId, routing] : room->routingByPlayer)
-        {
-            SendUnbindBattle(routing, playerId, battleId);
-        }
+        // 不结算:战斗作废,scene reaper 按 InBattleComp.deadline_ms 解冻(§3.2)。
         // 停机作废无胜负:观众收 ABORTED + ONGOING
-        NotifySpectateEndAndUnbind(*room, ::SPECTATE_END_BATTLE_ABORTED,
-                                   ::BATTLE_OUTCOME_ONGOING);
+        NotifySpectateEndAndClose(*room, ::SPECTATE_END_BATTLE_ABORTED, ::BATTLE_OUTCOME_ONGOING);
         CloseDirectConnections(*room, reason.c_str());
+        EraseRoom(battleId);
     }
-    rooms_.clear();
 }
 
-// ---- 客户端直连(设计文档 §18,D23-D28) ----
+// ---- 客户端直连(设计文档 §18,D23-D28;下行出口 turn-based §22 D68) ----
 
-void BattleRoomManager::PushToPlayer(const BattleRoom &room, const uint64_t playerId,
-                                     const ::BattleRouting &routing, const uint32_t messageId,
-                                     const ::google::protobuf::Message &message) const
+muduo::net::TcpConnectionPtr BattleRoomManager::LiveDirectConnOf(const BattleRoom &room,
+                                                                 const uint64_t playerId) const
 {
-    if (edge_ != nullptr)
+    if (edge_ == nullptr)
     {
-        const auto it = room.directConnByPlayer.find(playerId);
-        muduo::net::TcpConnectionPtr conn;
-        if (it != room.directConnByPlayer.end())
-        {
-            conn = it->second.lock();   // 锁不住 == 直连已断 == 缺项 → 走下面的 Kafka 回落
-        }
-        if (conn && conn->connected())
-        {
-            ::MessageContent content;
-            content.set_message_id(messageId);
-            content.set_serialized_message(message.SerializeAsString());
-            edge_->Send(conn, content);
-            return;
-        }
+        return nullptr;
     }
-    PushMessageViaGate(routing, playerId, messageId, message);
+    const auto it = room.directConnByPlayer.find(playerId);
+    if (it == room.directConnByPlayer.end())
+    {
+        return nullptr;
+    }
+    // 锁不住 == 直连已断 == 缺项(AGENTS.md §11.7:只存 weak,用时 lock)
+    auto conn = it->second.lock();
+    if (!conn || !conn->connected())
+    {
+        return nullptr;
+    }
+    return conn;
+}
+
+namespace
+{
+    // 经已验证的直连写一条 S2C(MessageContent 信封,与大厅连接同一线协议)。
+    void SendOverDirect(const BattleClientEdge &edge, const muduo::net::TcpConnectionPtr &conn,
+                        const uint32_t messageId, const ::google::protobuf::Message &message)
+    {
+        ::MessageContent content;
+        content.set_message_id(messageId);
+        content.set_serialized_message(message.SerializeAsString());
+        edge.Send(conn, content);
+    }
+} // namespace
+
+void BattleRoomManager::PushBattleFrame(const BattleRoom &room, const uint64_t playerId,
+                                        const uint32_t messageId,
+                                        const ::google::protobuf::Message &message) const
+{
+    const auto conn = LiveDirectConnOf(room, playerId);
+    switch (battle_push_policy::Decide(battle_push_policy::PushCategory::kBattleFrame, conn != nullptr))
+    {
+    case battle_push_policy::PushRoute::kDirect:
+        SendOverDirect(*edge_, conn, messageId, message);
+        return;
+    case battle_push_policy::PushRoute::kViaGate:
+        // 战斗帧的判定不会产出 kViaGate(tests/battle_push_policy_test.cpp 钉住);
+        // 本出口也没有路由可回落,防御性按丢弃处理
+    case battle_push_policy::PushRoute::kDrop:
+        LogBattleFrameDroppedSampled(room.battleId, playerId, messageId);
+        return;
+    }
+}
+
+void BattleRoomManager::PushLobbyAnnouncement(const BattleRoom &room, const uint64_t playerId,
+                                              const ::BattleRouting &routing, const uint32_t messageId,
+                                              const ::google::protobuf::Message &message) const
+{
+    const auto conn = LiveDirectConnOf(room, playerId);
+    switch (battle_push_policy::Decide(battle_push_policy::PushCategory::kLobbyAnnouncement,
+                                       conn != nullptr))
+    {
+    case battle_push_policy::PushRoute::kDirect:
+        SendOverDirect(*edge_, conn, messageId, message);
+        return;
+    case battle_push_policy::PushRoute::kViaGate:
+        PushMessageViaGate(routing, playerId, messageId, message);
+        return;
+    case battle_push_policy::PushRoute::kDrop:
+        // 大厅公告的判定不会产出 kDrop(单测钉住);真出现说明判定契约被改坏了,必须响
+        LOG_ERROR << "battle 大厅公告被判定丢弃(battle_push_policy 契约破坏): battle_id=" << room.battleId
+                  << " player_id=" << playerId << " message_id=" << messageId;
+        return;
+    }
 }
 
 bool BattleRoomManager::BuildAssignment(const BattleRoom &room, const uint64_t playerId,
@@ -1344,10 +1446,21 @@ bool BattleRoomManager::BuildAssignment(const BattleRoom &room, const uint64_t p
     {
         return false;
     }
+    // 本函数只在 loop 线程执行(Handle* 经 runInLoop 投递):GetNodeInfo() 读 thread_local,
+    // 换到 gRPC 线程会拿到空 NodeInfo、整批静默拒签。
     const auto &self = gNode->GetNodeInfo();
-    if (self.endpoint().ip().empty() || self.endpoint().port() == 0)
+    // 客户端可达地址(集群外入口 D76/D78,规则唯一权威实现在 client_endpoint::ClientFacing):
+    // client_endpoint 可用就用它;否则 required=false 时回落 endpoint(podip 形态),
+    // required=true 或 endpoint 本身不可用时拿不到 —— 拒签,调用方按 D70 fail-closed 回 kServiceUnavailable。
+    const bool required = gNode->ClientEndpointRequired();
+    const auto clientFacing = client_endpoint::ClientFacing(self, required);
+    if (!clientFacing)
     {
-        LOG_ERROR << "battle 票据签发被拒: 本节点客户端面 endpoint 未就绪, battle_id=" << room.battleId;
+        LOG_ERROR << "battle 票据签发被拒: 本节点没有客户端可达地址, battle_id=" << room.battleId
+                  << " player_id=" << playerId
+                  << " endpoint=" << self.endpoint().ip() << ":" << self.endpoint().port()
+                  << " client_endpoint=" << self.client_endpoint().ip() << ":" << self.client_endpoint().port()
+                  << " required=" << (required ? 1 : 0);
         return false;
     }
 
@@ -1375,8 +1488,8 @@ bool BattleRoomManager::BuildAssignment(const BattleRoom &room, const uint64_t p
 
     out.Clear();
     out.set_battle_id(room.battleId);
-    out.set_host(self.endpoint().ip());
-    out.set_port(self.endpoint().port());
+    out.set_host(clientFacing->ip());
+    out.set_port(clientFacing->port());
     out.set_token_payload(payloadBytes);
     out.set_token_signature(signature);
     out.set_expire_at_ms(room.deadlineMs);
@@ -1385,17 +1498,12 @@ bool BattleRoomManager::BuildAssignment(const BattleRoom &room, const uint64_t p
 }
 
 void BattleRoomManager::PushAssignment(const BattleRoom &room, const uint64_t playerId,
-                                       const ::BattleRouting &routing, const ::eBattleTicketRole role) const
+                                       const ::BattleRouting &routing,
+                                       const ::BattleAssignedS2C &assigned) const
 {
-    ::BattleAssignedS2C assigned;
-    if (!BuildAssignment(room, playerId, role, assigned))
-    {
-        // 签不出票不阻断开局:该玩家仍能经 gate 中继打完这一局(D23 回落路径)
-        LOG_WARN << "battle 落点分配包未下发,玩家将全程走 gate 中继: battle_id=" << room.battleId
-                 << " player_id=" << playerId << " role=" << ::eBattleTicketRole_Name(role);
-        return;
-    }
-    PushToPlayer(room, playerId, routing, BattleClientPlayerNotifyBattleAssignedMessageId, assigned);
+    // 票据已由调用方预签(签不出时调用方已拒绝开局 / 拒绝观战,turn-based §22 D70)
+    PushLobbyAnnouncement(room, playerId, routing, BattleClientPlayerNotifyBattleAssignedMessageId,
+                          assigned);
 }
 
 bool BattleRoomManager::AttachDirectConnection(const uint64_t battleId, const uint64_t playerId,
@@ -1465,13 +1573,32 @@ void BattleRoomManager::DetachDirectConnection(const uint64_t battleId, const ui
     }
 }
 
+void BattleRoomManager::OnDirectConnectionVerified(const uint64_t battleId, const uint64_t playerId,
+                                                   const ::eBattleTicketRole role)
+{
+    // 参战者:客户端直连就绪时自己 GetBattleState 补拉(robot 与 Unity 同口径),这里不推
+    if (role != ::BATTLE_TICKET_ROLE_OBSERVER)
+    {
+        return;
+    }
+    const auto *room = FindRoom(battleId);
+    if (room == nullptr || room->routingByObserver.find(playerId) == room->routingByObserver.end())
+    {
+        return;
+    }
+    // snapshot on connect(turn-based §22 D69):观战首帧只随直连下发。刚挂接的直连就在
+    // directConnByPlayer 里,战斗帧出口会直发;万一握手应答写出后连接已断,照常按无直连丢弃,
+    // 客户端重连握手时再推一次。
+    PushSpectateState(*room, playerId);
+}
+
 namespace
 {
     // 推迟到本轮 loop 之后再关:shutdown() 与 forceCloseWithDelay() 都会**同步**把连接切到
     // kDisconnecting(muduo TcpConnection.cc),之后 connected()==false、send 一律丢弃。而
     // 调用本函数的 Handle*(StopWatchBattle / 打出最后一击的 SubmitBattleAction / SetAutoBattle)
     // 的应答要等 Handle* 返回后由直连面写出。queueInLoop 保证:应答先入输出缓冲 → shutdown
-    // 等排空再 FIN → 1s 后强关兜底不配合的对端。终局包(PushToPlayer)早已在缓冲里,顺序不变。
+    // 等排空再 FIN → 1s 后强关兜底不配合的对端。终局包(PushBattleFrame)早已在缓冲里,顺序不变。
     void ShutdownDirectConnAfterThisLoop(const muduo::net::TcpConnectionPtr &conn)
     {
         if (!conn)
@@ -1502,7 +1629,8 @@ void BattleRoomManager::CloseDirectConnectionOf(BattleRoom &room, const uint64_t
                  << " reason=" << reason;
         ShutdownDirectConnAfterThisLoop(conn);
     }
-    // 表里立刻摘除:从此对该玩家的 S2C 回落 Kafka→gate,不再往一条正在关闭的连接上写
+    // 表里立刻摘除:从此该玩家视为无活直连(战斗帧丢弃、大厅公告回落 Kafka→gate),
+    // 不再往一条正在关闭的连接上写
     room.directConnByPlayer.erase(it);
 }
 
@@ -1900,50 +2028,6 @@ void BattleRoomManager::ProbeActivityResultOne(const uint64_t battleId)
             }
         },
         "EXISTS %s", key.c_str());
-}
-
-void BattleRoomManager::RefreshRoutingFromSession(const ::SessionDetails &sessionDetails)
-{
-    // 只采信真的经 gate 转发过来的会话身份(直连面合成的那份没有 gate 身份)。
-    if (sessionDetails.gate_instance_id().empty() || sessionDetails.player_id() == 0)
-    {
-        return;
-    }
-
-    const auto playerId = sessionDetails.player_id();
-    auto refresh = [&sessionDetails, playerId](std::map<uint64_t, ::BattleRouting> &table,
-                                               const char *what, const uint64_t battleId)
-    {
-        const auto it = table.find(playerId);
-        if (it == table.end())
-        {
-            return;
-        }
-        auto &routing = it->second;
-        if (routing.session_id() == sessionDetails.session_id() &&
-            routing.gate_node_id() == sessionDetails.gate_node_id() &&
-            routing.gate_instance_id() == sessionDetails.gate_instance_id())
-        {
-            return;
-        }
-        LOG_INFO << "battle 刷新" << what << "路由(会话已变): battle_id=" << battleId
-                 << " player_id=" << playerId
-                 << " old_session_id=" << routing.session_id()
-                 << " new_session_id=" << sessionDetails.session_id()
-                 << " old_gate_node_id=" << routing.gate_node_id()
-                 << " new_gate_node_id=" << sessionDetails.gate_node_id();
-        routing.set_session_id(sessionDetails.session_id());
-        routing.set_gate_node_id(sessionDetails.gate_node_id());
-        routing.set_gate_instance_id(sessionDetails.gate_instance_id());
-    };
-
-    // 一个玩家同一时刻只可能在一个房间里参战(scene 侧 InBattleComp + battle:lock 串行化),
-    // 但可以同时观战别的局,所以两张表都扫。房间数是内存对象数量级,遍历成本可忽略。
-    for (auto &[battleId, room] : rooms_)
-    {
-        refresh(room->routingByPlayer, "参战", battleId);
-        refresh(room->routingByObserver, "观战", battleId);
-    }
 }
 
 void BattleRoomManager::HandleIssueBattleTicket(const ::IssueBattleTicketRequest &request,

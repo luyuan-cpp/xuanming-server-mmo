@@ -2,7 +2,7 @@
 #include "thread_context/ecs_context.h"
 
 ///<<< BEGIN WRITING YOUR CODE
-#include "agones/agones_scene_lifecycle.h"
+#include "infra/agones/agones_gameserver_lifecycle.h"
 #include "spatial/system/aoi.h"
 #include "spatial/system/scene_crowd.h"
 ///<<< END WRITING YOUR CODE
@@ -40,7 +40,8 @@ void SceneEventHandler::OnSceneCreatedHandler(const OnSceneCreated& event)
 	// increment" for free, without duplicating the counter in both handlers.
 	// NOTE: comments in this file stay ASCII -- it carries codegen guard regions
 	// and has no UTF-8 BOM (see .github/copilot-instructions.md, CP936).
-	agones::SceneLifecycle::Instance().OnSceneCreated(event.entity());
+	// A scene is one "unit" of the shared GameServerLifecycle (battle rooms are the other kind).
+	agones::GameServerLifecycle::Instance().OnUnitCreated(event.entity());
 ///<<< END WRITING YOUR CODE
 }
 void SceneEventHandler::OnSceneDestroyedHandler(const OnSceneDestroyed& event)
@@ -48,9 +49,9 @@ void SceneEventHandler::OnSceneDestroyedHandler(const OnSceneDestroyed& event)
 ///<<< BEGIN WRITING YOUR CODE
 	// Same as above: both DestroyScene paths fire this event only when the
 	// entity actually exists -- "destroy a scene that is not here" takes the
-	// idempotent-OK branch and never reaches this handler. SceneLifecycle
+	// idempotent-OK branch and never reaches this handler. GameServerLifecycle
 	// additionally dedupes by key, so the count can never go negative.
-	agones::SceneLifecycle::Instance().OnSceneDestroyed(event.entity());
+	agones::GameServerLifecycle::Instance().OnUnitDestroyed(event.entity());
 ///<<< END WRITING YOUR CODE
 }
 void SceneEventHandler::BeforeEnterSceneHandler(const BeforeEnterScene& event)

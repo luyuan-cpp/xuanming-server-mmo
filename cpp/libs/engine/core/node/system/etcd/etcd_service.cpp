@@ -317,7 +317,11 @@ void EtcdService::HandlePutEvent(const std::string &key, const std::string &valu
 		if (key == myKey)
 		{
 			NodeInfo remoteInfo;
-			if (google::protobuf::util::JsonStringToMessage(value, &remoteInfo).ok())
+			// D77:忽略未知字段(永久保留)。严格解析时,更新版本的节点多带一个字段就会让
+			// 这里解析失败、静默跳过劫持检测。
+			google::protobuf::util::JsonParseOptions parseOptions;
+			parseOptions.ignore_unknown_fields = true;
+			if (google::protobuf::util::JsonStringToMessage(value, &remoteInfo, parseOptions).ok())
 			{
 				if (!remoteInfo.node_uuid().empty() &&
 					remoteInfo.node_uuid() != myInfo.node_uuid())

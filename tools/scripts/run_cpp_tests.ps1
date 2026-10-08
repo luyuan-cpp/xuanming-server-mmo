@@ -46,6 +46,7 @@ $projects = [ordered]@{
     'aoi_test'                 = 'cpp\tests\aoi_test\aoi_test.vcxproj'
     'bag_test'                 = 'cpp\tests\bag_test\bag_test.vcxproj'
     'buff_test'                = 'cpp\tests\buff_test\buff_test.vcxproj'
+    'client_endpoint_test'     = 'cpp\tests\client_endpoint_test\client_endpoint_test.vcxproj'
     'configuration_table_test' = 'cpp\tests\configuration_table_test\configuration_table_test.vcxproj'
     'cool_down_time_test'      = 'cpp\tests\cool_down_time_test\cool_down_time_test.vcxproj'
     'cross_zone_test'          = 'cpp\tests\cross_zone_test\cross_zone_test.vcxproj'

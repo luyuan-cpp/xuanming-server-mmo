@@ -40,6 +40,7 @@
 #include "proto/scene/player_state_attribute_sync.pb.h"                // ActorBaseAttributesS2C 字段号
 #include "stress_test_probe.h"
 #include "player/constants/player.h"
+#include <node_config_manager.h> // SavePlayerToRedis:DBTask topic 世代号(BaseDeployConfig.db_task_topic_generation)
 #include "proto/db/db_task.pb.h"
 #include "modules/snapshot/snapshot_system.h"
 #include "modules/transaction_log/anomaly_detector.h"
@@ -1727,7 +1728,8 @@ void PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	}
 
 	// 6. 回合制战斗登录后置钩子:先应用离线挂起结算(再放开排队),
-	//    RECONNECT 且战斗在途时向 gate 重发 BindBattleEvent 并提示客户端补拉。
+	//    换会话(RECONNECT / REPLACE)且战斗在途时推重连提示,客户端据此补签重建直连后补拉
+	//    (turn-based §22 D72)。
 	//    放在场景绑定成功之后:会话快照与 gate 路由此时才可靠。
 	PlayerBattleSystem::OnPlayerEnterScene(player, enterInfo.enter_gs_type());
 }
@@ -2560,7 +2562,11 @@ bool PlayerLifecycleSystem::SavePlayerToRedisImpl(entt::entity player, bool allo
 
 	// Send each sub-table as a separate DBTask (matching how login reads per-table)
 	const std::string playerIdStr = std::to_string(playerId);
-	const std::string dbTaskTopic = GetDbTaskTopic(homeZoneId);
+	// 世代号来自部署配置(DbTaskTopicGeneration,缺键 / 0 = 第一代,名字不带后缀),必须与 go/db、
+	// go/login 的 Kafka.TopicGeneration 相等:换代后仍按旧名写 = 存盘进了已排空、没人消费的旧 topic。
+	// 选哪个 zone 的 topic 仍只看 home_zone(上面的回落逻辑),世代号不改变路由。
+	const std::string dbTaskTopic = GetDbTaskTopic(
+		homeZoneId, tlsNodeConfigManager.GetBaseDeployConfig().db_task_topic_generation());
 
 	auto sendSubTableTask = [&](const google::protobuf::Message &subMsg)
 	{

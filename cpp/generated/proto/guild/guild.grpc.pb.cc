@@ -46,6 +46,11 @@ static const char* GuildService_method_names[] = {
   "/guildpb.GuildService/UpgradeGuild",
   "/guildpb.GuildService/GetGuildShop",
   "/guildpb.GuildService/BuyGuildShopGoods",
+  "/guildpb.GuildService/GetGuildActivities",
+  "/guildpb.GuildService/LightGuildLantern",
+  "/guildpb.GuildService/ClaimGuildReunion",
+  "/guildpb.GuildService/StartGuildTrial",
+  "/guildpb.GuildService/RespondGuildTrialInvite",
 };
 
 std::unique_ptr< GuildService::Stub> GuildService::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
@@ -78,6 +83,11 @@ GuildService::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& chann
   , rpcmethod_UpgradeGuild_(GuildService_method_names[20], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_GetGuildShop_(GuildService_method_names[21], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_BuyGuildShopGoods_(GuildService_method_names[22], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_GetGuildActivities_(GuildService_method_names[23], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_LightGuildLantern_(GuildService_method_names[24], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_ClaimGuildReunion_(GuildService_method_names[25], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_StartGuildTrial_(GuildService_method_names[26], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_RespondGuildTrialInvite_(GuildService_method_names[27], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
 
 ::grpc::Status GuildService::Stub::CreateGuild(::grpc::ClientContext* context, const ::guildpb::CreateGuildRequest& request, ::guildpb::CreateGuildResponse* response) {
@@ -609,6 +619,121 @@ void GuildService::Stub::async::BuyGuildShopGoods(::grpc::ClientContext* context
   return result;
 }
 
+::grpc::Status GuildService::Stub::GetGuildActivities(::grpc::ClientContext* context, const ::guildpb::GetGuildActivitiesRequest& request, ::guildpb::GetGuildActivitiesResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::guildpb::GetGuildActivitiesRequest, ::guildpb::GetGuildActivitiesResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_GetGuildActivities_, context, request, response);
+}
+
+void GuildService::Stub::async::GetGuildActivities(::grpc::ClientContext* context, const ::guildpb::GetGuildActivitiesRequest* request, ::guildpb::GetGuildActivitiesResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::guildpb::GetGuildActivitiesRequest, ::guildpb::GetGuildActivitiesResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetGuildActivities_, context, request, response, std::move(f));
+}
+
+void GuildService::Stub::async::GetGuildActivities(::grpc::ClientContext* context, const ::guildpb::GetGuildActivitiesRequest* request, ::guildpb::GetGuildActivitiesResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetGuildActivities_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildActivitiesResponse>* GuildService::Stub::PrepareAsyncGetGuildActivitiesRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildActivitiesRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::guildpb::GetGuildActivitiesResponse, ::guildpb::GetGuildActivitiesRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_GetGuildActivities_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildActivitiesResponse>* GuildService::Stub::AsyncGetGuildActivitiesRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildActivitiesRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncGetGuildActivitiesRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status GuildService::Stub::LightGuildLantern(::grpc::ClientContext* context, const ::guildpb::LightGuildLanternRequest& request, ::guildpb::LightGuildLanternResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::guildpb::LightGuildLanternRequest, ::guildpb::LightGuildLanternResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_LightGuildLantern_, context, request, response);
+}
+
+void GuildService::Stub::async::LightGuildLantern(::grpc::ClientContext* context, const ::guildpb::LightGuildLanternRequest* request, ::guildpb::LightGuildLanternResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::guildpb::LightGuildLanternRequest, ::guildpb::LightGuildLanternResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_LightGuildLantern_, context, request, response, std::move(f));
+}
+
+void GuildService::Stub::async::LightGuildLantern(::grpc::ClientContext* context, const ::guildpb::LightGuildLanternRequest* request, ::guildpb::LightGuildLanternResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_LightGuildLantern_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::guildpb::LightGuildLanternResponse>* GuildService::Stub::PrepareAsyncLightGuildLanternRaw(::grpc::ClientContext* context, const ::guildpb::LightGuildLanternRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::guildpb::LightGuildLanternResponse, ::guildpb::LightGuildLanternRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_LightGuildLantern_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::guildpb::LightGuildLanternResponse>* GuildService::Stub::AsyncLightGuildLanternRaw(::grpc::ClientContext* context, const ::guildpb::LightGuildLanternRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncLightGuildLanternRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status GuildService::Stub::ClaimGuildReunion(::grpc::ClientContext* context, const ::guildpb::ClaimGuildReunionRequest& request, ::guildpb::ClaimGuildReunionResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::guildpb::ClaimGuildReunionRequest, ::guildpb::ClaimGuildReunionResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_ClaimGuildReunion_, context, request, response);
+}
+
+void GuildService::Stub::async::ClaimGuildReunion(::grpc::ClientContext* context, const ::guildpb::ClaimGuildReunionRequest* request, ::guildpb::ClaimGuildReunionResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::guildpb::ClaimGuildReunionRequest, ::guildpb::ClaimGuildReunionResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_ClaimGuildReunion_, context, request, response, std::move(f));
+}
+
+void GuildService::Stub::async::ClaimGuildReunion(::grpc::ClientContext* context, const ::guildpb::ClaimGuildReunionRequest* request, ::guildpb::ClaimGuildReunionResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_ClaimGuildReunion_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::guildpb::ClaimGuildReunionResponse>* GuildService::Stub::PrepareAsyncClaimGuildReunionRaw(::grpc::ClientContext* context, const ::guildpb::ClaimGuildReunionRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::guildpb::ClaimGuildReunionResponse, ::guildpb::ClaimGuildReunionRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_ClaimGuildReunion_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::guildpb::ClaimGuildReunionResponse>* GuildService::Stub::AsyncClaimGuildReunionRaw(::grpc::ClientContext* context, const ::guildpb::ClaimGuildReunionRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncClaimGuildReunionRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status GuildService::Stub::StartGuildTrial(::grpc::ClientContext* context, const ::guildpb::StartGuildTrialRequest& request, ::guildpb::StartGuildTrialResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::guildpb::StartGuildTrialRequest, ::guildpb::StartGuildTrialResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_StartGuildTrial_, context, request, response);
+}
+
+void GuildService::Stub::async::StartGuildTrial(::grpc::ClientContext* context, const ::guildpb::StartGuildTrialRequest* request, ::guildpb::StartGuildTrialResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::guildpb::StartGuildTrialRequest, ::guildpb::StartGuildTrialResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_StartGuildTrial_, context, request, response, std::move(f));
+}
+
+void GuildService::Stub::async::StartGuildTrial(::grpc::ClientContext* context, const ::guildpb::StartGuildTrialRequest* request, ::guildpb::StartGuildTrialResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_StartGuildTrial_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::guildpb::StartGuildTrialResponse>* GuildService::Stub::PrepareAsyncStartGuildTrialRaw(::grpc::ClientContext* context, const ::guildpb::StartGuildTrialRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::guildpb::StartGuildTrialResponse, ::guildpb::StartGuildTrialRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_StartGuildTrial_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::guildpb::StartGuildTrialResponse>* GuildService::Stub::AsyncStartGuildTrialRaw(::grpc::ClientContext* context, const ::guildpb::StartGuildTrialRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncStartGuildTrialRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status GuildService::Stub::RespondGuildTrialInvite(::grpc::ClientContext* context, const ::guildpb::RespondGuildTrialInviteRequest& request, ::guildpb::RespondGuildTrialInviteResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::guildpb::RespondGuildTrialInviteRequest, ::guildpb::RespondGuildTrialInviteResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_RespondGuildTrialInvite_, context, request, response);
+}
+
+void GuildService::Stub::async::RespondGuildTrialInvite(::grpc::ClientContext* context, const ::guildpb::RespondGuildTrialInviteRequest* request, ::guildpb::RespondGuildTrialInviteResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::guildpb::RespondGuildTrialInviteRequest, ::guildpb::RespondGuildTrialInviteResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RespondGuildTrialInvite_, context, request, response, std::move(f));
+}
+
+void GuildService::Stub::async::RespondGuildTrialInvite(::grpc::ClientContext* context, const ::guildpb::RespondGuildTrialInviteRequest* request, ::guildpb::RespondGuildTrialInviteResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RespondGuildTrialInvite_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::guildpb::RespondGuildTrialInviteResponse>* GuildService::Stub::PrepareAsyncRespondGuildTrialInviteRaw(::grpc::ClientContext* context, const ::guildpb::RespondGuildTrialInviteRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::guildpb::RespondGuildTrialInviteResponse, ::guildpb::RespondGuildTrialInviteRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_RespondGuildTrialInvite_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::guildpb::RespondGuildTrialInviteResponse>* GuildService::Stub::AsyncRespondGuildTrialInviteRaw(::grpc::ClientContext* context, const ::guildpb::RespondGuildTrialInviteRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncRespondGuildTrialInviteRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
 GuildService::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       GuildService_method_names[0],
@@ -840,6 +965,56 @@ GuildService::Service::Service() {
              ::guildpb::BuyGuildShopGoodsResponse* resp) {
                return service->BuyGuildShopGoods(ctx, req, resp);
              }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      GuildService_method_names[23],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< GuildService::Service, ::guildpb::GetGuildActivitiesRequest, ::guildpb::GetGuildActivitiesResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](GuildService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::guildpb::GetGuildActivitiesRequest* req,
+             ::guildpb::GetGuildActivitiesResponse* resp) {
+               return service->GetGuildActivities(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      GuildService_method_names[24],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< GuildService::Service, ::guildpb::LightGuildLanternRequest, ::guildpb::LightGuildLanternResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](GuildService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::guildpb::LightGuildLanternRequest* req,
+             ::guildpb::LightGuildLanternResponse* resp) {
+               return service->LightGuildLantern(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      GuildService_method_names[25],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< GuildService::Service, ::guildpb::ClaimGuildReunionRequest, ::guildpb::ClaimGuildReunionResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](GuildService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::guildpb::ClaimGuildReunionRequest* req,
+             ::guildpb::ClaimGuildReunionResponse* resp) {
+               return service->ClaimGuildReunion(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      GuildService_method_names[26],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< GuildService::Service, ::guildpb::StartGuildTrialRequest, ::guildpb::StartGuildTrialResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](GuildService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::guildpb::StartGuildTrialRequest* req,
+             ::guildpb::StartGuildTrialResponse* resp) {
+               return service->StartGuildTrial(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      GuildService_method_names[27],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< GuildService::Service, ::guildpb::RespondGuildTrialInviteRequest, ::guildpb::RespondGuildTrialInviteResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](GuildService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::guildpb::RespondGuildTrialInviteRequest* req,
+             ::guildpb::RespondGuildTrialInviteResponse* resp) {
+               return service->RespondGuildTrialInvite(ctx, req, resp);
+             }, this)));
 }
 
 GuildService::Service::~Service() {
@@ -1000,6 +1175,41 @@ GuildService::Service::~Service() {
 }
 
 ::grpc::Status GuildService::Service::BuyGuildShopGoods(::grpc::ServerContext* context, const ::guildpb::BuyGuildShopGoodsRequest* request, ::guildpb::BuyGuildShopGoodsResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status GuildService::Service::GetGuildActivities(::grpc::ServerContext* context, const ::guildpb::GetGuildActivitiesRequest* request, ::guildpb::GetGuildActivitiesResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status GuildService::Service::LightGuildLantern(::grpc::ServerContext* context, const ::guildpb::LightGuildLanternRequest* request, ::guildpb::LightGuildLanternResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status GuildService::Service::ClaimGuildReunion(::grpc::ServerContext* context, const ::guildpb::ClaimGuildReunionRequest* request, ::guildpb::ClaimGuildReunionResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status GuildService::Service::StartGuildTrial(::grpc::ServerContext* context, const ::guildpb::StartGuildTrialRequest* request, ::guildpb::StartGuildTrialResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status GuildService::Service::RespondGuildTrialInvite(::grpc::ServerContext* context, const ::guildpb::RespondGuildTrialInviteRequest* request, ::guildpb::RespondGuildTrialInviteResponse* response) {
   (void) context;
   (void) request;
   (void) response;

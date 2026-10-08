@@ -196,8 +196,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="agones\agones_rest_client.cpp" />
-    <ClCompile Include="agones\agones_scene_lifecycle.cpp" />
     <ClCompile Include="handler\event\scene_kafka_command_router.cpp" />
     <ClCompile Include="handler\event\actor_combat_state_event_handler.cpp" />
     <ClCompile Include="handler\event\actor_event_handler.cpp" />

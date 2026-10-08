@@ -270,3 +270,14 @@
 - **关机先排空再 `quit()`**：`quit()` 经**两跳 `queueInLoop`** 排到队列末尾，靠 FIFO 让排队的 `forceCloseInLoop`（第一趟）与 `connectDestroyed`（第二趟）都跑完；少一趟就是 `TcpConnection.cc:71` 或 `Channel.cc:43` 的 assert。关闭完成标记和通知必须在最后一跳的 `quit()` 之后、完成锁内发出，解锁后不再访问 Node，保证析构等待与 fallback 不会提前结束。**不要用定时器**：Windows 的 loop 是 `poll → handleEvents → timerQueue_->loop() → doPendingFunctors`，定时器恰在 N+1 趟到期时 `quit_` 先置位、只剩一趟——它"通常"能跑完，不是"必然"。
 
 新写或修改任何持有连接、绑进回调的类时只问两句：**"我存的是 weak 吗？""我绑的是 weak 吗？"** 两个都是，这一类问题与你无关。参考实现：`GameChannel::LockConnection`、`RpcClient::connect()`、`RpcSession::connection`、`BattleClientEdge::DirectSession`。回归测试：`cpp/tests/rpc_controller_test/rpc_client_lifecycle_test.cpp`。
+
+## 12. 双版本服务器（C++/Go 版 + Java 版，强制）
+
+2026-09-29 起服务器有两个版本并行演进：本仓库（C++ 节点 + Go 微服务）与 **Java 版**
+（`github.com/luyuan-java/xuanming-server-mmo`，本机 `D:\luyuan\wuxingqitan\xuanming-server-mmo-java`）。
+
+- **以后所有功能两个版本都要做。** 一个功能只在一边落地不算完成；交付说明必须写明另一版的状态（已做 / 待做 + 原因）。
+- **对账本**：Java 仓库根目录 `PARITY.md` 记录「本仓库 commit ↔ Java 版本号」与逐功能对齐状态。任一边完成一个功能都要在 `PARITY.md` 登记一行；本仓库的 `PROGRESS.md` 条目同时注明对应的 Java 版本号。
+- **两版共享的只有客户端契约**：客户端 ↔ gate 的帧格式与 `proto/` 里客户端可见的消息、tip 码、配置表数据。改这些时两版必须同批改。服务端内部（RPC、注册发现、存储访问）Java 版按 Java 惯用方式实现，不照抄本仓库。
+- **Java 版选型**：第三方库优先 GitHub ≥ 2 万 star 的成熟项目（JDK 与 Spring 自带组件视为事实标准）。选型表与理由见 Java 仓库 `docs/design/`。
+- Java 仓库的构建与测试口径以该仓库自己的 `AGENTS.md` 为准。

@@ -19,6 +19,10 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="agones\agones_client_endpoint_source.h" />
+    <ClInclude Include="agones\agones_gameserver_lifecycle.h" />
+    <ClInclude Include="agones\agones_gameserver_status.h" />
+    <ClInclude Include="agones\agones_rest_client.h" />
     <ClInclude Include="messaging\kafka\kafka_consumer.h" />
     <ClInclude Include="messaging\kafka\kafka_partition_assign_policy.h" />
     <ClInclude Include="messaging\kafka\kafka_manager.h" />
@@ -68,6 +72,13 @@
     <ClCompile Include="../../../../third_party/librdkafka/src-cpp/TopicPartitionImpl.cpp">
       <PreprocessorDefinitions>LIBRDKAFKA_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <!-- Agones SDK sidecar 适配(scene / battle 共用,集群外入口 D85)。libcurl 传输层只在
+         Linux 以 MMORPG_AGONES_CURL 编入;Windows 下 MakeDefaultHttpTransport() 返回 nullptr,
+         生命周期走 Disabled,因此本工程不链接也不包含 curl。 -->
+    <ClCompile Include="agones\agones_client_endpoint_source.cpp" />
+    <ClCompile Include="agones\agones_gameserver_lifecycle.cpp" />
+    <ClCompile Include="agones\agones_gameserver_status.cpp" />
+    <ClCompile Include="agones\agones_rest_client.cpp" />
     <ClCompile Include="messaging\kafka\kafka_consumer.cpp" />
     <ClCompile Include="messaging\kafka\kafka_manager.cpp" />
     <ClCompile Include="messaging\kafka\kafka_producer.cpp" />
@@ -145,7 +156,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;NOMINMAX;GOOGLE_CHECK_EQ=ABSL_CHECK_EQ;GOOGLE_LOG=ABSL_LOG;GOOGLE_DCHECK=ABSL_DCHECK;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;YAML_CPP_STATIC_DEFINE;_WIN32_WINNT=0x0A00</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../../../third_party/boost/;./;../../../../third_party/muduo/;../../../../third_party/redis/;../../../../third_party/redis/deps/;../../../../third_party/muduo/contrib/windows/include;../../../../third_party/grpc/third_party/protobuf/src/;../../../../third_party/grpc/third_party/abseil-cpp/;../../../../third_party/yaml-cpp/include/;../../../../third_party/xxhash/;../../../../third_party/librdkafka/src-cpp/;../common/;../../../../third_party/zlib/;../../../generated/;../../../../third_party/;../;../config/;../../;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../../third_party/boost/;./;../../../../third_party/muduo/;../../../../third_party/redis/;../../../../third_party/redis/deps/;../../../../third_party/muduo/contrib/windows/include;../../../../third_party/grpc/third_party/protobuf/src/;../../../../third_party/grpc/third_party/abseil-cpp/;../../../../third_party/yaml-cpp/include/;../../../../third_party/xxhash/;../../../../third_party/librdkafka/src-cpp/;../common/;../../../../third_party/zlib/;../../../generated/;../../../../third_party/;../;../config/;../../;../core/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <DisableSpecificWarnings>4200;4819;4146;4244;4267;4018;</DisableSpecificWarnings>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -190,7 +201,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;NOMINMAX;GOOGLE_CHECK_EQ=ABSL_CHECK_EQ;GOOGLE_LOG=ABSL_LOG;GOOGLE_DCHECK=ABSL_DCHECK;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;YAML_CPP_STATIC_DEFINE;_WIN32_WINNT=0x0A00;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../../../third_party/boost/;./;../../../../third_party/muduo/;../../../../third_party/redis/;../../../../third_party/redis/deps/;../../../../third_party/muduo/contrib/windows/include;../../../../third_party/grpc/third_party/protobuf/src/;../../../../third_party/grpc/third_party/abseil-cpp/;../../../../third_party/yaml-cpp/include/;../../../../third_party/xxhash/;../../../../third_party/librdkafka/src-cpp/;../common/;../../../../third_party/zlib/;../../../generated/;../../../../third_party/;../;../config/;../../;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../../third_party/boost/;./;../../../../third_party/muduo/;../../../../third_party/redis/;../../../../third_party/redis/deps/;../../../../third_party/muduo/contrib/windows/include;../../../../third_party/grpc/third_party/protobuf/src/;../../../../third_party/grpc/third_party/abseil-cpp/;../../../../third_party/yaml-cpp/include/;../../../../third_party/xxhash/;../../../../third_party/librdkafka/src-cpp/;../common/;../../../../third_party/zlib/;../../../generated/;../../../../third_party/;../;../config/;../../;../core/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <AdditionalOptions>/bigobj /utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>

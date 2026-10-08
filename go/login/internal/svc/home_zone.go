@@ -33,4 +33,9 @@ func (s *ServiceContext) initHomeZoneResolver() {
 		"role_list_timeout=%s enter_timeout=%s register_timeout=%s",
 		!hz.RefreshRoleListDisabled, hz.RedirectOnEnterEnabled,
 		s.HomeZone.RoleListTimeout, s.HomeZone.EnterTimeout, s.HomeZone.RegisterTimeout)
+	// 建角钉落点的实际取值打一行:go/db Placement.Required=true 之前必须确认所有 login 都是
+	// pin_on_create=true(player-storage-placement.md §13),这行是运维核对的依据。
+	pl := config.AppConfig.Placement
+	logx.Infof("[placement] pin_on_create=%v new_player_storage_id=%d (0 = not pinned)",
+		pl.PinOnCreate, pl.StorageIDForNewPlayer(config.AppConfig.Node.ZoneId))
 }

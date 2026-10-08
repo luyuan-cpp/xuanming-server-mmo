@@ -172,7 +172,12 @@ func (r *Resolver) BatchHomeZones(ctx context.Context, playerIDs []uint64) (map[
 // (CreatePlayer),失败必须向上返回让建角失败——映射是数据路由 / 公会 / 榜的
 // 归属权威,没有映射的玩家是一颗迟早引爆的路由炸弹,不能「先建了再说」。
 // zone 为 0 视为调用方 bug,直接拒绝而不是写一条无意义的映射。
-func (r *Resolver) RegisterPlayerZone(ctx context.Context, playerID uint64, zone uint32) error {
+//
+// storageID 非 0 时,data_service 在写 player:zone 的同一段 Lua 里原子钉
+// player:placement = "{storageID}:1"(docs/design/player-storage-placement.md §8.1);
+// 0 = 不钉,与落点设计之前的请求逐字节相同。两键同一次写,避免「有归属、无落点」的半态
+// 在 go/db Required=true 下把新号的存盘打进死信。
+func (r *Resolver) RegisterPlayerZone(ctx context.Context, playerID uint64, zone, storageID uint32) error {
 	if r == nil || r.Client == nil {
 		return ErrUnavailable
 	}
@@ -181,7 +186,7 @@ func (r *Resolver) RegisterPlayerZone(ctx context.Context, playerID uint64, zone
 	}
 	cctx, cancel := bounded(ctx, r.RegisterTimeout, DefaultRegisterTimeout)
 	defer cancel()
-	_, err := r.Client.RegisterPlayerZone(cctx, &dspb.RegisterPlayerZoneRequest{PlayerId: playerID, HomeZoneId: zone})
+	_, err := r.Client.RegisterPlayerZone(cctx, &dspb.RegisterPlayerZoneRequest{PlayerId: playerID, HomeZoneId: zone, StorageId: storageID})
 	return err
 }
 

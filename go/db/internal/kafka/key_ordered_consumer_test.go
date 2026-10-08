@@ -38,6 +38,8 @@
 //     被废黜节点的迟到写可以带更大的 offset。落库前比对 DBTask.owner_epoch 与
 //     player:{id}:owner_epoch,小于即丢;合并器把 epoch 变化当段边界,否则新主的
 //     写会先被老写按 offset 合并掉、老写再被守卫丢弃,MySQL 少一版。
+//   - TC8(按玩家落点选库 / 落库后复核,player-storage-placement.md §6)见 placement_route_test.go。
+//     本文件的用例都不写落点键,全部走 legacy(本 zone 库),钉住「无记录 = 旧语义」。
 package kafka
 
 import (
@@ -58,6 +60,7 @@ import (
 
 	"github.com/IBM/sarama"
 	"github.com/alicebob/miniredis/v2"
+	"github.com/luyuancpp/proto2mysql"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,6 +80,8 @@ type recordedCall struct {
 	msgType string
 	taskID  string
 	body    []byte
+	// dbName 是 SQL 落到的落点库(store.DBName),落点用例据此断言选库结果。
+	dbName string
 }
 
 type recordingSession struct {
@@ -117,6 +122,9 @@ type recordingHarness struct {
 	calls      []recordedCall
 	failNextOf map[string]int // taskID -> remaining failure count (0 = always succeed)
 	prevHnd    map[string]dbOpHandler
+	// afterCall 在一次 SQL「成功执行」之后、落库后复核之前被调用(不持锁),
+	// 落点用例用它模拟搬库工具恰好在这个窗口里冻结 / 切换记录。
+	afterCall func(recordedCall)
 }
 
 func newHarness(t *testing.T) *recordingHarness {
@@ -144,26 +152,43 @@ func newHarness(t *testing.T) *recordingHarness {
 }
 
 func (h *recordingHarness) makeHandler(op string) dbOpHandler {
-	return func(_ context.Context, _ redis.Cmdable, task *db_proto.DBTask, _ proto.Message) string {
+	return func(_ context.Context, store *proto2mysql.DB, task *db_proto.DBTask, _ proto.Message) string {
 		h.mu.Lock()
-		defer h.mu.Unlock()
 
 		// Honor injected failure plan first.
 		if remaining, ok := h.failNextOf[task.TaskId]; ok && remaining > 0 {
 			h.failNextOf[task.TaskId] = remaining - 1
+			h.mu.Unlock()
 			return fmt.Sprintf("injected failure for taskID=%s op=%s", task.TaskId, op)
 		}
 
 		body := append([]byte(nil), task.Body...) // deep copy, defensive
-		h.calls = append(h.calls, recordedCall{
+		call := recordedCall{
 			op:      op,
 			key:     task.Key,
 			msgType: task.MsgType,
 			taskID:  task.TaskId,
 			body:    body,
-		})
+		}
+		if store != nil {
+			call.dbName = store.DBName
+		}
+		h.calls = append(h.calls, call)
+		hook := h.afterCall
+		h.mu.Unlock()
+
+		if hook != nil {
+			hook(call)
+		}
 		return ""
 	}
+}
+
+// setAfterCall 安装 afterCall 钩子(见字段注释)。
+func (h *recordingHarness) setAfterCall(fn func(recordedCall)) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.afterCall = fn
 }
 
 // programFailure makes the next `count` invocations of the handler for `taskID`
@@ -223,6 +248,10 @@ func newTestWorker(t *testing.T, partition int32) (*worker, *miniredis.Miniredis
 		// 与 buildWorker 同款生产实现,跑在 miniredis 上;需要隔离读失败分支的
 		// 用例再把它换成 fakeAppliedEpochStore。
 		appliedEpochs: redisAppliedEpochStore{rc: rc},
+
+		// 落点记录与排序锁 / 游标同一个 miniredis;没有写任何落点键的用例全部走 legacy(本 zone 库),
+		// 行为与引入落点之前一致。落点用例直接往 mr 里写 player:placement / player:zone。
+		placement: newTestPlacementRouter(rc),
 	}
 	return w, mr, newHarness(t)
 }
@@ -1373,6 +1402,7 @@ func TestConcurrentWorkers_FinalStateIsGlobalMax(t *testing.T) {
 	defer cancel()
 
 	workers := make([]*worker, partitions)
+	router := newTestPlacementRouter(rc)
 	for i := int32(0); i < partitions; i++ {
 		workers[i] = &worker{
 			partition:          i,
@@ -1385,6 +1415,7 @@ func TestConcurrentWorkers_FinalStateIsGlobalMax(t *testing.T) {
 			retryProcessingKey: "kafka:retry:processing:soak",
 			retryDeadQueueKey:  "kafka:dead:queue:soak",
 			wg:                 &sync.WaitGroup{},
+			placement:          router,
 		}
 	}
 

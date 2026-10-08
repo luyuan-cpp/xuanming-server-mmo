@@ -196,10 +196,11 @@ int main(int argc, char *argv[])
     // and the receiver logs `ProtobufCodec::defaultErrorCallback -
     // InvalidNameLen` on every reconnect (~2 Hz).
     //
-    //   * BattleNodeService — 回合制战斗节点(gRPC,全局池,不分 zone):
-    //     gate 按 BindBattleEvent 的会话绑定把客户端战斗消息转发过去。
-    //     必须进白名单,否则 AddServiceNode/ConnectAllNodes 不会为 battle
-    //     建实体和 gRPC stub,绑定解析(FindNodeEntityByNodeId)永远落空。
+    //   * BattleNodeService **两种模式都不进白名单**(turn-based §22 D66):战斗上行与
+    //     战斗帧只走客户端直连 battle,gate 不中继、不持 battle stub、不维护战斗会话绑定;
+    //     经 gate 发来的 BattleClientPlayer 号在 DispatchClientRpcMessage 统一回
+    //     kServiceUnavailable。battle 发往大厅的开局公告仍经 Kafka gate-{id} 的
+    //     PushToPlayerEvent 下发,与白名单无关。
     //   * MatchNodeService — 匹配服务(Go gRPC,无状态随机路由):客户端
     //     JoinQueue/ChallengePlayer/WatchBattle 等按 NODE_MATCH 路由,缺席则
     //     全部报 "Node not found ... message id: 157"(2026-09-01 冒烟补)。
@@ -207,14 +208,15 @@ int main(int argc, char *argv[])
     //   * ClientRpcRouterNodeService — 客户端 RPC 路由服(Go gRPC,全局池,不分 zone;
     //     docs/design/client-rpc-router.md D29–D34)。GATE_CLIENT_RPC_ROUTER=1 时它是
     //     gate **唯一**的 gRPC 目标:白名单收成 {Scene(TCP), ClientRpcRouter},gate 对
-    //     login / scene_manager / battle / match **零 stub、零 channel**,gRPC 连接数 =
+    //     login / scene_manager / match **零 stub、零 channel**,gRPC 连接数 =
     //     路由服副本数,与业务服务数量无关 —— 以后加 chat / friend / guild 不再碰 gate。
-    //     旧模式(默认,未设或非 1/true/on)完全不连路由服,行为与改前一致;所以路由服
-    //     可以先于 gate 切换单独上线,回退 = 去掉环境变量再滚动(设计文档 §6 灰度)。
+    //     旧模式(默认,未设或非 1/true/on)完全不连路由服,除战斗(两种模式都不经 gate,
+    //     见上)外行为与改前一致;所以路由服可以先于 gate 切换单独上线,回退 = 去掉环境
+    //     变量再滚动(设计文档 §6 灰度)。
     const bool routerMode = gate_router_mode::IsRouterModeEnabled();
     const Node::CanConnectNodeTypeList connectTo = routerMode
         ? Node::CanConnectNodeTypeList{SceneNodeService, eNodeType::ClientRpcRouterNodeService}
-        : Node::CanConnectNodeTypeList{SceneNodeService, LoginNodeService, SceneManagerNodeService, BattleNodeService, MatchNodeService};
+        : Node::CanConnectNodeTypeList{SceneNodeService, LoginNodeService, SceneManagerNodeService, MatchNodeService};
 
     return node::entry::RunSimpleNodeMainWithOwnedContext<GateHandler, GateRuntimeContext, GateNodeHooks>(
         GateNodeService,
@@ -235,7 +237,7 @@ int main(int argc, char *argv[])
                          << ", 出站白名单=" << Node::FormatNodeTypeNames(whitelistForLog)
                          << (routerMode
                                  ? ", 路由模式:gate 对 Go 业务服务零 stub,gRPC 连接数=路由服副本数,战斗消息一律拒绝(只走直连)"
-                                 : ", 直连模式:行为与引入路由服之前一致");
+                                 : ", 直连模式:除战斗外行为与引入路由服之前一致,战斗消息一律拒绝(只走直连)");
             }
 
             // Override the default Kafka dispatch with GateCommand-specific routing

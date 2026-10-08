@@ -735,7 +735,7 @@ func TestWatchBattleRejectsNonOnlineSessionState(t *testing.T) {
 }
 
 // 权威身份:session 里的 player_id 压过请求体伪造的 player_id
-// (客户端直达协议里请求体可被篡改;观战绑定的是会话,认错人就把首帧推给了别人)。
+// (客户端直达协议里请求体可被篡改;观众登记挂的是会话路由,认错人就会以别人的身份签票挂观众)。
 func TestWatchBattleUsesSessionPlayerIdOverRequestBody(t *testing.T) {
 	svcCtx, mr := newGatherSvcCtx(t)
 	fake := stubObserverRPCs(t)
@@ -862,7 +862,8 @@ func TestListWatchableBattlesPropagatesRedisError(t *testing.T) {
 }
 
 // gather 开局失败并回滚:① 不得登记新的可观战战斗;② 入口已清退的观众不因回滚而恢复
-// (观众绑定早被参战绑定覆盖过,恢复只会推给一个已经不存在的战斗)。
+// (入口 RemoveObserver 已让 battle 推 SpectateEnd 并关掉观战直连,客户端已收起观战 UI;
+// 回滚时再挂回去只会在名单里留一个没有直连的观众)。
 func TestGatherFailureLeavesNoSpectateIndexAndKeepsObserverEvicted(t *testing.T) {
 	svcCtx, mr := newGatherSvcCtx(t)
 	rpcs := stubGatherRPCs(t, map[uint64]string{7210: "fp", 7211: "fp"})
@@ -886,4 +887,65 @@ func TestGatherFailureLeavesNoSpectateIndexAndKeepsObserverEvicted(t *testing.T)
 	require.Empty(t, watchingMark(t, mr, 7210), "已清退的观众不因回滚而恢复")
 	require.Len(t, observers.removes, 1)
 	require.Equal(t, "enter_gather", observers.removes[0].GetReason())
+}
+
+// ---- turn-based §22 D70:battle 签不出票(kServiceUnavailable)时的观战回滚 ----
+
+// battle 侧 AddObserver 预签票失败回 kServiceUnavailable:新观众不登记;同场重看走的幂等重推
+// 路径由 battle 摘出名单并关其直连。match 必须:回「该战斗当前无法观战」、回滚观战标记、
+// 不剔除索引(战斗仍在打)、随机模式不换场、不补发 RemoveObserver(battle 侧已不留该观众);
+// 标记回滚彻底,battle 恢复后同一玩家能正常再接入。
+func TestWatchBattleServiceUnavailableRollsBackMark(t *testing.T) {
+	unavailable := func(*battlepb.AddObserverRequest) (*battlepb.AddObserverResponse, error) {
+		return &battlepb.AddObserverResponse{
+			ErrorMessage: tipErr(uint32(table.CommonError_kServiceUnavailable), "战斗服务暂不可用"),
+		}, nil
+	}
+
+	t.Run("新观众", func(t *testing.T) {
+		svcCtx, mr := newGatherSvcCtx(t)
+		fake := stubObserverRPCs(t)
+		const watcher = uint64(7160)
+		const battleId = uint64(880240)
+		setPlayerSessionOnline(t, mr, watcher)
+		registerBattle(t, svcCtx, battleId, nowMs())
+		fake.onAdd = unavailable
+
+		resp := watchBattle(t, svcCtx, watcher, 0) // 随机模式:唯一一场被拒也不换场重试
+		require.Equal(t, constants.ErrBattleNotWatchable, resp.GetErrorMessage().GetId())
+		require.Zero(t, resp.GetBattleId())
+		require.Len(t, fake.adds, 1, "签不出票不是房间不存在,不换场重试")
+		require.Empty(t, fake.removes, "battle 侧未登记该观众,match 不补发 RemoveObserver")
+		require.Empty(t, watchingMark(t, mr, watcher), "失败必须回滚观战标记")
+		require.True(t, mr.Exists(spectateBattleKey(battleId)), "战斗仍在打,索引不许剔除")
+		require.Equal(t, 1, activeIndexSize(t, svcCtx))
+
+		// 回滚彻底:battle 恢复后同一玩家再看同一场能正常接入,不被残留标记卡住。
+		fake.onAdd = nil
+		retry := watchBattle(t, svcCtx, watcher, battleId)
+		require.Zero(t, retry.GetErrorMessage().GetId(), "tip=%v", retry.GetErrorMessage())
+		require.Equal(t, battleId, retry.GetBattleId())
+		require.Len(t, fake.adds, 2)
+		require.Equal(t, strconv.FormatUint(battleId, 10), watchingMark(t, mr, watcher))
+	})
+
+	t.Run("同场重看走幂等重推", func(t *testing.T) {
+		svcCtx, mr := newGatherSvcCtx(t)
+		fake := stubObserverRPCs(t)
+		const watcher = uint64(7161)
+		const battleId = uint64(880241)
+		setPlayerSessionOnline(t, mr, watcher)
+		registerBattle(t, svcCtx, battleId, nowMs())
+		require.Zero(t, watchBattle(t, svcCtx, watcher, battleId).GetErrorMessage().GetId())
+		require.Equal(t, strconv.FormatUint(battleId, 10), watchingMark(t, mr, watcher))
+
+		fake.onAdd = unavailable
+		resp := watchBattle(t, svcCtx, watcher, battleId)
+		require.Equal(t, constants.ErrBattleNotWatchable, resp.GetErrorMessage().GetId())
+		require.Len(t, fake.adds, 2)
+		require.Empty(t, fake.removes, "battle 侧已把该观众摘出名单,match 不补发 RemoveObserver")
+		require.Empty(t, watchingMark(t, mr, watcher), "与 battle 摘除观众一致:标记必须回滚")
+		require.True(t, mr.Exists(spectateBattleKey(battleId)), "战斗仍在打,索引不许剔除")
+		require.Equal(t, 1, activeIndexSize(t, svcCtx))
+	})
 }

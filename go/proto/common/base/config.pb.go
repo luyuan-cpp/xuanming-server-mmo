@@ -433,9 +433,20 @@ type BaseDeployConfig struct {
 	// 现在收敛成这一个部署键(k8s 侧由 k8s_deploy.ps1 从 data_service.yaml 镜像进 node ConfigMap)。
 	AuditTopicGeneration uint32 `protobuf:"varint,20,opt,name=audit_topic_generation,json=auditTopicGeneration,proto3" json:"audit_topic_generation,omitempty"`
 	// C++ 节点 unary gRPC 调用的 deadline(见 GrpcClientConfig)。可以不写:缺席 = 全部用内置默认。
-	GrpcClient    *GrpcClientConfig `protobuf:"bytes,21,opt,name=grpc_client,json=grpcClient,proto3" json:"grpc_client,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	GrpcClient *GrpcClientConfig `protobuf:"bytes,21,opt,name=grpc_client,json=grpcClient,proto3" json:"grpc_client,omitempty"`
+	// 玩家存盘 DBTask topic(db_task_zone_{zone})的**世代号**。有效名:
+	// `<= 1` → `db_task_zone_{zone}`(不带后缀),`>= 2` → `db_task_zone_{zone}_g{N}`。
+	// 注意与 audit_topic_generation **第一代就带 _g1** 的规则不同:db_task 第一代的名字早已上线,
+	// 换规则等于换 topic,只能沿用 go/db、go/login 的 DbTaskTopicForGeneration 口径。
+	// 0 当 1 处理(proto3 没有 presence,存量 yaml 不写这一键也能起,名字不变)。
+	//
+	// **必须等于 go/db 的 ServerConfig.Kafka.TopicGeneration 与 go/login 的 Kafka.TopicGeneration**:
+	// C++ scene 按 home_zone 往这个 topic 写玩家存盘,go/db 是唯一的消费者。分家不报任何错 ——
+	// 换代后 scene 仍写旧代 topic,存盘静默积压在一个已排空、没人消费的 topic 里。
+	// 换代流程见 docs/design/db-task-kafka-partition-contract.md;设计见 player-storage-placement.md §7。
+	DbTaskTopicGeneration uint32 `protobuf:"varint,22,opt,name=db_task_topic_generation,json=dbTaskTopicGeneration,proto3" json:"db_task_topic_generation,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *BaseDeployConfig) Reset() {
@@ -615,6 +626,13 @@ func (x *BaseDeployConfig) GetGrpcClient() *GrpcClientConfig {
 	return nil
 }
 
+func (x *BaseDeployConfig) GetDbTaskTopicGeneration() uint32 {
+	if x != nil {
+		return x.DbTaskTopicGeneration
+	}
+	return 0
+}
+
 // Game config
 type GameConfig struct {
 	state         protoimpl.MessageState      `protogen:"open.v1"`
@@ -774,7 +792,7 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x10call_deadline_ms\x18\x01 \x03(\v2%.GrpcClientConfig.CallDeadlineMsEntryR\x0ecallDeadlineMs\x1aA\n" +
 	"\x13CallDeadlineMsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xe6\a\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x9f\b\n" +
 	"\x10BaseDeployConfig\x12\x1d\n" +
 	"\n" +
 	"etcd_hosts\x18\x01 \x03(\tR\tetcdHosts\x12\x1b\n" +
@@ -801,7 +819,8 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"id_segment\x18\x13 \x01(\v2\x10.IdSegmentConfigR\tidSegment\x124\n" +
 	"\x16audit_topic_generation\x18\x14 \x01(\rR\x14auditTopicGeneration\x122\n" +
 	"\vgrpc_client\x18\x15 \x01(\v2\x11.GrpcClientConfigR\n" +
-	"grpcClient\"\xf0\x01\n" +
+	"grpcClient\x127\n" +
+	"\x18db_task_topic_generation\x18\x16 \x01(\rR\x15dbTaskTopicGeneration\"\xf0\x01\n" +
 	"\n" +
 	"GameConfig\x12&\n" +
 	"\x0fscene_node_type\x18\x01 \x01(\rR\rsceneNodeType\x12\x17\n" +

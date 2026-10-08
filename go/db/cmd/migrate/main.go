@@ -21,8 +21,14 @@
 //	# 列类型漂移默认只报告;确认过影响面后才允许生成 MODIFY COLUMN
 //	go run ./cmd/migrate -f etc/db.yaml -command up -allow-modify
 //
+//	# 迁移按落点编号派生的库(player-storage-placement.md §4.2 / §11.1),覆盖 ZoneId 推导:
+//	#   1..999999 → zone_{id}_db;>= 1000000 → player_store_{id}_db(Phase 2 全局库)
+//	go run ./cmd/migrate -f etc/db.yaml -storage-id 1000000 -command up -create-database
+//
 // 无论哪条路径,库名都必须先过外部注入的白名单(DB_ALLOWED_DATABASES /
-// AllowedDatabasesFile / AllowedDatabases),否则拒绝执行。
+// AllowedDatabasesFile / AllowedDatabases),否则拒绝执行。-storage-id 的库另按业务服务的
+// 同一判定放行(proto_sql.AdmitStore:白名单,或 Placement.AllowStoreFamilies 且名字属于落点库家族);
+// 但**建库**(-create-database)仍只认白名单 —— 家族放行只适用于已存在的库,与业务服务按需打开同口径。
 package main
 
 import (
@@ -32,12 +38,15 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"time"
 
 	"db/internal/config"
+	"db/internal/dbguard"
 	"db/internal/logic/pkg/proto_sql"
 	"db/internal/migrate"
+	"shared/placement"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/luyuancpp/proto2mysql"
@@ -52,22 +61,36 @@ func main() {
 		createDatabase = flag.Bool("create-database", false, "库不存在时先 CREATE DATABASE(仍需过白名单)")
 		allowModify    = flag.Bool("allow-modify", false, "允许把列类型漂移变成 MODIFY COLUMN(大表上是重建表级操作,默认只报告)")
 		timeout        = flag.Duration("timeout", 30*time.Minute, "整个迁移过程的总超时")
+		storageID      = flag.Uint64("storage-id", 0, "落点库编号:0 = 按 ZoneId 迁 zone_{ZoneId}_db(旧行为);1..999999 = zone_{id}_db;>=1000000 = player_store_{id}_db。非 0 时覆盖 ZoneId 推导")
 	)
 	flag.Parse()
 
 	conf.MustLoad(*configFile, &config.AppConfig)
 	config.AppConfig.Normalize()
-	if config.AppConfig.ZoneId == 0 {
+	if *storageID == 0 && config.AppConfig.ZoneId == 0 {
 		log.Fatalf("ZoneId must be set in %s (> 0)", *configFile)
 	}
-	config.AppConfig.ServerConfig.Database.DBName = config.ZoneDBName(config.AppConfig.ZoneId)
 
 	allow, err := proto_sql.AllowlistSpec().Resolve()
 	if err != nil {
 		log.Fatalf("resolve database allow list: %v", err)
 	}
-	target := config.AppConfig.ServerConfig.Database.DBName
-	logf("target database=%s zone=%d allowlist=%s", target, config.AppConfig.ZoneId, allow.String())
+	target, runnerAllow, admittedBy, err := migrationTarget(config.AppConfig.ZoneId, *storageID, allow,
+		config.AppConfig.Placement.StoreFamiliesAllowed(), proto_sql.RelaxEmptyAllowlist())
+	if err != nil {
+		log.Fatalf("resolve migration target: %v", err)
+	}
+	config.AppConfig.ServerConfig.Database.DBName = target
+	if *storageID == 0 {
+		logf("target database=%s zone=%d allowlist=%s", target, config.AppConfig.ZoneId, allow.String())
+	} else {
+		logf("target database=%s storage=%d admitted_by=%s allowlist=%s", target, *storageID, admittedBy, runnerAllow.String())
+		if admittedBy == proto_sql.StoreAdmittedByFamily && *createDatabase {
+			// CreateDatabase 只认外部白名单;家族放行不延伸到建库,见包注释。提前说清楚,免得以为是 bug。
+			logf("注意:%s 仅由 Placement.AllowStoreFamilies 放行;-create-database 仍要求它出现在外部白名单里(%s)",
+				target, dbguard.AllowedDatabasesEnv)
+		}
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
@@ -93,7 +116,7 @@ func main() {
 		InnodbLockWaitSeconds: migrateCfg.InnodbLockWaitSeconds,
 		StatementTimeout:      time.Duration(migrateCfg.StatementTimeoutSeconds) * time.Second,
 		AdvisoryLockTimeout:   time.Duration(migrateCfg.AdvisoryLockSeconds) * time.Second,
-		Allow:                 allow,
+		Allow:                 runnerAllow,
 		RelaxEmptyAllowlist:   proto_sql.RelaxEmptyAllowlist(),
 		ExpectedDatabase:      target,
 		DryRun:                *command == "plan",
@@ -108,6 +131,46 @@ func main() {
 	default:
 		log.Fatalf("unknown -command %q (want status | plan | up)", *command)
 	}
+}
+
+// migrationTarget 决定本次迁移的目标库、交给 runner 的有效白名单与放行依据。
+//
+//   - storageID == 0:库名按 ZoneId 推导,白名单原样返回 —— 与加 -storage-id 之前逐字节相同;
+//   - storageID != 0:库名 = placement.StoreDBName(storageID),放行判定与业务服务按需打开同一个函数
+//     (proto_sql.AdmitStore)。家族放行的库不在外部清单里,而 runner 会按清单断言连上的库,所以把它并进
+//     一份**仅本次迁移使用**的有效清单;原清单不改,也不回写任何配置。
+//
+// 外部白名单为空且不是 dev 的 warn 档时照样拒绝:业务服务在这种部署上根本起不来(InitDB 拒启),
+// 家族放行不能替一个没注入白名单的部署兜底。warn 档的空白名单原样交给 runner,由它打 WARN 放行,
+// dev 的「宽松」保持看得见。
+func migrationTarget(zoneID uint32, storageID uint64, allow dbguard.Allowlist, familiesAllowed, relaxEmptyAllowlist bool) (string, dbguard.Allowlist, string, error) {
+	if storageID == 0 {
+		if zoneID == 0 {
+			return "", allow, "", errors.New("ZoneId must be > 0 when -storage-id is 0")
+		}
+		return config.ZoneDBName(zoneID), allow, "", nil
+	}
+	if storageID > math.MaxUint32 {
+		return "", allow, "", fmt.Errorf("-storage-id %d exceeds uint32", storageID)
+	}
+	name, _ := placement.StoreDBName(uint32(storageID))
+	if allow.Empty() && !relaxEmptyAllowlist {
+		return "", allow, "", fmt.Errorf("%w: refusing to migrate %s (-storage-id %d) without an injected allow list (set %s)",
+			dbguard.ErrAllowlistMissing, name, storageID, dbguard.AllowedDatabasesEnv)
+	}
+	admittedBy, ok := proto_sql.AdmitStore(allow, familiesAllowed, name)
+	if !ok {
+		return "", allow, "", fmt.Errorf("%w: -storage-id %d derives %s, which is neither in the allow list %s nor admitted by Placement.AllowStoreFamilies=%v",
+			dbguard.ErrDatabaseNotAllowed, storageID, name, allow.String(), familiesAllowed)
+	}
+	if admittedBy == proto_sql.StoreAdmittedByAllowlist || allow.Empty() {
+		return name, allow, admittedBy, nil
+	}
+	effective := dbguard.Allowlist{
+		Names:  append(append([]string(nil), allow.Names...), name),
+		Source: allow.Source + "+placement-family",
+	}
+	return name, effective, admittedBy, nil
 }
 
 // migrationMysqlConfig 复用业务服务的目标与严格模式,只为迁移台账开启时间解析。

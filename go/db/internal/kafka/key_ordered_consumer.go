@@ -4,7 +4,6 @@ import (
 	"context"
 	db_config "db/internal/config"
 	"db/internal/dbguard"
-	"db/internal/logic/pkg/proto_sql"
 	"db/internal/metrics"
 	"encoding/binary"
 	"encoding/json"
@@ -89,6 +88,9 @@ type KeyOrderedKafkaConsumer struct {
 	retryDeadQueueKey    string
 	retryConsumeInterval time.Duration
 	retryMaxTimes        int
+
+	// placement 是按玩家落点选库的依赖(player-storage-placement.md §6),所有 worker 共用。
+	placement *placementRouter
 }
 
 type worker struct {
@@ -107,6 +109,10 @@ type worker struct {
 	// 数据源(见 guardOwnerEpoch)。生产由 buildWorker 装成 redisAppliedEpochStore;测试
 	// 注入 map 实现。nil 时守卫对带 epoch 的任务 fail-closed 成可重试错误,而不是放行。
 	appliedEpochs appliedEpochStore
+
+	// placement 为每条 read / write 任务选落点库并在落库后复核(routeTask / placementRoute.confirm)。
+	// 生产由 buildWorker 装配;nil 时任务 fail-closed 成可重试错误,绝不回落到本 zone 库。
+	placement *placementRouter
 
 	// subShardCount is the number of intra-partition parallel goroutines
 	// that share the work for this partition. With subShardCount=1 the
@@ -304,10 +310,15 @@ func failKafkaTask(task *workerTask, err error) {
 	task.acker.fail(task.kafkaMsg, err)
 }
 
-// dbOpHandler is the handler signature for DB operations.
+// dbOpHandler 在选好的落点库上执行一条任务的 SQL 半程(读 = SELECT,写 = 大字段闸 + REPLACE),
+// 不碰任何共享 Redis。
+//
+// 共享缓存回写与读结果发布是另一半(publishDBOpResult),由 runDBOp 在落库后复核(§6.3)通过之后
+// 才做。拆成两半是为了让复核卡在「SQL 已执行、别人还没看到结果」这一个点上 —— 复核写在公共路径里,
+// 任何 handler(包括测试替换进来的)都绕不过去。
 type dbOpHandler func(
 	ctx context.Context,
-	redisClient redis.Cmdable,
+	store *proto2mysql.DB,
 	task *db_proto.DBTask,
 	msg proto.Message,
 ) string
@@ -318,15 +329,27 @@ var dbOpHandlers = map[string]dbOpHandler{
 }
 
 func handleDBReadOp(
-	ctx context.Context,
-	redisClient redis.Cmdable,
+	_ context.Context,
+	store *proto2mysql.DB,
 	task *db_proto.DBTask,
 	msg proto.Message,
 ) string {
-	if err := proto_sql.DB.SqlModel.FindOneByWhereClause(msg, task.WhereCase); err != nil && !errors.Is(err, proto2mysql.ErrNoRowsFound) {
+	if err := store.FindOneByWhereClause(msg, task.WhereCase); err != nil && !errors.Is(err, proto2mysql.ErrNoRowsFound) {
 		return fmt.Sprintf("db read failed: %v", err)
 	}
+	return ""
+}
 
+// publishDBOpResult 是任务的共享 Redis 半程:读 = 缓存回写 + 结果发布,写 = 缓存回写。
+// 只能在落库后复核通过之后调用(见 runDBOp)。
+func publishDBOpResult(ctx context.Context, redisClient redis.Cmdable, task *db_proto.DBTask, msg proto.Message) string {
+	if task.Op == "read" {
+		return publishDBReadResult(ctx, redisClient, task, msg)
+	}
+	return publishDBWriteResult(ctx, redisClient, task, msg)
+}
+
+func publishDBReadResult(ctx context.Context, redisClient redis.Cmdable, task *db_proto.DBTask, msg proto.Message) string {
 	resultData, err := proto.Marshal(msg)
 	if err != nil {
 		return fmt.Sprintf("marshal read result failed: %v", err)
@@ -348,28 +371,37 @@ func handleDBReadOp(
 			Data:    resultData,
 			Error:   "",
 		}
-		resBytes, err := proto.Marshal(result)
-		if err != nil {
-			return fmt.Sprintf("marshal result failed: %v", err)
-		}
-		resultKey := fmt.Sprintf("task:result:%s", task.TaskId)
-		if err := redisClient.LPush(ctx, resultKey, resBytes).Err(); err != nil {
-			return fmt.Sprintf("save read result failed: %v", err)
-		}
-		if err := redisClient.Expire(ctx, resultKey, taskResultExpireDuration).Err(); err != nil {
-			return fmt.Sprintf("set expire for result key failed: %v", err)
-		}
-		// Notify event-driven subscribers (e.g. login dispatcher) so they don't
-		// have to BLPOP-wait. Existing LPush + BLPOP consumers still work; this
-		// is purely additive. Failure to publish only degrades latency for
-		// notification-based consumers (their stale-cleanup will catch it).
-		if err := redisClient.Publish(ctx, taskResultNotifyChannel, task.TaskId).Err(); err != nil {
-			logx.Errorf("publish task result notify failed: taskID=%s, err=%v", task.TaskId, err)
+		if err := publishTaskResult(ctx, redisClient, task.TaskId, result); err != nil {
+			return err.Error()
 		}
 		metrics.ObserveStage(metrics.StageResultPublish, "read", time.Since(publishStart))
 	}
 
 	return ""
+}
+
+// publishTaskResult 把读任务的回执交给等待方:LPUSH task:result:{taskID} + EXPIRE + PUBLISH 通知。
+// 成功回执与落点失败回执(failReadTask)共用这一条路径。
+func publishTaskResult(ctx context.Context, redisClient redis.Cmdable, taskID string, result *db_proto.TaskResult) error {
+	resBytes, err := proto.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("marshal result failed: %w", err)
+	}
+	resultKey := fmt.Sprintf("task:result:%s", taskID)
+	if err := redisClient.LPush(ctx, resultKey, resBytes).Err(); err != nil {
+		return fmt.Errorf("save read result failed: %w", err)
+	}
+	if err := redisClient.Expire(ctx, resultKey, taskResultExpireDuration).Err(); err != nil {
+		return fmt.Errorf("set expire for result key failed: %w", err)
+	}
+	// Notify event-driven subscribers (e.g. login dispatcher) so they don't
+	// have to BLPOP-wait. Existing LPush + BLPOP consumers still work; this
+	// is purely additive. Failure to publish only degrades latency for
+	// notification-based consumers (their stale-cleanup will catch it).
+	if err := redisClient.Publish(ctx, taskResultNotifyChannel, taskID).Err(); err != nil {
+		logx.Errorf("publish task result notify failed: taskID=%s, err=%v", taskID, err)
+	}
+	return nil
 }
 
 // appliedSeqKey stores the last successfully applied Kafka cursor for a given
@@ -768,8 +800,8 @@ func InitBlobGuard(cfg db_config.BlobGuardConfig) {
 }
 
 func handleDBWriteOp(
-	ctx context.Context,
-	redisClient redis.Cmdable,
+	_ context.Context,
+	store *proto2mysql.DB,
 	task *db_proto.DBTask,
 	msg proto.Message,
 ) string {
@@ -786,9 +818,13 @@ func handleDBWriteOp(
 		return fmt.Sprintf("db write rejected by blob size gate: %v", guardErr)
 	}
 
-	if err := proto_sql.DB.SqlModel.Save(msg); err != nil {
+	if err := store.Save(msg); err != nil {
 		return fmt.Sprintf("db write failed: %v", err)
 	}
+	return ""
+}
+
+func publishDBWriteResult(ctx context.Context, redisClient redis.Cmdable, task *db_proto.DBTask, msg proto.Message) string {
 	if err := writeBackDBCache(ctx, redisClient, task, msg); err != nil {
 		// MySQL is already durable, but ACKing here would leave login reading an
 		// older Redis snapshot indefinitely. Return failure so the same
@@ -815,10 +851,24 @@ func writeBackDBCache(ctx context.Context, redisClient redis.Cmdable, task *db_p
 	return nil
 }
 
+// NewKeyOrderedKafkaConsumer 建消费者。
+//
+// placementRedis 是落点记录所在的 Redis(Placement.Redis,缺省传 redisClient 本身);stores 按落点编号
+// 给出已打开的库(proto_sql.StoreRegistry)。两者都不许缺:缺了只能回落「按进程 zone 选库」的旧行为,
+// 而写过落点记录之后那就是错库写(player-storage-placement.md §13)。
 func NewKeyOrderedKafkaConsumer(
 	cfg db_config.Config,
 	redisClient redis.Cmdable,
+	placementRedis redis.Cmdable,
+	stores StoreResolver,
 ) (*KeyOrderedKafkaConsumer, error) {
+	if placementRedis == nil || stores == nil {
+		return nil, errors.New("placement routing needs both the placement Redis client and the store registry")
+	}
+	if cfg.ZoneId == 0 {
+		return nil, errors.New("placement routing needs ZoneId > 0")
+	}
+
 	config := sarama.NewConfig()
 	config.Version = sarama.V3_5_0_0
 	config.Consumer.Return.Errors = true
@@ -864,6 +914,12 @@ func NewKeyOrderedKafkaConsumer(
 		retryDeadQueueKey:    retryDeadQueueKey,
 		retryConsumeInterval: 1 * time.Second,
 		retryMaxTimes:        3,
+		placement: &placementRouter{
+			rc:       placementRedis,
+			zone:     cfg.ZoneId,
+			required: cfg.Placement.Required,
+			stores:   stores,
+		},
 	}
 	for i := int32(0); i < cfg.ServerConfig.Kafka.PartitionCnt; i++ {
 		c.workers[i] = c.buildWorker(i)
@@ -893,6 +949,7 @@ func (c *KeyOrderedKafkaConsumer) buildWorker(partition int32) *worker {
 		retryDeadQueueKey:  c.retryDeadQueueKey,
 		wg:                 c.wg,
 		appliedEpochs:      redisAppliedEpochStore{rc: c.redisClient},
+		placement:          c.placement,
 		subShardCount:      c.subShardCount,
 		subShardChans:      shardChans,
 	}
@@ -1501,12 +1558,23 @@ func (w *worker) handleTask(task *workerTask, isOfflineExpand bool) {
 		return
 	}
 
+	// 按玩家落点选库(player-storage-placement.md §6.2):写在上面三道守卫全部通过之后才选,
+	// 选中的库连同选库时的快照交给执行路径,SQL 之后由 runDBOp 复核(§6.3)。
+	// 读写之外的 op 不选库,执行时按 unsupported op 报错(与改动前相同)。
+	var route *placementRoute
+	if dbTask.Op == "write" || dbTask.Op == "read" {
+		var routed bool
+		if route, routed = w.routeTask(task, dbTask); !routed {
+			return
+		}
+	}
+
 	startTime := time.Now()
 	processCtx := w.ctx
 	if task.claimCtx != nil {
 		processCtx = task.claimCtx
 	}
-	err := processDBTask(processCtx, w, dbTask, w.partition, task.seq, isOfflineExpand)
+	err := processDBTask(processCtx, w, dbTask, route, w.partition, task.seq, isOfflineExpand)
 
 	if err != nil {
 		logx.Errorf("worker process task failed: partition=%d, cost=%v, err=%v",
@@ -1699,20 +1767,20 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 	}
 }
 
-func processDBTask(ctx context.Context, w *worker, task *db_proto.DBTask, partition int32, seq uint64, isOfflineExpand bool) error {
+func processDBTask(ctx context.Context, w *worker, task *db_proto.DBTask, route *placementRoute, partition int32, seq uint64, isOfflineExpand bool) error {
 	key := strconv.FormatUint(task.Key, 10)
 	logx.Debugf("received db task: taskID=%s, key=%s, partition=%d, seq=%d, isOfflineExpand=%v",
 		task.TaskId, key, partition, seq, isOfflineExpand)
 
 	if isOfflineExpand {
 		logx.Debugf("offline expand mode: skip lock/status check, taskID=%s", task.TaskId)
-		return processTaskWithoutLock(ctx, w.redisClient, task)
+		return processTaskWithoutLock(ctx, w.redisClient, task, route)
 	}
 
 	expandStatus, err := kafkautil.GetExpandStatus(ctx, w.redisClient, w.topic)
 	if err != nil {
 		logx.Errorf("get expand status failed: key=%s, taskID=%s, err=%v", key, task.TaskId, err)
-		return tryLockAndProcess(ctx, w, key, task, seq)
+		return tryLockAndProcess(ctx, w, key, task, seq, route)
 	}
 
 	currentTime := time.Now().UnixMilli()
@@ -1726,10 +1794,10 @@ func processDBTask(ctx context.Context, w *worker, task *db_proto.DBTask, partit
 
 	if expandStatus.Status == kafkautil.ExpandStatusExpanding {
 		logx.Debugf("expanding mode: try lock for task: taskID=%s, key=%s", task.TaskId, key)
-		return tryLockAndProcess(ctx, w, key, task, seq)
+		return tryLockAndProcess(ctx, w, key, task, seq, route)
 	}
 
-	return processTaskWithoutLock(ctx, w.redisClient, task)
+	return processTaskWithoutLock(ctx, w.redisClient, task, route)
 }
 
 const orderingLockTTL = 2 * time.Minute
@@ -1840,7 +1908,7 @@ func releaseOrderingLock(ctx context.Context, lease *orderingLease, task *db_pro
 	}
 }
 
-func tryLockAndProcess(ctx context.Context, worker *worker, key string, task *db_proto.DBTask, seq uint64) error {
+func tryLockAndProcess(ctx context.Context, worker *worker, key string, task *db_proto.DBTask, seq uint64, route *placementRoute) error {
 	lockKey := fmt.Sprintf("kafka:consumer:lock:%s", key)
 	lockTTL := 5 * time.Second
 
@@ -1863,10 +1931,10 @@ func tryLockAndProcess(ctx context.Context, worker *worker, key string, task *db
 		}
 	}()
 
-	return processTaskWithoutLock(ctx, worker.redisClient, task)
+	return processTaskWithoutLock(ctx, worker.redisClient, task, route)
 }
 
-func processTaskWithoutLock(ctx context.Context, redisClient redis.Cmdable, task *db_proto.DBTask) error {
+func processTaskWithoutLock(ctx context.Context, redisClient redis.Cmdable, task *db_proto.DBTask, route *placementRoute) error {
 	totalStart := time.Now()
 	opLabel := task.Op
 	if opLabel != "read" && opLabel != "write" {
@@ -1888,24 +1956,49 @@ func processTaskWithoutLock(ctx context.Context, redisClient redis.Cmdable, task
 		return fmt.Errorf("unmarshal task body failed: taskID=%s, err=%w", task.TaskId, err)
 	}
 
-	handler, ok := dbOpHandlers[task.Op]
-	var resultErr string
-	if !ok {
-		resultErr = fmt.Sprintf("unsupported op: %s", task.Op)
+	var opErr error
+	if handler, ok := dbOpHandlers[task.Op]; !ok {
+		opErr = fmt.Errorf("unsupported op: %s", task.Op)
 	} else {
+		// op_handler 口径与改动前一致:覆盖 SQL + 共享缓存回写(+ 读结果发布),另外多了夹在中间的复核读。
 		handlerStart := time.Now()
-		resultErr = handler(ctx, redisClient, task, msg)
+		opErr = runDBOp(ctx, redisClient, task, msg, handler, route)
 		metrics.ObserveStage(metrics.StageOpHandler, opLabel, time.Since(handlerStart))
 	}
 
+	errText := ""
+	if opErr != nil {
+		errText = opErr.Error()
+	}
 	logx.Infof("task processed: taskID=%s, op=%s, success=%v, err=%s",
-		task.TaskId, task.Op, resultErr == "", resultErr)
+		task.TaskId, task.Op, opErr == nil, errText)
 
-	if resultErr != "" {
+	if opErr != nil {
 		metrics.ObserveResult(opLabel, "error")
-		return fmt.Errorf("%s", resultErr)
+		return opErr
 	}
 	metrics.ObserveResult(opLabel, "ok")
+	return nil
+}
+
+// runDBOp 按固定顺序执行一条任务:选中的落点库上跑 SQL → 落库后复核(§6.3)→ 共享缓存回写 / 读结果发布。
+//
+// 复核不通过时返回包着 errPlacementMoved 的错误:共享缓存不写、读结果不发,调用方也就不会推进游标与
+// applied epoch —— 这正是「可重试,不标记游标」。route 缺失是装配错误,fail-closed,绝不回落到某个默认库。
+func runDBOp(ctx context.Context, redisClient redis.Cmdable, task *db_proto.DBTask, msg proto.Message,
+	handler dbOpHandler, route *placementRoute) error {
+	if route == nil || route.store == nil {
+		return fmt.Errorf("no placement route for op=%s taskID=%s; refusing to guess a database", task.Op, task.TaskId)
+	}
+	if resultErr := handler(ctx, route.store, task, msg); resultErr != "" {
+		return errors.New(resultErr)
+	}
+	if err := route.confirm(ctx); err != nil {
+		return err
+	}
+	if resultErr := publishDBOpResult(ctx, redisClient, task, msg); resultErr != "" {
+		return errors.New(resultErr)
+	}
 	return nil
 }
 
@@ -1931,10 +2024,12 @@ func encodeRetryPayload(task *db_proto.DBTask, seq uint64, partition int32, hasP
 
 func (w *worker) deferFailedTask(task *workerTask, dbTask *db_proto.DBTask, cause error) {
 	if task.fromRetry {
-		if errors.Is(cause, errOrderingLockBusy) && dbTask.RetryCount > 0 {
+		if retryBudgetExempt(dbTask, cause) && dbTask.RetryCount > 0 {
 			// Lock contention is serialization backpressure, not a failed DB
 			// attempt. Do not consume the finite business-retry budget while a
 			// prior owner (possibly an old rebalance claim) is still draining.
+			// 落点冻结 / 复核发现落点刚变 / 落点库暂不可用(写)同理,见 retryBudgetExempt。
+			// consumeOneRetryTask 认领时先 +1,这里减回去,重试次数就停在原地。
 			dbTask.RetryCount--
 		}
 		payload, err := encodeRetryPayload(dbTask, task.seq, task.originPartition, task.hasOriginPartition)
@@ -1949,6 +2044,15 @@ func (w *worker) deferFailedTask(task *workerTask, dbTask *db_proto.DBTask, caus
 		if err != nil {
 			logx.Errorf("retry reschedule failed; receipt remains in processing for recovery: taskID=%s cause=%v err=%v",
 				dbTask.TaskId, cause, err)
+			return
+		}
+		if errors.Is(cause, errPlacementFrozen) {
+			// 搬库冻结期间每条写每轮重试都会走到这里(不耗预算、直到解冻),与 routeTask 的冻结分支同口径只打
+			// DEBUG,否则批量搬库时每个 topic 每秒上百条 ERROR 会淹没真故障;冻结长时间不解除看
+			// frozen_deferred 计数告警。落点库不可用(errPlacementStoreUnavailable)是真实基础设施故障,
+			// 仍打 ERROR。
+			logx.Debugf("retry task rescheduled (placement frozen): taskID=%s retryCount=%d cause=%v",
+				dbTask.TaskId, dbTask.RetryCount, cause)
 			return
 		}
 		logx.Errorf("retry task rescheduled: taskID=%s retryCount=%d cause=%v",

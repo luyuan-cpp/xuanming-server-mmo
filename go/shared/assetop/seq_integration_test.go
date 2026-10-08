@@ -25,6 +25,27 @@ import (
 //
 // 连接经 go-zero 的 sqlx 拿 *sql.DB:shared 不直接引 MySQL 驱动,驱动由 sqlx 带进来,
 // 这样 shared 的 go.mod 里不会多出一条**直接**依赖。
+//
+// # 验收开关 ASSETOP_REQUIRE_MYSQL_TESTS(与 go/friend 的 FRIEND_REQUIRE_MYSQL_TESTS 同一口径)
+//
+// 它**不是**第二个门控(门控仍只有 ASSETOP_TEST_MYSQL_DSN 一个),只决定"跳过算不算失败"。设了之后:
+//   - ASSETOP_TEST_MYSQL_DSN 为空 → TestAssetopIntegrationGateIsHonored 判红(见
+//     lock_waits_query_error_test.go),不再让"整组静默 Skip"与"全绿"在报告里长得一样;
+//   - 读不了 performance_schema 的锁视图 → EnsureSeqRowRetry 那条编排用例判红,不再静默 Skip。
+//
+// 验收一律这样跑(PowerShell,工作目录 go/shared;账号必须能 SELECT performance_schema.data_locks /
+// data_lock_waits,库级授权的 appuser 通常不行,用一次性库上的 root;密码见 deploy/docker-compose.yml,
+// 不要写进任何被跟踪的文件):
+//
+//	$env:ASSETOP_TEST_MYSQL_DSN='root:<root 密码>@tcp(127.0.0.1:3306)/assetop_it'
+//	$env:ASSETOP_REQUIRE_MYSQL_TESTS='1'
+//	go test ./assetop/ -count=1 -v
+//
+// 通过标准:-v 输出里本文件带 Integration 的用例全部 PASS,且 TestAssetopIntegrationGateIsHonored 也 PASS
+// (它只在验收模式下生效,DSN 为空时判红)。
+//
+// ⚠ 本文件没有 build tag,所以不设 DSN 时用例仍会跑到、然后 Skip;判断"到底跑了没有"只能看 -v 输出里的
+// PASS / SKIP,或者把上面的开关打开让 Skip 变红。
 
 const (
 	itSeqTable = "assetop_it_seq"
@@ -346,38 +367,136 @@ func alwaysRetryable(error) bool { return true }
 
 // ── 2026-09-21 死锁审计的三条回归 ──
 
-// itIsLockConflict 按错误文本认 1213 / 1205。集成测试刻意不直接 import MySQL 驱动(理由见文件头),
-// 所以不能 errors.As 到 *mysql.MySQLError;生产侧的分类函数在各业务服务里,按错误号判。
-func itIsLockConflict(err error) bool {
+// itMySQLErrorNumberIs 报告 err 的文本里是否带着 MySQL 错误号 number。
+//
+// 集成测试刻意不直接 import MySQL 驱动(理由见文件头:shared 的 go.mod 里不多出一条直接依赖),所以拿不到
+// *mysql.MySQLError 去读 .Number,只能认驱动生成的文本。go-sql-driver 的 MySQLError.Error() 只有两种形态
+// (v1.9.0 errors.go):"Error <号>: <文案>" 与带 SQLSTATE 的 "Error <号> (<SQLSTATE>): <文案>",
+// 所以判据是"`Error <号>` 紧跟 ':' 或 ' ('"。不用 strings.Contains 裸比,是因为那样 "Error 11420" 会被当成
+// 1142;这里多要一个后缀字符就能把它挡掉。错误被 fmt.Errorf("%w") 包过时前缀不在开头,所以扫全串而不是只看开头。
+//
+// 文本判定的脆弱性只会往**判红**的方向失效:认不出号 → 不归"不可观测" → 判红。它绝不会把该红的报成 SKIP,
+// 而这正是 2026-09-21 复审要的方向(见 itLockWaitsQueryError)。
+func itMySQLErrorNumberIs(err error, number uint16) bool {
 	if err == nil {
 		return false
 	}
-	s := err.Error()
-	return strings.Contains(s, "Error 1213") || strings.Contains(s, "Error 1205")
+	needle := fmt.Sprintf("Error %d", number)
+	for s := err.Error(); ; {
+		at := strings.Index(s, needle)
+		if at < 0 {
+			return false
+		}
+		rest := s[at+len(needle):]
+		if strings.HasPrefix(rest, ":") || strings.HasPrefix(rest, " (") {
+			return true
+		}
+		s = rest
+	}
 }
 
-// itAwaitLockWaiters 轮询 performance_schema,直到当前库 table 上至少有 want 个事务在排队等行锁。
-// 读不了 performance_schema(账号无权限 / 不是 MySQL 8)时返回 ok=false,由调用方 Skip:那是环境问题,不是产品缺陷。
-func itAwaitLockWaiters(ctx context.Context, db *sql.DB, table string, want int, budget time.Duration) (waiters int, ok bool, err error) {
+// itIsLockConflict 认 1213(死锁)/ 1205(锁等待超时)。生产侧的分类函数在各业务服务里,按错误号判。
+func itIsLockConflict(err error) bool {
+	return itMySQLErrorNumberIs(err, 1213) || itMySQLErrorNumberIs(err, 1205)
+}
+
+// assetopRequireMySQLEnv 是验收开关(见文件头注):设了就把"跳过"一律判红。
+// 它**不是**第二个门控,门控仍只有 ASSETOP_TEST_MYSQL_DSN 一个。
+const assetopRequireMySQLEnv = "ASSETOP_REQUIRE_MYSQL_TESTS"
+
+// itRequireMySQLTests 报告是否处于验收模式。
+func itRequireMySQLTests() bool {
+	return os.Getenv(assetopRequireMySQLEnv) != ""
+}
+
+// errItLockWaitsUnobservable:测试账号读不了 performance_schema 的锁视图,或实例上根本没有这两张表。
+// 这时手工编排做不出来 —— 那不是产品缺陷,由 itFailOrSkipOnLockWaitError 按验收模式决定跳过还是判红。
+// 只有 itIsLockWaitsUnobservable 认定的错误号才归到这里,见 itLockWaitsQueryError。
+var errItLockWaitsUnobservable = errors.New("读 performance_schema.data_lock_waits 失败")
+
+// itAwaitLockWaiters 轮询,直到当前库 table 上至少有 want 个事务在排队等行锁,或 budget 用尽(返回错误)。
+// 靠轮询**观察**,不靠 sleep 估时间:两次轮询之间的短停顿只是不去空转打爆 MySQL,
+// 条件不满足就一直等到预算用尽并报错,不会"睡够了就当它们已经在等"。
+// 查询失败时的定性见 itLockWaitsQueryError:只有权限 / 对象缺失类错误算"不可观测",ctx 结束与其余错误都判红。
+func itAwaitLockWaiters(ctx context.Context, db *sql.DB, table string, want int, budget time.Duration) (int, error) {
 	const q = `
 		SELECT COUNT(DISTINCT w.REQUESTING_ENGINE_TRANSACTION_ID)
 		FROM performance_schema.data_lock_waits w
 		JOIN performance_schema.data_locks l ON l.ENGINE_LOCK_ID = w.REQUESTING_ENGINE_LOCK_ID
 		WHERE l.OBJECT_SCHEMA = DATABASE() AND l.OBJECT_NAME = ?`
+	const pollEvery = 10 * time.Millisecond
 	deadline := time.Now().Add(budget)
 	for {
-		if qErr := db.QueryRowContext(ctx, q, table).Scan(&waiters); qErr != nil {
-			return 0, false, qErr
+		var waiters int
+		if err := db.QueryRowContext(ctx, q, table).Scan(&waiters); err != nil {
+			return 0, itLockWaitsQueryError(ctx, err)
 		}
 		if waiters >= want {
-			return waiters, true, nil
+			return waiters, nil
 		}
 		if time.Now().After(deadline) {
-			return waiters, true, fmt.Errorf("%v 内只看到 %d/%d 个事务排进 %s 的锁等待队列", budget, waiters, want, table)
+			return waiters, fmt.Errorf("%v 内只看到 %d/%d 个事务排进 %s 的锁等待队列", budget, waiters, want, table)
 		}
-		// 轮询间的短停顿只是不去空转打爆 MySQL;条件不满足就一直等到预算用尽,不靠 sleep 估时间。
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(pollEvery)
 	}
+}
+
+// itLockWaitsQueryError 给锁等待查询的失败定性:是"环境看不见锁等待"(可按模式跳过),还是"编排出错"(判红)。
+//
+// 2026-09-21 复审前这里把一切查询错误都当成"不可观测"(返回 ok=false),连 ctx 超时 / 取消也算,
+// 于是用例卡住会被报成 SKIP —— 该红的时候不红。现在:
+//   - 用例 ctx 已结束(预算用尽 / 被取消):带出 ctx 错误(errors.Is 可认出 context.DeadlineExceeded / Canceled),判红。
+//     这时查询失败只是结果,原因是编排卡住或超了预算。先看 ctx.Err() 而不是先看错误本身,是因为 ctx 结束时驱动
+//     报出来的形态不固定(可能是 ctx 错误,也可能是 invalid connection 之类),以 ctx 的状态为准。
+//   - MySQL 权限 / 对象缺失类错误(itIsLockWaitsUnobservable):归为 errItLockWaitsUnobservable。
+//   - 其余一律判红:断连、SQL 写错、服务端内部错误都说明编排本身坏了。
+//
+// 与 go/friend/internal/data/friend_guard_lock_order_mysql_test.go、go/trade/internal/data/listing_repo_integration_test.go
+// 的 lockWaitsQueryError 同一口径(只差:那两处能 errors.As 到 *mysql.MySQLError,这里按错误文本认号),
+// 改一处要同步另两处。定性回归在 lock_waits_query_error_test.go。
+func itLockWaitsQueryError(ctx context.Context, err error) error {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return fmt.Errorf("轮询锁等待时用例 ctx 已结束(编排卡住或超出预算,不是读不了 performance_schema): %w; 查询错误: %v", ctxErr, err)
+	}
+	if itIsLockWaitsUnobservable(err) {
+		return fmt.Errorf("%w: %v", errItLockWaitsUnobservable, err)
+	}
+	return fmt.Errorf("查询 performance_schema 锁等待失败,且不是权限 / 对象缺失类错误,按编排失败判红: %w", err)
+}
+
+// itIsLockWaitsUnobservable 只按 MySQL 错误号判定"账号或实例不支持观察锁等待" —— 都是环境问题,
+// 与被测的锁行为无关。刻意不匹配错误文案(文案随版本与语言变),也不把"查询失败"整体归进来。
+// 注意 performance_schema=OFF 时表仍在、只是恒为空,查询不报错,会走到 itAwaitLockWaiters 的"等待者没到齐"而判红;
+// 本仓的 MySQL 8 默认开启,真遇到时先检查 SELECT @@performance_schema。
+func itIsLockWaitsUnobservable(err error) bool {
+	for _, number := range []uint16{
+		1044, // ER_DBACCESS_DENIED_ERROR:对 performance_schema 库整体无权
+		1142, // ER_TABLEACCESS_DENIED_ERROR:对 data_lock_waits / data_locks 没有 SELECT 权限
+		1143, // ER_COLUMNACCESS_DENIED_ERROR:只授了部分列的 SELECT 权限
+		1146, // ER_NO_SUCH_TABLE:实例没有这两张表(MySQL 8.0 以前、MariaDB 等)
+		1227, // ER_SPECIFIC_ACCESS_DENIED_ERROR:缺某项全局权限
+	} {
+		if itMySQLErrorNumberIs(err, number) {
+			return true
+		}
+	}
+	return false
+}
+
+// itFailOrSkipOnLockWaitError 处理 itAwaitLockWaiters 的错误。读不了 performance_schema 时:验收模式
+// (ASSETOP_REQUIRE_MYSQL_TESTS)下判红 —— 那条用例是"首个插入者回滚后两个排队者仍要成功"唯一的确定性证据,
+// 不许静默跳过;否则跳过(不代表通过)。其余错误(等待者没到齐、ctx 结束、非权限类查询错误)一律判红:
+// 编排失败本身就说明锁行为与推演不符,或者用例卡住了。
+func itFailOrSkipOnLockWaitError(t *testing.T, err error, expectation string) {
+	t.Helper()
+	if errors.Is(err, errItLockWaitsUnobservable) {
+		if itRequireMySQLTests() {
+			t.Fatalf("%s 已设置(验收模式),无法编排本场景(测试账号需要 performance_schema 的 SELECT 权限): %v",
+				assetopRequireMySQLEnv, err)
+		}
+		t.Skipf("无法编排本场景(测试账号需要 performance_schema 的 SELECT 权限),跳过 —— 不代表通过: %v", err)
+	}
+	t.Fatalf("夹具编排失败:%v —— %s", err, expectation)
 }
 
 // TestIntegrationAllocateSeqDoesNotDeadlockWithFinalize:分配与终结在同一玩家同一流上对撞,不得出现 1213。
@@ -562,13 +681,12 @@ func TestIntegrationEnsureSeqRowRetrySurvivesRolledBackFirstInserter(t *testing.
 	}
 	collect := func() []error { return []error{<-results, <-results} }
 
-	if _, ok, err := itAwaitLockWaiters(ctx, db, itSeqTable, 2, 10*time.Second); err != nil || !ok {
+	if _, err := itAwaitLockWaiters(ctx, db, itSeqTable, 2, 10*time.Second); err != nil {
+		// 先把编排里起的两个 goroutine 收干净(回滚解锁 → 它们各自返回),再交给 itFailOrSkipOnLockWaitError
+		// 定性:Skip / Fatal 都会结束本用例,留着未回收的 goroutine 只会让后面的用例看到脏连接。
 		_ = first.Rollback()
 		collect()
-		if !ok {
-			t.Skipf("读 performance_schema.data_lock_waits 失败,无法编排本场景,跳过(不代表通过): %v", err)
-		}
-		t.Fatalf("夹具编排失败:%v —— 未提交的首个插入应当让两个补行都卡在重复键检查上", err)
+		itFailOrSkipOnLockWaitError(t, err, "未提交的首个插入应当让两个补行都卡在重复键检查上")
 	}
 
 	// 回滚:两个等待者此刻继承间隙锁、互相挡住插入意向锁,成环的时刻就在这里。

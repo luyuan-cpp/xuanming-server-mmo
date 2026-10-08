@@ -3,6 +3,10 @@ package main
 // 2026-09-21 死锁审计 #17 的纯单测(不连库):RC 会话 DSN、锁冲突判定、有界重试、点更新 SQL 形状、
 // 围栏保留文案。执行计划与真实交错(整区 UPDATE 与 DisbandGuild 反序成环)在 integration_test.go 的
 // TestIT_ZonePointUpdatesArePrimaryKeyPointLookups / TestIT_MigrateGuildZone_ConcurrentDisbandDoesNotDeadlock。
+//
+// 2026-09-28(player-storage-placement.md §12 A15)起每个 id 一个显式短事务:SELECT … FOR UPDATE →
+// 带 zone 复核的 UPDATE → COMMIT。本文件末尾用内存替身(fakeZoneTable)钉住事务的口径:升序、一个 id
+// 一个事务、先锁再改、不在 from 就只回滚、锁冲突重试整个事务、硬错误立即停且回滚。
 
 import (
 	"context"
@@ -214,6 +218,186 @@ func TestZonePointUpdateSQL_IsAPrimaryKeyEqualityWithZoneGuard(t *testing.T) {
 	}
 	if strings.Contains(got, " IN (") {
 		t.Error("the point update must not use IN lists")
+	}
+}
+
+func TestZoneLockSelectSQL_LocksOnlyThePrimaryKeyRow(t *testing.T) {
+	// 单行事务第一句:WHERE 只有完整主键等值 + FOR UPDATE —— 执行期就拿到主键锁(TiDB 悲观模式同样),
+	// 不带 zone 条件,也就不会让优化器去看 zone 二级索引。zone 的复核交给随后那条带旧值守卫的 UPDATE。
+	for _, c := range []struct{ got, want string }{
+		{zoneLockSelectSQL(guildQualified(defaultGuildSchema, guildTable), guildPKColumn, guildZoneColumn),
+			"SELECT zone_id FROM mmorpg_guild.guild WHERE guild_id = ? FOR UPDATE"},
+		{zoneLockSelectSQL(tradeListingQualified(defaultTradeSchema), tradeListingPKColumn, tradeMarketZoneColumn),
+			"SELECT market_zone FROM mmorpg_trade.trade_listing WHERE listing_id = ? FOR UPDATE"},
+	} {
+		if c.got != c.want {
+			t.Errorf("lock select = %q, want %q", c.got, c.want)
+		}
+		if strings.Contains(c.got, " IN (") || strings.Count(c.got, "?") != 1 {
+			t.Errorf("the lock select must be a single primary-key equality: %q", c.got)
+		}
+	}
+}
+
+// fakeZoneTable 是 zoneRowTx 的内存替身:一张「主键 → zone」表、按次序注入的错误与调用日志。
+// 未提交的改写只存在事务里,提交才落表 —— 与真库一样,回滚的事务什么也没留下。
+type fakeZoneTable struct {
+	zones      map[uint64]uint32
+	lockErrs   map[uint64][]error // lockZone 第 n 次调用返回第 n 个错误(nil = 正常)
+	updateErrs map[uint64][]error
+	log        []string
+}
+
+func (f *fakeZoneTable) begin(context.Context) (zoneRowTx, error) {
+	f.log = append(f.log, "begin")
+	return &fakeZoneTx{f: f}, nil
+}
+
+// popErr 取出 id 的下一个注入错误。
+func popErr(m map[uint64][]error, id uint64) error {
+	errs := m[id]
+	if len(errs) == 0 {
+		return nil
+	}
+	m[id] = errs[1:]
+	return errs[0]
+}
+
+type fakeZoneTx struct {
+	f       *fakeZoneTable
+	pending map[uint64]uint32
+}
+
+func (t *fakeZoneTx) lockZone(_ context.Context, id uint64) (uint32, bool, error) {
+	t.f.log = append(t.f.log, fmt.Sprintf("lock %d", id))
+	if err := popErr(t.f.lockErrs, id); err != nil {
+		return 0, false, err
+	}
+	zone, ok := t.f.zones[id]
+	return zone, ok, nil
+}
+
+func (t *fakeZoneTx) rewriteZone(_ context.Context, id uint64, from, to uint32) (int64, error) {
+	t.f.log = append(t.f.log, fmt.Sprintf("update %d", id))
+	if err := popErr(t.f.updateErrs, id); err != nil {
+		return 0, err
+	}
+	if zone, ok := t.f.zones[id]; !ok || zone != from {
+		return 0, nil
+	}
+	if t.pending == nil {
+		t.pending = map[uint64]uint32{}
+	}
+	t.pending[id] = to
+	return 1, nil
+}
+
+func (t *fakeZoneTx) commit() error {
+	t.f.log = append(t.f.log, "commit")
+	for id, zone := range t.pending {
+		t.f.zones[id] = zone
+	}
+	return nil
+}
+
+func (t *fakeZoneTx) rollback() error {
+	t.f.log = append(t.f.log, "rollback")
+	t.pending = nil
+	return nil
+}
+
+func newFakeZoneTable(zones map[uint64]uint32) *fakeZoneTable {
+	return &fakeZoneTable{zones: zones, lockErrs: map[uint64][]error{}, updateErrs: map[uint64][]error{}}
+}
+
+var testZoneTarget = zoneRewriteTarget{table: "mmorpg_guild.guild", pkCol: guildPKColumn, zoneCol: guildZoneColumn}
+
+func TestRewriteZoneRows_OneTransactionPerIDInAscendingOrder(t *testing.T) {
+	// 11 / 12 / 13 在源区;21 已在目标区(续跑或原住民);99 已被删除。输入故意乱序且有重复。
+	f := newFakeZoneTable(map[uint64]uint32{11: 901, 12: 901, 13: 901, 21: 902})
+	rec := &recordingSleep{}
+	retry := lockRetryPolicy{attempts: 3, baseBackoff: time.Millisecond, maxBackoff: time.Second, sleep: rec.sleep}
+	n, err := rewriteZoneRows(context.Background(), f.begin, retry, testZoneTarget, []uint64{13, 99, 11, 21, 12, 11}, 901, 902)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 3 {
+		t.Errorf("rewrote %d rows, want 3", n)
+	}
+	want := []string{
+		"begin", "lock 11", "update 11", "commit",
+		"begin", "lock 12", "update 12", "commit",
+		"begin", "lock 13", "update 13", "commit",
+		"begin", "lock 21", "rollback", // 已不在 from:只锁、不写、回滚放锁
+		"begin", "lock 99", "rollback", // 行已不存在:同上
+	}
+	if fmt.Sprint(f.log) != fmt.Sprint(want) {
+		t.Errorf("transaction log =\n%v\nwant\n%v", f.log, want)
+	}
+	for _, id := range []uint64{11, 12, 13, 21} {
+		if f.zones[id] != 902 {
+			t.Errorf("guild %d zone = %d, want 902", id, f.zones[id])
+		}
+	}
+	if len(rec.waits) != 0 {
+		t.Errorf("no lock conflict, but slept %v", rec.waits)
+	}
+}
+
+func TestRewriteZoneRows_RetriesTheWholeTransactionOnLockConflict(t *testing.T) {
+	f := newFakeZoneTable(map[uint64]uint32{11: 901, 12: 901})
+	// 12 的 UPDATE 先撞 1205(锁等待超时只回滚语句、不回滚事务),再在锁读上撞 1213,第三次才成。
+	f.updateErrs[12] = []error{&mysql.MySQLError{Number: 1205}}
+	f.lockErrs[12] = []error{nil, &mysql.MySQLError{Number: 1213}}
+	rec := &recordingSleep{}
+	retry := lockRetryPolicy{attempts: 5, baseBackoff: 10 * time.Millisecond, maxBackoff: time.Second, sleep: rec.sleep}
+	n, err := rewriteZoneRows(context.Background(), f.begin, retry, testZoneTarget, []uint64{11, 12}, 901, 902)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Errorf("rewrote %d rows, want 2", n)
+	}
+	want := []string{
+		"begin", "lock 11", "update 11", "commit",
+		"begin", "lock 12", "update 12", "rollback", // 1205:整个事务回滚,不带着锁重试
+		"begin", "lock 12", "rollback", // 1213
+		"begin", "lock 12", "update 12", "commit",
+	}
+	if fmt.Sprint(f.log) != fmt.Sprint(want) {
+		t.Errorf("transaction log =\n%v\nwant\n%v", f.log, want)
+	}
+	if len(rec.waits) != 2 {
+		t.Errorf("slept %d times, want 2 (one per retried conflict)", len(rec.waits))
+	}
+}
+
+func TestRewriteZoneRows_HardErrorStopsAndReportsProgress(t *testing.T) {
+	f := newFakeZoneTable(map[uint64]uint32{11: 901, 12: 901, 13: 901})
+	f.updateErrs[12] = []error{&mysql.MySQLError{Number: 1146}} // 表不存在:重试不会好
+	rec := &recordingSleep{}
+	retry := lockRetryPolicy{attempts: 5, baseBackoff: time.Millisecond, maxBackoff: time.Second, sleep: rec.sleep}
+	n, err := rewriteZoneRows(context.Background(), f.begin, retry, testZoneTarget, []uint64{11, 12, 13}, 901, 902)
+	if n != 1 {
+		t.Errorf("rewrote %d rows before the failure, want 1", n)
+	}
+	var me *mysql.MySQLError
+	if err == nil || !errors.As(err, &me) || me.Number != 1146 {
+		t.Fatalf("the hard error must surface: %v", err)
+	}
+	for _, want := range []string{"mmorpg_guild.guild.zone_id 901 → 902", "guild_id=12", "此前已改 1 行"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err, want)
+		}
+	}
+	if last := f.log[len(f.log)-1]; last != "rollback" {
+		t.Errorf("the failed transaction must be rolled back, log ends with %q", last)
+	}
+	if f.zones[12] != 901 || f.zones[13] != 901 {
+		t.Errorf("nothing after the failure may change: 12=%d 13=%d", f.zones[12], f.zones[13])
+	}
+	if len(rec.waits) != 0 {
+		t.Errorf("a non-lock error must not be retried, slept %v", rec.waits)
 	}
 }
 

@@ -10,6 +10,16 @@
 > - `ErrUnsafeCrossNodeHandoff`(14)已是历史码、不再发出;同类拒绝改为可重试的 `ErrHandoffPending`(18)。带状态跨区不必等 Phase 2:存盘已按 home_zone 选 topic(CZ-2,即本文 Phase 2「DBTask 按 home_zone 选 topic」的先行一步),目标 zone 从共享 Redis 直接加载。
 > - 上述代码已进 main 但**尚未编译、未跑测试**。
 
+> **⚠️ 状态说明(2026-09-28):Phase 2 的落地方式由 [player-storage-placement.md](./player-storage-placement.md) 修订**。TiDB / proto2mysql / 建表方言 / D5「write-behind 管线不动」的决策不变,本文正文不重写。受影响的是:
+> - **结论 4 Phase 2「玩家表收敛到单一全局库」**:改为**按落点逐玩家迁移**。
+>   - 把「玩家属于哪个区」(home_zone)与「主数据在哪个库」(落点记录 `player:placement:{id}`)拆开,go/db 按当前记录选库。
+>   - 全局库是一种非 zone 落点库(默认 `player_store_1000000_db`)。新号可直接钉到全局库,存量按 zone 冻结式搬库,任何时刻每个玩家只有一个真源,可逐玩家回退;旧 zone 库无人指向后退役。
+>   - D7 的「合服零玩家主数据迁移」由合服 pin 模式提前兑现。
+>   - 生产切换仍受 D8(应用级回档)卡住,D1 的映射持久化兜底表仍是遗留项。
+> - **§6「明确未做」里的「topic 按 home_zone 路由」已由 [cross-zone-scene-travel.md](./cross-zone-scene-travel.md) CZ-2 落码**:C++ 存盘按 `PlayerHomeZoneComp` 选 `db_task_zone_{home}`。2026-09-28 起 topic 世代号也进了 C++ 配置(`DbTaskTopicGeneration`)。
+> - **proto2mysql 核实结论**(2026-09-28,go/db 多库落码时):生成的 SQL 都是裸表名,库由连接池 DSN 的默认库决定。所以多库必须一库一池,不能靠 `USE` 切换。
+> - 上述代码同样**未编译、未跑测试**。
+
 ---
 
 ## 结论(先读这节)

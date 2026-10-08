@@ -2,7 +2,7 @@
 #include "muduo/base/Logging.h"
 
 #include "node/system/node/node_entry.h"
-#include "agones/agones_scene_lifecycle.h"
+#include "infra/agones/agones_gameserver_lifecycle.h"
 #include "handler/rpc/scene_handler.h"
 #include "rpc_replies/scene_manager_response_handler.h"
 #include "handler/grpc/scene_node_service.h"
@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
             // 刻意**不**在这里调 POST /shutdown —— SIGTERM 通常正是 Agones
             // 删 Pod 发出来的,再回敬一个 /shutdown 就是递归触发删除。
             // 只有进程自己决定自我终止时才调 RequestShutdown()。
-            agones::SceneLifecycle::Instance().Stop();
+            agones::GameServerLifecycle::Instance().Stop();
 			context->dependencyGate.probeTimer.Cancel();
 			context->worldTimer.Cancel();
 			PlayerBattleSystem::StopReaper();
@@ -247,7 +247,7 @@ int main(int argc, char *argv[])
                                    {
             // 先停 Agones lifecycle worker(理由同 exitAllPlayers 里的注释),
             // 再动玩家数据。Stop() 幂等。
-            agones::SceneLifecycle::Instance().Stop();
+            agones::GameServerLifecycle::Instance().Stop();
             PlayerLifecycleSystem::BeginEmergencyRelocateAll(); });
 
         // 有界 drain:存盘全部落地、改派全部派发完才退出。
@@ -269,6 +269,9 @@ int main(int argc, char *argv[])
             // 非 Agones 环境(本地开发 / 普通 Deployment):ReadAgonesEnv() 读不到
             // AGONES_SDK_HTTP_PORT,或 Windows 构建拿不到 curl 传输层,
             // 都会退化成 Disabled —— 不起线程、不发 HTTP、所有 gate 直接放行。
+            //
+            // scene 用默认 LifecycleOptions:不开 EventLoop 心跳绑定(D84)、不开排空标签(D83),
+            // 行为与下沉前的 SceneLifecycle 一致;这两项目前只有 battle 开启。
             {
                 const auto agonesEnv = agones::ReadAgonesEnv();
                 std::unique_ptr<agones::HttpTransport> transport;
@@ -280,11 +283,11 @@ int main(int argc, char *argv[])
                 {
                     LOG_INFO << "Agones lifecycle disabled (enabled=" << agonesEnv.enabled
                              << ", transport=" << (agonesEnv.enabled ? "unavailable" : "n/a") << ")";
-                    agones::SceneLifecycle::Instance().StartDisabled();
+                    agones::GameServerLifecycle::Instance().StartDisabled();
                 }
                 else
                 {
-                    agones::SceneLifecycle::Instance().Start(
+                    agones::GameServerLifecycle::Instance().Start(
                         std::move(transport), agonesEnv.BaseUrl(), agones::LifecycleOptions{});
                 }
             }
@@ -338,5 +341,5 @@ int main(int argc, char *argv[])
 
 		// loop 退出后的兜底 join。SetBeforeShutdown 已经调过一次,Stop() 幂等;
 		// 但走 conflict-shutdown 之类的分支时不保证走过那条路径。
-        agones::SceneLifecycle::Instance().Stop(); });
+        agones::GameServerLifecycle::Instance().Stop(); });
 }

@@ -63,8 +63,9 @@ const (
 	ErrChallengeNotTarget = uint32(table.MatchError_kMatchChallengeNotTarget)
 
 	// ---- 观战(二期,设计文档 §10) ----
-	// 观众绑定与参战绑定共用 SessionInfo 的 BattleNodeService 槽位,
-	// 排队/战斗/观战三态互斥(设计决策 D11)。
+	// 一名玩家同一时刻只保留一条 battle 直连(客户端单条链路,battle 房间
+	// directConnByPlayer 按 player_id 单槽),观战与参战不能并存;
+	// 排队 / 战斗中 / 观战三态互斥(设计决策 D11)。
 
 	// ErrSpectateWhileQueued:持有 match ticket(排队/开局中)不能观战。
 	ErrSpectateWhileQueued = uint32(table.MatchError_kMatchSpectateWhileQueued)
@@ -77,6 +78,8 @@ const (
 	ErrNoWatchableBattle = uint32(table.MatchError_kMatchNoWatchableBattle)
 	// ErrBattleNotWatchable:指定战斗不存在/已结束,或 battle 节点拒绝接入观众。
 	ErrBattleNotWatchable = uint32(table.MatchError_kMatchBattleNotWatchable)
-	// ErrSpectateOffline:观战者会话不在线,观战首帧无法路由。
+	// ErrSpectateOffline:观战者会话不在线。观众尚无直连时,落点分配
+	// (NotifyBattleAssigned)要经 gate 回落下发(turn-based §22 D68 大厅公告),
+	// 不在线就没有可路由的会话;观战首帧由直连握手快照下发(D69),不依赖大厅会话。
 	ErrSpectateOffline = uint32(table.MatchError_kMatchSpectateOffline)
 )

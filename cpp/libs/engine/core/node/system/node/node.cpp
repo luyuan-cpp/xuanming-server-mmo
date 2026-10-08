@@ -33,6 +33,7 @@
 #include "node/system/etcd/etcd_service.h"
 #include "node/system/grpc_call_deadline.h"
 #include "node/system/node/node_connector.h"
+#include "node/system/node/client_endpoint.h"
 #include "thread_context/node_context_manager.h"
 #include <node_config_manager.h>
 #include <atomic>
@@ -40,6 +41,8 @@
 #include <chrono>
 #include <cerrno>
 #include <csignal>
+#include <cstdio>
+#include <cstdlib>
 #include <optional>
 
 namespace
@@ -282,9 +285,12 @@ namespace
 	std::string ResolveNodeIp()
 	{
 		// 这里返回的是节点的**集群内**身份地址:写进 NodeInfo.endpoint、发布到 etcd,
-		// 供服务间互相拨号。它不是 bind 地址(bind 见 Node::StartRpcServer),更**不是**
-		// 对外通告地址 —— 进程没有、也不应该有办法知道自己在集群外长什么样。
-		// 外部客户端要用的地址由下发方(go/login 的 CandidatesForZone)翻译,不在这里解决。
+		// 供服务间互相拨号、端口 CAS、对端校验、FindNodeByPodIP。它不是 bind 地址
+		// (bind 见 Node::StartRpcServer),也**不是**客户端可达地址。
+		// 客户端可达地址是另一个字段 NodeInfo.client_endpoint(advertised address,语义同
+		// Kafka advertised.listeners,D76):由进程按 CLIENT_ENDPOINT_* 在发布前自报
+		// (见 Node::InitClientEndpoint),下发方只按 client_endpoint::ClientFacing 选址、不做翻译。
+		// 两者互不替代:这里永远不读 CLIENT_ENDPOINT_*,那边也永远不读 POD_IP / NODE_IP(D92)。
 		//
 		// Prefer K8s Downward API pod IP, then explicit override, then legacy hostname resolve.
 		if (const char *podIp = GetNonEmptyEnv("POD_IP"))
@@ -340,6 +346,23 @@ namespace
 		}
 
 		return boost::algorithm::join(partitionTokens, ",");
+	}
+
+	// 客户端地址配置 / 来源失败时的致命退出(D79 fail-closed)。
+	// K8s 下 C++ 节点的业务日志只落 logs/cpp_nodes/*.log,而 muduo 的 LOG_FATAL 直接 abort,
+	// 异步日志后端来不及把最后几行刷盘 —— CrashLoopBackOff 时运维会找不到原因。
+	// 所以先同步写一行 stderr(kubectl logs --previous 可见),再 LOG_FATAL 以非 0 退出。
+	[[noreturn]] void FatalClientEndpoint(const std::string &reason)
+	{
+		std::fprintf(stderr, "FATAL client endpoint: %s\n", reason.c_str());
+		std::fflush(stderr);
+		LOG_FATAL << "Client endpoint: " << reason;
+		std::abort(); // LOG_FATAL 已 abort;这一行只为让 [[noreturn]] 对编译器成立
+	}
+
+	std::string FormatEndpoint(const EndpointComp &endpoint)
+	{
+		return endpoint.ip() + ":" + std::to_string(endpoint.port());
 	}
 }
 
@@ -497,11 +520,17 @@ void Node::InitRpcServer()
 	}
 
 	LOG_INFO << "Node endpoint resolved. ip=" << endpointIp;
+
+	// 客户端可达地址必须在这里(etcd 端口/node_id 分配与发布之前)同步定下来:
+	// 发布出去的第一版 NodeInfo 就要带上它,match / login 看到节点时不能再有"地址待补"的窗口。
+	InitClientEndpoint();
+
 	localNodeInfo.set_node_type(GetNodeType());
 	localNodeInfo.set_scene_node_type(tlsNodeConfigManager.GetGameConfig().scene_node_type());
-	// battle 等纯 gRPC 节点必须以 PROTOCOL_GRPC 注册:发现方(node_connector.cpp)
-	// 按 protocol_type 分派,标成 TCP 会让 gate/match 去拨 muduo TCP 端口而
-	// 永远建不出 gRPC stub。其余 C++ 节点维持 TCP 注册不变。
+	// battle 等纯 gRPC 节点必须以 PROTOCOL_GRPC 注册:C++ 发现方(node_connector.cpp)
+	// 按 protocol_type 分派,标成 TCP 会让它们用 RpcCodec 去拨 battle 的 TCP 端口
+	// (那里挂的是客户端战斗直连面 BattleClientEdge),而且永远建不出 gRPC stub;
+	// Go match 只认 grpc_endpoint,不受 protocol_type 影响。其余 C++ 节点维持 TCP 注册不变。
 	localNodeInfo.set_protocol_type(
 		NodeUtils::IsGrpcOnlyNodeType(GetNodeType()) ? PROTOCOL_GRPC : PROTOCOL_TCP);
 	localNodeInfo.set_launch_time(TimeSystem::NowMicrosecondsUTC());
@@ -528,6 +557,78 @@ void Node::InitRpcServer()
 	tlsRedis.Connect(eventLoop, zoneRedisAddress);
 
 	LOG_DEBUG << "Node info: " << localNodeInfo.DebugString();
+}
+
+void Node::InitClientEndpoint()
+{
+	// 四步(D79):解析 env → (agones)取预构造钩子注册的来源 → Resolve → 写 NodeInfo。
+	// 任何一步失败都 fail-closed 致命退出,由 K8s / Agones 重建;绝不回落成"不自报",
+	// 否则 match 已经把房间派给本节点、玩家已经凑齐,到下发地址时才发现不可达就太晚了。
+	client_endpoint::Settings settings;
+	std::string error;
+	const client_endpoint::EnvLookup env = [](const char *name) -> const char *
+	{ return std::getenv(name); };
+	if (!client_endpoint::ParseSettings(env, settings, error))
+	{
+		FatalClientEndpoint("invalid settings: " + error);
+	}
+
+	// none(含未设置)下 ParseSettings 按契约忽略 HOST / PORT 并放行:podip 形态的 Fleet 模板可能仍带 HOST(WP9)。
+	// 但"给了地址却漏写 SOURCE=static"也落在这条路上 —— 节点不自报、消费方回落 PodIP、集群外客户端连不上,
+	// 且全程没有任何报错。这是 fail-open 路径(AGENTS §11.3),必须留痕:放行语义不变,
+	// 但同步写一行 stderr(kubectl logs 可见)再 LOG_WARN,带上两个原值,排障时一眼能看出配置被丢弃了。
+	if (settings.source == client_endpoint::SourceKind::kNone)
+	{
+		const char *ignoredHost = GetNonEmptyEnv(client_endpoint::kEnvHost);
+		const char *ignoredPort = GetNonEmptyEnv(client_endpoint::kEnvPort);
+		if (ignoredHost != nullptr || ignoredPort != nullptr)
+		{
+			const std::string message = std::string("CLIENT_ENDPOINT_HOST/PORT set but CLIENT_ENDPOINT_SOURCE=none; ignored. ") +
+										client_endpoint::kEnvHost + "='" + (ignoredHost != nullptr ? ignoredHost : "") + "' " +
+										client_endpoint::kEnvPort + "='" + (ignoredPort != nullptr ? ignoredPort : "") + "'";
+			std::fprintf(stderr, "WARN client endpoint: %s\n", message.c_str());
+			std::fflush(stderr);
+			LOG_WARN << "Client endpoint: " << message;
+		}
+	}
+
+	std::unique_ptr<client_endpoint::ExternalSource> external;
+	if (settings.source == client_endpoint::SourceKind::kAgones)
+	{
+		const auto factory = client_endpoint::GetExternalSourceFactory();
+		if (factory == nullptr)
+		{
+			FatalClientEndpoint(std::string(client_endpoint::kEnvSource) +
+								"=agones but this node registered no ClientEndpointSourceFactory hook");
+		}
+		external = factory();
+		if (external == nullptr)
+		{
+			FatalClientEndpoint(std::string(client_endpoint::kEnvSource) +
+								"=agones but the source factory returned null (Agones disabled or unsupported in this build)");
+		}
+	}
+
+	// agones 来源在这里有界阻塞(来源内部重试,最坏约 60s);此时 EventLoop 尚未运行,阻塞只推迟启动。
+	std::optional<EndpointComp> clientEndpoint;
+	if (!client_endpoint::Resolve(settings, external.get(), clientEndpoint, error))
+	{
+		FatalClientEndpoint("resolve failed: source=" + std::string(client_endpoint::SourceKindName(settings.source)) +
+							" error=" + error);
+	}
+
+	NodeInfo &localNodeInfo = GetNodeInfo();
+	if (clientEndpoint)
+	{
+		*localNodeInfo.mutable_client_endpoint() = *clientEndpoint;
+	}
+	clientEndpointRequired_ = settings.required;
+
+	// endpoint 的端口可能还是 0(扫描区间的节点要到 etcd 分配后才定),照实打印。
+	LOG_INFO << "Client endpoint resolved. source=" << std::string(client_endpoint::SourceKindName(settings.source))
+			 << " endpoint=" << FormatEndpoint(localNodeInfo.endpoint())
+			 << " client_endpoint=" << (clientEndpoint ? FormatEndpoint(*clientEndpoint) : std::string("(unset, clients use endpoint)"))
+			 << " required=" << (settings.required ? 1 : 0);
 }
 
 void Node::InitKafka()
@@ -1231,7 +1332,11 @@ void Node::HandleServiceNodeStop(const std::string &key, const std::string &node
 	}
 
 	NodeInfo stoppedNode;
-	auto parseResult = google::protobuf::util::JsonStringToMessage(nodeJson, &stoppedNode);
+	// D77:忽略未知字段且永久保留。新版本节点会多带字段(如 clientEndpoint),严格解析会让
+	// 滚动期间的旧解析方把整条记录当坏数据丢掉;与 Go 侧 shared/nodeinfo.Unmarshal 同一口径。
+	google::protobuf::util::JsonParseOptions parseOptions;
+	parseOptions.ignore_unknown_fields = true;
+	auto parseResult = google::protobuf::util::JsonStringToMessage(nodeJson, &stoppedNode, parseOptions);
 	if (!parseResult.ok())
 	{
 		LOG_ERROR << "Parse node JSON failed, key: " << key

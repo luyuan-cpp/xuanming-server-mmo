@@ -7,11 +7,14 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"proto/battle"
+	"proto/common/base"
 	"proto/match"
 	"proto/scene"
 	"robot/config"
 	"robot/generated/pb/game"
 	"robot/logic/gameobject"
+	"robot/logic/handler"
+	"robot/pkg"
 )
 
 // 只开放当前明确验收的 PVE1、任务12链；所有变更选项在连接账号之前校验。
@@ -113,7 +116,14 @@ func (s *featureSmokeSession) runFeatureBattle(cfg *config.Config) error {
 	if battleID == 0 {
 		return fmt.Errorf("feature battle started without identity")
 	}
-	if _, err := s.call(game.BattleClientPlayerSetAutoBattleMessageId,
+	// 直连是唯一战斗通路(turn-based §22 D73):自动战斗只能经直连开,回合结算只从直连来;
+	// 终局包可能来自直连,也可能来自 scene 结算后的大厅推送,两边都进同一个 waiter。
+	direct, err := s.openFeatureBattleDirect(battleID)
+	if err != nil {
+		return err
+	}
+	defer direct.Close()
+	if _, err := s.callDirect(direct, game.BattleClientPlayerSetAutoBattleMessageId,
 		&battle.SetAutoBattleRequest{BattleId: battleID, Enabled: true}); err != nil {
 		return err
 	}
@@ -128,6 +138,41 @@ func (s *featureSmokeSession) runFeatureBattle(cfg *config.Config) error {
 	}
 	fmt.Printf("FEATURES_BATTLE_OK battle=%d config=%d outcome=SIDE_A_WIN turns=%d\n", battleID, cfg.FeaturesSmoke.BattleConfigID, s.player.GetTurnCount())
 	return nil
+}
+
+// openFeatureBattleDirect 凭本局的 NotifyBattleAssigned 直连 battle 节点(分配先于 BattleStart 经大厅
+// 下发,D70,通常此刻早已到达)。本会话的 Player 只打这一场(runFeatureBattle 入口已拒绝第二场),
+// 所以可以用一次性的 WaitBattleAssigned,但仍核对 battle_id 与参战角色。
+func (s *featureSmokeSession) openFeatureBattleDirect(battleID uint64) (*battleDirectConn, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), battleDirectConnTimeout)
+	assigned, err := s.player.WaitBattleAssigned(ctx)
+	cancel()
+	if err != nil {
+		return nil, fmt.Errorf("feature battle has no direct-connect assignment: %w", err)
+	}
+	if assigned.GetBattleId() != battleID || assigned.GetRole() != battle.EBattleTicketRole_BATTLE_TICKET_ROLE_PARTICIPANT {
+		return nil, fmt.Errorf("feature battle assignment does not match the started battle as participant")
+	}
+	direct, err := dialBattleDirect(s.gc.Account, s.gc.PlayerId, assigned, s.stats, s.onFeatureBattleDirectMessage)
+	if err != nil {
+		return nil, fmt.Errorf("feature battle direct connection failed: %w", err)
+	}
+	return direct, nil
+}
+
+// onFeatureBattleDirectMessage 是 features-smoke 的直连回调:应答与战斗推送先交给
+// HandleFeatureBattleMessage(与大厅连接进同一组 waiter,信封拒绝也在这里变成失败快照),
+// 没认领的(如就绪补拉的 GetBattleState 应答)走直连的通用分发。
+func (s *featureSmokeSession) onFeatureBattleDirectMessage(client *pkg.GameClient, message *base.MessageContent) {
+	if handler.HandleFeatureBattleMessage(s.player, message) {
+		return
+	}
+	dispatchBattleDirectDefault(client, message)
+}
+
+// callDirect 经战斗直连发一条战斗客户端 RPC,按与大厅相同的 FeatureResponse(cursor) 口径等应答。
+func (s *featureSmokeSession) callDirect(direct *battleDirectConn, id uint32, request proto.Message) (proto.Message, error) {
+	return s.callVia(direct.Send, id, request)
 }
 
 // BattleEnd 可先于 scene 应用结算；只轮询服务器任务快照，不在机器人本地累加击杀。

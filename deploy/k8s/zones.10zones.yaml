@@ -1,60 +1,73 @@
+# gateNodePortBase(D88):external + NodePort 时 gate-<i> 的 nodePort = gateNodePortBase + i。
+# 10 个 zone 按步长 8 错开(30000、30008 … 30072),全部收在 K8s 静态子段 30000-30085 内,
+# 每 zone 的 gate 扩到 8 副本前都不重叠;podip 模式不读它。键单独占一行、行尾不写注释。
 zones:
   - name: zone-1
     zoneId: 1
+    gateNodePortBase: 30000
     replicas:
       gate: 1
       scene: 2
 
   - name: zone-2
     zoneId: 2
+    gateNodePortBase: 30008
     replicas:
       gate: 1
       scene: 2
 
   - name: zone-3
     zoneId: 3
+    gateNodePortBase: 30016
     replicas:
       gate: 1
       scene: 2
 
   - name: zone-4
     zoneId: 4
+    gateNodePortBase: 30024
     replicas:
       gate: 1
       scene: 2
 
   - name: zone-5
     zoneId: 5
+    gateNodePortBase: 30032
     replicas:
       gate: 1
       scene: 2
 
   - name: zone-6
     zoneId: 6
+    gateNodePortBase: 30040
     replicas:
       gate: 1
       scene: 2
 
   - name: zone-7
     zoneId: 7
+    gateNodePortBase: 30048
     replicas:
       gate: 1
       scene: 2
 
   - name: zone-8
     zoneId: 8
+    gateNodePortBase: 30056
     replicas:
       gate: 1
       scene: 2
 
   - name: zone-9
     zoneId: 9
+    gateNodePortBase: 30064
     replicas:
       gate: 1
       scene: 2
 
   - name: zone-10
     zoneId: 10
+    gateNodePortBase: 30072
     replicas:
       gate: 1
       scene: 2

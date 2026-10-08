@@ -1,0 +1,173 @@
+# kind 本地集群配置:集群外客户端入口(client_endpoint / advertised address)端到端验证专用。
+# 设计与验收口径见 docs/design/k8s-client-entry.md 的「kind 端到端验证」一节(D76–D93)。
+#
+# ── 用法:独立 kubeconfig,不改用户默认 kubeconfig 的 current-context(D93)──────────
+#   PowerShell(工作目录 = 仓库根;先跑完下面「宿主机端口预检」):
+#     $env:KUBECONFIG = "$env:TEMP\kind-mmorpg.kubeconfig"
+#     kind create cluster --name mmorpg --config deploy/k8s/kind-config.yaml --kubeconfig $env:KUBECONFIG
+#     kubectl --context kind-mmorpg get node          # 通了再动手
+#     ...                                             # 部署 / 验收见设计文档「kind 端到端验证」一节
+#     kind delete cluster --name mmorpg --kubeconfig $env:KUBECONFIG
+#   要点:
+#   - kind / kubectl / helm 选 kubeconfig 的顺序相同:--kubeconfig 参数 > $env:KUBECONFIG > 默认 ~/.kube/config。
+#     真正的风险是「没设 $env:KUBECONFIG 又没带 --kubeconfig」(新开窗口、换终端、子进程丢环境变量):
+#     kind create 会写进默认文件并把它的 current-context 切到 kind-mmorpg;kubectl / helm / k8s_deploy.ps1
+#     则静默落到默认 current-context 上 —— 本机默认 context 是 pandora 的集群,D93 严禁碰。
+#   - 所以除了设环境变量,每条命令再显式点名 context(fail-closed):默认 kubeconfig 里没有 kind-mmorpg,
+#     环境变量丢了会直接报 context 不存在,而不是部署到别的集群:
+#       pwsh tools/scripts/k8s_deploy.ps1 ... -KubeContext kind-mmorpg -KubeConfig "$env:TEMP\kind-mmorpg.kubeconfig"
+#         (Build-KubectlBaseArgs 把这两个参数加到它的每一次 kubectl 调用上)
+#       helm ... --kube-context kind-mmorpg --kubeconfig "$env:TEMP\kind-mmorpg.kubeconfig"
+#       kubectl --context kind-mmorpg ...     (手工命令一律如此,含 port-forward / set env / delete pod)
+#   - 独立文件丢了:kind export kubeconfig --name mmorpg --kubeconfig <同一路径> 重新导出。
+#   - kind load docker-image / image-archive 按 --name 找节点容器(mmorpg-control-plane),不读 kubeconfig。
+#   - 建之前 `docker ps -a` 里不能已有 mmorpg-control-plane;全程不执行任何 minikube 命令。
+#   - node 镜像已钉死(原因见 nodes[0].image 的注释);验收报告里记下 `kind version` 与 `kubectl version`。
+#   - 已知未处理:backlog P2-03(节点 / 宿主重启后 kubelet 对 kind load 过的镜像去 Docker Hub 校验,Pod 卡
+#     ErrImagePull)。验证跨过一次宿主或 Docker 重启时,按 deploy/k8s/README.md 的做法 delete pod 重建;
+#     P2-03 落地时在本文件上追加 kubeadmConfigPatches,不要重写本文件,也不要动下面的 extraPortMappings。
+#
+# ── 端口映射总则 ──────────────────────────────────────────────────────────────
+# - extraPortMappings 把宿主机端口转发进节点容器,只能在建集群时指定;增删端口必须删集群重建。
+# - 全部只监听 127.0.0.1:本地验证不对局域网开放,与 `-ClientPublicHost 127.0.0.1`
+#   (gate / battle 的 CLIENT_ENDPOINT_HOST=127.0.0.1)口径一致。
+# - 全部 TCP:gate 与 battle 的客户端连接都是 TCP。
+# - gRPC(TCP+30000,如 battle 的 50000)永不映射(D81):节点间 gRPC 只走集群内网络。
+# - login 的 gRPC 可用 kubectl port-forward;gate / battle 严禁用 port-forward 验证(D93)——
+#   port-forward 走 apiserver 隧道,既验不到 NodePort / hostPort 路径,也验不到源 IP 保留(D89)。
+# - 源 IP 验收:gate / battle 日志里的 peer IP 应等于 `docker network inspect kind` 的 Gateway,
+#   而不是节点 IP;这只能证明没被 SNAT 成节点 IP,证明不了真实公网 IP。
+#
+# ── 宿主机端口预检(建集群前必做;extraPortMappings 在 kind create 时一次性全部绑定,
+#    哪怕阶段 A 用不到 Agones 段,任一端口被占都会让 kind create 直接失败,Docker 报端口不可用 / 已被占用)──
+#   只读预检,任一条有输出就中止,先停占用方:
+#     $ports = @(18080, 18443, 30000, 30001, 20000) + (7100..7109)
+#     Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $ports -contains $_.LocalPort }
+#     netsh interface ipv4 show excludedportrange protocol=tcp   # 上面 15 个端口都不能落在保留段里
+#   已知占用方:
+#   - 20000 / 30000 / 30001:宿主机直接跑的 C++ 节点(bin/*.exe)。非 gate 节点的 TCP 端口在 20000..35535 里分配,
+#     gate 从 10000..19999(18080 / 18443 也在其中)。20000 挪不了(battle 的 CLIENT_ENDPOINT_PORT=20000
+#     就是客户端连的宿主机端口),所以先停掉全部宿主机 C++ 节点,kind 集群存在期间不要再起。
+#   - 18080:本地 sa-token 认证服务的默认端口(java/springboot_satoken_auth_starter 的
+#     server.port=${SERVER_PORT:18080})。它起着时先停,或用 SERVER_PORT 挪走。
+#   - Agones 段刻意避开 7000–7005 / 17000–17005:那是 deploy/docker-compose.yml 的 redis-cluster profile
+#     (容器 redis-cluster-0,restart: unless-stopped,宿主机上 match 的 MatchRedis 指向它),是日常常驻环境;
+#     两边抢同一段端口,Docker Desktop 重启后谁先起谁占住,另一边起不来。
+# robot 在宿主机上跑 kind 验证时不要用默认的 robot/etc/robot.yaml:它是 auth_type: satoken、
+#   satoken_addr: http://127.0.0.1:18080。sa-token 没起时这个请求会落到 kind 的 ingress-nginx 上拿到 404,
+#   而不是 connection refused,看起来像网关或 Ingress 路由坏了;而且集群内 login 的 ConfigMap 不配 SaToken,
+#   satoken 本来也验不过。用专用的 robot yaml(auth_type: password,集群内 login 要开 DevPasswordAuth),
+#   具体口径见设计文档「kind 端到端验证」一节。
+# 下面的端口号与 k8s_deploy.ps1 参数、Agones helm 端口段、验收命令是同一份契约:改任何一处都要同改其余各处。
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: mmorpg
+networking:
+  # 显式写出 kind 默认的 Pod 网段:验收命令里 gateway 的 -GatewayTrustedProxies 10.244.0.0/16
+  # 就是它(Ingress controller Pod 的源地址落在这个网段)。改这里必须同步改该参数,
+  # 否则网关把所有请求都记在 controller Pod 名下,全体玩家共用一个限流桶(D91)。
+  podSubnet: "10.244.0.0/16"
+nodes:
+  # 单个 control-plane 节点兼做工作节点(kind 单节点默认允许调度业务 Pod)。
+  - role: control-plane
+    # 钉 Kubernetes 1.35:阶段 B 固定用 Agones 1.58.0,它支持的 Kubernetes 只有 1.33 / 1.34 / 1.35
+    # (agones.dev 安装文档的版本对照表);ingress-nginx v1.15.x 支持到 1.35 为止。kind v0.33.0 的默认
+    # node 是 v1.37.0,两者都不在支持范围内,出了问题会卡在 CRD 或控制器层面,很难定位。
+    # 镜像与 digest 取自 kind v0.33.0 release notes 的预构建列表(kind 要求带 @sha256,才能保证是为该
+    # kind 版本构建的镜像),所以 kind 也要装 v0.33.0:go install sigs.k8s.io/kind@v0.33.0,不要 @latest。
+    # 升级 Agones、ingress-nginx 或 kind 时,先核对三者的版本支持表,再同改这一行并重建集群。
+    image: kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0
+    labels:
+      # ingress-nginx 官方 kind provider 的部分版本以 nodeSelector ingress-ready=true 选节点;
+      # 单节点下打上无副作用。用 kind 节点的 labels 字段而不是 kubeadmConfigPatches 的
+      # kubeletExtraArgs,避免 kubeadm v1beta3 / v1beta4 两种写法随 node 版本变化。
+      ingress-ready: "true"
+    extraPortMappings:
+      # ── Ingress(D91,Java gateway 的 HTTP 入口)──
+      # ingress-nginx kind provider 的 controller 以 hostPort 80 / 443 监听在节点上。
+      # 宿主机 18080 → 节点 80:HTTP。验收:
+      #   curl -H "Host: gateway.mmorpg.test" http://127.0.0.1:18080/api/server-list  → 200
+      - containerPort: 80
+        hostPort: 18080
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      # 宿主机 18443 → 节点 443:HTTPS,只在 -GatewayIngressTlsSecret 非空、生成 tls 段时用得上。
+      - containerPort: 443
+        hostPort: 18443
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+
+      # ── gate 每序号 NodePort Service(D87 / D88 / D89)──
+      # zone-up 取 -GateNodePortBase 30000 -GateReplicas 2 -GateServiceType NodePort:
+      #   gate-0 → nodePort 30000,gate-1 → nodePort 30001;
+      #   etcd 里对应 clientEndpoint = 127.0.0.1:30000 / 127.0.0.1:30001,endpoint 仍是 PodIP。
+      # externalTrafficPolicy 默认 Local;单节点下 Pod 必在本节点,不会因 Local 丢包,且不做 SNAT。
+      # 加 gate 副本 = 在这里补 30002…(base + 副本数 − 1)并重建集群;
+      # 生产建议段 30000–30085,超出只告警,越过 32767 被 preflight 拒绝。
+      - containerPort: 30000
+        hostPort: 30000
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      - containerPort: 30001
+        hostPort: 30001
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+
+      # ── 阶段 A:battle hostPort Deployment(D86,只用于验证与回退)──
+      # -BattleOrchestrator deployment -BattleReplicas 1:battle 客户端端口 20000 带 hostPort 20000,
+      # CLIENT_ENDPOINT_PORT=20000 → clientEndpoint = 127.0.0.1:20000(BattleAssignedS2C 下发它)。
+      # 一个节点只能跑 1 个 battle(hostPort 独占);阶段 B 用不到这个口,留着无害。
+      - containerPort: 20000
+        hostPort: 20000
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+
+      # ── 阶段 B:Agones Fleet 的 Dynamic 端口段(D81)──
+      # 与 helm 安装参数一一对应:--set gameservers.minPort=7100 --set gameservers.maxPort=7109。
+      # 段选 7100–7109 而不是 Agones 默认段的起点 7000:要避开 redis-cluster 的 7000–7005 / 17000–17005
+      # (见文件头「宿主机端口预检」)、宿主机 C++ 节点的 TCP 区间 10000..35535、NodePort 段 30000–32767,
+      # 以及 Windows 的保留端口段。
+      # Agones 为每个 GameServer 的 `client` 端口(containerPort 20000)从段里分一个 hostPort,
+      # 进程读 sidecar 的 status.ports[client] 自报 clientEndpoint = 127.0.0.1:<该端口>。
+      # 10 个端口 = 本节点最多 10 个 battle GameServer(Fleet replicas 加滚动时新旧并存都要装得下)。
+      # kind 的 extraPortMappings 不支持端口区间,只能逐个列出;改 helm 端口段必须同步改这里并重建。
+      - containerPort: 7100
+        hostPort: 7100
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      - containerPort: 7101
+        hostPort: 7101
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      - containerPort: 7102
+        hostPort: 7102
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      - containerPort: 7103
+        hostPort: 7103
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      - containerPort: 7104
+        hostPort: 7104
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      - containerPort: 7105
+        hostPort: 7105
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      - containerPort: 7106
+        hostPort: 7106
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      - containerPort: 7107
+        hostPort: 7107
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      - containerPort: 7108
+        hostPort: 7108
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      - containerPort: 7109
+        hostPort: 7109
+        listenAddress: "127.0.0.1"
+        protocol: TCP

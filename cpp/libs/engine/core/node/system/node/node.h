@@ -197,9 +197,22 @@ public:
     bool IsCurrentNode(const NodeInfo &candidateNode) const;
     bool IsServiceStarted() { return rpcServer != nullptr; }
 
+    // CLIENT_ENDPOINT_REQUIRED(D79)在启动时解析后的缓存值,构造完成后不再变化。
+    // 只给"把本节点地址下发给客户端"的出口做纵深防御:为 true 时经
+    // client_endpoint::ClientFacing(GetNodeInfo(), true) 拿不到地址就必须拒签,不许回落 endpoint。
+    // 线程:本函数读的是普通成员(构造期写一次、之后只读),任何线程都可调用。
+    // 但配套的 GetNodeInfo() 读的是 thread_local tlsEcs,只有 loop 线程上才是本节点真实的 NodeInfo;
+    // 在 gRPC 等非 loop 线程上调用会就地 emplace 出一个空 NodeInfo,ClientFacing 随之恒返回 nullopt ——
+    // 仍是 fail-closed,但整批静默拒签、极难排查。所以 ClientFacing 的 node 实参必须取自 loop 线程上的
+    // gNode->GetNodeInfo()(例如 battle 在 runInLoop 之内的 BuildAssignment / 预签,不得挪到 gRPC 线程上的许可阶段)。
+    bool ClientEndpointRequired() const { return clientEndpointRequired_; }
+
 protected:
     // Initialization
     void InitRpcServer();
+    // 解析并写入 NodeInfo.client_endpoint(D76/D79)。只在 InitRpcServer 设完 endpoint 之后、
+    // etcd 分配与发布之前调用一次;配置非法或地址来源失败直接 LOG_FATAL,绝不带病发布。
+    void InitClientEndpoint();
     void Initialize();
     void InitLogSystem();
     void RegisterEventHandlers();
@@ -263,6 +276,8 @@ protected:
     bool shutdownGrpcDrainComplete_{false};
     bool shutdownFinalizationStarted_{false};
     bool kafkaPollingStarted{false};
+    // 见 ClientEndpointRequired();由 InitClientEndpoint 在构造期写一次。
+    bool clientEndpointRequired_{false};
 
     // Grace-period pending removals: node_uuid -> pending removal state.
     // When etcd fires DELETE, removal is deferred; a subsequent PUT cancels it.

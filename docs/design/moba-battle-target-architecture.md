@@ -4,6 +4,7 @@
 **状态:** 目标形态基准 + 本仓现状映射。**2026-09-05:第 7 步「客户端直连 + 票据入场」已落码、已过静态评审与编译/单测(C++ Debug 0 error、gtest 18+22 全绿、Go/robot 全绿),整栈冒烟待本机基础设施**
 (见 [turn-based-battle-server.md §18](./turn-based-battle-server.md#18-客户端直连-battle-节点票据入场战斗流量零字节经-gate2026-09-05已落码待验证));
 写本文时 battle 节点尚不存在,现状映射一节按 2026-09-05 的仓库状态重写。
+**2026-09-29 状态更新:** 直连收缩(turn-based-battle-server.md §22 D65–D75:gate 两种路由模式都不中继战斗、直连是战斗唯一通路、D26 改 fail-closed、K8s 默认路由模式)与集群外客户端入口(D76–D93,[k8s-client-entry.md](./k8s-client-entry.md):battle 进程自报客户端可达地址、Agones Fleet `portPolicy: Dynamic`)**已落码,但未编译、未测试、未上集群,待 Codex / 用户验证**;§七验收判据仍零打勾。§六 的现状表与缺口 1 / 2 已按此更新。
 **来源:** 架构讨论。通用骨架部分为业界标准形态(LoL / Dota2 / 王者 / 绝地求生这类"会话制对局"的通用做法),现状映射部分已逐项对照本仓代码核实。
 **关联:** [moba-ds-server-interview-qa.md](./moba-ds-server-interview-qa.md)(DS 内部设计细则)、[moba-non-ds-server-interview-qa.md](./moba-non-ds-server-interview-qa.md)(外围系统)、[ARCH.md](./ARCH.md)(现有 MMO 拓扑)、[player_login_flow.md](./player_login_flow.md)(票据入场的现有实现)、[session-extractability-mmo-slg.md](./session-extractability-mmo-slg.md)(本文这套判据能/不能套到 MMO、SLG 的哪些层)
 
@@ -167,12 +168,17 @@ Battle ──result──▶ 结算服
 | 局中闸 | `InBattleComp` 冻结清单(排队 / 交易 / 改属性道具 / 切场景 / 跨 zone / 宠物) | 存储红线 2 ⚠️ **部分**(2026-09-17 更正):背包写、实时技能、移动、GM 回滚原本全无闸,已在 [turn-battle-gap-closure.md](./turn-battle-gap-closure.md) D48 补上(未编译);"交易"至今无代码,因为交易系统本身不存在 |
 | 路由表 | match 侧 `spectate:*` / 票据;battle 落点由 gather 决定并写进快照路由 | 存储红线 3 ✅(Redis) |
 | **客户端直连 + 票据入场** | `turn-based-battle-server.md` §18(2026-09-05 落码):battle 自签 HMAC 票据、自身 TCP 端口开客户端面、S2C 直连优先 Kafka 回落 | 契约① / 第五节直连 ✅(待编译 + 冒烟) |
+| ↳ 回落口径(2026-09-29 更正上一行「S2C 直连优先 Kafka 回落」) | turn-based §22 D68:下行拆成两个显式出口。`PushBattleFrame`(回合结果、终局、观战帧及直连建立后的一切战斗帧)**只走直连,无活直连即丢弃**;`PushLobbyAnnouncement` 只用于 `NotifyBattleAssigned` / `NotifyBattleStart`,有活直连直发,否则经 Kafka → gate 回落(判定纯函数 `cpp/nodes/battle/battle_push_policy.h:21-48`,出口 `battle_room_manager.h:291-297`)。scene 发的 `NotifyBattleReconnect` 与结算后的 `NotifyBattleEnd` 经大厅,属 scene 自己的下行。上行:gate 对目标为 battle 的客户端消息一律回 `kServiceUnavailable`(D66,`client_message_processor.cpp:937-950`) | 第五节直连 ✅ **已落码,未编译、未测试** |
+| 落点入口(2026-09-29 补,D76–D93) | `BuildAssignment` 经 `client_endpoint::ClientFacing` 取 battle 的客户端可达地址(`client_endpoint.h:100-109`,`battle_room_manager.cpp:1452-1464`):`NodeInfo.client_endpoint`(=11)可用就用它;否则 required=false 时回落 `NodeInfo.endpoint`;required=true(`CLIENT_ENDPOINT_REQUIRED=1`)或连 endpoint 都不可用时拒签(D78 / D79,沿用 D70 fail-closed)。client_endpoint 只在 static / agones 形态下由进程在发布 etcd 前自报(D76 / D79);默认 podip 形态(`CLIENT_ENDPOINT_SOURCE=none`)不自报,下发的就是回落的 endpoint(POD_IP,只有集群内可达,`client_endpoint.h:16-17`、`:90-91`)。K8s 形态:`-ClientEntryMode external` + `-BattleOrchestrator agones` 时 battle 为 Agones Fleet `portPolicy: Dynamic`、端口名 `client`(`tools/scripts/lib/k8s_client_entry.ps1:988` `New-BattleFleetYaml`);`external + deployment` 为 hostPort 20000,只用于验证 / 回退(D86)。节点级准入:`CreateBattle` 先取分配许可,拒绝回 gRPC `UNAVAILABLE "battle_not_allocatable"`,match 不发 DestroyBattle、换节点重试一次(D82,`battle_node.cpp:15`、`:60-83`);排空标签 `mmorpg.io/drain`(D83) | 第五节「每个落点可寻址入口」✅ **已落码,未编译、未上集群**(kind 端到端见 k8s-client-entry.md) |
 | 跨 zone 匹配 + 水平扩展 | `cross-zone-matchmaking.md`;battle / match 全局池 | — |
 
 ### 仍是缺口
 
 1. **收缩阶段**(2026-09-16 更正):Unity 客户端已接直连(客户端仓 `b5cf6ef`,2026-09-06);本机一键启动已默认路由模式,gate 不再中继战斗;剩余 = K8s `-GateRouterMode` 默认翻转 + 删 gate 中继代码,门禁与顺序见 [turn-based-battle-server.md §19](./turn-based-battle-server.md#19-收缩阶段决策--换会话重绑修复2026-09-16) D36 / D37("直连失败率数据"前提已作废:项目未上线、无老客户端);
+   **(2026-09-29)已落码,未验证**:用户豁免 D36 / D37 的「K8s 路由模式 battle-smoke 先跑通」前提(turn-based §22 D65,事后补验),一次做完——gate 两种模式都不中继战斗(D66)、删 Kafka Bind/Unbind 契约(D67)、下行两个显式出口(D68)、观众握手快照(D69)、D26 fail-closed(D70)、scene 换会话只推重连提示(D72)、robot 与 Unity 直连是唯一通路(D73 / D74)、K8s `-GateRouterMode` 默认 `"1"`、C++ 默认值不改(D75,[xuanming-port-decisions-20260910.md](./xuanming-port-decisions-20260910.md) D-12 修订)。**未编译、未测试、未上集群,待 Codex 验证**;
+   仍未做:停机路径 `DisconnectAll` 立即强关房间直连、独立的 `battle_id → 落点` 路由键(补签目前依赖观战索引 `spectate:battle:{id}`)、D40 回合号幂等;
 2. **部署形态**(2026-09-16 更正):battle 的 Deployment / ConfigMap / 密钥注入已由 `k8s_deploy.ps1`(`Apply-BattlePool`)生成,但只开 containerPort,`NodeInfo.endpoint` 通告 POD_IP,集群外客户端不可达——与 gate 是同一个未解问题(脚本 `Show-ExposureProfileWarning` 明写"翻译要在 login 侧做");并行会话正在做"完整 K8s Battle 验收"(microservice-zone-contract §17),对外入口形态(hostPort / NodePort / 外部 L4)随其拍板;
+   **(2026-09-29)已落码,未验证**:入口形态已由集群外入口 D76–D93 拍板并落码([k8s-client-entry.md](./k8s-client-entry.md))——进程自报 `client_endpoint`、login / scene_manager / battle 三出口同一选择规则;battle 生产推荐 `external + agones`(Agones Fleet `portPolicy: Dynamic`,分配许可 + 排空标签),`external + deployment`(hostPort)只用于验证 / 回退;gate 为 StatefulSet + 每序号 Service。上面「NodeInfo.endpoint 通告 POD_IP、集群外不可达」只在默认 `-ClientEntryMode podip` 下仍成立(podip 专供集群内 robot 与压测)。**未编译、未上集群;kind 端到端验证待 Codex / 用户执行**;
 3. 落点粒度已由事实拍板为 **一进程 N 房**(单 battle 进程多房间,§8),隔离(单房异常不掀翻进程)只有 timer 回调按 battle_id 重查这一层,无 try/catch 熔断 —— 待补;
 4. 票据吊销 / 每消息 HMAC / 观众连接上限单独配置(§18.7)。
 
@@ -218,4 +224,7 @@ Battle ──result──▶ 结算服
 - [ ] 结算服重启后,已落地未发奖的 result 自动续跑,无人工补单
 - [ ] 客户端杀进程重启,凭有效票据(或重签)回到原局
 - [ ] 对局全程抓包:战斗流量零字节经过 gate
+  - (2026-09-29 精确判据)~~除 `NotifyBattleAssigned` / `NotifyBattleStart`(battle 的大厅公告,仅无活直连时经 Kafka → gate 回落)、`NotifyBattleReconnect` 与 scene 结算后推送的 `NotifyBattleEnd` 外,**零字节经 gate**~~ **(2026-09-29 更正:上句例外清单漏了 match 的大厅 RPC,补签与观战按设计就经 gate)** 抓包口径收窄为:`BattleClientPlayer` 的四条战斗 RPC(`SubmitBattleAction` / `GetBattleState` / `StopWatchBattle` / `SetAutoBattle`)及其应答、以及直连握手后的全部战斗帧(`NotifyTurnResult`、battle 发的 `NotifyBattleEnd`、`NotifySpectateState` / `NotifySpectateTurnResult` / `NotifySpectateEnd`)**零字节经 gate**;经 gate 发往 battle 的客户端消息一律被拒(turn-based §22 D66 / D68)。以下**按设计经 gate、不算违例**:battle 的大厅公告 `NotifyBattleAssigned` / `NotifyBattleStart`(仅无活直连时经 Kafka → gate 回落);scene 发的 `NotifyBattleReconnect` 与结算后推送的 `NotifyBattleEnd`;match 的大厅 RPC——含补签 `MatchService.RequestBattleTicket` 及其应答(应答带完整 `BattleAssignedS2C`,即票据与 battle host/port,`proto/battle/player_battle.proto:161-183`)与观战 `WatchBattle`,经 gate → `client_rpc_router` → match(部署默认的路由模式;C++ 直连模式下 gate 直连 match,同样经 gate;turn-based §22.1 gate 长连接一行,`turn-based-battle-server.md:785`)。上一条「凭有效票据(或重签)回到原局」的重签字节正走这条路
+- [ ] (2026-09-29 新增)直连失败时客户端给出明确提示(「无法连接战斗服务器」+ 重新连接),**不回落到大厅中继**;战斗 RPC 在直连未就绪时本地快速失败(turn-based §22 D74)
+- [ ] (2026-09-29 新增)K8s 集群外的客户端(不经 port-forward)按 `BattleAssignedS2C.host/port` 直连 battle 成功并打完一局(`-ClientEntryMode external`,D76–D93;kind 端到端验证见 [k8s-client-entry.md](./k8s-client-entry.md))
 - [ ] (high-density 时)单房抛异常,同进程其余房间正常出结算

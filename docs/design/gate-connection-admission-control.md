@@ -145,11 +145,35 @@ cookie 一点忙不帮）；反过来，应用层再怎么改也吸收不了带�
 | G6 | **`sockets::accept` 对 `ENFILE`/`ENOBUFS`/`ENOMEM` 直接 `LOG_FATAL` → abort** | `SocketsOps.cc:125-156`。即便把连接上限调到 1，只要内核在 accept 时返回 `ENOBUFS`（连接洪水的典型产物）gate 照样崩。这条与 gate 自己的上限**完全正交** |
 | G7 | **`Acceptor` 的 EMFILE 分支自带日志洪水**：`LOG_SYSERR` 在 `errno==EMFILE` 判断**之外**，LT epoll + EMFILE = 忙循环，每转一圈一行同步日志 | `Acceptor.cc` handleRead 的 else 分支第一行。应用层采样在这一层完全帮不上忙 |
 | G8 | **`idleFd_` 不是可靠兜底**：`close(idleFd_)` 与 `::accept` 之间被别的线程抢走名额时 `idleFd_` 会变成 -1 且**没有任何重新装填路径**（重开 `/dev/null` 的返回值根本不检查），对进程剩余生命周期彻底失效 | `Acceptor.cc` EMFILE 分支。gate 进程里 grpc/redis/kafka 客户端都在别的线程开 fd，窗口是存在的 |
-| G9 | **零 per-source 限制**，且**做之前有前置条件未满足**：`peerAddress()` 全仓只出现在 5 行日志里；而 `gate-entry` Service 未设 `externalTrafficPolicy` → 默认 `Cluster` → kube-proxy SNAT → `peerAddress()` 拿到的是 **node IP** | `k8s_deploy.ps1:928-947`（Service spec 只有 type/selector/ports） |
+| G9 | **零 per-source 限制**，且**做之前有前置条件未满足**：`peerAddress()` 全仓只出现在 5 行日志里；而 `gate-entry` Service 未设 `externalTrafficPolicy` → 默认 `Cluster` → kube-proxy SNAT → `peerAddress()` 拿到的是 **node IP**。**(2026-09-29 更正:前置条件在 external 形态下已由部署层满足,podip 形态仍不满足,见下方 §4.2.1;per-source 限制本身仍为零)** | `k8s_deploy.ps1:928-947`（Service spec 只有 type/selector/ports）——**行号已漂移**,2026-09-29 现为 `tools/scripts/k8s_deploy.ps1:2405-2424` `New-GateServiceYaml` |
 | G10 | **pre-auth 路径的按包防护为零**：`DispatchClientRpcMessage` 在 `:736` 的 `verified` 判定**排在** `ValidateClientMessage`（`:707`）之前；`DispatchTokenVerify`（`:780`）从头到尾不调限流器、也不调 `CheckMessageSize` | 未认证连接可反复让 gate 缓冲 64KB（`codec.h:64`）+ adler32 + 反射建 message + parse |
 | G11 | **gate 容器 BestEffort**：无 `resources`、无探针、无 `securityContext`、无 PDB。`oom_score_adj=1000`，节点内存压力时最先被驱逐，且连接洪峰打的是整个 node | `k8s_deploy.ps1:560-632`（`New-NodeDeploymentYaml` 全文）。对照 go-svc 的 login/gateway 都配了 limits |
 | G12 | **131071 硬上限是借来的**：`network_utils.h:12` 借 `snow_flake.h:26` 的 `kNodeBits=17` 当 seq 位宽。编译期打开 `ENABLE_SNOWFLAKE_TESTING` 会让它**静默变成 511**，并让默认的 `GateMaxConnections: 20000` 在 `main.cpp:116` 直接 `LOG_FATAL` | 两个语义完全无关的常量共用一个名字 |
 | G13 | **应用侧零 Prometheus 埋点** | `cpp/nodes/gate` 全仓 grep 不到 prometheus。现在只能靠内核计数器 + 采样日志间接推断 |
+
+#### 4.2.1 G9 前置条件现状(2026-09-29 更正,集群外入口 D76–D93;未上集群,待 kind 验证)
+
+G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"。集群外入口落码后,它按部署形态分成两种情况:
+
+| 形态 | 客户端入口 | 源 IP 是否保留 | 证据 |
+| --- | --- | --- | --- |
+| `-ClientEntryMode external`(集群外玩家唯一可用形态) | 每序号 Service `gate-<i>`,`externalTrafficPolicy` 默认 **`Local`**(D89) | **NodePort + `Local`:保留**(不做 SNAT,流量只进本节点上的同序号 Pod)。**LoadBalancer:取决于云 LB 是否直通** —— 直通型 L4 LB 配 `Local` 保留;代理型 LB 会把源 IP 换成 LB 自己的地址,要靠 PROXY protocol 传真实 IP,而 gate **不解析** PROXY protocol(`cpp/` 下无相关实现),此时 G9 前置仍不满足 | 生成器 `tools/scripts/lib/k8s_client_entry.ps1:864-909`(`:897` 写 `externalTrafficPolicy`);参数 `tools/scripts/k8s_deploy.ps1:202-204` `-GateExternalTrafficPolicy Local\|Cluster`;选 `Cluster` 时 preflight 警告"G9 按源 IP 限流不可用"(`lib/k8s_client_entry.ps1:1438`) |
+| `-ClientEntryMode podip`(默认,只给集群内 robot / 压测) | 单副本时的 `gate-entry`(D90),spec 仍不写 `externalTrafficPolicy` | **不保留**(默认 Cluster,SNAT);且 podip 下 login 下发 PodIP,集群外客户端本来就连不上 | `tools/scripts/k8s_deploy.ps1:2405-2424` `New-GateServiceYaml` |
+
+- battle 直连(同样面向客户端)走 hostPort:Agones Fleet `portPolicy: Dynamic`(`lib/k8s_client_entry.ps1:1056`)或验证用 hostPort Deployment(`:1173`)。
+  hostPort 是节点上的 DNAT,本身保源 IP(D89)。battle 目前没有按源限流,这里只记录前置条件已具备。
+- `Local` 的代价与本文 P1-5 写的一致:没有对应 Pod 的节点不接这个 nodePort 的流量。gate 自报地址的主机优先级是「模板 > `-ClientPublicHost` > `HOST_IP`」
+  (`tools/scripts/lib/k8s_client_entry.ps1:401`、`:434` `Resolve-GateClientEndpointPlan`,D88),所以:
+  - 主机取 `HOST_IP`,或取按 `{ordinal}` 渲染、解析到 Pod 所在节点的 DNS 模板时,客户端才只连 Pod 所在节点,`Local` 不丢包。
+  - 给了 `-ClientPublicHost`(单一主机)时,所有序号都自报**同一个主机**、只是端口不同。多节点 NodePort + `Local` 下,只有该主机所在节点上的 gate、
+    或该主机背后按 nodePort 把每个序号正确转发到 Pod 所在节点的那些 gate 可达,其余序号的流量在到达节点上直接被丢弃,gate 不可达。
+    preflight 对这种组合**没有任何警告**(`lib/k8s_client_entry.ps1:1356-1366` 只校验形状、`:1437-1439` 只对 `Cluster` 告警);
+    `tools/scripts/k8s_zone_rollback.ps1:93` 的 `.EXAMPLE` 正是 NodePort + `-ClientPublicHost 203.0.113.10` + 默认 `Local`,单节点集群(如 kind)才安全。
+  - 多节点下应改用按序号的 DNS 模板或 LoadBalancer + DNS 模板(D89,`docs/design/k8s-client-entry.md` D89;`k8s_gate_exposure_guidance.md` §2)。
+  (2026-09-29 更正:本条原写"gate 自报的地址恰好是 Pod 所在节点的 `HOST_IP`(或按序号渲染的 DNS 模板),所以 NodePort 形态下客户端本来就只连 Pod 所在节点",漏了 `-ClientPublicHost`。)
+- kind 验收项:gate 与 battle 日志里的 peer IP 应等于 `docker network inspect kind` 的 Gateway,而不是节点 IP。这只能证明"没被 SNAT 成节点 IP",证明不了真实公网 IP
+  (Docker Desktop 限制)。前置条件满足**不等于** per-source 限制已实现:P2-2 仍是零,开启前仍按 §7 评估。
+- §10 第 3 条("kube-proxy 在 `Cluster` 下 SNAT")仍是 model-knowledge 级论断;external 默认 `Local` 使 G9 不再依赖它,但 kind 验收时仍应顺带核对。
 
 ### 4.3 一条要专门澄清的：`sessions().size()` 是**会话配额**，不是连接配额、更不是 fd 配额
 
@@ -304,6 +328,11 @@ muduo 全库零 `SO_LINGER`，`TcpConnection` 也不暴露 fd，所以必须加 
 - `externalTrafficPolicy: Local`（或 LB 开 PROXY protocol）——**这是 per-source 限制从「不可能正确」
   变成「可能正确」的前提**，应排在写限速代码之前。代价：没有 gate pod 的 node 会拒绝该 NodePort 流量，
   外部 L4 LB 的健康检查必须能正确摘掉空 node。
+  **(2026-09-29 更正)** 这一条已按集群外入口 D89 落在 external 形态的每序号 Service 上(默认 `Local`,见 §4.2.1);
+  生成位置也不再只是 `New-GateServiceYaml`:external 的 gate StatefulSet / 每序号 Service / PDB 在 `tools/scripts/lib/k8s_client_entry.ps1`,
+  `New-GateServiceYaml`(现 `k8s_deploy.ps1:2405`)只剩 podip 单副本的 `gate-entry`。本节其余条目(resources、sysctl、NetworkPolicy)未做。
+  注意:gate 票据绑 `gate_node_id`,"外部 L4 LB"只能按实例透传,不能把多台 gate 放进一个后端池(`k8s_gate_exposure_guidance.md`)。
+  括号里的"或 LB 开 PROXY protocol"目前不可用:gate 不解析 PROXY protocol(`cpp/` 下无实现),LB 单方面开启会在每条连接前多出 PROXY 头、gate 按业务包解析(静态推断,未实测);代理型 LB 下 G9 前置仍不满足(§4.2.1 表)。
 - **safe sysctl**（pod 里 `securityContext.sysctls` 直接写，不用动节点）：
   `net.ipv4.tcp_keepalive_time`/`_intvl`/`_probes`（v1.29+）——这是部署层对应的死连接回收阀门；
   `net.ipv4.tcp_rmem`/`tcp_wmem`（v1.32+）调小能直接抬高同一内存预算下的连接天花板。
@@ -323,6 +352,7 @@ muduo 全库零 `SO_LINGER`，`TcpConnection` 也不暴露 fd，所以必须加 
 ### P2-2 · per-source 限制（默认关闭，告警后开启）
 
 前置条件（G9）解决后才有意义。而且**在游戏里这是高危操作**，见 §7。
+(2026-09-29 更正:前置条件在 external 形态下已具备、podip 下不具备,见 §4.2.1;限制本身仍未实现,未上集群验证。)
 
 ### P2-3 · 「上限满了正常玩家进不来」的二阶问题
 

@@ -3,6 +3,13 @@
 > **文档状态**: v2 — 2026-09-08(v1 2026-05-15)。**这是设计与历史决策文档;可逐字执行的 SOP 在 [`docs/ops/merge-zone-runbook.md`](../ops/merge-zone-runbook.md)。** 作废段落一律就地标注,不悄悄改写历史。
 > **范围**: 把散落在 `tools/merge_zone/main.go`、`mmo_cross_server_architecture.md §9`、`guild_ranking_architecture.md §合服工具`、`enter-scene-zone-routing.md §50` 的合服知识收口为单一权威来源。
 > **读者**: 运维、客服总监、新接手的 AI / 工程师。
+> **⚠️ 修订(2026-09-28,先读)**:
+> - 本文 **§2「合服的本质」**(「改 mapping + 数据搬家」)与 **§4 冲突处理的结论**以 `tools/merge_zone` 的实现(`main.go` 顶部注释是步骤顺序的真源)和 [player-storage-placement.md](./player-storage-placement.md) 为准。
+>   - 合服默认 **pin 模式**:只改 home_zone,玩家主数据留在源区库,由落点记录 `player:placement:{id}` 指过去,不再搬玩家行。旧的拷行做法保留为 copy 模式。
+>   - 公会重名是全局唯一键下的断言,冲突时一个字节都不写,不再是「跳过冲突公会继续迁移」。
+> - 可执行 SOP 以 [merge-zone-runbook.md](../ops/merge-zone-runbook.md) v3 为准。
+> - 本文正文不改写,作废处按此标注理解。
+>
 > **修订(2026-08-15)**: 全区全服数据层落地后(见 [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) §D7),合服从"跨库搬数据"收敛为"`RemapHomeZoneForMerge` 改逻辑归属 + 业务数据合并",`tools/merge_zone` 职责相应收缩;Phase 2 之前本文流程仍是权威。
 
 ---

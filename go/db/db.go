@@ -17,6 +17,7 @@ import (
 	"shared/grpcstats"
 	"shared/kafkautil"
 	"shared/killswitch"
+	"shared/placement"
 	"shared/serverbase"
 	"syscall"
 	"time"
@@ -38,6 +39,10 @@ var showVersion = flag.Bool("version", false, "打印版本信息并退出")
 // killSwitchEtcdDialTimeout 与 scene_manager 建 etcd 客户端时的取值一致(5s)。
 // 只影响 killswitch 自己的 watch 连接,拨不通也只是退回全放行。
 const killSwitchEtcdDialTimeout = 5 * time.Second
+
+// placementCapabilityTimeout 是启动期首次写能力标记的预算:一条 SET,只为不让 Redis 卡住拖住启动。
+// 之后的续写由 kafka.KeepPlacementCapability 负责,预算见那里。
+const placementCapabilityTimeout = 5 * time.Second
 
 func main() {
 	flag.Parse()
@@ -84,8 +89,8 @@ func main() {
 	ctx := svc.NewServiceContext()
 
 	// Initialize database BEFORE the Kafka consumer starts pulling tasks:
-	// 消费任务落到 worker 就会碰 proto_sql.DB,若此时还是 nil,启动窗口内的
-	// 每条消息都 panic-recover 一次(offset 不提交,重启可恢复,但整个窗口在
+	// 消费任务落到 worker 就要从落点库注册表拿库(种子就是 proto_sql.DB),若此时还没建好,
+	// 启动窗口内的每条消息都会失败重排(offset 不提交,重启可恢复,但整个窗口在
 	// 空转打错误日志)。先建库连接再放消费者进来,窗口从机制上不存在。
 	//
 	// InitDB 默认**不跑任何 DDL**,并且会断言实际连上的 DATABASE() 落在外部
@@ -96,6 +101,14 @@ func main() {
 		panic(fmt.Sprintf("database init rejected: %v", err))
 	}
 
+	// 落点库注册表(docs/design/player-storage-placement.md §6.1):本 zone 库登记为落点 ZoneId,
+	// 其余落点库在第一次被指向时按需打开(只 Ping + 只读 schema 闸,从不建库)。
+	// 必须在 InitDB 之后(拿本 zone 库做种子)、消费者启动之前(第一条任务就要选库)。
+	stores, err := proto_sql.NewStoreRegistryFromConfig()
+	if err != nil {
+		panic(fmt.Sprintf("placement store registry rejected: %v", err))
+	}
+
 	// 装配大字段三档闸(必须在消费者启动之前:第一条消息落到 worker 就要过闸)
 	kafka.InitBlobGuard(config.AppConfig.ServerConfig.BlobGuard)
 
@@ -103,6 +116,8 @@ func main() {
 	kafkaConsumer, err := kafka.NewKeyOrderedKafkaConsumer(
 		config.AppConfig,
 		ctx.RedisClient,
+		ctx.PlacementRedis,
+		stores,
 	)
 	if err != nil {
 		panic(fmt.Sprintf("failed to init Kafka consumer: %v", err))
@@ -116,6 +131,30 @@ func main() {
 
 	// Start Prometheus /metrics endpoint (no-op when MetricsListenAddr empty).
 	metrics.Start(config.AppConfig.MetricsListenAddr)
+
+	// ── 能力标记(player-storage-placement.md §4.3)──────────────────────────
+	// 合服 pin 模式与搬库工具动手前检查各 zone 的 db:capability:zone:{Z};没有标记 = 那个 zone 此刻没有新版
+	// go/db 在按落点选库,工具拒绝执行。写在库注册表与消费者都已就绪之后:标记承诺的是
+	// 「这个 zone 正在跑的 go/db 按落点选库」,早于这一刻写就是提前承诺。
+	// 标记带 TTL、由心跳续写(见 kafka.KeepPlacementCapability):回退到旧版 / 进程退出后它在 TTL 内自然消失,
+	// 不会替已经不在跑的新版作证。第 4 步之前回退本 zone 的 go/db 时,若等不及 TTL,在 mapping Redis DB 0 上
+	// DEL 这把键再动工具。
+	// 失败只打 ERROR 不拒启:缺标记的后果是工具拒绝动手(安全方向),为它拒启等于停掉整个 zone 的存盘。
+	capabilityCtx, capabilityCancel := context.WithTimeout(context.Background(), placementCapabilityTimeout)
+	if err := kafka.MarkPlacementCapability(capabilityCtx, ctx.PlacementRedis, config.AppConfig.ZoneId); err != nil {
+		logx.Errorf("[placement] 能力标记写入失败(不拒启;心跳会在 Redis 恢复后自动补写,补写前合服 pin / 搬库工具会因缺标记拒绝对本 zone 动手): key=%s err=%v",
+			placement.CapabilityKey(config.AppConfig.ZoneId), err)
+	} else {
+		logx.Infof("[placement] capability marked: %s=%s ttl=%s refresh=%s",
+			placement.CapabilityKey(config.AppConfig.ZoneId), placement.CapabilityRoutingV1,
+			kafka.PlacementCapabilityTTL, kafka.PlacementCapabilityRefreshInterval)
+	}
+	capabilityCancel()
+	// 心跳在进程退出时停(defer 先于 kafkaConsumer.Stop 执行):先停止承诺能力,再停消费者。
+	// 不主动 DEL:同 zone 的其他副本可能仍在跑,交给 TTL 收尾。
+	capabilityHeartbeatCtx, stopCapabilityHeartbeat := context.WithCancel(context.Background())
+	defer stopCapabilityHeartbeat()
+	go kafka.KeepPlacementCapability(capabilityHeartbeatCtx, ctx.PlacementRedis, config.AppConfig.ZoneId)
 
 	// ── 热关停(killswitch)────────────────────────────────────────────
 	// db 是玩家权威数据的写入方,真出事时最缺的是"秒级止血阀":往 etcd 前缀
@@ -184,6 +223,13 @@ func main() {
 		fmt.Printf("  etcd:        %v\n", config.AppConfig.Etcd.Hosts)
 	}
 	fmt.Printf("  redis:       %s\n", config.AppConfig.ServerConfig.RedisClient.Hosts)
+	placementRedisHosts := "(RedisClient)"
+	if pr := config.AppConfig.Placement.Redis; pr != nil {
+		placementRedisHosts = fmt.Sprintf("%s db=%d", pr.Hosts, pr.DB)
+	}
+	fmt.Printf("  placement:   redis=%s required=%v storeFamilies=%v extraPool=%d/%d\n",
+		placementRedisHosts, config.AppConfig.Placement.Required, config.AppConfig.Placement.StoreFamiliesAllowed(),
+		config.AppConfig.Placement.ExtraStoreMaxOpenConn, config.AppConfig.Placement.ExtraStoreMaxIdleConn)
 	fmt.Printf("  kafka:       %v\n", config.AppConfig.ServerConfig.Kafka.Brokers)
 	fmt.Printf("  kafka topic: %s\n", config.AppConfig.ServerConfig.Kafka.Topic)
 	fmt.Printf("  mysql:       %s@%s/%s\n", config.AppConfig.ServerConfig.Database.User, config.AppConfig.ServerConfig.Database.Hosts, config.AppConfig.ServerConfig.Database.DBName)

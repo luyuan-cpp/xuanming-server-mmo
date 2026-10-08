@@ -152,6 +152,18 @@ message BaseDeployConfig {
 
     // C++ 节点 unary gRPC 调用的 deadline(见 GrpcClientConfig)。可以不写:缺席 = 全部用内置默认。
     GrpcClientConfig grpc_client = 21;
+
+    // 玩家存盘 DBTask topic(db_task_zone_{zone})的**世代号**。有效名:
+    // `<= 1` → `db_task_zone_{zone}`(不带后缀),`>= 2` → `db_task_zone_{zone}_g{N}`。
+    // 注意与 audit_topic_generation **第一代就带 _g1** 的规则不同:db_task 第一代的名字早已上线,
+    // 换规则等于换 topic,只能沿用 go/db、go/login 的 DbTaskTopicForGeneration 口径。
+    // 0 当 1 处理(proto3 没有 presence,存量 yaml 不写这一键也能起,名字不变)。
+    //
+    // **必须等于 go/db 的 ServerConfig.Kafka.TopicGeneration 与 go/login 的 Kafka.TopicGeneration**:
+    // C++ scene 按 home_zone 往这个 topic 写玩家存盘,go/db 是唯一的消费者。分家不报任何错 ——
+    // 换代后 scene 仍写旧代 topic,存盘静默积压在一个已排空、没人消费的 topic 里。
+    // 换代流程见 docs/design/db-task-kafka-partition-contract.md;设计见 player-storage-placement.md §7。
+    uint32 db_task_topic_generation = 22;
 }
 
 // Game config

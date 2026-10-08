@@ -137,26 +137,106 @@ param(
 	# 与 C++ gRPC server 的默认值保持一致。传 0 时 Deployment / Fleet
 	# 都不注入环境变量,由进程默认值接管；正数则两种编排写入同一个值。
 	[int]$GrpcServerMaxPollers = 8,
+	# gate 对外 Service 的类型。-ClientEntryMode external:决定每序号 Service gate-<i> 的类型,只允许 NodePort / LoadBalancer
+	# (preflight 校验);podip:决定单一 gate-entry 的类型,且 gate-entry 只在 gate 副本数为 1 时生成(D90)。
+	# 取值在参数绑定后规范成 K8s 的标准大小写(见脚本顶部 ConvertTo-ClientEntryCanonicalName)。
 	[ValidateSet("ClusterIP", "NodePort", "LoadBalancer")]
 	[string]$GateServiceType = "NodePort",
 	[int]$GateServicePort = 18000,
 	# gate 的客户端 RPC 路由模式:写进 gate Deployment 的环境变量 GATE_CLIENT_RPC_ROUTER
 	# (cpp/nodes/gate/gate_router_mode.h;docs/design/client-rpc-router.md D34)。
-	#   "1" = gate 只连路由服 client-rpc-router,chat 等只承诺路由模式的服务才可达;
-	#   "0" = 旧的逐服务直连,chat 不可达。
-	# **默认 "0",在 K8s 上以路由模式跑通一次 battle-smoke 之前不翻默认值**。路由服部署链已登记齐:
-	# go_svc_image.ps1 镜像、$GoSvcCatalogue 条目、New-GoSvcConfigMapYaml 的 client-rpc-router case、
+	#   "1" = gate 只连路由服 client-rpc-router,chat / friend / trade 等只承诺路由模式的服务经它可达
+	#         (guild / team 等没登记进 $GoSvcCatalogue 的服务,K8s 上本来就不部署,与本开关无关);
+	#   "0" = 旧的逐服务直连,只作回退:chat / friend / trade 不可达(gate 直连白名单里没有它们)。
+	# 两种模式下战斗都只走客户端 ↔ battle 直连,gate 不中继战斗(turn-based §22 D66),所以本开关与战斗无关。
+	# **默认 "1"**(turn-based §22 D75,2026-09-29 用户拍板):豁免 D-12 / D36 / D37 的前提①
+	# 「先在 K8s 上以路由模式跑通一次 battle-smoke」,改为事后补验;D-12 的前提②③(路由服 manifest 已落地、
+	# 路由服按 POD_IP 通告)已满足。翻转只落在部署层:C++ 进程默认值(gate_router_mode.h 未设变量即直连)
+	# 与 gate_security_test 的默认值断言一字不改(docs/design/xuanming-port-decisions-20260910.md D-12 及其修订)。
+	# 前置(翻转后 gate 硬依赖它):infra-up 必须已把 client-rpc-router 部署就绪 —— 不带 -SkipGoSvc,且给了 -GoSvcRegistry。
+	# 路由模式下 gate 的依赖门等的是 ClientRpcRouter + Scene 而不是 Login(gate/main.cpp requiredDependencies),
+	# 路由服不在就过不了依赖门,登录 / 匹配 / 聊天全部 no_target;对一个没有路由服的旧 infra 只跑 zone-up 同理。
+	# 路由服部署链:go_svc_image.ps1 镜像、$GoSvcCatalogue 条目、New-GoSvcConfigMapYaml 的 client-rpc-router case、
 	# manifests/go-svc/client-rpc-router.yaml(注入 POD_IP)、node-config service_discovery_prefixes 的
 	# ClientRpcRouterNodeService.rpc;路由服按 POD_IP 通告对外地址(client_rpc_router_service.go advertisedHost)。
-	# 以上都还没在 K8s 上实跑过(未编译、未部署),开 "1" 前要先确认路由服 Deployment 就绪,
-	# 否则 gate 白名单里唯一的 gRPC 目标拨不通,登录 / 匹配 / 聊天全部 no_target。
-	# 开启前置(docs/design/xuanming-port-decisions-20260910.md D-12):路由服镜像构建通过、infra-up 部署就绪,
-	# 并在 K8s 上以路由模式跑通一次 battle-smoke 之后再翻默认值。反向回退到 "0" = chat 及所有只承诺路由模式的服务同时不可达,
-	# 回退前先 killswitch 关 chat 方法并公告。
+	# 回退到 "0" = chat 及所有只承诺路由模式的服务同时不可达,回退前先 killswitch 关这些方法并公告(D-12)。
+	# 回退态不粘滞:本值每次部署都原样重写进 gate env,脚本不从集群读回旧值。以 "0" 回退运行的 zone,之后每一次
+	# 重新部署(日常 zone-up / release-zone、合服后的 zone-up、k8s_zone_rollback.ps1 的 Step 6,以及经 dev_tools.ps1 /
+	# k8s_image.ps1 等包装入口)都必须显式再传 -GateRouterMode 0,否则静默落回默认 "1";回退的原因(如路由服不可用)
+	# 若仍在,gate 就卡在依赖门,登录 / 匹配全部 no_target。
 	# 只收 "0" / "1":gate 侧除 1/true/on 以外一律当关,拼错会静默落回直连,不如在脚本入口就拒。
 	# 用字符串而不是 [bool]/[switch]:值原样写进 env,两边字面值一致,kubectl 里看到的就是传进来的。
 	[ValidateSet("0", "1")]
-	[string]$GateRouterMode = "0",
+	[string]$GateRouterMode = "1",
+
+	# ── 集群外客户端入口(D76–D93;生成器、preflight 与就绪等待在 lib/k8s_client_entry.ps1)────────────
+	# 模式矩阵(D80):
+	#   podip    + deployment:gate / battle 都是现状 Deployment,客户端拿 PodIP,只给集群内 robot 与压测。
+	#   podip    + agones    :battle 为 Agones Fleet(CLIENT_ENDPOINT_SOURCE=none)。
+	#   external + deployment:gate 为 StatefulSet + 每序号 Service;battle 为 Deployment + hostPort 20000(只用于验证 / 回退,D86)。
+	#   external + agones    :gate 同上;battle 为 Fleet portPolicy Dynamic(生产推荐)。
+	# 模式参数**不粘滞**:每次部署按本次取值生成,漏传就落回默认 podip / deployment。以 external / agones 运行的环境
+	# 重跑时(含 k8s_zone_rollback.ps1 Step 6 与包装入口)必须照传;否则清单会指向正在服务的 gate StatefulSet / battle Fleet,
+	# 这类会踢人的删除由 -AllowDisruptiveSwitch 把关,没给就在删除之前整条拒绝;battle 同 kind 内换模式(按现有容器 env
+	# CLIENT_ENDPOINT_SOURCE 判定)同样把关。以上判定都在写路径入口一次做完(Assert-ClientEntryClusterState,非 DryRun)。
+	# 上线口径(turn-based §22 D75 / ingress_final §6):集群外部署须与 -GateRouterMode 1 同一窗口启用 external;
+	# login / scene_manager 的 RequireClientEndpoint 见 -RequireClientEndpoint。
+	[ValidateSet("podip", "external")]
+	[string]$ClientEntryMode = "podip",
+	# login / scene_manager ConfigMap 的 RequireClientEndpoint(D78):下发 gate 地址时是否必须用 gate 自报的客户端可达地址。
+	# auto(默认)= 跟随 -ClientEntryMode:external → true,podip → false。
+	# 上线顺序(ingress_final §6):第 2 批逐个 zone 切 external 的窗口里,已切 zone 取 true 会让 scene_manager 跨 zone
+	# RedirectToGate 跳过未切 zone 的 gate(它们没有 client_endpoint),跨区跳转失败 —— 窗口期对已切 zone 显式传 false;
+	# 第 3 批确认全部 gate 都已自报地址后,回到 auto 并滚动 login 与 scene_manager。podip 下传 true 在写操作之前拒绝
+	# (podip 的 gate 从不自报地址,全部 gate 都会被跳过)。包装入口留空不透传。
+	[ValidateSet("auto", "true", "false")]
+	[string]$RequireClientEndpoint = "auto",
+	# gate 与 battle 共用的客户端可达主机(裸主机名或 IPv4,不带 scheme / 端口);kind 填 127.0.0.1。只在 external 下生效;
+	# 留空时 gate 取 status.hostIP,battle(agones)取 Agones status.address,battle(hostPort)取 status.hostIP。
+	[string]$ClientPublicHost = "",
+	# gate 客户端主机模板,例如 gate-{ordinal}.{zone}.example.com:{zone} 生成期渲染,{ordinal} 在 gate 启动 shell 里渲染。
+	# 优先级高于 -ClientPublicHost;-GateServiceType LoadBalancer 时必填;gate 副本数 >1 时必须含 {ordinal}。
+	# 地址参数(本参数、-ClientPublicHost、-GateNodePortBase、-GateServiceType)同样不粘滞:gate StatefulSet 是 OnDelete,
+	# 现有 Pod 仍自报旧地址,每序号 Service 却会立刻改写。所以集群里已有 gate StatefulSet 而本次算出的地址来源与它的模板
+	# 不同时,没给 -AllowDisruptiveSwitch 就在任何写操作之前拒绝,报错写明保持现状要传的值。
+	[string]$GateClientHostTemplate = "",
+	# external + NodePort:gate-<i> 的 nodePort = base + i,gate 自报同一个端口(D88)。只给单 zone 路径(zone-up)用;
+	# all-up 由 zones 配置里每个 zone 的 gateNodePortBase 覆盖,多 zone 时每个 zone 必须显式写(preflight 校验段不重叠、不越界)。
+	# 建议落在 K8s 静态子段 30000–30085。分多次 zone-up 部署时跨 zone 的重叠由删除旧形态之前的服务端预演
+	# (kubectl apply --dry-run=server)拦下。
+	[int]$GateNodePortBase = 30000,
+	# 每序号 Service 的 externalTrafficPolicy(D89):Local 保留玩家真实源 IP;Cluster 会 SNAT,G9 按源限流失效(preflight 警告)。
+	[ValidateSet("Local", "Cluster")]
+	[string]$GateExternalTrafficPolicy = "Local",
+	# battle 全局池的编排(D80 / D81):deployment = Deployment(external 下为 hostPort 形态);agones = agones.dev/v1 Fleet
+	# (集群须已安装 Agones,preflight 探测 fleets.agones.dev,DryRun 跳过探测)。只对 infra-up / all-up(不带 -SkipInfra)生效,
+	# 与 -SceneOrchestrator 相互独立。Fleet 的 health 复用 -AgonesHealth* 三个参数,initialDelaySeconds 不够覆盖 battle 启动
+	# 最坏耗时时按推导抬高并打一行说明(Resolve-BattleFleetHealth)。
+	[ValidateSet("deployment", "agones")]
+	[string]$BattleOrchestrator = "deployment",
+	# gateway 的 Ingress(D91)。**由 zone-up 生成**:Ingress 与 gateway Deployment 同处(zone namespace,Apply-JavaSvcManifests),
+	# 只在本次确实部署 Java 服务(给了 -JavaSvcRegistry 且不带 -SkipJavaSvc)时生成;在 infra-up 上给它只会得到"被忽略"警告。
+	# 可含 {zone}(生成期渲染,多 zone 各用一个 host)。留空 = 不生成,也**不删除**已有的 Ingress(参数不粘滞,
+	# 自动删会切断玩家的 HTTP 入口;要撤掉请手动 kubectl delete ingress gateway)。Ingress 只路由 /api,/admin 与 /actuator 不出集群。
+	[string]$GatewayIngressHost = "",
+	[string]$GatewayIngressClassName = "nginx",
+	# 非空时 Ingress 生成 tls 段,值为 zone namespace 里的 TLS Secret 名。
+	[string]$GatewayIngressTlsSecret = "",
+	# gateway 信任的反向代理 CIDR,逗号分隔,写进 java-svc-gateway-config 的 gate.rate-limit.trusted-proxies。
+	# 配了 -GatewayIngressHost 却不给它 = 全体玩家共用 Ingress controller 那一个限流桶,preflight 报错。
+	# 同样不粘滞:本次部署 gateway 而它为空时,若 zone namespace 里已有 Ingress gateway(留空 host 不会删它),
+	# 在写操作之前拒绝 —— 要么照传,要么先手动删掉 Ingress(不受 -AllowDisruptiveSwitch 豁免)。
+	[string]$GatewayTrustedProxies = "",
+	# 集群内 login 的开发口令认证(2b §7):login ConfigMap 写 DevPasswordAuth(账号前缀 robot_ / dev_),共享口令从环境变量
+	# MMORPG_LOGIN_DEV_PASSWORD_SHARED_SECRET 读入 zone namespace 的 Secret login-dev-password,经 secretKeyRef 注入 login 容器的
+	# LOGIN_DEV_PASSWORD_SHARED_SECRET,绝不进 ConfigMap。**只允许 -ReleaseProfile dev**(与 release_preflight.ps1 的
+	# debug.login.devpassword 同一门禁),其它档位传它在任何写操作之前报错。不传 = login 没有任何口令认证配置(fail-closed)。
+	[switch]$LoginDevPasswordAuth,
+	# 确认本次就是要切换形态(-ClientEntryMode / -BattleOrchestrator 换了取值)或改 gate / battle 的客户端地址来源,
+	# 接受整台 gate 踢人、在打的战斗作废、改地址后须逐个排空重建 gate。
+	# 不给时,只要"另一种形态"里会踢人的工作负载在集群里确实存在,或现有 gate / battle 的入口形态与地址来源会被改写,
+	# 部署就在任何写操作之前整条拒绝、一个都不删。只在维护窗口里显式加;包装入口留空不透传。
+	[switch]$AllowDisruptiveSwitch,
 
 	[switch]$SkipInfra,
 	[switch]$SkipGoSvc,
@@ -209,7 +289,33 @@ $script:CppLogPrunerCommand = "(while true; do ls -1t /app/bin/logs/cpp_nodes/*.
 # 提示只在一次运行里打一遍(all-up 会依次进 battle 池和每个 zone)。
 $script:CppLogSidecarNoticeShown = $false
 
+# -LoginDevPasswordAuth 的共享口令 Secret(zone namespace)。login 容器里的变量名取自库契约 LoginDevPasswordSecretEnv。
+$script:LoginDevPasswordSecretName = "login-dev-password"
+$script:LoginDevPasswordSecretKey = "shared-secret"
+# 口令由 Initialize-InjectedSecrets 解析(只在要部署 login 且开了开关时)。
+$script:LoginDevPasswordSecret = ""
+# gateway 管理面(/admin/**)的 X-Admin-Key,即 Spring 属性 admin.api-key(AdminApiKeyFilter 的 @Value("${admin.api-key}"))。
+# 部署侧从环境变量 MMORPG_GATEWAY_ADMIN_API_KEY 读入 zone namespace 的 Secret,经 secretKeyRef 注入 gateway 容器的 ADMIN_APIKEY,
+# 不进 ConfigMap。env 名取 Spring Boot 文档的规范写法(点换下划线、去掉短横、大写);OS 环境变量优先于 jar 内与 ConfigMap 挂载的
+# application.yaml,所以 git 里公开的默认值 change-me-in-production 不再生效。dev 档允许回落占位值(打警告),其它档缺失 /
+# 占位 / 短于 32 位一律在写操作之前拒绝(Resolve-InjectedSecret)。
+# 纵深防御:生成的 gateway ConfigMap 显式写 admin.api-key: "${ADMIN_APIKEY}"(New-JavaSvcConfigMapYaml),不靠宽松绑定。
+# env 注入一旦被删 / 改名,Spring 解析不了占位符直接拒启(fail-closed),而不是静默回落到 jar 内的公开常量。
+# 轮换:secretKeyRef 只在容器启动时读,Pod 模板带口令指纹注解($script:GatewayAdminApiKeyHashAnnotation),
+# 口令一变模板就变,重跑 zone-up 自动滚动 gateway,旧口令随旧 Pod 退场。
+$script:GatewayAdminApiKeySecretName = "gateway-admin-api-key"
+$script:GatewayAdminApiKeySecretKey = "api-key"
+$script:GatewayAdminApiKeyEnv = "ADMIN_APIKEY"
+$script:GatewayAdminApiKeyHashAnnotation = "mmorpg.io/gateway-admin-api-key-hash"
+# 由 Initialize-InjectedSecrets 解析(只在本次部署 gateway 时)。
+$script:GatewayAdminApiKey = ""
+# battle 全局池的工作负载,由写路径入口 Assert-ClientEntryDeployPreflight 渲染(New-BattleWorkloadManifest),Apply-BattlePool 只 apply。
+$script:BattleWorkload = $null
+
 . (Join-Path $ScriptDir "lib\release_common.ps1")
+# 集群外客户端入口(D76–D93)的生成器、preflight、就绪等待与模式切换清理。库函数不读本脚本的任何变量,
+# 碰集群的函数一律显式传 -KubeContext / -KubeConfig(漏传不会悄悄落到本机默认 context)。
+. (Join-Path (Join-Path $ScriptDir "lib") "k8s_client_entry.ps1")
 
 # ─────────────────────────────────────────────────────────────────
 # 不可变版本戳
@@ -248,6 +354,15 @@ if ([string]::IsNullOrWhiteSpace($JavaSvcTag)) {
 if ([string]::IsNullOrWhiteSpace($ImagePullPolicy)) {
 	$ImagePullPolicy = Resolve-ImagePullPolicy -ImageRef $NodeImage
 }
+
+# K8s 枚举区分大小写,PowerShell 的 ValidateSet 既不分也不改写:-GateServiceType nodeport 能过参数校验,原样写进
+# Service 的 type: 会被 API server 拒收(那时另一种形态的 gate 可能已经删了)。参数绑定后统一规范成标准写法,
+# 之后所有模板(含 gate-entry 的 type: $GateServiceType)拿到的都是它。取值已被 ValidateSet 限定,规范化必然命中。
+$GateServiceType = ConvertTo-ClientEntryCanonicalName -Value $GateServiceType -Allowed @("ClusterIP", "NodePort", "LoadBalancer")
+$GateExternalTrafficPolicy = ConvertTo-ClientEntryCanonicalName -Value $GateExternalTrafficPolicy -Allowed @("Local", "Cluster")
+$ImagePullPolicy = ConvertTo-ClientEntryCanonicalName -Value $ImagePullPolicy -Allowed @("Always", "IfNotPresent", "Never")
+# 写进 ConfigMap 的是 YAML 布尔字面量,统一成小写(True / TRUE 在不同 YAML 库里的解释不一致)。
+$RequireClientEndpoint = ConvertTo-ClientEntryCanonicalName -Value $RequireClientEndpoint -Allowed @("auto", "true", "false")
 
 <#
 .SYNOPSIS
@@ -344,6 +459,30 @@ function Initialize-InjectedSecrets {
 		-DevFallback "appuser" -ReleaseProfile $ReleaseProfile -Purpose "Java Gateway 数据源用户名" -MinLength 1
 	$script:GatewayDbPassword = Resolve-InjectedSecret -EnvName "MMORPG_GATEWAY_DB_PASSWORD" `
 		-DevFallback "apppass123" -ReleaseProfile $ReleaseProfile -Purpose "Java Gateway 数据源密码" -MinLength 12
+
+	# -LoginDevPasswordAuth 的共享口令(开发账号的登录口令,robot yaml 的 password 要与它一致)。只在本次会部署 login 时解析;
+	# 开关只允许 dev 档(Assert-ClientEntryDeployPreflight 已先拒其它档位)。刻意**没有**回落值:口令是运维 / 本机显式决定的,
+	# 生成器不替它猜一个 —— 未设置就在任何写操作之前拒绝(与 login 对空密钥 panic 同一口径)。
+	$script:LoginDevPasswordSecret = ""
+	if ($LoginDevPasswordAuth -and (Test-ZoneLoginDeployed)) {
+		$script:LoginDevPasswordSecret = Resolve-InjectedSecret -EnvName "MMORPG_LOGIN_DEV_PASSWORD_SHARED_SECRET" `
+			-DevFallback "" -ReleaseProfile $ReleaseProfile -Purpose "login 开发口令认证共享口令(DevPasswordAuth)" -MinLength 1
+		if ([string]::IsNullOrWhiteSpace($script:LoginDevPasswordSecret)) {
+			throw "-LoginDevPasswordAuth 需要环境变量 MMORPG_LOGIN_DEV_PASSWORD_SHARED_SECRET(开发账号的共享登录口令,robot yaml 的 password 须与它一致),当前未设置,拒绝部署。"
+		}
+	}
+
+	# gateway 管理面口令(见 $script:GatewayAdminApiKeyEnv 处的说明)。只在本次部署 gateway 时解析:infra-up 与不带 Java 服务的
+	# zone-up 不因它被阻断。非 dev 档缺失 / 占位 / 过短由 Resolve-InjectedSecret throw;dev 档回落占位值,照样经 Secret 注入
+	# (注入路径各档一致),但打警告 —— 管理面只在集群内可达(Ingress 只路由 /api),占位口令仍等于对集群内任何 Pod 开放。
+	$script:GatewayAdminApiKey = ""
+	if (Test-ZoneGatewayDeployed) {
+		$script:GatewayAdminApiKey = Resolve-InjectedSecret -EnvName "MMORPG_GATEWAY_ADMIN_API_KEY" `
+			-DevFallback "change-me-in-production" -ReleaseProfile $ReleaseProfile -Purpose "Java Gateway 管理面口令(X-Admin-Key / admin.api-key)" -MinLength 32
+		if (Test-PlaceholderSecret -Value $script:GatewayAdminApiKey) {
+			Write-Warning "gateway 管理面口令是占位值(MMORPG_GATEWAY_ADMIN_API_KEY 未设置或仍是占位串,ReleaseProfile=$ReleaseProfile):/admin/** 用公开常量鉴权,只允许本地 dev;非 dev 档会拒绝部署。"
+		}
+	}
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -571,18 +710,18 @@ $GoSvcCatalogue = @{
 	# 与 battle 池同形态。gate 发现它走非 zone-scoped 前缀,所以放 infra namespace 一份即可。
 	match           = @{ ConfigMap = "go-svc-match-config";           Manifest = "match.yaml";           Port = 50500; ConfigFlag = "-f";              ConfigFile = "match_service.yaml";            ImageName = "mmorpg-match"; Global = $true }
 	# 全局聊天 chat v1:世界频道全服唯一、私聊 key 不含 zone,表里天然有跨 zone 的行,所以是全局池(Global),
-	# 与 match 同形态放 infra namespace 一份。客户端只经 gate → client-rpc-router 到达它;路由服在 K8s 上
-	# 真正跑起来之前(见下一条与 -GateRouterMode 参数注释),它「部署得起来但玩家不可达」,是已知缺口而不是配置错误。
+	# 与 match 同形态放 infra namespace 一份。客户端只经 gate → client-rpc-router 到达它:-GateRouterMode 默认 "1" 下可达
+	# (K8s 上路由模式整链待事后补验,turn-based §22 D75);以 "0" 回退时「部署得起来但玩家不可达」,见下一条与参数注释。
 	chat            = @{ ConfigMap = "go-svc-chat-config";            Manifest = "chat.yaml";            Port = 50700; ConfigFlag = "-f";              ConfigFile = "chat.yaml";                     ImageName = "mmorpg-chat"; Global = $true }
 	# 客户端 RPC 路由服(契约 zone_contract_v1 §1 路由服部署链):GATE_CLIENT_RPC_ROUTER=1 时 gate 唯一的 gRPC 目标。
 	# 全局池(node_util.cpp IsGlobalPoolNodeType 含 ClientRpcRouter),与 match / chat 同放 infra namespace。
 	# 端口 50600 与 go/client_rpc_router/etc/client_rpc_router.yaml、go_services.ps1 一致;metrics 9200。
 	# manifest 在 deploy/k8s/manifests/go-svc/client-rpc-router.yaml(照 match.yaml:replicas 2 + podAntiAffinity + PDB,
 	# 50600/9200,注入 POD_IP);路由服写进 NodeInfo 的是 POD_IP 而不是 ListenOn 的 0.0.0.0(client_rpc_router_service.go advertisedHost)。
-	# 部署了不等于 gate 会用它:gate 是否只连路由服由 -GateRouterMode 决定,默认 "0"。
+	# gate 是否只连路由服由 -GateRouterMode 决定:默认 "1" 下它是 gate 唯一的 gRPC 目标、依赖门等它就绪;以 "0" 回退时 gate 不连它。
 	"client-rpc-router" = @{ ConfigMap = "go-svc-client-rpc-router-config"; Manifest = "client-rpc-router.yaml"; Port = 50600; ConfigFlag = "-f"; ConfigFile = "client_rpc_router.yaml"; ImageName = "mmorpg-client-rpc-router"; Global = $true }
 	# 聚宝斋 trade(docs/design/jubaozhai-market.md,P1):商品表天然有跨 zone 的行,所以是全局池(Global),与 chat 同放 infra namespace。
-	# 客户端只经 gate → client-rpc-router 可达;-GateRouterMode 默认 "0" 下「部署得起来但玩家不可达」,与 chat 同一已知缺口。
+	# 客户端只经 gate → client-rpc-router 可达:-GateRouterMode 默认 "1" 下可达;以 "0" 回退时「部署得起来但玩家不可达」,与 chat 同口径。
 	# 端口 50800 / metrics 9230 与 go/trade/etc/trade.yaml、go_services.ps1 一致;ImageName 与 go_svc_image.ps1 的 trade 条目一致。
 	# 独占库 mmorpg_trade(port-decisions D-14):库由 mysql-init-sql 带入的 deploy/mysql-init/00_init_zone_dbs.sql 预建(建库只登记那一处);
 	# 表由 MigrateJob 登记的 trade-migrate Job 建 —— Apply-OneGoSvc 在 ConfigMap 之后、Deployment 之前 delete + apply 它
@@ -590,7 +729,7 @@ $GoSvcCatalogue = @{
 	trade           = @{ ConfigMap = "go-svc-trade-config";           Manifest = "trade.yaml";           Port = 50800; ConfigFlag = "-f";              ConfigFile = "trade.yaml";                    ImageName = "mmorpg-trade"; Global = $true; MigrateJob = "trade-migrate.yaml" }
 	# 好友 friend(docs/design/friend-port-20260918.md):好友关系天然跨 zone(表里一行的两个 player_id 可能分属不同区),
 	# 所以是全局池(Global),与 chat / trade 同放 infra namespace 一份。客户端只经 gate → client-rpc-router 可达;
-	# -GateRouterMode 默认 "0" 下「部署得起来但玩家不可达」,与 chat / trade 同一已知缺口。
+	# -GateRouterMode 默认 "1" 下可达;以 "0" 回退时「部署得起来但玩家不可达」,与 chat / trade 同口径。
 	# 注意本目录的 Global 与 go_services.ps1 $ServiceCatalogue 的字段集**语义不同**:这里的 Global 决定
 	# 「infra namespace 部署一份、zone-up 跳过」(Get-GlobalGoSvcNames → Apply-GlobalGoSvcManifests);
 	# 那边没有 Global 字段这一说,本地双 zone 仍每 zone 起一份进程。所以 friend 在这里标 Global、在那边不标,不矛盾。
@@ -835,14 +974,372 @@ function Show-ExposureProfileWarning {
 	if ($OpsProfile -eq "custom" -and $GateServiceType -eq "LoadBalancer") {
 		Write-Warning "Using OpsProfile=custom with GateServiceType=LoadBalancer. Ensure your cluster has a mature LB implementation; otherwise prefer NodePort + external L4 load balancer or use -OpsProfile bare-metal."
 	}
-	if ($GateServiceType -ne "ClusterIP") {
-		# 暴露 Service 只是一半:客户端的 gate 地址不是从 Service 拿的,而是 login 从
-		# etcd 读到 endpoint 后原样下发的(go/login internal/svc/servicecontext.go
-		# CandidatesForZone)。那个 endpoint 是 POD_IP —— 集群内地址,只有 in-cluster 的
-		# robot 连得上。所以 Service 暴露出去了,客户端拿到的仍是集群内地址。
-		# 翻译要在 login 侧做,不在这个脚本里。
-		Write-Warning "GateServiceType=$GateServiceType exposes the Service, but clients do not get gate's address from the Service: login hands out the etcd-registered endpoint, which is the cluster-internal POD_IP. External clients will still fail to connect until login is configured to translate node_id -> external address. See deploy/k8s/README.md."
+	if ($ClientEntryMode -eq "external") {
+		# external:gate 在发布进 etcd 之前自报客户端可达地址(NodeInfo.client_endpoint,D76),login / scene_manager 下发的
+		# 就是它;每序号 Service gate-<i> 把这个地址接到同序号的 Pod。其余组合的合法性由 Assert-ClientEntryDeployPreflight 校验。
+		return
 	}
+	if ($GateServiceType -ne "ClusterIP") {
+		# podip:暴露 Service 只是一半。客户端的 gate 地址不是从 Service 拿的,而是 login 从 etcd 读到 endpoint 后
+		# 下发的(go/login internal/svc/servicecontext.go CandidatesForZone),podip 下那就是 POD_IP —— 集群内地址,
+		# 只有 in-cluster 的 robot 连得上。集群外客户端要走 -ClientEntryMode external(D76–D93)。
+		Write-Warning "GateServiceType=$GateServiceType 只是把 Service 暴露了出去:-ClientEntryMode podip 下 login 下发的是 gate 在 etcd 里注册的集群内 POD_IP,集群外客户端仍然连不上。对外开放请用 -ClientEntryMode external(gate StatefulSet + 每序号 Service,见 docs/design/k8s-client-entry.md);单一 gate-entry 只在 gate 副本数为 1 时生成(D90)。"
+	}
+}
+
+# 本次是否部署 zone 内的 login(Apply-GoSvcManifests 的同一组条件)。-LoginDevPasswordAuth 只作用于它:
+# preflight 的"不生效"警告与共享口令的解析共用这一条判定,不在两处各写一遍。
+function Test-ZoneLoginDeployed {
+	return (($Command -in @("zone-up", "all-up")) -and -not $SkipGoSvc -and -not [string]::IsNullOrWhiteSpace($GoSvcRegistry))
+}
+
+# 本次是否部署 gateway(Apply-Zone → Apply-JavaSvcManifests 的同一组开关)。集群外入口预检与管理面口令解析共用这一处判定。
+function Test-ZoneGatewayDeployed {
+	return (($Command -in @("zone-up", "all-up")) -and -not $SkipJavaSvc -and -not [string]::IsNullOrWhiteSpace($JavaSvcRegistry))
+}
+
+<#
+.SYNOPSIS
+	集群外客户端入口的部署前校验,写操作入口调用,早于任何集群写操作。三步,任何一步失败都 throw:
+	  1. 参数组合:lib Test-ClientEntryPreflight,并入本脚本 -RequireClientEndpoint 的矛盾检查,一次报全;
+	  2. 渲染 battle 工作负载(New-BattleWorkloadManifest,DryRun 同样渲染),结果存 $script:BattleWorkload 给 Apply-BattlePool;
+	  3. 集群现状(Assert-ClientEntryClusterState,DryRun 跳过):会踢人、会静默改写入口的情形,battle 与各 zone 一次判定完。
+
+.DESCRIPTION
+	必须在 Apply-OpsProfileDefaults 之后调用:GateServiceType 可能已被 OpsProfile 改写。
+	-Zones 只收本次真正要部署的 zone:zone-up 一个(-GateNodePortBase 视为显式值),all-up 取 zones 配置
+	(是否显式写了 gateNodePortBase 由 Get-ZonesFromJson 记下),infra-up 为空(跳过 gate 校验)。
+	Agones CRD 只在本次要以 agones 编排部署 battle 时探测,DryRun 跳过探测(ingress_final WP9);
+	探测失败(集群不可达、Forbidden)由库函数 throw —— 查不到不等于"没装"。
+	不受 -SkipPreflight 影响:那个开关只跳过发布预检,这里拦的是会生成错误清单或踢人的组合。
+#>
+function Assert-ClientEntryDeployPreflight {
+	$deploysInfra = ($Command -eq "infra-up") -or ($Command -eq "all-up" -and -not $SkipInfra)
+
+	# FromZonesConfig 只给报错文本用:保持现状的 nodePort 起点要写在命令行(zone-up)还是 zones 配置(all-up)。
+	$zones = @()
+	if ($Command -eq "zone-up") {
+		$zones += [pscustomobject]@{ Name = $ZoneName; GateReplicas = $GateReplicas; GateNodePortBase = $GateNodePortBase; GateNodePortBaseExplicit = $true; FromZonesConfig = $false }
+	}
+	elseif ($Command -eq "all-up") {
+		foreach ($zone in (Get-ZonesFromJson -Path (Resolve-ZonesConfigPath))) {
+			$zones += [pscustomobject]@{
+				Name                     = $zone.name
+				GateReplicas             = $zone.gate
+				GateNodePortBase         = $zone.gateNodePortBase
+				GateNodePortBaseExplicit = $zone.gate_node_port_base_explicit
+				FromZonesConfig          = $true
+			}
+		}
+	}
+
+	$deploysBattle = $deploysInfra -and $BattleReplicas -gt 0
+	$deploysGateway = Test-ZoneGatewayDeployed
+	$deploysLogin = Test-ZoneLoginDeployed
+
+	$agonesFleetCrdPresent = $null
+	if ($deploysBattle -and $BattleOrchestrator -eq "agones" -and -not $DryRun) {
+		$agonesFleetCrdPresent = Test-AgonesFleetCrdPresent -KubeContext $KubeContext -KubeConfig $KubeConfig
+	}
+
+	$result = Test-ClientEntryPreflight -ClientEntryMode $ClientEntryMode -GateServiceType $GateServiceType -Zones $zones `
+		-GateClientHostTemplate $GateClientHostTemplate -ClientPublicHost $ClientPublicHost `
+		-GateExternalTrafficPolicy $GateExternalTrafficPolicy `
+		-DeploysBattle $deploysBattle -BattleOrchestrator $BattleOrchestrator -AgonesFleetCrdPresent $agonesFleetCrdPresent `
+		-DeploysGateway $deploysGateway -GatewayIngressHost $GatewayIngressHost -GatewayIngressTlsSecret $GatewayIngressTlsSecret `
+		-GatewayTrustedProxies $GatewayTrustedProxies `
+		-LoginDevPasswordAuth $LoginDevPasswordAuth.IsPresent -ReleaseProfile $ReleaseProfile
+
+	# -RequireClientEndpoint 是本脚本的参数(库只给 auto 的取值规则),矛盾检查并进同一份结果,一次报全。
+	$extraErrors = @()
+	$extraWarnings = @()
+	if ($ClientEntryMode -eq "podip" -and $RequireClientEndpoint -eq "true") {
+		$extraErrors += "-RequireClientEndpoint true 与 -ClientEntryMode podip 矛盾:podip 的 gate 从不自报客户端地址,login / scene_manager 会跳过全部 gate,登录与跨 zone 跳转全部失败。"
+	}
+	if ($ClientEntryMode -eq "external" -and $RequireClientEndpoint -eq "false") {
+		$extraWarnings += "-ClientEntryMode external 配 -RequireClientEndpoint false:没自报地址的 gate 会回落下发集群内 PodIP。只用于 ingress_final §6 第 2 批逐个 zone 切换的窗口,全部 zone 切完后回到 auto。"
+	}
+	Assert-ClientEntryPreflightResult -Result ([pscustomobject]@{
+		Errors   = [string[]](@($result.Errors) + $extraErrors)
+		Warnings = [string[]](@($result.Warnings) + $extraWarnings)
+	})
+
+	if ($LoginDevPasswordAuth -and -not $deploysLogin) {
+		Write-Warning "[client-entry] 给了 -LoginDevPasswordAuth,但本次不部署 login(它只随 zone-up / all-up 的 Go 服务生成,需要 -GoSvcRegistry 且不带 -SkipGoSvc),开关不生效。"
+	}
+
+	# battle 工作负载在这里渲染(Apply-Infra 开头"battle 配置在任何基础设施写操作之前生成并校验"的同一约定):
+	# Resolve-BattleFleetHealth 与生成器的参数校验都可能 throw,不能等 etcd / kafka / redis / mysql 都 apply 完才发现。
+	$script:BattleWorkload = $null
+	if ($deploysBattle) {
+		$script:BattleWorkload = New-BattleWorkloadManifest
+	}
+
+	if ($DryRun) {
+		Write-Host "[dry-run] 跳过集群现状预检(gate / battle 的形态与地址来源、gateway Ingress):真实执行时在任何写操作之前判定。"
+	}
+	else {
+		Assert-ClientEntryClusterState -Zones $zones -DeploysBattle $deploysBattle -DeploysGateway $deploysGateway `
+			-AgonesFleetCrdPresent $agonesFleetCrdPresent
+	}
+	Write-Host "Client entry: mode=$ClientEntryMode battle_orchestrator=$BattleOrchestrator gate_service_type=$GateServiceType gate_etp=$GateExternalTrafficPolicy require_client_endpoint=$(Resolve-RequireClientEndpoint)($RequireClientEndpoint) ingress_host=$(if ($GatewayIngressHost) { $GatewayIngressHost } else { '<none>' }) login_dev_password_auth=$($LoginDevPasswordAuth.IsPresent) allow_disruptive_switch=$($AllowDisruptiveSwitch.IsPresent)"
+}
+
+# login / scene_manager ConfigMap 的 RequireClientEndpoint 取值(见参数 -RequireClientEndpoint):auto 跟随 -ClientEntryMode
+# (库 Get-ClientEntryRequireClientEndpoint 是 auto 规则的唯一真相),true / false 为运维在上线窗口里的显式覆盖。
+function Resolve-RequireClientEndpoint {
+	if ($RequireClientEndpoint -eq "auto") {
+		return Get-ClientEntryRequireClientEndpoint -ClientEntryMode $ClientEntryMode
+	}
+	return $RequireClientEndpoint
+}
+
+<#
+.SYNOPSIS
+	集群现状预检(非 DryRun,Assert-ClientEntryDeployPreflight 第 3 步):本次参数会踢人、或会静默改写正在服务的
+	客户端入口时,在任何写操作之前拒绝,所有问题一次列全。
+
+.DESCRIPTION
+	模式与地址参数都不粘滞,漏传就落回默认值;下面几类情形 apply 不会报错,玩家却会大面积连不上:
+	  1. 换 kind 的切换(gate Deployment ↔ StatefulSet、battle Deployment ↔ Fleet):库 Find-ClientEntryObsoleteResources
+	     给出拒绝文本,与 Remove-ClientEntryObsoleteResources 的闸是同一份判据与文本(删除前那里还会再判一次,纵深防御:
+	     两次之间集群可能被别人改动)。提前到这里,是为了 all-up 下 battle 与
+	     各 zone 一次判定完,不会出现 infra 已重写、battle 已翻过去,排在后面的 zone 才被拒的半截部署。
+	  2. battle 同 kind 内换 -ClientEntryMode 或换客户端主机(Get-BattleEntryDrift)。
+	  3. external gate 的地址来源变化(Get-GateAddressDrift)。
+	  1–3 给了 -AllowDisruptiveSwitch 就只打警告放行(1 的删除由 Remove-ClientEntryObsoleteResources 告警)。
+	  4. 本次部署 gateway 却没有 trusted proxies,而 zone namespace 里已有 Ingress gateway:ConfigMap 会被重写成不含
+	     trusted-proxies,gateway Pod 重建后全体玩家共用 Ingress controller 的一个限流桶(D91)。与切换无关,
+	     不受 -AllowDisruptiveSwitch 豁免。
+	任何 kubectl 失败(集群不可达、Forbidden)都 throw:查不到不等于不存在(fail-closed)。
+#>
+function Assert-ClientEntryClusterState {
+	param(
+		[Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Zones,
+		[Parameter(Mandatory = $true)][bool]$DeploysBattle,
+		[Parameter(Mandatory = $true)][bool]$DeploysGateway,
+		# Test-AgonesFleetCrdPresent 的结果;$null = 静态 preflight 没探测(非 agones),这里按需再探测一次。
+		[AllowNull()][object]$AgonesFleetCrdPresent = $null
+	)
+
+	$problems = @()
+	# 会踢人 / 会改写入口的漂移:没给 -AllowDisruptiveSwitch 就并入 $problems,给了只打警告。
+	$drifts = @()
+
+	if ($DeploysBattle) {
+		if ($null -eq $AgonesFleetCrdPresent) {
+			$AgonesFleetCrdPresent = Test-AgonesFleetCrdPresent -KubeContext $KubeContext -KubeConfig $KubeConfig
+		}
+		if (-not $AllowDisruptiveSwitch) {
+			$probe = Find-ClientEntryObsoleteResources -Namespace $InfraNamespace -KicksPlayersOnly `
+				-Resources (Get-BattleObsoleteResources -BattleOrchestrator $BattleOrchestrator) -AgonesFleetCrdPresent $AgonesFleetCrdPresent `
+				-KubeContext $KubeContext -KubeConfig $KubeConfig
+			$problems += @($probe.Refusals)
+		}
+		$drifts += @(Get-BattleEntryDrift -AgonesFleetCrdPresent $AgonesFleetCrdPresent)
+	}
+
+	# New-GatewayRateLimitYaml 为空 = 本次 gateway ConfigMap 不含 trusted-proxies(与 New-JavaSvcConfigMapYaml 同一判定)。
+	# 非法 CIDR 已被静态 preflight 拒绝,这里不会 throw。
+	$gatewayLosesTrustedProxies = $DeploysGateway -and [string]::IsNullOrEmpty((New-GatewayRateLimitYaml -TrustedProxies $GatewayTrustedProxies))
+	foreach ($zone in $Zones) {
+		$namespace = Get-ZoneNamespace -Name $zone.Name
+		if (-not $AllowDisruptiveSwitch) {
+			$probe = Find-ClientEntryObsoleteResources -Namespace $namespace -KicksPlayersOnly `
+				-Resources (Get-GateObsoleteResources -ClientEntryMode $ClientEntryMode -GateReplicas $zone.GateReplicas) -AgonesFleetCrdPresent $AgonesFleetCrdPresent `
+				-KubeContext $KubeContext -KubeConfig $KubeConfig
+			$problems += @($probe.Refusals)
+		}
+		if ($ClientEntryMode -eq "external") {
+			$drifts += @(Get-GateAddressDrift -Zone $zone -Namespace $namespace)
+		}
+		if ($gatewayLosesTrustedProxies) {
+			$ingress = Invoke-ClientEntryKubectl -KubectlArgs @("get", "ingress", "gateway", "-n", $namespace, "--ignore-not-found", "-o", "name") `
+				-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput
+			if (-not [string]::IsNullOrWhiteSpace($ingress.Stdout)) {
+				$problems += "zone $($zone.Name)(namespace=$namespace):已有 Ingress gateway,本次部署 gateway 却没给 -GatewayTrustedProxies —— java-svc-gateway-config 会被重写成不含 gate.rate-limit.trusted-proxies,gateway Pod 重建后把 Ingress controller 的地址当成所有玩家的来源 IP,全体玩家共用一个限流桶,assign-gate / login 大面积 429(D91)。请照传 -GatewayTrustedProxies,或先手动 kubectl -n $namespace delete ingress gateway。"
+			}
+		}
+	}
+
+	if ($AllowDisruptiveSwitch) {
+		foreach ($drift in $drifts) {
+			Write-Warning "[client-entry] 已给 -AllowDisruptiveSwitch,放行:$drift"
+		}
+	}
+	else {
+		$problems += $drifts
+	}
+	if ($problems.Count -gt 0) {
+		throw ("集群现状预检失败($($problems.Count) 项),未做任何写操作:`n  - " + ($problems -join "`n  - "))
+	}
+}
+
+# pod spec(kubectl -o json 的解析结果)里指定容器某个 env 的字面值;容器或变量缺席返回 $null。
+# 值为空串的 env 由 API server 省略 value 字段,读出来同样是 $null:调用方按 [string] 取值时两者都是空串,
+# 与启动 shell 里 [ -n "$X" ] 的口径一致。本脚本未开 StrictMode,缺席的 JSON 字段按 $null 读。
+function Get-PodSpecEnvValue {
+	param(
+		[AllowNull()]$PodSpec,
+		[Parameter(Mandatory = $true)][string]$ContainerName,
+		[Parameter(Mandatory = $true)][string]$EnvName
+	)
+
+	if ($null -eq $PodSpec) { return $null }
+	foreach ($container in @($PodSpec.containers)) {
+		if ($null -eq $container -or $container.name -cne $ContainerName) { continue }
+		foreach ($entry in @($container.env)) {
+			if ($null -ne $entry -and $entry.name -ceq $EnvName) { return $entry.value }
+		}
+		return $null
+	}
+	return $null
+}
+
+<#
+.SYNOPSIS
+	battle 同 kind 内的入口漂移:读集群里本次要 apply 的那一种 battle 工作负载(Fleet 或 Deployment),按容器 env 判定
+	它现在的客户端入口形态与主机覆盖,与本次参数比对。不存在(首次部署 / 换 kind)或一致时返回空数组。
+
+.DESCRIPTION
+	env 名与取值一律取自库 Get-ClientEntryContract(与生成器同一份):CLIENT_ENDPOINT_SOURCE 为 agones / static = external,
+	none / 缺省 = podip(改造前的 Deployment 模板不写它);CLIENT_ENDPOINT_HOST 为空或 hostPort 形态的 $(HOST_IP) = 没有主机覆盖。
+	换 kind 的切换由 Find-ClientEntryObsoleteResources 负责,这里只管同 kind:apply 不会报错,但 Fleet 滚动后新开的房间
+	改按新形态下发地址(external → podip 时集群外客户端全部连不上新房间),Deployment 滚动重建、在打的局全部作废。
+#>
+function Get-BattleEntryDrift {
+	param([AllowNull()][object]$AgonesFleetCrdPresent)
+
+	$contract = Get-ClientEntryContract
+	if ($BattleOrchestrator -eq "agones") {
+		# 没装 Agones 已被静态 preflight 拒绝,走不到这里;防御性地当作不存在。
+		if (-not $AgonesFleetCrdPresent) { return ,@() }
+		$resource = $contract.AgonesFleetResource
+		$shape = "fleet battle"
+	}
+	else {
+		$resource = "deployment"
+		$shape = "deployment battle"
+	}
+	$live = Invoke-ClientEntryKubectl -KubectlArgs @("get", $resource, "battle", "-n", $InfraNamespace, "--ignore-not-found", "-o", "json") `
+		-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput
+	if ([string]::IsNullOrWhiteSpace($live.Stdout)) { return ,@() }
+	$workload = $live.Stdout | ConvertFrom-Json
+	# Fleet:spec.template(GameServer 模板).spec.template(Pod 模板).spec;Deployment:spec.template.spec。
+	$podSpec = if ($BattleOrchestrator -eq "agones") { $workload.spec.template.spec.template.spec } else { $workload.spec.template.spec }
+
+	$source = [string](Get-PodSpecEnvValue -PodSpec $podSpec -ContainerName "battle" -EnvName $contract.ClientEndpointSourceEnv)
+	$liveMode = if ($source -cin @($contract.ClientEndpointSourceAgones, $contract.ClientEndpointSourceStatic)) { "external" } else { "podip" }
+	if ($liveMode -ne $ClientEntryMode) {
+		return ,@("battle(namespace=$InfraNamespace):当前 $shape 以 -ClientEntryMode $liveMode 运行($($contract.ClientEndpointSourceEnv)='$source'),本次参数会改成 $ClientEntryMode —— Fleet 滚动后新开的房间改按新形态下发地址(external → podip 时集群外客户端全部连不上新房间),Deployment 滚动重建、在打的局全部作废。要保持现状请显式传 -ClientEntryMode $liveMode;确认要切换请加 -AllowDisruptiveSwitch。")
+	}
+	if ($liveMode -eq "external") {
+		$liveHost = [string](Get-PodSpecEnvValue -PodSpec $podSpec -ContainerName "battle" -EnvName $contract.ClientEndpointHostEnv)
+		if ($liveHost -ceq $contract.BattleHostPortDefaultClientHost) { $liveHost = "" }
+		if ($liveHost -ne $ClientPublicHost) {
+			$keep = if ($liveHost) { "显式传 -ClientPublicHost $liveHost" } else { "不传 -ClientPublicHost" }
+			return ,@("battle(namespace=$InfraNamespace):当前 $shape 的客户端主机覆盖是 '$liveHost'(空 = 取节点 / Agones 地址),本次 -ClientPublicHost 为 '$ClientPublicHost' —— 滚动后新开的房间改报新主机。要保持现状请$keep;确认要改请加 -AllowDisruptiveSwitch。")
+		}
+	}
+	return ,@()
+}
+
+<#
+.SYNOPSIS
+	gate 自报地址的两个来源(D88)→ 可比较的描述 + "保持现状要传的参数"。取值口径同 lib New-GateStatefulSetYaml 的
+	生成器内部 env 与启动 shell 前缀:主机按 模板 > CLIENT_PUBLIC_HOST > status.hostIP 取第一个非空的。
+#>
+function Get-GateAddressSource {
+	param(
+		[AllowEmptyString()][string]$PortMode = "",
+		[AllowEmptyString()][string]$NodePortBase = "",
+		[AllowEmptyString()][string]$ClientPort = "",
+		[AllowEmptyString()][string]$HostTemplate = "",
+		[AllowEmptyString()][string]$PublicHost = "",
+		[Parameter(Mandatory = $true)][string]$ZoneName,
+		# true = all-up(nodePort 起点写在 zones 配置),false = zone-up(写命令行)。
+		[bool]$FromZonesConfig = $false
+	)
+
+	$contract = Get-ClientEntryContract
+	if ($PortMode -ceq $contract.GateClientPortModeNodePort) {
+		$port = "nodePort $NodePortBase+序号(NodePort)"
+		$portHint = if ($FromZonesConfig) { "-GateServiceType NodePort,并在 zones 配置里给 zone $ZoneName 写 gateNodePortBase: $NodePortBase" } else { "-GateServiceType NodePort -GateNodePortBase $NodePortBase" }
+	}
+	elseif ($PortMode -ceq $contract.GateClientPortModeService) {
+		$port = "Service 端口 $ClientPort(LoadBalancer)"
+		$portHint = "-GateServiceType LoadBalancer"
+	}
+	else {
+		$port = "未知形态($($contract.GateClientPortModeEnv)='$PortMode')"
+		$portHint = "与现有 StatefulSet gate 的 env 一致的参数(先人工核对 kubectl get sts gate -o yaml)"
+	}
+
+	if ($HostTemplate) {
+		$hostDesc = "主机模板 '$HostTemplate'"
+		$hostHint = "-GateClientHostTemplate(本 zone 渲染 {zone} 后须为 '$HostTemplate')"
+	}
+	elseif ($PublicHost) {
+		$hostDesc = "主机 '$PublicHost'"
+		$hostHint = "-ClientPublicHost $PublicHost 且不传 -GateClientHostTemplate"
+	}
+	else {
+		$hostDesc = "节点地址 status.hostIP"
+		$hostHint = "既不传 -GateClientHostTemplate 也不传 -ClientPublicHost"
+	}
+	return [pscustomobject]@{ Port = $port; PortHint = $portHint; Host = $hostDesc; HostHint = $hostHint }
+}
+
+<#
+.SYNOPSIS
+	external gate 的地址来源漂移:集群里 StatefulSet gate 模板的生成器内部 env vs 本次地址计划(Resolve-ZoneGatePlan)。
+	StatefulSet 不存在(首次切 external)或一致时返回空数组。
+
+.DESCRIPTION
+	端口与主机分开比,只比实际生效的来源:
+	  - 端口(GATE_CLIENT_PORT_MODE + GATE_NODE_PORT_BASE | GATE_CLIENT_PORT):每序号 Service 会在本次 apply 时立刻改写,
+	    而 updateStrategy 为 OnDelete,现有 Pod 仍自报旧端口 —— 该 zone 全部登录失败,且不报任何错,直到逐个排空重建;
+	  - 主机(GATE_CLIENT_HOST_TEMPLATE > CLIENT_PUBLIC_HOST > status.hostIP):现有 Pod 仍报旧主机,之后任何重建(排空、
+	    崩溃、节点故障)的 Pod 改报新主机,同一 zone 混用两套地址。
+	比的是 StatefulSet 模板(最近一次 apply 的意图),不是逐个 Pod:OnDelete 下它就是下一批重建 Pod 要用的地址。
+#>
+function Get-GateAddressDrift {
+	param(
+		# Assert-ClientEntryDeployPreflight 的 zone 记录:Name / GateReplicas / GateNodePortBase / FromZonesConfig。
+		[Parameter(Mandatory = $true)]$Zone,
+		[Parameter(Mandatory = $true)][string]$Namespace
+	)
+
+	$live = Invoke-ClientEntryKubectl -KubectlArgs @("get", "statefulset", "gate", "-n", $Namespace, "--ignore-not-found", "-o", "json") `
+		-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput
+	if ([string]::IsNullOrWhiteSpace($live.Stdout)) { return ,@() }
+	$podSpec = ($live.Stdout | ConvertFrom-Json).spec.template.spec
+	# env 名取自库契约(与 New-GateStatefulSetYaml 写入的同一份)。
+	$contract = Get-ClientEntryContract
+	$liveEnv = @{}
+	foreach ($name in @($contract.GateClientPortModeEnv, $contract.GateNodePortBaseEnv, $contract.GateClientPortEnv,
+			$contract.GateClientHostTemplateEnv, $contract.GateClientPublicHostEnv)) {
+		$liveEnv[$name] = [string](Get-PodSpecEnvValue -PodSpec $podSpec -ContainerName "gate" -EnvName $name)
+	}
+	$plan = Resolve-ZoneGatePlan -CurrentZoneName $Zone.Name -Replicas $Zone.GateReplicas -NodePortBase $Zone.GateNodePortBase
+
+	$fromZonesConfig = [bool]$Zone.FromZonesConfig
+	$liveSource = Get-GateAddressSource -PortMode $liveEnv[$contract.GateClientPortModeEnv] -NodePortBase $liveEnv[$contract.GateNodePortBaseEnv] `
+		-ClientPort $liveEnv[$contract.GateClientPortEnv] -HostTemplate $liveEnv[$contract.GateClientHostTemplateEnv] `
+		-PublicHost $liveEnv[$contract.GateClientPublicHostEnv] -ZoneName $Zone.Name -FromZonesConfig $fromZonesConfig
+	$planSource = Get-GateAddressSource -PortMode $plan.PortMode -NodePortBase ([string]$plan.NodePortBase) `
+		-ClientPort ([string]$plan.ClientPort) -HostTemplate $plan.HostTemplate -PublicHost $plan.PublicHost `
+		-ZoneName $Zone.Name -FromZonesConfig $fromZonesConfig
+
+	$where = "zone $($Zone.Name)(namespace=$Namespace)"
+	$drifts = @()
+	if ($liveSource.Port -cne $planSource.Port) {
+		$drifts += "${where}:gate 自报端口将从 $($liveSource.Port) 改为 $($planSource.Port)。StatefulSet 是 OnDelete,现有 gate Pod 仍自报旧端口,每序号 Service 却会在本次 apply 时立刻改写 —— 该 zone 全部登录失败,直到逐个排空重建。要保持现状请显式传 $($liveSource.PortHint);确认要改请加 -AllowDisruptiveSwitch,并随即用 k8s_gate_drain.ps1 逐个排空重建全部 gate。"
+	}
+	if ($liveSource.Host -ne $planSource.Host) {
+		$drifts += "${where}:gate 自报主机将从 $($liveSource.Host) 改为 $($planSource.Host)。现有 Pod 仍报旧主机,之后任何重建(排空、崩溃、节点故障)的 Pod 改报新主机,同一 zone 混用两套地址。要保持现状请显式传 $($liveSource.HostHint);确认要改请加 -AllowDisruptiveSwitch,并随即用 k8s_gate_drain.ps1 逐个排空重建全部 gate。"
+	}
+	return ,$drifts
 }
 
 function Build-KubectlBaseArgs {
@@ -1025,6 +1522,22 @@ function New-NodeConfigMapYaml {
 		$auditTopicGeneration = $auditGen.Value
 	}
 
+	# 玩家存盘 DBTask topic 世代号(player-storage-placement.md §7)。**真源取 go/db 那份**:C++ scene
+	# 按 home_zone 往 db_task_zone_{zone}[_g<N>] 写存盘,go/db 是唯一的消费者,go-svc-db ConfigMap 也是从
+	# 同一个键镜像($dbTopicGeneration)。login 读写同一组 topic,三方必须相等,这里顺带钉住 login ——
+	# 分家不报任何错:换代后 scene 仍写旧代 topic,存盘静默积压在没人消费的旧 topic 里。
+	# 与 AuditTopicGeneration 不同,这里用 Get-AuthoritativeScalar(查不到就 throw):go-svc-db ConfigMap
+	# 本来就强制要这一键,不存在"yaml 可以不写"的窗口,宽容只会让两份 ConfigMap 各取各的默认值。
+	$dbTaskTopicGeneration = Get-AuthoritativeScalar -RelativePath 'go/db/etc/db.yaml' -KeyPath 'ServerConfig.Kafka.TopicGeneration'
+	$loginDbTaskTopicGeneration = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Kafka.TopicGeneration'
+	$dbTaskGenNumber = 0L
+	if (-not [long]::TryParse($dbTaskTopicGeneration, [ref]$dbTaskGenNumber) -or $dbTaskGenNumber -le 0 -or $dbTaskGenNumber -gt [uint32]::MaxValue) {
+		throw "生成 node ConfigMap 失败:go/db/etc/db.yaml 的 ServerConfig.Kafka.TopicGeneration 必须是 1..4294967295 的整数(当前 '$dbTaskTopicGeneration')。"
+	}
+	if ($loginDbTaskTopicGeneration -cne $dbTaskTopicGeneration) {
+		throw "生成 node ConfigMap 失败:go/db ServerConfig.Kafka.TopicGeneration($dbTaskTopicGeneration)与 go/login Kafka.TopicGeneration($loginDbTaskTopicGeneration)不一致;db_task topic 换代必须 login/db/C++ 三方同一次改。"
+	}
+
 	$baseDeployConfig = (@"
 Etcd:
   Hosts:
@@ -1048,8 +1561,10 @@ service_discovery_prefixes:
   - "GateNodeService.rpc"
   - "LoginNodeService.rpc"
   # 与 bin/etc/base_deploy_config.yaml 对齐(2026-09-02 跨 zone 匹配审计发现此处只有三条):
-  # 缺 BattleNodeService/MatchNodeService 时 gate 发现不到 battle/match,BindBattle 不落地、
-  # JoinQueue 报 "Node not found ... message id: 157";这份 ConfigMap 以只读整目录挂载覆盖镜像里的 bin/etc。
+  # 缺 MatchNodeService 时直连模式("0")的 gate 发现不到 match,JoinQueue 报 "Node not found ... message id: 157"。
+  # BattleNodeService 已不供 gate 使用(两种模式下 gate 都不连 battle、不中继战斗,turn-based §22 D66);保留它是因为
+  # battle-node-config 也由本模板生成,battle 按这些前缀 watch 自己的节点键(etcd_service 劫持检测与注册自检)。
+  # 这份 ConfigMap 以只读整目录挂载覆盖镜像里的 bin/etc。
   - "SceneManagerNodeService.rpc"
   - "BattleNodeService.rpc"
   # 客户端 RPC 路由服(Go-Zero,全局池):GATE_CLIENT_RPC_ROUTER=1 时 gate 唯一的 gRPC 目标(契约 zone_contract_v1 §1)。
@@ -1069,6 +1584,11 @@ service_discovery_prefixes:
 # 缺这一键 C++ 回落成第一代(_g1),消费者若已换代就是"生产者写进没人消费的 topic",
 # 不报任何错,流水 / 快照静默积压到保留期(30 天)被删。
 AuditTopicGeneration: ${auditTopicGeneration}
+# 玩家存盘 DBTask topic 世代号:<= 1 → db_task_zone_{zone}(第一代不带后缀),>= 2 → db_task_zone_{zone}_g<N>
+# (与审计 topic 第一代就带 _g1 不同)。读法见 config.cpp::readBaseDeployConfig 的 DbTaskTopicGeneration 分支 +
+# services/scene/player/constants/player.h。值从 go/db/etc/db.yaml 的 ServerConfig.Kafka.TopicGeneration 取
+# (生成期已核对与 login 相等):缺这一键 C++ 回落第一代,go/db 若已换代就是存盘写进没人消费的旧 topic。
+DbTaskTopicGeneration: ${dbTaskTopicGeneration}
 Kafka:
   Brokers:
     - "kafka.${InfraNamespace}:9092"
@@ -1165,7 +1685,8 @@ function New-NodeDeploymentYaml {
 		# initContainers 与 containers 共用同一个 spec.volumes,所以卷片段不动。
 		$sidecarInitBlock = "`n      initContainers:`n" + (New-CppLogSidecarContainerYaml -ItemIndent "        " -CurrentZoneName $zoneLabelForSidecar -AsNativeSidecar)
 		$sidecarVolumeBlock = "`n" + (New-CppLogSidecarVolumeYaml -ItemIndent "        ")
-		$sidecarAnnotationBlock = "`n      annotations:`n        mmorpg.io/cpp-log-sidecar-config-hash: $(Get-CppLogSidecarConfigHash)"
+		# 哈希加引号:12 位十六进制可能全是数字(如 123456789012)或是 12345678e123 这类科学计数法,裸写会被 YAML 解析成数字,annotation 值必须是字符串,API server 拒收。
+		$sidecarAnnotationBlock = "`n      annotations:`n        mmorpg.io/cpp-log-sidecar-config-hash: `"$(Get-CppLogSidecarConfigHash)`""
 	}
 
 	# 用数组逐行拼,最后 join 换行。
@@ -1186,10 +1707,10 @@ function New-NodeDeploymentYaml {
 	# 什么也不做,统一注入省一个分支。
 	$extraEnvLines += "`t`t`t- name: SNOWFLAKE_CACHE_DIR"
 	$extraEnvLines += "`t`t`t  value: `"$SnowflakeCacheDir`""
-	# 客户端 RPC 路由模式(脚本参数 -GateRouterMode,默认 "0";开启前置见参数处注释)。只给 gate 注入:
-	# scene 不读这个变量,写进 scene 的 Deployment 只会让人误以为它也分模式。
-	# "0" 也显式写出而不是省略:`kubectl get deploy gate -o yaml` 一眼就能看出这个 zone 的 gate 跑在哪个模式,
-	# 不必再去翻 C++ 默认值;将来翻转默认值时 diff 里也看得见。
+	# 客户端 RPC 路由模式(脚本参数 -GateRouterMode,默认 "1";前置与回退见参数处注释)。只给 gate 注入:
+	# scene / battle 不读这个变量,写进它们的 Deployment 只会让人误以为它们也分模式。
+	# 两个值都显式写出而不是省略:`kubectl get deploy gate -o yaml` 一眼就能看出这个 zone 的 gate 跑在哪个模式,
+	# 不必再去翻 C++ 默认值 —— 部署层默认 "1" 与 C++ 进程默认(未设即直连)刻意不同(D-12),省略 "1" 就会落回直连。
 	if ($NodeName -eq 'gate') {
 		$extraEnvLines += "`t`t`t- name: GATE_CLIENT_RPC_ROUTER"
 		$extraEnvLines += "`t`t`t  value: `"$GateRouterMode`""
@@ -1200,7 +1721,8 @@ function New-NodeDeploymentYaml {
 	# 三个角色共同的约束:
 	#  - C++ 尚未注册 grpc.health.v1,只能用 tcpSocket 探**实际在监听**的口;端口一律写数字,不写端口名。
 	#  - 两个口都在 etcd 注册完成之后才 listen,所以 tcpSocket 通 = 「已发布进 etcd」,**不等于**依赖门
-	#    (gate 等 Login / Scene,scene 等 SceneManager 与号段首段)已过。readiness 只能表达前者。
+	#    (gate 等 ClientRpcRouter / Scene —— -GateRouterMode "0" 回退时是 Login / Scene,scene 等 SceneManager 与号段首段)已过。
+	#    readiness 只能表达前者。
 	#  - 不加 livenessProbe:tcpSocket 看不出 EventLoop 卡死(内核照样完成握手),加了只多一条杀容器的路。
 	#  - startupProbe 会杀容器,预算必须越过 etcd 租约:同 Pod 重启时 POD_IP 不变,旧进程的注册要等
 	#    NodeTTLSeconds(180s,bin/etc/base_deploy_config.yaml)到期才消失,在此之前新进程命中
@@ -1745,7 +2267,8 @@ function New-SceneFleetYaml {
 	if ($script:CppLogSidecarEnabled) {
 		$sidecarInitBlock = "`n          initContainers:`n" + (New-CppLogSidecarContainerYaml -ItemIndent "            " -CurrentZoneName $ZoneLabel -AsNativeSidecar)
 		$sidecarVolumeBlock = "`n" + (New-CppLogSidecarVolumeYaml -ItemIndent "            ")
-		$sidecarAnnotationBlock = "`n          annotations:`n            mmorpg.io/cpp-log-sidecar-config-hash: $(Get-CppLogSidecarConfigHash)"
+		# 哈希加引号,理由同 New-NodeDeploymentYaml 的同名注解。
+		$sidecarAnnotationBlock = "`n          annotations:`n            mmorpg.io/cpp-log-sidecar-config-hash: `"$(Get-CppLogSidecarConfigHash)`""
 		$gameServerContainerLine = "      container: $FleetName`n"
 	}
 
@@ -2017,6 +2540,135 @@ spec:
 "@
 }
 
+<#
+.SYNOPSIS
+	把本脚本的 C++ 节点公共参数(镜像、拉取策略、发号槽缓存、日志卷与清理循环、gRPC poller、日志 sidecar)
+	打包成 lib/k8s_client_entry.ps1 生成器要的 PodCommon。与 New-NodeDeploymentYaml 同一组脚本变量,一处取值。
+
+.PARAMETER SidecarZoneLabel
+	日志 sidecar 的 zone 标签:zone 内节点传 zone 名,battle 这类全局池传 "global"(同 New-NodeDeploymentYaml)。
+#>
+function New-CppNodePodCommon {
+	param([Parameter(Mandatory = $true)][string]$SidecarZoneLabel)
+
+	$sidecar = @{ SidecarContainerYaml = ''; SidecarVolumeYaml = ''; SidecarConfigHash = '' }
+	if ($script:CppLogSidecarEnabled) {
+		# 缩进随便给:库会去掉公共前导空格后按各模板的列位置重新缩进(-ItemIndent 必填、不收空串)。
+		$sidecar.SidecarContainerYaml = New-CppLogSidecarContainerYaml -ItemIndent '  ' -CurrentZoneName $SidecarZoneLabel -AsNativeSidecar
+		$sidecar.SidecarVolumeYaml = New-CppLogSidecarVolumeYaml -ItemIndent '  '
+		$sidecar.SidecarConfigHash = Get-CppLogSidecarConfigHash
+	}
+	return New-ClientEntryPodCommon -Image $NodeImage -ImagePullPolicy $ImagePullPolicy -SnowflakeCacheDir $SnowflakeCacheDir `
+		-LogVolumeSizeLimit $script:CppLogVolumeSizeLimit -LogPrunerCommand $script:CppLogPrunerCommand `
+		-GrpcServerMaxPollers $GrpcServerMaxPollers @sidecar
+}
+
+<#
+.SYNOPSIS
+	一个 zone 的 external gate 地址计划(lib Resolve-GateClientEndpointPlan)。清单渲染(New-ExternalGateManifests)
+	与集群现状比对(Get-GateAddressDrift)共用这一处:比对的就是本次真正要 apply 的计划。
+#>
+function Resolve-ZoneGatePlan {
+	param(
+		[Parameter(Mandatory = $true)][string]$CurrentZoneName,
+		[Parameter(Mandatory = $true)][int]$Replicas,
+		[Parameter(Mandatory = $true)][int]$NodePortBase
+	)
+
+	return Resolve-GateClientEndpointPlan -ServiceType $GateServiceType -Replicas $Replicas -ServicePort $GateServicePort `
+		-NodePortBase $NodePortBase -ClientHostTemplate $GateClientHostTemplate -ClientPublicHost $ClientPublicHost `
+		-ZoneName $CurrentZoneName
+}
+
+<#
+.SYNOPSIS
+	在本地渲染 -ClientEntryMode external 的 gate 全部清单(D87 / D88 / D89),不碰集群。
+
+.DESCRIPTION
+	地址计划(Resolve-ZoneGatePlan)是 StatefulSet 里 gate 自报端口与每序号 Service 暴露端口的唯一来源。
+	Apply-Zone 在删除 Deployment 形态之前先调它:地址计划或模板校验失败就在任何删除 / apply 之前 throw。
+#>
+function New-ExternalGateManifests {
+	param(
+		[Parameter(Mandatory = $true)][string]$CurrentZoneName,
+		[Parameter(Mandatory = $true)][int]$Replicas,
+		[Parameter(Mandatory = $true)][int]$NodePortBase,
+		[Parameter(Mandatory = $true)][string]$ConfigMapName
+	)
+
+	$plan = Resolve-ZoneGatePlan -CurrentZoneName $CurrentZoneName -Replicas $Replicas -NodePortBase $NodePortBase
+	$podCommon = New-CppNodePodCommon -SidecarZoneLabel $CurrentZoneName
+	return [pscustomobject]@{
+		Plan            = $plan
+		Replicas        = $Replicas
+		HeadlessService = New-GateHeadlessServiceYaml -ServicePort $GateServicePort
+		StatefulSet     = New-GateStatefulSetYaml -PodCommon $podCommon -Plan $plan -RpcPort 18000 -StartCommand "./gate" `
+			-ConfigMapName $ConfigMapName -GateRouterMode $GateRouterMode
+		# 副本数为 0 时为空串,apply 时跳过。
+		OrdinalServices = New-GateOrdinalServicesYaml -Plan $plan -ExternalTrafficPolicy $GateExternalTrafficPolicy
+		Pdb             = New-GatePdbYaml
+	}
+}
+
+<#
+.SYNOPSIS
+	external gate 清单的服务端预演(kubectl apply --dry-run=server):Apply-Zone 在删除 Deployment 形态之前调用,DryRun 不调用。
+
+.DESCRIPTION
+	跨 zone 的 nodePort 冲突只有集群知道:分多次 zone-up 部署时,preflight 看不到别的 zone 的 gateNodePortBase。
+	等到真正 apply 每序号 Service 才被拒,旧 gate 已经删了,本 zone 没有可回退的入口。服务端预演走同一套准入校验与
+	nodePort 分配检查但不落库,被拒就在任何删除之前 throw。只需要 zone namespace 内的权限,不要求集群级 list services。
+	整套清单一起预演(Service / StatefulSet / PDB),StatefulSet 不可变字段的冲突同样在删除之前暴露。
+#>
+function Test-ExternalGateServerSide {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)]$Manifests
+	)
+
+	$documents = @($Manifests.HeadlessService, $Manifests.OrdinalServices, $Manifests.StatefulSet, $Manifests.Pdb) |
+		Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+	try {
+		Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace, "--dry-run=server") -InputContent (@($documents) -join "`n---`n")
+	}
+	catch {
+		throw "namespace $Namespace 的 external gate 清单服务端预演(--dry-run=server)被集群拒绝,未删除、未改动任何资源:$($_.Exception.Message)。常见原因是 gate-<i> 的 nodePort 已被其他 namespace 占用(或本 namespace 残留的 gate-entry 恰好占着同一端口):换一个不重叠的 gateNodePortBase,或先处理占用者。kubectl 的原始报错见上方输出。"
+	}
+}
+
+<#
+.SYNOPSIS
+	apply New-ExternalGateManifests 的结果:headless → 每序号 Service → StatefulSet → 清理多余的每序号 Service → PDB。
+
+.DESCRIPTION
+	Service 先于 StatefulSet:gate 启动即按 nodePort 自报地址进 etcd,Service 被集群拒绝(例如 nodePort 冲突)时
+	StatefulSet 还没建,不会出现"gate 已按冲突端口发布、玩家连到别的 zone"的状态。
+	updateStrategy 为 OnDelete:apply 新模板不重建现有 Pod,换版本走 k8s_gate_drain.ps1 逐个排空删 Pod。
+	缩容后 apply 不会回收多出来的 gate-<i>,由 Remove-StaleGateOrdinalServices 删除(否则继续占着 nodePort);
+	放在 StatefulSet 之后,高序号 Pod 先被缩掉,再删它们的 Service。
+	Deployment 形态的残留由 Apply-Zone 里的 Remove-ClientEntryObsoleteResources 先行删除。
+#>
+function Apply-ExternalGate {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)]$Manifests
+	)
+
+	$plan = $Manifests.Plan
+	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $Manifests.HeadlessService
+	if (-not [string]::IsNullOrWhiteSpace($Manifests.OrdinalServices)) {
+		Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $Manifests.OrdinalServices
+	}
+	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $Manifests.StatefulSet
+	Remove-StaleGateOrdinalServices -Namespace $Namespace -Replicas $Manifests.Replicas `
+		-KubeContext $KubeContext -KubeConfig $KubeConfig -DryRun:$DryRun
+	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $Manifests.Pdb
+
+	$hostSource = if ($plan.HostTemplate) { "template=$($plan.HostTemplate)" } elseif ($plan.PublicHost) { "host=$($plan.PublicHost)" } else { "host=status.hostIP" }
+	$portSource = if ($plan.PortMode -eq (Get-ClientEntryContract).GateClientPortModeNodePort) { "nodePort=$($plan.NodePortBase)+ordinal" } else { "port=$($plan.ClientPort)" }
+	Write-Host "Gate (external): StatefulSet replicas=$($Manifests.Replicas) service_type=$($plan.ServiceType) etp=$GateExternalTrafficPolicy $hostSource $portSource"
+}
+
 function Wait-ForDeploymentReady {
 	param(
 		[Parameter(Mandatory = $true)][string]$Namespace,
@@ -2101,7 +2753,9 @@ function Wait-ForZoneReady {
 		[Parameter(Mandatory = $true)][string]$Namespace,
 		# 本 zone 实际生成的 scene Deployment 名字(legacy 单池 = @("scene"),
 		# 拆分模式 = @("scene-world","scene-instance"))。副本数为 0 的池不等。
-		[string[]]$SceneDeploymentNames = @("scene")
+		[string[]]$SceneDeploymentNames = @("scene"),
+		# external 下 gate StatefulSet 要等到的就绪副本数。
+		[Parameter(Mandatory = $true)][int]$GateReplicas
 	)
 
 	if (-not $WaitReady) {
@@ -2109,7 +2763,15 @@ function Wait-ForZoneReady {
 	}
 
 	Write-Host "Waiting for zone workloads to become ready: namespace=$Namespace"
-	Wait-ForDeploymentReady -Namespace $Namespace -DeploymentName "gate"
+	if ($ClientEntryMode -eq "external") {
+		# 不能用 Wait-ForStatefulSetReady:kubectl rollout status 对 updateStrategy: OnDelete 的 StatefulSet 直接报错。
+		# 库函数有界轮询 readyReplicas;OnDelete 下等到的是"现存 Pod 已就绪",新模板何时生效由排空脚本逐个删 Pod 决定。
+		Wait-ForGateStatefulSetReady -Namespace $Namespace -ExpectedReplicas $GateReplicas -TimeoutSeconds $WaitTimeoutSeconds `
+			-KubeContext $KubeContext -KubeConfig $KubeConfig -DryRun:$DryRun
+	}
+	else {
+		Wait-ForDeploymentReady -Namespace $Namespace -DeploymentName "gate"
+	}
 
 	if ($SceneOrchestrator -eq "agones") {
 		# Fleet 不是 Deployment,`kubectl rollout status` 对它无效(会直接报
@@ -2507,6 +3169,23 @@ function New-GoSvcConfigMapYaml {
 	# 的 `Mode: dev` 口径一致。staging/prod 不写,保持 pro 的严格门禁。
 	$loginModeLine = if ($ReleaseProfile -eq 'dev') { 'Mode: dev' } else { '' }
 
+	# login / scene_manager 下发 gate 地址时是否必须用 gate 自报的客户端可达地址(D78,ingress_final §3):
+	# 默认 auto 跟随模式(external → true,没自报地址的 gate 被跳过、绝不回落集群内 PodIP;podip → false),
+	# 上线窗口里可由 -RequireClientEndpoint 显式覆盖(见参数注释)。两个服务取同一个值。
+	# 变量名刻意不叫 $requireClientEndpoint:PowerShell 变量名不分大小写,那会遮住脚本参数 -RequireClientEndpoint。
+	$requireClientEndpointValue = Resolve-RequireClientEndpoint
+
+	# login 的开发口令认证段(-LoginDevPasswordAuth,2b §7)。生效还依赖两件事,缺一个 login 就启动 panic(fail-closed):
+	# 同一份配置的 Mode 为 dev(上面的 $loginModeLine,dev 档恒写),以及容器 env 里的共享口令(Apply-OneGoSvc 经 Secret 注入)。
+	# 与 PasswordAuth 互斥(auth_init.go),这份 ConfigMap 不写后者。非 dev 档在这里再拒一次(纵深防御,preflight 已先拒)。
+	$loginDevPasswordAuthBlock = ''
+	if ($SvcName -eq 'login' -and $LoginDevPasswordAuth) {
+		if ($ReleaseProfile -ne 'dev') {
+			throw "生成 login ConfigMap 失败:-LoginDevPasswordAuth 只允许 -ReleaseProfile dev(当前 $ReleaseProfile)。"
+		}
+		$loginDevPasswordAuthBlock = "`n" + (New-LoginDevPasswordAuthYaml)
+	}
+
 	$svcConfig = switch ($SvcName) {
 		"db" {
 @"
@@ -2545,6 +3224,10 @@ ${dbAllowedDatabasesYaml}
     Hosts: "redis.${InfraNamespace}:6379"
     DefaultTTLSeconds: 3600
     Password: "${redisPassword}"
+    # 这个 RedisClient 同时是按落点选库读 player:placement / player:zone 的句柄(player-storage-placement.md §6.2):
+    # 顶层 Placement 段不写 = 整段取缺省(AllowStoreFamilies=true、Required=false、Redis 复用本段)。
+    # 所以它必须与 data-service ConfigMap 的 MappingRedis 同实例、DB 0 —— 读错库 = 读不到任何记录与 home_zone,
+    # 全员按本 zone 选库,被钉到别处的玩家会写错库。契约测试钉住两者同址。
     DB: 0
 "@
 		}
@@ -2556,11 +3239,15 @@ Etcd:
   Hosts:
     - "etcd.${InfraNamespace}:2379"
   Key: dataservice.rpc
+# MappingRedis 刻意不写 DB 键:go-zero 的 redis.RedisConf 没有 DB 字段,以前这里的 `DB: 15` 被静默忽略,
+# 映射一直落在 DB 0(与 go/data_service/etc/data_service.yaml 的注释同一结论)。留着它只会误导运维按 15 去查 /
+# 给 merge_zone 填 -mapping-redis-db 15,让合服围栏与改映射打进 data_service 从不读的库。
+# player:zone / player:placement / merge:in_progress / db:capability:zone 都在这个实例的 DB 0;
+# go/db 的 Placement.Redis 缺省复用它自己的 RedisClient(同一实例、DB 0),所以 go-svc-db ConfigMap 不写 Placement 段。
 MappingRedis:
   Host: redis.${InfraNamespace}:6379
   Type: node
   Pass: "${redisPassword}"
-  DB: 15
 Regions:
   - Id: 1
     Zones: [1]
@@ -2731,6 +3418,9 @@ GateTokenSecret: "${gateTokenSecret}"
 Secrets:
   InternalAuth:
     Value: "${internalAuthSecret}"
+# 下发 gate 地址时是否必须用 gate 自报的客户端可达地址(NodeInfo.client_endpoint,D78):
+# true = 缺地址的 gate 不下发;false = 回落 endpoint(PodIP)。取值见 k8s_deploy.ps1 -RequireClientEndpoint(默认跟随 -ClientEntryMode)。
+RequireClientEndpoint: ${requireClientEndpointValue}${loginDevPasswordAuthBlock}
 Kafka:
   Brokers:
     - "kafka.${InfraNamespace}:9092"
@@ -2836,6 +3526,9 @@ DataServiceRpc:
   Middlewares:
     Breaker: false
 HomeZoneLookupTimeoutMs: ${sceneManagerHomeZoneLookupTimeout}
+# 跨 zone 重定向(RedirectToGate)下发 gate 地址时是否必须用 gate 自报的客户端可达地址(D78),与 login 同值:
+# 取值见 k8s_deploy.ps1 -RequireClientEndpoint(默认跟随 -ClientEntryMode;逐个 zone 切 external 的窗口里显式传 false)。
+RequireClientEndpoint: ${requireClientEndpointValue}
 "@
 		}
 		"match" {
@@ -3629,6 +4322,213 @@ function Add-GoSvcTopicReplicationEnv {
 		-Comment '由 k8s_deploy.ps1 按 -KafkaBrokers 注入(Add-GoSvcTopicReplicationEnv),manifest 里不要手写'
 }
 
+<#
+.SYNOPSIS
+	往服务 manifest 唯一的 env: 段追加一条 secretKeyRef 环境变量:密钥只经 K8s Secret 进容器,不进 ConfigMap / manifest。
+	go-svc(login 开发口令)与 java-svc(gateway 管理面口令)共用。
+
+.DESCRIPTION
+	对 manifest 形状的要求与 Add-GoSvcCommandTopicEnv 相同(恰好一个 env: 段、其下第一条非注释内容是列表项),
+	不对就 throw。两个调用方(Apply-OneGoSvc / Apply-JavaSvcManifests)都在本服务的任何集群写操作(ConfigMap /
+	Secret / 迁移 Job / Deployment)之前调用它,形状不对不留半截部署。manifest 里手写了同名变量视为冲突,拒绝(一处真相)。
+	secretKeyRef 不写 optional(= false):Secret 缺失时 Pod 卡在 CreateContainerConfigError,而不是带着空密钥起来。
+#>
+function Add-GoSvcSecretEnv {
+	param(
+		[Parameter(Mandatory = $true)][string]$SvcName,
+		[Parameter(Mandatory = $true)][string]$ManifestContent,
+		[Parameter(Mandatory = $true)][string]$EnvName,
+		[Parameter(Mandatory = $true)][string]$SecretName,
+		[Parameter(Mandatory = $true)][string]$SecretKey
+	)
+
+	$handWritten = '(?m)^[ \t]*(-[ \t]+)?name:[ \t]*"?{0}"?[ \t]*\r?$' -f [regex]::Escape($EnvName)
+	if ($ManifestContent -cmatch $handWritten) {
+		throw "服务 $SvcName 的 manifest 手写了 ${EnvName}:它由 k8s_deploy.ps1 经 Secret $SecretName 注入(Add-GoSvcSecretEnv),请从 manifest 里删掉。"
+	}
+
+	$envMatches = [regex]::Matches($ManifestContent, '(?m)^(?<indent>[ ]*)env:[ \t]*\r?$')
+	if ($envMatches.Count -ne 1) {
+		throw "服务 $SvcName 的 manifest 应当恰好有 1 个 env: 段(实际 $($envMatches.Count) 个),无法注入 $EnvName。"
+	}
+	$envMatch = $envMatches[0]
+	$lineEnd = $envMatch.Index + $envMatch.Length
+	if ($lineEnd -ge $ManifestContent.Length -or $ManifestContent[$lineEnd] -ne "`n") {
+		throw "服务 $SvcName 的 manifest 在 env: 之后没有内容,无法注入 $EnvName。"
+	}
+	$insertAt = $lineEnd + 1
+
+	$itemIndent = $null
+	foreach ($line in ($ManifestContent.Substring($insertAt) -split "`r?`n")) {
+		$trimmed = $line.Trim()
+		if ($trimmed.Length -eq 0 -or $trimmed.StartsWith('#')) { continue }
+		if ($line -match '^(?<indent>[ ]*)-[ ]') { $itemIndent = $Matches['indent'] }
+		break
+	}
+	if ($null -eq $itemIndent -or $itemIndent.Length -lt $envMatch.Groups['indent'].Value.Length) {
+		throw "服务 $SvcName 的 manifest 里 env: 下第一条内容不是列表项,无法注入 $EnvName。"
+	}
+
+	$newline = if ($ManifestContent.Contains("`r`n")) { "`r`n" } else { "`n" }
+	$valueIndent = $itemIndent + '  '
+	$injected = @(
+		"${itemIndent}# 由 k8s_deploy.ps1 经 Secret $SecretName 注入(Add-GoSvcSecretEnv),manifest 里不要手写",
+		"${itemIndent}- name: $EnvName",
+		"${valueIndent}valueFrom:",
+		"${valueIndent}  secretKeyRef:",
+		"${valueIndent}    name: $SecretName",
+		"${valueIndent}    key: $SecretKey"
+	) -join $newline
+	return $ManifestContent.Substring(0, $insertAt) + $injected + $newline + $ManifestContent.Substring($insertAt)
+}
+
+<#
+.SYNOPSIS
+	往服务 manifest 唯一的 Pod 模板(template: 紧跟 metadata:)新增 annotations: 段,写一条注解。
+	用于让"只改 Secret"这类 Pod 模板本身看不见的变更也能触发滚动(见 Get-InjectedSecretFingerprint)。
+
+.DESCRIPTION
+	形状要求:恰好一处 template: 下一行是 metadata:,且该 metadata 下还没有 annotations: —— 已有就 throw,
+	不猜怎么合并(重复键的 YAML 各解析器行为不一)。与 Add-GoSvcSecretEnv 一样在本服务任何集群写操作之前调用。
+	值一律写成双引号标量:12 位十六进制可能全是数字或形如 1e5…,不加引号会被 YAML 解析成数字,注解值必须是字符串。
+#>
+function Add-PodTemplateAnnotation {
+	param(
+		[Parameter(Mandatory = $true)][string]$SvcName,
+		[Parameter(Mandatory = $true)][string]$ManifestContent,
+		[Parameter(Mandatory = $true)][string]$Key,
+		[Parameter(Mandatory = $true)][string]$Value
+	)
+
+	if ($Value -match '["\\\r\n]') {
+		throw "内部错误:服务 $SvcName 的注解 $Key 的值含引号、反斜杠或换行,拒绝渲染。"
+	}
+	$templateMatches = [regex]::Matches($ManifestContent, '(?m)^(?<tindent>[ ]*)template:[ \t]*\r?\n(?<mindent>[ ]*)metadata:[ \t]*\r?$')
+	if ($templateMatches.Count -ne 1) {
+		throw "服务 $SvcName 的 manifest 应当恰好有 1 个 Pod 模板(template: 下一行 metadata:),实际 $($templateMatches.Count) 个,无法写注解 $Key。"
+	}
+	$templateMatch = $templateMatches[0]
+	$metadataIndent = $templateMatch.Groups['mindent'].Value
+	if ($metadataIndent.Length -le $templateMatch.Groups['tindent'].Value.Length) {
+		throw "服务 $SvcName 的 manifest 里 template: 下的 metadata: 缩进不对,无法写注解 $Key。"
+	}
+	$lineEnd = $templateMatch.Index + $templateMatch.Length
+	if ($lineEnd -ge $ManifestContent.Length -or $ManifestContent[$lineEnd] -ne "`n") {
+		throw "服务 $SvcName 的 manifest 在 Pod 模板 metadata: 之后没有内容,无法写注解 $Key。"
+	}
+	$insertAt = $lineEnd + 1
+
+	# 取 metadata 的子键缩进,顺带确认它下面还没有 annotations:。缩进回到 metadata 同级或更浅即出块。
+	$childIndent = $null
+	foreach ($line in ($ManifestContent.Substring($insertAt) -split "`r?`n")) {
+		$trimmed = $line.Trim()
+		if ($trimmed.Length -eq 0 -or $trimmed.StartsWith('#')) { continue }
+		$indent = $line.Length - $line.TrimStart(' ').Length
+		if ($indent -le $metadataIndent.Length) { break }
+		if ($null -eq $childIndent) { $childIndent = ' ' * $indent }
+		if ($indent -eq $childIndent.Length -and $trimmed -match '^annotations:') {
+			throw "服务 $SvcName 的 manifest 在 Pod 模板里已有 annotations:,$Key 由 k8s_deploy.ps1 生成,请把手写的注解段并入生成逻辑或删掉。"
+		}
+	}
+	if ($null -eq $childIndent) {
+		throw "服务 $SvcName 的 manifest 里 Pod 模板 metadata: 下没有子键,无法写注解 $Key。"
+	}
+
+	$newline = if ($ManifestContent.Contains("`r`n")) { "`r`n" } else { "`n" }
+	$injected = @(
+		"${childIndent}# 由 k8s_deploy.ps1 生成(Add-PodTemplateAnnotation),manifest 里不要手写",
+		"${childIndent}annotations:",
+		('{0}  {1}: "{2}"' -f $childIndent, $Key, $Value)
+	) -join $newline
+	return $ManifestContent.Substring(0, $insertAt) + $injected + $newline + $ManifestContent.Substring($insertAt)
+}
+
+<#
+.SYNOPSIS
+	注入密钥的短指纹(SHA-256 前 12 位十六进制),给 Pod 模板注解用:secretKeyRef 只在容器启动时读,
+	只改 Secret 时 Pod 模板逐字节没变,kubectl apply 是 no-op,旧口令会一直有效。指纹进模板后,口令一变即滚动。
+
+.DESCRIPTION
+	与 Get-CppLogSidecarConfigHash 同一手法,只是输入是密钥,所以写明暴露面:
+	- 哈希输入带 Secret 名做域分隔,同一个值用在别处得到的指纹不同,不能跨用途比对;
+	- 只截 48 位,是变更探测器而不是校验值;非 dev 档口令 ≥32 位(Resolve-InjectedSecret),无法由指纹反推;
+	- 能读 Deployment 的人本就能读同 namespace 的 ConfigMap,而 gateway ConfigMap 里有明文的 gate.token-secret 与数据源密码,
+	  指纹不扩大暴露面;但它也不能把弱口令变强 —— 口令强度仍由运维负责。
+	纯本地计算、不读集群,DryRun 与真跑结果一致。
+#>
+function Get-InjectedSecretFingerprint {
+	param(
+		[Parameter(Mandatory = $true)][string]$SecretName,
+		[Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value
+	)
+
+	if ([string]::IsNullOrWhiteSpace($Value)) {
+		throw "内部错误:Secret $SecretName 的值未解析(Initialize-InjectedSecrets 未在写路径入口调用?),无法计算指纹。"
+	}
+	$sha256 = [System.Security.Cryptography.SHA256]::Create()
+	try {
+		$bytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes("$SecretName`n$Value"))
+	} finally {
+		$sha256.Dispose()
+	}
+	return ((($bytes | ForEach-Object { $_.ToString('x2') }) -join '').Substring(0, 12))
+}
+
+<#
+.SYNOPSIS
+	把部署侧解析好的一个密钥写成 zone namespace 的单键 Opaque Secret。必须先于引用它的 Deployment apply
+	(secretKeyRef 不写 optional,Secret 缺失的 Pod 卡在 CreateContainerConfigError)。
+
+.DESCRIPTION
+	DryRun 不走 Invoke-KubectlWithInputFile:它会把整份 YAML(含明文)打进输出,这里只打一行已隐去值的意图。
+	值写成 YAML 双引号标量:反斜杠、双引号、制表符与换行全部转义 —— 制表符不转义会被 Invoke-KubectlWithInputFile
+	换成 4 个空格,密钥被静默改掉。值为空一律 throw:空密钥进 Secret 等于静默关掉鉴权。
+#>
+function Apply-InjectedSecret {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][string]$Name,
+		[Parameter(Mandatory = $true)][string]$Key,
+		[Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value,
+		# 引用它的工作负载,写进 app 标签与报错文本。
+		[Parameter(Mandatory = $true)][string]$AppLabel
+	)
+
+	if ([string]::IsNullOrWhiteSpace($Value)) {
+		throw "内部错误:Secret $Name 的值未解析(Initialize-InjectedSecrets 未在写路径入口调用?),拒绝部署 $AppLabel。"
+	}
+	if ($DryRun) {
+		Write-Host "[dry-run] kubectl apply -n $Namespace -f -   # Secret $Name(key $Key,值已隐去)"
+		return
+	}
+
+	$escaped = '"' + $Value.Replace('\', '\\').Replace('"', '\"').Replace("`t", '\t').Replace("`r", '\r').Replace("`n", '\n') + '"'
+	$secretYaml = @"
+apiVersion: v1
+kind: Secret
+metadata:
+  name: $Name
+  labels:
+    app: $AppLabel
+    mmorpg.io/managed-by: k8s_deploy.ps1
+type: Opaque
+stringData:
+  ${Key}: $escaped
+"@
+	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $secretYaml
+}
+
+# -LoginDevPasswordAuth 的共享口令 Secret(zone namespace)。必须先于引用它的 login Deployment apply。
+function Apply-LoginDevPasswordSecret {
+	param([Parameter(Mandatory = $true)][string]$Namespace)
+
+	if ([string]::IsNullOrWhiteSpace($script:LoginDevPasswordSecret)) {
+		throw "内部错误:-LoginDevPasswordAuth 的共享口令未解析(Initialize-InjectedSecrets 未在写路径入口调用?),拒绝部署 login。"
+	}
+	Apply-InjectedSecret -Namespace $Namespace -Name $script:LoginDevPasswordSecretName -Key $script:LoginDevPasswordSecretKey `
+		-Value $script:LoginDevPasswordSecret -AppLabel "login"
+}
+
 # 单个 Go 服务的 ConfigMap + 主 manifest apply。zone 循环与全局循环共用同一段逻辑。
 function Apply-OneGoSvc {
 	param(
@@ -3661,6 +4561,16 @@ function Apply-OneGoSvc {
 	$manifestContent = Add-GoSvcTopicReplicationEnv -SvcName $SvcName -ManifestContent $manifestContent `
 		-ReplicationFactor (Get-KafkaTopology).ReplicationFactor
 
+	# -LoginDevPasswordAuth:先本地渲染(形状不对就在写操作之前 throw),再建 Secret —— secretKeyRef 不是 optional,
+	# Secret 必须先于引用它的 Deployment 落地。
+	$isLoginDevPassword = ($SvcName -eq 'login' -and $LoginDevPasswordAuth)
+	if ($isLoginDevPassword) {
+		$manifestContent = Add-GoSvcSecretEnv -SvcName $SvcName -ManifestContent $manifestContent `
+			-EnvName (Get-ClientEntryContract).LoginDevPasswordSecretEnv `
+			-SecretName $script:LoginDevPasswordSecretName -SecretKey $script:LoginDevPasswordSecretKey
+		Apply-LoginDevPasswordSecret -Namespace $Namespace
+	}
+
 	# Apply ConfigMap
 	$cmYaml = New-GoSvcConfigMapYaml -SvcName $SvcName -CurrentZoneId $CurrentZoneId -CurrentClusterId $CurrentClusterId
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $cmYaml
@@ -3673,6 +4583,12 @@ function Apply-OneGoSvc {
 	}
 
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $manifestContent
+
+	if ($SvcName -eq 'login' -and -not $isLoginDevPassword) {
+		# 开关关闭:ConfigMap 已不含 DevPasswordAuth,新 Deployment 也不再引用口令,删掉残留 Secret(放在 Deployment
+		# apply 之后,不让新 Pod 因引用缺失的 Secret 卡在 CreateContainerConfigError)。
+		Invoke-Kubectl -Args @("delete", "secret", $script:LoginDevPasswordSecretName, "-n", $Namespace, "--ignore-not-found")
+	}
 
 	Write-Host "  [applied] $SvcName -> $svcImage (port $($info.Port) pullPolicy=$svcPullPolicy)"
 }
@@ -3724,6 +4640,20 @@ function New-JavaSvcConfigMapYaml {
 	$gatewayDbUser = $script:GatewayDbUser
 	$gatewayDbPassword = $script:GatewayDbPassword
 
+	# gate.rate-limit.trusted-proxies(D91):gateway 只采信这些网段转发来的 X-Forwarded-For。片段接在下面已有的 gate: 键下
+	# (不能另起一个 gate:),只写 application.yaml 这一处、不另设 env(ingress_final §3 二选一)。列表为空 = 不写 = 只信
+	# socket 对端(fail-closed);非法 CIDR 由 New-GatewayRateLimitYaml throw(preflight 已先拒)。
+	$gatewayRateLimitBlock = ''
+	if ($SvcName -eq 'gateway') {
+		$gatewayRateLimitBlock = New-GatewayRateLimitYaml -TrustedProxies $GatewayTrustedProxies -Indent '  '
+		if (-not [string]::IsNullOrEmpty($gatewayRateLimitBlock)) { $gatewayRateLimitBlock = "`n" + $gatewayRateLimitBlock }
+	}
+	# admin.api-key 只写成对容器环境变量的引用(值经 Secret 注入,见 $script:GatewayAdminApiKeyEnv 处)。挂载的
+	# /app/config/application.yaml 优先于 jar 内那份,所以公开的 change-me-in-production 被这行盖掉;env 缺失时
+	# @Value("${admin.api-key}") 解析不了嵌套占位符,gateway 拒启(fail-closed)。拼成 PowerShell 变量再嵌进下面的
+	# 双引号 here-string,既不用转义 $,env 名也只有一处真相。
+	$gatewayAdminApiKeyRef = '${' + $script:GatewayAdminApiKeyEnv + '}'
+
 	$svcConfig = switch ($SvcName) {
 		"auth" {
 @"
@@ -3763,10 +4693,12 @@ spring:
 etcd:
   endpoints: http://etcd.${InfraNamespace}:2379
 gate:
-  token-secret: "${gateTokenSecret}"
+  token-secret: "${gateTokenSecret}"${gatewayRateLimitBlock}
 zone:
   probe:
     interval-ms: 5000
+admin:
+  api-key: "${gatewayAdminApiKeyRef}"
 "@
 		}
 		default {
@@ -3787,7 +4719,9 @@ $($svcConfig -split "`n" | ForEach-Object { "    $_" } | Out-String)
 
 function Apply-JavaSvcManifests {
 	param(
-		[Parameter(Mandatory = $true)][string]$Namespace
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		# 只用于渲染 -GatewayIngressHost 里的 {zone}。
+		[Parameter(Mandatory = $true)][string]$CurrentZoneName
 	)
 
 	if ($SkipJavaSvc) { return }
@@ -3801,23 +4735,54 @@ function Apply-JavaSvcManifests {
 	foreach ($svcName in $JavaSvcCatalogue.Keys) {
 		$info = $JavaSvcCatalogue[$svcName]
 		$svcImage = "$JavaSvcRegistry/$($info.ImageName):$JavaSvcTag"
+		$isGateway = ($svcName -eq 'gateway')
 
-		# Apply ConfigMap
-		$cmYaml = New-JavaSvcConfigMapYaml -SvcName $svcName
-		Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $cmYaml
-
-		# Apply manifest with image placeholder replaced
+		# manifest 缺席就整条跳过,连 ConfigMap 也不 apply(与 Apply-OneGoSvc 同口径,不留没有 Deployment 消费的孤儿 ConfigMap;
+		# 目录里的 auth 就是这种条目)。
 		$manifestPath = Join-Path $JavaSvcManifestsDir $info.Manifest
 		if (-not (Test-Path $manifestPath)) {
-			Write-Warning "Java service manifest not found: $manifestPath – skipping $svcName"
+			Write-Warning "Java service manifest not found: $manifestPath – skipping $svcName (ConfigMap not applied)"
 			continue
 		}
+
+		# 本服务要写的东西先全部在本地渲染完,再做任何集群写操作(与 Apply-OneGoSvc 同序):ConfigMap 生成器
+		# (非法 CIDR)与 manifest 注入(形状不对)都 fail-closed,要在 ConfigMap / Secret 落地之前拦下,不留半截部署。
+		$cmYaml = New-JavaSvcConfigMapYaml -SvcName $svcName
 		$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
 		$manifestContent = (Get-Content $manifestPath -Raw) -replace 'PLACEHOLDER_IMAGE', $svcImage
 		$manifestContent = $manifestContent -replace 'PLACEHOLDER_PULL_POLICY', $svcPullPolicy
+
+		# gateway 管理面口令(admin.api-key)只经 Secret 进容器(见 $script:GatewayAdminApiKeyEnv 处的说明):env 走 secretKeyRef,
+		# Pod 模板带口令指纹注解 —— 只改 Secret 时模板不变、apply 是 no-op,旧 Pod 会一直认旧口令;指纹让轮换自动滚动。
+		# gateway 的 Ingress(D91)与 gateway Deployment 同处:只在 gateway 确实部署了才生成(manifest 缺席在上面就 continue 了)。
+		# Ingress 只能引用同 namespace 的 Service,所以跟着 zone namespace 走。留空不生成,也不删已有的(见参数注释)。
+		$ingressYaml = $null
+		if ($isGateway) {
+			$manifestContent = Add-GoSvcSecretEnv -SvcName $svcName -ManifestContent $manifestContent `
+				-EnvName $script:GatewayAdminApiKeyEnv -SecretName $script:GatewayAdminApiKeySecretName -SecretKey $script:GatewayAdminApiKeySecretKey
+			$manifestContent = Add-PodTemplateAnnotation -SvcName $svcName -ManifestContent $manifestContent `
+				-Key $script:GatewayAdminApiKeyHashAnnotation `
+				-Value (Get-InjectedSecretFingerprint -SecretName $script:GatewayAdminApiKeySecretName -Value $script:GatewayAdminApiKey)
+			if (-not [string]::IsNullOrWhiteSpace($GatewayIngressHost)) {
+				$ingressYaml = New-GatewayIngressYaml -IngressHost $GatewayIngressHost -ZoneName $CurrentZoneName `
+					-IngressClassName $GatewayIngressClassName -TlsSecret $GatewayIngressTlsSecret -ServicePort $info.HttpPort
+			}
+		}
+
+		# 写操作:ConfigMap → Secret → Deployment(secretKeyRef 不是 optional,Secret 必须先于 Deployment 落地)→ Ingress。
+		Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $cmYaml
+		if ($isGateway) {
+			Apply-InjectedSecret -Namespace $Namespace -Name $script:GatewayAdminApiKeySecretName -Key $script:GatewayAdminApiKeySecretKey `
+				-Value $script:GatewayAdminApiKey -AppLabel "gateway"
+		}
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $manifestContent
 
 		Write-Host "  [applied] $svcName -> $svcImage (http=$($info.HttpPort) grpc=$($info.GrpcPort) pullPolicy=$svcPullPolicy)"
+
+		if ($null -ne $ingressYaml) {
+			Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $ingressYaml
+			Write-Host "  [applied] gateway Ingress host=$($GatewayIngressHost.Replace('{zone}', $CurrentZoneName)) class=$GatewayIngressClassName tls=$(if ($GatewayIngressTlsSecret) { $GatewayIngressTlsSecret } else { '<none>' }) path=/api"
+		}
 	}
 }
 
@@ -3861,6 +4826,7 @@ function Get-ZonesFromJson {
 				$currentZone = [ordered]@{
 					name = $matches[1].Trim().Trim('"', "'")
 					zoneId = $null
+					gateNodePortBase = $null
 					replicas = [ordered]@{
 						centre = $null
 						gate = $null
@@ -3878,6 +4844,11 @@ function Get-ZonesFromJson {
 
 			if ($trimmed -match "^zoneId\s*:\s*(\d+)$") {
 				$currentZone.zoneId = [int]$matches[1]
+				continue
+			}
+
+			if ($trimmed -match "^gateNodePortBase\s*:\s*(\d+)$") {
+				$currentZone.gateNodePortBase = [int]$matches[1]
 				continue
 			}
 
@@ -3953,6 +4924,15 @@ function Get-ZonesFromJson {
 
 		$sceneLegacyExplicit = ($null -ne $zone.replicas -and $null -ne $zone.replicas.scene)
 
+		# gateNodePortBase(D88):external + NodePort 时 gate-<i> 的 nodePort = base + i。没写就落回命令行 -GateNodePortBase,
+		# 并记下"未显式写":多 zone 部署时 preflight 要求每个 zone 显式写,否则各 zone 落在同一段 nodePort 上。
+		$zoneGateNodePortBase = $GateNodePortBase
+		$zoneGateNodePortBaseExplicit = $false
+		if ($null -ne $zone.gateNodePortBase) {
+			$zoneGateNodePortBase = [int]$zone.gateNodePortBase
+			$zoneGateNodePortBaseExplicit = $true
+		}
+
 		$result += [pscustomobject]@{
 			name = [string]$zone.name
 			zoneId = [int]$zone.zoneId
@@ -3962,6 +4942,8 @@ function Get-ZonesFromJson {
 			scene_world = $zoneSceneWorld
 			scene_instance = $zoneSceneInstance
 			scene_legacy_explicit = $sceneLegacyExplicit
+			gateNodePortBase = $zoneGateNodePortBase
+			gate_node_port_base_explicit = $zoneGateNodePortBaseExplicit
 		}
 	}
 
@@ -4054,7 +5036,9 @@ function Apply-Zone {
 		[Parameter(Mandatory = $true)][int]$CurrentSceneReplicas,
 		[int]$CurrentSceneWorldReplicas = -1,
 		[int]$CurrentSceneInstanceReplicas = -1,
-		[bool]$CurrentSceneLegacyExplicit = $false
+		[bool]$CurrentSceneLegacyExplicit = $false,
+		# external + NodePort 时 gate-<i> 的 nodePort 起点(D88):zone-up 取 -GateNodePortBase,all-up 取 zones 配置。
+		[Parameter(Mandatory = $true)][int]$CurrentGateNodePortBase
 	)
 
 	$namespace = Get-ZoneNamespace -Name $CurrentZoneName
@@ -4073,11 +5057,33 @@ function Apply-Zone {
 	Write-Host "Ops profile resolved: profile=$OpsProfile gate_service_type=$GateServiceType centre=$CurrentCentreReplicas gate=$CurrentGateReplicas"
 	Write-Host "Scene orchestrator: $SceneOrchestrator -> $sceneKind"
 	Write-Host "Scene pools resolved: $sceneSummary"
+	$gateKind = if ($ClientEntryMode -eq "external") { "apps/v1 StatefulSet + per-ordinal Service" } else { "apps/v1 Deployment" }
+	Write-Host "Client entry mode: $ClientEntryMode -> gate $gateKind"
 
 	Ensure-Namespace -Namespace $namespace
 
 	$configMapName = "node-config"
 	$gateServiceName = "gate-entry"
+
+	# external 的 gate 先在本地渲染:地址计划或模板校验失败要在删除 Deployment 形态之前 throw。
+	# 再做服务端预演(非 DryRun):nodePort 被其他 zone 占用这类只有集群知道的冲突,也要在删除之前暴露。
+	$externalGateManifests = $null
+	if ($ClientEntryMode -eq "external") {
+		$externalGateManifests = New-ExternalGateManifests -CurrentZoneName $CurrentZoneName -Replicas $CurrentGateReplicas `
+			-NodePortBase $CurrentGateNodePortBase -ConfigMapName $configMapName
+		if (-not $DryRun) {
+			Test-ExternalGateServerSide -Namespace $namespace -Manifests $externalGateManifests
+		}
+	}
+
+	# 模式切换:再删"另一种形态"的 gate(Deployment 与 StatefulSet 同名不同 kind,apply 不会互相回收,两套 gate 会同时
+	# 注册、同时收玩家),以及本模式不该有的 Service / PDB 残留(含 D90 不再生成的 gate-entry)。会踢人的条目在集群里确实
+	# 存在而没给 -AllowDisruptiveSwitch 时整条拒绝、一个都不删;放在本 zone 任何配置与工作负载 apply 之前,被拒时本 zone 未被改动。
+	# 写路径入口(Assert-ClientEntryClusterState)已对全部 zone 与 battle 先判过一次,这里是删除前的纵深防御。
+	$gateObsoleteResources = Get-GateObsoleteResources -ClientEntryMode $ClientEntryMode -GateReplicas $CurrentGateReplicas
+	Remove-ClientEntryObsoleteResources -Namespace $namespace -Resources $gateObsoleteResources `
+		-KubeContext $KubeContext -KubeConfig $KubeConfig -AllowDisruptiveSwitch:$AllowDisruptiveSwitch -DryRun:$DryRun
+
 	# Agones 模式:必须先在本 namespace 里建 agones-sdk 的 SA + RoleBinding,
 	# 否则 GameServer 控制器建 Pod 会被 API server 拒掉,GameServer 全进 Error。
 	# 必须在 Fleet 之前 apply —— 反过来的话第一批 GameServer 会先失败一轮。
@@ -4096,8 +5102,13 @@ function Apply-Zone {
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $sidecarConfigYaml
 	}
 
-	$gateYaml = New-NodeDeploymentYaml -NodeName "gate" -Replicas $CurrentGateReplicas -RpcPort 18000 -StartCommand "./gate" -ConfigMapName $configMapName -CurrentZoneName $CurrentZoneName
-	Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $gateYaml
+	if ($ClientEntryMode -eq "external") {
+		Apply-ExternalGate -Namespace $namespace -Manifests $externalGateManifests
+	}
+	else {
+		$gateYaml = New-NodeDeploymentYaml -NodeName "gate" -Replicas $CurrentGateReplicas -RpcPort 18000 -StartCommand "./gate" -ConfigMapName $configMapName -CurrentZoneName $CurrentZoneName
+		Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $gateYaml
+	}
 
 	foreach ($scenePool in $scenePlan) {
 		if ($SceneOrchestrator -eq "agones") {
@@ -4138,15 +5149,19 @@ function Apply-Zone {
 		}
 	}
 
-	$gateServiceYaml = New-GateServiceYaml -ServiceName $gateServiceName
-	Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $gateServiceYaml
+	# 单一 gate-entry(D90):只在 podip 且 gate 副本数恰为 1 时生成。副本数 ≥2 时 Service 随机分流,约一半票据会被
+	# token_gate_node_mismatch 拒绝;external 由每序号 Service 取代。不生成时的残留已由上面的 Remove-ClientEntryObsoleteResources 删除。
+	if (Test-GateEntryServiceWanted -ClientEntryMode $ClientEntryMode -GateReplicas $CurrentGateReplicas) {
+		$gateServiceYaml = New-GateServiceYaml -ServiceName $gateServiceName
+		Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $gateServiceYaml
+	}
 
 	Apply-GoSvcManifests -Namespace $namespace -CurrentZoneId $CurrentZoneId -CurrentClusterId $CurrentClusterId
 
-	Apply-JavaSvcManifests -Namespace $namespace
+	Apply-JavaSvcManifests -Namespace $namespace -CurrentZoneName $CurrentZoneName
 
 	$sceneDeploymentNames = @($scenePlan | Where-Object { $_.Replicas -gt 0 } | ForEach-Object { $_.Name })
-	Wait-ForZoneReady -Namespace $namespace -SceneDeploymentNames $sceneDeploymentNames
+	Wait-ForZoneReady -Namespace $namespace -SceneDeploymentNames $sceneDeploymentNames -GateReplicas $CurrentGateReplicas
 
 	if ($scenePlan.Count -gt 1) {
 		Write-Host "NOTE: 从 legacy 单池切到拆分模式时,旧的 'scene' 工作负载不会被 apply 自动删除。确认新池 Ready 后手动执行: kubectl -n $namespace delete deployment scene"
@@ -4176,7 +5191,8 @@ function Show-ZoneStatus {
 
 	$namespace = Get-ZoneNamespace -Name $CurrentZoneName
 	Write-Host "Zone status for namespace=$namespace"
-	Invoke-Kubectl -Args @("get", "deploy,po,svc,cm", "-n", $namespace) -AllowFailure
+	# sts / pdb / ingress:-ClientEntryMode external 下 gate 是 StatefulSet(带 PDB),gateway 可能带 Ingress,只看 deploy 会漏掉它们。
+	Invoke-Kubectl -Args @("get", "deploy,sts,po,svc,pdb,ingress,cm", "-n", $namespace) -AllowFailure
 }
 
 <#
@@ -4385,11 +5401,56 @@ function Apply-KafkaTopicInitJob {
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $content
 }
 
+<#
+.SYNOPSIS
+	渲染 battle 全局池的工作负载(纯渲染,不碰集群),返回 { Orchestrator; Health; Yaml }。
+
+.DESCRIPTION
+	客户端必须连房间所在的那个 battle 实例,不能由一个 Service 随机分流。podip 下是 POD_IP:20000(只有集群内可达);
+	external 下 battle 自报逐实例的客户端地址:Agones Fleet 取 Dynamic 端口(D81),Deployment 形态取 hostPort 20000(D86)。
+	由写路径入口(Assert-ClientEntryDeployPreflight)调用、结果存 $script:BattleWorkload:health 推导(Resolve-BattleFleetHealth)
+	与生成器的参数校验都可能 throw,必须早于任何基础设施写操作,更不能删了旧 battle 才发现新的生成不出来。
+#>
+function New-BattleWorkloadManifest {
+	$health = $null
+	if ($BattleOrchestrator -eq 'agones') {
+		$health = Resolve-BattleFleetHealth -InitialDelaySeconds $AgonesHealthInitialDelaySeconds `
+			-PeriodSeconds $AgonesHealthPeriodSeconds -FailureThreshold $AgonesHealthFailureThreshold
+		$yaml = New-BattleFleetYaml -PodCommon (New-CppNodePodCommon -SidecarZoneLabel 'global') -Replicas $BattleReplicas `
+			-RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' -ClientEntryMode $ClientEntryMode `
+			-Health $health -BuildLabel (Get-ImageBuildLabel -Image $NodeImage) -ClientPublicHost $ClientPublicHost
+	}
+	elseif ($ClientEntryMode -eq 'external') {
+		# Deployment + hostPort 20000:只用于验证与回退(D86),每个节点只能跑 1 个副本、没有忙碌保护(preflight 已警告)。
+		$yaml = New-BattleHostPortDeploymentYaml -PodCommon (New-CppNodePodCommon -SidecarZoneLabel 'global') `
+			-Replicas $BattleReplicas -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' `
+			-ClientPublicHost $ClientPublicHost
+	}
+	else {
+		$yaml = New-NodeDeploymentYaml -NodeName 'battle' -Replicas $BattleReplicas `
+			-RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config'
+	}
+	return [pscustomobject]@{ Orchestrator = $BattleOrchestrator; Health = $health; Yaml = $yaml }
+}
+
 function Apply-BattlePool {
 	param([Parameter(Mandatory = $true)][string]$ConfigMapYaml)
 
-	# 客户端必须连房间所在实例的 POD_IP:20000，不能由一个 Service 随机分流。
-	# 集群外客户端需要另外完成逐实例入口映射；这里不虚构一个可公网访问的地址。
+	# 工作负载已在写路径入口渲染并校验(New-BattleWorkloadManifest),集群现状(换 kind / 同 kind 换入口)也已在那里判定。
+	$workload = $script:BattleWorkload
+	if ($null -eq $workload) {
+		throw "内部错误:battle 工作负载未在写路径入口渲染(Assert-ClientEntryDeployPreflight 未调用?),拒绝部署 battle。"
+	}
+	$battleHealth = $workload.Health
+	$battleYaml = $workload.Yaml
+
+	# 模式切换:再删另一种编排的 battle(Deployment 与 Fleet 同名不同 kind,apply 不会互相回收,两套 battle 会同时注册)。
+	# 在打的局会作废,所以集群里确实存在另一种形态而没给 -AllowDisruptiveSwitch 时整条拒绝、一个都不删。
+	# 写路径入口已判过一次(Assert-ClientEntryClusterState);这里删除前再判一次是纵深防御:两次之间集群可能被别人改动。
+	$battleObsoleteResources = Get-BattleObsoleteResources -BattleOrchestrator $BattleOrchestrator
+	Remove-ClientEntryObsoleteResources -Namespace $InfraNamespace -Resources $battleObsoleteResources `
+		-KubeContext $KubeContext -KubeConfig $KubeConfig -AllowDisruptiveSwitch:$AllowDisruptiveSwitch -DryRun:$DryRun
+
 	Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent $ConfigMapYaml
 	# battle 是全局池,跑在 infra namespace,所以日志 sidecar 的 ConfigMap 也要在这里建一份
 	# (zone namespace 里的那份对它不可见)。它不属于任何 zone:传空串 = 不写 mmorpg.io/zone 标签,
@@ -4399,8 +5460,21 @@ function Apply-BattlePool {
 		$battleSidecarConfigYaml = New-CppLogSidecarConfigMapYaml -ConfigName $script:CppLogSidecarConfigMapName -CurrentZoneName ""
 		Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent $battleSidecarConfigYaml
 	}
-	$battleYaml = New-NodeDeploymentYaml -NodeName 'battle' -Replicas $BattleReplicas `
-		-RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config'
+	if ($BattleOrchestrator -eq 'agones') {
+		# agones-sdk 的 SA + RoleBinding 必须先于 Fleet(理由同 scene Fleet,见 New-AgonesSdkRbacYaml)。
+		Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent (New-AgonesSdkRbacYaml -Namespace $InfraNamespace)
+		if ($battleHealth.Raised) {
+			Write-Host "NOTE: battle Fleet health.initialDelaySeconds 由 -AgonesHealthInitialDelaySeconds=$($battleHealth.RequestedInitialDelaySeconds) 抬到 $($battleHealth.InitialDelaySeconds):battle 启动到首次 /health 的最坏耗时约 $($battleHealth.StartupWorstSeconds)s(推导见 lib/k8s_client_entry.ps1 Resolve-BattleFleetHealth);scene Fleet 仍用原值。"
+		}
+		Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent $battleYaml
+		if ($WaitReady) {
+			# 下限 300s(ingress_final WP9):GameServer 从调度、端口分配到 SDK Ready,单实例最坏约 135s,另有镜像拉取与排队。
+			Wait-ForFleetReady -Namespace $InfraNamespace -FleetName 'battle' -ExpectedReplicas $BattleReplicas `
+				-TimeoutSeconds ([Math]::Max($WaitTimeoutSeconds, 300)) -KubeContext $KubeContext -KubeConfig $KubeConfig -DryRun:$DryRun
+		}
+		return
+	}
+
 	Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent $battleYaml
 	if ($WaitReady) {
 		Wait-ForDeploymentReady -Namespace $InfraNamespace -DeploymentName 'battle'
@@ -4614,6 +5688,9 @@ if ($script:ReleaseStamp.Ok -and $script:ReleaseStamp.Dirty) {
 if ($Command -in @("zone-up", "all-up", "infra-up")) {
 	Assert-ImmutableReleaseImages
 	Invoke-ReleasePreflight
+	# 集群外入口的组合校验(含 -LoginDevPasswordAuth 只许 dev 档)排在密钥解析之前:非 dev 档传该开关时,
+	# 报的是门禁原因,而不是"缺环境变量"。battle 工作负载渲染与集群现状预检(只读 kubectl)也在这里,早于任何写操作。
+	Assert-ClientEntryDeployPreflight
 	Initialize-InjectedSecrets
 	# C++ gRPC deadline ≥ 目标 Go 服务 zrpc Timeout + 2000(上游比下游宽)。放在任何集群写操作之前:
 	# 不成立就整条拒绝,不留半截部署(见 Assert-GrpcClientDeadlineBudget)。
@@ -4639,7 +5716,7 @@ switch ($Command) {
 		}
 	}
 	"zone-up" {
-		Apply-Zone -CurrentZoneName $ZoneName -CurrentZoneId $ZoneId -CurrentClusterId $ClusterId -CurrentCentreReplicas $CentreReplicas -CurrentGateReplicas $GateReplicas -CurrentSceneReplicas $SceneReplicas -CurrentSceneWorldReplicas $SceneWorldReplicas -CurrentSceneInstanceReplicas $SceneInstanceReplicas
+		Apply-Zone -CurrentZoneName $ZoneName -CurrentZoneId $ZoneId -CurrentClusterId $ClusterId -CurrentCentreReplicas $CentreReplicas -CurrentGateReplicas $GateReplicas -CurrentSceneReplicas $SceneReplicas -CurrentSceneWorldReplicas $SceneWorldReplicas -CurrentSceneInstanceReplicas $SceneInstanceReplicas -CurrentGateNodePortBase $GateNodePortBase
 	}
 	"zone-down" {
 		Remove-Zone -CurrentZoneName $ZoneName
@@ -4655,7 +5732,7 @@ switch ($Command) {
 		$zones = Get-ZonesFromJson -Path $zonesPath
 		foreach ($zone in $zones) {
 			# zones 配置里没有 cluster:它是集群常量,所有 zone 与 infra 阶段共用命令行 -ClusterId。
-			Apply-Zone -CurrentZoneName $zone.name -CurrentZoneId $zone.zoneId -CurrentClusterId $ClusterId -CurrentCentreReplicas $zone.centre -CurrentGateReplicas $zone.gate -CurrentSceneReplicas $zone.scene -CurrentSceneWorldReplicas $zone.scene_world -CurrentSceneInstanceReplicas $zone.scene_instance -CurrentSceneLegacyExplicit $zone.scene_legacy_explicit
+			Apply-Zone -CurrentZoneName $zone.name -CurrentZoneId $zone.zoneId -CurrentClusterId $ClusterId -CurrentCentreReplicas $zone.centre -CurrentGateReplicas $zone.gate -CurrentSceneReplicas $zone.scene -CurrentSceneWorldReplicas $zone.scene_world -CurrentSceneInstanceReplicas $zone.scene_instance -CurrentSceneLegacyExplicit $zone.scene_legacy_explicit -CurrentGateNodePortBase $zone.gateNodePortBase
 		}
 	}
 	"all-down" {

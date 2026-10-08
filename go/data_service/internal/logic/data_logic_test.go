@@ -45,7 +45,7 @@ func newTestSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis) {
 func setupPlayer(t *testing.T, svcCtx *svc.ServiceContext, playerID uint64, zoneID uint32) {
 	t.Helper()
 	ctx := context.Background()
-	err := svcCtx.Router.RegisterPlayerZone(ctx, playerID, zoneID)
+	err := svcCtx.Router.RegisterPlayerZone(ctx, playerID, zoneID, 0)
 	assert.NoError(t, err)
 }
 

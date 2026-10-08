@@ -8,14 +8,23 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
-// TestPlayerNameReserveAttemptsFloor 守住 playerNameReserveAttempts 的下限 2(理由见常量注释与 Reserve 的「残余」):
-// 调成 1 时,「残余」A(锁继承)与 B(新项插在删除标记项之前)两类环里被牺牲的那一方会把 1213 直接当存储错误
-// 返回,玩家看到的是建角失败,而不是"名字已被占用"。
-func TestPlayerNameReserveAttemptsFloor(t *testing.T) {
+// TestPlayerNameAttemptsFloor 守住 Reserve / Release 两个尝试上限的下限 2(理由见各自的常量注释):
+//   - playerNameReserveAttempts 调成 1 时,「残余」A(锁继承)与 B(同一 player_id 上的并发重名登记)
+//     两类 InnoDB 固有情形里被牺牲的那一方会把 1213 直接当存储错误返回,玩家看到的是建角失败,
+//     而不是"名字已被占用";迁移没跑过的库(主键还是 player_id)上,名字抢注本身也还会成环,
+//     那个窗口里这次重来是唯一的兜底。
+//   - playerNameReleaseAttempts 调成 1 时,Release 的「情形 3」(行在且落在窗口内却没删到 —— 在途 INSERT 在
+//     DELETE 之后才提交)永远不会重删:循环只跑一轮就落到 exhausted 分支返回存储错误。而这正是 login 两次
+//     补偿释放要覆盖的竞态,退化的后果是每撞上一次就留一条孤儿名字行,且是静默的(只有 orphan 计数会涨)。
+func TestPlayerNameAttemptsFloor(t *testing.T) {
 	const floor = 2
 	if playerNameReserveAttempts < floor {
 		t.Fatalf("playerNameReserveAttempts=%d < %d:锁冲突重试与\"撞键后行已消失\"的重插共用这一个预算,"+
 			"至少要能重来一次,Reserve 才能在固有的 1213 之后收敛到 Taken", playerNameReserveAttempts, floor)
+	}
+	if playerNameReleaseAttempts < floor {
+		t.Fatalf("playerNameReleaseAttempts=%d < %d:少了这一次重来,在途 INSERT 与 Release 交叉时必留孤儿名字行"+
+			"(Release 的「情形 3」再也走不到重删,直接按存储错误返回)", playerNameReleaseAttempts, floor)
 	}
 }
 

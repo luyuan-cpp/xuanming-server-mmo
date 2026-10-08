@@ -8,8 +8,9 @@ import (
 )
 
 // BattleClientPlayerNotifyBattleAssignedHandler 处理直连落点分配推送
-// (docs/design/turn-based-battle-server.md §18 D26):记录 host:port + 票据并唤醒
-// 等待直连的脚本化场景(battle-smoke 的 openBattleDirectConn)。
+// (docs/design/turn-based-battle-server.md §18 D26;经大厅下发的两条公告之一,turn-based §22 D68):
+// 记录 host:port + 票据并唤醒等待直连的脚本化场景(openBattleDirectConn / features-smoke)。
+// team-smoke 同一会话打多场,不用这个一次性信号,按 battle_id 从自己的留底里找分配。
 func BattleClientPlayerNotifyBattleAssignedHandler(player *gameobject.Player, response *battle.BattleAssignedS2C) {
 	if response == nil {
 		zap.L().Warn("nil BattleAssignedS2C", zap.Uint64("player", player.ID))

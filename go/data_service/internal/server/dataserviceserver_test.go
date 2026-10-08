@@ -16,6 +16,7 @@ import (
 	"data_service/internal/svc"
 	"proto/data_service"
 
+	"shared/placement"
 	"shared/playername"
 
 	"github.com/alicebob/miniredis/v2"
@@ -104,6 +105,26 @@ func TestGetPlayerHomeZone_RedisFailureIsUnavailableNotNotFound(t *testing.T) {
 		"Redis 故障绝不能带上'缺失映射'的文案,否则 login 会把故障当成正常状态吞掉")
 }
 
+// TestGetPlayerHomeZone_ReportsMergeFence:home_zone_merging 与 home 同一次读出;
+// scene_manager 据 true 在任何写之前拒绝进场(player-storage-placement.md §8.2 / A16)。
+func TestGetPlayerHomeZone_ReportsMergeFence(t *testing.T) {
+	s, mr := newHomeZoneTestServer(t)
+	ctx := context.Background()
+	_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 1003, HomeZoneId: 9})
+	require.NoError(t, err)
+
+	resp, err := s.GetPlayerHomeZone(ctx, &data_service.GetPlayerHomeZoneRequest{PlayerId: 1003})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(9), resp.GetHomeZoneId())
+	assert.False(t, resp.GetHomeZoneMerging())
+
+	require.NoError(t, mr.Set(routing.MergeFenceKey(9), `{"started_at":1757000000}`))
+	resp, err = s.GetPlayerHomeZone(ctx, &data_service.GetPlayerHomeZoneRequest{PlayerId: 1003})
+	require.NoError(t, err, "合服中不是错误:照常返回 home,由 merging 告知调用方")
+	assert.Equal(t, uint32(9), resp.GetHomeZoneId())
+	assert.True(t, resp.GetHomeZoneMerging())
+}
+
 // TestBatchGetPlayerHomeZone_OmitsMissingIds:批量口径刻意与单查不同 ——
 // 缺席的 id 直接不出现,不是错误(角色列表天然要处理"部分有部分没有")。
 func TestBatchGetPlayerHomeZone_OmitsMissingIds(t *testing.T) {
@@ -171,6 +192,31 @@ func TestRegisterPlayerZone_RefusedWhileZoneIsMerging(t *testing.T) {
 	// 闸门只封锁被合的那个 zone。
 	_, err = s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 3004, HomeZoneId: 21})
 	require.NoError(t, err)
+}
+
+// TestRegisterPlayerZone_StorageIdPinsPlacementOnlyOnFirstWrite:storage_id 经 RPC 透传到
+// 同一段 Lua;冲突被拒时落点零变更,拒绝码与不带 storage_id 时相同。
+func TestRegisterPlayerZone_StorageIdPinsPlacementOnlyOnFirstWrite(t *testing.T) {
+	s, mr := newHomeZoneTestServer(t)
+	ctx := context.Background()
+
+	_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{
+		PlayerId: 3101, HomeZoneId: 4, StorageId: placement.DefaultGlobalStorageID,
+	})
+	require.NoError(t, err)
+	raw, err := mr.Get(placement.Key(3101))
+	require.NoError(t, err)
+	assert.Equal(t, placement.StableValue(placement.DefaultGlobalStorageID, 1), raw)
+
+	_, err = s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 3102, HomeZoneId: 4})
+	require.NoError(t, err)
+	_, err = s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{
+		PlayerId: 3102, HomeZoneId: 8, StorageId: placement.DefaultGlobalStorageID,
+	})
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.AlreadyExists, st.Code())
+	assert.False(t, mr.Exists(placement.Key(3102)), "冲突的登记不得留下落点")
 }
 
 // ── RemapHomeZoneForMerge:鉴权 + 闸门 ──────────────────────────

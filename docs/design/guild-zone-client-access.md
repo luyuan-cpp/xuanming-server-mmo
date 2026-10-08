@@ -20,7 +20,7 @@
 | G6 | 入会的 zone 校验在 `AddMemberInZone` 事务内 `FOR UPDATE` 判 | 缓存 `guild:v2:{id}` 的 zone_id 在合服刚搬迁时可能是旧值;与满员判定同一把行锁 |
 | G7 | 帮名仍**全局唯一**(`uk_name`),重名 → `kGuildNameTaken` | 合服不必改名;`tools/merge_zone/guild_step.go` 的 `assertNoGuildNameCollision` 依赖这个前提 |
 | G8 | 输入由服务端校验:帮名 trim 后 1–24 字、无控制字符 → 否则 `kGuildNameInvalid`;公告 ≤ 600 UTF-8 字节 → 否则 `kGuildAnnouncementTooLong` | gate 单包上限 1KB,500 个汉字约 1500 字节会在 gate 被丢弃、玩家只看到超时;客户端输入框同步改为 200 字 |
-| G9 | 只承诺**路由服模式**可达(`GATE_CLIENT_RPC_ROUTER=1`);K8s 本轮不接 | 与 chat 同口径;K8s 上路由服部署链尚缺,接了也不可达 |
+| G9 | 只承诺**路由服模式**可达(`GATE_CLIENT_RPC_ROUTER=1`);K8s 本轮不接 | 与 chat 同口径;K8s 上路由服部署链尚缺,接了也不可达。**(2026-09-29 更正原因)** 路由服部署链已补齐(manifest + POD_IP 通告),K8s 默认也已是路由模式 `"1"`(turn-based §22 D75,battle-smoke 事后补验);guild 在 K8s 上仍**不可达**,原因改为 **guild 没有 K8s manifest / ConfigMap、未登记进 `$GoSvcCatalogue`,根本没有部署**(`deploy/k8s/AGENTS.md` NOTES)。接入 K8s 仍是后续任务 |
 
 ## 2. 请求流
 

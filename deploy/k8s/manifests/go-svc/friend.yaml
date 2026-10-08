@@ -18,9 +18,9 @@
 #   - staging/prod 的 ConfigMap 固定 Schema.AutoMigrate=false:启动路径只跑一次只读 plan,有待执行语句或需人工项就拒绝启动
 #     (fail-closed,日志打印补救命令),所以 Job 没跑成功时这里会 CrashLoop —— 这是预期,先看 `kubectl logs job/friend-migrate`。
 #
-# ⚠ 已知前提:friend 只承诺路由服模式可达(D-12)。gate 的 GATE_CLIENT_RPC_ROUTER 在 K8s 上默认 "0"(k8s_deploy.ps1 -GateRouterMode),
-# 所以默认部署下这份 Deployment 起得来、探针绿,但玩家够不着;以 -GateRouterMode 1 部署之后才算真正可用。
-# 与 chat / trade 是同一个存量缺口,不是 friend 引入的。
+# ⚠ 已知前提:friend 只承诺路由服模式可达(D-12)。gate 的 GATE_CLIENT_RPC_ROUTER 在 K8s 上默认 "1"(k8s_deploy.ps1 -GateRouterMode,
+# turn-based §22 D75),默认部署下玩家经 gate → client-rpc-router 可达;以 -GateRouterMode 0 回退时这份 Deployment
+# 照样起得来、探针绿,但玩家够不着。与 chat / trade 同口径,不是 friend 特有的。
 #
 # Kafka 命令 topic 的分区契约(gate-cmd_g<N>,friend 的 S2C 推送经它到目标 zone 的 gate):
 #   **本文件不写 KAFKA_COMMAND_TOPIC_PARTITIONS / KAFKA_COMMAND_TOPIC_GENERATION** —— 这两个变量由

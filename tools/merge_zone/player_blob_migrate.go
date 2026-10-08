@@ -63,8 +63,8 @@ func collectPlayerIDsWithHomeZone(ctx context.Context, rdb *redis.Client, zone u
 	return sortedUint64(out), nil
 }
 
-// mappingScanCount 是 mapping Redis 上 SCAN 的批量。500 与 remapPlayerMapping
-// 保持一致,便于两次扫描的耗时可比。
+// mappingScanCount 是 mapping Redis 上 SCAN 的批量,也是按 id 分批 MGET / CAS 的批量
+// (readPlayerZones、remapPlayerMapping、restoreMappingForIDs 共用),各处耗时可比。
 const mappingScanCount = 500
 
 // newDataRedisClient returns a standalone client (one addr) or cluster client (multiple addrs).

@@ -1,7 +1,7 @@
 #include "scene_node_service.h"
 #include <future>
 ///<<< BEGIN WRITING YOUR CODE
-#include "agones/agones_scene_lifecycle.h"
+#include "infra/agones/agones_gameserver_lifecycle.h"
 #include "modules/scene/comp/scene_node_comp.h"
 #include "player/system/player_lifecycle.h"
 #include "proto/common/event/scene_event.pb.h"
@@ -248,12 +248,12 @@ grpc::Status SceneNodeGrpcImpl::CreateScene(grpc::ServerContext* /*context*/,
     // (覆盖 future.get()),在途创建才能阻止提前回到 Ready。
     //
     // 2026-09-15 恢复:原块在 commit 6c4021ae5 被 proto 重生成吞掉(当时位于守护段外)。
-    auto createPermit = agones::SceneLifecycle::Instance().AcquireCreatePermitBlocking();
+    auto createPermit = agones::GameServerLifecycle::Instance().AcquireAllocationPermitBlocking();
     if (!createPermit)
     {
         LOG_ERROR << "[gRPC] CreateScene rejected: Agones allocate not confirmed, scene_id="
                   << request->scene_id() << " state="
-                  << agones::ToString(agones::SceneLifecycle::Instance().State());
+                  << agones::ToString(agones::GameServerLifecycle::Instance().State());
         return grpc::Status(grpc::StatusCode::UNAVAILABLE, "agones allocate not confirmed");
     }
 ///<<< END WRITING YOUR CODE

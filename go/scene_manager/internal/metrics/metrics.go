@@ -113,15 +113,17 @@ var (
 	//
 	// 读数注意:handoff_pending_no_marker 在生产配置(AllowUnsafeCrossNodeHandoff=false)下是
 	// 跨节点换图的常规第一跳,恒非 0,不能拿来告警;告警口径见 deploy/k8s/scene-manager-alerts.yaml。
-	// zone_id 对 home_zone_unavailable / home_zone_unmapped_travel 是 gate zone(home_zone.go),
-	// 对其余 reason 是目标 zone。
+	// zone_id 对 home_zone_unavailable / home_zone_unmapped_travel / home_zone_merging 是 gate zone
+	// (home_zone.go),对其余 reason 是目标 zone。
+	// home_zone_merging = 归属 zone 正处于合服围栏内(player-storage-placement.md §8.2 / §12 A16),
+	// 只应在合服窗口里非 0;窗口外持续非 0 = merge:in_progress:{home} 围栏键残留。
 	enterSceneRejectedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "enter_scene_rejected_total",
 		// reason 取值必须与 enterscenelogic.go / home_zone.go 里实际传入的字面量一致;
 		// 旧的 unsafe_handoff / handoff_pending 已无调用点(换手门拒绝细分成了
 		// no_marker / stale_marker / withdrawn 三种),按旧名配的告警会恒为空而不报错。
-		Help: "EnterScene rejections by reason (handoff_pending_no_marker|handoff_pending_stale_marker|handoff_pending_withdrawn|epoch_conflict|home_zone_unavailable|home_zone_unmapped_travel|travel_map_unavailable|pending_map_fallback|scene_gone).",
+		Help: "EnterScene rejections by reason (handoff_pending_no_marker|handoff_pending_stale_marker|handoff_pending_withdrawn|epoch_conflict|home_zone_unavailable|home_zone_unmapped_travel|home_zone_merging|travel_map_unavailable|pending_map_fallback|scene_gone).",
 	}, []string{"zone_id", "reason"})
 
 	// homeZoneLookupTotal 统计 EnterScene 里每一次归属 zone 查询的结果:

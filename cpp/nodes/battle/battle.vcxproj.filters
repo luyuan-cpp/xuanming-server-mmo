@@ -37,9 +37,6 @@
     <ClCompile Include="handler\event\event_handler.cpp">
       <Filter>handler\event</Filter>
     </ClCompile>
-    <ClCompile Include="handler\grpc\battle_client_player_service.cpp">
-      <Filter>handler\grpc</Filter>
-    </ClCompile>
     <ClCompile Include="handler\grpc\battle_node.cpp">
       <Filter>handler\grpc</Filter>
     </ClCompile>
@@ -63,12 +60,12 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="battle_admission_gate.h" />
+    <ClInclude Include="battle_push_policy.h" />
+    <ClInclude Include="battle_room_table.h" />
     <ClInclude Include="battle_security.h" />
     <ClInclude Include="client\battle_client_edge.h">
       <Filter>client</Filter>
-    </ClInclude>
-    <ClInclude Include="handler\grpc\battle_client_player_service.h">
-      <Filter>handler\grpc</Filter>
     </ClInclude>
     <ClInclude Include="handler\grpc\battle_node.h">
       <Filter>handler\grpc</Filter>

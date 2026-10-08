@@ -32,6 +32,8 @@ message CreateBattleRequest {
   BattleActivityContext activity_context = 9;
 }
 
+// error_message 非零 = 未建房。签不出参战票据时回 kServiceUnavailable(turn-based §22 D70 fail-closed):
+// battle 保证没有建房、没有推送、没有发确认事件,match 按通用补偿回滚(DestroyBattle 幂等 → CancelBattlePrepare)。
 message CreateBattleResponse {
   uint64 battle_id = 1;
   TipInfoMessage error_message = 2;
@@ -52,8 +54,11 @@ message AddObserverRequest {
   string observer_name = 4;   // 日志/后续观众列表展示用
 }
 
+// 房间不存在(kEntityIsNull)/观众已满/观众是参战者/签不出观战票据(kServiceUnavailable)。
+// 签票失败时 battle 保证该观众不在名单里(新观众不登记;幂等重推路径摘除已登记的观众并关其直连,
+// turn-based §22 D70),与 match 收到任何错误即 DEL 观战标记的回滚一致。
 message AddObserverResponse {
-  TipInfoMessage error_message = 1;  // 房间不存在/观众已满/观众是参战者
+  TipInfoMessage error_message = 1;
 }
 
 message RemoveObserverRequest {
