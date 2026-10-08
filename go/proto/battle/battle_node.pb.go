@@ -33,8 +33,13 @@ type CreateBattleRequest struct {
 	CreatedAtMs      uint64                  `protobuf:"varint,6,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`             // Unix 毫秒
 	DeadlineMs       uint64                  `protobuf:"varint,7,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`                  // 战斗最长期限,超时 battle 强制平局收尾
 	TableFingerprint string                  `protobuf:"bytes,8,opt,name=table_fingerprint,json=tableFingerprint,proto3" json:"table_fingerprint,omitempty"` // match 确认的全员一致指纹;battle 与自身指纹不一致按配置拒开局/告警
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 活动对局上下文(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.17/§6.19)。
+	// 可空:普通对局不填(等价 kind == NONE)。match 的 RunActivityGather 原样填入;battle 存进房间,
+	// 结算时回显进 BattleResultEvent.activity_context,并且 kind != NONE 时先落 SharedRedis
+	// battle:activity_result:{battle_id} 再发 Kafka(未被 guild 销账就重发)。battle 不解释其余字段。
+	ActivityContext *BattleActivityContext `protobuf:"bytes,9,opt,name=activity_context,json=activityContext,proto3" json:"activity_context,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *CreateBattleRequest) Reset() {
@@ -123,6 +128,15 @@ func (x *CreateBattleRequest) GetTableFingerprint() string {
 	return ""
 }
 
+func (x *CreateBattleRequest) GetActivityContext() *BattleActivityContext {
+	if x != nil {
+		return x.ActivityContext
+	}
+	return nil
+}
+
+// error_message 非零 = 未建房。签不出参战票据时回 kServiceUnavailable(turn-based §22 D70 fail-closed):
+// battle 保证没有建房、没有推送、没有发确认事件,match 按通用补偿回滚(DestroyBattle 幂等 → CancelBattlePrepare)。
 type CreateBattleResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
@@ -298,9 +312,12 @@ func (x *AddObserverRequest) GetObserverName() string {
 	return ""
 }
 
+// 房间不存在(kEntityIsNull)/观众已满/观众是参战者/签不出观战票据(kServiceUnavailable)。
+// 签票失败时 battle 保证该观众不在名单里(新观众不登记;幂等重推路径摘除已登记的观众并关其直连,
+// turn-based §22 D70),与 match 收到任何错误即 DEL 观战标记的回滚一致。
 type AddObserverResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"` // 房间不存在/观众已满/观众是参战者
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -514,7 +531,7 @@ var File_proto_battle_battle_node_proto protoreflect.FileDescriptor
 
 const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\n" +
-	"\x1eproto/battle/battle_node.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1eproto/battle/battle_data.proto\x1a proto/battle/player_battle.proto\"\xb2\x02\n" +
+	"\x1eproto/battle/battle_node.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1eproto/battle/battle_data.proto\x1a proto/battle/player_battle.proto\"\xf5\x02\n" +
 	"\x13CreateBattleRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12(\n" +
 	"\x10battle_config_id\x18\x02 \x01(\rR\x0ebattleConfigId\x12/\n" +
@@ -525,7 +542,8 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\rcreated_at_ms\x18\x06 \x01(\x04R\vcreatedAtMs\x12\x1f\n" +
 	"\vdeadline_ms\x18\a \x01(\x04R\n" +
 	"deadlineMs\x12+\n" +
-	"\x11table_fingerprint\x18\b \x01(\tR\x10tableFingerprint\"i\n" +
+	"\x11table_fingerprint\x18\b \x01(\tR\x10tableFingerprint\x12A\n" +
+	"\x10activity_context\x18\t \x01(\v2\x16.BattleActivityContextR\x0factivityContext\"i\n" +
 	"\x14CreateBattleResponse\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
 	"\rerror_message\x18\x02 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"K\n" +
@@ -582,33 +600,35 @@ var file_proto_battle_battle_node_proto_goTypes = []any{
 	(*IssueBattleTicketRequest)(nil),  // 6: IssueBattleTicketRequest
 	(*IssueBattleTicketResponse)(nil), // 7: IssueBattleTicketResponse
 	(*BattlePlayerSnapshot)(nil),      // 8: BattlePlayerSnapshot
-	(*base.TipInfoMessage)(nil),       // 9: TipInfoMessage
-	(*BattleRouting)(nil),             // 10: BattleRouting
-	(*BattleAssignedS2C)(nil),         // 11: BattleAssignedS2C
-	(*base.Empty)(nil),                // 12: Empty
+	(*BattleActivityContext)(nil),     // 9: BattleActivityContext
+	(*base.TipInfoMessage)(nil),       // 10: TipInfoMessage
+	(*BattleRouting)(nil),             // 11: BattleRouting
+	(*BattleAssignedS2C)(nil),         // 12: BattleAssignedS2C
+	(*base.Empty)(nil),                // 13: Empty
 }
 var file_proto_battle_battle_node_proto_depIdxs = []int32{
 	8,  // 0: CreateBattleRequest.players:type_name -> BattlePlayerSnapshot
-	9,  // 1: CreateBattleResponse.error_message:type_name -> TipInfoMessage
-	10, // 2: AddObserverRequest.routing:type_name -> BattleRouting
-	9,  // 3: AddObserverResponse.error_message:type_name -> TipInfoMessage
-	9,  // 4: IssueBattleTicketResponse.error_message:type_name -> TipInfoMessage
-	11, // 5: IssueBattleTicketResponse.assignment:type_name -> BattleAssignedS2C
-	0,  // 6: BattleNode.CreateBattle:input_type -> CreateBattleRequest
-	2,  // 7: BattleNode.DestroyBattle:input_type -> DestroyBattleRequest
-	3,  // 8: BattleNode.AddObserver:input_type -> AddObserverRequest
-	5,  // 9: BattleNode.RemoveObserver:input_type -> RemoveObserverRequest
-	6,  // 10: BattleNode.IssueBattleTicket:input_type -> IssueBattleTicketRequest
-	1,  // 11: BattleNode.CreateBattle:output_type -> CreateBattleResponse
-	12, // 12: BattleNode.DestroyBattle:output_type -> Empty
-	4,  // 13: BattleNode.AddObserver:output_type -> AddObserverResponse
-	12, // 14: BattleNode.RemoveObserver:output_type -> Empty
-	7,  // 15: BattleNode.IssueBattleTicket:output_type -> IssueBattleTicketResponse
-	11, // [11:16] is the sub-list for method output_type
-	6,  // [6:11] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	9,  // 1: CreateBattleRequest.activity_context:type_name -> BattleActivityContext
+	10, // 2: CreateBattleResponse.error_message:type_name -> TipInfoMessage
+	11, // 3: AddObserverRequest.routing:type_name -> BattleRouting
+	10, // 4: AddObserverResponse.error_message:type_name -> TipInfoMessage
+	10, // 5: IssueBattleTicketResponse.error_message:type_name -> TipInfoMessage
+	12, // 6: IssueBattleTicketResponse.assignment:type_name -> BattleAssignedS2C
+	0,  // 7: BattleNode.CreateBattle:input_type -> CreateBattleRequest
+	2,  // 8: BattleNode.DestroyBattle:input_type -> DestroyBattleRequest
+	3,  // 9: BattleNode.AddObserver:input_type -> AddObserverRequest
+	5,  // 10: BattleNode.RemoveObserver:input_type -> RemoveObserverRequest
+	6,  // 11: BattleNode.IssueBattleTicket:input_type -> IssueBattleTicketRequest
+	1,  // 12: BattleNode.CreateBattle:output_type -> CreateBattleResponse
+	13, // 13: BattleNode.DestroyBattle:output_type -> Empty
+	4,  // 14: BattleNode.AddObserver:output_type -> AddObserverResponse
+	13, // 15: BattleNode.RemoveObserver:output_type -> Empty
+	7,  // 16: BattleNode.IssueBattleTicket:output_type -> IssueBattleTicketResponse
+	12, // [12:17] is the sub-list for method output_type
+	7,  // [7:12] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_battle_node_proto_init() }

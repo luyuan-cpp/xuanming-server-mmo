@@ -42,6 +42,7 @@ const (
 	DataService_ReservePlayerName_FullMethodName      = "/data_service.DataService/ReservePlayerName"
 	DataService_ReleasePlayerName_FullMethodName      = "/data_service.DataService/ReleasePlayerName"
 	DataService_BatchGetPlayerName_FullMethodName     = "/data_service.DataService/BatchGetPlayerName"
+	DataService_GetPlayerAssetOpLedger_FullMethodName = "/data_service.DataService/GetPlayerAssetOpLedger"
 )
 
 // DataServiceClient is the client API for DataService service.
@@ -89,6 +90,11 @@ type DataServiceClient interface {
 	ReservePlayerName(ctx context.Context, in *ReservePlayerNameRequest, opts ...grpc.CallOption) (*ReservePlayerNameResponse, error)
 	ReleasePlayerName(ctx context.Context, in *ReleasePlayerNameRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	BatchGetPlayerName(ctx context.Context, in *BatchGetPlayerNameRequest, opts ...grpc.CallOption) (*BatchGetPlayerNameResponse, error)
+	// ── 资产通道:已落盘账本只读 ─────────────────────────────────
+	// 读 zone Redis 里 scene 写的 PlayerAllData blob 的 asset_op_ledger 子字段。只读、不鉴权(与
+	// BatchGetPlayerName 同级)。实现 go/shared/assetop 的 LedgerReader。
+	// 设计见 docs/design/guild-phase2/07-rollback-fail-closed.md §7.8。
+	GetPlayerAssetOpLedger(ctx context.Context, in *GetPlayerAssetOpLedgerRequest, opts ...grpc.CallOption) (*GetPlayerAssetOpLedgerResponse, error)
 }
 
 type dataServiceClient struct {
@@ -319,6 +325,16 @@ func (c *dataServiceClient) BatchGetPlayerName(ctx context.Context, in *BatchGet
 	return out, nil
 }
 
+func (c *dataServiceClient) GetPlayerAssetOpLedger(ctx context.Context, in *GetPlayerAssetOpLedgerRequest, opts ...grpc.CallOption) (*GetPlayerAssetOpLedgerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPlayerAssetOpLedgerResponse)
+	err := c.cc.Invoke(ctx, DataService_GetPlayerAssetOpLedger_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DataServiceServer is the server API for DataService service.
 // All implementations must embed UnimplementedDataServiceServer
 // for forward compatibility.
@@ -364,6 +380,11 @@ type DataServiceServer interface {
 	ReservePlayerName(context.Context, *ReservePlayerNameRequest) (*ReservePlayerNameResponse, error)
 	ReleasePlayerName(context.Context, *ReleasePlayerNameRequest) (*emptypb.Empty, error)
 	BatchGetPlayerName(context.Context, *BatchGetPlayerNameRequest) (*BatchGetPlayerNameResponse, error)
+	// ── 资产通道:已落盘账本只读 ─────────────────────────────────
+	// 读 zone Redis 里 scene 写的 PlayerAllData blob 的 asset_op_ledger 子字段。只读、不鉴权(与
+	// BatchGetPlayerName 同级)。实现 go/shared/assetop 的 LedgerReader。
+	// 设计见 docs/design/guild-phase2/07-rollback-fail-closed.md §7.8。
+	GetPlayerAssetOpLedger(context.Context, *GetPlayerAssetOpLedgerRequest) (*GetPlayerAssetOpLedgerResponse, error)
 	mustEmbedUnimplementedDataServiceServer()
 }
 
@@ -439,6 +460,9 @@ func (UnimplementedDataServiceServer) ReleasePlayerName(context.Context, *Releas
 }
 func (UnimplementedDataServiceServer) BatchGetPlayerName(context.Context, *BatchGetPlayerNameRequest) (*BatchGetPlayerNameResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BatchGetPlayerName not implemented")
+}
+func (UnimplementedDataServiceServer) GetPlayerAssetOpLedger(context.Context, *GetPlayerAssetOpLedgerRequest) (*GetPlayerAssetOpLedgerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPlayerAssetOpLedger not implemented")
 }
 func (UnimplementedDataServiceServer) mustEmbedUnimplementedDataServiceServer() {}
 func (UnimplementedDataServiceServer) testEmbeddedByValue()                     {}
@@ -857,6 +881,24 @@ func _DataService_BatchGetPlayerName_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DataService_GetPlayerAssetOpLedger_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlayerAssetOpLedgerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).GetPlayerAssetOpLedger(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_GetPlayerAssetOpLedger_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).GetPlayerAssetOpLedger(ctx, req.(*GetPlayerAssetOpLedgerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DataService_ServiceDesc is the grpc.ServiceDesc for DataService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -951,6 +993,10 @@ var DataService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BatchGetPlayerName",
 			Handler:    _DataService_BatchGetPlayerName_Handler,
+		},
+		{
+			MethodName: "GetPlayerAssetOpLedger",
+			Handler:    _DataService_GetPlayerAssetOpLedger_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

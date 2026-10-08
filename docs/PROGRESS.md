@@ -6608,3 +6608,12 @@ PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修
   同日「battle 直连收缩」条的 Java 小节,Java 版(0.1.0-SNAPSHOT,截至 09-29 的记录;机器 A 上没有 Java 仓,未复核当前版本)
   只有「登录 → 进场景」竖切、没有 friend;做到好友推荐时按同一口径对齐(候选查询要有由 SQL 结构给出、与玩家总数无关的上界,
   并配读数上界回归)。`PARITY.md` 由 Java 仓会话登记,本条没有改它。
+
+## 2026-10-08 本机启动准备与 Go 协议生成产物补齐
+
+- 在 `64f0e33` 上准备本机启动时,发现已跟踪的 Go 生成产物落后于现有源契约,并缺少 `guild_internal`、`match_internal` 的生成文件;已核对不是 sparse-checkout 漏检出。
+- 依据 `BuildUnifiedGoProto` 的暂存与 `go_package=proto/{目录}` 规则,用 protoc 35.1、protoc-gen-go v1.36.10、protoc-gen-go-grpc 1.6.0 定向生成 `guild/guild_internal.proto`、`data_service/data_service.proto`、`common/base/common.proto`、`battle/battle_data.proto`、`battle/battle_node.proto`、`match/match_internal.proto` 对应的 9 个 Go 文件。源 `.proto`、`go.mod`、`go.sum` 均未改动,未手改生成代码;原统一生成器递归收集源文件,本来就覆盖这些目标。
+- Go 1.26.8 下,`tools/scripts/go_services.ps1 -Command build` 已产出 `db`、`data_service`、`client_rpc_router`、`scene_manager`、`player_locator`、`login`、`match` 七个本机 exe,均使用最终协议集。`login` 的锁定依赖 Sarama v1.46.2 经 GitHub 官方仓库定向下载恢复,Sum/GoModSum 与原 `go.sum` 一致;没有换版本或关闭校验。
+- 验证:`data_service` 的 `go test -count=1 ./internal/guildcheck` 通过(15.240s),`shared` 的 `go test -count=1 ./nodeinfo` 通过(6.719s);补取并校验 miniredis v2.37.0 后,`match` 的 `go test -count=1 ./internal/logic -run 'Test.*(Activity|Internal|Session)'` 通过(25.243s)。根包原 `match_service_test.go:42` 的重复比较触发 `go vet suspect or`,现拆成协议值固定为10、JSON值等于枚举两条独立断言,保留两项检查;再次测试被 Windows Application Control 拦截测试 exe,因此根包尚未执行通过。没有关闭 vet 或系统防护。构建与失败日志、锁定工具、定向生成及续跑脚本保留在工作区外的 `.codex-docker-setup/`。
+- 运行状态:已装 Docker Desktop 4.93.0、Docker CLI 29.8.1、Compose 5.5.1、WSL 3.0.1;本机本日已重启,但 `VirtualizationFirmwareEnabled=False` 且 `HypervisorPresent=False`,需在 BIOS 开启 SVM。C++ gate/scene/battle、JDK 23 网关产物也尚未具备;原有 3306/6379/9092 监听需隔离。未启动完整服务器、未执行登录入场验收,未重启机器或改动现存游戏数据。
+- **Java 版(AGENTS §12)**:本条只补本仓库既有源契约的 Go 生成物与本机工具,没有新增业务功能或修改客户端契约;Java 对应版本不涉及,未改另一仓库及其 `PARITY.md`。
