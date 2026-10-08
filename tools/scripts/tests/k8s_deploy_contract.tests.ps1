@@ -186,6 +186,21 @@ Test-Case "data-service 是多副本形态:2 副本滚动更新 + PDB + 反亲�
 }
 
 
+Test-Case "db 是多副本形态:2 副本滚动更新 + PDB + 反亲和" {
+    # 背景(docs/design/no-single-node-horizontal-scaling-20261001.md §3):db 把存档任务从 Kafka 落到 MySQL,以前每个 zone 钉成单实例。
+    # 重试收据按实例归属之后(go/db/internal/kafka/retry_ownership.go)可以多开;部署侧要一起到位。
+    $block = @(Get-ManifestBlocks -Output $devOut | Where-Object {
+        $_ -cmatch '(?m)^kind: Deployment\s*$' -and $_ -cmatch '(?m)^  name: db\s*$'
+    }) | Select-Object -First 1
+    Assert-True -Condition ($null -ne $block) -Because 'DryRun 输出里应当有 db 的 Deployment'
+    Assert-Match -Text $block -Pattern '(?m)^  replicas: 2\s*$' -Because '单副本 = 这个 zone 的存档落库是单点'
+    Assert-Match -Text $block -Pattern 'type: RollingUpdate\s+rollingUpdate:\s+maxSurge: 1\s+maxUnavailable: 0' -Because '先起新的再停旧的,发布期间不出现零实例'
+    Assert-Match -Text $block -Pattern 'podAntiAffinity' -Because '两个副本不该落在同一个节点上'
+    Assert-Match -Text $block -Pattern '(?s)kind: PodDisruptionBudget.*?name: db-pdb.*?minAvailable: 1' -Because 'PDB 必须写在主 manifest 里,独立文件不会被 apply'
+    Assert-Match -Text $block -Pattern 'terminationGracePeriodSeconds: 45' -Because '停机要留出把重试收据还回 ready 的时间'
+}
+
+
 Test-Case "login 与 db 生成产物里的 Kafka.PartitionCnt 必须彼此相等" {
     # db 侧启动门禁 fail-closed:两边不一致直接起不来
     $loginFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "go-svc-login-config")

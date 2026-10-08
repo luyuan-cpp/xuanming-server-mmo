@@ -208,6 +208,14 @@ type KafkaConfig struct {
 	// With SubShardCount=4, effective parallelism becomes 10×4=40 and the
 	// pool actually fills. See 2026-05-28 stress maxopenconn doc §3.
 	SubShardCount int `json:"SubShardCount,optional"`
+
+	// RetryInstanceId 是本实例在重试收据登记表里的名字(go/db/internal/kafka/retry_ownership.go)。
+	// 留空 = <主机名>:<ListenOn 端口>:K8s 上主机名就是 Pod 名,本机多开时端口不同,通常不需要配置。
+	// 两个同时活着的实例**不能**同名:同名被当成"上一次的自己",启动时会收走对方的在途重试收据(重复执行)。
+	RetryInstanceId string `json:"RetryInstanceId,optional"`
+	// RetryLeaseSeconds 是上面那份登记的租约时长。0 = 默认 30;小于 10 的值按 10 算。
+	// 续租与孤儿回收的周期是它的三分之一;崩溃实例的在途重试收据最迟约 4/3 个租约之后回到 ready。
+	RetryLeaseSeconds int `json:"RetryLeaseSeconds,optional"`
 }
 
 var AppConfig Config

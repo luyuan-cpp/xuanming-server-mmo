@@ -93,11 +93,83 @@
    **另外两个必须保持 Ready**,期间 robot login-test 仍能通过;kafka-1 回来后重新加入。
 4. 原地切换的闸:对一个单 broker 集群执行 `infra-up -KafkaBrokers 3`,必须报「拒绝变更 Kafka broker 数」且集群无任何变化。
 
-## 3. db(存档写库):每区 1 → 多实例(待做)
+## 3. db(存档写库):每区 1 → 2 副本(已落码,未编译、未跑测试)
 
-现状:`go/db/internal/kafka/key_ordered_consumer.go` 启动时 `recoverRetryProcessing` 把**全部** processing 收据搬回 ready,
-两个实例会互相抢走对方正在处理的任务;部署与本机脚本因此把它钉成单实例。
-方向:让每个实例只认领自己的在途任务(收据带实例标识 + 租约),分区由消费组在实例之间分配。先读代码再定稿。
+### 3.1 结论:只差重试收据的归属
+
+通读 `go/db/internal/kafka/key_ordered_consumer.go` 后的判定(2026-10-08):
+
+- **已经是跨实例安全的**:Kafka 消费是 sarama consumer group(分区在实例间独占分配,rebalance 时旧属主的在途任务被 claim context 拦住);
+  写任务靠 ordering lock(Redis 分布式锁,带租约)互斥、applied 游标保证不回退、owner epoch 守卫归属;读结果发布、能力标记都不依赖单实例。
+- **唯一的阻塞点**:重试队列的 processing 列表 `kafka:retry:processing:{topic}` 全 zone 共用,进程启动时把它**整表**搬回 ready。
+  第二个实例一启动,第一个实例在途的收据全部被搬走重做。后果是重复执行(被游标挡住,不会写坏库),但「每条收据恰有一个认领者」不成立,
+  而且孤儿回收只发生在进程启动 —— 单纯删掉那段恢复,崩溃实例的收据就永远留在 processing 里。
+- 顺带:K8s 上 db 的清单没写 `strategy`,默认滚动策略在 1 副本时是先起新 Pod 再停旧 Pod,所以「单实例」在每次发布的重叠期本来就不成立。
+
+### 3.2 做法:processing 按实例隔离 + 租约 + 孤儿回收(`retry_ownership.go`)
+
+| 键 | 类型 | 说明 |
+|---|---|---|
+| `kafka:retry:queue:{topic}` | LIST | ready,所有实例共享(不变) |
+| `kafka:dead:queue:{topic}` | LIST | 死信(不变) |
+| `kafka:retry:processing:{topic}:{instanceID}` | LIST | 本实例认领的收据(新) |
+| `kafka:retry:instances:{topic}` | ZSET | 实例登记表,score = 租约到期毫秒,统一取 Redis 的 `TIME`(新) |
+| `kafka:retry:processing:{topic}` | LIST | 旧版共享列表:新版只回收、不写入 |
+
+- `instanceID` 默认 `<主机名>:<ListenOn 端口>`(K8s 上主机名即 Pod 名;本机多开时端口不同),可用 `Kafka.RetryInstanceId` 覆盖。
+  租约 `Kafka.RetryLeaseSeconds` 默认 30(下限 10),续租与回收周期是它的三分之一。
+- **认领**:一个 Lua 脚本里先续租、再 `RPOPLPUSH ready → processing:{me}`。
+- **启动**:收回同名实例(上一次的自己)遗留的收据 → 登记租约(失败即拒启) → 回收一遍孤儿 → 开始消费。
+- **回收**(每拍):旧版共享列表直接搬回 ready;对租约过期的其它实例,由脚本**再确认一次仍然过期**后分批搬回 ready,搬空才把它摘出登记表。
+- **停机**:worker 全停之后,用新的有时限 context 把没做完的收据还回 ready 并摘掉租约(失败则靠租约过期兜底)。
+- **不变量**:一个实例的 processing 列表只在它持有未过期租约的那一刻才会增长(续租与认领同一个脚本)。
+  所以不存在「已被摘出登记表、却还持有收据」的列表 —— 那样的收据没人会来回收。
+- **语义**:仍是 at-least-once。误回收(实例活着但租约断了)= 重复执行,被游标挡住。
+- **滚动升级**:旧 → 新,旧版实例仍写旧列表、新版每拍回收它,重叠期旧实例的在途收据会被重复执行(与以前每次发布的行为相同)。
+  新 → 旧(回退):旧版看不到按实例的列表;正常停机时收据已还回 ready,若新版是崩溃退出,回退前要先起一个新版实例让它回收,
+  或手工把 `kafka:retry:processing:{topic}:*` 搬回 ready。
+
+同批修掉的两处既有问题(多实例会把它们放大):
+
+- **停机时 ordering lock 放不掉**:`Stop()` 先取消 worker 的 context,在途任务用它去释放锁必然失败,锁残留到 TTL(2 分钟),
+  期间这个 key 的存盘只能在别的实例上排队。改为脱离取消信号、带 2 秒上限释放。
+- rebalance 的 Cleanup 日志把切片下标当成了分区号。
+
+`tools/merge_zone` 同批改:P4 门禁与 `kafka_db_task_queues` 审计原来只查旧的共享 processing 键,键一拆它们会恒为 0、静默放行;
+现在读登记表,把每个实例的列表都查到(`dbTaskQueueKeys`)。运行手册里的手查命令同步更新(原来还把键名写错了)。
+
+### 3.3 部署
+
+- `db.yaml`:2 副本、显式 `RollingUpdate`(maxSurge 1 / maxUnavailable 0)、preferred 反亲和、同文件 PDB、`terminationGracePeriodSeconds: 45`。
+- 本机 `go_services.ps1`:db 的 `AllowMultiInstance` 放开(默认仍起 1 个,`-Counts db=N` 可多开)。
+
+### 3.4 限制与未做
+
+- **K8s 上所有 zone 的 db 共用一个消费组**(`db_rpc_consumer_group`,ConfigMap 里写死;本机脚本会加 `_z<Zone>` 后缀)。
+  每个 zone 只订阅自己的 topic,但同组成员的任何进出都会让**全组** rebalance:任一 zone 的 db Pod 重启,所有 zone 的存档消费一起暂停几秒。
+  zone 多了这是个明显的耦合。改成按 zone 命名需要同步 `tools/merge_zone` 的 `-kafka-group` 默认值、`k8s_zone_rollback.ps1`、
+  `dev_tools.ps1`、`stress_summarize.ps1`、`kafka_offset_reset.ps1` 与运行手册,而且要先确认 merge_zone 对「组里没有该 topic 位点」的判定是
+  fail-closed 的(否则门禁会静默放行)。**本次没做,单列为后续项。**
+- 有效并行度上限 = 分区数(`Kafka.PartitionCnt`,现为 10);不要配 HPA(eager rebalance,成员变化全员暂停)。
+- 连接预算:每实例最多 60 条 MySQL 连接 + 每个额外落点库 8 条;2 副本 × 4 个 zone = 480,已贴近 `max_connections = 500`(见 §6)。
+- 读任务的缓存回写是无条件 `SET`,不持 ordering lock:在非属主实例上重试的读可能把旧值盖到新缓存上。这是既有问题
+  (读与写本来就多半不在同一个分区),多实例只是多了一个入口。改成只补缺不覆盖(`SETNX`)要先确认 login 的缓存修复路径与回档工具不依赖覆盖,没在本次做。
+- 持锁实例若在拿锁与落库之间停顿超过锁 TTL 且续租失败,醒来仍会把旧版本写进库(随后复核失败,游标不回退)。既有设计,彻底封死需要 MySQL 侧的版本条件写。
+
+### 3.5 验证(交 Codex)
+
+```
+cd go/db && go build ./... && go vet ./... && go test -count=1 ./internal/kafka/... ./internal/config/...
+cd tools/merge_zone && go build ./... && go vet ./... && go test ./...
+pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
+pwsh -NoProfile -File tools/scripts/tests/go_services_ports.tests.ps1
+```
+
+重点用例在 `go/db/internal/kafka/retry_ownership_test.go`(miniredis,用 `SetTime` 推进 Redis 时钟):只收回自己的、过期才回收、
+脚本内复核租约、不自己回收自己、旧列表被排空、被回收后认领会重新登记、停机归还、大列表分批搬完、逐拍驱动的续租循环、消费者接线。
+
+本机:`go_services.ps1 -Counts db=2` 起两个 db,跑 robot login-test;杀掉其中一个(`taskkill /F`),另一个应在约 40 秒内打出
+`reclaimed abandoned retry receipts`(如果被杀的那个当时有在途重试),存盘继续。kind 上:两个 db Pod Ready,`kubectl delete pod` 一个,robot 存盘不中断。
 
 ## 4. data_service:每区 1 → 2 副本(已落码,未编译、未跑测试)
 

@@ -6615,3 +6615,34 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
   `GET_LOCK` 在 TiDB 上未实测;唯一键缺失时拒绝启动快照消费者的守卫、C++ 约定键提前注销两项没做。
 - **Java 版(AGENTS §12)**:待做。本机没有 Java 仓库,未核对它的 data 服务是否有对应的单实例假设;`PARITY.md` 未登记。
 - **注意**:契约测试基线仍因 deadline 门禁与 `data_service.yaml` 的 `MethodTimeouts` 冲突而失败(09-29 起,与本条无关)。
+
+## 2026-10-08 消除单节点(三):db(存档落库)每区 1 实例 → 2 副本(Claude,未编译、未跑测试、未上集群)
+
+总纲 `docs/design/no-single-node-horizontal-scaling-20261001.md` §3。前两项见同名「(一)」「(二)」条目。
+
+- **结论先行**:通读 `go/db/internal/kafka/key_ordered_consumer.go` 后确认,db 的绝大部分本来就是按多实例写的 —— Kafka 消费是 consumer group
+  (分区在实例间独占分配),写任务靠 Redis 分布式锁互斥、applied 游标保证不回退。把它钉成单实例的**只有一处**:重试队列的 processing 列表
+  全 zone 共用,进程启动时把它整表搬回 ready;第二个实例一启动,第一个实例在途的收据就全被搬走重做。
+  另外,K8s 上 db 的清单没写 `strategy`,默认滚动策略在 1 副本时是先起新 Pod 再停旧 Pod —— 「单实例」在每次发布的重叠期本来就不成立。
+- **做法**(新文件 `go/db/internal/kafka/retry_ownership.go`):processing 列表按实例拆开(`kafka:retry:processing:{topic}:{实例名}`),
+  实例登记表 `kafka:retry:instances:{topic}` 是带租约的 ZSET(时间统一取 Redis 的 `TIME`)。认领 = 一个 Lua 脚本里「续租 + 搬进自己的列表」;
+  启动时只收回同名实例(上一次的自己)的收据;每拍回收旧版共享列表和租约过期实例的孤儿(脚本内再确认一次过期);停机时把没做完的还回 ready。
+  实例名默认 `<主机名>:<端口>`(K8s 上即 Pod 名),租约默认 30s,两者可用 `Kafka.RetryInstanceId` / `Kafka.RetryLeaseSeconds` 覆盖(一般不用配)。
+- **同批修掉的两处既有问题**:停机时 ordering lock 用已取消的 context 去释放、必然失败,锁残留 2 分钟(改为脱离取消信号、2 秒上限);
+  rebalance 的 Cleanup 日志把切片下标当成分区号。
+- **合服工具同批改**:`tools/merge_zone` 的 P4 门禁与 `kafka_db_task_queues` 审计原来只查旧的共享 processing 键,键一拆它们会恒为 0、静默放行;
+  现在读登记表把每个实例的列表都查到。`docs/ops/merge-zone-runbook.md` 的手查命令同步更新,并更正一处一直写错的键名
+  (`kafka:processing:queue:…` 不存在,照着查恒为 0)。
+- **部署**:`db.yaml` 改 2 副本 + 显式 RollingUpdate(maxSurge 1 / maxUnavailable 0)+ preferred 反亲和 + 同文件 PDB + 优雅终止 45s;
+  本机 `go_services.ps1` 放开 db 的多开限制(默认仍起 1 个,`-Counts db=2` 可多开)。
+- **已做的静态核对**:`gofmt` 通过;PowerShell 语法解析 0 错误;`db.yaml` 可解析(Service / Deployment / PDB 三段,`env:` 块仍恰好一个,
+  发布脚本的环境变量注入不受影响)。
+- **未做(交 Codex,命令见设计文档 §3.5)**:`go/db`、`tools/merge_zone` 的 build / vet / test(新用例集中在 `retry_ownership_test.go`,用 miniredis);
+  两份 `*.tests.ps1`;本机两个 db 实例杀一个的实测;kind 上删 Pod 的实测。
+- **限制(设计文档 §3.4)**:① K8s 上所有 zone 的 db 共用一个消费组 `db_rpc_consumer_group`,任一 zone 的 db Pod 重启会让所有 zone 的存档消费
+  一起暂停几秒 —— 改成按 zone 命名要同步合服工具与多个运维脚本,**本次没做,单列后续**;② 并行度上限 = 分区数(10),不要配 HPA;
+  ③ 连接预算:2 副本 × 4 个 zone = 480 条,已贴近 MySQL 的 `max_connections = 500`;④ 读任务的缓存回写可能用旧值覆盖新缓存(既有问题,未改)。
+- **回退注意**:新版 → 旧版时,旧版看不到按实例的 processing 列表。正常停机没问题(收据已还回 ready);若新版是崩溃退出,回退前先起一个新版实例
+  让它回收,或手工把 `kafka:retry:processing:{topic}:*` 搬回 ready。
+- **Java 版(AGENTS §12)**:待做。本机没有 Java 仓库,未核对它的存档落库是否有对应的单实例假设;`PARITY.md` 未登记。
+- **注意**:契约测试基线仍因 deadline 门禁与 `data_service.yaml` 的 `MethodTimeouts` 冲突而失败(09-29 起,与本条无关)。

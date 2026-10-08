@@ -168,6 +168,37 @@ func dbRetryQueueKey(topic string) string      { return "kafka:retry:queue:" + t
 func dbRetryProcessingKey(topic string) string { return "kafka:retry:processing:" + topic }
 func dbDeadQueueKey(topic string) string       { return "kafka:dead:queue:" + topic }
 
+// 2026-10 起 go/db 可以多实例,processing 列表按实例拆开(go/db/internal/kafka/retry_ownership.go):
+//   - dbRetryProcessingKey(topic) 是旧版共享列表,新版只回收不写入(滚动升级期间仍可能非空);
+//   - 每个实例认领到 kafka:retry:processing:{topic}:{instanceID};
+//   - 实例登记在 ZSET kafka:retry:instances:{topic} 里,列表搬空之前不会被摘掉。
+//
+// 所以"processing 是否为空"必须把登记表里每个实例的列表都算上 —— 只看旧键,门禁会恒为 0、静默放行。
+func dbRetryInstancesKey(topic string) string { return "kafka:retry:instances:" + topic }
+func dbRetryInstanceProcessingKey(topic, instanceID string) string {
+	return dbRetryProcessingKey(topic) + ":" + instanceID
+}
+
+// dbTaskQueueKeysFor 列出"必须为空"的全部 db_task 队列键:ready、旧版共享 processing、死信,
+// 再加登记表里每个实例各自的 processing(纯函数,键名镜像由 merge_unit_test.go 钉住)。
+func dbTaskQueueKeysFor(topic string, instanceIDs []string) []string {
+	keys := []string{dbRetryQueueKey(topic), dbRetryProcessingKey(topic), dbDeadQueueKey(topic)}
+	for _, id := range instanceIDs {
+		keys = append(keys, dbRetryInstanceProcessingKey(topic, id))
+	}
+	return keys
+}
+
+// dbTaskQueueKeys 读登记表,返回 dbTaskQueueKeysFor 的结果。登记表读不到即报错(fail-closed):
+// 不知道有哪些实例,就不能宣称 processing 是空的。
+func dbTaskQueueKeys(ctx context.Context, rdb *redis.Client, topic string) ([]string, error) {
+	instanceIDs, err := rdb.ZRange(ctx, dbRetryInstancesKey(topic), 0, -1).Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return nil, fmt.Errorf("zrange %s: %w", dbRetryInstancesKey(topic), err)
+	}
+	return dbTaskQueueKeysFor(topic, instanceIDs), nil
+}
+
 // ── preflight 主体 ────────────────────────────────────────────
 
 // preflightDeps 是 preflight 需要的全部句柄。任何一个为 nil 的检查会被跳过
@@ -229,7 +260,11 @@ func runPreflight(ctx context.Context, d preflightDeps, p preflightParams) error
 	if d.sharedRdb == nil {
 		return errors.New("preflight P4: no shared (DB 0) Redis handle — cannot inspect kafka retry/dead queues")
 	}
-	for _, k := range []string{dbRetryQueueKey(topic), dbRetryProcessingKey(topic), dbDeadQueueKey(topic)} {
+	queueKeys, err := dbTaskQueueKeys(ctx, d.sharedRdb, topic)
+	if err != nil {
+		return fmt.Errorf("preflight P4: %w", err)
+	}
+	for _, k := range queueKeys {
 		n, err := d.sharedRdb.LLen(ctx, k).Result()
 		if err != nil && !errors.Is(err, redis.Nil) {
 			return fmt.Errorf("preflight P4: llen %s: %w", k, err)
@@ -239,7 +274,7 @@ func runPreflight(ctx context.Context, d preflightDeps, p preflightParams) error
 				"those writes never reached zone_%d_db. Drain or triage them before touching these players", k, n, p.zone)
 		}
 	}
-	log.Printf("preflight P4 OK: kafka retry/processing/dead queues for %s are empty", topic)
+	log.Printf("preflight P4 OK: kafka retry/processing/dead queues for %s are empty (%d keys incl. per-instance processing lists)", topic, len(queueKeys))
 
 	// P5 玩家锁。lock:player:{id} 在 mapping Redis(data_service router.go),
 	// player:{id}:__lock 在 data Redis —— 后者的地址由 -source-data-redis 决定,

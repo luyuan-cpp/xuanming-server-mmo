@@ -264,7 +264,7 @@ K8s 上 db Pod 因此 CrashLoop 时,集群里没有 db-migrate Job,db 镜像也�
 | G | guard | 0 个玩家 ⇒ 拒绝(除非 `-MergeAllowEmptySource`);源库有行却没有任何映射 ⇒ 拒绝;`-MergeExpectedSrcPlayers` 对不上 ⇒ 拒绝 | 同上 |
 | P2 | preflight | `scene_nodes:zone:{src}:load` 必须空(源区无活节点) | 同上 |
 | P3 | preflight | `db_task_zone_{src}[_g{gen}]` 在 `db_rpc_consumer_group` 上的 LAG = 0 | 同上 |
-| P4 | preflight | `kafka:retry/processing/dead:queue:db_task_zone_{src}` 三个列表都空 | 同上 |
+| P4 | preflight | `kafka:retry/processing/dead:queue:db_task_zone_{src}` 三个列表都空,且每个 db 实例各自的 `kafka:retry:processing:{topic}:{实例}` 也空 | 同上 |
 | P5 | preflight | 源区玩家没有在持的 `lock:player:{id}` | 同上 |
 | P6 | preflight | 源区玩家没有 `player:session:{id}` | 同上 |
 | P7 | preflight | 源区玩家**不在任何活队伍里**(`team:player:{id}` 的 tid 非 0 且 `team:rec:{tid}` 仍在)。队伍记录写着每个成员的 zone_id,合服不迁移 | 同上;处置见 §8 Step 1 |
@@ -402,7 +402,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit `
 | `source_scene_nodes` | `scene_nodes:zone:{src}:load` 必须空 | block | **必然 block**(在线),T-1 忽略 |
 | `online_presence` | `player:session:{pid}`(**DB 0**)必须为 0 | block | **必然 block**,T-1 忽略 |
 | `player_locks` | `lock:player:{id}`(mapping DB)+ `player:{id}:__lock`(data Redis,给了 `-MergeSourceDataRedis` 才查) | block | 可能 block,T-1 忽略 |
-| `kafka_db_task_queues` | `kafka:retry/processing/dead:queue:db_task_zone_{src}` 三个都空 | block | 在线时有也正常;**死信队列非空要在 T-1 查清** |
+| `kafka_db_task_queues` | `kafka:retry/processing/dead:queue:db_task_zone_{src}` 三个都空,且每个 db 实例各自的 processing 列表也空 | block | 在线时有也正常;**死信队列非空要在 T-1 查清** |
 | `friend` / `friend_request` | 住独占库 `mmorpg_friend`,按 player_id 索引,合服后自然存活;只看量级。库 / 表查不到算 INFRA | info | 必须不是 INFRA |
 | `guild_member` | 按 player_id 索引,合服后自然存活;只看量级。库 / 表查不成或孤儿查询失败算 **INFRA**;同时给 `-MergeSkipGuildMySql -MergeSkipGuildRank` 时报 **SKIPPED(warn)** | info | 必须不是 INFRA |
 | `player.name (global)` | 角色名在 data_service 全局库 `player_name` 全服唯一,合服无冲突、不改名;不查库,只出说明行(§4.4) | info | — |
@@ -486,10 +486,15 @@ curl -X POST https://<gateway>/admin/zones/<DST_ID>/maintenance \
    ```bash
    <kafka-consumer-groups.sh> --bootstrap-server <broker:9092> --describe --group db_rpc_consumer_group \
      | grep db_task_zone_<src>                                   # 每个分区 LAG == 0
-   redis-cli -h <shared-redis> -n 0 LLEN kafka:retry:queue:db_task_zone_<src>        # 三个都 == 0
-   redis-cli -h <shared-redis> -n 0 LLEN kafka:processing:queue:db_task_zone_<src>
+   redis-cli -h <shared-redis> -n 0 LLEN kafka:retry:queue:db_task_zone_<src>        # 下面每一个都 == 0
+   redis-cli -h <shared-redis> -n 0 LLEN kafka:retry:processing:db_task_zone_<src>   # 旧版共享 processing(新版只回收不写入)
    redis-cli -h <shared-redis> -n 0 LLEN kafka:dead:queue:db_task_zone_<src>
+   # 2026-10 起 db 可以多实例,每个实例有自己的 processing 列表。先列出登记过的实例名,再逐个查:
+   redis-cli -h <shared-redis> -n 0 ZRANGE kafka:retry:instances:db_task_zone_<src> 0 -1
+   redis-cli -h <shared-redis> -n 0 LLEN kafka:retry:processing:db_task_zone_<src>:<实例名>
    ```
+   - 〔2026-10-08 更正〕本节以前把第二个键写成了 `kafka:processing:queue:…`,那个键不存在,照着查恒为 0。
+   - merge_zone 的 P4 门禁与 `kafka_db_task_queues` 审计已经会把每个实例的列表都查到(`dbTaskQueueKeys`)。
    - 世代号 ≥ 2 的环境,topic 名带 `_g<gen>`。
    - **死信队列非空不会自己变空**:死信没有消费者。按其内容排查(常见是 `stale_topic` 或 `missing_required`,见 go/db 的 `db_placement_guard_total`),处理清楚再继续。
    - 冻结中的玩家(`frozen_deferred`)会让重试队列一直不空:合服前不应有进行中的搬库(§14.2)。

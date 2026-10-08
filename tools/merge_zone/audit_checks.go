@@ -155,8 +155,13 @@ func auditKafkaQueues(ctx context.Context, cfg auditConfig) ResourceAudit {
 	}
 	topic := dbTaskTopic(cfg.src, cfg.topicGeneration)
 	var total int64
-	details := make([]string, 0, 3)
-	for _, k := range []string{dbRetryQueueKey(topic), dbRetryProcessingKey(topic), dbDeadQueueKey(topic)} {
+	// 含每个 go/db 实例各自的 processing 列表(见 preflight.go 的 dbTaskQueueKeys)。
+	queueKeys, err := dbTaskQueueKeys(ctx, cfg.sharedRDB, topic)
+	if err != nil {
+		return infraAudit(r.Name, "%v", err)
+	}
+	details := make([]string, 0, len(queueKeys))
+	for _, k := range queueKeys {
 		n, err := cfg.sharedRDB.LLen(ctx, k).Result()
 		if err != nil && !errors.Is(err, redis.Nil) {
 			return infraAudit(r.Name, "llen %s: %v", k, err)

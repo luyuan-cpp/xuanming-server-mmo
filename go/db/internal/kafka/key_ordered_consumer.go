@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	db_proto "proto/db"
 	"runtime/debug"
 	"strconv"
@@ -88,6 +89,13 @@ type KeyOrderedKafkaConsumer struct {
 	retryDeadQueueKey    string
 	retryConsumeInterval time.Duration
 	retryMaxTimes        int
+
+	// retryOwner 管本实例对重试收据的归属(认领进自己的 processing 列表、续租、回收孤儿、停机归还),
+	// 见 retry_ownership.go。生产路径恒非 nil;只有直接拼结构体的单测是 nil,那时认领退回单纯的 RPOPLPUSH。
+	// retryProcessingKey 就是 retryOwner.processingKey —— 收据的 ack / 搬回 / 进死信都作用在本实例的列表上。
+	retryOwner *retryOwnership
+	// retryOwnerDone 在续租循环退出后关闭;Stop 等它退出之后才归还收据,否则循环会把刚摘掉的租约又登记回去。
+	retryOwnerDone chan struct{}
 
 	// placement 是按玩家落点选库的依赖(player-storage-placement.md §6),所有 worker 共用。
 	placement *placementRouter
@@ -868,6 +876,12 @@ func NewKeyOrderedKafkaConsumer(
 	if cfg.ZoneId == 0 {
 		return nil, errors.New("placement routing needs ZoneId > 0")
 	}
+	// 主机名取不到时由 resolveRetryInstanceID 报错(除非显式配置了 Kafka.RetryInstanceId)。
+	hostname, _ := os.Hostname()
+	retryInstanceID, err := resolveRetryInstanceID(cfg.ServerConfig.Kafka.RetryInstanceId, hostname, cfg.ListenOn)
+	if err != nil {
+		return nil, err
+	}
 
 	config := sarama.NewConfig()
 	config.Version = sarama.V3_5_0_0
@@ -887,7 +901,10 @@ func NewKeyOrderedKafkaConsumer(
 	wg := &sync.WaitGroup{}
 
 	retryQueueKey := fmt.Sprintf("kafka:retry:queue:%s", cfg.ServerConfig.Kafka.Topic)
-	retryProcessingKey := fmt.Sprintf("kafka:retry:processing:%s", cfg.ServerConfig.Kafka.Topic)
+	// processing 列表按实例隔离:同一个 zone 可以有多个 db 实例,谁认领的收据归谁管(retry_ownership.go)。
+	retryOwner := newRetryOwnership(redisClient, cfg.ServerConfig.Kafka.Topic, retryQueueKey, retryInstanceID,
+		retryLeaseDuration(cfg.ServerConfig.Kafka.RetryLeaseSeconds))
+	retryProcessingKey := retryOwner.processingKey
 	retryDeadQueueKey := fmt.Sprintf("kafka:dead:queue:%s", cfg.ServerConfig.Kafka.Topic)
 	lockerIns := locker.NewRedisLocker(redisClient)
 
@@ -914,6 +931,7 @@ func NewKeyOrderedKafkaConsumer(
 		retryDeadQueueKey:    retryDeadQueueKey,
 		retryConsumeInterval: 1 * time.Second,
 		retryMaxTimes:        3,
+		retryOwner:           retryOwner,
 		placement: &placementRouter{
 			rc:       placementRedis,
 			zone:     cfg.ZoneId,
@@ -987,10 +1005,22 @@ func (c *KeyOrderedKafkaConsumer) ensureWorker(partition int32) (*worker, error)
 }
 
 func (c *KeyOrderedKafkaConsumer) Start() error {
-	// db 服务在部署与本地脚本中均被强制为单实例。启动时先把上次进程崩溃
-	// 遗留的 processing 收据全部搬回 ready，恢复 at-least-once 交付。
-	if err := c.recoverRetryProcessing(); err != nil {
-		return fmt.Errorf("recover retry processing queue: %w", err)
+	// 同一个 zone 可以有多个 db 实例,所以启动时**不能**再把整个 processing 列表搬回 ready ——
+	// 那会把别的实例正在处理的收据搬走重做。现在每个实例只管自己认领的收据:先收回同名实例(上一次的自己)
+	// 遗留的、登记租约、回收一遍租约已过期的实例留下的孤儿,再开始消费(retry_ownership.go)。
+	// Redis 不可用时与以前一样拒绝启动:重试队列不可用就不该开始消费。
+	if c.retryOwner != nil {
+		if err := c.retryOwner.start(c.ctx); err != nil {
+			return fmt.Errorf("retry receipt ownership: %w", err)
+		}
+		c.retryOwnerDone = make(chan struct{})
+		go func() {
+			defer close(c.retryOwnerDone)
+			// 续租与孤儿回收的周期取租约的三分之一:允许连续两拍失败而不丢租约。
+			ticker := time.NewTicker(c.retryOwner.lease / 3)
+			defer ticker.Stop()
+			c.retryOwner.run(c.ctx, ticker.C)
+		}()
 	}
 
 	c.workersMu.Lock()
@@ -1040,25 +1070,15 @@ func (c *KeyOrderedKafkaConsumer) StartRetryConsumer() {
 		c.topic, c.retryConsumeInterval, c.retryMaxTimes)
 }
 
-// recoverRetryProcessing restores receipts left behind by a crashed singleton
-// db consumer. RPOPLPUSH keeps every payload present in at least one durable
-// list throughout recovery.
-func (c *KeyOrderedKafkaConsumer) recoverRetryProcessing() error {
-	var recovered int
-	for {
-		_, err := c.redisClient.RPopLPush(c.ctx, c.retryProcessingKey, c.retryQueueKey).Result()
-		if errors.Is(err, redis.Nil) {
-			if recovered > 0 {
-				logx.Errorf("recovered %d abandoned retry receipts: processing=%s ready=%s",
-					recovered, c.retryProcessingKey, c.retryQueueKey)
-			}
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		recovered++
+// claimRetryReceipt 把一条重试收据从 ready 原子地认领到**本实例的** processing 列表。
+// ready 为空时返回 redis.Nil。认领之后进程崩溃,收据留在本实例的 processing 列表里:
+// 同名实例重启时自己收回,否则等租约过期由别的实例回收(retry_ownership.go)。
+func (c *KeyOrderedKafkaConsumer) claimRetryReceipt() ([]byte, error) {
+	if c.retryOwner == nil {
+		// 没有归属登记(只有直接拼结构体的单测走到这里):退回单纯的原子认领。
+		return c.redisClient.RPopLPush(c.ctx, c.retryQueueKey, c.retryProcessingKey).Bytes()
 	}
+	return c.retryOwner.claim(c.ctx)
 }
 
 // moveRetryReceiptScript atomically publishes the replacement payload before
@@ -1136,9 +1156,8 @@ func (c *KeyOrderedKafkaConsumer) consumeRetryQueue() {
 // consumeOneRetryTask 认领并处理一条重试任务。返回 false 表示队列已空(或认领失败),
 // 调用方应结束本轮排空。
 func (c *KeyOrderedKafkaConsumer) consumeOneRetryTask() bool {
-	// Atomic ready -> processing claim. A process crash after this point leaves
-	// the only receipt in processing; Start() restores it before consuming again.
-	msgBytes, err := c.redisClient.RPopLPush(c.ctx, c.retryQueueKey, c.retryProcessingKey).Bytes()
+	// Atomic ready -> processing claim (see claimRetryReceipt for what happens to the receipt after a crash).
+	msgBytes, err := c.claimRetryReceipt()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return false
@@ -1640,8 +1659,8 @@ func (h *consumerGroupHandler) Cleanup(session sarama.ConsumerGroupSession) erro
 	claims := session.Claims()
 	if partitions, ok := claims[h.consumer.topic]; ok {
 		partitionIDs := make([]int32, 0, len(partitions))
-		for p := range partitions {
-			partitionIDs = append(partitionIDs, int32(p))
+		for _, partition := range partitions {
+			partitionIDs = append(partitionIDs, partition)
 		}
 		logx.Infof("consumer group releasing partitions: groupID=%s, topic=%s, partitions=%v",
 			h.consumer.groupID, h.consumer.topic, partitionIDs)
@@ -1893,16 +1912,23 @@ func acquireOrderingLock(ctx context.Context, w *worker, task *db_proto.DBTask) 
 	return lease, nil
 }
 
+// orderingLockReleaseTimeout bounds the lock release issued while shutting down or after a canceled claim.
+const orderingLockReleaseTimeout = 2 * time.Second
+
 func releaseOrderingLock(ctx context.Context, lease *orderingLease, task *db_proto.DBTask) {
 	if lease == nil {
 		return
 	}
 	close(lease.stop)
 	<-lease.done
-	// Release should still run if a Sarama claim context was canceled. The
-	// worker context remains alive across rebalances; token-checked Lua prevents
-	// this owner from deleting a successor's lock after TTL expiry.
-	if _, err := lease.result.Release(ctx); err != nil {
+	// Release must still run after the caller's context is canceled: the worker context is canceled by
+	// Stop() before in-flight tasks unwind, and releasing with it would always fail, leaving the lock to
+	// expire by TTL (2 minutes) while every other instance queues behind it. So detach from the
+	// cancellation and bound the call instead. Token-checked Lua prevents this owner from deleting a
+	// successor's lock after TTL expiry.
+	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), orderingLockReleaseTimeout)
+	defer cancel()
+	if _, err := lease.result.Release(releaseCtx); err != nil {
 		logx.Errorf("release cross-instance ordering lock failed: taskID=%s key=%d msgType=%s err=%v",
 			task.TaskId, task.Key, task.MsgType, err)
 	}
@@ -2176,9 +2202,28 @@ func saveToRetryQueue(ctx context.Context, redisClient redis.Cmdable, retryQueue
 func (c *KeyOrderedKafkaConsumer) Stop() {
 	c.cancel()
 	c.wg.Wait()
+	c.releaseRetryOwnership()
 	if err := c.consumer.Close(); err != nil {
 		logx.Errorf("close consumer group failed: groupID=%s, err=%v", c.groupID, err)
 	} else {
 		logx.Infof("consumer group closed: groupID=%s, topic=%s", c.groupID, c.topic)
+	}
+}
+
+// releaseRetryOwnership 在 worker 全部停下之后,把本实例没做完的重试收据还回 ready 并摘掉自己的租约,
+// 让别的实例立刻接手,而不是等租约过期。c.ctx 此时已取消,所以用一个新的、有时限的 context。
+// 失败只记日志:租约过期后别的实例照样会回收(最多晚一个租约周期)。
+func (c *KeyOrderedKafkaConsumer) releaseRetryOwnership() {
+	if c.retryOwner == nil {
+		return
+	}
+	if c.retryOwnerDone != nil {
+		<-c.retryOwnerDone
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), retryReleaseTimeout)
+	defer cancel()
+	if err := c.retryOwner.release(ctx); err != nil {
+		logx.Errorf("release retry receipt ownership failed (receipts stay recoverable until the lease expires): topic=%s err=%v",
+			c.topic, err)
 	}
 }
