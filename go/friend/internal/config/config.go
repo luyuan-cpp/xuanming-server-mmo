@@ -357,11 +357,12 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("Friend.RecommendMaxLimit(%d)不能大于 %d:单次推荐返回条数的硬天花板(契约 F1 §3.1)",
 			c.Friend.RecommendMaxLimit, recommendMaxLimitCeiling)
 	}
-	// 好友数上限的硬天花板:RecommendFriends 每次都先跑 mutual(好友的好友)召回,它约读 8×MaxFriends² 行。
-	// 配成 600 不会报错,只会让好友满员的玩家的推荐请求集体超时(实测 4.3–7.5 s,RequestBudget 默认 3500 ms)。
+	// 好友数上限的硬天花板:RecommendFriends 每次都先跑 mutual(好友的好友)召回,它的内层约读 3×MaxFriends² 行、
+	// 分组数也按平方增长。配大了不会报错,只会让好友满员的玩家每次推荐都付一次平方级的聚合(分组多到装不进内存
+	// 临时表时还要落盘),所以在这里封死;依据与实测见 maxFriendsCeiling。
 	if c.Friend.MaxFriends > maxFriendsCeiling {
-		return fmt.Errorf("Friend.MaxFriends(%d)不能大于 %d:好友推荐的二度关系查询约读 8×MaxFriends² 行,"+
-			"超过它就装不进请求预算(要调大先按 maxFriendsCeiling 的注释重测)", c.Friend.MaxFriends, maxFriendsCeiling)
+		return fmt.Errorf("Friend.MaxFriends(%d)不能大于 %d:好友推荐的二度关系查询约读 3×MaxFriends² 行、分组数按平方增长,"+
+			"超过它之后分组临时表的内存余量与冷缓存开销都没有复核过(要调大先按 maxFriendsCeiling 的注释重测)", c.Friend.MaxFriends, maxFriendsCeiling)
 	}
 	// CacheTTL ≤ 0 在 Redis 的 setex 语义下等于"永不过期":缓存与 MySQL 一旦不一致
 	// 就再也不会自愈(删了的好友一直留在列表里),只能靠清 Redis 修。
@@ -396,24 +397,33 @@ func (c *Config) Validate() error {
 
 // recommendMaxLimitCeiling 是 Friend.RecommendMaxLimit 的硬天花板(契约 F1 §3.1)。
 // 不做成配置项:它封的是单请求的返回条数,连带 random 兜底要凑的人数与在线状态查询的 key 数(都随它线性增长),
-// 它还进 data.RecommendAnchorWindow 的窗口预算。它**不**决定推荐的最坏开销:mutual 召回的 FOF 行数由
-// MaxFriends² 决定、limit 只贡献 +limit 次读,见 maxFriendsCeiling。
+// 它还进 data.RecommendAnchorWindow 的窗口预算。它**不**决定推荐的最坏开销:mutual 召回内层的 FOF 行数由
+// MaxFriends² 决定,外层的排除点查由窗口封顶,limit 不进读数上界,见 maxFriendsCeiling。
 const recommendMaxLimitCeiling uint32 = 20
 
 // maxFriendsCeiling 是 Friend.MaxFriends 的硬天花板。不做成配置项:它不是运维旋钮,而是"单次推荐的最坏开销
-// 必须能装进 RequestBudget"的结论。
+// 有实测依据、且能装进 RequestBudget"的结论。
 //
-// 推导:RecommendFriends 每次都先跑 data.RecommendByMutual(好友的好友),FOF 行数 R ≤ MaxFriends²,单次 Handler 读
-// ≤ 8R + 2F + 2 + limit(推导见该方法注释;GROUP BY 临时表留在内存时成立),本机约 1.1–1.6 µs/次。2026-09-29 在最坏
-// 形状(每个好友的好友互不相同,R = F²;另有 2 万人拉黑我、全服 1.5 万条 pending)上实测,本机同时有别的会话负载:
+// 推导:RecommendFriends 每次都先跑 data.RecommendByMutual(好友的好友)。它的内层(连接 + 分组)约读 3R 行,
+// FOF 行数 R ≤ MaxFriends²;外层的排除点查由排名窗口 W 封顶,与 MaxFriends 无关。单次 Handler 读 ≤ 3R + 6W + 3
+// (推导见该方法注释;GROUP BY 临时表留在内存时成立)。2026-10-08 在最坏形状(每个好友的好友互不相同,R = F²)上
+// 实测,热缓存,limit = 20(读数是确定的;耗时随同机负载浮动,另一轮实测 300 是 0.10–0.11 s、400 是 0.17–0.21 s):
 //
-//	MaxFriends 200:   319,002 次读,0.44–0.51 s      300:   718,502 次,0.81–1.05 s
-//	           400: 1,278,002 次,1.39–1.68 s        470: 1,961,415 次,2.4–4.0 s(GROUP BY 临时表已转存磁盘)
-//	           600: 3,073,565 次,4.3–7.5 s(越过默认 RequestBudget 3500 ms)
+//	MaxFriends 200: 121,127 次读,0.09–0.12 s      300:   271,127 次,0.15–0.21 s
+//	           400: 481,127 次,0.46–0.56 s        470:   860,390 次,0.67–0.77 s(GROUP BY 临时表已转存磁盘)
+//	           600: 1,277,690 次,1.05–1.18 s(临时表在磁盘上)
 //
-// 取 300:mutual 最坏约占预算的三分之一,余下留给 random 兜底(最坏约 20 万次索引读,见 data.RecommendAnchorWindow)、
-// 在线状态查询与冷缓存;候选分组 ≤ 9 万个,离 MySQL 默认 tmp_table_size(16 MiB)下实测仍装得进内存临时表的
-// 约 16 万个还有近一倍余量,上面那条读数上界成立。
-// 调大它之前:在目标库上按 data.RecommendByMutual 注释的最坏形状重测上表;MaxFriends 也在 data.RecommendAnchorWindow
-// 的窗口预算里(TestRecommendAnchorWindowCoversExclusionBudget),两笔账一起复核。
+// 取 300 的三条依据:
+//   - 候选分组 ≤ 9 万个,离 MySQL 默认 tmp_table_size(16 MiB)下实测仍装得进内存临时表的约 16 万个还有近一倍余量,
+//     上面那条读数上界成立;470 起临时表落盘,开销不再有这条式子兜底。
+//   - random 兜底的窗口生产最坏约 W × MaxFriends 次索引读(见 data.RecommendAnchorWindow 的"代价"),300 时约 31 万次;
+//     与 mutual 的 27 万次合计不到 60 万次读,给冷缓存(排除表大于 buffer pool 时 mutual 最坏约 1 s,见
+//     data.RecommendByMutual 的实测表)与在线状态查询留足余量。
+//   - MaxFriends 也在 data.RecommendAnchorWindow 的窗口预算里:300 时预算是 854,仍在 1024 之内。
+//
+// 沿革:2026-09-29 定这个值时 mutual 还是"每个 FOF 行五次点查"(≤ 8R + 2F + 2 + limit;300 时 718,502 次读、
+// 0.81–1.05 s,600 时 4.3–7.5 s、越过预算)。2026-10-08 改成排名窗口后同样的 MaxFriends 便宜了很多,天花板没有跟着
+// 放宽 —— 放宽它要在目标库上重测上表并确认分组仍在内存,而目前没有这个需求。
+// 调大它之前:在目标库上按 data.RecommendByMutual 注释的最坏形状重测上表;两笔账(本值与窗口预算,
+// TestRecommendAnchorWindowCoversExclusionBudget)一起复核。
 const maxFriendsCeiling uint32 = 300

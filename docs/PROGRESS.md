@@ -6540,3 +6540,71 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
   - 另:本条相关的 `client_endpoint_test` 同样要求 fail=0;e2e-1 没有单测,scene 只能验证编译,行为留给冒烟;
     Unity EditMode `MmorpgClient.Tests.EditMode.Battle` 以 results.xml 为准;scene 相关工程 MSBuild 串行 `/m:1`。
 - **Java 版(AGENTS §12)**:D72 口径细化为「PREPARING 不推重连提示,升级到 FIGHTING 时按会话号补推」,Java 版做战斗时按此对齐。
+
+## 2026-10-08 friend 收尾:第 7 / 9 步实跑、全量 EXPLAIN、好友推荐两条查询有界化(Claude;SQL 级实测,10-08 的 Go 改动未编译未跑测试)
+
+这一条补记 09-25 起 friend 这条线上的全部工作(之前只写进了交接文档 `docs/handoff/friend-handoff-20260920.md` §9.4 / §9.5,
+PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修复尚未提交"的说法由本条更正(旧条目不改)。
+
+- **第 7 步(2026-09-25,机器 A,按用户指示实跑)**:`mmorpg_friend` 删库重建后 `friend.exe -migrate` 退出 0,建出 5 张表
+  (含 `schema_migrations`),唯一索引只有各表 PRIMARY,`friend_request` / `friend_capacity` 的列与索引齐全,第二次执行 0 条语句;
+  `-allow-modify` 不带 `-migrate` 以 1 退出。常驻启动:横幅、`mysql:` 行不含密码、`friend_redis: shared-fallback`、
+  `sweep: mode=report_only`、`:9180/metrics` 五个指标、etcd NodeInfo 的 `endpoint` 与 `grpcEndpoint` 都在;发真 Ctrl+C 后
+  先注销再排空,3.4 s 内退出。
+- **第 9 步(同日)**:两区栈上 robot `friend-smoke` 退出 0,`FRIEND_SMOKE_OK ... cross_zone=true`(A / C 在 zone 1、B 在 zone 2,
+  两个 gate 不同),两次跨区推送 `outcome=ok`,第 6 步信封 tip 1003 且 friend 日志有"拒绝客户端调用非客户端方法",连跑两轮都过。
+  首跑挂在 B 登录,原因是环境:`zone_2_db.player_database` 缺列(db 启动期 DDL 关闭),用 `go/db/cmd/migrate -command up`
+  (不带 `-allow-modify`)补齐后通过。两区起法的三个坑(z2 端口位移撞 7000、命令主题 g2 要预建、每个 zone 的库要单独迁移)
+  记在交接文档 §9.4「进度续(2026-09-25)」。**偏离 AGENTS §10.1**:为跑冒烟把 robot 与 `go/db/cmd/migrate` 编到了 `%TEMP%`
+  (不在仓里),是用户当时点名要求的实跑;须以 Codex 的正式构建为准。
+- **全量 EXPLAIN(2026-09-28)**:在 5 万玩家 / 100 万边 / 25 万申请的只读基线库(MySQL 26.7.0)上对 `go/friend/internal/data`
+  的约 30 条 SQL 逐条 `EXPLAIN`。全部锁定语句都是完整主键点锁(`const` / `range`,`rows=1`);容量行回收候选与终态申请清理候选
+  都是覆盖索引 `range`、实际读 1000 行即止。**抓到两条推荐查询没有上界**(注释却写"绝不全表扫"):
+  - `recommendAnchor`(random 兜底):扫描量 = pivot 之后的全部玩家数(5 万玩家时 49,899 个分组 / 1.1 s)。09-28 改成
+    "pivot 起 W=1024 个去重 id 的窗口 + 五条按方向拆开的完整主键 `NOT EXISTS`",同库约 2,151 次读 / 3 ms。
+  - `RecommendByMutual`(FOF 召回,普通推荐每次先跑它):最初写法在对抗库上 9,215,314 次读 / 4.6–5.1 s。09-29 改成
+    "每个 FOF 行五次主键点查"(读数有界);**10-08 再改**成"内层派生表只碰 friend 表、按共同好友数排名取前 W=1024 名,
+    外层只对这 W 名点查" —— 09-29 版的点查次数随 FOF 行数增长,其中落在各候选自己页上的那部分在排除表大于 buffer pool
+    的库上(`friend_request` 1.9 GB / buffer pool 128 MB)实测 **38–51 s / 次**;改后同库 **0.09–0.12 s**,窗口里每人做满点查的
+    最坏情况约 1 s、约 2,000 次页读。上界 3R + 6W + 3(R ≤ MaxFriends²),与全服 pending 数、拉黑我的人数、表规模都无关。
+- **对外可见的变化**(都不改协议、tip 码、配置表):
+  - 两条推荐查询都只在一个 1024 人的窗口里挑:窗口被排除者占满时返回偏少,mutual 偏少由 random 兜底补足。候选不多于窗口时
+    结果与改前逐行相同(逐库比对过)。
+  - mutual 的窗口被占满时,random 兜底补进来的人可能是窗口之外、实际有共同好友的人,而兜底不数共同好友、一律填 0 ——
+    所以这种情况下 `mutual_friends = 0` 不再保证"没有共同好友"。默认上限下要有约 270 个以上"拉黑了我"的人挤在排名头部才会
+    触发;要保住原含义得在 logic 层给兜底结果补数一次共同好友,**没有做**(写在 `RecommendCandidate` 的注释里)。
+  - `config.Validate` 新增 `Friend.MaxFriends ≤ 300` 的硬天花板(09-29 加,`maxFriendsCeiling`),超过即拒绝启动;默认 200
+    与 K8s ConfigMap(取自 `etc/friend.yaml`)都不受影响。
+- **改动文件**:`go/friend/internal/data/recommend_repo.go`、`recommend_repo_mysql_test.go`、`go/friend/internal/config/config.go`、
+  `config_test.go`、`go/friend/etc/friend.yaml`(仅注释)、`docs/handoff/friend-handoff-20260920.md` 等 friend 文档。
+- **测试**:推荐查询的扫描上界 / 计划 / 窗口回归共 11 条 —— T1–T4(`TestRecommendAnchor_ReadsBoundedByWindowNotPoolSize` /
+  `_StopsAtWindowWhenSaturated` / `_WindowCoversBoundedExclusionBudget` / `_PlanIsPerRowPrimaryKeyLookups`)、M1 / M2 / M2b
+  (`TestRecommendByMutual_ReadsBoundedByFOFRowsNotGlobalSets` / `_PlanIsPerRowPrimaryKeyLookups` / `_JoinOrderSurvivesStaleStatistics`)、
+  10-08 新增 W1–W4(`_ExclusionLookupsBoundedByWindow` / `_StopsAtWindowWhenSaturated` / `_TiesAreShuffledPerCall` /
+  `_WindowMembershipRotatesPerCall`);config 包有一条窗口预算对账用例与一条天花板边界用例。
+  **10-08 改过的 `recommend_repo.go`、M1 / M2 / M2b 的新口径与新增的 W1–W4 未经编译与运行**;T1–T4 与 config 的用例本批没有
+  改代码,之前的运行记录见上面 2026-09-29「数据层死锁审计收口」条。10-08 的红绿证据只有 SQL 级重放(同一份夹具、同一种测量):
+  例如 W1 夹具上 09-29 版 80,946 次读 > 上界 36,915,现在 30,871。测量辅助函数 `measureSessionHandlerReads` 同批改成
+  "两次读数不等时再测一对,最多三轮"(buffer pool 吃紧时五条排除的先后会翻,读数随之变,不是缺陷)。
+  交付前做过一轮四视角评审(静态过编译 / SQL 语义与上界 / 测试回归力 / 文档核对),6 条 P2 与各条 P3 已按评审修完,
+  其中"静态过编译"一项的结论是没有发现编译或 vet 问题 —— 这是阅读结论,不能代替 Codex 实编。
+- **给 Codex**:命令与通过标准见交接文档 §9.5 表后的「第 8 条的 Codex 命令(2026-10-08)」小节(`go/friend` 下 gofmt / build / vet /
+  不设 DSN 的全量 `go test`,再设 `FRIEND_TEST_MYSQL_DSN` + `FRIEND_REQUIRE_MYSQL_TESTS=1` 跑推荐相关的 19 条与整包;运行期间
+  同实例不得有会话执行 `FLUSH STATUS`,也不要有别的大查询)。通过后重编 `friend.exe`、重跑 `friend-smoke`。
+- **前提与剩余风险**(都写在 `recommend_repo.go` 注释里):GROUP BY 临时表要留在内存(默认 `tmp_table_size` 下 MaxFriends ≤ 约 400);
+  依赖传统优化器 —— `hypergraph_optimizer=on` 时提示失效,某种陈旧统计状态下退化为全表扫,部署不要打开;TiDB 忽略 SEMIJOIN
+  提示,迁移时要按它自己的计划重新核对;`recommendAnchor` 在 friend 表持久统计退化到 ≤ 1 行时窗口退化为全索引扫,用例进不去
+  这个状态,生产上只靠 InnoDB `auto_recalc`(交接文档 §9.5 第 9 条,未做兜底)。
+- **提交状态(写入本条时)**:09-21 条的死锁修复(6 个代码文件与事故报告)已随 2026-09-21 的自动保存 `9cef7b2ec` 进库,
+  ODKU 与 DSN 层 RC 在 `ff39a13f1`。推荐查询 09-28 / 09-29 的部分已随 `24dd3e6c5` / `09f71f9d5` / `f4a24c21e` / `524ad0216` /
+  `a8c2d44a8`(每小时自动保存)与 `ccafe300c` 进 main。10-08 的部分在隔离工作树分支 `fix/friend-mutual-window` 上完成、
+  与本条同一个提交;是否已进 origin/main 以 `git log -- go/friend/internal/data/recommend_repo.go` 为准。
+  机器 A 主工作区另有一个只在本地的在途提交 `6af8b876af`(共 13 个文件,其余是别的会话的部署与 kafkautil 改动),其中
+  go/friend 只有 `recommend_repo.go` 一个文件,是 10-01 会话中断时留下的半成品(`RecommendByMutual` 的 SQL 已改成窗口版,
+  注释与测试还是旧的);10-08 的提交是它的完整版,那段 SQL 逐字相同 —— 主工作区合并时该文件取 origin 的版本即可。
+- **本机清理**:核对用的一次性库(`friend_explain_scratch`、`friend_explain_adv_*`、`friend_it_scratch`)已从机器 A 的 MySQL 删除;
+  `mmorpg_friend` 与两个 zone 库没有动。
+- **Java 版(AGENTS §12)**:**待做**。本条是服务端内部的查询改写,不涉及客户端契约。按上面 2026-09-29「Java 版服务器启动」条与
+  同日「battle 直连收缩」条的 Java 小节,Java 版(0.1.0-SNAPSHOT,截至 09-29 的记录;机器 A 上没有 Java 仓,未复核当前版本)
+  只有「登录 → 进场景」竖切、没有 friend;做到好友推荐时按同一口径对齐(候选查询要有由 SQL 结构给出、与玩家总数无关的上界,
+  并配读数上界回归)。`PARITY.md` 由 Java 仓会话登记,本条没有改它。

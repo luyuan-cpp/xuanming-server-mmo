@@ -119,7 +119,7 @@ Kafka:
 # 每一项为 0 都会被 config.Validate 拒绝(为 0 时的静默故障见 config.go 各字段注释)。
 Friend:
   # 单玩家好友数硬上限(friend_capacity.friend_count 的封顶值)。config.Validate 另有硬天花板 300:
-  # 好友推荐的二度关系查询约读 8×MaxFriends² 行,开销按平方增长(推导与实测见 config.go 的 maxFriendsCeiling)。
+  # 好友推荐的二度关系查询约读 3×MaxFriends² 行,开销按平方增长(推导与实测见 config.go 的 maxFriendsCeiling)。
   MaxFriends: 200
   # 出站 pending 申请上限:挡"一个人给全服发好友申请"。
   MaxPendingRequests: 50

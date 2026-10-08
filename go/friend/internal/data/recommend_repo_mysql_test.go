@@ -5,9 +5,9 @@ package data
 // # 为什么必须打真库
 //
 // recommend_repo.go 的四类业务排除(自己 / 已是好友 / 任一方向拉黑 / 任一方向仍 pending 的申请)
-// **内联写在两条 query 字符串里、各一份**,列名还不一样:RecommendByMutual 用 `f2.friend_player_id`,
-// recommendAnchor 在五处 NOT EXISTS 里必须写派生表别名的全限定 `c.player_id`(裸 `player_id` 会解析到
-// 子查询自己的表上,条件变成"自己拉黑自己",排除静默失效)。拼错列名在 Go 侧完全静态无感,
+// **内联写在两条 query 字符串里、各一份**,列名还不一样:两条都在五处 NOT EXISTS 里写派生表别名的全限定列 ——
+// RecommendByMutual 是 `c.candidate_id`(自排除在内层,写 `f2.friend_player_id <> ?`),recommendAnchor 是 `c.player_id`
+// (裸 `player_id` 会解析到子查询自己的表上,条件变成"自己拉黑自己",排除静默失效)。拼错列名在 Go 侧完全静态无感,
 // 编译、vet、mock 都看不见 —— 只有让 MySQL 真的解析并执行这两条 SQL 才验得到。
 // 所以两条 query **分别**验一遍,不因为"长得一样"就只验一条。
 //
@@ -16,13 +16,16 @@ package data
 // robot 冒烟的"推荐不含已拉黑的 C"在三账号数据集下结构性不可能失败(C 本来就不在候选池里),
 // 那是已登记的假绿,这里不许重蹈。本文件的纪律:
 //
-//   - 每个"应被排除的人"都**同时满足成为候选的全部条件**(mutual:是我好友的好友;anchor:在 friend 表里
+//   - 每个"应被排除的人"都**同时满足成为候选的全部条件**(mutual:是我好友的好友,且排名落在前 RecommendAnchorWindow
+//     名之内 —— seedMutualGraph 与 seedMutualAdversarialGraph 的候选都远少于 W;anchor:在 friend 表里
 //     有出边、id ≥ pivot,且落在 pivot 起的前 RecommendAnchorWindow 个去重 id 内 —— seedAnchorGraph 的池只有
 //     十来个人、远小于 W;WindowCoversBoundedExclusionBudget 与 PlanIsPerRowPrimaryKeyLookups 的关系人都紧贴
 //     pivot、都在窗口里),他不出现的**唯一**原因只能是那一条排除子句;
 //   - 例外:TestRecommendAnchor_StopsAtWindowWhenSaturated **有意**把一半"拉黑了我"的人(pivot+W..pivot+2W-1)
 //     和 5 个合格者放在窗口之外。它断言的是窗口语义(窗口外的人一律不看、不推荐),不是某条排除子句,
 //     所以不受上一条"唯一原因"纪律约束;它自己的正向对照(从窗口外那 5 人起扫必须全部返回)另行保证夹具造对了;
+//     TestRecommendByMutual_StopsAtWindowWhenSaturated 同理:断言的是"排名窗口之外的合格候选不被返回",
+//     尾部那 8×W 个合格者不出现的原因是窗口,不是排除子句;
 //   - 断言的是**整个结果集**(ElementsMatch / Equal),不是"不包含某人":后者在查询整体返回空时照绿;
 //   - 旁边放**反向对照**:别人之间的拉黑 / pending、我与他之间**已终态**的申请,都不许把人排除掉 ——
 //     否则"把 NOT EXISTS 写成恒真"这种坏实现也能通过"被排除的人没出现"。
@@ -250,7 +253,7 @@ func TestRecommendByMutual_HonorsCallerExcludeAndLimit(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, got, 2)
 
-	// exclude 与 limit 同时给:占位符顺序是 7 个 playerID → exclude → LIMIT,三段都在场时再验一次。
+	// exclude 与 limit 同时给:占位符顺序是 playerID ×2 → 窗口 W → playerID ×5 → exclude → LIMIT,三段都在场时再验一次。
 	got, err = repo.RecommendByMutual(ctx, c.me, []uint64{c.plain}, 1)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
@@ -561,34 +564,49 @@ func sessionHandlerReads(t *testing.T, ctx context.Context, db *sql.DB) (connID,
 // 先空跑一次、再连测两次并要求两次读数相同,防的是**别的会话的 FLUSH STATUS**:它会把同一实例上所有活动会话的计数
 // 一起清零(2026-09-29 评审在 MySQL 26.7.0 上实测,约 30 次重放里有 5 次被别的会话打低)。清在两次 SHOW 之间,后读数
 // 小于前读数 —— 不拦的话 uint64 差值回绕成约 1.8e19,被误报成"缺陷复发";清在查询中途,读数偏小,可能掩盖回退。
-// 同一条纯读查询在同一份数据、同一份统计上的读数是确定的(本文件各用例 2026-09-28 / 09-29 的 SQL 级重放逐次相同),
-// 所以两次不同只能是测量被干扰。空跑让表首次打开时的十几次额外 read_key(冷表)不落进任何一次测量。
-// 返回第一次测量的结果。
+// 空跑让表首次打开时的十几次额外 read_key(冷表)不落进任何一次测量。
+//
+// 两次读数不同还有第二个原因,不是干扰而是计划本身换了:五条排除反连接的代价相同,它们的先后由优化器按代价排,
+// 代价里含"索引有多少在 buffer pool 里"。同实例上别的读负载把夹具表的页挤出去时先后会翻,命中的那条排除从第 k 层
+// 换到另一层,读数随之变(窗口饱和的用例每层差约 W 次;2026-10-08 评审实测:同一份数据、同一份统计,
+// 35,891 ↔ 34,867)。翻转是一次性的,翻完即稳定,所以两次不等时再测一对,最多 measureRounds 轮;
+// 每一轮的读数都记进日志。几轮都不等才判失败。返回"相邻两次相等"那一对里第一次测量的结果与读数。
 func measureSessionHandlerReads(t *testing.T, ctx context.Context, db *sql.DB,
 	call func() ([]RecommendCandidate, error)) ([]RecommendCandidate, uint64) {
 	t.Helper()
-	const disturbed = "会话 Handler 计数被外部干扰(最可能是同一实例上别的会话执行了 FLUSH STATUS,它会清零所有会话的计数)," +
-		"本次读数无效:确认没有并发的 FLUSH STATUS 后重跑,不要放宽断言"
+	const (
+		measureRounds = 3
+		disturbed     = "会话 Handler 计数被外部干扰(最可能是同一实例上别的会话执行了 FLUSH STATUS,它会清零所有会话的计数)," +
+			"本次读数无效:确认没有并发的 FLUSH STATUS 后重跑,不要放宽断言"
+		unstable = "同一条纯读查询连测 %d 轮、每轮两次,读数始终不等(最后一轮 %d / %d)。两种可能:别的会话在执行 FLUSH STATUS;" +
+			"或者同实例上有别的读负载在不断把夹具表的页挤出 buffer pool、反连接的先后来回翻。" +
+			"在没有其它负载的实例上重跑,不要放宽断言"
+	)
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 	_, err := call() // 空跑,不计数
 	require.NoError(t, err)
-	var got []RecommendCandidate
-	var reads [2]uint64
-	for i := range reads {
-		connBefore, readsBefore := sessionHandlerReads(t, ctx, db)
-		res, err := call()
-		require.NoError(t, err)
-		connAfter, readsAfter := sessionHandlerReads(t, ctx, db)
-		require.Equal(t, connBefore, connAfter, "Handler 计数跨了会话(连接被重建),本次读数无效")
-		require.GreaterOrEqual(t, readsAfter, readsBefore, "第 %d 次测量:后读数小于前读数。%s", i+1, disturbed)
-		reads[i] = readsAfter - readsBefore
-		if i == 0 {
-			got = res
+	for round := 1; ; round++ {
+		var got []RecommendCandidate
+		var reads [2]uint64
+		for i := range reads {
+			connBefore, readsBefore := sessionHandlerReads(t, ctx, db)
+			res, err := call()
+			require.NoError(t, err)
+			connAfter, readsAfter := sessionHandlerReads(t, ctx, db)
+			require.Equal(t, connBefore, connAfter, "Handler 计数跨了会话(连接被重建),本次读数无效")
+			require.GreaterOrEqual(t, readsAfter, readsBefore, "第 %d 轮第 %d 次测量:后读数小于前读数。%s", round, i+1, disturbed)
+			reads[i] = readsAfter - readsBefore
+			if i == 0 {
+				got = res
+			}
 		}
+		if reads[0] == reads[1] {
+			return got, reads[0]
+		}
+		t.Logf("第 %d 轮(共 %d 轮)连测两次读数不等(%d / %d):反连接的先后可能刚翻过", round, measureRounds, reads[0], reads[1])
+		require.Less(t, round, measureRounds, unstable, measureRounds, reads[0], reads[1])
 	}
-	require.Equal(t, reads[0], reads[1], "同一条纯读查询连测两次读数不同。%s", disturbed)
-	return got, reads[0]
 }
 
 // recommendAnchorWithReads 用 measureSessionHandlerReads 测一次 recommendAnchor。
@@ -839,12 +857,16 @@ func TestRecommendAnchor_PlanIsPerRowPrimaryKeyLookups(t *testing.T) {
 		"pivot+31 / pivot+33 只有终态申请,必须出现;f / b_out / b_in / r_out(+30)/ r_in(+32)的关系人必须被排除")
 }
 
-// ── RecommendByMutual 扫描上界回归(2026-09-28 评审缺陷:OR 形 NOT EXISTS 让每个 FOF 行扫一遍全服 pending)──────
+// ── RecommendByMutual 扫描上界回归 ──────
+// 两个缺陷各有回归:
+//   - 2026-09-28 评审缺陷:OR 形 NOT EXISTS 让每个 FOF 行扫一遍全服 pending(读数随全服集合增长)→ M1 / M2 / M2b;
+//   - 2026-10-08 缺陷:09-29 的修法对**每个 FOF 行**做五次点查,其中两次落在各候选自己的页上,排除表大于 buffer pool
+//     时单次调用 38–51 s → 现在只对排名前 RecommendAnchorWindow 的候选点查,W1 / W2 / W3 / W4 守这个窗口。
 //
 // 四类排除 + 调用方 exclude + COUNT 排序的语义由上面的 TestRecommendByMutual_AppliesAllFourExclusions /
-// TestRecommendByMutual_HonorsCallerExcludeAndLimit 覆盖(它们走的就是生产 SQL,改写后原样适用),这里不重复;
-// 下面三条守的是改写本身:读数上界、计划形状、统计陈旧时的连接顺序。三条共用 seedMutualAdversarialGraph,
-// 读数上界用例顺带在这份大夹具上把全量结果逐人核对一遍。
+// TestRecommendByMutual_HonorsCallerExcludeAndLimit 覆盖(它们走的就是生产 SQL,候选远少于窗口,改写后原样适用),
+// 这里不重复。M1 / M2 / M2b 共用 seedMutualAdversarialGraph,M1 顺带在这份大夹具上把全量结果逐人核对一遍;
+// W1 / W2 共用 seedMutualWindowGraph;W3 / W4 的夹具很小,在用例里内联构造。
 
 // recommendBulkRejectedRow 是一条终态申请行:status=3 即 rejected,与 testStatusRejected 同值。
 const recommendBulkRejectedRow = "(?, ?, 1, 3, 1)"
@@ -980,9 +1002,15 @@ func seedMutualAdversarialGraph(t *testing.T, ctx context.Context, db *sql.DB) m
 	return g
 }
 
-// readBound 是 RecommendByMutual 注释里推出的 Handler 读上界 8R + 2F + 2 + limit,只由我的好友数与 FOF 行数决定。
-func (g mutualAdversarialGraph) readBound(limit uint32) uint64 {
-	return 8*g.fofRows + 2*g.friendCount + 2 + uint64(limit)
+// mutualReadBound 是 RecommendByMutual 注释里推出的 Handler 读上界 3R + 6W + 3:只由 FOF 行数 R 与窗口 W 决定,
+// 与我的好友数(式子里消掉了)、全服 pending 数、拉黑我的人数都无关。
+func mutualReadBound(fofRows uint64) uint64 {
+	return 3*fofRows + 6*uint64(RecommendAnchorWindow) + 3
+}
+
+// readBound 是本夹具的读数上界(本夹具 R=660:3×660 + 6×1024 + 3 = 8,127)。
+func (g mutualAdversarialGraph) readBound() uint64 {
+	return mutualReadBound(g.fofRows)
 }
 
 // assertCandidates 逐人核对结果:不重复、不含任何应被排除的人、共同好友数对;wantAll 时还要求一个合格者都不缺。
@@ -1023,83 +1051,114 @@ func recommendByMutualWithReads(t *testing.T, ctx context.Context, db *sql.DB, r
 	})
 }
 
-// assertMutualReadsAndResult 按生产上限 limit=20 调一次,断言结果与读数上界;M1 与 M2b 共用。
+// assertMutualReadsAndResult 断言读数上界与结果;M1 与 M2b 共用。
+//
+// 读数按 limit = W 测,不按生产上限 20 测:同数候选每次调用进窗口前列的人不同(打散键),按 20 测时"凑满之前碰到几个
+// 被排除者"是随机的,读数逐次浮动(2026-10-08 本夹具连测 30 次:2,057–2,062),measureSessionHandlerReads 的
+// "连测两次读数相同"会被打破。limit = W 时窗口里每个候选都被判到底(命中第一条排除,或五条都不命中),只要五条
+// 反连接的先后不变读数就是确定的(先后变了差几次,见 measureSessionHandlerReads),也正是上界里 5W 那一项的最坏形态。
+// 本夹具候选数少于 W,所以这一遍同时是全量结果。
 func assertMutualReadsAndResult(t *testing.T, ctx context.Context, db *sql.DB, repo *FriendRepo, g mutualAdversarialGraph) {
 	t.Helper()
-	const limit = mutualAdvProductionLimit
-	bound := g.readBound(limit)
+	bound := g.readBound()
 	// 自检:拉黑我的人数与全服 pending 数都要大于上界 —— 任何"把这两个集合之一读一遍"的计划都必然越界,
 	// 读数断言才对"退回按集合做排除"有鉴别力。
 	require.Greater(t, g.blockersOfMe, bound, "前置条件:拉黑我的人数必须大于读数上界")
 	require.Greater(t, g.globalPending, bound, "前置条件:全服 pending 数必须大于读数上界")
+	require.Less(t, len(g.want)+len(g.excluded), int(RecommendAnchorWindow),
+		"前置条件:本夹具的候选数必须少于窗口,limit = W 的那一遍才是全量结果")
 
-	got, reads := recommendByMutualWithReads(t, ctx, db, repo, g.me, g.callerExclude, limit)
-	t.Logf("RecommendByMutual 会话 Handler_read_* 增量 = %d(上界 8R+2F+2+limit = %d;F=%d R=%d;拉黑我 %d 人,全服 pending %d 条)",
-		reads, bound, g.friendCount, g.fofRows, g.blockersOfMe, g.globalPending)
+	all, reads := recommendByMutualWithReads(t, ctx, db, repo, g.me, g.callerExclude, RecommendAnchorWindow)
+	t.Logf("RecommendByMutual(limit = W)会话 Handler_read_* 增量 = %d(上界 3R+6W+3 = %d;F=%d R=%d W=%d;拉黑我 %d 人,全服 pending %d 条)",
+		reads, bound, g.friendCount, g.fofRows, RecommendAnchorWindow, g.blockersOfMe, g.globalPending)
+	assert.LessOrEqual(t, reads, bound,
+		"读数越过了由 FOF 行数与窗口推出的上界:排除判定又在按全服 pending / 拉黑我的人的集合做了(2026-09-28 缺陷复发)")
+	assert.Len(t, all, len(g.want), "候选少于窗口时必须一个合格者都不缺")
+	g.assertCandidates(t, all, true)
+
+	// 生产上限:取满、star 排第一。
+	const limit = mutualAdvProductionLimit
+	got, err := repo.RecommendByMutual(ctx, g.me, g.callerExclude, limit)
+	require.NoError(t, err)
 	require.Len(t, got, limit, "合格候选远多于 limit,必须取满")
 	assert.Equal(t, g.star, got[0].CandidatePlayerID, "共同好友数最多的 star 必须排第一(ORDER BY mutual DESC)")
 	g.assertCandidates(t, got, false)
-	assert.LessOrEqual(t, reads, bound,
-		"读数越过了由好友数与 FOF 行数推出的上界:排除判定又在按全服 pending / 拉黑我的人的集合做了(2026-09-28 缺陷复发)")
 }
 
 // assertMutualPlanIsPerRowPrimaryKeyLookups 对生产 SQL 原文(recommendByMutualStatement 的产物)做 EXPLAIN,
-// 断言上界所依赖的计划形状:恰好 f1 / f2 / f / b_out / b_in / r_out / r_in 七张表;f1 是驱动表,按 player_id = 常量做
-// 主键前缀 ref;f2 紧随其后,按 f1.friend_player_id 做主键前缀 ref;五个排除都是 eq_ref / PRIMARY / key_len=16;
-// 七张表的 possible_keys 都只有 PRIMARY;没有 MATERIALIZED、没有 <subqueryN>、没有 hash join。
+// 断言上界所依赖的计划形状(2026-10-08 在 MySQL 26.7.0 上核对的原样):
+//   - 外层恰好六行:驱动行是物化的派生表 <derivedN>(窗口),其余五行是 f / b_out / b_in / r_out / r_in,
+//     每行都是 eq_ref / PRIMARY / key_len=16(每个窗口内候选一次单行点查;五行的先后由优化器按统计排,不断言);
+//   - 派生表里恰好两行,先 f1 后 f2:f1 按 player_id = 常量做主键前缀 ref,f2 按 f1.friend_player_id 做主键前缀 ref;
+//   - 七张真实表的 possible_keys 都只有 PRIMARY;没有 MATERIALIZED、没有 <subqueryN>、没有 hash join。
 func assertMutualPlanIsPerRowPrimaryKeyLookups(t *testing.T, ctx context.Context, db *sql.DB, g mutualAdversarialGraph) {
 	t.Helper()
 	query, args := recommendByMutualStatement(g.me, g.callerExclude, mutualAdvProductionLimit)
 	plan := explainTraditionalRows(t, ctx, db, inlineNumericArgs(t, query, args...))
-	tables := make([]string, 0, len(plan))
-	for _, row := range plan {
-		tables = append(tables, row["table"])
-	}
-	assert.ElementsMatch(t, []string{"f1", "f2", "f", "b_out", "b_in", "r_out", "r_in"}, tables,
-		"计划里的表必须恰好是这七个别名:多出 <subqueryN> 是排除被物化,缺了是别名被改")
-	require.GreaterOrEqual(t, len(plan), 2)
-	assert.Equal(t, "f1", plan[0]["table"], "驱动表必须是 f1(我的好友,≤ MaxFriends 行);从 f2 起步就是全扫 friend 表")
-	assert.Equal(t, "f2", plan[1]["table"], "f2 必须紧跟 f1:排除点查要以 f2 的每一行为单位")
+
+	var outer, derived []map[string]string
 	for _, row := range plan {
 		table := row["table"]
-		assert.NotEqual(t, "MATERIALIZED", row["select_type"],
-			"表 %s 被物化了(type=%s key=%s):扫描量会跟着被物化的集合走,不再由 FOF 行数封顶", table, row["type"], row["key"])
+		require.NotEqual(t, "MATERIALIZED", row["select_type"],
+			"表 %s 被物化了(type=%s key=%s):扫描量会跟着被物化的集合走,不再由窗口封顶", table, row["type"], row["key"])
+		require.False(t, strings.HasPrefix(table, "<subquery"),
+			"计划里出现 %s:有一条排除被物化成集合再做反连接(SEMIJOIN(FIRSTMATCH) 提示丢了?)", table)
 		assert.NotContains(t, row["Extra"], "join buffer", "表 %s 走了 hash join:那是对整个集合做反连接", table)
-		assert.Equal(t, "PRIMARY", row["key"], "%s 必须走主键", table)
-		assert.Equal(t, "PRIMARY", row["possible_keys"], "%s 的 FORCE INDEX (PRIMARY) 丢了:优化器又能挑二级索引", table)
-		switch table {
-		case "f1":
-			assert.Equal(t, "ref", row["type"], "f1 必须是主键前缀 ref")
-			assert.Equal(t, "8", row["key_len"], "f1 只用主键第一列 player_id")
-			assert.Equal(t, "const", row["ref"], "f1 的 player_id 必须是常量 me")
-		case "f2":
-			assert.Equal(t, "ref", row["type"], "f2 必须是主键前缀 ref")
-			assert.Equal(t, "8", row["key_len"], "f2 只用主键第一列 player_id")
-			assert.True(t, strings.HasSuffix(row["ref"], ".f1.friend_player_id"),
-				"f2 必须按 f1.friend_player_id 定位,实际 ref=%s", row["ref"])
+		switch row["select_type"] {
+		case "DERIVED":
+			derived = append(derived, row)
 		default:
-			assert.Equal(t, "eq_ref", row["type"], "%s 必须是每个 FOF 行一次单行点查", table)
-			assert.Equal(t, "16", row["key_len"], "%s 必须用满两列主键", table)
+			outer = append(outer, row)
 		}
 	}
+
+	// 内层:f1 驱动、f2 紧随。
+	require.Len(t, derived, 2, "派生表里必须恰好是 f1、f2 两张表:%v", plan)
+	f1, f2 := derived[0], derived[1]
+	assert.Equal(t, "f1", f1["table"], "派生表的驱动表必须是 f1(我的好友,≤ MaxFriends 行);从 f2 起步就是全扫 friend 表(STRAIGHT_JOIN 丢了?)")
+	assert.Equal(t, "f2", f2["table"], "f2 必须紧跟 f1")
+	for _, row := range derived {
+		assert.Equal(t, "PRIMARY", row["key"], "%s 必须走主键", row["table"])
+		assert.Equal(t, "PRIMARY", row["possible_keys"], "%s 的 FORCE INDEX (PRIMARY) 丢了:优化器又能挑二级索引", row["table"])
+		assert.Equal(t, "ref", row["type"], "%s 必须是主键前缀 ref", row["table"])
+		assert.Equal(t, "8", row["key_len"], "%s 只用主键第一列 player_id", row["table"])
+	}
+	assert.Equal(t, "const", f1["ref"], "f1 的 player_id 必须是常量 me")
+	assert.True(t, strings.HasSuffix(f2["ref"], ".f1.friend_player_id"), "f2 必须按 f1.friend_player_id 定位,实际 ref=%s", f2["ref"])
+
+	// 外层:物化窗口驱动,五条排除各是一次主键单行点查。
+	require.Len(t, outer, 6, "外层必须恰好是 <derivedN> + 五条排除:%v", plan)
+	assert.True(t, strings.HasPrefix(outer[0]["table"], "<derived"),
+		"外层的驱动行必须是物化的派生表(窗口),实际是 %s:派生表被合并进外层,窗口 LIMIT 就不再是点查次数的上界", outer[0]["table"])
+	lookups := make([]string, 0, 5)
+	for _, row := range outer[1:] {
+		table := row["table"]
+		lookups = append(lookups, table)
+		assert.Equal(t, "eq_ref", row["type"], "%s 必须是每个窗口内候选一次单行点查", table)
+		assert.Equal(t, "PRIMARY", row["key"], "%s 必须走主键", table)
+		assert.Equal(t, "16", row["key_len"], "%s 必须用满两列主键", table)
+		assert.Equal(t, "PRIMARY", row["possible_keys"], "%s 的 FORCE INDEX (PRIMARY) 丢了:优化器又能挑二级索引", table)
+		assert.Contains(t, row["ref"], "c.candidate_id", "%s 必须按窗口里的候选定位,实际 ref=%s", table, row["ref"])
+	}
+	assert.ElementsMatch(t, []string{"f", "b_out", "b_in", "r_out", "r_in"}, lookups, "外层的五条排除必须恰好是这五个别名")
 }
 
 // TestRecommendByMutual_ReadsBoundedByFOFRowsNotGlobalSets(M1)是 2026-09-28 评审缺陷的确定性回归(先红后绿)。
 // 缺陷:旧写法的两条 OR 形 NOT EXISTS 没有完整主键等值,friend_request 那条被做成"每个 FOF 行按 status=1 扫一遍全服
 // pending"、friend_block 那条被做成对"我拉黑的 + 拉黑我的"全集的 hash antijoin,读数 ≈ FOF 行数 × 全服 pending 数。
-// 断言:limit=20 的结果正确;会话 Handler_read_* 增量 ≤ 8R + 2F + 2 + limit(本夹具 F=30、R=660,上界 5,362)——
-// 生产上 F ≤ MaxFriends、R ≤ MaxFriends²,上界与全服 pending 数、拉黑我的人数无关。再把 limit 放大、核对全量结果。
-//   - 旧写法为何必红:2026-09-29 按本夹具逐行重建(含 seedPending 的 updated_ms = 当前时间)后重放旧 SQL(服务端预处理
-//     语句),计划是 idx_status_updated 上 status=1 的逐行 ref,读 9,334,150 次(Handler_read_next 9,291,954,即约 620 个
-//     FOF 行各扫一遍 1.5 万条 pending;评审独立复测同一数字)、3.4–4.8 s。读数随 pending 行在 idx_status_updated 里的位置
-//     与计划浮动(把两条 seedPending 行的 updated_ms 改成 1 就是 9,274,150),但都是"FOF 行数 × 全服 pending 数"的量级,
-//     约为上界的 1,700 倍。
-//     结果与新写法相同,所以红在读数断言。统计不同时旧写法也可能改走 index_merge + hash join(friend_explain_scratch 上就是),
-//     那样 union 要把"拉黑我的人"整个读一遍,读数 ≥ 2 万,照样越界 —— 自检保证这两个集合都大于上界。
-//     OR 形条件没有完整主键可点查,旧写法做不出"每行常数次点查"的计划,所以不论走哪种计划都红。
-//   - 新写法:4,739 次(key 3,755 / next 690 / rnd_next 294)、约 6 ms。
-//   - 全量核对跑两遍:一遍按生产形状(exclude 含 me),一遍 exclude 不含 me —— 后一遍里 me 不出现的唯一原因是 `<> ?`,
-//     删掉那条子句就红在"结果里多出 me"(2026-09-29 SQL 级重放:294 行、含 me;保留时两遍都是同样的 293 行)。
+// 断言:会话 Handler_read_* 增量 ≤ 3R + 6W + 3(本夹具 R=660,上界 8,127;按 limit = W 测,理由见 assertMutualReadsAndResult)——
+// 生产上 R ≤ MaxFriends²,上界与全服 pending 数、拉黑我的人数无关;limit = W 的全量结果逐人正确;limit=20 取满且 star 第一。
+//   - 最初写法(OR 形)为何必红:2026-09-29 按本夹具逐行重建(含 seedPending 的 updated_ms = 当前时间)后重放那条 SQL(服务端
+//     预处理语句),计划是 idx_status_updated 上 status=1 的逐行 ref,读 9,334,150 次(Handler_read_next 9,291,954,即约 620 个
+//     FOF 行各扫一遍 1.5 万条 pending;评审独立复测同一数字)、3.4–4.8 s,约为上界的 1,100 倍。结果与现在相同,所以红在读数断言。
+//     统计不同时它也可能改走 index_merge + hash join(friend_explain_scratch 上就是),那样 union 要把"拉黑我的人"整个读一遍,
+//     读数 ≥ 2 万,照样越界 —— 自检保证这两个集合都大于上界。OR 形条件没有完整主键可点查,做不出"每行常数次点查"的计划,
+//     所以不论走哪种计划都红。
+//   - 09-29 版(每个 FOF 行五次点查)在本夹具上是 4,737 次,**不红** —— 本夹具候选只有 302 个、少于窗口,区分不了它与现在的
+//     写法;那一版的回归是 TestRecommendByMutual_ExclusionLookupsBoundedByWindow。
+//   - 现在的写法(2026-10-08 实测):limit = W 时 3,446 次(key 2,150 / next 690 / rnd_next 606),limit=20 时 2,057–2,062 次。
+//   - 全量核对再跑两遍:一遍按生产形状(exclude 含 me),一遍 exclude 不含 me —— 后一遍里 me 不出现的唯一原因是内层的
+//     `<> ?`,删掉那条子句就红在"结果里多出 me"。
 //
 // 断言的是行操作计数,不看墙钟。
 func TestRecommendByMutual_ReadsBoundedByFOFRowsNotGlobalSets(t *testing.T) {
@@ -1121,13 +1180,16 @@ func TestRecommendByMutual_ReadsBoundedByFOFRowsNotGlobalSets(t *testing.T) {
 
 // TestRecommendByMutual_PlanIsPerRowPrimaryKeyLookups(M2)钉住上界成立所依赖的计划形状(统计新鲜时),
 // 断言见 assertMutualPlanIsPerRowPrimaryKeyLookups。夹具与 M1 相同:"FOF 行多、me 的关系集小"会诱使优化器先物化排除集。
-//   - 旧写法为何必红(结构性的,与统计无关):OR 形子查询没有完整主键等值,friend_block / friend_request 不可能是
-//     key_len=16 的 eq_ref;好友 NOT IN 被物化成 <subquery2>;表名集合也对不上。2026-09-29 在本夹具上实测:
+//   - 最初写法(OR 形)为何必红(结构性的,与统计无关):OR 形子查询没有完整主键等值,friend_block / friend_request 不可能是
+//     key_len=16 的 eq_ref;好友 NOT IN 被物化成 <subquery2>;也没有派生表。2026-09-29 在本夹具上实测:
 //     <subquery2> MATERIALIZED、b 是 index_merge + hash join、r 是 idx_status_updated 上 status=1 的 ref。
-//   - 只去掉 SEMIJOIN(FIRSTMATCH):f / b_out / r_out 被物化 → 红;两个提示都去掉:再多一个 r_in 被物化 → 红;
+//   - 09-29 版(每个 FOF 行五次点查)为何必红:它没有派生表,f1 / f2 与五条排除同在一层,红在"派生表里必须恰好是 f1、f2"。
+//   - 只去掉 SEMIJOIN(FIRSTMATCH):f / b_out / r_out 被物化(出现 <subqueryN>)→ 红;两个提示都去掉:再多一个 r_in 被物化 → 红;
 //     去掉任何一处 FORCE INDEX (PRIMARY):possible_keys 多出二级索引 → 红(这一条守的是防线,不是已实测到的退化,
-//     见 RecommendByMutual 注释第 3 条)。
-//   - 去掉 STRAIGHT_JOIN:统计新鲜时计划不变,本用例照绿 —— 那一条由 TestRecommendByMutual_JoinOrderSurvivesStaleStatistics 守。
+//     见 RecommendByMutual 注释第 5 条)。以上 2026-10-08 在本夹具上逐项实测。
+//   - 本用例照绿、要靠别的用例守的两处:去掉 STRAIGHT_JOIN(统计新鲜时计划不变)由
+//     TestRecommendByMutual_JoinOrderSurvivesStaleStatistics 守;去掉派生表里的 LIMIT(带 GROUP BY 的派生表照样被物化,
+//     EXPLAIN 看不出差别)由 TestRecommendByMutual_ExclusionLookupsBoundedByWindow / _StopsAtWindowWhenSaturated 守。
 func TestRecommendByMutual_PlanIsPerRowPrimaryKeyLookups(t *testing.T) {
 	db, ctx := openFriendTestDB(t)
 	g := seedMutualAdversarialGraph(t, ctx, db)
@@ -1137,20 +1199,31 @@ func TestRecommendByMutual_PlanIsPerRowPrimaryKeyLookups(t *testing.T) {
 }
 
 // TestRecommendByMutual_JoinOrderSurvivesStaleStatistics(M2b)钉住 STRAIGHT_JOIN(先红后绿):持久统计陈旧时,
-// 计划仍是"先 f1 后 f2 + 逐行主键点查",读数仍在上界内。
+// 计划仍是"派生表里先 f1 后 f2 + 窗口内逐候选主键点查",读数仍在上界内。SEMIJOIN(FIRSTMATCH) 在本用例造出的状态下
+// 与 M2 一样只靠计划断言守(见下)。
 //
 // 陈旧统计的造法:建表后、灌数前关掉三张表的 STATS_AUTO_RECALC,灌完不 ANALYZE —— 持久统计停在建表时的空表状态
 // (n_diff = 0)。n_diff = 0 时,按 f1.friend_player_id 做的 f2 前缀 ref 每次都被估成整表行数(rec_per_key 取表行数;
-// f1 是常量前缀 ref,走 index dive,估得准),优化器于是改成"f2 全索引扫描驱动 + f1 主键点查"。2026-09-29 在本夹具上
-// EXPLAIN 生产 SQL:f1 rows=30、f2 rows=1,318(= friend 整表)。不需要改 mysql.innodb_*_stats,也不需要 FLUSH(RELOAD 权限)。
-// 用例先自检:把生产 SQL 的 STRAIGHT_JOIN 换回普通 JOIN 再 EXPLAIN,驱动表必须变成 f2 —— 证明夹具确实造出了会让
+// f1 是常量前缀 ref,走 index dive,估得准),优化器于是改成"f2 全索引扫描驱动 + f1 主键点查"。
+// 不需要改 mysql.innodb_*_stats,也不需要 FLUSH(RELOAD 权限)。
+// 用例先自检:把生产 SQL 的 STRAIGHT_JOIN 换回普通 JOIN 再 EXPLAIN,派生表的驱动表必须变成 f2 —— 证明夹具确实造出了会让
 // 连接顺序翻转的陈旧统计;没有这一步,"f1 在前"在统计没造坏时也照绿(假绿)。
-//   - 旧写法为何必红:2026-09-29 在本夹具上,旧 SQL 的驱动表是 f2(idx_friend_player 上的 range),红在"驱动表必须是 f1";
-//     读数约 930 万次(实测 9,335,651;评审另测到 9,085,699,随计划浮动),也红在读数断言。
-//   - 新写法去掉 STRAIGHT_JOIN:驱动表变成 f2(PRIMARY 全索引扫描,type=index)、f1 变成 eq_ref → 红;读数 6,931 > 上界 5,362。
-//     本夹具 friend 表只有 1,318 行,所以读数差距不大;116 万边的库上同一退化是 1,529,004 次(见 RecommendByMutual 注释第 1 条)。
-//   - 新写法去掉 SEMIJOIN 与 FORCE INDEX:b_in 被物化成 idx_blocked_player 上"拉黑我的 2 万人"的读取,24,785 次 → 计划与读数两处都红。
-//   - 新写法:计划与统计新鲜时相同,4,739 次。
+// 2026-10-08 按本用例的做法(建表 → 关 STATS_AUTO_RECALC → 灌数,不 ANALYZE、不 FLUSH;EXPLAIN 里 f2 rows = 1,318,
+// 即"被估成整表行数")在 SQL 级逐项重放,读数按 limit = W:
+//   - 现在的写法:计划与统计新鲜时同形(只是外层五条点查的先后不同),3,445 次。
+//   - 去掉 STRAIGHT_JOIN:派生表改由 f2 驱动(PRIMARY 全索引扫描,type=index)、f1 变成 eq_ref → 红在计划断言。读数 4,375,
+//     **没有**越过上界 8,127 —— 本夹具 friend 表只有 1,318 行,整表读一遍也不多,所以这一条只靠计划断言和上面的自检守;
+//     116 万边的库上同一段连接的退化是 1,529,004 次(见 RecommendByMutual 注释第 1 条)。
+//   - 去掉 SEMIJOIN(FIRSTMATCH):与统计新鲜时一样,f / b_out / r_out 被物化(出现 <subqueryN>),b_in / r_in 仍是 eq_ref;
+//     读数 3,482,不越界 → 只红在计划断言。
+//   - 两个提示都去掉:再多一个 r_in 被物化(idx_to_player 上 to = me、status = 1),读数 3,487,不越界 → 只红在计划断言。
+//   - 最初写法(OR 形):驱动表是 f2(idx_friend_player 上的 range),约 930 万次(2026-09-29 实测 9,335,651)→ 两处都红。
+//
+// 本用例**进不去**的另一种陈旧状态:持久统计里的 n_rows = 0 被重新读回内存(对这几张表 FLUSH TABLES,或 mysqld 重启;
+// EXPLAIN 里 f2 rows = 1)。那种状态下去掉 SEMIJOIN 提示才会把 b_in 物化成 friend_block 主键全索引扫描、r_in 物化成
+// friend_request 全表扫描(同一份数据 58,462 次读;两个提示都去掉 38,454 次),现在的写法仍是 3,443 次。
+// 造出它需要 FLUSH TABLES(RELOAD / FLUSH_TABLES 权限),本用例不做;这层保护目前只有 M2 / M2b 的计划断言
+// (去掉提示必然出现 <subqueryN>)间接守着。
 func TestRecommendByMutual_JoinOrderSurvivesStaleStatistics(t *testing.T) {
 	db, ctx := openFriendTestDB(t)
 	repo, _ := newFriendTestRepo(t, db)
@@ -1176,10 +1249,310 @@ func TestRecommendByMutual_JoinOrderSurvivesStaleStatistics(t *testing.T) {
 	query, args := recommendByMutualStatement(g.me, g.callerExclude, mutualAdvProductionLimit)
 	probe := strings.Replace(query, "STRAIGHT_JOIN", "JOIN", 1)
 	probePlan := explainTraditionalRows(t, ctx, db, inlineNumericArgs(t, probe, args...))
-	require.Equal(t, "f2", probePlan[0]["table"],
-		"前置条件:去掉 STRAIGHT_JOIN 的同一条 SQL 在陈旧统计下必须改由 f2 驱动,否则夹具没造出陈旧统计、本用例没有鉴别力"+
+	var probeDerived []string
+	for _, row := range probePlan {
+		if row["select_type"] == "DERIVED" {
+			probeDerived = append(probeDerived, row["table"])
+		}
+	}
+	require.Equal(t, []string{"f2", "f1"}, probeDerived,
+		"前置条件:去掉 STRAIGHT_JOIN 的同一条 SQL 在陈旧统计下,派生表必须改由 f2 驱动,否则夹具没造出陈旧统计、本用例没有鉴别力"+
 			"(先核对 innodb_stats_persistent 是否为 ON)")
 
 	assertMutualPlanIsPerRowPrimaryKeyLookups(t, ctx, db, g)
 	assertMutualReadsAndResult(t, ctx, db, repo, g)
+}
+
+// ── RecommendByMutual 窗口回归(2026-10-08 缺陷:09-29 版对每个 FOF 行做五次点查,排除表大于 buffer pool 时 38–51 s)──────
+
+// seedMutualWindowGraph 的规模与 id 段(与其它用例的 id 段不重叠)。
+const (
+	mutualWinMe         uint64 = 63000000
+	mutualWinFriendBase uint64 = 63000001 // 我的好友 63000001..63000016
+	mutualWinTopBase    uint64 = 63100000 // 头部:W 个候选,各经 2 个好友可达(共同好友数 2)
+	mutualWinTailBase   uint64 = 63200000 // 尾部:8×W 个候选,各经 1 个好友可达(共同好友数 1)
+	mutualWinFriends           = 16
+	mutualWinTailFactor        = 8
+)
+
+// mutualWindowGraph 是"候选远多于窗口"的夹具:头部恰好 W 人(共同好友数 2,正好占满排名窗口),尾部 8×W 人
+// (共同好友数 1)。候选互不相同,所以 FOF 行数 R = 16(好友→我)+ 2W + 8W = 10,256,去重候选 9W = 9,216。
+// 没有任何人与我有排除关系(由调用它的用例按需添加)。
+type mutualWindowGraph struct {
+	me         uint64
+	top        []uint64 // 排名前 W 的候选
+	survivor   uint64   // 头部里留作"窗口内唯一合格者"的那一个
+	candidates uint64   // 去重候选数
+	fofRows    uint64   // R:f2 行数(含"候选就是我自己"的那 F 行)
+}
+
+func seedMutualWindowGraph(t *testing.T, ctx context.Context, db *sql.DB) mutualWindowGraph {
+	t.Helper()
+	w := int(RecommendAnchorWindow)
+	me := mutualWinMe
+	friends := recommendIDRange(mutualWinFriendBase, mutualWinFriends)
+	top := recommendIDRange(mutualWinTopBase, w)
+	tail := recommendIDRange(mutualWinTailBase, mutualWinTailFactor*w)
+
+	// 好友边一律双向写(与 AcceptFriend 落库的形状一致)。
+	edges := make([][2]uint64, 0, 2*(len(friends)+2*len(top)+len(tail)))
+	link := func(a, b uint64) { edges = append(edges, [2]uint64{a, b}, [2]uint64{b, a}) }
+	for _, f := range friends {
+		link(me, f)
+	}
+	for j, c := range top {
+		link(friends[j%mutualWinFriends], c)
+		link(friends[(j+1)%mutualWinFriends], c)
+	}
+	for k, c := range tail {
+		link(friends[k%mutualWinFriends], c)
+	}
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkFriendPrefix, recommendBulkPairRow, edges)
+	seedRecommendUnrelatedExclusionRows(t, ctx, db)
+
+	g := mutualWindowGraph{
+		me:       me,
+		top:      top,
+		survivor: top[w/2],
+		candidates: uint64(mustCount(t, ctx, db,
+			"SELECT COUNT(DISTINCT f2.friend_player_id) FROM friend f1 JOIN friend f2 ON f2.player_id = f1.friend_player_id"+
+				" WHERE f1.player_id = ? AND f2.friend_player_id <> ?", me, me)),
+		fofRows: uint64(mustCount(t, ctx, db,
+			"SELECT COUNT(*) FROM friend f1 JOIN friend f2 ON f2.player_id = f1.friend_player_id WHERE f1.player_id = ?", me)),
+	}
+	// 前置自检(候选数是从库里数出来的,不是切片长度):头部 + 尾部确实都成了我的 FOF 候选;候选远多于窗口;
+	// "对每个候选做五次点查"的读数必然越过上界 —— 否则读数断言区分不了 09-29 版(每个 FOF 行都点查)与现在的写法
+	// (只点查窗口内的人)。
+	require.Equal(t, uint64(len(top)+len(tail)), g.candidates, "前置条件:头部 W 人与尾部 8×W 人都必须是我好友的好友")
+	require.Greater(t, g.candidates, 4*uint64(RecommendAnchorWindow), "前置条件:候选数必须远多于窗口")
+	require.Greater(t, 5*g.candidates, mutualReadBound(g.fofRows),
+		"前置条件:5 × 候选数必须大于读数上界,读数断言才对「点查次数随候选数增长」有鉴别力")
+	return g
+}
+
+// TestRecommendByMutual_ExclusionLookupsBoundedByWindow(W1)是 2026-10-08 缺陷的确定性回归(先红后绿)。
+// 缺陷:09-29 版把五条排除点查放在 f2 的每一行上,点查次数 = 5 × FOF 行数;其中 b_in / r_in 落在各候选自己的叶子页上,
+// 排除表大于 buffer pool 时单次调用约 7.6 万次页读、38–51 s。现在只对排名前 W 的候选点查。
+// 断言:limit=20 的结果取满、全部来自头部(共同好友数 2);会话 Handler_read_* 增量 ≤ 3R + 6W + 3(本夹具 36,915)。
+//   - 09-29 版为何必红:2026-10-08 按本夹具逐行重建后重放那条 SQL,读 80,946 次(10,240 个非自身的 FOF 行各做五次点查;
+//     头部每人经两个好友可达,被点查两遍),结果与现在相同,所以红在读数断言;
+//   - 现在的写法:30,871 次(排名前 20 都合格,只做 100 次点查;其余是内层的连接、分组与窗口物化)。
+//
+// 第二条断言更紧,守"外层先按 (mutual, shuffle) 排序、凑够 limit 即停":排名前 limit 都合格时点查只有 5 × limit 次,
+// 读数 ≤ 3R + W + 3 + 5×limit(本夹具 31,895)。把外层排序键写成 `ORDER BY c.mutual DESC, RAND()` 时优化器改成
+// "对窗口里全部 W 人做完点查再排序",本夹具读 35,891 → 红在这一条(第一条的上界 36,915 拦不住它)。
+//
+// 本夹具头部恰好 W 人、全部合格,所以 limit=20 时点查次数固定为 100,读数是确定的(与 assertMutualReadsAndResult 里
+// "按 20 测会浮动"的那个夹具不同)。断言的是行操作计数,不看墙钟;冷缓存下的耗时差距见 RecommendByMutual 注释的实测表。
+func TestRecommendByMutual_ExclusionLookupsBoundedByWindow(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+	g := seedMutualWindowGraph(t, ctx, db)
+	analyzeRecommendTables(t, ctx, db)
+
+	const limit = mutualAdvProductionLimit
+	bound := mutualReadBound(g.fofRows)
+	got, reads := recommendByMutualWithReads(t, ctx, db, repo, g.me, []uint64{g.me}, limit)
+	t.Logf("RecommendByMutual 会话 Handler_read_* 增量 = %d(上界 3R+6W+3 = %d;R=%d W=%d;去重候选 %d 个)",
+		reads, bound, g.fofRows, RecommendAnchorWindow, g.candidates)
+
+	require.Len(t, got, limit, "头部 W 人全部合格,必须取满")
+	inTop := make(map[uint64]bool, len(g.top))
+	for _, id := range g.top {
+		inTop[id] = true
+	}
+	seen := make(map[uint64]bool, len(got))
+	for _, c := range got {
+		assert.False(t, seen[c.CandidatePlayerID], "候选 %d 重复出现", c.CandidatePlayerID)
+		seen[c.CandidatePlayerID] = true
+		assert.True(t, inTop[c.CandidatePlayerID], "候选 %d 不在头部:共同好友数 2 的人没排在 1 的人前面", c.CandidatePlayerID)
+		assert.Equal(t, uint32(2), c.MutualFriends, "候选 %d 的共同好友数", c.CandidatePlayerID)
+	}
+	assert.LessOrEqual(t, reads, bound,
+		"读数越过了由 FOF 行数与窗口推出的上界:排除点查又在对每个候选做了,而不是只对排名窗口内的人(2026-10-08 缺陷复发)")
+	// 排名前 limit 都合格(本夹具头部全部合格)时,点查只有 5 × limit 次。
+	earlyStopBound := 3*g.fofRows + uint64(RecommendAnchorWindow) + 3 + 5*uint64(limit)
+	assert.LessOrEqual(t, reads, earlyStopBound,
+		"排名前 %d 名都合格,读数却超过了 3R + W + 3 + 5×limit = %d:外层没有先排序、凑够 limit 即停,"+
+			"而是对窗口里的人做完了点查(外层排序键不是物化列 c.shuffle 了?)", limit, earlyStopBound)
+}
+
+// TestRecommendByMutual_StopsAtWindowWhenSaturated(W2)钉住窗口的语义:只在排名前 W 名里挑,窗口里的人被排除光了
+// 就返回偏少 / 返回空,**不**越过窗口去尾部找(由 logic 的 random 兜底补足)。这一条与执行计划无关:
+//   - 头部 W 人里除 survivor 外全部拉黑我 → 只返回 survivor 一人;
+//   - survivor 也拉黑我 → 返回空,尾部 8×W 个合格候选(共同好友数 1)一个都不出现。
+//
+// 09-29 版与去掉派生表 LIMIT 的写法都会越过头部、从尾部凑满 20 人 → 红在条数断言(2026-10-08 SQL 级重放:
+// 09-29 版两个阶段都返回 20 行)。两个阶段的读数都 ≤ 3R + 6W + 3:"拉黑了我"那条排除排在第 k 层时约
+// 30,771 + k×W,2026-10-08 实测过 35,891(k=5)与 34,867 / 34,868(k=4,buffer pool 吃紧时反连接的先后会翻,
+// 见 measureSessionHandlerReads),都在上界内。
+func TestRecommendByMutual_StopsAtWindowWhenSaturated(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+	g := seedMutualWindowGraph(t, ctx, db)
+
+	blockers := make([]uint64, 0, len(g.top)-1)
+	for _, id := range g.top {
+		if id != g.survivor {
+			blockers = append(blockers, id)
+		}
+	}
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkBlockPrefix, recommendBulkPairRow, recommendPairsTo(blockers, g.me))
+	analyzeRecommendTables(t, ctx, db)
+
+	// 正向对照:尾部 8×W 人确实是窗口之外的**合格**候选(是我好友的好友,且与我没有任何拉黑 / 申请关系)——
+	// 否则"返回空"也可能只是因为尾部没灌进去或者被别的子句排除了,断言就没有鉴别力。
+	tailCandidates := mustCount(t, ctx, db,
+		"SELECT COUNT(DISTINCT f2.friend_player_id) FROM friend f1 JOIN friend f2 ON f2.player_id = f1.friend_player_id"+
+			" WHERE f1.player_id = ? AND f2.friend_player_id >= ?", g.me, mutualWinTailBase)
+	require.EqualValues(t, mutualWinTailFactor*len(g.top), tailCandidates, "前置条件:尾部 8×W 人必须都是我好友的好友")
+	require.Zero(t, mustCount(t, ctx, db,
+		"SELECT COUNT(*) FROM friend_block WHERE (player_id = ? AND blocked_player_id >= ?) OR (blocked_player_id = ? AND player_id >= ?)",
+		g.me, mutualWinTailBase, g.me, mutualWinTailBase), "前置条件:尾部的人与我之间不能有拉黑")
+	require.Zero(t, mustCount(t, ctx, db,
+		"SELECT COUNT(*) FROM friend_request WHERE (from_player_id = ? AND to_player_id >= ?) OR (to_player_id = ? AND from_player_id >= ?)",
+		g.me, mutualWinTailBase, g.me, mutualWinTailBase), "前置条件:尾部的人与我之间不能有申请")
+
+	const limit = mutualAdvProductionLimit
+	bound := mutualReadBound(g.fofRows)
+
+	got, reads := recommendByMutualWithReads(t, ctx, db, repo, g.me, []uint64{g.me}, limit)
+	t.Logf("窗口内只剩 1 个合格者:读数 %d(上界 %d)", reads, bound)
+	require.Len(t, got, 1, "窗口里只剩 survivor 一个合格者:多出来的人只能来自窗口之外(派生表的 LIMIT 丢了)")
+	assert.Equal(t, g.survivor, got[0].CandidatePlayerID)
+	assert.Equal(t, uint32(2), got[0].MutualFriends)
+	assert.LessOrEqual(t, reads, bound, "窗口饱和时读数也必须在上界内")
+
+	seedBlock(t, ctx, db, g.survivor, g.me)
+	got, reads = recommendByMutualWithReads(t, ctx, db, repo, g.me, []uint64{g.me}, limit)
+	t.Logf("窗口全被排除:读数 %d(上界 %d)", reads, bound)
+	assert.Empty(t, got, "排名前 W 的人全被排除时必须返回空:返回了人说明越过了窗口(派生表的 LIMIT 丢了)")
+	assert.LessOrEqual(t, reads, bound, "窗口饱和时读数也必须在上界内")
+}
+
+// TestRecommendByMutual_TiesAreShuffledPerCall(W3)夹具的 id 段。
+const (
+	mutualTieMe       uint64 = 64000000
+	mutualTieFriendA  uint64 = 64000001
+	mutualTieFriendB  uint64 = 64000002
+	mutualTieFriendC  uint64 = 64000003
+	mutualTieHeadBase uint64 = 64100000 // 头部 3 人:经好友 A、B 可达,共同好友数 2
+	mutualTiePoolBase uint64 = 64200000 // 同分池 40 人:只经好友 C 可达,共同好友数 1
+	mutualTieHead            = 3
+	mutualTiePool            = 40
+)
+
+// TestRecommendByMutual_TiesAreShuffledPerCall(W3)钉住"同数随机":共同好友数相同的候选,每次调用的先后顺序不同
+// (客户端"换一批"靠它在共同好友数扁平的图上换出人来),而且打散不能破坏"共同好友数降序"。
+// 夹具:3 个共同好友数 2 的头部 + 40 个共同好友数 1 的同分池,limit=20 → 每次都应是"头部 3 人 + 池里任取 17 人"。
+// 连调 8 次:每次的结果都合法;8 次的序列不能全都相同。
+//   - 打散键本身丢了(内层的 `RAND() AS shuffle` 换成确定的列 / 常量):窗口与顺序都变成确定的,8 次完全相同 → 红;
+//   - 本用例**守不住**"只把内层 ORDER BY 里的 shuffle 去掉":43 个候选全在窗口里,外层仍按 c.shuffle 打散,8 次照样
+//     8 种序列(2026-10-08 评审的 SQL 级重放)。那种改法坏的是"同数候选多于窗口时每次进窗口的人不同",由
+//     TestRecommendByMutual_WindowMembershipRotatesPerCall(W4)守;
+//   - 内外打散键不一致以致乱序(例如外层排序键写错):头部 3 人不在前 3 位 → 红。
+//
+// 随机性断言的误报概率:17 个位置从 40 人里有序抽取,共 40!/23! ≈ 3×10^25 种;8 次独立抽取全相同的概率约 10^-178。
+// 2026-10-08 SQL 级重放:8 次调用 8 种序列,头部 3 人每次都在前 3 位。
+func TestRecommendByMutual_TiesAreShuffledPerCall(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	me := mutualTieMe
+	head := recommendIDRange(mutualTieHeadBase, mutualTieHead)
+	pool := recommendIDRange(mutualTiePoolBase, mutualTiePool)
+	var edges [][2]uint64
+	link := func(a, b uint64) { edges = append(edges, [2]uint64{a, b}, [2]uint64{b, a}) }
+	for _, f := range []uint64{mutualTieFriendA, mutualTieFriendB, mutualTieFriendC} {
+		link(me, f)
+	}
+	for _, c := range head {
+		link(mutualTieFriendA, c)
+		link(mutualTieFriendB, c)
+	}
+	for _, c := range pool {
+		link(mutualTieFriendC, c)
+	}
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkFriendPrefix, recommendBulkPairRow, edges)
+	seedRecommendUnrelatedExclusionRows(t, ctx, db)
+	analyzeRecommendTables(t, ctx, db)
+
+	inHead := make(map[uint64]bool, len(head))
+	for _, id := range head {
+		inHead[id] = true
+	}
+	inPool := make(map[uint64]bool, len(pool))
+	for _, id := range pool {
+		inPool[id] = true
+	}
+
+	const (
+		limit = mutualAdvProductionLimit
+		calls = 8
+	)
+	sequences := make(map[[limit]uint64]bool, calls)
+	for i := 0; i < calls; i++ {
+		got, err := repo.RecommendByMutual(ctx, me, []uint64{me}, limit)
+		require.NoError(t, err)
+		require.Len(t, got, limit, "第 %d 次:头部 3 人 + 同分池 40 人,必须取满", i+1)
+		var seq [limit]uint64
+		seen := make(map[uint64]bool, limit)
+		for pos, c := range got {
+			id := c.CandidatePlayerID
+			seq[pos] = id
+			require.False(t, seen[id], "第 %d 次:候选 %d 重复出现", i+1, id)
+			seen[id] = true
+			if pos < mutualTieHead {
+				assert.True(t, inHead[id], "第 %d 次:第 %d 位必须是共同好友数 2 的头部,实际是 %d(打散破坏了降序)", i+1, pos+1, id)
+				assert.Equal(t, uint32(2), c.MutualFriends, "第 %d 次:候选 %d 的共同好友数", i+1, id)
+			} else {
+				assert.True(t, inPool[id], "第 %d 次:第 %d 位必须来自同分池,实际是 %d", i+1, pos+1, id)
+				assert.Equal(t, uint32(1), c.MutualFriends, "第 %d 次:候选 %d 的共同好友数", i+1, id)
+			}
+		}
+		sequences[seq] = true
+	}
+	assert.Greater(t, len(sequences), 1,
+		"同数候选连调 %d 次返回了完全相同的序列:打散键(内层的 RAND() AS shuffle)丢了,客户端「换一批」换不出人", calls)
+}
+
+// TestRecommendByMutual_WindowMembershipRotatesPerCall(W4)钉住"同数候选多于窗口时,每次调用进窗口的人不同":
+// 谁进窗口由内层 ORDER BY 里的 shuffle 决定。去掉它(`RAND() AS shuffle` 列与外层排序都保留)时,窗口里的人固定不变,
+// 窗口之外的同数候选永远推荐不到 —— W3 测不出来(它的候选全在窗口里),2026-10-08 评审在 3.98 万个同数候选的库上
+// 实测:那样改之后连调三次是同一批人,原写法三次两两只重叠约 30 人。
+// 夹具:1 个好友带 2×W 个同数候选(共同好友数都是 1),没有任何排除;limit = W 时返回的就是整个窗口。连调两次,
+// 两个集合必须不同(从 2W 人里取 W 人,两次恰好相同的概率约 10^-615)。
+func TestRecommendByMutual_WindowMembershipRotatesPerCall(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	const (
+		me       uint64 = 65000000
+		myFriend uint64 = 65000001
+		poolBase uint64 = 65100000
+	)
+	w := int(RecommendAnchorWindow)
+	pool := recommendIDRange(poolBase, 2*w)
+	edges := make([][2]uint64, 0, 2*(1+len(pool)))
+	link := func(a, b uint64) { edges = append(edges, [2]uint64{a, b}, [2]uint64{b, a}) }
+	link(me, myFriend)
+	for _, c := range pool {
+		link(myFriend, c)
+	}
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkFriendPrefix, recommendBulkPairRow, edges)
+	seedRecommendUnrelatedExclusionRows(t, ctx, db)
+	analyzeRecommendTables(t, ctx, db)
+
+	var windows [2]map[uint64]bool
+	for i := range windows {
+		got, err := repo.RecommendByMutual(ctx, me, []uint64{me}, RecommendAnchorWindow)
+		require.NoError(t, err)
+		require.Len(t, got, w, "第 %d 次:2×W 个同数候选、无人被排除,limit = W 必须取满整个窗口", i+1)
+		windows[i] = make(map[uint64]bool, len(got))
+		for _, c := range got {
+			windows[i][c.CandidatePlayerID] = true
+		}
+	}
+	assert.NotEqual(t, windows[0], windows[1],
+		"同数候选多于窗口时,连调两次进窗口的是同一批人:内层 ORDER BY 里的 shuffle 丢了,窗口外的同数候选永远推荐不到")
 }
