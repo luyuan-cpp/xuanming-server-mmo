@@ -495,10 +495,30 @@ func TestGuildCheckBudgetBounds(t *testing.T) {
 	}
 }
 
+// TestGuildRecheckBudgetFollowsCheckBudget:写后复查预算 = max(120s, 检查预算)。复查重走检查的分块翻页,
+// 检查预算调大而复查停在 120s 时,数据写完后复查必然超时(每次都误报紧急告警)。
+func TestGuildRecheckBudgetFollowsCheckBudget(t *testing.T) {
+	cases := []struct {
+		checkSeconds int64
+		want         time.Duration
+	}{
+		{1, 120 * time.Second}, {119, 120 * time.Second}, {120, 120 * time.Second},
+		{121, 121 * time.Second}, {600, 600 * time.Second}, {MaxGuildCheckBudgetSeconds, time.Hour},
+	}
+	for _, tc := range cases {
+		c := loadYaml(t, minimalYaml)
+		c.GuildCheckBudgetSeconds = tc.checkSeconds
+		if got := c.GuildRecheckBudget(); got != tc.want {
+			t.Fatalf("GuildCheckBudgetSeconds=%d: GuildRecheckBudget() = %v, want %v", tc.checkSeconds, got, tc.want)
+		}
+	}
+}
+
 // TestShippedYamlGuildCheck 钉住仓库里那份 dev yaml 的回档闸配置(07 §7.5.5、§7.5.3-3、§7.9.1):
 // 直连 guild 的 ListenOn、单次超时合法、NonBlock、Breaker 关;MetricsListenAddr 已开;三个 Rollback* 配了
-// MethodTimeouts,且 RollbackPlayer 的值盖得住"沉降 30 + 检查预算 + 复查等待 10 + 复查预算 120"
-// (三个常量在 internal/logic/rollback_logic.go;本包不能 import logic,这里照抄数值)。
+// MethodTimeouts,且 RollbackPlayer 的值盖得住"沉降 30 + 检查预算 + 复查等待 10 + 复查预算"
+// (沉降 30s 与复查等待 10s 两个常量在 internal/logic/rollback_logic.go;本包不能 import logic,这里照抄数值;
+// 复查预算取 Config.GuildRecheckBudget())。
 func TestShippedYamlGuildCheck(t *testing.T) {
 	var c Config
 	if err := conf.Load("../../etc/data_service.yaml", &c); err != nil {
@@ -538,7 +558,7 @@ func TestShippedYamlGuildCheck(t *testing.T) {
 			t.Fatalf("MethodTimeouts has no entry for %s (go-zero's 2000ms default would cut every rollback short)", method)
 		}
 	}
-	minPlayer := 30*time.Second + time.Duration(c.GuildCheckBudgetSeconds)*time.Second + 10*time.Second + 120*time.Second
+	minPlayer := 30*time.Second + time.Duration(c.GuildCheckBudgetSeconds)*time.Second + 10*time.Second + c.GuildRecheckBudget()
 	if got := want["/data_service.DataService/RollbackPlayer"]; got < minPlayer {
 		t.Fatalf("RollbackPlayer MethodTimeout %v < settle + check budget + recheck delay + recheck budget = %v", got, minPlayer)
 	}

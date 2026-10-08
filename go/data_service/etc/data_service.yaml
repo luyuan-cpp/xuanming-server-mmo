@@ -28,10 +28,11 @@ MetricsListenAddr: ":9260"
 
 # 三个回档 RPC 的服务端超时(go-zero 默认 2000ms,帮会闸的沉降 30s + 检查预算 120s 远超它,
 # 不配的话批量回档恒被截断成 DeadlineExceeded)。07 §7.5.3-3:
-#   RollbackPlayer:沉降 30 + 检查预算 120 + 复查等待 10 + 复查预算 120 = 280,余 20s 给单人写。
+#   RollbackPlayer:沉降 30 + 检查预算 120 + 复查等待 10 + 复查预算 max(120, 检查预算) = 280,余 20s 给单人写。
 #   RollbackZone / RollbackAll:起始值,没有写耗时实测(回档今天在生产整体停用);落码后按本地 zone 回档实测订正。
 # 配小了的后果:调用方拿到 DeadlineExceeded、拿不到响应体;写后阶段靠脱钩 ctx 照常跑完,结论以 RESULT 审计与日志为准。
-# 调大 GuildCheckBudgetSeconds 时同步调大这里。k8s_deploy.ps1 只镜像标量 Timeout,不镜像这张表 ——
+# 调大 GuildCheckBudgetSeconds 时同步调大这里:写后复查的预算跟着检查预算走(复查重走同一套分块翻页),
+# 所以检查预算每加 1 秒,这三项各加 2 秒。k8s_deploy.ps1 只镜像标量 Timeout,不镜像这张表 ——
 # k8s 里今天也没配 GuildInternalRpc(回档一律被拒),接上 guild 时再一并处理。
 MethodTimeouts:
   - FullMethod: /data_service.DataService/RollbackPlayer
