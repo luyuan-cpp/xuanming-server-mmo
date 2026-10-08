@@ -178,7 +178,8 @@ Test-Case "data-service 是多副本形态:2 副本滚动更新 + PDB + 反亲�
     $job = Select-ManifestByName -Output $devOut -Name 'data-service-migrate'
     Assert-True -Condition ($null -ne $job) -Because 'staging/prod 启动期不建表、不种号段行,必须有迁移 Job'
     Assert-Match -Text $job -Pattern 'args: \["-f", "/app/etc/data_service.yaml", "-migrate"\]' -Because 'Job 必须用与服务同一份配置跑 -migrate'
-    Assert-NotMatch -Text $job -Pattern '__[A-Z][A-Z0-9_]*__|PLACEHOLDER_' -Because '占位必须全部替换'
+    # (?-i):占位是全大写;断言助手默认不分大小写,不关掉会把无关的小写双下划线词也算进去。
+    Assert-NotMatch -Text $job -Pattern '(?-i)__[A-Z][A-Z0-9_]*__|PLACEHOLDER_' -Because '占位必须全部替换'
     $jobIndex = $devOut.IndexOf('name: data-service-migrate')
     $deployIndex = $devOut.IndexOf('name: data-service-pdb')
     Assert-True -Condition ($jobIndex -ge 0 -and $deployIndex -gt $jobIndex) -Because '迁移 Job 必须先于 Deployment apply'
@@ -1012,7 +1013,9 @@ Test-Case '-KafkaBrokers 3:StatefulSet / 选举组 / 副本数 / PDB / 预建 Jo
     Assert-Match -Text $kafka -Pattern 'name: KAFKA_MIN_INSYNC_REPLICAS\s+value: "2"' -Because '三份副本允许一份掉队,不允许只剩一份还照常收写'
     Assert-Match -Text $kafka -Pattern 'minAvailable: 2' -Because '一次最多自愿驱逐一个 broker'
     Assert-Match -Text $kafka -Pattern 'PLAINTEXT://\$\{POD_NAME\}\.kafka-headless\.contract-battle-infra\.svc\.cluster\.local:9092' -Because '多 broker 必须每个 Pod 广播自己的 DNS'
-    Assert-NotMatch -Text $run.Output -Pattern '__[A-Z][A-Z0-9_]*__' -Because '占位必须全部替换'
+    # (?-i):占位是全大写。断言助手默认不分大小写,而 DryRun 输出里日志 sidecar 的 Alloy 配置有内置标签 __path__,
+    # 不关掉大小写无关就会把它误判成未替换的占位(2026-10-08 实跑发现)。
+    Assert-NotMatch -Text $run.Output -Pattern '(?-i)__[A-Z][A-Z0-9_]*__' -Because '占位必须全部替换'
     $topicJob = Select-ManifestByName -Output $run.Output -Name 'kafka-topic-init'
     Assert-Match -Text $topicJob -Pattern 'name: REPLICATION_FACTOR\s+value: "3"' -Because '命令 topic 与审计 topic 必须按三份建'
 }
