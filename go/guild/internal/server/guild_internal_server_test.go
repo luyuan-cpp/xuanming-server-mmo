@@ -38,6 +38,13 @@ type fakeAppliedLister struct {
 	ops   []*pb.GuildAssetOpBrief
 	next  uint64
 	err   error
+	// 清理水位(0 = 从未清理过)与读水位的错误。
+	watermarkMs  uint64
+	watermarkErr error
+}
+
+func (f *fakeAppliedLister) TerminalCleanupWatermarkMs(context.Context) (uint64, error) {
+	return f.watermarkMs, f.watermarkErr
 }
 
 func (f *fakeAppliedLister) ListAppliedAssetOpsSince(_ context.Context, q data.AppliedOpsQuery) ([]*pb.GuildAssetOpBrief, uint64, error) {
@@ -192,6 +199,53 @@ func TestListAppliedRetentionBoundary(t *testing.T) {
 		require.NoError(t, err, "since=%d", since)
 	}
 	assert.Equal(t, 2, lister.calls)
+}
+
+// TestListAppliedCleanupWatermarkRaisesTheFloor:保留期调大之后(这里按 60 天配置),旧配置(30 天)清理留下的水位
+// 才是真正的可证明下界 —— 只看配置会把"已被删掉的那 30 天"当成可证明且没有分歧(fail-open)。
+// 下界 = max(配置下界, 水位 + 1 小时余量);拒绝里回带的 cutoff_ms 已含水位,钳位重查不会被水位再拒一次。
+func TestListAppliedCleanupWatermarkRaisesTheFloor(t *testing.T) {
+	const retention60d = 60 * 24 * time.Hour
+	watermark := internalTestNowMs - 30*internalTestDayMs // 旧配置最后一轮清理的截止
+	floor := watermark + internalTestHourMs
+	require.Greater(t, floor, retentionCutoffMs(internalTestNowMs, retention60d), "本用例里水位下界必须高于配置下界")
+	assert.Equal(t, floor, provableCutoffMs(internalTestNowMs, retention60d, watermark))
+	assert.Equal(t, retentionCutoffMs(internalTestNowMs, retention60d), provableCutoffMs(internalTestNowMs, retention60d, 0), "从未清理过:只按配置算")
+	assert.Equal(t, retentionCutoffMs(internalTestNowMs, internalTestRetention),
+		provableCutoffMs(internalTestNowMs, internalTestRetention, internalTestNowMs-40*internalTestDayMs), "水位比配置下界旧:配置说了算")
+
+	lister := &fakeAppliedLister{watermarkMs: watermark}
+	s, observed := newInternalTestServer(lister, retention60d)
+	req := validInternalRequest()
+	req.SinceMs = internalTestNowMs - 45*internalTestDayMs // 配置(60 天)内,但早于水位:那段流水已经删了
+
+	resp, err := s.ListAppliedAssetOpsSince(context.Background(), req)
+
+	assert.Nil(t, resp)
+	st := requireStatus(t, err, codes.FailedPrecondition)
+	assert.Equal(t, RetentionRejectedMessage(floor), st.Message())
+	assert.Zero(t, lister.calls, "不可证明就不查")
+	assert.Equal(t, []observedCall{{listAppliedResultRetention, 0}}, *observed)
+
+	req.SinceMs = floor
+	_, err = s.ListAppliedAssetOpsSince(context.Background(), req)
+	require.NoError(t, err, "恰好等于下界可证明")
+	assert.Equal(t, 1, lister.calls)
+}
+
+// TestListAppliedUnavailableWhenWatermarkUnreadable:读不到清理水位就无法判断哪段流水还在 → Unavailable、不查库。
+// data_service 对 Unavailable 按"问不到"拒绝回档且放行无效;把读失败当成 0 才是 fail-open。
+func TestListAppliedUnavailableWhenWatermarkUnreadable(t *testing.T) {
+	lister := &fakeAppliedLister{watermarkErr: errors.New("redis: connection refused")}
+	s, observed := newInternalTestServer(lister, internalTestRetention)
+
+	resp, err := s.ListAppliedAssetOpsSince(context.Background(), validInternalRequest())
+
+	assert.Nil(t, resp)
+	st := requireStatus(t, err, codes.Unavailable)
+	assert.NotContains(t, st.Message(), "connection refused", "底层错误原文不外发")
+	assert.Zero(t, lister.calls)
+	assert.Equal(t, []observedCall{{listAppliedResultUnavailable, 0}}, *observed)
 }
 
 // TestRetentionCutoffNeverUnderflows:now 早于"保留期 − 余量"时下界取 0,不回绕成一个巨大的数把所有调用都拒掉。

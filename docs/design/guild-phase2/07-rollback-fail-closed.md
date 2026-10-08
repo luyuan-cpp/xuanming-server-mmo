@@ -254,6 +254,19 @@ SELECT o.op_id, o.player_id, o.guild_id, o.stream, o.kind, o.status,
 > 4. **表外补一行**:查询失败时,ctx 超时回 `DeadlineExceeded`,取消回 `Canceled`,其余回 `Internal`。库错误原文只进日志,不外发,计 `result="error"`。data_service 对这几种一视同仁地拒绝。
 > 5. 查询不另设子预算(不像 `asset_store.go` 的后台方法那样套 `storeReadBudget`),只受 RPC 整请求预算(`Timeout − 500ms`,`guild.go` 的 `requestBudgetInterceptor`)约束。
 
+> **2026-10-08 落码修正(评审后修复:清理水位)**:上表第 4 行的下界只按**当前**配置算,保留期调大时会 fail-open ——
+> 把 `TerminalRetentionDays` 从 30 调到 60 之后,30 天前的终态行早被旧配置清掉了,新配置的下界却退到 60 天前,
+> 那 30 天里的捐献既查不到、也不报不可证明,回档照常放行 = 复制资产。修法(只动 guild,不动接口形状、不加表):
+> - 清理任务在删任何终态行**之前**,先把本轮截止时刻以**只增**语义写进 guild 全局 Redis 的键
+>   `guild:asset_op:terminal_cleanup_watermark_ms`(write-ahead;写不进就不删,终态行多留一轮)。
+>   实现在 `go/guild/internal/data/asset_op_cleanup_watermark.go`,`CleanupOnce` 调用。
+> - `ListAppliedAssetOpsSince` 的可证明下界 = `max(上表第 4 行的值, 水位 + RetentionSafetyMs)`(`provableCutoffMs`);
+>   拒绝里回带的 `cutoff_ms` 已含水位,data_service 的钳位重查不会被水位再拒一次。水位为 0(键不存在)= 从未清理过,只按配置算。
+> - 读不到水位(Redis 故障、值损坏)→ `Unavailable`,data_service 按"问不到"拒绝回档(R2,放行无效)。
+> - 判定顺序相应变为:入参 → 装配 → **清理水位** → 保留期 → 查询。
+> - 残余风险见 §7.9.3 第 8 条。用例:`guild_internal_server_test.go` 的 `TestListAppliedCleanupWatermarkRaisesTheFloor` /
+>   `…UnavailableWhenWatermarkUnreadable`,`asset_op_cleanup_watermark_test.go` 三条(第三条需 `GUILD_TEST_MYSQL_DSN`)。未编译。
+
 ### 7.4.3 `zone_id` 的语义(偏差 1)
 
 90:191 写"再按 `guild_id` 关联 `guild.zone_id`"。本文实现这个过滤,但 **data_service 恒传 0**,理由:
@@ -501,6 +514,16 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
 - **为什么不用"前置条件:无 PENDING 行"**:接口只列已应用行,查 PENDING 要改形状;更要紧的是离线玩家的 SHOP / ACTIVITY_REWARD 行按设计长期 PENDING(04:1536),拿它当前置条件等于 zone 回档永远过不了闸。
 - **两段等待的代价**:每次回档 RPC 多等 30s + 10s(zone / server 级各只等一次,不是每玩家一次)。调用方超时与服务端 `MethodTimeouts`(§7.5.3-3)都**建议** ≥ 30s + 检查预算 + 写耗时 + 10s + 复查预算,写进手册。不足不影响正确性:调用方等不及先断开、或服务端入口 ctx 先到点,调用方收到的是 `DeadlineExceeded`、拿不到响应体;写后阶段靠脱钩 ctx 跑完,结论以 RESULT 审计与日志为准。
 
+> **2026-10-08 落码修正(评审后修复:写后复查)**:
+> ① **复查范围**:处置二原文"用同一组 `sinceMsByPlayer` 再查一次"会把**没写过**的玩家(R5 断言失败、安全快照失败、全服回档停在更早的
+> zone 而没轮到)在检查之后新终结的行也报成 post-write —— 他们的数据并没有回退,运维照单补偿就多扣一次。落码改为只复查**走到写
+> Redis 那一步**的玩家(结果未知也算,方向多报):`guildPlan.onlyPlayers`,zone 级记在 `zoneRollback.attempted`,全服合并各 zone 的名单;
+> 归到具体 zone 时也只看该 zone 实际写过的玩家。用例 `TestRollbackGuildGate_PostWriteRecheckCoversOnlyWrittenPlayers`。
+> ② **单人回档的记账**:写 Redis 失败后复查又报警时,响应码仍是更紧急的 `DivergedAfterWrite`(带新行),但 RESULT 审计与指标按真实结果记
+> "恢复 0 人、失败 1 人"(`RollbackPlayerResp.written`)。用例 `TestRollbackGuildGate_PostWriteFlagAfterFailedWriteCountsAsFailed`。
+> ③ **钳位重查余量**(§7.5.3-2b):guild 每次调用都按当时墙钟重算下界,原样拿首次带回的 `cutoff_ms` 重查必然再被拒。
+> data_service 重查用 `cutoff + 900000`(15 分钟,`retentionClampSlackMs`),不可证明判据同步为 `since < cutoff + 余量`。
+
 **T2 PENDING 行在回档后重投。** §7.1.1 注 1 已论证自洽。补一条边界:回档后账本 `max_seq` 变小,guild 的 `next_seq` 不变,差距 ≤ 1024 时新 seq 判 Unseen 正常应用(`go/shared/assetop/classify.go:79-131`);> 1024 判 JumpTooFar → UNKNOWN(04:1187),见 §7.8.1。
 
 **T3 与 B4c 存盘属主围栏的关系。** 回档要真正作用到 scene 读的 blob,必须(a)写 PlayerAllData key,(b)经 owner_epoch 守卫写入(推进 / 校验 `player:{id}:owner_epoch`;原 04 §4.35 的 `rollback:<毫秒>` 属主已作废,见 [08-save-owner-fence.md](./08-save-owner-fence.md) §8.1 末行),否则旧 scene 的晚到存盘会把回档结果盖掉——盖掉之后玩家侧其实**没回档**,而 guild 侧的"分歧已放行"日志却说回了,补偿就会补错。这两件事都不在 B5d:B5d 的闸不依赖它们,但**手册写明**:B4c 与"回档写 PlayerAllData"落地之前,放行日志只能当线索,补偿前必须人工核对玩家当前资产(§7.9.3)。
@@ -588,6 +611,10 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
 5. 看到 `post-write`:立即按第 3 步处理差集行,或用 `pre_rollback_snapshot_id` 撤销这次回档(撤销同样过闸)。
 6. `guild_unprovable_player_count > 0`(日志 `[Rollback][GuildDivergence] unprovable`,列出是谁):这些玩家的快照比帮会流水保留期(默认 30 天)还老,保留期之前那段流水已被清理,系统无法证明。三条出路,按优先级:① 这些玩家本来就不需要回档 → 改用逐玩家回档,避开他们;② 需要回档且人工核过帐 → 与分歧同一个放行开关(第 2 步),日志记 `unprovable accepted`,**系统给不出补偿单**,放行人自担;③ 都不是 → 不回档。保留期内仍可证明的那段照常出现在分歧清单里。
 7. 同步订正两处旧口径:`rollback_logic.go:378-382` 的 "Guild/friend data is NOT rolled back … self-healing" 注释改为指向本文;`docs/design/zone_data_rollback.md:53-62` 追加"帮会资产见 guild-phase2/07"。
+8. **调大 `AssetOp.TerminalRetentionDays` 之后的(新值 − 旧值)天内,不要清空 guild 的全局 Redis**。回档检查靠 Redis 键
+   `guild:asset_op:terminal_cleanup_watermark_ms`(清理水位,§7.4.2 落码修正)知道"哪段流水已经被旧配置删掉";这个键丢了、同时保留期
+   又刚调大过,被删掉的那段会被误当成"可证明且没有分歧"。必须清 Redis 时:先把保留期改回旧值,或在这段时间内对快照早于
+   "now − 旧保留期"的回档一律人工核帐。水位读不到时回档检查回 `Unavailable`、回档被拒(安全,但要先恢复 Redis)。
 
 ---
 

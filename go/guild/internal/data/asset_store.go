@@ -1025,9 +1025,15 @@ func (s *GuildAssetStore) CleanupOnce(ctx context.Context, now time.Time, c Clea
 
 	var errs []error
 	if opCutoffMs > 0 {
-		errs = append(errs, s.cleanupInBatches(ctx, cleanupTableAssetOp, func(ctx context.Context) (int, int64, error) {
-			return s.cleanupTerminalOpsBatch(ctx, opCutoffMs)
-		}))
+		// 先推进清理水位再删(write-ahead,理由见 asset_op_cleanup_watermark.go):回档检查靠水位知道"哪一段流水已经可能被删"。
+		// 水位写不进就不删终态行 —— 多留一轮无害;删了却没记下,调大保留期之后那段流水会被误当成"可证明且没有分歧"。
+		if err := s.advanceTerminalCleanupWatermark(ctx, opCutoffMs); err != nil {
+			errs = append(errs, fmt.Errorf("cleanup %s skipped: %w", cleanupTableAssetOp, err))
+		} else {
+			errs = append(errs, s.cleanupInBatches(ctx, cleanupTableAssetOp, func(ctx context.Context) (int, int64, error) {
+				return s.cleanupTerminalOpsBatch(ctx, opCutoffMs)
+			}))
+		}
 	}
 	errs = append(errs,
 		s.cleanupInBatches(ctx, cleanupTableCounter, func(ctx context.Context) (int, int64, error) {
