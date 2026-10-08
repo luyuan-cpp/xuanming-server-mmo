@@ -55,6 +55,7 @@ set(SOURCE_FILES
     battle/battle_node_grpc_client.cpp
     battle/player_battle_grpc_client.cpp
     match/match_service_grpc_client.cpp
+    match/match_internal_grpc_client.cpp
 )
 
 add_library(grpc_client STATIC ${SOURCE_FILES})

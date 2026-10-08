@@ -10,11 +10,13 @@ import (
 	"github.com/redis/go-redis/v9"
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/zrpc"
 
 	"guild/internal/config"
 	"guild/internal/data"
 	guildkafka "guild/internal/kafka"
 	dspb "proto/data_service"
+	matchpb "proto/match"
 	"shared/generated/table"
 	"shared/idsegment"
 	"shared/kafkacmd"
@@ -43,6 +45,10 @@ type ServiceContext struct {
 	// merge:in_progress:{zone}(合服闸门,见 internal/logic/merge_fence.go)。
 	// 没配 MergeMarkerRedis 时为 nil = 闸门不生效。
 	MergeMarkerRedisClient *redis.Client
+	// MatchInternal 是 match 内部服务的客户端(同道历练确认开战,06-activities.md §6.22 / §6.26)。
+	// 没配 MatchRpc 目标时是 **nil 接口** = 历练未开放;guild.go 把它原样赋给 logic.ActivityDeps.Match
+	// (接口赋接口,nil 仍是 nil),并在 !Config.TrialResultActive() 时改传 nil —— 没有结算就不许开战。
+	MatchInternal matchpb.MatchInternalClient
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -134,7 +140,30 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	sc.initGuildIDSegment()
 	// 必须在 initGuildIDSegment 之后:"开了号段却没配 data_service"由它先拒启,这里只剩启用 / 未启用两种形态。
 	sc.initAssetOpIDSegment()
+	sc.initMatchInternalClient()
 	return sc
+}
+
+// initMatchInternalClient 按 MatchRpc 建 match 内部服务客户端;没配目标时保持 nil 接口(历练未开放)。
+//
+// **强制 NonBlock**,不看 yaml 里写没写:match 对 guild 是弱依赖(只有历练确认开战用它),它没起、或晚于 guild 起,
+// 都不该让帮会的建帮 / 审批 / 捐献 / 灯会一起起不来。阻塞拨号下 zrpc.MustNewClient 连不上会直接 Fatal ——
+// 这是可用性约束、不是部署偏好,所以钉在代码里(与 WithLockWaitTimeout 钉进 DSN 同一个理由:
+// ConfigMap 与本地 yaml 各改一遍,等于给"某个环境忘了写"留后门)。运行期 match 不可达时,
+// logic 把调用失败映射成 tip kGuildTrialServiceBusy(不是 gRPC 错误)。
+func (s *ServiceContext) initMatchInternalClient() {
+	if !s.Config.MatchRpcConfigured() {
+		logx.Info("[ServiceContext] MatchRpc 未配置:同道历练未开放(视图显示未开放,两个历练写 RPC 回 kGuildActivityNotOpen);灯会 / 团圆不受影响")
+		return
+	}
+	rpcConf := s.Config.MatchRpc
+	if !rpcConf.NonBlock {
+		logx.Info("[ServiceContext] MatchRpc.NonBlock 未开启,已强制按非阻塞拨号(match 是弱依赖,不能卡住 guild 起服)")
+		rpcConf.NonBlock = true
+	}
+	conn := zrpc.MustNewClient(rpcConf)
+	s.MatchInternal = matchpb.NewMatchInternalClient(conn.Conn())
+	logx.Infof("[ServiceContext] MatchInternal 客户端已建立(非阻塞拨号): timeout=%dms", rpcConf.Timeout)
 }
 
 // newMergeMarkerRedis 建合服闸门用的只读 Redis 客户端;没配 = nil = 闸门不生效。

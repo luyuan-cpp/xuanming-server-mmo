@@ -44,9 +44,11 @@ package main
 // 捐献 / 升级 / 兑换,通过打印 `GUILD_ECONOMY_SMOKE_OK mode=full|degraded …`,失败的 step 形如 `economy-7-silver`。
 // 步骤与两种模式见 guild_economy_smoke.go 文件头。
 //
-// 活动段(B6a-cli,guild_smoke.activities=true 时):经济段之后由 robot_9216–9219 另建一个帮会跑
-// 元宵灯会 / 中秋团圆(06-activities.md §6.44 的 S1–S8),通过打印 `GUILD_SMOKE_ACTIVITIES_OK guild_id=…`,
-// 失败打印 `GUILD_SMOKE_ACTIVITIES_FAIL step=Sx reason=…`(退出码同样是 1)。步骤见 guild_activity_smoke.go 文件头。
+// 活动段(B6a-cli + B6b-cli,guild_smoke.activities=true 时):经济段之后由 robot_9216–9219 另建一个帮会跑
+// 元宵灯会 / 中秋团圆(06-activities.md §6.44 的 S1–S8);guild_smoke.trial=true 时接着跑同道历练
+// (S9–S15:邀请房间 → 全员同意 → 开战 → 结算发奖 → 拒绝 / 离线 / 名单不合法)。通过打印
+// `GUILD_SMOKE_ACTIVITIES_OK guild_id=…`,失败打印 `GUILD_SMOKE_ACTIVITIES_FAIL step=Sx reason=…`(退出码同样是 1)。
+// 步骤见 guild_activity_smoke.go 文件头。
 
 import (
 	"context"
@@ -763,6 +765,10 @@ func guildSmokeLogin(cfg *config.Config, account string, stats *metrics.Stats) (
 
 // onMessage:公会消息号的回包(含信封拒绝)由本场景认领;NotifyGuildChanged 解码留底;
 // gate 的 SendTipToClient 记下来供快速失败;其余交给通用分发。
+//
+// 战斗推送(大厅连接上的 NotifyBattleAssigned / NotifyBattleStart / NotifyBattleEnd)属于"其余":
+// 通用分发把它们转成 gameobject.Player 上的开战 / 落点 / 终局信号,活动段的同道历练(S10)就等在这些信号上,
+// 与 battle-smoke 同一套。所以这里**不要**把战斗消息号加进认领名单 —— 认领了,Player 就再也收不到信号。
 func (b *guildSmokeBot) onMessage(client *pkg.GameClient, msg *base.MessageContent) {
 	b.stats.MsgRecv()
 	// NotifyGuildChanged 是服务端主动下行,不是任何请求的回包:放进 replies 会被下一次同号等待
@@ -890,11 +896,30 @@ func (b *guildSmokeBot) clearPushes() {
 // 超时返回 error,并把此刻留底的全部推送列进错误里 —— 排查时最想知道的就是
 // "到底收到了什么":收到别的 kind 说明推送矩阵错了,一条都没收到才是投递链路的问题。
 func (b *guildSmokeBot) waitPush(kind guildpb.GuildChangeKind, guildID uint64, timeout time.Duration) error {
+	return b.waitPushMatching(fmt.Sprintf("%s(guild=%d)", kind, guildID), timeout,
+		func(push *guildpb.GuildChangedS2C) bool {
+			return push.GetKind() == kind && push.GetGuildId() == guildID
+		})
+}
+
+// waitPushTo 在 waitPush 的条件上再要求 target_player_id == target,其余语义相同。
+// 同道历练的邀请(活动段 S9)用它:邀请是逐人推的,target 是被邀请人自己,客户端靠这一位决定弹不弹邀请框;
+// 只按 kind 等,会被同一个帮会里别的 ACTIVITY_CHANGED(target = 0,只表示"去拉活动页")顶替。
+func (b *guildSmokeBot) waitPushTo(kind guildpb.GuildChangeKind, guildID, target uint64, timeout time.Duration) error {
+	return b.waitPushMatching(fmt.Sprintf("%s(guild=%d target=%d)", kind, guildID, target), timeout,
+		func(push *guildpb.GuildChangedS2C) bool {
+			return push.GetKind() == kind && push.GetGuildId() == guildID && push.GetTargetPlayerId() == target
+		})
+}
+
+// waitPushMatching 是 waitPush / waitPushTo 共用的等待循环:等第一条让 match 为真的推送,命中即从留底里移除。
+// what 是"在等什么"的描述,只用于超时信息。match 在持有 b.mu 时被调用,只能读传进来的那条推送。
+func (b *guildSmokeBot) waitPushMatching(what string, timeout time.Duration, match func(*guildpb.GuildChangedS2C) bool) error {
 	deadline := time.Now().Add(timeout)
 	for {
 		b.mu.Lock()
 		for i, push := range b.pushes {
-			if push.GetKind() == kind && push.GetGuildId() == guildID {
+			if match(push) {
 				b.pushes = append(b.pushes[:i], b.pushes[i+1:]...)
 				b.mu.Unlock()
 				return nil
@@ -909,8 +934,8 @@ func (b *guildSmokeBot) waitPush(kind guildpb.GuildChangeKind, guildID uint64, t
 		b.mu.Unlock()
 
 		if timedOut {
-			return fmt.Errorf("account=%s 等 %s(guild=%d)推送超时(%s),此刻留底的推送:[%s]",
-				b.account, kind, guildID, timeout, pending)
+			return fmt.Errorf("account=%s 等 %s推送超时(%s),此刻留底的推送:[%s]",
+				b.account, what, timeout, pending)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -1002,7 +1027,7 @@ func guildSmokeIsGuildMessage(messageId uint32) bool {
 		game.GuildServiceUpgradeGuildMessageId,
 		game.GuildServiceGetGuildShopMessageId,
 		game.GuildServiceBuyGuildShopGoodsMessageId,
-		// 活动(B6):五个号在 B6a 一次占齐,历练两个在 B6b 落地前恒回 kGuildActivityNotOpen。
+		// 活动(B6):五个号在 B6a 一次占齐;历练两个由活动段的 S9–S15 使用(guild 没配历练依赖时恒回 kGuildActivityNotOpen)。
 		game.GuildServiceGetGuildActivitiesMessageId,
 		game.GuildServiceLightGuildLanternMessageId,
 		game.GuildServiceClaimGuildReunionMessageId,

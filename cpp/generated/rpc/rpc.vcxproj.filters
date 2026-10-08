@@ -150,6 +150,9 @@
     <ClInclude Include="service_metadata\match_service_service_metadata.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="service_metadata\match_internal_service_metadata.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="service_metadata\player_activity_service_metadata.h">
       <Filter>头文件</Filter>
     </ClInclude>

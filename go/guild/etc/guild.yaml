@@ -142,6 +142,48 @@ AssetOp:
   TerminalRetentionDays: 30
   CounterRetentionDays: 30
 
+# ---- 帮会同道历练(B6b,docs/design/guild-phase2/06-activities.md §6.22)----
+# 确认开战:邀请房间全员同意后,guild 调 match 内部服务 MatchInternal.StartActivityBattle 拿 battle_id。
+# 整段删掉 = 历练未开放(视图显示未开放、两个历练写接口回 GuildActivityNotOpen);灯会 / 团圆不受影响。
+# 本地 go_services.ps1 -Zone N 会把 Key 改成 matchservice.rpc.zN,guild 只连该 zone 的 match;匹配池全局共享,不影响功能。
+# NonBlock:match 是弱依赖,它没起时 guild 照常起服,开战回 GuildTrialServiceBusy(tip,不是 gRPC 错误);
+#   代码里建客户端时也会强制 NonBlock,这里显式写出只为所见即所得。
+# Timeout:单次调 match 的上限(毫秒),config.Validate 强制 [300, 2000],越界拒绝启动。
+#   实际预算 = min(Timeout, 本次请求的剩余时间 − 500ms),不足 300ms 就不调 match、直接回 GuildTrialServiceBusy;
+#   所以 Timeout 本身小于 300 等于"每次开战都不调 match",历练看着开放却永远开不了战 —— 下限就是为了挡住它。
+MatchRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: matchservice.rpc
+  Timeout: 1500
+  NonBlock: true
+  Middlewares:
+    Breaker: false
+
+# 历练的后台节律与对局结果消费。
+#   TrialResultOverdueSeconds:对局登记多久后仍无结果,巡检器去读 battle 落在 Redis 的结果记录兜底
+#     (= match 的 BattleMaxDurationSeconds 300 + 120)。
+#   TrialAbandonSeconds:多久后仍无结果也无记录则判 EXPIRED(迟到的结果仍可结算);必须 ≥ 上一项 + 600,≤ 604800(7 天)。
+#   TrialSweepIntervalSeconds:巡检间隔 [10, 600];多副本靠全局 Redis 的 guild:trial:sweep:lease 互斥。
+#   OwedLoopIntervalSeconds:待入队物品循环间隔 [1, 60](结算时未决指令已满者的物品,等窗口有空位再入队)。
+# 结果记录与战斗锁读的是上面的 PlayerLocatorRedis:它必须与 battle / scene 的 zone Redis(K8s 的 SharedRedis)
+#   **同一实例同一 DB**。指错的表现是结算后销不掉账(battle 每局重发满 30 次)、巡检器永远读不到记录,且不报错。
+Activity:
+  TrialResultOverdueSeconds: 420
+  TrialAbandonSeconds: 3600
+  TrialSweepIntervalSeconds: 60
+  OwedLoopIntervalSeconds: 10
+  # 结果消费:**只有显式写 Enabled: true 才开**;不写这一段、或没配上面的 Kafka.Brokers = 不消费 = 历练未开放
+  # (没有结算就不许开战)。Topic / Partitions 必须与 match 的 ResultTopic / ResultTopicPartitions 相同。
+  TrialResult:
+    Enabled: true
+    Topic: match-results
+    Partitions: 3
+    # 刻意不加引号:go_services.ps1 -Zone 只给带引号的 GroupID 加 _zN。
+    # guild 是全局服务、match-results 是全局 topic,本地多个 guild 进程必须同组分摊分区,而不是各组各跑一遍结算。
+    GroupID: guild-trial
+
 # RPC 级热关停(shared/killswitch)规则在 etcd 里的前缀。
 # 留空 = 用默认前缀 /mmorpg/killswitch/,且前缀下没有 key 时全部放行。
 # 关停某个方法:etcdctl put /mmorpg/killswitch/guildpb.GuildService/CreateGuild '{"deny":true,"reason":"..."}'

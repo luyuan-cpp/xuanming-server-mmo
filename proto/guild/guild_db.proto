@@ -7,13 +7,16 @@ import "proto/db/proto_option.proto";
 
 // 帮会独占库 mmorpg_guild 的表结构,唯一事实源(port-decisions D-14,§8 已修订)。
 // - 建表 / 加列只经 go/schemamigrate(go/guild 的 -migrate 与启动期 Schema.AutoMigrate);业务 SQL 手写。
-// - D-14 §2:主键只用整数 / 枚举列;string 列建成 MEDIUMTEXT,进索引只按 191 前缀;每表至多一个唯一键。
+// - D-14 §2:主键只用整数 / 枚举列;每表至多一个唯一键。string 列的建法(proto2mysql v0.2.0 起):进唯一键的列建成
+//   **整列** VARCHAR(191)(utf8mb4_0900_bin、NOT NULL DEFAULT ''),唯一键覆盖整列(STATISTICS.SUB_PART = NULL,不再是 191 前缀);
+//   其余 string 列仍是可空的 MEDIUMTEXT。依据见 docs/design/guild-phase2/01-storage.md 的 2026-09-28 落码修正。
 // - 改表纪律见 docs/design/guild-phase2/01-storage.md §6.4:新表 / 新字段只追加;OptionIndex 组只能追加到末尾,
 //   不得调序;已有唯一键或索引组的列一旦改动,开发期必须删库重建。
 // - 与 guild.proto 同包:message 一律带 Record 后缀,枚举值一律带枚举名前缀。
 // - 本文件不进客户端 tools/gen_proto.ps1 清单,不定义 service。
 // - 加锁顺序:guild → guild_player_state → guild_member → guild_application → guild_player_op_seq
-//   → guild_asset_op → guild_daily_counter → guild_activity_progress → guild_trial_battle(同上文档 §2.1)。
+//   → guild_asset_op → guild_daily_counter → guild_activity_progress → guild_trial_battle → guild_trial_reward_owed
+//   (同上文档 §2.1;2026-09-21 死锁修复后以 92-handoff.md §12.2 与 go/guild/internal/data/tables.go 为准)。
 // - 后续表由 B5 / B6a / B6b 在本文件追加 message,并在 go/guild/internal/data/tables.go 追加。
 
 message GuildRecord {
@@ -35,7 +38,7 @@ message GuildRecord {
   uint32 zone_id = 8;         // 帮会归属 zone;merge_zone 步骤 3 改写
   int64 score = 9;            // 排行分权威副本;Redis ZSET 由 RebuildRanks 重建
   uint64 funds = 10;          // 帮会资金;B1 恒为 0,B5 起写入
-  string name_norm = 11;      // data.GuildNameNorm(name):NFKC → TrimSpace → 小写;≤ 48 rune(远小于 191 前缀)
+  string name_norm = 11;      // data.GuildNameNorm(name):NFKC → TrimSpace → 小写;≤ 48 rune(远小于列长 VARCHAR(191),uk_guild 是整列索引)
   // 追加区:从 12 起。
 }
 
@@ -225,4 +228,89 @@ message GuildActivityProgressRecord {         // 锁序位置 8
   uint32 funds_granted = 6;          // 0/1:本期帮会资金已发。与阈值判定在同一把 guild 行锁下读改,保证只发一次
   uint64 updated_ms = 7;
   // 追加区:从 8 起。
+}
+
+// ── 同道历练(B6b)──────────────────────────────────────────────────
+// 设计:docs/design/guild-phase2/06-activities.md §6.5(表)、§6.26(登记)、§6.29–§6.33(结算、毒消息、待入队、巡检)。
+// 落码与正文不同的地方(取锁序列、解散只删在途行、帮会已解散时不落行)以 go/guild/internal/data/activity_repo.go 文件头与
+// 92-handoff.md §12.2 / §12.4 的 B6b 落码修正为准 —— 06 正文写于死锁修复之前。
+
+// 一局历练在 guild 侧的状态。SETTLED 是唯一的终态,也是结算的幂等闸门。
+enum GuildTrialBattleState {
+  GUILD_TRIAL_BATTLE_STATE_UNSPECIFIED = 0;
+  GUILD_TRIAL_BATTLE_STATE_STARTED = 1;   // 已开战、未结算
+  GUILD_TRIAL_BATTLE_STATE_SETTLED = 2;   // 已结算(终态;重复的结果事件到这里即止)
+  GUILD_TRIAL_BATTLE_STATE_EXPIRED = 3;   // 巡检判定长时间无结果(gather 失败 / 战斗作废);不是终态,迟到的结果仍可把它结算成 SETTLED
+}
+
+// 结算结论,只在 state = SETTLED 时有意义(其余状态恒为 UNSPECIFIED)。
+enum GuildTrialSettleResult {
+  GUILD_TRIAL_SETTLE_RESULT_UNSPECIFIED = 0;
+  GUILD_TRIAL_SETTLE_RESULT_WIN = 1;
+  GUILD_TRIAL_SETTLE_RESULT_LOSS = 2;            // 失败 / 平局
+  // 保留值,当前代码不写入:历练行只在持有该帮 guild 行锁时才写(见 GuildTrialBattleRecord 注释),帮会已解散就什么都不落,
+  // 结果只进日志与指标 guild_trial_result_total{result="guild_gone"}。数值留着是为了日后要落审计时不必改号。
+  GUILD_TRIAL_SETTLE_RESULT_GUILD_GONE = 3;
+  GUILD_TRIAL_SETTLE_RESULT_CONFIG_MISSING = 4;  // 活动行被删或类型不符,不发奖
+  GUILD_TRIAL_SETTLE_RESULT_POISON = 5;          // 确定性失败(溢出 / 奖励包构建失败 / 结果过旧),不发奖,转人工审计与补发
+}
+
+// 一局历练一行:开战时登记(STARTED),结果到达时结算(SETTLED),巡检器把长时间无结果的判为 EXPIRED。
+//
+// 锁序位置 9(guild_activity_progress 之后)。与 guild_activity_progress 同一条不变量:
+// **本表任一行的插入者 / 锁定者 / 写者,都先持有该行 guild_id 对应的 guild 行锁(FOR UPDATE)** ——
+// 登记、结算、毒消息标记、巡检判 EXPIRED、解散删在途行的第一把锁都是它;不持 guild 行锁的路径只许普通读。
+// 帮会已解散(guild 行不存在)时没有任何路径写本表:解散在同一事务里已删掉该帮全部 STARTED 行,
+// 剩下的 SETTLED / EXPIRED 行此后不可变,作历史保留(v1 不清理)。
+//
+// idx_guild_trial_battle_0 (guild_id, state):解散按"本帮 + STARTED"取候选(在途对局数有上界,与帮会历史长短无关);
+// idx_guild_trial_battle_1 (state, created_ms):巡检扫超时的 STARTED 行。
+// 06 §6.5 原写 idx_0 = (guild_id):解散改为只删在途行后补上 state 列,候选读才是索引内的范围读,不必回表过滤全部历史行。
+message GuildTrialBattleRecord {              // 锁序位置 9
+  option(OptionTableName) = "guild_trial_battle";
+  option(OptionPrimaryKey) = "battle_id";
+  option(OptionIndex) = "guild_id,state;state,created_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 battle_id = 1;                // match 发的雪花 id;与 BattleResultEvent.battle_id、SharedRedis 结果键同值
+  uint64 guild_id = 2;                 // 发起帮会;插入后不变(本表的守卫行就按它取)
+  uint32 activity_id = 3;              // GuildActivity.id
+  uint32 period_key = 4;               // 开战时的游戏日键(个人每日次数记在这一天)
+  uint32 guild_period_key = 5;         // 开战时的帮会期键(历练 = 游戏日键;每日计资金胜场上限记在这一期)
+  uint64 initiator_player_id = 6;
+  GuildTrialBattleState state = 7;
+  GuildTrialSettleResult settle_result = 8;
+  uint32 rewarded_count = 9;           // 得帮贡人数(审计)
+  uint64 created_ms = 10;              // 登记时刻;结算时补登记的行取对局结束时刻
+  uint64 settled_ms = 11;              // 进入 SETTLED / EXPIRED 的时刻;STARTED 为 0
+  // 追加区:从 12 起。
+}
+
+// 历练结算时某位得奖者的 GUILD_CREDIT 流未决指令已满(assetop.ErrTooManyPending):物品先记在这里,
+// 由后台循环等窗口有空位再转成 guild_asset_op 行(同一事务里删本行)。**绝不跳过** —— 帮贡当场已发,物品只是晚到。
+//
+// 锁序位置 10(全序末尾)。行的写者:结算(插新行,位置 9 之后)、转换(持该玩家 GUILD_CREDIT 流的 seq 行 → 插指令行 → 点删本行)、
+// 诊断计数(自动提交,只改无索引列 attempts)。解散不删:物品属于玩家。
+// 有本行就一定有该玩家 GUILD_CREDIT 流的 seq 行(本行正是因为 seq 分配被守卫拒绝才产生的),转换不必再建 seq 行。
+//
+// idx_guild_trial_reward_owed_0 (created_ms):后台循环按先来后到翻页。
+message GuildTrialRewardOwedRecord {          // 锁序位置 10
+  option(OptionTableName) = "guild_trial_reward_owed";
+  option(OptionPrimaryKey) = "player_id,battle_id";
+  option(OptionIndex) = "created_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint64 battle_id = 2;
+  uint64 guild_id = 3;                 // 结算时的帮会;转入指令行的 guild_id,此外只作审计
+  uint32 activity_id = 4;              // 转入指令行的 ref_id
+  uint32 period_key = 5;               // 转入指令行的 period_key(开战时的游戏日键,审计用)
+  bytes payload = 6;                   // AssetBundle 序列化字节,原样转入指令行
+  uint32 attempts = 7;                 // 因窗口仍满而跳过的轮数(诊断)
+  uint64 created_ms = 8;
+  // 追加区:从 9 起。
 }

@@ -34,6 +34,7 @@
     <ClCompile Include="trade\trade_admin_grpc_client.cpp" />
     <ClCompile Include="login\login_grpc_client.cpp" />
     <ClCompile Include="match\match_service_grpc_client.cpp" />
+    <ClCompile Include="match\match_internal_grpc_client.cpp" />
     <ClCompile Include="scene_manager\scene_manager_service_grpc_client.cpp" />
     <ClCompile Include="scene_manager\scene_node_service_grpc_client.cpp" />
     <ClCompile Include="team\team_grpc_client.cpp" />
@@ -55,6 +56,7 @@
     <ClInclude Include="trade\trade_admin_grpc_client.h" />
     <ClInclude Include="login\login_grpc_client.h" />
     <ClInclude Include="match\match_service_grpc_client.h" />
+    <ClInclude Include="match\match_internal_grpc_client.h" />
     <ClInclude Include="scene_manager\scene_manager_service_grpc_client.h" />
     <ClInclude Include="scene_manager\scene_node_service_grpc_client.h" />
     <ClInclude Include="team\team_grpc_client.h" />

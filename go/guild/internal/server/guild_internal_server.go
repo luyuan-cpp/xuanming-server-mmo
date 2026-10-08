@@ -151,7 +151,8 @@ type GuildInternalServer struct {
 // NewGuildInternalServer。
 //   - ops:终态资产指令的读接缝;nil = 资产 Store 未装配,调用一律 Unavailable(fail-closed)。
 //     **传 nil 接口,不要把 nil 指针装进来**(那样接口不为 nil,会在查询时 panic)。
-//   - terminalRetention:终态行保留期,取 AssetOp.TerminalRetentionDays(svc.CleanupConfFrom);≤ 0 视同未配置,一律 Unavailable。
+//   - terminalRetention:终态行保留期,装配处用 svc.RollbackProofRetention 取(AssetOp.TerminalRetentionDays;
+//     AssetOp 整段缺失时回落到默认值,所以生产装配永远是正数)。≤ 0 只可能是装配写错,一律 Unavailable(fail-closed)。
 //     清理关着(CleanupEnabled=false)时行实际上不删,按配置值判定只会多拒,方向安全。
 //   - now:墙钟,单测注入;nil 取 time.Now。
 func NewGuildInternalServer(ops AppliedAssetOpLister, terminalRetention time.Duration, now func() time.Time) *GuildInternalServer {

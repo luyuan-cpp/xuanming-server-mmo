@@ -118,6 +118,23 @@ func CleanupConfFrom(c config.AssetOpConf) data.CleanupConf {
 	}
 }
 
+// RollbackProofRetention 返回回档检查(GuildInternal.ListAppliedAssetOpsSince)用的终态行保留期。
+//
+// 与 CleanupConfFrom 的区别只在"没有配置保留期"这一种形态:AssetOp 整段缺失时 go-zero 不回填 default,
+// TerminalRetentionDays 是 0。这是文档化的合法形态(通道关闭,见 config.AssetOpConf),此时本副本不清理任何终态行,
+// 但回档检查仍要答得出来 —— 把 0 原样交给 GuildInternalServer 会让它恒回 Unavailable,data_service 的所有回档
+// 被拒且放行无效,唯一出路是改 guild 配置并重启(2026-10-08 评审)。
+// 这里回落到与"段出现时"相同的默认值:判定与正常配置的副本一致(多拒:早于默认保留期的快照按"不可证明"处理,
+// 可被合法放行覆盖),不引入新的口径;清理水位照常参与下界(server.provableCutoffMs)。
+// 配了值的(> 0)原样使用,是否越界由 config.Validate 在 CleanupEnabled 时把关。
+func RollbackProofRetention(c config.AssetOpConf) time.Duration {
+	days := c.TerminalRetentionDays
+	if days <= 0 {
+		days = config.DefaultTerminalRetentionDays
+	}
+	return time.Duration(days) * 24 * time.Hour
+}
+
 func msToDuration(ms int) time.Duration {
 	return time.Duration(ms) * time.Millisecond
 }

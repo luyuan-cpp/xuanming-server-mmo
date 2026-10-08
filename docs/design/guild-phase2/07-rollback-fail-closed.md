@@ -264,6 +264,12 @@ SELECT o.op_id, o.player_id, o.guild_id, o.stream, o.kind, o.status,
 >   拒绝里回带的 `cutoff_ms` 已含水位,data_service 的钳位重查不会被水位再拒一次。水位为 0(键不存在)= 从未清理过,只按配置算。
 > - 读不到水位(Redis 故障、值损坏)→ `Unavailable`,data_service 按"问不到"拒绝回档(R2,放行无效)。
 > - 判定顺序相应变为:入参 → 装配 → **清理水位** → 保留期 → 查询。
+> - **AssetOp 段整段缺失时的保留期**(2026-10-08 第 2 轮评审订正):那是文档化的合法形态(通道关闭),go-zero 不回填 default,
+>   `TerminalRetentionDays` 是 0。原装配把 0 原样交给 `GuildInternalServer`(`≤ 0 → Unavailable`),于是该环境下所有回档
+>   都是 `CheckFailed` 且放行无效,而 guild 明明在线、清理也没开。现在装配改用 `svc.RollbackProofRetention`:没配(≤ 0)时
+>   回落到 `config.DefaultTerminalRetentionDays`(30,与 struct tag 同值,`TestAssetOpEnabledFillsY06Defaults` 守住两处相等),
+>   判定与"段出现但没写这个键"的副本一致 —— 多拒(早于 30 天的快照按不可证明处理,可被合法放行覆盖),不引入新口径。
+>   `GuildInternalServer` 的 `≤ 0 → Unavailable` 保留为装配写错时的兜底。用例 `TestRollbackProofRetention`(svc)。
 > - 残余风险见 §7.9.3 第 8 条。用例:`guild_internal_server_test.go` 的 `TestListAppliedCleanupWatermarkRaisesTheFloor` /
 >   `…UnavailableWhenWatermarkUnreadable`,`asset_op_cleanup_watermark_test.go` 三条(第三条需 `GUILD_TEST_MYSQL_DSN`)。未编译。
 
@@ -382,6 +388,7 @@ type GuildCheckResult struct {
 > 4. **响应码优先级**(三个 RPC 一致):RESULT 审计写不进(`SnapshotDBError`)> 写后分歧(`DivergedAfterWrite`,此时 err 置空让计数与样本带得出去,执行期原错误进日志)> 执行失败。写后分歧时 `guild_divergence_count / guild_divergences` 换成**新行**。
 > 5. 装配预检(`GuildDivergence == nil`、配置非法)放在 STARTED 审计之后、沉降之前:注定被拒的回档不先持栅栏白等 30s,且照样留 STARTED + 带码的 RESULT。
 > 6. **钳位重查的 `since_ms = cutoff_ms + 900000`(15 分钟钳位余量,`guildcheck.retentionClampSlackMs`),不是上面 2b 写的 `cutoff_ms` 原值**(10-01 复核订正)。2b 的"重查再得 `FailedPrecondition` 不该发生"论证不成立:guild **每次调用都用当时的墙钟重算下界**并拒绝 `since_ms < cutoff`(`guild_internal_server.go` 的 `retentionCutoffMs`),1 小时安全量保护的是"行还没被清理",不是"下界不动"——拿第一次带回的 `cutoff_ms` 原样重查,第二次调用哪怕只晚 1ms 就再被拒,于是凡是清单里有老快照玩家的回档恒为 `CheckFailed`、放行无效,R2b / U9 在真实 guild 上走不通(方向仍是拒绝,但正是 U9 要避免的"开服 30 天后批量回档无出口")。余量盖住"首次被拒 → 该块最后一页"之间 guild 墙钟的前移:检查预算(默认 120s)+ 两副本墙钟差(各 ±300s,至多 600s)= 720s < 900s;超出(时钟差超承诺,或预算调到 300s 以上且单块真翻了那么久)→ 再被拒 → `CheckFailed`。**不可证明的判据随之改为 `playerSinceMs[p] < cutoff_ms + 余量`**(`(since, 下界]` 这段没查,按 `cutoff_ms` 判会静默少查 = fail-open);代价是保留期边缘 15 分钟带内的玩家被多记为不可证明(多拒,可放行)。`GuildCheckResult.RetentionCutoffMs` 与日志的 `cutoff_ms=` 是**实际查询下界**(含余量)。guild 侧不改。测试 `TestListDivergences_RetentionClampSurvivesMovingCutoff` 用"墙钟每次调用前移"的假 guild 钉住。
+> 7. **复查预算不再是常量 120s,而是 `max(120s, 检查预算)`**(`config.Config.GuildRecheckBudget()`,下限 `MinGuildRecheckBudgetSeconds`;2026-10-08 第 2 轮评审订正)。上面第 3 点、§7.5.5、§7.7 写的"`guildRecheckBudget` = 常量 120s"作废。原因:复查与检查走同一个 checker、同一套分块翻页,范围约等于全部写过的玩家,检查花了多久它就要多久;而检查预算是可配的(`GuildCheckBudgetSeconds`,上限 3600),手册还指引"检查不完就调大"—— 凡是"调大了才过得了闸"的回档,数据写完后复查必在第 120 秒超时,每次都误报紧急的 `post_write_recheck_failed`,拿不到 clean 结论也拿不到新分歧清单。不单独做成配置项:它没有独立于检查预算的取值依据。**运维口径随之变化**:检查预算每调大 1 秒,三个 `Rollback*` 的 `MethodTimeouts` 与调用方超时各调大 2 秒(公式 = 沉降 30 + 检查预算 + 写耗时 + 复查等待 10 + `max(120, 检查预算)`)。用例:`TestGuildRecheckBudgetFollowsCheckBudget`(config)、D18(d)"复查预算随检查预算放大"(logic);`TestShippedYamlGuildCheck` 的下限改用同一个函数。未编译。
 
 ### 7.5.4 拒绝与放行
 

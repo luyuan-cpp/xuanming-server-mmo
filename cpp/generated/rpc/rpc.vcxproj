@@ -64,6 +64,7 @@
     <ClInclude Include="service_metadata\common_event_battle_event_event_id.h" />
     <ClInclude Include="service_metadata\contracts_kafka_match_event_event_id.h" />
     <ClInclude Include="service_metadata\match_service_service_metadata.h" />
+    <ClInclude Include="service_metadata\match_internal_service_metadata.h" />
     <ClInclude Include="service_metadata\player_activity_service_metadata.h" />
     <ClInclude Include="service_metadata\player_attribute_service_metadata.h" />
     <ClInclude Include="service_metadata\player_bag_service_metadata.h" />
