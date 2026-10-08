@@ -543,3 +543,22 @@ func TestShippedYamlGuildCheck(t *testing.T) {
 		t.Fatalf("RollbackPlayer MethodTimeout %v < settle + check budget + recheck delay + recheck budget = %v", got, minPlayer)
 	}
 }
+
+// Store.Required:本地 yaml 不写(整段缺失)必须保持旧的降级语义;K8s ConfigMap 显式写 true 必须生效。
+// 零值就是旧行为,所以这里用裸 bool 是安全的(对照 Schema.AutoMigrate 必须用 *bool 的理由)。
+func TestStoreRequiredDefaultsToFalseAndHonoursExplicitTrue(t *testing.T) {
+	if c := loadYaml(t, minimalYaml); c.Store.Required {
+		t.Fatal("yaml without a Store block must keep the legacy degrade-and-run behaviour")
+	}
+	if c := loadYaml(t, minimalYaml+`
+Store: {}
+`); c.Store.Required {
+		t.Fatal("an empty Store block must not turn Required on")
+	}
+	if c := loadYaml(t, minimalYaml+`
+Store:
+  Required: true
+`); !c.Store.Required {
+		t.Fatal("Store.Required=true (the K8s ConfigMap form) must be honoured")
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 
 	dbpb "proto/common/database"
@@ -239,7 +240,8 @@ var bootstrapUniqueColumns = map[string][]string{
 //
 // # 回滚(可执行,不是口号)
 //
-// 停掉 data_service(本服务 replicas=1 + Recreate,见 deploy/k8s/manifests/go-svc/data-service.yaml),
+// 停掉 data_service 的**全部**副本(现在是多副本 Deployment,见 deploy/k8s/manifests/go-svc/data-service.yaml;
+// 先 `kubectl scale deployment data-service --replicas=0`,所有 zone 的都要停 —— 它们共用这一个全局库),
 // 然后:
 //
 //	ALTER TABLE `player_name`
@@ -738,8 +740,8 @@ const (
 	// snapshotGuidDedupeMaxRows 是"一次迁移最多删多少行"的**默认值**,
 	// 可由 MigrateOptions.SnapshotGuidDedupeMaxRows 覆盖(运维不必重新编译)。
 	//
-	// 为什么要上限:这是**删数据**的一步,而"重复行"在设计上根本不该存在
-	// (部署不变量是 data-service replicas=1 + Recreate)。真删出成千上万行时,更可能是
+	// 为什么要上限:这是**删数据**的一步,而"重复行"只该在唯一键建出来之前、消费组 rebalance 重叠的
+	// 那一瞬间零星出现(唯一键 uk_snapshot_guid_nz 在了之后库会直接拒绝)。真删出成千上万行时,更可能是
 	// 有人把两套环境指到了同一个库、或 snapshot_guid 发号出了问题 —— 那种情况下应该停下来让人看,
 	// 而不是让迁移安静地删到天亮。
 	snapshotGuidDedupeMaxRows = 100_000
@@ -1246,6 +1248,11 @@ type MigrateOptions struct {
 	// (那两处归别的改动),所以现在它只有零值一条路 —— 即 TiDB 上迁移必然失败,这正是期望行为。
 	AllowMissingGuidUniqueKey bool
 
+	// LockWait 是等迁移锁(见 acquireMigrateLock)的上限。0 = defaultMigrateLockWait;
+	// ctx 带截止时间时不会超过剩余时间。启动路径给得长(等先起的那个实例迁完,自己再跑一遍幂等的空迁移),
+	// `-migrate` 用默认值(锁忙就以退出码 3 让部署侧重试,不在 Job 里无限等)。
+	LockWait time.Duration
+
 	// AllowLegacyPlayerNamePrimaryKey 允许**跳过** player_name 的换主键迁移,让其余迁移照常跑完。
 	//
 	// 默认 false = 照常执行那条 ALTER。打开它等于明确接受「本实例的 player_name 仍是旧形态
@@ -1304,7 +1311,107 @@ func MigrateSchema(ctx context.Context, cfg MySQLConfig, opts MigrateOptions) er
 		return err
 	}
 	defer db.Close()
+	// 迁移锁会占住池里一条连接直到迁移结束;池上限是 1 时,迁移语句会永远等不到连接。
+	if cfg.MaxOpenConn == 1 {
+		db.SetMaxOpenConns(2)
+	}
+	release, err := acquireMigrateLock(ctx, db, cfg.DBName, opts.LockWait)
+	if err != nil {
+		return err
+	}
+	defer release()
 	return migrateSchemaOn(ctx, db, cfg.DBName, opts)
+}
+
+// ── 迁移互斥 ─────────────────────────────────────────────────────────────
+//
+// 为什么要:migrateSchemaOn 里的补列 / 补索引 / 换主键都是「先查 information_schema、再 ALTER」,
+// 稳态下重复跑是幂等的,但**首次建库或有结构变更时**两个实例同时启动会各自查到"缺",然后撞在同一条
+// ALTER 上;输的一方迁移失败,四个 store 全部不装配,而且进程生命周期内不重试。
+// data_service 要能开多副本(docs/design/no-single-node-horizontal-scaling-20261001.md §4),这一段必须串行。
+//
+// 用 MySQL 的会话级命名锁 GET_LOCK:与 go/schemamigrate、go/db 的迁移器同一做法。锁跟着连接走 ——
+// 进程崩溃或连接断开时服务端自动释放,不会留下死锁;代价是迁移中途那条连接断了,锁也就没了(另一实例可能进来),
+// 那时两边的语句仍各自幂等,只是回到了加锁前的行为,不会更糟。
+// 锁名带库名:不同库互不阻塞,同一个库的多个副本 / 多次部署串行。
+// TiDB 上 GET_LOCK 的行为没有实测过(迁移在 TiDB 上本来就会停在 player_snapshot 的可空唯一键那一步)。
+
+// ErrMigrateLockBusy 表示迁移锁在等待上限内一直被另一个实例持有。
+// `-migrate` 入口把它映射成退出码 3(与 go/schemamigrate 的 ExitLockBusy 同值:锁忙、可重试);
+// 启动路径当成普通迁移失败处理。
+var ErrMigrateLockBusy = errors.New("data_service: schema migrate lock is held by another instance")
+
+const (
+	migrateLockPrefix = "data_service.schema_migrate."
+	// MySQL 的 GET_LOCK 锁名上限是 64 个字符。
+	maxMigrateLockNameLen = 64
+	// defaultMigrateLockWait 是 MigrateOptions.LockWait 为 0 时等锁的上限。
+	defaultMigrateLockWait = 60 * time.Second
+	// migrateLockReleaseTimeout 是释放锁那条语句的上限;超时也无妨,连接关闭时服务端会释放。
+	migrateLockReleaseTimeout = 5 * time.Second
+)
+
+func migrateLockName(dbName string) string {
+	name := migrateLockPrefix + dbName
+	if len(name) > maxMigrateLockNameLen {
+		name = name[:maxMigrateLockNameLen]
+	}
+	return name
+}
+
+// migrateLockWaitSeconds 把「愿意等多久」折算成 GET_LOCK 的秒数:wait<=0 取默认值;有截止时间时不超过
+// 剩余时间;向上取整到秒且至少为 1(GET_LOCK 的 0 是"不等"、负数是"无限等",都不是这里要的语义)。
+func migrateLockWaitSeconds(wait time.Duration, deadline time.Time, hasDeadline bool, now time.Time) int64 {
+	if wait <= 0 {
+		wait = defaultMigrateLockWait
+	}
+	if hasDeadline {
+		if remaining := deadline.Sub(now); remaining < wait {
+			wait = remaining
+		}
+	}
+	secs := int64((wait + time.Second - 1) / time.Second)
+	if secs < 1 {
+		secs = 1
+	}
+	return secs
+}
+
+// acquireMigrateLock 钉住一条连接并在它上面取迁移锁,返回释放函数(释放并归还连接)。
+func acquireMigrateLock(ctx context.Context, db *sql.DB, dbName string, wait time.Duration) (func(), error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("pin a connection for the schema migrate lock: %w", err)
+	}
+	name := migrateLockName(dbName)
+	deadline, hasDeadline := ctx.Deadline()
+	waitSecs := migrateLockWaitSeconds(wait, deadline, hasDeadline, time.Now())
+
+	var got sql.NullInt64
+	if err := conn.QueryRowContext(ctx, "SELECT GET_LOCK(?, ?)", name, waitSecs).Scan(&got); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("acquire schema migrate lock %q: %w", name, err)
+	}
+	if !got.Valid {
+		// NULL = 服务端出错(例如会话被 KILL),不是"别人持有",不按可重试的锁忙处理。
+		conn.Close()
+		return nil, fmt.Errorf("acquire schema migrate lock %q: GET_LOCK returned NULL (server error or session killed)", name)
+	}
+	if got.Int64 != 1 {
+		conn.Close()
+		return nil, fmt.Errorf("%w: lock %q still held after %ds", ErrMigrateLockBusy, name, waitSecs)
+	}
+	logx.Infof("[schema] holding migrate lock %s", name)
+
+	return func() {
+		releaseCtx, cancel := context.WithTimeout(context.Background(), migrateLockReleaseTimeout)
+		defer cancel()
+		var released sql.NullInt64
+		if err := conn.QueryRowContext(releaseCtx, "SELECT RELEASE_LOCK(?)", name).Scan(&released); err != nil {
+			logx.Errorf("[schema] release migrate lock %s failed (the server frees it when the connection closes): %v", name, err)
+		}
+		conn.Close()
+	}, nil
 }
 
 // migrateSchemaOn 注册五张表 → 表名守卫 → 预建 bootstrapTables(id_segment、player_name)

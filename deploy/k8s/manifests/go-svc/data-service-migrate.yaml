@@ -1,0 +1,121 @@
+# data-service-migrate:全局库(mmorpg_global)的建表 / 补列 / 预建号段行 Job
+# (docs/design/no-single-node-horizontal-scaling-20261001.md §4;形状照 trade-migrate.yaml)。
+#
+# 与 manifests/go-svc/data-service.yaml 同一镜像、同一 ConfigMap(go-svc-data-service-config),跑服务二进制自带的迁移入口:
+#   /app/service -f /app/etc/data_service.yaml -migrate
+# 只连 MySQL 跑 store.MigrateSchema(与 Schema.AutoMigrate=true 的启动路径是同一段代码),跑完即退;
+# 不起 gRPC、不连 etcd / Kafka。库本身由 mysql-init-sql 预建,本 Job 不建库。
+#
+# 为什么需要它:staging/prod 的 ConfigMap 固定 Schema.AutoMigrate=false、IdSegment.AllowAutoSeed=false ——
+# 启动路径不建表、不种号段行。以前这一步靠人手工跑 `-migrate`;全新集群上没人跑,data-service 起来就是
+# "四个 store 全不可用",而现在 Store.Required=true 会让它直接拒启。把迁移接进发布流程,这个缺口才算补上。
+#
+# 多个 zone 各有一份本 Job,迁的却是**同一个**全局库:迁移由库级命名锁(GET_LOCK)串行,语句全部幂等,
+# 后到的要么等到锁、跑一遍空迁移,要么以退出码 3 重试。
+#
+# 调用:k8s_deploy.ps1 的 $GoSvcCatalogue."data-service" 用 MigrateJob 字段登记本文件;Apply-OneGoSvc 在 apply 服务
+# ConfigMap 之后、Deployment 之前调用 Apply-GoSvcMigrateJob(先删上一次的同名 Job 再 apply;在途的先等它结束)。
+# 门禁:staging/prod 恒等本 Job Complete 才 apply Deployment;dev 档只在 -WaitReady 下等(dev 启动期自己也会迁移)。
+# 镜像、拉取策略与 infra namespace 三个占位由 Apply-GoSvcMigrateJob 在 apply 前替换,漏替换即拒绝 apply。
+#
+# 退出码(go/data_service/data_service.go 的 runMigration)与 Job 语义:
+#   0 成功                                        → Complete
+#   3 迁移锁被另一个实例持有                       → 可重试:不命中下面的 FailJob 规则,按 backoffLimit 退避重试
+#   1 失败(连不上库 / 库不存在 / DDL 报错 / 列漂移) → 不可重试:podFailurePolicy FailJob,Job 立刻 Failed
+#   其余非 0(Go panic = 2、OOMKilled = 137 等)与 initContainer 失败 → 按 backoffLimit 重试
+# ⚠ podFailurePolicy 需要 Kubernetes ≥ 1.26;前提是 Pod 模板 restartPolicy: Never。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: data-service-migrate
+  labels:
+    # 刻意不用 app: data-service:Service / PDB 的 selector 是 app=data-service,迁移 Pod 混进去会被当成 gRPC 后端。
+    app: data-service-migrate
+    tier: go-svc
+spec:
+  # 给"锁忙 / 意外崩溃 / MySQL 迟迟不可连"留重试余量:默认退避 10s → 20s → 40s → 80s,4 次后 Job Failed。
+  backoffLimit: 4
+  podFailurePolicy:
+    rules:
+      # 1 = 迁移失败:重试不会自己变好,立即判 Job 失败,让发布停在 Deployment 之前。
+      - action: FailJob
+        onExitCodes:
+          containerName: data-service-migrate
+          operator: In
+          values: [1]
+      # 节点排空 / 抢占导致的驱逐不是迁移本身的问题,不计入 backoffLimit。
+      - action: Ignore
+        onPodConditions:
+          - type: DisruptionTarget
+  template:
+    metadata:
+      labels:
+        app: data-service-migrate
+        tier: go-svc
+    spec:
+      restartPolicy: Never
+      initContainers:
+        # 等 MySQL 的 3306 真正可连再跑迁移(理由与时间预算的算法见 trade-migrate.yaml 同名 initContainer 的注释):
+        # 上限 WAIT_MYSQL_TIMEOUT_SECONDS + 8s,要明显小于 k8s_deploy.ps1 的 $GoSvcMigrateJobMinWaitSeconds。
+        - name: wait-mysql
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          env:
+            - name: MYSQL_ADDR
+              value: "mysql.__INFRA_NAMESPACE__"
+            - name: WAIT_MYSQL_TIMEOUT_SECONDS
+              value: "150"
+          command:
+            - sh
+            - -c
+            - |
+              if ! command -v nc >/dev/null 2>&1; then
+                echo "nc not found in image, skip waiting for $MYSQL_ADDR:3306"
+                exit 0
+              fi
+              uptime_s() { cut -d. -f1 /proc/uptime; }
+              deadline=$(( $(uptime_s) + $WAIT_MYSQL_TIMEOUT_SECONDS ))
+              while :; do
+                if nc -z -w 3 "$MYSQL_ADDR" 3306; then
+                  echo "$MYSQL_ADDR:3306 reachable"
+                  exit 0
+                fi
+                now=$(uptime_s)
+                if [ "$now" -ge "$deadline" ]; then
+                  echo "ERROR: $MYSQL_ADDR:3306 not reachable within ${WAIT_MYSQL_TIMEOUT_SECONDS}s" >&2
+                  exit 1
+                fi
+                echo "waiting for $MYSQL_ADDR:3306 ($(( deadline - now ))s left)..."
+                sleep 5
+              done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+      containers:
+        - name: data-service-migrate
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          env:
+            - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
+              value: warn
+          # 与 data-service.yaml 的 args 只差最后一个 -migrate:同一份 ConfigMap,库名 / 账号 / 号段清单与服务完全一致。
+          args: ["-f", "/app/etc/data_service.yaml", "-migrate"]
+          volumeMounts:
+            - name: svc-config
+              mountPath: /app/etc
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: svc-config
+          configMap:
+            name: go-svc-data-service-config

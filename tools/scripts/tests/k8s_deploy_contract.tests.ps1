@@ -156,6 +156,35 @@ Test-Case "zone 内 go-svc Deployment 统一注入控制面命令 topic 契约,�
     }
 }
 
+Test-Case "data-service 是多副本形态:2 副本滚动更新 + PDB + 反亲和,ConfigMap 要求 store 必备,迁移 Job 先于 Deployment" {
+    # 背景(docs/design/no-single-node-horizontal-scaling-20261001.md §4):data-service 管发号段与审计落库,
+    # 以前钉成 1 副本 + Recreate。多副本的两个服务侧前提是迁移互斥与 Store.Required,部署侧要一起到位。
+    $block = @(Get-ManifestBlocks -Output $devOut | Where-Object {
+        $_ -cmatch '(?m)^kind: Deployment\s*$' -and $_ -cmatch '(?m)^  name: data-service\s*$'
+    }) | Select-Object -First 1
+    Assert-True -Condition ($null -ne $block) -Because 'DryRun 输出里应当有 data-service 的 Deployment'
+    Assert-Match -Text $block -Pattern '(?m)^  replicas: 2\s*$' -Because '单副本 = 这个 zone 的发号与审计落库是单点'
+    Assert-NotMatch -Text $block -Pattern 'type: Recreate' -Because 'Recreate 会在发布时出现一个实例都没有的窗口'
+    Assert-Match -Text $block -Pattern 'type: RollingUpdate\s+rollingUpdate:\s+maxSurge: 1\s+maxUnavailable: 0' -Because '先起新的再停旧的'
+    Assert-Match -Text $block -Pattern 'podAntiAffinity' -Because '两个副本不该落在同一个节点上'
+    Assert-Match -Text $block -Pattern '(?s)kind: PodDisruptionBudget.*?name: data-service-pdb.*?minAvailable: 1' -Because 'PDB 必须写在主 manifest 里,独立文件不会被 apply'
+    Assert-Match -Text $block -Pattern 'fieldPath: status.podIP' -Because 'C++ 约定注册仍要通告 Pod IP'
+    Assert-Match -Text $block -Pattern 'containerPort: 9260\s+name: metrics' -Because '多副本后要能按 Pod 抓指标'
+
+    $configMap = Select-ManifestByName -Output $devOut -Name 'go-svc-data-service-config'
+    Assert-Match -Text $configMap -Pattern '(?m)^\s+Store:\s*\r?\n\s+Required: true\s*$' -Because 'store 装配不起来的实例不能进发现池'
+    Assert-Match -Text $configMap -Pattern 'MetricsListenAddr: ":9260"' -Because '指标端口要与 manifest 一致'
+
+    $job = Select-ManifestByName -Output $devOut -Name 'data-service-migrate'
+    Assert-True -Condition ($null -ne $job) -Because 'staging/prod 启动期不建表、不种号段行,必须有迁移 Job'
+    Assert-Match -Text $job -Pattern 'args: \["-f", "/app/etc/data_service.yaml", "-migrate"\]' -Because 'Job 必须用与服务同一份配置跑 -migrate'
+    Assert-NotMatch -Text $job -Pattern '__[A-Z][A-Z0-9_]*__|PLACEHOLDER_' -Because '占位必须全部替换'
+    $jobIndex = $devOut.IndexOf('name: data-service-migrate')
+    $deployIndex = $devOut.IndexOf('name: data-service-pdb')
+    Assert-True -Condition ($jobIndex -ge 0 -and $deployIndex -gt $jobIndex) -Because '迁移 Job 必须先于 Deployment apply'
+}
+
+
 Test-Case "login 与 db 生成产物里的 Kafka.PartitionCnt 必须彼此相等" {
     # db 侧启动门禁 fail-closed:两边不一致直接起不来
     $loginFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "go-svc-login-config")

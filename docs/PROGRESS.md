@@ -6588,3 +6588,30 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
   原地切换被拒。步骤见设计文档 §2.5 与 `deploy/k8s/README.md`「Kafka:多 broker」。
 - **已知限制**:前 3 个是 combined 模式(controller 与 broker 同进程),独立 controller 节点未做;加 broker 不会自动搬分区;镜像仍是浮动 tag;本机 compose 保持单 broker。
 - **注意**:契约测试基线目前因 deadline 门禁与 `data_service.yaml` 的 `MethodTimeouts` 冲突而失败(09-29 起,与本条无关),要先由相关会话解决,本条的断言才跑得到。
+
+## 2026-10-08 消除单节点(二):data_service 每区 1 副本 → 2 副本(Claude,未编译、未跑测试、未上集群)
+
+总纲 `docs/design/no-single-node-horizontal-scaling-20261001.md` §4。上一项(Kafka)见同名「(一)」条目。
+
+- **结论先行**:通读代码后确认 data_service 在数据正确性上本来就能多开 —— RPC 面没有进程内业务状态(发号段靠行锁 + version、名字登记靠唯一键、
+  存盘靠 Redis 带 token 的锁 + Lua);两条落库消费者是 kafka-go 的 consumer group(分区在实例间独占分配,先落库后提交 + 幂等落库);
+  而且多个 zone 的实例早就在共用同一个全局库、同一组 topic 与消费组。`data-service.yaml` 里「两个实例互相等锁」的理由只在快照唯一键建出来之前成立。
+- **补的两处代码**:
+  1. 迁移互斥:`store.MigrateSchema` 先取库级命名锁 `GET_LOCK('data_service.schema_migrate.<库名>')`。补列 / 补索引是「先查后改」,
+     没有互斥时两个实例同时首次启动会撞在同一条 ALTER 上,输的一方四个 store 全不装配且不重试。启动路径等满迁移时限;`-migrate` 等 60s,
+     锁忙返回 `ErrMigrateLockBusy` → 退出码 3(与 go/schemamigrate 同值,Job 按它重试)。
+  2. `Store.Required`(新配置,缺省 false,本地行为不变):为 true 时四个 store 任一没装配起来就拒启,发生在任何 etcd 注册之前。
+     以前这种实例 gRPC 健康恒为 SERVING、照常注册;单实例时是全挂,多实例时是按比例失败,滚动更新还会把健康的旧 Pod 换成带病的新 Pod。
+- **部署**:`data-service.yaml` 改为 2 副本 + RollingUpdate(maxSurge 1 / maxUnavailable 0)+ preferred 反亲和 + 同文件 PDB + metrics 端口 9260;
+  新增 `data-service-migrate.yaml` 并在 `$GoSvcCatalogue` 登记 `MigrateJob` —— staging / prod 启动路径不建表、不种号段行,以前靠人手工跑 `-migrate`,
+  全新集群上没人跑;现在由发布流程在 Deployment 之前跑并恒等它 Complete。ConfigMap 加 `Store.Required: true`、`MetricsListenAddr: ":9260"`。
+- **顺带更正**:README、`data_service_role_and_scope.md`、`snapshot_store.go` 的一条运维日志文案与四处注释里「部署不变量是 replicas=1 + Recreate」的说法。
+- **已做的静态核对**:`gofmt` 通过;PowerShell 语法解析 0 错误;`data-service.yaml` 经真实的环境变量注入函数渲染后 YAML 可解析
+  (2 副本 / 滚动策略 / 反亲和 / PDB / 两个端口 / 三个注入变量);迁移 Job 的 YAML 可解析、占位只有脚本会替换的三个。
+- **未做(交 Codex,命令见设计文档 §4.5)**:`go/data_service` 的 build / vet / test;需要本地 MySQL 的两条新集成用例
+  (`TestMigrateSchema_ConcurrentFirstBootIsSerialized`、`TestMigrateSchema_LockBusyReturnsSentinel`);两份 `*.tests.ps1`;kind 上的实测
+  (迁移 Job Complete、两个 Pod Ready、删一个 Pod 不影响建角与 scene 启动、停掉 MySQL 后重启的 Pod 应当拒启而不是带病 Ready)。
+- **限制**:消费并行度上限 = 分区数(6 / 3);每实例最多 35 条 MySQL 连接,「zone 数 × 2 × 35」要算进 `max_connections`(现 500);
+  `GET_LOCK` 在 TiDB 上未实测;唯一键缺失时拒绝启动快照消费者的守卫、C++ 约定键提前注销两项没做。
+- **Java 版(AGENTS §12)**:待做。本机没有 Java 仓库,未核对它的 data 服务是否有对应的单实例假设;`PARITY.md` 未登记。
+- **注意**:契约测试基线仍因 deadline 门禁与 `data_service.yaml` 的 `MethodTimeouts` 冲突而失败(09-29 起,与本条无关)。

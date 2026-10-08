@@ -93,6 +93,12 @@ function Reset-MigrateFixture {
         ConfigFile = 'friend.yaml'; ImageName = 'mmorpg-friend'; Port = 50400; Global = $true
     }
 
+    # data-service 是第三个带 MigrateJob 的服务,也是第一个**不是全局池**的(每个 zone 一份,迁的是同一个全局库)。
+    $script:GoSvcCatalogue['data-service'] = @{
+        ConfigMap = 'go-svc-data-service-config'; Manifest = 'data-service.yaml'; MigrateJob = 'data-service-migrate.yaml'
+        ConfigFile = 'data_service.yaml'; ImageName = 'mmorpg-data-service'; Port = 9000
+    }
+
     Set-Item Function:script:Get-GoSvcMigrateJobWaitSeconds { return $script:BudgetSeconds }
     Set-Item Function:script:New-GoSvcConfigMapYaml {
         param($SvcName, $CurrentZoneId, $CurrentClusterId)
@@ -194,6 +200,21 @@ Test-Case 'friend 的迁移门禁与 trade 同链路：ConfigMap → Job → Dep
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'staging/prod 的 Schema.AutoMigrate=false，表没建出来 friend 会拒启，迁移必须先于 Deployment'
     Assert-True -Condition ($events -contains 'query:Job') -Because '成功必须来自 Job 查询，不能因为是新服务就直接放行'
 }
+
+# data-service(全局库 mmorpg_global)走同一条门禁:staging/prod 启动期不建表、不种号段行,而 Store.Required=true
+# 会让没有表的实例直接拒启,所以迁移 Job 必须先 Complete。用真 manifest 跑,顺带钉住两个文件都在、占位全部可替换。
+Test-Case 'data-service 的迁移门禁:ConfigMap → Job → Deployment,且 Deployment 是多副本形态' {
+    Reset-MigrateFixture
+    $script:JobAbsentBeforeApply = $true
+    Apply-OneGoSvc -SvcName 'data-service' -Namespace audit-zone -CurrentZoneId 1 -CurrentClusterId 0
+    $events = @($script:Events)
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because '迁移 Job 要读取先前创建的 ConfigMap'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because '表与号段行没就位,Store.Required 会让 data-service 拒启'
+    Assert-True -Condition ($events -contains 'query:Job') -Because '放行必须来自 Job 查询结果'
+    Assert-Match -Text $script:DeploymentContent -Pattern '(?m)^  replicas: 2\s*$' -Because 'data-service 不再是单副本'
+    Assert-Match -Text $script:DeploymentContent -Pattern 'name: data-service-pdb' -Because 'PDB 随主 manifest 一起 apply'
+}
+
 
 # 控制面命令 topic 契约(KAFKA_COMMAND_TOPIC_*)统一注入。背景:go/shared/kafkacmd 不配这两个变量就回落到 256 / 1,
 # 而 C++ gate / scene 消费的是 base_deploy_config.yaml 的代号,不一致时 Go 发给 gate / scene 的命令静默丢失。

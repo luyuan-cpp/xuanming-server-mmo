@@ -99,10 +99,52 @@
 两个实例会互相抢走对方正在处理的任务;部署与本机脚本因此把它钉成单实例。
 方向:让每个实例只认领自己的在途任务(收据带实例标识 + 租约),分区由消费组在实例之间分配。先读代码再定稿。
 
-## 4. data_service:每区 1 → 多实例(待做)
+## 4. data_service:每区 1 → 2 副本(已落码,未编译、未跑测试)
 
-现状:同一个进程既是发号段 / 名字登记的 RPC 服务,又跑两条审计落库消费者;多实例时消费者互相等锁,所以钉成 1 + Recreate。
-方向:RPC 部分本来就靠 MySQL 行锁保证原子,可以多实例;消费者按分区在实例间分工。先读代码再定稿。
+### 4.1 结论:它在数据正确性上本来就能多开
+
+通读代码后的判定(2026-10-08):
+
+- **RPC 面没有进程内业务状态**。发号段是单事务 `SELECT ... FOR UPDATE` + `UPDATE ... WHERE version=?`;名字登记靠库上的唯一键;
+  存盘 / 删除是 Redis 带 token 的分布式锁 + Lua;归属映射全是 Lua 原子脚本。
+- **两条落库消费者是 kafka-go 的 consumer group**:每个分区同一时刻只属于一个实例;顺序恒为先落库后提交 offset,落库幂等
+  (流水 `INSERT IGNORE`、快照唯一键 + ON DUPLICATE KEY)。重叠只发生在 rebalance 瞬间,结果是「至少一次 + 幂等」,不丢不重。
+- **它早就是多实例的**:data-service 每个 zone 一份,但全局库、topic、消费组都不分 zone —— 多个 zone 的实例一直在共用它们。
+- manifest 里「两个实例互相等锁」的理由只在快照唯一键 `uk_snapshot_guid_nz` 还没建出来的库上成立(那时走 NOT EXISTS + 间隙锁的退路)。
+
+### 4.2 补的两处代码
+
+| 问题 | 改动 |
+|---|---|
+| 启动期迁移没有互斥:补列 / 补索引是「先查后改」,首次建库或有结构变更时两个实例会撞在同一条 ALTER 上;输的一方四个 store 全不装配,且不重试 | `store.MigrateSchema` 先取库级命名锁 `GET_LOCK('data_service.schema_migrate.<库名>')`。启动路径等满迁移时限(后到的等先到的跑完);`-migrate` 等 60s,锁忙返回 `ErrMigrateLockBusy` → 退出码 3(可重试) |
+| store 装配失败的实例照样进发现池:gRPC 健康恒为 SERVING、两条 etcd 注册照常。单实例时是全挂(显眼),多实例时是**按比例失败**(隐蔽),滚动更新还会把健康的旧 Pod 换成带病的新 Pod | 新配置 `Store.Required`(缺省 false,本地行为不变)。为 true 时四个 store 任一缺失即拒启,发生在任何 etcd 注册之前。K8s 的 ConfigMap 所有档位写 true |
+
+### 4.3 部署
+
+- `data-service.yaml`:2 副本、`RollingUpdate`(maxSurge 1 / maxUnavailable 0)、preferred 反亲和、同文件 PDB(`minAvailable: 1`)、metrics 端口 9260。
+- 新增 `data-service-migrate.yaml`(照 `trade-migrate.yaml`),目录条目登记 `MigrateJob`:staging / prod 的启动路径不建表、不种号段行,
+  以前靠人手工跑 `-migrate`;现在由发布流程在 Deployment 之前跑,且恒等它 Complete。每个 zone 一份 Job,迁同一个全局库,靠迁移锁串行。
+- ConfigMap 加 `Store.Required: true`、`MetricsListenAddr: ":9260"`。
+- 本机脚本不用改:`go_services.ps1` 对 data_service 本来就允许多开。
+
+### 4.4 限制与未做
+
+- 消费并行度上限 = 分区数(transaction_log 6 / player_snapshot 3);副本超过它只增加 RPC 容量。要更高只能换 topic 代号。
+- 连接预算:每实例最多 35 条 MySQL 连接;「zone 数 × 2 × 35」要算进 `max_connections`(现为 500,见 §6)。
+- 未做:唯一键缺失时拒绝启动快照消费者的守卫;C++ 约定的 etcd 键提前到 wrap-up 阶段注销(现在滚动更新有一个靠 READY 过滤兜住的短窗口)。
+- `GET_LOCK` 在 TiDB 上的行为没有实测(迁移在 TiDB 上本来就停在可空唯一键那一步,见 §6)。
+
+### 4.5 验证(交 Codex)
+
+```
+cd go/data_service && go build ./... && go vet ./... && go test ./...
+cd go/data_service && go test -tags=integration ./internal/store/...      # 需要本地 MySQL;新用例 TestMigrateSchema_ConcurrentFirstBootIsSerialized / _LockBusyReturnsSentinel
+pwsh -NoProfile -File tools/scripts/tests/k8s_migrate_gate.tests.ps1
+pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
+```
+
+kind 上:`zone-up` 后 `data-service-migrate` Job Complete、两个 Pod Ready;`kubectl delete pod` 其中一个,期间 robot 建角(要领 PlayerId 号段)
+与 scene 重启(要领首个 GUID 号段)都不受影响;把 MySQL 停掉再重启一个 data-service Pod,它应当 CrashLoop(拒启)而不是带病 Ready。
 
 ## 5. 共享 Redis:单实例 → 高可用(待做)
 
