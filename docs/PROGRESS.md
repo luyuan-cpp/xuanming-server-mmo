@@ -6560,3 +6560,31 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
 - 从上述唯一提交导出隔离源码，仅加入已回归的 aoi.cpp 最小补丁；所有自有库使用同一源码从空目录构建，第三方 SDK 复用；MSBuild /m:1 /nr:false，关闭 PostBuildEvent。中途工具会话被打断后，仅增量续编同一输出目录；未清缓存，未混入当前主工作区新库。解决方案遗漏 gate/battle 前置依赖，因此显式先构建这两个同基线正式目标，再完成 Scene 链接。最终构建 exit 0，0 警告/0 错误；真实 link.read 输入逐项证明 16 个本地库全部来自隔离目录，详见 baseline-linked-inputs.json。
 - 新 exe：E:\work\image\designs\team-invites-20260928\aoi-fix\baseline-source\build\cpp\nodes\scene.exe，SHA256=33d1d0b19aa03da9d926b9918eef9704c7f9742e9f32f97eb6f81a1e42c0c473。本子任务未替换/重启运行服务器；根任务负责随后部署和双客户端四入口验证，联网结果以组队邀请总验收记录为准。
 - 证据：E:/work/image/designs/team-invites-20260928/aoi-fix/verification.json、deployed-pdb-sources.txt、deployed-baseline-comparison.json、repository-regression.log、baseline-build-result.json 及其构建日志。
+
+## 2026-10-01 ~ 10-08 消除单节点(一):Kafka 单 broker → 可配置 ≥3 个 broker(Claude,未跑测试、未上集群)
+
+用户要求(10-01):所有服务都不能只有一个节点,要能水平扩展。总纲、盘点与每一项的设计 / 验证口径在
+`docs/design/no-single-node-horizontal-scaling-20261001.md`;顺序 Kafka → db → data_service → 共享 Redis → MySQL → guild 的 K8s 清单。本条是第一项。
+
+- **盘点结论**:能多开的有 gate / scene / battle、login、player-locator、match、chat、client-rpc-router、trade、friend、
+  scene-manager(请求由所有副本处理,后台任务由主节点做)、Java gateway、etcd×3、match 的 Redis Cluster。
+  仍是单节点的:Kafka、共享 Redis、MySQL、db(每区 1)、data_service(每区 1)、guild(K8s 上没有清单)。
+- **做法**:`k8s_deploy.ps1 -KafkaBrokers <n>`(0 = 按档位:`-ReleaseProfile` 不是 dev 或 `-OpsProfile` 不是 custom → 3,其余 1;只接受 1 或 ≥3)。
+  派生值只在 `Get-KafkaTopologyFor` 算一次,三处消费:`kafka.yaml`(副本数 / 选举组成员表 / broker 默认副本数 / `min.insync.replicas` / PDB / `podManagementPolicy`)、
+  `kafka-topic-init.yaml`(预建 topic 的副本数,建完读回核对)、注入每个 go-svc 的 `KAFKA_TOPIC_REPLICATION_FACTOR`(`kafkautil.EnsureTopics` 建 topic 用)。
+  前 3 个 Pod 兼任 controller、第 4 个起只当 broker,所以 3 → N 只改 `replicas`。每个 Pod 的 `node.id` / 角色 / 监听 / 广播地址由启动脚本按序号导出;
+  单 broker 时算出来的值与改造前逐字相同(既有 PVC 可沿用)。客户端的 broker 地址配置不用改(`kafka.<ns>:9092` 只做 bootstrap 入口)。
+- **三道 fail-closed 闸**:① 1 ↔ ≥3、缩容一律拒绝 apply(`Assert-KafkaTopologyChangeIsSafe`:静态选举组成员表不能原地改,
+  否则两个空白新节点可以用空的元数据日志当选,全部 topic 元数据消失);② 已存在 topic 的副本数低于要求,预建 Job 与 `EnsureTopics` 都拒绝;
+  ③ broker 级 `min.insync.replicas=2`,多 broker 集群上 1 份副本的 topic 会让 `acks=all` 的写入直接被拒。
+- **为什么不用 broker 默认副本数(建 topic 传 −1)**:需要 CreateTopics v4,仓库钉的 sarama v1.43.1 最高只发 v3。
+- **go-svc 环境变量注入抽成通用函数** `Add-GoSvcEnvEntries`,`Add-GoSvcCommandTopicEnv`(09-28)与新增的 `Add-GoSvcTopicReplicationEnv` 是它的薄包装。
+- **落点**:改动在 10-01 被每小时自动保存提交(`c3ef832129` / `f0b4a1481a` / `df3e2ca922`),10-08 随主工作区合并(`59c270499c` 之前的合并提交)保留;
+  合并后的 `k8s_deploy.ps1` 逐函数核对过(92 个 = 两侧并集,Kafka 相关函数与合并前逐字相同)。
+- **已做的静态核对**:PowerShell 语法解析 0 错误;`kafka.yaml` 按 1 / 3 / 5 个 broker 模拟渲染后 YAML 可解析,启动脚本对每个 Pod 名算出的身份正确
+  (单 broker 与改造前一致;第 4、5 个只当 broker);预建 Job 脚本用假工具走过「副本数够 / 不够 / 建不出来」三条路径;几个纯函数直接喂值核对;`gofmt` 通过。
+- **未做(交 Codex)**:`tools/scripts/tests/k8s_deploy_contract.tests.ps1`、`k8s_migrate_gate.tests.ps1`、`cd go/shared && go test ./kafkautil/...`;
+  kind 上单 broker 回归、三 broker 起服、**杀掉一个 broker 后另外两个必须保持 Ready**(就绪探针依赖 `kafka-broker-api-versions.sh` 的行为,必须实测)、
+  原地切换被拒。步骤见设计文档 §2.5 与 `deploy/k8s/README.md`「Kafka:多 broker」。
+- **已知限制**:前 3 个是 combined 模式(controller 与 broker 同进程),独立 controller 节点未做;加 broker 不会自动搬分区;镜像仍是浮动 tag;本机 compose 保持单 broker。
+- **注意**:契约测试基线目前因 deadline 门禁与 `data_service.yaml` 的 `MethodTimeouts` 冲突而失败(09-29 起,与本条无关),要先由相关会话解决,本条的断言才跑得到。
