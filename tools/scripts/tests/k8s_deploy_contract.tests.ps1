@@ -502,6 +502,9 @@ Test-Case "自检:MethodTimeouts 逐条核对,C++ 会调用的方法必须在预
     $got = @(& $check '10000' (& $block (& $entry $allocate '8s')) @() -OmitParsedEntries)
     Assert-True -Condition ($got.Count -gt 0) -Because '有 MethodTimeouts 却没给逐方法解析结果必须报违例'
     Assert-Match -Text $got[0] -Pattern '^DataServiceNodeService:.*没有拿到逐方法的解析结果' -Because '违例要说明缺的是逐方法解析结果'
+    $got = @(& $check '10000' "methodTimeouts: [{FullMethod: $allocate, Timeout: 1h}]" @() -OmitParsedEntries)
+    Assert-True -Condition ($got.Count -gt 0) -Because '键名小写时同样要认出「有 MethodTimeouts 却没给逐方法解析结果」(go-zero 的键不分大小写)'
+    Assert-Match -Text $got[0] -Pattern '^DataServiceNodeService:.*没有拿到逐方法的解析结果' -Because '小写键的违例同样要说明缺的是逐方法解析结果'
 
     # 下面三种是「两套解析对不上」的情形,直接喂构造值(绕开 Get-ZrpcMethodTimeouts,它自己会先 throw)。
     $deployScalars = (ConvertFrom-YamlToFlatMap -Text "GrpcClient:`n  CallDeadlineMs:`n    DataServiceNodeService: 4000").Scalars
@@ -575,7 +578,8 @@ Test-Case "自检:Get-ZrpcMethodTimeouts 读得出块式写法的每一条,读�
         @{ Why = '列表项是标量'; Text = "MethodTimeouts:`n  - just-a-string"; Pattern = '看不懂的行' }
         @{ Why = '键只有名字没有值'; Text = "MethodTimeouts:`n  - FullMethod:`n    Timeout: 1s"; Pattern = '看不懂的行' }
         @{ Why = '顶层出现两次'; Text = "MethodTimeouts:`n$one`nName: x`nMethodTimeouts:`n$one"; Pattern = '不止一次' }
-        # 以下几种 go-zero 都会照常生效(它走完整的 YAML 解析),而这里读不出来:必须拒绝,不能当作没有这张表。
+        # 以下几种这里都读不出来,必须拒绝而不能当作没有这张表。除「嵌在别的键下面」外,go-zero 都会让它们照常生效
+        # (它走完整的 YAML 解析);嵌套的那种在服务端并不生效,但这里不去分辨。
         @{ Why = '列表项顶格写'; Text = "MethodTimeouts:`n- FullMethod: /a.B/One`n  Timeout: 1s`nNext: 1"; Pattern = '列表项要缩进书写' }
         @{ Why = '键带双引号 + 流式写法'; Text = "Name: x`n`"MethodTimeouts`": [{`"FullMethod`": `"/a.B/One`", `"Timeout`": `"1h`"}]"; Pattern = '提到了 MethodTimeouts' }
         @{ Why = '键带单引号 + 块式写法'; Text = "'MethodTimeouts':`n$one"; Pattern = '提到了 MethodTimeouts' }
@@ -583,6 +587,13 @@ Test-Case "自检:Get-ZrpcMethodTimeouts 读得出块式写法的每一条,读�
         @{ Why = '整份文档统一缩进'; Text = "  Name: x`n  MethodTimeouts: [{FullMethod: /a.B/One, Timeout: 1h}]"; Pattern = '提到了 MethodTimeouts' }
         @{ Why = '嵌在别的键下面'; Text = "Outer:`n  MethodTimeouts:`n    - FullMethod: /a.B/One`n      Timeout: 1h"; Pattern = '提到了 MethodTimeouts' }
         @{ Why = '标准写法之后又用带引号的键写了一遍(YAML 里后者覆盖前者)'; Text = "MethodTimeouts:`n$one`n`"MethodTimeouts`": [{FullMethod: /a.B/Two, Timeout: 2h}]"; Pattern = '提到了 MethodTimeouts' }
+        @{ Why = '标准写法之后又用大小写不同的带引号键写了一遍(go-zero 的键不分大小写,两条会归并)'; Text = "MethodTimeouts:`n$one`n`"methodTimeouts`": [{FullMethod: /a.B/Two, Timeout: 2h}]"; Pattern = '提到了 MethodTimeouts' }
+        @{ Why = '整份文档写成一行流式映射 / JSON(键在行中间)'; Text = '{"Name": "x", "MethodTimeouts": [{"FullMethod": "/a.B/One", "Timeout": "1h"}]}'; Pattern = '提到了 MethodTimeouts' }
+        # yaml.v2 把单独的 CR 与 NEL / LS / PS 也当换行;这里只按 LF / CRLF 切行,注释后面跟一个这样的字符,后续内容会被当成注释漏读。
+        @{ Why = '行尾是单独的 CR'; Text = "Name: x # c`rMethodTimeouts:`r  - FullMethod: /a.B/One`r    Timeout: 1h`r"; Pattern = '单独的 CR 或 NEL / LS / PS' }
+        @{ Why = '注释后面跟 U+2028(LS)'; Text = "Name: x # c$([char]0x2028)MethodTimeouts:`n$one"; Pattern = '单独的 CR 或 NEL / LS / PS' }
+        @{ Why = '注释后面跟 U+0085(NEL)'; Text = "Name: x # c$([char]0x85)MethodTimeouts:`n$one"; Pattern = '单独的 CR 或 NEL / LS / PS' }
+        @{ Why = '块内条目之间用 U+2029(PS)分隔'; Text = "MethodTimeouts:`n  - FullMethod: /a.B/One`n    Timeout: 1h # c$([char]0x2029)  - FullMethod: /a.B/Two`n    Timeout: 2h"; Pattern = '单独的 CR 或 NEL / LS / PS' }
     )
     foreach ($c in $malformed) {
         $message = ''
@@ -591,7 +602,7 @@ Test-Case "自检:Get-ZrpcMethodTimeouts 读得出块式写法的每一条,读�
     }
 }
 
-Test-Case "自检:ConvertTo-ZrpcDurationMs 与 Go 的时长写法一致,解析不了返回空(交给调用方报违例)" {
+Test-Case "自检:ConvertTo-ZrpcDurationMs 认的是 Go 时长写法的子集,换算不多算,解析不了返回空(交给调用方报违例)" {
     $expected = [ordered]@{
         '300s'      = 300000
         '3600s'     = 3600000
@@ -610,7 +621,7 @@ Test-Case "自检:ConvertTo-ZrpcDurationMs 与 Go 的时长写法一致,解析�
         Assert-Equal -Expected $expected[$text] -Actual (ConvertTo-ZrpcDurationMs -Text $text) -Because "'$text' 的毫秒数(小数不能多算,不足 1ms 向上取整)"
     }
     $fullWidthThree = [string][char]0xFF13
-    foreach ($text in @('3000', '8S', '1m30S', '1H30m', '0s', '0ms', '-5s', '+5s', '.5s', '5.s', '1e3s', '1d', '10us', '5 s', 's', '', 'abc', '5s extra', "${fullWidthThree}s", '99999999999999999999999999h')) {
+    foreach ($text in @('3000', '8S', '1m30S', '1H30m', '0s', '0ms', '-5s', '+5s', '.5s', '5.s', '1e3s', '1d', '10us', '5 s', 's', '', 'abc', '5s extra', "${fullWidthThree}s", "${fullWidthThree}s5s", "5s${fullWidthThree}ms", '99999999999999999999999999h')) {
         Assert-True -Condition ($null -eq (ConvertTo-ZrpcDurationMs -Text $text)) -Because "'$text' 不是带单位的正时长(单位只认小写的 ms / s / m / h,数字只认 0-9),必须返回空而不是抛异常"
     }
 }
@@ -667,12 +678,23 @@ Test-Case "负向:给 C++ 会调用的 AllocateIdSegment 配一条超预算的 M
 
         $serviceCopy = Join-Path $tempRoot 'go/data_service/etc/data_service.yaml'
         $original = Get-Content -LiteralPath $serviceCopy -Raw
-        $keyLine = '(?m)^MethodTimeouts:[ \t]*\r?$'
+        # 与解析器同样宽:键名不分大小写,键后可以带行尾注释。否则有人只给这一行加条注释,门禁照常放行、本用例却假红。
+        $keyLine = '(?mi)^MethodTimeouts[ \t]*:[ \t]*(#[^\r\n]*)?\r?$'
         Assert-Match -Text $original -Pattern $keyLine -Because '夹具前提:data_service.yaml 里要有块式的 MethodTimeouts(回档三条),下面两处改动都插在它的第一行之后'
         $RepoRoot = $tempRoot
 
-        # 前提:副本不改就该放行。否则下面两条负向断言分不清是谁造成的失败。
+        # 前提:副本不改就该放行。否则下面几条负向断言分不清是谁造成的失败。
         Assert-GrpcClientDeadlineBudget | Out-Null
+
+        # 通过行只列真正按登记表放行的条目:预算内的普通条目、以及与登记项只差大小写的方法(判定函数不豁免它,
+        # 只是 1s + 2000 ≤ 4000 所以通过)都不能被写成 exempt,否则部署的人看到的豁免清单是错的。
+        $withInBudget = [regex]::Replace($original, $keyLine, "MethodTimeouts:`n  - FullMethod: /data_service.DataService/AllocateIdSegment`n    Timeout: 1s`n  - FullMethod: /data_service.DataService/rollbackplayer`n    Timeout: 1s")
+        [System.IO.File]::WriteAllText($serviceCopy, $withInBudget, [System.Text.UTF8Encoding]::new($false))
+        $passLine = [string](Assert-GrpcClientDeadlineBudget 6>&1 | Out-String)
+        Assert-Match -Text $passLine -Pattern 'GrpcClient deadline budget OK' -Because '两条预算内的条目不该让门禁拒绝(夹具前提)'
+        Assert-Match -Text $passLine -Pattern 'RollbackPlayer=' -Because '登记过的回档条目仍要出现在豁免清单里'
+        Assert-NotMatch -Text $passLine -Pattern 'AllocateIdSegment=' -Because '没登记的条目是经过 deadline 比较才通过的,不能出现在豁免清单里'
+        Assert-True -Condition (-not ($passLine -cmatch 'rollbackplayer=')) -Because '与登记项只差大小写的方法没有被豁免,不能出现在豁免清单里(登记表逐字匹配)'
 
         $withAllocate = [regex]::Replace($original, $keyLine, "MethodTimeouts:`n  - FullMethod: /data_service.DataService/AllocateIdSegment`n    Timeout: 8s")
         [System.IO.File]::WriteAllText($serviceCopy, $withAllocate, [System.Text.UTF8Encoding]::new($false))

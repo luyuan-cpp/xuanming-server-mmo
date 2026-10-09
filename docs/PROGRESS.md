@@ -6873,12 +6873,12 @@ PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修
 
 ## 2026-10-09 部署门禁:MethodTimeouts 改为逐条核对,k8s 写路径不再在入口被拒(Claude,契约测试已实跑)
 
-- **更正前文**:本文件 10-08 的三条(消除单节点(二)(三)、帮会库 name_norm)都注明「契约测试基线因 deadline 门禁与 `data_service.yaml` 的 `MethodTimeouts` 冲突而失败」。该冲突本条已解决,基线不再因此失败。
+- **更正前文**:本文件「消除单节点」的三条 —— (一)(标题日期 10-01 ~ 10-08)、(二)、(三)—— 都注明「契约测试基线因 deadline 门禁与 `data_service.yaml` 的 `MethodTimeouts` 冲突而失败」。该冲突本条已解决,基线不再因此失败。
 - **问题**:`Assert-GrpcClientDeadlineBudget` 原先见到服务 yaml 里有 `MethodTimeouts` 就拒绝(`ccfc402919`),而同一天帮会线给 data_service 的回档三个 RPC 配了 `MethodTimeouts`(`907a6b7529`)。两边互不知情,`zone-up` / `infra-up` / `all-up` 从 09-29 起全部在入口被拒,10-08 实跑契约测试时才发现。
 - **改法**(`tools/scripts/k8s_deploy.ps1`):`MethodTimeouts` 逐条核对,每条都要满足「C++ deadline ≥ 该方法超时 + 2000」;唯一例外是 C++ 节点从不调用的方法,显式登记在 `Get-GrpcClientMethodsNotCalledFromCpp`(今天只有回档三个 RPC)。新增 `Get-ZrpcMethodTimeouts`(专门读这张表,只认顶格不带引号的键 + 缩进的块式列表,读不懂一律 throw)与 `ConvertTo-ZrpcDurationMs`(Go 时长 → 毫秒)。通过时的那一行会列出本次放行的条目。完整口径见 `docs/design/grpc-client-deadline-failure-callback.md` §4.4。
 - **以后往服务 yaml 加 `MethodTimeouts` 条目**:要么 ≤ 对应目标的 `GrpcClient.CallDeadlineMs` − 2000,要么确认 C++ 不调用后登记进上面那张表,否则部署被拒。登记表由契约测试守护:C++ 不直接调用(生成客户端符号 / 消息号常量)、gate 不按消息号转发(`IsClientMessageId`)、没有过期项。
-- **验证**(用户授权 Claude 实跑):`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1` 87/87;改前该文件在基线 DryRun 就失败。其余契约测试结果与改前一致:`k8s_client_entry_contract` 91/100(9 条集群外入口用例是既有失败,与本条无关)、`artifacts_lib` 22/23、`publish_images` 7/14、`no_raw_pointer_check` / `no_raw_pointer_project` 需要环境,其余全过。五个视角的对抗式评审共 24 条发现全部成立并已处理,其中一条是真漏洞(键带引号或整份文档缩进 + 流式写法时两套解析都读成空表而放行)。
-- **CI**:`.github/workflows/deploy-config-tests.yml` 的触发路径加了 `cpp/nodes/**`、`cpp/libs/**`、`cpp/generated/rpc/service_metadata/**`,让登记表的守护在只改 C++ 的 PR 上也会跑。
-- **没有顺带解决**:K8s 的 data-service ConfigMap 仍不镜像 `MethodTimeouts`(集群里回档 RPC 取 go-zero 默认 2000ms),属帮会线「接上 guild 时一并处理」;`k8s_client_entry_contract` 的 9 条既有失败。
+- **验证**(用户授权 Claude 实跑):`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1` 87/87;改前该文件在基线 DryRun 就失败。其余契约测试结果与改前一致:`k8s_client_entry_contract` 91/100(9 条集群外入口用例是既有失败,与本条无关)、`artifacts_lib` 22/23、`publish_images` 7/14、`no_raw_pointer_check` / `no_raw_pointer_project` 需要环境,其余全过。两轮对抗式评审:第一轮五个视角 24 条发现全部成立并已处理,其中一条是真漏洞(键带引号或整份文档缩进 + 流式写法时两套解析都读成空表而放行);第二轮复查修订版,没有再找到误放,余下的文档措辞、报错提示与测试覆盖问题已一并处理。
+- **守护的触发时机**:登记表的守护在跑契约测试时生效。CI 的 `deploy-config-tests` 只在 `tools/scripts`、各 `etc` 配置、k8s 清单等路径有改动时跑,发版流程必跑;只改 C++ 的提交不会当场变红。这次没有把 `cpp/**` 加进触发路径:该 workflow 任何一套契约测试失败就整体判红,而今天还有几套既有失败,先扩触发面只会多出修不了的红灯。
+- **没有顺带解决**:K8s 的 data-service ConfigMap 仍不镜像 `MethodTimeouts`(集群里回档 RPC 取 go-zero 默认 2000ms),属帮会线「接上 guild 时一并处理」;`k8s_client_entry_contract` 的 9 条既有失败;把登记表守护拆成只因 C++ 改动触发的独立 CI job。
 - **同批**:合入 origin/main 的 11 个提交(`ed40df6a4d`)与本机 main 的装备、切线(`d55437fc21`);`third_party/librdkafka`、`third_party/ue5navmesh` 的指针取远端 `d1705175dd` 同步的值 —— 本机 10-08 的每小时自动保存(`a9569db98a`)曾把它们写回本机检出,不是有意回退。
 - **Java 版(AGENTS §12)**:不涉及。本条只动本仓库的 k8s 部署脚本与 go-zero 服务配置的核对,没有改客户端契约。

@@ -577,11 +577,12 @@ function Get-AuthoritativeYamlBlock {
 
 .DESCRIPTION
 	go-zero 的 MethodTimeouts[].Timeout 是 time.Duration,yaml 里必须是字符串,由 Go 的 time.ParseDuration 解析
-	(go-zero core/mapping/unmarshaler.go)。这里用同一套写法,只认 ms / s / m / h 四种单位:
+	(go-zero core/mapping/unmarshaler.go)。这里认的是其中一个子集,只认 ms / s / m / h 四种单位:
 	  - 裸数字("3000"):go-zero 不接受,加载配置时直接报错、服务起不来(数字报 expect string,带引号的
 	    数字报 missing unit);几乎一定是把毫秒写错了地方。
 	  - ns / us 对服务端超时没有意义。
-	这两类都返回 $null,由调用方按「解析不了」报违例,不替配置猜一个值(fail-closed)。
+	  - 正负号、小数点一侧缺数字的写法(+5s、.5s、5.s):Go 认,这里不认。
+	这几类都返回 $null,由调用方按「解析不了」报违例,不替配置猜一个值(fail-closed)。
 	单位大小写敏感、数字只认 ASCII 的 0-9,与 Go 一致("5S"、全角数字都不认)。
 	用 decimal 而不是 double 算:16.1s 必须恰好是 16100,多算 1ms 会在「超时 + 2000 = deadline」的等号边界上误拒。
 #>
@@ -622,9 +623,11 @@ function ConvertTo-ZrpcDurationMs {
 
 	只认一种写法:键顶格、不带引号,键后换行,每项缩进并以 `- ` 开头,项内只有 FullMethod 与 Timeout 两个键。
 	其余一律 throw,宁可拒绝部署,也不拿一份解析错的表去核预算:
-	  - 文件里别处提到了 MethodTimeouts 却不是上面这种键行(键带引号、整份文档统一缩进、嵌在别的键下面、
-	    流式 / JSON 写法、同一个键写了两次)。go-zero 走完整的 YAML 解析,这些写法在服务端照样生效,
-	    这里读不出来就必须拒绝,不能当作没有这张表。
+	  - 文件里别处提到了 MethodTimeouts 却不是上面这种键行(键带引号、整份文档统一缩进、流式 / JSON 写法、
+	    同一个键写了两次)。go-zero 走完整的 YAML 解析,这些写法在服务端照样生效,这里读不出来就必须拒绝,
+	    不能当作没有这张表。嵌在别的键下面的在服务端并不生效,但这里不去分辨,一并拒绝。
+	  - 文本里有单独的 CR 或 NEL / LS / PS(U+0085 / U+2028 / U+2029)。yaml.v2 把它们当换行,这里只按 LF / CRLF
+	    切行:注释后面跟一个这样的字符,后续内容就会被当成注释的一部分整段漏读。
 	  - 列表项顶格写(YAML 允许)。ConvertFrom-YamlToFlatMap 数不到这种写法的条目,还会把项内的 Timeout
 	    认成顶层 Timeout,后面的核对全都对不上。
 	  - 看不懂的行、未知键、重复键、缺键。
@@ -632,6 +635,10 @@ function ConvertTo-ZrpcDurationMs {
 #>
 function Get-ZrpcMethodTimeouts {
 	param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text)
+
+	if ($Text -match '\r(?!\n)|[\u0085\u2028\u2029]') {
+		throw '文本里有单独的 CR 或 NEL / LS / PS 换行符(yaml.v2 把它们当换行,这里按 LF / CRLF 切行会漏读),请先把行尾统一成 LF 或 CRLF'
+	}
 
 	$entries = New-Object System.Collections.Generic.List[object]
 	$current = $null
@@ -655,7 +662,7 @@ function Get-ZrpcMethodTimeouts {
 				$seen = $true
 				$rest = $Matches['rest'].Trim()
 				if ($rest -eq '[]') { continue }
-				if ($rest.Length -gt 0) { throw "MethodTimeouts 只认块式写法(键后换行,每项缩进并以 '- ' 开头),看不懂:$($line.Trim())" }
+				if ($rest.Length -gt 0) { throw "MethodTimeouts 只认块式写法(键后换行,每项缩进并以 '- ' 开头;空表请写成 MethodTimeouts: []),看不懂:$($line.Trim())" }
 				$inBlock = $true
 			}
 			elseif ($line -match 'MethodTimeouts') {
@@ -710,8 +717,8 @@ function Get-ZrpcMethodTimeouts {
 	    所以消息号列在生成的 IsClientMessageId(cpp/generated/rpc/service_metadata/rpc_event_registry.cpp)里的方法
 	    一律算「C++ 会调用」,不许登记。
 	表里登记了、服务 yaml 里却没有对应 MethodTimeouts 条目的过期项同样判失败。
-	这道守护在跑契约测试时生效(CI 在 tools/scripts、各 etc 配置、cpp/nodes、cpp/libs、消息号注册表有改动时跑;
-	发版流程必跑),部署脚本自身不扫 C++ 源码。
+	这道守护在跑契约测试时生效:CI 在 tools/scripts、各 etc 配置、k8s 清单等有改动时跑,发版流程必跑;
+	只改 C++ 的提交不会当场触发(原因与后续做法见设计文档 §4.4)。部署脚本自身不扫 C++ 源码。
 
 	全方法名大小写敏感、逐字匹配,与 go-zero 按 info.FullMethod 查表的方式一致。
 #>
