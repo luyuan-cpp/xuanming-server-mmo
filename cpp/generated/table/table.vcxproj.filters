@@ -417,6 +417,54 @@
     <ClInclude Include="code\guildshop_table_fk.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="code\equipattribute_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\equipattribute_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\equipattributecap_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\equipattributecap_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\equipattributecap_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\equipaffixpool_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\equipaffixpool_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\equipaffixpool_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\equipaffixrule_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\equipaffixrule_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\item_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\equipattribute_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\equipattributecap_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\equipaffixpool_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\equipaffixrule_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\tip\equip_error_tip.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="code\actoractioncombatstate_table.cpp">
@@ -708,6 +756,42 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\tip\attribute_error_tip.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\equipattribute_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\equipattributecap_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\equipattributecap_table_fk.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\equipaffixpool_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\equipaffixpool_table_fk.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\equipaffixrule_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\item_table_fk.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\equipattribute_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\equipattributecap_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\equipaffixpool_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\equipaffixrule_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\tip\equip_error_tip.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

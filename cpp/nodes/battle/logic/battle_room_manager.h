@@ -219,6 +219,9 @@ private:
     // 只动出站拷贝,不碰引擎状态,确定性与回放不受影响(宪法 §7 不变量 5)。
     // 注意:buff 保留不裁 —— 客户端名牌要画 buff 图标,且"谁被控了几回合"本就写在
     // 回合事件流里,裁了只是让自己人也看不见。
+    // 同时不分视角清空全员 BattleActorState.combat(装备带来的必杀 / 连击 / 反震等概率,
+    // equipment-attributes.md §4.5,经 TurnBattleEngine::StripEngineOnlyState):这是"不暴露
+    // 对手装备概率"的唯一闸口,任何新增的出站 BattleStateS2C 都必须先经过本函数。
     void RedactStateForViewer(::BattleStateS2C &state, uint64_t viewerPlayerId) const;
 
     // 填入收信人本人的剩余战斗道具(观众与他人收到的恒为空)。

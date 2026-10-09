@@ -94,6 +94,12 @@
 //                                 its own lineage). The script's Redis behaviour is
 //                                 covered by the Go cross-language golden test
 //                                 go/scene_manager/internal/logic/owner_epoch_crosslang_test.go.
+//   14. BagEquipInstanceData    — the equipment instance data (ItemEntry.equip,
+//                                 docs/design/equipment-attributes.md §3.1) rides the
+//                                 saved PlayerAllData across a hop: attribute rows and
+//                                 the has_equip() presence both survive, in the
+//                                 player_database record and in the legacy top-level
+//                                 mirror alike.
 //
 // History: these cases were written for the player_migrate data-moving chain
 // (Kafka PlayerMigrationEvent + ACK + CrossZoneReaper). That chain was
@@ -2436,6 +2442,140 @@ TEST(TravelOwnership, JudgeScriptKeepsShebangAndMget)
         << "只删后缀(saved_at_ms)与本次 requestedAtMs 逐字节相同的那一族,别人的标记不碰";
     EXPECT_EQ(lua.find("DEL', KEYS[2]"), std::string::npos) << "不删 owner_epoch";
     EXPECT_EQ(lua.find("DEL', KEYS[3]"), std::string::npos) << "不删 location";
+}
+
+// ============================================================================
+// 14. BagEquipInstanceData —— 装备实例数据(ItemEntry.equip,docs/design/equipment-attributes.md §3.1)
+// 随存盘的 PlayerAllData 过一跳不丢。目标节点是从共享 Redis 里的 PlayerAllData 载入玩家的,所以这里
+// 走的是「marshal 成 PlayerAllData → 整条序列化 / 解析 → 从记录里的 bag_component 还原」。
+//
+// 还原这一步用 bag_marshal::Unmarshal 而不是 PlayerAllDataMessageFieldsUnMarshal:本测试宿主不加载
+// 任何配置表,整条 unmarshal 会连带跑属性 / 宝宝的载入初始化,那不是这条用例要钉的东西
+// (整条入口的往返在 bag_test 的 PlayerFeaturePersistenceTest 里,那边加载了表)。
+// 配置号沿用本文件上方的 3001 —— 表里查不到,装备栏按「还原宽容」退回快照里的槽位。
+// ============================================================================
+TEST(CrossZoneBagMarshal, EquipInstanceDataSurvivesThePlayerAllDataHop)
+{
+    tlsEcs.actorRegistry.clear();
+
+    constexpr Guid kWornGuid = 9300001;
+    constexpr Guid kSpareGuid = 9300002;
+    constexpr Guid kPotionGuid = 9300003;
+
+    const auto source = tlsEcs.actorRegistry.create();
+    {
+        auto& bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(source);
+
+        // 穿在身上的一件:两条属性,四个字段各取不同的值。
+        ItemComp worn;
+        worn.set_item_id(kWornGuid);
+        worn.set_config_id(3001);
+        worn.set_size(1);
+        auto* blue = worn.mutable_equip()->add_affixes();
+        blue->set_attr_id(8);
+        blue->set_tier(1);
+        blue->set_value(77);
+        blue->set_seq(0);
+        auto* pink = worn.mutable_equip()->add_affixes();
+        pink->set_attr_id(16);
+        pink->set_tier(2);
+        pink->set_value(6);
+        pink->set_seq(1);
+        bags.bags[kEquipment].InsertItemForRestore(worn, 5);
+
+        // 背包里的一件:已初始化但一条都没掷出,只有 presence。
+        ItemComp spare;
+        spare.set_item_id(kSpareGuid);
+        spare.set_config_id(3002);
+        spare.set_size(1);
+        spare.mutable_equip();
+        bags.bags[kInventory].InsertItemForRestore(spare, 2);
+
+        // 普通物品:没有 equip 段。
+        ItemComp potion;
+        potion.set_item_id(kPotionGuid);
+        potion.set_config_id(1001);
+        potion.set_size(7);
+        bags.bags[kInventory].InsertItemForRestore(potion, 3);
+    }
+
+    PlayerAllData saved;
+    PlayerAllDataMessageFieldsMarshal(source, saved);
+    std::string bytes;
+    ASSERT_TRUE(saved.SerializeToString(&bytes));
+    PlayerAllData landed;
+    ASSERT_TRUE(landed.ParseFromString(bytes));
+
+    // 数据库记录与顶层兼容镜像是两份拷贝,哪一份丢了 equip 都会在某条读路径上重掷。
+    const auto expectCopyCarriesEquip = [&](const BagAllData& copy, const char* which) {
+        ASSERT_EQ(copy.items_size(), 3) << which;
+        int withEquip = 0;
+        for (const auto& entry : copy.items())
+        {
+            if (entry.item_uuid() == kWornGuid)
+            {
+                ASSERT_TRUE(entry.has_equip()) << which;
+                ASSERT_EQ(entry.equip().affixes_size(), 2) << which;
+                EXPECT_EQ(entry.equip().affixes(0).attr_id(), 8u) << which;
+                EXPECT_EQ(entry.equip().affixes(0).tier(), 1u) << which;
+                EXPECT_EQ(entry.equip().affixes(0).value(), 77u) << which;
+                EXPECT_EQ(entry.equip().affixes(0).seq(), 0u) << which;
+                EXPECT_EQ(entry.equip().affixes(1).attr_id(), 16u) << which;
+                EXPECT_EQ(entry.equip().affixes(1).tier(), 2u) << which;
+                EXPECT_EQ(entry.equip().affixes(1).value(), 6u) << which;
+                EXPECT_EQ(entry.equip().affixes(1).seq(), 1u) << which;
+            }
+            else if (entry.item_uuid() == kSpareGuid)
+            {
+                EXPECT_TRUE(entry.has_equip()) << which << ": zero rows is still 'already rolled'";
+                EXPECT_EQ(entry.equip().affixes_size(), 0) << which;
+            }
+            else
+            {
+                EXPECT_FALSE(entry.has_equip()) << which << ": a plain item must not grow an equip section";
+            }
+            withEquip += entry.has_equip() ? 1 : 0;
+        }
+        EXPECT_EQ(withEquip, 2) << which;
+    };
+    ASSERT_TRUE(landed.player_database_data().has_bag_component());
+    ASSERT_NO_FATAL_FAILURE(
+        expectCopyCarriesEquip(landed.player_database_data().bag_component(), "player_database.bag_component"));
+    ASSERT_NO_FATAL_FAILURE(expectCopyCarriesEquip(landed.bag_data(), "PlayerAllData.bag_data"));
+
+    const auto dest = tlsEcs.actorRegistry.create();
+    bag_marshal::Unmarshal(dest, landed.player_database_data().bag_component());
+    auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(dest);
+    ASSERT_NE(bags, nullptr);
+
+    const ItemComp* worn = bags->bags[kEquipment].GetItemCompByGuid(kWornGuid);
+    const ItemComp* spare = bags->bags[kInventory].GetItemCompByGuid(kSpareGuid);
+    const ItemComp* potion = bags->bags[kInventory].GetItemCompByGuid(kPotionGuid);
+    ASSERT_NE(worn, nullptr);
+    ASSERT_NE(spare, nullptr);
+    ASSERT_NE(potion, nullptr);
+
+    ASSERT_TRUE(worn->has_equip());
+    ASSERT_EQ(worn->equip().affixes_size(), 2);
+    EXPECT_EQ(worn->equip().affixes(0).attr_id(), 8u);
+    EXPECT_EQ(worn->equip().affixes(0).tier(), 1u);
+    EXPECT_EQ(worn->equip().affixes(0).value(), 77u);
+    EXPECT_EQ(worn->equip().affixes(0).seq(), 0u);
+    EXPECT_EQ(worn->equip().affixes(1).attr_id(), 16u);
+    EXPECT_EQ(worn->equip().affixes(1).tier(), 2u);
+    EXPECT_EQ(worn->equip().affixes(1).value(), 6u);
+    EXPECT_EQ(worn->equip().affixes(1).seq(), 1u);
+    EXPECT_EQ(bags->bags[kEquipment].GetItemPosByGuid(kWornGuid), 5u) << "worn gear keeps its slot";
+
+    EXPECT_TRUE(spare->has_equip());
+    EXPECT_EQ(spare->equip().affixes_size(), 0);
+    EXPECT_FALSE(potion->has_equip());
+    EXPECT_EQ(potion->size(), 7u);
+
+    for (const auto& bag : bags->bags)
+    {
+        EXPECT_TRUE(bag.IsLayerConsistent());
+    }
 }
 
 // ============================================================================

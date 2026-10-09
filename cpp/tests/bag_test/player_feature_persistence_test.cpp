@@ -332,4 +332,121 @@ TEST_F(PlayerFeaturePersistenceTest, MissingProfileComponentLoadsEmptyName)
     EXPECT_TRUE(resaved.player_database_data().profile_component().name().empty());
 }
 
+// 装备实例数据(ItemEntry.equip,字段 14;docs/design/equipment-attributes.md §3.1):
+// 随 player_database 这条记录落库、再从冷记录读回,属性行与 presence 都不能丢。
+// presence 有语义 —— has_equip() 表示「已掷过」,读回来若变成没有,这件装备下次经过任何
+// 入包路径都会被当成新铸的重掷一次;反过来普通物品也不能凭空长出一段空的 equip。
+//
+// 三件都放在人物背包 / 仓库而不是装备栏:这条用例钉的是存档往返,不是穿戴后的属性加成
+// (那是 player_equip 的用例),放进装备栏会把还原后的属性重算也拖进来。
+TEST_F(PlayerFeaturePersistenceTest, EquipInstanceDataRoundTripsThroughDatabaseRecord)
+{
+    constexpr uint64_t kRolledItemId = (uint64_t{1} << 60) + 711;
+    constexpr uint64_t kEmptyRolledItemId = (uint64_t{1} << 60) + 712;
+    constexpr uint64_t kPlainItemId = (uint64_t{1} << 60) + 713;
+
+    const auto player = NewPlayer();
+    tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player).set_health(100);
+    tlsEcs.actorRegistry.emplace<LevelComp>(player).set_level(30);
+    {
+        auto& bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
+
+        // 两条属性:四个字段各取不同的值,丢哪个字段都看得出来。
+        ItemComp rolled;
+        rolled.set_item_id(kRolledItemId);
+        rolled.set_config_id(1);
+        rolled.set_size(1);
+        auto* blue = rolled.mutable_equip()->add_affixes();
+        blue->set_attr_id(3);
+        blue->set_tier(1);
+        blue->set_value(17);
+        blue->set_seq(0);
+        auto* yellow = rolled.mutable_equip()->add_affixes();
+        yellow->set_attr_id(12);
+        yellow->set_tier(3);
+        yellow->set_value(4);
+        yellow->set_seq(1);
+        bags.bags[kInventory].InsertItemForRestore(rolled, 5);
+
+        // 已初始化但一条都没掷出:只有 presence。
+        ItemComp emptyRolled;
+        emptyRolled.set_item_id(kEmptyRolledItemId);
+        emptyRolled.set_config_id(2);
+        emptyRolled.set_size(1);
+        emptyRolled.mutable_equip();
+        bags.bags[kWarehouse].InsertItemForRestore(emptyRolled, 9);
+
+        // 普通物品:没有 equip 段。
+        ItemComp plain;
+        plain.set_item_id(kPlainItemId);
+        plain.set_config_id(3);
+        plain.set_size(1);
+        bags.bags[kInventory].InsertItemForRestore(plain, 6);
+    }
+
+    PlayerAllData saved;
+    PlayerAllDataMessageFieldsMarshal(player, saved);
+    const auto& database = saved.player_database_data();
+    ASSERT_TRUE(database.has_bag_component());
+    ASSERT_EQ(3, database.bag_component().items_size());
+    // 顶层兼容镜像与数据库记录是同一份内容,equip 段同样在里面。
+    EXPECT_EQ(database.bag_component().SerializeAsString(), saved.bag_data().SerializeAsString());
+
+    // 只拿 player_database 的字节重建(MySQL 落库的就是这一份),不带顶层镜像。
+    std::string bytes;
+    ASSERT_TRUE(database.SerializeToString(&bytes));
+    PlayerAllData coldSnapshot;
+    ASSERT_TRUE(coldSnapshot.mutable_player_database_data()->ParseFromString(bytes));
+    ASSERT_FALSE(coldSnapshot.has_bag_data());
+    const auto restored = NewPlayer();
+    PlayerAllDataMessageFieldsUnMarshal(restored, coldSnapshot);
+
+    auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(restored);
+    ASSERT_NE(nullptr, bags);
+    const auto* rolled = bags->bags[kInventory].GetItemCompByGuid(kRolledItemId);
+    const auto* emptyRolled = bags->bags[kWarehouse].GetItemCompByGuid(kEmptyRolledItemId);
+    const auto* plain = bags->bags[kInventory].GetItemCompByGuid(kPlainItemId);
+    ASSERT_NE(nullptr, rolled);
+    ASSERT_NE(nullptr, emptyRolled);
+    ASSERT_NE(nullptr, plain);
+
+    ASSERT_TRUE(rolled->has_equip());
+    ASSERT_EQ(2, rolled->equip().affixes_size());
+    EXPECT_EQ(3u, rolled->equip().affixes(0).attr_id());
+    EXPECT_EQ(1u, rolled->equip().affixes(0).tier());
+    EXPECT_EQ(17u, rolled->equip().affixes(0).value());
+    EXPECT_EQ(0u, rolled->equip().affixes(0).seq());
+    EXPECT_EQ(12u, rolled->equip().affixes(1).attr_id());
+    EXPECT_EQ(3u, rolled->equip().affixes(1).tier());
+    EXPECT_EQ(4u, rolled->equip().affixes(1).value());
+    EXPECT_EQ(1u, rolled->equip().affixes(1).seq());
+    EXPECT_EQ(1u, rolled->config_id());
+    EXPECT_EQ(5u, bags->bags[kInventory].GetItemPosByGuid(kRolledItemId));
+
+    EXPECT_TRUE(emptyRolled->has_equip());
+    EXPECT_EQ(0, emptyRolled->equip().affixes_size());
+    EXPECT_EQ(9u, bags->bags[kWarehouse].GetItemPosByGuid(kEmptyRolledItemId));
+
+    EXPECT_FALSE(plain->has_equip());
+    EXPECT_EQ(6u, bags->bags[kInventory].GetItemPosByGuid(kPlainItemId));
+    EXPECT_TRUE(bags->bags[kInventory].IsLayerConsistent());
+    EXPECT_TRUE(bags->bags[kWarehouse].IsLayerConsistent());
+
+    // 读回后再存一次,记录里的 equip 段逐字节不变(不会越存越多 / 越存越少)。
+    PlayerAllData resaved;
+    PlayerAllDataMessageFieldsMarshal(restored, resaved);
+    ASSERT_EQ(3, resaved.player_database_data().bag_component().items_size());
+    int withEquip = 0;
+    for (const auto& entry : resaved.player_database_data().bag_component().items())
+    {
+        if (entry.has_equip()) ++withEquip;
+        if (entry.item_uuid() == kRolledItemId)
+        {
+            EXPECT_EQ(rolled->equip().SerializeAsString(), entry.equip().SerializeAsString());
+        }
+    }
+    EXPECT_EQ(2, withEquip);
+    ExpectNoMissionEvents();
+}
+
 } // namespace

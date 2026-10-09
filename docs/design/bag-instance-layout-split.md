@@ -139,7 +139,7 @@ public:
     virtual bool        CanFit(std::size_t count, Footprint footprint) const = 0;
 
     virtual SlotId Place(Guid guid, Footprint footprint) = 0;             // 自动选位
-    virtual bool   PlaceAt(Guid guid, SlotId slot, Footprint footprint) = 0; // 快照还原专用
+    virtual bool   PlaceAt(Guid guid, SlotId slot, Footprint footprint) = 0; // 落到调用方指定的槽:快照还原;2026-10-08 起搬运原语 Bag::PutInstance 的指定槽也走它
     virtual void   Remove(Guid guid) = 0;
     virtual void   Clear() = 0;
 
@@ -436,6 +436,7 @@ C++ 侧只有两个函数参与,都在桥层:
 > 改法是把两条路径的严格程度分开:
 > - **入包**(`AddItem` → `PlaceInstance`):往装备栏塞一个没声明槽位的东西,拒。
 > - **还原**(`InsertItemForRestore`):配置优先 → 退回快照 pos → 退回自动选位。表被裁过、这件是新版本装备、或者干脆是脏数据,都不该让玩家掉装备。
+>   - 「配置优先」这一步 2026-10-08 起分两问(装备属性系统落地穿脱时改,`equipment-attributes.md` §10.2 第 5 条):快照 pos 这个槽**今天仍接受这件东西的部位**(槽位表 + 当前容量,与 `SlotsAcceptingKind` / `PutInstance` 的指定槽同一条口径)且空着 → 原样落回;否则才取该部位的第一个空槽。此前恒取第一个空槽,而存档按实例层遍历序写出(不保证按槽号),同部位两个槽时重登会换位,穿上规则「都占着就替换槽号最小的那个」换掉的是哪一件也跟着漂。用例 `RestoreFollowsConfigNotTheSnapshotPos` 的语义不变(它的快照 pos 不被槽位表认可)。
 >
 > 用例 `FixedSlotLayoutTest.RestoreKeepsGearWhoseConfigDeclaresNoSlot` 把这个区别钉死了。
 

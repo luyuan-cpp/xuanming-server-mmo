@@ -923,6 +923,9 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 		snapshot.set_physical_attack(derived->physical_attack());
 		snapshot.set_magic_attack(derived->magic_attack());
 		snapshot.set_defense(derived->defense());
+		// 战斗类属性的装备加成(必杀 / 连击 / 反击 / 反震 / 抗性,equipment-attributes.md §4.5):
+		// 整块原样拷给引擎;derived 缺失时不带 = 全 0 = 引擎行为与装备系统落地前逐位一致
+		snapshot.mutable_combat()->CopyFrom(derived->combat());
 	}
 
 	// —— 出战宝宝(player-pet.md §5):没带宝宝时不填,引擎侧自然没有这个单位 ——

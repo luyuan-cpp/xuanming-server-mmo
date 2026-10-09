@@ -11,6 +11,7 @@
 #include "core/system/redis.h"
 #include "frame/manager/frame_time.h"
 #include "player/system/player_lifecycle.h"
+#include "player/system/player_equip.h"
 #include "battle/system/player_battle.h"
 #include "services/battle/data/battle_table_fingerprint.h"
 #include "proto/contracts/kafka/scene_command.pb.h"
@@ -54,6 +55,11 @@ namespace
                 // 也让指纹出现在启动日志里便于跨 zone 比对排障
                 LOG_INFO << "scene 战斗配表指纹: table_fingerprint="
                          << turnbattle::BattleTableFingerprint::Refresh();
+                // 装备掷属性的挂点 + 装备表校验(docs/design/equipment-attributes.md §4.3)。
+                // 放在配表加载完成回调里:此时表已就绪,而 Node 还在构造、没有监听任何端口,
+                // 一定早于第一笔入包流量(玩家加载 / 掉落 / 邮件 / GM 发物)。漏装的后果是新装备
+                // 永远没有随机属性,且没有任何报错。
+                PlayerEquipSystem::InstallItemInitializer();
             }
         };
         using KafkaCommandType = contracts::kafka::SceneCommand;

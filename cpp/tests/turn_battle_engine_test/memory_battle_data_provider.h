@@ -64,6 +64,16 @@ public:
         skillDamageValues[skillTableId] = damage;
     }
 
+    // 可选:让某个技能的伤害随引擎传来的等级参数线性增长(伤害 = 固定值 + 每级增量 × 等级参数)。
+    // 用来验证「所有技能上升」确实抬高了技能伤害表达式的等级参数。
+    // 没设过的技能沿用固定数值、忽略等级参数,所以既有用例的数值不受影响。
+    void SetSkillDamagePerLevel(uint32_t skillTableId, double damagePerLevel) {
+        skillDamagePerLevel[skillTableId] = damagePerLevel;
+    }
+
+    // 引擎最近一次求技能伤害时传进来的等级参数(还没求过为 0)
+    double LastSkillDamageLevel() const { return lastSkillDamageLevel; }
+
     void SetBuffRegen(uint32_t buffTableId, double regen) {
         buffRegenValues[buffTableId] = regen;
     }
@@ -115,9 +125,15 @@ public:
     }
 
     double GetSkillDamage(uint32_t skillTableId, double casterLevel) override {
-        (void)casterLevel;  // 单测固定数值,不做等级缩放
+        lastSkillDamageLevel = casterLevel;
         const auto it = skillDamageValues.find(skillTableId);
-        return it == skillDamageValues.end() ? 0.0 : it->second;
+        const double fixedDamage = it == skillDamageValues.end() ? 0.0 : it->second;
+        // 默认固定数值、不做等级缩放;只有显式 SetSkillDamagePerLevel 过的技能才吃等级参数
+        const auto perLevelIt = skillDamagePerLevel.find(skillTableId);
+        if (perLevelIt == skillDamagePerLevel.end()) {
+            return fixedDamage;
+        }
+        return fixedDamage + perLevelIt->second * casterLevel;
     }
 
     double GetBuffHealthRegeneration(uint32_t buffTableId, double level, double lostHealth) override {
@@ -142,6 +158,8 @@ private:
     std::map<uint32_t, uint64_t> cooldownDurations;
     std::map<uint32_t, std::vector<uint32_t>> dungeonMonsterIds;
     std::map<uint32_t, double> skillDamageValues;
+    std::map<uint32_t, double> skillDamagePerLevel;
+    double lastSkillDamageLevel = 0.0;
     std::map<uint32_t, double> buffRegenValues;
     std::map<uint32_t, double> buffBonusValues;
 };

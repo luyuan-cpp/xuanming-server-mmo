@@ -21,12 +21,63 @@
 //     saw in the source zone is preserved on the destination. It then
 //     rebuilds dynamicBags_ from the DynamicBagData list.
 //
-// Schema is the conservative 5-field subset (item_uuid / config_id /
-// stack_size / pos / bag_type). Game-design extensions (enchant level,
-// affixes, gem inlay, bound state) are documented as TODO at known
-// field numbers in proto/common/database/bag_quest_mail_data.proto and
-// will land here as the schema grows; the migration path stays
-// forward-compatible because proto field numbers are reserved.
+// Schema: item_uuid / config_id / stack_size / pos / bag_type, plus
+// acquire_seq (13) and, since 2026-10-07, equip (14) — the equipment
+// instance data (random attribute rows), see
+// docs/design/equipment-attributes.md §3.1. Remaining game-design
+// extensions (enchant level, gem inlay, bound state) are still TODO at
+// known field numbers in proto/common/database/bag_quest_mail_data.proto;
+// the migration path stays forward-compatible because proto field numbers
+// are reserved.
+//
+// ItemComp(运行时实例)与 ItemEntry(存盘 / 跨服记录)之间的转换**只有下面这一对
+// 函数**,固定包与动态包、Marshal 与 Unmarshal 共用。此前四处各抄一遍字段列表,
+// 实例层每加一个字段就有四处要记得同改,漏一处就是"某一种包、某一个方向"静默丢数据。
+
+namespace
+{
+
+// ItemComp -> ItemEntry。
+//
+// pos / bagType 不是实例的一部分(AGENTS §11.6:实例只回答「是什么」),所以由调用方
+// 从布局层 / 所在的包另行给出;ItemEntry 是「实例 + 摆在哪」拼在一起的存盘记录。
+// 动态包传 bagType = 0(那里由 bag_id 指认包,该字段无意义,等于 proto 默认值、不上线)。
+void ItemToEntry(const ItemComp& item, uint32_t pos, uint32_t bagType, ItemEntry& entry)
+{
+    entry.set_item_uuid(item.item_id());
+    entry.set_config_id(item.config_id());
+    entry.set_stack_size(item.size());
+    entry.set_pos(pos);
+    entry.set_bag_type(bagType);
+    // 入包序号:淘汰策略按它排先后。不带走的话跨服一跳顺序就丢了,
+    // 而 item_uuid 顶替不了它(跨服的号是源服铸的)。
+    entry.set_acquire_seq(item.acquire_seq());
+    // 装备实例数据:**presence 有语义**。has_equip() == true 表示这件装备已经掷过属性
+    // (哪怕一条都没掷出);无条件 mutable_equip() 会让每件普通物品读回来都"带一段空的
+    // equip",反过来漏拷则让装备读回来像没初始化过、下次入包被重掷。
+    if (item.has_equip())
+    {
+        entry.mutable_equip()->CopyFrom(item.equip());
+    }
+}
+
+// ItemEntry -> ItemComp。pos / bag_type 不进实例,由调用方单独读 entry.pos()。
+ItemComp ItemFromEntry(const ItemEntry& entry)
+{
+    ItemComp item;
+    item.set_item_id(entry.item_uuid());
+    item.set_config_id(entry.config_id());
+    item.set_size(entry.stack_size());
+    // 0 = 旧存档没盖过章,由 ItemStore::Insert 按重放顺序补盖;非 0 原样保留。
+    item.set_acquire_seq(entry.acquire_seq());
+    if (entry.has_equip())  // presence 原样带回,理由同 ItemToEntry
+    {
+        item.mutable_equip()->CopyFrom(entry.equip());
+    }
+    return item;
+}
+
+}  // namespace
 
 namespace bag_marshal
 {
@@ -60,15 +111,7 @@ void Marshal(entt::entity player, BagAllData& out)
     {
         const auto& bag = bags->bags[bagType];
         bag.ForEachItem([&out, bagType, &bag](Guid guid, const ItemComp& item) {
-            ItemEntry* entry = out.add_items();
-            entry->set_item_uuid(static_cast<uint64_t>(guid));
-            entry->set_config_id(item.config_id());
-            entry->set_stack_size(item.size());
-            entry->set_pos(bag.GetItemPosByGuid(guid));
-            entry->set_bag_type(bagType);
-            // 入包序号:淘汰策略按它排先后。不带走的话跨服一跳顺序就丢了,
-            // 而 item_uuid 顶替不了它(跨服的号是源服铸的)。
-            entry->set_acquire_seq(item.acquire_seq());
+            ItemToEntry(item, bag.GetItemPosByGuid(guid), bagType, *out.add_items());
         });
     }
 
@@ -84,14 +127,9 @@ void Marshal(entt::entity player, BagAllData& out)
         // 不带它,节日包跨服回来会退化成默认的自由格 + 什么都收 —— 规则静默消失。
         dyn->set_profile_id(bag.ProfileId());
         bag.ForEachItem([dyn, &bag](Guid guid, const ItemComp& item) {
-            ItemEntry* entry = dyn->add_items();
-            entry->set_item_uuid(static_cast<uint64_t>(guid));
-            entry->set_config_id(item.config_id());
-            entry->set_stack_size(item.size());
-            entry->set_pos(bag.GetItemPosByGuid(guid));
-            entry->set_acquire_seq(item.acquire_seq());
             // bag_type is meaningless for dynamic bags (identified by
-            // bag_id); leave it at the proto default 0.
+            // bag_id); pass the proto default 0 so nothing goes on the wire.
+            ItemToEntry(item, bag.GetItemPosByGuid(guid), /*bagType=*/0, *dyn->add_items());
         });
     }
 }
@@ -143,12 +181,8 @@ void Unmarshal(entt::entity player, const BagAllData& in)
                      << " player=" << entt::to_integral(player);
             continue;
         }
-        bags.bags[bagType].InsertItemForRestore(
-            static_cast<Guid>(entry.item_uuid()),
-            entry.config_id(),
-            entry.stack_size(),
-            entry.pos(),
-            entry.acquire_seq());
+        // 整份重载:实例数据(equip 段)原样带回。位置参数那个重载带不动它。
+        bags.bags[bagType].InsertItemForRestore(ItemFromEntry(entry), entry.pos());
     }
 
     // Transient runtime bags. Rebuild dynamicBags_ from scratch so a
@@ -169,12 +203,7 @@ void Unmarshal(entt::entity player, const BagAllData& in)
         bag.SetCapacityForRestore(static_cast<std::size_t>(dyn.capacity()));
         for (const auto& entry : dyn.items())
         {
-            bag.InsertItemForRestore(
-                static_cast<Guid>(entry.item_uuid()),
-                entry.config_id(),
-                entry.stack_size(),
-                entry.pos(),
-                entry.acquire_seq());
+            bag.InsertItemForRestore(ItemFromEntry(entry), entry.pos());
         }
     }
 }

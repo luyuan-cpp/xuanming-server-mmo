@@ -25,6 +25,7 @@ message AttributeDimensionInfo {
 
   uint32 cap = 7;          // 可分配上限(0 = 不限)
   uint32 sort = 8;
+  uint32 bonus = 9;        // 外部加成点数(装备等),**已含在 value 内**;客户端显示成「170(+15)」
 }
 
 // 点数池(角色目前只有属性点池;2026-09-14 删相性点 / 仙魔点池)
@@ -56,6 +57,16 @@ message DerivedAttributeInfo {
   uint64 mana = 8;
 }
 
+// 战斗类属性的一行(必杀率 / 连击率 / 抗性 …,equipment-attributes.md §3.2)。
+// 服务器下发终值:必杀率含角色基础暴击率,抗物理 / 抗法术含基础抗性。
+message CombatAttributeInfo {
+  uint32 combat_id = 1;    // 与 CombatAttributes 的字段号一致
+  string name = 2;
+  uint64 value = 3;
+  bool percent = 4;        // true = 显示成 N%
+  uint32 sort = 5;
+}
+
 message AttributePanelInfo {
   repeated AttributePoolInfo pools = 1;
   repeated AttributeDimensionInfo dimensions = 2;
@@ -66,6 +77,7 @@ message AttributePanelInfo {
   uint32 level = 7;
   uint64 switch_cooldown_until = 8;     // Unix 秒;<= now 表示可切换
   uint64 create_scheme_cost_gold = 9;   // 再开一个方案要花的金币(0 = 免费)
+  repeated CombatAttributeInfo combat = 10; // 战斗类属性全量,sort 升序
 }
 
 message GetAttributePanelRequest {

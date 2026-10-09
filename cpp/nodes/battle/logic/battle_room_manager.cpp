@@ -1202,6 +1202,10 @@ void BattleRoomManager::RedactStateForViewer(::BattleStateS2C &state,
     // 道具余量是私有信息:统一在这里清掉,再由 FillSelfItems 只给本人回填。
     // 不依赖"BuildStateSnapshot 恰好不填 self_items"这一外部事实 —— 那是别处的实现细节。
     state.clear_self_items();
+    // 战斗类属性(装备带来的必杀 / 连击 / 反击 / 反震 / 抗性概率)只供引擎判定:不分视角全员清掉,
+    // 自己的看属性面板(equipment-attributes.md §4.5)。所有出站状态(开战包 / 回合结果 / 补拉 /
+    // 观战首帧)都经过本函数,新增下发路径必须同样先过这里。
+    turnbattle::TurnBattleEngine::StripEngineOnlyState(state);
     for (auto &actor : *state.mutable_actors())
     {
         // "自己的单位" = 本人 + 本人的宝宝(宝宝 actor_id 是局内号,归属看 owner_player_id)

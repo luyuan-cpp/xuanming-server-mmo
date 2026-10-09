@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -361,10 +362,72 @@ public:
     // 它们会把残值覆盖掉,于是流水里的 item_uuid 可能根本不是任何一件物品的 guid;
     // ②纯并堆(remaining==0)与"单件沿用预设 guid"这两条路径**根本不铸号**,残值是上一件
     // 物品留下的,直接张冠李戴。显式回执把"这次写了哪些实例"变成返回值,两个问题一起消失。
+    //
+    // instanceInitializer(可为 nullptr / 空 function)= 新铸实例的初始化回调,契约见
+    // item_system.h 的 ItemInstanceInitializer。**Bag 自己不持有它**:进程级的那一份在
+    // BagService 手里,由它每次调用时传进来;直接调 Bag 的路径不传就是不调(既有用例行为
+    // 不变)。只有不可叠加物品会用到它 —— 逐件循环里、进 ItemStore 之前、且该件
+    // `!has_equip()` 时各调一次;可叠加物品一律不调。
     uint32_t AddItem(const InitItemParam &initItemParam,
                      std::vector<Guid> *writtenGuidsOut = nullptr,
-                     std::vector<DestroyedInstance> *evictedOut = nullptr);
+                     std::vector<DestroyedInstance> *evictedOut = nullptr,
+                     const ItemInstanceInitializer *instanceInitializer = nullptr);
     uint32_t RemoveItem(Guid guid);
+
+    // ── 搬运原语(同一 guid 换包)──────────────────────────────────────
+    //
+    // **仅供穿脱 / 包间移动的编排层使用**(scene 是 PlayerEquipSystem)。它们搬的是
+    // 「整份实例」:身份(guid)与实例数据(equip 段)原样带走,所以
+    //   * 不写流水 —— 实例没有被创造也没有被销毁,只是换了个包;写了反而会在
+    //     transaction_log 里伪造一对「销毁 + 获得」;
+    //   * 不过封禁闸(GainBlockService / PlayerItemBlockList)—— 那是「获得」的闸,
+    //     封了某件装备不等于不许把已经穿着的那件脱下来;
+    //   * 不掷属性 —— 不调 ItemInstanceInitializer(设计文档 §5 不变量 1 / 5);
+    //   * 不查跨区冻结 / 战斗中 —— 那是编排层入口的事。
+    // **调用方负责成对调用与失败回滚**:Take 成功之后实例只活在调用方手里的那份
+    // ItemComp 上,Put 失败就必须按相反顺序放回原包,否则这件东西就没了。
+    // 所以两者都把**全部校验放在任何修改之前**,失败时两层(实例 / 布局)都不变。
+    //
+    // 只搬 `max_stack_size == 1` 且 `size == 1` 的实例。可叠加物品的 guid 不是稳定身份
+    // (并堆会重铸),「同一 guid 换包」对它不成立;理由同 ReserveForBatchRemove。
+
+    // 把 guid 这件实例整份拷进 out(含 equip 与 acquire_seq),并从本包两层成对移除。
+    // 返回:
+    //   kBagDeleteItemFindGuid        guid 不在本包(与 RemoveItem 同码)
+    //   kInvalidTableId               config 查不到表(无从判断可否叠加,fail-closed)
+    //   kBagDelItemConfig             可叠加物品(max_stack_size != 1)
+    //   kBagItemDeletionSizeMismatch  size != 1(僵尸堆 / 数据腐化)
+    // 任何失败都不改 out、不改本包。
+    uint32_t TakeInstance(Guid guid, ItemComp &out);
+
+    // 把一件既有实例放进本包,沿用 item.item_id() 作 guid。
+    //
+    // slot 为空:走与入包相同的找位逻辑(具名槽布局按部位找第一个接受的空槽,其余
+    //            布局 first-fit)。
+    // slot 有值:落到指定槽。该槽必须在容量内、空着、且(具名槽布局下)槽位表声明它
+    //            接受这件物品的部位;自由格布局不看部位。
+    //            指定的槽**随存档保留**:还原时只要槽位表仍然认可它,就落回原槽
+    //            (见 InsertItemForRestore 的落位规则),同部位多槽不会在重登后互换。
+    //
+    // acquire_seq 在函数内清 0,由本包重新盖章:那是「同一背包内的入包先后」,带着源包
+    // 的序号进来会抬高本包水位、打乱先进先出。
+    //
+    // **不触发淘汰**(包满就拒,哪怕是临时格):搬运不该销毁任何东西。准入策略照常问。
+    // 返回:
+    //   kBagAddItemInvalidGuid        item_id 无效(0 / kInvalidGuid)
+    //   kBagAddItemInvalidParam       config_id == 0、size != 1、可叠加物品、本包准入不收、
+    //                                 指定槽越界、指定槽不接受该部位
+    //   kInvalidTableId / kInvalidTableData  config 查不到表 / max_stack_size == 0
+    //   kBagDeleteItemAlreadyHasGuid  本包已有同 guid 的实例
+    //   kBagAddItemBagFull            没有可用的位置(自动找位失败,或指定槽被占)
+    // 任何失败都不改本包。
+    uint32_t PutInstance(ItemComp item, std::optional<uint32_t> slot = std::nullopt);
+
+    // 槽位表里接受该部位、且槽号在当前容量内的槽,升序、去重。**不看占用** ——
+    // 编排层拿它决定「穿到哪个空槽 / 替换哪一只」,占用者用 Layout().At(slot) 查
+    // (空槽返回 kInvalidGuid;已有的公开只读接口,没有另加一个)。
+    // 自由格布局的槽位没有部位语义,恒返回空;equipKind == 0(不是装备)同样返回空。
+    [[nodiscard]] std::vector<uint32_t> SlotsAcceptingKind(uint32_t equipKind) const;
 
     // destroyedOut(可为 nullptr)按销毁顺序收集**本次整理销毁掉的实例**(销毁前
     // 抓拍 guid/config/size)。整理会退役掉一批 item_uuid,而那是 transaction_log
@@ -449,8 +512,26 @@ public:
     // to replay items one by one without re-running stack/anomaly logic.
     // acquireSeq:快照里的入包序号。0 = 旧存档没盖过章,由 ItemStore 按重放顺序
     // 重新盖 —— 那至少还原出一个自洽的先后,好过拿 guid 猜。
+    //
+    // 这个位置参数重载只带得动「身份 + 数量 + 入包序号」,**带不动实例数据**(equip 段)。
+    // 保留它是因为大量用例直调;它转调下面的整份重载。新代码(bag_marshal)一律走整份重载,
+    // 否则实例层每加一个字段,这里就多一处「忘了透传 = 存档往返丢数据」。
     void InsertItemForRestore(Guid guid, uint32_t configId, uint32_t stackSize, uint32_t pos,
                               uint64_t acquireSeq = 0);
+
+    // 整份还原:item 原样进实例层 —— item_id / config_id / size / acquire_seq / equip
+    // (含 presence)一个都不丢、一个都不改。pos 是快照里的槽位。
+    //
+    // 落位规则(两个重载是同一份实现),原则是「位置可以变,物品不能丢」:
+    //   ① 具名槽布局(装备栏)以配置为准:快照 pos 今天仍被槽位表认可(接受这件的部位、
+    //      在容量内)且空着 -> 原样落回;否则 -> 该部位的第一个空槽(策划改了部位 / 槽位表,
+    //      老存档落到新槽位)。前一半保证同部位多槽时「戴在哪一只上」不随存档往返漂移。
+    //   ② 上一步没落成(自由格布局的正常路径;具名槽下配置查不到时的兜底)-> 快照 pos。
+    //   ③ 快照 pos 也用不了(越界 / 撞位)-> 自动选位并记 ERROR;再不行才丢弃并记 ERROR。
+    //
+    // **绝不调用 ItemInstanceInitializer**:还原的是已经存在过的实例,has_equip() 为假
+    // 就是「它本来就没有」,不是「还没掷」(设计文档 §5 不变量 1)。
+    void InsertItemForRestore(ItemComp item, uint32_t pos);
 
     // Set capacity (replays Bag::ExpandCapacity's effect without the audit log).
     // Used by Unmarshal to restore gameplay-unlocked slots.
@@ -582,8 +663,12 @@ private:
     // 新铸的、沿用调用方预设的、以及被并入的既有堆,都算。调用方据此写流水,
     // 不必再回读任何"上一次发号"的残值。
     // evictedOut 透传给 ReserveOrEvict —— 腾位发生在这两个函数的 reserve 段。
+    //
+    // instanceInitializer 只有不可叠加这一支收:它的逐件循环是**所有玩法入包的唯一汇聚点**
+    // (单件 / count = N / 两个批量重载最终都落到这里),挂在这儿就不存在"哪条入口漏了"。
     uint32_t AddNonStackableItem(ItemComp itemProto, std::vector<Guid> *writtenGuidsOut,
-                                 std::vector<DestroyedInstance> *evictedOut);
+                                 std::vector<DestroyedInstance> *evictedOut,
+                                 const ItemInstanceInitializer *instanceInitializer);
     uint32_t AddStackableItem(ItemComp itemProto, uint32_t maxStackSize,
                               std::vector<Guid> *writtenGuidsOut,
                               std::vector<DestroyedInstance> *evictedOut);

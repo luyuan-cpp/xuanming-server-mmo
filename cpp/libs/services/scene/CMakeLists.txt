@@ -116,6 +116,11 @@ set(SOURCE_FILES
     player/system/player_skill.cpp
     player/system/player_attribute.cpp
     player/system/player_pet.cpp
+    # 装备编排(掷随机属性 / 穿脱 / 加成汇总 / tooltip 显示,docs/design/equipment-attributes.md §4.3)。
+    # 两个头 equip_attribute_rules.h(纯规则,header-only)与 player_equip.h 不需要登记:
+    # CMake 这边只列编译单元。player_attribute.cpp 与 player_feature_snapshot.cpp 都调它,
+    # 漏登记会在 scene 静态库里缺定义,链接期报 undefined reference。
+    player/system/player_equip.cpp
     player/system/player_tip.cpp
     player/system/stress_test_probe.cpp
     player/system/bag_marshal.cpp

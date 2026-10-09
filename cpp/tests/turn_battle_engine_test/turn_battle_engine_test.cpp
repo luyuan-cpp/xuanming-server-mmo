@@ -2,8 +2,10 @@
 
 #include <cmath>
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "constants/turn_battle_constants.h"
 #include "memory_battle_data_provider.h"
@@ -21,6 +23,8 @@
 // 覆盖:确定性事件流 / 速度序 / 超时默认行动 / 冷却回合 / buff 到期·叠层·周期·驱散·免疫 /
 // 沉默许可 / 胜负边界(全灭·打满·平局)/ 结算数值 / FLEE·DEFEND·ITEM 路径 /
 // 二期:自动战斗(SetActorAuto·就绪·快照排除·确定性回归)/ 队伍人数上限(设计文档 §11)。
+// 装备战斗类属性(equipment-attributes.md §4.5,文件末尾):必杀 / 抗性按伤害类型分流、连击、反震、反击、
+// 所有技能上升、抗异常、零概率不耗随机数、新掷骰的随机数消费顺序、下发前清洗。
 
 namespace turnbattle {
 // 只注入当前客户端无法施加的非玩家来源周期伤害，不改公开业务接口。
@@ -33,6 +37,24 @@ public:
         TurnResultS2C result;
         engine.AddBuffToActor(*target, buffId, sourceId, 0, result);
         return true;
+    }
+
+    // 同 AddBuff,但把过程中产出的事件带回来:抗异常要看的是 RESIST / BUFF_ADD / BUFF_REMOVE 事件。
+    // 目标不存在时返回空结果。
+    static TurnResultS2C AddBuffWithEvents(TurnBattleEngine& engine, uint64_t targetId,
+                                           uint32_t buffId, uint64_t sourceId) {
+        TurnResultS2C result;
+        if (auto* target = engine.FindActor(targetId); target != nullptr) {
+            engine.AddBuffToActor(*target, buffId, sourceId, 0, result);
+        }
+        return result;
+    }
+
+    // 引擎 RNG 的下一个输出。在副本上取,不推进引擎自己的 RNG。
+    // 同种子的两台引擎这个值相同 <=> 它们至今消耗的随机数个数相同 —— 「零概率不耗随机数」靠它直接断言。
+    static uint64_t PeekNextRandom(const TurnBattleEngine& engine) {
+        auto rngCopy = engine.rng;
+        return rngCopy();
     }
 };
 } // namespace turnbattle
@@ -2117,4 +2139,1279 @@ TEST(TurnBattleEngineTest, PassiveSkillIsNotCastableAndNotListedOnActor) {
     EXPECT_EQ(
         engine.ValidateAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kPlayerA, kSkillPassiveOnly)),
         kInvalidParameter);
+}
+
+// ---------------------------------------------------------------------------
+// 装备战斗类属性(docs/design/equipment-attributes.md §4.5,D3–D8):
+// 必杀 / 抗性按伤害类型分流、连击、反震、反击、所有技能上升、抗异常、零概率不耗随机数、
+// 新掷骰的随机数消费顺序、下发前清洗。
+//
+// 数值口径(全部选在离整数足够远的地方,向上取整不受浮点末位影响):
+//   PVE 打默认怪(护甲 24、等级 10 → 受伤比例 1560 / 1584 ≈ 0.98485):
+//     力量 4 普攻 = 14 × 0.98485 ≈ 13.79 → 14,必杀 ≈ 27.58 → 28;
+//     再叠物伤 50 = 64 × 0.98485 ≈ 63.03 → 64,连击段 ≈ 31.52 → 32;
+//     50 点技能 = 70 × 0.98485 ≈ 68.94 → 69,必杀 ≈ 137.88 → 138。
+//   PVP 双方无甲无防(受伤比例 1,再乘 kPvpDamageScale 0.3),力量 0:
+//     物伤 1004 普攻 = 1014 × 0.3 = 304.2 → 305,连击段 152.1 → 153;物伤 504 普攻 = 154.2 → 155;
+//     物伤 1001 普攻 = 1011 × 0.3 = 303.3 → 304。
+// ---------------------------------------------------------------------------
+
+namespace {
+
+using turnbattle::TurnBattleEngineDeathTestAccess;
+
+constexpr uint32_t kMatchModePvp = 3;           // PVP 1v1:非 PVE,直接伤害再乘 kPvpDamageScale
+constexpr uint32_t kSkillPhysicalStrike = 106;  // 物理伤害技能(damage_type = 物理),基础伤害 50
+constexpr uint32_t kBuffAilmentFreeze = 261;    // 冰冻
+constexpr uint32_t kBuffAilmentStun = 262;      // 眩晕
+constexpr uint32_t kBuffBurn = 263;             // 灼烧:不在异常映射里
+constexpr uint32_t kBuffStunWithDispel = 264;   // 眩晕 + 顺带驱散毒 tag
+
+// 标准表之上补:一个物理技能、冰冻 / 眩晕 / 灼烧 buff、一个带驱散的眩晕 buff
+std::shared_ptr<MemoryBattleDataProvider> MakeCombatProvider() {
+    auto provider = MakeProvider();
+
+    auto& physicalSkill = provider->AddSkill(kSkillPhysicalStrike);
+    physicalSkill.add_targeting_mode(1);
+    physicalSkill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
+    physicalSkill.set_damage_type(combatdamage::kPhysicalDamage);
+    provider->SetSkillDamage(kSkillPhysicalStrike, 50.0);
+
+    auto& freezeBuff = provider->AddBuff(kBuffAilmentFreeze);
+    freezeBuff.set_buff_type(turnbattle::kBuffTypeFreeze);
+    freezeBuff.set_duration(12.0);
+
+    auto& stunBuff = provider->AddBuff(kBuffAilmentStun);
+    stunBuff.set_buff_type(turnbattle::kBuffTypeStun);
+    stunBuff.set_duration(12.0);
+
+    auto& burnBuff = provider->AddBuff(kBuffBurn);
+    burnBuff.set_buff_type(turnbattle::kBuffTypeBurn);
+    burnBuff.set_duration(12.0);
+
+    auto& stunDispelBuff = provider->AddBuff(kBuffStunWithDispel);
+    stunDispelBuff.set_buff_type(turnbattle::kBuffTypeStun);
+    stunDispelBuff.set_duration(12.0);
+    (*stunDispelBuff.mutable_dispel_tag())["poison_tag"] = true;
+
+    return provider;
+}
+
+// 某个出手者打出的全部 DAMAGE 事件(按事件流顺序;指针指向 result 内部,result 活着才有效)
+std::vector<const BattleEventItem*> DamageEventsFrom(const TurnResultS2C& result,
+                                                     uint64_t sourceId) {
+    std::vector<const BattleEventItem*> events;
+    for (const auto& event : result.events()) {
+        if (event.event_type() == BATTLE_EVENT_DAMAGE && event.source_id() == sourceId) {
+            events.push_back(&event);
+        }
+    }
+    return events;
+}
+
+int CountEventsOfKind(const TurnResultS2C& result, eBattleEventType eventType,
+                      eBattleHitKind hitKind) {
+    int count = 0;
+    for (const auto& event : result.events()) {
+        if (event.event_type() == eventType && event.hit_kind() == hitKind) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+// PVP 打一回合:A 出指定行动,B 防御。B 更慢,防御落在 A 出手之后,不影响 A 这一下的伤害
+TurnResultS2C ResolveDuelRound(TurnBattleEngine& engine, const BattleAction& attackerAction) {
+    engine.SubmitAction(kPlayerA, attackerAction);
+    engine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_DEFEND));
+    return engine.ResolveCurrentRound();
+}
+
+}  // namespace
+
+// ---- 数据贯通:快照 → 引擎单位状态 ----
+
+TEST(TurnBattleEngineTest, CombatAttributesAreCopiedFromSnapshotForPlayersOnly) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9500, turnbattle::kMatchModePveTeam, 1);
+    auto* equipped = AddPlayer(request, kPlayerA, 0, 1000, 1000, 5, 0, 0, 120);
+    equipped->mutable_combat()->set_physical_crit_rate(7);
+    equipped->mutable_combat()->set_resist_confusion(9);
+    AddPet(equipped, kPetA, 400, 400, 4, 360);
+    AddPlayer(request, kPlayerB, 0, 1000, 1000, 5, 0, 0, 108);  // 快照没带 combat
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto state = engine.BuildStateSnapshot();
+    const auto* equippedActor = FindStateActor(state, kPlayerA);
+    ASSERT_NE(equippedActor, nullptr);
+    EXPECT_EQ(equippedActor->combat().physical_crit_rate(), 7u);
+    EXPECT_EQ(equippedActor->combat().resist_confusion(), 9u);
+
+    // 没带的玩家、宝宝、怪物:连子消息都不建(全 0),单位状态字节与装备系统落地前相同
+    const auto* bareActor = FindStateActor(state, kPlayerB);
+    const auto* petActor = FindPetActor(state, kPetA);
+    const auto* monsterActor = FindStateActor(state, kMonsterId);
+    ASSERT_NE(bareActor, nullptr);
+    ASSERT_NE(petActor, nullptr);
+    ASSERT_NE(monsterActor, nullptr);
+    EXPECT_FALSE(bareActor->has_combat());
+    EXPECT_FALSE(petActor->has_combat());
+    EXPECT_FALSE(monsterActor->has_combat());
+}
+
+// ---- 必杀分类:物理必杀率只管物理伤害,法术必杀率只管法术伤害 ----
+
+TEST(TurnBattleEngineTest, CombatPhysicalCritRateAppliesToPhysicalDamageOnly) {
+    TurnBattleEngine engine(MakeCombatProvider());
+    auto request = MakeRequest(9501, turnbattle::kMatchModePveSolo, 1);
+    // 基础暴击率置 0,隔离出装备加成的那一份
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/100, /*crit*/0, /*speed*/120);
+    snapshot->add_skill_table_ids(kSkillPhysicalStrike);
+    snapshot->mutable_combat()->set_physical_crit_rate(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    // 普攻(物理):必杀,13.79 × 2 → 28
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
+    auto result = engine.ResolveCurrentRound();
+    auto hits = DamageEventsFrom(result, kPlayerA);
+    ASSERT_EQ(hits.size(), 1u);
+    EXPECT_TRUE(hits[0]->is_critical());
+    EXPECT_EQ(hits[0]->value(), 28u);
+
+    // 法术技能:不因物理必杀率而必杀,68.94 → 69
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kMonsterId, kSkillDamage));
+    result = engine.ResolveCurrentRound();
+    hits = DamageEventsFrom(result, kPlayerA);
+    ASSERT_EQ(hits.size(), 1u);
+    EXPECT_FALSE(hits[0]->is_critical());
+    EXPECT_EQ(hits[0]->value(), 69u);
+
+    // 物理技能:分流看的是伤害类型而不是"普攻还是技能",同样必杀,68.94 × 2 → 138
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kMonsterId, kSkillPhysicalStrike));
+    result = engine.ResolveCurrentRound();
+    hits = DamageEventsFrom(result, kPlayerA);
+    ASSERT_EQ(hits.size(), 1u);
+    EXPECT_TRUE(hits[0]->is_critical());
+    EXPECT_EQ(hits[0]->value(), 138u);
+}
+
+TEST(TurnBattleEngineTest, CombatMagicCritRateAppliesToMagicDamageOnly) {
+    TurnBattleEngine engine(MakeCombatProvider());
+    auto request = MakeRequest(9502, turnbattle::kMatchModePveSolo, 1);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/100, /*crit*/0, /*speed*/120);
+    snapshot->add_skill_table_ids(kSkillPhysicalStrike);
+    snapshot->mutable_combat()->set_magic_crit_rate(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    // 普攻(物理):不因法术必杀率而必杀,13.79 → 14
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
+    auto result = engine.ResolveCurrentRound();
+    auto hits = DamageEventsFrom(result, kPlayerA);
+    ASSERT_EQ(hits.size(), 1u);
+    EXPECT_FALSE(hits[0]->is_critical());
+    EXPECT_EQ(hits[0]->value(), 14u);
+
+    // 法术技能:必杀,68.94 × 2 → 138
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kMonsterId, kSkillDamage));
+    result = engine.ResolveCurrentRound();
+    hits = DamageEventsFrom(result, kPlayerA);
+    ASSERT_EQ(hits.size(), 1u);
+    EXPECT_TRUE(hits[0]->is_critical());
+    EXPECT_EQ(hits[0]->value(), 138u);
+
+    // 物理技能:不必杀,68.94 → 69
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kMonsterId, kSkillPhysicalStrike));
+    result = engine.ResolveCurrentRound();
+    hits = DamageEventsFrom(result, kPlayerA);
+    ASSERT_EQ(hits.size(), 1u);
+    EXPECT_FALSE(hits[0]->is_critical());
+    EXPECT_EQ(hits[0]->value(), 69u);
+}
+
+// ---- 抗性分类:抗物理只减物理伤害,抗法术只减法术伤害;叠在基础抗性上,共用 60% 封顶 ----
+
+TEST(TurnBattleEngineTest, CombatResistAppliesToMatchingDamageTypeOnly) {
+    // A 打 B 一下,返回这一下的伤害。A 的物伤 1001、法伤 961:普攻与 50 点法术技能的原始伤害都是 1011
+    const auto hitDamage = [](uint64_t baseResistance, uint64_t physicalResist,
+                              uint64_t magicResist, bool useMagicSkill) -> uint64_t {
+        TurnBattleEngine engine(MakeProvider());
+        auto request = MakeRequest(9503, kMatchModePvp, 1);
+        auto* attacker = AddPlayer(request, kPlayerA, 0, 100000, 100000, 0, 0, 0, 120);
+        attacker->set_physical_attack(1001);
+        attacker->set_magic_attack(961);
+        auto* defender = AddPlayer(request, kPlayerB, 1, 100000, 100000, 0, 0, 0, 60);
+        defender->mutable_base_attributes()->set_resistance(baseResistance);
+        defender->mutable_combat()->set_physical_resist(physicalResist);
+        defender->mutable_combat()->set_magic_resist(magicResist);
+        EXPECT_TRUE(engine.Initialize(request));
+
+        const auto result = ResolveDuelRound(
+            engine, useMagicSkill ? MakeAction(BATTLE_ACTION_SKILL, kPlayerB, kSkillDamage)
+                                  : MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+        const auto hits = DamageEventsFrom(result, kPlayerA);
+        EXPECT_EQ(hits.size(), 1u);
+        return hits.empty() ? 0 : hits[0]->value();
+    };
+
+    // 对照组:无抗性,1011 × 0.3 = 303.3 → 304
+    EXPECT_EQ(hitDamage(0, 0, 0, false), 304u);
+    EXPECT_EQ(hitDamage(0, 0, 0, true), 304u);
+
+    // 抗物理 30:普攻 1011 × 0.7 × 0.3 = 212.31 → 213;法术技能不受影响
+    EXPECT_EQ(hitDamage(0, 30, 0, false), 213u);
+    EXPECT_EQ(hitDamage(0, 30, 0, true), 304u);
+
+    // 抗法术 30:法术技能 → 213;普攻不受影响
+    EXPECT_EQ(hitDamage(0, 0, 30, false), 304u);
+    EXPECT_EQ(hitDamage(0, 0, 30, true), 213u);
+
+    // 叠在基础抗性上:10 + 30 = 40 → 1011 × 0.6 × 0.3 = 181.98 → 182
+    EXPECT_EQ(hitDamage(10, 30, 0, false), 182u);
+    EXPECT_EQ(hitDamage(10, 0, 30, true), 182u);
+
+    // 与护甲 / 防御共用 60% 常驻减伤封顶(D7):抗物理 90 也只减六成,1011 × 0.4 × 0.3 = 121.32 → 122
+    EXPECT_EQ(hitDamage(0, 90, 0, false), 122u);
+}
+
+// ---- 连击 ----
+
+TEST(TurnBattleEngineTest, CombatComboRateAddsOneHalfDamageHitInSameGroup) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9510, turnbattle::kMatchModePveSolo, 1);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/100, /*crit*/0, /*speed*/120);
+    snapshot->set_physical_attack(50);
+    snapshot->mutable_combat()->set_combo_rate(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
+    const auto result = engine.ResolveCurrentRound();
+
+    // 恰好 2 段:首段 63.03 → 64,追加段按普攻公式独立结算再 × 50% = 31.52 → 32
+    const auto hits = DamageEventsFrom(result, kPlayerA);
+    ASSERT_EQ(hits.size(), 2u);
+    EXPECT_EQ(hits[0]->hit_index(), 0u);
+    EXPECT_EQ(hits[0]->hit_kind(), BATTLE_HIT_NORMAL);
+    EXPECT_EQ(hits[0]->value(), 64u);
+    EXPECT_EQ(hits[0]->target_health_after(), turnbattle::kMonsterDefaultHealth - 64);
+    EXPECT_EQ(hits[1]->hit_index(), 1u);
+    EXPECT_EQ(hits[1]->hit_kind(), BATTLE_HIT_COMBO);
+    EXPECT_EQ(hits[1]->value(), 32u);
+    EXPECT_EQ(hits[1]->value(), (hits[0]->value() + 1) / 2);  // ceil(首段 × 50%)
+    EXPECT_EQ(hits[1]->target_id(), kMonsterId);
+    EXPECT_EQ(hits[1]->target_health_after(), turnbattle::kMonsterDefaultHealth - 64 - 32);
+    // 同一拍:与首段同 group_id;整次普攻只有一个 ATTACK 事件
+    EXPECT_NE(hits[0]->group_id(), 0u);
+    EXPECT_EQ(hits[1]->group_id(), hits[0]->group_id());
+    int attackEvents = 0;
+    for (const auto& event : result.events()) {
+        if (event.event_type() == BATTLE_EVENT_ATTACK && event.source_id() == kPlayerA) {
+            ++attackEvents;
+        }
+    }
+    EXPECT_EQ(attackEvents, 1);
+
+    // 怪物没有战斗类属性:它的普攻只有一段,且 hit_index 回到 0(连击的段序不外溢到后面的行动)
+    const auto monsterHits = DamageEventsFrom(result, kMonsterId);
+    ASSERT_EQ(monsterHits.size(), 1u);
+    EXPECT_EQ(monsterHits[0]->hit_index(), 0u);
+    EXPECT_EQ(monsterHits[0]->hit_kind(), BATTLE_HIT_NORMAL);
+}
+
+TEST(TurnBattleEngineTest, CombatComboDoesNotContinueAfterKillingTarget) {
+    auto provider = MakeProvider();
+    constexpr uint32_t kFrailMonster = 7801;
+    auto& monster = provider->AddMonster(kFrailMonster);
+    monster.set_health(10);  // 首段 14 点就打死
+    monster.set_strength(1);
+    monster.set_speed(12);
+    provider->SetDungeonMonsters(kDungeonConfig, {kFrailMonster});
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9511, turnbattle::kMatchModePveSolo, 1);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/100, /*crit*/0, /*speed*/120);
+    snapshot->mutable_combat()->set_combo_rate(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
+    const auto result = engine.ResolveCurrentRound();
+
+    const auto hits = DamageEventsFrom(result, kPlayerA);
+    ASSERT_EQ(hits.size(), 1u);  // 目标已死,不追加
+    EXPECT_EQ(hits[0]->value(), 10u);
+    EXPECT_EQ(hits[0]->hit_kind(), BATTLE_HIT_NORMAL);
+    EXPECT_EQ(CountEvents(result, BATTLE_EVENT_DEATH), 1);
+    EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+}
+
+TEST(TurnBattleEngineTest, CombatComboAlsoAppliesWhenSkillDowngradesToBasicAttack) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9512, turnbattle::kMatchModePveSolo, 1);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/100, /*crit*/0, /*speed*/120);
+    snapshot->set_physical_attack(50);
+    snapshot->mutable_combat()->set_combo_rate(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    // 提交时技能合法;出手前被沉默 → 结算期校验链不过,降级成普攻。降级出来的普攻同样吃连击
+    ASSERT_TRUE(engine.SubmitAction(kPlayerA,
+                                    MakeAction(BATTLE_ACTION_SKILL, kMonsterId, kSkillDamage)));
+    ASSERT_TRUE(TurnBattleEngineDeathTestAccess::AddBuff(engine, kPlayerA, kBuffSilence, kMonsterId));
+    const auto result = engine.ResolveCurrentRound();
+
+    EXPECT_EQ(CountEvents(result, BATTLE_EVENT_SKILL), 0);
+    const auto hits = DamageEventsFrom(result, kPlayerA);
+    ASSERT_EQ(hits.size(), 2u);
+    EXPECT_EQ(hits[0]->value(), 64u);
+    EXPECT_EQ(hits[1]->hit_kind(), BATTLE_HIT_COMBO);
+    EXPECT_EQ(hits[1]->value(), 32u);
+}
+
+// ---- 反震 ----
+
+TEST(TurnBattleEngineTest, CombatReflectRateReturnsHalfOfDealtDamageToAttacker) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9520, kMatchModePvp, 1);
+    auto* attacker = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, 120);
+    attacker->set_physical_attack(1004);
+    auto* defender = AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 0, 0, 60);
+    defender->mutable_combat()->set_reflect_rate(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto result = ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+
+    // 事件流:ATTACK(A→B) DAMAGE(A→B 305) DAMAGE(B→A 反震 153) DEFEND(B)
+    ASSERT_EQ(result.events_size(), 4);
+    const auto& attackEvent = result.events(0);
+    const auto& damageEvent = result.events(1);
+    const auto& reflectEvent = result.events(2);
+    EXPECT_EQ(attackEvent.event_type(), BATTLE_EVENT_ATTACK);
+    EXPECT_EQ(damageEvent.event_type(), BATTLE_EVENT_DAMAGE);
+    EXPECT_EQ(damageEvent.source_id(), kPlayerA);
+    EXPECT_EQ(damageEvent.target_id(), kPlayerB);
+    EXPECT_EQ(damageEvent.hit_kind(), BATTLE_HIT_NORMAL);
+    EXPECT_EQ(damageEvent.value(), 305u);
+
+    EXPECT_EQ(reflectEvent.event_type(), BATTLE_EVENT_DAMAGE);
+    EXPECT_EQ(reflectEvent.source_id(), kPlayerB);  // 受击者
+    EXPECT_EQ(reflectEvent.target_id(), kPlayerA);  // 出手者
+    EXPECT_EQ(reflectEvent.hit_kind(), BATTLE_HIT_REFLECT);
+    EXPECT_EQ(reflectEvent.value(), 153u);          // ceil(305 × 50%)
+    EXPECT_EQ(reflectEvent.value(), (damageEvent.value() + 1) / 2);
+    EXPECT_FALSE(reflectEvent.is_critical());
+    EXPECT_EQ(reflectEvent.target_health_after(), 1000u - 153u);  // 填的是出手者的气血
+    EXPECT_EQ(reflectEvent.group_id(), damageEvent.group_id());
+    EXPECT_EQ(result.events(3).event_type(), BATTLE_EVENT_DEFEND);
+
+    const auto* attackerState = FindStateActor(result.state(), kPlayerA);
+    const auto* defenderState = FindStateActor(result.state(), kPlayerB);
+    ASSERT_NE(attackerState, nullptr);
+    ASSERT_NE(defenderState, nullptr);
+    EXPECT_EQ(attackerState->attributes().health(), 1000u - 153u);
+    EXPECT_EQ(defenderState->attributes().health(), 1000u - 305u);
+}
+
+TEST(TurnBattleEngineTest, CombatReflectAlsoTriggersOnComboHit) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9521, kMatchModePvp, 1);
+    auto* attacker = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, 120);
+    attacker->set_physical_attack(1004);
+    attacker->mutable_combat()->set_combo_rate(100);
+    auto* defender = AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 0, 0, 60);
+    defender->mutable_combat()->set_reflect_rate(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto result = ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+
+    // 每段固定顺序 落伤害 → 反震 → 连击续段:
+    // ATTACK, DAMAGE(首段 305), DAMAGE(反震 153), DAMAGE(连击 153), DAMAGE(反震 77), DEFEND
+    ASSERT_EQ(result.events_size(), 6);
+    EXPECT_EQ(result.events(1).hit_kind(), BATTLE_HIT_NORMAL);
+    EXPECT_EQ(result.events(1).value(), 305u);
+    EXPECT_EQ(result.events(2).hit_kind(), BATTLE_HIT_REFLECT);
+    EXPECT_EQ(result.events(2).value(), 153u);
+    EXPECT_EQ(result.events(2).hit_index(), 0u);
+    EXPECT_EQ(result.events(3).hit_kind(), BATTLE_HIT_COMBO);
+    EXPECT_EQ(result.events(3).source_id(), kPlayerA);
+    EXPECT_EQ(result.events(3).value(), 153u);  // 152.1 → 153
+    EXPECT_EQ(result.events(3).hit_index(), 1u);
+    EXPECT_EQ(result.events(4).hit_kind(), BATTLE_HIT_REFLECT);
+    EXPECT_EQ(result.events(4).source_id(), kPlayerB);
+    EXPECT_EQ(result.events(4).target_id(), kPlayerA);
+    EXPECT_EQ(result.events(4).value(), 77u);  // ceil(153 × 50%)
+    EXPECT_EQ(result.events(4).hit_index(), 1u);
+    EXPECT_EQ(result.events(4).target_health_after(), 1000u - 153u - 77u);
+    for (int index = 0; index < 5; ++index) {
+        EXPECT_EQ(result.events(index).group_id(), result.events(0).group_id());
+    }
+}
+
+TEST(TurnBattleEngineTest, CombatReflectKillingAttackerEndsItsActionAndDecidesOutcome) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9522, kMatchModePvp, 1);
+    // A 只有 100 血:打出 305,反震 153 夹到 100,自己被弹死。
+    // A 还带着 100% 连击、B 还带着 100% 反击 —— 出手者一死,这两样都不该再发生
+    auto* attacker = AddPlayer(request, kPlayerA, 0, 100, 100, 0, 0, 0, 120);
+    attacker->set_physical_attack(1004);
+    attacker->mutable_combat()->set_combo_rate(100);
+    auto* defender = AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 0, 0, 60);
+    defender->mutable_combat()->set_reflect_rate(100);
+    defender->mutable_combat()->set_counter_rate(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+    engine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_ATTACK, kPlayerA));
+    const auto result = engine.ResolveCurrentRound();
+
+    // ATTACK(A→B) DAMAGE(A→B) DAMAGE(B→A 反震,致死) DEATH(A);B 自己的行动因为没有存活敌人而落空
+    ASSERT_EQ(result.events_size(), 4);
+    EXPECT_EQ(result.events(0).event_type(), BATTLE_EVENT_ATTACK);
+    EXPECT_EQ(result.events(1).event_type(), BATTLE_EVENT_DAMAGE);
+    EXPECT_EQ(result.events(1).value(), 305u);
+    EXPECT_EQ(result.events(2).event_type(), BATTLE_EVENT_DAMAGE);
+    EXPECT_EQ(result.events(2).hit_kind(), BATTLE_HIT_REFLECT);
+    EXPECT_EQ(result.events(2).value(), 100u);  // 不超过出手者当前气血
+    EXPECT_EQ(result.events(2).target_health_after(), 0u);
+    EXPECT_EQ(result.events(3).event_type(), BATTLE_EVENT_DEATH);
+    EXPECT_EQ(result.events(3).target_id(), kPlayerA);
+    EXPECT_EQ(CountEventsOfKind(result, BATTLE_EVENT_DAMAGE, BATTLE_HIT_COMBO), 0);
+    EXPECT_EQ(CountEventsOfKind(result, BATTLE_EVENT_ATTACK, BATTLE_HIT_COUNTER), 0);
+
+    EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_B_WIN);
+    EXPECT_TRUE(engine.BuildSettlement(kPlayerA).is_dead());
+    EXPECT_FALSE(engine.BuildSettlement(kPlayerB).is_dead());
+}
+
+TEST(TurnBattleEngineTest, CombatReflectDoesNotTriggerOnSkillOrLethalHit) {
+    // 技能伤害不反震
+    {
+        TurnBattleEngine engine(MakeProvider());
+        auto request = MakeRequest(9523, kMatchModePvp, 1);
+        auto* attacker = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, 120);
+        attacker->set_magic_attack(961);
+        auto* defender = AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 0, 0, 60);
+        defender->mutable_combat()->set_reflect_rate(100);
+        ASSERT_TRUE(engine.Initialize(request));
+
+        const auto result =
+            ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_SKILL, kPlayerB, kSkillDamage));
+        EXPECT_EQ(DamageEventsFrom(result, kPlayerA).size(), 1u);
+        EXPECT_EQ(CountEventsOfKind(result, BATTLE_EVENT_DAMAGE, BATTLE_HIT_REFLECT), 0);
+        const auto* attackerState = FindStateActor(result.state(), kPlayerA);
+        ASSERT_NE(attackerState, nullptr);
+        EXPECT_EQ(attackerState->attributes().health(), 1000u);
+    }
+
+    // 受击者被这一下打死:死人不反震
+    {
+        TurnBattleEngine engine(MakeProvider());
+        auto request = MakeRequest(9524, kMatchModePvp, 1);
+        auto* attacker = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, 120);
+        attacker->set_physical_attack(1004);
+        auto* defender = AddPlayer(request, kPlayerB, 1, 10, 10, 0, 0, 0, 60);
+        defender->mutable_combat()->set_reflect_rate(100);
+        ASSERT_TRUE(engine.Initialize(request));
+
+        const auto result = ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+        EXPECT_EQ(CountEventsOfKind(result, BATTLE_EVENT_DAMAGE, BATTLE_HIT_REFLECT), 0);
+        EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+        EXPECT_EQ(engine.BuildSettlement(kPlayerA).health(), 1000u);
+    }
+}
+
+TEST(TurnBattleEngineTest, CombatReflectKillCreditsDefenderAndWinsBattle) {
+    auto provider = MakeProvider();
+    constexpr uint32_t kGlassMonster = 7802;
+    auto& monster = provider->AddMonster(kGlassMonster);
+    monster.set_health(5);     // 自己普攻打出 15,被弹回 ceil(7.5) = 8,夹到 5 点气血
+    monster.set_strength(5);
+    monster.set_speed(96);     // 比玩家快,先出手
+    monster.set_exp_reward(50);
+    monster.set_gold_reward(25);
+    provider->SetDungeonMonsters(kDungeonConfig, {kGlassMonster});
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9525, turnbattle::kMatchModePveSolo, 1);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, /*speed*/12);
+    snapshot->mutable_combat()->set_reflect_rate(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_DEFEND));
+    const auto result = engine.ResolveCurrentRound();
+
+    // ATTACK(怪→A) DAMAGE(怪→A 15) DAMAGE(A→怪 反震 5) DEATH(怪) DEFEND(A)
+    ASSERT_EQ(result.events_size(), 5);
+    EXPECT_EQ(result.events(1).value(), 15u);
+    EXPECT_EQ(result.events(2).hit_kind(), BATTLE_HIT_REFLECT);
+    EXPECT_EQ(result.events(2).source_id(), kPlayerA);
+    EXPECT_EQ(result.events(2).target_id(), kMonsterId);
+    EXPECT_EQ(result.events(2).value(), 5u);
+    EXPECT_EQ(result.events(3).event_type(), BATTLE_EVENT_DEATH);
+    EXPECT_EQ(result.events(3).target_id(), kMonsterId);
+
+    // 击杀归属受击者(玩家):照常记击杀簿、发经验金币
+    EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+    const auto settlement = engine.BuildSettlement(kPlayerA);
+    ASSERT_EQ(settlement.defeated_monsters_size(), 1);
+    EXPECT_EQ(settlement.defeated_monsters(0).monster_config_id(), kGlassMonster);
+    EXPECT_EQ(settlement.exp_gain(), 50u);
+    EXPECT_EQ(settlement.gold_gain(), 25u);
+}
+
+// ---- 反击 ----
+
+TEST(TurnBattleEngineTest, CombatCounterRateStrikesBackOnceInItsOwnGroup) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9530, kMatchModePvp, 1);
+    auto* attacker = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, 120);
+    attacker->set_physical_attack(1004);
+    attacker->mutable_combat()->set_counter_rate(100);  // 出手者自己也 100% 反击:不得反击"反击"
+    auto* defender = AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 0, 0, 60);
+    defender->set_physical_attack(504);
+    defender->mutable_combat()->set_counter_rate(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto result = ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+
+    // ATTACK(A→B) DAMAGE(A→B) ATTACK(B→A 反击) DAMAGE(B→A 反击) DEFEND(B)
+    ASSERT_EQ(result.events_size(), 5);
+    const auto& attackEvent = result.events(0);
+    const auto& damageEvent = result.events(1);
+    const auto& counterAttack = result.events(2);
+    const auto& counterDamage = result.events(3);
+    EXPECT_EQ(attackEvent.event_type(), BATTLE_EVENT_ATTACK);
+    EXPECT_EQ(attackEvent.source_id(), kPlayerA);
+    EXPECT_EQ(attackEvent.target_id(), kPlayerB);
+    EXPECT_EQ(attackEvent.hit_kind(), BATTLE_HIT_NORMAL);
+    EXPECT_EQ(damageEvent.event_type(), BATTLE_EVENT_DAMAGE);
+    EXPECT_EQ(damageEvent.source_id(), kPlayerA);
+    EXPECT_EQ(damageEvent.hit_kind(), BATTLE_HIT_NORMAL);
+    EXPECT_EQ(damageEvent.value(), 305u);
+
+    EXPECT_EQ(counterAttack.event_type(), BATTLE_EVENT_ATTACK);
+    EXPECT_EQ(counterAttack.source_id(), kPlayerB);
+    EXPECT_EQ(counterAttack.target_id(), kPlayerA);
+    EXPECT_EQ(counterAttack.hit_kind(), BATTLE_HIT_COUNTER);
+    EXPECT_EQ(counterDamage.event_type(), BATTLE_EVENT_DAMAGE);
+    EXPECT_EQ(counterDamage.source_id(), kPlayerB);
+    EXPECT_EQ(counterDamage.target_id(), kPlayerA);
+    EXPECT_EQ(counterDamage.hit_kind(), BATTLE_HIT_COUNTER);
+    EXPECT_EQ(counterDamage.value(), 155u);  // 按普攻公式:514 × 0.3 = 154.2 → 155,不打折
+    EXPECT_EQ(counterDamage.target_health_after(), 1000u - 155u);
+    EXPECT_EQ(result.events(4).event_type(), BATTLE_EVENT_DEFEND);
+
+    // 分拍:出手一组、反击另起一组(非 0、hit_index 归 0)、B 自己的行动又是新的一组
+    EXPECT_NE(attackEvent.group_id(), 0u);
+    EXPECT_EQ(damageEvent.group_id(), attackEvent.group_id());
+    EXPECT_NE(counterAttack.group_id(), attackEvent.group_id());
+    EXPECT_EQ(counterDamage.group_id(), counterAttack.group_id());
+    EXPECT_EQ(counterAttack.hit_index(), 0u);
+    EXPECT_EQ(counterDamage.hit_index(), 0u);
+    EXPECT_NE(result.events(4).group_id(), counterAttack.group_id());
+    EXPECT_NE(result.events(4).group_id(), attackEvent.group_id());
+
+    // 反击不引发对方再反击
+    EXPECT_EQ(CountEvents(result, BATTLE_EVENT_ATTACK), 2);
+}
+
+TEST(TurnBattleEngineTest, CombatCounterDoesNotChainWhenBothSidesAlwaysCounter) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9531, kMatchModePvp, 1);
+    auto* attacker = AddPlayer(request, kPlayerA, 0, 100000, 100000, 0, 0, 0, 120);
+    attacker->mutable_combat()->set_counter_rate(100);
+    attacker->mutable_combat()->set_combo_rate(100);    // 反击那一下不吃连击
+    attacker->mutable_combat()->set_reflect_rate(100);  // 反击那一下也不被反震
+    auto* defender = AddPlayer(request, kPlayerB, 1, 100000, 100000, 0, 0, 0, 60);
+    defender->mutable_combat()->set_counter_rate(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    // 双方互相普攻:每次普攻恰好引发一次反击,反击本身不再引发任何连锁
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+    engine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_ATTACK, kPlayerA));
+    const auto result = engine.ResolveCurrentRound();
+
+    EXPECT_EQ(CountEventsOfKind(result, BATTLE_EVENT_ATTACK, BATTLE_HIT_NORMAL), 2);
+    EXPECT_EQ(CountEventsOfKind(result, BATTLE_EVENT_ATTACK, BATTLE_HIT_COUNTER), 2);
+    EXPECT_EQ(CountEventsOfKind(result, BATTLE_EVENT_DAMAGE, BATTLE_HIT_COUNTER), 2);
+    // A 的出手:首段 + 连击段;B 没有反震,所以这两段不被弹
+    // B 的出手:一段,被 A 反震一次;A 反击 B 的那一下只有一段(反击不连击)
+    EXPECT_EQ(CountEventsOfKind(result, BATTLE_EVENT_DAMAGE, BATTLE_HIT_COMBO), 1);
+    EXPECT_EQ(CountEventsOfKind(result, BATTLE_EVENT_DAMAGE, BATTLE_HIT_REFLECT), 1);
+    EXPECT_EQ(CountEventsOfKind(result, BATTLE_EVENT_DAMAGE, BATTLE_HIT_NORMAL), 2);
+    // B 反击 A 的那一下没有被 A 的反震弹回:唯一的反震事件来自 B 的正常出手,排在 B 的 ATTACK 之后
+    int lastNormalAttackIndex = -1;
+    int reflectIndex = -1;
+    for (int index = 0; index < result.events_size(); ++index) {
+        const auto& event = result.events(index);
+        if (event.event_type() == BATTLE_EVENT_ATTACK && event.hit_kind() == BATTLE_HIT_NORMAL) {
+            lastNormalAttackIndex = index;
+        }
+        if (event.event_type() == BATTLE_EVENT_DAMAGE && event.hit_kind() == BATTLE_HIT_REFLECT) {
+            reflectIndex = index;
+        }
+    }
+    ASSERT_GE(lastNormalAttackIndex, 0);
+    EXPECT_EQ(result.events(lastNormalAttackIndex).source_id(), kPlayerB);
+    EXPECT_GT(reflectIndex, lastNormalAttackIndex);
+}
+
+TEST(TurnBattleEngineTest, CombatCounterIsSuppressedWhileStunnedOrFrozen) {
+    // 0 = 对照组(没被控,应当反击);其余两组:受击者开打前被对手挂上眩晕 / 冰冻
+    for (const uint32_t controlBuff : {uint32_t{0}, kBuffAilmentStun, kBuffAilmentFreeze}) {
+        SCOPED_TRACE(controlBuff);
+        TurnBattleEngine engine(MakeCombatProvider());
+        auto request = MakeRequest(9532, kMatchModePvp, 1);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, 120);
+        auto* defender = AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 0, 0, 60);
+        defender->mutable_combat()->set_counter_rate(100);
+        ASSERT_TRUE(engine.Initialize(request));
+        if (controlBuff != 0) {
+            ASSERT_TRUE(TurnBattleEngineDeathTestAccess::AddBuff(engine, kPlayerB, controlBuff,
+                                                                 kPlayerA));
+        }
+
+        // 被控单位的提交不落账,结算时它自己的行动也作废;这里只看它会不会还手
+        const auto result = ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+        EXPECT_EQ(DamageEventsFrom(result, kPlayerA).size(), 1u);
+        EXPECT_EQ(CountEventsOfKind(result, BATTLE_EVENT_ATTACK, BATTLE_HIT_COUNTER),
+                  controlBuff == 0 ? 1 : 0);
+    }
+}
+
+TEST(TurnBattleEngineTest, CombatCounterDoesNotTriggerOnSkill) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9533, kMatchModePvp, 1);
+    auto* attacker = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, 120);
+    attacker->set_magic_attack(961);
+    auto* defender = AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 0, 0, 60);
+    defender->mutable_combat()->set_counter_rate(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto result =
+        ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_SKILL, kPlayerB, kSkillDamage));
+    EXPECT_EQ(CountEvents(result, BATTLE_EVENT_SKILL), 1);
+    EXPECT_EQ(DamageEventsFrom(result, kPlayerA).size(), 1u);
+    EXPECT_EQ(CountEvents(result, BATTLE_EVENT_ATTACK), 0);  // 技能不触发反击
+    EXPECT_EQ(DamageEventsFrom(result, kPlayerB).size(), 0u);
+}
+
+TEST(TurnBattleEngineTest, CombatCounterKillingAttackerGoesThroughDeathHandling) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9534, kMatchModePvp, 1);
+    AddPlayer(request, kPlayerA, 0, 50, 50, 0, 0, 0, 120);  // 反击 155 点足以打死
+    auto* defender = AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 0, 0, 60);
+    defender->set_physical_attack(504);
+    defender->mutable_combat()->set_counter_rate(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto result = ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+
+    // ATTACK(A→B) DAMAGE(A→B) ATTACK(B→A 反击) DAMAGE(B→A 反击,夹到 50) DEATH(A) DEFEND(B)
+    ASSERT_EQ(result.events_size(), 6);
+    EXPECT_EQ(result.events(3).hit_kind(), BATTLE_HIT_COUNTER);
+    EXPECT_EQ(result.events(3).value(), 50u);
+    EXPECT_EQ(result.events(3).target_health_after(), 0u);
+    EXPECT_EQ(result.events(4).event_type(), BATTLE_EVENT_DEATH);
+    EXPECT_EQ(result.events(4).target_id(), kPlayerA);
+    EXPECT_EQ(result.events(4).group_id(), result.events(3).group_id());
+    EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_B_WIN);
+}
+
+// ---- 所有技能上升 ----
+
+TEST(TurnBattleEngineTest, CombatSkillLevelBonusRaisesSkillDamageLevelParameter) {
+    // 技能伤害 = 50 + 2 × 等级参数;玩家 10 级、力量 0、法伤 0,打默认怪
+    const auto castOnce = [](uint64_t skillLevelBonus, double& levelParameter,
+                             uint32_t& actorLevel) -> uint64_t {
+        auto provider = MakeProvider();
+        provider->SetSkillDamagePerLevel(kSkillDamage, 2.0);
+        TurnBattleEngine engine(provider);
+        auto request = MakeRequest(9540, turnbattle::kMatchModePveSolo, 1);
+        auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/0, /*armor*/100, /*crit*/0, /*speed*/120);
+        if (skillLevelBonus > 0) {
+            snapshot->mutable_combat()->set_skill_level_bonus(skillLevelBonus);
+        }
+        EXPECT_TRUE(engine.Initialize(request));
+
+        engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kMonsterId, kSkillDamage));
+        const auto result = engine.ResolveCurrentRound();
+        levelParameter = provider->LastSkillDamageLevel();
+        const auto* actor = FindStateActor(result.state(), kPlayerA);
+        EXPECT_NE(actor, nullptr);
+        actorLevel = actor != nullptr ? actor->level() : 0;
+        const auto hits = DamageEventsFrom(result, kPlayerA);
+        EXPECT_EQ(hits.size(), 1u);
+        return hits.empty() ? 0 : hits[0]->value();
+    };
+
+    double levelParameter = 0.0;
+    uint32_t actorLevel = 0;
+    // 无加成:等级参数 = 10 → 基础 70 × 0.98485 = 68.94 → 69
+    EXPECT_EQ(castOnce(0, levelParameter, actorLevel), 69u);
+    EXPECT_EQ(levelParameter, 10.0);
+    EXPECT_EQ(actorLevel, 10u);
+
+    // 所有技能上升 5:等级参数 = 15 → 基础 80 × 0.98485 = 78.79 → 79;角色等级本身不变
+    EXPECT_EQ(castOnce(5, levelParameter, actorLevel), 79u);
+    EXPECT_EQ(levelParameter, 15.0);
+    EXPECT_EQ(actorLevel, 10u);
+}
+
+// ---- 抗异常 ----
+
+TEST(TurnBattleEngineTest, CombatAilmentResistBlocksEnemyPoisonAndEmitsResistEvent) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9550, kMatchModePvp, 1);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, 120);
+    auto* defender = AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 0, 0, 60);
+    defender->mutable_combat()->set_resist_poison(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto result =
+        ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_SKILL, kPlayerB, kSkillPoison));
+
+    const auto* skillEvent = FindFirstEvent(result, BATTLE_EVENT_SKILL);
+    const auto* resistEvent = FindFirstEvent(result, BATTLE_EVENT_RESIST);
+    ASSERT_NE(skillEvent, nullptr);
+    ASSERT_NE(resistEvent, nullptr);
+    EXPECT_EQ(resistEvent->source_id(), kPlayerA);  // 施加者
+    EXPECT_EQ(resistEvent->target_id(), kPlayerB);  // 抵抗者
+    EXPECT_EQ(resistEvent->buff_table_id(), kBuffPoison);
+    EXPECT_EQ(resistEvent->group_id(), skillEvent->group_id());
+    EXPECT_EQ(CountEvents(result, BATTLE_EVENT_RESIST), 1);
+    // 没挂上:无 BUFF_ADD、回合末无毒 tick、状态里没有 buff、气血没掉
+    EXPECT_EQ(CountEvents(result, BATTLE_EVENT_BUFF_ADD), 0);
+    EXPECT_EQ(CountEvents(result, BATTLE_EVENT_BUFF_TICK), 0);
+    const auto* defenderState = FindStateActor(result.state(), kPlayerB);
+    ASSERT_NE(defenderState, nullptr);
+    EXPECT_EQ(defenderState->buffs_size(), 0);
+    EXPECT_EQ(defenderState->attributes().health(), 1000u);
+}
+
+TEST(TurnBattleEngineTest, CombatAilmentResistAddsAllAilmentAndSubtractsIgnore) {
+    // A 给 B 上毒;返回本回合事件。三项都取 0 / 100 的组合,有效抵抗率恒为 0 或 >= 100,不涉及随机
+    const auto castPoison = [](uint64_t resistPoison, uint64_t resistAllAilment,
+                               uint64_t ignoreAilmentResist) {
+        TurnBattleEngine engine(MakeProvider());
+        auto request = MakeRequest(9551, kMatchModePvp, 1);
+        auto* attacker = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, 120);
+        attacker->mutable_combat()->set_ignore_ailment_resist(ignoreAilmentResist);
+        auto* defender = AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 0, 0, 60);
+        defender->mutable_combat()->set_resist_poison(resistPoison);
+        defender->mutable_combat()->set_resist_all_ailment(resistAllAilment);
+        EXPECT_TRUE(engine.Initialize(request));
+        return ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_SKILL, kPlayerB, kSkillPoison));
+    };
+    const auto expectResisted = [](const TurnResultS2C& result, bool resisted) {
+        EXPECT_EQ(CountEvents(result, BATTLE_EVENT_RESIST), resisted ? 1 : 0);
+        EXPECT_EQ(CountEvents(result, BATTLE_EVENT_BUFF_ADD), resisted ? 0 : 1);
+    };
+
+    {
+        SCOPED_TRACE("no resist at all");
+        expectResisted(castPoison(0, 0, 0), false);
+    }
+    {
+        SCOPED_TRACE("all-ailment resist alone");
+        expectResisted(castPoison(0, 100, 0), true);
+    }
+    {
+        SCOPED_TRACE("specific 60 + all 40 = 100");
+        expectResisted(castPoison(60, 40, 0), true);
+    }
+    {
+        SCOPED_TRACE("ignore 100 cancels resist 100");
+        expectResisted(castPoison(100, 0, 100), false);
+    }
+    {
+        SCOPED_TRACE("ignore 100 cancels specific 60 + all 40");
+        expectResisted(castPoison(60, 40, 100), false);
+    }
+    {
+        SCOPED_TRACE("ignore 100 only cancels half of 100 + 100");
+        expectResisted(castPoison(100, 100, 100), true);
+    }
+    {
+        SCOPED_TRACE("ignore larger than resist floors at zero");
+        expectResisted(castPoison(40, 0, 100), false);
+    }
+}
+
+TEST(TurnBattleEngineTest, CombatAilmentResistDoesNotApplyToOwnTeamBuffs) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9552, turnbattle::kMatchModePveTeam, 1);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, 120);
+    auto* teammate = AddPlayer(request, kPlayerB, 0, 1000, 1000, 0, 0, 0, 108);
+    teammate->mutable_combat()->set_resist_poison(100);
+    teammate->mutable_combat()->set_resist_all_ailment(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    // 队友给他上毒、他自己给自己上毒:都不判抵抗(不同施法者各占一条,所以是两次 BUFF_ADD)
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kPlayerB, kSkillPoison));
+    engine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_SKILL, kPlayerB, kSkillPoison));
+    const auto result = engine.ResolveCurrentRound();
+
+    EXPECT_EQ(CountEvents(result, BATTLE_EVENT_RESIST), 0);
+    EXPECT_EQ(CountEvents(result, BATTLE_EVENT_BUFF_ADD), 2);
+    const auto* teammateState = FindStateActor(result.state(), kPlayerB);
+    ASSERT_NE(teammateState, nullptr);
+    EXPECT_EQ(teammateState->buffs_size(), 2);
+}
+
+TEST(TurnBattleEngineTest, CombatAilmentResistIsPerAilmentType) {
+    struct AilmentCase {
+        const char* name;
+        uint32_t buffTableId;
+        void (*setResist)(CombatAttributes& combat, uint64_t percent);
+    };
+    // 映射(turn_battle_constants.h 的 kAilmentBuffMappings):中毒 → 抗中毒,冰冻 → 抗冰冻,
+    // 眩晕 → 抗昏睡,沉默 → 抗遗忘
+    const AilmentCase cases[] = {
+        {"poison", kBuffPoison,
+         [](CombatAttributes& combat, uint64_t percent) { combat.set_resist_poison(percent); }},
+        {"freeze", kBuffAilmentFreeze,
+         [](CombatAttributes& combat, uint64_t percent) { combat.set_resist_freeze(percent); }},
+        {"stun", kBuffAilmentStun,
+         [](CombatAttributes& combat, uint64_t percent) { combat.set_resist_sleep(percent); }},
+        {"silence", kBuffSilence,
+         [](CombatAttributes& combat, uint64_t percent) { combat.set_resist_forget(percent); }},
+    };
+
+    // B 带着 combat 开一局,A(敌方)直接给 B 挂 buffTableId,返回过程中的事件
+    const auto applyFromEnemy = [](const CombatAttributes& defenderCombat, uint32_t buffTableId) {
+        TurnBattleEngine engine(MakeCombatProvider());
+        auto request = MakeRequest(9553, kMatchModePvp, 1);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, 120);
+        auto* defender = AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 0, 0, 60);
+        *defender->mutable_combat() = defenderCombat;
+        EXPECT_TRUE(engine.Initialize(request));
+        return TurnBattleEngineDeathTestAccess::AddBuffWithEvents(engine, kPlayerB, buffTableId,
+                                                                  kPlayerA);
+    };
+
+    // 单项抗性只挡自己那一种异常
+    for (const auto& resistCase : cases) {
+        CombatAttributes combat;
+        resistCase.setResist(combat, 100);
+        for (const auto& buffCase : cases) {
+            SCOPED_TRACE(std::string("resist=") + resistCase.name + " buff=" + buffCase.name);
+            const bool expectResisted = resistCase.buffTableId == buffCase.buffTableId;
+            const auto result = applyFromEnemy(combat, buffCase.buffTableId);
+            EXPECT_EQ(CountEvents(result, BATTLE_EVENT_RESIST), expectResisted ? 1 : 0);
+            EXPECT_EQ(CountEvents(result, BATTLE_EVENT_BUFF_ADD), expectResisted ? 0 : 1);
+        }
+    }
+
+    // 所有抗异常挡全部四种;灼烧不在异常清单里,照挂
+    {
+        CombatAttributes combat;
+        combat.set_resist_all_ailment(100);
+        for (const auto& buffCase : cases) {
+            SCOPED_TRACE(std::string("resist=all buff=") + buffCase.name);
+            EXPECT_EQ(CountEvents(applyFromEnemy(combat, buffCase.buffTableId), BATTLE_EVENT_RESIST), 1);
+        }
+        const auto burnResult = applyFromEnemy(combat, kBuffBurn);
+        EXPECT_EQ(CountEvents(burnResult, BATTLE_EVENT_RESIST), 0);
+        EXPECT_EQ(CountEvents(burnResult, BATTLE_EVENT_BUFF_ADD), 1);
+    }
+
+    // 抗混乱:引擎没有混乱 buff,暂无消费点 —— 四种异常一种都挡不住
+    {
+        CombatAttributes combat;
+        combat.set_resist_confusion(100);
+        for (const auto& buffCase : cases) {
+            SCOPED_TRACE(std::string("resist=confusion buff=") + buffCase.name);
+            EXPECT_EQ(CountEvents(applyFromEnemy(combat, buffCase.buffTableId), BATTLE_EVENT_RESIST), 0);
+        }
+    }
+}
+
+TEST(TurnBattleEngineTest, CombatResistedAilmentDoesNotDispelExistingBuffs) {
+    // B 身上先有一层毒;A 再挂"眩晕 + 驱散毒 tag"。resistSleep = 100 时眩晕被抵抗,毒必须原样留着
+    for (const uint64_t resistSleep : {uint64_t{0}, uint64_t{100}}) {
+        SCOPED_TRACE(resistSleep);
+        TurnBattleEngine engine(MakeCombatProvider());
+        auto request = MakeRequest(9554, kMatchModePvp, 1);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, 120);
+        auto* defender = AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 0, 0, 60);
+        defender->mutable_combat()->set_resist_sleep(resistSleep);
+        ASSERT_TRUE(engine.Initialize(request));
+        ASSERT_TRUE(TurnBattleEngineDeathTestAccess::AddBuff(engine, kPlayerB, kBuffPoison, kPlayerA));
+
+        const auto result = TurnBattleEngineDeathTestAccess::AddBuffWithEvents(
+            engine, kPlayerB, kBuffStunWithDispel, kPlayerA);
+        const auto state = engine.BuildStateSnapshot();
+        const auto* defenderState = FindStateActor(state, kPlayerB);
+        ASSERT_NE(defenderState, nullptr);
+        ASSERT_EQ(defenderState->buffs_size(), 1);
+        if (resistSleep == 100) {
+            EXPECT_EQ(CountEvents(result, BATTLE_EVENT_RESIST), 1);
+            EXPECT_EQ(CountEvents(result, BATTLE_EVENT_BUFF_REMOVE), 0);
+            EXPECT_EQ(CountEvents(result, BATTLE_EVENT_BUFF_ADD), 0);
+            EXPECT_EQ(defenderState->buffs(0).buff_table_id(), kBuffPoison);
+        } else {
+            // 对照组:没抵抗 → 毒被驱散、眩晕挂上
+            EXPECT_EQ(CountEvents(result, BATTLE_EVENT_RESIST), 0);
+            EXPECT_EQ(CountEvents(result, BATTLE_EVENT_BUFF_REMOVE), 1);
+            EXPECT_EQ(CountEvents(result, BATTLE_EVENT_BUFF_ADD), 1);
+            EXPECT_EQ(defenderState->buffs(0).buff_table_id(), kBuffStunWithDispel);
+        }
+    }
+}
+
+TEST(TurnBattleEngineTest, CombatPartialAilmentResistRollsDeterministically) {
+    // 抵抗率 50:走引擎 RNG。同种子必同结果;不同种子两种结果都要出现过(否则说明根本没掷骰)
+    const auto resistedWithSeed = [](uint64_t seed) {
+        TurnBattleEngine engine(MakeProvider());
+        auto request = MakeRequest(9555, kMatchModePvp, seed);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, 120);
+        auto* defender = AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 0, 0, 60);
+        defender->mutable_combat()->set_resist_poison(50);
+        EXPECT_TRUE(engine.Initialize(request));
+        const auto result =
+            ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_SKILL, kPlayerB, kSkillPoison));
+        const int resisted = CountEvents(result, BATTLE_EVENT_RESIST);
+        // 要么被抵抗、要么挂上,二者恰居其一
+        EXPECT_EQ(resisted + CountEvents(result, BATTLE_EVENT_BUFF_ADD), 1);
+        return resisted == 1;
+    };
+
+    int resistedCount = 0;
+    constexpr int kSeedCount = 40;
+    for (int seed = 1; seed <= kSeedCount; ++seed) {
+        const bool resisted = resistedWithSeed(static_cast<uint64_t>(seed));
+        EXPECT_EQ(resisted, resistedWithSeed(static_cast<uint64_t>(seed)));
+        resistedCount += resisted ? 1 : 0;
+    }
+    // 40 个种子全落在同一侧的概率约 2^-39;真出现就说明抵抗率没有被当成 50% 在掷
+    EXPECT_GT(resistedCount, 0);
+    EXPECT_LT(resistedCount, kSeedCount);
+}
+
+// ---- 确定性:零概率不消耗随机数 ----
+
+TEST(TurnBattleEngineTest, CombatZeroProbabilityRollsConsumeNoRandomNumbers) {
+    enum class Variant {
+        kNoCombat,       // 快照不带 combat(装备系统落地前的输入)
+        kEmptyCombat,    // 带了子消息但全 0(scene 对无装备玩家的实际输出)
+        kIrrelevant,     // 只带本场用不上的属性
+        kComboAttacker,  // 敏感性对照:出手者真带 50% 连击,随机序列必然被多消耗
+    };
+    static constexpr int kRounds = 6;  // static:下面不带捕获的 lambda 里也要用
+
+    // A 每回合普攻 B,B 每回合防御。双方基础暴击 50:每次普攻恰好消耗 1 个随机数(必杀掷骰),
+    // 此外本场没有任何随机消费(目标有效不重选、无逃跑、未分胜负不掷掉落)。
+    const auto runDuel = [](uint64_t seed, Variant variant, uint64_t& nextRandom) {
+        TurnBattleEngine engine(MakeProvider());
+        auto request = MakeRequest(9560, kMatchModePvp, seed);
+        auto* attacker = AddPlayer(request, kPlayerA, 0, 100000, 100000, 4, 0, /*crit*/50, 120);
+        auto* defender = AddPlayer(request, kPlayerB, 1, 100000, 100000, 4, 0, /*crit*/50, 60);
+        if (variant == Variant::kEmptyCombat) {
+            attacker->mutable_combat();
+            defender->mutable_combat();
+        } else if (variant == Variant::kIrrelevant) {
+            // 没人打 A:A 的反震 / 反击 / 两种抗性都用不上;A 只普攻:法术必杀、技能等级用不上;没人给 A 上 buff:抗异常用不上
+            auto* attackerCombat = attacker->mutable_combat();
+            attackerCombat->set_reflect_rate(50);
+            attackerCombat->set_counter_rate(50);
+            attackerCombat->set_physical_resist(30);
+            attackerCombat->set_magic_resist(30);
+            attackerCombat->set_magic_crit_rate(50);
+            attackerCombat->set_skill_level_bonus(3);
+            attackerCombat->set_resist_poison(50);
+            attackerCombat->set_resist_all_ailment(50);
+            // B 只防御不出手:连击、两种必杀、忽视抗异常都用不上;A 的普攻是物理:B 的抗法术用不上
+            auto* defenderCombat = defender->mutable_combat();
+            defenderCombat->set_combo_rate(50);
+            defenderCombat->set_physical_crit_rate(50);
+            defenderCombat->set_magic_crit_rate(50);
+            defenderCombat->set_ignore_ailment_resist(50);
+            defenderCombat->set_magic_resist(30);
+            defenderCombat->set_resist_freeze(50);
+            defenderCombat->set_resist_confusion(50);
+        } else if (variant == Variant::kComboAttacker) {
+            attacker->mutable_combat()->set_combo_rate(50);
+        }
+        EXPECT_TRUE(engine.Initialize(request));
+
+        std::string stream;
+        for (int round = 0; round < kRounds; ++round) {
+            const auto result = ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+            for (const auto& event : result.events()) {
+                stream += event.SerializeAsString();
+                stream += '|';
+            }
+        }
+        EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_ONGOING);
+        stream += engine.BuildSettlement(kPlayerA).SerializeAsString();
+        stream += '|';
+        stream += engine.BuildSettlement(kPlayerB).SerializeAsString();
+        nextRandom = TurnBattleEngineDeathTestAccess::PeekNextRandom(engine);
+        return stream;
+    };
+
+    for (const uint64_t seed : {uint64_t{42}, uint64_t{20261007}}) {
+        SCOPED_TRACE(seed);
+        uint64_t baselineNext = 0;
+        const auto baseline = runDuel(seed, Variant::kNoCombat, baselineNext);
+
+        // 全 0 路径的随机数消耗量与装备系统落地前相同:kRounds 次普攻 = kRounds 个随机数,一个不多。
+        // 用独立的 mt19937_64 推出"第 kRounds + 1 个输出"来对账,不依赖引擎自己和自己比
+        std::mt19937_64 reference(seed);
+        reference.discard(kRounds);
+        EXPECT_EQ(baselineNext, reference());
+
+        uint64_t emptyNext = 0;
+        EXPECT_EQ(runDuel(seed, Variant::kEmptyCombat, emptyNext), baseline);
+        EXPECT_EQ(emptyNext, baselineNext);
+
+        // 只带与本场无关的属性:事件流逐字节相同,随机序列一步不差
+        uint64_t irrelevantNext = 0;
+        EXPECT_EQ(runDuel(seed, Variant::kIrrelevant, irrelevantNext), baseline);
+        EXPECT_EQ(irrelevantNext, baselineNext);
+
+        // 对照:真带连击率的出手者每回合至少多掷一次,探针必须能看出来(否则上面的相等没有说服力)
+        uint64_t comboNext = 0;
+        runDuel(seed, Variant::kComboAttacker, comboNext);
+        EXPECT_NE(comboNext, baselineNext);
+    }
+}
+
+TEST(TurnBattleEngineTest, CombatAllZeroEventsCarryOnlyPreEquipmentFields) {
+    // 既有的确定性用例都是"引擎自己和自己比",守不住"新字段悄悄上线"这一类变化
+    // (例如普通出手被标了非 0 的 hit_kind、或 hit_kind 被改成带 presence 的 optional)。
+    // 这里用手工拼出的事件当基线:只填装备系统落地前就有的字段,逐字节相等才算没动旧布局。
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9561, kMatchModePvp, 1);
+    auto* attacker = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, 120);
+    attacker->set_physical_attack(1004);
+    AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 0, 0, 60);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    // 暴击率 0、目标有效:本回合不消耗任何随机数,事件内容完全由公式决定
+    const auto result = ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+    ASSERT_EQ(result.events_size(), 3);
+
+    BattleEventItem expectedAttack;
+    expectedAttack.set_event_type(BATTLE_EVENT_ATTACK);
+    expectedAttack.set_source_id(kPlayerA);
+    expectedAttack.set_target_id(kPlayerB);
+    expectedAttack.set_group_id(1);
+    EXPECT_EQ(result.events(0).SerializeAsString(), expectedAttack.SerializeAsString());
+
+    BattleEventItem expectedDamage;
+    expectedDamage.set_event_type(BATTLE_EVENT_DAMAGE);
+    expectedDamage.set_source_id(kPlayerA);
+    expectedDamage.set_target_id(kPlayerB);
+    expectedDamage.set_value(305);  // 1014 × 0.3 = 304.2 → 305
+    expectedDamage.set_target_health_after(1000 - 305);
+    expectedDamage.set_group_id(1);
+    EXPECT_EQ(result.events(1).SerializeAsString(), expectedDamage.SerializeAsString());
+
+    // 没有反击:B 自己的行动紧接着就是下一组
+    BattleEventItem expectedDefend;
+    expectedDefend.set_event_type(BATTLE_EVENT_DEFEND);
+    expectedDefend.set_source_id(kPlayerB);
+    expectedDefend.set_target_id(kPlayerB);
+    expectedDefend.set_group_id(2);
+    EXPECT_EQ(result.events(2).SerializeAsString(), expectedDefend.SerializeAsString());
+}
+
+TEST(TurnBattleEngineTest, CombatUnequippedPveRoundConsumesOnlyTargetSelectionRandoms) {
+    // PVE:无装备玩家 + 宝宝 + 默认怪,三者的战斗类属性都是全 0(宝宝 / 怪物连子消息都没有)。
+    // 每回合的随机消费只有两次默认行动的选目标:宝宝选怪(候选只有 1 个也掷一次 RandIndex)、
+    // 怪在玩家与宝宝之间选。暴击率全 0 不掷;连击 / 反震 / 反击的判定一次都不该消耗随机数。
+    constexpr uint64_t kSeed = 20261008;
+    constexpr int kPveRounds = 5;  // 每回合怪物掉 15 + 14 点,5 回合打不死(300 血)
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9562, turnbattle::kMatchModePveSolo, kSeed);
+    auto* owner = AddPlayer(request, kPlayerA, 0, 1000, 1000, 5, 0, 0, 120);
+    AddPet(owner, kPetA, 400, 400, 4, 360);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    for (int round = 0; round < kPveRounds; ++round) {
+        ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId)));
+        const auto result = engine.ResolveCurrentRound();
+        // 宝宝、玩家、怪物各出手一次,全是普通段:没有追加段、没有反震、没有还手
+        EXPECT_EQ(CountEvents(result, BATTLE_EVENT_ATTACK), 3);
+        EXPECT_EQ(CountEvents(result, BATTLE_EVENT_DAMAGE), 3);
+        EXPECT_EQ(CountEventsOfKind(result, BATTLE_EVENT_ATTACK, BATTLE_HIT_NORMAL), 3);
+        EXPECT_EQ(CountEventsOfKind(result, BATTLE_EVENT_DAMAGE, BATTLE_HIT_NORMAL), 3);
+        EXPECT_EQ(CountEvents(result, BATTLE_EVENT_RESIST), 0);
+    }
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_ONGOING);
+
+    // 用独立的 mt19937_64 对账:恰好消耗了 2 × 回合数 个随机数
+    std::mt19937_64 reference(kSeed);
+    reference.discard(2 * kPveRounds);
+    EXPECT_EQ(TurnBattleEngineDeathTestAccess::PeekNextRandom(engine), reference());
+}
+
+// ---- 确定性:新掷骰之间的随机数消费顺序 ----
+
+TEST(TurnBattleEngineTest, CombatFractionalRollsFollowDocumentedRandomOrder) {
+    // 前面的用例里连击 / 反震 / 反击的概率不是 0 就是 100,而 RollPercent 在这两端都不取随机数:
+    // 事件的先后被断言了,随机数的消费顺序没有 —— 调换任意两步掷骰,那些用例照样全绿,
+    // 带装备玩家的同种子回放却会整体平移。这里把相关概率全设成 50,用独立的 mt19937_64
+    // 按 turn_battle_constants.h 写明的顺序逐回合预测,再与引擎的事件流对账:
+    //   首段必杀 → 首段反震 → 连击续段判定 →(连击段必杀 → 连击段反震)→ 反击判定 →(反击那一下的必杀)
+    // A 每回合普攻 B,B 每回合防御(B 更慢,防御落在 A 出手之后):目标有效不重选、命中率 100% 不掷,
+    // 除上面这几步之外本场没有别的随机消费。
+    constexpr uint64_t kSeedCount = 16;
+    constexpr int kOrderRounds = 8;  // 每回合双方各掉十来点血,气血 100000 下谁都死不了
+
+    // 一回合的事件流压成一串记号,对不上时一眼能看出是哪一步:
+    //   A = 出手方的 ATTACK;N0 / N1 = 首段(未必杀 / 必杀);C0 / C1 = 连击段;R = 反震;
+    //   K = 反击的 ATTACK;X0 / X1 = 反击那一下;F = DEFEND;? = 本场不该出现的事件
+    const auto describeRound = [](const TurnResultS2C& result) {
+        std::string tokens;
+        for (const auto& event : result.events()) {
+            const char criticalMark = event.is_critical() ? '1' : '0';
+            if (event.event_type() == BATTLE_EVENT_ATTACK) {
+                tokens += (event.hit_kind() == BATTLE_HIT_COUNTER ? 'K' : 'A');
+            } else if (event.event_type() == BATTLE_EVENT_DEFEND) {
+                tokens += 'F';
+            } else if (event.event_type() != BATTLE_EVENT_DAMAGE) {
+                tokens += '?';
+            } else if (event.hit_kind() == BATTLE_HIT_REFLECT) {
+                tokens += 'R';
+            } else if (event.hit_kind() == BATTLE_HIT_COMBO) {
+                tokens += 'C';
+                tokens += criticalMark;
+            } else if (event.hit_kind() == BATTLE_HIT_COUNTER) {
+                tokens += 'X';
+                tokens += criticalMark;
+            } else {
+                tokens += 'N';
+                tokens += criticalMark;
+            }
+            tokens += ' ';
+        }
+        return tokens;
+    };
+
+    int totalRounds = 0;
+    int criticalFirstHits = 0;
+    int reflectedFirstHits = 0;
+    int comboRounds = 0;
+    int counterRounds = 0;
+    for (uint64_t seed = 1; seed <= kSeedCount; ++seed) {
+        SCOPED_TRACE(seed);
+        TurnBattleEngine engine(MakeProvider());
+        auto request = MakeRequest(9563, kMatchModePvp, seed);
+        // 基础暴击 0:必杀率只来自装备加成那一份
+        auto* attacker = AddPlayer(request, kPlayerA, 0, 100000, 100000, 0, 0, 0, 120);
+        attacker->mutable_combat()->set_physical_crit_rate(50);
+        attacker->mutable_combat()->set_combo_rate(50);
+        auto* defender = AddPlayer(request, kPlayerB, 1, 100000, 100000, 0, 0, 0, 60);
+        defender->mutable_combat()->set_physical_crit_rate(50);  // 只有反击那一下用得上
+        defender->mutable_combat()->set_reflect_rate(50);
+        defender->mutable_combat()->set_counter_rate(50);
+        ASSERT_TRUE(engine.Initialize(request));
+
+        // 与引擎同种子的独立随机源。换算照抄引擎的两种写法:
+        //   Rand01 = 高 53 位 / 2^53;必杀 = Rand01 < 暴击率(0.5);其余判定 = Rand01 × 100 < 百分点(50)
+        std::mt19937_64 reference(seed);
+        const auto next01 = [&reference]() {
+            return static_cast<double>(reference() >> 11) * (1.0 / 9007199254740992.0);
+        };
+        const auto rollCritical = [&next01]() { return next01() < 0.5; };
+        const auto rollHalf = [&next01]() { return next01() * 100.0 < 50.0; };
+
+        for (int round = 0; round < kOrderRounds; ++round) {
+            SCOPED_TRACE(round);
+            // 每一步各占一条语句:求值顺序就是随机数的消费顺序,不能合进同一个表达式
+            std::string expected = "A ";
+            const bool firstCritical = rollCritical();
+            expected += (firstCritical ? "N1 " : "N0 ");
+            const bool firstReflected = rollHalf();
+            if (firstReflected) {
+                expected += "R ";
+            }
+            const bool comboed = rollHalf();
+            if (comboed) {
+                // 连击段是独立的一段:自己的必杀、自己的反震,都排在反击判定之前
+                const bool comboCritical = rollCritical();
+                expected += (comboCritical ? "C1 " : "C0 ");
+                const bool comboReflected = rollHalf();
+                if (comboReflected) {
+                    expected += "R ";
+                }
+            }
+            const bool countered = rollHalf();
+            if (countered) {
+                const bool counterCritical = rollCritical();
+                expected += "K ";
+                expected += (counterCritical ? "X1 " : "X0 ");
+            }
+            expected += "F ";
+
+            const auto result = ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+            EXPECT_EQ(describeRound(result), expected);
+
+            ++totalRounds;
+            criticalFirstHits += firstCritical ? 1 : 0;
+            reflectedFirstHits += firstReflected ? 1 : 0;
+            comboRounds += comboed ? 1 : 0;
+            counterRounds += countered ? 1 : 0;
+        }
+        ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_ONGOING);
+        // 个数也要对上:预测用掉几个随机数,引擎就恰好用掉几个
+        EXPECT_EQ(TurnBattleEngineDeathTestAccess::PeekNextRandom(engine), reference());
+    }
+
+    // 每种判定的"成立"与"不成立"都必须走到过,否则上面的对账没有覆盖到全部掷骰点
+    // (独立脚本按同一顺序算出 128 回合里分别是 66 / 74 / 73 / 64 次)
+    ASSERT_EQ(totalRounds, static_cast<int>(kSeedCount) * kOrderRounds);
+    EXPECT_GT(criticalFirstHits, 0);
+    EXPECT_LT(criticalFirstHits, totalRounds);
+    EXPECT_GT(reflectedFirstHits, 0);
+    EXPECT_LT(reflectedFirstHits, totalRounds);
+    EXPECT_GT(comboRounds, 0);
+    EXPECT_LT(comboRounds, totalRounds);
+    EXPECT_GT(counterRounds, 0);
+    EXPECT_LT(counterRounds, totalRounds);
+}
+
+// ---- 下发前清洗 ----
+
+TEST(TurnBattleEngineTest, StripEngineOnlyStateClearsCombatWithoutTouchingEngine) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9570, kMatchModePvp, 1);
+    auto* attacker = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 0, 0, 120);
+    attacker->mutable_combat()->set_combo_rate(100);
+    auto* defender = AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 0, 0, 60);
+    defender->mutable_combat()->set_reflect_rate(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    // 开局全量(开战包 / 重连补拉 / 观战首帧同源):引擎出的是"全知"版本,清洗后任何单位都不带 combat
+    auto opening = engine.BuildStateSnapshot();
+    const auto* openingAttacker = FindStateActor(opening, kPlayerA);
+    ASSERT_NE(openingAttacker, nullptr);
+    ASSERT_TRUE(openingAttacker->has_combat());
+    TurnBattleEngine::StripEngineOnlyState(opening);
+    ASSERT_EQ(opening.actors_size(), 2);
+    for (const auto& actor : opening.actors()) {
+        EXPECT_FALSE(actor.has_combat());
+        // 其余字段原样保留
+        EXPECT_EQ(actor.attributes().health(), 1000u);
+        EXPECT_EQ(actor.max_health(), 1000u);
+    }
+    EXPECT_EQ(opening.battle_id(), 9570u);
+    EXPECT_EQ(opening.pending_actor_ids_size(), 2);
+
+    // 回合结果里携带的 state 同样要清
+    auto result = ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+    TurnBattleEngine::StripEngineOnlyState(*result.mutable_state());
+    ASSERT_EQ(result.state().actors_size(), 2);
+    for (const auto& actor : result.state().actors()) {
+        EXPECT_FALSE(actor.has_combat());
+    }
+
+    // 清的只是出站拷贝:引擎内部状态不受影响,下一回合连击 / 反震照常生效
+    const auto afterStrip = engine.BuildStateSnapshot();
+    const auto* stillEquipped = FindStateActor(afterStrip, kPlayerA);
+    ASSERT_NE(stillEquipped, nullptr);
+    EXPECT_EQ(stillEquipped->combat().combo_rate(), 100u);
+    const auto second = ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+    EXPECT_EQ(CountEventsOfKind(second, BATTLE_EVENT_DAMAGE, BATTLE_HIT_COMBO), 1);
+    EXPECT_EQ(CountEventsOfKind(second, BATTLE_EVENT_DAMAGE, BATTLE_HIT_REFLECT), 2);
 }
