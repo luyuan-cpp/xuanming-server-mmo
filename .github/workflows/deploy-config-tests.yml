@@ -34,6 +34,9 @@ on:
       - "bin/etc/**"
       - "go/*/etc/**"
       - "deploy/k8s/manifests/**"
+      - "cpp/nodes/**"
+      - "cpp/libs/**"
+      - "cpp/generated/rpc/service_metadata/**"
       - ".github/workflows/deploy-config-tests.yml"
       - "deploy/k8s/Dockerfile*"
       - ".dockerignore"
@@ -51,6 +54,11 @@ on:
       - "go/*/etc/**"
       # k8s 清单：端口/服务名/镜像 tag 与 etc/*.yaml 对账的对面
       - "deploy/k8s/manifests/**"
+      # C++ 手写代码与消息号注册表:k8s_deploy_contract 里「C++ 不调用」登记表的守护用例要扫它们
+      # (C++ 开始调用某个被豁免的方法时,要在这个 PR 上就红,而不是等下一次改脚本)
+      - "cpp/nodes/**"
+      - "cpp/libs/**"
+      - "cpp/generated/rpc/service_metadata/**"
       - ".github/workflows/deploy-config-tests.yml"
       # 镜像构建输入:版本注入 / OCI label / 构建上下文排除规则改了,发布契约测试要重跑
       - "deploy/k8s/Dockerfile*"

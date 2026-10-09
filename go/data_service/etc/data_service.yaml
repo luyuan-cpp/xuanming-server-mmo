@@ -34,6 +34,9 @@ MetricsListenAddr: ":9260"
 # 调大 GuildCheckBudgetSeconds 时同步调大这里:写后复查的预算跟着检查预算走(复查重走同一套分块翻页),
 # 所以检查预算每加 1 秒,这三项各加 2 秒。k8s_deploy.ps1 只镜像标量 Timeout,不镜像这张表 ——
 # k8s 里今天也没配 GuildInternalRpc(回档一律被拒),接上 guild 时再一并处理。
+# 部署门禁(k8s_deploy.ps1 Assert-GrpcClientDeadlineBudget)逐条核对这张表:每一条都要 ≤ C++ 的
+# GrpcClient.CallDeadlineMs.DataServiceNodeService − 2000,除非该方法登记在 Get-GrpcClientMethodsNotCalledFromCpp
+# (C++ 节点从不调用)。下面三条已登记;往这里加新条目时二选一,否则部署被拒。
 MethodTimeouts:
   - FullMethod: /data_service.DataService/RollbackPlayer
     Timeout: 300s

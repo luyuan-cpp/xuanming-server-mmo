@@ -964,7 +964,10 @@ C++ 节点(gate / scene / battle)发出的每次 unary gRPC 调用现在都带 d
 
   判定口径:这五项必须在 `CallDeadlineMs` 里显式写成正整数(缺席 / 0 = 落到隐式默认,不算数);服务 yaml 不写 `Timeout` 按
   go-zero `RpcServerConf.Timeout` 的 `default=2000` 算(go.mod 钉的 v1.9.2 / v1.10.0 相同),写了就必须是正整数(0 = go-zero 不装超时拦截器,
-  服务端没有上界);服务 yaml 出现 `MethodTimeouts` 一律拒(门禁只按全局 `Timeout` 核对)。`Battle` / `Etcd` 没有 Go 服务端超时,不在表里;
+  服务端没有上界);服务 yaml 的 `MethodTimeouts` 逐条核对:每一条都要满足「deadline ≥ 该方法超时 + 2000」,除非该方法登记在 `k8s_deploy.ps1` 的
+  `Get-GrpcClientMethodsNotCalledFromCpp`(C++ 节点从不调用;今天是 data_service 回档的三个 RPC,通过时那一行会列出来)。
+  这张表只认「顶格不带引号的键 + 缩进的块式列表」,超时只认带单位的写法(`300s`),读不懂一律拒(2026-10-09 起,
+  此前是出现即拒;`docs/design/grpc-client-deadline-failure-callback.md` §4.4)。`Battle` / `Etcd` 没有 Go 服务端超时,不在表里;
   chat / friend / guild / team / trade 不在 C++ 节点白名单里,只经路由服。
 - **改服务端超时 = 两处同拍**:调大上表任一服务的 `Timeout` 必须同时调 `CallDeadlineMs` 对应项,否则下一次 `*-up` 被门禁拒绝。
   改完重跑 `zone-up`(以及 `infra-up`,battle 用的是 `battle-node-config`)重新生成 ConfigMap,并滚更 C++ 节点让它们重新读配置。
@@ -976,7 +979,8 @@ C++ 节点(gate / scene / battle)发出的每次 unary gRPC 调用现在都带 d
   读不到或不是正整数时生成期直接 throw。镜像落地时两边都是 100000,行为不变;随后值已改正为 10000(见上一条),ConfigMap 自动跟随。
   以后再改只需动 login.yaml 与 `LoginNodeService` 两处,生成器不用动。
 - 契约测试:`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的「C++ gRPC 客户端 deadline 预算」一节 —— 两份 node ConfigMap 的块与权威文件逐项相等、
-  门禁先于任何 `kubectl` 写操作、K8s 生成物(login 镜像 login.yaml 的 Timeout、data-service 不写 Timeout)同样满足不等式、判定口径自检,
+  门禁先于任何 `kubectl` 写操作、K8s 生成物(login 镜像 login.yaml 的 Timeout、data-service 不写 Timeout)同样满足不等式、判定口径自检(含 `MethodTimeouts` 逐条核对、解析器与时长换算)、
+  「C++ 不调用」登记表的守护(C++ 不直接调用、gate 不按消息号转发、没有过期项),
   以及把 DataService 改回 2500 的配置副本必须被拒并只点名这一项;login ConfigMap 的 `Timeout` == login.yaml 在「login ConfigMap 关键值」用例的键对表里逐键钉住。
 
 ## Kafka:StatefulSet + PVC(2026-09-08,routing-identity-audit-20260908.md R06)

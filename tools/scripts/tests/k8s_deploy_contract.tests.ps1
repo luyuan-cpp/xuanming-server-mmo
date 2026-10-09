@@ -311,14 +311,17 @@ Test-Case "自检:scene-manager 超时预算判定对 5000 / 2000 / 7999 / 0 / �
 # 上面守的是 scene-manager 服务端 Timeout 盖住它自己的内部预算;这里守反方向:C++ deadline ≥ 目标 Go 服务的
 # zrpc Timeout + 2000(上游比下游宽),以及 node ConfigMap 把 GrpcClient 块原样搬进集群。
 # 判定规则只有一份,在 k8s_deploy.ps1:Get-GrpcClientDeadlineBudgetViolations(纯函数)+ Assert-GrpcClientDeadlineBudget
-# (读文件、不满足即 throw,由写路径入口调用)。这里按 AST 把两个函数抽出来直接调用,不另抄一份判定,也不执行脚本入口
+# (读文件、不满足即 throw,由写路径入口调用)。这里按 AST 把这组函数(名单见下)抽出来直接调用,不另抄一份判定,也不执行脚本入口
 # (与 k8s_migrate_gate.tests.ps1 同一做法)。它们用到的 ConvertFrom-YamlToFlatMap 来自 deploy_capture.ps1 dot-source 的
 # release_common.ps1;Assert 读 $RepoRoot,由各用例自己设。
 $deadlineParseTokens = $null
 $deadlineParseErrors = $null
 $deadlineDeployAst = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'), [ref]$deadlineParseTokens, [ref]$deadlineParseErrors)
 if ($deadlineParseErrors.Count -gt 0) { throw "k8s_deploy.ps1 语法错误: $($deadlineParseErrors.Message -join '; ')" }
-$deadlineFunctionNames = @('Get-GrpcClientDeadlineBudgetViolations', 'Assert-GrpcClientDeadlineBudget')
+$deadlineFunctionNames = @(
+    'ConvertTo-ZrpcDurationMs', 'Get-ZrpcMethodTimeouts', 'Get-GrpcClientMethodsNotCalledFromCpp',
+    'Get-GrpcClientDeadlineBudgetViolations', 'Assert-GrpcClientDeadlineBudget'
+)
 foreach ($deadlineFnAst in $deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
     if ($deadlineFunctionNames -contains $deadlineFnAst.Name) {
         Set-Item -Path "Function:script:$($deadlineFnAst.Name)" -Value $deadlineFnAst.Body.GetScriptBlock()
@@ -398,7 +401,7 @@ Test-Case "K8s 生成物同样满足 deadline 预算:node-config 的 GrpcClient 
     Assert-True -Condition ($violations.Count -eq 0) -Because ("K8s 生成物违例:{0}" -f ($violations -join ';'))
 }
 
-Test-Case "自检:deadline 预算判定对 修复前的 2500 / 差 1ms / 缺席 / 0 / 非数字 / 服务端 Timeout 0 / 非数字 / MethodTimeouts 报违例并点名目标,对等号边界通过(守卫不得静默放行)" {
+Test-Case "自检:deadline 预算判定对 修复前的 2500 / 差 1ms / 缺席 / 0 / 非数字 / 服务端 Timeout 0 / 非数字 报违例并点名目标,对等号边界通过(守卫不得静默放行)" {
     $check = {
         param([string]$DeployText, [string]$ServiceText)
         $targets = [ordered]@{
@@ -425,7 +428,6 @@ Test-Case "自检:deadline 预算判定对 修复前的 2500 / 差 1ms / 缺席 
         @{ Why = 'deadline 非数字'; Deploy = "${deployWith}4s"; Service = "Timeout: 1000" }
         @{ Why = '服务端 Timeout 0(go-zero 不装超时拦截器)'; Deploy = "${deployWith}10000"; Service = "Timeout: 0" }
         @{ Why = '服务端 Timeout 非数字'; Deploy = "${deployWith}10000"; Service = "Timeout: 8s" }
-        @{ Why = 'MethodTimeouts(只按全局 Timeout 核对)'; Deploy = "${deployWith}10000"; Service = "Timeout: 2000`nMethodTimeouts:`n  - FullMethod: /dataservice.DataService/AllocateIdSegment`n    Timeout: 8s" }
     )
     foreach ($c in $violationCases) {
         $got = @(& $check $c.Deploy $c.Service)
@@ -434,17 +436,199 @@ Test-Case "自检:deadline 预算判定对 修复前的 2500 / 差 1ms / 缺席 
     }
 }
 
+# go-zero 的 MethodTimeouts 能把个别方法的服务端超时单独放宽。门禁逐条核对:C++ 会调用的方法照样要满足
+# 「deadline ≥ 该方法超时 + 2000」;只有登记为「C++ 不调用」的方法(Get-GrpcClientMethodsNotCalledFromCpp)可以更高。
+# 2026-10-09 之前的口径是「出现 MethodTimeouts 就拒绝」,它与 data_service 回档三个 RPC 的 MethodTimeouts 撞在一起,
+# 使所有写路径在入口被拒(docs/handoff/repo-layout-20261007.md §6.3)。
+Test-Case "自检:MethodTimeouts 逐条核对,C++ 会调用的方法必须在预算内,登记为 C++ 不调用的方法才可以更高(守卫不得静默放行)" {
+    $check = {
+        param([string]$Deadline, [string]$ServiceText, [string[]]$NotCalledFromCpp = @(), [switch]$OmitParsedEntries)
+        $target = @{
+            Source                  = 'fixture/data_service.yaml'
+            Scalars                 = (ConvertFrom-YamlToFlatMap -Text $ServiceText).Scalars
+            MethodsNotCalledFromCpp = $NotCalledFromCpp
+        }
+        if (-not $OmitParsedEntries) { $target['MethodTimeouts'] = @(Get-ZrpcMethodTimeouts -Text $ServiceText) }
+        $deployText = "GrpcClient:`n  CallDeadlineMs:`n    DataServiceNodeService: $Deadline"
+        return @(Get-GrpcClientDeadlineBudgetViolations -DeployScalars (ConvertFrom-YamlToFlatMap -Text $deployText).Scalars -Targets ([ordered]@{ DataServiceNodeService = $target }))
+    }
+    $allocate = '/data_service.DataService/AllocateIdSegment'
+    $rollback = '/data_service.DataService/RollbackPlayer'
+    $block = {
+        param([string[]]$Lines)
+        return "MethodTimeouts:`n" + ($Lines -join "`n")
+    }
+    $entry = { param([string]$Method, [string]$Timeout) return "  - FullMethod: $Method`n    Timeout: $Timeout" }
+
+    $passes = @(
+        @{ Why = '等号边界:8s + 2000 = 10000'; Deadline = '10000'; Service = (& $block (& $entry $allocate '8s')) }
+        @{ Why = '小数时长不多算:16.1s 恰好是 16100,加 2000 等于 18100'; Deadline = '18100'; Service = (& $block (& $entry $allocate '16.1s')) }
+        @{ Why = '逐方法超时比全局默认还短'; Deadline = '4000'; Service = (& $block (& $entry $allocate '500ms')) }
+        @{ Why = '登记为 C++ 不调用的方法可以远高于 deadline'; Deadline = '4000'; Service = (& $block (& $entry $rollback '14400s')); NotCalled = @($rollback) }
+        @{ Why = '豁免只放行登记的那一条,另一条照常在预算内'; Deadline = '10000'; Service = (& $block @((& $entry $rollback '300s'), (& $entry $allocate '8s'))); NotCalled = @($rollback) }
+        @{ Why = '显式空表 MethodTimeouts: []'; Deadline = '4000'; Service = 'MethodTimeouts: []' }
+        @{ Why = '键名小写(go-zero 配置键不分大小写)且在预算内'; Deadline = '10000'; Service = "methodTimeouts:`n  - fullMethod: $allocate`n    timeout: 8s" }
+    )
+    foreach ($c in $passes) {
+        $notCalled = if ($c.ContainsKey('NotCalled')) { $c.NotCalled } else { @() }
+        $got = @(& $check $c.Deadline $c.Service $notCalled)
+        Assert-True -Condition ($got.Count -eq 0) -Because ("{0} 应通过,实际报:{1}" -f $c.Why, ($got -join ';'))
+    }
+
+    $violationCases = @(
+        @{ Why = '差 1ms(8s + 2000 > 9999)'; Deadline = '9999'; Service = (& $block (& $entry $allocate '8s')); Pattern = 'AllocateIdSegment 8s' }
+        @{ Why = '回档方法没登记豁免就不放行,并提示登记到哪'; Deadline = '4000'; Service = (& $block (& $entry $rollback '300s')); Pattern = 'RollbackPlayer 300s.*Get-GrpcClientMethodsNotCalledFromCpp' }
+        @{ Why = '登记的是别的方法,这一条不沾光'; Deadline = '4000'; Service = (& $block (& $entry $allocate '300s')); NotCalled = @($rollback); Pattern = 'AllocateIdSegment 300s' }
+        @{ Why = '豁免逐字匹配,大小写不同不算(go-zero 按 FullMethod 原样查表)'; Deadline = '4000'; Service = (& $block (& $entry $rollback '300s')); NotCalled = @($rollback.ToLowerInvariant()); Pattern = 'RollbackPlayer 300s' }
+        @{ Why = 'Timeout 是裸数字(go-zero 加载配置时直接报错,几乎一定是把毫秒写错了地方)'; Deadline = '10000'; Service = (& $block (& $entry $allocate '8000')); Pattern = "AllocateIdSegment 的 Timeout='8000' 解析不了" }
+        @{ Why = 'Timeout 为 0'; Deadline = '10000'; Service = (& $block (& $entry $allocate '0s')); Pattern = '解析不了' }
+        @{ Why = 'Timeout 单位大写(Go 不认)'; Deadline = '10000'; Service = (& $block (& $entry $allocate '8S')); Pattern = '解析不了' }
+        @{ Why = 'FullMethod 不是 /包.服务/方法'; Deadline = '10000'; Service = (& $block (& $entry 'AllocateIdSegment' '1s')); Pattern = "FullMethod='AllocateIdSegment' 不是" }
+        @{ Why = '键名小写同样被核到(否则换个大小写就绕过门禁)'; Deadline = '4000'; Service = "methodTimeouts:`n  - fullMethod: $allocate`n    timeout: 300s"; Pattern = 'AllocateIdSegment 300s' }
+        @{ Why = '豁免不跳过全局 Timeout 的核对'; Deadline = '9999'; Service = ("Timeout: 8000`n" + (& $block (& $entry $rollback '300s'))); NotCalled = @($rollback); Pattern = 'Timeout 8000 \+ 2000 = 10000' }
+        @{ Why = '豁免只免比大小,不免格式:豁免条目的超时写坏了也要报'; Deadline = '4000'; Service = (& $block (& $entry $rollback 'abc')); NotCalled = @($rollback); Pattern = "RollbackPlayer 的 Timeout='abc' 解析不了" }
+        @{ Why = '豁免条目的超时是裸数字同样要报'; Deadline = '4000'; Service = (& $block (& $entry $rollback '3600')); NotCalled = @($rollback); Pattern = "RollbackPlayer 的 Timeout='3600' 解析不了" }
+        @{ Why = '有这个键却一条也没有(键后什么都没写)'; Deadline = '4000'; Service = "MethodTimeouts:`nName: x"; Pattern = '有 MethodTimeouts 键却没有解析出任何条目' }
+    )
+    foreach ($c in $violationCases) {
+        $notCalled = if ($c.ContainsKey('NotCalled')) { $c.NotCalled } else { @() }
+        $got = @(& $check $c.Deadline $c.Service $notCalled)
+        Assert-True -Condition ($got.Count -gt 0) -Because "$($c.Why) 必须报违例"
+        Assert-Match -Text $got[0] -Pattern '^DataServiceNodeService:' -Because "$($c.Why) 的违例必须点名是哪个目标"
+        Assert-Match -Text ($got -join "`n") -Pattern $c.Pattern -Because "$($c.Why) 的违例必须说清是哪一条、为什么"
+    }
+
+    # 服务 yaml 里明明有 MethodTimeouts,调用方却没把逐方法解析结果交进来:不能当作没有,必须拒绝。
+    $got = @(& $check '10000' (& $block (& $entry $allocate '8s')) @() -OmitParsedEntries)
+    Assert-True -Condition ($got.Count -gt 0) -Because '有 MethodTimeouts 却没给逐方法解析结果必须报违例'
+    Assert-Match -Text $got[0] -Pattern '^DataServiceNodeService:.*没有拿到逐方法的解析结果' -Because '违例要说明缺的是逐方法解析结果'
+
+    # 下面三种是「两套解析对不上」的情形,直接喂构造值(绕开 Get-ZrpcMethodTimeouts,它自己会先 throw)。
+    $deployScalars = (ConvertFrom-YamlToFlatMap -Text "GrpcClient:`n  CallDeadlineMs:`n    DataServiceNodeService: 4000").Scalars
+    $violationsFor = {
+        param([string]$ServiceText, [object[]]$Entries)
+        $target = @{
+            Source                  = 'fixture/data_service.yaml'
+            Scalars                 = (ConvertFrom-YamlToFlatMap -Text $ServiceText).Scalars
+            MethodTimeouts          = $Entries
+            MethodsNotCalledFromCpp = @($rollback)
+        }
+        return @(Get-GrpcClientDeadlineBudgetViolations -DeployScalars $deployScalars -Targets ([ordered]@{ DataServiceNodeService = $target }))
+    }
+
+    # 条数对不上(解析器漏读 / 调用方传错文件)。
+    $got = @(& $violationsFor (& $block @((& $entry $rollback '300s'), (& $entry $allocate '300s'))) @(@{ FullMethod = $rollback; Timeout = '300s' }))
+    Assert-True -Condition ($got.Count -gt 0) -Because '解析出 1 条而拍平表里有 2 条必须报违例(否则漏掉的那条 AllocateIdSegment 300s 就被放过了)'
+    Assert-Match -Text $got[0] -Pattern '解析出 1 条,拍平表里数到 2 条' -Because '违例要给出两边的条数'
+
+    # 交进来了逐方法条目,拍平表里却没有这个键:条目不能因此不被核对。
+    $got = @(& $violationsFor 'Name: x' @(@{ FullMethod = $allocate; Timeout = '300s' }))
+    Assert-True -Condition ($got.Count -gt 0) -Because '有逐方法条目而拍平表里没有 MethodTimeouts 键必须报违例(不能让这条 300s 不经核对)'
+    Assert-Match -Text $got[0] -Pattern '解析出 1 条,拍平表里数到 0 条' -Because '违例要给出两边的条数'
+
+    # 带引号的键 + 流式写法:拍平表认得出键、数不出条目,解析结果也是 0 条。0 == 0 不能算通过
+    # (go-zero 走完整的 YAML 解析,这张表在服务端照常生效;评审时抓到的误放)。
+    $flowText = "`"MethodTimeouts`": [{FullMethod: $allocate, Timeout: 1h}]"
+    $got = @(& $violationsFor $flowText @())
+    Assert-True -Condition ($got.Count -gt 0) -Because '有 MethodTimeouts 键、两边都数出 0 条、值又不是 [] 时必须报违例,不能当成空表放行'
+    Assert-Match -Text $got[0] -Pattern '有 MethodTimeouts 键却没有解析出任何条目' -Because '违例要说明是有键却读不出条目'
+}
+
+Test-Case "自检:Get-ZrpcMethodTimeouts 读得出块式写法的每一条,读不懂的一律 throw(不拿读错的表去核预算)" {
+    $text = @(
+        'Name: dataservice.rpc'
+        'MethodTimeouts:  # 逐方法超时'
+        '  - FullMethod: /a.B/One   # 行尾注释'
+        '    Timeout: 300s'
+        ''
+        '  # 两个键的先后顺序可以反过来,值可以带引号'
+        '  - Timeout: "1m30s"'
+        "    FullMethod: '/a.B/Two'"
+        'Redis:'
+        '  Timeout: 5s'
+        '  FullMethod: /not.A/Method'
+    ) -join "`n"
+    foreach ($variant in @($text, ($text -replace "`n", "`r`n"))) {
+        $got = @(Get-ZrpcMethodTimeouts -Text $variant)
+        Assert-Equal -Expected 2 -Actual $got.Count -Because '应当读出两条(LF 与 CRLF 结果相同),块在下一个顶层键 Redis 处结束'
+        Assert-Equal -Expected '/a.B/One' -Actual $got[0].FullMethod -Because '第一条的方法名'
+        Assert-Equal -Expected '300s' -Actual $got[0].Timeout -Because '第一条的超时(行尾注释要去掉)'
+        Assert-Equal -Expected '/a.B/Two' -Actual $got[1].FullMethod -Because '第二条的方法名(引号要去掉)'
+        Assert-Equal -Expected '1m30s' -Actual $got[1].Timeout -Because '第二条的超时与方法名各归各位,不能串到别的条目上'
+    }
+
+    $lower = @(Get-ZrpcMethodTimeouts -Text "methodtimeouts:`n  - fullmethod: /a.B/One`n    timeout: 1s")
+    Assert-Equal -Expected '/a.B/One=1s' -Actual ("{0}={1}" -f $lower[0].FullMethod, $lower[0].Timeout) -Because '键名不分大小写(与 go-zero 的配置加载一致)'
+    Assert-Equal -Expected 0 -Actual @(Get-ZrpcMethodTimeouts -Text "Name: x`nTimeout: 8000").Count -Because '没有这个键 = 空'
+    Assert-Equal -Expected 0 -Actual @(Get-ZrpcMethodTimeouts -Text 'MethodTimeouts: []').Count -Because '显式空表 = 空'
+    Assert-Equal -Expected 0 -Actual @(Get-ZrpcMethodTimeouts -Text '').Count -Because '空文本 = 空'
+    Assert-Equal -Expected 0 -Actual @(Get-ZrpcMethodTimeouts -Text "Name: x  # 注释里提到 MethodTimeouts 不算`n# MethodTimeouts: [{FullMethod: /a.B/One, Timeout: 1h}]").Count -Because '只在注释里出现不算'
+
+    $one = "  - FullMethod: /a.B/One`n    Timeout: 1h"
+    $malformed = @(
+        @{ Why = '流式写法'; Text = 'MethodTimeouts: [{FullMethod: /a.B/One, Timeout: 1s}]'; Pattern = '只认块式写法' }
+        @{ Why = '条目里有未知键'; Text = "MethodTimeouts:`n  - FullMethod: /a.B/One`n    Timeout: 1s`n    Retries: 3"; Pattern = '未知键 Retries' }
+        @{ Why = '同一条目里键重复'; Text = "MethodTimeouts:`n  - FullMethod: /a.B/One`n    Timeout: 1s`n    Timeout: 2s"; Pattern = 'Timeout 写了两次' }
+        @{ Why = '条目缺 Timeout'; Text = "MethodTimeouts:`n  - FullMethod: /a.B/One"; Pattern = '缺 FullMethod 或 Timeout' }
+        @{ Why = '条目缺 FullMethod'; Text = "MethodTimeouts:`n  - Timeout: 1s"; Pattern = '缺 FullMethod 或 Timeout' }
+        @{ Why = '条目不以 - 开头'; Text = "MethodTimeouts:`n  FullMethod: /a.B/One`n  Timeout: 1s"; Pattern = "必须以 '- ' 开头" }
+        @{ Why = '列表项是标量'; Text = "MethodTimeouts:`n  - just-a-string"; Pattern = '看不懂的行' }
+        @{ Why = '键只有名字没有值'; Text = "MethodTimeouts:`n  - FullMethod:`n    Timeout: 1s"; Pattern = '看不懂的行' }
+        @{ Why = '顶层出现两次'; Text = "MethodTimeouts:`n$one`nName: x`nMethodTimeouts:`n$one"; Pattern = '不止一次' }
+        # 以下几种 go-zero 都会照常生效(它走完整的 YAML 解析),而这里读不出来:必须拒绝,不能当作没有这张表。
+        @{ Why = '列表项顶格写'; Text = "MethodTimeouts:`n- FullMethod: /a.B/One`n  Timeout: 1s`nNext: 1"; Pattern = '列表项要缩进书写' }
+        @{ Why = '键带双引号 + 流式写法'; Text = "Name: x`n`"MethodTimeouts`": [{`"FullMethod`": `"/a.B/One`", `"Timeout`": `"1h`"}]"; Pattern = '提到了 MethodTimeouts' }
+        @{ Why = '键带单引号 + 块式写法'; Text = "'MethodTimeouts':`n$one"; Pattern = '提到了 MethodTimeouts' }
+        @{ Why = '键带引号 + 顶格列表'; Text = "`"MethodTimeouts`":`n- Timeout: 1h`n  FullMethod: /a.B/One"; Pattern = '提到了 MethodTimeouts' }
+        @{ Why = '整份文档统一缩进'; Text = "  Name: x`n  MethodTimeouts: [{FullMethod: /a.B/One, Timeout: 1h}]"; Pattern = '提到了 MethodTimeouts' }
+        @{ Why = '嵌在别的键下面'; Text = "Outer:`n  MethodTimeouts:`n    - FullMethod: /a.B/One`n      Timeout: 1h"; Pattern = '提到了 MethodTimeouts' }
+        @{ Why = '标准写法之后又用带引号的键写了一遍(YAML 里后者覆盖前者)'; Text = "MethodTimeouts:`n$one`n`"MethodTimeouts`": [{FullMethod: /a.B/Two, Timeout: 2h}]"; Pattern = '提到了 MethodTimeouts' }
+    )
+    foreach ($c in $malformed) {
+        $message = ''
+        try { Get-ZrpcMethodTimeouts -Text $c.Text | Out-Null } catch { $message = $_.Exception.Message }
+        Assert-Match -Text $message -Pattern $c.Pattern -Because "$($c.Why) 必须 throw 并说清原因,不能读出一份残缺的表"
+    }
+}
+
+Test-Case "自检:ConvertTo-ZrpcDurationMs 与 Go 的时长写法一致,解析不了返回空(交给调用方报违例)" {
+    $expected = [ordered]@{
+        '300s'      = 300000
+        '3600s'     = 3600000
+        '14400s'    = 14400000
+        '1m30s'     = 90000
+        '1h2m3s4ms' = 3723004
+        '500ms'     = 500
+        '1.5s'      = 1500
+        '16.1s'     = 16100
+        '2.007s'    = 2007
+        '2h'        = 7200000
+        ' 8s '      = 8000
+        '0.4ms'     = 1
+    }
+    foreach ($text in $expected.Keys) {
+        Assert-Equal -Expected $expected[$text] -Actual (ConvertTo-ZrpcDurationMs -Text $text) -Because "'$text' 的毫秒数(小数不能多算,不足 1ms 向上取整)"
+    }
+    $fullWidthThree = [string][char]0xFF13
+    foreach ($text in @('3000', '8S', '1m30S', '1H30m', '0s', '0ms', '-5s', '+5s', '.5s', '5.s', '1e3s', '1d', '10us', '5 s', 's', '', 'abc', '5s extra', "${fullWidthThree}s", '99999999999999999999999999h')) {
+        Assert-True -Condition ($null -eq (ConvertTo-ZrpcDurationMs -Text $text)) -Because "'$text' 不是带单位的正时长(单位只认小写的 ms / s / m / h,数字只认 0-9),必须返回空而不是抛异常"
+    }
+}
+
+# 部署门禁读的全部文件。两条夹具用例都把它们拷到临时目录再改,不碰仓库。
+$deadlineBudgetFixtureFiles = @(
+    'bin/etc/base_deploy_config.yaml'
+    'go/scene_manager/etc/scene_manager_service.yaml'
+    'go/data_service/etc/data_service.yaml'
+    'go/client_rpc_router/etc/client_rpc_router.yaml'
+    'go/match/etc/match_service.yaml'
+    'go/login/etc/login.yaml'
+)
+
 Test-Case "负向:DataService deadline 退回修复前的 2500 时部署门禁必须 throw 并只点名该项(夹具是临时目录里的配置副本,不碰仓库)" {
     $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('grpc-deadline-budget-' + [guid]::NewGuid().ToString('N'))
     try {
-        foreach ($rel in @(
-            'bin/etc/base_deploy_config.yaml'
-            'go/scene_manager/etc/scene_manager_service.yaml'
-            'go/data_service/etc/data_service.yaml'
-            'go/client_rpc_router/etc/client_rpc_router.yaml'
-            'go/match/etc/match_service.yaml'
-            'go/login/etc/login.yaml'
-        )) {
+        foreach ($rel in $deadlineBudgetFixtureFiles) {
             $dst = Join-Path $tempRoot $rel
             New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
             Copy-Item -LiteralPath (Join-Path (Get-RepoRoot) $rel) -Destination $dst
@@ -464,6 +648,119 @@ Test-Case "负向:DataService deadline 退回修复前的 2500 时部署门禁�
     }
     finally {
         Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Test-Case "负向:给 C++ 会调用的 AllocateIdSegment 配一条超预算的 MethodTimeouts,或把这张表写坏,部署门禁都必须 throw(夹具是临时目录里的配置副本,不碰仓库)" {
+    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('grpc-deadline-method-timeouts-' + [guid]::NewGuid().ToString('N'))
+    try {
+        foreach ($rel in $deadlineBudgetFixtureFiles) {
+            $dst = Join-Path $tempRoot $rel
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
+            Copy-Item -LiteralPath (Join-Path (Get-RepoRoot) $rel) -Destination $dst
+        }
+        # 把副本里的 deadline 钉成 4000:本用例验的是判定逻辑,不该随仓库里这个值的调整变红。
+        $deployCopy = Join-Path $tempRoot 'bin/etc/base_deploy_config.yaml'
+        $deployText = Get-Content -LiteralPath $deployCopy -Raw
+        Assert-Match -Text $deployText -Pattern '(?m)^\s+DataServiceNodeService:\s*\d+' -Because '夹具前提:base_deploy_config.yaml 里要有 DataServiceNodeService 的 deadline'
+        [System.IO.File]::WriteAllText($deployCopy, [regex]::Replace($deployText, '(?m)^(\s+DataServiceNodeService:\s*)\d+', '${1}4000'), [System.Text.UTF8Encoding]::new($false))
+
+        $serviceCopy = Join-Path $tempRoot 'go/data_service/etc/data_service.yaml'
+        $original = Get-Content -LiteralPath $serviceCopy -Raw
+        $keyLine = '(?m)^MethodTimeouts:[ \t]*\r?$'
+        Assert-Match -Text $original -Pattern $keyLine -Because '夹具前提:data_service.yaml 里要有块式的 MethodTimeouts(回档三条),下面两处改动都插在它的第一行之后'
+        $RepoRoot = $tempRoot
+
+        # 前提:副本不改就该放行。否则下面两条负向断言分不清是谁造成的失败。
+        Assert-GrpcClientDeadlineBudget | Out-Null
+
+        $withAllocate = [regex]::Replace($original, $keyLine, "MethodTimeouts:`n  - FullMethod: /data_service.DataService/AllocateIdSegment`n    Timeout: 8s")
+        [System.IO.File]::WriteAllText($serviceCopy, $withAllocate, [System.Text.UTF8Encoding]::new($false))
+        $message = ''
+        try { Assert-GrpcClientDeadlineBudget | Out-Null } catch { $message = $_.Exception.Message }
+        Assert-Match -Text $message -Pattern '拒绝部署' -Because 'C++ 会调用的方法被放宽到 deadline 之上必须拒绝部署'
+        Assert-Match -Text $message -Pattern 'DataServiceNodeService:C\+\+ deadline 4000 < .*AllocateIdSegment 8s.*= 10000' -Because '错误必须点名目标、方法与按 8s + 2000 算出的下限'
+        Assert-NotMatch -Text $message -Pattern 'Rollback(Player|Zone|All)' -Because '回档三条已登记为 C++ 不调用,不应被点名'
+        Assert-NotMatch -Text $message -Pattern 'SceneManagerNodeService|ClientRpcRouterNodeService|MatchNodeService|LoginNodeService' -Because '其余四项仍满足,只点名不满足的那一项'
+
+        $withUnknownKey = [regex]::Replace($original, $keyLine, "MethodTimeouts:`n  - FullMethod: /data_service.DataService/RollbackPlayer`n    Timeout: 300s`n    Retries: 3")
+        [System.IO.File]::WriteAllText($serviceCopy, $withUnknownKey, [System.Text.UTF8Encoding]::new($false))
+        $message = ''
+        try { Assert-GrpcClientDeadlineBudget | Out-Null } catch { $message = $_.Exception.Message }
+        Assert-Match -Text $message -Pattern 'go/data_service/etc/data_service\.yaml 的 MethodTimeouts 解析不了.*未知键 Retries' -Because '读不懂的 MethodTimeouts 必须拒绝部署并点名文件与原因,不能当作没有这张表'
+
+        # 评审时抓到的误放:在文件末尾用带引号的键、流式写法再写一遍,YAML 里后者覆盖前者,go-zero 照常生效。
+        $withQuotedFlow = $original.TrimEnd() + "`n`"MethodTimeouts`": [{FullMethod: /data_service.DataService/AllocateIdSegment, Timeout: 1h}]`n"
+        [System.IO.File]::WriteAllText($serviceCopy, $withQuotedFlow, [System.Text.UTF8Encoding]::new($false))
+        $message = ''
+        try { Assert-GrpcClientDeadlineBudget | Out-Null } catch { $message = $_.Exception.Message }
+        Assert-Match -Text $message -Pattern 'go/data_service/etc/data_service\.yaml 的 MethodTimeouts 解析不了.*提到了 MethodTimeouts' -Because '带引号的键 + 流式写法必须拒绝部署,不能因为两套解析都读不出条目就放行'
+    }
+    finally {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Test-Case "通过时回显按「C++ 不调用」放行的 MethodTimeouts 条目(部署的人看得到这次豁免了什么)" {
+    $okLine = [string]($devOut -split "`r?`n" | Where-Object { $_ -match 'GrpcClient deadline budget OK' } | Select-Object -First 1)
+    Assert-Match -Text $okLine -Pattern 'MethodTimeouts exempt \(never called from C\+\+\): ' -Because 'zone-up 的输出里,门禁通过的那一行必须列出被豁免的条目'
+    $table = Get-GrpcClientMethodsNotCalledFromCpp
+    foreach ($target in $table.Keys) {
+        foreach ($fullMethod in @($table[$target])) {
+            Assert-Match -Text $okLine -Pattern ([regex]::Escape("$target $fullMethod=")) -Because "$fullMethod 在服务 yaml 里配了 MethodTimeouts 且已登记,通过时必须点名它"
+        }
+    }
+}
+
+Test-Case "「C++ 不调用」表名副其实:表里的方法 C++ 既不直接调用、gate 也不会按消息号转发,且每一项都对应服务 yaml 里的一条 MethodTimeouts(没有过期项)" {
+    # 表里的目标 → 它的服务 yaml。新增目标时在这里补一行(与 Assert-GrpcClientDeadlineBudget 的 $targetSources 同值)。
+    $serviceYamlOf = @{ DataServiceNodeService = 'go/data_service/etc/data_service.yaml' }
+
+    # 手写 C++ = cpp/ 下除生成物(cpp/generated,生成客户端自身的定义就在那里)与内嵌 muduo 之外的全部源码。
+    $handWritten = @(Get-ChildItem -LiteralPath (Join-Path (Get-RepoRoot) 'cpp') -Recurse -File | Where-Object {
+        @('.cpp', '.cc', '.h', '.hpp') -contains $_.Extension -and (($_.FullName -replace '\\', '/') -notmatch '/cpp/generated/|/muduo_windows/')
+    })
+    Assert-True -Condition ($handWritten.Count -gt 100) -Because "手写 C++ 源文件应当有几百个,实际只找到 $($handWritten.Count) 个(搜索范围写错了?)"
+
+    # gate 直连模式不写任何符号:它拿客户端消息号查 gRpcMethodRegistry 再调 .sender 转发
+    # (cpp/nodes/gate/handler/rpc/client_message_processor.cpp)。哪些消息号算客户端消息,由生成的 IsClientMessageId 决定。
+    $registryText = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'cpp/generated/rpc/service_metadata/rpc_event_registry.cpp') -Raw
+    $clientIdsFunction = [regex]::Match($registryText, '(?s)bool\s+IsClientMessageId\s*\([^)]*\)\s*\{(?<body>.*?)\r?\n\}')
+    Assert-True -Condition $clientIdsFunction.Success -Because 'rpc_event_registry.cpp 里应当有 IsClientMessageId(生成器改了形状的话,本用例的「gate 会转发」判据要跟着改)'
+    $clientMessageIds = @([regex]::Matches($clientIdsFunction.Groups['body'].Value, '\bcase\s+(?<id>[A-Za-z_][A-Za-z0-9_]*MessageId)\s*:') | ForEach-Object { $_.Groups['id'].Value })
+    Assert-True -Condition ($clientMessageIds.Count -gt 20) -Because "IsClientMessageId 里应当列着上百个客户端消息号,实际只读到 $($clientMessageIds.Count) 个(解析写错了?)"
+
+    $namesOf = {
+        param([string]$FullMethod)
+        $parts = [regex]::Match($FullMethod, '^/(?:[A-Za-z_][A-Za-z0-9_]*\.)*(?<service>[A-Za-z_][A-Za-z0-9_]*)/(?<method>[A-Za-z_][A-Za-z0-9_]*)$')
+        if (-not $parts.Success) { throw "全方法名不是 /包.服务/方法 的形状: $FullMethod" }
+        return $parts.Groups['service'].Value + $parts.Groups['method'].Value
+    }
+    # 直接调用:生成客户端的符号 Send<服务><方法> / Async<服务><方法>[Handler|FailedHandler|GrpcClient],或它的消息号常量。
+    $findDirectUses = {
+        param([string]$FullMethod)
+        $name = & $namesOf $FullMethod
+        $symbol = '\b(?:(?:Send|Async)' + $name + '(?:Handler|FailedHandler|GrpcClient)?|' + $name + 'MessageId)\b'
+        return @($handWritten | Select-String -Pattern $symbol -CaseSensitive | ForEach-Object { "{0}:{1}" -f ($_.Path -replace '\\', '/'), $_.LineNumber })
+    }
+    $isForwardedByGate = { param([string]$FullMethod) return ($clientMessageIds -ccontains ((& $namesOf $FullMethod) + 'MessageId')) }
+
+    # 正向对照:两种调用形态各拿一个已知会被调用的方法验一遍。搜不到它们,说明搜索本身坏了,下面的「搜不到」不能算证据。
+    Assert-True -Condition (@(& $findDirectUses '/data_service.DataService/AllocateIdSegment').Count -gt 0) -Because '搜索必须能找到已知的直接调用 SendDataServiceAllocateIdSegment(scene 的号段领取),否则本用例的结论无效'
+    Assert-True -Condition (& $isForwardedByGate '/loginpb.ClientPlayerLogin/Login') -Because 'Login 是 gate 直连模式按消息号转发的客户端消息,必须被判成「C++ 会调用」,否则本用例对这种调用形态是瞎的'
+    Assert-True -Condition (-not (& $isForwardedByGate '/data_service.DataService/AllocateIdSegment')) -Because 'AllocateIdSegment 不是客户端消息,gate 不转发它(反向对照:判据不能把所有方法都判成会转发)'
+
+    $table = Get-GrpcClientMethodsNotCalledFromCpp
+    Assert-True -Condition ($table.Count -gt 0) -Because '表不应为空(回档三个 RPC 登记在这里;若它们的 MethodTimeouts 已删,连同本表一起清掉并改写本断言)'
+    foreach ($target in $table.Keys) {
+        Assert-True -Condition $serviceYamlOf.ContainsKey($target) -Because "本用例不认识目标 ${target}:在 `$serviceYamlOf 里补上它的服务 yaml"
+        $configured = @(Get-ZrpcMethodTimeouts -Text (Get-Content -LiteralPath (Join-Path (Get-RepoRoot) $serviceYamlOf[$target]) -Raw) | ForEach-Object { [string]$_.FullMethod })
+        foreach ($fullMethod in @($table[$target])) {
+            $uses = @(& $findDirectUses $fullMethod)
+            Assert-True -Condition ($uses.Count -eq 0) -Because ("{0} 登记为 C++ 不调用,但手写 C++ 里出现了它的生成客户端符号或消息号:{1}。C++ 一旦调用它,就必须满足 deadline ≥ 该方法超时 + 2000,不能再豁免" -f $fullMethod, ($uses -join ', '))
+            Assert-True -Condition (-not (& $isForwardedByGate $fullMethod)) -Because "$fullMethod 登记为 C++ 不调用,但它的消息号列在 IsClientMessageId 里:gate 直连模式会按消息号把它转发给目标服务,不能豁免"
+            Assert-True -Condition ($configured -ccontains $fullMethod) -Because "$fullMethod 登记在表里,但 $($serviceYamlOf[$target]) 的 MethodTimeouts 里没有这一条:过期的豁免要删掉,免得将来给它配长超时时无人复核"
+        }
     }
 }
 

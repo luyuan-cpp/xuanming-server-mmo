@@ -573,7 +573,161 @@ function Get-AuthoritativeYamlBlock {
 
 <#
 .SYNOPSIS
-	纯函数:核对「C++ deadline ≥ 目标 Go 服务的 zrpc Timeout + 2000」(上游比下游宽),返回违例文本数组,空 = 通过。
+	把 Go 时长写法("300s"、"1m30s"、"500ms")换算成毫秒(向上取整)。解析不了或不为正返回 $null。
+
+.DESCRIPTION
+	go-zero 的 MethodTimeouts[].Timeout 是 time.Duration,yaml 里必须是字符串,由 Go 的 time.ParseDuration 解析
+	(go-zero core/mapping/unmarshaler.go)。这里用同一套写法,只认 ms / s / m / h 四种单位:
+	  - 裸数字("3000"):go-zero 不接受,加载配置时直接报错、服务起不来(数字报 expect string,带引号的
+	    数字报 missing unit);几乎一定是把毫秒写错了地方。
+	  - ns / us 对服务端超时没有意义。
+	这两类都返回 $null,由调用方按「解析不了」报违例,不替配置猜一个值(fail-closed)。
+	单位大小写敏感、数字只认 ASCII 的 0-9,与 Go 一致("5S"、全角数字都不认)。
+	用 decimal 而不是 double 算:16.1s 必须恰好是 16100,多算 1ms 会在「超时 + 2000 = deadline」的等号边界上误拒。
+#>
+function ConvertTo-ZrpcDurationMs {
+	param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text)
+
+	$value = $Text.Trim()
+	if ($value -cnotmatch '^(?:[0-9]+(?:\.[0-9]+)?(?:ms|s|m|h))+$') { return $null }
+
+	try {
+		$totalMs = [decimal]0
+		foreach ($part in [regex]::Matches($value, '([0-9]+(?:\.[0-9]+)?)(ms|s|m|h)')) {
+			$number = [decimal]::Parse($part.Groups[1].Value, [System.Globalization.NumberStyles]::AllowDecimalPoint, [System.Globalization.CultureInfo]::InvariantCulture)
+			switch -CaseSensitive ($part.Groups[2].Value) {
+				'ms' { $totalMs += $number }
+				's'  { $totalMs += $number * [decimal]1000 }
+				'm'  { $totalMs += $number * [decimal]60000 }
+				'h'  { $totalMs += $number * [decimal]3600000 }
+			}
+		}
+		if ($totalMs -le 0) { return $null }
+		return [long][math]::Ceiling($totalMs)
+	}
+	catch {
+		# 大到装不下的数:同样算解析不了,由调用方点名是哪个服务哪一条。
+		return $null
+	}
+}
+
+<#
+.SYNOPSIS
+	从 zrpc 服务 yaml 的文本里取出顶层 MethodTimeouts 的逐方法条目,每项是 @{ FullMethod = ...; Timeout = ... }。
+	没有这个键(或写成 `MethodTimeouts: []`)返回空。
+
+.DESCRIPTION
+	为什么不用 ConvertFrom-YamlToFlatMap:它只展开「标量的列表」,遇到「映射的列表」会把每一项的第二个键压到
+	同一条路径上 —— 三条 MethodTimeouts 的 Timeout 互相覆盖只剩最后一条,方法名和超时对不上号。
+
+	只认一种写法:键顶格、不带引号,键后换行,每项缩进并以 `- ` 开头,项内只有 FullMethod 与 Timeout 两个键。
+	其余一律 throw,宁可拒绝部署,也不拿一份解析错的表去核预算:
+	  - 文件里别处提到了 MethodTimeouts 却不是上面这种键行(键带引号、整份文档统一缩进、嵌在别的键下面、
+	    流式 / JSON 写法、同一个键写了两次)。go-zero 走完整的 YAML 解析,这些写法在服务端照样生效,
+	    这里读不出来就必须拒绝,不能当作没有这张表。
+	  - 列表项顶格写(YAML 允许)。ConvertFrom-YamlToFlatMap 数不到这种写法的条目,还会把项内的 Timeout
+	    认成顶层 Timeout,后面的核对全都对不上。
+	  - 看不懂的行、未知键、重复键、缺键。
+	键名不分大小写,与 go-zero 的配置加载一致:写成 `methodTimeouts:` 在服务端同样生效,这里照常读出来核对。
+#>
+function Get-ZrpcMethodTimeouts {
+	param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text)
+
+	$entries = New-Object System.Collections.Generic.List[object]
+	$current = $null
+	$seen = $false
+	$inBlock = $false
+	foreach ($rawLine in ($Text -split "`r?`n")) {
+		$line = (Remove-YamlInlineComment -Value ($rawLine -replace "`t", '    ')).TrimEnd()
+		if ([string]::IsNullOrWhiteSpace($line)) { continue }
+
+		if ($inBlock) {
+			if ($line -match '^-') {
+				throw "MethodTimeouts 的列表项要缩进书写(顶格的 '- ' 这里读不了):$($line.Trim())"
+			}
+			# 顶格的其他内容 = 下一个顶层键,MethodTimeouts 块到此结束。
+			if ($line -notmatch '^\s') { $inBlock = $false }
+		}
+
+		if (-not $inBlock) {
+			if ($line -match '^MethodTimeouts\s*:(?<rest>.*)$') {
+				if ($seen) { throw 'MethodTimeouts 在顶层出现了不止一次' }
+				$seen = $true
+				$rest = $Matches['rest'].Trim()
+				if ($rest -eq '[]') { continue }
+				if ($rest.Length -gt 0) { throw "MethodTimeouts 只认块式写法(键后换行,每项缩进并以 '- ' 开头),看不懂:$($line.Trim())" }
+				$inBlock = $true
+			}
+			elseif ($line -match 'MethodTimeouts') {
+				throw "这一行提到了 MethodTimeouts,却不是「顶格、不带引号的键 + 换行后的缩进列表」这种写法,读不了:$($line.Trim())"
+			}
+			continue
+		}
+
+		$item = [regex]::Match($line, '^\s+(?<dash>-\s+)?(?<key>[A-Za-z_][A-Za-z0-9_]*)\s*:\s*(?<value>\S.*)$')
+		if (-not $item.Success) { throw "MethodTimeouts 里有看不懂的行:$($line.Trim())" }
+		if ($item.Groups['dash'].Success) {
+			$current = [ordered]@{}
+			$entries.Add($current)
+		}
+		elseif ($null -eq $current) {
+			throw "MethodTimeouts 的条目必须以 '- ' 开头:$($line.Trim())"
+		}
+
+		$key = $item.Groups['key'].Value
+		$canonicalKey = $null
+		if ($key -eq 'FullMethod') { $canonicalKey = 'FullMethod' }
+		elseif ($key -eq 'Timeout') { $canonicalKey = 'Timeout' }
+		else { throw "MethodTimeouts 的条目里只应有 FullMethod 与 Timeout,出现了未知键 ${key}" }
+		if ($current.Contains($canonicalKey)) { throw "MethodTimeouts 的同一条目里 $canonicalKey 写了两次" }
+		$current[$canonicalKey] = ConvertFrom-YamlScalarLiteral -Value $item.Groups['value'].Value
+	}
+
+	foreach ($entry in $entries) {
+		if (-not ($entry.Contains('FullMethod') -and $entry.Contains('Timeout'))) {
+			throw ("MethodTimeouts 有条目缺 FullMethod 或 Timeout:{0}" -f (($entry.Keys | ForEach-Object { "$_=$($entry[$_])" }) -join ', '))
+		}
+	}
+	return $entries.ToArray()
+}
+
+<#
+.SYNOPSIS
+	「C++ 节点从不调用」的方法表:目标节点类型 → gRPC 全方法名数组。只有列在这里的方法,它在服务 yaml 的
+	MethodTimeouts 里才允许高于「C++ deadline − 2000」。
+
+.DESCRIPTION
+	C++ 的 deadline 按目标节点类型配一个值,对该目标的所有方法生效;而 go-zero 的 MethodTimeouts 可以把个别方法的
+	服务端超时单独放宽。一个被放宽的方法只要 C++ 不调用,就不存在「C++ 比服务端先放弃」的问题 —— 回档的三个 RPC
+	正是如此:它们由运维带 x-admin-token 发起,服务端在回档过程中要等帮会资产沉降并反向调用 guild 做检查与复查,
+	超时是分钟到小时级。
+
+	登记一项之前先确认 C++ 不会调到它。C++ 调 Go 服务有两种形态,契约测试两种都查
+	(tools/scripts/tests/k8s_deploy_contract.tests.ps1):
+	  - 直接调用:cpp/ 下(生成物 cpp/generated 除外)出现生成客户端的符号 `Send<服务><方法>` /
+	    `Async<服务><方法>…`,或它的消息号常量 `<服务><方法>MessageId`。
+	  - gate 按消息号转发:gate 直连模式查 gRpcMethodRegistry 转发客户端消息,手写代码里不出现任何符号。
+	    所以消息号列在生成的 IsClientMessageId(cpp/generated/rpc/service_metadata/rpc_event_registry.cpp)里的方法
+	    一律算「C++ 会调用」,不许登记。
+	表里登记了、服务 yaml 里却没有对应 MethodTimeouts 条目的过期项同样判失败。
+	这道守护在跑契约测试时生效(CI 在 tools/scripts、各 etc 配置、cpp/nodes、cpp/libs、消息号注册表有改动时跑;
+	发版流程必跑),部署脚本自身不扫 C++ 源码。
+
+	全方法名大小写敏感、逐字匹配,与 go-zero 按 info.FullMethod 查表的方式一致。
+#>
+function Get-GrpcClientMethodsNotCalledFromCpp {
+	return [ordered]@{
+		DataServiceNodeService = @(
+			'/data_service.DataService/RollbackPlayer'
+			'/data_service.DataService/RollbackZone'
+			'/data_service.DataService/RollbackAll'
+		)
+	}
+}
+
+<#
+.SYNOPSIS
+	纯函数:核对「C++ deadline ≥ 目标 Go 服务的服务端超时 + 2000」(上游比下游宽),返回违例文本数组,空 = 通过。
 
 .DESCRIPTION
 	为什么是部署门禁而不只是注释:两个数分属两份配置(bin/etc 的 GrpcClient 块与 go/<svc>/etc 的 Timeout),
@@ -586,17 +740,26 @@ function Get-AuthoritativeYamlBlock {
 	  - 服务 yaml 不写 Timeout = go-zero 默认 2000(go.mod 钉的 v1.9.2 / v1.10.0 的 zrpc/config.go 里
 	    RpcServerConf.Timeout 都是 `default=2000`);写了就必须是正整数 —— 0 = go-zero 不装超时拦截器
 	    (zrpc/server.go 只在 Timeout > 0 时装),服务端没有上界,「下游先超时」无从成立。
-	  - 出现 MethodTimeouts:它能把个别方法的服务端超时放宽到全局 Timeout 之上,而这里只按全局 Timeout 核对;
-	    真要用,先把它纳入本函数。
+	  - MethodTimeouts 逐条核对:它能把个别方法的服务端超时放宽到全局 Timeout 之上,所以每一条都要满足
+	    「C++ deadline ≥ 该方法的超时 + 2000」。唯一的例外是 C++ 节点从不调用的方法,由调用方通过
+	    MethodsNotCalledFromCpp 显式列出(来源与守护见 Get-GrpcClientMethodsNotCalledFromCpp)。
+	    例外只免「与 deadline 比大小」这一步,不免格式:每一条的全方法名都必须是 /包.服务/方法 的形状,
+	    超时都必须解析得了(见 ConvertTo-ZrpcDurationMs)。
+	    以下情形同样报违例而不放行:服务 yaml 里有 MethodTimeouts 键,调用方却没给逐方法解析结果;
+	    解析出的条数与拍平表里数到的条数不一致(包括只有一边有);有这个键、解析出 0 条,而值又不是显式的 `[]`。
 
-	只接收已拍平的 yaml(release_common.ps1 ConvertFrom-YamlToFlatMap 的 Scalars),不读文件,
-	契约测试直接喂构造值验证每条口径(tools/scripts/tests/k8s_deploy_contract.tests.ps1)。
+	只接收已解析好的值,不读文件,契约测试直接喂构造值验证每条口径
+	(tools/scripts/tests/k8s_deploy_contract.tests.ps1)。
 
 .PARAMETER DeployScalars
 	bin/etc/base_deploy_config.yaml 拍平后的 Scalars,键形如 GrpcClient.CallDeadlineMs.SceneManagerNodeService。
 
 .PARAMETER Targets
-	有序字典:目标节点类型(ENodeType 枚举名)→ @{ Source = <服务 yaml 路径,只用于报错>; Scalars = <该 yaml 拍平后的 Scalars> }。
+	有序字典:目标节点类型(ENodeType 枚举名)→ 一张表,键如下。
+	  Source                   服务 yaml 路径,只用于报错。
+	  Scalars                  该 yaml 经 ConvertFrom-YamlToFlatMap 拍平后的 Scalars。
+	  MethodTimeouts           可选。该 yaml 经 Get-ZrpcMethodTimeouts 取出的条目数组。
+	  MethodsNotCalledFromCpp  可选。该目标下 C++ 从不调用的全方法名数组。
 #>
 function Get-GrpcClientDeadlineBudgetViolations {
 	param(
@@ -620,10 +783,46 @@ function Get-GrpcClientDeadlineBudgetViolations {
 			continue
 		}
 
+		# -like / -match 不分大小写:go-zero 的配置键同样不分大小写,methodTimeouts: 也会生效。
 		$methodKeys = @($serviceScalars.Keys | Where-Object { $_ -like 'MethodTimeouts*' })
-		if ($methodKeys.Count -gt 0) {
-			$violations.Add("${target}:$source 出现 MethodTimeouts($($methodKeys -join ', ')),个别方法的服务端超时可能高于 C++ deadline;这里只按全局 Timeout 核对,要用先把它纳入 Get-GrpcClientDeadlineBudgetViolations")
+		$hasParsedEntries = $Targets[$target].Contains('MethodTimeouts')
+		if ($methodKeys.Count -gt 0 -and -not $hasParsedEntries) {
+			$violations.Add("${target}:$source 出现 MethodTimeouts($($methodKeys -join ', ')),但没有拿到逐方法的解析结果,个别方法的服务端超时可能高于 C++ deadline,无法核对")
 			continue
+		}
+		$entries = @()
+		if ($hasParsedEntries) { $entries = @($Targets[$target].MethodTimeouts) }
+		$itemCount = @($serviceScalars.Keys | Where-Object { $_ -match '^MethodTimeouts\[\d+\]$' }).Count
+		if ($entries.Count -ne $itemCount) {
+			$violations.Add("${target}:$source 的 MethodTimeouts 解析出 $($entries.Count) 条,拍平表里数到 $itemCount 条,两者不一致,无法核对(只认顶格不带引号的键 + 缩进的块式列表)")
+			continue
+		}
+		if ($methodKeys.Count -gt 0 -and $entries.Count -eq 0 -and ([string]$serviceScalars['MethodTimeouts']).Trim() -cne '[]') {
+			$violations.Add("${target}:$source 有 MethodTimeouts 键却没有解析出任何条目,无法核对(空表请写成 MethodTimeouts: [];有条目请用顶格不带引号的键 + 缩进的块式列表)")
+			continue
+		}
+
+		$notCalledFromCpp = @()
+		if ($Targets[$target].Contains('MethodsNotCalledFromCpp')) { $notCalledFromCpp = @($Targets[$target].MethodsNotCalledFromCpp) }
+		foreach ($entry in $entries) {
+			$fullMethod = [string]$entry.FullMethod
+			$timeoutText = [string]$entry.Timeout
+			if ($fullMethod -cnotmatch '^/[A-Za-z_][A-Za-z0-9_.]*/[A-Za-z_][A-Za-z0-9_]*$') {
+				$violations.Add("${target}:$source 的 MethodTimeouts 里 FullMethod='$fullMethod' 不是 /包.服务/方法 的形状,无法核对")
+				continue
+			}
+			$methodTimeoutMs = ConvertTo-ZrpcDurationMs -Text $timeoutText
+			if ($null -eq $methodTimeoutMs) {
+				$violations.Add("${target}:$source 的 MethodTimeouts 里 $fullMethod 的 Timeout='$timeoutText' 解析不了(只认带单位的正时长,单位 ms / s / m / h,如 300s)")
+				continue
+			}
+			# 格式过关之后才看豁免:C++ 不调用的方法不用和 deadline 比大小。
+			if ($notCalledFromCpp -ccontains $fullMethod) { continue }
+
+			$methodRequiredMs = $methodTimeoutMs + $marginMs
+			if ($deadline -lt $methodRequiredMs) {
+				$violations.Add("${target}:C++ deadline $deadline < $source 的 MethodTimeouts $fullMethod $timeoutText($methodTimeoutMs ms)+ $marginMs = $methodRequiredMs(调大 bin/etc/base_deploy_config.yaml 的 GrpcClient.CallDeadlineMs.$target 或调小这条超时;若 C++ 节点根本不调用这个方法,把它登记进 k8s_deploy.ps1 的 Get-GrpcClientMethodsNotCalledFromCpp)")
+			}
 		}
 
 		$serverTimeout = [long]$goZeroDefaultServerTimeoutMs
@@ -656,7 +855,8 @@ function Get-GrpcClientDeadlineBudgetViolations {
 
 	核对的目标(键 = C++ 发往的 ENodeType 枚举名)与各自服务端超时的真源:
 	  SceneManagerNodeService    ← go/scene_manager/etc/scene_manager_service.yaml
-	  DataServiceNodeService     ← go/data_service/etc/data_service.yaml(不写 Timeout,按 go-zero 默认)
+	  DataServiceNodeService     ← go/data_service/etc/data_service.yaml(不写 Timeout,按 go-zero 默认;
+	                                三个回档 RPC 另有 MethodTimeouts,C++ 不调用,见下)
 	  ClientRpcRouterNodeService ← go/client_rpc_router/etc/client_rpc_router.yaml
 	  MatchNodeService           ← go/match/etc/match_service.yaml(gate 直连模式)
 	  LoginNodeService           ← go/login/etc/login.yaml(gate 直连模式)
@@ -664,6 +864,9 @@ function Get-GrpcClientDeadlineBudgetViolations {
 	比对的是服务 yaml:scene-manager / match / 路由服 / login 的 go-svc ConfigMap 都从它镜像 Timeout
 	(New-GoSvcConfigMapYaml);data-service 的 ConfigMap 不写 Timeout(= go-zero 默认 2000)—— 生成物同样满足
 	这条不等式,由契约测试另外钉住(防镜像被改回常数、ConfigMap 键改名)。
+
+	MethodTimeouts 逐条核对,只有 Get-GrpcClientMethodsNotCalledFromCpp 列出的方法可以高于 C++ deadline;
+	本次放行了哪些,会在通过时的那一行里列出来。
 #>
 function Assert-GrpcClientDeadlineBudget {
 	$deployPath = 'bin/etc/base_deploy_config.yaml'
@@ -674,27 +877,50 @@ function Assert-GrpcClientDeadlineBudget {
 		MatchNodeService           = 'go/match/etc/match_service.yaml'
 		LoginNodeService           = 'go/login/etc/login.yaml'
 	}
+	$notCalledFromCpp = Get-GrpcClientMethodsNotCalledFromCpp
 
 	# 与 Get-AuthoritativeScalar 同一条纪律:文件缺席就 throw,不替你猜一个超时。
-	$readScalars = {
+	$readText = {
 		param([string]$RelativePath)
 		$full = Join-Path $RepoRoot ($RelativePath -replace '/', [System.IO.Path]::DirectorySeparatorChar)
 		if (-not (Test-Path -LiteralPath $full)) {
 			throw "gRPC deadline 预算核对失败:找不到 $RelativePath(fail-closed:不替你猜一个超时)"
 		}
-		return (ConvertFrom-YamlToFlatMap -Text (Get-Content -LiteralPath $full -Raw)).Scalars
+		return [string](Get-Content -LiteralPath $full -Raw)
 	}
 
 	$targets = [ordered]@{}
+	$exempted = New-Object System.Collections.Generic.List[string]
 	foreach ($target in $targetSources.Keys) {
-		$targets[$target] = @{ Source = $targetSources[$target]; Scalars = (& $readScalars $targetSources[$target]) }
+		$source = $targetSources[$target]
+		$text = & $readText $source
+		try {
+			$methodTimeouts = @(Get-ZrpcMethodTimeouts -Text $text)
+		}
+		catch {
+			throw "gRPC deadline 预算核对失败:$source 的 MethodTimeouts 解析不了(fail-closed:不拿一份读错的表去核预算):$($_.Exception.Message)"
+		}
+		$targetNotCalled = @()
+		if ($notCalledFromCpp.Contains($target)) { $targetNotCalled = @($notCalledFromCpp[$target]) }
+		$targets[$target] = @{
+			Source                  = $source
+			Scalars                 = (ConvertFrom-YamlToFlatMap -Text $text).Scalars
+			MethodTimeouts          = $methodTimeouts
+			MethodsNotCalledFromCpp = $targetNotCalled
+		}
+		foreach ($entry in $methodTimeouts) {
+			if ($targetNotCalled -ccontains [string]$entry.FullMethod) { $exempted.Add("$target $($entry.FullMethod)=$($entry.Timeout)") }
+		}
 	}
-	$violations = @(Get-GrpcClientDeadlineBudgetViolations -DeployScalars (& $readScalars $deployPath) -Targets $targets)
+	$deployScalars = (ConvertFrom-YamlToFlatMap -Text (& $readText $deployPath)).Scalars
+	$violations = @(Get-GrpcClientDeadlineBudgetViolations -DeployScalars $deployScalars -Targets $targets)
 	if ($violations.Count -gt 0) {
 		throw ("C++ gRPC 客户端 deadline 预算不成立,拒绝部署(上游比下游宽:C++ deadline ≥ Go zrpc Timeout + 2000," +
 			"docs/design/grpc-client-deadline-failure-callback.md §4.2):`n  - " + ($violations -join "`n  - "))
 	}
-	Write-Host ("GrpcClient deadline budget OK (C++ deadline >= Go zrpc Timeout + 2000): {0}" -f ($targetSources.Keys -join ', '))
+	$exemptedNote = ''
+	if ($exempted.Count -gt 0) { $exemptedNote = "; MethodTimeouts exempt (never called from C++): " + ($exempted -join ', ') }
+	Write-Host ("GrpcClient deadline budget OK (C++ deadline >= Go zrpc Timeout + 2000): {0}{1}" -f ($targetSources.Keys -join ', '), $exemptedNote)
 }
 
 # Go micro-service catalogue: name → { configMapName, manifestFile, port, configFlag, configFileName }

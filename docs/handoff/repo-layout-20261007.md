@@ -171,7 +171,7 @@ git worktree remove E:\work\xuanming-server-mmo-wt-layout
 
 | 现象 | 原因 | 从哪来 |
 |------|------|--------|
-| `k8s_deploy.ps1` 的任何写路径在入口被拒,`k8s_deploy_contract`、`k8s_client_entry_contract` 两个契约测试因此红 | gRPC deadline 预算门禁见到服务 yaml 里有 `MethodTimeouts` 就拒绝,而 `go/data_service/etc/data_service.yaml` 给 `Rollback*` 配了 `MethodTimeouts`。这三个方法 C++ 并不调用 | 门禁 `ccfc402919`,配置 `907a6b7529`,都是 09-29,互相不知道 |
+| **(2026-10-09 已修,见 `docs/design/grpc-client-deadline-failure-callback.md` §4.4)** `k8s_deploy.ps1` 的任何写路径在入口被拒,`k8s_deploy_contract`、`k8s_client_entry_contract` 两个契约测试因此红 | gRPC deadline 预算门禁见到服务 yaml 里有 `MethodTimeouts` 就拒绝,而 `go/data_service/etc/data_service.yaml` 给 `Rollback*` 配了 `MethodTimeouts`。这三个方法 C++ 并不调用 | 门禁 `ccfc402919`,配置 `907a6b7529`,都是 09-29,互相不知道 |
 | 去掉上一条的干扰后,`k8s_deploy_contract` 78/79 | `-KafkaBrokers 3` 用例用 `-match` 检查"不残留 `__XXX__` 占位",PowerShell 的 `-match` 不分大小写,把日志采集配置里的 `__path__` 当成了占位 | 本地 10-01 的 Kafka 多 broker 改动,纯本地代码上 65/66 |
 | 去掉第一条的干扰后,`k8s_client_entry_contract` 91/100 | 9 个集群外入口用例失败 | 远端 09-29 的集群外入口改动,纯远端代码上同样 91/100 |
 | `go/login` 编不过:`NodeInfo` 没有 `GetClientEndpoint` | `proto/common/base/common.proto` 加了 `client_endpoint = 11`,但 Go 与 C++ 的生成代码没有重新生成 | 远端 `9e72119b8e`(09-29) |
