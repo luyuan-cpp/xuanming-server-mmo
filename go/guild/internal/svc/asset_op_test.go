@@ -160,6 +160,27 @@ func TestCleanupConfFrom(t *testing.T) {
 	}
 }
 
+// TestRollbackProofRetention:AssetOp 段缺失(字段全零)时回档检查用默认保留期而不是 0 ——
+// 0 会让 GuildInternal 恒回 Unavailable,所有回档被拒且放行无效;配了值的原样使用。
+func TestRollbackProofRetention(t *testing.T) {
+	const day = 24 * time.Hour
+	want := time.Duration(config.DefaultTerminalRetentionDays) * day
+	if got := RollbackProofRetention(config.AssetOpConf{}); got != want {
+		t.Fatalf("AssetOp 段缺失: 保留期 = %v, 期望默认 %v", got, want)
+	}
+	if got := RollbackProofRetention(config.AssetOpConf{TerminalRetentionDays: -3}); got != want {
+		t.Fatalf("非正值: 保留期 = %v, 期望默认 %v", got, want)
+	}
+	if got := RollbackProofRetention(config.AssetOpConf{TerminalRetentionDays: 60}); got != 60*day {
+		t.Fatalf("配了 60 天: 保留期 = %v", got)
+	}
+	// 与清理用的换算一致:配了值时两处给出同一个保留期。
+	conf := config.AssetOpConf{CleanupIntervalMinutes: 10, TerminalRetentionDays: 45, CounterRetentionDays: 30}
+	if got := RollbackProofRetention(conf); got != CleanupConfFrom(conf).TerminalRetention {
+		t.Fatalf("回档检查保留期 %v 与清理保留期 %v 不一致", got, CleanupConfFrom(conf).TerminalRetention)
+	}
+}
+
 // ── 装配与启停 ────────────────────────────────────────────────
 
 func TestAssetOpIDBizTagIsDistinct(t *testing.T) {

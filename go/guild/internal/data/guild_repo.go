@@ -517,8 +517,8 @@ func isDuplicateKey(err error) bool {
 }
 
 // MaxGuildNameNormRunes 是 name_norm 的上限:展示名 ≤ constants.MaxGuildNameRunes(24),
-// NFKC 对少数兼容字符会展开(如 ㍿),留一倍余量;同时远小于 proto2mysql 的 191 索引前缀,
-// 保证唯一键覆盖整个值而不是前缀。
+// NFKC 对少数兼容字符会展开(如 ㍿),留一倍余量;同时远小于列长 —— proto2mysql v0.2.0 起 name_norm 是整列
+// VARCHAR(191),uk_guild 覆盖整列(不再是 191 前缀索引),超过列长的值写不进去,所以上限必须卡在列长之内。
 const MaxGuildNameNormRunes = 48
 
 // GuildNameNorm 返回帮名唯一键 name_norm:NFKC → TrimSpace → 小写。

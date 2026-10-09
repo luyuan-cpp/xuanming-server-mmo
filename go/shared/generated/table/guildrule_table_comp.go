@@ -41,6 +41,18 @@ type GuildRuleReunion_min_online_membersComp struct {
     Value uint32
 }
 
+type GuildRuleActivity_join_min_hoursComp struct {
+    Value uint32
+}
+
+type GuildRuleTrial_invite_ttl_secondsComp struct {
+    Value uint32
+}
+
+type GuildRuleTrial_invite_cooldown_secondsComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -72,5 +84,17 @@ func MakeGuildRuleAsset_op_retry_base_msComp(row *pb.GuildRuleTable) GuildRuleAs
 
 func MakeGuildRuleReunion_min_online_membersComp(row *pb.GuildRuleTable) GuildRuleReunion_min_online_membersComp {
     return GuildRuleReunion_min_online_membersComp{Value: row.ReunionMinOnlineMembers}
+}
+
+func MakeGuildRuleActivity_join_min_hoursComp(row *pb.GuildRuleTable) GuildRuleActivity_join_min_hoursComp {
+    return GuildRuleActivity_join_min_hoursComp{Value: row.ActivityJoinMinHours}
+}
+
+func MakeGuildRuleTrial_invite_ttl_secondsComp(row *pb.GuildRuleTable) GuildRuleTrial_invite_ttl_secondsComp {
+    return GuildRuleTrial_invite_ttl_secondsComp{Value: row.TrialInviteTtlSeconds}
+}
+
+func MakeGuildRuleTrial_invite_cooldown_secondsComp(row *pb.GuildRuleTable) GuildRuleTrial_invite_cooldown_secondsComp {
+    return GuildRuleTrial_invite_cooldown_secondsComp{Value: row.TrialInviteCooldownSeconds}
 }
 

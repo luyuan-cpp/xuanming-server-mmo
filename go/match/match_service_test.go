@@ -39,8 +39,11 @@ func TestNodeInfoValueMatchesRegistryContract(t *testing.T) {
 	if mirror.NodeId != 11 || mirror.ZoneId != 3 || mirror.NodeUuid != "uuid-team-test" {
 		t.Fatalf("身份字段不符: %+v", mirror)
 	}
-	if mirror.NodeType != uint32(base.ENodeType_TeamNodeService) || mirror.NodeType != 10 {
-		t.Fatalf("nodeType 应为 TeamNodeService(10),实际 %d", mirror.NodeType)
+	if uint32(base.ENodeType_TeamNodeService) != 10 {
+		t.Fatalf("TeamNodeService 的协议值应为 10,实际 %d", base.ENodeType_TeamNodeService)
+	}
+	if mirror.NodeType != uint32(base.ENodeType_TeamNodeService) {
+		t.Fatalf("nodeType 应为 TeamNodeService,实际 %d", mirror.NodeType)
 	}
 	if mirror.ProtocolType != uint32(base.ENodeProtocolType_PROTOCOL_GRPC) {
 		t.Fatalf("protocolType 应为 PROTOCOL_GRPC,实际 %d", mirror.ProtocolType)

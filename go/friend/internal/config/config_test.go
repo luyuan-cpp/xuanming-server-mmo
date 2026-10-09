@@ -118,8 +118,8 @@ func TestEtcYamlContractValues(t *testing.T) {
 // 只用测试守 etc/friend.yaml,不进 Validate 拒启:超预算的后果只是排除者扎堆于 pivot 之后时推荐偏少,不会推荐出
 // 错人;推荐是可降级展示功能,不值得为它把"运维调大好友上限"变成启动失败。这条红了:去 internal/data/recommend_repo.go
 // 调大 RecommendAnchorWindow,并同步复核其注释里的读数上界与 data 包 TestRecommendAnchor_WindowCoversBoundedExclusionBudget 的字面量。
-// 如果红是因为调大了 MaxFriends,调窗口之前先复核 mutual 召回的平方开销:单次 RecommendByMutual 约读 8×MaxFriends² 行,
-// Validate 用 maxFriendsCeiling 封顶它(推导与实测见那个常量)—— 只调窗口、不看这笔账,推荐会在好友满员的玩家身上超时。
+// 如果红是因为调大了 MaxFriends,调窗口之前先复核 mutual 召回的平方开销:单次 RecommendByMutual 的内层约读 3×MaxFriends² 行,
+// Validate 用 maxFriendsCeiling 封顶它(推导与实测见那个常量)—— 只调窗口、不看这笔账,好友满员的玩家每次推荐都要付一次平方级的聚合(分组装不进内存临时表时还会落盘)。
 //
 // 下面的 need 是**保守上界**:它把"mutual 已选中、追加进 exclude 的 RecommendMaxLimit-1 个"与"want = RecommendMaxLimit"
 // 各按最大值算了一次,而 logic/recommend.go 的 RecommendFriends 里两者之和恒等于 limit ≤ RecommendMaxLimit。

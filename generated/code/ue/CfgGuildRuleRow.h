@@ -82,4 +82,16 @@ struct FCfgGuildRuleRow : public FTableRowBase
 	/** 中秋团圆在线人数兜底阈值(B6a 读取) 帮会同时在线人数达到它才锁存团圆进度;活动表可按档期另配更高阈值,这里是下限 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|GuildRule")
 	int32 reunion_min_online_members = 0;
+
+	/** 参与帮会活动所需最短入帮时长(小时,B6a 读取),0-720 防"刷完活动就换帮再刷":团圆在线人数也只数满足它的成员。开发值 0,上线改 24 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|GuildRule")
+	int32 activity_join_min_hours = 0;
+
+	/** 同道历练邀请房间有效期(秒,B6b 读取),10-120 到期未全员同意即解散,避免被邀请人长时间被占在一个开不了战的房间里 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|GuildRule")
+	int32 trial_invite_ttl_seconds = 0;
+
+	/** 同一发起人两次成功建历练房间的最小间隔(秒,B6b 读取),0-600 防止反复建房刷邀请推送骚扰帮会成员 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|GuildRule")
+	int32 trial_invite_cooldown_seconds = 0;
 };

@@ -125,6 +125,39 @@ private static final long serialVersionUID = 0L;
     return reunionMinOnlineMembers_;
   }
 
+  public static final int ACTIVITY_JOIN_MIN_HOURS_FIELD_NUMBER = 8;
+  private int activityJoinMinHours_ = 0;
+  /**
+   * <code>uint32 activity_join_min_hours = 8;</code>
+   * @return The activityJoinMinHours.
+   */
+  @java.lang.Override
+  public int getActivityJoinMinHours() {
+    return activityJoinMinHours_;
+  }
+
+  public static final int TRIAL_INVITE_TTL_SECONDS_FIELD_NUMBER = 9;
+  private int trialInviteTtlSeconds_ = 0;
+  /**
+   * <code>uint32 trial_invite_ttl_seconds = 9;</code>
+   * @return The trialInviteTtlSeconds.
+   */
+  @java.lang.Override
+  public int getTrialInviteTtlSeconds() {
+    return trialInviteTtlSeconds_;
+  }
+
+  public static final int TRIAL_INVITE_COOLDOWN_SECONDS_FIELD_NUMBER = 10;
+  private int trialInviteCooldownSeconds_ = 0;
+  /**
+   * <code>uint32 trial_invite_cooldown_seconds = 10;</code>
+   * @return The trialInviteCooldownSeconds.
+   */
+  @java.lang.Override
+  public int getTrialInviteCooldownSeconds() {
+    return trialInviteCooldownSeconds_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -160,6 +193,15 @@ private static final long serialVersionUID = 0L;
     if (reunionMinOnlineMembers_ != 0) {
       output.writeUInt32(7, reunionMinOnlineMembers_);
     }
+    if (activityJoinMinHours_ != 0) {
+      output.writeUInt32(8, activityJoinMinHours_);
+    }
+    if (trialInviteTtlSeconds_ != 0) {
+      output.writeUInt32(9, trialInviteTtlSeconds_);
+    }
+    if (trialInviteCooldownSeconds_ != 0) {
+      output.writeUInt32(10, trialInviteCooldownSeconds_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -191,6 +233,18 @@ private static final long serialVersionUID = 0L;
     if (reunionMinOnlineMembers_ != 0) {
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(7, reunionMinOnlineMembers_);
+    }
+    if (activityJoinMinHours_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(8, activityJoinMinHours_);
+    }
+    if (trialInviteTtlSeconds_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(9, trialInviteTtlSeconds_);
+    }
+    if (trialInviteCooldownSeconds_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(10, trialInviteCooldownSeconds_);
     }
     return size;
   }
@@ -230,6 +284,12 @@ private static final long serialVersionUID = 0L;
         != other.getAssetOpRetryBaseMs()) return false;
     if (getReunionMinOnlineMembers()
         != other.getReunionMinOnlineMembers()) return false;
+    if (getActivityJoinMinHours()
+        != other.getActivityJoinMinHours()) return false;
+    if (getTrialInviteTtlSeconds()
+        != other.getTrialInviteTtlSeconds()) return false;
+    if (getTrialInviteCooldownSeconds()
+        != other.getTrialInviteCooldownSeconds()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -255,6 +315,12 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getAssetOpRetryBaseMs();
     hash = (37 * hash) + REUNION_MIN_ONLINE_MEMBERS_FIELD_NUMBER;
     hash = (53 * hash) + getReunionMinOnlineMembers();
+    hash = (37 * hash) + ACTIVITY_JOIN_MIN_HOURS_FIELD_NUMBER;
+    hash = (53 * hash) + getActivityJoinMinHours();
+    hash = (37 * hash) + TRIAL_INVITE_TTL_SECONDS_FIELD_NUMBER;
+    hash = (53 * hash) + getTrialInviteTtlSeconds();
+    hash = (37 * hash) + TRIAL_INVITE_COOLDOWN_SECONDS_FIELD_NUMBER;
+    hash = (53 * hash) + getTrialInviteCooldownSeconds();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -393,6 +459,9 @@ private static final long serialVersionUID = 0L;
       assetOpDeadlineSeconds_ = 0;
       assetOpRetryBaseMs_ = 0;
       reunionMinOnlineMembers_ = 0;
+      activityJoinMinHours_ = 0;
+      trialInviteTtlSeconds_ = 0;
+      trialInviteCooldownSeconds_ = 0;
       return this;
     }
 
@@ -447,6 +516,15 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000040) != 0)) {
         result.reunionMinOnlineMembers_ = reunionMinOnlineMembers_;
       }
+      if (((from_bitField0_ & 0x00000080) != 0)) {
+        result.activityJoinMinHours_ = activityJoinMinHours_;
+      }
+      if (((from_bitField0_ & 0x00000100) != 0)) {
+        result.trialInviteTtlSeconds_ = trialInviteTtlSeconds_;
+      }
+      if (((from_bitField0_ & 0x00000200) != 0)) {
+        result.trialInviteCooldownSeconds_ = trialInviteCooldownSeconds_;
+      }
     }
 
     @java.lang.Override
@@ -481,6 +559,15 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getReunionMinOnlineMembers() != 0) {
         setReunionMinOnlineMembers(other.getReunionMinOnlineMembers());
+      }
+      if (other.getActivityJoinMinHours() != 0) {
+        setActivityJoinMinHours(other.getActivityJoinMinHours());
+      }
+      if (other.getTrialInviteTtlSeconds() != 0) {
+        setTrialInviteTtlSeconds(other.getTrialInviteTtlSeconds());
+      }
+      if (other.getTrialInviteCooldownSeconds() != 0) {
+        setTrialInviteCooldownSeconds(other.getTrialInviteCooldownSeconds());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -543,6 +630,21 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000040;
               break;
             } // case 56
+            case 64: {
+              activityJoinMinHours_ = input.readUInt32();
+              bitField0_ |= 0x00000080;
+              break;
+            } // case 64
+            case 72: {
+              trialInviteTtlSeconds_ = input.readUInt32();
+              bitField0_ |= 0x00000100;
+              break;
+            } // case 72
+            case 80: {
+              trialInviteCooldownSeconds_ = input.readUInt32();
+              bitField0_ |= 0x00000200;
+              break;
+            } // case 80
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -780,6 +882,102 @@ private static final long serialVersionUID = 0L;
     public Builder clearReunionMinOnlineMembers() {
       bitField0_ = (bitField0_ & ~0x00000040);
       reunionMinOnlineMembers_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int activityJoinMinHours_ ;
+    /**
+     * <code>uint32 activity_join_min_hours = 8;</code>
+     * @return The activityJoinMinHours.
+     */
+    @java.lang.Override
+    public int getActivityJoinMinHours() {
+      return activityJoinMinHours_;
+    }
+    /**
+     * <code>uint32 activity_join_min_hours = 8;</code>
+     * @param value The activityJoinMinHours to set.
+     * @return This builder for chaining.
+     */
+    public Builder setActivityJoinMinHours(int value) {
+
+      activityJoinMinHours_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 activity_join_min_hours = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearActivityJoinMinHours() {
+      bitField0_ = (bitField0_ & ~0x00000080);
+      activityJoinMinHours_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int trialInviteTtlSeconds_ ;
+    /**
+     * <code>uint32 trial_invite_ttl_seconds = 9;</code>
+     * @return The trialInviteTtlSeconds.
+     */
+    @java.lang.Override
+    public int getTrialInviteTtlSeconds() {
+      return trialInviteTtlSeconds_;
+    }
+    /**
+     * <code>uint32 trial_invite_ttl_seconds = 9;</code>
+     * @param value The trialInviteTtlSeconds to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTrialInviteTtlSeconds(int value) {
+
+      trialInviteTtlSeconds_ = value;
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 trial_invite_ttl_seconds = 9;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearTrialInviteTtlSeconds() {
+      bitField0_ = (bitField0_ & ~0x00000100);
+      trialInviteTtlSeconds_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int trialInviteCooldownSeconds_ ;
+    /**
+     * <code>uint32 trial_invite_cooldown_seconds = 10;</code>
+     * @return The trialInviteCooldownSeconds.
+     */
+    @java.lang.Override
+    public int getTrialInviteCooldownSeconds() {
+      return trialInviteCooldownSeconds_;
+    }
+    /**
+     * <code>uint32 trial_invite_cooldown_seconds = 10;</code>
+     * @param value The trialInviteCooldownSeconds to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTrialInviteCooldownSeconds(int value) {
+
+      trialInviteCooldownSeconds_ = value;
+      bitField0_ |= 0x00000200;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 trial_invite_cooldown_seconds = 10;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearTrialInviteCooldownSeconds() {
+      bitField0_ = (bitField0_ & ~0x00000200);
+      trialInviteCooldownSeconds_ = 0;
       onChanged();
       return this;
     }

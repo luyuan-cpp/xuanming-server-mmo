@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -307,6 +309,12 @@ func TestAssetOpEnabledFillsY06Defaults(t *testing.T) {
 	if a.CleanupEnabled {
 		t.Error("CleanupEnabled 没写时应为 false(只有显式打开才清理)")
 	}
+	// 常量与 struct tag 是同一个默认值的两处写法:段缺失时回档检查按常量回落(svc.RollbackProofRetention),
+	// 两处分叉会让"段缺失的副本"与"段出现但没写这个键的副本"对同一次回档给出不同结论。
+	if a.TerminalRetentionDays != DefaultTerminalRetentionDays {
+		t.Errorf("TerminalRetentionDays 的 tag 默认值 %d 与 DefaultTerminalRetentionDays %d 不一致",
+			a.TerminalRetentionDays, DefaultTerminalRetentionDays)
+	}
 }
 
 // TestAssetOpLoopBounds:循环参数越界各一例,以及每条边界的合法端点。
@@ -461,6 +469,219 @@ func TestEtcYamlAssetOpBlock(t *testing.T) {
 	}
 	if a.CleanupIntervalMinutes != 10 || a.TerminalRetentionDays != 30 || a.CounterRetentionDays != 30 {
 		t.Errorf("etc/guild.yaml 的清理参数偏离默认值: %+v", a)
+	}
+}
+
+// ── 同道历练(MatchRpc / Activity,B6b)──────────────────────────
+
+// TestActivityAbsentUsesDefaults 钉住"整段缺失"的两条相反语义(06 §6.22,见 ActivityConf 的说明):
+// 四个节律回落到默认值(待入队循环与巡检器在历练关着时也要跑完存量),而结果消费是关的(= 历练未开放)。
+// 少抄一段配置的环境必须起得来,且不会在没有结算的情况下放玩家开战。
+func TestActivityAbsentUsesDefaults(t *testing.T) {
+	c := loadMinimal(t)
+	a := c.Activity
+	if a.TrialResultOverdueSeconds != 0 || a.TrialAbandonSeconds != 0 || a.TrialSweepIntervalSeconds != 0 || a.OwedLoopIntervalSeconds != 0 {
+		t.Fatalf("整段缺失时 go-zero 不回填 default,字段应为零值,得到 %+v", a)
+	}
+	checks := []struct {
+		name      string
+		got, want time.Duration
+	}{
+		{"TrialResultOverdue", a.TrialResultOverdue(), 420 * time.Second},
+		{"TrialAbandon", a.TrialAbandon(), 3600 * time.Second},
+		{"TrialSweepInterval", a.TrialSweepInterval(), 60 * time.Second},
+		{"OwedLoopInterval", a.OwedLoopInterval(), 10 * time.Second},
+	}
+	for _, ck := range checks {
+		if ck.got != ck.want {
+			t.Errorf("Activity.%s() = %v,整段缺失时应回落到默认 %v", ck.name, ck.got, ck.want)
+		}
+	}
+	if a.TrialResult.Enabled || c.TrialResultActive() {
+		t.Fatal("没写 Activity.TrialResult 时结果消费必须是关的(没有结算就不许开战)")
+	}
+	if c.MatchRpcConfigured() {
+		t.Fatal("没写 MatchRpc 时不应判为已配置")
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("整段缺失不该被拒启: %v", err)
+	}
+}
+
+// loadTrialEnabled 在最小配置上只写 `Activity.TrialResult.Enabled: true`(加载即校验)。
+func loadTrialEnabled(t *testing.T) Config {
+	t.Helper()
+	var c Config
+	if err := conf.LoadFromYamlBytes([]byte(minimalGuildYaml+"Activity:\n  TrialResult:\n    Enabled: true\n"), &c); err != nil {
+		t.Fatalf("只写 TrialResult.Enabled: true 的配置必须能通过校验: %v", err)
+	}
+	return c
+}
+
+// TestActivityConfDefaultsMatchTags:段一出现,go-zero 按 struct tag 的 default 回填;回填值必须与
+// XxxOrDefault 方法用的常量相同 —— 两处各写一份,改了一处忘了另一处时,"写了段"与"没写段"会得到两套节律。
+func TestActivityConfDefaultsMatchTags(t *testing.T) {
+	c := loadTrialEnabled(t)
+	a := c.Activity
+	nums := []struct {
+		name      string
+		got, want uint32
+	}{
+		{"TrialResultOverdueSeconds", a.TrialResultOverdueSeconds, defaultTrialResultOverdueSeconds},
+		{"TrialAbandonSeconds", a.TrialAbandonSeconds, defaultTrialAbandonSeconds},
+		{"TrialSweepIntervalSeconds", a.TrialSweepIntervalSeconds, defaultTrialSweepIntervalSeconds},
+		{"OwedLoopIntervalSeconds", a.OwedLoopIntervalSeconds, defaultOwedLoopIntervalSeconds},
+	}
+	for _, ck := range nums {
+		if ck.got != ck.want {
+			t.Errorf("Activity.%s 的 tag default = %d,与代码里的默认常量 %d 不一致", ck.name, ck.got, ck.want)
+		}
+	}
+	r := a.TrialResult
+	if !r.Enabled || r.Topic != "match-results" || r.Partitions != 3 || r.GroupID != "guild-trial" {
+		t.Errorf("TrialResult 默认值应为 match-results / 3 / guild-trial(与 match 的 ResultTopic、ResultTopicPartitions 对齐),得到 %+v", r)
+	}
+	if !c.TrialResultActive() {
+		t.Error("Enabled 且配了 Brokers 时 TrialResultActive 应为 true")
+	}
+}
+
+// TestTrialResultActiveNeedsBrokers:Brokers 为空不拒启(本地不起 Kafka 是正常形态),但历练必须视为未开放。
+func TestTrialResultActiveNeedsBrokers(t *testing.T) {
+	c := loadTrialEnabled(t)
+	c.Kafka.Brokers = nil
+	if c.TrialResultActive() {
+		t.Fatal("没有 Brokers 时结果消费跑不起来,TrialResultActive 必须为 false")
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Enabled 而没有 Brokers 不该拒启(由 guild.go 打告警并关闭历练): %v", err)
+	}
+}
+
+// TestActivityBounds:节律越界各一例 + 合法端点;结果消费参数只在 Enabled 时校验。
+func TestActivityBounds(t *testing.T) {
+	cases := []struct {
+		name    string
+		mutate  func(a *ActivityConf)
+		wantErr string // 空 = 应通过
+	}{
+		{"超时判定下界", func(a *ActivityConf) { a.TrialResultOverdueSeconds = 60 }, ""},
+		{"超时判定过短", func(a *ActivityConf) { a.TrialResultOverdueSeconds = 59 }, "TrialResultOverdueSeconds"},
+		{"超时判定写 0 取默认", func(a *ActivityConf) { a.TrialResultOverdueSeconds = 0 }, ""},
+		{"放弃时长恰好等于超时加余量", func(a *ActivityConf) { a.TrialResultOverdueSeconds, a.TrialAbandonSeconds = 420, 1020 }, ""},
+		{"放弃时长短于超时加余量", func(a *ActivityConf) { a.TrialResultOverdueSeconds, a.TrialAbandonSeconds = 420, 1019 }, "TrialAbandonSeconds"},
+		{"放弃时长上界 7 天", func(a *ActivityConf) { a.TrialAbandonSeconds = 604800 }, ""},
+		{"放弃时长超过保留期", func(a *ActivityConf) { a.TrialAbandonSeconds = 604801 }, "TrialAbandonSeconds"},
+		{"超时判定大到挤掉默认放弃时长", func(a *ActivityConf) { a.TrialResultOverdueSeconds, a.TrialAbandonSeconds = 3600, 0 }, "TrialAbandonSeconds"},
+		{"巡检间隔下界", func(a *ActivityConf) { a.TrialSweepIntervalSeconds = 10 }, ""},
+		{"巡检间隔上界", func(a *ActivityConf) { a.TrialSweepIntervalSeconds = 600 }, ""},
+		{"巡检间隔过短", func(a *ActivityConf) { a.TrialSweepIntervalSeconds = 9 }, "TrialSweepIntervalSeconds"},
+		{"巡检间隔过长", func(a *ActivityConf) { a.TrialSweepIntervalSeconds = 601 }, "TrialSweepIntervalSeconds"},
+		{"待入队间隔下界", func(a *ActivityConf) { a.OwedLoopIntervalSeconds = 1 }, ""},
+		{"待入队间隔上界", func(a *ActivityConf) { a.OwedLoopIntervalSeconds = 60 }, ""},
+		{"待入队间隔过长", func(a *ActivityConf) { a.OwedLoopIntervalSeconds = 61 }, "OwedLoopIntervalSeconds"},
+		{"消费开着但 Topic 为空", func(a *ActivityConf) { a.TrialResult.Topic = "" }, "Topic"},
+		{"消费开着但 GroupID 为空", func(a *ActivityConf) { a.TrialResult.GroupID = "" }, "GroupID"},
+		{"消费开着但分区数为 0", func(a *ActivityConf) { a.TrialResult.Partitions = 0 }, "Partitions"},
+		{"消费关着时不校验它的参数", func(a *ActivityConf) {
+			a.TrialResult = TrialResultConf{}
+		}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := loadTrialEnabled(t)
+			tc.mutate(&c.Activity)
+			err := c.Validate()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("应通过,得到 %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("错误 = %v,期望包含 %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestMatchRpcTimeoutBounds:MatchRpc 只在配了目标时校验(整段缺失时 Timeout 是 0,不能因此拒启);
+// 配了目标时合法区间是 [300, 2000]:
+//   - 超过 2000ms 拒启 —— 开战那次请求的预算里放不下更久的等待;
+//   - 低于 300ms 拒启(含 0 = 不设客户端超时)—— logic 给 match 的预算不足 300ms 就不调它,Timeout 配得比这还小,
+//     历练显示开放而每次开战必回"服务繁忙"。下限常量镜像 logic 的 minMatchBudget(logic 侧有用例守两者相等)。
+func TestMatchRpcTimeoutBounds(t *testing.T) {
+	c := loadMinimal(t)
+	c.MatchRpc.Timeout = 0
+	if err := c.Validate(); err != nil {
+		t.Fatalf("没配 MatchRpc 目标时不校验它的 Timeout: %v", err)
+	}
+	if MinMatchRpcTimeoutMs != 300 || MaxMatchRpcTimeoutMs != 2000 {
+		t.Fatalf("MatchRpc.Timeout 的合法区间变了([%d, %d]):同步改下面的边界用例、etc/guild.yaml 的注释与 06 §6.22",
+			MinMatchRpcTimeoutMs, MaxMatchRpcTimeoutMs)
+	}
+
+	cases := []struct {
+		timeout int64
+		wantErr bool
+	}{
+		{300, false}, {1500, false}, {2000, false},
+		{0, true}, {-1, true}, {1, true}, {299, true}, {2001, true},
+	}
+	for _, tc := range cases {
+		c := loadMinimal(t)
+		c.MatchRpc.Endpoints = []string{"127.0.0.1:50500"}
+		c.MatchRpc.Timeout = tc.timeout
+		if !c.MatchRpcConfigured() {
+			t.Fatal("配了 Endpoints 应判为已配置")
+		}
+		err := c.Validate()
+		if tc.wantErr && (err == nil || !strings.Contains(err.Error(), "MatchRpc.Timeout")) {
+			t.Errorf("MatchRpc.Timeout=%d 必须拒启,得到 %v", tc.timeout, err)
+		}
+		if !tc.wantErr && err != nil {
+			t.Errorf("MatchRpc.Timeout=%d 应通过,得到 %v", tc.timeout, err)
+		}
+	}
+}
+
+// TestEtcYamlTrialBlock:仓库里的 dev 配置把同道历练接全(match 客户端 + 结果消费),段名拼错时这些字段会静默
+// 保持零值、历练在本地永远显示"未开放"。同时钉住两条写在 yaml 注释里、解析结果看不出来的约定:
+//   - MatchRpc 显式 NonBlock(match 没起时 guild 照常起服;svc 建客户端时也会强制);
+//   - GroupID 不加引号(go_services.ps1 -Zone 只给带引号的 GroupID 加 _zN,加了就变成每个 zone 各结算一遍)。
+func TestEtcYamlTrialBlock(t *testing.T) {
+	const path = "../../etc/guild.yaml"
+	var c Config
+	if err := conf.Load(path, &c); err != nil {
+		t.Fatalf("加载 etc/guild.yaml 失败: %v", err)
+	}
+	if !c.MatchRpcConfigured() || c.MatchRpc.Etcd.Key != "matchservice.rpc" {
+		t.Errorf("etc/guild.yaml 应把 MatchRpc 指向 matchservice.rpc,得到 Etcd.Key=%q", c.MatchRpc.Etcd.Key)
+	}
+	if !c.MatchRpc.NonBlock {
+		t.Error("MatchRpc 应显式 NonBlock: true(match 是弱依赖)")
+	}
+	if c.MatchRpc.Timeout != 1500 {
+		t.Errorf("MatchRpc.Timeout = %d,期望 1500", c.MatchRpc.Timeout)
+	}
+	a := c.Activity
+	if a.TrialResultOverdueSeconds != 420 || a.TrialAbandonSeconds != 3600 || a.TrialSweepIntervalSeconds != 60 || a.OwedLoopIntervalSeconds != 10 {
+		t.Errorf("etc/guild.yaml 的历练节律偏离默认值: %+v", a)
+	}
+	r := a.TrialResult
+	if !r.Enabled || r.Topic != "match-results" || r.Partitions != 3 || r.GroupID != "guild-trial" {
+		t.Errorf("etc/guild.yaml 的结果消费配置应为 Enabled / match-results / 3 / guild-trial,得到 %+v", r)
+	}
+	if !c.TrialResultActive() {
+		t.Error("dev 配置里历练结果消费应当是开的")
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("读取 etc/guild.yaml 失败: %v", err)
+	}
+	if !regexp.MustCompile(`(?m)^\s*GroupID:\s*guild-trial\s*(#.*)?$`).Match(raw) {
+		t.Error("etc/guild.yaml 的 GroupID 必须写成不带引号的 `GroupID: guild-trial`:带引号会被 go_services.ps1 -Zone 加上 _zN 后缀")
 	}
 }
 

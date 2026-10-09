@@ -163,6 +163,46 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildContributionInsufficient = 14031;</code>
      */
     kGuildContributionInsufficient(14031),
+    /**
+     * <code>kGuildActivityNotOpen = 14032;</code>
+     */
+    kGuildActivityNotOpen(14032),
+    /**
+     * <code>kGuildActivityAlreadyClaimed = 14033;</code>
+     */
+    kGuildActivityAlreadyClaimed(14033),
+    /**
+     * <code>kGuildActivityThresholdNotReached = 14034;</code>
+     */
+    kGuildActivityThresholdNotReached(14034),
+    /**
+     * <code>kGuildTrialTeamInvalid = 14035;</code>
+     */
+    kGuildTrialTeamInvalid(14035),
+    /**
+     * <code>kGuildActivityLevelTooLow = 14036;</code>
+     */
+    kGuildActivityLevelTooLow(14036),
+    /**
+     * <code>kGuildActivityJoinTooRecent = 14037;</code>
+     */
+    kGuildActivityJoinTooRecent(14037),
+    /**
+     * <code>kGuildTrialInviteExpired = 14038;</code>
+     */
+    kGuildTrialInviteExpired(14038),
+    /**
+     * <code>kGuildTrialInviteDeclined = 14039;</code>
+     */
+    kGuildTrialInviteDeclined(14039),
+    /**
+     * <code>kGuildTrialInviteCooldown = 14040;</code>
+     */
+    kGuildTrialInviteCooldown(14040),
+    /**
+     * <code>kGuildTrialServiceBusy = 14041;</code>
+     */
+    kGuildTrialServiceBusy(14041),
     UNRECOGNIZED(-1),
     ;
 
@@ -307,6 +347,46 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildContributionInsufficient = 14031;</code>
      */
     public static final int kGuildContributionInsufficient_VALUE = 14031;
+    /**
+     * <code>kGuildActivityNotOpen = 14032;</code>
+     */
+    public static final int kGuildActivityNotOpen_VALUE = 14032;
+    /**
+     * <code>kGuildActivityAlreadyClaimed = 14033;</code>
+     */
+    public static final int kGuildActivityAlreadyClaimed_VALUE = 14033;
+    /**
+     * <code>kGuildActivityThresholdNotReached = 14034;</code>
+     */
+    public static final int kGuildActivityThresholdNotReached_VALUE = 14034;
+    /**
+     * <code>kGuildTrialTeamInvalid = 14035;</code>
+     */
+    public static final int kGuildTrialTeamInvalid_VALUE = 14035;
+    /**
+     * <code>kGuildActivityLevelTooLow = 14036;</code>
+     */
+    public static final int kGuildActivityLevelTooLow_VALUE = 14036;
+    /**
+     * <code>kGuildActivityJoinTooRecent = 14037;</code>
+     */
+    public static final int kGuildActivityJoinTooRecent_VALUE = 14037;
+    /**
+     * <code>kGuildTrialInviteExpired = 14038;</code>
+     */
+    public static final int kGuildTrialInviteExpired_VALUE = 14038;
+    /**
+     * <code>kGuildTrialInviteDeclined = 14039;</code>
+     */
+    public static final int kGuildTrialInviteDeclined_VALUE = 14039;
+    /**
+     * <code>kGuildTrialInviteCooldown = 14040;</code>
+     */
+    public static final int kGuildTrialInviteCooldown_VALUE = 14040;
+    /**
+     * <code>kGuildTrialServiceBusy = 14041;</code>
+     */
+    public static final int kGuildTrialServiceBusy_VALUE = 14041;
 
 
     public final int getNumber() {
@@ -366,6 +446,16 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
         case 14029: return kGuildShopLevelTooLow;
         case 14030: return kGuildShopLimit;
         case 14031: return kGuildContributionInsufficient;
+        case 14032: return kGuildActivityNotOpen;
+        case 14033: return kGuildActivityAlreadyClaimed;
+        case 14034: return kGuildActivityThresholdNotReached;
+        case 14035: return kGuildTrialTeamInvalid;
+        case 14036: return kGuildActivityLevelTooLow;
+        case 14037: return kGuildActivityJoinTooRecent;
+        case 14038: return kGuildTrialInviteExpired;
+        case 14039: return kGuildTrialInviteDeclined;
+        case 14040: return kGuildTrialInviteCooldown;
+        case 14041: return kGuildTrialServiceBusy;
         default: return null;
       }
     }
@@ -431,7 +521,7 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025guild_error_tip.proto*\352\006\n\013guild_error\022" +
+      "\n\025guild_error_tip.proto*\254\t\n\013guild_error\022" +
       "\022\n\016kGuild_errorOK\020\000\022\031\n\024kGuildAlreadyInGu" +
       "ild\020\260m\022\023\n\016kGuildNotFound\020\261m\022\025\n\020kGuildNot" +
       "InGuild\020\262m\022\017\n\nkGuildFull\020\263m\022\032\n\025kGuildLea" +
@@ -453,8 +543,16 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       "\023kGuildAssetRejected\020\313m\022\034\n\027kGuildShopGoo" +
       "dsNotFound\020\314m\022\032\n\025kGuildShopLevelTooLow\020\315" +
       "m\022\024\n\017kGuildShopLimit\020\316m\022#\n\036kGuildContrib" +
-      "utionInsufficient\020\317mB$\n\016com.game.tableZ\022" +
-      "generated/pb/tableb\006proto3"
+      "utionInsufficient\020\317m\022\032\n\025kGuildActivityNo" +
+      "tOpen\020\320m\022!\n\034kGuildActivityAlreadyClaimed" +
+      "\020\321m\022&\n!kGuildActivityThresholdNotReached" +
+      "\020\322m\022\033\n\026kGuildTrialTeamInvalid\020\323m\022\036\n\031kGui" +
+      "ldActivityLevelTooLow\020\324m\022 \n\033kGuildActivi" +
+      "tyJoinTooRecent\020\325m\022\035\n\030kGuildTrialInviteE" +
+      "xpired\020\326m\022\036\n\031kGuildTrialInviteDeclined\020\327" +
+      "m\022\036\n\031kGuildTrialInviteCooldown\020\330m\022\033\n\026kGu" +
+      "ildTrialServiceBusy\020\331mB$\n\016com.game.table" +
+      "Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

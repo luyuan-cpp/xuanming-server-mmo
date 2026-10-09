@@ -51,4 +51,22 @@ public interface GuildRuleTableOrBuilder extends
    * @return The reunionMinOnlineMembers.
    */
   int getReunionMinOnlineMembers();
+
+  /**
+   * <code>uint32 activity_join_min_hours = 8;</code>
+   * @return The activityJoinMinHours.
+   */
+  int getActivityJoinMinHours();
+
+  /**
+   * <code>uint32 trial_invite_ttl_seconds = 9;</code>
+   * @return The trialInviteTtlSeconds.
+   */
+  int getTrialInviteTtlSeconds();
+
+  /**
+   * <code>uint32 trial_invite_cooldown_seconds = 10;</code>
+   * @return The trialInviteCooldownSeconds.
+   */
+  int getTrialInviteCooldownSeconds();
 }

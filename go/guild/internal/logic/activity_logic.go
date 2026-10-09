@@ -1,6 +1,8 @@
 package logic
 
-// 帮会活动的 logic 层:元宵灯会、中秋团圆(B6a),以及同道历练两个写 RPC 的桩(B6b 去桩)。
+// 帮会活动的 logic 层:依赖装配、公共前置、查询视图,以及元宵灯会、中秋团圆两个写 RPC(B6a)。
+// 同道历练(B6b)的邀请房间、确认开战与结算在 activity_trial.go,后台循环在 trial_background.go;
+// 它们共用本文件的 ActivityDeps、activityPrelude、precheckActivity 与视图装配。
 // 设计 docs/design/guild-phase2/06-activities.md §6.6–§6.15;以下订正效力高于 06 正文(06 写于死锁修复之前):
 //   - 90-consistency Y-01:身份 = callerOf + operatorGuild;写 RPC 不查归属 zone(合服闸门在事务内按锁住的
 //     guild.zone_id 判,part2 §2 第 10 条);读 RPC GetGuildActivities 保留 clientZone + visibleIn;
@@ -30,6 +32,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -50,9 +53,8 @@ import (
 
 // ActivityDeps 是帮会活动 RPC 的全部外部依赖,由 guild.go 经 WithActivities 一次装配(90 Y-02)。
 //
-// 与 06 §6.6 原稿的差异:删 Notifier(推送走 l.notify,Y-02)、删 HandlerBudget(裁决 K)、
-// 暂不放 LocatorRedis / Lobby / Match —— 它们只有 B6b 的历练用,现在加上只会是一组永远为 nil 的字段,
-// 由 B6b-srv2 与去桩一起追加。
+// 与 06 §6.6 原稿的差异:删 Notifier(推送走 l.notify,Y-02)、删 HandlerBudget(裁决 K:预算一律从 ctx 截止时间倒推);
+// LocatorRedis 拆成 Results(结果记录的读与销账,data 层封装)与 BattleLocks(只读战斗锁)两个字段,各管一件事。
 type ActivityDeps struct {
 	// Repo 是活动事务与读查询的唯一入口。nil → WithActivities 不装配(五个 RPC 回 kGuildActivityNotOpen,见 activitiesNotWiredTip)。
 	Repo *data.ActivityRepo
@@ -68,6 +70,39 @@ type ActivityDeps struct {
 	SyncBudget time.Duration
 	// Lease 是插行时写下的租约(= AssetOp.LeaseMs):同步投递期间重投循环不领这一行。0 → 10s。
 	Lease time.Duration
+
+	// ── 同道历练(B6b)──
+	// Lobby / Match / Results 任一为 nil = 历练未开放(trialAvailable):视图里历练显示未开放,
+	// StartGuildTrial / RespondGuildTrialInvite 回 kGuildActivityNotOpen。灯会 / 团圆不受影响。
+	// guild.go 在"没配 MatchRpc"或"结果消费跑不起来(config.TrialResultActive 为假)"时把 Match 留成 nil ——
+	// 没有结算就不许开战。结算(SettleTrialResult)与后台循环不看 Match / Lobby:关掉历练之后,
+	// 在途对局的结果与待入队物品仍要处理完。
+
+	// Lobby 是邀请房间(guild 全局 Redis,单节点)。巡检器的多副本租约也经它。
+	Lobby *data.TrialLobbyRepo
+	// Match 是 match 内部服务(MatchInternal.StartActivityBattle)。
+	// 注意 nil 接口的坑:必须传 nil **接口**,不能把一个 nil 的具体类型指针装进来(那样 `Match == nil` 为假,
+	// 第一次开战就 nil 解引用)。svc.ServiceContext.MatchInternal 本身就是接口类型,原样赋值即可。
+	Match TrialBattleStarter
+	// Results 读、销 battle 落在 PlayerLocatorRedis(K8s 的 SharedRedis)上的对局结果记录:结算有了定论之后销账,
+	// 巡检器靠它兜住"Kafka 把事件弄丢了"。
+	Results *data.TrialResultRecords
+	// BattleLocks 是 PlayerLocatorRedis,本包只读一把键 battle:lock:{player_id}(scene 写,值 = battle_id),
+	// 给视图判"本人是否正在一局历练里"。nil → 视图的 my_trial_battle_id 恒为 0,不影响开战与结算。
+	BattleLocks *redis.Client
+	// MatchBudget 是调 match 的单次上限(= MatchRpc.Timeout);实际预算还会被请求剩余时间截短(matchBudgetFor)。0 → 1500ms。
+	MatchBudget time.Duration
+
+	// trials 是历练对仓储的全部要求(trialStore)。生产恒为 Repo(WithActivities 填);只有同包单测会换成替身 ——
+	// 历练的结算、巡检、待入队循环要在不连库的前提下逐支验证(AGENTS §11.4:测试替身通过同一接口注入)。
+	// 不导出:装配层没有理由、也不应该给它传别的实现。
+	trials trialStore
+}
+
+// trialAvailable 报告同道历练此刻是否开放(依赖齐全)。为假时视图强制未开放,两个历练写 RPC 回 kGuildActivityNotOpen。
+// 只管"能不能发起新的对局";已发起对局的结算与后台循环不看它。
+func (d *ActivityDeps) trialAvailable() bool {
+	return d != nil && d.Lobby != nil && d.Match != nil && d.Results != nil && d.trials != nil
 }
 
 // WithActivities 注入活动依赖,写进 GuildLogic.activities(90 Y-02 的函数式 Option,与 WithEconomy / WithPlayerNames 同一写法)。
@@ -92,6 +127,12 @@ func WithActivities(d ActivityDeps) Option {
 		}
 		if deps.Lease <= 0 {
 			deps.Lease = defaultInsertLease
+		}
+		if deps.MatchBudget <= 0 {
+			deps.MatchBudget = defaultMatchBudget
+		}
+		if deps.trials == nil {
+			deps.trials = deps.Repo
 		}
 		l.activities = &deps
 	}
@@ -482,6 +523,10 @@ type activityViewData struct {
 	rewards  map[uint32]data.RewardStatus
 	// reunionOnline 只对未锁存的开放团圆行有意义(可见行里每种类型至多一行,所以一个数就够)。
 	reunionOnline uint32
+	// owed 是本人各活动的历练待入队物品行数(06 §6.8 第 7c 步),并进 my_pending_reward_count。
+	owed map[uint32]uint32
+	// trial 是历练行独有的三样(可见行里历练至多一行)。零值 = 历练未开放:视图强制 DISABLED,不带房间与对局。
+	trial trialViewState
 }
 
 // buildActivityView 装配一行视图。规则(状态、不满足项、团圆锁存后进度填 0 …)全在 activity.BuildView 里,
@@ -494,29 +539,40 @@ func buildActivityView(row *tablepb.GuildActivityTable, v activityViewData) (*pb
 		level = v.guild.Level
 	}
 	return activity.BuildView(row, activity.ViewInput{
-		Now:                     v.now,
-		Rule:                    v.rule,
-		GuildLevel:              level,
-		JoinTimeMs:              v.member.JoinTimeMs,
-		MyUsedCount:             v.usage[id],
-		Progress:                v.progress[data.ProgressKey{ActivityID: id, PeriodKey: activity.GuildPeriodKey(row, v.now)}],
-		ReunionOnline:           v.reunionOnline,
-		MyPendingRewardCount:    reward.PendingCount,
+		Now:           v.now,
+		Rule:          v.rule,
+		GuildLevel:    level,
+		JoinTimeMs:    v.member.JoinTimeMs,
+		MyUsedCount:   v.usage[id],
+		Progress:      v.progress[data.ProgressKey{ActivityID: id, PeriodKey: activity.GuildPeriodKey(row, v.now)}],
+		ReunionOnline: v.reunionOnline,
+		// 待发 = 已入队未到账的指令行 + 还没入队的历练待入队行(后者只有历练会有;两个数都很小,相加不会溢出)。
+		MyPendingRewardCount:    reward.PendingCount + v.owed[id],
 		MyPendingReasonTipID:    reward.PendingReasonTipID,
 		MyLastRewardRejectTipID: reward.LastRejectTipID,
-		// B6a 桩:历练的依赖(match 内部服务、邀请房间)还不存在,视图强制 DISABLED + 未开放,
-		// 不让界面显示一个点了必失败的按钮(06 §6.7 末段)。B6b 改为"d.Match == nil || d.Lobby == nil"。
-		TrialUnavailable: true,
+		// 下面三项只对历练行生效(activity.BuildView 按类型取用)。历练的依赖(match 内部服务、邀请房间、结果记录)
+		// 不齐时强制 DISABLED + 未开放,不让界面显示一个点了必失败的按钮(06 §6.7 末段)。
+		MyTrialBattleID:  v.trial.battleID,
+		TrialLobby:       v.trial.lobby,
+		TrialUnavailable: !v.trial.available,
 	})
 }
 
 // activityViews 读齐视图数据(06 §6.8 第 2–7 步)再逐行装配。
 //
 // 失败口径:MySQL 读失败返回错误(整页拿不到比拿到错的次数好);团圆在线人数读不到降级为 0 并计指标
-// (只读展示,错一个数字不值得让整页失败);单行装配失败(只可能是奖励配表被错误热更)只藏掉那一行并记 ERROR。
+// (只读展示,错一个数字不值得让整页失败);历练的邀请房间与战斗锁(都在 Redis)读不到同样降级为"没有"
+// (见 trialViewExtras);单行装配失败(只可能是奖励配表被错误热更)只藏掉那一行并记 ERROR。
 func (l *GuildLogic) activityViews(ctx context.Context, d *ActivityDeps, a activityActor, rule *tablepb.GuildRuleTable, now time.Time) ([]*pb.GuildActivityView, error) {
+	return l.activityViewsOf(ctx, d, a, rule, now, activity.SelectVisible(activity.Rows(), uint64(now.UnixMilli())))
+}
+
+// activityViewsOf 给指定的配表行装配视图(读法与失败口径见 activityViews)。活动页传全部可见行;
+// 历练的写 RPC 只传历练那一行,回包里的视图因此与活动页逐字段同源(trialView)。
+// rows 里每种类型至多一行(SelectVisible 的结果或其子集)。
+func (l *GuildLogic) activityViewsOf(ctx context.Context, d *ActivityDeps, a activityActor, rule *tablepb.GuildRuleTable, now time.Time,
+	rows []*tablepb.GuildActivityTable) ([]*pb.GuildActivityView, error) {
 	nowMs := uint64(now.UnixMilli())
-	rows := activity.SelectVisible(activity.Rows(), nowMs)
 	if len(rows) == 0 {
 		return nil, nil
 	}
@@ -536,6 +592,10 @@ func (l *GuildLogic) activityViews(ctx context.Context, d *ActivityDeps, a activ
 	if err != nil {
 		return nil, err
 	}
+	owed, trial, err := l.trialViewExtras(ctx, d, a, rows, nowMs)
+	if err != nil {
+		return nil, err
+	}
 
 	vd := activityViewData{
 		now:           now,
@@ -546,6 +606,8 @@ func (l *GuildLogic) activityViews(ctx context.Context, d *ActivityDeps, a activ
 		progress:      progress,
 		rewards:       rewards,
 		reunionOnline: l.reunionOnlineForView(ctx, rows, progress, a.guild, rule, now),
+		owed:          owed,
+		trial:         trial,
 	}
 	views := make([]*pb.GuildActivityView, 0, len(rows))
 	for _, row := range rows {
@@ -658,6 +720,14 @@ func activityResultOf(tip *base.TipInfoMessage, err error) string {
 		return activityResultBusyRetry
 	case constants.ErrIDGenUnavailable:
 		return activityResultIDUnavailable
+	case constants.ErrTrialTeamInvalid:
+		return activityResultTeamInvalid
+	case constants.ErrTrialInviteCooldown:
+		return activityResultCooldown
+	case constants.ErrTrialInviteExpired:
+		return activityResultInviteExpired
+	case constants.ErrTrialServiceBusy:
+		return activityResultServiceBusy
 	default:
 		return activityResultOtherReject
 	}
@@ -823,42 +893,4 @@ func (l *GuildLogic) claimGuildReunion(ctx context.Context, req *pb.ClaimGuildRe
 	return &pb.ClaimGuildReunionResponse{Activity: l.committedActivityView(ctx, d, a, pre, now, res)}, nil
 }
 
-// ── RPC:同道历练(B6a 桩,06 §6.7 末段)──────────────────────
-
-// StartGuildTrial:B6a 桩。公共前置照常走完(无会话、未入帮的答复与 B6b 落地后一致),然后恒回未开放。
-// 消息号、白名单、限流已在 B6a 一次占好,B6b 只替换函数体。
-func (l *GuildLogic) StartGuildTrial(ctx context.Context, _ *pb.StartGuildTrialRequest) (*pb.StartGuildTrialResponse, error) {
-	tip, err := l.trialNotOpenYet(ctx, "StartGuildTrial")
-	var resp *pb.StartGuildTrialResponse
-	if err == nil {
-		resp = &pb.StartGuildTrialResponse{ErrorMessage: tip}
-	}
-	guildActivityActionTotal.Inc(activityTypeTrial, activityActionInvite, activityResultOf(tip, err))
-	return resp, err
-}
-
-// RespondGuildTrialInvite:B6a 桩,同 StartGuildTrial。
-func (l *GuildLogic) RespondGuildTrialInvite(ctx context.Context, _ *pb.RespondGuildTrialInviteRequest) (*pb.RespondGuildTrialInviteResponse, error) {
-	tip, err := l.trialNotOpenYet(ctx, "RespondGuildTrialInvite")
-	var resp *pb.RespondGuildTrialInviteResponse
-	if err == nil {
-		resp = &pb.RespondGuildTrialInviteResponse{ErrorMessage: tip}
-	}
-	guildActivityActionTotal.Inc(activityTypeTrial, activityActionRespond, activityResultOf(tip, err))
-	return resp, err
-}
-
-// trialNotOpenYet 是两个历练写 RPC 的共同桩体:返回 (tip, err),tip 恒非 nil 当 err 为 nil。rpc 只进日志。
-func (l *GuildLogic) trialNotOpenYet(ctx context.Context, rpc string) (*base.TipInfoMessage, error) {
-	if l.activities == nil {
-		return activitiesNotWiredTip(rpc), nil
-	}
-	_, tip, err := l.activityPrelude(ctx, false)
-	if err != nil {
-		return nil, err
-	}
-	if tip != nil {
-		return tip, nil
-	}
-	return tipErr(constants.ErrActivityNotOpen, "guild trial not open"), nil
-}
+// 同道历练的两个写 RPC(StartGuildTrial / RespondGuildTrialInvite)与结算在 activity_trial.go。

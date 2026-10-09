@@ -10,6 +10,7 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
+	component "proto/common/component"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -1651,22 +1652,128 @@ func (x *GetPlayerSnapshotDiffResponse) GetDiffs() []*FieldDiff {
 	return nil
 }
 
+// 回档被帮会资产分歧拦下(或被放行)时的摘要行。与 guildpb.GuildAssetOpBrief 同义;刻意不 import
+// guild 的 proto,避免 data_service 的 C++/Go 生成闭包依赖 guild。kind / status 是 guild_db.proto 里
+// GuildAssetOpKind / GuildAssetOpStatus 的数值(status 只会是 APPLIED 或 APPLIED_PARTIAL)。
+type RollbackGuildDivergence struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	OpId              uint64                 `protobuf:"varint,1,opt,name=op_id,json=opId,proto3" json:"op_id,omitempty"`
+	PlayerId          uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	GuildId           uint64                 `protobuf:"varint,3,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"` // 发起时绑定的帮会;该帮会可能已解散
+	Kind              uint32                 `protobuf:"varint,4,opt,name=kind,proto3" json:"kind,omitempty"`
+	Status            uint32                 `protobuf:"varint,5,opt,name=status,proto3" json:"status,omitempty"`
+	FundsDelta        uint64                 `protobuf:"varint,6,opt,name=funds_delta,json=fundsDelta,proto3" json:"funds_delta,omitempty"`
+	ContributionDelta uint64                 `protobuf:"varint,7,opt,name=contribution_delta,json=contributionDelta,proto3" json:"contribution_delta,omitempty"`
+	UpdatedMs         uint64                 `protobuf:"varint,8,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"` // guild 侧终结时刻(毫秒,guild 的墙钟)
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *RollbackGuildDivergence) Reset() {
+	*x = RollbackGuildDivergence{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RollbackGuildDivergence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RollbackGuildDivergence) ProtoMessage() {}
+
+func (x *RollbackGuildDivergence) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RollbackGuildDivergence.ProtoReflect.Descriptor instead.
+func (*RollbackGuildDivergence) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *RollbackGuildDivergence) GetOpId() uint64 {
+	if x != nil {
+		return x.OpId
+	}
+	return 0
+}
+
+func (x *RollbackGuildDivergence) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *RollbackGuildDivergence) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *RollbackGuildDivergence) GetKind() uint32 {
+	if x != nil {
+		return x.Kind
+	}
+	return 0
+}
+
+func (x *RollbackGuildDivergence) GetStatus() uint32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *RollbackGuildDivergence) GetFundsDelta() uint64 {
+	if x != nil {
+		return x.FundsDelta
+	}
+	return 0
+}
+
+func (x *RollbackGuildDivergence) GetContributionDelta() uint64 {
+	if x != nil {
+		return x.ContributionDelta
+	}
+	return 0
+}
+
+func (x *RollbackGuildDivergence) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
 type RollbackPlayerRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	SnapshotId    uint64                 `protobuf:"varint,2,opt,name=snapshot_id,json=snapshotId,proto3" json:"snapshot_id,omitempty"` // specific snapshot; 0 = use target_time
-	TargetTime    uint64                 `protobuf:"varint,3,opt,name=target_time,json=targetTime,proto3" json:"target_time,omitempty"` // rollback to latest snapshot before this time
-	Scope         RollbackScope          `protobuf:"varint,4,opt,name=scope,proto3,enum=data_service.RollbackScope" json:"scope,omitempty"`
-	Fields        []string               `protobuf:"bytes,5,rep,name=fields,proto3" json:"fields,omitempty"` // only for ROLLBACK_PARTIAL
-	Reason        string                 `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`
-	Operator      string                 `protobuf:"bytes,7,opt,name=operator,proto3" json:"operator,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId   uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	SnapshotId uint64                 `protobuf:"varint,2,opt,name=snapshot_id,json=snapshotId,proto3" json:"snapshot_id,omitempty"` // specific snapshot; 0 = use target_time
+	TargetTime uint64                 `protobuf:"varint,3,opt,name=target_time,json=targetTime,proto3" json:"target_time,omitempty"` // rollback to latest snapshot before this time
+	Scope      RollbackScope          `protobuf:"varint,4,opt,name=scope,proto3,enum=data_service.RollbackScope" json:"scope,omitempty"`
+	Fields     []string               `protobuf:"bytes,5,rep,name=fields,proto3" json:"fields,omitempty"` // only for ROLLBACK_PARTIAL
+	Reason     string                 `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`
+	Operator   string                 `protobuf:"bytes,7,opt,name=operator,proto3" json:"operator,omitempty"`
+	// true = 明知帮会资产有分歧(或快照早于帮会流水保留期、无法证明)仍要回档;要求 reason 与 operator 非空。
+	// 默认 false = 有分歧即拒绝。ROLLBACK_PARTIAL 同样过闸。
+	AcceptGuildDivergence bool `protobuf:"varint,8,opt,name=accept_guild_divergence,json=acceptGuildDivergence,proto3" json:"accept_guild_divergence,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *RollbackPlayerRequest) Reset() {
 	*x = RollbackPlayerRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[25]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1678,7 +1785,7 @@ func (x *RollbackPlayerRequest) String() string {
 func (*RollbackPlayerRequest) ProtoMessage() {}
 
 func (x *RollbackPlayerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[25]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1691,7 +1798,7 @@ func (x *RollbackPlayerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackPlayerRequest.ProtoReflect.Descriptor instead.
 func (*RollbackPlayerRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{25}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RollbackPlayerRequest) GetPlayerId() uint64 {
@@ -1743,19 +1850,32 @@ func (x *RollbackPlayerRequest) GetOperator() string {
 	return ""
 }
 
+func (x *RollbackPlayerRequest) GetAcceptGuildDivergence() bool {
+	if x != nil {
+		return x.AcceptGuildDivergence
+	}
+	return false
+}
+
 type RollbackPlayerResponse struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	ErrorCode             uint32                 `protobuf:"varint,1,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
 	SnapshotIdUsed        uint64                 `protobuf:"varint,2,opt,name=snapshot_id_used,json=snapshotIdUsed,proto3" json:"snapshot_id_used,omitempty"`
 	PreRollbackSnapshotId uint64                 `protobuf:"varint,3,opt,name=pre_rollback_snapshot_id,json=preRollbackSnapshotId,proto3" json:"pre_rollback_snapshot_id,omitempty"` // safety snapshot created before rollback
 	FieldsRestored        []string               `protobuf:"bytes,4,rep,name=fields_restored,json=fieldsRestored,proto3" json:"fields_restored,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// 帮会资产分歧条数(已按逐玩家快照时刻过滤)。error_code = RollbackGuildDivergedAfterWrite 时是写后复查
+	// 新发现的条数。
+	GuildDivergenceCount uint32                     `protobuf:"varint,5,opt,name=guild_divergence_count,json=guildDivergenceCount,proto3" json:"guild_divergence_count,omitempty"`
+	GuildDivergences     []*RollbackGuildDivergence `protobuf:"bytes,6,rep,name=guild_divergences,json=guildDivergences,proto3" json:"guild_divergences,omitempty"` // 按 op_id 升序的前 20 条
+	// 快照早于帮会流水保留期、无法证明的玩家数(是谁看 `[Rollback][GuildDivergence] unprovable` 日志)。
+	GuildUnprovablePlayerCount uint32 `protobuf:"varint,7,opt,name=guild_unprovable_player_count,json=guildUnprovablePlayerCount,proto3" json:"guild_unprovable_player_count,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *RollbackPlayerResponse) Reset() {
 	*x = RollbackPlayerResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[26]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1767,7 +1887,7 @@ func (x *RollbackPlayerResponse) String() string {
 func (*RollbackPlayerResponse) ProtoMessage() {}
 
 func (x *RollbackPlayerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[26]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1780,7 +1900,7 @@ func (x *RollbackPlayerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackPlayerResponse.ProtoReflect.Descriptor instead.
 func (*RollbackPlayerResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{26}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RollbackPlayerResponse) GetErrorCode() uint32 {
@@ -1811,19 +1931,41 @@ func (x *RollbackPlayerResponse) GetFieldsRestored() []string {
 	return nil
 }
 
+func (x *RollbackPlayerResponse) GetGuildDivergenceCount() uint32 {
+	if x != nil {
+		return x.GuildDivergenceCount
+	}
+	return 0
+}
+
+func (x *RollbackPlayerResponse) GetGuildDivergences() []*RollbackGuildDivergence {
+	if x != nil {
+		return x.GuildDivergences
+	}
+	return nil
+}
+
+func (x *RollbackPlayerResponse) GetGuildUnprovablePlayerCount() uint32 {
+	if x != nil {
+		return x.GuildUnprovablePlayerCount
+	}
+	return 0
+}
+
 type RollbackZoneRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ZoneId        uint32                 `protobuf:"varint,1,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
-	TargetTime    uint64                 `protobuf:"varint,2,opt,name=target_time,json=targetTime,proto3" json:"target_time,omitempty"`
-	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
-	Operator      string                 `protobuf:"bytes,4,opt,name=operator,proto3" json:"operator,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	ZoneId                uint32                 `protobuf:"varint,1,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
+	TargetTime            uint64                 `protobuf:"varint,2,opt,name=target_time,json=targetTime,proto3" json:"target_time,omitempty"`
+	Reason                string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	Operator              string                 `protobuf:"bytes,4,opt,name=operator,proto3" json:"operator,omitempty"`
+	AcceptGuildDivergence bool                   `protobuf:"varint,5,opt,name=accept_guild_divergence,json=acceptGuildDivergence,proto3" json:"accept_guild_divergence,omitempty"` // 语义同 RollbackPlayerRequest.accept_guild_divergence
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *RollbackZoneRequest) Reset() {
 	*x = RollbackZoneRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[27]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1835,7 +1977,7 @@ func (x *RollbackZoneRequest) String() string {
 func (*RollbackZoneRequest) ProtoMessage() {}
 
 func (x *RollbackZoneRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[27]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1848,7 +1990,7 @@ func (x *RollbackZoneRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackZoneRequest.ProtoReflect.Descriptor instead.
 func (*RollbackZoneRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{27}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *RollbackZoneRequest) GetZoneId() uint32 {
@@ -1879,6 +2021,13 @@ func (x *RollbackZoneRequest) GetOperator() string {
 	return ""
 }
 
+func (x *RollbackZoneRequest) GetAcceptGuildDivergence() bool {
+	if x != nil {
+		return x.AcceptGuildDivergence
+	}
+	return false
+}
+
 type RollbackZoneResponse struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ErrorCode       uint32                 `protobuf:"varint,1,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
@@ -1888,15 +2037,18 @@ type RollbackZoneResponse struct {
 	// Compatibility name: players currently mapped to the zone but without a
 	// snapshot at or before target_time. Candidates are reported only; no player
 	// data, zone mapping, or account relationship is deleted.
-	OrphanPlayerIds []uint64 `protobuf:"varint,5,rep,packed,name=orphan_player_ids,json=orphanPlayerIds,proto3" json:"orphan_player_ids,omitempty"`
-	OrphansCleaned  uint32   `protobuf:"varint,6,opt,name=orphans_cleaned,json=orphansCleaned,proto3" json:"orphans_cleaned,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	OrphanPlayerIds            []uint64                   `protobuf:"varint,5,rep,packed,name=orphan_player_ids,json=orphanPlayerIds,proto3" json:"orphan_player_ids,omitempty"`
+	OrphansCleaned             uint32                     `protobuf:"varint,6,opt,name=orphans_cleaned,json=orphansCleaned,proto3" json:"orphans_cleaned,omitempty"`
+	GuildDivergenceCount       uint32                     `protobuf:"varint,7,opt,name=guild_divergence_count,json=guildDivergenceCount,proto3" json:"guild_divergence_count,omitempty"` // 语义同 RollbackPlayerResponse
+	GuildDivergences           []*RollbackGuildDivergence `protobuf:"bytes,8,rep,name=guild_divergences,json=guildDivergences,proto3" json:"guild_divergences,omitempty"`                // 按 op_id 升序的前 20 条
+	GuildUnprovablePlayerCount uint32                     `protobuf:"varint,9,opt,name=guild_unprovable_player_count,json=guildUnprovablePlayerCount,proto3" json:"guild_unprovable_player_count,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *RollbackZoneResponse) Reset() {
 	*x = RollbackZoneResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[28]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1908,7 +2060,7 @@ func (x *RollbackZoneResponse) String() string {
 func (*RollbackZoneResponse) ProtoMessage() {}
 
 func (x *RollbackZoneResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[28]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1921,7 +2073,7 @@ func (x *RollbackZoneResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackZoneResponse.ProtoReflect.Descriptor instead.
 func (*RollbackZoneResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{28}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *RollbackZoneResponse) GetErrorCode() uint32 {
@@ -1966,18 +2118,40 @@ func (x *RollbackZoneResponse) GetOrphansCleaned() uint32 {
 	return 0
 }
 
+func (x *RollbackZoneResponse) GetGuildDivergenceCount() uint32 {
+	if x != nil {
+		return x.GuildDivergenceCount
+	}
+	return 0
+}
+
+func (x *RollbackZoneResponse) GetGuildDivergences() []*RollbackGuildDivergence {
+	if x != nil {
+		return x.GuildDivergences
+	}
+	return nil
+}
+
+func (x *RollbackZoneResponse) GetGuildUnprovablePlayerCount() uint32 {
+	if x != nil {
+		return x.GuildUnprovablePlayerCount
+	}
+	return 0
+}
+
 type RollbackAllRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TargetTime    uint64                 `protobuf:"varint,1,opt,name=target_time,json=targetTime,proto3" json:"target_time,omitempty"`
-	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
-	Operator      string                 `protobuf:"bytes,3,opt,name=operator,proto3" json:"operator,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	TargetTime            uint64                 `protobuf:"varint,1,opt,name=target_time,json=targetTime,proto3" json:"target_time,omitempty"`
+	Reason                string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	Operator              string                 `protobuf:"bytes,3,opt,name=operator,proto3" json:"operator,omitempty"`
+	AcceptGuildDivergence bool                   `protobuf:"varint,4,opt,name=accept_guild_divergence,json=acceptGuildDivergence,proto3" json:"accept_guild_divergence,omitempty"` // 语义同 RollbackPlayerRequest.accept_guild_divergence
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *RollbackAllRequest) Reset() {
 	*x = RollbackAllRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[29]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1989,7 +2163,7 @@ func (x *RollbackAllRequest) String() string {
 func (*RollbackAllRequest) ProtoMessage() {}
 
 func (x *RollbackAllRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[29]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2002,7 +2176,7 @@ func (x *RollbackAllRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackAllRequest.ProtoReflect.Descriptor instead.
 func (*RollbackAllRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{29}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *RollbackAllRequest) GetTargetTime() uint64 {
@@ -2026,19 +2200,29 @@ func (x *RollbackAllRequest) GetOperator() string {
 	return ""
 }
 
+func (x *RollbackAllRequest) GetAcceptGuildDivergence() bool {
+	if x != nil {
+		return x.AcceptGuildDivergence
+	}
+	return false
+}
+
 type RollbackAllResponse struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	ErrorCode       uint32                 `protobuf:"varint,1,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
-	ZonesProcessed  uint32                 `protobuf:"varint,2,opt,name=zones_processed,json=zonesProcessed,proto3" json:"zones_processed,omitempty"`
-	PlayersAffected uint32                 `protobuf:"varint,3,opt,name=players_affected,json=playersAffected,proto3" json:"players_affected,omitempty"`
-	PlayersFailed   uint32                 `protobuf:"varint,4,opt,name=players_failed,json=playersFailed,proto3" json:"players_failed,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state                      protoimpl.MessageState     `protogen:"open.v1"`
+	ErrorCode                  uint32                     `protobuf:"varint,1,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	ZonesProcessed             uint32                     `protobuf:"varint,2,opt,name=zones_processed,json=zonesProcessed,proto3" json:"zones_processed,omitempty"`
+	PlayersAffected            uint32                     `protobuf:"varint,3,opt,name=players_affected,json=playersAffected,proto3" json:"players_affected,omitempty"`
+	PlayersFailed              uint32                     `protobuf:"varint,4,opt,name=players_failed,json=playersFailed,proto3" json:"players_failed,omitempty"`
+	GuildDivergenceCount       uint32                     `protobuf:"varint,5,opt,name=guild_divergence_count,json=guildDivergenceCount,proto3" json:"guild_divergence_count,omitempty"` // 全部 zone 合并检查一次(语义同 RollbackPlayerResponse)
+	GuildDivergences           []*RollbackGuildDivergence `protobuf:"bytes,6,rep,name=guild_divergences,json=guildDivergences,proto3" json:"guild_divergences,omitempty"`                // 按 op_id 升序的前 20 条
+	GuildUnprovablePlayerCount uint32                     `protobuf:"varint,7,opt,name=guild_unprovable_player_count,json=guildUnprovablePlayerCount,proto3" json:"guild_unprovable_player_count,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *RollbackAllResponse) Reset() {
 	*x = RollbackAllResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[30]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2050,7 +2234,7 @@ func (x *RollbackAllResponse) String() string {
 func (*RollbackAllResponse) ProtoMessage() {}
 
 func (x *RollbackAllResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[30]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2063,7 +2247,7 @@ func (x *RollbackAllResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackAllResponse.ProtoReflect.Descriptor instead.
 func (*RollbackAllResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{30}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *RollbackAllResponse) GetErrorCode() uint32 {
@@ -2094,6 +2278,27 @@ func (x *RollbackAllResponse) GetPlayersFailed() uint32 {
 	return 0
 }
 
+func (x *RollbackAllResponse) GetGuildDivergenceCount() uint32 {
+	if x != nil {
+		return x.GuildDivergenceCount
+	}
+	return 0
+}
+
+func (x *RollbackAllResponse) GetGuildDivergences() []*RollbackGuildDivergence {
+	if x != nil {
+		return x.GuildDivergences
+	}
+	return nil
+}
+
+func (x *RollbackAllResponse) GetGuildUnprovablePlayerCount() uint32 {
+	if x != nil {
+		return x.GuildUnprovablePlayerCount
+	}
+	return 0
+}
+
 type BatchRecallItemsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PlayerIds     []uint64               `protobuf:"varint,1,rep,packed,name=player_ids,json=playerIds,proto3" json:"player_ids,omitempty"`     // target players (empty = use query filter)
@@ -2111,7 +2316,7 @@ type BatchRecallItemsRequest struct {
 
 func (x *BatchRecallItemsRequest) Reset() {
 	*x = BatchRecallItemsRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[31]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2123,7 +2328,7 @@ func (x *BatchRecallItemsRequest) String() string {
 func (*BatchRecallItemsRequest) ProtoMessage() {}
 
 func (x *BatchRecallItemsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[31]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2136,7 +2341,7 @@ func (x *BatchRecallItemsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchRecallItemsRequest.ProtoReflect.Descriptor instead.
 func (*BatchRecallItemsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{31}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *BatchRecallItemsRequest) GetPlayerIds() []uint64 {
@@ -2216,7 +2421,7 @@ type RecallResult struct {
 
 func (x *RecallResult) Reset() {
 	*x = RecallResult{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[32]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2228,7 +2433,7 @@ func (x *RecallResult) String() string {
 func (*RecallResult) ProtoMessage() {}
 
 func (x *RecallResult) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[32]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2241,7 +2446,7 @@ func (x *RecallResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecallResult.ProtoReflect.Descriptor instead.
 func (*RecallResult) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{32}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *RecallResult) GetPlayerId() uint64 {
@@ -2299,7 +2504,7 @@ type BatchRecallItemsResponse struct {
 
 func (x *BatchRecallItemsResponse) Reset() {
 	*x = BatchRecallItemsResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[33]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2311,7 +2516,7 @@ func (x *BatchRecallItemsResponse) String() string {
 func (*BatchRecallItemsResponse) ProtoMessage() {}
 
 func (x *BatchRecallItemsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[33]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2324,7 +2529,7 @@ func (x *BatchRecallItemsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchRecallItemsResponse.ProtoReflect.Descriptor instead.
 func (*BatchRecallItemsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{33}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *BatchRecallItemsResponse) GetErrorCode() uint32 {
@@ -2378,7 +2583,7 @@ type QueryTransactionLogRequest struct {
 
 func (x *QueryTransactionLogRequest) Reset() {
 	*x = QueryTransactionLogRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[34]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2390,7 +2595,7 @@ func (x *QueryTransactionLogRequest) String() string {
 func (*QueryTransactionLogRequest) ProtoMessage() {}
 
 func (x *QueryTransactionLogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[34]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2403,7 +2608,7 @@ func (x *QueryTransactionLogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryTransactionLogRequest.ProtoReflect.Descriptor instead.
 func (*QueryTransactionLogRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{34}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *QueryTransactionLogRequest) GetPlayerId() uint64 {
@@ -2484,7 +2689,7 @@ type TransactionLogRow struct {
 
 func (x *TransactionLogRow) Reset() {
 	*x = TransactionLogRow{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[35]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2496,7 +2701,7 @@ func (x *TransactionLogRow) String() string {
 func (*TransactionLogRow) ProtoMessage() {}
 
 func (x *TransactionLogRow) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[35]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2509,7 +2714,7 @@ func (x *TransactionLogRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransactionLogRow.ProtoReflect.Descriptor instead.
 func (*TransactionLogRow) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{35}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *TransactionLogRow) GetTxId() uint64 {
@@ -2621,7 +2826,7 @@ type QueryTransactionLogResponse struct {
 
 func (x *QueryTransactionLogResponse) Reset() {
 	*x = QueryTransactionLogResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[36]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2633,7 +2838,7 @@ func (x *QueryTransactionLogResponse) String() string {
 func (*QueryTransactionLogResponse) ProtoMessage() {}
 
 func (x *QueryTransactionLogResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[36]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2646,7 +2851,7 @@ func (x *QueryTransactionLogResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryTransactionLogResponse.ProtoReflect.Descriptor instead.
 func (*QueryTransactionLogResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{36}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *QueryTransactionLogResponse) GetErrorCode() uint32 {
@@ -2682,7 +2887,7 @@ type CreateEventSnapshotRequest struct {
 
 func (x *CreateEventSnapshotRequest) Reset() {
 	*x = CreateEventSnapshotRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[37]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2694,7 +2899,7 @@ func (x *CreateEventSnapshotRequest) String() string {
 func (*CreateEventSnapshotRequest) ProtoMessage() {}
 
 func (x *CreateEventSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[37]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2707,7 +2912,7 @@ func (x *CreateEventSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateEventSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*CreateEventSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{37}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *CreateEventSnapshotRequest) GetPlayerId() uint64 {
@@ -2749,7 +2954,7 @@ type CreateEventSnapshotResponse struct {
 
 func (x *CreateEventSnapshotResponse) Reset() {
 	*x = CreateEventSnapshotResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[38]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2761,7 +2966,7 @@ func (x *CreateEventSnapshotResponse) String() string {
 func (*CreateEventSnapshotResponse) ProtoMessage() {}
 
 func (x *CreateEventSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[38]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2774,7 +2979,7 @@ func (x *CreateEventSnapshotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateEventSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*CreateEventSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{38}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *CreateEventSnapshotResponse) GetErrorCode() uint32 {
@@ -2808,7 +3013,7 @@ type AllocateIdSegmentRequest struct {
 
 func (x *AllocateIdSegmentRequest) Reset() {
 	*x = AllocateIdSegmentRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[39]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2820,7 +3025,7 @@ func (x *AllocateIdSegmentRequest) String() string {
 func (*AllocateIdSegmentRequest) ProtoMessage() {}
 
 func (x *AllocateIdSegmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[39]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2833,7 +3038,7 @@ func (x *AllocateIdSegmentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AllocateIdSegmentRequest.ProtoReflect.Descriptor instead.
 func (*AllocateIdSegmentRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{39}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *AllocateIdSegmentRequest) GetBizTag() string {
@@ -2865,7 +3070,7 @@ type AllocateIdSegmentResponse struct {
 
 func (x *AllocateIdSegmentResponse) Reset() {
 	*x = AllocateIdSegmentResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[40]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2877,7 +3082,7 @@ func (x *AllocateIdSegmentResponse) String() string {
 func (*AllocateIdSegmentResponse) ProtoMessage() {}
 
 func (x *AllocateIdSegmentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[40]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2890,7 +3095,7 @@ func (x *AllocateIdSegmentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AllocateIdSegmentResponse.ProtoReflect.Descriptor instead.
 func (*AllocateIdSegmentResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{40}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *AllocateIdSegmentResponse) GetErrorCode() uint32 {
@@ -2926,7 +3131,7 @@ type ReservePlayerNameRequest struct {
 
 func (x *ReservePlayerNameRequest) Reset() {
 	*x = ReservePlayerNameRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[41]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2938,7 +3143,7 @@ func (x *ReservePlayerNameRequest) String() string {
 func (*ReservePlayerNameRequest) ProtoMessage() {}
 
 func (x *ReservePlayerNameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[41]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2951,7 +3156,7 @@ func (x *ReservePlayerNameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReservePlayerNameRequest.ProtoReflect.Descriptor instead.
 func (*ReservePlayerNameRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{41}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ReservePlayerNameRequest) GetPlayerId() uint64 {
@@ -2987,7 +3192,7 @@ type ReservePlayerNameResponse struct {
 
 func (x *ReservePlayerNameResponse) Reset() {
 	*x = ReservePlayerNameResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[42]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2999,7 +3204,7 @@ func (x *ReservePlayerNameResponse) String() string {
 func (*ReservePlayerNameResponse) ProtoMessage() {}
 
 func (x *ReservePlayerNameResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[42]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3012,7 +3217,7 @@ func (x *ReservePlayerNameResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReservePlayerNameResponse.ProtoReflect.Descriptor instead.
 func (*ReservePlayerNameResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{42}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ReservePlayerNameResponse) GetResult() uint32 {
@@ -3043,7 +3248,7 @@ type ReleasePlayerNameRequest struct {
 
 func (x *ReleasePlayerNameRequest) Reset() {
 	*x = ReleasePlayerNameRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[43]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3055,7 +3260,7 @@ func (x *ReleasePlayerNameRequest) String() string {
 func (*ReleasePlayerNameRequest) ProtoMessage() {}
 
 func (x *ReleasePlayerNameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[43]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3068,7 +3273,7 @@ func (x *ReleasePlayerNameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleasePlayerNameRequest.ProtoReflect.Descriptor instead.
 func (*ReleasePlayerNameRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{43}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ReleasePlayerNameRequest) GetPlayerId() uint64 {
@@ -3096,7 +3301,7 @@ type BatchGetPlayerNameRequest struct {
 
 func (x *BatchGetPlayerNameRequest) Reset() {
 	*x = BatchGetPlayerNameRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[44]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3108,7 +3313,7 @@ func (x *BatchGetPlayerNameRequest) String() string {
 func (*BatchGetPlayerNameRequest) ProtoMessage() {}
 
 func (x *BatchGetPlayerNameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[44]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3121,7 +3326,7 @@ func (x *BatchGetPlayerNameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchGetPlayerNameRequest.ProtoReflect.Descriptor instead.
 func (*BatchGetPlayerNameRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{44}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *BatchGetPlayerNameRequest) GetPlayerIds() []uint64 {
@@ -3142,7 +3347,7 @@ type BatchGetPlayerNameResponse struct {
 
 func (x *BatchGetPlayerNameResponse) Reset() {
 	*x = BatchGetPlayerNameResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[45]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3154,7 +3359,7 @@ func (x *BatchGetPlayerNameResponse) String() string {
 func (*BatchGetPlayerNameResponse) ProtoMessage() {}
 
 func (x *BatchGetPlayerNameResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[45]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3167,7 +3372,7 @@ func (x *BatchGetPlayerNameResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchGetPlayerNameResponse.ProtoReflect.Descriptor instead.
 func (*BatchGetPlayerNameResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{45}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *BatchGetPlayerNameResponse) GetNames() map[uint64]string {
@@ -3177,11 +3382,107 @@ func (x *BatchGetPlayerNameResponse) GetNames() map[uint64]string {
 	return nil
 }
 
+type GetPlayerAssetOpLedgerRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPlayerAssetOpLedgerRequest) Reset() {
+	*x = GetPlayerAssetOpLedgerRequest{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPlayerAssetOpLedgerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPlayerAssetOpLedgerRequest) ProtoMessage() {}
+
+func (x *GetPlayerAssetOpLedgerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPlayerAssetOpLedgerRequest.ProtoReflect.Descriptor instead.
+func (*GetPlayerAssetOpLedgerRequest) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *GetPlayerAssetOpLedgerRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+type GetPlayerAssetOpLedgerResponse struct {
+	state         protoimpl.MessageState             `protogen:"open.v1"`
+	Found         bool                               `protobuf:"varint,1,opt,name=found,proto3" json:"found,omitempty"`  // false = 该玩家在 zone Redis 里没有 blob(从未入场,或 Redis 丢数据)
+	Ledger        *component.PlayerAssetOpLedgerComp `protobuf:"bytes,2,opt,name=ledger,proto3" json:"ledger,omitempty"` // found=true 且玩家从未有过资产操作时为空消息(不是缺席)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPlayerAssetOpLedgerResponse) Reset() {
+	*x = GetPlayerAssetOpLedgerResponse{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPlayerAssetOpLedgerResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPlayerAssetOpLedgerResponse) ProtoMessage() {}
+
+func (x *GetPlayerAssetOpLedgerResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPlayerAssetOpLedgerResponse.ProtoReflect.Descriptor instead.
+func (*GetPlayerAssetOpLedgerResponse) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *GetPlayerAssetOpLedgerResponse) GetFound() bool {
+	if x != nil {
+		return x.Found
+	}
+	return false
+}
+
+func (x *GetPlayerAssetOpLedgerResponse) GetLedger() *component.PlayerAssetOpLedgerComp {
+	if x != nil {
+		return x.Ledger
+	}
+	return nil
+}
+
 var File_proto_data_service_data_service_proto protoreflect.FileDescriptor
 
 const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\n" +
-	"%proto/data_service/data_service.proto\x12\fdata_service\x1a\x1bgoogle/protobuf/empty.proto\"L\n" +
+	"%proto/data_service/data_service.proto\x12\fdata_service\x1a\x1bgoogle/protobuf/empty.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\"L\n" +
 	"\x15LoadPlayerDataRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x16\n" +
 	"\x06fields\x18\x02 \x03(\tR\x06fields\"\xce\x01\n" +
@@ -3308,7 +3609,18 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x12(\n" +
 	"\x10snapshot_id_used\x18\x02 \x01(\x04R\x0esnapshotIdUsed\x12#\n" +
 	"\rsnapshot_time\x18\x03 \x01(\x04R\fsnapshotTime\x12-\n" +
-	"\x05diffs\x18\x04 \x03(\v2\x17.data_service.FieldDiffR\x05diffs\"\xf5\x01\n" +
+	"\x05diffs\x18\x04 \x03(\v2\x17.data_service.FieldDiffR\x05diffs\"\x81\x02\n" +
+	"\x17RollbackGuildDivergence\x12\x13\n" +
+	"\x05op_id\x18\x01 \x01(\x04R\x04opId\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x19\n" +
+	"\bguild_id\x18\x03 \x01(\x04R\aguildId\x12\x12\n" +
+	"\x04kind\x18\x04 \x01(\rR\x04kind\x12\x16\n" +
+	"\x06status\x18\x05 \x01(\rR\x06status\x12\x1f\n" +
+	"\vfunds_delta\x18\x06 \x01(\x04R\n" +
+	"fundsDelta\x12-\n" +
+	"\x12contribution_delta\x18\a \x01(\x04R\x11contributionDelta\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\b \x01(\x04R\tupdatedMs\"\xad\x02\n" +
 	"\x15RollbackPlayerRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
 	"\vsnapshot_id\x18\x02 \x01(\x04R\n" +
@@ -3318,19 +3630,24 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x05scope\x18\x04 \x01(\x0e2\x1b.data_service.RollbackScopeR\x05scope\x12\x16\n" +
 	"\x06fields\x18\x05 \x03(\tR\x06fields\x12\x16\n" +
 	"\x06reason\x18\x06 \x01(\tR\x06reason\x12\x1a\n" +
-	"\boperator\x18\a \x01(\tR\boperator\"\xc3\x01\n" +
+	"\boperator\x18\a \x01(\tR\boperator\x126\n" +
+	"\x17accept_guild_divergence\x18\b \x01(\bR\x15acceptGuildDivergence\"\x90\x03\n" +
 	"\x16RollbackPlayerResponse\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x12(\n" +
 	"\x10snapshot_id_used\x18\x02 \x01(\x04R\x0esnapshotIdUsed\x127\n" +
 	"\x18pre_rollback_snapshot_id\x18\x03 \x01(\x04R\x15preRollbackSnapshotId\x12'\n" +
-	"\x0ffields_restored\x18\x04 \x03(\tR\x0efieldsRestored\"\x83\x01\n" +
+	"\x0ffields_restored\x18\x04 \x03(\tR\x0efieldsRestored\x124\n" +
+	"\x16guild_divergence_count\x18\x05 \x01(\rR\x14guildDivergenceCount\x12R\n" +
+	"\x11guild_divergences\x18\x06 \x03(\v2%.data_service.RollbackGuildDivergenceR\x10guildDivergences\x12A\n" +
+	"\x1dguild_unprovable_player_count\x18\a \x01(\rR\x1aguildUnprovablePlayerCount\"\xbb\x01\n" +
 	"\x13RollbackZoneRequest\x12\x17\n" +
 	"\azone_id\x18\x01 \x01(\rR\x06zoneId\x12\x1f\n" +
 	"\vtarget_time\x18\x02 \x01(\x04R\n" +
 	"targetTime\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x1a\n" +
-	"\boperator\x18\x04 \x01(\tR\boperator\"\x88\x02\n" +
+	"\boperator\x18\x04 \x01(\tR\boperator\x126\n" +
+	"\x17accept_guild_divergence\x18\x05 \x01(\bR\x15acceptGuildDivergence\"\xd5\x03\n" +
 	"\x14RollbackZoneResponse\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x12)\n" +
@@ -3338,18 +3655,25 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x0eplayers_failed\x18\x03 \x01(\rR\rplayersFailed\x12*\n" +
 	"\x11failed_player_ids\x18\x04 \x03(\x04R\x0ffailedPlayerIds\x12*\n" +
 	"\x11orphan_player_ids\x18\x05 \x03(\x04R\x0forphanPlayerIds\x12'\n" +
-	"\x0forphans_cleaned\x18\x06 \x01(\rR\x0eorphansCleaned\"i\n" +
+	"\x0forphans_cleaned\x18\x06 \x01(\rR\x0eorphansCleaned\x124\n" +
+	"\x16guild_divergence_count\x18\a \x01(\rR\x14guildDivergenceCount\x12R\n" +
+	"\x11guild_divergences\x18\b \x03(\v2%.data_service.RollbackGuildDivergenceR\x10guildDivergences\x12A\n" +
+	"\x1dguild_unprovable_player_count\x18\t \x01(\rR\x1aguildUnprovablePlayerCount\"\xa1\x01\n" +
 	"\x12RollbackAllRequest\x12\x1f\n" +
 	"\vtarget_time\x18\x01 \x01(\x04R\n" +
 	"targetTime\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x1a\n" +
-	"\boperator\x18\x03 \x01(\tR\boperator\"\xaf\x01\n" +
+	"\boperator\x18\x03 \x01(\tR\boperator\x126\n" +
+	"\x17accept_guild_divergence\x18\x04 \x01(\bR\x15acceptGuildDivergence\"\xfc\x02\n" +
 	"\x13RollbackAllResponse\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x12'\n" +
 	"\x0fzones_processed\x18\x02 \x01(\rR\x0ezonesProcessed\x12)\n" +
 	"\x10players_affected\x18\x03 \x01(\rR\x0fplayersAffected\x12%\n" +
-	"\x0eplayers_failed\x18\x04 \x01(\rR\rplayersFailed\"\xa5\x02\n" +
+	"\x0eplayers_failed\x18\x04 \x01(\rR\rplayersFailed\x124\n" +
+	"\x16guild_divergence_count\x18\x05 \x01(\rR\x14guildDivergenceCount\x12R\n" +
+	"\x11guild_divergences\x18\x06 \x03(\v2%.data_service.RollbackGuildDivergenceR\x10guildDivergences\x12A\n" +
+	"\x1dguild_unprovable_player_count\x18\a \x01(\rR\x1aguildUnprovablePlayerCount\"\xa5\x02\n" +
 	"\x17BatchRecallItemsRequest\x12\x1d\n" +
 	"\n" +
 	"player_ids\x18\x01 \x03(\x04R\tplayerIds\x12$\n" +
@@ -3447,7 +3771,12 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\n" +
 	"NamesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\x87\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"<\n" +
+	"\x1dGetPlayerAssetOpLedgerRequest\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\"h\n" +
+	"\x1eGetPlayerAssetOpLedgerResponse\x12\x14\n" +
+	"\x05found\x18\x01 \x01(\bR\x05found\x120\n" +
+	"\x06ledger\x18\x02 \x01(\v2\x18.PlayerAssetOpLedgerCompR\x06ledger*\x87\x01\n" +
 	"\fSnapshotType\x12\x13\n" +
 	"\x0fSNAPSHOT_MANUAL\x10\x00\x12\x15\n" +
 	"\x11SNAPSHOT_PERIODIC\x10\x01\x12\x1c\n" +
@@ -3462,7 +3791,7 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x0eEVENT_RECHARGE\x10\x01\x12\x19\n" +
 	"\x15EVENT_PRE_MAINTENANCE\x10\x02\x12\x12\n" +
 	"\x0eEVENT_LEVEL_UP\x10\x03\x12\x15\n" +
-	"\x11EVENT_FIRST_LOGIN\x10\x042\xce\x11\n" +
+	"\x11EVENT_FIRST_LOGIN\x10\x042\xc5\x12\n" +
 	"\vDataService\x12]\n" +
 	"\x0eLoadPlayerData\x12#.data_service.LoadPlayerDataRequest\x1a$.data_service.LoadPlayerDataResponse\"\x00\x12]\n" +
 	"\x0eSavePlayerData\x12#.data_service.SavePlayerDataRequest\x1a$.data_service.SavePlayerDataResponse\"\x00\x12]\n" +
@@ -3485,7 +3814,8 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x11AllocateIdSegment\x12&.data_service.AllocateIdSegmentRequest\x1a'.data_service.AllocateIdSegmentResponse\"\x00\x12f\n" +
 	"\x11ReservePlayerName\x12&.data_service.ReservePlayerNameRequest\x1a'.data_service.ReservePlayerNameResponse\"\x00\x12U\n" +
 	"\x11ReleasePlayerName\x12&.data_service.ReleasePlayerNameRequest\x1a\x16.google.protobuf.Empty\"\x00\x12i\n" +
-	"\x12BatchGetPlayerName\x12'.data_service.BatchGetPlayerNameRequest\x1a(.data_service.BatchGetPlayerNameResponse\"\x00B\x14Z\x12proto/data_serviceb\x06proto3"
+	"\x12BatchGetPlayerName\x12'.data_service.BatchGetPlayerNameRequest\x1a(.data_service.BatchGetPlayerNameResponse\"\x00\x12u\n" +
+	"\x16GetPlayerAssetOpLedger\x12+.data_service.GetPlayerAssetOpLedgerRequest\x1a,.data_service.GetPlayerAssetOpLedgerResponse\"\x00B\x14Z\x12proto/data_serviceb\x06proto3"
 
 var (
 	file_proto_data_service_data_service_proto_rawDescOnce sync.Once
@@ -3500,125 +3830,135 @@ func file_proto_data_service_data_service_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_data_service_data_service_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_data_service_data_service_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
+var file_proto_data_service_data_service_proto_msgTypes = make([]protoimpl.MessageInfo, 53)
 var file_proto_data_service_data_service_proto_goTypes = []any{
-	(SnapshotType)(0),                      // 0: data_service.SnapshotType
-	(RollbackScope)(0),                     // 1: data_service.RollbackScope
-	(SnapshotEventType)(0),                 // 2: data_service.SnapshotEventType
-	(*LoadPlayerDataRequest)(nil),          // 3: data_service.LoadPlayerDataRequest
-	(*LoadPlayerDataResponse)(nil),         // 4: data_service.LoadPlayerDataResponse
-	(*SavePlayerDataRequest)(nil),          // 5: data_service.SavePlayerDataRequest
-	(*SavePlayerDataResponse)(nil),         // 6: data_service.SavePlayerDataResponse
-	(*GetPlayerFieldRequest)(nil),          // 7: data_service.GetPlayerFieldRequest
-	(*GetPlayerFieldResponse)(nil),         // 8: data_service.GetPlayerFieldResponse
-	(*SetPlayerFieldRequest)(nil),          // 9: data_service.SetPlayerFieldRequest
-	(*SetPlayerFieldResponse)(nil),         // 10: data_service.SetPlayerFieldResponse
-	(*RegisterPlayerZoneRequest)(nil),      // 11: data_service.RegisterPlayerZoneRequest
-	(*GetPlayerHomeZoneRequest)(nil),       // 12: data_service.GetPlayerHomeZoneRequest
-	(*GetPlayerHomeZoneResponse)(nil),      // 13: data_service.GetPlayerHomeZoneResponse
-	(*BatchGetPlayerHomeZoneRequest)(nil),  // 14: data_service.BatchGetPlayerHomeZoneRequest
-	(*BatchGetPlayerHomeZoneResponse)(nil), // 15: data_service.BatchGetPlayerHomeZoneResponse
-	(*RemapHomeZoneForMergeRequest)(nil),   // 16: data_service.RemapHomeZoneForMergeRequest
-	(*RemapHomeZoneForMergeResponse)(nil),  // 17: data_service.RemapHomeZoneForMergeResponse
-	(*DeletePlayerDataRequest)(nil),        // 18: data_service.DeletePlayerDataRequest
-	(*DeletePlayerDataResponse)(nil),       // 19: data_service.DeletePlayerDataResponse
-	(*CreatePlayerSnapshotRequest)(nil),    // 20: data_service.CreatePlayerSnapshotRequest
-	(*CreatePlayerSnapshotResponse)(nil),   // 21: data_service.CreatePlayerSnapshotResponse
-	(*ListPlayerSnapshotsRequest)(nil),     // 22: data_service.ListPlayerSnapshotsRequest
-	(*SnapshotInfo)(nil),                   // 23: data_service.SnapshotInfo
-	(*ListPlayerSnapshotsResponse)(nil),    // 24: data_service.ListPlayerSnapshotsResponse
-	(*GetPlayerSnapshotDiffRequest)(nil),   // 25: data_service.GetPlayerSnapshotDiffRequest
-	(*FieldDiff)(nil),                      // 26: data_service.FieldDiff
-	(*GetPlayerSnapshotDiffResponse)(nil),  // 27: data_service.GetPlayerSnapshotDiffResponse
-	(*RollbackPlayerRequest)(nil),          // 28: data_service.RollbackPlayerRequest
-	(*RollbackPlayerResponse)(nil),         // 29: data_service.RollbackPlayerResponse
-	(*RollbackZoneRequest)(nil),            // 30: data_service.RollbackZoneRequest
-	(*RollbackZoneResponse)(nil),           // 31: data_service.RollbackZoneResponse
-	(*RollbackAllRequest)(nil),             // 32: data_service.RollbackAllRequest
-	(*RollbackAllResponse)(nil),            // 33: data_service.RollbackAllResponse
-	(*BatchRecallItemsRequest)(nil),        // 34: data_service.BatchRecallItemsRequest
-	(*RecallResult)(nil),                   // 35: data_service.RecallResult
-	(*BatchRecallItemsResponse)(nil),       // 36: data_service.BatchRecallItemsResponse
-	(*QueryTransactionLogRequest)(nil),     // 37: data_service.QueryTransactionLogRequest
-	(*TransactionLogRow)(nil),              // 38: data_service.TransactionLogRow
-	(*QueryTransactionLogResponse)(nil),    // 39: data_service.QueryTransactionLogResponse
-	(*CreateEventSnapshotRequest)(nil),     // 40: data_service.CreateEventSnapshotRequest
-	(*CreateEventSnapshotResponse)(nil),    // 41: data_service.CreateEventSnapshotResponse
-	(*AllocateIdSegmentRequest)(nil),       // 42: data_service.AllocateIdSegmentRequest
-	(*AllocateIdSegmentResponse)(nil),      // 43: data_service.AllocateIdSegmentResponse
-	(*ReservePlayerNameRequest)(nil),       // 44: data_service.ReservePlayerNameRequest
-	(*ReservePlayerNameResponse)(nil),      // 45: data_service.ReservePlayerNameResponse
-	(*ReleasePlayerNameRequest)(nil),       // 46: data_service.ReleasePlayerNameRequest
-	(*BatchGetPlayerNameRequest)(nil),      // 47: data_service.BatchGetPlayerNameRequest
-	(*BatchGetPlayerNameResponse)(nil),     // 48: data_service.BatchGetPlayerNameResponse
-	nil,                                    // 49: data_service.LoadPlayerDataResponse.DataEntry
-	nil,                                    // 50: data_service.SavePlayerDataRequest.DataEntry
-	nil,                                    // 51: data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
-	nil,                                    // 52: data_service.BatchGetPlayerNameResponse.NamesEntry
-	(*emptypb.Empty)(nil),                  // 53: google.protobuf.Empty
+	(SnapshotType)(0),                         // 0: data_service.SnapshotType
+	(RollbackScope)(0),                        // 1: data_service.RollbackScope
+	(SnapshotEventType)(0),                    // 2: data_service.SnapshotEventType
+	(*LoadPlayerDataRequest)(nil),             // 3: data_service.LoadPlayerDataRequest
+	(*LoadPlayerDataResponse)(nil),            // 4: data_service.LoadPlayerDataResponse
+	(*SavePlayerDataRequest)(nil),             // 5: data_service.SavePlayerDataRequest
+	(*SavePlayerDataResponse)(nil),            // 6: data_service.SavePlayerDataResponse
+	(*GetPlayerFieldRequest)(nil),             // 7: data_service.GetPlayerFieldRequest
+	(*GetPlayerFieldResponse)(nil),            // 8: data_service.GetPlayerFieldResponse
+	(*SetPlayerFieldRequest)(nil),             // 9: data_service.SetPlayerFieldRequest
+	(*SetPlayerFieldResponse)(nil),            // 10: data_service.SetPlayerFieldResponse
+	(*RegisterPlayerZoneRequest)(nil),         // 11: data_service.RegisterPlayerZoneRequest
+	(*GetPlayerHomeZoneRequest)(nil),          // 12: data_service.GetPlayerHomeZoneRequest
+	(*GetPlayerHomeZoneResponse)(nil),         // 13: data_service.GetPlayerHomeZoneResponse
+	(*BatchGetPlayerHomeZoneRequest)(nil),     // 14: data_service.BatchGetPlayerHomeZoneRequest
+	(*BatchGetPlayerHomeZoneResponse)(nil),    // 15: data_service.BatchGetPlayerHomeZoneResponse
+	(*RemapHomeZoneForMergeRequest)(nil),      // 16: data_service.RemapHomeZoneForMergeRequest
+	(*RemapHomeZoneForMergeResponse)(nil),     // 17: data_service.RemapHomeZoneForMergeResponse
+	(*DeletePlayerDataRequest)(nil),           // 18: data_service.DeletePlayerDataRequest
+	(*DeletePlayerDataResponse)(nil),          // 19: data_service.DeletePlayerDataResponse
+	(*CreatePlayerSnapshotRequest)(nil),       // 20: data_service.CreatePlayerSnapshotRequest
+	(*CreatePlayerSnapshotResponse)(nil),      // 21: data_service.CreatePlayerSnapshotResponse
+	(*ListPlayerSnapshotsRequest)(nil),        // 22: data_service.ListPlayerSnapshotsRequest
+	(*SnapshotInfo)(nil),                      // 23: data_service.SnapshotInfo
+	(*ListPlayerSnapshotsResponse)(nil),       // 24: data_service.ListPlayerSnapshotsResponse
+	(*GetPlayerSnapshotDiffRequest)(nil),      // 25: data_service.GetPlayerSnapshotDiffRequest
+	(*FieldDiff)(nil),                         // 26: data_service.FieldDiff
+	(*GetPlayerSnapshotDiffResponse)(nil),     // 27: data_service.GetPlayerSnapshotDiffResponse
+	(*RollbackGuildDivergence)(nil),           // 28: data_service.RollbackGuildDivergence
+	(*RollbackPlayerRequest)(nil),             // 29: data_service.RollbackPlayerRequest
+	(*RollbackPlayerResponse)(nil),            // 30: data_service.RollbackPlayerResponse
+	(*RollbackZoneRequest)(nil),               // 31: data_service.RollbackZoneRequest
+	(*RollbackZoneResponse)(nil),              // 32: data_service.RollbackZoneResponse
+	(*RollbackAllRequest)(nil),                // 33: data_service.RollbackAllRequest
+	(*RollbackAllResponse)(nil),               // 34: data_service.RollbackAllResponse
+	(*BatchRecallItemsRequest)(nil),           // 35: data_service.BatchRecallItemsRequest
+	(*RecallResult)(nil),                      // 36: data_service.RecallResult
+	(*BatchRecallItemsResponse)(nil),          // 37: data_service.BatchRecallItemsResponse
+	(*QueryTransactionLogRequest)(nil),        // 38: data_service.QueryTransactionLogRequest
+	(*TransactionLogRow)(nil),                 // 39: data_service.TransactionLogRow
+	(*QueryTransactionLogResponse)(nil),       // 40: data_service.QueryTransactionLogResponse
+	(*CreateEventSnapshotRequest)(nil),        // 41: data_service.CreateEventSnapshotRequest
+	(*CreateEventSnapshotResponse)(nil),       // 42: data_service.CreateEventSnapshotResponse
+	(*AllocateIdSegmentRequest)(nil),          // 43: data_service.AllocateIdSegmentRequest
+	(*AllocateIdSegmentResponse)(nil),         // 44: data_service.AllocateIdSegmentResponse
+	(*ReservePlayerNameRequest)(nil),          // 45: data_service.ReservePlayerNameRequest
+	(*ReservePlayerNameResponse)(nil),         // 46: data_service.ReservePlayerNameResponse
+	(*ReleasePlayerNameRequest)(nil),          // 47: data_service.ReleasePlayerNameRequest
+	(*BatchGetPlayerNameRequest)(nil),         // 48: data_service.BatchGetPlayerNameRequest
+	(*BatchGetPlayerNameResponse)(nil),        // 49: data_service.BatchGetPlayerNameResponse
+	(*GetPlayerAssetOpLedgerRequest)(nil),     // 50: data_service.GetPlayerAssetOpLedgerRequest
+	(*GetPlayerAssetOpLedgerResponse)(nil),    // 51: data_service.GetPlayerAssetOpLedgerResponse
+	nil,                                       // 52: data_service.LoadPlayerDataResponse.DataEntry
+	nil,                                       // 53: data_service.SavePlayerDataRequest.DataEntry
+	nil,                                       // 54: data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
+	nil,                                       // 55: data_service.BatchGetPlayerNameResponse.NamesEntry
+	(*component.PlayerAssetOpLedgerComp)(nil), // 56: PlayerAssetOpLedgerComp
+	(*emptypb.Empty)(nil),                     // 57: google.protobuf.Empty
 }
 var file_proto_data_service_data_service_proto_depIdxs = []int32{
-	49, // 0: data_service.LoadPlayerDataResponse.data:type_name -> data_service.LoadPlayerDataResponse.DataEntry
-	50, // 1: data_service.SavePlayerDataRequest.data:type_name -> data_service.SavePlayerDataRequest.DataEntry
-	51, // 2: data_service.BatchGetPlayerHomeZoneResponse.player_zone_map:type_name -> data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
+	52, // 0: data_service.LoadPlayerDataResponse.data:type_name -> data_service.LoadPlayerDataResponse.DataEntry
+	53, // 1: data_service.SavePlayerDataRequest.data:type_name -> data_service.SavePlayerDataRequest.DataEntry
+	54, // 2: data_service.BatchGetPlayerHomeZoneResponse.player_zone_map:type_name -> data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
 	0,  // 3: data_service.CreatePlayerSnapshotRequest.type:type_name -> data_service.SnapshotType
 	0,  // 4: data_service.SnapshotInfo.type:type_name -> data_service.SnapshotType
 	23, // 5: data_service.ListPlayerSnapshotsResponse.snapshots:type_name -> data_service.SnapshotInfo
 	26, // 6: data_service.GetPlayerSnapshotDiffResponse.diffs:type_name -> data_service.FieldDiff
 	1,  // 7: data_service.RollbackPlayerRequest.scope:type_name -> data_service.RollbackScope
-	35, // 8: data_service.BatchRecallItemsResponse.results:type_name -> data_service.RecallResult
-	38, // 9: data_service.QueryTransactionLogResponse.rows:type_name -> data_service.TransactionLogRow
-	2,  // 10: data_service.CreateEventSnapshotRequest.event_type:type_name -> data_service.SnapshotEventType
-	52, // 11: data_service.BatchGetPlayerNameResponse.names:type_name -> data_service.BatchGetPlayerNameResponse.NamesEntry
-	3,  // 12: data_service.DataService.LoadPlayerData:input_type -> data_service.LoadPlayerDataRequest
-	5,  // 13: data_service.DataService.SavePlayerData:input_type -> data_service.SavePlayerDataRequest
-	7,  // 14: data_service.DataService.GetPlayerField:input_type -> data_service.GetPlayerFieldRequest
-	9,  // 15: data_service.DataService.SetPlayerField:input_type -> data_service.SetPlayerFieldRequest
-	11, // 16: data_service.DataService.RegisterPlayerZone:input_type -> data_service.RegisterPlayerZoneRequest
-	12, // 17: data_service.DataService.GetPlayerHomeZone:input_type -> data_service.GetPlayerHomeZoneRequest
-	14, // 18: data_service.DataService.BatchGetPlayerHomeZone:input_type -> data_service.BatchGetPlayerHomeZoneRequest
-	16, // 19: data_service.DataService.RemapHomeZoneForMerge:input_type -> data_service.RemapHomeZoneForMergeRequest
-	18, // 20: data_service.DataService.DeletePlayerData:input_type -> data_service.DeletePlayerDataRequest
-	20, // 21: data_service.DataService.CreatePlayerSnapshot:input_type -> data_service.CreatePlayerSnapshotRequest
-	22, // 22: data_service.DataService.ListPlayerSnapshots:input_type -> data_service.ListPlayerSnapshotsRequest
-	25, // 23: data_service.DataService.GetPlayerSnapshotDiff:input_type -> data_service.GetPlayerSnapshotDiffRequest
-	28, // 24: data_service.DataService.RollbackPlayer:input_type -> data_service.RollbackPlayerRequest
-	30, // 25: data_service.DataService.RollbackZone:input_type -> data_service.RollbackZoneRequest
-	32, // 26: data_service.DataService.RollbackAll:input_type -> data_service.RollbackAllRequest
-	34, // 27: data_service.DataService.BatchRecallItems:input_type -> data_service.BatchRecallItemsRequest
-	37, // 28: data_service.DataService.QueryTransactionLog:input_type -> data_service.QueryTransactionLogRequest
-	40, // 29: data_service.DataService.CreateEventSnapshot:input_type -> data_service.CreateEventSnapshotRequest
-	42, // 30: data_service.DataService.AllocateIdSegment:input_type -> data_service.AllocateIdSegmentRequest
-	44, // 31: data_service.DataService.ReservePlayerName:input_type -> data_service.ReservePlayerNameRequest
-	46, // 32: data_service.DataService.ReleasePlayerName:input_type -> data_service.ReleasePlayerNameRequest
-	47, // 33: data_service.DataService.BatchGetPlayerName:input_type -> data_service.BatchGetPlayerNameRequest
-	4,  // 34: data_service.DataService.LoadPlayerData:output_type -> data_service.LoadPlayerDataResponse
-	6,  // 35: data_service.DataService.SavePlayerData:output_type -> data_service.SavePlayerDataResponse
-	8,  // 36: data_service.DataService.GetPlayerField:output_type -> data_service.GetPlayerFieldResponse
-	10, // 37: data_service.DataService.SetPlayerField:output_type -> data_service.SetPlayerFieldResponse
-	53, // 38: data_service.DataService.RegisterPlayerZone:output_type -> google.protobuf.Empty
-	13, // 39: data_service.DataService.GetPlayerHomeZone:output_type -> data_service.GetPlayerHomeZoneResponse
-	15, // 40: data_service.DataService.BatchGetPlayerHomeZone:output_type -> data_service.BatchGetPlayerHomeZoneResponse
-	17, // 41: data_service.DataService.RemapHomeZoneForMerge:output_type -> data_service.RemapHomeZoneForMergeResponse
-	19, // 42: data_service.DataService.DeletePlayerData:output_type -> data_service.DeletePlayerDataResponse
-	21, // 43: data_service.DataService.CreatePlayerSnapshot:output_type -> data_service.CreatePlayerSnapshotResponse
-	24, // 44: data_service.DataService.ListPlayerSnapshots:output_type -> data_service.ListPlayerSnapshotsResponse
-	27, // 45: data_service.DataService.GetPlayerSnapshotDiff:output_type -> data_service.GetPlayerSnapshotDiffResponse
-	29, // 46: data_service.DataService.RollbackPlayer:output_type -> data_service.RollbackPlayerResponse
-	31, // 47: data_service.DataService.RollbackZone:output_type -> data_service.RollbackZoneResponse
-	33, // 48: data_service.DataService.RollbackAll:output_type -> data_service.RollbackAllResponse
-	36, // 49: data_service.DataService.BatchRecallItems:output_type -> data_service.BatchRecallItemsResponse
-	39, // 50: data_service.DataService.QueryTransactionLog:output_type -> data_service.QueryTransactionLogResponse
-	41, // 51: data_service.DataService.CreateEventSnapshot:output_type -> data_service.CreateEventSnapshotResponse
-	43, // 52: data_service.DataService.AllocateIdSegment:output_type -> data_service.AllocateIdSegmentResponse
-	45, // 53: data_service.DataService.ReservePlayerName:output_type -> data_service.ReservePlayerNameResponse
-	53, // 54: data_service.DataService.ReleasePlayerName:output_type -> google.protobuf.Empty
-	48, // 55: data_service.DataService.BatchGetPlayerName:output_type -> data_service.BatchGetPlayerNameResponse
-	34, // [34:56] is the sub-list for method output_type
-	12, // [12:34] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	28, // 8: data_service.RollbackPlayerResponse.guild_divergences:type_name -> data_service.RollbackGuildDivergence
+	28, // 9: data_service.RollbackZoneResponse.guild_divergences:type_name -> data_service.RollbackGuildDivergence
+	28, // 10: data_service.RollbackAllResponse.guild_divergences:type_name -> data_service.RollbackGuildDivergence
+	36, // 11: data_service.BatchRecallItemsResponse.results:type_name -> data_service.RecallResult
+	39, // 12: data_service.QueryTransactionLogResponse.rows:type_name -> data_service.TransactionLogRow
+	2,  // 13: data_service.CreateEventSnapshotRequest.event_type:type_name -> data_service.SnapshotEventType
+	55, // 14: data_service.BatchGetPlayerNameResponse.names:type_name -> data_service.BatchGetPlayerNameResponse.NamesEntry
+	56, // 15: data_service.GetPlayerAssetOpLedgerResponse.ledger:type_name -> PlayerAssetOpLedgerComp
+	3,  // 16: data_service.DataService.LoadPlayerData:input_type -> data_service.LoadPlayerDataRequest
+	5,  // 17: data_service.DataService.SavePlayerData:input_type -> data_service.SavePlayerDataRequest
+	7,  // 18: data_service.DataService.GetPlayerField:input_type -> data_service.GetPlayerFieldRequest
+	9,  // 19: data_service.DataService.SetPlayerField:input_type -> data_service.SetPlayerFieldRequest
+	11, // 20: data_service.DataService.RegisterPlayerZone:input_type -> data_service.RegisterPlayerZoneRequest
+	12, // 21: data_service.DataService.GetPlayerHomeZone:input_type -> data_service.GetPlayerHomeZoneRequest
+	14, // 22: data_service.DataService.BatchGetPlayerHomeZone:input_type -> data_service.BatchGetPlayerHomeZoneRequest
+	16, // 23: data_service.DataService.RemapHomeZoneForMerge:input_type -> data_service.RemapHomeZoneForMergeRequest
+	18, // 24: data_service.DataService.DeletePlayerData:input_type -> data_service.DeletePlayerDataRequest
+	20, // 25: data_service.DataService.CreatePlayerSnapshot:input_type -> data_service.CreatePlayerSnapshotRequest
+	22, // 26: data_service.DataService.ListPlayerSnapshots:input_type -> data_service.ListPlayerSnapshotsRequest
+	25, // 27: data_service.DataService.GetPlayerSnapshotDiff:input_type -> data_service.GetPlayerSnapshotDiffRequest
+	29, // 28: data_service.DataService.RollbackPlayer:input_type -> data_service.RollbackPlayerRequest
+	31, // 29: data_service.DataService.RollbackZone:input_type -> data_service.RollbackZoneRequest
+	33, // 30: data_service.DataService.RollbackAll:input_type -> data_service.RollbackAllRequest
+	35, // 31: data_service.DataService.BatchRecallItems:input_type -> data_service.BatchRecallItemsRequest
+	38, // 32: data_service.DataService.QueryTransactionLog:input_type -> data_service.QueryTransactionLogRequest
+	41, // 33: data_service.DataService.CreateEventSnapshot:input_type -> data_service.CreateEventSnapshotRequest
+	43, // 34: data_service.DataService.AllocateIdSegment:input_type -> data_service.AllocateIdSegmentRequest
+	45, // 35: data_service.DataService.ReservePlayerName:input_type -> data_service.ReservePlayerNameRequest
+	47, // 36: data_service.DataService.ReleasePlayerName:input_type -> data_service.ReleasePlayerNameRequest
+	48, // 37: data_service.DataService.BatchGetPlayerName:input_type -> data_service.BatchGetPlayerNameRequest
+	50, // 38: data_service.DataService.GetPlayerAssetOpLedger:input_type -> data_service.GetPlayerAssetOpLedgerRequest
+	4,  // 39: data_service.DataService.LoadPlayerData:output_type -> data_service.LoadPlayerDataResponse
+	6,  // 40: data_service.DataService.SavePlayerData:output_type -> data_service.SavePlayerDataResponse
+	8,  // 41: data_service.DataService.GetPlayerField:output_type -> data_service.GetPlayerFieldResponse
+	10, // 42: data_service.DataService.SetPlayerField:output_type -> data_service.SetPlayerFieldResponse
+	57, // 43: data_service.DataService.RegisterPlayerZone:output_type -> google.protobuf.Empty
+	13, // 44: data_service.DataService.GetPlayerHomeZone:output_type -> data_service.GetPlayerHomeZoneResponse
+	15, // 45: data_service.DataService.BatchGetPlayerHomeZone:output_type -> data_service.BatchGetPlayerHomeZoneResponse
+	17, // 46: data_service.DataService.RemapHomeZoneForMerge:output_type -> data_service.RemapHomeZoneForMergeResponse
+	19, // 47: data_service.DataService.DeletePlayerData:output_type -> data_service.DeletePlayerDataResponse
+	21, // 48: data_service.DataService.CreatePlayerSnapshot:output_type -> data_service.CreatePlayerSnapshotResponse
+	24, // 49: data_service.DataService.ListPlayerSnapshots:output_type -> data_service.ListPlayerSnapshotsResponse
+	27, // 50: data_service.DataService.GetPlayerSnapshotDiff:output_type -> data_service.GetPlayerSnapshotDiffResponse
+	30, // 51: data_service.DataService.RollbackPlayer:output_type -> data_service.RollbackPlayerResponse
+	32, // 52: data_service.DataService.RollbackZone:output_type -> data_service.RollbackZoneResponse
+	34, // 53: data_service.DataService.RollbackAll:output_type -> data_service.RollbackAllResponse
+	37, // 54: data_service.DataService.BatchRecallItems:output_type -> data_service.BatchRecallItemsResponse
+	40, // 55: data_service.DataService.QueryTransactionLog:output_type -> data_service.QueryTransactionLogResponse
+	42, // 56: data_service.DataService.CreateEventSnapshot:output_type -> data_service.CreateEventSnapshotResponse
+	44, // 57: data_service.DataService.AllocateIdSegment:output_type -> data_service.AllocateIdSegmentResponse
+	46, // 58: data_service.DataService.ReservePlayerName:output_type -> data_service.ReservePlayerNameResponse
+	57, // 59: data_service.DataService.ReleasePlayerName:output_type -> google.protobuf.Empty
+	49, // 60: data_service.DataService.BatchGetPlayerName:output_type -> data_service.BatchGetPlayerNameResponse
+	51, // 61: data_service.DataService.GetPlayerAssetOpLedger:output_type -> data_service.GetPlayerAssetOpLedgerResponse
+	39, // [39:62] is the sub-list for method output_type
+	16, // [16:39] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_proto_data_service_data_service_proto_init() }
@@ -3632,7 +3972,7 @@ func file_proto_data_service_data_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_data_service_data_service_proto_rawDesc), len(file_proto_data_service_data_service_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   50,
+			NumMessages:   53,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

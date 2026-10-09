@@ -186,6 +186,120 @@ func (GuildDailyCounterKind) EnumDescriptor() ([]byte, []int) {
 	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{2}
 }
 
+// 一局历练在 guild 侧的状态。SETTLED 是唯一的终态,也是结算的幂等闸门。
+type GuildTrialBattleState int32
+
+const (
+	GuildTrialBattleState_GUILD_TRIAL_BATTLE_STATE_UNSPECIFIED GuildTrialBattleState = 0
+	GuildTrialBattleState_GUILD_TRIAL_BATTLE_STATE_STARTED     GuildTrialBattleState = 1 // 已开战、未结算
+	GuildTrialBattleState_GUILD_TRIAL_BATTLE_STATE_SETTLED     GuildTrialBattleState = 2 // 已结算(终态;重复的结果事件到这里即止)
+	GuildTrialBattleState_GUILD_TRIAL_BATTLE_STATE_EXPIRED     GuildTrialBattleState = 3 // 巡检判定长时间无结果(gather 失败 / 战斗作废);不是终态,迟到的结果仍可把它结算成 SETTLED
+)
+
+// Enum value maps for GuildTrialBattleState.
+var (
+	GuildTrialBattleState_name = map[int32]string{
+		0: "GUILD_TRIAL_BATTLE_STATE_UNSPECIFIED",
+		1: "GUILD_TRIAL_BATTLE_STATE_STARTED",
+		2: "GUILD_TRIAL_BATTLE_STATE_SETTLED",
+		3: "GUILD_TRIAL_BATTLE_STATE_EXPIRED",
+	}
+	GuildTrialBattleState_value = map[string]int32{
+		"GUILD_TRIAL_BATTLE_STATE_UNSPECIFIED": 0,
+		"GUILD_TRIAL_BATTLE_STATE_STARTED":     1,
+		"GUILD_TRIAL_BATTLE_STATE_SETTLED":     2,
+		"GUILD_TRIAL_BATTLE_STATE_EXPIRED":     3,
+	}
+)
+
+func (x GuildTrialBattleState) Enum() *GuildTrialBattleState {
+	p := new(GuildTrialBattleState)
+	*p = x
+	return p
+}
+
+func (x GuildTrialBattleState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GuildTrialBattleState) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_guild_guild_db_proto_enumTypes[3].Descriptor()
+}
+
+func (GuildTrialBattleState) Type() protoreflect.EnumType {
+	return &file_proto_guild_guild_db_proto_enumTypes[3]
+}
+
+func (x GuildTrialBattleState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GuildTrialBattleState.Descriptor instead.
+func (GuildTrialBattleState) EnumDescriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{3}
+}
+
+// 结算结论,只在 state = SETTLED 时有意义(其余状态恒为 UNSPECIFIED)。
+type GuildTrialSettleResult int32
+
+const (
+	GuildTrialSettleResult_GUILD_TRIAL_SETTLE_RESULT_UNSPECIFIED GuildTrialSettleResult = 0
+	GuildTrialSettleResult_GUILD_TRIAL_SETTLE_RESULT_WIN         GuildTrialSettleResult = 1
+	GuildTrialSettleResult_GUILD_TRIAL_SETTLE_RESULT_LOSS        GuildTrialSettleResult = 2 // 失败 / 平局
+	// 保留值,当前代码不写入:历练行只在持有该帮 guild 行锁时才写(见 GuildTrialBattleRecord 注释),帮会已解散就什么都不落,
+	// 结果只进日志与指标 guild_trial_result_total{result="guild_gone"}。数值留着是为了日后要落审计时不必改号。
+	GuildTrialSettleResult_GUILD_TRIAL_SETTLE_RESULT_GUILD_GONE     GuildTrialSettleResult = 3
+	GuildTrialSettleResult_GUILD_TRIAL_SETTLE_RESULT_CONFIG_MISSING GuildTrialSettleResult = 4 // 活动行被删或类型不符,不发奖
+	GuildTrialSettleResult_GUILD_TRIAL_SETTLE_RESULT_POISON         GuildTrialSettleResult = 5 // 确定性失败(溢出 / 奖励包构建失败 / 结果过旧),不发奖,转人工审计与补发
+)
+
+// Enum value maps for GuildTrialSettleResult.
+var (
+	GuildTrialSettleResult_name = map[int32]string{
+		0: "GUILD_TRIAL_SETTLE_RESULT_UNSPECIFIED",
+		1: "GUILD_TRIAL_SETTLE_RESULT_WIN",
+		2: "GUILD_TRIAL_SETTLE_RESULT_LOSS",
+		3: "GUILD_TRIAL_SETTLE_RESULT_GUILD_GONE",
+		4: "GUILD_TRIAL_SETTLE_RESULT_CONFIG_MISSING",
+		5: "GUILD_TRIAL_SETTLE_RESULT_POISON",
+	}
+	GuildTrialSettleResult_value = map[string]int32{
+		"GUILD_TRIAL_SETTLE_RESULT_UNSPECIFIED":    0,
+		"GUILD_TRIAL_SETTLE_RESULT_WIN":            1,
+		"GUILD_TRIAL_SETTLE_RESULT_LOSS":           2,
+		"GUILD_TRIAL_SETTLE_RESULT_GUILD_GONE":     3,
+		"GUILD_TRIAL_SETTLE_RESULT_CONFIG_MISSING": 4,
+		"GUILD_TRIAL_SETTLE_RESULT_POISON":         5,
+	}
+)
+
+func (x GuildTrialSettleResult) Enum() *GuildTrialSettleResult {
+	p := new(GuildTrialSettleResult)
+	*p = x
+	return p
+}
+
+func (x GuildTrialSettleResult) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GuildTrialSettleResult) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_guild_guild_db_proto_enumTypes[4].Descriptor()
+}
+
+func (GuildTrialSettleResult) Type() protoreflect.EnumType {
+	return &file_proto_guild_guild_db_proto_enumTypes[4]
+}
+
+func (x GuildTrialSettleResult) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GuildTrialSettleResult.Descriptor instead.
+func (GuildTrialSettleResult) EnumDescriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{4}
+}
+
 type GuildRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	GuildId       uint64                 `protobuf:"varint,1,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`    // data_service 号段 biz_tag=guild
@@ -198,7 +312,7 @@ type GuildRecord struct {
 	ZoneId        uint32                 `protobuf:"varint,8,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`             // 帮会归属 zone;merge_zone 步骤 3 改写
 	Score         int64                  `protobuf:"varint,9,opt,name=score,proto3" json:"score,omitempty"`                             // 排行分权威副本;Redis ZSET 由 RebuildRanks 重建
 	Funds         uint64                 `protobuf:"varint,10,opt,name=funds,proto3" json:"funds,omitempty"`                            // 帮会资金;B1 恒为 0,B5 起写入
-	NameNorm      string                 `protobuf:"bytes,11,opt,name=name_norm,json=nameNorm,proto3" json:"name_norm,omitempty"`       // data.GuildNameNorm(name):NFKC → TrimSpace → 小写;≤ 48 rune(远小于 191 前缀)
+	NameNorm      string                 `protobuf:"bytes,11,opt,name=name_norm,json=nameNorm,proto3" json:"name_norm,omitempty"`       // data.GuildNameNorm(name):NFKC → TrimSpace → 小写;≤ 48 rune(远小于列长 VARCHAR(191),uk_guild 是整列索引)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1048,6 +1162,249 @@ func (x *GuildActivityProgressRecord) GetUpdatedMs() uint64 {
 	return 0
 }
 
+// 一局历练一行:开战时登记(STARTED),结果到达时结算(SETTLED),巡检器把长时间无结果的判为 EXPIRED。
+//
+// 锁序位置 9(guild_activity_progress 之后)。与 guild_activity_progress 同一条不变量:
+// **本表任一行的插入者 / 锁定者 / 写者,都先持有该行 guild_id 对应的 guild 行锁(FOR UPDATE)** ——
+// 登记、结算、毒消息标记、巡检判 EXPIRED、解散删在途行的第一把锁都是它;不持 guild 行锁的路径只许普通读。
+// 帮会已解散(guild 行不存在)时没有任何路径写本表:解散在同一事务里已删掉该帮全部 STARTED 行,
+// 剩下的 SETTLED / EXPIRED 行此后不可变,作历史保留(v1 不清理)。
+//
+// idx_guild_trial_battle_0 (guild_id, state):解散按"本帮 + STARTED"取候选(在途对局数有上界,与帮会历史长短无关);
+// idx_guild_trial_battle_1 (state, created_ms):巡检扫超时的 STARTED 行。
+// 06 §6.5 原写 idx_0 = (guild_id):解散改为只删在途行后补上 state 列,候选读才是索引内的范围读,不必回表过滤全部历史行。
+type GuildTrialBattleRecord struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	BattleId          uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`                     // match 发的雪花 id;与 BattleResultEvent.battle_id、SharedRedis 结果键同值
+	GuildId           uint64                 `protobuf:"varint,2,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`                        // 发起帮会;插入后不变(本表的守卫行就按它取)
+	ActivityId        uint32                 `protobuf:"varint,3,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"`               // GuildActivity.id
+	PeriodKey         uint32                 `protobuf:"varint,4,opt,name=period_key,json=periodKey,proto3" json:"period_key,omitempty"`                  // 开战时的游戏日键(个人每日次数记在这一天)
+	GuildPeriodKey    uint32                 `protobuf:"varint,5,opt,name=guild_period_key,json=guildPeriodKey,proto3" json:"guild_period_key,omitempty"` // 开战时的帮会期键(历练 = 游戏日键;每日计资金胜场上限记在这一期)
+	InitiatorPlayerId uint64                 `protobuf:"varint,6,opt,name=initiator_player_id,json=initiatorPlayerId,proto3" json:"initiator_player_id,omitempty"`
+	State             GuildTrialBattleState  `protobuf:"varint,7,opt,name=state,proto3,enum=guildpb.GuildTrialBattleState" json:"state,omitempty"`
+	SettleResult      GuildTrialSettleResult `protobuf:"varint,8,opt,name=settle_result,json=settleResult,proto3,enum=guildpb.GuildTrialSettleResult" json:"settle_result,omitempty"`
+	RewardedCount     uint32                 `protobuf:"varint,9,opt,name=rewarded_count,json=rewardedCount,proto3" json:"rewarded_count,omitempty"` // 得帮贡人数(审计)
+	CreatedMs         uint64                 `protobuf:"varint,10,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`            // 登记时刻;结算时补登记的行取对局结束时刻
+	SettledMs         uint64                 `protobuf:"varint,11,opt,name=settled_ms,json=settledMs,proto3" json:"settled_ms,omitempty"`            // 进入 SETTLED / EXPIRED 的时刻;STARTED 为 0
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *GuildTrialBattleRecord) Reset() {
+	*x = GuildTrialBattleRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildTrialBattleRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildTrialBattleRecord) ProtoMessage() {}
+
+func (x *GuildTrialBattleRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildTrialBattleRecord.ProtoReflect.Descriptor instead.
+func (*GuildTrialBattleRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *GuildTrialBattleRecord) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *GuildTrialBattleRecord) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *GuildTrialBattleRecord) GetActivityId() uint32 {
+	if x != nil {
+		return x.ActivityId
+	}
+	return 0
+}
+
+func (x *GuildTrialBattleRecord) GetPeriodKey() uint32 {
+	if x != nil {
+		return x.PeriodKey
+	}
+	return 0
+}
+
+func (x *GuildTrialBattleRecord) GetGuildPeriodKey() uint32 {
+	if x != nil {
+		return x.GuildPeriodKey
+	}
+	return 0
+}
+
+func (x *GuildTrialBattleRecord) GetInitiatorPlayerId() uint64 {
+	if x != nil {
+		return x.InitiatorPlayerId
+	}
+	return 0
+}
+
+func (x *GuildTrialBattleRecord) GetState() GuildTrialBattleState {
+	if x != nil {
+		return x.State
+	}
+	return GuildTrialBattleState_GUILD_TRIAL_BATTLE_STATE_UNSPECIFIED
+}
+
+func (x *GuildTrialBattleRecord) GetSettleResult() GuildTrialSettleResult {
+	if x != nil {
+		return x.SettleResult
+	}
+	return GuildTrialSettleResult_GUILD_TRIAL_SETTLE_RESULT_UNSPECIFIED
+}
+
+func (x *GuildTrialBattleRecord) GetRewardedCount() uint32 {
+	if x != nil {
+		return x.RewardedCount
+	}
+	return 0
+}
+
+func (x *GuildTrialBattleRecord) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
+func (x *GuildTrialBattleRecord) GetSettledMs() uint64 {
+	if x != nil {
+		return x.SettledMs
+	}
+	return 0
+}
+
+// 历练结算时某位得奖者的 GUILD_CREDIT 流未决指令已满(assetop.ErrTooManyPending):物品先记在这里,
+// 由后台循环等窗口有空位再转成 guild_asset_op 行(同一事务里删本行)。**绝不跳过** —— 帮贡当场已发,物品只是晚到。
+//
+// 锁序位置 10(全序末尾)。行的写者:结算(插新行,位置 9 之后)、转换(持该玩家 GUILD_CREDIT 流的 seq 行 → 插指令行 → 点删本行)、
+// 诊断计数(自动提交,只改无索引列 attempts)。解散不删:物品属于玩家。
+// 有本行就一定有该玩家 GUILD_CREDIT 流的 seq 行(本行正是因为 seq 分配被守卫拒绝才产生的),转换不必再建 seq 行。
+//
+// idx_guild_trial_reward_owed_0 (created_ms):后台循环按先来后到翻页。
+type GuildTrialRewardOwedRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	BattleId      uint64                 `protobuf:"varint,2,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	GuildId       uint64                 `protobuf:"varint,3,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`          // 结算时的帮会;转入指令行的 guild_id,此外只作审计
+	ActivityId    uint32                 `protobuf:"varint,4,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"` // 转入指令行的 ref_id
+	PeriodKey     uint32                 `protobuf:"varint,5,opt,name=period_key,json=periodKey,proto3" json:"period_key,omitempty"`    // 转入指令行的 period_key(开战时的游戏日键,审计用)
+	Payload       []byte                 `protobuf:"bytes,6,opt,name=payload,proto3" json:"payload,omitempty"`                          // AssetBundle 序列化字节,原样转入指令行
+	Attempts      uint32                 `protobuf:"varint,7,opt,name=attempts,proto3" json:"attempts,omitempty"`                       // 因窗口仍满而跳过的轮数(诊断)
+	CreatedMs     uint64                 `protobuf:"varint,8,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`    // 追加区:从 9 起。
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GuildTrialRewardOwedRecord) Reset() {
+	*x = GuildTrialRewardOwedRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildTrialRewardOwedRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildTrialRewardOwedRecord) ProtoMessage() {}
+
+func (x *GuildTrialRewardOwedRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildTrialRewardOwedRecord.ProtoReflect.Descriptor instead.
+func (*GuildTrialRewardOwedRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *GuildTrialRewardOwedRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GuildTrialRewardOwedRecord) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *GuildTrialRewardOwedRecord) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *GuildTrialRewardOwedRecord) GetActivityId() uint32 {
+	if x != nil {
+		return x.ActivityId
+	}
+	return 0
+}
+
+func (x *GuildTrialRewardOwedRecord) GetPeriodKey() uint32 {
+	if x != nil {
+		return x.PeriodKey
+	}
+	return 0
+}
+
+func (x *GuildTrialRewardOwedRecord) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *GuildTrialRewardOwedRecord) GetAttempts() uint32 {
+	if x != nil {
+		return x.Attempts
+	}
+	return 0
+}
+
+func (x *GuildTrialRewardOwedRecord) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
 var File_proto_guild_guild_db_proto protoreflect.FileDescriptor
 
 const file_proto_guild_guild_db_proto_rawDesc = "" +
@@ -1151,7 +1508,37 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\x14threshold_reached_ms\x18\x05 \x01(\x04R\x12thresholdReachedMs\x12#\n" +
 	"\rfunds_granted\x18\x06 \x01(\rR\ffundsGranted\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\a \x01(\x04R\tupdatedMs:O\x8a\x92\xf4\x01\x17guild_activity_progress\x92\x92\xf4\x01\x1fguild_id,activity_id,period_key\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xf3\x01\n" +
+	"updated_ms\x18\a \x01(\x04R\tupdatedMs:O\x8a\x92\xf4\x01\x17guild_activity_progress\x92\x92\xf4\x01\x1fguild_id,activity_id,period_key\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xa5\x04\n" +
+	"\x16GuildTrialBattleRecord\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x19\n" +
+	"\bguild_id\x18\x02 \x01(\x04R\aguildId\x12\x1f\n" +
+	"\vactivity_id\x18\x03 \x01(\rR\n" +
+	"activityId\x12\x1d\n" +
+	"\n" +
+	"period_key\x18\x04 \x01(\rR\tperiodKey\x12(\n" +
+	"\x10guild_period_key\x18\x05 \x01(\rR\x0eguildPeriodKey\x12.\n" +
+	"\x13initiator_player_id\x18\x06 \x01(\x04R\x11initiatorPlayerId\x124\n" +
+	"\x05state\x18\a \x01(\x0e2\x1e.guildpb.GuildTrialBattleStateR\x05state\x12D\n" +
+	"\rsettle_result\x18\b \x01(\x0e2\x1f.guildpb.GuildTrialSettleResultR\fsettleResult\x12%\n" +
+	"\x0erewarded_count\x18\t \x01(\rR\rrewardedCount\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\n" +
+	" \x01(\x04R\tcreatedMs\x12\x1d\n" +
+	"\n" +
+	"settled_ms\x18\v \x01(\x04R\tsettledMs:X\x8a\x92\xf4\x01\x12guild_trial_battle\x92\x92\xf4\x01\tbattle_idڒ\xf4\x01\x1fguild_id,state;state,created_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xda\x02\n" +
+	"\x1aGuildTrialRewardOwedRecord\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1b\n" +
+	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\x12\x19\n" +
+	"\bguild_id\x18\x03 \x01(\x04R\aguildId\x12\x1f\n" +
+	"\vactivity_id\x18\x04 \x01(\rR\n" +
+	"activityId\x12\x1d\n" +
+	"\n" +
+	"period_key\x18\x05 \x01(\rR\tperiodKey\x12\x18\n" +
+	"\apayload\x18\x06 \x01(\fR\apayload\x12\x1a\n" +
+	"\battempts\x18\a \x01(\rR\battempts\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\b \x01(\x04R\tcreatedMs:R\x8a\x92\xf4\x01\x17guild_trial_reward_owed\x92\x92\xf4\x01\x13player_id,battle_idڒ\xf4\x01\n" +
+	"created_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xf3\x01\n" +
 	"\x12GuildAssetOpStatus\x12%\n" +
 	"!GUILD_ASSET_OP_STATUS_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dGUILD_ASSET_OP_STATUS_PENDING\x10\x01\x12!\n" +
@@ -1168,7 +1555,19 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"$GUILD_DAILY_COUNTER_KIND_UNSPECIFIED\x10\x00\x12#\n" +
 	"\x1fGUILD_DAILY_COUNTER_KIND_DONATE\x10\x01\x12!\n" +
 	"\x1dGUILD_DAILY_COUNTER_KIND_SHOP\x10\x02\x12%\n" +
-	"!GUILD_DAILY_COUNTER_KIND_ACTIVITY\x10\x03B\rZ\vproto/guildb\x06proto3"
+	"!GUILD_DAILY_COUNTER_KIND_ACTIVITY\x10\x03*\xb3\x01\n" +
+	"\x15GuildTrialBattleState\x12(\n" +
+	"$GUILD_TRIAL_BATTLE_STATE_UNSPECIFIED\x10\x00\x12$\n" +
+	" GUILD_TRIAL_BATTLE_STATE_STARTED\x10\x01\x12$\n" +
+	" GUILD_TRIAL_BATTLE_STATE_SETTLED\x10\x02\x12$\n" +
+	" GUILD_TRIAL_BATTLE_STATE_EXPIRED\x10\x03*\x88\x02\n" +
+	"\x16GuildTrialSettleResult\x12)\n" +
+	"%GUILD_TRIAL_SETTLE_RESULT_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dGUILD_TRIAL_SETTLE_RESULT_WIN\x10\x01\x12\"\n" +
+	"\x1eGUILD_TRIAL_SETTLE_RESULT_LOSS\x10\x02\x12(\n" +
+	"$GUILD_TRIAL_SETTLE_RESULT_GUILD_GONE\x10\x03\x12,\n" +
+	"(GUILD_TRIAL_SETTLE_RESULT_CONFIG_MISSING\x10\x04\x12$\n" +
+	" GUILD_TRIAL_SETTLE_RESULT_POISON\x10\x05B\rZ\vproto/guildb\x06proto3"
 
 var (
 	file_proto_guild_guild_db_proto_rawDescOnce sync.Once
@@ -1182,30 +1581,36 @@ func file_proto_guild_guild_db_proto_rawDescGZIP() []byte {
 	return file_proto_guild_guild_db_proto_rawDescData
 }
 
-var file_proto_guild_guild_db_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_guild_guild_db_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_proto_guild_guild_db_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_proto_guild_guild_db_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_proto_guild_guild_db_proto_goTypes = []any{
 	(GuildAssetOpStatus)(0),             // 0: guildpb.GuildAssetOpStatus
 	(GuildAssetOpKind)(0),               // 1: guildpb.GuildAssetOpKind
 	(GuildDailyCounterKind)(0),          // 2: guildpb.GuildDailyCounterKind
-	(*GuildRecord)(nil),                 // 3: guildpb.GuildRecord
-	(*GuildPlayerStateRecord)(nil),      // 4: guildpb.GuildPlayerStateRecord
-	(*GuildMemberRecord)(nil),           // 5: guildpb.GuildMemberRecord
-	(*GuildApplicationRecord)(nil),      // 6: guildpb.GuildApplicationRecord
-	(*GuildPlayerOpSeqRecord)(nil),      // 7: guildpb.GuildPlayerOpSeqRecord
-	(*GuildAssetOpRecord)(nil),          // 8: guildpb.GuildAssetOpRecord
-	(*GuildDailyCounterRecord)(nil),     // 9: guildpb.GuildDailyCounterRecord
-	(*GuildActivityProgressRecord)(nil), // 10: guildpb.GuildActivityProgressRecord
+	(GuildTrialBattleState)(0),          // 3: guildpb.GuildTrialBattleState
+	(GuildTrialSettleResult)(0),         // 4: guildpb.GuildTrialSettleResult
+	(*GuildRecord)(nil),                 // 5: guildpb.GuildRecord
+	(*GuildPlayerStateRecord)(nil),      // 6: guildpb.GuildPlayerStateRecord
+	(*GuildMemberRecord)(nil),           // 7: guildpb.GuildMemberRecord
+	(*GuildApplicationRecord)(nil),      // 8: guildpb.GuildApplicationRecord
+	(*GuildPlayerOpSeqRecord)(nil),      // 9: guildpb.GuildPlayerOpSeqRecord
+	(*GuildAssetOpRecord)(nil),          // 10: guildpb.GuildAssetOpRecord
+	(*GuildDailyCounterRecord)(nil),     // 11: guildpb.GuildDailyCounterRecord
+	(*GuildActivityProgressRecord)(nil), // 12: guildpb.GuildActivityProgressRecord
+	(*GuildTrialBattleRecord)(nil),      // 13: guildpb.GuildTrialBattleRecord
+	(*GuildTrialRewardOwedRecord)(nil),  // 14: guildpb.GuildTrialRewardOwedRecord
 }
 var file_proto_guild_guild_db_proto_depIdxs = []int32{
 	1, // 0: guildpb.GuildAssetOpRecord.kind:type_name -> guildpb.GuildAssetOpKind
 	0, // 1: guildpb.GuildAssetOpRecord.status:type_name -> guildpb.GuildAssetOpStatus
 	2, // 2: guildpb.GuildDailyCounterRecord.counter_kind:type_name -> guildpb.GuildDailyCounterKind
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	3, // 3: guildpb.GuildTrialBattleRecord.state:type_name -> guildpb.GuildTrialBattleState
+	4, // 4: guildpb.GuildTrialBattleRecord.settle_result:type_name -> guildpb.GuildTrialSettleResult
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_proto_guild_guild_db_proto_init() }
@@ -1218,8 +1623,8 @@ func file_proto_guild_guild_db_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_guild_guild_db_proto_rawDesc), len(file_proto_guild_guild_db_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   8,
+			NumEnums:      5,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -273,6 +273,59 @@ func (EBattleOutcome) EnumDescriptor() ([]byte, []int) {
 	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{3}
 }
 
+// ---- 活动对局上下文(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.17) ----
+// 流向:guild 组装 → match MatchInternal.StartActivityBattle 校验后原样放进 CreateBattleRequest.activity_context
+//
+//	→ battle 存进房间、结算时原样回显进 contracts.kafka.BattleResultEvent.activity_context → guild 消费结算。
+//
+// battle / scene 不解释其中任何业务字段(只看 kind 是否为 NONE 来决定是否走持久化结果通道,§6.19)。
+// 本段只在文件末尾追加(属性会话也在改本文件)。
+type EBattleActivityKind int32
+
+const (
+	EBattleActivityKind_BATTLE_ACTIVITY_KIND_NONE        EBattleActivityKind = 0 // 普通对局:不回显上下文,结果事件照旧只发一次
+	EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_TRIAL EBattleActivityKind = 1 // 帮会同道历练:go/guild 以消费组 guild-trial 消费 match-results 结算
+)
+
+// Enum value maps for EBattleActivityKind.
+var (
+	EBattleActivityKind_name = map[int32]string{
+		0: "BATTLE_ACTIVITY_KIND_NONE",
+		1: "BATTLE_ACTIVITY_KIND_GUILD_TRIAL",
+	}
+	EBattleActivityKind_value = map[string]int32{
+		"BATTLE_ACTIVITY_KIND_NONE":        0,
+		"BATTLE_ACTIVITY_KIND_GUILD_TRIAL": 1,
+	}
+)
+
+func (x EBattleActivityKind) Enum() *EBattleActivityKind {
+	p := new(EBattleActivityKind)
+	*p = x
+	return p
+}
+
+func (x EBattleActivityKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EBattleActivityKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_battle_battle_data_proto_enumTypes[4].Descriptor()
+}
+
+func (EBattleActivityKind) Type() protoreflect.EnumType {
+	return &file_proto_battle_battle_data_proto_enumTypes[4]
+}
+
+func (x EBattleActivityKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EBattleActivityKind.Descriptor instead.
+func (EBattleActivityKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{4}
+}
+
 // ---- 路由信息:battle 节点出站消息(Kafka)所需的全部定位数据,快照携带,battle 不查 etcd ----
 type BattleRouting struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -1548,6 +1601,90 @@ func (x *BattlePetSettlementData) GetIsDead() bool {
 	return false
 }
 
+type BattleActivityContext struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Kind              EBattleActivityKind    `protobuf:"varint,1,opt,name=kind,proto3,enum=EBattleActivityKind" json:"kind,omitempty"`                             // 非 NONE 才是活动对局;match 拒绝 NONE(INVALID_ARGUMENT)
+	GuildId           uint64                 `protobuf:"varint,2,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`                                 // 发起帮会(SnowFlake 17-bit 布局);guild 写、guild 读
+	ActivityId        uint32                 `protobuf:"varint,3,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"`                        // GuildActivity 表 id;guild 写、guild 读
+	PeriodKey         uint32                 `protobuf:"varint,4,opt,name=period_key,json=periodKey,proto3" json:"period_key,omitempty"`                           // 确认开战时的游戏日键 YYYYMMDD(gameday.DayKey,UTC+8 05:00 换日),用于个人每日次数
+	InitiatorPlayerId uint64                 `protobuf:"varint,5,opt,name=initiator_player_id,json=initiatorPlayerId,proto3" json:"initiator_player_id,omitempty"` // 发起人;match 校验它等于 StartActivityBattleRequest.member_player_ids[0]
+	GuildPeriodKey    uint32                 `protobuf:"varint,6,opt,name=guild_period_key,json=guildPeriodKey,proto3" json:"guild_period_key,omitempty"`          // 确认开战时的帮会期键(activity.GuildPeriodKey;历练即游戏日),用于每日计资金胜场上限
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *BattleActivityContext) Reset() {
+	*x = BattleActivityContext{}
+	mi := &file_proto_battle_battle_data_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattleActivityContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattleActivityContext) ProtoMessage() {}
+
+func (x *BattleActivityContext) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_data_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattleActivityContext.ProtoReflect.Descriptor instead.
+func (*BattleActivityContext) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *BattleActivityContext) GetKind() EBattleActivityKind {
+	if x != nil {
+		return x.Kind
+	}
+	return EBattleActivityKind_BATTLE_ACTIVITY_KIND_NONE
+}
+
+func (x *BattleActivityContext) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *BattleActivityContext) GetActivityId() uint32 {
+	if x != nil {
+		return x.ActivityId
+	}
+	return 0
+}
+
+func (x *BattleActivityContext) GetPeriodKey() uint32 {
+	if x != nil {
+		return x.PeriodKey
+	}
+	return 0
+}
+
+func (x *BattleActivityContext) GetInitiatorPlayerId() uint64 {
+	if x != nil {
+		return x.InitiatorPlayerId
+	}
+	return 0
+}
+
+func (x *BattleActivityContext) GetGuildPeriodKey() uint32 {
+	if x != nil {
+		return x.GuildPeriodKey
+	}
+	return 0
+}
+
 var File_proto_battle_battle_data_proto protoreflect.FileDescriptor
 
 const file_proto_battle_battle_data_proto_rawDesc = "" +
@@ -1695,7 +1832,16 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12\x16\n" +
 	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x12\n" +
 	"\x04mana\x18\x03 \x01(\x04R\x04mana\x12\x17\n" +
-	"\ais_dead\x18\x04 \x01(\bR\x06isDead*\x86\x01\n" +
+	"\ais_dead\x18\x04 \x01(\bR\x06isDead\"\xf6\x01\n" +
+	"\x15BattleActivityContext\x12(\n" +
+	"\x04kind\x18\x01 \x01(\x0e2\x14.eBattleActivityKindR\x04kind\x12\x19\n" +
+	"\bguild_id\x18\x02 \x01(\x04R\aguildId\x12\x1f\n" +
+	"\vactivity_id\x18\x03 \x01(\rR\n" +
+	"activityId\x12\x1d\n" +
+	"\n" +
+	"period_key\x18\x04 \x01(\rR\tperiodKey\x12.\n" +
+	"\x13initiator_player_id\x18\x05 \x01(\x04R\x11initiatorPlayerId\x12(\n" +
+	"\x10guild_period_key\x18\x06 \x01(\rR\x0eguildPeriodKey*\x86\x01\n" +
 	"\x10eBattleActorType\x12\x1a\n" +
 	"\x16BATTLE_ACTOR_TYPE_NONE\x10\x00\x12\x1c\n" +
 	"\x18BATTLE_ACTOR_TYPE_PLAYER\x10\x01\x12\x1d\n" +
@@ -1729,7 +1875,10 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x16BATTLE_OUTCOME_ONGOING\x10\x00\x12\x1d\n" +
 	"\x19BATTLE_OUTCOME_SIDE_A_WIN\x10\x01\x12\x1d\n" +
 	"\x19BATTLE_OUTCOME_SIDE_B_WIN\x10\x02\x12\x17\n" +
-	"\x13BATTLE_OUTCOME_DRAW\x10\x03B\x0eZ\fproto/battleb\x06proto3"
+	"\x13BATTLE_OUTCOME_DRAW\x10\x03*Z\n" +
+	"\x13eBattleActivityKind\x12\x1d\n" +
+	"\x19BATTLE_ACTIVITY_KIND_NONE\x10\x00\x12$\n" +
+	" BATTLE_ACTIVITY_KIND_GUILD_TRIAL\x10\x01B\x0eZ\fproto/battleb\x06proto3"
 
 var (
 	file_proto_battle_battle_data_proto_rawDescOnce sync.Once
@@ -1743,50 +1892,53 @@ func file_proto_battle_battle_data_proto_rawDescGZIP() []byte {
 	return file_proto_battle_battle_data_proto_rawDescData
 }
 
-var file_proto_battle_battle_data_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_proto_battle_battle_data_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_proto_battle_battle_data_proto_goTypes = []any{
 	(EBattleActorType)(0),                // 0: eBattleActorType
 	(EBattleActionType)(0),               // 1: eBattleActionType
 	(EBattleEventType)(0),                // 2: eBattleEventType
 	(EBattleOutcome)(0),                  // 3: eBattleOutcome
-	(*BattleRouting)(nil),                // 4: BattleRouting
-	(*BattleBuffEntry)(nil),              // 5: BattleBuffEntry
-	(*BattleItemEntry)(nil),              // 6: BattleItemEntry
-	(*BattlePlayerSnapshot)(nil),         // 7: BattlePlayerSnapshot
-	(*BattlePetSnapshot)(nil),            // 8: BattlePetSnapshot
-	(*BattleActorState)(nil),             // 9: BattleActorState
-	(*BattleAction)(nil),                 // 10: BattleAction
-	(*BattleEventItem)(nil),              // 11: BattleEventItem
-	(*BattleMonsterDefeat)(nil),          // 12: BattleMonsterDefeat
-	(*BattleSettlementData)(nil),         // 13: BattleSettlementData
-	(*BattlePetSettlementData)(nil),      // 14: BattlePetSettlementData
-	nil,                                  // 15: BattleActorState.SkillCooldownRoundsEntry
-	(*component.BaseAttributesComp)(nil), // 16: BaseAttributesComp
+	(EBattleActivityKind)(0),             // 4: eBattleActivityKind
+	(*BattleRouting)(nil),                // 5: BattleRouting
+	(*BattleBuffEntry)(nil),              // 6: BattleBuffEntry
+	(*BattleItemEntry)(nil),              // 7: BattleItemEntry
+	(*BattlePlayerSnapshot)(nil),         // 8: BattlePlayerSnapshot
+	(*BattlePetSnapshot)(nil),            // 9: BattlePetSnapshot
+	(*BattleActorState)(nil),             // 10: BattleActorState
+	(*BattleAction)(nil),                 // 11: BattleAction
+	(*BattleEventItem)(nil),              // 12: BattleEventItem
+	(*BattleMonsterDefeat)(nil),          // 13: BattleMonsterDefeat
+	(*BattleSettlementData)(nil),         // 14: BattleSettlementData
+	(*BattlePetSettlementData)(nil),      // 15: BattlePetSettlementData
+	(*BattleActivityContext)(nil),        // 16: BattleActivityContext
+	nil,                                  // 17: BattleActorState.SkillCooldownRoundsEntry
+	(*component.BaseAttributesComp)(nil), // 18: BaseAttributesComp
 }
 var file_proto_battle_battle_data_proto_depIdxs = []int32{
-	16, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
-	5,  // 1: BattlePlayerSnapshot.buffs:type_name -> BattleBuffEntry
-	6,  // 2: BattlePlayerSnapshot.items:type_name -> BattleItemEntry
-	4,  // 3: BattlePlayerSnapshot.routing:type_name -> BattleRouting
-	8,  // 4: BattlePlayerSnapshot.pets:type_name -> BattlePetSnapshot
-	16, // 5: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
+	18, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
+	6,  // 1: BattlePlayerSnapshot.buffs:type_name -> BattleBuffEntry
+	7,  // 2: BattlePlayerSnapshot.items:type_name -> BattleItemEntry
+	5,  // 3: BattlePlayerSnapshot.routing:type_name -> BattleRouting
+	9,  // 4: BattlePlayerSnapshot.pets:type_name -> BattlePetSnapshot
+	18, // 5: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
 	0,  // 6: BattleActorState.actor_type:type_name -> eBattleActorType
-	16, // 7: BattleActorState.attributes:type_name -> BaseAttributesComp
-	5,  // 8: BattleActorState.buffs:type_name -> BattleBuffEntry
-	15, // 9: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
+	18, // 7: BattleActorState.attributes:type_name -> BaseAttributesComp
+	6,  // 8: BattleActorState.buffs:type_name -> BattleBuffEntry
+	17, // 9: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
 	1,  // 10: BattleAction.action_type:type_name -> eBattleActionType
 	2,  // 11: BattleEventItem.event_type:type_name -> eBattleEventType
 	3,  // 12: BattleSettlementData.outcome:type_name -> eBattleOutcome
-	6,  // 13: BattleSettlementData.items_consumed:type_name -> BattleItemEntry
-	6,  // 14: BattleSettlementData.items_gained:type_name -> BattleItemEntry
-	14, // 15: BattleSettlementData.pets:type_name -> BattlePetSettlementData
-	12, // 16: BattleSettlementData.defeated_monsters:type_name -> BattleMonsterDefeat
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	7,  // 13: BattleSettlementData.items_consumed:type_name -> BattleItemEntry
+	7,  // 14: BattleSettlementData.items_gained:type_name -> BattleItemEntry
+	15, // 15: BattleSettlementData.pets:type_name -> BattlePetSettlementData
+	13, // 16: BattleSettlementData.defeated_monsters:type_name -> BattleMonsterDefeat
+	4,  // 17: BattleActivityContext.kind:type_name -> eBattleActivityKind
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_battle_data_proto_init() }
@@ -1799,8 +1951,8 @@ func file_proto_battle_battle_data_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_battle_battle_data_proto_rawDesc), len(file_proto_battle_battle_data_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   12,
+			NumEnums:      5,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

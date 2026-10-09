@@ -177,7 +177,8 @@ func TestGetPlayerAssetOpLedger_FailureRowsNeverReportAbsent(t *testing.T) {
 		assert.False(t, found)
 
 		// 有映射但该 zone 没配 Redis 集群,同样是"路由不到"。
-		require.NoError(t, r.RegisterPlayerZone(context.Background(), ledgerTestPlayerID, 7))
+		// storageID = 0:不钉落点(与同包 setupPlayer 一致);本用例只要"有映射、zone 未配 Redis"。
+		require.NoError(t, r.RegisterPlayerZone(context.Background(), ledgerTestPlayerID, 7, 0))
 		_, found, err = GetPlayerAssetOpLedger(context.Background(), svcCtx, ledgerTestPlayerID)
 		assert.Equal(t, codes.Unavailable, status.Code(err), "zone 未配置: err=%v", err)
 		assert.False(t, found)

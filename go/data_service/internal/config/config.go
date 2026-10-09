@@ -107,10 +107,24 @@ type Config struct {
 	GuildClockSkewMarginMs int64 `json:",default=300000"`
 
 	// GuildCheckBudgetSeconds:帮会检查阶段(沉降等待之后、第一笔写之前)的总预算,单调时钟。
-	// **只罩检查阶段**,不罩写阶段,也不罩写后复查(那段有自己的常量预算)。耗尽 = CheckFailed、零写入,
+	// **只罩检查阶段**,不罩写阶段。耗尽 = CheckFailed、零写入,
 	// 不重试:重试只会把"guild 正在抖"伪装成"慢"。玩家很多的全服回档检查不完时调大它,并同步调大
 	// yaml 里对应方法的 MethodTimeouts。
+	// 写后复查的预算跟着它走(GuildRecheckBudget):复查与检查走同一套分块翻页、范围约等于全部写过的玩家,
+	// 所以这里每调大 1 秒,MethodTimeouts 要调大 2 秒。
 	GuildCheckBudgetSeconds int64 `json:",default=120"`
+}
+
+// GuildRecheckBudget:写后复查调用本身的预算(不含复查前的等待)= max(MinGuildRecheckBudgetSeconds, 检查预算)。
+// 不单独做成配置项:复查的工作量由检查阶段决定(同一个 checker、同样的玩家与 since),它的预算没有独立于检查预算的取值依据;
+// 两个旋钮只会被拧成不一致 —— 检查预算调大而复查仍是 120s 时,凡是"调大了才过得了闸"的回档,数据写完后复查必然超时,
+// 每次都误报紧急的 post_write_recheck_failed,真分歧反而查不出(2026-10-08 评审)。
+func (c Config) GuildRecheckBudget() time.Duration {
+	seconds := c.GuildCheckBudgetSeconds
+	if seconds < MinGuildRecheckBudgetSeconds {
+		seconds = MinGuildRecheckBudgetSeconds
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 // 回档帮会闸的配置边界(07 §7.2、§7.5.3-3)。
@@ -130,6 +144,10 @@ const (
 	// MaxGuildCheckBudgetSeconds:检查阶段总预算的上限。一小时仍检查不完的回档应当缩小范围分批做;
 	// 也防止把一个秒数误填成毫秒后 Duration 乘法溢出。
 	MaxGuildCheckBudgetSeconds int64 = 3600
+
+	// MinGuildRecheckBudgetSeconds:写后复查预算的下限(见 Config.GuildRecheckBudget)。检查预算被调得很小时
+	// 复查仍至少有这么久:数据已经写了,复查做不成的代价(紧急告警 + 人工核对)远大于多等两分钟。
+	MinGuildRecheckBudgetSeconds int64 = 120
 )
 
 // HasGuildInternalRpc:是否配置了回档帮会检查的 guild 客户端。只认 Endpoints / Target,

@@ -164,6 +164,8 @@ set(SOURCE_FILES
     contracts/kafka/match_event.pb.cc
     match/match_service.pb.cc
     match/match_service.grpc.pb.cc
+    match/match_internal.pb.cc
+    match/match_internal.grpc.pb.cc
     scene/player_activity.pb.cc
     scene/player_attribute.pb.cc
     scene/player_bag.pb.cc

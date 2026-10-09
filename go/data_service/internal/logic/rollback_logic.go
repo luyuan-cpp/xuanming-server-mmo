@@ -152,8 +152,7 @@ const (
 	// guildRecheckDelay:最后一笔写完到复查的等待(07 §7.7 处置二):> 投递 1800 + 落库 700 + Finalize 2000 ms,再留一倍。
 	guildRecheckDelay = 10 * time.Second
 
-	// guildRecheckBudget:复查调用本身的预算(不含等待)。与等待一起罩在脱钩 ctx 上。
-	guildRecheckBudget = 120 * time.Second
+	// 复查调用本身的预算(不含等待)不是这里的常量:它跟着检查预算走,见 config.Config.GuildRecheckBudget。
 
 	// maxDivergenceSample:响应里最多带多少条分歧样本(按 op_id 升序的前 N 条)。
 	maxDivergenceSample = 20
@@ -411,13 +410,14 @@ func runGuildGate(ctx context.Context, svcCtx *svc.ServiceContext, checker guild
 //
 // 用脱钩 ctx(07 §7.5.3-3,先例 shared/assetop 的 settleContext):写阶段可能远超调用方 deadline,调用方超时 / 断开后
 // 入口 ctx 已死,沿用它的话等待立即返回、复查必失败 → 每一次这样的回档都被误报成紧急的 post-write,真分歧反而查不出。
-// 数据已经写了,这一段必须跑完;它自带 guildRecheckDelay + guildRecheckBudget 的截止时间。
+// 数据已经写了,这一段必须跑完;它自带 guildRecheckDelay + Config.GuildRecheckBudget() 的截止时间。
+// 复查预算 = max(120s, 检查预算):复查重走检查阶段的分块翻页,范围约等于全部写过的玩家,检查花了多久它就要多久。
 //
 // 调用方传入的 plan 已收窄到走到写 Redis 那一步的玩家(guildPlan.onlyPlayers;各人的 since 与检查阶段相同)。
 // 再查一次,与检查阶段的 op_id 集合做差;不可证明玩家本身不算新分歧(检查阶段已放行过)。
 // 返回 ErrCodeOK,或 ErrCodeRollbackGuildDivergedAfterWrite + 新行(复查没做成时新行为 nil)。数据不自动撤销(Q3 = ①)。
 func recheckGuildAfterWrite(ctx context.Context, svcCtx *svc.ServiceContext, checker guildcheck.GuildDivergenceChecker, g guildGateRequest, plan guildPlan, before guildcheck.GuildCheckResult) (uint32, []guildcheck.GuildDivergence) {
-	postCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), guildRecheckDelay+guildRecheckBudget)
+	postCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), guildRecheckDelay+svcCtx.Config.GuildRecheckBudget())
 	defer cancel()
 
 	res, err := func() (guildcheck.GuildCheckResult, error) {

@@ -1111,7 +1111,7 @@ func TestRollbackGuildGate_D18_TimingAndContexts(t *testing.T) {
 		assert.NoError(t, checker.ctxErrs[1], "复查拿到的 ctx 在调用时未被取消")
 		deadline, ok := checker.ctxs[1].Deadline()
 		require.True(t, ok, "脱钩 ctx 必须自带截止时间")
-		assert.LessOrEqual(t, time.Until(deadline), guildRecheckDelay+guildRecheckBudget)
+		assert.LessOrEqual(t, time.Until(deadline), guildRecheckDelay+svcCtx.Config.GuildRecheckBudget())
 
 		last := len(snapshots.auditCtxErrs) - 1
 		assert.NoError(t, snapshots.auditCtxErrs[last], "RESULT 审计在脱钩 ctx 上写")
@@ -1137,6 +1137,26 @@ func TestRollbackGuildGate_D18_TimingAndContexts(t *testing.T) {
 		assert.Equal(t, constants.ErrCodeRollbackGuildDivergedAfterWrite, resp.ErrorCode)
 		assert.True(t, recheckHadDeadline, "复查必须在有截止时间的 ctx 上跑")
 		assert.Contains(t, logs.String(), "[Rollback][GuildDivergence] post-write recheck failed")
+	})
+
+	// (d) 复查预算跟着检查预算走:复查重走检查阶段的分块翻页,检查花了多久它就要多久。检查预算调大到 600s 而复查
+	// 仍是 120s 的话,凡是"调大了才过得了闸"的回档,数据写完后复查必然超时,每次都误报 post_write_recheck_failed。
+	t.Run("d 复查预算随检查预算放大", func(t *testing.T) {
+		const pid = 834
+		svcCtx, _, _ := newGateTestPlayer(t, pid)
+		checker := cleanGuildChecker()
+		enableGuildGate(svcCtx, checker)
+		svcCtx.Config.GuildCheckBudgetSeconds = 600
+
+		resp, err := RollbackPlayer(context.Background(), svcCtx, &RollbackPlayerReq{PlayerID: pid, SnapshotID: 1})
+		require.NoError(t, err)
+		require.Equal(t, constants.ErrCodeOK, resp.ErrorCode)
+		require.Len(t, checker.ctxs, 2, "检查一次、复查一次")
+		deadline, ok := checker.ctxs[1].Deadline()
+		require.True(t, ok)
+		left := time.Until(deadline)
+		assert.Greater(t, left, 500*time.Second, "复查预算不能停在 120s")
+		assert.LessOrEqual(t, left, guildRecheckDelay+600*time.Second)
 	})
 }
 

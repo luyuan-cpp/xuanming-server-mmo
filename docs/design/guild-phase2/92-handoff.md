@@ -866,6 +866,78 @@ xlsx 脚本 5 条(1 major:发号机制的注释写错;4 minor:幂等判定、核
 > - **出处**:`go/guild/internal/data/tables.go` 的 `Tables()` 注释;`activity_repo.go` 文件头的"取锁序列 / 为什么不成环",以及 `deleteGuildActivityProgress` 函数头。
 >   本条只登记现状,**没有改动任何事务的取锁顺序**。
 
+> **2026-10-08 落码修正(B6b-srv2 数据层:同道历练)**:第 1 条的表间全序末尾再接两张表,现为
+> `G < S < M < A < Q < O < C < P < T < W`(T = `guild_trial_battle`,位置 9;W = `guild_trial_reward_owed`,位置 10)。
+> 以下各点**全部来自静态推演**,没有一条经过真库运行,验收以 §12.4 落码修正末尾列的真库回归为准。
+>
+> **(1)"新插 O 行"例外没有采用。** B6a 在 `tables.go` 预先登记过历练结算"按 player_id 升序逐人 (Q → O)"的写法,
+> 它从第二人起是持着前一人新插的 O 行去锁下一人的 Q,要靠"本事务新插的 O 行在提交前没人拿得到"才不成环,并要求落码时在这里登记复核。
+> 落码时改成了**先按 player_id 升序锁完全部合格者的 Q,再逐人插 O**:结算严格守 `Q < O`,不依赖任何例外。
+> - 代价:每个得奖者多一次点锁往返(`AllocateSeq` 对已持有的 Q 行再 `FOR UPDATE` 一次,不是新的取锁位置),至多 5 人。
+> - 换来的:以后有人给 `guild_asset_op` 加锁定范围扫描、或按 `(player_id, stream)` 前缀锁行,结算不会因此成环。
+> - `tables.go` 里那条预登记已改写为"未采用";`activity_repo_static_test.go` 的 `TestTrialSeqGuardsLockedBeforeAnyOpInsert`
+>   钉住"锁 Q 的步骤里不出现任何碰 `guild_asset_op` 的调用"。要改回逐人写法,得先把那条例外重新论证并登记到这里。
+>
+> **(2)"登记过的例外"新增一条:T 只在持有该行 `guild_id` 对应的 G 行锁时插入 / 锁定 / 写,因此与 P 一样豁免第 6 条。**
+> T 的写者一共五类,第一把锁都是 G:登记(`RegisterTrialBattle`)、结算(`SettleTrialBattleTx`)、毒消息标记(`MarkTrialBattlePoison`)、
+> 巡检判过期(`ExpireTrialBattle`)、解散(`deleteGuildTrialBattles`)。
+> - **为什么能豁免**:同一帮的 T 行任何时刻只有一个持锁者在推进。TiDB 下插入 / 点改 / 点删在语句末尾并行锁 {行 key, PRIMARY key}
+>   没有第二个竞争者;同一 `battle_id` 的插入者至多一个在途,首插者回滚时没有排队者,不会出现第 4 条要消的那类
+>   "查重锁被继承成间隙锁、插入意向互挡"的 1213。有行时的写法仍是"完整主键点锁 → 完整主键点改"(不带复核条件,状态在锁内读回后在 Go 里判)。
+> - **顺带得到的**:持着 G 之后对 T 的**普通读**是权威的,所以结算把"已结算(重复事件)/ 属于别帮"放在事务开头用普通读判定,
+>   重复事件不必先把奖发一遍再回滚;锁定语句仍排在位置 9。06 §6.30"幂等检查放最后是锁序要求"只对**锁定语句**成立。
+> - **后续改代码必须守的约束**(违反任一条,豁免即失效):
+>   ① 只在已持有该行 `guild_id` 的 G 行锁(FOR UPDATE)的事务里插入、锁定或写 T;不持 G 的路径(视图、巡检候选读、
+>      以及 2026-10-08 评审修复加的**结算入口终态预读**)只许普通读。预读是结算开事务**之前**的一次自动提交读(`TrialBattle`),
+>      不取任何锁、不在任何事务里,所以不进 §12.4 的取锁序列;它只把"SETTLED 且归属相符"当结论(SETTLED 行不可变:
+>      五类写者没有一类会改或删它),读到别的状态一律不下结论,仍由持着 G 的普通读判。将来若新增会把 SETTLED 行改回别的状态的路径,要回头复核这条。
+>   ② 锁定语句只做完整主键 `battle_id` 等值点操作;按 `guild_id` / `state` 找行一律"普通读候选 → 主键升序逐行点操作"。
+>   ③ **帮会已解散(G 行不存在)时不写 T**。结算回 GuildGone、标记回 GuildGone、判过期回 false,都不落行。
+>      06 §6.30 的"单表补插 `SETTLED/GUILD_GONE`"与 §6.31 的"单表 upsert"作废:那是不持守卫的 upsert,
+>      消费者与巡检器同时处理同一局时,两条 `INSERT … ON DUPLICATE KEY UPDATE` 在 TiDB 上会各持 {行 key, PRIMARY key} 的一半。
+>      枚举值 `GUILD_TRIAL_SETTLE_RESULT_GUILD_GONE = 3` 保留但不写入。
+>   ④ 登记不是 06 §6.26 写的自动提交 upsert,而是"G FOR UPDATE → 普通读 → 缺行才插"的短事务(op=`trial_register`):
+>      否则它就是一个能与结算 / 标记同时插同一 `battle_id` 的无守卫插入者。
+>   ⑤ 将来给 T 做保留期清理(v1.1)时,活帮会的行照 ① 先锁 G;已解散帮会留下的行不再有任何写者,清理者之间用
+>      "逐行短事务:主键点锁 → 点删"彼此排队即可。
+> - **不在论证之内的输入**:同一 `battle_id` 的结果事件带着两个不同的 `guild_id`。上下文由 guild 自己发给 match、battle 原样回显,
+>   正常流程不会出现;真出现时后到者在普通读那一步判 ContextMismatch(不去锁别帮的行),并发下最坏是一次插入撞键报内部错误后重试收敛。
+>
+> **(3)解散只删本帮 STARTED(在途)的 T 行,不删历史行。** X-14 写的"删 `guild_trial_battle`"按此收窄(06 §6.41 I12 同步收窄)。
+> - **为什么必须删在途行**:帮会行一删,就再没有路径能写它们(约束 ①),会永远停在 STARTED,卡在巡检器
+>   `state = STARTED ORDER BY created_ms` 扫描的队头。
+> - **为什么不删全部**:v1 不清理 T,活跃的满员帮一天可新增上百行(一局一行,败局不消耗次数),历史行随帮会寿命线性增长;
+>   在解散事务(`txBudgetDisband` 2500ms)里逐行点删全部历史,老帮会每次都会超预算,永远解散不掉。在途行数有上界(一人同时至多在一局里)。
+> - 留下的 SETTLED / EXPIRED 行此后不可变、不在任何扫描里,只占存储。为了让候选读是索引内的范围读,
+>   `idx_guild_trial_battle_0` 定成了 `(guild_id, state)`(06 §6.5 原写 `(guild_id)`)。
+>
+> **(4)W 的写者与取锁。** 结算在全序末尾插新行;转换(`ConvertOwedReward`,op=`trial_owed`)的序列是
+> `Q(p, GUILD_CREDIT) FOR UPDATE(AllocateSeq)→ 插 O 新行 → W 完整主键点删`,第一把锁是 Q;诊断计数是自动提交、只改无索引列 `attempts`
+> 的单 key 写(与第 6 条里 Claim 的形状相同)。
+> - 转换**不建 seq 行**,所以不需要第 5 条的成员行守卫:W 行只会由结算在 seq 分配被拒时写下,那时该玩家本流的 seq 行已存在且永不删除。
+>   06 §6.32 第 2 步写的"事务外 `EnsureSeqRow`"作废(它正是第 5 条消掉的写法)。
+> - 同一 W 行的两个转换者先在 Q(p) 上串行,后到者点删影响 0 行即整体回滚。
+> - 持有全部合格者**本帮** M 行的结算,只可能在 Q(p, GUILD_CREDIT) 上等两类不经本帮成员行的事务:兑换被拒的终结(记给玩家旧帮的指令,
+>   `[M(旧帮,p)] → Q → op 点锁 → 退 SHOP 计数`;同帮的那种要先拿 M(本帮,p),排在结算后面)与转换。两者拿到 Q(p) 之后要的都不是结算
+>   持有的行(已提交的 op 行 / SHOP 计数行 / 已提交的 W 行),结算只会单向等待。捐献的退款分支锁的是 GUILD_DEBIT 流的 seq 行,没有交集。
+>
+> **(5)计数行:结算写的是历史周期键。** 第 7 条的清理短事务不持 seq 行,它与带上限 upsert 永不相遇靠的是"upsert 只写当前周期"。
+> 结算写的是**开战时**的游戏日键,不天然满足。`trialCounterPeriodWritable` 把前提补上:周期键必须严格晚于
+> `DayKey(now − minCounterCleanupAge + 1h)`,否则不发奖、回 `ErrActivityPoison`(确定性失败,走毒消息标记,人工补发)。
+> 会被它拦下的只有在 guild 这里滞留了约 7 天的结果 —— battle 的结果记录与 Kafka 本来也只留 7 天(06 §6.34 T11)。
+> 另:结算在**持有 Q 之后**才普通读各人的次数,所以正常运行下带上限 upsert 不会再判"达上限";06 §6.30 e 步的 `errRetryTx` 只剩兜底作用。
+>
+> **(6)已登记的风险。**
+> - `errRetryTx` 经 `inTx` 的重试通道走,每次都会让 `guild_tx_deadlock_total{op="trial_settle"}` 加 1(`txDeadlockObserved`)。
+>   它不是死锁,但 §12.8 的告警 `increase(guild_tx_deadlock_total[10m]) > 0` 分不出来。正常运行下不会触发(见第 5 点);
+>   真触发说明有路径绕过 seq 行守卫写了活动计数行,本来就该有人看。
+> - T 行 v1 不清理,全表只增不减;W 行在玩家长期不清背包时一直留着(`guild_trial_owed_rows` gauge 看得见)。
+> - 结算事务最重时(5 人、全员得奖、带物品)约 50–60 条主键点语句,走默认 1500ms 子预算,**未经测量**;上线前与解散一起用真库量 p99。
+>
+> **出处**:`go/guild/internal/data/tables.go` 的 `Tables()` 注释(T、W 两段);`activity_repo.go` 文件头"取锁序列"与"为什么不成环"第 7–11 条,
+> 以及 `deleteGuildTrialBattles`、`ConvertOwedReward`、`trialCounterPeriodWritable` 的函数头。
+> 本条**没有改动任何既有事务的取锁顺序**:解散只是在删 P 与删 G 之间插入一步,其余都是新增的事务。
+
 ### 12.3 本批未提交的文件(死锁修复,`9cef7b2ec` 之后)
 
 修改 14:`go/guild/guild.go`;`internal/data/` 的 `asset_store.go`、`economy_repo.go`、`guild_manage_repo.go`、`guild_repo.go`、`economy_repo_test.go`、`economy_lock_plan_mysql_test.go`、`guild_manage_repo_test.go`、`guild_repo_test.go`、`rank_zone_integration_test.go`;`internal/logic/` 的 `guild_logic.go`、`guild_manage_logic.go`、`economy_logic_test.go`、`economy_flow_integration_test.go`。
@@ -906,6 +978,40 @@ xlsx 脚本 5 条(1 major:发号机制的注释写错;4 minor:幂等判定、核
 > 
 > 上面"收敛检查"的结论出自 09-21,**不覆盖 P**。P 相关事务不成环的论证目前只有 `activity_repo.go` 文件头的静态推演(逐条对照 §12.2)。
 > 真库证据要等 §12.6 补的 `TestActivity` 并发回归跑出来,在那之前不能宣称 P 无死锁。本条没有改动任何既有事务的取锁顺序。
+
+> **2026-10-08 落码修正(B6b-srv2 数据层:同道历练)**:上表新增三行、改一行,序列照 `activity_repo.go` 文件头"取锁序列"抄录。
+>
+> | 事务 | 取锁序列 |
+> |---|---|
+> | 历练结算(op=`trial_settle`) | G FOR UPDATE → 闸门 → [T 普通读:判重复 / 判归属] → M(G,候选人↑)主键逐行点锁 → Q(合格者↑,GUILD_CREDIT):[缺行插 Q] → 守卫点锁,**先锁完全部 Q** → [C 普通读:定得奖名单] → O(得奖者↑ 插新行;AllocateSeq 再锁的是已持有的 Q)→ C(得奖者↑ 带上限 IODKU)→ P(G,活动,游戏日键)IODKU → P 点锁读回 → 再写已持有的 G.funds / P 胜场计数 / M 帮贡 → T(缺行插入;有行则主键点锁 → 点改)→ W(未决已满者↑ 插新行) |
+> | 历练登记 / 毒消息标记 / 巡检判过期(op=`trial_register` / `trial_mark`) | G FOR UPDATE → [T 普通读] → T 插新行,或主键点锁 → 完整主键点改 |
+> | 待入队物品转换(op=`trial_owed`) | Q(p,GUILD_CREDIT)FOR UPDATE(AllocateSeq)→ 插 O 新行 → W(p,battle_id)完整主键点删;诊断计数另走自动提交(只改无索引列) |
+> | 解散(改) | G → 闸门 → S(全员↑) → M(全员↑) → 删 M → A↑ → O↑ → P↑ 逐行点删 → **T↑(本帮 STARTED 行)逐行点删** → 删 G |
+>
+> 要点:
+> - 结算**不**用"逐人 (Q → O)":先锁完全部 Q 再插 O,严格守全序(§12.2 落码修正第 1 点)。不发奖的局(负 / 平 / 配表缺行)只走 `G → [T 普通读] → T`。
+> - **2026-10-08 评审修复没有改动上表任何一行**。结算入口新增的终态预读(06 §6.29 落码修正第 10 点)发生在 `SettleTrialBattleTx` 开事务之前,
+>   是不持锁的自动提交读:读到 SETTLED 就不再开事务(重复结果少一次 G 行锁),读到别的状态照旧走上面那一行序列。
+>   它不引入新的锁、不引入新的等待边,不成环的论证不变。
+> - 结算里 M / Q / O / C / W 的多行一律按 player_id 升序;候选由调用方给(team 0 − 逃跑,U2:含阵亡者),repo 去重排序。
+> - 帮会行不存在时,结算、标记、判过期都在第一步结束,不写任何表(§12.2 落码修正第 2 点 ③)。
+> - 解散删 T 这一步必须排在删 P 之后、删 G 之前,理由与删 P 相同:排到删申请或提前截止之前,就成了持着 T 回头取 A / O。
+>   它只删 STARTED 行(§12.2 落码修正第 3 点);`guild_trial_reward_owed` 不删。
+> - 源码次序由 `activity_repo_static_test.go` 的 `TestActivityLockOrderInSource`(不带 build tag,普通 `go test ./...` 必跑)钉住:
+>   先钉 `settleTrialBattle` 里各步骤的先后,再逐个钉步骤内部的语句先后;`DisbandGuild` 的次序表加了 `deleteGuildTrialBattles`。
+>
+> 上面"收敛检查"的结论出自 09-21,**不覆盖 P、T、W**。T / W 相关事务不成环的论证目前只有 `activity_repo.go` 文件头第 7–11 条的静态推演。
+> 真库证据要等下面这组并发回归跑出来(与 §12.6 第 5b 步同一套前提:独占实例、MySQL ≥ 8.0.29、`-p 1`、账号有 CREATE / DROP DATABASE 与 PROCESS 权限),
+> 在那之前不能宣称 T / W 无死锁:
+> ```
+> $env:GUILD_IT_MYSQL_DSN = "<账号>@tcp(127.0.0.1:3306)/"    # 口令不写进任何文件;库名被忽略
+> go test -tags=integration -p 1 -count=1 -v -run "TestActivityIT_Trial|TestActivityIT_DisbandDeletesStartedTrial" ./internal/data
+> ```
+> - 判死锁的四条并发用例(都比对 InnoDB 的 LATEST DETECTED DEADLOCK):`TestActivityIT_TrialConcurrentDuplicateSettlesOnce`(同一局 6 路结算)、
+>   `TestActivityIT_TrialConcurrentWithLanternAndShop`(结算 ‖ 点灯 ‖ 兑换预留,同帮同人)、`TestActivityIT_TrialConcurrentSettleVersusDisband`、
+>   `TestActivityIT_TrialConcurrentOwedConvert`(转换 ‖ 转换 ‖ 兑换预留)。通过标准同 5b:全部 PASS,**不许出现 SKIP**。
+> - **前置**:本批的 `proto/guild/guild_db.proto`(两表两枚举)已 proto-gen。否则 `go/proto/guild` 里没有 `GuildTrialBattleRecord` 等类型,包在编译阶段就失败。
+> - TiDB 上这些用例只能按概率撞;T 的"各持一半"类互等在 MySQL 上本来就不成环,所以 MySQL 全绿**不能**当作 TiDB 下的证据。
 
 ### 12.5 仍需用户 / 别的会话拍板或处理
 

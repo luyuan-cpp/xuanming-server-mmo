@@ -423,6 +423,12 @@ const (
 	// 启动期建全局插入守卫哨兵行(EnsureGlobalInsertGuard)的标签:它的 1213 / 9007 重试与 1205 单独计,
 	// 不混进任何请求路径的 label。
 	opInsertGuard = "insert_guard"
+
+	// B6b 追加:同道历练除结算(opTrialSettle)之外的三类写事务(activity_repo.go)。分开计的理由同 opDonate / opShop:
+	// 登记在开战 RPC 里、标记与转换在后台循环里,混进 trial_settle 一个 label,死锁 / 超预算指标就分不清是哪条路径在抢锁。
+	opTrialRegister = "trial_register" // 开战后登记对局行(G → 插 T)
+	opTrialMark     = "trial_mark"     // 毒消息标记、巡检判 EXPIRED(G → T 单行)
+	opTrialOwed     = "trial_owed"     // 待入队物品转成资产指令行(Q → 插 O → 删 W)
 )
 
 // ── 权限判定(§2.2,纯函数,事务内调用) ──────────────────────
@@ -2232,7 +2238,8 @@ func (r *GuildRepo) ReviewApplication(ctx context.Context, guildID, actorID, app
 // 事务边界:事务外先对普通读出的成员逐个建状态行;单事务 op=disband,锁序
 // guild → guild_player_state(全体成员,player_id 升序)→ guild_member(全体成员,主键升序逐行点锁,随即逐行删)→
 // guild_application(本帮的 + 成员们在别帮的,合并后主键升序逐行点删)→ guild_asset_op(提前截止)→
-// guild_activity_progress(B6a,本帮全部进度行主键升序逐行点删)→ guild(删行)。
+// guild_activity_progress(B6a,本帮全部进度行主键升序逐行点删)→ guild_trial_battle(B6b,本帮 STARTED 行主键升序逐行点删)
+// → guild(删行)。
 //   - 删成员行紧跟在锁成员行之后、排在删申请之前(与踢人 / 退帮同一顺序;原先是"删申请 → 提前截止 → 删成员"):
 //     删成员行要对 uk_guild_member 的项取 X,那是 guild_member 表上的新锁,放在申请表之后就违反表间全序(契约 P1)。
 //     具体的环:审批通过 / 建帮给玩家 p 插成员行时,若 p 刚离过帮(uk 上留着删除标记项),查重会对"它后面的第一条 uk 项"
@@ -2258,8 +2265,10 @@ func (r *GuildRepo) ReviewApplication(ctx context.Context, guildID, actorID, app
 // 输入约束:now 为服务进程时钟毫秒(> 0,由 logic 传入),用于建状态行与把全体成员在本帮的未决捐献截止时间提前到 now。
 // 错误语义:ErrGuildGone / ErrRankTooLow(logic 映射为 kGuildNotLeader)/ ErrZoneMerging / ErrWriteConflict。
 // 幂等:重放得到 ErrGuildGone。
-// 扩展点:B5(捐献提前截止,已落)、B6a(活动进度,已落)、B6b(历练战报,接在删进度之后)按表序插在提前截止之后、
+// 扩展点:B5(捐献提前截止,已落)、B6a(活动进度,已落)、B6b(历练对局行,已落,接在删进度之后)按表序插在提前截止之后、
 // 删帮会行之前(90-consistency X-14 原写"删申请之后、删成员之前",删成员已按上文前移,见交付说明)。
+// 历练对局行只删 STARTED(在途)的,已结算 / 已判过期的历史行留着:理由与"为什么必须删在途行"见 activity_repo.go 的
+// deleteGuildTrialBattles。待入队物品 guild_trial_reward_owed 不删(物品属于玩家,06 §6.14)。
 func (r *GuildRepo) DisbandGuild(ctx context.Context, guildID, actorID, now uint64, fence FenceFunc) (DisbandResult, error) {
 	// 事务外建状态行(规则 3:事务内只对已存在的行点锁)。这次读不加锁,只决定给谁建行;
 	// 帮会不存在时读到空集,照常进事务拿 ErrGuildGone。
@@ -2322,6 +2331,11 @@ func (r *GuildRepo) DisbandGuild(ctx context.Context, guildID, actorID, now uint
 		// 就成了持着 P 回头取 A / O,违反表间全序。普通读候选 → 主键升序逐行点删,理由与候选集完整性见 activity_repo.go。
 		// 计数行(按玩家)与 ACTIVITY_REWARD 指令行(物品属于玩家,解散后照常投递)都不删(06 §6.14)。
 		if err := deleteGuildActivityProgress(ctx, tx, guildID); err != nil {
+			return err
+		}
+		// B6b 历练对局行(X-14,锁序位置 9 = T):排在删进度(P)之后、删 guild 行之前,理由同上一步。
+		// 只删本帮 STARTED 行:帮会行一删,就再没有路径能写它们(T 的写者都先锁 guild 行),留着会一直卡在巡检器的扫描队头。
+		if err := deleteGuildTrialBattles(ctx, tx, guildID); err != nil {
 			return err
 		}
 		// 0 行 = 这一瞬间帮会已经被别的事务解散了(我们持有的行锁本该挡住,

@@ -44,15 +44,20 @@ import (
 //       统计退化本身在用例里复现不了,生产上只靠 InnoDB auto_recalc(默认开启,约 10% 的行变化后后台重算)。
 //       不要拿 GROUP_INDEX(friend PRIMARY) 之类的提示去"钉住"窗口:2026-09-28 实测它在统计新鲜时反而把窗口变成
 //       从索引开头的 type=index 全扫(5 万玩家 / 100 万边的库 pivot=1025000 读 521,607 次,不加提示 2,151 次)。
-//     - mutual(RecommendByMutual):外层行数由 friend 主键前缀给出(f1 我的好友 F ≤ MaxFriends → f2 好友的好友,
-//       FOF 行数 R ≤ MaxFriends²),STRAIGHT_JOIN 钉住"先 f1 后 f2";每个 FOF 行的排除判定是 ≤5 次完整主键单行点查
-//       (与 recommendAnchor 同一套 FORCE INDEX (PRIMARY) + SEMIJOIN(FIRSTMATCH))。单次调用 Handler 读
-//       ≤ 8R + 2F + 2 + limit(GROUP BY 临时表留在内存时成立;默认上限下 ≤ 320,422),与全服 pending 数、"拉黑我的人数"都无关。
-//       这个上界按 MaxFriends 的平方增长,所以 config.Validate 把 MaxFriends 硬封顶在 300(config 包 maxFriendsCeiling:
-//       ≤ 72 万次读,2026-09-29 实测 0.81–1.05 s)。
-//       2026-09-28 评审实测的旧写法(两条 OR 形 NOT EXISTS,被做成"每个 FOF 行扫一遍全服 pending")已于 2026-09-29 修掉,
-//       推导与新旧实测数字见 RecommendByMutual 的注释。
-//       与 recommendAnchor 不同,这条的"统计退化"风险已由 SQL 结构(STRAIGHT_JOIN)消掉,不是剩余风险。
+//     - mutual(RecommendByMutual):分两段。内层派生表只碰 friend 表:f1(我的好友,F ≤ MaxFriends 行)STRAIGHT_JOIN f2
+//       (好友的好友,FOF 行数 R ≤ MaxFriends²)→ 按候选分组数出共同好友数 → 按"共同好友数降序、同数随机"取前
+//       RecommendAnchorWindow(W=1024)名(派生表里的 LIMIT 给出)。外层只对这 W 名做排除判定,每人 ≤5 次完整主键
+//       单行点查(与 recommendAnchor 同一套 FORCE INDEX (PRIMARY) + SEMIJOIN(FIRSTMATCH))。单次调用 Handler 读
+//       ≤ 3R + 6W + 3(GROUP BY 临时表留在内存时成立;默认上限下 ≤ 126,147),与全服 pending 数、"拉黑我的人数"都无关;
+//       其中会落到**候选自己**叶子页上的点查(b_in / r_in)≤ 2W 次,与 R 无关 —— 这一条封住的是排除表大于
+//       buffer pool 时的耗时。3R 那部分只读 friend 表、按 MaxFriends 的平方增长,所以 config.Validate 把 MaxFriends
+//       硬封顶在 300(config 包 maxFriendsCeiling)。
+//       沿革:2026-09-28 评审实测的最初写法(两条 OR 形 NOT EXISTS,被做成"每个 FOF 行扫一遍全服 pending")于 09-29 改成
+//       "每个 FOF 行五次主键点查"。那一版读数有界,但点查次数是 5R,其中 2R 次落在各候选自己的页上:排除表大于 buffer pool
+//       时单次调用 38–51 s(2026-10-08 实测)。同日改成现在的"先排名截窗口、再只对窗口内候选点查"。
+//       推导、前提与新旧实测数字见 RecommendByMutual 的注释。
+//       与 recommendAnchor 不同,这条在传统优化器下的"统计退化"风险已由 SQL 结构(STRAIGHT_JOIN + 派生表 LIMIT +
+//       五条排除上的 SEMIJOIN(FIRSTMATCH),三者缺一不可,见 RecommendByMutual 注释第 1 / 2 / 5 条)消掉。
 //     "有界索引区间 + LIMIT"本身**不**构成上界:2026-09-28 在 MySQL 26.7.0、5 万玩家 / 100 万好友边的库上实测,
 //     旧写法 `WHERE player_id >= ? ... GROUP BY player_id ORDER BY player_id LIMIT ?` 的 GROUP BY 去重落成临时表、
 //     OR 形 NOT EXISTS 被做成 hash antijoin,LIMIT 无法提前终止 —— 扫描量 = pivot 之后的全部玩家数
@@ -71,8 +76,10 @@ import (
 
 // RecommendCandidate 是一条推荐候选(SQL 侧结果行,由 logic 组装成 pb.RecommendEntry)。
 //
-// MutualFriends 是与查询者的共同好友数:mutual 策略的候选 > 0,random 兜底候选恒为 0。
-// 0 的含义是"没有共同好友",不是"未知" —— 客户端按它排序,不能拿它判断数据是否缺失。
+// MutualFriends 是与查询者的共同好友数:mutual 策略的候选 > 0,random 兜底候选恒填 0 —— 表示兜底那条查询没有去数
+// 共同好友,客户端按它排序,不能拿它判断数据是否缺失。通常兜底出来的人确实没有共同好友(有的话早被 mutual 召回了);
+// 例外是 mutual 的排名窗口被排除者占满的时候(见 RecommendByMutual):兜底可能挑到窗口之外、实际有共同好友的人,
+// 所以 0 不保证"没有共同好友"。要保住这层含义得在 logic 层给兜底结果补数一次共同好友,目前没有做。
 type RecommendCandidate struct {
 	CandidatePlayerID uint64
 	MutualFriends     uint32
@@ -101,91 +108,124 @@ func recommendExcludeClause(col string, exclude []uint64) (string, []any) {
 // RecommendByMutual 召回"好友的好友"(FOF):f1 是我的好友,f2.friend_player_id 是我好友的好友,
 // mutual 是共同好友数(同一个候选经几个 f1 可达)。
 //
-// 按共同好友数降序、同数随机(RAND()),取至多 limit 个。同数随机是为了让客户端"换一批"
+// 按共同好友数降序、同数随机,取至多 limit 个。同数随机是为了让客户端"换一批"
 // 在共同好友数扁平的图上也能换出人来,而不是每次都返回同一串 id。
 //
-// SQL(recommendByMutualBaseSQL)与 recommendAnchor 用同一套技法,每一处写法都是承重的,改之前先读完:
+// **只在排名前 RecommendAnchorWindow(W=1024)名里挑。** 窗口里被排除的人超过 W − limit 个时返回偏少(可能为空),
+// logic/recommend.go 会用 RecommendRandom 兜底补足。有配置上限的排除类(已是我的好友 / 我拉黑的 / 两个方向的 pending /
+// 调用方 exclude)合计不超过窗口预算(推导见 RecommendAnchorWindow,config 包有对账测试),所以偏少只可能来自没有配置
+// 上限的"拉黑了我的人"扎堆在排名头部、超出上限的历史行,或上限被调到超出预算。返回的候选永远满足全部排除条件、不重复;
+// 偏少只影响数量,外加一处显示上的副作用:此时兜底补进来的人可能是窗口之外的 FOF,他们的共同好友数显示为 0
+// (见 RecommendCandidate)。2026-10-08 逐库比对(按 (id, mutual)):候选不多于 W 时,结果与"不设窗口、对每个 FOF 行做排除"的
+// 09-29 版逐行相同(friend_explain_scratch 五个 me、测试夹具、对抗库);候选多于 W 时(3.7 万个合格候选的最坏库、
+// 3,601 个候选的聚簇库),新结果是旧结果的子集、共同好友数逐人相同,截断档之上各档的候选集合逐档相同。
 //
-//  1. **外层行数由 friend 主键前缀给出,STRAIGHT_JOIN 钉住"先 f1 后 f2"**。f1 是 `player_id = me` 的前缀 ref
+// SQL(recommendByMutualBaseSQL)的每一处写法都是承重的,改之前先读完:
+//
+//  1. **内层派生表只碰 friend 表,行数由主键前缀给出,STRAIGHT_JOIN 钉住"先 f1 后 f2"**。f1 是 `player_id = me` 的前缀 ref
 //     (F ≤ MaxFriends 行),f2 按 f1.friend_player_id 做前缀 ref(每个 f1 ≤ MaxFriends 行),FOF 行数 R ≤ MaxFriends²
 //     (默认 200×200 = 4 万;AcceptFriend 对双方都查 MaxFriends,单人出边数由它封顶,超出上限的历史行按实际行数算)。
+//     `f2.friend_player_id <> ?` 在内层就滤掉"候选是我自己"的那 F 行,不占窗口。
 //     STRAIGHT_JOIN 是承重的:持久统计陈旧时,优化器会把连接顺序翻成"f2 全索引扫描驱动 + f1 主键点查",读数随 friend
-//     表总行数增长。被估错的是 **f2 那一侧,不是 f1** —— f1 是 `player_id = 常量` 的前缀 ref,走 index dive,估得准。
-//     (i) 持久统计的 n_diff 还是 0(建表后关掉 STATS_AUTO_RECALC 再灌数、不 ANALYZE)时,按 f1.friend_player_id 做的
-//     f2 前缀 ref 每次都被估成整表行数(n_diff = 0 时 rec_per_key 取表行数),"先 f1 后 f2"的成本被放大 F 倍;
-//     (ii) 持久统计被重新读回、n_rows ≤ 1(上一种状态再 FLUSH TABLE 一次)时,则是 f2 的全索引扫描本身被估成约 1 行。
-//     2026-09-29 在 TestRecommendByMutual_JoinOrderSurvivesStaleStatistics 的夹具上逐条复核:前一种状态 EXPLAIN 为 f1 rows=30、
-//     f2 rows=1,318(= friend 整表),后一种为 f1 rows=30、f2 rows=1;两种状态下去掉 STRAIGHT_JOIN 都改由 f2 驱动
-//     (读 6,931 / 5,669 次,都越过该夹具的上界 5,362),加上后都是 4,739 次、计划与统计新鲜时相同。
-//     200×200 最坏库(116 万边)把三张表的持久统计冻结在 1 行时,不加 STRAIGHT_JOIN 读 1,529,004 次、约 1.0–2.4 s,
-//     加上后 319,002 次、约 0.37 s(与统计新鲜时相同)。
-//     这与 recommendAnchor 登记在案的"统计退化"剩余风险同源,但在这里可以用 SQL 结构消掉,所以消掉。
-//  2. **五条 NOT EXISTS 按方向拆开,每条都是完整主键等值**(f 我的好友 / b_out 我拉黑的 / b_in 拉黑我的 /
-//     r_out 我发出的 pending / r_in 发给我的 pending),与 recommendAnchor 第 4 条同理:旧写法
-//     `(a=me AND b=x) OR (a=x AND b=me)` 没有可用的完整主键,优化器只能去扫 per-me 甚至全服的集合。
-//     拆开逻辑等价:NOT EXISTS(A OR B) ≡ NOT EXISTS(A) AND NOT EXISTS(B);"已是好友"从 NOT IN 改成
-//     NOT EXISTS 也等价(两边的列都是 NOT NULL)。
-//  3. **SEMIJOIN(FIRSTMATCH) 是承重的,FORCE INDEX (PRIMARY) 是防线**,两者一起把每条排除钉成"每个 FOF 行一次主键
-//     单行点查"。2026-09-29 按 TestRecommendByMutual_ReadsBoundedByFOFRowsNotGlobalSets 的夹具逐行重建后实测(EXPLAIN FORMAT=TRADITIONAL):
-//     (a) 两个提示都不加:f / b_out / r_out / r_in 四条被物化(r_in 走 (to_player_id, status) 二级索引);
-//     (b) 只加 FORCE INDEX:f / b_out / r_out 三条被物化。统计新鲜时被物化的都是 per-me 的小集合(我的好友 / 我拉黑的 /
-//     我发出的申请 / 发给我的 pending),本夹具上读数没有越界 —— 但物化哪几条由统计决定:同一份数据换成陈旧统计(TestRecommendByMutual_JoinOrderSurvivesStaleStatistics
-//     的夹具),(a) 把 b_in("拉黑我的人",唯一没有配置上限的一类)也物化了,走 idx_blocked_player 读完 2 万个拉黑我的人,
-//     24,785 次读,越过该夹具的上界 5,362。
-//     (c) 只加 SEMIJOIN(FIRSTMATCH):新鲜 / 陈旧统计下计划都仍是逐行主键点查,只是 possible_keys 多出二级索引,没有实测到
-//     退化;f1 / f2 上的 FORCE INDEX (PRIMARY) 同样是防线(去掉后计划不变)。计划守卫用例用 possible_keys == PRIMARY 钉住它们。
-//     TiDB 不认 SEMIJOIN 提示(警告 8061 后忽略),认 STRAIGHT_JOIN。2026-09-29 在 v8.5.2 上用同形数据实测:f / b_out / r_out
-//     按 per-me 主键区间读(30 / 2 / 2 行)、b_in / r_in 走 IndexJoin 逐候选点查,没有去扫 2 万个拉黑我的人或全服 pending,
-//     结果与 MySQL 逐行相同;迁移时仍要按它自己的计划重新核对。
-//  4. **外层列一律写 f2.friend_player_id**:子查询里 friend / friend_block 也有 player_id / friend_player_id 列,
+//     表总行数增长。被估错的是 **f2 那一侧,不是 f1** —— f1 是 `player_id = 常量` 的前缀 ref,走 index dive,估得准;
+//     持久统计的 n_diff 还是 0(建表后关掉 STATS_AUTO_RECALC 再灌数、不 ANALYZE)时,按 f1.friend_player_id 做的 f2 前缀 ref
+//     每次都被估成整表行数。2026-10-08 在 TestRecommendByMutual_JoinOrderSurvivesStaleStatistics 的夹具上复核:去掉
+//     STRAIGHT_JOIN 后派生表改由 f2 驱动(type=index,把 friend 整表 1,318 行读一遍;limit = W 时 4,375 次读,保留时
+//     3,445 次)。夹具的 friend 表很小所以差距不大;09-29 在 116 万边的库上测过同一段连接,不加 STRAIGHT_JOIN 是
+//     1,529,004 次读。
+//  2. **派生表里的 LIMIT 就是"按候选点查"次数的上界本身**。带 LIMIT 的派生表不能合并进外层、外层条件也不会下推进去,
+//     优化器只能先把它物化成 ≤ W 行;外层的五条排除只对这 ≤ W 行做。去掉这个 LIMIT 就退回 09-29 版的代价:在排除表
+//     远大于 buffer pool 的库上实测(窗口饱和场景:39,800 个候选全部拉黑了 me;命中的那条排除排在外层第 k 层时每人
+//     做 k 次点查),去掉后 159,803 + k × 39,800 次读、约 4 万次页读、18–21 s(2026-10-01 测到 k=4 的 319,003,
+//     10-08 测到 k=3 的 279,203);保留时 121,027 + k × W 次读、约 1,000 次页读、0.5–0.7 s。
+//  3. **打散键 `RAND() AS shuffle` 在内层算一次并随窗口一起物化,外层按 `c.mutual DESC, c.shuffle` 排序**。内外用的是
+//     同一个值,所以"先截窗口、再排序"不会乱序;同数的候选每次调用进窗口的人与先后顺序都不同(2026-10-08 实测:40 人同分池
+//     连调 8 次是 8 种序列;3.98 万个同分候选的库连调 5 次,返回的 5×20 人两两不重叠)。
+//     外层**不能**写成 `ORDER BY c.mutual DESC, RAND()`:排序键不再是物化列,优化器就做不出"先排序、凑够 limit 即停",
+//     而是对窗口里全部 W 人做完点查再排序(2026-10-01 同一个大库:126,147 次读、约 2,000 次页读、约 1.1 s,
+//     对照 121,127 次、约 50 次页读、约 0.1 s)。结果仍然正确,只是每次都付最坏代价;
+//     TestRecommendByMutual_ExclusionLookupsBoundedByWindow 的第二条断言(3R + W + 3 + 5×limit)守这一点。
+//  4. **五条 NOT EXISTS 按方向拆开,每条都是完整主键等值**(f 我的好友 / b_out 我拉黑的 / b_in 拉黑我的 /
+//     r_out 我发出的 pending / r_in 发给我的 pending),与 recommendAnchor 第 4 条同理:`(a=me AND b=x) OR (a=x AND b=me)`
+//     没有可用的完整主键,优化器只能去扫 per-me 甚至全服的集合(2026-09-28 的最初缺陷)。拆开逻辑等价:
+//     NOT EXISTS(A OR B) ≡ NOT EXISTS(A) AND NOT EXISTS(B);"已是好友"从 NOT IN 改成 NOT EXISTS 也等价(列都是 NOT NULL)。
+//  5. **SEMIJOIN(FIRSTMATCH) 是承重的,FORCE INDEX (PRIMARY) 是防线**,两者一起把每条排除钉成"每个窗口内候选一次主键
+//     单行点查"。2026-10-08 在 TestRecommendByMutual_ReadsBoundedByFOFRowsNotGlobalSets 的夹具上逐项拆除(EXPLAIN FORMAT=TRADITIONAL):
+//     (a) 只去掉 SEMIJOIN 提示:统计新鲜时、以及 n_diff = 0 的陈旧统计下(第 1 条那种状态,也是 M2b 用例造出的状态),
+//     f / b_out / r_out 被物化(都是 per-me 的小集合;limit = 20 时读数 2,094,没越界)。真正的退化出现在另一种陈旧
+//     状态:持久统计里 n_rows = 0 被重新读回内存(对这几张表 FLUSH TABLES,或 mysqld 重启后;EXPLAIN 里 f2 rows = 1)——
+//     这时 b_in 被物化成 friend_block 主键全索引扫描、r_in 被物化成 friend_request 全表扫描,同一份数据 57,076 次读;
+//     (b) 两个提示都去掉:在"n_rows = 0 被重读"的状态下 b_in 走 idx_blocked_player 读完 2 万个拉黑我的人、r_out 走
+//     idx_status_updated 读完全服 pending,37,071 次读(n_diff = 0 的状态下只比 (a) 多物化一个 r_in,约 2,097 次);
+//     (c) 只去掉 FORCE INDEX(子查询上的,或 f1 / f2 上的):各种统计状态下计划都不变,只是 possible_keys 多出二级索引 ——
+//     没有实测到退化,留作防线,计划守卫用例用 possible_keys == PRIMARY 钉住。
+//     "n_rows = 0 被重读"的状态要 FLUSH TABLES 才造得出来,用例进不去;去掉提示在任何状态下都会出现 <subqueryN>,
+//     M2 / M2b 的计划断言因此能拦住"提示被删",但拦不住的是那种状态本身 —— 提示在,它就不成问题(带着两个提示实测:
+//     limit = 20 时 2,057 次,limit = W 时 3,443 次;上面 (a)(b) 的 57,076 / 37,071 是 limit = 20 的读数)。
+//  6. **外层列一律写派生表别名 `c.candidate_id`**:子查询里 friend / friend_block 也有 player_id / friend_player_id 列,
 //     裸列名会先解析到子查询自己的表上,排除静默失效(与 recommendAnchor 第 3 条同一个坑)。
 //
-// 上界(与全服 pending 数、"拉黑我的人数"、friend 表总行数都无关):设 F = 我的好友数、R = FOF 行数,
+// 上界(与全服 pending 数、"拉黑我的人数"、friend 表总行数都无关):设 F = 我的好友数、R = FOF 行数(含"候选是我自己"的
+// F 行)、D = 去重后的候选数(≤ R − F),
 //
-//	Handler 读 ≤ (1+F) f1 + (F+R) f2 + 5R 排除点查 + R 分组临时表定位 + (R+1) 临时表扫描 + limit 排序回读(实测 0)
-//	          = 8R + 2F + 2 + limit;默认上限下(F ≤ 200、R ≤ 40,000、limit ≤ 20)≤ 320,422,
+//	Handler 读 ≤ (1+F) f1 + (F+R) f2 + (R−F) 分组临时表定位 + (D+1) 分组临时表扫描 + (W+1) 物化窗口扫描 + 5W 排除点查
+//	          ≤ 3R + 6W + 3;默认上限下(R ≤ 40,000)≤ 126,147,MaxFriends 取天花板 300 时 ≤ 276,147。
 //
-// 外加 ≤ R 行的内存分组与 ORDER BY RAND() 的 top-limit 排序。嵌套循环反连接在某行命中第一条排除时就丢弃它,
-// 所以 5R 是一条都不命中时的值;f2 里"候选就是我自己"的 F 行被 `<> ?` 先滤掉,不做点查。
-// 式子里"分组临时表定位 + 临时表扫描"两项假定 GROUP BY 的临时表留在内存(TempTable 引擎,单表上限 tmp_table_size,
-// MySQL 默认 16 MiB)。候选分组多到放不下时临时表转存磁盘,读数越过这个式子(仍只随 R 增长,与全服集合无关):
-// 2026-09-29 实测约 16 万个分组仍在内存,约 22 万个已转存(Created_tmp_disk_tables = 1,Handler_read_rnd_next 近乎翻倍)。
+// 外层先把 ≤ W 行的窗口按 (mutual, shuffle) 在内存里排好,再逐人做嵌套循环反连接、凑够 limit 即停:limit = 20 且排名前 20
+// 都合格时只做 100 次点查;5W 是窗口里每个人都把五次点查做满时的值(窗口全被排在最后一层的那条排除掉)。
+// 外层的 filesort、exclude 的 NOT IN 与 limit 都不产生 Handler 读。式子里的 (R−F) 假定好友边双向成对(每个好友都有
+// 一条回到我的边,AcceptFriend / RemoveFriend 的不变量);存在单向的历史行时"候选是我自己"不足 F 行,
+// 上界放宽为 3R + 2F + 6W + 3(2026-10-08 评审用 40 条单向边实测,正好多 2F)。
 //
-// **单次推荐能否守住 RequestBudget(默认 Timeout 4000 − 500 = 3500 ms)只取决于 MaxFriends**:R 按它的平方增长,
-// RecommendMaxLimit 只贡献 +limit。所以 config.Validate 把 MaxFriends 硬封顶在 config 包的 maxFriendsCeiling = 300。
-// 2026-09-29 在最坏形状(每个好友的好友互不相同,R = F²;2 万人拉黑我、全服 15,250 条 pending;exclude 65 个、limit 20)
-// 上实测,本机同时有别的会话负载,约 1.1–1.6 µs/次读:
+// **读数有界不等于耗时有界** —— 耗时 ≈ 读数 × CPU + 随机页读 × IO。五条点查里 f / b_out / r_out 落在 me 自己的主键
+// 前缀上(几页,热的);b_in / r_in 落在**各候选自己**的叶子页上,这才是冷缓存下贵的部分。现在它们 ≤ 2W 次,
+// 内层读 friend 表是 F+1 段主键前缀范围读,所以单次调用的随机页读约为 F 段范围读 + ≤ 2W,与 R 无关。
+// 2026-10-08 实测(MySQL 26.7.0,innodb_buffer_pool_size = 128 MB,服务端预处理语句;读数是会话 Handler_read_* 增量,
+// 页读是 Innodb_buffer_pool_reads 增量。库:friend 约 291 万边 / friend_block 约 228 万行、780 MB / friend_request 约 271 万行、
+// 1.9 GB,后两张远大于 buffer pool;me 有 200 个好友、39,800 个互不相同的候选,R = 40,000;30 万人拉黑 me;
+// exclude 65 个、limit 20):
 //
-//	F=200:   319,002 次读,0.44–0.51 s         F=300:   718,502 次,0.81–1.05 s
-//	F=400: 1,278,002 次,1.39–1.68 s           F=470: 1,961,415 次,2.4–4.0 s(临时表已转存磁盘,越过 8R+2F+2+limit)
-//	F=600: 3,073,565 次,4.3–7.5 s(越过 3500 ms 预算)
+//	09-29 版(每个 FOF 行五次点查):318,957 次读,每次调用约 7.6 万次页读,38–51 s —— 超过 RPC 超时十倍
+//	现在:limit=20                 121,127 次读,约 40–140 次页读,0.09–0.12 s(挤出 buffer pool 后与热态相近)
+//	     窗口全被排除(39,800 个候选都拉黑了 me):121,027 + k × W 次读(k 是"拉黑了我"那条排除在外层的第几层;
+//	                                   实测过 k=3 的 124,099 与 k=4 的 125,123),约 950–1,290 次页读,0.47–0.73 s,返回空
+//	     limit=1024(窗口里每人做满点查):126,147 次读(= 上界),约 1,950–2,400 次页读,0.96–1.09 s
 //
-// 调大 maxFriendsCeiling 之前必须在目标库上重测这张表,并确认候选分组数仍装得进内存临时表。
+// 耗时与页读是本机数字,随同机负载与缓存状态浮动;读数只随五条排除在外层的先后变(优化器按代价排,见下)。
+// 其它库上"09-29 版 → 现在"的读数(limit=20,热):测试夹具(F=30、R=660)4,737 → 2,057;friend_explain_scratch
+// (5 万玩家 / 100 万边,F=20、R=400)1,928 → 1,063;另一个约 4 万 FOF 行的最坏库(排除表小、全在内存)约 31 万次(两次实测 309,687 / 311,907)→ 121,357 次;
+// 聚簇库(F=200、R=21,400、3,601 个候选)140,408 → 47,731。读数会随"窗口里排名靠前的人有几个被排除"小幅浮动
+// (5 万玩家对抗库同一个 me 连测 1,921 / 1,949),因为同数候选每次进窗口的人不同。
 //
-// 2026-09-28 评审在对抗库上实测旧写法(两条 OR 形 NOT EXISTS + 好友 NOT IN):friend_request 那条被做成"每个 FOF 行按
-// status=1 扫一遍全服 pending"、friend_block 那条被做成对"我拉黑的 + 拉黑我的"全集的 hash antijoin,9,215,314 次读、
-// 4.6–5.1 s,超过 RPC 超时。2026-09-29 修复后复测(MySQL 26.7.0,服务端预处理语句,读数是会话 Handler_read_* 增量;旧 → 新):
-//   - 按 TestRecommendByMutual_ReadsBoundedByFOFRowsNotGlobalSets 的夹具逐行重建(F=30、R=660;2 万人拉黑我,他们发给我的
-//     申请都已是终态;全服 15,002 条 pending):旧写法约 930 万次(统计新鲜 9,334,150、陈旧 9,335,651,评审另测到 9,085,699 ——
-//     随 pending 行在 idx_status_updated 里的位置与计划浮动)、3.4–4.8 s → 4,739 次、约 6 ms(上界 5,362);
-//   - 5 万玩家 / 100 万边的对抗库(按评审的造法:F=30、R=610;20,101 人拉黑我,其中 2 万人发给我的申请是终态;
-//     全服 15,250 条 pending):4,688,713 次、1.5–1.6 s → 2,654 次、约 4 ms(上界 4,962);那 2 万条终态申请加进去之前,
-//     旧写法走 index_merge + hash join,63,152 次 —— 要把"拉黑我的人"整个读一遍;
-//   - friend_explain_scratch(5 万玩家 / 100 万边,F=20、R=400;每人的拉黑 / 申请集合都很小):旧写法走 index_merge +
-//     hash join,1,003 次;新写法 2,472 次(上界 3,262),两者都在 2–7 ms —— 集合小的库上新写法读数反而多,换来的是上界;
-//   - 200×200 最坏库(R=40,000;全服 15,250 条 pending,2 万人拉黑我):旧写法读到约 1.25 亿次时被 60 s 的
-//     MAX_EXECUTION_TIME 中断;新写法 319,002 次(39,800 个候选互不相同)/ 279,401 次(200 个好友共用同一批 199 人),
-//     0.13–0.51 s。
+// 前提(都不满足时读数会越过上面的式子,但仍与全服集合无关,除非另有说明):
+//   - **GROUP BY 的临时表留在内存**(TempTable 引擎,单表上限 tmp_table_size,MySQL 默认 16 MiB)。式子里"分组临时表
+//     定位 + 扫描"两项依赖它。2026-10-08 实测(热缓存,耗时随同机负载浮动,两轮实测的区间一并列出):F=400
+//     (16 万个分组)仍在内存,481,127 次读、0.17–0.56 s;F=470(22 万个)转存磁盘(Created_tmp_disk_tables = 1),
+//     860,390 次读、0.67–0.77 s,比式子多约 19.7 万次(落盘那一刻内存里已有的分组各回读一次,与 R 无关);
+//     F=600 是 1,277,690 次、1.05–1.18 s。
+//   - **内层的 3R 按 MaxFriends 的平方增长**,RecommendMaxLimit 不进这个式子。所以 config.Validate 把 MaxFriends 硬封顶
+//     在 config 包的 maxFriendsCeiling = 300(F=300 实测 271,127 次读、0.10–0.21 s);调大之前必须在目标库上重测,并确认
+//     候选分组数仍装得进内存临时表。
+//   - **传统优化器**。STRAIGHT_JOIN 与 SEMIJOIN(FIRSTMATCH) 两个提示在 hypergraph_optimizer=on 时都不生效(MySQL 26.7.0
+//     默认 off)。2026-10-08 实测:打开后统计新鲜时仍然有界(测试夹具上是 per-me 的三个集合做 hash antijoin、
+//     b_in / r_in 逐候选点查,1,101 次读;上面那个大库上是五层逐候选主键点查,约 4.2 万次读);n_diff = 0 的陈旧统计下
+//     也还有界(测试夹具约 2,690 次);但在"n_rows = 0 被重新读回"的陈旧状态下(见第 5 条)退化成 friend /
+//     friend_block / friend_request 三表全扫(测试夹具 56,703 次读,随三张表的总行数增长)。部署不要打开 hypergraph 优化器。
+//   - TiDB 不认 SEMIJOIN 提示(警告 8061 后忽略),认 STRAIGHT_JOIN。2026-10-01 在 v8.5.2 上核对过结果语义
+//     (窗口饱和时返回空、打散键内外一致、同数换序);计划与读数要在迁移时按它自己的重新核对。
 //
-// 各库上新写法的全量结果(limit 放大到装得下全部候选)按 (mutual, id) 排序后,与旧写法、与"按五个 per-me 集合做差"的
-// 参照查询逐行相同;最坏库上旧写法跑不完,只与参照查询比对。
+// 沿革:2026-09-28 评审在对抗库上实测最初的写法(两条 OR 形 NOT EXISTS + 好友 NOT IN):friend_request 那条被做成
+// "每个 FOF 行按 status=1 扫一遍全服 pending",9,215,314 次读、4.6–5.1 s,超过 RPC 超时(测试夹具上约 930 万次)。
+// 09-29 改成"每个 FOF 行五次主键点查",读数 ≤ 8R + 2F + 2 + limit,不再随全服集合增长,但点查次数随 R 增长、
+// 冷缓存下守不住预算(见上表第一行)。2026-10-08 改成现在的写法。
 func (r *FriendRepo) RecommendByMutual(ctx context.Context, playerID uint64, exclude []uint64, limit uint32) ([]RecommendCandidate, error) {
 	query, args := recommendByMutualStatement(playerID, exclude, limit)
 	return r.scanRecommendCandidates(ctx, "mutual", playerID, query, args)
 }
 
-// recommendByMutualBaseSQL 是 RecommendByMutual 的主体;调用方 exclude 与 GROUP BY / ORDER BY / LIMIT 由
-// recommendByMutualStatement 拼在后面。每一处写法为什么不能动,见 RecommendByMutual 的注释。
+// recommendByMutualBaseSQL 是 RecommendByMutual 的主体(内层派生表:连接、分组、排名、截窗口;外层:五条排除);
+// 调用方 exclude 与外层的 ORDER BY / LIMIT 由 recommendByMutualStatement 拼在后面。每一处写法为什么不能动,
+// 见 RecommendByMutual 的注释。
 //
 // friend_request 的 status=1 是 pending(取值见 proto/friend/friend_table.proto)。这里把 1 直接写进 SQL 文本,
 // 而 friend_repo.go 的查询(loadPendingRequestsFromMySQL 等)是把 requestStatusPending 当参数传 —— 两种写法指的是
@@ -232,6 +272,10 @@ func recommendByMutualStatement(playerID uint64, exclude []uint64, limit uint32)
 // RecommendAnchorWindow 是 random 兜底一次最多检视的候选池玩家数:pivot 起按 player_id 升序的前 W 个去重 id。
 // recommendAnchor 的扫描上界由它给出(见 recommendAnchor 注释第 1 条与文件头第 2 条)。
 //
+// 2026-10-08 起 RecommendByMutual 共用同一个 W:它只对"共同好友数排名前 W"的候选做排除判定(见该函数注释第 2 条)。
+// 两条查询要排除的是同一批人,所以下面这份预算对它同样成立,而且更宽裕 —— mutual 在内层就滤掉了自己(不占窗口),
+// 也没有"mutual 已选中后追加进 exclude"那 19 个。名字里的 Anchor 是历史沿革,不单指 random。
+//
 // 取值 1024 的依据(与 etc/friend.yaml 的默认阈值对账):窗口里可能被"有配置上限的排除"占掉的去重 id 至多
 //
 //	自己 1 + MaxFriends 200 + MaxBlocks 200 + MaxPendingRequests 50 + MaxIncomingRequests 200
@@ -245,6 +289,7 @@ func recommendByMutualStatement(playerID uint64, exclude []uint64, limit uint32)
 // 一起 —— logic/recommend.go 的 RecommendFriends 里 mutual 每选中一人就追加一个 exclude,random 的 want 是
 // limit 减去已选中数,所以"mutual 已追加数 + want"恒等于 limit ≤ RecommendMaxLimit。可达组合的真实最大需求是
 // 1 + 200 + 200 + 50 + 200 + 64 + 20 = 735。按 754 算只会让 config 包那条对账测试比实际早 19 个名额变红,不会漏判。
+// MaxFriends 调到 config 包允许的天花板 300 时,同一算法是 854,仍在 1024 之内。
 //
 // 代价随 W 线性,但系数取决于派生表生产窗口时选了哪种计划 —— 由采样统计决定,同一份数据上两种都会出现:
 //   - 跳跃扫描(EXPLAIN ANALYZE 显示 Covering index skip scan for deduplication):窗口生产 W+2 次读

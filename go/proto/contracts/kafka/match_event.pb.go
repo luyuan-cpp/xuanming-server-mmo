@@ -22,10 +22,14 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// battle -> match:对局结果(评分回流,二期 MMR)。
+// battle -> match(评分回流,二期 MMR,消费组 match-rating)/ guild(帮会同道历练结算,消费组 guild-trial)。
 // Kafka 投递:topic = match-results(全局,无 zone 段),key = battle_id(同局保序即可);
-// 无目标实例语义(任一 match 实例消费即可,消费组 match-rating)。
+// 无目标实例语义(任一 match / guild 实例消费即可)。
 // battle 作废(DestroyBattle / AbortAllRooms)不发本事件:评分只按真实打完的局更新。
+// 带活动上下文(activity_context.kind != NONE)的事件另有持久记录:battle 先把本事件序列化字节写入
+// SharedRedis battle:activity_result:{battle_id}(TTL 7 天)再发 Kafka,每 10s 查键、仍在则按原字节重发(≤30 次);
+// guild 该局进入终态后 DEL 销账。见 docs/design/guild-phase2/06-activities.md §6.19。
+// 因此同一 battle_id 的带上下文事件可能被投递多次,消费方必须按 battle_id 幂等。
 type BattleResultTeam struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TeamIndex     uint32                 `protobuf:"varint,1,opt,name=team_index,json=teamIndex,proto3" json:"team_index,omitempty"`
@@ -88,8 +92,14 @@ type BattleResultEvent struct {
 	Teams           []*BattleResultTeam    `protobuf:"bytes,6,rep,name=teams,proto3" json:"teams,omitempty"`
 	TotalRounds     uint32                 `protobuf:"varint,7,opt,name=total_rounds,json=totalRounds,proto3" json:"total_rounds,omitempty"`
 	FinishedAtMs    uint64                 `protobuf:"varint,8,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// ---- 帮会同道历练(docs/design/guild-phase2/06-activities.md §6.17.3);battle 写,guild 读,match 评分忽略 ----
+	ActivityContext *battle.BattleActivityContext `protobuf:"bytes,9,opt,name=activity_context,json=activityContext,proto3" json:"activity_context,omitempty"`      // 开局时 CreateBattleRequest.activity_context 的原样回显;普通对局(kind == NONE)不填
+	FledPlayerIds   []uint64                      `protobuf:"varint,10,rep,packed,name=fled_player_ids,json=fledPlayerIds,proto3" json:"fled_player_ids,omitempty"` // 结算时 BattleSettlementData.fled == true 的玩家,升序去重;所有对局都填
+	// 结算时 BattleSettlementData.is_dead == true 的玩家,升序去重;所有对局都填。
+	// 用户决策 U2(阵亡也得奖):guild 发奖候选 = team 0 − fled_player_ids,本字段不参与过滤,只供统计与日后回退。
+	DeadPlayerIds []uint64 `protobuf:"varint,11,rep,packed,name=dead_player_ids,json=deadPlayerIds,proto3" json:"dead_player_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BattleResultEvent) Reset() {
@@ -178,6 +188,27 @@ func (x *BattleResultEvent) GetFinishedAtMs() uint64 {
 	return 0
 }
 
+func (x *BattleResultEvent) GetActivityContext() *battle.BattleActivityContext {
+	if x != nil {
+		return x.ActivityContext
+	}
+	return nil
+}
+
+func (x *BattleResultEvent) GetFledPlayerIds() []uint64 {
+	if x != nil {
+		return x.FledPlayerIds
+	}
+	return nil
+}
+
+func (x *BattleResultEvent) GetDeadPlayerIds() []uint64 {
+	if x != nil {
+		return x.DeadPlayerIds
+	}
+	return nil
+}
+
 var File_proto_contracts_kafka_match_event_proto protoreflect.FileDescriptor
 
 const file_proto_contracts_kafka_match_event_proto_rawDesc = "" +
@@ -187,7 +218,7 @@ const file_proto_contracts_kafka_match_event_proto_rawDesc = "" +
 	"\n" +
 	"team_index\x18\x01 \x01(\rR\tteamIndex\x12\x1d\n" +
 	"\n" +
-	"player_ids\x18\x02 \x03(\x04R\tplayerIds\"\xd2\x02\n" +
+	"player_ids\x18\x02 \x03(\x04R\tplayerIds\"\xe5\x03\n" +
 	"\x11BattleResultEvent\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1d\n" +
 	"\n" +
@@ -197,7 +228,11 @@ const file_proto_contracts_kafka_match_event_proto_rawDesc = "" +
 	"\x11winner_team_index\x18\x05 \x01(\rR\x0fwinnerTeamIndex\x127\n" +
 	"\x05teams\x18\x06 \x03(\v2!.contracts.kafka.BattleResultTeamR\x05teams\x12!\n" +
 	"\ftotal_rounds\x18\a \x01(\rR\vtotalRounds\x12$\n" +
-	"\x0efinished_at_ms\x18\b \x01(\x04R\ffinishedAtMsB\x17Z\x15proto/contracts/kafkab\x06proto3"
+	"\x0efinished_at_ms\x18\b \x01(\x04R\ffinishedAtMs\x12A\n" +
+	"\x10activity_context\x18\t \x01(\v2\x16.BattleActivityContextR\x0factivityContext\x12&\n" +
+	"\x0ffled_player_ids\x18\n" +
+	" \x03(\x04R\rfledPlayerIds\x12&\n" +
+	"\x0fdead_player_ids\x18\v \x03(\x04R\rdeadPlayerIdsB\x17Z\x15proto/contracts/kafkab\x06proto3"
 
 var (
 	file_proto_contracts_kafka_match_event_proto_rawDescOnce sync.Once
@@ -213,18 +248,20 @@ func file_proto_contracts_kafka_match_event_proto_rawDescGZIP() []byte {
 
 var file_proto_contracts_kafka_match_event_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_proto_contracts_kafka_match_event_proto_goTypes = []any{
-	(*BattleResultTeam)(nil),   // 0: contracts.kafka.BattleResultTeam
-	(*BattleResultEvent)(nil),  // 1: contracts.kafka.BattleResultEvent
-	(battle.EBattleOutcome)(0), // 2: eBattleOutcome
+	(*BattleResultTeam)(nil),             // 0: contracts.kafka.BattleResultTeam
+	(*BattleResultEvent)(nil),            // 1: contracts.kafka.BattleResultEvent
+	(battle.EBattleOutcome)(0),           // 2: eBattleOutcome
+	(*battle.BattleActivityContext)(nil), // 3: BattleActivityContext
 }
 var file_proto_contracts_kafka_match_event_proto_depIdxs = []int32{
 	2, // 0: contracts.kafka.BattleResultEvent.outcome:type_name -> eBattleOutcome
 	0, // 1: contracts.kafka.BattleResultEvent.teams:type_name -> contracts.kafka.BattleResultTeam
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	3, // 2: contracts.kafka.BattleResultEvent.activity_context:type_name -> BattleActivityContext
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_contracts_kafka_match_event_proto_init() }

@@ -60,6 +60,9 @@ func LoadTables(configDir string, useBinary bool) {
     if err := GlobalVariableTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load GlobalVariable table: %v", err)
     }
+    if err := GuildActivityTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load GuildActivity table: %v", err)
+    }
     if err := GuildDonateTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load GuildDonate table: %v", err)
     }
@@ -124,7 +127,7 @@ func LoadTables(configDir string, useBinary bool) {
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTablesAsync(configDir string, useBinary bool) {
     var wg sync.WaitGroup
-    wg.Add(34)
+    wg.Add(35)
     go func() {
         defer wg.Done()
         if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
@@ -219,6 +222,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
         defer wg.Done()
         if err := GlobalVariableTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load GlobalVariable table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := GuildActivityTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load GuildActivity table: %v", err)
         }
     }()
     go func() {
@@ -409,6 +418,10 @@ func ReloadTables(configDir string, useBinary bool) error {
     if err := newGlobalVariable.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload GlobalVariable failed: %w", err)
     }
+    newGuildActivity := NewGuildActivityTableManager()
+    if err := newGuildActivity.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload GuildActivity failed: %w", err)
+    }
     newGuildDonate := NewGuildDonateTableManager()
     if err := newGuildDonate.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload GuildDonate failed: %w", err)
@@ -499,6 +512,7 @@ func ReloadTables(configDir string, useBinary bool) error {
     DungeonTableManagerInstance = newDungeon
     EquipSlotTableManagerInstance = newEquipSlot
     GlobalVariableTableManagerInstance = newGlobalVariable
+    GuildActivityTableManagerInstance = newGuildActivity
     GuildDonateTableManagerInstance = newGuildDonate
     GuildLevelTableManagerInstance = newGuildLevel
     GuildRuleTableManagerInstance = newGuildRule

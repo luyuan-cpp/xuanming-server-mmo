@@ -265,7 +265,17 @@
         "GuildShopGoodsNotFound": 14028,
         "GuildShopLevelTooLow": 14029,
         "GuildShopLimit": 14030,
-        "GuildContributionInsufficient": 14031
+        "GuildContributionInsufficient": 14031,
+        "GuildActivityNotOpen": 14032,
+        "GuildActivityAlreadyClaimed": 14033,
+        "GuildActivityThresholdNotReached": 14034,
+        "GuildTrialTeamInvalid": 14035,
+        "GuildActivityLevelTooLow": 14036,
+        "GuildActivityJoinTooRecent": 14037,
+        "GuildTrialInviteExpired": 14038,
+        "GuildTrialInviteDeclined": 14039,
+        "GuildTrialInviteCooldown": 14040,
+        "GuildTrialServiceBusy": 14041
       }
     },
     "friend_error": {

@@ -16,6 +16,9 @@ message GuildRuleTable {
 	uint32 asset_op_deadline_seconds = 5;
 	uint32 asset_op_retry_base_ms = 6;
 	uint32 reunion_min_online_members = 7;
+	uint32 activity_join_min_hours = 8;
+	uint32 trial_invite_ttl_seconds = 9;
+	uint32 trial_invite_cooldown_seconds = 10;
 }
 
 message GuildRuleTableData {

@@ -59,6 +59,7 @@ var Faults = []Fault{
 	{Code: 6002, Group: "bag_error", Name: "BagAddItemHasNotBaseComponent"},
 	{Code: 9000, Group: "entity_error", Name: "EntityTransformNotFound"},
 	{Code: 14008, Group: "guild_error", Name: "GuildIdGenUnavailable"},
+	{Code: 14041, Group: "guild_error", Name: "GuildTrialServiceBusy"},
 	{Code: 26016, Group: "pet_error", Name: "PetIdGenerateFailed"},
 	{Code: 27004, Group: "asset_error", Name: "AssetInvalidBundle"},
 	{Code: 27007, Group: "asset_error", Name: "AssetPartialApplied"},

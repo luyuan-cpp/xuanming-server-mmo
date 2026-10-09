@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_guild_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025guild_error_tip.proto*\352\006\n\013guild_error\022"
+    "\n\025guild_error_tip.proto*\254\t\n\013guild_error\022"
     "\022\n\016kGuild_errorOK\020\000\022\031\n\024kGuildAlreadyInGu"
     "ild\020\260m\022\023\n\016kGuildNotFound\020\261m\022\025\n\020kGuildNot"
     "InGuild\020\262m\022\017\n\nkGuildFull\020\263m\022\032\n\025kGuildLea"
@@ -57,14 +57,22 @@ const char descriptor_table_protodef_guild_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     "\023kGuildAssetRejected\020\313m\022\034\n\027kGuildShopGoo"
     "dsNotFound\020\314m\022\032\n\025kGuildShopLevelTooLow\020\315"
     "m\022\024\n\017kGuildShopLimit\020\316m\022#\n\036kGuildContrib"
-    "utionInsufficient\020\317mB$\n\016com.game.tableZ\022"
-    "generated/pb/tableb\006proto3"
+    "utionInsufficient\020\317m\022\032\n\025kGuildActivityNo"
+    "tOpen\020\320m\022!\n\034kGuildActivityAlreadyClaimed"
+    "\020\321m\022&\n!kGuildActivityThresholdNotReached"
+    "\020\322m\022\033\n\026kGuildTrialTeamInvalid\020\323m\022\036\n\031kGui"
+    "ldActivityLevelTooLow\020\324m\022 \n\033kGuildActivi"
+    "tyJoinTooRecent\020\325m\022\035\n\030kGuildTrialInviteE"
+    "xpired\020\326m\022\036\n\031kGuildTrialInviteDeclined\020\327"
+    "m\022\036\n\031kGuildTrialInviteCooldown\020\330m\022\033\n\026kGu"
+    "ildTrialServiceBusy\020\331mB$\n\016com.game.table"
+    "Z\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_guild_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_guild_5ferror_5ftip_2eproto = {
     false,
     false,
-    946,
+    1268,
     descriptor_table_protodef_guild_5ferror_5ftip_2eproto,
     "guild_error_tip.proto",
     &descriptor_table_guild_5ferror_5ftip_2eproto_once,
@@ -83,7 +91,7 @@ guild_error_descriptor() {
   return file_level_enum_descriptors_guild_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t guild_error_internal_data_[] = {
-    65536u, 2097152u, 14016u, 14008u, 14024u, 14004u, 14012u, 14020u, 14028u, 14002u, 14006u, 14010u, 14014u, 14018u, 14022u, 14026u, 14030u, 14001u, 14003u, 14005u, 14007u, 14009u, 14011u, 14013u, 14015u, 14017u, 14019u, 14021u, 14023u, 14025u, 14027u, 14029u, 14031u, 14000u, };
+    65536u, 2752512u, 14026u, 14015u, 14034u, 14007u, 14022u, 14030u, 14038u, 14003u, 14011u, 14019u, 14024u, 14028u, 14032u, 14036u, 14040u, 14001u, 14005u, 14009u, 14013u, 14017u, 14021u, 14023u, 14025u, 14027u, 14029u, 14031u, 14033u, 14035u, 14037u, 14039u, 14041u, 14000u, 14002u, 14004u, 14006u, 14008u, 14010u, 14012u, 14014u, 14016u, 14018u, 14020u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

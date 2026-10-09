@@ -357,6 +357,12 @@
     <ClCompile Include="scene\player_movement.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="match\match_internal.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="match\match_internal.grpc.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="etcd\etcd.pb.h">
@@ -738,6 +744,12 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="match\match_service.grpc.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="match\match_internal.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="match\match_internal.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="trade\trade_table.grpc.pb.h">

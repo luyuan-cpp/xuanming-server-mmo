@@ -9,6 +9,18 @@
 > 3. 测试口径改为:`TestTrialCandidates` 期望"team 0 − 逃跑"(阵亡者仍在候选,升序去重);T13 改为"逃跑不在候选、阵亡在候选";§6.44 冒烟断言同步。
 > 4. 其余过滤条件不变:结算时已不在帮、当日次数已满的仍然不发。
 
+> ## 落码状态(2026-10-08)
+>
+> **B6b-srv2(同道历练的 guild 侧)已落码,未编译、未 proto-gen、未跑测试,待 Codex 验证。**
+> 第 7、8 部分(§6.22–§6.35)写于死锁修复之前,与代码不同的地方都就地加了"2026-10-08 落码修正";§6.40、§6.41、§6.45、§6.46、§6.49 同样各有一段。
+> 冲突时的效力顺序不变:README §2 / §3 > 上面的决策覆盖 > 92-handoff §12.2 / §12.4 > 90-consistency > 本文件正文;落码修正与代码注释优先于它所在小节的正文。
+> 运维要点(结果消费卡住、毒消息、EXPIRED 局、待入队积压、人工补发、部署顺序)在 §6.35a;验证命令在 §6.46 的 B6b-srv2。
+>
+> **2026-10-08 评审修复(同样未编译、未跑测试)**,三处,细节在所指小节的落码修正里:
+> 1. 结果消费卡住时的**影响面订正**:停的是那个 guild 副本分到的**全部分区**,不是"只卡所在分区"(消费是单协程串行的;消费行为没改,订正的是代码注释与重调日志的文案、§6.28 第 8 点、§6.34 T6 / T16、§6.35a 场景一与告警、§6.49 第 33 项,并补一条钉住现状的用例)。
+> 2. 结算入口加**终态预读**:对局行已是 SETTLED 就直接销账回 Duplicate,排在构建奖励、发号、合服闸门之前(§6.29 第 10 点)。它让 §6.35a 的"做法 A"对几乎所有原因都有效,battle 的重发副本也不再能重新卡住消费;"做法 B"按"同一局至多 31 份副本"重写。巡检器按记录结算时逐局兜 panic(§6.33 第 8 点)。
+> 3. `MatchRpc.Timeout` 的启动校验下限从"大于 0"提到 **300ms**(§6.22 第 3 点):更小的值历练显示开放、每次开战必回服务繁忙。
+
 # S6 帮会活动(B6a/B6b)
 > 本节由 11 个分部合并而成(原分部名保留在小标题里),另附对抗评审处理记录。
 
@@ -1022,6 +1034,31 @@ Activity:
 
 `svc.ServiceContext` 追加 `MatchInternal matchpb.MatchInternalClient`:`MatchRpc.Etcd.Key` 非空时 `zrpc.MustNewClient(c.MatchRpc)` → `matchpb.NewMatchInternalClient(cli.Conn())`,否则 nil。`guild.go` 组装 `ActivityDeps` 时:`Match = svcCtx.MatchInternal`(`!TrialResultActive()` 时置 nil)、`Lobby = data.NewTrialLobbyRepo(svcCtx.RedisClient)`。
 
+> **2026-10-08 落码修正(B6b-srv2;已落码,未编译、未 proto-gen、未跑测试)**:本节正文与代码不同的地方,以代码为准。
+>
+> 1. **`TrialResult.Enabled` 没有 `default=true`**,是 `json:",optional"`:只有 yaml 里显式写了 `Enabled: true` 才消费。
+>    原因:一个 optional 的配置段整块缺失时,go-zero 不回填段内的 default。写成 `default=true` 会出现"段写了但漏了 Enabled → 开;段整个没写 → 关"这种看配置猜不出来的分叉。
+> 2. **整段 `Activity` 缺失时四个秒数是 0**,代码只经 `ActivityConf` 的四个方法读(`TrialResultOverdue()` / `TrialAbandon()` / `TrialSweepInterval()` / `OwedLoopInterval()`),0 回落到默认值 420 / 3600 / 60 / 10。后台循环在历练关着时也要跑,不能因为少抄一段配置就起不来。
+> 3. **`Validate` 的三处收紧**:
+>    - `MatchRpc.Timeout` 只在 MatchRpc 配了任何目标时校验(`Config.MatchRpcConfigured()`,整段缺失时 Timeout 本来就是 0);
+>    - 合法区间是 **`[300, 2000]`**,不是正文的 `0 < Timeout ≤ 2000`(2026-10-08 评审修复)。下限 `config.MinMatchRpcTimeoutMs = 300` 镜像 logic 的 `minMatchBudget`:给 match 的预算 = `min(Timeout, 请求剩余 − 500ms)`,不足 300ms 就不调 match(§6.26 落码修正第 4 点)。Timeout 配成 1–299 时预算恒不够 —— 进程能起、历练显示开放、能建房能同意,而每一次开战都回 `GuildTrialServiceBusy`,启动期没有任何提示。这种"半开"现在拒绝启动。两个常量由 `logic/activity_trial_test.go` 的 `TestTrialMinMatchBudgetMirrorsConfig` 守住相等(config 不能 import logic);
+>    - `TrialAbandonSeconds` 另加上限 604800(7 天,即结果记录与 Kafka 的保留期)。
+> 4. **建 match 客户端时代码里强制 `NonBlock`**,不看 yaml 写没写(`svc.initMatchInternalClient`):match 是弱依赖,它没起不能拖住 guild 起服。
+> 5. **`guild.go` 的装配**(`ActivityDeps` 的历练字段):
+>
+>    | 字段 | 取值 | 说明 |
+>    |---|---|---|
+>    | `Lobby` | `data.NewTrialLobbyRepo(svcCtx.RedisClient)` | 无条件建 |
+>    | `Results` | `data.NewTrialResultRecords(svcCtx.PlayerLocatorRedisClient)` | 无条件建;结算销账与巡检器都要用 |
+>    | `BattleLocks` | `svcCtx.PlayerLocatorRedisClient` | 视图读 `battle:lock:{player_id}` |
+>    | `Match` | `svcCtx.MatchInternal`,仅当 `TrialResultActive()` 且配了 MatchRpc;否则 nil 接口 | **历练开不开只看它**:没有结算就不许开战 |
+>    | `MatchBudget` | `MatchRpc.Timeout` 毫秒 | 0 时 logic 取 1500ms(只在没配 MatchRpc 时为 0;配了就已被 `Validate` 限在 [300, 2000]) |
+>
+>    没有 `HandlerBudget`:预算一律从 ctx 的截止时间倒推(§6.26 的落码修正)。
+> 6. **历练因配置而关闭时,启动日志打一行原因**(`guild.go` 的 `logTrialClosedReason`):`Enabled: true` 而 `Kafka.Brokers` 为空、或配了 MatchRpc 而没开 `Enabled`,打 ERROR(go-zero logx 没有 WARN 级);没配 MatchRpc(不论结果消费开没开)打 INFO。历练开着时不打。
+>    **结果消费者与后台循环的启动条件和"历练开不开"是两回事**:消费者只看 `TrialResultActive()`(不看 MatchRpc),两个后台循环无条件启动 —— 关掉历练之后,关之前开打的对局与待入队物品仍要处理完。
+> 7. yaml 注释里的 `docs/design/guild-phase2.md §6` 不存在,实际就是本文件;`go/guild/etc/guild.yaml` 的注释已照本文件写。
+
 ## 6.23 邀请房间 `go/guild/internal/data/trial_lobby_repo.go`
 
 guild 全局 Redis(`RedisClient`,单节点 `*redis.Client`,`servicecontext.go:24`)。Lua 内按 id 拼接其它房间键只在单节点成立;迁 Redis Cluster 时须改两段式(写进文件头注释)。
@@ -1094,6 +1131,18 @@ return {1, 0}
 
 **有效状态折算**(`LoadForPlayer`):`GET of` → `HGETALL`;缺失 → nil;`state=1 && now ≥ exp` → 视为 4、`etip=kGuildTrialInviteExpired`;`state=2 && now ≥ ldl` → 视为 4、`etip=kGuildTrialServiceBusy`。
 
+> **2026-10-08 落码修正(B6b-srv2;`go/guild/internal/data/trial_lobby_repo.go`)**:键、三段脚本的语义、状态折算与正文一致;**Go 接口的形状不同**,logic 不再看脚本返回码。
+>
+> | 方法 | 实际签名与返回 |
+> |---|---|
+> | `Create` | `Create(ctx, TrialLobbyCreate{GuildID, ActivityID, Roster, TTL, Cooldown, NowMs}) (TrialLobbyCreateResult, error)`。自己 INCR 发号,撞号(-6)时重发一次。`Status` ∈ `Created` / `Cooldown`(带 `CooldownRemaining`)/ `MemberBusy`(带 `BusyPlayerID`) |
+> | `Respond` | `Respond(ctx, lobbyID, playerID, accept, nowMs, launchWindow) (TrialLobbyRespondResult, error)`。`Status` ∈ `Gone` / `NotPending`(带 `AlreadyAccepted`)/ `Accepted` / `Launch` / `Declined`;拒绝的 tip 由 repo 填,调用方不再传 |
+> | `Finish` | from / to 的类型是 `pb.GuildTrialLobbyState` |
+> | `Load` / `LoadForPlayer` | 返回 `*TrialLobby`;另有 `TrialLobby.EffectiveAt` / `Accepted` / `Has`。房间内容损坏时回错误,不当成"不存在" |
+> | `AcquireSweepLease`(新增) | 巡检器的多副本租约,键 `guild:trial:sweep:lease`,值 = 持有者标识(节点 uuid) |
+>
+> 另:玩家 id、房间 id 在 Lua 里一律按**字符串**比较与存取(Lua 的 number 是 double,存不下 64 位雪花 id)。
+
 ## 6.24 `StartGuildTrial`(建房)
 
 1. `start := d.Now()`;`activityPrelude(ctx, true)`。`row, ok := PickForWrite(rows, 3, req.ActivityId, nowMs)`;`!ok || d.Match == nil || d.Lobby == nil` → `kGuildActivityNotOpen`。
@@ -1152,6 +1201,23 @@ return {1, 0}
 9. `Lobby.Finish(id, 2, 3, battleID, 0, nil)`;失败只 WARN(视图 5s 后显示 ServiceBusy,纯展示偏差,参战者已收到 `BattleStartS2C`)。
 10. 推 ACTIVITY_CHANGED 给名单其余人;计 `action="launch",result="ok"`;返回视图。
 
+> **2026-10-08 落码修正(B6b-srv2;§6.24–§6.26 合并说明,代码在 `go/guild/internal/logic/activity_trial.go`)**:
+>
+> 1. **建房的判定次序**:公共前置 → 依赖是否齐全 → 合服闸门 → 公共预检(活动开放 / 帮会等级 / 发起人入帮时长 / **发起人今日次数**)→ 名单规范化 → 权威核对名单 → 物品通道 → 建房。与 §6.24 相比有三处不同:
+>    - 发起人今日次数排到名单校验**之前**(沿用 B6a 的 `precheckActivity`,不另写一份预检);
+>    - 新增**合服闸门**:帮会所在 zone 正在合服(或闸门读不到)时不许建房,回 `GuildZoneMerging`。这里按缓存快照的 zone 判,只是前置闸;权威的闸门在结算事务里;
+>    - 新增**物品通道检查**:历练配了物品奖励,而资产通道关闭(回 `GuildAssetPending`)或发号器未接线(回 `GuildIdGenUnavailable`)时,建房之前就拒绝。放这一局开打,打赢之后物品发不出去。
+> 2. **名单核对只认 MySQL,且先判成员、再判在线**(§6.24 第 4、6、7 步合成一步 `verifyTrialRoster`,建房与开战复核共用):
+>    - 不用缓存成员表:它可能落后一个代次,刚入帮的人会被误拒、刚被踢的人会被放行;
+>    - 先判帮会归属:否则任何人都能把陌生玩家的 id 塞进名单,靠返回的"不在线"来探测他在不在线。
+>    - 名单规范化的判定次序:人数超上限 → 含 0 或重复 → 不含发起人 → 人数不足。
+> 3. **同意之前查一次合服闸门**(它可能就是凑齐开战的那一票);拒绝、取消不查,让房间能被主动解散。房间不存在、属于别的帮、本人不在名单,一律回 `GuildTrialInviteExpired`(分得更细会泄露别人的房间状态)。
+> 4. **调 match 的预算** = `min(MatchRpc.Timeout, 请求剩余时间 − 500ms)`,不足 300ms 不调、房间以 `GuildTrialServiceBusy` 结束。也就是"剩余不足 800ms 不调"。§6.26 第 5 步的 `HandlerBudget − since(start)` 作废(没有 HandlerBudget)。`MatchRpc.Timeout` 本身不许小于这个 300ms(启动校验,§6.22 落码修正第 3 点),所以"不调"只可能来自请求剩余时间不够,不会来自配置。
+> 5. **登记不是自动提交的 upsert**(§6.26 第 8 步的 SQL 作废),是一个短事务:锁帮会行 → 普通读对局行 → 缺行才插(`RegisterTrialBattle`)。原因见 92-handoff §12.2 的 B6b 落码修正:对局表的每个写者都要先持有该帮的帮会行锁。帮会恰好在这一刻被解散不算登记失败。
+> 6. **开战成功之后的两步用独立预算**:登记对局、把房间写成 LAUNCHED 共用一个 2s 预算,**不继承请求的取消与截止**。开战已是事实,客户端此刻断开或请求预算耗尽,都不该让这一局少一行登记。
+> 7. 开战复核里读"发起人今日次数"失败时按 0 次处理:这一步只为不让明知没次数的人白开一局,权威判定在结算事务。
+> 8. 指标多一个 `action="launch"`,与 `respond` 分开计(§6.35 的落码修正)。
+
 ## 6.27 崩溃与并发窗口(房间)
 
 | # | 场景 | 结果 |
@@ -1164,6 +1230,15 @@ return {1, 0}
 | L6 | 骚扰:反复邀请同一人 | 每人同时只在一个有效房间;发起人建房冷却 10s;被邀请人可拒绝;写限流 5/s ✓ |
 | L7 | guild 全局 Redis 故障 | 建房 / 响应返回 err;视图不填 `trial_lobby` ✓ |
 | L8 | Redis 被清空 | 房间全失效,seq 回卷由 -6 分支兜住 ✓ |
+
+> **2026-10-08 落码修正(B6b-srv2)**:上表补一行,并订正 L4。
+>
+> | # | 场景 | 结果 |
+> |---|---|---|
+> | L4(订正) | match 已返回、登记与 Finish 前崩溃,或登记失败 | 战斗照常;结果到达时结算补登记 ✓。**在结果到达之前巡检器看不见这一局**(巡检只扫登记行);登记失败计 `guild_trial_register_fail_total` |
+> | L9(新增) | 调 match 超时,guild 判为开战失败(房间 ENDED / ServiceBusy),而 match 其实已经建票开战 | 没有登记行;结果事件到达时结算补登记并照常发奖 ✓。结果事件若同时丢失,这一局只能靠 battle 的重发(10s × 30 次)送达,巡检器兜不到 —— 已知缺口,接受(需要 match 超时与 Kafka 丢事件同时发生) |
+>
+> LAUNCHING 的窗口 5s(`trialLaunchWindow`)必须大于整请求业务预算(3.5s):拿到开战权的那次请求还没走完,房间不能先被折算成"开战失败"。
 
 <!-- s6_activities_part8.md -->
 
@@ -1194,6 +1269,38 @@ func runTrialResultConsumer(ctx context.Context, r trialReader, handle TrialResu
 
 启动:`guild.go` 装配 `logic.WithActivities` 之后(2026-09-28 落码修正,原文写 `EnableActivities`)、`TrialResultActive()` 为真时启动;首次失败(Kafka 未就绪)照 `match_service.go:78-98` 每 30s 重试,不拒绝启动。
 
+> **2026-10-08 落码修正(B6b-srv2;`go/guild/internal/kafka/trial_result_consumer.go` + `go/guild/guild.go`)**:消费语义与正文一致(逐条同步提交、暂时性失败不提交并按 1s、2s、4s … 封顶 30s 退避、不设次数上限),接口形状与几处细节不同。
+>
+> **接口(以代码为准)**:
+>
+> ```go
+> type TrialResultConsumerConfig struct { Brokers []string; Topic, GroupID string; Partitions int32 }
+> // nil = 有了定论,提交位点;error = 暂时性失败,不提交,退避后带同一条消息重调。
+> type TrialResultHandler func(ctx context.Context, ev *kafkapb.BattleResultEvent) error
+> type TrialResultCounters struct { DecodeError, HandlerRetry func() }
+> func NewTrialResultConsumer(cfg TrialResultConsumerConfig, handle TrialResultHandler, counters TrialResultCounters) (*TrialResultConsumer, error)
+> func (c *TrialResultConsumer) Run(ctx context.Context)   // 阻塞到 ctx 结束
+> ```
+>
+> 1. **不 import `internal/logic` 与 `internal/config`**(写法同 match 的结果消费者):`svc` 已经 import 了本包,再从这里指回 logic,logic 就永远不能依赖 svc。结算入口与两个计数出口由 `guild.go` 以回调注入;`TrialSettleOutcome` 定义在 logic 包(§6.29),消费者不看它,只看 error。
+> 2. **销账不在消费者里**。删 SharedRedis 的 `battle:activity_result:{battle_id}`、幂等闸门、毒消息标记都在 `SettleTrialResult` 里(只有一处权威)。消费者只决定"提交位点"还是"退避重调",不碰 MySQL 和 Redis。
+> 3. **消费者先过滤**:`activity_context` 为空、或 `kind != GUILD_TRIAL` 的结果直接提交,不调 handler(与正文第 3 步相同)。上下文残缺但 kind 是历练的仍交给 handler,由它判成"上下文不可用"并销账。
+> 4. **`Run` 是阻塞的,由 `guild.go` 放进 `safego.Go("guild.kafka.trial_results")`**,并返回一个 stop:取消 ctx 并等 goroutine 退出。stop 排在 `svcCtx.Stop`(关 MySQL / Redis)之前执行,也排在资产通道的 stop 之前(结算的同步投递用的是那条 Loop)。正文的 `StartTrialResultConsumer(...) error` 没有"等它退出"这一步。
+> 5. **确保 topic 失败的 30s 重试放在消费者内部**(`waitForTopic`),不在 `guild.go`。"历练结果消费者启动 topic=… group=…"这一行在**真正连上 Kafka、建好 reader 时**才打;`guild.go` 起 goroutine 时另打一行"历练结果消费已安排"。Kafka 没起时只会看到后者与每 30s 一条 ERROR。
+> 6. **纵深防御三条**(正文没有):
+>    - 单次调 handler 带 30s 上限(`trialResultHandleTimeout`):某个依赖把调用挂住时,到点按一次暂时性失败处理,留下日志与计数,而不是一个不出声的、永远停住的消费者;
+>    - handler 的 panic 只算一次暂时性失败(`safego.Run`),消费 goroutine 不死。否则 reader 关闭 → 重平衡 → 别的副本接手同一条消息 → 同样 panic,最后全服没有消费者;
+>    - 确保 topic 的调用(sarama 管理连接,不接受 ctx)放在单独的协程里,ctx 结束时把它丢下,不拖住进程退出。
+> 7. **拉取出错只在自己的 ctx 结束时退出**。reader 回 `io.EOF`(被关闭)时退出并打 ERROR;其余错误(含 ctx 未结束时的 `context.Canceled`)一律 1s 后重拉。match 的写法在后一种情况下会直接退出,这里没有照搬。
+> 8. **为什么不设重试次数上限**(与 AGENTS §11.3 的偏离,代码头注释有同样的说明):跳过一条消息 = 这一局的帮贡、资金、物品永久不发。
+>    **代价(2026-10-08 评审修复,订正影响面)**:停下来的是**这个 guild 副本的整个历练结果消费,不只是那条消息所在的分区**。消费是单协程串行的 —— `consume` 是唯一取消息的循环,重调就发生在这个协程里;kafka-go 的消费组 reader 把本进程分到的全部分区汇进同一个 `FetchMessage`,卡住期间一条也不再取。所以:
+>    - 只有一个 guild 副本时(当前的实际部署形态,它独占 3 个分区),一条卡住的结果让**全服**的历练结算都停在 Kafka 这条路上;多副本时是该副本名下的那几个分区。reader 的心跳在它自己的协程里照常发,不会触发重平衡把分区让给别的副本。
+>    - 这段时间里,**已登记**的对局由巡检器在登记 420s 之后从结果记录兜底结算(另一个协程,同一个 `SettleTrialResult`),比平时晚几分钟到账;**没有登记行**的对局(§6.27 L4 / L9)只能等消费恢复。不丢奖。
+>    - battle 对每一局未销账的结果每 10s 重发一次、至多 30 次,这些副本在消费恢复后各走一遍 Duplicate。
+>    - **为什么不按分区隔离(v1 的取舍)**:topic 的 key 是 battle_id,分区与 zone / 帮会没有对应关系。最现实的长时间卡住是某个 zone 合服,它的在途对局散在每个分区上,隔离换不来"别的 zone 不受影响";而 kafka-go 的消费组 reader 不能按分区暂停,要隔离就得在进程内无上限地缓存被卡分区的后续消息。v1 接受这个影响面,靠巡检器兜底与 §6.35a 场景一的人工出口。
+>    - `trial_result_consumer_test.go` 的 `TestTrialConsumer_RetryingMessageHoldsBackOtherPartitions` 把这个现状钉住:改成按分区隔离时要先改这里与 §6.35a。
+> 9. **逐条同步提交对无关消息也成立**:match-results 里的普通对局每条都要一次提交往返。这是照搬 match 的写法,好处是"消费组 lag = 0"是可信的验收判据;吞吐未经测量,新消费组首次从头消费 7 天存量时会慢(§6.34 T12)。
+
 ## 6.29 结算 `GuildLogic.SettleTrialResult(ctx, ev) (TrialSettleOutcome, error)`
 
 消费者与巡检器共用。
@@ -1210,6 +1317,25 @@ func runTrialResultConsumer(ctx context.Context, r trialReader, handle TrialResu
    - 对每个入队 op 按 6.6 预算 `ProcessOne`(消费者无 RPC 截止,`HandlerBudget` 从 handler 开始算);
    - 推送:`FundsGranted` → ACTIVITY_CHANGED 给全帮在线成员;否则只给 `team_index==0` 的参战者;
    - 计指标。
+
+> **2026-10-08 落码修正(B6b-srv2;`logic/activity_trial.go` 的 `SettleTrialResult`)**:
+>
+> 1. **返回语义**(消费者与巡检器都按它办):`error == nil` → 这条结果处理完了,可以提交位点;`error != nil` → 暂时性失败,什么都没提交、没有销账,退避后重调。每次调用都重取"现在"。
+> 2. **去向多一种 `Skipped`**:没有活动上下文、或不是 `GUILD_TRIAL` 的事件回 `(Skipped, nil)`,**不销账**(别的活动类型的结果记录不归 guild 删)。§6.40 的 `TestSettleFiltersEvents` 把这两种写成 `BadContext`,以这里为准。`BadContext` 只指"是历练,但上下文残缺或对局模式不是 PVE_TEAM"。
+> 3. **候选集合按 U2**:team 0 的玩家 − 逃跑者,去重升序,阵亡者在内(第 4 步的"− dead_player_ids"作废)。id 为 0 的直接丢弃。
+> 4. **不在事务外建 seq 行**(第 5 步的 `EnsureSeqRow` 作废):seq 行由结算事务在锁住成员行之后建。事务前只做两件事:为每位候选人发一个 op_id、生成一个租约令牌。
+> 5. **不看资产通道开没开**:建房时已拒绝"通道关着还带物品"的历练;开战之后通道才被关掉的,指令行照插、保持 PENDING,通道重新打开后由重投循环投递。
+> 6. **传合服闸门**(`Fence`):帮会所在 zone 正在合服时回暂时性错误,合服结束后照常结算。
+> 7. **确定性失败的范围**比正文宽:仓储回 `ErrTrialInputInvalid`(候选人超过 16、配表 `daily_limit` 为 0 等)或 `ErrActivityPoison`(帮贡 / 资金溢出、**结果过旧**)、奖励包构建或序列化失败,都走毒消息(§6.31)。
+> 8. **提交后的同步投递有合计上限**:全部物品指令合计 `SyncBudget + 1000ms`(约 3.5s),逐个顺序投,单个剩余不足 300ms 就不投、交给重投循环。不打 `withSyncDelivery` 标记(没有调用方拿着回包,终结时要照常推 `DELIVERY_DONE`)。
+> 9. 推送的收件人:计了帮会资金 → 全帮成员;否则只给己方参战者。
+> 10. **入口处先做一次终态预读**(2026-10-08 评审修复;`trialSettledBefore`,排在第 1 步的上下文校验之后、第 2 步之前):
+>     用 `ActivityRepo.TrialBattle(battle_id)` 普通读对局行,**行已是 SETTLED 且 `guild_id` 与结果相符** → 直接销账、计 `duplicate`、回 `(Duplicate, nil)`,不构建奖励包、不发号、不开事务。
+>     - **为什么不持锁也权威**:SETTLED 是不可变终态。写对局行的五条路径(登记 / 结算 / 标毒 / 判过期 / 解散)没有一条会改或删 SETTLED 行。读到别的状态(没有行、STARTED、EXPIRED、登记在别的帮名下)**不下结论**,照常往下走,由事务里持帮会行锁的闸门判。它是事务之外的自动提交读,不取任何锁,不改变 92-handoff §12.4 的取锁序列。
+>     - **为什么要有**:原先唯一的幂等闸门在事务里,而且排在合服闸门之后;事务之前还有构建奖励包与发号。这三步任何一步持续失败,"把对局行手工写成终态"(§6.35a 做法 A)就救不了;battle 落在同一分区里的重发副本(至多 30 份,逐字节相同)也会一份接一份地以同样的原因重新卡住消费。预读之后,终态行对预读**之后**任何位置的失败都是出口,重复副本也不再烧号、不再抢帮会行锁、合服期间不再被闸门拦成暂时性失败。
+>     - 预读本身读失败(库故障)按暂时性错误返回,不烧号、不销账。
+>     - 帮会已解散而对局行是 SETTLED 的重复结果,现在计 `duplicate`(原先走到事务里计 `guild_gone`);两者都是"已有定论",只是指标取值不同。
+>     - 用例:`TestSettleShortCircuitsAlreadySettledBattles`(发号器是坏的、事务一进就回"正在合服",终态行仍然让结果走掉)、`TestSettlePreReadOnlyTrustsSettledRows`。
 
 ## 6.30 事务 `SettleTrialBattleTx`(按全库锁序)
 
@@ -1274,9 +1400,54 @@ COMMIT;
   ```
   `state` 必须写在最后(前两列要读旧 state)。
 
+> **2026-10-08 落码修正(B6b-srv2;`go/guild/internal/data/activity_repo.go` 的 `SettleTrialBattleTx`)**:**本节的 SQL 顺序已作废**,它写于死锁修复之前。权威的取锁序列与不成环论证在 `activity_repo.go` 文件头(第 7–11 条)、`tables.go` 的 `Tables()` 注释与 92-handoff §12.2 / §12.4 的 B6b 落码修正,这里只列与正文不同的结论。
+>
+> **实际顺序**(记号:G 帮会行、M 成员行、Q 玩家 seq 行、O 资产指令行、C 计数行、P 活动进度行、T 对局行、W 待入队行;表间全序 G < M < Q < O < C < P < T < W):
+>
+> ```
+> G FOR UPDATE → 合服闸门 → [T 普通读:已结算 → Duplicate;属于别帮 → ContextMismatch]
+> → M(候选人,player_id 升序逐行点锁;不在帮的跳过)
+> → Q(合格者升序:缺行在事务内建,再点锁 —— 碰 O 之前锁完全部 Q)
+> → [C 普通读:各人开战那个游戏日的已用次数,未满者得奖]
+> → O(得奖者升序逐人插新行;未决已满 16 条的不插,记入待入队名单)
+> → C(得奖者升序,带上限 upsert)→ P(upsert + 主键点锁读回)
+> → 再写已持有的 G.funds / P 的胜场计数 / M 的帮贡
+> → T(缺行则插入终态行;有行则主键点锁后点改)→ W(待入队名单升序插新行)
+> ```
+>
+> | # | 与正文的不同 | 原因 |
+> |---|---|---|
+> | 1 | **幂等判定提到事务开头**,用普通读(正文 h 步放在最后) | 对局行的每个写者都先持该帮的 G 行锁,持着 G 之后的普通读就是权威的;重复的结果事件不必先把发奖做一遍再回滚 |
+> | 2 | **先锁完全部 Q,再逐人插 O**(正文 d 步是"逐人 Q → O") | 严格守 Q < O 的全序,不依赖 `tables.go` 预先登记的"新插 O 行"例外(那条例外没有采用) |
+> | 3 | **得奖名单在持有 Q 之后读计数来定**(正文 c 步在锁 Q 之前读) | 活动计数行的每个写者都先持同一把 Q,读到的值在提交前不会被别人改;upsert 再判"达上限"只在有人绕过 Q 时出现,那时回 `errRetryTx` 整事务重跑 |
+> | 4 | **帮会已解散时什么都不写**(正文的"单表补插 SETTLED/GUILD_GONE"作废) | 没有 G 行就没有守卫;不持守卫的 upsert,消费者与巡检器同时处理同一局时在 TiDB 上会各持一半锁。`GUILD_TRIAL_SETTLE_RESULT_GUILD_GONE = 3` 保留不写,结果只进日志与指标 |
+> | 5 | **新增"结果过旧"判定** → `ErrActivityPoison` | 结算写的是**开战日**的计数行。开战日的游戏日键 ≤ `DayKey(now − 8 天 + 1 小时)` 时,那一行可能已被计数行清理删掉,不能再写。只影响在 guild 这里滞留约 7 天以上的结果 |
+> | 6 | 对局行缺行时用**普通 INSERT**,不是 upsert | 同帮没有第二个插入者;撞键只可能来自带着别的 guild_id 的事件,那要报出来 |
+> | 7 | 待入队行(i 步)撞键不会出现 | 幂等闸门已保证是首次结算 |
+> | 8 | 候选人上限 16(`maxTrialCandidates`),超过回 `ErrTrialInputInvalid` | 给事务大小封顶;历练队伍至多 5 人 |
+>
+> 结算事务的子预算是否够用**未经测量**:5 人满编约 50–60 条主键点语句,p99 要在真库回归里量。
+
 ## 6.31 毒消息 `markPoison(ctx, ev, cause)`
 
 同上"已解散"分支的单表写法,`settle_result=?POISON`;成功后 `ackResult`,ERROR 日志带 battle_id、guild_id 与 cause,计 `poison`,返回 `(Poison, nil)`。单表写失败 → 返回暂时性 err(下轮再试)。确定性错误来源:资金或帮贡溢出、`BuildRewardBundle` 出错、`proto.Marshal` 出错。运维据日志人工补发(runbook 写明)。
+
+> **2026-10-08 落码修正(B6b-srv2;`data.MarkTrialBattlePoison` + `logic.poisonTrialBattle`)**:
+>
+> 1. **标记是一个短事务**,不是单表 upsert:锁帮会行 → 普通读对局行 → 缺行则插入终态行、有行则主键点锁后点改成 `SETTLED / POISON`。理由同 §6.30 的第 4 条。
+> 2. **标记有五种去向,都算"这一局不必再处理"**(销账、提交位点):
+>
+>    | 去向 | 含义 | 对外结果 |
+>    |---|---|---|
+>    | Done | 本次写成了 `SETTLED / POISON` | `poison`,ERROR 日志,**需人工核对** |
+>    | Missing | 没有登记行,入参又不够补一行(巡检器只有 battle_id、guild_id) | `poison`,ERROR 日志,只能靠日志追 |
+>    | AlreadySettled | 这一局其实早已结算,这次的"坏"只是一条重复消息的坏 | `duplicate`,什么都不用补 |
+>    | GuildGone | 帮会已解散,不写任何行 | `guild_gone` |
+>    | Mismatch | 登记在别的帮名下 | `context_mismatch` |
+>
+> 3. **确定性错误的来源**(比正文多三类):帮贡或资金相加溢出、奖励包构建失败、奖励包序列化失败、**结果过旧**(§6.30 第 5 条)、**输入畸形**(候选人超过 16、配表行 `daily_limit` 为 0 等)、巡检器读到的结果记录解不开或描述的不是这一局。
+> 4. 标记本身遇到库故障或写冲突时回暂时性错误,不销账,调用方下一轮再来。
+> 5. 排查与人工补发见 §6.35a。
 
 ## 6.32 待入队循环 `OwedRewardLoop`(`go/guild/internal/logic/trial_background.go`)
 
@@ -1292,6 +1463,16 @@ COMMIT;
    ```
 3. 计 `guild_trial_owed_total{result="converted|still_full|error"}`;每轮末 `guild_trial_owed_rows` gauge = `SELECT COUNT(*)`(上限 10000 行时只报 10000)。
 
+> **2026-10-08 落码修正(B6b-srv2;`logic/trial_background.go` 的 `owedRewardLoop` + `data.ConvertOwedReward`)**:
+>
+> 1. **翻页读完,带游标轮转**:一页 50 行,一轮最多看 500 行;看不完时下一轮从游标处接着看,读到表尾回到表头。正文的"每轮只取最早 50 行"会让队头一批背包长期满着的玩家饿死排在后面的人。
+> 2. **同一玩家本轮判过"仍满"后,他名下的其余行本轮不再尝试**(同一个窗口,结论相同,省掉注定回滚的事务)。
+> 3. **不在事务外建 seq 行**(第 2 步的 `EnsureSeqRow` 作废):有待入队行就一定已有 seq 行。转换的取锁序列是 Q → 插 O → 完整主键点删 W。
+> 4. **资产通道关闭或发号器未接线时整轮跳过**,计 `result="skipped"`,行原样留着(转了也没人投递 / 发不出号)。发号失败时本轮到此为止,游标停在这一行之前。
+> 5. **去向多两种**:`gone`(别的副本刚转走,整体回滚)、`skipped`(上一条)。`still_full` 时待入队行的 `attempts` +1(尽力而为,只作诊断)。
+> 6. 每个副本都跑这个循环,**靠幂等而不是互斥**:同一行的两个转换者先在 Q 上串行,后到者点删影响 0 行即整体回滚。
+> 7. 历练关着时照常跑:关之前结算留下的待入队物品仍要处理完。
+
 ## 6.33 巡检器 `TrialSweeper`(同文件)
 
 每 `TrialSweepIntervalSeconds`(60s);先 `SET guild:trial:sweep:lease <实例 id> NX PX 55000`(全局 Redis),抢不到本轮跳过。
@@ -1302,6 +1483,17 @@ COMMIT;
    - 无记录且 `created_ms < now − Abandon×1000` → `UPDATE guild_trial_battle SET state=?EXPIRED, settled_ms=? WHERE battle_id=? AND state=?STARTED`,计 `sweeper_expired`;
    - 无记录但未到 Abandon → 计入本轮 overdue 数。
 3. `guild_trial_result_overdue` gauge = 本轮 overdue 数。告警:>0 持续 10 分钟。
+
+> **2026-10-08 落码修正(B6b-srv2;`logic/trial_background.go` 的 `trialSweepRound`)**:
+>
+> 1. **每轮最多看 200 条**(正文 50)。候选按登记时刻升序,排在最前面的往往是"gather 失败、永远等不来结果"的局,要等到判过期才离开候选;批量太小会把后面有结果记录可救的局挡住。每条候选只是一次 Redis GET。队头堆积超过 200 条无记录对局时,后面的仍要等它们过期 —— 已知局限。
+> 2. **租约时长 = 巡检间隔 − 5s**(不短于间隔的一半),不是固定 55000ms:租约不主动释放,必须在下一轮开始前自然到期。租约只为省掉重复劳动,不承担正确性(结算与判过期各自在事务里复核)。
+> 3. **没拿到租约的副本把自己的 `guild_trial_result_overdue` 置 0**;告警要取各副本的最大值。
+> 4. **判过期是一个短事务**(`ExpireTrialBattle`):锁帮会行 → 普通读对局行 → 仍是 STARTED 才点锁后点改。帮会已解散时不写(解散已删掉它的在途行)。正文的自动提交 UPDATE 作废。
+> 5. **结果记录解不开、或它描述的不是这一局**(battle_id 不符、不是历练上下文):标成 POISON 并销账。否则它会永远停在候选里(有记录就不会被判过期)。
+> 6. 读结果记录出错时**本轮到此为止**(与正文相同):读不到不等于没有记录,不能据此判过期。
+> 7. 首轮在 `[0, 间隔)` 内随机延迟,把多副本错开;单轮 panic 只丢那一轮。历练关着时照常跑。
+> 8. **按结果记录结算某一局时再兜一层 panic**(2026-10-08 评审修复):那一局 panic 只丢那一局(本轮不算处理完,记录原样留着,下一轮再试),同一轮里排在它后面的候选照常结算、照常判过期。候选按登记时刻升序,出问题的局每轮都排在同一个位置;原先只有整轮一层兜底,它会把后面的候选每一轮都截断。计 `safego_panic_total{point="guild.trial_sweeper"}`(与整轮的兜底同一个点位),另打一条 ERROR `sweeper panicked while settling battle …`。用例 `TestTrialSweepSurvivesPanicInOneBattle`。
 
 ## 6.34 崩溃与并发窗口(结算)
 
@@ -1322,6 +1514,20 @@ COMMIT;
 | T13 | 逃跑 / 阵亡 | 不在候选 ✓(U2);挂机不逃跑且存活的仍算参战,v1 接受 |
 | T14 | 跨 05:00 | 用上下文里开战时刻的键 ✓ |
 
+> **2026-10-08 落码修正(B6b-srv2)**:上表按落码订正四行、补五行(T6 / T16 的影响面与 T19 是同日评审修复后的口径)。
+>
+> | # | 场景 | 结果 |
+> |---|---|---|
+> | T1(订正) | match 返回后、guild 登记前崩溃(或登记失败) | 结果到达时结算补登记 ✓;结果到达之前巡检器看不见这一局(§6.27 L4 / L9) |
+> | T6(订正) | MySQL / Redis 故障、写冲突、**合服闸门**、**号段不可用** | 都是暂时性错误:不提交位点,按 1s … 30s 退避重调,不设次数上限。**这个 guild 副本分到的全部分区都停在这条消息上**(消费是单协程串行的;只有一个副本时就是全服),别的分区、别的 zone 的结果跟着等:已登记的对局由巡检器在登记 420s 后从结果记录兜底,没有登记行的只能等恢复(§6.28 落码修正第 8 点、§6.35a 场景一) |
+> | T10(订正) | 战后帮会解散 / 成员退帮 | 解散事务同时删掉本帮全部 STARTED 对局行;结果到达时回 GuildGone,**不落行**,只计指标 `guild_gone`。退帮者无奖励 ✓ |
+> | T13(订正) | 逃跑 / 阵亡 | 按 U2:逃跑不在候选,**阵亡在候选** ✓ |
+> | T15(新增) | 结果在 guild 这里滞留约 7 天以上才被处理(例如分区卡了很久) | 开战日的计数行可能已被清理 → 判"结果过旧" → POISON,不发奖,转人工 |
+> | T16(新增) | 结算代码对某条消息 panic | 只算一次暂时性失败,消费 goroutine 不死;**该副本的结果消费(它分到的全部分区)**停在这条消息上并持续报错(`safego_panic_total{point="guild.kafka.trial_results.handle"}`),影响面同 T6。巡检器按记录结算同一局时也会 panic,但只丢那一局、不挡同一轮里别的候选(§6.33 落码修正第 8 点)。出口见 §6.35a 场景一 |
+> | T19(新增,2026-10-08 评审修复) | 同一局的结果在分区里有多份:battle 在销账之前每 10s 重发一次(至多 30 次,key = battle_id,同一分区) | 第一份结算之后,其余各份在结算入口的终态预读处回 Duplicate 并销账,不发号、不开事务、不过合服闸门(§6.29 落码修正第 10 点)✓。运维手工把对局行写成终态之后,卡住的那一份与它后面的全部副本同样从这里走掉 |
+> | T17(新增) | guild 停机(进程退出)时正在结算 | 事务随 ctx 取消回滚,位点没有提交;重启后重放这条消息,由幂等闸门兜住 ✓ |
+> | T18(新增) | 结算已提交、销账(DEL)前崩溃或 DEL 失败 | battle 继续重发 → Duplicate → 再销一次;最坏由 7 天 TTL 兜底 ✓ |
+
 ## 6.35 指标(B6b 追加)
 
 | 指标 | 标签 / 说明 |
@@ -1331,6 +1537,194 @@ COMMIT;
 | `guild_trial_result_overdue` | gauge |
 | `guild_trial_owed_total{result}`、`guild_trial_owed_rows` | counter、gauge |
 | `guild_trial_register_fail_total` | 无标签 |
+
+> **2026-10-08 落码修正(B6b-srv2;`logic/activity_metrics.go`)**:指标用 go-zero `core/metric` 注册(不是 promauto),名字与正文相同,取值有增补。label 全部是写死的有限集合,不含 player_id / guild_id / activity_id。
+>
+> | 指标 | 实际取值 |
+> |---|---|
+> | `guild_trial_result_total{result}` | 正文 12 个取值不变。`decode_error`、`handler_retry` 由消费者经回调计(每次重调计一次);`sweeper_*` 由巡检器计;其余由 `SettleTrialResult` 计。不属于历练的结果(Skipped)不计数 |
+> | `guild_trial_owed_total{result}` | `converted` / `still_full` / `gone` / `error` / `skipped`(多 `gone`、`skipped` 两种,见 §6.32 的落码修正) |
+> | `guild_trial_result_overdue` | 只有持有巡检租约的副本报真实值,其余报 0;告警取各副本最大值 |
+> | `guild_activity_action_total{type="trial",action,result}` | `action` ∈ `invite` / `respond` / `launch`;`result` 多 `team_invalid` / `cooldown` / `invite_expired` / `service_busy` / `declined` |
+> | `guild_activity_reward_total{type="trial",result}` | `enqueued` / `no_items` / `owed`,历练按"人"计 |
+> | `guild_activity_funds_granted_total{type="trial"}` | 每个计资金的胜场一次 |
+> | `guild_tx_deadlock_total{op}` | `op` 多 `trial_settle` / `trial_register` / `trial_mark` / `trial_owed`。注意 `trial_settle` 在"读到的计数已过期、整事务重跑"时也会 +1,正常运行不触发,但告警分不清它和真死锁 |
+> | `safego_panic_total{point}` | 历练相关点位:`guild.kafka.trial_results`、`guild.kafka.trial_results.handle`、`guild.kafka.trial_results.ensure_topic`、`guild.trial_owed_loop`、`guild.trial_sweeper`、`guild.trial_battle_lock_get` |
+
+## 6.35a 运维要点(B6b-srv2,2026-10-08;原 §6.45 第 22 项)
+
+> 原清单把这一段指到 `docs/design/guild-phase2.md`,那个文件不存在,落在这里。
+> **本节的命令都未演练**(代码尚未编译、未跑过):首次使用前先在本地环境走一遍。口令不写进任何文件。
+
+### 先看哪三样
+
+| 看什么 | 怎么看 | 正常值 |
+|---|---|---|
+| 消费是否在跑 | guild 日志搜 `历练结果消费者启动 topic=match-results group=guild-trial`;`kafka-consumer-groups --bootstrap-server <broker> --describe --group guild-trial` | 有这一行;LAG = 0 |
+| 结算去向 | 指标 `guild_trial_result_total{result}` | `settled_win` / `settled_loss` 随对局增长;`duplicate` 偶尔增长属正常(battle 在 guild 销账之前的重发);`poison`、`handler_retry`、`bad_context`、`context_mismatch`、`decode_error` 恒为 0 |
+| 一局的状态 | `SELECT * FROM mmorpg_guild.guild_trial_battle WHERE battle_id = <id>;` | `state`:1 进行中 / 2 已结算 / 3 已判过期;`settle_result`:1 胜 / 2 负或平 / 4 配表缺行 / 5 毒消息(3 保留不写) |
+
+结果记录在 guild 的 **PlayerLocatorRedis**(K8s 的 SharedRedis):`EXISTS battle:activity_result:<battle_id>`。键还在 = guild 还没给这一局下定论。
+
+### 场景一:结果消费卡住(`handler_retry` 持续上涨、LAG 上涨)
+
+**含义**:某条历练结果的结算一直回暂时性错误。消费者不提交位点、不跳过(跳过 = 这一局的奖励永久不发),按 1s、2s、4s … 封顶 30s 一直重调。
+
+**影响面(2026-10-08 评审修复,订正)**:停下来的是**这个 guild 副本的整个历练结果消费**,不只是日志里 `partition=` 的那个分区。消费是单协程串行的,卡住期间该副本分到的**全部分区**都不再前进(§6.28 落码修正第 8 点)。
+
+- **只有一个 guild 副本时(当前的部署形态,它独占 3 个分区):全服的历练结果都不再从 Kafka 结算**,不是三分之一。多副本时是该副本名下的分区 —— `kafka-consumer-groups … --describe --group guild-trial` 里同一个 CONSUMER-ID 的各行 LAG 一起上涨。
+- **已登记的对局**(绝大多数)由巡检器在登记 `TrialResultOverdueSeconds`(默认 420s)之后从结果记录兜底结算,玩家比平时晚几分钟到账;看 `guild_trial_result_total{result="sweeper_recovered"}` 是否在涨。**没有登记行的对局**(开战时登记失败、或 match 超时而实际已开战)只能等消费恢复。两种都不丢奖。
+- 这期间 battle 日志里每一局的 `battle_activity_result_resend` 都会重发到 30 次,属于预期;消费恢复后这些副本各回一次 `duplicate`。
+- 卡住的那一局自己若有登记行,巡检器在它登记满 420s 之后每轮也会从结果记录再试一次(多半同样失败);失败或 panic 只影响这一局,不挡同一轮里别的对局(§6.33 落码修正第 8 点)。
+
+**第一步,看原因**。guild 日志搜 `历练结果处理失败`,每次重调一条 ERROR,带 `battle=`、`guild=`、`partition=`、`offset=` 与错误原文:
+
+| 错误原文里有 | 原因 | 处理 |
+|---|---|---|
+| MySQL / Redis 的连接或超时错误、`write conflict`、`read trial battle … before settling` | 依赖故障或瞬时冲突 | 修依赖;恢复后自动继续,不需要人工干预 |
+| `zone is merging` | 帮会所在 zone 正在合服(或合服闸门读不到),结算被闸门拦住 | 等合服结束。合服窗口内属于预期,但要知道**这期间别的 zone 的历练结算也在等**(见上面的影响面);建房与"同意"之前已有前置闸,尽量不让新对局开在窗口里。合服时间很长、不能等时按"第二步"做法 A 让这一局出局 |
+| `mint asset op id` / `prepare reward ops` | data_service 的号段取不到 | 查 data_service;恢复后自动继续 |
+| `not wired` | 装配错误(活动依赖没接上) | 修配置或代码后重启 guild;重启后自动继续,不需要跳过任何消息 |
+| `handler panicked` | 结算代码对这条消息 panic(另有一条 `goroutine_panic` 日志带栈) | 代码缺陷,交开发;紧急时按"第二步"做法 A 让这一局出局 |
+| 其它,且长时间不变 | 疑似这一局的数据有问题 | 交开发;紧急时按"第二步"做法 A 让这一局出局 |
+
+**第二步,最后手段:让这一局出局**。只在确认"它不会自己好、而消费不能再等"时做。做之前记下日志里的 battle、guild、partition、offset。代价是这一局**不发任何奖励**,事后要人工补发。
+
+- **做法 A(不停服,首选)**:把这一局的对局行手工写成终态。结算在校验完活动上下文之后、做任何别的事之前,先普通读这一行(§6.29 落码修正第 10 点),读到"已结算"即回 Duplicate、销账、提交位点,消费恢复;**排在它后面的同一局的重发副本(至多 30 份)同样在这一步走掉**,不会再卡。
+  它对这次预读**之后**任何位置的失败都有效:上表的 `zone is merging`、`mint asset op id` / `prepare reward ops`、"其它",以及 `handler panicked`(构建奖励、发号、结算事务、提交后的任何一步 panic 都在预读之后;预读之前只有上下文字段的判空)。只有两种情况无效,都发生在预读之前或就是预读本身,而且都不该靠跳过解决:`not wired`(修装配后重启)与 `read trial battle … before settling`(库读不了,修库)。
+  ```sql
+  START TRANSACTION;
+  -- 先锁帮会行:对局表的每个写者都要先持它(92-handoff §12.2)。
+  -- 查不到这一行 = 帮会已解散。此时没有任何程序路径会再写这一局的行(它们都先锁帮会行,锁不到就不写),
+  -- 可以不持帮会行锁直接做下面的 UPDATE / INSERT。
+  SELECT guild_id FROM guild WHERE guild_id = <guild_id> FOR UPDATE;
+  SELECT state, settle_result FROM guild_trial_battle WHERE battle_id = <battle_id>;
+  -- 有行且 state <> 2:
+  UPDATE guild_trial_battle SET state = 2, settle_result = 5, rewarded_count = 0, settled_ms = <当前毫秒时间戳>
+   WHERE battle_id = <battle_id>;
+  -- 没有行(这一局从未登记):补一行终态,各键取自日志或结果事件
+  INSERT INTO guild_trial_battle (battle_id, guild_id, activity_id, period_key, guild_period_key, initiator_player_id,
+                                  state, settle_result, rewarded_count, created_ms, settled_ms)
+  VALUES (<battle_id>, <guild_id>, <activity_id>, <period_key>, <guild_period_key>, <initiator_player_id>, 2, 5, 0, <毫秒>, <毫秒>);
+  COMMIT;
+  ```
+  提交之后等下一次重调(退避封顶 30s),日志出现 `历练结果在第 N 次处理成功`、`handler_retry` 不再上涨即恢复。这一局随后按"场景二"的毒消息处理(没有发任何奖励,需人工补发)。
+- **做法 B(要把全部 guild 副本重启两次;只在做法 A 用不上时才考虑)**:把消费组的位点移过这一局。做法 A 用不上的只有上面那两种情况,而它们都该先修装配 / 修库,所以**正常情况下用不到做法 B**;它是给"预读之前的代码出了缺陷、修复版本一时上不了线"留的。
+  **同一局的结果在分区里不止一条**(2026-10-08 评审修复,订正:原文写"前移一条、对任何原因都有效",不成立):battle 在结果记录被销账之前每 10s 按原字节重发一次、至多 30 次,key = battle_id,全部落在同一分区、夹在别的对局的结果之间。卡了 5 分钟以上时这一局共有 **31 条**(原始 1 条 + 重发 30 条);只把位点前移一条(`--shift-by 1`),消费者会在下一份副本上以同样的原因再卡住。要一次越过全部副本:
+  1. 所有 guild 副本把 `Activity.TrialResult.Enabled` 改成 `false` 并重启(历练随之关闭,帮会其余功能照常);等十几秒,用 `--describe --group guild-trial` 确认该组已没有活跃成员(Kafka 只允许对没有活跃成员的消费组改位点);
+  2. 确认这一局的重发已经结束:battle 日志里该 battle_id 的 `battle_activity_result_resend` 不再出现(对局结束约 5 分钟后);
+  3. 找出该分区里这一局**最后一份副本**的 offset:
+     `kafka-console-consumer --bootstrap-server <broker> --topic match-results --partition <partition> --offset <卡住的 offset> --property print.key=true --property print.offset=true --property print.value=false --timeout-ms 10000`
+     输出里 key 等于这个 battle_id 的各行中最大的 offset 记作 L;同时把 [卡住的 offset, L] 之间出现的**别的 key** 抄下来(它们是会被连带跳过的对局);
+  4. `kafka-consumer-groups --bootstrap-server <broker> --group guild-trial --topic match-results:<partition> --reset-offsets --to-offset <L + 1> --execute`;
+  5. 改回 `Enabled: true` 并重启。
+  **代价**:[卡住的 offset, L] 之间别的对局的结果被一并跳过。普通对局不受影响(guild 本来就只提交、不处理它们);其中的历练对局,有登记行的由巡检器在登记 420s 之后从结果记录兜底,没有登记行的要人工补发(对照第 3 步抄下的 key 逐个查 `guild_trial_battle`)。被跳过的这一局自己:有登记行的,巡检器之后每轮都会从结果记录再试一次(同样失败,但只丢它自己、**不挡同一轮里别的对局**),缺陷修好之后自动结算;没有登记行的只能人工补发。
+
+### 场景二:毒消息(`guild_trial_result_total{result="poison"}` 增长)
+
+**含义**:这一局的结算遇到确定性失败,重试多少次都一样。对局被标成 `state=2, settle_result=5`,**没有发任何奖励**,结果记录已销账、位点已提交,不会再自动处理。
+
+**排查**:guild 日志搜 `POISON battle`(ERROR 级),末尾是原因;表里查
+```sql
+SELECT battle_id, guild_id, activity_id, period_key, initiator_player_id,
+       FROM_UNIXTIME(created_ms / 1000) AS created_at, FROM_UNIXTIME(settled_ms / 1000) AS settled_at
+  FROM guild_trial_battle WHERE state = 2 AND settle_result = 5 ORDER BY settled_ms DESC LIMIT 50;
+```
+日志写 `has no registered row to mark` 的局表里查不到(没有登记行可标),只能靠日志。
+
+| 日志里的原因(按从上到下第一个匹配的算) | 说明 | 能否补发 |
+|---|---|---|
+| `too old to settle` | 结果过旧:它在 guild 这里滞留了约 7 天以上,开战日的次数记录可能已被清理 | 人工核对后补发 |
+| `deterministic failure (overflow)`(且没有上一行的文字) | 帮贡或帮会资金相加溢出 uint64。配表有上限,正常不可达 | 先查数据为什么这么大 |
+| `build reward bundle` | `GuildActivity.reward_id` 指向的奖励被改坏或删掉 | 修表后人工补发 |
+| `marshal reward bundle` | 奖励包序列化失败(代码或数据缺陷) | 交开发 |
+| `invalid input`(候选人超过 16、`daily_limit` 为 0 等) | 配表或 battle 回显的数据不合规 | 修正后人工补发 |
+| `result record undecodable` / `result record describes battle` | 巡检器读到的结果记录是坏的 | 交开发 |
+
+### 场景三:EXPIRED 局(`state = 3`)与 `guild_trial_result_overdue`
+
+**含义**:这一局登记之后 `TrialAbandonSeconds`(默认 3600s)内既没等到结果事件,SharedRedis 上也没有结果记录,巡检器把它判为过期。**EXPIRED 不是终态**:迟到的结果事件仍会把它结算成 `state=2`。
+
+**绝大多数是正常的**:全员同意之后、进战斗之前有人换场景 / 掉线 / 准备失败,战斗根本没开(§6.34 T2)。这种局不需要处理。
+
+**需要追的三种情况**:
+
+| 现象 | 可能原因 | 怎么确认 |
+|---|---|---|
+| `guild_trial_result_overdue` 明显高于平时 | 有对局的结果既没到 Kafka 也没落进 Redis。**注意这个数也包含"没打成"的局**:它们在登记后 420s 到 3600s 之间一直算在里面(巡检器分不清"没开打"与"结果丢了"),所以它平时就可能大于 0 | match 日志看该 battle_id 的 gather 是否失败;battle 日志搜该 battle_id;搜 `battle_activity_result_not_durable`(battle 写不进 Redis,降级为只发一次) |
+| battle 日志里 `battle_activity_result_resend` **每一局**都重发满 30 次,guild 的 `duplicate` 计数按每局约 30 次增长;结果事件一旦丢失,对局直接 EXPIRED 而不是被巡检器救回 | guild 的 `PlayerLocatorRedis` 与 battle 的 zone Redis **不是同一实例同一 DB**:结算照常(走 Kafka),但 guild 销不掉账、巡检器也读不到记录;活动页的"进行中"也恒不显示 | 对比两边配置;已结算的局在 battle 的 Redis 上 `EXISTS battle:activity_result:<id>` 仍为 1 |
+| 个别局 EXPIRED,而玩家说打赢了 | battle 节点在战斗中崩溃,或结果事件与结果记录都丢了 | battle 日志有没有这一局的结束记录 |
+
+```sql
+SELECT battle_id, guild_id, initiator_player_id,
+       FROM_UNIXTIME(created_ms / 1000) AS created_at, FROM_UNIXTIME(settled_ms / 1000) AS expired_at
+  FROM guild_trial_battle WHERE state = 3 ORDER BY created_ms DESC LIMIT 50;
+```
+
+巡检器是否在跑:guild 全局 Redis 上 `GET guild:trial:sweep:lease`,值是持有租约的节点 uuid(对照 guild 启动日志 `Guild node registered … uuid=`);该键 TTL 约为巡检间隔 − 5s。确认战斗确实打赢而结果丢失的,按下面的人工补发处理。
+
+### 场景四:待入队物品积压(`guild_trial_owed_rows` 长期不降)
+
+**含义**:结算时某位得奖者"已入队未到账"的物品指令已满 16 条(通常是背包一直满着),他的历练物品先记在 `guild_trial_reward_owed`,后台循环每 `OwedLoopIntervalSeconds`(默认 10s)试一次,有空位就转成正式的物品指令。**帮贡当场已发,只有物品晚到;不会跳过,也不需要人工补发。**
+
+**排查**:看 `guild_trial_owed_total{result}` 哪个取值在涨。
+
+| 取值在涨 | 原因 | 处理 |
+|---|---|---|
+| `still_full` | 这些玩家的未决指令一直满着 | 查下面两条 SQL;多半是背包满,玩家腾出空间后自动到账 |
+| `skipped` | 资产通道关闭(`AssetOp.Enabled=false`)或 op_id 号段没接上 | 打开资产通道 / 修号段;循环在这之前不会转换任何一行 |
+| `error` | 读表、发号或转换事务出错 | 看 guild 日志 `owed reward` 相关 ERROR |
+| `converted` 在涨而行数不降 | 新的待入队行产生得比转换快 | 看是哪些玩家,同 `still_full` |
+
+```sql
+-- 谁在积压、积压了多久
+SELECT player_id, COUNT(*) AS owed_rows, MAX(attempts) AS max_attempts,
+       FROM_UNIXTIME(MIN(created_ms) / 1000) AS oldest
+  FROM guild_trial_reward_owed GROUP BY player_id ORDER BY owed_rows DESC LIMIT 20;
+-- 某位玩家挡在前面的未决指令(stream 2 = GUILD_CREDIT,status 1 = PENDING;kind 2 商店 / 3 活动发奖)
+SELECT op_id, kind, attempts, last_outcome, last_reason, FROM_UNIXTIME(created_ms / 1000) AS created_at
+  FROM guild_asset_op WHERE player_id = <player_id> AND stream = 2 AND status = 1 ORDER BY stream_epoch, seq;
+```
+未决指令本身卡住(scene 一直回 UNKNOWN)时按 92-handoff §12.8 的 `assetopfix` 处理;指令终结后窗口腾出空位,待入队行会被自动转走。**不要手工删 `guild_trial_reward_owed` 的行**:删了这份物品就真的没了。
+
+### 人工补发
+
+**现状:v1 没有补发工具,这是一条欠账。** 下面是补发时必须遵守的口径,动手的人是开发,不是运维手写 SQL。
+
+1. **补给谁**:己方(team 0)参战者 − 逃跑者(阵亡者也算,U2)∩ 结算时仍在本帮 ∩ 开战那个游戏日的历练次数未满。参战名单以结果事件为准:Kafka `match-results`,key = battle_id,保留 7 天;battle 节点日志里同一 battle_id 的结算记录可以交叉核对。
+2. **补多少**:按开战时的 `GuildActivity` 行。每人 `personal_contribution` 帮贡;物品按 `reward_id`;帮会资金 `guild_funds`,但同一帮同一游戏日计资金的胜场不超过 `guild_threshold`。
+3. **怎么补**:
+   - 首选**重放**:把对局行改回 `state=1`,再把原始结果事件重新送进结算(发回 Kafka,或写回 `battle:activity_result:<id>` 让巡检器取)。这样次数、上限、推送、物品通道全部走正常路径,幂等闸门保证只发一次。**重放工具未做**;在它做出来之前,这一步需要开发协助。结果已超过 7 天的无法重放。
+   - 不能重放时由开发出一次性脚本:帮贡改 `guild_member.contribution_total / contribution_balance`、资金改 `guild.funds`,必须在同一事务里按"先帮会行、后成员行"的顺序加锁,提交后失效帮会缓存;物品必须走资产通道(插 `guild_asset_op` 行),不能直接改背包。
+   - **不要**直接 `UPDATE` 这两张表了事:帮会缓存不会失效,界面上的数字要等缓存过期才变,而且绕过了取锁顺序。
+4. 补发前后都在工单里记下 battle_id、名单、数额与依据。
+
+### 关掉同道历练的正确方式
+
+| 做法 | 玩家看到 | 已经开打的对局 |
+|---|---|---|
+| 改表:`GuildActivity` 历练行 `enabled = 0` 或调整档期(推荐) | 活动未开放 | 照常结算 |
+| 删掉 guild 配置里的 `MatchRpc` 段并重启 | 活动未开放 | 照常结算(结果消费仍在跑) |
+| 把 `Activity.TrialResult.Enabled` 改成 `false` 并重启 | 活动未开放 | **结果消费随之停止**,只能等巡检器在 420s 之后从结果记录兜底;不要用它来"关历练" |
+| killswitch(etcd 写 `/mmorpg/killswitch/guildpb.GuildService/StartGuildTrial`) | 请求被短路 | 照常结算;只挡住新的发起,用于紧急止血 |
+
+待入队物品循环与巡检器**无条件运行**,上面任何一种做法都不会让它们停下。
+
+### 部署与告警
+
+- **顺序:battle → match → 路由服与 gate → guild**。battle 必须先会"回显活动上下文 + 先落结果记录再发事件":match 新、battle 旧时,对局照常打完,但结果里没有上下文,guild 无从结算,玩家白打。match 先于 guild:guild 调不到 `StartActivityBattle` 时只是回"服务繁忙",无害。guild 最后:它一上线历练就对玩家开放。
+- **Redis 同源**:guild 的 `PlayerLocatorRedis` 必须与 battle / scene 的 zone Redis 是同一实例同一 DB(K8s 的 SharedRedis)。指错不会报错,表现见场景三第二行。
+- **topic 分区数**:guild 的 `Activity.TrialResult.Partitions` 必须等于 match 的 `ResultTopicPartitions`(默认都是 3)。不相等时消费者起不来,每 30s 一条 ERROR `确保历练结果 topic … 失败`,历练仍能开战、结果积在 topic 里。
+- **消费组**:`guild-trial`,本地 `go_services.ps1 -Zone N` 也**不带** `_zN` 后缀(yaml 里这个值刻意不加引号)。多个 guild 副本同组分摊分区。
+- **K8s**:guild 目前没有 manifest(D-14 遗留);补的时候 ConfigMap 要带 `MatchRpc` 与 `Activity` 两段,`Activity.TrialResult.Enabled: true` 必须显式写。
+- **建议告警**(BK8s 落规则):
+  - `increase(guild_trial_result_total{result="handler_retry"}[10m]) > 0`(结果消费卡住;影响面是那个副本分到的全部分区,单副本时是全服,见场景一 —— 级别按"全服历练结算延迟"定,不要按"三分之一"定);
+  - `increase(guild_trial_result_total{result=~"poison|bad_context|context_mismatch|decode_error"}[1h]) > 0`;
+  - `max(guild_trial_result_overdue)` 超过阈值持续 10 分钟。§6.33 写的阈值是 0,但"没打成"的局也会让它大于 0(见场景三),上线后按实际的开战失败率定阈值;
+  - `max(guild_trial_owed_rows)` 持续上升超过 1 小时;
+  - `increase(guild_trial_register_fail_total[10m]) > 0`;
+  - 消费组 `guild-trial` 的 lag 持续大于 0;
+  - `increase(safego_panic_total{point=~"guild\\.kafka\\.trial_results.*|guild\\.trial_.*"}[10m]) > 0`。
 
 <!-- s6_activities_part9.md -->
 
@@ -1587,6 +1981,25 @@ private ulong _inviteModalLobbyId;                                        // 已
 
 用假 `trialReader`:1 坏字节 → 提交、不调 handler;2 无上下文 → 提交、不调;3 handler 前两次暂时性 err、第三次 nil → 调 3 次、之后提交 1 次、期间不提交;4 handler 返回 (Poison, nil) → 提交;5 退避中 ctx 取消 → 退出不提交。
 
+> **2026-10-08 落码修正(B6b-srv2;本小节 B6b 各测试文件的实际内容,全部未运行)**:
+>
+> - **`internal/kafka/trial_result_consumer_test.go`**(用例名前缀 `TestTrialConsumer_` / `TestNewTrialResultConsumer_`):上面五条都在,按落码后的接口改写 —— handler 只回 error,所以第 4 条是"handler 回 nil 即提交"(毒消息在 handler 内已转终态)。另加:
+>   - 过滤:kind=NONE、空 payload 不调 handler;上下文残缺但 kind 是历练的仍交给 handler;key 与 battle_id 不一致只记日志。
+>   - 退避:逐次翻倍、封顶 30s、不设次数上限;换一条消息从 1s 重新起算;handler 因 ctx 结束而回错不计重调。
+>   - 影响面(2026-10-08 评审修复补):`TestTrialConsumer_RetryingMessageHoldsBackOtherPartitions` —— 一条消息在重调期间,另一个分区的消息一次都不被处理(钉住"单协程串行、停的是本副本全部分区"这个现状,§6.28 落码修正第 8 点)。
+>   - 健壮性:handler panic 只算一次暂时性失败;每次调用带单次上限;提交失败不终止循环;拉取失败 1s 后重拉;reader 回 `io.EOF` 时退出。
+>   - `Run`:先确保 topic(名字、分区数、7 天保留期)再建 reader;失败每 30s 重试(含 panic);等待期间或调用卡住时 ctx 结束即返回;退出前关闭 reader;**启动日志含 `历练结果消费者启动 topic=match-results group=guild-trial`**。
+>   - 构造参数:nil handler、空 Brokers / Topic / GroupID、分区数 < 1 一律报错。
+> - **`internal/logic/activity_trial_test.go`**:上表的口径有三处按落码改了。
+>   - `TestTrialCandidates` 按 U2:只去掉逃跑者,阵亡者在候选里。
+>   - `TestSettleFiltersEvents` 拆成两个:`TestSettleSkipsEventsThatAreNotGuildTrials`(无上下文、kind=NONE → **Skipped**,不销账)与 `TestSettleBadContextAcksWithoutTouchingRepo`(是历练但上下文残缺 / 对局模式不对 → BadContext,销账)。
+>   - `TestLaunchMatchBudget` 拆成 `TestClampMatchBudget`、`TestMatchBudgetForDeadline`、`TestLaunchSkipsMatchWhenBudgetTooSmall`、`TestLaunchMatchFailuresBecomeTips`。
+>   - `activity_logic_test.go` 里的 `TestTrialStubsB6a` 等用例名仍是"桩"口径,本批没有改名。
+>   - 2026-10-08 评审修复补三条:`TestSettleShortCircuitsAlreadySettledBattles`(终态行让重复结果在入口处走掉,发号器坏着、事务回"正在合服"也不影响)、`TestSettlePreReadOnlyTrustsSettledRows`(STARTED / EXPIRED / 归属不符照常进事务;预读失败是暂时性错误)、`TestTrialMinMatchBudgetMirrorsConfig`(`config.MinMatchRpcTimeoutMs` 与 `minMatchBudget` 相等)。
+> - **`internal/config/config_test.go`**:`TestMatchRpcTimeoutBounds` 的边界按 `[300, 2000]` 写(299、1、0、−1、2001 拒启;300、1500、2000 通过)。
+> - **`internal/data/trial_lobby_repo_test.go`**:上面 8 条都在;结果记录(`trial_result_record.go`)与巡检租约的用例也放在这个文件末尾。
+> - **`internal/logic/trial_background_test.go`**:巡检器与待入队循环按 §6.32 / §6.33 的落码修正写(游标轮转、通道关闭时跳过、读记录失败不判过期、坏记录标毒、取消即停)。2026-10-08 评审修复补 `TestTrialSweepSurvivesPanicInOneBattle`(按记录结算某一局时 panic,同一轮里后面的候选照常结算、照常判过期)。
+
 ### `go/match/internal/logic/activitybattlelogic_test.go`(B6b)
 
 用 `newGatherSvcCtx(t)`(`gather_fingerprint_test.go:81`)、`stubGatherRPCs`,`runActivityGatherFn` 换成记录参数的桩:
@@ -1634,6 +2047,18 @@ match 根包 `match_service_internal_guard_test.go`:带 `x-session-detail-bin` �
 | I21(B6b) | 预置候选人 B 16 条 PENDING,胜利结算 | B 无 op 行、owed 表 1 行、帮贡照发;把 B 的 16 行改 APPLIED 后跑一轮 OwedRewardLoop → B 出现第 17 个 seq 的 op、owed 行删除 |
 | I22(B6b) | 行为 EXPIRED,迟到结果到达 | 正常结算为 SETTLED/WIN |
 | I23(B6b) | markPoison 于 STARTED 行、于 SETTLED 行 | 前者 SETTLED/POISON;后者不变 |
+
+> **2026-10-08 落码修正(B6b-srv2;I13–I23 的实际用例名都以 `TestActivityIT_Trial` 开头,全部未运行)**:
+>
+> - **环境变量是 `GUILD_IT_MYSQL_DSN`**(与本节开头一致)。`GUILD_TEST_MYSQL_DSN` 是同包另一组老用例读的变量,两者的关系见 §6.46 B6a-srv 的落码修正。
+> - **I12 收窄**:解散只删本帮 `STARTED` 的对局行,`SETTLED` / `EXPIRED` 的历史行保留(`TestActivityIT_DisbandDeletesStartedTrialBattlesKeepsHistoryAndOwed`)。历史行随对局数线性增长,全删会让老帮会超出解散事务的 2.5s 预算而解散不掉。
+> - **I17 改口径**:帮会不存在时**什么都不写**,回 GuildGone;重放仍是 GuildGone(`TestActivityIT_TrialGuildGoneWritesNothing`)。
+> - **I20**:钩子名是 `trialAfterCounterReadHook`。
+> - **新增**:
+>   - 并发死锁回归 4 条:重复结算只成一次、结算对点灯与商店、结算对解散、两个副本同时转换同一待入队行。判据同 B6a,比对 InnoDB 的 LATEST DETECTED DEADLOCK 段。
+>   - 表形状(`TestActivityIT_TrialTablesShape`):两张新表的主键与索引。
+>   - 确定性失败整体回滚、成员资格与合服闸门、登记幂等、巡检与名单读。
+> - **TiDB 下的无死锁结论只有静态推演**,MySQL 全绿不能当证据(92-handoff §12.6 第 7 步要把 DSN 指向 TiDB 重跑)。
 
 ## 6.42 C++ gtest(B6b)
 
@@ -1760,6 +2185,20 @@ TEST(BattleResultActivity, ClassifyRetryOrder)             // (false,99,30)→kD
 | 20 | `go/guild/guild.go`(消费者、巡检器、待入队循环) |
 | 21–22 | `go/guild/internal/data/trial_result_record.go`(结果键常量与 ack)、`docs/design/guild-phase2.md`(§6 运维段:毒消息、EXPIRED 局、owed 积压的排查与人工补发) |
 
+> **2026-10-08 落码修正(B6b-srv2 已落码;未编译、未 proto-gen、未跑测试)**:实际手改文件与上表的出入。
+>
+> | 上表 | 实际 |
+> |---|---|
+> | #13 `guild_repo.go`(解散删历练行) | 解散的改动落在 `guild_manage_repo.go` 的 `DisbandGuild`(删进度行之后、删帮会行之前调 `deleteGuildTrialBattles`,只删 STARTED 行),并在该文件的 op 固定集合里加 `trial_register` / `trial_mark` / `trial_owed`;`guild_repo.go` 只订正了一处注释 |
+> | #22 `docs/design/guild-phase2.md` 的运维段 | 该文件不存在;运维段落在本文件 §6.35a |
+> | (未列) | `go/guild/internal/data/activity_repo_static_test.go`(语句形状、源码取锁次序、入参校验的静态测试) |
+> | (未列) | `go/guild/internal/data/guild_repo_test.go`、`go/guild/internal/logic/economy_flow_integration_test.go`(删表清单加两张新表) |
+> | (未列) | `docs/design/guild-phase2/92-handoff.md`(§12.2 / §12.4 的 B6b 落码修正)与本文件各节的落码修正 |
+>
+> **没有改、但文字已过时的两处**(不在本批清单内):`go/guild/internal/logic/guild_logic.go` 里一处注释、`activity_logic_test.go` 里 `TestTrialStubsB6a` 等用例名,仍是"历练为桩"的口径。
+>
+> **生成物**:本批给 `proto/guild/guild_db.proto` 加了两表两枚举;`go/proto/guild`、`go/proto/match`(`match_internal`)、`go/proto/battle`、`go/proto/contracts/kafka` 的 Go 生成物要先跑 proto-gen 才有,在那之前 `go/guild` 编不过。
+
 ### B6b-cli(7)
 
 `GuildClient.cs`、`GuildWindow.cs`、`GuildUiRoot.cs`、`GuildUiTests.cs`、`robot/guild_smoke_scenario.go`(S9–S15)、`robot/etc/guild_smoke.yaml`(`trial: true`)、`PROGRESS.md`。
@@ -1824,6 +2263,67 @@ TEST(BattleResultActivity, ClassifyRetryOrder)             // (false,99,30)→kD
 1. `cd go/guild; go build ./...; go vet ./...; go test -count=1 ./internal/...`;集成 `-run "Trial|Owed|Poison"`,不得 SKIP。
 2. 部署顺序:battle → match → 路由服与 gate → guild。guild 日志应有"历练结果消费者启动 topic=match-results group=guild-trial"(本地 `-Zone` 也**不带** `_zN` 后缀)。
 
+> **2026-10-08 落码修正(B6b-srv2 已落码;以下命令全部未执行,由 Codex 串行执行)**:上面两步按实际文件展开。
+>
+> **工作目录**:含本批改动的**完整检出**。落码所在的 worktree(`E:\work\xuanming-server-mmo-guild`,分支 `guild/phase2-finish`)是稀疏检出,缺 `go/schemamigrate`、`tools/scripts` 等,**不能直接在里面编 `go/guild`**;先把分支带进完整工作区。下文的相对路径都从仓库根算。
+>
+> **0. 前置(任一不满足即停)**
+> - B6b-srv1 的 proto 已在:`rg -n "activity_context = 9" proto/contracts/kafka/match_event.proto`、`rg -n "rpc StartActivityBattle" proto/match/match_internal.proto` 各 1 行。
+> - 本批的表已在:`rg -n "message GuildTrialBattleRecord|message GuildTrialRewardOwedRecord" proto/guild/guild_db.proto` 2 行。
+> - **B6a-srv 的导表已跑完**(上文 B6a-srv 第 1–3 步)。落码时它还没跑:活动与历练的 tip 码只在 `data/tip/Tip.xlsx` 里,生成物里没有。判据:`rg -n "kGuildTrialServiceBusy" go/shared/generated/pb/table/guild_error_tip.pb.go` 有输出,且 `go/shared/generated/table/guildactivity_table.go` 存在。没有就先按 B6a-srv 第 1 步导表。
+> - `git status --short proto go/proto cpp/generated robot/generated generated data > pre-b6b-srv2-status.txt`,生成后逐项对比,别人未提交的生成物不得被覆盖。
+>
+> **1. proto-gen**(命令同 B6a-srv 第 2 步)。通过标准:
+> - `rg -n "GuildTrialBattleRecord|GuildTrialRewardOwedRecord|GuildTrialBattleState_|GuildTrialSettleResult_" go/proto/guild/guild_db.pb.go` 有输出;
+> - `go/proto/match/match_internal.pb.go` 与 `match_internal_grpc.pb.go` 存在,含 `MatchInternalClient`、`ActivityBattleReject_`;
+> - `rg -n "BattleActivityContext|EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_TRIAL" go/proto/battle` 有输出;
+> - `rg -n "GetActivityContext|GetFledPlayerIds" go/proto/contracts/kafka` 有输出。
+> - 对比 `pre-b6b-srv2-status.txt`:只多出本批与 B6b-srv1 的生成物。本批没有改 robot;robot 的 `go mod vendor` 留给 B6b-cli。
+>
+> **2. 格式与静态检查**(工作目录 `go/guild`)
+> ```
+> gofmt -l .            # 期望无输出。internal/data/guild_repo_test.go 在本批之前就有一处 gofmt 差异,若只列出它,记录后继续
+> go build ./...
+> go vet ./...
+> go vet -tags integration ./...
+> ```
+> 通过标准:build 与 vet 零报错。
+>
+> **3. 单元测试**(不设任何 DSN;工作目录 `go/guild`)
+> ```
+> go test -count=1 ./internal/kafka ./internal/config ./internal/activity ./internal/constants ./internal/session ./internal/svc ./internal/server
+> go test -count=1 ./internal/logic ./internal/data
+> go test -count=1 .
+> ```
+> 通过标准:全部 PASS。重点看这几组确实跑了(`-v -run` 复核):`./internal/kafka` 的 `TestTrialConsumer_` 与 `TestNewTrialResultConsumer_`;`./internal/logic` 的 `Trial|Settle|Launch|Respond|Owed|Sweep`;`./internal/data` 的 `TrialLobby|TrialResultRecords|TrialSweepLease|TrialTx|TrialSettlePlan|TrialCounterPeriod|ActivityLockOrderInSource|TrialSeqGuards`。不设 DSN 时真库用例 SKIP 属于预期,**只在这一步**。
+>
+> **4. 真库集成测试**(MySQL ≥ 8.0.29,独占实例;工作目录 `go/guild`;口令不写进任何文件)
+> ```
+> $env:GUILD_IT_MYSQL_DSN = "<有 CREATE/DROP DATABASE 与 PROCESS 权限的账号>@tcp(127.0.0.1:3306)/"
+> go test -tags=integration -p 1 -count=1 -v -run "TestActivityIT_" ./internal/data
+> ```
+> 通过标准:全部 PASS,**不得出现 SKIP**;历练相关的 `TestActivityIT_Trial*` 与 `TestActivityIT_DisbandDeletesStartedTrialBattlesKeepsHistoryAndOwed` 都在输出里;并发用例(`TestActivityIT_TrialConcurrent*`)没有报 LATEST DETECTED DEADLOCK。`-p 1` 不能省。
+> 解散路径与经济流的老回归(读 `GUILD_TEST_MYSQL_DSN`)按 92-handoff §12.6 第 5 步另跑一遍:本批改了 `DisbandGuild` 与两份删表清单。
+>
+> **5. 出二进制**:`go build -o ../../bin/go_services/guild.exe .`(工作目录 `go/guild`)。
+>
+> **6. 起服验证**
+> - **部署顺序:battle → match → 路由服与 gate → guild**(理由见 §6.35a"部署与告警")。
+> - 核对 guild 的 `PlayerLocatorRedis` 与 battle 的 zone Redis 是同一实例同一 DB。
+> - guild 启动日志应出现下面五行(Kafka、match 都已起;前四行按此顺序,第 5 行在连上 Kafka 之后):
+>   1. `MatchInternal 客户端已建立(非阻塞拨号)`
+>   2. `帮会活动已装配(元宵灯会 / 中秋团圆 / 同道历练): … 历练开放=true(MatchRpc 已配置=true 结果消费=true)`
+>   3. `[GuildTrial] 后台循环已启动: goroutine guild.trial_owed_loop … guild.trial_sweeper …`
+>   4. `历练结果消费已安排: goroutine guild.kafka.trial_results topic=match-results group=guild-trial`
+>   5. `历练结果消费者启动 topic=match-results group=guild-trial`(本地 `-Zone N` 也**不带** `_zN` 后缀)
+> - 不应出现:`同道历练关闭`、`确保历练结果 topic … 失败`、`goroutine_panic`。
+> - `kafka-consumer-groups --bootstrap-server localhost:9092 --describe --group guild-trial` 能看到该组,追完存量后 LAG = 0。
+> - 停服:Linux / 容器里发 SIGTERM,日志应有 `历练结果消费者退出`,进程在数秒内退出。Windows 本地 Ctrl+C 是直接杀进程,看不到这一行,不作判据。
+>
+> **失败时保留**:失败用例名与断言、`-v` 输出、`SHOW ENGINE INNODB STATUS` 的 LATEST DETECTED DEADLOCK 段、`SELECT VERSION()`;起服失败保留 guild 启动日志全文。
+>
+> 端到端(建房 → 同意 → 开战 → 结算 → 销账)的冒烟在 B6b-cli 的 robot 阶段(S9–S15),不在本批。
+
 ### B6b-cli
 1. 同 B6a-cli 1–3。
 2. 冒烟 `trial: true`,S9–S15 通过;回归 `battle_smoke`(BATTLE_SMOKE_OK)与 features smoke。
@@ -1867,6 +2367,30 @@ TEST(BattleResultActivity, ClassifyRetryOrder)             // (false,99,30)→kD
 20. `GuildActivity` 同 type 启用行时间窗不得重叠;写 RPC 只接受该类型当前选中行。
 21. 多玩家结算按 `(player_id, 表位置)` 全序交错锁 `guild_player_op_seq`/`guild_asset_op`,写进 S1 规则 2 注释。
 22. 活动事务重试用 `withActivityTxRetry`(1213/1205 各最多 2 次),不同于 S1 规则 5 的 `withTxRetry`(1213 一次)。
+
+> **2026-10-08 落码修正(B6b-srv2 落码后新增或订正的偏差;细节在所指小节的落码修正里)**:
+>
+> | # | 偏差 | 在哪 |
+> |---|---|---|
+> | 10(订正) | 历练发奖名单 = team 0 − 逃跑 − 结算时已不在帮 − 开战日次数已满;**阵亡者得奖**(U2) | 顶部决策覆盖、§6.29 |
+> | 15(订正) | 两张新表的锁序位置是 9(T)与 10(W);`guild_trial_battle` 的 idx_0 是 `(guild_id, state)`,不是 `(guild_id)` | §6.30、`tables.go` |
+> | 22(订正) | 活动与历练事务都走 `GuildRepo.inTx`(1213 / 9007 整事务重跑,1205 与子预算到期归一成写冲突),没有 `withActivityTxRetry` | `activity_repo.go` 文件头 |
+> | 23 | `TrialResult.Enabled` 必须显式写才开;整段 `Activity` 缺失时节律取默认值、结果消费关闭 | §6.22 |
+> | 24 | 没有 `HandlerBudget`:调 match 的预算从 ctx 截止时间倒推,剩余不足 800ms 不调 | §6.26 |
+> | 25 | 建房与"同意"之前查合服闸门;带物品而资产通道关闭时建房前拒绝;名单核对只认 MySQL 且先判成员再判在线 | §6.26 |
+> | 26 | 开战登记是短事务(先锁帮会行),不是自动提交 upsert;登记与改房间状态用不继承取消的 2s 独立预算 | §6.26 |
+> | 27 | 结果消费者只回 error、不回去向;销账在 `SettleTrialResult` 里;不 import logic / config;单次调用 30s 上限、panic 折成暂时性失败 | §6.28 |
+> | 28 | 不属于历练的结果回 Skipped 且不销账(正文归入 BadContext) | §6.29 |
+> | 29 | 结算的取锁顺序重排:幂等判定提前到事务开头、先锁完全部 Q 再插 O;没有采用预登记的"新插 O 行"例外 | §6.30 |
+> | 30 | 帮会已解散时结算、标毒、判过期都不落行;`GUILD_TRIAL_SETTLE_RESULT_GUILD_GONE = 3` 保留不写 | §6.30、§6.31 |
+> | 31 | 解散只删本帮 STARTED 的对局行,历史行保留(v1 不清理 `guild_trial_battle`) | §6.41、`tables.go` |
+> | 32 | 新增"结果过旧"判定:开战日 ≤ `DayKey(now − 8 天 + 1 小时)` 的结果判毒 | §6.30 |
+> | 33 | 结算传合服闸门;合服期间到达的结果让**那个 guild 副本的整个结果消费**(它分到的全部分区,单副本时是全服)停在该消息上重试,其余对局靠巡检器兜底(2026-10-08 评审修复订正,原写"所在分区") | §6.28、§6.29、§6.35a |
+> | 34 | 巡检每轮 200 条、租约 = 间隔 − 5s;待入队循环带游标轮转、单轮 500 行、通道关闭时跳过 | §6.32、§6.33 |
+> | 35 | 运维段落在本文件 §6.35a(原写的 `docs/design/guild-phase2.md` 不存在);**人工补发与重放工具未做** | §6.35a |
+> | 36 | 结算入口加一次不持锁的终态预读:对局行已是 SETTLED 即回 Duplicate 并销账,排在构建奖励、发号、合服闸门之前(2026-10-08 评审修复) | §6.29 第 10 点 |
+> | 37 | `MatchRpc.Timeout` 的启动校验区间是 `[300, 2000]`,不是 `(0, 2000]`(2026-10-08 评审修复) | §6.22 第 3 点 |
+> | 38 | 巡检器按结果记录结算时逐局兜 panic,不让一局的缺陷截断整轮(2026-10-08 评审修复) | §6.33 第 8 点 |
 
 ---
 

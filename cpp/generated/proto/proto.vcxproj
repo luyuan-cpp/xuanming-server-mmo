@@ -27,6 +27,8 @@
     <ClCompile Include="battle\player_battle.grpc.pb.cc" />
     <ClCompile Include="match\match_service.pb.cc" />
     <ClCompile Include="match\match_service.grpc.pb.cc" />
+    <ClCompile Include="match\match_internal.pb.cc" />
+    <ClCompile Include="match\match_internal.grpc.pb.cc" />
     <ClCompile Include="client_rpc_router\client_rpc_router.pb.cc" />
     <ClCompile Include="client_rpc_router\client_rpc_router.grpc.pb.cc" />
     <ClCompile Include="common\asset\asset_op.pb.cc" />
@@ -440,6 +442,8 @@
     <ClInclude Include="contracts\kafka\match_event.pb.h" />
     <ClInclude Include="match\match_service.pb.h" />
     <ClInclude Include="match\match_service.grpc.pb.h" />
+    <ClInclude Include="match\match_internal.pb.h" />
+    <ClInclude Include="match\match_internal.grpc.pb.h" />
     <ClInclude Include="trade\trade_table.grpc.pb.h" />
   </ItemGroup>
 </Project>

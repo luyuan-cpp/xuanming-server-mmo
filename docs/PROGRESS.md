@@ -6709,3 +6709,123 @@ ALTER TABLE `guild` ADD UNIQUE KEY `uk_guild` (`name_norm`);
   让它回收,或手工把 `kafka:retry:processing:{topic}:*` 搬回 ready。
 - **Java 版(AGENTS §12)**:待做。本机没有 Java 仓库,未核对它的存档落库是否有对应的单实例假设;`PARITY.md` 未登记。
 - **注意**:契约测试基线仍因 deadline 门禁与 `data_service.yaml` 的 `MethodTimeouts` 冲突而失败(09-29 起,与本条无关)。
+
+## 2026-10-08 friend 收尾:第 7 / 9 步实跑、全量 EXPLAIN、好友推荐两条查询有界化(Claude;SQL 级实测,10-08 的 Go 改动未编译未跑测试)
+
+这一条补记 09-25 起 friend 这条线上的全部工作(之前只写进了交接文档 `docs/handoff/friend-handoff-20260920.md` §9.4 / §9.5,
+PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修复尚未提交"的说法由本条更正(旧条目不改)。
+
+- **第 7 步(2026-09-25,机器 A,按用户指示实跑)**:`mmorpg_friend` 删库重建后 `friend.exe -migrate` 退出 0,建出 5 张表
+  (含 `schema_migrations`),唯一索引只有各表 PRIMARY,`friend_request` / `friend_capacity` 的列与索引齐全,第二次执行 0 条语句;
+  `-allow-modify` 不带 `-migrate` 以 1 退出。常驻启动:横幅、`mysql:` 行不含密码、`friend_redis: shared-fallback`、
+  `sweep: mode=report_only`、`:9180/metrics` 五个指标、etcd NodeInfo 的 `endpoint` 与 `grpcEndpoint` 都在;发真 Ctrl+C 后
+  先注销再排空,3.4 s 内退出。
+- **第 9 步(同日)**:两区栈上 robot `friend-smoke` 退出 0,`FRIEND_SMOKE_OK ... cross_zone=true`(A / C 在 zone 1、B 在 zone 2,
+  两个 gate 不同),两次跨区推送 `outcome=ok`,第 6 步信封 tip 1003 且 friend 日志有"拒绝客户端调用非客户端方法",连跑两轮都过。
+  首跑挂在 B 登录,原因是环境:`zone_2_db.player_database` 缺列(db 启动期 DDL 关闭),用 `go/db/cmd/migrate -command up`
+  (不带 `-allow-modify`)补齐后通过。两区起法的三个坑(z2 端口位移撞 7000、命令主题 g2 要预建、每个 zone 的库要单独迁移)
+  记在交接文档 §9.4「进度续(2026-09-25)」。**偏离 AGENTS §10.1**:为跑冒烟把 robot 与 `go/db/cmd/migrate` 编到了 `%TEMP%`
+  (不在仓里),是用户当时点名要求的实跑;须以 Codex 的正式构建为准。
+- **全量 EXPLAIN(2026-09-28)**:在 5 万玩家 / 100 万边 / 25 万申请的只读基线库(MySQL 26.7.0)上对 `go/friend/internal/data`
+  的约 30 条 SQL 逐条 `EXPLAIN`。全部锁定语句都是完整主键点锁(`const` / `range`,`rows=1`);容量行回收候选与终态申请清理候选
+  都是覆盖索引 `range`、实际读 1000 行即止。**抓到两条推荐查询没有上界**(注释却写"绝不全表扫"):
+  - `recommendAnchor`(random 兜底):扫描量 = pivot 之后的全部玩家数(5 万玩家时 49,899 个分组 / 1.1 s)。09-28 改成
+    "pivot 起 W=1024 个去重 id 的窗口 + 五条按方向拆开的完整主键 `NOT EXISTS`",同库约 2,151 次读 / 3 ms。
+  - `RecommendByMutual`(FOF 召回,普通推荐每次先跑它):最初写法在对抗库上 9,215,314 次读 / 4.6–5.1 s。09-29 改成
+    "每个 FOF 行五次主键点查"(读数有界);**10-08 再改**成"内层派生表只碰 friend 表、按共同好友数排名取前 W=1024 名,
+    外层只对这 W 名点查" —— 09-29 版的点查次数随 FOF 行数增长,其中落在各候选自己页上的那部分在排除表大于 buffer pool
+    的库上(`friend_request` 1.9 GB / buffer pool 128 MB)实测 **38–51 s / 次**;改后同库 **0.09–0.12 s**,窗口里每人做满点查的
+    最坏情况约 1 s、约 2,000 次页读。上界 3R + 6W + 3(R ≤ MaxFriends²),与全服 pending 数、拉黑我的人数、表规模都无关。
+- **对外可见的变化**(都不改协议、tip 码、配置表):
+  - 两条推荐查询都只在一个 1024 人的窗口里挑:窗口被排除者占满时返回偏少,mutual 偏少由 random 兜底补足。候选不多于窗口时
+    结果与改前逐行相同(逐库比对过)。
+  - mutual 的窗口被占满时,random 兜底补进来的人可能是窗口之外、实际有共同好友的人,而兜底不数共同好友、一律填 0 ——
+    所以这种情况下 `mutual_friends = 0` 不再保证"没有共同好友"。默认上限下要有约 270 个以上"拉黑了我"的人挤在排名头部才会
+    触发;要保住原含义得在 logic 层给兜底结果补数一次共同好友,**没有做**(写在 `RecommendCandidate` 的注释里)。
+  - `config.Validate` 新增 `Friend.MaxFriends ≤ 300` 的硬天花板(09-29 加,`maxFriendsCeiling`),超过即拒绝启动;默认 200
+    与 K8s ConfigMap(取自 `etc/friend.yaml`)都不受影响。
+- **改动文件**:`go/friend/internal/data/recommend_repo.go`、`recommend_repo_mysql_test.go`、`go/friend/internal/config/config.go`、
+  `config_test.go`、`go/friend/etc/friend.yaml`(仅注释)、`docs/handoff/friend-handoff-20260920.md` 等 friend 文档。
+- **测试**:推荐查询的扫描上界 / 计划 / 窗口回归共 11 条 —— T1–T4(`TestRecommendAnchor_ReadsBoundedByWindowNotPoolSize` /
+  `_StopsAtWindowWhenSaturated` / `_WindowCoversBoundedExclusionBudget` / `_PlanIsPerRowPrimaryKeyLookups`)、M1 / M2 / M2b
+  (`TestRecommendByMutual_ReadsBoundedByFOFRowsNotGlobalSets` / `_PlanIsPerRowPrimaryKeyLookups` / `_JoinOrderSurvivesStaleStatistics`)、
+  10-08 新增 W1–W4(`_ExclusionLookupsBoundedByWindow` / `_StopsAtWindowWhenSaturated` / `_TiesAreShuffledPerCall` /
+  `_WindowMembershipRotatesPerCall`);config 包有一条窗口预算对账用例与一条天花板边界用例。
+  **10-08 改过的 `recommend_repo.go`、M1 / M2 / M2b 的新口径与新增的 W1–W4 未经编译与运行**;T1–T4 与 config 的用例本批没有
+  改代码,之前的运行记录见上面 2026-09-29「数据层死锁审计收口」条。10-08 的红绿证据只有 SQL 级重放(同一份夹具、同一种测量):
+  例如 W1 夹具上 09-29 版 80,946 次读 > 上界 36,915,现在 30,871。测量辅助函数 `measureSessionHandlerReads` 同批改成
+  "两次读数不等时再测一对,最多三轮"(buffer pool 吃紧时五条排除的先后会翻,读数随之变,不是缺陷)。
+  交付前做过一轮四视角评审(静态过编译 / SQL 语义与上界 / 测试回归力 / 文档核对),6 条 P2 与各条 P3 已按评审修完,
+  其中"静态过编译"一项的结论是没有发现编译或 vet 问题 —— 这是阅读结论,不能代替 Codex 实编。
+- **给 Codex**:命令与通过标准见交接文档 §9.5 表后的「第 8 条的 Codex 命令(2026-10-08)」小节(`go/friend` 下 gofmt / build / vet /
+  不设 DSN 的全量 `go test`,再设 `FRIEND_TEST_MYSQL_DSN` + `FRIEND_REQUIRE_MYSQL_TESTS=1` 跑推荐相关的 19 条与整包;运行期间
+  同实例不得有会话执行 `FLUSH STATUS`,也不要有别的大查询)。通过后重编 `friend.exe`、重跑 `friend-smoke`。
+- **前提与剩余风险**(都写在 `recommend_repo.go` 注释里):GROUP BY 临时表要留在内存(默认 `tmp_table_size` 下 MaxFriends ≤ 约 400);
+  依赖传统优化器 —— `hypergraph_optimizer=on` 时提示失效,某种陈旧统计状态下退化为全表扫,部署不要打开;TiDB 忽略 SEMIJOIN
+  提示,迁移时要按它自己的计划重新核对;`recommendAnchor` 在 friend 表持久统计退化到 ≤ 1 行时窗口退化为全索引扫,用例进不去
+  这个状态,生产上只靠 InnoDB `auto_recalc`(交接文档 §9.5 第 9 条,未做兜底)。
+- **提交状态(写入本条时)**:09-21 条的死锁修复(6 个代码文件与事故报告)已随 2026-09-21 的自动保存 `9cef7b2ec` 进库,
+  ODKU 与 DSN 层 RC 在 `ff39a13f1`。推荐查询 09-28 / 09-29 的部分已随 `24dd3e6c5` / `09f71f9d5` / `f4a24c21e` / `524ad0216` /
+  `a8c2d44a8`(每小时自动保存)与 `ccafe300c` 进 main。10-08 的部分在隔离工作树分支 `fix/friend-mutual-window` 上完成、
+  与本条同一个提交;是否已进 origin/main 以 `git log -- go/friend/internal/data/recommend_repo.go` 为准。
+  机器 A 主工作区另有一个只在本地的在途提交 `6af8b876af`(共 13 个文件,其余是别的会话的部署与 kafkautil 改动),其中
+  go/friend 只有 `recommend_repo.go` 一个文件,是 10-01 会话中断时留下的半成品(`RecommendByMutual` 的 SQL 已改成窗口版,
+  注释与测试还是旧的);10-08 的提交是它的完整版,那段 SQL 逐字相同 —— 主工作区合并时该文件取 origin 的版本即可。
+- **本机清理**:核对用的一次性库(`friend_explain_scratch`、`friend_explain_adv_*`、`friend_it_scratch`)已从机器 A 的 MySQL 删除;
+  `mmorpg_friend` 与两个 zone 库没有动。
+- **Java 版(AGENTS §12)**:**待做**。本条是服务端内部的查询改写,不涉及客户端契约。按上面 2026-09-29「Java 版服务器启动」条与
+  同日「battle 直连收缩」条的 Java 小节,Java 版(0.1.0-SNAPSHOT,截至 09-29 的记录;机器 A 上没有 Java 仓,未复核当前版本)
+  只有「登录 → 进场景」竖切、没有 friend;做到好友推荐时按同一口径对齐(候选查询要有由 SQL 结构给出、与玩家总数无关的上界,
+  并配读数上界回归)。`PARITY.md` 由 Java 仓会话登记,本条没有改它。
+
+## 2026-10-08 本机启动准备与 Go 协议生成产物补齐
+
+- 在 `64f0e33` 上准备本机启动时,发现已跟踪的 Go 生成产物落后于现有源契约,并缺少 `guild_internal`、`match_internal` 的生成文件;已核对不是 sparse-checkout 漏检出。
+- 依据 `BuildUnifiedGoProto` 的暂存与 `go_package=proto/{目录}` 规则,用 protoc 35.1、protoc-gen-go v1.36.10、protoc-gen-go-grpc 1.6.0 定向生成 `guild/guild_internal.proto`、`data_service/data_service.proto`、`common/base/common.proto`、`battle/battle_data.proto`、`battle/battle_node.proto`、`match/match_internal.proto` 对应的 9 个 Go 文件。源 `.proto`、`go.mod`、`go.sum` 均未改动,未手改生成代码;原统一生成器递归收集源文件,本来就覆盖这些目标。
+- Go 1.26.8 下,`tools/scripts/go_services.ps1 -Command build` 已产出 `db`、`data_service`、`client_rpc_router`、`scene_manager`、`player_locator`、`login`、`match` 七个本机 exe,均使用最终协议集。`login` 的锁定依赖 Sarama v1.46.2 经 GitHub 官方仓库定向下载恢复,Sum/GoModSum 与原 `go.sum` 一致;没有换版本或关闭校验。
+- 验证:`data_service` 的 `go test -count=1 ./internal/guildcheck` 通过(15.240s),`shared` 的 `go test -count=1 ./nodeinfo` 通过(6.719s);补取并校验 miniredis v2.37.0 后,`match` 的 `go test -count=1 ./internal/logic -run 'Test.*(Activity|Internal|Session)'` 通过(25.243s)。根包原 `match_service_test.go:42` 的重复比较触发 `go vet suspect or`,现拆成协议值固定为10、JSON值等于枚举两条独立断言,保留两项检查;再次测试被 Windows Application Control 拦截测试 exe,因此根包尚未执行通过。没有关闭 vet 或系统防护。构建与失败日志、锁定工具、定向生成及续跑脚本保留在工作区外的 `.codex-docker-setup/`。
+- 运行状态:已装 Docker Desktop 4.93.0、Docker CLI 29.8.1、Compose 5.5.1、WSL 3.0.1;本机本日已重启,但 `VirtualizationFirmwareEnabled=False` 且 `HypervisorPresent=False`,需在 BIOS 开启 SVM。C++ gate/scene/battle、JDK 23 网关产物也尚未具备;原有 3306/6379/9092 监听需隔离。未启动完整服务器、未执行登录入场验收,未重启机器或改动现存游戏数据。
+- **Java 版(AGENTS §12)**:本条只补本仓库既有源契约的 Go 生成物与本机工具,没有新增业务功能或修改客户端契约;Java 对应版本不涉及,未改另一仓库及其 `PARITY.md`。
+
+## 2026-10-08 补齐帮会表生成物、Java 网关与客户端本机环境
+
+- 帮会编译发现 `Tip.xlsx` 已有活动相关10项错误码,但生成代码仍止于14031;`GuildActivity`源表/schema及`GuildRule`三个字段也已存在而未完整导出。用原导表器在独立沙盒读取当前权威数据和state,再原样采用91个必要生成文件,未手改生成代码或修改xlsx/schema。旧tip号与legacy号保持不变,新增14032–14041,仅14041按源表标记故障;清单复用原版本后正规生成19→20、34→35表,35表文件SHA/size/content_digest全部复核。同步C++、Go、Java和表数据,客户端对应5个C#输出在独立客户端仓库提交。
+- `guild.exe`已构建;constants、activity、logic、data四包58个顶层用例、155个含子用例事件通过,0失败/跳过。chat、trade、friend也已构建,本机11个Go服务均有可用构建产物。现有服务及数据库仍未启动或清理;构建产物不代表联机验收。
+- JDK23.0.2已安装,官方SHA256及Oracle签名验证通过;Java网关在最终表生成物上执行Maven `clean verify`成功:18个suite、112项测试,108通过、4项因未配置独立MySQL测试库跳过,0失败/错误。JAR已生成,目标class major67;`start_game.ps1`最低Java检查由21修正为实际所需23。
+- C++依赖按仓库锁定提交恢复,LLVM检查器与支持库逐项校验。严格模式安装检查器时,测试脚本直接访问可选的`Member`键会异常,现对两处访问先检查`ContainsKey`;原10个用例分别由独立检查器及clang-query执行,共20次通过,构建钩子成功缓存和拒绝裸指针反例亦通过。未关闭检查器或其他检查。
+- C++依赖编译仍在进行,不能声称gate/scene/battle已构建。三个既有内部RPC缺失的消息号与wrapper还需正规生成;沙盒修订后的Go生成器执行文件被Windows Application Control拦截,没有关闭策略、绕过拦截或把未经完整验证的沙盒结果落入仓库。
+- 客户端已安装Unity6000.6.0f1,恢复15人物2055张基础运行图、全部运行时脚本与必要场景依赖;既有2940张人物归档动作和114段完整宠物战斗片段保持已提交状态。44协议类+82表文件独立Roslyn类型编译通过。首次人物/宠物53项EditMode测试在许可证检查阶段退出198(无可用登录令牌/许可证),未进入Unity编译或执行测试,未生成可玩EXE。
+- Docker/WSL已安装,本日重启后固件SVM仍关闭、Hypervisor仍未运行;需用户开启BIOS虚拟化。原3306/6379/9092已有服务保持不动,后续启动还需独立端口/数据目录。用户已被提示在Unity Hub激活自己的许可证;未代为接受许可条款。尚无登录、入场或联机战斗验收。
+- **Java版(AGENTS §12)**:本条是本仓库既有权威源的生成物恢复与本机工具准备,没有新增业务契约;本仓Java表同步且网关重新构建通过。另一Java服务器仓库未改,对应版本与`PARITY.md`不涉及本次本机修复。
+
+### 同日本机验证补充
+
+- 保留并快进合入远端`4f1b6b2`的data_service修复后,重新构建该服务成功;config以及ledger/recall定向回归64个顶层测试、85个含子测试通过,0失败/跳过,没有连接外部数据库。其他10个Go服务已在最终表生成物上重新构建。
+- 用本机构建的锁定gRPC/Protobuf代码生成工具(protoc35.1),按原生成器repo-root include路径从未修改的`proto/guild/guild_internal.proto`生成4个C++ protobuf/gRPC文件。独立重复生成与目标逐字节一致;没有从受应用控制拦截的wrapper沙盒采用文件。节点整体编译和运行仍以之后实际结果为准。
+- `c14ddf7`完整提交的格式检查有10个正规生成文件的30项警告(24项尾空格、6项末尾空行),来自官方protoc/原表生成器输出;为保持可复现未手工修改生成物。91份生成物与沙盒输出一致(仅Git换行归一化),无冲突标记;两个手写脚本和本进度文档的格式检查通过。不能把此前仅检查已跟踪工作区的结果表述为完整生成提交格式检查通过。
+- 锁定版本gRPC Debug全量构建和官方安装已完成;新增`guild_internal.pb.cc`与`guild_internal.grpc.pb.cc`使用原`proto.vcxproj`的Debug|x64参数、`NoRawPointerMemberCheck`和`ClCompile`实际编译,均0警告0错误。保留原串行MSBuild要求;3节点完整构建仍在补齐rdkafka依赖,缺失wrapper仍需正规生成器成功运行。
+- 客户端最新冻结交付补齐剩余13帧,20只宠物120组双方向普攻/受击/施法共1360帧完整,0缺帧/0pending;16项导入器测试通过。仅灵玥和云啾啾有既有服务器身份绑定,其余18只当前为图鉴预览;Unity运行验收仍受许可证阻挡。
+- 本机独立启动配置已完成Compose静态检查及11/11 Go原生配置解析,44个计划端口检查无占用;使用独立卷/端口,不操作原3306/6379/9092。未连接数据库或启动服务;硬件SVM、Unity许可、C++原生成器应用控制拦截仍阻挡完整进游戏验收。受管敏感词文件未在仓库交付,没有伪造空词库。
+- 提交前发现远端新增`43e5a99`帮会二期业务(含guild_db协议变更),将保留该提交;以上Go/Java与协议编译数据仅对应本条原始验证基线`c14ddf7`,不能推定新增远端业务已编译通过。
+- 本批4份正规protoc/grpc输出暂存格式检查仅`guild_internal.grpc.pb.cc`第88行末尾空行一项,与独立重生成输出一致,未手工修改。
+
+### 2026-10-08 最新帮会协议生成闭包验证
+
+- 保留外部工作者本地提交`6cd8c7b`的7份生成物;其中6份C++与1份Go输出均与本次独立正规重生成的SHA/Git blob一致。补齐`battle_data` C++与Kafka `match_event` Go的旧生成产物,不修改权威proto、依赖版本或业务代码。
+- 最新guild服务使用Go1.26.8离线重新构建成功;5个包(config/kafka/data/logic/svc)实际执行164个顶层测试、226个子测试,共390个通过事件,0失败/跳过。仅使用miniredis及进程内替身,没有连接真实数据库、Kafka或match服务。guild.exe为92,934,144字节,SHA256=`a8a309457cf69d291fe14ba23c82b0ee0181bc6a7220eb7609742ad882e7e05a`。
+- `guild_db.pb.cc`、`battle_data.pb.cc`、`match_internal.pb.cc`及其gRPC实现使用原proto工程参数实际编译,均0警告0错误;独立重复生成产物一致。GTest/GMock Debug正式构建安装完成。3个节点整体构建仍未完成;rdkafka的SSL兼容性正在按锁定OpenSSL依赖处理。
+- Windows CodeIntegrity事件3077/3033确认原包装生成器被企业签名级别/应用控制策略拦截,没有通过替换执行路径或修改安全策略绕过;包装产物仍未从失败沙盒采用。
+- 客户端完整宠物动作已Push到`d2658cac`;隔离运行配置仅按新guild源追加MatchRpc与Activity,单独原生配置验证通过。数据库迁移工具已离线构建并通过帮助参数验证,未执行迁移。上述验证不能替代Unity编译、完整节点构建或联机验收。
+- **Java版(AGENTS §12)**:本条继续恢复本仓库原有权威协议的生成物,未新增客户端契约;另一Java服务器仓库未改,业务二期对齐状态沿用远端`43e5a99`的“待做”。
+
+### 同日 Kafka 结果契约与运行产物补充
+
+- 继续按未改动的`proto/contracts/kafka/match_event.proto`正规生成C++两份既有输出,补齐源中已有的activity_context、逃跑及阵亡玩家字段;独立重复生成逐字节一致。`match_event.pb.cc`使用原proto工程、原检查门禁与/m:1、单编译线程实际编译,0警告0错误。
+- 对10个非guild Go服务逐个执行依赖查询,仅重建7个受影响服务且全部exit0:login/player_locator/scene_manager/match/friend/trade依赖Kafka契约,data_service依赖guild契约。db/client_rpc_router/chat不受影响,guild刚完成验证,其4份EXE SHA均保持。所有模块锁文件未变,不重复已完成的回归测试,未启动任何服务。
+
+### 2026-10-08 本机依赖准备收尾与验收阻塞
+
+- gRPC/Protobuf、GTest/GMock、锁定OpenSSL及librdkafka的本机Debug依赖已构建安装。OpenSSL版本、SHA256(abc)标准向量、TLS1.3套件列举、default provider检查通过;未声称完成完整上游测试或网络TLS握手。librdkafka保留SSL/SASL/ZLIB,使用正式OpenSSL解决先前BoringSSL头冲突,没有修改vendor补丁关闭功能;官方示例在创建生产者前执行配置dump并退出0,未连接Kafka。
+- 隔离启动配置为3个C++进程加入所需DLL目录,5份DLL及30条导入依赖文件核对通过;仅改变进程局部PATH,未修改全局PATH或私有凭据。配置和DLL存在性检查不等于服务器成功运行。
+- C++工程仍缺guild_internal与match_internal两组RPC包装代码;正规包装生成器被Windows CodeIntegrity 3077/3033记录拦截。没有手写替身、改安全策略或换路径绕过。3个节点完整编译/启动尚未完成,不会在已知必要输入缺失时宣称构建通过。
+- 13:01 UTC复查仍为固件虚拟化关闭、Hypervisor未运行;Unity6000.6.0f1已安装,许可证日志仍为0 entitlement。Docker基础设施未启动、数据库未迁移、Unity测试未执行、客户端可玩EXE未生成。后续需用户开启BIOS SVM并重启、在Hub激活有效Unity许可证,以及管理员按现有策略核准生成器,然后继续构建与联机验收。

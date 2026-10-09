@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15guildrule_table.proto\"\xfe\x01\n\x0eGuildRuleTable\x12\n\n\x02id\x18\x01 \x01(\r\x12 \n\x18\x61pplication_expire_hours\x18\x02 \x01(\r\x12+\n#max_pending_applications_per_player\x18\x03 \x01(\r\x12*\n\"max_pending_applications_per_guild\x18\x04 \x01(\r\x12!\n\x19\x61sset_op_deadline_seconds\x18\x05 \x01(\r\x12\x1e\n\x16\x61sset_op_retry_base_ms\x18\x06 \x01(\r\x12\"\n\x1areunion_min_online_members\x18\x07 \x01(\r\"3\n\x12GuildRuleTableData\x12\x1d\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x0f.GuildRuleTableB@\n\x0e\x63om.game.tableB\x18GuildRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15guildrule_table.proto\"\xe8\x02\n\x0eGuildRuleTable\x12\n\n\x02id\x18\x01 \x01(\r\x12 \n\x18\x61pplication_expire_hours\x18\x02 \x01(\r\x12+\n#max_pending_applications_per_player\x18\x03 \x01(\r\x12*\n\"max_pending_applications_per_guild\x18\x04 \x01(\r\x12!\n\x19\x61sset_op_deadline_seconds\x18\x05 \x01(\r\x12\x1e\n\x16\x61sset_op_retry_base_ms\x18\x06 \x01(\r\x12\"\n\x1areunion_min_online_members\x18\x07 \x01(\r\x12\x1f\n\x17\x61\x63tivity_join_min_hours\x18\x08 \x01(\r\x12 \n\x18trial_invite_ttl_seconds\x18\t \x01(\r\x12%\n\x1dtrial_invite_cooldown_seconds\x18\n \x01(\r\"3\n\x12GuildRuleTableData\x12\x1d\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x0f.GuildRuleTableB@\n\x0e\x63om.game.tableB\x18GuildRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,7 +33,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\030GuildRuleTableOuterClassP\001Z\022generated/pb/table'
   _globals['_GUILDRULETABLE']._serialized_start=26
-  _globals['_GUILDRULETABLE']._serialized_end=280
-  _globals['_GUILDRULETABLEDATA']._serialized_start=282
-  _globals['_GUILDRULETABLEDATA']._serialized_end=333
+  _globals['_GUILDRULETABLE']._serialized_end=386
+  _globals['_GUILDRULETABLEDATA']._serialized_start=388
+  _globals['_GUILDRULETABLEDATA']._serialized_end=439
 # @@protoc_insertion_point(module_scope)

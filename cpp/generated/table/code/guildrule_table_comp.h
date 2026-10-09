@@ -42,6 +42,18 @@ struct GuildRuleReunion_min_online_membersComp {
     uint32_t value;
 };
 
+struct GuildRuleActivity_join_min_hoursComp {
+    uint32_t value;
+};
+
+struct GuildRuleTrial_invite_ttl_secondsComp {
+    uint32_t value;
+};
+
+struct GuildRuleTrial_invite_cooldown_secondsComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -67,4 +79,13 @@ inline GuildRuleAsset_op_retry_base_msComp MakeGuildRuleAsset_op_retry_base_msCo
 }
 inline GuildRuleReunion_min_online_membersComp MakeGuildRuleReunion_min_online_membersComp(const GuildRuleTable& row) {
     return { row.reunion_min_online_members() };
+}
+inline GuildRuleActivity_join_min_hoursComp MakeGuildRuleActivity_join_min_hoursComp(const GuildRuleTable& row) {
+    return { row.activity_join_min_hours() };
+}
+inline GuildRuleTrial_invite_ttl_secondsComp MakeGuildRuleTrial_invite_ttl_secondsComp(const GuildRuleTable& row) {
+    return { row.trial_invite_ttl_seconds() };
+}
+inline GuildRuleTrial_invite_cooldown_secondsComp MakeGuildRuleTrial_invite_cooldown_secondsComp(const GuildRuleTable& row) {
+    return { row.trial_invite_cooldown_seconds() };
 }

@@ -25,12 +25,14 @@ import (
 	"guild/internal/config"
 	"guild/internal/constants"
 	"guild/internal/data"
+	guildkafka "guild/internal/kafka"
 	"guild/internal/logic"
 	"guild/internal/node"
 	"guild/internal/server"
 	"guild/internal/session"
 	"guild/internal/svc"
 	base "proto/common/base"
+	kafkapb "proto/contracts/kafka"
 	pb "proto/guild"
 	"schemamigrate"
 	"shared/buildinfo"
@@ -307,15 +309,50 @@ func main() {
 	if err != nil {
 		logx.Must(fmt.Errorf("guild activity repo: %w", err))
 	}
-	activities := logic.ActivityDeps{
-		Repo:       activityRepo,
-		Loop:       economy.Loop,
-		OpIDs:      assetOpIDs,
-		Now:        time.Now,
-		SyncBudget: economySyncBudget,
-		Lease:      economy.Lease,
+	// ── 同道历练(B6b,06-activities.md §6.22–§6.33)──
+	// 邀请房间与结果记录两个仓储**无条件建**(都只是包一层已连好的 Redis 客户端):历练此刻开不开,只由下面的
+	// trialMatch 是不是 nil 决定;而结算、巡检器、待入队循环在历练关着时也要跑(关之前留下的在途对局与待入队物品
+	// 仍要处理完),它们需要这两个仓储。
+	//   - 邀请房间在 guild 全局 Redis(RedisClient,单节点;Lua 里按 id 拼别的房间键,只在单节点成立);
+	//   - 结果记录与战斗锁在 PlayerLocatorRedis:它必须与 battle / scene 的 zone Redis 是同一实例同一 DB
+	//     (K8s 的 SharedRedis)。指错的表现是结算后销不掉账、巡检器永远读不到记录,而且不报错 —— 启动期无从自检,
+	//     由部署核对(§6.46 B6b-srv1 第 0 步)。
+	trialLobby, err := data.NewTrialLobbyRepo(svcCtx.RedisClient)
+	if err != nil {
+		logx.Must(fmt.Errorf("guild trial lobby repo: %w", err))
 	}
-	logx.Infof("[guild] 帮会活动已装配(元宵灯会 / 中秋团圆;同道历练为 B6a 桩): 物品奖励通道=%t", activities.Loop != nil)
+	trialResults, err := data.NewTrialResultRecords(svcCtx.PlayerLocatorRedisClient)
+	if err != nil {
+		logx.Must(fmt.Errorf("guild trial result records: %w", err))
+	}
+	// **没有结算就不许开战**:结果消费跑不起来(没显式开 Activity.TrialResult.Enabled,或没配 Kafka.Brokers)时,
+	// 把 Match 留成 nil 接口 → 视图显示未开放、两个历练写 RPC 回 kGuildActivityNotOpen。否则玩家打完一局,
+	// 帮贡、资金、物品都无人发放。
+	// 注意 nil 接口的坑(同上面的 assetOpIDs / 下面的 mergeFence):svcCtx.MatchInternal 本身是接口类型,没配 MatchRpc 时
+	// 是 nil 接口;这里显式判过再赋值,trialMatch 要么是可用的客户端、要么是 nil 接口,不会出现"装着 nil 指针的非 nil 接口"。
+	trialResultActive := config.AppConfig.TrialResultActive()
+	matchConfigured := svcCtx.MatchInternal != nil
+	var trialMatch logic.TrialBattleStarter
+	if trialResultActive && matchConfigured {
+		trialMatch = svcCtx.MatchInternal
+	}
+	activities := logic.ActivityDeps{
+		Repo:        activityRepo,
+		Loop:        economy.Loop,
+		OpIDs:       assetOpIDs,
+		Now:         time.Now,
+		SyncBudget:  economySyncBudget,
+		Lease:       economy.Lease,
+		Lobby:       trialLobby,
+		Match:       trialMatch,
+		Results:     trialResults,
+		BattleLocks: svcCtx.PlayerLocatorRedisClient,
+		// 没配 MatchRpc 时 Timeout 是 0,logic 取自己的默认值(1500ms),但那时也不会调 match。
+		MatchBudget: time.Duration(config.AppConfig.MatchRpc.Timeout) * time.Millisecond,
+	}
+	logx.Infof("[guild] 帮会活动已装配(元宵灯会 / 中秋团圆 / 同道历练): 物品奖励通道=%t 历练开放=%t(MatchRpc 已配置=%t 结果消费=%t)",
+		activities.Loop != nil, trialMatch != nil, matchConfigured, trialResultActive)
+	logTrialClosedReason(config.AppConfig, matchConfigured)
 
 	// 合服闸门(可选):没配 MergeMarkerRedis 时 NewRedisMergeFence 返回 nil 指针,
 	// 必须显式转成 nil **接口** 再传下去 —— 直接传一个 nil 的具体类型指针,
@@ -366,9 +403,11 @@ func main() {
 		// 帮会内部服务(B5d-2a,docs/design/guild-phase2/07-rollback-fail-closed.md §7.4.4):data_service 回档前检查用的只读 RPC。
 		// 方法不进 session.ClientMethods,客户端来源一律 PermissionDenied;拦截器链对它同样生效。
 		// assetStore 在上面无条件建好(logx.Must 兜底),与通道开关无关:回档检查读的是历史终态行,通道关着也要答得出来。
-		// 保留期取清理配置同一个换算(svc.CleanupConfFrom),它是"可证明窗口"的下界。
+		// 保留期是"可证明窗口"的下界,用 svc.RollbackProofRetention 取:配了值时与清理用的换算相同;
+		// AssetOp 整段缺失(通道关闭的合法形态,字段是 0)时回落到默认值 —— 原样传 0 会让这个 RPC 恒回 Unavailable,
+		// data_service 的所有回档被拒且放行无效,上一行说的"通道关着也要答得出来"就不成立了。
 		pb.RegisterGuildInternalServer(grpcServer, server.NewGuildInternalServer(assetStore,
-			svc.CleanupConfFrom(config.AppConfig.AssetOp).TerminalRetention, time.Now))
+			svc.RollbackProofRetention(config.AppConfig.AssetOp), time.Now))
 		if config.AppConfig.Mode == service.DevMode || config.AppConfig.Mode == service.TestMode {
 			reflection.Register(grpcServer)
 		}
@@ -394,6 +433,41 @@ func main() {
 	if config.AppConfig.AssetOp.CleanupEnabled {
 		stopCleanup := startAssetOpCleanup(assetStore, svc.CleanupConfFrom(config.AppConfig.AssetOp))
 		defer stopCleanup()
+	}
+
+	// 同道历练的后台(B6b,06-activities.md §6.28 / §6.32 / §6.33):待入队物品循环、巡检器、对局结果消费者。
+	//
+	// 位置约束有三条,都与上面的资产通道同理:
+	//   1. 在 MustNewServer 之后启动:它们一跑就写指标(guild_trial_*),go-zero 指标开关打开之前写的样本会被丢弃;
+	//   2. 在 assetStore.OnFinalized 赋值与 assetPipe.Start 之后启动:结算提交后会同步投递物品指令(Loop.ProcessOne),
+	//      指令终结时要读那个回调;
+	//   3. 它们的 stop 写在 assetPipe.Stop 的 defer **之后**(后进先出 → 先于它执行):结算的同步投递用的就是那条 Loop,
+	//      使用者要先停;又都早于 svcCtx.Stop(关 MySQL / Redis)。每个 stop 都会等 goroutine 真正退出才返回 ——
+	//      正在进行的结算事务随 ctx 取消回滚,那条消息的位点没有提交,重启后重放,由幂等闸门兜住。
+	//
+	// 后台两个循环**无条件跑**(不看历练此刻开没开,理由见上面的活动依赖装配)。它们没有外部开关,
+	// 起不来只可能是装配错误,所以拒启。
+	stopTrialBackground, err := guildLogic.StartTrialBackground(logic.TrialBackgroundConf{
+		OwedInterval:  config.AppConfig.Activity.OwedLoopInterval(),
+		SweepInterval: config.AppConfig.Activity.TrialSweepInterval(),
+		ResultOverdue: config.AppConfig.Activity.TrialResultOverdue(),
+		Abandon:       config.AppConfig.Activity.TrialAbandon(),
+		// 巡检租约的持有者标识:节点 uuid 每个进程实例唯一,排障时看 guild:trial:sweep:lease 的值就知道是谁在扫。
+		Owner: n.Info.NodeUuid,
+	})
+	if err != nil {
+		logx.Must(fmt.Errorf("guild trial background loops: %w", err))
+	}
+	defer stopTrialBackground()
+
+	// 结果消费者只看"结果消费是否打开"(TrialResultActive),**不看 MatchRpc 配没配**:运维删掉 MatchRpc 来关历练时,
+	// 关之前已经开打的对局仍要结算。Kafka 此刻连不上不拒启(帮会其余功能不依赖它),消费者在后台每 30s 重试。
+	if trialResultActive {
+		stopTrialResults, err := startTrialResultConsumer(config.AppConfig, guildLogic)
+		if err != nil {
+			logx.Must(fmt.Errorf("guild trial result consumer: %w", err))
+		}
+		defer stopTrialResults()
 	}
 
 	// Lost() 关闭 = 本进程**确认**不再是这个槽的持有者(slots key 被挂到了别的 uuid 上:
@@ -443,6 +517,75 @@ func startAssetOpCleanup(store *data.GuildAssetStore, c data.CleanupConf) (stop 
 	return func() {
 		cancel()
 		<-done
+	}
+}
+
+// trialResultsPoint 是历练结果消费 goroutine 的 safego 点位名(safego_panic_total 的 label,必须是常量)。
+const trialResultsPoint = "guild.kafka.trial_results"
+
+// startTrialResultConsumer 起历练对局结果的消费 goroutine(guild.kafka.trial_results;06-activities.md §6.28):
+// Kafka topic match-results、消费组 guild-trial,只把帮会同道历练的结果交给 SettleTrialResult。
+// 返回的 stop 取消它并**等它退出**(契约同 startAssetOpCleanup):结算跑在 MySQL / Redis 上,必须在关库之前停下。
+//
+// 返回 error 只可能是参数非法(config.Validate 与 TrialResultActive 已经挡过一遍,走到这里是装配错误)。
+// **Kafka 连不上不在此列**:消费者自己在后台每 30s 重试确保 topic,真正连上时才打
+// "历练结果消费者启动 topic=… group=…"那一行(部署验收看的就是它)。
+//
+// 接线只有两处:
+//   - 结算入口:消费者只关心"提交位点还是退避重调",所以丢掉 SettleTrialResult 的去向、只留 error。
+//     销账(删 battle 落在 SharedRedis 的结果记录)、幂等闸门、毒消息标记都在 SettleTrialResult 里,这里不重复;
+//   - 两个计数出口:指标在 logic 包注册,消费者(internal/kafka)不 import logic,经回调计数。
+func startTrialResultConsumer(c config.Config, guildLogic *logic.GuildLogic) (stop func(), err error) {
+	resultConf := c.Activity.TrialResult
+	consumer, err := guildkafka.NewTrialResultConsumer(guildkafka.TrialResultConsumerConfig{
+		Brokers:    c.Kafka.Brokers,
+		Topic:      resultConf.Topic,
+		GroupID:    resultConf.GroupID,
+		Partitions: resultConf.Partitions,
+	}, func(ctx context.Context, ev *kafkapb.BattleResultEvent) error {
+		_, err := guildLogic.SettleTrialResult(ctx, ev)
+		return err
+	}, guildkafka.TrialResultCounters{
+		DecodeError:  logic.CountTrialResultDecodeError,
+		HandlerRetry: logic.CountTrialResultHandlerRetry,
+	})
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	safego.Go(trialResultsPoint, func() {
+		// close 放在 defer 里:safego 兜住 panic 时它照样执行,stop 不会永远等下去。
+		defer close(done)
+		consumer.Run(ctx)
+	})
+	logx.Infof("[guild] 历练结果消费已安排: goroutine %s topic=%s group=%s partitions=%d(连上 Kafka 后另有一行启动日志)",
+		trialResultsPoint, resultConf.Topic, resultConf.GroupID, resultConf.Partitions)
+	return func() {
+		cancel()
+		<-done
+	}, nil
+}
+
+// logTrialClosedReason 在同道历练因为**配置**而关闭时打一行原因(开着时什么都不打)。
+// 历练的三个开关分散在三段配置里(MatchRpc、Activity.TrialResult.Enabled、Kafka.Brokers),任何一个没配,
+// 玩家看到的都只是一句"活动未开放";这一行让运维不必对着 yaml 猜是哪一个。
+// 灯会 / 团圆不受这三个开关影响。配表层面的关闭(GuildActivity.enabled、档期)不归这里管。
+func logTrialClosedReason(c config.Config, matchConfigured bool) {
+	resultActive := c.TrialResultActive()
+	switch {
+	case c.Activity.TrialResult.Enabled && !resultActive:
+		// 06 §6.22:Enabled 而没有 Brokers 不拒启(本地不起 Kafka 是正常形态),但必须出声。
+		// go-zero logx 没有 WARN 级,沿用本文件"降级形态打一条 ERROR"的写法。
+		logx.Error("Guild: Activity.TrialResult.Enabled=true 但 Kafka.Brokers 为空,历练结果消费未启用,同道历练关闭" +
+			"(没有结算就不许开战);已在途的对局只能靠巡检器从结果记录兜底")
+	case !resultActive && matchConfigured:
+		logx.Error("Guild: 已配置 MatchRpc 但 Activity.TrialResult.Enabled 未显式打开,历练结果消费未启用,同道历练关闭" +
+			"(没有结算就不许开战);要开放历练请在 Activity.TrialResult 下写 Enabled: true")
+	case !resultActive:
+		logx.Info("[guild] 同道历练未开放: 未配置 MatchRpc,Activity.TrialResult.Enabled 也未打开")
+	case !matchConfigured:
+		logx.Info("[guild] 同道历练未开放: 未配置 MatchRpc(结果消费照常运行,关之前开打的对局仍会结算)")
 	}
 }
 

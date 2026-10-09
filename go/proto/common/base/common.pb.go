@@ -85,8 +85,19 @@ type NodeInfo struct {
 	NodeUuid      string                 `protobuf:"bytes,8,opt,name=node_uuid,json=nodeUuid,proto3" json:"node_uuid,omitempty"`
 	PlayerCount   uint32                 `protobuf:"varint,9,opt,name=player_count,json=playerCount,proto3" json:"player_count,omitempty"`    // Current online player/connection count (for load balancing)
 	GrpcEndpoint  *EndpointComp          `protobuf:"bytes,10,opt,name=grpc_endpoint,json=grpcEndpoint,proto3" json:"grpc_endpoint,omitempty"` // gRPC server endpoint (for Go services to connect)
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 客户端可达地址（advertised address，语义同 Kafka advertised.listeners）。
+	// 只由客户端面节点（gate / battle）在 etcd 发布前自报。
+	// 缺失（未设置或不可用，判据见下）时：消费方 require=false 回落 endpoint（podip 模式）；
+	// require=true 跳过该节点 / 拒签（external 模式纵深防御）。require 即 login / scene_manager 的
+	// RequireClientEndpoint、battle 的 CLIENT_ENDPOINT_REQUIRED（docs/design/k8s-client-entry.md D78 / D79）。
+	// 只用于下发给客户端：login CandidatesForZone / scene_manager RedirectToGate / battle BuildAssignment。
+	// 不参与端口 CAS、节点间对端校验、gRPC 拨号、FindNodeByPodIP —— 这些永远用 endpoint / grpc_endpoint。
+	// ip 可以是 IPv4 字面量或 DNS 名；port 是客户端连接端口（可能是 NodePort / hostPort，与 endpoint.port 不同）。
+	// 可用 = ip 非空且 port 在 1..65535；半填（只有 ip 或只有 port）视为缺失。
+	// 字段号 11 上线后不复用；废弃时写 `reserved 11;`（AGENTS.md §4.3）。
+	ClientEndpoint *EndpointComp `protobuf:"bytes,11,opt,name=client_endpoint,json=clientEndpoint,proto3" json:"client_endpoint,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *NodeInfo) Reset() {
@@ -185,6 +196,13 @@ func (x *NodeInfo) GetPlayerCount() uint32 {
 func (x *NodeInfo) GetGrpcEndpoint() *EndpointComp {
 	if x != nil {
 		return x.GrpcEndpoint
+	}
+	return nil
+}
+
+func (x *NodeInfo) GetClientEndpoint() *EndpointComp {
+	if x != nil {
+		return x.ClientEndpoint
 	}
 	return nil
 }
@@ -292,7 +310,7 @@ const file_proto_common_base_common_proto_rawDesc = "" +
 	"\x1eproto/common/base/common.proto\"2\n" +
 	"\fEndpointComp\x12\x0e\n" +
 	"\x02ip\x18\x01 \x01(\tR\x02ip\x12\x12\n" +
-	"\x04port\x18\x02 \x01(\rR\x04port\"\xe6\x02\n" +
+	"\x04port\x18\x02 \x01(\rR\x04port\"\x9e\x03\n" +
 	"\bNodeInfo\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\rR\x06nodeId\x12\x1b\n" +
 	"\tnode_type\x18\x02 \x01(\rR\bnodeType\x12\x1f\n" +
@@ -305,7 +323,8 @@ const file_proto_common_base_common_proto_rawDesc = "" +
 	"\tnode_uuid\x18\b \x01(\tR\bnodeUuid\x12!\n" +
 	"\fplayer_count\x18\t \x01(\rR\vplayerCount\x122\n" +
 	"\rgrpc_endpoint\x18\n" +
-	" \x01(\v2\r.EndpointCompR\fgrpcEndpoint\":\n" +
+	" \x01(\v2\r.EndpointCompR\fgrpcEndpoint\x126\n" +
+	"\x0fclient_endpoint\x18\v \x01(\v2\r.EndpointCompR\x0eclientEndpoint\":\n" +
 	"\x10NodeInfoListComp\x12&\n" +
 	"\tnode_list\x18\x01 \x03(\v2\t.NodeInfoR\bnodeList\"4\n" +
 	"\x0eNetworkAddress\x12\x0e\n" +
@@ -334,12 +353,13 @@ var file_proto_common_base_common_proto_goTypes = []any{
 var file_proto_common_base_common_proto_depIdxs = []int32{
 	0, // 0: NodeInfo.endpoint:type_name -> EndpointComp
 	0, // 1: NodeInfo.grpc_endpoint:type_name -> EndpointComp
-	1, // 2: NodeInfoListComp.node_list:type_name -> NodeInfo
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	0, // 2: NodeInfo.client_endpoint:type_name -> EndpointComp
+	1, // 3: NodeInfoListComp.node_list:type_name -> NodeInfo
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_base_common_proto_init() }

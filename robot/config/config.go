@@ -207,14 +207,17 @@ type GuildSmokeConfig struct {
 	EconomyLeader string `yaml:"economy_leader"`
 	EconomyMember string `yaml:"economy_member"`
 
-	// Activities 打开活动段(帮会二期 B6a-cli,robot/guild_activity_smoke.go):经济段之后由 ActivityAccounts
-	// 的四个账号在 zone_a 另建帮会跑 元宵灯会 / 中秋团圆(docs/design/guild-phase2/06-activities.md §6.44 的 S1–S8)。
+	// Activities 打开活动段(帮会二期 B6a-cli / B6b-cli,robot/guild_activity_smoke.go):经济段之后由 ActivityAccounts
+	// 的四个账号在 zone_a 另建帮会跑 元宵灯会 / 中秋团圆(docs/design/guild-phase2/06-activities.md §6.44 的 S1–S8);
+	// 同道历练(S9–S15)另由 Trial 控制。
 	Activities bool `yaml:"activities"`
 	// ActivityAccounts 依次是帮主 A、成员 B / C / D,必须恰好四个且互不相同(默认配表的阈值按四个机器人能达成来取)。
 	// 四个账号必须首次在 zone_a 建角;缺省 robot_9216–9219(号段见 90-consistency Y-09)。
 	ActivityAccounts []string `yaml:"activity_accounts"`
-	// Trial 打开同道历练段(§6.44 的 S9–S15,B6b-cli 落码),同时决定 S1 对历练卡片的期望:
-	// false = 未开放(B6a 的服务端桩),true = 开放。只在 Activities 为 true 时有意义。
+	// Trial 打开同道历练段(§6.44 的 S9–S15:邀请房间 → 全员同意 → 开战 → 结算发奖 → 拒绝 / 离线 / 名单不合法),
+	// 同时决定 S1 对历练卡片的期望:true = 开放,false = 未开放。只在 Activities 为 true 时有意义。
+	// 它必须与被测 guild 的部署一致:配表行启用之外,历练还要 guild 配了 MatchRpc 与历练结果消费
+	// (Activity.TrialResult.Enabled + Kafka.Brokers)才算开放;两边不一致时冒烟在 S1 失败并说明原因。
 	Trial bool `yaml:"trial"`
 }
 

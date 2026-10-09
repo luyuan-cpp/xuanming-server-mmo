@@ -49,6 +49,8 @@ public class AllTable {
 
         GlobalVariableTableManager.getInstance().load(configDir, useBinary);
 
+        GuildActivityTableManager.getInstance().load(configDir, useBinary);
+
         GuildDonateTableManager.getInstance().load(configDir, useBinary);
 
         GuildLevelTableManager.getInstance().load(configDir, useBinary);
@@ -100,7 +102,7 @@ public class AllTable {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(34);
+        CountDownLatch latch = new CountDownLatch(35);
 
         new Thread(() -> {
             try {
@@ -257,6 +259,16 @@ public class AllTable {
                 GlobalVariableTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load GlobalVariable table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                GuildActivityTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load GuildActivity table", e);
             } finally {
                 latch.countDown();
             }
@@ -493,6 +505,8 @@ public class AllTable {
         EquipSlotTableManager.getInstance().load(configDir, useBinary);
 
         GlobalVariableTableManager.getInstance().load(configDir, useBinary);
+
+        GuildActivityTableManager.getInstance().load(configDir, useBinary);
 
         GuildDonateTableManager.getInstance().load(configDir, useBinary);
 
