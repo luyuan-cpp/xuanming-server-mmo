@@ -1,0 +1,114 @@
+{
+  "scope": "Local dependency revisions and preserved source patches; this is not a build acceptance record.",
+  "dependencies": [
+    {
+      "path": "third_party/boost",
+      "local_revision": "87db1d0dfa4986d223cc5966e29d4a17312fa3f9",
+      "local_origin": "https://github.com/luyuancpp/boost.git",
+      "tracked_worktree_patch": null,
+      "recorded_revision": "c89e6267665516192015a9e40955e154466f4f68",
+      "status": "主仓保留官方可获取的 recorded_revision；当前受版本控制的源码按不超过 2 MiB 分卷保存，不包含 .git、历史或构建产物。",
+      "recovery_archive": "tools/patches/boost/local-source-87db1d0d.zip",
+      "recovery_archive_bytes": 26692385,
+      "recovery_archive_sha256": "feffb7c00d65058cb7dd4610a92a2fa89e4cba39300dc4e6a94c814fe6ebc4d1",
+      "recovery_archive_revision": "87db1d0dfa4986d223cc5966e29d4a17312fa3f9",
+      "recovery_verification": "分卷逐一 SHA-256 校验；拼接总 SHA-256 与原 ZIP 完全相同；ZIP 完整性与原源码路径清单已验证。",
+      "recovery_command": "python tools/patches/boost/restore_local_source.py --output <尚不存在的独立恢复目录>",
+      "recovery_parts": [
+        {
+          "path": "tools/patches/boost/local-source-87db1d0d.zip.part-001",
+          "bytes": 2097152,
+          "sha256": "b0c468d877e2144c4e497870253020fe77e415fd543f927721bc12875aea6fc1"
+        },
+        {
+          "path": "tools/patches/boost/local-source-87db1d0d.zip.part-002",
+          "bytes": 2097152,
+          "sha256": "3e10032772d5a219b44d16c473ff7bc2b7dcb6c350861cd07aabea7703d1fdf3"
+        },
+        {
+          "path": "tools/patches/boost/local-source-87db1d0d.zip.part-003",
+          "bytes": 2097152,
+          "sha256": "716b8cc4784b3ba070ff957c383f619c8992e88a80180a91b85558b8284b4a9d"
+        },
+        {
+          "path": "tools/patches/boost/local-source-87db1d0d.zip.part-004",
+          "bytes": 2097152,
+          "sha256": "86eb68f109ad5ad7db7cde81dab95e6a86515961f3c7e364cf5f48b661347bc6"
+        },
+        {
+          "path": "tools/patches/boost/local-source-87db1d0d.zip.part-005",
+          "bytes": 2097152,
+          "sha256": "a2b02069eaa042fb40622bbcf66a47adc6814fcaf89c11348d9e9657361e46bd"
+        },
+        {
+          "path": "tools/patches/boost/local-source-87db1d0d.zip.part-006",
+          "bytes": 2097152,
+          "sha256": "46cd7f2d3bb99195b87832416c795afa3dd04d2b1e876c99f75af6c29e16bb36"
+        },
+        {
+          "path": "tools/patches/boost/local-source-87db1d0d.zip.part-007",
+          "bytes": 2097152,
+          "sha256": "71e12844db93b139a2f3b2bfb912f0d16da3f2fc6e543fd5d45f5c77bf9fbdf6"
+        },
+        {
+          "path": "tools/patches/boost/local-source-87db1d0d.zip.part-008",
+          "bytes": 2097152,
+          "sha256": "5528887cf49d0b43ea0a30b636d7a2c59b4e86c767db4a89a2f8e7bb03a5bb12"
+        },
+        {
+          "path": "tools/patches/boost/local-source-87db1d0d.zip.part-009",
+          "bytes": 2097152,
+          "sha256": "6dd84e569e80ead071d7c1eff097c5da38c945dd941edec41b4a6e71763747f2"
+        },
+        {
+          "path": "tools/patches/boost/local-source-87db1d0d.zip.part-010",
+          "bytes": 2097152,
+          "sha256": "88512bb82c002cf1056949850e30c4a022fa7edcd9cfb62aad7886dd56315b5f"
+        },
+        {
+          "path": "tools/patches/boost/local-source-87db1d0d.zip.part-011",
+          "bytes": 2097152,
+          "sha256": "809677451ab79370264ac3ecf90eb9968dd1020394bd851bf41599047ee2e25a"
+        },
+        {
+          "path": "tools/patches/boost/local-source-87db1d0d.zip.part-012",
+          "bytes": 2097152,
+          "sha256": "fd2631249f85a153eeab224338ddceac0673ab6cbd7175f65497606cdccc425b"
+        },
+        {
+          "path": "tools/patches/boost/local-source-87db1d0d.zip.part-013",
+          "bytes": 1526561,
+          "sha256": "9ee4fd05d7cf767ff515f5c466e3ab5f003b234ebd10f6b4de7dc911479975d5"
+        }
+      ]
+    },
+    {
+      "path": "third_party/librdkafka",
+      "local_revision": "f1b831e7ce01283119ef60a55e1a214787d9707b",
+      "local_origin": "https://github.com/confluentinc/librdkafka.git",
+      "tracked_worktree_patch": "tools/patches/librdkafka/local-worktree-20260914.patch",
+      "status": "Tracked source edits are preserved by the referenced patch; build outputs remain local."
+    },
+    {
+      "path": "third_party/ue5navmesh",
+      "local_revision": "bea0cedd649d6b195168869845c8b8880f72d35a",
+      "local_origin": "https://github.com/luyuancpp/ue5navmesh.git",
+      "tracked_worktree_patch": "tools/patches/ue5navmesh/local-worktree-20260914.patch",
+      "status": "Tracked source edits are preserved by the referenced patch; build outputs remain local."
+    },
+    {
+      "path": "third_party/grpc/third_party/boringssl-with-bazel",
+      "local_revision": "2b44a3701a4788e1ef866ddc7f143060a3d196c9",
+      "local_origin": "https://github.com/google/boringssl.git",
+      "tracked_worktree_patch": "tools/patches/grpc/v1.83.0-boringssl-windows-x509-name.patch",
+      "status": "Tracked source edits are preserved by the referenced patch; build outputs remain local."
+    },
+    {
+      "path": "third_party/grpc/third_party/zlib",
+      "local_revision": "f1f503da85d52e56aae11557b4d79a42bcaa2b86",
+      "local_origin": "https://github.com/madler/zlib",
+      "tracked_worktree_patch": "tools/patches/grpc/zlib-local-zconf-removal-20260929.patch",
+      "status": "保存当前受版本控制的 zconf.h 删除差异，不改变上游子模块指针，不修改本地构建目录。"
+    }
+  ]
+}

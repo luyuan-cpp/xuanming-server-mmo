@@ -43,7 +43,7 @@ service_discovery_prefixes:
   - "FriendNodeService.rpc" # 好友服务（Go-Zero gRPC）的Etcd存储前缀
   - "GuildNodeService.rpc" # 公会服务（Go-Zero gRPC）的Etcd存储前缀
   - "SceneManagerNodeService.rpc" # 场景管理服务（Go-Zero gRPC）的Etcd存储前缀
-  - "BattleNodeService.rpc" # 回合制战斗节点（C++ gRPC，全局池不分 zone；gate 据此发现 battle 建 gRPC channel，match 的 Go 侧自行 watch）
+  - "BattleNodeService.rpc" # 回合制战斗节点（C++ gRPC，全局池不分 zone）。gate 不再连 battle（两种路由模式下 gate 都不中继战斗，turn-based §22 D66）；保留此前缀是因为 battle 自己也读这份配置，etcd_service 按这些前缀 watch 自己的节点键做劫持检测与注册自检；match 的 Go 侧自行 watch
   - "ClientRpcRouterNodeService.rpc" # 客户端 RPC 路由服(Go-Zero,全局池):GATE_CLIENT_RPC_ROUTER=1 时 gate 唯一的 gRPC 目标,客户端消息按 message_id 经它不透明转发到 login/match/… (docs/design/client-rpc-router.md)
   - "MatchNodeService.rpc" # 匹配服务（Go-Zero gRPC，全局池不分 zone：不在 IsZoneScopedNodeType，gate 连全 zone 的 match 实例随机路由；排队池全服共享，见 docs/design/cross-zone-matchmaking.md）：gate 按 NODE_MATCH 路由 JoinQueue/WatchBattle 等客户端消息，缺此前缀会报 "Node not found ... message id: 157"（2026-09-01 冒烟补）
   - "DataServiceNodeService.rpc" # 全局数据服务（Go-Zero gRPC，全局池不分 zone）：scene 经它的 AllocateIdSegment 领 item / txlog / snapshot 三种永久 guid 的号段（IdSegments 里启用的种类领到首段是启动硬依赖）。前提：data_service 须按 C++ 约定把 NodeInfo 注册到本前缀下（同 scene_manager 的 noderegistry），只注册 go-zero 的 dataservice.rpc 是发现不到的
@@ -65,7 +65,7 @@ Kafka:
   # zone-2 BindSession could land on z1_gate, where ValidateCommandTarget
   # silently dropped it because target_gate_id != node.GetNodeId(). Stress
   # 2026-05-24 saw this surface as z2/z3 `scene_notified=1` ratios at 5%
-  # while z1 was at 100%; see docs/design/stress-3zone-2026-05-23-postmortem.md
+  # while z1 was at 100%; see docs/stress/stress-3zone-2026-05-23-postmortem.md
   # §J.6.
   #
   # Per-instance groupId means every node only competes for partitions of
@@ -154,6 +154,17 @@ BattleMaxConnections: 4096
 # 必须同一次提交改两处并重出/重滚镜像:本键 + data_service.yaml 的 Kafka.TopicGeneration。
 # K8s 上 node ConfigMap 里的这一键由 k8s_deploy.ps1 从 data_service.yaml 镜像生成(不抄这份)。
 AuditTopicGeneration: 1
+
+# 玩家存盘 DBTask topic 的世代号(C++ scene 按 home_zone 往 db_task_zone_{zone} 写存盘)。
+# 名字规则与审计 topic **不同**:<= 1 → db_task_zone_{zone}(第一代不带后缀,该名字在引入世代号前就已上线),
+# >= 2 → db_task_zone_{zone}_g{N}。缺键 / 0 = 1。见 cpp/libs/services/scene/player/constants/player.h。
+#
+# **必须与 go/db/etc/db.yaml 的 ServerConfig.Kafka.TopicGeneration、go/login/etc/login.yaml 的
+# Kafka.TopicGeneration 三方相等**:go/db 是唯一的消费者。不一致不会有任何报错 —— 换代后 scene
+# 仍写旧代 topic,存盘静默积压在已排空、没人消费的旧 topic 里。start_game.ps1 启动前会核对三方。
+# 换代(= 改分区数)走 docs/design/db-task-kafka-partition-contract.md 的停写 / 排空流程,三处同一次提交改。
+# K8s 上 node ConfigMap 里的这一键由 k8s_deploy.ps1 从 go/db/etc/db.yaml 镜像生成(不抄这份)。
+DbTaskTopicGeneration: 1
 
 # 集群号(0..31):部署级常量,运维一次性设定,策划不碰。只有 Go 的 snowflake 槽位协议
 # (login-player / guild / scene-manager / match)消费它,作为 17 位 worker 字段的高 5 位;

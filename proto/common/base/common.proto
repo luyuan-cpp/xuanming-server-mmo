@@ -20,6 +20,17 @@ message NodeInfo {
   string node_uuid = 8;
   uint32 player_count = 9; // Current online player/connection count (for load balancing)
   EndpointComp grpc_endpoint = 10; // gRPC server endpoint (for Go services to connect)
+  // 客户端可达地址（advertised address，语义同 Kafka advertised.listeners）。
+  // 只由客户端面节点（gate / battle）在 etcd 发布前自报。
+  // 缺失（未设置或不可用，判据见下）时：消费方 require=false 回落 endpoint（podip 模式）；
+  // require=true 跳过该节点 / 拒签（external 模式纵深防御）。require 即 login / scene_manager 的
+  // RequireClientEndpoint、battle 的 CLIENT_ENDPOINT_REQUIRED（docs/design/k8s-client-entry.md D78 / D79）。
+  // 只用于下发给客户端：login CandidatesForZone / scene_manager RedirectToGate / battle BuildAssignment。
+  // 不参与端口 CAS、节点间对端校验、gRPC 拨号、FindNodeByPodIP —— 这些永远用 endpoint / grpc_endpoint。
+  // ip 可以是 IPv4 字面量或 DNS 名；port 是客户端连接端口（可能是 NodePort / hostPort，与 endpoint.port 不同）。
+  // 可用 = ip 非空且 port 在 1..65535；半填（只有 ip 或只有 port）视为缺失。
+  // 字段号 11 上线后不复用；废弃时写 `reserved 11;`（AGENTS.md §4.3）。
+  EndpointComp client_endpoint = 11;
 }
 
 message NodeInfoListComp

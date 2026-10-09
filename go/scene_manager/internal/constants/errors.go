@@ -59,4 +59,12 @@ const (
 	// 在跨 zone 传送的两条腿上走这个码 —— gate zone 不能代表归属(logic/home_zone.go
 	// 的 homeZoneUnmappedPolicy)。那种拒绝重试不会好,要先回填映射。
 	ErrHomeZoneUnavailable uint32 = 20
+	// ErrHomeZoneMerging: 玩家的归属 zone 正处于合服围栏内(data_service 读到
+	// merge:in_progress:{home} 存在,GetPlayerHomeZoneResponse.home_zone_merging=true)。
+	// 合服窗口里源区归属玩家不得从**任何** zone 进场:存盘 topic 按 home_zone 选,此刻还是
+	// 源区的,而源 topic 已被合服工具排空(P3/P4),放进去的存盘会写进一个没人再消费、
+	// 也不在合服清单口径里的 topic(player-storage-placement.md §8.2、§12 A16)。
+	// 拒绝发生在任何 location / owner_epoch 写之前,一个字节都不改;可重试 —— 合服完成
+	// (home 改成目标区、围栏撤掉)或中止后重试即放行,不是故障。
+	ErrHomeZoneMerging uint32 = 21
 )

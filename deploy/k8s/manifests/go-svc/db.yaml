@@ -21,7 +21,22 @@ metadata:
     app: db
     tier: go-svc
 spec:
-  replicas: 1
+  # 2 副本(2026-10-08,docs/design/no-single-node-horizontal-scaling-20261001.md §3)。
+  # db 以前在每个 zone 被钉成单实例,唯一的原因是重试队列的 processing 列表全 zone 共用、启动时整表搬回 ready:
+  # 第二个实例一启动就会把第一个实例在途的收据搬走重做。现在 processing 按实例隔离、带租约,孤儿由活着的实例回收
+  # (go/db/internal/kafka/retry_ownership.go)。其余部分本来就是按多实例写的:Kafka 消费是 consumer group
+  # (分区在实例间独占分配),写任务靠跨实例的 ordering lock + applied 游标保证同一个 key 不乱序、不回退。
+  # 有效并行度的上限是分区数(Kafka.PartitionCnt,现为 10),副本超过它没有意义。
+  # 不要给它配 HPA:sarama 是 eager rebalance,每次成员变化全员暂停几秒。
+  # MySQL 连接预算:每个实例最多 MaxOpenConn(60)条,外加每个额外落点库 8 条;按 zone 数 × 副本数算进 max_connections。
+  replicas: 2
+  # 先起新的、Ready 之后再停旧的。以前没写 strategy,默认滚动策略在 1 副本时同样是先起后停 ——
+  # 也就是说"单实例"在每次发布的重叠期本来就不成立;现在显式写出来,并且重叠是安全的。
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: db
@@ -31,6 +46,16 @@ spec:
         app: db
         tier: go-svc
     spec:
+      affinity:
+        podAntiAffinity:
+          # 两个副本尽量不落同一节点,否则单节点故障等于这个 zone 的存档落库全停
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: db
+                topologyKey: kubernetes.io/hostname
       containers:
         - name: db
           image: PLACEHOLDER_IMAGE
@@ -67,8 +92,25 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
-      terminationGracePeriodSeconds: 30
+      # preStop 5s + 消费排空最多 10s + 把没做完的重试收据还回 ready(最多 5s)+ 余量。
+      # 超时被 SIGKILL 也不丢:收据留在本实例的 processing 列表里,租约过期后由另一个实例回收。
+      terminationGracePeriodSeconds: 45
       volumes:
         - name: svc-config
           configMap:
             name: go-svc-db-config
+---
+# PDB 直接放在本文件里:k8s_deploy.ps1 只 apply 各服务目录里登记的主 manifest,独立的 *-pdb.yaml 不会被应用。
+# minAvailable: 1 —— 节点排空 / 集群升级一次只能带走一个副本,这个 zone 的存档落库不会被自愿驱逐打成零。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: db-pdb
+  labels:
+    app: db
+    tier: go-svc
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: db

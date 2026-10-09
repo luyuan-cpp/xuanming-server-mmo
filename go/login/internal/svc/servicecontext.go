@@ -3,7 +3,9 @@ package svc
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 	"sync/atomic"
 
 	"github.com/bwmarrin/snowflake"
@@ -24,6 +26,7 @@ import (
 	dspb "proto/data_service"
 	plpb "proto/player_locator"
 	smpb "proto/scene_manager"
+	"shared/clientendpoint"
 	"shared/generated/table"
 	"shared/idsegment"
 	"shared/safego"
@@ -87,6 +90,9 @@ type ServiceContext struct {
 
 	// preloadStatsStop signals the stats logger goroutine to exit on shutdown.
 	preloadStatsStop chan struct{}
+
+	// gateDrainStop 取消 startGateDrainMonitor 起的 gate 排空判定循环;nil = 没起。
+	gateDrainStop context.CancelFunc
 }
 
 func NewServiceContext() *ServiceContext {
@@ -278,6 +284,9 @@ type gateWatcherCapacityProvider struct {
 	// rdb 用来查 gate 排空标记。缩容前被标记 draining 的 gate 不再接新玩家。
 	// nil 时跳过过滤(队列关闭 / 早期初始化路径)。
 	rdb *redis.Client
+	// requireClientEndpoint 取自配置 RequireClientEndpoint:true 时没自报客户端地址的 gate
+	// 不进候选集(见 buildGateCandidates)。启动期定值,运行中不变。
+	requireClientEndpoint bool
 }
 
 func (g *gateWatcherCapacityProvider) CandidatesForZone(ctx context.Context, zoneID uint32) ([]loginqueue.GateCandidate, error) {
@@ -285,36 +294,125 @@ func (g *gateWatcherCapacityProvider) CandidatesForZone(ctx context.Context, zon
 	if err != nil {
 		return nil, err
 	}
-	out := make([]loginqueue.GateCandidate, 0, len(nodes))
+	return candidatesFromNodes(ctx, g.rdb, nodes, zoneID, g.requireClientEndpoint), nil
+}
+
+// candidatesFromNodes 是 CandidatesForZone 取完节点之后的全部逻辑。单独拆出来,是为了让
+// 「先去重、后排空过滤」这条顺序有单测守住:CandidatesForZone 依赖具体的 etcd NodeWatcher,测不到。
+//
+// 选客户端地址 + 按地址去重必须在排空过滤之前:排空标记按 node_id 打在活着的那台上,
+// 若先排空过滤,它被剔掉后,同地址上旧 node_id 的陈旧影子(没被标记)会顶上来被选中,
+// 玩家连过去照样被新 gate 以 token_gate_node_mismatch 拒绝。
+//
+// 剔除正在排空的 gate 放在这里而不是 PickGate 里,是因为这是**所有** gate 选择路径的唯一收口
+// (队列 dispatcher 与非队列快路径都经过它),而 PickGate 是个纯函数、拿不到 Redis。
+// rdb 为 nil 时跳过排空过滤。失败方向是放行不是拦截,全部被标记时也会放行 —— 见 FilterDrainingGates。
+func candidatesFromNodes(ctx context.Context, rdb *redis.Client, nodes []*login_proto.NodeInfo,
+	zoneID uint32, require bool) []loginqueue.GateCandidate {
+	out := buildGateCandidates(nodes, zoneID, require)
+	if rdb != nil {
+		out = loginqueue.FilterDrainingGates(out, loginqueue.DrainingGates(ctx, rdb, out))
+	}
+	return out
+}
+
+func (g *gateWatcherCapacityProvider) ZoneCapacity(zoneID uint32) uint32 {
+	return loginqueue.ZoneCapacityFromMap(g.caps, zoneID)
+}
+
+// gateChoice 是 buildGateCandidates 的中间态:去重要用 launch_time,而 GateCandidate
+// 刻意不带它(那是 loginqueue 的选择投影,不该为去重扩字段)。
+type gateChoice struct {
+	candidate  loginqueue.GateCandidate
+	launchTime uint64
+}
+
+// buildGateCandidates 把 etcd 里的 gate NodeInfo 投影成下发候选。无 I/O,可直接单测;
+// 副作用只有 shared/clientendpoint 的计数与本文件的节流 ERROR 日志。
+//
+// 顺序是契约(集群外入口 D78):
+//
+//  1. 丢掉没有 endpoint 的畸形记录与不属于 zoneID 的 gate(zoneID=0 表示不按 zone 过滤);
+//  2. clientendpoint.Select 选客户端地址,选不出的 gate 跳过。GateCandidate.IP/Port 就是选中的
+//     客户端地址:它们只下发给客户端,签票不绑地址(GateTokenPayload 只带 node_id / zone_id);
+//  3. 按选中的地址 DedupeNewest,同一地址只留 launch_time 最大者,见 clientendpoint.DedupeNewest。
+//
+// 排空过滤不在这里,由调用方在本函数**之后**做(见 CandidatesForZone)。
+// 输出保持 nodes 的相对顺序;最终挑哪台由 loginqueue.PickGate 按负载决定,与顺序无关。
+func buildGateCandidates(nodes []*login_proto.NodeInfo, zoneID uint32, require bool) []loginqueue.GateCandidate {
+	choices := make([]gateChoice, 0, len(nodes))
 	for _, n := range nodes {
-		if n.Endpoint == nil {
+		if n == nil || n.Endpoint == nil {
 			continue
 		}
 		if zoneID != 0 && n.ZoneId != zoneID {
 			continue
 		}
-		out = append(out, loginqueue.GateCandidate{
-			NodeID:      n.NodeId,
-			IP:          n.Endpoint.Ip,
-			Port:        n.Endpoint.Port,
-			PlayerCount: n.PlayerCount,
-			ZoneID:      n.ZoneId,
+		host, port, ok := clientendpoint.Select(
+			n.GetClientEndpoint().GetIp(), n.GetClientEndpoint().GetPort(),
+			n.Endpoint.Ip, n.Endpoint.Port, require)
+		if !ok {
+			logGateSkippedWithoutClientEndpoint(n, require)
+			continue
+		}
+		choices = append(choices, gateChoice{
+			candidate: loginqueue.GateCandidate{
+				NodeID:      n.NodeId,
+				IP:          host,
+				Port:        port,
+				PlayerCount: n.PlayerCount,
+				ZoneID:      n.ZoneId,
+			},
+			launchTime: n.LaunchTime,
 		})
 	}
 
-	// 剔除正在排空的 gate。放在这里而不是 PickGate 里,是因为这是**所有**
-	// gate 选择路径的唯一收口(队列 dispatcher 与非队列快路径都经过它),
-	// 而 PickGate 是个纯函数、拿不到 Redis。
-	//
-	// 失败方向是放行不是拦截,全部被标记时也会放行 —— 见 FilterDrainingGates。
-	if g.rdb != nil {
-		out = loginqueue.FilterDrainingGates(out, loginqueue.DrainingGates(ctx, g.rdb, out))
+	choices = clientendpoint.DedupeNewest(choices,
+		func(c gateChoice) string {
+			return net.JoinHostPort(c.candidate.IP, strconv.FormatUint(uint64(c.candidate.Port), 10))
+		},
+		func(c gateChoice) uint64 { return c.launchTime })
+
+	out := make([]loginqueue.GateCandidate, 0, len(choices))
+	for _, c := range choices {
+		out = append(out, c.candidate)
 	}
-	return out, nil
+	return out
 }
 
-func (g *gateWatcherCapacityProvider) ZoneCapacity(zoneID uint32) uint32 {
-	return loginqueue.ZoneCapacityFromMap(g.caps, zoneID)
+// skippedGateLogEvery 是「有 gate 因没有可下发的客户端地址被跳过」这条 ERROR 的最小间隔。
+//
+// CandidatesForZone 每次 AssignGate、dispatcher 每个 tick 都会跑,不节流就是按登录 QPS × gate 数
+// 刷盘。持续性看 mmorpg_client_endpoint_select_total{result="rejected"},日志只负责告诉运维是哪台;
+// 同一窗口内其余被跳过的 gate 不再逐条打印。
+const skippedGateLogEvery = 30 * time.Second
+
+var (
+	// skippedGateLogClock 是节流计时的单调时钟基准:只用 time.Since 取差值,
+	// 墙钟回拨不会把日志压住。
+	skippedGateLogClock = time.Now()
+	// skippedGateLogLast 是上一次打印时距基准的纳秒数;0 = 还没打过。CAS 保证并发下每个窗口只打一条。
+	skippedGateLogLast atomic.Int64
+)
+
+func logGateSkippedWithoutClientEndpoint(n *login_proto.NodeInfo, require bool) {
+	now := int64(time.Since(skippedGateLogClock)) + 1 // +1 让 0 专指「还没打过」
+	last := skippedGateLogLast.Load()
+	if last != 0 && now-last < int64(skippedGateLogEvery) {
+		return
+	}
+	if !skippedGateLogLast.CompareAndSwap(last, now) {
+		return
+	}
+	// require=true:gate 没自报 clientEndpoint(查它的 CLIENT_ENDPOINT_SOURCE / 版本);
+	// require=false:连 endpoint 都不可用,是一条坏记录。
+	logx.Errorf("[GateSelect] gate skipped: no client-reachable address "+
+		"(node_id=%d zone=%d endpoint=%s:%d client_endpoint=%s:%d RequireClientEndpoint=%v); "+
+		"further skips are not logged for %s, see mmorpg_client_endpoint_select_total{result=\"rejected\"}",
+		n.GetNodeId(), n.GetZoneId(),
+		n.GetEndpoint().GetIp(), n.GetEndpoint().GetPort(),
+		n.GetClientEndpoint().GetIp(), n.GetClientEndpoint().GetPort(),
+		require, skippedGateLogEvery)
 }
 
 // initLoginQueue is called from NewServiceContext when Queue.Enabled=true.
@@ -330,10 +428,13 @@ func (s *ServiceContext) initLoginQueue() {
 	// login crash on a nil-receiver method call inside CandidatesForZone.
 	// Found during 3-zone × 15000 stress 2026-05.
 	s.queueCapProvider = &gateWatcherCapacityProvider{
-		watcher: s.GateWatcher,
-		caps:    cfg.ZoneCapacityOverride,
-		rdb:     s.RedisClient,
+		watcher:               s.GateWatcher,
+		caps:                  cfg.ZoneCapacityOverride,
+		rdb:                   s.RedisClient,
+		requireClientEndpoint: config.AppConfig.RequireClientEndpoint,
 	}
+	logx.Infof("[GateSelect] RequireClientEndpoint=%v (true: gates without clientEndpoint are never handed to clients)",
+		config.AppConfig.RequireClientEndpoint)
 
 	if !cfg.Enabled {
 		return
@@ -397,6 +498,72 @@ func (s *ServiceContext) Start() {
 	}
 	if s.QueueDispatcher != nil {
 		s.QueueDispatcher.Start()
+	}
+	s.startGateDrainMonitor()
+}
+
+// startGateDrainMonitor 起 gate 排空判定循环(集群外入口 D87:标 draining → 等 drained → 删 Pod
+// 的中间一步)。k8s_gate_drain.ps1 标完 gate:{id}:draining 后,靠它在在线掉到阈值或等到期限时
+// 写 gate:{id}:drained,脚本见到标记才删 Pod。不起它,drained 永远不会出现,gate 滚动只能等脚本超时。
+//
+// 快照取 GateWatcher 的原始节点,**不能**复用 CandidatesForZone / buildGateCandidates:那条链会跳过
+// 缺客户端地址的 gate、按地址去重、剔除 draining,而正在排空的 gate 恰恰是这里要看的。
+//
+// 每个 login 副本各跑一份,不抢 dispatcher 锁:一轮判定只按 draining 标记写 / 清 drained 标记,
+// 幂等,多副本并发写的是同一个值。GateWatcher 按本 login 的 zone 前缀建,只判本 zone 的 gate。
+func (s *ServiceContext) startGateDrainMonitor() {
+	cfg := config.AppConfig.GateDrain
+	if s.GateWatcher == nil || cfg.Interval <= 0 {
+		logx.Errorf("[GateDrain] monitor NOT started (GateDrain.Interval=%s, gate watcher present=%v): "+
+			"gate:{id}:drained will never be written and k8s_gate_drain.ps1 can only time out",
+			cfg.Interval, s.GateWatcher != nil)
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.gateDrainStop = cancel
+	loginqueue.StartGateDrainMonitor(ctx, s.RedisClient,
+		newGateDrainSnapshotFunc(s.GateWatcher.FetchAllNodes), gateDrainPolicy(cfg), cfg.Interval)
+}
+
+// newGateDrainSnapshotFunc 把「取 gate 原始节点」包成排空判定的快照函数。
+// fetch 以函数注入而不是直接拿 *node.NodeWatcher,是为了让接线测试不依赖 etcd。
+// 传进来的 ctx 不往下传:FetchAllNodes 自带 ServiceDiscoveryTimeout 上界。
+func newGateDrainSnapshotFunc(fetch func() ([]*login_proto.NodeInfo, error)) loginqueue.GateSnapshotFunc {
+	return func(context.Context) ([]loginqueue.GateOnline, error) {
+		nodes, err := fetch()
+		if err != nil {
+			return nil, err
+		}
+		return gateDrainSnapshot(nodes), nil
+	}
+}
+
+// gateDrainSnapshot 按 node_id 投影 gate 的在线数。除 nil 外一条不丢:陈旧记录、缺客户端地址、
+// 正在排空的 gate 都要留下 —— 排空标记按 node_id 打,判定也按 node_id 做,
+// 没在排空的那些由 EvaluateDrainingGates 顺手清掉残留的 drained 标记。
+// etcd 键是 .../node_id/<id>,同一前缀下一个 node_id 只有一条,所以不再按 node_id 去重。
+func gateDrainSnapshot(nodes []*login_proto.NodeInfo) []loginqueue.GateOnline {
+	out := make([]loginqueue.GateOnline, 0, len(nodes))
+	for _, n := range nodes {
+		if n == nil {
+			continue
+		}
+		out = append(out, loginqueue.GateOnline{NodeID: n.NodeId, PlayerCount: n.PlayerCount})
+	}
+	return out
+}
+
+// gateDrainPolicy 把配置换成 loginqueue 的判定参数。
+// Deadline 向上取整到秒:不足 1s 的正数若截成 0,会被读成「永不因超时放行」,语义反了;
+// <=0 一律按 0(永不因超时放行)处理 —— 负数不能被理解成「立刻放行」。
+func gateDrainPolicy(cfg config.GateDrainConf) loginqueue.GateDrainPolicy {
+	var deadlineSeconds int64
+	if cfg.Deadline > 0 {
+		deadlineSeconds = int64((cfg.Deadline + time.Second - 1) / time.Second)
+	}
+	return loginqueue.GateDrainPolicy{
+		DrainedBelowPlayers: cfg.DrainedBelowPlayers,
+		DeadlineSeconds:     deadlineSeconds,
 	}
 }
 
@@ -479,6 +646,10 @@ func (s *ServiceContext) Stop() {
 	if s.preloadStatsStop != nil {
 		close(s.preloadStatsStop)
 		s.preloadStatsStop = nil
+	}
+	if s.gateDrainStop != nil {
+		s.gateDrainStop()
+		s.gateDrainStop = nil
 	}
 	if s.TaskResultDispatcher != nil {
 		s.TaskResultDispatcher.Stop()

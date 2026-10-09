@@ -1370,11 +1370,11 @@ constexpr BaseDeployConfig::ParseTableT_ BaseDeployConfig::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_._has_bits_),
       0, // no _extensions_
-      21, 248,  // max_field_number, fast_idx_mask
+      22, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4292870144,  // skipmap
+      4290772992,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      21,  // num_field_entries
+      22,  // num_field_entries
       4,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1469,7 +1469,10 @@ constexpr BaseDeployConfig::ParseTableT_ BaseDeployConfig::InternalGenerateParse
       {::_pbi::TcParser::FastMtS2,
        {426, 11, 3,
         PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.grpc_client_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 db_task_topic_generation = 22;
+      {::_pbi::TcParser::FastV32S2,
+       {432, 21, 0,
+        PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.db_task_topic_generation_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -1524,6 +1527,8 @@ constexpr BaseDeployConfig::ParseTableT_ BaseDeployConfig::InternalGenerateParse
       {PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.audit_topic_generation_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .GrpcClientConfig grpc_client = 21;
       {PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.grpc_client_), _Internal::kHasBitsOffset + 11, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 db_task_topic_generation = 22;
+      {PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.db_task_topic_generation_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1611,7 +1616,8 @@ inline constexpr BaseDeployConfig::Impl_::Impl_(
         gate_max_connections_{0u},
         battle_max_connections_{0u},
         cluster_id_{0u},
-        audit_topic_generation_{0u} {}
+        audit_topic_generation_{0u},
+        db_task_topic_generation_{0u} {}
 
 template <typename>
 constexpr BaseDeployConfig::BaseDeployConfig(::_pbi::ConstantInitialized,
@@ -1770,7 +1776,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_._has_bits_),
-        24, // hasbit index offset
+        25, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_.etcd_hosts_),
         PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_.log_level_),
         PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_.services_),
@@ -1792,6 +1798,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_.id_segment_),
         PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_.audit_topic_generation_),
         PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_.grpc_client_),
+        PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_.db_task_topic_generation_),
         0,
         12,
         1,
@@ -1813,6 +1820,7 @@ const ::uint32_t
         10,
         20,
         11,
+        21,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GameConfig_ZoneRedisConfig, _impl_._has_bits_),
         7, // hasbit index offset
@@ -1844,8 +1852,8 @@ static const ::_pbi::MigrationSchema
         {44, sizeof(::GrpcClientConfig_CallDeadlineMsEntry_DoNotUse)},
         {51, sizeof(::GrpcClientConfig)},
         {56, sizeof(::BaseDeployConfig)},
-        {101, sizeof(::GameConfig_ZoneRedisConfig)},
-        {112, sizeof(::GameConfig)},
+        {103, sizeof(::GameConfig_ZoneRedisConfig)},
+        {114, sizeof(::GameConfig)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1876,7 +1884,7 @@ const char descriptor_table_protodef_proto_2fcommon_2fbase_2fconfig_2eproto[] AB
     "pcClientConfig\022\?\n\020call_deadline_ms\030\001 \003(\013"
     "2%.GrpcClientConfig.CallDeadlineMsEntry\032"
     "5\n\023CallDeadlineMsEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005v"
-    "alue\030\002 \001(\r:\0028\001\"\202\005\n\020BaseDeployConfig\022\022\n\ne"
+    "alue\030\002 \001(\r:\0028\001\"\244\005\n\020BaseDeployConfig\022\022\n\ne"
     "tcd_hosts\030\001 \003(\t\022\021\n\tlog_level\030\002 \001(\r\022 \n\010se"
     "rvices\030\003 \003(\0132\016.ServiceConfig\022\"\n\032service_"
     "discovery_prefixes\030\004 \003(\t\022\033\n\023keep_alive_i"
@@ -1892,18 +1900,19 @@ const char descriptor_table_protodef_proto_2fcommon_2fbase_2fconfig_2eproto[] AB
     "ons\030\021 \001(\r\022\022\n\ncluster_id\030\022 \001(\r\022$\n\nid_segm"
     "ent\030\023 \001(\0132\020.IdSegmentConfig\022\036\n\026audit_top"
     "ic_generation\030\024 \001(\r\022&\n\013grpc_client\030\025 \001(\013"
-    "2\021.GrpcClientConfig\"\264\001\n\nGameConfig\022\027\n\017sc"
-    "ene_node_type\030\001 \001(\r\022\017\n\007zone_id\030\002 \001(\r\022/\n\n"
-    "zone_redis\030\007 \001(\0132\033.GameConfig.ZoneRedisC"
-    "onfig\032K\n\017ZoneRedisConfig\022\014\n\004host\030\003 \001(\t\022\014"
-    "\n\004port\030\004 \001(\r\022\020\n\010password\030\005 \001(\t\022\n\n\002db\030\006 \001"
-    "(\rB\rZ\013common/baseb\006proto3"
+    "2\021.GrpcClientConfig\022 \n\030db_task_topic_gen"
+    "eration\030\026 \001(\r\"\264\001\n\nGameConfig\022\027\n\017scene_no"
+    "de_type\030\001 \001(\r\022\017\n\007zone_id\030\002 \001(\r\022/\n\nzone_r"
+    "edis\030\007 \001(\0132\033.GameConfig.ZoneRedisConfig\032"
+    "K\n\017ZoneRedisConfig\022\014\n\004host\030\003 \001(\t\022\014\n\004port"
+    "\030\004 \001(\r\022\020\n\010password\030\005 \001(\t\022\n\n\002db\030\006 \001(\rB\rZ\013"
+    "common/baseb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fbase_2fconfig_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fbase_2fconfig_2eproto = {
     false,
     false,
-    1465,
+    1499,
     descriptor_table_protodef_proto_2fcommon_2fbase_2fconfig_2eproto,
     "proto/common/base/config.proto",
     &descriptor_table_proto_2fcommon_2fbase_2fconfig_2eproto_once,
@@ -3502,9 +3511,9 @@ BaseDeployConfig::BaseDeployConfig(
                offsetof(Impl_, log_level_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, log_level_),
-           offsetof(Impl_, audit_topic_generation_) -
+           offsetof(Impl_, db_task_topic_generation_) -
                offsetof(Impl_, log_level_) +
-               sizeof(Impl_::audit_topic_generation_));
+               sizeof(Impl_::db_task_topic_generation_));
 
   // @@protoc_insertion_point(copy_constructor:BaseDeployConfig)
 }
@@ -3539,9 +3548,9 @@ inline void BaseDeployConfig::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, kafka_),
            0,
-           offsetof(Impl_, audit_topic_generation_) -
+           offsetof(Impl_, db_task_topic_generation_) -
                offsetof(Impl_, kafka_) +
-               sizeof(Impl_::audit_topic_generation_));
+               sizeof(Impl_::db_task_topic_generation_));
 }
 BaseDeployConfig::~BaseDeployConfig() {
   // @@protoc_insertion_point(destructor:BaseDeployConfig)
@@ -3648,10 +3657,10 @@ PROTOBUF_NOINLINE void BaseDeployConfig::Clear() {
         reinterpret_cast<char*>(&_impl_.health_check_interval_) -
         reinterpret_cast<char*>(&_impl_.log_level_)) + sizeof(_impl_.health_check_interval_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     ::memset(&_impl_.node_removal_grace_seconds_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.audit_topic_generation_) -
-        reinterpret_cast<char*>(&_impl_.node_removal_grace_seconds_)) + sizeof(_impl_.audit_topic_generation_));
+        reinterpret_cast<char*>(&_impl_.db_task_topic_generation_) -
+        reinterpret_cast<char*>(&_impl_.node_removal_grace_seconds_)) + sizeof(_impl_.db_task_topic_generation_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -3871,6 +3880,15 @@ PROTOBUF_NOINLINE void BaseDeployConfig::Clear() {
         stream);
   }
 
+  // uint32 db_task_topic_generation = 22;
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_db_task_topic_generation() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          22, this_._internal_db_task_topic_generation(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -4010,7 +4028,7 @@ PROTOBUF_NOINLINE void BaseDeployConfig::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     // uint32 node_removal_grace_seconds = 13;
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_node_removal_grace_seconds() != 0) {
@@ -4044,6 +4062,13 @@ PROTOBUF_NOINLINE void BaseDeployConfig::Clear() {
       if (this_._internal_audit_topic_generation() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_audit_topic_generation());
+      }
+    }
+    // uint32 db_task_topic_generation = 22;
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_db_task_topic_generation() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_db_task_topic_generation());
       }
     }
   }
@@ -4182,7 +4207,7 @@ void BaseDeployConfig::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_node_removal_grace_seconds() != 0) {
         _this->_impl_.node_removal_grace_seconds_ = from._impl_.node_removal_grace_seconds_;
@@ -4206,6 +4231,11 @@ void BaseDeployConfig::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (from._internal_audit_topic_generation() != 0) {
         _this->_impl_.audit_topic_generation_ = from._impl_.audit_topic_generation_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (from._internal_db_task_topic_generation() != 0) {
+        _this->_impl_.db_task_topic_generation_ = from._impl_.db_task_topic_generation_;
       }
     }
   }
@@ -4238,8 +4268,8 @@ void BaseDeployConfig::InternalSwap(BaseDeployConfig* PROTOBUF_RESTRICT PROTOBUF
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.data_root_directory_, &other->_impl_.data_root_directory_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.battle_token_secret_, &other->_impl_.battle_token_secret_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.audit_topic_generation_)
-      + sizeof(BaseDeployConfig::_impl_.audit_topic_generation_)
+      PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.db_task_topic_generation_)
+      + sizeof(BaseDeployConfig::_impl_.db_task_topic_generation_)
       - PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.kafka_)>(
           reinterpret_cast<char*>(&_impl_.kafka_),
           reinterpret_cast<char*>(&other->_impl_.kafka_));

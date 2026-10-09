@@ -125,3 +125,55 @@ func keys(m map[string]bool) []string {
 	}
 	return out
 }
+
+// 多副本同时首次启动(docs/design/no-single-node-horizontal-scaling-20261001.md §4):迁移里的补列 / 补索引是
+// 「先查后改」,没有互斥时两个实例会撞在同一条 ALTER 上,输的一方四个 store 全不装配。
+// 有迁移锁之后必须全部成功,且库的终态与单实例跑一次相同。
+func TestMigrateSchema_ConcurrentFirstBootIsSerialized(t *testing.T) {
+	db := storetest.NewEmptyDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	const instances = 4
+	tags := []string{"player", "guild"}
+	errs := make(chan error, instances)
+	for i := 0; i < instances; i++ {
+		go func() {
+			errs <- store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{BootstrapTags: tags, LockWait: 4 * time.Minute})
+		}()
+	}
+	for i := 0; i < instances; i++ {
+		require.NoError(t, <-errs, "every concurrently starting instance must finish its migration")
+	}
+
+	for _, table := range []string{"transaction_log", "player_snapshot", "rollback_audit_log", store.IdSegmentTableName, store.PlayerNameTableName} {
+		require.NotEmpty(t, db.Columns(t, table), "table %s must exist after concurrent first boot", table)
+	}
+	assert.EqualValues(t, len(tags), db.Count(t, store.IdSegmentTableName, "biz_tag IN ('player','guild')"),
+		"each bootstrap tag must have exactly one id_segment row")
+}
+
+// 锁被另一个实例持有、等待上限已到:返回 ErrMigrateLockBusy(-migrate 据此以退出码 3 让部署侧重试),
+// 而且一条 DDL 都不能跑;对方放锁之后再跑必须成功。
+func TestMigrateSchema_LockBusyReturnsSentinel(t *testing.T) {
+	db := storetest.NewEmptyDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	holder, err := db.Raw.Conn(ctx)
+	require.NoError(t, err)
+	defer holder.Close()
+	lockName := store.MigrateLockNameForTest(db.Cfg.DBName)
+	var got int
+	require.NoError(t, holder.QueryRowContext(ctx, "SELECT GET_LOCK(?, 0)", lockName).Scan(&got))
+	require.Equal(t, 1, got, "the test must hold the migrate lock first")
+
+	err = store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{LockWait: time.Second})
+	require.ErrorIs(t, err, store.ErrMigrateLockBusy)
+	assert.Empty(t, db.Columns(t, "transaction_log"), "a busy lock must not let any DDL run")
+
+	require.NoError(t, holder.QueryRowContext(ctx, "SELECT RELEASE_LOCK(?)", lockName).Scan(&got))
+	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{LockWait: time.Second}),
+		"once the other instance releases the lock the migration must go through")
+	assert.NotEmpty(t, db.Columns(t, "transaction_log"))
+}

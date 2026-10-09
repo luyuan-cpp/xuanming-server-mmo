@@ -80,7 +80,7 @@ INSERT INTO player_snapshot (...) SELECT ?,... FROM DUAL
 ```
 
 存在性判断与插入在同一条语句、同一个隐式事务里,InnoDB 会在 `snapshot_guid` 索引上对那个不存在的值加间隙锁,两个并发实例写同一个 guid 只会有一个成功(另一个 0 行受影响,按"重复"计数)。以前是"先 SELECT 再 INSERT",两次往返之间没有任何锁:滚动更新窗口里新旧两个 pod 同时在线,足以把同一条快照写成两行 `source=1`。
-**deploy 侧仍应把 data-service 的 Deployment 策略设成 `Recreate`**(deploy/ 由另一位负责):UNIQUE 键用不了,DB 侧的保证止步于"同一条语句 + 间隙锁",真正的单实例语义还得靠部署策略。`guid=0` 走这条入口直接报错。`transaction_log` 不需要这套:`tx_id` 是主键,重放天然被 `INSERT IGNORE` 吃掉。
+〔2026-10-08 更正:本节上面描述的「普通 INDEX + NOT EXISTS + 间隙锁」是唯一键建出来之前的形态,现在只是**退路**。迁移会给 `player_snapshot` 建可空唯一键 `uk_snapshot_guid_nz`,有它时去重走 `INSERT ... ON DUPLICATE KEY`,不同 guid 互不相干、不再依赖单实例;data-service 的 Deployment 已改为 2 副本 + RollingUpdate(docs/design/no-single-node-horizontal-scaling-20261001.md §4)。下面这句是当时的结论,保留为历史。〕**deploy 侧仍应把 data-service 的 Deployment 策略设成 `Recreate`**(deploy/ 由另一位负责):UNIQUE 键用不了,DB 侧的保证止步于"同一条语句 + 间隙锁",真正的单实例语义还得靠部署策略。`guid=0` 走这条入口直接报错。`transaction_log` 不需要这套:`tx_id` 是主键,重放天然被 `INSERT IGNORE` 吃掉。
 
 ### `AllocateIdSegment(biz_tag, step) → [lo, hi)`
 - 半开区间,一经返回视为已发出、绝不重发;段内剩余号作废不回收。

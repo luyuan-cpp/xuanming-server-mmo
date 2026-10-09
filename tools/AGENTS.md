@@ -1,36 +1,18 @@
 # TOOLS KNOWLEDGE BASE
 
 ## OVERVIEW
-`tools/` hosts developer tooling, code generators, exporters, robot/load clients, snapshots, and the preferred PowerShell entrypoints for common repo workflows.
+`tools/` 放代码生成器、导表器、运维工具和工程脚本。机器人客户端在仓库根的 `robot/`,不在这里。
 
 ## STRUCTURE
-```text
-tools/
-├── proto_generator/      # Canonical proto-gen source project
-├── data_table_exporter/  # Table export scripts/templates
-├── robot/                # Robot proto definitions + message handlers
-├── contracts/            # Tool-side Kafka message stubs
-├── data_service/         # Tool-side gRPC data service stubs
-├── scene_manager/        # Tool-side gRPC scene manager stubs
-├── proto/                # Legacy proto-gen/pbgen tool bundle kept for compatibility
-├── generated/            # Temporary/ignored generation workspace
-├── archived/             # Legacy scripts retained for reference
-├── dev/                  # mprocs dashboard configs
-├── docs/                 # Tool snapshots and archived logs
-├── scripts/              # Preferred script entrypoints
-└── github.com/           # Go import path mirrors for proto extensions
-```
+目录结构与常用入口见同目录 [README.md](README.md),这里不重复维护。
 
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
 | Main script entrypoint | `scripts/dev_tools.ps1` | proto-gen (pbgen), k8s, tree, naming audit/apply |
-| Data consistency chaos test | `scripts/chaos_test.ps1` | L4: builds db+data_stress+verifier, kill-restarts consumer N times, verifies convergence. Design: `docs/design/data-consistency-stress-testing.md` |
 | proto-gen source | `proto_generator/protogen/` | Canonical generator project |
 | Compatibility proto-gen bundle | `proto/` | Retained for existing local toolchains |
-| Robot proto/handlers | `robot/` | Proto defs + message handlers for load testing |
-| Robot data-stress mode | see `robot/data_stress.go` | L3 e2e: login→enter→play→logout cycles, publishes expected seq to Redis for verifier |
-| Archived generator logs | `docs/protogen/` | Historical runs only |
+| Robot data-stress mode | 仓库根 `robot/data_stress.go` | L3 e2e: login→enter→play→logout cycles, publishes expected seq to Redis for verifier |
 | **配置表 schema（事实源）** | `data/schema/*.proto` | 类型/owner/键/索引/外键/位序/注释;词表在 `cfg_options.proto` |
 | **配置表全表索引** | `data/AGENTS.md` | 哪张表有主键/索引/外键/位序,由 `gen_schema_index.py` 生成 |
 | 表怎么被读进来 | `data_table_exporter/core/table_source.py` | 按 sheet 名派发:有权威 schema 走 schema-first |
@@ -60,16 +42,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/
 pwsh -File tools/scripts/dev_tools.ps1 -Command tree
 pwsh -File tools/scripts/dev_tools.ps1 -Command naming-audit
 pwsh -File tools/scripts/dev_tools.ps1 -Command naming-apply -MaxChanges 100
-
-# Data consistency stress / chaos
-pwsh -File tools/scripts/chaos_test.ps1                                      # default: 200 players × 50 writes, 3 kill cycles
-pwsh -File tools/scripts/chaos_test.ps1 -Players 500 -Writes 100 -KillCount 5  # heavier run
-pwsh -File tools/scripts/chaos_test.ps1 -KillCount 0                         # L2 happy-path only (no chaos)
-pwsh -File tools/scripts/chaos_test.ps1 -SkipBuild                           # skip go build (faster iteration)
 ```
 
 ## NOTES
 - `tools/scripts/README.md` is the practical command catalog; keep new tool workflows wired through it.
 - High-risk rename exclusions already include generated files, IDE files, `*.vcxproj*`, `*.sln*`, and `*.pb.{h,cc,go}`.
-- `tools/robot/` contains proto definitions and message handlers for the robot load-testing framework.
-- **`chaos_test.ps1`**: orchestrates L4 data-consistency testing. It builds three binaries (`db.exe`, `data_stress.exe`, `verifier.exe`) into `bin/chaos_test/`, runs them with kill-restart cycles on the db consumer, and exits non-zero on any divergence. Logs go to `bin/chaos_test/logs/`. Key flags: `-Players`, `-Writes`, `-KillCount`, `-KillIntervalMs`, `-Wait`, `-MetricsAddr` (Prometheus endpoint on verifier), `-SkipBuild`. Design: `docs/design/data-consistency-stress-testing.md`.

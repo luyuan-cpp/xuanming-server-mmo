@@ -26,7 +26,7 @@
 | 12 | scene_manager 路由 | `go/scene_manager/` | [enter-scene-zone-routing.md](./enter-scene-zone-routing.md) |
 | 13 | Gate Kafka 命令通道 | `gate-{gateId}` topic | [player_login_flow.md](./player_login_flow.md) |
 | 14 | 重连 / 顶号 / 超时清理 | LOGIN_FIRST/RECONNECT/REPLACE | [player_login_flow.md](./player_login_flow.md) |
-| 15 | Centre 节点已退役 | Login + player_locator 接管 | [centre_decommission_*.md](./centre_decommission_migration_plan.md) |
+| 15 | Centre 节点已退役 | Login + player_locator 接管 | [centre_decommission_*.md](../archive/centre_decommission_migration_plan.md) |
 
 ---
 

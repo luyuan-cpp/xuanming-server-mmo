@@ -4,8 +4,9 @@ PowerShell and shell scripts for common development tasks.
 
 ## Directory Rules
 
-- [scripts](../../scripts) is for thin entrypoints and bootstrap tasks only, such as environment setup, submodule sync, or simple one-shot launch commands.
+- The repository root keeps only thin launchers (`dev.bat`, `start-server.cmd`, `start-game.cmd`) that forward into this directory; they contain no logic of their own.
 - [tools/scripts](.) is the canonical home for maintained engineering scripts.
+- One-off or retired scripts go to [tools/archived](../archived) instead of staying here.
 - [tools/scripts/third_party](third_party) stores third-party build and maintenance scripts, such as gRPC or future protobuf/redis builds.
 - If a top-level convenience command is needed, keep it as a thin wrapper that forwards into [tools/scripts](.) instead of copying logic.
 - Do not place project-maintained scripts under vendored directories such as [third_party](../../third_party); treat those trees as upstream-owned whenever possible.
@@ -14,7 +15,7 @@ PowerShell and shell scripts for common development tasks.
 
 ### start_game.ps1（本机游戏一键启动）
 
-电脑重启后双击仓库根目录 `启动服务器.cmd`；双击 `启动服务器并打开游戏.cmd` 可同时打开客户端。
+电脑重启后双击仓库根目录 `start-server.cmd`；双击 `start-game.cmd` 可同时打开客户端。
 脚本复用现有 `dev_tools.ps1` 和编译产物，依次启动本机 Docker、数据库依赖、六个 Go 服务、Java 网关、一区 gate / scene / battle，并等待就绪。关闭启动窗口后服务继续运行；再次双击会复用已有实例。
 
 - 网关：`http://127.0.0.1:8081`，一区；默认客户端：同级工作目录 `tmp/showcase_player/mmorpg.exe`。

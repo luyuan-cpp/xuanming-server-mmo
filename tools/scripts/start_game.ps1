@@ -7,14 +7,16 @@
     运行日志：run/logs/game-launcher。服务在后台运行，关闭启动窗口不影响服务。
 .PARAMETER GateRouterMode
     gate 的客户端 RPC 路由模式（环境变量 GATE_CLIENT_RPC_ROUTER，cpp/nodes/gate/gate_router_mode.h），
-    默认 '1' = 开：gate 只连 client_rpc_router，登录 / 匹配 / 聊天 / 帮会都经路由服转发。
-    '0' = 回退到旧的逐服务直连：**直连模式下 chat 与 guild 不可达**——gate 直连白名单（cpp/nodes/gate/main.cpp）里没有
-    Chat / Guild，进程照样在跑，但任何玩家的聊天、帮会请求都到不了它们（docs/design/client-rpc-router.md D34）。
-    只用于排障回退，回退前先 killswitch 关 chat / guild 方法并公告。
+    默认 '1' = 开：gate 只连 client_rpc_router，登录 / 匹配 / 聊天 / 帮会 / 好友 / 聚宝斋都经路由服转发。
+    '0' = 回退到旧的逐服务直连：**直连模式下 chat / guild / friend / trade 不可达**——gate 直连白名单（cpp/nodes/gate/main.cpp）里没有
+    Chat / Guild / Friend / Trade，进程照样在跑，但任何玩家的这些请求都到不了它们（docs/design/client-rpc-router.md D34）。
+    只用于排障回退，回退前先 killswitch 关这些方法并公告。
+    战斗与本开关无关：两种模式下战斗都只走客户端 ↔ battle 直连，gate 不再中继战斗（turn-based §22 D66）。
     翻转落在部署层、不改 C++ 默认值：gate 进程启动时读一次该变量并缓存，所以只对本次新拉起的 gate 生效；
     已在运行的 gate 保持原模式，换模式要先有序停掉 gate 再启动。
     用 '1'/'0' 字符串而不是 [bool]：根目录 .cmd 经 pwsh -File 原样透传 %*，实参都是字符串，
-    写成 `启动服务器.cmd -GateRouterMode 0` 即可；与 k8s_deploy.ps1 -GateRouterMode 同一口径。
+    写成 `start-server.cmd -GateRouterMode 0` 即可；与 k8s_deploy.ps1 -GateRouterMode 同一口径，
+    K8s 默认也是 '1'（turn-based §22 D75）。
 #>
 [CmdletBinding()]
 param([switch]$OpenClient, [string]$ClientPath = '', [switch]$CheckOnly, [ValidateSet('1','0')][string]$GateRouterMode = '1')
@@ -114,7 +116,7 @@ function Get-LocalKafkaContract {
     $basePath = Join-Path $serverRoot 'bin/etc/base_deploy_config.yaml'
     $auditPath = Join-Path $serverRoot 'go/data_service/etc/data_service.yaml'
     $values = @{}
-    foreach ($key in @('Kafka.CommandTopicPartitions','Kafka.CommandTopicGeneration','AuditTopicGeneration')) {
+    foreach ($key in @('Kafka.CommandTopicPartitions','Kafka.CommandTopicGeneration','AuditTopicGeneration','DbTaskTopicGeneration')) {
         $value = Get-YamlScalar -Path $basePath -KeyPath $key
         $number = 0L
         if (-not $value.Found -or -not [long]::TryParse($value.Value,[ref]$number) -or $number -le 0 -or $number -gt [int]::MaxValue) {
@@ -129,6 +131,18 @@ function Get-LocalKafkaContract {
     }
     if ($values['TopicGeneration'] -cne [string]$values['AuditTopicGeneration']) {
         throw 'C++ AuditTopicGeneration 与 data_service Kafka.TopicGeneration 不一致，已中止主题预建。'
+    }
+    # 玩家存盘 DBTask topic 世代号：C++ scene 生产、go/db 消费、login 同样读写这组 topic，三方分家不报任何错，
+    # 只会让换代后的存盘静默写进没人消费的旧 topic（player-storage-placement.md §7）。
+    foreach ($entry in @{'go/db/etc/db.yaml'='ServerConfig.Kafka.TopicGeneration';'go/login/etc/login.yaml'='Kafka.TopicGeneration'}.GetEnumerator()) {
+        $value = Get-YamlScalar -Path (Join-Path $serverRoot $entry.Key) -KeyPath $entry.Value
+        $number = 0L
+        if (-not $value.Found -or -not [long]::TryParse($value.Value,[ref]$number) -or $number -le 0) {
+            throw "$($entry.Key) 缺少有效的 $($entry.Value)，未启动任何服务。"
+        }
+        if ($number -ne $values['DbTaskTopicGeneration']) {
+            throw "C++ DbTaskTopicGeneration 与 $($entry.Key) 的 $($entry.Value) 不一致，未启动任何服务。"
+        }
     }
     # 正式 Compose 预建清单的审计规则当前固定；漂移时显式拒绝，避免给生产者建错主题。
     foreach ($entry in @{TransactionLogTopic='transaction_log_topic';TransactionLogPartitions='6';SnapshotTopic='player_snapshot_topic';SnapshotPartitions='3';RetentionMs='2592000000'}.GetEnumerator()) {
@@ -559,9 +573,9 @@ try {
         Initialize-AssetOpDevSecrets -RepoRoot $serverRoot | Out-Null
         Write-Host "  GM 指令通道：GATE_RUN_MODE=$($env:GATE_RUN_MODE) / SCENE_RUN_MODE=$($env:SCENE_RUN_MODE)（非 dev/test 即关闭；生产默认 prod）"
         if ($GateRouterMode -eq '1') {
-            Write-Host '  gate 路由模式：GATE_CLIENT_RPC_ROUTER=1（经 client_rpc_router 转发，chat 可达）'
+            Write-Host '  gate 路由模式：GATE_CLIENT_RPC_ROUTER=1（经 client_rpc_router 转发；战斗只走 battle 直连）'
         } else {
-            Write-Host '  gate 路由模式：GATE_CLIENT_RPC_ROUTER=0（直连模式，chat 不可达）' -ForegroundColor Yellow
+            Write-Host '  gate 路由模式：GATE_CLIENT_RPC_ROUTER=0（直连模式：chat / guild / friend / trade 不可达；战斗仍走 battle 直连）' -ForegroundColor Yellow
         }
         Invoke-Dev 'gate' @('-Command','cpp-node-start','-CppNodes','gate','-GateCount','1','-SceneCount','0','-BattleCount','0','-Zone','1','-NodeIp','loopback')
         Assert-NodeStartup 'gate'

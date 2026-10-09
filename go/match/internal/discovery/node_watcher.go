@@ -302,20 +302,32 @@ func (w *NodeWatcher) EndpointOfNode(nodeId uint32) (string, error) {
 }
 
 // PickRandom 随机取一个节点(battle 节点 v1 选法:随机,负载上报二期)。
+// 镜像为空返回 false。等价于不排除任何节点的 PickRandomExcept。
 func (w *NodeWatcher) PickRandom() (NodeEntry, bool) {
+	return w.PickRandomExcept(nil)
+}
+
+// PickRandomExcept 在 Endpoint 不在 exclude 里的节点中等概率随机取一个;没有可选节点
+// (镜像为空或全被排除)返回 false。exclude 只读、可为 nil。
+//
+// exclude 以 NodeEntry.Endpoint(gRPC 地址)为键,不以 etcd key / node_id 为键:同一进程
+// 在租约重建窗口里可能留下多条注册(key 不同、endpoint 相同),按 endpoint 排除才能保证
+// 「换一个没试过的节点」不会又拨回同一个进程(CreateBattle 被 battle_not_allocatable 拒绝
+// 后换节点重试,k8s-client-entry D82)。
+func (w *NodeWatcher) PickRandomExcept(exclude map[string]bool) (NodeEntry, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	if len(w.nodes) == 0 {
+	candidates := make([]NodeEntry, 0, len(w.nodes))
+	for _, entry := range w.nodes {
+		if exclude[entry.Endpoint] {
+			continue
+		}
+		candidates = append(candidates, entry)
+	}
+	if len(candidates) == 0 {
 		return NodeEntry{}, false
 	}
-	idx := rand.Intn(len(w.nodes))
-	for _, entry := range w.nodes {
-		if idx == 0 {
-			return entry, true
-		}
-		idx--
-	}
-	return NodeEntry{}, false
+	return candidates[rand.Intn(len(candidates))], true
 }
 
 // Count 返回镜像里的节点数量。

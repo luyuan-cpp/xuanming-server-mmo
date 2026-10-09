@@ -415,8 +415,14 @@ func (e *featureServerError) Error() string {
 }
 
 func (s *featureSmokeSession) call(id uint32, request proto.Message) (proto.Message, error) {
+	return s.callVia(s.gc.SendRequest, id, request)
+}
+
+// callVia 经 send 发请求,等同消息号、序号新于发送前游标的应答或拒绝。大厅连接与战斗直连
+// (callDirect)共用这套等待:两条连接的应答都记在同一个 Player 的 feature 快照上。
+func (s *featureSmokeSession) callVia(send func(uint32, proto.Message) error, id uint32, request proto.Message) (proto.Message, error) {
 	cursor := s.player.FeatureSequence()
-	if err := s.gc.SendRequest(id, request); err != nil {
+	if err := send(id, request); err != nil {
 		return nil, fmt.Errorf("feature send failed message_id=%d", id)
 	}
 	s.stats.MsgSent()

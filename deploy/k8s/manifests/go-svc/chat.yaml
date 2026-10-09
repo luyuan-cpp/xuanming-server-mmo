@@ -8,8 +8,9 @@
 # infra-up / all-up 在基础设施阶段部署。ConfigMap go-svc-chat-config 由脚本生成。
 #
 # ⚠ 已知前提:chat 只承诺路由服模式可达。路由服部署链(镜像 / 目录 / ConfigMap / manifests/go-svc/client-rpc-router.yaml /
-# C++ 发现前缀 / 按 POD_IP 通告)已登记齐,但 gate 的 GATE_CLIENT_RPC_ROUTER 在 K8s 上默认 "0"(k8s_deploy.ps1 -GateRouterMode)。
-# 所以默认部署下这份 Deployment 起得来、探针绿,但玩家够不着;以 -GateRouterMode 1 部署并跑通 battle-smoke 之后才算真正可用。
+# C++ 发现前缀 / 按 POD_IP 通告)已登记齐,gate 的 GATE_CLIENT_RPC_ROUTER 在 K8s 上默认 "1"(k8s_deploy.ps1 -GateRouterMode,
+# turn-based §22 D75),默认部署下玩家经 gate → client-rpc-router 可达(K8s 上路由模式 battle-smoke 事后补验)。
+# 以 -GateRouterMode 0 回退时这份 Deployment 照样起得来、探针绿,但玩家够不着。
 apiVersion: v1
 kind: Service
 metadata:

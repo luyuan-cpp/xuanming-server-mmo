@@ -129,12 +129,17 @@ namespace NodeUtils
 	// 措辞,分配器的实际行为是全局唯一。
 	bool IsGlobalPoolNodeType(uint32_t nodeType);
 
-	// 纯 gRPC 协议的 C++ 节点:不对外提供 muduo TCP RPC 服务,注册进 etcd 的
-	// NodeInfo.protocol_type 必须是 PROTOCOL_GRPC —— 发现方(node_connector)
-	// 按 protocol_type 分派连接方式,标错成 TCP 会让对端反复去拨一个没有
-	// 业务 codec 的端口,而且永远建不出 gRPC stub。
-	// TCP 端口仍会占位分配(gRPC 端口 = TCP + 30000 的派生规则依赖它,见
-	// node_allocator.cpp),只是没有节点会向它发起业务连接。
+	// 纯 gRPC 协议的 C++ 节点:不对外提供节点间 muduo TCP RPC 服务,注册进 etcd 的
+	// NodeInfo.protocol_type 必须是 PROTOCOL_GRPC —— C++ 发现方(node_connector)
+	// 按 protocol_type 分派连接方式;所有 C++ 节点共用 base_deploy_config 的发现前缀,
+	// 都 watch BattleNodeService.rpc,标错成 TCP 会让它们用 RpcCodec 反复去拨 battle
+	// 的 TCP 端口(那里挂的是客户端战斗直连面,走客户端 ProtobufCodec 帧而非节点间
+	// RpcCodec),而且永远建不出 gRPC stub。
+	// Go match 只认 grpc_endpoint,不受 protocol_type 影响。
+	// TCP 端口照常分配(gRPC 端口 = TCP + 30000 的派生规则依赖它,见
+	// node_allocator.cpp),且不是空闲占位:battle 自身在上面挂载客户端战斗直连面
+	// (BattleClientEdge),不可回收。节点间控制面只剩 Go match 经 grpc_endpoint
+	// 调用(turn-based §22 D66)。
 	//
 	//   目前:BattleNodeService(回合制战斗,全局池,gRPC only)
 	bool IsGrpcOnlyNodeType(uint32_t nodeType);

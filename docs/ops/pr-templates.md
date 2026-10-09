@@ -73,7 +73,7 @@ pushed the entire game-loop p99. Splitting the login surface to HTTP:
   zero-PlayerId-guard for sendDisconnectBestEffort)
 - E2E smoke at 50/100/200/500 bots × 30s = **0 fail / 0 stuck**,
   avg_login 69-101 ms, max_login 163-342 ms. Detailed table in
-  `docs/design/stress-test-2026-05-http-login.md`.
+  `docs/stress/stress-test-2026-05-http-login.md`.
 - Bucket4j first-run hit rates documented in §四点五 of the same doc:
   zone QUEUEING, IP QUEUEING, account COOLDOWN all fire correctly
   through Lettuce → Redis.
@@ -197,7 +197,7 @@ Add the documentation backbone for the HTTP login migration:
   what's done vs what's still TODO in the current quarter.
 - `docs/design/open-server-rate-limit-design.md`,
   `docs/design/third-party-login-end-to-end-design.md` — design notes.
-- `docs/design/stress-test-2026-05-http-login.md` — Windows dev
+- `docs/stress/stress-test-2026-05-http-login.md` — Windows dev
   baseline + Bucket4j first-hit data.
 - `docs/ops/release-checklist.md` — the on-call playbook with
   three-tier rollback.
@@ -225,5 +225,5 @@ No code change in this PR.
 - [ARCH.md §11-12](../design/ARCH.md) — 决策表和 deprecation
 - [release-checklist.md](./release-checklist.md) — 上线 SOP
 - [linux-staging-stress-runbook.md](./linux-staging-stress-runbook.md) — staging 跑数
-- [stress-test-2026-05-http-login.md](../design/stress-test-2026-05-http-login.md) — 基线数据
+- [stress-test-2026-05-http-login.md](../stress/stress-test-2026-05-http-login.md) — 基线数据
 - [gate-login-rpc-boundary.md](../design/gate-login-rpc-boundary.md) — 边界文档

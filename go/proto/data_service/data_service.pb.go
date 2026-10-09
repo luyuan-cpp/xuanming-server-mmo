@@ -627,9 +627,12 @@ func (x *SetPlayerFieldResponse) GetNewVersion() uint64 {
 }
 
 type RegisterPlayerZoneRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	HomeZoneId    uint32                 `protobuf:"varint,2,opt,name=home_zone_id,json=homeZoneId,proto3" json:"home_zone_id,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId   uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	HomeZoneId uint32                 `protobuf:"varint,2,opt,name=home_zone_id,json=homeZoneId,proto3" json:"home_zone_id,omitempty"`
+	// 非 0:与 player:zone 同一段 Lua 原子钉上 player:placement:{id} = "{storage_id}:1"
+	// (player-storage-placement.md §8.1);0 = 不钉落点(旧行为,有效落点 = home_zone)。
+	StorageId     uint32 `protobuf:"varint,3,opt,name=storage_id,json=storageId,proto3" json:"storage_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -674,6 +677,13 @@ func (x *RegisterPlayerZoneRequest) GetPlayerId() uint64 {
 func (x *RegisterPlayerZoneRequest) GetHomeZoneId() uint32 {
 	if x != nil {
 		return x.HomeZoneId
+	}
+	return 0
+}
+
+func (x *RegisterPlayerZoneRequest) GetStorageId() uint32 {
+	if x != nil {
+		return x.StorageId
 	}
 	return 0
 }
@@ -723,10 +733,14 @@ func (x *GetPlayerHomeZoneRequest) GetPlayerId() uint64 {
 }
 
 type GetPlayerHomeZoneResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	HomeZoneId    uint32                 `protobuf:"varint,1,opt,name=home_zone_id,json=homeZoneId,proto3" json:"home_zone_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	HomeZoneId uint32                 `protobuf:"varint,1,opt,name=home_zone_id,json=homeZoneId,proto3" json:"home_zone_id,omitempty"`
+	// home_zone 正处于合服围栏内(merge:in_progress:{home_zone_id} 存在),与 home_zone 同一段 Lua 读出。
+	// scene_manager 据此拒绝进场:合服窗口里源区归属玩家不得从任何 zone 进场,否则存盘会写进已排空的
+	// 源 topic(player-storage-placement.md §8 / §12 A16)。旧版 data_service 不填 = false。
+	HomeZoneMerging bool `protobuf:"varint,2,opt,name=home_zone_merging,json=homeZoneMerging,proto3" json:"home_zone_merging,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *GetPlayerHomeZoneResponse) Reset() {
@@ -764,6 +778,13 @@ func (x *GetPlayerHomeZoneResponse) GetHomeZoneId() uint32 {
 		return x.HomeZoneId
 	}
 	return 0
+}
+
+func (x *GetPlayerHomeZoneResponse) GetHomeZoneMerging() bool {
+	if x != nil {
+		return x.HomeZoneMerging
+	}
+	return false
 }
 
 type BatchGetPlayerHomeZoneRequest struct {
@@ -3200,16 +3221,19 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\n" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x12\x1f\n" +
 	"\vnew_version\x18\x02 \x01(\x04R\n" +
-	"newVersion\"Z\n" +
+	"newVersion\"y\n" +
 	"\x19RegisterPlayerZoneRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12 \n" +
 	"\fhome_zone_id\x18\x02 \x01(\rR\n" +
-	"homeZoneId\"7\n" +
+	"homeZoneId\x12\x1d\n" +
+	"\n" +
+	"storage_id\x18\x03 \x01(\rR\tstorageId\"7\n" +
 	"\x18GetPlayerHomeZoneRequest\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\"=\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\"i\n" +
 	"\x19GetPlayerHomeZoneResponse\x12 \n" +
 	"\fhome_zone_id\x18\x01 \x01(\rR\n" +
-	"homeZoneId\">\n" +
+	"homeZoneId\x12*\n" +
+	"\x11home_zone_merging\x18\x02 \x01(\bR\x0fhomeZoneMerging\">\n" +
 	"\x1dBatchGetPlayerHomeZoneRequest\x12\x1d\n" +
 	"\n" +
 	"player_ids\x18\x01 \x03(\x04R\tplayerIds\"\xcb\x01\n" +

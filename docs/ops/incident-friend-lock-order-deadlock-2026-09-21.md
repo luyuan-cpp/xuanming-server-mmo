@@ -2,7 +2,7 @@
 
 - **日期**:2026-09-21(机器 B,`D:\luyuan\wuxingqitan\mmorpg`,时间为本地 -04:00)
 - **级别**:P1(产品缺陷,可稳定复现的死锁)。**线上影响:无** —— friend 服务从未部署,本次是它第一次在真 MySQL 上跑并发回归。
-- **发现方式**:交接文档 `docs/design/friend-handoff-20260920.md` §2 第 6 步"真 MySQL 并发回归"首跑。
+- **发现方式**:交接文档 `docs/handoff/friend-handoff-20260920.md` §2 第 6 步"真 MySQL 并发回归"首跑。
 - **状态**:已修复,真库验证通过;**截至本文写入时修复代码尚未提交**(以 `git log -- go/friend/internal/data/friend_repo.go` 为准)。〔2026-09-28 更正:✅ **已提交** —— §5.2 的 6 个代码文件与本报告随 2026-09-21 08:52 的自动保存提交 `9cef7b2ec` 进库(`git show 9cef7b2ec` 可见 `lockCapacityRowSQL` / `lockBlockRowSQL` / `lockFriendEdgeRowSQL` / `cancelPendingRequestSQL` / `deleteTerminalRequestSQL` 与 `TestLockingStatementsArePrimaryKeyPointLookups`);同日 22:49 的全仓数据层死锁审计 `ff39a13f1` 在其上补了容量行 / 拉黑写入 ODKU 与 DSN 层 READ COMMITTED〔2026-09-29 更正:归属写错了。容量行补行的 ODKU(`ensureCapacityRowSQL … ON DUPLICATE KEY UPDATE player_id = player_id`)已经在 `9cef7b2ec` 里;`ff39a13f1` 对 `friend_repo.go` 只改了注释,它给 friend 新增的是拉黑写入 ODKU(`block_repo.go` 的 `insertBlockRowSQL`)与 DSN 层 READ COMMITTED(`svc/servicecontext.go` 的 `BuildDSN`)。与 `friend-handoff-20260920.md` §5.6 (b)、§9.5 第 5 条一致〕。09-25 第 7–9 步已跑通,09-28 已在真实数据量上复核 `EXPLAIN`(见 §7.3 / §7.5)。〕
 - **一句话**:好友服务的几条 `SELECT ... FOR UPDATE` 写成了 `OR` / `IN`,优化器把它们规划成索引全扫描,锁到了**别的玩家对**的行上,与那一对玩家"先主键后二级索引"的 `DELETE` 取锁顺序相反,成环。守卫只串行化"这一对玩家",所以锁集一旦越界,守卫就失去了意义。
 
@@ -182,7 +182,7 @@ Record lock, heap no 5 …
 ### 7.3 【说明】规模上的结论
 
 修复后的锁定语句都是完整主键等值,执行计划与数据量无关。**非锁定**的候选读(sweep 的两条候选 `SELECT`)在小表上同样被规划成全索引扫描,只影响性能不影响正确性;上线后应在真实数据量下再 `EXPLAIN` 一次,确认走 `(status, updated_ms)` / `(friend_count, created_ms)` 的范围。
-〔2026-09-28 更正:✅ 已在真实数据量下完成(未等上线)—— 一次性库 5 万玩家 / 100 万好友边 / 25 万申请 / 5 万拉黑,MySQL 26.7.0:**全部锁定语句都是 PRIMARY 完整主键等值**(SELECT … FOR UPDATE 为 `const`,UPDATE / DELETE 为 `key=PRIMARY` 用满主键列、`rows=1`);两条候选读分别走 `idx_friend_request_1 (status, updated_ms)` 与 `idx_friend_capacity_0 (friend_count, created_ms)` 的覆盖索引 `range`,实际都读 1000 行(`LIMIT`)即止。同一次核对还发现好友推荐的两条查询(不属本事故的锁定语句)扫描量无界,已另行修复 / 修复中。结果表见 `docs/design/friend-handoff-20260920.md` §9.4 末段「2026-09-28 执行结果」。〕〔2026-09-29 更正:"修复中"已过期 —— `recommendAnchor` 于 09-28 改为 W=1024 窗口,`RecommendByMutual` 于 09-29 改写(STRAIGHT_JOIN + 五条完整主键 `NOT EXISTS`,随 `ccafe300c` 进库)。两者都未经 Claude 编译,真库用例待 Codex,见 handoff §9.5 第 8 条。数据集那个一次性库是 `friend_explain_scratch`,仍保留在机器 A 上作只读基线。〕
+〔2026-09-28 更正:✅ 已在真实数据量下完成(未等上线)—— 一次性库 5 万玩家 / 100 万好友边 / 25 万申请 / 5 万拉黑,MySQL 26.7.0:**全部锁定语句都是 PRIMARY 完整主键等值**(SELECT … FOR UPDATE 为 `const`,UPDATE / DELETE 为 `key=PRIMARY` 用满主键列、`rows=1`);两条候选读分别走 `idx_friend_request_1 (status, updated_ms)` 与 `idx_friend_capacity_0 (friend_count, created_ms)` 的覆盖索引 `range`,实际都读 1000 行(`LIMIT`)即止。同一次核对还发现好友推荐的两条查询(不属本事故的锁定语句)扫描量无界,已另行修复 / 修复中。结果表见 `docs/handoff/friend-handoff-20260920.md` §9.4 末段「2026-09-28 执行结果」。〕〔2026-09-29 更正:"修复中"已过期 —— `recommendAnchor` 于 09-28 改为 W=1024 窗口,`RecommendByMutual` 于 09-29 改写(STRAIGHT_JOIN + 五条完整主键 `NOT EXISTS`,随 `ccafe300c` 进库)。两者都未经 Claude 编译,真库用例待 Codex,见 handoff §9.5 第 8 条。数据集那个一次性库是 `friend_explain_scratch`,仍保留在机器 A 上作只读基线。〕
 
 ### 7.4 【已修,非产品缺陷】`TestAcceptFriend_RejectsBlockedPair` 夹具自相矛盾
 
@@ -191,7 +191,7 @@ Record lock, heap no 5 …
 ### 7.5 【未做】交接文档 §2 第 7–9 步 〔2026-09-28:✅ 已完成〕
 
 `-migrate` + 常驻启动、缓存手工核对、两区 robot `friend-smoke` 尚未运行。
-〔2026-09-28 更正:✅ 已于 2026-09-25 完成(机器 A):第 7a 步空库 `-migrate` 建出 5 张表、零 UNIQUE、二次迁移 0 条语句;第 7b 步常驻启动横幅、`:9180/metrics` 五个指标预建 0 值、etcd NodeInfo 双填、真 Ctrl+C 3.4 s 内优雅退出;第 8 步由单测 `TestVersionedCache_FillsWhenGenerationKeyNeverWritten` 覆盖(09-21 PASS);第 9 步两区 `friend-smoke` 退出 0、`FRIEND_SMOKE_OK … cross_zone=true`,连跑第二轮同样通过。详见 `docs/design/friend-handoff-20260920.md` §9.4「进度续(2026-09-25)」。〕
+〔2026-09-28 更正:✅ 已于 2026-09-25 完成(机器 A):第 7a 步空库 `-migrate` 建出 5 张表、零 UNIQUE、二次迁移 0 条语句;第 7b 步常驻启动横幅、`:9180/metrics` 五个指标预建 0 值、etcd NodeInfo 双填、真 Ctrl+C 3.4 s 内优雅退出;第 8 步由单测 `TestVersionedCache_FillsWhenGenerationKeyNeverWritten` 覆盖(09-21 PASS);第 9 步两区 `friend-smoke` 退出 0、`FRIEND_SMOKE_OK … cross_zone=true`,连跑第二轮同样通过。详见 `docs/handoff/friend-handoff-20260920.md` §9.4「进度续(2026-09-25)」。〕
 
 ## 8. 教训
 
@@ -199,3 +199,84 @@ Record lock, heap no 5 …
 2. **小表是最坏情况,不是最好情况。** 小表上优化器最爱全扫描;测试环境与新服刚开时恰恰是小表。
 3. **"需要运行期核对"的风险项要有人认领执行时间。** 这条风险在交接文档里被准确预言,却因为"要真库"一直挂着;第一次真库运行就兑现了。
 4. **确定性回归优先于概率性回归。** 并发用例能发现问题,但证明"修好了"要靠 `EXPLAIN` 这类每次结论相同的断言。
+
+## 9. 全仓数据层死锁审计与根治(2026-09-21 → 09-29)
+
+本节是 §7.2 那张"待核"表的收口。friend 这次事故之后做了一轮全仓审计(6 个方向并行排查所有加锁 SQL,
+每条发现交独立 agent 反驳式复验),确认 18 条;随后分四轮修复,每轮都配独立复审。
+**结论里凡是标"实测"的,都来自 2026-09-29 对着本机 Docker 里的真 MySQL 26.7.0(全局 RR、binlog ROW、
+innodb_deadlock_detect=ON)跑出来的受控实验;标"推演"的没有真库证据。**
+
+### 9.1 受控实验:三类现场,结论两次推翻静态推演
+
+实验用一个独立小程序(与仓库代码无关)摆出与生产语句同形的交错,每格重复 5~20 次。
+
+**现场一:唯一键上撞"删除标记记录"(名字被释放后立刻被抢)**
+
+| 表结构 | 写法 | 竞争者 id 都小于原主人(生产常态) | 都大于 | 一大一小 |
+|---|---|---|---|---|
+| `PRIMARY KEY(player_id)` + `UNIQUE(name_norm)` | 普通 INSERT | **5/5 成环** | 2/5 | 5/5 |
+| 同上 | ODKU | **5/5 成环** | 0/5 | 2/5 |
+| `PRIMARY KEY(name_norm)` + `UNIQUE(player_id)` | 普通 INSERT | 5/5 | 5/5 | 5/5 |
+| **同上** | **ODKU** | **0/5** | **0/5** | **0/5** |
+
+→ **推翻了"ODKU 能消掉 S→X 升级环"这个一般性结论**:它只在"新记录的主键排在删除标记项之后"时成立。
+唯一 0/15 全清的组合是"被争抢的键当聚簇主键 **且** 用 ODKU",两个条件缺一不可。
+`player_name` 正好是最坏情形:`player_id` 由号段分配(小),存量角色是 snowflake(大),新号抢老名字必然走 5/5 那一路。
+
+**现场二:先到者回滚,两个后到者排在它后面**
+
+| 争抢的键 | 普通 INSERT | INSERT IGNORE | ODKU |
+|---|---|---|---|
+| 聚簇主键 | 10/10 | 10/10 | 10/10 |
+| 二级唯一索引(自增主键) | 10/10 | 10/10 | 10/10 |
+
+→ 成环的是**回滚时的锁继承**(等待锁被继承成间隙锁,两个后到者各自申请插入意向锁互相挡住),
+与写法、与键的位置都无关。**ODKU 对它无效**。手册那句 "an exclusive lock rather than a shared lock"
+管的是现场一,不是这一类。唯一的消法:**别让两个插入者同时排在同一条未提交记录后面** ——
+让所有首次插入者先排在一行已提交的守卫记录上(trade 的哨兵行)。
+
+**现场三:改主键会不会引入新环(同一 player_id 并发写两个名字 / 写一个删一个)**:两种表结构各 0/20,未复现。
+
+### 9.2 可 grep 的判据
+
+**当"被争抢的键"是二级唯一索引、且新记录的主键可能小于删除标记那条记录的主键时,ODKU 不够用。**
+
+按这条扫过全仓:`player_name` 中招(已根治);`zone_whitelist` 自增主键、新项必然更大,ODKU 够用(实测绿);
+`zone_config` / `trade_favorite` / friend 各表争抢的键就是聚簇主键,安全;
+`guild`(主键 `guild_id` + `uk_guild(name_norm)`)形状与 `player_name` 相同,**安全性依赖 `guild_id` 单调递增**
+—— 一旦改成号段分配,这个环立刻回来(已知会帮会会话)。
+
+### 9.3 18 条的处置与验证状态
+
+| # | 位置 | 处置 | 真库 |
+|---|---|---|---|
+| 1 | friend 拉黑写入 | ODKU | ✅ 全套 124s 零 SKIP |
+| 2/3/5/6/10 | guild 申请表 / 捐献截止 / 建帮重名 | 主键点锁 + `FORCE INDEX(PRIMARY)`,帮会会话落码 | 归帮会会话 |
+| 4/7/8/14/15 | `assetop.AllocateSeq` 未决行加锁读 | 改普通读,对 op 表不再持锁 | ✅(09-29 早,现被 proto 缺口挡住重验) |
+| 9 | `trade_favorite` 收藏 | ODKU(聚簇主键,安全) | ✅ |
+| 11 | 快照 guid 去重 | 生成列 + `uk_snapshot_guid_nz`,写入改普通 INSERT + 1062 回查,配去重迁移 | ✅ |
+| 12 | `player_name` 抢注 | **根治:主键改 `name_norm`、`player_id` 转唯一键、保持 ODKU**,配幂等可回滚迁移 | ✅ |
+| 13 | `debug_import` | 事务改 RC + 表遍历定序 | ✅ |
+| 16 | seq 行首次创建 | trade:守卫哨兵行 + `EnsureSeqRowTx`;guild 同法自行落 | ⏳ 被 proto 缺口挡住 |
+| 17 | merge_zone 整区改写 | 按主键升序点更新 + RC + 有界重试;TiDB 悲观短事务由搬迁会话落 | 未跑 |
+| 18 | gateway 白名单 | ODKU(自增主键,安全) | ✅ 12/12 |
+
+### 9.4 留下的口子
+
+1. **`go/trade`、`go/shared/assetop` 的真库回归没跑完**:HEAD 编不过(`ledger_dataservice.go` 调的
+   `GetPlayerAssetOpLedger` 没有 proto 生成产物,2026-09-29 `ccafe300c` 带入),要先按 §4 重生成。
+2. **`TestMigrateSchema_UpgradesLegacyHandWrittenTables` 在干净 HEAD 上就失败**(`transaction_log` 列默认值与
+   proto 声明不符),与本批无关,单独处置。
+3. **TiDB 一次都没实测**:上面全部结论只对 InnoDB 成立。TiDB 没有间隙锁,现场一/二本来就不存在,
+   但 `#11` 的唯一键在 TiDB 上建不出来(不支持 ALTER 加 STORED 生成列、不支持 NULLIF),
+   退路那条 `NOT EXISTS` 去重在 TiDB 上**不成立**——这条必须在迁库前解决。
+4. **`player_name` 改主键要停写窗口**:迁移是单条 ALTER(手册标注 Permits Concurrent DML=Yes),
+   但"旧二进制 + 新表"会让 Release 以 1176 失败,回滚镜像之前必须先回滚 DDL。
+
+### 9.5 教训(补 §8)
+
+5. **手册结论要问"它说的是哪一类现场"。** 同一句 "exclusive lock rather than a shared lock" 被两轮 agent
+   分别用来证明"ODKU 能消环"和"ODKU 消不掉",两次都只对一半现场成立。三类现场各有各的成因。
+6. **推演能把断言写反。** `#12` 的注释翻过三次、`#11` 的断言翻过两次,每次都有手册引用撑着,
+   直到真库一跑才定案。**凡是"某某锁会不会与某某锁互等"的判断,在真库上摆一次交错的成本远低于反复推演。**

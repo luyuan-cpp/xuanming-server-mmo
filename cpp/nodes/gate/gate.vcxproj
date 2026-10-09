@@ -19,7 +19,6 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="handler\event\battle_binding_helper.cpp" />
     <ClCompile Include="handler\event\scene_entry_dispatch.cpp" />
     <ClCompile Include="handler\event\event_handler.cpp" />
     <ClCompile Include="handler\event\gate_event_handler.cpp" />
@@ -43,7 +42,6 @@
     <ClInclude Include="gate_security.h" />
     <ClInclude Include="gate_router_mode.h" />
     <ClInclude Include="gate_version.h" />
-    <ClInclude Include="handler\event\battle_binding_helper.h" />
     <ClInclude Include="handler\event\scene_route_helper.h" />
     <ClInclude Include="handler\event\scene_entry_dispatch.h" />
     <ClInclude Include="handler\event\match_event_handler.h" />

@@ -96,6 +96,95 @@ type Config struct {
 	// (internal/logic/pkg/homezone 包注释)。整块可缺省,缺省 = 角色列表刷新开、
 	// 进游戏重定向关(见 HomeZoneConf 各字段)。
 	HomeZone HomeZoneConf `json:"HomeZone,optional"`
+
+	// Placement 控制建角时是否顺手钉「存储落点」(docs/design/player-storage-placement.md §8.3)。
+	// 整块可缺省,缺省 = 不钉;在 go/db 未开 Placement.Required 的前提下与落点设计上线前完全一致
+	// (Required 开着时不钉 = 新号不可用,见 PlacementConf)。
+	Placement PlacementConf `json:"Placement,optional"`
+
+	// RequireClientEndpoint 控制下发 gate 地址时是否**必须**用 gate 自报的客户端可达地址
+	// (NodeInfo.client_endpoint,集群外入口 D78/D79,规则见 shared/clientendpoint.Select)。
+	//
+	//   - false(默认,podip 模式与滚动过渡期):gate 没自报就回落 endpoint(PodIP),与改动前一致;
+	//   - true(external 模式):没自报客户端地址的 gate 直接跳过,不再把集群外连不上的 PodIP 发给玩家。
+	//
+	// 这是消费方的纵深防御,不是主闸:生产方(gate 进程)在 external 模式下缺地址会直接起不来。
+	// 打开顺序:确认 etcd 里本 zone 所有 gate 都带 clientEndpoint 之后再置 true;回退时先把它置回 false。
+	// 置 true 而 gate 全都缺地址 = 本 zone 无 gate 可分,登录整体失败(mmorpg_client_endpoint_select_total
+	// {result="rejected"} 会持续增长)。K8s 下由 k8s_deploy.ps1 按 -ClientEntryMode 写进 ConfigMap。
+	RequireClientEndpoint bool `json:"RequireClientEndpoint,default=false"`
+
+	// GateDrain 是 gate 排空判定循环(loginqueue.StartGateDrainMonitor)的参数:已标
+	// gate:{id}:draining 的 gate 在线掉到阈值或等到期限后,由它写上 gate:{id}:drained,
+	// k8s_gate_drain.ps1 看到标记才删 Pod(集群外入口 D87)。
+	//
+	// **刻意不标 optional**:go-zero 对整块缺失的 optional 结构体不填内层 default(见 KillSwitchConf),
+	// 而 K8s 的 login ConfigMap 由 k8s_deploy.ps1 另写模板、不含这一块。标了 optional,集群上就会拿到
+	// 零值 Interval = 监控关闭,drained 永远等不到。不标 optional 且内层字段全带 default 时,go-zero
+	// 判定该结构体「非必填」,整块缺失 = 全部取默认值(gate_drain_conf_test.go 钉住这一点)。
+	GateDrain GateDrainConf `json:"GateDrain"`
+}
+
+// GateDrainConf 是 gate 排空判定的参数,判定逻辑与标记语义见 loginqueue/gatedrain_monitor.go。
+//
+// **每个字段都必须带 default**:任一字段变成必填,整块缺失的旧配置(包括 K8s ConfigMap)会起服失败;
+// 变成 optional 不带 default,缺失时拿零值。两种都会让 Config.GateDrain 的「缺省即默认值」失效。
+type GateDrainConf struct {
+	// Interval 是判定周期。<=0 关闭监控(启动时打 ERROR):drained 永远不出现,排空脚本只能等到超时。
+	// 每轮一次 etcd 前缀读 + 每台 gate 一次 Redis GET,5s 对 etcd / Redis 都可忽略。
+	Interval time.Duration `json:"Interval,default=5s"`
+	// DrainedBelowPlayers:在线数 <= 它即判定排空。默认 0 = 必须一个人都不剩。
+	DrainedBelowPlayers uint32 `json:"DrainedBelowPlayers,default=0"`
+	// Deadline:从标 draining 起等这么久,无论还剩多少人都判定可缩容(理由记 deadline,打 ERROR);
+	// 0 = 永不因超时放行,只认人走干净。判定只产出信号,删不删 Pod 仍由运维带不带 -DeletePod 决定。
+	//
+	// 默认 25m 必须**小于** draining 标记的 TTL(k8s_gate_drain.ps1 -DrainTtlSeconds,默认 1800s)
+	// 与脚本的等待上限(-WaitTimeoutSeconds,默认 1800s):期限不早于 TTL 时 draining 先过期,
+	// 这台 gate 重新接客,drained 永远等不到。调小脚本的 TTL 时同步调小这里。
+	Deadline time.Duration `json:"Deadline,default=25m"`
+}
+
+// PlacementConf 是建角钉落点的开关(docs/design/player-storage-placement.md §8.3 / §13)。
+//
+// **整块零值 = 关闭**,理由同 KillSwitchConf:go-zero 对整块缺失的 optional 结构体不填内层
+// default,所以这里不写任何 default。零值是安全方向**仅在 go/db 的 Placement.Required=false
+// 的前提下成立**:PinOnCreate=false 时 RegisterPlayerZone 带 storage_id=0,data_service
+// 只写 player:zone,不写 player:placement,go/db 对无记录玩家按 home_zone 选库
+// (设计 P-5「缺席即旧语义」)。
+//
+// 打开顺序(§13):data_service / go/db 新版全部就绪、能力标记齐全之后才允许 PinOnCreate=true;
+// go/db 的 Placement.Required=true 必须在 PinOnCreate=true **之后**才能开——否则新建角色
+// 没有落点记录,Required 下它们的每一条存盘都会进死信。
+//
+// 关闭 / 回退顺序与之相反(反向约束):任一 go/db 已开 Required=true 时,
+//   - 禁止把 PinOnCreate 改回 false(它**不是**回滚开关);
+//   - 禁止把 NewPlayerStorageId 改成没有 go/db 能打开的库;
+//   - 禁止把 login 回退到不带 storage_id 的旧版。
+//
+// 违反时建角照常成功、login 侧零报错,但新号只有 player:zone 没有 player:placement:
+// 进游戏时预加载秒级失败(§6.2 读任务 Success=false),存盘全部进死信(missing_required)。
+// 要关这些,先把全部 go/db 的 Required 关掉。
+type PlacementConf struct {
+	// PinOnCreate=true:建角时在同一次 RegisterPlayerZone 里原子钉 player:placement = "{storage}:1"。
+	PinOnCreate bool `json:"PinOnCreate,optional"`
+	// NewPlayerStorageId 是新角色钉到的落点库编号(§4.2):0 = 本 login 所在 zone(Node.ZoneId);
+	// 1..999999 = zone_{id}_db;>=1000000 = player_store_{id}_db(Phase 2 全局库填 1000000)。
+	// 只在 PinOnCreate=true 时生效。
+	NewPlayerStorageId uint32 `json:"NewPlayerStorageId,optional"`
+}
+
+// StorageIDForNewPlayer 返回建角时要传给 RegisterPlayerZone 的 storage_id。
+// 返回 0 表示「不钉」(开关关着)—— 这是 data_service 侧约定的缺省语义,不是错误。
+// loginZone 为本 login 的 Node.ZoneId,NewPlayerStorageId 为 0 时用它兜底,
+// 与「建角 home = login 所在 zone」的既有约定一致,钉下去的有效落点与不钉时相同。
+func (c PlacementConf) StorageIDForNewPlayer(loginZone uint32) uint32 {
+	if !c.PinOnCreate {
+		return 0
+	}
+	if c.NewPlayerStorageId != 0 {
+		return c.NewPlayerStorageId
+	}
+	return loginZone
 }
 
 // HomeZoneConf 是合服后 zone 归属修正的开关。

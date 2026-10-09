@@ -4,19 +4,7 @@
 `proto/` is the contract source of truth. Cross-language interface changes should start here, then flow into generated outputs and consuming services.
 
 ## STRUCTURE
-```text
-proto/
-├── common/          # Shared/common messages
-├── contracts/       # Cross-service command contracts
-├── login/           # Login service contracts
-├── scene/           # Scene-related contracts
-├── scene_manager/   # Scene manager contracts
-├── data_service/    # Data service contracts
-├── db/              # DB service contracts
-├── player_locator/  # Player-location contracts
-├── gate/            # Gate-side contracts
-└── *.txt            # message_id / event_id registries
-```
+目录结构与客户端可见契约的范围见同目录 [README.md](README.md),这里不重复维护。
 
 ## WHERE TO LOOK
 | Task | Location | Notes |

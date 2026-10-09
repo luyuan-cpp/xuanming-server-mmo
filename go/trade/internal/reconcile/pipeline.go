@@ -204,12 +204,22 @@ func (p *Pipeline) Start(ctx context.Context) {
 //
 // 步骤(顺序固定):
 //  1. 号段发 op_id —— 发不出就当场失败,绝不自造 id;
-//  2. **事务外**建 seq 行(并发首次建行在事务内会死锁,§4.19);
-//  3. 一个事务里:分配 seq(FOR UPDATE + I5 未决数守卫)→ 插 outbox 行。P3 的商品状态迁移
-//     必须并进这同一个事务,否则会出现"扣了但商品没进 ESCROWING";
+//  2. **建 seq 行的短事务(全序里的"事务 A")**:EnsureSeqRows 自己开一个 RC 事务,
+//     普通读探针 →(仅缺行时)锁哨兵守卫行 → 按 (player_id, stream) 升序 INSERT IGNORE → **提交**。
+//     稳态下探针全命中,它连事务都不开;
+//  3. **业务事务("事务 B")**:AllocateSeqsTx(普通读确认行在 → 按升序逐个 FOR UPDATE 分配 seq,
+//     含 I5 未决数守卫)→ 插 outbox 行。P3 的商品状态迁移必须并进这同一个事务(否则会出现
+//     "扣了但商品没进 ESCROWING"),且商品 / 订单行的锁要排在 AllocateSeqsTx **之前**;
 //  4. 提交后同步投一次(复用重投循环的同一个 ProcessOne,不另写一条路径)。
 //
-// 第 4 步失败不回滚第 3 步:行已在 outbox,循环会接着投。只有 1–3 步失败才算本次上架失败。
+// 第 2 步为什么是独立的短事务(2026-09-29):把它并进业务事务的话,全局哨兵行的 X 要一直持到业务
+// 事务提交 —— 中间还夹着分配 seq 与插 outbox 行。开服 / 新区首日几乎每一次上架都是首次建行,
+// 那段窗口里全服托管入队全局串行。拆开之后持锁时间只剩一次点查 + 几条 INSERT IGNORE,而"消环"
+// 的性质不受影响:它来自"所有首次建行者排在同一行已提交、永不删除的记录锁上",与是否同事务无关。
+// 完整论证(含"短事务提交后 seq 行为什么不可能消失")见 data.AssetOpRepo 上方的守卫一节。
+//
+// 第 2 步失败 = 本次上架失败,**不降级成在业务事务里建行**:那会把"持业务锁再拿哨兵锁"的反向边
+// 画回来。第 4 步失败不回滚第 3 步:行已在 outbox,循环会接着投。只有 1–3 步失败才算本次上架失败。
 func (p *Pipeline) EnqueueEscrowDebit(ctx context.Context, req EscrowRequest) (EscrowResult, error) {
 	// 空接收者 = 降级形态(密钥缺失,svc 没建管线)。以错误返回而不是 panic:
 	// 调用方本来就要处理"托管失败",多一种 panic 只会让整个请求线程炸掉。
@@ -233,20 +243,35 @@ func (p *Pipeline) EnqueueEscrowDebit(ctx context.Context, req EscrowRequest) (E
 	}
 
 	const stream = assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT
-	nowMs := p.nowMs()
-	if err := p.ops.EnsureSeqRow(ctx, req.SellerPlayerID, stream, nowMs); err != nil {
-		return EscrowResult{}, err
+	sellerKey := data.SeqKey{PlayerID: req.SellerPlayerID, Stream: stream}
+
+	// 事务 A:建行。本事务要用到的**全部** (player, stream) 一次传进去 —— 本批只有卖家一条 DEBIT 流,
+	// P3 的交付会是买家 + 卖家两个 key,仍然一次传进来,由 data 层按升序处理。
+	// 纪元取当前毫秒(建行时刻)。它一旦写下就不再变,所以这里不需要像旧写法那样"每次重试重新取":
+	// 建行不再随业务事务回滚,重试的是业务事务,不是建行。
+	if err := p.ops.EnsureSeqRows(ctx, p.nowMs(), sellerKey); err != nil {
+		return EscrowResult{}, fmt.Errorf("trade: 建 seq 行失败(listing=%d player=%d): %w",
+			req.ListingID, req.SellerPlayerID, err)
 	}
 
 	var alloc assetop.Alloc
+	// 事务 B:业务写。它只对 seq 表做普通读确认 + 升序 FOR UPDATE,一行都不建,也不碰哨兵行。
 	txErr := assetop.WithTxRetry(ctx, p.ops.DB(), 2, data.IsRetryableTxError, func(tx *sql.Tx) error {
 		// 每次重试都重新分配:上一次尝试的 seq 随事务一起回滚了,复用会写出空洞。
-		a, err := assetop.AllocateSeq(ctx, tx, p.ops.Tables(), req.SellerPlayerID, stream, assetop.DefaultLimits, p.nowMs())
+		allocs, err := p.ops.AllocateSeqsTx(ctx, tx, p.nowMs(), sellerKey)
 		if err != nil {
 			return err
 		}
+		a, ok := allocs[sellerKey]
+		if !ok || a.Epoch == 0 {
+			// 不可达的防御:AllocateSeqsTx 给每个传进去的 key 都填结果,纪元为 0 时它自己就报错了。
+			// 但 map 取值失手拿到零值是**静默**的,而零值会写出一行 seq=0 / stream_epoch=0 的 outbox,
+			// scene 侧只会把它判成坏行并吃掉一次投递 —— 宁可在这里响亮地失败。
+			return fmt.Errorf("trade: seq 分配结果缺 (player=%d stream=%d),不写 outbox",
+				sellerKey.PlayerID, int32(sellerKey.Stream))
+		}
 		alloc = a
-		return p.ops.InsertOp(ctx, tx, p.newEscrowRecord(req, opID, a, payload))
+		return p.ops.InsertOp(ctx, tx, p.newEscrowRecord(req, opID, alloc, payload))
 	})
 	if txErr != nil {
 		return EscrowResult{}, fmt.Errorf("trade: 托管入队失败(listing=%d player=%d): %w",

@@ -29,6 +29,9 @@ type GameDB struct {
 	DB       *sql.DB
 }
 
+// DB 是本 zone 库(zone_{ZoneId}_db),由 InitDB 在启动期打开并过全部断言。
+// 消费者按玩家落点选库时,它被登记为落点 ZoneId 的库(NewStoreRegistryFromConfig),其余落点库由
+// StoreRegistry 按需打开;verifier / data_stress 等只读工具继续只用它。
 var DB *GameDB
 
 // DDL 开关的环境变量覆盖名。
@@ -535,15 +538,15 @@ var ddlTableNameRegex = regexp.MustCompile("CREATE TABLE IF NOT EXISTS `([^`]+)`
 // assertTableNameLocked 表名守卫:proto2mysql 新版默认表名 = proto full name(含点号),
 // 一旦 OptionTableName 因任何原因未被读到,schema sync 会静默建出新表,存量数据对业务
 // "消失"。这里强校验每张表生成 DDL 的表名与 proto 里声明的 OptionTableName 完全一致,
-// 不一致直接拒绝启动(全局数据层决策风险 #3)。挂在 RegisterTables 里,业务服务
-// 与迁移入口(internal/migrate)走同一条注册链,自动共享这道守卫。
-func assertTableNameLocked(table proto.Message) error {
+// 不一致直接拒绝启动(全局数据层决策风险 #3)。挂在 registerTables 里,业务服务、
+// 按需打开的落点库(store_registry.go)与迁移入口(internal/migrate)走同一条注册链,自动共享这道守卫。
+func assertTableNameLocked(model *proto2mysql.DB, table proto.Message) error {
 	md := table.ProtoReflect().Descriptor()
 	declared, ok := proto2mysql.TableNameFromDescriptor(md)
 	if !ok || declared == "" {
 		return fmt.Errorf("表名守卫: 消息 %s 未声明 OptionTableName,拒绝按默认表名建表", md.FullName())
 	}
-	ddl := DB.SqlModel.GetCreateTableSQL(table)
+	ddl := model.GetCreateTableSQL(table)
 	m := ddlTableNameRegex.FindStringSubmatch(ddl)
 	if m == nil {
 		return fmt.Errorf("表名守卫: 无法从 %s 的建表语句中解析表名: %s", md.FullName(), ddl)
@@ -563,13 +566,22 @@ func RegisterTables() ([]proto.Message, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, table := range tables {
-		DB.SqlModel.RegisterTable(table)
-		if err := assertTableNameLocked(table); err != nil {
-			return nil, err
-		}
+	if err := registerTables(DB.SqlModel, tables); err != nil {
+		return nil, err
 	}
 	return tables, nil
+}
+
+// registerTables 把表逐张注册进给定模型并过表名守卫(纯内存)。
+// 每个落点库有自己的 proto2mysql 模型(见 OpenPlacementStore),注册与守卫必须对每个模型各做一遍。
+func registerTables(model *proto2mysql.DB, tables []proto.Message) error {
+	for _, table := range tables {
+		model.RegisterTable(table)
+		if err := assertTableNameLocked(model, table); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // CreateOrUpdateTables 逐张建表 / 补列。

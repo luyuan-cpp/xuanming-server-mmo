@@ -27,6 +27,10 @@ import java.util.Optional;
  * 插入分支里那条新主键记录不参与任何锁序比较:它的 id 刚分配、只有本事务知道,没有写者会按主键或主键范围去锁它
  * (别人只可能经由 uk 项碰到它,那已是 uk 上的排队)。所以两条写路径彼此只会排队、不会成环。
  *
+ * <p><b>「id 是自增」在这里不是无关紧要的实现细节,而是消环论证的一半</b>(2026-09-29 真库探针,见 {@link #upsert}
+ * 的「为什么 ODKU 在这张表上只会排队」)。谁要把它换成外部发号(雪花、号段)之前,必须先重跑那份探针:新行的
+ * 唯一键项一旦可能排在删除标记项<b>之前</b>,ODKU 就不再消环。
+ *
  * <p>刻意继承 {@link Repository} 而不是 {@code JpaRepository}:不再暴露 {@code save()} / {@code delete(entity)} /
  * {@code deleteById()}。{@code save()} 正是 #18 的成因(见 {@link #upsert}),{@code deleteById()} 与 merge 式
  * {@code save()} 则是「先主键、后唯一键」的反向取锁;把它们从接口上拿掉,比在注释里写「不要用」更拦得住回归。
@@ -77,11 +81,28 @@ public interface ZoneWhitelistRepository extends Repository<ZoneWhitelist, Long>
      * 先到的 add 因故回滚时,排队的两个 add 也会以同样方式成环(MySQL 手册「Locks Set by Different SQL
      * Statements」的 DELETE + 双 INSERT 例)。
      *
-     * <h3>为什么 ODKU 只会排队</h3>
-     * ODKU 的重复键检查直接取 <b>X</b> next-key,不存在「先拿 S、再升级」这一步。X 与 X 互斥,等待者只能一个一个拿到:
-     * 先到者插入(或改 note)并提交,后到者再拿到锁时看见的是活行,走 UPDATE 分支。锁序按分支不同(见类注释):
-     * 插入分支是「新主键记录(隐式锁,别人碰不到)→ uk 重复键检查 X → 插入 uk 项」,重复键分支是
-     * 「uk 项 X → 已有主键 X」;能与别人冲突的部分都与 {@link #deleteByZoneIdAndAccountId} 同向。
+     * <p>校准(2026-09-29 真库探针):上面是成环的机制,<b>不是</b>「每次都会成环」。同一时序在这张表上实测
+     * 普通 INSERT 只有 2/5 成环,其余几次是幸存者先提交、后到者直接拿 1062;而且同一格在不同轮次跑出过 2/5
+     * 与 5/5,随时序波动。所以「save() 会撞 1213」是<b>会不会</b>的问题,不是<b>一定</b> —— 一次没复现不能
+     * 当作「save() 也安全」的证据(对照用例 {@code ZoneWhitelistUpsertLockOrderMySqlTest} 因此不强断言 1213)。
+     *
+     * <h3>为什么 ODKU 在<b>这张表上</b>只会排队</h3>
+     * 两个条件<b>一起</b>成立才消环,缺一不可 —— 2026-09-29 真库探针(MySQL 26.7.0,全局 RR,
+     * {@code innodb_deadlock_detect=ON};编排与 {@code MySqlLockOrderFixture} 同形,每格重复 5 次)的实测结论:
+     * <ol>
+     *   <li><b>ODKU 的重复键检查直接取 X next-key</b>,不存在「先拿 S、再升级」这一步。X 与 X 互斥,等待者只能
+     *       一个一个拿到:先到者插入(或改 note)并提交,后到者再拿到锁时看见的是活行,走 UPDATE 分支。</li>
+     *   <li><b>{@code id} 是自增,所以新行的 uk 项必然排在删除标记项之后</b>(唯一二级索引记录按索引列
+     *       排序、以主键破同键的序)。探针测的正是这一路:{@code zone_whitelist} 这种形状上 ODKU <b>0/5</b> 成环,
+     *       同一时序的普通 INSERT 只有 <b>2/5</b> 成环、其余几次是幸存者先提交、后到者拿 1062。</li>
+     * </ol>
+     * <b>不要把它读成「ODKU 在任何顺序下都安全」</b>:同一份探针在「新行主键<b>小于</b>删除标记那条记录的主键」
+     * 的形状上(go/login 的 {@code player_name}:主键 player_id + 唯一索引 name_norm,号段发的新 id 小于存量
+     * snowflake id),ODKU <b>5/5 成环</b>。可 grep 的判据是:<em>被争抢的键是二级唯一索引,且新记录的主键可能
+     * 小于删除标记那条记录的主键时,ODKU 不够用。</em>
+     *
+     * <p>锁序按分支不同(见类注释):插入分支是「新主键记录(隐式锁,别人碰不到)→ uk 重复键检查 X → 插入 uk 项」,
+     * 重复键分支是「uk 项 X → 已有主键 X」;能与别人冲突的部分都与 {@link #deleteByZoneIdAndAccountId} 同向。
      * 走 UPDATE 分支也会消耗一个自增号,id 出现空洞无害(id 只是代理主键,接口一律按业务键定位)。
      *
      * <h3>为什么不靠 JDBC URL 加 READ COMMITTED</h3>
@@ -91,7 +112,10 @@ public interface ZoneWhitelistRepository extends Repository<ZoneWhitelist, Long>
      * <h3>剩下去不掉的固有情形</h3>
      * 同键并发插入且先到者<b>回滚</b>,或 purge 恰在排队期间清掉删除标记的 uk 项时,排队者的锁被继承成后继记录上的
      * 间隙锁,InnoDB 仍可能牺牲一个等待者(1213)。这由调用方(AdminWhitelistController#add)做有上限的整事务
-     * 重试兜住,收敛论证见 AdminWhitelistController#executeRetryingDeadlockVictim。
+     * 重试兜住,收敛论证见 {@code com.game.gateway.controller.InnoDbDeadlockRetry#execute}
+     * (该类是包内可见的支撑类,本包引用不到,所以只能写成文本而不是 {@code @link})。
+     * 该论证目前<b>没有真库证据</b>:探针的 ODKU 那一格是 0/5,连一次 1213 都没观察到,所以「重试能吸收它」
+     * 至今是推演。
      *
      * <p>native 语句绕过持久化上下文,所以先 flush 再 clear,免得同一事务里随后读到缓存里的旧实体。
      */

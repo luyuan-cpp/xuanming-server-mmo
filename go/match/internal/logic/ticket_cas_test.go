@@ -18,13 +18,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// matchedWorstCaseSeconds 是 D5 公式里"required 人串行 gather 最坏耗时 + 10s"
-// 的独立算法(测试不复用被测函数的表达式,用 gather.go / spectate.go 常量重新拼):
-// 每人观战清退(RemoveObserver 3s)+ PrepareBattle 3s,全齐后 CreateBattle 5s,
-// CreateBattle 失败先 DestroyBattle 3s 才进补偿。
+// matchedWorstCaseSeconds 是 D5 公式里"required 人串行 gather 最坏耗时(向上取整到秒)+ 10s"
+// 的独立算法(测试不复用被测函数的表达式,也不引用 gatherCreateStageWorst,用 gather.go /
+// spectate.go 常量逐跳重新拼),按 k8s-client-entry D82 换节点重试路径计:
+// 每人观战清退(RemoveObserver 3s)+ PrepareBattle 3s;全齐后写观战记录 6.1s → 首选节点
+// CreateBattle 被拒 5s → 改写记录 6.1s → 重试节点 CreateBattle 5s;失败先 DestroyBattle 3s 才进补偿。
 func matchedWorstCaseSeconds(required int) int {
-	perMember := int(removeObserverTimeout/time.Second) + int(prepareBattleTimeout/time.Second)
-	return required*perMember + int(createBattleTimeout/time.Second) + int(rollbackTimeout/time.Second) + 10
+	chain := time.Duration(required)*(removeObserverTimeout+prepareBattleTimeout) +
+		spectateRecordWriteWorst + createBattleTimeout + // 写记录 + 首选节点 CreateBattle
+		spectateRecordWriteWorst + createBattleTimeout + // D82:改写记录 + 重试节点 CreateBattle
+		rollbackTimeout
+	return int((chain+time.Second-1)/time.Second) + 10
 }
 
 // compensationWorstCaseSeconds 补偿路径最坏耗时:已冻结者逐人 CancelBattlePrepare + 余量。
@@ -72,33 +76,60 @@ func joinQueue(t *testing.T, svcCtx *svc.ServiceContext, playerId uint64, mode m
 
 func TestMatchedTicketTTLFormula(t *testing.T) {
 	svcCtx, _ := newTestSvcCtx(t)
-	// PVE solo 一人:最坏 6+5+3+10=24s < 配置 30s,取配置下限。
-	require.Equal(t, 30, matchedTicketTTLFor(svcCtx, 1))
-	// 1V1 两人:2×6+5+3+10=30s,恰好等于配置下限。
-	require.Equal(t, 30, matchedTicketTTLFor(svcCtx, 2))
-	// PVE_TEAM 五人:5×6+18=48s > 30s。
+	// 每档 = ⌈N×6 + 2×(6.1+5) + 3⌉ + 10(D82 换节点路径,逐跳见 matchedWorstCaseSeconds)。
+	// PVE solo 一人:⌈31.2⌉+10 = 42s,已高于配置 30s。
+	require.Equal(t, matchedWorstCaseSeconds(1), matchedTicketTTLFor(svcCtx, 1))
+	require.Equal(t, 42, matchedTicketTTLFor(svcCtx, 1))
+	// 1V1 两人:⌈37.2⌉+10 = 48s。
+	require.Equal(t, matchedWorstCaseSeconds(2), matchedTicketTTLFor(svcCtx, 2))
+	require.Equal(t, 48, matchedTicketTTLFor(svcCtx, 2))
+	// PVE_TEAM 五人:⌈55.2⌉+10 = 66s。
 	require.Equal(t, matchedWorstCaseSeconds(5), matchedTicketTTLFor(svcCtx, 5))
-	require.Equal(t, 48, matchedTicketTTLFor(svcCtx, 5))
-	// 5v5 十人:10×6+5+3+10=78s,旧公式 45s 盖不住"十人都在观战"的成功路径(65s)。
+	require.Equal(t, 66, matchedTicketTTLFor(svcCtx, 5))
+	// 5v5 十人:⌈85.2⌉+10 = 96s。更早的 45s 盖不住"十人都在观战"的成功路径(65s);
+	// 不计写记录与 D82 的上一版 78s 盖不住 D82 最坏链路(85.2s)。
 	require.Equal(t, matchedWorstCaseSeconds(10), matchedTicketTTLFor(svcCtx, 10))
-	require.Equal(t, 78, matchedTicketTTLFor(svcCtx, 10))
+	require.Equal(t, 96, matchedTicketTTLFor(svcCtx, 10))
 	require.Greater(t, matchedTicketTTLFor(svcCtx, 10),
 		10*int((removeObserverTimeout+prepareBattleTimeout)/time.Second)+int(createBattleTimeout/time.Second),
 		"必须覆盖含观战清退的成功路径")
+	// 配置是下限:抬到 50s 时小组取配置,大组仍取公式。
+	svcCtx.Config.MatchedTicketTTLSeconds = 50
+	require.Equal(t, 50, matchedTicketTTLFor(svcCtx, 1))
+	require.Equal(t, 50, matchedTicketTTLFor(svcCtx, 2))
+	require.Equal(t, 66, matchedTicketTTLFor(svcCtx, 5))
 	// 配置抬高到 120s 时所有组都取配置。
 	svcCtx.Config.MatchedTicketTTLSeconds = 120
 	require.Equal(t, 120, matchedTicketTTLFor(svcCtx, 10))
-	// 漏配(0)退回 30s 下限。
+	// 漏配(0)不会得到 0 TTL:缺省下限 30s 低于公式最小值,取公式。
 	svcCtx.Config.MatchedTicketTTLSeconds = 0
-	require.Equal(t, 30, matchedTicketTTLFor(svcCtx, 1))
+	require.Equal(t, matchedWorstCaseSeconds(1), matchedTicketTTLFor(svcCtx, 1))
 
 	// 补偿窗口:十人全冻结后逐人解冻 10×3+10=40s。
 	require.Equal(t, compensationWorstCaseSeconds(10), compensationTicketTTLFor(10))
 	require.Equal(t, 40, compensationTicketTTLFor(10))
 }
 
-// 5V5 十人弹组:matched TTL ≥ 10×(3+3)+5+3+10=78s 且 ≥ 配置值,固定 30s / 旧公式 45s
-// 都会在正常 gather 途中过期。
+// 预算回归(k8s-client-entry D82 + 集群外入口 2b 第 9 条):D82 换节点重试路径的逐跳最坏链路,
+// 加上完整 10s 余量,必须落在 matched 票据 TTL 里 —— 每人观战清退 + PrepareBattle,写记录 →
+// 首选节点 CreateBattle 被拒 → 改写记录 → 重试节点 CreateBattle → 失败时 DestroyBattle。
+// 单条 Redis 命令按 spectateRedisOpWorst(go-redis ReadTimeout)计,不按 ctx 截止计(spectate.go)。
+// 常规路径(不换节点)的回归见 gather_spectate_index_test.go TestSpectateRecordWriteWorstFitsMatchedTicketTTL。
+func TestMatchedTicketTTLCoversD82RetryPath(t *testing.T) {
+	svcCtx, _ := newTestSvcCtx(t)
+	svcCtx.Config.MatchedTicketTTLSeconds = 1 // 配置下限压到最低,只看公式
+	for _, required := range []uint32{1, 2, kMaxBattleTeamSize, required5v5Players} {
+		budget := time.Duration(matchedTicketTTLFor(svcCtx, required)) * time.Second
+		chain := time.Duration(required)*(removeObserverTimeout+prepareBattleTimeout) +
+			spectateRecordWriteWorst + createBattleTimeout +
+			spectateRecordWriteWorst + createBattleTimeout +
+			rollbackTimeout
+		require.GreaterOrEqual(t, budget, chain+10*time.Second, "required=%d 余量不足 10s", required)
+	}
+}
+
+// 5V5 十人弹组:matched TTL ≥ ⌈10×(3+3) + 2×(6.1+5) + 3⌉ + 10 = 96s 且 ≥ 配置值,
+// 固定 30s / 旧公式 45s 都会在正常 gather 途中过期。
 func TestMatcher5v5MatchedTTLCoversWorstCaseGather(t *testing.T) {
 	svcCtx, mr := newTestSvcCtx(t)
 	groups := stubGather(t)

@@ -236,7 +236,7 @@ func main() {
 	//    shutdown listener 在收到信号 1s 后执行,所以这里等 serveDone(有上限);
 	//  ③ 停后台循环(节点发现 / matcher / 评分消费);
 	//  ④ svcCtx.Stop()(flush Kafka、释放 snowflake 租约)→ s.Stop()(logx.Close 放最后,前面的错误日志不丢)。
-	// 组队的异步副作用(推送、EndMatch 清开战锁)不等:开战锁靠自然过期(5 人 83s),推送至多一次。
+	// 组队的异步副作用(推送、EndMatch 清开战锁)不等:开战锁靠自然过期(5 人 101s),推送至多一次。
 	regs.Close()
 	select {
 	case <-serveDone:

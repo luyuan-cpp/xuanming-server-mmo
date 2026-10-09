@@ -5,7 +5,7 @@
 # Why this is a separate script (and not a generic shell loop): the dev box
 # (Windows) maxes out around 500 bots due to (a) Hyper-V port reservations
 # 50000-50059 + 50160-50259, (b) single-broker docker kafka, (c) absent
-# sysctl tuning. See docs/design/stress-test-2026-05-http-login.md §三 and
+# sysctl tuning. See docs/stress/stress-test-2026-05-http-login.md §三 and
 # docs/ops/release-checklist.md #B-3 for the full constraints.
 #
 # Run on the staging gate host (where cpp gate listens). Pre-reqs:
@@ -96,7 +96,7 @@ column -ts, "${RESULTS_CSV}" 2>/dev/null || cat "${RESULTS_CSV}"
 cat <<'EOF'
 
 Next steps:
-  - Append a row to docs/design/stress-test-2026-05-http-login.md §二
+  - Append a row to docs/stress/stress-test-2026-05-http-login.md §二
     (new column: env=Linux-staging vs the existing Windows-dev row).
   - If avg_login climbs above ~150ms or max above ~1s in any tier,
     that's the first cliff: capture cpp gate %CPU, ListenOverflows,

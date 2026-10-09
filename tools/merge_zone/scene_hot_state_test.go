@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -97,6 +98,40 @@ func TestDecideLocationZone(t *testing.T) {
 		if got := decideLocationZone(c.loc, 102, c.sceneZone); got != c.want {
 			t.Errorf("%s: got %v want %v", c.name, got, c.want)
 		}
+	}
+}
+
+func TestLocationInScope_ZoneZeroSweepOnlyTouchesLegacyRecords(t *testing.T) {
+	// A11:删场景键之前对清单外全量补扫,只看 zone_id==0 的旧记录(它们靠 scene:{id}:zone 反查,
+	// 场景键一删就判不出归属);zone_id 非 0 的自带归属,补扫一律不碰 —— 哪怕它写的正是源区。
+	legacy := playerLocation{ZoneID: 0, SceneID: 7}
+	explicitSrc := playerLocation{ZoneID: 102, SceneID: 7}
+	explicitOther := playerLocation{ZoneID: 101, SceneID: 7}
+	if !locationInScope(legacy, zoneZeroLocationsOnly) {
+		t.Error("a zone_id=0 record must be swept")
+	}
+	for _, loc := range []playerLocation{explicitSrc, explicitOther} {
+		if locationInScope(loc, zoneZeroLocationsOnly) {
+			t.Errorf("the zone_id=0 sweep must not touch %+v", loc)
+		}
+	}
+	// 清单玩家那一轮(allLocations)照旧什么都看。
+	for _, loc := range []playerLocation{legacy, explicitSrc, explicitOther} {
+		if !locationInScope(loc, allLocations) {
+			t.Errorf("the manifest pass must look at %+v", loc)
+		}
+	}
+}
+
+func TestHotStateReportCountsTheSweepSeparately(t *testing.T) {
+	var rep hotStateClearReport
+	rep.addLocations(locationCounts{Checked: 3, Matched: 2, Deleted: 2, Undecided: 1})
+	rep.addZoneZeroSweep(locationCounts{Checked: 5, Matched: 1, Deleted: 1, Undecided: 4})
+	if rep.LocationsChecked != 3 || rep.LocationsDeleted != 2 || rep.ZoneZeroChecked != 5 || rep.ZoneZeroUndecided != 4 {
+		t.Fatalf("report = %+v", rep)
+	}
+	if s := rep.String(); !strings.Contains(s, "zone0_sweep(checked=5 matched=1 deleted=1 undecided=4)") {
+		t.Errorf("the sweep must show up in the report: %s", s)
 	}
 }
 

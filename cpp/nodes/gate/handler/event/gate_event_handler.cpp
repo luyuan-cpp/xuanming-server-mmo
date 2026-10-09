@@ -14,7 +14,6 @@
 #include "thread_context/node_context_manager.h"
 #include "network/rpc_client.h"
 #include "node/system/node/node_util.h"
-#include "battle_binding_helper.h"
 #include "scene_route_helper.h"
 #include "scene_entry_dispatch.h"
 
@@ -343,15 +342,10 @@ void GateEventHandler::BroadcastToAllEventHandler(const contracts::kafka::Broadc
 void GateEventHandler::BindBattleEventHandler(const contracts::kafka::BindBattleEvent& event)
 {
 ///<<< BEGIN WRITING YOUR CODE
-    // 委托手写辅助(handler/event/battle_binding_helper.cpp):解析 battle 节点
-    // 实体并写入会话的 BattleNodeService 绑定,记录 battle_id 供解绑匹配。
-    gate_battle_binding::HandleBindBattle(event);
 ///<<< END WRITING YOUR CODE
 }
 void GateEventHandler::UnbindBattleEventHandler(const contracts::kafka::UnbindBattleEvent& event)
 {
 ///<<< BEGIN WRITING YOUR CODE
-    // 委托手写辅助:battle_id 匹配当前绑定才清除,迟到/重复解绑幂等忽略。
-    gate_battle_binding::HandleUnbindBattle(event);
 ///<<< END WRITING YOUR CODE
 }

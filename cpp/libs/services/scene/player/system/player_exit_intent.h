@@ -24,6 +24,9 @@
 //       HandlePlayerAsyncSaved 退出分支的"被取代"与"意图缺失"两条 fail-closed 出口 —— 都与 UnregisterPlayer
 //       一起摘;实体销毁时随实体消失。
 //   已在退出中再来一次退出:不重挂,按 player_exit::MergeExitCause 合并原因。
+//   sceneIdAtExit / clientDisconnected 两个字段只在这两处写:HandleExitGameNode 首次挂组件时抄场景、按原因置位,
+//   MergeExitCause 在又来一次客户端断线时粘性置位。读它们的是疏散 / 排空改派的票据判定与确认核实
+//   (PlayerLifecycleSystem::DispatchEmergencyRelocate,relocate_confirm.h)。
 
 // 退出原因。A1′(断线释放标记)按它判定能不能写(exit_release_mark.h 的 DecideExitReleaseMark,
 // §12.6.3 第二步)。默认值 kUnspecified = 来源不明 = 不写标记:漏标只会少写。
@@ -63,6 +66,16 @@ struct PlayerExitIntentComp
 	// 本次退出已打过一次 "save outran reconnect lease" WARN。退出分支现在一次退出可能落地多次(重存轮次、
 	// 超限保留后的周期存盘 / rekick),该 WARN 被帮会值班 LogQL 按"事件数"引用(§12.6.9),只许每次退出打一条。
 	bool leaseOverrunWarned{false};
+	// 退出发起那一刻所在场景的 scene_id(SceneInfoComp);0 = 当时不在任何场景 / 拿不到。必须在 DetachFromScene 之前抄:
+	// 它一摘 SceneEntityComp 就再也拿不到了,而疏散 / 排空改派要在退出收敛之后才发。改派的确认核实拿它与 Redis 里
+	// location 的场景比:仍指向这个场景 = 改派没生效(relocate_confirm::ClassifyPlacement 的 sourceSceneId)。
+	// 0 时核实一律判"判不清"、不踢。
+	uint64_t sceneIdAtExit{0};
+	// 粘性:本次退出期间收到过 kClientDisconnect(gate 断线 / 客户端主动退出)= 这条会话已经死了。置位后不清。
+	// 改派票据据此作废(relocate_confirm::DecideTicket):给死会话改派,scene_manager 放行后路由会在 gate 被丢掉,
+	// location 停在一个从未载入该玩家的节点上。与 cause 分开记:cause 只保留第一次的原因,排空 / 疏散发起的退出之后
+	// 才断线的玩家,cause 仍是 kSceneDrain / kIdentityConflict。
+	bool clientDisconnected{false};
 };
 
 namespace player_exit
@@ -141,6 +154,7 @@ namespace player_exit
 
 	// 合并一次"已在退出中"的退出请求:原因保持第一次的,只按上面的规则粘性置位 releaseMarkSuppressed,
 	// 并记下第一次触发压制的原因(之后再来的压制不改它)。
+	// 又来的是客户端断线时另外粘性置位 clientDisconnected(会话已死,改派票据作废);它不改原因、也不参与压制规则。
 	constexpr void MergeExitCause(PlayerExitIntentComp &intent, ExitCause incoming, bool devBypassSuppressesTransfer)
 	{
 		if (ShouldSuppressReleaseMarkOnMerge(incoming, devBypassSuppressesTransfer))
@@ -151,6 +165,23 @@ namespace player_exit
 			}
 			intent.releaseMarkSuppressed = true;
 		}
+		if (incoming == ExitCause::kClientDisconnect)
+		{
+			intent.clientDisconnected = true;
+		}
+	}
+
+	// "退出优先"作废的那次交接,它的 EnterScene 是否还可能在 scene_manager 排队:交接标记已写,就按可能算。
+	//   exitWonOverIssuedHandoff  FinishExitAfterPersist 自己的"退出优先"分支里标记已写(局部变量,组件已摘);
+	//   intent                    意图组件(可为空):HandlePlayerAsyncSaved 的"退出优先"分支把同一件事记在
+	//                             travelHandoffMarkIssued 上。
+	// 两处消费者共用这一个判据,不许各写一份:A1′ 据此不写断线释放标记(M11:新标记会被在途的 EnterScene 用掉);
+	// 疏散 / 排空改派据此记"更早的请求可能还会被放行"(relocate_confirm::Registration.earlierEnterSceneMayReply:
+	// 那条在途请求可以凭改派刚写的同代标记过门)。判据偏保守("标记已写"不等于"EnterScene 真的发出过"):
+	// 判错的一侧只是 A1′ 少写一次、改派多等到 settle,不会多写也不会误踢。
+	constexpr bool HandoffEnterSceneMayBeInFlight(bool exitWonOverIssuedHandoff, const PlayerExitIntentComp *intent)
+	{
+		return exitWonOverIssuedHandoff || (intent != nullptr && intent->travelHandoffMarkIssued);
 	}
 
 	// 退出存盘落地后(已排除"被取代""意图缺失")的去留:

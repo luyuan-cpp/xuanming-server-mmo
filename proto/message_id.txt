@@ -237,3 +237,8 @@
 236=ClientPlayerFriendUnblock
 237=DataServiceReleasePlayerName
 238=ClientPlayerFriendAcceptFriend
+239=GuildServiceLightGuildLantern
+240=GuildServiceClaimGuildReunion
+241=GuildServiceGetGuildActivities
+242=GuildServiceStartGuildTrial
+243=GuildServiceRespondGuildTrialInvite

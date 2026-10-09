@@ -16,6 +16,7 @@ java/
 │   │   ├── repository/              # JPA repositories
 │   │   └── service/                 # Zone probe, server list, gate assign, CDN sign
 │   └── src/test/                    # Unit tests
+├── config_node/                     # 配置表查询服务;导表器 Java 产物的落点,日常不启动
 └── springboot_satoken_auth_starter/ # Example/starter app with local auth stack
 ```
 

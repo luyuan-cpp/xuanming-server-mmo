@@ -49,6 +49,9 @@ type Config struct {
 	// 整段可缺失,缺失语义见 SchemaConfig.AutoMigrate 与 ShouldAutoMigrate。
 	Schema SchemaConfig `json:",optional"`
 
+	// Store 见 StoreConfig。
+	Store StoreConfig `json:",optional"`
+
 	// Kafka 是 C++ scene 产出的 transaction_log_topic / player_snapshot_topic 的落库消费者
 	// 配置。Brokers 为空 = 不消费(本地无 Kafka 时的合法形态);消费者启动失败不会拖死
 	// data_service(Load/Save 是热路径),只记日志并每 30s 后台重试。
@@ -205,6 +208,20 @@ func (c IdSegmentConfig) EffectiveBootstrapTags() []string {
 	return out
 }
 
+// StoreConfig 决定 MySQL 侧的 store(快照 / 流水 / 号段 / 名字注册表)装配不起来时进程怎么办。
+type StoreConfig struct {
+	// Required=true:四个 store 任一没装配起来(MySQL 启动瞬间不可达、迁移失败、表结构不对)就**拒绝启动**,
+	// 而且发生在任何 etcd 注册之前。缺省 false = 沿用旧行为:降级运行,依赖它的 RPC 各自返回错误。
+	//
+	// 为什么多副本必须开:store 为 nil 的实例 gRPC 健康检查照样是 SERVING、两条 etcd 注册照常进行。
+	// 单实例时这是"全挂",很显眼;多实例时是**按比例失败**(p2c / 随机挑到它的请求才失败),隐蔽得多;
+	// 滚动更新还会把健康的旧 Pod 换成一个带病的新 Pod。K8s 的 ConfigMap 所有档位都写 true(k8s_deploy.ps1)。
+	//
+	// 用裸 bool:安全值恰好不是零值,但零值 = 旧语义,整段 `Store:` 缺失(本地 yaml)时行为不变
+	// (与下面 SchemaConfig 用 *bool 的理由相反:那里零值是危险值)。
+	Required bool `json:",optional"`
+}
+
 // SchemaConfig 建表策略。
 type SchemaConfig struct {
 	// AutoMigrate 缺省(nil)= true:启动时用 proto2mysql 按 proto 定义对五张表逐张
@@ -213,9 +230,10 @@ type SchemaConfig struct {
 	// (proto2mysql 把 string 渲染成 MEDIUMTEXT,TEXT 列上建不了唯一键),
 	// 迁移对它们只做列漂移校验。
 	//
-	// 生产必须显式设 false:多副本同时启动会对同一张表并发 ALTER,MDL 阻塞会让所有
-	// GM 回滚/流水查询停摆;改为部署阶段显式跑一次 `data_service -f <yaml> -migrate`
+	// 生产必须显式设 false:存量大表上的 ALTER 会持有 MDL,阻塞期间所有 GM 回滚/流水查询停摆,
+	// 这种事不该发生在某个副本的启动路径上;改为部署阶段显式跑一次 `data_service -f <yaml> -migrate`
 	// (同一段代码、单进程、跑完即退)。设 false 时启动路径不碰任何 DDL。
+	// 多副本同时启动本身是安全的:迁移由库级命名锁串行(store.acquireMigrateLock),后到的等先到的跑完。
 	//
 	// 为什么是 *bool 而不是 `bool json:",default=true"`:go-zero 的 mapping **不下钻**
 	// 一个"整段 optional 且未出现"的嵌套结构,里面的 default 标签一个都不会回填

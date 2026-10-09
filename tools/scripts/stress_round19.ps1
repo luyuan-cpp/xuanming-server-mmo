@@ -51,7 +51,7 @@ param(
 
     [int]$Zone = 1,
     [string]$RobotConfig = 'robot/etc/robot.stress-3zone-z1.yaml',  # 45k, profile=stress (R18 config)
-    [string]$PrevSummary = 'docs/design/prev-summary.txt',          # R18 baseline
+    [string]$PrevSummary = 'docs/stress/prev-summary.txt',          # R18 baseline
     [string]$Stages = '2,5,10,15,18',
     [int]$SteadyMinutes = 18,   # how long 'all' waits before summarize
     [string]$RunDir = '',       # reused by 'summarize'; auto-created by 'run'/'all'

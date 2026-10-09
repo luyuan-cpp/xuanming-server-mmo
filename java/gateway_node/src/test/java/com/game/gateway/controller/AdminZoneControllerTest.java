@@ -85,7 +85,7 @@ class AdminZoneControllerTest {
                 assertThrows(CannotAcquireLockException.class, () -> controller.create(zone(ZONE, "z")));
 
         assertSame(dl, thrown, "用尽重试后原样抛出,不包装、不吞");
-        verify(repo, times(AdminWhitelistController.DEADLOCK_MAX_ATTEMPTS)).upsert(any(), any());
+        verify(repo, times(InnoDbDeadlockRetry.MAX_ATTEMPTS)).upsert(any(), any());
         verify(repo, never()).findById(anyLong());
     }
 

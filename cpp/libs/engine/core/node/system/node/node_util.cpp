@@ -94,10 +94,12 @@ std::optional<entt::entity> NodeUtils::FindNodeEntityByUuid(uint32_t nodeType, c
 
 bool NodeUtils::IsGrpcOnlyNodeType(uint32_t nodeType)
 {
-	// 见头文件注释。目前只有回合制战斗节点:纯 gRPC 服务
-	// (turn-based-battle-server.md D2/D6),注册 PROTOCOL_GRPC 后
-	// 发现方(gate 等)会走 ConnectToGrpcNode 建 stub,而不是
-	// 对一个没有业务语义的 muduo TCP 端口拨号。
+	// 协议分派与 gRPC 端口派生规则见头文件注释。目前只有回合制战斗节点
+	// (turn-based-battle-server.md D2/D6)。gate 已不连 battle(turn-based §22 D66),
+	// 节点间控制面只剩 Go match 经 grpc_endpoint 调用;判定仍须保留:它让 battle
+	// 以 PROTOCOL_GRPC 注册,保证没有任何 C++ 节点用 RpcCodec 去拨 battle 的 TCP 端口。
+	// 那个 TCP 端口不是空闲占位:battle 自身在上面挂客户端战斗直连面
+	// (BattleClientEdge,battle/main.cpp),不可回收。
 	switch (static_cast<eNodeType>(nodeType))
 	{
 	case eNodeType::BattleNodeService:

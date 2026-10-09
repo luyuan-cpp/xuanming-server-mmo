@@ -1,6 +1,8 @@
 zones:
   - name: yesterday
     zoneId: 101
+    # external + NodePort 时 gate-<i> 的 nodePort = gateNodePortBase + i(见文末第 8 条)。
+    gateNodePortBase: 30000
     replicas:
       centre: 1
       gate: 2
@@ -10,6 +12,7 @@ zones:
 
   - name: today
     zoneId: 102
+    gateNodePortBase: 30010
     replicas:
       centre: 1
       gate: 2
@@ -31,3 +34,9 @@ zones:
 # 7. Do not default every cluster to LoadBalancer; if the cluster lacks a mature
 #    LB implementation, NodePort + external L4 LB is usually the more stable
 #    production choice.
+# 8. gateNodePortBase(每个 zone 一个,D88)只在 -ClientEntryMode external +
+#    -GateServiceType NodePort 时生效:gate-<i> 的 nodePort = gateNodePortBase + i,
+#    占用 [base, base + gate 副本数 - 1]。多 zone 时每个 zone 必须显式写,各段不能重叠
+#    (否则预检拒绝部署);全部收在 K8s 静态子段 30000-30085 内,并给 gate 扩容留余量
+#    (这里每 zone 留 10 个口)。键单独占一行、行尾不写注释(k8s_deploy.ps1 的 YAML
+#    回退解析只认这种写法)。

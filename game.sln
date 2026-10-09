@@ -238,6 +238,12 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "routing_identity_test", "cp
 		{6348AEF3-B5C7-43C9-AEAD-D707F104140F} = {6348AEF3-B5C7-43C9-AEAD-D707F104140F}
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "client_endpoint_test", "cpp\tests\client_endpoint_test\client_endpoint_test.vcxproj", "{148E5BA2-69D3-47F0-BBEF-845CE4B33665}"
+	ProjectSection(ProjectDependencies) = postProject
+		{03F2DF47-F5B9-41E9-933B-903D317FEEB1} = {03F2DF47-F5B9-41E9-933B-903D317FEEB1}
+		{7D732139-58FD-4E6F-A12A-F6B3F8B13577} = {7D732139-58FD-4E6F-A12A-F6B3F8B13577}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -517,6 +523,11 @@ Global
 		{5C1E7A34-8F62-4D90-B3A7-6E2D0C4B915A}.Debug|x86.ActiveCfg = Debug|Win32
 		{5C1E7A34-8F62-4D90-B3A7-6E2D0C4B915A}.Release|x64.ActiveCfg = Release|x64
 		{5C1E7A34-8F62-4D90-B3A7-6E2D0C4B915A}.Release|x86.ActiveCfg = Release|Win32
+		{148E5BA2-69D3-47F0-BBEF-845CE4B33665}.Debug|x64.ActiveCfg = Debug|x64
+		{148E5BA2-69D3-47F0-BBEF-845CE4B33665}.Debug|x64.Build.0 = Debug|x64
+		{148E5BA2-69D3-47F0-BBEF-845CE4B33665}.Debug|x86.ActiveCfg = Debug|Win32
+		{148E5BA2-69D3-47F0-BBEF-845CE4B33665}.Release|x64.ActiveCfg = Release|x64
+		{148E5BA2-69D3-47F0-BBEF-845CE4B33665}.Release|x86.ActiveCfg = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -572,6 +583,7 @@ Global
 		{DD04C5C4-D701-472D-B82E-45DA1DA0337F} = {BD08644C-5088-49D6-A48E-8D8B916D073B}
 		{4B7C1E90-9A62-4D31-8F5C-2E6D0A9B3C14} = {BD08644C-5088-49D6-A48E-8D8B916D073B}
 		{5C1E7A34-8F62-4D90-B3A7-6E2D0C4B915A} = {BD08644C-5088-49D6-A48E-8D8B916D073B}
+		{148E5BA2-69D3-47F0-BBEF-845CE4B33665} = {BD08644C-5088-49D6-A48E-8D8B916D073B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {39DD7ACD-8F24-4314-9D3C-74F6B00572A2}

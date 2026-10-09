@@ -18,7 +18,7 @@
 2. **注册发现只有一份实现**:新包 `go/shared/noderegistry`。
    - key 形状与 C++ 逐字一致。
    - 失租后先重夺原 id;抢不回时,chat 这类服务换 id 继续,login 这类服务退出(D-11)。
-3. **客户端入口只承诺路由服模式**。翻转落在部署层:本地默认开,K8s 默认仍关;C++ 默认值一字不改(D-12)。
+3. **客户端入口只承诺路由服模式**。翻转落在部署层:本地默认开,K8s 默认仍关;C++ 默认值一字不改(D-12)。(2026-09-29:K8s 默认已开,battle-smoke 事后补验,见 §18)
 4. **全局服务不注册 go-zero 发现键**:yaml 里有 `Etcd` 段时写 `Key: ""`,不能省略这一行(D-13)。
 5. **chat v1**:
    - 只开 WORLD 和 PRIVATE 两个频道;历史存 Redis LIST,7 天 / 200 条尽力保留。
@@ -32,7 +32,7 @@
 | §7「`Etcd:` 只写 `Hosts`,不写 Key」 | **`Key: ""` 显式留空** | go-zero v1.10.0 的 `discov.EtcdConf.Key` 不是 optional。`Etcd` 段存在而缺 Key 时,`conf.MustLoad` 会 Fatal,K8s 上 Pod 会 CrashLoop(见 D-13 证据) |
 | §2「扫描已占 id 时跳过 `/allocated/` 子树」 | **两棵子树的 key 都算占号** | 两棵子树合起来是超集,只会让可用 id 变少,不会撞号;真正防撞号的是 allocKey 上的 CAS(§2.3)。扫描结果只是跳过已占 id 的优化:少跳过一个 id,最多多一次 CAS 失败再试下一个 |
 | §9「幂等:SET NX EX 60」 | **两态幂等键 `pending:<token>` / `done`** | 只有一态时,首发还在写入,重发就会被当成功回,消息实际可能丢了。两态下,读到 `pending` 回限速码让客户端重试(§9.3) |
-| §7 第 5 条「`-GateRouterMode` 默认 `$true`」 | **`[string]`,取值 `'1'` / `'0'`,默认 `'1'`** | 根目录 `启动服务器.cmd` 经 `pwsh -File` 透传的是字符串;与 K8s 同口径 |
+| §7 第 5 条「`-GateRouterMode` 默认 `$true`」 | **`[string]`,取值 `'1'` / `'0'`,默认 `'1'`** | 根目录 `start-server.cmd` 经 `pwsh -File` 透传的是字符串;与 K8s 同口径 |
 
 ---
 
@@ -73,7 +73,7 @@
   - 直连模式下,任何 zone 的 gate 都到不了 chat:直连白名单里没有 Chat(`cpp/nodes/gate/main.cpp:207-209`)。同 zone 过滤只是第二道墙。
 - 「翻转」落在**部署层**。C++ 默认值(`cpp/nodes/gate/gate_router_mode.h:31-39`、`:51-55`,未设即直连)和单测(`cpp/nodes/gate/tests/gate_security_test.cpp:102-105`)一字不改。
   - **本地**:`start_game.ps1 -GateRouterMode`,默认 `'1'`。起 gate 前设 `$env:GATE_CLIENT_RPC_ROUTER`,脚本结束还原旧值(`tools/scripts/start_game.ps1:20`、`:33`、`:397-403`、`:451`)。`dev_tools.ps1 dev-start-zones` / `cpp_nodes.ps1` 由父 shell 设这个 env。
-  - **K8s**:`k8s_deploy.ps1 -GateRouterMode`,**默认 `"0"`**,只注入 gate Deployment(`tools/scripts/k8s_deploy.ps1:120-135`、`:806-812`)。要等 K8s 上以路由模式跑通过一次 battle-smoke、且路由服部署链补齐(§14 缺口 1、2)才翻。
+  - **K8s**:`k8s_deploy.ps1 -GateRouterMode`,**默认 `"0"`**,只注入 gate Deployment(`tools/scripts/k8s_deploy.ps1:120-135`、`:806-812`)。要等 K8s 上以路由模式跑通过一次 battle-smoke、且路由服部署链补齐(§14 缺口 1、2)才翻。**(2026-09-29 已被 §18 取代:默认已翻为 `"1"`,battle-smoke 改为事后补验)**
   - **路由服部署链**(本批已补的部分):
     - `go_svc_image.ps1` 加 `client-rpc-router`;
     - `$GoSvcCatalogue` 加 `"client-rpc-router"`(Global,端口 50600;`k8s_deploy.ps1:404`);
@@ -579,7 +579,7 @@ $env:GATE_CLIENT_RPC_ROUTER = '1'
   - redis-cluster 在跑时,zone 2 的 db 按默认位移到 7000 会撞集群端口。改传 `-ZonePortShift 2000`。
   - zone 2 的 gate / scene 可能卡在预设端口重试死循环。此时按 `$env:RPC_PORT` 逐个显式起。
 - 若 `go_services.ps1 -Command status` 里没有 chat / z2_chat,补起:`& .\tools\scripts\go_services.ps1 -Command start-exe -Services chat -Zone <1|2>`。
-- 只起单 zone 的替代方案:`启动服务器.cmd`(默认 `-GateRouterMode 1`)。它只起 zone 1(`start_game.ps1:405-413`),只能配 `chat_smoke.cross_zone: false` 做弱验收,不能替代本步。
+- 只起单 zone 的替代方案:`start-server.cmd`(默认 `-GateRouterMode 1`)。它只起 zone 1(`start_game.ps1:405-413`),只能配 `chat_smoke.cross_zone: false` 做弱验收,不能替代本步。
 
 **核对**:
 
@@ -656,7 +656,7 @@ $env:GATE_CLIENT_RPC_ROUTER = '1'
 - **不改**:proto(28 / 61 已烧进 gate 与路由表)、`node_util.cpp`、gate C++、C++ 路由模式默认值、既有 8 份注册实现。
 - **chat v1 不做**:推送(§5)、MySQL、发号器、Kafka 消费、merge 围栏、TEAM / SYSTEM 频道、敏感词过滤(见 [chat-sensitive-word-filter.md](./chat-sensitive-word-filter.md),v1 未接)、`since` 增量拉取。
 - **不写** Unity 聊天 UI(客户端任务未授权,由 robot 代替验收)。
-- **K8s 路由模式不翻**:`-GateRouterMode` 默认 `"0"`。
+- **K8s 路由模式不翻**:`-GateRouterMode` 默认 `"0"`。(2026-09-29 已被 §18 取代)
 
 ### 13.2 待拍板
 
@@ -665,9 +665,9 @@ $env:GATE_CLIENT_RPC_ROUTER = '1'
 | ~~D4 全局库归属 + 迁移器~~ **已拍:port-decisions D-14** | chat 零 MySQL | 首个建表的全局服务同批落 `go/schemamigrate` 与 migrate Job |
 | killswitch 是否加 zone 维度 | 全局服务本就看不到 zone(§0),需求未出现 | 出现「只关某个 zone 的某个方法」的运维需求时 |
 | 推送缓冲(#286 / `shared/pushbuffer`) | chat v1 不推送 | chat v1.1 私聊单播立项时 |
-| K8s 路由模式默认翻转时间 | 隔离K8s的router→chat已实跑通过(§16)，含gate的battle-smoke尚未验证 | K8s 上以路由模式跑通过一次 battle-smoke 之后 |
+| K8s 路由模式默认翻转时间 | 隔离K8s的router→chat已实跑通过(§16)，含gate的battle-smoke尚未验证 | K8s 上以路由模式跑通过一次 battle-smoke 之后。(2026-09-29 已被 §18 取代:已翻为 `"1"`,battle-smoke 改为事后补验) |
 | C++ → Go 东西向调用的身份 | chat v1 没有这条边(§8) | 首个 scene → 全局 Go 服务的调用出现时 |
-| D34 何时删直连旧路径 | 仍有依赖直连的环境(K8s) | K8s 翻转且稳定之后 |
+| D34 何时删直连旧路径 | 仍有依赖直连的环境(K8s) | K8s 翻转且稳定之后。(2026-09-29:K8s 已翻转,"稳定"待事后补验,见 §18) |
 | chat 私有 tip 段 | Tip.xlsx 未开 chat 段 | 导表器开段后,把 common 码替换成 chat 段码 |
 | MessageLimiter 给 28 / 61 配档位 | 表未改;现在 gate 默认 3 次 / 窗口比 chat 的 5 次 / 秒更严 | 客户端聊天 UI 接入前 |
 | 路由服本地 yaml 的 `Etcd.Key` | 本地仍是 `client_rpc_router.rpc`,K8s 已留空 | 路由服迁 shared 版 noderegistry 时 |
@@ -678,14 +678,14 @@ $env:GATE_CLIENT_RPC_ROUTER = '1'
 
 ### 14.1 缺口
 
-1. ~~路由服 K8s manifest 不在仓库里~~ **已补(2026-09-14 复核)**:`deploy/k8s/manifests/go-svc/client-rpc-router.yaml`。2026-09-15已在本地kind隔离环境实跑router→chat(§16)；`-GateRouterMode` 默认仍为 `"0"`，默认部署下玩家仍不可达，翻转门禁仍是含gate的battle-smoke。
+1. ~~路由服 K8s manifest 不在仓库里~~ **已补(2026-09-14 复核)**:`deploy/k8s/manifests/go-svc/client-rpc-router.yaml`。2026-09-15已在本地kind隔离环境实跑router→chat(§16)；`-GateRouterMode` 默认仍为 `"0"`，默认部署下玩家仍不可达，翻转门禁仍是含gate的battle-smoke。(2026-09-29 已被 §18 取代:K8s 默认已翻为 `"1"`,battle-smoke 改为事后补验;manifest 已补这一结论不变)
 2. ~~路由服在 K8s 上会通告 `0.0.0.0`~~ **已修(2026-09-14 复核)**:`client_rpc_router_service.go` 改为经 `advertisedHost` 优先 `POD_IP`(与 chat / data_service 同口径);本地 `ListenOn=127.0.0.1` 行为不变。Codex 已通过路由服 vet、单测和 build，并补充 Pod IP 优先及通配地址回退回归测试。
 3. **gate MessageLimiter 表里没有 28 / 61**:默认档比 chat 自己的限速更严,真实客户端快速发言会先被 gate 拒。
 4. **ChatRedis 与 match 共用 `redis-match-cluster`**(512mb,volatile-lru):聊天历史可能被提前淘汰,并与 match 争内存。chat 数据一旦成为唯一权威,必须换独立的 noeviction 实例。
 5. **正常停机顺序已修复并活体验证（2026-09-15）**：chat持有真实gRPC Server，在注销尝试返回后主动排空，再关闭依赖和框架；Linux默认1s自动停止推迟到24s硬截止，Windows使用同一主动清理路径。真实Linux SIGTERM、慢注销超过1.5s、在途/永久阻塞请求及启动期信号均验证通过；最终K8s容器收到SIGTERM后exit=0，旧注册身份已清理并恢复Ready。硬截止/SIGKILL不保证在途业务完成，注销传输失败仍依赖租约TTL；详细边界见§16。
 6. **go-zero 版本不一致**:shared 模块实际依赖 go-zero v1.9.2,chat 是 v1.10.0。chat 模块内经 MVS 统一到 v1.10.0;noderegistry 用到的 logx API 两个版本都有。
 7. **`start_game.ps1` 的 chat / guild 均为可选服务**:缺 exe 时告警并跳过。Codex 实跑修复了警告内弯引号导致的 PowerShell 参数绑定失败，修复后缺 chat.exe 的 CheckOnly 已通过。
-8. **`dev_tools.ps1` 的 `k8s-*` 包装不透传 `-GateRouterMode`**,只能直接调 `k8s_deploy.ps1`。
+8. **`dev_tools.ps1` 的 `k8s-*` 包装不透传 `-GateRouterMode`**,只能直接调 `k8s_deploy.ps1`。(2026-09-29 已关闭,见 §18)
 9. **服务清单文档未同步**:`tools/scripts/README.md`、`deploy/k8s/AGENTS.md`、`deploy/k8s/README.md` 不在本批范围。
 10. **`OnNodeIDChanged` 回调里调 `Close()` 不会死锁**,但会等满 closeTimeout(5s)。
 
@@ -718,7 +718,7 @@ $env:GATE_CLIENT_RPC_ROUTER = '1'
 - 路由服：vet、全包测试和 build 通过；新增 Pod IP/具体地址/通配监听的注册回归测试通过。match build 通过。
 - robot：首次 vendor 构建因并行 guild 批次缺少 `proto/guild` 失败；该批次完成 vendor 同步后，重新构建和定向 vet 通过。本批独立冒烟程序为 `run/verify-chat-20260914/robot.exe`，从 `robot/` 工作目录运行。
 - 项目脚本已构建 `bin/go_services/chat.exe`；两个实际实例 z1_chat:50700 / z2_chat:52700 启动成功（ZonePortShift=2000）。etcd 有两个服务 key 及两个分配 key，无 `chat.rpc` 额外注册；指标 9210/11210 均 HTTP 200。
-- 4 个部署/启动脚本解析通过；infra-up 和 zone-up 的模式 0/1 DryRun 通过、模式 2 按预期拒绝，渲染 YAML 结构检查通过。未 apply 到 K8s；K8s 默认仍为直连模式 0。
+- 4 个部署/启动脚本解析通过；infra-up 和 zone-up 的模式 0/1 DryRun 通过、模式 2 按预期拒绝，渲染 YAML 结构检查通过。未 apply 到 K8s；K8s 默认仍为直连模式 0。(2026-09-29 已被 §18 取代:K8s 默认已翻为 `"1"`;本条是 09-14 当时的验证记录,原文保留)
 - 启动器缺 chat.exe 的 CheckOnly 首次失败于中文弯引号；改成「服务不可用」后复验 exit=0，保留首败与复验日志。
 - 经 gate 的双 zone chat-smoke 已连续两次通过（chat-smoke-run2.log / run3.log，均 exit=0、各一行 CHAT_SMOKE_OK）。A/B 分别为玩家603/702，gate 127.0.0.1:10000 / 127.0.0.1:11010，两区 gate 均为 router；世界/私聊可见、sender覆盖、600字节拒绝、同request_id只存一条均通过。首轮 run1 在二区登录预加载阶段失败，原因是 zone_2_db.player_database 缺 pet/bag/mission 三列；并行帮会任务按正式迁移补齐并核验后才重跑，首败日志保留。
 - Linux/amd64 交叉编译通过；机器人配置负例（cross_zone=true 且 zone_a=zone_b）按预期在连接前 exit=1，错误包含 zone_a and zone_b must differ。
@@ -736,12 +736,41 @@ $env:GATE_CLIENT_RPC_ROUTER = '1'
 - **单幸存者故障切换**：先孤立本次chat Deployment/ReplicaSet以阻止自动补副本，再强制删除一个已按UID核验的chat Pod。运行时已无该task；132s后etcd只剩原幸存Pod，UID不变、restartCount=0。`probe-failover.log` exit=0，145断言；先只读故障前历史，再用新nonce验证新WORLD/PRIVATE及即时重试。没有把已经超过60s幂等TTL的旧request_id当成去重保证。
 - **最终版本复验**：聊天最终镜像`local/mmorpg-chat:chat-verify-20260915-final`（manifest index `sha256:58102cf2d455450f4923b3b552e3eaf64f11c96d2512a182c3176ad273551b48`）；路由服`local/mmorpg-client-rpc-router:chat-verify-20260915`。恢复最终双副本并正常关闭旧孤立Pod后，向最终容器发送真实SIGTERM：K8s记录exitCode=0/Completed，日志先收到信号再完成registry.Close，旧nodeUuid消失，容器恢复Ready。随后`probe-final.log`再次exit=0、123断言；源码hash仍与测试版本一致。
 - **清理与复现**：隔离namespace已删除并等待确认，原`mmorpg-infra`/`mmorpg-zone-yesterday`仍在。夹具、探针、镜像构建日志、完整结果与清理证据位于`run/verify-chat-k8s-20260915/`，入口`prepare-fixture.ps1`、`fixture-usage.txt`、`verification-summary.json`。Docker首次启动的遗留socket问题仅按现有流程备份通信目录恢复，未重置数据卷。
-- **验收边界**：此次K8s链路为probe→router→chat→Redis，不包含C++ gate/login/battle；含gate的本地双zone chat-smoke证据见§15。K8s的GateRouterMode默认翻转仍须另跑battle-smoke。24s硬截止本身未主动触发，Windows用stdin取消模拟退出context而非真实控制台Ctrl+C；未运行race detector。etcd删除失败仍靠租约清理，跨Redis slot的历史写入/claim提交仍是既有尽力幂等语义。
+- **验收边界**：此次K8s链路为probe→router→chat→Redis，不包含C++ gate/login/battle；含gate的本地双zone chat-smoke证据见§15。K8s的GateRouterMode默认翻转仍须另跑battle-smoke(2026-09-29 已被 §18 取代:已先翻转,battle-smoke 改为事后补验)。24s硬截止本身未主动触发，Windows用stdin取消模拟退出context而非真实控制台Ctrl+C；未运行race detector。etcd删除失败仍靠租约清理，跨Redis slot的历史写入/claim提交仍是既有尽力幂等语义。
 
 ## §17 2026-09-16 完整K8s Battle验收计划
 
 - 继续项：在本机kind新建`chat-full-verify-20260916`隔离命名空间，运行真实gateway→gate→login/scene/match→battle直连的原始robot battle-smoke；必须得到`BATTLE_SMOKE_OK`及玩家/观战直连回合断言，不用gRPC探针替代TCP客户端。
 - 当前阻塞：已有`local/mmorpg-node:410b5283d822-dirty`实际指向Alpine占位镜像，没有C++程序；Linux构建清单、镜像/runtime staging及K8s装配均遗漏battle。以`.vcxproj`为源补齐生成器/构建入口/镜像产物，CMake仅在隔离构建环境自动生成。
-- 部署范围：battle是全局池，只在infra装配；保留GateRouterMode默认值。Kafka命令topic代数与分区数从现有权威配置读取；全新DB使用正式migrate入口建表。测试数据全部使用本次emptyDir存储，不清理或复用现有游戏数据库。
+- 部署范围：battle是全局池，只在infra装配；保留GateRouterMode默认值(2026-09-29 已被 §18 取代:K8s 默认已为 `"1"`)。Kafka命令topic代数与分区数从现有权威配置读取；全新DB使用正式migrate入口建表。测试数据全部使用本次emptyDir存储，不清理或复用现有游戏数据库。
 - 构建资源：Docker有32 CPU、约15.2GiB内存，给C++构建增加可配置并行度，验证时限制并发，避免按CPU数启动32个高内存编译器。gRPC/protobuf使用仓库已固定的v1.83.0/v35.1，保持源码版本一致。
 - 验证与清理：先检查构建/部署契约，再导入本地镜像、启动独立基础设施并迁移、运行原robot；保留首败及修复复验日志、源码/镜像标识、注册/直连证据。完成后仅删除本次命名空间。本节当前为实施计划，实际结果另追加，不视为已通过。
+
+## §18 2026-09-29 修订注:K8s 默认已翻为路由模式,battle-smoke 改为事后补验
+
+本节修订前文 §1(第 3 条"K8s 默认仍关"、"K8s:`-GateRouterMode` 默认 `"0"`…才翻")、§13.1("K8s 路由模式不翻")、§13.2("K8s 路由模式默认翻转时间"
+"D34 何时删直连旧路径"两行)、§14.1 第 1 条与第 8 条、§15 末尾"K8s 默认仍为直连模式 0"、§16 验收边界与 §17"保留 GateRouterMode 默认值"中关于 K8s 默认值的表述。
+上述原文保留作历史,以本节为准。
+
+- **已翻转**:`tools/scripts/k8s_deploy.ps1 -GateRouterMode` 默认改为 `"1"`(`k8s_deploy.ps1:163-164`,参数注释 `:140-162`)。决策:turn-based-battle-server.md §22 D75
+  (用户 2026-09-29 拍板"一次全做、事后验",D65),对应 `docs/design/xuanming-port-decisions-20260910.md` 文末「D-12 修订(2026-09-29)」。翻转只落在部署层:C++ 默认值(`cpp/nodes/gate/gate_router_mode.h`,未设即直连)
+  与 `cpp/nodes/gate/tests/gate_security_test.cpp` 的默认值断言一字不改。本地 `start_game.ps1` 默认 `'1'` 不变。
+- **豁免的前提**:D-12 的前提①"K8s 上以路由模式跑通一次含 gate 的 battle-smoke"由用户豁免,改为**事后补验**;前提②(路由服 manifest 已落地,§14.1 第 1 条)、
+  ③(路由服按 POD_IP 通告,§14.1 第 2 条)已满足。补验之前,**不能声称 K8s 默认部署下登录、匹配、聊天已验证可用** —— K8s 上至今只跑过 §16 的隔离 router→chat 链路,
+  从未以路由模式跑过含 C++ gate 的链路。补验由谁、在哪个 kind namespace 跑,待用户决定。
+- **战斗与本开关解耦**:收缩批之后 gate 两种模式都不中继战斗(turn-based §22 D66),客户端 ↔ battle 直连是战斗唯一通路。所以 battle-smoke 补验时若 team-smoke 的
+  `SetAutoBattle` 或 features-smoke 战斗段仍经 gate 发送而被拒,那是 robot 口径问题(D73 已改走直连),不是 D75 的回归。
+- **前置(翻转后 gate 硬依赖)**:路由模式下 gate 的依赖门等 ClientRpcRouter + Scene。`infra-up` 必须已部署 `client-rpc-router`(不带 `-SkipGoSvc`、给了 `-GoSvcRegistry`);
+  否则 gate 卡在依赖门,登录 / 匹配 / 聊天全部 `no_target`。脚本只有注释、**没有运行时拦截**;`k8s_image.ps1` 的发布路径从不部署 Go 服务,全新集群上同样会踩到。
+  "infra-up 带 `-SkipGoSvc` 或缺 `-GoSvcRegistry` 时 fail-fast"已建议单独立项,待拍板。
+- **可达性口径更新**:K8s 默认部署下,chat / friend / trade 这些已登记进 `$GoSvcCatalogue` 且有 manifest 的全局服务,经 gate → `client-rpc-router` **按设计可达,待补验**;
+  guild / team / mail / rank 等没有 K8s manifest 的服务仍然不可达,原因是**未部署**,不是路由模式。集群外玩家另需 `-ClientEntryMode external`(集群外入口 D76–D93):
+  podip 下 gate 与 battle 都通告 PodIP,只有集群内 robot 连得上;上线时 external 须与 `-GateRouterMode 1` 在同一窗口启用。
+- **§14.1 第 8 条已关闭**:`dev_tools.ps1` 与 `k8s_image.ps1` 都加了 `-GateRouterMode`(`[ValidateSet("", "0", "1")]`,留空 = 不覆盖、默认值只在 `k8s_deploy.ps1`,非空才透传);
+  `k8s_zone_rollback.ps1` 与 `dev_tools.ps1 -Command k8s-zone-rollback` 也透传,并在 `-Apply` 且留空时由第 0 步预检核对集群现状(`docs/design/zone_data_rollback.md`「## 3. 整 Zone 灾难恢复级回档」下的「2026-09-29 修订」)。
+- **回退**:仍可 `-GateRouterMode 0`,后果是 chat 与所有只承诺路由模式的服务同时不可达、且已没有 gate 战斗中继兜底;回退前先 killswitch 关方法并公告(本文 §1 末条不变)。
+  **回退态不粘滞**:之后每一次重新部署(zone-up / release-zone / 合服后 zone-up / 回滚 Step 6 / 各包装入口)都要显式再传 `-GateRouterMode 0`。
+- **§13.2「D34 何时删直连旧路径」**:触发点"K8s 翻转且稳定之后"中的"翻转"已发生、"稳定"尚待补验;另见 `client-access-band-routing.md` D61 计划删除直连模式与开关本身,
+  与本批"保留 `"0"` 回退、C++ 默认值不改"的口径存在未来冲突,留待该文档的属主协调。
+- **验证状态**:部署脚本与契约测试的改动均未运行,待 Codex 执行 `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`
+  (用例"gate 默认以路由模式部署…""`-GateRouterMode 0` 回退路径仍可生成…""dev_tools / k8s_image 的 `-GateRouterMode`:留空不透传…"须 PASS)。

@@ -3,19 +3,20 @@ package main
 // battle-smoke 场景:两个机器人对本地服务端做"回合制战斗 + 观战"端到端冒烟。
 //
 // 兑现 docs/design/turn-based-battle-server.md §9 预留的 "robot battle 动作":
-//   机器人 A(参战):JoinQueue(PVE_SOLO) → NotifyBattleStart → [直连 battle 节点]
-//                   → SetAutoBattle → 等 NotifyBattleEnd;
+//   机器人 A(参战):JoinQueue(PVE_SOLO) → NotifyBattleStart → [直连 battle 节点 + GetBattleState 补拉]
+//                   → 等观战就绪屏障 → [直连上 SetAutoBattle] → 等 NotifyBattleEnd;
 //   机器人 B(观战):等 A 开战 → WatchBattle(battle_id=0,观战匹配随机对局)
-//                   → NotifySpectateState → 断言观战对局 == A 的对局 → [直连 battle 节点]
-//                   → 等 NotifySpectateEnd → 断言观战回合数 ≥ 1。
+//                   → NotifyBattleAssigned(role=OBSERVER,断言对局 == A 的对局) → [直连 battle 节点]
+//                   → 握手快照 NotifySpectateState(断言从直连到达) → 等 NotifySpectateEnd
+//                   → 断言观战回合数 ≥ 1。
 //
-// 方括号是战斗直连(docs/design/turn-based-battle-server.md §18):凭 NotifyBattleAssigned
-// 的票据连 battle 节点客户端面,并断言回合结果 / 终局包从直连到达;
-// battle_smoke.skip_direct_connect=true 时跳过,全程经 gate 中继(验证 D23 回落路径)。
+// 方括号是战斗直连(docs/design/turn-based-battle-server.md §18;收缩后见 turn-based §22 D73):
+// 直连是战斗唯一通路 —— gate 拒绝战斗上行(D66),战斗帧只走直连(D68),所以拨号失败即 FAIL,
+// 没有经 gate 的回落可跑。观众首帧由 battle 在握手成功时经直连推送(D69)。
 //
 // 结果约定(供外层脚本消费):
 //   全部断言通过 → 日志一行 `BATTLE_SMOKE_OK battle_id=… a_turns=… b_spectate_turns=…
-//                  a_direct_turns=… b_direct_spectate_turns=…`(跳过直连时后两项为 -1),
+//                  a_direct_turns=… b_direct_spectate_turns=…`(直连计数恒 ≥ 1),
 //                  进程退出码 0;
 //   任一步失败   → 日志一行 `BATTLE_SMOKE_FAIL step=… reason=…`,进程退出码 1。
 //
@@ -69,7 +70,9 @@ type battleSmokeBot struct {
 // spectateReady 是"允许 A 开自动战斗"的屏障:PVE solo 秒杀(玩家 auto + 怪物无
 // 属性一回合即结束,实测 ~100ms),战斗会在 B 走完 WatchBattle→match→AddObserver
 // 一圈之前就销毁,B 必然扑空(battle 房间已不存在,回 tip_id=5)。故 A 收到
-// BattleStart 后先不出招,阻塞在这个屏障上,等主流程确认 B 观战首帧到位再放行。
+// BattleStart 后先不开自动战斗,阻塞在这个屏障上,等主流程确认 B 观战首帧到位再放行。
+// 屏障只拦 SetAutoBattle,不拦直连:屏障期间回合超时照样结算,那些 TurnResult 只走直连
+// (D68,没有活直连即丢弃),所以 A 在屏障**之前**就建好直连。
 // 这只是冒烟脚本的时序编排;真实玩家战斗多回合、有决策时间,观战窗口天然充裕。
 var spectateReady = make(chan struct{})
 
@@ -80,7 +83,7 @@ type battleSmokeFighterResult struct {
 	battleId uint64
 	outcome  int32
 	turns    int
-	// directTurns 是从战斗直连收到的 NotifyTurnResult 条数;-1 = 本次跳过直连
+	// directTurns 是从战斗直连收到的 NotifyTurnResult 条数(直连是唯一通路,成功时恒 ≥ 1)
 	directTurns int
 }
 
@@ -184,29 +187,47 @@ func RunBattleSmoke(cfg *config.Config) {
 	}
 	stats.MsgSent()
 
+	// B 的观战首帧只从直连来(D69):AddObserver 先为观众预签票据,经大厅推
+	// NotifyBattleAssigned(role=OBSERVER);B 凭它直连,battle 在握手成功时经直连推一份
+	// NotifySpectateState。所以顺序是"等观众分配 → 直连 → 等握手快照",不能先等快照。
+	assignCtx, assignCancel := context.WithTimeout(context.Background(), battleSmokeSpectateTimeout)
+	bAssigned, err := botB.player.WaitBattleAssigned(assignCtx)
+	assignCancel()
+	if err != nil {
+		fail("b-wait-battle-assigned", "no observer BattleAssigned within %s: %v", battleSmokeSpectateTimeout, err)
+	}
+	if bAssigned.GetRole() != battle.EBattleTicketRole_BATTLE_TICKET_ROLE_OBSERVER {
+		fail("b-assigned-role", "B's BattleAssigned role=%s, expected %s",
+			bAssigned.GetRole(), battle.EBattleTicketRole_BATTLE_TICKET_ROLE_OBSERVER)
+	}
+	if bAssigned.GetBattleId() != aBattleId {
+		fail("b-assigned-battle-id", "observer ticket battle_id=%d, expected A's battle_id=%d",
+			bAssigned.GetBattleId(), aBattleId)
+	}
+
+	bDirect, err := dialBattleDirect(botB.account, botB.gc.PlayerId, bAssigned, stats, dispatchBattleDirectDefault)
+	if err != nil {
+		fail("b-direct-connect", "%v", err)
+	}
+	defer bDirect.Close()
+
 	specCtx, specCancel := context.WithTimeout(context.Background(), battleSmokeSpectateTimeout)
 	specBattleId, err := botB.player.WaitSpectateState(specCtx)
 	specCancel()
 	if err != nil {
-		fail("b-wait-spectate-state", "no SpectateState within %s: %v", battleSmokeSpectateTimeout, err)
+		fail("b-wait-spectate-state", "no SpectateState (handshake snapshot) within %s: %v", battleSmokeSpectateTimeout, err)
 	}
 	if specBattleId != aBattleId {
 		fail("b-spectate-battle-id", "spectating battle_id=%d, expected A's battle_id=%d", specBattleId, aBattleId)
 	}
+	// 计数先于分发(dialBattleDirect 的 RecvLoop 回调),快照若来自直连,此刻计数必然已到。
+	if bDirect.spectateStates.Load() < 1 {
+		fail("b-direct-snapshot", "first SpectateState did not arrive on the direct connection (D69 snapshot on connect): %s",
+			bDirect.summary())
+	}
 	zap.L().Info("[battle-smoke] B spectating A's battle",
 		zap.Uint64("battle_id", specBattleId),
 		zap.Uint32("observer_count", botB.player.GetSpectateObserverCount()))
-
-	// B 也走战斗直连(观众票据,role=OBSERVER):首帧之前落点分配已到(D26),
-	// 这里连上去,后续 SpectateTurnResult / SpectateEnd 应从直连到达。
-	var bDirect *battleDirectConn
-	if !cfg.BattleSmoke.SkipDirectConnect {
-		bDirect, err = openBattleDirectConn(botB, stats)
-		if err != nil {
-			fail("b-direct-connect", "%v", err)
-		}
-		defer bDirect.Close()
-	}
 
 	// B 观战首帧已到位,放行 A 开自动战斗推进对局(见 spectateReady 注释)。
 	close(spectateReady)
@@ -230,15 +251,12 @@ func RunBattleSmoke(cfg *config.Config) {
 	if bSpectateTurns < 1 {
 		fail("b-spectate-turn-count", "spectator saw %d turn results, expected >= 1", bSpectateTurns)
 	}
-	bDirectSpectateTurns := -1
-	if bDirect != nil {
-		// 直连建立之后,观众的回合结果与观战结束必须从直连到达(不再经 gate 回落)
-		bDirectSpectateTurns = int(bDirect.spectateTurns.Load())
-		zap.L().Info("[battle-smoke] B direct-connect delivery", zap.String("counts", bDirect.summary()))
-		if bDirectSpectateTurns < 1 || bDirect.spectateEnds.Load() < 1 {
-			fail("b-direct-delivery", "observer direct connection saw %s, expected spectate_turns>=1 and spectate_ends>=1",
-				bDirect.summary())
-		}
+	// 观众的回合结果与观战结束只走直连(D68,不再经 gate 回落)
+	bDirectSpectateTurns := int(bDirect.spectateTurns.Load())
+	zap.L().Info("[battle-smoke] B direct-connect delivery", zap.String("counts", bDirect.summary()))
+	if bDirectSpectateTurns < 1 || bDirect.spectateEnds.Load() < 1 {
+		fail("b-direct-delivery", "observer direct connection saw %s, expected spectate_turns>=1 and spectate_ends>=1",
+			bDirect.summary())
 	}
 
 	// ---- 步骤 5:收 A 的参战结果 ----
@@ -284,7 +302,8 @@ func battleSmokeLogin(cfg *config.Config, account string, stats *metrics.Stats) 
 }
 
 // runBattleSmokeFighter 是参战方(A)的完整流程:
-// JoinQueue(PVE_SOLO) → 等 NotifyBattleStart → SetAutoBattle → 等 NotifyBattleEnd。
+// JoinQueue(PVE_SOLO) → 等 NotifyBattleStart → 直连(含 GetBattleState 补拉)→ 等观战屏障
+// → 直连上 SetAutoBattle → 等 NotifyBattleEnd。
 func runBattleSmokeFighter(cfg *config.Config, bot *battleSmokeBot, stats *metrics.Stats) battleSmokeFighterResult {
 	zap.L().Info("[battle-smoke] step 2: A join queue",
 		zap.String("account", bot.account),
@@ -308,6 +327,21 @@ func runBattleSmokeFighter(cfg *config.Config, bot *battleSmokeBot, stats *metri
 		return battleSmokeFighterResult{step: "a-wait-battle-start",
 			err: fmt.Errorf("no BattleStart within %s: %w", battleSmokeStartTimeout, err)}
 	}
+
+	// 战斗直连(§18 / turn-based §22 D73):开战后立刻建,不等观战屏障 —— 屏障期间回合超时
+	// 照样结算,那些 TurnResult 只走直连(D68),晚连就丢。直连是战斗唯一通路,大厅那条连接
+	// 不承载任何战斗上行;建不起来本局就打不了,直接 FAIL。
+	direct, err := openBattleDirectConn(bot, stats)
+	if err != nil {
+		return battleSmokeFighterResult{step: "a-direct-connect", err: err, battleId: battleId}
+	}
+	defer direct.Close()
+	if direct.battleId != battleId {
+		return battleSmokeFighterResult{step: "a-direct-battle-id",
+			err:      fmt.Errorf("direct handshake battle_id=%d != started battle_id=%d", direct.battleId, battleId),
+			battleId: battleId}
+	}
+
 	// 秒杀防竞态:等主流程确认 B 已观战到位再开 auto 推进战斗(见 spectateReady 注释)。
 	// 兜底 30s:即便 B 观战失败,也让 A 把战斗打完,好让主流程拿到 A 侧真实结果/超时。
 	select {
@@ -319,26 +353,8 @@ func runBattleSmokeFighter(cfg *config.Config, bot *battleSmokeBot, stats *metri
 	zap.L().Info("[battle-smoke] A battle started, enabling auto battle",
 		zap.Uint64("battle_id", battleId))
 
-	// 战斗直连(§18):凭 NotifyBattleAssigned 的票据连 battle 节点;之后战斗消息走直连,
-	// 大厅那条连接不再承载任何战斗流量。跳过时退回 gate 中继(D23 回落路径)。
-	var direct *battleDirectConn
-	sendBattle := bot.gc.SendRequest
-	if !cfg.BattleSmoke.SkipDirectConnect {
-		direct, err = openBattleDirectConn(bot, stats)
-		if err != nil {
-			return battleSmokeFighterResult{step: "a-direct-connect", err: err, battleId: battleId}
-		}
-		defer direct.Close()
-		if direct.battleId != battleId {
-			return battleSmokeFighterResult{step: "a-direct-battle-id",
-				err:      fmt.Errorf("direct handshake battle_id=%d != started battle_id=%d", direct.battleId, battleId),
-				battleId: battleId}
-		}
-		sendBattle = direct.Send
-	}
-
-	// 开自动战斗,battle 节点每回合替 A 出招,冒烟无需手工提交动作。
-	if err := sendBattle(game.BattleClientPlayerSetAutoBattleMessageId, &battle.SetAutoBattleRequest{
+	// 开自动战斗(只能经直连),battle 节点每回合替 A 出招,冒烟无需手工提交动作。
+	if err := direct.Send(game.BattleClientPlayerSetAutoBattleMessageId, &battle.SetAutoBattleRequest{
 		BattleId: battleId,
 		Enabled:  true,
 	}); err != nil {
@@ -356,16 +372,14 @@ func runBattleSmokeFighter(cfg *config.Config, bot *battleSmokeBot, stats *metri
 	}
 
 	turns := bot.player.GetTurnCount()
-	directTurns := -1
-	if direct != nil {
-		// 直连建立之后,回合结果与终局包必须从直连到达(零字节经 gate,§18 验收判据)
-		directTurns = int(direct.turnResults.Load())
-		zap.L().Info("[battle-smoke] A direct-connect delivery", zap.String("counts", direct.summary()))
-		if directTurns < 1 || direct.battleEnds.Load() < 1 {
-			return battleSmokeFighterResult{step: "a-direct-delivery",
-				err:      fmt.Errorf("fighter direct connection saw %s, expected turn_results>=1 and battle_ends>=1", direct.summary()),
-				battleId: battleId, outcome: outcome, turns: turns}
-		}
+	// 就绪补拉应答、回合结果与终局包都必须从直连到达(零字节经 gate,§18 验收判据;D68/D69)
+	directTurns := int(direct.turnResults.Load())
+	zap.L().Info("[battle-smoke] A direct-connect delivery", zap.String("counts", direct.summary()))
+	if directTurns < 1 || direct.battleEnds.Load() < 1 || direct.stateReplies.Load() < 1 {
+		return battleSmokeFighterResult{step: "a-direct-delivery",
+			err: fmt.Errorf("fighter direct connection saw %s, expected state_replies>=1, turn_results>=1 and battle_ends>=1",
+				direct.summary()),
+			battleId: battleId, outcome: outcome, turns: turns}
 	}
 	zap.L().Info("[battle-smoke] A battle finished",
 		zap.Uint64("battle_id", battleId),

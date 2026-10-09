@@ -18,7 +18,7 @@ import (
 //     and chews an ephemeral port for 60s. With 15k bots and ~3 calls per
 //     login, we burn through the 64k ephemeral range in seconds and start
 //     getting "cannot assign requested address" — the exact failure mode
-//     post-mortemed in docs/design/stress-test-2026-05-ephemeral-port.md.
+//     post-mortemed in docs/stress/stress-test-2026-05-ephemeral-port.md.
 //
 // Tuning rationale:
 //

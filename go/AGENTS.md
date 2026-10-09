@@ -1,28 +1,10 @@
 # GO KNOWLEDGE BASE
 
 ## OVERVIEW
-`go/` contains multiple service roots rather than one monolith: login, scene manager, data service, player locator, db, contracts, and generated service-local artifacts.
+`go/` 是一组各自独立的 Go module:一个服务一个 module,另有公共库 `shared/`、`schemamigrate/` 与生成的 `proto/`。`battle/`、`team/` 下只有生成的消息号常量,不是服务。
 
 ## STRUCTURE
-```text
-go/
-├── login/           # Login grpc service (active)
-├── scene_manager/   # Scene manager grpc service (active)
-├── data_service/    # Data service grpc service (active)
-├── player_locator/  # Player location service (active)
-├── db/              # Kafka consumer + MySQL persistence (active)
-├── contracts/       # Shared Go-side contracts/helpers (active, has go.mod)
-├── generated/       # Top-level generated Go outputs (has go.mod)
-├── chat/            # Chat service (stub — generated proto only, no entry point)
-├── guild/           # Guild service (stub — generated proto only, no entry point)
-├── instance/        # Instance service (stub — generated proto only, no entry point)
-├── mail/            # Mail service (stub — generated proto/model only, no entry point)
-├── team/            # Team service (stub — generated proto only, no entry point)
-├── common/          # Proto structure mirror (no go.mod, no hand-written code)
-├── etcd/            # Proto structure mirror (no go.mod, no hand-written code)
-├── github.com/      # Local vendor: luyuancpp/protooption (custom proto extensions)
-└── pkg/             # Go module cache (not project code)
-```
+目录结构、服务清单与端口见同目录 [README.md](README.md),这里不重复维护。
 
 ## WHERE TO LOOK
 | Task | Location | Notes |

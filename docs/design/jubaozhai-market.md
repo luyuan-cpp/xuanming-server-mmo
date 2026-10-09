@@ -47,7 +47,7 @@
 | 登录冻结 / 封禁 | **没有**任何字段或闸;踢人 `KickPlayerEvent` 只有 session_id,提示写死"顶号" | `gate_event_handler.cpp:160` |
 | 角色名 / 等级对 Go 可见 | **无角色名**;等级只在 `level_component` blob,Go 读不到 | `entergamelogic.go:428-433` |
 | GM 客户端消息 | 6 条(37/49/94/95/175/187)作为客户端消息开放;**2026-09-18 起按运行模式关闭**(`GATE_RUN_MODE`/`SCENE_RUN_MODE` 非 dev/test 即拒,默认 prod),proto 未动、消息号仍在 `IsClientMessageId` 里 | `cpp/nodes/gate/gate_gm_client_messages.h`;`cpp/nodes/gate/SECURITY.md` §3;`proto/scene/player_currency.proto:65-73` |
-| 新服务客户端可达 | 只在路由服模式(`GATE_CLIENT_RPC_ROUTER=1`)可达;K8s 路由服 manifest 与 POD_IP 通告已补齐,默认仍为 0,待 K8s 路由模式 battle-smoke 通过后再切换 | `cpp/nodes/gate/main.cpp:206-209`;[zone 契约 §14](microservice-zone-contract-20260914.md) |
+| 新服务客户端可达 | 只在路由服模式(`GATE_CLIENT_RPC_ROUTER=1`)可达;K8s 路由服 manifest 与 POD_IP 通告已补齐,默认仍为 0,待 K8s 路由模式 battle-smoke 通过后再切换。**(2026-09-29 更正)** K8s 默认已切为 `"1"`(turn-based §22 D75,`tools/scripts/k8s_deploy.ps1:163-164`),battle-smoke 改为事后补验;trade 在 K8s 默认部署下**按设计可达、待补验**(前置:infra 已部署 `client-rpc-router`;集群外玩家另需 `-ClientEntryMode external`) | `cpp/nodes/gate/main.cpp:206-209`;[zone 契约 §14 / §18](microservice-zone-contract-20260914.md) |
 | 新 Go 服务接入口径 | 以 `microservice-zone-contract-20260914.md` 为准(§2 注册 / §3 客户端入口 / §4 数据归属 / §7 部署登记,chat v1 为首个样板) | 该文档 2026-09-14 由并行会话落地 |
 
 ## 3. 术语与界面映射
@@ -279,6 +279,7 @@ TRADE_DEBIT,只把 `item_uuids` 换成该玩家的其它装备再发出去,这�
 - **显式改列授权(D-14)**:`trade -f <yaml> -migrate -allow-modify` 才允许按 proto 修改已存在列的类型;单独 `-allow-modify` 在读取配置前拒绝,常驻启动与默认迁移均不自动改列。默认 Job 不带该参数,类型漂移以 4 退出,经人工审查后再显式执行。
 - **D-14 第 9 条上线清单**:`trade_listing.market_zone` 带 home_zone 语义 → `tools/merge_zone` 需改写步骤(P1 同批落);audit auditor、data_consistency_check、TiDB BR 按库恢复清单列为 **P3 上线前**必做项(P1 只有 dev 种子数据,无玩家资产)。
 - 客户端可达只承诺路由服模式;K8s 路由服 manifest 与 POD_IP 通告已补齐,但尚未在 K8s 上以路由模式跑通 battle-smoke,默认仍为 0。
+  (2026-09-29 更正:K8s 默认已为 `"1"`(D75),trade 按设计可达;battle-smoke 仍未跑,改为事后补验,补验前不宣称 K8s 上已验证可达。以 `"0"` 回退运行的环境仍不可达。)
 - 指标(低基数,不带 player_id):商品/订单状态迁移计数(按 kind、to_status)、渠道回调结果、outbox 积压 gauge、交付延迟直方图、reconcile 轮次耗时。
 
 ## 11. 客户端改动

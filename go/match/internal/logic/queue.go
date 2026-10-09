@@ -329,27 +329,50 @@ func ticketTTLSeconds(svcCtx *svc.ServiceContext) int {
 	return 21600
 }
 
+// gatherCreateStageWorst 是 gather 从取 created_at_ms、写观战记录起,到最后一次 CreateBattle 返回
+// 为止的最坏耗时,按 k8s-client-entry D82 换节点重试路径算(常规路径只走前一半):
+//
+//	写观战记录(spectateRecordWriteWorst)+ 首选节点 CreateBattle 被准入拒绝(createBattleTimeout)
+//	+ 改写记录指向重试节点(spectateRecordWriteWorst)+ 重试节点 CreateBattle(createBattleTimeout)
+//	= 2 × (6.1s + 5s) = 22.2s
+//
+// 准入拒绝通常在 battle 的分配许可等待(3s)内就回,这里仍按 createBattleTimeout 计:match 侧能保证的
+// 上限只有 RPC 超时。两处引用:matchedTicketTTLFor 的预算,以及 WatchBattle 判定"记录已写、房间可能
+// 还在建"的窗口(watchbattlelogic.go roomMayBeCreating)。
+const gatherCreateStageWorst = 2 * (spectateRecordWriteWorst + createBattleTimeout)
+
 // matchedTicketTTLFor 按组大小算 matched 态 TTL(设计决策 D5):
 //
 //	max(MatchedTicketTTLSeconds,
-//	    required × (removeObserverTimeout + prepareBattleTimeout)
-//	    + createBattleTimeout + rollbackTimeout + 10s)
+//	    ⌈required × (removeObserverTimeout + prepareBattleTimeout)
+//	     + gatherCreateStageWorst + rollbackTimeout⌉ + 10s)
 //
 // 覆盖 gather 从弹组到"成功写 ready"或"进入补偿"之前的最坏链路:每人先观战
-// 清退(RemoveObserver 阻塞 RPC,spectate.go)再串行 PrepareBattle,全齐后
-// CreateBattle;CreateBattle 失败还要先 DestroyBattle(rollbackTimeout)才进 fail。
-// 5v5 十人 = 10×6+5+3+10 = 78s;只算 prepare+create 的旧公式(45s)会让票据在
-// 仍在跑的 gather 途中过期(复审 2026-09-02)。补偿路径(逐人 CancelBattlePrepare)
-// 不计入这里:fail 闭包进入补偿前先用 CAS 把幸存者票据续期
-// (extendMatchedTickets / compensationTicketTTLFor),TTL 不必一次覆盖全部。
+// 清退(RemoveObserver 阻塞 RPC,spectate.go)再串行 PrepareBattle;全齐后先写观战
+// 记录再 CreateBattle,被节点级准入拒绝(D82)时改写记录、换节点再建一次
+// (gatherCreateStageWorst);最后一次 CreateBattle 失败还要先 DestroyBattle
+// (rollbackTimeout)才进 fail。10s 余量吸收没单列的 Redis 小操作(读位置、推进 ready)。
+// 5v5 十人 = ⌈10×6 + 22.2 + 3⌉ + 10 = 96s。只算 prepare+create 的更早公式(45s)
+// 会让票据在仍在跑的 gather 途中过期(复审 2026-09-02);不计写记录与 D82 的上一版(78s)
+// 同样盖不住 D82 最坏链路(85.2s)。
+// 同一个值也是 scene 侧 PREPARING 的作废期限(gather.go prepare_deadline_ms,PrepareBattle 时
+// 已下发、事后改不了):预算偏小时 scene 可能在重试节点建房之前就按期限解冻玩家,所以 D82 路径
+// 必须算进公式,不能指望事后给票据续期。
+// 下游依赖(改公式或上调 MatchedTicketTTLSeconds 时一并核对):scene 备战锁 EX = 该期限 +
+// PlayerBattleSystem::kLockExtraTtlSec(60s),十人组锁最长到 gather 起点 +156s;battle 的确认事件
+// 补发窗口 kConfirmResendWindowMs(battle_room_manager.cpp)从建房起算,必须 ≥ 这个值。
+// 补偿路径(逐人 CancelBattlePrepare)不计入这里:fail 闭包进入补偿前先用 CAS 把幸存者
+// 票据续期(extendMatchedTickets / compensationTicketTTLFor),TTL 不必一次覆盖全部。
 // 配置值只是下限,组越大窗口越长。常量与 gather.go / spectate.go 同源,不另写数字。
 func matchedTicketTTLFor(svcCtx *svc.ServiceContext, required uint32) int {
 	ttl := int(svcCtx.Config.MatchedTicketTTLSeconds)
 	if ttl <= 0 {
 		ttl = 30
 	}
-	perMember := int((removeObserverTimeout + prepareBattleTimeout) / time.Second)
-	worst := int(required)*perMember + int((createBattleTimeout+rollbackTimeout)/time.Second) + 10
+	chain := time.Duration(required)*(removeObserverTimeout+prepareBattleTimeout) +
+		gatherCreateStageWorst + rollbackTimeout
+	// 向上取整到秒:spectateRecordWriteWorst 带 100ms 零头,截断会把预算算小。
+	worst := int((chain+time.Second-1)/time.Second) + 10
 	if worst > ttl {
 		return worst
 	}

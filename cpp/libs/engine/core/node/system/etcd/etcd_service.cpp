@@ -301,7 +301,7 @@ void EtcdService::HandlePutEvent(const std::string &key, const std::string &valu
 	// Stress run 2026-05-23, third pass: zone-1 launched 6 cpp processes
 	// (2 gate + 4 scene) concurrently, 4 of them committed suicide inside a
 	// 2-second window with this exact symptom (z1_scene_2/3/4 + z1_gate_2;
-	// see docs/design/stress-3zone-2026-05-23-postmortem.md §E). The CAS
+	// see docs/stress/stress-3zone-2026-05-23-postmortem.md §E). The CAS
 	// loser path in NodeAllocator already handles "id taken" by retrying
 	// with the next id, so we don't need Watch-level enforcement during
 	// boot — it's redundant and hostile to concurrent same-zone launches.
@@ -317,7 +317,11 @@ void EtcdService::HandlePutEvent(const std::string &key, const std::string &valu
 		if (key == myKey)
 		{
 			NodeInfo remoteInfo;
-			if (google::protobuf::util::JsonStringToMessage(value, &remoteInfo).ok())
+			// D77:忽略未知字段(永久保留)。严格解析时,更新版本的节点多带一个字段就会让
+			// 这里解析失败、静默跳过劫持检测。
+			google::protobuf::util::JsonParseOptions parseOptions;
+			parseOptions.ignore_unknown_fields = true;
+			if (google::protobuf::util::JsonStringToMessage(value, &remoteInfo, parseOptions).ok())
 			{
 				if (!remoteInfo.node_uuid().empty() &&
 					remoteInfo.node_uuid() != myInfo.node_uuid())

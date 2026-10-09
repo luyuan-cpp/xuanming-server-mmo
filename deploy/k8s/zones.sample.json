@@ -3,6 +3,7 @@
     {
       "name": "yesterday",
       "zoneId": 101,
+      "gateNodePortBase": 30000,
       "replicas": {
         "centre": 1,
         "gate": 2,
@@ -12,6 +13,7 @@
     {
       "name": "today",
       "zoneId": 102,
+      "gateNodePortBase": 30010,
       "replicas": {
         "centre": 1,
         "gate": 2,

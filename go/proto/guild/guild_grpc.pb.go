@@ -43,6 +43,11 @@ const (
 	GuildService_UpgradeGuild_FullMethodName            = "/guildpb.GuildService/UpgradeGuild"
 	GuildService_GetGuildShop_FullMethodName            = "/guildpb.GuildService/GetGuildShop"
 	GuildService_BuyGuildShopGoods_FullMethodName       = "/guildpb.GuildService/BuyGuildShopGoods"
+	GuildService_GetGuildActivities_FullMethodName      = "/guildpb.GuildService/GetGuildActivities"
+	GuildService_LightGuildLantern_FullMethodName       = "/guildpb.GuildService/LightGuildLantern"
+	GuildService_ClaimGuildReunion_FullMethodName       = "/guildpb.GuildService/ClaimGuildReunion"
+	GuildService_StartGuildTrial_FullMethodName         = "/guildpb.GuildService/StartGuildTrial"
+	GuildService_RespondGuildTrialInvite_FullMethodName = "/guildpb.GuildService/RespondGuildTrialInvite"
 )
 
 // GuildServiceClient is the client API for GuildService service.
@@ -84,6 +89,13 @@ type GuildServiceClient interface {
 	UpgradeGuild(ctx context.Context, in *UpgradeGuildRequest, opts ...grpc.CallOption) (*UpgradeGuildResponse, error)
 	GetGuildShop(ctx context.Context, in *GetGuildShopRequest, opts ...grpc.CallOption) (*GetGuildShopResponse, error)
 	BuyGuildShopGoods(ctx context.Context, in *BuyGuildShopGoodsRequest, opts ...grpc.CallOption) (*BuyGuildShopGoodsResponse, error)
+	// 帮会活动(B6a 一次加齐五个)。都是客户端方法,进 go/guild session.ClientMethods;身份一律取会话。
+	// 历练两个在 B6b 落地前固定回 kGuildActivityNotOpen(占好消息号,B6b 不再动协议与白名单)。
+	GetGuildActivities(ctx context.Context, in *GetGuildActivitiesRequest, opts ...grpc.CallOption) (*GetGuildActivitiesResponse, error)
+	LightGuildLantern(ctx context.Context, in *LightGuildLanternRequest, opts ...grpc.CallOption) (*LightGuildLanternResponse, error)
+	ClaimGuildReunion(ctx context.Context, in *ClaimGuildReunionRequest, opts ...grpc.CallOption) (*ClaimGuildReunionResponse, error)
+	StartGuildTrial(ctx context.Context, in *StartGuildTrialRequest, opts ...grpc.CallOption) (*StartGuildTrialResponse, error)
+	RespondGuildTrialInvite(ctx context.Context, in *RespondGuildTrialInviteRequest, opts ...grpc.CallOption) (*RespondGuildTrialInviteResponse, error)
 }
 
 type guildServiceClient struct {
@@ -324,6 +336,56 @@ func (c *guildServiceClient) BuyGuildShopGoods(ctx context.Context, in *BuyGuild
 	return out, nil
 }
 
+func (c *guildServiceClient) GetGuildActivities(ctx context.Context, in *GetGuildActivitiesRequest, opts ...grpc.CallOption) (*GetGuildActivitiesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetGuildActivitiesResponse)
+	err := c.cc.Invoke(ctx, GuildService_GetGuildActivities_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) LightGuildLantern(ctx context.Context, in *LightGuildLanternRequest, opts ...grpc.CallOption) (*LightGuildLanternResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LightGuildLanternResponse)
+	err := c.cc.Invoke(ctx, GuildService_LightGuildLantern_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) ClaimGuildReunion(ctx context.Context, in *ClaimGuildReunionRequest, opts ...grpc.CallOption) (*ClaimGuildReunionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimGuildReunionResponse)
+	err := c.cc.Invoke(ctx, GuildService_ClaimGuildReunion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) StartGuildTrial(ctx context.Context, in *StartGuildTrialRequest, opts ...grpc.CallOption) (*StartGuildTrialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartGuildTrialResponse)
+	err := c.cc.Invoke(ctx, GuildService_StartGuildTrial_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) RespondGuildTrialInvite(ctx context.Context, in *RespondGuildTrialInviteRequest, opts ...grpc.CallOption) (*RespondGuildTrialInviteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RespondGuildTrialInviteResponse)
+	err := c.cc.Invoke(ctx, GuildService_RespondGuildTrialInvite_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GuildServiceServer is the server API for GuildService service.
 // All implementations must embed UnimplementedGuildServiceServer
 // for forward compatibility.
@@ -363,6 +425,13 @@ type GuildServiceServer interface {
 	UpgradeGuild(context.Context, *UpgradeGuildRequest) (*UpgradeGuildResponse, error)
 	GetGuildShop(context.Context, *GetGuildShopRequest) (*GetGuildShopResponse, error)
 	BuyGuildShopGoods(context.Context, *BuyGuildShopGoodsRequest) (*BuyGuildShopGoodsResponse, error)
+	// 帮会活动(B6a 一次加齐五个)。都是客户端方法,进 go/guild session.ClientMethods;身份一律取会话。
+	// 历练两个在 B6b 落地前固定回 kGuildActivityNotOpen(占好消息号,B6b 不再动协议与白名单)。
+	GetGuildActivities(context.Context, *GetGuildActivitiesRequest) (*GetGuildActivitiesResponse, error)
+	LightGuildLantern(context.Context, *LightGuildLanternRequest) (*LightGuildLanternResponse, error)
+	ClaimGuildReunion(context.Context, *ClaimGuildReunionRequest) (*ClaimGuildReunionResponse, error)
+	StartGuildTrial(context.Context, *StartGuildTrialRequest) (*StartGuildTrialResponse, error)
+	RespondGuildTrialInvite(context.Context, *RespondGuildTrialInviteRequest) (*RespondGuildTrialInviteResponse, error)
 	mustEmbedUnimplementedGuildServiceServer()
 }
 
@@ -441,6 +510,21 @@ func (UnimplementedGuildServiceServer) GetGuildShop(context.Context, *GetGuildSh
 }
 func (UnimplementedGuildServiceServer) BuyGuildShopGoods(context.Context, *BuyGuildShopGoodsRequest) (*BuyGuildShopGoodsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BuyGuildShopGoods not implemented")
+}
+func (UnimplementedGuildServiceServer) GetGuildActivities(context.Context, *GetGuildActivitiesRequest) (*GetGuildActivitiesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetGuildActivities not implemented")
+}
+func (UnimplementedGuildServiceServer) LightGuildLantern(context.Context, *LightGuildLanternRequest) (*LightGuildLanternResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LightGuildLantern not implemented")
+}
+func (UnimplementedGuildServiceServer) ClaimGuildReunion(context.Context, *ClaimGuildReunionRequest) (*ClaimGuildReunionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimGuildReunion not implemented")
+}
+func (UnimplementedGuildServiceServer) StartGuildTrial(context.Context, *StartGuildTrialRequest) (*StartGuildTrialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartGuildTrial not implemented")
+}
+func (UnimplementedGuildServiceServer) RespondGuildTrialInvite(context.Context, *RespondGuildTrialInviteRequest) (*RespondGuildTrialInviteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RespondGuildTrialInvite not implemented")
 }
 func (UnimplementedGuildServiceServer) mustEmbedUnimplementedGuildServiceServer() {}
 func (UnimplementedGuildServiceServer) testEmbeddedByValue()                      {}
@@ -877,6 +961,96 @@ func _GuildService_BuyGuildShopGoods_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GuildService_GetGuildActivities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGuildActivitiesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).GetGuildActivities(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_GetGuildActivities_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).GetGuildActivities(ctx, req.(*GetGuildActivitiesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_LightGuildLantern_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LightGuildLanternRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).LightGuildLantern(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_LightGuildLantern_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).LightGuildLantern(ctx, req.(*LightGuildLanternRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_ClaimGuildReunion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimGuildReunionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).ClaimGuildReunion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_ClaimGuildReunion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).ClaimGuildReunion(ctx, req.(*ClaimGuildReunionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_StartGuildTrial_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartGuildTrialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).StartGuildTrial(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_StartGuildTrial_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).StartGuildTrial(ctx, req.(*StartGuildTrialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_RespondGuildTrialInvite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RespondGuildTrialInviteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).RespondGuildTrialInvite(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_RespondGuildTrialInvite_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).RespondGuildTrialInvite(ctx, req.(*RespondGuildTrialInviteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GuildService_ServiceDesc is the grpc.ServiceDesc for GuildService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -975,6 +1149,26 @@ var GuildService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BuyGuildShopGoods",
 			Handler:    _GuildService_BuyGuildShopGoods_Handler,
+		},
+		{
+			MethodName: "GetGuildActivities",
+			Handler:    _GuildService_GetGuildActivities_Handler,
+		},
+		{
+			MethodName: "LightGuildLantern",
+			Handler:    _GuildService_LightGuildLantern_Handler,
+		},
+		{
+			MethodName: "ClaimGuildReunion",
+			Handler:    _GuildService_ClaimGuildReunion_Handler,
+		},
+		{
+			MethodName: "StartGuildTrial",
+			Handler:    _GuildService_StartGuildTrial_Handler,
+		},
+		{
+			MethodName: "RespondGuildTrialInvite",
+			Handler:    _GuildService_RespondGuildTrialInvite_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

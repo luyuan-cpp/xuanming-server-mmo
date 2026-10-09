@@ -33,6 +33,10 @@ package main
 //     再回表锁主键,与 guild 服 DisbandGuild「主键 FOR UPDATE → DELETE 删二级项」反序成环;
 //     guild 是全局服务、合服期间不停,DisbandGuild 的合服闸门只在客户端路径上查。
 //     现在锁序与在线写者同为「主键 → 二级」,改写后再复查源区计数(见 migrateGuildZone)。
+//     2026-09-28 起每个 id 一个显式短事务(SELECT … FOR UPDATE → UPDATE → COMMIT,A15),理由见
+//     merge_run.go 的 rewriteZoneByPrimaryKey。
+//
+//  5. 榜单合并在维护锁内重读源榜,以重读结果为准(2026-09-28,A8,见 mergeGuildRank)。
 
 import (
 	"context"
@@ -309,10 +313,72 @@ func readZoneRankMembers(ctx context.Context, rdb *redis.Client, zone uint32) ([
 	return out, nil
 }
 
+// chooseRankWrite 是步骤 4 的纯判定:锁内重读的源榜决定写什么,清单快照只决定撤销依据。
+//
+//   - 重读非空:以重读为准,写它、记它(清单阶段的快照分数旧、缺后来进榜的成员)。
+//   - 重读为空:一律不写。ZADD 与 DEL 在同一条 MULTI/EXEC 里,「源榜为空」只可能是
+//     (a) 续跑,上一次的 MULTI/EXEC 已把它并进目标榜并删掉;
+//     (b) guild 服合法清空(公会全部解散,或步骤 3 之后 RebuildRanks 按 MySQL 重建)。
+//     两种情况下目标榜都已是 guild 服维护的最新状态,再 ZADD 快照只会回退分数、复活已解散的公会。
+//     撤销依据:snapshotMayBeWritten(快照是上一次写入之前落盘的那一份,或旧版工具写的清单 —— 旧版步骤 4
+//     写的正是它)时沿用快照,撤销按它把成员还回源区;快照只是清单阶段读的、从没交给过任何一次写时记为空,
+//     撤销不再把这些(可能已解散的)成员 ZADD 回源区。
+//
+// 返回要写的集合、要记进清单(撤销依据)的集合,以及是否走了「源榜已不在」这一支。
+func chooseRankWrite(reread, snapshot []manifestRankMember, snapshotMayBeWritten bool) (toWrite, toRecord []manifestRankMember, sourceGone bool) {
+	if len(reread) > 0 {
+		return reread, reread, false
+	}
+	if snapshotMayBeWritten {
+		return nil, snapshot, true
+	}
+	return nil, nil, true
+}
+
+// mergeGuildRank 是合服步骤 4(2026-09-28,player-storage-placement.md §12 A8):拿 guild_rank:maintenance_lock
+// → 锁内重读源榜 → 以重读结果为准 MULTI/EXEC 并进目标榜并删源榜。
+//
+// 为什么重读:清单阶段的快照(m.RankMembers)到这里隔着步骤 1~3b。guild 是全局服务、合服期间不停,分数
+// 更新与榜单重建 / 回填(后者与本步骤同一把维护锁)都可能改过源榜。照旧快照 ZADD 会把分数写回旧值,
+// 快照之后才进源榜的成员则被随后的 DEL 一并删掉 —— 它们从哪张榜上都消失了,而且撤销也找不回来。
+// 只有锁内读到的,才与 MULTI/EXEC 之间没有别的维护写者。源榜已不在时不写(chooseRankWrite)。
+//
+// snapshotMayBeWritten:snapshot 是否可能已经被写进过目标榜(见 chooseRankWrite),只影响撤销依据。
+// recordBeforeWrite 在 MULTI/EXEC 之前被调用(dry-run 不调用),调用方借它把「撤销依据」先落进清单
+// (清单先于写):MULTI/EXEC 成功之后、步骤标记之前崩溃,续跑读到的与撤销按它 ZREM 的都是真正并进去的
+// 那一份。它返回错误时一个字节都不写。返回记进清单的集合,以及是否走了「源榜已不在」这一支。
+func mergeGuildRank(ctx context.Context, rdb *redis.Client, src, dst uint32, snapshot []manifestRankMember,
+	snapshotMayBeWritten, dryRun bool, recordBeforeWrite func([]manifestRankMember) error) ([]manifestRankMember, bool, error) {
+	release, err := acquireGuildRankLock(ctx, rdb, dryRun)
+	if err != nil {
+		return nil, false, fmt.Errorf("guild rank lock: %w", err)
+	}
+	defer release()
+	reread, err := readZoneRankMembers(ctx, rdb, src)
+	if err != nil {
+		return nil, false, fmt.Errorf("re-read the source rank under %s: %w", guildRankLockKey, err)
+	}
+	toWrite, toRecord, sourceGone := chooseRankWrite(reread, snapshot, snapshotMayBeWritten)
+	if !dryRun && recordBeforeWrite != nil {
+		if err := recordBeforeWrite(toRecord); err != nil {
+			return nil, sourceGone, fmt.Errorf("record the rank members in the manifest before writing: %w", err)
+		}
+	}
+	// toWrite 为空时 mergeRankZSET 只幂等地 DEL 源键空壳,目标榜不动。
+	if _, err := mergeRankZSET(ctx, rdb, src, dst, toWrite, dryRun); err != nil {
+		return nil, sourceGone, err
+	}
+	return toRecord, sourceGone, nil
+}
+
 // mergeRankZSET 把 members 原子地并进目标区 ZSET 并删掉源区 ZSET。
 //
 // 原子性来自 TxPipelined(MULTI/EXEC):ZADD 与 DEL 在同一条事务里,
 // 中途断连不会留下「源区没了、目标区也没有」的状态。
+//
+// 目标榜用 ZADD NX:目标榜里已有的源区公会成员只可能是步骤 3 把 zone_id 改成 dst 之后 guild 服写进去的
+// (分数更新 / RebuildRanks 按 MySQL 重建),都比源榜里的新;公会 id 全局唯一,不会与目标区原住民撞名。
+// 覆盖它们 = 把分数回退到源榜的旧值。
 func mergeRankZSET(
 	ctx context.Context,
 	rdb *redis.Client,
@@ -341,7 +407,7 @@ func mergeRankZSET(
 		zm = append(zm, redis.Z{Score: m.Score, Member: m.Member})
 	}
 	if _, err := rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.ZAdd(ctx, dstKey, zm...)
+		pipe.ZAddNX(ctx, dstKey, zm...)
 		pipe.Del(ctx, srcKey)
 		return nil
 	}); err != nil {

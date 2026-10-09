@@ -1,12 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <ClCompile Include="agones\agones_client_endpoint_source.cpp" />
+    <ClCompile Include="agones\agones_gameserver_lifecycle.cpp" />
+    <ClCompile Include="agones\agones_gameserver_status.cpp" />
+    <ClCompile Include="agones\agones_rest_client.cpp" />
     <ClCompile Include="messaging\kafka\kafka_consumer.cpp" />
     <ClCompile Include="messaging\kafka\kafka_manager.cpp" />
     <ClCompile Include="messaging\kafka\kafka_producer.cpp" />
     <ClCompile Include="storage\redis_client\redis_client.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="agones\agones_client_endpoint_source.h" />
+    <ClInclude Include="agones\agones_gameserver_lifecycle.h" />
+    <ClInclude Include="agones\agones_gameserver_status.h" />
+    <ClInclude Include="agones\agones_rest_client.h" />
     <ClInclude Include="messaging\kafka\kafka_consumer.h" />
     <ClInclude Include="messaging\kafka\kafka_manager.h" />
     <ClInclude Include="messaging\kafka\kafka_producer.h" />

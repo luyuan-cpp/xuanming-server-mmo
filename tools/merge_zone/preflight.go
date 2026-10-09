@@ -1,18 +1,21 @@
 package main
 
-// 合服前置门禁(preflight)。全部是**拒绝执行**,不是警告。
+// 合服 / 撤销的前置门禁(preflight)。全部是**拒绝执行**,不是警告。
 //
 // 门禁存在的理由都一样:合服的四个写入面之间没有事务,一旦开写就没有便宜的
 // 回头路。所有「这次能不能开始」的判断必须在第一次写之前问完。
 //
-// 检查清单(顺序即执行顺序):
-//   P1 源 / 目标 zone 库存在              —— 目标 zone 从没部署过就不是合服目标
-//   P2 源区场景节点全下线                  —— scene_nodes:zone:{src}:load 必须空
-//   P3 go/db 对源区 topic 的消费积压 = 0    —— 还有没落库的存盘任务就搬 = 搬走一份旧的
+// 检查清单(顺序即执行顺序)。「那个 zone」合服时是源区,撤销时是目标区(见 preflightParams.zone):
+//   P1 源 / 目标 zone 库存在              —— 目标 zone 从没部署过就不是合服目标(MySQL 侧,调用方先做)
+//   P2 那个 zone 的场景节点全下线          —— scene_nodes:zone:{zone}:load 必须空
+//   P3 go/db 对那个 zone topic 的积压 = 0   —— 还有没落库的存盘任务就动 = 动的是一份旧的
 //   P4 kafka:retry / kafka:dead 队列为空    —— 同上,而且这两个是**已经失败**的任务
-//   P5 源区玩家没有任何在持的锁            —— lock:player:* / player:{id}:__lock
-//   P6 源区玩家没有在线会话                —— player:session:*
-//   P7 源区玩家不在任何活队伍里            —— team:player:* 的 tid 非 0 且 team:rec:<tid> 仍在
+//   P5 本次涉及的玩家没有任何在持的锁      —— lock:player:* / player:{id}:__lock
+//   P6 本次涉及的玩家没有在线会话          —— player:session:*
+//   P7 本次涉及的玩家不在任何活队伍里      —— team:player:* 的 tid 非 0 且 team:rec:<tid> 仍在
+//
+// 合服与撤销共用这一套(2026-09-28,player-storage-placement.md §12 A7):撤销要把玩家改回源区、删目标库
+// 的行,目标区还有节点在跑、目标 topic 还有没落库的存盘、玩家还在线,都等于把合服之后产生的写直接丢掉。
 //
 // P3 的可注入性:Kafka 在开发机上根本不跑,而这条检查又不能省(它保护的是
 // 「玩家最后一次存盘有没有落库」)。所以 lag 的来源是一个接口:
@@ -165,6 +168,37 @@ func dbRetryQueueKey(topic string) string      { return "kafka:retry:queue:" + t
 func dbRetryProcessingKey(topic string) string { return "kafka:retry:processing:" + topic }
 func dbDeadQueueKey(topic string) string       { return "kafka:dead:queue:" + topic }
 
+// 2026-10 起 go/db 可以多实例,processing 列表按实例拆开(go/db/internal/kafka/retry_ownership.go):
+//   - dbRetryProcessingKey(topic) 是旧版共享列表,新版只回收不写入(滚动升级期间仍可能非空);
+//   - 每个实例认领到 kafka:retry:processing:{topic}:{instanceID};
+//   - 实例登记在 ZSET kafka:retry:instances:{topic} 里,列表搬空之前不会被摘掉。
+//
+// 所以"processing 是否为空"必须把登记表里每个实例的列表都算上 —— 只看旧键,门禁会恒为 0、静默放行。
+func dbRetryInstancesKey(topic string) string { return "kafka:retry:instances:" + topic }
+func dbRetryInstanceProcessingKey(topic, instanceID string) string {
+	return dbRetryProcessingKey(topic) + ":" + instanceID
+}
+
+// dbTaskQueueKeysFor 列出"必须为空"的全部 db_task 队列键:ready、旧版共享 processing、死信,
+// 再加登记表里每个实例各自的 processing(纯函数,键名镜像由 merge_unit_test.go 钉住)。
+func dbTaskQueueKeysFor(topic string, instanceIDs []string) []string {
+	keys := []string{dbRetryQueueKey(topic), dbRetryProcessingKey(topic), dbDeadQueueKey(topic)}
+	for _, id := range instanceIDs {
+		keys = append(keys, dbRetryInstanceProcessingKey(topic, id))
+	}
+	return keys
+}
+
+// dbTaskQueueKeys 读登记表,返回 dbTaskQueueKeysFor 的结果。登记表读不到即报错(fail-closed):
+// 不知道有哪些实例,就不能宣称 processing 是空的。
+func dbTaskQueueKeys(ctx context.Context, rdb *redis.Client, topic string) ([]string, error) {
+	instanceIDs, err := rdb.ZRange(ctx, dbRetryInstancesKey(topic), 0, -1).Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return nil, fmt.Errorf("zrange %s: %w", dbRetryInstancesKey(topic), err)
+	}
+	return dbTaskQueueKeysFor(topic, instanceIDs), nil
+}
+
 // ── preflight 主体 ────────────────────────────────────────────
 
 // preflightDeps 是 preflight 需要的全部句柄。任何一个为 nil 的检查会被跳过
@@ -182,37 +216,43 @@ type preflightDeps struct {
 
 // preflightParams 是本次运行的参数面。
 type preflightParams struct {
-	src, dst        uint32
+	// zone 是写之前必须已经停干净的那个 zone:场景节点全下线、它的 db_task topic 无积压、重试 / 死信队列为空。
+	// 合服是源区:源区玩家最后的存盘在源 topic 上,没落库就拷 = 拷走一份旧的。
+	// 撤销是目标区:合服后这批玩家的存盘走目标 topic,没落库就改回路由、删目标行 = 把这些存盘丢掉。
+	zone uint32
+	// scope 只进日志与拒绝文案("source" / "target"),让运维一眼看出拦住的是哪一侧。
+	scope           string
 	kafkaGroup      string
 	topicGeneration uint32
-	playerIDs       []uint64
+	// playerIDs 是本次要动的玩家(合服 = 收集到的源区玩家;撤销 = 清单),P5~P7 逐个查。
+	playerIDs []uint64
 }
 
-// runPreflight 依次跑 P2~P7(P1 在 MySQL 侧,由调用方先做)。任何一条不过
-// 就返回错误,调用方 log.Fatal。
+// runPreflight 依次跑 P2~P7(P1 在 MySQL 侧,由调用方先做)。任何一条不过就返回错误;
+// 调用方此时已立围栏、还没写任何东西,走 mergeFence.refuseAndRelease(释放围栏再非零退出)。
 func runPreflight(ctx context.Context, d preflightDeps, p preflightParams) error {
-	// P2 源区场景节点全下线。
+	// P2 那个 zone 的场景节点全下线。
 	if d.sceneRdb == nil {
-		return errors.New("preflight: no scene_manager Redis handle — cannot prove the source zone is down")
+		return fmt.Errorf("preflight: no scene_manager Redis handle — cannot prove the %s zone %d is down", p.scope, p.zone)
 	}
-	if err := assertSourceZoneDown(ctx, d.sceneRdb, p.src); err != nil {
-		return fmt.Errorf("preflight P2: %w", err)
+	if err := assertZoneDown(ctx, d.sceneRdb, p.zone); err != nil {
+		return fmt.Errorf("preflight P2 (%s zone %d): %w", p.scope, p.zone, err)
 	}
-	log.Printf("preflight P2 OK: zone %d has no live scene nodes", p.src)
+	log.Printf("preflight P2 OK: %s zone %d has no live scene nodes", p.scope, p.zone)
 
 	// P3 Kafka 消费积压。
 	if d.lag == nil {
 		return errors.New("preflight P3: no Kafka lag source configured — pass -kafka-consumer-groups-cmd, " +
 			"or -assume-kafka-drained if you have verified the backlog by other means")
 	}
-	topic := dbTaskTopic(p.src, p.topicGeneration)
+	topic := dbTaskTopic(p.zone, p.topicGeneration)
 	lag, err := d.lag.TotalLag(ctx, topic, p.kafkaGroup)
 	if err != nil {
 		return fmt.Errorf("preflight P3 (%s): %w", d.lag.Describe(), err)
 	}
 	if lag != 0 {
 		return fmt.Errorf("preflight P3: consumer group %q still has lag %d on topic %s — "+
-			"the last saves of source-zone players are not in zone_%d_db yet", p.kafkaGroup, lag, topic, p.src)
+			"the last saves on the %s zone's topic are not in zone_%d_db yet", p.kafkaGroup, lag, topic, p.scope, p.zone)
 	}
 	log.Printf("preflight P3 OK: %s lag=0 on %s [%s]", p.kafkaGroup, topic, d.lag.Describe())
 
@@ -220,17 +260,21 @@ func runPreflight(ctx context.Context, d preflightDeps, p preflightParams) error
 	if d.sharedRdb == nil {
 		return errors.New("preflight P4: no shared (DB 0) Redis handle — cannot inspect kafka retry/dead queues")
 	}
-	for _, k := range []string{dbRetryQueueKey(topic), dbRetryProcessingKey(topic), dbDeadQueueKey(topic)} {
+	queueKeys, err := dbTaskQueueKeys(ctx, d.sharedRdb, topic)
+	if err != nil {
+		return fmt.Errorf("preflight P4: %w", err)
+	}
+	for _, k := range queueKeys {
 		n, err := d.sharedRdb.LLen(ctx, k).Result()
 		if err != nil && !errors.Is(err, redis.Nil) {
 			return fmt.Errorf("preflight P4: llen %s: %w", k, err)
 		}
 		if n > 0 {
 			return fmt.Errorf("preflight P4: %s holds %d unprocessed db_task payload(s) — "+
-				"those writes never reached zone_%d_db. Drain or triage them before merging", k, n, p.src)
+				"those writes never reached zone_%d_db. Drain or triage them before touching these players", k, n, p.zone)
 		}
 	}
-	log.Printf("preflight P4 OK: kafka retry/processing/dead queues for %s are empty", topic)
+	log.Printf("preflight P4 OK: kafka retry/processing/dead queues for %s are empty (%d keys incl. per-instance processing lists)", topic, len(queueKeys))
 
 	// P5 玩家锁。lock:player:{id} 在 mapping Redis(data_service router.go),
 	// player:{id}:__lock 在 data Redis —— 后者的地址由 -source-data-redis 决定,
@@ -243,10 +287,10 @@ func runPreflight(ctx context.Context, d preflightDeps, p preflightParams) error
 		return fmt.Errorf("preflight P5: %w", err)
 	}
 	if locked > 0 {
-		return fmt.Errorf("preflight P5: %d source-zone players still hold lock:player:* in the mapping Redis — "+
+		return fmt.Errorf("preflight P5: %d of the players in scope still hold lock:player:* in the mapping Redis — "+
 			"someone is mid-write on them", locked)
 	}
-	log.Printf("preflight P5 OK: no lock:player:* held by the %d source players", len(p.playerIDs))
+	log.Printf("preflight P5 OK: no lock:player:* held by the %d players in scope", len(p.playerIDs))
 
 	// P6 在线会话。player:session:{id} 由 player_locator 维护,DB 0。
 	sessions, err := countExistingKeys(ctx, d.sharedRdb, p.playerIDs, "player:session:")
@@ -254,9 +298,9 @@ func runPreflight(ctx context.Context, d preflightDeps, p preflightParams) error
 		return fmt.Errorf("preflight P6: %w", err)
 	}
 	if sessions > 0 {
-		return fmt.Errorf("preflight P6: %d source-zone players still have player:session:* — zone-down is incomplete", sessions)
+		return fmt.Errorf("preflight P6: %d of the players in scope still have player:session:* — zone-down is incomplete", sessions)
 	}
-	log.Printf("preflight P6 OK: no player:session:* for the %d source players", len(p.playerIDs))
+	log.Printf("preflight P6 OK: no player:session:* for the %d players in scope", len(p.playerIDs))
 
 	// P7 组队。队伍只存在 SharedRedis(DB 0,与 player:session 同库),记录里写着每个成员的 zone_id
 	// 与队伍 zone_id(docs/design/team-system.md §C.1、§D.3),合服不迁移这些数据:玩家改归目标区后,
@@ -266,10 +310,10 @@ func runPreflight(ctx context.Context, d preflightDeps, p preflightParams) error
 		return fmt.Errorf("preflight P7: %w", err)
 	}
 	if inTeam > 0 {
-		return fmt.Errorf("preflight P7: %d source-zone players are still members of a live team (team:player:* -> team:rec:*) — "+
-			"team records carry each member's zone_id and are not migrated. Disband those teams (or wait for the 24h idle expiry) before merging", inTeam)
+		return fmt.Errorf("preflight P7: %d of the players in scope are still members of a live team (team:player:* -> team:rec:*) — "+
+			"team records carry each member's zone_id and are not migrated. Disband those teams (or wait for the 24h idle expiry) first", inTeam)
 	}
-	log.Printf("preflight P7 OK: none of the %d source players is in a live team", len(p.playerIDs))
+	log.Printf("preflight P7 OK: none of the %d players in scope is in a live team", len(p.playerIDs))
 	return nil
 }
 

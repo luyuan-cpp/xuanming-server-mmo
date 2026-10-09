@@ -8,6 +8,7 @@
 #include <Windows.h>
 #endif
 #include "muduo/net/EventLoop.h"
+#include "node/system/node/client_endpoint.h"
 #include "node/system/node/node.h"
 #include "node/system/node/node_kafka_command_handler.h"
 #include "table/code/all_table.h"
@@ -33,6 +34,11 @@ namespace entry {
 //   struct MyNodeHooks {
 //       struct TableLoadHandler { static void OnLoaded(); };
 //       using KafkaCommandType = contracts::kafka::MyNodeCommand;
+//       // 可选:CLIENT_ENDPOINT_SOURCE=agones 时构造外部地址来源(D79)。
+//       // 返回 nullptr = 本构建/本进程不支持,Node 会致命退出。
+//       struct ClientEndpointSourceFactory {
+//           static std::unique_ptr<client_endpoint::ExternalSource> Make();
+//       };
 //   };
 //
 // Omit any member to skip that hook.  Pass void (the default) to skip all.
@@ -50,11 +56,25 @@ struct has_kafka_command_type : std::false_type {};
 template <typename T>
 struct has_kafka_command_type<T, std::void_t<typename T::KafkaCommandType>> : std::true_type {};
 
+template <typename T, typename = void>
+struct has_client_endpoint_source_factory : std::false_type {};
+template <typename T>
+struct has_client_endpoint_source_factory<T, std::void_t<typename T::ClientEndpointSourceFactory>> : std::true_type {};
+
 template <typename THooks>
 void ApplyPreConstructionHooks()
 {
     if constexpr (!std::is_void_v<THooks> && has_table_load_handler<THooks>::value) {
         OnTablesLoadSuccess([] { THooks::TableLoadHandler::OnLoaded(); });
+    }
+    // 地址来源工厂必须在 Node 构造之前注册:Node 构造函数里的 InitRpcServer 就要解析
+    // client_endpoint(早于 main 的 configure lambda),configure 里再注册已经太晚。
+    if constexpr (!std::is_void_v<THooks> && has_client_endpoint_source_factory<THooks>::value) {
+        static_assert(std::is_convertible_v<decltype(&THooks::ClientEndpointSourceFactory::Make),
+                                            client_endpoint::ExternalSourceFactory>,
+                      "THooks::ClientEndpointSourceFactory::Make 必须是 "
+                      "static std::unique_ptr<client_endpoint::ExternalSource> Make()");
+        client_endpoint::SetExternalSourceFactory(&THooks::ClientEndpointSourceFactory::Make);
     }
 }
 

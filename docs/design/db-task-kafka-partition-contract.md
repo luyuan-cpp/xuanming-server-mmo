@@ -33,20 +33,39 @@ Kafka 扩分区会重映射一部分 key；新 partition 的 offset 与旧 parti
 
 假设从 generation 1 / 10 partitions 扩到 generation 2 / 20 partitions：
 
-1. 备份配置，停止所有会产生 DBTask 的 login/业务写入入口。
+1. 备份配置，停止所有会产生 DBTask 的 login/业务写入入口。C++ scene 是 DBTask 的
+   另一个生产者（`SavePlayerToRedis` 按 home_zone 写存盘），停写必须包含全部 scene
+   节点，不能只停 login。
 2. 保持旧 db consumer 运行，确认旧 topic consumer lag 为 0。
-3. 确认旧 generation 的 Redis retry `ready`、`processing` 均为 0；逐条处置 dead
+3. 确认旧 generation 的 Redis retry `ready`、`processing` 均为 0(2026-10 起 `processing` 按 db 实例拆开:
+   旧版共享列表 `kafka:retry:processing:{topic}` 加上 `kafka:retry:instances:{topic}` 里每个实例名对应的
+   `kafka:retry:processing:{topic}:{实例名}`,都要为 0)；逐条处置 dead
    queue，不能把未决任务遗留到旧 namespace。
 4. 停止旧 db consumer。此时 MySQL 已包含旧 generation 的最终状态。
 5. 在 login 与 db 配置中同时设置 `TopicGeneration: 2`、`PartitionCnt: 20`、
-   `InitialPartition: 20`（login）。不要 ALTER generation 1 的 topic。
-6. 先启动 db，再启动 login。任一侧启动门禁失败都不开放写流量。
+   `InitialPartition: 20`（login），并在同一次提交里把 C++ 的
+   `bin/etc/base_deploy_config.yaml` 设为 `DbTaskTopicGeneration: 2`。不要 ALTER
+   generation 1 的 topic。
+   - 三方必须相等：C++ 与 Go 同一条命名规则（`cpp/libs/services/scene/player/constants/player.h`
+     `GetDbTaskTopic` ↔ `DbTaskTopicForGeneration`）：`<= 1` 为 `db_task_zone_{zone}`，
+     `>= 2` 为 `db_task_zone_{zone}_g{N}`；缺键 / 0 当 1。注意与审计 topic 第一代就带
+     `_g1` 不同。
+   - 漏改 C++ 不报任何错：scene 会继续写已排空、没人消费的旧 topic，存盘静默积压。
+     本机 `start_game.ps1` 启动前核对三方，不一致即中止；K8s 的 node ConfigMap 由
+     `k8s_deploy.ps1` 从 `go/db/etc/db.yaml` 的 `ServerConfig.Kafka.TopicGeneration` 生成
+     `DbTaskTopicGeneration`（生成期同时核对 login），契约测试
+     `tools/scripts/tests/k8s_deploy_contract.tests.ps1` 钉住三方相等。
+   - `DbTaskTopicGeneration` 只在进程启动时读入；换代必须重启全部 scene 节点。
+6. 先启动 db，再启动 login，最后启动 scene。任一侧启动门禁失败都不开放写流量。
+   scene 必须晚于 db：broker 开着 auto.create，scene 抢先发消息会把新代 topic 自动建成
+   1 分区，db 的分区契约校验随即永久失败。
 7. 验证新 topic 名为 `db_task_zone_{zone}_g2`、20 partitions、marker 存在；执行
    单玩家连续写与故障重试 smoke，确认 applied cursor 使用新 topic namespace。
 8. 恢复写入口并观察 lag、DLQ、producer fence 告警。旧 topic 与 marker 至少保留
    一个审计/回滚窗口，不立即删除。
 
-回滚也必须先停写并排空新 generation。已有新写时直接把配置切回旧 topic，会形成
+回滚也必须先停写并排空新 generation，并把 login、db、C++ `DbTaskTopicGeneration`
+三方一起切回。已有新写时直接把配置切回旧 topic，会形成
 两条独立顺序历史，禁止这样操作。
 
 ## 已知边界

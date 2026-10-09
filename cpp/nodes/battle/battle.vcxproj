@@ -20,7 +20,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="handler\event\event_handler.cpp" />
-    <ClCompile Include="handler\grpc\battle_client_player_service.cpp" />
     <ClCompile Include="handler\grpc\battle_node.cpp" />
     <ClCompile Include="handler\rpc\battle_handler.cpp" />
     <ClCompile Include="handler\rpc\player\player_service_interface.cpp" />
@@ -32,8 +31,10 @@
     <ClCompile Include="rpc_replies\register_response_handler.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="battle_admission_gate.h" />
+    <ClInclude Include="battle_push_policy.h" />
+    <ClInclude Include="battle_room_table.h" />
     <ClInclude Include="client\battle_client_edge.h" />
-    <ClInclude Include="handler\grpc\battle_client_player_service.h" />
     <ClInclude Include="handler\grpc\battle_node.h" />
     <ClInclude Include="handler\rpc\battle_handler.h" />
     <ClInclude Include="logic\battle_room_manager.h" />

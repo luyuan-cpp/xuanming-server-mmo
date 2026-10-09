@@ -129,6 +129,15 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 		baseConfig.set_audit_topic_generation(root["AuditTopicGeneration"].as<uint32_t>());
 	}
 
+	// 玩家存盘 DBTask topic 世代号(见 config.proto db_task_topic_generation /
+	// services/scene/player/constants/player.h GetDbTaskTopic)。
+	// 可以不写:不写 = 0 = 第一代,topic 名仍是不带后缀的 db_task_zone_{zone},存量 yaml 不改也能起。
+	// 必须与 go/db、go/login 的 Kafka.TopicGeneration 相等,否则换代后存盘写进没人消费的旧 topic。
+	if (root["DbTaskTopicGeneration"])
+	{
+		baseConfig.set_db_task_topic_generation(root["DbTaskTopicGeneration"].as<uint32_t>());
+	}
+
 	// 永久 guid 号段(见 config.proto IdSegmentConfig):一种 GUID 一块配置,按 Kind 名字
 	// 对上 GuidSegmentRegistry 里的实例(item / txlog / snapshot;以后 pet / guild 只加一块)。
 	// 逐键显式读,与本文件其他块一致;缺键 = proto 默认值(0),由 scene 侧的 Enable 校验并拒绝。

@@ -43,7 +43,11 @@ void ServiceDiscoveryManager::AddServiceNode(const std::string &nodeJson, uint32
 	}
 
 	NodeInfo discoveredNode;
-	auto parseResult = google::protobuf::util::JsonStringToMessage(nodeJson, &discoveredNode);
+	// D77:忽略未知字段且永久保留。严格解析时,滚动期间新版本节点多带的字段(如 clientEndpoint)
+	// 会让旧解析方把整个节点判为缺席;与 Go 侧 shared/nodeinfo.Unmarshal 同一口径。
+	google::protobuf::util::JsonParseOptions parseOptions;
+	parseOptions.ignore_unknown_fields = true;
+	auto parseResult = google::protobuf::util::JsonStringToMessage(nodeJson, &discoveredNode, parseOptions);
 	if (!parseResult.ok())
 	{
 		LOG_ERROR << "Parse node JSON failed, type: " << nodeType

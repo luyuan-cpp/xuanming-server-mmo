@@ -30,9 +30,11 @@ package main
 //   1b. **写任何一张表之前**,先把全部表的两库列集合比一遍(alignedPlayerColumns)。
 //      不能放进逐表循环:每张表一个事务、跨表没有原子性,半迁移状态下会先写完
 //      一张表才在下一张表上炸,留下半合服的目标库(见 copyPlayerRows 的注释)。
-//   2. 逐表:先查目标库有没有同 player_id 的行 —— 有就是 **ID 安全事件**
-//      (两个 zone 发出了同一个 player_id,或这批人已经合过一次),立刻中止,
-//      不写任何东西。
+//   2. 撞号预检,同样对**全部表**在任何写之前做完(2026-09-28,§12 A4):目标库里有没有清单
+//      玩家的行。首跑有就是 **ID 安全事件**(两个 zone 发出了同一个 player_id),一个字节都不写;
+//      续跑时目标行与源行按列名逐列相同、且没有目标独有行 = 上次已经把这张表拷完,跳过,其余照拒
+//      (decideTableCopy)。此前这一查放在逐表循环里:首跑时第二张表撞号,第一张已经提交;
+//      续跑时第一张表就撞上自己上次拷进去的行,步骤 1 永远过不去。
 //   3. 逐表事务:分批
 //      `INSERT INTO dst.t (col...) SELECT col... FROM src.t WHERE player_id IN (...)`。
 //      列清单来自两库 information_schema 的**交集校验**(alignedPlayerColumns):
@@ -84,20 +86,22 @@ const mysqlErrDupEntry = 1062
 
 // playerRowsReport 是逐表拷贝的计数汇总。
 type playerRowsReport struct {
-	Tables       []string       // 实际处理的表(有序)
-	SourceRows   map[string]int // 每表:源库里这批 id 的行数
-	CopiedRows   map[string]int // 每表:实际 INSERT 的行数(dry-run 恒 0)
-	TargetRows   map[string]int // 每表:拷完后目标库里这批 id 的行数
-	MissingRows  map[string]int // 每表:源库里**没有**行的 id 数(正常:玩家没这张表的数据)
-	CacheDeleted int            // 删掉的 DB 0 缓存键数
+	Tables        []string        // 实际处理的表(有序)
+	SourceRows    map[string]int  // 每表:源库里这批 id 的行数
+	CopiedRows    map[string]int  // 每表:实际 INSERT 的行数(dry-run 恒 0)
+	TargetRows    map[string]int  // 每表:拷完后目标库里这批 id 的行数
+	MissingRows   map[string]int  // 每表:源库里**没有**行的 id 数(正常:玩家没这张表的数据)
+	AlreadyCopied map[string]bool // 每表:续跑时判定为上次已拷完(逐列相同),本次跳过
+	CacheDeleted  int             // 删掉的 DB 0 缓存键数
 }
 
 func newPlayerRowsReport() playerRowsReport {
 	return playerRowsReport{
-		SourceRows:  map[string]int{},
-		CopiedRows:  map[string]int{},
-		TargetRows:  map[string]int{},
-		MissingRows: map[string]int{},
+		SourceRows:    map[string]int{},
+		CopiedRows:    map[string]int{},
+		TargetRows:    map[string]int{},
+		MissingRows:   map[string]int{},
+		AlreadyCopied: map[string]bool{},
 	}
 }
 
@@ -107,10 +111,62 @@ func (r playerRowsReport) String() string {
 	}
 	parts := make([]string, 0, len(r.Tables))
 	for _, t := range r.Tables {
-		parts = append(parts, fmt.Sprintf("%s(src=%d copied=%d dst=%d)",
-			t, r.SourceRows[t], r.CopiedRows[t], r.TargetRows[t]))
+		already := ""
+		if r.AlreadyCopied[t] {
+			already = " already_copied"
+		}
+		parts = append(parts, fmt.Sprintf("%s(src=%d copied=%d dst=%d%s)",
+			t, r.SourceRows[t], r.CopiedRows[t], r.TargetRows[t], already))
 	}
 	return strings.Join(parts, " ") + fmt.Sprintf(" cache_keys_deleted=%d", r.CacheDeleted)
+}
+
+// existingTargetRows 决定步骤 1 在目标库里已经有清单玩家的行时怎么办(A4)。
+type existingTargetRows int
+
+const (
+	// refuseExistingTargetRows:首跑(没有清单)。任何一行都是 ID 安全事件 —— 两个 zone 发出了同一个
+	// player_id,或这次合服其实跑过、清单丢了。一个字节都不写。
+	refuseExistingTargetRows existingTargetRows = iota
+	// acceptIdenticalTargetRows:续跑(清单已在)。目标行与源行按列名逐列相同、且没有目标独有行 = 上次
+	// 运行已经把这张表整表拷完(copyOneTable 一表一事务,不会只拷半张),跳过;其余情况照旧拒绝。
+	acceptIdenticalTargetRows
+)
+
+// tableCopyAction 是撞号预检对一张表的结论。
+type tableCopyAction int
+
+const (
+	tableNothingToCopy tableCopyAction = iota // 源库、目标库都没有这批 id 的行
+	tableNeedsCopy                            // 目标库没有这批 id 的行:整表拷
+	tableAlreadyCopied                        // 续跑:目标行与源行逐列相同,上次已拷完
+)
+
+// decideTableCopy 是撞号预检的纯判定(A4),单测不需要 MySQL。
+//
+//	srcRows       源库里这批 id 的行数
+//	dstRows       目标库里这批 id 的行数
+//	identicalRows 两库同一 player_id、且按列名逐列 NULL-safe 相等的行数(只在续跑且 dstRows>0 时查,否则传 0)
+//
+// player_id 是每张玩家表的主键,所以「identical == dst == src」同时证明了两件事:每个源行在目标库都有
+// 逐字节相同的一份(没漏),目标库这批 id 的行全是拷过来的(没有目标独有行、没有被改过的行)。
+// 返回的错误是给人看的原因,调用方包上表名与「ID SAFETY」。
+func decideTableCopy(policy existingTargetRows, srcRows, dstRows, identicalRows int) (tableCopyAction, error) {
+	switch {
+	case dstRows == 0 && srcRows == 0:
+		return tableNothingToCopy, nil
+	case dstRows == 0:
+		return tableNeedsCopy, nil
+	case policy != acceptIdenticalTargetRows:
+		return tableNothingToCopy, errors.New("this is a fresh run (no manifest): either this merge already ran — " +
+			"resume with its manifest instead of a fresh run — or the two zones issued colliding player_ids")
+	case identicalRows == dstRows && identicalRows == srcRows:
+		return tableAlreadyCopied, nil
+	default:
+		return tableNothingToCopy, fmt.Errorf("this is a resumed run, but only %d of the %d target rows are byte-identical "+
+			"to the source (source has %d): the target was written after the previous run, holds rows the source does not, "+
+			"or the two zones issued colliding player_ids", identicalRows, dstRows, srcRows)
+	}
 }
 
 // ── 表发现 ────────────────────────────────────────────────────
@@ -209,15 +265,78 @@ func countRowsForIDs(ctx context.Context, db *sql.DB, qualified string, ids []ui
 	return total, nil
 }
 
-// copyPlayerRows 执行第 2~4 步。
+// identicalRowCondition 拼「目标行 d 与源行 s 按列名逐列相同」的 SQL 条件:每列 NULL-safe 相等(<=>)。
+// 不能用 CHECKSUM(表级),也不能整行 JSON 化(player_database 的列是 MEDIUMBLOB,JSON 化会炸内存),
+// 交给 MySQL 逐列比。cols 必须来自 alignedPlayerColumns(两库列集合相同、列名不含反引号),
+// 才能直接用反引号包裹、且两侧都有这些列。撞号预检(续跑)与撤销删行共用这一份判据。
+func identicalRowCondition(cols []string) string {
+	conds := make([]string, 0, len(cols))
+	for _, c := range cols {
+		conds = append(conds, fmt.Sprintf("d.`%s` <=> s.`%s`", c, c))
+	}
+	return strings.Join(conds, " AND ")
+}
+
+// countIdenticalRows 数 ids 里「目标库与源库都有行、且按列名逐列相同」的行数(A4 续跑判定用)。
+// 非锁定读;分批 IN。
+func countIdenticalRows(ctx context.Context, db *sql.DB, srcQ, dstQ string, cols []string, ids []uint64) (int, error) {
+	cond := identicalRowCondition(cols)
+	total := 0
+	for _, batch := range chunkUint64(ids, playerRowsBatchSize) {
+		var n int
+		q := fmt.Sprintf("SELECT COUNT(*) FROM %s d JOIN %s s ON d.%s = s.%s WHERE d.%s IN (%s) AND (%s)",
+			dstQ, srcQ, playerIDColumn, playerIDColumn, playerIDColumn, inListLiteral(batch), cond)
+		if err := db.QueryRowContext(ctx, q).Scan(&n); err != nil {
+			return 0, fmt.Errorf("compare %s vs %s: %w", dstQ, srcQ, err)
+		}
+		total += n
+	}
+	return total, nil
+}
+
+// idsWithoutRow 返回 ids 里在 qualified(库名.表名)没有 player_id 行的那些,升序。非锁定读;分批 IN。
+// -verify-merged 逐 id 核对主数据行(A6)用。
+func idsWithoutRow(ctx context.Context, db *sql.DB, qualified string, ids []uint64) ([]uint64, error) {
+	var missing []uint64
+	for _, batch := range chunkUint64(sortedUint64(ids), playerRowsBatchSize) {
+		rows, err := db.QueryContext(ctx, fmt.Sprintf("SELECT %s FROM %s WHERE %s IN (%s)",
+			playerIDColumn, qualified, playerIDColumn, inListLiteral(batch)))
+		if err != nil {
+			return nil, fmt.Errorf("query %s: %w", qualified, err)
+		}
+		found := make(map[uint64]struct{}, len(batch))
+		for rows.Next() {
+			var id uint64
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			found[id] = struct{}{}
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range batch {
+			if _, ok := found[id]; !ok {
+				missing = append(missing, id)
+			}
+		}
+	}
+	return missing, nil
+}
+
+// copyPlayerRows 执行第 1b~4 步。policy 决定目标库已有清单玩家的行时怎么办(首跑拒绝 / 续跑认逐列相同)。
 //
-// dryRun 只做只读部分(源行数 / 目标冲突检查),不开事务、不写。
+// dryRun 只做只读部分(列对齐、源行数、撞号预检),不开事务、不写。
 func copyPlayerRows(
 	ctx context.Context,
 	db *sql.DB,
 	srcSchema, dstSchema string,
 	tables []string,
 	ids []uint64,
+	policy existingTargetRows,
 	dryRun bool,
 ) (playerRowsReport, error) {
 	rep := newPlayerRowsReport()
@@ -233,8 +352,8 @@ func copyPlayerRows(
 	// 逐表检查,"一个 zone 已加 player_database.asset_op_ledger、另一个还没"这种典型
 	// 半迁移状态会先把 player_centre_database 整表 COMMIT 进目标库,轮到 player_database
 	// 才抛 SCHEMA MISMATCH —— 留下一个半合服的目标库。而这一步没被标进清单,运维跑齐
-	// 迁移后重跑,循环第一张表就撞上下面的 dstPre>0「ID SAFETY」拒写,清单又说这步没做完,
-	// 于是谁也进不去,只能在维护窗口里手工清库。
+	// 迁移后重跑,当时的逐表预检让第一张表就撞上「ID SAFETY」拒写,清单又说这步没做完,
+	// 于是谁也进不去,只能在维护窗口里手工清库(续跑认逐列相同的表,是 2026-09-28 A4 的事,见下)。
 	//
 	// 全部先检查则最坏情况是"一行没写就停下",正是 alignedPlayerColumns 注释里写的初衷。
 	alignedCols := make(map[string][]string, len(tables))
@@ -246,10 +365,13 @@ func copyPlayerRows(
 		alignedCols[t] = cols
 	}
 
+	// 撞号预检与列对齐同理:**全部表**判完才开始写第一张(A4)。目标库已有这批 id 的行,可能是
+	// (a) 这次合服跑过一半(续跑),(b) 两个 zone 的发号器撞了号。(a) 只有「与源行逐列相同、且没有目标
+	// 独有行」才算上次拷完;其余都不能靠 INSERT 决定 —— 停下来让人看,而且停在第一张表写之前。
+	actions := make(map[string]tableCopyAction, len(tables))
 	for _, t := range tables {
 		srcQ := srcSchema + "." + t
 		dstQ := dstSchema + "." + t
-		cols := alignedCols[t]
 
 		srcN, err := countRowsForIDs(ctx, db, srcQ, ids)
 		if err != nil {
@@ -258,28 +380,45 @@ func copyPlayerRows(
 		rep.SourceRows[t] = srcN
 		rep.MissingRows[t] = len(ids) - srcN
 
-		// 目标库预检:这批 id 在目标库里已经有行 = 目标区已经有同号玩家。
-		// 可能是 (a) 这次合服跑过一半,(b) 两个 zone 的发号器撞了号。
-		// 两种都不能靠 INSERT 决定 —— 停下来让人看。
-		dstPre, err := countRowsForIDs(ctx, db, dstQ, ids)
+		dstN, err := countRowsForIDs(ctx, db, dstQ, ids)
 		if err != nil {
 			return rep, err
 		}
-		if dstPre > 0 {
-			return rep, fmt.Errorf(
-				"ID SAFETY: %s already holds %d of the %d source player ids (table %s). "+
-					"Either this merge already ran (resume with the manifest instead of a fresh run) "+
-					"or the two zones issued colliding player_ids. Refusing to write",
-				dstQ, dstPre, len(ids), t)
+		identicalN := 0
+		if dstN > 0 && policy == acceptIdenticalTargetRows {
+			if identicalN, err = countIdenticalRows(ctx, db, srcQ, dstQ, alignedCols[t], ids); err != nil {
+				return rep, err
+			}
+		}
+		action, derr := decideTableCopy(policy, srcN, dstN, identicalN)
+		if derr != nil {
+			return rep, fmt.Errorf("ID SAFETY: %s already holds %d of the %d manifest player ids (table %s): %v. "+
+				"Refusing to write — no player table has been written by this run", dstQ, dstN, len(ids), t, derr)
+		}
+		actions[t] = action
+	}
+
+	for _, t := range tables {
+		srcQ := srcSchema + "." + t
+		dstQ := dstSchema + "." + t
+		cols := alignedCols[t]
+		srcN := rep.SourceRows[t]
+
+		switch actions[t] {
+		case tableNothingToCopy:
+			rep.TargetRows[t] = 0
+			continue
+		case tableAlreadyCopied:
+			rep.AlreadyCopied[t] = true
+			rep.TargetRows[t] = srcN
+			log.Printf("%s: all %d rows for these ids are already in %s byte-identical to the source — "+
+				"copied by the previous run, skipped", t, srcN, dstQ)
+			continue
 		}
 
 		if dryRun {
 			log.Printf("[DRY-RUN] %s: would copy %d rows for %d ids (%d ids have no row), %d columns aligned by name",
 				t, srcN, len(ids), rep.MissingRows[t], len(cols))
-			continue
-		}
-		if srcN == 0 {
-			rep.TargetRows[t] = 0
 			continue
 		}
 
@@ -458,10 +597,7 @@ func deletePlayerRows(
 	if cerr != nil {
 		return 0, nil, cerr
 	}
-	conds := make([]string, 0, len(cols))
-	for _, c := range cols {
-		conds = append(conds, fmt.Sprintf("d.`%s` <=> s.`%s`", c, c))
-	}
+	cond := identicalRowCondition(cols)
 
 	for _, batch := range chunkUint64(ids, playerRowsBatchSize) {
 		in := inListLiteral(batch)
@@ -470,7 +606,7 @@ func deletePlayerRows(
 			`SELECT d.%s, (%s) AS identical
 			   FROM %s d JOIN %s s ON d.%s = s.%s
 			  WHERE d.%s IN (%s)`,
-			playerIDColumn, strings.Join(conds, " AND "),
+			playerIDColumn, cond,
 			dstQ, srcQ, playerIDColumn, playerIDColumn, playerIDColumn, in)
 		rows, qerr := db.QueryContext(ctx, q)
 		if qerr != nil {

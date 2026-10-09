@@ -21,6 +21,12 @@ package main
 //
 // 幂等 / dry-run / 分批:keyset 分页读 MySQL(player_id > last ORDER BY
 // player_id LIMIT batch),每批一条 pipeline;dry-run 用 EXISTS 统计将写入数。
+//
+// 已被合走的 zone 拒绝回填(2026-09-28,player-storage-placement.md §12 A10):合服改映射之前会写
+// merge:merged_into:{src}(merged_into.go)。那之后「有行 = 归属这里」不再成立(copy 模式源库的行是冷副本,
+// pin 模式行还是真源、但归属已是目标区);
+// SET NX 虽然不覆盖已有映射,但映射一旦丢失(Redis 整体丢数据正是想起回填的典型时刻),回填就会把
+// 已合走的玩家整批钉回死区。dry-run 同样拒绝,彩排就能暴露。
 
 import (
 	"context"
@@ -175,9 +181,12 @@ func backfillPlanBatch(ids []uint64, existing []string, zoneVal string, rep *bac
 	return toCreate
 }
 
-// backfillHomeZone 逐批读 id → 读现有映射 → SET NX 写缺席的。
+// backfillHomeZone 逐批读 id → 读现有映射 → SET NX 写缺席的。zone 已被合走(A10 标记在)时一个键都不写。
 func backfillHomeZone(ctx context.Context, mapRdb *redis.Client, src playerIDSource, zone uint32, dryRun bool) (backfillReport, error) {
 	var rep backfillReport
+	if err := refuseBackfillOfMergedZone(ctx, mapRdb, zone); err != nil {
+		return rep, err
+	}
 	zoneVal := strconv.FormatUint(uint64(zone), 10)
 	var after uint64
 	for {

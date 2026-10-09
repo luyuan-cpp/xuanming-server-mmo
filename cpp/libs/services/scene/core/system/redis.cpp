@@ -39,6 +39,10 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         // 断线期间失败、等重发的 A2′(载入前"先核归属再删"继承来的 handoff 标记)也立刻补发,排在重发的
         // 玩家加载之前(同一条连接 FIFO)。闸门只认 A2′ 的应答,不靠这条顺序(见 exit_release_mark.h)。
         PlayerLifecycleSystem::RetryInheritedMarkClears(/*reconnected=*/true);
+        // 疏散 / 排空改派的待确认表(relocate_confirm.h):断线期间没读到、在等重试的核实立刻重发(不绕过 settle 等待),
+        // 排在重发的玩家加载之前 —— 核实读与随后的凭证补写必须走这条不重放的连接,与载入前的标记清理按 FIFO 排队。
+        // 表空时直接返回。
+        PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::now(), /*reconnected=*/true);
         if (playerRedis)
         {
             playerRedis->OnReconnected();
@@ -59,7 +63,11 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         }
         // 没确认的 handoff 标记撤回也搭这个 1s 节拍重试(表为空时直接返回;条目自带 5s 重试间隔
         // 与"标记 TTL + 余量"的截止时刻,见 handoff_mark_withdraw.h)。静态函数,不引入新的绑定。
-        PlayerLifecycleSystem::RetryPendingHandoffWithdrawals(/*reconnected=*/false); });
+        PlayerLifecycleSystem::RetryPendingHandoffWithdrawals(/*reconnected=*/false);
+        // 改派待确认表的各阶段截止、核实的首发 / 重发、落地条目的检查,与撤回表、A2′ 用同一个 1s 节拍(单调时钟的
+        // 时刻在这里取一次、显式传入)。表空时直接返回。静态函数,不引入新的绑定。
+        // BeginShutdown 只取消周期存盘,本定时器在停机 drain 期间仍在跑:停机谓词等待确认表清空靠的就是它。
+        PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::now(), /*reconnected=*/false); });
     retryTimerActive_ = true;
 
     // Periodically log a snapshot of internal queue sizes so operators can spot

@@ -256,6 +256,7 @@ pwsh -File tools/scripts/artifacts_retention.ps1 -KeepLast 10
   - Self-hosted / bare metal K8s: prefer `-GateServiceType NodePort` behind an external L4 load balancer.
   - Exposing the Service is only half of it, and the missing half is **not** in this script: clients never learn gate's address from the Service. `login` reads gate's etcd-registered endpoint — the cluster-internal `POD_IP` — and hands it to the client verbatim (`go/login/internal/svc/servicecontext.go`, `CandidatesForZone`). Until `login` is taught to translate `node_id` to an externally reachable address, external clients cannot connect no matter how the Service is configured. The deploy script warns on any non-`ClusterIP` setting for this reason.
   - The gate process deliberately does not try to discover its own external address. It binds `0.0.0.0` and registers its pod identity; deciding what the outside world should dial is the job of whoever hands the address out.
+  - **(2026-09-29 更正:上面两条已被集群外入口 D76–D93 取代,原文保留作历史)** 最终没有采用"login 按 `node_id` 翻译地址"(D76 否决的方案④),而是**进程自报客户端可达地址**:`-ClientEntryMode external` 下 gate / battle 在发布 etcd 之前把 `NodeInfo.client_endpoint`(`proto/common/base/common.proto:33`)填好,login / scene_manager / battle 三个出口按同一规则选地址(Go `go/shared/clientendpoint/select.go:41` `Select`,C++ `client_endpoint::ClientFacing`)。`endpoint` 仍是集群内身份,只在 `podip` 模式下被当成客户端地址下发 —— 所以**上面那段"Service 怎么配都连不上"的结论对默认的 `podip` 仍然成立**,集群外玩家必须用 external。external 下 gate 是 StatefulSet + 每序号 Service `gate-<i>`,见下方 Optional Flags「集群外客户端入口」与 `docs/design/k8s_gate_exposure_guidance.md`;权威设计见 `docs/design/k8s-client-entry.md`(D76–D93、「运维手册」、「kind 端到端验证」)。**未上集群验证**,待 Codex / 用户按 kind 端到端验收。
 - Do not treat `LoadBalancer` as the universal default. If the cluster does not have a mature, production-grade LB implementation, `NodePort` plus an external L4 balancer is usually the more stable choice.
 - Internal-only services should stay inside the cluster and do not need external exposure.
 - Stability baseline per zone: `centre=1`, `gate=2`, `scene=4`.
@@ -328,6 +329,12 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   - 这个目录**不会无限长**:muduo 每 8MiB 滚一个新文件且从不删旧文件,所以业务容器的启动命令里带了一个每 5 分钟跑一次的清理循环,按时间只留最近 8 个 `.log`(≈64MiB);`node-logs` 这个 emptyDir 另有 `sizeLimit: 2Gi` 作远端兜底。`kubectl exec` 进去只看得到最近这几个文件,更早的要去 Loki 查。
   - **采不到的东西**:容器 stdout 上的 gRPC / librdkafka stderr,以及崩溃现场文本(glibc 断言、`terminate called`、abort 栈)——它们只在 `kubectl logs` 里,Pod 一重建就没了。Loki 里的 `level="fatal"` 只覆盖代码里显式 `LOG_FATAL` 的分支。
 - A `gate-entry` Service is created per zone namespace for external TCP access.
+  **(2026-09-29 更正,D90)** 上面这句已不成立:单一 `gate-entry` 只在 `-ClientEntryMode podip` **且 gate 副本数恰为 1** 时生成
+  (`tools/scripts/lib/k8s_client_entry.ps1:509` `Test-GateEntryServiceWanted`,`tools/scripts/k8s_deploy.ps1:4994-4999`)。
+  原因:login 签的票据绑 `gate_node_id`,gate 不符即以 `token_gate_node_mismatch` 断开(`cpp/nodes/gate/handler/rpc/client_message_processor.cpp:1052-1057`),
+  副本数 ≥2 时 Service 随机分流,约一半票据会被拒。其余情形(podip 多副本、external)不生成,并在删旧形态时清掉残留
+  (`lib/k8s_client_entry.ps1:1894-1895`、`:1908-1910`)。而且 podip 下 login 下发的是 PodIP,`gate-entry` 本身并不能让集群外客户端连上;
+  集群外入口一律走 external 的每序号 Service `gate-<i>`。`gate-entry` 的 spec 也没有 `externalTrafficPolicy`(`k8s_deploy.ps1:2405-2424`,默认 Cluster,会 SNAT)。
 
 ## Optional Flags
 
@@ -353,6 +360,78 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
 - `-LokiPushUrl`: sidecar 的推送地址。留空(默认)= 写 infra namespace 里的 Loki,即 `http://loki.<InfraNamespace>:3100/loki/api/v1/push`(`manifests/infra/loki.yaml`,也只有这种情况 `infra-up` 才部署它);指向集群外 / 已有的 Loki 时写完整 push 地址,例如 `http://loki.observability:3100/loki/api/v1/push`。**改它要挑时机**:Alloy 的配置正文哈希以 `mmorpg.io/cpp-log-sidecar-config-hash` 注解打进 pod 模板(只改 ConfigMap 不会让跑着的 Alloy 重读配置,而模板不变时 `kubectl apply` 是 no-op),所以改推送地址或改解析规则 = 下次 `zone-up` 滚动重启该 zone 的 C++ 节点,Agones 侧是 Fleet RollingUpdate 换 GameServer。**别漏了 battle**:battle 是不分 zone 的全局池,由 `Apply-Infra` → `Apply-BattlePool` 部署在 infra namespace(连它那份 sidecar ConfigMap 也建在 infra namespace),`zone-up` 根本不碰它 —— 它要等下一次 `infra-up` / `all-up` 才跟着滚。
 - 上面三个参数 `dev_tools.ps1` 与 `k8s_image.ps1` 都已透传(与 `-ClusterId` 不同,不必绕开包装脚本直接调 `k8s_deploy.ps1`)。两个字符串参数在包装脚本里默认留空 = **不覆盖**,不会把空的 `image:` 渲染进清单;镜像默认版本这个事实源只存在于 `tools/scripts/k8s_deploy.ps1` 一处。
 - **"sidecar 装上了但推无可推"这个半配置状态要知道**:集群内 Loki 只随 `infra-up` 部署,所以只跑 `zone-up`、跑 `all-up -SkipInfra`、或在存量集群上直接升级这三种走法,都会得到"每个 C++ Pod 里 sidecar 跑得好好的、推送目标压根不存在"的组合。脚本对此**只做只读探测、不阻断**:用默认 Loki(没给 `-LokiPushUrl`)时跑一次 `kubectl -n <InfraNamespace> get svc loki --ignore-not-found`,查不到就 `Write-Warning` 提示去跑 `infra-up` / 给 `-LokiPushUrl` / 用 `-NoCppLogSidecar`,然后照常 apply;`-DryRun` 下整段跳过,`-LokiPushUrl` 指向集群外 Loki 时无从判断也不探。表现是**部署全绿、一条 C++ 日志都查不到**(Alloy 的推送失败只写在它自己的 stdout 里,脚本不会失败)。处置见 `docs/ops/grafana-loki-local-logs.md` §6。
+- `-GateRouterMode`(2026-09-29 补登记;权威口径是 `tools/scripts/k8s_deploy.ps1:140-164` 的参数注释,决策 turn-based §22 D75 / port-decisions D-12 修订):
+  gate 的客户端 RPC 路由模式,只写进 gate 的环境变量 `GATE_CLIENT_RPC_ROUTER`。**K8s 默认 `"1"`**(路由模式:gate 只连 `client-rpc-router`,
+  chat / friend / trade 等只承诺路由模式的服务经它可达);`"0"` = 旧的逐服务直连,只作回退。只收 `"0"` / `"1"`,拼错在入口就拒。
+  C++ 进程默认值(`cpp/nodes/gate/gate_router_mode.h`,未设即直连)与 `gate_security_test` 的默认值断言一字不改,翻转只落在部署层。
+  两种模式下战斗都只走客户端 ↔ battle 直连,gate 不中继战斗(turn-based §22 D66),本开关与战斗无关。
+  - **前置**:路由模式下 gate 的依赖门等 ClientRpcRouter + Scene(不再是 Login)。`infra-up` 必须已把 `client-rpc-router` 部署就绪 ——
+    不带 `-SkipGoSvc`、给了 `-GoSvcRegistry`;否则 zone-up 之后 gate 卡在依赖门,登录 / 匹配 / 聊天全部 `no_target`。
+    **脚本没有运行时拦截**,只有参数注释。`k8s_image.ps1` 的 `release-zone` / `release-all` 从不传 `-GoSvcRegistry`、不部署任何 Go 服务,
+    全新集群只走发布路径时同样会卡住 —— 先跑一次带 Go 服务的 `infra-up`。
+  - **回退 `"0"` 的后果**:chat / friend / trade 及所有只承诺路由模式的服务**同时**不可达;gate 已不再中继战斗(D66),没有任何兜底。
+    回退前先用 killswitch 关掉这些方法并公告(D-12)。
+  - **回退态不粘滞**:本值每次部署都原样重写进 gate env,脚本不从集群读回旧值。以 `"0"` 回退运行的 zone,之后**每一次**重新部署
+    (日常 `zone-up` / `release-zone`、合服后的 `zone-up`、`k8s_zone_rollback.ps1` 的 Step 6,以及经 `dev_tools.ps1` / `k8s_image.ps1` 的入口)
+    都必须显式再传 `-GateRouterMode 0`,否则静默落回 `"1"`;回退的原因(如路由服不可用)若仍在,gate 就卡在依赖门。
+    只有回滚脚本在 `-Apply` 且留空时有第 0 步预检拦截(`docs/design/zone_data_rollback.md`「## 3. 整 Zone 灾难恢复级回档」下的「2026-09-29 修订」),其余入口没有。
+  - **验证状态**:K8s 上从未以路由模式跑过含 gate 的链路(09-15 kind 隔离环境只验过 router→chat,见 `docs/design/microservice-zone-contract-20260914.md` §16)。
+    "K8s 上以路由模式跑通一次 battle-smoke"已由用户豁免为**事后补验**(D65 / D75)。补验之前,不能声称 K8s 默认部署下登录、匹配、聊天可用。
+- **集群外客户端入口**(D76–D93;设计 `docs/design/k8s-client-entry.md`,参数速查见其「运维手册」;权威参数注释 `tools/scripts/k8s_deploy.ps1:166-233`,
+  生成器、preflight 与就绪等待在 `tools/scripts/lib/k8s_client_entry.ps1`)。以下全部**未上集群**,待 kind 端到端验证:
+  - `-ClientEntryMode podip|external`,默认 `podip`。podip:gate / battle 通告 PodIP,只有集群内 robot / 压测连得上。
+    external:gate 为 StatefulSet(`podManagementPolicy: Parallel`、`updateStrategy: OnDelete`、PDB `maxUnavailable: 0`)+ 每序号 Service `gate-<i>`,
+    gate 在发布 etcd 之前自报 `NodeInfo.client_endpoint`,login / scene_manager 下发它;battle 的形态由 `-BattleOrchestrator` 决定。
+  - `-BattleOrchestrator deployment|agones`,默认 `deployment`,只对 `infra-up` / `all-up`(不带 `-SkipInfra`)生效。
+    external + agones = battle Agones Fleet(`portPolicy: Dynamic`,生产推荐);external + deployment = battle hostPort 20000,
+    每节点 1 个、无忙碌保护,只用于验证与回退(D86,preflight 警告)。与 `-SceneOrchestrator` 相互独立。
+  - `-ClientPublicHost`:gate 与 battle 共用的客户端可达主机(裸主机名或 IPv4,不带 scheme / 端口;kind 填 `127.0.0.1`)。
+    `-GateClientHostTemplate`:如 `gate-{ordinal}.{zone}.example.com`,优先级高于 `-ClientPublicHost`;`-GateServiceType LoadBalancer` 时必填,
+    gate 副本数 >1 时必须含 `{ordinal}`。两者都留空时 gate 取节点 `status.hostIP`。
+    多节点 + NodePort + 默认 `Local` 时**不要只给 `-ClientPublicHost`**:所有序号自报同一主机,Pod 不在该主机所在节点的 gate 流量会被丢弃、不可达,
+    preflight 不告警;改用 `{ordinal}` DNS 模板或 LoadBalancer(D89,`docs/design/gate-connection-admission-control.md` §4.2.1)。单节点(kind)不受影响。
+  - `-GateNodePortBase`(默认 `30000`):external + NodePort 时 `gate-<i>` 的 nodePort = base + i,gate 自报同一个端口;只给单 zone 的 `zone-up` 用。
+  - `-GateExternalTrafficPolicy Local|Cluster`(默认 `Local`,D89):保留玩家真实源 IP;`Cluster` 会 SNAT,gate 按源限流(G9)不可用,preflight 警告。
+  - `-RequireClientEndpoint auto|true|false`(默认 `auto` = external → true、podip → false):login / scene_manager 下发 gate 地址时是否必须用自报地址。
+    逐个 zone 切 external 的窗口里,已切 zone 显式传 `false`(否则跨 zone `RedirectToGate` 会跳过未切 zone 的 gate),全部切完再回 `auto`(`k8s_deploy.ps1:180-187`)。
+    podip 配 `true` 在任何写操作之前拒绝。
+  - `-GatewayIngressHost` / `-GatewayIngressClassName`(默认 `nginx`)/ `-GatewayIngressTlsSecret` / `-GatewayTrustedProxies`(逗号分隔 CIDR):
+    gateway Ingress **由 `zone-up` 随 gateway 生成**(只在本次确实部署 Java 服务时),只路由 `/api`;`infra-up` 上给只会得到"被忽略"警告。
+    配了 host 就必须给 trusted proxies(preflight 报错,否则全体玩家共用一个限流桶,D91)。留空 host 不生成、也**不删除**已有 Ingress。
+  - `-LoginDevPasswordAuth`(switch):集群内 login 的开发口令认证,**只允许 `-ReleaseProfile dev`**;共享口令读环境变量
+    `MMORPG_LOGIN_DEV_PASSWORD_SHARED_SECRET`,经 Secret `login-dev-password` 注入,绝不进 ConfigMap。不传 = login 没有任何口令认证配置(fail-closed)。
+  - `-AllowDisruptiveSwitch`(switch):确认本次就是要切换形态或改客户端地址来源(整台 gate 踢人、在打的战斗作废)。
+    不给时,只要会踢人的另一种形态在集群里存在,或现有 gate / battle 的入口形态与地址来源会被改写,部署就在任何写操作之前整条拒绝。只在维护窗口里显式加。
+  - **模式参数不粘滞**:每次部署按本次取值生成,漏传就落回默认 `podip` / `deployment`;以 external 运行的环境每次重跑都要照传同一组值
+    (漏传时由上一条的集群现状核对在写操作之前拒绝)。
+  - **上线口径**:集群外部署须与 `-GateRouterMode 1` 在同一窗口启用 `-ClientEntryMode external`(`k8s_deploy.ps1:176`),不再按旧计划"第 4 批才翻 GateRouterMode"。
+    只翻路由模式而不开 external,集群外玩家仍连不上 gate 与 battle(两者都通告 PodIP)。
+  - **zones 配置的 `gateNodePortBase`**(D88):external + NodePort 时每个 zone 一个;`all-up` 多 zone 时每个 zone 必须显式写(不从 zoneId 推导),
+    各段 `[base, base + gate 副本数 − 1]` 不能重叠,建议收在 K8s 静态子段 `30000–30085`(超出只警告,越过 `32767` 拒绝)。
+    YAML 里该键**单独占一行、行尾不写注释**(脚本的 YAML 回退解析读不到带行尾注释的行)。示例:`zones.sample.{json,yaml}`(30000 / 30010)、
+    `zones.10zones.yaml`(30000–30072,步长 8)。podip 模式不读它。
+  - **gate 滚动与排空**:external 的 gate 是 `OnDelete`,滚动一律走 `tools/scripts/k8s_gate_drain.ps1`(标 draining → 等 drained → `-DeletePod`);
+    kind 上带 `-KubeContext kind-mmorpg -KubeConfig "$env:TEMP\kind-mmorpg.kubeconfig"`(与下方 kind 小节同一口径;脚本两个参数都支持,`k8s_gate_drain.ps1:91-92`、`:159-160`)。PDB `maxUnavailable: 0` 会挡住 `kubectl drain` 与 cluster-autoscaler,维护节点前先按此排空。
+- **包装入口的透传口径**(2026-09-29,ingress 2b / 2c / 2d 批 WP12 与对齐包):
+  - `dev_tools.ps1` 与 `k8s_image.ps1` 的 `-GateRouterMode`、`-GateServiceType` 与全部集群外入口参数一律**默认留空 = 不覆盖**,非空才透传
+    (`-GateNodePortBase` 用 `-1` 表示未指定);默认值只留在 `k8s_deploy.ps1` 一处。本文「好友 friend」一节里"`dev_tools.ps1` 不透传 `-GateRouterMode`"的说法已作废。
+  - `dev_tools.ps1` 的 `k8s-infra-up` / `k8s-zone-up` / `k8s-all-up` 透传全部参数。`k8s-zone-rollback` 转发 `-GateRouterMode`、gate / Ingress 这组、
+    `-GateServiceType`、`-RequireClientEndpoint`、`-LoginDevPasswordAuth`、`-AllowDisruptiveSwitch`、
+    `-RollbackConfirmNoGatewayIngress`(转为回滚脚本的 `-ConfirmNoGatewayIngress`,`dev_tools.ps1:1602`;namespace 已删、第 0 步要求对 Ingress 表态时用,
+    见 `docs/design/zone_data_rollback.md`「## 3. 整 Zone 灾难恢复级回档」下的「2026-09-29 修订」)、显式给的 `-ReleaseProfile` 与 `-KubeContext` / `-KubeConfig`,
+    **不转发 `-BattleOrchestrator`**(zone 回滚不碰 battle 全局池)。以上为主要转发项,完整清单以 `dev_tools.ps1:1592-1617` 为准。
+  - `k8s_image.ps1`(以及 `dev_tools.ps1` 的 `k8s-image-*` / `k8s-release-*`)只透传 gate / battle 侧 6 个参数(`-ClientEntryMode`、`-ClientPublicHost`、
+    `-GateClientHostTemplate`、`-GateNodePortBase`、`-GateExternalTrafficPolicy`、`-BattleOrchestrator`),外加 `-GateRouterMode`、`-AllowDisruptiveSwitch`、
+    `-RequireClientEndpoint`(经这条路只参与预检、不改写 login / scene_manager 的 ConfigMap,给了在入口打告警)。
+    `-Gateway*` 与 `-LoginDevPasswordAuth` 经 `k8s-image-*` / `k8s-release-*` **显式给了即报错**(`dev_tools.ps1:791-801`):`k8s_image.ps1` 不部署 Go / Java 服务,
+    要用请走 `k8s-zone-up` / `k8s-all-up` 或直接调 `k8s_deploy.ps1`。`-BattleOrchestrator` 经这条路只对 `release-all`(不带 `-SkipInfra`)生效。
+  - `-GateServiceType` 默认值统一为留空、跟随 `k8s_deploy.ps1`。行为变化只有一处:经 `k8s_image.ps1`、`-OpsProfile custom`、没显式给 `-GateServiceType` 时,
+    由原来的 `LoadBalancer` 变为 `NodePort`(managed-cloud / bare-metal 两档由 `Apply-OpsProfileDefaults` 强制,不变)。`k8s_image.ps1` 默认
+    `-OpsProfile managed-cloud`(强制 LoadBalancer),所以经它发布 external 时必须给 `-GateClientHostTemplate`,否则被 preflight 拒绝。
+  - 存量缺陷已修:`dev_tools.ps1` 的 `k8s-image-preflight` / `k8s-build-image` / `k8s-push-image` / `k8s-release-zone` / `k8s-release-all` 自提交 `31e4d1d4c`
+    起因多传 4 个 Agones 参数在参数绑定阶段就失败,现已去掉并对 `-AgonesHighDensity` / `-AgonesAutoscale` 显式拒绝。这条链很久没人跑通,首次使用先加 `-DryRun`。
+  - 以上透传与拒绝**未运行**,契约测试 `tools/scripts/tests/k8s_client_entry_contract.tests.ps1`、`k8s_deploy_contract.tests.ps1`、
+    `k8s_zone_rollback_gate_router_mode.tests.ps1` 待 Codex 验证。
 
 ## Important Notes
 
@@ -416,8 +495,14 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
     `BootstrapTags: [player, guild, item, txlog, snapshot, trade_listing, guild_asset_op]` 与服务 yaml / Go 的 `DefaultIdSegmentBootstrapTags` 同一份清单,新增永久身份两边同加
     (`trade_listing` = 聚宝斋 listing_id,2026-09-14 加,见下面「聚宝斋 trade」;`guild_asset_op` = 帮会资产指令 op_id,2026-09-20 帮会二期 B5a 加,
     消费表在独占库 `mmorpg_guild`。**存量集群要先让 data-service 跑一次 `-migrate` 建出这一行,再上 guild 的经济功能**,否则 guild 取不到号、经济写 RPC 全部失败)。
-  - `manifests/go-svc/data-service.yaml` 的 Deployment 现在是 `strategy: Recreate` + `replicas: 1`:快照消费者按 guid 去重是「单条语句 + 间隙锁」,
-    两个实例重叠不会写坏数据,但会互相等锁、消费组反复 rebalance,没有任何好处;换版本时短暂停一下,消息留在 topic 里(30 天保留期)。
+  - `manifests/go-svc/data-service.yaml` 的 Deployment **2026-10-08 起是 2 副本 + RollingUpdate(maxSurge 1 / maxUnavailable 0)+ 反亲和 + 同文件 PDB**
+    (docs/design/no-single-node-horizontal-scaling-20261001.md §4)。以前钉成 `Recreate` + `replicas: 1` 的理由(快照去重靠「单条语句 + 间隙锁」,
+    两个实例互相等锁)已经过时:去重现在是唯一键 `uk_snapshot_guid_nz` + ON DUPLICATE KEY;消费者是 consumer group,分区在实例间独占分配;
+    发号靠行锁 + version。多副本的两个服务侧前提:启动期迁移由库级命名锁串行;ConfigMap 写 `Store.Required: true`,store 装配不起来就拒启。
+  - **建表 / 种号段行改由 `data-service-migrate` Job 做**(`manifests/go-svc/data-service-migrate.yaml`,目录条目 `MigrateJob`):
+    `Apply-OneGoSvc` 在 ConfigMap 之后、Deployment 之前 apply 它,staging / prod 恒等它 Complete(与 trade / friend 同一条门禁)。
+    每个 zone 各跑一份,迁的是同一个全局库,由 `GET_LOCK` 串行;锁忙以退出码 3 重试。以前这一步靠人手工跑 `-migrate`,全新集群上没人跑。
+  - 连接预算:每个 data-service 实例最多 35 条 MySQL 连接(三个 store 各 5 + 名字注册表 20),按「zone 数 × 2 副本 × 35」算进 `max_connections`。
 - **全局库预建**:`infra-up` 的 `mysql-init-sql` ConfigMap 现在多生成一份 `02_k8s_global_db.sql`
   (`CREATE DATABASE IF NOT EXISTS mmorpg_global` + `GRANT ALL ... TO 'appuser'@'%'`),data-service 启动期 / `-migrate` 在里面按 proto 建
   `transaction_log` / `player_snapshot` / `rollback_audit_log` / `id_segment` 四张表。全集群一份,不按 zone 拆。
@@ -455,6 +540,9 @@ trade 是全局池服务(`$GoSvcCatalogue.trade`,`Global = $true`):`infra-up` / 
 - **可达性**:只承诺路由服模式。客户端经 gate → `client-rpc-router` → trade;K8s 默认 `-GateRouterMode "0"`,
   此时 Deployment 起得来、探针绿,但玩家够不着(与 chat 同一已知缺口)。内部方法 `TradeAdmin.SeedListing` 不经 gate(gate 不认它的消息号),
   只在 `Mode ∈ {dev, test}` 时可用,否则回 gRPC `PermissionDenied`。
+  **(2026-09-29 更正)** K8s 默认已改为 `-GateRouterMode "1"`(turn-based §22 D75,`k8s_deploy.ps1:163-164`),默认部署下 gate → `client-rpc-router` → trade
+  这条路已接上,trade **按设计可达,但尚未在 K8s 上实跑补验**(D65 / D75 豁免的事后补验项)。前置:`client-rpc-router` 已随 `infra-up` 部署就绪;
+  集群外玩家还需 `-ClientEntryMode external`(podip 下 gate 通告 PodIP)。以 `"0"` 回退运行的环境仍然够不着,见 Optional Flags 的 `-GateRouterMode`。
 - **工作负载**:`manifests/go-svc/trade.yaml` = Service `trade`(50800)+ Deployment(`replicas: 2`、podAntiAffinity、grpc 探针、
   `preStop sleep 5`、Downward API `POD_IP`、metrics 9230)+ 同文件 PDB `trade-pdb`。ConfigMap `go-svc-trade-config` 由脚本生成。
 - **ConfigMap 键**与 `go/trade/etc/trade.yaml` / `go/trade/internal/config` 逐字一致;契约值只从服务 yaml 取,且只在生成 trade 自己的 ConfigMap 时求值
@@ -517,6 +605,8 @@ friend 与 trade 同形:全局池服务(`$GoSvcCatalogue.friend`,`Global = $true
 - **可达性**:只承诺路由服模式(D-12)。客户端经 gate → `client-rpc-router` → friend;K8s 默认 `-GateRouterMode "0"`,
   此时 Deployment 起得来、探针绿,但玩家够不着(与 chat / trade 同一已知缺口)。内部方法(`NotifyFriendEvent` 等下行)
   客户端直呼一律回 gRPC `PermissionDenied`,由路由服翻成信封级 `kServiceUnavailable`(D-9)。
+  **(2026-09-29 更正)** 同「聚宝斋 trade」一节:K8s 默认已是 `"1"`(D75),friend 在默认部署下**按设计可达、待 K8s 事后补验**;
+  前置与集群外口径(`client-rpc-router` 已部署、集群外玩家需 `-ClientEntryMode external`)相同,以 `"0"` 回退运行时仍不可达。
 - **工作负载**:`manifests/go-svc/friend.yaml` = Service `friend`(50400)+ Deployment(`replicas: 2`、podAntiAffinity、grpc 探针、
   `preStop sleep 5`、Downward API `POD_IP`、metrics 9180)+ 同文件 PDB `friend-pdb`。ConfigMap `go-svc-friend-config` 由脚本生成。
   **不挂 snowflake 卷**:friend 不发号,好友 / 申请 / 黑名单的主键都是 player_id 组合键。
@@ -557,6 +647,8 @@ friend 与 trade 同形:全局池服务(`$GoSvcCatalogue.friend`,`Global = $true
 - **上线前未做(P3)**:`mmorpg_friend` 的 audit auditor;`-GateRouterMode` 默认仍是 `"0"`(与 chat / trade 同一缺口);
   `dev_tools.ps1` 的 `k8s-*` 包装不透传 `-GateRouterMode`。合服:friend 三张表里没有 `zone_id` / `home_zone` 列,
   合服后行自动存活,`tools/merge_zone` 只需把审计连到 `mmorpg_friend`,不需要改写数据。
+  **(2026-09-29 更正)** 上面两条关于 `-GateRouterMode` 的缺口已关闭:默认值已翻为 `"1"`(D75,K8s 路由模式 battle-smoke 为事后补验项);
+  `dev_tools.ps1` 与 `k8s_image.ps1` 都已加"留空不覆盖、非空透传"的 `-GateRouterMode`(见 Optional Flags「包装入口的透传口径」)。audit auditor 缺口不变。
 
 ## Kafka 审计 topic 预建(kafka-topic-init,2026-09-08,node-id-overhaul-plan §2.0c)
 
@@ -640,10 +732,37 @@ kind 本地环境特有,不影响真集群:
 > 下面凡是标了"2026-09-19 新增"的命令与条目,都不是 2026-09-03 那次观察到的,而是按本轮代码补的;
 > 日志 sidecar 的端到端形态与实测结论见 `docs/ops/grafana-loki-local-logs.md` §7。
 
+> **(2026-09-29 更正:建集群的方式已被取代,下面代码块里的 `kind@latest` 与 `kind create cluster --name mmorpg` 两行保留作历史,不要再照抄。)**
+> 旧写法没带 `--config`,拿不到集群外入口验证要的端口映射;也没带独立 kubeconfig,会把**默认** kubeconfig 的 current-context 切到 kind-mmorpg
+> —— 本机默认 context 是别的项目的集群,集群外入口 D93 明令不碰。现在一律这样建(工作目录 = 仓库根;先跑 `deploy/k8s/kind-config.yaml` 文件头的「宿主机端口预检」):
+>
+> ```powershell
+> go install sigs.k8s.io/kind@v0.33.0                      # 钉版本:kind-config.yaml 钉了 kindest/node:v1.35.8@sha256,只保证与 kind v0.33.0 配套
+> $env:KUBECONFIG = "$env:TEMP\kind-mmorpg.kubeconfig"     # 独立 kubeconfig,不改默认文件
+> kind create cluster --name mmorpg --config deploy/k8s/kind-config.yaml --kubeconfig $env:KUBECONFIG
+> kubectl --context kind-mmorpg get node                   # 通了再动手
+> # k8s_deploy.ps1 一律带 -KubeContext kind-mmorpg -KubeConfig "$env:TEMP\kind-mmorpg.kubeconfig"
+> # helm 一律带 --kube-context kind-mmorpg --kubeconfig "$env:TEMP\kind-mmorpg.kubeconfig";手工 kubectl 一律带 --context kind-mmorpg
+> kind delete cluster --name mmorpg --kubeconfig $env:KUBECONFIG
+> ```
+>
+> - 风险口径:真正的风险是「没设 `$env:KUBECONFIG` 又没带 `--kubeconfig`」(新开窗口、换终端、子进程丢环境变量)—— 这时 kubectl / helm / `k8s_deploy.ps1`
+>   会静默落到默认 current-context。每条命令显式点名 `kind-mmorpg` 是 fail-closed 的兜底:默认 kubeconfig 里没有这个 context,环境变量丢了会直接报 context 不存在,
+>   而不是部署到别的集群。独立文件丢了用 `kind export kubeconfig --name mmorpg --kubeconfig <同一路径>` 重新导出。`kind load` 按 `--name mmorpg` 找节点容器,不读 kubeconfig。
+> - `extraPortMappings` 只能在建集群时指定:按旧命令建出来的同名集群必须 `kind delete` 后按新配置重建,**会丢全部 PVC 数据**(mysql / etcd / kafka),重建前要执行者确认。
+> - 用新配置重建后节点从上面记录的 v1.37.0 变成 v1.35.8(Agones 1.58 与 ingress-nginx v1.15.x 只支持到 1.35,原因见 `kind-config.yaml` 注释);
+>   Agones 端口段是 7100–7109(避开 redis-cluster 的 7000–7005),20000 / 30000 / 30001 要求先停宿主机上直跑的 C++ 节点。
+> - 集群外入口的端到端验收(阶段 A 不装 Agones、阶段 B 装 Agones)见 `docs/design/k8s-client-entry.md` 的「kind 端到端验证」一节;gate / battle 严禁用 port-forward 验证,
+>   HTTP 的 gateway 可以。宿主机上跑 robot 不要用默认的 `robot/etc/robot.yaml`(satoken → 127.0.0.1:18080 会打到 ingress 上拿 404),用 password 认证的专用 yaml,
+>   并给集群内 login 开 `-LoginDevPasswordAuth`(仅 dev 档)。
+> - 节点 / 宿主重启后 kubelet 对 `kind load` 过的镜像去 Docker Hub 校验、Pod 卡 `ErrImagePull`(backlog P2-03)**仍未处理**,照下文 `kubectl delete pod` 重建;
+>   P2-03 落地时在已有的 `kind-config.yaml` 上追加 `kubeadmConfigPatches`,不重写该文件、不动 `extraPortMappings`。
+> - 以上命令本会话**未运行**(本机未装 kind),待 Codex / 用户验证。
+
 ```powershell
 . E:\work\tools\buildenv.ps1                       # GOPROXY / go 工具链
-go install sigs.k8s.io/kind@latest                 # 装到 $(go env GOPATH)\bin
-kind create cluster --name mmorpg                  # kubectl context 自动切到 kind-mmorpg
+go install sigs.k8s.io/kind@latest                 # 装到 $(go env GOPATH)\bin   ← 2026-09-29 已被取代:改 @v0.33.0,见上方更正
+kind create cluster --name mmorpg                  # kubectl context 自动切到 kind-mmorpg   ← 2026-09-29 已被取代:须带 --config 与独立 --kubeconfig
 pwsh -File tools/scripts/go_svc_image.ps1 -Command build-all -Registry local -Services match
 kind load docker-image local/mmorpg-match:<tag> --name mmorpg
 # 2026-09-19 新增(本轮才有,2026-09-03 那次实跑没有这一段):观测栈的两个 Docker Hub 镜像 ——

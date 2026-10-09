@@ -31,6 +31,23 @@ deploy/k8s/
 - `Dockerfile.runtime` expects Linux binaries staged under `deploy/k8s/runtime/linux/`(根 `.dockerignore` 不得排除该目录)。
 - Managed cloud generally uses `LoadBalancer`; bare metal generally uses `NodePort` + external L4.
 - Prefer explicit `-OpsProfile managed-cloud` / `-OpsProfile bare-metal` in commands and docs.
+- **gate 路由模式(2026-09-29,turn-based §22 D75)**:`k8s_deploy.ps1 -GateRouterMode` **默认 `"1"`**(只写 gate 的 `GATE_CLIENT_RPC_ROUTER`;C++ 默认值不改)。
+  前置是 `infra-up` 已部署 `client-rpc-router`(不带 `-SkipGoSvc`、给了 `-GoSvcRegistry`),否则 gate 卡在依赖门、全部 `no_target`,脚本不拦。
+  回退 `"0"` = chat / friend / trade 同时不可达、且 gate 不再中继战斗(D66)。**回退态不粘滞**:以 `"0"` 运行的 zone 每次重新部署
+  (含 `release-zone`、合服后 `zone-up`、`k8s_zone_rollback.ps1` Step 6、各包装入口)都要显式再传 `-GateRouterMode 0`。
+  K8s 路由模式下的 battle-smoke 是事后补验项,补验前不要写"K8s 默认部署下已验证可用"。细节见 `README.md` Optional Flags。
+- **集群外入口(D76–D93,设计 `docs/design/k8s-client-entry.md`)**:`-ClientEntryMode podip|external`(默认 podip)与 `-BattleOrchestrator deployment|agones`
+  (默认 deployment)是两个正交开关;模式与地址参数**不粘滞**,以 external 运行的环境每次部署都要照传,换形态 / 改地址要 `-AllowDisruptiveSwitch`
+  (不给则在写操作之前整条拒绝)。集群外部署须与 `-GateRouterMode 1` 同窗口启用 external。生成器与 preflight 只在
+  `tools/scripts/lib/k8s_client_entry.ps1` 一处,不要在 `k8s_deploy.ps1` 里复制第二份规则。
+- **gate 入口 = 每实例一个**:login 的票据绑 `gate_node_id`,gate 不符即 `token_gate_node_mismatch`。单一 `gate-entry` Service 只在 podip 且 gate 副本数恰为 1 时生成(D90);
+  external 用 StatefulSet + 每序号 Service `gate-<i>`(`externalTrafficPolicy` 默认 Local,保源 IP)。不要写"给 gate 挂一个 LB / Service 就能对外"。
+- **包装入口透传**:`dev_tools.ps1` / `k8s_image.ps1` 的 `-GateRouterMode`、`-GateServiceType` 与集群外入口参数一律留空 = 不覆盖,默认值只在 `k8s_deploy.ps1`。
+  `k8s_image.ps1` 只透传 gate / battle 侧 6 个参数 + `-GateRouterMode` / `-AllowDisruptiveSwitch` / `-RequireClientEndpoint`;`-Gateway*` 与 `-LoginDevPasswordAuth`
+  经 `k8s-image-*` / `k8s-release-*` 给了即报错(它不部署 Go / Java 服务)。完整清单见 `README.md`「包装入口的透传口径」。
+- **kind**:一律 `kind create cluster --name mmorpg --config deploy/k8s/kind-config.yaml --kubeconfig "$env:TEMP\kind-mmorpg.kubeconfig"`(kind 钉 v0.33.0),
+  所有命令 fail-closed 点名 context:`k8s_deploy.ps1 -KubeContext kind-mmorpg -KubeConfig <同一文件>`、helm `--kube-context kind-mmorpg --kubeconfig <同一文件>`、
+  kubectl `--context kind-mmorpg`。不要再写不带 `--config` 的 `kind create cluster`(会切走默认 current-context);改 `kind-config.yaml` 只追加,不重写。
 
 ## ANTI-PATTERNS
 - Using the repository root `Dockerfile` as the K8s runtime image.
@@ -71,7 +88,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-push-image -ImageRepository 
 - **Kafka 保留期只有一条规则**(`routing-identity-audit-20260908.md` R11):**消费者可能落后的 topic,保留期必须 > 消费者可能落后的最长时间并留足余量,而且必须显式声明、不许继承 broker 默认值。** C++ 消费者把 `max.poll.interval.ms` 钉在 900000(15 分钟),所以命令 topic 取 1 小时,`$KafkaBrokerRetentionMs`(给迁移窗口里 auto-create 的 `gate-<id>`/`scene-<id>` 兜底)取 30 分钟 / 1 小时。`--create --config retention.ms` 只在新建那一刻生效,所以两条 init 路径都在建完后再 `kafka-configs.sh --alter` 声明一次并读回核对。`db_task_zone_<N>` 有个额外陷阱:**login 与 db 都会在启动时对它 `IncrementalAlterConfigs`**,而 db 的 ConfigMap 不写 `RetentionMs`(走 Go 默认 24h)、login 写脚本注入值,两边不一致时保留期会随重启顺序横跳 —— 改 `$KafkaDbTaskRetentionMs` 必须与 `go/db/etc/db.yaml` 同拍。细节在 `README.md`「Kafka 保留期」。
 - **恢复全局库 `mmorpg_global` 是 ID 安全事件**:`id_segment.max_id` 是发号水位,从备份恢复会把水位倒回去、把已发出的号再发一遍。恢复前必须核对每个 `biz_tag` 的 `max_id` ≥ 消费侧最大号并手工抬上去(player 看各 zone 库、item 看 blob、txlog/snapshot 看 Kafka),data-service ConfigMap 的 `IdSegment.AllowAutoSeed` 在 staging/prod 固定 `false` 就是为了缺行时拒绝领段而不是从 1 重来。步骤在 `README.md`「恢复全局库前须先核对 id_segment.max_id」。`manifests/go-svc/data-service.yaml` 是 `strategy: Recreate` + `replicas: 1`。
 - **guild 没有 K8s ConfigMap / manifest**(`$GoSvcCatalogue` 与 `manifests/go-svc/` 都没有它)。补的时候要带 `ClusterId`、`SnowflakeCacheDir`(+ emptyDir)、`DataServiceRpc`、`IdSegment`,形状照 `go/guild/etc/guild.yaml`。
-- **聚宝斋 trade = 全局池(infra namespace 一份)+ 建表 Job**:`manifests/go-svc/trade.yaml`(50800 / metrics 9230,只经路由服可达;K8s 默认 `-GateRouterMode 0` 下玩家不可达)与 **`manifests/go-svc/trade-migrate.yaml`**(port-decisions D-14 第 4 条:同镜像、同 ConfigMap、`-migrate`)。`$GoSvcCatalogue.trade.MigrateJob` 登记 Job;`Apply-OneGoSvc` 在 ConfigMap 之后、Deployment 之前 `Apply-GoSvcMigrateJob`(先删再 apply;门禁 **staging/prod 恒等、不受 `-WaitReady` 控制**(D-14 第 4 条),dev 只在 `-WaitReady` 下等:先等 `deploy/mysql` 再轮询 Job,Failed / 超时即中断发布,Deployment 不 apply)。**删之前先查上一次的 Job 是否在途**:迁移 runner 执行 DDL 前写 dirty=1,删在途 Job 会把台账留在 dirty、之后每次 `-migrate` 都以 1 失败 —— 所以存在的 Job 须有 Complete / Failed / FailureTarget 条件,且按该 Job UID 核对所属 Pod 全部为 Succeeded / Failed,才可删除;仍在途、状态未知或查询失败时在预算内等待,等不到就中断且不删;ACTIVE=0 不含 terminating Pod,不能单独作为安全删除判据;不要把 kafka-topic-init 的"无脑先删再建"照搬到有台账的 Job 上,也不要手工 delete 在途迁移 Job。Job 的 `podFailurePolicy`:退出码 1 / 4 → FailJob,3(锁忙)→ backoff 重试,**需 K8s ≥ 1.26 + `restartPolicy: Never`**;initContainer 用同镜像 busybox `nc` 等 3306(mysql 就绪探针走 socket,initdb 期间会谎报 Ready),预算 `WAIT_MYSQL_TIMEOUT_SECONDS=150`(`/proc/uptime` 单调计时,硬上限 +8s);脚本两段 Job 等待(删前在途检查、apply 后终态轮询)的预算 = `max(-WaitTimeoutSeconds, $GoSvcMigrateJobMinWaitSeconds=300)`,**改 initContainer 上限必须同步这个下限**,否则全新集群的正常等待会被误判超时、中断发布。库 `mmorpg_trade` **只登记在 `deploy/mysql-init/00_init_zone_dbs.sql`**(mysql-init-sql 原样带入),不要在脚本里再生成建库 sql;存量 PVC 手工补建 + GRANT(命令在 `README.md`「聚宝斋 trade」)。ConfigMap 的 `Mode` / `Schema.AutoMigrate` dev = 服务 yaml,staging/prod = `pro` / `false`。data-service `BootstrapTags` 已含 `trade_listing` 与 `guild_asset_op`(帮会资产指令 op_id,帮会二期 B5a),存量集群要先跑一次 data-service `-migrate` 建这两行(`AllowAutoSeed` 在 staging/prod 是 false)。以后的建表服务照 `MigrateJob` 字段加,不另写 Job 调度。
+- **聚宝斋 trade = 全局池(infra namespace 一份)+ 建表 Job**:`manifests/go-svc/trade.yaml`(50800 / metrics 9230,只经路由服可达;K8s 默认 `-GateRouterMode 0` 下玩家不可达 —— **2026-09-29 更正**:K8s 默认已是 `"1"`(D75),默认部署下按设计可达、待 K8s 事后补验,集群外玩家另需 `-ClientEntryMode external`)与 **`manifests/go-svc/trade-migrate.yaml`**(port-decisions D-14 第 4 条:同镜像、同 ConfigMap、`-migrate`)。`$GoSvcCatalogue.trade.MigrateJob` 登记 Job;`Apply-OneGoSvc` 在 ConfigMap 之后、Deployment 之前 `Apply-GoSvcMigrateJob`(先删再 apply;门禁 **staging/prod 恒等、不受 `-WaitReady` 控制**(D-14 第 4 条),dev 只在 `-WaitReady` 下等:先等 `deploy/mysql` 再轮询 Job,Failed / 超时即中断发布,Deployment 不 apply)。**删之前先查上一次的 Job 是否在途**:迁移 runner 执行 DDL 前写 dirty=1,删在途 Job 会把台账留在 dirty、之后每次 `-migrate` 都以 1 失败 —— 所以存在的 Job 须有 Complete / Failed / FailureTarget 条件,且按该 Job UID 核对所属 Pod 全部为 Succeeded / Failed,才可删除;仍在途、状态未知或查询失败时在预算内等待,等不到就中断且不删;ACTIVE=0 不含 terminating Pod,不能单独作为安全删除判据;不要把 kafka-topic-init 的"无脑先删再建"照搬到有台账的 Job 上,也不要手工 delete 在途迁移 Job。Job 的 `podFailurePolicy`:退出码 1 / 4 → FailJob,3(锁忙)→ backoff 重试,**需 K8s ≥ 1.26 + `restartPolicy: Never`**;initContainer 用同镜像 busybox `nc` 等 3306(mysql 就绪探针走 socket,initdb 期间会谎报 Ready),预算 `WAIT_MYSQL_TIMEOUT_SECONDS=150`(`/proc/uptime` 单调计时,硬上限 +8s);脚本两段 Job 等待(删前在途检查、apply 后终态轮询)的预算 = `max(-WaitTimeoutSeconds, $GoSvcMigrateJobMinWaitSeconds=300)`,**改 initContainer 上限必须同步这个下限**,否则全新集群的正常等待会被误判超时、中断发布。库 `mmorpg_trade` **只登记在 `deploy/mysql-init/00_init_zone_dbs.sql`**(mysql-init-sql 原样带入),不要在脚本里再生成建库 sql;存量 PVC 手工补建 + GRANT(命令在 `README.md`「聚宝斋 trade」)。ConfigMap 的 `Mode` / `Schema.AutoMigrate` dev = 服务 yaml,staging/prod = `pro` / `false`。data-service `BootstrapTags` 已含 `trade_listing` 与 `guild_asset_op`(帮会资产指令 op_id,帮会二期 B5a),存量集群要先跑一次 data-service `-migrate` 建这两行(`AllowAutoSeed` 在 staging/prod 是 false)。以后的建表服务照 `MigrateJob` 字段加,不另写 Job 调度。
 - `zones.ops-recommended.yaml` is the best starting point for multi-zone ops.
 - `-SkipInfra`, `-DryRun`, and `-WaitReady` are the high-signal operational flags.
 - `k8s-all-up` deploys infra first, then all zones. Use `-SkipInfra` to skip infra.
@@ -93,7 +110,23 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-push-image -ImageRepository 
 - 模型:**1 Agones GameServer = 1 个 Scene Node Pod / C++ 进程 = N 个动态创建的 ECS Scene 房间**。不要写成"一个 Scene 一个 GameServer"。设计文档:`docs/design/agones-scene-node-high-density.md`。
 - 开关:`-SceneOrchestrator deployment|agones`,默认 `deployment`。**不做**"检测集群装没装 Agones 就自动切换"。
 - agones 模式下 `scene-world` / `scene-instance` 生成 `agones.dev/v1 Fleet`,gate 仍是 Deployment。
+  (2026-09-29 补:gate **永不进 Agones**(D87);`-ClientEntryMode external` 下 gate 是 StatefulSet + 每序号 Service,podip 下仍是 Deployment。)
 - 内部服务,端口用 `portPolicy: None`;不加公网 Service / HostPort / NodePort / LB。SceneManager 继续从 etcd 拿 PodIP。
+  (2026-09-29 补:这一条只说 scene。battle 是客户端面,见下面「battle Fleet」。)
+- **battle Fleet(集群外入口 D81–D84,2026-09-29 已落码,未上集群)**:`-BattleOrchestrator agones` 在 infra namespace 生成 battle Fleet
+  (`tools/scripts/lib/k8s_client_entry.ps1` `New-BattleFleetYaml`),与 scene 的差别:
+  - 端口:`spec.ports` 只列 `name: client`、`portPolicy: Dynamic`、containerPort 20000;gRPC 50000 永不进 hostPort / nodePort / Agones ports,容器 ports 只写 grpc。
+    进程读 sidecar `status.address` + `status.ports[client]` 自报 `client_endpoint`(external 时 `CLIENT_ENDPOINT_SOURCE=agones`,podip 时 `none`)。
+  - 排空:Fleet `allocationOverflow.labels: {mmorpg.io/drain: "true"}`,进程每 5s 读自己的 labels,有标签就拒新房间、打完回 Ready;运维维护节点前手动
+    `kubectl label gs <name> mmorpg.io/drain=true`,删标签(`mmorpg.io/drain-`)即恢复。`eviction.safe: Never`。
+  - 心跳:battle 开 EventLoop 心跳绑定(超过 10s 未更新就停发 /health,Agones 判 Unhealthy 替换);scene 不开。
+  - health 复用 `-AgonesHealth*` 三个参数,initialDelaySeconds 不够覆盖 battle 启动最坏耗时(地址来源 ≤60s + 初始化余量 20s + /ready 重试约 53s + 首次 health 2s,合计 135s;
+    默认 period 10 × threshold 3 时 initialDelaySeconds 下限 105s,`lib/k8s_client_entry.ps1:543`、`:560-564`)时由
+    `Resolve-BattleFleetHealth` 自动抬高并打说明;`periodSeconds` 必须大于 C++ healthInterval(2s)。
+  - 跨语言字符串契约:端口名 `client`、排空标签 `mmorpg.io/drain`、`CreateBattle` 拒绝消息 `battle_not_allocatable`(gRPC UNAVAILABLE,match 不发 DestroyBattle、换节点重试一次)。
+  - `-BattleOrchestrator deployment` + external = battle hostPort 20000 Deployment,每节点 1 个、无忙碌保护,只用于验证与回退(D86)。
+- **C++ 生命周期代码已下沉**:`cpp/libs/engine/infra/agones/`(`GameServerLifecycle` / `AllocationPermit`,原 `cpp/nodes/scene/agones/` 的 `SceneLifecycle` / `CreatePermit`),
+  scene 与 battle 共用,登记在 infra.vcxproj;细节见 `docs/design/agones-scene-node-high-density.md` §12。
 - Fleet 的 `health.periodSeconds`(默认 10s)必须大于 C++ 侧心跳间隔(`LifecycleOptions::healthInterval`,默认 2s)。
 - `kubectl rollout status` 对 Fleet 无效,`-WaitReady` 在 agones 模式下**不等** scene,只打印该看的命令(`kubectl get fleet ... -o jsonpath='{.status.readyReplicas}'`)。
 - 换编排方式会换 kind:`kubectl apply` 不会回收同名的旧 Deployment,必须手动删,否则一个 zone 里有两套 scene 进程和两套容量语义。

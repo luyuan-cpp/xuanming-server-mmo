@@ -636,6 +636,141 @@ void SendGuildServiceBuyGuildShopGoods(entt::registry& registry, entt::entity no
 void SendGuildServiceBuyGuildShopGoods(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::BuyGuildShopGoodsRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 void SendGuildServiceBuyGuildShopGoods(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
+#pragma region GuildServiceGetGuildActivities
+
+struct AsyncGuildServiceGetGuildActivitiesGrpcClient {
+    uint32_t messageId{ GuildServiceGetGuildActivitiesMessageId };
+    ClientContext context;
+    Status status;
+    ::guildpb::GetGuildActivitiesResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::guildpb::GetGuildActivitiesResponse>> response_reader;
+    // 失败时交还失败处理器:应答里的回显字段与服务端回写的 metadata 这时都拿不到(见 GrpcCallFailure)。
+    // 必须是副本:gate 通用路径发出的是 gRpcMethodRegistry 里的共享原型,下一条客户端消息就会覆盖它。
+    ::guildpb::GetGuildActivitiesRequest request;
+    GrpcSentMetadata sentMetadata;
+};
+
+using AsyncGuildServiceGetGuildActivitiesHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::GetGuildActivitiesResponse&)>;
+extern AsyncGuildServiceGetGuildActivitiesHandlerFunctionType AsyncGuildServiceGetGuildActivitiesHandler;
+// 调用以非 OK 状态结束时的回调(deadline 到期 / 连接不可用 / 服务端报错),拿到发出的请求副本。
+// 未装时只打 ERROR 日志。失败 = 结果未知,语义见 GrpcCallFailure。
+using AsyncGuildServiceGetGuildActivitiesFailedHandlerFunctionType =
+    std::function<void(const GrpcCallFailure&, const ::guildpb::GetGuildActivitiesRequest&)>;
+extern AsyncGuildServiceGetGuildActivitiesFailedHandlerFunctionType AsyncGuildServiceGetGuildActivitiesFailedHandler;
+
+void SendGuildServiceGetGuildActivities(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildActivitiesRequest& request);
+void SendGuildServiceGetGuildActivities(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildActivitiesRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendGuildServiceGetGuildActivities(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region GuildServiceLightGuildLantern
+
+struct AsyncGuildServiceLightGuildLanternGrpcClient {
+    uint32_t messageId{ GuildServiceLightGuildLanternMessageId };
+    ClientContext context;
+    Status status;
+    ::guildpb::LightGuildLanternResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::guildpb::LightGuildLanternResponse>> response_reader;
+    // 失败时交还失败处理器:应答里的回显字段与服务端回写的 metadata 这时都拿不到(见 GrpcCallFailure)。
+    // 必须是副本:gate 通用路径发出的是 gRpcMethodRegistry 里的共享原型,下一条客户端消息就会覆盖它。
+    ::guildpb::LightGuildLanternRequest request;
+    GrpcSentMetadata sentMetadata;
+};
+
+using AsyncGuildServiceLightGuildLanternHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::LightGuildLanternResponse&)>;
+extern AsyncGuildServiceLightGuildLanternHandlerFunctionType AsyncGuildServiceLightGuildLanternHandler;
+// 调用以非 OK 状态结束时的回调(deadline 到期 / 连接不可用 / 服务端报错),拿到发出的请求副本。
+// 未装时只打 ERROR 日志。失败 = 结果未知,语义见 GrpcCallFailure。
+using AsyncGuildServiceLightGuildLanternFailedHandlerFunctionType =
+    std::function<void(const GrpcCallFailure&, const ::guildpb::LightGuildLanternRequest&)>;
+extern AsyncGuildServiceLightGuildLanternFailedHandlerFunctionType AsyncGuildServiceLightGuildLanternFailedHandler;
+
+void SendGuildServiceLightGuildLantern(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::LightGuildLanternRequest& request);
+void SendGuildServiceLightGuildLantern(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::LightGuildLanternRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendGuildServiceLightGuildLantern(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region GuildServiceClaimGuildReunion
+
+struct AsyncGuildServiceClaimGuildReunionGrpcClient {
+    uint32_t messageId{ GuildServiceClaimGuildReunionMessageId };
+    ClientContext context;
+    Status status;
+    ::guildpb::ClaimGuildReunionResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::guildpb::ClaimGuildReunionResponse>> response_reader;
+    // 失败时交还失败处理器:应答里的回显字段与服务端回写的 metadata 这时都拿不到(见 GrpcCallFailure)。
+    // 必须是副本:gate 通用路径发出的是 gRpcMethodRegistry 里的共享原型,下一条客户端消息就会覆盖它。
+    ::guildpb::ClaimGuildReunionRequest request;
+    GrpcSentMetadata sentMetadata;
+};
+
+using AsyncGuildServiceClaimGuildReunionHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::ClaimGuildReunionResponse&)>;
+extern AsyncGuildServiceClaimGuildReunionHandlerFunctionType AsyncGuildServiceClaimGuildReunionHandler;
+// 调用以非 OK 状态结束时的回调(deadline 到期 / 连接不可用 / 服务端报错),拿到发出的请求副本。
+// 未装时只打 ERROR 日志。失败 = 结果未知,语义见 GrpcCallFailure。
+using AsyncGuildServiceClaimGuildReunionFailedHandlerFunctionType =
+    std::function<void(const GrpcCallFailure&, const ::guildpb::ClaimGuildReunionRequest&)>;
+extern AsyncGuildServiceClaimGuildReunionFailedHandlerFunctionType AsyncGuildServiceClaimGuildReunionFailedHandler;
+
+void SendGuildServiceClaimGuildReunion(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ClaimGuildReunionRequest& request);
+void SendGuildServiceClaimGuildReunion(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ClaimGuildReunionRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendGuildServiceClaimGuildReunion(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region GuildServiceStartGuildTrial
+
+struct AsyncGuildServiceStartGuildTrialGrpcClient {
+    uint32_t messageId{ GuildServiceStartGuildTrialMessageId };
+    ClientContext context;
+    Status status;
+    ::guildpb::StartGuildTrialResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::guildpb::StartGuildTrialResponse>> response_reader;
+    // 失败时交还失败处理器:应答里的回显字段与服务端回写的 metadata 这时都拿不到(见 GrpcCallFailure)。
+    // 必须是副本:gate 通用路径发出的是 gRpcMethodRegistry 里的共享原型,下一条客户端消息就会覆盖它。
+    ::guildpb::StartGuildTrialRequest request;
+    GrpcSentMetadata sentMetadata;
+};
+
+using AsyncGuildServiceStartGuildTrialHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::StartGuildTrialResponse&)>;
+extern AsyncGuildServiceStartGuildTrialHandlerFunctionType AsyncGuildServiceStartGuildTrialHandler;
+// 调用以非 OK 状态结束时的回调(deadline 到期 / 连接不可用 / 服务端报错),拿到发出的请求副本。
+// 未装时只打 ERROR 日志。失败 = 结果未知,语义见 GrpcCallFailure。
+using AsyncGuildServiceStartGuildTrialFailedHandlerFunctionType =
+    std::function<void(const GrpcCallFailure&, const ::guildpb::StartGuildTrialRequest&)>;
+extern AsyncGuildServiceStartGuildTrialFailedHandlerFunctionType AsyncGuildServiceStartGuildTrialFailedHandler;
+
+void SendGuildServiceStartGuildTrial(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::StartGuildTrialRequest& request);
+void SendGuildServiceStartGuildTrial(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::StartGuildTrialRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendGuildServiceStartGuildTrial(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region GuildServiceRespondGuildTrialInvite
+
+struct AsyncGuildServiceRespondGuildTrialInviteGrpcClient {
+    uint32_t messageId{ GuildServiceRespondGuildTrialInviteMessageId };
+    ClientContext context;
+    Status status;
+    ::guildpb::RespondGuildTrialInviteResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::guildpb::RespondGuildTrialInviteResponse>> response_reader;
+    // 失败时交还失败处理器:应答里的回显字段与服务端回写的 metadata 这时都拿不到(见 GrpcCallFailure)。
+    // 必须是副本:gate 通用路径发出的是 gRpcMethodRegistry 里的共享原型,下一条客户端消息就会覆盖它。
+    ::guildpb::RespondGuildTrialInviteRequest request;
+    GrpcSentMetadata sentMetadata;
+};
+
+using AsyncGuildServiceRespondGuildTrialInviteHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::RespondGuildTrialInviteResponse&)>;
+extern AsyncGuildServiceRespondGuildTrialInviteHandlerFunctionType AsyncGuildServiceRespondGuildTrialInviteHandler;
+// 调用以非 OK 状态结束时的回调(deadline 到期 / 连接不可用 / 服务端报错),拿到发出的请求副本。
+// 未装时只打 ERROR 日志。失败 = 结果未知,语义见 GrpcCallFailure。
+using AsyncGuildServiceRespondGuildTrialInviteFailedHandlerFunctionType =
+    std::function<void(const GrpcCallFailure&, const ::guildpb::RespondGuildTrialInviteRequest&)>;
+extern AsyncGuildServiceRespondGuildTrialInviteFailedHandlerFunctionType AsyncGuildServiceRespondGuildTrialInviteFailedHandler;
+
+void SendGuildServiceRespondGuildTrialInvite(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::RespondGuildTrialInviteRequest& request);
+void SendGuildServiceRespondGuildTrialInvite(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::RespondGuildTrialInviteRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendGuildServiceRespondGuildTrialInvite(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
 void SetGuildHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void SetGuildIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void SetGuildFailedHandler(const std::function<void(const GrpcCallFailure&, const ::google::protobuf::Message& request)>& handler);

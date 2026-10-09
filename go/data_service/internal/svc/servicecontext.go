@@ -120,6 +120,25 @@ func MySQLConfigOf(c config.Config) store.MySQLConfig {
 	}
 }
 
+// MissingStores 返回没装配起来的 MySQL store 的名字(固定顺序);全部就绪时返回 nil。
+// main 在 Store.Required=true 时据此拒绝启动(见 config.StoreConfig)。
+func (s *ServiceContext) MissingStores() []string {
+	var missing []string
+	if s.SnapshotStore == nil {
+		missing = append(missing, "snapshot")
+	}
+	if s.TxLogStore == nil {
+		missing = append(missing, "transaction_log")
+	}
+	if s.IdSegmentStore == nil {
+		missing = append(missing, "id_segment")
+	}
+	if s.PlayerNameStore == nil {
+		missing = append(missing, "player_name")
+	}
+	return missing
+}
+
 func NewServiceContext(c config.Config) *ServiceContext {
 	// PlayerName 段的零值**全是危险值**(CacheTTL=0 会让每次缓存回填都失败,
 	// ReleaseWindow=0 会让建角失败后的条件释放什么都删不掉),而 go-zero 不下钻一个
@@ -140,7 +159,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		ctx, cancel := context.WithTimeout(context.Background(), autoMigrateTimeout)
 		// 启动路径与 -migrate 传同一份 BootstrapTags:号段行在生产只能由迁移创建
 		// (运行期补种关着),两条路径少传一处就会让 AllocateIdSegment 对那个 tag 直接拒绝。
-		if err := store.MigrateSchema(ctx, mysqlCfg, store.MigrateOptions{BootstrapTags: c.IdSegment.EffectiveBootstrapTags()}); err != nil {
+		// LockWait 给满整个启动期迁移时限:多副本同时启动时,后到的等先到的迁完,再跑一遍幂等的空迁移。
+		migrateOpts := store.MigrateOptions{BootstrapTags: c.IdSegment.EffectiveBootstrapTags(), LockWait: autoMigrateTimeout}
+		if err := store.MigrateSchema(ctx, mysqlCfg, migrateOpts); err != nil {
 			logx.Errorf("[ServiceContext] schema auto-migrate failed; snapshot/txlog/idsegment stores disabled: %v", err)
 			schemaReady = false
 		}

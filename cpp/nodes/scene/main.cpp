@@ -2,7 +2,7 @@
 #include "muduo/base/Logging.h"
 
 #include "node/system/node/node_entry.h"
-#include "agones/agones_scene_lifecycle.h"
+#include "infra/agones/agones_gameserver_lifecycle.h"
 #include "handler/rpc/scene_handler.h"
 #include "rpc_replies/scene_manager_response_handler.h"
 #include "handler/grpc/scene_node_service.h"
@@ -39,7 +39,10 @@ namespace
         std::size_t lastPendingKafkaMessages = std::numeric_limits<std::size_t>::max();
         std::size_t lastRemainingPlayers = std::numeric_limits<std::size_t>::max();
         std::size_t lastExitReleaseMarks = std::numeric_limits<std::size_t>::max();
+        std::size_t lastRelocateConfirms = std::numeric_limits<std::size_t>::max();
         bool shutdownDrainLogged = false;
+        // 本次停机里"drain 只剩改派待确认表"的逐条清单已经打过(每次停机只打一次)。
+        bool relocateBacklogLogged = false;
 
         explicit SceneRuntimeContext(EventLoop& loop) : grpcService(loop) {}
     };
@@ -139,7 +142,7 @@ int main(int argc, char *argv[])
             // 刻意**不**在这里调 POST /shutdown —— SIGTERM 通常正是 Agones
             // 删 Pod 发出来的,再回敬一个 /shutdown 就是递归触发删除。
             // 只有进程自己决定自我终止时才调 RequestShutdown()。
-            agones::SceneLifecycle::Instance().Stop();
+            agones::GameServerLifecycle::Instance().Stop();
 			context->dependencyGate.probeTimer.Cancel();
 			context->worldTimer.Cancel();
 			PlayerBattleSystem::StopReaper();
@@ -212,23 +215,39 @@ int main(int argc, char *argv[])
 			// 断线释放标记(A1′)的条件写在途数(R6):实体销毁之后才发、回调才归零,不等它的话 loop 一退
 			// 回调就再也不会来。受 Node drain 看门狗约束(Redis 卡住时不会无限等)。
 			const std::size_t exitReleaseMarks = PlayerLifecycleSystem::ExitReleaseMarksInFlight();
+			// 疏散 / 排空改派的待确认表(relocate_confirm.h)里还没有结论的改派数。停机前的单场景排空会留下条目:
+			// scene_manager 的拒绝应答、核实读的应答都还在路上,不等它们的话 loop 一退,被拒的玩家就挂在没有实体的
+			// 会话上。等待同样受 Node 的 drain 看门狗(15s)约束;确认阶段只读 Redis、只推 gate,唯一的写(踢线前的
+			// 凭证补写)要过身份闸、且已计入上面的 exitReleaseMarks。看门狗到期时还剩的条目只放弃、不踢。
+			const std::size_t relocateConfirms = PlayerLifecycleSystem::RelocateConfirmsPending();
 			if (pendingPlayerSaves != context->lastPendingPlayerSaves ||
 				pendingKafkaMessages != context->lastPendingKafkaMessages ||
 				remainingPlayers != context->lastRemainingPlayers ||
-				exitReleaseMarks != context->lastExitReleaseMarks)
+				exitReleaseMarks != context->lastExitReleaseMarks ||
+				relocateConfirms != context->lastRelocateConfirms)
 			{
 				LOG_INFO << "Shutdown drain progress: redis_player_saves=" << pendingPlayerSaves
 						 << " kafka_messages=" << pendingKafkaMessages
 						 << " remaining_players=" << remainingPlayers
-						 << " exit_release_marks=" << exitReleaseMarks;
+						 << " exit_release_marks=" << exitReleaseMarks
+						 << " relocate_confirms=" << relocateConfirms;
 				context->lastPendingPlayerSaves = pendingPlayerSaves;
 				context->lastPendingKafkaMessages = pendingKafkaMessages;
 				context->lastRemainingPlayers = remainingPlayers;
 				context->lastExitReleaseMarks = exitReleaseMarks;
+				context->lastRelocateConfirms = relocateConfirms;
 			}
 
-			const bool drained =
-				remainingPlayers == 0 && pendingPlayerSaves == 0 && exitReleaseMarks == 0 && kafkaDrained;
+			const bool drained = remainingPlayers == 0 && pendingPlayerSaves == 0 && exitReleaseMarks == 0 &&
+								 relocateConfirms == 0 && kafkaDrained;
+			// drain 第一次只剩待确认表时把条目逐条打出来(一条 WARN 汇总 + 每条一行 INFO),每次停机只打一次:
+			// 看门狗到期后这些条目被放弃,事后要查得出是哪些玩家的会话可能还挂着。本谓词被周期轮询,所以用标志挡住重复。
+			if (!drained && relocateConfirms > 0 && remainingPlayers == 0 && pendingPlayerSaves == 0 &&
+				exitReleaseMarks == 0 && kafkaDrained && !context->relocateBacklogLogged)
+			{
+				context->relocateBacklogLogged = true;
+				PlayerLifecycleSystem::LogRelocateConfirmBacklog("shutdown_drain");
+			}
 			if (drained && !context->shutdownDrainLogged)
 			{
 				context->shutdownDrainLogged = true;
@@ -253,7 +272,7 @@ int main(int argc, char *argv[])
                                    {
             // 先停 Agones lifecycle worker(理由同 exitAllPlayers 里的注释),
             // 再动玩家数据。Stop() 幂等。
-            agones::SceneLifecycle::Instance().Stop();
+            agones::GameServerLifecycle::Instance().Stop();
             PlayerLifecycleSystem::BeginEmergencyRelocateAll(); });
 
         // 有界 drain:存盘全部落地、改派全部派发完才退出。
@@ -275,6 +294,9 @@ int main(int argc, char *argv[])
             // 非 Agones 环境(本地开发 / 普通 Deployment):ReadAgonesEnv() 读不到
             // AGONES_SDK_HTTP_PORT,或 Windows 构建拿不到 curl 传输层,
             // 都会退化成 Disabled —— 不起线程、不发 HTTP、所有 gate 直接放行。
+            //
+            // scene 用默认 LifecycleOptions:不开 EventLoop 心跳绑定(D84)、不开排空标签(D83),
+            // 行为与下沉前的 SceneLifecycle 一致;这两项目前只有 battle 开启。
             {
                 const auto agonesEnv = agones::ReadAgonesEnv();
                 std::unique_ptr<agones::HttpTransport> transport;
@@ -286,11 +308,11 @@ int main(int argc, char *argv[])
                 {
                     LOG_INFO << "Agones lifecycle disabled (enabled=" << agonesEnv.enabled
                              << ", transport=" << (agonesEnv.enabled ? "unavailable" : "n/a") << ")";
-                    agones::SceneLifecycle::Instance().StartDisabled();
+                    agones::GameServerLifecycle::Instance().StartDisabled();
                 }
                 else
                 {
-                    agones::SceneLifecycle::Instance().Start(
+                    agones::GameServerLifecycle::Instance().Start(
                         std::move(transport), agonesEnv.BaseUrl(), agones::LifecycleOptions{});
                 }
             }
@@ -344,5 +366,5 @@ int main(int argc, char *argv[])
 
 		// loop 退出后的兜底 join。SetBeforeShutdown 已经调过一次,Stop() 幂等;
 		// 但走 conflict-shutdown 之类的分支时不保证走过那条路径。
-        agones::SceneLifecycle::Instance().Stop(); });
+        agones::GameServerLifecycle::Instance().Stop(); });
 }

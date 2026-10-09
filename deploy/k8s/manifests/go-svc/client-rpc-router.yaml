@@ -8,7 +8,8 @@
 #
 # 对外地址:路由服写进 NodeInfo 的 IP 优先取下面注入的 POD_IP(client_rpc_router_service.go advertisedHost),
 # 不能原样写 ListenOn 的 0.0.0.0,否则 gate 拨不通。
-# 部署了不等于 gate 会用它:gate 是否只连路由服由 k8s_deploy.ps1 -GateRouterMode 决定(默认 "0")。
+# gate 是否只连路由服由 k8s_deploy.ps1 -GateRouterMode 决定:默认 "1"(turn-based §22 D75)下它是 gate 唯一的 gRPC 目标,
+# gate 的依赖门等它就绪 —— 所以 infra-up 必须先把它部署起来,否则登录 / 匹配 / 聊天全部 no_target;以 "0" 回退时 gate 不连它。
 apiVersion: v1
 kind: Service
 metadata:

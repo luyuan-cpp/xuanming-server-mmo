@@ -41,6 +41,11 @@ function Get-ToolsScriptsDir { return $script:ToolsScriptsDir }
     所以这里在捕获期间把控制台编码顶成 UTF-8(子进程继承同一个控制台码页),
     跑完立刻还原,不污染调用方终端。
 
+    **子进程一律 -NonInteractive**:测试从不给子进程任何交互输入。被测脚本缺必填参数
+    (例如 lib 内部把 `-Reason'…'` 写成位置参数)、或走到 Read-Host 这类提示时,
+    交互模式会停在提示上等输入,把整套测试(含 CI)挂死;非交互模式下直接报错、非 0 退出,
+    变成一条带原因的红用例。
+
 .PARAMETER Env
     要在子进程里设置的环境变量(hashtable)。跑完自动还原,避免污染同一轮里的其它用例。
 #>
@@ -70,7 +75,7 @@ function Invoke-CapturedPwsh {
     }
 
     try {
-        $output = & pwsh -NoProfile -File $ScriptPath @Arguments 2>&1 | Out-String
+        $output = & pwsh -NoProfile -NonInteractive -File $ScriptPath @Arguments 2>&1 | Out-String
         return @{ ExitCode = $LASTEXITCODE; Output = $output }
     }
     finally {

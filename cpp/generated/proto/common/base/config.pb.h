@@ -2062,6 +2062,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
     kBattleMaxConnectionsFieldNumber = 17,
     kClusterIdFieldNumber = 18,
     kAuditTopicGenerationFieldNumber = 20,
+    kDbTaskTopicGenerationFieldNumber = 22,
   };
   // repeated string etcd_hosts = 1;
   [[nodiscard]] int etcd_hosts_size()
@@ -2366,11 +2367,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
   void _internal_set_audit_topic_generation(::uint32_t value);
 
   public:
+  // uint32 db_task_topic_generation = 22;
+  void clear_db_task_topic_generation() ;
+  [[nodiscard]] ::uint32_t db_task_topic_generation() const;
+  void set_db_task_topic_generation(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_db_task_topic_generation() const;
+  void _internal_set_db_task_topic_generation(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BaseDeployConfig)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 21,
+      ::google::protobuf::internal::TcParseTable<5, 22,
                           4, 189,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2420,6 +2431,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
     ::uint32_t battle_max_connections_;
     ::uint32_t cluster_id_;
     ::uint32_t audit_topic_generation_;
+    ::uint32_t db_task_topic_generation_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4297,6 +4309,30 @@ inline void BaseDeployConfig::set_allocated_grpc_client(::GrpcClientConfig* PROT
 
   _impl_.grpc_client_ = reinterpret_cast<::GrpcClientConfig*>(value);
   // @@protoc_insertion_point(field_set_allocated:BaseDeployConfig.grpc_client)
+}
+
+// uint32 db_task_topic_generation = 22;
+inline void BaseDeployConfig::clear_db_task_topic_generation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.db_task_topic_generation_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::uint32_t BaseDeployConfig::db_task_topic_generation() const {
+  // @@protoc_insertion_point(field_get:BaseDeployConfig.db_task_topic_generation)
+  return _internal_db_task_topic_generation();
+}
+inline void BaseDeployConfig::set_db_task_topic_generation(::uint32_t value) {
+  _internal_set_db_task_topic_generation(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:BaseDeployConfig.db_task_topic_generation)
+}
+inline ::uint32_t BaseDeployConfig::_internal_db_task_topic_generation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.db_task_topic_generation_;
+}
+inline void BaseDeployConfig::_internal_set_db_task_topic_generation(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.db_task_topic_generation_ = value;
 }
 
 // -------------------------------------------------------------------

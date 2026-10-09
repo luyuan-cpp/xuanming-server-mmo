@@ -158,11 +158,8 @@ type CurrencyCrashConfig struct {
 type BattleSmokeConfig struct {
 	CrossZone bool `yaml:"cross_zone"`
 
-	// SkipDirectConnect=true 时机器人不走战斗直连(不连 BattleAssignedS2C 给的 battle
-	// 节点地址),战斗消息全程经 gate 中继 —— 用来验证 D23 的回落路径仍然完整。
-	// 缺省 false:收到 NotifyBattleAssigned 后凭票据直连 battle 节点,并断言回合结果
-	// 与终局包确实从直连到达(docs/design/turn-based-battle-server.md §18)。
-	SkipDirectConnect bool `yaml:"skip_direct_connect"`
+	// 战斗直连没有开关:收缩后它是战斗唯一通路(turn-based §22 D73),原 skip_direct_connect
+	// (经 gate 中继验证 D23 回落)已删。yaml 非严格解析,旧配置里残留该键不会报错,但不再生效。
 
 	// ZoneA / ZoneB 是两个机器人各自登录的 zone;必须非 0 且不同
 	// (同 zone 就不是跨 zone 冒烟,登录时 0 会被 server-list 自动选区顶掉)。

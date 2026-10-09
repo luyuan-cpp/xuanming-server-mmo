@@ -28,7 +28,9 @@
 //                                        (疏散 / 排空改派,owner_epoch 条件写)、A1′(干净退出收敛、实体销毁前,
 //                                        owner_epoch 条件写)、A2′ 放弃补写(载入被放弃时把删掉的当前代际写回,
 //                                        owner_epoch 条件写)、scene_manager 回滚转写(推路由失败的 bump 回滚,只在
-//                                        所凭原标记原样还在时,把它转写成 "{N+2}:{同一 saved_at_ms}",后缀逐字节不变)。
+//                                        所凭原标记原样还在时,把它转写成 "{N+2}:{同一 saved_at_ms}",后缀逐字节不变)、
+//                                        改派踢线前的兜底补写(疏散 / 排空的改派核实出没生效、要踢线时,按核实读到的
+//                                        owner_epoch 条件写;已有同代标记时不写,见 relocate_confirm::DecideCredential)。
 //                                    删:WithdrawHandoffMark(按原文条件删)、ResolveTravelOutcome(原子取证脚本按
 //                                        saved_at_ms 只删本次交接这一族:"E:t" 与转写出来的 "E+2:t")、
 //                                        A2′(新载入建实体之前,核对 owner_epoch 后删代际 ≤N 的;路由不带
@@ -37,7 +39,9 @@
 //                                    只有 A2′ 能保证新持有期间不留有效标记。
 //   player:{player_id}:location     PlayerLocation proto 二进制(Go 写),含 owner_epoch;路由失败回滚恢复出的那一条
 //                                    还带 rollback_receipt(被回滚那次铸造所凭的标记原文,与 INCR 同一段 Lua 原子写入,
-//                                    任何新落点整条重写 location 时随之消失)。C++ 只有 ResolveTravelOutcome 读它。
+//                                    任何新落点整条重写 location 时随之消失)。C++ 读 location 的地方:ResolveTravelOutcome
+//                                    (唯一读 rollback_receipt 的)、队伍跟随、改派确认的只读核实(只读 zone / node / scene,
+//                                    不读回执、不采纳 epoch)。
 //
 // ── epoch 的 0 语义 ──
 //   0 = 未知 / 旧版 Go 未铸造。这是滚动升级的兼容窗口:校验一律跳过并计数
@@ -187,7 +191,8 @@ struct PlayerTravelHandoffComp
 // 队伍跟随也必须挂:不挂的话发送侧闸看不见它,客户端换图会与它同时在途;旧版 scene_manager 下
 // 跟随的应答仍会按 player_id 摘掉客户端那条换图的记录,那条随后到达的 18 找不到目标、同 zone
 // 交接不发起。挂上之后同一玩家的普通 EnterScene 始终串行。
-// 疏散 / 排空发的 EnterScene 不挂它(发完实体就销毁了,没有等待者)。
+// 疏散 / 排空发的 EnterScene 不挂它(发完实体就销毁了):它们的等待者是改派待确认表(relocate_confirm.h),
+// 应答与传输失败在"实体已不在"分支按关联号认领。
 // 应答或传输失败到达即摘(DispatchEnterSceneReply / DispatchEnterSceneTransportFailure;生成的 gRPC 客户端
 // 保证每次调用在 deadline 内以其一收场);完成通知永远不来时靠 sentAtMs 的 TTL(SceneManager deadline + 1s)
 // 自然失效,不需要定时器。

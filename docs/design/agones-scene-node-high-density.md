@@ -5,6 +5,10 @@
 24 个 C++ 单测验证;阶段 C 已落码并通过 Go 侧 `build` / `vet` / 107 个单测
 (其中 20 个为阶段 C 新增)。**三个阶段都没有上过集群**,也没有装过 Agones。
 
+> **2026-09-29 更新(集群外入口 D81–D85)**:C++ 生命周期代码已从 `cpp/nodes/scene/agones/` 下沉到 `cpp/libs/engine/infra/agones/` 并泛化,
+> 类名改为 `GameServerLifecycle` / `AllocationPermit`,battle 也接入(Fleet `portPolicy: Dynamic`、排空标签、EventLoop 心跳)。
+> 下文凡提到旧路径 / 旧类名的地方均按 §12 的对照表理解;scene 只做了机械改名,行为不变。**本轮改动未编译、未测试、未上集群,待 Codex 验证。**
+
 ## 1. 为什么是 1 GameServer = 1 Scene Node,而不是 1 Scene
 
 ```
@@ -72,6 +76,9 @@ ports:
     protocol: TCP
 ```
 
+(2026-09-29 注:示例里的 `19000` 是旧值;scene 的 TCP 端口早已改为 20000(19000 落在 gate 的 10000–19999 区间),生成器写的是 `containerPort: $RpcPort`
+(`tools/scripts/k8s_deploy.ps1:2209-2213`)。`portPolicy: None` 只适用于 scene 这类内部服务;battle 是客户端面,用 `portPolicy: Dynamic`,见 §12.3。)
+
 SceneManager 继续走原有发现链路:C++ 节点把自己的 `Endpoint` 注册进 etcd
 (`SceneNodeService.rpc/` 前缀),`scene_node_client.go` 从 etcd 拿 PodIP:port
 建 gRPC 连接。Agones 不参与寻址。
@@ -79,6 +86,8 @@ SceneManager 继续走原有发现链路:C++ 节点把自己的 `Endpoint` 注�
 ## 4. Ready / Allocated 状态机
 
 实现:`cpp/nodes/scene/agones/agones_scene_lifecycle.{h,cpp}`。
+(2026-09-29 已被取代:现为 `cpp/libs/engine/infra/agones/agones_gameserver_lifecycle.{h,cpp}` 的 `agones::GameServerLifecycle`;
+本节的 `CreatePermit` / `AcquireCreatePermit*` / `activeScenes` 分别对应 `AllocationPermit` / `AcquireAllocationPermit*` / 活跃单元,见 §12.1。)
 
 ```
 Disabled          非 Agones 构建 / 环境,全程不发 HTTP,所有 gate 直接放行
@@ -352,13 +361,13 @@ RBAC 见 `deploy/k8s/manifests/go-svc/scene-manager-agones-rbac.yaml`:
 
 | 文件 | 作用 |
 |---|---|
-| `cpp/nodes/scene/agones/agones_rest_client.{h,cpp}` | 可注入 HTTP 传输层 + libcurl 实现 + Agones REST 端点封装 + 环境变量解析 |
-| `cpp/nodes/scene/agones/agones_scene_lifecycle.{h,cpp}` | 状态机、lifecycle worker、房间计数、allocate 前置门 |
+| `cpp/nodes/scene/agones/agones_rest_client.{h,cpp}` | 可注入 HTTP 传输层 + libcurl 实现 + Agones REST 端点封装 + 环境变量解析 —— **2026-09-29 已迁到 `cpp/libs/engine/infra/agones/agones_rest_client.{h,cpp}`,旧文件已删** |
+| `cpp/nodes/scene/agones/agones_scene_lifecycle.{h,cpp}` | 状态机、lifecycle worker、房间计数、allocate 前置门 —— **2026-09-29 已迁为 `cpp/libs/engine/infra/agones/agones_gameserver_lifecycle.{h,cpp}`(`GameServerLifecycle`),旧文件已删;新增文件见 §12.6** |
 | `cpp/nodes/scene/handler/event/scene_event_handler.cpp` | 房间计数唯一接入点 |
 | `cpp/nodes/scene/handler/grpc/scene_node_service.cpp` | gRPC 路径的阻塞式 allocate 门 + idle 收口 |
 | `cpp/nodes/scene/handler/rpc/scene_handler.cpp` | legacy muduo RPC 路径的非阻塞 allocate 门 |
 | `cpp/nodes/scene/main.cpp` | `SetAfterStart` 起生命周期,`SetBeforeShutdown` + loop 退出后停并 join |
-| `cpp/tests/agones_lifecycle_test/` | 24 个状态机单测(含在途 permit/回 Ready/停止态竞态;注入 fake transport,不需要 sidecar) |
+| `cpp/tests/agones_lifecycle_test/` | 24 个状态机单测(含在途 permit/回 Ready/停止态竞态;注入 fake transport,不需要 sidecar) —— 2026-09-29 磁盘上 `TEST(` 共 51 个(工程名不变),见 §12.7 |
 | `tools/scripts/k8s_deploy.ps1` | `New-SceneFleetYaml` / `Resolve-SceneDeploymentPlan` / `-SceneOrchestrator` / `-AgonesHighDensity` |
 | `deploy/k8s/Dockerfile.runtime` | 运行时增加 `libcurl4` |
 | `docs/ops/scene-node-role-split.md` | 角色拆分运维手册 + 兼容规则权威表 |
@@ -390,3 +399,83 @@ zlib、hiredis、yaml-cpp 均按 `/MDd` 构建;Debug 的 `/WHOLEARCHIVE` 也必�
 - `bin/gate.exe` 与 `bin/scene.exe`:成功生成并由各节点 PostBuildEvent 复制。
 - `agones_lifecycle_test.exe --gtest_brief=1`:24/24 PASS。
 - 未连接 dev 集群、未安装 Agones、未构建运行时镜像。
+
+## 12. 2026-09-29:代码下沉 infra、泛化为 GameServerLifecycle,battle 接入(集群外入口 D81–D85)
+
+决策原文见 `docs/design/k8s-client-entry.md`(D76–D93,battle 相关为 D81–D86 与「battle Fleet health 预算与就绪判据」)。本节只记与本文相关的代码事实。**全部未编译、未测试、未上集群,待 Codex 验证。**
+
+### 12.1 位置与改名(D85,scene 只做机械改名,不复制第二份状态机)
+
+| 旧(本文 §4–§10 的写法) | 新 |
+|---|---|
+| `cpp/nodes/scene/agones/agones_rest_client.{h,cpp}` | `cpp/libs/engine/infra/agones/agones_rest_client.{h,cpp}` |
+| `cpp/nodes/scene/agones/agones_scene_lifecycle.{h,cpp}`,类 `SceneLifecycle` | `cpp/libs/engine/infra/agones/agones_gameserver_lifecycle.{h,cpp}`,类 `agones::GameServerLifecycle` |
+| `CreatePermit` / `AcquireCreatePermitBlocking` / `AcquireCreatePermitNonBlocking` | `AllocationPermit` / `AcquireAllocationPermitBlocking` / `AcquireAllocationPermitNonBlocking`(`agones_gameserver_lifecycle.h:123-169`) |
+| `OnSceneCreated` / `OnSceneDestroyed` / `SceneCount` | `OnUnitCreated` / `OnUnitDestroyed` / `UnitCount`(`:176-194`;单元 = scene 的房间实体或 battle 的 battle_id) |
+| (无) | 新增 `agones_gameserver_status.{h,cpp}`(`ParseGameServer` / `ParseGameServerLabels`,用 protobuf `Struct` 解析,兼容 `object_meta` 与 `objectMeta`)、`agones_client_endpoint_source.{h,cpp}`(Agones 地址来源) |
+
+- 旧目录与 4 个旧文件已删除(未用 `git mv`,新建 + 删除,构建清单同步);构建登记改在 `infra.vcxproj` / `infra.vcxproj.filters` / infra `CMakeLists.txt`,
+  scene 的 vcxproj 与 CMake 移除了旧条目。`AllocationPermit` 持有 `GameServerLifecycle&` 引用(不再是裸指针成员)。
+- scene 调用点只改名:`scene_node_service.cpp:251` 阻塞许可、`scene_handler.cpp:869` 非阻塞许可、`scene_event_handler.cpp:44/54` 单元计数、
+  `scene/main.cpp:286-291` 以默认 `LifecycleOptions{}` 启动。
+- libcurl 边界不变(§5):infra 与 battle 的 Linux 构建定义 `MMORPG_AGONES_CURL` 并链接系统 curl;Windows 不定义,`MakeDefaultHttpTransport()` 返回 nullptr → `StartDisabled`。
+
+### 12.2 `LifecycleOptions` 新增项(默认值即 scene 行为)
+
+- `requireLoopHeartbeat=false`、`loopStaleAfter=10s`:开启后 EventLoop 须定时 `TouchLoopHeartbeat()`,超过阈值没更新 worker 就停发 `/health`,由 Agones 判 Unhealthy 替换(D84)。
+- `drainLabelKey`(空 = 不启用)、`drainPollInterval=5s`:开启后 worker 每 5s `GET /gameserver` 读自己的 labels,有标签即排空(D83)。
+  SDK 的 `SetLabel` 会自动加 `agones.dev/sdk-` 前缀,所以排空标签只能由 Fleet `allocationOverflow` 或运维 `kubectl label` 打上,进程只读。
+- `healthInterval=2s`、`allocateWaitTimeout=3s` 沿用原值(`agones_gameserver_lifecycle.h:75-106`)。
+
+### 12.3 battle 与 scene 的差异
+
+| 项 | scene | battle |
+|---|---|---|
+| 端口 | `portPolicy: None`,内部服务,SceneManager 从 etcd 拿 PodIP | `name: client`、`portPolicy: Dynamic`、containerPort 20000(`tools/scripts/lib/k8s_client_entry.ps1:1054-1058`);gRPC 50000 只写容器 ports,永不进 Agones ports / hostPort |
+| 客户端地址 | 不涉及 | external 时 `CLIENT_ENDPOINT_SOURCE=agones`:构造期经 THooks `ClientEndpointSourceFactory`(`battle/main.cpp:228-232`)读 sidecar `status.address` + `status.ports[client]`,在发布 etcd 之前自报 `client_endpoint`;podip 时 `none` |
+| 排空标签 | 不开 | `mmorpg.io/drain`(`battle/main.cpp:45` `kAgonesDrainLabelKey`),Fleet `allocationOverflow.labels` 同值 |
+| EventLoop 心跳 | 不开(D84 后续项) | 开:`requireLoopHeartbeat=true`,EventLoop 每 1s `TouchLoopHeartbeat()`(`battle/main.cpp:85-86`、`:319`) |
+| 单元 | scene 实体(`SceneEventHandler`) | battle_id:所有插表 / 删表路径收口到 `BattleRoomManager::EmplaceRoom` / `EraseRoom`(房间表 `battle_room_table.h`),回调转发 `OnUnitCreated/OnUnitDestroyed`(`battle/main.cpp:279-281`) |
+| 许可拒绝的出口 | gRPC `UNAVAILABLE`(§4.1) | gRPC `UNAVAILABLE "battle_not_allocatable"`(`battle_node.cpp:15-19`);match 遇到它不发 DestroyBattle、换一个没试过的节点重试一次(D82) |
+| 进程级准入闸 | 无 | `battle_admission_gate.h`:SetAfterStart 完成前、停机开始后的 CreateBattle 也回 `battle_not_allocatable`(启动窗口与停机窗口) |
+| 停机 | Stop 并 join | CloseAdmission → AbortAllRooms → DisconnectAll → lifecycle `Stop()`,**不调** `/shutdown`(`battle/main.cpp:342-350`);单元归零可能让 worker 在 Stop 前发一次 `/ready`,Stop 至多等一次 HTTP 超时(2s) |
+| Fleet health | `-AgonesHealth*` 默认 30 / 10 / 3 | 复用同三个参数;initialDelaySeconds 不够覆盖 battle 启动最坏耗时(地址来源 ≤60s + 初始化余量 20s + `/ready` 重试约 53s + 首次 health 2s,合计 135s;默认 period 10 × threshold 3 时下限 105s,`lib/k8s_client_entry.ps1:543`、`:560-564`)时由 `Resolve-BattleFleetHealth`(`lib/k8s_client_entry.ps1:553`)抬高并打说明 |
+| 驱逐 | 按原模板 | `eviction.safe: Never`;Fleet `scheduling: Packed` |
+
+### 12.4 修复后的时序语义(WP6 评审修复与 2c 批 late-allocate)
+
+- **排空先于分配**:Ready 成功之后、进入主循环之前先同步读一次排空标签,再处理挂起的 allocate;不会"先接单元再发现自己在排空"。
+- **读取失败保持上一次判定**:GET 失败、响应没有 `object_meta` / `objectMeta`、labels 形状不符,都算读取失败;status 段形状问题不影响排空判定(排空只用 `ParseGameServerLabels`)。
+  首次读取失败时按未排空处理(可用性优先的 fail-open,有 WARN,最长一个 `drainPollInterval` 后纠正)。解除排空 = 删标签(只看键是否存在,不看值)。
+- **Agones 地址来源有硬预算**:`ClientEndpointSourceOptions.totalBudget=60s`(单调时钟,`agones_client_endpoint_source.h:36-47`),单次 GET 超时截到剩余预算,
+  最多 30 次、退避 200ms→2s;address 为空、没有 `client` 端口、sidecar 不可达都算失败并重试,耗尽即 `LOG_FATAL`(fail-closed,由 Agones 重建)。
+- **allocate 晚到收口**:`DoAllocate` 最坏约 6.4s,而等待方只等 3s。等待方全部超时之后 allocate 才成功时,若零单元、零在途许可、无等待方与非阻塞重试方,
+  同一临界区内自动请求回 Ready,并打 WARN `allocate confirmed after every waiter gave up`(`agones_gameserver_lifecycle.cpp:525`)。
+  否则该实例会以零房间的 Allocated 永久占着 Fleet 容量。非阻塞调用方踢了 allocate 却再也不来重试时,仍会停在"Allocated 但零单元"(与改动前的 scene 一致)。
+- **已知未做**:`state_` 默认 Disabled,gRPC server 起来到 `Start()` 之间许可恒放行;battle 由准入闸兜住,scene 仍有这个窗口。显式的 NotStarted(默认拒绝)状态已登记为独立任务。
+
+### 12.5 部署侧
+
+- `-BattleOrchestrator agones` 在 infra namespace 生成 battle Fleet(只对 `infra-up` / `all-up` 生效,与 `-SceneOrchestrator` 相互独立);`-ClientEntryMode external` 时
+  battle 带 `CLIENT_ENDPOINT_SOURCE=agones` 与 `CLIENT_ENDPOINT_REQUIRED=1`。Fleet 就绪等待是有界轮询(`Wait-ForFleetReady`)。参数口径见 `deploy/k8s/README.md` Optional Flags。
+- 节点维护前给 battle 打 `mmorpg.io/drain=true`;防火墙放行 Agones 端口段。kind 验证用段 7100–7109(helm `gameservers.minPort=7100 / maxPort=7109`,见 `deploy/k8s/kind-config.yaml`)。
+- gate **不进 Agones**(D87,长连接恒为 Allocated、Fleet 滚动永远收敛不了),走 StatefulSet + 每序号 Service。
+
+### 12.6 新增文件索引(补 §10)
+
+| 文件 | 作用 |
+|---|---|
+| `cpp/libs/engine/infra/agones/agones_gameserver_lifecycle.{h,cpp}` | 泛化后的状态机、worker、单元计数、许可、排空、心跳 |
+| `cpp/libs/engine/infra/agones/agones_gameserver_status.{h,cpp}` | `/gameserver` JSON 解析(完整解析 / 只解析元数据段) |
+| `cpp/libs/engine/infra/agones/agones_client_endpoint_source.{h,cpp}` | Agones 地址来源(`MakeClientEndpointSourceFromEnv`,常量 `kClientPortName="client"`) |
+| `cpp/nodes/battle/main.cpp` | battle 的 THooks 地址来源工厂、lifecycle 启动选项、心跳、停机顺序 |
+| `cpp/nodes/battle/battle_room_table.h` / `battle_admission_gate.h` | 房间表(增删恰好回调一次)与进程级准入闸,各有独立 gtest(`cpp/nodes/battle/tests/`,不进 vcxproj,编译命令见文件头) |
+
+### 12.7 验证交接(Codex,仓库根,MSBuild 必须串行 `/m:1`)
+
+- 前置:WP2 的 proto 重生(`NodeInfo.client_endpoint`);命令见 `docs/design/k8s-client-entry.md`,不是 `cd go && build.bat`。
+- `msbuild` 依次 core → infra → scene → battle → `cpp\tests\agones_lifecycle_test\agones_lifecycle_test.vcxproj`(`/p:Configuration=Debug /p:Platform=x64 /m:1`),
+  再 `pwsh -File tools/scripts/run_cpp_tests.ps1` 与 `pwsh -File tools/scripts/check_no_raw_pointer_member.ps1`。
+  通过标准:infra 0 warning / 0 error;`agones_lifecycle_test` 全绿(磁盘上 `TEST(` 共 51 个,以实际运行数为准)。Linux 按 `tools/scripts/build_linux.sh`,`ldd` 确认 scene / battle 链接 libcurl。
+- 行为回归:scene 日志应为 `require_loop_heartbeat=false ... drain_label=<disabled>` 且无 `GET /gameserver`;battle 应为 `require_loop_heartbeat=true ... drain_label=mmorpg.io/drain`。
+- `/gameserver` 的真实 JSON 形状仍待 kind 阶段 B 用 curl 实测;元数据键名若既不是 `object_meta` 也不是 `objectMeta`,排空会一直保持上一次判定并每 5s 打 WARN(不会静默解除)。

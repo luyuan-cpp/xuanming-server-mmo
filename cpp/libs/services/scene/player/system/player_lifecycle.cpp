@@ -40,6 +40,7 @@
 #include "proto/scene/player_state_attribute_sync.pb.h"                // ActorBaseAttributesS2C 字段号
 #include "stress_test_probe.h"
 #include "player/constants/player.h"
+#include <node_config_manager.h> // SavePlayerToRedis:DBTask topic 世代号(BaseDeployConfig.db_task_topic_generation)
 #include "proto/db/db_task.pb.h"
 #include "modules/snapshot/snapshot_system.h"
 #include "modules/transaction_log/anomaly_detector.h"
@@ -103,50 +104,125 @@ thread_local std::unordered_map<Guid, EmergencyRelocateTicket> tlsEmergencyReloc
 // 不单独计这一段的话 IsEmergencyRelocateDrained 会在"改派请求其实还没发"时宣布收敛,
 // 节点随即 quit loop,Redis 回调再也不会来,这批玩家的改派就丢了。
 thread_local std::size_t tlsRelocateHandoffMarksInFlight = 0;
-// 已发出、应答未到的断线释放标记条件写数(A1′ 与 A2′ 放弃补写,exit_release_mark.h)。计入停机 drain 谓词
-// (main.cpp)与 IsEmergencyRelocateDrained(R6):节点在它归零之前 quit loop 的话回调再也不会来,计数与日志都丢。
+// 已发出、应答未到的断线释放标记条件写数(A1′、A2′ 放弃补写,以及改派踢线前的凭证补写,exit_release_mark.h)。计入停机
+// drain 谓词(main.cpp)与 IsEmergencyRelocateDrained(R6):节点在它归零之前 quit loop 的话回调再也不会来,计数与日志都丢。
 thread_local std::size_t tlsExitReleaseMarksInFlight = 0;
+// 疏散 / 排空改派的待确认表(契约见 relocate_confirm.h):每张被消费的票据一条,键 = player_id。
+// tlsRelocateHandoffMarksInFlight 只覆盖"标记在写、EnterScene 还没发"这一段;发出之后改派有没有生效,由这张表盯到
+// 有结论为止(已在别处 / 已落回本节点 / 已踢线 / 已放弃)。
+// 线程模型:只在 scene 逻辑线程上读写 —— 登记(FinishExitAfterPersist → DispatchEmergencyRelocate)、写标记的 Redis
+// 回调、EnterScene 的应答 / 传输失败(主循环上的定时器轮询 CompletionQueue 后分发)、进场路由(PlayerEnterGameNode)、
+// 核实的 Redis 回调、RedisSystem 的重连回调与 1s 定时器,都跑在同一个 EventLoop 上,不需要锁。认领靠的 EnterScene
+// 关联号也是线程内发号(tlsEnterSceneCorrelationSeq),两者作用域一致:号只在发出它的线程上有意义。
+// 不随 tlsEcs.Clear() 清空;进程退出丢表无害(只是少踢,玩家自己重登)。
+thread_local relocate_confirm::Table tlsRelocateConfirms;
 
 namespace
 {
-	// Sends a SendTipToClient message directly to the gate by session_id.
-	// Used during the async-load window when the player entity does not yet
-	// exist, so the entity-based PlayerTipSystem path is not available.
-	//
-	// playerId 是 gate 侧的身份栅栏(routing-identity-audit-20260908.md R13):
-	// 这条路径没有玩家实体可取 Guid,但调用方两处都拿得到 player_id —— 必须传下来,
-	// 否则本函数会成为整条推送链上唯一一个不带身份的口子。
-	void SendTipToPendingSession(SessionId sessionId, Guid playerId, uint32_t tipId)
+	// 按会话把一条消息直接推给会话所在的 gate。用在没有玩家实体可用的两种场合:载入在途(SendTipToPendingSession),
+	// 以及实体已销毁、手里只剩改派票据抄下的会话(SendTipAndKickToSession)。有实体时走 SendMessageToClientViaGate
+	// 的实体重载,不要走这里。
+	//   expectedGateInstanceId  发票时 gate 的实例 uuid。非空时与 gate 当前的 NodeInfo.node_uuid 比对,不等 = gate 进程
+	//                           已换过一个、会话随旧进程消失,不推(kGateReplaced)。空 = 不比对(载入在途的提示;
+	//                           发票时就没找到 gate、抄不到实例号的票据)。
+	//   site                    失败原因的日志前缀。四种推不出去的原因各打一条 WARN,由本函数自己打。
+	// playerId 是 gate 侧的身份栅栏(routing-identity-audit-20260908.md R13):会话号已被别的玩家占用时由 gate 在写
+	// socket 之前拦下。这里没有玩家实体可取 Guid,调用方都拿得到 player_id —— 必须传下来,否则这条路径会成为整条
+	// 推送链上唯一一个不带身份的口子。
+	// 返回 kSent 只表示"已交给 RpcSession":底层发送没有返回值,不代表客户端收到。
+	relocate_confirm::GatePushResult PushToSessionViaGate(SessionId sessionId, Guid playerId,
+														  const std::string &expectedGateInstanceId, uint32_t messageId,
+														  const google::protobuf::Message &message, const char *site)
 	{
-		if (sessionId == 0)
-		{
-			return;
-		}
 		// 不能写 `entt::entity{GetGateNodeId(sessionId)}` —— node_id 是业务编号,
 		// 而 gate 实体槽位是 registry.create() 按发现顺序分配的(node_connector.cpp:118 /
 		// registration_manager.cpp),两者早在 uuid 主键重构后就不再相等。
 		// network_utils.h:27-30 明文禁止这种写法。单 gate 部署时 node_id 从 1 起、
 		// 实体槽位从 0 起,valid() 必假,这条提示 100% 发不出去;多 gate 时更糟,
 		// 会命中另一个 gate 的槽位、把提示发给没有这个会话的节点。
-		// 本文件 EnqueueRelocateTicket 与 SendMessageToClientViaGate 都已走
-		// ResolveLocalZoneGateEntity,只有这个 namespace-local 函数漏改。
+		// 本文件 EnqueueRelocateTicket 与 SendMessageToClientViaGate 都走 ResolveLocalZoneGateEntity,
+		// 按会话直推的函数同样一律走它。
 		const auto gateEntityOpt = ResolveLocalZoneGateEntity(sessionId);
 		if (!gateEntityOpt)
 		{
-			LOG_WARN << "SendTipToPendingSession: gate not found for session " << sessionId;
-			return;
+			LOG_WARN << site << ": gate not found for session " << sessionId;
+			return relocate_confirm::GatePushResult::kGateGone;
 		}
 		auto &gateNodeRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
 		auto *gateSessionPtr = gateNodeRegistry.try_get<RpcSession>(*gateEntityOpt);
 		if (gateSessionPtr == nullptr)
 		{
-			LOG_WARN << "SendTipToPendingSession: RpcSession missing for session " << sessionId;
+			LOG_WARN << site << ": RpcSession missing for session " << sessionId;
+			return relocate_confirm::GatePushResult::kGateGone;
+		}
+		// 连接已断时 RpcSession 自己会丢弃并打 ERROR;在这里先判,调用方才分得清"交出去了"与"根本没发"。
+		if (!gateSessionPtr->IsConnected())
+		{
+			LOG_WARN << site << ": gate not connected for session " << sessionId;
+			return relocate_confirm::GatePushResult::kGateGone;
+		}
+		if (!expectedGateInstanceId.empty())
+		{
+			// 这里不调 ResolveGateInstanceId(定义在后面,而且会重复解析一次 gate 实体)。拿不到 NodeInfo 时证明不了
+			// 还是同一个 gate 进程,按已换处理(fail-closed:宁可不推,不把踢线推给另一个进程上的同号会话)。
+			const auto *gateNodeInfo = gateNodeRegistry.try_get<NodeInfo>(*gateEntityOpt);
+			if (gateNodeInfo == nullptr || gateNodeInfo->node_uuid() != expectedGateInstanceId)
+			{
+				LOG_WARN << site << ": gate instance replaced for session " << sessionId;
+				return relocate_confirm::GatePushResult::kGateReplaced;
+			}
+		}
+		SendMessageToClientViaGate(messageId, message, *gateSessionPtr, sessionId, playerId);
+		return relocate_confirm::GatePushResult::kSent;
+	}
+
+	// Sends a SendTipToClient message directly to the gate by session_id.
+	// Used during the async-load window when the player entity does not yet
+	// exist, so the entity-based PlayerTipSystem path is not available.
+	// 尽力而为:推不出去(gate 不在 / 连接已断)只留 PushToSessionViaGate 的那条 WARN,调用方不看结果。
+	void SendTipToPendingSession(SessionId sessionId, Guid playerId, uint32_t tipId)
+	{
+		if (sessionId == 0)
+		{
 			return;
 		}
 		TipInfoMessage tip;
 		tip.set_id(tipId);
-		SendMessageToClientViaGate(SceneClientPlayerCommonSendTipToClientMessageId,
-								   tip, *gateSessionPtr, sessionId, playerId);
+		PushToSessionViaGate(sessionId, playerId, /*expectedGateInstanceId=*/std::string(),
+							 SceneClientPlayerCommonSendTipToClientMessageId, tip, "SendTipToPendingSession");
+	}
+
+	// 疏散 / 排空改派核实出"没生效"之后的客户端出口:实体早已销毁,只能按票据里抄下的会话直推 —— 先回失败 tip,
+	// tip 交出去了才紧跟踢线 KickPlayer(34,reason.id = 同一个 tip),客户端断线回选服重登。
+	// 与 SendTipAndKickToClient 是两条路、同一份契约(先 tip 后 34、reason 同码):那个按实体踢,对象是还活着的冻结实体;
+	// 这个按会话踢,对象是"实体已不在、会话还挂着"的票据。待确认条目存在期间本节点没有该玩家实体(或条目在等载入),
+	// 两条路不会对同一玩家同时生效。
+	// 票据的会话号可以是 0(发票条件只排除了 kInvalidSessionId):没有有效会话就什么都不发,按 gate 不在计。
+	// 这个判定放在这里而不是 PushToSessionViaGate 里:后者还服务 SendTipToPendingSession,那边对无效会话号的既有
+	// 日志原文不能变。
+	// 返回值是踢线那一条的结果:tip 没交出去时直接返回它的失败原因,不再发 34。
+	relocate_confirm::GatePushResult SendTipAndKickToSession(SessionId sessionId, Guid playerId,
+															 const std::string &expectedGateInstanceId, uint32_t tipId)
+	{
+		static constexpr const char *kSite = "[RelocateConfirm] push";
+		if (!player_exit::IsBoundSession(sessionId))
+		{
+			LOG_WARN << kSite << ": ticket has no bound session for player " << playerId << " (session=" << sessionId
+					 << ")";
+			return relocate_confirm::GatePushResult::kGateGone;
+		}
+		TipInfoMessage tip;
+		tip.set_id(tipId);
+		const auto tipResult = PushToSessionViaGate(sessionId, playerId, expectedGateInstanceId,
+													SceneClientPlayerCommonSendTipToClientMessageId, tip, kSite);
+		if (tipResult != relocate_confirm::GatePushResult::kSent)
+		{
+			return tipResult;
+		}
+		GameKickPlayerRequest kick;
+		kick.mutable_reason()->set_id(tipId);
+		return PushToSessionViaGate(sessionId, playerId, expectedGateInstanceId,
+									SceneClientPlayerCommonKickPlayerMessageId, kick, kSite);
 	}
 
 	// 会话所在 gate 的实例 uuid(EnterSceneRequest.gate_instance_id,scene_manager 用它做 Kafka
@@ -376,7 +452,8 @@ namespace
 	// scene 进程内 EnterScene 的**唯一**发送出口:全仓(cpp/generated 之外)只有这里直接调生成的
 	// EnterScene 发送函数(cpp/generated/grpc_client/scene_manager)。由它保证每条请求都带非 0 关联号,DispatchEnterSceneReply 才能把
 	// "应答号为 0"读成"scene_manager 是旧版、没回显"。有等待者的发送走 PlayerLifecycleSystem::RequestSceneChange
-	// (或本文件的交接 RequestTravelEnterScene),无等待者的(疏散 / 排空)直接调本函数。绕过它直调生成函数的发送点,
+	// (或本文件的交接 RequestTravelEnterScene);疏散 / 排空的等待者是待确认表(SendEmergencyRelocateEnterScene 先
+	// Table::MarkSent 把号记到条目上、再调本函数;表满没被跟踪的那一次没有等待者)。绕过它直调生成函数的发送点,
 	// 在新版 scene_manager 下应答号为 0,会退回按 player_id 对应答,并让 reply_uncorrelated 非 0。
 	// 前置条件:correlationId ≠ 0(调用方用 NextEnterSceneCorrelationId 取号、先记到等待者上再调本函数)、
 	// smEntity 非空(调用方已查 GetSceneManagerEntity)。
@@ -395,8 +472,9 @@ namespace
 		scene_manager::SendSceneManagerEnterScene(smRegistry, smEntity, req);
 	}
 
-	// [ExitPersist] 与 [ExitRelease] 两行汇总(计数含义见 player_lifecycle.h 的 exit_persist_stats /
-	// exit_release_stats)。与上面的 [TravelHandoff] 同款:第一次有玩家退出(或第一次发起 A2′)时在当前线程的
+	// [ExitPersist]、[ExitRelease] 与 [RelocateConfirm] 三行汇总(计数含义见 player_lifecycle.h 的 exit_persist_stats /
+	// exit_release_stats / relocate_confirm_stats;改派待确认表的每一项计数都发生在某次退出之后,所以借退出链的这个
+	// 定时器就够了)。与上面的 [TravelHandoff] 同款:第一次有玩家退出(或第一次发起 A2′)时在当前线程的
 	// EventLoop 上挂 30s 定时器,回调不捕获任何对象、只读进程级原子计数(AGENTS §11.7 管的是绑了对象的回调,
 	// 这里没有对象),各自有变化才打。挂在本文件而不是 RedisSystem 的快照定时器里:计数只属于本文件的退出链,
 	// 改动也只落在退出链自己的文件里。
@@ -434,6 +512,51 @@ namespace
 		return line;
 	}
 
+	// [RelocateConfirm] 行:key=value 平铺。数组项的 key 取自 relocate_confirm 的名表(push / credential 两组加前缀,
+	// 免得与 outcomes 里的同名项混淆),其余是固定项。顺序与原文是给 runbook 按原文 grep 的,改了要同步 runbook。
+	std::string FormatRelocateConfirmStats(const relocate_confirm_stats::Snapshot &stats)
+	{
+		std::string line = "[RelocateConfirm]";
+		const auto append = [&line](const std::string &key, uint64_t value)
+		{
+			line += ' ';
+			line += key;
+			line += '=';
+			line += std::to_string(value);
+		};
+		for (std::size_t i = 0; i < stats.ticketDecisions.size(); ++i)
+		{
+			append(relocate_confirm::kTicketDecisionNames[i], stats.ticketDecisions[i]);
+		}
+		append("untracked_overflow", stats.untrackedOverflow);
+		append("cancelled_on_reentry", stats.cancelledOnReentry);
+		append("ticket_dropped_deposed", stats.ticketsDroppedDeposed);
+		append("reply_verified", stats.replyVerified);
+		append("reply_ignored", stats.replyIgnored);
+		append("transport_failed", stats.transportFailed);
+		append("not_sent", stats.notSent);
+		append("mark_write_timeout", stats.markWriteTimeout);
+		append("reply_timeout", stats.replyTimeout);
+		append("verify_deferred", stats.verifyDeferred);
+		append("settle_waits", stats.settleWaits);
+		for (std::size_t i = 0; i < stats.outcomes.size(); ++i)
+		{
+			append(relocate_confirm::kOutcomeNames[i], stats.outcomes[i]);
+		}
+		for (std::size_t i = 0; i < stats.push.size(); ++i)
+		{
+			append(std::string("push_") + relocate_confirm::kGatePushResultNames[i], stats.push[i]);
+		}
+		for (std::size_t i = 0; i < stats.credentialActions.size(); ++i)
+		{
+			append(std::string("credential_") + relocate_confirm::kCredentialActionNames[i], stats.credentialActions[i]);
+		}
+		append("credential_written", stats.credentialWritten);
+		append("credential_epoch_moved", stats.credentialEpochMoved);
+		append("credential_failed", stats.credentialFailed);
+		return line;
+	}
+
 	void EnsureExitStatsTimer()
 	{
 		static thread_local bool armed = false;
@@ -448,13 +571,21 @@ namespace
 		}
 		armed = true;
 		loop->runEvery(kExitPersistStatsIntervalSec,
-					   [lastLogged = exit_persist_stats::Snapshot{}, lastRelease = exit_release_stats::Snapshot{}]() mutable
+					   [lastLogged = exit_persist_stats::Snapshot{}, lastRelease = exit_release_stats::Snapshot{},
+						lastRelocate = relocate_confirm_stats::Snapshot{}]() mutable
 		{
 			const auto release = exit_release_stats::Read();
 			if (!(release == lastRelease))
 			{
 				lastRelease = release;
 				LOG_INFO << FormatExitReleaseStats(release);
+			}
+			// [RelocateConfirm] 必须排在下面 [ExitPersist] 的"无变化就 return"之前:三行各看各的变化。
+			const auto relocate = relocate_confirm_stats::Read();
+			if (!(relocate == lastRelocate))
+			{
+				lastRelocate = relocate;
+				LOG_INFO << FormatRelocateConfirmStats(relocate);
 			}
 			const auto stats = exit_persist_stats::Read();
 			if (stats == lastLogged)
@@ -771,17 +902,20 @@ namespace
 		return suffix;
 	}
 
-	// 条件写标记的两个来源:A1′ 退出收尾,A2′ 载入放弃补写。只决定计到哪组计数、日志里写哪个 site。
+	// 条件写标记的三个来源:A1′ 退出收尾,A2′ 载入放弃补写,改派踢线前的凭证兜底补写(待确认表核实出"没变"、
+	// 而 Redis 里已没有同代标记时,见 relocate_confirm::DecideCredential)。只决定计到哪组计数、日志里写哪个 site。
 	enum class MarkWriteSite : uint8_t
 	{
 		kExitRelease,
 		kInheritRewrite,
+		kRelocateRefresh,
 
 		kCount
 	};
 	constexpr const char *kMarkWriteSiteNames[] = {
 		"exit_release",
 		"inherit_rewrite",
+		"relocate_refresh",
 	};
 	static_assert(std::size(kMarkWriteSiteNames) == static_cast<std::size_t>(MarkWriteSite::kCount),
 				  "kMarkWriteSiteNames 必须与 MarkWriteSite 一一对应");
@@ -792,28 +926,61 @@ namespace
 		return index < std::size(kMarkWriteSiteNames) ? kMarkWriteSiteNames[index] : "?";
 	}
 
+	// 按 site 把一次条件写的结果计到各自那一组上。必须按 site 分三路,不能再用"是不是 A2′ 补写"的二分:
+	// 改派的凭证补写会被算进 A1′ 的 written / epoch_moved / failed,[ExitRelease] 行的 attempted 就对不上账了。
 	void CountMarkWrite(MarkWriteSite site, exit_release_mark::MarkWriteResult result)
 	{
 		using Result = exit_release_mark::MarkWriteResult;
 		auto &stats = exit_release_stats::Get();
-		const bool rewrite = site == MarkWriteSite::kInheritRewrite;
+		auto &relocateStats = relocate_confirm_stats::Get();
+		// 每个 site 的三个去向:写成 / owner_epoch 已变没写 / 失败。
+		std::atomic<uint64_t> *written = nullptr;
+		std::atomic<uint64_t> *epochMoved = nullptr;
+		std::atomic<uint64_t> *failed = nullptr;
+		switch (site)
+		{
+		case MarkWriteSite::kExitRelease:
+			written = &stats.written;
+			epochMoved = &stats.epochMoved;
+			failed = &stats.failed;
+			break;
+		case MarkWriteSite::kInheritRewrite:
+			written = &stats.inheritRewritten;
+			epochMoved = &stats.inheritRewriteSkipped;
+			failed = &stats.inheritRewriteFailed;
+			break;
+		case MarkWriteSite::kRelocateRefresh:
+			written = &relocateStats.credentialWritten;
+			epochMoved = &relocateStats.credentialEpochMoved;
+			failed = &relocateStats.credentialFailed;
+			break;
+		case MarkWriteSite::kCount:
+			break;
+		}
+		if (written == nullptr)
+		{
+			// 越界的 site 只可能是调用方传错:不计到任何一组上(计错组比不计更误导),留一条 ERROR。
+			LOG_ERROR << "[ExitRelease] CountMarkWrite called with an unknown site "
+					  << static_cast<uint32_t>(site) << "; result not counted";
+			return;
+		}
 		switch (result)
 		{
 		case Result::kWritten:
-			exit_release_stats::Inc(rewrite ? stats.inheritRewritten : stats.written);
+			written->fetch_add(1, std::memory_order_relaxed);
 			break;
 		case Result::kEpochMoved:
-			exit_release_stats::Inc(rewrite ? stats.inheritRewriteSkipped : stats.epochMoved);
+			epochMoved->fetch_add(1, std::memory_order_relaxed);
 			break;
 		default:
-			exit_release_stats::Inc(rewrite ? stats.inheritRewriteFailed : stats.failed);
+			failed->fetch_add(1, std::memory_order_relaxed);
 			break;
 		}
 	}
 
 	// 条件写 player:{id}:handoff "E:now_ms":owner_epoch 仍等于 E 才写(exit_release_mark::kLuaWriteIfOwnerEpoch)。
-	// A1′ 与 A2′ 放弃补写共用。走 tlsRedis.GetZoneRedis() —— 与存盘、A2′、标记撤回同一条连接(FIFO):
-	// 退出存盘的落地回调已经到了,这条写必然排在它之后执行。
+	// A1′、A2′ 放弃补写与改派踢线前的凭证补写(MarkWriteSite::kRelocateRefresh)共用。走 tlsRedis.GetZoneRedis() ——
+	// 与存盘、A2′、标记撤回、改派的核实读同一条连接(FIFO):退出存盘的落地回调已经到了,这条写必然排在它之后执行。
 	// **一律不重试**(R7):写不成的后果只是这一次重登可能回 18、下一次重试放行;重试会把"这一刻已落盘"的
 	// 凭证推迟到一个不再成立的时刻。在途计数:发出前 +1,回调或派发失败时 -1(R6)。
 	void SendConditionalMarkWrite(Guid playerId, uint64_t epoch, MarkWriteSite site)
@@ -876,7 +1043,8 @@ namespace
 	// A1′:退出收尾时按 exit_release_mark::DecideExitReleaseMark 判定写不写断线释放标记,并按结果计数。
 	// 只由 FinishExitAfterPersist 调用,位置在 DispatchEmergencyRelocate 之后、RemovePlayerSession 之前
 	// (实体与意图组件此刻还在)。
-	//   relocateTicketConsumed    本次改派消费了疏散票据(它自己写标记,A1′ 不覆盖)
+	//   relocateTicketConsumed    本次改派消费了疏散票据:这次的标记归改派负责(条件写,可能没写成;没生效要踢线时
+	//                             由待确认表在踢线前兜底补写),A1′ 不覆盖。票据作废(没发改派)时为 false,A1′ 照常判定
 	//   exitWonOverIssuedHandoff  FinishExitAfterPersist 自己的"退出优先"分支里交接标记已写(M11)
 	void WriteExitReleaseMarkIfEligible(Guid playerId, entt::entity playerEntity, bool relocateTicketConsumed,
 										bool exitWonOverIssuedHandoff)
@@ -894,7 +1062,8 @@ namespace
 			facts.suppressedBy = intent->suppressedBy;
 		}
 		facts.relocateTicketConsumed = relocateTicketConsumed;
-		facts.handoffMarkInflight = exitWonOverIssuedHandoff || (intent != nullptr && intent->travelHandoffMarkIssued);
+		// 与改派的"更早请求可能还会被放行"共用同一个判据(player_exit_intent.h),两处不许各写一份。
+		facts.handoffMarkInflight = player_exit::HandoffEnterSceneMayBeInFlight(exitWonOverIssuedHandoff, intent);
 		if (facts.entityValid)
 		{
 			if (const auto *epochComp = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(playerEntity))
@@ -1171,6 +1340,542 @@ namespace
 			exit_release_stats::Inc(exit_release_stats::Get().inheritFailed);
 			ScheduleInheritClearRetry(playerId, "dispatch_failed");
 		}
+	}
+} // namespace
+
+namespace
+{
+	// ── 疏散 / 排空改派的待确认表:粘合代码 ──────────────────────────────────────────────
+	// 判定、阶段迁移与预算全在 relocate_confirm.h(契约写在它的文件头,改这里之前先读一遍);设计见
+	// cross-zone-scene-travel.md「CPP-3 疏散 / 排空改派的待确认表」。这一段只做粘合:读写 tlsRelocateConfirms、
+	// 发核实命令、按会话推 gate、计数、打日志。
+	// 全部只在 scene 逻辑线程上跑(线程模型见 tlsRelocateConfirms 的定义),不需要锁。Redis 回调只按值捕获
+	// playerId、条目号与核实代际,不绑对象、不持连接(AGENTS §11.7);表内指针只在一次调用栈里用,任何可能结清条目的
+	// 调用(含发 Redis 命令)之后一律重新 Find。不往任何实体上挂组件;读到的 owner_epoch 只当条件补写的参数与日志,
+	// 不写进任何 PlayerOwnerEpochComp(player_ownership_comp.h:读 Redis 采纳 epoch 的入口只有归属取证那一个)。
+	// 时间:定时扫描用调用方注入的时刻,其余入口在各自开头取一次单调时钟,一路往下传。
+
+	using RelocateClock = relocate_confirm::Clock;
+
+	int64_t RelocateMillis(RelocateClock::duration duration)
+	{
+		return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+	}
+
+	// 条目从登记到 now 过了多久(毫秒),只进日志。now 早于登记时刻(单测注入时间)按 0 计。
+	int64_t RelocateAgeMs(const relocate_confirm::Entry &entry, RelocateClock::time_point now)
+	{
+		return now > entry.createdAt ? RelocateMillis(now - entry.createdAt) : 0;
+	}
+
+	// 一条**已经从表里取走**的条目按"不踢"收口:计 outcome、打 resolved 行。
+	// verdictText = 日志里 verdict= 的取值:这次结清是由一次核实读数裁决出来的,传 relocate_confirm::VerdictName(读数);
+	// 没有读数的一律传 relocate_confirm::kVerdictUnread。reply_code 与 unsettled 两项是给 gave_up_unverified 排障用的:
+	// 分得出是"还有请求结局未定"还是"拒绝码不在可以盲踢的白名单里"。
+	void ConcludeRelocateWithoutKick(const relocate_confirm::Entry &entry, relocate_confirm::Outcome outcome,
+									 const char *verdictText, RelocateClock::time_point now)
+	{
+		using relocate_confirm::Outcome;
+		relocate_confirm_stats::Inc(relocate_confirm_stats::Get().outcomes[static_cast<std::size_t>(outcome)]);
+		const std::string line = "[RelocateConfirm] resolved player=" + std::to_string(entry.playerId) +
+								 " seq=" + std::to_string(entry.seq) +
+								 " outcome=" + relocate_confirm::OutcomeName(outcome) +
+								 " evidence=" + relocate_confirm::EvidenceName(entry.evidence) +
+								 " verdict=" + verdictText +
+								 " reply_code=" + std::to_string(entry.replyErrorCode) +
+								 " unsettled=" + (relocate_confirm::RequestOutcomeUnsettled(entry) ? "1" : "0") +
+								 " age_ms=" + std::to_string(RelocateAgeMs(entry, now));
+		switch (outcome)
+		{
+		case Outcome::kGranted:
+		case Outcome::kMovedElsewhere:
+		case Outcome::kLandedHere:
+			LOG_INFO << line;
+			return;
+		case Outcome::kSuperseded:
+		case Outcome::kIndeterminate:
+			// 不踢,但值得留证据:会话换了 / 读到了却判不清。
+			LOG_WARN << line;
+			return;
+		case Outcome::kGaveUpUnverified:
+		case Outcome::kKickVerified:   // 两个踢线结果不该走到这里(它们由 KickRelocatedSession 打 kick 行);
+		case Outcome::kKickUnverified: // 真走到了也按最高级别留痕。
+		case Outcome::kCount:
+			break;
+		}
+		// gave_up_unverified:读不到、又不能排除已被放行 —— 这条会话可能还挂在没有实体的玩家上,本节点不敢踢。
+		LOG_ERROR << line;
+	}
+
+	// 取走条目并按"不踢"收口。条目已不在(另一条路径先结清了)时 no-op。
+	void ResolveRelocate(Guid playerId, relocate_confirm::Outcome outcome, const char *verdictText,
+						 RelocateClock::time_point now)
+	{
+		const std::optional<relocate_confirm::Entry> taken = tlsRelocateConfirms.Take(playerId);
+		if (!taken.has_value())
+		{
+			return;
+		}
+		ConcludeRelocateWithoutKick(*taken, outcome, verdictText, now);
+	}
+
+	// 踢线:按票据里抄下的会话直推 tip(kEnterSceneFailed)+ KickPlayer(34),让客户端断线回选服重登。
+	// 核实过的踢(kKickVerified)与读不到时的踢(kKickUnverified)都经这里。
+	//   credentialAction / credentialEpoch  踢线前补不补写重登凭证,由调用方按同一次核实读数判好
+	//                                       (relocate_confirm::DecideCredential);没有读数时传 kNone / 0;
+	//   verdictText                         同 ConcludeRelocateWithoutKick。
+	// tip 码用 kEnterSceneFailed:客户端按它识别"换图确定没成"并断线重登。不用 kEnterSceneServerBusy —— 那个码被客户端
+	// 刻意排除在"确定没成"之外(见 DispatchEnterSceneTransportFailure)。
+	void KickRelocatedSession(Guid playerId, relocate_confirm::Outcome outcome,
+							  relocate_confirm::CredentialAction credentialAction, uint64_t credentialEpoch,
+							  const char *verdictText, RelocateClock::time_point now)
+	{
+		using relocate_confirm::Outcome;
+		// 1. 先取走:下面的补写与推送都不会重入到同一条条目上,重复调用也拿不到第二次。
+		const std::optional<relocate_confirm::Entry> taken = tlsRelocateConfirms.Take(playerId);
+		if (!taken.has_value())
+		{
+			return;
+		}
+		const relocate_confirm::Entry &entry = *taken;
+		auto &stats = relocate_confirm_stats::Get();
+
+		// 2. 踢线前的本地复核:本节点此刻有他的有效实体就不踢、也不补写。"条目存在 ⇒ 本节点没有该玩家实体"只是契约,
+		//    这里在代码里判一次:载入卡过落地预算才建出实体、或核实应答回来时实体已建出,踢下去打掉的是一条正在本节点
+		//    上的合法会话,补写出来的标记还会在新持有期间留成一张免存盘的放行证(回档)。
+		//    载入还在途(只在待入场表里)时照常踢,但不补写 —— 那一条由 DecideCredential 的 kSkipLocalHolder 挡。
+		if (const auto localEntity = tlsEcs.GetPlayer(playerId); tlsEcs.actorRegistry.valid(localEntity))
+		{
+			const auto *snapshot = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(localEntity);
+			const bool sameSession = snapshot != nullptr && snapshot->gate_session_id() == entry.sessionId;
+			const Outcome withheld = sameSession ? Outcome::kLandedHere : Outcome::kSuperseded;
+			relocate_confirm_stats::Inc(stats.outcomes[static_cast<std::size_t>(withheld)]);
+			if (sameSession)
+			{
+				LOG_INFO << "[RelocateConfirm] kick withheld player=" << playerId << " seq=" << entry.seq
+						 << ": entity is back on this node, outcome=" << relocate_confirm::OutcomeName(withheld);
+			}
+			else
+			{
+				LOG_WARN << "[RelocateConfirm] kick withheld player=" << playerId << " seq=" << entry.seq
+						 << ": entity is back on this node, outcome=" << relocate_confirm::OutcomeName(withheld);
+			}
+			return;
+		}
+
+		// 3. 凭证:每次踢线按判定结果计一次;只有 kAttempt 真的去写。补写是 owner_epoch 条件写,一律不重试,
+		//    计入 tlsExitReleaseMarksInFlight(因而进两个 drain 谓词),结果由 CountMarkWrite 记到 credential_* 上。
+		//    排在推送之前:同一条连接上先把凭证发出去,客户端被踢后立刻重登时它多半已经落地。
+		relocate_confirm_stats::Inc(stats.credentialActions[static_cast<std::size_t>(credentialAction)]);
+		if (credentialAction == relocate_confirm::CredentialAction::kAttempt)
+		{
+			SendConditionalMarkWrite(playerId, credentialEpoch, MarkWriteSite::kRelocateRefresh);
+		}
+
+		// 4. 推送。gate 已不在 / 已换实例时推不出去,客户端仍然卡着:如实记成 push_gate_gone / push_gate_replaced。
+		const relocate_confirm::GatePushResult push = SendTipAndKickToSession(
+			entry.sessionId, playerId, entry.gateInstanceId, static_cast<uint32_t>(kEnterSceneFailed));
+		relocate_confirm_stats::Inc(stats.outcomes[static_cast<std::size_t>(outcome)]);
+		relocate_confirm_stats::Inc(stats.push[static_cast<std::size_t>(push)]);
+		const std::string line = "[RelocateConfirm] kick player=" + std::to_string(playerId) +
+								 " seq=" + std::to_string(entry.seq) +
+								 " outcome=" + relocate_confirm::OutcomeName(outcome) +
+								 " push=" + relocate_confirm::GatePushResultName(push) +
+								 " credential=" + relocate_confirm::CredentialActionName(credentialAction) +
+								 " credential_epoch=" + std::to_string(credentialEpoch) +
+								 " session=" + std::to_string(entry.sessionId) +
+								 " evidence=" + relocate_confirm::EvidenceName(entry.evidence) +
+								 " verdict=" + verdictText +
+								 " reply_code=" + std::to_string(entry.replyErrorCode) +
+								 " age_ms=" + std::to_string(RelocateAgeMs(entry, now));
+		if (outcome == Outcome::kKickVerified && push == relocate_confirm::GatePushResult::kSent)
+		{
+			// 核实过、也推出去了:改派没成是异常信号,但处置是完整的。
+			LOG_WARN << line;
+		}
+		else
+		{
+			// 没核实就踢,或者踢线没推出去(客户端仍卡着):都要人看。
+			LOG_ERROR << line;
+		}
+	}
+
+	// 这次核实没读到:1s 后重试(Table::MarkVerifyDeferred),计 verify_deferred。
+	// firstAttempt = 本轮核实里第一次没读到 → WARN;之后的重试失败降为 DEBUG(Redis 不通时每条每秒一次,逐次打 WARN
+	// 会把故障期日志淹掉;趋势看 verify_deferred)。detail 是可选的排障后缀(ERROR 应答的原文)。
+	void DeferRelocateVerify(relocate_confirm::Entry &entry, const char *reason, bool firstAttempt,
+							 RelocateClock::time_point now, const std::string &detail = std::string())
+	{
+		relocate_confirm::Table::MarkVerifyDeferred(entry, now);
+		relocate_confirm_stats::Inc(relocate_confirm_stats::Get().verifyDeferred);
+		if (firstAttempt)
+		{
+			LOG_WARN << "[RelocateConfirm] verify deferred player=" << entry.playerId << " seq=" << entry.seq
+					 << " reason=" << reason << detail;
+		}
+		else
+		{
+			LOG_DEBUG << "[RelocateConfirm] verify deferred player=" << entry.playerId << " seq=" << entry.seq
+					  << " reason=" << reason << detail;
+		}
+	}
+
+	// 核实读(SendRelocateVerify 发出的 EVAL)的应答。全部参数都是回调按值捕获的:条目号、发出时的核实代际、
+	// 发出时是不是一次重试(只决定"没读到"的日志级别)。
+	void HandleRelocateVerifyReply(Guid playerId, uint64_t seq, uint32_t gen, bool wasRetry, const redisReply *reply)
+	{
+		using relocate_confirm::Outcome;
+		using relocate_confirm::VerifyAction;
+		const RelocateClock::time_point now = RelocateClock::now();
+
+		// 入口判据写死:条目号对得上,并且条目仍在核实阶段、仍有命令在途、代际就是这一条(AcceptsVerifyReply)。
+		// 不通过的一律丢弃 —— 空应答 / ERROR / 正常应答一视同仁,不计数、不改条目。条目被转去落地(进场路由到了)或
+		// 重新开始一轮核实之后,在途旧应答读到的"仍指向源场景"若照常裁决,会踢掉正在本节点载入的合法会话。
+		relocate_confirm::Entry *entry = tlsRelocateConfirms.Find(playerId, seq);
+		if (entry == nullptr || !relocate_confirm::AcceptsVerifyReply(*entry, gen))
+		{
+			LOG_DEBUG << "[RelocateConfirm] stale verify reply dropped player=" << playerId << " seq=" << seq
+					  << " gen=" << gen << " phase="
+					  << (entry != nullptr ? relocate_confirm::PhaseName(entry->phase) : "gone")
+					  << " in_flight=" << (entry != nullptr && entry->verifyInFlight ? 1 : 0)
+					  << " entry_gen=" << (entry != nullptr ? entry->verifyGen : 0u);
+			return;
+		}
+		entry->verifyInFlight = false;
+
+		// 应答必须是三元素数组、每个元素 STRING 或 NIL(MGET 对缺键 / 类型不对的键给 NIL)。空应答(连接断了)、
+		// ERROR(带 shebang 的脚本在只读副本 / MISCONF / OOM 下整体被拒)、其它形状都算这次没读到。
+		const char *deferReason = nullptr;
+		std::string deferDetail;
+		if (reply == nullptr)
+		{
+			deferReason = "reply_lost";
+		}
+		else if (reply->type == REDIS_REPLY_ERROR)
+		{
+			deferReason = "reply_error";
+			if (reply->str != nullptr)
+			{
+				deferDetail = std::string(" err=") + reply->str;
+			}
+		}
+		else if (reply->type != REDIS_REPLY_ARRAY || reply->elements != 3)
+		{
+			deferReason = "malformed";
+		}
+		else
+		{
+			for (std::size_t i = 0; i < 3; ++i)
+			{
+				const redisReply *element = reply->element[i];
+				if (element == nullptr ||
+					(element->type != REDIS_REPLY_STRING && element->type != REDIS_REPLY_NIL))
+				{
+					deferReason = "malformed";
+				}
+			}
+		}
+		if (deferReason != nullptr)
+		{
+			DeferRelocateVerify(*entry, deferReason, /*firstAttempt=*/!wasRetry, now, deferDetail);
+			return;
+		}
+		const redisReply *epochElement = reply->element[0];
+		const redisReply *locationElement = reply->element[1];
+		const redisReply *handoffElement = reply->element[2];
+
+		// owner_epoch:键不存在(NIL)或不是完整的十进制串一律按 0 —— 0 在凭证判定里就是"不写"。
+		uint64_t redisOwnerEpoch = 0;
+		if (epochElement->type == REDIS_REPLY_STRING && epochElement->str != nullptr)
+		{
+			redisOwnerEpoch =
+				relocate_confirm::ParseOwnerEpoch(std::string_view(epochElement->str, epochElement->len));
+		}
+
+		// location:present 必须按元素类型单独取。ParsePlayerLocationElement 对"键不存在"与"解析失败"都返回 false,
+		// 把解析失败当成不存在会让一条写坏的 location 判成 kAbsent(可踢),正确结果是判不清(不踢)。
+		// 裁决只看 zone / node / scene:不读 rollback_receipt(它只证明凭这份标记的某条请求被回滚,证明不了本次改派已处理完),
+		// 也不看 location 里记的 owner_epoch。
+		storage::PlayerLocation location;
+		relocate_confirm::PlacementFacts placement;
+		placement.expectation = entry->expectation;
+		placement.present = locationElement->type == REDIS_REPLY_STRING;
+		placement.parsed = placement.present && player_ownership::ParsePlayerLocationElement(locationElement, location);
+		placement.locationZoneId = placement.parsed ? location.zone_id() : 0;
+		placement.selfZoneId = GetZoneId();
+		// PlayerLocation.node_id 是十进制字符串(与归属取证、队伍跟随同一判法)。node_id 只在 zone 内唯一,
+		// zone 由 ClassifyPlacement 另比;任一 zone 为 0 时它判"判不清",不把 0 当成本 zone。
+		placement.nodeIsSelf = placement.parsed && location.node_id() == std::to_string(GetNodeInfo().node_id());
+		placement.locationSceneId = placement.parsed ? location.scene_id() : 0;
+		placement.sourceSceneId = entry->sourceSceneId;
+		placement.evacuating = tlsEmergencyRelocating;
+		const relocate_confirm::Verdict verdict = relocate_confirm::ClassifyPlacement(placement);
+		const char *verdictText = relocate_confirm::VerdictName(verdict);
+
+		// 读到"没变 / 已不存在"时现在许不许踢:过了 settleAt,或者没有请求结局未定且证据不是成功应答 / 结果未知。
+		const bool requestUnsettled = relocate_confirm::RequestOutcomeUnsettled(*entry);
+		const bool kickAllowedNow =
+			now >= entry->settleAt || relocate_confirm::MayKickBeforeSettle(entry->evidence, requestUnsettled);
+		switch (relocate_confirm::DecideAfterVerify(verdict, kickAllowedNow))
+		{
+		case VerifyAction::kResolveMoved:
+			// 已在别处:有成功应答的算本次改派放行了(granted),否则是别的请求把他放走的。都不踢。
+			ResolveRelocate(playerId,
+							entry->evidence == relocate_confirm::Evidence::kReplySucceeded ? Outcome::kGranted
+																							: Outcome::kMovedElsewhere,
+							verdictText, now);
+			return;
+		case VerifyAction::kResolveIndeterminate:
+			ResolveRelocate(playerId, Outcome::kIndeterminate, verdictText, now);
+			return;
+		case VerifyAction::kAwaitLanding:
+			// scene_manager 把他放到了本节点的另一个场景:进场路由还在路上,转去等它。
+			relocate_confirm::Table::BeginLanding(*entry, now, /*reentered=*/false, /*loadPending=*/false);
+			LOG_INFO << "[RelocateConfirm] landing player=" << playerId << " seq=" << seq << " reentered=0";
+			return;
+		case VerifyAction::kWaitSettle:
+			relocate_confirm::Table::WaitForSettle(*entry);
+			relocate_confirm_stats::Inc(relocate_confirm_stats::Get().settleWaits);
+			LOG_INFO << "[RelocateConfirm] waiting for settle player=" << playerId << " seq=" << seq
+					 << " evidence=" << relocate_confirm::EvidenceName(entry->evidence) << " verdict=" << verdictText
+					 << " settle_in_ms=" << RelocateMillis(entry->settleAt - now);
+			return;
+		case VerifyAction::kKick:
+		{
+			// 凭证判定用的全是这一刻的事实:同一次读到的 owner_epoch 与 handoff,加上本节点此刻的状态。
+			relocate_confirm::CredentialFacts credential;
+			credential.verdict = verdict;
+			credential.redisOwnerEpoch = redisOwnerEpoch;
+			credential.markCarriesEpoch =
+				handoffElement->type == REDIS_REPLY_STRING && handoffElement->str != nullptr &&
+				relocate_confirm::MarkCarriesEpoch(std::string_view(handoffElement->str, handoffElement->len),
+												   redisOwnerEpoch);
+			credential.localHolderPossible = tlsEcs.actorRegistry.valid(tlsEcs.GetPlayer(playerId)) ||
+											 tlsPendingEnterMap.count(playerId) != 0;
+			credential.identityConfirmed = IsNodeIdentityConfirmed();
+			credential.devUnsafeCrossNode = IsDevUnsafeCrossNodeHandoff();
+			// entry 指针到此为止不再使用:KickRelocatedSession 会把条目取走。
+			KickRelocatedSession(playerId, Outcome::kKickVerified, relocate_confirm::DecideCredential(credential),
+								 redisOwnerEpoch, verdictText, now);
+			return;
+		}
+		case VerifyAction::kCount:
+			break;
+		}
+		// DecideAfterVerify 不会返回 kCount;真走到这里就让本轮核实自己到期,按"无法核实"处置(不在这里猜)。
+		LOG_ERROR << "[RelocateConfirm] verify reply for player " << playerId << " seq=" << seq
+				  << " produced no action (verdict=" << verdictText << "); leaving the entry to its verify deadline";
+	}
+
+	// 发一次核实读。条目必须在 kVerifying 且没有命令在途,否则 no-op。
+	// 命令是只读脚本 relocate_confirm::kLuaReadPlacement(一次读回 owner_epoch / location / handoff,为什么带 shebang、
+	// 为什么不删任何键见它的注释)。**必须走 tlsRedis.GetZoneRedis()**:muduo hiredis::Hiredis::command 是
+	// redisvAsyncCommand 的薄封装,无队列、无重放,与存盘、标记写、载入前的标记清理同一条 FIFO 连接。改走
+	// redis_client.h 那类带重试队列的接口,读数之后的凭证补写可能被重放到某次载入的标记清理之后,等于给活持有者
+	// 发一张放行证。
+	// settle 之前不许读的情形(结果未知 / 还有请求结局未定,relocate_confirm::MustReadAfterSettle)在这里拦:
+	// 不发命令,把下一次核实排到 settleAt。
+	// now 由调用方传入,函数内不另取时钟。
+	void SendRelocateVerify(Guid playerId, uint64_t seq, RelocateClock::time_point now)
+	{
+		relocate_confirm::Entry *entry = tlsRelocateConfirms.Find(playerId, seq);
+		if (entry == nullptr || entry->phase != relocate_confirm::Phase::kVerifying || entry->verifyInFlight)
+		{
+			return;
+		}
+		const relocate_confirm::Evidence evidence = entry->evidence;
+		const relocate_confirm::Expectation expectation = entry->expectation;
+		if (now < entry->settleAt &&
+			relocate_confirm::MustReadAfterSettle(evidence, relocate_confirm::RequestOutcomeUnsettled(*entry)))
+		{
+			relocate_confirm::Table::WaitForSettle(*entry);
+			relocate_confirm_stats::Inc(relocate_confirm_stats::Get().settleWaits);
+			LOG_INFO << "[RelocateConfirm] waiting for settle player=" << playerId << " seq=" << seq
+					 << " evidence=" << relocate_confirm::EvidenceName(evidence)
+					 << " verdict=" << relocate_confirm::kVerdictUnread
+					 << " settle_in_ms=" << RelocateMillis(entry->settleAt - now);
+			return;
+		}
+
+		// 上一次没读到、这次是重试:只决定"又没读到"时的日志级别。MarkVerifySent 会清掉这个位,先抄下来。
+		const bool wasRetry = entry->retryPending;
+		auto &redis = tlsRedis.GetZoneRedis();
+		if (!redis || !redis->connected())
+		{
+			DeferRelocateVerify(*entry, "redis_unavailable", /*firstAttempt=*/!wasRetry, now);
+			return;
+		}
+		const uint32_t gen = relocate_confirm::Table::MarkVerifySent(*entry);
+		const std::string ownerEpochKey = player_ownership::OwnerEpochRedisKey(playerId);
+		const std::string locationKey = player_ownership::LocationRedisKey(playerId);
+		const std::string handoffKey = player_ownership::HandoffRedisKey(playerId);
+		// 不能只判 connected():连接正在断开时它仍为真,而命令已经发不出去(理由见 SendHandoffWithdraw 上方的注释),
+		// command() 的返回值必须一并检查。脚本串作为一个 %s 参数传入是安全的(同 SendHandoffWithdraw)。
+		const int ret = redis->command(
+			[playerId, seq, gen, wasRetry](hiredis::Hiredis *, redisReply *reply)
+			{
+				HandleRelocateVerifyReply(playerId, seq, gen, wasRetry, reply);
+			},
+			"EVAL %s 3 %s %s %s", relocate_confirm::kLuaReadPlacement, ownerEpochKey.c_str(), locationKey.c_str(),
+			handoffKey.c_str());
+		if (ret != REDIS_OK)
+		{
+			// 命令没发出去,回调不会来。command() 之后不沿用之前的指针,重新对号;仍是刚才那一条才记推迟。
+			relocate_confirm::Entry *unsent = tlsRelocateConfirms.Find(playerId, seq);
+			if (unsent != nullptr && relocate_confirm::AcceptsVerifyReply(*unsent, gen))
+			{
+				DeferRelocateVerify(*unsent, "dispatch_failed", /*firstAttempt=*/!wasRetry, now);
+			}
+			return;
+		}
+		LOG_INFO << "[RelocateConfirm] verify player=" << playerId << " seq=" << seq << " gen=" << gen
+				 << " evidence=" << relocate_confirm::EvidenceName(evidence)
+				 << " expectation=" << relocate_confirm::ExpectationName(expectation);
+	}
+
+	// 有了证据:转入(新一轮)核实并立刻试着读一次。应答认领、传输失败认领、改派没发出去、落地两类共用。
+	// 条目已不在时 no-op。读不读、何时读由 SendRelocateVerify 决定(settle 之前可能只是排到 settleAt)。
+	void StartRelocateVerify(Guid playerId, uint64_t seq, relocate_confirm::Evidence evidence,
+							 relocate_confirm::Expectation expectation, RelocateClock::time_point now)
+	{
+		relocate_confirm::Entry *entry = tlsRelocateConfirms.Find(playerId, seq);
+		if (entry == nullptr)
+		{
+			return;
+		}
+		relocate_confirm::Table::BeginVerify(*entry, now, evidence, expectation);
+		SendRelocateVerify(playerId, seq, now);
+	}
+
+	// kLanding 条目的每拍检查:实体建出来没有、载入是不是被放弃了、等没等过头(relocate_confirm::DecideLanding)。
+	// "实体已建出且会话一致"就按 landed_here 结清 —— 它不保证玩家进了场景(目标场景在路由到达前被销毁时,
+	// EnterScene 只回一条失败 tip 就返回,实体与会话都已在),这是进场链自己的既有缺口,不在这里收。
+	void CheckRelocateLanding(Guid playerId, uint64_t seq, RelocateClock::time_point now)
+	{
+		using relocate_confirm::LandingAction;
+		const relocate_confirm::Entry *entry = tlsRelocateConfirms.Find(playerId, seq);
+		if (entry == nullptr || entry->phase != relocate_confirm::Phase::kLanding)
+		{
+			return;
+		}
+		const auto playerEntity = tlsEcs.GetPlayer(playerId);
+		const bool entityValid = tlsEcs.actorRegistry.valid(playerEntity);
+		bool sessionMatches = false;
+		if (entityValid)
+		{
+			const auto *snapshot = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(playerEntity);
+			sessionMatches = snapshot != nullptr && snapshot->gate_session_id() == entry->sessionId;
+		}
+		const bool loadPending = tlsPendingEnterMap.count(playerId) != 0;
+		// entry 指针在 switch 之后不再使用:每一支要么结清条目,要么重新 Find。
+		switch (relocate_confirm::DecideLanding(entityValid, sessionMatches, entry->reentered, loadPending,
+												now >= entry->deadline))
+		{
+		case LandingAction::kWait:
+			return;
+		case LandingAction::kResolveLanded:
+			ResolveRelocate(playerId, relocate_confirm::Outcome::kLandedHere, relocate_confirm::kVerdictUnread, now);
+			return;
+		case LandingAction::kResolveSuperseded:
+			ResolveRelocate(playerId, relocate_confirm::Outcome::kSuperseded, relocate_confirm::kVerdictUnread, now);
+			return;
+		case LandingAction::kVerifyAbandoned:
+			// 进场路由到过、载入却已不在途(继承标记核对不过 / 载入失败 / 会话在载入中取消):那几条出口只回 tip、不踢线,
+			// 踢不踢由这里核实后决定 —— 读到仍指向本节点才踢。
+			StartRelocateVerify(playerId, seq, relocate_confirm::Evidence::kLandingAbandoned,
+								relocate_confirm::Expectation::kAtThisNode, now);
+			return;
+		case LandingAction::kVerifyTimeout:
+			StartRelocateVerify(playerId, seq, relocate_confirm::Evidence::kLandingTimeout,
+								relocate_confirm::Expectation::kAtThisNode, now);
+			return;
+		case LandingAction::kCount:
+			return;
+		}
+	}
+
+	// DispatchEnterSceneReply 在"实体已不在"分支里问一句:这条应答是不是本次改派的。返回 true = 已认领(调用方直接
+	// 返回),false = 不是待确认表的(调用方照原样记一条 INFO)。
+	// 认领按关联号精确匹配;回显号为 0(旧版 scene_manager)才退回按 player_id(relocate_confirm::DecideReplyClaim)。
+	// 认领之后**只触发核实,从不直接定案**:成功不直接结清(可能是把他放回了正在排空的同一个场景、路由还在路上),
+	// 拒绝不直接踢(推路由失败那一类拒绝在回滚没成时等于已放行到别处)。
+	// 应答回显的 owner_epoch_after_rollback 只进日志,绝不采纳。
+	bool ClaimRelocateEnterSceneReply(Guid playerId, uint64_t replyTag, const ::scene_manager::EnterSceneResponse &resp)
+	{
+		using relocate_confirm::ClaimAction;
+		relocate_confirm::Entry *entry = tlsRelocateConfirms.FindPlayer(playerId);
+		const ClaimAction claim = relocate_confirm::DecideReplyClaim(
+			entry != nullptr, entry != nullptr ? entry->correlationId : 0,
+			entry != nullptr ? entry->phase : relocate_confirm::Phase::kMarkWriting, replyTag);
+		if (entry == nullptr || claim == ClaimAction::kNotMine || claim == ClaimAction::kCount)
+		{
+			return false;
+		}
+		const uint64_t seq = entry->seq;
+		// 号精确匹配的认领才记"本次请求的完成通知已到"与它的拒绝码。回显号为 0 的退路认领归属不精确(那条应答可能是
+		// 更早请求的),不记:条目继续按"还有请求结局未定"处理,只会多等到 settle、读不到时不盲踢。
+		if (replyTag != 0)
+		{
+			relocate_confirm::Table::MarkCompletion(*entry, resp.error_code());
+		}
+		if (claim == ClaimAction::kIgnore)
+		{
+			// 条目已不在等应答:还没发出(只可能是退路认领)/ 已有证据在核实 / 已落回本节点。结论由已排好的路径给。
+			relocate_confirm_stats::Inc(relocate_confirm_stats::Get().replyIgnored);
+			LOG_INFO << "[RelocateConfirm] reply ignored player=" << playerId << " seq=" << seq << " corr=" << replyTag
+					 << " phase=" << relocate_confirm::PhaseName(entry->phase) << " error_code=" << resp.error_code();
+			return true;
+		}
+		relocate_confirm_stats::Inc(relocate_confirm_stats::Get().replyVerified);
+		const relocate_confirm::Evidence evidence = relocate_confirm::EvidenceForReply(resp.error_code());
+		if (resp.has_redirect())
+		{
+			// 改派的目标 zone 就是本 zone,不该被重定向。只留痕,仍按应答码当证据(error_code 为 0 即成功),由核实定案。
+			LOG_WARN << "[RelocateConfirm] reply for player=" << playerId << " seq=" << seq << " corr=" << replyTag
+					 << " carries a cross-zone redirect, which a same-zone relocate should never get; verifying anyway";
+		}
+		LOG_INFO << "[RelocateConfirm] reply player=" << playerId << " seq=" << seq << " corr=" << replyTag
+				 << " error_code=" << resp.error_code()
+				 << " epoch_after_rollback=" << resp.owner_epoch_after_rollback()
+				 << " evidence=" << relocate_confirm::EvidenceName(evidence);
+		// 必须排在 MarkCompletion 之后:SendRelocateVerify 要读 completionSeen 决定是不是等到 settle 再读。
+		StartRelocateVerify(playerId, seq, evidence, relocate_confirm::Expectation::kAtSource, RelocateClock::now());
+		return true;
+	}
+
+	// DispatchEnterSceneTransportFailure 在"实体已不在"分支里问一句:这次传输失败是不是本次改派的。返回值同上。
+	// 只按号精确匹配,没有 player_id 退路(relocate_confirm::DecideTransportFailureClaim)。
+	// 传输失败 = **结果未知**:deadline 到期之后 scene_manager 的 handler 仍在跑,可能照样铸造、推路由、回滚。
+	// 所以认领后只是换一种证据(kTransportFailed)转核实,而且要等到 settle 才读 —— 此刻读到窗口中间的"已在别处"
+	// 会被结清为不踢,随后的回滚把 location 写回源场景,会话就永远挂着。
+	bool ClaimRelocateTransportFailure(Guid playerId, uint64_t requestTag, const std::string &reason)
+	{
+		using relocate_confirm::ClaimAction;
+		relocate_confirm::Entry *entry = tlsRelocateConfirms.FindPlayer(playerId);
+		const ClaimAction claim = relocate_confirm::DecideTransportFailureClaim(
+			entry != nullptr, entry != nullptr ? entry->correlationId : 0,
+			entry != nullptr ? entry->phase : relocate_confirm::Phase::kMarkWriting, requestTag);
+		if (entry == nullptr || claim == ClaimAction::kNotMine || claim == ClaimAction::kCount)
+		{
+			return false;
+		}
+		const uint64_t seq = entry->seq;
+		relocate_confirm_stats::Inc(relocate_confirm_stats::Get().transportFailed);
+		// 本次请求的完成通知到了(以失败的形式);没有应答体,拒绝码留 0。
+		relocate_confirm::Table::MarkCompletion(*entry, 0);
+		if (claim == ClaimAction::kIgnore)
+		{
+			// 条目已不在等完成通知(例如进场路由已先把他带回本节点):只记一笔,结论由已排好的路径给。
+			LOG_INFO << "[RelocateConfirm] transport failure ignored player=" << playerId << " seq=" << seq
+					 << " corr=" << requestTag << " phase=" << relocate_confirm::PhaseName(entry->phase) << " ("
+					 << reason << ")";
+			return true;
+		}
+		LOG_WARN << "[RelocateConfirm] transport failure player=" << playerId << " seq=" << seq << " corr=" << requestTag
+				 << " (" << reason << "); outcome unknown, verifying after settle";
+		StartRelocateVerify(playerId, seq, relocate_confirm::Evidence::kTransportFailed,
+							relocate_confirm::Expectation::kAtSource, RelocateClock::now());
+		return true;
 	}
 } // namespace
 
@@ -1727,7 +2432,8 @@ void PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	}
 
 	// 6. 回合制战斗登录后置钩子:先应用离线挂起结算(再放开排队),
-	//    RECONNECT 且战斗在途时向 gate 重发 BindBattleEvent 并提示客户端补拉。
+	//    换会话(RECONNECT / REPLACE)且战斗在途时推重连提示,客户端据此补签重建直连后补拉
+	//    (turn-based §22 D72)。
 	//    放在场景绑定成功之后:会话快照与 gate 路由此时才可靠。
 	PlayerBattleSystem::OnPlayerEnterScene(player, enterInfo.enter_gs_type());
 }
@@ -1971,6 +2677,20 @@ void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player, ExitCause ca
 			intent.sessionAtExit = sessionSnapshot->gate_session_id();
 		}
 		intent.cause = cause;
+		// 会话是不是已经死了(粘性;之后再来的客户端断线由 MergeExitCause 置位)。改派票据据此作废。
+		intent.clientDisconnected = cause == ExitCause::kClientDisconnect;
+		// 源场景必须此刻抄:下面的 DetachFromScene 会摘掉 SceneEntityComp,而疏散 / 排空的改派要等退出收敛之后才发,
+		// 那时已无从知道玩家是从哪个场景被排走的。改派的确认核实拿它与 Redis 里的 location 比:仍指向这个场景 = 改派
+		// 没生效。对"整节点疏散时本来就已在退出中"的玩家同样有效(那时只合并原因,这里抄下的值还在)。
+		// sceneRegistry 上先 valid 再 try_get:对已销毁的场景实体调 try_get 是 entt 的未定义行为。
+		if (const auto *sceneComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
+			sceneComp != nullptr && tlsEcs.sceneRegistry.valid(sceneComp->sceneEntity))
+		{
+			if (const auto *sceneInfo = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(sceneComp->sceneEntity))
+			{
+				intent.sceneIdAtExit = sceneInfo->scene_id();
+			}
+		}
 		tlsEcs.actorRegistry.emplace_or_replace<PlayerExitIntentComp>(player, intent);
 	}
 
@@ -2119,10 +2839,36 @@ void PlayerLifecycleSystem::FinishExitAfterPersist(Guid playerId)
 		tlsEcs.actorRegistry.remove<PlayerFrozenComp>(playerEntity);
 	}
 
+	// 改派登记要记一笔"本节点替他发出的更早 EnterScene 还可能被 scene_manager 处理"(实体销毁之后就无从得知了):
+	//   * 退出优先作废的那次交接,标记已写 → 它的 EnterScene 可能还在排队(与 A1′ 共用同一个判据,见 player_exit_intent.h);
+	//   * 实体上还挂着在途的普通换图,发出不满一个 settle 窗口。
+	// 换手门只比标记的代际:那条更早的请求可以凭改派刚写的同代标记过门。所以为真时,改派被拒也不能马上踢,
+	// 核实要等到 settle 再读(relocate_confirm::RequestOutcomeUnsettled)。
+	// 已知漏报:普通换图的传输失败会当场摘掉在途组件(DispatchEnterSceneTransportFailure),此后一个 settle 窗口内被
+	// 排空的玩家读不到它。后果只伤活性(被瞬时拒绝后立即踢,那条换图随后才被放行,重登即恢复)。
+	const bool exitEntityValid = tlsEcs.actorRegistry.valid(playerEntity);
+	const PlayerExitIntentComp *exitIntent =
+		exitEntityValid ? tlsEcs.actorRegistry.try_get<PlayerExitIntentComp>(playerEntity) : nullptr;
+	bool earlierEnterSceneMayReply = player_exit::HandoffEnterSceneMayBeInFlight(exitWonOverIssuedHandoff, exitIntent);
+	if (exitEntityValid)
+	{
+		if (const auto *inFlight = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(playerEntity))
+		{
+			// settle 窗口从 scene_manager 的 gRPC deadline 派生,与待确认表登记时用的是同一个取值。
+			const auto settleWindow =
+				relocate_confirm::BudgetsFor(grpc_call_deadline::Get(eNodeType::SceneManagerNodeService)).settleWindow;
+			const auto settleWindowMs = std::chrono::duration_cast<std::chrono::milliseconds>(settleWindow).count();
+			earlierEnterSceneMayReply =
+				earlierEnterSceneMayReply ||
+				relocate_confirm::SceneChangeReplyMayArrive(/*hasInFlight=*/true, TimeSystem::NowMillisecondsUTC(),
+															inFlight->sentAtMs, static_cast<uint64_t>(settleWindowMs));
+		}
+	}
+
 	// 顺序不能反:先改派再摘 session 的话,改派用到的 session 已经没了;
 	// 先销毁实体再改派的话,票据里的 gate/session 也拿不到。
 	// 改派只需要票据里抄下来的信息,所以放在最前面。
-	const bool relocateTicketConsumed = DispatchEmergencyRelocate(playerId);
+	const bool relocateTicketConsumed = DispatchEmergencyRelocate(playerId, earlierEnterSceneMayReply);
 
 	// A1′ 断线释放标记(§12.6.3 第二步):改派之后(改派消费了票据就由它写标记,A1′ 不覆盖)、摘会话之前
 	// (实体、意图组件、owner_epoch 此刻都还在)。条件与计数见 WriteExitReleaseMarkIfEligible。
@@ -2238,13 +2984,18 @@ bool PlayerLifecycleSystem::IsEmergencyRelocateDrained()
 	// 标记在途为 0 = 这些改派的 EnterScene 确实都发出去了(写 handoff 标记是异步的);
 	// 实体清空 = 本地不再持有任何玩家状态。
 	// 断线释放标记在途为 0(R6):疏散期间 A1′ 按"身份不确认"一律不写,这一项正常恒 0,纳入谓词只为不依赖那条判定。
+	// 待确认表清空 = 每一次改派都有了结论(已在别处 / 已落回本节点 / 已踢线 / 已放弃)。不等它的话,节点在 quit loop 时
+	// 会把即将到达的拒绝应答丢掉,被拒的玩家就挂在没有实体的会话上 —— 这正是待确认表要收的口。等待受 Node 的 drain
+	// 看门狗约束:到期只放弃、不踢。疏散中表里的条目只读 Redis、只推 gate(凭证补写被身份闸挡住),不给将死的节点
+	// 新增任何写。
 	return tlsEmergencyRelocateTickets.empty() &&
 		   tlsRelocateHandoffMarksInFlight == 0 &&
 		   tlsExitReleaseMarksInFlight == 0 &&
+		   tlsRelocateConfirms.size() == 0 &&
 		   tlsEcs.actorRegistry.view<Player>().size() == 0;
 }
 
-bool PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId)
+bool PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId, bool earlierEnterSceneMayReply)
 {
 	auto it = tlsEmergencyRelocateTickets.find(playerId);
 	if (it == tlsEmergencyRelocateTickets.end())
@@ -2254,31 +3005,116 @@ bool PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId)
 	const EmergencyRelocateTicket ticket = it->second;
 	tlsEmergencyRelocateTickets.erase(it);
 
-	// 换手门(CZ-4):scene_manager 只凭 player:{id}:handoff 放行"已有位置记录的跨节点落点"。
-	// 走到这里时存盘已经落地(FinishExitAfterPersist 的前置条件),正是可以写标记的那一刻;
-	// 不写的话生产配置(AllowUnsafeCrossNodeHandoff=false)下疏散 / 排空的每一个玩家都会被
-	// ErrHandoffPending 挡回来,而本地实体马上就要销毁,玩家只能自己重登。
-	// 标记落地之后再发 EnterScene;实体此后立刻销毁,回调只用按值捕获的票据。
+	// 实体此刻还在(FinishExitAfterPersist 在本函数返回之后才销毁它):意图组件、当前会话、缓存的 owner_epoch 都要
+	// 现在读,之后只剩按值抄下来的东西。实体已无效(不该发生)时三样都按"没有"处理。
+	const auto playerEntity = tlsEcs.GetPlayer(playerId);
+	const bool entityValid = tlsEcs.actorRegistry.valid(playerEntity);
+	const PlayerExitIntentComp *exitIntent =
+		entityValid ? tlsEcs.actorRegistry.try_get<PlayerExitIntentComp>(playerEntity) : nullptr;
+	SessionId currentSession = kInvalidSessionId;
 	uint64_t ownerEpoch = 0;
-	if (const auto playerEntity = tlsEcs.GetPlayer(playerId); tlsEcs.actorRegistry.valid(playerEntity))
+	if (entityValid)
 	{
+		if (const auto *snapshot = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(playerEntity))
+		{
+			currentSession = snapshot->gate_session_id();
+		}
 		if (const auto *epochComp = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(playerEntity))
 		{
 			ownerEpoch = epochComp->epoch;
 		}
 	}
+
+	// 票据作废:本次退出期间客户端已断线(会话已死),或实体当前的会话已不是发票时那一条。给这样的会话改派,
+	// scene_manager 放行后路由会在 gate 被丢掉,location 停在一个从未载入该玩家的节点上,租约内重登被挑到别处时
+	// 拿不出那一代的标记。不发改派、返回 false:由 A1′ 按第一次退出原因决定写不写断线释放标记(排空时写、疏散时不写)。
+	const relocate_confirm::TicketDecision ticketDecision = relocate_confirm::DecideTicket(
+		exitIntent != nullptr && exitIntent->clientDisconnected, player_exit::IsBoundSession(currentSession),
+		currentSession == ticket.sessionId);
+	relocate_confirm_stats::Inc(
+		relocate_confirm_stats::Get().ticketDecisions[static_cast<std::size_t>(ticketDecision)]);
+	if (ticketDecision != relocate_confirm::TicketDecision::kDispatch)
+	{
+		LOG_INFO << "[RelocateConfirm] ticket voided player=" << playerId
+				 << " decision=" << relocate_confirm::TicketDecisionName(ticketDecision)
+				 << " ticket_session=" << ticket.sessionId << " current_session=" << currentSession;
+		return false;
+	}
+
+	// 换手门(CZ-4):scene_manager 只凭 player:{id}:handoff 放行"已有位置记录的跨节点落点"。
+	// 走到这里时存盘已经落地(FinishExitAfterPersist 的前置条件),正是可以写标记的那一刻;
+	// 不写的话生产配置(AllowUnsafeCrossNodeHandoff=false)下疏散 / 排空的每一个玩家都会被
+	// ErrHandoffPending 挡回来,而本地实体马上就要销毁,玩家只能自己重登。
+	// 标记落地之后再发 EnterScene;实体此后立刻销毁,回调只用按值捕获的票据与条目号。
 	auto &redis = tlsRedis.GetZoneRedis();
-	if (ownerEpoch == 0 || !redis || !redis->connected())
+	const bool writeMark = ownerEpoch != 0 && redis && redis->connected();
+	// 本次**尝试**写的标记原文;不写时为空。只记到条目上进日志。
+	const std::string value =
+		writeMark ? player_ownership::HandoffRedisValue(ownerEpoch, TimeSystem::NowMillisecondsUTC()) : std::string();
+
+	// 登记进待确认表:必须在销毁实体之前、与票据消费同一个调用栈里做(契约见 relocate_confirm.h)。从这一刻起这次
+	// 改派有人盯到有结论为止。逐字段显式赋值:Registration 的缺省值取的是保守一侧,漏赋会让条目白等到 settle。
+	relocate_confirm::Registration registration;
+	registration.playerId = playerId;
+	registration.sessionId = ticket.sessionId;
+	registration.gateNodeId = ticket.gateNodeId;
+	registration.gateInstanceId = ticket.gateInstanceId;
+	registration.ownerEpoch = ownerEpoch; // 可能落后于 Redis(回滚把 epoch 推进了而本节点还没取证),只进日志
+	registration.sourceSceneId = exitIntent != nullptr ? exitIntent->sceneIdAtExit : 0;
+	registration.markValue = value;
+	registration.earlierEnterSceneMayReply = earlierEnterSceneMayReply;
+	const relocate_confirm::Clock::time_point registeredAt = relocate_confirm::Clock::now();
+	// settle 窗口与等完成通知的预算从 scene_manager 的 gRPC deadline 派生(grpc_call_deadline.h 的要求)。
+	const relocate_confirm::Budgets budgets =
+		relocate_confirm::BudgetsFor(grpc_call_deadline::Get(eNodeType::SceneManagerNodeService));
+	std::optional<relocate_confirm::Entry> superseded;
+	const uint64_t seq = tlsRelocateConfirms.Add(registration, registeredAt, budgets, superseded);
+	if (superseded.has_value())
+	{
+		// 同一玩家上一次改派的条目还没收口就又被排空:只可能是他刚落回本节点、1s 节拍还没来得及把 kLanding 条目结清。
+		// 旧条目按 superseded 结清(不踢:玩家本人就在本节点上,正要被再次改派)。别的阶段出现在这里说明"条目存在期间
+		// 本节点没有该玩家实体"的契约被破坏了,留一条 ERROR。
+		if (superseded->phase != relocate_confirm::Phase::kLanding)
+		{
+			LOG_ERROR << "[RelocateConfirm] entry of player " << playerId << " seq=" << superseded->seq
+					  << " was replaced while in phase " << relocate_confirm::PhaseName(superseded->phase)
+					  << " (expected landing): the player had an entity on this node while its relocate was unresolved";
+		}
+		ConcludeRelocateWithoutKick(*superseded, relocate_confirm::Outcome::kSuperseded,
+									relocate_confirm::kVerdictUnread, registeredAt);
+	}
+	if (seq == 0)
+	{
+		// 表满:不淘汰在途条目(淘汰 = 放弃对某个玩家的确认),这一次按旧行为发出、不跟踪。
+		relocate_confirm_stats::Inc(relocate_confirm_stats::Get().untrackedOverflow);
+		LOG_ERROR << "[RelocateConfirm] untracked player=" << playerId << " reason=table_full pending="
+				  << tlsRelocateConfirms.size() << " (metric=untracked_overflow)";
+	}
+	else
+	{
+		LOG_INFO << "[RelocateConfirm] tracking player=" << playerId << " seq=" << seq << " session=" << ticket.sessionId
+				 << " gate=" << ticket.gateNodeId << " owner_epoch=" << ownerEpoch
+				 << " source_scene=" << registration.sourceSceneId
+				 << " mark=" << (value.empty() ? std::string("none") : value)
+				 << " earlier_reply_possible=" << (earlierEnterSceneMayReply ? 1 : 0);
+	}
+
+	if (!writeMark)
 	{
 		// epoch 未铸造(兼容窗口,scene_manager 侧也没有门可过)或 Redis 不可用:照旧直接发。
 		// 后者在生产下会被换手门拒绝 —— 写不出落盘凭证就不该被放行,这是 fail-closed 的本意。
+		// 被拒之后由待确认表核实并踢线,不再让玩家挂着。
 		if (ownerEpoch != 0)
 		{
 			LOG_ERROR << "[EmergencyRelocate] zone redis unavailable; handoff mark not written for player "
 					  << playerId << ", scene_manager will refuse the re-home until the player re-enters";
 		}
-		SendEmergencyRelocateEnterScene(playerId, ticket);
+		TrackRelocateDispatch(playerId, seq, ticket, relocate_confirm::MarkWrite::kNotAttempted);
 		return true;
+	}
+	if (relocate_confirm::Entry *entry = tlsRelocateConfirms.Find(playerId, seq); entry != nullptr)
+	{
+		entry->markWrite = relocate_confirm::MarkWrite::kPending; // seq 为 0(未跟踪)时 Find 找不到,跳过
 	}
 
 	// 条件写(GO-2 §12.8):owner_epoch 仍等于本实体缓存的 E 才写 "E:now"(exit_release_mark::kLuaWriteIfOwnerEpoch,
@@ -2287,21 +3123,30 @@ bool PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId)
 	// 条件写在 epoch 已变时不写,转写标记留着,改派凭它过门;对已被废黜的节点同样不写,比无条件写严格更安全。
 	// 无论写没写成都照常发改派,由 scene_manager 的换手门裁决(与改动前一致)。
 	// 残余:疏散在回滚**之前**撤回了原标记时回滚回 marker_gone,改派会回 18(三重巧合,cross-zone-scene-travel.md §12.8)。
+	// 写的结局(写成 / owner_epoch 已变没写 / 失败)只记到条目上进日志,**不进任何判定**:没写时 scene_manager 凭的是
+	// 别人的标记,从"这份原文写没写成"推不出改派有没有被放行、被回滚。改派没生效要踢线时,凭证由待确认表按那一次
+	// 核实读到的 owner_epoch 兜底补写(relocate_confirm::DecideCredential)。
 	const std::string ownerEpochKey = player_ownership::OwnerEpochRedisKey(playerId);
 	const std::string key = player_ownership::HandoffRedisKey(playerId);
 	const std::string epochText = std::to_string(ownerEpoch);
-	const std::string value = player_ownership::HandoffRedisValue(ownerEpoch, TimeSystem::NowMillisecondsUTC());
 	++tlsRelocateHandoffMarksInFlight;
 	// 脚本串作为一个 %s 参数传入是安全的:hiredis 只按**格式串**里的空格切参数(同 SendConditionalMarkWrite)。
+	// 回调只按值捕获 id、条目号、票据与标记原文(AGENTS §11.7);回调到达时凭 (playerId, seq) 对号,条目已结清 /
+	// 已落回本节点 / 已超时转核实的不再发(TrackRelocateDispatch)。
 	const int ret = redis->command(
-		[playerId, ticket, value](hiredis::Hiredis *, redisReply *reply)
+		[playerId, seq, ticket, value](hiredis::Hiredis *, redisReply *reply)
 		{
 			--tlsRelocateHandoffMarksInFlight;
-			switch (exit_release_mark::ClassifyMarkWriteReply(ToReplyShape(reply), ReplyInteger(reply)))
+			const exit_release_mark::MarkWriteResult writeResult =
+				exit_release_mark::ClassifyMarkWriteReply(ToReplyShape(reply), ReplyInteger(reply));
+			relocate_confirm::MarkWrite markWrite = relocate_confirm::MarkWrite::kFailed;
+			switch (writeResult)
 			{
 			case exit_release_mark::MarkWriteResult::kWritten:
+				markWrite = relocate_confirm::MarkWrite::kWritten;
 				break;
 			case exit_release_mark::MarkWriteResult::kEpochMoved:
+				markWrite = relocate_confirm::MarkWrite::kEpochMoved;
 				LOG_INFO << "[EmergencyRelocate] handoff mark not written for player " << playerId << " mark=" << value
 						 << ": owner_epoch moved on (e.g. rolled back past this node's cached epoch); keeping the"
 						 << " existing mark, requesting re-home anyway (scene_manager decides)";
@@ -2312,7 +3157,7 @@ bool PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId)
 						  << "; requesting re-home anyway (scene_manager decides)";
 				break;
 			}
-			SendEmergencyRelocateEnterScene(playerId, ticket);
+			TrackRelocateDispatch(playerId, seq, ticket, markWrite);
 		},
 		"EVAL %s 2 %s %s %s %s %d", exit_release_mark::kLuaWriteIfOwnerEpoch, ownerEpochKey.c_str(), key.c_str(),
 		epochText.c_str(), value.c_str(), player_ownership::kHandoffMarkTtlSec);
@@ -2321,19 +3166,74 @@ bool PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId)
 		// 命令没发出去,回调不会来:自己把计数还回去。
 		--tlsRelocateHandoffMarksInFlight;
 		LOG_ERROR << "[EmergencyRelocate] redis command dispatch failed for player " << playerId;
-		SendEmergencyRelocateEnterScene(playerId, ticket);
+		TrackRelocateDispatch(playerId, seq, ticket, relocate_confirm::MarkWrite::kFailed);
 	}
 	return true;
 }
 
-void PlayerLifecycleSystem::SendEmergencyRelocateEnterScene(Guid playerId, const EmergencyRelocateTicket &ticket)
+void PlayerLifecycleSystem::TrackRelocateDispatch(Guid playerId, uint64_t seq, const EmergencyRelocateTicket &ticket,
+												  relocate_confirm::MarkWrite markWrite)
 {
+	if (seq == 0)
+	{
+		// 没被跟踪(登记时表满):按旧行为直接发,发没发出去、有没有生效都不再过问。
+		SendEmergencyRelocateEnterScene(playerId, ticket, /*trackSeq=*/0);
+		return;
+	}
+	relocate_confirm::Entry *entry = tlsRelocateConfirms.Find(playerId, seq);
+	if (entry != nullptr)
+	{
+		entry->markWrite = markWrite; // 只进日志
+	}
+	if (entry == nullptr || entry->phase != relocate_confirm::Phase::kMarkWriting)
+	{
+		// 写标记的回调到达时这次改派已经有了去向:已结清,进场路由已先把他带回本节点(条目在等载入),或回调来得
+		// 太晚、条目已按"没发出去"转核实。再发一条 EnterScene 只会给一条已经处置过的会话重新改派。
+		LOG_INFO << "[RelocateConfirm] not sending player=" << playerId << " seq=" << seq << " phase="
+				 << (entry != nullptr ? relocate_confirm::PhaseName(entry->phase) : "gone")
+				 << ": entry already moved on";
+		return;
+	}
+	const uint64_t correlationId = SendEmergencyRelocateEnterScene(playerId, ticket, seq);
+	if (correlationId == 0)
+	{
+		// 没发出去(scene_manager 注册表为空):改派不可能生效,核实一下 location 没被别的请求动过就踢。
+		relocate_confirm_stats::Inc(relocate_confirm_stats::Get().notSent);
+		StartRelocateVerify(playerId, seq, relocate_confirm::Evidence::kNotSent,
+							relocate_confirm::Expectation::kAtSource, relocate_confirm::Clock::now());
+		return;
+	}
+	// 发送之后不沿用之前的指针,重新对号再读条目上的两个预算(SendEmergencyRelocateEnterScene 里 MarkSent 时定的)。
+	entry = tlsRelocateConfirms.Find(playerId, seq);
+	if (entry == nullptr)
+	{
+		return;
+	}
+	LOG_INFO << "[RelocateConfirm] sent player=" << playerId << " seq=" << seq << " corr=" << correlationId
+			 << " mark_write=" << relocate_confirm::MarkWriteName(markWrite)
+			 << " settle_ms=" << RelocateMillis(entry->settleAt - entry->sentAt)
+			 << " reply_wait_ms=" << RelocateMillis(entry->deadline - entry->sentAt);
+}
+
+uint64_t PlayerLifecycleSystem::SendEmergencyRelocateEnterScene(Guid playerId, const EmergencyRelocateTicket &ticket,
+																uint64_t trackSeq)
+{
+	// GetSceneManagerEntity 只在 scene_manager 注册表为空时返回 null;"全是坏通道"时照样挑出一个,请求随后以传输失败
+	// 收场(由待确认表按结果未知处理)。所以"没发出去"只剩注册表为空这一种。
 	const auto smEntity = GetSceneManagerEntity(playerId);
 	if (smEntity == entt::null)
 	{
-		LOG_ERROR << "[EmergencyRelocate] no SceneManager node reachable; player " << playerId
-				  << " keeps its gate session and has to re-enter through the normal login flow";
-		return;
+		if (trackSeq != 0)
+		{
+			LOG_ERROR << "[EmergencyRelocate] no SceneManager node reachable; player " << playerId
+					  << " was not re-homed, will verify and kick";
+		}
+		else
+		{
+			LOG_ERROR << "[EmergencyRelocate] no SceneManager node reachable; player " << playerId
+					  << " keeps its gate session and has to re-enter through the normal login flow";
+		}
+		return 0;
 	}
 	::scene_manager::EnterSceneRequest req;
 	req.set_player_id(playerId);
@@ -2350,14 +3250,171 @@ void PlayerLifecycleSystem::SendEmergencyRelocateEnterScene(Guid playerId, const
 	// 就会被静默丢掉,玩家卡在原地。这里本来也不需要去重:票据在发送前就已经从
 	// tlsEmergencyRelocateTickets 里删掉了,每张票最多发一次,也没有重试。
 	// 其它 EnterScene 调用点(player_scene.cpp)同样不带 request_id。
-	// 关联号照取(统一出口要求每条都带非 0 号),但不登记等待者:发出时本地实体已销毁(或随即销毁),
-	// 应答到达时是 no-op;实体若已在本节点重建,它的应答对不上任何等待者的号(kNoWaiter / kUnmatched)。
-	// 号只进日志,供与 reply 日志对照。
+	// 关联号(统一出口要求每条都带非 0 号):这次改派的等待者是待确认表里的条目,不是实体 —— 发出时本地实体随即销毁。
+	// **先把号记到条目上再发**(SendCorrelatedEnterScene 的前置条件,与 RequestSceneChange / RequestTravelEnterScene
+	// 同一纪律):应答 / 传输失败回来时走到 DispatchEnterSceneReply / DispatchEnterSceneTransportFailure 的"实体已不在"
+	// 分支,由 ClaimRelocateEnterSceneReply / ClaimRelocateTransportFailure 按这个号认领。实体若已在本节点重建,
+	// 应答照旧进 Classify,对不上任何等待者的号(kNoWaiter / kUnmatched)—— 那时条目已在等载入,本来就不看应答。
+	// 未跟踪(trackSeq == 0,表满)的这一次没有等待者,号只进日志。
 	const uint64_t correlationId = NextEnterSceneCorrelationId();
+	if (trackSeq != 0)
+	{
+		// 调用方(TrackRelocateDispatch)已确认条目在 kMarkWriting;这里再对一次号,只在仍然如此时迁移。
+		// 应答与 settle 的钟都从这一刻起算,预算从 scene_manager 的 gRPC deadline 派生。
+		if (relocate_confirm::Entry *entry = tlsRelocateConfirms.Find(playerId, trackSeq);
+			entry != nullptr && entry->phase == relocate_confirm::Phase::kMarkWriting)
+		{
+			relocate_confirm::Table::MarkSent(
+				*entry, relocate_confirm::Clock::now(), correlationId,
+				relocate_confirm::BudgetsFor(grpc_call_deadline::Get(eNodeType::SceneManagerNodeService)));
+		}
+	}
 	SendCorrelatedEnterScene(smEntity, req, correlationId);
 
 	LOG_INFO << "[EmergencyRelocate] requested main-world re-home for player " << playerId
 			 << " (session=" << ticket.sessionId << ", gate=" << ticket.gateNodeId << ", corr=" << correlationId << ")";
+	return correlationId;
+}
+
+void PlayerLifecycleSystem::ReconcileRelocateOnReentry(Guid playerId, SessionId sessionId)
+{
+	// 1. 还没派发的票据作废。任何把玩家路由回本节点的进场,要么复用实体并取消退出(EnterScene 第 0 步),要么废黜实体
+	//    后重新载入;两种情况下那次退出都不会再正常收尾。留着票据,它会在下一次、会话已换的退出里被误消费。
+	if (tlsEmergencyRelocateTickets.erase(playerId) != 0)
+	{
+		relocate_confirm_stats::Inc(relocate_confirm_stats::Get().cancelledOnReentry);
+		LOG_INFO << "[RelocateConfirm] cancelled on reentry player=" << playerId << " session=" << sessionId
+				 << " (metric=cancelled_on_reentry)";
+	}
+
+	// 2. 本节点替他发的改派有了去向。
+	relocate_confirm::Entry *entry = tlsRelocateConfirms.FindPlayer(playerId);
+	if (entry == nullptr)
+	{
+		return;
+	}
+	const relocate_confirm::Clock::time_point now = relocate_confirm::Clock::now();
+	if (!player_exit::IsBoundSession(sessionId) || sessionId != entry->sessionId)
+	{
+		// 进场带来的不是票据那条会话(或根本没带会话):玩家已经重登,票据里的旧会话已死。不踢。
+		ResolveRelocate(playerId, relocate_confirm::Outcome::kSuperseded, relocate_confirm::kVerdictUnread, now);
+		return;
+	}
+	// 同一条会话被路由回了本节点:转入"落地等载入",由 SweepRelocateConfirms 每拍看实体建出来没有;载入被放弃
+	// (继承标记核对不过 / 载入失败 / 会话在载入中取消)时核实后踢。条目若还在写标记 / 等应答 / 核实,那些阶段的
+	// 回调与应答此后都因阶段已变而不再生效(在途的核实应答由 AcceptsVerifyReply 丢弃)。
+	// loadPending 取的是"上一次载入还在不在":本函数排在登记这一次的待入场条目之前。同一条路由被 gate 补发时
+	// 上一次载入还在途,BeginLanding 据此不重置截止时刻;上一次已结束则是真正的第二次进场,截止时刻重新起算。
+	const bool loadPending = tlsPendingEnterMap.count(playerId) != 0;
+	const bool wasLanding = entry->phase == relocate_confirm::Phase::kLanding;
+	const bool wasReentered = entry->reentered;
+	const relocate_confirm::Clock::time_point previousDeadline = entry->deadline;
+	relocate_confirm::Table::BeginLanding(*entry, now, /*reentered=*/true, loadPending);
+	if (!wasLanding || !wasReentered || entry->deadline != previousDeadline)
+	{
+		LOG_INFO << "[RelocateConfirm] landing player=" << playerId << " seq=" << entry->seq << " reentered=1";
+	}
+	else
+	{
+		LOG_DEBUG << "[RelocateConfirm] duplicate route for a landing entry, player=" << playerId
+				  << " seq=" << entry->seq << "; deadline unchanged";
+	}
+}
+
+void PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::time_point now, bool reconnected)
+{
+	if (tlsRelocateConfirms.size() == 0)
+	{
+		return;
+	}
+	auto &stats = relocate_confirm_stats::Get();
+	// CollectDue 只归类、只给出 (playerId, seq);逐个处置时会结清条目,所以每一个都重新对号,不持有表内指针。
+	const relocate_confirm::Table::Due due = tlsRelocateConfirms.CollectDue(now, reconnected);
+	if (due.markWriteTimedOut > 0)
+	{
+		stats.markWriteTimeout.fetch_add(due.markWriteTimedOut, std::memory_order_relaxed);
+	}
+	if (due.replyTimedOut > 0)
+	{
+		stats.replyTimeout.fetch_add(due.replyTimedOut, std::memory_order_relaxed);
+	}
+	for (const auto &[playerId, seq] : due.toVerify)
+	{
+		SendRelocateVerify(playerId, seq, now);
+	}
+	for (const auto &[playerId, seq] : due.verifyExpired)
+	{
+		// 一轮核实到期仍读不到。本节点读不到 ≠ scene_manager 写不了(脚本在被降级的旧主上被拒、本节点与 Redis 之间
+		// 的分区),所以只有"本节点替他发的请求里没有一条可能写过落点"才踢,其余放弃、不踢(relocate_confirm::
+		// ShouldKickUnverified;拒绝码过 SmRejectedBeforeAnyPlacementWrite 的白名单)。没有读数,也就不补写凭证。
+		const relocate_confirm::Entry *entry = tlsRelocateConfirms.Find(playerId, seq);
+		if (entry == nullptr || entry->phase != relocate_confirm::Phase::kVerifying)
+		{
+			continue;
+		}
+		if (relocate_confirm::ShouldKickUnverified(entry->evidence, relocate_confirm::RequestOutcomeUnsettled(*entry),
+												   SmRejectedBeforeAnyPlacementWrite(entry->replyErrorCode)))
+		{
+			KickRelocatedSession(playerId, relocate_confirm::Outcome::kKickUnverified,
+								 relocate_confirm::CredentialAction::kNone, /*credentialEpoch=*/0,
+								 relocate_confirm::kVerdictUnread, now);
+		}
+		else
+		{
+			ResolveRelocate(playerId, relocate_confirm::Outcome::kGaveUpUnverified, relocate_confirm::kVerdictUnread,
+							now);
+		}
+	}
+	for (const auto &[playerId, seq] : due.landingToCheck)
+	{
+		CheckRelocateLanding(playerId, seq, now);
+	}
+}
+
+std::size_t PlayerLifecycleSystem::RelocateConfirmsPending()
+{
+	return tlsRelocateConfirms.size();
+}
+
+void PlayerLifecycleSystem::LogRelocateConfirmBacklog(const char *site)
+{
+	if (tlsRelocateConfirms.size() == 0)
+	{
+		return;
+	}
+	const auto counts = tlsRelocateConfirms.CountByPhase();
+	std::string summary = "[RelocateConfirm] backlog site=";
+	summary += site;
+	summary += " total=";
+	summary += std::to_string(tlsRelocateConfirms.size());
+	for (std::size_t i = 0; i < counts.size(); ++i)
+	{
+		summary += ' ';
+		summary += relocate_confirm::kPhaseNames[i];
+		summary += '=';
+		summary += std::to_string(counts[i]);
+	}
+	LOG_WARN << summary;
+	// 逐条列出:drain 看门狗到期后这些条目只放弃、不踢,事后要查得出是哪些玩家可能还挂着。player_id 只进日志,
+	// 不做指标 label。不在任何定时路径上(调用方保证每次 drain 只调一次)。
+	const relocate_confirm::Clock::time_point now = relocate_confirm::Clock::now();
+	for (const relocate_confirm::Entry &entry : tlsRelocateConfirms.Snapshot())
+	{
+		LOG_INFO << "[RelocateConfirm] backlog entry player=" << entry.playerId << " seq=" << entry.seq
+				 << " phase=" << relocate_confirm::PhaseName(entry.phase)
+				 << " evidence=" << relocate_confirm::EvidenceName(entry.evidence) << " session=" << entry.sessionId
+				 << " age_ms=" << RelocateAgeMs(entry, now);
+	}
+}
+
+std::optional<relocate_confirm::Entry> PlayerLifecycleSystem::PeekRelocateConfirm(Guid playerId)
+{
+	const relocate_confirm::Entry *entry = tlsRelocateConfirms.FindPlayer(playerId);
+	if (entry == nullptr)
+	{
+		return std::nullopt;
+	}
+	return *entry;
 }
 
 entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &playerAllData, const PlayerEnterContext &ctx)
@@ -2560,7 +3617,11 @@ bool PlayerLifecycleSystem::SavePlayerToRedisImpl(entt::entity player, bool allo
 
 	// Send each sub-table as a separate DBTask (matching how login reads per-table)
 	const std::string playerIdStr = std::to_string(playerId);
-	const std::string dbTaskTopic = GetDbTaskTopic(homeZoneId);
+	// 世代号来自部署配置(DbTaskTopicGeneration,缺键 / 0 = 第一代,名字不带后缀),必须与 go/db、
+	// go/login 的 Kafka.TopicGeneration 相等:换代后仍按旧名写 = 存盘进了已排空、没人消费的旧 topic。
+	// 选哪个 zone 的 topic 仍只看 home_zone(上面的回落逻辑),世代号不改变路由。
+	const std::string dbTaskTopic = GetDbTaskTopic(
+		homeZoneId, tlsNodeConfigManager.GetBaseDeployConfig().db_task_topic_generation());
 
 	auto sendSubTableTask = [&](const google::protobuf::Message &subMsg)
 	{
@@ -2667,7 +3728,17 @@ void PlayerLifecycleSystem::DestroyDeposedPlayer(Guid playerId, const char *reas
 
 	// 疏散票据作废:改派也是 EnterScene,会拿着旧 epoch 去撞门;而且这个玩家已经有新主了。
 	// 票据删掉后 IsEmergencyRelocateDrained 照常收敛。
-	tlsEmergencyRelocateTickets.erase(playerId);
+	// 这是票据在 DispatchEmergencyRelocate 之外的第二个删除点:不发改派、不进待确认表,也就没有人替这条会话核实与
+	// 踢线。多数入口下玩家已在别处或正被本节点重载,作废是对的;但排空 / 疏散发起的退出还没收敛就被"标记已发出"
+	// 收口销毁时(那条路按"退出中 = 客户端已断开"不踢),客户端可能还连着。这里不踢(被废黜的玩家多半已在别处,
+	// 按旧会话踢会误伤),只留计数与日志让它看得见。
+	if (tlsEmergencyRelocateTickets.erase(playerId) != 0)
+	{
+		relocate_confirm_stats::Inc(relocate_confirm_stats::Get().ticketsDroppedDeposed);
+		LOG_WARN << "[RelocateConfirm] ticket dropped player=" << playerId << " site=" << reasonTag
+				 << ": entity destroyed as deposed before its exit converged; not relocating, not kicking"
+				 << " (metric=ticket_dropped_deposed)";
+	}
 
 	// 交接标记与冻结成对摘掉。实体马上就销毁,组件本来也会跟着消失;显式先摘是为了让下面
 	// DetachFromScene 触发的事件(BeforeLeaveScene …)看到的是一个普通的离场实体,而不是一个
@@ -3062,6 +4133,14 @@ void PlayerLifecycleSystem::DispatchEnterSceneReply(const ::scene_manager::Enter
 	const auto playerEntity = tlsEcs.GetPlayer(playerId);
 	if (!tlsEcs.actorRegistry.valid(playerEntity))
 	{
+		// 疏散 / 排空改派的应答只会落在这里(改派发出时实体随即销毁):先交待确认表按号认领,认领后只触发核实。
+		// 挂在"实体已不在"之后而不是实体查找之前:待确认条目存在期间本节点要么没有该玩家实体,要么条目已在等载入
+		// (那时应答本来就该忽略);实体有效时应答照旧进下面的 Classify,不会被按 player_id 吞掉。
+		if (ClaimRelocateEnterSceneReply(playerId, replyTag, resp))
+		{
+			return;
+		}
+		// 不认领的:玩家在交接途中退出,或没被跟踪(表满)的改派。
 		LOG_INFO << "[ZoneTravel] EnterScene reply for player " << playerId
 				 << " but entity is gone (exited during travel); ignoring corr=" << replyTag
 				 << " error_code=" << resp.error_code();
@@ -3132,7 +4211,7 @@ void PlayerLifecycleSystem::DispatchEnterSceneReply(const ::scene_manager::Enter
 	case Route::kCount:
 		break;
 	}
-	// kNoWaiter:疏散 / 退出后重建的实体、路由已先落地(EnterScene 3.1 已摘)的成功应答,或看门狗已先
+	// kNoWaiter:未跟踪(表满)的改派、退出后重建的实体、路由已先落地(EnterScene 3.1 已摘)的成功应答,或看门狗已先
 	// 核实过的迟到应答。没有事可做。(kCount 不会由 Classify 返回,一并落到这里。)
 	LOG_DEBUG << "[ZoneTravel] EnterScene reply for player " << playerId
 			  << " without an in-flight handoff or scene change; ignoring corr=" << replyTag
@@ -3159,7 +4238,12 @@ void PlayerLifecycleSystem::DispatchEnterSceneTransportFailure(const ::scene_man
 	const auto playerEntity = tlsEcs.GetPlayer(playerId);
 	if (!tlsEcs.actorRegistry.valid(playerEntity))
 	{
-		// 疏散 / 排空发的 EnterScene(发完实体就销毁了),或玩家在途中退出。
+		// 先交待确认表按号认领(疏散 / 排空发的 EnterScene,发完实体就销毁了):认领后当作结果未知,等到 settle 才核实。
+		// 不认领的是途中退出的玩家,或没被跟踪(表满)的改派。
+		if (ClaimRelocateTransportFailure(playerId, requestTag, reason))
+		{
+			return;
+		}
 		LOG_INFO << "[EnterSceneReply] EnterScene transport failure for player " << playerId
 				 << " but entity is gone; ignoring corr=" << requestTag << " (" << reason << ")";
 		return;

@@ -1,6 +1,6 @@
 # 装备属性系统(问道式:基础属性 + 蓝/粉/黄随机属性)
 
-> 落地日期:2026-10-07 / 08(**未编译、未导表、未 proto-gen,待 Codex 验证**,见 §9;尚未提交、未并入 main,改动在隔离工作树 `xuanming-server-mmo-equip`)。
+> 落地日期:2026-10-07 / 08(**未编译、未导表、未 proto-gen,待 Codex 验证**,见 §9)。2026-10-09 已并入本机 main(功能提交 `d69d50be7d`,未推送);客户端改动仍在隔离工作树 `mmorpg-client-equip`,未提交。
 > 实现分布:配表 `data/EquipAttribute*.xlsx` / `data/EquipAffix*.xlsx` + `data/Item.xlsx` 新列;
 > 协议 `proto/common/component/item_base_comp.proto`、`proto/scene/player_bag.proto`、
 > `proto/scene/player_attribute.proto`、`proto/battle/battle_data.proto`;
@@ -547,10 +547,10 @@ static CombatStatDisplay DescribeCombatStat(equiprules::CombatStat stat);     //
 - 两条生成流水线的客户端落点都是相对路径 `../mmorpg-client`(那是 Codex 在用的另一条分支的检出)。要让产物落进 `mmorpg-client-equip`,用第 2 步的配置副本。
 - MSBuild 一律串行:`/m:1 /p:Configuration=Debug /p:Platform=x64`。
 
-**0. 带入(git 写操作,需用户明确同意)**
-- 把隔离工作树的改动提交成分支,并入主仓 main(主仓 10-08 已解完那次 pull 合并)。预期唯一文本冲突:
-  `cpp/tests/cross_zone_test/cross_zone_test.cpp`(两边在同一锚点各追加一段用例,**都保留**;文件头索引里我方那几行别丢)。
-- 通过标准:`proto/message_id.txt` 末行是 `243=GuildServiceRespondGuildTrialInvite`;
+**0. 带入(2026-10-09 已完成,用户同意后由 Claude 执行;未推送)**
+- 功能提交 `d69d50be7d`(分支 `feat/equip-attributes`)已与 main 合并。冲突只有两处,都是「两边各追加一段」:
+  `cpp/tests/cross_zone_test/cross_zone_test.cpp`(main 的第 14 节 RelocateConfirm 在前,本功能的往返用例顺延为第 15 节)与 `docs/PROGRESS.md`(两边条目都保留)。
+- 合并后已核对的通过标准(Codex 可复核):`proto/message_id.txt` 末行是 `243=GuildServiceRespondGuildTrialInvite`;
   `grep -n StripEngineOnlyState cpp/nodes/battle/logic/battle_room_manager.cpp` 命中且在 `RedactStateForViewer` 内
   (它是「不向客户端暴露 combat」的唯一闸口,节点侧没有单测兜底);`data/` 下 xlsx 的差异只有装备这一批。
 

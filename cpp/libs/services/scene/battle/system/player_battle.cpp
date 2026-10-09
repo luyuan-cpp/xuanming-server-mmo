@@ -17,8 +17,6 @@
 #include <vector>
 
 #include "engine/core/time/system/time.h"
-#include "engine/infra/messaging/kafka/kafka_producer.h"
-#include "node/system/node/node_command_route.h"
 #include "network/network_utils.h"
 #include "network/node_utils.h"
 #include "network/player_message_utils.h"
@@ -68,7 +66,6 @@
 #include "proto/common/component/player_login_comp.pb.h"
 #include "proto/common/component/player_network_comp.pb.h"
 #include "proto/common/component/player_skill_comp.pb.h"
-#include "proto/contracts/kafka/gate_command.pb.h"
 
 // —— 以下生成产物当前尚未生成,proto 重生成后出现(路径按仓库生成器命名规律推断,
 //    依据见任务返回 open_issues;battle 节点侧代码采用同一推断)——
@@ -76,9 +73,7 @@
 #include "proto/common/component/battle_comp.pb.h"                    // InBattleComp / eInBattleState
 #include "proto/common/event/battle_event.pb.h"                       // BattleSettlementEvent
 #include "proto/scene/scene.pb.h"                                     // PrepareBattle* / CancelBattlePrepare*(重生成后新增消息)
-#include "proto/contracts/kafka/gate_event.pb.h"                      // BindBattleEvent(重生成后新增)
 #include "proto/battle/player_battle.pb.h"                            // BattleEndS2C / BattleReconnectS2C
-#include "rpc/service_metadata/contracts_kafka_gate_event_event_id.h" // ContractsKafkaBindBattleEventEventId(重生成后新增)
 #include "rpc/service_metadata/player_battle_service_metadata.h"      // BattleClientPlayerNotify*MessageId
 
 namespace
@@ -86,7 +81,7 @@ namespace
 	// Redis key 契约(设计文档 §6):
 	//   battle:lock:{player_id} = battle_id           —— 战斗串行化咨询锁(match 读,只 EXISTS)
 	//   battle:ctx:{player_id}  = InBattleComp 序列化 —— 锁的伴生上下文(scene 私有):
-	//       battle_node_id / deadline_ms / state / prepare_deadline_ms,供"实体没了但锁还在"
+	//       battle_node_id(仅日志/排障)/ deadline_ms / state / prepare_deadline_ms,供"实体没了但锁还在"
 	//       的路径重建冻结(完整下线再登录、备战到期后迟到的确认)。生命周期与锁完全同步:
 	//       同时 SET / 同 TTL / 同一条 Lua 里 EXPIRE / DEL,只在锁存在且值匹配时才被信任。
 	//   battle:settlement:pending:{player_id}    = event —— 待结算记录(TTL 7 天)
@@ -130,6 +125,26 @@ namespace
 		return g ? *g : 0;
 	}
 
+	// 备战时写进快照 routing 的大厅会话号(turn-based §22.5 第 3 条)。
+	// match 的 NotifyBattleAssigned 与 battle 的 NotifyBattleStart 都按这份快照路由推送;
+	// PREPARING 期间换了会话(断线重连 / REPLACE / 跨 gate 重定向),新会话收不到这两条,
+	// ConfirmBattle 升级 FIGHTING 时比对它来补推一次重连提示。
+	// 纯运行时组件:不入库,也**不能**并进 InBattleComp —— 后者经 SerializeBattleCtx 落 battle:ctx。
+	// 生命周期:PrepareBattle 与 InBattleComp 同时挂上;ConfirmBattle 升级后即摘;
+	// 其余情况随 RemoveInBattleComp 一并摘除。组件缺失而 InBattleComp 为 PREPARING,
+	// 说明实体是登录重建出来的(RestoreBattleFreezeOnLogin),同样视为换过会话。
+	struct BattlePrepareSessionComp
+	{
+		uint32_t gateSessionId = 0;
+	};
+
+	// 当前大厅会话号;无会话快照(已断线、实体仍在)时返回 0。
+	uint32_t CurrentGateSessionId(entt::entity player)
+	{
+		const auto* session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(player);
+		return session != nullptr ? session->gate_session_id() : 0;
+	}
+
 	// 摘 InBattleComp 的唯一入口(team-system.md §F.2):确实摘掉组件时回调组队系统,
 	// 补一次战斗中被跳过的跟随检查。所有解冻路径(结算、取消、备战作废、战斗作废、
 	// 重建撤销、重复结算销账)都必须走这里,漏一处就漏一次跟随。
@@ -137,7 +152,13 @@ namespace
 	// 删锁先入 hiredis 管道可保证跟随链读到的是删锁之后的状态。
 	bool RemoveInBattleComp(entt::entity player)
 	{
-		if (!tlsEcs.actorRegistry.valid(player) || !tlsEcs.actorRegistry.any_of<InBattleComp>(player))
+		if (!tlsEcs.actorRegistry.valid(player))
+		{
+			return false;
+		}
+		// 备战会话记录只随 InBattleComp 存在:一并摘除(组件缺失时 remove 为空操作)
+		tlsEcs.actorRegistry.remove<BattlePrepareSessionComp>(player);
+		if (!tlsEcs.actorRegistry.any_of<InBattleComp>(player))
 		{
 			return false;
 		}
@@ -1158,6 +1179,10 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 	inBattle.set_deadline_ms(request.deadline_ms());
 	inBattle.set_prepare_deadline_ms(prepareDeadlineMs);
 	inBattle.set_state(IN_BATTLE_STATE_PREPARING);
+	// 记下写进快照 routing 的会话号(BuildBattleSnapshot 已保证非 0),ConfirmBattle 据此判断
+	// 备战期间是否换过会话。emplace_or_replace:正常不会残留(随 RemoveInBattleComp 摘),防御性覆盖。
+	tlsEcs.actorRegistry.emplace_or_replace<BattlePrepareSessionComp>(
+		player, BattlePrepareSessionComp{response.snapshot().routing().session_id()});
 
 	// 指纹与快照同值(match 用响应字段比对,battle 用快照字段比对)
 	response.set_table_fingerprint(turnbattle::BattleTableFingerprint::Current());
@@ -1359,8 +1384,7 @@ void PlayerBattleSystem::ConfirmBattle(const ::BattleConfirmedEvent& event)
 		// 或玩家完整下线再登录后(登录重建尚未完成/未命中)才到的确认。
 		// 锁值 == battle_id 证明这期间玩家没有被放进第二场,可以安全重建为 FIGHTING;
 		// 锁不在则确认已过期(取消/结算/锁 TTL 过期),忽略。
-		RebuildBattleFreezeFromLock(player, playerId, battleId, event.deadline_ms(),
-									/*rebindGate=*/false, "late_confirm");
+		RebuildBattleFreezeFromLock(player, playerId, battleId, event.deadline_ms(), "late_confirm");
 		return;
 	}
 	if (inBattle->battle_id() != battleId)
@@ -1391,11 +1415,34 @@ void PlayerBattleSystem::ConfirmBattle(const ::BattleConfirmedEvent& event)
 			 << " deadline_ms=" << deadlineMs
 			 << " prepare_deadline_ms=" << inBattle->prepare_deadline_ms()
 			 << " lock_ttl_sec=" << ttlSec;
+
+	// 备战期间换过会话 -> 房间此刻已建成,补推一次重连提示(turn-based §22.5 第 3 条)。
+	// match 的 NotifyBattleAssigned 与 battle 的 NotifyBattleStart 走的是备战快照里的旧会话路由,
+	// 新会话收不到;OnPlayerEnterScene 在 PREPARING 时刻意不推(房间未建成,补签会被判 BattleGone),
+	// 所以这里是换会话后唯一的恢复入口。判据:
+	//   - 无备战会话记录:实体由 RestoreBattleFreezeOnLogin 以 PREPARING 重建(完整重登);
+	//   - 记录的会话号 != 当前会话号:大厅断线重连 / REPLACE / 跨 gate 重定向。
+	// 当前无会话(已断线、实体仍在)不推:之后的 RECONNECT 进场会因已 FIGHTING 在第 2 步推。
+	// 客户端对「同局已有活直连 / 同局补签在途」直接返回,重复提示无害。
+	const auto* prepareSession = tlsEcs.actorRegistry.try_get<BattlePrepareSessionComp>(player);
+	const uint32_t currentSessionId = CurrentGateSessionId(player);
+	const bool sessionChanged =
+		prepareSession == nullptr || prepareSession->gateSessionId != currentSessionId;
+	if (sessionChanged && currentSessionId != 0)
+	{
+		LOG_INFO << "[PlayerBattle] 备战期间换过会话,确认后补推重连提示: player_id=" << playerId
+				 << " battle_id=" << battleId
+				 << " prepare_session_id=" << (prepareSession != nullptr ? prepareSession->gateSessionId : 0u)
+				 << " current_session_id=" << currentSessionId;
+		NotifyBattleReconnectToClient(player);
+	}
+	// 升级完成即摘:之后的换会话由 OnPlayerEnterScene 按 FIGHTING 推提示
+	tlsEcs.actorRegistry.remove<BattlePrepareSessionComp>(player);
 }
 
 void PlayerBattleSystem::RebuildBattleFreezeFromLock(entt::entity player, const uint64_t playerId,
 													 const uint64_t battleId, const uint64_t deadlineMsHint,
-													 const bool rebindGate, const char* reason)
+													 const char* reason)
 {
 	if (!RedisReady())
 	{
@@ -1405,7 +1452,7 @@ void PlayerBattleSystem::RebuildBattleFreezeFromLock(entt::entity player, const 
 	}
 	const std::string reasonCopy = reason;
 	tlsRedis.GetZoneRedis()->command(
-		[player, playerId, battleId, deadlineMsHint, rebindGate, reasonCopy](hiredis::Hiredis*, redisReply* reply) {
+		[player, playerId, battleId, deadlineMsHint, reasonCopy](hiredis::Hiredis*, redisReply* reply) {
 			if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
 			{
 				LOG_ERROR << "[PlayerBattle] 冻结重建读锁/ctx EVAL 失败, player_id=" << playerId
@@ -1465,9 +1512,15 @@ void PlayerBattleSystem::RebuildBattleFreezeFromLock(entt::entity player, const 
 					 << " battle_node_id=" << rebuilt.battle_node_id()
 					 << " deadline_ms=" << rebuilt.deadline_ms() << " lock_ttl_sec=" << ttlSec;
 
-			if (rebindGate)
+			// 重建出的一律是 FIGHTING(房间已建成),而这条路径上 PREPARING->FIGHTING 的升级提示
+			// 从未推过(备战冻结已被 reaper 摘掉 / 实体是新建的),无从判断客户端是否知道这一局:
+			// 在线就无条件推一次重连提示(turn-based §22.5 第 3 条)。客户端对「同局已有活直连 /
+			// 同局补签在途」直接返回,只有直连正在建连时会多一次补签;迟到确认很少发生,可以接受。
+			// 若随后 ConfirmRebuiltFreeze 撤销重建(锁已被结算删掉),补签失败 -> 客户端判 BattleGone,
+			// 与这一局确实已结束一致。当前无会话时不推:之后的 RECONNECT 进场按 FIGHTING 推。
+			if (CurrentGateSessionId(player) != 0)
 			{
-				RebindBattleOnReconnect(player);
+				NotifyBattleReconnectToClient(player);
 			}
 		},
 		(std::string("EVAL %s 2 ") + kBattleLockKeyFmt + " " + kBattleCtxKeyFmt + " %llu").c_str(),
@@ -1547,19 +1600,13 @@ void PlayerBattleSystem::RestoreBattleFreezeOnLogin(entt::entity player, const u
 					 << " deadline_ms=" << rebuilt.deadline_ms()
 					 << " prepare_deadline_ms=" << rebuilt.prepare_deadline_ms();
 
-			// 战斗中(房间已建成)才重绑 gate 并提示客户端补拉;PREPARING 由随后的确认/取消/reaper 处理。
-			// battle_node_id 为 0(ctx 缺失的降级重建)时绑定无目标,只保留冻结不重绑。
+			// 战斗中(房间已建成)才提示客户端补签重连;PREPARING 由随后的确认/取消/reaper 处理 ——
+			// 重建实体不挂 BattlePrepareSessionComp,确认到达升级 FIGHTING 时 ConfirmBattle 据此补推提示。
+			// 不再要求 battle_node_id 已知(turn-based §22 D72):客户端凭 battle_id 经
+			// MatchService.RequestBattleTicket 补签,用不到节点号;ctx 缺失的降级重建同样要提示。
 			if (rebuilt.state() == IN_BATTLE_STATE_FIGHTING)
 			{
-				if (rebuilt.battle_node_id() != 0)
-				{
-					RebindBattleOnReconnect(player);
-				}
-				else
-				{
-					LOG_WARN << "[PlayerBattle] 登录重建: battle_node_id 未知,跳过 gate 重绑, player_id="
-							 << playerId << " battle_id=" << battleId;
-				}
+				NotifyBattleReconnectToClient(player);
 			}
 		},
 		(std::string("EVAL %s 2 ") + kBattleLockKeyFmt + " " + kBattleCtxKeyFmt).c_str(),
@@ -1919,8 +1966,8 @@ void PlayerBattleSystem::ApplyPendingSettlement(entt::entity player, const ::Bat
 	// 登录钩子只在「没有待结算记录」时才按锁重建冻结。可锁在落盘销账前一直留着,
 	// 玩家也可能在上一局还没销账时已经开了下一场(锁自然过期等极端情况):这里补一次按锁重建。
 	// 锁指向刚补应用的这一局时,RestoreBattleFreezeOnLogin 查账本命中会跳过重建;指向下一场
-	// 才重建并重绑(评审 wne803bj5 #8)。只在补应用成功后做:失败时锁与 pending 都指向这一局,
-	// 重建会把玩家冻进一场已经结束的战斗、把 gate 重绑到不存在的房间。
+	// 才重建并提示客户端补签重连(评审 wne803bj5 #8)。只在补应用成功后做:失败时锁与 pending 都指向这一局,
+	// 重建会把玩家冻进一场已经结束的战斗、让客户端去重连一个不存在的房间。
 	// 同一条连接 FIFO:上面的销账/续锁命令排在这次读锁之前。
 	if (!tlsEcs.actorRegistry.any_of<InBattleComp>(player))
 	{
@@ -1930,67 +1977,26 @@ void PlayerBattleSystem::ApplyPendingSettlement(entt::entity player, const ::Bat
 			 << " battle_id=" << settlement.battle_id();
 }
 
-void PlayerBattleSystem::RebindBattleOnReconnect(entt::entity player)
+void PlayerBattleSystem::NotifyBattleReconnectToClient(entt::entity player)
 {
 	const auto* inBattle = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
 	if (inBattle == nullptr)
 	{
 		return;
 	}
-	const uint64_t playerId = GuidForLog(player);
 
-	GateRoute gateRoute;
-	if (!ResolveGateRoute(player, gateRoute))
-	{
-		LOG_WARN << "[PlayerBattle] 重连重绑失败: 缺会话快照, player_id=" << playerId
-				 << " battle_id=" << inBattle->battle_id();
-		return;
-	}
-	// 不变量 2 fail-closed:空 instance id 会关闭 gate 侧防僵尸过滤,宁可不发
-	if (gateRoute.gateInstanceId.empty())
-	{
-		LOG_ERROR << "[PlayerBattle] 重连重绑被拒: gate_instance_id 为空, player_id=" << playerId
-				  << " battle_id=" << inBattle->battle_id()
-				  << " gate_node_id=" << gateRoute.gateNodeId;
-		return;
-	}
-
-	// BindBattleEvent 经 Kafka gate-cmd_g<N> 的 gate_node_id % P 号分区
-	// (GateCommand;key=player_id;分区由目标 gate 定死,同一 gate 的命令天然有序)
-	contracts::kafka::BindBattleEvent bindEvent;
-	bindEvent.set_session_id(gateRoute.sessionId);
-	bindEvent.set_battle_node_id(inBattle->battle_node_id());
-	bindEvent.set_battle_id(inBattle->battle_id());
-	bindEvent.set_player_id(playerId);
-
-	contracts::kafka::GateCommand command;
-	command.set_event_id(ContractsKafkaBindBattleEventEventId);
-	// 共享分区后的第一级(数字)过滤,理由见 node_kafka_command_filter.h。
-	command.set_target_gate_id(gateRoute.gateNodeId);
-	command.set_target_instance_id(gateRoute.gateInstanceId);
-	command.set_payload(bindEvent.SerializeAsString());
-
-	const auto route = node::kafka::ResolveCommandRoute(GateNodeService, gateRoute.gateNodeId);
-	const auto err = KafkaProducer::Instance().send(route.topic, command.SerializeAsString(),
-													std::to_string(playerId), route.partition);
-	if (err != RdKafka::ERR_NO_ERROR)
-	{
-		LOG_ERROR << "[PlayerBattle] BindBattleEvent 发送失败: topic=" << route.topic
-				  << " partition=" << route.partition
-				  << " player_id=" << playerId << " battle_id=" << inBattle->battle_id()
-				  << " err=" << RdKafka::err2str(err);
-		return;
-	}
-
-	// 推重连提示,客户端随后用 GetBattleState 向 battle 节点补拉全量状态
+	// 只推重连提示(turn-based §22 D72):gate 不再中继战斗,没有绑定可重建。
+	// 这是 scene 自己经大厅会话的下行(scene→gate TCP,不经 Kafka),不归 D39 管;
+	// 客户端收到后凭 battle_id 经 MatchService.RequestBattleTicket 补签、重建直连、
+	// 直连就绪后 GetBattleState 补拉全量状态。
 	::BattleReconnectS2C message;
 	message.set_battle_id(inBattle->battle_id());
 	SendMessageToClientViaGate(BattleClientPlayerNotifyBattleReconnectMessageId, message, player);
 
-	LOG_INFO << "[PlayerBattle] 战斗中重连已重绑: player_id=" << playerId
+	LOG_INFO << "[PlayerBattle] 战斗中换会话,已推重连提示: player_id=" << GuidForLog(player)
 			 << " battle_id=" << inBattle->battle_id()
-			 << " battle_node_id=" << inBattle->battle_node_id()
-			 << " gate_node_id=" << gateRoute.gateNodeId;
+			 << " state=" << eInBattleState_Name(inBattle->state())
+			 << " battle_node_id=" << inBattle->battle_node_id();
 }
 
 void PlayerBattleSystem::OnPlayerEnterScene(entt::entity player, uint32_t enterGsType)
@@ -2007,7 +2013,8 @@ void PlayerBattleSystem::OnPlayerEnterScene(entt::entity player, uint32_t enterG
 
 	// 1) 离线挂起结算:所有登录类型都查(先应用挂起结算再放开排队,§3.2)。
 	//    没有挂起结算时,再看 battle:lock 是否还在 —— 在则说明战斗仍在途而实体是新建的
-	//    (InBattleComp 不落库),按锁 + ctx 重建冻结并重绑 gate,后续结算才能在线命中。
+	//    (InBattleComp 不落库),按锁 + ctx 重建冻结(FIGHTING 时提示客户端补签重连),
+	//    后续结算才能在线命中。
 	//    两步必须串在同一条回调链上:挂起结算应用后,销账/续锁命令要排在读锁之前(同连接 FIFO)。
 	//    锁在结算应用后一直留到落盘销账(ReleaseFreezeKeepLock),所以按锁重建前还要查账本:
 	//    锁指向已应用的局就不重建(RestoreBattleFreezeOnLogin / RebuildBattleFreezeFromLock 内)。
@@ -2049,7 +2056,7 @@ void PlayerBattleSystem::OnPlayerEnterScene(entt::entity player, uint32_t enterG
 							 kPendingSettlementIdKeyFmt).c_str(), playerId, playerId);
 					}
 					// 这里**不**按锁重建:锁多半正属于这条坏记录的那一局(已结束、从没应用、账本里没有),
-					// 重建会把玩家冻进一场已结束的战斗并把 gate 重绑到不存在的房间(第二轮评审 w0zw729x1 #1)。
+					// 重建会把玩家冻进一场已结束的战斗并让客户端去重连不存在的房间(第二轮评审 w0zw729x1 #1)。
 					// 锁留给 TTL 过期;真有另一局在途时,它的结算/迟到确认会按锁匹配路径重建。
 					return;
 				}
@@ -2063,16 +2070,23 @@ void PlayerBattleSystem::OnPlayerEnterScene(entt::entity player, uint32_t enterG
 				 << "(battle:lock 未解,排队仍被挡,下次登录再补)";
 	}
 
-	// 2) 战斗中换了会话:实体仍存活且挂着 InBattleComp -> 重发 gate 绑定 + 提示客户端补拉
-	//    (完整下线再登录的重绑走上面的 RestoreBattleFreezeOnLogin 回调)。
+	// 2) 战斗中换了会话:实体仍存活且 InBattleComp 为 FIGHTING -> 提示客户端补签重连(turn-based §22 D72)
+	//    (完整下线再登录的提示走上面的 RestoreBattleFreezeOnLogin 回调)。
 	//    RECONNECT 与 REPLACE 都算换会话:跨 gate 重定向(RedirectToGate)后旧会话通常仍是 Online,
-	//    login 判成 REPLACE 而不是 RECONNECT;只认 RECONNECT 会让重定向后的玩家既拿不到
-	//    重绑也拿不到重连提示,战斗在客户端侧断掉(turn-based-battle-server.md §18.7 待修项)。
+	//    login 判成 REPLACE 而不是 RECONNECT;只认 RECONNECT 会让重定向后的玩家拿不到
+	//    重连提示,战斗在客户端侧断掉(turn-based-battle-server.md §18.7 / D38)。
 	//    LOGIN_FIRST 不进这里:首登实体是新建的,没有 InBattleComp,由第 1 步按锁 + ctx 重建。
-	if ((enterGsType == LOGIN_RECONNECT || enterGsType == LOGIN_REPLACE) &&
-		tlsEcs.actorRegistry.any_of<InBattleComp>(player))
+	//    PREPARING 不推(§22.5 第 3 条):房间还没建成(观战记录可能也还没写),补签拿到
+	//    kInvalidParameter,客户端会先判 BattleGone、弹「战斗已结束」再被拉回战斗。
+	//    这一局的提示交给 ConfirmBattle:升级 FIGHTING 时比对 BattlePrepareSessionComp 记下的
+	//    备战会话号,换过就补推;确认事件由 battle 侧周期补发兜底。
+	if (enterGsType == LOGIN_RECONNECT || enterGsType == LOGIN_REPLACE)
 	{
-		RebindBattleOnReconnect(player);
+		if (const auto* inBattle = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
+			inBattle != nullptr && inBattle->state() == IN_BATTLE_STATE_FIGHTING)
+		{
+			NotifyBattleReconnectToClient(player);
+		}
 	}
 }
 

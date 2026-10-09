@@ -209,6 +209,29 @@ func (f *mergeFence) release(ctx context.Context) {
 	f.keys = nil
 }
 
+// refuseAndRelease 是「围栏已立、还一个字节都没写」时的拒绝出口(合服:首跑时清单落盘之前;撤销:首次撤销时
+// 第一步写之前):打出原因,正常释放围栏,非零退出(2026-09-28,player-storage-placement.md §12 A2)。
+// 续跑时(合服:清单已存在且步骤 7 未标记完成;撤销:已有清单玩家被改回源区)上一次运行可能已写到一半,
+// 「这次什么都没写」不等于「两个 zone 没有半截状态」,调用方改走 abortKeepingFence 保留围栏(见 runMerge /
+// runUnmerge 的 refuse),不走这里。
+//
+// 不能用 log.Fatalf:它不跑 defer,围栏会一直挂到 TTL(-timeout+30m,下限 1h)。这段时间里两个 zone 的
+// 建号 / 建帮全被拒,而此刻什么都没写、没有任何需要保护的半截状态 —— 保留围栏只有代价。
+// 写过之后的失败走各自的 abortKeepingFence(fenceKeptAbortMessage),那里保留围栏才是对的。
+// dry-run 的句柄没有键,release 是空操作。
+func (f *mergeFence) refuseAndRelease(format string, args ...any) {
+	log.Printf("ERROR: "+format, args...)
+	held := f != nil && len(f.keys) > 0
+	f.release(context.Background())
+	if held {
+		log.Printf("Refused before this run's first write: this run wrote nothing and its merge fence was released. " +
+			"Fix the cause above and re-run the same command.")
+	} else {
+		log.Printf("Refused before this run's first write: this run wrote nothing. Fix the cause above and re-run the same command.")
+	}
+	os.Exit(1)
+}
+
 // ── guild_rank:maintenance_lock ───────────────────────────────
 
 const (

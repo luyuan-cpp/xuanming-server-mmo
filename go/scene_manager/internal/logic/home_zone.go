@@ -25,7 +25,9 @@ import (
 // 是归属的唯一真源(login 也这么取),见 cross-zone-scene-travel.md CZ-3。
 //
 // 结果语义(与 login 的 homezone 包对齐):
-//   - 映射存在                → 用它;
+//   - 映射存在                → 用它;但 data_service 同时报告 home_zone_merging(归属 zone
+//                               正处于合服围栏内)时**拒绝**(ErrHomeZoneMerging,可重试),
+//                               见 player-storage-placement.md §8.2 / §12 A16;
 //   - 映射里没有(NotFound / 老版 Unknown + 文案)→ 看这次落点的性质(homeZoneUnmappedPolicy):
 //       · 首次落点 / 同 zone 换图 → 首登或未回填的存量号,gate zone 即 home zone,INFO;
 //       · 跨 zone 传送的任一条腿  → **拒绝**。第二条腿的 gate zone 是目标 zone,回落过去
@@ -54,6 +56,11 @@ const (
 	// 落不了地,要等映射补上)。后者只在两条腿之间映射丢失、或第一条腿的前置检查上线之前
 	// 留下的等待落点上出现。
 	rejectReasonHomeZoneUnmappedTravel = "home_zone_unmapped_travel"
+
+	// enter_scene_rejected_total 的 reason:玩家的归属 zone 正处于合服围栏内(ErrHomeZoneMerging)。
+	// zone_id 同上是 gate zone。只在合服窗口里非 0,窗口外持续非 0 = 围栏键 merge:in_progress:{home}
+	// 残留(合服工具崩溃没释放),要按 merge-zone-runbook 处理,重试不会自己好。
+	rejectReasonHomeZoneMerging = "home_zone_merging"
 )
 
 // homeZoneUnmappedPolicy 说明「映射里没有这个玩家」时 resolveHomeZone 该怎么办。
@@ -93,6 +100,9 @@ func isHomeZoneUnmapped(err error) bool {
 // resolveHomeZone 返回要写进 RoutePlayerEvent.home_zone_id 的归属 zone。
 // 第二个返回值非 nil 表示本次 EnterScene 必须以它作为响应拒绝(可重试)。
 // 只读:不改任何 Redis 状态,调用方只需成对释放自己已经做过的预占。
+// 调用方必须在本请求对 location / owner_epoch 的**第一次写之前**调用它:合服围栏
+// (ErrHomeZoneMerging)的拒绝语义是「一个字节都不改」,先写后拒就把源区归属玩家的
+// 归属推进了一步(铸出的 epoch / 补种的键 / 等待落点都会留下)。
 //
 // dev 旁路 AllowGateZoneAsHomeZone=true(没配 DataServiceRpc)不看 unmapped 策略,一律回
 // gate zone。在跨 zone 传送的第二条腿上这等于把访客记成目标 zone 归属、存盘写进目标 zone
@@ -159,7 +169,34 @@ func (l *EnterSceneLogic) resolveHomeZone(in *scene_manager.EnterSceneRequest, u
 		return in.GateZoneId, nil
 	}
 	metrics.ObserveHomeZoneLookup(in.GateZoneId, metrics.HomeZoneLookupMapped)
+	// 合服围栏:只在「映射存在」这一支上看。没有映射就没有归属 zone,也就谈不上它在不在合服
+	// 围栏里(data_service 只在 player:zone 存在时才去读 merge:in_progress:{home});上面几支
+	// 未映射 / 映射为 0 即使收到 merging=true 也不理会,按各自的未映射策略处理。
+	// 旧版 data_service 不填这个字段,读作 false,行为与加字段之前相同。
+	if resp.GetHomeZoneMerging() {
+		return 0, l.rejectHomeZoneMerging(in, home)
+	}
 	return home, nil
+}
+
+// rejectHomeZoneMerging 是「归属 zone 正在合服」的拒绝应答(ErrHomeZoneMerging,可重试)。
+//
+// 为什么不分腿、不分首登 / 换图一律拒:合服围栏立起之后,合服工具要把源区 topic 排空(P3/P4)
+// 再改 player:zone。此时放一个源区归属玩家进任何 zone 的场景,节点就会按 home_zone(仍是源区)
+// 往源 topic 存盘 —— 排空已经做完,这些写要么进一个再也没人消费的 topic,要么被
+// 源区 go/db 按 P-6(home ≠ 本进程 zone)判成过期 topic 进死信;两种都等于丢档,而且只有事后对账
+// 才看得出来。
+// 在这里拒绝,玩家原地不动(第一条腿:源 scene 按失败应答解冻并回 tip;其余:未写 location / epoch),
+// 合服完成或中止、围栏撤掉之后上游重试即可。
+//
+// 日志用 Infof:合服窗口里这是预期行为,且由玩家操作直接触发、量随在线人数走;
+// 看量与「窗口外是否残留」用 enter_scene_rejected_total{reason="home_zone_merging"}。
+func (l *EnterSceneLogic) rejectHomeZoneMerging(in *scene_manager.EnterSceneRequest, home uint32) *scene_manager.EnterSceneResponse {
+	metrics.ObserveEnterSceneRejected(in.GateZoneId, rejectReasonHomeZoneMerging)
+	l.Logger.Infof("[home-zone] 归属 zone 正处于合服围栏内,拒绝进场景(可重试,未修改玩家状态): player=%d home_zone=%d gate_zone=%d req_zone=%d",
+		in.PlayerId, home, in.GateZoneId, in.ZoneId)
+	return errResp(constants.ErrHomeZoneMerging,
+		fmt.Sprintf("home zone %d of player %d is being merged; retry after the merge window, player state untouched", home, in.PlayerId))
 }
 
 // rejectUnmappedTravel 是「跨 zone 传送 + 未映射」的拒绝应答。错误码沿用 ErrHomeZoneUnavailable:

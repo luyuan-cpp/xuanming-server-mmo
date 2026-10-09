@@ -167,8 +167,10 @@ func importPlayerRedis(ctx context.Context, configPath string, data *exportFile,
 	// RegisterPlayerZone 是 SETNX 语义:导入到一个**已有别的归属**的 player_id 上会
 	// 报错而不是覆盖(值相同则幂等)。对导入工具来说这正是想要的 —— 覆盖会把一名
 	// 已经被合服搬到新区的玩家静默送回源区,而这里的失败只是让人换个 -player 重来。
+	// storage_id 传 0 = 不钉落点记录:导出文件里没有落点信息,导入的玩家有效落点 = home_zone
+	// (player-storage-placement.md §1),与引入落点之前的调试导入行为一致。
 	if data.HomeZoneID > 0 {
-		if err := svcCtx.Router.RegisterPlayerZone(ctx, data.PlayerID, data.HomeZoneID); err != nil {
+		if err := svcCtx.Router.RegisterPlayerZone(ctx, data.PlayerID, data.HomeZoneID, 0); err != nil {
 			return fmt.Errorf("register zone mapping: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "  Registered mapping: player %d -> zone %d\n", data.PlayerID, data.HomeZoneID)

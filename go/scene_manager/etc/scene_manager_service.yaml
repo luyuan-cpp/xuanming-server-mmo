@@ -41,6 +41,7 @@ Kafka:
 # Gate 路由/重定向的一次同步 produce 使用 RequireOne ACK；该值是 writer 侧
 # 超时（秒）。不使用 caller context 取消，避免 WriteMessages 返回后仍继续投递。
 # 调大它必须同步调大文件头的 Timeout(不等式见那里,契约测试守)。
+# 还必须同步 C++ 的 relocate_confirm::kSettleAfterCallDeadline(疏散 / 排空改派的 settle 窗口 = C++ deadline + 本值)。
 KafkaWriteTimeoutSeconds: 5
 
 # 开发旁路:true 时跨节点切场景 / 已有位置的跨区重定向不再要求源 scene 先写出
@@ -208,3 +209,12 @@ KillSwitchPrefix: ""
 # Enabled by default in dev so stress runs can scrape :9150 alongside
 # login :9101. Disable for prod by setting MetricsListenAddr: "".
 MetricsListenAddr: ":9150"
+
+# --- 集群外客户端入口(docs/design/k8s-client-entry.md D78/D79) -------------------
+#
+# 跨 zone 重定向下发 gate 地址时是否要求 gate 自报客户端可达地址(NodeInfo.client_endpoint)。
+# false(本地 / podip 模式):有 client_endpoint 用它,没有就回落 endpoint(PodIP)。
+# true(external 模式):没有 client_endpoint 的 gate 一律跳过,绝不下发客户端连不上的 PodIP。
+# 与 login.yaml 的同名开关同口径;K8s 上由 k8s_deploy.ps1 按 -ClientEntryMode 写进 ConfigMap。
+# 翻 true 之前必须确认所有 gate 都已带 client_endpoint;回退时先翻回 false。
+RequireClientEndpoint: false

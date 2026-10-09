@@ -58,10 +58,28 @@ func retentionCutoffMs(nowMs uint64, terminalRetention time.Duration) uint64 {
 	return nowMs + RetentionSafetyMs - retentionMs
 }
 
-// AppliedAssetOpLister 是本服务读终态资产指令的接缝;生产实现是 *data.GuildAssetStore(asset_op_divergence_repo.go),
-// 测试注入假实现。契约见 data.GuildAssetStore.ListAppliedAssetOpsSince。
+// provableCutoffMs 是本次可接受的最小 since_ms:按当前配置算出的下界,与"清理实际删到过哪里"两者取较大值。
+//
+// 只看配置不够:保留期调大之后(例如 30 天 → 60 天),30 天前的终态行早被旧配置清掉了,配置下界却退到 60 天前 ——
+// 那 30 天既查不到行、也不报不可证明,回档照常放行 = 复制资产(fail-open)。清理水位(data 包
+// asset_op_cleanup_watermark.go)记下清理用过的最大截止时刻,next_attempt_ms 小于它的终态行可能已不在库里。
+// 水位同样加 RetentionSafetyMs:清理是"先推水位再删",别的副本可能正拿着稍新的截止在删,余量盖住这段(清理间隔远小于 1 小时)。
+// 水位为 0 = 从未清理过,只按配置算。
+func provableCutoffMs(nowMs uint64, terminalRetention time.Duration, cleanupWatermarkMs uint64) uint64 {
+	cutoff := retentionCutoffMs(nowMs, terminalRetention)
+	if cleanupWatermarkMs == 0 {
+		return cutoff
+	}
+	return max(cutoff, cleanupWatermarkMs+RetentionSafetyMs)
+}
+
+// AppliedAssetOpLister 是本服务读终态资产指令的接缝;生产实现是 *data.GuildAssetStore(asset_op_divergence_repo.go、
+// asset_op_cleanup_watermark.go),测试注入假实现。
+//   - ListAppliedAssetOpsSince:契约见 data.GuildAssetStore.ListAppliedAssetOpsSince。
+//   - TerminalCleanupWatermarkMs:清理水位;0 = 从未清理过。**读不准必须返回 error**(不能回 0),本服务据此回 Unavailable。
 type AppliedAssetOpLister interface {
 	ListAppliedAssetOpsSince(ctx context.Context, q data.AppliedOpsQuery) ([]*pb.GuildAssetOpBrief, uint64, error)
+	TerminalCleanupWatermarkMs(ctx context.Context) (uint64, error)
 }
 
 // ── 指标(07 §7.4.5;guild 已配 Prometheus.Host,用 go-zero core/metric;label 只有 result,不带任何 id)──
@@ -143,8 +161,8 @@ func NewGuildInternalServer(ops AppliedAssetOpLister, terminalRetention time.Dur
 	return &GuildInternalServer{ops: ops, terminalRetention: terminalRetention, now: now, observe: observeListApplied}
 }
 
-// ListAppliedAssetOpsSince:判定顺序 = 入参(InvalidArgument)→ 装配(Unavailable)→ 保留期(FailedPrecondition)→ 查询。
-// 全部判定先于任何 SQL(07 §7.4.2)。
+// ListAppliedAssetOpsSince:判定顺序 = 入参(InvalidArgument)→ 装配(Unavailable)→ 清理水位(读不到 → Unavailable)
+// → 保留期(FailedPrecondition)→ 查询。全部判定先于任何 SQL(07 §7.4.2);水位是一次 Redis GET。
 func (s *GuildInternalServer) ListAppliedAssetOpsSince(ctx context.Context, req *pb.ListAppliedAssetOpsSinceRequest) (*pb.ListAppliedAssetOpsSinceResponse, error) {
 	limit, err := validateListAppliedRequest(req)
 	if err != nil {
@@ -160,12 +178,19 @@ func (s *GuildInternalServer) ListAppliedAssetOpsSince(ctx context.Context, req 
 		return nil, status.Error(codes.Unavailable, "guild asset op store is not available")
 	}
 
-	cutoff := retentionCutoffMs(uint64(s.now().UnixMilli()), s.terminalRetention)
+	// 水位先于保留期判定读:拒绝里回带的 cutoff_ms 必须已经把水位算进去,否则 data_service 钳位重查会被水位再拒一次。
+	watermark, err := s.ops.TerminalCleanupWatermarkMs(ctx)
+	if err != nil {
+		s.observe(listAppliedResultUnavailable, 0)
+		logx.WithContext(ctx).Errorf("[GuildInternal] ListAppliedAssetOpsSince 不可用:读不到终态指令清理水位,无法判断哪段流水还能证明: %v", err)
+		return nil, status.Error(codes.Unavailable, "guild asset op cleanup watermark is not available")
+	}
+	cutoff := provableCutoffMs(uint64(s.now().UnixMilli()), s.terminalRetention, watermark)
 	if req.GetSinceMs() < cutoff {
 		// 预期内的答复:快照早于终态流水保留期,这段已无法证明。data_service 据 cutoff_ms 钳位重查,不打 ERROR。
 		s.observe(listAppliedResultRetention, 0)
-		logx.WithContext(ctx).Infof("[GuildInternal] ListAppliedAssetOpsSince since_ms=%d 早于保留期下界 cutoff_ms=%d",
-			req.GetSinceMs(), cutoff)
+		logx.WithContext(ctx).Infof("[GuildInternal] ListAppliedAssetOpsSince since_ms=%d 早于可证明下界 cutoff_ms=%d(清理水位 %d)",
+			req.GetSinceMs(), cutoff, watermark)
 		return nil, status.Error(codes.FailedPrecondition, RetentionRejectedMessage(cutoff))
 	}
 

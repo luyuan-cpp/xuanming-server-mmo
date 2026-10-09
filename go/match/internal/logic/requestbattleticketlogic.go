@@ -54,7 +54,9 @@ func NewRequestBattleTicketLogic(ctx context.Context, svcCtx *svc.ServiceContext
 // RequestBattleTicket 丢票补签(turn-based §18 D25;改道见 client-rpc-router.md D33):
 //   - player_id 只取 gate 注入的会话身份(x-session-detail-bin → ctxkeys);请求体没有也不该有
 //     player_id。没有会话身份即不可信来源,fail-closed;
-//   - 按 battle_id 读观战索引 spectate:battle:{battle_id}(gather 成功登记,TTL = 战斗时限 + 60s)
+//   - 按 battle_id 读观战索引 spectate:battle:{battle_id}(gather 在 CreateBattle 之前写入、写不进去
+//     就不建房(fail-closed),开局成功后同值重写,建房失败补偿后删除 —— 仅 CreateBattle 与
+//     DestroyBattle 都失败、房间可能仍活着时保留;TTL = 战斗时限 + 60s)
 //     取 battle_node_id;索引不存在 = 房间已结束 / 作废,回 kInvalidParameter —— 与 battle 侧
 //     "房间不存在"同一 tip,客户端据此丢弃本地战斗 UI;
 //   - 定位 battle 节点 gRPC 地址(EndpointOfNode;未发现 / 身份歧义 = kServiceUnavailable),
@@ -62,7 +64,8 @@ func NewRequestBattleTicketLogic(ctx context.Context, svcCtx *svc.ServiceContext
 //   - battle 的 error_message / assignment 原样搬进响应,不改写语义(不在名单 = kInvalidParameter,
 //     签不出票 = kServiceUnavailable,均由 battle 决定)。
 //
-// 为什么走 match 而不是 gate→battle 直达:路由服不转发 battle 消息(D33),而票据发放必须由已鉴权的
+// 为什么走 match 而不是 gate→battle 直达:gate 两种路由模式都不中继 battle 消息(D33;
+// turn-based §22 D66),而票据发放必须由已鉴权的
 // 大厅会话背书 —— match 是客户端协议里唯一同时掌握"会话身份 + 房间所在节点"的服务。
 func (l *RequestBattleTicketLogic) RequestBattleTicket(in *battlepb.RequestBattleTicketRequest) (*battlepb.RequestBattleTicketResponse, error) {
 	detail, ok := ctxkeys.GetSessionDetails(l.ctx)
@@ -92,6 +95,13 @@ func (l *RequestBattleTicketLogic) RequestBattleTicket(in *battlepb.RequestBattl
 		}, nil
 	}
 
+	// 节点未注册 / 身份歧义一律按 kServiceUnavailable(可重试)回,不判 BattleGone:
+	// "节点缺席"不是"房间已死"的正面证据(etcd 抖动、滚动重启窗口里战斗可能仍活着),
+	// 按缺席推断会误作废活着的战斗。已知缺口(turn-based §22 后续项):battle 停机 / 崩溃后
+	// 本分支会持续回 no_node,客户端判 Unreachable,直到观战索引 TTL 过期才拿到 BattleGone。
+	// 收敛途径是 battle 优雅停机推作废帧 + scene reaper 到期推作废终局;若要 match 侧提前判死,
+	// 只能凭正面证据——记录里写入建房时的实例 uuid,与当前同 node_id 注册实例的 NodeUuid 不等
+	// 才判 BattleGone(需给 SpectateBattleRecord 加字段并按 AGENTS §4 重生)。
 	endpoint, err := l.svcCtx.BattleNodes.EndpointOfNode(record.GetBattleNodeId())
 	if err != nil {
 		l.Errorf("[ticket] RequestBattleTicket 定位 battle 节点失败 player=%d battle=%d node=%d: %v",

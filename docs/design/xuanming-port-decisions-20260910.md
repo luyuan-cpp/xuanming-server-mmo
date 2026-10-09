@@ -260,13 +260,16 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
 - 翻转落在部署层:
   - **本地**:`start_game.ps1 -GateRouterMode`,默认 `'1'`。起 gate 前设 env,脚本结束还原旧值。`dev_tools.ps1 dev-start-zones` / `cpp_nodes.ps1` 由父 shell 设 env。
   - **K8s**:`k8s_deploy.ps1 -GateRouterMode`,默认 `"0"`,只注入 gate Deployment。翻成 1 要同时满足三件事:K8s 上以路由模式跑通过一次 battle-smoke、路由服 manifest 已落地、路由服用 POD_IP 通告。
+    - (2026-09-29 已被文末「D-12 修订」取代:K8s 默认改为 `"1"`;前提① battle-smoke 由用户豁免、事后补验,前提②③ 已满足。原文保留作历史。)
 - 回退到直连,等于 chat 等只承诺路由模式的服务同时不可达。回退前先用 killswitch 关掉对应方法,并发公告。
 
 **理由**
 
 1. 每加一个服务就改 gate 白名单、重编 gate、滚动重启踢在线玩家,正是 `client-rpc-router.md` §1 要消灭的成本。给 chat 补直连白名单,等于走回旧路。
 2. C++ 默认值是灰度开关的安全兜底(拼错宁可留在直连)。改它会连带 battle 等既有直连路径的回归面;部署层参数则可以逐个环境翻,一行就能回退。
+   - (2026-09-29 已被文末「D-12 修订」部分取代:前半句「C++ 默认值是安全兜底」仍成立、不改;后半句「battle 等既有直连路径的回归面」在 gate 中继战斗代码删除后(turn-based §22 D66 / D67)不再成立。原文保留作历史。)
 3. K8s 路由服 manifest 与 POD_IP 通告已补齐,但尚未在 K8s 上以路由模式跑通 battle-smoke。因此 K8s 默认仍为 0,本地默认仍为 1;按 D34 验证后再切换 K8s 默认值。
+   - (2026-09-29 已被文末「D-12 修订」取代,turn-based §22 D65 / D75:K8s 默认改为 `"1"`,battle-smoke 前提由用户豁免、事后补验。原文保留作历史。)
 
 **补充的旧条目**:`client-rpc-router.md` D34(:31):gate 双模式,默认旧模式,默认值在冒烟通过后翻转,再删旧路径。
 
@@ -495,7 +498,7 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
 | `-migrate` flag 形态,跑完即退 | `go/data_service/data_service.go:41-44`、`:225-240` |
 | data-service 随 zone 部署(非 Global),全局库只有一份 | `tools/scripts/k8s_deploy.ps1:387`;`deploy/k8s/README.md:321` |
 | 全局服务模板是多副本 | `deploy/k8s/manifests/go-svc/chat.yaml:41`;`match.yaml:36` |
-| data-service Deployment args 只有 `-f`;K8s 命令集没有 migrate;go/db 同类缺口 open | `data-service.yaml:54`;`k8s_deploy.ps1:8`、`:1495-1496`;`docs/design/handoff-backlog-2026-09-05.md:202` |
+| data-service Deployment args 只有 `-f`;K8s 命令集没有 migrate;go/db 同类缺口 open | `data-service.yaml:54`;`k8s_deploy.ps1:8`、`:1495-1496`;`docs/handoff/handoff-backlog-2026-09-05.md:202` |
 | staging/prod 固定 AutoMigrate=false | `k8s_deploy.ps1:1500-1512` |
 | 一次性 Job 接进部署流程的先例(infra manifest 之后、zone 之前;先 delete 再 apply) | `deploy/k8s/manifests/infra/kafka-topic-init.yaml:15-16`、`:42-57`;`k8s_deploy.ps1:2814-2816` |
 | mysql-init 目录原样打进 K8s ConfigMap;02_ 只因库名与本地不同才生成 | `k8s_deploy.ps1:2597-2601`、`:2620-2632`、`:424-429` |
@@ -591,3 +594,61 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
 - **文档面残留**:`docs/design/friend-persistence-architecture.md:58-59`、`:79` 与 `docs/design/guild_friend_service_notes*.md:34`、`:38` 仍按 B 侧旧形态描述这道门禁。它们是 B 侧现状文档,本批不改;读到那几段时以本条为准。
 
 **验证状态**:未编译、未运行测试(AGENTS.md §10.1),待 Codex 验证。
+
+---
+
+> 以下一条为 2026-09-29 追加,随 battle 直连收缩批(`turn-based-battle-server.md` §22 D65–D75)落盘,仿本文「D-10 修订(2026-09-18)」的先例。
+> 它**修订 D-12 的 K8s 默认值、前提与一条理由**;D-12 原文(本文 :252-:290)不删不改,只在被修订的三处旁加了就地标注(:263、:270、:272,指向本段),冲突时以本段为准(AGENTS.md §5「没写文档 = 没说过」)。
+> 相关脚本与代码**未编译、未运行测试、未上集群**,行为以 Codex 验证结果为准。
+
+## D-12 修订(2026-09-29)K8s 默认翻为路由模式:**`k8s_deploy.ps1 -GateRouterMode` 默认 `"1"`;C++ 默认值与单测仍不改;回退态不粘滞**
+
+(来源:turn-based §22 D65「一次做完收缩,豁免前提①、事后补验」与 D75「K8s 默认路由模式」,2026-09-29 用户拍板。被修订的是 D-12 结论第三条的 **K8s** 子项(:262)、理由 2 的后半句(:269)与理由 3(:271)。D-12 其余结论——新 Go 服务只承诺路由模式、不补直连白名单、回退前先 killswitch 并公告——不变。)
+
+**结论**
+
+- **K8s 默认翻为 `"1"`**:`k8s_deploy.ps1 -GateRouterMode` 默认由 `"0"` 改为 `"1"`,`ValidateSet("0","1")` 与字符串类型保留,仍只注入 gate(`k8s_deploy.ps1:163-164`;注入点两处:podip / Deployment 形态 `k8s_deploy.ps1:1594-1601`,external 的 gate StatefulSet 形态 `lib/k8s_client_entry.ps1:772-782` `New-GateStatefulSetYaml`,参数 Mandatory、无默认值,由 `k8s_deploy.ps1` 传入)。本地 `start_game.ps1 -GateRouterMode` 默认 `'1'` 不变(`start_game.ps1:22`)。
+- **D-12 原前提的现状**(原文 :262「翻成 1 要同时满足三件事」):
+  1. 「K8s 上以路由模式跑通过一次 battle-smoke」——**未满足,由用户豁免,改为事后补验**(D65)。补验之前,K8s 默认值属于「已落码、未实测」。
+  2. 「路由服 manifest 已落地」——已满足:`deploy/k8s/manifests/go-svc/client-rpc-router.yaml`,`$GoSvcCatalogue` 条目与 ConfigMap case 见 `k8s_deploy.ps1:150-155` 注释列出的部署链。
+  3. 「路由服用 POD_IP 通告」——已满足:`go/client_rpc_router/client_rpc_router_service.go:141-145`(`advertisedHost`,POD_IP 优先)。
+- **C++ 默认值与单测一字不改**:`gate_router_mode.h:35-55` 未设变量、或不是 `1` / `true` / `on`,一律直连;`gate_security_test.cpp:160` `EmptyAndUnsetDefaultToDirectMode` 照旧断言。**「进程默认直连、部署默认路由」是有意的分层,不是漂移**;看到两者不一致不要去「对齐」C++ 默认值。
+- **包装入口「留空不覆盖」**:`dev_tools.ps1`(:83,透传 :652-653 / :855-856,回滚入口 :1603)、`k8s_image.ps1`(:69,透传 :411-412)、`k8s_zone_rollback.ps1`(:139-150)各有 `-GateRouterMode`,`ValidateSet("", "0", "1")`,默认空串 = 不传,由 `k8s_deploy.ps1` 的默认值接管;默认值只存在于 `k8s_deploy.ps1` 一处。
+- **翻转后 gate 硬依赖路由服**:路由模式下 gate 的依赖门等 `ClientRpcRouter + Scene`,不等 Login(`cpp/nodes/gate/main.cpp:401-404`)。infra-up 必须已把 client-rpc-router 部署就绪(不带 `-SkipGoSvc`,且给了 `-GoSvcRegistry`);否则 zone-up 后 gate 卡在依赖门,登录 / 匹配 / 聊天全部 `no_target`(`k8s_deploy.ps1:150-152` 注释)。
+- **回退态不粘滞**(本修订新增的运维约束):`k8s_deploy.ps1` 每次部署都把本值原样重写进 gate env,不从集群读回旧值(`k8s_deploy.ps1:157-160`)。以 `"0"` 回退运行的 zone,之后**每一次**重新部署——日常 zone-up / release-zone、**合服后的 zone-up**、**灾备回滚 `k8s_zone_rollback.ps1` 的 Step 6**、以及经 `dev_tools.ps1` / `k8s_image.ps1` 包装入口——都必须显式再传 `-GateRouterMode 0`,否则静默落回 `"1"`;回退的原因(例如路由服不可用)若仍在,gate 就卡在依赖门。
+  - **回滚脚本第 0 步预检**:`k8s_zone_rollback.ps1 -Apply` 且未传 `-GateRouterMode` 时,在 Step 1 停服**之前**只读一次 zone namespace 里的 gate(StatefulSet 与 Deployment 两种形态都认),取出 `GATE_CLIENT_RPC_ROUTER`;与 `k8s_deploy.ps1` 的默认值不一致、或判不出(namespace 已删 / kubectl 失败 / `valueFrom` / 变量重复 / 两种 gate 同时存在)即拒绝,要求显式传 `0` 或 `1`(函数定义:`Assert-ZoneEntryKeptOnRollback` :496、`Get-ClusterZoneEntryState` :390、`Get-GateRouterModeFromPodSpec` :273;脚本头说明 :18、:35-45)。同一预检也核对集群外入口的 `-ClientEntryMode` / `-GatewayIngressHost`(D76–D93 的不粘滞参数)。`-AllowDisruptiveSwitch` 只透传到 Step 6,**不豁免第 0 步**。
+  - **合服 zone-up 没有同类预检**:合服 runbook 的 zone-up 与各处 `k8s-zone-up` 示例目前都不带 `-GateRouterMode`,回退态 zone 合服时须人工补 `-GateRouterMode 0`。
+- **集群外部署同窗口**:集群外入口(`k8s-client-entry.md`,D76–D93)与本修订同批落码;`ingress_final` §6 原定「第 4 批才在 K8s 默认启用 GateRouterMode=1」作废。集群外部署须与 `-GateRouterMode 1` 在同一窗口启用 `-ClientEntryMode external`(`k8s_deploy.ps1:176` 注释)。
+
+**理由**(按权重)
+
+1. **前提①保护的窗口不存在,且它要验证的交互已经消失。** 项目未上线、没有老客户端(turn-based §19 D36 已据此作废「客户端直连失败率」前提)。D66 起 gate 在两种路由模式下都不中继战斗、不连 battle(`gate_router_mode.h:11-13`;白名单代码 `gate/main.cpp:216-219`,说明注释 `:199-203`),battle-smoke 在两种模式下走同一条战斗路径;它对路由模式还能提供的证据只剩登录、匹配这些经路由服的 RPC,由事后补验覆盖。
+2. **原理由 2 前半句仍成立,后半句在 D37 落地后不成立。** 前半句「C++ 默认值是灰度开关的安全兜底(拼错宁可留在直连)」仍是 C++ 默认值不改的依据。后半句「改它会连带 battle 等既有直连路径的回归面」写于 gate 仍中继战斗之时;D37 规定的删码(gate 战斗中继、Kafka Bind/Unbind 契约)已由 D66 / D67 执行,`GATE_CLIENT_RPC_ROUTER` 不再影响任何战斗路径,battle 已不在它的回归面里。
+3. **原理由 3「按 D34 验证后再切换 K8s 默认值」被 D65 的豁免取代**;验证没有取消,只是从「翻转前置」改成「翻转后补验」,见下方残留第 1 条。
+4. **翻转仍只落在部署层**:部署参数可以逐个环境翻,出问题一行回退;这正是 D-12 原结论选部署层的理由,本修订只改了 K8s 这一层的默认值。
+
+**证据**
+
+| 事实 | file:line |
+|---|---|
+| K8s 默认 `"1"`、ValidateSet、参数注释(前提、前置、回退不粘滞) | `tools/scripts/k8s_deploy.ps1:145-164` |
+| K8s 只给 gate 注入 `GATE_CLIENT_RPC_ROUTER` | `tools/scripts/k8s_deploy.ps1:1594-1601`(Deployment 形态);`tools/scripts/lib/k8s_client_entry.ps1:772-782`(external 的 gate StatefulSet 形态) |
+| 本地默认 `'1'`、起 gate 前设 env | `tools/scripts/start_game.ps1:22`、`:554` |
+| C++ 默认直连、只认 1/true/on;战斗与本开关无关 | `cpp/nodes/gate/gate_router_mode.h:6-13`、`:35-55` |
+| 单测钉死默认直连 | `cpp/nodes/gate/tests/gate_security_test.cpp:137`、`:160` |
+| 路由模式依赖门 = ClientRpcRouter + Scene | `cpp/nodes/gate/main.cpp:401-404` |
+| 包装入口留空不覆盖 | `tools/scripts/dev_tools.ps1:83`、`:652-653`、`:855-856`、`:1603`;`tools/scripts/k8s_image.ps1:69`、`:411-412` |
+| 回滚第 0 步预检 | `tools/scripts/k8s_zone_rollback.ps1:139-150`(参数)、`:273`、`:390`、`:496`(三个函数定义) |
+| 契约用例:默认路由 / 回退 0 / 拼错被拒 / 包装透传 | `tools/scripts/tests/k8s_deploy_contract.tests.ps1:732`、`:740`、`:745`、`:801` |
+| 契约用例:回滚透传与预检 | `tools/scripts/tests/k8s_zone_rollback_gate_router_mode.tests.ps1:89`、`:101`、`:450`、`:466`、`:484`、`:555` |
+| 路由服 POD_IP 通告 | `go/client_rpc_router/client_rpc_router_service.go:141-145` |
+| D36 / D37 原文 | `docs/design/turn-based-battle-server.md` §19.1 D36 / D37(2026-09-29 工作树 `:660`、`:661`;该文件有并行改动,行号可能再漂移,以决策号为锚) |
+
+**代价与残留**
+
+- **K8s 路由模式 battle-smoke 仍未跑**:补验是本修订成立的前提,补验前 K8s 默认值未经实测。补验通过后应在 `PROGRESS.md` 与 turn-based §22 登记结果。
+- **没有「路由模式却没部署路由服」的 fail-fast**:`k8s_deploy.ps1` 只在参数注释里写明前置,未对「`GateRouterMode=1` 且 infra-up 带 `-SkipGoSvc` 或缺 `-GoSvcRegistry`」告警或拒绝;`k8s_image.ps1` 不透传 `-GoSvcRegistry`,release-zone 依赖 infra-up 另行部署路由服。是否加 fail-fast 待拍板。
+- **合服 zone-up 与文档示例**不带 `-GateRouterMode`,回退态下只能靠人工补传(见结论)。
+- **D34 遗留的「何时删 C++ 直连模式代码」仍待拍板**:直连模式目前仍是 login / scene_manager / match 这些既有服务的回退面(回退时 chat 等只承诺路由模式的服务不可达,见 D-12 原文 :264),C++ 默认值不改的前提下它不能删。
+
+**验证状态**:未编译、未运行测试、未上集群(AGENTS.md §10.1),待 Codex 验证。Codex 在仓库根执行:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1` 与 `pwsh -NoProfile -File tools/scripts/tests/k8s_zone_rollback_gate_router_mode.tests.ps1`,通过标准 fail=0;C++ `gate_security_test` 回归(`GateRouterMode.*` 全过,默认仍直连);K8s 路由模式 battle-smoke 由用户或 Codex 在集群上补跑。

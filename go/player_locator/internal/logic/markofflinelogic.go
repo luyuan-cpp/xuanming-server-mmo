@@ -127,7 +127,7 @@ func (l *MarkOfflineLogic) notifySceneManagerLeaveOrEnqueue(
 	enqueued, err := enqueueOfflineCleanup(l.ctx, l.svcCtx, playerID, retryBytes)
 	if err != nil {
 		// 双重失败(LeaveScene RPC + Redis 入队都挂):此时只剩日志可依赖。
-		// 位置残留的后果与修复手段见 PROGRESS.md 2026-08-09 节。
+		// 位置残留的后果与修复手段见 docs/PROGRESS.md 2026-08-09 节。
 		l.Errorf("MarkOffline: enqueue cleanup retry for player %d failed, scene cleanup LOST: %v",
 			playerID, err)
 		return

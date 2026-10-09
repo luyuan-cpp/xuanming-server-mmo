@@ -274,7 +274,7 @@ SceneEntryAttempt AttemptPendingSceneEntry(SessionInfo& session, const SceneEntr
     const SceneRouteTarget target = entry.target;
 
     // 玩家围栏:同一条连接上换了角色时,绝不以错的角色补发。事件没带玩家(0)或会话尚未绑定玩家时不设防,
-    // 与 LeaseExpired / BindBattle 的同款防御一致。
+    // 与 LeaseExpired 的同款防御一致。
     if (target.playerId != 0 && session.playerId != kInvalidGuid && target.playerId != session.playerId)
     {
         return SceneEntryAttempt::kPlayerMismatch;

@@ -105,11 +105,43 @@ ServerConfig:
         MaxColumnBytes: 8388608
         MaxRowBytes: 8388608
 
+# ── 玩家存储落点(docs/design/player-storage-placement.md §6)────────────────
+# 每条读 / 写任务按 player:placement:{id}(落点记录)与 player:zone:{id}(home_zone)选库:
+#   有记录 → 记录指向的库;无记录 → home_zone 的 zone 库;都没有 → 本 zone 库(旧语义)。
+#   写任务的 home_zone ≠ 本 ZoneId → 进死信不落库(合服前的滞留写);记录冻结(搬库中)→ 延后重试。
+# 整段可缺省,缺省 = 下面写出的值。启动日志 "placement:" 一行是核对依据。
+Placement:
+  # 允许按需打开 zone_{1..999999}_db / player_store_{>=1000000}_db 两个家族的库(不在上面的
+  # 库名白名单里也行)。按需打开只 Ping + 只读 schema 闸,**从不建库**,白名单防「ZoneId 填错
+  # 静默建新库」的语义不变。设 false 时,本 zone 库之外的每个落点库都必须写进白名单。
+  AllowStoreFamilies: true
+  # true = 没有落点记录的玩家一律 fail-closed(写进死信、读回失败)。
+  # 打开顺序(§13,反了会出事):全部 login 已 Placement.PinOnCreate=true,且各 zone 已
+  # `merge_zone -mode pin-placement` 钉完存量之后才能开。
+  Required: false
+  # **每个**额外落点库的连接池(本 zone 库仍用上面的 Database.MaxOpenConn / MaxIdleConn)。
+  # 库数不设上限;Phase 2 大部分玩家搬进全局库后,这个池会成为全局库的瓶颈,按压测结论调大。
+  ExtraStoreMaxOpenConn: 8
+  ExtraStoreMaxIdleConn: 2
+  # 落点记录所在的 Redis = data_service 的 MappingRedis(player:zone 所在实例,DB 0)。
+  # 不写 = 复用上面的 RedisClient(本地与 K8s 两者同实例同 DB 0)。两者不同时**必须**显式填:
+  # 读错 Redis = 读不到任何记录与 home_zone,全员按本 zone 选库,被钉到别处的玩家会写错库。
+  # 必须指向主节点,不能是只读副本:落库后复核(§6.3)读到的冻结若滞后于搬库工具的写,关不住 TOCTOU。
+  # 能力标记 db:capability:zone:{ZoneId} 也写在这里:带 90s TTL、每 30s 心跳续写(合服 pin / 搬库工具据此确认
+  # 本 zone 此刻正在跑新版 go/db;回退旧版后标记在 TTL 内自然消失)。
+  # Redis:
+  #   Hosts: "127.0.0.1:6379"
+  #   Password: ""
+  #   DB: 0
+
 # Prometheus /metrics endpoint. Dev default; disable for prod by setting
 # empty string. Exposes:
 #   db_task_stage_seconds{stage,op}  - per-task sub-stage latency
 #     (op_total | op_handler | cache_write | result_publish)
 #   db_task_result_total{op,result}  - terminal task outcome counter
+#   db_placement_guard_total{op,outcome} / db_placement_store_open_total{result} /
+#   db_placement_open_stores          - 按落点选库(见上面 Placement 段;stale_topic 应恒 0,
+#                                       frozen_deferred 持续上涨 = 搬库冻结未解除,应告警)
 # Round 16 stress runs scrape :9160 alongside login :9101 and
 # scene_manager :9150 to attribute the dataloader_preload_callback_wait
 # 11.8 ms → 31.4 ms regression seen in Round 15.

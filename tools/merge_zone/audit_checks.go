@@ -26,8 +26,10 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -153,8 +155,13 @@ func auditKafkaQueues(ctx context.Context, cfg auditConfig) ResourceAudit {
 	}
 	topic := dbTaskTopic(cfg.src, cfg.topicGeneration)
 	var total int64
-	details := make([]string, 0, 3)
-	for _, k := range []string{dbRetryQueueKey(topic), dbRetryProcessingKey(topic), dbDeadQueueKey(topic)} {
+	// 含每个 go/db 实例各自的 processing 列表(见 preflight.go 的 dbTaskQueueKeys)。
+	queueKeys, err := dbTaskQueueKeys(ctx, cfg.sharedRDB, topic)
+	if err != nil {
+		return infraAudit(r.Name, "%v", err)
+	}
+	details := make([]string, 0, len(queueKeys))
+	for _, k := range queueKeys {
 		n, err := cfg.sharedRDB.LLen(ctx, k).Result()
 		if err != nil && !errors.Is(err, redis.Nil) {
 			return infraAudit(r.Name, "llen %s: %v", k, err)
@@ -200,6 +207,10 @@ func auditSourceZoneNodes(ctx context.Context, cfg auditConfig) ResourceAudit {
 // ── B. 合服后验证(-verify-merged)─────────────────────────────
 
 // verifyMappingDrained: mapping 里 home_zone==src 的玩家数必须是 0。
+//
+// 它兜的是清单之外的人:改映射只按清单(A2),清单外仍指向源区的玩家不会被改,合服后留在已下线的 zone 里。
+// 旧版还有一条下界「home_zone==dst 的人数 >= -expected-src-players」,那个数里本来就有目标区原住民,
+// 漏改几个照样过线 —— 已由 verifyManifestMapping 逐 id 核对取代(A6)。
 func verifyMappingDrained(ctx context.Context, cfg auditConfig) ResourceAudit {
 	r := ResourceAudit{Name: "verify:mapping_src", UniqueScope: "global"}
 	if cfg.mappingDB == nil {
@@ -217,13 +228,8 @@ func verifyMappingDrained(ctx context.Context, cfg auditConfig) ResourceAudit {
 	r.TargetCount = int64(len(dstIDs))
 	if len(pids) != 0 {
 		r.Severity = "block"
-		r.Notes = fmt.Sprintf("%d players still map to home_zone=%d — remap did not complete", len(pids), cfg.src)
-		return r
-	}
-	if cfg.expectedSrcPlayers >= 0 && int64(len(dstIDs)) < cfg.expectedSrcPlayers {
-		r.Severity = "block"
-		r.Notes = fmt.Sprintf("home_zone=%d has only %d players but at least %d were expected "+
-			"(-expected-src-players recorded at T-1)", cfg.dst, len(dstIDs), cfg.expectedSrcPlayers)
+		r.Notes = fmt.Sprintf("%d players still map to home_zone=%d (first ids: %v) — remap did not complete, or they are "+
+			"outside the manifest and were never remapped", len(pids), cfg.src, sampleUint64(pids))
 		return r
 	}
 	r.Severity = "info"
@@ -231,9 +237,175 @@ func verifyMappingDrained(ctx context.Context, cfg auditConfig) ResourceAudit {
 	return r
 }
 
+// verifyManifestMapping(A6):清单里的每一个玩家,player:zone 都必须已经是 dst。
+//
+// 逐 id 核对才回答得了「清单里的人是不是都过来了」;键丢了、指向第三个 zone、还停在源区,都算没过来。
+// 顺带把清单人数与 -expected-src-players 对一遍:T-0 的 -apply 在首跑时已按它守过人数,对不上多半是拿错了清单。
+func verifyManifestMapping(ctx context.Context, cfg auditConfig) ResourceAudit {
+	r := ResourceAudit{Name: "verify:manifest_mapping", UniqueScope: "global"}
+	m, err := cfg.verifyManifest()
+	if err != nil {
+		return infraAudit(r.Name, "%v", err)
+	}
+	r.SourceCount = int64(len(m.PlayerIDs))
+	// 人数核对只看清单本身,放在任何查询之前:拿错清单是真问题(block),不因为某个库连不上被说成 INFRA。
+	if cfg.expectedSrcPlayers >= 0 && r.SourceCount != cfg.expectedSrcPlayers {
+		r.Severity = "block"
+		r.Notes = fmt.Sprintf("the manifest lists %d players but -expected-src-players is %d (recorded at T-1) — "+
+			"is this the manifest of the merge being verified?", r.SourceCount, cfg.expectedSrcPlayers)
+		return r
+	}
+	if cfg.mappingDB == nil {
+		return infraAudit(r.Name, "no mapping Redis handle")
+	}
+	vals, present, err := readPlayerZones(ctx, cfg.mappingDB, m.PlayerIDs)
+	if err != nil {
+		return infraAudit(r.Name, "%v", err)
+	}
+	want := strconv.FormatUint(uint64(cfg.dst), 10)
+	var wrong []uint64
+	for i, id := range m.PlayerIDs {
+		if !present[i] || vals[i] != want {
+			wrong = append(wrong, id)
+		}
+	}
+	r.TargetCount = r.SourceCount - int64(len(wrong))
+	r.ConflictCount = int64(len(wrong))
+	if len(wrong) > 0 {
+		r.Severity = "block"
+		r.Notes = fmt.Sprintf("%d of the %d manifest players do not map to home_zone=%d (missing, still %d, or a third zone; "+
+			"first ids: %v)", len(wrong), len(m.PlayerIDs), cfg.dst, cfg.src, sampleUint64(wrong))
+		return r
+	}
+	r.Severity = "info"
+	r.Notes = fmt.Sprintf("all %d manifest players map to home_zone=%d", len(m.PlayerIDs), cfg.dst)
+	return r
+}
+
+// playerMainRowCheck 是「清单玩家的主数据行合服后应当在哪」的判据(A6)。
+type playerMainRowCheck struct {
+	where   string // 进 Notes:查的是哪里
+	missing func(ctx context.Context, db *sql.DB, mapping *redis.Client, ids []uint64) ([]uint64, error)
+}
+
+// expectedMainRowStore 是纯判定:一名清单玩家的主数据行合服后应在的落点库(player-storage-placement.md §10)。
+//
+//	有落点记录 → 记录指向的库:pin 模式钉住的 "{src}:1"、copy 模式因已有记录而没拷的人、合服前就在别处的人;
+//	没有记录   → 目标区 zone 库:copy 模式步骤 1 把他的行拷了过去。
+//
+// 设计原文是「有效落点按 记录 ?? home 算」;无记录时这里用 dst 而不是 home —— verify:manifest_mapping 已逐人断言
+// home == dst,两者在它通过时完全等价;它不通过时按 home 去查一个第三区的库只会得出一条难懂的 INFRA,不如照
+// 合服本该落到的地方查。记录畸形 → ok=false:go/db 对他 fail-closed,算作「行不在该在的地方」。
+func expectedMainRowStore(rd placementRead, dst uint32) (uint32, bool) {
+	switch {
+	case rd.RecordPresent && rd.RecordErr != nil:
+		return 0, false
+	case rd.RecordPresent:
+		return rd.Record.StorageID, true
+	default:
+		return dst, true
+	}
+}
+
+// mainRowCheckFor 给出 -verify-merged 的主数据行判据:每个清单玩家在 expectedMainRowStore 指向的库的
+// player_database 有行(每个玩家必有这一行;_1 / centre 允许缺行,不作判据)。copy / pin 两种模式同一条判据,
+// 差别全在落点记录上:pin 模式无记录者都被钉成了 "{src}:1",漏钉的人会落到「无记录 → dst」而在目标库查不到。
+func mainRowCheckFor(_ *mergeManifest, dst uint32) playerMainRowCheck {
+	return playerMainRowCheck{
+		where: fmt.Sprintf("player_database of each player's placement store (player:placement record, else %s)", zoneDBName(dst)),
+		missing: func(ctx context.Context, db *sql.DB, mapping *redis.Client, ids []uint64) ([]uint64, error) {
+			reads, err := readPlacements(ctx, mapping, ids)
+			if err != nil {
+				return nil, err
+			}
+			var missing []uint64
+			byStore := map[uint32][]uint64{}
+			for i, id := range ids {
+				store, ok := expectedMainRowStore(reads[i], dst)
+				if !ok {
+					missing = append(missing, id)
+					continue
+				}
+				byStore[store] = append(byStore[store], id)
+			}
+			for _, store := range sortedZones(storeSet(byStore)) {
+				name, _ := storeDBName(store)
+				lost, err := idsWithoutRow(ctx, db, name+".player_database", byStore[store])
+				if err != nil {
+					return nil, err
+				}
+				missing = append(missing, lost...)
+			}
+			return sortedUint64(missing), nil
+		},
+	}
+}
+
+// storeSet 返回 byStore 的键集合(给 sortedZones 排序,查询顺序稳定)。
+func storeSet(byStore map[uint32][]uint64) map[uint32]bool {
+	out := make(map[uint32]bool, len(byStore))
+	for s := range byStore {
+		out[s] = true
+	}
+	return out
+}
+
+// verifyManifestRows(A6):清单里的每一个玩家,主数据行都必须在合服后该在的库里。
+//
+// 取代旧的 verify:target_zone_rows(目标库 player_database 总行数 >= -expected-src-players):总行数里有
+// 目标区原住民,漏拷几个照样过线。清单没记「玩家行这一步」完成时报 NOT VERIFIED(warn):copy 模式是步骤 1
+// (-skip-player-rows,或合服没走到那里,行本来就不该在目标库),pin 模式是钉落点(没钉完就按有效落点查只会
+// 得出错误结论)。
+func verifyManifestRows(ctx context.Context, cfg auditConfig) ResourceAudit {
+	r := ResourceAudit{Name: "verify:manifest_rows", UniqueScope: "per_zone"}
+	m, err := cfg.verifyManifest()
+	if err != nil {
+		return infraAudit(r.Name, "%v", err)
+	}
+	r.SourceCount = int64(len(m.PlayerIDs))
+	mode := m.rowsMode()
+	if gate := rowsStepFor(mode); !m.stepDone(gate) {
+		r.Severity = "warn"
+		r.Notes = fmt.Sprintf("NOT VERIFIED: step %s (-player-rows-mode %s) is not recorded as done in the manifest "+
+			"(merged with -skip-player-rows, or the run did not get that far) — main-data rows were not checked", gate, mode)
+		return r
+	}
+	if cfg.db == nil {
+		return infraAudit(r.Name, "no MySQL handle")
+	}
+	if cfg.mappingDB == nil {
+		return infraAudit(r.Name, "no mapping Redis handle (placement records decide where each player's rows live)")
+	}
+	check := mainRowCheckFor(m, cfg.dst)
+	missing, err := check.missing(ctx, cfg.db, cfg.mappingDB, m.PlayerIDs)
+	if err != nil {
+		return infraAudit(r.Name, "%v", err)
+	}
+	r.TargetCount = r.SourceCount - int64(len(missing))
+	r.ConflictCount = int64(len(missing))
+	if len(missing) > 0 {
+		r.Severity = "block"
+		r.Notes = fmt.Sprintf("%d of the %d manifest players have no row in %s (first ids: %v) — "+
+			"their main data did not arrive", len(missing), len(m.PlayerIDs), check.where, sampleUint64(missing))
+		return r
+	}
+	r.Severity = "info"
+	r.Notes = fmt.Sprintf("all %d manifest players have a row in %s", len(m.PlayerIDs), check.where)
+	return r
+}
+
 // verifyGuildZoneDrained: guild WHERE zone_id=src 必须是 0。
 func verifyGuildZoneDrained(ctx context.Context, cfg auditConfig) ResourceAudit {
 	r := ResourceAudit{Name: "verify:guild_zone", UniqueScope: "global"}
+	// 与合服 P1 同一口径:-skip-guild-mysql 与 -skip-guild-rank 同时给出 = 这里没有部署帮会服务,合服没有改写
+	// guild.zone_id。报 SKIPPED(warn),不伪装成通过,也不因为查不到表而恒报 INFRA(exit 2)。
+	// 只给其中一个开关时 P1 照样要求帮会表存在,这里照常断言(源区残留即 block,是正确结论)。
+	if cfg.skipGuild {
+		r.Severity = "warn"
+		r.Notes = "SKIPPED (-skip-guild-mysql -skip-guild-rank): the guild service is declared absent here — " +
+			"guild.zone_id was not rewritten by this merge and is NOT VERIFIED"
+		return r
+	}
 	if cfg.db == nil {
 		return infraAudit(r.Name, "no MySQL handle")
 	}
@@ -266,6 +438,13 @@ func verifyGuildZoneDrained(ctx context.Context, cfg auditConfig) ResourceAudit 
 // 表现为公会在榜单上凭空消失。
 func verifyGuildRankZSets(ctx context.Context, cfg auditConfig) ResourceAudit {
 	r := ResourceAudit{Name: "verify:guild_rank", UniqueScope: "per_zone"}
+	// 口径同 verifyGuildZoneDrained:两个帮会跳过开关都给 = 帮会服务不存在,榜单既没合并也无从核对。
+	if cfg.skipGuild {
+		r.Severity = "warn"
+		r.Notes = "SKIPPED (-skip-guild-mysql -skip-guild-rank): the guild service is declared absent here — " +
+			"the guild_rank ZSETs were not merged by this merge and are NOT VERIFIED"
+		return r
+	}
 	if cfg.rankRDB == nil {
 		return infraAudit(r.Name, "no guild (rank) Redis handle")
 	}
@@ -308,67 +487,6 @@ func verifyGuildRankZSets(ctx context.Context, cfg auditConfig) ResourceAudit {
 	}
 	r.Severity = "info"
 	r.Notes = fmt.Sprintf("%s gone; %s has %d members == %d guild rows", srcKey, dstKey, dstCard, guildRows)
-	return r
-}
-
-// verifyTargetZoneRows: zone_{dst}_db 的每张玩家表行数 >= 合过来的玩家数。
-//
-// 「>=」而不是「==」:目标区本来就有自己的玩家。下界用 -expected-src-players
-// (T-1 记录的源区人数);没给就退化成「表存在且非空」的弱断言并标 warn ——
-// 弱断言必须看起来就弱,不能伪装成通过。
-func verifyTargetZoneRows(ctx context.Context, cfg auditConfig) ResourceAudit {
-	r := ResourceAudit{Name: "verify:target_zone_rows", UniqueScope: "per_zone"}
-	if cfg.db == nil {
-		return infraAudit(r.Name, "no MySQL handle")
-	}
-	schema := zoneDBName(cfg.dst)
-	if err := assertSchemaExists(ctx, cfg.db, schema); err != nil {
-		return infraAudit(r.Name, "%v", err)
-	}
-	tables, err := discoverPlayerTables(ctx, cfg.db, schema, cfg.tableCandidates)
-	if err != nil {
-		return infraAudit(r.Name, "%v", err)
-	}
-	if len(tables) == 0 {
-		return infraAudit(r.Name, "no player tables found in %s (checked %v)", schema, cfg.tableCandidates)
-	}
-	var minRows int64 = -1
-	var worst string
-	for _, t := range tables {
-		var n int64
-		if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+schema+"."+t).Scan(&n); err != nil {
-			return infraAudit(r.Name, "count %s.%s: %v", schema, t, err)
-		}
-		if minRows < 0 || n < minRows {
-			minRows, worst = n, t
-		}
-	}
-	r.TargetCount = minRows
-	if cfg.expectedSrcPlayers < 0 {
-		r.Severity = "warn"
-		r.Notes = fmt.Sprintf("%s player tables %v; smallest is %s with %d rows. "+
-			"Pass -expected-src-players <N recorded at T-1> to turn this into a real assertion.",
-			schema, tables, worst, minRows)
-		return r
-	}
-	r.SourceCount = cfg.expectedSrcPlayers
-	// player_database 是每个玩家必有的一行;player_database_1 /
-	// player_centre_database 允许缺行(玩家没触发过对应功能),所以下界
-	// 只对 player_database 断言,其余表只报数。
-	var mainRows int64
-	if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+schema+".player_database").Scan(&mainRows); err != nil {
-		return infraAudit(r.Name, "count %s.player_database: %v", schema, err)
-	}
-	r.TargetCount = mainRows
-	if mainRows < cfg.expectedSrcPlayers {
-		r.Severity = "block"
-		r.Notes = fmt.Sprintf("%s.player_database has %d rows but at least %d source players were merged in — "+
-			"player main data did not arrive", schema, mainRows, cfg.expectedSrcPlayers)
-		return r
-	}
-	r.Severity = "info"
-	r.Notes = fmt.Sprintf("%s.player_database has %d rows >= %d merged source players (tables checked: %v)",
-		schema, mainRows, cfg.expectedSrcPlayers, tables)
 	return r
 }
 

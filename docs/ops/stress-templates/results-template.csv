@@ -6,7 +6,7 @@
 # 填到下面这张表,然后 commit + push,作为 ARCH §11 决策的支撑数据。
 #
 # 文档锚点:
-#   docs/design/stress-test-2026-05-http-login.md §二  ← 主表(env=Windows-dev 已填,新增 Linux-staging 行)
+#   docs/stress/stress-test-2026-05-http-login.md §二  ← 主表(env=Windows-dev 已填,新增 Linux-staging 行)
 #   docs/ops/linux-staging-stress-runbook.md §E       ← 留位等填(本文)
 #
 # 时间戳约定: ISO 8601 with timezone(2026-MM-DDTHH:MM:SS+08:00)。
