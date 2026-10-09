@@ -21,7 +21,6 @@
 #include "google/protobuf/io/coded_stream.h"
 #include "google/protobuf/arena.h"
 #include "google/protobuf/arenastring.h"
-#include "google/protobuf/generated_message_bases.h"
 #include "google/protobuf/generated_message_tctable_decl.h"
 #include "google/protobuf/generated_message_util.h"
 #include "google/protobuf/metadata_lite.h"
@@ -63,6 +62,8 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_prot
 }  // extern "C"
 enum ActorType : int;
 extern const uint32_t ActorType_internal_data_[];
+enum SceneChannelState : int;
+extern const uint32_t SceneChannelState_internal_data_[];
 class ActorCreateS2C;
 struct ActorCreateS2CGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -119,6 +120,22 @@ extern const ::google::protobuf::internal::ClassDataFull EnterSceneS2C_class_dat
 #else
 extern const EnterSceneS2CGlobalsTypeInternal EnterSceneS2C_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class SceneChannelDirectory;
+struct SceneChannelDirectoryGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SceneChannelDirectoryGlobalsTypeInternal SceneChannelDirectory_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SceneChannelDirectory_class_data_;
+#else
+extern const SceneChannelDirectoryGlobalsTypeInternal SceneChannelDirectory_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SceneChannelInfo;
+struct SceneChannelInfoGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SceneChannelInfoGlobalsTypeInternal SceneChannelInfo_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SceneChannelInfo_class_data_;
+#else
+extern const SceneChannelInfoGlobalsTypeInternal SceneChannelInfo_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class SceneInfoRequest;
 struct SceneInfoRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -164,9 +181,56 @@ namespace protobuf {
 template <>
 internal::EnumTraitsT<::ActorType_internal_data_>
     internal::EnumTraitsImpl::value<::ActorType>;
+template <>
+internal::EnumTraitsT<::SceneChannelState_internal_data_>
+    internal::EnumTraitsImpl::value<::SceneChannelState>;
 }  // namespace protobuf
 }  // namespace google
 
+enum SceneChannelState : int {
+  SCENE_CHANNEL_STATE_UNKNOWN = 0,
+  SCENE_CHANNEL_STATE_SMOOTH = 1,
+  SCENE_CHANNEL_STATE_BUSY = 2,
+  SCENE_CHANNEL_STATE_FULL = 3,
+  SCENE_CHANNEL_STATE_CLOSING = 4,
+  SCENE_CHANNEL_STATE_UNAVAILABLE = 5,
+  SceneChannelState_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  SceneChannelState_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t SceneChannelState_internal_data_[];
+inline constexpr SceneChannelState SceneChannelState_MIN =
+    static_cast<SceneChannelState>(0);
+inline constexpr SceneChannelState SceneChannelState_MAX =
+    static_cast<SceneChannelState>(5);
+[[nodiscard]] inline bool SceneChannelState_IsValid(int value) {
+  return 0 <= value && value <= 5;
+}
+inline constexpr int SceneChannelState_ARRAYSIZE = 5 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+SceneChannelState_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(SceneChannelState) {
+  return SceneChannelState_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& SceneChannelState_Name(T value) {
+  static_assert(::std::is_same<T, SceneChannelState>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to SceneChannelState_Name().");
+  return SceneChannelState_Name(static_cast<SceneChannelState>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& SceneChannelState_Name(SceneChannelState value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<SceneChannelState_descriptor, 0, 5>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool SceneChannelState_Parse(
+    ::absl::string_view name, SceneChannelState* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<SceneChannelState>(SceneChannelState_descriptor(), name,
+                                           value);
+}
 enum ActorType : int {
   ACTOR_TYPE_NONE = 0,
   ACTOR_TYPE_PLAYER = 1,
@@ -272,7 +336,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelToZoneRequest final : public 
   [[nodiscard]] static const TravelToZoneRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TravelToZoneRequest>(&TravelToZoneRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(TravelToZoneRequest& a, TravelToZoneRequest& b) { a.Swap(&b); }
   inline void Swap(TravelToZoneRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -429,10 +493,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelToZoneRequest final : public 
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:SceneInfoRequest) */ {
  public:
   inline SceneInfoRequest() : SceneInfoRequest(nullptr) {}
+  ~SceneInfoRequest() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
   void operator delete(SceneInfoRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
@@ -484,7 +549,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoRequest final : public ::g
   [[nodiscard]] static const SceneInfoRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SceneInfoRequest>(&SceneInfoRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(SceneInfoRequest& a, SceneInfoRequest& b) { a.Swap(&b); }
   inline void Swap(SceneInfoRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -504,17 +569,50 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoRequest final : public ::g
 
   [[nodiscard]] SceneInfoRequest* PROTOBUF_NONNULL
   New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<SceneInfoRequest>(arena);
+    return ::google::protobuf::Message::DefaultConstruct<SceneInfoRequest>(arena);
   }
-  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
-  inline void CopyFrom(const SceneInfoRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
-  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
-  void MergeFrom(const SceneInfoRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SceneInfoRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SceneInfoRequest& from) { SceneInfoRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
 
   public:
   [[nodiscard]] bool IsInitialized() const {
     return true;
   }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SceneInfoRequest* PROTOBUF_NONNULL other);
  private:
   template <typename T>
   friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
@@ -542,11 +640,24 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoRequest final : public ::g
   // nested types ----------------------------------------------------
 
   // accessors -------------------------------------------------------
+  enum : int {
+    kWithChannelDirectoryFieldNumber = 1,
+  };
+  // bool with_channel_directory = 1;
+  void clear_with_channel_directory() ;
+  [[nodiscard]] bool with_channel_directory() const;
+  void set_with_channel_directory(bool value);
+
+  private:
+  bool _internal_with_channel_directory() const;
+  void _internal_set_with_channel_directory(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SceneInfoRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 0,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -563,6 +674,259 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoRequest final : public ::g
   friend class ::google::protobuf::Arena::InternalHelper;
   using InternalArenaConstructable_ = void;
   using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SceneInfoRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    bool with_channel_directory_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fscene_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneChannelInfo final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SceneChannelInfo) */ {
+ public:
+  inline SceneChannelInfo() : SceneChannelInfo(nullptr) {}
+  ~SceneChannelInfo() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SceneChannelInfo* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SceneChannelInfo));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SceneChannelInfo(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SceneChannelInfo(const SceneChannelInfo& from) : SceneChannelInfo(nullptr, from) {}
+  inline SceneChannelInfo(SceneChannelInfo&& from) noexcept : SceneChannelInfo(nullptr, ::std::move(from)) {}
+  inline SceneChannelInfo& operator=(const SceneChannelInfo& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SceneChannelInfo& operator=(SceneChannelInfo&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SceneChannelInfo& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SceneChannelInfo>(&SceneChannelInfo_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 3;
+  friend void swap(SceneChannelInfo& a, SceneChannelInfo& b) { a.Swap(&b); }
+  inline void Swap(SceneChannelInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SceneChannelInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SceneChannelInfo* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SceneChannelInfo>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SceneChannelInfo& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SceneChannelInfo& from) { SceneChannelInfo::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SceneChannelInfo* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SceneChannelInfo"; }
+
+  explicit SceneChannelInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SceneChannelInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SceneChannelInfo& from);
+  SceneChannelInfo(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SceneChannelInfo&& from) noexcept
+      : SceneChannelInfo(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSceneIdFieldNumber = 1,
+    kChannelNoFieldNumber = 2,
+    kPlayerCountFieldNumber = 3,
+    kStateFieldNumber = 4,
+  };
+  // uint64 scene_id = 1;
+  void clear_scene_id() ;
+  [[nodiscard]] ::uint64_t scene_id() const;
+  void set_scene_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_scene_id() const;
+  void _internal_set_scene_id(::uint64_t value);
+
+  public:
+  // uint32 channel_no = 2;
+  void clear_channel_no() ;
+  [[nodiscard]] ::uint32_t channel_no() const;
+  void set_channel_no(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_channel_no() const;
+  void _internal_set_channel_no(::uint32_t value);
+
+  public:
+  // uint32 player_count = 3;
+  void clear_player_count() ;
+  [[nodiscard]] ::uint32_t player_count() const;
+  void set_player_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_player_count() const;
+  void _internal_set_player_count(::uint32_t value);
+
+  public:
+  // .SceneChannelState state = 4;
+  void clear_state() ;
+  [[nodiscard]] ::SceneChannelState state() const;
+  void set_state(::SceneChannelState value);
+
+  private:
+  ::SceneChannelState _internal_state() const;
+  void _internal_set_state(::SceneChannelState value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:SceneChannelInfo)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SceneChannelInfo& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t scene_id_;
+    ::uint32_t channel_no_;
+    ::uint32_t player_count_;
+    int state_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fscene_2fplayer_5fscene_2eproto;
 };
 // -------------------------------------------------------------------
@@ -623,7 +987,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorListDestroyS2C final : public 
   [[nodiscard]] static const ActorListDestroyS2C& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ActorListDestroyS2C>(&ActorListDestroyS2C_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(ActorListDestroyS2C& a, ActorListDestroyS2C& b) { a.Swap(&b); }
   inline void Swap(ActorListDestroyS2C* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -835,7 +1199,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorDestroyS2C final : public ::go
   [[nodiscard]] static const ActorDestroyS2C& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ActorDestroyS2C>(&ActorDestroyS2C_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(ActorDestroyS2C& a, ActorDestroyS2C& b) { a.Swap(&b); }
   inline void Swap(ActorDestroyS2C* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1036,7 +1400,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelToZoneResponse final : public
   [[nodiscard]] static const TravelToZoneResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TravelToZoneResponse>(&TravelToZoneResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(TravelToZoneResponse& a, TravelToZoneResponse& b) { a.Swap(&b); }
   inline void Swap(TravelToZoneResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1180,6 +1544,290 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelToZoneResponse final : public
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fscene_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneChannelDirectory final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SceneChannelDirectory) */ {
+ public:
+  inline SceneChannelDirectory() : SceneChannelDirectory(nullptr) {}
+  ~SceneChannelDirectory() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SceneChannelDirectory* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SceneChannelDirectory));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SceneChannelDirectory(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SceneChannelDirectory(const SceneChannelDirectory& from) : SceneChannelDirectory(nullptr, from) {}
+  inline SceneChannelDirectory(SceneChannelDirectory&& from) noexcept : SceneChannelDirectory(nullptr, ::std::move(from)) {}
+  inline SceneChannelDirectory& operator=(const SceneChannelDirectory& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SceneChannelDirectory& operator=(SceneChannelDirectory&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SceneChannelDirectory& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SceneChannelDirectory>(&SceneChannelDirectory_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 4;
+  friend void swap(SceneChannelDirectory& a, SceneChannelDirectory& b) { a.Swap(&b); }
+  inline void Swap(SceneChannelDirectory* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SceneChannelDirectory* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SceneChannelDirectory* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SceneChannelDirectory>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SceneChannelDirectory& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SceneChannelDirectory& from) { SceneChannelDirectory::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SceneChannelDirectory* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SceneChannelDirectory"; }
+
+  explicit SceneChannelDirectory(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SceneChannelDirectory(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SceneChannelDirectory& from);
+  SceneChannelDirectory(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SceneChannelDirectory&& from) noexcept
+      : SceneChannelDirectory(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kChannelsFieldNumber = 3,
+    kZoneIdFieldNumber = 1,
+    kSceneConfigIdFieldNumber = 2,
+    kUpdatedAtMsFieldNumber = 4,
+    kSwitchCooldownSecondsFieldNumber = 5,
+    kMaxPlayersPerChannelFieldNumber = 6,
+    kSwitchEnabledFieldNumber = 7,
+  };
+  // repeated .SceneChannelInfo channels = 3;
+  [[nodiscard]] int channels_size()
+      const;
+  private:
+  int _internal_channels_size() const;
+
+  public:
+  void clear_channels() ;
+  [[nodiscard]] const ::SceneChannelInfo& channels(int index) const;
+  [[nodiscard]] ::SceneChannelInfo* PROTOBUF_NONNULL mutable_channels(int index);
+  ::SceneChannelInfo* PROTOBUF_NONNULL add_channels();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::SceneChannelInfo>&
+  channels() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::SceneChannelInfo>* PROTOBUF_NONNULL
+  mutable_channels();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::SceneChannelInfo>& _internal_channels() const;
+  ::google::protobuf::RepeatedPtrField<::SceneChannelInfo>* PROTOBUF_NONNULL _internal_mutable_channels();
+
+  public:
+  // uint32 zone_id = 1;
+  void clear_zone_id() ;
+  [[nodiscard]] ::uint32_t zone_id() const;
+  void set_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_zone_id() const;
+  void _internal_set_zone_id(::uint32_t value);
+
+  public:
+  // uint32 scene_config_id = 2;
+  void clear_scene_config_id() ;
+  [[nodiscard]] ::uint32_t scene_config_id() const;
+  void set_scene_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_scene_config_id() const;
+  void _internal_set_scene_config_id(::uint32_t value);
+
+  public:
+  // uint64 updated_at_ms = 4;
+  void clear_updated_at_ms() ;
+  [[nodiscard]] ::uint64_t updated_at_ms() const;
+  void set_updated_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_updated_at_ms() const;
+  void _internal_set_updated_at_ms(::uint64_t value);
+
+  public:
+  // uint32 switch_cooldown_seconds = 5;
+  void clear_switch_cooldown_seconds() ;
+  [[nodiscard]] ::uint32_t switch_cooldown_seconds() const;
+  void set_switch_cooldown_seconds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_switch_cooldown_seconds() const;
+  void _internal_set_switch_cooldown_seconds(::uint32_t value);
+
+  public:
+  // uint32 max_players_per_channel = 6;
+  void clear_max_players_per_channel() ;
+  [[nodiscard]] ::uint32_t max_players_per_channel() const;
+  void set_max_players_per_channel(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_players_per_channel() const;
+  void _internal_set_max_players_per_channel(::uint32_t value);
+
+  public:
+  // bool switch_enabled = 7;
+  void clear_switch_enabled() ;
+  [[nodiscard]] bool switch_enabled() const;
+  void set_switch_enabled(bool value);
+
+  private:
+  bool _internal_switch_enabled() const;
+  void _internal_set_switch_enabled(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:SceneChannelDirectory)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SceneChannelDirectory& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::SceneChannelInfo > channels_;
+    ::uint32_t zone_id_;
+    ::uint32_t scene_config_id_;
+    ::uint64_t updated_at_ms_;
+    ::uint32_t switch_cooldown_seconds_;
+    ::uint32_t max_players_per_channel_;
+    bool switch_enabled_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1450,7 +2098,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoS2C final : public ::googl
   [[nodiscard]] static const SceneInfoS2C& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SceneInfoS2C>(&SceneInfoS2C_globals_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(SceneInfoS2C& a, SceneInfoS2C& b) { a.Swap(&b); }
   inline void Swap(SceneInfoS2C* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1543,6 +2191,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoS2C final : public ::googl
   // accessors -------------------------------------------------------
   enum : int {
     kSceneInfoFieldNumber = 1,
+    kChannelDirectoryFieldNumber = 2,
   };
   // repeated .SceneInfoComp scene_info = 1;
   [[nodiscard]] int scene_info_size()
@@ -1565,12 +2214,28 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoS2C final : public ::googl
   ::google::protobuf::RepeatedPtrField<::SceneInfoComp>* PROTOBUF_NONNULL _internal_mutable_scene_info();
 
   public:
+  // .SceneChannelDirectory channel_directory = 2;
+  [[nodiscard]] bool has_channel_directory()
+      const;
+  void clear_channel_directory() ;
+  [[nodiscard]] const ::SceneChannelDirectory& channel_directory() const;
+  [[nodiscard]] ::SceneChannelDirectory* PROTOBUF_NULLABLE release_channel_directory();
+  ::SceneChannelDirectory* PROTOBUF_NONNULL mutable_channel_directory();
+  void set_allocated_channel_directory(::SceneChannelDirectory* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_channel_directory(::SceneChannelDirectory* PROTOBUF_NULLABLE value);
+  ::SceneChannelDirectory* PROTOBUF_NULLABLE unsafe_arena_release_channel_directory();
+
+  private:
+  const ::SceneChannelDirectory& _internal_channel_directory() const;
+  ::SceneChannelDirectory* PROTOBUF_NONNULL _internal_mutable_channel_directory();
+
+  public:
   // @@protoc_insertion_point(class_scope:SceneInfoS2C)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
-                          1, 0,
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1599,6 +2264,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoS2C final : public ::googl
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::SceneInfoComp > scene_info_;
+    ::SceneChannelDirectory* PROTOBUF_NULLABLE channel_directory_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1662,7 +2328,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoResponse final : public ::
   [[nodiscard]] static const SceneInfoResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SceneInfoResponse>(&SceneInfoResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(SceneInfoResponse& a, SceneInfoResponse& b) { a.Swap(&b); }
   inline void Swap(SceneInfoResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2288,7 +2954,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorCreateS2C final : public ::goo
   [[nodiscard]] static const ActorCreateS2C& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ActorCreateS2C>(&ActorCreateS2C_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(ActorCreateS2C& a, ActorCreateS2C& b) { a.Swap(&b); }
   inline void Swap(ActorCreateS2C* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2584,7 +3250,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorListCreateS2C final : public :
   [[nodiscard]] static const ActorListCreateS2C& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ActorListCreateS2C>(&ActorListCreateS2C_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(ActorListCreateS2C& a, ActorListCreateS2C& b) { a.Swap(&b); }
   inline void Swap(ActorListCreateS2C* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3171,6 +3837,309 @@ inline void EnterSceneS2C::set_allocated_scene_info(::SceneInfoComp* PROTOBUF_NU
 
 // -------------------------------------------------------------------
 
+// SceneChannelInfo
+
+// uint64 scene_id = 1;
+inline void SceneChannelInfo::clear_scene_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scene_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t SceneChannelInfo::scene_id() const {
+  // @@protoc_insertion_point(field_get:SceneChannelInfo.scene_id)
+  return _internal_scene_id();
+}
+inline void SceneChannelInfo::set_scene_id(::uint64_t value) {
+  _internal_set_scene_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:SceneChannelInfo.scene_id)
+}
+inline ::uint64_t SceneChannelInfo::_internal_scene_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.scene_id_;
+}
+inline void SceneChannelInfo::_internal_set_scene_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scene_id_ = value;
+}
+
+// uint32 channel_no = 2;
+inline void SceneChannelInfo::clear_channel_no() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.channel_no_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t SceneChannelInfo::channel_no() const {
+  // @@protoc_insertion_point(field_get:SceneChannelInfo.channel_no)
+  return _internal_channel_no();
+}
+inline void SceneChannelInfo::set_channel_no(::uint32_t value) {
+  _internal_set_channel_no(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:SceneChannelInfo.channel_no)
+}
+inline ::uint32_t SceneChannelInfo::_internal_channel_no() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.channel_no_;
+}
+inline void SceneChannelInfo::_internal_set_channel_no(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.channel_no_ = value;
+}
+
+// uint32 player_count = 3;
+inline void SceneChannelInfo::clear_player_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t SceneChannelInfo::player_count() const {
+  // @@protoc_insertion_point(field_get:SceneChannelInfo.player_count)
+  return _internal_player_count();
+}
+inline void SceneChannelInfo::set_player_count(::uint32_t value) {
+  _internal_set_player_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:SceneChannelInfo.player_count)
+}
+inline ::uint32_t SceneChannelInfo::_internal_player_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_count_;
+}
+inline void SceneChannelInfo::_internal_set_player_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_count_ = value;
+}
+
+// .SceneChannelState state = 4;
+inline void SceneChannelInfo::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::SceneChannelState SceneChannelInfo::state() const {
+  // @@protoc_insertion_point(field_get:SceneChannelInfo.state)
+  return _internal_state();
+}
+inline void SceneChannelInfo::set_state(::SceneChannelState value) {
+  _internal_set_state(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:SceneChannelInfo.state)
+}
+inline ::SceneChannelState SceneChannelInfo::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::SceneChannelState>(_impl_.state_);
+}
+inline void SceneChannelInfo::_internal_set_state(::SceneChannelState value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// SceneChannelDirectory
+
+// uint32 zone_id = 1;
+inline void SceneChannelDirectory::clear_zone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t SceneChannelDirectory::zone_id() const {
+  // @@protoc_insertion_point(field_get:SceneChannelDirectory.zone_id)
+  return _internal_zone_id();
+}
+inline void SceneChannelDirectory::set_zone_id(::uint32_t value) {
+  _internal_set_zone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:SceneChannelDirectory.zone_id)
+}
+inline ::uint32_t SceneChannelDirectory::_internal_zone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.zone_id_;
+}
+inline void SceneChannelDirectory::_internal_set_zone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = value;
+}
+
+// uint32 scene_config_id = 2;
+inline void SceneChannelDirectory::clear_scene_config_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scene_config_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t SceneChannelDirectory::scene_config_id() const {
+  // @@protoc_insertion_point(field_get:SceneChannelDirectory.scene_config_id)
+  return _internal_scene_config_id();
+}
+inline void SceneChannelDirectory::set_scene_config_id(::uint32_t value) {
+  _internal_set_scene_config_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:SceneChannelDirectory.scene_config_id)
+}
+inline ::uint32_t SceneChannelDirectory::_internal_scene_config_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.scene_config_id_;
+}
+inline void SceneChannelDirectory::_internal_set_scene_config_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scene_config_id_ = value;
+}
+
+// repeated .SceneChannelInfo channels = 3;
+inline int SceneChannelDirectory::_internal_channels_size() const {
+  return _internal_channels().size();
+}
+inline int SceneChannelDirectory::channels_size() const {
+  return _internal_channels_size();
+}
+inline void SceneChannelDirectory::clear_channels() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.channels_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::SceneChannelInfo& SceneChannelDirectory::channels(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SceneChannelDirectory.channels)
+  return _internal_channels().Get(index);
+}
+inline ::SceneChannelInfo* PROTOBUF_NONNULL SceneChannelDirectory::mutable_channels(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:SceneChannelDirectory.channels)
+  return _internal_mutable_channels()->Mutable(index);
+}
+inline ::SceneChannelInfo* PROTOBUF_NONNULL SceneChannelDirectory::add_channels()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::SceneChannelInfo* _add =
+      _internal_mutable_channels()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:SceneChannelDirectory.channels)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::SceneChannelInfo>& SceneChannelDirectory::channels() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:SceneChannelDirectory.channels)
+  return _internal_channels();
+}
+inline ::google::protobuf::RepeatedPtrField<::SceneChannelInfo>* PROTOBUF_NONNULL
+SceneChannelDirectory::mutable_channels() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:SceneChannelDirectory.channels)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_channels();
+}
+inline const ::google::protobuf::RepeatedPtrField<::SceneChannelInfo>&
+SceneChannelDirectory::_internal_channels() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.channels_;
+}
+inline ::google::protobuf::RepeatedPtrField<::SceneChannelInfo>* PROTOBUF_NONNULL
+SceneChannelDirectory::_internal_mutable_channels() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.channels_;
+}
+
+// uint64 updated_at_ms = 4;
+inline void SceneChannelDirectory::clear_updated_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t SceneChannelDirectory::updated_at_ms() const {
+  // @@protoc_insertion_point(field_get:SceneChannelDirectory.updated_at_ms)
+  return _internal_updated_at_ms();
+}
+inline void SceneChannelDirectory::set_updated_at_ms(::uint64_t value) {
+  _internal_set_updated_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:SceneChannelDirectory.updated_at_ms)
+}
+inline ::uint64_t SceneChannelDirectory::_internal_updated_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.updated_at_ms_;
+}
+inline void SceneChannelDirectory::_internal_set_updated_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_at_ms_ = value;
+}
+
+// uint32 switch_cooldown_seconds = 5;
+inline void SceneChannelDirectory::clear_switch_cooldown_seconds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.switch_cooldown_seconds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t SceneChannelDirectory::switch_cooldown_seconds() const {
+  // @@protoc_insertion_point(field_get:SceneChannelDirectory.switch_cooldown_seconds)
+  return _internal_switch_cooldown_seconds();
+}
+inline void SceneChannelDirectory::set_switch_cooldown_seconds(::uint32_t value) {
+  _internal_set_switch_cooldown_seconds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:SceneChannelDirectory.switch_cooldown_seconds)
+}
+inline ::uint32_t SceneChannelDirectory::_internal_switch_cooldown_seconds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.switch_cooldown_seconds_;
+}
+inline void SceneChannelDirectory::_internal_set_switch_cooldown_seconds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.switch_cooldown_seconds_ = value;
+}
+
+// uint32 max_players_per_channel = 6;
+inline void SceneChannelDirectory::clear_max_players_per_channel() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_players_per_channel_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t SceneChannelDirectory::max_players_per_channel() const {
+  // @@protoc_insertion_point(field_get:SceneChannelDirectory.max_players_per_channel)
+  return _internal_max_players_per_channel();
+}
+inline void SceneChannelDirectory::set_max_players_per_channel(::uint32_t value) {
+  _internal_set_max_players_per_channel(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:SceneChannelDirectory.max_players_per_channel)
+}
+inline ::uint32_t SceneChannelDirectory::_internal_max_players_per_channel() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_players_per_channel_;
+}
+inline void SceneChannelDirectory::_internal_set_max_players_per_channel(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_players_per_channel_ = value;
+}
+
+// bool switch_enabled = 7;
+inline void SceneChannelDirectory::clear_switch_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.switch_enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline bool SceneChannelDirectory::switch_enabled() const {
+  // @@protoc_insertion_point(field_get:SceneChannelDirectory.switch_enabled)
+  return _internal_switch_enabled();
+}
+inline void SceneChannelDirectory::set_switch_enabled(bool value) {
+  _internal_set_switch_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:SceneChannelDirectory.switch_enabled)
+}
+inline bool SceneChannelDirectory::_internal_switch_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.switch_enabled_;
+}
+inline void SceneChannelDirectory::_internal_set_switch_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.switch_enabled_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // SceneInfoS2C
 
 // repeated .SceneInfoComp scene_info = 1;
@@ -3223,9 +4192,131 @@ SceneInfoS2C::_internal_mutable_scene_info() {
   return &_impl_.scene_info_;
 }
 
+// .SceneChannelDirectory channel_directory = 2;
+inline bool SceneInfoS2C::has_channel_directory() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.channel_directory_ != nullptr);
+  return value;
+}
+inline void SceneInfoS2C::clear_channel_directory() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.channel_directory_ != nullptr) _impl_.channel_directory_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::SceneChannelDirectory& SceneInfoS2C::_internal_channel_directory() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::SceneChannelDirectory* p = _impl_.channel_directory_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::SceneChannelDirectory>(&::SceneChannelDirectory_globals_);
+}
+inline const ::SceneChannelDirectory& SceneInfoS2C::channel_directory() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SceneInfoS2C.channel_directory)
+  return _internal_channel_directory();
+}
+inline void SceneInfoS2C::unsafe_arena_set_allocated_channel_directory(
+    ::SceneChannelDirectory* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.channel_directory_);
+  }
+  _impl_.channel_directory_ = reinterpret_cast<::SceneChannelDirectory*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SceneInfoS2C.channel_directory)
+}
+inline ::SceneChannelDirectory* PROTOBUF_NULLABLE SceneInfoS2C::release_channel_directory() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SceneChannelDirectory* released = _impl_.channel_directory_;
+  _impl_.channel_directory_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::SceneChannelDirectory* PROTOBUF_NULLABLE SceneInfoS2C::unsafe_arena_release_channel_directory() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SceneInfoS2C.channel_directory)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SceneChannelDirectory* temp = _impl_.channel_directory_;
+  _impl_.channel_directory_ = nullptr;
+  return temp;
+}
+inline ::SceneChannelDirectory* PROTOBUF_NONNULL SceneInfoS2C::_internal_mutable_channel_directory() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.channel_directory_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::SceneChannelDirectory>(GetArena());
+    _impl_.channel_directory_ = reinterpret_cast<::SceneChannelDirectory*>(p);
+  }
+  return _impl_.channel_directory_;
+}
+inline ::SceneChannelDirectory* PROTOBUF_NONNULL SceneInfoS2C::mutable_channel_directory()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SceneChannelDirectory* _msg = _internal_mutable_channel_directory();
+  // @@protoc_insertion_point(field_mutable:SceneInfoS2C.channel_directory)
+  return _msg;
+}
+inline void SceneInfoS2C::set_allocated_channel_directory(::SceneChannelDirectory* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.channel_directory_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.channel_directory_ = reinterpret_cast<::SceneChannelDirectory*>(value);
+  // @@protoc_insertion_point(field_set_allocated:SceneInfoS2C.channel_directory)
+}
+
 // -------------------------------------------------------------------
 
 // SceneInfoRequest
+
+// bool with_channel_directory = 1;
+inline void SceneInfoRequest::clear_with_channel_directory() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.with_channel_directory_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline bool SceneInfoRequest::with_channel_directory() const {
+  // @@protoc_insertion_point(field_get:SceneInfoRequest.with_channel_directory)
+  return _internal_with_channel_directory();
+}
+inline void SceneInfoRequest::set_with_channel_directory(bool value) {
+  _internal_set_with_channel_directory(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:SceneInfoRequest.with_channel_directory)
+}
+inline bool SceneInfoRequest::_internal_with_channel_directory() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.with_channel_directory_;
+}
+inline void SceneInfoRequest::_internal_set_with_channel_directory(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.with_channel_directory_ = value;
+}
 
 // -------------------------------------------------------------------
 
@@ -3887,6 +4978,12 @@ inline void TravelToZoneResponse::set_allocated_error_message(::TipInfoMessage* 
 namespace google {
 namespace protobuf {
 
+template <>
+struct is_proto_enum<::SceneChannelState> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::SceneChannelState>() {
+  return ::SceneChannelState_descriptor();
+}
 template <>
 struct is_proto_enum<::ActorType> : std::true_type {};
 template <>

@@ -339,8 +339,15 @@ type EnterSceneRequest struct {
 	//     0 表示调用方不需要按请求对应答(如 login)。
 	//   - 请求侧后续新字段从 11 起用。
 	CorrelationId uint64 `protobuf:"varint,10,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 客户端主动选线(docs/design/world-channel-switch.md §4):这条请求的 scene_id 是玩家自己在
+	// 客户端点选的,不是服务器替他决定的。只有 scene 节点的客户端 EnterScene 入口会置位;
+	// 队伍跟随、镜像自动进场、疏散、登录、跨节点交接的重发一律不置位。
+	// 置位且目标是本 zone 的大世界分线时,scene_manager 额外校验「未回收 / 未满 / 冷却已过」,
+	// 并在放行后开始计冷却;目标不是分线(按 id 进副本 / 镜像)时本字段不产生任何效果。
+	// 进 request_id 指纹(它是业务语义);proto3 不序列化 false,不带它的请求指纹与加字段前逐字节相同。
+	ClientChannelPick bool `protobuf:"varint,11,opt,name=client_channel_pick,json=clientChannelPick,proto3" json:"client_channel_pick,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *EnterSceneRequest) Reset() {
@@ -441,6 +448,13 @@ func (x *EnterSceneRequest) GetCorrelationId() uint64 {
 		return x.CorrelationId
 	}
 	return 0
+}
+
+func (x *EnterSceneRequest) GetClientChannelPick() bool {
+	if x != nil {
+		return x.ClientChannelPick
+	}
+	return false
 }
 
 type EnterSceneResponse struct {
@@ -714,7 +728,7 @@ const file_proto_scene_manager_scene_manager_service_proto_rawDesc = "" +
 	"creatorIds\"I\n" +
 	"\x13DestroySceneRequest\x12\x19\n" +
 	"\bscene_id\x18\x01 \x01(\x04R\asceneId\x12\x17\n" +
-	"\azone_id\x18\x02 \x01(\rR\x06zoneId\"\xd2\x02\n" +
+	"\azone_id\x18\x02 \x01(\rR\x06zoneId\"\x82\x03\n" +
 	"\x11EnterSceneRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x19\n" +
 	"\bscene_id\x18\x02 \x01(\x04R\asceneId\x12\x1d\n" +
@@ -729,7 +743,8 @@ const file_proto_scene_manager_scene_manager_service_proto_rawDesc = "" +
 	"\fgate_zone_id\x18\t \x01(\rR\n" +
 	"gateZoneId\x12%\n" +
 	"\x0ecorrelation_id\x18\n" +
-	" \x01(\x04R\rcorrelationId\"\x98\x02\n" +
+	" \x01(\x04R\rcorrelationId\x12.\n" +
+	"\x13client_channel_pick\x18\v \x01(\bR\x11clientChannelPick\"\x98\x02\n" +
 	"\x12EnterSceneResponse\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x12#\n" +

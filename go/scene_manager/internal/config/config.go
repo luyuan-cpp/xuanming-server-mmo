@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"strconv"
 
 	"github.com/zeromicro/go-zero/zrpc"
@@ -71,6 +72,7 @@ type Config struct {
 	// 加上写之前受续期 ctx 超时 2s 约束的排队 / 重试退避 / 拨号,单次续期最坏 maxCall = 8s。
 	// 自我降级要赶在锁过期之前,须 maxCall < TTL/3,即 TTL > 24s。默认 30s 得到 20s 降级门槛,
 	// 降级最晚 28s 完成、早于 30s 过期;低于下限时选主器任一续期出错即降级,并记错误日志。
+	// 读取走 EffectiveLeaderLockTTLSeconds():分线目录的 TTL 也按它算竞选间隔(TTL/3)。
 	LeaderLockTTLSeconds int64 `json:",default=30"`
 
 	// LeaderLockKey:选主锁的 Redis key,留空用默认 scene_manager:leader:lock。
@@ -213,6 +215,10 @@ type Config struct {
 	// 设计文档:docs/design/world-channel-autoscale.md。
 	WorldAutoscale WorldAutoscaleConfig `json:",optional"`
 
+	// ChannelSwitch: 玩家主动切线(分线目录发布 + EnterScene 选线预检)。整块可缺省。
+	// 设计文档:docs/design/world-channel-switch.md §4.5。
+	ChannelSwitch ChannelSwitchConfig `json:",optional"`
+
 	// SceneReentryBarrierSeconds: 节点判死之后,SceneManager 允许把它名下的
 	// 场景改派/销毁/清理之前必须等待的秒数。0(默认)= 用
 	// constants.SceneReentryBarrier(= C++ drain 预算 + 时钟余量)。
@@ -328,6 +334,123 @@ type WorldAutoscaleConfig struct {
 	// DrainTimeoutSeconds: 排空标记的 TTL。进程在排空中途挂掉时标记会过期,
 	// 下一轮 sweep 重新接手,不会留下永久"半死"频道。
 	DrainTimeoutSeconds int64 `json:",default=300"`
+}
+
+// ChannelSwitchConfig 控制玩家主动切线(docs/design/world-channel-switch.md §4.5)。
+//
+// **读取一律走下面的取值方法,不要直接读字段。** 字段全部是 optional、零值即「用默认」:
+// 这个块挂在 Config 上是 `json:",optional"`,yaml 整块不写时(K8s ConfigMap 由 k8s_deploy.ps1
+// 生成,只镜像它认识的标量)嵌套字段的 `default=` 标签是否生效没有保证,所以默认值写在方法里,
+// 不写在标签里。
+type ChannelSwitchConfig struct {
+	// Disabled: true = 关闭玩家主动切线。目录照常发布(switch_enabled=false,客户端整面板置灰),
+	// EnterScene 对带 client_channel_pick 的分线请求回 ErrChannelUnavailable。
+	// 只拦「玩家点线路面板」这一个入口,自动选线、队伍跟随、按 id 进副本都不受影响。
+	Disabled bool `json:",optional"`
+
+	// CooldownSeconds: 两次主动切线的最小间隔(秒)。0 = 取默认 10;负数 = 不设冷却。
+	CooldownSeconds int64 `json:",optional"`
+
+	// MaxPlayersPerChannel: 玩家主动选线时的每线人数上限(软上限,只拦主动选线)。
+	// 0(或负数)= 跟随 WorldAutoscale.ScaleOutPlayerThreshold;两者都没配时取 2000。
+	MaxPlayersPerChannel int64 `json:",optional"`
+
+	// BusyPercent: 人数达到上限的这个百分比时目录里显示「繁忙」。0 = 取默认 60;钳到 [1,100]。
+	BusyPercent int64 `json:",optional"`
+
+	// DirectoryRefreshSeconds: 分线目录的发布周期(秒)。0 = 取默认 2;负数 = 不发布目录
+	// (客户端拿不到线路列表,等于关掉列线;EnterScene 的选线预检不受它影响)。
+	DirectoryRefreshSeconds int64 `json:",optional"`
+}
+
+const (
+	defaultChannelSwitchCooldownSeconds   int64 = 10
+	defaultChannelBusyPercent             int64 = 60
+	defaultChannelDirectoryRefreshSeconds int64 = 2
+	defaultChannelMaxPlayers              int64 = 2000
+
+	// channelSwitchMaxSeconds 是冷却 / 发布周期两个秒数的上限(一天)。再长就不是「冷却」「刷新周期」
+	// 而是配置笔误;钳住之后它们换算成 Redis EX(int)、目录 TTL(3 倍周期 + 一个选主竞选间隔,
+	// 后者在 logic/world_channel_directory.go 另有上限)、目录里的 uint32 都不会溢出。
+	channelSwitchMaxSeconds int64 = 24 * 60 * 60
+)
+
+// EffectiveCooldownSeconds 返回生效的切线冷却秒数。**返回 0 = 不设冷却**(既不查也不写冷却键);
+// 配置 0 取默认 10,负数关闭,正数钳到一天。
+func (c ChannelSwitchConfig) EffectiveCooldownSeconds() int64 {
+	switch {
+	case c.CooldownSeconds < 0:
+		return 0
+	case c.CooldownSeconds == 0:
+		return defaultChannelSwitchCooldownSeconds
+	case c.CooldownSeconds > channelSwitchMaxSeconds:
+		return channelSwitchMaxSeconds
+	}
+	return c.CooldownSeconds
+}
+
+// EffectiveBusyPercent 返回「繁忙」线(占每线上限的百分比),恒在 [1,100]。配置 0 取默认 60。
+// 下限 1:配成 0 以下若照用,空线也会显示繁忙;上限 100:再高就永远到不了,等于没有「繁忙」。
+func (c ChannelSwitchConfig) EffectiveBusyPercent() int64 {
+	switch {
+	case c.BusyPercent == 0:
+		return defaultChannelBusyPercent
+	case c.BusyPercent < 1:
+		return 1
+	case c.BusyPercent > 100:
+		return 100
+	}
+	return c.BusyPercent
+}
+
+// EffectiveDirectoryRefreshSeconds 返回分线目录的发布周期(秒)。**返回 0 = 不发布**;
+// 配置 0 取默认 2,负数关闭,正数钳到一天。
+func (c ChannelSwitchConfig) EffectiveDirectoryRefreshSeconds() int64 {
+	switch {
+	case c.DirectoryRefreshSeconds < 0:
+		return 0
+	case c.DirectoryRefreshSeconds == 0:
+		return defaultChannelDirectoryRefreshSeconds
+	case c.DirectoryRefreshSeconds > channelSwitchMaxSeconds:
+		return channelSwitchMaxSeconds
+	}
+	return c.DirectoryRefreshSeconds
+}
+
+// ChannelMaxPlayers 返回玩家主动选线时的每线人数上限,恒为正。
+//
+// 取值顺序:ChannelSwitch.MaxPlayersPerChannel → WorldAutoscale.ScaleOutPlayerThreshold → 2000。
+// 跟随扩容线的含义:自动伸缩认为「这条线该扩了」的人数,就是手动选线不再放人的人数。
+// 要同时看两个配置块,所以挂在 Config 上而不是 ChannelSwitchConfig 上。
+// 钳到 uint32 上限:它要原样进目录的 max_players_per_channel(uint32),也让「人数 × 100」
+// 的繁忙线比较不会溢出 int64。
+func (c *Config) ChannelMaxPlayers() int64 {
+	limit := c.ChannelSwitch.MaxPlayersPerChannel
+	if limit <= 0 {
+		limit = c.WorldAutoscale.ScaleOutPlayerThreshold
+	}
+	if limit <= 0 {
+		limit = defaultChannelMaxPlayers
+	}
+	if limit > math.MaxUint32 {
+		limit = math.MaxUint32
+	}
+	return limit
+}
+
+// defaultLeaderLockTTLSeconds 是 LeaderLockTTLSeconds 配成 ≤ 0 时的取值,与该字段的 default= 标签一致。
+const defaultLeaderLockTTLSeconds int64 = 30
+
+// EffectiveLeaderLockTTLSeconds 返回生效的选主锁 TTL(秒),恒为正:配置 ≤ 0 时取默认 30。
+//
+// 选主接线(scene_manager_service.go)与分线目录的 TTL(logic/world_channel_directory.go
+// worldChannelDirectoryTTLSeconds:要盖住一个竞选间隔 = 锁 TTL / 3)都从这里取。两处各自兜底的话,
+// 只改其中一处,目录 TTL 就悄悄盖不住领导者让位了。
+func (c *Config) EffectiveLeaderLockTTLSeconds() int64 {
+	if c.LeaderLockTTLSeconds <= 0 {
+		return defaultLeaderLockTTLSeconds
+	}
+	return c.LeaderLockTTLSeconds
 }
 
 // ChannelCountFor returns the effective world-channel count for a confId,

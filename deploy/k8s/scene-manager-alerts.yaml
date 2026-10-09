@@ -207,7 +207,8 @@ spec:
         #     rejectReasonSceneGone),对应告警是本组最后的 SceneManagerEnterSceneSceneGone,
         #     阈值 / for / severity 沿用原告警。
         #
-        # 现在真实发射的 reason 共 9 个(metrics.go 的 Help;发射点在 enterscenelogic.go / home_zone.go):
+        # 现在真实发射的 reason:下面 9 个(metrics.go 的 Help;发射点在 enterscenelogic.go / home_zone.go),
+        # 外加列在它们之后的 channel_* 5 个(玩家主动选线预检,发射点在 channel_pick.go):
         #   handoff_pending_no_marker     **不告警**。生产配置(AllowUnsafeCrossNodeHandoff=false)下,
         #                                 客户端每一次跨节点换图的第一跳都注定拿到它:源 scene 收到 18 才
         #                                 冻结 → 存盘 → 写 handoff 标记 → 重发(docs/design/
@@ -239,6 +240,21 @@ spec:
         #                                 任何状态,玩家留在原地收 tip。scene_conf_id 是客户端可控字段。
         #   pending_map_fallback          跨 zone 传送第二条腿:第一条腿记下的目标地图解析失败,已回落默认
         #                                 大世界(人照常落地)。不该有稳定速率。
+        #
+        # 另有玩家主动选线预检发出的 5 个 reason(发射点 go/scene_manager/internal/logic/channel_pick.go,
+        # 设计 docs/design/world-channel-switch.md §4.4;只有带 client_channel_pick 的 EnterScene 会发出,
+        # zone_id 是目标 zone)。**都不告警**:它们是玩家点线路面板触发的业务拒绝,预检纯只读、拒绝时不改
+        # 任何状态,有稳定的低速率属正常,速率只反映玩家点得有多频繁:
+        #   channel_closing               玩家选的线在回收中集合里(自动缩容已把它摘出选线集合,等人走空后销毁)。
+        #                                 只在 WorldAutoscale 缩容期间出现。
+        #   channel_conf_mismatch         请求带的 scene_conf_id 与这条线实际所属的地图对不上(该字段客户端可控)。
+        #                                 正常客户端不该发出;持续出现 = 客户端缺陷或有人在构造请求。
+        #   channel_switch_disabled       ChannelSwitch.Disabled=true:玩家主动切线被配置关闭,关闭期间每点一次
+        #                                 一次拒绝(客户端按目录的 switch_enabled 置灰,正常不该发得出来)。
+        #   channel_full                  目标线人数已到每线上限(ChannelSwitch.MaxPlayersPerChannel,缺省跟随
+        #                                 WorldAutoscale.ScaleOutPlayerThreshold)。人数计数没有对账,节点死亡后
+        #                                 残留的旧计数会造成误拒(world-channel-switch.md §9.3)。
+        #   channel_switch_cooldown       距上一次主动切线还没过冷却(ChannelSwitch.CooldownSeconds,默认 10s)。
         #
         # 按语义拆成五组:归属交接异常(warning)/ 归属查询依赖不可用(critical + warning 两档)/
         # 跨 zone 传送的玩家缺归属映射(warning)/ 跨 zone 传送目标地图不可用(warning)/

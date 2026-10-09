@@ -92,3 +92,15 @@ message CreateSceneRequest {
 | `TestGetBestWorldChannel_AllEmpty` | 所有线为空时仍能返回 |
 | `TestCreateScene_MainWorld_MultipleLines_ReturnsLeastLoaded` | 高负载线→自动切换 |
 | `TestCreateScene_MainWorld_ChannelCountDefault1_BackwardCompat` | LineCount=1 等同旧行为 |
+
+## 2026-10-08 批注:线号与玩家主动切线
+
+本文写成时线没有序号,也没有给玩家看的线路列表。2026-10-08 起:
+
+- 每条线有持久化的线号(`world_channel_lineno:zone:{zoneId}:{confId}`,HASH scene_id → 线号),
+  scene_manager 的领导者每 2 秒把一张图的分线目录发布到 `world_channel_directory:zone:{zoneId}:{confId}`。
+- 玩家可以在客户端列出线路并切到指定的线;切线复用 `EnterScene(scene_id)`,
+  scene_manager 对「客户端主动选线」额外校验回收中 / 人数上限 / 冷却。
+- 自动选线仍然是「人数最少」,本文上面的流程没有变。
+
+设计与验证清单见 [world-channel-switch.md](world-channel-switch.md)。

@@ -67,4 +67,21 @@ const (
 	// 拒绝发生在任何 location / owner_epoch 写之前,一个字节都不改;可重试 —— 合服完成
 	// (home 改成目标区、围栏撤掉)或中止后重试即放行,不是故障。
 	ErrHomeZoneMerging uint32 = 21
+	// 22 / 23 / 24 只由「玩家主动选线」的预检发出(EnterSceneRequest.client_channel_pick=true 且
+	// 目标是本 zone 的大世界分线,见 logic/channel_pick.go、world-channel-switch.md §4.4)。
+	// 三个都是业务拒绝、不是故障:预检纯只读,拒绝时 location / owner_epoch / 人数一个字节都不改。
+	// 不带 client_channel_pick 的请求(自动选线、队伍跟随、镜像、疏散、登录、跨节点交接的重发)
+	// 永远拿不到它们。与本文件其它码一样是 scene_manager 私有数轴,不是 tip 码;C++ 目前把它们
+	// 统一翻成 kEnterSceneFailed(3023)。
+	//
+	// ErrChannelUnavailable: 玩家选的线不可进入 —— 正在回收(已摘出选线集合、等人走空)、
+	// 玩家主动切线被配置关闭(ChannelSwitch.Disabled),或请求带的 scene_conf_id 与这条线所属的
+	// 地图对不上(对不上的值会被死节点改派拿去建场景,不能信)。重试同一条线不会好,换一条线。
+	ErrChannelUnavailable uint32 = 22
+	// ErrChannelFull: 玩家选的线人数已到每线上限(Config.ChannelMaxPlayers)。软上限:只拦主动选线,
+	// 预检与人数预占不在同一原子步骤里,并发下可能超出几个人。
+	ErrChannelFull uint32 = 23
+	// ErrChannelSwitchCooldown: 距上一次主动切线还没过冷却(player:{id}:channel_switch_cooldown 仍在)。
+	// 被它拒绝不会刷新冷却,等键过期后重试即可。
+	ErrChannelSwitchCooldown uint32 = 24
 )

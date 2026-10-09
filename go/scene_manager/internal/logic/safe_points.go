@@ -20,6 +20,10 @@ const (
 	// SafePointWorldAutoscale 是大世界频道按人数自动扩缩容循环。
 	SafePointWorldAutoscale = "scene_manager.world_autoscale"
 
+	// SafePointWorldChannelDirectory 是分线目录(线号 + 各线人数 / 状态)的周期发布循环。
+	// 它停摆的表现是客户端的线路列表在一个目录 TTL 后变成「暂不可用」,切线本身不受影响。
+	SafePointWorldChannelDirectory = "scene_manager.world_channel_directory"
+
 	// SafePointAgonesReconcile 是 Agones rooms 计数与 Redis 映射的周期比对。
 	SafePointAgonesReconcile = "scene_manager.agones_reconcile"
 

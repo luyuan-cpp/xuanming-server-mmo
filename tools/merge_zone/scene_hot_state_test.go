@@ -183,6 +183,10 @@ func TestSourceZonePatternsAndFixedKeys(t *testing.T) {
 		"world_channels:zone:102:*",
 		"world_channels:draining:zone:102:*",
 		"world_channels:cooldown:zone:102:*",
+		// 玩家主动切线的两个读模型(world-channel-switch.md §4.1)。前缀刻意不是 world_channels:zone:,
+		// 所以上面三条模式扫不到它们,必须单列。
+		"world_channel_lineno:zone:102:*",
+		"world_channel_directory:zone:102:*",
 		"node:zone:102:*",
 	}
 	if len(pats) != len(wantPats) {
