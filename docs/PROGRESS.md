@@ -6890,3 +6890,26 @@ PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修
 - **没有顺带解决**:K8s 的 data-service ConfigMap 仍不镜像 `MethodTimeouts`(集群里回档 RPC 取 go-zero 默认 2000ms),属帮会线「接上 guild 时一并处理」;`k8s_client_entry_contract` 的 9 条既有失败;把登记表守护拆成只因 C++ 改动触发的独立 CI job。
 - **同批**:合入 origin/main 的 11 个提交(`ed40df6a4d`)与本机 main 的装备、切线(`d55437fc21`);`third_party/librdkafka`、`third_party/ue5navmesh` 的指针取远端 `d1705175dd` 同步的值 —— 本机 10-08 的每小时自动保存(`a9569db98a`)曾把它们写回本机检出,不是有意回退。
 - **Java 版(AGENTS §12)**:不涉及。本条只动本仓库的 k8s 部署脚本与 go-zero 服务配置的核对,没有改客户端契约。
+
+## 2026-10-09 帮会二期收口:B5c / B5d / B6 全部批次落码进主干(Claude,自己未编译;运行证据引自 Codex 10-08 各条)
+
+- **范围**:帮会二期剩余批次全部落码并推到主干。服务端 `origin/main` 含 `7708581eeb`、`64f0e3301c`、`4f1b6b2544`、`43e5a9953e`;
+  客户端 `origin/main` 含 `98cd0d9`(B5c)、`de41479f`(B6 活动页与历练)。
+  - B5d 回档前检查帮会资产分歧:三子批 + 两轮评审修复(保留期钳位重查余量、清理水位、写后复查范围与预算、AssetOp 段缺失时的保留期回落)。
+  - B6b-srv2 同道历练的 guild 侧:邀请房间(Redis Lua)、开战(调 `MatchInternal.StartActivityBattle`)、`match-results` 消费、结算发奖、
+    待入队循环、巡检器;表间全序接 `T(guild_trial_battle) < W(guild_trial_reward_owed)`。
+  - robot 历练冒烟 S9–S15;`match_internal` 的 C++ 工程登记(8 处)。
+- **做法**:隔离工作树落码(服务端 `guild/phase2-finish`、客户端 `guild-b6-client`,已并入主干),每批"多视角查找 → 三票核验 → 修复";
+  确认的全部是 P2(B5d 第 2 轮 3 条、B6 客户端 5 条 3 个根因、B6b-srv2 3 条),没有 P0 / P1;修复之后没有再跑下一轮评审。
+- **运行证据**:本会话没有跑任何构建、测试、生成命令(AGENTS §10.1)。Codex 在 2026-10-08 各条记录的实跑结果覆盖到:
+  guild.exe 在 `43e5a9953e` 上构建成功、五包 164 个顶层 / 226 个子用例通过(miniredis 与进程内替身,没连真库 / Kafka / match);
+  data_service 构建与 config、ledger / recall 定向回归通过;match 活动用例通过。**没有证据的部分**:真库集成用例、robot、
+  C++ 三个节点整体构建、客户端编译与 EditMode、任何联机冒烟。
+- **待办与边界**:见 `docs/design/guild-phase2/92-handoff.md` §13(2026-10-09 重写)。最要紧的三件:
+  ① 客户端主干在跑完 `gen_proto.ps1` + `gen_messageids.ps1`(都带 `-ProtoRoot`)之前编不过;
+  ② `guild_internal` / `match_internal` 的 C++ RPC 包装与三个内部 RPC 的消息号还没生成(包装生成器被本机应用控制策略拦截),节点编不过;
+  ③ `MessageLimiter.xlsx` 的活动 5 行、`robot` 的 `go mod vendor`、配表索引重生成都还没做。
+- **已知边界**:历练结果消费是单协程,一条结果持续失败时本副本名下全部分区都停(不丢奖,巡检器兜底);人工补发 / 重放工具未做。
+- **Java 版(AGENTS §12)**:帮会二期整体**待做**。原因:Java 版(`0.1.0-SNAPSHOT`,截至 09-29 的记录)只有「登录 → 进场景」竖切,没有帮会;
+  Java 仓不在机器 A,`PARITY.md` 未登记,由 Java 仓会话补。客户端可见契约(guild.proto 活动消息、消息号 239–243、tip 14032–14041、
+  GuildActivity 表)已在本仓主干,对齐时以这些为准。
