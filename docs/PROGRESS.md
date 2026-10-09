@@ -6871,6 +6871,14 @@ PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修
 - **Java 版(AGENTS §12)**:未做(本机没有 Java 仓库);需同步 `SceneInfoRequest.with_channel_directory`、`SceneInfoS2C.channel_directory`
   与 EnterScene 指定 `scene_id` 的选线语义,登记 `PARITY.md` 待做。
 
+### 2026-10-09 切线主干接入与验证边界(Codex)
+
+- 从远端主干 `d1705175dd` 独立合入切线提交 `45cef582cb`,保留上游帮会配置及双方进度记录;未带入本机其它功能的在途修改。
+- 前置移植 AOI 反向通知修复 `a1507aa41a` 为 `0336e07c3e`,两者的 `aoi.cpp` 内容一致,用于切线后静止玩家的相互可见性。
+- 客户端远端 `main=b6e30f36` 已包含切线 UI 与 3028 兼容;本机常用 Unity 工程同步的 18 个文件与切线版本逐项一致。
+- 合并文件范围、源提交差异、冲突标记及 `git diff --check` 已核对。主干 `6aa4f31435` 的 scene_manager 切线定向 Go 测试在 Go 1.26.5 下通过 106 项(含子用例),0 失败、0 跳过;首次沙箱执行被本机回环网络权限阻断,获准后使用测试自带的 miniredis 重跑通过。C++ 构建、Unity 内测试和双号联机验收仍未完成。本次 Unity 启动再次因无有效 Editor 许可证退出 198。
+- Java 服务器版本仍待同步,本次未修改另一版本或其 `PARITY.md`。
+
 ## 2026-10-09 部署门禁:MethodTimeouts 改为逐条核对,k8s 写路径不再在入口被拒(Claude,契约测试已实跑)
 
 - **更正前文**:本文件「消除单节点」的三条 —— (一)(标题日期 10-01 ~ 10-08)、(二)、(三)—— 都注明「契约测试基线因 deadline 门禁与 `data_service.yaml` 的 `MethodTimeouts` 冲突而失败」。该冲突本条已解决,基线不再因此失败。
