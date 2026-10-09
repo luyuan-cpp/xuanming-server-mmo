@@ -1,7 +1,7 @@
 # 玩家主动切线(分线列表 + 选线切换)
 
 > 状态:2026-10-08 落码 + 8 视角对抗式评审(21 条意见全为 minor,已按区域修复),2026-10-09 并入本机 main(Claude)。
-> **服务端未编译、未跑测试,待 Codex 验证**(清单见 §10);客户端离线 Roslyn 编译 0 error,Unity 内测试与截图未跑(本机 Unity 许可证离线过期)。
+> 2026-10-09 Codex 已在主干合入版本完成 scene_manager 切线定向测试:106 项(含子用例)通过,0 失败、0 跳过。**完整服务端构建、其余测试与联机验收仍待执行**(清单见 §10);Unity 内测试与截图仍受本机 Editor 许可证阻挡。
 > 分支:服务端 `feat/channel-switch`(隔离工作树 `E:\work\xuanming-server-mmo-wt-channel`,基于 `5f4b968bcb`),
 > 客户端 `feat/channel-switch`(`E:\work\mmorpg-client-wt-channel`,基于 `8280cb13`)。
 > 前置阅读:[world-channel-system.md](world-channel-system.md)(分线是什么)、
@@ -333,7 +333,11 @@ v1 规则:
    "enter scene rejected"。channel-smoke 自己绕开了;根治是改成 `GetId() != 0`(既有问题,本次未改)。
 9. **线路面板开着时每 5 秒列一次线**,客户端消息会续活跃帧,玩家把面板开着挂机不会进入服务端的挂机态(组队窗同类)。
 
-## 10. 给 Codex 的验证清单(全部未执行)
+## 10. 给 Codex 的验证清单与执行状态
+
+2026-10-09 执行记录:主干 `6aa4f31435` 在 Go 1.26.5 下完成下列第 1 项的定向 `go test` 命令,
+共 106 个通过事件(含子用例),0 失败、0 跳过。首次执行被沙箱回环网络权限阻断,获准访问本机临时 miniredis 后同组测试通过;
+没有连接真实 Redis、数据库或游戏服务。此结果不代表第 1 项全量测试、服务程序构建或第 2–7 项已完成。
 
 **编译位置**:C++ 必须在子模块齐全的检出里编(本机主仓 `E:\work\xuanming-server-mmo`,本分支已并入其 main);
 隔离工作树的 `third_party` 子模块全空,直接编会以 C1083 失败。Go / robot 在主仓或工作树都行。
