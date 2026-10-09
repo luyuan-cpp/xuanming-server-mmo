@@ -1127,6 +1127,7 @@ xlsx 脚本 5 条(1 major:发号机制的注释写错;4 minor:幂等判定、核
    表迁移之后,bin 里旧的 v0.1.1 guild.exe 也会拒启。
    顺序:用 v0.2.0 重编 `bin/go_services/guild.exe` → 停 guild → 执行 PROGRESS 该条目「运行期注意」第 1 条的迁移 SQL(索引名必须保持 `uk_guild`,`guild_repo.go` 按这个名字判断撞名)→ 启动新 guild。
    验收口径的变化见 `01-storage.md` 的 2026-09-28 落码修正:uk_guild 从 SUB_PART=191 改为 SUB_PART=NULL。
+   **2026-10-08 已迁(本机,会话「帮会库 name_norm 列迁移」执行)**:`mmorpg_guild.guild.name_norm` 现为 `varchar(191) utf8mb4_0900_bin NOT NULL DEFAULT ''`,`uk_guild` 整列唯一(information_schema 核到 `NON_UNIQUE=0`、`SUB_PART=NULL`)。`bin/go_services/guild.exe` 是过渡版(`1ad634443d` + v0.2.0 的 6 个模块文件,7 张表,不含 B6a / GuildInternal)。**导表 + proto-gen 后用 main 重编覆盖即可,上面的迁移 SQL 在本机不用再跑**;导表与重编要同一批做(过渡版加载不了带新键的配表)。其它机器 / K8s dev 的旧形态库仍按上面的顺序迁。明细见 `docs/PROGRESS.md` 2026-10-08 条目。
 
 ### 13.3 验证入口(全部未执行)
 
