@@ -89,6 +89,7 @@ python tools/scripts/gen_docs_index.py
 - [scene-owner-reentry-barrier.md](design/scene-owner-reentry-barrier.md) — 场景所有权:再入屏障 + owner_epoch(防 etcd 分区期双写/回档)
 - [scene-switch-release-design.md](design/scene-switch-release-design.md) — SceneManager跨节点切场景释放玩家方案选型
 - [world-channel-autoscale.md](design/world-channel-autoscale.md) — 按人数自动扩缩容:大世界频道 / gate / Scene Node 进程
+- [world-channel-switch.md](design/world-channel-switch.md) — 玩家主动切线(分线列表 + 选线切换)
 - [world-channel-system.md](design/world-channel-system.md) — 主世界场景分线系统 (Main World Scene Lines)
 
 #### 战斗

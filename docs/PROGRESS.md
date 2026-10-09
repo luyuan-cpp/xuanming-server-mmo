@@ -6540,3 +6540,28 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
   - 另:本条相关的 `client_endpoint_test` 同样要求 fail=0;e2e-1 没有单测,scene 只能验证编译,行为留给冒烟;
     Unity EditMode `MmorpgClient.Tests.EditMode.Battle` 以 results.xml 为准;scene 相关工程 MSBuild 串行 `/m:1`。
 - **Java 版(AGENTS §12)**:D72 口径细化为「PREPARING 不推重连提示,升级到 FIGHTING 时按会话号补推」,Java 版做战斗时按此对齐。
+
+## 2026-10-09 玩家主动切线:分线目录 + 线号 + 选线预检 + 客户端线路面板(Claude,服务端未编译)
+- 设计与验证清单:`docs/design/world-channel-switch.md`(§10 是给 Codex 的完整清单)。在隔离工作树 `feat/channel-switch` 落码,
+  经 8 视角对抗式评审(21 条意见全为 minor,已逐条核实并修复)后并入本机 main;客户端同名分支在 `mmorpg-client`。
+- 协议:**零新消息号、零新 tip、零新内部 RPC**。列线复用 `SceneInfoC2S(43) → NotifySceneInfo(31)`,`SceneInfoRequest` 加显式开关
+  `with_channel_directory = 1`(不带它的请求开销与改动前相同,压测机器人的 43 不受影响),`SceneInfoS2C` 加 `channel_directory = 2`;
+  切线复用 `EnterScene(63)` 指定 `scene_id`,内部 `EnterSceneRequest.client_channel_pick = 11` 只由客户端入口置位。
+  `player_scene.pb.*` / `scene_manager_service.pb.*` 用 protoc 窄面重生成(先用 HEAD 版 proto 生成、与入库产物逐字节比对一致),
+  三份暂存副本、`robot/vendor` 同步;`.grpc.pb.*` 与 message_id 未变。
+- scene_manager:领导者每 2 秒发布分线目录到 `world_channel_directory:zone:{z}:{conf}`,线号持久化在
+  `world_channel_lineno:zone:{z}:{conf}`(Lua 原子分配最小空闲号);EnterScene 对置位请求做只读预检(回收中 / 地图不符 / 关闭 → 22,
+  满 → 23,冷却 → 24),应答为 0 或 18 时写 `player:{id}:channel_switch_cooldown`;新增配置块 `ChannelSwitch`(全可缺省)、
+  指标 `scene_manager_world_channel_directory_publish_total`,孤儿清理删两把新键;k8s 告警 / 看板的 reason 说明已补。
+- scene 节点:`PlayerSceneSystem::SendSceneInfo(player, withChannelDirectory)` 异步读目录转发;EnterScene 守护段置
+  `client_channel_pick`。没动 `player_lifecycle.*` / 工程文件,所以 22/23/24 在 C++ 侧仍一律变成 3023。
+- robot:新模式 `channel-smoke`(`etc/channel_smoke.yaml`,账号 robot_9801);合服工具认识两个新前缀,runbook 同步。
+- 客户端:`SceneChannelClient` / `SceneChannelModels` / `SceneChannelWindow` / `SceneChannelUiRoot`(右上角「N线 [L]」角标,L 键面板)
+  + 3 份 EditMode 测试 + 离线截图验收 `SceneChannelUiVerification.CaptureAll` + `Docs/scene-channel-ui.md`;`GameClient.cs` 未改。
+- 证据边界:Go 只过了 gofmt;C++ 只做了静态核对;客户端离线 Roslyn 编译四个程序集 0 error、纯逻辑测试在离线 NUnit 替身里通过;
+  **Unity 内测试与截图未跑**(本机 Unity 许可证离线有效期已过,需用户在 Unity Hub 登录刷新)。
+- 已知残余(详见设计文档 §9):自动缩容 SREM/SADD 之间的毫秒级窗口;robot 通用 EnterScene 回包处理器误报(既有);
+  面板开着挂机不进挂机态;联机验收依赖本机 main 上的 AOI 反向通知修复 `a1507aa41a`。
+- **给 Codex**:按设计文档 §10 的 1→7 顺序执行;C++ 在主仓(子模块齐全)编。
+- **Java 版(AGENTS §12)**:未做(本机没有 Java 仓库);需同步 `SceneInfoRequest.with_channel_directory`、`SceneInfoS2C.channel_directory`
+  与 EnterScene 指定 `scene_id` 的选线语义,登记 `PARITY.md` 待做。

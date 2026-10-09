@@ -95,10 +95,9 @@ func main() {
 	if leaderLockKey == "" {
 		leaderLockKey = "scene_manager:leader:lock"
 	}
-	leaderLockTTL := time.Duration(c.LeaderLockTTLSeconds) * time.Second
-	if leaderLockTTL <= 0 {
-		leaderLockTTL = 30 * time.Second
-	}
+	// ≤ 0 时取默认 30s 的兜底在取值方法里:分线目录的 TTL 要按同一个值算竞选间隔
+	// (logic/world_channel_directory.go worldChannelDirectoryTTLSeconds),两处不能各兜各的。
+	leaderLockTTL := time.Duration(c.EffectiveLeaderLockTTLSeconds()) * time.Second
 	electorID, _ := os.Hostname()
 	elector := leader.New(leader.NewGoZeroStore(svcCtx.Redis), leaderLockKey, leader.Options{
 		TTL: leaderLockTTL,
@@ -171,6 +170,10 @@ func main() {
 
 	// 大世界频道按人数自动扩缩容(默认关闭)。
 	logic.StartWorldAutoscaler(ctx, svcCtx)
+
+	// 分线目录发布(线号 + 各线人数 / 状态,供客户端线路面板;world-channel-switch.md §4.3)。
+	// 与自动扩缩容开关无关,默认开;只有领导者真正发布。必须排在上面的选主接线之后。
+	logic.StartWorldChannelDirectoryPublisher(ctx, svcCtx)
 
 	// RPC 级热关停(shared/killswitch):线上某个方法把依赖打爆时,往 etcd 写一个
 	// key 就能秒级把它短路掉,不必走一遍构建-发布-滚动更新。
@@ -320,6 +323,10 @@ func buildUnaryInterceptors(ks *killswitch.Switch) []grpc.UnaryServerInterceptor
 				//   ErrSceneReentryBarrier      屏障未到的可重试拒绝(见再入屏障)
 				//   ErrHandoffPending           源 scene 尚未落盘的可重试拒绝,拒得越多越说明门在工作
 				//   ErrOwnerEpochConflict       并发 EnterScene 的 CAS 落败,可重试
+				//   ErrChannelUnavailable / ErrChannelFull / ErrChannelSwitchCooldown
+				//                               玩家主动选线的业务拒绝(线在回收或切线已关闭 / 线已满 /
+				//                               冷却未过),预检纯只读、拒绝时一个字节都不改,
+				//                               见 logic/channel_pick.go
 			),
 		}),
 	}

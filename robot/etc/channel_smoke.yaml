@@ -1,0 +1,59 @@
+# channel-smoke 配置:单机器人对「玩家主动切线」做端到端冒烟
+# (docs/design/world-channel-switch.md §3 协议 / §4.4 选线预检;场景实现见 robot/channel_smoke_scenario.go)
+#
+# 流程:C1 登录进场,记下当前 scene_id / scene_config_id(登录时自动分到的线 = 原线)
+#       → C2 列线:SceneInfoC2S(43)→ NotifySceneInfo(31)必须带 channel_directory(不带就隔 3s 重试,最多试到 15s);
+#          校验 scene_config_id == 当前地图、channels 非空、channel_no 严格递增且 ≥ 1、恰有一条 scene_id == 当前线、switch_enabled
+#       → C3 选目标线:第一条不是当前线、state 为 SMOOTH / BUSY 的线
+#       → C4 切线:EnterScene(63){scene_config_id=当前地图, scene_id=目标线} 同步应答无错,随后 NotifyEnterScene(79)的 scene_id == 目标线
+#       → C5 再列线:当前线变成目标线,两次目录里都有的线 channel_no 不变
+#       → C6 冷却(目录 switch_cooldown_seconds > 0 才做):立刻切回原线 → 已受理、5s 内收到 tip kEnterSceneFailed、没有切回成功;
+#          等冷却过期(从 C4 到达起 switch_cooldown_seconds + 1s)再切回原线 → 成功
+#       → C7 负例:切到当前所在的线 → 同步应答 tip kEnterSceneYouInCurrentScene。
+#
+# 前置(缺一条就会失败或跳过,原因写进 CHANNEL_SMOKE_FAIL 的 reason / CHANNEL_SMOKE_SKIP):
+#   1. scene_manager 已换上带切线的新版并启动,且有实例当上领导者:分线目录只由领导者发布(每 2s 一次),
+#      ChannelSwitch.DirectoryRefreshSeconds 不能是负数(负数 = 不发布),ChannelSwitch.Disabled 不能是 true。
+#   2. scene 节点同样是新版(把目录放进 NotifySceneInfo;客户端 EnterScene 带 client_channel_pick),
+#      它的 zone Redis 与 scene_manager 是同一个(目录键 world_channel_directory:zone:{zone}:{conf} 在里面)。
+#      gate 不需要为此重编:没有新消息号,它只转发消息体。
+#   3. 机器人登录落到的那张大世界地图至少有 2 条线:scene_manager 的 WorldChannelCountByConfId 里这张图 ≥ 2
+#      (本机 yaml 的主城是 "1": 16)。只有 1 条线时打印 CHANNEL_SMOKE_SKIP 并以退出码 0 结束(列线仍会验证)。
+#      配置只是种子、Redis 里的 desired 才是权威:改了 yaml 不生效时看 world_channels:desired:zone:{zone}。
+#   4. robot/vendor/proto/scene/player_scene.pb.go 已与 go/proto 同步(含 SceneChannelDirectory),robot 重新编译过。
+#   5. robot_9801 不在任何队伍里(队员切线后会被同节点的队长拉回,C4 会报"进了别的场景");
+#      账号停在大世界地图上(副本 / 镜像里不带目录)。前缀必须是 robot_ 才会命中 login 侧 DevPasswordAuth。
+#   6. 从 robot/ 目录运行(table_dir 是相对路径)。
+#
+# 用法(robot/ 目录下):
+#   .\robot.exe -c etc/channel_smoke.yaml
+# 退出码 0 = 全部断言通过(日志有 CHANNEL_SMOKE_OK player_id=… 一行),或只有 1 条线而跳过(CHANNEL_SMOKE_SKIP reason=single_channel);
+# 退出码 1 = 任一步失败(CHANNEL_SMOKE_FAIL step=… reason=…)。每步通过另有一行 [channel-smoke] PASS step=…。
+# 跑一轮约 20 秒(其中约 8 秒是等缺省 10s 的切线冷却过期)。
+#
+# 可重复运行:上一轮最后一次切线留下的冷却(player:{id}:channel_switch_cooldown)可能还没过,C4 被拒时会等
+#   switch_cooldown_seconds + 1s 后自动重试一次(日志有一行 WARN,OK 行里 retried_after_cooldown=true)。
+# 结果行里的 cooldown_reject / cooldown_switch_back:checked = 断言做了;skipped = 该子断言被跳过(日志有 SKIP 行说明原因:
+#   冷却配得太短来不及验"冷却期内被拒",或冷却长于 max_cooldown_wait_seconds 不等它过期);no_cooldown = 服务端没开冷却。
+# 单 scene 节点的本机环境只能验到同节点切线;目标线在别的 scene 节点时走存盘交接链路,把 arrive_timeout_seconds 调大再跑。
+# 失败码不细分:scene_manager 的任何拒绝(满 / 回收中 / 冷却 / 功能关闭)到客户端都是 kEnterSceneFailed,
+#   具体原因看 scene_manager 日志里的 reason(channel_closing / channel_conf_mismatch / channel_switch_disabled /
+#   channel_full / channel_switch_cooldown)。
+
+gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
+zone_id: 1 # 目标 zone(0 = 从 /api/server-list 自动选推荐 zone,此时不校验目录的 zone_id)
+robot_count: 1 # 语义占位:本模式固定单机器人
+account_fmt: "robot_%04d" # 保留骨架字段;本模式用固定账号 robot_9801
+password: "123456"
+skill_ids: [] # 本模式不放技能
+table_dir: "../generated/tables"
+action_interval: 3 # 本模式不跑场景 AI 循环,保留默认
+report_interval: 5
+
+mode: "channel-smoke"
+
+channel_smoke:
+  arrive_timeout_seconds: 20 # 发出切线请求后等 NotifyEnterScene(scene_id == 目标线)的上限;同节点毫秒级,跨节点交接更久
+  max_cooldown_wait_seconds: 60 # C6 最多愿意等多久的冷却;switch_cooldown_seconds + 1 超过它时只验"冷却期内被拒",不等过期再切回
+
+auth_type: "password"

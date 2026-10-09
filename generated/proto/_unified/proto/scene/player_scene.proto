@@ -25,13 +25,55 @@ message EnterSceneS2C
   SceneInfoComp scene_info = 1;
 }
 
+// 一条分线对玩家可见的状态(docs/design/world-channel-switch.md §3)。
+// 只有 SMOOTH / BUSY 可以被玩家主动选中;其余客户端置灰。服务端对 FULL / CLOSING 会拒;UNAVAILABLE 由进场时
+// 的节点判定决定(再入屏障内拒,屏障过后可能改派到活节点放行)。
+enum SceneChannelState
+{
+	SCENE_CHANNEL_STATE_UNKNOWN = 0;
+	SCENE_CHANNEL_STATE_SMOOTH = 1;      // 流畅
+	SCENE_CHANNEL_STATE_BUSY = 2;        // 繁忙
+	SCENE_CHANNEL_STATE_FULL = 3;        // 爆满:人数已到每线上限
+	SCENE_CHANNEL_STATE_CLOSING = 4;     // 回收中:已从选线集合摘除,等玩家走空后销毁
+	SCENE_CHANNEL_STATE_UNAVAILABLE = 5; // 所在节点暂不可用(刚判死 / 身份歧义 / 映射缺失)
+}
+
+message SceneChannelInfo
+{
+	uint64 scene_id = 1;         // 这条线的场景实例 id;切线 = EnterScene(scene_config_id, 这个 scene_id)
+	uint32 channel_no = 2;       // 线号,从 1 起;同一条线在其生命周期内不变
+	uint32 player_count = 3;     // scene_manager 记的人数,秒级滞后,只用于展示
+	SceneChannelState state = 4;
+}
+
+// 一张大世界地图在一个 zone 里的分线目录。
+// 它是 scene_manager 发布到 Redis 的读模型(key: world_channel_directory:zone:{zone}:{conf},
+// value 就是本消息的序列化字节),scene 节点原样读出、放进 SceneInfoS2C 推给客户端。
+// 目录只用于展示和客户端预判,不是放行凭据:切线请求仍由 scene_manager 在 EnterScene 里重新校验。
+message SceneChannelDirectory
+{
+	uint32 zone_id = 1;
+	uint32 scene_config_id = 2;
+	repeated SceneChannelInfo channels = 3; // 按 channel_no 升序
+	uint64 updated_at_ms = 4;               // 发布时刻(scene_manager 墙钟,毫秒)
+	uint32 switch_cooldown_seconds = 5;     // 两次主动切线的最小间隔;0 = 无冷却
+	uint32 max_players_per_channel = 6;     // 每线人数上限(判定 FULL 的分母);scene_manager 恒填正数
+	bool switch_enabled = 7;                // false = 服务端关闭了玩家主动切线,客户端整面板置灰
+}
+
 message SceneInfoS2C
 {
   repeated SceneInfoComp scene_info = 1;
+  // 玩家当前所在大世界地图的分线目录。副本 / 镜像里、或目录尚未发布时不带(has_channel_directory == false)。
+  SceneChannelDirectory channel_directory = 2;
 }
 
 message SceneInfoRequest
 {
+	// true = 连同当前地图的分线目录一起要(SceneInfoS2C.channel_directory,docs/design/world-channel-switch.md §3)。
+	// 做成显式开关而不是默认附带:带目录要让 scene 节点多读一次 zone Redis、推送也更大,而压测机器人把
+	// SceneInfoC2S 当作高频的"动一下"在发 —— 不带本字段的请求,开销与改动前逐字节相同。
+	bool with_channel_directory = 1;
 }
 
 message SceneInfoResponse

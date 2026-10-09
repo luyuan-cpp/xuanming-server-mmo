@@ -839,6 +839,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneRequest final : public ::
     kSceneConfIdFieldNumber = 8,
     kCorrelationIdFieldNumber = 10,
     kGateZoneIdFieldNumber = 9,
+    kClientChannelPickFieldNumber = 11,
   };
   // string request_id = 4;
   void clear_request_id() ;
@@ -955,11 +956,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneRequest final : public ::
   void _internal_set_gate_zone_id(::uint32_t value);
 
   public:
+  // bool client_channel_pick = 11;
+  void clear_client_channel_pick() ;
+  [[nodiscard]] bool client_channel_pick() const;
+  void set_client_channel_pick(bool value);
+
+  private:
+  bool _internal_client_channel_pick() const;
+  void _internal_set_client_channel_pick(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:scene_manager.EnterSceneRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
+      ::google::protobuf::internal::TcParseTable<4, 11,
                           0, 81,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -998,6 +1009,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneRequest final : public ::
     ::uint64_t scene_conf_id_;
     ::uint64_t correlation_id_;
     ::uint32_t gate_zone_id_;
+    bool client_channel_pick_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2944,6 +2956,30 @@ inline ::uint64_t EnterSceneRequest::_internal_correlation_id() const {
 inline void EnterSceneRequest::_internal_set_correlation_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.correlation_id_ = value;
+}
+
+// bool client_channel_pick = 11;
+inline void EnterSceneRequest::clear_client_channel_pick() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_channel_pick_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline bool EnterSceneRequest::client_channel_pick() const {
+  // @@protoc_insertion_point(field_get:scene_manager.EnterSceneRequest.client_channel_pick)
+  return _internal_client_channel_pick();
+}
+inline void EnterSceneRequest::set_client_channel_pick(bool value) {
+  _internal_set_client_channel_pick(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:scene_manager.EnterSceneRequest.client_channel_pick)
+}
+inline bool EnterSceneRequest::_internal_client_channel_pick() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_channel_pick_;
+}
+inline void EnterSceneRequest::_internal_set_client_channel_pick(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_channel_pick_ = value;
 }
 
 // -------------------------------------------------------------------

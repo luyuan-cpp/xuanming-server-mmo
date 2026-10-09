@@ -97,6 +97,13 @@ message EnterSceneRequest {
   //   0 表示调用方不需要按请求对应答(如 login)。
   // - 请求侧后续新字段从 11 起用。
   uint64 correlation_id = 10;
+  // 客户端主动选线(docs/design/world-channel-switch.md §4):这条请求的 scene_id 是玩家自己在
+  // 客户端点选的,不是服务器替他决定的。只有 scene 节点的客户端 EnterScene 入口会置位;
+  // 队伍跟随、镜像自动进场、疏散、登录、跨节点交接的重发一律不置位。
+  // 置位且目标是本 zone 的大世界分线时,scene_manager 额外校验「未回收 / 未满 / 冷却已过」,
+  // 并在放行后开始计冷却;目标不是分线(按 id 进副本 / 镜像)时本字段不产生任何效果。
+  // 进 request_id 指纹(它是业务语义);proto3 不序列化 false,不带它的请求指纹与加字段前逐字节相同。
+  bool client_channel_pick = 11;
 }
 
 message EnterSceneResponse {

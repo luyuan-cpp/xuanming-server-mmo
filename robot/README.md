@@ -26,6 +26,7 @@ cd robot && go run . -c etc/robot.yaml     # 直接运行
 | `attribute-smoke`、`pet-smoke` | 属性加点、宠物 |
 | `chat-smoke`、`friend-smoke`、`guild-smoke`、`team-smoke`、`trade-smoke` | 聊天、好友、帮会、组队、交易 |
 | `travel-smoke` | 跨区场景传送往返 |
+| `channel-smoke` | 玩家主动切线:列出分线、切到同图另一条线、冷却与拒绝(地图只有 1 条线时打印 SKIP,不算失败) |
 | `currency-crash-snapshot` | 货币崩溃窗口验证用的单次登录快照 |
 
 每种模式在 `etc/` 下都有对应的配置样例。

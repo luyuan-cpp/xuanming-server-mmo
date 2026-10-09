@@ -205,6 +205,16 @@ func main() {
 		return
 	}
 
+	// Channel-smoke 模式:单机器人做「玩家主动切线」端到端冒烟
+	// (登录 → 列线(SceneInfoC2S → NotifySceneInfo 带分线目录)→ 切到同图另一条线 → 再列线核对线号不变
+	//  → 冷却期内切回被拒、冷却过后切回成功 → 切到当前所在的线被同步拒绝)。
+	// 该地图只有 1 条线时打印 CHANNEL_SMOKE_SKIP 并以退出码 0 结束(前置条件不满足,不算失败)。
+	// 见 channel_smoke_scenario.go 与 docs/design/world-channel-switch.md;前置条件写在 etc/channel_smoke.yaml 文件头。
+	if cfg.Mode == "channel-smoke" {
+		RunChannelSmoke(cfg)
+		return
+	}
+
 	stopReport := make(chan struct{})
 	reportInterval := time.Duration(cfg.ReportInterval) * time.Second
 	if reportInterval <= 0 {

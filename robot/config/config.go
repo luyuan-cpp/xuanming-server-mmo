@@ -30,7 +30,8 @@ type Config struct {
 	// 单次登录快照(见 CurrencyCrash 块); "battle-smoke" — 双机器人
 	// 回合制战斗 + 观战端到端冒烟(见 battle_smoke_scenario.go;子模式
 	// 见 BattleSmoke 块); "travel-smoke" — 单机器人跨 zone 场景传送往返
-	// 冒烟(见 travel_smoke_scenario.go / TravelSmoke 块)。
+	// 冒烟(见 travel_smoke_scenario.go / TravelSmoke 块); "channel-smoke" —
+	// 单机器人玩家主动切线冒烟(见 channel_smoke_scenario.go / ChannelSmoke 块)。
 	Mode string `yaml:"mode"`
 
 	// FeaturesSmoke only uses an explicitly selected existing account/character.
@@ -61,6 +62,10 @@ type Config struct {
 
 	// TravelSmoke 是 "travel-smoke" 模式的子开关(见 TravelSmokeConfig / travel_smoke_scenario.go)。
 	TravelSmoke TravelSmokeConfig `yaml:"travel_smoke"`
+
+	// ChannelSmoke 是 "channel-smoke" 模式的子开关(见 ChannelSmokeConfig / channel_smoke_scenario.go)。
+	// 整块可缺省。
+	ChannelSmoke ChannelSmokeConfig `yaml:"channel_smoke"`
 
 	// CurrencyCrash configures the "currency-crash-snapshot" mode used by
 	// docs/notes/currency-crash-window-verification.md. Driven by an external
@@ -439,6 +444,41 @@ func (c *TravelSmokeConfig) validate() error {
 	return nil
 }
 
+// ChannelSmokeConfig 配置 "channel-smoke" 模式(docs/design/world-channel-switch.md §10)。
+//
+// 单机器人登顶层 zone_id → 列线(SceneInfoC2S → NotifySceneInfo 带分线目录)→ 切到同图另一条线 → 再列线
+// → 冷却验证 → 切到当前线的负例。本块两个字段都是等待上限,缺省值见 Load。
+type ChannelSmokeConfig struct {
+	// ArriveTimeoutSeconds 是发出切线请求后等 NotifyEnterScene(scene_id == 目标线)的上限,缺省 20。
+	// 同节点切线在本地是毫秒级;目标线在别的 scene 节点时要走「冻结 → 存盘 → 写标记 → 重发」的交接链路,
+	// 多 scene 节点环境按需调大。
+	ArriveTimeoutSeconds int `yaml:"arrive_timeout_seconds"`
+
+	// MaxCooldownWaitSeconds 是冷却验证愿意等的最长时间,缺省 60。
+	// 目录里的 switch_cooldown_seconds + 1 超过它时,只验「冷却期内切回被拒」,不等冷却过期再切回
+	// (日志打印 SKIP 说明):服务端配了长冷却的环境不该把冒烟跑成几分钟的挂起。
+	MaxCooldownWaitSeconds int `yaml:"max_cooldown_wait_seconds"`
+}
+
+// channel-smoke 两个等待上限自身的上限:填错单位(比如把毫秒当秒)时在加载期就拒掉,
+// 而不是让冒烟在失败路径上挂很久。
+const (
+	channelSmokeMaxArriveTimeoutSeconds = 300
+	channelSmokeMaxCooldownWaitSeconds  = 600
+)
+
+func (c *ChannelSmokeConfig) validate() error {
+	if c.ArriveTimeoutSeconds <= 0 || c.ArriveTimeoutSeconds > channelSmokeMaxArriveTimeoutSeconds {
+		return fmt.Errorf("arrive_timeout_seconds must be in 1..%d (got %d)",
+			channelSmokeMaxArriveTimeoutSeconds, c.ArriveTimeoutSeconds)
+	}
+	if c.MaxCooldownWaitSeconds <= 0 || c.MaxCooldownWaitSeconds > channelSmokeMaxCooldownWaitSeconds {
+		return fmt.Errorf("max_cooldown_wait_seconds must be in 1..%d (got %d)",
+			channelSmokeMaxCooldownWaitSeconds, c.MaxCooldownWaitSeconds)
+	}
+	return nil
+}
+
 type LLMConfig struct {
 	Enabled  bool   `yaml:"enabled"`
 	Endpoint string `yaml:"endpoint"` // e.g. "http://localhost:11434/v1/chat/completions"
@@ -460,10 +500,12 @@ func Load(path string) (*Config, error) {
 		TableDir:       "../generated/tables",
 		BattleSmoke:    BattleSmokeConfig{Mode: "1v1"},
 		// trade-smoke 缺省:trade 本地 gRPC 端口 50800;间隔 1100ms 适配 gate 默认限流档。
-		TradeSmoke: TradeSmokeConfig{AdminAddr: "127.0.0.1:50800", RequestIntervalMs: 1100},
+		TradeSmoke:  TradeSmokeConfig{AdminAddr: "127.0.0.1:50800", RequestIntervalMs: 1100},
 		FriendSmoke: FriendSmokeConfig{RequestIntervalMs: 1100, PushTimeoutMs: 10000},
 		// travel-smoke 缺省:停留 35s,大于 login 断线租约 30s(见 TravelSmokeConfig.DwellSeconds)。
 		TravelSmoke: TravelSmokeConfig{DwellSeconds: 35},
+		// channel-smoke 缺省:等到达 20s(同节点切线毫秒级,留足余量);冷却验证最多等 60s(服务端缺省冷却 10s)。
+		ChannelSmoke: ChannelSmokeConfig{ArriveTimeoutSeconds: 20, MaxCooldownWaitSeconds: 60},
 	}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
@@ -504,10 +546,10 @@ func (c *Config) validate() error {
 		return fmt.Errorf("account_fmt must be set")
 	}
 	switch c.Mode {
-	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "chat-smoke", "guild-smoke", "trade-smoke", "team-smoke", "travel-smoke", "friend-smoke":
+	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "chat-smoke", "guild-smoke", "trade-smoke", "team-smoke", "travel-smoke", "friend-smoke", "channel-smoke":
 		// valid
 	default:
-		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, chat-smoke, guild-smoke, trade-smoke, team-smoke, travel-smoke, or friend-smoke)", c.Mode)
+		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, chat-smoke, guild-smoke, trade-smoke, team-smoke, travel-smoke, friend-smoke, or channel-smoke)", c.Mode)
 	}
 	if c.AuthType == "satoken" && c.SaTokenAddr == "" {
 		return fmt.Errorf("satoken_addr must be set when auth_type is satoken")
@@ -545,6 +587,11 @@ func (c *Config) validate() error {
 	if c.Mode == "travel-smoke" {
 		if err := c.TravelSmoke.validate(); err != nil {
 			return fmt.Errorf("travel_smoke: %w", err)
+		}
+	}
+	if c.Mode == "channel-smoke" {
+		if err := c.ChannelSmoke.validate(); err != nil {
+			return fmt.Errorf("channel_smoke: %w", err)
 		}
 	}
 	return nil

@@ -202,6 +202,12 @@ func deleteOrphanChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone u
 	// 会直接复活上次伸缩到的数量(比如伸到过 8),而不是回到配置种子。
 	svcCtx.Redis.Hdel(worldDesiredChannelsKey(zone), strconv.FormatUint(confId, 10))
 	svcCtx.Redis.Del(worldDrainingSetKey(zone, confId))
+	// 线号表与分线目录(world_channel_directory.go)同样按 (zone, conf) 存。这张图已不在 World 表里,
+	// 目录发布循环不会再碰它们:线号表没有 TTL,不删就是永久垃圾;目录有 TTL,顺手删只是让客户端
+	// 不必再等它过期。两把键刻意不用 world_channels:zone: 前缀(否则会被 CleanupOrphanWorldChannels 的
+	// SCAN 当成频道集合),所以要在这里点名删。
+	svcCtx.Redis.Del(worldChannelLineNoKey(zone, confId))
+	svcCtx.Redis.Del(worldChannelDirectoryKey(zone, confId))
 
 	if _, err := svcCtx.Redis.Del(setKey); err != nil {
 		logx.Errorf("[OrphanCleanup] del(%s) failed: %v", setKey, err)
