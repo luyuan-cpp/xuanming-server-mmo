@@ -6913,3 +6913,20 @@ PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修
 - **Java 版(AGENTS §12)**:帮会二期整体**待做**。原因:Java 版(`0.1.0-SNAPSHOT`,截至 09-29 的记录)只有「登录 → 进场景」竖切,没有帮会;
   Java 仓不在机器 A,`PARITY.md` 未登记,由 Java 仓会话补。客户端可见契约(guild.proto 活动消息、消息号 239–243、tip 14032–14041、
   GuildActivity 表)已在本仓主干,对齐时以这些为准。
+
+## 2026-10-09 跨 zone 传送收尾第二轮收口:GO-2 根治 + CPP-3 改派待确认表(Claude,未编译、未测试)
+
+- **范围**:设计文档 `docs/design/cross-zone-scene-travel.md` §13 列的八项全部进了 main(§13.1 关联号、§13.2 冻结上限、§13.3 CPP-2、§13.4 P3 收尾、§13.5 Hiredis / Timeout、§13.6 客户端 CL-6 / CL-8、§13.7 GO-2、§13.8 CPP-3)。本条补记最后两项的落定;前六项见本文件 09-28 / 09-29 的条目。**GO-3 仍不落**(理由与根治方向见 §13.9,需用户拍板)。
+- **GO-2 根治(owner_epoch 严格单调)**:scene_manager 推路由失败后的回滚不再把 epoch 退回旧值,而是再前进一格(E → E+1 铸造 → E+2 回滚),并在 location 里留下回滚回执、把所凭标记转写到新代际;源 scene 用一段原子脚本取证(删本族标记 + 读 epoch / location),凭回执采纳新 epoch 后解冻。落点 `ccafe300c` / `907a6b752` / `80a1b0823` / `a8c2d44a8` / `6b7a59287` / `567333aaf`,文档 `b820a0c37a`;三视角审查无必须改项。
+- **CPP-3(疏散 / 排空的改派从"发完即忘"改成"登记 → 确认 → 收口")**:新纯头文件 `relocate_confirm.h` + `player_lifecycle.{h,cpp}` 粘合 + 三处外围挂点 + `cross_zone_test` 第 14 节 47 个用例。改派没生效的玩家(被拒 / 没发出去 / 落回本节点后载入被放弃)核实后按票据里的会话推 tip 3023 + 踢线 34,生效的不受打扰。落码 `a9569db98a`(每小时自动保存),审查修正见同日提交"跨 zone 传送:CPP-3 待确认表的对抗审查修正"。
+  - 落码前把规格按当时的 main 重定基了一遍(19 条设计修订);落码后做了规格一致性 + 五视角对抗审查,又对修正做了一轮四视角复审,代码都没有必须改项;两轮建议里值得做的已落(传输失败不再记成"完成通知已到"、`MarkCompletion` 幂等、"更早请求"补第三个来源、疏散中进场不删票据、重试日志降级、`evidence=none`、`(std::max)`、两处注释更正、补 4 个 ECS 用例与 1 个纯函数用例)。
+  - 十个取舍按保守默认落码(少踢、少写、不动别人代码),列在 §13.8 的表里;要改须另行决定。
+- **文档**:设计文档 §13.7 / §13.8 改成落码实情;runbook `docs/ops/cross-zone-failure-test-runbook.md` 升到 v2.7(GO-2 的 B3a–B3d 与专属验收点、CPP-3 的场景 V、`[RelocateConfirm]` 日志表与汇总行读法、缺口 RC-1 – RC-16);交接说明 `docs/handoff/handoff-crosszone-20260920.md` 同步。
+- **证据边界**:Claude 没有运行任何构建、测试或 regen(AGENTS §10.1)。C++(scene 库、scene 节点、`cross_zone_test`)与 Go(`go/scene_manager`、`go/shared`)都没有编译证据;gofmt 没跑;runbook 的场景全部是静态编写、未实跑。
+- **给 Codex**(按序,任何一步失败就停下并保留输出):
+  1. `gofmt -l go/scene_manager go/shared`(期望无输出)→ `go/scene_manager` 的 vet 与单测,命令与通过标准见设计文档 §13.7 的验证清单(其中 `owner_epoch_crosslang_test` 读 C++ 头文件里的 Lua 字面量与 Go 副本逐字节比)。
+  2. 仓库根 `msbuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`(必须串行)。报错先按文件归因;若 `relocate_confirm.h` 之外的地方报 `max` 宏错误,给 `cross_zone_test.vcxproj` 加 `NOMINMAX`。
+  3. `cross_zone_test.exe --gtest_filter=RelocateConfirm*`(期望 47 个通过)→ 回归过滤器与 `--gtest_shuffle` 见设计文档 §13.8 的验证清单;GO-2 的用例名见 §13.7。
+  4. 实跑 runbook:B1 / B2 / B3a–B3d(GO-2)、H(冻结上限)、SE(CPP-2)、V1–V5(CPP-3)与 §5 全局不变量。
+- **已知残余**:都只伤活性(不丢数据、不出双主),逐条列在设计文档 §13.7 / §13.8 的"残余"与 runbook §6(GR-* / RC-*)。
+- **Java 版(AGENTS §12)**:未做。本条全部是本仓库服务端内部的归属交接与改派收口(C++ scene / Go scene_manager 之间的 Redis 键、内部 RPC 字段与日志),**没有改客户端契约**:没有新增客户端可见的消息、字段或 tip 码(踢线复用既有的 `kEnterSceneFailed` = 3023 与 `kZoneTravelTargetBusy` = 3027,34 号踢线消息不变)。Java 版是否存在同类问题(路由失败回滚让归属代际回退、排空改派发完即忘)取决于它自己的实现,需在 Java 仓库另查并登记 `PARITY.md`。

@@ -1,6 +1,6 @@
 # 跨 Zone 传送 / 归属交接 失败场景测试 Runbook
 
-> **状态**: v2 — 2026-09-20(整篇重写,v1 的四个场景全部作废,见 §0);v2.2 — 2026-09-21 补 S3L1-1 第二层出口的观测点与场景 B3(见 Changelog);v2.4 — 2026-09-21 补 Z1 修复 / 断线释放标记 A′ / GO-5 的观测点与场景 Z、R,并按 A′ 改写 §3.3 / §3.4 / B2 / C1 / C2 / D2 / F3 的期望(代码已落码,C++ 未重新编译、Go 未编译,均未测试;设计文档 §12.6.10 / §12.7);**v2.5 — 2026-09-29 补冻结硬上限 + 晚发闸 +「标记已发出」统一收口(D-2 的修复)、EnterScene 应答关联号、gRPC 失败回调、CPP-2 gate 侧进场转发补发、GO-6 推迟摘除的观测点与场景 H / SE / E2,并改写 §2.3 / §2.4 / §3.2 K-SM / §3.3 / B1 / F3 / §5 / §6 / §7(代码 2026-09-28 已进 main,**全部未编译、未测试;本版同样是静态编写、未实跑**,见 Changelog)**;v2.5 修订 — 2026-09-29 按 HEAD `907a6b752` 复核:GO-2 已进 main(未编译),取证改为单条原子 EVAL、新增第 5 个收口点与 3 个计数,B3 在 HEAD 上记 SKIP;CPP-2 之后 G7 的第二种形态在场景 A / E / E2 同步改写;v2.5 表格去掉行号(见 Changelog);**v2.6 — 2026-10-08(2026-10-01 起稿,当次撰写中途中断;10-08 按合并远端之后的 HEAD 复核补完)GO-2 根治(owner_epoch 严格单调:回滚再 INCR + 回滚回执 + 转写标记 + 源端原子取证)落码完成后的复核与 B3 重写:按 HEAD 逐条核对 GO-2 相关的日志原文 / 计数名 / outcome / site,场景 B3 重写为 B3a(回滚执行了 → 源端凭回执采纳解冻)/ B3b(回滚没执行 → 已放行销毁 + 踢线)/ B3c(unpause 后的迟到投递)/ B3d(凭标记的迟到回滚:所凭标记已不在 → `marker_gone`,一个字节不动),新增 H1c(取证脚本被 Redis 整体拒绝 → 不解冻),补 GO-2 专属验收点与已登记的偏离 / 残余 GR-1–GR-11,§7 结果表同步(GO-2 代码已全部在 main:ccafe300c / 907a6b752 / 80a1b0823 / a8c2d44a8 / 6b7a59287 / 567333aaf;其后 4ae3d11a0 与 2026-10-08 的远端合并 3b93efd539 / f8175c5bea 碰到的落点已一并按当前代码核对,**均未编译、未测试;本版同样是静态编写、未实跑**,见 Changelog)**
+> **状态**: v2 — 2026-09-20(整篇重写,v1 的四个场景全部作废,见 §0);v2.2 — 2026-09-21 补 S3L1-1 第二层出口的观测点与场景 B3(见 Changelog);v2.4 — 2026-09-21 补 Z1 修复 / 断线释放标记 A′ / GO-5 的观测点与场景 Z、R,并按 A′ 改写 §3.3 / §3.4 / B2 / C1 / C2 / D2 / F3 的期望(代码已落码,C++ 未重新编译、Go 未编译,均未测试;设计文档 §12.6.10 / §12.7);**v2.5 — 2026-09-29 补冻结硬上限 + 晚发闸 +「标记已发出」统一收口(D-2 的修复)、EnterScene 应答关联号、gRPC 失败回调、CPP-2 gate 侧进场转发补发、GO-6 推迟摘除的观测点与场景 H / SE / E2,并改写 §2.3 / §2.4 / §3.2 K-SM / §3.3 / B1 / F3 / §5 / §6 / §7(代码 2026-09-28 已进 main,**全部未编译、未测试;本版同样是静态编写、未实跑**,见 Changelog)**;v2.5 修订 — 2026-09-29 按 HEAD `907a6b752` 复核:GO-2 已进 main(未编译),取证改为单条原子 EVAL、新增第 5 个收口点与 3 个计数,B3 在 HEAD 上记 SKIP;CPP-2 之后 G7 的第二种形态在场景 A / E / E2 同步改写;v2.5 表格去掉行号(见 Changelog);**v2.6 — 2026-10-08(2026-10-01 起稿,当次撰写中途中断;10-08 按合并远端之后的 HEAD 复核补完)GO-2 根治(owner_epoch 严格单调:回滚再 INCR + 回滚回执 + 转写标记 + 源端原子取证)落码完成后的复核与 B3 重写:按 HEAD 逐条核对 GO-2 相关的日志原文 / 计数名 / outcome / site,场景 B3 重写为 B3a(回滚执行了 → 源端凭回执采纳解冻)/ B3b(回滚没执行 → 已放行销毁 + 踢线)/ B3c(unpause 后的迟到投递)/ B3d(凭标记的迟到回滚:所凭标记已不在 → `marker_gone`,一个字节不动),新增 H1c(取证脚本被 Redis 整体拒绝 → 不解冻),补 GO-2 专属验收点与已登记的偏离 / 残余 GR-1–GR-11,§7 结果表同步(GO-2 代码已全部在 main:ccafe300c / 907a6b752 / 80a1b0823 / a8c2d44a8 / 6b7a59287 / 567333aaf;其后 4ae3d11a0 与 2026-10-08 的远端合并 3b93efd539 / f8175c5bea 碰到的落点已一并按当前代码核对,**均未编译、未测试;本版同样是静态编写、未实跑**,见 Changelog)**;**v2.7 — 2026-10-09 补 CPP-3 疏散 / 排空改派待确认表的观测点、场景 V 与缺口 RC-1 – RC-16(代码已进 main,未编译、未测试;设计文档「CPP-3 疏散 / 排空改派的待确认表」一节)**
 > **⚠ 静态编写声明**: 本文依据 2026-09-20 的 `main`(`d9e471b80`)**只读代码**写成。它描述的链路(跨 zone 场景传送阶段 1/2/3 + 同 zone 跨节点换图 + 单节点硬崩接管)**尚未编译、尚未实跑**(`docs/design/cross-zone-scene-travel.md` §11 / §11.4)。文中每条日志原文、键名、指标名、错误码都逐字 grep 核对过,但**注入手法的时序、期望现象的先后**是从代码推出来的,没有一条被执行验证过。**首次执行的人发现与实际不符处,应回改本文**(并在 Changelog 记一笔),不要照着错的文档去"修"代码。凡标了「拿不准」的地方,就是首跑时最该记录实际现象的地方。
 > **范围**: 归属交接链(`StartTravelHandoff → 冻结 → 存盘 → BeginTravelHandoff 写 handoff 标记 → scene_manager.EnterScene → 放行销毁 / 未成解冻`)与属主接管(`playerLocationOwnerDead`)的失败场景 SOP。设计参考 `docs/design/cross-zone-scene-travel.md` §4 / §6 / §7 / §10.3 / §11,以及 `docs/design/scene-owner-reentry-barrier.md`。
 > **执行环境**: 本地双 zone(`dev_tools.ps1 -Command dev-start-zones -Zones 1,2`,共享同一个 docker `redis` / `kafka`)。K8s 双 zone 的对应手法见 §3.5,**未逐条核对**。
@@ -70,7 +70,7 @@ v1 原文在 git 历史里(`git log -- docs/ops/cross-zone-failure-test-runbook.
 | 键 | 值 | 谁写 | 出处 |
 |---|---|---|---|
 | `player:{P}:owner_epoch` | 十进制整数;只经 scene_manager 的 `INCR` 前进,**只升不降**:铸造 +1;GO-2 起路由 / 重定向失败的回滚也是 `INCR`(再 +1,不退回旧值)。键缺失时只按已记录的值补种(scene_manager 按 location 记录值 `SETNX`,C++ guard 存盘按缓存值)| scene_manager | `go/shared/ownerepoch/ownerepoch.go` `OwnerEpochKey` 与包注释、`player_ownership_comp.h` `OwnerEpochRedisKey`(v2.6 起按名字引用,行号会漂)|
-| `player:{P}:handoff` | `"{epoch}:{saved_at_ms}"`,`EX 300` | 写:源 scene(C++)的交接 / 疏散改派(GO-2 起改为 owner_epoch 条件写,epoch 已变就不写)/ **A1′ 断线释放标记**(v2.4);**GO-2 起 scene_manager 的回滚 Lua 转写**(`"E:<ms>"` → `"E+2:<同一 ms>"`,只在原标记原样还在时写)。删:撤回(按标记原文条件删)、`ResolveTravelOutcome` 的取证脚本(GO-2:只删毫秒后缀等于本次交接 `requestedAtMs` 的那一族,原标记与转写标记都算;别人的标记不删)、**新载入节点的 A2′**(v2.4)。scene_manager 从不删 | `ownerepoch.go` `HandoffKey` / `HandoffTTL`、`player_ownership_comp.h` `HandoffRedisKey` / `kHandoffMarkTtlSec`、`exit_release_mark.h`(`kLuaWriteIfOwnerEpoch` / `kLuaInheritClear`)、`owner_epoch.go` `luaRollbackPlayerPlacement`、`player_lifecycle.h` `travel_outcome::kLuaJudgeTravelOutcome` |
+| `player:{P}:handoff` | `"{epoch}:{saved_at_ms}"`,`EX 300` | 写:源 scene(C++)的交接 / 疏散改派(GO-2 起改为 owner_epoch 条件写,epoch 已变就不写)/ **A1′ 断线释放标记**(v2.4)/ A2′ 放弃载入时的补写(`site=inherit_rewrite`)/ **改派踢线前的凭证兜底补写**(v2.7,`site=relocate_refresh`;已有同代标记、本节点有该玩家实体或载入在途、身份未确认、dev 旁路开着时都不写);**GO-2 起 scene_manager 的回滚 Lua 转写**(`"E:<ms>"` → `"E+2:<同一 ms>"`,只在原标记原样还在时写)。删:撤回(按标记原文条件删)、`ResolveTravelOutcome` 的取证脚本(GO-2:只删毫秒后缀等于本次交接 `requestedAtMs` 的那一族,原标记与转写标记都算;别人的标记不删)、**新载入节点的 A2′**(v2.4)。scene_manager 从不删 | `ownerepoch.go` `HandoffKey` / `HandoffTTL`、`player_ownership_comp.h` `HandoffRedisKey` / `kHandoffMarkTtlSec`、`exit_release_mark.h`(`kLuaWriteIfOwnerEpoch` / `kLuaInheritClear`)、`owner_epoch.go` `luaRollbackPlayerPlacement`、`player_lifecycle.h` `travel_outcome::kLuaJudgeTravelOutcome` |
 | `player:{P}:location` | `PlayerLocation` **proto 二进制**(`redis-cli` 直接读不出字段)。GO-2 起多一个字段 `rollback_receipt = 7`(string):只由回滚 Lua 写,值 = 被回滚那次铸造所凭的 handoff 标记原文,与恢复出来的 location、`INCR` 之后的 owner_epoch 同一段 Lua 原子落地;任何新落点整条重写 location 时它随之消失。回执是 ASCII,`redis-cli --no-raw GET` 的输出里能直接看到 `<E>:<ms>` 这串字符(从 proto 线格式推的,首跑核对)| scene_manager | `changesceneutil.go` `getPlayerLocationKey`、`proto/scene_manager/storage.proto` |
 | `node:zone:{z}:{n}:death_at` | Unix 毫秒,节点判死时刻,TTL 10 分钟 | scene_manager(leader)| `reentry_barrier.go:37`、`constants/reentry_barrier.go:80` |
 | `scene_nodes:zone:{z}:load` | ZSET,活节点负载集 | scene_manager | `load_reporter.go:23` |
@@ -167,6 +167,13 @@ docker exec redis redis-cli --no-raw GET "player:${P}:location"   # 二进制,�
 - `[OwnerEpoch] stale_owner_write_rejected=… home_zone_unknown=… owner_epoch_unknown=…` —— WARN,**任一非 0 才打**(`cpp/libs/services/scene/core/system/redis.cpp:75-81`)。所以"恒 0"的证据是**这行日志从头到尾没出现**。
 - **(v2.4)`[ExitPersist] exit_superseded=… exit_intent_missing=… exit_resave=… exit_resave_capped=… exit_exhausted_rekick=… exit_fastpath_deferred=… exit_client_msg_rejected=… exit_deposed_on_reentry=…`** —— INFO,累计值,30s、有变化才打,进程内第一次有玩家退出后开始(`player_lifecycle.cpp:333-340`,定时器由 `EnsureExitStatsTimer` 自挂,**不在** `redis.cpp`)。期望:`exit_superseded` / `exit_intent_missing` / `exit_resave_capped` 恒 0;`exit_resave` 偶发(退出存盘在途时实体又变了);`exit_client_msg_rejected` 在断线瞬间客户端在途包多时会涨,正常;`exit_deposed_on_reentry` 非 0 = 有旧实体被判废黜后丢弃重载(退出被保留到租约之后 / 活僵尸),记录 player_id。
 - **(v2.4)`[ExitRelease] attempted=… skip_disabled=… skip_entity_invalid=… skip_intent_missing=… skip_cause=… skip_suppressed_release=… skip_suppressed_identity=… skip_suppressed_unspecified=… skip_relocate=… skip_handoff_inflight=… skip_epoch_unknown=… skip_identity_conflict=… written=… epoch_moved=… failed=… inherit_absent=… inherit_deleted_older=… inherit_deleted_exact=… inherit_kept_newer=… inherit_deleted_malformed=… inherit_epoch_mismatch=… inherit_reply_error=… inherit_reply_lost=… inherit_failed=… inherit_refused=… inherit_rewritten=… inherit_rewrite_skipped=… inherit_rewrite_failed=… inherit_rewrite_dropped_node_holds=… inherit_rewrite_handed_over=…`** —— INFO,同上(`player_lifecycle.cpp:274-303`)。`attempted` = 判定为"写"的次数,写成功看 `written`。期望:干净断线 `attempted`≈`written`,`failed` / `inherit_epoch_mismatch` / `inherit_refused` 稳态恒 0;ReleasePlayer 引起的退出计 `skip_cause`(正常);`skip_epoch_unknown` 非 0 = 还有 owner_epoch 为 0 的存量玩家。**M12 口径**:v2.4 起 `enter_scene_rejected_total{reason="handoff_pending_stale_marker"}` 会混入"上一任的释放标记还在、而新铸落点没载入"的登录重试,排查先对照本行的 `written` / `inherit_*` 与 CPP-2 症状,压测复盘把两类分开统计。
+- **(v2.7,CPP-3)`[RelocateConfirm] dispatch=… void_client_gone=… void_session_replaced=… untracked_overflow=… cancelled_on_reentry=… ticket_dropped_deposed=… reply_verified=… reply_ignored=… transport_failed=… not_sent=… mark_write_timeout=… reply_timeout=… verify_deferred=… settle_waits=… granted=… moved_elsewhere=… landed_here=… superseded=… indeterminate=… kick_verified=… kick_unverified=… gave_up_unverified=… push_sent=… push_gate_gone=… push_gate_replaced=… credential_none=… credential_keep_existing=… credential_skip_local_holder=… credential_skip_identity=… credential_skip_dev_bypass=… credential_attempted=… credential_written=… credential_epoch_moved=… credential_failed=…`** —— INFO,累计值,30s、有变化才打(`player_lifecycle.cpp` `EnsureExitStatsTimer` / `FormatRelocateConfirmStats`;计数定义在 `player_lifecycle.h` 的 `relocate_confirm_stats`)。疏散 / 排空改派的待确认表(场景 V)。读法:
+  - `dispatch` = 票据没作废、进入派发的次数(含表满未跟踪与没发出去的);`void_*` = 票据作废、没发改派。
+  - 每条被跟踪的改派最终恰好落进八个结局之一:`granted` / `moved_elsewhere` / `landed_here` / `superseded` / `indeterminate`(都不踢)、`kick_verified` / `kick_unverified`(踢)、`gave_up_unverified`(读不到又不敢踢)。
+  - `kick_verified + kick_unverified` = 六个 `credential_<动作>` 之和(因踢线前本地复核改判为 `landed_here` / `superseded` 的不计);`credential_attempted` = `credential_written + credential_epoch_moved + credential_failed + 在途`。
+  - `credential_attempted` 与 `[ExitRelease]` 行的 `inherit_rewritten` **可以同时 +1**(载入被放弃时 A2′ 的补写排在本项核实之后,两边各写一次同代标记,无害),不要判成异常。
+  - `landed_here` 只表示实体已在本节点建出且会话一致,不保证进了场景(缺口 RC-8)。
+  - **健康期望**:`untracked_overflow`、`kick_unverified`、`gave_up_unverified`、`ticket_dropped_deposed` 恒 0;`kick_verified` 只在场景 V2 / V3 这类注入下非 0;`push_gate_gone` / `push_gate_replaced` 只在 gate 重启或整节点疏散时非 0。
 - **(v2.5,C++ gate,CPP-2)`[SceneEntry] deferred=… recovered=… gave_up=… superseded=… session_closed=… player_changed=… links_ready=… pending=…`** —— INFO,gate 进程(`z<N>_gate*` 的日志),30s 一次、**计数或积压有变化才打**(`cpp/nodes/gate/handler/event/scene_entry_dispatch.cpp` `MaybeLogSummary`;前 7 项是累计值,`pending` 是当前还在补发的会话数)。含义:`deferred` = 进场转发第一次没交出去、转入补发(链路没连上 / 没握手 / 节点找不到);`recovered` = 补发成功;`gave_up` = 超限放弃(推 3023 + 踢线 34 + 关连接);`superseded` = 补发期间来了新路由、整体替换;`session_closed` = 补发期间客户端连接已关、撤销;`player_changed` = 路由属于另一名角色、撤销;`links_ready` = scene 链路握手就绪次数。期望:健康栈基线 `gave_up=0`、`pending` 回到 0;`links_ready` 至少等于 scene 节点数(每次重连握手再 +1)。C++ 没有接 Prometheus,故障期间排障以这一行的 `pending` / `gave_up` 为准(原先逐条的 `RoutePlayer: scene node not found in registry` ERROR 已删)。
 
 ### 2.4 日志原文(grep 用)
@@ -254,7 +261,7 @@ handoff 标记的 SET 发出之后,"保留实体又解冻"的出口**只有三�
 | `[ZoneTravel] player <P> location points back to this node but owner_epoch moved <E> -> <E'> without this handoff's rollback receipt (receipt=<回执原文,可为空>, <reason>, evidence=<e>); treating it as granted, not unfreezing (metric=returned_after_grant)` | WARN,判定表 **B7**。epoch 变了、location 指回本节点本 zone,但回执为空或不是本次标记原文:**不解冻**,沿用"已放行"分支不存盘销毁、不踢线;路由若随后到达本节点,按"无实体"从盘上重新加载(零损失)。随后是 `… was granted although the reply was lost/failed … (returned_to_self)`(同 zone 且 `evidence=succeeded` 时是 `same-zone handoff granted … (returned_to_self)`);跨 zone 且证据为 `failed` / `no_reply` 时还有一行 `[ZoneTravel][ClientReset] not resetting client … location is not this handoff's awaiting placement (epoch advanced by another request) …`(location 指向活节点,不是等待落点,所以不踢)。`returned_after_grant`+1 | `JudgeTravelOutcomeReply` |
 | `[ZoneTravel] SET handoff mark failed for player <P> requested_at_ms=<ms> err=<Redis 错误>` | ERROR。写标记的 SET 被 Redis 明确回 ERROR(READONLY / LOADING / ACL 拒绝等)= SET 没执行、盘上没有这份标记:随后 `handoff aborted … handoff mark write failed`(解冻 + tip,不登记撤回)。只处置**同一代**交接;应答属于上一代交接时是 WARN `[ZoneTravel] SET handoff mark failed for player <P> requested_at_ms=<ms> err=<…>, but that handoff generation is no longer in flight (current=<ms'>); ignoring the late reply`,什么都不动 | `HandleTravelMarkWriteRejected`(头文件写明:公开只为单测能直接验证代际判断,业务代码不要调)|
 | `[ZoneTravel] ResolveTravelOutcome called for player <P> (<reason>) before the handoff mark was sent (requested_at_ms=0); leaving the handoff to the save watchdog / freeze cap` | ERROR,按构造不可达,**不该出现**(调用方都在 SET 发出之后才进来)。**已登记的偏离**:判定表 A1 对"SET 未发出"写的是解冻,这里只打 ERROR 就返回、不调 `AbortTravelHandoff`,玩家保持冻结,由 30s 存盘看门狗 / 70s 冻结上限的"标记未发出"一支兜底解冻 —— 安全方向,代价只是晚解冻 | `ResolveTravelOutcome` |
-| `[EmergencyRelocate] handoff mark not written for player <P> mark=<E>:<ms>: owner_epoch moved on (e.g. rolled back past this node's cached epoch); keeping the existing mark, requesting re-home anyway (scene_manager decides)` | INFO。疏散 / 排空改派的标记是条件写(`exit_release_mark::kLuaWriteIfOwnerEpoch`),Redis 里的 owner_epoch 已不等于本实体缓存的 E(典型:归属刚被单调回滚成 E+2、本节点还没取证)→ 不写,保留已有的转写标记 `"E+2:<ms>"`,改派照发,由 scene_manager 的换手门凭转写标记裁决。写失败是 ERROR `[EmergencyRelocate] conditional handoff mark write failed for player <P> mark=<E>:<ms>…; requesting re-home anyway (scene_manager decides)`。*(这两行是 2026-10-08 HEAD 的原文。CPP-3 —— 疏散 / 排空改派的待确认表,设计文档 §13.8 —— 正在落码,会改写这条路径;它落地后以它的日志为准,本文届时另行修订)* | `DispatchEmergencyRelocate` |
+| `[EmergencyRelocate] handoff mark not written for player <P> mark=<E>:<ms>: owner_epoch moved on (e.g. rolled back past this node's cached epoch); keeping the existing mark, requesting re-home anyway (scene_manager decides)` | INFO。疏散 / 排空改派的标记是条件写(`exit_release_mark::kLuaWriteIfOwnerEpoch`),Redis 里的 owner_epoch 已不等于本实体缓存的 E(典型:归属刚被单调回滚成 E+2、本节点还没取证)→ 不写,保留已有的转写标记 `"E+2:<ms>"`,改派照发,由 scene_manager 的换手门凭转写标记裁决。写失败是 ERROR `[EmergencyRelocate] conditional handoff mark write failed for player <P> mark=<E>:<ms>…; requesting re-home anyway (scene_manager decides)`。*(v2.7:CPP-3 已落码(设计文档「CPP-3 疏散 / 排空改派的待确认表」一节),这两行原文未变。写的结局同时记在下方 v2.7 表的 `[RelocateConfirm] sent … mark_write=epoch_moved\|failed`;"requesting re-home anyway" 现在有一个例外 —— 写标记的回调到达时这次改派已有去向,则打 `[RelocateConfirm] not sending … entry already moved on`、不再发 EnterScene。改派之后的确认与收口见下方 v2.7 表)* | `DispatchEmergencyRelocate` |
 
 **C++ scene —— v2.5 新增(EnterScene 应答关联号 + gRPC 失败回调;设计文档「EnterScene 应答关联号」一节、`docs/design/grpc-client-deadline-failure-callback.md`)**:
 
@@ -267,6 +274,41 @@ v2.5 起 scene 发出的每条 EnterScene 都带 `correlation_id`(scene_manager 
 | `[EnterSceneReply] invariant broken: scene-change reply while a handoff is in flight, player=<P> … ; dropping` / `[ZoneTravel] invariant broken: travel reply routed without an issued handoff EnterScene, player=<P> …` | ERROR,**不该出现**(前者同时 `reply_unmatched`+1)| `DispatchEnterSceneReply`、`HandleTravelEnterSceneReply` |
 | `[ZoneTravel] handoff EnterScene transport failure for player <P> corr=<N> (<method> code=<grpc code> msg=<…>); outcome unknown, leaving the verdict to the reply watchdog / freeze cap` | WARN。**2026-09-28 起生成的 gRPC 客户端对非 OK 状态也回调失败处理器**(deadline:`bin/etc/base_deploy_config.yaml` `GrpcClient.CallDeadlineMs.SceneManagerNodeService` = 10000ms = 服务端 `Timeout` 8000 + 2000)。交接路径上传输失败 = **结果未知**:只记这一行,不当失败证据、不提前核实、不计任何数,去留仍由 30s 应答看门狗 / 70s 上限按 `owner_epoch` 裁决。K-SM 下常见 `code=14`(UNAVAILABLE)或 `code=4`(DEADLINE_EXCEEDED)| `DispatchEnterSceneTransportFailure` |
 | `[ZoneTravel] EnterScene transport failure for player <P> scene_id=… scene_conf_id=… corr=<N> (…); notifying the client` / `[ZoneTravel] team-follow EnterScene transport failure for player <P> …; player stays in the current scene` | 普通换图(不是交接)的传输失败:释放在途槽;玩家发起的回专用码 `kEnterSceneServerBusy`(3028,"服务器繁忙,请稍后再试";4ae3d11a0 起,此前是 `kServiceUnavailable`)—— 不断言失败(scene_manager 可能已执行、路由随后到达),只让客户端结束等待;队伍跟随只记日志。在途槽 TTL v2.5 起 = SceneManager deadline + 1000ms(旧的 5s 小于服务端 8s、同一玩家可能两条 EnterScene 并行的窗口已随之消除)| `DispatchEnterSceneTransportFailure` |
+
+**C++ scene —— v2.7 新增(CPP-3 疏散 / 排空改派的待确认表;设计文档「CPP-3 疏散 / 排空改派的待确认表」一节;出处一律写函数名,都在 `player_lifecycle.cpp`,判定在 `relocate_confirm.h`;代码未编译、以下均未实跑)**:
+
+取值名表(同时是日志取值与 `[RelocateConfirm]` 汇总行的 key,`relocate_confirm.h`):阶段 `mark_writing` / `awaiting_reply` / `verifying` / `landing`;证据 `not_sent` / `reply_rejected` / `reply_succeeded` / `no_reply` / `transport_failed` / `landing_abandoned` / `landing_timeout`(`resolved` 与 `backlog entry` 两行另有一个只在日志里出现的取值 `none`,见下表 `resolved` 行);期望 `at_source` / `at_this_node`;读数 `absent` / `unchanged` / `moved_here` / `moved_elsewhere` / `indeterminate`(没有读数时日志里是 `unread`);结局 `granted` / `moved_elsewhere` / `landed_here` / `superseded` / `indeterminate` / `kick_verified` / `kick_unverified` / `gave_up_unverified`;推送 `sent` / `gate_gone` / `gate_replaced`;写标记 `not_attempted` / `pending` / `written` / `epoch_moved` / `failed`;凭证 `none` / `keep_existing` / `skip_local_holder` / `skip_identity` / `skip_dev_bypass` / `attempted`。
+
+| 片段 | 含义 | 出处 |
+|---|---|---|
+| `[RelocateConfirm] tracking player=<P> seq=<n> session=<s> gate=<g> owner_epoch=<E> source_scene=<id> mark=<E>:<ms> earlier_reply_possible=0\|1`(没尝试写标记时 `mark=none`)| INFO。票据被消费,登记进待确认表。`earlier_reply_possible=1` = 本节点替他发的更早 EnterScene 还可能被 scene_manager 处理(三个来源:退出优先作废的交接;在途的普通换图;同一玩家上一次改派的条目还没收口、名下请求结局未定),这条改派的核实要等到 settle | `DispatchEmergencyRelocate` |
+| `[RelocateConfirm] untracked player=<P> reason=table_full pending=<n> (metric=untracked_overflow)` | ERROR。表满(8192),这次改派按旧行为发出、不跟踪。**应恒不出现** | `DispatchEmergencyRelocate` |
+| `[RelocateConfirm] ticket voided player=<P> decision=void_client_gone\|void_session_replaced ticket_session=<s> current_session=<s>` | INFO。票据作废(本次退出期间客户端已断线 / 实体当前会话已不是发票时那一条),不发改派,由 A1′ 接手 | `DispatchEmergencyRelocate` |
+| `[RelocateConfirm] cancelled on reentry player=<P> session=<s> (metric=cancelled_on_reentry)` | INFO。进场路由回到本节点,还没派发的票据作废。例外:整节点疏散中、带着票据那同一条有效会话的进场**不**作废(票据留给节点最后的退出收尾去消费),这一行与计数都不出现 | `ReconcileRelocateOnReentry` |
+| `[RelocateConfirm] ticket dropped player=<P> site=<reasonTag>: entity destroyed as deposed before its exit converged; not relocating, not kicking (metric=ticket_dropped_deposed)` | WARN。带票据的退出实体被按"废黜"销毁:不改派、不踢(缺口 RC-6)| `DestroyDeposedPlayer` |
+| `[RelocateConfirm] not sending player=<P> seq=<n> phase=<阶段 或 gone>: entry already moved on` | INFO。写标记的回调到达时这次改派已有去向(已结清 / 已落回本节点 / 已超时转核实),不再发 EnterScene | `TrackRelocateDispatch` |
+| `[RelocateConfirm] sent player=<P> seq=<n> corr=<c> mark_write=<写标记> settle_ms=<ms> reply_wait_ms=<ms>` | INFO。EnterScene 已交给 gRPC。当前配置下 `settle_ms=15000 reply_wait_ms=30000`。同一次改派还有一行既有的 `[EmergencyRelocate] requested main-world re-home for player <P> (session=…, gate=…, corr=<c>)` | `TrackRelocateDispatch` |
+| `[EmergencyRelocate] no SceneManager node reachable; player <P> was not re-homed, will verify and kick` | ERROR。scene_manager 注册表为空,改派没发出去,随后按 `not_sent` 核实并踢。未被跟踪(表满)的改派仍是旧原文 `…; player <P> keeps its gate session and has to re-enter through the normal login flow` | `SendEmergencyRelocateEnterScene` |
+| `[RelocateConfirm] reply player=<P> seq=<n> corr=<c> error_code=<code> epoch_after_rollback=<n> evidence=reply_succeeded\|reply_rejected` | INFO。认领到本次改派的应答,转核实。**应答从不直接定案**。被拒时紧跟一条既有的 ERROR `SceneManager.EnterScene error: player=<P> corr=<c> code=<code> msg=…`(code=18 时是 INFO `SceneManager.EnterScene deferred (handoff pending): …`),是预期日志 | `ClaimRelocateEnterSceneReply` |
+| `[RelocateConfirm] reply ignored player=<P> seq=<n> corr=<c> phase=<阶段> error_code=<code>` | INFO。认领了但条目已不在等应答(已有证据在核实 / 已落回本节点),只记一笔。`reply_ignored` +1 | `ClaimRelocateEnterSceneReply` |
+| `[RelocateConfirm] reply for player=<P> seq=<n> corr=<c> carries a cross-zone redirect, which a same-zone relocate should never get; verifying anyway` | WARN。**不该出现**(改派的目标就是本 zone)| `ClaimRelocateEnterSceneReply` |
+| `[RelocateConfirm] transport failure player=<P> seq=<n> corr=<c> (<reason>); outcome unknown, verifying after settle` | WARN。改派的 EnterScene 传输失败(deadline 到期 / 连接被重置)= 结果未知,等到 settle 才读。`transport_failed` +1 | `ClaimRelocateTransportFailure` |
+| `[RelocateConfirm] transport failure ignored player=<P> seq=<n> corr=<c> phase=<阶段> (<reason>)` | INFO。条目已不在等完成通知(例如进场路由已先把他带回本节点)。同样计 `transport_failed` +1 | `ClaimRelocateTransportFailure` |
+| `[RelocateConfirm] verify player=<P> seq=<n> gen=<g> evidence=<证据> expectation=<期望>` | 本轮第一次是 INFO,之后的重试是 DEBUG(Redis 连得上但脚本被拒时每条条目每秒重发一次,不逐次打 INFO)。发出一次核实读(只读脚本,一次读回 owner_epoch / location / handoff)| `SendRelocateVerify` |
+| `[RelocateConfirm] verify deferred player=<P> seq=<n> reason=redis_unavailable\|dispatch_failed\|reply_lost\|reply_error\|malformed`(`reply_error` 时末尾另带 ` err=<Redis 原文>`)| 本轮第一次没读到是 WARN,之后的重试失败是 DEBUG。核实推迟 1s 重试;连续 10s 读不到按"无法核实"处置。`verify_deferred` +1 | `DeferRelocateVerify` |
+| `[RelocateConfirm] waiting for settle player=<P> seq=<n> evidence=<证据> verdict=<读数 或 unread> settle_in_ms=<ms>` | INFO。等到 settle 再读 / 再踢:`verdict=unread` = 结果未知或还有请求结局未定,settle 之前不读;带读数 = 读到"没变"但现在还不许踢。`settle_waits` +1 | `SendRelocateVerify` / `HandleRelocateVerifyReply` |
+| `[RelocateConfirm] landing player=<P> seq=<n> reentered=0\|1` | INFO。转入"落地等载入":`reentered=1` = 进场路由带着票据那条会话回到了本节点;`reentered=0` = 核实读到落在本节点的另一个场景,路由还没到。同一次载入的重复路由只打 DEBUG `[RelocateConfirm] duplicate route for a landing entry, player=<P> seq=<n>; deadline unchanged` | `ReconcileRelocateOnReentry` / `HandleRelocateVerifyReply` |
+| `[RelocateConfirm] resolved player=<P> seq=<n> outcome=<结局> evidence=<证据> verdict=<读数 或 unread> reply_code=<code> unsettled=0\|1 age_ms=<ms>` | 结清、**不踢**。`granted` / `moved_elsewhere` / `landed_here` 是 INFO;`superseded` / `indeterminate` 是 WARN;`gave_up_unverified` 是 **ERROR**(读不到、又不能排除已被放行:这条会话可能还挂着,本节点不敢踢)。`reply_code` 与 `unsettled` 用来给 `gave_up_unverified` 排障:分得出是"还有请求结局未定"还是"拒绝码不在可以盲踢的白名单里"。**已发出**(关联号非 0)但从没进过核实就结清的条目(例如等应答时被进场路由直接带进落地,随后 `landed_here`)打 `evidence=none`;还没发出的(仍在 `mark_writing`,或写标记途中就被带进落地的)仍打 `not_sent`,结合 `phase` 读。`backlog entry` 行同此 | `ConcludeRelocateWithoutKick` |
+| `[RelocateConfirm] kick player=<P> seq=<n> outcome=kick_verified\|kick_unverified push=<推送> credential=<凭证> credential_epoch=<X> session=<s> evidence=<证据> verdict=<读数 或 unread> reply_code=<code> age_ms=<ms>` | tip 3023(`kEnterSceneFailed`)+ 踢线 34。`kick_verified` 且 `push=sent` 是 WARN,其余 **ERROR**(没核实就踢,或踢线没推出去、客户端仍卡着)。`kick_unverified` 恒为 `verdict=unread credential=none credential_epoch=0` | `KickRelocatedSession` |
+| `[RelocateConfirm] kick withheld player=<P> seq=<n>: entity is back on this node, outcome=landed_here\|superseded` | 踢线前的本地复核:本节点此刻有他的有效实体就不踢、也不补写凭证。`landed_here` 是 INFO,`superseded` 是 WARN | `KickRelocatedSession` |
+| `[RelocateConfirm] push: gate not found for session <s>` / `… RpcSession missing for session <s>` / `… gate not connected for session <s>` / `… gate instance replaced for session <s>` / `[RelocateConfirm] push: ticket has no bound session for player <P> (session=<s>)` | WARN。按会话推 tip / 踢线失败的具体原因;前三种与最后一种计 `push_gate_gone`,第四种计 `push_gate_replaced` | `PushToSessionViaGate` / `SendTipAndKickToSession` |
+| `[ExitRelease] mark written player=<P> mark=<X>:<ms> site=relocate_refresh`(及同 site 的 `mark not written … owner_epoch moved on`、`mark write failed …`)| 踢线前的凭证兜底补写的结果(只在核实读到"没变"、Redis 里没有同代有效标记、本节点没有该玩家实体 / 载入、身份确认、dev 旁路关着时才写)。计到 `credential_written` / `credential_epoch_moved` / `credential_failed` | `SendConditionalMarkWrite` |
+| `[RelocateConfirm] backlog site=shutdown_drain total=<n> mark_writing=<n> awaiting_reply=<n> verifying=<n> landing=<n>` + 每条一行 `[RelocateConfirm] backlog entry player=<P> seq=<n> phase=<阶段> evidence=<证据> session=<s> age_ms=<ms>` | WARN + INFO。停机 drain 第一次只剩待确认表时打一次;看门狗到期后这些条目被放弃、不踢 | `LogRelocateConfirmBacklog`(`cpp/nodes/scene/main.cpp` 调)|
+| `Shutdown drain progress: … exit_release_marks=<n> relocate_confirms=<n>` | INFO。既有进度行末尾追加了 `relocate_confirms` | `cpp/nodes/scene/main.cpp` |
+| `[RelocateConfirm] stale verify reply dropped player=<P> seq=<n> gen=<g> phase=<阶段 或 gone> in_flight=0\|1 entry_gen=<g>` | DEBUG。核实应答到达时条目已不在 / 已不在核实阶段 / 不在途 / 代际对不上,丢弃、不计数 | `HandleRelocateVerifyReply` |
+| `[RelocateConfirm] entry of player <P> seq=<n> was replaced while in phase <阶段> (expected landing): …` / `[RelocateConfirm] verify reply for player <P> seq=<n> produced no action (verdict=…); leaving the entry to its verify deadline` / `[ExitRelease] CountMarkWrite called with an unknown site <n>; result not counted` | ERROR,**都不该出现**(契约被破坏 / 按构造不可达的防御分支),出现即保留证据 | `DispatchEmergencyRelocate` / `HandleRelocateVerifyReply` / `CountMarkWrite` |
+
+**CPP-3 之后语义有变的既有日志**:`[ZoneTravel] EnterScene reply for player <P> but entity is gone (exited during travel); ignoring corr=…` 与 `[EnterSceneReply] EnterScene transport failure for player <P> but entity is gone; ignoring corr=…` 原文不变,但改派的应答 / 传输失败不再走到这里(被待确认表认领),只剩途中退出的玩家与没被跟踪(表满)的改派。`SendTipToPendingSession: gate not found for session <s>` / `… RpcSession missing for session <s>` 原文不变,新增第三条 `SendTipToPendingSession: gate not connected for session <s>`(此前这种情形只有 RpcSession 自己的 ERROR)。踢线后 gate 回发 ExitGame 时会出现一条既有的 ERROR `ProcessClientPlayerMessage: session id not found <s>, message id <id>`,是预期日志。
 
 **scene_manager**(`go/scene_manager/internal/logic/`;末列自 2026-10-08 起一律写函数名、不再抄行号 —— `enterscenelogic.go` 此后(GO-2、10-08 合并远端等)整体后移,旧行号全部失效,要定位就按片段原文 grep):
 
@@ -613,7 +655,7 @@ Kafka 暂停期间那条被判超时的 RedirectToGateEvent / RoutePlayerEvent,�
    - **落回源节点**(单 scene 节点时排空改派只能如此;多节点时也可能被挑回来):scene_manager 按同落点重连或同物理节点换图处理,**不过换手门、也不铸造**(`enterscenelogic.go` `EnterScene`:换手门只在 `crossNodeHandoff` 时过,它要求 `!samePlacement && !samePhysicalNode`;铸造条件是 `!samePhysicalNode`,同节点 epoch 0 的铸造除外),owner_epoch **仍是 E+2**,同样不回 18。这种结局不要按"没到 E+3"判失败,照录落点节点与 epoch。
    - 整节点疏散(节点已丢身份)在单节点环境下没有别的活节点可落,改派多半被拒(回 1,从代码推的),测不到本条。
 
-   *v2.6 更正:此前这里无条件写"凭转写标记过换手门,owner_epoch 变为 E+3",漏了"至少两个 scene 节点、且落到另一个节点"的前提;设计文档 §13.7 验证清单第 8 步"疏散"是同一句,以本条为准。*排空 / 疏散的触发手法本文**未核对**;这条路径正在被 CPP-3(疏散改派待确认表,设计文档 §13.8,落码中)改写,CPP-3 落地后以它为准。
+   *v2.6 更正:此前这里无条件写"凭转写标记过换手门,owner_epoch 变为 E+3",漏了"至少两个 scene 节点、且落到另一个节点"的前提;设计文档 §13.7 验证清单第 8 步"疏散"是同一句,以本条为准。*排空的触发手法见场景 V「共用前置」(`DestroyScene`,记得带 `zone_id`;静态编写、未实跑);整节点疏散仍没有注入手法。CPP-3(设计文档 §13.8)已落码(v2.7,未编译):本条的条件写与 `handoff mark not written … owner_epoch moved on` 原文未变,改派另有 `[RelocateConfirm]` 各行(§2.4 v2.7 表)。本条情形下按代码推应是 `tracking … earlier_reply_possible=1`(被退出优先作废的那次交接标记已写)、`sent … mark_write=epoch_moved`,核实等到 settle(约 15s,先出 `waiting for settle`)才 `resolved`,不要按 V1 的 `earlier_reply_possible=0` 判;结局仍不踢线(落到另一节点 `granted`,落回源节点 `landed_here`)。
 7. **标记不在时回滚一个字节不动(`marker_gone`)**:见 **B3d**。任何场景里只要 scene_manager 记了 `marker_gone`,就核三样 —— owner_epoch 停在本次铸出的 E+1(不是 E+2)、location 里没有本次标记原文的回执、handoff 键里没有 `"<E+2>:<同一 ms>"` 形态的转写标记。`marker_gone` 与 `[RollbackAdopt] … adopting and unfreezing` **不得**对同一次交接同时出现:前者说回滚没动,后者说源端读到了回执,两者同时成立 = 回滚 Lua 的"先查令牌、后写"被改坏了,保留全部证据。
 
 验收口径:设计文档 §13.7 验证清单第 9 步对故障注入的要求是 —— B3a 的跨 zone 与同 zone 两种采纳都通过(第 1 条),B3c 至少命中一种结局且没有"不可接受"项。本文另加自己的恒 0 项:第 2、3 条在所有场景里成立,第 4 条核过规则文件。H1c、B3b、B3d 与第 6 条做了就如实记结果,做不出来记 SKIP / 未命中。缺哪一条就在 §7 里写"未验证",不要写成通过。
@@ -879,6 +921,86 @@ Z1 = 真写盘的正常断线退出不销毁实体(僵尸)。**必须先用修�
 
 ---
 
+### 场景 V:疏散 / 排空改派的确认与收口(v2.7 新增,CPP-3;设计文档「CPP-3 疏散 / 排空改派的待确认表」一节,代码未编译、本场景未实跑)
+
+排空(scene_manager 调 `DestroyScene`)或整节点疏散时,scene 在玩家退出存盘收敛后替他发一条 EnterScene,让他带着原来的 gate 会话落到别的频道 / 节点。CPP-3 之前这条请求发完即忘:被拒、没发出去、落回本节点后载入被放弃时,玩家挂在一个没有实体的会话上。本场景验证"登记 → 确认 → 收口":改派没生效的玩家会被 tip 3023 + 踢线 34 送回选服,生效的不受打扰。日志原文见 §2.4「疏散 / 排空改派的待确认表」表,计数见 §2.3 的 `[RelocateConfirm]` 行。
+
+**共用前置**:
+- 单 zone(zone 1),起 2 个 scene 节点、至少 2 个世界频道;测试号(robot 常驻在线,或 Unity 客户端)在其中一个频道里。
+- 按 §3.1 把 `AllowUnsafeCrossNodeHandoff` 临时改成 `false`(生产口径),测完还原,不提交。本地默认栈里 scene_manager 的旁路是开着的,而 C++ 侧的 `SCENE_DEV_UNSAFE_CROSS_NODE_HANDOFF` 默认关,两端不同步(缺口 RC-12),按生产口径测才与线上一致。(旁路开着时 V2 / V3 的读数其实不变:换手门先看标记、后看旁路,改派自己写了标记就照样凭标记铸造。)
+- **V0**:记下三个实际取值 —— `go/scene_manager/etc/scene_manager_service.yaml` 的 `Timeout`(应为 8000)与 `KafkaWriteTimeoutSeconds`(应为 5);`bin/etc/base_deploy_config.yaml` 的 `GrpcClient.CallDeadlineMs.SceneManagerNodeService`(应为 10000);`AllowUnsafeCrossNodeHandoff`。settle 窗口 = deadline + 5s,当前配置下是 15s,下面的时间都按它写。
+- 排空的触发方式:`grpcurl -plaintext -d '{"scene_id":<该频道的 scene_id>,"zone_id":1}' 127.0.0.1:<scene_manager gRPC 端口> scene_manager.SceneManager/DestroyScene`(端口不确定先 `grpcurl -plaintext 127.0.0.1:<端口> list`)。
+  - **`zone_id` 不能省**(填该频道所在的 zone,本场景是 1)。scene_manager 按 `zone_id` 查节点是否存活再通知它;省掉 = 按 zone 0 查,查不到,节点根本收不到 `DestroyScene`,而 scene_manager 不报错、还把这个场景的登记删了 —— 之后带上 `zone_id` 重发也不会再通知节点,只能换一个频道或重启本地栈。
+  - **生效判据**:源 scene 日志出现 `[gRPC] DestroyScene: scene_id=<id> still has residents; relocating <n> player(s) to the main world, entity kept until drained`,紧接着 `[SceneDrain] draining scene entity …`。两条都没有 = 节点没被通知,先查 `zone_id`,不要往下判 V1–V4。
+  - **每一步消耗一个频道**:被手工 `DestroyScene` 的频道在 scene_manager 一侧已删登记,节点上的场景实体却留着(没有第二次调用去销毁它)。"至少 2 个世界频道"只够做一步;每步之前确认还有可用频道,或步骤之间重启本地栈。
+
+**V1 —— 基线:改派生效,不打扰玩家**
+
+- **注入**:对测试号所在频道执行一次 `DestroyScene`。
+- **期望**(源 scene,按序):
+  - `[SceneDrain] draining …`;
+  - `[RelocateConfirm] tracking player=<P> seq=<n> session=<s> gate=<g> owner_epoch=<E> source_scene=<id> mark=<E>:<ms> earlier_reply_possible=0`;
+  - `[RelocateConfirm] sent player=<P> seq=<n> corr=<c> mark_write=written settle_ms=15000 reply_wait_ms=30000`;
+  - `[RelocateConfirm] reply player=<P> … error_code=0 … evidence=reply_succeeded` → `[RelocateConfirm] verify … evidence=reply_succeeded expectation=at_source`;
+  - 落到另一个节点:`[RelocateConfirm] resolved player=<P> … outcome=granted … verdict=moved_elsewhere …`;落在本节点的另一个频道:`[RelocateConfirm] landing player=<P> … reentered=0`(核实先读到;进场路由随后到达时还会再打一行 `reentered=1`)→ 1–2s 内(取决于异步载入)`resolved … outcome=landed_here … verdict=unread`。
+  - **另一种次序(同样算通过)**:落在本节点、且进场路由先于应答到达时,没有上面 `reply … evidence=reply_succeeded` 与 `verify` 两行,而是先 `landing … reentered=1`,应答到达时若实体还没建出来打一行 `[RelocateConfirm] reply ignored … phase=landing error_code=0`(实体已建出时连这一行也没有),然后 `resolved … outcome=landed_here evidence=none …`。
+- 客户端 / robot:**不断线**,不出现踢线 34;30s 内 `[RelocateConfirm]` 汇总行的 `granted` 或 `landed_here` 加 1,`kick_verified` / `kick_unverified` 不动。
+- **通过标准**:玩家留在线上并出现在新频道;汇总行没有任何 `kick_*` 增量;scene_manager 没有 `[Handoff]` 暂拒日志。
+
+**V2 —— 改派被拒:核实后踢回选服,重登能过换手门**
+
+- **注入**:先 `docker pause kafka`,再做一次 V1 的排空。约 5s 后 scene_manager 推路由失败、回 7 并回滚。测完 `docker unpause kafka`。
+- **期望**(源 scene):
+  - `[RelocateConfirm] reply player=<P> … error_code=7 epoch_after_rollback=<0 或 E+2> evidence=reply_rejected` → `verify … evidence=reply_rejected expectation=at_source`;
+  - 紧跟其后 `SceneManager.EnterScene error: player=<P> corr=<c> code=7 msg=…`(ERROR,**预期日志**,不是本场景的失败;应答处理器先分发应答、后打这一行);
+  - 1s 内 `[RelocateConfirm] kick player=<P> seq=<n> outcome=kick_verified push=sent credential=keep_existing credential_epoch=<X> session=<s> evidence=reply_rejected verdict=unchanged reply_code=7 age_ms=…`(WARN);
+  - 随后一条预期的 `ProcessClientPlayerMessage: session id not found`(踢线后 gate 回发 ExitGame)。
+- Redis 读数(踢线之后):
+  - 改派目标在**另一个节点**(凭标记铸造,回滚再前进一格):`GET player:{P}:owner_epoch` = `E+2`;`GET player:{P}:handoff` = `"E+2:<派发时的 ms>"`(scene_manager 转写的,不是补写时刻);location 指回源节点源场景并带 `rollback_receipt`。
+  - 改派目标在**同一节点的另一个频道**(不铸造,按原字节回滚):`owner_epoch` = `E`;`handoff` = `"E:<ms>"`。
+  - 两种情况凭证判定都是 `keep_existing`(已有同代标记,不重复写),**没有** `site=relocate_refresh` 的写标记日志。
+- 客户端 / robot:收到 tip 3023 + 踢线 34(robot 日志里是一条 `kicked by server`,`robot/logic/handler/handlers.go`;Unity 客户端按 3023 显示原因),回选服。`docker unpause kafka` 后重登成功,**不出现 18**,scene_manager 没有 `[Handoff]` 暂拒日志。
+- **未命中判据**:应答是 `code=7` 但 scene 结清为 `resolved … outcome=moved_elsewhere`(不踢)—— 这是 Kafka"报错但其实已投递":目标节点已消费标记(它的日志里有 `[ExitRelease][InheritClear] … result=inherit_deleted_older`),scene_manager 的回滚回 `marker_gone`,玩家其实已被放行。结局自洽,记"未命中",不算失败(与场景 B3c 同源)。
+- **通过标准**:被拒的玩家在收到应答后 1–2s 内被踢回选服;重登不被 18 挡;`kick_verified` +1、`push_sent` +1、`credential_keep_existing` +1。
+
+**V2b —— dev 旁路下跳过凭证补写(可选;基于 V3,不是 V2)**
+
+- **前置**:scene 进程**启动前**设环境变量 `SCENE_DEV_UNSAFE_CROSS_NODE_HANDOFF=1`(进程内只读一次;第一次用到开关时打一行 `[ExitRelease] SCENE_DEV_UNSAFE_CROSS_NODE_HANDOFF=1 -> on`)。scene_manager 的 yaml 不用动。
+- **注入**:照 V3 做;scene 日志出现 `[RelocateConfirm] waiting for settle player=<P>` 之后、到点之前(约 15s 的窗口)执行 `docker exec redis redis-cli DEL "player:${P}:handoff"`(写法同 §2.1;文中的 `{P}` 是占位符,真实的键没有花括号,照抄带花括号的键删不到东西,结果会变成 `keep_existing`)。
+- **期望**:settle 到点后 `kick … outcome=kick_verified … credential=skip_dev_bypass`;**没有** `site=relocate_refresh` 的写标记日志;`GET player:{P}:handoff` 为空。
+- 为什么不能照 V2 做(事先 DEL 再被拒):票据被消费时会重新条件写 `"E:ms"`,scene_manager 的回滚还会把它转写成 `"E+2:ms"`;核实读到同代标记,而"已有同代标记"的判定排在"dev 旁路"之前,结果必是 `keep_existing`。
+- 窗口里来不及删、或 scene_manager 杀得太晚(改派已被处理)时记 SKIP,不要改断言。
+
+**V3 —— 传输失败(结果未知):等到 settle 才核实**
+
+- **注入**:执行 V1 的排空之后**立刻** K-SM 硬杀 scene_manager(§3.2),让改派的 EnterScene 以传输失败收场。能造出来就做,造不出来记 SKIP。
+- **期望**(源 scene):
+  - `[RelocateConfirm] transport failure player=<P> seq=<n> corr=<c> (<reason>); outcome unknown, verifying after settle`(WARN);
+  - `[RelocateConfirm] waiting for settle player=<P> seq=<n> evidence=transport_failed verdict=unread settle_in_ms=<≤15000>`;
+  - 发送后约 15s:`verify … evidence=transport_failed` → `kick … outcome=kick_verified push=sent credential=keep_existing …`(scene_manager 没来得及处理时 location 没变、标记还是改派写的那一份)。
+- **另一种命中**:scene 已把 scene_manager 从注册表摘空,改派根本没发出去 —— `[EmergencyRelocate] no SceneManager node reachable; player <P> was not re-homed, will verify and kick` → `verify … evidence=not_sent` → 立即 `kick … outcome=kick_verified`。两种都算命中,记下是哪一种。按本步的做法它基本造不出来:排空要靠活着的 scene_manager 触发,改派在毫秒级就发出去了,而注册表要等 etcd 租约到期(本地 `LeaseTTL: 60`)才摘。它只在整节点疏散、或 K-SM 60s 之后直连节点 gRPC(`scene_node.SceneNodeGrpc/DestroyScene`)触发排空时出现。
+- **不再期望** 30s 的 `evidence=no_reply`:每次调用都有 10s deadline,完成通知正常一定在 deadline 内到;`no_reply` 只兜"完成通知永远不来"。
+- **通过标准**:玩家在约 15s(或立即)被踢回选服;scene_manager 拉起后重登成功。
+
+**V4 —— 停机 drain 等待确认表**
+
+- **注入**(基于 V3,**Kafka 保持可用**;刚做过 V2 的话先 `docker unpause kafka`):做一次 V1 的排空后立刻 K-SM;源 scene 日志出现 `[RelocateConfirm] waiting for settle player=<P>` 之后,对源 scene 节点发 SIGTERM(真 Ctrl+C / `taskkill` 不带 `/F`)。
+- **期望**:存盘与 Kafka 都收敛、表里还有条目时,先打一次 `[RelocateConfirm] backlog site=shutdown_drain total=<n> mark_writing=… awaiting_reply=… verifying=… landing=…`(WARN)+ 每条一行 `[RelocateConfirm] backlog entry player=<P> …`(INFO)。清单是在 drain **第一次只剩待确认表**的那一刻打的,不是看门狗到期时才打,所以下面两种结局之前都会先看到它。之后二选一,都如实记录:
+  - settle 到点 → `verify` → `kick`,`Shutdown drain progress: … relocate_confirms=0` → `Shutdown persistence barrier complete`;
+  - 条目没等到 → `Before-shutdown drain budget exceeded; continuing with work still in flight`(ERROR),条目被放弃、**不踢**。停机**当刻**才登记、证据是传输失败或还有请求结局未定的条目,至少要活到 settle(15s),而 drain 看门狗也是 15s,多半落在这一种(§6 的 RC-5)。这是预期,不算失败。
+- **不要在 Kafka 暂停时做本步**(即不要照 V2 的注入):退出存盘的 DBTask 经 scene 的 Kafka 生产端发送,broker 暂停期间留在本地队列(默认最长 5 分钟),`Shutdown drain progress` 里的 `kafka_messages` 一直非 0,谓词永不成立 —— 既没有 `Shutdown persistence barrier complete`,也没有 backlog 清单,只有 `Before-shutdown drain budget exceeded`。那测的是 Kafka,不是待确认表。同理,看门狗到期的那一刻若还有别的未收敛项(例如 Redis 故障下未落地的存盘,`redis_player_saves` 非 0),清单一次都不会打,被放弃的条目只剩 30s 汇总行。
+- 身份冲突疏散走两道看门狗:冲突 drain 到期时打一条 `Conflict drain budget exceeded; shutting down with work still in flight`,随后 Node 走 Shutdown,被放下的条目在停机谓词下再等一道 15s(settle 落在这个窗口里的会被读到并踢线,也可能出现 `backlog site=shutdown_drain`)。所以 scene_manager 不可达时,失去身份的节点最长约 30s 才退出。本文没有身份冲突的注入手法,这一条只供判读。
+- **通过标准**:节点在看门狗时限内退出;没有崩溃、没有 assert;drain 只剩待确认表时,被放弃的条目都能在 backlog 清单里查到。
+
+**V5 —— 回归**
+
+- robot `login-test` 23/23;双 zone `travel_smoke` 仍输出 `TRAVEL_SMOKE_OK`,期间 `[RelocateConfirm]` 汇总行不出现任何 `kick_*` 增量;场景 Z、R 的期望不变。
+- 合服窗口(若环境里开着合服围栏):排空的玩家会被 21(`ErrHomeZoneMerging`)拒、随后核实并踢线,重登仍被拒到围栏撤掉。行为正确,记录即可。
+
+**失败时保留**:scene 与 scene_manager 日志中 `[SceneDrain]` / `[EmergencyRelocate]` / `[RelocateConfirm]` / `[ExitRelease]` 相关行及前后 20 行;同一时段的 `SceneManager.EnterScene error` 行;robot 输出;V2 / V3 的 `redis-cli` 读数(`owner_epoch` / `location` / `handoff` 三个键)。不要连续重试,不要改断言;没跑完的步骤如实写"未验证"。
+
+---
+
 ## 5. 全局不变量(每个场景都要核)
 
 1. **无双主**:所有 scene 进程日志里**没有** `HandlePlayerSaveRejected: owner_epoch CAS rejected save`,**没有** `[OwnerEpoch]` 行;两个 zone 的 db `db_stale_owner_write_rejected_total` 增量为 0,无 `STALE-OWNER-WRITE rejected`。唯一例外见场景 E 末尾的僵尸情形。*(v2.6,GO-2 的已登记残余,本文的注入不应触发:**不凭标记**的铸造 —— 首次落点、第二条腿、死节点接管 —— 遇到 Kafka"报错但其实已投递"时没有令牌可互斥,幽灵目标节点可能在回滚之前建出实体并存一次盘,回滚之后它的存盘被 CAS 拒、实体自毁,此时这两项非 0 属预期;B3 系列注入的是凭标记的第一条腿 / 同 zone 交接,走不到这一支。见 §6 GR-6;同类的还有 GR-9 —— 不凭标记的铸造被回滚时 epoch 同样前进一格,手里缓存着旧值的被保留实体 / 活僵尸随后会被 CAS 拒。)*
@@ -944,6 +1066,27 @@ Z1 = 真写盘的正常断线退出不销毁实体(僵尸)。**必须先用修�
 | G9 | scene 选 scene_manager 不按 zone 过滤(`node_utils.cpp:15-35`),双 zone 下第一条腿落在哪个 SM 上不确定,日志与指标要两边找;K-SM 因此只能"全杀" |
 | G10 | 客户端侧(Unity `DevAutoPilot -travelZone / -travelScene / -quitOnTravelEnd`,设计文档 §11.1)本文**未核对**(服务端任务不读客户端仓)。*v2.5:Unity 的"已受理交接"预算是 75s(服务端 `travel_freeze_cap.h` `kClientAcceptedHandoffBudget` 镜像它),长于 robot 的 60s,场景 H 因此只能用 Unity 做;robot 要覆盖上限分支需另案加 ≥75s 的可配置预算* |
 
+**CPP-3(疏散 / 排空改派的待确认表)的已知缺口**(设计残余,都只伤活性:不丢数据、不出双主;不计入通过,出现时如实记录):
+
+| # | 缺口 | 现象 | 对应场景 |
+|---|---|---|---|
+| RC-1 | scene_manager 比 settle 窗口(15s)还慢:回滚 EVAL 在 go-redis 重试下变慢,或请求在客户端通道里排队到 deadline 前一刻才被收到 | 误踢一次,location 停在目标上;重登即恢复 | V2 / V3 |
+| RC-2 | 放行到别处、但路由丢了 | 不踢(本项只管"没放行"的会话);玩家挂着,靠 gate 侧 CPP-2 或自己重登 | — |
+| RC-3 | 放行后又被一次新落点放回源场景、进场路由还在路上,恰好在 settle 那一刻核实 | 核实只看 zone / node / scene,分不出"没变",误踢一次 | — |
+| RC-4 | 被拒码是 7 / 19 / 3 或未知码(可能已写过落点),随后本节点又连续 10s 读不到 Redis | `resolved … outcome=gave_up_unverified`(ERROR),**不踢**,会话可能继续挂着直到玩家自己重登。典型:Kafka 故障叠加 scene 到 Redis 的分区 | V2 × F |
+| RC-5 | 停机**当刻**才登记、证据是传输失败或还有请求结局未定的条目 | settle 下限 15s 与 drain 看门狗相等,等不到第一次读,被看门狗放弃、不踢。身份冲突疏散串联了两道看门狗,**第一轮**改派的条目多数能等到;被同会话进场留下票据、到停机阶段才改派的玩家,条目是在第二道窗口开头才登记的,同样等不到。停机时若看门狗到期那一刻还有别的未收敛项(Kafka 队列 / 未落地存盘),逐条积压清单不会打 | V4 |
+| RC-6 | 带票据的退出实体在退出收敛前被按"废黜"销毁(整节点疏散中,同会话进场留下的票据随后撞上"废黜实体后重载"也算)| 不改派、不踢,只有 `ticket_dropped_deposed` 与一条 WARN | — |
+| RC-7 | `PlayerEnterGameNode` 没有 owner_epoch 栅栏 | 陈旧路由带着别的会话到达,会把条目误结成 `superseded`,玩家不被踢 | — |
+| RC-8 | `landed_here` 不保证进了场景 | 目标场景在路由到达前被销毁时,玩家只收到 3023、不被踢、不在任何场景里,而条目记成 `landed_here`(进场链的既有缺口)| V1 |
+| RC-9 | 普通换图传输失败后一个 settle 窗口内被排空 | "更早请求可能被放行"漏报(在途组件已被摘掉):改派被瞬时拒绝就立即踢,那条换图随后才被放行,location 停在目标上而没有实体;重登即恢复 | — |
+| RC-10 | 踢线只推一次:整节点疏散时 gate 多半已摘掉本节点;单场景排空时 scene 与 gate 的连接恰好在重连;票据没有 gate 实例号时改派必被 5 拒 | 踢线推不出去,`kick … push=gate_gone` / `gate_replaced`(ERROR),条目已结清、不再重推,客户端仍卡着 | V2 / V4 |
+| RC-11 | 合服窗口里被排空的玩家 | 被 21(`ErrHomeZoneMerging`)拒后踢线,重登仍被拒到围栏撤掉。行为正确,体验差 | V5 |
+| RC-12 | dev 旁路的"跳过凭证补写"在默认本地栈里不生效(scene_manager 旁路开着、C++ 侧开关默认关)| 仅开发环境:核实读完到补写落地之间若发生一次不铸造的跨节点落点,目标节点上的活持有者会拿到一份有效标记。生产口径(旁路关)不受影响 | V2b |
+| RC-13 | 落回本节点后,实体建出又在下一个 1s 节拍之前被销毁 | 被当成"载入被放弃"去核实,读到仍指向本节点就踢。销毁原因是客户端断线时无害(踢的是死会话);dev 旁路下 scene_manager 先发 ReleasePlayer、后写落点时,可能踢到一条正在合法换图的活会话。只影响 dev 旁路 | — |
+| RC-14 | 上一次改派的条目已按 `landed_here` 结清(实体建出后 1s 之内)之后又被排空,而它自己的请求其实还在 scene_manager 排队(漏报窗口 = 结清之后直到那条请求的 settle,最长约 15s)| 与 RC-9 同性质:新的改派被瞬时拒绝就立即踢,那条旧请求随后才被放行。条目尚未结清时已由代码兜住(登记时带上"更早请求可能被放行")| — |
+| RC-15 | 核实脚本与交接链上其它多键脚本一样不支持 Redis Cluster(`player:<id>:*` 三个键没有哈希标签)| 上 Cluster 后 EVAL 被 CROSSSLOT 拒绝,所有核实落到"读不到"。当前部署不是 Cluster | — |
+| RC-16 | 整节点疏散中,三类落在将死节点上的玩家手里没有票据:进场被废黜销毁后重载的;票据已派发、scene_manager 又把他放回本节点、条目按 `landed_here` 结清的;疏散开始后才被路由到本节点的新进场 | 节点最后退出时既不改派也不踢,客户端挂着直到自己重登(CPP-3 之前就有,不是本项引入;疏散只发一轮票)。同会话进场取消退出的那一类已由"疏散中保留票据"兜住 | — |
+
 ---
 
 ## 7. 结果记录
@@ -955,7 +1098,7 @@ Z1 = 真写盘的正常断线退出不销毁实体(僵尸)。**必须先用修�
 
 Operator: <name>      Build: <commit-sha>      Env: local dual-zone / k8s
 AllowUnsafeCrossNodeHandoff: false(已核对日志无 "[Handoff] dev 旁路")
-Runbook 版本: v2.6(首跑 = 校准轮;与实际不符处已回改 runbook:是 / 否,改了哪些)
+Runbook 版本: v2.7(首跑 = 校准轮;与实际不符处已回改 runbook:是 / 否,改了哪些)
 全栈同一批二进制(GO-2 之后):是 / 否(scene 的 [TravelHandoff] 行末尾有 rolled_back_adopted=;scene_manager 两个 zone 都已换新)
 
 | 场景 | 结果 | 备注(实际现象、耗时、与 runbook 不符处) |
@@ -994,6 +1137,12 @@ Runbook 版本: v2.6(首跑 = 校准轮;与实际不符处已回改 runbook:是 
 | H2 晚发闸 enter_scene 阶段 | PASS / FAIL / SKIP(没走快路径)| `frozen_ms`;是否出现 `requested EnterScene`(应无);`dispatch_window_closed` / `mark_sent_destroyed` 增量 |
 | SE gate 转发补发放弃 | PASS / FAIL / 未命中(login 直接推 3023)| `attempts` / `elapsed_ms` / `last_failure`;客户端回选服的时刻(约 20s 还是 60s);顺带记 G7 走的是哪一种 |
 | SE2 握手竞态补发 | 命中 / 未命中 | `forward recovered` 的 `last_failure`;新节点有无 `RpcSession not found for gate` |
+| V1 改派生效(基线) | PASS / FAIL | 结局是 `granted` 还是 `landed_here`;玩家是否断线(不应断) |
+| V2 改派被拒后踢线 | PASS / FAIL / 未命中(`marker_gone`,实际已放行) | 收到应答到踢线的间隔;`credential=` 取值;踢线后三个键的读数;重登有无 18 |
+| V2b dev 旁路跳过补写(可选) | PASS / FAIL / SKIP | `credential=skip_dev_bypass`;`handoff` 是否为空 |
+| V3 传输失败后等 settle | PASS / FAIL / SKIP;命中的是 `transport_failed` 还是 `not_sent` | 发送到踢线的间隔(约 15s 或立即) |
+| V4 停机 drain | backlog 后归零退出 / backlog 后看门狗到期 | `relocate_confirms` 的变化;backlog 清单条数;`kafka_messages` / `redis_player_saves` 是否收敛(不收敛时没有清单,记 SKIP 并说明) |
+| V5 回归 | PASS / FAIL | login-test 与 travel_smoke 结果;汇总行有无 `kick_*` 增量 |
 | 全局不变量 1–9 | 全部成立 / 第 N 条不成立 | |
 ```
 
@@ -1041,6 +1190,12 @@ Go 侧的两条(`DbStaleOwnerWriteRejected`、`DbOwnerEpochLegacyZero`)是可部
 
 ## Changelog
 
+- **2026-10-09 v2.7**(CPP-3 疏散 / 排空改派的待确认表;**静态编写、未实跑**,代码未编译):
+  - **新增场景 V**(V0 前置 / V1 基线 / V2 被拒后踢线 / V2b dev 旁路跳过补写 / V3 传输失败后等 settle / V4 停机 drain / V5 回归)。期望按 GO-2 之后的回滚语义写:凭标记铸造的改派被回滚后 owner_epoch 是 E+2、标记被 scene_manager 转写成 `"E+2:<ms>"`,所以踢线前的凭证判定是 `keep_existing`,不是补写。
+  - **观测点**:§2.3 新增 `[RelocateConfirm]` 30s 汇总行与读法;§2.4 新增「疏散 / 排空改派的待确认表」日志表(含取值名表、语义有变的既有日志);`Shutdown drain progress` 行末尾多了 `relocate_confirms`。
+  - **§6** 新增缺口 RC-1 – RC-16;**§7** 结果表新增 V1 – V5 六行。
+  - **同步旧条目**:§2.1 `handoff` 键的写入方补 A2′ 放弃补写与改派凭证兜底补写;§2.4 GO-2 表"疏散条件写"一行与"GO-2 专属验收点"第 6 条的 CPP-3 状态句(v2.6 记的"落地后要再修订"至此销账)。
+  - 日志原文与计数名逐条对过 `player_lifecycle.{h,cpp}` / `relocate_confirm.h` / `cpp/nodes/scene/main.cpp`。
 - **2026-10-08 v2.6**(GO-2 落码完成后的复核与 B3 重写;**静态编写、未实跑**。2026-10-01 起稿 —— 随 `567333aaf` / `6ebe88664a` / `27941e9274` / `6af8b876af` / `c3ef832129` 进库(按时间序;改动量最大的是 `6af8b876af`,B3a / B3b 的正文与 §3.3 的 GO-2 基线一条是它带进来的)—— 当次撰写中途中断:状态栏、§1–§2 的观测点、B3a / B3b / B3c、H1c、§5、§6 的 GR-1–GR-8 已经写了,§7 结果表与本条变更记录没写,场景 H2 的标题行被截坏。10-08 按当前 HEAD(本地 main 当日已与远端合并:`3b93efd539` / `f8175c5bea`)逐条复核后补完。所依据的 GO-2 代码全部在 main:`ccafe300c`(两份 proto 源 + Go)、`907a6b752` / `a8c2d44a8`(C++)、`80a1b0823`(两个 proto 字段的窄面 regen)、`6b7a59287` / `567333aaf`(三视角审查后的修正)—— **均未编译、未测试,待 Codex 验证**。本版引用的每条日志原文、计数名、outcome 标签、site 名,都在 10-08 的工作树上对着 `player_lifecycle.{h,cpp}` / `travel_freeze_cap.h` / `owner_epoch.go` / `enterscenelogic.go` / `metrics.go` / `scene-manager-alerts.yaml` grep 核对过;注入时序与期望现象仍是从代码推出来的)。
   - **B3 重写**(原"Kafka pause + 回滚注入 Redis 错误";v2.5 修订里"HEAD 上记 SKIP"的口径作废):开头用一张表按"回滚实际执行了 / 回滚没执行 / 回滚迟到、所凭标记已不在"三种结局对齐 scene_manager、Redis、源 scene、客户端四处的现象;拆成 **B3a**(回滚执行了 → 源端凭回执采纳解冻,判定表 B5;同 zone 变体写成完整步骤,并注明设计文档 §13.7 的验收口径要求同 zone 与跨 zone 两种都过)、**B3b**(Redis 拒掉回滚 EVAL → 已放行销毁 + 踢线;写明源端取证也是 EVAL,ACL 必须在回滚失败后尽快恢复,旧步骤"ACL 留到 `[ClientReset]` 出现"在 HEAD 二进制上等不到)、**B3c**(unpause 之后的迟到投递,四种可接受结局与"不可接受"清单;补注"目标先载入"那一支手工几乎撞不到、由 Go 单测覆盖)、**B3d**(10-08 新增:Kafka 暂停时让玩家在写超时之前断线,退出优先先撤回标记 → 回滚 `marker_gone`、一个字节不动;可稳定注入)。"共同前置"写明全栈同一批二进制、单测先于场景(gofmt → go vet / go test → cross_zone_test)、Redis 旁路采样。与设计文档 §13.7 验证清单第 8 步各项的对应关系写在 B3 开头(定稿规格里的 B4a / B4b / B5 编号不沿用)。
   - **GO-2 专属验收点**(B3 末尾,7 条):B5 采纳(`[ZoneTravel][RollbackAdopt] … adopting and unfreezing`、`rolled_back_adopted` +1、采纳后 owner_epoch 比请求前多 2、location 带 `rollback_receipt`、转写标记已被取证脚本删掉、强制存盘、db 记 `advance`);B6 `rollback_receipt_anomaly` 恒 0 及其"收口后没有可当 A1′ 用的标记"的例外;B7 `returned_after_grant` 三种来源的判读;告警表达式已并入 `plan_error`;取证被拒不解冻(指向 H1c);疏散改派不覆盖转写标记(尽力而为);`marker_gone` 时回滚一个字节不动(10-08 新增,指向 B3d)。末尾补验收口径。
