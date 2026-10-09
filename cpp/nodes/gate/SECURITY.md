@@ -128,7 +128,7 @@ scene 的节点号即可。
 
 ## 3. GM 客户端指令闸 —— `GATE_RUN_MODE` / `SCENE_RUN_MODE`(默认关闭)
 
-有六条 **GM 指令挂在客户端协议服务上**,也就是说它们和 `GetBag`、`MoveStart`
+有七条 **GM 指令挂在客户端协议服务上**,也就是说它们和 `GetBag`、`MoveStart`
 走的是同一条路径、同一个端口、同一份会话:
 
 | message_id | RPC | 被滥用的后果 |
@@ -138,14 +138,20 @@ scene 的节点号即可。
 | 94 / 95 | `SceneCurrencyClientPlayer.GmBlock/UnblockCurrency` | 自己解除货币封禁 |
 | 175 | `SceneAttributeClientPlayer.GmSetPlayerLevel` | 一秒满级(上限 85) |
 | 187 | `ScenePetClientPlayer.GmGrantPet` | 自己发任意宝宝 |
+| 待 proto-gen 发号(见 `proto/message_id.txt` 的 `SceneBagClientPlayerGmGrantItem`) | `SceneBagClientPlayer.GmGrantItem` | 自己发任意物品 / 装备(单次至多 99 个;装备照常掷随机属性) |
 
-在收口之前,这六条**没有任何鉴权** —— 会话过了令牌校验之后,普通玩家发一个包就能
+前六条在 2026-09-18 收口之前**没有任何鉴权** —— 会话过了令牌校验之后,普通玩家发一个包就能
 执行。聚宝斋要用人民币寄售(`docs/design/jubaozhai-market.md` §12 P0-a),这条口子
-等于把印钞机接到交易所上,是上线阻塞级漏洞。
+等于把印钞机接到交易所上,是上线阻塞级漏洞。第七条 `GmGrantItem`(2026-10-07,
+`docs/design/equipment-attributes.md` §4.6)落地时就登记在闸内,从未裸奔过。
+
+**这道闸是「prod 关闭」,不是鉴权。** 它只回答"这个环境开不开 GM 指令",不回答"这个人有没有
+资格用":`dev` / `test` 下,任何过了会话校验的客户端都能调这七条。所以它们只能出现在
+本机与测试环境;要在线上给玩家发东西,走下面"运维须知"里那条带签名与审计的运维面。
 
 ### 现在的行为
 
-| `GATE_RUN_MODE` | 客户端发 37/49/94/95/175/187 |
+| `GATE_RUN_MODE` | 客户端发这七条(37/49/94/95/175/187 与 `GmGrantItem`) |
 | --- | --- |
 | 不设置(默认)/ `prod` / 拼错的值 | **拒绝**:回 `kFeatureUnavailable` tip,计一次非法包(阈值 `GATE_ILLEGAL_PACKET_THRESHOLD` 默认 50 才踢线),gate 打一条 `GM client message refused` WARN |
 | `dev` / `test` | 放行(本地联调与 robot 冒烟) |

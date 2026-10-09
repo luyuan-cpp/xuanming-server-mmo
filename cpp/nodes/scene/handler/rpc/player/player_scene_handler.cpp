@@ -157,6 +157,13 @@ void SceneSceneClientPlayerHandler::EnterScene(entt::entity player,const ::Enter
 	req.set_gate_instance_id(gateInstanceId);
 	req.set_gate_zone_id(GetZoneId());
 	req.set_zone_id(GetZoneId());
+	// client_channel_pick = "这个 scene_id 是玩家自己点选的"。scene_manager 据此对大世界分线做
+	// 回收中 / 人数上限 / 冷却校验(docs/design/world-channel-switch.md §4.4);目标不是分线
+	// (按 id 进副本 / 镜像)时它不产生任何效果。
+	// 只有本 handler 置位:队伍跟随等服务器代发的请求不经过这里,所以不带它,不受上限与冷却约束。
+	// 跨节点交接的重发是重新构造的请求,同样不带它 —— 有意如此:预检只在第一跳做,重发直接放行,
+	// 否则第一跳记下的冷却会把重发自己挡住。
+	req.set_client_channel_pick(scene_info.scene_id() > 0);
 
 	// RequestSceneChange 在发送之前把"这次要去哪"与关联号记进单槽在途记录,再经统一出口带号发出。
 	// 目标场景若在别的节点,生产配置下 scene_manager 会先以 18 暂拒(它要求源 scene 先存盘并出示标记),
@@ -185,23 +192,10 @@ void SceneSceneClientPlayerHandler::SceneInfoC2S(entt::entity player,const ::Sce
 	::Empty* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
-	auto* sceneEntityComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
-	if (!sceneEntityComp || sceneEntityComp->sceneEntity == entt::null)
-	{
-		LOG_WARN << "SceneInfoC2S: Player not in any scene";
-		return;
-	}
-
-	const auto* sceneInfo = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(sceneEntityComp->sceneEntity);
-	if (!sceneInfo)
-	{
-		LOG_WARN << "SceneInfoC2S: Scene info not found for player's scene entity";
-		return;
-	}
-
-	SceneInfoS2C message;
-	message.add_scene_info()->CopyFrom(*sceneInfo);
-	SendMessageToClientViaGate(SceneSceneClientPlayerNotifySceneInfoMessageId, message, player);
+	// handler 只委托:取当前场景信息、(大世界线上)异步读分线目录、推 NotifySceneInfo(31)都在系统层
+	// (docs/design/world-channel-switch.md §5)。本方法的应答类型是 Empty,数据走那条推送。
+	// 分线目录只在请求显式要的时候才读、才带:不带 with_channel_directory 的请求开销与改动前相同。
+	PlayerSceneSystem::SendSceneInfo(player, request->with_channel_directory());
 ///<<< END WRITING YOUR CODE
 
 }

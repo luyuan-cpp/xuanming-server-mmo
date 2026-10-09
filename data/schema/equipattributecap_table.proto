@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+// EquipAttributeCap 表的权威 schema。源表 data/EquipAttributeCap.xlsx。
+// 设计:docs/design/equipment-attributes.md §2.2。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 装备随机属性的取值区间,按「属性 × 装备等级档」给。掷值 = [min_value, cap] 均匀整数。
+// 上限不入库:显示与校验时按 (attr_id, 装备等级) 现查,所以改表立即对存量装备生效。
+// 一个属性在某件装备上的档 = level <= 装备等级 的最大那一行;一行都不满足 = 该属性在这件装备上不可用。
+// 源表由 tools/scripts/equip_xlsx_patch.py new-tables 生成;schema 与 xlsx 必须成对提交。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message EquipAttributeCapTable {
+  option (cfg_sheet)       = "EquipAttributeCap";
+  option (cfg_source_file) = "EquipAttributeCap.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 行号 = attr_id * 1000 + level
+  uint32 id = 1;
+  // 属性。FK -> EquipAttribute.id
+  uint32 attr_id = 2 [(cfg_fk) = "EquipAttribute", (cfg_index) = true];
+  // 等级档起点(含):取 level <= 装备等级 的最大档
+  uint32 level = 3;
+  // 掷值下限(>= 1)
+  uint32 min_value = 4;
+  // 上限,即 tooltip 的「/上限值」
+  uint32 cap = 5;
+}

@@ -145,6 +145,33 @@ WorldChannelCountByConfId:
 #   2: 2   # major hub
 #   # 16: 1  # any id not listed uses WorldChannelCount (implicit)
 
+# --- 玩家主动切线(docs/design/world-channel-switch.md §4.5) -----------------------
+#
+# 整块可以不写:下面每个键缺省(或写 0)都取括号里的默认值,所以这里全部保持注释状态。
+# 取消注释时注意 ChannelSwitch: 这一行也要放开。K8s ConfigMap 目前不带这个块,同样走默认值。
+#
+#   Disabled                 (false) true = 关闭玩家主动切线:线路列表照常下发但整面板置灰,
+#                                    带 client_channel_pick 的选线请求一律被拒。自动选线、队伍跟随、
+#                                    按 id 进副本不受影响。
+#   CooldownSeconds          (10)    两次主动切线的最小间隔(秒)。负数 = 不设冷却。
+#   MaxPlayersPerChannel     (0)     玩家主动选线的每线人数上限(软上限,只拦主动选线)。
+#                                    0 = 跟随 WorldAutoscale.ScaleOutPlayerThreshold;那边也没配时取 2000。
+#   BusyPercent              (60)    人数达到上限的这个百分比时线路列表显示「繁忙」,钳到 1..100。
+#   DirectoryRefreshSeconds  (2)     线路列表(分线目录)的发布周期(秒),只有领导者发布。
+#                                    负数 = 不发布(客户端拿不到线路列表,等于关掉列线)。
+#
+# 本地想让两个客户端碰面:上面 WorldChannelCountByConfId 给 1 号图开了 16 条线,自动选线又总是挑
+# 人最少的那条,先后登录的两个号必然落在不同的线上、互相看不见。登录后点右上角的「N线」角标
+# (快捷键 L),在线路面板里把两个号切到同一条线即可。不要为此改上面的 "1": 16 —— 配置只是种子,
+# 线数的权威在 Redis(world_channels:desired:zone:{zone}),改 yaml 不会让已有的线消失。
+#
+# ChannelSwitch:
+#   Disabled: false
+#   CooldownSeconds: 10
+#   MaxPlayersPerChannel: 0
+#   BusyPercent: 60
+#   DirectoryRefreshSeconds: 2
+
 # --- Node role routing --------------------------------------------------------
 #
 # StrictNodeTypeSeparation:

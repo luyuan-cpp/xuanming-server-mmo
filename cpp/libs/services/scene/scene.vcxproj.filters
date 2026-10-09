@@ -48,6 +48,8 @@
     <ClInclude Include="player\system\pet_rules.h" />
     <ClInclude Include="player\system\player_pet.h" />
     <ClInclude Include="player\system\attribute_allocation_rules.h" />
+    <ClInclude Include="player\system\equip_attribute_rules.h" />
+    <ClInclude Include="player\system\player_equip.h" />
     <ClInclude Include="player\system\player_level_rules.h" />
     <ClInclude Include="player\system\player_tip.h" />
     <ClInclude Include="player\system\stress_test_probe.h" />
@@ -105,6 +107,7 @@
     <ClCompile Include="player\system\player_skill.cpp" />
     <ClCompile Include="player\system\player_attribute.cpp" />
     <ClCompile Include="player\system\player_pet.cpp" />
+    <ClCompile Include="player\system\player_equip.cpp" />
     <ClCompile Include="player\system\player_tip.cpp" />
     <ClCompile Include="spatial\system\aoi.cpp" />
     <ClCompile Include="spatial\system\grid.cpp" />

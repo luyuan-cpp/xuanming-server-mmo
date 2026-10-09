@@ -117,13 +117,16 @@ var (
 	// (home_zone.go),对其余 reason 是目标 zone。
 	// home_zone_merging = 归属 zone 正处于合服围栏内(player-storage-placement.md §8.2 / §12 A16),
 	// 只应在合服窗口里非 0;窗口外持续非 0 = merge:in_progress:{home} 围栏键残留。
+	// channel_* 五种 = 玩家主动选线的预检拒绝(internal/logic/channel_pick.go,world-channel-switch.md §4.4),
+	// 只有带 client_channel_pick 的请求会发出,zone_id 是目标 zone。它们是玩家操作触发的业务拒绝,
+	// 有稳定的低速率属正常(channel_switch_cooldown / channel_full 尤其如此),不要按「> 0」告警。
 	enterSceneRejectedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "enter_scene_rejected_total",
-		// reason 取值必须与 enterscenelogic.go / home_zone.go 里实际传入的字面量一致;
+		// reason 取值必须与 enterscenelogic.go / home_zone.go / channel_pick.go 里实际传入的字面量一致;
 		// 旧的 unsafe_handoff / handoff_pending 已无调用点(换手门拒绝细分成了
 		// no_marker / stale_marker / withdrawn 三种),按旧名配的告警会恒为空而不报错。
-		Help: "EnterScene rejections by reason (handoff_pending_no_marker|handoff_pending_stale_marker|handoff_pending_withdrawn|epoch_conflict|home_zone_unavailable|home_zone_unmapped_travel|home_zone_merging|travel_map_unavailable|pending_map_fallback|scene_gone).",
+		Help: "EnterScene rejections by reason (handoff_pending_no_marker|handoff_pending_stale_marker|handoff_pending_withdrawn|epoch_conflict|home_zone_unavailable|home_zone_unmapped_travel|home_zone_merging|travel_map_unavailable|pending_map_fallback|scene_gone|channel_closing|channel_conf_mismatch|channel_switch_disabled|channel_full|channel_switch_cooldown).",
 	}, []string{"zone_id", "reason"})
 
 	// homeZoneLookupTotal 统计 EnterScene 里每一次归属 zone 查询的结果:
@@ -332,6 +335,21 @@ var (
 		Help:      "Dead scene nodes kept in the load set because writing death_at or the load-set ZREM failed, by outcome (deferred|recovered|expired|abandoned|dropped).",
 	}, []string{"zone_id", "outcome"})
 
+	// worldChannelDirectoryPublishTotal:分线目录发布循环(internal/logic/world_channel_directory.go,
+	// world-channel-switch.md §4.3)对**每张大世界地图、每一轮**的结果。只有领导者会发出。
+	// outcome 取 ChannelDirectoryPublish* 常量:
+	//   ok     目录已写进 Redis
+	//   empty  这张图在该 zone 一条在役 / 回收中的线都没有,本轮不发布(旧目录自然过期)
+	//   error  读线集合 / 分配线号 / 读节点映射 / 写目录失败,本轮不发布
+	// 读数:ok 的速率 ≈ 地图数 ÷ 发布周期;ok 掉到 0 而领导者在位 = 发布停摆,客户端的线路列表
+	// 会在一个目录 TTL 后变成「暂不可用」。error 持续非 0 多半是 Redis 故障。
+	// 只按 zone 与 outcome 分;地图 id、scene_id、线号都不进 label。
+	worldChannelDirectoryPublishTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "world_channel_directory_publish_total",
+		Help:      "World channel directory publish attempts (one per world map per round) by outcome (ok|empty|error).",
+	}, []string{"zone_id", "outcome"})
+
 	registerOnce sync.Once
 )
 
@@ -366,8 +384,25 @@ func register() {
 			enterSceneOwnerDeadTakeoverTotal,
 			homeZoneLookupTotal,
 			nodeDetachDeferredTotal,
+			worldChannelDirectoryPublishTotal,
 		)
 	})
+}
+
+// world_channel_directory_publish_total 的 outcome 标签取值。**必须是常量**:它们直接变成 Prometheus label。
+const (
+	ChannelDirectoryPublishOK    = "ok"
+	ChannelDirectoryPublishEmpty = "empty"
+	ChannelDirectoryPublishError = "error"
+)
+
+// ObserveWorldChannelDirectoryPublish 记一次「对一张图发布分线目录」的结果,outcome 取
+// ChannelDirectoryPublish*,含义见 worldChannelDirectoryPublishTotal 的注释。
+func ObserveWorldChannelDirectoryPublish(zoneID uint32, outcome string) {
+	register()
+	worldChannelDirectoryPublishTotal.WithLabelValues(
+		strconv.FormatUint(uint64(zoneID), 10), outcome,
+	).Inc()
 }
 
 // node_detach_deferred_total 的 outcome 标签取值。**必须是常量**:它们直接变成 Prometheus label。
@@ -560,8 +595,9 @@ func ObserveInstanceDestroyed(zoneID uint32, kind, reason string) {
 // 现有取值与 enterSceneRejectedTotal 的 Help 一致:handoff_pending_no_marker /
 // handoff_pending_stale_marker / handoff_pending_withdrawn / epoch_conflict /
 // home_zone_unavailable / home_zone_unmapped_travel / travel_map_unavailable /
-// pending_map_fallback / scene_gone
-// (发射点:internal/logic/enterscenelogic.go、home_zone.go)。
+// pending_map_fallback / scene_gone /
+// channel_closing / channel_conf_mismatch / channel_switch_disabled / channel_full / channel_switch_cooldown
+// (发射点:internal/logic/enterscenelogic.go、home_zone.go、channel_pick.go)。
 // 其它快速失败路径(场景解析失败、再入屏障未到、Kafka 路由失败等)只回各自的错误码,不记本指标。
 // 新增 reason 时同步改 Help 与 deploy/k8s/scene-manager-alerts.yaml 的分组说明。
 func ObserveEnterSceneRejected(zoneID uint32, reason string) {

@@ -13,8 +13,10 @@
 // 实例层(item store)
 //
 // 物品实例是**领域实体**:有自己的身份(item_uuid,全局唯一、跨堆叠拆合稳定)、
-// 自己的生命期(铸号 -> 存在 -> 销毁),以及自己的状态(今天只有 config_id +
-// size,proto 里已经预留了强化等级 / 词条 / 镶嵌 / 绑定态 / 限时等字段)。
+// 自己的生命期(铸号 -> 存在 -> 销毁),以及自己的状态(config_id + size,
+// 2026-10-07 起装备实例还带一段 equip —— 随机属性行;强化等级 / 镶嵌 / 绑定态 /
+// 限时等仍是预留)。本层把 ItemComp 当**整份**搬运与存放,不解释 equip 的内容,
+// 只在堆叠判定上认它的 presence(见 CanStack)。
 //
 // 这一层只管"有哪些实例、它们各是什么、数量怎么在实例之间分配"。
 // 它**不认识槽位、不认识容量、不知道背包满没满** —— 那些全在布局层
@@ -150,6 +152,14 @@ public:
     // 与 MergePartialStacks 一样,**它自己不销毁任何实例**。
     [[nodiscard]] GuidVector CollectEmptyInstances() const;
 
+    // 两个实例能不能并成一堆:同 config,且**双方都不带实例数据**(equip 段)。
+    // 后一条是兜底:装备本该 max_stack_size == 1、根本不走堆叠,但表一旦被误配成可堆叠,
+    // 并堆只加数量,两件属性不同的装备会并成一堆、其中一份属性无声消失。
+    // 判的是 has_equip() 这个 presence,不是属性条数。
+    //
+    // 同一口径还有三处不经过本函数、各自内联了等价判断(都在 .cpp 里):
+    // MeasureFreeRoomPerConfig / HasMergeablePartials / MergePartialStacks。
+    // 改这里的判据时四处同改,否则 reserve 与 commit、整理与入包会给出不一致的答案。
     [[nodiscard]] static bool CanStack(const ItemComp &leftItem, const ItemComp &rightItem);
 
     // totalSize 个单位、每堆最多 maxStackSize 个,要拆成几个实例。

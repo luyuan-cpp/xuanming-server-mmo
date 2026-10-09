@@ -35,6 +35,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto, /* tracker*/ nullptr,},
         // ::EnterSceneS2C
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto, /* tracker*/ nullptr,},
+        // ::SceneChannelInfo
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto, /* tracker*/ nullptr,},
+        // ::SceneChannelDirectory
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto, /* tracker*/ nullptr,},
         // ::SceneInfoS2C
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto, /* tracker*/ nullptr,},
         // ::SceneInfoRequest
@@ -153,7 +157,7 @@ constexpr auto TravelToZoneRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[12],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto,
@@ -206,19 +210,21 @@ const ::_pbi::ClassData* TravelToZoneRequest_get_class_data() {
 #endif  // PROTOBUF_CUSTOM_VTABLE
 class SceneInfoRequest::_Internal {
  public:
+  using HasBits = decltype(::std::declval<SceneInfoRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SceneInfoRequest, _impl_._has_bits_);
 };
 
 constexpr SceneInfoRequest::ParseTableT_ SceneInfoRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
   return ParseTableT_{
     {
-      PROTOBUF_FIELD_OFFSET(SceneInfoRequest,
-                            _impl_._cached_size_),  // no hasbits
+      PROTOBUF_FIELD_OFFSET(SceneInfoRequest, _impl_._has_bits_),
       0, // no _extensions_
-      0, 0,  // max_field_number, fast_idx_mask
+      1, 0,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967295,  // skipmap
-      offsetof(ParseTableT_, field_names),  // no field_entries
-      0,  // num_field_entries
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -228,23 +234,38 @@ constexpr SceneInfoRequest::ParseTableT_ SceneInfoRequest::InternalGenerateParse
       ::_pbi::TcParser::GetTable<::SceneInfoRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool with_channel_directory = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SceneInfoRequest, _impl_.with_channel_directory_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SceneInfoRequest, _impl_.with_channel_directory_)}},
     }}, {{
       65535, 65535
-    }}, // no field_entries, or aux_entries
+    }}, {{
+      // bool with_channel_directory = 1;
+      {PROTOBUF_FIELD_OFFSET(SceneInfoRequest, _impl_.with_channel_directory_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
     {{
     }},
   };
 }
 
+
+inline constexpr SceneInfoRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        with_channel_directory_{false} {}
+
 template <typename>
 constexpr SceneInfoRequest::SceneInfoRequest(::_pbi::ConstantInitialized,
                        const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : ::google::protobuf::internal::ZeroFieldsBase(
+    : ::google::protobuf::Message(
 #if defined(PROTOBUF_CUSTOM_VTABLE)
           class_data
 #endif  // PROTOBUF_CUSTOM_VTABLE
-      ) {
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
 }
 inline void* PROTOBUF_NONNULL SceneInfoRequest::PlacementNew_(
     const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
@@ -267,17 +288,17 @@ constexpr auto SceneInfoRequest::InternalGenerateClassData_(
 #endif
           nullptr,  // IsInitialized
           &SceneInfoRequest::MergeImpl,
-          ::google::protobuf::internal::ZeroFieldsBase::GetNewImpl<SceneInfoRequest>(),
+          ::google::protobuf::Message::GetNewImpl<SceneInfoRequest>(),
 #if defined(PROTOBUF_CUSTOM_VTABLE)
           &SceneInfoRequest::SharedDtor,
-          ::google::protobuf::internal::ZeroFieldsBase::GetClearImpl<SceneInfoRequest>(), &SceneInfoRequest::ByteSizeLong,
+          ::google::protobuf::Message::GetClearImpl<SceneInfoRequest>(), &SceneInfoRequest::ByteSizeLong,
               &SceneInfoRequest::_InternalSerialize,
 #endif  // PROTOBUF_CUSTOM_VTABLE
           PROTOBUF_FIELD_OFFSET(SceneInfoRequest, _impl_._cached_size_),
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[4],
+      &file_reflection_data[6],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto,
@@ -324,6 +345,168 @@ const ::_pbi::ClassData* SceneInfoRequest_get_class_data() {
   return SceneInfoRequest_globals_.GetClassData();
 #else
   return SceneInfoRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SceneChannelInfo::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SceneChannelInfo>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SceneChannelInfo, _impl_._has_bits_);
+};
+
+constexpr SceneChannelInfo::ParseTableT_ SceneChannelInfo::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SceneChannelInfo, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::SceneChannelInfo>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .SceneChannelState state = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SceneChannelInfo, _impl_.state_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SceneChannelInfo, _impl_.state_)}},
+      // uint64 scene_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SceneChannelInfo, _impl_.scene_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SceneChannelInfo, _impl_.scene_id_)}},
+      // uint32 channel_no = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SceneChannelInfo, _impl_.channel_no_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SceneChannelInfo, _impl_.channel_no_)}},
+      // uint32 player_count = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SceneChannelInfo, _impl_.player_count_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SceneChannelInfo, _impl_.player_count_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 scene_id = 1;
+      {PROTOBUF_FIELD_OFFSET(SceneChannelInfo, _impl_.scene_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 channel_no = 2;
+      {PROTOBUF_FIELD_OFFSET(SceneChannelInfo, _impl_.channel_no_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 player_count = 3;
+      {PROTOBUF_FIELD_OFFSET(SceneChannelInfo, _impl_.player_count_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .SceneChannelState state = 4;
+      {PROTOBUF_FIELD_OFFSET(SceneChannelInfo, _impl_.state_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SceneChannelInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        scene_id_{::uint64_t{0u}},
+        channel_no_{0u},
+        player_count_{0u},
+        state_{static_cast< ::SceneChannelState >(0)} {}
+
+template <typename>
+constexpr SceneChannelInfo::SceneChannelInfo(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SceneChannelInfo::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SceneChannelInfo(arena);
+}
+constexpr auto SceneChannelInfo::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SceneChannelInfo), alignof(SceneChannelInfo));
+}
+constexpr auto SceneChannelInfo::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SceneChannelInfo::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SceneChannelInfo>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SceneChannelInfo::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SceneChannelInfo>(), &SceneChannelInfo::ByteSizeLong,
+              &SceneChannelInfo::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SceneChannelInfo, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[3],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SceneChannelInfoGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SceneChannelInfoGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SceneChannelInfo_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SceneChannelInfo::InternalGenerateClassData_(
+            _default, &SceneChannelInfo_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SceneChannelInfo>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SceneChannelInfoGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SceneChannelInfo _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SceneChannelInfo>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SceneChannelInfoGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SceneChannelInfoGlobalsTypeInternal SceneChannelInfo_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SceneChannelInfo_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SceneChannelInfo_globals_.GetClassData();
+#else
+  return SceneChannelInfo_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -423,7 +606,7 @@ constexpr auto ActorListDestroyS2C::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[11],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto,
@@ -564,7 +747,7 @@ constexpr auto ActorDestroyS2C::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto,
@@ -711,7 +894,7 @@ constexpr auto TravelToZoneResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[13],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto,
@@ -758,6 +941,200 @@ const ::_pbi::ClassData* TravelToZoneResponse_get_class_data() {
   return TravelToZoneResponse_globals_.GetClassData();
 #else
   return TravelToZoneResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SceneChannelDirectory::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SceneChannelDirectory>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_._has_bits_);
+};
+
+constexpr SceneChannelDirectory::ParseTableT_ SceneChannelDirectory::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_._has_bits_),
+      0, // no _extensions_
+      7, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967168,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      7,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::SceneChannelDirectory>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 zone_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SceneChannelDirectory, _impl_.zone_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.zone_id_)}},
+      // uint32 scene_config_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SceneChannelDirectory, _impl_.scene_config_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.scene_config_id_)}},
+      // repeated .SceneChannelInfo channels = 3;
+      {::_pbi::TcParser::FastMtR1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.channels_)}},
+      // uint64 updated_at_ms = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SceneChannelDirectory, _impl_.updated_at_ms_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.updated_at_ms_)}},
+      // uint32 switch_cooldown_seconds = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SceneChannelDirectory, _impl_.switch_cooldown_seconds_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.switch_cooldown_seconds_)}},
+      // uint32 max_players_per_channel = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SceneChannelDirectory, _impl_.max_players_per_channel_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.max_players_per_channel_)}},
+      // bool switch_enabled = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SceneChannelDirectory, _impl_.switch_enabled_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.switch_enabled_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 zone_id = 1;
+      {PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.zone_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 scene_config_id = 2;
+      {PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.scene_config_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated .SceneChannelInfo channels = 3;
+      {PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.channels_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 updated_at_ms = 4;
+      {PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.updated_at_ms_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 switch_cooldown_seconds = 5;
+      {PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.switch_cooldown_seconds_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 max_players_per_channel = 6;
+      {PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.max_players_per_channel_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool switch_enabled = 7;
+      {PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.switch_enabled_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SceneChannelInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SceneChannelInfo_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SceneChannelDirectory::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        channels_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SceneChannelDirectory,
+            PROTOBUF_FIELD_OFFSET(::SceneChannelDirectory, _impl_.channels_)>()
+         }
+        ,
+        zone_id_{0u},
+        scene_config_id_{0u},
+        updated_at_ms_{::uint64_t{0u}},
+        switch_cooldown_seconds_{0u},
+        max_players_per_channel_{0u},
+        switch_enabled_{false} {}
+
+template <typename>
+constexpr SceneChannelDirectory::SceneChannelDirectory(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SceneChannelDirectory::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SceneChannelDirectory(arena);
+}
+constexpr auto SceneChannelDirectory::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SceneChannelDirectory), alignof(SceneChannelDirectory));
+}
+constexpr auto SceneChannelDirectory::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SceneChannelDirectory::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SceneChannelDirectory>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SceneChannelDirectory::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SceneChannelDirectory>(), &SceneChannelDirectory::ByteSizeLong,
+              &SceneChannelDirectory::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[4],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SceneChannelDirectoryGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SceneChannelDirectoryGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SceneChannelDirectory_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SceneChannelDirectory::InternalGenerateClassData_(
+            _default, &SceneChannelDirectory_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SceneChannelDirectory>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SceneChannelDirectoryGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SceneChannelDirectory _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SceneChannelDirectory>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SceneChannelDirectoryGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SceneChannelDirectoryGlobalsTypeInternal SceneChannelDirectory_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SceneChannelDirectory_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SceneChannelDirectory_globals_.GetClassData();
+#else
+  return SceneChannelDirectory_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -921,12 +1298,12 @@ constexpr SceneInfoS2C::ParseTableT_ SceneInfoS2C::InternalGenerateParseTable_(c
     {
       PROTOBUF_FIELD_OFFSET(SceneInfoS2C, _impl_._has_bits_),
       0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
+      2, 8,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
+      4294967292,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
-      1,  // num_aux_entries
+      2,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -935,6 +1312,10 @@ constexpr SceneInfoS2C::ParseTableT_ SceneInfoS2C::InternalGenerateParseTable_(c
       ::_pbi::TcParser::GetTable<::SceneInfoS2C>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      // .SceneChannelDirectory channel_directory = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(SceneInfoS2C, _impl_.channel_directory_)}},
       // repeated .SceneInfoComp scene_info = 1;
       {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
@@ -944,12 +1325,19 @@ constexpr SceneInfoS2C::ParseTableT_ SceneInfoS2C::InternalGenerateParseTable_(c
     }}, {{
       // repeated .SceneInfoComp scene_info = 1;
       {PROTOBUF_FIELD_OFFSET(SceneInfoS2C, _impl_.scene_info_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .SceneChannelDirectory channel_directory = 2;
+      {PROTOBUF_FIELD_OFFSET(SceneInfoS2C, _impl_.channel_directory_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
         {::_pbi::TcParser::GetTable<::SceneInfoComp>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::SceneInfoComp_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SceneChannelDirectory>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SceneChannelDirectory_globals_},
         #endif
     }},
     {{
@@ -966,7 +1354,8 @@ inline constexpr SceneInfoS2C::Impl_::Impl_(
             ::SceneInfoS2C,
             PROTOBUF_FIELD_OFFSET(::SceneInfoS2C, _impl_.scene_info_)>()
          }
-     {}
+        ,
+        channel_directory_{nullptr} {}
 
 template <typename>
 constexpr SceneInfoS2C::SceneInfoS2C(::_pbi::ConstantInitialized,
@@ -1009,7 +1398,7 @@ constexpr auto SceneInfoS2C::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[3],
+      &file_reflection_data[5],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto,
@@ -1160,7 +1549,7 @@ constexpr auto SceneInfoResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[5],
+      &file_reflection_data[7],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto,
@@ -1655,7 +2044,7 @@ constexpr auto ActorCreateS2C::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[6],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto,
@@ -1806,7 +2195,7 @@ constexpr auto ActorListCreateS2C::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[10],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto,
@@ -1858,7 +2247,7 @@ const ::_pbi::ClassData* ActorListCreateS2C_get_class_data() {
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_proto_2fscene_2fplayer_5fscene_2eproto[1];
+    file_level_enum_descriptors_proto_2fscene_2fplayer_5fscene_2eproto[2];
 static const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL
     file_level_service_descriptors_proto_2fscene_2fplayer_5fscene_2eproto[1];
 const ::uint32_t
@@ -1880,11 +2269,45 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::EnterSceneS2C, _impl_.scene_info_),
         0,
         0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::SceneInfoS2C, _impl_._has_bits_),
-        4, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::SceneInfoS2C, _impl_.scene_info_),
+        PROTOBUF_FIELD_OFFSET(::SceneChannelInfo, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SceneChannelInfo, _impl_.scene_id_),
+        PROTOBUF_FIELD_OFFSET(::SceneChannelInfo, _impl_.channel_no_),
+        PROTOBUF_FIELD_OFFSET(::SceneChannelInfo, _impl_.player_count_),
+        PROTOBUF_FIELD_OFFSET(::SceneChannelInfo, _impl_.state_),
         0,
-        0x000, // bitmap
+        1,
+        2,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::SceneChannelDirectory, _impl_._has_bits_),
+        10, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SceneChannelDirectory, _impl_.zone_id_),
+        PROTOBUF_FIELD_OFFSET(::SceneChannelDirectory, _impl_.scene_config_id_),
+        PROTOBUF_FIELD_OFFSET(::SceneChannelDirectory, _impl_.channels_),
+        PROTOBUF_FIELD_OFFSET(::SceneChannelDirectory, _impl_.updated_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::SceneChannelDirectory, _impl_.switch_cooldown_seconds_),
+        PROTOBUF_FIELD_OFFSET(::SceneChannelDirectory, _impl_.max_players_per_channel_),
+        PROTOBUF_FIELD_OFFSET(::SceneChannelDirectory, _impl_.switch_enabled_),
+        1,
+        2,
+        0,
+        3,
+        4,
+        5,
+        6,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::SceneInfoS2C, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SceneInfoS2C, _impl_.scene_info_),
+        PROTOBUF_FIELD_OFFSET(::SceneInfoS2C, _impl_.channel_directory_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::SceneInfoRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SceneInfoRequest, _impl_.with_channel_directory_),
+        0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SceneInfoResponse, _impl_._has_bits_),
         4, // hasbit index offset
@@ -1943,21 +2366,25 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::EnterSceneC2SRequest)},
         {5, sizeof(::EnterSceneC2SResponse)},
         {10, sizeof(::EnterSceneS2C)},
-        {15, sizeof(::SceneInfoS2C)},
-        {20, sizeof(::SceneInfoRequest)},
-        {21, sizeof(::SceneInfoResponse)},
-        {26, sizeof(::ActorCreateS2C)},
-        {45, sizeof(::ActorDestroyS2C)},
-        {50, sizeof(::ActorListCreateS2C)},
-        {55, sizeof(::ActorListDestroyS2C)},
-        {60, sizeof(::TravelToZoneRequest)},
-        {67, sizeof(::TravelToZoneResponse)},
+        {15, sizeof(::SceneChannelInfo)},
+        {26, sizeof(::SceneChannelDirectory)},
+        {43, sizeof(::SceneInfoS2C)},
+        {50, sizeof(::SceneInfoRequest)},
+        {55, sizeof(::SceneInfoResponse)},
+        {60, sizeof(::ActorCreateS2C)},
+        {79, sizeof(::ActorDestroyS2C)},
+        {84, sizeof(::ActorListCreateS2C)},
+        {89, sizeof(::ActorListDestroyS2C)},
+        {94, sizeof(::TravelToZoneRequest)},
+        {101, sizeof(::TravelToZoneResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::EnterSceneC2SRequest_globals_,
         &::EnterSceneC2SResponse_globals_,
         &::EnterSceneS2C_globals_,
+        &::SceneChannelInfo_globals_,
+        &::SceneChannelDirectory_globals_,
         &::SceneInfoS2C_globals_,
         &::SceneInfoRequest_globals_,
         &::SceneInfoResponse_globals_,
@@ -1979,36 +2406,52 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fscene_2eproto[] AB
     "ceneInfoComp\"\?\n\025EnterSceneC2SResponse\022&\n"
     "\rerror_message\030\001 \001(\0132\017.TipInfoMessage\"3\n"
     "\rEnterSceneS2C\022\"\n\nscene_info\030\001 \001(\0132\016.Sce"
-    "neInfoComp\"2\n\014SceneInfoS2C\022\"\n\nscene_info"
-    "\030\001 \003(\0132\016.SceneInfoComp\"\022\n\020SceneInfoReque"
-    "st\"7\n\021SceneInfoResponse\022\"\n\nscene_info\030\001 "
-    "\003(\0132\016.SceneInfoComp\"\271\001\n\016ActorCreateS2C\022\016"
-    "\n\006entity\030\001 \001(\004\022\035\n\ttransform\030\002 \001(\0132\n.Tran"
-    "sform\022\036\n\nactor_type\030\003 \001(\0162\n.ActorType\022\014\n"
-    "\004guid\030\004 \001(\004\022\021\n\tconfig_id\030\005 \001(\004\022\025\n\rappear"
-    "ance_id\030\006 \001(\t\022\020\n\010class_id\030\007 \001(\r\022\016\n\006gende"
-    "r\030\010 \001(\r\"!\n\017ActorDestroyS2C\022\016\n\006entity\030\001 \001"
-    "(\004\"9\n\022ActorListCreateS2C\022#\n\nactor_list\030\001"
-    " \003(\0132\017.ActorCreateS2C\"%\n\023ActorListDestro"
-    "yS2C\022\016\n\006entity\030\001 \003(\004\"F\n\023TravelToZoneRequ"
-    "est\022\026\n\016target_zone_id\030\001 \001(\r\022\027\n\017scene_con"
-    "fig_id\030\002 \001(\r\">\n\024TravelToZoneResponse\022&\n\r"
-    "error_message\030\001 \001(\0132\017.TipInfoMessage*K\n\t"
-    "ActorType\022\023\n\017ACTOR_TYPE_NONE\020\000\022\025\n\021ACTOR_"
-    "TYPE_PLAYER\020\001\022\022\n\016ACTOR_TYPE_NPC\020\0022\353\003\n\026Sc"
-    "eneSceneClientPlayer\022;\n\nEnterScene\022\025.Ent"
-    "erSceneC2SRequest\032\026.EnterSceneC2SRespons"
-    "e\022*\n\020NotifyEnterScene\022\016.EnterSceneS2C\032\006."
-    "Empty\022)\n\014SceneInfoC2S\022\021.SceneInfoRequest"
-    "\032\006.Empty\022(\n\017NotifySceneInfo\022\r.SceneInfoS"
-    "2C\032\006.Empty\022,\n\021NotifyActorCreate\022\017.ActorC"
-    "reateS2C\032\006.Empty\022.\n\022NotifyActorDestroy\022\020"
-    ".ActorDestroyS2C\032\006.Empty\0224\n\025NotifyActorL"
-    "istCreate\022\023.ActorListCreateS2C\032\006.Empty\0226"
-    "\n\026NotifyActorListDestroy\022\024.ActorListDest"
-    "royS2C\032\006.Empty\022;\n\014TravelToZone\022\024.TravelT"
-    "oZoneRequest\032\025.TravelToZoneResponse\032\n\200\250\303"
-    "\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "neInfoComp\"q\n\020SceneChannelInfo\022\020\n\010scene_"
+    "id\030\001 \001(\004\022\022\n\nchannel_no\030\002 \001(\r\022\024\n\014player_c"
+    "ount\030\003 \001(\r\022!\n\005state\030\004 \001(\0162\022.SceneChannel"
+    "State\"\327\001\n\025SceneChannelDirectory\022\017\n\007zone_"
+    "id\030\001 \001(\r\022\027\n\017scene_config_id\030\002 \001(\r\022#\n\010cha"
+    "nnels\030\003 \003(\0132\021.SceneChannelInfo\022\025\n\rupdate"
+    "d_at_ms\030\004 \001(\004\022\037\n\027switch_cooldown_seconds"
+    "\030\005 \001(\r\022\037\n\027max_players_per_channel\030\006 \001(\r\022"
+    "\026\n\016switch_enabled\030\007 \001(\010\"e\n\014SceneInfoS2C\022"
+    "\"\n\nscene_info\030\001 \003(\0132\016.SceneInfoComp\0221\n\021c"
+    "hannel_directory\030\002 \001(\0132\026.SceneChannelDir"
+    "ectory\"2\n\020SceneInfoRequest\022\036\n\026with_chann"
+    "el_directory\030\001 \001(\010\"7\n\021SceneInfoResponse\022"
+    "\"\n\nscene_info\030\001 \003(\0132\016.SceneInfoComp\"\271\001\n\016"
+    "ActorCreateS2C\022\016\n\006entity\030\001 \001(\004\022\035\n\ttransf"
+    "orm\030\002 \001(\0132\n.Transform\022\036\n\nactor_type\030\003 \001("
+    "\0162\n.ActorType\022\014\n\004guid\030\004 \001(\004\022\021\n\tconfig_id"
+    "\030\005 \001(\004\022\025\n\rappearance_id\030\006 \001(\t\022\020\n\010class_i"
+    "d\030\007 \001(\r\022\016\n\006gender\030\010 \001(\r\"!\n\017ActorDestroyS"
+    "2C\022\016\n\006entity\030\001 \001(\004\"9\n\022ActorListCreateS2C"
+    "\022#\n\nactor_list\030\001 \003(\0132\017.ActorCreateS2C\"%\n"
+    "\023ActorListDestroyS2C\022\016\n\006entity\030\001 \003(\004\"F\n\023"
+    "TravelToZoneRequest\022\026\n\016target_zone_id\030\001 "
+    "\001(\r\022\027\n\017scene_config_id\030\002 \001(\r\">\n\024TravelTo"
+    "ZoneResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
+    "pInfoMessage*\326\001\n\021SceneChannelState\022\037\n\033SC"
+    "ENE_CHANNEL_STATE_UNKNOWN\020\000\022\036\n\032SCENE_CHA"
+    "NNEL_STATE_SMOOTH\020\001\022\034\n\030SCENE_CHANNEL_STA"
+    "TE_BUSY\020\002\022\034\n\030SCENE_CHANNEL_STATE_FULL\020\003\022"
+    "\037\n\033SCENE_CHANNEL_STATE_CLOSING\020\004\022#\n\037SCEN"
+    "E_CHANNEL_STATE_UNAVAILABLE\020\005*K\n\tActorTy"
+    "pe\022\023\n\017ACTOR_TYPE_NONE\020\000\022\025\n\021ACTOR_TYPE_PL"
+    "AYER\020\001\022\022\n\016ACTOR_TYPE_NPC\020\0022\353\003\n\026SceneScen"
+    "eClientPlayer\022;\n\nEnterScene\022\025.EnterScene"
+    "C2SRequest\032\026.EnterSceneC2SResponse\022*\n\020No"
+    "tifyEnterScene\022\016.EnterSceneS2C\032\006.Empty\022)"
+    "\n\014SceneInfoC2S\022\021.SceneInfoRequest\032\006.Empt"
+    "y\022(\n\017NotifySceneInfo\022\r.SceneInfoS2C\032\006.Em"
+    "pty\022,\n\021NotifyActorCreate\022\017.ActorCreateS2"
+    "C\032\006.Empty\022.\n\022NotifyActorDestroy\022\020.ActorD"
+    "estroyS2C\032\006.Empty\0224\n\025NotifyActorListCrea"
+    "te\022\023.ActorListCreateS2C\032\006.Empty\0226\n\026Notif"
+    "yActorListDestroy\022\024.ActorListDestroyS2C\032"
+    "\006.Empty\022;\n\014TravelToZone\022\024.TravelToZoneRe"
+    "quest\032\025.TravelToZoneResponse\032\n\200\250\303\001\001\210\250\303\001\001"
+    "B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto_deps[5] = {
@@ -2022,13 +2465,13 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto = {
     false,
     false,
-    1551,
+    2184,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fscene_2eproto,
     "proto/scene/player_scene.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto_deps,
     5,
-    12,
+    14,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fplayer_5fscene_2eproto::offsets,
@@ -2036,9 +2479,16 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_
     file_level_service_descriptors_proto_2fscene_2fplayer_5fscene_2eproto,
 };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
-ActorType_descriptor() {
+SceneChannelState_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto);
   return file_level_enum_descriptors_proto_2fscene_2fplayer_5fscene_2eproto[0];
+}
+PROTOBUF_CONSTINIT const uint32_t SceneChannelState_internal_data_[] = {
+    393216u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+ActorType_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto);
+  return file_level_enum_descriptors_proto_2fscene_2fplayer_5fscene_2eproto[1];
 }
 PROTOBUF_CONSTINIT const uint32_t ActorType_internal_data_[] = {
     196608u, 0u, };
@@ -2692,6 +3142,649 @@ void EnterSceneS2C::InternalSwap(EnterSceneS2C* PROTOBUF_RESTRICT PROTOBUF_NONNU
 }
 // ===================================================================
 
+SceneChannelInfo::SceneChannelInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SceneChannelInfo_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:SceneChannelInfo)
+}
+SceneChannelInfo::SceneChannelInfo(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SceneChannelInfo& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SceneChannelInfo_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE SceneChannelInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void SceneChannelInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, scene_id_),
+           0,
+           offsetof(Impl_, state_) -
+               offsetof(Impl_, scene_id_) +
+               sizeof(Impl_::state_));
+}
+SceneChannelInfo::~SceneChannelInfo() {
+  // @@protoc_insertion_point(destructor:SceneChannelInfo)
+  SharedDtor(*this);
+}
+inline void SceneChannelInfo::SharedDtor(MessageLite& self) {
+  SceneChannelInfo& this_ = static_cast<SceneChannelInfo&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SceneChannelInfo_class_data_ =
+        SceneChannelInfo::InternalGenerateClassData_(SceneChannelInfo_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SceneChannelInfo::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SceneChannelInfo_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SceneChannelInfo_class_data_.tc_table);
+  return SceneChannelInfo_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SceneChannelInfo::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SceneChannelInfo_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SceneChannelInfo_globals_));
+  return SceneChannelInfo_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SceneChannelInfo::ParseTableT_
+    SceneChannelInfo::_table_ =
+        SceneChannelInfo::InternalGenerateParseTable_(SceneChannelInfo_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SceneChannelInfo::Clear() {
+// @@protoc_insertion_point(message_clear_start:SceneChannelInfo)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    ::memset(&_impl_.scene_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.state_) -
+        reinterpret_cast<char*>(&_impl_.scene_id_)) + sizeof(_impl_.state_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SceneChannelInfo::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SceneChannelInfo& this_ = static_cast<const SceneChannelInfo&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SceneChannelInfo::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SceneChannelInfo& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:SceneChannelInfo)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 scene_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_scene_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_scene_id(), target);
+    }
+  }
+
+  // uint32 channel_no = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_channel_no() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_channel_no(), target);
+    }
+  }
+
+  // uint32 player_count = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_player_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_player_count(), target);
+    }
+  }
+
+  // .SceneChannelState state = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_state() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          4, this_._internal_state(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:SceneChannelInfo)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SceneChannelInfo::ByteSizeLong(const MessageLite& base) {
+  const SceneChannelInfo& this_ = static_cast<const SceneChannelInfo&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SceneChannelInfo::ByteSizeLong() const {
+  const SceneChannelInfo& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:SceneChannelInfo)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // uint64 scene_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_scene_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_scene_id());
+      }
+    }
+    // uint32 channel_no = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_channel_no() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_channel_no());
+      }
+    }
+    // uint32 player_count = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_player_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_player_count());
+      }
+    }
+    // .SceneChannelState state = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_state() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_state());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SceneChannelInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SceneChannelInfo*>(&to_msg);
+  auto& from = static_cast<const SceneChannelInfo&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:SceneChannelInfo)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_scene_id() != 0) {
+        _this->_impl_.scene_id_ = from._impl_.scene_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_channel_no() != 0) {
+        _this->_impl_.channel_no_ = from._impl_.channel_no_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_player_count() != 0) {
+        _this->_impl_.player_count_ = from._impl_.player_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_state() != 0) {
+        _this->_impl_.state_ = from._impl_.state_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SceneChannelInfo::CopyFrom(const SceneChannelInfo& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:SceneChannelInfo)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SceneChannelInfo::InternalSwap(SceneChannelInfo* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SceneChannelInfo, _impl_.state_)
+      + sizeof(SceneChannelInfo::_impl_.state_)
+      - PROTOBUF_FIELD_OFFSET(SceneChannelInfo, _impl_.scene_id_)>(
+          reinterpret_cast<char*>(&_impl_.scene_id_),
+          reinterpret_cast<char*>(&other->_impl_.scene_id_));
+}
+
+::google::protobuf::Metadata SceneChannelInfo::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+SceneChannelDirectory::SceneChannelDirectory(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SceneChannelDirectory_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:SceneChannelDirectory)
+}
+PROTOBUF_NDEBUG_INLINE SceneChannelDirectory::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::SceneChannelDirectory& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        channels_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::SceneChannelDirectory,
+              PROTOBUF_FIELD_OFFSET(::SceneChannelDirectory, _impl_.channels_)>()
+          , from.channels_
+        }
+     {}
+
+SceneChannelDirectory::SceneChannelDirectory(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SceneChannelDirectory& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SceneChannelDirectory_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SceneChannelDirectory* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, zone_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, zone_id_),
+           offsetof(Impl_, switch_enabled_) -
+               offsetof(Impl_, zone_id_) +
+               sizeof(Impl_::switch_enabled_));
+
+  // @@protoc_insertion_point(copy_constructor:SceneChannelDirectory)
+}
+PROTOBUF_NDEBUG_INLINE SceneChannelDirectory::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        channels_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SceneChannelDirectory,
+            PROTOBUF_FIELD_OFFSET(::SceneChannelDirectory, _impl_.channels_)>()
+         }
+     {}
+
+inline void SceneChannelDirectory::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, zone_id_),
+           0,
+           offsetof(Impl_, switch_enabled_) -
+               offsetof(Impl_, zone_id_) +
+               sizeof(Impl_::switch_enabled_));
+}
+SceneChannelDirectory::~SceneChannelDirectory() {
+  // @@protoc_insertion_point(destructor:SceneChannelDirectory)
+  SharedDtor(*this);
+}
+inline void SceneChannelDirectory::SharedDtor(MessageLite& self) {
+  SceneChannelDirectory& this_ = static_cast<SceneChannelDirectory&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SceneChannelDirectory_class_data_ =
+        SceneChannelDirectory::InternalGenerateClassData_(SceneChannelDirectory_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SceneChannelDirectory::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SceneChannelDirectory_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SceneChannelDirectory_class_data_.tc_table);
+  return SceneChannelDirectory_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SceneChannelDirectory::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SceneChannelDirectory_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SceneChannelDirectory_globals_));
+  return SceneChannelDirectory_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SceneChannelDirectory::ParseTableT_
+    SceneChannelDirectory::_table_ =
+        SceneChannelDirectory::InternalGenerateParseTable_(SceneChannelDirectory_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SceneChannelDirectory::Clear() {
+// @@protoc_insertion_point(message_clear_start:SceneChannelDirectory)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.channels_.Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007eU)) {
+    ::memset(&_impl_.zone_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.switch_enabled_) -
+        reinterpret_cast<char*>(&_impl_.zone_id_)) + sizeof(_impl_.switch_enabled_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SceneChannelDirectory::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SceneChannelDirectory& this_ = static_cast<const SceneChannelDirectory&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SceneChannelDirectory::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SceneChannelDirectory& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:SceneChannelDirectory)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 zone_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_zone_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_zone_id(), target);
+    }
+  }
+
+  // uint32 scene_config_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_scene_config_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_scene_config_id(), target);
+    }
+  }
+
+  // repeated .SceneChannelInfo channels = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_channels_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_channels().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              3, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // uint64 updated_at_ms = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_updated_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_updated_at_ms(), target);
+    }
+  }
+
+  // uint32 switch_cooldown_seconds = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_switch_cooldown_seconds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_switch_cooldown_seconds(), target);
+    }
+  }
+
+  // uint32 max_players_per_channel = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_max_players_per_channel() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_max_players_per_channel(), target);
+    }
+  }
+
+  // bool switch_enabled = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_switch_enabled() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          7, this_._internal_switch_enabled(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:SceneChannelDirectory)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SceneChannelDirectory::ByteSizeLong(const MessageLite& base) {
+  const SceneChannelDirectory& this_ = static_cast<const SceneChannelDirectory&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SceneChannelDirectory::ByteSizeLong() const {
+  const SceneChannelDirectory& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:SceneChannelDirectory)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    // repeated .SceneChannelInfo channels = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_channels_size();
+      for (const auto& msg : this_._internal_channels()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // uint32 zone_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_zone_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_zone_id());
+      }
+    }
+    // uint32 scene_config_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_scene_config_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_scene_config_id());
+      }
+    }
+    // uint64 updated_at_ms = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_updated_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_updated_at_ms());
+      }
+    }
+    // uint32 switch_cooldown_seconds = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_switch_cooldown_seconds() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_switch_cooldown_seconds());
+      }
+    }
+    // uint32 max_players_per_channel = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_max_players_per_channel() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_max_players_per_channel());
+      }
+    }
+    // bool switch_enabled = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_switch_enabled() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SceneChannelDirectory::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SceneChannelDirectory*>(&to_msg);
+  auto& from = static_cast<const SceneChannelDirectory&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:SceneChannelDirectory)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_channels()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_channels());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_zone_id() != 0) {
+        _this->_impl_.zone_id_ = from._impl_.zone_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_scene_config_id() != 0) {
+        _this->_impl_.scene_config_id_ = from._impl_.scene_config_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_updated_at_ms() != 0) {
+        _this->_impl_.updated_at_ms_ = from._impl_.updated_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_switch_cooldown_seconds() != 0) {
+        _this->_impl_.switch_cooldown_seconds_ = from._impl_.switch_cooldown_seconds_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_max_players_per_channel() != 0) {
+        _this->_impl_.max_players_per_channel_ = from._impl_.max_players_per_channel_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_switch_enabled() != 0) {
+        _this->_impl_.switch_enabled_ = from._impl_.switch_enabled_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SceneChannelDirectory::CopyFrom(const SceneChannelDirectory& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:SceneChannelDirectory)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SceneChannelDirectory::InternalSwap(SceneChannelDirectory* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.channels_.InternalSwap(&other->_impl_.channels_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.switch_enabled_)
+      + sizeof(SceneChannelDirectory::_impl_.switch_enabled_)
+      - PROTOBUF_FIELD_OFFSET(SceneChannelDirectory, _impl_.zone_id_)>(
+          reinterpret_cast<char*>(&_impl_.zone_id_),
+          reinterpret_cast<char*>(&other->_impl_.zone_id_));
+}
+
+::google::protobuf::Metadata SceneChannelDirectory::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 void SceneInfoS2C::clear_scene_info() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scene_info_.Clear();
@@ -2734,6 +3827,10 @@ SceneInfoS2C::SceneInfoS2C(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.channel_directory_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.channel_directory_)
+                : nullptr;
 
   // @@protoc_insertion_point(copy_constructor:SceneInfoS2C)
 }
@@ -2749,6 +3846,7 @@ PROTOBUF_NDEBUG_INLINE SceneInfoS2C::Impl_::Impl_(
 
 inline void SceneInfoS2C::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.channel_directory_ = {};
 }
 SceneInfoS2C::~SceneInfoS2C() {
   // @@protoc_insertion_point(destructor:SceneInfoS2C)
@@ -2761,6 +3859,7 @@ inline void SceneInfoS2C::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.channel_directory_;
   this_._impl_.~Impl_();
 }
 
@@ -2798,8 +3897,14 @@ PROTOBUF_NOINLINE void SceneInfoS2C::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.scene_info_.Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.scene_info_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.channel_directory_ != nullptr);
+      _impl_.channel_directory_->Clear();
+    }
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2837,6 +3942,13 @@ PROTOBUF_NOINLINE void SceneInfoS2C::Clear() {
     }
   }
 
+  // .SceneChannelDirectory channel_directory = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.channel_directory_, this_._impl_.channel_directory_->GetCachedSize(), target,
+        stream);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -2861,14 +3973,19 @@ PROTOBUF_NOINLINE void SceneInfoS2C::Clear() {
   (void)cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-   {
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // repeated .SceneInfoComp scene_info = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_scene_info_size();
       for (const auto& msg : this_._internal_scene_info()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
+    }
+    // .SceneChannelDirectory channel_directory = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.channel_directory_);
     }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
@@ -2889,10 +4006,20 @@ void SceneInfoS2C::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _this->_internal_mutable_scene_info()->InternalMergeFromWithArena(
-        ::google::protobuf::MessageLite::internal_visibility(), arena,
-        from._internal_scene_info());
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_scene_info()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_scene_info());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.channel_directory_ != nullptr);
+      if (_this->_impl_.channel_directory_ == nullptr) {
+        _this->_impl_.channel_directory_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.channel_directory_);
+      } else {
+        _this->_impl_.channel_directory_->MergeFrom(*from._impl_.channel_directory_);
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -2912,6 +4039,7 @@ void SceneInfoS2C::InternalSwap(SceneInfoS2C* PROTOBUF_RESTRICT PROTOBUF_NONNULL
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.scene_info_.InternalSwap(&other->_impl_.scene_info_);
+  swap(_impl_.channel_directory_, other->_impl_.channel_directory_);
 }
 
 ::google::protobuf::Metadata SceneInfoS2C::GetMetadata() const {
@@ -2921,27 +4049,45 @@ void SceneInfoS2C::InternalSwap(SceneInfoS2C* PROTOBUF_RESTRICT PROTOBUF_NONNULL
 
 SceneInfoRequest::SceneInfoRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::internal::ZeroFieldsBase(arena, SceneInfoRequest_get_class_data()) {
+    : ::google::protobuf::Message(arena, SceneInfoRequest_get_class_data()) {
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+    : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:SceneInfoRequest)
 }
 SceneInfoRequest::SceneInfoRequest(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
-    const SceneInfoRequest& from)
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SceneInfoRequest& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::internal::ZeroFieldsBase(arena, SceneInfoRequest_get_class_data()) {
-
+    : ::google::protobuf::Message(arena, SceneInfoRequest_get_class_data()),
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+    : ::google::protobuf::Message(arena),
 #endif  // PROTOBUF_CUSTOM_VTABLE
-  SceneInfoRequest* const _this = this;
-  (void)_this;
+      _impl_(from._impl_) {
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE SceneInfoRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
 
-  // @@protoc_insertion_point(copy_constructor:SceneInfoRequest)
+inline void SceneInfoRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.with_channel_directory_ = {};
+}
+SceneInfoRequest::~SceneInfoRequest() {
+  // @@protoc_insertion_point(destructor:SceneInfoRequest)
+  SharedDtor(*this);
+}
+inline void SceneInfoRequest::SharedDtor(MessageLite& self) {
+  SceneInfoRequest& this_ = static_cast<SceneInfoRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
 }
 
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2970,15 +4116,122 @@ PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SceneInfoRequest::ParseTableT_
     SceneInfoRequest::_table_ =
         SceneInfoRequest::InternalGenerateParseTable_(SceneInfoRequest_class_data_.base());
 #endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SceneInfoRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:SceneInfoRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.with_channel_directory_ = false;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SceneInfoRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SceneInfoRequest& this_ = static_cast<const SceneInfoRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SceneInfoRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SceneInfoRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:SceneInfoRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // bool with_channel_directory = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_with_channel_directory() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          1, this_._internal_with_channel_directory(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:SceneInfoRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SceneInfoRequest::ByteSizeLong(const MessageLite& base) {
+  const SceneInfoRequest& this_ = static_cast<const SceneInfoRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SceneInfoRequest::ByteSizeLong() const {
+  const SceneInfoRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:SceneInfoRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // bool with_channel_directory = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_with_channel_directory() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SceneInfoRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SceneInfoRequest*>(&to_msg);
+  auto& from = static_cast<const SceneInfoRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:SceneInfoRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_with_channel_directory() != 0) {
+      _this->_impl_.with_channel_directory_ = from._impl_.with_channel_directory_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SceneInfoRequest::CopyFrom(const SceneInfoRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:SceneInfoRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
 
 
-
-
-
-
+void SceneInfoRequest::InternalSwap(SceneInfoRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.with_channel_directory_, other->_impl_.with_channel_directory_);
+}
 
 ::google::protobuf::Metadata SceneInfoRequest::GetMetadata() const {
-  return ::google::protobuf::internal::ZeroFieldsBase::GetMetadataImpl(GetClassData()->full());
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================
 

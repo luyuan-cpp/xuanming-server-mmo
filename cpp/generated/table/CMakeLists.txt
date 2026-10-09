@@ -86,6 +86,13 @@ set(SOURCE_FILES
     code/attributerule_table.cpp
     code/pet_table.cpp
     code/petrule_table.cpp
+    code/equipattribute_table.cpp
+    code/equipattributecap_table.cpp
+    code/equipattributecap_table_fk.cpp
+    code/equipaffixpool_table.cpp
+    code/equipaffixpool_table_fk.cpp
+    code/equipaffixrule_table.cpp
+    code/item_table_fk.cpp
     proto/activityschedule_table.pb.cc
     proto/actoractioncombatstate_table.pb.cc
     proto/actoractionstate_table.pb.cc
@@ -144,6 +151,11 @@ set(SOURCE_FILES
     proto/pet_table.pb.cc
     proto/petrule_table.pb.cc
     proto/tip/attribute_error_tip.pb.cc
+    proto/equipattribute_table.pb.cc
+    proto/equipattributecap_table.pb.cc
+    proto/equipaffixpool_table.pb.cc
+    proto/equipaffixrule_table.pb.cc
+    proto/tip/equip_error_tip.pb.cc
 )
 
 add_library(table STATIC ${SOURCE_FILES})

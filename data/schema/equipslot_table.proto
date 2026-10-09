@@ -18,4 +18,6 @@ message EquipSlotTable {
   uint32 id = 1;
   // 该槽位接受的装备部位;没在本表里出现的槽位不接受任何东西
   uint32 equip_kind = 2;
+  // 槽位显示名(下发客户端,空槽显示它);可留空
+  string name = 3;
 }

@@ -430,6 +430,28 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		return resp, redirErr
 	}
 
+	// 2b. 玩家主动选线的预检(world-channel-switch.md §4.4,实现见 channel_pick.go)。
+	//     只对 scene 节点客户端入口置位的请求生效;不置位的请求(自动选线、队伍跟随、镜像、疏散、登录、
+	//     跨节点交接的重发)整段跳过,行为与加这段之前逐字节相同。
+	//     放在这里:location 已读、陈旧位置已过滤,还没有任何预占与写入,也早于第 3 步的死节点改派
+	//     和换手门 —— 预检纯只读,拒绝时没有东西要成对释放。
+	//     预检只在第一跳做:跨节点切线的第一跳必拿 18,scene 节点存盘写标记后重发的那一条不带
+	//     client_channel_pick,直接放行;所以冷却要记在第一跳上 —— 最终应答是 0 或 18 都起算
+	//     (理由见 channelSwitchStartsCooldown)。defer 读的是具名返回值,覆盖其后所有返回路径。
+	if in.ClientChannelPick && in.SceneId != 0 {
+		pickResp, chargeCooldown := l.checkClientChannelPick(in, currentLoc, targetZoneId)
+		if pickResp != nil {
+			return pickResp, nil
+		}
+		if chargeCooldown {
+			defer func() {
+				if channelSwitchStartsCooldown(response, returnErr) {
+					l.startChannelSwitchCooldown(in.PlayerId)
+				}
+			}()
+		}
+	}
+
 	// 3. Resolve the target scene (sceneId + nodeId).
 	//    跨 zone 传送的第二条腿:请求本身不带地图(目标 zone 的 login 不知道玩家要去哪张图),
 	//    用第一条腿记在「等待落点」里的目标地图。只在这条记录仍然有效、且就是指向本次落点的

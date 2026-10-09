@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+// EquipAttribute 表的权威 schema。源表 data/EquipAttribute.xlsx。
+// 设计:docs/design/equipment-attributes.md §2.1。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 装备属性定义:一行 = 一个属性(基础属性与蓝 / 粉 / 黄随机属性共用这一张表)。
+// C++ 只按 effect 分支,不按 id 分支(AGENTS §11.6);id 一经使用不再改义。
+// 源表由 tools/scripts/equip_xlsx_patch.py new-tables 生成;schema 与 xlsx 必须成对提交,
+// 只有一边会让整批导表失败("这些权威 schema 没有对应的源表")。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message EquipAttributeTable {
+  option (cfg_sheet)       = "EquipAttribute";
+  option (cfg_source_file) = "EquipAttribute.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 属性 id(一经使用不再改义)
+  uint32 id = 1;
+  // 显示名(服务器下发给客户端,客户端零配表)
+  string name = 2;
+  // 效果种类:1 一级属性点 / 2 所有一级属性点 / 3 二级属性平加 / 4 伤害(物伤与法伤各加) / 5 战斗类属性
+  uint32 effect = 3;
+  // 效果参数:effect=1 填 AttributeDimension.id;effect=3 填 1 气血上限 / 2 法力上限 / 3 物伤 / 4 法伤 / 5 速度 / 6 防御;effect=5 填 CombatAttributes 字段号;其余填 0
+  uint32 effect_param = 4;
+  // 数值单位:0 = 点数;1 = 整数百分点(显示成 N%)
+  uint32 percent = 5;
+  // 显示排序(升序)
+  uint32 sort = 6;
+}

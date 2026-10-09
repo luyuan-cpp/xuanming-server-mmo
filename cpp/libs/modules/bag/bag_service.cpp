@@ -1,5 +1,7 @@
 #include "bag_service.h"
 
+#include <utility>
+
 #include "engine/core/error_handling/error_handling.h"
 #include "engine/core/macros/return_define.h"
 #include "table/proto/tip/asset_error_tip.pb.h" // kAssetFrozen / kAssetInvalidBundle — 按 guid 扣出的错误码
@@ -65,6 +67,33 @@ static void LogEvictedInstances(entt::entity playerEntity,
 	}
 }
 
+// 进程级的「新铸实例初始化回调」槽位。
+//
+// 做成函数内静态而不是文件级变量:安装方可能在别的编译单元的静态初始化期就调
+// SetItemInstanceInitializer,函数内静态保证那时槽位已经构造好。
+// 不带锁 —— 约定是启动期装一次、此后只读(见 bag_service.h)。
+static ItemInstanceInitializer &ItemInstanceInitializerSlot()
+{
+	static ItemInstanceInitializer slot;
+	return slot;
+}
+
+// 传给 Bag::AddItem 的那个参数:没装就是 nullptr,Bag 侧一个分支都不用多判。
+//
+// **三个入包入口(AddItem / AddItems×2)各有一套自己的循环,都必须从这里取。**
+// 漏掉任何一套,那条入口发出去的装备就永远没有属性,而且不会有任何报错 ——
+// 新增第四个入包入口时同理。
+static const ItemInstanceInitializer *InstalledItemInstanceInitializer()
+{
+	const ItemInstanceInitializer &slot = ItemInstanceInitializerSlot();
+	return slot ? &slot : nullptr;
+}
+
+void BagService::SetItemInstanceInitializer(ItemInstanceInitializer initializer)
+{
+	ItemInstanceInitializerSlot() = std::move(initializer);
+}
+
 uint32_t BagService::AddItem(
 	entt::entity playerEntity,
 	Bag &bag,
@@ -112,7 +141,8 @@ uint32_t BagService::AddItem(
 	std::vector<Guid> writtenGuids;
 	// evicted:临时格满了时被先进先出挤掉的实例(其余包恒为空)。
 	std::vector<DestroyedInstance> evicted;
-	auto result = bag.AddItem(param, &writtenGuids, &evicted);
+	// 末参 = 新铸实例初始化回调(装备掷属性);三套入包循环都要传,见上面的取用函数。
+	auto result = bag.AddItem(param, &writtenGuids, &evicted, InstalledItemInstanceInitializer());
 
 	// 先落淘汰流水,再落本次获得的流水 —— 顺序与实际发生顺序一致(腾位在写入
 	// 之前),而且它不看 result:销毁已经提交完成了。
@@ -204,7 +234,9 @@ uint32_t BagService::AddItems(
 		std::vector<Guid> writtenGuids;
 		// 位已经腾够,这里正常不会再淘汰;真淘汰了也要留痕(说明上面的规划漏了什么)。
 		std::vector<DestroyedInstance> lateEvicted;
-		auto result = bag.AddItem(param, &writtenGuids, &lateEvicted);
+		// count = N 的不可叠加物品在 Bag 的逐件循环里各调一次初始化回调,每件属性各掷各的。
+		auto result = bag.AddItem(param, &writtenGuids, &lateEvicted,
+								  InstalledItemInstanceInitializer());
 		LogEvictedInstances(playerEntity, lateEvicted);
 		// 写出了 guid = 这一项真的落进包里了;迟到的淘汰同样是改动。
 		if (mutated != nullptr && (!writtenGuids.empty() || !lateEvicted.empty()))
@@ -279,7 +311,10 @@ uint32_t BagService::AddItems(
 	{
 		std::vector<Guid> writtenGuids;
 		std::vector<DestroyedInstance> lateEvicted;
-		auto result = bag.AddItem(param, &writtenGuids, &lateEvicted);
+		// 这条路径的每一件都带着完整 ItemComp:已带 equip 段的(邮件回流的既有装备)
+		// 在 Bag 侧按 has_equip() 跳过、绝不重掷;没带的新装备照常初始化。
+		auto result = bag.AddItem(param, &writtenGuids, &lateEvicted,
+								  InstalledItemInstanceInitializer());
 		LogEvictedInstances(playerEntity, lateEvicted);
 		if (result != kSuccess)
 		{

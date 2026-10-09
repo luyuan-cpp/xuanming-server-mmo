@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include <muduo/base/Logging.h>
@@ -18,6 +19,8 @@
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/system/attribute_allocation_rules.h"
+#include "player/system/equip_attribute_rules.h"
+#include "player/system/player_equip.h"
 #include "player/system/player_level_rules.h"
 
 #include "rpc/service_metadata/player_attribute_service_metadata.h"
@@ -89,7 +92,10 @@ constexpr uint32_t kPoolOwnerPlayer = 0;
 
 bool IsPlayerPool(const AttributePoolTable& pool) { return pool.owner_type() == kPoolOwnerPlayer; }
 
-bool IsPlayerDimension(const AttributeDimensionTable& dim) {
+// 已经拿着维度行时用这个;只有维度 id 的调用方(含别的系统)用公开的
+// PlayerAttributeSystem::IsPlayerDimension(id),它查到行之后转到这里 —— 判定只有这一份。
+// 名字刻意与那个公开成员不同:成员函数体内的非限定名先找到类成员,同名的话这里会被遮住。
+bool IsPlayerDimensionRow(const AttributeDimensionTable& dim) {
 	const auto [pool, err] = AttributePoolTableManager::Instance().FindByIdSilent(dim.pool_id());
 	return pool != nullptr && IsPlayerPool(*pool);
 }
@@ -165,15 +171,35 @@ uint32_t TotalPoints(entt::entity player, const PlayerAttributeComp& comp, const
 	return attributerules::TotalPoints(ToRule(pool), PlayerLevel(player), BonusPoints(comp, pool.id()));
 }
 
-// 维度面板值 = 每级自然成长 × 等级 + 已分配 + 外部加成(面板显示的是点数,与换算口径无关)
-uint64_t DimensionValue(entt::entity player, const PlayerAttributeComp& comp,
-						const AttributeScheme* scheme, const AttributeDimensionTable& dim) {
+// 装备加成在 equiprules 里是饱和到 uint64 上限的整数;这里再与别的量相加也保持饱和,不回绕
+// (回绕会把一个巨大的加成变成接近 0 的数且零报错)。
+uint64_t SaturatingAdd(uint64_t a, uint64_t b) {
+	return b > std::numeric_limits<uint64_t>::max() - a ? std::numeric_limits<uint64_t>::max() : a + b;
+}
+
+uint32_t SaturateToU32(uint64_t value) {
+	return value > std::numeric_limits<uint32_t>::max() ? std::numeric_limits<uint32_t>::max()
+														: static_cast<uint32_t>(value);
+}
+
+// 维度的外部加成点数 = 落库的 bonus_values(丹药等,尚无写入方)+ 装备的一级属性点(单项 + 所有属性)。
+// 装备那部分每次从装备栏现算、不落库(equipment-attributes.md §5 不变量 3),所以不写回 bonus_values。
+// Recalculate 与 BuildPanel 共用这一个函数:面板显示的点数与实际参与换算的点数不会分叉。
+// 只对角色池维度调用(调用点都已先过 IsPlayerDimensionRow):equiprules 不认识池,「所有属性」不该加到宝宝维度上。
+uint64_t ExternalBonusPoints(const PlayerAttributeComp& comp, const equiprules::EquipBonus& equipBonus,
+							 uint32_t dimensionId) {
+	return SaturatingAdd(BonusValue(comp, dimensionId), equiprules::PrimaryPointsFor(equipBonus, dimensionId));
+}
+
+// 维度面板值 = 每级自然成长 × 等级 + 已分配 + 外部加成(面板显示的是点数,与换算口径无关)。
+// externalBonus 由调用方用 ExternalBonusPoints 算好传入,同一个数也作为 AttributeDimensionInfo.bonus 下发。
+uint64_t DimensionValue(entt::entity player, const AttributeScheme* scheme, const AttributeDimensionTable& dim,
+						uint64_t externalBonus) {
 	uint64_t value = static_cast<uint64_t>(dim.base_per_level()) * PlayerLevel(player);
 	if (scheme != nullptr) {
 		value += AllocatedIn(*scheme, dim.id());
 	}
-	value += BonusValue(comp, dim.id());
-	return value;
+	return SaturatingAdd(value, externalBonus);
 }
 
 // 六项二级属性的临时累加器(与 DerivedAttributesComp 同六项)
@@ -193,7 +219,198 @@ struct DerivedAccumulator {
 		speed += dim.speed() * points;
 		defense += dim.defense() * points;
 	}
+
+	// 装备的二级属性平加(EquipAttribute.effect = 3 的六项,以及 effect = 4「伤害」摊到物伤 / 法伤的那两份)。
+	// 必须按名字逐项加:equiprules::DerivedStat 的编号跟的是配表(kSpeed = 5、kDefense = 6),与 proto
+	// DerivedAttributesComp 的字段号(defense = 5、speed = 6)正好相反,按号对拷会把速度加到防御上且零报错。
+	// 加的是整数:累加器里原有的小数部分不受影响,向下取整后恰好多出这些点。
+	void AddEquipFlat(const equiprules::EquipBonus& bonus) {
+		using equiprules::DerivedFlatOf;
+		using equiprules::DerivedStat;
+		maxHealth += static_cast<double>(DerivedFlatOf(bonus, DerivedStat::kMaxHealth));
+		maxMana += static_cast<double>(DerivedFlatOf(bonus, DerivedStat::kMaxMana));
+		physicalAttack += static_cast<double>(DerivedFlatOf(bonus, DerivedStat::kPhysicalAttack));
+		magicAttack += static_cast<double>(DerivedFlatOf(bonus, DerivedStat::kMagicAttack));
+		speed += static_cast<double>(DerivedFlatOf(bonus, DerivedStat::kSpeed));
+		defense += static_cast<double>(DerivedFlatOf(bonus, DerivedStat::kDefense));
+	}
 };
+
+// double -> uint64:向下取整,负数与 0 归 0,越过 uint64 上限的夹到上限。
+// 上界那一刀是装备接入后才需要的:装备加成会饱和到 UINT64_MAX,转成 double 正好是 2^64,
+// 而越界的 double 再转回整数是未定义行为(正常数值远到不了这里)。
+constexpr double kUint64Ceiling = 18446744073709551616.0;  // 2^64
+
+uint64_t FloorToU64(double value) {
+	if (value <= 0.0) {
+		return 0;
+	}
+	if (value >= kUint64Ceiling) {
+		return std::numeric_limits<uint64_t>::max();
+	}
+	return static_cast<uint64_t>(std::floor(value));
+}
+
+// ---- 战斗类属性(必杀 / 连击 / 抗性 … 15 项,equipment-attributes.md §3.3 / §4.4) ----
+//
+// equiprules::CombatStat 的数值 == proto CombatAttributes 的字段号 == EquipAttribute.effect_param。
+// 下面两个函数都按名字逐字段读写,名字对了就不会写错格;但面板的 combat_id、战斗引擎和配表都按「号」
+// 认这 15 项,号一旦错位,「抗冰冻」会悄悄变成「抗昏睡」且零报错。所以在唯一写 DerivedAttributesComp.combat
+// 的这个文件里把对应关系钉死(纯规则单测 equip_attribute_rules_test.cpp 有同一组断言,但它不编进 scene.lib)。
+constexpr bool CombatStatIsField(equiprules::CombatStat stat, int fieldNumber) {
+	return static_cast<int>(equiprules::ToRaw(stat)) == fieldNumber;
+}
+static_assert(CombatStatIsField(equiprules::CombatStat::kPhysicalCritRate, CombatAttributes::kPhysicalCritRateFieldNumber),
+			  "CombatStat must equal the CombatAttributes field number");
+static_assert(CombatStatIsField(equiprules::CombatStat::kMagicCritRate, CombatAttributes::kMagicCritRateFieldNumber),
+			  "CombatStat must equal the CombatAttributes field number");
+static_assert(CombatStatIsField(equiprules::CombatStat::kComboRate, CombatAttributes::kComboRateFieldNumber),
+			  "CombatStat must equal the CombatAttributes field number");
+static_assert(CombatStatIsField(equiprules::CombatStat::kCounterRate, CombatAttributes::kCounterRateFieldNumber),
+			  "CombatStat must equal the CombatAttributes field number");
+static_assert(CombatStatIsField(equiprules::CombatStat::kReflectRate, CombatAttributes::kReflectRateFieldNumber),
+			  "CombatStat must equal the CombatAttributes field number");
+static_assert(CombatStatIsField(equiprules::CombatStat::kSkillLevelBonus, CombatAttributes::kSkillLevelBonusFieldNumber),
+			  "CombatStat must equal the CombatAttributes field number");
+static_assert(CombatStatIsField(equiprules::CombatStat::kIgnoreAilmentResist,
+								CombatAttributes::kIgnoreAilmentResistFieldNumber),
+			  "CombatStat must equal the CombatAttributes field number");
+static_assert(CombatStatIsField(equiprules::CombatStat::kResistPoison, CombatAttributes::kResistPoisonFieldNumber),
+			  "CombatStat must equal the CombatAttributes field number");
+static_assert(CombatStatIsField(equiprules::CombatStat::kResistFreeze, CombatAttributes::kResistFreezeFieldNumber),
+			  "CombatStat must equal the CombatAttributes field number");
+static_assert(CombatStatIsField(equiprules::CombatStat::kResistSleep, CombatAttributes::kResistSleepFieldNumber),
+			  "CombatStat must equal the CombatAttributes field number");
+static_assert(CombatStatIsField(equiprules::CombatStat::kResistForget, CombatAttributes::kResistForgetFieldNumber),
+			  "CombatStat must equal the CombatAttributes field number");
+static_assert(CombatStatIsField(equiprules::CombatStat::kResistConfusion, CombatAttributes::kResistConfusionFieldNumber),
+			  "CombatStat must equal the CombatAttributes field number");
+static_assert(CombatStatIsField(equiprules::CombatStat::kResistAllAilment,
+								CombatAttributes::kResistAllAilmentFieldNumber),
+			  "CombatStat must equal the CombatAttributes field number");
+static_assert(CombatStatIsField(equiprules::CombatStat::kMagicResist, CombatAttributes::kMagicResistFieldNumber),
+			  "CombatStat must equal the CombatAttributes field number");
+static_assert(CombatStatIsField(equiprules::CombatStat::kPhysicalResist, CombatAttributes::kPhysicalResistFieldNumber),
+			  "CombatStat must equal the CombatAttributes field number");
+
+// 把装备的战斗类加成整块写进 out:先清空再逐字段写。战斗类属性只有装备一个来源,每次重算整块覆盖、
+// 不做增量维护 —— 卸下最后一件装备后这里写出的就是全 0。
+void WriteCombatAttributes(const equiprules::EquipBonus& bonus, CombatAttributes& out) {
+	using equiprules::CombatOf;
+	using equiprules::CombatStat;
+	out.Clear();
+	out.set_physical_crit_rate(CombatOf(bonus, CombatStat::kPhysicalCritRate));
+	out.set_magic_crit_rate(CombatOf(bonus, CombatStat::kMagicCritRate));
+	out.set_combo_rate(CombatOf(bonus, CombatStat::kComboRate));
+	out.set_counter_rate(CombatOf(bonus, CombatStat::kCounterRate));
+	out.set_reflect_rate(CombatOf(bonus, CombatStat::kReflectRate));
+	out.set_skill_level_bonus(CombatOf(bonus, CombatStat::kSkillLevelBonus));
+	out.set_ignore_ailment_resist(CombatOf(bonus, CombatStat::kIgnoreAilmentResist));
+	out.set_resist_poison(CombatOf(bonus, CombatStat::kResistPoison));
+	out.set_resist_freeze(CombatOf(bonus, CombatStat::kResistFreeze));
+	out.set_resist_sleep(CombatOf(bonus, CombatStat::kResistSleep));
+	out.set_resist_forget(CombatOf(bonus, CombatStat::kResistForget));
+	out.set_resist_confusion(CombatOf(bonus, CombatStat::kResistConfusion));
+	out.set_resist_all_ailment(CombatOf(bonus, CombatStat::kResistAllAilment));
+	out.set_magic_resist(CombatOf(bonus, CombatStat::kMagicResist));
+	out.set_physical_resist(CombatOf(bonus, CombatStat::kPhysicalResist));
+}
+
+// 按 CombatStat 读 combat 里的一项(面板用);kNone / kCount 返回 0。
+uint64_t CombatBonusOf(const CombatAttributes& combat, equiprules::CombatStat stat) {
+	using equiprules::CombatStat;
+	switch (stat) {
+	case CombatStat::kPhysicalCritRate: return combat.physical_crit_rate();
+	case CombatStat::kMagicCritRate: return combat.magic_crit_rate();
+	case CombatStat::kComboRate: return combat.combo_rate();
+	case CombatStat::kCounterRate: return combat.counter_rate();
+	case CombatStat::kReflectRate: return combat.reflect_rate();
+	case CombatStat::kSkillLevelBonus: return combat.skill_level_bonus();
+	case CombatStat::kIgnoreAilmentResist: return combat.ignore_ailment_resist();
+	case CombatStat::kResistPoison: return combat.resist_poison();
+	case CombatStat::kResistFreeze: return combat.resist_freeze();
+	case CombatStat::kResistSleep: return combat.resist_sleep();
+	case CombatStat::kResistForget: return combat.resist_forget();
+	case CombatStat::kResistConfusion: return combat.resist_confusion();
+	case CombatStat::kResistAllAilment: return combat.resist_all_ailment();
+	case CombatStat::kMagicResist: return combat.magic_resist();
+	case CombatStat::kPhysicalResist: return combat.physical_resist();
+	case CombatStat::kNone:
+	case CombatStat::kCount:
+		break;
+	}
+	return 0;
+}
+
+// 战斗类属性里「角色自带」的那部分:必杀率叠在基础暴击率上,抗物理 / 抗法术叠在基础抗性上
+// (与回合引擎的取值口径一致,equipment-attributes.md §4.5);其余 11 项没有角色基础值。
+uint64_t CombatBaseValue(const BaseAttributesComp* baseAttrs, equiprules::CombatStat stat) {
+	using equiprules::CombatStat;
+	if (baseAttrs == nullptr) {
+		return 0;
+	}
+	switch (stat) {
+	case CombatStat::kPhysicalCritRate:
+	case CombatStat::kMagicCritRate:
+		return baseAttrs->critchance();
+	case CombatStat::kMagicResist:
+	case CombatStat::kPhysicalResist:
+		return baseAttrs->resistance();
+	default:
+		return 0;
+	}
+}
+
+// 百分比类战斗属性的面板显示上限(整数百分点)。只管显示:DerivedAttributesComp.combat 里存的是未夹取的
+// 加成原值,概率怎么封顶由战斗引擎自己决定。
+constexpr uint64_t kPercentDisplayCap = 100;
+
+// 面板「战斗属性」区:15 项逐项下发终值,按 sort 升序(sort 相同按 combat_id)。
+// 名称 / 是否百分比 / 排序来自 EquipAttribute 表(PlayerEquipSystem::DescribeCombatStat),客户端零配表。
+// 加成部分读 DerivedAttributesComp.combat —— 与六项二级属性同一个来源,也正是开战时拷进战斗快照的那一份,
+// 面板与实战不会各算各的。表里没有显示行的项不下发(没有名字,客户端无从显示);表完整时恒为 15 项。
+// 缺行在这里是静默的(每次开面板都会走到),由启动表校验 PlayerEquipSystem::ValidateTables 报 ERROR。
+void FillCombatPanel(entt::entity player, AttributePanelInfo& panel) {
+	struct Line {
+		uint32_t combatId{0};
+		PlayerEquipSystem::CombatStatDisplay display;
+		uint64_t value{0};
+	};
+
+	const auto* derived = tlsEcs.actorRegistry.try_get<DerivedAttributesComp>(player);
+	const auto* baseAttrs = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(player);
+
+	std::vector<Line> lines;
+	lines.reserve(static_cast<std::size_t>(equiprules::CombatStat::kCount));
+	for (uint32_t raw = equiprules::ToRaw(equiprules::CombatStat::kNone) + 1;
+		 raw < equiprules::ToRaw(equiprules::CombatStat::kCount); ++raw) {
+		const auto stat = equiprules::ToCombatStat(raw);
+		Line line;
+		line.combatId = raw;
+		line.display = PlayerEquipSystem::DescribeCombatStat(stat);
+		if (line.display.name.empty()) {
+			continue;
+		}
+		const uint64_t bonus = derived != nullptr ? CombatBonusOf(derived->combat(), stat) : 0;
+		line.value = SaturatingAdd(CombatBaseValue(baseAttrs, stat), bonus);
+		if (line.display.percent && line.value > kPercentDisplayCap) {
+			line.value = kPercentDisplayCap;
+		}
+		lines.push_back(std::move(line));
+	}
+	std::sort(lines.begin(), lines.end(), [](const Line& lhs, const Line& rhs) {
+		return lhs.display.sort != rhs.display.sort ? lhs.display.sort < rhs.display.sort
+													 : lhs.combatId < rhs.combatId;
+	});
+	for (const auto& line : lines) {
+		auto* info = panel.add_combat();
+		info->set_combat_id(line.combatId);
+		info->set_name(line.display.name);
+		info->set_value(line.value);
+		info->set_percent(line.display.percent);
+		info->set_sort(line.display.sort);
+	}
+}
 
 DerivedAccumulator ClassInitialValues(const ClassTable* classRow) {
 	DerivedAccumulator acc;
@@ -212,7 +429,7 @@ DerivedAccumulator StandardBaseAtLevelCap(const ClassTable* classRow) {
 	auto acc = ClassInitialValues(classRow);
 	const auto& dims = AttributeDimensionTableManager::Instance().FindAll().data();
 	for (const auto& dim : dims) {
-		if (!IsPlayerDimension(dim) || dim.base_per_level() == 0) {
+		if (!IsPlayerDimensionRow(dim) || dim.base_per_level() == 0) {
 			continue;
 		}
 		acc.AddLinear(dim, static_cast<double>(dim.base_per_level()) * playerlevel::kMaxLevel);
@@ -389,6 +606,11 @@ void SanitizeSchemes(PlayerAttributeComp& comp) {
 
 }  // namespace
 
+bool PlayerAttributeSystem::IsPlayerDimension(uint32_t dimensionId) {
+	const auto [dim, err] = AttributeDimensionTableManager::Instance().FindByIdSilent(dimensionId);
+	return dim != nullptr && IsPlayerDimensionRow(*dim);
+}
+
 void PlayerAttributeSystem::InitializeOnLoad(entt::entity player) {
 	if (!tlsEcs.actorRegistry.valid(player)) {
 		return;
@@ -442,19 +664,28 @@ void PlayerAttributeSystem::Recalculate(entt::entity player, RecalcReason reason
 	const auto classId = PlayerClassId(player);
 	const auto level = PlayerLevel(player);
 
+	// 装备加成每次重算都从装备栏现算(纯读,不写任何组件)。**不写** bonus_values:那是落库字段,写进去就成了
+	// 「装备栏」之外的第二份真相,脱下时还得记得减回去(equipment-attributes.md §4.4、§5 不变量 3)。
+	equiprules::EquipBonus equipBonus;
+	PlayerEquipSystem::CollectBonus(player, equipBonus);
+
 	// 二级属性 = 职业初值
-	//          + Σ (自然成长 × 等级 + 外部加成) × 每点固定系数            ← 所有维度,老口径
+	//          + Σ (自然成长 × 等级 + 外部加成) × 每点固定系数            ← 所有维度,老口径;外部加成 = bonus_values + 装备的一级属性点
 	//          + Σ 玩家分配点 → 有比例表的维度走百分比公式(2026-09-13),没有的仍按每点固定系数
+	//          + 装备的二级属性平加(气血 / 法力 / 物伤 / 法伤 / 速度 / 防御)
 	// 自然成长与装备加成不走公式:策划公式只定义"加点收益",白送的点与装备值保持原样(用户 2026-09-13 选定)。
+	// 所以有两处**不能**混进装备:standard(加点收益的分母基准,混进去后同样的加点收益会随装备浮动),
+	// 以及下面传给公式的 allocated(装备点不是玩家分配的点,不享受集中投资加成)。
 	auto acc = ClassInitialValues(classRow);
 	const auto standard = StandardBaseAtLevelCap(classRow);
 
 	const auto& dims = AttributeDimensionTableManager::Instance().FindAll().data();
 	for (const auto& dim : dims) {
-		if (!IsPlayerDimension(dim)) {
+		if (!IsPlayerDimensionRow(dim)) {
 			continue;  // 宝宝维度不进角色二级属性
 		}
-		const double natural = static_cast<double>(dim.base_per_level()) * level + BonusValue(comp, dim.id());
+		const double natural = static_cast<double>(dim.base_per_level()) * level +
+							   static_cast<double>(ExternalBonusPoints(comp, equipBonus, dim.id()));
 		if (natural > 0.0) {
 			acc.AddLinear(dim, natural);
 		}
@@ -471,36 +702,39 @@ void PlayerAttributeSystem::Recalculate(entt::entity player, RecalcReason reason
 		}
 	}
 
-	auto toU64 = [](double v) -> uint64_t {
-		if (v <= 0.0) return 0;
-		return static_cast<uint64_t>(std::floor(v));
-	};
+	// 装备的二级属性平加:在维度循环之后、向下取整之前进累加器。
+	acc.AddEquipFlat(equipBonus);
 
 	auto& derived = tlsEcs.actorRegistry.get_or_emplace<DerivedAttributesComp>(player);
 	const uint64_t oldMaxHealth = derived.max_health();
 	const uint64_t oldMaxMana = derived.max_mana();
-	derived.set_max_health(std::max<uint64_t>(toU64(acc.maxHealth), 1));
-	derived.set_max_mana(toU64(acc.maxMana));
-	derived.set_physical_attack(toU64(acc.physicalAttack));
-	derived.set_magic_attack(toU64(acc.magicAttack));
-	derived.set_speed(toU64(acc.speed));
-	derived.set_defense(toU64(acc.defense));
+	derived.set_max_health(std::max<uint64_t>(FloorToU64(acc.maxHealth), 1));
+	derived.set_max_mana(FloorToU64(acc.maxMana));
+	derived.set_physical_attack(FloorToU64(acc.physicalAttack));
+	derived.set_magic_attack(FloorToU64(acc.magicAttack));
+	derived.set_speed(FloorToU64(acc.speed));
+	derived.set_defense(FloorToU64(acc.defense));
+	// 战斗类属性(必杀 / 连击 / 抗性 …):装备加成整块覆盖,开战时由 BuildBattleSnapshot 原样拷进快照。
+	WriteCombatAttributes(equipBonus, *derived.mutable_combat());
 
-	// 速度直写基础属性:回合引擎出手序 / 逃跑判定只读 BaseAttributesComp.speed
+	// 速度直写基础属性:回合引擎出手序 / 逃跑判定只读 BaseAttributesComp.speed。
+	// 这里面含装备的速度 —— 它是重算结果的镜像,每次加载都在这里被覆盖、从不作为输入,落库的那份只是缓存。
 	baseAttrs->set_speed(derived.speed());
 
 	// 护甲按职业表直写(2026-09-14 防御单位 ×12 时加):护甲原本只在新号初始化时写一次、随存档落库,改表后已建的角色
 	// (含本地测试号)不会跟着变;这里每次重算都以 Class.init_armor 为准,与上面 speed 直写同口径。
 	// 全仓没有 buff / 装备 / GM 在运行时改护甲,这里直写不会冲掉任何东西;以后装备要加护甲,必须在这里累加,
-	// 不能直接改 BaseAttributesComp.armor。
+	// 不能直接改 BaseAttributesComp.armor。装备的「防御」不是护甲:它已经加在上面的 derived.defense 里
+	// (伤害公式里护甲与防御本来就相加),这里不碰 armor。
 	if (classRow != nullptr) {
 		baseAttrs->set_armor(classRow->init_armor());
 	}
 
 	// 当前 HP/MP 跟随上限(见 RecalcReason 注释):
 	//   升级:抬高按绝对增量补(降级只夹);
-	//   加载/加点/切方案/洗点:按比例保持 —— 降后再升往返不净得(极低血量因"至少留 1"有上界的回升例外,
-	//   见 RescaleCurrent),堵住"切方案/洗点当治疗"。
+	//   加载/加点/切方案/洗点/换装:按比例保持 —— 降后再升往返不净得(极低血量因"至少留 1"有上界的回升例外,
+	//   见 RescaleCurrent),堵住"切方案/洗点当治疗"。换装(kEquipmentChanged)必须落在这个分支:
+	//   走上面的补增量分支的话,脱下加血装再穿回就是一次免费回血。
 	if (reason == RecalcReason::kLevelChanged) {
 		if (baseAttrs->health() > 0 && derived.max_health() > oldMaxHealth && oldMaxHealth > 0) {
 			baseAttrs->set_health(baseAttrs->health() + (derived.max_health() - oldMaxHealth));
@@ -558,9 +792,17 @@ void PlayerAttributeSystem::BuildPanel(entt::entity player, AttributePanelInfo& 
 		info->set_reset_cost_gold(ResetCostFor(player, pool));
 	}
 
+	// 装备的一级属性点在这里再现算一次,而不是在 Recalculate 时缓存进一个运行时组件:
+	//   * 一级属性的输入本来就都是现读的(等级、已分配、bonus_values),装备点与它们同口径;
+	//   * 面板只在开窗与写操作之后才建,不在逐帧路径上,CollectBonus 是纯读,多算一次没有副作用;
+	//   * 缓存就是装备栏之外的第二份真相,还要多一个「只许 Recalculate 写」的组件要守。
+	// 二级属性与战斗类加成是产出,仍读上一次 Recalculate 写下的 DerivedAttributesComp(见下)。
+	equiprules::EquipBonus equipBonus;
+	PlayerEquipSystem::CollectBonus(player, equipBonus);
+
 	const auto& dims = AttributeDimensionTableManager::Instance().FindAll().data();
 	for (const auto& dim : dims) {
-		if (!IsPlayerDimension(dim)) {
+		if (!IsPlayerDimensionRow(dim)) {
 			continue;
 		}
 		auto* info = panel.add_dimensions();
@@ -569,7 +811,10 @@ void PlayerAttributeSystem::BuildPanel(entt::entity player, AttributePanelInfo& 
 		info->set_name(dim.name());
 		info->set_desc(dim.desc());
 		info->set_allocated(scheme != nullptr ? AllocatedIn(*scheme, dim.id()) : 0);
-		info->set_value(DimensionValue(player, comp, scheme, dim));
+		// bonus 已含在 value 内(客户端显示成「170(+15)」);它不占点、也不抬高可分配上限。
+		const uint64_t externalBonus = ExternalBonusPoints(comp, equipBonus, dim.id());
+		info->set_value(DimensionValue(player, scheme, dim, externalBonus));
+		info->set_bonus(SaturateToU32(externalBonus));
 		if (const auto [pool, err] = AttributePoolTableManager::Instance().FindByIdSilent(dim.pool_id()); pool != nullptr) {
 			info->set_cap(pool->dimension_cap());
 		}
@@ -595,6 +840,8 @@ void PlayerAttributeSystem::BuildPanel(entt::entity player, AttributePanelInfo& 
 		derivedInfo->set_health(base->health());
 		derivedInfo->set_mana(base->mana());
 	}
+
+	FillCombatPanel(player, panel);
 }
 
 uint32_t PlayerAttributeSystem::Allocate(entt::entity player, uint32_t poolId,

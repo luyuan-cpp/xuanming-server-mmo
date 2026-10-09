@@ -21,6 +21,15 @@ func HandleFeatureMessage(player *gameobject.Player, message *base.MessageConten
 		response = &scene.GetBagResponse{}
 	case game.SceneBagClientPlayerSortBagMessageId:
 		response = &scene.SortBagResponse{}
+	case game.SceneBagClientPlayerEquipItemMessageId:
+		// 穿 / 脱 / GM 发物(equipment-attributes.md §3.2):供 features-smoke 这条收包路径以后发这三条消息时用,
+		// 与 GetBag 同一套「信封错误先于解包」的口径。equip-smoke **不经过这里** —— 它走 prepareBehaviorClient
+		// 的通用分发(信封错误只打日志,随后 stub → RecordFeatureBody 把全零响应落成 failure)。
+		response = &scene.EquipItemResponse{}
+	case game.SceneBagClientPlayerUnequipItemMessageId:
+		response = &scene.UnequipItemResponse{}
+	case game.SceneBagClientPlayerGmGrantItemMessageId:
+		response = &scene.GmGrantItemResponse{}
 	case game.SceneActivityClientPlayerGetActivityListMessageId:
 		response = &scene.GetActivityListResponse{}
 	case game.SceneMissionClientPlayerGetMissionListMessageId,
@@ -60,6 +69,24 @@ func RecordFeatureBody(player *gameobject.Player, messageID uint32, response pro
 		tip = body.GetErrorMessage().GetId()
 		if body.GetBag().GetLayout() == nil {
 			failure = "sort response has no layout"
+		}
+	case *scene.EquipItemResponse:
+		// 穿 / 脱成功必须同时带回人物背包与装备栏两份全量,缺任何一份都不能算成功:
+		// gate 级拒绝(限流 / GM 闸)被通用分发器解出来的就是一份全零响应,要落成 failure 而不是「空包」。
+		// 业务拒绝(tip != 0)时两个包本来就不填,函数末尾统一改写成 server rejected。
+		tip = body.GetErrorMessage().GetId()
+		if body.GetBag().GetLayout() == nil || body.GetEquipment().GetLayout() == nil {
+			failure = "equip response has no bag or equipment layout"
+		}
+	case *scene.UnequipItemResponse:
+		tip = body.GetErrorMessage().GetId()
+		if body.GetBag().GetLayout() == nil || body.GetEquipment().GetLayout() == nil {
+			failure = "unequip response has no bag or equipment layout"
+		}
+	case *scene.GmGrantItemResponse:
+		tip = body.GetErrorMessage().GetId()
+		if body.GetBag().GetLayout() == nil {
+			failure = "gm grant item response has no layout"
 		}
 	case *scene.GetMissionListResponse:
 		tip = body.GetErrorMessage().GetId()

@@ -3,6 +3,26 @@ option go_package = "common/component";
 
 
 
+// 一条装备随机属性(设计文档 docs/design/equipment-attributes.md §3.1)。
+//
+// 实例层只写「是什么」:上限、名称、百分比标记等能由配表重算的量**不入库**
+// (AGENTS §11.6「显示态不进持久化记录」),显示时按 (attr_id, 装备等级) 现查。
+message EquipAffix
+{
+	uint32 attr_id = 1;	// EquipAttribute 表 id
+	uint32 tier = 2;	// 颜色档:1 蓝 / 2 粉 / 3 黄 / 4 绿(预留,本期不掷)
+	uint32 value = 3;	// 当前值
+	// 档内序号(0 起)。显示顺序 = (tier, seq);repeated 的下标不承载语义,
+	// 序列化 / 合并 / 跨服迁移中任何一环打乱下标都不影响显示。
+	uint32 seq = 4;
+}
+
+// 装备实例数据。只有装备实例才有这一段。
+message EquipInstanceData
+{
+	repeated EquipAffix affixes = 1;
+}
+
 message ItemComp
 {
 	uint64 item_id = 1;
@@ -21,4 +41,12 @@ message ItemComp
 	// 跨服 / 快照随 ItemEntry.acquire_seq 原样带走,还原时恢复水位。
 	// 0 = 未盖章(旧存档),此时退回按 item_id 排序,与本字段落地前的行为一致。
 	uint64 acquire_seq = 4;
+
+	// 装备实例数据(随机属性)。仅装备实例有。
+	//
+	// **has_equip() == true 表示「已完成初始化」**,即使一条属性都没掷出 ——
+	// 搬运(穿脱 / 邮件回流 / 交易退回)靠它保证不重掷。所以存盘 / 读盘必须保留
+	// presence:只在 has_equip() 时拷贝,不要无条件 mutable_equip()。
+	// 镜像 ItemEntry.equip(字段 14),两边必须同改(bag_marshal 的转换函数)。
+	EquipInstanceData equip = 5;
 }

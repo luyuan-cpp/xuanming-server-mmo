@@ -210,7 +210,7 @@
     {
       "type": "timeseries",
       "title": "EnterScene rejected (by reason)",
-      "description": "reason 取值:handoff_pending_no_marker(跨节点换图的常规第一跳,生产配置下恒非 0,不是异常)| handoff_pending_stale_marker | handoff_pending_withdrawn | epoch_conflict(归属交接异常)| home_zone_unavailable(data_service 归属查询不可用)| home_zone_unmapped_travel(跨 zone 传送的玩家没有 player:zone 映射,需回填;这两种 reason 的 zone_id 是 gate zone)| travel_map_unavailable | pending_map_fallback(跨 zone 传送目标地图不可用)| scene_gone(进入途中场景被回收;发射点 2026-05-02 被删、2026-09-20 补回)。告警口径见 scene-manager-alerts.yaml。",
+      "description": "reason 取值:handoff_pending_no_marker(跨节点换图的常规第一跳,生产配置下恒非 0,不是异常)| handoff_pending_stale_marker | handoff_pending_withdrawn | epoch_conflict(归属交接异常)| home_zone_unavailable(data_service 归属查询不可用)| home_zone_unmapped_travel(跨 zone 传送的玩家没有 player:zone 映射,需回填;这两种 reason 的 zone_id 是 gate zone)| travel_map_unavailable | pending_map_fallback(跨 zone 传送目标地图不可用)| scene_gone(进入途中场景被回收;发射点 2026-05-02 被删、2026-09-20 补回)| channel_closing | channel_conf_mismatch | channel_switch_disabled | channel_full | channel_switch_cooldown(玩家主动选线的预检拒绝:所选线在回收中 / 请求的地图与线对不上 / 切线功能已关闭 / 线已满 / 冷却未过;只有带 client_channel_pick 的请求会发出,由玩家操作触发,有稳定的低速率属正常,不告警)。告警口径见 scene-manager-alerts.yaml。",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
       "id": 301,

@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+// EquipAffixPool 表的权威 schema。源表 data/EquipAffixPool.xlsx。
+// 设计:docs/design/equipment-attributes.md §2.3。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 装备随机属性池:一行 = 「某个池里可以掷出某个属性」。同一 pool_id 的全部行构成一个池。
+// 池是数据,不在 C++ 里写 if 部位 == 武器(AGENTS §11.6);以后加首饰池只加行。
+// Item.affix_pool 指向的是本表的 pool_id(不是主键 id),所以那一列不设外键。
+// 源表由 tools/scripts/equip_xlsx_patch.py new-tables 生成;schema 与 xlsx 必须成对提交。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message EquipAffixPoolTable {
+  option (cfg_sheet)       = "EquipAffixPool";
+  option (cfg_source_file) = "EquipAffixPool.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 行号 = pool_id * 1000 + attr_id
+  uint32 id = 1;
+  // 池号:1 武器池 / 2 防具池
+  uint32 pool_id = 2 [(cfg_index) = true];
+  // 属性。FK -> EquipAttribute.id
+  uint32 attr_id = 3 [(cfg_fk) = "EquipAttribute"];
+  // 权重(> 0)
+  uint32 weight = 4;
+}

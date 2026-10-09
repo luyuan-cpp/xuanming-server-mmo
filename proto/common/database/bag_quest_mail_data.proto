@@ -76,7 +76,8 @@ message ItemEntry {
   // field numbers and don't break wire compatibility.
   //
   // 6:  uint32 enchant_level    — refinement / +X grade. Common in MMOs.
-  // 7:  repeated uint32 affixes — random word lines. Variable count.
+  // 7:  (不再启用)随机词条已由字段 14 `equip` 承载 —— 一条词条要带
+  //     属性 id + 颜色档 + 数值,repeated uint32 装不下。7 号保持空置,别复用。
   // 8:  repeated uint64 gem_uuids — sockets. Each gem is itself an item
   //                                  that may need its own ItemEntry.
   // 9:  uint32 bound_state      — 0 unbound / 1 soul-bound / 2 account-bound
@@ -95,6 +96,14 @@ message ItemEntry {
   // 字段时撞号。0 = 旧存档没盖过章,还原后按 item_uuid 排序(与本字段落地前
   // 的行为一致),并由 ItemStore 从现有实例重建水位。
   uint64 acquire_seq = 13;
+
+  // 装备实例数据(随机属性行)。镜像 ItemComp.equip,设计文档
+  // docs/design/equipment-attributes.md §3.1。
+  //
+  // presence 有语义:有这一段 = 该实例已掷过属性(哪怕 0 条)。存盘 / 读盘
+  // 只在 has_equip() 时拷贝,否则还原后会被当成「没初始化过」再掷一次。
+  // 字段号取 14:6–12 仍留给上面那张 TODO 表。
+  EquipInstanceData equip = 14;
   //
   // When adding any of the above:
   //   1. uncomment the field with the exact number listed

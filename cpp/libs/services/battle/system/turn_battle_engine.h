@@ -72,9 +72,16 @@ public:
 
     // 重连补拉的全量状态。action_deadline_ms 引擎不填(引擎无时钟),
     // 由 battle 节点按房间 timer 回填。
-    // 注意:这是"全知"版本,含全员冷却。下发给客户端前必须由节点按收信人裁剪
-    // (BattleRoomManager::RedactStateForViewer),否则对手/观众能直接读到别人的冷却。
+    // 注意:这是"全知"版本,含全员冷却与全员战斗类属性(combat)。下发给客户端前必须由节点按收信人裁剪
+    // (BattleRoomManager::RedactStateForViewer),否则对手/观众能直接读到别人的冷却与装备概率。
     BattleStateS2C BuildStateSnapshot() const;
+
+    // 下发前清洗:把只供引擎判定用、任何客户端都不该看到的字段从一份出站状态里剔掉。
+    // 目前只有 BattleActorState.combat(装备带来的必杀 / 连击 / 反击 / 反震 / 抗性概率):
+    // 对手的不能暴露,自己的看属性面板,所以不分视角一律清空(equipment-attributes.md §4.5)。
+    // 只动传入的拷贝,不碰引擎状态;放在引擎库里是为了让"哪些字段只属于引擎"只有一处定义,
+    // 且引擎单测能直接覆盖(节点的 RedactStateForViewer 对每一份出站快照都调它)。
+    static void StripEngineOnlyState(BattleStateS2C& state);
 
     // 某玩家当前剩余的战斗道具副本(item_table_id → 剩余个数),按 item_table_id 升序。
     // 数量只存在于引擎私有的开局快照副本里(ExecuteItem 原地递减),节点按视角回填
@@ -120,7 +127,28 @@ private:
     void FillDefaultActions();
     std::vector<uint64_t> BuildTurnOrder() const;
     void ExecuteAction(BattleActorState& actor, const BattleAction& action, TurnResultS2C& result);
+    // 普攻:选目标 → ATTACK 事件 → 首段 → (连击率成立)追加段 → (受击者反击率成立)反击。
+    // 连击 / 反震 / 反击只挂在这条路径上(含技能校验失败降级成的普攻),技能不触发
     void ExecuteAttack(BattleActorState& actor, uint64_t targetId, TurnResultS2C& result);
+    // 普攻的一段,固定顺序:命中 → 必杀 → 落伤害(致死走 HandleDeath)→ 反震。
+    // hitKind 标在本段产出的 MISS / DAMAGE 事件上,并决定本段的规则:
+    //   NORMAL  首段,伤害原样落地;
+    //   COMBO   连击追加段,伤害 × kComboDamagePercent%;
+    //   COUNTER 反击,伤害原样落地,且**不**触发对方的反震(反击不再引发任何连锁)。
+    // 返回本段是否命中。出手者可能在本段被反震弹死,调用方用 IsActorActive(attacker) 判断能否继续
+    bool ResolveBasicAttackHit(BattleActorState& attacker, BattleActorState& target,
+                               eBattleHitKind hitKind, TurnResultS2C& result);
+    // 反震:target 刚被 attacker 的一段普攻实扣 dealt 点且仍存活时,按 target 的 reflect_rate 掷骰;
+    // 成立则 attacker 受到 ceil(dealt × kReflectDamagePercent%)(至少 1,不超过其当前气血;
+    // 不吃减伤、不必杀、不受防御指令影响),发 DAMAGE(source=target,target=attacker,hit_kind=REFLECT)。
+    // attacker 被弹死走 HandleDeath,击杀归属 target
+    void TryReflectDamage(BattleActorState& attacker, BattleActorState& target, uint64_t dealt,
+                          TurnResultS2C& result);
+    // 反击:整次普攻结束后,attacker 与 defender 都在场、defender 当前能行动(CheckState)时,
+    // 按 defender 的 counter_rate 掷骰;成立则 defender 另起一个事件组对 attacker 打一次普攻
+    // (ATTACK + DAMAGE,hit_kind=COUNTER,可必杀)。反击不再触发连击 / 反击 / 反震
+    void TryCounterAttack(BattleActorState& attacker, BattleActorState& defender,
+                          TurnResultS2C& result);
     void ExecuteSkill(BattleActorState& actor, const BattleAction& action, TurnResultS2C& result);
     // 技能对单个目标落地:命中判定 → 伤害 → 死亡 → effect[] buff;
     // 多目标(AOE)技能对每个目标依次调用,hit_index 由调用方递增
@@ -148,10 +176,14 @@ private:
 
     // 伤害公式与实时技能共用 combat_damage_rules.h(比例减伤,常驻减伤封顶 60%):
     // attack 普攻取物伤、技能按 SkillTable.damage_type 取物伤或法伤;attackMultiplier 取 attack_multiplier。
-    // 非 PVE 对局再乘 kPvpDamageScale,之后 critchance/100 概率 ×2。isCritical 回传是否暴击
+    // damageType 用 combatdamage::kPhysicalDamage / kMagicDamage(普攻 = 物理,技能 = SkillTable.damage_type),
+    // 决定吃哪一组战斗类属性:暴击率 = critchance + 出手者的 物理 / 法术必杀率(夹到 [0, 100]),
+    // 抗性 = resistance + 目标的 抗物理 / 抗法术(规则头内部夹取);未知类型两边都不吃。
+    // 非 PVE 对局再乘 kPvpDamageScale,之后按暴击率 × kCriticalDamageMultiplier。isCritical 回传是否暴击。
+    // 战斗类属性全 0 时,结果与随机数消耗和加这个参数之前逐位一致
     double CalculateFinalDamage(const BattleActorState& caster, const BattleActorState& target,
                                 double baseDamage, uint64_t attack, double attackMultiplier,
-                                bool& isCritical);
+                                uint32_t damageType, bool& isCritical);
     // 当前对局是否 PVE(单人 / 组队):决定能否逃跑、是否乘 PVP 伤害系数
     bool IsPveMatch() const;
     // 命中判定骨架(表现规格 D1):命中率 = kBaseHitRate(一期表无命中/闪避列)。
@@ -172,10 +204,17 @@ private:
     void HandleDeath(BattleActorState& target, uint64_t sourceActorId, TurnResultS2C& result);
 
     // effect[] → buff:镜像 BuffSystem::AddOrUpdateBuff 的
-    // 免疫检查 → 驱散 → 叠层/刷新 → 新建 → 子 buff 语义,时间维度换算为回合
+    // 免疫检查 → (回合制新增)抗异常 → 驱散 → 叠层/刷新 → 新建 → 子 buff 语义,时间维度换算为回合。
+    // 被抵抗时只发 BATTLE_EVENT_RESIST(source=施加者,target=抵抗者),不加 buff、不走驱散
     void AddBuffToActor(BattleActorState& target, uint32_t buffTableId, uint64_t casterId,
                         uint32_t depth, TurnResultS2C& result);
     bool IsImmuneToBuff(const BattleActorState& target, const BuffTable& buffRow) const;
+    // 抗异常判定(非 const:可能消耗一个随机数)。只在三个条件同时成立时才可能抵抗:
+    // 施加者是本局单位、与目标不同队(自己或队友挂的不判)、buff 类型在 kAilmentBuffMappings 里。
+    // 有效抵抗率 = max(0, 单项 + resist_all_ailment − 施加者.ignore_ailment_resist);
+    // 为 0(必不抵抗)或 >= 100(必抵抗)都不掷骰,只有 1..99 消耗一个随机数(RollPercent 两端短路)
+    bool RollAilmentResist(const BattleActorState& target, const BuffTable& buffRow,
+                           uint64_t casterId);
     void DispelBuffsByTag(BattleActorState& target, const BuffTable& buffRow, TurnResultS2C& result);
     bool StackOrRefreshExistingBuff(BattleActorState& target, const BuffTable& buffRow,
                                     uint64_t casterId, TurnResultS2C& result);
@@ -201,7 +240,9 @@ private:
     BattleEventItem* AppendEvent(TurnResultS2C& result, eBattleEventType eventType,
                                  uint64_t sourceId, uint64_t targetId);
     // 开启新事件组:group_id 每回合从 1 起递增,hit_index 归 0。
-    // 每个行动(普攻/技能/道具/防御/逃跑)一组;回合末每个单位的 buff tick 各一组
+    // 每个行动(普攻/技能/道具/防御/逃跑)一组;回合末每个单位的 buff tick 各一组;
+    // 反击是受击者的另一次出手,也另起一组(客户端按 group_id 分拍,同组的 DAMAGE 会并成一拍)。
+    // 连击追加段与反震留在原行动的组里,靠 hit_index / hit_kind 区分
     void BeginEventGroup();
 
     // ---- 确定性随机(禁 tlsRandom / rand(),宪法 §7 新增不变量 5) ----
@@ -211,6 +252,10 @@ private:
     // [0, 1) 实数。不走 std::uniform_real_distribution(其实现跨平台不定),
     // 直接取 mt19937_64 的高 53 位,保证任何平台上同种子同序列
     double Rand01();
+    // 整数百分点的概率判定(连击 / 反击 / 反震 / 抗异常共用):percent <= 0 恒 false、>= 100 恒 true,
+    // 这两端都**不消耗随机数**;1..99 消耗恰好一个 Rand01。
+    // 0 端短路是硬约束:属性全 0 的单位(怪物、宝宝、无装备玩家)不能平移既有同种子回放
+    bool RollPercent(uint64_t percent);
 
 private:
     std::shared_ptr<BattleDataProvider> dataProvider;

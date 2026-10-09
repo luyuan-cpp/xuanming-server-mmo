@@ -9,6 +9,19 @@ package mmorpg.cfgtable.v1;
 
 import "cfg_options.proto";
 
+// 装备基础属性的一条(docs/design/equipment-attributes.md §2.5)。
+// 消息名 = 表名 + 字段名、子字段名 = 字段名 + "_" + 子列名、号必须是 1..N 连续 —— 都是导表器的硬约束。
+// base_attr_id 指向 EquipAttribute.id,但**不设外键**:导表器的外键 / 索引只认主消息上的标量列,
+// 写在子消息列上会让生成的 Load() 去调主消息上不存在的访问器(row_data.base_attr_id())。
+// 所以导表期**不校验**这一列的引用完整性,填错的 id 要靠运行期的启动表校验
+// (PlayerEquipSystem::InstallItemInitializer,设计文档 §4.3 / §10)发现。
+message Itembase_attr {
+  // 属性 id(EquipAttribute.id);空槽整槽留空
+  uint32 base_attr_id = 1;
+  // 数值;单位随该属性的 percent(0 = 点数,1 = 整数百分点)
+  uint32 base_attr_value = 2;
+}
+
 message ItemTable {
   option (cfg_sheet)       = "Item";
   option (cfg_source_file) = "Item.xlsx";
@@ -25,4 +38,20 @@ message ItemTable {
   uint64 battle_heal_hp = 5;
   // 战斗内使用回复的法力值(0=不回蓝)。按当前属性单位(法力 ×4)填
   uint64 battle_heal_mp = 6;
+  // 物品名(下发客户端)
+  string name = 7;
+  // 描述(下发客户端 tooltip)
+  string description = 8;
+  // 图标 Resources 路径(UI/ 开头,不带扩展名);空 = 客户端兜底图标
+  string icon_key = 9;
+  // 佩戴等级,同时是查属性上限(EquipAttributeCap)用的装备等级
+  uint32 equip_level = 10;
+  // 职业要求(Class.id);0 = 不限
+  uint32 equip_class = 11;
+  // 随机属性池(EquipAffixPool.pool_id,不是那张表的主键,所以不设外键);0 = 不掷
+  uint32 affix_pool = 12;
+  // 掷值规则。FK -> EquipAffixRule.id;0 = 不掷
+  uint32 affix_rule = 13 [(cfg_fk) = "EquipAffixRule"];
+  // 基础属性:每槽 (EquipAttribute.id, 数值),最多 3 条;用不到的槽留空,不要填 0
+  repeated Itembase_attr base_attr = 14 [(cfg_slots) = 3];
 }

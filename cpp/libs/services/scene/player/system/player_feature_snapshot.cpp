@@ -20,6 +20,7 @@
 #include "table/code/mission_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/mission_error_tip.pb.h"
+#include "services/scene/player/system/player_equip.h"
 #include "services/scene/player/system/player_mission.h"
 #include "services/scene/player/system/player_activity_schedule.h"
 #include "engine/core/time/system/time.h"
@@ -137,6 +138,9 @@ uint32_t PlayerBagSystem::BuildSnapshot(entt::entity player, uint32_t bagType, B
             info->set_max_stack(row->max_stack_size());
             info->set_equip_kind(row->equip_kind());
         }
+        // 名称 / 描述 / 图标 / 佩戴要求 / 属性行(BagItemInfo 6–13 号字段)。客户端不加载配表,
+        // 装备 tooltip 上的每一个字都来自这里;上限按当前表现查,所以改表后下一次开包就生效。
+        PlayerEquipSystem::FillItemDisplay(item, *info);
         auto* slot = layout->add_slots();
         slot->set_slot(bag.GetItemPosByGuid(guid));
         slot->set_item_id(guid);
@@ -148,6 +152,10 @@ uint32_t PlayerBagSystem::BuildSnapshot(entt::entity player, uint32_t bagType, B
         [](const BagItemInfo& left, const BagItemInfo& right) { return left.item_id() < right.item_id(); });
     std::sort(layout->mutable_slots()->begin(), layout->mutable_slots()->end(),
         [](const BagSlotInfo& left, const BagSlotInfo& right) { return left.slot() < right.slot(); });
+    // 装备栏额外下发槽位定义(含空槽):客户端据此画出栏位、在空槽上显示部位名。
+    // 必须在 set_capacity 与上面填完 slots 之后调 —— 它只下发槽号在容量内的槽,
+    // 并且没有部位名的槽只在被占用时才下发(占用关系读 layout.slots)。
+    if (bagType == kEquipment) PlayerEquipSystem::FillEquipSlots(*layout);
     if (const auto* currency = tlsEcs.actorRegistry.try_get<CurrencyComp>(player))
         out.mutable_currency()->CopyFrom(*currency);
     return kSuccess;

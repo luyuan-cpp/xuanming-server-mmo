@@ -6829,3 +6829,44 @@ PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修
 - 隔离启动配置为3个C++进程加入所需DLL目录,5份DLL及30条导入依赖文件核对通过;仅改变进程局部PATH,未修改全局PATH或私有凭据。配置和DLL存在性检查不等于服务器成功运行。
 - C++工程仍缺guild_internal与match_internal两组RPC包装代码;正规包装生成器被Windows CodeIntegrity 3077/3033记录拦截。没有手写替身、改安全策略或换路径绕过。3个节点完整编译/启动尚未完成,不会在已知必要输入缺失时宣称构建通过。
 - 13:01 UTC复查仍为固件虚拟化关闭、Hypervisor未运行;Unity6000.6.0f1已安装,许可证日志仍为0 entitlement。Docker基础设施未启动、数据库未迁移、Unity测试未执行、客户端可玩EXE未生成。后续需用户开启BIOS SVM并重启、在Hub激活有效Unity许可证,以及管理员按现有策略核准生成器,然后继续构建与联机验收。
+
+## 2026-10-08 装备属性系统(问道式蓝 / 粉 / 黄随机属性 + 穿脱 + 战斗类属性)(Claude,未编译)
+
+- **范围(用户 10-07 给四张问道截图)**:武器属性池 12 条(相对问道删 忽视所有抗性 / 所有相性 / 五行相性,加 法术必杀率)、防具属性池 17 条(删五行抗性 / 所有抗性,加 抗法术 / 抗物理);装备 tooltip 形如问道(基础属性 + 按颜色分档的「名称 当前值/上限值」)。此前仓里**没有任何穿 / 脱装备能力**,物品实例只有 4 个字段,战斗引擎只有一个不分物理 / 法术的暴击率与抗性。
+- **用户未明示、按默认值落地的决定(D1–D10,设计文档 §1.4,全部可改表或改常量)**:粉 / 黄属性在炼化未做之前由创建时按概率掷出;「准确」只加物理伤害(本作没有命中 / 闪避判定);连击追加 1 段(独立结算再 ×50%);反击不连锁;反震弹回实扣的 50% 且要求受击者仍存活;必杀倍率沿用 ×2;抗物理 / 抗法术与防御共用 60% 减伤封顶;抗昏睡 → 眩晕、抗遗忘 → 沉默;全部数值是按本作单位重定的占位建议。
+- **配表**:新表 `EquipAttribute`(26 行)/ `EquipAttributeCap`(125 行)/ `EquipAffixPool`(29 行)/ `EquipAffixRule`(1 行);`Item` 加 8 列(名称 / 描述 / 图标 / 佩戴等级 / 职业 / 属性池 / 规则 / 基础属性)与 20 件样例装备(1101–1405);`EquipSlot` 加 `name` 列与 3–6 号槽(武器 / 帽子 / 衣服 / 鞋子);新 tip 域 `equip_error`(28000 起 11 个码)。xlsx 全部由幂等脚本 `tools/scripts/equip_xlsx_patch.py` 生成 / 打补丁。**只做过沙盒导表(退出码 0),仓内 `generated/**` 未动。**
+- **协议**:`item_base_comp.proto`(`ItemComp.equip` = 5)、`bag_quest_mail_data.proto`(`ItemEntry.equip` = 14)、`player_bag.proto`(tooltip 行 / 槽位定义 / `EquipItem` `UnequipItem` `GmGrantItem` 三个 RPC,追加在 service 末尾)、`player_attribute.proto`(`bonus` 与战斗属性列表)、`actor_attribute_state_comp.proto`(`CombatAttributes` 15 项)、`battle_data.proto`(快照 / 单位的 `combat`、`hit_kind`、`BATTLE_EVENT_RESIST`)。只过了 protoc 语法校验,**未 proto-gen,新 RPC 尚无消息号**。
+- **服务端实现**:背包实例层(`Bag::TakeInstance / PutInstance / SlotsAcceptingKind`、入包回调 `ItemInstanceInitializer`、`bag_marshal` 收成一对转换函数、堆叠兜底、装备栏还原优先落回快照槽);纯规则 `equip_attribute_rules.h`;编排 `player_equip.{h,cpp}`(掷属性、穿上 / 替换 / 卸下与回滚、加成汇总、tooltip 投影、表校验、GM 发物);`PlayerAttributeSystem::Recalculate` 现算装备加成(不落库,`kEquipmentChanged` 走按比例分支)并下发面板;`BuildBattleSnapshot` 带 `combat`;回合引擎消费物理 / 法术必杀率、抗物理 / 抗法术、连击、反击、反震、所有技能上升、抗异常(概率为 0 时不消耗随机数,无装备单位的事件流与改动前一致);下发给客户端的战斗状态清掉 `combat`;GM 三道闸登记 `GmGrantItem`。
+- **测试(全部未运行)**:`PlayerEquipTest` 47、`PlayerEquipAttributeTest` 20、`BagInstanceDataTest` 27、`TurnBattleEngineTest` 新增 29(共 89)、规则单测 33、GM 闸 1、存档往返 2;robot `equip-smoke`(账号 `robot_9103`,9 步,`EQUIP_SMOKE_OK`)与 14 个 Go 单测。
+- **客户端**(`../mmorpg-client` 的隔离工作树 `mmorpg-client-equip`,基于 origin/main):`PlayerFeaturesClient` 背包 / 装备栏分开缓存与穿脱;背包页装备栏 + 装备卡片;属性面板装备加成与战斗属性页;战斗分拍对连击 / 反震 / 反击 / 抵抗事件的兼容用例 16 条(演出代码零改动)。离线 Roslyn 编译零新增错误,纯逻辑用例 181/181;**窗口级用例只在 Unity 替身里跑过,真实 Unity 未跑(本机 Unity 许可离线有效期已过),没有截图**。客户端在 `MessageIds.EquipItem / UnequipItem` 生成之前有 15 处预期的 CS0117。Codex 10-08 起在同一工作树里并行改装备卡片皮肤与「选择期望属性」对话框。
+- **审查**:每块两个视角(人肉编译器 / 语义与不变量)审查 + 修复;最后做了跨模块整体审查(全链路贯通 / 既有回归 / 生成器兼容 / 资产与安全,11 条发现)→ 统一修复 → 独立复核,复核结论「未读出新的编译或链接问题」。这些都是静态阅读,**不能代替编译与运行证据**。
+- **有意没做 / 已知缺口**(设计文档 §1.3、§8):炼化 / 改造 / 进化 / 套装(绿色属性)/ 限制交易;混乱状态本身(抗混乱在引擎里没有消费点);现网 Buff / Skill 表没有任何异常状态,抗异常要等策划配出带异常的技能才有触发机会;重登 / 离线结算窗口内可以穿脱(小额回血,留到带入 main 后在 `IsInBattle` 一处收口);入包边界整份信任实例上的 `equip` 段(做邮件回流 / 寄售交付前必须补校验);聚宝斋寄售、流水、回滚 diff 都不带属性;怪物强度是按无装备角色定的,接入装备后需策划重定。
+- **状态**:服务端 2026-10-09 经用户同意已提交(`d69d50be7d`,分支 `feat/equip-attributes`)并并入本机 main,**未推送**;合并只有两处「两边各追加一段」的冲突(`cross_zone_test.cpp`、本文件),都两段保留。客户端改动仍在隔离工作树 `E:\work\mmorpg-client-equip`,未提交(Codex 在同一工作树并行改装备卡片)。当初没在主仓写是因为主仓 10-07 正停在别人未解完的 pull 合并上(10-08 已解)。
+- **设计文档**:`docs/design/equipment-attributes.md`(§2–§6 契约,§10 逐块实现偏离)。
+- **未编译、未导表、未 proto-gen、未跑任何测试(AGENTS §10.1),待 Codex 验证。给 Codex**:完整的先后顺序、命令、通过标准与失败保留物在设计文档 §9。要点:① 生成与编译都在主仓做,先把本批改动并入 main(预期唯一冲突 `cpp/tests/cross_zone_test/cross_zone_test.cpp`,两段都保留);② **不要在隔离工作树上跑全量 proto-gen**(它的 `message_id.txt` 止于 238,main 已到 243,会随机错位发号);③ 顺序:xlsx 补丁确认 → 导表 → proto-gen → `equip_xlsx_patch.py message-limiter` → 再导表 → C++ 按 table → proto → core → rpc → grpc_client → modules → battle → scene → 节点 → 测试 串行 `/m:1`(`modules` 与 `scene` 必须同批重编)→ 单测 → Go 服务与 robot 同批重编 → 先跑 login-test 基线再跑 `equip-smoke` 两遍 → 客户端 `gen_proto.ps1` / `gen_messageids.ps1`;④ 基线里 `match_internal` 的生成物没登记进工程,首次节点链接会报与装备无关的 LNK2019。
+- **Java 版(AGENTS §12)**:**待做**。本机没有 Java 仓(`D:\luyuan\wuxingqitan\xuanming-server-mmo-java` 不存在),Java 版目前只有「登录 → 进场景」竖切。客户端可见契约的变化:`player_bag.proto` / `player_attribute.proto` / `battle_data.proto` 的新消息与新字段、`equip_error` tip 域(28000–28010)、5 张表的数据;Java 版做背包 / 战斗时按设计文档 §2、§3 对齐,并在 `PARITY.md` 登记。
+
+## 2026-10-09 玩家主动切线:分线目录 + 线号 + 选线预检 + 客户端线路面板(Claude,服务端未编译)
+- 设计与验证清单:`docs/design/world-channel-switch.md`(§10 是给 Codex 的完整清单)。在隔离工作树 `feat/channel-switch` 落码,
+  经 8 视角对抗式评审(21 条意见全为 minor,已逐条核实并修复)后并入本机 main;客户端同名分支在 `mmorpg-client`。
+- 协议:**零新消息号、零新 tip、零新内部 RPC**。列线复用 `SceneInfoC2S(43) → NotifySceneInfo(31)`,`SceneInfoRequest` 加显式开关
+  `with_channel_directory = 1`(不带它的请求开销与改动前相同,压测机器人的 43 不受影响),`SceneInfoS2C` 加 `channel_directory = 2`;
+  切线复用 `EnterScene(63)` 指定 `scene_id`,内部 `EnterSceneRequest.client_channel_pick = 11` 只由客户端入口置位。
+  `player_scene.pb.*` / `scene_manager_service.pb.*` 用 protoc 窄面重生成(先用 HEAD 版 proto 生成、与入库产物逐字节比对一致),
+  三份暂存副本、`robot/vendor` 同步;`.grpc.pb.*` 与 message_id 未变。
+- scene_manager:领导者每 2 秒发布分线目录到 `world_channel_directory:zone:{z}:{conf}`,线号持久化在
+  `world_channel_lineno:zone:{z}:{conf}`(Lua 原子分配最小空闲号);EnterScene 对置位请求做只读预检(回收中 / 地图不符 / 关闭 → 22,
+  满 → 23,冷却 → 24),应答为 0 或 18 时写 `player:{id}:channel_switch_cooldown`;新增配置块 `ChannelSwitch`(全可缺省)、
+  指标 `scene_manager_world_channel_directory_publish_total`,孤儿清理删两把新键;k8s 告警 / 看板的 reason 说明已补。
+- scene 节点:`PlayerSceneSystem::SendSceneInfo(player, withChannelDirectory)` 异步读目录转发;EnterScene 守护段置
+  `client_channel_pick`。没动 `player_lifecycle.*` / 工程文件,所以 22/23/24 在 C++ 侧仍一律变成 3023。
+- robot:新模式 `channel-smoke`(`etc/channel_smoke.yaml`,账号 robot_9801);合服工具认识两个新前缀,runbook 同步。
+- 客户端:`SceneChannelClient` / `SceneChannelModels` / `SceneChannelWindow` / `SceneChannelUiRoot`(右上角「N线 [L]」角标,L 键面板)
+  + 3 份 EditMode 测试 + 离线截图验收 `SceneChannelUiVerification.CaptureAll` + `Docs/scene-channel-ui.md`;`GameClient.cs` 未改。
+- 证据边界:Go 只过了 gofmt;C++ 只做了静态核对;客户端离线 Roslyn 编译四个程序集 0 error、纯逻辑测试在离线 NUnit 替身里通过;
+  **Unity 内测试与截图未跑**(本机 Unity 许可证离线有效期已过,需用户在 Unity Hub 登录刷新)。
+- 已知残余(详见设计文档 §9):自动缩容 SREM/SADD 之间的毫秒级窗口;robot 通用 EnterScene 回包处理器误报(既有);
+  面板开着挂机不进挂机态;联机验收依赖本机 main 上的 AOI 反向通知修复 `a1507aa41a`。
+- **给 Codex**:按设计文档 §10 的 1→7 顺序执行;C++ 在主仓(子模块齐全)编。
+- **Java 版(AGENTS §12)**:未做(本机没有 Java 仓库);需同步 `SceneInfoRequest.with_channel_directory`、`SceneInfoS2C.channel_directory`
+  与 EnterScene 指定 `scene_id` 的选线语义,登记 `PARITY.md` 待做。

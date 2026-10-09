@@ -31,14 +31,24 @@ package main
 //   2. scene:{id}:zone == S 的场景:DEL scene:{id}:{zone,node,mirror,source,mirrors}
 //      + instance:{id}:player_count;再 DEL instances:zone:{S}:active。
 //   3. world_channels:zone:{S}:* / world_channels:{draining,cooldown}:zone:{S}:*
-//      / world_channels:desired:zone:{S}。
+//      / world_channels:desired:zone:{S};以及玩家主动切线的两个读模型(2026-10-08,
+//      world-channel-switch.md §4.1 / §4.6):world_channel_lineno:zone:{S}:*(线号表)
+//      与 world_channel_directory:zone:{S}:*(目录快照,自带秒级 TTL,通常已自行过期)。
+//      线号表没有 TTL,只有发布目录的那一轮分配脚本会摘掉已销毁的线;源区下线后不再有
+//      发布者,不清就永久残留。
 //   4. node:zone:{S}:* (scene_count / player_count / scene_node_type /
 //      death_at / scenes 反向索引)+ scene_nodes:zone:{S}:load 本身。
 //
+// 故意不清的 player:* 键:本步骤只动 player:{id}:location(它不会自己过期,且能证明归属)。
+// 其余按玩家维度、自带 TTL 的键 —— player:{id}:handoff(300s)与切线冷却
+// player:{id}:channel_switch_cooldown(冷却秒数,缺省 10s)—— 键里没有 zone,无法证明
+// 属于源区;zone-down 到合服之间的间隔远大于它们的 TTL,到这一步时早已过期。
+// player:{id}:owner_epoch 是单调代际,scene_manager 自己也刻意不删(changesceneutil.go)。
+//
 // 键格式与 go/scene_manager/internal/logic 保持一致(load_reporter.go /
 // createscenelogic.go / world_init.go / world_autoscale.go / reentry_barrier.go /
-// changesceneutil.go)。merge_zone 是独立 go.mod,不引主工程包,所以这里
-// 重复一份字面量;改动任何一方都要同步另一方。
+// changesceneutil.go / world_channel_directory.go)。merge_zone 是独立 go.mod,不引主工程包,
+// 所以这里重复一份字面量;改动任何一方都要同步另一方。
 
 import (
 	"context"
@@ -61,6 +71,8 @@ const (
 	worldDrainingZonePattern  = "world_channels:draining:zone:%d:*"
 	worldCooldownZonePattern  = "world_channels:cooldown:zone:%d:*"
 	worldDesiredZoneKeyFmt    = "world_channels:desired:zone:%d"
+	worldLinenoZonePattern    = "world_channel_lineno:zone:%d:*"
+	worldDirectoryZonePattern = "world_channel_directory:zone:%d:*"
 	nodeZonePattern           = "node:zone:%d:*"
 	hotStateScanCount         = 500
 	hotStatePipelineBatch     = 500
@@ -81,7 +93,7 @@ type hotStateClearReport struct {
 	ZoneZeroUndecided int
 	ScenesMatched     int // scene:{id}:zone == S 的场景数
 	SceneKeysDeleted  int
-	WorldChannelKeys  int // 匹配到的 world_channels* 键数
+	WorldChannelKeys  int // 匹配到的 world_channels* 键数(含切线的 world_channel_lineno / world_channel_directory)
 	WorldChannelDel   int
 	NodeKeys          int // node:zone:{S}:* + 负载集
 	NodeKeysDeleted   int
@@ -309,6 +321,8 @@ func sourceZoneScanPatterns(src uint32) []string {
 		fmt.Sprintf(worldChannelsZonePattern, src),
 		fmt.Sprintf(worldDrainingZonePattern, src),
 		fmt.Sprintf(worldCooldownZonePattern, src),
+		fmt.Sprintf(worldLinenoZonePattern, src),
+		fmt.Sprintf(worldDirectoryZonePattern, src),
 		fmt.Sprintf(nodeZonePattern, src),
 	}
 }

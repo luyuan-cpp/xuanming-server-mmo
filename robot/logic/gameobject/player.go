@@ -103,6 +103,14 @@ type Player struct {
 	petSuggested   map[uint32]uint32 // 最近一次自动加点建议(dimension_id → 目标已分配)
 	petSuggestPet  uint64
 	petLastGranted uint64 // 最近一次 GmGrantPet 返回的 pet_id
+
+	// ---- 分线目录冒烟(channel-smoke)状态 ----
+	// NotifySceneInfo(31)是 SceneInfoC2S(43)的数据通道(43 的应答类型是 Empty):当前场景信息,
+	// 大世界线上还带分线目录(docs/design/world-channel-switch.md §3.1)。只存最近一份。
+	// 它会反复刷新,所以照属性面板的做法配一个自增序号,让等待方能区分
+	// "这次请求带回来的推送"与"上一次留下的旧推送"。
+	sceneInfoPush    *scene.SceneInfoS2C
+	sceneInfoPushSeq uint64
 }
 
 // NewPlayer creates a Player with an initialized scene-ready channel.
@@ -190,6 +198,24 @@ func (p *Player) GetSceneEnterCount() int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.sceneEnterCnt
+}
+
+// SetSceneInfoPush 记录服务器下发的 NotifySceneInfo(每收到一条调一次,序号随之自增)。
+// push 由调用方每条消息新建(handler 的 unmarshalAndCall 每次 New 一份),这里只存指针不拷贝,
+// 读出方不得修改它。
+func (p *Player) SetSceneInfoPush(push *scene.SceneInfoS2C) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.sceneInfoPush = push
+	p.sceneInfoPushSeq++
+}
+
+// GetSceneInfoPush 返回最近一份 NotifySceneInfo 与它的序号(序号 0 = 还没收到过)。
+// 等"这次请求带回来的推送":发请求前记下序号,之后轮询到序号变大(与 GetAttributePanel 同一用法)。
+func (p *Player) GetSceneInfoPush() (*scene.SceneInfoS2C, uint64) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.sceneInfoPush, p.sceneInfoPushSeq
 }
 
 // AddEntity adds an entity to the known list.
