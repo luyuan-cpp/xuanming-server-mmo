@@ -51,7 +51,7 @@ function New-MockPod {
 function Reset-MigrateFixture {
     foreach ($name in @('Apply-OneGoSvc', 'Apply-GoSvcMigrateJob', 'Get-GoSvcMigrateJobState',
         'Wait-GoSvcMigrateJobSettled', 'Assert-GoSvcMigrateJobNotInFlight', 'Wait-ForGoSvcMigrateJob',
-        'Write-GoSvcMigrateJobDiagnostics', 'Add-GoSvcCommandTopicEnv')) {
+        'Write-GoSvcMigrateJobDiagnostics', 'Add-GoSvcEnvEntries', 'Add-GoSvcCommandTopicEnv', 'Add-GoSvcTopicReplicationEnv')) {
         Restore-ProductionFunction $name
     }
     # Add-GoSvcEnvEntries:Add-GoSvcCommandTopicEnv / Add-GoSvcSecretEnv 共用的 env 注入助手,由 k8s_deploy 属主从两者中抽出。
@@ -93,12 +93,20 @@ function Reset-MigrateFixture {
         ConfigFile = 'friend.yaml'; ImageName = 'mmorpg-friend'; Port = 50400; Global = $true
     }
 
+    # data-service 是第三个带 MigrateJob 的服务,也是第一个**不是全局池**的(每个 zone 一份,迁的是同一个全局库)。
+    $script:GoSvcCatalogue['data-service'] = @{
+        ConfigMap = 'go-svc-data-service-config'; Manifest = 'data-service.yaml'; MigrateJob = 'data-service-migrate.yaml'
+        ConfigFile = 'data_service.yaml'; ImageName = 'mmorpg-data-service'; Port = 9000
+    }
+
     Set-Item Function:script:Get-GoSvcMigrateJobWaitSeconds { return $script:BudgetSeconds }
     Set-Item Function:script:New-GoSvcConfigMapYaml {
         param($SvcName, $CurrentZoneId, $CurrentClusterId)
         return "kind: ConfigMap`nmetadata:`n  name: go-svc-trade-config"
     }
     Set-Item Function:script:Resolve-ImagePullPolicy { param($ImageRef) return 'IfNotPresent' }
+    # 真实实现按 -KafkaBrokers 与档位算;这里固定成多 broker 的 3,证明注入值来自拓扑而不是写死的 1。
+    Set-Item Function:script:Get-KafkaTopology { return [pscustomobject]@{ ReplicationFactor = 3 } }
     # 真实实现读 bin/etc/base_deploy_config.yaml;这里给一个仓库里不会出现的代号 7,证明注入值来自契约而不是写死。
     Set-Item Function:script:Get-GoSvcCommandTopicContract {
         if ($script:CommandTopicContractError) { throw $script:CommandTopicContractError }
@@ -193,6 +201,21 @@ Test-Case 'friend 的迁移门禁与 trade 同链路：ConfigMap → Job → Dep
     Assert-True -Condition ($events -contains 'query:Job') -Because '成功必须来自 Job 查询，不能因为是新服务就直接放行'
 }
 
+# data-service(全局库 mmorpg_global)走同一条门禁:staging/prod 启动期不建表、不种号段行,而 Store.Required=true
+# 会让没有表的实例直接拒启,所以迁移 Job 必须先 Complete。用真 manifest 跑,顺带钉住两个文件都在、占位全部可替换。
+Test-Case 'data-service 的迁移门禁:ConfigMap → Job → Deployment,且 Deployment 是多副本形态' {
+    Reset-MigrateFixture
+    $script:JobAbsentBeforeApply = $true
+    Apply-OneGoSvc -SvcName 'data-service' -Namespace audit-zone -CurrentZoneId 1 -CurrentClusterId 0
+    $events = @($script:Events)
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because '迁移 Job 要读取先前创建的 ConfigMap'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because '表与号段行没就位,Store.Required 会让 data-service 拒启'
+    Assert-True -Condition ($events -contains 'query:Job') -Because '放行必须来自 Job 查询结果'
+    Assert-Match -Text $script:DeploymentContent -Pattern '(?m)^  replicas: 2\s*$' -Because 'data-service 不再是单副本'
+    Assert-Match -Text $script:DeploymentContent -Pattern 'name: data-service-pdb' -Because 'PDB 随主 manifest 一起 apply'
+}
+
+
 # 控制面命令 topic 契约(KAFKA_COMMAND_TOPIC_*)统一注入。背景:go/shared/kafkacmd 不配这两个变量就回落到 256 / 1,
 # 而 C++ gate / scene 消费的是 base_deploy_config.yaml 的代号,不一致时 Go 发给 gate / scene 的命令静默丢失。
 foreach ($svc in @('trade', 'friend')) {
@@ -205,6 +228,8 @@ foreach ($svc in @('trade', 'friend')) {
         Assert-Match -Text $content -Pattern '- name: KAFKA_COMMAND_TOPIC_PARTITIONS\s+value: "256"' -Because '分区数来自契约'
         Assert-Match -Text $content -Pattern '- name: KAFKA_COMMAND_TOPIC_GENERATION\s+value: "7"' -Because '代号来自契约,不是 kafkacmd 的编译期默认 1'
         Assert-Equal -Expected 1 -Actual ([regex]::Matches($content, 'name: KAFKA_COMMAND_TOPIC_GENERATION').Count) -Because '重复的 env 名会让其中一份静默失效'
+        Assert-Match -Text $content -Pattern '- name: KAFKA_TOPIC_REPLICATION_FACTOR\s+value: "3"' -Because 'topic 副本数来自 Kafka 拓扑,多 broker 集群上不能按 1 份建'
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($content, 'name: KAFKA_TOPIC_REPLICATION_FACTOR').Count) -Because '只能注入一份'
         Assert-NotMatch -Text $content -Pattern 'PLACEHOLDER_' -Because '注入不能打乱原有占位替换'
     }
 }
@@ -244,6 +269,17 @@ Test-Case 'Add-GoSvcCommandTopicEnv:manifest 形状不对或手写了变量一�
     $notList = "containers:`n  - name: x`n    env:`n    args: []`n"
     $failure = Get-ThrownMessage { Add-GoSvcCommandTopicEnv -SvcName x -ManifestContent $notList -Partitions 256 -Generation 2 }
     Assert-Match -Text $failure -Pattern '不是列表项' -Because 'env 下不是列表时插入会产出非法 YAML'
+}
+
+Test-Case 'Add-GoSvcTopicReplicationEnv:与命令 topic 契约叠加注入,手写同名变量被拒' {
+    Reset-MigrateFixture
+    $manifest = "containers:`n  - name: x`n    env:`n      - name: A`n        value: b`n"
+    $once = Add-GoSvcCommandTopicEnv -SvcName x -ManifestContent $manifest -Partitions 256 -Generation 2
+    $twice = Add-GoSvcTopicReplicationEnv -SvcName x -ManifestContent $once -ReplicationFactor 3
+    Assert-Match -Text $twice -Pattern '(?m)^    env:\n      # [^\n]*\n      - name: KAFKA_TOPIC_REPLICATION_FACTOR\n        value: "3"\n      # [^\n]*\n      - name: KAFKA_COMMAND_TOPIC_PARTITIONS\n        value: "256"\n      - name: KAFKA_COMMAND_TOPIC_GENERATION\n        value: "2"\n      - name: A' -Because '两组注入都落在同一个 env 列表里,缩进一致'
+    $handWritten = "containers:`n  - name: x`n    env:`n      - name: KAFKA_TOPIC_REPLICATION_FACTOR`n        value: `"1`"`n"
+    $failure = Get-ThrownMessage { Add-GoSvcTopicReplicationEnv -SvcName x -ManifestContent $handWritten -ReplicationFactor 3 }
+    Assert-Match -Text $failure -Pattern 'KAFKA_TOPIC_REPLICATION_FACTOR' -Because '手写一份副本数就是第二份真相:broker 数变了它不会跟着变'
 }
 
 foreach ($condition in @('Complete', 'Failed', 'FailureTarget')) {

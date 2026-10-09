@@ -102,7 +102,7 @@ func TestEnsureTopicsWaitsForCreatedTopicMetadata(t *testing.T) {
 				topics: map[string]sarama.TopicDetail{spec.Name: {NumPartitions: 10}},
 			})
 			admin.createErr = createErr
-			if err := ensureTopics(admin, []TopicSpec{spec}, admin.clock, admin.sleep); err != nil {
+			if err := ensureTopics(admin, []TopicSpec{spec}, 1, admin.clock, admin.sleep); err != nil {
 				t.Fatalf("delayed metadata must not reject successful creation: %v", err)
 			}
 			if admin.listCalls != 3 || len(admin.sleeps) == 0 {
@@ -143,7 +143,7 @@ func TestEnsureTopicsRejectsDelayedPartitionOrMarkerConflict(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			admin := newTopicAdminFake(t, topicMetadataReply{}, topicMetadataReply{}, topicMetadataReply{topics: tc.topics})
 			admin.createErr = sarama.ErrTopicAlreadyExists
-			err := ensureTopics(admin, []TopicSpec{{Name: topic, Partitions: 10, RetentionMs: 86400000}}, admin.clock, admin.sleep)
+			err := ensureTopics(admin, []TopicSpec{{Name: topic, Partitions: 10, RetentionMs: 86400000}}, 1, admin.clock, admin.sleep)
 			if err == nil || !strings.Contains(err.Error(), tc.message) {
 				t.Fatalf("delayed conflicting metadata must fail closed with %q: %v", tc.message, err)
 			}
@@ -156,7 +156,7 @@ func TestEnsureTopicsRejectsDelayedPartitionOrMarkerConflict(t *testing.T) {
 
 func TestEnsureTopicsMetadataVisibilityTimeout(t *testing.T) {
 	admin := newTopicAdminFake(t, topicMetadataReply{})
-	err := ensureTopics(admin, []TopicSpec{{Name: "db_task_zone_1", Partitions: 10, RetentionMs: 86400000}}, admin.clock, admin.sleep)
+	err := ensureTopics(admin, []TopicSpec{{Name: "db_task_zone_1", Partitions: 10, RetentionMs: 86400000}}, 1, admin.clock, admin.sleep)
 	if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "db_task_zone_1") {
 		t.Fatalf("invisible metadata must report the topic and deadline: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestEnsureTopicsRejectsMetadataArrivingAfterDeadline(t *testing.T) {
 	admin := newTopicAdminFake(t, topicMetadataReply{}, topicMetadataReply{
 		topics: map[string]sarama.TopicDetail{topic: {NumPartitions: 10}}, elapsed: 11 * time.Second,
 	})
-	err := ensureTopics(admin, []TopicSpec{{Name: topic, Partitions: 10, RetentionMs: 86400000}}, admin.clock, admin.sleep)
+	err := ensureTopics(admin, []TopicSpec{{Name: topic, Partitions: 10, RetentionMs: 86400000}}, 1, admin.clock, admin.sleep)
 	if !errors.Is(err, context.DeadlineExceeded) || admin.listCalls != 2 || len(admin.sleeps) != 0 || admin.retention != nil || len(admin.created) != 1 {
 		t.Fatalf("an in-flight query exceeding the deadline must not permit follow-up work: err=%v calls=%d", err, admin.listCalls)
 	}
@@ -182,8 +182,87 @@ func TestEnsureTopicsRejectsMetadataArrivingAfterDeadline(t *testing.T) {
 func TestEnsureTopicsMetadataErrorStopsImmediately(t *testing.T) {
 	cause := sarama.ErrTopicAuthorizationFailed
 	admin := newTopicAdminFake(t, topicMetadataReply{}, topicMetadataReply{err: cause})
-	err := ensureTopics(admin, []TopicSpec{{Name: "db_task_zone_1", Partitions: 10}}, admin.clock, admin.sleep)
+	err := ensureTopics(admin, []TopicSpec{{Name: "db_task_zone_1", Partitions: 10}}, 1, admin.clock, admin.sleep)
 	if !errors.Is(err, cause) || admin.listCalls != 2 || len(admin.sleeps) != 0 || len(admin.created) != 1 {
 		t.Fatalf("metadata errors must retain their cause without retrying: err=%v calls=%d", err, admin.listCalls)
+	}
+}
+
+// 副本数是部署契约:spec 不写时取调用方给的默认值(生产路径 = KAFKA_TOPIC_REPLICATION_FACTOR),
+// 数据 topic 与它的不可变分区 marker 用同一个副本数;spec 显式写了的以 spec 为准。
+func TestEnsureTopicsCreatesWithDeploymentReplicationFactor(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		specReplica    int16
+		defaultReplica int16
+		want           int16
+	}{
+		{"deployment_default", 0, 3, 3},
+		{"spec_overrides_default", 2, 3, 2},
+		{"unset_default_falls_back_to_one", 0, 0, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := TopicSpec{Name: "db_task_zone_1", Partitions: 10, ReplicaFactor: tc.specReplica}
+			admin := newTopicAdminFake(t, topicMetadataReply{}, topicMetadataReply{
+				topics: map[string]sarama.TopicDetail{spec.Name: {NumPartitions: 10, ReplicationFactor: tc.want}},
+			})
+			if err := ensureTopics(admin, []TopicSpec{spec}, tc.defaultReplica, admin.clock, admin.sleep); err != nil {
+				t.Fatalf("creation with the deployment replication factor must succeed: %v", err)
+			}
+			_, marker := partitionContractMarker(spec.Name, spec.Partitions)
+			if got := admin.created[spec.Name].ReplicationFactor; got != tc.want {
+				t.Fatalf("data topic replication factor = %d, want %d", got, tc.want)
+			}
+			if got := admin.created[marker].ReplicationFactor; got != tc.want {
+				t.Fatalf("partition marker replication factor = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+// 已存在的 topic 副本数低于契约 = 假冗余,启动期 fail-closed;高于契约、或元数据不带副本信息(0)不拦。
+func TestEnsureTopicsRejectsUnderReplicatedExistingTopic(t *testing.T) {
+	const topic = "db_task_zone_1"
+	_, marker := partitionContractMarker(topic, 10)
+	for _, tc := range []struct {
+		name       string
+		existing   int16
+		wantReject bool
+	}{
+		{"under_replicated", 1, true},
+		{"exact", 3, false},
+		{"over_replicated", 5, false},
+		{"unknown_replication", 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			admin := newTopicAdminFake(t, topicMetadataReply{topics: map[string]sarama.TopicDetail{
+				topic:  {NumPartitions: 10, ReplicationFactor: tc.existing},
+				marker: {NumPartitions: 1},
+			}})
+			err := ensureTopics(admin, []TopicSpec{{Name: topic, Partitions: 10, RetentionMs: 86400000}}, 3, admin.clock, admin.sleep)
+			if tc.wantReject {
+				if err == nil || !strings.Contains(err.Error(), "replication contract mismatch") {
+					t.Fatalf("an under-replicated topic must fail closed: %v", err)
+				}
+				if admin.retention != nil || len(admin.created) != 0 {
+					t.Fatal("a rejected topic must not be altered and nothing may be created")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("replication at or above the contract must pass: %v", err)
+			}
+			if len(admin.created) != 0 {
+				t.Fatalf("an existing topic with its marker must not trigger any creation: %+v", admin.created)
+			}
+		})
+	}
+}
+
+func TestParseReplicationFactor(t *testing.T) {
+	for raw, want := range map[string]int16{"": 1, "  ": 1, "1": 1, " 3 ": 3, "0": 1, "-2": 1, "abc": 1, "70000": 1} {
+		if got := parseReplicationFactor(raw); got != want {
+			t.Fatalf("parseReplicationFactor(%q) = %d, want %d", raw, got, want)
+		}
 	}
 }

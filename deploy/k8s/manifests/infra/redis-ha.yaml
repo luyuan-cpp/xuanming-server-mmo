@@ -1,0 +1,884 @@
+# 共享 Redis 的高可用形态:1 主 2 从 + 3 个哨兵 + 2 个入口代理
+# (docs/design/no-single-node-horizontal-scaling-20261001.md §5)。
+# k8s_deploy.ps1 在 -RedisReplicas 3(staging / prod 档默认)时 apply 本文件,**代替** redis.yaml;
+# 本机 kind / dev 档默认仍用 redis.yaml 的单实例。两份清单里的对象同名,所以可以原地从单实例切过来。
+#
+# 一句话说清结构:
+#   客户端 ──▶ Service redis(名字与 ClusterIP 都不变)──▶ redis-proxy(haproxy ×2)──▶ 当前的主
+#   三个 redis Pod 各带一个哨兵容器;哨兵负责判定主挂了并提升一个从。
+#
+# 为什么是「代理永远指向主」,而不是让客户端自己找哨兵 / 上 Redis Cluster:
+#   - go-zero 的 redis 封装只有 node / cluster 两种模式,没有 Sentinel;C++ 节点用的 hiredis 封装是单连接、
+#     启动时解析一次地址。让每个客户端都学会找主 = 改全部服务;
+#   - 这个库里有大量多 key 的 Lua、SCAN、事务与 RPOPLPUSH,没有统一的 hash tag,集群模式跑不了。
+#   所以切主这件事收口在服务端:客户端仍然只认识一个地址 redis:6379,连上去的永远是主。
+#
+# 代理把连接交给某个节点,必须**同时**满足两条:
+#   1) 该节点自己答 role:master;
+#   2) 至少 2 个哨兵说「主就是它」。
+#   只看 1) 会在网络分区时出现两个自称是主的节点各接一部分写入(脑裂);加上 2) 之后,少数派一侧拿不到流量。
+#   节点不再满足条件时,代理主动掐断已有连接(on-marked-down shutdown-sessions),客户端重连即落到新主 ——
+#   C++ / Java 这类不认识 READONLY 的客户端不需要任何额外逻辑。
+#   例外:三个哨兵**全都**连不上时(哨兵自己坏了),代理退回只看 1),不让哨兵故障连带打断 Redis。
+#
+# 数据安全的边界(要知情):
+#   - 主从复制是异步的,故障转移可能丢掉最后一小段写入(通常是毫秒级;单实例时期 AOF 每秒刷盘,本来也可能丢 1 秒)。
+#   - min-replicas-to-write 1:主身边一个在线的从都没有时**拒绝写入**。这是有意的 —— 被隔离的旧主继续收写,
+#     这些写入在它被降级时会全部丢弃(锁、会话、存档游标都在里面)。代价:三个 Pod 里同时坏两个时 Redis 只读。
+#   - 哨兵的多数派是 2/3:同时坏两个 Pod 就不能自动切主。
+#
+# 从单实例原地切过来(脚本 Apply-Infra 的配套分支会处理):redis-0 保留原 PVC 与数据、以主身份重启,
+# redis-1 / redis-2 新建后从它全量同步。**这是一次有停机窗口的变更**(redis-0 重启期间全服登录不可用)。
+# 反方向(3 → 1)脚本拒绝:主可能不在 redis-0 上,直接缩容会丢数据。
+#
+# **Service redis 不能删了重建**:C++ 节点启动时把它解析成 IP 存下来,重连用的是同一个 IP;
+# 重建 Service 会换 ClusterIP,所有 gate / scene / battle 都要重启才连得上。改 selector 用 apply,不要 delete。
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  selector:
+    app: redis-proxy
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+# 节点之间(复制、哨兵、代理的健康检查)互相寻址用的 headless Service:每个 Pod 一条固定的 DNS 名
+# redis-<n>.redis-headless.<ns>.svc.cluster.local。Pod 重建后 IP 会变,名字不变,所以复制关系、哨兵记住的主、
+# 代理的后端一律用名字。publishNotReadyAddresses:从要在主还没 Ready 时就能解析到它。
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-headless
+  labels:
+    app: redis
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+    - name: sentinel
+      port: 26379
+      targetPort: 26379
+---
+# 一次自愿驱逐(节点排空 / 集群升级)最多带走一个 redis Pod:剩下两个仍然有主、有一个在线的从、哨兵有多数派。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  labels:
+    app: redis
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: redis
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-proxy-pdb
+  labels:
+    app: redis-proxy
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: redis-proxy
+---
+# 启动 / 探针 / 停机脚本。全部是 POSIX sh(redis 镜像是 dash,haproxy 镜像是 busybox ash),不用 bash 语法。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-ha-scripts
+  labels:
+    app: redis
+data:
+  common.sh: |
+    # 由其它脚本用 `. /scripts/common.sh` 引入。
+    NS="${POD_NAMESPACE:?POD_NAMESPACE 未注入}"
+    DOMAIN="${CLUSTER_DOMAIN:-cluster.local}"
+    NODES="${REDIS_NODES:-3}"
+    MASTER_NAME=mymaster
+    ORDINAL="${HOSTNAME##*-}"
+    # redis-cli 从这个环境变量取密码:不出现在命令行里,也不会打出「密码写在命令行不安全」的告警。
+    # 只在非空时设置 —— 对没设密码的服务端发 AUTH 会报错。
+    if [ -n "${REDIS_PASSWORD:-}" ]; then
+      export REDISCLI_AUTH="$REDIS_PASSWORD"
+    fi
+
+    node_fqdn() {
+      echo "redis-$1.redis-headless.${NS}.svc.${DOMAIN}"
+    }
+    SELF="$(node_fqdn "$ORDINAL")"
+
+    # 问 $1 号 Pod 里的哨兵「现在的主是谁」。答不出(没起来 / 连不上 / 不认识)就什么都不输出。
+    sentinel_master_of() {
+      timeout 3 redis-cli -h "$(node_fqdn "$1")" -p 26379 sentinel get-master-addr-by-name "$MASTER_NAME" 2>/dev/null \
+        | head -n 1 | tr -d '\r' | grep '^redis-[0-9]' || true
+    }
+
+    # 问一圈哨兵,输出一行「票数 得票最多的主」;一个都答不出返回 1。$1 = 要跳过的 Pod 序号(不跳过传空串)。
+    sentinel_votes() {
+      votes=""
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        if [ "$i" != "$1" ]; then
+          m="$(sentinel_master_of "$i")"
+          if [ -n "$m" ]; then
+            votes="$votes $m"
+          fi
+        fi
+        i=$((i + 1))
+      done
+      [ -n "$votes" ] || return 1
+      printf '%s' "$votes" | tr ' ' '\n' | grep . | sort | uniq -c | sort -rn | head -n 1 | sed 's/^ *//'
+    }
+
+    # 同上,但只输出主机名(不关心票数的调用方用)。
+    ask_sentinels() {
+      top="$(sentinel_votes "$1")" || return 1
+      echo "${top#* }"
+    }
+
+    # 本机 redis 的角色:master / slave;问不到输出空。
+    local_role() {
+      timeout 2 redis-cli -h 127.0.0.1 -p 6379 info replication 2>/dev/null | tr -d '\r' | sed -n 's/^role://p'
+    }
+
+  redis-start.sh: |
+    #!/bin/sh
+    set -eu
+    . /scripts/common.sh
+    QUORUM=$((NODES / 2 + 1))
+
+    # 别的节点里,有没有「已经连续运行了一阵子的从」。用来区分两种情况(见下面 MASTER = SELF 的分支)。
+    long_running_replica_exists() {
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        if [ "$i" != "$ORDINAL" ]; then
+          info="$(timeout 2 redis-cli -h "$(node_fqdn "$i")" -p 6379 info 2>/dev/null | tr -d '\r' || true)"
+          role="$(printf '%s\n' "$info" | sed -n 's/^role://p')"
+          up="$(printf '%s\n' "$info" | sed -n 's/^uptime_in_seconds://p')"
+          case "$up" in
+            ''|*[!0-9]*) ;;
+            *) if [ "$role" = "slave" ] && [ "$up" -ge 30 ]; then return 0; fi ;;
+          esac
+        fi
+        i=$((i + 1))
+      done
+      return 1
+    }
+
+    # 有没有哨兵已经判当前的主下线,或者正在切主。
+    sentinels_see_master_down() {
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        flags="$(timeout 3 redis-cli -h "$(node_fqdn "$i")" -p 26379 sentinel master "$MASTER_NAME" 2>/dev/null \
+          | tr -d '\r' | grep -A1 '^flags$' | tail -n 1 || true)"
+        case "$flags" in
+          *s_down*|*o_down*|*failover*) return 0 ;;
+        esac
+        i=$((i + 1))
+      done
+      return 1
+    }
+
+    # 1) 问哨兵「现在的主是谁」,等到多数哨兵意见一致为止,最多 15 秒。
+    #    不能问一次就算:整个集群一起重启时,redis 容器和哨兵容器同时起,问早了没人答;
+    #    本 Pod 的哨兵如果错过了一次切主,它单独给出的答案也是旧的。
+    MASTER=""
+    best=""
+    n=0
+    while [ "$n" -lt 15 ]; do
+      top="$(sentinel_votes "" || true)"
+      if [ -n "$top" ]; then
+        best="${top#* }"
+        if [ "${top%% *}" -ge "$QUORUM" ]; then
+          MASTER="$best"
+          break
+        fi
+      fi
+      sleep 1
+      n=$((n + 1))
+    done
+    if [ -z "$MASTER" ] && [ -n "$best" ]; then
+      MASTER="$best"
+      echo "[redis-start] 15 秒内没有凑出多数哨兵的一致意见,采用得票最多的: $MASTER"
+    fi
+
+    if [ -z "$MASTER" ]; then
+      # 一个哨兵都答不出:只应出现在哨兵全部起不来的时候。按约定以 redis-0 为主。
+      MASTER="$(node_fqdn 0)"
+      echo "[redis-start] 没有哨兵答得出当前的主,按约定以 redis-0 为主"
+    elif [ "$MASTER" = "$SELF" ]; then
+      # 哨兵认为主是我。两种情况要分开:
+      #   a) 只有我崩了 / 被杀了 / 被重建了,别的节点一直在跑。这时不能直接以主身份回来:重放 AOF 的整段时间里
+      #      全服不可用,而且哨兵**不会**切主(它把 LOADING 当作活着)。先不启动,等哨兵按正常流程把主切走
+      #      (判下线 5 秒 + 选举),我再以从的身份回来。
+      #      判据有两条,满足一条即可:已经有哨兵判我下线 / 正在切主;或者别的节点里有连续运行了一阵子的从
+      #      (我倒下还不到 5 秒、哨兵还没来得及判的时候靠这一条)。
+      #   b) 整个集群一起重启(断电、整体停机后拉起),或全新部署。这时我的数据是最新的,直接以主启动。
+      if sentinels_see_master_down || long_running_replica_exists; then
+        echo "[redis-start] 哨兵说主还是我,而别的节点一直在运行(或哨兵已判我下线):先等它们切主,最多 20 秒"
+        n=0
+        while [ "$n" -lt 20 ]; do
+          sleep 1
+          now="$(ask_sentinels "" || true)"
+          if [ -n "$now" ] && [ "$now" != "$SELF" ]; then
+            MASTER="$now"
+            break
+          fi
+          n=$((n + 1))
+        done
+      else
+        echo "[redis-start] 哨兵说主是我,别的节点也都刚启动(或还没起来):直接以主启动"
+      fi
+    fi
+
+    # --replica-announce-ip:让主(进而让哨兵)用**名字**记住这个从。Pod 重建后 IP 会变,名字不变。
+    # --min-replicas-*:见文件头「数据安全的边界」。
+    # --repl-diskless-sync-delay:从要做全量同步时,主默认先等 5 秒「攒一批」再开始。这里只有两个从,
+    #   攒批没有意义,而切主时哨兵要等从同步完才算切换结束,白等 5 秒。
+    set -- redis-server \
+      --appendonly yes \
+      --replica-announce-ip "$SELF" \
+      --min-replicas-to-write 1 \
+      --min-replicas-max-lag 10 \
+      --repl-diskless-sync-delay 1
+    if [ -n "${REDIS_PASSWORD:-}" ]; then
+      # masterauth 与 requirepass 用同一个密码:任何一个节点都可能在下一次切主后变成主或从。
+      set -- "$@" --requirepass "$REDIS_PASSWORD" --masterauth "$REDIS_PASSWORD"
+    fi
+    if [ "$MASTER" = "$SELF" ]; then
+      echo "[redis-start] 以主身份启动: $SELF"
+    else
+      echo "[redis-start] 以从身份启动: $SELF 跟随 $MASTER"
+      set -- "$@" --replicaof "$MASTER" 6379
+    fi
+    exec "$@"
+
+  redis-ready.sh: |
+    #!/bin/sh
+    # 就绪判据:
+    #   - 答 PONG(加载数据期间答的是 LOADING,不算就绪);
+    #   - 主:就绪;从:与主的复制链路已经接上(首次全量同步做完)才算就绪。
+    # 后一条是给滚动更新用的:StatefulSet 一次换一个 Pod、等它就绪再换下一个。从还没同步完就去重启主,
+    # 哨兵可能把一个数据不全的从提升上来。
+    . /scripts/common.sh
+    [ "$(timeout 2 redis-cli -h 127.0.0.1 -p 6379 ping 2>/dev/null)" = "PONG" ] || exit 1
+    info="$(timeout 2 redis-cli -h 127.0.0.1 -p 6379 info replication 2>/dev/null)" || exit 1
+    case "$info" in
+      *role:master*) exit 0 ;;
+      *master_link_status:up*) exit 0 ;;
+    esac
+    exit 1
+
+  redis-prestop.sh: |
+    #!/bin/sh
+    # 正常停机(滚动更新 / 节点排空)时,如果我是主,先把主**无损地**交出去再停。
+    #
+    # 为什么不能只发一条「请切主」:哨兵提升某个从之后,旧主身边还挂着另一个从,它会继续接收写入约 1 秒;
+    # 随后那个从也被改去跟新主、并且因为数据比新主「多」而整个丢弃重来 —— 这 1 秒里已经答复成功的写入就没了
+    # (2026-10-08 在本机 kind 上实测到)。而且哨兵要过 10 秒左右才来把旧主降级,期间连在旧主上的长连接一直报错。
+    #
+    # 所以顺序是:
+    #   0) 等某个**别的 Pod** 上的哨兵确认「主身边在线的从,我都看得见、都健康」(本 Pod 的哨兵容器正在和我一起被停掉,不能用);
+    #   1) 暂停写入(客户端的写命令被挂起,不是报错);
+    #   2) 等至少一个从追平;
+    #   3) 请第 0 步选中的那个哨兵切主;
+    #   4) 等其它哨兵都改口;
+    #   5) 把还连着我的客户端请走(它们重连即落到新主;被挂起的写命令随连接一起断开,没有执行),自己降为从。
+    # 任何一步走不通都解除暂停、照常停机 —— 那时由哨兵按「主挂了」的流程自行切主。
+    #
+    # 第 0 步是实测补上的:滚动更新时上一个 Pod(某个从)刚重启完、复制已经接上、K8s 认为它就绪了,
+    # 但 Pod 的 IP 变了,哨兵要十几秒才重新连上它。这时就去切主,哨兵眼里那个从还是「下线」的,切完不会让它去跟新主,
+    # 新主身边暂时一个从都没有 —— 按 min-replicas-to-write 拒绝写入约 8 秒。
+    . /scripts/common.sh
+    [ "$(local_role)" = "master" ] || exit 0
+
+    rc() {
+      timeout 3 redis-cli -h 127.0.0.1 -p 6379 "$@" 2>/dev/null | tr -d '\r'
+    }
+
+    # 只在主身边**确实有同步中的从**时才交接:让哨兵去提升一个还在做首次同步的从,等于把数据清空。
+    online="$(rc info replication | grep -c 'state=online' || true)"
+    if [ "${online:-0}" -lt 1 ]; then
+      echo "[redis-prestop] 我是主,但没有在线的从,不交接"
+      exit 0
+    fi
+
+    # 0) 找一个把从都看清楚了的哨兵,最多等 25 秒;等不到就用最后问的那个(总比不交接强)。
+    #    「看清楚」= 它登记的从里,状态恰好是 slave(没有 s_down / disconnected 之类的附加标记)并且与主的链路正常的,
+    #    不少于主自己数出来的在线从的个数。
+    PEER=""
+    n=0
+    while [ "$n" -lt 25 ] && [ -z "$PEER" ]; do
+      # 等的过程中从都走了(整体停机:它们没有主可交,比我先退出)就不用交接了。
+      online="$(rc info replication | grep -c 'state=online' || true)"
+      if [ "${online:-0}" -lt 1 ]; then
+        echo "[redis-prestop] 在线的从都没了(整体停机?),不交接"
+        exit 0
+      fi
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        if [ "$i" != "$ORDINAL" ]; then
+          seen="$(timeout 3 redis-cli -h "$(node_fqdn "$i")" -p 26379 sentinel replicas "$MASTER_NAME" 2>/dev/null | tr -d '\r')"
+          healthy="$(printf '%s\n' "$seen" | grep -A1 '^flags$' | grep -c '^slave$' || true)"
+          linked="$(printf '%s\n' "$seen" | grep -A1 '^master-link-status$' | grep -c '^ok$' || true)"
+          if [ "${healthy:-0}" -ge "$online" ] && [ "${linked:-0}" -ge "$online" ]; then
+            PEER="$i"
+            break
+          fi
+        fi
+        i=$((i + 1))
+      done
+      if [ -z "$PEER" ]; then
+        sleep 1
+        n=$((n + 1))
+      fi
+    done
+    if [ -z "$PEER" ]; then
+      echo "[redis-prestop] 25 秒内没有哨兵把从都看清楚,照常尝试交接"
+    fi
+
+    # 1) 暂停写入。20 秒后自动解除,是脚本中途被杀时的保险。
+    rc client pause 20000 write >/dev/null
+
+    # 2) 等至少一个从追平(从每秒向主报告一次进度,所以通常要等 1 秒左右;最多等 3 秒)
+    n=0
+    while [ "$n" -lt 30 ]; do
+      info="$(rc info replication)"
+      mine="$(printf '%s\n' "$info" | sed -n 's/^master_repl_offset://p')"
+      best="$(printf '%s\n' "$info" | sed -n 's/^slave[0-9]*:.*state=online,offset=\([0-9]*\),.*/\1/p' | sort -n | tail -n 1)"
+      if [ -n "$mine" ] && [ -n "$best" ] && [ "$best" -ge "$mine" ]; then
+        break
+      fi
+      sleep 0.1
+      n=$((n + 1))
+    done
+
+    # 3) 请哨兵切主:先问第 0 步选中的那个,它不接受再依次问其它 Pod 上的
+    asked=0
+    for i in $PEER $(seq 0 $((NODES - 1))); do
+      if [ "$i" != "$ORDINAL" ]; then
+        r="$(timeout 3 redis-cli -h "$(node_fqdn "$i")" -p 26379 sentinel failover "$MASTER_NAME" 2>&1 | tr -d '\r' || true)"
+        if [ "$r" = "OK" ]; then
+          asked=1
+          break
+        fi
+      fi
+    done
+    if [ "$asked" != "1" ]; then
+      echo "[redis-prestop] 没有哨兵接受切换请求,解除暂停后直接停(哨兵会在判下线后自行切主)"
+      rc client unpause >/dev/null
+      exit 0
+    fi
+
+    # 4) 等其它 Pod 上的哨兵**全都**改口(代理要凑够多数票才会把连接交给新主),最多 20 秒
+    NEW=""
+    n=0
+    while [ "$n" -lt 100 ]; do
+      agreed=""
+      split=0
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        if [ "$i" != "$ORDINAL" ]; then
+          m="$(sentinel_master_of "$i")"
+          if [ -z "$m" ] || [ "$m" = "$SELF" ]; then
+            split=1
+          elif [ -z "$agreed" ]; then
+            agreed="$m"
+          elif [ "$agreed" != "$m" ]; then
+            split=1
+          fi
+        fi
+        i=$((i + 1))
+      done
+      if [ "$split" = "0" ] && [ -n "$agreed" ]; then
+        NEW="$agreed"
+        break
+      fi
+      sleep 0.2
+      n=$((n + 1))
+    done
+    if [ -z "$NEW" ]; then
+      echo "[redis-prestop] 20 秒内哨兵没有切到新主,解除暂停后直接停"
+      rc client unpause >/dev/null
+      exit 0
+    fi
+
+    # 5) 给代理 1 秒多的时间看到哨兵的新结论,然后请走客户端、自降为从。
+    #    顺序不能反:先解除暂停的话,被挂起的写命令会在一个已经不是主的节点上执行出 READONLY。
+    sleep 1.5
+    rc client kill type normal >/dev/null
+    rc client kill type pubsub >/dev/null
+    rc replicaof "$NEW" 6379 >/dev/null
+    rc client unpause >/dev/null
+    echo "[redis-prestop] 主已交给 $NEW"
+    exit 0
+
+  sentinel-start.sh: |
+    #!/bin/sh
+    set -eu
+    . /scripts/common.sh
+    CONF=/data/sentinel/sentinel.conf
+    mkdir -p /data/sentinel
+
+    # 口令的字符集限制(只在高可用形态下有):哨兵会把口令**原样、不加引号**写回它自己的配置文件
+    # (sentinel auth-pass / sentinel-pass 两行,Redis 自身的行为),口令里有空白、引号或反斜杠时,
+    # 这次能启动,下一次重启读这份文件就报 "Unbalanced quotes" 起不来(2026-10-08 实测)。
+    # 所以宁可现在就拒启、把话说清楚。k8s_deploy.ps1 在部署入口有同一条检查。
+    case "${REDIS_PASSWORD:-}" in
+      *[[:space:]\"\'\\]*)
+        echo "[sentinel-start] 拒绝启动:Redis 口令里含有空白、引号或反斜杠。哨兵无法把这样的口令存回配置文件,请换一个只含字母、数字和 ._~@%+=:,^- 的口令。" >&2
+        exit 1
+        ;;
+    esac
+
+    # 哨兵会把「当前的主、已知的从、已知的其它哨兵、自己的身份 ID」写回这份配置文件,所以它放在 PVC 上:
+    #   - 身份 ID 不能每次重启都换:别的哨兵会把旧 ID 当成另一个(永远联系不上的)哨兵记着,已知哨兵的总数只增不减,
+    #     「多数派」的门槛跟着涨,几次重启之后就再也凑不够票数切主;
+    #   - 整个集群断电重启之后,靠它记得上一任主是谁(那个节点的数据最新)。
+    # 所以只在文件不存在时生成。
+    if [ ! -s "$CONF" ]; then
+      MASTER="$(ask_sentinels "$ORDINAL" || true)"
+      if [ -z "$MASTER" ]; then
+        MASTER="$(node_fqdn 0)"
+      fi
+      QUORUM=$((NODES / 2 + 1))
+      echo "[sentinel-start] 首次启动:监视的主 = $MASTER,判定下线需要 $QUORUM 票"
+      {
+        echo "port 26379"
+        echo "dir /data/sentinel"
+        # 用名字而不是 IP 记录和通告节点(Redis 6.2+)。
+        echo "sentinel resolve-hostnames yes"
+        echo "sentinel announce-hostnames yes"
+        echo "sentinel announce-ip $SELF"
+        echo "sentinel monitor $MASTER_NAME $MASTER 6379 $QUORUM"
+        # 5 秒联系不上判主观下线;30 秒内切不完算本次失败、换下一个哨兵重来;一次只让一个从去重新同步。
+        echo "sentinel down-after-milliseconds $MASTER_NAME 5000"
+        echo "sentinel failover-timeout $MASTER_NAME 30000"
+        echo "sentinel parallel-syncs $MASTER_NAME 1"
+      } > "$CONF.tmp"
+      mv "$CONF.tmp" "$CONF"
+    fi
+
+    # 密码不写进上面的文件模板,而是每次启动从环境变量传入:命令行选项在配置文件**之后**解析,
+    # 所以轮换密码后重启即生效,不用去改 PVC 上那份被哨兵改写过的文件。
+    #   requirepass      访问哨兵自己要密码(否则集群内任何人都能命令它切主)
+    #   auth-pass        哨兵连 redis 节点用的密码
+    #   sentinel-pass    哨兵之间互连用的密码
+    if [ -n "${REDIS_PASSWORD:-}" ]; then
+      exec redis-sentinel "$CONF" \
+        --requirepass "$REDIS_PASSWORD" \
+        --sentinel auth-pass "$MASTER_NAME" "$REDIS_PASSWORD" \
+        --sentinel sentinel-pass "$REDIS_PASSWORD"
+    fi
+    exec redis-sentinel "$CONF"
+
+  proxy-start.sh: |
+    #!/bin/sh
+    # 生成 haproxy 配置并启动。路由规则见 redis-ha.yaml 文件头。
+    set -eu
+    NS="${POD_NAMESPACE:?POD_NAMESPACE 未注入}"
+    DOMAIN="${CLUSTER_DOMAIN:-cluster.local}"
+    NODES="${REDIS_NODES:-3}"
+    QUORUM=$((NODES / 2 + 1))
+    CFG=/tmp/haproxy.cfg
+
+    node_fqdn() {
+      echo "redis-$1.redis-headless.${NS}.svc.${DOMAIN}"
+    }
+
+    # 健康检查里的认证:密码不直接写成配置文本(引号、空格、反斜杠都会撞上 haproxy 的转义规则),
+    # 而是把整条 AUTH 命令按 Redis 协议编码成十六进制,用 send-binary 原样发出去。
+    AUTH_HEX=""
+    if [ -n "${REDIS_PASSWORD:-}" ]; then
+      len="$(printf '%s' "$REDIS_PASSWORD" | wc -c | tr -d ' ')"
+      AUTH_HEX="$(printf '*2\r\n$4\r\nAUTH\r\n$%s\r\n%s\r\n' "$len" "$REDIS_PASSWORD" | od -An -v -tx1 | tr -d ' \n')"
+    fi
+    emit_auth_check() {
+      if [ -n "$AUTH_HEX" ]; then
+        echo "  tcp-check send-binary ${AUTH_HEX}"
+        echo "  tcp-check expect min-recv 5 string +OK"
+      fi
+    }
+
+    # 关于下面每条 expect 都带的 min-recv:不写它时,收到的应答里找不到期望的字符串,haproxy 会一直等「也许后面还有」,
+    # 直到检查超时(2 秒)才判失败 —— 每一次「这个节点不是主」的结论都要花 2 秒。写了之后,收够这么多字节仍不匹配
+    # 就立刻判失败。数值只要不超过正常应答的长度即可(这些应答都是一个 TCP 包发完的)。
+
+    # 后端地址用名字 + 运行期解析:Pod 重建后 IP 会变。init-addr 末尾的 none 让代理在名字暂时解析不出来时也能启动。
+    SERVER_OPTS="resolvers kube init-addr last,libc,none"
+    # 只加在转发业务流量的后端上:已经发给节点的数据 10 秒没被确认(节点连同它的 IP 一起消失了)就放弃这条连接,
+    # 代理随即关掉客户端那一侧,客户端重连。没有它,这种连接要等内核重传耗尽(十几分钟)。
+    DATA_OPTS="tcp-ut 10s"
+
+    {
+      cat <<'EOF'
+    global
+      log stdout format raw daemon notice
+      maxconn 20000
+      # 收到停止信号后先停止接新连接;Redis 连接都是长连接,不会自己结束,10 秒后强制关闭(客户端重连到另一个代理)。
+      hard-stop-after 10s
+      # 只听本机的诊断口,排障用,例如:
+      #   kubectl exec <代理 Pod> -- sh -c 'echo "show servers state" | nc 127.0.0.1 9999'
+      #   kubectl exec <代理 Pod> -- sh -c 'echo "show sess" | nc 127.0.0.1 9999'
+      stats socket ipv4@127.0.0.1:9999 level admin
+
+    defaults
+      mode tcp
+      log global
+      # 只记录异常连接与后端状态变化;正常连接不逐条记(连接池会频繁建连)。
+      option dontlog-normal
+      timeout connect 3s
+      timeout check 2s
+      # 空闲连接保留 1 小时:客户端的连接池会留着暂时不用的连接,太短的超时等于不停地替它们断线重连。
+      timeout client 1h
+      timeout server 1h
+      # 两侧都开 TCP keepalive,并把探测调密(默认要空闲 2 小时才开始探测):
+      # 对端主机直接消失(没有 FIN / RST)时,空闲连接在 10 + 5×3 = 25 秒内被发现并关闭。
+      option clitcpka
+      option srvtcpka
+      clitcpka-idle 10s
+      clitcpka-intvl 5s
+      clitcpka-cnt 3
+      srvtcpka-idle 10s
+      srvtcpka-intvl 5s
+      srvtcpka-cnt 3
+
+    resolvers kube
+      parse-resolv-conf
+      resolve_retries 3
+      timeout resolve 1s
+      timeout retry 1s
+      hold valid 2s
+      hold nx 2s
+      hold other 2s
+      hold refused 2s
+      hold timeout 2s
+      hold obsolete 5s
+
+    frontend health
+      bind :8405
+      mode http
+      monitor-uri /healthz
+
+    frontend redis_in
+      bind :6379
+    EOF
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        # 节点 i 自己答 role:master,并且多数哨兵说主就是它
+        echo "  use_backend redis_${i} if { srv_is_up(redis_${i}/node) } { nbsrv(quorum_${i}) ge ${QUORUM} }"
+        i=$((i + 1))
+      done
+      # 一个哨兵都连不上:退回只看节点自述(不让哨兵故障连带打断 Redis)
+      echo "  use_backend redis_selfreport if { nbsrv(sentinels_alive) eq 0 }"
+      echo "  default_backend redis_none"
+      echo ""
+      echo "# 没有任何 server:连进来的连接立即被关闭,客户端按自己的重试策略再来。"
+      echo "backend redis_none"
+      echo ""
+      echo "backend sentinels_alive"
+      echo "  option tcp-check"
+      echo "  tcp-check connect"
+      emit_auth_check
+      echo '  tcp-check send PING\r\n'
+      echo "  tcp-check expect min-recv 5 string +PONG"
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        echo "  server s${i} $(node_fqdn "$i"):26379 check inter 1s fall 3 rise 1 ${SERVER_OPTS}"
+        i=$((i + 1))
+      done
+
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        echo ""
+        echo "# 有几个哨兵认为主是 redis-${i}"
+        echo "backend quorum_${i}"
+        echo "  option tcp-check"
+        echo "  tcp-check connect"
+        emit_auth_check
+        echo '  tcp-check send SENTINEL\ get-master-addr-by-name\ mymaster\r\n'
+        echo "  tcp-check expect min-recv 32 string redis-${i}.redis-headless."
+        j=0
+        while [ "$j" -lt "$NODES" ]; do
+          # fall 1:哨兵一改口就不再把票算给旧主。单次检查失败最多让这个哨兵的一票缺席 1 秒,三票里本来就只要两票。
+          echo "  server s${j} $(node_fqdn "$j"):26379 check inter 1s fall 1 rise 1 ${SERVER_OPTS}"
+          j=$((j + 1))
+        done
+        echo ""
+        echo "backend redis_${i}"
+        echo "  option tcp-check"
+        echo "  tcp-check connect"
+        emit_auth_check
+        echo '  tcp-check send PING\r\n'
+        echo "  tcp-check expect min-recv 5 string +PONG"
+        echo '  tcp-check send INFO\ replication\r\n'
+        echo "  tcp-check expect min-recv 40 string role:master"
+        echo "  server node $(node_fqdn "$i"):6379 check inter 1s fall 2 rise 1 on-marked-down shutdown-sessions ${DATA_OPTS} ${SERVER_OPTS}"
+        i=$((i + 1))
+      done
+
+      echo ""
+      echo "# 哨兵全部失联时的退路:跟随上面各节点自己的检查结果(不另起一套检查)。"
+      echo "backend redis_selfreport"
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        echo "  server r${i} $(node_fqdn "$i"):6379 track redis_${i}/node on-marked-down shutdown-sessions ${DATA_OPTS} ${SERVER_OPTS}"
+        i=$((i + 1))
+      done
+    } > "$CFG"
+
+    haproxy -c -f "$CFG"
+    exec haproxy -db -f "$CFG"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  serviceName: redis-headless
+  replicas: 3
+  # 三个 Pod 同时创建,而不是 0 → 1 → 2 逐个等就绪:整个集群断电重启时,上一任主可能是 redis-1,
+  # 而 redis-0 作为从要等主起来才就绪 —— 按序创建会在这里互相等死。
+  # 这个字段创建后不能改:从单实例清单切过来时,脚本会先 `delete --cascade=orphan` 旧的 StatefulSet(Pod 与 PVC 原样保留)。
+  # 滚动更新不受它影响,仍然一次换一个、等就绪再换下一个。
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      # 停机顺序:preStop 交接主(通常 3 ~ 5 秒;上一个 Pod 刚重启完时要先等哨兵重新连上它,约 15 秒;最坏约 60 秒)
+      # → SIGTERM → redis 把 AOF 刷盘后退出。
+      terminationGracePeriodSeconds: 90
+      affinity:
+        podAntiAffinity:
+          # 尽量一个节点一个:三个 Pod 落在同一台机器上,那台机器一坏就全没了。
+          # 用 preferred 而不是 required,是为了单节点的本机 kind 也能起得来;正式集群要保证至少 3 个可调度节点。
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: redis
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: redis
+          image: redis:7.2
+          command: ["sh", "/scripts/redis-start.sh"]
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: REDIS_NODES
+              value: "3"
+            # 与 redis.yaml 同一个**可选** Secret:dev 档不注入密码,Secret 不存在则无密码启动。
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+                  optional: true
+          ports:
+            - containerPort: 6379
+              name: redis
+          # 启动探针只看「进程起来并且数据加载完」,给 AOF 重放 / 首次全量同步留 5 分钟。
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - '. /scripts/common.sh; [ "$(timeout 2 redis-cli -h 127.0.0.1 -p 6379 ping 2>/dev/null)" = "PONG" ]'
+            periodSeconds: 5
+            timeoutSeconds: 4
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: ["sh", "/scripts/redis-ready.sh"]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "/scripts/redis-prestop.sh"]
+          # 与 redis.yaml 同一取舍:只写 requests,不写 limits 与 --maxmemory(这里存的是锁与会话,不能被淘汰;
+          # 上限要和压测数据一起定)。
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+        - name: sentinel
+          image: redis:7.2
+          command: ["sh", "/scripts/sentinel-start.sh"]
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: REDIS_NODES
+              value: "3"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+                  optional: true
+          ports:
+            - containerPort: 26379
+              name: sentinel
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - '. /scripts/common.sh; [ "$(timeout 2 redis-cli -h 127.0.0.1 -p 26379 ping 2>/dev/null)" = "PONG" ]'
+            periodSeconds: 5
+            timeoutSeconds: 4
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 26379
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          volumeMounts:
+            # 与 redis 容器共用同一块卷:哨兵的状态文件放在 /data/sentinel 下(见 sentinel-start.sh)。
+            - name: redis-data
+              mountPath: /data
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: scripts
+          configMap:
+            name: redis-ha-scripts
+  # 与 redis.yaml 逐字相同(这一段创建后不能改,两份清单必须一致才能原地切换)。
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 8Gi
+---
+# 入口代理。无状态,两个副本;Service redis 指向它们。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-proxy
+  labels:
+    app: redis-proxy
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: redis-proxy
+  template:
+    metadata:
+      labels:
+        app: redis-proxy
+    spec:
+      terminationGracePeriodSeconds: 20
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: redis-proxy
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: haproxy
+          image: haproxy:3.2-alpine
+          command: ["sh", "/scripts/proxy-start.sh"]
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: REDIS_NODES
+              value: "3"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+                  optional: true
+          ports:
+            - containerPort: 6379
+              name: redis
+            - containerPort: 8405
+              name: health
+          # 探针只看代理进程自己是否正常,**不**看后面有没有主:主不在时把代理也判成未就绪,
+          # 只会让故障转移结束后多等一轮探针才恢复。
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8405
+            # 代理刚启动时所有后端都先被当成「在线」,要等头两轮健康检查(各 1 秒)做完才知道谁是主;
+            # 在那之前不接流量,否则连接会被随手交给 redis-0。
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8405
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: scripts
+          configMap:
+            name: redis-ha-scripts

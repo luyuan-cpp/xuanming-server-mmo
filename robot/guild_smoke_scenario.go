@@ -43,6 +43,10 @@ package main
 // 经济段(B5c,guild_smoke.economy=true 时):GUILD_SMOKE_OK 之后由 robot_9214 / 9215 另建一个帮会跑
 // 捐献 / 升级 / 兑换,通过打印 `GUILD_ECONOMY_SMOKE_OK mode=full|degraded …`,失败的 step 形如 `economy-7-silver`。
 // 步骤与两种模式见 guild_economy_smoke.go 文件头。
+//
+// 活动段(B6a-cli,guild_smoke.activities=true 时):经济段之后由 robot_9216–9219 另建一个帮会跑
+// 元宵灯会 / 中秋团圆(06-activities.md §6.44 的 S1–S8),通过打印 `GUILD_SMOKE_ACTIVITIES_OK guild_id=…`,
+// 失败打印 `GUILD_SMOKE_ACTIVITIES_FAIL step=Sx reason=…`(退出码同样是 1)。步骤见 guild_activity_smoke.go 文件头。
 
 import (
 	"context"
@@ -707,6 +711,10 @@ func RunGuildSmoke(cfg *config.Config) {
 	if sc.Economy {
 		runGuildEconomySmoke(cfg, stats)
 	}
+	// 活动段同理:自己的四个账号、自己的帮会,排在经济段的会话收尾之后。
+	if sc.Activities {
+		runGuildActivitySmoke(cfg, stats)
+	}
 	_ = zap.L().Sync()
 }
 
@@ -993,7 +1001,13 @@ func guildSmokeIsGuildMessage(messageId uint32) bool {
 		game.GuildServiceDonateToGuildMessageId,
 		game.GuildServiceUpgradeGuildMessageId,
 		game.GuildServiceGetGuildShopMessageId,
-		game.GuildServiceBuyGuildShopGoodsMessageId:
+		game.GuildServiceBuyGuildShopGoodsMessageId,
+		// 活动(B6):五个号在 B6a 一次占齐,历练两个在 B6b 落地前恒回 kGuildActivityNotOpen。
+		game.GuildServiceGetGuildActivitiesMessageId,
+		game.GuildServiceLightGuildLanternMessageId,
+		game.GuildServiceClaimGuildReunionMessageId,
+		game.GuildServiceStartGuildTrialMessageId,
+		game.GuildServiceRespondGuildTrialInviteMessageId:
 		return true
 	}
 	return false

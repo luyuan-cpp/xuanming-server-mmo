@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <cstdint>
 
 // 回合制战斗引擎常量(纯逻辑库,零网络/零 ECS 依赖,设计文档 §5.1)。
@@ -105,6 +106,66 @@ inline constexpr uint32_t kMaxItemUsesPerBattlePvp = 5;
 
 // 子 buff 递归深度上限(防表配环)
 inline constexpr uint32_t kMaxSubBuffDepth = 8;
+
+// ---- 战斗类属性(装备加成,docs/design/equipment-attributes.md §4.5,D3–D8) ----
+//
+// 数值来自 BattleActorState.combat(玩家快照带入;怪物 / 宝宝全 0),百分比一律是整数百分点。
+//
+// 随机数消费顺序(确定性铁律:调换任何两步 = 平移全部同种子回放,必须同步刷新单测基线):
+//   普攻 / 单体技能选目标:只有目标失效需要重选时才掷一次 RandIndex,排在该次行动的最前;
+//   普攻的每一段:命中(RollHit)→ 必杀 → 落伤害 → 反震 → 连击续段判定;
+//   整次普攻(含连击追加段)结束后:反击判定 → 反击那一下的 命中 → 必杀 → 落伤害;
+//   技能的每个目标:命中 → 必杀 → 落伤害 → effect[] 逐个 buff 的抗异常判定。
+// 普攻这几步的先后由单测 CombatFractionalRollsFollowDocumentedRandomOrder 用独立随机源逐步对账
+// (概率取 0 / 100 的用例两端都不掷骰,看不出顺序被调换)。
+// 连击 / 反击 / 反震 / 抗异常的概率判定走 TurnBattleEngine::RollPercent:概率 <= 0 恒不成立、
+// >= 100 恒成立,两端都不消耗随机数(与 RollHit 的短路口径一致),只有 1..99 才掷一次 Rand01。
+// 所以属性全 0 的单位(怪物、宝宝、无装备玩家)的事件流与本功能落地前逐位一致。
+// 必杀是唯一的例外:它沿用落地前的写法(合计暴击率 > 0 即掷骰,满 100 也掷),
+// 改成两端短路会平移存量回放里所有满暴击单位之后的随机序列。
+
+// 必杀伤害倍率(D6):物理 / 法术必杀共用,沿用引擎落地前写死的 ×2
+inline constexpr double kCriticalDamageMultiplier = 2.0;
+
+// 连击(D3):普攻命中后按出手者 combo_rate 追加的段数上限,以及追加段的伤害百分比
+// (追加段先按普攻公式独立结算、可独立必杀,再乘这个百分比;同样可以触发目标的反震)。
+// 只挂普攻(含技能校验失败降级成的普攻),技能不连击
+inline constexpr uint32_t kMaxComboExtraHits = 1;
+inline constexpr uint32_t kComboDamagePercent = 50;
+
+// 反震(D5):受到普攻伤害(含连击段)且仍存活时,按受击者 reflect_rate 把该段实扣伤害的这个百分比
+// 弹回出手者。弹回的伤害不吃减伤、不必杀、不受防御指令影响,至少 1 点
+inline constexpr uint32_t kReflectDamagePercent = 50;
+// 引擎用"先拆商和余数再乘"的整数算法求 ceil(实扣 × 百分比 / 100),百分比超过 100 时那个算法会溢出
+static_assert(kReflectDamagePercent <= 100);
+
+// 抗异常(D8):带异常状态的 buff 类型 → 目标身上对应的单项抗性(CombatAttributes 的 resist_* 字段)。
+// 有效抵抗率 = max(0, 单项 + resist_all_ailment − 施加者.ignore_ailment_resist),夹到 100。
+// 引擎没有与问道同名的「昏睡」「遗忘」状态,按效果就近映射:昏睡 → 眩晕(无法行动),遗忘 → 沉默(放不出技能)。
+// 「混乱」在引擎里没有对应的 buff 类型,所以 resist_confusion 暂无消费点(只贯通到面板与战斗快照);
+// 以后加了混乱 buff,在枚举与下表各补一项即可。灼烧(51)不在问道的异常清单里,不判抵抗。
+enum class AilmentResistKind : uint8_t {
+    kPoison = 0,  // CombatAttributes.resist_poison
+    kFreeze,      // CombatAttributes.resist_freeze
+    kSleep,       // CombatAttributes.resist_sleep(昏睡)
+    kForget,      // CombatAttributes.resist_forget(遗忘)
+    kCount,
+};
+
+struct AilmentBuffMapping {
+    uint32_t buffType;             // BuffTable.buff_type
+    AilmentResistKind resistKind;  // 该类型吃哪一项单项抗性
+};
+
+inline constexpr AilmentBuffMapping kAilmentBuffMappings[] = {
+    {kBuffTypePoison, AilmentResistKind::kPoison},
+    {kBuffTypeFreeze, AilmentResistKind::kFreeze},
+    {kBuffTypeStun, AilmentResistKind::kSleep},
+    {kBuffTypeSilence, AilmentResistKind::kForget},
+};
+// 每项单项抗性恰有一个 buff 类型消费它:枚举加了项而表没跟上(或反过来)在这里编译失败
+static_assert(sizeof(kAilmentBuffMappings) / sizeof(kAilmentBuffMappings[0]) ==
+              static_cast<std::size_t>(AilmentResistKind::kCount));
 
 // ---- 表现规格(docs/design/turn-battle-presentation.md §2 D1-D5)相关常量 ----
 

@@ -2,6 +2,7 @@ syntax = "proto3";
 option go_package = "battle";
 
 import "proto/common/component/actor_comp.proto";
+import "proto/common/component/actor_attribute_state_comp.proto";
 
 // 回合制战斗共享数据结构(快照/行动/事件/结算)。
 // 设计依据:docs/design/turn-based-battle-server.md §4。
@@ -56,6 +57,9 @@ message BattlePlayerSnapshot {
   string appearance_id = 17; // 与主城、选角一致的玩家外观身份。
   uint32 class_id = 18;
   uint32 gender = 19;
+  // 战斗类属性的装备加成(必杀 / 连击 / 反击 / 反震 / 抗性等,equipment-attributes.md §3.3)。
+  // scene 侧原样拷自 DerivedAttributesComp.combat;不带 = 全 0 = 引擎行为与装备系统落地前逐位一致。
+  CombatAttributes combat = 20;
 }
 
 // ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
@@ -114,6 +118,9 @@ message BattleActorState {
   string appearance_id = 24; // 玩家来自快照；重连/观战保持同一身份。
   uint32 class_id = 25;
   uint32 gender = 26;
+  // 战斗类属性的装备加成(来自快照;怪物 / 宝宝全 0)。只供引擎判定用:
+  // 下发给客户端的状态快照里会被清空,不暴露对手的装备概率。
+  CombatAttributes combat = 27;
 }
 
 // ---- 玩家行动指令 ----
@@ -150,6 +157,15 @@ enum eBattleEventType {
   BATTLE_EVENT_MISS = 12;      // 未命中/闪避(演出:目标头顶"闪");value=0
   BATTLE_EVENT_BLOCK = 13;     // 格挡(预留,一期不产出)
   BATTLE_EVENT_MANA = 14;      // 法力变化:value=变化绝对值,is_negative 由 target_health_after 之外的 mana_after 表达
+  BATTLE_EVENT_RESIST = 15;    // 异常状态被抵抗:source=施加者,target=抵抗者,buff_table_id=被抵抗的 buff;老客户端忽略
+}
+
+// 一段伤害 / 出手是怎么来的(equipment-attributes.md §4.5)。0 = 普通,老客户端不读也不影响演出。
+enum eBattleHitKind {
+  BATTLE_HIT_NORMAL = 0;
+  BATTLE_HIT_COMBO = 1;    // 连击追加段(与首段同 group_id,hit_index 递增)
+  BATTLE_HIT_COUNTER = 2;  // 反击(受击者还手的 ATTACK / DAMAGE)
+  BATTLE_HIT_REFLECT = 3;  // 反震(DAMAGE:source=受击者,target=出手者)
 }
 
 message BattleEventItem {
@@ -166,6 +182,7 @@ message BattleEventItem {
   uint32 group_id = 11;             // 同一次行动/施法内的事件共用(演出:群攻多目标同一拍);每次行动递增
   uint32 hit_index = 12;            // 多段攻击的段序(0 起)
   uint64 target_mana_after = 13;    // 目标结算后法力(BATTLE_EVENT_MANA 与技能耗蓝演出用)
+  eBattleHitKind hit_kind = 14;     // 连击 / 反击 / 反震标注;普通出手为 0
 }
 
 // ---- 胜负 ----

@@ -85,6 +85,36 @@ func TestDbTaskTopicAndQueueKeys(t *testing.T) {
 	if got := dbDeadQueueKey("t"); got != "kafka:dead:queue:t" {
 		t.Fatalf("dead key=%q", got)
 	}
+	// go/db 多实例之后的键(镜像 go/db/internal/kafka/retry_ownership.go)。
+	if got := dbRetryInstancesKey("t"); got != "kafka:retry:instances:t" {
+		t.Fatalf("instances key=%q", got)
+	}
+	if got := dbRetryInstanceProcessingKey("t", "db-0:6000"); got != "kafka:retry:processing:t:db-0:6000" {
+		t.Fatalf("per-instance processing key=%q", got)
+	}
+}
+
+// P4 / 审计必须把每个 go/db 实例各自的 processing 列表都查到:只查旧的共享键,多实例下门禁恒为 0。
+func TestDbTaskQueueKeysCoverEveryInstance(t *testing.T) {
+	got := dbTaskQueueKeysFor("t", []string{"db-0:6000", "db-1:6000"})
+	want := []string{
+		"kafka:retry:queue:t",
+		"kafka:retry:processing:t",
+		"kafka:dead:queue:t",
+		"kafka:retry:processing:t:db-0:6000",
+		"kafka:retry:processing:t:db-1:6000",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("queue keys=%v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("queue keys[%d]=%q, want %q (all: %v)", i, got[i], want[i], got)
+		}
+	}
+	if legacyOnly := dbTaskQueueKeysFor("t", nil); len(legacyOnly) != 3 {
+		t.Fatalf("with no registered instance the three shared keys must still be checked, got %v", legacyOnly)
+	}
 }
 
 // ── 缓存键 ───────────────────────────────────────────────────

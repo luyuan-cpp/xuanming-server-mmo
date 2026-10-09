@@ -4,6 +4,15 @@
     <ClCompile Include="bag_test.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="bag_instance_data_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="player_equip_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="player_equip_attribute_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Include">

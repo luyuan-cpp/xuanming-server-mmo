@@ -3,6 +3,7 @@
 > 三个提交,基于 `origin/main` 的 `26ceb70ca5`,2026-10-07 经用户同意以快进方式推送到 `origin/main`。
 > 推送前未编译、未运行任何测试(AGENTS.md §10.1);源码改动只有注释里的文档路径,验证见 §3。
 > 本机的主工作区当时停在一次未解完的 `git pull` 合并上,所以还没有这三个提交,带入步骤见 §2。
+> **2026-10-08 更新:主工作区已带入,§3 的验证已由 Claude 按用户授权执行,结果见 §6。**
 
 ## 1. 做了什么
 
@@ -131,3 +132,56 @@ git worktree remove E:\work\xuanming-server-mmo-wt-layout
   需要改写历史并强制推送,这会影响所有已有的检出,没有做。
 - **提交历史里有大量 `WIP: hourly save`**。同理,改写已推送的历史代价很大;可行的做法是今后让自动保存
   提交到单独的分支,合进 main 时压成有意义的提交。
+
+## 6. 带入与验证结果(2026-10-08)
+
+用户说"你可以自己跑",所以这一节的命令由 Claude 执行,不再等 Codex。
+
+### 6.1 带入
+
+| 提交 | 内容 |
+|------|------|
+| `3b93efd539` | 解掉停了一天的那次 `git pull` 合并(4 个冲突文件,解法写在提交说明里) |
+| `f8175c5bea` | 合入 `origin/main`:整理的三个提交,加帮会会话 10-08 推的两个提交,无冲突 |
+| `59c270499c` | 刷新文档索引 |
+
+`.claude/settings.local.json` 如预期被合并从磁盘删掉,已从 `E:\work\_git-backups\` 的备份恢复。
+整理用的工作副本与本地分支 `chore/repo-layout` 已删除。本机 main 领先远端,这一节的提交都没有推送。
+
+### 6.2 整理提交自身的验证
+
+| 项 | 结果 |
+|----|------|
+| 源码改动只有注释 | 逐文件核对:`bin/`、`cpp/`、`go/`、`java/`、`robot/` 下被改的文件,新增行全部是注释 |
+| 文档索引 `gen_docs_index.py --check` | 通过 |
+| markdown 死链 | 3 条,与整理前相同,都不是真链接(公式和小节标题被检查脚本当成了链接) |
+| 启动器 `start_game.ps1 -CheckOnly` | 通过 |
+| Go:`go/friend`、`go/player_locator` | `go build ./...` 与 `go vet ./...` 通过 |
+| Go:`robot`(在整理提交的顶端 `5f4b968bcb`) | `go build ./...` 与 `go vet ./...` 通过 |
+| Java:`gateway_node` | `mvnw -q compile` 通过 |
+| C++:`etcd_service.cpp` 单文件编译 | 0 错误(产物导向临时目录,没有动 `lib/`、`bin/` 与增量编译状态) |
+
+没有做的两项:C++ 全量编译(合并后的 main 从未整体编过,中途失败会留下新旧混装的 `bin/*.exe`,
+影响日常启动,所以没有在主工作区里跑)与真正的一键启动。
+
+### 6.3 合并后的 main 上原本就有的问题
+
+下面这些在验证时暴露出来,但都不是整理或这次合并带来的:每一项都在"只含远端代码"或"只含本地代码"
+的副本上单独复现过。都没有修,留给各自的属主。
+
+| 现象 | 原因 | 从哪来 |
+|------|------|--------|
+| `k8s_deploy.ps1` 的任何写路径在入口被拒,`k8s_deploy_contract`、`k8s_client_entry_contract` 两个契约测试因此红 | gRPC deadline 预算门禁见到服务 yaml 里有 `MethodTimeouts` 就拒绝,而 `go/data_service/etc/data_service.yaml` 给 `Rollback*` 配了 `MethodTimeouts`。这三个方法 C++ 并不调用 | 门禁 `ccfc402919`,配置 `907a6b7529`,都是 09-29,互相不知道 |
+| 去掉上一条的干扰后,`k8s_deploy_contract` 78/79 | `-KafkaBrokers 3` 用例用 `-match` 检查"不残留 `__XXX__` 占位",PowerShell 的 `-match` 不分大小写,把日志采集配置里的 `__path__` 当成了占位 | 本地 10-01 的 Kafka 多 broker 改动,纯本地代码上 65/66 |
+| 去掉第一条的干扰后,`k8s_client_entry_contract` 91/100 | 9 个集群外入口用例失败 | 远端 09-29 的集群外入口改动,纯远端代码上同样 91/100 |
+| `go/login` 编不过:`NodeInfo` 没有 `GetClientEndpoint` | `proto/common/base/common.proto` 加了 `client_endpoint = 11`,但 Go 与 C++ 的生成代码没有重新生成 | 远端 `9e72119b8e`(09-29) |
+| `robot` 编不过:`guild_activity_smoke.go` 引用的帮会活动类型与 tip 码不存在 | 帮会活动的导表与协议生成还没跑,`robot/vendor` 也没同步 | 帮会会话 10-08 推的 `7708581eeb` |
+| `artifacts_lib` 22/23、`publish_images` 7/14 | 前者是用例把报错文本当正则用,括号没转义;后者未细查 | 纯远端代码上结果相同 |
+| `no_raw_pointer_check`、`no_raw_pointer_project` 跑不起来 | 前者要先编出检查器,后者要带参数 | 环境,不是代码问题 |
+
+其余契约测试全部通过:`artifacts_fetch_import_retention` 29、`dev_tools_merge_zone_contract` 16、
+`go_services_ports` 18、`k8s_gate_drain` 54、`k8s_migrate_gate` 30、`k8s_zone_rollback_gate_router_mode` 30、
+`make_release` 11、`release_common_version` 21、`start_game_command_contract` 14、`no_raw_pointer_setup`。
+
+子模块 `third_party/librdkafka`、`third_party/ue5navmesh` 的指针随远端更新了,本机的检出没有动,
+所以 `git status` 会显示这两个子模块有改动;不要把它们 `git add` 回去。

@@ -318,7 +318,8 @@ func (s *SnapshotStore) InsertSnapshot(ctx context.Context, row *SnapshotRow) (u
 // 成环的是第 3 步的**锁继承**,不是第 2 步取 S 还是取 X。
 // 要真正消掉它只有一条路:别让两个插入者同时排在同一条未提交记录后面 —— 让所有首次插入者先排在
 // 一行**已提交**的守卫记录上(trade 的哨兵行就是这么做的,见 go/trade/internal/data/asset_op_repo.go)。
-// 本表没有这样做:快照写者部署上是单实例(replicas=1 + Recreate),这一类只在多写者并存时出现,
+// 本表没有这样做:同一个 guid 要有三个写者同时在场才成环,而 data-service 虽是多副本,每个分区同一时刻只属于
+// 一个实例(consumer group),同 guid 的并发写者只在 rebalance 重叠的瞬间出现。
 // 频率低、且被下面的有界重试完整吸收(结局仍是"恰好一行、两人回出同一个 id")。
 // 回归:TestSnapshotStore_SameGuidQueueDeadlockIsAbsorbed。
 //
@@ -345,9 +346,9 @@ func (s *SnapshotStore) InsertSnapshot(ctx context.Context, row *SnapshotRow) (u
 //   - 单条消息连输 snapshotGuidInsertAttempts 次时,1213 交给消费者按 1s 间隔再试
 //     (最多 DBMaxAttempts 次),1s 的错峰足以把写者的节奏打散;消费者最终放弃也只是停在当前
 //     offset 不提交(宁可滞后不丢),既不丢也不重。
-//   - 能并发的写者本来就只有"短时两三个"这个量级:部署不变量是 data-service replicas=1 + Recreate
-//     (deploy/k8s/manifests/go-svc/data-service.yaml),只有本地多开 / 手工改副本数 / 滚动更新窗口
-//     才会出现并发写者,也才会看到本函数"就地吸收了 1213"的日志。
+//   - 能并发的写者本来就只有"短时两三个"这个量级:data-service 是多副本,但两条消费者是 consumer group,
+//     分区在实例间独占分配(deploy/k8s/manifests/go-svc/data-service.yaml),同一个 guid 只在 rebalance
+//     重叠(发布 / 崩溃 / DB 故障后 reader 重建)的瞬间才会有并发写者,也才会看到本函数"就地吸收了 1213"的日志。
 //
 // 为什么只就地重试 1213、不重试 1205(锁等待超时):1213 在环形成的那一刻就报出,就地重跑的代价是几十
 // 毫秒;1205 则说明本条语句已经白等了一整个 innodb_lock_wait_timeout(默认 50s,多半是被别的长事务压住),
@@ -386,8 +387,8 @@ func (s *SnapshotStore) InsertSnapshotIfGuidAbsent(ctx context.Context, row *Sna
 			logx.Infof("[SnapshotStore] snapshot guid=%d 在**唯一键路径**上因 InnoDB 死锁(1213)就地重跑了 %d 次,结果 err=%v:"+
 				"预期内的固有情形 —— 同一个 guid 有两个写者排在第三个未提交写者后面、而后者回滚时,"+
 				"等待锁被继承成间隙锁再互等插入意向锁(实测与写法无关,ODKU 也拆不掉,见 InsertSnapshotIfGuidAbsent)。"+
-				"结局由重试保证正确。**但本服务部署上是单写者(replicas=1 + Recreate)**,所以这条日志频繁出现"+
-				"说明有第二个写者在跑(本地多开 / 手工改副本数 / 滚动更新新旧并存)——那才是要查的事",
+				"结局由重试保证正确。本服务是多副本部署,同一个 guid 只会在消费组 rebalance 的重叠瞬间被两个实例同时写,"+
+				"所以这条日志偶发属正常;**持续高频**出现才要查:消费组是不是在反复 rebalance(成员进进出出 / DB 故障后 reader 重建)",
 				row.SnapshotGuid, reruns, err)
 		} else {
 			logx.Errorf("[SnapshotStore] snapshot guid=%d 在**退路**(INSERT...SELECT...NOT EXISTS)上因 InnoDB 死锁(1213)"+

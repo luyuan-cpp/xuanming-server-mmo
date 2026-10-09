@@ -412,12 +412,12 @@ spec:
         #                                      Redis 里可能留着本次落点(epoch 已推进),而 Kafka 同时也坏了;
         #   plan_error                         回滚计划构造失败(按构造不可达),没有回滚,终态同 redis_error;
         #                                      应恒 0,出现即代码缺陷(日志搜 "[RouteRollback] outcome=plan_error")。
-        #                                      本批不单独配规则。
+        #                                      与 redis_error 并入同一条规则(终态相同,都不告警就没有别的信号)。
         # "理应为 0"且单次就有玩家受影响的事件:任一次即告警(> 0),不设 for。该指标只按 outcome 分,
         # 不带 zone_id;哪个 zone 要看是哪个 scene_manager 实例报的。代码从未编译、未实测,无基线。
         - alert: SceneManagerEnterSceneRollbackRedisError
           expr: |
-            sum(increase(scene_manager_enter_scene_rollback_total{outcome="redis_error"}[10m])) > 0
+            sum(increase(scene_manager_enter_scene_rollback_total{outcome=~"redis_error|plan_error"}[10m])) > 0
           labels:
             severity: warning
           annotations:
@@ -436,6 +436,8 @@ spec:
               采纳新 epoch、解冻继续玩(scene 日志 "[ZoneTravel][RollbackAdopt]"),同样不丢数据。
               处置:先查 Redis(连接数、慢日志、主从切换)与 Kafka broker 是否同时异常;scene_manager 日志
               搜 "[RouteRollback] outcome=redis_error" 拿到 player 与 epoch,必要时按 location 人工核对。
+              outcome=plan_error 同样触发本规则:回滚计划构造失败(按构造不可达)、没有回滚,终态同上;出现即代码
+              缺陷,日志搜 "[RouteRollback] outcome=plan_error",保留现场交开发。
             runbook_url: docs/ops/cross-zone-failure-test-runbook.md
 
         # --- 死节点推迟摘除(scene_manager_node_detach_deferred_total,GO-6)------

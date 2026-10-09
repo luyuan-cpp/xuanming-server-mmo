@@ -37,7 +37,9 @@ Kafka 扩分区会重映射一部分 key；新 partition 的 offset 与旧 parti
    另一个生产者（`SavePlayerToRedis` 按 home_zone 写存盘），停写必须包含全部 scene
    节点，不能只停 login。
 2. 保持旧 db consumer 运行，确认旧 topic consumer lag 为 0。
-3. 确认旧 generation 的 Redis retry `ready`、`processing` 均为 0；逐条处置 dead
+3. 确认旧 generation 的 Redis retry `ready`、`processing` 均为 0(2026-10 起 `processing` 按 db 实例拆开:
+   旧版共享列表 `kafka:retry:processing:{topic}` 加上 `kafka:retry:instances:{topic}` 里每个实例名对应的
+   `kafka:retry:processing:{topic}:{实例名}`,都要为 0)；逐条处置 dead
    queue，不能把未决任务遗留到旧 namespace。
 4. 停止旧 db consumer。此时 MySQL 已包含旧 generation 的最终状态。
 5. 在 login 与 db 配置中同时设置 `TopicGeneration: 2`、`PartitionCnt: 20`、

@@ -34,8 +34,9 @@ import (
 // 交接、放行跨 zone 交接、等待落点的第二条腿。新值随路由事件带给目标节点;C++
 // 存盘用 Lua 比对「缓存值 == Redis 当前值」,老 epoch 的写一律被拒。
 // epoch 只经 INCR 前进 —— 路由失败的回滚也是 INCR,任何值都不会被铸两次(补种只按 location
-// 记录值补回缺失的键,见 enterscenelogic.go sameNodeZeroMint 一段)。bump 回滚是「持有者没换也推进」
-// 的唯一情形:它让被回滚掉的那个值作废,仍持有玩家的源 scene 凭 location 里的回滚回执采纳新值。
+// 记录值补回缺失的键,见 enterscenelogic.go sameNodeZeroMint 一段)。除下面「唯一例外」里的同节点 epoch 0
+// 铸造外,bump 回滚是另一种「持有者没换也推进」的情形:它让被回滚掉的那个值作废,仍持有玩家的源 scene
+// 凭 location 里的回滚回执采纳新值。
 //
 // 持有者没换就不许推进 —— 同节点换图、同落点重连、dev 旁路下无标记的跨节点
 // 交接都只做「epoch 不变才写 location」的 CAS。原因:持有节点要等 Kafka → gate →
@@ -79,9 +80,9 @@ import (
 // 负值不会与 -1(标记已撤回)/ 0(epoch 冲突)撞:凭标记放行时观察到的 epoch ≥ 1(epoch 为 0 的
 // 标记从不写出),新 epoch ≥ 2,取负 ≤ -2;万一真有 epoch 0 的标记,-1 会被读成「已撤回」,
 // 是拒绝方向,不会误放行。三条合起来能证明是本请求自己的写入:epoch 恰好只前进一格;location 原文带
-// UpdateTime 与完整目标;标记仍是本请求所凭的那一份(源端 DEL 标记之后不再认,与上面「标记
-// 检查与铸造同一原子步骤」的承诺一致 —— 源端 DEL 后读 epoch 做裁决,此时识别与否都不改变
-// 它的结论,只影响本请求回 0 还是回成功)。本请求的落点已被 bump 回滚之后(epoch 已是
+// UpdateTime 与完整目标;标记仍是本请求所凭的那一份(源端的原子取证脚本删掉本族标记之后不再认,与上面
+// 「标记检查与铸造同一原子步骤」的承诺一致 —— 源端删标记后读 epoch / location 做裁决,此时识别与否都不
+// 改变它的结论,只影响本请求回 0 还是回成功)。本请求的落点已被 bump 回滚之后(epoch 已是
 // ARGV[1]+2),原样重发同样回 0:「恰好只前进一格」不成立,不会把回滚掉的落点重新认成已生效。
 //
 // 不带标记的铸造(首次落点 / 等待落点)**不做**识别,维持回 0:UpdateTime 是秒级,同一秒内
@@ -467,7 +468,8 @@ func rollbackPlacementAfterPushFailure(svcCtx *svc.ServiceContext, log logx.Logg
 //     marker_gone,不凭标记的没有这层保护)。
 //
 // redis_error 之后谁来收尾,取决于调用点(两者都由源端的原子取证脚本 —— 删本族标记 + 读 epoch / location ——
-// 裁决「已被放行」):
+// 裁决。回滚实际没执行时判成「已被放行」,走下面两支;读超时一类、回滚其实已执行时,凭标记的那一支留下了
+// 回执,源端凭回执采纳解冻(判定表 B5),下面两支都不发生):
 //   - 跨 zone 第一条腿(handleCrossZoneRedirect):源 scene 会重置客户端(失败 tip + 踢线 34),
 //     玩家重登落到等待落点;
 //   - 同 zone 路由失败(rollbackEnterSceneAfterRouteFailure):源端**不**重置客户端,源实体被

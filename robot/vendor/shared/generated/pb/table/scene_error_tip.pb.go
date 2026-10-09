@@ -53,6 +53,7 @@ const (
 	SceneError_kZoneTravelInBattle                    SceneError = 3025
 	SceneError_kZoneTravelInTeam                      SceneError = 3026
 	SceneError_kZoneTravelTargetBusy                  SceneError = 3027
+	SceneError_kEnterSceneServerBusy                  SceneError = 3028
 )
 
 // Enum value maps for SceneError.
@@ -87,6 +88,7 @@ var (
 		3025: "kZoneTravelInBattle",
 		3026: "kZoneTravelInTeam",
 		3027: "kZoneTravelTargetBusy",
+		3028: "kEnterSceneServerBusy",
 	}
 	SceneError_value = map[string]int32{
 		"kScene_errorOK":                         0,
@@ -118,6 +120,7 @@ var (
 		"kZoneTravelInBattle":                    3025,
 		"kZoneTravelInTeam":                      3026,
 		"kZoneTravelTargetBusy":                  3027,
+		"kEnterSceneServerBusy":                  3028,
 	}
 )
 
@@ -152,7 +155,7 @@ var File_scene_error_tip_proto protoreflect.FileDescriptor
 
 const file_scene_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15scene_error_tip.proto*\x87\a\n" +
+	"\x15scene_error_tip.proto*\xa3\a\n" +
 	"\vscene_error\x12\x12\n" +
 	"\x0ekScene_errorOK\x10\x00\x12\x18\n" +
 	"\x13kEnterSceneNotFound\x10\xb8\x17\x12\x17\n" +
@@ -182,7 +185,8 @@ const file_scene_error_tip_proto_rawDesc = "" +
 	"\x1dkZoneTravelTargetZoneNotFound\x10\xd0\x17\x12\x18\n" +
 	"\x13kZoneTravelInBattle\x10\xd1\x17\x12\x16\n" +
 	"\x11kZoneTravelInTeam\x10\xd2\x17\x12\x1a\n" +
-	"\x15kZoneTravelTargetBusy\x10\xd3\x17B$\n" +
+	"\x15kZoneTravelTargetBusy\x10\xd3\x17\x12\x1a\n" +
+	"\x15kEnterSceneServerBusy\x10\xd4\x17B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

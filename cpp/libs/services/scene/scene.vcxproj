@@ -60,6 +60,7 @@
     <ClInclude Include="player\system\handoff_mark_withdraw.h" />
     <ClInclude Include="player\system\exit_release_mark.h" />
     <ClInclude Include="player\system\travel_freeze_cap.h" />
+    <ClInclude Include="player\system\relocate_confirm.h" />
     <ClInclude Include="player\system\player_data_loader.h" />
     <ClInclude Include="player\system\player_exit_intent.h" />
     <ClInclude Include="player\system\player_lifecycle.h" />
@@ -70,6 +71,8 @@
     <ClInclude Include="player\system\pet_rules.h" />
     <ClInclude Include="player\system\player_pet.h" />
     <ClInclude Include="player\system\attribute_allocation_rules.h" />
+    <ClInclude Include="player\system\equip_attribute_rules.h" />
+    <ClInclude Include="player\system\player_equip.h" />
     <ClInclude Include="player\system\player_level_rules.h" />
     <ClInclude Include="player\system\stress_test_probe.h" />
     <ClInclude Include="player\system\player_tip.h" />
@@ -129,6 +132,7 @@
     <ClCompile Include="player\system\player_skill.cpp" />
     <ClCompile Include="player\system\player_attribute.cpp" />
     <ClCompile Include="player\system\player_pet.cpp" />
+    <ClCompile Include="player\system\player_equip.cpp" />
     <ClCompile Include="player\system\player_tip.cpp" />
     <ClCompile Include="player\system\stress_test_probe.cpp" />
     <ClCompile Include="player\system\bag_marshal.cpp" />

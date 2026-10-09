@@ -14,6 +14,33 @@ message CalculatedAttributesComp {
 	bool isDead = 3; // Dead/alive state
 }
 
+// 战斗类属性(设计文档 docs/design/equipment-attributes.md §3.3)。
+//
+// 只装**装备等外部来源的加成部分**,不含角色基础暴击率 / 基础抗性
+// (那两项仍在 BaseAttributesComp.critchance / resistance)。运行时派生,不落库:
+// PlayerAttributeSystem::Recalculate 每次从装备栏现算并整块覆盖,不做增量维护。
+// 百分比一律是整数百分点。
+//
+// **字段号 == equiprules::CombatStat 枚举值 == EquipAttribute 表 effect=5 行的
+// effect_param**,三处不得错位;新增只能追加。
+message CombatAttributes {
+    uint64 physical_crit_rate = 1;     // 物理必杀率(普攻 / 物理技能)
+    uint64 magic_crit_rate = 2;        // 法术必杀率(法术技能)
+    uint64 combo_rate = 3;             // 物理连击率
+    uint64 counter_rate = 4;           // 反击率
+    uint64 reflect_rate = 5;           // 反震率
+    uint64 skill_level_bonus = 6;      // 所有技能上升(技能伤害表达式的等级参数 +N)
+    uint64 ignore_ailment_resist = 7;  // 忽视所有抗异常(进攻方,抵扣目标的抗异常)
+    uint64 resist_poison = 8;          // 抗中毒
+    uint64 resist_freeze = 9;          // 抗冰冻
+    uint64 resist_sleep = 10;          // 抗昏睡(引擎映射到眩晕)
+    uint64 resist_forget = 11;         // 抗遗忘(引擎映射到沉默)
+    uint64 resist_confusion = 12;      // 抗混乱(引擎暂无混乱状态,未消费)
+    uint64 resist_all_ailment = 13;    // 所有抗异常
+    uint64 magic_resist = 14;          // 抗法术(叠加在基础抗性上,仅对法术伤害)
+    uint64 physical_resist = 15;       // 抗物理(叠加在基础抗性上,仅对物理伤害)
+}
+
 // 二级属性(服务器按 AttributeDimension 表系数重算,不落库;设计文档
 // docs/design/player-attribute-allocation.md §3)。
 // 全部 uint64:与 BaseAttributesComp / BattlePlayerSnapshot 同口径,战斗公式不窄化。
@@ -24,6 +51,7 @@ message DerivedAttributesComp {
     uint64 magic_attack = 4;    // 法伤(技能加成)
     uint64 defense = 5;         // 防御(加法减伤)
     uint64 speed = 6;           // 速度(同步写入 BaseAttributesComp.speed 供出手序)
+    CombatAttributes combat = 7; // 战斗类属性的装备加成(开战时原样拷进 BattlePlayerSnapshot.combat)
 }
 
 

@@ -159,7 +159,7 @@
     # Per-service instance counts for local multi-open of Go services. Accepts:
     #   * hashtable (in-session use): -GoCounts @{ login = 2; scene_manager = 2 }
     #   * string list (pwsh -File):   -GoCounts login=2,scene_manager=2
-    # Cap = 32 per service. 'db' is single-instance only.
+    # Cap = 32 per service.
     [object]$GoCounts = @{},
     [int]$GoPortStride = 1,
     # Disable tier-staged Go service startup (parallel launch like before).

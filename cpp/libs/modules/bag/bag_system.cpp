@@ -697,8 +697,48 @@ bool Bag::MergeAndCompact(std::vector<DestroyedInstance> *destroyedOut, CompactP
 
 // ── 入包:plan -> reserve -> commit ───────────────────────────────────────
 
+// 对一件**新铸**的不可叠加实例调一次初始化回调(装备掷属性),契约见 item_system.h。
+//
+// 判据只有 `!piece.has_equip()` 这一条:带着装备数据来的既有实例(穿脱搬运回流、邮件
+// 附件)已经初始化过,再调就是重掷(docs/design/equipment-attributes.md §5 不变量 1)。
+//
+// 调用点在 reserve 之后、这一件进 ItemStore 之前,所以回调**不许失败**;它也不许动
+// 容器负责的字段。后一条不靠约定:调用前抓拍、调用后钉回去 —— 回调若改了 config_id,
+// 这一件就会带着没做过 reserve / 准入 / 部位判定的 config 进包;改了 item_id 则绕过
+// 入口那道预设 guid 撞车预检。钉回去之后回调再怎么写错,坏的也只是它自己那段实例数据。
+static void InitializeNewInstance(const ItemInstanceInitializer *instanceInitializer,
+								  ItemComp &piece, Guid playerGuid)
+{
+	if (instanceInitializer == nullptr || !*instanceInitializer || piece.has_equip())
+	{
+		return;
+	}
+	const uint64_t itemId = piece.item_id();
+	const uint32_t configId = piece.config_id();
+	const uint32_t size = piece.size();
+	const uint64_t acquireSeq = piece.acquire_seq();
+
+	(*instanceInitializer)(piece);
+
+	if (piece.item_id() != itemId || piece.config_id() != configId || piece.size() != size ||
+		piece.acquire_seq() != acquireSeq)
+	{
+		LOG_ERROR << "Bag: item instance initializer touched container-owned fields (item_id "
+			<< itemId << " -> " << piece.item_id() << ", config_id " << configId << " -> "
+			<< piece.config_id() << ", size " << size << " -> " << piece.size()
+			<< ", acquire_seq " << acquireSeq << " -> " << piece.acquire_seq()
+			<< "); restoring them. The initializer may only write instance data. player "
+			<< playerGuid;
+		piece.set_item_id(itemId);
+		piece.set_config_id(configId);
+		piece.set_size(size);
+		piece.set_acquire_seq(acquireSeq);
+	}
+}
+
 uint32_t Bag::AddNonStackableItem(ItemComp itemProto, std::vector<Guid> *writtenGuidsOut,
-								  std::vector<DestroyedInstance> *evictedOut)
+								  std::vector<DestroyedInstance> *evictedOut,
+								  const ItemInstanceInitializer *instanceInitializer)
 {
 	// 不可叠加物品(装备等):每一件都是一个独立实例,size 即"要放几件"。
 	// 统一处理:把 itemProto 拆成 pieceCount 件、每件 size=1 单独入包。
@@ -770,6 +810,13 @@ uint32_t Bag::AddNonStackableItem(ItemComp itemProto, std::vector<Guid> *written
 			}
 		}
 		const auto guid = piece.item_id();
+
+		// 新铸实例初始化(装备掷属性)。**这里是所有玩法入包的唯一汇聚点**:单件、
+		// count = N、两个批量重载最终都落到这个逐件循环,所以每件各调一次、各拿各的
+		// ItemComp。放在铸号之后(回调看得到这一件的 guid)、进 ItemStore 之前(进去的
+		// 就是初始化完的整份实例,不存在"先入库再补属性"的中间态)。
+		// 已带 equip 段的(搬运 / 回流来的既有实例)与没传回调的调用方都直接跳过。
+		InitializeNewInstance(instanceInitializer, piece, PlayerGuid());
 
 		// commit:实例层建实例,布局层给位置。两步都在同一次迭代里完成,
 		// 保证不会出现"有实例没位置"或"有位置没实例"的中间态。
@@ -929,7 +976,8 @@ uint32_t Bag::AddStackableItem(ItemComp itemProto, uint32_t maxStackSize,
 }
 
 uint32_t Bag::AddItem(const InitItemParam &initItemParam, std::vector<Guid> *writtenGuidsOut,
-					  std::vector<DestroyedInstance> *evictedOut)
+					  std::vector<DestroyedInstance> *evictedOut,
+					  const ItemInstanceInitializer *instanceInitializer)
 {
 	auto itemProto = initItemParam.itemPBComp;
 	// config_id / size 都是无符号:== 0 即"没指定物品"或"数量为 0",均属非法入参。
@@ -959,9 +1007,12 @@ uint32_t Bag::AddItem(const InitItemParam &initItemParam, std::vector<Guid> *wri
 
 	if (itemRow->max_stack_size() == 1)
 	{
-		return AddNonStackableItem(std::move(itemProto), writtenGuidsOut, evictedOut);
+		return AddNonStackableItem(std::move(itemProto), writtenGuidsOut, evictedOut,
+								   instanceInitializer);
 	}
 
+	// 可叠加物品**不调**初始化回调:它们没有「一件一个实例」的身份,数量会并进既有堆,
+	// 实例数据(equip 段)挂上去也守不住 —— 装备被误配成可堆叠由 ItemStore::CanStack 兜底。
 	return AddStackableItem(std::move(itemProto), itemRow->max_stack_size(), writtenGuidsOut,
 							evictedOut);
 }
@@ -1055,14 +1106,14 @@ uint32_t Bag::EquipKindFor(uint32_t configId)
 	return itemRow->equip_kind();
 }
 
-// 这一行槽位,对这个部位来说是不是一个"可用的空槽"。
+// 这一行槽位**接不接**这个部位 —— 只看槽位表与当前容量,不看占用。
 //
-// **FindFreeSlotForKind(commit 侧)与 CountFreeSlotsForKind(reserve 侧)必须
-// 共用这一条判据。** 两侧一旦各写各的,reserve 数出来的空槽就可能不是 commit
-// 真能落位的那些,于是"预检通过、写到一半失败"会以新的形式复活 —— 那正是
-// CanReserve 要消灭的 bug 本身。
-static bool IsFreeSlotForEquipKind(const EquipSlotTable &slotRow, uint32_t kind,
-								   const IContainerLayout &layout)
+// 从下面的 IsFreeSlotForEquipKind 里拆出来,是因为穿脱编排要问的恰恰是"不看占用"的
+// 那一半(Bag::SlotsAcceptingKind:该部位有哪些槽,满了要替换哪一只),而指定槽放置
+// (Bag::PutInstance)要拿同一条口径校验调用方给的槽。**"接受"只许有这一处定义**,
+// 否则 SlotsAcceptingKind 报出来的槽 PutInstance 可能不认。
+static bool SlotRowAcceptsKind(const EquipSlotTable &slotRow, uint32_t kind,
+							   const IContainerLayout &layout)
 {
 	// 槽位表说了算:哪个槽接受哪个部位,完全是数据。表里没出现的槽位不接受任何东西。
 	if (slotRow.equip_kind() != kind)
@@ -1073,11 +1124,23 @@ static bool IsFreeSlotForEquipKind(const EquipSlotTable &slotRow, uint32_t kind,
 	// 槽位号必须落在**当前容量**内。容量是可以被快照还原改小的(见
 	// FixedSlotLayout 那条"刻意不写死槽位数"的注释),此时表里靠后的槽位
 	// PlaceAt 会拒。不在这里一起滤掉,reserve 就会比 commit 乐观。
-	if (slot >= layout.Capacity())
+	return slot < layout.Capacity();
+}
+
+// 这一行槽位,对这个部位来说是不是一个"可用的空槽"。
+//
+// **FindFreeSlotForKind(commit 侧)与 CountFreeSlotsForKind(reserve 侧)必须
+// 共用这一条判据。** 两侧一旦各写各的,reserve 数出来的空槽就可能不是 commit
+// 真能落位的那些,于是"预检通过、写到一半失败"会以新的形式复活 —— 那正是
+// CanReserve 要消灭的 bug 本身。
+static bool IsFreeSlotForEquipKind(const EquipSlotTable &slotRow, uint32_t kind,
+								   const IContainerLayout &layout)
+{
+	if (!SlotRowAcceptsKind(slotRow, kind, layout))
 	{
 		return false;
 	}
-	return layout.At(slot) == kInvalidGuid; // 空着才算
+	return layout.At(static_cast<SlotId>(slotRow.id())) == kInvalidGuid; // 空着才算
 }
 
 SlotId Bag::FindFreeSlotForKind(uint32_t kind) const
@@ -1363,6 +1426,197 @@ void Bag::DestroyItem(Guid guid)
 	layout_->Remove(guid);
 }
 
+// ── 搬运原语(同一 guid 换包:穿脱 / 包间移动)─────────────────────────────
+// 契约见 bag_system.h。这里的纪律只有一条,与入包的三段同源:**所有校验先于任何修改**。
+// 调用方要靠"失败 = 两层都没动"来按相反顺序回滚,任何一个会失败的判断排在第一次写入
+// 之后,回滚就没有可信的起点了。
+
+std::vector<uint32_t> Bag::SlotsAcceptingKind(uint32_t equipKind) const
+{
+	std::vector<uint32_t> slots;
+	// 自由格布局(人物背包 / 仓库 / 临时格)的槽位号不表达任何东西,"哪些槽接受部位 N"
+	// 在那里没有答案;把槽位表的行号原样报出去,调用方就会拿装备栏的槽号去指人物背包的格子。
+	// equipKind == 0 = 不是装备,同样没有接受它的槽(与 FindFreeSlotForKind 一致)。
+	if (equipKind == 0 || !layout_->HasSlotSemantics())
+	{
+		return slots;
+	}
+	for (const auto &slotRow : EquipSlotTableManager::Instance().FindAll().data())
+	{
+		if (SlotRowAcceptsKind(slotRow, equipKind, *layout_))
+		{
+			slots.push_back(static_cast<uint32_t>(slotRow.id()));
+		}
+	}
+	// 升序是契约(穿上规则 = 槽号升序里第一个空槽,都占着就替换槽号最小的),不能依赖表的
+	// 行序;去重是防脏表里同一 id 出现两行(理由同 CountFreeSlotsForKind)。
+	std::sort(slots.begin(), slots.end());
+	slots.erase(std::unique(slots.begin(), slots.end()), slots.end());
+	return slots;
+}
+
+uint32_t Bag::TakeInstance(Guid guid, ItemComp &out)
+{
+	// ── 全部纯校验 ──────────────────────────────────────────────────────
+	const ItemComp *item = store_.Find(guid);
+	if (item == nullptr)
+	{
+		return PrintStackAndReturnError(kBagDeleteItemFindGuid); // 与 RemoveItem 同码
+	}
+
+	// 查不到表就无从判断可否叠加,fail-closed(与 ReserveForBatchRemove ③ 同一取舍)。
+	LookupItemOrReturnError(item->config_id());
+
+	// 只搬不可叠加实例:可叠加物品的 guid 不是稳定身份(并堆会重铸),整件拷走再放进
+	// 另一个包还会绕过并堆,凭空多出一个未满堆。
+	if (itemRow->max_stack_size() != 1)
+	{
+		LOG_ERROR << "Bag::TakeInstance: guid " << guid << " (config " << item->config_id()
+			<< ") is stackable (max_stack_size=" << itemRow->max_stack_size()
+			<< "); only non-stackable instances can be carried. player " << PlayerGuid();
+		return PrintStackAndReturnError(kBagDelItemConfig);
+	}
+	// 不可叠加实例的 size 恒为 1。0 是该被整理回收的僵尸,>1 是数据腐化 ——
+	// 两者都不该被当成"一件装备"搬走。
+	if (item->size() != 1)
+	{
+		LOG_ERROR << "Bag::TakeInstance: guid " << guid << " (config " << item->config_id()
+			<< ") has size=" << item->size() << ", expected exactly 1. player " << PlayerGuid();
+		return PrintStackAndReturnError(kBagItemDeletionSizeMismatch);
+	}
+
+	// ── 校验全过,现在才允许改状态 ──────────────────────────────────────
+	// 先整份拷出(含 equip 与 acquire_seq)再销毁:DestroyItem 之后 item 指针即失效。
+	out = *item;
+	DestroyItem(guid); // 两层成对移除,与 RemoveItem 走同一个口子
+	AssertLayerConsistency();
+	return kSuccess;
+}
+
+uint32_t Bag::PutInstance(ItemComp item, std::optional<uint32_t> slot)
+{
+	// ── 全部纯校验 ──────────────────────────────────────────────────────
+	if (ItemStore::IsInvalidGuid(item))
+	{
+		LOG_ERROR << "Bag::PutInstance: invalid guid (config " << item.config_id()
+			<< "); a carried instance must keep its own identity. player " << PlayerGuid();
+		return PrintStackAndReturnError(kBagAddItemInvalidGuid);
+	}
+	const Guid guid = item.item_id();
+	const uint32_t configId = item.config_id();
+	if (configId == 0 || item.size() != 1)
+	{
+		LOG_ERROR << "Bag::PutInstance: guid " << guid << " has config " << configId << " size "
+			<< item.size() << "; expected a single non-stackable instance. player " << PlayerGuid();
+		return PrintStackAndReturnError(kBagAddItemInvalidParam);
+	}
+
+	LookupItemOrReturnError(configId);
+	if (itemRow->max_stack_size() == 0)
+	{
+		return PrintStackAndReturnError(kInvalidTableData);
+	}
+	// 与 TakeInstance 对称:可叠加物品走这里会绕过并堆。
+	if (itemRow->max_stack_size() != 1)
+	{
+		LOG_ERROR << "Bag::PutInstance: guid " << guid << " (config " << configId
+			<< ") is stackable (max_stack_size=" << itemRow->max_stack_size()
+			<< "); only non-stackable instances can be carried. player " << PlayerGuid();
+		return PrintStackAndReturnError(kBagAddItemInvalidParam);
+	}
+
+	// 准入照常问:搬运不是绕过"这个包收不收这种东西"的后门(节日包照样不收装备)。
+	if (!admission_->Accepts(configId))
+	{
+		LOG_ERROR << "Bag::PutInstance: this bag does not admit config " << configId
+			<< " (guid " << guid << "); refusing. player " << PlayerGuid();
+		return PrintStackAndReturnError(kBagAddItemInvalidParam);
+	}
+
+	if (store_.Contains(guid))
+	{
+		LOG_ERROR << "Bag::PutInstance: guid " << guid << " (config " << configId
+			<< ") already exists in this bag; refusing. player " << PlayerGuid();
+		return PrintStackAndReturnError(kBagDeleteItemAlreadyHasGuid);
+	}
+
+	if (slot.has_value())
+	{
+		const SlotId wanted = *slot;
+		// 越界:布局层的 PlaceAt 也会拒,但那已经在实例入库之后了 —— 这里提前问。
+		if (wanted == kInvalidSlot || wanted >= layout_->Capacity())
+		{
+			LOG_ERROR << "Bag::PutInstance: slot " << wanted << " is out of range (capacity "
+				<< layout_->Capacity() << ") for guid " << guid << ". player " << PlayerGuid();
+			return PrintStackAndReturnError(kBagAddItemInvalidParam);
+		}
+		// 被占:绝不顶替。"替换"是编排层先把旧的 Take 走、再 Put 新的。
+		if (layout_->At(wanted) != kInvalidGuid)
+		{
+			LOG_ERROR << "Bag::PutInstance: slot " << wanted << " is occupied by guid "
+				<< layout_->At(wanted) << "; refusing to place guid " << guid << ". player "
+				<< PlayerGuid();
+			return PrintStackAndReturnError(kBagAddItemBagFull);
+		}
+		// 部位:只有具名槽布局才问,且与 SlotsAcceptingKind 是同一条口径(它报出来的槽
+		// 这里一定认)。自由格布局的格子放什么都行 —— 分叉条件与 PlaceInstance 相同。
+		if (layout_->HasSlotSemantics())
+		{
+			const uint32_t kind = EquipKindFor(configId);
+			const std::vector<uint32_t> accepting = SlotsAcceptingKind(kind);
+			if (std::find(accepting.begin(), accepting.end(), wanted) == accepting.end())
+			{
+				LOG_ERROR << "Bag::PutInstance: slot " << wanted << " does not accept equip kind "
+					<< kind << " (config " << configId << ", guid " << guid << "); refusing. player "
+					<< PlayerGuid();
+				return PrintStackAndReturnError(kBagAddItemInvalidParam);
+			}
+		}
+	}
+	else
+	{
+		// 自动找位的 reserve:CanReserve 与下面 commit 用的 PlaceInstance 在同一个条件上
+		// 分叉(HasSlotSemantics),它说能放,PlaceInstance 就一定落得了位。
+		// **刻意不走 ReserveOrEvict**:搬运绝不为了腾位销毁东西,临时格也一样。
+		if (!CanReserve({{configId, uint32_t{1}}}, 1))
+		{
+			return PrintStackAndReturnError(kBagAddItemBagFull);
+		}
+	}
+
+	// ── 校验全过,现在才允许改状态 ──────────────────────────────────────
+	// 入包序号是"本包内的先后",不随实例搬家:ItemStore::Insert 对非 0 值会原样保留并把
+	// 水位抬到它之上,带着源包的序号进来,先进先出就按别的包的时间线挤人了。
+	item.set_acquire_seq(0);
+
+	if (store_.Insert(std::move(item)) == nullptr)
+	{
+		// 上面刚查过 Contains,走到这里只可能是实例层索引与实体不同步(编程错误)。
+		// Insert 失败自己会回滚半建好的实体,两层仍然没动。
+		LOG_ERROR << "Bag::PutInstance: ItemStore refused guid " << guid << " right after the "
+			<< "Contains check passed (programming error). player " << PlayerGuid();
+		return PrintStackAndReturnError(kBagDeleteItemAlreadyHasGuid);
+	}
+
+	const bool placed = slot.has_value()
+							? layout_->PlaceAt(guid, *slot, FootprintFor(configId))
+							: PlaceInstance(guid, configId) != kInvalidSlot;
+	if (!placed)
+	{
+		// 预检已排除全部数据可触发的原因;到这里说明预检与布局层不一致,是真 bug。
+		// 回滚这一件 —— 绝不留下没有槽位的孤儿实例(同 AddNonStackableItem)。
+		store_.Erase(guid);
+		LOG_ERROR << "Bag::PutInstance: layout refused to place guid " << guid << " (config "
+			<< configId << ", capacity " << layout_->Capacity() << ", occupied "
+			<< layout_->OccupiedSlotCount() << ") after the pre-check passed (programming error). "
+			<< "player " << PlayerGuid();
+		return PrintStackAndReturnError(kBagAddItemBagFull);
+	}
+
+	AssertLayerConsistency();
+	return kSuccess;
+}
+
 // ── 快照还原(cross-zone / rollback / 持久化)────────────────────────────
 // 详见 cpp/libs/services/scene/player/system/bag_marshal.{h,cpp} 与
 // docs/design/cross-zone-readiness-audit.md §3.2 件 1。
@@ -1383,6 +1637,23 @@ void Bag::ResetFromSnapshot()
 void Bag::InsertItemForRestore(Guid guid, uint32_t configId, uint32_t stackSize, uint32_t pos,
 							   uint64_t acquireSeq)
 {
+	// 位置参数重载:只带得动身份 + 数量 + 入包序号。拼成 ItemComp 后转调整份重载,
+	// 校验与落位只有那一份 —— 两个重载各写一遍,日后必然漂移。
+	ItemComp proto;
+	proto.set_item_id(guid);
+	proto.set_config_id(configId);
+	proto.set_size(stackSize);
+	// 0 交给 ItemStore::Insert 按重放顺序补盖(旧存档);非 0 原样保留并抬高水位。
+	proto.set_acquire_seq(acquireSeq);
+	InsertItemForRestore(std::move(proto), pos);
+}
+
+void Bag::InsertItemForRestore(ItemComp item, uint32_t pos)
+{
+	// 身份与模板先抄出来:item 下面会被 move 进实例层。
+	const Guid guid = item.item_id();
+	const uint32_t configId = item.config_id();
+
 	if (guid == kInvalidGuid)
 	{
 		LOG_ERROR << "Bag::InsertItemForRestore: refusing invalid guid (configId=" << configId << ")";
@@ -1397,16 +1668,12 @@ void Bag::InsertItemForRestore(Guid guid, uint32_t configId, uint32_t stackSize,
 		return;
 	}
 
-	// Build the ItemComp the same shape AddItem would, then route through
-	// the single ItemStore::Insert chokepoint so the store stays consistent.
-	ItemComp proto;
-	proto.set_item_id(guid);
-	proto.set_config_id(configId);
-	proto.set_size(stackSize);
-	// 0 交给 ItemStore::Insert 按重放顺序补盖(旧存档);非 0 原样保留并抬高水位。
-	proto.set_acquire_seq(acquireSeq);
-
-	if (store_.Insert(std::move(proto)) == nullptr)
+	// 整份原样进实例层,走 ItemStore::Insert 这唯一的创建口径:
+	//   * equip 段连同 presence 一起保留 —— has_equip() 是"已初始化过"的唯一判据,
+	//     还原时丢了它,这件装备下次经过任何入包路径都会被当成新铸的再掷一次;
+	//   * acquire_seq 为 0 由 Insert 按重放顺序补盖(旧存档),非 0 原样保留并抬高水位;
+	//   * **不调 ItemInstanceInitializer** —— 还原的不是新铸实例。
+	if (store_.Insert(std::move(item)) == nullptr)
 	{
 		LOG_ERROR << "Bag::InsertItemForRestore: duplicate guid=" << guid
 				  << " configId=" << configId << ", skipping";
@@ -1416,13 +1683,38 @@ void Bag::InsertItemForRestore(Guid guid, uint32_t configId, uint32_t stackSize,
 	const Footprint footprint = FootprintFor(configId);
 	bool placed = false;
 
-	// ① 具名槽布局(装备栏):优先按**配置数据**落位。策划把某件装备从"头"改到
-	//    "胸"之后,老存档还原就该落到新槽位 —— 这是"口径在数据里"的直接后果。
+	// ① 具名槽布局(装备栏):落到哪个槽由**配置数据**说了算,快照 pos 只有在配置
+	//    今天仍然认可它时才算数。
+	//
+	//    (a) 快照 pos 这个槽**仍然接受这件东西的部位**(槽位表 + 当前容量,与
+	//        SlotsAcceptingKind / PutInstance 的指定槽是同一条口径)且空着 -> 原样落回。
+	//        同一部位可以有多个槽(两个手镯位),"戴在哪一只上"是编排层经 PutInstance
+	//        的指定槽选定的,必须撑得过存档往返。此前这里直接取"该部位第一个空槽",
+	//        而存档是按实例层的遍历序写出的(不保证按槽号):单独戴在 1 号槽的那只重登
+	//        后会跑到 0 号槽,两只都戴着时每往返一次互换一次 —— 穿上规则"都占着就替换
+	//        槽号最小的那只"换掉的是哪一只,也就跟着重登漂。
+	//    (b) 否则(策划把这件装备从"头"改到了"胸"、槽位表改了、容量缩了、或与另一件
+	//        已还原的撞位)-> 该部位的第一个空槽。老存档落到新槽位,这是"口径在数据里"
+	//        的直接后果。
 	if (layout_->HasSlotSemantics())
 	{
 		// 安静地试:还原路径不该因为配置查不到就刷错误日志,后面还有兜底。
-		if (const SlotId slot = FindFreeSlotForKind(EquipKindFor(configId));
-			slot != kInvalidSlot)
+		// (EquipKindFor 查不到表返回哨兵,下面两问对哨兵都只会答"没有"。)
+		const uint32_t kind = EquipKindFor(configId);
+		SlotId slot = kInvalidSlot;
+		if (layout_->At(pos) == kInvalidGuid)
+		{
+			const std::vector<uint32_t> accepting = SlotsAcceptingKind(kind);
+			if (std::find(accepting.begin(), accepting.end(), pos) != accepting.end())
+			{
+				slot = pos;
+			}
+		}
+		if (slot == kInvalidSlot)
+		{
+			slot = FindFreeSlotForKind(kind);
+		}
+		if (slot != kInvalidSlot)
 		{
 			placed = layout_->PlaceAt(guid, slot, footprint);
 		}

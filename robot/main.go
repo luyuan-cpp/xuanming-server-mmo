@@ -155,6 +155,15 @@ func main() {
 		return
 	}
 
+	// Equip-smoke 模式:单机器人做「装备属性(问道式随机属性 + 穿脱)」端到端冒烟
+	// (GM 发装备 → tooltip 字段与随机属性形状 → 等级不足被拒 → 穿上 / 替换 / 再穿一件 → 面板加成
+	//  → 重登往返 → 卸下后面板恰好还原 → 各类拒绝守卫)。
+	// 见 equip_smoke_scenario.go 与 docs/design/equipment-attributes.md §7;前置条件写在 etc/equip_smoke.yaml 文件头。
+	if cfg.Mode == "equip-smoke" {
+		RunEquipSmoke(cfg)
+		return
+	}
+
 	// Chat-smoke 模式:两个机器人做「全局聊天 go/chat v1」端到端冒烟
 	// (A/B 分登两个 zone → WORLD 发 + 拉 → PRIVATE 发 + 拉 → chat 侧超长拒绝 → 同 request_id 幂等)。
 	// 见 chat_smoke_scenario.go 与 zone 接入契约 v1 §9 冒烟段;前置条件写在 etc/chat_smoke.yaml 文件头。

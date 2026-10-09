@@ -14,13 +14,20 @@
 //   of comment that sends someone down the wrong path during an incident,
 //   so: if you change these functions, change this paragraph too.)
 //
-//   Schema is still the conservative 5-field subset (item_uuid /
-//   config_id / stack_size / pos / bag_type). Game-design extensions
-//   (enchant level, affixes, gem inlay, bound state) are documented as
-//   TODO at known field numbers in
-//   proto/common/database/bag_quest_mail_data.proto and will land here as
-//   the schema grows; proto field numbers are reserved so the migration
-//   path stays forward-compatible.
+//   Schema (2026-10-07): item_uuid / config_id / stack_size / pos /
+//   bag_type / acquire_seq, plus `equip` (ItemEntry field 14) — the
+//   equipment instance data (random attribute rows), mirrored 1:1 from
+//   ItemComp.equip. Its PRESENCE is part of the data: has_equip() means
+//   "this instance has already been rolled" (even with zero rows), so both
+//   directions copy it only when present. See
+//   docs/design/equipment-attributes.md §3.1 / §5 invariant 1.
+//   The ItemComp <-> ItemEntry mapping lives in ONE pair of file-local
+//   functions in bag_marshal.cpp shared by fixed and dynamic bags; a new
+//   instance field is added there and nowhere else.
+//   Remaining game-design extensions (enchant level, gem inlay, bound
+//   state) are still TODO at known field numbers in
+//   proto/common/database/bag_quest_mail_data.proto; proto field numbers
+//   are reserved so the migration path stays forward-compatible.
 //
 //   ItemEntry.pos is a Bag SlotId. Its meaning is layout-strategy
 //   dependent (flat = index, grid = y*width+x) but its wire type never

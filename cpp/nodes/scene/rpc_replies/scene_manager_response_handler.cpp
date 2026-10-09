@@ -11,7 +11,7 @@
 #include "proto/scene_manager/scene_manager_service.pb.h"
 #include "services/scene/player/system/player_lifecycle.h"
 #include "services/scene/player/system/player_tip.h"
-#include "table/proto/tip/common_error_tip.pb.h"
+#include "table/proto/tip/scene_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 
 #include <string>
@@ -33,6 +33,8 @@ void InitSceneManagerReply()
         // 应答回调里没有请求上下文:按 correlation_id 分发,见 PlayerLifecycleSystem::DispatchEnterSceneReply
         // (player_id 只用来找实体;player_id == 0 / correlation_id == 0 的旧版 scene_manager 应答也在里面处理)。
         // 成功与失败都要送到:交接的源端要据此收尾,普通换图要据此得知 18 或失败。本处只做适配。
+        // 疏散 / 排空改派的应答同样从这里进入(发出时本地实体已销毁),由改派待确认表按号认领、只触发核实;
+        // 它被拒时下面那条 "SceneManager.EnterScene error" 照常打,是预期日志。
         PlayerLifecycleSystem::DispatchEnterSceneReply(resp);
 
         if (resp.error_code() != 0)
@@ -66,6 +68,7 @@ void InitSceneManagerReply()
 
     // EnterScene 传输失败(gRPC deadline 到期 / scene_manager 不可达 / 服务端超时):生成的客户端交回发出的请求,
     // 按它的 correlation_id 分发,语义见 PlayerLifecycleSystem::DispatchEnterSceneTransportFailure。本处只做适配。
+    // 疏散 / 排空改派的传输失败同样从这里进入,由改派待确认表按号认领(只按号,没有 player_id 退路),当作结果未知。
     scene_manager::AsyncSceneManagerEnterSceneFailedHandler =
         [](const GrpcCallFailure& failure, const ::scene_manager::EnterSceneRequest& req)
     {
@@ -179,7 +182,7 @@ void InitSceneManagerReply()
 
     // CreateScene 传输失败。镜像的自动进场由**应答**驱动(上面按回显的 creator_ids 发 EnterScene),应答没了
     // 这次就一定不会自动进场:按发出请求里的 creator_ids 告诉本节点上的创建者,否则客户端一直等一个不会来的
-    // EnterSceneS2C(EnterSceneC2S 早已回"已受理")。回 kServiceUnavailable 而不是"创建失败":结果未知,
+    // EnterSceneS2C(EnterSceneC2S 早已回"已受理")。回 kEnterSceneServerBusy 而不是"创建失败":结果未知,
     // 镜像若其实已经建好,由 scene_manager 按空场景回收。
     // 注:scene_manager 的**业务**失败应答(error_code != 0)不回显 creator_ids,那条路径今天仍告诉不了创建者
     // (docs/design/grpc-client-deadline-failure-callback.md §7)。
@@ -195,7 +198,7 @@ void InitSceneManagerReply()
             {
                 continue; // 创建者已不在本节点(断线 / 已换节点),没有客户端可提示
             }
-            PlayerTipSystem::SendToPlayer(playerEntity, kServiceUnavailable, {});
+            PlayerTipSystem::SendToPlayer(playerEntity, kEnterSceneServerBusy, {});
         }
     };
 }

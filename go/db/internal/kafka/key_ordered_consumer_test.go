@@ -896,25 +896,7 @@ func TestRetryConsumer_LegacyPayloadWithoutPartitionGoesToDeadQueue(t *testing.T
 	assert.Equal(t, int64(1), deadLen)
 }
 
-func TestRecoverRetryProcessingRestoresEveryReceipt(t *testing.T) {
-	w, _, _ := newTestWorker(t, 0)
-	for _, payload := range [][]byte{[]byte("one"), []byte("two")} {
-		require.NoError(t, w.redisClient.LPush(w.ctx, w.retryProcessingKey, payload).Err())
-	}
-	c := &KeyOrderedKafkaConsumer{
-		redisClient:        w.redisClient,
-		ctx:                w.ctx,
-		retryQueueKey:      w.retryQueueKey,
-		retryProcessingKey: w.retryProcessingKey,
-	}
-	require.NoError(t, c.recoverRetryProcessing())
-	processingLen, err := w.redisClient.LLen(w.ctx, w.retryProcessingKey).Result()
-	require.NoError(t, err)
-	assert.Zero(t, processingLen)
-	ready, err := w.redisClient.LRange(w.ctx, w.retryQueueKey, 0, -1).Result()
-	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"one", "two"}, ready)
-}
+// 重试收据的启动恢复 / 孤儿回收改为按实例归属,用例在 retry_ownership_test.go。
 
 func TestPoisonKafkaPayloadIsPersistedBeforeAck(t *testing.T) {
 	w, _, _ := newTestWorker(t, 0)

@@ -273,6 +273,10 @@ func main() {
 		if err != nil {
 			logx.Must(fmt.Errorf("guild asset pipeline: %w", err))
 		}
+		// 离线读账本(B5d-1,07-rollback-fail-closed.md §7.8.3):必须紧跟建管线、在把 Loop 交给同步投递路径
+		// (下面的 EconomyDeps.Loop / ActivityDeps.Loop)与 Start 之前接上 —— Loop.Ledger 是无锁字段。
+		// 没配 DataServiceRpc 时客户端为 nil,方法内保持 Ledger=nil 并打 INFO(离线读账本是优化,不是正确性路径)。
+		assetPipe.AttachPersistedLedger(svcCtx.DataServiceClient)
 		svcCtx.WarmAssetOpIDSegment()
 	} else {
 		// go-zero logx 没有 WARN 级;沿用本文件"降级形态打一条 ERROR"的写法(同 DataServiceRpc 未配置)。

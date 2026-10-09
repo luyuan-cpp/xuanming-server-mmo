@@ -9,7 +9,7 @@
 // 而且能在不起 ECS / 不连网络的情况下确定性地验。
 //
 // **最有价值的是 DescriptorScan 那条**:前缀判据的已知缝隙是"名字不叫 Gm* 的后门"。
-// 它遍历四个服务的描述符,凡是不区分大小写以 `gm` 开头的方法都必须被判据认出来 ——
+// 它遍历五个服务的描述符,凡是不区分大小写以 `gm` 开头的方法都必须被判据认出来 ——
 // 于是将来有人写出 `GMGrant` / `gmAdd`,是这条用例红,而不是线上多一条免鉴权印钞机。
 
 #include <gtest/gtest.h>
@@ -19,6 +19,7 @@
 #include <string_view>
 
 #include "proto/scene/player_attribute.pb.h"
+#include "proto/scene/player_bag.pb.h"
 #include "proto/scene/player_currency.pb.h"
 #include "proto/scene/player_pet.pb.h"
 #include "proto/scene/player_rollback.pb.h"
@@ -29,11 +30,13 @@ namespace
 {
 
 // 2026-09-18 实得的、挂在 player service 上的全部 GM 方法:货币 4、宠物 1、属性 1、
-// 回档/欠款 12。清单写在这里**不是**为了让运行时去查它(运行时用前缀判据,不查表),
+// 回档/欠款 12;2026-10-07 加背包 1(GmGrantItem,发任意物品 / 装备)。
+// 清单写在这里**不是**为了让运行时去查它(运行时用前缀判据,不查表),
 // 而是为了让"新增一条 Gm* 却没被判据认出来"这件事在测试里就炸掉。
 constexpr std::string_view kKnownClientGmMethods[] = {
 	"GmAddCurrency", "GmDeductCurrency", "GmBlockCurrency", "GmUnblockCurrency",
 	"GmGrantPet",
+	"GmGrantItem",
 	"GmSetPlayerLevel",
 	"GmAttachDebt", "GmWaiveDebt", "GmAdjustDebt", "GmFreezeDebt", "GmQueryDebt",
 	"GmCreateSnapshot", "GmListSnapshots", "GmPreviewRollback", "GmExecuteRollback",
@@ -102,6 +105,23 @@ TEST(ClientGmGateTest, DescriptorScan)
 	ExpectEveryGmMethodIsGated(ScenePetClientPlayer::descriptor());
 	ExpectEveryGmMethodIsGated(SceneAttributeClientPlayer::descriptor());
 	ExpectEveryGmMethodIsGated(SceneRollbackClientPlayer::descriptor());
+	ExpectEveryGmMethodIsGated(SceneBagClientPlayer::descriptor());
+}
+
+// 清单与描述符对账:kKnownClientGmMethods 里的 GmGrantItem 必须真的是 SceneBagClientPlayer 上的方法。
+// 没有这条,清单里写错一个名字(或 proto 里把它改了名)时,上面两条用例照样全绿。
+TEST(ClientGmGateTest, BagServiceExposesGmGrantItemAndItIsGated)
+{
+	const auto *method = SceneBagClientPlayer::descriptor()->FindMethodByName("GmGrantItem");
+	ASSERT_NE(nullptr, method) << "SceneBagClientPlayer.GmGrantItem is missing: run proto-gen first";
+	EXPECT_TRUE(scene_gm_guard::IsClientGmMethodName(std::string(method->name())));
+	// 同一个 service 上的正常 RPC 不能被闸门误伤。
+	for (const char *name : {"GetBag", "SortBag", "EquipItem", "UnequipItem"})
+	{
+		const auto *normal = SceneBagClientPlayer::descriptor()->FindMethodByName(name);
+		ASSERT_NE(nullptr, normal) << name;
+		EXPECT_FALSE(scene_gm_guard::IsClientGmMethodName(std::string(normal->name()))) << name;
+	}
 }
 
 TEST(ClientGmGateTest, DefaultRunModeRefusesGmCommands)

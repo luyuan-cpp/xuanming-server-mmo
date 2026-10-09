@@ -95,3 +95,6 @@ const (
 	MySQLErrDeadlockForTest = mysqlErrDeadlock
 	MySQLErrDupEntryForTest = mysqlErrDupEntry
 )
+
+// MigrateLockNameForTest 返回某个库的迁移锁名,让真库用例能扮演"另一个正在迁移的实例"占住同一把锁。
+func MigrateLockNameForTest(dbName string) string { return migrateLockName(dbName) }

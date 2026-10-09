@@ -41,6 +41,22 @@ private:
 class BagService
 {
 public:
+	// 安装「新铸实例初始化回调」(契约见 item_system.h 的 ItemInstanceInitializer;
+	// scene 侧的安装方是 PlayerEquipSystem::InstallItemInitializer,装的是装备掷属性)。
+	//
+	// **进程级**,不是每线程一份:启动时装一次,此后只读。传空 function = 卸载(单测用)。
+	// 刻意不做成 thread_local —— 安装点与入包点一旦不在同一线程,回调会静默为空,
+	// 装备从此不掷属性且零报错。代价是它**不带同步**:只许在还没有任何入包流量时安装
+	// (启动期 / 单测的 SetUp、TearDown),运行中换回调不在支持范围内。
+	//
+	// 装上之后,下面三个 AddItem / AddItems 入口新铸的**每一个不可叠加实例**,在进
+	// ItemStore 之前各调它一次,条件是该实例 `!has_equip()` —— 带着装备数据来的既有实例
+	// (邮件回流、穿脱搬运后再经这里入包的)绝不重掷;`count = N` 的批量每件各调一次。
+	// 可叠加物品不调;还原(Bag::InsertItemForRestore)与搬运原语(Bag::TakeInstance /
+	// PutInstance)根本不经过本类,自然也不调。
+	// Bag 自己不持有这份全局状态:回调由本类在每次调用 Bag::AddItem 时作为参数传下去。
+	static void SetItemInstanceInitializer(ItemInstanceInitializer initializer);
+
 	// Orchestrated AddItem:
 	//   block check → Bag::AddItem → transaction log → anomaly detection
 	static uint32_t AddItem(
@@ -83,6 +99,13 @@ public:
 	//   per-piece block check → Bag::ReserveForBatchAdd(vector 重载:含预设 guid
 	//   撞车预检)→ per-piece Bag::AddItem → transaction log → anomaly detection.
 	//   原子性口径同上。
+	//
+	//   ⚠ 信任边界(docs/design/equipment-attributes.md §8):入参里已带 equip 段的实例**原样入库**
+	//   —— has_equip() 即视为「已初始化」,不重掷,也**不校验**它的随机属性(条数、同档是否重复、
+	//   attr_id 是否属于该装备的属性池;消费侧只把每条的数值夹到表上限)。容器层不认识属性,
+	//   这道校验不该长在这里。本重载今天没有生产调用方(只有单测);接上任何「外来的 equip 段」
+	//   之前(邮件附件、寄售 / 交易回流、Go 侧携带实例),调用方必须先在玩法层把实例校验 / 规范化,
+	//   否则这里就是属性注入口(一件帽子带 50 条「所有属性」,每条都按上限计)。
 	static uint32_t AddItems(
 		entt::entity playerEntity,
 		Bag &bag,

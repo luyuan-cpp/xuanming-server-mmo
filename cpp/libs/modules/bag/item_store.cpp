@@ -150,6 +150,13 @@ ItemCountMap ItemStore::MeasureFreeRoomPerConfig(const ItemCountMap &wanted,
         {
             continue;
         }
+        // 带实例数据的堆不收任何并入(见 CanStack)。这里是 reserve 侧的估算,不跟着跳过的话
+        // 它会把这种堆的空余算进去,而 commit 侧的 PlanStackIntoExistingStacks 并不往里填 ——
+        // reserve 比 commit 乐观,就是"预检通过、写到一半放不下"。
+        if (item.has_equip())
+        {
+            continue;
+        }
         LookupItemOrContinue(item.config_id());
         const uint32_t maxStack = itemRow->max_stack_size();
         // `<` 而非 `!=`:防止脏数据"超满堆叠"在做减法时无符号下溢成巨大值。
@@ -263,6 +270,10 @@ bool ItemStore::HasMergeablePartials() const
     std::unordered_map<uint32_t, uint32_t> partialCountByConfig;
     for (auto &&[entity, item] : registry_.view<ItemComp>().each())
     {
+        if (item.has_equip())
+        {
+            continue;  // 带实例数据:不参与合并(与 CanStack / MergePartialStacks 同一口径)
+        }
         LookupItemOrContinue(item.config_id());
         if (itemRow->max_stack_size() <= 1)
         {
@@ -283,11 +294,18 @@ bool ItemStore::HasMergeablePartials() const
 void ItemStore::MergePartialStacks()
 {
     // ① 分组 —— 把同 config_id 的"未满可叠加堆"归到一组。
-    // 直接用 config_id 做哈希分组,O(实例数)。CanStack 本质就是比 config_id,
-    // 所以这里完全等价,且避免了"逐物品线性扫已有组"的 O(实例数 × 组数) 开销。
+    // 直接用 config_id 做哈希分组,O(实例数),避免"逐物品线性扫已有组"的
+    // O(实例数 × 组数) 开销。它与 CanStack 等价的前提是**先把带实例数据的堆剔出去**:
+    // CanStack 对 has_equip() 的实例一律返回 false(装备被误配成可堆叠时的兜底),
+    // 这里不剔就会绕过那道兜底,把属性各不相同的几件装备并成一堆 —— 数量守恒,
+    // 属性只剩下排在前面那一件的,其余无声消失。
     std::unordered_map<uint32_t, EntityVector> groupsByConfig;
     for (auto &&[entity, item] : registry_.view<ItemComp>().each())
     {
+        if (item.has_equip())
+        {
+            continue;  // 带实例数据:不参与合并
+        }
         LookupItemOrContinue(item.config_id());  // 查物品表(查不到跳过),注入 itemRow
         if (itemRow->max_stack_size() <= 1)
         {
@@ -365,6 +383,15 @@ GuidVector ItemStore::CollectEmptyInstances() const
 
 bool ItemStore::CanStack(const ItemComp &leftItem, const ItemComp &rightItem)
 {
+    // 任一方带实例数据(equip 段)就不许并堆:并堆只加数量,两份不同的属性并成一堆之后
+    // 只剩下既有那一份。正常情况下到不了这里 —— 装备必须 max_stack_size == 1,根本不走
+    // 堆叠路径(docs/design/equipment-attributes.md §5 不变量 7,由玩法层启动时逐行校验);
+    // 这是表被误配成可堆叠时的兜底。判的是 presence 而不是"有几条属性":
+    // has_equip() 且 0 条属性同样是一件已经初始化过的独立实例。
+    if (leftItem.has_equip() || rightItem.has_equip())
+    {
+        return false;
+    }
     return leftItem.config_id() == rightItem.config_id();
 }
 

@@ -6541,6 +6541,191 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
     Unity EditMode `MmorpgClient.Tests.EditMode.Battle` 以 results.xml 为准;scene 相关工程 MSBuild 串行 `/m:1`。
 - **Java 版(AGENTS §12)**:D72 口径细化为「PREPARING 不推重连提示,升级到 FIGHTING 时按会话号补推」,Java 版做战斗时按此对齐。
 
+## 2026-10-01 换图传输失败改用专用提示码 kEnterSceneServerBusy(3028,「服务器繁忙,请稍后再试」)(Claude,用户拍板,未编译)
+
+- **决定**:换图时 gRPC 调用失败保留提示,但不再复用通用的 `kServiceUnavailable`(「服务不可用」:文案生硬,且客户端换图界面不认识这个码,会显示成"传送失败(tip=1003)")。
+- **新码**:`data/tip/Tip.xlsx` scene_error 组末尾加 `EnterSceneServerBusy`(fault=1),导表器发号 **3028**。导表在隔离工作树里跑:HEAD 上帮会有 10 行已提交未导表的 guild_error 码,导表前在工作树副本里去掉,只带回本码的产物 —— `scene_error_tip` 的 proto / C++(两处)/ Go / Java(两处)/ Python、`generated/tables/tip_text.json`、`go/shared/generated/tip/{faults,segments}.go`、`tools/data_table_exporter/state/mapping/tip_enum_ids/tip_enum_ids.json`、robot vendor 同名 pb.go(与 go/ 逐字节相同)。帮会那 10 个码未发号,留给帮会整批导表(届时 14032–14041)。
+- **服务端三处改用新码**:`PlayerLifecycleSystem::DispatchEnterSceneTransportFailure`(普通换图传输失败)、`scene_manager_response_handler.cpp` 的 CreateScene 失败处理器、`player_scene_handler.cpp` "一个 SceneManager 都没注册"分支。gate 的通用失败桥不是换图语义,仍回 1003。三个文件里为 1003 加的 `common_error_tip.pb.h` include 随之去掉 / 换成 `scene_error_tip.pb.h`。
+- **客户端**(`../mmorpg-client`,用户"全部做完"授权):`SceneErrorTip.cs` 用仓内 protoc 35.1 只重生成这一个文件;`GameClient.DescribeTravelTip` 增加文案。不加入 `IsTravelFailureTip`(那是"确定没成"的判据,本码是结果未知)。
+- **文档**:`docs/design/grpc-client-deadline-failure-callback.md` §3.3 / §5 / §8 / §9.2;`docs/design/cross-zone-scene-travel.md` 三处码名。
+- **给 Codex**:沿用设计文档 §9.2 的串行步骤。本条新增的编译面:`cpp/generated/table/table.vcxproj`(scene_error_tip.pb.cc 变了)→ scene 库 → scene 节点;联机检查第 4 步的预期 tip 由 1003 改为 3028。客户端:`pwsh ../mmorpg-client/tools/client_compile_check.ps1`(退出码 0)。
+
+
+## 2026-10-01 组队邀请联机验收：修复 AOI 反向创建/销毁通知（Codex，已编译与回归）
+
+- 缺陷：后来入场玩家能看到静止玩家，但静止玩家仅有服务器兴趣关系，收不到 ActorListCreate；移出视野时反向 ActorListDestroy 同样遗漏。aoi.cpp 现在对实际新增的反向兴趣关系立即发创建通知，对反向移除立即发销毁通知；原有隐身、容量拒收、pinned 例外保持独立方向判定。
+- 正式回归：新增 cpp/tests/aoi_delivery_test，直接编译生产 AOI/Grid/Interest/View，仅截获网络发送边界；登记 tools/scripts/run_cpp_tests.ps1。原实现 2 项失败、3 项通过；修复后和正式入口 -Build -Filter aoi_delivery_test 均 5/5 通过，覆盖静止观察者、新入场、双向移出、隐身/容量及 pinned 行为。
+- 当前主工作区完整 Scene 构建暴露其他任务的 GuildInternal/GuildActivity 生成链缺失。只补齐了正式 protoc 35.1 生成的 guild_internal.pb/grpc.pb 四文件，没有手改生成代码、没有给新 Guild RPC 分号，也没有改变路由。当前主工作区的整套构建仍不可据本条宣称通过。
+- 为交付本次最小修复，只读提取已部署 scene.exe 的 PDB 源码校验和；正式提交 1ad634443d4d5028075d6b7e839b434018bfb0e8 与全部 993 个仓库源码记录匹配，零差异。部署前旧 exe SHA256=f39344f361dd975497aa0340d1c6e6dcf78204b293a950fe54e61092046073f1。
+- 从上述唯一提交导出隔离源码，仅加入已回归的 aoi.cpp 最小补丁；所有自有库使用同一源码从空目录构建，第三方 SDK 复用；MSBuild /m:1 /nr:false，关闭 PostBuildEvent。中途工具会话被打断后，仅增量续编同一输出目录；未清缓存，未混入当前主工作区新库。解决方案遗漏 gate/battle 前置依赖，因此显式先构建这两个同基线正式目标，再完成 Scene 链接。最终构建 exit 0，0 警告/0 错误；真实 link.read 输入逐项证明 16 个本地库全部来自隔离目录，详见 baseline-linked-inputs.json。
+- 新 exe：E:\work\image\designs\team-invites-20260928\aoi-fix\baseline-source\build\cpp\nodes\scene.exe，SHA256=33d1d0b19aa03da9d926b9918eef9704c7f9742e9f32f97eb6f81a1e42c0c473。本子任务未替换/重启运行服务器；根任务负责随后部署和双客户端四入口验证，联网结果以组队邀请总验收记录为准。
+- 证据：E:/work/image/designs/team-invites-20260928/aoi-fix/verification.json、deployed-pdb-sources.txt、deployed-baseline-comparison.json、repository-regression.log、baseline-build-result.json 及其构建日志。
+
+## 2026-10-01 ~ 10-08 消除单节点(一):Kafka 单 broker → 可配置 ≥3 个 broker(Claude,未跑测试、未上集群)
+
+用户要求(10-01):所有服务都不能只有一个节点,要能水平扩展。总纲、盘点与每一项的设计 / 验证口径在
+`docs/design/no-single-node-horizontal-scaling-20261001.md`;顺序 Kafka → db → data_service → 共享 Redis → MySQL → guild 的 K8s 清单。本条是第一项。
+
+- **盘点结论**:能多开的有 gate / scene / battle、login、player-locator、match、chat、client-rpc-router、trade、friend、
+  scene-manager(请求由所有副本处理,后台任务由主节点做)、Java gateway、etcd×3、match 的 Redis Cluster。
+  仍是单节点的:Kafka、共享 Redis、MySQL、db(每区 1)、data_service(每区 1)、guild(K8s 上没有清单)。
+- **做法**:`k8s_deploy.ps1 -KafkaBrokers <n>`(0 = 按档位:`-ReleaseProfile` 不是 dev 或 `-OpsProfile` 不是 custom → 3,其余 1;只接受 1 或 ≥3)。
+  派生值只在 `Get-KafkaTopologyFor` 算一次,三处消费:`kafka.yaml`(副本数 / 选举组成员表 / broker 默认副本数 / `min.insync.replicas` / PDB / `podManagementPolicy`)、
+  `kafka-topic-init.yaml`(预建 topic 的副本数,建完读回核对)、注入每个 go-svc 的 `KAFKA_TOPIC_REPLICATION_FACTOR`(`kafkautil.EnsureTopics` 建 topic 用)。
+  前 3 个 Pod 兼任 controller、第 4 个起只当 broker,所以 3 → N 只改 `replicas`。每个 Pod 的 `node.id` / 角色 / 监听 / 广播地址由启动脚本按序号导出;
+  单 broker 时算出来的值与改造前逐字相同(既有 PVC 可沿用)。客户端的 broker 地址配置不用改(`kafka.<ns>:9092` 只做 bootstrap 入口)。
+- **三道 fail-closed 闸**:① 1 ↔ ≥3、缩容一律拒绝 apply(`Assert-KafkaTopologyChangeIsSafe`:静态选举组成员表不能原地改,
+  否则两个空白新节点可以用空的元数据日志当选,全部 topic 元数据消失);② 已存在 topic 的副本数低于要求,预建 Job 与 `EnsureTopics` 都拒绝;
+  ③ broker 级 `min.insync.replicas=2`,多 broker 集群上 1 份副本的 topic 会让 `acks=all` 的写入直接被拒。
+- **为什么不用 broker 默认副本数(建 topic 传 −1)**:需要 CreateTopics v4,仓库钉的 sarama v1.43.1 最高只发 v3。
+- **go-svc 环境变量注入抽成通用函数** `Add-GoSvcEnvEntries`,`Add-GoSvcCommandTopicEnv`(09-28)与新增的 `Add-GoSvcTopicReplicationEnv` 是它的薄包装。
+- **落点**:改动在 10-01 被每小时自动保存提交(`c3ef832129` / `f0b4a1481a` / `df3e2ca922`),10-08 随主工作区合并(`59c270499c` 之前的合并提交)保留;
+  合并后的 `k8s_deploy.ps1` 逐函数核对过(92 个 = 两侧并集,Kafka 相关函数与合并前逐字相同)。
+- **已做的静态核对**:PowerShell 语法解析 0 错误;`kafka.yaml` 按 1 / 3 / 5 个 broker 模拟渲染后 YAML 可解析,启动脚本对每个 Pod 名算出的身份正确
+  (单 broker 与改造前一致;第 4、5 个只当 broker);预建 Job 脚本用假工具走过「副本数够 / 不够 / 建不出来」三条路径;几个纯函数直接喂值核对;`gofmt` 通过。
+- **未做(交 Codex)**:`tools/scripts/tests/k8s_deploy_contract.tests.ps1`、`k8s_migrate_gate.tests.ps1`、`cd go/shared && go test ./kafkautil/...`;
+  kind 上单 broker 回归、三 broker 起服、**杀掉一个 broker 后另外两个必须保持 Ready**(就绪探针依赖 `kafka-broker-api-versions.sh` 的行为,必须实测)、
+  原地切换被拒。步骤见设计文档 §2.5 与 `deploy/k8s/README.md`「Kafka:多 broker」。
+- **已知限制**:前 3 个是 combined 模式(controller 与 broker 同进程),独立 controller 节点未做;加 broker 不会自动搬分区;镜像仍是浮动 tag;本机 compose 保持单 broker。
+- **注意**:契约测试基线目前因 deadline 门禁与 `data_service.yaml` 的 `MethodTimeouts` 冲突而失败(09-29 起,与本条无关),要先由相关会话解决,本条的断言才跑得到。
+
+## 2026-10-08 帮会库 `guild.name_norm` 迁到 v0.2.0 键列形态 + 过渡 guild.exe(Claude 执行,须 Codex 复验)
+
+接 09-28「服务器全仓 proto2mysql 切到 v0.2.0」条目「运行期注意」第 1 条与 09-29 补记。用户 10-01 指示「帮我修复完毕」、10-08「继续做完给我」;与帮会二期会话对过归属(三步都归本会话,不碰它的源码)。
+
+### 结果
+
+- 本机 MySQL `mmorpg_guild.guild.name_norm`:`mediumtext` 可空 `utf8mb4_unicode_ci` + `uk_guild(name_norm(191))` → `varchar(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL DEFAULT '' COMMENT 'pb:11'` + 整列 `uk_guild(name_norm)`。索引名未变。表 0 行;其余 7 张表(含 `guild_player_state` 6 行、`schema_migrations` 1 行)未动。本机 TiDB 没有这个库,不涉及。
+- `bin/go_services/guild.exe` 换成过渡版(proto2mysql v0.2.0);09-22 的旧版改名为同目录 `guild.exe.v0.1.1-20260922.bak`。
+- **没有改任何受 git 跟踪的源码**:`bin/go_services/` 与 `run/` 都在 `.gitignore` 里。本条是唯一的仓内改动。
+
+### 过渡 exe 是什么
+
+- 10-08 的 main(`6e79eed12b`)上 go/guild 仍编不过:`RegisterGuildInternalServer` 在 `go/proto` 下 0 定义(guild_internal 没有 Go 生成物),`GuildActivityTable` 在 `go/shared/generated` 下 0 定义(GuildActivity 未导表)。所以按原计划先编过渡版,等帮会线导表 + proto-gen 后重编 main 时直接覆盖。
+- 来源:隔离 worktree 检出 `1ad634443d`(09-28 03:38,B6a 落码前最后一个自洽提交),再从 `9da27f9a4d` 只覆盖 6 个文件:`go/guild/go.mod`、`go/guild/go.sum`、`go/schemamigrate/go.mod`、`go/schemamigrate/go.sum`、`go/schemamigrate/plan.go`、`go/schemamigrate/plan_test.go`。即「B6a 之前的帮会代码 + proto2mysql v0.2.0」。没有任何提交同时满足「能编过」和「已是 v0.2.0」(`9da27f9a4d` 同一次自动保存就带进了 B6a 的未生成符号)。
+- 构建:`tools/scripts/go_services.ps1 -Command build -Services guild`(worktree 内),Go 1.26.5,`GOTOOLCHAIN=local`、`GOFLAGS=-mod=readonly`。版本戳 `version=dev commit=1ad634443d4d-dirty`;`go version -m` 显示 `luyuancpp/proto2mysql v0.2.0 => luyuan-cpp/proto2mysql v0.2.0 h1:uLFpdq…`。SHA256 `EFBF1E0CECD264066D6559FFAB7B58C5763BDF5B8C17B8D07C62CBAC10A1EF74`(旧 exe:`C43A51B1…8267`)。
+- 范围:声明 7 张表,与线上一致。**不含** B6a 活动、GuildInternal 对账服务、`ed75ad177` 及之后的帮会改动。
+- **保质期到帮会线导表为止**:过渡 exe 用旧生成码加载配表(protojson 默认不容忍未知键)。今天 `generated/tables/guildrule.json` 的键与旧生成码一致,能加载;导表给任何已加载的表带出新键后,它会在 `LoadTables` 退出,届时必须同批用 main 重编。重编后的 exe 首次启动会自动补建 `guild_activity_progress` 等新表,name_norm 不用再管。
+
+### 执行的 SQL(同一个 mysql 会话,默认库 `mmorpg_guild`,遇错即停)
+
+与 proto2mysql v0.2.0 `keycolumns.go` 的 `legacyKeyAlterSQL` 产出同形:
+
+```sql
+SET SESSION sql_mode = CONCAT_WS(',', NULLIF(@@SESSION.sql_mode, ''), 'STRICT_ALL_TABLES');
+ALTER TABLE `guild` DROP INDEX `uk_guild`;
+UPDATE `guild` SET `name_norm` = '' WHERE `name_norm` IS NULL;
+ALTER TABLE `guild` MODIFY COLUMN `name_norm` VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL DEFAULT '' COMMENT 'pb:11';
+ALTER TABLE `guild` ADD UNIQUE KEY `uk_guild` (`name_norm`);
+```
+
+执行前:本机 0 个游戏进程、库上 0 个其它连接、`guild` 0 行;`mysqldump` 备份 8 张表。五条全部 `Query OK`。
+
+### 运行证据(Claude 执行,违反 AGENTS §10.1 的分工,用户指示代做;须 Codex 复验)
+
+1. **迁移前,新 exe 对旧表**:`guild -f etc/guild.yaml -migrate` 退出码 **4**,`statements=0 warnings=0 manual=1`,唯一一项是 `guild.name_norm 现为 "mediumtext",proto 期望 "VARCHAR(191) … utf8mb4_0900_bin NOT NULL DEFAULT '' COMMENT 'pb:11'"`。同时说明其余 6 张表的列和索引对 v0.2.0 是干净的。
+2. **迁移后直接查 information_schema**(表结构闸只比基础类型和索引名,排序规则 / 可空 / 前缀它不查,所以这一步不能省):`COLUMN_TYPE=varchar(191)`、`IS_NULLABLE=NO`、`COLUMN_DEFAULT=''`、`COLLATION_NAME=utf8mb4_0900_bin`、`COLUMN_COMMENT=pb:11`;`uk_guild` 的 `NON_UNIQUE=0`、`SUB_PART=NULL`。`SHOW CREATE TABLE` 与 09-28 迁完的 `zone_1_db.user_phone` 同形。
+3. **迁移后,新 exe 对新表**:`-migrate` 退出码 **0**,`statements=0 warnings=0 manual=0`。
+4. **迁移后,旧 exe(v0.1.1)对新表**:`-migrate` 退出码 **4**,`guild.name_norm 现为 "varchar(191)",proto 期望 "MEDIUMTEXT COMMENT 'pb:11'"`。「新旧互斥、必须同批换」由读代码的推断变成了实测。
+5. **真实启动**:`go_services.ps1 -Command start-exe -Services guild`(启动器用的同一条路径)。日志依次为 `schemamigrate up 完成 … statements=0 warnings=0 manual=0` → `数据库版本 26.7.0 满足下限` → `Guild node registered: id=1` → `Starting Guild RPC server at 127.0.0.1:50300`;50300 处于 LISTEN,稳定运行约 4 分钟后用 `-Command stop -Services guild` 停掉。stderr 里只有号段 `AllocateIdSegment … Unavailable`:这次只起了 guild 一个服务,data_service 没起,属预期。
+
+**没做的**:`start_game.ps1` 全栈启动;建帮 / 重名判定等业务冒烟;`go test`(含 `guild_lock_order_mysql_test.go`,它从未在整列唯一键形态下跑过)。
+
+证据在 `run/verify-guild-name-norm-20261001/`(不入库):迁移前后的 `SHOW CREATE TABLE`、两份 dump、`migrate-name_norm.sql` 与执行输出、上面 1/3/4/5 各步的日志、过渡 exe 副本、`rollback-name_norm.sql`。
+
+### 行为变化(知情即可)
+
+- 库层判重从「不区分大小写 / 重音」变成逐字节比较。帮名唯一性本来就由 Go 侧 `GuildNameNorm`(NFKC → TrimSpace → 小写)决定,所以大小写、首尾空格的判定不变;只差重音的名字(`cafe` / `café`)以前被库顺带挡住,现在可以并存。要挡视觉混淆名需在 Go 侧规范化里补。
+- 列从可空变成 `NOT NULL DEFAULT ''`:漏写 `name_norm` 的插入会落成空串,第二行起撞 `uk_guild`。现有插入都显式带值,`GuildNameNorm` 拒绝空串。
+
+### 回退
+
+停 guild → 在 `mmorpg_guild` 执行 `run/verify-guild-name-norm-20261001/rollback-name_norm.sql`(DROP INDEX → `MODIFY COLUMN name_norm MEDIUMTEXT COMMENT 'pb:11'` → `ADD UNIQUE KEY uk_guild (name_norm(191))`)→ 把 `.bak` 改回 `guild.exe`。只在必须退回 v0.1.1 时用。
+
+### 其它环境
+
+另一台机器或 K8s dev 上若已有旧形态的 `mmorpg_guild.guild`,换上 v0.2.0 的 guild 时会同样以退出码 4 拒启,需要先跑上面 5 条。全新库不受影响(直接建成新形态)。
+
+### Codex 复验
+
+- 工作目录 `go/guild`(主工作区),本机 MySQL 在跑、guild 未启动:`..\..\bin\go_services\guild.exe -f etc/guild.yaml -migrate`。通过标准:退出码 0,输出含 `0 statement(s) executed`,无 `MANUAL` 行。
+- 复现过渡 exe:`git worktree add --detach <目录> 1ad634443d` → 在该目录 `git checkout 9da27f9a4d -- go/guild/go.mod go/guild/go.sum go/schemamigrate/go.mod go/schemamigrate/go.sum go/schemamigrate/plan.go go/schemamigrate/plan_test.go` → `$env:GOFLAGS='-mod=readonly'; pwsh -File tools/scripts/go_services.ps1 -Command build -Services guild`。通过标准:`[ok] guild`;`go version -m bin\go_services\guild.exe` 含 `proto2mysql v0.2.0`。同一目录可顺带跑 `cd go/schemamigrate && go vet ./... && go test -count=1 ./...` 与 `cd go/guild && go vet ./... && go test -count=1 ./...`(真库用例需按 92-handoff §12.6 设 DSN)。失败时保留完整输出。
+- 帮会线导表 + proto-gen 之后:用 main 重编 `guild.exe` 覆盖过渡版,再跑第一条命令;预期首次会多出建 `guild_activity_progress` 等新表的语句,退出码仍为 0。
+
+## 2026-10-08 消除单节点(二):data_service 每区 1 副本 → 2 副本(Claude,未编译、未跑测试、未上集群)
+
+总纲 `docs/design/no-single-node-horizontal-scaling-20261001.md` §4。上一项(Kafka)见同名「(一)」条目。
+
+- **结论先行**:通读代码后确认 data_service 在数据正确性上本来就能多开 —— RPC 面没有进程内业务状态(发号段靠行锁 + version、名字登记靠唯一键、
+  存盘靠 Redis 带 token 的锁 + Lua);两条落库消费者是 kafka-go 的 consumer group(分区在实例间独占分配,先落库后提交 + 幂等落库);
+  而且多个 zone 的实例早就在共用同一个全局库、同一组 topic 与消费组。`data-service.yaml` 里「两个实例互相等锁」的理由只在快照唯一键建出来之前成立。
+- **补的两处代码**:
+  1. 迁移互斥:`store.MigrateSchema` 先取库级命名锁 `GET_LOCK('data_service.schema_migrate.<库名>')`。补列 / 补索引是「先查后改」,
+     没有互斥时两个实例同时首次启动会撞在同一条 ALTER 上,输的一方四个 store 全不装配且不重试。启动路径等满迁移时限;`-migrate` 等 60s,
+     锁忙返回 `ErrMigrateLockBusy` → 退出码 3(与 go/schemamigrate 同值,Job 按它重试)。
+  2. `Store.Required`(新配置,缺省 false,本地行为不变):为 true 时四个 store 任一没装配起来就拒启,发生在任何 etcd 注册之前。
+     以前这种实例 gRPC 健康恒为 SERVING、照常注册;单实例时是全挂,多实例时是按比例失败,滚动更新还会把健康的旧 Pod 换成带病的新 Pod。
+- **部署**:`data-service.yaml` 改为 2 副本 + RollingUpdate(maxSurge 1 / maxUnavailable 0)+ preferred 反亲和 + 同文件 PDB + metrics 端口 9260;
+  新增 `data-service-migrate.yaml` 并在 `$GoSvcCatalogue` 登记 `MigrateJob` —— staging / prod 启动路径不建表、不种号段行,以前靠人手工跑 `-migrate`,
+  全新集群上没人跑;现在由发布流程在 Deployment 之前跑并恒等它 Complete。ConfigMap 加 `Store.Required: true`、`MetricsListenAddr: ":9260"`。
+- **顺带更正**:README、`data_service_role_and_scope.md`、`snapshot_store.go` 的一条运维日志文案与四处注释里「部署不变量是 replicas=1 + Recreate」的说法。
+- **已做的静态核对**:`gofmt` 通过;PowerShell 语法解析 0 错误;`data-service.yaml` 经真实的环境变量注入函数渲染后 YAML 可解析
+  (2 副本 / 滚动策略 / 反亲和 / PDB / 两个端口 / 三个注入变量);迁移 Job 的 YAML 可解析、占位只有脚本会替换的三个。
+- **未做(交 Codex,命令见设计文档 §4.5)**:`go/data_service` 的 build / vet / test;需要本地 MySQL 的两条新集成用例
+  (`TestMigrateSchema_ConcurrentFirstBootIsSerialized`、`TestMigrateSchema_LockBusyReturnsSentinel`);两份 `*.tests.ps1`;kind 上的实测
+  (迁移 Job Complete、两个 Pod Ready、删一个 Pod 不影响建角与 scene 启动、停掉 MySQL 后重启的 Pod 应当拒启而不是带病 Ready)。
+- **限制**:消费并行度上限 = 分区数(6 / 3);每实例最多 35 条 MySQL 连接,「zone 数 × 2 × 35」要算进 `max_connections`(现 500);
+  `GET_LOCK` 在 TiDB 上未实测;唯一键缺失时拒绝启动快照消费者的守卫、C++ 约定键提前注销两项没做。
+- **Java 版(AGENTS §12)**:待做。本机没有 Java 仓库,未核对它的 data 服务是否有对应的单实例假设;`PARITY.md` 未登记。
+- **注意**:契约测试基线仍因 deadline 门禁与 `data_service.yaml` 的 `MethodTimeouts` 冲突而失败(09-29 起,与本条无关)。
+
+## 2026-10-08 消除单节点(三):db(存档落库)每区 1 实例 → 2 副本(Claude,未编译、未跑测试、未上集群)
+
+总纲 `docs/design/no-single-node-horizontal-scaling-20261001.md` §3。前两项见同名「(一)」「(二)」条目。
+
+- **结论先行**:通读 `go/db/internal/kafka/key_ordered_consumer.go` 后确认,db 的绝大部分本来就是按多实例写的 —— Kafka 消费是 consumer group
+  (分区在实例间独占分配),写任务靠 Redis 分布式锁互斥、applied 游标保证不回退。把它钉成单实例的**只有一处**:重试队列的 processing 列表
+  全 zone 共用,进程启动时把它整表搬回 ready;第二个实例一启动,第一个实例在途的收据就全被搬走重做。
+  另外,K8s 上 db 的清单没写 `strategy`,默认滚动策略在 1 副本时是先起新 Pod 再停旧 Pod —— 「单实例」在每次发布的重叠期本来就不成立。
+- **做法**(新文件 `go/db/internal/kafka/retry_ownership.go`):processing 列表按实例拆开(`kafka:retry:processing:{topic}:{实例名}`),
+  实例登记表 `kafka:retry:instances:{topic}` 是带租约的 ZSET(时间统一取 Redis 的 `TIME`)。认领 = 一个 Lua 脚本里「续租 + 搬进自己的列表」;
+  启动时只收回同名实例(上一次的自己)的收据;每拍回收旧版共享列表和租约过期实例的孤儿(脚本内再确认一次过期);停机时把没做完的还回 ready。
+  实例名默认 `<主机名>:<端口>`(K8s 上即 Pod 名),租约默认 30s,两者可用 `Kafka.RetryInstanceId` / `Kafka.RetryLeaseSeconds` 覆盖(一般不用配)。
+- **同批修掉的两处既有问题**:停机时 ordering lock 用已取消的 context 去释放、必然失败,锁残留 2 分钟(改为脱离取消信号、2 秒上限);
+  rebalance 的 Cleanup 日志把切片下标当成分区号。
+- **合服工具同批改**:`tools/merge_zone` 的 P4 门禁与 `kafka_db_task_queues` 审计原来只查旧的共享 processing 键,键一拆它们会恒为 0、静默放行;
+  现在读登记表把每个实例的列表都查到。`docs/ops/merge-zone-runbook.md` 的手查命令同步更新,并更正一处一直写错的键名
+  (`kafka:processing:queue:…` 不存在,照着查恒为 0)。
+- **部署**:`db.yaml` 改 2 副本 + 显式 RollingUpdate(maxSurge 1 / maxUnavailable 0)+ preferred 反亲和 + 同文件 PDB + 优雅终止 45s;
+  本机 `go_services.ps1` 放开 db 的多开限制(默认仍起 1 个,`-Counts db=2` 可多开)。
+- **已做的静态核对**:`gofmt` 通过;PowerShell 语法解析 0 错误;`db.yaml` 可解析(Service / Deployment / PDB 三段,`env:` 块仍恰好一个,
+  发布脚本的环境变量注入不受影响)。
+- **未做(交 Codex,命令见设计文档 §3.5)**:`go/db`、`tools/merge_zone` 的 build / vet / test(新用例集中在 `retry_ownership_test.go`,用 miniredis);
+  两份 `*.tests.ps1`;本机两个 db 实例杀一个的实测;kind 上删 Pod 的实测。
+- **限制(设计文档 §3.4)**:① K8s 上所有 zone 的 db 共用一个消费组 `db_rpc_consumer_group`,任一 zone 的 db Pod 重启会让所有 zone 的存档消费
+  一起暂停几秒 —— 改成按 zone 命名要同步合服工具与多个运维脚本,**本次没做,单列后续**;② 并行度上限 = 分区数(10),不要配 HPA;
+  ③ 连接预算:2 副本 × 4 个 zone = 480 条,已贴近 MySQL 的 `max_connections = 500`;④ 读任务的缓存回写可能用旧值覆盖新缓存(既有问题,未改)。
+- **回退注意**:新版 → 旧版时,旧版看不到按实例的 processing 列表。正常停机没问题(收据已还回 ready);若新版是崩溃退出,回退前先起一个新版实例
+  让它回收,或手工把 `kafka:retry:processing:{topic}:*` 搬回 ready。
+- **Java 版(AGENTS §12)**:待做。本机没有 Java 仓库,未核对它的存档落库是否有对应的单实例假设;`PARITY.md` 未登记。
+- **注意**:契约测试基线仍因 deadline 门禁与 `data_service.yaml` 的 `MethodTimeouts` 冲突而失败(09-29 起,与本条无关)。
+
+## 2026-10-08 装备属性系统(问道式蓝 / 粉 / 黄随机属性 + 穿脱 + 战斗类属性)(Claude,未编译)
+
+- **范围(用户 10-07 给四张问道截图)**:武器属性池 12 条(相对问道删 忽视所有抗性 / 所有相性 / 五行相性,加 法术必杀率)、防具属性池 17 条(删五行抗性 / 所有抗性,加 抗法术 / 抗物理);装备 tooltip 形如问道(基础属性 + 按颜色分档的「名称 当前值/上限值」)。此前仓里**没有任何穿 / 脱装备能力**,物品实例只有 4 个字段,战斗引擎只有一个不分物理 / 法术的暴击率与抗性。
+- **用户未明示、按默认值落地的决定(D1–D10,设计文档 §1.4,全部可改表或改常量)**:粉 / 黄属性在炼化未做之前由创建时按概率掷出;「准确」只加物理伤害(本作没有命中 / 闪避判定);连击追加 1 段(独立结算再 ×50%);反击不连锁;反震弹回实扣的 50% 且要求受击者仍存活;必杀倍率沿用 ×2;抗物理 / 抗法术与防御共用 60% 减伤封顶;抗昏睡 → 眩晕、抗遗忘 → 沉默;全部数值是按本作单位重定的占位建议。
+- **配表**:新表 `EquipAttribute`(26 行)/ `EquipAttributeCap`(125 行)/ `EquipAffixPool`(29 行)/ `EquipAffixRule`(1 行);`Item` 加 8 列(名称 / 描述 / 图标 / 佩戴等级 / 职业 / 属性池 / 规则 / 基础属性)与 20 件样例装备(1101–1405);`EquipSlot` 加 `name` 列与 3–6 号槽(武器 / 帽子 / 衣服 / 鞋子);新 tip 域 `equip_error`(28000 起 11 个码)。xlsx 全部由幂等脚本 `tools/scripts/equip_xlsx_patch.py` 生成 / 打补丁。**只做过沙盒导表(退出码 0),仓内 `generated/**` 未动。**
+- **协议**:`item_base_comp.proto`(`ItemComp.equip` = 5)、`bag_quest_mail_data.proto`(`ItemEntry.equip` = 14)、`player_bag.proto`(tooltip 行 / 槽位定义 / `EquipItem` `UnequipItem` `GmGrantItem` 三个 RPC,追加在 service 末尾)、`player_attribute.proto`(`bonus` 与战斗属性列表)、`actor_attribute_state_comp.proto`(`CombatAttributes` 15 项)、`battle_data.proto`(快照 / 单位的 `combat`、`hit_kind`、`BATTLE_EVENT_RESIST`)。只过了 protoc 语法校验,**未 proto-gen,新 RPC 尚无消息号**。
+- **服务端实现**:背包实例层(`Bag::TakeInstance / PutInstance / SlotsAcceptingKind`、入包回调 `ItemInstanceInitializer`、`bag_marshal` 收成一对转换函数、堆叠兜底、装备栏还原优先落回快照槽);纯规则 `equip_attribute_rules.h`;编排 `player_equip.{h,cpp}`(掷属性、穿上 / 替换 / 卸下与回滚、加成汇总、tooltip 投影、表校验、GM 发物);`PlayerAttributeSystem::Recalculate` 现算装备加成(不落库,`kEquipmentChanged` 走按比例分支)并下发面板;`BuildBattleSnapshot` 带 `combat`;回合引擎消费物理 / 法术必杀率、抗物理 / 抗法术、连击、反击、反震、所有技能上升、抗异常(概率为 0 时不消耗随机数,无装备单位的事件流与改动前一致);下发给客户端的战斗状态清掉 `combat`;GM 三道闸登记 `GmGrantItem`。
+- **测试(全部未运行)**:`PlayerEquipTest` 47、`PlayerEquipAttributeTest` 20、`BagInstanceDataTest` 27、`TurnBattleEngineTest` 新增 29(共 89)、规则单测 33、GM 闸 1、存档往返 2;robot `equip-smoke`(账号 `robot_9103`,9 步,`EQUIP_SMOKE_OK`)与 14 个 Go 单测。
+- **客户端**(`../mmorpg-client` 的隔离工作树 `mmorpg-client-equip`,基于 origin/main):`PlayerFeaturesClient` 背包 / 装备栏分开缓存与穿脱;背包页装备栏 + 装备卡片;属性面板装备加成与战斗属性页;战斗分拍对连击 / 反震 / 反击 / 抵抗事件的兼容用例 16 条(演出代码零改动)。离线 Roslyn 编译零新增错误,纯逻辑用例 181/181;**窗口级用例只在 Unity 替身里跑过,真实 Unity 未跑(本机 Unity 许可离线有效期已过),没有截图**。客户端在 `MessageIds.EquipItem / UnequipItem` 生成之前有 15 处预期的 CS0117。Codex 10-08 起在同一工作树里并行改装备卡片皮肤与「选择期望属性」对话框。
+- **审查**:每块两个视角(人肉编译器 / 语义与不变量)审查 + 修复;最后做了跨模块整体审查(全链路贯通 / 既有回归 / 生成器兼容 / 资产与安全,11 条发现)→ 统一修复 → 独立复核,复核结论「未读出新的编译或链接问题」。这些都是静态阅读,**不能代替编译与运行证据**。
+- **有意没做 / 已知缺口**(设计文档 §1.3、§8):炼化 / 改造 / 进化 / 套装(绿色属性)/ 限制交易;混乱状态本身(抗混乱在引擎里没有消费点);现网 Buff / Skill 表没有任何异常状态,抗异常要等策划配出带异常的技能才有触发机会;重登 / 离线结算窗口内可以穿脱(小额回血,留到带入 main 后在 `IsInBattle` 一处收口);入包边界整份信任实例上的 `equip` 段(做邮件回流 / 寄售交付前必须补校验);聚宝斋寄售、流水、回滚 diff 都不带属性;怪物强度是按无装备角色定的,接入装备后需策划重定。
+- **状态**:服务端 2026-10-09 经用户同意已提交(`d69d50be7d`,分支 `feat/equip-attributes`)并并入本机 main,**未推送**;合并只有两处「两边各追加一段」的冲突(`cross_zone_test.cpp`、本文件),都两段保留。客户端改动仍在隔离工作树 `E:\work\mmorpg-client-equip`,未提交(Codex 在同一工作树并行改装备卡片)。当初没在主仓写是因为主仓 10-07 正停在别人未解完的 pull 合并上(10-08 已解)。
+- **设计文档**:`docs/design/equipment-attributes.md`(§2–§6 契约,§10 逐块实现偏离)。
+- **未编译、未导表、未 proto-gen、未跑任何测试(AGENTS §10.1),待 Codex 验证。给 Codex**:完整的先后顺序、命令、通过标准与失败保留物在设计文档 §9。要点:① 生成与编译都在主仓做,先把本批改动并入 main(预期唯一冲突 `cpp/tests/cross_zone_test/cross_zone_test.cpp`,两段都保留);② **不要在隔离工作树上跑全量 proto-gen**(它的 `message_id.txt` 止于 238,main 已到 243,会随机错位发号);③ 顺序:xlsx 补丁确认 → 导表 → proto-gen → `equip_xlsx_patch.py message-limiter` → 再导表 → C++ 按 table → proto → core → rpc → grpc_client → modules → battle → scene → 节点 → 测试 串行 `/m:1`(`modules` 与 `scene` 必须同批重编)→ 单测 → Go 服务与 robot 同批重编 → 先跑 login-test 基线再跑 `equip-smoke` 两遍 → 客户端 `gen_proto.ps1` / `gen_messageids.ps1`;④ 基线里 `match_internal` 的生成物没登记进工程,首次节点链接会报与装备无关的 LNK2019。
+- **Java 版(AGENTS §12)**:**待做**。本机没有 Java 仓(`D:\luyuan\wuxingqitan\xuanming-server-mmo-java` 不存在),Java 版目前只有「登录 → 进场景」竖切。客户端可见契约的变化:`player_bag.proto` / `player_attribute.proto` / `battle_data.proto` 的新消息与新字段、`equip_error` tip 域(28000–28010)、5 张表的数据;Java 版做背包 / 战斗时按设计文档 §2、§3 对齐,并在 `PARITY.md` 登记。
+
 ## 2026-10-09 玩家主动切线:分线目录 + 线号 + 选线预检 + 客户端线路面板(Claude,服务端未编译)
 - 设计与验证清单:`docs/design/world-channel-switch.md`(§10 是给 Codex 的完整清单)。在隔离工作树 `feat/channel-switch` 落码,
   经 8 视角对抗式评审(21 条意见全为 minor,已逐条核实并修复)后并入本机 main;客户端同名分支在 `mmorpg-client`。

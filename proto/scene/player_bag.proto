@@ -8,6 +8,25 @@ import "proto/common/component/currency_comp.proto";
 option cc_generic_services = true;
 option (OptionFileDefaultNode) = NODE_SCENE;
 
+// 装备 tooltip 的一行属性(设计文档 docs/design/equipment-attributes.md §3.2)。
+// 客户端零配表:名称、上限、是否百分比全部由服务器下发。
+message EquipAttrLineInfo {
+  uint32 attr_id = 1;   // EquipAttribute 表 id
+  string name = 2;
+  uint32 tier = 3;      // 0 基础属性 / 1 蓝 / 2 粉 / 3 黄 / 4 绿(预留)
+  uint64 value = 4;     // 当前值(已按当前表上限夹取)
+  uint64 cap = 5;       // 上限;基础属性行为 0,客户端不显示「/上限」
+  bool percent = 6;     // true = 显示成 N%
+  uint32 seq = 7;       // 档内序号;显示顺序 = (tier, seq)
+}
+
+// 装备栏的一个槽位定义(含空槽),客户端据此画出全部栏位。
+message EquipSlotInfo {
+  uint32 slot = 1;
+  uint32 equip_kind = 2;
+  string name = 3;      // 部位名(武器 / 帽子 …);只有「没配名字却被占着」的槽才会为空
+}
+
 // 实例与布局分离；显示信息不写入玩家持久化记录。
 message BagItemInfo {
   uint64 item_id = 1;
@@ -15,9 +34,15 @@ message BagItemInfo {
   uint32 count = 3;
   uint32 max_stack = 4;
   uint32 equip_kind = 5;
-  string name = 6;        // 当前物品表尚无展示字段，缺配时为空。
+  string name = 6;        // 来自物品表;缺配时为空,客户端不许编造。
   string description = 7;
   string icon_key = 8;
+  // ── 以下仅装备(equip_kind != 0)有意义 ──
+  uint32 equip_level = 9;                       // 佩戴等级
+  uint32 equip_class = 10;                      // 职业要求,0 = 不限
+  string equip_class_name = 11;                 // 职业名;职业表无名称列时为空
+  repeated EquipAttrLineInfo base_attrs = 12;   // 基础属性,seq 升序
+  repeated EquipAttrLineInfo affixes = 13;      // 随机属性,已按 (tier, seq) 排好
 }
 
 message BagSlotInfo {
@@ -32,6 +57,9 @@ message BagLayoutInfo {
   uint32 capacity = 2;
   repeated BagSlotInfo slots = 3; // 顺序无语义，位置只认 slot。
   bool can_sort = 4;
+  // 仅装备栏(bag_type = 2):槽位定义,slot 升序。服务器只下发容量内的槽;
+  // 没配部位名的槽(不对玩家展示)只在被占用时才下发。
+  repeated EquipSlotInfo equip_slots = 5;
 }
 
 message BagInfo {
@@ -52,6 +80,33 @@ message SortBagResponse {
   bool changed = 3;
 }
 
+// 穿上:物品必须在人物背包里。取接受该部位的槽位里第一个空槽;都占着就替换
+// 槽号最小的那个,旧装备回背包。成功回两个包的全量,客户端整体覆盖。
+message EquipItemRequest { uint64 item_id = 1; }
+message EquipItemResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;        // 人物背包
+  BagInfo equipment = 3;  // 装备栏
+}
+
+// 卸下:物品必须在装备栏里,回到人物背包(背包满则拒绝)。
+message UnequipItemRequest { uint64 item_id = 1; }
+message UnequipItemResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;
+  BagInfo equipment = 3;
+}
+
+// 开发 / 测试用发物(prod 关闭,不是鉴权,见 cpp/nodes/gate/SECURITY.md)。
+message GmGrantItemRequest {
+  uint32 config_id = 1;
+  uint32 count = 2;
+}
+message GmGrantItemResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;        // 人物背包
+}
+
 service SceneBagClientPlayer {
   option (OptionIsPlayerService) = true;
   option (OptionIsClientProtocolService) = true;
@@ -59,4 +114,10 @@ service SceneBagClientPlayer {
   rpc GetBag (GetBagRequest) returns (GetBagResponse);
   // 仅支持人物背包和仓库，玩家显式点击后走 BagService 审计入口。
   rpc SortBag (SortBagRequest) returns (SortBagResponse);
+  // ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
+  // 穿上 / 卸下:战斗中、跨区冻结中拒绝;成功后服务器重算属性并推属性面板。
+  rpc EquipItem (EquipItemRequest) returns (EquipItemResponse);
+  rpc UnequipItem (UnequipItemRequest) returns (UnequipItemResponse);
+  // 名字必须是 Gm + 大写字母开头:gate / scene 的 GM 闸按这个前缀识别。
+  rpc GmGrantItem (GmGrantItemRequest) returns (GmGrantItemResponse);
 }

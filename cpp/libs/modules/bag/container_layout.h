@@ -80,12 +80,16 @@ public:
     // Place:自动选位,放不下返回 kInvalidSlot 且不改任何状态。
     virtual SlotId Place(Guid guid, Footprint footprint) = 0;
 
-    // PlaceAt:落到指定槽位,快照还原专用 —— 玩家在源服摆好的位置必须原样复现,
-    // 不能重新分配。
+    // PlaceAt:落到**调用方指定**的槽位,不重新分配。两类调用方:
+    //   * 快照还原(Bag::InsertItemForRestore)—— 玩家在源服摆好的位置必须原样复现;
+    //   * 搬运原语的指定槽(Bag::PutInstance 带 slot)—— 落到上层编排选定的那个槽
+    //     (同一部位有多个槽时,穿在哪一个由编排层决定)。
+    // 自动选位一律走上面的 Place。
     //
     // **fail-closed**:槽位越界、或已被别的实例占着,一律返回 false 且不改任何
     // 状态。放不下时怎么办是桥层的决策(Bag::InsertItemForRestore 会退化为自动
-    // 选位),布局层只负责诚实回答"这个位置能不能用"。
+    // 选位;Bag::PutInstance 事先预检过,走到这里失败就整件回滚),布局层只负责
+    // 诚实回答"这个位置能不能用"。
     virtual bool PlaceAt(Guid guid, SlotId slot, Footprint footprint) = 0;
 
     virtual void Remove(Guid guid) = 0;

@@ -66,6 +66,12 @@ param(
 	[long]$KafkaRetentionBytes = 0,
 	[long]$KafkaSegmentBytes = 0,
 	[string]$KafkaHeapOpts = "",
+	# Kafka broker 数。0 = 按档位取默认:-ReleaseProfile 不是 dev,或 -OpsProfile 不是 custom → 3;其余 → 1。
+	# 只接受 1 或 ≥3:两个 broker 的选举组挂一个就没有多数派,比单 broker 还脆。
+	# 前 3 个 Pod 兼任 controller、第 4 个起只当 broker,所以 3 → N 只是加副本;
+	# 1 ↔ ≥3 不能原地切换,脚本会拒绝(Assert-KafkaTopologyChangeIsSafe,流程见 README「Kafka:多 broker」)。
+	[ValidateRange(0, 99)]
+	[int]$KafkaBrokers = 0,
 	[int]$CentreReplicas = 1,
 	[int]$GateReplicas = 2,
 	# battle 是不分 zone 的全局池，只由 infra-up / all-up 部署一次。
@@ -696,7 +702,7 @@ function Assert-GrpcClientDeadlineBudget {
 #   $InfraNamespace 一次,zone-up 跳过(见 Apply-GlobalGoSvcManifests)。
 $GoSvcCatalogue = @{
 	db              = @{ ConfigMap = "go-svc-db-config";              Manifest = "db.yaml";              Port = 6000;  ConfigFlag = "-f";              ConfigFile = "db.yaml";                    ImageName = "mmorpg-db" }
-	"data-service"  = @{ ConfigMap = "go-svc-data-service-config";    Manifest = "data-service.yaml";    Port = 9000;  ConfigFlag = "-f";              ConfigFile = "data_service.yaml";             ImageName = "mmorpg-data-service" }
+	"data-service"  = @{ ConfigMap = "go-svc-data-service-config";    Manifest = "data-service.yaml";    Port = 9000;  ConfigFlag = "-f";              ConfigFile = "data_service.yaml";             ImageName = "mmorpg-data-service"; MigrateJob = "data-service-migrate.yaml" }
 	login           = @{ ConfigMap = "go-svc-login-config";           Manifest = "login.yaml";           Port = 50000; ConfigFlag = "-loginService";   ConfigFile = "login.yaml";                  ImageName = "mmorpg-login" }
 	"player-locator"= @{ ConfigMap = "go-svc-player-locator-config";  Manifest = "player-locator.yaml";  Port = 50100; ConfigFlag = "-f";              ConfigFile = "player_locator.yaml";           ImageName = "mmorpg-player-locator" }
 	"scene-manager" = @{ ConfigMap = "go-svc-scene-manager-config";   Manifest = "scene-manager.yaml";   Port = 60000; ConfigFlag = "-f";              ConfigFile = "scene_manager_service.yaml";    ImageName = "mmorpg-scene-manager" }
@@ -795,6 +801,116 @@ function Apply-OpsProfileDefaults {
 		default {
 		}
 	}
+}
+
+# Kafka 拓扑:broker 数决定的全部派生值都在这一个函数里算(docs/design/no-single-node-horizontal-scaling-20261001.md §2)。
+# kafka.yaml 的副本数 / 选举组成员表 / broker 默认副本数、kafka-topic-init 的建 topic 副本数、注入给 Go 服务的
+# KAFKA_TOPIC_REPLICATION_FACTOR 全部取自这里 —— 多 broker 要同时成立的几件事不允许各算各的。
+#
+#   controller:前 min(3, N) 个 Pod 兼任,其余只当 broker。选举组固定 3 票:挂 1 个仍有多数派,
+#     而且与 broker 总数无关,所以加 broker 不改成员表、不改 Pod 模板。
+#   副本数 min(3, N)、min.insync.replicas:N≥3 时为 2(三份里允许一份掉队;不允许只剩一份还照常收写)。
+#   PDB minAvailable = N − 1(一次最多自愿驱逐一个),单 broker 为 1(不允许自愿驱逐)。
+#   podManagementPolicy:多 broker 必须 Parallel(见 kafka.yaml 该字段旁的注释);单 broker 保持缺省值 OrderedReady,
+#     既有的单 broker StatefulSet 不会因为这个不可变字段而 apply 失败。
+function Get-KafkaTopologyFor {
+	param(
+		[Parameter(Mandatory = $true)][int]$Brokers,
+		[Parameter(Mandatory = $true)][string]$Namespace
+	)
+
+	if ($Brokers -lt 1 -or $Brokers -eq 2) {
+		throw "Kafka broker 数必须是 1 或 ≥3(实际 $Brokers)。两个 broker 的 KRaft 选举组挂一个就没有多数派,比单 broker 还脆。"
+	}
+	$controllers = [Math]::Min(3, $Brokers)
+	$voters = @(for ($i = 0; $i -lt $controllers; $i++) {
+		"{0}@kafka-{1}.kafka-headless.{2}.svc.cluster.local:9093" -f ($i + 1), $i, $Namespace
+	})
+	return [pscustomobject]@{
+		Brokers                = $Brokers
+		ControllerCount        = $controllers
+		ControllerQuorumVoters = ($voters -join ',')
+		ReplicationFactor      = [Math]::Min(3, $Brokers)
+		MinInsyncReplicas      = if ($Brokers -ge 3) { 2 } else { 1 }
+		PodManagementPolicy    = if ($Brokers -ge 3) { 'Parallel' } else { 'OrderedReady' }
+		PdbMinAvailable        = [Math]::Max(1, $Brokers - 1)
+	}
+}
+
+# 按命令行与档位解析出本次部署的 Kafka 拓扑。-KafkaBrokers 0(缺省)= 按档位:
+# 非 dev 的发布档(staging / prod)或非 custom 的运维档(managed-cloud / bare-metal)默认 3 个 broker,其余 1 个。
+# zone-up 与 infra-up 必须用同一套档位参数:zone 里的 Go 服务按这里的副本数建自己的 topic。
+function Get-KafkaTopology {
+	$brokers = $KafkaBrokers
+	if ($brokers -le 0) {
+		$brokers = if ($ReleaseProfile -ne 'dev' -or $OpsProfile -ne 'custom') { 3 } else { 1 }
+	}
+	return Get-KafkaTopologyFor -Brokers $brokers -Namespace $InfraNamespace
+}
+
+# 线上 StatefulSet 的 spec.replicas;不存在返回 $null。DryRun 不连集群,一律当不存在。
+function Get-LiveStatefulSetReplicas {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][string]$Name
+	)
+
+	if ($DryRun) { return $null }
+
+	$baseArgs = Build-KubectlBaseArgs
+	$allArgs = @()
+	$allArgs += $baseArgs
+	$allArgs += @("get", "statefulset", $Name, "-n", $Namespace, "--ignore-not-found", "-o", "jsonpath={.spec.replicas}")
+	$out = & kubectl @allArgs
+	if ($LASTEXITCODE -ne 0) {
+		throw "查询线上 StatefulSet $Name 失败(namespace=$Namespace)。fail-closed:不知道现状就无法判断这次变更是否安全。"
+	}
+	$text = ([string]($out | Out-String)).Trim()
+	if ([string]::IsNullOrEmpty($text)) { return $null }
+	$replicas = 0
+	if (-not [int]::TryParse($text, [ref]$replicas)) {
+		throw "线上 StatefulSet $Name 的 spec.replicas 读出来不是整数:'$text'"
+	}
+	return $replicas
+}
+
+# 线上 broker 数 → 目标 broker 数,这次变更算哪一类(纯函数,契约测试直接喂值):
+#   absent     线上没有这个 StatefulSet(全新集群)
+#   unchanged  数量不变
+#   scale-up   已经是多 broker(≥3),继续加:新 Pod 只当 broker,不动选举组
+#   refuse     其余一律拒绝 —— 1 ↔ ≥3(选举组成员表变了,见 kafka.yaml 文件头)、缩容(被摘掉的 broker 上还有分区副本)、
+#              以及线上是 0 / 2 这类本脚本从不产生的数量(不知道它经历过什么,不猜)
+function Get-KafkaTopologyChangeVerdict {
+	param(
+		[AllowNull()]$LiveReplicas,
+		[Parameter(Mandatory = $true)][int]$DesiredBrokers
+	)
+
+	if ($null -eq $LiveReplicas) { return 'absent' }
+	$live = [int]$LiveReplicas
+	if ($live -eq $DesiredBrokers) { return 'unchanged' }
+	if ($live -ge 3 -and $DesiredBrokers -gt $live) { return 'scale-up' }
+	return 'refuse'
+}
+
+# apply kafka.yaml 之前调用:会改掉选举组或摘掉 broker 的变更直接拒绝,不交给 kubectl 去"试试看"。
+function Assert-KafkaTopologyChangeIsSafe {
+	param([Parameter(Mandatory = $true)]$Topology)
+
+	$live = Get-LiveStatefulSetReplicas -Namespace $InfraNamespace -Name 'kafka'
+	$verdict = Get-KafkaTopologyChangeVerdict -LiveReplicas $live -DesiredBrokers $Topology.Brokers
+	if ($verdict -eq 'absent' -or $verdict -eq 'unchanged') { return }
+	if ($verdict -eq 'scale-up') {
+		Write-Host "Kafka broker 扩容:$live → $($Topology.Brokers)。新 broker 起来后**不会**自动接手已有 topic 的分区,需要用 kafka-reassign-partitions.sh 把副本挪过去(README「Kafka:多 broker」)。"
+		return
+	}
+	throw @"
+拒绝变更 Kafka broker 数:线上 $live 个 → 目标 $($Topology.Brokers) 个(namespace=$InfraNamespace)。
+这类变更不能原地做:1 ↔ ≥3 会改掉 KRaft 选举组的成员表,两个空白的新节点可以先凑成多数派、用一份空的元数据日志当选,
+原有 broker 回来时被截断,全部 topic 元数据消失;缩容则会摘掉仍持有分区副本的 broker。
+要切换,按 deploy/k8s/README.md「Kafka:多 broker」的重建流程做(停写 → 删 StatefulSet 与 PVC → 以新 broker 数 infra-up → 重跑 infra-kafka-topics)。
+若只是这次不想改 broker 数,显式传 -KafkaBrokers $live。
+"@
 }
 
 # Kafka 保留期的**唯一一条规则**(routing-identity-audit-20260908.md R11):
@@ -3166,9 +3282,15 @@ SnapshotMySQL:
   DBName: "${GlobalDbName}"
   MaxOpenConn: ${dsMysqlMaxOpenConn}
   MaxIdleConn: ${dsMysqlMaxIdleConn}
-# 建表策略(见生成器注释):dev = 服务 yaml 的值;staging/prod = false,部署阶段跑 -migrate。
+# 建表策略(见生成器注释):dev = 服务 yaml 的值;staging/prod = false,由 data-service-migrate Job 在 Deployment 之前跑 -migrate。
 Schema:
   AutoMigrate: ${dataServiceAutoMigrate}
+# 多副本的前提(manifests/go-svc/data-service.yaml 头部):MySQL 侧的 store 装配不起来就拒启,不带病进发现池。
+# 所有档位都写 true;本地 yaml 不写(缺省 false,沿用降级运行)。
+Store:
+  Required: true
+# 与 manifest 的 9260 端口、prometheus 注解一致。多副本之后要能按 Pod 看消费者是否在跑。
+MetricsListenAddr: ":9260"
 # id_segment 行播种策略(见生成器注释):dev = 服务 yaml 的值;staging/prod = false,缺行不自动播种,
 # 由人核对消费侧最大号后处理(README「恢复全局库前须先核对 id_segment.max_id」)。
 # BootstrapTags 与服务 yaml / DefaultIdSegmentBootstrapTags 同一份清单:迁移(AutoMigrate / -migrate)
@@ -3850,7 +3972,8 @@ function Apply-GoSvcMigrateJob {
 	if ($gateOnJob) {
 		# MySQL 起不来时 -migrate 连库失败以 1 退出,会被 podFailurePolicy 当成不可重试直接判 Job 失败;
 		# 先等 mysql Deployment 滚动完成,把"镜像还在拉 / Pod 还没调度"这类原因挡在 Job 之外,失败时报的也是真实原因。
-		# (本函数只经 Apply-Infra → Apply-GlobalGoSvcManifests 调到,mysql.yaml 在同一次 Apply-Infra 里已 apply。)
+		# (全局服务经 Apply-Infra → Apply-GlobalGoSvcManifests 调到,mysql.yaml 在同一次 Apply-Infra 里已 apply;
+		#  zone 内的 data-service 经 zone-up 调到,那时 mysql 应当已由先前的 infra-up 部署在 infra namespace。)
 		Wait-ForDeploymentReady -Namespace $InfraNamespace -DeploymentName "mysql"
 	}
 
@@ -4104,42 +4227,40 @@ function Get-GoSvcCommandTopicContract {
 	return [pscustomobject]@{ Partitions = $partitions; Generation = $generation }
 }
 
-# 把命令 topic 契约以环境变量注入 go-svc manifest 唯一的那个 env: 段(go/shared/kafkacmd 只认这两个变量,
-# 不配就回落到编译期默认 256 / 1)。
-#
-# 为什么必须注入:C++ gate / scene 按 base_deploy_config.yaml 消费 gate-cmd_g<N>(当前 N=2),kafka-topic-init
-# 也只预建 g<N>;Go 侧(login 的会话绑定 / 顶号踢人、scene-manager 的换场景、player-locator、match、friend、guild 的推送)
-# 若回落到 g1,命令落进一个没人消费的 topic,**静默丢失**,Kafka 不报错。本机 start_game.ps1 一直注入这两个变量,
-# 所以本机与 robot 冒烟从来看不到这个缺口。
-#
-# 为什么在这里统一注入而不是写进各 manifest:代号是部署级常量,只能有一处真相;每个 manifest 各写一份,
-# 下次换代号必漏改(kafkacmd 注释里的「四处同拍」纪律)。所以 manifest 里手写这两个变量会被拒绝。
+# 往 go-svc manifest **唯一**的那个 env: 段最前面插入一组环境变量 —— 部署级契约(只能有一处真相、不该写进各 manifest
+# 的值)的统一注入点。目前两组:控制面命令 topic 契约(Add-GoSvcCommandTopicEnv)、topic 副本数(Add-GoSvcTopicReplicationEnv)。
 #
 # 对 manifest 形状 fail-closed:必须恰好一个 env: 段(go-svc 都是单容器),且它下面第一条非注释内容是列表项;
-# 插入的条目沿用那一项的缩进,不假设「env 缩进 + 2」。所有 go-svc 都注入,不只是今天的生产者 ——
-# 新加一个会发 gate 命令的服务时不需要记得来这里登记。
-function Add-GoSvcCommandTopicEnv {
+# 插入的条目沿用那一项的缩进,不假设「env 缩进 + 2」。manifest 里手写了同名变量也拒绝 —— 那是第二份真相。
+# 所有 go-svc 都注入,不只是今天用得到的服务:新加一个服务时不需要记得来这里登记。
+function Add-GoSvcEnvEntries {
 	param(
 		[Parameter(Mandatory = $true)][string]$SvcName,
 		[Parameter(Mandatory = $true)][string]$ManifestContent,
-		[Parameter(Mandatory = $true)][int]$Partitions,
-		[Parameter(Mandatory = $true)][int]$Generation
+		# 有序字典:变量名 -> 值(一律当字符串写进 YAML)。
+		[Parameter(Mandatory = $true)][System.Collections.Specialized.OrderedDictionary]$Entries,
+		# 报错里对这组变量的称呼(如 KAFKA_COMMAND_TOPIC_*)与用途(如「命令 topic 契约」)。
+		[Parameter(Mandatory = $true)][string]$NamesLabel,
+		[Parameter(Mandatory = $true)][string]$Purpose,
+		# 写在注入处的一行 YAML 注释(不带 # 前缀),说明值从哪来。
+		[Parameter(Mandatory = $true)][string]$Comment
 	)
 
-	if ($ManifestContent -cmatch '(?m)^[ \t]*(-[ \t]+)?name:[ \t]*"?KAFKA_COMMAND_TOPIC_(PARTITIONS|GENERATION)"?[ \t]*\r?$') {
-		throw "Go service $SvcName 的 manifest 手写了 KAFKA_COMMAND_TOPIC_*:这两个变量由 k8s_deploy.ps1 从 bin/etc/base_deploy_config.yaml 统一注入,请从 manifest 里删掉(一处真相,见 Add-GoSvcCommandTopicEnv 注释)"
+	$namePattern = (@($Entries.Keys) | ForEach-Object { [regex]::Escape([string]$_) }) -join '|'
+	if ([regex]::IsMatch($ManifestContent, '(?m)^[ \t]*(-[ \t]+)?name:[ \t]*"?(' + $namePattern + ')"?[ \t]*\r?$')) {
+		throw "Go service $SvcName 的 manifest 手写了 ${NamesLabel}:这组变量($Purpose)由 k8s_deploy.ps1 统一注入,请从 manifest 里删掉(一处真相,见 Add-GoSvcEnvEntries 注释)"
 	}
 
 	$envMatches = [regex]::Matches($ManifestContent, '(?m)^(?<indent>[ ]*)env:[ \t]*\r?$')
 	if ($envMatches.Count -ne 1) {
-		throw "Go service $SvcName 的 manifest 应当恰好有 1 个 env: 段(实际 $($envMatches.Count) 个),无法注入命令 topic 契约。多容器或无 env 的 manifest 需要先在 Add-GoSvcCommandTopicEnv 里明确注入目标"
+		throw "Go service $SvcName 的 manifest 应当恰好有 1 个 env: 段(实际 $($envMatches.Count) 个),无法注入${Purpose}。多容器或无 env 的 manifest 需要先在 Add-GoSvcEnvEntries 里明确注入目标"
 	}
 	$envMatch = $envMatches[0]
 	$envIndent = $envMatch.Groups['indent'].Value
 	# (?m) 下的 $ 停在 \n 之前(\r 已被 \r? 吃掉),所以 env: 行之后紧跟的必须是 \n。
 	$lineEnd = $envMatch.Index + $envMatch.Length
 	if ($lineEnd -ge $ManifestContent.Length -or $ManifestContent[$lineEnd] -ne "`n") {
-		throw "Go service $SvcName 的 manifest 在 env: 之后没有内容,无法注入命令 topic 契约"
+		throw "Go service $SvcName 的 manifest 在 env: 之后没有内容,无法注入${Purpose}"
 	}
 	$insertAt = $lineEnd + 1
 
@@ -4151,19 +4272,61 @@ function Add-GoSvcCommandTopicEnv {
 		break
 	}
 	if ($null -eq $itemIndent -or $itemIndent.Length -lt $envIndent.Length) {
-		throw "Go service $SvcName 的 manifest 里 env: 下第一条内容不是列表项,无法注入命令 topic 契约"
+		throw "Go service $SvcName 的 manifest 里 env: 下第一条内容不是列表项,无法注入${Purpose}"
 	}
 
 	$newline = if ($ManifestContent.Contains("`r`n")) { "`r`n" } else { "`n" }
 	$valueIndent = $itemIndent + '  '
-	$injected = @(
-		"${itemIndent}# 由 k8s_deploy.ps1 从 bin/etc/base_deploy_config.yaml 注入(Add-GoSvcCommandTopicEnv),manifest 里不要手写",
-		"${itemIndent}- name: KAFKA_COMMAND_TOPIC_PARTITIONS",
-		"${valueIndent}value: `"$Partitions`"",
-		"${itemIndent}- name: KAFKA_COMMAND_TOPIC_GENERATION",
-		"${valueIndent}value: `"$Generation`""
-	) -join $newline
+	$injectedLines = @("${itemIndent}# $Comment")
+	foreach ($name in $Entries.Keys) {
+		$injectedLines += "${itemIndent}- name: $name"
+		$injectedLines += "${valueIndent}value: `"$($Entries[$name])`""
+	}
+	$injected = $injectedLines -join $newline
 	return $ManifestContent.Substring(0, $insertAt) + $injected + $newline + $ManifestContent.Substring($insertAt)
+}
+
+# 控制面命令 topic 契约(go/shared/kafkacmd 只认这两个变量,不配就回落到编译期默认 256 / 1)。
+#
+# 为什么必须注入:C++ gate / scene 按 base_deploy_config.yaml 消费 gate-cmd_g<N>(当前 N=2),kafka-topic-init
+# 也只预建 g<N>;Go 侧(login 的会话绑定 / 顶号踢人、scene-manager 的换场景、player-locator、match、friend、guild 的推送)
+# 若回落到 g1,命令落进一个没人消费的 topic,**静默丢失**,Kafka 不报错。本机 start_game.ps1 一直注入这两个变量,
+# 所以本机与 robot 冒烟从来看不到这个缺口。
+#
+# 为什么在这里统一注入而不是写进各 manifest:代号是部署级常量,只能有一处真相;每个 manifest 各写一份,
+# 下次换代号必漏改(kafkacmd 注释里的「四处同拍」纪律)。
+function Add-GoSvcCommandTopicEnv {
+	param(
+		[Parameter(Mandatory = $true)][string]$SvcName,
+		[Parameter(Mandatory = $true)][string]$ManifestContent,
+		[Parameter(Mandatory = $true)][int]$Partitions,
+		[Parameter(Mandatory = $true)][int]$Generation
+	)
+
+	$entries = [ordered]@{
+		KAFKA_COMMAND_TOPIC_PARTITIONS = [string]$Partitions
+		KAFKA_COMMAND_TOPIC_GENERATION = [string]$Generation
+	}
+	return Add-GoSvcEnvEntries -SvcName $SvcName -ManifestContent $ManifestContent -Entries $entries `
+		-NamesLabel 'KAFKA_COMMAND_TOPIC_*' -Purpose '命令 topic 契约' `
+		-Comment '由 k8s_deploy.ps1 从 bin/etc/base_deploy_config.yaml 注入(Add-GoSvcCommandTopicEnv),manifest 里不要手写'
+}
+
+# topic 副本数(go/shared/kafkautil.EnsureTopics 建 topic 时用,不配就是 1)。
+# 值来自 Get-KafkaTopology:单 broker = 1,≥3 个 broker = 3,与 kafka.yaml 的 broker 默认值、kafka-topic-init 同源。
+# 不注入的后果:多 broker 集群上 Go 服务按 1 份副本建出自己的 topic(db_task、match-results 等)——
+# 那个 topic 仍是单点,而且 broker 的 min.insync.replicas=2 会让 acks=all 的写入直接被拒。
+function Add-GoSvcTopicReplicationEnv {
+	param(
+		[Parameter(Mandatory = $true)][string]$SvcName,
+		[Parameter(Mandatory = $true)][string]$ManifestContent,
+		[Parameter(Mandatory = $true)][int]$ReplicationFactor
+	)
+
+	$entries = [ordered]@{ KAFKA_TOPIC_REPLICATION_FACTOR = [string]$ReplicationFactor }
+	return Add-GoSvcEnvEntries -SvcName $SvcName -ManifestContent $ManifestContent -Entries $entries `
+		-NamesLabel 'KAFKA_TOPIC_REPLICATION_FACTOR' -Purpose 'topic 副本数契约' `
+		-Comment '由 k8s_deploy.ps1 按 -KafkaBrokers 注入(Add-GoSvcTopicReplicationEnv),manifest 里不要手写'
 }
 
 <#
@@ -4402,6 +4565,8 @@ function Apply-OneGoSvc {
 	$commandTopic = Get-GoSvcCommandTopicContract
 	$manifestContent = Add-GoSvcCommandTopicEnv -SvcName $SvcName -ManifestContent $manifestContent `
 		-Partitions $commandTopic.Partitions -Generation $commandTopic.Generation
+	$manifestContent = Add-GoSvcTopicReplicationEnv -SvcName $SvcName -ManifestContent $manifestContent `
+		-ReplicationFactor (Get-KafkaTopology).ReplicationFactor
 
 	# -LoginDevPasswordAuth:先本地渲染(形状不对就在写操作之前 throw),再建 Secret —— secretKeyRef 不是 optional,
 	# Secret 必须先于引用它的 Deployment 落地。
@@ -5231,6 +5396,8 @@ function Apply-KafkaTopicInitJob {
 	$content = $content.Replace("__KAFKA_GATE_COMMAND_TOPIC__", $gateCmdTopic)
 	$content = $content.Replace("__KAFKA_SCENE_COMMAND_TOPIC__", $sceneCmdTopic)
 	$content = $content.Replace("__KAFKA_COMMAND_PARTITIONS__", [string]$cmdPartitions)
+	# 副本数与 kafka.yaml / 注入给 Go 服务的值同源(Get-KafkaTopology):单 broker 1,多 broker 3。
+	$content = $content.Replace("__KAFKA_REPLICATION_FACTOR__", [string](Get-KafkaTopology).ReplicationFactor)
 
 	# 与 Apply-Infra 同一条 fail-closed:任何双下划线大写占位没替换就拒绝 apply。
 	$leftover = [regex]::Matches($content, '__[A-Z][A-Z0-9_]*__') | ForEach-Object { $_.Value } | Sort-Object -Unique
@@ -5375,6 +5542,9 @@ function Apply-Infra {
 			# 在同一次 infra-up 里就会跑一遍;单独止血用 -Command infra-kafka-topics)。
 			# --ignore-not-found:全新集群 / 已经切过的集群这里是 no-op。
 			Invoke-Kubectl -Args @("delete", "deployment", "kafka", "-n", $InfraNamespace, "--ignore-not-found")
+
+			# broker 数变更的安全闸:会改掉选举组或摘掉 broker 的变更在这里拒绝(DryRun 不查集群)。
+			Assert-KafkaTopologyChangeIsSafe -Topology (Get-KafkaTopology)
 		}
 
 		if ($manifest -eq "redis.yaml") {
@@ -5431,6 +5601,15 @@ stringData:
 			$manifestContent = $manifestContent.Replace("__KAFKA_LOG_RETENTION_BYTES__", [string]$KafkaRetentionBytes)
 			$manifestContent = $manifestContent.Replace("__KAFKA_LOG_SEGMENT_BYTES__", [string]$KafkaSegmentBytes)
 			$manifestContent = $manifestContent.Replace("__KAFKA_HEAP_OPTS__", [string]$KafkaHeapOpts)
+			# 拓扑相关的占位全部取自同一个 Get-KafkaTopology(broker 数 / 选举组 / 副本数 / PDB 必须一起变)。
+			$kafkaTopology = Get-KafkaTopology
+			$manifestContent = $manifestContent.Replace("__KAFKA_BROKER_COUNT__", [string]$kafkaTopology.Brokers)
+			$manifestContent = $manifestContent.Replace("__KAFKA_CONTROLLER_COUNT__", [string]$kafkaTopology.ControllerCount)
+			$manifestContent = $manifestContent.Replace("__KAFKA_CONTROLLER_QUORUM_VOTERS__", [string]$kafkaTopology.ControllerQuorumVoters)
+			$manifestContent = $manifestContent.Replace("__KAFKA_POD_MANAGEMENT_POLICY__", [string]$kafkaTopology.PodManagementPolicy)
+			$manifestContent = $manifestContent.Replace("__KAFKA_REPLICATION_FACTOR__", [string]$kafkaTopology.ReplicationFactor)
+			$manifestContent = $manifestContent.Replace("__KAFKA_MIN_INSYNC_REPLICAS__", [string]$kafkaTopology.MinInsyncReplicas)
+			$manifestContent = $manifestContent.Replace("__KAFKA_PDB_MIN_AVAILABLE__", [string]$kafkaTopology.PdbMinAvailable)
 		}
 
 		# fail-closed:任何 __XXX__ 形态的占位没被替换就拒绝 apply。以前只有 kafka.yaml
@@ -5501,6 +5680,10 @@ function Resolve-ZonesConfigPath {
 Ensure-KubectlAvailable
 Apply-OpsProfileDefaults
 Apply-KafkaProfileDefaults
+# -KafkaBrokers 非法(例如 2)要在任何写操作之前拦下;同时把本次解析出的拓扑打出来,
+# zone-up 与 infra-up 的档位参数不一致时,从这一行就能看出两边的副本数对不上。
+$kafkaTopologyAtStart = Get-KafkaTopology
+Write-Host "Kafka topology: brokers=$($kafkaTopologyAtStart.Brokers) controllers=$($kafkaTopologyAtStart.ControllerCount) replication_factor=$($kafkaTopologyAtStart.ReplicationFactor) min_insync_replicas=$($kafkaTopologyAtStart.MinInsyncReplicas)"
 Show-ExposureProfileWarning
 
 Write-Host "Release: profile=$ReleaseProfile image=$NodeImage pullPolicy=$ImagePullPolicy go_tag=$GoSvcTag java_tag=$JavaSvcTag cluster_id=$ClusterId"

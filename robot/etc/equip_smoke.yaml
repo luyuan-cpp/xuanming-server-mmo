@@ -1,0 +1,64 @@
+# equip-smoke 配置:单机器人「装备属性(问道式随机属性 + 穿脱)」端到端冒烟
+#
+# 用法(robot/ 目录下):
+#   .\robot.exe -c etc/equip_smoke.yaml
+# 退出码 0 = 全部断言通过(日志有 EQUIP_SMOKE_OK 一行);
+# 退出码 1 = 任一步失败(日志有 EQUIP_SMOKE_FAIL step=… reason=…)。
+#
+# 固定账号 robot_9103(前缀必须 robot_ 才走 login 侧 DevPasswordAuth,改名会直接登录失败;
+# 账号没有角色时自动建角)。断言逐条对应 docs/design/equipment-attributes.md
+# (§2.6 样例数据 / §3.2 协议 / §4.3 穿脱 / §4.4 属性 / §5 不变量),步骤清单见 equip_smoke_scenario.go 文件头。
+#
+# 可重复跑:预备段会把等级设回 1、卸下身上全部装备、背包里缺哪件样例装备才发哪件
+# (2 把 1101 + 1 把 1105 + 1 件 1401,已有就复用),所以同一账号反复跑背包恒为这 4 件、不会涨满。
+# 若报 step=prep-bag-space / prep-bag-full(背包被别的东西占满):清掉该账号的背包存档,
+# 或把 equip_smoke_scenario.go 里的 equipSmokeAccount 换成一个新账号。
+# 「已有就复用」的另一面:随机属性只在新铸时掷一次、之后不重掷(设计文档 §5 不变量 1)。这 4 件若是在导表不全、
+# 或掷值挂点没生效的 scene 上铸出来的(0 条随机属性),服务端修好之后同账号重跑仍会红在 step=display-*
+# (失败信息带 [reused=true] 就是这种情况;[reused=false] = 本轮新铸的就是坏的,问题在当前这批 scene / 配表)。
+# 两种都要在修好之后换 equipSmokeAccount、或清掉该账号的背包存档再跑 —— 坏实例不会自己变好。
+# 红在 name / equip_level / base_attrs 则不用换号:它们每次按表现算,导表并重启 scene 即可。
+#
+# 前置(按顺序做;缺哪条、红在哪一步写在括号里):
+#   1. 导表:tools/scripts/equip_xlsx_patch.py 的 ①–⑤ + 导表器(4 张 Equip* 新表、Item 新列与 20 件样例装备、
+#      EquipSlot 3–6 号槽、equip_error tip 段)。
+#      (没导:prep-grant-table「需先导表」、display-* 的 name 为空、equip-slots 缺槽)
+#   2. 全量 proto-gen,并把 go/proto、go/shared 的变化同步进 robot/vendor(robot 走 -mod=vendor),再重编 robot.exe:
+#      新消息号 SceneBagClientPlayerEquipItem / UnequipItem / GmGrantItem、player_bag / player_attribute 的新字段、
+#      equip_error 枚举都在生成物里。(没做:robot 编不过)
+#      注意 robot 的**所有 mode** 启动时都先 LoadTables(robot/main.go,在 mode 分发之前),而 Go 侧读表是严格 JSON:
+#      导表之后还用旧的 robot.exe,连 login-test / stress 都会在启动时 `failed to load Item table` 直接退出 ——
+#      不只是 equip-smoke。
+#   3. 用同一批生成物与配表重编并重启 scene / gate / battle(Item 表在战斗指纹内,scene 与 battle 必须同批换表)。
+#      (scene 是旧的:第一个新请求起「等响应超时」)
+#      **Go 服务也要同批重编并重启**:login / scene_manager / player_locator / guild 启动时都 table.LoadTables,
+#      生成的加载器用 protojson.Unmarshal(不丢弃未知字段)且失败即 log.Fatalf。导表后 item.json / equipslot.json
+#      多了新列(name / equip_level / affix_pool / base_attr …),旧 exe 不认识这些字段,一重启就起不来;
+#      login 在同步登录路径上,它起不来 = 全服进不去。做法:导表后 `pwsh -File tools/scripts/go_services.ps1 -Command build`
+#      (bin\go_services\*.exe 不会自己跟着变),再重启 Go 服务;先跑一遍既有的 login-test 基线确认没被带坏,
+#      再跑本冒烟。Java config_node 读表忽略未知字段,不受影响。
+#      (Go 服务是旧的:login / scene_manager 等启动日志 `failed to load Item table: … unknown field`,进程直接退出)
+#   4. MessageLimiter:proto-gen 之后跑 equip_xlsx_patch.py message-limiter(⑥)、再导一次表、重启 gate。
+#      本冒烟自己按 gate 的默认档节流(同一消息号间隔 700ms),**不加行也能跑完**;但真实客户端连点
+#      「穿 / 脱」会在第 4 个包起被默认档(3 次/窗口)限流,所以它仍是上线前置,只是不由这条冒烟来红。
+#   5. GM 指令闸处于 dev / test(本机启动器 cpp_nodes.ps1 / start_game.ps1 默认兜底成 dev):预备段要用
+#      GmSetPlayerLevel 与 GmGrantItem。(闸关着:prep-level 报 tip=kFeatureUnavailable)
+#   6. 第 7 步(重登)若报随机属性丢失 / 面板不一致:先查 scene 的存盘 / 读盘是否带上了新字段 ItemEntry.equip
+#      (bag_marshal 的 ItemComp ↔ ItemEntry 往返),再确认落库链路上的进程都是本批重编的。
+#
+# gate 级拒绝(限流 / GM 闸)的表现:日志里先有一条 `gate envelope error message_id=… tip=…`,
+# 随后本冒烟在该步报「回了全零 / 残缺的响应」—— 背包这几条消息的信封错误目前不会被翻译成 tip。
+
+gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
+zone_id: 1 # 目标 zone(0 = 从 /api/server-list 自动选推荐 zone)
+robot_count: 1 # 语义占位:本模式固定单机器人
+account_fmt: "robot_%04d" # 保留骨架字段;本模式用固定账号 robot_9103
+password: "123456"
+skill_ids: []
+table_dir: "../generated/tables"
+action_interval: 3 # 本模式不跑场景 AI 循环
+report_interval: 5
+
+mode: "equip-smoke"
+
+auth_type: "password"

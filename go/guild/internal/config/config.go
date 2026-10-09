@@ -141,7 +141,7 @@ type AssetOpConf struct {
 	MaxBackoffMs int `json:",default=60000"`
 	// PoisonDelayMs payload 解不开的毒行推迟多久再看(循环算好绝对时刻传给 Store.Claim)。
 	PoisonDelayMs int `json:",default=3600000"`
-	// LedgerReadMinAttempts 连续几次投不出去之后才读已落盘账本(B5d 接 Ledger 之前不生效)。
+	// LedgerReadMinAttempts 连续几次投不出去之后才读已落盘账本(B5d-1 起由 guild.go 的 AttachPersistedLedger 接上;没配 DataServiceRpc 时不读)。
 	LedgerReadMinAttempts int `json:",default=3"`
 
 	// ── 清理(goroutine guild.asset_op_cleanup,§5.22)──

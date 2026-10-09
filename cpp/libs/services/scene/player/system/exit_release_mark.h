@@ -31,7 +31,9 @@
 //   写:BeginTravelHandoff(交接)、DispatchEmergencyRelocate(疏散 / 排空改派,owner_epoch 条件写,与 A1′ 同一段
 //       kLuaWriteIfOwnerEpoch)、A1′(本文件,干净退出)、A2′ 放弃补写(本文件,载入被放弃时把删掉的那一份写回)、
 //       scene_manager 回滚转写(GO-2 §12.8:推路由失败的 bump 回滚只在所凭原标记原样还在时,把 "N:t" 转写成
-//       "N+2:t",后缀逐字节不变;scene_manager 从不删除这个键)。
+//       "N+2:t",后缀逐字节不变;scene_manager 从不删除这个键)、改派踢线前的兜底补写(疏散 / 排空的改派核实出
+//       没生效、要按会话踢线时,按那次核实读到的 owner_epoch 条件写,同一段 kLuaWriteIfOwnerEpoch;已有同代标记、
+//       本节点有该玩家实体或载入在途、身份未确认、dev 旁路时都不写,见 relocate_confirm::DecideCredential)。
 //   删:WithdrawHandoffMark(按原文条件删)、ResolveTravelOutcome(原子取证脚本按 saved_at_ms 只删本次交接这一族,
 //       含转写形态,见 player_lifecycle.h travel_outcome::kLuaJudgeTravelOutcome)、A2′(本文件,核对 owner_epoch
 //       后删 ≤N,转写标记同样在内;路由不带 owner_epoch 时删 ≤ 当前 owner_epoch)。
@@ -61,7 +63,9 @@ namespace exit_release_mark
 		ExitCause cause{ExitCause::kUnspecified};
 		bool releaseMarkSuppressed{false};  // 意图组件上的粘性压制位
 		ExitCause suppressedBy{ExitCause::kCount}; // 第一次触发压制的原因(kCount = 未压制)
-		bool relocateTicketConsumed{false}; // 本次 DispatchEmergencyRelocate 消费了疏散票据(它自己写标记)
+		// 本次 DispatchEmergencyRelocate 消费了疏散票据:这次的标记归改派负责(条件写,可能没写成;改派没生效要踢线时
+		// 由待确认表兜底补写)。票据作废(没发改派)时为 false,A1′ 照常判定。
+		bool relocateTicketConsumed{false};
 		bool handoffMarkInflight{false};	   // "退出优先"且交接标记已写、交接 EnterScene 可能在途(M11)
 		uint64_t ownerEpoch{0};			   // PlayerOwnerEpochComp.epoch
 		bool identityValid{false};		   // 本节点身份当前确认有效(M3)
@@ -79,7 +83,7 @@ namespace exit_release_mark
 		kSkipSuppressedRelease,	   // 退出中又收到 ReleasePlayer 且 dev 旁路开关开着(M6)
 		kSkipSuppressedIdentity,   // 退出中又遇到整节点疏散(身份冲突)
 		kSkipSuppressedUnspecified, // 退出中又收到来源不明的退出请求
-		kSkipRelocate,			   // 本次消费了疏散票据:改派自己写了标记,A1′ 不得覆盖
+		kSkipRelocate,			   // 本次消费了疏散票据:改派负责这次的标记(条件写,可能没写成;踢线前由待确认表兜底补写),A1′ 不得覆盖
 		kSkipHandoffInflight,	   // 退出优先且交接标记已写(M11)
 		kSkipEpochUnknown,		   // owner_epoch 为 0(兼容窗口,换手门对它本来就不设防)
 		kSkipIdentityConflict,	   // 本节点身份不确认有效(疏散中 / etcd 租约推定过期,M3)
@@ -163,8 +167,9 @@ namespace exit_release_mark
 		return ExitReleaseDecision::kWrite;
 	}
 
-	// A1′、A2′ 放弃补写与疏散 / 排空改派(DispatchEmergencyRelocate)共用的条件写:owner_epoch 仍等于调用方缓存的 E
-	// 才写标记。改派用它是为了不覆盖 scene_manager 回滚转写出来的 "E+2:t"(GO-2 §12.8)。
+	// A1′、A2′ 放弃补写、疏散 / 排空改派(DispatchEmergencyRelocate)与改派踢线前的凭证补写共用的条件写:owner_epoch
+	// 仍等于调用方给的 E 才写标记(A1′ 与改派给实体缓存的值,A2′ 放弃补写给它删掉的那一代,凭证补写给刚从 Redis
+	// 读到的值)。改派用它是为了不覆盖 scene_manager 回滚转写出来的 "E+2:t"(GO-2 §12.8)。
 	//   KEYS[1] = player:{id}:owner_epoch   KEYS[2] = player:{id}:handoff
 	//   ARGV[1] = E(十进制,与 INCR 的文本格式一致)  ARGV[2] = 标记原文 "E:now_ms"  ARGV[3] = TTL 秒
 	// 返回 1 = 写了;0 = owner_epoch 已不是 E(含缺键:GET 返回 false,与字符串永不相等)。

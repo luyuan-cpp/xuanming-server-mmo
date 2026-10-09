@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+// EquipAffixRule 表的权威 schema。源表 data/EquipAffixRule.xlsx。
+// 设计:docs/design/equipment-attributes.md §2.4。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 装备随机属性的掷值规则:创建装备实例时掷几条蓝属性、以多大概率带粉 / 黄属性。
+// Item.affix_rule 引用本表的 id。粉 / 黄概率填 0 即关闭(设计文档 D1)。
+// 源表由 tools/scripts/equip_xlsx_patch.py new-tables 生成;schema 与 xlsx 必须成对提交。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message EquipAffixRuleTable {
+  option (cfg_sheet)       = "EquipAffixRule";
+  option (cfg_source_file) = "EquipAffixRule.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 规则号
+  uint32 id = 1;
+  // 蓝属性条数下限(含)
+  uint32 blue_min = 2;
+  // 蓝属性条数上限(含);条数在 [blue_min, blue_max] 均匀,蓝属性之间互不重复
+  uint32 blue_max = 3;
+  // 掷出 1 条粉属性的概率(万分比);可与蓝属性重复
+  uint32 pink_rate = 4;
+  // 掷出 1 条黄属性的概率(万分比);可与蓝 / 粉属性重复
+  uint32 yellow_rate = 5;
+}

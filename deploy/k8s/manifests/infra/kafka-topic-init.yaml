@@ -84,6 +84,10 @@ spec:
               value: "__KAFKA_SCENE_COMMAND_TOPIC__"
             - name: COMMAND_PARTITIONS
               value: "__KAFKA_COMMAND_PARTITIONS__"
+            # topic 副本数:单 broker 是 1,多 broker 是 3(由 Apply-KafkaTopicInitJob 按 -KafkaBrokers 注入,
+            # 与 kafka.yaml 的 broker 默认值、注入给 Go 服务的 KAFKA_TOPIC_REPLICATION_FACTOR 同源)。
+            - name: REPLICATION_FACTOR
+              value: "__KAFKA_REPLICATION_FACTOR__"
           command:
             - sh
             - -c
@@ -119,16 +123,39 @@ spec:
               # (与分区数不同,retention.ms 是可变配置,重设它没有任何寻址风险。)
               ensure_topic() {
                 _ret="${3:-$RETENTION_MS}"
-                $KT --bootstrap-server "$BOOTSTRAP" --create --if-not-exists --topic "$1" \
-                  --partitions "$2" --replication-factor 1 --config "retention.ms=$_ret"
-                got=$($KT --bootstrap-server "$BOOTSTRAP" --describe --topic "$1" \
-                  | sed -n 's/.*PartitionCount: *\([0-9]*\).*/\1/p' | head -n 1)
+                # 多 broker 时,第一个 broker 可达不代表三个都已注册:副本数 3 的建 topic 请求在只有
+                # 一两个 broker 时会被拒(InvalidReplicationFactor)。这里重试而不是直接失败,最多等 5 分钟。
+                _created=0
+                for _i in $(seq 1 60); do
+                  if $KT --bootstrap-server "$BOOTSTRAP" --create --if-not-exists --topic "$1" \
+                    --partitions "$2" --replication-factor "$REPLICATION_FACTOR" --config "retention.ms=$_ret"; then
+                    _created=1; break
+                  fi
+                  echo "create topic $1 (replication-factor=$REPLICATION_FACTOR) failed, are all brokers registered? retry $_i/60..."
+                  sleep 5
+                done
+                if [ "$_created" != 1 ]; then
+                  echo "ERROR: cannot create topic $1 with replication-factor=$REPLICATION_FACTOR after 5 minutes" >&2
+                  exit 1
+                fi
+                _desc=$($KT --bootstrap-server "$BOOTSTRAP" --describe --topic "$1")
+                got=$(echo "$_desc" | sed -n 's/.*PartitionCount: *\([0-9]*\).*/\1/p' | head -n 1)
                 if [ "$got" != "$2" ]; then
                   echo "ERROR: topic $1 has PartitionCount=${got:-?} but the contract is $2." >&2
                   echo "       审计 topic 的契约在 go/data_service/etc/data_service.yaml;" >&2
                   echo "       命令 topic 的契约在 bin/etc/base_deploy_config.yaml Kafka.CommandTopicPartitions。" >&2
                   echo "       Partition counts are immutable: bump the topic generation (new *_gN topic); never expand in place." >&2
                   echo "       If a producer auto-created this topic before this Job ran, delete the topic and re-run: k8s_deploy.ps1 -Command infra-kafka-topics" >&2
+                  exit 1
+                fi
+                # 副本数同样要读回核对:--if-not-exists 会原样保留已存在的 topic,一个早先按副本数 1 建出来的
+                # topic 在多 broker 集群里仍然是单点。副本数**多于**契约不算错(运维手工加过)。
+                # 与分区数不同,副本数不参与寻址、可以原地补,所以这里给的修法不是换代号。
+                gotrf=$(echo "$_desc" | sed -n 's/.*ReplicationFactor: *\([0-9]*\).*/\1/p' | head -n 1)
+                if [ -z "$gotrf" ] || [ "$gotrf" -lt "$REPLICATION_FACTOR" ]; then
+                  echo "ERROR: topic $1 has ReplicationFactor=${gotrf:-?} but the deployment requires $REPLICATION_FACTOR." >&2
+                  echo "       这个 topic 比部署要求的副本少:唯一持有它的 broker 一倒,这条通道就断。" >&2
+                  echo "       Fix: if the topic is empty, delete it and re-run this Job; otherwise add replicas with kafka-reassign-partitions.sh." >&2
                   exit 1
                 fi
                 $KC --bootstrap-server "$BOOTSTRAP" --entity-type topics --entity-name "$1" \
@@ -145,7 +172,7 @@ spec:
                   echo "       Retention must be declared per topic, never inherited from the broker default." >&2
                   exit 1
                 fi
-                echo "ok: $1 partitions=$2 retention.ms=$_ret"
+                echo "ok: $1 partitions=$2 replication-factor=$gotrf retention.ms=$_ret"
               }
               ensure_topic "$TX_TOPIC" "$TX_PARTITIONS"
               ensure_topic "$SNAPSHOT_TOPIC" "$SNAPSHOT_PARTITIONS"

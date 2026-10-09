@@ -42,6 +42,7 @@ $testOutDir = Join-Path $repoRoot 'build\cpp\tests'
 # 引用 common/src/pb/pbc 那棵已删的 proto 树)。
 $projects = [ordered]@{
     'agones_lifecycle_test'    = 'cpp\tests\agones_lifecycle_test\agones_lifecycle_test.vcxproj'
+    'aoi_delivery_test'        = 'cpp\tests\aoi_delivery_test\aoi_delivery_test.vcxproj'
     'aoi_test'                 = 'cpp\tests\aoi_test\aoi_test.vcxproj'
     'bag_test'                 = 'cpp\tests\bag_test\bag_test.vcxproj'
     'buff_test'                = 'cpp\tests\buff_test\buff_test.vcxproj'

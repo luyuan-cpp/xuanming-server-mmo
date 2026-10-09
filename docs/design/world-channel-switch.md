@@ -112,6 +112,8 @@ message SceneInfoRequest {
 
 客户端把受理后收到的 3023 / 3014 / 1003 都当作「这次切线没成」(`SceneChannelClient.IsSwitchFailureTip`);
 其中 1003 结果未知,客户端另记一份,75 秒内真的到了目标线就补记成功(见 §7)。
+主干服务端(`4ae3d11a0` 起)在「换图时内部调用没拿到结果」时推的是 3028 `kEnterSceneServerBusy` 而不是 1003,含义相同;
+客户端 `SceneChannelClient.IsOutcomeUnknownTip` 两个码都认。
 
 scene_manager 的拒绝码(§4.4)在 C++ 侧一律变成 3023(`player_lifecycle.cpp` 的既有行为,本次不改:
 该文件正被跨区会话 CPP-3 改写)。客户端因此拿不到「是满了还是冷却中」的细分原因 ——

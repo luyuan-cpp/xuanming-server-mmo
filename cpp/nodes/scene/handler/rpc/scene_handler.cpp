@@ -166,6 +166,17 @@ void SceneHandler::PlayerEnterGameNode(::google::protobuf::RpcController* contro
 	          << " enter_gs_type=" << request->enter_gs_type()
 	          << " scene_id=" << request->scene_id();
 
+	// 0. 进场路由把玩家派回了本节点:先让疏散 / 排空改派的待确认表(relocate_confirm.h)知道。
+	//    ① 他还没派发的改派票据作废 —— 这次进场要么复用实体并取消退出(EnterScene 第 0 步),要么在 1.5 / 1.6 把实体
+	//       按"被废黜"销毁后重载,那次退出都不会再正常收尾;留着票据只会在下一次、会话已换的退出里被误消费。
+	//    ② 本节点替他发的改派有了去向:同一条会话 → 条目转入"落地等载入",由待确认表每拍看实体建出来没有,载入被放弃
+	//       (下面 3.5 的标记清理核对不过 / 载入失败)就核实后踢线;会话不同或为 0 → 玩家已重登、旧会话已死,结清不踢。
+	//    必须排在最前面:要赶在第 1 步擦旧会话、1.5 / 1.6 销毁旧实体(那里也会删票据,排在后面就分不清是谁删的)、
+	//    第 3 步登记待入场条目之前 —— 它靠"此刻待入场表里有没有他"区分同一条路由被 gate 补发与真正的第二次进场。
+	//    入口目前没有 owner_epoch 栅栏(陈旧路由只在 EnterScene 里打一条 WARN);以后加栅栏时本调用要挪到放行之后,
+	//    否则一条陈旧路由带着别的会话到达,会把条目误结清、玩家不被踢。
+	PlayerLifecycleSystem::ReconcileRelocateOnReentry(request->player_id(), request->session_id());
+
 	// 1. Clear existing player session (handles rapid reconnect / account takeover)
 	PlayerLifecycleSystem::RemovePlayerSessionSilently(request->player_id());
 

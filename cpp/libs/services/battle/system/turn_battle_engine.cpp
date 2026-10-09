@@ -1,6 +1,8 @@
 #include "system/turn_battle_engine.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <optional>
 
 #include "data/table_battle_data_provider.h"
 #include "system/combat_damage_rules.h"
@@ -26,6 +28,45 @@ namespace {
 // 快照未携带 max_health/max_mana 时的保守回退:以当前值为上限
 uint64_t FallbackMax(uint64_t declaredMax, uint64_t currentValue) {
     return declaredMax > 0 ? declaredMax : currentValue;
+}
+
+// 百分点 / 等级这类 uint64 的饱和加法。战斗类属性来自另一进程的快照,数值再离谱也只该"封顶",
+// 不该回绕成一个很小的数(那样满抗性会变成零抗性)
+uint64_t SaturatingAdd(uint64_t lhs, uint64_t rhs) {
+    const uint64_t sum = lhs + rhs;  // 无符号溢出是良定义的回绕:和比加数小 = 溢出了
+    return sum < lhs ? UINT64_MAX : sum;
+}
+
+// ceil(value × percent / 100) 的整数算法。先拆商和余数再乘,value 再大也不溢出;
+// 前提 percent <= 100(调用处的常量由 turn_battle_constants.h 的 static_assert 守住)
+uint64_t PercentCeil(uint64_t value, uint32_t percent) {
+    const uint64_t quotient = value / 100;
+    const uint64_t remainder = value % 100;
+    return quotient * percent + (remainder * percent + 99) / 100;
+}
+
+// 异常类 buff 在目标身上对应的单项抗性(整数百分点);该 buff 类型不算异常状态时返回空。
+// buff 类型 → 抗性种类是 kAilmentBuffMappings 一张平铺表,这里只负责把种类落到 proto 字段上
+std::optional<uint64_t> AilmentResistPercent(const CombatAttributes& combat, uint32_t buffType) {
+    for (const auto& mapping : kAilmentBuffMappings) {
+        if (mapping.buffType != buffType) {
+            continue;
+        }
+        switch (mapping.resistKind) {
+        case AilmentResistKind::kPoison:
+            return combat.resist_poison();
+        case AilmentResistKind::kFreeze:
+            return combat.resist_freeze();
+        case AilmentResistKind::kSleep:
+            return combat.resist_sleep();
+        case AilmentResistKind::kForget:
+            return combat.resist_forget();
+        case AilmentResistKind::kCount:
+            break;
+        }
+        return std::nullopt;
+    }
+    return std::nullopt;
 }
 
 }  // namespace
@@ -146,6 +187,11 @@ bool TurnBattleEngine::InitPlayers(const CreateBattleRequest& request) {
         actor.set_physical_attack(snapshot.physical_attack());
         actor.set_magic_attack(snapshot.magic_attack());
         actor.set_defense(snapshot.defense());
+        // 战斗类属性的装备加成(equipment-attributes.md §4.5):只有玩家快照带;怪物 / 宝宝不填 = 全 0。
+        // 快照没带就不建子消息:老 scene 发来的快照下,单位状态的序列化字节与装备系统落地前相同
+        if (snapshot.has_combat()) {
+            *actor.mutable_combat() = snapshot.combat();
+        }
         // 阵位(表现规格 D4):按快照顺序在本队内 0.. 递增,前 5 个前排、之后后排
         actor.set_formation_slot(NextFormationSlot(snapshot.team_index()));
         // 参战 buff 副本:remain_rounds 已是回合口径(快照契约,scene 侧负责换算)
@@ -756,30 +802,131 @@ void TurnBattleEngine::ExecuteAttack(BattleActorState& actor, uint64_t targetId,
 
     AppendEvent(result, BATTLE_EVENT_ATTACK, actor.actor_id(), targetId);
 
-    // 命中判定(D1):未命中只出 MISS,不出 DAMAGE(一期命中率 100%,永不进入此分支)
-    if (!RollHit(actor, *target)) {
-        auto* missEvent = AppendEvent(result, BATTLE_EVENT_MISS, actor.actor_id(), targetId);
-        missEvent->set_value(0);
-        missEvent->set_target_health_after(target->attributes().health());
-        missEvent->set_target_mana_after(target->attributes().mana());
+    // 首段。没打中就谈不上"被普攻打中":连击(D3)、反击(D4)的前提都不成立,本次行动到此为止
+    // (一期命中率 100%,永不进入此分支)
+    if (!ResolveBasicAttackHit(actor, *target, BATTLE_HIT_NORMAL, result)) {
         return;
     }
 
-    bool isCritical = false;
-    // 普攻是物理攻击:吃物伤、倍率 1;技能按表选物伤 / 法伤(见 ApplySkillToTarget)
-    const double finalDamage = CalculateFinalDamage(actor, *target, kBasicAttackBaseDamage,
-                                                    actor.physical_attack(), 1.0, isCritical);
-    const uint64_t dealt = ApplyDamage(*target, finalDamage);
+    // 连击(D3):每段结算完(含该段的反震)再判下一段。双方都还在场才掷骰 ——
+    // 目标被打死、或出手者被反震弹死,都直接收手,不白白消耗随机数。
+    // 追加段与首段同 group_id、hit_index 递增:客户端把它们并在同一拍里连着播
+    for (uint32_t extraHit = 1; extraHit <= kMaxComboExtraHits; ++extraHit) {
+        if (!IsActorActive(actor) || !IsActorActive(*target)) {
+            break;
+        }
+        if (!RollPercent(actor.combat().combo_rate())) {
+            break;
+        }
+        currentHitIndex = extraHit;
+        ResolveBasicAttackHit(actor, *target, BATTLE_HIT_COMBO, result);
+    }
+    currentHitIndex = 0;
 
-    auto* damageEvent = AppendEvent(result, BATTLE_EVENT_DAMAGE, actor.actor_id(), targetId);
+    // 反击(D4):整次普攻(含连击追加段)结束后才判,一次普攻至多引发一次反击
+    TryCounterAttack(actor, *target, result);
+}
+
+bool TurnBattleEngine::ResolveBasicAttackHit(BattleActorState& attacker, BattleActorState& target,
+                                             eBattleHitKind hitKind, TurnResultS2C& result) {
+    // hit_kind 为 NORMAL(= 0,proto3 缺省值不上线)时,本段产出的事件字节与装备系统落地前逐位相同
+
+    // 命中判定(D1):未命中只出 MISS,不出 DAMAGE(一期命中率 100%,永不进入此分支)
+    if (!RollHit(attacker, target)) {
+        auto* missEvent =
+            AppendEvent(result, BATTLE_EVENT_MISS, attacker.actor_id(), target.actor_id());
+        missEvent->set_value(0);
+        missEvent->set_target_health_after(target.attributes().health());
+        missEvent->set_target_mana_after(target.attributes().mana());
+        missEvent->set_hit_kind(hitKind);
+        return false;
+    }
+
+    bool isCritical = false;
+    // 普攻是物理攻击:吃物伤、倍率 1、物理必杀率与目标的抗物理;技能按表选物伤 / 法伤(见 ApplySkillToTarget)
+    double finalDamage = CalculateFinalDamage(attacker, target, kBasicAttackBaseDamage,
+                                              attacker.physical_attack(), 1.0,
+                                              combatdamage::kPhysicalDamage, isCritical);
+    if (hitKind == BATTLE_HIT_COMBO) {
+        // 连击追加段:独立结算(上面已经独立掷过必杀)后再打折。只有这一种段做缩放 ——
+        // 首段与反击若也写成「× 100 / 100」,浮点舍入可能让伤害差出最后一位,平移既有回放基线。
+        // 普攻基础伤害恒 > 0,打折后仍 > 0,ApplyDamage 的向上取整天然给出「至少 1、不超过目标当前气血」
+        finalDamage *= static_cast<double>(kComboDamagePercent) / 100.0;
+    }
+    const uint64_t dealt = ApplyDamage(target, finalDamage);
+
+    auto* damageEvent =
+        AppendEvent(result, BATTLE_EVENT_DAMAGE, attacker.actor_id(), target.actor_id());
     damageEvent->set_value(dealt);
     damageEvent->set_is_critical(isCritical);
-    damageEvent->set_target_health_after(target->attributes().health());
-    damageEvent->set_target_mana_after(target->attributes().mana());
+    damageEvent->set_target_health_after(target.attributes().health());
+    damageEvent->set_target_mana_after(target.attributes().mana());
+    damageEvent->set_hit_kind(hitKind);
 
-    if (target->attributes().health() == 0) {
-        HandleDeath(*target, actor.actor_id(), result);
+    if (target.attributes().health() == 0) {
+        HandleDeath(target, attacker.actor_id(), result);
     }
+
+    // 反震(D5)排在落伤害之后、连击续段判定之前。反击那一下不触发:
+    // 反击不再引发连击 / 反击 / 反震,否则两个高反震 + 高反击的单位能在一次行动里来回弹
+    if (hitKind != BATTLE_HIT_COUNTER) {
+        TryReflectDamage(attacker, target, dealt, result);
+    }
+    return true;
+}
+
+void TurnBattleEngine::TryReflectDamage(BattleActorState& attacker, BattleActorState& target,
+                                        uint64_t dealt, TurnResultS2C& result) {
+    // 先过完所有不耗随机数的条件,最后才掷骰:该段没扣到血、或受击者已被这一段打死,都不反震
+    if (dealt == 0 || !IsActorActive(target) || !IsActorActive(attacker)) {
+        return;
+    }
+    if (!RollPercent(target.combat().reflect_rate())) {
+        return;
+    }
+
+    // 弹回的是「已经结算完的实扣值」的一个比例:直接扣血,不再过减伤公式、不掷必杀、
+    // 也不走 ApplyDamage(那里会按出手者的防御指令减半)
+    const uint64_t healthBefore = attacker.attributes().health();
+    const uint64_t reflected = std::min<uint64_t>(
+        healthBefore, std::max<uint64_t>(1, PercentCeil(dealt, kReflectDamagePercent)));
+    attacker.mutable_attributes()->set_health(healthBefore - reflected);
+
+    auto* reflectEvent =
+        AppendEvent(result, BATTLE_EVENT_DAMAGE, target.actor_id(), attacker.actor_id());
+    reflectEvent->set_value(reflected);
+    reflectEvent->set_hit_kind(BATTLE_HIT_REFLECT);
+    reflectEvent->set_target_health_after(attacker.attributes().health());
+    reflectEvent->set_target_mana_after(attacker.attributes().mana());
+
+    if (attacker.attributes().health() == 0) {
+        // 击杀归属受击者(怪物普攻被玩家弹死,照常记进玩家方的击杀簿)
+        HandleDeath(attacker, target.actor_id(), result);
+    }
+}
+
+void TurnBattleEngine::TryCounterAttack(BattleActorState& attacker, BattleActorState& defender,
+                                        TurnResultS2C& result) {
+    // 出手者可能刚被反震弹死,受击者可能已被打死:任何一方不在场都没有反击
+    if (!IsActorActive(attacker) || !IsActorActive(defender)) {
+        return;
+    }
+    // 「仍能行动」复用行动校验链的状态判定:眩晕 / 冰冻中的单位连自己的回合都出不了手,自然不能还手
+    if (CheckState(defender) != kSuccess) {
+        return;
+    }
+    if (!RollPercent(defender.combat().counter_rate())) {
+        return;
+    }
+
+    // 反击是受击者的另一次出手:另起一个事件组(group_id + 1、hit_index 归 0),
+    // 客户端据此把它排成独立的一拍,而不是并进出手者那一拍的伤害里
+    BeginEventGroup();
+    auto* attackEvent =
+        AppendEvent(result, BATTLE_EVENT_ATTACK, defender.actor_id(), attacker.actor_id());
+    attackEvent->set_hit_kind(BATTLE_HIT_COUNTER);
+    // 按普攻公式结算(可必杀);COUNTER 段不触发反震,这里也不再判连击与反击
+    ResolveBasicAttackHit(defender, attacker, BATTLE_HIT_COUNTER, result);
 }
 
 void TurnBattleEngine::ExecuteSkill(BattleActorState& actor, const BattleAction& action,
@@ -839,9 +986,13 @@ void TurnBattleEngine::ExecuteSkill(BattleActorState& actor, const BattleAction&
 
     // 伤害:damage 表达式两步调用(SetDamageParam({casterLevel}) + GetDamage),
     // 之后镜像 CalculateFinalDamage 公式;表达式为空/求值为 0 视为纯 buff 技能。
-    // 表达式只求值一次,多目标共用同一 base
-    const double baseDamage =
-        dataProvider->GetSkillDamage(action.skill_table_id(), static_cast<double>(actor.level()));
+    // 表达式只求值一次,多目标共用同一 base。
+    // 所有技能上升(equipment-attributes.md §4.5):只抬高这一处的等级参数,相当于技能按更高的等级算伤害;
+    // 角色等级本身不变 —— 目标的等级系数、buff 回血等其它读 level() 的地方都不吃这条加成。
+    // 加成为 0 时参数就是 level() 本身,求值结果与改动前逐位一致
+    const double baseDamage = dataProvider->GetSkillDamage(
+        action.skill_table_id(),
+        static_cast<double>(SaturatingAdd(actor.level(), actor.combat().skill_level_bonus())));
 
     // 逐目标落地,hit_index = 目标序(D2:群攻多目标同一 group_id、hit_index 0..n-1)
     for (size_t hitIndex = 0; hitIndex < targetIds.size(); ++hitIndex) {
@@ -874,8 +1025,10 @@ void TurnBattleEngine::ApplySkillToTarget(BattleActorState& actor, const BattleA
         bool isCritical = false;
         const uint64_t attack = combatdamage::SelectAttack(
             skillRow.damage_type(), actor.physical_attack(), actor.magic_attack());
-        const double finalDamage = CalculateFinalDamage(actor, target, baseDamage, attack,
-                                                        skillRow.attack_multiplier(), isCritical);
+        // 伤害类型同时决定吃物理还是法术的必杀率 / 抗性(与上面选攻击用的是同一列)
+        const double finalDamage =
+            CalculateFinalDamage(actor, target, baseDamage, attack, skillRow.attack_multiplier(),
+                                 skillRow.damage_type(), isCritical);
         const uint64_t dealt = ApplyDamage(target, finalDamage);
 
         auto* damageEvent =
@@ -1317,25 +1470,44 @@ bool TurnBattleEngine::IsPveMatch() const {
 double TurnBattleEngine::CalculateFinalDamage(const BattleActorState& caster,
                                               const BattleActorState& target, double baseDamage,
                                               uint64_t attack, double attackMultiplier,
-                                              bool& isCritical) {
+                                              uint32_t damageType, bool& isCritical) {
     isCritical = false;
 
-    // critchance 为整数百分比口径,换算后夹到 [0,1](与实时 CalculateFinalDamage 一致)
+    // 战斗类属性按伤害类型分流(equipment-attributes.md §4.5,D6 / D7):
+    // 物理吃出手者的物理必杀率 + 目标的抗物理,法术吃法术必杀率 + 抗法术。
+    // 未知类型两边都不吃,与 combatdamage::SelectAttack 对未知类型不给攻击同口径。
+    // 加成全 0(怪物 / 宝宝 / 无装备玩家)时下面两个和就是原来的 critchance / resistance,
+    // 公式与随机数消耗和加这组属性之前逐位一致
+    uint64_t critRateBonus = 0;
+    uint64_t resistBonus = 0;
+    if (damageType == combatdamage::kPhysicalDamage) {
+        critRateBonus = caster.combat().physical_crit_rate();
+        resistBonus = target.combat().physical_resist();
+    } else if (damageType == combatdamage::kMagicDamage) {
+        critRateBonus = caster.combat().magic_crit_rate();
+        resistBonus = target.combat().magic_resist();
+    }
+
+    // 暴击率为整数百分比口径,基础 + 加成之后换算并夹到 [0,1](与实时 CalculateFinalDamage 一致)
     const double critChance = std::clamp(
-        static_cast<double>(caster.attributes().critchance()) / 100.0, 0.0, 1.0);
-    // 目标等级:玩家 / 宝宝取快照等级,怪物取参战玩家最高等级(InitMonsters)
+        static_cast<double>(SaturatingAdd(caster.attributes().critchance(), critRateBonus)) / 100.0,
+        0.0, 1.0);
+    // 目标等级:玩家 / 宝宝取快照等级,怪物取参战玩家最高等级(InitMonsters)。
+    // 抗性之和交给规则头夹取:它与护甲 / 防御共用 60% 常驻减伤封顶(规则头与实时技能共用,不在这里另夹)
     double finalDamage = combatdamage::DamageBeforeCritical(
         baseDamage, caster.attributes().strength(), attack, attackMultiplier,
-        target.attributes().armor(), target.defense(), target.attributes().resistance(),
-        target.level());
+        target.attributes().armor(), target.defense(),
+        SaturatingAdd(target.attributes().resistance(), resistBonus), target.level());
     if (!IsPveMatch()) {
         finalDamage *= kPvpDamageScale;
     }
 
     // 暴击只走引擎 RNG;critChance 为 0 时不消耗随机数(与实时短路口径一致)。
-    // 掷骰位置与改公式前相同,同种子回放的随机数消费序列不变
+    // 掷骰位置与改公式前相同,同种子回放的随机数消费序列不变。
+    // 注意满 100 也掷骰(Rand01 ∈ [0,1) 恒小于 1,结果必为真):这是装备系统落地前的既有行为,
+    // 改成短路会平移所有满暴击单位之后的随机序列,所以不与 RollPercent 的两端短路对齐
     if (critChance > 0.0 && Rand01() < critChance) {
-        finalDamage *= 2;
+        finalDamage *= kCriticalDamageMultiplier;
         isCritical = true;
     }
 
@@ -1416,6 +1588,16 @@ void TurnBattleEngine::AddBuffToActor(BattleActorState& target, uint32_t buffTab
         return;
     }
 
+    // 抗异常(equipment-attributes.md §4.5,D8):排在免疫之后 —— 已经免疫就没有"抵抗"可言,
+    // 不该为它掷骰;排在驱散之前 —— 被抵抗的 buff 等于没挂上,不能顺手把目标身上的东西驱掉。
+    // 子 buff 是整条递归进来的,父 buff 被抵抗时它们也一并不落地。
+    // 快照带入的 buff 不经过本函数(InitPlayers 直接拷贝 + SanitizeSnapshotBuffs),不会被判抵抗
+    if (RollAilmentResist(target, *buffRow, casterId)) {
+        auto* resistEvent = AppendEvent(result, BATTLE_EVENT_RESIST, casterId, target.actor_id());
+        resistEvent->set_buff_table_id(buffTableId);
+        return;
+    }
+
     // 驱散:新 buff 的 dispel_tag 命中现有 buff 的 tag 即移除之
     DispelBuffsByTag(target, *buffRow, result);
 
@@ -1477,6 +1659,28 @@ void TurnBattleEngine::AddBuffToActor(BattleActorState& target, uint32_t buffTab
             RemoveBuffAt(target, index, result);
         }
     }
+}
+
+bool TurnBattleEngine::RollAilmentResist(const BattleActorState& target, const BuffTable& buffRow,
+                                         uint64_t casterId) {
+    // 只有敌方施加的才判抵抗:自己或队友挂的(哪怕类型是眩晕 / 沉默)是己方的选择,不该被自己的装备挡掉;
+    // 找不到施加者(casterId = 0 或已不在本局)也不判 —— 没有"忽视抗异常"可取,也谈不上敌我
+    const auto* caster = FindActor(casterId);
+    if (caster == nullptr || caster->team_index() == target.team_index()) {
+        return false;
+    }
+    const auto specificResist = AilmentResistPercent(target.combat(), buffRow.buff_type());
+    if (!specificResist.has_value()) {
+        return false;  // 不是异常状态(增益、驱散、灼烧等)
+    }
+
+    // 有效抵抗率 = max(0, 单项 + 所有抗异常 − 施加者的忽视所有抗异常);RollPercent 负责夹到 100,
+    // 且为 0 时不消耗随机数(没有抗性装备的目标,事件流与本功能落地前逐位一致)
+    const uint64_t totalResist =
+        SaturatingAdd(*specificResist, target.combat().resist_all_ailment());
+    const uint64_t ignored = caster->combat().ignore_ailment_resist();
+    const uint64_t effectiveResist = totalResist > ignored ? totalResist - ignored : 0;
+    return RollPercent(effectiveResist);
 }
 
 bool TurnBattleEngine::IsImmuneToBuff(const BattleActorState& target,
@@ -1655,6 +1859,14 @@ BattleStateS2C TurnBattleEngine::BuildStateSnapshot() const {
     return state;
 }
 
+void TurnBattleEngine::StripEngineOnlyState(BattleStateS2C& state) {
+    // 不分视角一律清空:对手的装备概率不能暴露(知道对面 10% 反震就能算着打),
+    // 自己的在属性面板上本来就看得到,战斗状态里再带一份只是多一个泄漏面
+    for (auto& actor : *state.mutable_actors()) {
+        actor.clear_combat();
+    }
+}
+
 // ---------------------------------------------------------------------------
 // 查询辅助
 // ---------------------------------------------------------------------------
@@ -1776,7 +1988,7 @@ BattleEventItem* TurnBattleEngine::AppendEvent(TurnResultS2C& result, eBattleEve
     event->set_source_id(sourceId);
     event->set_target_id(targetId);
     // 表现层分组(D2):同一行动/同一单位的回合末 tick 共用 group_id;
-    // hit_index 由 ExecuteSkill 逐目标递增,其余场景为 0
+    // hit_index 由 ExecuteSkill 逐目标递增、由 ExecuteAttack 在连击追加段递增,其余场景为 0
     event->set_group_id(currentGroupId);
     event->set_hit_index(currentHitIndex);
     return event;
@@ -1813,6 +2025,20 @@ uint64_t TurnBattleEngine::RandIndex(uint64_t count) {
 double TurnBattleEngine::Rand01() {
     // 取 mt19937_64 高 53 位映射到 [0,1),任何平台上同种子同序列
     return static_cast<double>(rng() >> 11) * (1.0 / 9007199254740992.0);
+}
+
+bool TurnBattleEngine::RollPercent(uint64_t percent) {
+    // 两端短路、不消耗随机数(与 RollHit 同口径):
+    //   0     —— 没有这项属性的单位(怪物、宝宝、无装备玩家)不能平移既有同种子回放;
+    //   >=100 —— 必然成立的事不必掷骰;同时把超过 100 的配置自然夹到 100。
+    // 必杀不走这里(见 CalculateFinalDamage:它要保持落地前"满 100 也掷"的消耗)
+    if (percent == 0) {
+        return false;
+    }
+    if (percent >= 100) {
+        return true;
+    }
+    return Rand01() * 100.0 < static_cast<double>(percent);
 }
 
 }  // namespace turnbattle

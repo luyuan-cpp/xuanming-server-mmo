@@ -117,7 +117,12 @@ void AoiSystem::HandleEntityVisibility(entt::entity entity, SceneGridListComp& g
 
             if (ViewSystem::CanSee(otherEntity, entity)) {
                 const auto priority = DetermineAoiPriority(otherEntity, entity);
-                InterestSystem::AddAoiEntity(otherEntity, entity, priority);
+                const auto* otherAoi = tlsEcs.actorRegistry.try_get<AoiListComp>(otherEntity);
+                const bool alreadyVisible = otherAoi && otherAoi->Contains(entity);
+                if (InterestSystem::AddAoiEntity(otherEntity, entity, priority) && !alreadyVisible) {
+                    // 静止观察者可能一直不跨格，必须在反向兴趣关系建立时立即通知。
+                    NotifyEntityVisibilityChanges(otherEntity, EntityUnorderedSet{entity}, {});
+                }
             }
         }
     }
@@ -147,6 +152,7 @@ void AoiSystem::HandleEntityVisibility(entt::entity entity, SceneGridListComp& g
                 auto it = otherAoi->entries.find(entity);
                 if (it != otherAoi->entries.end() && it->second.priority != AoiPriority::kPinned) {
                     InterestSystem::RemoveAoiEntity(otherEntity, entity);
+                    NotifyEntityVisibilityChanges(otherEntity, {}, EntityUnorderedSet{entity});
                 }
             }
         }

@@ -1,4 +1,4 @@
-# Kafka(KRaft 单 broker):StatefulSet + PVC,不再是 Deployment + emptyDir
+# Kafka(KRaft;1 个或 ≥3 个 broker,由 k8s_deploy.ps1 -KafkaBrokers 决定):StatefulSet + PVC,不再是 Deployment + emptyDir
 # (docs/design/routing-identity-audit-20260908.md R06)。
 #
 # 为什么换:
@@ -18,12 +18,20 @@
 # `pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-kafka-topics -WaitReady`
 # 把审计 topic 与控制面命令 topic 按分区契约重新建出来(README「Kafka:StatefulSet + PVC」)。
 #
-# 刻意保持**单 broker**(replicas: 1):仓库里所有 topic 都是 replication-factor 1
-# (kafka-topic-init.yaml / docker-compose.yml / kafkautil.EnsureTopics),
-# `min.insync.replicas` 用默认值,而 KAFKA_ADVERTISED_LISTENERS 广播的是 ClusterIP
-# Service 的 FQDN(多 broker 时每个 broker 必须广播自己的 Pod DNS,否则客户端拿到的
-# leader 地址会随机落到别的 broker 上)。把副本数改大而不同时改这三处 = 数据不但没有冗余,
-# 还会路由错乱。要上多 broker 是另一张票,见 README。
+# broker 数(2026-10-01,docs/design/no-single-node-horizontal-scaling-20261001.md §2):
+#   - 1 个:本机 kind / dev 档。行为与以前逐字一致(kafka-0、node.id=1、广播 Service 名、副本数 1)。
+#   - ≥3 个:staging / prod 档默认 3。**前 3 个 Pod 兼任 controller**(KRaft 选举组,挂 1 个仍有多数派),
+#     **第 4 个起只当 broker** —— 所以 3 → N 只改 replicas,不动选举组、不改 Pod 模板、不触发全体重启。
+#     topic 副本数 3、min.insync.replicas 2:任何一个 broker 倒下,acks=all 的生产者仍然写得进去。
+#   - 2 个不允许:两票的选举组挂一个就没有多数派,比单 broker 还脆。
+# 多 broker 必须同时成立的四件事都由脚本按 broker 数一起渲染,不能只改其中一处:
+#   1) 每个 broker 广播**自己**的 Pod DNS(否则客户端拿到的 leader 地址会随机落到别的 broker 上);
+#   2) controller 选举组的成员表;
+#   3) topic 副本数(kafka-topic-init.yaml 的预建 Job,以及注入给 Go 服务的 KAFKA_TOPIC_REPLICATION_FACTOR);
+#   4) min.insync.replicas。
+# **1 ↔ ≥3 不能原地切换**:单 broker 的选举组只有 kafka-0 一票,直接把成员表改成三票并扩容,
+# 两个空白的新节点可以先凑成多数派、用一份**空的**元数据日志当选,kafka-0 回来时被截断 —— 全部 topic 元数据消失。
+# 脚本发现线上 StatefulSet 的副本数与目标跨了这条线就拒绝 apply,切换流程见 README「Kafka:多 broker」。
 #
 # 所有双下划线包裹的大写占位由 k8s_deploy.ps1 Apply-Infra 在 apply 前替换
 # (占位名不在注释里重复写:Apply-Infra 有一条 fail-closed 检查会把注释里的假占位
@@ -31,7 +39,9 @@
 ---
 # 客户端入口。名字必须保持 `kafka`:所有 ConfigMap / base_deploy_config 里写的 broker
 # 地址都是 kafka.<InfraNamespace>:9092(C++ 节点、login/db/data-service/match/…),
-# 而且 broker 广播的也是这个名字的 FQDN。改名 = 全量改配置 + 广播地址失配。
+# 单 broker 时 broker 广播的也是这个名字的 FQDN。改名 = 全量改配置 + 广播地址失配。
+# 多 broker 时它只做 bootstrap 入口(任意一个 Ready 的 broker 都能给出全量元数据),
+# 之后客户端按各 broker 自己广播的 Pod DNS(kafka-<n>.kafka-headless.<ns>)直连。
 apiVersion: v1
 kind: Service
 metadata:
@@ -72,6 +82,8 @@ spec:
       port: 9093
       targetPort: 9093
 ---
+# minAvailable 由脚本渲染:单 broker 是 1,多 broker 是 broker 数 − 1(= 一次最多自愿驱逐一个,
+# 副本数 3 + min.insync.replicas 2 正好容得下一个 broker 不在)。下面这段说的是单 broker 的情形。
 # 单 broker 的 PDB 只有一种有意义的写法:minAvailable: 1 = **不允许自愿驱逐**。
 # 这不是洁癖 —— 整个控制面(gate/scene 的命令通道)、db_task 落库、审计流水都只有这一个
 # broker,自动化的节点排空 / 集群升级把它顺手赶走时,停机窗口里产出的命令会在 librdkafka
@@ -88,7 +100,7 @@ metadata:
   labels:
     app: kafka
 spec:
-  minAvailable: 1
+  minAvailable: __KAFKA_PDB_MIN_AVAILABLE__
   selector:
     matchLabels:
       app: kafka
@@ -101,7 +113,11 @@ metadata:
     app: kafka
 spec:
   serviceName: kafka-headless
-  replicas: 1
+  replicas: __KAFKA_BROKER_COUNT__
+  # 单 broker 渲染成 OrderedReady(= 缺省值,所以既有的单 broker StatefulSet 不会因为这个不可变字段而 apply 失败)。
+  # 多 broker 必须 Parallel:OrderedReady 要等 kafka-0 Ready 才建 kafka-1,而 kafka-0 要等选举组凑够多数派
+  # (至少两个 controller 在)才 Ready —— 互相等,永远起不来。
+  podManagementPolicy: __KAFKA_POD_MANAGEMENT_POLICY__
   updateStrategy:
     type: RollingUpdate
   selector:
@@ -124,6 +140,17 @@ spec:
       # 给 controlled shutdown 与日志 flush 留时间;被 SIGKILL 打断只会导致下次启动做
       # 一次日志恢复(数据仍在 PVC 上),但恢复期 broker 不可用,能避免就避免。
       terminationGracePeriodSeconds: 60
+      # 多 broker 时尽量一台机器一个:一台节点宕机最多带走一个 broker(副本数 3 + min.insync 2 容得下)。
+      # 用 preferred 而不是 required:本机 kind 只有一个节点,硬约束会让第 2、3 个 Pod 永远 Pending。
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: kafka
       containers:
         - name: kafka
           image: apache/kafka:latest
@@ -147,12 +174,46 @@ spec:
               if [ "$hard" = "unlimited" ]; then hard=1048576; fi
               ulimit -n "$hard" 2>/dev/null || echo "WARN: cannot raise nofile soft limit" >&2
               echo "kafka fd limit: soft=$(ulimit -Sn) hard=$(ulimit -Hn)"
+              # 身份由 StatefulSet 序号推出:kafka-<n> 的 node.id = n + 1。kafka-0 仍是 1,
+              # 与单 broker 时代 PVC 里 meta.properties 记的 node.id 一致(对不上 broker 会拒绝启动)。
+              ordinal="${POD_NAME##*-}"
+              case "$ordinal" in
+                ''|*[!0-9]*) echo "ERROR: cannot derive broker ordinal from POD_NAME=$POD_NAME" >&2; exit 1 ;;
+              esac
+              export KAFKA_NODE_ID=$((ordinal + 1))
+              # 前 KAFKA_CONTROLLER_COUNT 个 Pod 兼任 controller,其余只当 broker(见文件头)。
+              # 只当 broker 的节点不开 9093:它不在选举组里,开了也没人连。
+              if [ "$ordinal" -lt "$KAFKA_CONTROLLER_COUNT" ]; then
+                export KAFKA_PROCESS_ROLES="controller,broker"
+                export KAFKA_LISTENERS="PLAINTEXT://:9092,CONTROLLER://:9093"
+              else
+                export KAFKA_PROCESS_ROLES="broker"
+                export KAFKA_LISTENERS="PLAINTEXT://:9092"
+              fi
+              # 广播地址必须是**跨 namespace 可解析**的 FQDN:zone namespace 里的 login/db/gate 用
+              # kafka.<infra ns>:9092 做 bootstrap 没问题,但 bootstrap 之后客户端拿到的是 broker 广播的
+              # 地址再去连;以前广播短名 "kafka",在 mmorpg-zone-* namespace 里解析不到,表现为
+              # metadata 拉到了却 "dial tcp: lookup kafka: no such host"。
+              # 单 broker 广播 Service 名(客户端始终经过 Service 的 readiness 门禁);
+              # 多 broker 每个 Pod 必须广播自己的 DNS,否则客户端按 leader 找 broker 时会被 Service 随机分到别人身上。
+              if [ "$KAFKA_CONTROLLER_COUNT" -gt 1 ]; then
+                export KAFKA_ADVERTISED_LISTENERS="PLAINTEXT://${POD_NAME}.kafka-headless.__INFRA_NAMESPACE__.svc.cluster.local:9092"
+              else
+                export KAFKA_ADVERTISED_LISTENERS="PLAINTEXT://kafka.__INFRA_NAMESPACE__.svc.cluster.local:9092"
+              fi
+              echo "kafka identity: node.id=$KAFKA_NODE_ID roles=$KAFKA_PROCESS_ROLES advertised=$KAFKA_ADVERTISED_LISTENERS"
               exec /__cacert_entrypoint.sh /etc/kafka/docker/run
           env:
-            - name: KAFKA_NODE_ID
-              value: "1"
-            - name: KAFKA_PROCESS_ROLES
-              value: "controller,broker"
+            # node.id / process.roles / listeners / advertised.listeners 每个 Pod 不同,由上面的启动脚本按序号导出,
+            # 不在这里写死。POD_NAME 用 Downward API 取,不依赖容器运行时是否注入 HOSTNAME。
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            # 兼任 controller 的 Pod 数:单 broker 是 1,多 broker 固定是 3(与 broker 总数无关,
+            # 所以加 broker 不会改到 Pod 模板)。
+            - name: KAFKA_CONTROLLER_COUNT
+              value: "__KAFKA_CONTROLLER_COUNT__"
             - name: KAFKA_CLUSTER_ID
               value: "5L6g3nShT-eMCtK--X86sw"
             # 镜像的 launch 脚本读的是 **CLUSTER_ID**(不是 KAFKA_CLUSTER_ID),
@@ -163,29 +224,34 @@ spec:
               value: "5L6g3nShT-eMCtK--X86sw"
             - name: KAFKA_CONTROLLER_LISTENER_NAMES
               value: "CONTROLLER"
-            - name: KAFKA_LISTENERS
-              value: "PLAINTEXT://:9092,CONTROLLER://:9093"
-            # 广播地址必须是**跨 namespace 可解析**的 FQDN。
-            # zone namespace 里的 login/db/gate 用 kafka.<infra ns>:9092 做 bootstrap
-            # 没问题,但 bootstrap 之后客户端拿到的是 broker 广播的地址再去连;以前
-            # 这里广播短名 "kafka",在 mmorpg-zone-* namespace 里解析不到,表现为
-            # metadata 拉到了却 "dial tcp: lookup kafka: no such host"。
-            # __INFRA_NAMESPACE__ 由 k8s_deploy.ps1 Apply-Infra 替换(与 etcd.yaml 同一占位)。
-            # 单 broker 才能广播 Service 名;多 broker 必须改成每 Pod 自己的
-            # kafka-<n>.kafka-headless.<ns> —— 见文件头。
-            - name: KAFKA_ADVERTISED_LISTENERS
-              value: "PLAINTEXT://kafka.__INFRA_NAMESPACE__.svc.cluster.local:9092"
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
               value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
             # 不能使用普通 kafka Service：它只发布 Ready Pod，而 broker 注册到控制器
             # 才能通过 API 探针，形成启动死锁。headless 已发布未 Ready 地址，先完成自举。
-            # 固定单 broker kafka-0；扩为多 broker 时必须重新设计完整 controller quorum。
+            # 成员表由脚本渲染:单 broker 只有 kafka-0 一票,多 broker 是 kafka-0..2 三票
+            # (形如 <node.id>@kafka-<n>.kafka-headless.<ns>.svc.cluster.local:9093,逗号分隔)。
+            # 这是**静态**成员表:改它不等于迁移选举组,见文件头「不能原地切换」。
             - name: KAFKA_CONTROLLER_QUORUM_VOTERS
-              value: "1@kafka-0.kafka-headless.__INFRA_NAMESPACE__.svc.cluster.local:9093"
+              value: "__KAFKA_CONTROLLER_QUORUM_VOTERS__"
             - name: KAFKA_INTER_BROKER_LISTENER_NAME
               value: "PLAINTEXT"
+            # 副本数与最小同步副本数:单 broker 是 1 / 1,多 broker 是 3 / 2。
+            # 内部 topic(消费位点、事务状态)与 auto-create 出来的 topic 都吃这一组,
+            # 否则业务 topic 有三份、消费位点只有一份,倒一个 broker 照样全体消费者停摆。
             - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
-              value: "1"
+              value: "__KAFKA_REPLICATION_FACTOR__"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "__KAFKA_REPLICATION_FACTOR__"
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "__KAFKA_MIN_INSYNC_REPLICAS__"
+            - name: KAFKA_DEFAULT_REPLICATION_FACTOR
+              value: "__KAFKA_REPLICATION_FACTOR__"
+            # acks=all 的生产者(C++ 幂等生产者、login 的 db_task 生产者)至少要这么多副本确认才算写入成功。
+            # 多 broker 取 2:三份里允许一份掉队,但不允许只剩一份还照常收写(那份再丢就是数据丢失)。
+            # 它是 broker 级默认值,对**所有** topic 生效 —— 多 broker 集群里若有人建了副本数 1 的 topic,
+            # acks=all 的写入会被 NOT_ENOUGH_REPLICAS 拒掉,这是有意的:不让假冗余悄悄跑着。
+            - name: KAFKA_MIN_INSYNC_REPLICAS
+              value: "__KAFKA_MIN_INSYNC_REPLICAS__"
             - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
               value: "0"
             # 数据目录。显式指定,不用镜像默认的 /tmp/kraft-combined-logs:
@@ -230,6 +296,11 @@ spec:
           # 所以 readiness / startup 走 API 级探测(kafka-broker-api-versions.sh),
           # liveness 才用便宜的 TCP —— liveness 只负责判"JVM 死了/卡死",判错的代价是
           # 重启,阈值给宽。
+          #
+          # 多 broker 下这条探测命令先连本机 broker 拿到集群成员,再逐个问 API 版本;别的 broker 不在时
+          # 它对那个节点报错但**整体仍以 0 退出**,所以一个 broker 倒下不应把其余 broker 判成 NotReady。
+          # 这一点依赖工具的实现,上线前必须在 kind 上实测一次(杀掉一个 broker,另外两个保持 Ready),
+          # 步骤见 README「Kafka:多 broker」。
           #
           # KAFKA_HEAP_OPTS 在探针命令里被覆盖成 -Xms16m -Xmx64m:容器 env 里的
           # -Xms512m -Xmx1g 会被这些工具脚本继承,和 broker 自己的 1G 堆叠在

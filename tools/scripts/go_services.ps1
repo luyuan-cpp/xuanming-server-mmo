@@ -43,7 +43,7 @@ param(
     # Service name keys must match the catalogue. Count <= 1 means single instance
     # (uses the original etc/<svc>.yaml). Count > 1 generates derived yaml files
     # under run/etc/go_services/<svc>_<i>.yaml with ListenOn port = base + (i-1).
-    # 'db' is intentionally restricted to a single instance (Kafka consumer + DB writer).
+    # 'db' can run several instances too since 2026-10 (retry receipts are owned per instance, see go/db/internal/kafka/retry_ownership.go).
     [object]$Counts = @{},
 
     # Base port offset between instances. The N-th instance (1-based) listens on
@@ -64,9 +64,9 @@ param(
     #   * A derived yaml is materialized at run/etc/go_services/z<Zone>_<svc>[_<i>].yaml
     #     with `ZoneId: N` rewritten and `ListenOn` port shifted by (Zone-1)*ZonePortShift
     #     to avoid TCP port collisions.
-    #   * `db` (AllowMultiInstance=false) IS still launched once per zone since each
-    #     zone owns its own Kafka topic + MySQL DB; the per-zone single-instance rule
-    #     is preserved.
+    #   * `db` is launched once per zone by default since each
+    #     zone owns its own Kafka topic + MySQL DB; pass -Counts db=N to run several per zone
+    #     (they join the zone's consumer group and split its partitions).
     # Zone=0 (default) keeps legacy single-zone behaviour.
     [int]$Zone = 0,
 
@@ -105,7 +105,7 @@ $GoBinDir   = Join-Path $RepoRoot "bin\go_services"
 #   Desc        human-readable description
 #   ConfigFlag  command-line flag the entry uses to override the config path (e.g. -f, -loginService)
 #   ConfigFile  default config file path relative to the service Dir
-#   AllowMultiInstance  $false to forbid -Counts > 1 (e.g. db: single Kafka consumer)
+#   AllowMultiInstance  $false to forbid -Counts > 1 (no service needs it today; db became multi-instance safe in 2026-10)
 #   Tier        startup ordering bucket. Lower tiers are launched and (softly)
 #               wait for TCP LISTEN before the next tier. ONLY used by the local
 #               dev launcher to avoid first-boot dial races. Runtime services do
@@ -117,7 +117,7 @@ $GoBinDir   = Join-Path $RepoRoot "bin\go_services"
 #               Tier 2 = player_locator (depended by login)
 #               Tier 3 = login (top of the dial chain)
 $ServiceCatalogue = [ordered]@{
-    db              = @{ Dir = "db";              Entry = "db.go";                    Port = 6000;  Desc = "DB (Kafka consumer + MySQL)";       ConfigFlag = "-f";            ConfigFile = "etc/db.yaml";                    AllowMultiInstance = $false; Tier = 0 }
+    db              = @{ Dir = "db";              Entry = "db.go";                    Port = 6000;  Desc = "DB (Kafka consumer + MySQL)";       ConfigFlag = "-f";            ConfigFile = "etc/db.yaml";                    AllowMultiInstance = $true;  Tier = 0 }
     data_service    = @{ Dir = "data_service";    Entry = "data_service.go";          Port = 9000;  Desc = "Data Service (multi-zone Redis)"; ConfigFlag = "-f";            ConfigFile = "etc/data_service.yaml";          AllowMultiInstance = $true;  Tier = 0 }
     # Base ports for the zRPC services were originally 50000/50200 but Windows
     # reserves dynamic-port ranges that frequently land on 50000-50171 and a

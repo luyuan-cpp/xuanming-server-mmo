@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -87,6 +88,15 @@ func main() {
 	}
 
 	svcCtx := svc.NewServiceContext(c)
+	// Store.Required(config.StoreConfig):store 没装配齐就不许进发现池。必须在下面任何一处 etcd 注册之前判,
+	// 否则一个每次调用都报错的实例会被 p2c / C++ 的随机挑选分到流量。os.Exit 不跑 defer,所以先手动收尾。
+	if missing := svcCtx.MissingStores(); c.Store.Required && len(missing) > 0 {
+		logx.Errorf("[startup] Store.Required=true but these stores are not ready: %v; refusing to start (see the errors above for the cause)", missing)
+		fmt.Fprintf(os.Stderr, "data_service refuses to start: Store.Required=true but stores %v are not ready\n", missing)
+		svcCtx.Close()
+		logx.Close()
+		os.Exit(1)
+	}
 	defer svcCtx.Close()
 
 	// ── Kafka 落库消费者(transaction_log / player_snapshot)────────────
@@ -242,7 +252,8 @@ func main() {
 }
 
 // runMigration 是 -migrate 的实现:不设超时(存量大表的 MODIFY COLUMN 会重建表,
-// 时间由表决定),成功 0、失败 1。输出走 stdout/stderr,方便部署脚本直接读退出码。
+// 时间由表决定),成功 0、失败 1、迁移锁被另一个实例持有 3(migrateExitLockBusy,可重试)。
+// 输出走 stdout/stderr,方便部署脚本直接读退出码。
 func runMigration(c config.Config) int {
 	cfg := svc.MySQLConfigOf(c)
 	tags := c.IdSegment.EffectiveBootstrapTags()
@@ -252,10 +263,22 @@ func runMigration(c config.Config) int {
 	// (同库能查到时),那条 Error 日志出现就意味着库曾被重置 / 从备份恢复,按运维手册处理。
 	if err := store.MigrateSchema(context.Background(), cfg, store.MigrateOptions{BootstrapTags: tags}); err != nil {
 		fmt.Fprintf(os.Stderr, "schema migration FAILED: %v\n", err)
-		return 1
+		return migrateExitCode(err)
 	}
 	fmt.Printf("schema migration OK: transaction_log, player_snapshot, rollback_audit_log synced from proto; id_segment bootstrapped for %v (existing rows untouched, player/guild floors checked)\n", tags)
 	return 0
+}
+
+// migrateExitLockBusy 与 go/schemamigrate 的 ExitLockBusy 同值:迁移锁被另一个实例(另一个副本的启动路径,
+// 或上一次还没结束的迁移 Job)持有。K8s 的迁移 Job 按这个码重试,而不是当成迁移本身失败。
+const migrateExitLockBusy = 3
+
+// migrateExitCode 把迁移错误映射成 -migrate 的退出码。
+func migrateExitCode(err error) int {
+	if errors.Is(err, store.ErrMigrateLockBusy) {
+		return migrateExitLockBusy
+	}
+	return 1
 }
 
 // startKafkaConsumers 启动两条落库消费者,返回一个"等它们停下"的有界等待函数(给关停用;

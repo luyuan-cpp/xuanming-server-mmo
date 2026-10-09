@@ -1240,8 +1240,9 @@ func TestPlacePlayerLocationIsAnchoredToObservedEpoch(t *testing.T) {
 	assert.Equal(t, winner.raw, raw)
 }
 
-// 凭标记放行的落点:标记必须在铸造的同一段 Lua 里原样还在。源 scene 超时后先 DEL 标记、
-// 再读 epoch 判断自己有没有被放行 —— 这个判断成立的前提就是 DEL 之后不可能再有凭它的铸造。
+// 凭标记放行的落点:标记必须在铸造的同一段 Lua 里原样还在。源 scene 超时后在一段原子脚本里先删掉本族
+// 标记、再读 epoch / location 判断自己有没有被放行 —— 这个判断成立的前提就是删除之后不可能再有凭它的铸造。
+// (本用例用 DEL 模拟源端删标记,效果相同。)
 func TestMintIsRefusedOnceTheSourceWithdrewItsHandoffMarker(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	const playerID = uint64(6124)
@@ -2856,7 +2857,7 @@ func TestMintEpochLuaRecognizesReplayOfItsOwnWrite(t *testing.T) {
 		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "awaiting-bytes", marker)
 		require.NoError(t, err)
 		require.Equal(t, "2", fmt.Sprint(result))
-		// 源 scene 已 DEL 标记(它随后读 epoch 自行裁决),重发不再认。
+		// 源 scene 的取证脚本已删掉本族标记(同一步里读 epoch / location 自行裁决),重发不再认。这里用 DEL 模拟。
 		mr.Del(ownerepoch.HandoffKey(playerID))
 		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "awaiting-bytes", marker)
 		require.NoError(t, err)

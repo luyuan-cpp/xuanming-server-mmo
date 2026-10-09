@@ -21,14 +21,25 @@ metadata:
     app: data-service
     tier: go-svc
 spec:
-  replicas: 1
-  # Recreate 而不是默认的 RollingUpdate:滚动升级会让新旧两个实例同时跑一段时间。
-  # 快照落库消费者(player_snapshot)按 guid 去重是「单条语句 + 间隙锁」,两个实例重叠消费
-  # 同一分区不会写坏数据,但会互相等锁、消费组反复 rebalance、id_segment 行锁排队,没有任何好处。
-  # replicas 保持 1;换版本时短暂停一下,消息留在 topic 里(30 天保留期),起来接着消费;
-  # login 领号段是弱依赖(NonBlock,双 buffer),几秒的停顿吃不到。
+  # 2 副本(2026-10-08,docs/design/no-single-node-horizontal-scaling-20261001.md §4)。
+  # 以前钉成 1 + Recreate 的理由是「快照去重靠间隙锁,两个实例会互相等锁」—— 那已经过时:
+  #   - 去重现在是唯一键 uk_snapshot_guid_nz + ON DUPLICATE KEY,不同 guid 互不相干;
+  #   - 两条落库消费者是 consumer group,每个分区同一时刻只属于一个实例,重叠只发生在 rebalance 的瞬间
+  #     (先落库后提交 offset + 幂等落库,不丢不重);
+  #   - 发号段靠 id_segment 行锁 + version、名字登记靠唯一键,本来就不依赖单实例;
+  #   - 多个 zone 的 data-service 早就在共用同一个全局库、同一组 topic 与消费组 —— 它一直是多实例的。
+  # 多副本的两个前提在服务侧:启动期迁移由库级命名锁串行(store.acquireMigrateLock);store 装配不起来就拒启
+  # (ConfigMap 的 Store.Required: true),不让一个每次调用都报错的实例进发现池、按比例吃掉请求。
+  # 消费并行度的上限是分区数(transaction_log 6 / player_snapshot 3),副本超过它只是多一份 RPC 容量。
+  # MySQL 连接预算:每个实例最多 35 条(三个 store 各 5 + 名字注册表 20),按 zone 数 × 副本数算进 max_connections。
+  replicas: 2
+  # 先起新的、Ready 之后再停旧的:任何时刻至少有 2 个实例在发号。scene 启动要领的首个 GUID 号段、
+  # login 建角要领的 PlayerId 号段都从这里来,发布期间不能出现"一个都没有"的窗口。
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: data-service
@@ -37,7 +48,21 @@ spec:
       labels:
         app: data-service
         tier: go-svc
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9260"
+        prometheus.io/path: "/metrics"
     spec:
+      affinity:
+        podAntiAffinity:
+          # 两个副本尽量不落同一节点,否则单节点故障等于这个 zone 的发号 / 审计落库全停
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: data-service
+                topologyKey: kubernetes.io/hostname
       containers:
         - name: data-service
           image: PLACEHOLDER_IMAGE
@@ -55,6 +80,10 @@ spec:
           ports:
             - containerPort: 9000
               name: grpc
+            # 与 ConfigMap 的 MetricsListenAddr ":9260" 及上面 prometheus.io/port 注解一致(9260 = data-service)。
+            # 多副本之后要能按 Pod 看 kafka_consumer_up:哪个实例的消费者停了,只看总量是看不出来的。
+            - containerPort: 9260
+              name: metrics
           readinessProbe:
             grpc:
               port: 9000
@@ -85,3 +114,18 @@ spec:
         - name: svc-config
           configMap:
             name: go-svc-data-service-config
+---
+# PDB 直接放在本文件里:k8s_deploy.ps1 只 apply 各服务目录里登记的主 manifest,独立的 *-pdb.yaml 不会被应用。
+# minAvailable: 1 —— 节点排空 / 集群升级一次只能带走一个副本,发号不会被自愿驱逐打成零。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: data-service-pdb
+  labels:
+    app: data-service
+    tier: go-svc
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: data-service
