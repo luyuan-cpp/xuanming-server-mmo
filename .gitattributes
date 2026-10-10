@@ -25,6 +25,12 @@
 *.tmpl text eol=lf
 *.sql text eol=lf
 
+# 进度流水账只追加:本机与远端各自往末尾追加条目时用 union 合并(两边都保留,本机的在前)。
+# 不配的话,每小时自动保存的 git pull 每次都会卡成未完成的合并(2026-10-10 一天三次,都只冲突这一个文件)。
+# 代价:union 从不报冲突 —— 两边改的是同一段(例如都去补最后一条旧条目)而不是各自追加新条目时,
+# 两个版本都会留下且顺序可能不对,要靠评审发现。所以补充旧条目请另起一条,不要回头改最后一条。
+docs/PROGRESS.md merge=union
+
 # Binary files — do not touch.
 *.exe binary
 *.dll binary

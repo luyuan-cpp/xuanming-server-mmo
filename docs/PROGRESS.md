@@ -7073,3 +7073,22 @@ PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修
   且全量 proto-gen 会给别的会话在途的 RPC 一并发号,不该由帮会这边单独跑);`robot` 的 `go mod vendor`(vendor 落后于 `go/proto` 多个会话的改动,
   同步后必须紧跟一次 robot 构建才知道有没有连带问题,交 Codex 一步做完);真库集成用例、robot 冒烟、联机验证;guild 的 K8s 清单(不在二期范围,归消除单节点专项)。
 - **Java 版(AGENTS §12)**:本条没有新增或改动客户端契约(限流表是服务端内部配置);帮会二期的 Java 版状态不变,仍是**待做**。
+
+## 2026-10-10 PVE 人数档匹配:match 首次实跑(用户授权 Claude 执行)+ 进度文件改 union 合并
+
+- **授权**:用户当面选择「授权 Claude 编译匹配服务并跑它的单元测试,通过后替换程序」(AGENTS §10.1 的例外,只限 `go\match`);
+  C++ 仍等装备线的导表与全量 proto-gen,没有授权、没有做。
+- **运行结果**(Go 1.26.5,`GOTOOLCHAIN=local`,工作目录 `go\match`,代码为 `21d5b25120` 之上):
+  `go build ./...` 退出码 0;`go vet ./...` 退出码 0;`go test ./... -count=1` 7 个有测试的包全部 ok
+  (match / constants / discovery / logic / playercontract / svc / team),`pve_team_size_test.go` 的 10 条新用例全过。
+  这是人数档匹配(以及此前从未编译过的 match 侧组队、观战索引等代码)第一次真正通过编译与测试。
+- **顺手修的一条既有红用例**:`TestGatherCreateFailureWithDestroyFailureKeepsRecord`(09-29 入库)断言「票据留 matched」,
+  但它的铺数据 `popMatchedPair` 只弹组、没有像生产的 `matchQueueOnce` 那样先把票据推进 matched,所以一直是红的
+  (在人数档改动之前的提交 `84d5a3d903` 上单独跑同样失败)。只在该用例里补了推进 matched 的一步,没有改被测代码。
+- **产物**:`bin\go_services\match.exe` 已用 `go_services.ps1 -Command build -Services match` 重编(bin 不入库)。
+  只换 match 就能验人数档匹配:两个客户端都选「2人」应进同一场战斗;此时怪物仍是固定一组(battle 未重编)。
+- **进度文件改 union 合并**:`.gitattributes` 给 `docs/PROGRESS.md` 配了 `merge=union`。起因是每小时自动保存的 `git pull`
+  在本机与远端都往本文件末尾追加时每次都卡成未完成的合并,当天三次(`07c7e238ff`、`84d5a3d903`、`7897e0a146` 都是本会话手工收的)。
+  代价与约定写在 `.gitattributes` 注释和 AGENTS §5:union 从不报冲突,补充旧条目要另起一条,不要回头改最后一条。
+- **仍未做**:robot 的 `go build -mod=vendor`;C++(引擎、battle 节点、单测)未编译;Unity 内测试与面板目视;联机验收。
+- **Java 版(AGENTS §12)**:不涉及(本条是运行证据与本仓库的 git 属性)。

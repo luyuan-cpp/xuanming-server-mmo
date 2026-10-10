@@ -76,7 +76,7 @@
 - 运维手册与事故复盘 → `docs/ops/`
 - 交接说明与会话小结 → `docs/handoff/`
 - 已过期、仅作历史保留的文档 → `docs/archive/`
-- 周期进度与流水账 → `docs/PROGRESS.md`（只追加，不删旧条目）
+- 周期进度与流水账 → `docs/PROGRESS.md`（只追加，不删旧条目；该文件在 `.gitattributes` 里配了 `merge=union`，两边各自追加不会冲突，所以补充旧条目要另起一条，不要回头改最后一条）
 - 文档总索引 → `docs/README.md`（新增文档后在对应分类登记一行）
 
 **没写文档 = 没说过**（下个 AI 不会记得）。

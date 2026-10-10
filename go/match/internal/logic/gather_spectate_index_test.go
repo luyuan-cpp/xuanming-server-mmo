@@ -380,6 +380,14 @@ func TestGatherCreateFailureWithDestroyFailureKeepsRecord(t *testing.T) {
 	}
 	t.Cleanup(func() { createBattleFn, destroyBattleFn = prevCreate, prevDestroy })
 	members, tickets, queueKey := popMatchedPair(t, svcCtx, mr, 9821, 9822)
+	// 与生产同序:matcher 弹组后先把票据推进 matched 再跑 gather(matchQueueOnce);popMatchedPair 只弹组,
+	// 票据还是 queued。保守分支不碰票据,不先推进的话下面"票据留 matched"的断言永远不成立
+	// (这条用例自 09-29 入库起一直是红的,2026-10-10 首次实跑时发现)。
+	for _, pid := range members {
+		written, err := setTicketMatched(svcCtx, pid, tickets[pid], matchedTicketTTLFor(svcCtx, 2))
+		require.NoError(t, err)
+		require.True(t, written)
+	}
 	mode := matchpb.MatchMode_MATCH_MODE_1V1.String()
 	roomAliveBase := metrics.GatherValue(mode, "create_failed_room_alive")
 	createFailedBase := metrics.GatherValue(mode, "create_failed")
