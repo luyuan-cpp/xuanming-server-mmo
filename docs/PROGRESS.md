@@ -7058,3 +7058,18 @@ PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修
   组队奖励 / 掉落分配;不能凑单的队列里死成员的清扫;robot 自动化冒烟场景。
 - **Java 版(AGENTS §12)**:未做(本机没有 Java 仓库)。要同步的客户端契约只有 `JoinQueueRequest.team_size = 7`;
   需在 `PARITY.md` 登记待做。
+
+## 2026-10-10 帮会二期收尾补充:客户端生成物补齐并实跑、限流表源行、配表索引(Claude)
+
+- **客户端主干恢复可编译**(客户端仓 `f5370798`):补齐帮会活动 / 历练的三份生成物 —— `Guild.cs`、`GuildErrorTip.cs`(protoc 35.1 窄面生成,
+  源取本仓 `origin/main` `f478fa9c43`)与 `MessageIds.cs` 的 239–243 五行。没有整份跑 `gen_proto.ps1` / `gen_messageids.ps1`:前者的文件表里有
+  本仓主干还没有的 `equip_error_tip.proto`,后者整份输出会删掉装备的两个消息号;装备批次的服务端生成进主干后再整份重跑。
+- **客户端运行证据(本机实跑,客户端仓不在 §10.1 范围内)**:`client_compile_check.ps1` 生成前 31 个错误、生成后 393 个文件 0 错误;
+  帮会测试程序集与帮会编辑器脚本单独编译各 0 错误;`GuildClientTests` 139 条在 Unity 自带的 Mono 6.13 上用真实 NUnit 断言执行,
+  138 条通过、1 条(B6 之前就有)要调引擎原生接口跑不了;改坏一句文案的对照跑报 2 条断言失败。`GuildWindowTests` 54 条与截图验收没跑(要编辑器)。
+- **本仓**:`data/MessageLimiter.xlsx` 追加活动五行(239 / 240 / 242 / 243 各 5/1s,241 为 10/1s),**产物未重导**(主干叠着装备批次未导出的表与 tip,
+  且当时本机内存见底 protoc 起不来);`data/AGENTS.md` 配表索引已重生成;`92-handoff.md` §13 相应更新。本仓没有跑任何构建或测试。
+- **仍未做**(细节见 `92-handoff.md` §13.2):`guild_internal` / `match_internal` 的 C++ RPC 包装与三个内部 RPC 的消息号(包装生成器被本机应用控制策略拦截,
+  且全量 proto-gen 会给别的会话在途的 RPC 一并发号,不该由帮会这边单独跑);`robot` 的 `go mod vendor`(vendor 落后于 `go/proto` 多个会话的改动,
+  同步后必须紧跟一次 robot 构建才知道有没有连带问题,交 Codex 一步做完);真库集成用例、robot 冒烟、联机验证;guild 的 K8s 清单(不在二期范围,归消除单节点专项)。
+- **Java 版(AGENTS §12)**:本条没有新增或改动客户端契约(限流表是服务端内部配置);帮会二期的 Java 版状态不变,仍是**待做**。
