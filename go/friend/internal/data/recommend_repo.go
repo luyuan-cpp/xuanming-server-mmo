@@ -28,8 +28,10 @@ import (
 //  2. **每条候选查询都要有与玩家总数无关的扫描上界,而且上界必须由 SQL 结构给出,不能指望优化器"会提前停"**。
 //     - random(recommendAnchor):只看 pivot 起按 player_id 升序的前 RecommendAnchorWindow(W=1024)个去重 id
 //       (派生表里的 LIMIT 给出),每个候选的排除判定是 ≤5 次完整主键单行点查(FORCE INDEX (PRIMARY) +
-//       SEMIJOIN(FIRSTMATCH) 钉死)。单次调用 Handler 读 ≤ 窗口生产 + (W+1) + 5×W,与 friend / friend_block /
-//       friend_request 的行数、"拉黑我的人数"、全服 pending 数都无关;典型 2.1–3.1×W。窗口生产随计划不同:
+//       SEMIJOIN(FIRSTMATCH) 钉死)。单次调用 Handler 读 ≤ 窗口生产 + (W+1) + 5×W + limit×(2F+1),与 friend /
+//       friend_block / friend_request 的行数、"拉黑我的人数"、全服 pending 数都无关;典型 2.1–3.1×W 再加最后那一项。
+//       最后一项是给**返回的**每个候选数一次共同好友(2026-10-09 起,见 recommendAnchor 第 6 条):F 是我的好友数
+//       (≤ MaxFriends),默认上限下 ≤ 20×401 = 8,020 次,MaxFriends 取天花板 300 时 ≤ 12,020 次。窗口生产随计划不同:
 //       跳跃扫描约 W+1 次定位,范围扫描要读完窗口里 W 个人的全部出边(最坏 ≈ W×MaxFriends ≈ 20.5 万次,
 //       见 RecommendAnchorWindow 的"代价")。
 //       ⚠ SQL 结构(派生表的 LIMIT)封住的只是"pivot 之后最多读 W 个分组";"不从索引开头扫、只读 pivot 之后"
@@ -76,10 +78,16 @@ import (
 
 // RecommendCandidate 是一条推荐候选(SQL 侧结果行,由 logic 组装成 pb.RecommendEntry)。
 //
-// MutualFriends 是与查询者的共同好友数:mutual 策略的候选 > 0,random 兜底候选恒填 0 —— 表示兜底那条查询没有去数
-// 共同好友,客户端按它排序,不能拿它判断数据是否缺失。通常兜底出来的人确实没有共同好友(有的话早被 mutual 召回了);
-// 例外是 mutual 的排名窗口被排除者占满的时候(见 RecommendByMutual):兜底可能挑到窗口之外、实际有共同好友的人,
-// 所以 0 不保证"没有共同好友"。要保住这层含义得在 logic 层给兜底结果补数一次共同好友,目前没有做。
+// MutualFriends 是与查询者的共同好友数:既在我的好友列表里、又在候选的好友列表里的人有几个。好友边双向成对
+// (AcceptFriend / RemoveFriend 的不变量)时两条路径数出的是同一个数 —— 同一个人不管由哪条路径返回,数字都一样,
+// 0 就是"没有共同好友"。(两条 SQL 读的边不同:mutual 读 (我, x) 与 (x, 候选),兜底读 (我, x) 与 (候选, x),
+// 原因见 recommendAnchor 第 6 条;存在单向的历史行时两者可能差出那几条边。)
+//   - mutual 策略的候选恒 > 0(他们本来就是按这个数排名选出来的);
+//   - random 兜底的候选通常是 0(有共同好友的人大多已被 mutual 召回),但不恒为 0:mutual 的排名窗口被排除者占满时
+//     (见 RecommendByMutual),兜底会挑到窗口之外、实际有共同好友的人,这时填的是他的真实数字。
+//
+// 2026-10-09 之前兜底路径恒填 0(没有去数),上面第二种人会被客户端显示成"没有共同好友";现在兜底那条查询给每个
+// **返回的**候选数一次(recommendAnchor 第 6 条),不多打一次库。
 type RecommendCandidate struct {
 	CandidatePlayerID uint64
 	MutualFriends     uint32
@@ -115,8 +123,9 @@ func recommendExcludeClause(col string, exclude []uint64) (string, []any) {
 // logic/recommend.go 会用 RecommendRandom 兜底补足。有配置上限的排除类(已是我的好友 / 我拉黑的 / 两个方向的 pending /
 // 调用方 exclude)合计不超过窗口预算(推导见 RecommendAnchorWindow,config 包有对账测试),所以偏少只可能来自没有配置
 // 上限的"拉黑了我的人"扎堆在排名头部、超出上限的历史行,或上限被调到超出预算。返回的候选永远满足全部排除条件、不重复;
-// 偏少只影响数量,外加一处显示上的副作用:此时兜底补进来的人可能是窗口之外的 FOF,他们的共同好友数显示为 0
-// (见 RecommendCandidate)。2026-10-08 逐库比对(按 (id, mutual)):候选不多于 W 时,结果与"不设窗口、对每个 FOF 行做排除"的
+// 偏少只影响数量。此时兜底补进来的人可能是窗口之外的 FOF;兜底那条查询会给他们数出真实的共同好友数
+// (见 RecommendCandidate 与 recommendAnchor 第 6 条),所以客户端看到的数字仍然是对的。
+// 2026-10-08 逐库比对(按 (id, mutual)):候选不多于 W 时,结果与"不设窗口、对每个 FOF 行做排除"的
 // 09-29 版逐行相同(friend_explain_scratch 五个 me、测试夹具、对抗库);候选多于 W 时(3.7 万个合格候选的最坏库、
 // 3,601 个候选的聚簇库),新结果是旧结果的子集、共同好友数逐人相同,截断档之上各档的候选集合逐档相同。
 //
@@ -213,6 +222,10 @@ func recommendExcludeClause(col string, exclude []uint64) (string, []any) {
 //     friend_block / friend_request 三表全扫(测试夹具 56,703 次读,随三张表的总行数增长)。部署不要打开 hypergraph 优化器。
 //   - TiDB 不认 SEMIJOIN 提示(警告 8061 后忽略),认 STRAIGHT_JOIN。2026-10-01 在 v8.5.2 上核对过结果语义
 //     (窗口饱和时返回空、打散键内外一致、同数换序);计划与读数要在迁移时按它自己的重新核对。
+//     2026-10-09 核对了计划:统计新鲜时内层只读 friend 的 F+R 行,五条排除只对窗口内 ≤ W 人做(排除表很小时会直接
+//     扫整张小表);但 STRAIGHT_JOIN 在 TiDB 上只定连接顺序、不定连接算法 —— 统计低估表规模时 b_in / r_in / f2 会变成
+//     对大表的整表扫描。迁移到 TiDB 之前要先加
+//     它自己的提示,做法与实测数字登记在 docs/handoff/friend-handoff-20260920.md §9.5 第 12 条。
 //
 // 沿革:2026-09-28 评审在对抗库上实测最初的写法(两条 OR 形 NOT EXISTS + 好友 NOT IN):friend_request 那条被做成
 // "每个 FOF 行按 status=1 扫一遍全服 pending",9,215,314 次读、4.6–5.1 s,超过 RPC 超时(测试夹具上约 930 万次)。
@@ -291,7 +304,8 @@ func recommendByMutualStatement(playerID uint64, exclude []uint64, limit uint32)
 // 1 + 200 + 200 + 50 + 200 + 64 + 20 = 735。按 754 算只会让 config 包那条对账测试比实际早 19 个名额变红,不会漏判。
 // MaxFriends 调到 config 包允许的天花板 300 时,同一算法是 854,仍在 1024 之内。
 //
-// 代价随 W 线性,但系数取决于派生表生产窗口时选了哪种计划 —— 由采样统计决定,同一份数据上两种都会出现:
+// 代价随 W 线性,但系数取决于派生表生产窗口时选了哪种计划 —— 由采样统计决定,同一份数据上两种都会出现
+// (下面的读数都不含 2026-10-09 加的共同好友子查询:它与 W 无关,每返回一行另加 2F+1 次,见 recommendAnchor 第 6 条):
 //   - 跳跃扫描(EXPLAIN ANALYZE 显示 Covering index skip scan for deduplication):窗口生产 W+2 次读
 //     (W+1 次定位 + 1 次 read_last),单次调用典型 ≈ 2.1×W 次 Handler 读(约 3 ms)。
 //     窗口里全是被排除者时 ≤ 7×W+3 = 窗口生产 W+2 + 物化表扫描 W+1 + 点查 5×W。嵌套循环反连接在候选命中第一条
@@ -358,8 +372,8 @@ func (r *FriendRepo) RecommendRandom(ctx context.Context, playerID uint64, exclu
 }
 
 // recommendAnchor 取 pivot 起按 player_id 升序的前 RecommendAnchorWindow(W)个去重 id 作为窗口,
-// 在窗口里做四类排除 + 调用方 exclude,按 id 升序返回前 limit 个。mutual 恒填 0(随机候选没有算共同好友数,
-// 为它再做一次 FOF 统计等于把兜底路径的开销抬到与主路径相同)。
+// 在窗口里做四类排除 + 调用方 exclude,按 id 升序返回前 limit 个,并给每个**返回的**候选数出与我的共同好友数
+// (选择列表里的标量子查询,见第 6 条;不是对整个窗口再做一遍 FOF 统计)。
 //
 // SQL(recommendAnchorBaseSQL)的每一处写法都是承重的,改之前先读完:
 //
@@ -390,10 +404,51 @@ func (r *FriendRepo) RecommendRandom(ctx context.Context, playerID uint64, exclu
 //     100 万边)和"2 万人拉黑我"的对抗库上,计划都**仍是**逐行主键点查,只是 possible_keys 多出二级索引
 //     (如 b_in 的 idx_blocked_player)—— 没有实测到退化。FORCE INDEX 留作防线:防统计信息变化后优化器
 //     改用二级索引去建排除集;上面那个计划守卫用例用 possible_keys == PRIMARY 的断言钉住它。
-//     TiDB 不认 SEMIJOIN 提示(警告 8061 后忽略;v8.5.2 上实测计划仍有界),迁移时要按它自己的计划重新核对。
+//     TiDB 不认 SEMIJOIN 提示(警告 8061 后忽略)。2026-10-09 在 v8.5.2 上重新核对:统计新鲜、排除表明显大于窗口时,
+//     b_in / r_in 是按候选的主键批量点查(≤ W 次);排除表小(实测 1 万行的 friend_block)时统计新鲜也会直接扫整张表。
+//     两者都是代价估算的结果、不是 SQL 结构保证的 —— 统计低估表规模时,大表上的 b_in / r_in 同样会变成整表扫描。
+//     TiDB 也没有跳跃扫描,窗口生产比 MySQL 贵。迁移到 TiDB 之前要先加它自己的提示,做法与实测数字登记在
+//     docs/handoff/friend-handoff-20260920.md §9.5 第 12 条。
+//  6. **共同好友数是选择列表里的相关标量子查询,只对返回的行求值**(2026-10-09 加;此前恒填 0,见 RecommendCandidate)。
+//     m1 是 `player_id = me` 的主键前缀 ref(我的 F 个好友 x),m2 按 (c.player_id, x) 做完整主键单行点查:数的是
+//     "我的好友列表与候选的好友列表的交集"。好友边双向成对时,它与 RecommendByMutual 数的 (我, x)、(x, 候选) 是同一个数
+//     (RecommendByMutual 的上界推导同样假定成对);为什么不照抄那两条边,见下面 (b)。
+//     每返回一行多 2F+1 次 Handler 读(1 次定位 + F 次 next + F 次点查),整条查询多 limit×(2F+1)。2026-10-09 实测:
+//     limit=20 时 F=16 / 20 / 30 / 300 依次多 660 / 820 / 1,220 / 12,020 次;F=20 时 limit=1 / 5 只多 41 / 205 次。
+//     两处写法是承重的:
+//     (a) **外层 ORDER BY 不能引用 mutual**(例如想把兜底结果按共同好友数降序排)。排序键一旦依赖子查询,它就得对
+//     窗口里每个合格者都求值之后才能排序,代价从 limit×(2F+1) 变成 W×(2F+1)(F=300 时约 61.5 万次)。实测 300 人的
+//     窗口、F=30(exclude 是自己加 1 个窗口内的候选):1,932 → 19,956 次;exclude 只有自己时是 20,022 次。
+//     现在按 c.player_id 排:优化器先给物化窗口排序、逐行做反连接、凑够 limit 即停,
+//     子查询只在一行被送出时才求值。TestRecommendAnchor_CountsRealMutualFriendsForOutputRowsOnly 的读数断言守这一点。
+//     (b) **m2 的主键前缀必须是候选(`m2.player_id = c.player_id`),不要"对齐"成 RecommendByMutual 的 f2 那样按我的好友
+//     去连(`m2.player_id = m1.friend_player_id AND m2.friend_player_id = c.player_id`)**。两种写法在 MySQL 上计划同形、
+//     读数相同(都是 m1 前缀 ref + m2 完整主键点查),在成对的数据上结果逐行相同,回归测不出差别(只有单独冷跑时的页读
+//     不同,见下面"页读");真正的差别在 TiDB。TiDB 把这条子查询做成
+//     对每个返回行执行一次的 Apply,相关列 c.player_id 只有落在索引前缀上才会被拿去定位。2026-10-09 在 v8.5.2 上实测
+//     (4,400 人、每人 200 个好友、88 万条边,统计新鲜,limit=20):按候选连,m1 / m2 各读 4,000 行(每返回一行读我的
+//     200 行 + 候选的 200 行),整条约 0.1 s;按我的好友连,m2 变成每返回一行全扫一遍 friend —— 17,600,000 行,首次执行 13.6 s。
+//     库小的时候不全扫,但每返回一行要读我全部好友的全部出边(F=30 的夹具:13,200 行对 40 行)。统计声称空表、统计停在
+//     只有 60 行两种陈旧状态下,按候选连都仍然只读前缀,结果与 MySQL 逐行相同。
+//     这样写还有一个好处:MySQL 上不论连接顺序如何,m1 / m2 能走的只有主键前缀或完整主键。去掉 STRAIGHT_JOIN 后优化器
+//     可能改由 m2(候选的好友前缀)驱动、m1 点查,同样有界、结果相同(F=30 的夹具:统计新鲜 812 次、n_rows = 0 被重读的
+//     状态 1,831 次;保留时 1,932 / 2,951 次;n_diff = 0 的状态下去不去计划都一样)。STRAIGHT_JOIN 与两处
+//     FORCE INDEX (PRIMARY) 留着,是为了让代价只取决于我自己的好友数、计划不随统计摆动;计划守卫用例断言 m1 / m2 的
+//     访问方式,并断言 m2 的 ref 以 c.player_id 开头(防有人把连接条件改回上面那种)。
+//     另外留意占位符:m1 的 `player_id = ?` 是整条语句的第一个(选择列表在 FROM 之前),见 recommendAnchorStatement。
+//     页读:m1 读我自己的主键前缀(几页),m2 的点查落在**候选自己**的主键前缀上 —— 正是本条查询生产窗口时刚读过的
+//     叶子页,所以子查询不带来新的冷页。2026-10-09 实测(MySQL 26.7.0,innodb_buffer_pool_size = 128 MB;F=300、每个好友
+//     300 条边,limit=20,每次测量前把整个库挤出 buffer pool,测了两轮;耗时是本机数字):单独冷跑 14,171 次读、
+//     186 次页读、约 0.11–0.12 s —— 页读与恒填 0 的旧写法相同(2,151 次读、186 次页读、约 0.10–0.11 s);
+//     全热 0 次页读、23–40 ms(旧写法 11–20 ms)。按我的好友去连的写法在同一个库上单独冷跑是 437–439 次页读、约 0.23 s
+//     (多读了我全部好友的页),紧跟在 RecommendByMutual 之后跑时两种写法都是 177 次。
+//     "不带来新的冷页"的适用范围:该库窗口里的候选每人 42–57 条边,主键前缀不跨叶子页。候选好友多到前缀跨页、而窗口
+//     生产走跳跃扫描(只碰每人前缀的第一页)时,每返回一行至多再读它前缀余下的一两页,合计几十页 —— 这一句是推算,没有实测。
 //
-// 上界(与表规模无关):Handler 读 ≤ 窗口生产 + (W+1)(物化表扫描)+ 5×W(点查),外加 ≤ W 行的内存排序。
-// 窗口生产随计划而变(见 RecommendAnchorWindow 的"代价"):跳跃扫描下 ≤ W+2,整条上界 7×W+3 = 7,171;
+// 上界(与表规模无关):Handler 读 ≤ 窗口生产 + (W+1)(物化表扫描)+ 5×W(点查)+ limit×(2F+1)(第 6 条的共同好友
+// 子查询),外加 ≤ W 行的内存排序。下面"7×W+3"与 09-28 的实测读数都**不含**最后一项(当时恒填 0);含它时每返回一行
+// 另加 2F+1。
+// 窗口生产随计划而变(见 RecommendAnchorWindow 的"代价"):跳跃扫描下 ≤ W+2,前三项合计 7×W+3 = 7,171;
 // 范围扫描下按窗口里 W 个人的出边数计(最坏约 W×MaxFriends),7×W+3 **不是**上界 —— 例如下一段那个
 // 5 万玩家 / 100 万边的库,pivot=1049629、me=1049999 时优化器选了范围扫描(窗口里只有 371 人、每人 20 条边),
 // 窗口生产就读了 7,420 条出边,合计 7,898 次。
@@ -411,7 +466,11 @@ func (r *FriendRepo) recommendAnchor(ctx context.Context, playerID uint64, exclu
 
 // recommendAnchorBaseSQL 是 recommendAnchor 的主体;调用方 exclude 与 ORDER BY / LIMIT 由
 // recommendAnchorStatement 拼在后面。每一处写法为什么不能动,见 recommendAnchor 的注释。
-const recommendAnchorBaseSQL = `SELECT c.player_id, 0 AS mutual
+const recommendAnchorBaseSQL = `SELECT c.player_id,
+       (SELECT COUNT(*) FROM friend m1 FORCE INDEX (PRIMARY)
+        STRAIGHT_JOIN friend m2 FORCE INDEX (PRIMARY)
+                ON m2.player_id = c.player_id AND m2.friend_player_id = m1.friend_player_id
+        WHERE m1.player_id = ?) AS mutual
 FROM (SELECT DISTINCT player_id FROM friend FORCE INDEX (PRIMARY)
       WHERE player_id >= ?
       ORDER BY player_id
@@ -432,13 +491,17 @@ WHERE c.player_id <> ?
 // TestRecommendAnchor_PlanIsPerRowPrimaryKeyLookups 对它的产物做 EXPLAIN,保证计划守卫测的与生产跑的是同一份文本。
 //
 // 参数顺序与 ? 的出现顺序一一对应:
-// pivot → 窗口 W → playerID ×6(<> 自排除、f、b_out、b_in、r_out、r_in)→ exclude... → limit。
+// playerID(选择列表里数共同好友的 m1 前缀)→ pivot → 窗口 W
+// → playerID ×6(<> 自排除、f、b_out、b_in、r_out、r_in)→ exclude... → limit。
+// 第一个 playerID 排在 pivot 之前,是因为选择列表在 SQL 文本里先于 FROM 出现。它与 pivot 对调不会报错(都是 BIGINT):
+// m1 拿 pivot 当 me 去数、窗口改从 me 的 id 起扫 —— 返回的 id 可能照样对,数字是错的
+// (TestRecommendAnchor_HonorsPivotExcludeAndLimit 里有这个反例)。
 func recommendAnchorStatement(playerID uint64, exclude []uint64, pivot uint64, limit uint32) (string, []any) {
 	excludeClause, excludeArgs := recommendExcludeClause("c.player_id", exclude)
 	query := recommendAnchorBaseSQL + excludeClause + "\nORDER BY c.player_id\nLIMIT ?"
-	args := make([]any, 0, 8+len(excludeArgs)+1)
+	args := make([]any, 0, 9+len(excludeArgs)+1)
 	// 两个 LIMIT 都显式转 int64,理由同 RecommendByMutual:给驱动一个原生支持的类型。
-	args = append(args, pivot, int64(RecommendAnchorWindow),
+	args = append(args, playerID, pivot, int64(RecommendAnchorWindow),
 		playerID, playerID, playerID, playerID, playerID, playerID)
 	args = append(args, excludeArgs...)
 	args = append(args, int64(limit))
@@ -460,8 +523,8 @@ func (r *FriendRepo) scanRecommendCandidates(ctx context.Context, kind string, p
 	var candidates []RecommendCandidate
 	for rows.Next() {
 		var c RecommendCandidate
-		// MutualFriends 扫成 uint32 是安全的:它的上界是查询者的好友数,受 Friend.MaxFriends
-		// 封顶(默认 200);random 路径更是常量 0。
+		// MutualFriends 扫成 uint32 是安全的:两条路径数的都是"我的好友里有几个也是他的好友",
+		// 上界是查询者的好友数,受 Friend.MaxFriends 封顶(默认 200)。
 		if err := rows.Scan(&c.CandidatePlayerID, &c.MutualFriends); err != nil {
 			return nil, fmt.Errorf("scan recommend %s for player %d: %w", kind, playerID, err)
 		}

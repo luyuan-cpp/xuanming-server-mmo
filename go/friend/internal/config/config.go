@@ -165,7 +165,8 @@ type FriendConf struct {
 	RecommendDefaultLimit uint32 `json:",default=10"`
 
 	// RecommendMaxLimit:RecommendFriends 的 limit 上限,超出钳到它。
-	// 它只线性影响单请求的返回条数、random 兜底要凑的人数与在线状态查询的 key 数;推荐里最贵的
+	// 它只线性影响单请求的返回条数、random 兜底要凑的人数(连同给这些人各数一次共同好友的读数,
+	// 每人 2×好友数+1 次,见 data.recommendAnchor)与在线状态查询的 key 数;推荐里最贵的
 	// 二度关系(mutual)查询开销由 MaxFriends² 决定,不由它决定(见 maxFriendsCeiling)。
 	RecommendMaxLimit uint32 `json:",default=20"`
 
@@ -399,6 +400,9 @@ func (c *Config) Validate() error {
 // 不做成配置项:它封的是单请求的返回条数,连带 random 兜底要凑的人数与在线状态查询的 key 数(都随它线性增长),
 // 它还进 data.RecommendAnchorWindow 的窗口预算。它**不**决定推荐的最坏开销:mutual 召回内层的 FOF 行数由
 // MaxFriends² 决定,外层的排除点查由窗口封顶,limit 不进读数上界,见 maxFriendsCeiling。
+// 2026-10-09 起 random 兜底给每个返回的候选数一次共同好友,读数是 limit ×(2×好友数+1):这是 limit 唯一进读数
+// **上界**的地方(排除点查在上界里按整个窗口 5W 计,与 limit 无关),本值与 maxFriendsCeiling 都取满时
+// 20 × 601 = 12,020 次,比 mutual 的约 27 万次小一个数量级,上面那句话不变。
 const recommendMaxLimitCeiling uint32 = 20
 
 // maxFriendsCeiling 是 Friend.MaxFriends 的硬天花板。不做成配置项:它不是运维旋钮,而是"单次推荐的最坏开销
@@ -418,7 +422,9 @@ const recommendMaxLimitCeiling uint32 = 20
 //     上面那条读数上界成立;470 起临时表落盘,开销不再有这条式子兜底。
 //   - random 兜底的窗口生产最坏约 W × MaxFriends 次索引读(见 data.RecommendAnchorWindow 的"代价"),300 时约 31 万次;
 //     与 mutual 的 27 万次合计不到 60 万次读,给冷缓存(排除表大于 buffer pool 时 mutual 最坏约 1 s,见
-//     data.RecommendByMutual 的实测表)与在线状态查询留足余量。
+//     data.RecommendByMutual 的实测表)与在线状态查询留足余量。2026-10-09 起兜底还给返回的候选各数一次共同好友,
+//     300 时至多再加 12,020 次(见 recommendMaxLimitCeiling)。把兜底的物化表扫描与排除点查(W+1 + 5W = 6,145)也算上,
+//     两条查询的读数上界合计 307,200 + 6,145 + 12,020 + 276,147 = 601,512 —— 约 60 万,量级没有变。
 //   - MaxFriends 也在 data.RecommendAnchorWindow 的窗口预算里:300 时预算是 854,仍在 1024 之内。
 //
 // 沿革:2026-09-29 定这个值时 mutual 还是"每个 FOF 行五次点查"(≤ 8R + 2F + 2 + limit;300 时 718,502 次读、
