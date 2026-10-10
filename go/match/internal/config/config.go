@@ -90,7 +90,9 @@ type Config struct {
 	TableFingerprintMode string `json:",default=warn,options=off|warn|enforce"`
 
 	// PveTeamSizeByConfigId:PVE 组队各 battle_config_id(DungeonTable id)
-	// 的凑满人数。一期临时配置 —— 人数权威来源是 DungeonTable.max_team_size,
+	// 的队伍人数上限。排队按人数档凑单(JoinQueueRequest.team_size,1..上限,不填 = 上限;
+	// docs/design/pve-team-size-matching.md),整队开战按它判人数是否超编。
+	// 一期临时配置 —— 人数权威来源是 DungeonTable.max_team_size,
 	// Go 侧尚无表管理器,待接导表数据后改为查表(backlog P2-05)。
 	// yaml map 键是字符串(与 scene_manager 的 WorldChannelCountByConfId 同 workaround)。
 	// 组队整队开战(ClientPlayerTeam.StartTeamMatch)也用它判副本人数上限,未配置
@@ -189,8 +191,8 @@ func (c *Config) RatingDrawRoundCapFor(configId uint32) uint32 {
 	return c.RatingDrawRoundCap
 }
 
-// PveTeamSizeFor 返回 battle_config_id 对应的 PVE 组队凑满人数;
-// 未配置返回 0(调用方按"该副本未开放组队"拒绝)。
+// PveTeamSizeFor 返回 battle_config_id 对应的 PVE 组队人数上限(未按引擎每队上限收口,
+// 收口在 logic.requiredPlayers);未配置返回 0(调用方按"该副本未开放组队"拒绝)。
 func (c *Config) PveTeamSizeFor(configId uint32) uint32 {
 	if c.PveTeamSizeByConfigId == nil {
 		return 0

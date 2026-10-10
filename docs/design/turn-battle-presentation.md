@@ -115,11 +115,11 @@ BattleScreen(已有):改为只负责命令环/回合计时/目标选择;单位�
   - 已知余项(minor):cast 脚底光晕贴画布底边被硬切;源立绘裁在 850 框内;怪物命中帧 index 4 vs 客户端默认 HitFrame 3;命令环右下安全边距;角色卡等级文字被裁。
 ## 6.1 行动窗口 vs 演出时长(跨端契约,2026-09-03 定)
 
-服务端 `BattleRoomManager::ArmRoundTimer` 的行动收集窗口 = `kRoundDurationMs`(手动局)或 `kAutoRoundIntervalMs = 2000ms`(全员自动,D13),
+服务端 `BattleRoomManager::ArmRoundTimer` 的行动收集窗口 = `kRoundDurationMs`(手动局)或 `kAutoRoundIntervalMs = 2000ms` 起(全员自动,D13;2026-10-10 起出手单位超过 8 个时按每单位 250ms 放宽,见 pve-team-size-matching.md §2.2),
 `action_deadline_ms` 随 `BattleStartS2C` / `TurnResultS2C` 下发。**这个窗口不含客户端演出时长** —— 一回合多目标群攻的演出可能 4~6s,
 远超自动局 2s 的节奏。
 
-**契约(客户端负责压缩,服务端不改)**:
+**契约(客户端负责压缩,服务端不改;2026-10-10 补:服务端只按出手单位数放宽全自动间隔,压缩与跳过的判定仍在客户端)**:
 - 客户端按 `PlaybackBudget` 计算预算 `budget = action_deadline_ms − now − 输入余量`(手动 2.5s / 自动·观战 0.3s),
   取 `speed = clamp(plan.TotalSeconds / budget, 基础倍率(自动 1.5), 6x)`;`budget < 0.6s` 或 6x 仍塞不下 → 直接 `Skip()` 跳到终态。
 - `action_deadline_ms == 0`(无窗口)或 `State.Outcome` 已终局时,完整播放不压缩(末回合与结算要看清)。

@@ -21,6 +21,7 @@ public:
 
     uint64_t GetCooldownDurationMs(uint32_t cooldownTableId) const override;
     std::vector<uint32_t> GetDungeonMonsterIds(uint32_t dungeonTableId) const override;
+    uint32_t GetDungeonMonstersPerPlayer(uint32_t dungeonTableId) const override;
 
     double GetSkillDamage(uint32_t skillTableId, double casterLevel) override;
     double GetBuffHealthRegeneration(uint32_t buffTableId, double level, double lostHealth) override;

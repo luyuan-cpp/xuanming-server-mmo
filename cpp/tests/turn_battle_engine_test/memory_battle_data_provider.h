@@ -60,6 +60,14 @@ public:
         dungeonMonsterIds[dungeonTableId] = std::move(monsterIds);
     }
 
+    // 怪物只数随人数放大的口径(见 BattleDataProvider::GetDungeonMonstersPerPlayer)。
+    // **缺省 0 = 怪物组原样生成**,与生产实现(返回怪物组只数 = 每人一整组)不同:
+    // 既有用例都是"手写怪物组 + 手算回合数 / 奖励",让它们跟着人数变会把断言全部作废。
+    // 生产口径由 table_battle_data_provider_test.cpp 的契约用例钉住。
+    void SetDungeonMonstersPerPlayer(uint32_t dungeonTableId, uint32_t monstersPerPlayer) {
+        dungeonMonstersPerPlayer[dungeonTableId] = monstersPerPlayer;
+    }
+
     void SetSkillDamage(uint32_t skillTableId, double damage) {
         skillDamageValues[skillTableId] = damage;
     }
@@ -124,6 +132,11 @@ public:
         return it == dungeonMonsterIds.end() ? std::vector<uint32_t>{} : it->second;
     }
 
+    uint32_t GetDungeonMonstersPerPlayer(uint32_t dungeonTableId) const override {
+        const auto it = dungeonMonstersPerPlayer.find(dungeonTableId);
+        return it == dungeonMonstersPerPlayer.end() ? 0 : it->second;
+    }
+
     double GetSkillDamage(uint32_t skillTableId, double casterLevel) override {
         lastSkillDamageLevel = casterLevel;
         const auto it = skillDamageValues.find(skillTableId);
@@ -157,6 +170,7 @@ private:
     std::map<uint32_t, ItemTable> itemRows;
     std::map<uint32_t, uint64_t> cooldownDurations;
     std::map<uint32_t, std::vector<uint32_t>> dungeonMonsterIds;
+    std::map<uint32_t, uint32_t> dungeonMonstersPerPlayer;
     std::map<uint32_t, double> skillDamageValues;
     std::map<uint32_t, double> skillDamagePerLevel;
     double lastSkillDamageLevel = 0.0;

@@ -96,6 +96,7 @@ python tools/scripts/gen_docs_index.py
 
 - [battle-art-prompts.md](design/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
 - [battle-transport-decision.md](design/battle-transport-decision.md) — battle 节点传输选型定谳(gRPC vs muduo TCP RPC vs Go)
+- [pve-team-size-matching.md](design/pve-team-size-matching.md) — PVE 人数档匹配:人越多怪越多
 - [session-extractability-mmo-slg.md](design/session-extractability-mmo-slg.md) — 「战斗抽出去」这套做法能套到哪些玩法:MOBA / MMO / SLG 定谳
 - [turn-based-battle-server.md](design/turn-based-battle-server.md) — 回合制战斗服设计(turn-based battle server)
 - [turn-battle-gap-closure.md](design/turn-battle-gap-closure.md) — 回合制战斗缺口收口 G1–G9(2026-09-17)

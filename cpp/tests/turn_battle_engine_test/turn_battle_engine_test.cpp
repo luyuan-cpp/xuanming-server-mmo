@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <random>
@@ -916,6 +917,224 @@ TEST(TurnBattleEngineTest, InitializeEnforcesTeamSizeLimit) {
             AddPlayer(request, kPlayerA + offset, 0, 1000, 1000, 0, 100, 0, 120);
         }
         EXPECT_TRUE(engine.Initialize(request));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PVE 怪物只数随队伍人数(docs/design/pve-team-size-matching.md §2)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+struct SpawnedMonster {
+    uint64_t actorId;
+    uint32_t monsterTableId;
+    uint32_t formationSlot;
+};
+
+// 本局全部怪物,按 actor_id 升序(= 生成序:actor_id 是 kMonsterActorIdBase + 生成序号)
+std::vector<SpawnedMonster> SpawnedMonsters(const BattleStateS2C& state) {
+    std::vector<SpawnedMonster> monsters;
+    for (const auto& actor : state.actors()) {
+        if (actor.actor_type() == BATTLE_ACTOR_TYPE_MONSTER) {
+            monsters.push_back({actor.actor_id(), actor.monster_table_id(), actor.formation_slot()});
+        }
+    }
+    std::sort(monsters.begin(), monsters.end(),
+              [](const SpawnedMonster& lhs, const SpawnedMonster& rhs) { return lhs.actorId < rhs.actorId; });
+    return monsters;
+}
+
+constexpr uint32_t kScaledMonsterX = 7101;
+constexpr uint32_t kScaledMonsterY = 7102;
+
+// 怪物组 [X, Y] + 每人 monstersPerPlayer 只
+std::shared_ptr<MemoryBattleDataProvider> MakeScaledMonsterProvider(uint32_t monstersPerPlayer) {
+    auto provider = MakeProvider();
+    provider->AddMonster(kScaledMonsterX).set_health(100);
+    provider->AddMonster(kScaledMonsterY).set_health(100);
+    provider->SetDungeonMonsters(kDungeonConfig, {kScaledMonsterX, kScaledMonsterY});
+    provider->SetDungeonMonstersPerPlayer(kDungeonConfig, monstersPerPlayer);
+    return provider;
+}
+
+}  // namespace
+
+// 每人 1 只:N 人对 N 只怪(1..队伍上限),种类按怪物组顺序循环取;局内号与阵位都按生成序连续,不撞号
+TEST(TurnBattleEngineTest, PveMonsterCountFollowsTeamSize) {
+    for (uint32_t teamSize = 1; teamSize <= turnbattle::kMaxBattleTeamSize; ++teamSize) {
+        TurnBattleEngine engine(MakeScaledMonsterProvider(1));
+        // 客户端 1 人档发 PVE_SOLO;PVE_TEAM + team_size=1、一人队整队开战送来的是 1 人的 PVE_TEAM。
+        // 两种模式同一口径(1 人的 PVE_TEAM 由下一条用例覆盖)
+        const uint32_t matchMode =
+            teamSize == 1 ? turnbattle::kMatchModePveSolo : turnbattle::kMatchModePveTeam;
+        auto request = MakeRequest(9600 + teamSize, matchMode, 1);
+        for (uint32_t offset = 0; offset < teamSize; ++offset) {
+            AddPlayer(request, kPlayerA + offset, 0, 1000, 1000, 20, 10, 0, 120);
+        }
+        ASSERT_TRUE(engine.Initialize(request)) << "team_size=" << teamSize;
+
+        const auto monsters = SpawnedMonsters(engine.BuildStateSnapshot());
+        ASSERT_EQ(monsters.size(), static_cast<size_t>(teamSize)) << "team_size=" << teamSize;
+        for (uint32_t index = 0; index < teamSize; ++index) {
+            EXPECT_EQ(monsters[index].actorId, kMonsterId + index) << "team_size=" << teamSize;
+            EXPECT_EQ(monsters[index].monsterTableId, index % 2 == 0 ? kScaledMonsterX : kScaledMonsterY)
+                << "team_size=" << teamSize << " index=" << index;
+            EXPECT_EQ(monsters[index].formationSlot, index) << "team_size=" << teamSize;
+        }
+    }
+}
+
+// 生产口径「每人一整组」(每人只数 = 怪物组只数):单人打到的就是怪物组本身,多一个人多一组
+TEST(TurnBattleEngineTest, PveWholeGroupPerPlayerRepeatsGroupForEachPlayer) {
+    for (uint32_t teamSize = 1; teamSize <= 3; ++teamSize) {
+        TurnBattleEngine engine(MakeScaledMonsterProvider(2));  // 怪物组 [X, Y] 共 2 只
+        auto request = MakeRequest(9620 + teamSize, turnbattle::kMatchModePveTeam, 1);
+        for (uint32_t offset = 0; offset < teamSize; ++offset) {
+            AddPlayer(request, kPlayerA + offset, 0, 1000, 1000, 20, 10, 0, 120);
+        }
+        ASSERT_TRUE(engine.Initialize(request)) << "team_size=" << teamSize;
+
+        const auto monsters = SpawnedMonsters(engine.BuildStateSnapshot());
+        ASSERT_EQ(monsters.size(), static_cast<size_t>(teamSize) * 2) << "team_size=" << teamSize;
+        for (uint32_t index = 0; index < teamSize * 2; ++index) {
+            EXPECT_EQ(monsters[index].monsterTableId, index % 2 == 0 ? kScaledMonsterX : kScaledMonsterY)
+                << "team_size=" << teamSize << " index=" << index;
+            EXPECT_EQ(monsters[index].formationSlot, index) << "team_size=" << teamSize;
+        }
+    }
+}
+
+// 活动对局(帮会同道历练等,请求带 activity_context)不按人数放大:活动的难度与奖励口径是按固定一组怪定的
+TEST(TurnBattleEngineTest, PveActivityBattleKeepsMonsterGroupUnscaled) {
+    TurnBattleEngine engine(MakeScaledMonsterProvider(2));
+    auto request = MakeRequest(9630, turnbattle::kMatchModePveTeam, 1);
+    request.mutable_activity_context()->set_kind(BATTLE_ACTIVITY_KIND_GUILD_TRIAL);
+    for (uint32_t offset = 0; offset < 3; ++offset) {
+        AddPlayer(request, kPlayerA + offset, 0, 1000, 1000, 20, 10, 0, 120);
+    }
+    ASSERT_TRUE(engine.Initialize(request));
+
+    // 同样的数据供给下,不带活动上下文的三人局是 3 × 2 = 6 只(见上一条用例)
+    const auto monsters = SpawnedMonsters(engine.BuildStateSnapshot());
+    ASSERT_EQ(monsters.size(), 2u);
+    EXPECT_EQ(monsters[0].monsterTableId, kScaledMonsterX);
+    EXPECT_EQ(monsters[1].monsterTableId, kScaledMonsterY);
+}
+
+// 全自动回合间隔:8 个出手单位以内仍是下限 2000ms,再多按每单位 250ms 放宽;
+// 放宽后的预算要让客户端在 6 倍速以内演完(每单位约 0.9s,收尾余量 0.3s,见客户端 PlaybackBudget)
+TEST(TurnBattleEngineTest, AutoRoundIntervalScalesWithActedActorCount) {
+    using turnbattle::AutoRoundIntervalMsFor;
+    EXPECT_EQ(AutoRoundIntervalMsFor(0), turnbattle::kAutoRoundIntervalMs);  // 开局首次装填
+    EXPECT_EQ(AutoRoundIntervalMsFor(8), turnbattle::kAutoRoundIntervalMs);
+    EXPECT_EQ(AutoRoundIntervalMsFor(9), uint64_t{2250});
+    EXPECT_EQ(AutoRoundIntervalMsFor(15), uint64_t{3750});  // 5 人 + 10 怪
+    EXPECT_EQ(AutoRoundIntervalMsFor(20), uint64_t{5000});  // 5 人 + 5 宠 + 10 怪
+    for (size_t actors = 1; actors <= 20; ++actors) {
+        const double budgetSeconds = static_cast<double>(AutoRoundIntervalMsFor(actors)) / 1000.0 - 0.3;
+        EXPECT_LE(0.9 * static_cast<double>(actors) / budgetSeconds, 6.0) << "actors=" << actors;
+    }
+}
+
+// 每人只数为 0 = 怪物组原样生成,人数不影响只数(数据供给接口的契约另一半)
+TEST(TurnBattleEngineTest, PveMonsterGroupStaysFixedWhenMonstersPerPlayerIsZero) {
+    TurnBattleEngine engine(MakeScaledMonsterProvider(0));
+    auto request = MakeRequest(9610, turnbattle::kMatchModePveTeam, 1);
+    for (uint32_t offset = 0; offset < 3; ++offset) {
+        AddPlayer(request, kPlayerA + offset, 0, 1000, 1000, 20, 10, 0, 120);
+    }
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto monsters = SpawnedMonsters(engine.BuildStateSnapshot());
+    ASSERT_EQ(monsters.size(), 2u);
+    EXPECT_EQ(monsters[0].monsterTableId, kScaledMonsterX);
+    EXPECT_EQ(monsters[1].monsterTableId, kScaledMonsterY);
+}
+
+// 只数人头:带宝宝不会让怪物变多(否则带宠等于给自己加怪)
+TEST(TurnBattleEngineTest, PveMonsterCountIgnoresPets) {
+    TurnBattleEngine engine(MakeScaledMonsterProvider(1));
+    auto request = MakeRequest(9611, turnbattle::kMatchModePveSolo, 1);
+    auto* owner = AddPlayer(request, kPlayerA, 0, 1000, 1000, 20, 10, 0, 120);
+    auto* pet = owner->add_pets();
+    pet->set_pet_id(700101);
+    pet->set_owner_player_id(kPlayerA);
+    pet->set_level(10);
+    pet->set_max_health(400);
+    pet->mutable_base_attributes()->set_health(400);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto monsters = SpawnedMonsters(engine.BuildStateSnapshot());
+    ASSERT_EQ(monsters.size(), 1u);
+    EXPECT_EQ(monsters[0].monsterTableId, kScaledMonsterX);
+}
+
+// 放大后的只数压在阵位两排以内:5 人 × 每人 3 只 = 15 → 10 只,超出部分不生成
+TEST(TurnBattleEngineTest, PveScaledMonsterCountCapsAtTwoFormationRows) {
+    TurnBattleEngine engine(MakeScaledMonsterProvider(3));
+    auto request = MakeRequest(9612, turnbattle::kMatchModePveTeam, 1);
+    for (uint32_t offset = 0; offset < turnbattle::kMaxBattleTeamSize; ++offset) {
+        AddPlayer(request, kPlayerA + offset, 0, 1000, 1000, 20, 10, 0, 120);
+    }
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto monsters = SpawnedMonsters(engine.BuildStateSnapshot());
+    ASSERT_EQ(monsters.size(), static_cast<size_t>(turnbattle::kMaxScaledPveMonsterCount));
+    EXPECT_EQ(monsters.back().formationSlot, turnbattle::kMaxScaledPveMonsterCount - 1);
+}
+
+// 打完按人数放大的一组怪:击杀簿逐只记,奖励 = 实际打死的每一只之和(同种怪出现两只就算两份)
+TEST(TurnBattleEngineTest, PveScaledMonstersAllCountTowardRewards) {
+    auto provider = MakeScaledMonsterProvider(1);
+    auto& x = provider->AddMonster(kScaledMonsterX);
+    x.set_health(30);
+    x.set_strength(1);
+    x.set_speed(12);
+    x.set_exp_reward(10);
+    x.set_gold_reward(5);
+    auto& y = provider->AddMonster(kScaledMonsterY);
+    y.set_health(30);
+    y.set_strength(1);
+    y.set_speed(12);
+    y.set_exp_reward(15);
+    y.set_gold_reward(7);
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9613, turnbattle::kMatchModePveTeam, 5);
+    // 三人队 → 怪物 [X, Y, X]。玩家力量 20:普攻 10*(1+2.0)=30,一刀一只
+    for (uint32_t offset = 0; offset < 3; ++offset) {
+        AddPlayer(request, kPlayerA + offset, 0, 1000, 1000, 20, 10, 0, 240);
+    }
+    ASSERT_TRUE(engine.Initialize(request));
+    ASSERT_EQ(SpawnedMonsters(engine.BuildStateSnapshot()).size(), 3u);
+
+    for (int round = 0; round < 30 && engine.Outcome() == BATTLE_OUTCOME_ONGOING; ++round) {
+        // 全员都点当前还活着的第一只(按生成序)。目标先被队友打死时引擎会改选一只活着的敌人,
+        // 所以三只可能在同一回合被各打死一只;下面的断言只看终局的击杀簿与奖励,不依赖回合数
+        uint64_t target = 0;
+        const auto state = engine.BuildStateSnapshot();
+        for (const auto& monster : SpawnedMonsters(state)) {
+            const auto* actor = FindStateActor(state, monster.actorId);
+            if (actor != nullptr && !actor->is_dead()) {
+                target = monster.actorId;
+                break;
+            }
+        }
+        ASSERT_NE(target, 0u);
+        for (uint32_t offset = 0; offset < 3; ++offset) {
+            engine.SubmitAction(kPlayerA + offset, MakeAction(BATTLE_ACTION_ATTACK, target));
+        }
+        engine.ResolveCurrentRound();
+    }
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+
+    // 每个存活成员各得全额(既有组队口径):X、Y、X 三只 = 经验 10+15+10、金币 5+7+5
+    for (uint32_t offset = 0; offset < 3; ++offset) {
+        const auto settlement = engine.BuildSettlement(kPlayerA + offset);
+        EXPECT_EQ(settlement.defeated_monsters_size(), 3) << "player_offset=" << offset;
+        EXPECT_EQ(settlement.exp_gain(), 35u) << "player_offset=" << offset;
+        EXPECT_EQ(settlement.gold_gain(), 17u) << "player_offset=" << offset;
     }
 }
 

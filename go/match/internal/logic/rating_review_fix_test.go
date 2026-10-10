@@ -229,7 +229,7 @@ func TestStarvedAnchorsMatchAfterMaxWait(t *testing.T) {
 	var mu sync.Mutex
 	starved := map[string]float64{}
 	prev := setStarvedAnchorWaitFn
-	setStarvedAnchorWaitFn = func(mode, config string, seconds float64) {
+	setStarvedAnchorWaitFn = func(mode, config, _ string, seconds float64) {
 		mu.Lock()
 		defer mu.Unlock()
 		starved[mode+":"+config] = seconds

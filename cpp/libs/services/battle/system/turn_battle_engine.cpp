@@ -5,6 +5,7 @@
 #include <optional>
 
 #include "data/table_battle_data_provider.h"
+#include "system/battle_result_activity.h"
 #include "system/combat_damage_rules.h"
 #include "muduo/base/Logging.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -28,6 +29,17 @@ namespace {
 // 快照未携带 max_health/max_mana 时的保守回退:以当前值为上限
 uint64_t FallbackMax(uint64_t declaredMax, uint64_t currentValue) {
     return declaredMax > 0 ? declaredMax : currentValue;
+}
+
+// 把副本怪物组按原顺序循环取成 targetCount 只:组 [a,b]、要 3 只 → [a,b,a];要 1 只 → [a]。
+// 前置条件:group 非空(调用方已判)。不消耗 RNG —— 同一副本同一人数永远是同一批怪,回放基线不动
+std::vector<uint32_t> CycleMonsterGroup(const std::vector<uint32_t>& group, uint32_t targetCount) {
+    std::vector<uint32_t> cycled;
+    cycled.reserve(targetCount);
+    for (uint32_t index = 0; index < targetCount; ++index) {
+        cycled.push_back(group[index % group.size()]);
+    }
+    return cycled;
 }
 
 // 百分点 / 等级这类 uint64 的饱和加法。战斗类属性来自另一进程的快照,数值再离谱也只该"封顶",
@@ -286,14 +298,32 @@ bool TurnBattleEngine::InitPets(const CreateBattleRequest& request) {
 bool TurnBattleEngine::InitMonsters(const CreateBattleRequest& request) {
     // 参考等级取玩家侧最高等级(怪物属性表列缺失时的保守基准)
     uint32_t referenceLevel = 1;
+    // 进攻方(team 0)玩家数 = 队伍人数。只数人头:宝宝是玩家带进来的单位,不让怪物跟着变多
+    uint32_t attackerCount = 0;
     for (const auto& snapshot : request.players()) {
         referenceLevel = std::max(referenceLevel, snapshot.level());
+        if (snapshot.team_index() == 0) {
+            ++attackerCount;
+        }
     }
 
     auto monsterIds = dataProvider->GetDungeonMonsterIds(request.battle_config_id());
     if (monsterIds.empty()) {
         // DungeonTable 缺怪物组列:按玩家人数生成默认怪,保证 PVE 一定有对手
         monsterIds.assign(static_cast<size_t>(request.players_size()), 0);
+    } else if (const uint32_t monstersPerPlayer =
+                   dataProvider->GetDungeonMonstersPerPlayer(request.battle_config_id());
+               monstersPerPlayer > 0 && attackerCount > 0 &&
+               !IsActivityBattle(request.activity_context())) {
+        // 活动对局(帮会同道历练等,请求带 activity_context)不放大:活动的难度、胜负与奖励口径是按
+        // 固定一组怪定的(guild-phase2/06-activities.md),人数档只针对普通 PVE(排队 / 整队开战)。
+        // 怪物只数跟队伍人数走(pve-team-size-matching.md §2):怪物组此时是"种类池",
+        // 按顺序循环取够只数。每人只数先按上限夹一次再乘:attackerCount 已被 Initialize 压在
+        // kMaxBattleTeamSize 以内,乘积不会溢出。attackerCount == 0 是分边错误的快照,
+        // 不放大,留给 Initialize 的两侧非空检查拒绝
+        const uint32_t scaledCount =
+            attackerCount * std::min(monstersPerPlayer, kMaxScaledPveMonsterCount);
+        monsterIds = CycleMonsterGroup(monsterIds, std::min(scaledCount, kMaxScaledPveMonsterCount));
     }
 
     uint32_t monsterIndex = 0;

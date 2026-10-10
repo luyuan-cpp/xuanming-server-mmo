@@ -688,11 +688,11 @@ constexpr JoinQueueRequest::ParseTableT_ JoinQueueRequest::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(JoinQueueRequest, _impl_._has_bits_),
       0, // no _extensions_
-      6, 56,  // max_field_number, fast_idx_mask
+      7, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967232,  // skipmap
+      4294967168,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      6,  // num_field_entries
+      7,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -727,7 +727,10 @@ constexpr JoinQueueRequest::ParseTableT_ JoinQueueRequest::InternalGenerateParse
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JoinQueueRequest, _impl_.battle_config_id_), 5>(),
        {48, 5, 0,
         PROTOBUF_FIELD_OFFSET(JoinQueueRequest, _impl_.battle_config_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 team_size = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JoinQueueRequest, _impl_.team_size_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(JoinQueueRequest, _impl_.team_size_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -743,6 +746,8 @@ constexpr JoinQueueRequest::ParseTableT_ JoinQueueRequest::InternalGenerateParse
       {PROTOBUF_FIELD_OFFSET(JoinQueueRequest, _impl_.zone_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 battle_config_id = 6;
       {PROTOBUF_FIELD_OFFSET(JoinQueueRequest, _impl_.battle_config_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 team_size = 7;
+      {PROTOBUF_FIELD_OFFSET(JoinQueueRequest, _impl_.team_size_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -765,7 +770,8 @@ inline constexpr JoinQueueRequest::Impl_::Impl_(
         mode_{static_cast< ::match::MatchMode >(0)},
         map_config_id_{0u},
         zone_id_{0u},
-        battle_config_id_{0u} {}
+        battle_config_id_{0u},
+        team_size_{0u} {}
 
 template <typename>
 constexpr JoinQueueRequest::JoinQueueRequest(::_pbi::ConstantInitialized,
@@ -3107,19 +3113,21 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::JoinQueueRequest, _impl_._has_bits_),
-        9, // hasbit index offset
+        10, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::match::JoinQueueRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::match::JoinQueueRequest, _impl_.mode_),
         PROTOBUF_FIELD_OFFSET(::match::JoinQueueRequest, _impl_.map_config_id_),
         PROTOBUF_FIELD_OFFSET(::match::JoinQueueRequest, _impl_.party_member_ids_),
         PROTOBUF_FIELD_OFFSET(::match::JoinQueueRequest, _impl_.zone_id_),
         PROTOBUF_FIELD_OFFSET(::match::JoinQueueRequest, _impl_.battle_config_id_),
+        PROTOBUF_FIELD_OFFSET(::match::JoinQueueRequest, _impl_.team_size_),
         1,
         2,
         3,
         0,
         4,
         5,
+        6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::JoinQueueResponse, _impl_._has_bits_),
         6, // hasbit index offset
@@ -3275,24 +3283,24 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::match::JoinQueueRequest)},
-        {15, sizeof(::match::JoinQueueResponse)},
-        {24, sizeof(::match::CancelQueueRequest)},
-        {31, sizeof(::match::GetQueueStatusRequest)},
-        {36, sizeof(::match::GetQueueStatusResponse)},
-        {45, sizeof(::match::ChallengePlayerRequest)},
-        {54, sizeof(::match::ChallengePlayerResponse)},
-        {61, sizeof(::match::RespondChallengeRequest)},
-        {70, sizeof(::match::RespondChallengeResponse)},
-        {75, sizeof(::match::ChallengeInviteS2C)},
-        {88, sizeof(::match::ChallengeResultS2C)},
-        {97, sizeof(::match::WatchBattleRequest)},
-        {104, sizeof(::match::WatchBattleResponse)},
-        {111, sizeof(::match::ListWatchableBattlesRequest)},
-        {118, sizeof(::match::ListWatchableBattlesResponse)},
-        {123, sizeof(::match::BattleWatchSummary)},
-        {136, sizeof(::match::SpectateBattleRecord)},
-        {143, sizeof(::match::MatchResult)},
-        {158, sizeof(::match::MatchTeam)},
+        {17, sizeof(::match::JoinQueueResponse)},
+        {26, sizeof(::match::CancelQueueRequest)},
+        {33, sizeof(::match::GetQueueStatusRequest)},
+        {38, sizeof(::match::GetQueueStatusResponse)},
+        {47, sizeof(::match::ChallengePlayerRequest)},
+        {56, sizeof(::match::ChallengePlayerResponse)},
+        {63, sizeof(::match::RespondChallengeRequest)},
+        {72, sizeof(::match::RespondChallengeResponse)},
+        {77, sizeof(::match::ChallengeInviteS2C)},
+        {90, sizeof(::match::ChallengeResultS2C)},
+        {99, sizeof(::match::WatchBattleRequest)},
+        {106, sizeof(::match::WatchBattleResponse)},
+        {113, sizeof(::match::ListWatchableBattlesRequest)},
+        {120, sizeof(::match::ListWatchableBattlesResponse)},
+        {125, sizeof(::match::BattleWatchSummary)},
+        {138, sizeof(::match::SpectateBattleRecord)},
+        {145, sizeof(::match::MatchResult)},
+        {160, sizeof(::match::MatchTeam)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3322,80 +3330,81 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fservice_2eproto[] A
     "\032\033proto/db/proto_option.proto\032\035proto/com"
     "mon/base/empty.proto\032\033proto/common/base/"
     "tip.proto\032 proto/battle/player_battle.pr"
-    "oto\"\245\001\n\020JoinQueueRequest\022\021\n\tplayer_id\030\001 "
+    "oto\"\270\001\n\020JoinQueueRequest\022\021\n\tplayer_id\030\001 "
     "\001(\004\022\036\n\004mode\030\002 \001(\0162\020.match.MatchMode\022\025\n\rm"
     "ap_config_id\030\003 \001(\r\022\034\n\020party_member_ids\030\004"
     " \003(\004B\002\030\001\022\017\n\007zone_id\030\005 \001(\r\022\030\n\020battle_conf"
-    "ig_id\030\006 \001(\r\"e\n\021JoinQueueResponse\022\022\n\nerro"
-    "r_code\030\001 \001(\r\022\024\n\014queue_ticket\030\002 \001(\t\022&\n\rer"
-    "ror_message\030\003 \001(\0132\017.TipInfoMessage\"=\n\022Ca"
-    "ncelQueueRequest\022\021\n\tplayer_id\030\001 \001(\004\022\024\n\014q"
-    "ueue_ticket\030\002 \001(\t\"*\n\025GetQueueStatusReque"
-    "st\022\021\n\tplayer_id\030\001 \001(\004\"r\n\026GetQueueStatusR"
-    "esponse\022 \n\005state\030\001 \001(\0162\021.match.QueueStat"
-    "e\022\036\n\026estimated_wait_seconds\030\002 \001(\r\022\026\n\016que"
-    "ued_seconds\030\003 \001(\r\"_\n\026ChallengePlayerRequ"
-    "est\022\021\n\tplayer_id\030\001 \001(\004\022\030\n\020target_player_"
-    "id\030\002 \001(\004\022\030\n\020battle_config_id\030\003 \001(\r\"W\n\027Ch"
-    "allengePlayerResponse\022\024\n\014challenge_id\030\001 "
-    "\001(\004\022&\n\rerror_message\030\002 \001(\0132\017.TipInfoMess"
-    "age\"R\n\027RespondChallengeRequest\022\021\n\tplayer"
-    "_id\030\001 \001(\004\022\024\n\014challenge_id\030\002 \001(\004\022\016\n\006accep"
-    "t\030\003 \001(\010\"B\n\030RespondChallengeResponse\022&\n\re"
-    "rror_message\030\001 \001(\0132\017.TipInfoMessage\"\213\001\n\022"
-    "ChallengeInviteS2C\022\024\n\014challenge_id\030\001 \001(\004"
-    "\022\025\n\rchallenger_id\030\002 \001(\004\022\027\n\017challenger_na"
-    "me\030\003 \001(\t\022\030\n\020battle_config_id\030\004 \001(\r\022\025\n\rex"
-    "pires_at_ms\030\005 \001(\004\"R\n\022ChallengeResultS2C\022"
-    "\024\n\014challenge_id\030\001 \001(\004\022\020\n\010accepted\030\002 \001(\010\022"
-    "\024\n\014responder_id\030\003 \001(\004\":\n\022WatchBattleRequ"
-    "est\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\tbattle_id\030\002 \001("
-    "\004\"P\n\023WatchBattleResponse\022\021\n\tbattle_id\030\001 "
-    "\001(\004\022&\n\rerror_message\030\002 \001(\0132\017.TipInfoMess"
-    "age\"\?\n\033ListWatchableBattlesRequest\022\021\n\tpl"
-    "ayer_id\030\001 \001(\004\022\r\n\005limit\030\002 \001(\r\"J\n\034ListWatc"
-    "hableBattlesResponse\022*\n\007battles\030\001 \003(\0132\031."
-    "match.BattleWatchSummary\"\216\001\n\022BattleWatch"
-    "Summary\022\021\n\tbattle_id\030\001 \001(\004\022\036\n\004mode\030\002 \001(\016"
-    "2\020.match.MatchMode\022\030\n\020battle_config_id\030\003"
-    " \001(\r\022\024\n\014player_names\030\004 \003(\t\022\025\n\rcreated_at"
-    "_ms\030\005 \001(\004\"Z\n\024SpectateBattleRecord\022*\n\007sum"
-    "mary\030\001 \001(\0132\031.match.BattleWatchSummary\022\026\n"
-    "\016battle_node_id\030\002 \001(\r\"\243\001\n\013MatchResult\022\020\n"
-    "\010match_id\030\001 \001(\t\022\036\n\004mode\030\002 \001(\0162\020.match.Ma"
-    "tchMode\022\025\n\rmap_config_id\030\003 \001(\r\022\031\n\021dungeo"
-    "n_config_id\030\004 \001(\r\022\037\n\005teams\030\005 \003(\0132\020.match"
-    ".MatchTeam\022\017\n\007zone_id\030\006 \001(\r\"3\n\tMatchTeam"
-    "\022\022\n\nteam_index\030\001 \001(\r\022\022\n\nplayer_ids\030\002 \003(\004"
-    "*\263\001\n\tMatchMode\022\032\n\026MATCH_MODE_UNSPECIFIED"
-    "\020\000\022\022\n\016MATCH_MODE_5V5\020\001\022\022\n\016MATCH_MODE_3V3"
-    "\020\002\022\022\n\016MATCH_MODE_1V1\020\003\022\027\n\023MATCH_MODE_PVE"
-    "_SOLO\020\004\022\027\n\023MATCH_MODE_PVE_TEAM\020\005\022\034\n\030MATC"
-    "H_MODE_PVP_CHALLENGE\020\006*\247\001\n\nQueueState\022\033\n"
-    "\027QUEUE_STATE_UNSPECIFIED\020\000\022\026\n\022QUEUE_STAT"
-    "E_QUEUED\020\001\022\027\n\023QUEUE_STATE_MATCHED\020\002\022\025\n\021Q"
-    "UEUE_STATE_READY\020\003\022\030\n\024QUEUE_STATE_ENTERI"
-    "NG\020\004\022\032\n\026QUEUE_STATE_NOT_QUEUED\020\0052\202\006\n\014Mat"
-    "chService\022@\n\tJoinQueue\022\027.match.JoinQueue"
-    "Request\032\030.match.JoinQueueResponse\"\000\0222\n\013C"
-    "ancelQueue\022\031.match.CancelQueueRequest\032\006."
-    "Empty\"\000\022O\n\016GetQueueStatus\022\034.match.GetQue"
-    "ueStatusRequest\032\035.match.GetQueueStatusRe"
-    "sponse\"\000\022R\n\017ChallengePlayer\022\035.match.Chal"
-    "lengePlayerRequest\032\036.match.ChallengePlay"
-    "erResponse\"\000\022U\n\020RespondChallenge\022\036.match"
-    ".RespondChallengeRequest\032\037.match.Respond"
-    "ChallengeResponse\"\000\022<\n\025NotifyChallengeIn"
-    "vite\022\031.match.ChallengeInviteS2C\032\006.Empty\""
-    "\000\022<\n\025NotifyChallengeResult\022\031.match.Chall"
-    "engeResultS2C\032\006.Empty\"\000\022F\n\013WatchBattle\022\031"
-    ".match.WatchBattleRequest\032\032.match.WatchB"
-    "attleResponse\"\000\022R\n\023RequestBattleTicket\022\033"
-    ".RequestBattleTicketRequest\032\034.RequestBat"
-    "tleTicketResponse\"\000\022a\n\024ListWatchableBatt"
-    "les\022\".match.ListWatchableBattlesRequest\032"
-    "#.match.ListWatchableBattlesResponse\"\000\032\005"
-    "\210\250\303\001\001B\021Z\013match/match\230\324a\025b\006proto3"
+    "ig_id\030\006 \001(\r\022\021\n\tteam_size\030\007 \001(\r\"e\n\021JoinQu"
+    "eueResponse\022\022\n\nerror_code\030\001 \001(\r\022\024\n\014queue"
+    "_ticket\030\002 \001(\t\022&\n\rerror_message\030\003 \001(\0132\017.T"
+    "ipInfoMessage\"=\n\022CancelQueueRequest\022\021\n\tp"
+    "layer_id\030\001 \001(\004\022\024\n\014queue_ticket\030\002 \001(\t\"*\n\025"
+    "GetQueueStatusRequest\022\021\n\tplayer_id\030\001 \001(\004"
+    "\"r\n\026GetQueueStatusResponse\022 \n\005state\030\001 \001("
+    "\0162\021.match.QueueState\022\036\n\026estimated_wait_s"
+    "econds\030\002 \001(\r\022\026\n\016queued_seconds\030\003 \001(\r\"_\n\026"
+    "ChallengePlayerRequest\022\021\n\tplayer_id\030\001 \001("
+    "\004\022\030\n\020target_player_id\030\002 \001(\004\022\030\n\020battle_co"
+    "nfig_id\030\003 \001(\r\"W\n\027ChallengePlayerResponse"
+    "\022\024\n\014challenge_id\030\001 \001(\004\022&\n\rerror_message\030"
+    "\002 \001(\0132\017.TipInfoMessage\"R\n\027RespondChallen"
+    "geRequest\022\021\n\tplayer_id\030\001 \001(\004\022\024\n\014challeng"
+    "e_id\030\002 \001(\004\022\016\n\006accept\030\003 \001(\010\"B\n\030RespondCha"
+    "llengeResponse\022&\n\rerror_message\030\001 \001(\0132\017."
+    "TipInfoMessage\"\213\001\n\022ChallengeInviteS2C\022\024\n"
+    "\014challenge_id\030\001 \001(\004\022\025\n\rchallenger_id\030\002 \001"
+    "(\004\022\027\n\017challenger_name\030\003 \001(\t\022\030\n\020battle_co"
+    "nfig_id\030\004 \001(\r\022\025\n\rexpires_at_ms\030\005 \001(\004\"R\n\022"
+    "ChallengeResultS2C\022\024\n\014challenge_id\030\001 \001(\004"
+    "\022\020\n\010accepted\030\002 \001(\010\022\024\n\014responder_id\030\003 \001(\004"
+    "\":\n\022WatchBattleRequest\022\021\n\tplayer_id\030\001 \001("
+    "\004\022\021\n\tbattle_id\030\002 \001(\004\"P\n\023WatchBattleRespo"
+    "nse\022\021\n\tbattle_id\030\001 \001(\004\022&\n\rerror_message\030"
+    "\002 \001(\0132\017.TipInfoMessage\"\?\n\033ListWatchableB"
+    "attlesRequest\022\021\n\tplayer_id\030\001 \001(\004\022\r\n\005limi"
+    "t\030\002 \001(\r\"J\n\034ListWatchableBattlesResponse\022"
+    "*\n\007battles\030\001 \003(\0132\031.match.BattleWatchSumm"
+    "ary\"\216\001\n\022BattleWatchSummary\022\021\n\tbattle_id\030"
+    "\001 \001(\004\022\036\n\004mode\030\002 \001(\0162\020.match.MatchMode\022\030\n"
+    "\020battle_config_id\030\003 \001(\r\022\024\n\014player_names\030"
+    "\004 \003(\t\022\025\n\rcreated_at_ms\030\005 \001(\004\"Z\n\024Spectate"
+    "BattleRecord\022*\n\007summary\030\001 \001(\0132\031.match.Ba"
+    "ttleWatchSummary\022\026\n\016battle_node_id\030\002 \001(\r"
+    "\"\243\001\n\013MatchResult\022\020\n\010match_id\030\001 \001(\t\022\036\n\004mo"
+    "de\030\002 \001(\0162\020.match.MatchMode\022\025\n\rmap_config"
+    "_id\030\003 \001(\r\022\031\n\021dungeon_config_id\030\004 \001(\r\022\037\n\005"
+    "teams\030\005 \003(\0132\020.match.MatchTeam\022\017\n\007zone_id"
+    "\030\006 \001(\r\"3\n\tMatchTeam\022\022\n\nteam_index\030\001 \001(\r\022"
+    "\022\n\nplayer_ids\030\002 \003(\004*\263\001\n\tMatchMode\022\032\n\026MAT"
+    "CH_MODE_UNSPECIFIED\020\000\022\022\n\016MATCH_MODE_5V5\020"
+    "\001\022\022\n\016MATCH_MODE_3V3\020\002\022\022\n\016MATCH_MODE_1V1\020"
+    "\003\022\027\n\023MATCH_MODE_PVE_SOLO\020\004\022\027\n\023MATCH_MODE"
+    "_PVE_TEAM\020\005\022\034\n\030MATCH_MODE_PVP_CHALLENGE\020"
+    "\006*\247\001\n\nQueueState\022\033\n\027QUEUE_STATE_UNSPECIF"
+    "IED\020\000\022\026\n\022QUEUE_STATE_QUEUED\020\001\022\027\n\023QUEUE_S"
+    "TATE_MATCHED\020\002\022\025\n\021QUEUE_STATE_READY\020\003\022\030\n"
+    "\024QUEUE_STATE_ENTERING\020\004\022\032\n\026QUEUE_STATE_N"
+    "OT_QUEUED\020\0052\202\006\n\014MatchService\022@\n\tJoinQueu"
+    "e\022\027.match.JoinQueueRequest\032\030.match.JoinQ"
+    "ueueResponse\"\000\0222\n\013CancelQueue\022\031.match.Ca"
+    "ncelQueueRequest\032\006.Empty\"\000\022O\n\016GetQueueSt"
+    "atus\022\034.match.GetQueueStatusRequest\032\035.mat"
+    "ch.GetQueueStatusResponse\"\000\022R\n\017Challenge"
+    "Player\022\035.match.ChallengePlayerRequest\032\036."
+    "match.ChallengePlayerResponse\"\000\022U\n\020Respo"
+    "ndChallenge\022\036.match.RespondChallengeRequ"
+    "est\032\037.match.RespondChallengeResponse\"\000\022<"
+    "\n\025NotifyChallengeInvite\022\031.match.Challeng"
+    "eInviteS2C\032\006.Empty\"\000\022<\n\025NotifyChallengeR"
+    "esult\022\031.match.ChallengeResultS2C\032\006.Empty"
+    "\"\000\022F\n\013WatchBattle\022\031.match.WatchBattleReq"
+    "uest\032\032.match.WatchBattleResponse\"\000\022R\n\023Re"
+    "questBattleTicket\022\033.RequestBattleTicketR"
+    "equest\032\034.RequestBattleTicketResponse\"\000\022a"
+    "\n\024ListWatchableBattles\022\".match.ListWatch"
+    "ableBattlesRequest\032#.match.ListWatchable"
+    "BattlesResponse\"\000\032\005\210\250\303\001\001B\021Z\013match/match\230"
+    "\324a\025b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto_deps[4] = {
@@ -3408,7 +3417,7 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5fservice_2eprot
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto = {
     false,
     false,
-    3112,
+    3131,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5fservice_2eproto,
     "proto/match/match_service.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto_once,
@@ -3480,9 +3489,9 @@ JoinQueueRequest::JoinQueueRequest(
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, battle_config_id_) -
+           offsetof(Impl_, team_size_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::battle_config_id_));
+               sizeof(Impl_::team_size_));
 
   // @@protoc_insertion_point(copy_constructor:match.JoinQueueRequest)
 }
@@ -3502,9 +3511,9 @@ inline void JoinQueueRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, battle_config_id_) -
+           offsetof(Impl_, team_size_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::battle_config_id_));
+               sizeof(Impl_::team_size_));
 }
 JoinQueueRequest::~JoinQueueRequest() {
   // @@protoc_insertion_point(destructor:match.JoinQueueRequest)
@@ -3557,10 +3566,10 @@ PROTOBUF_NOINLINE void JoinQueueRequest::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.party_member_ids_.Clear();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007eU)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.battle_config_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.battle_config_id_));
+        reinterpret_cast<char*>(&_impl_.team_size_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.team_size_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -3641,6 +3650,15 @@ PROTOBUF_NOINLINE void JoinQueueRequest::Clear() {
     }
   }
 
+  // uint32 team_size = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_team_size() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_team_size(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3666,7 +3684,7 @@ PROTOBUF_NOINLINE void JoinQueueRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     // repeated uint64 party_member_ids = 4 [deprecated = true];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
@@ -3709,6 +3727,13 @@ PROTOBUF_NOINLINE void JoinQueueRequest::Clear() {
             this_._internal_battle_config_id());
       }
     }
+    // uint32 team_size = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_team_size() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_team_size());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -3727,7 +3752,7 @@ void JoinQueueRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_party_member_ids()->MergeFrom(from._internal_party_member_ids());
     }
@@ -3756,6 +3781,11 @@ void JoinQueueRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.battle_config_id_ = from._impl_.battle_config_id_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_team_size() != 0) {
+        _this->_impl_.team_size_ = from._impl_.team_size_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -3776,8 +3806,8 @@ void JoinQueueRequest::InternalSwap(JoinQueueRequest* PROTOBUF_RESTRICT PROTOBUF
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.party_member_ids_.InternalSwap(&other->_impl_.party_member_ids_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(JoinQueueRequest, _impl_.battle_config_id_)
-      + sizeof(JoinQueueRequest::_impl_.battle_config_id_)
+      PROTOBUF_FIELD_OFFSET(JoinQueueRequest, _impl_.team_size_)
+      + sizeof(JoinQueueRequest::_impl_.team_size_)
       - PROTOBUF_FIELD_OFFSET(JoinQueueRequest, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));

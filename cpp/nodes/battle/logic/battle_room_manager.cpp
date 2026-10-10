@@ -1011,8 +1011,8 @@ void BattleRoomManager::HandleSetAutoBattle(const ::SessionDetails &sessionDetai
 
     // 仅当本次置位把房间从"未就绪"翻到"全员就绪"时才立即结算(与 SubmitBattleAction
     // 的 allReady 分支同一条路径,ResolveRound 内部先取消回合 timer,不会双重结算);
-    // 装填时已全员就绪的房间(全自动)节奏由已按 kAutoRoundIntervalMs 装填的 roundTimer
-    // 负责,重复置位不触发立即结算,防止客户端以包速率重发击穿 D13 固定节奏。
+    // 装填时已全员就绪的房间(全自动)节奏由已按 AutoRoundIntervalMsFor(下限 kAutoRoundIntervalMs,
+    // 随出手单位数放宽)装填的 roundTimer 负责,重复置位不触发立即结算,防止客户端以包速率重发击穿 D13 节奏。
     if (request.enabled() && !wasAllReady && room->engine.AllPlayersReady())
     {
         ResolveRound(room->battleId);
@@ -1026,8 +1026,11 @@ void BattleRoomManager::ArmRoundTimer(BattleRoom &room)
     // 本窗口内不会再有任何提交把回合"提前"结算,整窗等待纯属空转拖慢节奏;
     // 又不能立即结算(同步递归刷回合,观众/客户端表现跟不上),
     // 故改用 kAutoRoundIntervalMs 固定节奏推进。
-    const uint64_t windowMs = room.engine.AllPlayersReady() ? turnbattle::kAutoRoundIntervalMs
-                                                            : turnbattle::kRoundDurationMs;
+    // 全自动间隔随刚结算那一回合的出手单位数放宽(AutoRoundIntervalMsFor):固定 2000ms 时单位一多,
+    // 客户端 6 倍速也演不完,会把整回合演出跳过。开局首次装填 LastActionOrder 为空 → 仍是下限 2000ms。
+    const uint64_t windowMs = room.engine.AllPlayersReady()
+                                  ? turnbattle::AutoRoundIntervalMsFor(room.engine.LastActionOrder().size())
+                                  : turnbattle::kRoundDurationMs;
     room.actionDeadlineMs = TimeSystem::NowMillisecondsUTC() + windowMs;
     const auto battleId = room.battleId;
     // timer 回调按 battle_id 重查房间:房间可能在窗口内被销毁,不能捕获裸指针

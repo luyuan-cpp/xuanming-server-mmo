@@ -30,10 +30,24 @@ inline constexpr uint32_t kMatchModePveTeam = 5;
 // 的历史行,以本常量为准,不改表重导
 inline constexpr uint32_t kMaxBattleTeamSize = 5;
 
-// 全自动房间(全体存活玩家均挂机)的回合推进间隔:装填回合时 AllPlayersReady()
-// 立即为真的房间,节点回合 timer 用此值替代整个行动窗口——既不空转刷回合
-// (观众/客户端跟得上),也不傻等行动窗口(D13)
+// 全自动房间(全体存活玩家均挂机)的回合推进间隔**下限**:装填回合时 AllPlayersReady()
+// 立即为真的房间,节点回合 timer 不等整个行动窗口——既不空转刷回合
+// (观众/客户端跟得上),也不傻等行动窗口(D13)。实际间隔见 AutoRoundIntervalMsFor
 inline constexpr uint64_t kAutoRoundIntervalMs = 2000;
+
+// 全自动间隔按刚结算那一回合出手的单位数放宽(pve-team-size-matching.md §2.2)。客户端要在这个窗口里
+// 把那一回合演完:每个出手单位约 0.9s、压缩上限 6 倍、收尾余量 0.3s(客户端 PlaybackBudget),
+// 固定 2000ms 只容得下约 11 个单位;PVE 按人数放大后一局最多 5 人 + 5 宠 + 10 怪,不放宽的话
+// 客户端会把整回合演出跳过。每单位 250ms:8 个单位以内仍是 2000ms(既有节奏不变),
+// 15 个 3750ms,20 个 5000ms
+inline constexpr uint64_t kAutoRoundPerActorMs = 250;
+
+// actedActorCount = 刚结算那一回合排定出手的单位数(TurnBattleEngine::LastActionOrder().size());
+// 开局首次装填还没有回合可演,传 0 即得下限
+constexpr uint64_t AutoRoundIntervalMsFor(std::size_t actedActorCount) {
+    const uint64_t scaledMs = static_cast<uint64_t>(actedActorCount) * kAutoRoundPerActorMs;
+    return scaledMs > kAutoRoundIntervalMs ? scaledMs : kAutoRoundIntervalMs;
+}
 
 // ---- 技能类型位号(镜像 cpp/libs/services/scene/combat/skill/constants/skill.h 的 eSkillType) ----
 // SkillTable.skill_type 存的是位号(0..5),SkillPermission.skill_type 列按位号平铺
@@ -184,6 +198,13 @@ inline constexpr uint32_t kSkillCostResourceMana = 1;
 // 阵位:每队 0..4 为前排(左→右),5..9 为后排(D4)。队伍上限 5 人时玩家只占前排;
 // 怪物按副本怪物组顺序落位,组内超过 5 只落后排
 inline constexpr uint32_t kFormationFrontRowSize = 5;
+
+// ---- PVE 怪物只数随队伍人数(docs/design/pve-team-size-matching.md §2) ----
+
+// 按人数放大后的怪物只数上限 = 阵位前后两排(D4)。超出的部分不生成;
+// 副本怪物组原样生成(每人只数为 0)的路径不受此限,那里的只数由表的槽位数决定。
+// 「每人几只」不是常量:由 BattleDataProvider::GetDungeonMonstersPerPlayer 按副本给
+inline constexpr uint32_t kMaxScaledPveMonsterCount = kFormationFrontRowSize * 2;
 
 // ---- 怪物侧保守默认值(仅在 MonsterTable 查不到行/属性缺失时回退,2026-09-02 起
 //      正常从 MonsterTable 读属性;兜底怪 monster_table_id=0 走这些常量) ----

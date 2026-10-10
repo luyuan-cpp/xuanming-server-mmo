@@ -58,6 +58,14 @@ std::vector<uint32_t> TableBattleDataProvider::GetDungeonMonsterIds(uint32_t dun
     return ids;
 }
 
+uint32_t TableBattleDataProvider::GetDungeonMonstersPerPlayer(uint32_t dungeonTableId) const {
+    // 每名玩家对应一整组怪:单人打到的还是表里那一组(只数、种类、任务目标、掉落都与按人数放大之前
+    // 相同),N 人就是这一组重复 N 遍。不能取更小的数 —— 只取组头几只的话,人少的队伍永远遇不到
+    // 组里靠后的怪,以它们为目标的任务和它们独有的掉落就做不了了。
+    // DungeonTable 没有单独的"每人几只"列,组的只数就是每人的只数;空组返回 0,引擎走兜底怪。
+    return static_cast<uint32_t>(GetDungeonMonsterIds(dungeonTableId).size());
+}
+
 double TableBattleDataProvider::GetSkillDamage(uint32_t skillTableId, double casterLevel) {
     // damage 表达式两步调用:先 SetDamageParam({casterLevel}) 再 GetDamage,
     // 与实时战斗 CalculateSkillDamage 的用法一致

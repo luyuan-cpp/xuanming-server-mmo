@@ -55,7 +55,7 @@ enum MatchMode {
   MATCH_MODE_3V3         = 2; // 6 players total(未开放)
   MATCH_MODE_1V1         = 3; // 2 players total(回合制 PVP,一期启用)
   MATCH_MODE_PVE_SOLO    = 4; // 回合制 PVE 单人,即时开战(伪匹配)
-  MATCH_MODE_PVE_TEAM    = 5; // 回合制 PVE 组队,FIFO 凑满 DungeonTable.max_team_size
+  MATCH_MODE_PVE_TEAM    = 5; // 回合制 PVE 组队:按 JoinQueueRequest.team_size 的人数档 FIFO 凑满(1 人档即时开战)
   MATCH_MODE_PVP_CHALLENGE = 6; // 场景发起 PK(切磋):点名成局,不入队
 }
 
@@ -70,6 +70,14 @@ message JoinQueueRequest {
   repeated uint64 party_member_ids = 4 [deprecated = true];
   uint32 zone_id = 5;                 // Player's current zone
   uint32 battle_config_id = 6;        // 回合制战斗配置(DungeonTable id:怪物组/人数/回合上限)
+  // PVE 人数档(只有 MATCH_MODE_PVE_TEAM 读它,docs/design/pve-team-size-matching.md):想凑成几人的队伍。
+  // 怪物只数跟着实际参战人数走(每人一整组怪:单人打一组,N 人打 N 组)。
+  //   0        = 该副本的人数上限(加这个字段之前的行为;老客户端不填就是它)
+  //   1        = 不排队,即时开战
+  //   2..上限  = 进这个人数档的队列,凑满即开
+  //   超过上限 = 拒绝(kMatchModeNotOpen)
+  // 上限 = match 配置 PveTeamSizeByConfigId[battle_config_id],且不超过引擎每队上限 5。
+  uint32 team_size = 7;
 }
 
 message JoinQueueResponse {

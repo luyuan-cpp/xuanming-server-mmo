@@ -7007,3 +7007,54 @@ PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修
 - **真实环境**:今日 07:12(纽约时间)许可客户端仍报 `LicenseGroupOfflineValidityPeriodIsExpired`、`Unable to find valid licenses`，用户需在 Unity Hub 登录刷新。Unity 测试、出包、双号联机均未执行。本机固件虚拟化/Hypervisor 与 Docker Linux Engine 已可用，不再沿用 10-08 的 SVM 阻塞结论；MySQL/Redis/etcd 等已有容器运行，但 Kafka 为 Exited(255)、9092 未监听，游戏原生服务和 Java 网关未启动。没有改动容器、清理业务数据或启动旧版游戏二进制；本次 Unity 探针进程已清理。
 - **证据与续跑**:编译日志、真实 NUnit XML、可复跑脚本 `client-pure-tests/run.ps1`、首批 C++ 错误、Unity 当前许可证据及在途文件基线均在 `E:/work/output/team-follow-20261010/`。待生成前置修复获准并完成后，从 V.6 的 Debug scene 库构建重新开始；许可刷新后再用 Unity 6000.6.0f1 做 EditMode、出包及组队跟随双号验收。这里没有任何联机通过结论。
 - **Java 版(AGENTS §12)**:仍待做；规范指定的另一 Java 仓库本机不存在，本次未修改客户端契约或另一版 `PARITY.md`。
+
+## 2026-10-10 PVE 人数档匹配:1~5 人任选一档,人越多怪越多(Claude,服务端未编译)
+
+- **需求**:PVE 不能只有「单人」和「必须凑满 5 人」两档;怪物数量要跟队伍人数走。
+  设计与验证清单:[`docs/design/pve-team-size-matching.md`](design/pve-team-size-matching.md)(§7 是给 Codex 的清单)。
+  分支 `feat/pve-team-size-match`,单个提交,接在本机 main 之后。
+- **引擎(battle)**:`InitMonsters` 数进攻方玩家数 N(宝宝不算),怪物只数 = N × 每人只数,种类按副本怪物组循环取,上限 10 只;不消耗随机数。
+  「每人几只」走新接口 `BattleDataProvider::GetDungeonMonstersPerPlayer`:生产实现返回该副本怪物组的只数,即**每人一整组**
+  (副本 1:1 人 2 只、2 人 4 只、5 人 10 只);单测替身缺省 0(怪物组原样),既有用例的只数不变。Dungeon 表没有加列。
+  单人打到的与改动前逐只相同;整队开战按人数成倍增加;**活动对局(帮会同道历练)不放大**,行为与改动前相同。
+  每人的经验、金币、掉落、任务击杀计数都随怪物只数累加(组队各得全额的既有口径),N 人队每人单场产出是单人的 N 倍 —— 没有动分配规则。
+- **全自动回合间隔**:`ArmRoundTimer` 的全自动间隔从固定 2000ms 改为 `AutoRoundIntervalMsFor(N) = max(2000, N × 250)`,
+  N 是刚结算那一回合的出手单位数。8 个单位以内不变;不放宽的话 4~5 人档全自动时客户端 6 倍速也演不完、每回合都跳过演出。
+  5v5 PVP 全自动(10 个单位)因此从 2.0 秒变 2.5 秒。D13 与表现规格 §6.1 已加更正。
+- **match**:`JoinQueueRequest.team_size = 7`(只有 `PVE_TEAM` 读):0 = 副本上限(老行为),1 = 即时开战,2..上限 = 进该人数档队列,
+  超上限回 `kMatchModeNotOpen`。人数档队列 key `match:{mq}:size{N}:queue:{mode}:{config}`,rank / lock key 同样带人数段、仍同 slot;
+  凑满人数从 key 读回,配置 `PveTeamSizeByConfigId` 的含义变成「人数上限」。没有新消息号、没有新 tip 码。
+  成员校验新增核对票据的 `queue_key`(别的队列的残留项只摘不弹,堵住把人拉进没选的档)。
+  上限被调低后残留的人数档不弹组、告警限频,成员都取消后离开注册集并把 `queue_depth` 归零。
+  指标 `match_queue_depth` / `match_starved_anchor_wait_seconds` 增加标签 `team_size`。
+- **发布顺序**:match 必须整批替换(K8s 先缩到 0 再发,见设计文档 §3.2);服务端先于或同批于客户端 ——
+  服务端没带本改动时,新客户端的 2~4 人档会静默排进「凑满 5 人」的旧队列。
+- **协议生成物**:`match_service.pb.{go,h,cc}` 与客户端 `MatchService.cs` 用 protoc 窄面重生成 —— 先用改动前的 proto 生成,
+  产物与入库版本逐字节一致,再生成新的;三份暂存副本与 `robot/vendor` 同步;`_grpc.pb.go`、`message_id.txt` 未变。
+  另补生成了一份既有欠账:`cpp/generated/proto/battle/battle_node.pb.{h,cc}`(入库产物停在 09-06,缺 09-29 加的
+  `CreateBattleRequest.activity_context = 9`;引擎现在要读它)。同样先做了基线逐字节比对。
+- **客户端**:排队面板把「单人 / 组队5人」换成 1~5 人档(选中档古铜色底 + 「√」)+ 一个匹配按钮(文案「N人 · 怪物×N」);
+  `BattleClient.JoinQueue` 多一个可选的人数参数,连续战斗重排会带回人数档;已组好的队仍由队长在队伍面板开战。
+  主体已随每小时自动保存 `537c2bad` 进入客户端**本机** main(未推 origin),其后的小改在工作区等下一次自动保存
+  (当时客户端仓正卡着别的会话的一次合并,没有单独提交)。
+- **三轮只读复核**(都不编译、不运行):第一轮否掉了「N 人 N 只、从组头取」(单人永远遇不到怪 2,它是物品 11 的唯一掉落来源与任务击杀目标),
+  改成每人一整组;第二轮 6 个方向找问题、每条发现由两名反驳者核实、再查漏(22 条里确认 18 条、反驳 4 条,无编译类问题),
+  据此改了活动对局不放大(否则 guild-smoke 历练段的「三人自动必胜」不再成立)、全自动回合间隔、成员校验核对 `queue_key`、客户端选中态与一批文档;
+  第三轮只审第二轮之后新写的代码(5 条里确认 4 条),据此补生成 `battle_node.pb.*`、把面板字体里没有字形的「✓」换成「√」、
+  调了选中底色与一处注释。第三轮之后的这四处改动没有再复核。
+- **测试**:Go 新增 `pve_team_size_test.go` 10 条,改 3 处既有测试(1 处队列 key、2 处指标桩签名);C++ 引擎新增 8 条 + 真表契约 1 条;
+  客户端 EditMode 新增 1 条。
+- **证据边界**:Go 只过了 gofmt;C++ 只做了静态核对;客户端离线 Roslyn 编译运行时与 `EditMode.Battle` 测试程序集 0 error
+  (不是 Unity 内编译;最后一次改动后客户端仓有别人的冲突标记,运行时程序集只确认了报错全部在别人的文件里)。
+  **Go / C++ 均未编译,所有新测试未跑,Unity 内测试与面板目视未做(许可证离线过期),没有联机验收**。
+- **验收分两步**:只重编并替换 match 就能验人数档匹配(老 gate / battle 不用动,怪物仍是固定一组);
+  怪物随人数成倍与全自动间隔要等 C++ 重编 —— 而主干的 C++ 目前本来就编不过(战斗引擎早已依赖装备属性系统的协议,
+  其 C++ 生成物尚未产出),要先做 equipment-attributes.md §9 的导表与全量 proto-gen。
+- **顺带**:本机 main 上每小时自动保存拉取远端时两次留下未完成的合并(都只冲突 `docs/PROGRESS.md`,两边纯追加),由本会话收掉,
+  提交 `07c7e238ff`(远端 `3220afa2b9`)与 `84d5a3d903`(远端 `f478fa9c43`);其余文件与 git 自动三方合并的结果逐文件一致。
+  其中 `player_lifecycle.cpp` 是跨区传送与组队跟随两边都改过、由 git 自动合并的,能否编译需要那两条线确认。
+  只要本机与远端都往本文件末尾追加,自动保存的拉取就会再卡一次。
+- **没做**:已组好的队伍进队列补位(team-system.md 推迟的 v2);按副本配置每人只数(副本 3 首领本开放组队之前必须先做);
+  组队奖励 / 掉落分配;不能凑单的队列里死成员的清扫;robot 自动化冒烟场景。
+- **Java 版(AGENTS §12)**:未做(本机没有 Java 仓库)。要同步的客户端契约只有 `JoinQueueRequest.team_size = 7`;
+  需在 `PARITY.md` 登记待做。

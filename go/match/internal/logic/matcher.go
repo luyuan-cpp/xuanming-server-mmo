@@ -75,6 +75,23 @@ var lastStarvedAnchorWarnNs sync.Map
 
 const starvedAnchorWarnInterval = 10 * time.Second
 
+// "队列现在不能凑单"告警的限频状态:queueKey → 上次告警 UnixNano,见 warnUnmatchableQueue。
+var lastUnmatchableQueueWarnNs sync.Map
+
+const unmatchableQueueWarnInterval = 10 * time.Second
+
+// warnUnmatchableQueue 对"没有凑满人数配置 / 人数档超出副本上限"的队列记一条限频(每队列 10s)
+// Error 日志。人数档让这种队列变成一次普通的运维操作(把副本上限调低)就能留下,matcher 每 500ms
+// 扫一轮,不限频会把日志刷满。
+func warnUnmatchableQueue(queueKey string) {
+	now := time.Now().UnixNano()
+	if last, ok := lastUnmatchableQueueWarnNs.Load(queueKey); ok && now-last.(int64) < int64(unmatchableQueueWarnInterval) {
+		return
+	}
+	lastUnmatchableQueueWarnNs.Store(queueKey, now)
+	logx.Errorf("[matcher] 队列 %s 无凑满人数配置或人数档超出副本上限,不凑单(排队保留,等配置恢复或玩家取消)", queueKey)
+}
+
 // warnStarvedAnchor 对"容差曲线已饱和仍凑不到候选"的锚点记一条限频(每队列 10s)
 // Error 日志:这是曲线本身救不了的饥饿(段位里没人 / 分差 > RatingToleranceMax),
 // 只能等 RatingToleranceMaxWaitSeconds 的 ∞ 兜底;运维看到这条就该看队列人数。
@@ -225,10 +242,24 @@ func matchQueueOnce(svcCtx *svc.ServiceContext, queueKey string) {
 		return
 	}
 
-	required := requiredPlayers(svcCtx, mode, config)
+	required := requiredPlayersForQueue(svcCtx, queueKey, mode, config)
 	if required == 0 {
-		// 配置被摘掉后残留的队列:不动数据,只告警,等运维处理。
-		logx.Errorf("[matcher] 队列 %s 无凑满人数配置,跳过", queueKey)
+		// 配置被摘掉(或人数档超出调低后的副本上限)后残留的队列:不动排队数据,只告警(限频),
+		// 等配置恢复或玩家自己取消。成员都主动取消、list 变空之后,把它从注册集摘掉并把 queue_depth 归零 ——
+		// JoinQueue 已经不放人进这个档,不摘的话空队列会一直留在注册集里每轮被扫。
+		// 剔除是一条"空了才删"的原子 Lua(pruneQueueScript),不需要凑单锁,多实例重复执行无害。
+		// 已知边界:没取消就离开的人(掉线 / 关客户端,票据 6 小时后过期)的 list 项这里不清 —— 成员校验只在
+		// 弹组路径上跑(groupPicker.validate),所以这种队列会留在注册集、告警每 10 秒一条,直到上限恢复且
+		// 该档再次凑够人数,或人工删掉这条 list 与同档的 rank key。
+		warnUnmatchableQueue(queueKey)
+		depth, err := svcCtx.MatchRedis.Llen(queueKey)
+		if err != nil {
+			logx.Errorf("[matcher] Llen %s 失败: %v", queueKey, err)
+			return
+		}
+		if depth == 0 {
+			pruneEmptyQueue(svcCtx, queueKey, matchpb.MatchMode(mode).String(), strconv.FormatUint(uint64(config), 10))
+		}
 		return
 	}
 
@@ -247,7 +278,12 @@ func matchQueueOnce(svcCtx *svc.ServiceContext, queueKey string) {
 	// 凑单临界区:SETNX 锁,拿不到跳过本轮 —— 连 queue_depth 也不上报
 	//(设计决策 D5c):多实例各自上报同一队列,看板 sum 会放大 N 倍;
 	// 由持锁实例独家上报,任一时刻每个队列只有一个写者。
-	lockKey := matcherLockKey(mode, config)
+	// 锁 key 由队列 key 推出:普通队列仍是 matcherLockKey(mode, config),人数档队列各有各的锁。
+	lockKey, err := lockKeyForQueue(queueKey)
+	if err != nil {
+		logx.Errorf("[matcher] 无法推出凑单锁 key %q: %v", queueKey, err)
+		return
+	}
 	lockTTL := int(svcCtx.Config.MatcherLockTTLSeconds)
 	if lockTTL <= 0 {
 		lockTTL = 10
@@ -268,15 +304,16 @@ func matchQueueOnce(svcCtx *svc.ServiceContext, queueKey string) {
 
 	modeName := matchpb.MatchMode(mode).String()
 	configName := strconv.FormatUint(uint64(config), 10)
+	sizeName := queueTeamSizeLabel(queueKey)
 	depth, err := svcCtx.MatchRedis.Llen(queueKey)
 	if err != nil {
 		logx.Errorf("[matcher] Llen %s 失败: %v", queueKey, err)
 		return
 	}
-	setQueueDepthFn(modeName, configName, depth)
+	setQueueDepthFn(modeName, configName, sizeName, depth)
 	if depth < int(required) {
 		// 人数不够谈不上"锚点凑不到候选":饥饿 gauge 归零,深度看 queue_depth。
-		setStarvedAnchorWaitFn(modeName, configName, 0)
+		setStarvedAnchorWaitFn(modeName, configName, sizeName, 0)
 		if depth == 0 {
 			pruneEmptyQueue(svcCtx, queueKey, modeName, configName)
 		}
@@ -351,13 +388,15 @@ func pruneEmptyQueue(svcCtx *svc.ServiceContext, queueKey string, modeName strin
 		return
 	}
 	if n, ok := removed.(int64); ok && n > 0 {
-		setQueueDepthFn(modeName, configName, 0)
+		setQueueDepthFn(modeName, configName, queueTeamSizeLabel(queueKey), 0)
 		logx.Infof("[matcher] 空队列已从注册集剔除 queue=%s", queueKey)
 	}
 }
 
-// requiredPlayers 返回该队列凑满所需人数;未知模式/未配置返回 0。
-// 必须与 JoinQueue 的 required 口径一致,否则队列永远凑不满或多弹人。
+// requiredPlayers 返回 (mode, config) 的凑满人数;未知模式/未配置返回 0。
+// PVP 各模式它就是队列的凑满人数,必须与 JoinQueue 的 required 口径一致,否则队列永远凑不满或多弹人。
+// PVE_TEAM 返回的是副本人数**上限**:排队按人数档凑单(见 requiredPlayersForQueue),
+// 整队开战(TeamSizeFor)拿它判超编;JoinQueue 也用它校验请求的人数档。
 func requiredPlayers(svcCtx *svc.ServiceContext, mode int32, config uint32) uint32 {
 	switch matchpb.MatchMode(mode) {
 	case matchpb.MatchMode_MATCH_MODE_1V1:
@@ -375,6 +414,39 @@ func requiredPlayers(svcCtx *svc.ServiceContext, mode int32, config uint32) uint
 		// PVE_SOLO 不入队;3v3/切磋没有队列。
 		return 0
 	}
+}
+
+// queueKeyForJoin 入队用的队列 key(pve-team-size-matching.md §3):PVE_TEAM 按人数档分队列
+// (key 带人数段),其余模式一个 (mode, config) 一条队列。与 requiredPlayersForQueue 成对 ——
+// 这里把凑满人数写进 key,那里读回来,两边不会再各算各的。
+// 前置条件:PVE_TEAM 的 required 已由 JoinQueue 校验在 2..副本上限 以内(1 人档不入队)。
+func queueKeyForJoin(mode matchpb.MatchMode, battleConfigId uint32, required uint32) string {
+	if mode == matchpb.MatchMode_MATCH_MODE_PVE_TEAM {
+		return matchSizedQueueKey(int32(mode), battleConfigId, required)
+	}
+	return matchQueueKey(int32(mode), battleConfigId)
+}
+
+// requiredPlayersForQueue 一条队列的凑满人数;0 = 这条队列现在不能凑单(调用方只告警、不动数据)。
+//   - 带人数段的队列(PVE 人数档):人数以 key 为准,但不得超过当前副本上限 —— 配置被摘掉、
+//     或上限被调低之后残留的队列不再弹组,不把超编的一组人送去 PrepareBattle 再被引擎拒绝;
+//   - 不带人数段的队列:requiredPlayers(PVP 各模式;以及加人数档之前写下的 PVE_TEAM 队列,
+//     仍按副本上限凑满,让存量排队的人能被弹走)。
+func requiredPlayersForQueue(svcCtx *svc.ServiceContext, queueKey string, mode int32, config uint32) uint32 {
+	limit := requiredPlayers(svcCtx, mode, config)
+	size := queueTeamSize(queueKey)
+	if size == 0 {
+		return limit
+	}
+	if matchpb.MatchMode(mode) != matchpb.MatchMode_MATCH_MODE_PVE_TEAM || size > limit {
+		return 0
+	}
+	return size
+}
+
+// queueTeamSizeLabel 队列的人数档指标标签值:"2".."5";没有人数档的队列是 "0"。
+func queueTeamSizeLabel(queueKey string) string {
+	return strconv.FormatUint(uint64(queueTeamSize(queueKey)), 10)
 }
 
 // queueEntry 是 queueSnapshotScript 读回的一个队列成员:等待序下标、评分镜像
@@ -449,6 +521,16 @@ func (p *groupPicker) validate(idx int) (bool, error) {
 	if ticket == nil || ticket.State != ticketStateQueued {
 		// 已取消 / 状态异常:摘掉队列项(取消路径已删票)。
 		logx.Infof("[matcher] 丢弃无效队列成员 player=%d(ticket 缺失或状态异常)", e.playerId)
+		p.drop(idx)
+		return false, nil
+	}
+	if ticket.QueueKey != "" && ticket.QueueKey != p.queueKey {
+		// 别的队列的残留项:这个人现在排的是另一条队列(另一个人数档 / 模式),本队列里是他以前没被摘掉的
+		// list 项 —— 没取消就离开、票据过期后重排,或取消时出队失败。票据是 queued 不代表他在排**这条**
+		// 队列,带进组就是把人拉进他没选的对局。只摘本队列的残留,不动票据(票据属于他正在排的那条队列);
+		// 这一步必须在下面的战斗锁判定之前,那里会无条件删票。queue_key 为空的旧票据不做这项核对。
+		logx.Infof("[matcher] 丢弃别的队列的残留成员 player=%d queue=%s ticket_queue=%s",
+			e.playerId, p.queueKey, ticket.QueueKey)
 		p.drop(idx)
 		return false, nil
 	}
@@ -617,7 +699,7 @@ func popGroup(svcCtx *svc.ServiceContext, queueKey string, required uint32) ([]u
 	if starvedWait < 0 {
 		starvedWait = 0
 	}
-	setStarvedAnchorWaitFn(p.modeName, configName, float64(starvedWait))
+	setStarvedAnchorWaitFn(p.modeName, configName, queueTeamSizeLabel(queueKey), float64(starvedWait))
 	return nil, nil, false
 }
 

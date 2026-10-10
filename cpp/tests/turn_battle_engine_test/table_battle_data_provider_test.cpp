@@ -128,6 +128,21 @@ TEST_F(TableBattleDataProviderTest, EveryConfiguredMonsterHasCombatStatsAndRewar
     EXPECT_EQ(provider.FindMonster(999999), nullptr);
 }
 
+// 生产口径:每名玩家对应一整组怪(pve-team-size-matching.md §2)—— 每人只数 = 该副本怪物组的只数。
+// 这样单人打到的与表里的怪物组完全一致(组里每一只都遇得到,任务目标与独有掉落不丢),多一个人多一组。
+// 引擎单测用的 MemoryBattleDataProvider 缺省是 0(怪物组原样生成),测不到生产取值;
+// 这里对生产实现断言,免得哪天有人把它改成更小的数而引擎用例照样全绿。
+TEST_F(TableBattleDataProviderTest, EveryPlayerFacesOneWholeMonsterGroup) {
+    turnbattle::TableBattleDataProvider provider;
+    for (const auto& dungeon : DungeonTableManager::Instance().FindAll().data()) {
+        const auto group = provider.GetDungeonMonsterIds(dungeon.id());
+        ASSERT_FALSE(group.empty()) << "dungeon " << dungeon.id() << " 没配怪物组";
+        EXPECT_EQ(provider.GetDungeonMonstersPerPlayer(dungeon.id()), static_cast<uint32_t>(group.size()))
+            << "dungeon " << dungeon.id();
+    }
+    EXPECT_EQ(provider.GetDungeonMonstersPerPlayer(999), 0u) << "未配置的副本:空组,引擎走兜底怪";
+}
+
 // 职业表首行有正的初始属性(登录初始化 / 阵亡复活 / 二级属性重算都读它)
 TEST_F(TableBattleDataProviderTest, ClassTableProvidesPositiveInitialAttributes) {
     const auto& rows = ClassTableManager::Instance().FindAll().data();

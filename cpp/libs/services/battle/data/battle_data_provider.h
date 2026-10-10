@@ -39,6 +39,13 @@ public:
     // 引擎按保守默认值生成怪物侧(建议 Excel 加列,见任务 open_issues)
     virtual std::vector<uint32_t> GetDungeonMonsterIds(uint32_t dungeonTableId) const = 0;
 
+    // 该副本每名参战玩家对应几只怪(docs/design/pve-team-size-matching.md §2):
+    //   0   = 只数不随人数变,怪物组原样生成(GetDungeonMonsterIds 的顺序与只数);
+    //   N>0 = 只数 = 进攻方玩家数 × N,种类按怪物组顺序循环取。
+    // 返回怪物组的只数就是「每人一整组」:单人打到的与原样生成完全相同,多一个人多一组。
+    // 怪物组为空时本值不生效(引擎走"按玩家人数生成兜底怪"的既有路径)。
+    virtual uint32_t GetDungeonMonstersPerPlayer(uint32_t dungeonTableId) const = 0;
+
     // ---- 表达式求值:镜像表管理器 SetXxxParam + GetXxx 两步调用 ----
 
     // 技能伤害:参数 {casterLevel},对应 SkillTableManager::SetDamageParam + GetDamage

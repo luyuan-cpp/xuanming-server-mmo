@@ -26,7 +26,7 @@ var (
 	joinQueueTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "join_queue_total",
-		Help:      "JoinQueue requests by mode and outcome (ok|in_battle|already_queued|mode_not_open|no_team_size|not_in_scene|internal).",
+		Help:      "JoinQueue requests by mode and outcome (ok|in_battle|already_queued|mode_not_open|no_team_size|team_size_over_limit|not_in_scene|internal).",
 	}, []string{"mode", "outcome"})
 
 	// gatherZoneMix 回答"跨 zone 对局占比":组内成员 zone 去重数 ==1 记 single,
@@ -68,8 +68,8 @@ var (
 	queueDepth = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: subsystem,
 		Name:      "queue_depth",
-		Help:      "Current Redis queue length per (mode, battle_config_id). Config ids are bounded table ids, not player ids.",
-	}, []string{"mode", "config"})
+		Help:      "Current Redis queue length per (mode, battle_config_id, team_size). Config ids are bounded table ids, not player ids; team_size is the PVE party-size tier (2..5), 0 for queues without one.",
+	}, []string{"mode", "config", "team_size"})
 
 	discoveredNodes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: subsystem,
@@ -132,8 +132,8 @@ var (
 	starvedAnchorWait = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: subsystem,
 		Name:      "starved_anchor_wait_seconds",
-		Help:      "Longest wait (seconds) among anchors the last matcher round tried but could not fill, per (mode, config); 0 when none.",
-	}, []string{"mode", "config"})
+		Help:      "Longest wait (seconds) among anchors the last matcher round tried but could not fill, per (mode, config, team_size); 0 when none.",
+	}, []string{"mode", "config", "team_size"})
 
 	// ratingRoundCapDraw PVP 队列模式回合打满(total_rounds >= RatingDrawRoundCap)
 	// 被改按平局结算的局数:C++ 引擎回合打满一律判 SIDE_B_WIN,match 侧纠正。
@@ -245,8 +245,9 @@ func register() {
 }
 
 // SetStarvedAnchorWait 更新某队列本轮凑不到候选的锚点的最长等待秒数(0 = 无)。
-func SetStarvedAnchorWait(mode string, config string, seconds float64) {
-	starvedAnchorWait.WithLabelValues(mode, config).Set(seconds)
+// teamSize 是 PVE 人数档("2".."5";没有人数档的队列传 "0"),见 SetQueueDepth。
+func SetStarvedAnchorWait(mode string, config string, teamSize string, seconds float64) {
+	starvedAnchorWait.WithLabelValues(mode, config, teamSize).Set(seconds)
 }
 
 // ObserveRatingRoundCapDraw 记录一局回合打满被改按平局结算。
@@ -329,8 +330,10 @@ func ObserveChallenge(stage string, outcome string) {
 }
 
 // SetQueueDepth 更新某个队列的当前长度(matcher loop 扫描时刷新)。
-func SetQueueDepth(mode string, config string, depth int) {
-	queueDepth.WithLabelValues(mode, config).Set(float64(depth))
+// teamSize 是 PVE 人数档("2".."5";没有人数档的队列传 "0"):同一副本的各人数档是互不相干的队列,
+// 少了这个标签它们会互相覆盖同一条时间序列。取值只有个位数种,不是高基数标签。
+func SetQueueDepth(mode string, config string, teamSize string, depth int) {
+	queueDepth.WithLabelValues(mode, config, teamSize).Set(float64(depth))
 }
 
 // SetDiscoveredNodes 更新节点发现缓存规模。

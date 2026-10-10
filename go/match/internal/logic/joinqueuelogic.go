@@ -40,7 +40,9 @@ func NewJoinQueueLogic(ctx context.Context, svcCtx *svc.ServiceContext) *JoinQue
 //     决策 D6:没有位置的玩家 gather 必败,提前拒比进队再失败省);
 //   - 匹配池全局不分 zone(决策 D1),zone 只进票据与日志;
 //   - MATCH_MODE_PVE_SOLO 即时开战:不入队,直接走 gather 开局管线;
-//   - MATCH_MODE_PVE_TEAM 按 battle_config_id 查凑满人数,FIFO 凑单(上限 5 收口,D14);
+//   - MATCH_MODE_PVE_TEAM 按人数档凑单(pve-team-size-matching.md):请求的 team_size 就是凑满人数,
+//     0 = 该副本上限(battle_config_id 查配置,上限 5 收口,D14),超过上限拒绝;
+//     1 人档与 PVE_SOLO 走同一条即时开战路径,2 人起进各自人数档的 FIFO 队列;
 //   - MATCH_MODE_1V1 两人凑对;MATCH_MODE_5V5 凑 10 人(二期开放,D15);
 //   - 3v3 未开放,切磋走 ChallengePlayer,均拒绝直接入队。
 func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQueueResponse, error) {
@@ -66,18 +68,26 @@ func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQ
 	case matchpb.MatchMode_MATCH_MODE_PVE_SOLO:
 		required = 1
 	case matchpb.MatchMode_MATCH_MODE_PVE_TEAM:
-		required = l.svcCtx.Config.PveTeamSizeFor(in.BattleConfigId)
-		if required == 0 {
+		// 副本人数上限:配置值按引擎每队上限 5 收口(D14,requiredPlayers 同一口径)。
+		limit := requiredPlayers(l.svcCtx, int32(in.Mode), in.BattleConfigId)
+		if limit == 0 {
 			metrics.ObserveJoinQueue(modeName, "no_team_size")
 			return &matchpb.JoinQueueResponse{
 				ErrorCode:    constants.ErrTeamSizeNotConfigured,
 				ErrorMessage: tipErr(constants.ErrTeamSizeNotConfigured, "该副本未开放组队"),
 			}, nil
 		}
-		// 队伍上限 5 收口(D14):DungeonTable 历史行可能配 10,与引擎
-		// Initialize 校验同口径压到 kMaxBattleTeamSize。
-		if required > kMaxBattleTeamSize {
-			required = kMaxBattleTeamSize
+		// 人数档:请求要几人就凑几人;0 = 上限(老客户端不填 team_size,行为与加字段前一致)。
+		required = in.TeamSize
+		if required == 0 {
+			required = limit
+		}
+		if required > limit {
+			metrics.ObserveJoinQueue(modeName, "team_size_over_limit")
+			return &matchpb.JoinQueueResponse{
+				ErrorCode:    constants.ErrModeNotOpen,
+				ErrorMessage: tipErr(constants.ErrModeNotOpen, "该副本不支持这个队伍人数"),
+			}, nil
 		}
 	case matchpb.MatchMode_MATCH_MODE_1V1:
 		required = 2
@@ -166,9 +176,11 @@ func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQ
 		ZoneId:       loc.ZoneId,
 	}
 
-	// PVE solo 即时开战(伪匹配):不入队,ticket 直接进 matched 态走 gather。
+	// 单人即时开战(伪匹配):PVE_SOLO,以及 PVE_TEAM 的 1 人档 —— 一个人不需要等别人,
+	// 进队列只会多绕一轮 matcher。不入队,ticket 直接进 matched 态走 gather。
 	// 不入队所以 QueueKey 留空;matched 短 TTL 与队列路径同口径(按 1 人算,D5)。
-	if in.Mode == matchpb.MatchMode_MATCH_MODE_PVE_SOLO {
+	// 只有这两种模式的 required 可能是 1(1v1 = 2、5v5 = 10)。
+	if required == 1 {
 		ticket.State = ticketStateMatched
 		if resp := l.createTicket(playerId, ticket, matchedTicketTTLFor(l.svcCtx, required), modeName); resp != nil {
 			return resp, nil
@@ -180,8 +192,8 @@ func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQ
 		safego.Go("match.gather.pve_solo", func() {
 			runGatherFn(svcCtx, mode, config, []uint64{playerId}, false, tickets)
 		})
-		l.Infof("[match] PVE solo 即时开战 player=%d zone=%d config=%d ticket=%s",
-			playerId, loc.ZoneId, config, ticket.Ticket)
+		l.Infof("[match] PVE 单人即时开战 player=%d zone=%d mode=%s config=%d ticket=%s",
+			playerId, loc.ZoneId, modeName, config, ticket.Ticket)
 		metrics.ObserveJoinQueue(modeName, "ok")
 		return &matchpb.JoinQueueResponse{QueueTicket: ticket.Ticket}, nil
 	}
@@ -191,7 +203,7 @@ func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQ
 	// 这里读出(按玩家分布的 key,与队列不同 slot)记进票据并作为 ARGV 传入;
 	// 读失败按默认 1500,不拒绝排队。
 	ticket.State = ticketStateQueued
-	ticket.QueueKey = matchQueueKey(int32(in.Mode), in.BattleConfigId)
+	ticket.QueueKey = queueKeyForJoin(in.Mode, in.BattleConfigId, required)
 	ticket.Rating = loadRatingOrDefault(l.svcCtx, playerId)
 	if resp := l.createTicket(playerId, ticket, ticketTTLSeconds(l.svcCtx), modeName); resp != nil {
 		return resp, nil

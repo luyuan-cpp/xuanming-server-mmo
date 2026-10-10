@@ -16,6 +16,9 @@ import (
 //	match:{mq}:queue:{mode}:{config}      list  排队玩家 id,等待序(Rpush 入队尾;队首最久)
 //	match:{mq}:rank:{mode}:{config}       zset  同一队列的评分镜像(member=player_id,score=rating,§11)
 //	match:{mq}:lock:{mode}:{config}       锁    matcher 凑单临界区(多实例 SETNX)
+//	match:{mq}:size{N}:queue|rank|lock:{mode}:{config}
+//	                                      PVE 人数档(pve-team-size-matching.md §3):同一副本按目标人数 N
+//	                                      各有一套 queue / rank / lock,人数段在 hash tag 之后,仍与上面同 slot
 //	match:ticket:{player_id}              hash  排队票据(状态机:queued/matched/ready),按玩家分布
 //	match:rating:{player_id}              hash  玩家评分(rating/games/updated_at_ms,无 TTL),按玩家分布
 //	match:rating:applied:{battle_id}      string 对局结果已入账标记(TTL 7d,SETNX 幂等),按对局分布
@@ -62,6 +65,49 @@ func matchQueueKey(mode int32, battleConfigId uint32) string {
 
 func matcherLockKey(mode int32, battleConfigId uint32) string {
 	return fmt.Sprintf("match:%s:lock:%d:%d", matchQueueHashTag, mode, battleConfigId)
+}
+
+// queueSizeSegmentPrefix PVE 人数档队列 key 里人数段的前缀("size2" = 2 人档)。
+const queueSizeSegmentPrefix = "size"
+
+// matchSizedQueueKey PVE 人数档的队列 key(pve-team-size-matching.md §3):同一个
+// (mode, battle_config_id) 按目标人数分成互不相干的队列,2 人档的人不会被 5 人档弹走。
+// 人数段放在 hash tag 之后、"queue" 之前:parseQueueKey / rankKeyForQueue / lockKeyForQueue
+// 只认尾部三段,所以 (mode, config) 的解析与同 slot 的 rank / lock key 推导都不用改;
+// 凑满人数由 queueTeamSize 从这一段读回,不再去问配置(配置只管上限)。
+func matchSizedQueueKey(mode int32, battleConfigId uint32, teamSize uint32) string {
+	return fmt.Sprintf("match:%s:%s%d:queue:%d:%d", matchQueueHashTag, queueSizeSegmentPrefix, teamSize, mode, battleConfigId)
+}
+
+// queueTeamSize 读队列 key 里的人数段。不带人数段的队列(PVP 各模式、加人数档之前写下的
+// PVE_TEAM 队列)返回 0,调用方按原来的口径(requiredPlayers)取凑满人数。
+// 只看紧挨 "queue" 前面的那一段:hash tag 段 "{mq}" 不以 size 开头,不会被误认。
+func queueTeamSize(queueKey string) uint32 {
+	parts := strings.Split(queueKey, ":")
+	if len(parts) < 5 || parts[len(parts)-3] != "queue" {
+		return 0
+	}
+	digits, found := strings.CutPrefix(parts[len(parts)-4], queueSizeSegmentPrefix)
+	if !found {
+		return 0
+	}
+	size, err := strconv.ParseUint(digits, 10, 32)
+	if err != nil {
+		return 0
+	}
+	return uint32(size)
+}
+
+// lockKeyForQueue 由队列 key 推出它的凑单锁 key:与 rankKeyForQueue 同一种换段写法
+// (倒数第三段 "queue" → "lock")。不带人数段的队列得到的就是 matcherLockKey(mode, config),
+// 所以新旧实例混跑时抢的还是同一把锁;人数档队列各有各的锁,互不挡道。非队列 key 形态报错。
+func lockKeyForQueue(queueKey string) (string, error) {
+	if _, _, err := parseQueueKey(queueKey); err != nil {
+		return "", err
+	}
+	parts := strings.Split(queueKey, ":")
+	parts[len(parts)-3] = "lock"
+	return strings.Join(parts, ":"), nil
 }
 
 // matchRankKey 是队列的评分镜像 ZSET(§11):与队列 list 同 slot,每条改动

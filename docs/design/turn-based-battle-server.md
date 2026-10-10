@@ -252,7 +252,7 @@ go-zero,结构照抄 `go/scene_manager`(config/etc yaml/internal/{logic,svc,serv
 |-----|------|------|------|
 | `battle:lock:{player_id}` = battle_id | scene(Prepare 时 SET EX / 结算与作废时 DEL) | match(JoinQueue 咨询性检查) | 战斗串行化锁,权威判定仍在 scene 的 InBattleComp |
 | `battle:settlement:pending:{player_id}` = 序列化 BattleSettlementEvent,TTL 7d | scene(玩家离线时) | scene(登录加载后) | 离线结算暂存 |
-| `match:{mq}:index` / `match:{mq}:queue:*` / `match:{mq}:lock:*` | match | match | 队列注册集 / 队列 / 凑单锁,hash tag `{mq}` 同 slot(Lua 原子入队;§16)|
+| `match:{mq}:index` / `match:{mq}:queue:*` / `match:{mq}:lock:*` | match | match | 队列注册集 / 队列 / 凑单锁,hash tag `{mq}` 同 slot(Lua 原子入队;§16);PVE 人数档另有 `match:{mq}:size<N>:{queue,rank,lock}:*`(pve-team-size-matching.md §3.2)|
 | `match:ticket:{player_id}` | match | match | 排队票据(含 zone_id / queue_key;matched 态短 TTL 自愈,§16)|
 
 **存储归属(2026-09-02,§16)**:上表 `battle:*` 与 `player:*` 是跨运行时契约 key,留在共享 Redis
@@ -361,8 +361,8 @@ robot battle 动作、匹配负载均衡、Excel 回合列(替代 kRoundDuration
 | # | 决策 | 理由 |
 |---|------|------|
 | D12 | **自动战斗是服务端状态**:`SetAutoBattle` 落在引擎 `BattleActorState.is_auto`;auto 单位在 `AllPlayersReady()` 中视为已就绪,`ResolveCurrentRound()` 的默认行动路径(普攻随机存活敌人)替他出手 | 挂机玩家掉线/切后台照打;引擎确定性不受影响(默认行动本来就走引擎 RNG);状态进快照,重连/观战免费可见 |
-| D13 | **全自动房间按固定节奏推进**:装填回合时若 `AllPlayersReady()` 立即为真(全员挂机),回合 timer 改用 `kAutoRoundIntervalMs = 2000` 而非整个行动窗口 | 既不空转刷回合(观众/客户端跟得上),也不傻等 30s 行动窗口 |
-| D14 | **队伍上限 5 双侧强制**:引擎 `Initialize` 校验每队玩家 ≤ `kMaxBattleTeamSize = 5`(超限拒绝建房);match 侧 PVE_TEAM 凑满人数按 `min(配置值, 5)` 收口 | 产品口径"队伍上限五个人";Dungeon 表存在 max_team_size=10 的历史行,代码收口比改表重导安全 |
+| D13 | **全自动房间按固定节奏推进**:装填回合时若 `AllPlayersReady()` 立即为真(全员挂机),回合 timer 改用 `kAutoRoundIntervalMs = 2000` 而非整个行动窗口(2026-10-10 更正:2000ms 是下限,出手单位超过 8 个时按每单位 250ms 放宽,`AutoRoundIntervalMsFor`,见 pve-team-size-matching.md §2.2) | 既不空转刷回合(观众/客户端跟得上),也不傻等 30s 行动窗口 |
+| D14 | **队伍上限 5 双侧强制**:引擎 `Initialize` 校验每队玩家 ≤ `kMaxBattleTeamSize = 5`(超限拒绝建房);match 侧 PVE_TEAM 人数上限按 `min(配置值, 5)` 收口(2026-10-09 起配置值是人数**上限**,凑满人数 = 请求的 `team_size`,见 pve-team-size-matching.md §3) | 产品口径"队伍上限五个人";Dungeon 表存在 max_team_size=10 的历史行,代码收口比改表重导安全 |
 | D15 | **5v5 PVP 启用既有枚举**:`MATCH_MODE_5V5` 走 FIFO 凑 10 人,弹出序前 5 人 team 0、后 5 人 team 1 | 复用 matcher/gather 全部管线,只改 requiredPlayers/teamIndexFor 两个开关点 |
 | D16 | **跑图不遇怪是既定架构,明文化**:场景内没有怪物实体、没有任何移动/碰撞触发战斗的逻辑;PVE 进战斗只有两条路——JoinQueue 匹配(solo 即配/组队凑单)与场景点名切磋。移动链路(MoveStart/MoveSync/导航裁决)与战斗系统零耦合,今后加"场景可见怪物"也必须走"点击怪物 → match 入口",禁止随机遇怪 | 用户产品决策(2026-08-31):跑路不遇怪 |
 
@@ -501,6 +501,8 @@ B 收到观战结束推送;B 观战中点排队 → 观战被清退(NotifySpecta
   新值同见 §8;09-13 那版同样从未导表。
   同日防御单位 ×12:`armor` 列 3~35 → 36~420,与等级系数 360 + 120 × 等级(`combat_damage_rules.h`)配套,减伤比例不变。
 - `Dungeon.xlsx`:`monster`(repeated fk:Monster)怪物组;副本1=[1,2]/副本2=[6,7]/副本3=[11,12,16]。
+  **2026-10-09 起怪物只数随人数成倍增加**:每名进攻方玩家对应一整组(单人打到的与此前相同,
+  2 人就是这一组重复两遍,上限 10 只)。规则与人数档匹配见 [pve-team-size-matching.md](pve-team-size-matching.md)。
 - `Class.xlsx`:init_health/mana/strength/armor/resistance/critchance/speed(职业初始属性)。
 - **导表 PATH 必须同时含 protoc 与 protoc-gen-go/grpc**,否则 Go 侧 proto 静默不重生成。
 

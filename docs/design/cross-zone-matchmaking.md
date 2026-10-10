@@ -148,6 +148,7 @@ JoinQueue(任一 zone 玩家)→ 票据(含 zone)→ Lua 原子入队 → matche
 | `match:{mq}:queue:<mode>:<config>` | list | 排队玩家 id,等待序(队首最久) | `{mq}` |
 | `match:{mq}:rank:<mode>:<config>` | zset | 同一队列的评分镜像:member=player_id,score=入队时评分(§11) | `{mq}` |
 | `match:{mq}:lock:<mode>:<config>` | string | matcher 凑单临界区(SETNX,值=实例 uuid) | `{mq}` |
+| `match:{mq}:size<N>:{queue,rank,lock}:<mode>:<config>` | list / zset / string | (2026-10-09 补)PVE 人数档,N = 2..副本上限,每档各一套队列 / 评分镜像 / 凑单锁;`PVE_TEAM` 新入队一律写带人数段的 key,见 [pve-team-size-matching.md](pve-team-size-matching.md) §3.2。排查某一档用 `SMEMBERS match:{mq}:index`,`match:{mq}:queue:*` 的通配匹配不到它 | `{mq}` |
 | `match:ticket:<player_id>` | hash | 票据:`ticket/mode/config/state/enqueued_at_ms/battle_id/zone_id/queue_key/rating` | 按玩家 |
 | `match:rating:<player_id>` | hash | 玩家评分 `rating/games/updated_at_ms`,无 TTL,默认 1500(§11) | 按玩家 |
 | `match:rating:applied:<battle_id>` | string | 对局结果已入账标记,TTL 7d(§11 幂等) | 按对局 |
@@ -327,6 +328,9 @@ player_migrate 目标判据(`scene_info.guid` uint32)、SceneManager 部署粒�
   battle 侧与自身指纹核对属各自服务的工作;
 - **多实例配置漂移**:`PveTeamSizeByConfigId` / `BattleMaxDurationSeconds` 各实例取本地 yaml,漂移会让同一队列
   按不同人数弹人(二期:凑满人数改查 DungeonTable,已在 §5.4 记为权威来源);
+  (2026-10-09 更正:PVE 人数档队列的凑满人数来自队列 key,`PveTeamSizeByConfigId` 现在是人数**上限**。漂移的表现改为
+  「上限较低的实例对超出的人数档不弹组、只告警」与「不填 `team_size` 的请求在不同实例落进不同人数档」;
+  只有存量的不带人数段的 `PVE_TEAM` 队列仍是「按不同人数弹人」。见 pve-team-size-matching.md §3.2)
 - **对局质量维度**:~~纯 FIFO 无 MMR/等级/战力~~ → **已落地评分匹配(§11,2026-09-03)**:Elo 评分 + 等待时间放宽的
   容差匹配 + 5v5 蛇形分队;等级 / 战力维度与跨 zone 新老区合流的平衡度仍不在本轮(产品决策;用户明确不设 zone 优先级)。
 
@@ -454,7 +458,7 @@ B 胜、PVE / 未结束 / 空队伍忽略不写标记不计局数、`applied` TT
 2. **滚动升级**:旧实例只写 list 不写 ZSET,新 matcher 对镜像缺失的成员按票据评分(旧票据无该字段 → 1500)补写 ZADD,
    两边混跑期间凑组照常;`migrateLegacyQueues` 搬旧格式队列时也写镜像。**不需要排空队列**。
 3. **Kafka**:`match-results` 分区数一旦创建不可改(`EnsureTopics` 契约);改分区要换 topic 名并同步 C++ `kMatchResultsTopic`。
-4. **回滚**:回退到无评分版本后 ZSET 成为无人维护的孤儿 —— 旧 `pruneQueueScript` 不删它,需手工 `DEL match:{mq}:rank:*`;
+4. **回滚**:回退到无评分版本后 ZSET 成为无人维护的孤儿 —— 旧 `pruneQueueScript` 不删它,需手工 `DEL match:{mq}:rank:*`(2026-10-09 起还有人数档的 `match:{mq}:size*:rank:*`);
    评分 hash 与 applied 标记留着无害。
 
 ### 11.10 非目标 / 后续

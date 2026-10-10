@@ -51,7 +51,7 @@ func NewTeamBattleStarter(svcCtx *svc.ServiceContext) *TeamBattleStarter {
 	return &TeamBattleStarter{svcCtx: svcCtx}
 }
 
-// TeamSizeFor 副本 battleConfigId 的组队开战人数上限:与 JoinQueue / matcher 的 PVE_TEAM 凑满人数
+// TeamSizeFor 副本 battleConfigId 的组队开战人数上限:与 JoinQueue / matcher 的 PVE_TEAM 人数上限
 // 同一口径(requiredPlayers:PveTeamSizeByConfigId,按 kMaxBattleTeamSize 收口);0 = 未开放组队。
 func (s *TeamBattleStarter) TeamSizeFor(battleConfigId uint32) uint32 {
 	return requiredPlayers(s.svcCtx, int32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), battleConfigId)

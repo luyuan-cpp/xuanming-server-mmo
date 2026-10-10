@@ -1354,6 +1354,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED JoinQueueRequest final : public ::g
     kMapConfigIdFieldNumber = 3,
     kZoneIdFieldNumber = 5,
     kBattleConfigIdFieldNumber = 6,
+    kTeamSizeFieldNumber = 7,
   };
   // repeated uint64 party_member_ids = 4 [deprecated = true];
   [[nodiscard]] [[deprecated]]  int party_member_ids_size()
@@ -1425,11 +1426,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED JoinQueueRequest final : public ::g
   void _internal_set_battle_config_id(::uint32_t value);
 
   public:
+  // uint32 team_size = 7;
+  void clear_team_size() ;
+  [[nodiscard]] ::uint32_t team_size() const;
+  void set_team_size(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_team_size() const;
+  void _internal_set_team_size(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:match.JoinQueueRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
+      ::google::protobuf::internal::TcParseTable<3, 7,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1465,6 +1476,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED JoinQueueRequest final : public ::g
     ::uint32_t map_config_id_;
     ::uint32_t zone_id_;
     ::uint32_t battle_config_id_;
+    ::uint32_t team_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4859,6 +4871,30 @@ inline ::uint32_t JoinQueueRequest::_internal_battle_config_id() const {
 inline void JoinQueueRequest::_internal_set_battle_config_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_config_id_ = value;
+}
+
+// uint32 team_size = 7;
+inline void JoinQueueRequest::clear_team_size() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_size_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t JoinQueueRequest::team_size() const {
+  // @@protoc_insertion_point(field_get:match.JoinQueueRequest.team_size)
+  return _internal_team_size();
+}
+inline void JoinQueueRequest::set_team_size(::uint32_t value) {
+  _internal_set_team_size(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.JoinQueueRequest.team_size)
+}
+inline ::uint32_t JoinQueueRequest::_internal_team_size() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_size_;
+}
+inline void JoinQueueRequest::_internal_set_team_size(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_size_ = value;
 }
 
 // -------------------------------------------------------------------

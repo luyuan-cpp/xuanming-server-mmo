@@ -79,7 +79,10 @@ ReadyTicketTTLSeconds: 60
 # 灰度期用 warn 观察指标,各 zone 表版本对齐后再切 enforce。
 TableFingerprintMode: warn
 
-# PVE 组队各 battle_config_id(DungeonTable id)的凑满人数。
+# PVE 组队各 battle_config_id(DungeonTable id)的队伍人数上限。
+# 排队按人数档凑单(JoinQueueRequest.team_size,docs/design/pve-team-size-matching.md):1 人即时开战,
+# 2..上限 各有一条队列,不填 = 上限;怪物只数跟参战人数走。配 5 就是开放 1~5 人五个档。
+# 把某个 id 的上限调低后,已经排在更高人数档里的人不会再被凑走(只告警),要他们取消重排。
 # ⚠ 一期临时配置:人数的权威来源是 DungeonTable.max_team_size,Go 侧尚无表管理器,
 # 待接导表数据后删除本段改为查表(见设计文档 §5.4)。yaml map 键必须是字符串。
 # 组队整队开战(ClientPlayerTeam.StartTeamMatch)也按它判副本人数上限,未配置的 id 回

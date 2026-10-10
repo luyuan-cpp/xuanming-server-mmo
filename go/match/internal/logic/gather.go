@@ -30,7 +30,7 @@ const (
 )
 
 // kMaxBattleTeamSize 队伍上限 5(设计决策 D14,双侧强制):引擎 Initialize
-// 同步校验每队 ≤ 5;match 侧 PVE_TEAM 凑满人数按 min(配置值, 5) 收口 ——
+// 同步校验每队 ≤ 5;match 侧 PVE_TEAM 人数上限按 min(配置值, 5) 收口 ——
 // DungeonTable 存在 max_team_size=10 的历史行,代码收口比改表重导安全。
 // 与引擎 constants/turn_battle_constants.h 的同名常量保持一致。
 const kMaxBattleTeamSize = 5
@@ -185,7 +185,9 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 					}
 					survivors = append(survivors, pid)
 				}
-				requeueFront(svcCtx, matchQueueKey(int32(mode), battleConfigId), survivors, tickets)
+				// 兜底队列 key(票据没有 queue_key 时才用,也是汇总日志里印的那个):回队首只发生在
+				// 队列凑单的组上,组大小就是那条队列的凑满人数,所以 PVE 人数档能还原出带人数段的 key。
+				requeueFront(svcCtx, queueKeyForJoin(mode, battleConfigId, uint32(len(members))), survivors, tickets)
 			} else {
 				for _, pid := range members {
 					deleteTicketIfOwned(svcCtx, pid, tickets[pid])

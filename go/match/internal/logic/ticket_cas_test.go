@@ -46,7 +46,7 @@ func stubQueueDepth(t *testing.T) *depthRecorder {
 	t.Helper()
 	rec := &depthRecorder{seen: map[string][]int{}}
 	prev := setQueueDepthFn
-	setQueueDepthFn = func(mode string, config string, depth int) {
+	setQueueDepthFn = func(mode string, config string, _ string, depth int) {
 		rec.mu.Lock()
 		defer rec.mu.Unlock()
 		rec.seen[mode+"/"+config] = append(rec.seen[mode+"/"+config], depth)

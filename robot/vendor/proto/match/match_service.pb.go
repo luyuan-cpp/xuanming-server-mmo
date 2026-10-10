@@ -33,7 +33,7 @@ const (
 	MatchMode_MATCH_MODE_3V3           MatchMode = 2 // 6 players total(未开放)
 	MatchMode_MATCH_MODE_1V1           MatchMode = 3 // 2 players total(回合制 PVP,一期启用)
 	MatchMode_MATCH_MODE_PVE_SOLO      MatchMode = 4 // 回合制 PVE 单人,即时开战(伪匹配)
-	MatchMode_MATCH_MODE_PVE_TEAM      MatchMode = 5 // 回合制 PVE 组队,FIFO 凑满 DungeonTable.max_team_size
+	MatchMode_MATCH_MODE_PVE_TEAM      MatchMode = 5 // 回合制 PVE 组队:按 JoinQueueRequest.team_size 的人数档 FIFO 凑满(1 人档即时开战)
 	MatchMode_MATCH_MODE_PVP_CHALLENGE MatchMode = 6 // 场景发起 PK(切磋):点名成局,不入队
 )
 
@@ -156,8 +156,18 @@ type JoinQueueRequest struct {
 	PartyMemberIds []uint64 `protobuf:"varint,4,rep,packed,name=party_member_ids,json=partyMemberIds,proto3" json:"party_member_ids,omitempty"`
 	ZoneId         uint32   `protobuf:"varint,5,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                           // Player's current zone
 	BattleConfigId uint32   `protobuf:"varint,6,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // 回合制战斗配置(DungeonTable id:怪物组/人数/回合上限)
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// PVE 人数档(只有 MATCH_MODE_PVE_TEAM 读它,docs/design/pve-team-size-matching.md):想凑成几人的队伍。
+	// 怪物只数跟着实际参战人数走(每人一整组怪:单人打一组,N 人打 N 组)。
+	//
+	//	0        = 该副本的人数上限(加这个字段之前的行为;老客户端不填就是它)
+	//	1        = 不排队,即时开战
+	//	2..上限  = 进这个人数档的队列,凑满即开
+	//	超过上限 = 拒绝(kMatchModeNotOpen)
+	//
+	// 上限 = match 配置 PveTeamSizeByConfigId[battle_config_id],且不超过引擎每队上限 5。
+	TeamSize      uint32 `protobuf:"varint,7,opt,name=team_size,json=teamSize,proto3" json:"team_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *JoinQueueRequest) Reset() {
@@ -229,6 +239,13 @@ func (x *JoinQueueRequest) GetZoneId() uint32 {
 func (x *JoinQueueRequest) GetBattleConfigId() uint32 {
 	if x != nil {
 		return x.BattleConfigId
+	}
+	return 0
+}
+
+func (x *JoinQueueRequest) GetTeamSize() uint32 {
+	if x != nil {
+		return x.TeamSize
 	}
 	return 0
 }
@@ -1275,14 +1292,15 @@ var File_proto_match_match_service_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_service_proto_rawDesc = "" +
 	"\n" +
-	"\x1fproto/match/match_service.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\x1a proto/battle/player_battle.proto\"\xea\x01\n" +
+	"\x1fproto/match/match_service.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\x1a proto/battle/player_battle.proto\"\x87\x02\n" +
 	"\x10JoinQueueRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12$\n" +
 	"\x04mode\x18\x02 \x01(\x0e2\x10.match.MatchModeR\x04mode\x12\"\n" +
 	"\rmap_config_id\x18\x03 \x01(\rR\vmapConfigId\x12,\n" +
 	"\x10party_member_ids\x18\x04 \x03(\x04B\x02\x18\x01R\x0epartyMemberIds\x12\x17\n" +
 	"\azone_id\x18\x05 \x01(\rR\x06zoneId\x12(\n" +
-	"\x10battle_config_id\x18\x06 \x01(\rR\x0ebattleConfigId\"\x8b\x01\n" +
+	"\x10battle_config_id\x18\x06 \x01(\rR\x0ebattleConfigId\x12\x1b\n" +
+	"\tteam_size\x18\a \x01(\rR\bteamSize\"\x8b\x01\n" +
 	"\x11JoinQueueResponse\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x12!\n" +

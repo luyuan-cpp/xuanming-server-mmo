@@ -31,9 +31,10 @@ const (
 	ErrInBattle = uint32(table.MatchError_kMatchInBattle)
 	// ErrAlreadyQueued:已有排队 ticket,不允许重复入队。
 	ErrAlreadyQueued = uint32(table.MatchError_kMatchAlreadyQueued)
-	// ErrModeNotOpen:该匹配模式一期未开放(5v5/3v3)或不接受直接入队(切磋)。
+	// ErrModeNotOpen:该匹配模式一期未开放(5v5/3v3)或不接受直接入队(切磋);
+	// 也用于 PVE_TEAM 请求的 team_size 超过副本人数上限(复用原因见 pve-team-size-matching.md §3.1)。
 	ErrModeNotOpen = uint32(table.MatchError_kMatchModeNotOpen)
-	// ErrTeamSizeNotConfigured:PVE 组队的 battle_config_id 未配置凑满人数。
+	// ErrTeamSizeNotConfigured:PVE 组队的 battle_config_id 未配置人数上限(PveTeamSizeByConfigId 无此 id)。
 	ErrTeamSizeNotConfigured = uint32(table.MatchError_kMatchTeamSizeNotConfigured)
 	// ErrInternal:Redis / snowflake 等内部错误。
 	ErrInternal = uint32(table.MatchError_kMatchInternal)

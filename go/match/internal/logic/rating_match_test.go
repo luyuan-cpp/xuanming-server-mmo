@@ -221,7 +221,8 @@ func TestPveTeamIgnoresRating(t *testing.T) {
 	svcCtx, mr := newTestSvcCtx(t)
 	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 3}
 	groups := stubGather(t)
-	queueKey := matchQueueKey(int32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), 1)
+	// 不填 team_size = 副本上限(3 人档);PVE_TEAM 的队列 key 带人数段。
+	queueKey := matchSizedQueueKey(int32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), 1, 3)
 	for i, rating := range []float64{3000, 1000, 2000} {
 		pid := uint64(11401 + i)
 		setPlayerLocation(t, mr, pid, 1)
