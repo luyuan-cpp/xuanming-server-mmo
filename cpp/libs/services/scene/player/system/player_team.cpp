@@ -1,5 +1,6 @@
 #include "player_team.h"
 
+#include <cmath>
 #include <limits>
 #include <string>
 
@@ -13,13 +14,18 @@
 #include "network/node_utils.h"
 #include "type_alias/player_session_type_alias.h"
 
+#include "hexagons_grid.h" // Hex:实体是否已被 AoiSystem::Update 放进格子
+
 #include "battle/system/player_battle.h"
 #include "modules/scene/comp/scene_comp.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"
 #include "player/system/player_lifecycle.h" // IsSceneChangeBusy / RequestSceneChange:普通 EnterScene 的发送侧闸与唯一发送入口
+#include "spatial/comp/scene_node_scene_comp.h" // AoiListComp:归队前判断队员与队长是否互相可见
+#include "spatial/system/movement.h"            // TeleportWithinScene:归队瞬移
 
 #include "grpc_client/scene_manager/scene_manager_service_grpc_client.h"
+#include "proto/common/component/actor_comp.pb.h" // Transform:归队时读队长位置
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_network_comp.pb.h"
 #include "proto/common/component/team_comp.pb.h"
@@ -133,7 +139,9 @@ void PlayerTeamSystem::OnRefreshEvent(const PlayerTeamRefreshEvent& event)
 		LOG_DEBUG << "[PlayerTeam] 刷新信号丢弃: 玩家不在本节点, player_id=" << playerId;
 		return;
 	}
-	RefreshMembership(player, FollowMode::kRefreshOnly);
+	// 入队即跟随(J-12 修订):信号只发给 TeamId 变了的人,被移出者刷新后 TeamId 为 0、
+	// 建队者是队长,两者都不会走到跟随;真正被带走的只有新加入的队员。不扇出。
+	RefreshMembership(player, FollowMode::kFollowLeader);
 }
 
 void PlayerTeamSystem::OnBattleFreezeCleared(entt::entity player)
@@ -440,8 +448,14 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 			}
 
 			const uint64_t leaderSceneId = leaderLocation.scene_id();
-			if (leaderSceneId == 0 || leaderSceneId == CurrentSceneId(player))
+			if (leaderSceneId == 0)
 			{
+				return;
+			}
+			if (leaderSceneId == CurrentSceneId(player))
+			{
+				// 已经和队长在同一个场景实例:不用换图,只需要把人带到队长看得见的地方
+				RegroupToLeader(player, leaderId);
 				return;
 			}
 
@@ -495,4 +509,66 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 					 << " leader_scene_id=" << leaderSceneId << " corr=" << correlationId;
 		},
 		(std::string("MGET %s ") + kBattleLockKeyFmt).c_str(), leaderLocationKey.c_str(), playerId);
+}
+
+void PlayerTeamSystem::RegroupToLeader(entt::entity player, uint64_t leaderId)
+{
+	const uint64_t playerId = GuidOf(player);
+	const auto leader = tlsEcs.GetPlayer(leaderId);
+	if (leader == entt::null || !tlsEcs.actorRegistry.valid(leader) || leader == player)
+	{
+		return; // 队长实体不在本节点(位置记录滞后 / 刚下线):没有可对齐的目标
+	}
+	// Redis 里的位置记录可能滞后于 ECS:以两个实体此刻实际绑定的场景为准,不一致就等下一次信号
+	const uint64_t sceneId = CurrentSceneId(player);
+	if (sceneId == 0 || CurrentSceneId(leader) != sceneId)
+	{
+		return;
+	}
+	// 队长正在被交接出本节点:他马上就不在这个场景了,不往一个即将消失的位置上凑
+	if (IsOwnershipInFlight(leader))
+	{
+		LOG_INFO << "[PlayerTeam] metric=team_regroup_skipped reason=leader_ownership_in_flight player_id="
+				 << playerId << " leader_id=" << leaderId;
+		return;
+	}
+
+	const auto* transform = tlsEcs.actorRegistry.try_get<Transform>(player);
+	const auto* leaderTransform = tlsEcs.actorRegistry.try_get<Transform>(leader);
+	if (transform == nullptr || leaderTransform == nullptr)
+	{
+		return;
+	}
+
+	// 兴趣表只有在双方都已经被 AoiSystem::Update 放进格子(有 Hex)之后才说明问题。
+	// 任一方刚进场 / 刚被瞬移、还没轮到下一次 Update 时表是空的:那不是"看不见",而是"还没评估"。
+	// 此时只看距离 —— 相距不超过 kTeamRegroupDistance(< 可见半径 10)的两个人必在同格或邻格,
+	// 后进格的那一方做首次进场评估时会把双向可见性一起建好。
+	// 不这样区分的话:进场链(三跳 Redis 回调通常早于首次 Update)每次都会瞬移;
+	// 一次瞬移之后、下一次 Update 之前再来一次跟随检查,还会重复瞬移。
+	const bool visibilityEvaluated = tlsEcs.actorRegistry.any_of<Hex>(player) &&
+									 tlsEcs.actorRegistry.any_of<Hex>(leader);
+	const auto* ownAoi = tlsEcs.actorRegistry.try_get<AoiListComp>(player);
+	const auto* leaderAoi = tlsEcs.actorRegistry.try_get<AoiListComp>(leader);
+	const bool mutuallyVisible = !visibilityEvaluated ||
+								 (ownAoi != nullptr && ownAoi->Contains(leader) && leaderAoi != nullptr &&
+								  leaderAoi->Contains(player));
+	// 服务器坐标的水平面是 x/y(z 为高度)
+	const double dx = transform->location().x() - leaderTransform->location().x();
+	const double dy = transform->location().y() - leaderTransform->location().y();
+	const double distance = std::sqrt(dx * dx + dy * dy);
+	if (!ShouldRegroup(distance, mutuallyVisible))
+	{
+		return;
+	}
+
+	// 落在队长脚下:那是队长刚被导航裁决过的合法点。排成一列是客户端的事 ——
+	// 队员客户端看到队长之后会自己走到身后的槽位。
+	// 先拷一份再传:TeleportWithinScene 会改写 player 的 Transform,不把别的实体组件的引用带进去。
+	const Vector3 targetLocation = leaderTransform->location();
+	const Rotation targetRotation = leaderTransform->rotation();
+	LOG_INFO << "[PlayerTeam] metric=team_regroup player_id=" << playerId << " leader_id=" << leaderId
+			 << " scene_id=" << sceneId << " distance=" << distance << " mutually_visible=" << mutuallyVisible
+			 << " visibility_evaluated=" << visibilityEvaluated;
+	MovementSystem::TeleportWithinScene(player, targetLocation, targetRotation, kTeleportReasonTeamRegroup);
 }

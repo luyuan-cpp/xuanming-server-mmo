@@ -17,6 +17,7 @@
 #include "spatial/constants/aoi_priority.h"
 #include "spatial/system/grid.h"
 #include "spatial/system/interest.h"
+#include "spatial/system/movement.h"
 #include "player/system/player_team.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/team_comp.pb.h"
@@ -291,6 +292,101 @@ TEST_F(AoiVisibilityTest, EntitiesOutOfRangeAreNotVisible)
         << "entity2 should NOT be in entity1's AoiList when out of range";
     EXPECT_FALSE(IsInAoiList(entity2, entity1))
         << "entity1 should NOT be in entity2's AoiList when out of range";
+}
+
+// ---------------------------------------------------------------------------
+// AoiSystem::ResetEntityVisibility:同场景瞬移之后的可见性重建(team-system.md 文末「组队跟随 v1.1」V.2)
+// ---------------------------------------------------------------------------
+
+// 同一个六边形内的瞬移:两者同格但相距 14(> kMaxViewRadius 10)时互相不可见;
+// 把 entity2 瞬移到 entity1 脚下并重置之后,下一次 Update 必须建立双向可见。
+TEST_F(AoiVisibilityTest, ResetEntityVisibilityRebuildsViewAfterSameHexTeleport)
+{
+    auto& location2 = *tlsEcs.actorRegistry.get<Transform>(entity2).mutable_location();
+    location2.set_x(14);
+    location2.set_y(0);
+    AoiSystem::Update(0.0);
+
+    // 前置条件:同格、互相不可见
+    ASSERT_EQ(GridSystem::GetGridId(tlsEcs.actorRegistry.get<Transform>(entity1).location()),
+              GridSystem::GetGridId(location2));
+    ASSERT_FALSE(IsInAoiList(entity1, entity2));
+    ASSERT_FALSE(IsInAoiList(entity2, entity1));
+
+    location2.set_x(0);
+    AoiSystem::ResetEntityVisibility(entity2);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<Hex>(entity2))
+        << "重置后必须摘掉 Hex,下一次 Update 才会走首次进场分支";
+    AoiSystem::Update(0.0);
+
+    EXPECT_TRUE(IsInAoiList(entity1, entity2));
+    EXPECT_TRUE(IsInAoiList(entity2, entity1));
+}
+
+// 瞬移到远处:旧位置的观察者立刻不再看到它,它自己的兴趣表也清空;
+// 之后的 Update 把它登记到新位置的格子里,两者仍然互相不可见。
+TEST_F(AoiVisibilityTest, ResetEntityVisibilityDropsOldNeighbours)
+{
+    auto& location2 = *tlsEcs.actorRegistry.get<Transform>(entity2).mutable_location();
+    location2.set_x(0);
+    location2.set_y(0);
+    AoiSystem::Update(0.0);
+    ASSERT_TRUE(IsInAoiList(entity1, entity2));
+    ASSERT_TRUE(IsInAoiList(entity2, entity1));
+
+    location2.set_x(500);
+    location2.set_y(500);
+    AoiSystem::ResetEntityVisibility(entity2);
+
+    EXPECT_FALSE(IsInAoiList(entity1, entity2));
+    EXPECT_FALSE(IsInAoiList(entity2, entity1));
+
+    AoiSystem::Update(0.0);
+
+    const auto& gridList = tlsEcs.sceneRegistry.get<SceneGridListComp>(sceneEntity);
+    const auto newGrid = gridList.find(GridSystem::GetGridId(location2));
+    ASSERT_TRUE(newGrid != gridList.end());
+    EXPECT_TRUE(newGrid->second.entities.contains(entity2));
+    const auto oldGrid = gridList.find(GridSystem::GetGridId(tlsEcs.actorRegistry.get<Transform>(entity1).location()));
+    ASSERT_TRUE(oldGrid != gridList.end());
+    EXPECT_FALSE(oldGrid->second.entities.contains(entity2));
+    EXPECT_FALSE(IsInAoiList(entity1, entity2));
+    EXPECT_FALSE(IsInAoiList(entity2, entity1));
+}
+
+// kPinned 条目由 buff / skill 生命周期管理:重置既不摘"我钉住的",也不摘"钉住我的"。
+TEST_F(AoiVisibilityTest, ResetEntityVisibilityKeepsPinnedEntriesOnBothSides)
+{
+    auto& location2 = *tlsEcs.actorRegistry.get<Transform>(entity2).mutable_location();
+    location2.set_x(0);
+    location2.set_y(0);
+    AoiSystem::Update(0.0);
+    ASSERT_TRUE(IsInAoiList(entity1, entity2));
+    ASSERT_TRUE(IsInAoiList(entity2, entity1));
+
+    ASSERT_TRUE(InterestSystem::PinAoiEntity(entity1, entity2));
+    ASSERT_TRUE(InterestSystem::PinAoiEntity(entity2, entity1));
+
+    location2.set_x(500);
+    location2.set_y(500);
+    AoiSystem::ResetEntityVisibility(entity2);
+
+    EXPECT_TRUE(IsInAoiList(entity1, entity2)) << "对方钉住我的条目不能被重置摘掉";
+    EXPECT_TRUE(IsInAoiList(entity2, entity1)) << "我钉住对方的条目不能被重置摘掉";
+}
+
+// 还没进过格子的实体(刚进场、首次 Update 之前):重置不崩,首次 Update 照常建立可见性。
+TEST_F(AoiVisibilityTest, ResetEntityVisibilityBeforeFirstUpdateIsHarmless)
+{
+    auto& location2 = *tlsEcs.actorRegistry.get<Transform>(entity2).mutable_location();
+    location2.set_x(3);
+    location2.set_y(0);
+
+    AoiSystem::ResetEntityVisibility(entity2);
+    AoiSystem::Update(0.0);
+
+    EXPECT_TRUE(IsInAoiList(entity1, entity2));
+    EXPECT_TRUE(IsInAoiList(entity2, entity1));
 }
 
 // ---------------------------------------------------------------------------
@@ -1099,4 +1195,54 @@ int main(int argc, char** argv)
 {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
+}
+
+// ---------------------------------------------------------------------------
+// 纯函数:PlayerTeamSystem::ShouldRegroup(team-system.md 文末「组队跟随 v1.1」V.2)
+// ---------------------------------------------------------------------------
+
+TEST(TeamRegroupRuleTest, InvisibleLeaderAlwaysRegroupsEvenWhenAdjacent)
+{
+    // 同格但从未建立可见性:脸贴脸也要瞬移,否则客户端永远看不到队长
+    EXPECT_TRUE(PlayerTeamSystem::ShouldRegroup(0.0, false));
+    EXPECT_TRUE(PlayerTeamSystem::ShouldRegroup(kTeamRegroupDistance, false));
+}
+
+TEST(TeamRegroupRuleTest, VisibleLeaderWithinFormationIsLeftAlone)
+{
+    EXPECT_FALSE(PlayerTeamSystem::ShouldRegroup(0.0, true));
+    EXPECT_FALSE(PlayerTeamSystem::ShouldRegroup(5.6, true)); // 5 人纵队末位
+    EXPECT_FALSE(PlayerTeamSystem::ShouldRegroup(kTeamRegroupDistance, true)); // 边界:恰好等于不触发
+}
+
+TEST(TeamRegroupRuleTest, VisibleLeaderBeyondFormationRegroups)
+{
+    EXPECT_TRUE(PlayerTeamSystem::ShouldRegroup(kTeamRegroupDistance + 0.01, true));
+    EXPECT_TRUE(PlayerTeamSystem::ShouldRegroup(300.0, true));
+}
+
+// ---------------------------------------------------------------------------
+// 纯函数:MovementSystem::JudgeReportAfterTeleport(瞬移后丢弃过期移动上报)
+// ---------------------------------------------------------------------------
+
+TEST(TeleportReportVerdictTest, FarReportBeforeDeadlineIsStale)
+{
+    EXPECT_EQ(MovementSystem::JudgeReportAfterTeleport(kTeleportSettleRadius + 0.01, 1000, 4000),
+              TeleportReportVerdict::kStale);
+    EXPECT_EQ(MovementSystem::JudgeReportAfterTeleport(250.0, 3999, 4000), TeleportReportVerdict::kStale);
+}
+
+TEST(TeleportReportVerdictTest, NearReportSettlesBeforeAndAfterDeadline)
+{
+    EXPECT_EQ(MovementSystem::JudgeReportAfterTeleport(0.0, 1000, 4000), TeleportReportVerdict::kSettled);
+    EXPECT_EQ(MovementSystem::JudgeReportAfterTeleport(kTeleportSettleRadius, 1000, 4000),
+              TeleportReportVerdict::kSettled);
+    // 落位后站着不动、过了超时才发第一条上报:仍然是正常落位
+    EXPECT_EQ(MovementSystem::JudgeReportAfterTeleport(0.5, 9000, 4000), TeleportReportVerdict::kSettled);
+}
+
+TEST(TeleportReportVerdictTest, FarReportAtOrAfterDeadlineExpires)
+{
+    EXPECT_EQ(MovementSystem::JudgeReportAfterTeleport(250.0, 4000, 4000), TeleportReportVerdict::kExpired);
+    EXPECT_EQ(MovementSystem::JudgeReportAfterTeleport(250.0, 9000, 4000), TeleportReportVerdict::kExpired);
 }

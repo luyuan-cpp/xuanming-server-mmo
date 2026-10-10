@@ -16,11 +16,15 @@
 //   player:<player_id>:location string storage::PlayerLocation pb(scene_manager 写)
 //   battle:lock:<player_id>  string battle_id(scene PrepareBattle 写,咨询性战斗锁)
 //
-// 语义(v1):
+// 语义(v1.1,2026-10-09 起;v1 是"入队不拉人、只换图不归位"):
 //   - 只在同 zone、同 scene 节点内跟随(DV-6);跨节点、跨 zone 只记日志指标。
 //   - 非队长进场 -> 查队长位置并请求 SceneManager 把自己切过去;
 //     队长进场 -> 对本节点上其他成员逐个"刷新并跟随",不再扇出(防循环)。
-//   - 组队服务发起的变更只刷新 TeamId,入队不立即拉人(J-12)。
+//   - 入队即跟随(J-12 修订,team-system.md 文末「组队跟随 v1.1」V.2):组队服务的刷新信号只发给 TeamId 变了的人
+//     (新加入者 / 被移出者),收到后除了刷新 TeamId,非队长还会走一遍跟随。
+//   - 归队:队员与队长已在同一个场景实例时,若两人互相不在对方视野里、或相距超过 kTeamRegroupDistance,
+//     把队员瞬移到队长脚下(MovementSystem::TeleportWithinScene)。"走路时排成一列跟着队长"由客户端做
+//     (队员客户端沿队长轨迹自己走并照常上报移动),scene 只负责把人带到队长看得见的地方。
 //   - 战斗中(IsInBattle 或 battle:lock 存在)一律不跟随,冻结解除后由 PlayerBattleSystem 回调补一次。
 //
 // 线程模型:所有方法都必须在 scene 节点 loop 线程调用;hiredis 回调同样在 loop 线程执行。
@@ -35,6 +39,11 @@
 #include "entt/src/entt/entity/entity.hpp"
 
 class PlayerTeamRefreshEvent;
+
+// 队员离队长超过这个水平距离(服务器坐标单位)就瞬移归队。
+// 客户端 5 人纵队最长约 5.6(4 个槽位 x 1.4),取 8:队形内的正常落后不触发瞬移;
+// 同时小于 kMaxViewRadius(10),保证"不触发瞬移"的队员一定在队长的可见半径内。
+constexpr double kTeamRegroupDistance = 8.0;
 
 // HMGET team:player:<id> tid epoch 回复的三态判定结果。
 enum class TeamIndexReplyKind : uint8_t
@@ -73,6 +82,17 @@ public:
 			return true;
 		}
 		return incomingEpoch > currentEpoch;
+	}
+
+	// 队员与队长已在同一个场景实例时,要不要把队员瞬移到队长脚下。
+	//   互相不可见:必须瞬移。可见性只在跨格时重新评估(AoiSystem::Update),两人同在一个六边形里
+	//               却互相看不见时,走到脸贴脸也不会再建立;而客户端要看得见队长才能跟着走。
+	//   互相可见:  只有离得比队形还远才瞬移,队形内的落后由客户端自己走回来。
+	// mutuallyVisible 由调用方给出;任一方还没被 AoiSystem::Update 评估过(没有 Hex)时按"可见"传入,
+	// 理由见 RegroupToLeader。
+	static bool ShouldRegroup(double horizontalDistance, bool mutuallyVisible)
+	{
+		return !mutuallyVisible || horizontalDistance > kTeamRegroupDistance;
 	}
 
 	// 解析 HMGET team:player:<id> tid epoch 的回复。逐个元素先判 type 再读 str,
@@ -117,8 +137,9 @@ public:
 	// 刷新 TeamId;非队长则检查跟随队长,队长则对本节点其他成员逐个刷新并跟随。
 	static void OnEnteredScene(entt::entity player);
 
-	// PlayerTeamRefreshEvent(team 服务经 Kafka scene-cmd 发来的信号)。
-	// 本节点找不到该玩家实体就丢弃;找到只刷新 TeamId,不跟随(入队不拉人,J-12)。
+	// PlayerTeamRefreshEvent(team 服务经 Kafka scene-cmd 发来的信号,只发给 TeamId 变了的人)。
+	// 本节点找不到该玩家实体就丢弃;找到则刷新 TeamId,并让非队长跟随队长(入队即跟随,J-12 修订)。
+	// 不扇出:建队者 / 新队长自己收到信号时不会去拉别人。
 	static void OnRefreshEvent(const PlayerTeamRefreshEvent& event);
 
 	// PlayerBattleSystem 在确实摘掉 InBattleComp 之后回调:补一次战斗中被跳过的跟随检查。
@@ -135,8 +156,8 @@ public:
 
 private:
 	// 刷新之后要不要继续跟随:
-	//   kRefreshOnly           只刷新 TeamId(组队服务事件)
-	//   kFollowLeader          刷新 + 非队长跟随队长(冻结解除补检查、队长扇出的成员侧)
+	//   kRefreshOnly           只刷新 TeamId(目前没有调用方,保留给"只对账不动人"的场合)
+	//   kFollowLeader          刷新 + 非队长跟随队长(组队服务事件、冻结解除补检查、队长扇出的成员侧)
 	//   kFollowLeaderAndFanout 刷新 + 非队长跟随队长 / 队长扇出本节点成员(玩家自己进场)
 	enum class FollowMode : uint8_t
 	{
@@ -170,6 +191,11 @@ private:
 	// GET team:<tid> 读投影;缺失时 EXISTS team:rec:<tid> 区分"未知 / 无队"。
 	static void LoadTeamInfo(entt::entity player, uint64_t teamId, FollowMode mode);
 
-	// 非队长跟随队长:战斗 / 会话 / battle:lock / zone / 节点守卫全部通过才请求 SceneManager。
+	// 非队长跟随队长:战斗 / 会话 / battle:lock / zone / 节点守卫全部通过之后,
+	// 队长在别的场景 -> 请求 SceneManager 切过去;已在同一场景 -> RegroupToLeader。
 	static void CheckFollowLeader(entt::entity player, uint64_t leaderId);
+
+	// 同一场景实例内的归队:按 ShouldRegroup 判定,需要时把 player 瞬移到队长脚下。
+	// 只由 CheckFollowLeader 在全部守卫通过后调用;队长实体不在本节点 / 不在同一场景 / 归属交接在途时不动。
+	static void RegroupToLeader(entt::entity player, uint64_t leaderId);
 };

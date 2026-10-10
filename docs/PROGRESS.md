@@ -6890,3 +6890,25 @@ PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修
 - **没有顺带解决**:K8s 的 data-service ConfigMap 仍不镜像 `MethodTimeouts`(集群里回档 RPC 取 go-zero 默认 2000ms),属帮会线「接上 guild 时一并处理」;`k8s_client_entry_contract` 的 9 条既有失败;把登记表守护拆成只因 C++ 改动触发的独立 CI job。
 - **同批**:合入 origin/main 的 11 个提交(`ed40df6a4d`)与本机 main 的装备、切线(`d55437fc21`);`third_party/librdkafka`、`third_party/ue5navmesh` 的指针取远端 `d1705175dd` 同步的值 —— 本机 10-08 的每小时自动保存(`a9569db98a`)曾把它们写回本机检出,不是有意回退。
 - **Java 版(AGENTS §12)**:不涉及。本条只动本仓库的 k8s 部署脚本与 go-zero 服务配置的核对,没有改客户端契约。
+
+## 2026-10-09 组队跟随 v1.1:入队即跟随、归队、走路跟随(Claude,服务端未编译;客户端离线编译 + 纯逻辑单测已实跑)
+
+- **起因**:用户给了一段问道手游录像(5 人队排成一路纵队跟着队长走),要求「进队伍跟随到队长场景;移动的时候跟随队长」。修订 J-12(原结论:入队不拉人、跟随走位放 v1.1)。设计与证据见 `docs/design/team-system.md` 文末「组队跟随 v1.1」。
+- **动手前核实到的既有缺口**(不是本轮引入):
+  1. 别的玩家在客户端上根本不会动 —— 服务端从不发 `ActorMoveS2C`(133),移动只置 `ActorBaseAttributesS2C`(66)的脏位且不带 `entity_id`,客户端只认 133;
+  2. 可见性只在跨六边形格时重新评估,同格内相距 10 以上的两个人走到脸贴脸也互相看不见;
+  3. 同图换线保留坐标,既有的跟随换线之后队员并不在队长身边。
+- **服务端(scene 节点,9 个文件,无 proto / 消息号 / tip / 新 .cpp)**:
+  - `spatial/system/movement.{h,cpp}`:移动广播 `MovementSystem::BroadcastMove`(发给互相可见且有会话的玩家);同场景瞬移原语 `TeleportWithinScene`(写 Transform、清零速度、发 `TeleportS2C` reason = 5、重建可见性);瞬移后丢弃过期移动上报的 `TeleportSettleComp`(新增 `spatial/comp/teleport_settle_comp.h`,单调时钟、只对当时的场景有效);
+  - `player_movement_handler.cpp`:MoveStart / MoveSync / MoveStop 裁决后广播;战斗 / 冻结中的 MoveStop 也广播。另两处服务器自己清速的地方同样补了广播:`MovementSystem::Update` 撞墙、`PlayerLifecycleSystem::StopMotionForExit`(`player_lifecycle.cpp` +3 行);
+  - `spatial/system/aoi.{h,cpp}`:`AoiSystem::ResetEntityVisibility`(同场景瞬移 = 离开旧位置 + 重新进场,保留 kPinned);
+  - `player/system/player_team.{h,cpp}`:`OnRefreshEvent` 由只刷新改为刷新并跟随(入队即跟随);与队长已在同一场景实例时 `RegroupToLeader`(已评估过可见性且互相不可见,或相距 > 8 → 瞬移到队长脚下);
+  - `cpp/tests/aoi_test/aoi_system_test.cpp`:新增 10 条。
+- **客户端(`mmorpg-client` 分支 `feat/team-follow`)**:走路跟随放在队员自己的客户端 —— `TeamFollowTrail`(队长轨迹)/ `TeamFollowPlanner`(槽位与每帧指令)/ `TeamFollowDriver`(驱动)+ `TianyongPlayerController` 的跟随接管 + 独立宿主 `TeamFollowUiRoot`(「暂离 / 归队」按钮)。另有四处让远端角色看起来对的修正(此前这些路径从未真正跑过):`ActorWorld.Tick` 的插值两端随权威速度一起外推(旧实现行走中恒定落后 1.35)、1 秒外推上限、角色碰撞体禁用、控制器转向超过约 20° 时立即补一条 MoveSync(额度内,约 8 条 / 秒封顶)。
+- **证据边界**:
+  - 服务端:静态核对 + 一轮独立的「人肉编译」评审(未发现编译错误;指出的 3 个逻辑问题与 6 处注释不实已改),**未编译、未跑测试**;
+  - 客户端:离线 Roslyn 编译运行时程序集与 `Tests.EditMode.Tianyong` 均 0 error;`TeamFollowTrailTests` + `TeamFollowPlannerTests` 36/36 在离线运行器里通过(另有八个故意改坏的版本各被抓到);一轮独立评审指出的「队长原路掉头时队员被赶到前面」等问题已改并补了用例;`TeamFollowDriver`、控制器的跟随分支、界面按钮、`ActorWorld` 的五条新用例**没有在 Unity 里跑过**(本机 Unity 许可证离线有效期仍是过期状态);
+  - 联机:没有做。旧的 `scene.exe` 上本功能不生效(没有移动广播,也不会入队拉人)。
+- **已知边界**:跨节点 / 跨 zone 仍不跟;可见性缺口 2 没有根治,只对归队瞬移这条路径做了重建;暂离是客户端本地状态,服务端不知道;走散到视野外之后没有自动归队(没有「召集」协议);兴趣表不对称(人多到装不下)时对方收不到我的移动;移动广播量约为每个移动中的玩家每秒 4~8 条 × 互相可见的人数,压测前要评估。
+- **给 Codex**:按设计文档 V.6 的 1→4 执行(scene 库 → scene 节点 → aoi_test,串行 `/m:1`,**Debug** 配置;然后 `run_cpp_tests.ps1 -Build -Filter aoi_test`)。
+- **Java 版(AGENTS §12)**:未做(本机没有 Java 仓库)。需同步三条客户端可见行为:移动后(及服务器让玩家停下时)广播 133;入队后把队员带到队长场景并以 130(reason = 5)落到队长身边;瞬移后丢弃过期移动上报。协议本身没有变化。登记 `PARITY.md` 待做。

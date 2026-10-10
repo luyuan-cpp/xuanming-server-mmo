@@ -36,6 +36,7 @@
 #include "player_team.h"
 #include "hexagons_grid.h"  // Hex —— 退出场景时要和 SceneEntityComp 成对摘掉
 #include "generated/attribute/actorbaseattributess2c_attribute_sync.h" // StopMotionForExit:速度脏位
+#include "spatial/system/movement.h" // StopMotionForExit:停步广播
 #include "proto/common/component/actor_comp.pb.h"                     // Velocity / Acceleration
 #include "proto/scene/player_state_attribute_sync.pb.h"                // ActorBaseAttributesS2C 字段号
 #include "stress_test_probe.h"
@@ -2578,6 +2579,8 @@ void PlayerLifecycleSystem::StopMotionForExit(entt::entity player)
 			velocity->set_z(0.0);
 			// 与 MovementSystem 撞墙清速同一写法:重连后同步给客户端的是 0 速度。
 			SetActorBaseAttributesS2CAttrDirtyBit(player, ActorBaseAttributesS2C::kVelocityFieldNumber);
+			// 走着掉线:观察者手里最后一条移动广播还带着行走速度,这里补一条"停了"。
+			MovementSystem::BroadcastMove(player);
 		}
 	}
 	if (auto *acceleration = tlsEcs.actorRegistry.try_get<Acceleration>(player))

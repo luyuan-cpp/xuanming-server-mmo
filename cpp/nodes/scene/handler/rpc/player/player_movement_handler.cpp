@@ -13,6 +13,7 @@
 #include "rpc/service_metadata/player_movement_service_metadata.h"
 #include "spatial/comp/nav_comp.h"
 #include "spatial/constants/nav.h"
+#include "spatial/system/movement.h"                  // BroadcastMove / ShouldDropReportAfterTeleport
 #include "spatial/system/nav_query.h"
 #include "spatial/system/scene_spawn.h"
 #include "proto/common/component/battle_comp.pb.h"  // InBattleComp:回合制战斗在途不收移动上报
@@ -171,9 +172,15 @@ void SceneMovementClientPlayerHandler::MoveStart(entt::entity player,const ::Mov
 	{
 		return;
 	}
+	// 服务器刚把他瞬移走、客户端还没落位:这条是按旧位置发的,整条丢弃(TeleportSettleComp)。
+	if (MovementSystem::ShouldDropReportAfterTeleport(player, request->start_location()))
+	{
+		return;
+	}
 	ApplyReportedLocation(player, request->start_location(), request->rotation(),
 		request->input_seq());
 	ApplyReportedVelocity(player, request->velocity());
+	MovementSystem::BroadcastMove(player);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -188,12 +195,21 @@ void SceneMovementClientPlayerHandler::MoveStop(entt::entity player,const ::Move
 	if (tlsEcs.actorRegistry.any_of<InBattleComp, PlayerFrozenComp>(player))
 	{
 		ApplyReportedVelocity(player, Velocity());
+		// 位置没有变,但"他停了"必须让观察者知道:进战 / 冻结前的最后一次广播还带着行走速度,
+		// 不发这一条,他在别人屏幕上会一直往前跑。
+		MovementSystem::BroadcastMove(player);
+		return;
+	}
+	// 瞬移后的过期上报整条丢弃;速度在瞬移时已经清零,不需要这条"停"来收敛。
+	if (MovementSystem::ShouldDropReportAfterTeleport(player, request->end_location()))
+	{
 		return;
 	}
 	ApplyReportedLocation(player, request->end_location(), request->rotation(),
 		request->input_seq());
 	// 停止:清零运动学矢量,MovementSystem 不再积分。
 	ApplyReportedVelocity(player, Velocity());
+	MovementSystem::BroadcastMove(player);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -206,9 +222,14 @@ void SceneMovementClientPlayerHandler::MoveSync(entt::entity player,const ::Move
 	{
 		return;  // 同 MoveStart:战斗在途 / 归属交接冻结中的位置上报一律丢弃
 	}
+	if (MovementSystem::ShouldDropReportAfterTeleport(player, request->location()))
+	{
+		return;  // 同 MoveStart:瞬移之前发出的上报
+	}
 	ApplyReportedLocation(player, request->location(), request->rotation(),
 		request->input_seq());
 	ApplyReportedVelocity(player, request->velocity());
+	MovementSystem::BroadcastMove(player);
 ///<<< END WRITING YOUR CODE
 
 }

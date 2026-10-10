@@ -938,7 +938,7 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
 
 1. **非队长成员进入任何场景**(登录、重连、同节点换场景)时刷新 TeamId。如果队长在**同 zone、同 scene 节点**的另一个场景，就请 SceneManager 把自己切过去。这是现有行为，本次补上节点和 zone 守卫。
 2. **队长进入场景**时，对**本节点上**的其他成员逐个执行"刷新并跟随"。这是新增的"队长换场景拉队员"。
-3. **组队服务发起的变更**(入队、离队、被踢、解散)只刷新 TeamId,**入队时不立即拉人**(J-12)。
+3. **组队服务发起的变更**(入队、离队、被踢、解散)只刷新 TeamId,**入队时不立即拉人**(J-12)。 *(2026-10-09 修订:入队即跟随并归队到队长身边,见文末「组队跟随 v1.1」。)*
 4. **不跟随的情况**:
    - 战斗中(既有逻辑，见 `player_scene.cpp:127-134`,`PlayerBattleSystem::IsInBattle` 在 `player_battle.h:91`);
    - 队长和自己不在同一 zone(新增守卫，修掉 `player_scene.cpp:175-176` 写死本 zone 的问题);
@@ -2224,3 +2224,113 @@ cd robot && .\robot.exe -c etc\team_smoke.yaml          # 形态一:expect_cross
 - **单人排队路径有与组队同形的缺口**:`JoinQueue` / `gather` 对"等待落点"(`location.node_id` 为空)也没有早拒,只会在 `gather.go:289` 的 `EndpointOf(zone, "")` 上失败。与组队无关,建议单独立项。
 - **既有工程登记缺口**(B 项只报告未补):`proto.vcxproj` 的失效登记 `proto\guild\guild_db.pb.cc`;`cpp/generated/proto/CMakeLists.txt` 相对 `proto.vcxproj` 仍缺 18 个 `.cc`;`cpp/libs/services/scene/CMakeLists.txt` 仍缺 4 个 Windows 侧在编的 `.cpp`;`rpc.vcxproj{,.filters}` 仍有 12 个 `ClInclude` 缺口;`scene.vcxproj.filters` 没有 `battle\system\player_battle.cpp` 条目(纯 IDE 显示)。
 - **客户端 UI 整块**(§H.2–§H.5):Team 传输适配器、单飞守卫、按 `(membership_epoch, version)` 应用快照(DV-7)、`TeamUiState.Complete` 的覆盖语义修正、`RequestTimeoutSeconds` 提到 ≥15s、错误码文案 —— 全部未做。
+
+---
+
+## 组队跟随 v1.1:入队即跟随、归队、走路跟随(2026-10-09,工作树 `feat/team-follow`,未编译)
+
+> 用户要求(附问道手游录像):「进队伍应该跟随到队长场景;移动的时候跟随队长」。
+> 录像里是 5 人队:队长点地走,4 名队员在身后排成一路纵队,沿队长走过的路一个跟一个,队长停队员也停。
+> 本节修订 §F.1 第 3 条与 J-12(原结论「入队不拉人、跟随走位放 v1.1」)。正文其余部分不变。
+
+### V.1 动手前核实到的三个事实(都是既有缺口,不是本轮引入)
+
+| # | 事实 | 证据 | 后果 |
+|---|---|---|---|
+| 1 | **别的玩家在客户端上不会动。** 服务端从不发送 `ActorMoveS2C`(133) / `ActorMoveListS2C`(135);移动只置 `ActorBaseAttributesS2C`(66)的 Transform / Velocity 脏位,且不带 `entity_id`(只有战斗状态那条路会置 `kEntityIdFieldNumber`)。客户端只注册了 133 / 135 的处理器,没有 66 的 proto 类也没有处理器 | `player_movement_handler.cpp`(改动前)三个 handler 只调 `ApplyReportedLocation` / `ApplyReportedVelocity`;`actor_attribute_calculator.cpp:78-83`;客户端 `GameClient.cs` `OnNotify(MessageIds.NotifyActorMove…)`、`Assets/Scripts/Proto/Generated/` 无 `PlayerStateAttributeSync.cs` | 队员客户端看不到队长在走,任何「跟着走」都无从谈起 |
+| 2 | **可见性只在跨六边形格时重新评估。** `AoiSystem::UpdateGridState` 在 `hex_distance(previous, current) == 0` 时直接返回;进格时用 `CanSee`(半径 `kMaxViewRadius = 10`)判一次,之后同格内不再判 | `aoi.cpp` `UpdateGridState` / `HandleEntityVisibility`;`spatial/constants/view.h` | 两人同在一个格子(边长 20)里却相距 10 以上时互相不可见,之后走到脸贴脸也建立不了可见性;同格瞬移同理 |
+| 3 | **同图换线保留坐标。** `HandleEnterScene` 只在换地图时落到出生点,同图不同线沿用原坐标 | `player_scene.cpp` `mapChanged` | 既有的跟随换线之后,队员仍站在自己原来的位置,不在队长身边 |
+
+### V.2 结论
+
+1. **入队即跟随**(J-12 修订):`PlayerTeamSystem::OnRefreshEvent` 从 `kRefreshOnly` 改为 `kFollowLeader`。刷新信号只发给 TeamId 变了的人(`notify.go` `publish`:`Joined ∪ Left ∪ healed`),被移出者刷新后 TeamId 为 0、建队者是队长,真正被带走的只有新加入的队员。不扇出。Go 侧不改。
+2. **归队**:`CheckFollowLeader` 全部守卫通过后,队长在别的场景 → 既有的 EnterScene 跟随;**已在同一场景实例** → 新增 `RegroupToLeader`:两人互相不在对方 `AoiListComp` 里,或水平距离 > `kTeamRegroupDistance`(8),就把队员瞬移到队长的 Transform 位置。纯判定 `ShouldRegroup(distance, mutuallyVisible)` 在头文件内联,有单测。
+   - 取 8 的理由:客户端 5 人纵队最长 4 × 1.4 = 5.6,队形内的落后不触发;且小于 `kMaxViewRadius`(10)。
+   - 「互相不可见必须瞬移」是事实 2 的直接推论:不瞬移就永远看不见队长。
+   - **兴趣表只有在双方都已被 `AoiSystem::Update` 放进格子(有 `Hex`)之后才算数。** 任一方刚进场 / 刚被瞬移、还没轮到下一次 Update 时表是空的,那是「还没评估」不是「看不见」,此时只看距离:相距 ≤ 8 的两个人必在同格或邻格,后进格的一方做首次进场评估时会把双向可见性一起建好。不这样区分,进场链(三跳 Redis 回调通常早于首次 Update)每次都会瞬移,一次瞬移之后紧跟的第二次检查还会重复瞬移。
+   - 落在队长脚下(那是刚被导航裁决过的合法点);排成一列是客户端的事。
+3. **同场景瞬移原语** `MovementSystem::TeleportWithinScene(entity, location, rotation, reason)`(`spatial/system/movement.{h,cpp}`)。`TeleportS2C` 在协议里早就有,服务端此前没有任何发送点。做四件事:
+   - 写 Transform、清零 Velocity(否则 `Update` 会从新位置按旧速度继续积分);
+   - 挂 `TeleportSettleComp`(新增 `spatial/comp/teleport_settle_comp.h`,运行时状态,不落盘):移动是客户端上报、服务器只做导航射线裁决,瞬移发出时客户端可能还有按旧位置发的 MoveStart / MoveSync / MoveStop 在路上,照常裁决会把人沿直线拉回旧位置。挂着组件期间,离瞬移目标超过 `kTeleportSettleRadius`(3)的上报整条丢弃;第一条落在目标附近的上报即视为客户端已落位,摘除组件;`kTeleportSettleTimeoutMs`(3000,单调时钟)之后仍在远处上报则放弃等待、照常相信客户端(与瞬移前的信任模型一致,不会把人卡死);期间换了场景则直接作废。没有定时器,判定都发生在下一条上报到达时。判定是纯函数 `JudgeReportAfterTeleport`,有单测;
+   - 实体是玩家时给它自己的客户端发 `TeleportS2C`,`reason = 5`(`kTeleportReasonTeamRegroup`;proto 注释目前只列到 4,下次重生成该 proto 时把注释补上,取值本身不需要改 proto);
+   - `AoiSystem::ResetEntityVisibility(entity)`(见下)。
+4. **`AoiSystem::ResetEntityVisibility`**(`aoi.{h,cpp}`):把同场景瞬移当作「离开旧位置、重新进场」。立刻:自己的非 `kPinned` 条目全部摘掉并通知自己的客户端销毁;旧格及邻格里看着它的观察者摘掉并收到销毁(对方钉住的不动);移出格子、摘掉 `Hex`。下一次 `AoiSystem::Update`:没有 `Hex` 的实体走「首次进场」分支,在新位置重建双向可见性。**没有去改事实 2 本身**(给 Update 加同格重评估是另一件事,影响所有玩家的每帧开销,不在本轮范围)。
+5. **移动广播** `MovementSystem::BroadcastMove(entity)`:把实体此刻的权威 Transform / Velocity 发成 `ActorMoveS2C`(`move_state` 0/1)。
+   - **接收者 = 互相可见的玩家**:在 entity 的兴趣表里、对方的兴趣表里也有 entity、且对方有网关会话。只按「我的兴趣表」发会把坐标发给看不到我的人(隐身);严格的「谁看得到我」要扫 7 格全部实体,这是每条移动上报都走的路径,扫不起。已知缺口:对方看得到我、但我的兴趣表因容量已满没有收下对方时,对方收不到我的移动(与 `ActorStateAttributeSyncSystem` 同一口径上的既有缺口)。
+   - **调用点**:MoveStart / MoveSync / MoveStop 裁决之后;以及服务器自己把速度清零的三处 —— 战斗 / 归属冻结中收到 MoveStop、`MovementSystem::Update` 撞墙清速、`PlayerLifecycleSystem::StopMotionForExit`(走着掉线)。后一类不广播的话,观察者会按最后一次上报的速度一直外推下去(客户端另有 1 秒外推上限兜底,见 V.4)。
+   - **量**:客户端移动中每 0.25s 一条 MoveSync,急转弯时立即补一条(客户端自己限在约 8 条 / 秒以内;gate 对 132 的限流是每窗口 20 条),即每个移动中的玩家约 4~8 次 / 秒 × 互相可见的人数(兴趣表有容量上限)。66 那一路原样保留,没有动。
+6. **走路跟随放在客户端**(`mmorpg-client` 同名分支,见 V.4):队员的客户端自己把本地角色走到「沿队长轨迹往回数 槽位 × 1.4」的点上,照常上报移动,服务端照常裁决。理由:移动本来就是客户端上报;服务端做跟随需要在 scene 里新增每帧系统、缓存队长与名单、处理转让队长的缓存失效,全部是没法在本机编译验证的 C++;而客户端这部分可以离线编译并真跑单测。代价:路人看到的队员位置各自多一段网络延迟,纵队在行进中会比队员自己屏幕上略松。
+
+### V.3 服务端改动文件(9 个,全部手写,未编译)
+
+| 文件 | 改动 |
+|---|---|
+| `cpp/libs/services/scene/spatial/system/movement.h` / `.cpp` | `BroadcastMove`、`TeleportWithinScene`、`ShouldDropReportAfterTeleport`、纯函数 `JudgeReportAfterTeleport`、常量;`Update` 撞墙清速后补一条广播 |
+| `cpp/libs/services/scene/spatial/comp/teleport_settle_comp.h` | 新增(仅头文件,不需要登记进工程;想在 IDE 里看到可自行加 `ClInclude`) |
+| `cpp/libs/services/scene/spatial/system/aoi.h` / `.cpp` | `ResetEntityVisibility` |
+| `cpp/libs/services/scene/player/system/player_team.h` / `.cpp` | `OnRefreshEvent` 改 `kFollowLeader`;同场景分支调 `RegroupToLeader`;`ShouldRegroup`、`kTeamRegroupDistance` |
+| `cpp/libs/services/scene/player/system/player_lifecycle.cpp` | `StopMotionForExit` 清速后补一条广播(+1 个 include,共 3 行) |
+| `cpp/nodes/scene/handler/rpc/player/player_movement_handler.cpp` | 三个 handler 加 `ShouldDropReportAfterTeleport` 与 `BroadcastMove`;战斗 / 冻结中的 MoveStop 也广播(都在守护段内) |
+| `cpp/tests/aoi_test/aoi_system_test.cpp` | 新增 10 条:`ResetEntityVisibility` 4 条(同格瞬移后重建 / 远距离瞬移后摘除 / 双向保留 kPinned / 首次 Update 之前调用无害)、`TeamRegroupRuleTest` 3 条、`TeleportReportVerdictTest` 3 条 |
+
+没有改 proto、没有新消息号、没有新 tip、没有新 .cpp(工程文件与 CMakeLists 不用动)。Go、robot 不改:robot 对 130 / 133 已有空处理器,`team_smoke` 里没有「入队后不许收到 EnterSceneS2C」的断言(只有 X2 跨 zone 的负向窗口,跨 zone 仍然不跟)。
+
+### V.4 客户端(`mmorpg-client`,分支 `feat/team-follow`)
+
+| 文件 | 职责 |
+|---|---|
+| `Assets/Scripts/Game/Team/TeamFollowTrail.cs` | 队长轨迹(折线):每 0.5 记一个点;按弧长取点、把位置投影到轨迹。队首回退时的「收回末端」只在队长站定时做、且一次最多 1.5(停步后显示位置被拉回停点);队长带着速度往回走是真掉头,轨迹折成发夹原样留着 —— 收掉的话槽位会一直落在队首前方,队员被赶着跑在队长前面。纯几何 |
+| `Assets/Scripts/Game/Team/TeamFollowPlanner.cs` | 槽位(非队长成员按 `JoinSeq` 升序,同号按玩家编号,1..4)与每帧指令:`Hold` / `Steer`(沿轨迹前视 0.8 取转向点,直角处内切约 0.28,小于点击寻路的路径净空 0.35)/ `Route`(偏离轨迹 > 2 时寻路去槽位)。起停滞回:行走中 0.15 内停,站定后超过 0.6 才重新起步。落后超过 0.3 时移速 ×1.1(9.9,低于服务端 `kMaxTrustedClientSpeed` = 10) |
+| `Assets/Scripts/Game/Team/TeamFollowDriver.cs` | 每帧:算槽位 → 在 `ActorWorld` 里按 `PlayerId` 找队长 → 记轨迹(首次 / 队长跳变 / 暂离或战斗回来后队长已挪动时,在队长背后铺一段可走的直线尾巴重起)→ 规划 → 驱动控制器。槽位落在不可走格子里时统一换成最近可走点;直线被掩码挡住后 0.75 秒内改寻路;寻路失败 2 秒后再试。看不到队长、暂离、战斗画面亮着、队伍视图未知时归还控制权 |
+| `Assets/Scripts/World/Tianyong/TianyongPlayerController.cs` | 跟随接管:`SetFollowControlled` / `FollowSteer` / `FollowRoute` / `FollowHold`。接管期间玩家自己的点击 / 键盘不驱动角色(只触发提示),界面占着键盘时照走;每一步仍过本地行走掩码、仍照常上报。`MoveInDirection` 加 `speedScale` / `maxDistance` 两个默认参数,默认值下步长计算与原行为等价 |
+| `Assets/Scripts/UI/Ugui/Team/TeamFollowUiRoot.cs` | 宿主(自动生成的常驻对象):持有驱动并每帧驱动它;组队入口右侧的开关按钮:跟随中显示「暂离」、暂离中显示「归队」、看不到队长时显示「寻找队长」(不可点)。队伍状态只读 `TeamUiRoot.Instance.Client`,`TeamUiRoot.cs` 没有改 |
+| `Assets/Scripts/World/ActorWorld.cs` | 三处让远端角色看起来对的修正,见下 |
+
+`ActorWorld` 与控制器里另有几处与跟随规则无关、但直接决定观感的修正(对所有远端角色生效;这些路径此前从未真正跑过,因为服务端不发 133):
+
+- **远端插值**:收到样本后两端一起按权威速度外推,只把「收到样本时的误差」在 0.15s 内收掉。旧实现先朝过期的上报点插值、之后才外推,行走中恒定落后 速度 × 0.15 = 1.35(一个槽位)。加了可注入的 `Clock` 与 `Tick(float)` 供测试驱动。
+- **外推上限 1 秒**:超过 1 秒没有新样本就停止外推。走着掉线 / 被服务端冻结而「停步」消息没到时,不会一直直线跑下去。
+- **角色不做物理障碍**:`SpawnActor` 禁用图元自带的碰撞体。否则远端玩家的盒子会挡住本地 `CharacterController`(被服务端放到队长脚下的队员一开始就在队长的盒子里;两个队员分到同一个落点时会互相顶着原地踏步)。可走性由客户端掩码与服务端导航决定,两者都不认其它角色。
+- **转向立即上报**:行进方向相对上一次上报转过约 20° 以上时立刻补发一条 MoveSync(两次之间至少 0.12s)。远端按最后一次上报的速度外推,拐弯不上报的话别人屏幕上会先直着冲出最多 0.25s × 9 = 2.25 再被拉回,跟随的队员会照着这条错误的显示轨迹走。
+
+其它约定:
+
+- **暂离是纯本地状态**:服务端不知道。暂离中的队员换图时照样被队长带走、照样可能被归队瞬移(例如单人打完一场战斗),只是到了之后不排队。确认换队 / 离队时复位;断线重连、跨区重定向期间队伍视图暂时拿不到不算换队。服务端意义上的暂离(`kActorStateTeamFollow`)仍未做。
+- **看不到队长就不跟**:队长的角色不在本机 `ActorWorld` 里时(跨节点没被拉过来、走散到视野外),队员恢复自由移动。走散后没有自动归队 —— 归队只在入队、进场、战斗冻结解除、队长换场景这几个时机触发。行进中掉队但仍在视野内的,沿轨迹追(轨迹保留 80)。
+- 每个客户端只驱动自己的角色;别的队员在本机上的位置来自他们各自的移动广播。
+
+### V.5 已知边界与没做的
+
+- **跨节点 / 跨 zone 仍不跟**(DV-6 不变)。
+- **事实 2 没有根治**:只对「归队瞬移」这一条路径做了可见性重建。两个不同队的玩家同格相距 10 以上再走近,仍然互相看不见。
+- **被钉住(kPinned)的观察者**收不到被瞬移者的销毁 / 重建;移动广播只发给互相可见的玩家,所以被瞬移者在那些客户端上会停在瞬移前的位置,直到双方重新互相可见。目前没有任何玩法钉住玩家。
+- **兴趣表不对称时的移动广播缺口**:见 V.2 第 5 条。人挤到兴趣表装不下时才会出现。
+- **入队后立刻开战**:入队触发的换场景在途(`IsSceneChangeBusy`)时队长点开战,名单里有人正在换图。真人操作到不了这么快,robot `team_smoke` 的开战步骤排在跟随步骤之后;需要联机时留意 `StartTeamMatch` 的预检与 gather 是否报成员未就绪。
+- **移动广播的量**:每个移动中的玩家每秒约 4~8 条 × 互相可见的人数。压测前先评估;要减可以改成只在起步 / 停步 / 转向时发(协议注释的原意),代价是远端外推误差变大。
+- **瞬移落点在客户端掩码上不可走**(两边导航数据不一致时):客户端会自己挪到最近可走点并回报;这条若离目标超过 3,会在 3 秒超时前被当成过期丢弃,之后恢复。
+- **服务端没有「归队 / 召集」协议**:走散后要靠上面那几个时机。要做需要新消息号(regen)。
+- **Java 版(AGENTS §12)**:未做(本机没有 Java 仓库)。需要同步的客户端可见行为:① 移动上报后(以及服务器自己让玩家停下时)向互相可见的玩家广播 `ActorMoveS2C`(133);② 入队后把队员带到队长所在场景并发 `TeleportS2C`(130,reason = 5)落到队长身边;③ 瞬移后丢弃过期移动上报。协议本身没有变化。登记 `PARITY.md` 待做。
+
+### V.6 给 Codex 的验证清单(按顺序;C++ MSBuild 串行 `/m:1`)
+
+工作目录:本工作树根目录(`third_party` 子模块为空,先 `git submodule update --init --recursive`,或把本分支合到主工作区后在主工作区编)。
+
+1. **编译**(`msbuild <工程> /m:1 /p:Configuration=Debug /p:Platform=x64`,依次;**必须 Debug** —— `aoi_test.vcxproj` 只有 Debug|x64 配了链接库,`scene.vcxproj` 也只有 Debug|x64 把产物输出到 `lib/`):
+   `cpp/libs/services/scene/scene.vcxproj` → `cpp/nodes/scene/scene.vcxproj` → `cpp/tests/aoi_test/aoi_test.vcxproj`。
+   本轮没有改 proto / 生成物,前面的 proto / table / rpc / grpc_client 工程按平时的增量即可。
+   通过标准:三个工程 0 error。重点看:
+   - `movement.cpp` 新增的 include(`network/player_message_utils.h`、`rpc/service_metadata/player_movement_service_metadata.h`、`modules/scene/comp/scene_comp.h`、`spatial/comp/scene_node_scene_comp.h`、`spatial/system/aoi.h`、`time/system/time.h`、`proto/common/component/player_network_comp.pb.h`)在 `libs/services/scene` 工程的包含目录下是否都解析得到;
+   - `emplace_or_replace<TeleportSettleComp>(entity)`(无参、聚合体带默认成员初值)在本仓库的 entt 版本下是否能编;不能的话改成 `emplace_or_replace<TeleportSettleComp>(entity, TeleportSettleComp{})`;
+   - 其它链接 `scene.lib` 并拉进 `player_team.obj` 的测试工程(`cross_zone_test`、`bag_test`、`currency_test`)是否因 `player_team.obj → movement.obj → aoi.obj` 多出未解析符号(预期不会:它们链接的库集合相同)。
+2. **单测**:`pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter aoi_test`(不带 `-Build` 只会跑旧的 exe)。
+   通过标准:全部通过,其中新增 `AoiVisibilityTest.ResetEntityVisibility*`(4)、`TeamRegroupRuleTest.*`(3)、`TeleportReportVerdictTest.*`(3)。
+3. **联机**(需要重编后的 `scene.exe` 与主干客户端合入 `feat/team-follow` 后重新出包):
+   - 两个号 A、B 进主城(通常会分到不同的线)。A 建队邀请 B,B 接受。
+     期望:B 立刻换到 A 所在的线并出现在 A 脚下,随后自己走到 A 身后。scene 日志有 `请求跟随队长切场景` 与 `metric=team_regroup`。
+   - A 点地走一段、拐弯、停下。期望:两端都能看到对方在走(此前远端角色不会动);B 在 A 身后约 1.4 处沿 A 的路跟着,A 停 B 停。
+   - A 走出去再原路走回来:B 应当先继续走到折返点附近再掉头跟上,不应跑到 A 的前面。
+   - B 点「暂离」后自己走,再点「归队」回到队列。
+   - A 换地图:B 跟过去并落在 A 身边。
+   - A 走着的时候直接关掉 A 的客户端:B 屏幕上的 A 应在 1 秒内停下,不会一直跑。
+   - 回归:`robot.exe -c etc\team_smoke.yaml`、`etc\battle_smoke.yaml`、`tools\run_move_test.ps1`(客户端仓,移动裁决没有被瞬移守卫误伤:合法道路 0 次回拉)。
+4. **失败时保留**:msbuild 输出里前 3 个 `C` / `LNK` 开头的 error 及文件行;scene 日志里含 `PlayerTeam`、`teleport`、`move corrected` 的行;两端客户端日志里含 `[move]`、`[scene]` 的行。

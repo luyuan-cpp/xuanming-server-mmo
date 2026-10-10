@@ -231,6 +231,73 @@ void AoiSystem::BeforeLeaveSceneHandler(const BeforeLeaveScene& message) {
     BroadcastEntityLeave(gridList, entity, gridsToLeave);
 }
 
+void AoiSystem::ResetEntityVisibility(entt::entity entity) {
+    if (!tlsEcs.actorRegistry.valid(entity)) {
+        return;
+    }
+
+    // 1) 自己这一侧:摘掉所有非钉住条目,并让自己的客户端销毁这些 actor。
+    //    不通知的话客户端会把旧位置的 actor 永远留在世界里(之后同一实体再进视野时
+    //    客户端按 entity 去重,连位置都不会更新)。kPinned 由 buff/skill 生命周期管理,不动。
+    if (auto* ownList = tlsEcs.actorRegistry.try_get<AoiListComp>(entity)) {
+        EntityUnorderedSet leavingEntities;
+        for (auto it = ownList->entries.begin(); it != ownList->entries.end(); ) {
+            if (it->second.priority == AoiPriority::kPinned) {
+                ++it;
+                continue;
+            }
+            leavingEntities.insert(it->first);
+            it = ownList->entries.erase(it);
+        }
+        NotifyEntityVisibilityChanges(entity, {}, leavingEntities);
+    }
+
+    // 2) 观察者一侧:按格子建立的条目只存在于"当前格及邻格"的实体之间,遍历旧 Hex 的这 7 格就够了。
+    //    (被 Unpin 降级后留在远处观察者表里的条目不在此列 —— 它们本来就不归格子逻辑管。)
+    const auto* hex = tlsEcs.actorRegistry.try_get<Hex>(entity);
+    if (hex == nullptr) {
+        return;
+    }
+
+    const auto* sceneEntityComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(entity);
+    if (sceneEntityComp != nullptr && tlsEcs.sceneRegistry.valid(sceneEntityComp->sceneEntity)) {
+        if (auto* gridList = tlsEcs.sceneRegistry.try_get<SceneGridListComp>(sceneEntityComp->sceneEntity)) {
+            GridSet gridsToLeave;
+            GridSystem::GetCurrentAndNeighborGridIds(*hex, gridsToLeave);
+
+            // 先收集再改:RemoveEntityFromGrid 在测试开关下会删空格子,不能边遍历边删。
+            EntityUnorderedSet observers;
+            for (const auto& gridId : gridsToLeave) {
+                auto gridIt = gridList->find(gridId);
+                if (gridIt == gridList->end()) continue;
+
+                for (const auto& otherEntity : gridIt->second.entities) {
+                    if (otherEntity == entity) continue;
+
+                    const auto* otherAoi = tlsEcs.actorRegistry.try_get<AoiListComp>(otherEntity);
+                    if (otherAoi == nullptr) continue;
+
+                    auto it = otherAoi->entries.find(entity);
+                    if (it != otherAoi->entries.end() && it->second.priority != AoiPriority::kPinned) {
+                        observers.insert(otherEntity);
+                    }
+                }
+            }
+
+            for (const auto& observer : observers) {
+                InterestSystem::RemoveAoiEntity(observer, entity);
+                NotifyEntityVisibilityChanges(observer, {}, EntityUnorderedSet{entity});
+            }
+
+            RemoveEntityFromGrid(*hex, *gridList, entity);
+        }
+    }
+
+    // 摘掉 Hex:下一次 Update 把它当作首次进场,在新位置重建双向可见性。
+    // hex 指针在这一行之后失效,必须放在最后。
+    tlsEcs.actorRegistry.remove<Hex>(entity);
+}
+
 void AoiSystem::RemoveEntityFromGrid(const Hex& hex, SceneGridListComp& gridList, entt::entity entity) {
     const auto gridId = GridSystem::GetGridId(hex);
     auto gridIt = gridList.find(gridId);
