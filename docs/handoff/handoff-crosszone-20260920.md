@@ -243,7 +243,7 @@
    - **`robot/connected()`:删除已随 `9da27f9a4` 提交**。那是 09-28 的每小时自动保存,本机跟踪引用显示已在 `origin/main`。原先写的"已暂存在 index、待带路径 commit"已过时,不需要再执行任何 git 操作。
    - **`handoff_pending_no_marker` 比值告警:本轮不落。** 口径 A / B 的阈值和 `for` 都没有压测基线。等首轮双 zone 压测(`AllowUnsafeCrossNodeHandoff=false`)拿到 p99 后,再以 `severity: info` 起步落码。口径与校准步骤写在「P3 收尾」一节。
 
-**验证顺序(2026-09-29;2026-10-01 按"GO-2 已全部进 main"改了第 2、4、5 步;2026-10-09 按"CPP-3 已进 main"补了第 4、5 步)**:由 Codex 执行,Claude 不跑。设计文档 §13 目前**没有**合并后的统一验证顺序,只有各小节自己的验证清单。细节来源是设计文档 §13 各小节的验证清单(13.1–13.6,GO-2 的在 13.7,CPP-3 的在 13.8)与 `grpc-client-deadline-failure-callback.md` §9.2;先后顺序以本节列出的硬约束为准。等 §13 真有了统一顺序小节,再改回指向它。
+**验证顺序(2026-09-29;2026-10-01 按"GO-2 已全部进 main"改了第 2、4、5 步;2026-10-09 按"CPP-3 已进 main"改了第 2 步、补了第 4、5 步)**:由 Codex 执行,Claude 不跑。设计文档 §13 目前**没有**合并后的统一验证顺序,只有各小节自己的验证清单。细节来源是设计文档 §13 各小节的验证清单(13.1–13.6,GO-2 的在 13.7,CPP-3 的在 13.8)与 `grpc-client-deadline-failure-callback.md` §9.2;先后顺序以本节列出的硬约束为准。等 §13 真有了统一顺序小节,再改回指向它。
 
 1. **先取红态,再做任何全量构建。**
    - C++ Hiredis:只构建 `cpp/tests/rpc_controller_test/rpc_controller_test.vcxproj`,**不要构建 muduo**。这样它链接的是 09-25 的 `lib/muduo.lib`(09-29 查 mtime 仍为 2026-09-25 09:45,早于修复的 2026-09-28 03:41)。再跑 `--gtest_filter=HiredisCommandLifecycle.*`,期望前三个 FAIL、`AcceptedCommandCallbackRunsExactlyOnceWithNullReplyOnFree` PASS。任何一次 `game.sln` 全量构建都会重建 muduo,之后这个红态就**永久拿不到**了。
@@ -259,7 +259,7 @@
      3. C++:编 scene 库 `cpp/libs/services/scene/scene.vcxproj` 与测试工程 `cpp/tests/cross_zone_test/cross_zone_test.vcxproj`,跑 `TravelOwnership.*` 与 `TravelFreezeCap*`。
         - 仓库里有两个同名的 `scene.vcxproj`,别编错:`cpp/libs/services/scene/` 下的是静态库,含 `player_lifecycle.cpp`,这里要编的是它;`cpp/nodes/scene/` 下的是 scene 节点 exe,不含 `player_lifecycle.cpp`。
         - `a8c2d44a8` 还改了节点工程下的 `scene_handler.cpp` / `scene_node_service.cpp`(守护段内只改注释),它们由 `cpp/nodes/scene/scene.vcxproj` 覆盖,整体编译(`game.sln`)时一并编到。
-     4. runbook 场景 B1 / B2 / B3(v2.6 起 B3 拆为 B3a / B3b / B3c)与 §5 不变量(见第 5 步)。
+     4. runbook 场景 B1 / B2 / B3(v2.6 起 B3 拆为 B3a / B3b / B3c / B3d)与 §5 不变量(见第 5 步)。
 3. **C++ MSBuild 一律串行 `/m:1 /nr:false`**,并和其他会话的构建错开,否则会报假的 C1041 / LNK1104。gRPC 失败回调批次的编译和单测(`grpc-client-deadline-failure-callback.md` §9.2)与本线合并在同一次全量编译里做。
 4. **单测**:
    - `cross_zone_test`:`EnterSceneReplyRoute.*`、`EnterSceneReplyEcs.*`、`EnterSceneTransportFailureEcs.*`、`TravelFreezeCap*`,以及 09-21 那批的 `ExitPersist*` / `ExitRelease*` / `HandoffMarkWithdrawQueue.*` / `TravelOutcomeReset.*`。GO-2 新增 `TravelOwnership.*`(7 个);`HandleTravelMarkWriteRejected` 的代际用例是 `TravelFreezeCapEcs.LateMarkSetErrorOfOlderGenerationLeavesNewHandoffFrozen`。CPP-3 新增 `RelocateConfirm*`(47 个,其中 `RelocateConfirmEcs.*` 15 个);它改过 `DispatchEnterSceneReply` / `DispatchEnterSceneTransportFailure` 的"实体已不在"分支与 A1′ 的判据抽取,所以上面几组要连它一起回归,再整体跑一遍 `--gtest_shuffle`(待确认表是 thread_local)。
@@ -270,6 +270,7 @@
    - GO-2:跑场景 B1 / B2 / B3,并逐场景核 §5 不变量。B1 的期望仍是"解冻 + tip,不踢线"。
      - B3 的执行口径以 runbook 当前文字为准,本文不写死。runbook 10-01 升到 v2.6,状态栏写明 B3 按 GO-2 拆成 B3a(回滚执行了 → 源端凭回执采纳解冻)/ B3b(回滚没执行 → 已放行销毁 + 踢线)/ B3c(unpause 后的迟到投递)。
      - 正文已有 B3a / B3b / B3c 时:按它们跑。
+     - *(2026-10-09 批注:runbook v2.6 的正文已于 10-08 落定(`b820a0c37a`),B3 是 B3a / B3b / B3c / B3d 四个子场景,另有 H1c 与"GO-2 专属验收点";v2.7 又新增 CPP-3 的场景 V。下面这一条"正文若还是旧的"分支已不会遇到,保留只为留痕。)*
      - 正文若还是旧的 B3 加"v2.5 注:§7 记 SKIP"(10-01 复核时就是这样):说明 v2.6 的改写还没提交完,旧 B3 按原文不执行,改按设计文档 §13.7 验证清单第 8 步「GO-2 专项故障注入」执行,步骤与期望都在那里。
      - 两边的对应关系(按 runbook 状态栏的描述推的,v2.6 正文落定后要回头核一次):B3a 对应 §13.7 第 8 步的"同 zone 回滚后采纳"与"跨 zone 第一条腿回滚后采纳"(定稿规格里叫 B4a / B4b);B3c 对应"迟到投递"(定稿规格里叫 B5,注意它和判定表的 B5 行不是一回事);B3b 是原 B3 的那一支(§12.5.6 的第二层出口),§13.7 第 8 步没有单列。第 8 步里的"取证被拒"和"疏散"两项在状态栏里没有对应的场景名。
 
@@ -297,7 +298,7 @@ docs/design/cross-zone-scene-travel.md 的 §12 与 §13(各小节的验证清�
    a8c2d44a8、6b7a59287、567333aaf。三视角审查没有必须改项;偏离与残余见交接说明 §4 第 2 条的 GO-2 一段。
    给 Codex 的顺序:gofmt -l → go/scene_manager 的 vet / test(跨语言用例要 PASS 不能 SKIP)
    → C++ 编 scene 库(cpp/libs/services/scene/scene.vcxproj,不是 cpp/nodes/scene 下的同名工程)
-   与 cross_zone_test → runbook 场景 B1 / B2 / B3(v2.6 起 B3 拆为 B3a / B3b / B3c)与 §5 不变量。
+   与 cross_zone_test → runbook 场景 B1 / B2 / B3(v2.6 起 B3 拆为 B3a / B3b / B3c / B3d)与 §5 不变量。
    10-01 11:07 fetch 之后本地 main 与 origin/main(26ceb70ca5)已分叉,远端新增提交也改了
    player_lifecycle.cpp / cross_zone_test.cpp / enterscenelogic.go 等 GO-2 落点文件;
    合并之后要把"按 HEAD 核对"的 GO-2 结论重核一遍,Codex 的验证在合并之后的树上做。
