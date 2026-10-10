@@ -117,13 +117,16 @@ namespace relocate_confirm
 	constexpr Budgets BudgetsFor(std::chrono::milliseconds smCallDeadline)
 	{
 		// seconds 与 milliseconds 直接喂给 std::max 时模板实参推导失败,先各自转成 Clock::duration 再比。
+		// 本文件里的 std::max 与 std::numeric_limits<T>::max 一律加括号写成 (std::max)(…) / (…::max)():不依赖
+		// "包含它的工程定义了 NOMINMAX、或前面某个头恰好 #undef 过 max"(cross_zone_test.vcxproj 就没定义;
+		// 同 scene_route_helper.h 对 std::min 的写法)。
 		const Clock::duration settleFloor = kSmSettleWindow;
 		const Clock::duration settleDerived = smCallDeadline + kSettleAfterCallDeadline;
 		Budgets budgets;
-		budgets.settleWindow = std::max(settleFloor, settleDerived);
+		budgets.settleWindow = (std::max)(settleFloor, settleDerived);
 		const Clock::duration replyFloor = kReplyWaitBudget;
 		const Clock::duration replyDerived = budgets.settleWindow + kSettleAfterCallDeadline;
-		budgets.replyWait = std::max(replyFloor, replyDerived);
+		budgets.replyWait = (std::max)(replyFloor, replyDerived);
 		return budgets;
 	}
 
@@ -137,7 +140,9 @@ namespace relocate_confirm
 	// 为什么不删任何键、也不复用 kLuaJudgeTravelOutcome:那段脚本"先删本族标记再读"是为了让活着的冻结实体能安全
 	//   解冻;这里没有实体可解冻,删标记只会毁掉被踢玩家重登要出示的凭证(换手门回 18)。
 	// 为什么用 MGET 不用 GET:类型不对的键给 nil,不抛 WRONGTYPE。
-	// 三个键同一个 {player_id} 段,集群下同槽。
+	// 三个键形如 "player:<id>:owner_epoch",**没有**哈希标签({}),在 Redis Cluster 下不同槽,本脚本会被 CROSSSLOT
+	// 整体拒绝(所有核实都落到"读不到")。当前部署不是 Cluster;交接链上其它多键脚本(取证、条件写、标记清理)同样
+	// 依赖这一点,要上 Cluster 得先统一给这三个键加哈希标签。
 	inline constexpr const char *kLuaReadPlacement =
 		"#!lua\n"
 		"return redis.call('MGET', KEYS[1], KEYS[2], KEYS[3])";
@@ -520,6 +525,21 @@ namespace relocate_confirm
 		return TicketDecision::kDispatch;
 	}
 
+	// 进场路由把玩家带回了本节点,而他手里还有一张没派发的票据:作废不作废。
+	//   evacuating              整节点疏散中(BeginEmergencyRelocateAll 之后);
+	//   reentrySessionBound     这次进场带来的会话是一条有效会话(player_exit::IsBoundSession);
+	//   reentryIsTicketSession  这次进场带来的会话 == 票据里抄下的会话。
+	// 平时一律作废:这次进场要么复用实体并取消退出,要么废黜实体后重载,那次退出都不会再正常收尾;留着票据,它会在
+	// 下一次、会话已换的退出里被误消费。
+	// 整节点疏散中,**同一条有效会话**的进场例外,票据留着:进场若取消了他的退出,他就留在这个将死的节点上,而疏散
+	// 只发一轮票;留着的票据会在节点最后的退出收尾时被消费,把同一条会话改派出去,删掉的话这名玩家既不改派也不踢。
+	// 带着另一条会话或会话 0 的进场照旧作废 —— 票据里的旧会话已死;尤其会话 0:进场会把实体的会话快照清成无效,
+	// 之后的票据判定(DecideTicket)把"没有会话"当成"不是换了会话的证据"而照发,所以必须在这里就作废。
+	constexpr bool CancelsTicketOnReentry(bool evacuating, bool reentrySessionBound, bool reentryIsTicketSession)
+	{
+		return !(evacuating && reentrySessionBound && reentryIsTicketSession);
+	}
+
 	// 实体上那条在途的普通换图 EnterScene 是否还可能被 scene_manager 处理:发出不满一个 settle 窗口就算。
 	// 墙钟回拨(nowMs < sentAtMs)按"可能"处理 —— 判错的一侧只是多等到 settle,不会误踢。
 	constexpr bool SceneChangeReplyMayArrive(bool hasInFlight, uint64_t nowMs, uint64_t sentAtMs,
@@ -584,13 +604,18 @@ namespace relocate_confirm
 
 	// ── settle 规则与踢线时机 ────────────────────────────────────────────────
 
-	// "本节点替他发的请求里,还有结局未定的"。两种来源,都以 settleAt 为界:
-	//   earlierEnterSceneMayReply            登记时就在途的更早请求(退出优先的交接 EnterScene、普通换图)可能稍后才
-	//                                        被放行 —— scene_manager 的换手门只比标记的代际,它可以凭改派刚写的标记过门;
-	//   correlationId != 0 && !completionSeen 本次改派已发出、它的完成通知(号精确匹配的应答,或传输失败)还没被认领
+	// "本节点替他发的请求里,还有结局未定的"。两种来源:
+	//   earlierEnterSceneMayReply            登记时就在途的更早请求可能稍后才被放行 —— scene_manager 的换手门只比
+	//                                        标记的代际,它可以凭改派刚写的标记过门。粘合层从三处取它:退出优先作废的
+	//                                        交接 EnterScene、实体上在途的普通换图、同一玩家上一次改派尚未收口的条目
+	//                                        名下结局未定的请求;
+	//   correlationId != 0 && !completionSeen 本次改派已发出、还没认领到它**带应答体**的完成通知(号精确匹配的应答)
 	//                                        —— 条目可能已被别的路由提前转进 kLanding,而自己的请求还在 scene_manager 排队。
+	//                                        传输失败**不算**:它是"结果未知",deadline 到期之后服务端的 handler 仍可能
+	//                                        铸造 / 推路由 / 回滚,所以认领到传输失败不置 completionSeen。
 	// 为真时:首次核实推迟到 settle(MustReadAfterSettle)、settle 之前不踢(MayKickBeforeSettle)、读不到时不盲踢
-	// (ShouldKickUnverified)。
+	// (ShouldKickUnverified)。前两道保护以 settleAt 为界;不盲踢没有时间界 —— 带着更早请求登记的条目、
+	// 从没拿到应答体的改派,读不到时永远不盲踢(证据后来被落地路径换成 kLandingAbandoned / kLandingTimeout 也一样)。
 	constexpr bool RequestOutcomeUnsettled(bool earlierEnterSceneMayReply, uint64_t correlationId,
 										   bool completionSeen)
 	{
@@ -727,7 +752,7 @@ namespace relocate_confirm
 	// 与计数如实。不把 "7a" 截成 7。
 	constexpr uint64_t ParseOwnerEpoch(std::string_view text)
 	{
-		const auto value = ParseDecimalUpTo(text, std::numeric_limits<uint64_t>::max());
+		const auto value = ParseDecimalUpTo(text, (std::numeric_limits<uint64_t>::max)());
 		return value.has_value() ? *value : 0;
 	}
 
@@ -744,13 +769,13 @@ namespace relocate_confirm
 		{
 			return false;
 		}
-		const auto markEpoch = ParseDecimalUpTo(mark.substr(0, colon), std::numeric_limits<uint64_t>::max());
+		const auto markEpoch = ParseDecimalUpTo(mark.substr(0, colon), (std::numeric_limits<uint64_t>::max)());
 		if (!markEpoch.has_value() || *markEpoch != epoch)
 		{
 			return false;
 		}
 		return ParseDecimalUpTo(mark.substr(colon + 1),
-								static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+								static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()))
 			.has_value();
 	}
 
@@ -892,8 +917,9 @@ namespace relocate_confirm
 		Expectation expectation{Expectation::kAtSource};
 		uint64_t correlationId{0};					   // 本次改派 EnterScene 的关联号;0 = 没发出
 		MarkWrite markWrite{MarkWrite::kNotAttempted}; // 派发时条件写的结局,只进日志
-		bool completionSeen{false}; // 本次改派的完成通知(号精确匹配的应答,或传输失败)已被认领
-		// 被认领的那条应答的 error_code;传输失败 / 未认领为 0。只供盲踢的白名单判定(ShouldKickUnverified 的第三个入参)与日志。
+		bool completionSeen{false}; // 已认领到本次改派带应答体的完成通知(号精确匹配的应答);传输失败不置位
+		// 被认领的那条应答的 error_code;未认领(含只认领到传输失败)为 0。只供盲踢的白名单判定(ShouldKickUnverified 的
+		// 第三个入参)与日志。
 		uint32_t replyErrorCode{0};
 		bool reentered{false};		// kLanding:进场路由确实到过本节点
 		bool verifyInFlight{false}; // 有一条核实命令在途(只由 MarkVerifySent 置位)
@@ -1034,10 +1060,17 @@ namespace relocate_confirm
 			entry.settleAt = now + budgets.settleWindow;
 		}
 
-		// 本次改派的完成通知已被认领。只由两个认领函数调:号精确匹配的应答(传它的 error_code)与传输失败(传 0)。
-		// 回显号为 0 的退路认领**不调**(归属不精确)。不改阶段,不改任何时间点。
+		// 已认领到本次改派带应答体的完成通知。只由应答的认领调,且只在号精确匹配时(传它的 error_code)。
+		// **不调**的两种:回显号为 0 的退路认领(归属不精确);传输失败(结果未知,不是结局 —— 把它记成"已完成",
+		// 条目随后经落地路径重新核实时,"结果未知"的三道保护就全没了,见 RequestOutcomeUnsettled)。
+		// 只认第一次:一次 unary 调用只会完成一次,第二次调用按构造不可达;真到了也不让它改写已记下的拒绝码
+		// (盲踢的白名单判定与日志都看它)。不改阶段,不改任何时间点。
 		static void MarkCompletion(Entry &entry, uint32_t replyErrorCode)
 		{
+			if (entry.completionSeen)
+			{
+				return;
+			}
 			entry.completionSeen = true;
 			entry.replyErrorCode = replyErrorCode;
 		}
@@ -1060,7 +1093,7 @@ namespace relocate_confirm
 		static void WaitForSettle(Entry &entry)
 		{
 			entry.nextVerifyAt = entry.settleAt;
-			entry.deadline = std::max(entry.deadline, entry.settleAt + kVerifyBudget);
+			entry.deadline = (std::max)(entry.deadline, entry.settleAt + kVerifyBudget);
 			entry.verifyInFlight = false;
 			entry.retryPending = false;
 		}

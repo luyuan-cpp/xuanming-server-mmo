@@ -11,6 +11,7 @@
 >   - `cross_zone_test`、`routing_identity_test` 编译过,但**跨 zone 相关用例一个都没运行过**。实际跑过的只有 `bag_test`(09-21 的 10 个结算用例、09-28 整套)与 09-28 的 `turn_battle_engine_test`(124/125,见 PROGRESS.md 同日条目),都不是跨 zone 用例。
 > - **2026-09-28 本轮落码的全部代码都没有编译证据**(清单见 §0 最后一条),因为它们都晚于上面那次构建。同样没有证据的还有:Go(`go/scene_manager`、`go/login`)的 build / vet / test、Unity 编译与 EditMode 测试、任何联调与故障注入。
 > - **2026-10-01**:GO-2 根治(owner_epoch 严格单调)的代码已全部进 main,同样**没有任何编译、测试证据**,连 `gofmt` 都没跑过。提交号、审查结论、偏离与残余见 §4 第 2 条的 GO-2 一段;设计与判定表见设计文档 §13.7。
+> - **2026-10-09**:CPP-3(疏散 / 排空改派的待确认表)的代码也已进 main(10-08 落码 `a9569db98a`,10-09 审查修正),同样**没有任何编译、测试证据**;只做过静态审查(规格一致性 + 五视角对抗审查 + 对修正的四视角复审,都没有必须改的代码问题)。设计、十个取舍、验证清单与残余见设计文档 §13.8,实跑步骤见 runbook v2.7 的场景 V。
 > - 任何"已修 / 已落码"都应读作"已落码,待 Codex 验证"。验证顺序见 §4 末尾的「验证顺序」。
 
 ## 0. 三十秒版
@@ -34,7 +35,7 @@
       - 提交:`ccafe300c`(proto 源 + Go)、`907a6b752`(C++ 大部分)、`80a1b0823`(窄面 regen 产物)、`a8c2d44a8`(C++ 余下部分、单测、跨语言 Lua 守卫)、`6b7a59287` 与 `567333aaf`(审查后的修正)。10-01 按本机跟踪引用查:前五个已在 `origin/main`,`567333aaf` 只在本地 main;以 `git ls-remote` 为准。10-01 11:07 的一次 fetch 之后,本地 main 与 `origin/main`(`26ceb70ca5`)已经**分叉**,远端新增的提交也改了 GO-2 的落点文件,详见 §4 第 2 条 GO-2 一段的"提交状态"。
       - 三视角审查(编译面静读 / 判定表与不变量 / 规格一致)的结论:**没有必须改项**。
       - 偏离与残余、给 Codex 的验证顺序:见 §4 第 2 条的 GO-2 一段与 §4 末尾的「验证顺序」第 2 步。
-  - **进行中(设计已定稿,落码中)**:CPP-3。它要改 `player_lifecycle.cpp`,和别的改动串行做。(原先并列在这里的 GO-2 根治已于 2026-10-01 前全部进 main,见上面"已落码"的最后一条。)
+  - **CPP-3 已落码(2026-10-09 更新)**:疏散 / 排空改派的待确认表随 `a9569db98a` 进 main,对抗审查后的修正另有提交,均未编译、未测试,见设计文档 §13.8。至此本轮没有"进行中"的项。(原先并列在这里的 GO-2 根治已于 2026-10-01 前全部进 main,见上面"已落码"的最后一条。)
   - **本轮不落**:
     - GO-3:需要用户拍板,理由见 §4 第 2 条。
     - `handoff_pending_no_marker` 的比值告警:没有压测基线,推迟到有基线之后。
@@ -129,7 +130,7 @@
      - Hiredis / zrpc Timeout / `robot/connected()` → 见 0e 与第 5 条。
      - 客户端 CL-6 / CL-8 → 见 §2.2 末行。
      - GO-2 根治(owner_epoch 严格单调)→ 见第 2 条的 GO-2 一段与设计文档 §13.7。*2026-10-01:已全部进 main,从"进行中"移到这里。*单测是 `cross_zone_test` 的 `TravelOwnership.*`(7 个),Go 侧是 `owner_epoch_test.go` 的新增 / 改写用例与新文件 `owner_epoch_crosslang_test.go`(3 个用例)。
-   - **进行中(设计已定稿,落码中)**:CPP-3,见第 2 条。
+   - **CPP-3 已落码(2026-10-09)**,见第 2 条;本轮没有"进行中"的项。
    - **不落**:GO-3,见第 2 条;`handoff_pending_no_marker` 比值告警,见第 5 条。
    - **跨会话**:gRPC 失败回调的 scene 侧 `DispatchEnterSceneTransportFailure` 已落地(`b85f13c07`),分发规则如下:
      - 按请求的 `correlation_id` 分发。
@@ -211,10 +212,10 @@
        - 日志前缀 `[SceneEntry]`。
        - 单测是 `routing_identity_test` 的 `SceneEntryRetry.*`、`SceneLinkReady.*`、`SceneEntryAttempt.*`、`SceneEntryLateLogin.*`;`SceneRouteEntry.*` 从 16 个增加到 17 个。
        - 残余:"路由根本没到 gate"那一半没做;"location 指向一个从未载入玩家的节点"也没变。
-     - **CPP-3:进行中,设计已定稿,落码中。**
+     - **CPP-3:已落码待验证,未编译、未测试(2026-10-09)。**落码提交 `a9569db98a`(每小时自动保存),对抗审查后的修正另有提交;落点、十个按保守默认落码的取舍、验证清单与残余都在设计文档 §13.8,实跑步骤在 runbook 场景 V。
        - 做法:改派从"发完即忘"改成"登记 → 确认 → 收口"。票据消费时登记进按 `player_id` 建键的待确认表(新纯头文件 `relocate_confirm.h`)。以 SM 应答、进场路由和各阶段的单调时钟截止为信号;在 zone Redis 上核实 location 仍在源端 / 本节点,并且 SM 已不可能再处理本次改派之后,才按票据里的 (sessionId, playerId) 先推 tip `kEnterSceneFailed` 再推 34。
-       - 跨配置契约:它的 `kSmSettleWindow = 15s` 是按 zrpc `Timeout` 8000 推出来的,`Timeout` 调到约 13s 以上时必须同步改它。
-       - 规格:已入档到设计文档 §13.8「CPP-3 疏散 / 排空改派的待确认表」。原始规格 `spec-cpp3.md` 只在机器 A 主会话的 scratchpad 里,仅作备注。
+       - 跨配置契约(落码后与原设想不同):settle 窗口从 C++ 的 gRPC deadline 派生(deadline + 5s,下限 15s),zrpc `Timeout` 的变化经 deadline 自动带入;要手工同步的是 `KafkaWriteTimeoutSeconds` → `relocate_confirm::kSettleAfterCallDeadline`(yaml 里已加注释)。
+       - 规格:已入档到设计文档 §13.8「CPP-3 疏散 / 排空改派的待确认表」。原始规格 `spec-cpp3.md` 与落码前的重定基修订表 `spec-cpp3-rebased.md`(规格写于关联号、冻结上限、gRPC 失败回调、GO-2 之前,落码前按当时的 main 重新对过一遍)只在机器 A 主会话的 scratchpad 里,仅作备注。
      - **冻结硬上限:已落码待验证,未编译。**提交 `09f71f9d5`,见 §3 与设计文档「交接冻结硬上限 + 晚发闸 + 『标记已发出』统一收口」。
        - 常量在 `travel_freeze_cap.h`:`kFreezeCap` 70s、`kDispatchWindow` 35s、`kSweepInterval` 1s。`kClientAcceptedHandoffBudget` 75s 镜像客户端的 `AcceptedHandoffBudgetSeconds`。
        - 收口点名表:`travel_freeze_cap` / `travel_dispatch_window` / `travel_no_gate_session` / `travel_no_scene_manager`。收口日志是 `[ZoneTravel][MarkSentDestroy] … site=…`;跨区用 tip 3027,同区用 tip 3023。*2026-10-01:GO-2 加了第五个收口点 `travel_receipt_anomaly`(`MarkSentSite::kReceiptAnomaly`,判定表 B6,在 `kMarkSentSiteNames` 的末项)。*
@@ -242,15 +243,15 @@
    - **`robot/connected()`:删除已随 `9da27f9a4` 提交**。那是 09-28 的每小时自动保存,本机跟踪引用显示已在 `origin/main`。原先写的"已暂存在 index、待带路径 commit"已过时,不需要再执行任何 git 操作。
    - **`handoff_pending_no_marker` 比值告警:本轮不落。** 口径 A / B 的阈值和 `for` 都没有压测基线。等首轮双 zone 压测(`AllowUnsafeCrossNodeHandoff=false`)拿到 p99 后,再以 `severity: info` 起步落码。口径与校准步骤写在「P3 收尾」一节。
 
-**验证顺序(2026-09-29;2026-10-01 按"GO-2 已全部进 main"改了第 2、4、5 步)**:由 Codex 执行,Claude 不跑。设计文档 §13 目前**没有**合并后的统一验证顺序,只有各小节自己的验证清单。细节来源是设计文档 §13 各小节的验证清单(13.1–13.6,GO-2 的在 13.7)与 `grpc-client-deadline-failure-callback.md` §9.2;先后顺序以本节列出的硬约束为准。等 §13 真有了统一顺序小节,再改回指向它。
+**验证顺序(2026-09-29;2026-10-01 按"GO-2 已全部进 main"改了第 2、4、5 步;2026-10-09 按"CPP-3 已进 main"补了第 4、5 步)**:由 Codex 执行,Claude 不跑。设计文档 §13 目前**没有**合并后的统一验证顺序,只有各小节自己的验证清单。细节来源是设计文档 §13 各小节的验证清单(13.1–13.6,GO-2 的在 13.7,CPP-3 的在 13.8)与 `grpc-client-deadline-failure-callback.md` §9.2;先后顺序以本节列出的硬约束为准。等 §13 真有了统一顺序小节,再改回指向它。
 
 1. **先取红态,再做任何全量构建。**
    - C++ Hiredis:只构建 `cpp/tests/rpc_controller_test/rpc_controller_test.vcxproj`,**不要构建 muduo**。这样它链接的是 09-25 的 `lib/muduo.lib`(09-29 查 mtime 仍为 2026-09-25 09:45,早于修复的 2026-09-28 03:41)。再跑 `--gtest_filter=HiredisCommandLifecycle.*`,期望前三个 FAIL、`AcceptedCommandCallbackRunsExactlyOnceWithNullReplyOnFree` PASS。任何一次 `game.sln` 全量构建都会重建 muduo,之后这个红态就**永久拿不到**了。
    - k8s 契约测试:红态要在 `c2c5ec505`(= `9da27f9a4^`)的临时 worktree 上取。HEAD 已含修复,在 HEAD 上跑是假绿。
    - Z1 的 Z-pre:见 0g 批注。
-2. **GO-2 根治已全部进 main(2026-10-01 按 HEAD 核对),CPP-3 还在落码。**
+2. **GO-2 根治已全部进 main(2026-10-01 按 HEAD 核对);CPP-3 也已进 main(2026-10-09)。两者都未编译、未测试。**
    - GO-2 对 `scene_manager_service.proto` + `storage.proto` 的窄面 regen 已随 `80a1b0823` 做完,**不要再 regen**。产物在三处:三个暂存目录下的 proto 副本、`go/proto`、`cpp/generated`;`robot/vendor` 不含这个包,没有产物。以后若再做 C++ 窄面 regen,必须用仓库根作 proto_path,`935ec83b1` 就是在修内嵌 go_package 的漂移。
-   - CPP-3 要改 `player_lifecycle.cpp`。整批编译排在它之前还是之后,目前没有成文的统一决定;执行前先用 `git log` / `git status` 确认 CPP-3 是否已提交,再定。
+   - CPP-3 已提交(`a9569db98a` + 审查修正提交),整批编译可以直接在当前 main 上做。它新增 `relocate_confirm.h` 并改了 `player_lifecycle.{h,cpp}` 等,编译与单测口径见设计文档 §13.8 的验证清单(`cross_zone_test.exe --gtest_filter=RelocateConfirm*`,47 个)。
    - 动手前先看第 2 条 GO-2 一段的"提交状态":10-01 起本地 main 与 `origin/main` 已分叉,远端新增的提交也改了 GO-2 的落点文件。GO-2 的验证要在合并之后的树上做;没合并就先跑的,结果里写明是在哪个提交上跑的。
    - GO-2 这一项自己的先后顺序如下,细节在设计文档 §13.7 的验证清单:
      1. 在仓库根跑 `gofmt -l go/scene_manager go/shared`,应无输出。有输出就先处理格式,再往下跑(原因见第 2 条 GO-2 一段的残余 6)。
@@ -261,11 +262,11 @@
      4. runbook 场景 B1 / B2 / B3(v2.6 起 B3 拆为 B3a / B3b / B3c)与 §5 不变量(见第 5 步)。
 3. **C++ MSBuild 一律串行 `/m:1 /nr:false`**,并和其他会话的构建错开,否则会报假的 C1041 / LNK1104。gRPC 失败回调批次的编译和单测(`grpc-client-deadline-failure-callback.md` §9.2)与本线合并在同一次全量编译里做。
 4. **单测**:
-   - `cross_zone_test`:`EnterSceneReplyRoute.*`、`EnterSceneReplyEcs.*`、`EnterSceneTransportFailureEcs.*`、`TravelFreezeCap*`,以及 09-21 那批的 `ExitPersist*` / `ExitRelease*` / `HandoffMarkWithdrawQueue.*` / `TravelOutcomeReset.*`。GO-2 新增 `TravelOwnership.*`(7 个);`HandleTravelMarkWriteRejected` 的代际用例是 `TravelFreezeCapEcs.LateMarkSetErrorOfOlderGenerationLeavesNewHandoffFrozen`。
+   - `cross_zone_test`:`EnterSceneReplyRoute.*`、`EnterSceneReplyEcs.*`、`EnterSceneTransportFailureEcs.*`、`TravelFreezeCap*`,以及 09-21 那批的 `ExitPersist*` / `ExitRelease*` / `HandoffMarkWithdrawQueue.*` / `TravelOutcomeReset.*`。GO-2 新增 `TravelOwnership.*`(7 个);`HandleTravelMarkWriteRejected` 的代际用例是 `TravelFreezeCapEcs.LateMarkSetErrorOfOlderGenerationLeavesNewHandoffFrozen`。CPP-3 新增 `RelocateConfirm*`(47 个,其中 `RelocateConfirmEcs.*` 15 个);它改过 `DispatchEnterSceneReply` / `DispatchEnterSceneTransportFailure` 的"实体已不在"分支与 A1′ 的判据抽取,所以上面几组要连它一起回归,再整体跑一遍 `--gtest_shuffle`(待确认表是 thread_local)。
    - `routing_identity_test`:`SceneRoute*`、`SceneEntry*`、`SceneLinkReady.*`。
    - `go/scene_manager`:`go test ./... -count=1`。GO-2 的用例在 `owner_epoch_test.go`(如 `TestPlanRouteRollback`、`TestClassifyRollbackReply`)与 `owner_epoch_crosslang_test.go`,先后顺序见第 2 步。
    - 客户端:在客户端 `origin/main`(`96d36da` 或之后,已含 CL-6 / CL-8)上跑 Unity 编译 + EditMode;分支 `crosszone/client-cl6-cl8` 已不是唯一落点。生成物只用单个 protoc 核对,**不跑 `gen_proto.ps1` 全量**,全量会漂 6 个文件。
-5. **联调与故障注入**:按 runbook(`docs/ops/cross-zone-failure-test-runbook.md`)。runbook v2.5 已新增场景 H(冻结硬上限)、SE / SE2(CPP-2)、E2(death_at 写失败注入),静态编写、未实跑;10-01 起状态栏已是 v2.6(GO-2 复核与收口,正文改写在途);以 runbook 的 Changelog 为准。场景 H 要用 Unity 客户端,原因是 robot 的 60s 预算先到,看不到上限分支。
+5. **联调与故障注入**:按 runbook(`docs/ops/cross-zone-failure-test-runbook.md`)。runbook v2.5 已新增场景 H(冻结硬上限)、SE / SE2(CPP-2)、E2(death_at 写失败注入),静态编写、未实跑;10-08 的 v2.6 是 GO-2 的复核与 B3 重写(B3a–B3d);10-09 的 v2.7 新增 CPP-3 的场景 V(V1–V5、V2b)、`[RelocateConfirm]` 日志表与缺口 RC-1 – RC-16;以 runbook 的 Changelog 为准。场景 V 用 `DestroyScene` 触发排空,请求里必须带 `zone_id`。场景 H 要用 Unity 客户端,原因是 robot 的 60s 预算先到,看不到上限分支。
    - GO-2:跑场景 B1 / B2 / B3,并逐场景核 §5 不变量。B1 的期望仍是"解冻 + tip,不踢线"。
      - B3 的执行口径以 runbook 当前文字为准,本文不写死。runbook 10-01 升到 v2.6,状态栏写明 B3 按 GO-2 拆成 B3a(回滚执行了 → 源端凭回执采纳解冻)/ B3b(回滚没执行 → 已放行销毁 + 踢线)/ B3c(unpause 后的迟到投递)。
      - 正文已有 B3a / B3b / B3c 时:按它们跑。
@@ -300,8 +301,8 @@ docs/design/cross-zone-scene-travel.md 的 §12 与 §13(各小节的验证清�
    10-01 11:07 fetch 之后本地 main 与 origin/main(26ceb70ca5)已分叉,远端新增提交也改了
    player_lifecycle.cpp / cross_zone_test.cpp / enterscenelogic.go 等 GO-2 落点文件;
    合并之后要把"按 HEAD 核对"的 GO-2 结论重核一遍,Codex 的验证在合并之后的树上做。
-   CPP-3(疏散改派待确认表)可能仍在别的会话落码,它改 player_lifecycle.*。
-   先用 git log 和 git status 看是否已提交;没提交之前不要碰这些文件。
+   CPP-3(疏散改派待确认表)10-08 落码(a9569db98a)、10-09 审查修正,均已进 main,未编译;
+   设计与验证清单见 cross-zone-scene-travel.md §13.8,实跑步骤见 runbook 场景 V。
 3. GO-3 本轮刻意不落(残余 R1 会违反交接不变量 I0 / I3),等用户拍板,不要自行开工。
 4. 同一个 main 工作树上有别的 Claude 会话在改文件,还有每小时一次的自动保存会把半成品卷进 main:
    - 动手前 ListAgents + SendMessage 互报范围。
@@ -322,7 +323,7 @@ docs/design/cross-zone-scene-travel.md 的 §12 与 §13(各小节的验证清�
 - GO-2 的六个提交在不在本地 HEAD 与 origin/main 上(567333aaf 在 10-01 时只在机器 A 的本地 main);
 - 本地 main 与 origin/main 是否分叉、各领先多少(git rev-list --left-right --count HEAD...origin/main),
   有没有人已经做过合并;
-- CPP-3 是否已提交;
+- CPP-3 的两批提交(a9569db98a 与 10-09 的审查修正)在不在 HEAD 与 origin/main;
 - 客户端远端 main 是什么、CL-6 / CL-8 的 54034fe 在不在远端 main 上
   (分支 crosszone/client-cl6-cl8 本身按本机跟踪引用没有推成远端分支,提交是经合并提交 96d36da 进的 main)。
 然后给出你打算做的第一件事。

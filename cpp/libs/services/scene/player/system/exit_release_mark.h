@@ -174,7 +174,9 @@ namespace exit_release_mark
 	//   ARGV[1] = E(十进制,与 INCR 的文本格式一致)  ARGV[2] = 标记原文 "E:now_ms"  ARGV[3] = TTL 秒
 	// 返回 1 = 写了;0 = owner_epoch 已不是 E(含缺键:GET 返回 false,与字符串永不相等)。
 	// 不做"缺键补种":那是存盘 guard 的语义(见 redis_client.h kSaveIfGuardLuaScript),标记不需要。
-	// 两个键同一个 {player_id} 段,集群下同槽。
+	// 两个键形如 "player:<id>:owner_epoch" / "player:<id>:handoff",**没有**哈希标签({}),Redis Cluster 下不同槽、
+	// 脚本会被 CROSSSLOT 拒绝。当前部署不是 Cluster;要上 Cluster 得先统一给这组键加哈希标签
+	// (2026-10-09 更正:原注释写的"同一个 {player_id} 段,集群下同槽"与 player_ownership_comp.h 里实际的键格式不符)。
 	inline constexpr const char *kLuaWriteIfOwnerEpoch =
 		"if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end "
 		"redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[3]) "

@@ -1076,68 +1076,99 @@ xlsx 脚本 5 条(1 major:发号机制的注释写错;4 minor:幂等判定、核
 
 ---
 
-## 13. 2026-09-28 本会话(机器 A)接续(**全部未编译、未导表、未 proto-gen,待 Codex 验证**)
+## 13. 2026-10-09 收口:二期全部批次已落码并进主干(机器 A)
 
-工作目录是 `E:\work\xuanming-server-mmo`(机器 A)。§8–§12 写于机器 B(`D:\luyuan\wuxingqitan\mmorpg`),照做时把命令里的路径换成本机路径。客户端仓在 `E:\work\mmorpg-client`。
+服务端仓 `E:\work\xuanming-server-mmo`,客户端仓 `E:\work\mmorpg-client`。§8–§12 写于机器 B(`D:\luyuan\wuxingqitan\mmorpg`),照做时把路径换成本机路径。
+本节取代 2026-09-28 版的 §13(那一版写的"B6a 未导表、未 proto-gen""name_norm 待迁"都已过期)。
 
 ### 13.0 先看这几条
 
-- **硬要求"go/guild 不能有死锁"仍然有效**。本轮只在表间全序**末尾**接上 P,并登记了 P 对 §12.2 第 6 条的豁免(见 §12.2 的落码修正)。
-  **没有改动任何既有事务的取锁顺序**:§12.4 里,解散一行只是在 O 与删 G 之间插入 P 这一步,点灯 / 团圆是新增的一行。
-- 本轮只做了静态落码和文档同步(AGENTS §10.1),构建、测试、生成命令一条都没跑。在 Codex 跑出结果之前,不得宣称"编译通过""测试绿"或"P 无死锁"。
+- **二期 20 个批次的代码都在主干了**:服务端 `origin/main` 含 `43e5a9953e`,客户端 `origin/main` 含 `de41479f`。
+- **"go/guild 不能有死锁"仍是硬要求**。B6b 把表间全序接到 `… < P < T(guild_trial_battle) < W(guild_trial_reward_owed)`;
+  历练结算**没有使用**预登记的"新插 O 行"例外,而是先锁完全部 Q 再插 O(§12.2 / §12.4 的 2026-10-08 落码修正)。
+- **落码的会话(Claude)一条构建、测试、生成命令都没跑**(AGENTS §10.1)。下面"运行证据"一列全部引自 Codex 写在
+  `docs/PROGRESS.md` 2026-10-08 各条里的实跑记录,不是落码会话自己的结论;没有列出证据的格子 = 没有任何运行证据。
+- **客户端主干在跑完 §13.2 ① 之前编不过**:`de41479f` 引用了尚未生成的活动协议类型、消息号和错误码。
 
-### 13.1 已落码(未编译)
+### 13.1 各批次落在哪、有什么运行证据
 
-| 批次 | 状态 | 与设计的偏差记在哪 |
-|---|---|---|
-| B3b 客户端 | 已落码。未编译,EditMode 未跑 | `03-names.md` §3.22 / §3.24 的 2026-09-28 落码修正:名字输入框与"随机"按钮的位置、建角模式不隐藏 PreviewTitle、正常路径默认填随机名、可重试提示文案、字符向量改为 `{cp,why}` 对象数组、`gen_proto.ps1` 必须带 `-ProtoRoot`。帮会成员页的偏差见 `90-consistency.md` Y-08 的落码修正 |
-| B6a-srv | 已落码,文件清单见 `06-activities.md` §6.45。未编译、**未导表、未 proto-gen** | P 进入表间全序及其豁免见 §12.2;取锁序列见 §12.4;真库回归见 §12.6 第 5b 步与 06 §6.46 的落码修正。解散删 P 的实际位置在 `guild_manage_repo.go` 的 `DisbandGuild`(`90-consistency.md` X-14 落码修正;06 §6.45 第 18 项写的 `guild_repo.go` 作废) |
-| B5b(已保留) | `economyCaller` 的自愈路径保持不变 | `05-economy.md` §5.24 落码修正:快照里没有本人时,经 `ResolvePlayerGuild` 以 MySQL 复核,并绕过缓存直读,不再直接回"未入帮"。B6a 的 `activityPrelude`(`activity_logic.go`)也走同一条路径,所以两处对"我在哪个帮"的回答一致 |
+| 批次 | 提交 | 运行证据(Codex,2026-10-08) | 与设计的偏差记在哪 |
+|---|---|---|---|
+| B3b 名字(服务端 + 客户端) | 服务端早先已在主干;客户端 `90c38fd` | 无 | `03-names.md` §3.22 / §3.24 落码修正;`90-consistency.md` Y-08 |
+| B5c 帮会经济客户端 + robot 经济冒烟 | 客户端 `98cd0d9`;robot 在主干 | 无(组队会话的编译检查发生在评审修复之前) | `05-economy.md` 各节落码修正;`mmorpg-client/Docs/GuildUI.md` |
+| B5d 回档前检查帮会资产分歧(三子批) | 主干;评审修复 `7708581eeb`、`64f0e3301c`、`4f1b6b2544`、`43e5a9953e` | data_service 构建成功;`guildcheck` 用例通过;config 与 ledger / recall 定向回归 64 个顶层、85 个含子用例通过。guild 侧见 B6b-srv2 行 | `07-rollback-fail-closed.md` 各节落码修正(清理水位 §7.4.2、复查预算 §7.5.3 第 7 条、AssetOp 段缺失) |
+| B6a-srv 灯会 / 团圆 | `ed75ad177` 起,在主干 | guild.exe 构建成功;constants / activity / logic / data 四包 58 个顶层用例通过(基线 `c14ddf7`) | §12.2、§12.4;`06-activities.md` §6.46 落码修正 |
+| B6b-srv1 battle + match | 主干 | match 的活动 / 内部 RPC / 会话用例通过;`battle_data`、`match_internal`、`match_event` 的 pb 文件单独编译 0 警告 0 错误。**battle 节点整体未构建** | `06-activities.md` §6.17–§6.21 落码修正 |
+| B6b-srv2 历练结算 + robot S9–S15 + match_internal 工程登记 | `43e5a9953e` | guild.exe 重新构建成功;config / kafka / data / logic / svc 五包 164 个顶层、226 个子用例通过,0 失败 0 跳过(只用 miniredis 与进程内替身,**没连真库、Kafka、match**) | `06-activities.md` 顶部"落码状态"与 §6.22–§6.35a、§6.49;§12.2 / §12.4 |
+| B6a-cli + B6b-cli 活动页与历练 | 客户端 `de41479f` | 无(未生成、未编译、EditMode 未跑) | `mmorpg-client/Docs/GuildUI.md`「同道历练」;提交说明 |
 
-### 13.2 待办(按顺序;全部交 Codex 或用户执行)
+B5d 用户没有回答选择题,按设计推荐项落码:Q1 = 方案 A(guild 内部 RPC 无凭据,靠会话身份拒绝客户端,**NetworkPolicy 待补**)、
+Q2 = 三个 `Rollback*` 一律要 `x-admin-token`、Q3 = 写后分歧只报错 + 告警 + 人工补偿、Q4 = 拆三批、
+U9 = "不可证明"可被合法放行覆盖、U10 = 静态 Endpoints(`127.0.0.1:50300`)。要改口径先改 `07-rollback-fail-closed.md` 再改代码。
 
-① **导表 + proto-gen**(仓库根目录)。B6a 的 `proto/guild/guild.proto`、`proto/guild/guild_db.proto` 与 `GuildActivity` 表还没生成:
-   `go/proto/guild/guild.pb.go` 的内容仍停在 09-20 那次提交,没有任何 `GuildActivity*` 类型;
-   `generated/tables/guildactivity.json`、`go/shared/generated/table/guildactivity_table.go` 也都不存在。
-   步骤与通过标准见 06 §6.46 B6a-srv 第 1、2 步。**没生成之前,go/guild 编译必然失败,这是预期,不是缺陷。**
-   导表与 proto-gen 期间不要和别的会话并发跑发号器(§5)。
+评审情况:B5d 两轮、B6b-srv2 一轮、B6 客户端一轮,都是"多视角查找 → 三票核验 → 修复"。确认的全部是 P2,没有 P0 / P1;
+**修复之后没有再跑下一轮评审**。B6b-srv2 的 Codex 用例是在含修复的 `43e5a9953e` 上跑的。
 
-② **回填 `data/MessageLimiter.xlsx` 的活动 5 行**。先等 ① 发出消息号,再填:`GetGuildActivities` 10/1s,
-   其余四个(`LightGuildLantern`、`ClaimGuildReunion`、`StartGuildTrial`、`RespondGuildTrialInvite`)各 5/1s。
-   填完**重跑一次导表**(06 §6.46 B6a-srv 第 3 步)。
-   xlsx 必须用 openpyxl 按 `load → 改行 → save` 修改,**禁止整表写回**:二进制文件不能 3-way 合并,整表写回等于删掉别人的行(§4)。
+### 13.2 待办(按顺序;生成与构建交 Codex 或用户执行)
 
-③ **`robot` 执行 `go mod vendor`**(90 Y-10:B6a-srv 属于必须 vendor 的批次)。要排在 ①② 之后,保证 vendor 拿到的是最终生成物。
-   执行后跑 `git status --short robot/vendor`,只允许出现本批 proto 与表生成物路径,预期在 `robot/vendor/proto/guild/` 与 `robot/vendor/shared/generated/` 下。
-   如果 `modules.txt` 有变化,要写明原因。**出现别的会话的路径就停下报告**,不要连带提交。
+① **客户端生成**(`E:\work\mmorpg-client`,先拉到含 `de41479f` 的主干):
+   `pwsh -File tools/gen_proto.ps1 -ProtoRoot E:\work\xuanming-server-mmo`,再
+   `pwsh -File tools/gen_messageids.ps1 -ProtoRoot E:\work\xuanming-server-mmo`。**两条都必须带 `-ProtoRoot`**(默认值会解析成 `E:\`)。
+   通过标准:`Guild.cs` 出现 `GuildActivityView` / `GuildTrialLobbyView`,`GuildErrorTip.cs` 出现 `KGuildActivity*` / `KGuildTrial*` 共 10 个,
+   `MessageIds.cs` 出现 239–243 五个常量;随后 `client_compile_check.ps1` 0 错误,EditMode `GuildClientTests` 139 + `GuildWindowTests` 54 = 193 条。
+   服务端这边的前置(Tip.xlsx 活动码 14032–14041、消息号 239–243)已经在主干。
 
-④ **重生成配表索引**:执行 `py tools/data_table_exporter/tools/gen_schema_index.py`,重生成 `data/AGENTS.md` 的配表索引。
-   那一段在 `<!-- BEGIN GENERATED: schema-index -->` 与 `<!-- END GENERATED -->` 之间,是生成块,**不要手改**。
-   目前索引里还没有 `GuildActivity`(§6"合计 N 张表"那条欠账同理)。
+② **RPC 包装生成**(仓库根目录,全量 proto-gen):`guild_internal`、`match_internal` 两组 C++ 包装代码(grpc_client、service_metadata)
+   与三个内部 RPC(`GuildInternal.ListAppliedAssetOpsSince`、`MatchInternal.StartActivityBattle`、`DataService.GetPlayerAssetOpLedger`)的消息号还没生成。
+   Codex 记录:包装生成器被本机 Windows 应用控制策略拦截(CodeIntegrity 3077 / 3033),没有绕过。**这一步不过,gate / scene / battle 三个节点编不过。**
+   工程登记已就位(`cpp/generated` 下 proto / grpc_client / rpc 各 8 处,guild_internal 与 match_internal 都登了),文件名以生成后的 `git status` 为准,对不上就改登记。
 
-⑤ **客户端**(`E:\work\mmorpg-client`):执行 `pwsh -File tools/gen_proto.ps1 -ProtoRoot E:\work\xuanming-server-mmo`,**必须带 `-ProtoRoot`**。
-   原因:默认值是 `$PSScriptRoot/../../..`,从 `tools` 目录往上退三级,在本机会解析成 `E:\`,protoc 在那里找不到 proto。
-   **生成 `LoginErrorTip.cs` 之前,客户端整体编不过**:B3b 的 `RoleNameRules` 引用了 `login_error` 枚举。
-   (核对记录:机器 A 的客户端仓里,2026-09-28 已有 `Assets/Scripts/Proto/Generated/LoginErrorTip.cs`,含 B3b 用到的 6 个码。换机或清过生成物时,仍要先跑这一步。)
-   之后照 `03-names.md` §3.24 跑 `client_compile_check.ps1` 与 EditMode。B6a-cli 另外还要跑 `gen_messageids.ps1`(06 §6.46)。
+③ **回填 `data/MessageLimiter.xlsx` 的活动 5 行**(生成物里还没有 239–243):`GetGuildActivities` 10/1s,其余四个各 5/1s,然后重跑导表。
+   xlsx 只能用 openpyxl `load → 改行 → save`,禁止整表写回(§4)。没填之前这五个 RPC 走默认限流(3 / 窗口),活动页连点会被限。
 
-⑥ **proto2mysql 已切到 v0.2.0**(见 `PROGRESS.md`「2026-09-28 服务器全仓 proto2mysql 切到 v0.2.0 + 本地库键列核对」条目)。
-   **新编的 guild.exe 必须与 guild 表的 `name_norm` 迁移同一批上线**。两边的旧版本都会拒启:
-   v0.2.0 编出的 guild.exe 遇到旧表(`mediumtext` + `uk_guild(name_norm(191))`)会报列类型漂移,schemamigrate 退出码 4;
-   表迁移之后,bin 里旧的 v0.1.1 guild.exe 也会拒启。
-   顺序:用 v0.2.0 重编 `bin/go_services/guild.exe` → 停 guild → 执行 PROGRESS 该条目「运行期注意」第 1 条的迁移 SQL(索引名必须保持 `uk_guild`,`guild_repo.go` 按这个名字判断撞名)→ 启动新 guild。
-   验收口径的变化见 `01-storage.md` 的 2026-09-28 落码修正:uk_guild 从 SUB_PART=191 改为 SUB_PART=NULL。
+④ **`robot` 执行 `go mod vendor`**:`robot/vendor/proto/guild/guild.pb.go` 还是没有活动类型的旧版本,robot 目前编不过。
+   执行后 `git status --short robot/vendor` 只允许出现本期 proto 与表生成物路径;出现别的会话的路径就停下报告。
 
-### 13.3 验证入口(全部未执行)
+⑤ **重生成配表索引**:`py tools/data_table_exporter/tools/gen_schema_index.py`(`data/AGENTS.md` 的生成块里还没有 `GuildActivity`,不要手改)。
 
-- **B6a-srv**:06 §6.46 B6a-srv(含落码修正:两个 DSN 都要设,或收窄 `-run`;补上 robot vendor 一步)。完成后跑本文件 §12.6 全序列与第 5b 步。
-- **B3b 客户端**:`03-names.md` §3.24(含落码修正:`gen_proto.ps1` 带 `-ProtoRoot`;"输入框留空点创建"之前要先手动清空默认的随机名)。
-- 失败时先看文件归属:go/guild 上还叠着 B2s / B3b / B5b / 死锁修复 / B6a 等从未编译过的批次。
+⑥ **重编并替换 `bin/go_services/guild.exe`**。`name_norm` 列已迁,不用再迁表:
+   已迁(2026-10-08,会话「帮会库 name_norm 列迁移」执行):本机 MySQL `mmorpg_guild.guild.name_norm` = `varchar(191) utf8mb4_0900_bin NOT NULL DEFAULT '' COMMENT 'pb:11'`,
+   `uk_guild` 整列唯一(information_schema 核到 NON_UNIQUE=0、SUB_PART=NULL),表 0 行、其余表未动。`bin/go_services/guild.exe` 已换成过渡版
+   (`1ad634443d` + 从 `9da27f9a4d` 覆盖 go/guild 与 go/schemamigrate 的 go.mod / go.sum、schemamigrate/plan.go、plan_test.go;proto2mysql v0.2.0;7 张表;不含 B6a / GuildInternal),
+   旧 v0.1.1 改名 `guild.exe.v0.1.1-20260922.bak`。实测:新 exe `-migrate` 迁前退出码 4 / 迁后 0;旧 exe 对新表退出码 4;新 exe 经 `go_services.ps1 start-exe` 真实启动到 50300 LISTEN。
+   明细见 `docs/PROGRESS.md` 2026-10-08 条目,证据在 `run/verify-guild-name-norm-20261001/`。
+   过渡版用旧生成码加载配表,**导表之后它会在 LoadTables 退出**,所以要用主干重编的 guild.exe 覆盖它;新 exe 首启自动补建
+   `guild_activity_progress`、`guild_trial_battle`、`guild_trial_reward_owed` 三张表。
 
-### 13.4 本轮查出、未在本轮处理的事
+⑦ **真库与联机验证**(都还没跑):见 §13.3。
 
-- 设计文档里还有旧写法:06 §6.45 第 18 项把"解散删进度行"写在 `guild_repo.go`,实际在 `guild_manage_repo.go`(`activity_repo.go` 的哨兵注释已说明清单不含 `guild_repo.go`);
-  06 正文写于死锁修复之前,凡与 §12.2 / §12.4 冲突的,以本文件与代码函数头为准(`activity_repo.go` 文件头已声明这个效力顺序)。
-- 代码注释里残留"191 前缀"的旧口径:`proto/guild/guild_db.proto` 文件头的 D-14 §2 那一行和 `name_norm` 字段注释,以及 `go/guild/internal/data/guild_repo.go` 中 `MaxGuildNameNormRunes` 的注释。
-  v0.2.0 下 `name_norm` 是整列 `VARCHAR(191)`,48 rune 的上限仍然成立,只是理由变成"远小于列长"。改这些注释归代码持有者;改 proto 注释后需要重跑生成。本轮只登记。
+⑧ **K8s**:guild 的清单由「单点加固」会话写,照最终的 `go/guild/etc/guild.yaml` 抄(本期新增 `MatchRpc`、`Activity.TrialResult` 两段)。
+   还欠:B5d Q1 要的 NetworkPolicy;k8s 里 data_service 没配 `GuildInternalRpc`(回档一律被拒,`07` §7.9.1)。
 
+⑨ **Java 版(AGENTS §12)**:帮会二期整体**待做**。Java 仓不在机器 A,`PARITY.md` 没有登记;客户端可见契约(guild.proto 的活动消息、
+   消息号 239–243、tip 14032–14041、GuildActivity 表)已在本仓主干,Java 版对齐时以这些为准。
+
+### 13.3 验证入口(除 §13.1 列出的单测外,全部未执行)
+
+- **B6b-srv2**:`06-activities.md` §6.46 B6b-srv2。真库集成用例要设 `GUILD_IT_MYSQL_DSN`(不是早期文档写的 `GUILD_TEST_MYSQL_DSN`):
+  `go test -tags=integration -p 1 -count=1 -v -run "TestActivityIT_" ./internal/data`,通过标准是无 SKIP、无 InnoDB 死锁段。之后跑本文件 §12.6 全序列与第 5b 步。
+- **部署顺序**:battle → match → 路由服与 gate → guild(match 新而 battle 旧时结果不带活动上下文,玩家白打)。
+  guild 的 `PlayerLocatorRedis` 必须与 battle 的 zone Redis 同实例同 DB;`Activity.TrialResult.Partitions` 须等于 match 的结果 topic 分区数;
+  `Activity.TrialResult.Enabled: true` 必须显式写,不写就不消费。
+- **冒烟**:`robot` 下 `.\robot.exe -c etc/guild_smoke.yaml`(现为 `trial: true`),须同时输出 `GUILD_SMOKE_OK`、`GUILD_SMOKE_ACTIVITIES_OK`;
+  S10 假设三人自动战斗能打赢 Dungeon[1],没有运行证据,输了会在 S10 失败。
+- **B5d**:`07-rollback-fail-closed.md` §7.10.3(D / L / R 系列与手工回档演练)。
+- **客户端**:§13.2 ① 之后跑 EditMode 与 `GuildUiVerification.CaptureAll`(26 张图,目视 `05-activities`、`12-trial-picker`、`13-trial-invite`)。
+- 失败时先看文件归属:go/guild 上叠着 B2s / B3b / B5b / 死锁修复 / B6a / B6b 多个批次。
+
+### 13.4 已知边界与欠账(都不是待修缺陷,动之前先看这里)
+
+- **历练结果消费是单协程**:一条结果持续失败(合服闸门、发号器不可用)时,本副本名下**全部分区**都停,不只所在分区;单副本时就是全服。
+  不丢奖:有登记行的对局由巡检器在 420 秒后从结果键兜底。没做按分区隔离(理由与人工出口见 `06-activities.md` §6.35a)。
+- **人工补发 / 重放工具没做**;§6.35a 的两种手工跳过(写终态行、位点前移)都没演练过。
+- `guild_trial_battle` v1 没有清理;解散帮会只删进行中的对局行,历史行保留。
+- 结果滞留约 7 天以上会被判成毒消息(结算要写"开战日"的计数行,过旧的周期键不再写)。
+- B5d:调大 `AssetOp.TerminalRetentionDays` 之后的(新值 − 旧值)天内不要清空 guild 的全局 Redis(清理水位在那里,`07` §7.9.3 第 8 条);
+  调大 data_service 的 `GuildCheckBudgetSeconds` 时,三个 `Rollback*` 的 `MethodTimeouts` 每秒要加 2 秒(复查预算跟着检查预算走)。
+- `Tip.xlsx` 里 25012 / 26013 的文案还是"金币不足",货币改名(银两 / 灵石)没有同步到这两行。
+- TiDB 下的无死锁结论只有静态推演;MySQL 上的集成用例全绿也不能当 TiDB 的证据。

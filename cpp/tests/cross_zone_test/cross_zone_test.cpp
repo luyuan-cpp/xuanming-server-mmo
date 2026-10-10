@@ -143,7 +143,16 @@
 //     covered by the pure-function / Table cases and runbook scenario V only:
 //       * anything past kAwaitingReply at the ECS level;
 //       * the kVerify branches of the correlated reply claim and the transport-failure
-//         claim, together with their Table::MarkCompletion calls;
+//         claim (only the reply claim calls Table::MarkCompletion; a transport failure
+//         is "outcome unknown" and deliberately leaves completionSeen false);
+//       * the "previous relocate's own request is still unsettled" source of
+//         earlierEnterSceneMayReply for an entry that was actually sent (the host only
+//         reaches it through an earlier-flagged, never-sent previous entry), and that
+//         source's settleAt bound (registration reads the real monotonic clock, there is
+//         no injection point to get past the previous entry's settleAt);
+//       * the glue that keeps the ticket on a same-session reentry while the whole node is
+//         evacuating (tlsEmergencyRelocating has no reset hook; the decision itself is the
+//         pure CancelsTicketOnReentry, covered by RelocateConfirmTicket.*);
 //       * HandleRelocateVerifyReply, including the glue that drops stale verify replies;
 //       * the conditional credential write;
 //       * the kSent path of PushToSessionViaGate.
@@ -1191,7 +1200,7 @@ TEST(ExitReleaseDecision, ConsumedRelocateTicketDoesNotWrite)
     facts.cause = ExitCause::kSceneDrain;
     facts.relocateTicketConsumed = true;
     EXPECT_EQ(erm::DecideExitReleaseMark(facts), erm::ExitReleaseDecision::kSkipRelocate)
-        << "改派自己写了标记,A1′ 不得覆盖";
+        << "票据被消费:这次的标记归改派负责(条件写,可能没写成;没生效要踢线时由待确认表兜底补写),A1′ 不得覆盖";
 }
 
 TEST(ExitReleaseDecision, EpochZeroOrInvalidEntityOrMissingIntentDoesNotWrite)
@@ -2476,6 +2485,27 @@ TEST(TravelOwnership, JudgeScriptKeepsShebangAndMget)
 #include "modules/scene/comp/scene_comp.h"      // SceneEntityComp:ECS 用例把玩家放进源场景
 #include "modules/scene/comp/scene_node_comp.h" // ScenePlayers
 #include <proto/scene/scene_info.pb.h>          // SceneInfoComp
+#include <algorithm>                            // std::max(本节直接用到,不靠 relocate_confirm.h 传递包含)
+#include <ostream>                              // 下面给枚举写的 PrintTo
+#include <utility>                              // std::pair
+
+// 让 gtest 在断言失败时打出枚举的名字,而不是「1-byte object <02>」。relocate_confirm.h 刻意不含 <ostream>,
+// 所以写在测试里;放进枚举所在的命名空间,gtest 靠 ADL 找到它。只影响失败时的输出,不影响任何断言的真假。
+namespace relocate_confirm
+{
+inline void PrintTo(Phase value, std::ostream *os) { *os << PhaseName(value); }
+inline void PrintTo(Evidence value, std::ostream *os) { *os << EvidenceName(value); }
+inline void PrintTo(Expectation value, std::ostream *os) { *os << ExpectationName(value); }
+inline void PrintTo(Verdict value, std::ostream *os) { *os << VerdictName(value); }
+inline void PrintTo(VerifyAction value, std::ostream *os) { *os << VerifyActionName(value); }
+inline void PrintTo(LandingAction value, std::ostream *os) { *os << LandingActionName(value); }
+inline void PrintTo(TicketDecision value, std::ostream *os) { *os << TicketDecisionName(value); }
+inline void PrintTo(Outcome value, std::ostream *os) { *os << OutcomeName(value); }
+inline void PrintTo(GatePushResult value, std::ostream *os) { *os << GatePushResultName(value); }
+inline void PrintTo(MarkWrite value, std::ostream *os) { *os << MarkWriteName(value); }
+inline void PrintTo(ClaimAction value, std::ostream *os) { *os << ClaimActionName(value); }
+inline void PrintTo(CredentialAction value, std::ostream *os) { *os << CredentialActionName(value); }
+} // namespace relocate_confirm
 
 namespace
 {
@@ -2608,6 +2638,31 @@ TEST(RelocateConfirmTicket, ClientGoneOrReplacedSessionVoidsTheTicket)
         << "快照已无会话不是「换了一条会话」的证据:仍按票据派发";
 }
 
+TEST(RelocateConfirmTicket, ReentryCancelsTheTicketExceptForTheSameSessionWhileEvacuating)
+{
+    // 记法:(evacuating, reentrySessionBound, reentryIsTicketSession)。进场路由把玩家带回本节点时,还没派发的票据
+    // 作废不作废。
+    static_assert(rc::CancelsTicketOnReentry(false, true, true), "判定必须能在编译期求值(纯函数)");
+    // 平时一律作废:那次退出不会再正常收尾,留着票据只会在下一次、会话已换的退出里被误消费。
+    for (const bool bound : {false, true})
+    {
+        for (const bool sameSession : {false, true})
+        {
+            EXPECT_TRUE(rc::CancelsTicketOnReentry(false, bound, sameSession))
+                << "bound=" << bound << " same_session=" << sameSession;
+        }
+    }
+    // 整节点疏散中,只有「票据那同一条有效会话」的进场留着票据:进场若取消了他的退出,他留在将死的节点上,而疏散
+    // 只发一轮票,删掉的话既不改派也不踢。
+    EXPECT_FALSE(rc::CancelsTicketOnReentry(true, true, true));
+    EXPECT_TRUE(rc::CancelsTicketOnReentry(true, true, false)) << "另一条有效会话:票据里的旧会话已死";
+    // 会话 0 / 无效会话必须在这里作废:进场会把实体的会话快照清成无效,而 DecideTicket 把「没有会话」当成
+    // 「不是换了会话的证据」照发 —— 留着就会按票据里的旧会话改派。
+    EXPECT_TRUE(rc::CancelsTicketOnReentry(true, false, false));
+    EXPECT_TRUE(rc::CancelsTicketOnReentry(true, false, true)) << "会话无效时「相等」没有意义,同样作废";
+    EXPECT_EQ(rc::DecideTicket(false, false, false), rc::TicketDecision::kDispatch) << "上一条注释依赖的前提";
+}
+
 TEST(RelocateConfirmEarlier, InFlightSceneChangeCountsOnlyInsideSettleWindow)
 {
     constexpr uint64_t kSettleWindowMs = 15000;
@@ -2626,9 +2681,12 @@ TEST(RelocateConfirmReply, OnlyAwaitingReplyTriggersVerification)
         EXPECT_EQ(rc::VerifiesOnReply(phase), phase == rc::Phase::kAwaitingReply) << rc::PhaseName(phase);
     }
     EXPECT_EQ(rc::EvidenceForReply(0), rc::Evidence::kReplySucceeded);
-    // 非 0 一律只是「被拒」,不区分码。字面量抄自 go/scene_manager/internal/constants/errors.go:
-    // 7 推路由失败、5 缺 gate 实例号(前置拒绝)、20 归属查不到、21 归属 zone 合服中(合服围栏)。
-    for (const uint32_t code : {7u, 5u, 20u, 21u})
+    // 非 0 一律只是「被拒」,不区分码:推路由失败(7,没有具名常量,字面量抄自
+    // go/scene_manager/internal/constants/errors.go 的 ErrKafkaRoute)、缺 gate 实例号(前置拒绝)、归属查不到、
+    // 归属 zone 合服中(合服围栏)。
+    for (const uint32_t code : {7u, PlayerLifecycleSystem::kSmErrInvalidGateID,
+                                PlayerLifecycleSystem::kSmErrHomeZoneUnavailable,
+                                PlayerLifecycleSystem::kSmErrHomeZoneMerging})
     {
         EXPECT_EQ(rc::EvidenceForReply(code), rc::Evidence::kReplyRejected) << "code=" << code;
     }
@@ -2828,7 +2886,7 @@ TEST(RelocateConfirmPlacement, MarkMustBeDigitsColonDigitsLikeTheSceneManagerPar
     EXPECT_TRUE(rc::MarkCarriesEpoch("7:0", 7));
     EXPECT_TRUE(rc::MarkCarriesEpoch("007:1", 7)) << "前导零:按数值比代际";
     EXPECT_TRUE(rc::MarkCarriesEpoch("7:9223372036854775807", 7)) << "后缀恰为 int64 上限(Go 侧用 ParseInt 解析它)";
-    EXPECT_TRUE(rc::MarkCarriesEpoch("18446744073709551615:1", std::numeric_limits<uint64_t>::max()));
+    EXPECT_TRUE(rc::MarkCarriesEpoch("18446744073709551615:1", (std::numeric_limits<uint64_t>::max)()));
 
     // 后缀写坏:换手门会按「未落盘」回 18,所以按没有标记处理,让条件补写覆盖它。
     for (const char *mark : {"7:x", "7:", "7:1:2", "7:-1", "7: 1", "7:99999999999999999999", "7:9223372036854775808"})
@@ -2844,7 +2902,7 @@ TEST(RelocateConfirmPlacement, MarkMustBeDigitsColonDigitsLikeTheSceneManagerPar
 
     EXPECT_EQ(rc::ParseOwnerEpoch("7"), 7u);
     EXPECT_EQ(rc::ParseOwnerEpoch("007"), 7u);
-    EXPECT_EQ(rc::ParseOwnerEpoch("18446744073709551615"), std::numeric_limits<uint64_t>::max());
+    EXPECT_EQ(rc::ParseOwnerEpoch("18446744073709551615"), (std::numeric_limits<uint64_t>::max)());
     // 不是完整的十进制串一律按 0(凭证判定里 0 = 不写),不能把 "7a" 截成 7。
     for (const char *text : {"", "7a", "-1", " 7", "18446744073709551616"})
     {
@@ -3023,6 +3081,10 @@ TEST(RelocateConfirmKick, UnsettledRequestDefersTheReadAndForbidsEarlyOrBlindKic
     EXPECT_TRUE(entry->deadline == beforeCompletion.deadline);
     EXPECT_TRUE(entry->settleAt == beforeCompletion.settleAt);
     EXPECT_TRUE(entry->nextVerifyAt == beforeCompletion.nextVerifyAt);
+    // 只认第一次:一次调用只完成一次,第二次按构造不可达;真到了也不改写已记下的拒绝码(盲踢白名单与日志都看它)。
+    rc::Table::MarkCompletion(*entry, 0);
+    EXPECT_TRUE(entry->completionSeen);
+    EXPECT_EQ(entry->replyErrorCode, 21u);
 
     rc::Entry *withEarlier = AddRelocateEntry(table, kRelocatePlayerC, kT0, /*earlierEnterSceneMayReply=*/true);
     ASSERT_NE(withEarlier, nullptr);
@@ -3276,7 +3338,7 @@ TEST(RelocateConfirmTable, VerifyPacingSettleAndDeadlineAreMutuallyExclusive)
     const auto deadlineBeforeWait = entry->deadline;
     rc::Table::WaitForSettle(*entry);
     EXPECT_TRUE(entry->nextVerifyAt == entry->settleAt);
-    EXPECT_TRUE(entry->deadline == std::max(deadlineBeforeWait, entry->settleAt + rc::kVerifyBudget));
+    EXPECT_TRUE(entry->deadline == (std::max)(deadlineBeforeWait, entry->settleAt + rc::kVerifyBudget));
     EXPECT_TRUE(entry->deadline == kT0 + 25s) << "本轮核实的截止顺延到 settle 之后一整轮";
     EXPECT_FALSE(entry->verifyInFlight);
     EXPECT_FALSE(entry->retryPending);
@@ -3313,10 +3375,15 @@ TEST(RelocateConfirmTable, TransportFailureWaitsForSettleBeforeTheFirstRead)
     const uint64_t seq = entry->seq;
 
     rc::Table::MarkSent(*entry, kT0 + 1s, 41, RelocateBudgets());
-    rc::Table::MarkCompletion(*entry, 0); // 传输失败被认领:完成通知已到,错误码留 0
+    // 传输失败被认领:粘合层**不**调 MarkCompletion(结果未知不是结局),只换证据转核实。
     rc::Table::BeginVerify(*entry, kT0 + 2s, rc::Evidence::kTransportFailed, rc::Expectation::kAtSource);
-    ASSERT_TRUE(rc::MustReadAfterSettle(entry->evidence, rc::RequestOutcomeUnsettled(*entry)))
-        << "结果未知:完成通知到了也得等 settle";
+    EXPECT_FALSE(entry->completionSeen);
+    EXPECT_TRUE(rc::RequestOutcomeUnsettled(*entry)) << "没拿到带应答体的完成通知:本次请求的结局一直算未定";
+    ASSERT_TRUE(rc::MustReadAfterSettle(entry->evidence, rc::RequestOutcomeUnsettled(*entry))) << "结果未知:等 settle";
+    // 证据本身就够:即使把「结局未定」这一项拿掉,传输失败照样等 settle、不提前踢、读不到不盲踢。
+    EXPECT_TRUE(rc::MustReadAfterSettle(rc::Evidence::kTransportFailed, /*requestUnsettled=*/false));
+    EXPECT_FALSE(rc::MayKickBeforeSettle(rc::Evidence::kTransportFailed, /*requestUnsettled=*/false));
+    EXPECT_FALSE(rc::ShouldKickUnverified(rc::Evidence::kTransportFailed, /*requestUnsettled=*/false, true));
     rc::Table::WaitForSettle(*entry); // 还没读过就可以等
     EXPECT_TRUE(entry->nextVerifyAt == kT0 + 16s) << "settleAt = 发送时刻 + 15s";
     EXPECT_TRUE(entry->deadline == kT0 + 26s);
@@ -3479,6 +3546,12 @@ TEST(RelocateConfirmBudgets, SettleWindowCoversTheSceneManagerCallDeadline)
     const auto budgets = rc::BudgetsFor(deadline);
     EXPECT_TRUE(budgets.settleWindow >= deadline + rc::kSettleAfterCallDeadline) << "deadline_ms=" << deadline.count();
     EXPECT_TRUE(budgets.replyWait > budgets.settleWindow);
+    // 上面两条对任何 deadline 都由 BudgetsFor 的定义保证;下面两条不经 BudgetsFor,钉的是「当前配置」本身:
+    // 宿主取到的默认 deadline 就是 10000ms(base_deploy_config.yaml 的 GrpcClient.CallDeadlineMs.SceneManagerNodeService
+    // 与它一致;给宿主 Apply 过别的配置时改这里),并且 settle 的下限常量对它够用 —— 不够用说明有人调大了 deadline 而
+    // 下限没跟上(BudgetsFor 仍会派生出更宽的窗口,但这个常量的注释与文档就过期了)。
+    EXPECT_EQ(deadline.count(), 10000);
+    EXPECT_TRUE(rc::kSmSettleWindow >= deadline + rc::kSettleAfterCallDeadline);
 }
 
 TEST(RelocateConfirmNames, CoverEveryValue)
@@ -3631,7 +3704,19 @@ void ExpectRelocateStats(const relocate_confirm_stats::Snapshot &actual,
     EXPECT_EQ(actual.credentialWritten, expected.credentialWritten) << "credential_written";
     EXPECT_EQ(actual.credentialEpochMoved, expected.credentialEpochMoved) << "credential_epoch_moved";
     EXPECT_EQ(actual.credentialFailed, expected.credentialFailed) << "credential_failed";
+    // 兜底:以后给 Snapshot 加了字段而上面没跟着逐项列出时,这一条会红(上面各项都绿、只有它红 = 漏列了新字段)。
+    EXPECT_TRUE(actual == expected) << "relocate_confirm_stats::Snapshot 有 ExpectRelocateStats 没逐项列出的字段";
 }
+
+// 作用域内把节点身份探针置为「确认有效」;离开作用域(含 ASSERT 失败提前返回)一律复位成「未注入 = 不确认」。
+// 探针是进程级的,不复位会改变后面所有走 A1′ 的用例的判定(--gtest_shuffle 下尤其难查)。
+struct ScopedConfirmedNodeIdentity
+{
+    ScopedConfirmedNodeIdentity() { PlayerLifecycleSystem::SetNodeIdentityProbe([] { return true; }); }
+    ~ScopedConfirmedNodeIdentity() { PlayerLifecycleSystem::SetNodeIdentityProbe({}); }
+    ScopedConfirmedNodeIdentity(const ScopedConfirmedNodeIdentity &) = delete;
+    ScopedConfirmedNodeIdentity &operator=(const ScopedConfirmedNodeIdentity &) = delete;
+};
 
 // 待确认表、改派票据表、待入场表都是 thread_local,不随 tlsEcs.Clear() 清。每条 ECS 用例开头和结尾各调一次:本节的
 // 用例都用 kExitPlayerId,前一条留下的条目会让下一条的登记把它计成 superseded;前一条在发票之后失败(ASSERT 提前
@@ -3641,6 +3726,8 @@ void DrainRelocateConfirms()
     // 本节会往待入场表里放 kExitPlayerId 的条目(模拟载入在途),别留给下一条。
     PlayerLifecycleSystem::GetPendingEnterMap().erase(kExitPlayerId);
     // ① 会话 0 的进场:删掉残留票据,并把残留条目按 superseded 结清。票据表没有公开访问器,这是唯一能清它的入口。
+    //    前提:进程不在整节点疏散中。本文件没有用例调 BeginEmergencyRelocateAll(那个标志没有复位入口);
+    //    会话 0 的进场在疏散中也照样作废票据,但疏散态本身清不掉 —— 以后要加这类用例,得先给它配一个单测复位口。
     PlayerLifecycleSystem::ReconcileRelocateOnReentry(kExitPlayerId, 0);
     // ② 别的玩家的残留条目(本节不产生,防御):第一拍把各阶段都推到「核实读不到」,第二拍让那一轮核实到期。
     const auto farFuture = rc::Clock::now() + std::chrono::hours(1);
@@ -3666,6 +3753,9 @@ entt::entity PlaceInScene(entt::entity player, uint64_t sceneId)
 // 当前内存(退出走快路径、同步收敛),对他所在的场景做单场景排空。返回后实体已销毁、会话映射已摘,待确认表里有他的
 // 一条 kVerifying / kNotSent 条目:没有 scene_manager → 没发出去 → 立即核实;没有 Redis → 核实推迟。
 // 计数只动三项:dispatch、not_sent、verify_deferred 各 +1。
+// 以上是「表里没有他的旧条目」时的结果。表里已有他的一条旧条目时再调:旧条目被顶掉,多计一项 superseded;
+// 旧条目名下若还有结局未定的请求,新条目带上「更早请求可能被放行」,首次核实改为等 settle
+// (settle_waits +1 而不是 verify_deferred +1)。
 void RegisterNotSentRelocate()
 {
     const auto player = MakeOnlinePlayer(kSessionAtExit);
@@ -3950,7 +4040,7 @@ TEST(RelocateConfirmEcs, ClientDisconnectDuringDrainVoidsTheTicket)
     // 排空发了票、退出还没收敛时客户端断线了:会话已死,给它改派只会让 location 停在一个从未载入该玩家的节点上。
     // 票据作废、不登记、不发改派;A1′ 按第一次退出原因(单场景排空)接手写断线释放标记。
     ASSERT_NO_FATAL_FAILURE(DrainRelocateConfirms());
-    PlayerLifecycleSystem::SetNodeIdentityProbe([] { return true; });
+    const ScopedConfirmedNodeIdentity identityConfirmed; // 下面有 ASSERT:用守卫保证探针一定被复位
     const auto made = MakeRelocateExitingPlayer();
     const auto before = RelocateStats();
     const auto releaseBefore = exit_release_stats::Read();
@@ -3971,6 +4061,8 @@ TEST(RelocateConfirmEcs, ClientDisconnectDuringDrainVoidsTheTicket)
     PlayerLifecycleSystem::HandlePlayerAsyncSaved(kExitPlayerId, landed);
 
     const auto releaseAfter = exit_release_stats::Read();
+    // 需要「身份确认」的那一步(A1′ 的判定)已经跑完,这里就复位,让后面的收尾在默认的「未确认」下跑;
+    // 守卫的析构会再复位一次(ASSERT 提前返回时只有它),重复无害。
     PlayerLifecycleSystem::SetNodeIdentityProbe({});
     EXPECT_FALSE(tlsEcs.actorRegistry.valid(made.player));
     EXPECT_EQ(PlayerLifecycleSystem::RelocateConfirmsPending(), 0u);
@@ -4074,6 +4166,192 @@ TEST(RelocateConfirmEcs, EarlierHandoffEnterSceneIsRecordedOnTheEntry)
     EXPECT_FALSE(rc::MayKickBeforeSettle(rc::Evidence::kNotSent, rc::RequestOutcomeUnsettled(*entry)));
     PlayerLifecycleSystem::SweepRelocateConfirms(rc::Clock::now() + 1s, /*reconnected=*/true);
     EXPECT_EQ(PlayerLifecycleSystem::RelocateConfirmsPending(), 1u) << "settle 之前一拍(含重连)什么都不做";
+    ExpectRelocateStats(RelocateStats(), expected);
+
+    DrainRelocateConfirms();
+}
+
+TEST(RelocateConfirmEcs, InFlightSceneChangeIsRecordedAsAnEarlierRequest)
+{
+    // 「更早请求」的第二个来源:退出时实体上还挂着一条在途的普通换图。它发出不满一个 settle 窗口时,scene_manager
+    // 可能还会处理它(而且可以凭改派刚写的同代标记过门),登记时要记在条目上;超过一个 settle 窗口的不算。
+    // 这条用例钉的是 FinishExitAfterPersist 里传给 SceneChangeReplyMayArrive 的实参接线(现在时刻 / 发出时刻 / 窗口,
+    // 都是毫秒):写反或单位取错,纯函数用例发现不了。三段都读真实墙钟,余量是秒级(15s 窗口对 0s / 16s / 5s):
+    // ① ② 抓得住实参写反、窗口偏大(例如取成纳秒);③ 的 5s 落在 15s 之内、15ms 之外,抓得住窗口按秒传成 15。
+    ASSERT_NO_FATAL_FAILURE(DrainRelocateConfirms());
+
+    // ① 刚发出的换图(AttachSceneChange 把发出时刻记成现在):在窗口内 → 记为「更早请求可能被放行」,首次核实排到 settle。
+    {
+        const auto player = MakeOnlinePlayer(kSessionAtExit);
+        tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 5;
+        AttachSceneChange(player, 777, /*playerRequested=*/true, 9);
+        const auto scene = PlaceInScene(player, kRelocateSourceScene);
+        MarkPersisted(player);
+        const auto before = RelocateStats();
+
+        ASSERT_EQ(PlayerLifecycleSystem::BeginSceneDrain(scene), 1u);
+        ASSERT_FALSE(tlsEcs.actorRegistry.valid(player));
+        const auto entry = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+        ASSERT_TRUE(entry.has_value());
+        EXPECT_TRUE(entry->earlierEnterSceneMayReply);
+        EXPECT_TRUE(entry->nextVerifyAt == entry->settleAt) << "首次核实排到 settleAt";
+        auto expected = before;
+        ++expected.ticketDecisions[RelocateIndex(rc::TicketDecision::kDispatch)];
+        ++expected.notSent;
+        ++expected.settleWaits; // 没有发核实:verify_deferred 不动
+        ExpectRelocateStats(RelocateStats(), expected);
+    }
+    ASSERT_NO_FATAL_FAILURE(DrainRelocateConfirms());
+
+    // ② 对照:同一条换图发出已有 16s(超过 15s 的 settle 窗口)→ 不算,核实立即发(宿主没有 Redis,记推迟)。
+    {
+        const auto player = MakeOnlinePlayer(kSessionAtExit);
+        tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 5;
+        AttachSceneChange(player, 777, /*playerRequested=*/true, 9);
+        tlsEcs.actorRegistry.get<PlayerSceneChangeInFlightComp>(player).sentAtMs = TimeSystem::NowMillisecondsUTC() - 16000;
+        const auto scene = PlaceInScene(player, kRelocateSourceScene);
+        MarkPersisted(player);
+        const auto before = RelocateStats();
+
+        ASSERT_EQ(PlayerLifecycleSystem::BeginSceneDrain(scene), 1u);
+        ASSERT_FALSE(tlsEcs.actorRegistry.valid(player));
+        const auto entry = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+        ASSERT_TRUE(entry.has_value());
+        EXPECT_FALSE(entry->earlierEnterSceneMayReply);
+        EXPECT_TRUE(entry->retryPending) << "核实读发不出去,等 1s 节拍重试";
+        auto expected = before;
+        ++expected.ticketDecisions[RelocateIndex(rc::TicketDecision::kDispatch)];
+        ++expected.notSent;
+        ++expected.verifyDeferred;
+        ExpectRelocateStats(RelocateStats(), expected);
+    }
+    ASSERT_NO_FATAL_FAILURE(DrainRelocateConfirms());
+
+    // ③ 发出已有 5s:仍在 15s 的窗口内 → 算。窗口若被按秒传进去(15 而不是 15000),5000ms 就会被判成「已过窗口」。
+    {
+        const auto player = MakeOnlinePlayer(kSessionAtExit);
+        tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 5;
+        AttachSceneChange(player, 777, /*playerRequested=*/true, 9);
+        tlsEcs.actorRegistry.get<PlayerSceneChangeInFlightComp>(player).sentAtMs = TimeSystem::NowMillisecondsUTC() - 5000;
+        const auto scene = PlaceInScene(player, kRelocateSourceScene);
+        MarkPersisted(player);
+        const auto before = RelocateStats();
+
+        ASSERT_EQ(PlayerLifecycleSystem::BeginSceneDrain(scene), 1u);
+        ASSERT_FALSE(tlsEcs.actorRegistry.valid(player));
+        const auto entry = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+        ASSERT_TRUE(entry.has_value());
+        EXPECT_TRUE(entry->earlierEnterSceneMayReply);
+        auto expected = before;
+        ++expected.ticketDecisions[RelocateIndex(rc::TicketDecision::kDispatch)];
+        ++expected.notSent;
+        ++expected.settleWaits;
+        ExpectRelocateStats(RelocateStats(), expected);
+    }
+
+    DrainRelocateConfirms();
+}
+
+TEST(RelocateConfirmEcs, ReplacedSessionVoidsTheTicket)
+{
+    // 排空发了票、退出还没收敛时,实体上的会话快照已经换成另一条:票据里抄的旧会话不是他当前的会话了,给旧会话
+    // 改派没有意义。票据作废、不登记、不发改派。钉的是 DispatchEmergencyRelocate 里「当前会话有效」与「当前会话就是
+    // 票据那一条」两个实参的接线(此前粘合层只走过 dispatch 与 void_client_gone 两个取值)。
+    ASSERT_NO_FATAL_FAILURE(DrainRelocateConfirms());
+    const auto made = MakeRelocateExitingPlayer();
+    const auto before = RelocateStats();
+
+    EXPECT_EQ(PlayerLifecycleSystem::BeginSceneDrain(made.scene), 1u);
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(made.player));
+    // 只改实体上的会话快照、不写 SessionMap:退出分支的「被取代」判定要求新会话已映射到本玩家,这里不成立,
+    // 退出照常收敛;走到票据判定时就是「当前会话有效,但不是票据那一条」。
+    tlsEcs.actorRegistry.get<PlayerSessionSnapshotComp>(made.player).set_gate_session_id(kNewerSession);
+
+    PlayerAllData landed = MarshalAsSaved(made.player);
+    PlayerLifecycleSystem::HandlePlayerAsyncSaved(kExitPlayerId, landed);
+
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(made.player));
+    EXPECT_EQ(PlayerLifecycleSystem::RelocateConfirmsPending(), 0u);
+    auto expected = before;
+    ++expected.ticketDecisions[RelocateIndex(rc::TicketDecision::kVoidSessionReplaced)];
+    ExpectRelocateStats(RelocateStats(), expected); // dispatch、not_sent 都不动
+
+    SessionMap().clear(); // 旧会话的映射没有随「已换过的快照」摘掉,别留给下一条
+    DrainRelocateConfirms();
+}
+
+TEST(RelocateConfirmEcs, NextRelocateSupersedesALandingEntryWithoutKick)
+{
+    // 同一玩家上一次改派的条目还在等载入(他刚被路由带回本节点、1s 节拍还没来得及结清)就又被排空:旧条目按
+    // superseded 结清(不踢:玩家本人就在本节点上,正要被再次改派),新条目照常登记。上一条没有结局未定的请求
+    // (它根本没发出去),所以不往新条目上带「更早请求」。
+    ASSERT_NO_FATAL_FAILURE(DrainRelocateConfirms());
+    ASSERT_NO_FATAL_FAILURE(RegisterNotSentRelocate());
+    PlayerLifecycleSystem::ReconcileRelocateOnReentry(kExitPlayerId, kSessionAtExit);
+    const auto first = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+    ASSERT_TRUE(first.has_value());
+    ASSERT_EQ(first->phase, rc::Phase::kLanding);
+    ASSERT_FALSE(rc::RequestOutcomeUnsettled(*first));
+    const auto before = RelocateStats();
+
+    ASSERT_NO_FATAL_FAILURE(RegisterNotSentRelocate()); // 第二次排空;它内部断言待确认表里仍只有一条
+
+    const auto second = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+    ASSERT_TRUE(second.has_value());
+    EXPECT_NE(second->seq, first->seq) << "是新登记的一条";
+    EXPECT_EQ(second->phase, rc::Phase::kVerifying);
+    EXPECT_EQ(second->evidence, rc::Evidence::kNotSent);
+    EXPECT_FALSE(second->reentered);
+    EXPECT_FALSE(second->earlierEnterSceneMayReply);
+    auto expected = before;
+    ++expected.ticketDecisions[RelocateIndex(rc::TicketDecision::kDispatch)];
+    ++expected.notSent;
+    ++expected.verifyDeferred;
+    ++expected.outcomes[RelocateIndex(rc::Outcome::kSuperseded)];
+    ExpectRelocateStats(RelocateStats(), expected); // 不踢:kick_*、push 都不动
+
+    DrainRelocateConfirms();
+}
+
+TEST(RelocateConfirmEcs, UnsettledPreviousRelocateIsCarriedIntoTheNextOne)
+{
+    // 「更早请求」的第三个来源:同一玩家上一次改派的条目还没收口、它名下还有结局未定的请求、又没过它的 settle ——
+    // 那条请求仍可能被 scene_manager 处理,而且可以凭这次改派刚写的同代标记过门。新条目要把它记下来:
+    // 被瞬时拒绝时不立即踢,首次核实排到 settle。
+    // 宿主里发不出 EnterScene,造不出「上一条自己的请求在途」;这里用「上一条登记时就带着更早请求」来走同一行判据
+    // (RequestOutcomeUnsettled(上一条) 且还没过它的 settleAt)。两次登记之间只隔毫秒,settle 窗口是 15s。
+    ASSERT_NO_FATAL_FAILURE(DrainRelocateConfirms());
+
+    // 第一次改派:退出优先作废过一次已写标记的交接 → 条目带「更早请求可能被放行」。
+    const auto made = MakeRelocateExitingPlayer(/*travelHandoffMarkIssued=*/true);
+    EXPECT_EQ(PlayerLifecycleSystem::BeginSceneDrain(made.scene), 1u);
+    PlayerAllData landed = MarshalAsSaved(made.player);
+    PlayerLifecycleSystem::HandlePlayerAsyncSaved(kExitPlayerId, landed);
+    ASSERT_FALSE(tlsEcs.actorRegistry.valid(made.player));
+    // 同一条会话被路由带回本节点:条目转入等载入,还没被 1s 节拍结清。
+    PlayerLifecycleSystem::ReconcileRelocateOnReentry(kExitPlayerId, kSessionAtExit);
+    const auto first = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+    ASSERT_TRUE(first.has_value());
+    ASSERT_EQ(first->phase, rc::Phase::kLanding);
+    ASSERT_TRUE(rc::RequestOutcomeUnsettled(*first));
+    const auto before = RelocateStats();
+
+    // 第二次排空:这一次退出本身没有任何更早的请求(没有交接、没有在途换图)。
+    ASSERT_NO_FATAL_FAILURE(RegisterNotSentRelocate());
+
+    const auto second = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+    ASSERT_TRUE(second.has_value());
+    EXPECT_NE(second->seq, first->seq);
+    EXPECT_TRUE(second->earlierEnterSceneMayReply) << "上一条名下结局未定的请求带进了新条目";
+    EXPECT_EQ(second->phase, rc::Phase::kVerifying);
+    EXPECT_EQ(second->evidence, rc::Evidence::kNotSent);
+    EXPECT_TRUE(second->nextVerifyAt == second->settleAt) << "首次核实排到 settleAt,不立即读";
+    EXPECT_FALSE(second->retryPending);
+    auto expected = before;
+    ++expected.ticketDecisions[RelocateIndex(rc::TicketDecision::kDispatch)];
+    ++expected.notSent;
+    ++expected.settleWaits; // 没有发核实:verify_deferred 不动
+    ++expected.outcomes[RelocateIndex(rc::Outcome::kSuperseded)];
     ExpectRelocateStats(RelocateStats(), expected);
 
     DrainRelocateConfirms();

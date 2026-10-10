@@ -499,13 +499,17 @@ namespace exit_release_stats
 // 30s 定时器打成一行 [RelocateConfirm](INFO,有变化才打,进程启动以来的累计值)。key 的原文与顺序见
 // player_lifecycle.cpp 的 FormatRelocateConfirmStats;数组项的 key 取自 relocate_confirm 的名表(runbook 按原文 grep)。
 //
-//   ticketDecisions[]      票据取出时发不发改派(relocate_confirm::kTicketDecisionNames):dispatch = 发出并登记进待确认表;
+//   ticketDecisions[]      票据取出时发不发改派(relocate_confirm::kTicketDecisionNames):dispatch = 票据没作废、进入派发
+//                          (表满未跟踪的 untracked_overflow 与没发出去的 not_sent 也计在内);
 //                          void_client_gone / void_session_replaced = 票据作废、不发,由 A1′ 按第一次退出原因接手
 //   untracked_overflow     待确认表满(relocate_confirm::kMaxTracked),这次改派按旧行为发出、不跟踪。应恒 0
-//   cancelled_on_reentry   进场路由回到本节点时该玩家还有一张没派发的票据,作废(那次退出不会再正常收尾)
+//   cancelled_on_reentry   进场路由回到本节点时该玩家还有一张没派发的票据,作废(那次退出不会再正常收尾)。
+//                          整节点疏散中、带着票据那同一条有效会话的进场不作废(票据留给节点最后的退出收尾去消费),
+//                          这一项不动
 //   ticket_dropped_deposed 实体被按"已废黜"销毁(DestroyDeposedPlayer)时手里还有没派发的票据:不改派、不踢。
 //                          多数情形玩家已在别处;非 0 且伴随客户端卡住 = 排空 / 疏散发起的退出还没收敛就被冻结上限 /
-//                          回执异常收口销毁(已知缺口:那条路只按"退出中 = 客户端已断开"处理)
+//                          回执异常收口销毁(已知缺口:那条路只按"退出中 = 客户端已断开"处理)。
+//                          整节点疏散中,同会话进场留下的票据随后撞上"废黜实体后重载"时也计在这里
 //   reply_verified         认领到本次改派的应答、条目正在等它,转核实
 //   reply_ignored          认领到应答,但条目已不在等它(还没发 / 已在核实 / 已落回本节点),只记日志
 //   transport_failed       认领到本次改派的 gRPC 传输失败(结果未知,等到 settle 才核实)
@@ -1259,9 +1263,13 @@ public:
 
 	// 疏散是否收敛:所有玩家都存盘完成、改派请求都已派发、本地实体都已销毁,并且待确认表已清空
 	// (每一次改派都有了结论:已在别处 / 已落回本节点 / 已踢线 / 已放弃)。
-	// 供 Node 的有界 drain 看门狗轮询:等待确认表受那道看门狗(15s)约束,到期时剩下的条目只放弃、不踢。
+	// 供 Node 的有界 drain 看门狗轮询:等待确认表受那道看门狗(15s)约束。
 	// scene_manager 的显式拒绝通常亚秒返回,等它回来正是疏散里唯一还能替玩家做的事;结果未知(传输失败)或还有请求
-	// 结局未定的条目要等到 settle 才读,疏散里多半等不到,会让 drain 跑满看门狗并打 ERROR —— 这是如实的信号。
+	// 结局未定的条目要等到 settle 才读,这一道看门狗之内多半等不到,会让 drain 跑满看门狗并打 ERROR —— 这是如实的信号。
+	// 看门狗到期**不等于**这些条目被丢下:Node 随后走 Shutdown,停机谓词(nodes/scene/main.cpp)同样等待确认表清空、
+	// 再给一道 15s,期间 1s 扫描照常跑 —— settle 恰好落在这第二个窗口里的条目会被读到并踢线(只读 Redis、只推 gate;
+	// 凭证补写仍被"疏散中身份未确认"的闸挡住)。到第二道看门狗也到期时还剩的条目才是真的只放弃、不踢。
+	// 代价:scene_manager 不可达时,失去身份的节点从约 15s 退出变成最长约 30s。
 	static bool IsEmergencyRelocateDrained();
 
 	// ── 疏散 / 排空改派的待确认表(契约与判定见 relocate_confirm.h;设计见 cross-zone-scene-travel.md
@@ -1271,6 +1279,9 @@ public:
 	// 登记待入场条目之前;入口以后若加 owner_epoch 栅栏,本调用要挪到栅栏放行之后,否则陈旧路由会把条目误结清)。
 	//   1. 该玩家还没派发的改派票据作废(cancelled_on_reentry):这次进场要么复用实体并取消退出,要么废黜实体后重载,
 	//      那次退出都不会再正常收尾;留着票据只会在下一次、会话已换的退出里被误消费。
+	//      例外(relocate_confirm::CancelsTicketOnReentry):整节点疏散中、sessionId 就是票据里那条有效会话时票据留着,
+	//      由节点最后的退出收尾去消费(疏散只发一轮票,删掉的话被这条路由留在将死节点上的玩家既不改派也不踢)。
+	//      留下的票据若随后撞上"废黜实体后重载",由 DestroyDeposedPlayer 删掉并计 ticket_dropped_deposed。
 	//   2. 他有待确认条目时:sessionId 与票据里的会话相同 → 本节点替他发的改派有了去向,转入"落地等载入"(kLanding),
 	//      由 SweepRelocateConfirms 等实体建出来,载入被放弃就核实后踢;sessionId 不同或为 0 → 玩家已重登、旧会话已死,
 	//      按 superseded 结清,不踢。

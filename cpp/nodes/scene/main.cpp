@@ -219,6 +219,8 @@ int main(int argc, char *argv[])
 			// scene_manager 的拒绝应答、核实读的应答都还在路上,不等它们的话 loop 一退,被拒的玩家就挂在没有实体的
 			// 会话上。等待同样受 Node 的 drain 看门狗(15s)约束;确认阶段只读 Redis、只推 gate,唯一的写(踢线前的
 			// 凭证补写)要过身份闸、且已计入上面的 exitReleaseMarks。看门狗到期时还剩的条目只放弃、不踢。
+			// 身份冲突疏散也会走到这里:冲突 drain 的看门狗到期后 Node 调 Shutdown,被它放下的条目在本谓词下再等
+			// 一道 15s(1s 扫描仍在跑,settle 落在这个窗口里的条目会被读到并踢线),所以失去身份的节点最长约 30s 才退出。
 			const std::size_t relocateConfirms = PlayerLifecycleSystem::RelocateConfirmsPending();
 			if (pendingPlayerSaves != context->lastPendingPlayerSaves ||
 				pendingKafkaMessages != context->lastPendingKafkaMessages ||
@@ -321,8 +323,8 @@ int main(int argc, char *argv[])
             // 属于"跨 zone 搬数据"那条链(Kafka 搬 PlayerAllData + ACK + reaper 重发)。该链已按
             // docs/design/cross-zone-scene-travel.md CZ-1 下线:全仓从无触发点,且与"数据不搬家、
             // 按 home_zone 落库"的决策冲突。跨 zone 现在走「重定向 + 目标 zone 直接从盘上加载」,
-            // 源端释放链在 PlayerLifecycleSystem(StartTravelHandoff …),冻结的超时恢复由它自己的
-            // 应答看门狗负责,不需要 reaper。
+            // 源端释放链在 PlayerLifecycleSystem(StartTravelHandoff …),冻结的收口由它自己的存盘 / 应答
+            // 看门狗(各 30s)与 70s 冻结硬上限(travel_freeze_cap.h,EnforceTravelFreezeCaps)负责,不需要 reaper。
             // broker 上残留的 consumer group `scene-cross-zone-{nodeId}`、两个 topic,以及 Redis 里的
             // player_migration:* 记录(TTL 120s)都无害,不为它们写清理代码。
 
