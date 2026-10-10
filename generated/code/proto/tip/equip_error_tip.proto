@@ -1,0 +1,34 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum equip_error {
+  kEquip_errorOK = 0;
+
+  kEquipItemNotFound = 28000;
+
+  kEquipNotEquipment = 28001;
+
+  kEquipLevelNotEnough = 28002;
+
+  kEquipClassMismatch = 28003;
+
+  kEquipNoSlot = 28004;
+
+  kEquipNotEquipped = 28005;
+
+  kEquipBagFull = 28006;
+
+  kEquipInBattle = 28007;
+
+  kEquipFrozen = 28008;
+
+  kEquipGrantInvalid = 28009;
+
+  kEquipInternalError = 28010;
+
+};

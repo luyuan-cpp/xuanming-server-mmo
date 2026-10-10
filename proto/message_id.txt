@@ -242,3 +242,9 @@
 241=GuildServiceGetGuildActivities
 242=GuildServiceStartGuildTrial
 243=GuildServiceRespondGuildTrialInvite
+244=GuildInternalListAppliedAssetOpsSince
+245=MatchInternalStartActivityBattle
+246=SceneBagClientPlayerUnequipItem
+247=SceneBagClientPlayerGmGrantItem
+248=DataServiceGetPlayerAssetOpLedger
+249=SceneBagClientPlayerEquipItem
