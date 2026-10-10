@@ -313,8 +313,14 @@ func TestRecommendAnchor_AppliesAllFourExclusions(t *testing.T) {
 	// 顺序与去重:严格按 player_id 升序、每人一次(Equal 同时钉住这两件事)。
 	assert.Equal(t, []uint64{hub, c.plain, c.rejected, c.bystander}, recommendCandidateIDs(got),
 		"anchor 必须按 player_id 升序返回且每个候选只出现一次(DISTINCT 窗口去重)")
+	// 共同好友数是真数出来的,不是恒填 0(2026-10-09 之前的行为):me 的好友只有 myFriend,而 myFriend 的好友是
+	// me 与 hub —— 所以 hub 与我有 1 个共同好友,其余三人是 0。hub 那个 1 钉的是"兜底路径也数";另外三个 0 钉的是
+	// "数的是两个好友列表的交集":plain 有 3 个好友(hub / rejected / bystander)却没有一个是我的好友,
+	// 把子查询写成数候选自己的好友数、或者漏了 m1.player_id = me,这里就不是 0。
+	wantMutual := map[uint64]uint32{hub: 1, c.plain: 0, c.rejected: 0, c.bystander: 0}
 	for _, cand := range got {
-		assert.Zero(t, cand.MutualFriends, "random 兜底候选的共同好友数恒为 0(候选 %d)", cand.CandidatePlayerID)
+		assert.Equal(t, wantMutual[cand.CandidatePlayerID], cand.MutualFriends,
+			"候选 %d 的共同好友数", cand.CandidatePlayerID)
 	}
 }
 
@@ -349,10 +355,18 @@ func TestRecommendAnchor_HonorsPivotExcludeAndLimit(t *testing.T) {
 	assert.Equal(t, []uint64{hub, c.plain, c.rejected}, recommendCandidateIDs(got),
 		"limit 数的是去重后的候选,不是 friend 表的行")
 
-	// pivot、exclude、limit 三段同时在场:占位符顺序是 pivot → 窗口 W → 6 个 playerID → exclude → LIMIT。
+	// pivot、exclude、limit 三段同时在场:占位符顺序是 playerID(数共同好友)→ pivot → 窗口 W → 6 个 playerID → exclude → LIMIT。
 	got, err = repo.recommendAnchor(ctx, c.me, []uint64{c.plain}, c.plain, 1)
 	require.NoError(t, err)
 	assert.Equal(t, []uint64{c.rejected}, recommendCandidateIDs(got))
+
+	// 第一个 playerID 与 pivot 不能互换(都是 BIGINT,换了不报错)。pivot 取 hub 的 id:参数顺序对时,hub 与我有
+	// 1 个共同好友(myFriend);两者互换后,窗口改从 me 的 id 起扫、第一个合格者仍是 hub,而子查询数的变成
+	// "hub 的好友里有几个与 hub 有边"= hub 自己的好友数 8 —— id 对、数字错,所以两样一起断言。
+	got, err = repo.recommendAnchor(ctx, c.me, nil, hub, 1)
+	require.NoError(t, err)
+	require.Equal(t, []uint64{hub}, recommendCandidateIDs(got))
+	assert.Equal(t, uint32(1), got[0].MutualFriends, "hub 与我有 1 个共同好友(myFriend)")
 }
 
 // ── RecommendRandom(pivot 随机;用"最大 id"把断言做成确定的)──────
@@ -655,6 +669,8 @@ func explainTraditionalRows(t *testing.T, ctx context.Context, db *sql.DB, stmt 
 //     回读 pivot 之后全部 8×W 个分组的 rnd_next 8,193:只要旧写法仍落临时表,读数就恒 > 8×W,但最坏余量只有约 1.5 倍;
 //   - 新实现:2,150 ≈ 2.1×W。上界取 8×W:理论最坏是 7×W+3 = 窗口生产 ≤ W+2(跳跃扫描是 W+1 次定位 + 1 次
 //     read_last;本夹具每人一条边,实测走范围扫描,是 1 次定位 + W 次 next = W+1)+ 物化表扫描 W+1 + 点查 5×W。
+//     2026-10-09 起选择列表多了数共同好友的子查询,每返回一行另加 2F+1 次;本夹具的 me 没有好友(F=0),
+//     所以只多 20 次,实测 2,170。F 不为 0 时的那一项由 TestRecommendAnchor_CountsRealMutualFriendsForOutputRowsOnly 守。
 //
 // pivot 放在正中而不是表头:窗口若退化成"从索引开头全扫再过滤"(EXPLAIN type=index),会把 pivot 之前的 8×W 人
 // 也读一遍,同样越界(2026-09-28 实测:给派生表加 GROUP_INDEX(friend PRIMARY) 提示后本夹具读 10,343 次)。
@@ -783,6 +799,8 @@ func TestRecommendAnchor_WindowCoversBoundedExclusionBudget(t *testing.T) {
 // pending 扫描。三者都与玩家总数成正比,在测试的小表上读数看不出来,只有计划看得出来,所以单独守。
 // 只去掉子查询上的 FORCE INDEX 时,本夹具上计划不变、只是 possible_keys 多出二级索引:possible_keys 那条断言
 // 守的是防线(防统计变化后改选二级索引),不是已实测到的退化。
+// 选择列表里数共同好友的子查询(m1 / m2,2026-10-09 加)也在这里守:访问方式、主键、possible_keys,外加
+// "m2 的主键前缀是候选"—— 后者的理由见用例里那段注释。
 //
 // 计划按生产上限 limit=20 取;顺带核对结果时 limit 取 30:按 id 升序,前 20 个合格者到 pivot+26 就截止,
 // 够不到放在 +30..+33 的申请关系人,那样 r_out / r_in 的排除失效、或 status=1 的过滤丢了都照样绿。
@@ -838,6 +856,36 @@ func TestRecommendAnchor_PlanIsPerRowPrimaryKeyLookups(t *testing.T) {
 	}
 	for alias, ok := range seen {
 		assert.True(t, ok, "计划里缺了排除子查询 %s(别名被改了,或被物化成 <subqueryN>)", alias)
+	}
+
+	// 选择列表里数共同好友的子查询(recommendAnchor 第 6 条):m1 是 `player_id = me` 的主键前缀 ref,
+	// m2 是 (候选, 我的好友) 的完整主键单行点查,两者都只许走主键。
+	mutualWant := map[string]struct{ accessType, keyLen string }{"m1": {"ref", "8"}, "m2": {"eq_ref", "16"}}
+	mutualSeen := map[string]bool{}
+	for _, row := range plan {
+		want, ok := mutualWant[row["table"]]
+		if !ok {
+			continue
+		}
+		mutualSeen[row["table"]] = true
+		assert.Equal(t, "DEPENDENT SUBQUERY", row["select_type"], "%s 必须是按返回行求值的相关子查询", row["table"])
+		assert.Equal(t, want.accessType, row["type"], "%s 的访问方式变了:数共同好友不再是「我的好友前缀 + 逐个主键点查」", row["table"])
+		assert.Equal(t, "PRIMARY", row["key"], "%s 必须走主键", row["table"])
+		assert.Equal(t, want.keyLen, row["key_len"], "%s 用到的主键列数不对", row["table"])
+		assert.Equal(t, "PRIMARY", row["possible_keys"], "%s 的 FORCE INDEX (PRIMARY) 丢了", row["table"])
+		if row["table"] == "m2" {
+			// m2 的主键前缀必须是候选。把连接条件改成按我的好友去连(m2.player_id = m1.friend_player_id AND
+			// m2.friend_player_id = c.player_id)在 MySQL 上计划同形、读数相同、结果也相同,这里的其它断言都还是绿的;
+			// 但 TiDB 上相关列 c.player_id 不在索引前缀上就定不了位,m2 会变成每返回一行全扫一遍 friend
+			// (2026-10-09 实测 88 万条边的库 17,600,000 行、首次执行 13.6 s,见 recommendAnchor 注释第 6 条 (b))。
+			// ref 列形如 "c.player_id,<库名>.m1.friend_player_id":只看开头,不依赖库名(也不带逗号 —— STRAIGHT_JOIN
+			// 被去掉、改由 m2 驱动时 ref 只剩 "c.player_id",那种情况由上面 type / key_len 的断言报,不该在这里再误报一次)。
+			assert.True(t, strings.HasPrefix(row["ref"], "c.player_id"),
+				"m2 的主键前缀必须是候选 c.player_id(实际 ref=%q):连接条件被改成按我的好友去连了?", row["ref"])
+		}
+	}
+	for alias := range mutualWant {
+		assert.True(t, mutualSeen[alias], "计划里缺了数共同好友的 %s(别名被改了,或子查询被改写成了别的形状)", alias)
 	}
 
 	const resultLimit = 30
@@ -1428,6 +1476,59 @@ func TestRecommendByMutual_StopsAtWindowWhenSaturated(t *testing.T) {
 	t.Logf("窗口全被排除:读数 %d(上界 %d)", reads, bound)
 	assert.Empty(t, got, "排名前 W 的人全被排除时必须返回空:返回了人说明越过了窗口(派生表的 LIMIT 丢了)")
 	assert.LessOrEqual(t, reads, bound, "窗口饱和时读数也必须在上界内")
+}
+
+// TestRecommendAnchor_CountsRealMutualFriendsForOutputRowsOnly 钉住 2026-10-09 的修正(先红后绿):random 兜底给每个
+// 返回的候选数出真实的共同好友数,而且只对**返回的**行数。放在 W2 后面,是因为它测的正是 W2 之后发生的事。
+//
+// 场景就是此前会显示错的那一种:seedMutualWindowGraph 的头部 W 人全部拉黑我,mutual 的排名窗口被占满、返回空
+// (W2 的第二阶段),能出人的只剩兜底;兜底从尾部挑到的人都是我好友的好友(各经 1 个好友可达)。
+//   - 修正前(选择列表写死 `0 AS mutual`):尾部的人返回时共同好友数是 0 → 红在数字断言;
+//   - 现在:每人是 1。对照是头部没被拉黑时从头部起扫,每人是 2 —— 数字不是写死的 1。
+//
+// 读数断言守"子查询只对返回的行求值":每返回一行 2F+1 次读(F = 我的好友数,本夹具 16),limit=20 共 660 次,
+// 整条 ≤ 8×W + limit×(2F+1) = 8,852。2026-10-09 在按本夹具逐行重建的库上实测 2,811 次(窗口生产 + 物化表扫描
+// 2,051、点查 5×20、子查询 660);把外层排序改成 `ORDER BY mutual DESC, c.player_id` 后,子查询要对窗口里 W 个人
+// 全部求值才能排序,同一份数据 40,963 次 → 红在读数断言。结果不变(每人仍是 1),所以只有读数看得出来。
+func TestRecommendAnchor_CountsRealMutualFriendsForOutputRowsOnly(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+	g := seedMutualWindowGraph(t, ctx, db)
+	analyzeRecommendTables(t, ctx, db)
+
+	const limit = mutualAdvProductionLimit
+
+	// 对照:头部还没被拉黑时从头部第一人起扫 —— 每人经 2 个好友可达。
+	got, err := repo.recommendAnchor(ctx, g.me, []uint64{g.me}, mutualWinTopBase, limit)
+	require.NoError(t, err)
+	require.Equal(t, g.top[:limit], recommendCandidateIDs(got), "前置条件:头部前 %d 人都合格,按 id 升序返回", limit)
+	for _, c := range got {
+		assert.Equal(t, uint32(2), c.MutualFriends, "头部候选 %d 经 2 个好友可达", c.CandidatePlayerID)
+	}
+
+	// 头部 W 人全部拉黑我:mutual 的排名窗口被占满,只能靠兜底。
+	bulkInsertRecommendPairs(t, ctx, db, recommendBulkBlockPrefix, recommendBulkPairRow, recommendPairsTo(g.top, g.me))
+	analyzeRecommendTables(t, ctx, db)
+	mutual, err := repo.RecommendByMutual(ctx, g.me, []uint64{g.me}, limit)
+	require.NoError(t, err)
+	require.Empty(t, mutual, "前置条件:排名窗口全被拉黑我的人占满时 mutual 必须返回空,否则本用例测的不是「只能靠兜底」的场景")
+
+	tail := recommendIDRange(mutualWinTailBase, limit)
+	got, reads := recommendAnchorWithReads(t, ctx, db, repo, g.me, []uint64{g.me}, mutualWinTailBase, limit)
+	require.Equal(t, tail, recommendCandidateIDs(got), "尾部的人与我没有任何排除关系:从尾部第一人起扫必须按 id 升序取满")
+	for _, c := range got {
+		assert.Equal(t, uint32(1), c.MutualFriends,
+			"尾部候选 %d 是我好友的好友(经 1 个好友可达):兜底路径又把共同好友数填成了别的值", c.CandidatePlayerID)
+	}
+
+	w := uint64(RecommendAnchorWindow)
+	perRow := 2*uint64(mutualWinFriends) + 1
+	bound := 8*w + uint64(limit)*perRow
+	t.Logf("recommendAnchor 会话 Handler_read_* 增量 = %d(上界 8×W + limit×(2F+1) = %d;F=%d)", reads, bound, mutualWinFriends)
+	// 自检:对窗口里每个人都求值的读数必须越过上界,读数断言才分得出"只对返回的行"与"对整个窗口"。
+	require.Greater(t, w*perRow, bound, "前置条件:W×(2F+1) 必须大于读数上界")
+	assert.LessOrEqual(t, reads, bound,
+		"读数越过了上界:数共同好友的子查询不再只对返回的 %d 行求值(外层排序依赖 mutual 了?见 recommendAnchor 注释第 6 条 (a))", limit)
 }
 
 // TestRecommendByMutual_TiesAreShuffledPerCall(W3)夹具的 id 段。
