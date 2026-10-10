@@ -817,7 +817,7 @@ TEST(ExitPersistReentry, DeposedOnlyWhenEpochJumpsByAtLeastTwo)
     EXPECT_FALSE(player_exit::IsDeposedOnReentry(0, 1)) << "缓存 0 = 未知,无从判断";
     EXPECT_FALSE(player_exit::IsDeposedOnReentry(0, 5))
         << "缓存 0 = 未知(兼容窗口经旧 gate 首登),Redis 真实值可能早已是 5:不能拿 0 当基数判被废黜";
-    EXPECT_FALSE(player_exit::IsDeposedOnReentry(std::numeric_limits<uint64_t>::max(), 1))
+    EXPECT_FALSE(player_exit::IsDeposedOnReentry((std::numeric_limits<uint64_t>::max)(), 1))
         << "不新就不废黜,减法不得回绕";
 }
 
@@ -2640,27 +2640,35 @@ TEST(RelocateConfirmTicket, ClientGoneOrReplacedSessionVoidsTheTicket)
 
 TEST(RelocateConfirmTicket, ReentryCancelsTheTicketExceptForTheSameSessionWhileEvacuating)
 {
-    // 记法:(evacuating, reentrySessionBound, reentryIsTicketSession)。进场路由把玩家带回本节点时,还没派发的票据
-    // 作废不作废。
-    static_assert(rc::CancelsTicketOnReentry(false, true, true), "判定必须能在编译期求值(纯函数)");
+    // 记法:(evacuating, reentrySessionBound, reentryIsTicketSession, exitSawClientDisconnect)。进场路由把玩家带回
+    // 本节点时,还没派发的票据作废不作废。
+    static_assert(rc::CancelsTicketOnReentry(false, true, true, false), "判定必须能在编译期求值(纯函数)");
     // 平时一律作废:那次退出不会再正常收尾,留着票据只会在下一次、会话已换的退出里被误消费。
     for (const bool bound : {false, true})
     {
         for (const bool sameSession : {false, true})
         {
-            EXPECT_TRUE(rc::CancelsTicketOnReentry(false, bound, sameSession))
-                << "bound=" << bound << " same_session=" << sameSession;
+            for (const bool clientGone : {false, true})
+            {
+                EXPECT_TRUE(rc::CancelsTicketOnReentry(false, bound, sameSession, clientGone))
+                    << "bound=" << bound << " same_session=" << sameSession << " client_gone=" << clientGone;
+            }
         }
     }
-    // 整节点疏散中,只有「票据那同一条有效会话」的进场留着票据:进场若取消了他的退出,他留在将死的节点上,而疏散
-    // 只发一轮票,删掉的话既不改派也不踢。
-    EXPECT_FALSE(rc::CancelsTicketOnReentry(true, true, true));
-    EXPECT_TRUE(rc::CancelsTicketOnReentry(true, true, false)) << "另一条有效会话:票据里的旧会话已死";
+    // 整节点疏散中,只有「票据那同一条有效会话、且被打断的那次退出没记过客户端断线」的进场留着票据:进场若取消了
+    // 他的退出,他留在将死的节点上,而疏散只发一轮票,删掉的话既不改派也不踢。
+    EXPECT_FALSE(rc::CancelsTicketOnReentry(true, true, true, false));
+    EXPECT_TRUE(rc::CancelsTicketOnReentry(true, true, false, false)) << "另一条有效会话:票据里的旧会话已死";
     // 会话 0 / 无效会话必须在这里作废:进场会把实体的会话快照清成无效,而 DecideTicket 把「没有会话」当成
     // 「不是换了会话的证据」照发 —— 留着就会按票据里的旧会话改派。
-    EXPECT_TRUE(rc::CancelsTicketOnReentry(true, false, false));
-    EXPECT_TRUE(rc::CancelsTicketOnReentry(true, false, true)) << "会话无效时「相等」没有意义,同样作废";
+    EXPECT_TRUE(rc::CancelsTicketOnReentry(true, false, false, false));
+    EXPECT_TRUE(rc::CancelsTicketOnReentry(true, false, true, false)) << "会话无效时「相等」没有意义,同样作废";
     EXPECT_EQ(rc::DecideTicket(false, false, false), rc::TicketDecision::kDispatch) << "上一条注释依赖的前提";
+    // 那次退出已经记过客户端断线:取消退出会把意图组件上的断线位一起摘掉,下一次退出就不知道这条会话死过了,
+    // 留着票据等于给一条判过「已断线」的会话改派 —— 作废。
+    EXPECT_TRUE(rc::CancelsTicketOnReentry(true, true, true, true));
+    EXPECT_EQ(rc::DecideTicket(true, true, true), rc::TicketDecision::kVoidClientGone)
+        << "断线位若还在,票据判定自己就会作废;这里兜的是它被摘掉之后";
 }
 
 TEST(RelocateConfirmEarlier, InFlightSceneChangeCountsOnlyInsideSettleWindow)
@@ -3709,7 +3717,8 @@ void ExpectRelocateStats(const relocate_confirm_stats::Snapshot &actual,
 }
 
 // 作用域内把节点身份探针置为「确认有效」;离开作用域(含 ASSERT 失败提前返回)一律复位成「未注入 = 不确认」。
-// 探针是进程级的,不复位会改变后面所有走 A1′ 的用例的判定(--gtest_shuffle 下尤其难查)。
+// 探针是 thread_local 的,而 gtest 的用例都跑在同一条线程上:不复位会改变后面所有走 A1′ 的用例的判定
+// (--gtest_shuffle 下尤其难查)。
 struct ScopedConfirmedNodeIdentity
 {
     ScopedConfirmedNodeIdentity() { PlayerLifecycleSystem::SetNodeIdentityProbe([] { return true; }); }

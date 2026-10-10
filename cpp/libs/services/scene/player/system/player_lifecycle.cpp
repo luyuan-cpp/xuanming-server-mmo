@@ -3327,20 +3327,36 @@ void PlayerLifecycleSystem::ReconcileRelocateOnReentry(Guid playerId, SessionId 
 	//    后重新载入;两种情况下那次退出都不会再正常收尾。留着票据,它会在下一次、会话已换的退出里被误消费。
 	//    整节点疏散中、带着票据那同一条有效会话的进场例外,票据留着(relocate_confirm::CancelsTicketOnReentry):
 	//    进场若取消了他的退出,他就留在这个将死的节点上,而 BeginEmergencyRelocateAll 只发一轮票(疏散开始后不再
-	//    补发)。留着的票据会在节点最后的 exitAllPlayers 收尾时被消费,把同一条会话改派出去 —— 那是将死节点在
-	//    停机阶段多做的一次"改派标记条件写 + EnterScene"(owner_epoch 条件写把关,与疏散开始时那一轮同样的写);
-	//    删掉的话这名玩家既不改派也不踢。另一条会话或会话 0 的进场照旧作废。
+	//    补发)。留着的票据在他下一次退出收敛时被消费 —— 通常就是节点最后的 exitAllPlayers;票据判定不看退出原因,
+	//    疏散期间别的原因发起的退出(例如 scene_manager 的 ReleasePlayer)同样会消费它 —— 把同一条会话改派出去。
+	//    那是将死节点多做的一次"改派标记条件写 + EnterScene"(owner_epoch 条件写把关,与疏散开始时那一轮同样的写);
+	//    删掉的话这名玩家既不改派也不踢。另一条会话或会话 0 的进场照旧作废;被打断的那次退出已经记过客户端断线的
+	//    也作废(取消退出会把断线位一起摘掉,留着票据等于给一条判过"已断线"的会话改派)。
 	//    进场若走的是"废黜实体后重载"(PlayerEnterGameNode 的 1.5 / 1.6),留下的票据随后由 DestroyDeposedPlayer
 	//    删掉,计的是 ticket_dropped_deposed 而不是 cancelled_on_reentry。
-	const auto ticketIt = tlsEmergencyRelocateTickets.find(playerId);
-	if (ticketIt != tlsEmergencyRelocateTickets.end() &&
-		relocate_confirm::CancelsTicketOnReentry(tlsEmergencyRelocating, player_exit::IsBoundSession(sessionId),
-												 sessionId == ticketIt->second.sessionId))
+	if (const auto ticketIt = tlsEmergencyRelocateTickets.find(playerId); ticketIt != tlsEmergencyRelocateTickets.end())
 	{
-		tlsEmergencyRelocateTickets.erase(ticketIt);
-		relocate_confirm_stats::Inc(relocate_confirm_stats::Get().cancelledOnReentry);
-		LOG_INFO << "[RelocateConfirm] cancelled on reentry player=" << playerId << " session=" << sessionId
-				 << " (metric=cancelled_on_reentry)";
+		// 被这次进场打断的那次退出有没有记过客户端断线:此刻实体与意图组件都还在(本函数排在进场的一切处置之前)。
+		bool exitSawClientDisconnect = false;
+		if (const auto reentryEntity = tlsEcs.GetPlayer(playerId); tlsEcs.actorRegistry.valid(reentryEntity))
+		{
+			const auto *exitIntent = tlsEcs.actorRegistry.try_get<PlayerExitIntentComp>(reentryEntity);
+			exitSawClientDisconnect = exitIntent != nullptr && exitIntent->clientDisconnected;
+		}
+		if (relocate_confirm::CancelsTicketOnReentry(tlsEmergencyRelocating, player_exit::IsBoundSession(sessionId),
+													 sessionId == ticketIt->second.sessionId, exitSawClientDisconnect))
+		{
+			tlsEmergencyRelocateTickets.erase(ticketIt);
+			relocate_confirm_stats::Inc(relocate_confirm_stats::Get().cancelledOnReentry);
+			LOG_INFO << "[RelocateConfirm] cancelled on reentry player=" << playerId << " session=" << sessionId
+					 << " (metric=cancelled_on_reentry)";
+		}
+		else
+		{
+			// 不计数:票据还在,之后要么被消费(计 dispatch / void_*),要么随废黜销毁(计 ticket_dropped_deposed)。
+			LOG_INFO << "[RelocateConfirm] ticket kept on reentry player=" << playerId << " session=" << sessionId
+					 << " (node is evacuating; left for the next exit to consume)";
+		}
 	}
 
 	// 2. 本节点替他发的改派有了去向。

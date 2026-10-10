@@ -1784,7 +1784,7 @@ C++(`cpp/libs/services/scene/player/` 下,另有两个 handler 文件):
 **做法**:把"发完即忘"改成"登记、确认、收口"。
 
 1. **登记**。票据被消费的那一刻(`DispatchEmergencyRelocate`,销毁实体之前的同一个调用栈),按 player_id 登记一条条目。条目经历四个阶段:`mark_writing`(改派标记的条件写在途)→ `awaiting_reply`(EnterScene 已交给 gRPC)→ `verifying`(有了证据,读 Redis 核实)→ 结清;另有 `landing`(进场路由回到了本节点,等载入把实体建出来)。表满(8192 条)时**不淘汰**在途条目,新的改派按旧行为发出、不跟踪(`untracked_overflow`)。
-2. **票据作废**。本次退出期间客户端已断线,或实体当前的会话已不是发票时那一条:不发改派,由 A1′ 按第一次退出原因决定写不写释放标记。进场路由回到本节点时,还没派发的票据也作废(`cancelled_on_reentry`);整节点疏散中、带着票据那同一条有效会话的进场例外,票据留着,由节点最后的退出收尾去消费(疏散只发一轮票;这类进场若取消了他的退出,删掉票据的话他既不改派也不踢)。另一条会话或会话 0 的进场照旧作废(`relocate_confirm::CancelsTicketOnReentry`)。
+2. **票据作废**。本次退出期间客户端已断线,或实体当前的会话已不是发票时那一条:不发改派,由 A1′ 按第一次退出原因决定写不写释放标记。进场路由回到本节点时,还没派发的票据也作废(`cancelled_on_reentry`);整节点疏散中、带着票据那同一条有效会话、且被打断的那次退出没有记过客户端断线的进场例外,票据留着,在他下一次退出收敛时被消费 —— 通常是节点最后的退出收尾(疏散只发一轮票;这类进场若取消了他的退出,删掉票据的话他既不改派也不踢)。另一条会话、会话 0、或那次退出已记过客户端断线的进场照旧作废(`relocate_confirm::CancelsTicketOnReentry`);保留时打一行 `ticket kept on reentry`。
 3. **应答只触发核实,从不直接定案**。成功不直接结清(可能是把他放回了正在排空的同一个场景,路由还在路上),拒绝不直接踢(回 7 而回滚没成、标记已被目标节点消费时,实际是已放行到别处)。应答与传输失败都在 `DispatchEnterSceneReply` / `DispatchEnterSceneTransportFailure` 的"实体已不在"分支按关联号认领;只有回显号为 0 的应答(旧版 scene_manager)才退回按 player_id 认领,传输失败没有这条退路。只有号精确匹配的**应答**才算"本次请求的完成通知已到"(`Table::MarkCompletion`,只认第一次);传输失败是结果未知,不算。
 4. **核实**。走 `tlsRedis.GetZoneRedis()`(不重放的那条连接)发一段只读脚本 `relocate_confirm::kLuaReadPlacement`,一次读回 owner_epoch、location、handoff 三个键。裁决只看 location 的 zone / node / scene,不看 owner_epoch、不读回滚回执,所以与 GO-2 的回滚语义无关。五种读数:
 
@@ -1816,6 +1816,7 @@ C++(`cpp/libs/services/scene/player/` 下,另有两个 handler 文件):
 **审查与修正**(2026-10-09;全部是静态阅读,没有任何编译或运行证据):
 - 落码时的规格一致性审查,加上落码后的五视角对抗审查(编译面两路、状态机时序、与既有机制的集成、测试质量与跨批次交互),**都没有找到必须改的问题**(编不过 / 行为错误 / 违反不变量 / 用例必然失败)。各视角实际核过的范围:`relocate_confirm.h` 全文与 20 余个 constexpr 函数、粘合代码的全部改动段与每个新引用符号的定义处、九条时序(含正常路径)、退出链与交接路径的每个 hunk、当时全部 42 个用例的期望值逐条人工求值。
 - 下面这批修正(含审查后补 / 改的用例)另经一轮四视角复审(编译面、行为、用例逐条求值、文档事实核对),代码仍然没有必须改的问题;复审又提了一批建议,其中值得做的也一并落了(疏散保留票据的条件收窄并抽成纯函数、`numeric_limits::max` 的宏防护、若干注释与用例)。文档那一路查出 runbook 场景 V 的两处硬伤(排空命令漏了 `zone_id`、V4 的注入会让停机谓词永不成立),已改。
+- 提交(`4bd096d1ab`)之后又对"复审之后才追加的那一小批改动"做了一次三视角收尾核查:代码与用例仍然没有必须改的问题;文档又查出几处与代码不符的描述(排空生效判据两行日志的先后、手工排空过的频道会被 rebalance 补回映射、"GO-2 专属验收点"第 6 条要按落点分两种、PROGRESS 条目里一句指向不存在的旧条目),连同两条小的保守加固(疏散中保留票据再加"那次退出没记过客户端断线"的条件、保留时打一行日志)在同日第二个提交里改掉。
 - 审查提出的建议里,下面这些已经落了(都往保守方向):
   1. **传输失败不再记成"完成通知已到"**。原先认领到传输失败也调 `MarkCompletion`:条目随后若被一条外来的同会话路由带进落地、载入又被放弃,重新核实时证据换成了"载入被放弃",而"还有请求结局未定"又为假,"settle 之前不读、不提前踢、读不到不盲踢"三道保护同时失效 —— 这时 scene_manager 的 handler 可能正要把他放到别处。现在只有带应答体的应答才算完成;传输失败后的落地核实同样等到 settle,读不到时放弃而不是盲踢。
   2. `MarkCompletion` 只认第一次,不让第二次通知改写已记下的拒绝码。
@@ -1849,7 +1850,7 @@ C++(`cpp/libs/services/scene/player/` 下,另有两个 handler 文件):
 - 预期会出现、不算异常的既有日志:`SceneManager.EnterScene error … code=<N>`(改派被拒);踢线后 gate 回发 ExitGame 时的 `ProcessClientPlayerMessage: session id not found`。
 
 **给 Codex 的验证清单**(Claude 未执行任何一步):
-1. 编译(仓库根,必须串行):`msbuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`。报错先按文件归因:落在 `cpp/libs/engine/infra/agones/**`、`GetDbTaskTopic`、`kEnterSceneServerBusy` 一带的,是别的批次带入而从未编译的代码,分开记录。若 `relocate_confirm.h` 报 `max` 宏相关错误,给 `cross_zone_test.vcxproj` 加 `NOMINMAX`(scene 库与 scene 节点工程已有)。
+1. 编译(仓库根,必须串行):`msbuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`。报错先按文件归因:落在 `cpp/libs/engine/infra/agones/**`、`GetDbTaskTopic`、`kEnterSceneServerBusy` 一带的,是别的批次带入而从未编译的代码,分开记录。`relocate_confirm.h` 与 `cross_zone_test.cpp` 里的 `max` 都已加括号写;若别处仍报 `max` 宏相关错误,给 `cross_zone_test.vcxproj` 加 `NOMINMAX`(scene 库与 scene 节点工程已有)。
 2. 单测:`cross_zone_test.exe --gtest_filter=RelocateConfirm*`,期望 47 个通过。
 3. 回归:`--gtest_filter=ExitPersist*:ExitRelease*:HandoffMarkWithdrawQueue.*:TravelOutcomeReset.*:CrossZone*:EnterSceneReply*:EnterSceneTransportFailure*:TravelFreezeCap*:TravelOwnership*:DbTaskTopicGeneration*`,再整体跑一遍 `--gtest_shuffle`(待确认表是 thread_local,检验用例之间不互相污染)。
 4. 实跑(runbook 场景 V):V1 基线(排空后 `granted` / `landed_here`);V2 `docker pause kafka`(约 5s 后回 7 并回滚 → `kick … outcome=kick_verified push=sent credential=keep_existing`,重登不出现 18);V3 排空后立刻杀 scene_manager(`transport failure … outcome unknown` → `waiting for settle` → 约 15s 后踢);V4 停机 drain;V5 回归。
@@ -1859,12 +1860,13 @@ C++(`cpp/libs/services/scene/player/` 下,另有两个 handler 文件):
 - scene_manager 比 settle 窗口还慢(回滚 EVAL 在 go-redis 重试下变慢、请求在客户端通道里排队到 deadline 前才被收到)时可能误踢一次,重登即恢复。
 - 放行到别处、但路由丢了时不踢(本项只管"没放行");放行后又被放回源场景、路由在途的那一刻恰好核实,会误踢一次。
 - 无法核实时放弃、不踢的范围比原规格大(见第 7 条)。典型:Kafka 故障(回 7、已回滚)叠加本节点连续 10s 读不到 Redis,被拒的玩家不会被踢。
-- 停机当刻登记的传输失败与结局未定条目等不到第一次读(settle 下限 15s 与 drain 看门狗相等),被看门狗放弃、不踢。身份冲突疏散因为串联了两道看门狗,第一轮改派的条目多数能等到;被同会话进场留下票据、到停机阶段才改派的玩家,条目在第二道窗口开头才登记,同样等不到。停机时若看门狗到期的那一刻还有别的未收敛项(例如 Redis 故障下未落地的存盘),逐条积压清单一次都不会打,被放弃的条目只剩 30s 汇总行。
+- 停机当刻登记的传输失败与结局未定条目等不到第一次读(settle 下限 15s 与 drain 看门狗相等),被看门狗放弃、不踢。身份冲突疏散因为串联了两道看门狗,第一轮改派的条目多数能等到;被同会话进场留下票据、到停机阶段才改派的玩家,条目在第二道窗口开头才登记,同样等不到。停机时若看门狗到期的那一刻还有别的未收敛项(例如 Redis 故障下未落地的存盘),逐条积压清单一次都不会打,被放弃的条目只能靠此前逐条的 `tracking` / `sent` 日志反推(30s 汇总行没有"放弃"计数,进程退出前也不补打)。
 - 踢线只推一次:gate 多半已摘掉本节点(整节点疏散)、或 scene 与 gate 的连接恰好在重连(单场景排空也会遇到)时,推送结果为 `push_gate_gone`,条目已结清、不再重推,客户端仍卡着;票据没有 gate 实例号时改派必被 5 拒,结局相同。
 - 落地后两拍之间实体又被销毁,会被当成"载入被放弃"去核实:销毁原因是客户端断线时无害(踢的是死会话);dev 旁路下若是 scene_manager 先发 ReleasePlayer、后写落点,可能踢到一条正在合法换图的活会话。只影响 dev 旁路,只伤活性。
 - "更早请求可能被放行"的另一处漏报:上一次改派的条目已按 `landed_here` 结清(1s 之内)之后又被排空,而它自己的请求其实还在 scene_manager 排队。与"普通换图传输失败"那条同性质。
 - 核实脚本与交接链上其它多键脚本一样,不支持 Redis Cluster(三个键没有哈希标签)。
 - 整节点疏散中,三类落在将死节点上的玩家手里没有票据,节点最后退出时既不改派也不踢:进场被废黜销毁后重载的;票据已派发、scene_manager 又把他放回本节点、条目按 `landed_here` 结清的;疏散开始后才被路由到本节点的新进场。CPP-3 之前就有(疏散只发一轮票),本项只兜住了"同会话进场取消退出"那一类;要收口得让节点最后的退出给仍在节点上的玩家补发票据,需另行决定。
+- 疏散中被保留的票据,消费它的是"他的下一次退出",不一定是节点最后的退出收尾:票据判定不看退出原因,疏散期间由 scene_manager 的 ReleasePlayer 或 s2s LeaveScene 发起的退出同样会按票据派发改派(客户端断线的走作废)。生产配置下这条路是否可达没有证实(活着且不在交接中的实体收到 ReleasePlayer,需要 scene_manager 不经换手门就跨节点落点);后果只是多发一次由 owner_epoch 条件写把关的改派。
 - 带票据的退出实体被废黜销毁时不踢(`ticket_dropped_deposed`)。
 - `PlayerEnterGameNode` 没有 epoch 栅栏,陈旧路由带不同会话到达会把条目误结成 `superseded`(加栅栏时 `ReconcileRelocateOnReentry` 要挪到放行之后,见 §13.9)。
 - 普通换图传输失败后一个 settle 窗口内被排空时,"更早请求可能被放行"漏报(在途组件已被摘掉);收口要改 gRPC 第二批的代码,本轮只登记。

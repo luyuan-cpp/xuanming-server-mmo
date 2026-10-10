@@ -528,16 +528,21 @@ namespace relocate_confirm
 	// 进场路由把玩家带回了本节点,而他手里还有一张没派发的票据:作废不作废。
 	//   evacuating              整节点疏散中(BeginEmergencyRelocateAll 之后);
 	//   reentrySessionBound     这次进场带来的会话是一条有效会话(player_exit::IsBoundSession);
-	//   reentryIsTicketSession  这次进场带来的会话 == 票据里抄下的会话。
+	//   reentryIsTicketSession  这次进场带来的会话 == 票据里抄下的会话;
+	//   exitSawClientDisconnect 被这次进场打断的那次退出,期间已经记过客户端断线(意图组件上的粘性位)。
 	// 平时一律作废:这次进场要么复用实体并取消退出,要么废黜实体后重载,那次退出都不会再正常收尾;留着票据,它会在
 	// 下一次、会话已换的退出里被误消费。
 	// 整节点疏散中,**同一条有效会话**的进场例外,票据留着:进场若取消了他的退出,他就留在这个将死的节点上,而疏散
-	// 只发一轮票;留着的票据会在节点最后的退出收尾时被消费,把同一条会话改派出去,删掉的话这名玩家既不改派也不踢。
+	// 只发一轮票;留着的票据在他下一次退出收敛时被消费(通常就是节点最后的退出收尾;票据判定不看退出原因,疏散期间
+	// 别的原因发起的退出同样会消费它),把同一条会话改派出去,删掉的话这名玩家既不改派也不踢。
 	// 带着另一条会话或会话 0 的进场照旧作废 —— 票据里的旧会话已死;尤其会话 0:进场会把实体的会话快照清成无效,
 	// 之后的票据判定(DecideTicket)把"没有会话"当成"不是换了会话的证据"而照发,所以必须在这里就作废。
-	constexpr bool CancelsTicketOnReentry(bool evacuating, bool reentrySessionBound, bool reentryIsTicketSession)
+	// 那次退出已经记过客户端断线的也作废:取消退出会连同意图组件上的断线位一起摘掉,下一次退出就不知道这条会话
+	// 死过了,留着票据等于给一条本节点自己判过"已断线"的会话改派。
+	constexpr bool CancelsTicketOnReentry(bool evacuating, bool reentrySessionBound, bool reentryIsTicketSession,
+										  bool exitSawClientDisconnect)
 	{
-		return !(evacuating && reentrySessionBound && reentryIsTicketSession);
+		return !(evacuating && reentrySessionBound && reentryIsTicketSession && !exitSawClientDisconnect);
 	}
 
 	// 实体上那条在途的普通换图 EnterScene 是否还可能被 scene_manager 处理:发出不满一个 settle 窗口就算。

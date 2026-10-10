@@ -504,8 +504,9 @@ namespace exit_release_stats
 //                          void_client_gone / void_session_replaced = 票据作废、不发,由 A1′ 按第一次退出原因接手
 //   untracked_overflow     待确认表满(relocate_confirm::kMaxTracked),这次改派按旧行为发出、不跟踪。应恒 0
 //   cancelled_on_reentry   进场路由回到本节点时该玩家还有一张没派发的票据,作废(那次退出不会再正常收尾)。
-//                          整节点疏散中、带着票据那同一条有效会话的进场不作废(票据留给节点最后的退出收尾去消费),
-//                          这一项不动
+//                          整节点疏散中、带着票据那同一条有效会话的进场不作废(票据留给他下一次退出去消费,通常是
+//                          节点最后的退出收尾;被打断的那次退出记过客户端断线的除外),这一项不动,另打一行
+//                          "ticket kept on reentry"
 //   ticket_dropped_deposed 实体被按"已废黜"销毁(DestroyDeposedPlayer)时手里还有没派发的票据:不改派、不踢。
 //                          多数情形玩家已在别处;非 0 且伴随客户端卡住 = 排空 / 疏散发起的退出还没收敛就被冻结上限 /
 //                          回执异常收口销毁(已知缺口:那条路只按"退出中 = 客户端已断开"处理)。
@@ -1279,8 +1280,9 @@ public:
 	// 登记待入场条目之前;入口以后若加 owner_epoch 栅栏,本调用要挪到栅栏放行之后,否则陈旧路由会把条目误结清)。
 	//   1. 该玩家还没派发的改派票据作废(cancelled_on_reentry):这次进场要么复用实体并取消退出,要么废黜实体后重载,
 	//      那次退出都不会再正常收尾;留着票据只会在下一次、会话已换的退出里被误消费。
-	//      例外(relocate_confirm::CancelsTicketOnReentry):整节点疏散中、sessionId 就是票据里那条有效会话时票据留着,
-	//      由节点最后的退出收尾去消费(疏散只发一轮票,删掉的话被这条路由留在将死节点上的玩家既不改派也不踢)。
+	//      例外(relocate_confirm::CancelsTicketOnReentry):整节点疏散中、sessionId 就是票据里那条有效会话、且被打断的
+	//      那次退出没有记过客户端断线时,票据留着,由他下一次退出收敛时消费 —— 通常是节点最后的退出收尾,疏散期间
+	//      别的原因发起的退出同样会消费它(疏散只发一轮票,删掉的话被这条路由留在将死节点上的玩家既不改派也不踢)。
 	//      留下的票据若随后撞上"废黜实体后重载",由 DestroyDeposedPlayer 删掉并计 ticket_dropped_deposed。
 	//   2. 他有待确认条目时:sessionId 与票据里的会话相同 → 本节点替他发的改派有了去向,转入"落地等载入"(kLanding),
 	//      由 SweepRelocateConfirms 等实体建出来,载入被放弃就核实后踢;sessionId 不同或为 0 → 玩家已重登、旧会话已死,
