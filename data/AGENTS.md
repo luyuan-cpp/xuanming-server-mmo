@@ -144,14 +144,19 @@ cd tools/data_table_exporter && py -m pytest -q
 | **Condition** | `Condition.xlsx` | `condition_table.proto` | 20 | 10 | 29 | — | — | — | — | — | — | — |
 | **Cooldown** | `Cooldown.xlsx` | `cooldown_table.proto` | 2 | 2 | 9 | — | — | — | — | — | — | — |
 | **Dungeon** | `Dungeon.xlsx` | `dungeon_table.proto` | 7 | 5 | 3 | — | — | `scene_id` | `scene_id→BaseScene.id` `monster→Monster.id` | — | — | — |
-| **EquipSlot** | `EquipSlot.xlsx` | `equipslot_table.proto` | 2 | 2 | 3 | — | — | — | — | — | — | — |
+| **EquipAffixPool** | `EquipAffixPool.xlsx` | `equipaffixpool_table.proto` | 4 | 4 | 29 | — | — | `pool_id` `attr_id` | `attr_id→EquipAttribute.id` | — | — | — |
+| **EquipAffixRule** | `EquipAffixRule.xlsx` | `equipaffixrule_table.proto` | 5 | 5 | 1 | — | — | — | — | — | — | — |
+| **EquipAttribute** | `EquipAttribute.xlsx` | `equipattribute_table.proto` | 6 | 6 | 26 | — | — | — | — | — | — | — |
+| **EquipAttributeCap** | `EquipAttributeCap.xlsx` | `equipattributecap_table.proto` | 5 | 5 | 125 | — | — | `attr_id` | `attr_id→EquipAttribute.id` | — | — | — |
+| **EquipSlot** | `EquipSlot.xlsx` | `equipslot_table.proto` | 3 | 3 | 7 | — | — | — | — | — | — | — |
 | **GlobalVariable** | `GlobalVariable.xlsx` | `globalvariable_table.proto` | 8 | 1 | 16 | — | — | — | — | — | — | — |
+| **GuildActivity** | `GuildActivity.xlsx` | `guildactivity_table.proto` | 15 | 15 | 3 | — | — | `reward_id` `dungeon_id` | `reward_id→Reward.id` `dungeon_id→Dungeon.id` | — | — | — |
 | **GuildDonate** | `GuildDonate.xlsx` | `guilddonate_table.proto` | 8 | 8 | 3 | — | — | — | — | — | — | — |
 | **GuildLevel** | `GuildLevel.xlsx` | `guildlevel_table.proto` | 4 | 4 | 10 | — | — | — | — | — | — | — |
-| **GuildRule** | `GuildRule.xlsx` | `guildrule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
+| **GuildRule** | `GuildRule.xlsx` | `guildrule_table.proto` | 10 | 10 | 1 | — | — | — | — | — | — | — |
 | **GuildShop** | `GuildShop.xlsx` | `guildshop_table.proto` | 9 | 9 | 11 | — | — | `item_id` | `item_id→Item.id` | — | — | — |
-| **Item** | `Item.xlsx` | `item_table.proto` | 6 | 6 | 28 | — | — | — | — | — | — | — |
-| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 53 | — | — | — | — | — | — | — |
+| **Item** | `Item.xlsx` | `item_table.proto` | 19 | 14 | 48 | — | — | `affix_rule` | `affix_rule→EquipAffixRule.id` | — | — | `base_attr` |
+| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 73 | — | — | — | — | — | — | — |
 | **Mirror** | `Mirror.xlsx` | `mirror_table.proto` | 3 | 3 | 2 | — | — | `scene_id` `main_scene_id` | `scene_id→BaseScene.id` `main_scene_id→World.id` | — | — | — |
 | **Mission** | `Mission.xlsx` | `mission_table.proto` | 15 | 9 | 17 | — | — | `reward_id` | `reward_id→Reward.id` `condition_id→Condition.id(组)` | `id` | — | — |
 | **Monster** | `Monster.xlsx` | `monster_table.proto` | 16 | 10 | 16 | — | — | — | — | — | — | `drop` |
@@ -165,6 +170,6 @@ cd tools/data_table_exporter && py -m pytest -q
 | **TestMultiKey** | `TestMultiKey.xlsx` | `testmultikey_table.proto` | 33 | 14 | 6 | `string_key` `uint32_key` `int32_key` | `m_string_key` `m_uint32_key` `m_int32_key` | `level` `test_ref` | `test_ref→Test.id` `test_refs→Test.id(组)` | — | — | `testobj1` |
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 
-合计 **34** 张表、**385** 个物理列、**246** 个进产物的字段。
+合计 **39** 张表、**437** 个物理列、**293** 个进产物的字段。
 
 <!-- END GENERATED -->

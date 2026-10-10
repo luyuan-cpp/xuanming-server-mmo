@@ -1076,19 +1076,20 @@ xlsx 脚本 5 条(1 major:发号机制的注释写错;4 minor:幂等判定、核
 
 ---
 
-## 13. 2026-10-09 收口:二期全部批次已落码并进主干(机器 A)
+## 13. 2026-10-09 收口:二期全部批次已落码并进主干(机器 A;2026-10-10 补:客户端生成物、限流表源行、配表索引)
 
 服务端仓 `E:\work\xuanming-server-mmo`,客户端仓 `E:\work\mmorpg-client`。§8–§12 写于机器 B(`D:\luyuan\wuxingqitan\mmorpg`),照做时把路径换成本机路径。
 本节取代 2026-09-28 版的 §13(那一版写的"B6a 未导表、未 proto-gen""name_norm 待迁"都已过期)。
 
 ### 13.0 先看这几条
 
-- **二期 20 个批次的代码都在主干了**:服务端 `origin/main` 含 `43e5a9953e`,客户端 `origin/main` 含 `de41479f`。
+- **二期 20 个批次的代码都在主干了**:服务端 `origin/main` 含 `43e5a9953e`,客户端 `origin/main` 含 `de41479f` 与 `f5370798`(生成物)。
 - **"go/guild 不能有死锁"仍是硬要求**。B6b 把表间全序接到 `… < P < T(guild_trial_battle) < W(guild_trial_reward_owed)`;
   历练结算**没有使用**预登记的"新插 O 行"例外,而是先锁完全部 Q 再插 O(§12.2 / §12.4 的 2026-10-08 落码修正)。
 - **落码的会话(Claude)一条构建、测试、生成命令都没跑**(AGENTS §10.1)。下面"运行证据"一列全部引自 Codex 写在
   `docs/PROGRESS.md` 2026-10-08 各条里的实跑记录,不是落码会话自己的结论;没有列出证据的格子 = 没有任何运行证据。
-- **客户端主干在跑完 §13.2 ① 之前编不过**:`de41479f` 引用了尚未生成的活动协议类型、消息号和错误码。
+- **客户端主干已恢复可编译**(2026-10-10,`f5370798`):`de41479f` 引用的活动协议类型、消息号和错误码已补齐,离线编译 393 个文件 0 错误。
+  `de41479f` 到 `f5370798` 之间的主干编不过(31 个 CS0246),二分定位问题时避开这一段。
 
 ### 13.1 各批次落在哪、有什么运行证据
 
@@ -1100,7 +1101,7 @@ xlsx 脚本 5 条(1 major:发号机制的注释写错;4 minor:幂等判定、核
 | B6a-srv 灯会 / 团圆 | `ed75ad177` 起,在主干 | guild.exe 构建成功;constants / activity / logic / data 四包 58 个顶层用例通过(基线 `c14ddf7`) | §12.2、§12.4;`06-activities.md` §6.46 落码修正 |
 | B6b-srv1 battle + match | 主干 | match 的活动 / 内部 RPC / 会话用例通过;`battle_data`、`match_internal`、`match_event` 的 pb 文件单独编译 0 警告 0 错误。**battle 节点整体未构建** | `06-activities.md` §6.17–§6.21 落码修正 |
 | B6b-srv2 历练结算 + robot S9–S15 + match_internal 工程登记 | `43e5a9953e` | guild.exe 重新构建成功;config / kafka / data / logic / svc 五包 164 个顶层、226 个子用例通过,0 失败 0 跳过(只用 miniredis 与进程内替身,**没连真库、Kafka、match**) | `06-activities.md` 顶部"落码状态"与 §6.22–§6.35a、§6.49;§12.2 / §12.4 |
-| B6a-cli + B6b-cli 活动页与历练 | 客户端 `de41479f` | 无(未生成、未编译、EditMode 未跑) | `mmorpg-client/Docs/GuildUI.md`「同道历练」;提交说明 |
+| B6a-cli + B6b-cli 活动页与历练 | 客户端 `de41479f`;生成物 `f5370798` | 2026-10-10 落码会话在客户端仓本机实跑:生成后 `client_compile_check.ps1` 393 个文件 0 错误(生成前 31 个);帮会测试程序集与帮会编辑器脚本单独编译各 0 错误;`GuildClientTests` 139 条在 Unity 自带的 Mono 上用真实 NUnit 断言执行,138 条通过、1 条要调引擎原生接口跑不了(把一句文案改坏后同一跑法报 2 条断言失败,确认能抓错)。**没跑**:`GuildWindowTests` 54 条与截图验收(要编辑器) | `mmorpg-client/Docs/GuildUI.md`「同道历练」;提交说明 |
 
 B5d 用户没有回答选择题,按设计推荐项落码:Q1 = 方案 A(guild 内部 RPC 无凭据,靠会话身份拒绝客户端,**NetworkPolicy 待补**)、
 Q2 = 三个 `Rollback*` 一律要 `x-admin-token`、Q3 = 写后分歧只报错 + 告警 + 人工补偿、Q4 = 拆三批、
@@ -1111,25 +1112,30 @@ U9 = "不可证明"可被合法放行覆盖、U10 = 静态 Endpoints(`127.0.0.1:
 
 ### 13.2 待办(按顺序;生成与构建交 Codex 或用户执行)
 
-① **客户端生成**(`E:\work\mmorpg-client`,先拉到含 `de41479f` 的主干):
-   `pwsh -File tools/gen_proto.ps1 -ProtoRoot E:\work\xuanming-server-mmo`,再
-   `pwsh -File tools/gen_messageids.ps1 -ProtoRoot E:\work\xuanming-server-mmo`。**两条都必须带 `-ProtoRoot`**(默认值会解析成 `E:\`)。
-   通过标准:`Guild.cs` 出现 `GuildActivityView` / `GuildTrialLobbyView`,`GuildErrorTip.cs` 出现 `KGuildActivity*` / `KGuildTrial*` 共 10 个,
-   `MessageIds.cs` 出现 239–243 五个常量;随后 `client_compile_check.ps1` 0 错误,EditMode `GuildClientTests` 139 + `GuildWindowTests` 54 = 193 条。
-   服务端这边的前置(Tip.xlsx 活动码 14032–14041、消息号 239–243)已经在主干。
+① **客户端生成 —— 帮会三份已补(2026-10-10,`f5370798`),整份重跑留给装备批次**。
+   已做:`Guild.cs`、`GuildErrorTip.cs` 用 protoc 35.1 按 `tools/gen_proto.ps1` 的参数只对帮会两个 proto 生成(源 = 服务端 `origin/main` `f478fa9c43`);
+   `MessageIds.cs` 只并入 `tools/gen_messageids.ps1` 输出里新增的 239–243 五行。同一条 protoc 命令重生成 `Chat.cs`、`LoginErrorTip.cs` 与库里内容一致(只差行尾)。
+   **没有整份跑两个脚本,原因都在装备批次**:`gen_proto.ps1` 的文件表里有 `generated/code/proto/tip/equip_error_tip.proto`,服务端主干还没有这个文件,protoc 整份失败;
+   `gen_messageids.ps1` 整份输出会删掉 `EquipItem` / `UnequipItem`(它们的号还没进服务端主干的 `proto/message_id.txt`)。装备批次的服务端生成进主干之后,
+   再整份跑一次(都带 `-ProtoRoot`),帮会这三份应当不再有差异。
+   还欠:EditMode 的 `GuildWindowTests`(54 条)与 `GuildUiVerification.CaptureAll` 截图(26 张),要 Unity 编辑器。
 
 ② **RPC 包装生成**(仓库根目录,全量 proto-gen):`guild_internal`、`match_internal` 两组 C++ 包装代码(grpc_client、service_metadata)
    与三个内部 RPC(`GuildInternal.ListAppliedAssetOpsSince`、`MatchInternal.StartActivityBattle`、`DataService.GetPlayerAssetOpLedger`)的消息号还没生成。
    Codex 记录:包装生成器被本机 Windows 应用控制策略拦截(CodeIntegrity 3077 / 3033),没有绕过。**这一步不过,gate / scene / battle 三个节点编不过。**
    工程登记已就位(`cpp/generated` 下 proto / grpc_client / rpc 各 8 处,guild_internal 与 match_internal 都登了),文件名以生成后的 `git status` 为准,对不上就改登记。
 
-③ **回填 `data/MessageLimiter.xlsx` 的活动 5 行**(生成物里还没有 239–243):`GetGuildActivities` 10/1s,其余四个各 5/1s,然后重跑导表。
-   xlsx 只能用 openpyxl `load → 改行 → save`,禁止整表写回(§4)。没填之前这五个 RPC 走默认限流(3 / 窗口),活动页连点会被限。
+③ **`data/MessageLimiter.xlsx` 的活动 5 行 —— 源表已补(2026-10-10),产物还没重导**。已追加 239 / 240 / 242 / 243 各 5/1s、241(`GetGuildActivities`)10/1s,
+   用 openpyxl `load → append → save`。**没有重导产物**,两个原因:主干上叠着装备批次还没导出的表与 tip(沙盒导表读到 39 张表、`equip_error` 段,
+   整份导表会连带产出别人的两百多项差异,不该由帮会这边单方面采用);当时本机内存见底(提交余量约 1 GB),protoc 起不来(退出码 `0xC000012D`)。
+   等装备批次的导表一起出,`generated/tables/messagelimiter.{json,pb}` 与 `manifest.json` 会自然带上这五行;在那之前这五个 RPC 走默认限流(3 / 窗口),活动页连点会被限。
+   别的会话若也在改这张 xlsx,二进制合不了,后合的一方用 openpyxl 重新追加自己的行(§4)。
 
 ④ **`robot` 执行 `go mod vendor`**:`robot/vendor/proto/guild/guild.pb.go` 还是没有活动类型的旧版本,robot 目前编不过。
    执行后 `git status --short robot/vendor` 只允许出现本期 proto 与表生成物路径;出现别的会话的路径就停下报告。
 
-⑤ **重生成配表索引**:`py tools/data_table_exporter/tools/gen_schema_index.py`(`data/AGENTS.md` 的生成块里还没有 `GuildActivity`,不要手改)。
+⑤ **配表索引 —— 已重生成(2026-10-10)**:`data/AGENTS.md` 的生成块现在有 `GuildActivity`、`GuildRule` 10 列、`MessageLimiter` 73 行,
+   也带上了主干里装备批次已有的五张表(索引只反映 `data/schema` 与源表的现状)。以后改表照旧重跑 `gen_schema_index.py`。
 
 ⑥ **重编并替换 `bin/go_services/guild.exe`**。`name_norm` 列已迁,不用再迁表:
    已迁(2026-10-08,会话「帮会库 name_norm 列迁移」执行):本机 MySQL `mmorpg_guild.guild.name_norm` = `varchar(191) utf8mb4_0900_bin NOT NULL DEFAULT '' COMMENT 'pb:11'`,
@@ -1158,7 +1164,8 @@ U9 = "不可证明"可被合法放行覆盖、U10 = 静态 Endpoints(`127.0.0.1:
 - **冒烟**:`robot` 下 `.\robot.exe -c etc/guild_smoke.yaml`(现为 `trial: true`),须同时输出 `GUILD_SMOKE_OK`、`GUILD_SMOKE_ACTIVITIES_OK`;
   S10 假设三人自动战斗能打赢 Dungeon[1],没有运行证据,输了会在 S10 失败。
 - **B5d**:`07-rollback-fail-closed.md` §7.10.3(D / L / R 系列与手工回档演练)。
-- **客户端**:§13.2 ① 之后跑 EditMode 与 `GuildUiVerification.CaptureAll`(26 张图,目视 `05-activities`、`12-trial-picker`、`13-trial-invite`)。
+- **客户端**:还欠 EditMode 的 `GuildWindowTests`(54 条)与 `GuildUiVerification.CaptureAll`(26 张图,目视 `05-activities`、`12-trial-picker`、`13-trial-invite`),要 Unity 编辑器;
+  `GuildClientTests` 的编辑器外跑法(真实 `nunit.framework.dll` + Unity 自带 Mono + 一个反射调度的小执行器)见客户端提交 `f5370798` 的说明。
 - 失败时先看文件归属:go/guild 上叠着 B2s / B3b / B5b / 死锁修复 / B6a / B6b 多个批次。
 
 ### 13.4 已知边界与欠账(都不是待修缺陷,动之前先看这里)
