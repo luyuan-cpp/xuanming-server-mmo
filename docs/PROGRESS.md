@@ -6952,3 +6952,14 @@ PROGRESS 一直没有条目)。上面 2026-09-21 条里"第 7–9 步未跑""修
 - **已知边界**:跨节点 / 跨 zone 仍不跟;可见性缺口 2 没有根治,只对归队瞬移这条路径做了重建;暂离是客户端本地状态,服务端不知道;走散到视野外之后没有自动归队(没有「召集」协议);兴趣表不对称(人多到装不下)时对方收不到我的移动;移动广播量约为每个移动中的玩家每秒 4~8 条 × 互相可见的人数,压测前要评估。
 - **给 Codex**:按设计文档 V.6 的 1→4 执行(scene 库 → scene 节点 → aoi_test,串行 `/m:1`,**Debug** 配置;然后 `run_cpp_tests.ps1 -Build -Filter aoi_test`)。
 - **Java 版(AGENTS §12)**:未做(本机没有 Java 仓库)。需同步三条客户端可见行为:移动后(及服务器让玩家停下时)广播 133;入队后把队员带到队长场景并以 130(reason = 5)落到队长身边;瞬移后丢弃过期移动上报。协议本身没有变化。登记 `PARITY.md` 待做。
+
+## 2026-10-10 组队跟随主干复核与实际验证(Codex，服务端生成前置仍阻塞)
+
+- **主干与收尾**:本次重新 fetch 两仓 origin，过夜后远端主干没有新提交。服务端功能提交 `c7dbc0c98f` 已包含在本机 main `f142f0b8ed`，对 origin/main `4bd096d1ab` 领先 2、不落后；客户端功能与独立宿主 `TeamFollowUiRoot` 已在 main `40e6fdd4`，对 origin/main `de41479f` 领先 2、落后 1(帮会 B6)。本条记录前没有新增功能提交，不重复合并，不推送。两个跟随工作树此前已清理；本次确认服务端 `feat/team-follow` 与 main 完全相同且无工作树占用后删除残留分支。
+- **在途保护**:服务端原有 5 项状态保持，两个普通文件 SHA256 未变；客户端原有 175 个已修改/未跟踪文件 SHA256 与完整 Git 状态保持。没有合并与在途 `GuildUiRoot.cs` 重叠的帮会 B6，也没有采用沙盒生成物或修改消息号、源表、生成状态。两仓 GitHub 当前无开放 PR/Issue。
+- **客户端实跑**:`tools/client_compile_check.ps1` 编译 404 个运行时文件，0 error、exit 0；项目原有 `TeamFollowTrailTests` 16 项与 `TeamFollowPlannerTests` 20 项使用真实 NUnit `NUnitTestAssemblyRunner`、已安装 Unity 6000.6.0f1 托管库执行，36/36 通过、0 失败/跳过。没有使用 NUnit 替身。独立宿主生命周期及与当前 `TeamUiRoot` 在途改动的兼容性静态复核未发现确定缺陷，但不是 Unity 生命周期实测。
+- **服务端实跑**:按 V.6 从 `cpp/libs/services/scene/scene.vcxproj` 开始，Debug|x64、`/m:1`。沙箱 FileTracker 权限错误经同命令正常权限执行后消除；实际编译 exit 1、110 errors。首三条为 `bag_marshal.cpp:58` 的 `ItemComp.has_equip`、`:60` 的 `ItemEntry.mutable_equip` 与 `ItemComp.equip` 缺失；另缺 `table/code/equipaffixpool_table.h` 与 `CombatAttributes`。这是已合入的装备源契约尚未完成配套生成，符合 `equipment-attributes.md` §9 列出的前置失败形态。未继续 scene 节点、aoi_test 或运行旧测试 EXE。构建内置原始指针检查因本机缺检查工具自动报告 SKIP，不能声称静态检查通过。
+- **生成预检**:使用当前主仓输入与当前发号状态，正式 `sandbox_export.py` 在独立目录完成导表，39 张表；与仓内产物比较发现 205 项差异(比较非零不等于导表失败)。输出在 `E:/work/output/team-follow-20261010/server-table-sandbox-v2`，未部署到真实仓库。完整恢复还需 `equipment-attributes.md` §9 的协议生成、限流表、工程登记与配套重编，尤其 modules/scene 必须同批重编以匹配 ItemComp/Bag 布局；不能只替换 scene.lib。范围已超出跟随的提交收尾，按 AGENTS §10.2 已请求是否纳入本次，未擅自覆盖并行生成工作。旧记录中的 proto-gen CodeIntegrity 拦截没有在本次重现，不把历史记录写成今日拦截；其 `-h` 不是只读帮助，未冒险执行。
+- **真实环境**:今日 07:12(纽约时间)许可客户端仍报 `LicenseGroupOfflineValidityPeriodIsExpired`、`Unable to find valid licenses`，用户需在 Unity Hub 登录刷新。Unity 测试、出包、双号联机均未执行。本机固件虚拟化/Hypervisor 与 Docker Linux Engine 已可用，不再沿用 10-08 的 SVM 阻塞结论；MySQL/Redis/etcd 等已有容器运行，但 Kafka 为 Exited(255)、9092 未监听，游戏原生服务和 Java 网关未启动。没有改动容器、清理业务数据或启动旧版游戏二进制；本次 Unity 探针进程已清理。
+- **证据与续跑**:编译日志、真实 NUnit XML、可复跑脚本 `client-pure-tests/run.ps1`、首批 C++ 错误、Unity 当前许可证据及在途文件基线均在 `E:/work/output/team-follow-20261010/`。待生成前置修复获准并完成后，从 V.6 的 Debug scene 库构建重新开始；许可刷新后再用 Unity 6000.6.0f1 做 EditMode、出包及组队跟随双号验收。这里没有任何联机通过结论。
+- **Java 版(AGENTS §12)**:仍待做；规范指定的另一 Java 仓库本机不存在，本次未修改客户端契约或另一版 `PARITY.md`。
