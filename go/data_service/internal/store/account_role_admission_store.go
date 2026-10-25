@@ -6,13 +6,16 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"errors"
+	"net"
 	"slices"
+	"strconv"
 	"strings"
 
 	base "proto/common/base"
 	dbpb "proto/common/database"
 	dspb "proto/data_service"
 	"shared/accountdirectory"
+	"shared/placement"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -475,23 +478,23 @@ func (s *AccountRoleAdmissionStore) AckDrain(ctx context.Context, in *dspb.AckRo
 
 // PlanCrashedTradeHolder与apply共用完整SQL校验，只读回滚，不创建收据/推进水位。
 // 唯一关闭依据是同SQL源内永久维护收据及完整双行E>U；不是Scene的跨实例关闭RPC。
-func (s *AccountRoleAdmissionStore) PlanCrashedTradeHolder(ctx context.Context, in *dbpb.AccountRoleAdmissionRecovery_Request, verifier *SQLRoleFreezeVerifier, localTarget string) (*dbpb.AccountRoleAdmissionRecovery, error) {
-	if len(localTarget) != 32 || strings.Trim(localTarget, "0123456789abcdef") != "" {
+func (s *AccountRoleAdmissionStore) PlanCrashedTradeHolder(ctx context.Context, in *dbpb.AccountRoleAdmissionRecovery_Request, verifier *SQLRoleFreezeVerifier, target MaintenanceRecoveryTarget) (*dbpb.AccountRoleAdmissionRecovery, error) {
+	if !target.Valid() {
 		return nil, accountdirectory.ErrInvalid
 	}
-	return s.recoverCrashedTradeHolder(ctx, in, verifier, false, localTarget, nil)
+	return s.recoverCrashedTradeHolder(ctx, in, verifier, false, target, nil)
 }
 
-// ApplyCrashedTradeHolder仅接受审定plan的原SQL摘要，并在相同事务重核本地实例marker。
+// ApplyCrashedTradeHolder仅接受审定plan的原SQL摘要，并在相同事务重核独立维护目标marker。
 // 提交错误含结局未知，绝不伪成功；同原请求重入读永久原件，不推进新入场/归属。
-func (s *AccountRoleAdmissionStore) ApplyCrashedTradeHolder(ctx context.Context, in *dbpb.AccountRoleAdmissionRecovery_Request, verifier *SQLRoleFreezeVerifier, localTarget string, expectedProof []byte) (*dbpb.AccountRoleAdmissionRecovery, error) {
-	if len(localTarget) != 32 || strings.Trim(localTarget, "0123456789abcdef") != "" || len(expectedProof) != 32 {
+func (s *AccountRoleAdmissionStore) ApplyCrashedTradeHolder(ctx context.Context, in *dbpb.AccountRoleAdmissionRecovery_Request, verifier *SQLRoleFreezeVerifier, target MaintenanceRecoveryTarget, expectedProof []byte) (*dbpb.AccountRoleAdmissionRecovery, error) {
+	if !target.Valid() || len(expectedProof) != 32 {
 		return nil, accountdirectory.ErrInvalid
 	}
-	return s.recoverCrashedTradeHolder(ctx, in, verifier, true, localTarget, expectedProof)
+	return s.recoverCrashedTradeHolder(ctx, in, verifier, true, target, expectedProof)
 }
 
-func (s *AccountRoleAdmissionStore) recoverCrashedTradeHolder(ctx context.Context, in *dbpb.AccountRoleAdmissionRecovery_Request, verifier *SQLRoleFreezeVerifier, apply bool, localTarget string, expectedProof []byte) (*dbpb.AccountRoleAdmissionRecovery, error) {
+func (s *AccountRoleAdmissionStore) recoverCrashedTradeHolder(ctx context.Context, in *dbpb.AccountRoleAdmissionRecovery_Request, verifier *SQLRoleFreezeVerifier, apply bool, target MaintenanceRecoveryTarget, expectedProof []byte) (*dbpb.AccountRoleAdmissionRecovery, error) {
 	if !s.ready() || verifier == nil {
 		return nil, accountdirectory.ErrUnavailable
 	}
@@ -519,13 +522,13 @@ func (s *AccountRoleAdmissionStore) recoverCrashedTradeHolder(ctx context.Contex
 		if !bytes.Equal(prior.RequestProto, raw) || !bytes.Equal(prior.RequestDigest, digest) || len(expectedProof) > 0 && !bytes.Equal(expectedProof, prior.SqlProofDigest) {
 			return nil, accountdirectory.ErrConflict
 		}
-		if localTarget != "" {
+		{
 			tx, err := s.directory.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 			if err != nil {
 				return nil, err
 			}
 			defer tx.Rollback()
-			if err := checkRecoveryLocalMarker(ctx, tx, localTarget); err != nil {
+			if err := checkRecoveryMaintenanceTarget(ctx, tx, target, in.Seal.ZoneId, s.directory.schema, verifier); err != nil {
 				return nil, err
 			}
 		}
@@ -535,8 +538,8 @@ func (s *AccountRoleAdmissionStore) recoverCrashedTradeHolder(ctx context.Contex
 	}
 	var out *dbpb.AccountRoleAdmissionRecovery
 	err = s.directory.transaction(ctx, func(tx *sql.Tx) error {
-		if localTarget != "" {
-			if err := checkRecoveryLocalMarker(ctx, tx, localTarget); err != nil {
+		{
+			if err := checkRecoveryMaintenanceTarget(ctx, tx, target, in.Seal.ZoneId, s.directory.schema, verifier); err != nil {
 				return err
 			}
 		}
@@ -577,7 +580,7 @@ func (s *AccountRoleAdmissionStore) recoverCrashedTradeHolder(ctx context.Contex
 		actualIdentity, err := admissionIdentity(a)
 		if err != nil || proto.Unmarshal(holderRaw, priorSeal) != nil || !proto.Equal(priorSeal, seal) || drained != 0 || len(holderDigest) != 0 ||
 			r.SellerAccount != in.SellerAccount || r.PlayerId != seal.PlayerId || r.SellerOwnerRevision != seal.OwnerRevision ||
-			(r.State != uint32(dspb.AccountRoleTradeState_ACCOUNT_ROLE_TRADE_STATE_FREEZING) && r.State != uint32(dspb.AccountRoleTradeState_ACCOUNT_ROLE_TRADE_STATE_CANCEL_PENDING)) ||
+			r.State != uint32(dspb.AccountRoleTradeState_ACCOUNT_ROLE_TRADE_STATE_CANCEL_PENDING) ||
 			owned.Account != in.SellerAccount || owned.TradeListingId != seal.ListingId || !proto.Equal(actualIdentity, identity) || !bytes.Equal(a.RequestDigest, in.AdmissionRequestDigest) ||
 			a.ClosedThrough != in.ExpectedClosedThrough || a.RequiredOwnerEpoch != in.ExpectedRequiredOwnerEpoch || a.RequiredSaveSeq != in.ExpectedRequiredSaveSeq {
 			return accountdirectory.ErrConflict
@@ -622,15 +625,46 @@ func (s *AccountRoleAdmissionStore) recoverCrashedTradeHolder(ctx context.Contex
 
 var errRecoveryPlanReadOnly = errors.New("旧holder维护plan完成只读回滚")
 
-// 与cmd/debugutil的本地标记同一表/标准值；额外实例nonce必须由操作者在专用本地库预建。
-// 不在工具中DDL/自建标记。marker先于目录锁且持到提交，换实例/删标记无法通过apply。
-func checkRecoveryLocalMarker(ctx context.Context, tx *sql.Tx, id string) error {
-	for _, want := range []string{"local-debug-import-target", "old-scene-recovery:" + id} {
-		var got string
-		if err := tx.QueryRowContext(ctx, "SELECT marker FROM debug_import_local_target WHERE marker=? FOR UPDATE", want).Scan(&got); err != nil {
-			return accountdirectory.ErrUnavailable
+// MaintenanceRecoveryTarget只限定运维预置的物理目标，不代表操作人权限。
+// 权限来自维护命令和受限凭据；此记录绝不让debug_import取得写权。
+type MaintenanceRecoveryTarget struct {
+	ID      string `json:"target_nonce"`
+	SQLAddr string `json:"physical_addr"`
+}
+
+func (t MaintenanceRecoveryTarget) Valid() bool {
+	host, port, err := net.SplitHostPort(t.SQLAddr)
+	n, portErr := strconv.ParseUint(port, 10, 16)
+	return len(t.ID) == 32 && strings.Trim(t.ID, "0123456789abcdef") == "" && t.ID != strings.Repeat("0", 32) &&
+		err == nil && host != "" && !strings.ContainsAny(host, " /\\@|\r\n\t") && portErr == nil && n != 0 && strconv.FormatUint(n, 10) == port
+}
+
+// 标记由有权运维预置；工具只核验并持行锁，不建表、不续期、不覆盖。
+// 固定全局库和显式storage白名单对应的行库，按库名锁序核完整集合。
+func checkRecoveryMaintenanceTarget(ctx context.Context, tx *sql.Tx, target MaintenanceRecoveryTarget, zone uint32, global string, verifier *SQLRoleFreezeVerifier) error {
+	if !target.Valid() || zone == 0 || verifier == nil || len(verifier.allowed) == 0 {
+		return accountdirectory.ErrInvalid
+	}
+	schemas := []string{global}
+	for storage := range verifier.allowed {
+		name, ok := placement.StoreDBName(storage)
+		if !ok {
+			return accountdirectory.ErrInvalid
 		}
-		if got != want {
+		schemas = append(schemas, name)
+	}
+	slices.Sort(schemas)
+	schemas = slices.Compact(schemas)
+	for _, schema := range schemas {
+		var nonce, address string
+		err := tx.QueryRowContext(ctx, "SELECT target_nonce,physical_addr FROM `"+schema+"`.maintenance_recovery_target WHERE purpose=? AND zone_id=? AND schema_name=? FOR UPDATE", "admission", zone, []byte(schema)).Scan(&nonce, &address)
+		if errors.Is(err, sql.ErrNoRows) {
+			return accountdirectory.ErrConflict
+		}
+		if err != nil {
+			return err
+		}
+		if nonce != target.ID || address != target.SQLAddr {
 			return accountdirectory.ErrConflict
 		}
 	}

@@ -95,14 +95,18 @@ func TestIntegrationFenceOnlyPromotionCLIConvergedSnapshotAndPendingPreserved(t 
 	require.NoError(t, err)
 	localTarget := hex.EncodeToString(targetNonce[:])
 	for _, schema := range []string{f.schema, routeSchema} {
-		_, err := f.r.DB.ExecContext(f.ctx, "CREATE TABLE `"+schema+"`.debug_import_local_target(marker VARCHAR(64) NOT NULL PRIMARY KEY)")
+		_, err := f.r.DB.ExecContext(f.ctx, "CREATE TABLE `"+schema+"`.maintenance_recovery_target(purpose VARBINARY(16) NOT NULL,zone_id INT UNSIGNED NOT NULL,schema_name VARBINARY(64) NOT NULL,target_nonce VARBINARY(32) NOT NULL,physical_addr VARBINARY(255) NOT NULL,PRIMARY KEY(purpose,zone_id,schema_name))")
 		require.NoError(t, err)
-		_, err = f.r.DB.ExecContext(f.ctx, "INSERT INTO `"+schema+"`.debug_import_local_target(marker) VALUES(?),(?)", "local-debug-import-target", "old-scene-recovery:"+localTarget)
+		_, err = f.r.DB.ExecContext(f.ctx, "INSERT INTO `"+schema+"`.maintenance_recovery_target(purpose,zone_id,schema_name,target_nonce,physical_addr) VALUES('promotion',?,?,?,?)", f.zone, []byte(schema), localTarget, parsed.Addr)
 		require.NoError(t, err)
 	}
 	mapping := redis.NewClient(&redis.Options{Addr: mappingAddr, MaxRetries: -1, DialTimeout: time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second})
 	t.Cleanup(func() { require.NoError(t, mapping.Close()) })
-	mapKeys := []string{MaintenanceKey(f.zone), placement.HomeZoneKey(id), placement.Key(id), placement.MapRevKey(id), placement.MergeFenceKey(f.zone), placement.RouteWatermarkKey, "debug_import:local_target", "debug_import:local_instance_id"}
+	coreMarker, _, err := MaintenanceRedisScope("promotion", "core", f.zone, routeSchema, f.schema, addr, f.r.Redis.Options().DB)
+	require.NoError(t, err)
+	mapMarker, _, err := MaintenanceRedisScope("promotion", "mapping", f.zone, routeSchema, f.schema, mappingAddr, mapping.Options().DB)
+	require.NoError(t, err)
+	mapKeys := []string{MaintenanceKey(f.zone), placement.HomeZoneKey(id), placement.Key(id), placement.MapRevKey(id), placement.MergeFenceKey(f.zone), placement.RouteWatermarkKey, mapMarker, mapMarker + ":nonce"}
 	for _, key := range mapKeys {
 		n, err := mapping.Exists(f.ctx, key).Result()
 		require.NoError(t, err)
@@ -120,23 +124,28 @@ func TestIntegrationFenceOnlyPromotionCLIConvergedSnapshotAndPendingPreserved(t 
 		require.NoError(t, err)
 		require.True(t, created)
 	}
-	var parentTarget string
-	for _, client := range []*redis.Client{f.r.Redis, mapping} {
-		created, err := client.SetNX(f.ctx, "debug_import:local_target", "local-debug-import-target", 0).Result()
+	var parentTarget, mappingTarget string
+	for i, client := range []*redis.Client{f.r.Redis, mapping} {
+		role := []string{"core", "mapping"}[i]
+		key, scope, err := MaintenanceRedisScope("promotion", role, f.zone, routeSchema, f.schema, client.Options().Addr, client.Options().DB)
+		require.NoError(t, err)
+		created, err := client.SetNX(f.ctx, key, scope, 0).Result()
 		require.NoError(t, err)
 		require.True(t, created)
 		_, err = rand.Read(targetNonce[:])
 		require.NoError(t, err)
 		nonce := hex.EncodeToString(targetNonce[:])
-		created, err = client.SetNX(f.ctx, "debug_import:local_instance_id", nonce, 0).Result()
+		created, err = client.SetNX(f.ctx, key+":nonce", nonce, 0).Result()
 		require.NoError(t, err)
 		require.True(t, created)
 		if client == f.r.Redis {
 			parentTarget = nonce
+		} else {
+			mappingTarget = nonce
 		}
 	}
-	f.ownedKeys = append(f.ownedKeys, "debug_import:local_target", "debug_import:local_instance_id")
-	r := Restorer{DB: f.r.DB, Redis: f.r.Redis, MappingRedis: mapping, RoutingMode: RoutingModeDBFirst, RouteSchema: routeSchema, AuditedOwnerUpperBound: "21", LocalTargetID: localTarget, RedisTargetID: parentTarget}
+	f.ownedKeys = append(f.ownedKeys, coreMarker, coreMarker+":nonce")
+	r := Restorer{DB: f.r.DB, Redis: f.r.Redis, MappingRedis: mapping, RoutingMode: RoutingModeDBFirst, RouteSchema: routeSchema, AuditedOwnerUpperBound: "21", LocalTargetID: localTarget, RedisTargetID: parentTarget, MappingTargetID: mappingTarget, MaintenanceSQLAddr: parsed.Addr}
 	target := Plan{Format: FormatV2, Schema: f.schema, Zone: f.zone, RedisAddr: addr, MappingAddr: mappingAddr, RoutingMode: RoutingModeDBFirst, RouteSchema: routeSchema, MaintenanceID: f.maintenance}
 	require.NoError(t, r.Guard(f.ctx, target))
 	parent := &databasepb.PlayerAllData{PlayerDatabaseData: first, PlayerDatabase_1Data: second, LastSaveSeq: 90}
@@ -177,7 +186,7 @@ func TestIntegrationFenceOnlyPromotionCLIConvergedSnapshotAndPendingPreserved(t 
 	evidence := []byte(`{"fixture":"exclusive-owned-snapshot","writers_stopped":true,"queues_drained":true,"audited_upper_bound":"21"}`)
 	require.NoError(t, os.WriteFile(evidencePath, evidence, 0600))
 	evidenceSHA := sha256.Sum256(evidence)
-	args := []string{"-fence-only-promotion", "-schema", f.schema, "-zone", strconv.FormatUint(uint64(f.zone), 10), "-maintenance-id", f.maintenance, "-plan", planPath, "-redis", addr, "-mapping-redis", mappingAddr, "-routing-mode", "db_first", "-route-schema", routeSchema, "-audited-owner-upper-bound", "21", "-writers-stopped", "-queues-drained", "-audit-evidence", evidencePath, "-audit-evidence-sha256", hex.EncodeToString(evidenceSHA[:]), "-local-target-id", localTarget}
+	args := []string{"-fence-only-promotion", "-schema", f.schema, "-zone", strconv.FormatUint(uint64(f.zone), 10), "-maintenance-id", f.maintenance, "-plan", planPath, "-redis", addr, "-mapping-redis", mappingAddr, "-routing-mode", "db_first", "-route-schema", routeSchema, "-audited-owner-upper-bound", "21", "-writers-stopped", "-queues-drained", "-audit-evidence", evidencePath, "-audit-evidence-sha256", hex.EncodeToString(evidenceSHA[:]), "-local-target-id", localTarget, "-sql-target-address", parsed.Addr}
 	parsed.DBName = f.schema
 	command := func(extra ...string) []byte {
 		extra = append(extra, "-target-observation", filepath.Join(temp, fmt.Sprintf("target-%d.json", time.Now().UnixNano())))
@@ -232,9 +241,9 @@ func TestIntegrationFenceOnlyPromotionCLIConvergedSnapshotAndPendingPreserved(t 
 	require.NoError(t, err)
 	require.Equal(t, parentRaw, unchangedParent)
 	t.Run("换Redis永久实例拒旧封套", func(t *testing.T) {
-		require.NoError(t, r.Redis.Set(f.ctx, "debug_import:local_instance_id", strings.Repeat("5", 32), 0).Err())
+		require.NoError(t, r.Redis.Set(f.ctx, coreMarker+":nonce", strings.Repeat("5", 32), 0).Err())
 		defer func() {
-			require.NoError(t, r.Redis.Set(f.ctx, "debug_import:local_instance_id", parentTarget, 0).Err())
+			require.NoError(t, r.Redis.Set(f.ctx, coreMarker+":nonce", parentTarget, 0).Err())
 		}()
 		cmd := exec.CommandContext(f.ctx, binaryPath, append(append([]string{}, args...), "-mode", "apply", "-plan-sha256", hex.EncodeToString(planSHA[:]), "-target-observation", filepath.Join(temp, "wrong-redis-target.json"))...)
 		cmd.Env = append(os.Environ(), "SAVE_BARRIER_RESTORE_DSN="+parsed.FormatDSN())
@@ -688,10 +697,15 @@ func TestIntegrationMaintenanceReleaseCommittedReplyLossAndOriginalReplay(t *tes
 	require.NoError(t, readReleaseJSON(planPin, &plan))
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
-	db, err := authoritysql.Open(ctx, required("BARRIER_RESTORE_RELEASE_TEST_DSN"), plan.RouteSchema, true, 1)
+	dsn := required("BARRIER_RESTORE_RELEASE_TEST_DSN")
+	cfg, err := mysql.ParseDSN(dsn)
+	require.NoError(t, err)
+	require.Equal(t, "tcp", cfg.Net)
+	require.Equal(t, plan.SQLAddr, cfg.Addr)
+	db, err := authoritysql.Open(ctx, dsn, plan.RouteSchema, true, 1)
 	require.NoError(t, err)
 	defer db.Close()
-	r := Restorer{DB: db, RoutingMode: RoutingModeDBFirst, RouteSchema: plan.RouteSchema, LocalTargetID: plan.LocalTarget}
+	r := Restorer{DB: db, RoutingMode: RoutingModeDBFirst, RouteSchema: plan.RouteSchema, LocalTargetID: plan.LocalTarget, MaintenanceSQLAddr: cfg.Addr}
 	require.NotEmpty(t, plan.Targets)
 	makeClient := func(target MaintenanceReleaseTarget) *redis.Client {
 		return redis.NewClient(&redis.Options{Addr: target.Addr, DB: target.DB, Password: os.Getenv("BARRIER_RESTORE_RELEASE_TEST_REDIS_PASSWORD"), MaxRetries: -1, ContextTimeoutEnabled: true, DialTimeout: time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second})

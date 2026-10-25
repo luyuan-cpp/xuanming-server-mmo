@@ -183,6 +183,13 @@ func (landingLedger) ReadPersistedLedger(context.Context, uint64) (*componentpb.
 	return &componentpb.PlayerAssetOpLedgerComp{}, nil
 }
 
+// ReadVerifiedPersistedLedger 的替身代表同次读取已核验的空账本，保留生产默认核验门禁。
+// 缺账本或读取错误不构成已核验事实。
+func (l landingLedger) ReadVerifiedPersistedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, bool, error) {
+	ledger, err := l.ReadPersistedLedger(ctx, playerID)
+	return ledger, ledger != nil && err == nil, err
+}
+
 // landingApplier 记下每一次投递并一律回"已落盘的全额应用"。
 type landingApplier struct {
 	mu    sync.Mutex

@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,6 +37,14 @@ import (
 	"shared/ownerepoch"
 	"shared/savebarrier"
 )
+
+func TestMaintenanceRecoveryTargetSeparatesScopeFromDebugAuthorization(t *testing.T) {
+	target := MaintenanceRecoveryTarget{ID: strings.Repeat("a", 32), SQLAddr: "tidb.maintenance.example:4000"}
+	require.True(t, target.Valid(), "正式维护目标不以loopback作为身份或权限")
+	for _, bad := range []MaintenanceRecoveryTarget{{ID: strings.Repeat("0", 32), SQLAddr: target.SQLAddr}, {ID: target.ID, SQLAddr: ""}, {ID: target.ID, SQLAddr: "root:secret@tidb.example:4000"}, {ID: target.ID, SQLAddr: "tidb.example:04000"}, {ID: target.ID, SQLAddr: "tidb.example:0"}, {ID: target.ID, SQLAddr: "tidb.example|other:4000"}} {
+		require.False(t, bad.Valid())
+	}
+}
 
 // 真实维护正向链从正式初始SQL双行与真实登记/Begin开始；目标高E只由已编译维护CLI产生。
 // 专用parent与mapping Redis必须为空命名空间；不SCAN/FLUSH，不清父或待投来制造前置。
@@ -106,8 +115,10 @@ func recoveredHolderTiDBFixture(t *testing.T) (*AccountDirectoryStore, *sql.DB, 
 	// 固定home1的原工具MaintenanceKey(1)，只登记本夹具实际创建的键以便精确清理。
 	maintenanceKey := "player:save_barrier:maintenance:1"
 	parentKey := savebarrier.ParentKey(11)
-	ownedCache := []string{ownerepoch.OwnerEpochKey(11), savebarrier.Key(11), parentKey, maintenanceKey, "debug_import:local_target", "debug_import:local_instance_id"}
-	ownedMapping := []string{placement.HomeZoneKey(11), placement.Key(11), placement.MapRevKey(11), placement.RouteWatermarkKey, maintenanceKey, placement.MergeFenceKey(1), "debug_import:local_target", "debug_import:local_instance_id"}
+	coreMarker := fmt.Sprintf("maintenance_recovery:target:promotion:1:%s:core", rowSchema)
+	mapMarker := fmt.Sprintf("maintenance_recovery:target:promotion:1:%s:mapping", rowSchema)
+	ownedCache := []string{ownerepoch.OwnerEpochKey(11), savebarrier.Key(11), parentKey, maintenanceKey, coreMarker, coreMarker + ":nonce"}
+	ownedMapping := []string{placement.HomeZoneKey(11), placement.Key(11), placement.MapRevKey(11), placement.RouteWatermarkKey, maintenanceKey, placement.MergeFenceKey(1), mapMarker, mapMarker + ":nonce"}
 	for _, group := range []struct {
 		client *redis.Client
 		keys   []string
@@ -135,18 +146,23 @@ func recoveredHolderTiDBFixture(t *testing.T) (*AccountDirectoryStore, *sql.DB, 
 	require.NoError(t, err)
 	localTarget := hex.EncodeToString(nonce[:])
 	for _, schema := range []string{d.schema, rowSchema} {
-		_, err := global.ExecContext(ctx, "CREATE TABLE `"+schema+"`.debug_import_local_target(marker VARCHAR(64) NOT NULL PRIMARY KEY)")
+		_, err := global.ExecContext(ctx, "CREATE TABLE `"+schema+"`.maintenance_recovery_target(purpose VARBINARY(16) NOT NULL,zone_id INT UNSIGNED NOT NULL,schema_name VARBINARY(64) NOT NULL,target_nonce VARBINARY(32) NOT NULL,physical_addr VARBINARY(255) NOT NULL,PRIMARY KEY(purpose,zone_id,schema_name))")
 		require.NoError(t, err)
-		_, err = global.ExecContext(ctx, "INSERT INTO `"+schema+"`.debug_import_local_target(marker) VALUES(?),(?)", "local-debug-import-target", "old-scene-recovery:"+localTarget)
-		require.NoError(t, err)
+		for _, purpose := range []string{"promotion", "admission"} {
+			_, err = global.ExecContext(ctx, "INSERT INTO `"+schema+"`.maintenance_recovery_target(purpose,zone_id,schema_name,target_nonce,physical_addr) VALUES(?,1,?,?,?)", purpose, []byte(schema), localTarget, cfg.Addr)
+			require.NoError(t, err)
+		}
 	}
-	for _, client := range []*redis.Client{cache, mapping} {
-		created, err := client.SetNX(ctx, "debug_import:local_target", "local-debug-import-target", 0).Result()
+	for i, client := range []*redis.Client{cache, mapping} {
+		role := []string{"core", "mapping"}[i]
+		key := []string{coreMarker, mapMarker}[i]
+		scope := fmt.Sprintf("maintenance-recovery-v1|promotion|%s|1|%s|%s|%s|%d", role, d.schema, rowSchema, client.Options().Addr, client.Options().DB)
+		created, err := client.SetNX(ctx, key, scope, 0).Result()
 		require.NoError(t, err)
 		require.True(t, created)
 		_, err = rand.Read(nonce[:])
 		require.NoError(t, err)
-		created, err = client.SetNX(ctx, "debug_import:local_instance_id", hex.EncodeToString(nonce[:]), 0).Result()
+		created, err = client.SetNX(ctx, key+":nonce", hex.EncodeToString(nonce[:]), 0).Result()
 		require.NoError(t, err)
 		require.True(t, created)
 	}
@@ -177,7 +193,7 @@ func recoveredHolderTiDBFixture(t *testing.T) (*AccountDirectoryStore, *sql.DB, 
 		return output
 	}
 	command("-mode", "guard")
-	args = append(args, "-fence-only-promotion", "-plan", planFile, "-audit-evidence", evidenceFile, "-audit-evidence-sha256", hex.EncodeToString(sum[:]), "-local-target-id", localTarget)
+	args = append(args, "-fence-only-promotion", "-plan", planFile, "-audit-evidence", evidenceFile, "-audit-evidence-sha256", hex.EncodeToString(sum[:]), "-local-target-id", localTarget, "-sql-target-address", cfg.Addr)
 	command("-mode", "plan", "-players", "11")
 	planRaw, err := os.ReadFile(planFile)
 	require.NoError(t, err)
@@ -198,9 +214,18 @@ func TestTiDBRecoverOldHolderFromRealPromotionCLIAndPermanentReplay(t *testing.T
 	d, global, a, verifier, in := recoveredHolderTiDBFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	var marker string
-	require.NoError(t, global.QueryRowContext(ctx, "SELECT marker FROM debug_import_local_target WHERE marker LIKE 'old-scene-recovery:%'").Scan(&marker))
-	localTarget := strings.TrimPrefix(marker, "old-scene-recovery:")
+	var localTarget MaintenanceRecoveryTarget
+	require.NoError(t, global.QueryRowContext(ctx, "SELECT target_nonce,physical_addr FROM maintenance_recovery_target WHERE purpose='admission' AND zone_id=1 AND schema_name=?", []byte(d.schema)).Scan(&localTarget.ID, &localTarget.SQLAddr))
+	_, err := a.PlanCrashedTradeHolder(ctx, in, verifier, localTarget)
+	require.ErrorIs(t, err, accountdirectory.ErrConflict, "FREEZING不能先退休再让后台Confirm重新上架")
+	var beforeRecovery int
+	require.NoError(t, global.QueryRowContext(ctx, "SELECT COUNT(*) FROM account_role_admission_recovery").Scan(&beforeRecovery))
+	require.Zero(t, beforeRecovery)
+	trades := newTestAccountRoleTradeStore(d, verifier)
+	cancelOriginal := &dspb.CancelAccountRoleTradeRequest{ListingId: 101, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1}
+	waiting, err := trades.Cancel(ctx, cancelOriginal)
+	require.NoError(t, err)
+	require.Equal(t, dspb.AccountRoleTradeState_ACCOUNT_ROLE_TRADE_STATE_CANCEL_PENDING, waiting.State, "正式Cancel先持久同listing取消原件；原holder未排空仍等待")
 	for _, kind := range []string{"wrong-request-digest", "wrong-prior-floor", "wrong-closed", "new-generation", "wrong-maintenance"} {
 		t.Run(kind, func(t *testing.T) {
 			bad := proto.Clone(in).(*dbpb.AccountRoleAdmissionRecovery_Request)
@@ -233,7 +258,7 @@ func TestTiDBRecoverOldHolderFromRealPromotionCLIAndPermanentReplay(t *testing.T
 	require.Zero(t, count)
 	require.NoError(t, global.QueryRowContext(ctx, "SELECT closed_through FROM account_role_admission WHERE player_id=11").Scan(&closedBefore))
 	require.Zero(t, closedBefore)
-	_, err = a.ApplyCrashedTradeHolder(ctx, in, verifier, strings.Repeat("0", 32), plan.SqlProofDigest)
+	_, err = a.ApplyCrashedTradeHolder(ctx, in, verifier, MaintenanceRecoveryTarget{ID: strings.Repeat("0", 32), SQLAddr: localTarget.SQLAddr}, plan.SqlProofDigest)
 	require.Error(t, err, "换SQL实例marker必须在任何副作用前拒绝")
 	wrongProof := bytes.Clone(plan.SqlProofDigest)
 	wrongProof[0] ^= 1
@@ -312,11 +337,11 @@ func TestTiDBRecoverOldHolderFromRealPromotionCLIAndPermanentReplay(t *testing.T
 	bad.Admission.SessionId++
 	_, err = a.ApplyCrashedTradeHolder(ctx, bad, verifier, localTarget, plan.SqlProofDigest)
 	require.ErrorIs(t, err, accountdirectory.ErrConflict)
-	trades := newTestAccountRoleTradeStore(d, verifier)
 	_, err = trades.Confirm(ctx, &dspb.ConfirmAccountRoleTradeFreezeRequest{ListingId: 101, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1})
-	require.NoError(t, err, "只有真实提升后的同版双SQL才让冻结确认继续")
-	_, err = trades.Cancel(ctx, &dspb.CancelAccountRoleTradeRequest{ListingId: 101, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1})
+	require.ErrorIs(t, err, accountdirectory.ErrConflict, "已取消原件不能在恢复后重开上架")
+	finished, err := trades.Cancel(ctx, cancelOriginal)
 	require.NoError(t, err)
+	require.Equal(t, dspb.AccountRoleTradeState_ACCOUNT_ROLE_TRADE_STATE_CANCELLED, finished.State, "退休原holder后重放同正式Cancel才解除")
 	newAdmission := admissionTestRequest(11, 2, 1)
 	newAdmission.Identity.OwnerEpoch = 22
 	_, err = a.Register(ctx, newAdmission)

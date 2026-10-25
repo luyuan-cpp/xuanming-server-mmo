@@ -405,6 +405,8 @@ private:
     void BeginSqlOutcome(BattleRoom& room, ::eBattleOutcome outcome, ::eSpectateEndReason reason,
                          std::optional<::TurnResultS2C> finalTurn, ::BattleStateS2C visibleBefore);
     void PumpSqlOutcomes();
+    // 与正式请求签名相同的密钥就绪门；只在本节点生命周期首次缺失时报警。
+    bool OutcomeSigningKeyReady(std::string_view secret);
     void PumpResultCommits();
     void StopResultCommits();
     // 结果第一次发往 broker 之前,把全部成员的个人结算写进 R07 pending(审计 social-match-battle#2)。
@@ -644,6 +646,7 @@ private:
     std::vector<std::pair<uint64_t, bool>> resultReports_;
     TimerTaskComp resultCommitTimer_;
     bool outcomeStopping_ = false;
+    bool outcomeKeyUnavailableLogged_ = false;
     std::set<uint64_t> sqlOutcomeRooms_;
     TimerTaskComp sqlOutcomeTimer_;
 

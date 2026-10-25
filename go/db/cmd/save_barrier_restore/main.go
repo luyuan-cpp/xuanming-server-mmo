@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
 	"io"
-	"net"
 	"os"
 	"os/signal"
 	databasepb "proto/common/database"
@@ -29,7 +28,7 @@ import (
 
 type options struct {
 	fenceOnlyPromotion                                                                                    bool
-	auditFile, auditSHA, localTarget, observationFile                                                     string
+	auditFile, auditSHA, localTarget, observationFile, sqlTarget                                          string
 	auditedOwnerUpperBound                                                                                string
 	mode, schema, players, maintenanceID, planFile, planSHA, redisAddr, dsnEnv, redisPasswordEnv          string
 	zone                                                                                                  uint
@@ -68,7 +67,8 @@ func main() {
 	flag.BoolVar(&o.fenceOnlyPromotion, "fence-only-promotion", false, "显式单玩家维护提升；稳定R撤销后，仅将两SQL围栏提升到max(原counter,U)+1/q1")
 	flag.StringVar(&o.auditFile, "audit-evidence", "", "独立审核的停写/队列/旧可发owner上界原件文件")
 	flag.StringVar(&o.auditSHA, "audit-evidence-sha256", "", "该审核原件的已审SHA-256；仅摘要进入计划")
-	flag.StringVar(&o.localTarget, "local-target-id", "", "新promotion专用本地SQL marker的32hex实例nonce；工具不自动建标记")
+	flag.StringVar(&o.localTarget, "local-target-id", "", "审定maintenance-recovery SQL目标32hex nonce；历史参数名不授予调试写权限")
+	flag.StringVar(&o.sqlTarget, "sql-target-address", "", "审定无凭据SQL host:port，逐字绑定DSN和永久维护标记")
 	flag.StringVar(&o.observationFile, "target-observation", "", "新promotion每次执行的新建目标观测文件；run_id/replid只记录当次观测")
 	flag.StringVar(&o.releaseMembers, "release-members", "", "仅release-plan：完整成员输入原件")
 	flag.StringVar(&o.releaseMembersSHA, "release-members-sha256", "", "完整成员输入的已审原文件SHA")
@@ -138,6 +138,7 @@ func run(ctx context.Context, o options, out, errOut io.Writer) int {
 	defer db.Close()
 	r.DB = db
 	r.LocalTargetID = o.localTarget
+	r.MaintenanceSQLAddr = o.sqlTarget
 	if o.mode == "release-plan" || o.mode == "release-apply" {
 		return runMaintenanceRelease(ctx, o, r, out, errOut)
 	}
@@ -204,10 +205,10 @@ func validateOptions(o options) error {
 		return errors.New("必须先停旧写者、阻止自动复活并审定全部 Kafka/retry/dead 排空；工具无法代替此停写门禁")
 	}
 	if o.fenceOnlyPromotion {
-		if o.mode == "guard" || o.routingMode != barrierrestore.RoutingModeDBFirst || o.localMySQL || o.allowLegacy || o.allowHomeFallback || o.auditFile == "" || len(o.auditSHA) != 64 || len(o.localTarget) != 32 || strings.Trim(o.localTarget, "0123456789abcdef") != "" || o.observationFile == "" || o.mode == "plan" && strings.Contains(o.players, ",") {
-			return errors.New("fence-only promotion仅支持显式单玩家db_first/TiDB、本地实例marker及独立审核原件，不接受隐式降级选项")
+		if o.mode == "guard" || o.routingMode != barrierrestore.RoutingModeDBFirst || o.localMySQL || o.allowLegacy || o.allowHomeFallback || o.auditFile == "" || len(o.auditSHA) != 64 || len(o.localTarget) != 32 || strings.Trim(o.localTarget, "0123456789abcdef") != "" || o.sqlTarget == "" || o.observationFile == "" || o.mode == "plan" && strings.Contains(o.players, ",") {
+			return errors.New("fence-only promotion仅支持显式单玩家db_first/TiDB、独立维护目标marker及独立审核原件，不接受隐式降级选项")
 		}
-	} else if o.auditFile != "" || o.auditSHA != "" || o.localTarget != "" || o.observationFile != "" {
+	} else if o.auditFile != "" || o.auditSHA != "" || o.localTarget != "" || o.sqlTarget != "" || o.observationFile != "" {
 		return errors.New("审核原件和实例选项仅属于显式fence-only promotion")
 	}
 	if o.mode == "guard" {
@@ -243,17 +244,15 @@ func validateMaintenanceReleaseOptions(o options) error {
 		return errors.New("解除入口必须显式指定release-plan或release-apply")
 	}
 	if o.zone == 0 || o.zone > 999999 || o.target().ValidateTarget() != nil || o.maintenanceID == "" || len(o.maintenanceID) > 128 || o.planFile == "" || o.schema == "" || o.redisAddr == "" || o.dsnEnv == "" || o.redisPasswordEnv == "" {
-		return errors.New("显式解除必须提供完整本地SQL/Redis目标、zone、维护号与计划文件")
+		return errors.New("显式解除必须提供完整受审SQL/Redis目标、zone、维护号与计划文件")
 	}
 	if o.routingMode != barrierrestore.RoutingModeDBFirst || o.localMySQL || o.fenceOnlyPromotion || o.allowLegacy || o.allowHomeFallback || o.players != "" || o.auditedOwnerUpperBound != "" || o.auditFile != "" || o.auditSHA != "" {
 		return errors.New("显式解除只支持原TiDB/db_first，不接受资产恢复、promotion或旧迁移参数")
 	}
-	if !o.writersStopped || !o.queuesDrained || !releaseDigestShape(o.localTarget, 32) || o.observationFile == "" || o.releaseReview == "" || !releaseDigestShape(o.releaseReviewSHA, 64) || o.releaseAttempt == "" || !releaseDigestShape(o.releaseAttemptSHA, 64) {
+	if !o.writersStopped || !o.queuesDrained || !releaseDigestShape(o.localTarget, 32) || o.sqlTarget == "" || o.observationFile == "" || o.releaseReview == "" || !releaseDigestShape(o.releaseReviewSHA, 64) || o.releaseAttempt == "" || !releaseDigestShape(o.releaseAttemptSHA, 64) {
 		return errors.New("显式解除需要原实例nonce、独立审核原件、本次短排他窗与新的观测文件；声明不能代替真实原件")
 	}
-	if !promotionLoopback(o.redisAddr) || !promotionLoopback(o.target().MappingAddr) {
-		return errors.New("显式解除仅允许本机两个Redis目标")
-	}
+
 	if o.mode == "release-plan" {
 		if o.planSHA != "" || o.releaseMembers == "" || !releaseDigestShape(o.releaseMembersSHA, 64) {
 			return errors.New("release-plan只读完整成员输入，不接受旧plan摘要")
@@ -277,10 +276,11 @@ func runMaintenanceRelease(ctx context.Context, o options, r barrierrestore.Rest
 	}
 	bindings, err := readPromotionBindings(ctx, o, r)
 	if err != nil {
-		fmt.Fprintln(errOut, "显式解除本地SQL/Redis实例核验失败")
+		fmt.Fprintln(errOut, "显式解除SQL/Redis维护目标核验失败")
 		return 2
 	}
 	r.RedisTargetID = bindings.RedisTarget
+	r.MappingTargetID = bindings.MappingTarget
 	var p barrierrestore.MaintenanceReleasePlan
 	if o.mode == "release-plan" {
 		input, e := barrierrestore.ReadMaintenanceReleaseMembers(barrierrestore.ReleaseFile{Path: o.releaseMembers, SHA256: o.releaseMembersSHA})
@@ -363,6 +363,7 @@ func runMaintenanceRelease(ctx context.Context, o options, r barrierrestore.Rest
 type promotionCLIPlan struct {
 	Format                  string          `json:"format"`
 	LocalTarget             string          `json:"local_target_id"`
+	SQLTarget               string          `json:"physical_sql_addr"`
 	RedisTarget             string          `json:"redis_target_id"`
 	MappingTarget           string          `json:"mapping_target_id"`
 	RedisAddr               string          `json:"redis_addr"`
@@ -375,7 +376,7 @@ type promotionCLIPlan struct {
 }
 
 func samePromotionTargets(a, b promotionCLIPlan) bool {
-	return a.Format == b.Format && a.LocalTarget == b.LocalTarget && a.RedisTarget == b.RedisTarget && a.MappingTarget == b.MappingTarget && a.RedisAddr == b.RedisAddr && a.RedisDB == b.RedisDB && a.MappingAddr == b.MappingAddr && a.MappingDB == b.MappingDB
+	return a.Format == b.Format && a.LocalTarget == b.LocalTarget && a.SQLTarget == b.SQLTarget && a.RedisTarget == b.RedisTarget && a.MappingTarget == b.MappingTarget && a.RedisAddr == b.RedisAddr && a.RedisDB == b.RedisDB && a.MappingAddr == b.MappingAddr && a.MappingDB == b.MappingDB
 }
 
 func runPromotion(ctx context.Context, o options, r barrierrestore.Restorer, out, errOut io.Writer) int {
@@ -391,6 +392,7 @@ func runPromotion(ctx context.Context, o options, r barrierrestore.Restorer, out
 		return 2
 	}
 	r.RedisTargetID = bindings.RedisTarget
+	r.MappingTargetID = bindings.MappingTarget
 	observation, err := json.Marshal(bindings)
 	if err != nil || writeNew(o.observationFile, append(observation, '\n')) != nil {
 		fmt.Fprintln(errOut, "目标当次观测必须新建留存，未进行提升")
@@ -468,32 +470,19 @@ func runPromotion(ctx context.Context, o options, r barrierrestore.Restorer, out
 }
 
 func readPromotionBindings(ctx context.Context, o options, r barrierrestore.Restorer) (promotionCLIPlan, error) {
-	result := promotionCLIPlan{Format: "fence-only-promotion-cli-plan-v1", LocalTarget: o.localTarget, RedisAddr: r.Redis.Options().Addr, RedisDB: r.Redis.Options().DB, MappingAddr: o.target().MappingAddr, MappingDB: o.target().MappingDB}
+	result := promotionCLIPlan{Format: "fence-only-promotion-cli-plan-v2", LocalTarget: o.localTarget, SQLTarget: o.sqlTarget, RedisAddr: r.Redis.Options().Addr, RedisDB: r.Redis.Options().DB, MappingAddr: o.target().MappingAddr, MappingDB: o.target().MappingDB}
 	dsn, err := mysql.ParseDSN(os.Getenv(o.dsnEnv))
-	if err != nil || dsn.Net != "tcp" || !promotionLoopback(dsn.Addr) || !promotionLoopback(o.redisAddr) || !promotionLoopback(o.target().MappingAddr) {
-		return result, errors.New("promotion只允许本机回环SQL与两个Redis目标")
+	if err != nil || dsn.Net != "tcp" || dsn.Addr != o.sqlTarget || r.MaintenanceSQLAddr != o.sqlTarget {
+		return result, errors.New("维护SQL物理地址偏离显式审定目标")
 	}
-	var n int
-	for _, schema := range []string{o.schema, o.routeSchema} {
-		if err := r.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM `"+schema+"`.debug_import_local_target WHERE marker IN (?,?)", "local-debug-import-target", "old-scene-recovery:"+o.localTarget).Scan(&n); err != nil || n != 2 {
-			return result, errors.New("SQL目标缺本地标准标记或本次实例nonce")
-		}
+	purpose, scopeSchema := "promotion", o.schema
+	if o.mode == "release-plan" || o.mode == "release-apply" {
+		purpose, scopeSchema = "release", o.routeSchema
 	}
-	read := func(client *redis.Client) (string, string, error) {
-		value, err := client.Get(ctx, "debug_import:local_target").Result()
-		if err != nil || value != "local-debug-import-target" {
-			return "", "", errors.New("Redis目标缺本地标记")
-		}
-		if ttl, err := client.PTTL(ctx, "debug_import:local_target").Result(); err != nil || ttl != -1 {
-			return "", "", errors.New("Redis本地标记必须无TTL")
-		}
-		nonce, err := client.Get(ctx, "debug_import:local_instance_id").Result()
-		if err != nil || len(nonce) != 32 || strings.Trim(nonce, "0123456789abcdef") != "" || nonce == strings.Repeat("0", 32) {
-			return "", "", errors.New("Redis目标缺永久独立实例nonce")
-		}
-		ttl, err := client.PTTL(ctx, "debug_import:local_instance_id").Result()
-		if err != nil || ttl != -1 {
-			return "", "", errors.New("Redis实例nonce必须无TTL")
+	read := func(client *redis.Client, role string) (string, string, error) {
+		marker, err := barrierrestore.ReadMaintenanceRedisMarker(ctx, client, purpose, role, uint32(o.zone), o.routeSchema, scopeSchema)
+		if err != nil {
+			return "", "", err
 		}
 		server, err := client.Info(ctx, "server").Result()
 		if err != nil {
@@ -516,9 +505,9 @@ func readPromotionBindings(ctx context.Context, o options, r barrierrestore.Rest
 		if len(run) != 40 || len(replica) != 40 || strings.Trim(run+replica, "0123456789abcdef") != "" || field(repl, "role") != "master" {
 			return "", "", errors.New("Redis实例身份未知或不是主")
 		}
-		return nonce, run + ":" + replica, nil
+		return marker.Nonce, run + ":" + replica, nil
 	}
-	result.RedisTarget, result.RedisObservedIdentity, err = read(r.Redis)
+	result.RedisTarget, result.RedisObservedIdentity, err = read(r.Redis, "core")
 	if err != nil {
 		return result, err
 	}
@@ -526,16 +515,11 @@ func readPromotionBindings(ctx context.Context, o options, r barrierrestore.Rest
 	if mapping == nil {
 		mapping = r.Redis
 	}
-	result.MappingTarget, result.MappingObservedIdentity, err = read(mapping)
-	return result, err
-}
-
-func promotionLoopback(addr string) bool {
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		return false
+	result.MappingTarget, result.MappingObservedIdentity, err = read(mapping, "mapping")
+	if err == nil && r.Redis.Options().Addr == mapping.Options().Addr && r.Redis.Options().DB == mapping.Options().DB && result.RedisTarget != result.MappingTarget {
+		return result, errors.New("同物理Redis目标nonce不一致")
 	}
-	return strings.EqualFold(host, "localhost") || net.ParseIP(host) != nil && net.ParseIP(host).IsLoopback()
+	return result, err
 }
 
 func readVerifiedFile(path, digest string, limit int64) ([]byte, error) {

@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <functional>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -29,6 +30,8 @@
 #include "modules/gain_block/gain_block_service.h"
 #include "proto/battle/battle_data.pb.h"
 #include "table/code/item_table.h"
+#include "table/code/pet_table.h"
+#include "table/code/attributepool_table.h"
 #include "table/code/condition_table.h"
 #include "table/code/dungeon_table.h"
 #include "table/code/mission_table.h"
@@ -773,10 +776,68 @@ TEST_F(PlayerBattleSettlementTest, InboxMissingPlayerMissionScopeCannotDropKillO
     EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
 }
 
-TEST_F(PlayerBattleSettlementTest, InboxUnownedPetDefersBeforeEveryEffect) {
-    tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+TEST_F(PlayerBattleSettlementTest, InboxUnownedPetSkipsOnlyRetiredPetEffect) {
+    auto& pets = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+    settlement.add_pets()->set_pet_id(911);
+    const auto before = pets.SerializeAsString();
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(before, pets.SerializeAsString());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(2u, KillProgress());
+    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+}
+
+TEST_F(PlayerBattleSettlementTest, InboxMissingPetTableSkipsOnlyThatPetEffect) {
+    auto& pets = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+    auto* pet = pets.add_pets(); pet->set_pet_id(911); pet->set_pet_table_id(UINT32_MAX); pet->set_health(17);
+    settlement.add_pets()->set_pet_id(911);
+    const auto before = pets.SerializeAsString();
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(before, pets.SerializeAsString());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(2u, KillProgress());
+}
+
+TEST_F(PlayerBattleSettlementTest, InboxMissingPetPoolSkipsOnlyThatPetEffect) {
+    PetTableManager::Instance().Load(); AttributePoolTableManager::Instance().Load();
+    ASSERT_GT(PetTableManager::Instance().FindAll().data_size(), 0);
+    struct RestorePoolOwners {
+        std::vector<std::pair<uint32_t, uint32_t>> rows;
+        ~RestorePoolOwners() {
+            for (const auto& [id, owner] : rows) {
+                auto* row = const_cast<AttributePoolTable*>(AttributePoolTableManager::Instance().FindByIdSilent(id).first);
+                EXPECT_NE(nullptr, row);
+                if (row) row->set_owner_type(owner);
+            }
+        }
+    } restore;
+    for (const auto& row : AttributePoolTableManager::Instance().FindAll().data()) {
+        auto* changed = const_cast<AttributePoolTable*>(&row);
+        restore.rows.emplace_back(row.id(), row.owner_type()); changed->set_owner_type(0);
+    }
+    auto& pets = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+    auto* pet = pets.add_pets(); pet->set_pet_id(911);
+    pet->set_pet_table_id(PetTableManager::Instance().FindAll().data(0).id()); pet->set_health(17);
+    settlement.add_pets()->set_pet_id(911);
+    const auto before = pets.SerializeAsString();
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(before, pets.SerializeAsString());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(2u, KillProgress());
+}
+
+TEST_F(PlayerBattleSettlementTest, InboxMissingUnknownOrDamagedPetStateStillDefersBeforeEffects) {
     settlement.add_pets()->set_pet_id(911);
     EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    auto& pets = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+    pets.GetReflection()->MutableUnknownFields(&pets)->AddVarint(900, 1);
+    const auto opaque = pets.SerializeAsString();
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(opaque, pets.SerializeAsString());
+    pets.Clear(); pets.add_pets()->set_pet_id(911); pets.add_pets()->set_pet_id(911);
+    const auto damaged = pets.SerializeAsString();
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(damaged, pets.SerializeAsString());
     EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
     EXPECT_EQ(0u, KillProgress());
     EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
@@ -881,6 +942,11 @@ protected:
         param.itemPBComp.set_size(count);
         ASSERT_EQ(kSuccess, Inventory().AddItem(param));
     }
+    std::map<Guid, std::string> ItemBytes() {
+        std::map<Guid, std::string> out;
+        Inventory().ForEachItem([&out](Guid guid, const ItemComp& item) { out.emplace(guid, item.SerializeAsString()); });
+        return out;
+    }
     void SetConsumed(uint32_t configId, uint64_t count) {
         auto* entry = settlement.add_items_consumed();
         entry->set_item_table_id(configId);
@@ -936,6 +1002,63 @@ TEST_F(PlayerBattleSettlementItemTest, InboxFullBagsKeepConsumptionGoldHealthAnd
     EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
     EXPECT_EQ(0u, KillProgress());
     EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+}
+
+TEST_F(PlayerBattleSettlementItemTest, InboxCommittedConsumptionSurvivesBattleUsableHotReloadAndPreservesOtherInstances)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementDropItem, 2));
+    Guid consumedGuid = 0, opaqueGuid = 0;
+    Inventory().ForEachItem([&](Guid guid, const ItemComp& item) {
+        if (item.config_id() == kSettlementStackItem) consumedGuid = guid;
+        if (item.config_id() == kSettlementDropItem) opaqueGuid = guid;
+    });
+    ASSERT_NE(0u, consumedGuid); ASSERT_NE(0u, opaqueGuid);
+    auto* opaque = Inventory().GetItemCompByGuid(opaqueGuid);
+    opaque->GetReflection()->MutableUnknownFields(opaque)->AddVarint(900, 7);
+    const auto before = ItemBytes();
+    const auto slots = Inventory().GridSlots();
+    auto* row = const_cast<ItemTable*>(ItemTableManager::Instance().FindByIdSilent(kSettlementStackItem).first);
+    ASSERT_NE(nullptr, row);
+    struct RestoreBattleUsable { ItemTable& row; uint32_t old; ~RestoreBattleUsable() { row.set_battle_usable(old); } } restore{*row, row->battle_usable()};
+    row->set_battle_usable(0);
+    SetConsumed(kSettlementStackItem, 1);
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    const auto after = ItemBytes();
+    ASSERT_EQ(before.size(), after.size()); ASSERT_EQ(2u, after.size());
+    EXPECT_TRUE(after.contains(consumedGuid)); EXPECT_TRUE(after.contains(opaqueGuid));
+    EXPECT_EQ(before.at(opaqueGuid), after.at(opaqueGuid));
+    ItemComp expected; ASSERT_TRUE(expected.ParseFromString(before.at(consumedGuid))); expected.set_size(2);
+    EXPECT_EQ(expected.SerializeAsString(), after.at(consumedGuid));
+    EXPECT_EQ(slots, Inventory().GridSlots());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold)); EXPECT_EQ(2u, KillProgress());
+}
+
+TEST_F(PlayerBattleSettlementItemTest, InboxUnknownConsumedInstanceCannotBeDowngradedToOrdinaryQuantity)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    Guid guid = 0; Inventory().ForEachItem([&guid](Guid id, const ItemComp&) { guid = id; });
+    ASSERT_NE(0u, guid);
+    auto* item = Inventory().GetItemCompByGuid(guid);
+    item->GetReflection()->MutableUnknownFields(item)->AddVarint(900, 7);
+    const auto before = ItemBytes();
+    const auto slots = Inventory().GridSlots();
+    SetConsumed(kSettlementStackItem, 1);
+    EXPECT_EQ(PlayerInboxExecKind::kVersionSkew, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(before, ItemBytes()); EXPECT_EQ(slots, Inventory().GridSlots());
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold)); EXPECT_EQ(0u, KillProgress());
+    EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+}
+
+TEST_F(PlayerBattleSettlementItemTest, InboxKnownConsumptionStillClampsToActualHeldInstances)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 1)); SetConsumed(kSettlementStackItem, 3);
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_TRUE(ItemBytes().empty()); EXPECT_EQ(0u, Inventory().OccupiedGridCount());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold)); EXPECT_EQ(2u, KillProgress());
 }
 
 TEST_F(PlayerBattleSettlementItemTest, InboxMissionRewardFailureRetainsClaimableEntitlement)

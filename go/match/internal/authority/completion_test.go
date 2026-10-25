@@ -3,6 +3,7 @@ package authority
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/binary"
 	"errors"
 	"sync"
@@ -44,15 +45,22 @@ func resultBytes(t *testing.T, e *kafkapb.BattleResultEvent) []byte {
 const terminalFixtureSecret = "fixture-only-battle-inbox-outcome-secret-000000000"
 
 func terminalResultFixture(t *testing.T, s *Store, expired bool) (*pb.MatchFormationRecord, *pb.CommitBattleOutcomeRequest) {
+	deadlineDelta := int64(300000)
+	if expired {
+		deadlineDelta = -int64(terminalOutcomeGraceMs) - 1000
+	}
+	return terminalResultFixtureWithDeadline(t, s, deadlineDelta)
+}
+
+func terminalResultFixtureWithDeadline(t *testing.T, s *Store, deadlineDelta int64) (*pb.MatchFormationRecord, *pb.CommitBattleOutcomeRequest) {
 	t.Helper()
 	ctx := context.Background()
 	a, b := testJoin(t, s, 11), testJoin(t, s, 22)
 	stamp, err := s.Now(ctx)
 	require.NoError(t, err)
 	f := &pb.MatchFormationRecord{BattleId: 901, OperationId: "terminal-original-op", State: 1, TargetNodeId: 7, TargetInstanceId: "10000000-0000-4000-8000-000000000007", TargetEndpoint: "127.0.0.1:1", PhysicalRegion: 1, Mode: 3, ConfigId: 1, CreatedMs: stamp - 2000, DeadlineMs: stamp + 300000, RetryAtMs: stamp - 2000, Members: []*pb.MatchFormationMember{{PlayerId: 11, Ticket: a.Ticket}, {PlayerId: 22, Ticket: b.Ticket}}}
-	if expired {
-		f.DeadlineMs = stamp - 1000
-	}
+	f.CreatedMs = stamp - terminalOutcomeGraceMs - 2000
+	f.DeadlineMs = uint64(int64(stamp) + deadlineDelta)
 	members, err := proto.Marshal(&pb.MatchFormationRecord{Members: f.Members})
 	require.NoError(t, err)
 	_, err = s.DB.ExecContext(ctx, "INSERT INTO match_formation("+formationColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", f.BattleId, f.OperationId, f.State, f.PhysicalRegion, f.TargetNodeId, f.TargetInstanceId, f.TargetEndpoint, f.Mode, f.ConfigId, members, []byte{}, f.CreatedMs, f.DeadlineMs, f.RetryAtMs, []byte{}, false, []byte{}, uint32(0), uint32(0), "", uint32(0), false)
@@ -115,6 +123,25 @@ func TestTerminalResultRejectsLegacyAndNestedUnknownBeforeSQL(t *testing.T) {
 	require.ErrorContains(t, validateTerminalResult(f, e, resultBytes(t, e)), "16KiB")
 }
 
+func TestTerminalPureOriginalErrorsAreTypedBeforeAnySQL(t *testing.T) {
+	for _, edit := range []func(*kafkapb.BattleResultEvent){
+		func(e *kafkapb.BattleResultEvent) { e.SettlementFormatVersion = 0; e.Settlements = nil },
+		func(e *kafkapb.BattleResultEvent) { e.Settlements[0].PlayerId = 0 },
+		func(e *kafkapb.BattleResultEvent) {
+			e.Settlements[0].Pets[0].ProtoReflect().SetUnknown([]byte{0xf8, 0x07, 0x01})
+		},
+		func(e *kafkapb.BattleResultEvent) { e.FledPlayerIds = []uint64{999} },
+	} {
+		event := completeResult()
+		edit(event)
+		// 零值DB没有连接能力；如校验后移到SQL/P锁之后，本例不能伪绿。
+		s := &Store{DB: new(sql.DB)}
+		req := &pb.CommitBattleOutcomeRequest{BattleId: 901, PlacementOperationId: "original", TargetInstanceId: "original", RawResultPayload: resultBytes(t, event)}
+		_, err := s.CommitBattleOutcome(context.Background(), req)
+		require.ErrorIs(t, err, ErrBattleOutcomeOriginal)
+	}
+}
+
 func TestTerminalTiDBCompleteKeepsBothOutboxesAndReplayBytes(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
@@ -173,9 +200,9 @@ func TestTerminalTiDBCancelledFormationDistinguishesUnissuedAndPersistedCreate(t
 			require.NoError(t, err)
 			if kind != "发房前" {
 				// 完整原意图先持久才可能发房。deadline只调整本隔离夹具，模拟已过期。
-				_, err = s.DB.ExecContext(ctx, "UPDATE match_formation SET created_ms=?,deadline_ms=? WHERE battle_id=?", stamp-2000, stamp-1000, f.BattleId)
+				_, err = s.DB.ExecContext(ctx, "UPDATE match_formation SET created_ms=?,deadline_ms=? WHERE battle_id=?", stamp-terminalOutcomeGraceMs-2000, stamp-terminalOutcomeGraceMs-1000, f.BattleId)
 				require.NoError(t, err)
-				request := &battlepb.CreateBattleRequest{BattleId: f.BattleId, PlacementOperationId: f.OperationId, TargetInstanceId: f.TargetInstanceId, BattleConfigId: f.ConfigId, MatchMode: f.Mode, CreatedAtMs: stamp - 2000, DeadlineMs: stamp - 1000, Players: []*battlepb.BattlePlayerSnapshot{{PlayerId: a.PlayerId}, {PlayerId: b.PlayerId}}}
+				request := &battlepb.CreateBattleRequest{BattleId: f.BattleId, PlacementOperationId: f.OperationId, TargetInstanceId: f.TargetInstanceId, BattleConfigId: f.ConfigId, MatchMode: f.Mode, CreatedAtMs: stamp - terminalOutcomeGraceMs - 2000, DeadlineMs: stamp - terminalOutcomeGraceMs - 1000, Players: []*battlepb.BattlePlayerSnapshot{{PlayerId: a.PlayerId}, {PlayerId: b.PlayerId}}}
 				newProtocol := kind == "新协议原件" || kind == "明确旧采用"
 				if newProtocol {
 					request.OutcomeProtocolVersion = 1
@@ -298,11 +325,61 @@ func TestTerminalTiDBAbortAndCompleteHaveOneWinner(t *testing.T) {
 	}
 }
 
+func TestTerminalAbortGraceUsesOverflowSafeBoundary(t *testing.T) {
+	const deadline uint64 = 100000
+	require.False(t, terminalAbortDue(deadline, deadline-1))
+	require.False(t, terminalAbortDue(deadline, deadline))
+	require.False(t, terminalAbortDue(deadline, deadline+terminalOutcomeGraceMs-1))
+	require.True(t, terminalAbortDue(deadline, deadline+terminalOutcomeGraceMs))
+	require.False(t, terminalAbortDue(0, ^uint64(0)))
+	require.False(t, terminalAbortDue(^uint64(0)-1, ^uint64(0)), "临近uint64上界不能因加法溢出提前ABORT")
+}
+
+func TestTerminalTiDBDeadlineGraceKeepsOriginalComplete(t *testing.T) {
+	for _, retry := range []bool{false, true} {
+		t.Run(map[bool]string{false: "截止同时恢复", true: "首次提交失败后原件重投"}[retry], func(t *testing.T) {
+			s := testStore(t)
+			ctx := context.Background()
+			f, req := terminalResultFixtureWithDeadline(t, s, -1000)
+			if retry {
+				cancelled, cancel := context.WithCancel(ctx)
+				cancel()
+				_, err := s.CommitBattleOutcome(cancelled, req)
+				require.Error(t, err)
+			}
+			_, err := s.DB.ExecContext(ctx, "UPDATE match_formation SET retry_at_ms=0 WHERE battle_id=?", f.BattleId)
+			require.NoError(t, err)
+			f, err = s.Formation(ctx, f.BattleId)
+			require.NoError(t, err)
+			// 正式候选页和锁内恢复都不能在宽限内抢ABORT。
+			_, _, err = s.RecoverExpiredOutcomes(ctx, 0, 0)
+			require.NoError(t, err)
+			row, err := readTerminal(ctx, s.DB, f.BattleId)
+			require.NoError(t, err)
+			require.Nil(t, row)
+			start := make(chan struct{})
+			result := make(chan error, 1)
+			go func() { <-start; _, err := s.RecoverExpiredOutcome(ctx, f); result <- err }()
+			close(start)
+			decision, err := s.CommitBattleOutcome(ctx, req)
+			require.NoError(t, err)
+			require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_COMPLETE, decision)
+			require.NoError(t, <-result)
+			row, err = readTerminal(ctx, s.DB, f.BattleId)
+			require.NoError(t, err)
+			require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_COMPLETE, row.Decision)
+		})
+	}
+}
+
 type terminalInboxFixture struct {
 	inboxpb.PlayerInboxClient
 	state      inboxpb.PlayerInboxItemState
 	failPlayer uint64
 	seen       []uint64
+	enqueues   int
+	lookups    int
+	onLookup   func()
 }
 
 func (c *terminalInboxFixture) response(method string, r *inboxpb.BattleSettlementInboxRequest) (*inboxpb.BattleSettlementInboxResponse, error) {
@@ -325,10 +402,103 @@ func (c *terminalInboxFixture) response(method string, r *inboxpb.BattleSettleme
 	return out, err
 }
 func (c *terminalInboxFixture) EnqueueBattleSettlement(_ context.Context, r *inboxpb.BattleSettlementInboxRequest, _ ...grpc.CallOption) (*inboxpb.BattleSettlementInboxResponse, error) {
+	c.enqueues++
 	return c.response(inboxpb.PlayerInbox_EnqueueBattleSettlement_FullMethodName, r)
 }
 func (c *terminalInboxFixture) LookupBattleSettlement(_ context.Context, r *inboxpb.BattleSettlementInboxRequest, _ ...grpc.CallOption) (*inboxpb.BattleSettlementInboxResponse, error) {
+	c.lookups++
+	if c.onLookup != nil {
+		c.onLookup()
+	}
 	return c.response(inboxpb.PlayerInbox_LookupBattleSettlement_FullMethodName, r)
+}
+
+func TestTerminalPersonalDeliveryUsesLookupAndBoundedBackoff(t *testing.T) {
+	client := &terminalInboxFixture{state: inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_PENDING}
+	resolve := func(context.Context) (inboxpb.PlayerInboxClient, error) { return client, nil }
+	r := &pb.MatchBattleSettlementSourceRecord{BattleId: 901, PlayerId: 11, OwnerAccount: "original", OwnerRevision: 1, IssuedAtMs: 10, SettlementProto: []byte{1}}
+	seq, _, err := deliverBattleOriginal(context.Background(), r, resolve, terminalFixtureSecret)
+	require.NoError(t, err)
+	require.Equal(t, 1, client.enqueues)
+	require.Zero(t, client.lookups)
+	r.InboxSeq = seq
+	_, _, err = deliverBattleOriginal(context.Background(), r, resolve, terminalFixtureSecret)
+	require.NoError(t, err)
+	require.Equal(t, 1, client.enqueues, "已入箱只查询，不重复取得Inbox P做Enqueue")
+	require.Equal(t, 1, client.lookups)
+	last := uint64(0)
+	for _, stamp := range []uint64{10, 5010, 20010, 1000010, ^uint64(0)} {
+		delay := pendingSettlementDelayMs(10, stamp)
+		require.GreaterOrEqual(t, delay, uint64(5000))
+		require.LessOrEqual(t, delay, uint64(300000))
+		require.GreaterOrEqual(t, delay, last)
+		last = delay
+	}
+}
+
+func TestTerminalTiDBFirstDeliveryHasBudgetDespiteOlderPending(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	_, request := terminalResultFixture(t, s, false)
+	_, err := s.CommitBattleOutcome(ctx, request)
+	require.NoError(t, err)
+	for battle := uint64(800); battle < 812; battle++ {
+		body, marshalErr := proto.Marshal(&battlepb.BattleSettlementData{BattleId: battle, PlayerId: 11, Outcome: battlepb.EBattleOutcome_BATTLE_OUTCOME_DRAW})
+		require.NoError(t, marshalErr)
+		digest := sha256.Sum256(body)
+		_, err = s.DB.ExecContext(ctx, "INSERT INTO match_battle_settlement_source(battle_id,player_id,settlement_proto,payload_digest,archived_ms,owner_account,owner_revision,issued_at_ms,inbox_seq,inbox_state,dispatch_state,next_retry_ms) VALUES(?,11,?,?,1,'original-owner',1,1,111,1,1,0)", battle, body, digest[:])
+		require.NoError(t, err)
+	}
+	client := &terminalInboxFixture{state: inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_PENDING}
+	resolve := func(context.Context) (inboxpb.PlayerInboxClient, error) { return client, nil }
+	require.NoError(t, s.PublishBattleOutcomesOnce(ctx, resolve, terminalFixtureSecret, func(context.Context, uint64, []byte) error { return nil }))
+	require.Equal(t, 2, client.enqueues, "更早的等待APPLIED页不能占掉本局两人首投")
+	require.Equal(t, 4, client.lookups, "等待页仍有独立有限预算")
+	var waiting int
+	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_battle_settlement_source WHERE battle_id=901 AND inbox_seq>0 AND dispatch_state=1").Scan(&waiting))
+	require.Equal(t, 2, waiting, "PENDING不能误成APPLIED或放票")
+}
+
+func TestTerminalTiDBOnDemandLookupRunsBeforePlayerLockAndKeepsNewTicket(t *testing.T) {
+	for _, replaced := range []bool{false, true} {
+		t.Run(map[bool]string{false: "原票", true: "查询期间换新票"}[replaced], func(t *testing.T) {
+			s := testStore(t)
+			ctx := context.Background()
+			_, request := terminalResultFixture(t, s, false)
+			_, err := s.CommitBattleOutcome(ctx, request)
+			require.NoError(t, err)
+			client := &terminalInboxFixture{state: inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_PENDING}
+			resolve := func(context.Context) (inboxpb.PlayerInboxClient, error) { return client, nil }
+			require.NoError(t, s.PublishBattleOutcomesOnce(ctx, resolve, terminalFixtureSecret, func(context.Context, uint64, []byte) error { return nil }))
+			ticket, err := s.Ticket(ctx, 11)
+			require.NoError(t, err)
+			guardEntered := false
+			s.roleGuard = func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord) error {
+				guardEntered = true
+				return nil
+			}
+			client.state = inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_APPLIED
+			client.onLookup = func() {
+				require.False(t, guardEntered, "跨服务Lookup必须先于P锁")
+				if replaced {
+					_, err := s.DB.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket='new-current-ticket' WHERE player_id=11")
+					require.NoError(t, err)
+				}
+			}
+			require.NoError(t, s.RefreshBattleSettlementReceipt(ctx, ticket, resolve, terminalFixtureSecret))
+			require.Equal(t, 2, client.enqueues, "按需确认只Lookup，不再次Enqueue")
+			released, err := s.ReleaseCompletedReady(ctx, ticket)
+			require.NoError(t, err)
+			require.True(t, guardEntered)
+			require.Equal(t, !replaced, released)
+			if replaced {
+				current, err := s.Ticket(ctx, 11)
+				require.NoError(t, err)
+				require.Equal(t, "new-current-ticket", current.Ticket)
+				require.EqualValues(t, 3, current.State, "旧观察不能释放后来票据")
+			}
+		})
+	}
 }
 
 func TestTerminalTiDBOfflineRecipientDoesNotBlockLaterAndAppliedOnly(t *testing.T) {

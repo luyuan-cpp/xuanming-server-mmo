@@ -11,7 +11,7 @@ import (
 // 与 deliveryOutcomes 逐项同序比对:两边不一致时 L3 表的列静默变成 n/a,只有这里能先红
 // (同 go/db 的 TestTaskResultNotifyNamesMatchStressSummarize)。
 func TestDeliveryOutcomesMatchStressSummarize(t *testing.T) {
-	path := filepath.Join("..", "..", "..", "tools", "scripts", "stress_summarize.ps1")
+	path := filepath.Join("..", "..", "..", "..", "tools", "scripts", "stress_summarize.ps1")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)

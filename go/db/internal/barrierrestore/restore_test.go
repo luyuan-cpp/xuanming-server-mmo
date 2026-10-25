@@ -108,12 +108,15 @@ func (tx *promotionTx) Rollback() error {
 	return tx.Tx.Rollback()
 }
 func (c *promotionConn) QueryContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
-	if strings.Contains(q, "debug_import_local_target") {
-		want := fmt.Sprint(args[0].Value)
-		if want != "local-debug-import-target" && want != "old-scene-recovery:"+c.state.localTarget {
-			return &storeRows{columns: []string{"marker"}}, nil
+	if strings.Contains(q, "maintenance_recovery_target") {
+		if len(args) != 3 || fmt.Sprint(args[0].Value) != "promotion" || fmt.Sprint(args[1].Value) != "17" || !strings.Contains(q, "FOR UPDATE") {
+			return nil, errors.New("目标核验必须原purpose/zone/schema行锁")
 		}
-		return &storeRows{columns: []string{"marker"}, values: []driver.Value{[]byte(want)}}, nil
+		schema := string(args[2].Value.([]byte))
+		if schema != "player_store_1000000_db" && schema != "global_routes" {
+			return nil, errors.New("未审定schema")
+		}
+		return &storeRows{columns: []string{"target_nonce", "physical_addr"}, values: []driver.Value{[]byte(c.state.localTarget), []byte("tidb.maintenance.example:4000")}}, nil
 	}
 	if !strings.Contains(q, "save_barrier_maintenance_receipt") {
 		return c.routeConn.QueryContext(ctx, q, args)
@@ -200,14 +203,62 @@ func (h noSQLNetworkHook) ProcessPipelineHook(next redis.ProcessPipelineHook) re
 	}
 }
 
+func provisionMaintenanceRedisTest(t *testing.T, r Restorer, purpose, schema string) {
+	t.Helper()
+	for i, c := range []*redis.Client{r.Redis, r.mapping()} {
+		role := []string{"core", "mapping"}[i]
+		nonce := r.RedisTargetID
+		if i == 1 {
+			nonce = r.MappingTargetID
+		}
+		if c.Options().Addr == r.Redis.Options().Addr && c.Options().DB == r.Redis.Options().DB {
+			nonce = r.RedisTargetID
+		}
+		key, scope, err := MaintenanceRedisScope(purpose, role, 17, r.RouteSchema, schema, c.Options().Addr, c.Options().DB)
+		require.NoError(t, err)
+		require.NoError(t, c.Set(context.Background(), key, scope, 0).Err())
+		require.NoError(t, c.Set(context.Background(), key+":nonce", nonce, 0).Err())
+	}
+}
+func promotionTestMarkerKey(r Restorer) string {
+	key, _, _ := MaintenanceRedisScope("promotion", "core", 17, r.RouteSchema, "player_store_1000000_db", r.Redis.Options().Addr, r.Redis.Options().DB)
+	return key + ":nonce"
+}
+func TestMaintenanceTargetUsesIndependentPermanentScope(t *testing.T) {
+	ctx := context.Background()
+	cache := miniredis.RunT(t)
+	c := redis.NewClient(&redis.Options{Addr: cache.Addr(), MaxRetries: -1})
+	defer c.Close()
+	require.NoError(t, c.Set(ctx, "debug_import:local_target", "local-debug-import-target", 0).Err())
+	require.NoError(t, c.Set(ctx, "debug_import:local_instance_id", strings.Repeat("a", 32), 0).Err())
+	_, err := ReadMaintenanceRedisMarker(ctx, c, "release", "core", 17, "global_routes", "global_routes")
+	require.Error(t, err, "旧调试标记不能授权正式维护")
+	key, scope, err := MaintenanceRedisScope("release", "core", 17, "global_routes", "global_routes", c.Options().Addr, 0)
+	require.NoError(t, err)
+	require.NoError(t, c.Set(ctx, key, scope, 0).Err())
+	require.NoError(t, c.Set(ctx, key+":nonce", strings.Repeat("b", 32), 0).Err())
+	marker, err := ReadMaintenanceRedisMarker(ctx, c, "release", "core", 17, "global_routes", "global_routes")
+	require.NoError(t, err)
+	require.Equal(t, strings.Repeat("b", 32), marker.Nonce)
+	_, err = ReadMaintenanceRedisMarker(ctx, c, "release", "mapping", 17, "global_routes", "global_routes")
+	require.Error(t, err)
+	require.NoError(t, c.Expire(ctx, key+":nonce", time.Minute).Err())
+	_, err = ReadMaintenanceRedisMarker(ctx, c, "release", "core", 17, "global_routes", "global_routes")
+	require.Error(t, err)
+	_, remote, err := MaintenanceRedisScope("release", "core", 17, "global_routes", "global_routes", "redis.maintenance.example:6379", 0)
+	require.NoError(t, err)
+	require.Contains(t, remote, "redis.maintenance.example:6379")
+	require.Equal(t, "local-debug-import-target", c.Get(ctx, "debug_import:local_target").Val(), "正式维护不创建或覆盖debug授权")
+}
 func promotionFixture(t *testing.T) (Restorer, *testStore, *miniredis.Miniredis, *promotionState) {
 	t.Helper()
 	r, s, cache, _, route := splitFixture(t, true)
 	state := &promotionState{localTarget: strings.Repeat("f", 32)}
 	r.LocalTargetID = state.localTarget
+	r.MaintenanceSQLAddr = "tidb.maintenance.example:4000"
 	r.RedisTargetID = strings.Repeat("e", 32)
-	require.NoError(t, r.Redis.Set(context.Background(), "debug_import:local_target", "local-debug-import-target", 0).Err())
-	require.NoError(t, r.Redis.Set(context.Background(), "debug_import:local_instance_id", r.RedisTargetID, 0).Err())
+	r.MappingTargetID = strings.Repeat("d", 32)
+	provisionMaintenanceRedisTest(t, r, "promotion", "player_store_1000000_db")
 	name := fmt.Sprintf("promotion-%d", driverID.Add(1))
 	sql.Register(name, promotionDriver{assets: s, route: route, state: state})
 	db, err := sql.Open(name, "")
@@ -283,6 +334,86 @@ func TestPromotionStableRevocationAndUnknownCommitResume(t *testing.T) {
 	}
 }
 
+// 模拟SQL收据已提交而Redis回退到原AOF前缀；重入必须重新撤销同一计划，不能只信SQL阶段。
+func TestPromotionResumeRechecksRevocationAfterRedisRollback(t *testing.T) {
+	for _, phase := range []databasepb.SaveBarrierMaintenanceReceipt_Phase{databasepb.SaveBarrierMaintenanceReceipt_WRITERS_REVOKED, databasepb.SaveBarrierMaintenanceReceipt_SQL_PROMOTED} {
+		for _, damaged := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/outbox=%t", phase, damaged), func(t *testing.T) {
+				ctx := context.Background()
+				r, store, _, state := promotionFixture(t)
+				p, err := r.PreparePromotion(ctx, "player_store_1000000_db", 17, "维护工单", "7", bytes.Repeat([]byte{7}, 32))
+				require.NoError(t, err)
+				originalOwner, err := r.Redis.Get(ctx, "player:{7}:owner_epoch").Result()
+				require.NoError(t, err)
+				originalBarrier, err := r.Redis.HGetAll(ctx, savebarrier.Key(7)).Result()
+				require.NoError(t, err)
+				for _, key := range recoveryKeys(p.HomeZone, p.PlayerId)[2:6] {
+					kind, err := r.Redis.Type(ctx, key).Result()
+					require.NoError(t, err)
+					require.Equal(t, "none", kind, "本例原缓存为空；只回退真实owner/资格/ACK前缀")
+				}
+				business := [2][][]byte{}
+				for n := range store.rows {
+					for _, value := range store.rows[n] {
+						business[n] = append(business[n], bytes.Clone(value.([]byte)))
+					}
+				}
+				state.loseReplyAt = phase
+				_, err = r.ApplyPromotion(ctx, p)
+				require.ErrorContains(t, err, "结局未知")
+				require.Equal(t, phase, state.receipt.Phase)
+				originalReceiptID := bytes.Clone(state.receipt.ReceiptId)
+				originalPlan := bytes.Clone(state.receipt.PlanProto)
+				// 仅测试故障注入回退Redis原前缀；SQL与marker均不回退，不清待投伪造完成。
+				require.NoError(t, r.Redis.Set(ctx, "player:{7}:owner_epoch", originalOwner, 0).Err())
+				require.NoError(t, r.Redis.Del(ctx, savebarrier.Key(7)).Err())
+				require.NoError(t, r.Redis.HSet(ctx, savebarrier.Key(7), originalBarrier).Err())
+				if damaged {
+					require.NoError(t, r.Redis.HSet(ctx, savebarrier.Key(7), "outbox_payload", "must-not-clear").Err())
+				}
+				receipt, err := r.ApplyPromotion(ctx, p)
+				if damaged {
+					require.Error(t, err)
+					require.Equal(t, phase, state.receipt.Phase)
+					owner, readErr := r.Redis.Get(ctx, "player:{7}:owner_epoch").Result()
+					require.NoError(t, readErr)
+					require.Equal(t, originalOwner, owner)
+					fence, readErr := r.Redis.HGet(ctx, savebarrier.Key(7), "handoff_fence").Result()
+					require.NoError(t, readErr)
+					require.Equal(t, p.OriginalFence, fence)
+					outbox, readErr := r.Redis.HGet(ctx, savebarrier.Key(7), "outbox_payload").Result()
+					require.NoError(t, readErr)
+					require.Equal(t, "must-not-clear", outbox)
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, databasepb.SaveBarrierMaintenanceReceipt_BARRIER_CONFIRMED, receipt.Phase)
+					require.Equal(t, originalReceiptID, receipt.ReceiptId)
+					require.Equal(t, originalPlan, receipt.PlanProto)
+					fence, readErr := r.Redis.HGet(ctx, savebarrier.Key(7), "handoff_fence").Result()
+					require.NoError(t, readErr)
+					require.Equal(t, p.RevokedFence, fence)
+					ttl, readErr := r.Redis.PTTL(ctx, savebarrier.Key(7)).Result()
+					require.NoError(t, readErr)
+					require.Equal(t, time.Duration(-1), ttl)
+					owner, readErr := r.Redis.Get(ctx, "player:{7}:owner_epoch").Result()
+					require.NoError(t, readErr)
+					require.Equal(t, strconv.FormatUint(p.TargetOwner, 10), owner)
+					repeated, readErr := r.ApplyPromotion(ctx, p)
+					require.NoError(t, readErr)
+					require.True(t, proto.Equal(receipt, repeated))
+				}
+				for n := range store.rows {
+					for i, column := range store.columns {
+						if column != "fence_owner_epoch" && column != "fence_save_seq" {
+							require.Equal(t, business[n][i], store.rows[n][i], column)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestPromotionRejectsUndrainedOrDamagedStateWithoutMutation(t *testing.T) {
 	for _, kind := range []string{"outbox", "pending-ahead", "owner-overflow", "cache-unproven", "wrongtype", "target-mismatch", "redis-target-mismatch", "redis-marker-missing", "redis-marker-expiring"} {
 		t.Run(kind, func(t *testing.T) {
@@ -303,9 +434,9 @@ func TestPromotionRejectsUndrainedOrDamagedStateWithoutMutation(t *testing.T) {
 			case "redis-target-mismatch":
 				r.RedisTargetID = strings.Repeat("d", 32)
 			case "redis-marker-missing":
-				require.NoError(t, r.Redis.Del(context.Background(), "debug_import:local_instance_id").Err())
+				require.NoError(t, r.Redis.Del(context.Background(), promotionTestMarkerKey(r)).Err())
 			case "redis-marker-expiring":
-				require.NoError(t, r.Redis.Expire(context.Background(), "debug_import:local_instance_id", time.Minute).Err())
+				require.NoError(t, r.Redis.Expire(context.Background(), promotionTestMarkerKey(r), time.Minute).Err())
 			}
 			before := cache.Dump()
 			_, err := r.PreparePromotion(context.Background(), "player_store_1000000_db", 17, "维护工单", "7", bytes.Repeat([]byte{1}, 32))
@@ -767,8 +898,8 @@ func (c *releaseReadConn) Begin() (driver.Tx, error) {
 	return nil, errors.New("必须显式只读一致事务")
 }
 func (c *releaseReadConn) BeginTx(_ context.Context, o driver.TxOptions) (driver.Tx, error) {
-	if !o.ReadOnly || o.Isolation != driver.IsolationLevel(sql.LevelRepeatableRead) {
-		return nil, errors.New("解除SQL必须一致只读")
+	if o.ReadOnly || o.Isolation != driver.IsolationLevel(sql.LevelRepeatableRead) {
+		return nil, errors.New("解除SQL必须RR并允许锁专用目标行；最终只Rollback")
 	}
 	c.active.Add(1)
 	return &releaseReadTx{active: c.active}, nil
@@ -781,9 +912,21 @@ func (t *releaseReadTx) Rollback() error {
 	}
 	return nil
 }
-func (c *releaseReadConn) QueryContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Rows, error) {
-	if c.active.Load() != 1 || !strings.HasPrefix(q, "SELECT ") || strings.Contains(q, "FOR UPDATE") {
+func (c *releaseReadConn) QueryContext(_ context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
+	if c.active.Load() != 1 || !strings.HasPrefix(q, "SELECT ") || strings.Contains(q, "FOR UPDATE") && !strings.Contains(q, "maintenance_recovery_target") {
 		return nil, errors.New("fixture只允许事务内一致只读")
+	}
+	if strings.Contains(q, "maintenance_recovery_target") {
+		if len(args) != 3 || fmt.Sprint(args[0].Value) != "release" || fmt.Sprint(args[1].Value) != "17" || !strings.Contains(q, "FOR UPDATE") {
+			return nil, errors.New("维护目标原purpose/zone/schema锁缺失")
+		}
+		records := c.records["maintenance_recovery_target"]
+		if strings.HasPrefix(q, "SELECT target_nonce,physical_addr") {
+			if len(records) != 1 {
+				return &releaseReadRows{columns: []string{"target_nonce", "physical_addr"}}, nil
+			}
+			return &releaseReadRows{columns: []string{"target_nonce", "physical_addr"}, records: []releaseSQLRecord{releaseTestRow("target_nonce", records[0].value("target_nonce"), "physical_addr", records[0].value("physical_addr"))}}, nil
+		}
 	}
 	table := ""
 	for name := range c.records {
@@ -865,7 +1008,7 @@ func releaseTestCancel(t *testing.T, source *databasepb.SaveBarrierMaintenanceRe
 	unsigned, err := proto.Marshal(&dspb.CancelAccountRoleTradeRequest{ListingId: 11, PlayerId: 7, SellerAccount: begin.SellerAccount, ExpectedOwnerRevision: 1})
 	require.NoError(t, err)
 	sum := sha256.Sum256(unsigned)
-	action := releaseTestFile(t, "cancel-action.json", map[string]any{"schema": "owned-old-scene-formal-trade-action-v1", "action": "cancel", "unsigned_request_proto": unsigned, "unsigned_request_sha256": hex.EncodeToString(sum[:]), "original_begin_receipt": writeProto("begin.json", begin), "reply": writeProto("reply.json", reply), "post_state": releaseTestFile(t, "state.json", map[string]any{"synthetic_unit_fixture": true}), "original_observation": releaseTestFile(t, "original.json", map[string]any{"synthetic_unit_fixture": true})})
+	action := releaseTestFile(t, "cancel-action.json", map[string]any{"schema": "maintenance-release-trade-cancel-v1", "action": "cancel", "unsigned_request_proto": unsigned, "unsigned_request_sha256": hex.EncodeToString(sum[:]), "original_begin_receipt": writeProto("begin.json", begin), "reply": writeProto("reply.json", reply), "post_state": releaseTestFile(t, "state.json", map[string]any{"synthetic_unit_fixture": true}), "original_observation": releaseTestFile(t, "original.json", map[string]any{"synthetic_unit_fixture": true})})
 	_, digest, err := PromotionDigest(source)
 	require.NoError(t, err)
 	request := &databasepb.AccountRoleAdmissionRecovery_Request{RequestId: bytes.Repeat([]byte{3}, 32), SellerAccount: begin.SellerAccount, Seal: seal, Admission: &base.RoleAdmissionIdentity{PlayerId: 7, SceneInstanceId: seal.SceneInstanceId, Generation: 12, OwnerRevision: 1, OwnerEpoch: 8, SceneNodeId: "9", SceneId: 19, ZoneId: 17, SessionId: 1, LoginGeneration: 1}, AdmissionRequestDigest: bytes.Repeat([]byte{4}, 32), ExpectedClosedThrough: 0, ExpectedRequiredOwnerEpoch: 8, ExpectedRequiredSaveSeq: 90, MaintenanceReceiptId: source.ReceiptId, MaintenanceRequestDigest: digest}
@@ -893,6 +1036,7 @@ func releaseTestFixture(t *testing.T, same bool) (Restorer, MaintenanceReleasePl
 		t.Cleanup(func() { core.Close() })
 		core.AddHook(noSQLNetworkHook{t, state})
 		r.Redis = core
+		provisionMaintenanceRedisTest(t, r, "promotion", "player_store_1000000_db")
 	}
 	source, err := r.PreparePromotion(ctx, "player_store_1000000_db", 17, "维护工单", "7", bytes.Repeat([]byte{7}, 32))
 	require.NoError(t, err)
@@ -907,10 +1051,7 @@ func releaseTestFixture(t *testing.T, same bool) (Restorer, MaintenanceReleasePl
 		r.MappingRedis = redis.NewClient(&redis.Options{Addr: mappingCache.Addr(), DB: 0, MaxRetries: -1})
 		t.Cleanup(func() { r.MappingRedis.Close() })
 	}
-	for _, c := range []*redis.Client{r.Redis, r.mapping()} {
-		require.NoError(t, c.Set(ctx, "debug_import:local_target", "local-debug-import-target", 0).Err())
-		require.NoError(t, c.Set(ctx, "debug_import:local_instance_id", strings.Repeat("e", 32), 0).Err())
-	}
+	provisionMaintenanceRedisTest(t, r, "release", r.RouteSchema)
 	target := promotionRouteTargetForReleaseTest(r, source)
 	require.NoError(t, r.Guard(ctx, target))
 	source.MappingAddr = r.mapping().Options().Addr
@@ -929,7 +1070,7 @@ func releaseTestFixture(t *testing.T, same bool) (Restorer, MaintenanceReleasePl
 	require.NoError(t, err)
 	member := MaintenanceReleaseMember{PlayerID: 7, RowSchema: source.RowSchema, PromotionProto: raw, RecoveryProtos: [][]byte{recoveryRaw}, CancelAction: cancel, FirstBusinessSHA256: hex.EncodeToString(source.FirstBusinessSha256), SecondBusinessSHA256: hex.EncodeToString(source.SecondBusinessSha256), Owner: source.TargetOwner, SaveSeq: source.TargetSaveSeq, Fence: source.RevokedFence}
 	records := map[string][]releaseSQLRecord{}
-	records["debug_import_local_target"] = []releaseSQLRecord{releaseTestRow("marker", "local-debug-import-target"), releaseTestRow("marker", "old-scene-recovery:"+r.LocalTargetID)}
+	records["maintenance_recovery_target"] = []releaseSQLRecord{releaseTestRow("purpose", "release", "zone_id", 17, "schema_name", r.RouteSchema, "target_nonce", r.LocalTargetID, "physical_addr", r.MaintenanceSQLAddr)}
 	records["route_meta"] = []releaseSQLRecord{releaseTestRow("id", 1, "generation", source.RouteGeneration, "writable", 0)}
 	records["route_reconcile"] = []releaseSQLRecord{releaseTestRow("id", 1, "watermark_ms", source.RouteWatermark, "cache_verified_ms", 1000)}
 	records["zone_merged_into"] = []releaseSQLRecord{}
@@ -969,7 +1110,7 @@ func releaseTestFixture(t *testing.T, same bool) (Restorer, MaintenanceReleasePl
 	for _, target := range targets {
 		expected = append(expected, maintenanceReleaseReviewedRedisTarget{Role: target.Role, Addr: target.Addr, DB: target.DB, InstanceNonce: target.InstanceNonce, Zones: []uint32{17}})
 	}
-	permit := &MaintenanceReleasePermit{review: review, members: input, deadline: time.Now().Add(50 * time.Second), expiresMS: time.Now().Add(50 * time.Second).UnixMilli(), redisTargets: expected}
+	permit := &MaintenanceReleasePermit{review: review, members: input, targetID: r.LocalTargetID, sqlAddr: r.MaintenanceSQLAddr, routeSchema: r.RouteSchema, deadline: time.Now().Add(50 * time.Second), expiresMS: time.Now().Add(50 * time.Second).UnixMilli(), redisTargets: expected}
 	plan, err := r.PrepareMaintenanceRelease(ctx, 17, source.MaintenanceId, input.Members, permit)
 	require.NoError(t, err)
 	return r, plan, permit, records, cache, mappingCache
@@ -1033,7 +1174,7 @@ func TestMaintenanceReleasePublicApplyCommittedPrefixAndLostReply(t *testing.T) 
 	}
 }
 func TestMaintenanceReleaseRejectsDamagedTargetsWithoutPartialWrite(t *testing.T) {
-	for _, kind := range []string{"nil-core", "nonce-ttl", "guard-ttl", "receipt-wrongtype", "receipt-plus-guard", "missing-one-guard", "pending-ahead", "outbox", "sql-unfrozen", "SQL-business-changed", "zone-member-added", "new-maintenance", "expired-window", "changed-plan", "route-generation", "route-watermark", "route-revision", "placement-version", "placement-NULL-pair", "duplicate-recovery"} {
+	for _, kind := range []string{"nil-core", "nonce-ttl", "guard-ttl", "receipt-wrongtype", "receipt-plus-guard", "missing-one-guard", "pending-ahead", "outbox", "sql-unfrozen", "SQL-business-changed", "zone-member-added", "new-maintenance", "expired-window", "changed-plan", "route-generation", "route-watermark", "route-revision", "placement-version", "placement-NULL-pair", "duplicate-recovery", "missing-mapping-marker", "wrong-marker-scope", "wrong-physical-SQL", "SQL-marker-nonce"} {
 		t.Run(kind, func(t *testing.T) {
 			r, p, permit, records, _, _ := releaseTestFixture(t, true)
 			ctx := context.Background()
@@ -1046,7 +1187,15 @@ func TestMaintenanceReleaseRejectsDamagedTargetsWithoutPartialWrite(t *testing.T
 			case "nil-core":
 				r.Redis = nil
 			case "nonce-ttl":
-				require.NoError(t, r.Redis.Expire(ctx, "debug_import:local_instance_id", time.Minute).Err())
+				require.NoError(t, r.Redis.Expire(ctx, p.Targets[0].Markers[0].Key+":nonce", time.Minute).Err())
+			case "missing-mapping-marker":
+				require.NoError(t, r.Redis.Del(ctx, p.Targets[0].Markers[1].Key).Err())
+			case "wrong-marker-scope":
+				require.NoError(t, r.Redis.Set(ctx, p.Targets[0].Markers[0].Key, "other-scope", 0).Err())
+			case "wrong-physical-SQL":
+				r.MaintenanceSQLAddr = "other.maintenance.example:4000"
+			case "SQL-marker-nonce":
+				records["maintenance_recovery_target"][0].Cells[3].Bytes = []byte(strings.Repeat("a", 32))
 			case "guard-ttl":
 				require.NoError(t, r.Redis.Expire(ctx, MaintenanceKey(p.Zone), time.Minute).Err())
 			case "receipt-wrongtype":
@@ -1116,91 +1265,119 @@ func TestMaintenanceReleaseOriginalReaderRejectsFabricatedPassed(t *testing.T) {
 }
 
 func TestMaintenanceReleasePermitBindsFreshCompleteAudits(t *testing.T) {
-	for _, kind := range []string{"complete", "missing-target", "missing-partition", "stale-attempt", "failed-build", "source-diff"} {
+	for _, kind := range []string{"complete", "missing-target", "missing-partition", "stale-attempt", "failed-build", "source-diff", "issuer-omitted", "issuer-same-count-swap", "missing-raw-evidence", "revival-window-short", "wrong-target", "wrong-route", "pending-bucket-missing", "barrier-unconverged", "outbox", "same-count-key-swap"} {
 		t.Run(kind, func(t *testing.T) {
-			// 所有文件都是本例临时、显式synthetic原件；不是实际native/数据库验收结果。
+			// 本例全部为显式synthetic运维原件；不冒真实停止、SQL或Redis验收。
 			_, plan, _, _, _, _ := releaseTestFixture(t, true)
-			now := time.Now()
-			issued := now.Add(-3 * time.Second).UnixMilli()
-			expires := now.Add(30 * time.Second).UnixMilli()
-			run := "synthetic-release-permit-fixture"
-			exePath := filepath.Join(t.TempDir(), "synthetic-only.exe")
-			require.NoError(t, os.WriteFile(exePath, []byte("unit-only-not-a-real-PE"), 0600))
-			sum := sha256.Sum256([]byte("unit-only-not-a-real-PE"))
-			exe := ReleaseFile{Path: exePath, SHA256: hex.EncodeToString(sum[:])}
-			source := releaseTestFile(t, "synthetic-source.go", map[string]string{"unit": "not-executed"})
-			birth := uint64(116444736000000000) + uint64(issued+100)*10000
-			native := func(args []string) map[string]any {
-				return map[string]any{"program": exe.Path, "arguments": args, "native_started": true, "native_exit": 0, "timed_out": false, "first_error": nil, "cleanup_errors": []any{}, "output_errors": []any{}, "evidence_errors": []any{}, "process_creation_filetime_utc": strconv.FormatUint(birth, 10), "ended_utc": time.UnixMilli(issued + 200).UTC().Format(time.RFC3339Nano)}
+			issued := time.Now().Add(-3 * time.Second).UnixMilli()
+			expires := issued + 40000
+			run := "synthetic-release-operation"
+			evidence := releaseTestFile(t, "raw-observation.json", map[string]any{"synthetic": "raw-operation-observation"})
+			issuer := maintenanceReleaseIssuer{ID: "sm/1", Role: "scene-manager", Instance: "original-instance"}
+			inv := releaseTestFile(t, "issuers.json", maintenanceReleaseIssuerInventory{Format: "maintenance-release-issuer-inventory-v1", RunID: run, TargetID: plan.LocalTarget, Zone: plan.Zone, RouteSchema: plan.RouteSchema, Issuers: []maintenanceReleaseIssuer{issuer}})
+			rawEvidence := []ReleaseFile{evidence}
+			if kind == "missing-raw-evidence" {
+				rawEvidence = nil
 			}
-			manifests := []ReleaseFile{}
-			for _, name := range []string{"before-source-diff.json", "after-source-diff.json", "final-source-diff.json", "before-dependency-diff.json", "after-dependency-diff.json"} {
-				var rows []string = []string{}
-				if kind == "source-diff" && name == "final-source-diff.json" {
-					rows = []string{"changed"}
-				}
-				manifests = append(manifests, releaseTestFile(t, name, rows))
+			retirementIssuer := issuer
+			if kind == "issuer-same-count-swap" {
+				retirementIssuer.Instance = "other-original"
 			}
-			buildNative := native([]string{"build", "-p=1", "-o", exe.Path, source.Path})
-			build := releaseTestFile(t, "build.json", map[string]any{"schema": "current-go-module-v4-proof", "kind": "RuntimeBuild", "passed": kind != "failed-build", "first_error": nil, "audit_errors": []any{}, "native_results": []any{buildNative}, "runtime_executable": map[string]any{"file": exe, "source_main_files": source}, "manifest_pins": manifests})
-			inventory := releaseTestFile(t, "inventory.json", map[string]any{"schema": "owned-recovery-kafka-reviewed-inventory-v1", "topics": []any{map[string]any{"name": "db-fixture", "partitions": 1}}, "subscriptions": []any{map[string]any{"group": "db-group", "topic": "db-fixture"}}, "internal_topics": []string{}})
-			stop := releaseTestFile(t, "stop.json", map[string]any{"schema": "owned-recovery-prefault-issuers-and-boundaries-stopped-v1", "synthetic": true})
-			cutoff := releaseTestFile(t, "cutoff.json", map[string]any{"schema": "owned-recovery-sm-client-cutoff-v1", "run_id": run, "issuer_stops": stop, "exact_id_actions": []any{map[string]any{"redis_client_id": "7", "kill_count": 1}}, "passed": false})
-			target := maintenanceReleaseReviewedRedisTarget{Role: "core", Addr: plan.Targets[0].Addr, DB: plan.Targets[0].DB, InstanceNonce: plan.Targets[0].InstanceNonce, Zones: []uint32{plan.Zone}}
+			retired := releaseTestFile(t, "retired.json", maintenanceReleaseRetirement{Format: "maintenance-release-issuer-retirement-v1", RunID: run, Issuer: retirementIssuer, PublicationClosedMS: issued - 200, StoppedMS: issued - 100, RevivalFenceID: "operator-maintenance-fence", Evidence: rawEvidence})
+			retirements := []ReleaseFile{retired}
+			if kind == "issuer-omitted" {
+				retirements = nil
+			}
+			cutoff := releaseTestFile(t, "cutoff.json", map[string]any{"schema": "maintenance-release-issuer-retirements-v1", "operation_id": run, "issuer_inventory": inv, "retirements": retirements})
+			inventory := releaseTestFile(t, "kafka-inventory.json", map[string]any{"schema": "maintenance-release-kafka-inventory-v1", "topics": []any{map[string]any{"name": "db-fixture", "partitions": 1}}, "subscriptions": []any{map[string]any{"group": "db-group", "topic": "db-fixture"}}, "internal_topics": []string{}})
+			target := maintenanceReleaseReviewedRedisTarget{Role: plan.Targets[0].Role, Addr: plan.Targets[0].Addr, DB: plan.Targets[0].DB, InstanceNonce: plan.Targets[0].InstanceNonce, Zones: []uint32{plan.Zone}}
 			epoch := strings.Repeat("a", 40)
-			definition := releaseTestFile(t, "redis-definition.json", map[string]any{"schema": "owned-recovery-redis-reviewed-inventory-v1", "targets": []any{map[string]any{"role": target.Role, "addr": target.Addr, "db": target.DB, "zones": target.Zones, "expected_run_id": epoch}}, "topics": []any{map[string]any{"name": "db-fixture", "partitions": 1}}})
+			definition := releaseTestFile(t, "redis-definition.json", map[string]any{"schema": "maintenance-release-redis-inventory-v1", "targets": []any{map[string]any{"role": target.Role, "addr": target.Addr, "db": target.DB, "zones": target.Zones, "expected_run_id": epoch}}, "topics": []any{map[string]any{"name": "db-fixture", "partitions": 1}}})
 			obs := []maintenanceReleaseRedisKeyObservation{}
+			names := []string{}
 			empty := sha256.Sum256(nil)
-			add := func(key, kind string) {
+			add := func(key, kind, topic string) {
 				h := sha256.Sum256([]byte(key))
-				obs = append(obs, maintenanceReleaseRedisKeyObservation{KeySHA: hex.EncodeToString(h[:]), Kind: kind, Type: "none", DumpSHA: hex.EncodeToString(empty[:]), PTTL: -2, Count: 0})
+				names = append(names, key)
+				obs = append(obs, maintenanceReleaseRedisKeyObservation{Key: key, KeySHA: hex.EncodeToString(h[:]), Kind: kind, Topic: topic, Type: "none", DumpSHA: hex.EncodeToString(empty[:]), PTTL: -2, Count: 0})
 			}
 			for b := 0; b < 64; b++ {
-				add(fmt.Sprintf("player:save_pending:%d:%d", plan.Zone, b), "pending")
+				if kind == "pending-bucket-missing" && b == 63 {
+					continue
+				}
+				add(fmt.Sprintf("player:save_pending:%d:%d", plan.Zone, b), "pending", "")
 			}
-			for _, pair := range []struct{ prefix, kind string }{{"kafka:retry:queue:", "retry"}, {"kafka:dead:queue:", "dead"}, {"kafka:retry:processing:", "processing"}, {"kafka:retry:instances:", "instances"}, {"kafka:retry:instance_mode:", "modes"}} {
-				add(pair.prefix+"db-fixture", pair.kind)
+			for _, p := range []struct{ prefix, kind string }{{"kafka:retry:queue:", "retry"}, {"kafka:dead:queue:", "dead"}, {"kafka:retry:processing:", "processing"}, {"kafka:retry:instances:", "instances"}, {"kafka:retry:instance_mode:", "modes"}} {
+				add(p.prefix+"db-fixture", p.kind, "db-fixture")
 			}
-			add("kafka:retry:queue:db-fixture:p0", "retry")
+			add("kafka:retry:queue:db-fixture:p0", "retry", "db-fixture")
+			if kind == "barrier-unconverged" || kind == "outbox" {
+				add(savebarrier.Key(7), "barrier", "")
+				i := len(obs) - 1
+				obs[i].Type = "hash"
+				obs[i].PTTL = -1
+				obs[i].Count = 3
+				obs[i].Members = []string{"pending", "player_database", "player_database_1"}
+				v := savebarrier.Version(22, 1)
+				obs[i].Values = []string{v, v, v}
+				if kind == "barrier-unconverged" {
+					obs[i].Values[0] = savebarrier.Version(23, 1)
+				} else {
+					obs[i].Count = 4
+					obs[i].Members = append(obs[i].Members, "outbox_payload")
+					obs[i].Values = append(obs[i].Values, "still-pending")
+				}
+			}
+			if kind == "same-count-key-swap" {
+				obs[0].Key = "player:save_pending:999:0"
+				h := sha256.Sum256([]byte(obs[0].Key))
+				obs[0].KeySHA = hex.EncodeToString(h[:])
+				names[0] = obs[0].Key
+			}
 			stable := append([]maintenanceReleaseRedisKeyObservation{}, obs...)
 			for i := range stable {
 				stable[i].PTTL = 0
 			}
 			raw, _ := json.Marshal(stable)
 			digest := sha256.Sum256(raw)
-			targetRows := []any{map[string]any{"role": target.Role, "addr": target.Addr, "db": target.DB, "run_id": epoch, "key_count": len(obs), "pending_buckets": 64, "blockers": []string{}, "observations": obs, "observations_sha256": hex.EncodeToString(digest[:])}}
+			targets := []any{map[string]any{"role": target.Role, "addr": target.Addr, "db": target.DB, "run_id": epoch, "key_count": len(obs), "key_names": names, "pending_buckets": 64, "blockers": []string{}, "observations": obs, "observations_sha256": hex.EncodeToString(digest[:])}}
 			if kind == "missing-target" {
-				targetRows = []any{}
+				targets = nil
 			}
-			queues := releaseTestFile(t, "redis-queues.json", map[string]any{"schema": "owned-recovery-redis-complete-queue-drain-v1", "definition": definition, "targets": targetRows, "passed": false})
-			partitions := []any{map[string]any{"group": "db-group", "topic": "db-fixture", "partition": 0, "earliest": 0, "committed": 2, "end": 2, "lag": 0}}
-			if kind == "missing-partition" {
-				partitions = []any{}
-			}
-			kafka := releaseTestFile(t, "kafka.json", map[string]any{"schema": "owned-recovery-kafka-all-reviewed-generations-drain-proof-v1", "inventory": inventory, "topic_names": []string{"db-fixture"}, "group_names": []string{"db-group"}, "partition_rows": partitions, "passed": false})
-			makeFact := func(role string, pin ReleaseFile, mode string) maintenanceReleaseFact {
-				args := []string{"-mode", mode, "-out", pin.Path}
-				if mode == "cancel" {
-					args = []string{"-mode", "cancel", "-out-dir", filepath.Dir(pin.Path)}
-				}
-				return maintenanceReleaseFact{Role: role, Actual: pin, NativeRecords: []ReleaseFile{releaseTestFile(t, roleReplace(role)+"-native.json", native(args))}}
-			}
-			cancelRole := "trade-cancel/7"
-			stableFacts := []maintenanceReleaseFact{makeFact("issuer-cutoff", cutoff, "cutoff"), makeFact(cancelRole, plan.Members[0].CancelAction, "cancel")}
-			producers := []maintenanceReleaseProducer{{Role: "issuer-cutoff", Schema: "owned-recovery-sm-client-cutoff-v1", Kind: "go-specific", Source: source, Executable: exe, BuildProof: build}, {Role: "redis-queues", Schema: "owned-recovery-redis-complete-queue-drain-v1", Kind: "go-specific", Source: source, Executable: exe, BuildProof: build}, {Role: "kafka-queues", Schema: "owned-recovery-kafka-all-reviewed-generations-drain-proof-v1", Kind: "coordinator-kafka-readonly", Source: source, Executable: exe}, {Role: cancelRole, Schema: "owned-old-scene-formal-trade-action-v1", Kind: "go-specific", Source: source, Executable: exe, BuildProof: build}}
-			input := MaintenanceReleaseInput{Format: "maintenance-release-member-input-v1", Zone: plan.Zone, MaintenanceID: plan.MaintenanceID, Members: plan.Members}
-			inputPin := releaseTestFile(t, "members.json", input)
-			review := releaseTestFile(t, "review.json", maintenanceReleaseReview{Format: "maintenance-release-reviewed-producers-v1", RunID: run, MembersInput: inputPin, Producers: producers, StableFacts: stableFacts, KafkaInventory: inventory, RedisTargets: []maintenanceReleaseReviewedRedisTarget{target}})
-			exitNative := native([]string{})
-			exitRecord := releaseTestFile(t, "original-exit.json", map[string]any{"schema": "owned-recovery-original-process-exit-v1", "pid": 9, "creation_filetime": strconv.FormatUint(birth, 10), "exit_filetime": strconv.FormatUint(birth+10000, 10), "image": exe.Path, "native_record": exitNative})
-			window := releaseTestFile(t, "window.json", maintenanceReleaseWindow{Format: "owned-recovery-explicit-release-window-v1", RunID: run, Review: review, IssuedMS: issued, ExpiresMS: expires, NativeRecords: []ReleaseFile{exitRecord}})
-			facts := []maintenanceReleaseFact{makeFact("redis-queues", queues, "queues"), makeFact("kafka-queues", kafka, "unused-coordinator")}
+			start := issued + 100
 			if kind == "stale-attempt" {
-				stale := native([]string{"-mode", "queues", "-out", queues.Path})
-				stale["process_creation_filetime_utc"] = strconv.FormatUint(birth-6000000000, 10)
-				facts[0].NativeRecords = []ReleaseFile{releaseTestFile(t, "stale-native.json", stale)}
+				start = issued - 100
 			}
-			attempt := releaseTestFile(t, "attempt.json", maintenanceReleaseAttempt{Format: "maintenance-release-fresh-attempt-v1", Review: review, RunID: run, Window: window, Facts: facts})
+			queues := releaseTestFile(t, "redis.json", map[string]any{"schema": "maintenance-release-redis-queues-v1", "operation_id": run, "observed_start_ms": start, "observed_end_ms": issued + 200, "source_evidence": []ReleaseFile{evidence}, "definition": definition, "targets": targets})
+			rows := []any{map[string]any{"group": "db-group", "topic": "db-fixture", "partition": 0, "earliest": 0, "committed": 2, "end": 2, "lag": 0}}
+			if kind == "missing-partition" {
+				rows = nil
+			}
+			kafka := releaseTestFile(t, "kafka.json", map[string]any{"schema": "maintenance-release-kafka-queues-v1", "operation_id": run, "observed_start_ms": issued + 100, "observed_end_ms": issued + 200, "source_evidence": []ReleaseFile{evidence}, "inventory": inventory, "topic_names": []string{"db-fixture"}, "group_names": []string{"db-group"}, "partition_rows": rows})
+			input := releaseTestFile(t, "members.json", MaintenanceReleaseInput{Format: "maintenance-release-member-input-v1", Zone: plan.Zone, MaintenanceID: plan.MaintenanceID, Members: plan.Members})
+			reviewBody := maintenanceReleaseReview{Format: "maintenance-release-operator-review-v1", RunID: run, TargetID: plan.LocalTarget, SQLAddr: plan.SQLAddr, RouteSchema: plan.RouteSchema, MembersInput: input, IssuerInventory: inv, StableFacts: []maintenanceReleaseFact{{Role: "issuer-cutoff", Actual: cutoff}, {Role: "trade-cancel/7", Actual: plan.Members[0].CancelAction}}, KafkaInventory: inventory, RedisTargets: []maintenanceReleaseReviewedRedisTarget{target}}
+			if kind == "wrong-target" {
+				reviewBody.TargetID = strings.Repeat("a", 32)
+			}
+			if kind == "wrong-route" {
+				reviewBody.RouteSchema = "other_routes"
+			}
+			var review ReleaseFile
+			if kind == "failed-build" || kind == "source-diff" {
+				raw, _ := json.Marshal(reviewBody)
+				var v map[string]any
+				require.NoError(t, json.Unmarshal(raw, &v))
+				v["producers"] = []any{map[string]any{"build_proof": evidence, "source": evidence}}
+				review = releaseTestFile(t, "review-private-fields.json", v)
+			} else {
+				review = releaseTestFile(t, "review.json", reviewBody)
+			}
+			until := expires
+			if kind == "revival-window-short" {
+				until--
+			}
+			window := releaseTestFile(t, "window.json", maintenanceReleaseWindow{Format: "maintenance-release-window-v1", RunID: run, Review: review, IssuedMS: issued, ExpiresMS: expires, Issuers: []maintenanceReleaseIssuerWindow{{Issuer: issuer, Retirement: retired, ObservedMS: issued + 100, RevivalBlockedUntilMS: until, RevivalFenceID: "operator-maintenance-fence", Evidence: []ReleaseFile{evidence}}}})
+			attempt := releaseTestFile(t, "attempt.json", maintenanceReleaseAttempt{Format: "maintenance-release-attempt-v1", Review: review, RunID: run, Window: window, Facts: []maintenanceReleaseFact{{Role: "redis-queues", Actual: queues}, {Role: "kafka-queues", Actual: kafka}}})
 			permit, err := ReadMaintenanceReleasePermit(context.Background(), review, attempt, "")
 			if kind == "complete" {
 				require.NoError(t, err)
@@ -1212,4 +1389,5 @@ func TestMaintenanceReleasePermitBindsFreshCompleteAudits(t *testing.T) {
 		})
 	}
 }
+
 func roleReplace(role string) string { return strings.ReplaceAll(role, "/", "-") }

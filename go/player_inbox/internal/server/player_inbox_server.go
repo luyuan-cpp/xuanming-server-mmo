@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"player_inbox/internal/constants"
+	"player_inbox/internal/inbox"
 
 	base "proto/common/base"
 	inboxpb "proto/player_inbox"
@@ -171,6 +172,11 @@ func (s *PlayerInboxServer) battleSettlement(ctx context.Context, in *inboxpb.Ba
 		resp, err = store.LookupBattleSettlement(call, in)
 	}
 	if err != nil || resp == nil {
+		if errors.Is(err, inbox.ErrBattleSettlementOriginal) {
+			logx.Error("metric=inbox_battle_original_rejected reason=original_conflict")
+			return nil, status.Error(codes.FailedPrecondition, "结算原件存在永久冲突")
+		}
+		logx.Error("metric=inbox_battle_receipt_unconfirmed reason=storage_or_transport")
 		return nil, status.Error(codes.Unavailable, "结算原收据尚未确认")
 	}
 	resp.RequestDigest = digest

@@ -11539,6 +11539,15 @@ function Add-MatchAuthoritySecretEnv {
 	return $ManifestContent
 }
 
+function Add-PlayerInboxMatchSecretEnv {
+	param([string]$ManifestContent)
+	# 与Match共用同一开关；未启全球匹配时不要求仅供Battle入箱的独立key。
+	$settings = Get-GlobalMatchDeploymentSettings -Profile $ReleaseProfile -TiDBHost $MatchTiDBHost -Region $PhysicalRegion
+	if (-not $settings.Enabled) { return $ManifestContent }
+	return Add-GoSvcSecretEnv -SvcName 'player-inbox' -ManifestContent $ManifestContent `
+		-EnvName 'MMORPG_PLAYER_INBOX_SECRET_MATCH' -SecretName 'domain-service-secrets' -SecretKey 'player-inbox-match'
+}
+
 function Add-GoSvcSecretEnv {
 	param(
 		[Parameter(Mandatory = $true)][string]$SvcName,
@@ -11813,8 +11822,7 @@ function Apply-OneGoSvc {
 		$manifestContent = Add-MatchAuthoritySecretEnv -ManifestContent $manifestContent
 	}
 	if ($SvcName -eq 'player-inbox') {
-		$manifestContent = Add-GoSvcSecretEnv -SvcName 'player-inbox' -ManifestContent $manifestContent `
-			-EnvName 'MMORPG_PLAYER_INBOX_SECRET_MATCH' -SecretName 'domain-service-secrets' -SecretKey 'player-inbox-match'
+		$manifestContent = Add-PlayerInboxMatchSecretEnv -ManifestContent $manifestContent
 	}
 
 	# db 专属注解(docs/design/db-consumer-group-per-zone.md §4):Pod 模板上的 mmorpg.io/db-consumer-group / mmorpg.io/db-group-handoff-from

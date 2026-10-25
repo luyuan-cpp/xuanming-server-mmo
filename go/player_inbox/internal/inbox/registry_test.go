@@ -3,6 +3,7 @@ package inbox
 import (
 	"bytes"
 	"context"
+	"errors"
 	"math"
 	"strings"
 	"testing"
@@ -27,6 +28,30 @@ const (
 	gmDebt    = inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT
 	gmDomain  = inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION
 )
+
+func TestBattleOriginalPermanentErrorsPrecedeStorage(t *testing.T) {
+	valid := &inboxpb.BattleSettlementInboxRequest{PlayerId: 11, BattleId: 21, ExpectedOwnerAccount: "owner", ExpectedOwnerRevision: 1, IssuedAtMs: 5}
+	valid.SettlementPayload = marshal(t, &battlepb.BattleSettlementData{PlayerId: 11, BattleId: 21, Outcome: battlepb.EBattleOutcome_BATTLE_OUTCOME_DRAW})
+	for _, edit := range []func(*inboxpb.BattleSettlementInboxRequest){
+		func(r *inboxpb.BattleSettlementInboxRequest) { r.PlayerId = 0 },
+		func(r *inboxpb.BattleSettlementInboxRequest) { r.BattleId++ },
+		func(r *inboxpb.BattleSettlementInboxRequest) { r.SettlementPayload = []byte{0xff} },
+		func(r *inboxpb.BattleSettlementInboxRequest) {
+			r.SettlementPayload = append(r.SettlementPayload, 0xf8, 0x07, 0x01)
+		},
+	} {
+		req := proto.Clone(valid).(*inboxpb.BattleSettlementInboxRequest)
+		edit(req)
+		// 没有DB的同一个正式入口仍能先拒纯原件错误，不触P/流或资产。
+		store := &Store{}
+		if _, err := store.EnqueueBattleSettlement(context.Background(), req); !errors.Is(err, ErrBattleSettlementOriginal) {
+			t.Fatalf("Enqueue原件错误应明确分类: %v", err)
+		}
+		if _, err := store.LookupBattleSettlement(context.Background(), req); !errors.Is(err, ErrBattleSettlementOriginal) {
+			t.Fatalf("Lookup原件错误应明确分类: %v", err)
+		}
+	}
+}
 
 func TestBattleSettlementRegistryAndImmutableOriginal(t *testing.T) {
 	r := mustRegistry(t)

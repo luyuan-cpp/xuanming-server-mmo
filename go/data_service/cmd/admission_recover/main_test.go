@@ -26,7 +26,7 @@ func recoveryCLIFixture(t *testing.T) (recoveryOptions, *dbpb.AccountRoleAdmissi
 	path := filepath.Join(t.TempDir(), "request.json")
 	require.NoError(t, os.WriteFile(path, body, 0600))
 	sum := sha256.Sum256(body)
-	return recoveryOptions{requestFile: path, requestSHA: hex.EncodeToString(sum[:]), dsnEnv: "OWNED_RECOVERY_DSN", schema: "mmorpg_global", stores: "1", maintenance: true, mode: "plan", planFile: filepath.Join(t.TempDir(), "plan.json"), localTarget: strings.Repeat("a", 32)}, in
+	return recoveryOptions{requestFile: path, requestSHA: hex.EncodeToString(sum[:]), dsnEnv: "OWNED_RECOVERY_DSN", schema: "mmorpg_global", stores: "1", maintenance: true, mode: "plan", planFile: filepath.Join(t.TempDir(), "plan.json"), localTarget: strings.Repeat("a", 32), sqlTarget: "tidb.maintenance.example:4000"}, in
 }
 
 func TestAdmissionRecoveryCLIPinnedRequestAndPermanentReceipt(t *testing.T) {
@@ -56,7 +56,7 @@ func TestAdmissionRecoveryCLIPinnedRequestAndPermanentReceipt(t *testing.T) {
 }
 
 func TestAdmissionRecoveryCLIRejectsBadPlanBeforeStore(t *testing.T) {
-	for _, kind := range []string{"sha", "no-maintenance", "unknown-field", "duplicate-storage", "bad-schema"} {
+	for _, kind := range []string{"sha", "no-maintenance", "unknown-field", "duplicate-storage", "bad-schema", "missing-target-address", "credential-in-address", "wrong-nonce"} {
 		t.Run(kind, func(t *testing.T) {
 			o, _ := recoveryCLIFixture(t)
 			switch kind {
@@ -75,6 +75,12 @@ func TestAdmissionRecoveryCLIRejectsBadPlanBeforeStore(t *testing.T) {
 				o.stores = "1,1"
 			case "bad-schema":
 				o.schema = "global;bad"
+			case "missing-target-address":
+				o.sqlTarget = ""
+			case "credential-in-address":
+				o.sqlTarget = "root:password@tidb.maintenance.example:4000"
+			case "wrong-nonce":
+				o.localTarget = strings.Repeat("0", 32)
 			}
 			var out, errOut bytes.Buffer
 			called := false

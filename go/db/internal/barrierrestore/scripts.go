@@ -160,14 +160,17 @@ return 1
 // 新维护提升有独立阶段，不改旧restore协议。所有类型、原件与待投检查先于首写；
 // check无副作用；revoke只撤销并清已与双SQL同内容的原缓存；finish只确认实际SQL目标版。
 var promotionScript = redis.NewScript(savebarrier.LuaVersionHelpers + luaHandoffFenceHelpers + `
-if #KEYS~=74 or #ARGV~=19 or not uint(ARGV[2]) or not uint(ARGV[3]) or cmp(ARGV[3],ARGV[2])<=0
+if (#KEYS~=74 and #KEYS~=76) or #ARGV~=#KEYS-54 or not uint(ARGV[2]) or not uint(ARGV[3]) or cmp(ARGV[3],ARGV[2])<=0
  or not is_version(ARGV[4]) or not is_version(ARGV[5]) or (ARGV[9]~='check' and ARGV[9]~='revoke' and ARGV[9]~='finish')
  or not string.match(ARGV[6],'^[1-9]%d*$') or #ARGV[6]>10 or bytecmp(ARGV[6],'4294967295')>0 then return redis.error_reply('promotion arguments invalid') end
 local unique={}
 for _,key in ipairs(KEYS) do if key=='' or unique[key] then return redis.error_reply('promotion keys duplicate') end unique[key]=true end
-if #ARGV[19]~=32 or string.find(ARGV[19],'[^0-9a-f]') or ARGV[19]==string.rep('0',32)
- or redis.call('TYPE',KEYS[73]).ok~='string' or redis.call('GET',KEYS[73])~='local-debug-import-target' or redis.call('PTTL',KEYS[73])~=-1
- or redis.call('TYPE',KEYS[74]).ok~='string' or redis.call('GET',KEYS[74])~=ARGV[19] or redis.call('PTTL',KEYS[74])~=-1 then return redis.error_reply('permanent local instance marker required') end
+for i=73,#KEYS,2 do
+ local a=i-54
+ if #ARGV[a]~=32 or string.find(ARGV[a],'[^0-9a-f]') or ARGV[a]==string.rep('0',32)
+  or ARGV[a+1]=='' or redis.call('TYPE',KEYS[i]).ok~='string' or redis.call('GET',KEYS[i])~=ARGV[a+1] or redis.call('PTTL',KEYS[i])~=-1
+  or redis.call('TYPE',KEYS[i+1]).ok~='string' or redis.call('GET',KEYS[i+1])~=ARGV[a] or redis.call('PTTL',KEYS[i+1])~=-1 then return redis.error_reply('permanent maintenance target required') end
+end
 if redis.call('TYPE',KEYS[1]).ok~='string' or redis.call('GET',KEYS[1])~=ARGV[1] or redis.call('PTTL',KEYS[1])~=-1 then return redis.error_reply('permanent maintenance required') end
 if redis.call('TYPE',KEYS[2]).ok~='string' or redis.call('PTTL',KEYS[2])~=-1 then return redis.error_reply('owner type or ttl invalid') end
 local bkind=redis.call('TYPE',KEYS[8]).ok
@@ -221,14 +224,13 @@ end
 return 1
 `)
 
-// 一物理目标一个命令：校全部TYPE/永久nonce/receipt/guard/原角色围栏后才有副作用。
-// check与apply共用同一判据；完整已提交前缀从入口即可确认，不要求旧guard重新存在。
+// 一物理目标只发一条EVAL；全部角色marker、guard及原角色状态均在首写前原子复核。
 const maintenanceReleaseLua = `
-local guards,players=tonumber(ARGV[5]),tonumber(ARGV[6])
-if (ARGV[1]~='check' and ARGV[1]~='apply') or not guards or guards<1 or guards>2
- or not players or players<0 or players>1000 or #KEYS~=3+guards+2*players
- or #ARGV~=7+guards+3*players then return redis.error_reply('release shape invalid') end
-local expires=tonumber(ARGV[7])
+local markers,guards,players=tonumber(ARGV[3]),tonumber(ARGV[4]),tonumber(ARGV[5])
+if (ARGV[1]~='check' and ARGV[1]~='apply') or not markers or markers<1 or markers>2
+ or not guards or guards<1 or guards>2 or not players or players<0 or players>1000
+ or #KEYS~=2*markers+1+guards+2*players or #ARGV~=6+2*markers+guards+3*players then return redis.error_reply('release shape invalid') end
+local expires=tonumber(ARGV[6])
 local clock=redis.call('TIME')
 if not expires or expires<=tonumber(clock[1])*1000+math.floor(tonumber(clock[2])/1000) then return redis.error_reply('release window expired') end
 for i,key in ipairs(KEYS) do
@@ -238,39 +240,41 @@ end
 local function permanent(key,want)
  return redis.call('TYPE',key).ok=='string' and redis.call('PTTL',key)==-1 and redis.call('GET',key)==want
 end
-if not permanent(KEYS[1],ARGV[2]) or not permanent(KEYS[2],ARGV[3]) then return redis.error_reply('release local instance changed') end
-local rt=redis.call('TYPE',KEYS[3]).ok
+for i=1,markers do
+ local k,a=2*(i-1),6+2*(i-1)
+ if not permanent(KEYS[k+1],ARGV[a+1]) or not permanent(KEYS[k+2],ARGV[a+2]) then return redis.error_reply('release maintenance target changed') end
+end
+local base=2*markers+1
+local argbase=6+2*markers
+local rt=redis.call('TYPE',KEYS[base]).ok
 if rt~='none' and rt~='string' then return redis.error_reply('release receipt type') end
-if rt=='string' and (ARGV[4]=='' or not permanent(KEYS[3],ARGV[4])) then return redis.error_reply('release receipt conflict or ttl') end
+if rt=='string' and (ARGV[2]=='' or not permanent(KEYS[base],ARGV[2])) then return redis.error_reply('release receipt conflict or ttl') end
 local present=0
 for i=1,guards do
- local k=KEYS[3+i]
- local t=redis.call('TYPE',k).ok
- if t~='none' then
-  if not permanent(k,ARGV[7+i]) then return redis.error_reply('release guard changed or ttl') end
+ local k=KEYS[base+i]
+ if redis.call('TYPE',k).ok~='none' then
+  if not permanent(k,ARGV[argbase+i]) then return redis.error_reply('release guard changed or ttl') end
   present=present+1
  end
 end
 if rt=='none' and present~=guards then return redis.error_reply('release missing guard without receipt') end
 if rt=='string' and present~=0 then return redis.error_reply('release receipt with residual guard') end
 for i=1,players do
- local keyindex=3+guards+2*(i-1)
- local argindex=7+guards+3*(i-1)
- local owner,barrier=KEYS[keyindex+1],KEYS[keyindex+2]
- if not permanent(owner,ARGV[argindex+1]) or redis.call('TYPE',barrier).ok~='hash'
-  or redis.call('PTTL',barrier)~=-1 then return redis.error_reply('release owner/barrier changed') end
+ local k=base+guards+2*(i-1)
+ local a=argbase+guards+3*(i-1)
+ local owner,barrier=KEYS[k+1],KEYS[k+2]
+ if not permanent(owner,ARGV[a+1]) or redis.call('TYPE',barrier).ok~='hash' or redis.call('PTTL',barrier)~=-1 then return redis.error_reply('release owner/barrier changed') end
  local values=redis.call('HMGET',barrier,'pending','player_database','player_database_1','handoff_fence')
- if values[1]~=ARGV[argindex+2] or values[2]~=ARGV[argindex+2] or values[3]~=ARGV[argindex+2]
-  or (values[4] or '')~=ARGV[argindex+3] then return redis.error_reply('release SQL ACK/fence mismatch') end
+ if values[1]~=ARGV[a+2] or values[2]~=ARGV[a+2] or values[3]~=ARGV[a+2] or (values[4] or '')~=ARGV[a+3] then return redis.error_reply('release SQL ACK/fence mismatch') end
  for _,field in ipairs(redis.call('HKEYS',barrier)) do
   if string.sub(field,1,7)=='outbox_' then return redis.error_reply('release pending outbox') end
  end
 end
 if rt=='string' then return 'committed' end
 if ARGV[1]=='check' then return 'pending' end
-if ARGV[4]=='' then return redis.error_reply('release apply needs immutable plan receipt') end
--- 所有预检在首写前；这里仅SET/DEL固定string键，无后续可能WRONGTYPE的命令。
-redis.call('SET',KEYS[3],ARGV[4])
-for i=1,guards do redis.call('DEL',KEYS[3+i]) end
+if ARGV[2]=='' then return redis.error_reply('release apply needs immutable plan receipt') end
+-- 首写之后只有固定string的SET和DEL，无后续可能WRONGTYPE的命令。
+redis.call('SET',KEYS[base],ARGV[2])
+for i=1,guards do redis.call('DEL',KEYS[base+i]) end
 return 'committed'
 `

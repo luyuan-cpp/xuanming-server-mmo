@@ -230,6 +230,18 @@ private:
     std::optional<std::string> previous_;
 };
 
+// v1未知房间按生产合同不能Destroy；接口回归在独立子进程中建房，父进程不留下房间或定时器。
+// threadsafe模式重新执行测试进程；退出码携带全部断言结果，OS退出负责回收该受控子进程资源。
+void AssertInFreshOutcomeProcess(const std::function<void()>& check) {
+    struct RestoreDeathStyle {
+        std::string previous;
+        ~RestoreDeathStyle() { GTEST_FLAG_SET(death_test_style, previous); }
+    } restore{GTEST_FLAG_GET(death_test_style)};
+    GTEST_FLAG_SET(death_test_style, "threadsafe");
+    ASSERT_EXIT({ check(); std::_Exit(::testing::Test::HasFailure() ? 1 : 0); },
+                ::testing::ExitedWithCode(0), "");
+}
+
 class BattleObserverContract : public testing::Test {
 protected:
     void SetUp() override {
@@ -280,9 +292,10 @@ protected:
 
     static BattleRoomManager& manager() { return BattleRoomManager::Instance(); }
 
-    void Create() {
+    CreateBattleRequest OriginalCreation(uint32_t outcomeProtocol = 0) const {
         CreateBattleRequest request;
         request.set_battle_id(battleId_);
+        request.set_outcome_protocol_version(outcomeProtocol);
         request.set_match_mode(::match::MATCH_MODE_1V1);
         request.set_seed(1);
         request.set_created_at_ms(originalNowMs_);
@@ -310,6 +323,21 @@ protected:
             route->set_scene_instance_id("interface-no-live-scene");
             route->set_zone_id(1);
         }
+        return request;
+    }
+
+    QueryBattleCreationResponse CreationState() const {
+        QueryBattleCreationRequest query;
+        query.set_battle_id(battleId_);
+        query.set_placement_operation_id(kPlacement);
+        query.set_target_instance_id(kInstance);
+        QueryBattleCreationResponse state;
+        manager().HandleQueryBattleCreation(query, state);
+        return state;
+    }
+
+    void Create() {
+        const auto request = OriginalCreation();
         CreateBattleResponse reply;
         manager().HandleCreateBattle(request, reply);
         ASSERT_EQ(0u, reply.error_message().id());
@@ -620,5 +648,82 @@ TEST_F(BattleObserverContract, ReconnectWithinGraceKeepsSeatAndStaleDetachIsIgno
         battleId_, reattached + BattleRoomManager::kObserverConnectGrace + BattleRoomManager::kObserverReconnectGrace);
     EXPECT_EQ(OBSERVER_ADMISSION_ACTIVE, Query(first));
     ASSERT_NO_FATAL_FAILURE(AssertTicket(first));
+}
+
+// 查询能力来自本节点此刻可签名状态；空/短/仅空白密钥均不能宣告v1。
+TEST_F(BattleObserverContract, OutcomeCapabilityRequiresTrimmedSigningKey) {
+    const std::vector<std::pair<const char*, uint32_t>> cases{
+        {nullptr, 0}, {"", 0}, {" \t\r\n", 0},
+        {" 1234567890123456789012345678901 ", 0},
+        {" \t12345678901234567890123456789012\r\n", 1}};
+    for (const auto& [secret, expected] : cases) {
+        ObserverFixtureEnvironment environment("MMORPG_MATCH_OUTCOME_SECRET_BATTLE", secret);
+        const auto state = CreationState();
+        EXPECT_EQ(BATTLE_CREATION_ABSENT, state.state());
+        EXPECT_EQ(kInstance, state.target_instance_id());
+        EXPECT_EQ(expected, state.supported_outcome_protocol_version());
+        EXPECT_EQ(0u, state.adopted_outcome_protocol_version());
+    }
+}
+
+// 真正Create入口拒绝缺密钥的新v1操作，且不遗留房间或采用回执；合法密钥才准创建。
+TEST_F(BattleObserverContract, NewOutcomeV1CreationFailsClosedUntilSigningKeyReady) {
+    ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess([&] {
+        const auto original = OriginalCreation(1);
+        for (const char* secret : {"", "1234567890123456789012345678901", " \t\r\n"}) {
+            ObserverFixtureEnvironment environment("MMORPG_MATCH_OUTCOME_SECRET_BATTLE", secret);
+            CreateBattleResponse refused;
+            manager().HandleCreateBattle(original, refused);
+            EXPECT_EQ(static_cast<uint32_t>(::kFeatureUnavailable), refused.error_message().id());
+            EXPECT_EQ(0u, refused.adopted_outcome_protocol_version());
+            const auto state = CreationState();
+            EXPECT_EQ(BATTLE_CREATION_ABSENT, state.state());
+            EXPECT_EQ(0u, state.supported_outcome_protocol_version());
+            EXPECT_EQ(0u, state.adopted_outcome_protocol_version());
+        }
+        ObserverFixtureEnvironment environment("MMORPG_MATCH_OUTCOME_SECRET_BATTLE", "12345678901234567890123456789012");
+        CreateBattleResponse created;
+        manager().HandleCreateBattle(original, created);
+        EXPECT_EQ(0u, created.error_message().id());
+        EXPECT_EQ(1u, created.adopted_outcome_protocol_version());
+        EXPECT_EQ(kInstance, created.target_instance_id());
+        EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state());
+    }));
+}
+
+// 已采用的原操作不随运行时缺密钥降为legacy；同原件幂等仍回原adopted，新操作继续拒绝。
+TEST_F(BattleObserverContract, ExistingOutcomeV1AdoptionSurvivesSigningKeyLossWithoutFallback) {
+    ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess([&] {
+        const auto original = OriginalCreation(1);
+        {
+            ObserverFixtureEnvironment environment("MMORPG_MATCH_OUTCOME_SECRET_BATTLE", "12345678901234567890123456789012");
+            CreateBattleResponse created;
+            manager().HandleCreateBattle(original, created);
+            EXPECT_EQ(0u, created.error_message().id());
+            EXPECT_EQ(1u, created.adopted_outcome_protocol_version());
+        }
+        ObserverFixtureEnvironment missing("MMORPG_MATCH_OUTCOME_SECRET_BATTLE", "");
+        const auto state = CreationState();
+        EXPECT_EQ(BATTLE_CREATION_PRESENT, state.state());
+        EXPECT_EQ(0u, state.supported_outcome_protocol_version());
+        EXPECT_EQ(1u, state.adopted_outcome_protocol_version());
+        CreateBattleResponse replayed;
+        manager().HandleCreateBattle(original, replayed);
+        EXPECT_EQ(0u, replayed.error_message().id());
+        EXPECT_EQ(1u, replayed.adopted_outcome_protocol_version());
+        EXPECT_EQ(kInstance, replayed.target_instance_id());
+        auto changed = original;
+        changed.set_seed(original.seed() + 1);
+        CreateBattleResponse invalid;
+        manager().HandleCreateBattle(changed, invalid);
+        EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), invalid.error_message().id());
+        auto next = original;
+        next.set_battle_id(original.battle_id() + 1);
+        CreateBattleResponse refused;
+        manager().HandleCreateBattle(next, refused);
+        EXPECT_EQ(static_cast<uint32_t>(::kFeatureUnavailable), refused.error_message().id());
+        EXPECT_EQ(0u, refused.adopted_outcome_protocol_version());
+        EXPECT_EQ(1u, CreationState().adopted_outcome_protocol_version());
+    }));
 }
 } // namespace

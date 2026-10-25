@@ -751,6 +751,8 @@ K8s沿既有迁移门禁接`match-migrate`：ConfigMap先于Job，全球模式�
 
 ### 2026-10-24：旧 Scene 维护后的显式解除（设计候选，未实现／未验收）
 
+> 下述初版严格验收方案作为历史保留。它把本地调试 marker、Codex 构建和 Windows 进程原件直接接进了维护入口；这些限制不构成生产运维授权。2026-10-24 负责人已批准本节后面的正式维护合同取代这部分生产依赖。历史实测与原失败原件不重写；新合同尚未完成实现和运行验收。
+
 旧 Scene 恢复分为两个独立结果：A 只证明原写者已停止、真实队列排空、永久撤资格与 SQL 恢复／退休收据成立，维护仍关闭；B 才是受控解除后由新 SM 铸造 owner、新 Scene 以新入场世代重新接流。Ctmp 的连接边界、队列观察和故障编排是验收工具，不是生产业务入口，源码或工具编译成功不等于 A／B 已通过。
 
 `save_barrier_restore` 原 `guard / plan / apply` 继续均不自动放流。拟在同一维护工具增加独立的 `release-plan / release-apply`：前者只读生成新计划；后者必须显式提供完整原文件 SHA、原维护 nonce、本地 SQL／Redis 永久实例 marker 和当次排他维护窗。新能力不改 DataService Cancel 的领域真相，不新增 RPC、迁移或另一份 proto 模型。计划直接引用原生成的 promotion／admission 原件；每个成员和物理目标自行携带身份，不用数组下标表达业务对应关系。
@@ -764,3 +766,32 @@ K8s沿既有迁移门禁接`match-migrate`：ConfigMap先于Job，全球模式�
 原计划重入允许两种且仅两种目标状态：尚未提交时，解除收据不存在且该实例全部原 guard 精确存在；已经提交时，永久解除收据完整等于原 intent／正文／实例 nonce，且该实例全部原 guard 已缺失。无收据但 guard 缺失、收据与部分 guard 并存、不同正文／新维护 nonce、错误类型或 TTL 都拒绝。split 部署若只完成前缀，后续同原件显式重入可识别已完成目标，不再要求它的旧 guard 仍在；未完成目标仍要求全部旧 guard。批次完成前 SQL 必须始终 `writable=0`，新入口保持关闭且旧写者不可复活；失败或回包未知保留已有前缀，不自动回滚或继续。全部解除完成后仍只报告解除结果，不据此宣布已接流。后续须另按既有 `route_tool audit -frozen-recovery` 与 `unfreeze -confirm-audited` 合同取得真实结果，再由新 SM／Scene 重登入场。已经进入后续正常运行后，旧解除计划不能再修改数据或授予新的放流资格；原永久收据仍可只读追溯。
 
 必要回归包括：只读计划零写；缺领域成功原件、遗漏／重复／未知成员拒绝；坏类型／TTL／错实例／改 nonce 在首写前零副作用；同物理目标全 guard 原子解除；split 前缀故障仍闭门；实际 Redis 提交后客户端丢回复，以同原件和永久收据消歧；超时无后续副作用；默认旧模式不新增自动解除。B 还必须真实验证新 owner／新入场世代可重登、业务可用、旧 Scene／旧世代迟到写仍拒绝，未执行的场景不能由设计或验收工具代计通过。
+
+#### 正式维护目标和操作审核合同（2026-10-24，已授权，待实现与验收）
+
+`save_barrier_restore` 与 `admission_recover` 的权限来自有权运维者显式执行维护命令，以及只覆盖审定 SQL／Redis 范围的受限凭据。plan 默认只读；apply 必须提供原 plan、审核原件的完整 SHA 和显式维护确认。SHA 只约束文件完整性，不认证操作人，也不证明停写或排空。工具不登录远端控制面、不创建目标标记、不替运维停进程或撤凭据，不提供 `allow-any-remote` 或调试导入开关。
+
+目标身份使用独立的 `maintenance-recovery` 命名空间。SQL 的每个实际全局库和行库由运维显式预置 `maintenance_recovery_target` 表：`purpose VARBINARY(16)`、`zone_id INT UNSIGNED`、`schema_name VARBINARY(64)`、`target_nonce VARBINARY(32)`、`physical_addr VARBINARY(255)`，主键为 `(purpose, zone_id, schema_name)`。`purpose` 仅允许 `promotion`、`admission`、`release`；nonce 为非全零的 32 位小写 hex，地址等于该次明确配置的规范 host:port。行没有 TTL，工具凭据不拥有此表的建表、插入、更新或删除权限。promotion／release 在涉及的全局库和全部行库内复核同一 SQL nonce；admission 在全局库及显式 storage 白名单对应的行库复核。每次 SQL 提交都用原事务的 `FOR UPDATE` 锁住这些标记行，直到业务提交或只读回滚结束。标记表示受控目标资格，不冒充数据库服务器 UUID；不能从名称、端口或调试标记推导资格。
+
+Redis 在每个实际 addr／DB 上由运维预置 `maintenance_recovery:target:<purpose>:<zone>:<schema>:<role>` 及其 `:nonce` 两个永久 string。role 是 `core` 或 `mapping`；scope 原值为 `maintenance-recovery-v1|<purpose>|<role>|<zone>|<route_schema>|<schema>|<addr>|<db>`，各字段不含分隔符，nonce 固定为该物理目标的非全零 32 位小写 hex。promotion 的 schema 为原行库；release 的 schema 为原 route schema，所有成员行库仍逐一由 SQL 标记和领域快照核验。Lua 在首写前复核每个标记的 TYPE、PTTL=-1、scope 原值和 nonce。core／mapping 同物理目标时仍核两种角色的标记，并在一个 Lua 内同时提交全部原 guard 和一份永久解除收据；split 目标保持 core 先、mapping 后和未知前缀显式重入。nonce 不因 Redis 重启而换；丢失、TTL、错 role／zone／schema／addr／DB、换 nonce 或只存在 `debug_import` 标记都拒绝。`debugutil`、`debug_import_local_target` 和 `debug_import:*` 的源码、loopback 规则及授权值完全不变；专用维护标记不能让调试导入取得写权。运维预置表属于操作前置，不纳入自动服务迁移，本轮不新增 proto 或生成物。历史 `LocalTarget` 字段／`-local-target-id` 参数现只表示这个受审维护 nonce，不再含 loopback 语义；`-sql-target-address` 必须逐字匹配实际 DSN 与 SQL 标记，原计划一并固定该无凭据地址，不改任何领域 proto 字段。
+
+解除审核改为与操作系统和构建工具无关的 `maintenance-release-operator-review-v1`。它固定原成员输入、逻辑发行方全集、每个发行方的原 instance／撤销范围、Kafka 全部历史 topic／group／partition 清单、Redis addr／DB／zone／nonce 清单，以及原领域 Cancel 和资产基线。发行方停止事实按稳定逻辑身份逐项记录停止时刻、停止／撤销原件和禁止再次发行的维护范围；每次短窗必须覆盖该原全集，不能只报数量、`writersStopped` 或 `passed`。本次队列事实必须落在不超过 60 秒的新窗内：逐分区满足 `earliest <= committed == end`，实际 topic、group、订阅和分区集合等于审核全集；Redis 必须覆盖每个原 zone 的 64 个 pending 桶、各历史 topic 的 retry／processing／dead／instance 元数据及所有实际 barrier／outbox，按原键和实际条目逐项核空或核正式已收敛版本，未知世代、键、成员和待投均拒绝。原始行、计数、类型、版本及内容摘要保留，COUNT 不替代等集。
+
+便携原件字段固定为以下关系，生产不接受旧私有 schema：review 的 `operation_id/target_nonce/physical_sql_addr/route_schema` 连到 `issuer_inventory` 和原成员输入；目录每项是 `issuer_id/role/instance_id`。每个退休原件含 `publication_closed_ms <= stopped_ms <= window.issued_ms`、同一 `revival_fence_id` 和非空原始 `source_evidence`。window 必须逐项引用原退休文件，实际观察时刻处于本窗，`revival_blocked_until_ms >= expires_ms`；漏项、重复或同数量换身份拒绝。`maintenance-release-attempt-v1` 只关联原 review／plan、新窗与 Redis／Kafka 两类事实；不会给原计划延期。Redis 事实使用 `maintenance-release-redis-queues-v1`，显式保留 `key_names` 和每键原 `key/type/pttl_ms/count/members/values`，并核 key 摘要与观察摘要；缺键须是 `none/-2/0`，存在的维护队列及屏障须永久，barrier 原 pending 与双 ACK 必须是同一规范版本且无任意 outbox 字段。Kafka 事实使用 `maintenance-release-kafka-queues-v1`，保全逐订阅分区的原 earliest／committed／end／lag。两类事实都固定本窗内的采样开始／结束时刻和实际采集源原件。生产仅机械验证这些受限事实；采集者的授权、完整发现范围及禁发／不可复活的真实外部执行仍由受审运维流程承担。
+停写与不可复活是运维控制面的显式责任，凭据受限的维护进程不具备跨主机进程真相的自动证明能力。生产读取器机器核验上述稳定事实的身份、全集、时序、数值、原件完整性及其与原计划的关系；不会把文件里的布尔或摘要解释成权限。采集者须用实际编排／凭据撤销／进程与连接证据建立这些事实，并在整个维护窗禁止新发行。私有本地验收先按原 source／PE／原句柄／完整创建目录／实际队列原件作严格校验，再转换为这些稳定操作事实；原 Windows FILETIME、Codex proof schema、PE 和 native argv 解析留在验收侧，不由生产工具依赖。缺真实源证据时验收转换器不得产出可执行审核原件，不能以便携格式掩盖尚未验收。
+
+领域裁决保持原实现：只能在正式同身份 Cancel 得到 `CANCEL_PENDING` 后恢复旧 holder，常规 `AckTradeSeal` 的 FREEZING 规则不变；恢复后 Confirm 必须明确拒绝，再重放同一 unsigned Cancel 正文得到 SQL／回包 `CANCELLED`。解除仍核完整生成的 promotion／admission 永久 PB、原域摘要、原 holder／Seal、双 SQL 全列与 NULL、原 owner/save_seq、路由冻结 generation／rev／watermark／placement，以及整个 zone 的原成员等集（上限 1000）。SQL 事务内不访问 Redis、Kafka 或 Scene。原 intent 与原 plan 固定，每次新窗独立，单调截止不自动续期；两存储前缀、提交回复丢失与同原件重放规则均保持。解除成功仍不自动 unfreeze 或重启，必须再执行正式 route audit／unfreeze，并实际证明新世代重登及保存可用、旧世代真实迟到写仍拒绝。
+
+新回归须包含非 loopback 的精确专用目标、仅调试 marker 拒绝、错物理 scope／nonce／TTL 在首副作用前拒绝、Linux 无 Codex／PE／FILETIME 输入、缺发行方／重复或同 COUNT 换成员、完整队列漏世代、所有 SQL／Lua 并发与未知提交前缀。现有本地旧 marker 和私有审核原件仅保留历史证据，不能称为新合同已通过；本条目前没有新的编译、单测、真库或 A／B 验收结果。
+
+### 2026-10-24：终局提交宽限与永久不适用子效果的恢复边界
+
+本条为本轮已授权既有路径内的评审修复合同。Battle房间的原deadline不变，Match在deadline到达后继续禁止续领开房工作租约；SQL ABORT候选与持锁提交点统一改为经过60秒终局提交宽限后才能竞争终局。宽限内接受符合原Create、成员、身份与正文的COMPLETE，COMPLETE／ABORT仍由原主键和锁序决定唯一永久结果，不因临时RPC失败另造结果。两版目前使用单一具名60秒常量，未新增配置文件路径；这是有限恢复窗口，不保证任意长网络分区后仍能采用迟到结果。边界比较须避免deadline加法溢出，直接取消入口同样不能绕过该宽限。
+
+个人结算仍以原永久来源及整笔候选为提交单位。已转出、不再归本角色的宠物，以及按既有PetService语义永久不存在的宠物配置，只跳过不再适用的该宠物子效果；其余金币、掉落和任务效果继续按原整笔校验与存盘。缺必要持久组件、损坏或unknown字段、重复实体和未知schema不能当作正常缺宠物；背包容量、货币上限、暂缺ID号段及存盘在途仍应保留整笔待执行。
+
+BattleItemEntry原载荷只有config/count，不得在恢复时杜撰原GUID。权威已记录的合法消耗不能因当前battleUsable热更再次判为永久等待；复用既有完整实际实例候选与GUID／原字节核验，按原消耗不足夹紧合同执行并明确记录不足。相关未知版本或损坏实例不能按普通数量消耗，不能为了放票默默丢失正常资产效果。两版按同一边界补回归，源码修改与实际运行证据分别记录。
+
+Scene退出时的异步SQL确认必须继续核原实体和原入场身份。原实体已经销毁时迟到回调不得补发Ack；永久Inbox水位保留已应用事实，新世代落地后按原来源重放并取得本次真实SQL确认，再Ack且不重复做资产效果。同步测试必须说明同步条件，不能把它当作生产退出前必定补发成功的证明。
+
+上述只是当前实现与验收合同，尚未据此声明新增源码已编译或真实故障通过。CurrentMaps、客户端与其他既有工作不在写集合内。

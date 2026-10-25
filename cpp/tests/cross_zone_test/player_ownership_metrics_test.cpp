@@ -44,8 +44,13 @@ namespace
 	// 取 "name value\n" 这一行的数值;找不到返回 UINT64_MAX。
 	uint64_t SampleValue(const std::string &text, const std::string &series)
 	{
-		const auto at = text.find(series + " ");
-		if (at == std::string::npos || (at > 0 && text[at - 1] != '\n'))
+		const auto needle = series + " ";
+		auto at = text.find(needle);
+		while (at != std::string::npos && at > 0 && text[at - 1] != '\n')
+		{
+			at = text.find(needle, at + needle.size());
+		}
+		if (at == std::string::npos)
 		{
 			return UINT64_MAX;
 		}

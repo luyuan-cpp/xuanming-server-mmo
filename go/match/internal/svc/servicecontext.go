@@ -15,6 +15,7 @@ import (
 	"match/internal/metrics"
 
 	dspb "proto/data_service"
+	matchpb "proto/match"
 	inboxpb "proto/player_inbox"
 
 	"shared/kafkacmd"
@@ -50,7 +51,9 @@ type ServiceContext struct {
 	ActivityCancelSecret string
 	BattleOutcomeAuth    *serviceauth.Verifier
 	BattleOutcomeSecret  string
-	resultPublisher      *kafka.Writer
+	// 启动时装配，随后只读；调用方必须在取得SQL/P锁之前调用。
+	RefreshBattleSettlement func(context.Context, *matchpb.MatchAuthorityTicketRecord) error
+	resultPublisher         *kafka.Writer
 	// 候选扫描游标是可重建调度状态，只由matcher循环访问；不参与SQL写决策。
 	GlobalScanMs      uint64
 	GlobalScanPlayer  uint64
@@ -319,6 +322,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		}
 		publishResult := func(ctx context.Context, battle uint64, raw []byte) error {
 			return sc.resultPublisher.WriteMessages(ctx, kafka.Message{Topic: c.ResultTopic, Key: []byte(fmt.Sprint(battle)), Value: raw})
+		}
+		sc.RefreshBattleSettlement = func(ctx context.Context, ticket *matchpb.MatchAuthorityTicketRecord) error {
+			return store.RefreshBattleSettlementReceipt(ctx, ticket, resolveInbox, inboxSecret)
 		}
 		var publishers sync.WaitGroup
 		publishers.Add(3)

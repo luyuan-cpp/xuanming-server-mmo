@@ -52,6 +52,9 @@ var errDuplicateUnderP = errors.New("inbox: duplicate key while original role P 
 // errStreamVanished 表示 ensureStream 刚确认过的流行在主事务里读不到(流行永不删除,只可能是缺陷或库被动过)。
 var errStreamVanished = errors.New("inbox: stream row vanished after ensureStream")
 
+// 仅专用Battle原件的确定性冲突；角色冻结、SQL/传输错误仍可能恢复，不能按文本归此类。
+var ErrBattleSettlementOriginal = errors.New("inbox: Battle永久原件冲突")
+
 // Enqueue 是入箱核心(设计 §6.2)。inTx 在主事务里、提交之前执行(GM 生产方用它同事务写审计,设计 §6.1);
 // 它返回错误会让整次入箱回滚。inTx 可能因事务重试被调用多次,必须可重跑。
 //
@@ -113,13 +116,16 @@ func (s *Store) enqueue(ctx context.Context, p EnqueueParams, inTx func(*sql.Tx,
 	err = s.withPlayerTx(ctx, p.PlayerID, func(tx *sql.Tx, original *dspb.AccountRoleOwnership) error {
 		res = EnqueueResult{} // 可重跑:上一轮的结果作废
 		if p.battleOriginal != nil && !battleOriginalMatches(p.battleOriginal, original) {
-			return ErrOriginalRole
+			return fmt.Errorf("%w: 原账号或revision不符", ErrBattleSettlementOriginal)
 		}
 		existing, err := readItemByRequest(ctx, tx, shard, p.PlayerID, p.Producer, p.RequestID)
 		if err != nil {
 			return err
 		}
 		if err = requireItemOriginal(existing, original); err != nil {
+			if p.battleOriginal != nil {
+				return fmt.Errorf("%w: 永久收据原归属不符", ErrBattleSettlementOriginal)
+			}
 			return err
 		}
 		if existing != nil {
@@ -227,6 +233,9 @@ func (s *Store) EnqueueBattleSettlement(ctx context.Context, req *inboxpb.Battle
 	if err != nil {
 		return nil, err
 	}
+	if r.Code == constants.ErrIdempotencyConflict {
+		return nil, fmt.Errorf("%w: 同局入箱正文冲突", ErrBattleSettlementOriginal)
+	}
 	return &inboxpb.BattleSettlementInboxResponse{PlayerId: req.PlayerId, BattleId: req.BattleId, Seq: r.Seq, State: r.State,
 		ContentSha256: ContentSHA256(p.Type, p.IssuedAtMs, p.Payload), ErrorMessage: tipOf(r.Code)}, nil
 }
@@ -240,7 +249,7 @@ func (s *Store) LookupBattleSettlement(ctx context.Context, req *inboxpb.BattleS
 	err := s.withPlayerTx(ctx, req.PlayerId, func(tx *sql.Tx, original *dspb.AccountRoleOwnership) error {
 		resp.Seq, resp.State, resp.ContentSha256 = 0, 0, nil
 		if !battleOriginalMatches(req, original) {
-			return ErrOriginalRole
+			return fmt.Errorf("%w: 原账号或revision不符", ErrBattleSettlementOriginal)
 		}
 		row, err := readItemByRequest(ctx, tx, RowShard(req.PlayerId), req.PlayerId, inboxpb.PlayerInboxProducerKind_PLAYER_INBOX_PRODUCER_MATCH, req.BattleId)
 		if err != nil {
@@ -250,10 +259,10 @@ func (s *Store) LookupBattleSettlement(ctx context.Context, req *inboxpb.BattleS
 			return nil
 		}
 		if err = requireItemOriginal(row, original); err != nil {
-			return err
+			return fmt.Errorf("%w: 永久收据原归属不符", ErrBattleSettlementOriginal)
 		}
 		if row.GetMsgType() != uint32(inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT) || !bytes.Equal(row.GetContentSha256(), digest) || !bytes.Equal(row.GetPayload(), req.SettlementPayload) || row.GetIssuedAtMs() != req.IssuedAtMs {
-			return errors.New("inbox: 原Battle收据正文冲突")
+			return fmt.Errorf("%w: 原Battle收据正文冲突", ErrBattleSettlementOriginal)
 		}
 		resp.Seq, resp.State, resp.ContentSha256 = row.GetSeq(), inboxpb.PlayerInboxItemState(row.GetState()), append([]byte(nil), row.GetContentSha256()...)
 		return nil
@@ -263,16 +272,19 @@ func (s *Store) LookupBattleSettlement(ctx context.Context, req *inboxpb.BattleS
 
 func validateBattleOriginal(req *inboxpb.BattleSettlementInboxRequest) error {
 	if req == nil || req.PlayerId == 0 || req.BattleId == 0 || ValidateText(req.ExpectedOwnerAccount, 191, true) != 0 || req.ExpectedOwnerRevision == 0 || req.IssuedAtMs == 0 || len(req.SettlementPayload) == 0 || len(req.SettlementPayload) > 16384 || battlePayloadHasUnknown(req.ProtoReflect()) {
-		return errors.New("inbox: Battle原件不完整")
+		return fmt.Errorf("%w: Battle原件不完整", ErrBattleSettlementOriginal)
 	}
 	p := &battlepb.BattleSettlementData{}
 	if err := proto.Unmarshal(req.SettlementPayload, p); err != nil {
-		return err
+		return fmt.Errorf("%w: Battle载荷不能解码", ErrBattleSettlementOriginal)
 	}
 	if p.PlayerId != req.PlayerId || p.BattleId != req.BattleId {
-		return errors.New("inbox: Battle载荷身份不符")
+		return fmt.Errorf("%w: Battle载荷身份不符", ErrBattleSettlementOriginal)
 	}
-	return validateBattlePayload(p)
+	if err := validateBattlePayload(p); err != nil {
+		return fmt.Errorf("%w: Battle载荷语义不完整", ErrBattleSettlementOriginal)
+	}
+	return nil
 }
 
 func battleOriginalMatches(req *inboxpb.BattleSettlementInboxRequest, role *dspb.AccountRoleOwnership) bool {

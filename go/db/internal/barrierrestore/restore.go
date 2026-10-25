@@ -83,9 +83,11 @@ type Player struct {
 
 // Restorer 的两个依赖均为维护专用连接，不能与正在接流量的业务池共用。
 type Restorer struct {
-	// 仅新promotion使用，由审定CLI封套钉住本地实例marker；旧恢复模式不读取它。
+	// 历史字段名保留；现在表示运维预置maintenance-recovery目标，不含loopback/调试授权语义。
 	LocalTargetID          string
 	RedisTargetID          string
+	MappingTargetID        string
+	MaintenanceSQLAddr     string
 	DB                     *sql.DB
 	Redis                  *redis.Client
 	RoutingMode            string
@@ -106,6 +108,9 @@ func (r Restorer) PreparePromotion(ctx context.Context, schema string, zone uint
 	}
 	p := Plan{Format: FormatV2, Schema: schema, Zone: zone, MaintenanceID: maintenanceID, RoutingMode: RoutingModeDBFirst, RedisAddr: r.Redis.Options().Addr, RedisDB: r.Redis.Options().DB, MappingAddr: r.mapping().Options().Addr, MappingDB: r.mapping().Options().DB, RouteSchema: r.RouteSchema}
 	if err := p.ValidateTarget(); err != nil {
+		return nil, err
+	}
+	if err := r.checkPromotionRedisTargets(ctx, p); err != nil {
 		return nil, err
 	}
 	u, err := auditedBound(r.AuditedOwnerUpperBound)
@@ -479,8 +484,20 @@ func (r Restorer) runPromotionScript(ctx context.Context, p *databasepb.SaveBarr
 		args = append(args, flag, "", "")
 	}
 	// 永久实例nonce在实际Lua提交点复核；run_id/replid只作CLI当次观测，AOF重启不换计划。
-	keys = append(keys[:72:72], "debug_import:local_target", "debug_import:local_instance_id")
-	args = append(args, r.RedisTargetID)
+	markerKey, markerScope, err := MaintenanceRedisScope("promotion", "core", p.HomeZone, p.RouteSchema, p.RowSchema, r.Redis.Options().Addr, r.Redis.Options().DB)
+	if err != nil {
+		return err
+	}
+	keys = append(keys[:72:72], markerKey, markerKey+":nonce")
+	args = append(args, r.RedisTargetID, markerScope)
+	if r.Redis.Options().Addr == r.mapping().Options().Addr && r.Redis.Options().DB == r.mapping().Options().DB {
+		mappingKey, mappingScope, err := MaintenanceRedisScope("promotion", "mapping", p.HomeZone, p.RouteSchema, p.RowSchema, r.mapping().Options().Addr, r.mapping().Options().DB)
+		if err != nil {
+			return err
+		}
+		keys = append(keys, mappingKey, mappingKey+":nonce")
+		args = append(args, r.MappingTargetID, mappingScope)
+	}
 	n, err := promotionScript.Run(ctx, r.Redis, keys, args...).Int()
 	if err != nil {
 		return fmt.Errorf("维护撤销或屏障确认拒绝: %w", err)
@@ -501,6 +518,10 @@ func (r Restorer) ApplyPromotion(ctx context.Context, p *databasepb.SaveBarrierM
 	if r.DB == nil || r.Redis == nil || !promotionTargetID(r.LocalTargetID) || !promotionTargetID(r.RedisTargetID) || r.RoutingMode != RoutingModeDBFirst || r.RouteSchema != p.RouteSchema || r.Redis.Options().Addr != p.RedisAddr || r.Redis.Options().DB != int(p.RedisDb) || r.mapping().Options().Addr != p.MappingAddr || r.mapping().Options().DB != int(p.MappingDb) || strconv.FormatUint(p.AuditedOwnerUpperBound, 10) != r.AuditedOwnerUpperBound {
 		return nil, errors.New("实际维护目标或旧写上界偏离审定计划")
 	}
+	target, _ := promotionRoute(p)
+	if err := r.checkPromotionRedisTargets(ctx, target); err != nil {
+		return nil, err
+	}
 	if _, _, err = r.promotionSQL(ctx, p, raw, digest, databasepb.SaveBarrierMaintenanceReceipt_PLAN_FIXED); err != nil {
 		return nil, err
 	}
@@ -508,13 +529,16 @@ func (r Restorer) ApplyPromotion(ctx context.Context, p *databasepb.SaveBarrierM
 	if err != nil {
 		return nil, err
 	}
-	if phase == databasepb.SaveBarrierMaintenanceReceipt_PLAN_FIXED {
+	// SQL永久阶段不能证明Redis崩溃后仍保有撤销；续跑也必须在SQL锁外重放原计划同一R。
+	if phase == databasepb.SaveBarrierMaintenanceReceipt_PLAN_FIXED || phase == databasepb.SaveBarrierMaintenanceReceipt_WRITERS_REVOKED || phase == databasepb.SaveBarrierMaintenanceReceipt_SQL_PROMOTED {
 		cache, err := r.readPromotionCache(ctx, p.HomeZone, p.PlayerId)
 		if err != nil {
 			return nil, err
 		}
-		if err := verifyPromotionCache(cache, recoveryKeys(p.HomeZone, p.PlayerId), pair, p.PlayerId); err != nil {
-			return nil, err
+		if phase == databasepb.SaveBarrierMaintenanceReceipt_PLAN_FIXED {
+			if err := verifyPromotionCache(cache, recoveryKeys(p.HomeZone, p.PlayerId), pair, p.PlayerId); err != nil {
+				return nil, err
+			}
 		}
 		target, row := promotionRoute(p)
 		if err := r.inspectMapping(ctx, target, row); err != nil {
@@ -523,13 +547,15 @@ func (r Restorer) ApplyPromotion(ctx context.Context, p *databasepb.SaveBarrierM
 		if err := r.runPromotionScript(ctx, p, cache, "revoke"); err != nil {
 			return nil, err
 		}
-		phase, _, err = r.promotionSQL(ctx, p, raw, digest, databasepb.SaveBarrierMaintenanceReceipt_WRITERS_REVOKED)
-		if err != nil {
-			return nil, err
+		if phase == databasepb.SaveBarrierMaintenanceReceipt_PLAN_FIXED {
+			phase, _, err = r.promotionSQL(ctx, p, raw, digest, databasepb.SaveBarrierMaintenanceReceipt_WRITERS_REVOKED)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if phase == databasepb.SaveBarrierMaintenanceReceipt_WRITERS_REVOKED {
-		// R确认已永久记录。后续只做SQL操作，绝不在角色/路由/双行锁内调网络。
+		// 原R已在本次调用现场复核；随后只做SQL操作，不在角色/路由/双行锁内调网络。
 		phase, _, err = r.promotionSQL(ctx, p, raw, digest, databasepb.SaveBarrierMaintenanceReceipt_SQL_PROMOTED)
 		if err != nil {
 			return nil, err
@@ -663,19 +689,107 @@ func (r Restorer) promotionSQL(ctx context.Context, p *databasepb.SaveBarrierMai
 	return next, pair, nil
 }
 
-// 复用既有debug_import本地标记合同；db模块不反向依赖DS工具包。两个schema同实例nonce，
-// 每个实际SQL事务持标记行锁复核，不能只拿事务外地址/强TiDB探针当写目标资格。
+// 专用维护标记只由运维预置；不能使debug_import获得写权限。
+// 每个实际SQL事务按固定库名序持标记行锁，不能以事务外探针代替提交点复核。
 func (r Restorer) checkPromotionSQLTarget(ctx context.Context, tx *sql.Tx, p Plan) error {
-	if len(r.LocalTargetID) != 32 || strings.Trim(r.LocalTargetID, "0123456789abcdef") != "" {
-		return errors.New("维护SQL实例nonce缺失")
+	return r.checkMaintenanceSQLTargets(ctx, tx, "promotion", p.Zone, []string{p.RouteSchema, p.Schema})
+}
+
+func maintenanceAddress(addr string) bool {
+	host, port, err := net.SplitHostPort(addr)
+	n, e := strconv.ParseUint(port, 10, 16)
+	return err == nil && host != "" && !strings.ContainsAny(host, " /\\@|\r\n\t") && e == nil && n != 0 && strconv.FormatUint(n, 10) == port
+}
+
+func (r Restorer) checkMaintenanceSQLTargets(ctx context.Context, tx *sql.Tx, purpose string, zone uint32, schemas []string) error {
+	if !promotionTargetID(r.LocalTargetID) || !maintenanceAddress(r.MaintenanceSQLAddr) || zone == 0 || zone > placement.MaxZoneStorageID || purpose != "promotion" && purpose != "release" {
+		return errors.New("维护SQL目标scope/nonce/物理地址非法")
 	}
-	for _, schema := range []string{p.RouteSchema, p.Schema} {
-		for _, want := range []string{"local-debug-import-target", "old-scene-recovery:" + r.LocalTargetID} {
-			var got string
-			if err := tx.QueryRowContext(ctx, "SELECT marker FROM `"+schema+"`.debug_import_local_target WHERE marker=? FOR UPDATE", want).Scan(&got); err != nil || got != want {
-				return errors.New("维护目标缺已审本地实例标记")
-			}
+	ordered := append([]string{}, schemas...)
+	sort.Strings(ordered)
+	last := ""
+	for _, schema := range ordered {
+		if !validSchema(schema) {
+			return errors.New("维护SQL schema非法")
 		}
+		if schema == last {
+			continue
+		}
+		last = schema
+		var nonce, address string
+		if err := tx.QueryRowContext(ctx, "SELECT target_nonce,physical_addr FROM `"+schema+"`.maintenance_recovery_target WHERE purpose=? AND zone_id=? AND schema_name=? FOR UPDATE", purpose, zone, []byte(schema)).Scan(&nonce, &address); err != nil {
+			return fmt.Errorf("专用维护SQL标记缺失或不可读: %w", err)
+		}
+		if nonce != r.LocalTargetID || address != r.MaintenanceSQLAddr {
+			return errors.New("维护SQL目标身份或物理地址变化")
+		}
+	}
+	return nil
+}
+
+// MaintenanceRedisScope是CLI与提交实现共用的固定键合同，不查询或创建任何标记。
+func MaintenanceRedisScope(purpose, role string, zone uint32, routeSchema, schema, addr string, db int) (string, string, error) {
+	if purpose != "promotion" && purpose != "release" || role != "core" && role != "mapping" || zone == 0 || zone > placement.MaxZoneStorageID || !validSchema(routeSchema) || !validSchema(schema) || !maintenanceAddress(addr) || db < 0 {
+		return "", "", errors.New("维护Redis目标scope非法")
+	}
+	key := fmt.Sprintf("maintenance_recovery:target:%s:%d:%s:%s", purpose, zone, schema, role)
+	value := fmt.Sprintf("maintenance-recovery-v1|%s|%s|%d|%s|%s|%s|%d", purpose, role, zone, routeSchema, schema, addr, db)
+	return key, value, nil
+}
+
+type MaintenanceRedisMarker struct {
+	Role  string `json:"role"`
+	Key   string `json:"key"`
+	Scope string `json:"scope"`
+	Nonce string `json:"target_nonce"`
+}
+
+// 只读预检不代替Lua内的原子复核；绝不创建或修补任一标记。
+func ReadMaintenanceRedisMarker(ctx context.Context, client *redis.Client, purpose, role string, zone uint32, routeSchema, schema string) (MaintenanceRedisMarker, error) {
+	if client == nil {
+		return MaintenanceRedisMarker{}, errors.New("缺显式Redis目标")
+	}
+	key, scope, err := MaintenanceRedisScope(purpose, role, zone, routeSchema, schema, client.Options().Addr, client.Options().DB)
+	if err != nil {
+		return MaintenanceRedisMarker{}, err
+	}
+	for _, want := range []struct{ key, value string }{{key, scope}, {key + ":nonce", ""}} {
+		kind, err := client.Type(ctx, want.key).Result()
+		if err != nil || kind != "string" {
+			return MaintenanceRedisMarker{}, errors.New("专用维护标记缺失或类型错误")
+		}
+		ttl, err := client.PTTL(ctx, want.key).Result()
+		if err != nil || ttl != -1 {
+			return MaintenanceRedisMarker{}, errors.New("专用维护标记必须永久无TTL")
+		}
+	}
+	value, err := client.Get(ctx, key).Result()
+	if err != nil || value != scope {
+		return MaintenanceRedisMarker{}, errors.New("维护Redis role/zone/schema/物理scope不符")
+	}
+	nonce, err := client.Get(ctx, key+":nonce").Result()
+	if err != nil || !promotionTargetID(nonce) {
+		return MaintenanceRedisMarker{}, errors.New("缺永久维护Redis nonce")
+	}
+	return MaintenanceRedisMarker{Role: role, Key: key, Scope: scope, Nonce: nonce}, nil
+}
+
+func (r Restorer) checkPromotionRedisTargets(ctx context.Context, p Plan) error {
+	for _, t := range []struct {
+		role   string
+		client *redis.Client
+		nonce  string
+	}{{"core", r.Redis, r.RedisTargetID}, {"mapping", r.mapping(), r.MappingTargetID}} {
+		marker, err := ReadMaintenanceRedisMarker(ctx, t.client, "promotion", t.role, p.Zone, p.RouteSchema, p.Schema)
+		if err != nil {
+			return err
+		}
+		if marker.Nonce != t.nonce {
+			return errors.New("维护Redis nonce偏离原审定")
+		}
+	}
+	if r.Redis.Options().Addr == r.mapping().Options().Addr && r.Redis.Options().DB == r.mapping().Options().DB && r.RedisTargetID != r.MappingTargetID {
+		return errors.New("同物理Redis不能声明不同实例nonce")
 	}
 	return nil
 }
@@ -1152,6 +1266,7 @@ type MaintenanceReleasePlan struct {
 	Zone          uint32                     `json:"zone"`
 	MaintenanceID string                     `json:"maintenance_id"`
 	LocalTarget   string                     `json:"local_target_id"`
+	SQLAddr       string                     `json:"physical_sql_addr"`
 	RouteSchema   string                     `json:"route_schema"`
 	Review        ReleaseFile                `json:"review"`
 	Members       []MaintenanceReleaseMember `json:"members"`
@@ -1177,6 +1292,7 @@ type MaintenanceReleaseTarget struct {
 	DB            int                       `json:"db"`
 	InstanceNonce string                    `json:"instance_nonce"`
 	Guards        []MaintenanceReleaseGuard `json:"guards"`
+	Markers       []MaintenanceRedisMarker  `json:"markers"`
 }
 type MaintenanceReleaseGuard struct {
 	Key   string `json:"key"`
@@ -1187,12 +1303,12 @@ type ReleaseFile struct {
 	SHA256 string `json:"sha256"`
 }
 
-const maintenanceReleaseFormat = "player-save-explicit-maintenance-release-v1"
+const maintenanceReleaseFormat = "player-save-explicit-maintenance-release-v2"
 
 // PrepareMaintenanceRelease 只读SQL/Redis，不写收据、guard或业务状态。
 // permit须由同一审定review和本次新排他窗构造；SQL不宣称能保证进程/操作者排他。
 func (r Restorer) PrepareMaintenanceRelease(ctx context.Context, zone uint32, maintenance string, members []MaintenanceReleaseMember, permit *MaintenanceReleasePermit) (MaintenanceReleasePlan, error) {
-	p := MaintenanceReleasePlan{Format: maintenanceReleaseFormat, Zone: zone, MaintenanceID: maintenance, LocalTarget: r.LocalTargetID, RouteSchema: r.RouteSchema, Members: members}
+	p := MaintenanceReleasePlan{Format: maintenanceReleaseFormat, Zone: zone, MaintenanceID: maintenance, LocalTarget: r.LocalTargetID, SQLAddr: r.MaintenanceSQLAddr, RouteSchema: r.RouteSchema, Members: members}
 	if permit == nil || permit.planSHA != "" {
 		return p, errors.New("只读release-plan需要未绑定计划的新审定窗口")
 	}
@@ -1300,10 +1416,11 @@ func (r Restorer) releaseTargets(ctx context.Context, zone uint32, maintenance s
 		{"mapping", r.mapping(), []MaintenanceReleaseGuard{{MaintenanceKey(zone), maintenance}, {placement.MergeFenceKey(zone), routeGuardValue(maintenance)}}},
 	} {
 		c := item.client
-		nonce, err := c.Get(ctx, "debug_import:local_instance_id").Result()
-		if err != nil || !promotionTargetID(nonce) {
-			return nil, errors.New("缺永久Redis实例nonce")
+		marker, err := ReadMaintenanceRedisMarker(ctx, c, "release", item.role, zone, r.RouteSchema, r.RouteSchema)
+		if err != nil {
+			return nil, err
 		}
+		nonce := marker.Nonce
 		merged := -1
 		for i, t := range targets {
 			if t.Addr == c.Options().Addr && t.DB == c.Options().DB {
@@ -1315,6 +1432,7 @@ func (r Restorer) releaseTargets(ctx context.Context, zone uint32, maintenance s
 			if t.InstanceNonce != nonce {
 				return nil, errors.New("同一物理目标nonce观察冲突")
 			}
+			t.Markers = append(t.Markers, marker)
 			for _, g := range item.guards {
 				found := false
 				for _, prior := range t.Guards {
@@ -1331,13 +1449,13 @@ func (r Restorer) releaseTargets(ctx context.Context, zone uint32, maintenance s
 			}
 			continue
 		}
-		targets = append(targets, MaintenanceReleaseTarget{Role: item.role, Addr: c.Options().Addr, DB: c.Options().DB, InstanceNonce: nonce, Guards: item.guards})
+		targets = append(targets, MaintenanceReleaseTarget{Role: item.role, Addr: c.Options().Addr, DB: c.Options().DB, InstanceNonce: nonce, Guards: item.guards, Markers: []MaintenanceRedisMarker{marker}})
 	}
 	return targets, nil
 }
 func (r Restorer) validateMaintenanceRelease(p MaintenanceReleasePlan) error {
-	if p.Format != maintenanceReleaseFormat || !releaseHex(p.Intent, 64) || p.Zone == 0 || p.Zone > placement.MaxZoneStorageID || p.MaintenanceID == "" || len(p.MaintenanceID) > 128 || p.LocalTarget != r.LocalTargetID || !promotionTargetID(p.LocalTarget) || p.RouteSchema != r.RouteSchema || !validSchema(p.RouteSchema) || r.RoutingMode != RoutingModeDBFirst || r.LocalMySQL || r.DB == nil || r.Redis == nil || r.mapping() == nil || len(p.Members) == 0 || len(p.Members) > 1000 {
-		return errors.New("显式解除仅限原TiDB/db_first/本地实例/完整具名成员")
+	if p.Format != maintenanceReleaseFormat || !releaseHex(p.Intent, 64) || p.Zone == 0 || p.Zone > placement.MaxZoneStorageID || p.MaintenanceID == "" || len(p.MaintenanceID) > 128 || p.LocalTarget != r.LocalTargetID || !promotionTargetID(p.LocalTarget) || p.SQLAddr != r.MaintenanceSQLAddr || !maintenanceAddress(p.SQLAddr) || p.RouteSchema != r.RouteSchema || !validSchema(p.RouteSchema) || r.RoutingMode != RoutingModeDBFirst || r.LocalMySQL || r.DB == nil || r.Redis == nil || r.mapping() == nil || len(p.Members) == 0 || len(p.Members) > 1000 {
+		return errors.New("显式解除仅限原TiDB/db_first/维护目标/完整具名成员")
 	}
 	seen := map[uint64]bool{}
 	recovered := 0
@@ -1377,23 +1495,45 @@ func (r Restorer) validateMaintenanceRelease(p MaintenanceReleasePlan) error {
 	}
 
 	expected := map[string]map[string]string{}
+	expectedMarkers := map[string]map[string]MaintenanceRedisMarker{}
 	// go-redis把构造参数MaxRetries:-1规范为Options().MaxRetries==0；默认构造会规范为3。
-	for _, c := range []*redis.Client{r.Redis, r.mapping()} {
+	for i, c := range []*redis.Client{r.Redis, r.mapping()} {
 		if c == nil || c.Options().MaxRetries != 0 {
 			return errors.New("解除连接必须关闭自动命令重试")
 		}
 		key := fmt.Sprintf("%s/%d", c.Options().Addr, c.Options().DB)
 		if expected[key] == nil {
 			expected[key] = map[string]string{MaintenanceKey(p.Zone): p.MaintenanceID}
+			expectedMarkers[key] = map[string]MaintenanceRedisMarker{}
 		}
+		role := []string{"core", "mapping"}[i]
+		mk, scope, err := MaintenanceRedisScope("release", role, p.Zone, p.RouteSchema, p.RouteSchema, c.Options().Addr, c.Options().DB)
+		if err != nil {
+			return err
+		}
+		expectedMarkers[key][role] = MaintenanceRedisMarker{Role: role, Key: mk, Scope: scope}
 	}
 	mk := fmt.Sprintf("%s/%d", r.mapping().Options().Addr, r.mapping().Options().DB)
 	expected[mk][placement.MergeFenceKey(p.Zone)] = routeGuardValue(p.MaintenanceID)
 	for _, t := range p.Targets {
 		key := fmt.Sprintf("%s/%d", t.Addr, t.DB)
 		guards, ok := expected[key]
-		if !ok || !promotionTargetID(t.InstanceNonce) || len(guards) != len(t.Guards) {
+		role := "mapping"
+		if t.Addr == r.Redis.Options().Addr && t.DB == r.Redis.Options().DB {
+			role = "core"
+		}
+		if !ok || t.Role != role || !promotionTargetID(t.InstanceNonce) || len(guards) != len(t.Guards) || len(t.Markers) != len(expectedMarkers[key]) {
 			return errors.New("目标/guard不是固定全集")
+		}
+		for _, marker := range t.Markers {
+			want, exists := expectedMarkers[key][marker.Role]
+			if !exists || marker.Key != want.Key || marker.Scope != want.Scope || marker.Nonce != t.InstanceNonce {
+				return errors.New("维护角色marker不是原物理目标全集")
+			}
+			delete(expectedMarkers[key], marker.Role)
+		}
+		if len(expectedMarkers[key]) != 0 {
+			return errors.New("维护角色marker遗漏")
 		}
 		for _, g := range t.Guards {
 			if guards[g.Key] != g.Value {
@@ -1432,16 +1572,21 @@ func (r Restorer) releaseTarget(ctx context.Context, p MaintenanceReleasePlan, t
 	gd := sha256.Sum256(guardRaw)
 	receipt := ""
 	if planSHA != "" {
-		receipt = fmt.Sprintf("release-v1|%s|%s|%x|%s|%x", p.Intent, planSHA, inner, t.InstanceNonce, gd)
+		receipt = fmt.Sprintf("release-v2|%s|%s|%x|%s|%x", p.Intent, planSHA, inner, t.InstanceNonce, gd)
 	}
-	keys := []string{"debug_import:local_target", "debug_import:local_instance_id", maintenanceReleaseReceiptKey(p.Zone, p.MaintenanceID)}
-	args := []any{mode, "local-debug-import-target", t.InstanceNonce, receipt, strconv.Itoa(len(t.Guards)), "0", strconv.FormatInt(expiresMS, 10)}
+	keys := []string{}
+	args := []any{mode, receipt, strconv.Itoa(len(t.Markers)), strconv.Itoa(len(t.Guards)), "0", strconv.FormatInt(expiresMS, 10)}
+	for _, marker := range t.Markers {
+		keys = append(keys, marker.Key, marker.Key+":nonce")
+		args = append(args, marker.Scope, marker.Nonce)
+	}
+	keys = append(keys, maintenanceReleaseReceiptKey(p.Zone, p.MaintenanceID))
 	for _, g := range t.Guards {
 		keys = append(keys, g.Key)
 		args = append(args, g.Value)
 	}
 	if t.Addr == r.Redis.Options().Addr && t.DB == r.Redis.Options().DB {
-		args[5] = strconv.Itoa(len(p.Members))
+		args[4] = strconv.Itoa(len(p.Members))
 		for _, m := range p.Members {
 			keys = append(keys, ownerepoch.OwnerEpochKey(m.PlayerID), savebarrier.Key(m.PlayerID))
 			args = append(args, strconv.FormatUint(m.Owner, 10), savebarrier.Version(m.Owner, m.SaveSeq), m.Fence)
@@ -1454,7 +1599,7 @@ func (r Restorer) releaseTarget(ctx context.Context, p MaintenanceReleasePlan, t
 // releaseSQLSnapshot只读一致事务；全部列含NULL/blob入摘要。无事务内Redis/Kafka/Scene调用。
 // 验证的是正式领域终态和永久原件，不重新实现Cancel的业务裁决或更新任何P/state。
 func (r Restorer) releaseSQLSnapshot(ctx context.Context, p MaintenanceReleasePlan) (string, error) {
-	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return "", err
 	}
@@ -1467,10 +1612,14 @@ func (r Restorer) releaseSQLSnapshot(ctx context.Context, p MaintenanceReleasePl
 		}
 		return rows, e
 	}
-	for _, schema := range append([]string{p.RouteSchema}, releaseMemberSchemas(p.Members)...) {
-		rows, e := read("marker/"+schema, "SELECT marker FROM `"+schema+"`.debug_import_local_target WHERE marker IN (?,?) ORDER BY marker", "local-debug-import-target", "old-scene-recovery:"+p.LocalTarget)
-		if e != nil || len(rows) != 2 || string(rows[0].value("marker")) != "local-debug-import-target" || string(rows[1].value("marker")) != "old-scene-recovery:"+p.LocalTarget {
-			return "", errors.New("SQL本地实例标记不符")
+	schemas := append([]string{p.RouteSchema}, releaseMemberSchemas(p.Members)...)
+	if err := r.checkMaintenanceSQLTargets(ctx, tx, "release", p.Zone, schemas); err != nil {
+		return "", err
+	}
+	for _, schema := range schemas {
+		rows, e := read("marker/"+schema, "SELECT * FROM `"+schema+"`.maintenance_recovery_target WHERE purpose=? AND zone_id=? AND schema_name=? FOR UPDATE", "release", p.Zone, []byte(schema))
+		if e != nil || len(rows) != 1 || string(rows[0].value("target_nonce")) != p.LocalTarget || string(rows[0].value("physical_addr")) != r.MaintenanceSQLAddr {
+			return "", errors.New("专用维护SQL目标原件不符")
 		}
 	}
 	meta, e := read("route_meta", "SELECT * FROM `"+p.RouteSchema+"`.route_meta WHERE id=1")
@@ -1803,14 +1952,17 @@ func releaseRecoveryProto(row releaseSQLRecord) (*databasepb.AccountRoleAdmissio
 	return r, nil
 }
 
-// MaintenanceReleasePermit不暴露可写的授权布尔。唯一构造器读取审定source/实际PE/native原件，
-// 并把短排他窗转成本进程单调截止；窗口不是SQL对外部进程的保证。
+// MaintenanceReleasePermit由稳定运维原件构造。权限来自显式维护执行与受限凭据，
+// SHA只固定原件完整性；本模块不认证操作人、不解释验收PE或操作系统进程格式。
 type MaintenanceReleasePermit struct {
 	review       ReleaseFile
 	input        ReleaseFile
 	members      MaintenanceReleaseInput
 	planSHA      string
 	runID        string
+	targetID     string
+	sqlAddr      string
+	routeSchema  string
 	deadline     time.Time
 	expiresMS    int64
 	redisTargets []maintenanceReleaseReviewedRedisTarget
@@ -1821,45 +1973,68 @@ type MaintenanceReleaseInput struct {
 	MaintenanceID string                     `json:"maintenance_id"`
 	Members       []MaintenanceReleaseMember `json:"members"`
 }
-type maintenanceReleaseProducer struct {
-	Role       string      `json:"role"`
-	Schema     string      `json:"schema"`
-	Kind       string      `json:"kind"`
-	Source     ReleaseFile `json:"source"`
-	Executable ReleaseFile `json:"executable"`
-	BuildProof ReleaseFile `json:"build_proof"`
-}
 type maintenanceReleaseFact struct {
-	Role          string        `json:"role"`
-	Actual        ReleaseFile   `json:"actual"`
-	NativeRecords []ReleaseFile `json:"native_records"`
+	Role   string      `json:"role"`
+	Actual ReleaseFile `json:"actual"`
 }
 type maintenanceReleaseReview struct {
-	Format         string                                  `json:"schema"`
-	RunID          string                                  `json:"run_id"`
-	MembersInput   ReleaseFile                             `json:"members_input"`
-	Producers      []maintenanceReleaseProducer            `json:"producers"`
-	StableFacts    []maintenanceReleaseFact                `json:"stable_facts"`
-	KafkaInventory ReleaseFile                             `json:"kafka_inventory"`
-	RedisTargets   []maintenanceReleaseReviewedRedisTarget `json:"redis_targets"`
+	Format          string                                  `json:"schema"`
+	RunID           string                                  `json:"operation_id"`
+	TargetID        string                                  `json:"target_nonce"`
+	SQLAddr         string                                  `json:"physical_sql_addr"`
+	RouteSchema     string                                  `json:"route_schema"`
+	MembersInput    ReleaseFile                             `json:"members_input"`
+	IssuerInventory ReleaseFile                             `json:"issuer_inventory"`
+	StableFacts     []maintenanceReleaseFact                `json:"stable_facts"`
+	KafkaInventory  ReleaseFile                             `json:"kafka_inventory"`
+	RedisTargets    []maintenanceReleaseReviewedRedisTarget `json:"redis_targets"`
 }
 type maintenanceReleaseAttempt struct {
 	Format     string                   `json:"schema"`
 	Review     ReleaseFile              `json:"review"`
-	RunID      string                   `json:"run_id"`
+	RunID      string                   `json:"operation_id"`
 	PlanSHA256 string                   `json:"plan_sha256"`
 	Window     ReleaseFile              `json:"window"`
 	Facts      []maintenanceReleaseFact `json:"facts"`
 }
+type maintenanceReleaseIssuer struct {
+	ID       string `json:"issuer_id"`
+	Role     string `json:"role"`
+	Instance string `json:"instance_id"`
+}
+type maintenanceReleaseIssuerInventory struct {
+	Format      string                     `json:"schema"`
+	RunID       string                     `json:"operation_id"`
+	TargetID    string                     `json:"target_nonce"`
+	Zone        uint32                     `json:"zone"`
+	RouteSchema string                     `json:"route_schema"`
+	Issuers     []maintenanceReleaseIssuer `json:"issuers"`
+}
+type maintenanceReleaseRetirement struct {
+	Format              string                   `json:"schema"`
+	RunID               string                   `json:"operation_id"`
+	Issuer              maintenanceReleaseIssuer `json:"issuer"`
+	PublicationClosedMS int64                    `json:"publication_closed_ms"`
+	StoppedMS           int64                    `json:"stopped_ms"`
+	RevivalFenceID      string                   `json:"revival_fence_id"`
+	Evidence            []ReleaseFile            `json:"source_evidence"`
+}
+type maintenanceReleaseIssuerWindow struct {
+	Issuer                maintenanceReleaseIssuer `json:"issuer"`
+	Retirement            ReleaseFile              `json:"retirement"`
+	ObservedMS            int64                    `json:"observed_ms"`
+	RevivalBlockedUntilMS int64                    `json:"revival_blocked_until_ms"`
+	RevivalFenceID        string                   `json:"revival_fence_id"`
+	Evidence              []ReleaseFile            `json:"source_evidence"`
+}
 type maintenanceReleaseWindow struct {
-	Format     string      `json:"schema"`
-	RunID      string      `json:"run_id"`
-	PlanSHA256 string      `json:"plan_sha256"`
-	Review     ReleaseFile `json:"review"`
-	IssuedMS   int64       `json:"issued_ms"`
-	ExpiresMS  int64       `json:"expires_ms"`
-	// 原coordinator关闭发布入口/所有原entry退出的完整原件，而非writersStopped=true。
-	NativeRecords []ReleaseFile `json:"native_records"`
+	Format     string                           `json:"schema"`
+	RunID      string                           `json:"operation_id"`
+	PlanSHA256 string                           `json:"plan_sha256"`
+	Review     ReleaseFile                      `json:"review"`
+	IssuedMS   int64                            `json:"issued_ms"`
+	ExpiresMS  int64                            `json:"expires_ms"`
+	Issuers    []maintenanceReleaseIssuerWindow `json:"issuers"`
 }
 
 func ReadMaintenanceReleaseMembers(pin ReleaseFile) (MaintenanceReleaseInput, error) {
@@ -1870,137 +2045,201 @@ func ReadMaintenanceReleaseMembers(pin ReleaseFile) (MaintenanceReleaseInput, er
 	}
 	return result, nil
 }
+func maintenanceLabel(s string) bool {
+	return s != "" && len(s) <= 256 && strings.Trim(s, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.:/@-") == ""
+}
+func releaseSourceEvidence(pins []ReleaseFile) error {
+	if len(pins) == 0 || len(pins) > 128 {
+		return errors.New("缺实际采集源原件或超预算")
+	}
+	seen := map[ReleaseFile]bool{}
+	for _, p := range pins {
+		if seen[p] {
+			return errors.New("采集源原件重复")
+		}
+		seen[p] = true
+		raw, err := readReleaseBound(p, 16<<20)
+		if err != nil {
+			return err
+		}
+		if len(raw) == 0 {
+			return errors.New("采集源原件为空")
+		}
+	}
+	return nil
+}
+func releaseIssuerSet(review maintenanceReleaseReview, input MaintenanceReleaseInput) (map[string]maintenanceReleaseIssuer, error) {
+	var inv maintenanceReleaseIssuerInventory
+	if readReleaseJSON(review.IssuerInventory, &inv) != nil || inv.Format != "maintenance-release-issuer-inventory-v1" || inv.RunID != review.RunID || inv.TargetID != review.TargetID || inv.Zone != input.Zone || inv.RouteSchema != review.RouteSchema || len(inv.Issuers) == 0 || len(inv.Issuers) > 1024 {
+		return nil, errors.New("缺原审定发行方完整目录")
+	}
+	set := map[string]maintenanceReleaseIssuer{}
+	for _, i := range inv.Issuers {
+		if !maintenanceLabel(i.ID) || !maintenanceLabel(i.Role) || !maintenanceLabel(i.Instance) || set[i.ID].ID != "" {
+			return nil, errors.New("发行方原身份重复或非法")
+		}
+		set[i.ID] = i
+	}
+	return set, nil
+}
+func readReleaseRetirements(f maintenanceReleaseFact, review maintenanceReleaseReview, expected map[string]maintenanceReleaseIssuer, w maintenanceReleaseWindow) (map[string]ReleaseFile, error) {
+	var actual struct {
+		Format      string        `json:"schema"`
+		RunID       string        `json:"operation_id"`
+		Inventory   ReleaseFile   `json:"issuer_inventory"`
+		Retirements []ReleaseFile `json:"retirements"`
+	}
+	if readReleaseJSON(f.Actual, &actual) != nil || actual.Format != "maintenance-release-issuer-retirements-v1" || actual.RunID != review.RunID || actual.Inventory != review.IssuerInventory || len(actual.Retirements) != len(expected) {
+		return nil, errors.New("发行停止事实与原全集不等")
+	}
+	set := map[string]ReleaseFile{}
+	for _, pin := range actual.Retirements {
+		var r maintenanceReleaseRetirement
+		if readReleaseJSON(pin, &r) != nil || r.Format != "maintenance-release-issuer-retirement-v1" || r.RunID != review.RunID || expected[r.Issuer.ID].ID == "" || expected[r.Issuer.ID] != r.Issuer || set[r.Issuer.ID].Path != "" || r.PublicationClosedMS <= 0 || r.StoppedMS < r.PublicationClosedMS || r.StoppedMS > w.IssuedMS || !maintenanceLabel(r.RevivalFenceID) {
+			return nil, errors.New("原发行方停止/关闭发布事实不完整或换身份")
+		}
+		if err := releaseSourceEvidence(r.Evidence); err != nil {
+			return nil, err
+		}
+		set[r.Issuer.ID] = pin
+	}
+	if len(w.Issuers) != len(set) {
+		return nil, errors.New("新维护窗缺原发行方等集")
+	}
+	seen := map[string]bool{}
+	for _, i := range w.Issuers {
+		if expected[i.Issuer.ID].ID == "" || expected[i.Issuer.ID] != i.Issuer || seen[i.Issuer.ID] || i.Retirement != set[i.Issuer.ID] || i.ObservedMS < w.IssuedMS || i.ObservedMS > w.ExpiresMS || i.RevivalBlockedUntilMS < w.ExpiresMS {
+			return nil, errors.New("新窗换发行方/原停止原件或未覆盖禁止复活区间")
+		}
+		seen[i.Issuer.ID] = true
+		var r maintenanceReleaseRetirement
+		if readReleaseJSON(i.Retirement, &r) != nil || r.RevivalFenceID != i.RevivalFenceID {
+			return nil, errors.New("新窗未沿原撤销范围")
+		}
+		if err := releaseSourceEvidence(i.Evidence); err != nil {
+			return nil, err
+		}
+	}
+	return set, nil
+}
 
-// ReadMaintenanceReleasePermit只读本地原件；调用它不代表任何SQL/Redis事实已采集。
-// 未来actual缺失时明确拒绝。schema/source/PE/Build/native/输出逐层绑定，不取passed作事实。
+// 这里只核稳定审核原件，不把本地文件视作权限，也不宣称代采跨主机事实。
+// 实际停止/撤凭据采集由有权运维负责；私有验收先核原句柄/创建全集再转换。
 func ReadMaintenanceReleasePermit(ctx context.Context, reviewPin, attemptPin ReleaseFile, expectedPlanSHA string) (*MaintenanceReleasePermit, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if expectedPlanSHA != "" && !releaseHex(expectedPlanSHA, 64) {
+		return nil, errors.New("解除计划摘要非法")
+	}
 	var review maintenanceReleaseReview
 	var attempt maintenanceReleaseAttempt
-	if readReleaseJSON(reviewPin, &review) != nil || readReleaseJSON(attemptPin, &attempt) != nil || review.Format != "maintenance-release-reviewed-producers-v1" || attempt.Format != "maintenance-release-fresh-attempt-v1" || review.RunID == "" || attempt.RunID != review.RunID || attempt.Review != reviewPin || attempt.PlanSHA256 != expectedPlanSHA {
-		return nil, errors.New("审定release review/本次attempt/原计划不符")
+	if readReleaseJSON(reviewPin, &review) != nil || readReleaseJSON(attemptPin, &attempt) != nil || review.Format != "maintenance-release-operator-review-v1" || attempt.Format != "maintenance-release-attempt-v1" || !maintenanceLabel(review.RunID) || attempt.RunID != review.RunID || attempt.Review != reviewPin || attempt.PlanSHA256 != expectedPlanSHA || !promotionTargetID(review.TargetID) || !maintenanceAddress(review.SQLAddr) || !validSchema(review.RouteSchema) {
+		return nil, errors.New("原运维审核/本次尝试/计划或物理目标不符")
 	}
 	input, err := ReadMaintenanceReleaseMembers(review.MembersInput)
 	if err != nil {
 		return nil, err
 	}
+	issuers, err := releaseIssuerSet(review, input)
+	if err != nil {
+		return nil, err
+	}
 	var window maintenanceReleaseWindow
-	if readReleaseJSON(attempt.Window, &window) != nil || window.Format != "owned-recovery-explicit-release-window-v1" || window.RunID != review.RunID || window.Review != reviewPin || window.PlanSHA256 != expectedPlanSHA || window.ExpiresMS <= window.IssuedMS || window.ExpiresMS-window.IssuedMS > 60000 {
-		return nil, errors.New("缺原计划的新短排他窗原件")
+	if readReleaseJSON(attempt.Window, &window) != nil || window.Format != "maintenance-release-window-v1" || window.RunID != review.RunID || window.Review != reviewPin || window.PlanSHA256 != expectedPlanSHA || window.IssuedMS <= 0 || window.ExpiresMS <= window.IssuedMS || window.ExpiresMS-window.IssuedMS > 60000 {
+		return nil, errors.New("缺原计划的新短维护窗")
 	}
 	now := time.Now()
 	if window.IssuedMS > now.UnixMilli() || window.ExpiresMS <= now.UnixMilli() {
-		return nil, errors.New("排他维护窗尚未开始或已过期")
+		return nil, errors.New("维护窗未开始或已过期")
 	}
-	if len(window.NativeRecords) == 0 {
-		return nil, errors.New("排他窗缺所有原entry退出原件，不采纳声明布尔")
-	}
-	for _, pin := range window.NativeRecords {
-		if err := verifyMaintenanceReleaseStoppedRecord(pin); err != nil {
-			return nil, err
+	stable := map[string]ReleaseFile{}
+	for _, f := range review.StableFacts {
+		if stable[f.Role].Path != "" {
+			return nil, errors.New("稳定事实重复")
 		}
-	}
-	producers := map[string]maintenanceReleaseProducer{}
-	for _, producer := range review.Producers {
-		if producers[producer.Role].Role != "" || producer.Role == "" || producer.Schema == "" {
-			return nil, errors.New("解除producer重复/缺contract")
-		}
-		if _, err = readReleaseBound(producer.Source, 16<<20); err != nil {
-			return nil, err
-		}
-		if _, err = readReleaseBound(producer.Executable, 256<<20); err != nil {
-			return nil, err
-		}
-		if producer.Kind == "go-specific" {
-			if err = verifyMaintenanceReleaseBuild(producer); err != nil {
+		stable[f.Role] = f.Actual
+		if f.Role == "issuer-cutoff" {
+			if _, err = readReleaseRetirements(f, review, issuers, window); err != nil {
 				return nil, err
 			}
-		} else if producer.Kind != "coordinator-kafka-readonly" {
-			return nil, errors.New("未实现的解除事实producer类型，拒绝占位")
+		} else if !strings.HasPrefix(f.Role, "trade-cancel/") {
+			return nil, errors.New("稳定事实包含未知角色或复用旧队列观察")
 		}
-		if producer.Role == "kafka-queues" {
-			if producer.Kind != "coordinator-kafka-readonly" {
-				return nil, errors.New("Kafka只能原CLI coordinator producer")
+	}
+	if stable["issuer-cutoff"].Path == "" {
+		return nil, errors.New("缺实际全发行方停止事实")
+	}
+	expectedStable := map[string]bool{"issuer-cutoff": true}
+	for _, m := range input.Members {
+		if len(m.PromotionProto) > 0 {
+			role := "trade-cancel/" + strconv.FormatUint(m.PlayerID, 10)
+			if expectedStable[role] || stable[role] != m.CancelAction {
+				return nil, errors.New("恢复成员缺原正式Cancel或同COUNT换成员")
 			}
-		} else if producer.Kind != "go-specific" {
-			return nil, errors.New("cutoff/Redis/Cancel必须实际独立Go PE")
-		}
-		producers[producer.Role] = producer
-	}
-	for _, fact := range review.StableFacts {
-		if fact.Role == "redis-queues" || fact.Role == "kafka-queues" {
-			return nil, errors.New("队列actual只能在本次fresh attempt，不准StableFacts复用")
+			expectedStable[role] = true
+			if _, err = readMaintenanceReleaseCancel(m.CancelAction); err != nil {
+				return nil, err
+			}
 		}
 	}
-	fresh := map[string]bool{}
-	for _, fact := range attempt.Facts {
-		if fact.Role != "redis-queues" && fact.Role != "kafka-queues" {
-			return nil, errors.New("fresh事实仅两类队列观察")
-		}
-		if fresh[fact.Role] {
-			return nil, errors.New("fresh队列事实重复")
-		}
-		fresh[fact.Role] = true
-		if err = verifyMaintenanceReleaseFreshNative(fact, window); err != nil {
-			return nil, err
-		}
-	}
-	if !fresh["redis-queues"] || !fresh["kafka-queues"] {
-		return nil, errors.New("每次attempt必须新的两类队列完整观察")
+	if len(stable) != len(expectedStable) {
+		return nil, errors.New("稳定事实与原成员全集不等")
 	}
 	seen := map[string]bool{}
-	for _, fact := range append(append([]maintenanceReleaseFact{}, review.StableFacts...), attempt.Facts...) {
-		producer, ok := producers[fact.Role]
-		if !ok || seen[fact.Role] {
-			return nil, errors.New("解除事实遗漏/重复/未知producer")
+	for _, f := range attempt.Facts {
+		if seen[f.Role] || f.Role != "redis-queues" && f.Role != "kafka-queues" {
+			return nil, errors.New("本次队列观察重复或未知")
 		}
-		seen[fact.Role] = true
-		if err = verifyMaintenanceReleaseFact(producer, fact, review.RunID); err != nil {
+		seen[f.Role] = true
+		if err = verifyMaintenanceReleaseFreshFact(f, review.RunID, window); err != nil {
 			return nil, err
 		}
-		if fact.Role == "redis-queues" {
-			if err = verifyMaintenanceReleaseRedisClosure(review, fact); err != nil {
-				return nil, err
-			}
+		if f.Role == "redis-queues" {
+			err = verifyMaintenanceReleaseRedisClosure(review, f)
+		} else {
+			err = verifyMaintenanceReleaseKafkaClosure(review, f)
 		}
-		if fact.Role == "kafka-queues" {
-			if err = verifyMaintenanceReleaseKafkaClosure(review, fact); err != nil {
-				return nil, err
-			}
+		if err != nil {
+			return nil, err
 		}
 	}
-	for _, role := range []string{"issuer-cutoff", "redis-queues", "kafka-queues"} {
-		if !seen[role] {
-			return nil, errors.New("缺全部issuer/Redis/Kafka真实原件")
-		}
+	if len(seen) != 2 {
+		return nil, errors.New("每次新窗必须两类完整队列原始观察")
 	}
-	if len(seen) != len(producers) {
-		return nil, errors.New("审定producer全集与实际fact不等")
-	}
-	// 所有成员的Cancel action也须是本review实际caller的产物，不接受任意JSON自报。
-	for _, member := range input.Members {
-		if len(member.PromotionProto) > 0 {
-			role := "trade-cancel/" + strconv.FormatUint(member.PlayerID, 10)
-			if !seen[role] {
-				return nil, errors.New("恢复成员缺本轮实际TradeClient Cancel producer")
-			}
-			found := false
-			for _, fact := range review.StableFacts {
-				if fact.Role == role && fact.Actual == member.CancelAction {
-					found = true
-				}
-			}
-			if !found {
-				return nil, errors.New("成员Cancel不是审定原actual")
-			}
-		}
-	}
-	return &MaintenanceReleasePermit{review: reviewPin, input: review.MembersInput, members: input, planSHA: expectedPlanSHA, runID: review.RunID, deadline: now.Add(time.Duration(window.ExpiresMS-now.UnixMilli()) * time.Millisecond), expiresMS: window.ExpiresMS, redisTargets: review.RedisTargets}, nil
+	return &MaintenanceReleasePermit{review: reviewPin, input: review.MembersInput, members: input, planSHA: expectedPlanSHA, runID: review.RunID, targetID: review.TargetID, sqlAddr: review.SQLAddr, routeSchema: review.RouteSchema, deadline: now.Add(time.Duration(window.ExpiresMS-now.UnixMilli()) * time.Millisecond), expiresMS: window.ExpiresMS, redisTargets: review.RedisTargets}, nil
 }
+
+func verifyMaintenanceReleaseFreshFact(f maintenanceReleaseFact, operation string, w maintenanceReleaseWindow) error {
+	v, err := readReleaseObject(f.Actual)
+	if err != nil {
+		return err
+	}
+	want := "maintenance-release-kafka-queues-v1"
+	keys := []string{"schema", "operation_id", "observed_start_ms", "observed_end_ms", "source_evidence", "inventory", "topic_names", "group_names", "partition_rows"}
+	if f.Role == "redis-queues" {
+		want = "maintenance-release-redis-queues-v1"
+		keys = []string{"schema", "operation_id", "observed_start_ms", "observed_end_ms", "source_evidence", "definition", "targets"}
+	}
+	allowed := map[string]bool{}
+	for _, k := range keys {
+		allowed[k] = true
+	}
+	for k := range v {
+		if !allowed[k] {
+			return errors.New("队列原件包含未知或私有验收字段")
+		}
+	}
+	var start, end int64
+	var evidence []ReleaseFile
+	if releaseString(v, "schema") != want || releaseString(v, "operation_id") != operation || json.Unmarshal(v["observed_start_ms"], &start) != nil || json.Unmarshal(v["observed_end_ms"], &end) != nil || start < w.IssuedMS || end < start || end > w.ExpiresMS || json.Unmarshal(v["source_evidence"], &evidence) != nil {
+		return errors.New("队列实际观察不在本次维护窗")
+	}
+	return releaseSourceEvidence(evidence)
+}
+
 func (p *MaintenanceReleasePermit) check(plan MaintenanceReleasePlan, sha string) error {
-	if p == nil || p.deadline.IsZero() || time.Until(p.deadline) <= 0 || p.planSHA != sha || p.review != plan.Review || p.members.Zone != plan.Zone || p.members.MaintenanceID != plan.MaintenanceID {
+	if p == nil || p.deadline.IsZero() || time.Until(p.deadline) <= 0 || p.planSHA != sha || p.review != plan.Review || p.members.Zone != plan.Zone || p.members.MaintenanceID != plan.MaintenanceID || p.targetID != plan.LocalTarget || p.sqlAddr != plan.SQLAddr || p.routeSchema != plan.RouteSchema {
 		return errors.New("解除短窗/原计划/审定维护已失效")
 	}
 	a, _ := json.Marshal(p.members.Members)
@@ -2096,282 +2335,12 @@ func releaseString(v map[string]json.RawMessage, key string) string {
 	_ = json.Unmarshal(v[key], &out)
 	return out
 }
-func verifyMaintenanceReleaseStoppedRecord(pin ReleaseFile) error {
-	v, err := readReleaseObject(pin)
-	if err != nil {
-		return err
-	}
-	if releaseString(v, "schema") != "owned-recovery-original-process-exit-v1" || releaseString(v, "creation_filetime") == "" || releaseString(v, "exit_filetime") == "" {
-		return errors.New("窗口缺原句柄原birth/exit原件")
-	}
-	var pid uint32
-	if json.Unmarshal(v["pid"], &pid) != nil || pid == 0 {
-		return errors.New("退出原件pid不符")
-	}
-	var native map[string]json.RawMessage
-	if json.Unmarshal(v["native_record"], &native) != nil {
-		return errors.New("退出原件缺native正文")
-	}
-	birth, err := positive(releaseString(v, "creation_filetime"))
-	if err != nil {
-		return err
-	}
-	exit, err := positive(releaseString(v, "exit_filetime"))
-	if err != nil || exit < birth || releaseString(native, "process_creation_filetime_utc") != releaseString(v, "creation_filetime") {
-		return errors.New("原entry birth/exit与native不符")
-	}
-	return checkMaintenanceReleaseNative(native, releaseString(v, "image"), false)
-}
-func checkMaintenanceReleaseNative(v map[string]json.RawMessage, program string, requireZero bool) error {
-	var started bool
-	var exit *int
-	var timeout bool
-	_ = json.Unmarshal(v["native_started"], &started)
-	_ = json.Unmarshal(v["native_exit"], &exit)
-	_ = json.Unmarshal(v["timed_out"], &timeout)
-	if !started || exit == nil || requireZero && *exit != 0 || timeout || releaseString(v, "process_creation_filetime_utc") == "" || !strings.EqualFold(filepath.Clean(releaseString(v, "program")), filepath.Clean(program)) {
-		return errors.New("事实producer没有原program/birth/明确退出")
-	}
-	for _, key := range []string{"cleanup_errors", "output_errors", "evidence_errors"} {
-		var rows []json.RawMessage
-		if json.Unmarshal(v[key], &rows) != nil || len(rows) != 0 {
-			return errors.New("事实producer清理/证据不干净")
-		}
-	}
-	return nil
-}
-func verifyMaintenanceReleaseBuild(p maintenanceReleaseProducer) error {
-	v, err := readReleaseObject(p.BuildProof)
-	if err != nil {
-		return err
-	}
-	if releaseString(v, "schema") != "current-go-module-v4-proof" || releaseString(v, "kind") != "RuntimeBuild" {
-		return errors.New("缺具名当前独立Build")
-	}
-	var passed bool
-	var audit []json.RawMessage
-	var first any
-	if json.Unmarshal(v["passed"], &passed) != nil || !passed || json.Unmarshal(v["audit_errors"], &audit) != nil || len(audit) != 0 || json.Unmarshal(v["first_error"], &first) != nil || first != nil {
-		return errors.New("Build整体失败/审计漂移/首错不能用native0覆盖")
-	}
-	var manifest []ReleaseFile
-	if json.Unmarshal(v["manifest_pins"], &manifest) != nil {
-		return errors.New("Build缺原首终封存")
-	}
-	required := map[string]bool{"before-source-diff.json": false, "after-source-diff.json": false, "final-source-diff.json": false, "before-dependency-diff.json": false, "after-dependency-diff.json": false}
-	for _, pin := range manifest {
-		if _, ok := required[filepath.Base(pin.Path)]; ok {
-			if required[filepath.Base(pin.Path)] {
-				return errors.New("Build重复首终diff原件")
-			}
-			raw, e := readReleaseBound(pin, 1<<20)
-			if e != nil {
-				return e
-			}
-			var diff []json.RawMessage
-			if json.Unmarshal(raw, &diff) != nil || len(diff) != 0 {
-				return errors.New("Build source/deps首终diff不为空")
-			}
-			required[filepath.Base(pin.Path)] = true
-		}
-	}
-	for _, found := range required {
-		if !found {
-			return errors.New("Build遗漏首终source/deps diff原件")
-		}
-	}
-
-	var rows []map[string]json.RawMessage
-	if json.Unmarshal(v["native_results"], &rows) != nil || len(rows) != 1 {
-		return errors.New("独立Build原生命令数不符")
-	}
-	// Build本身的go.exe由其原plan工具pin守卫；这里绑定确切test/build输出及唯一本source。
-	if err = checkMaintenanceReleaseNative(rows[0], releaseString(rows[0], "program"), true); err != nil {
-		return err
-	}
-	var args []string
-	_ = json.Unmarshal(rows[0]["arguments"], &args)
-	if len(args) != 5 || args[0] != "build" || args[1] != "-p=1" || args[2] != "-o" || !strings.EqualFold(filepath.Clean(args[3]), filepath.Clean(p.Executable.Path)) || !strings.EqualFold(filepath.Clean(args[4]), filepath.Clean(p.Source.Path)) {
-		return errors.New("Build不是原source的独立PE")
-	}
-	var artifact struct {
-		File       ReleaseFile     `json:"file"`
-		SourceMain json.RawMessage `json:"source_main_files"`
-	}
-	if json.Unmarshal(v["runtime_executable"], &artifact) != nil || !strings.EqualFold(artifact.File.SHA256, p.Executable.SHA256) || !strings.EqualFold(filepath.Clean(artifact.File.Path), filepath.Clean(p.Executable.Path)) {
-		return errors.New("actual Build与原PE pin不符")
-	}
-	var single ReleaseFile
-	var sources []ReleaseFile
-	if len(artifact.SourceMain) > 0 && artifact.SourceMain[0] == '[' {
-		if json.Unmarshal(artifact.SourceMain, &sources) != nil || len(sources) != 1 {
-			return errors.New("Build source_main_files不是唯一来源")
-		}
-		single = sources[0]
-	} else if json.Unmarshal(artifact.SourceMain, &single) != nil {
-		return errors.New("Build缺source_main_files")
-	}
-	if !strings.EqualFold(single.SHA256, p.Source.SHA256) || !strings.EqualFold(filepath.Clean(single.Path), filepath.Clean(p.Source.Path)) {
-		return errors.New("Build时source字节不是审定producer")
-	}
-	return nil
-}
-func verifyMaintenanceReleaseFact(p maintenanceReleaseProducer, f maintenanceReleaseFact, run string) error {
-	if len(f.NativeRecords) == 0 {
-		return errors.New("缺实际fact对应原native row")
-	}
-	for _, pin := range f.NativeRecords {
-		v, err := readReleaseObject(pin)
-		if err != nil {
-			return err
-		}
-		if err = checkMaintenanceReleaseNative(v, p.Executable.Path, true); err != nil {
-			return err
-		}
-		if p.Kind == "go-specific" {
-			if err = verifyMaintenanceReleaseOutputArguments(p, f, v); err != nil {
-				return err
-			}
-		}
-	}
-	v, err := readReleaseObject(f.Actual)
-	if err != nil {
-		return err
-	}
-	if releaseString(v, "schema") != p.Schema {
-		return errors.New("fact contract不是审定source输出")
-	}
-	if value := releaseString(v, "run_id"); value != "" && value != run {
-		return errors.New("fact来自其他run")
-	}
-	switch {
-	case p.Role == "issuer-cutoff":
-		if p.Schema != "owned-recovery-sm-client-cutoff-v1" {
-			return errors.New("cutoff contract不符")
-		}
-		var actions []struct {
-			ID    string `json:"redis_client_id"`
-			Count int    `json:"kill_count"`
-		}
-		if json.Unmarshal(v["exact_id_actions"], &actions) != nil {
-			return errors.New("缺精确client动作记录")
-		}
-		seen := map[string]bool{}
-		for _, a := range actions {
-			if _, err := positive(a.ID); err != nil || seen[a.ID] || a.Count < 0 || a.Count > 1 {
-				return errors.New("cutoff IDs不规范")
-			}
-			seen[a.ID] = true
-		}
-		var stop ReleaseFile
-		if json.Unmarshal(v["issuer_stops"], &stop) != nil {
-			return errors.New("缺原SM/proxy停止原件")
-		}
-		if _, err = readReleaseObject(stop); err != nil {
-			return err
-		}
-	case p.Role == "redis-queues":
-		if p.Schema != "owned-recovery-redis-complete-queue-drain-v1" {
-			return errors.New("Redis队列contract不符")
-		}
-		var targets []struct {
-			PendingBuckets int      `json:"pending_buckets"`
-			Blockers       []string `json:"blockers"`
-			Observations   []struct {
-				Kind  string `json:"kind"`
-				Count int64  `json:"count"`
-			} `json:"observations"`
-		}
-		if json.Unmarshal(v["targets"], &targets) != nil || len(targets) == 0 {
-			return errors.New("缺Redis实际全key观察")
-		}
-		for _, t := range targets {
-			if t.PendingBuckets < 64 || len(t.Blockers) != 0 {
-				return errors.New("64桶遗漏/Redis仍有阻断")
-			}
-			for _, o := range t.Observations {
-				if o.Count < 0 || o.Kind != "barrier" && o.Kind != "instances" && o.Kind != "modes" && o.Count != 0 {
-					return errors.New("Redis队列仍有未处理成员")
-				}
-			}
-		}
-	case p.Role == "kafka-queues":
-		if p.Schema != "owned-recovery-kafka-all-reviewed-generations-drain-proof-v1" || p.Kind != "coordinator-kafka-readonly" {
-			return errors.New("Kafka producer不符")
-		}
-		var rows []struct {
-			Group     string `json:"group"`
-			Topic     string `json:"topic"`
-			Partition int    `json:"partition"`
-			Earliest  int64  `json:"earliest"`
-			Committed int64  `json:"committed"`
-			End       int64  `json:"end"`
-			Lag       int64  `json:"lag"`
-		}
-		if json.Unmarshal(v["partition_rows"], &rows) != nil || len(rows) == 0 {
-			return errors.New("缺Kafka逐世代/订阅实际offset")
-		}
-		seen := map[string]bool{}
-		for _, row := range rows {
-			key := fmt.Sprintf("%s/%s/%d", row.Group, row.Topic, row.Partition)
-			if row.Group == "" || row.Topic == "" || row.Partition < 0 || seen[key] || row.Earliest < 0 || row.Committed < row.Earliest || row.Committed != row.End || row.Lag != 0 {
-				return errors.New("Kafka未提交/积压/分区重复")
-			}
-			seen[key] = true
-		}
-		var inventory ReleaseFile
-		if json.Unmarshal(v["inventory"], &inventory) != nil {
-			return errors.New("Kafka缺审定历史全集")
-		}
-		if _, err = readReleaseObject(inventory); err != nil {
-			return err
-		}
-	case strings.HasPrefix(p.Role, "trade-cancel/"):
-		_, err = readMaintenanceReleaseCancel(f.Actual)
-		return err
-	default:
-		return errors.New("未知解除事实角色")
-	}
-	return nil
-}
-
-func verifyMaintenanceReleaseOutputArguments(p maintenanceReleaseProducer, f maintenanceReleaseFact, native map[string]json.RawMessage) error {
-	var args []string
-	if json.Unmarshal(native["arguments"], &args) != nil || len(args)%2 != 0 {
-		return errors.New("事实producer参数不是固定键值对")
-	}
-	flags := map[string]string{}
-	for i := 0; i < len(args); i += 2 {
-		if flags[args[i]] != "" {
-			return errors.New("事实producer重复参数")
-		}
-		flags[args[i]] = args[i+1]
-	}
-	wantMode := "queues"
-	if p.Role == "issuer-cutoff" {
-		wantMode = "cutoff"
-	}
-	if strings.HasPrefix(p.Role, "trade-cancel/") {
-		wantMode = "cancel"
-		if flags["-mode"] != wantMode || !strings.EqualFold(filepath.Clean(filepath.Join(flags["-out-dir"], "cancel-action.json")), filepath.Clean(f.Actual.Path)) {
-			return errors.New("Cancel实际argv没产此原action")
-		}
-		return nil
-	}
-	if flags["-mode"] != wantMode || !strings.EqualFold(filepath.Clean(flags["-out"]), filepath.Clean(f.Actual.Path)) {
-		return errors.New("actual原件不是该native参数的固定输出")
-	}
-	return nil
-}
-
-// 严格读取Root具名r6 producer的真实action、Begin、reply和post-state；不采信其passed布尔。
-// 请求Auth不落盘；回复协议本来没有签名，绝不捏造reply-auth字段。
 func readMaintenanceReleaseCancel(pin ReleaseFile) (*dspb.CancelAccountRoleTradeRequest, error) {
 	v, err := readReleaseObject(pin)
 	if err != nil {
 		return nil, err
 	}
-	if releaseString(v, "schema") != "owned-old-scene-formal-trade-action-v1" || releaseString(v, "action") != "cancel" {
+	if releaseString(v, "schema") != "maintenance-release-trade-cancel-v1" || releaseString(v, "action") != "cancel" {
 		return nil, errors.New("不是正式原Cancel action")
 	}
 	var requestRaw []byte
@@ -2455,28 +2424,17 @@ type maintenanceReleaseKafkaInventory struct {
 func releaseInventory(pin ReleaseFile) (maintenanceReleaseKafkaInventory, error) {
 	var inv maintenanceReleaseKafkaInventory
 	raw, err := readReleaseBound(pin, 1<<20)
-	if err != nil || json.Unmarshal(raw, &inv) != nil || inv.Schema != "owned-recovery-kafka-reviewed-inventory-v1" || len(inv.Topics) == 0 || len(inv.Topics) > 128 || len(inv.Subscriptions) == 0 {
+	if err != nil || json.Unmarshal(raw, &inv) != nil || inv.Schema != "maintenance-release-kafka-inventory-v1" || len(inv.Topics) == 0 || len(inv.Topics) > 128 || len(inv.Subscriptions) == 0 {
 		return inv, errors.New("缺审定Kafka真实历史全集")
 	}
 	return inv, nil
 }
-func verifyMaintenanceReleaseFreshNative(f maintenanceReleaseFact, w maintenanceReleaseWindow) error {
-	for _, pin := range f.NativeRecords {
-		v, err := readReleaseObject(pin)
-		if err != nil {
-			return err
-		}
-		birth, err := positive(releaseString(v, "process_creation_filetime_utc"))
-		if err != nil || birth < 116444736000000000 {
-			return errors.New("fresh观察原native birth不符")
-		}
-		birthMS := int64((birth - 116444736000000000) / 10000)
-		end, err := time.Parse(time.RFC3339Nano, releaseString(v, "ended_utc"))
-		if err != nil || birthMS < w.IssuedMS || end.UnixMilli() < birthMS || end.UnixMilli() > w.ExpiresMS {
-			return errors.New("队列观察不是本次短窗新执行，拒绝复用历史passed")
-		}
+func topicsForReleaseInventory(inv maintenanceReleaseKafkaInventory) map[string]int {
+	topics := map[string]int{}
+	for _, t := range inv.Topics {
+		topics[t.Name] = t.Partitions
 	}
-	return nil
+	return topics
 }
 func verifyMaintenanceReleaseKafkaClosure(review maintenanceReleaseReview, f maintenanceReleaseFact) error {
 	inv, err := releaseInventory(review.KafkaInventory)
@@ -2589,14 +2547,121 @@ func releaseExactStrings(a, b []string) bool {
 }
 
 type maintenanceReleaseRedisKeyObservation struct {
-	KeySHA      string `json:"key_sha256"`
-	Kind        string `json:"kind"`
-	Topic       string `json:"topic,omitempty"`
-	Type        string `json:"type"`
-	DumpSHA     string `json:"dump_sha256"`
-	PTTL        int64  `json:"pttl_ms"`
-	Count       int64  `json:"count"`
-	OutboxTopic string `json:"outbox_topic,omitempty"`
+	Key         string   `json:"key"`
+	KeySHA      string   `json:"key_sha256"`
+	Kind        string   `json:"kind"`
+	Topic       string   `json:"topic,omitempty"`
+	Type        string   `json:"type"`
+	DumpSHA     string   `json:"dump_sha256"`
+	PTTL        int64    `json:"pttl_ms"`
+	Count       int64    `json:"count"`
+	OutboxTopic string   `json:"outbox_topic,omitempty"`
+	Members     []string `json:"members"`
+	Values      []string `json:"values"`
+}
+
+// 原key及原成员/字段值是机核事实；摘要仅防传输替换，不能代替内容和等集检查。
+func releaseRedisObservation(o maintenanceReleaseRedisKeyObservation, topics map[string]int, zones []uint32) error {
+	h := sha256.Sum256([]byte(o.Key))
+	if o.Key == "" || hex.EncodeToString(h[:]) != o.KeySHA || o.Count < 0 || len(o.Members) > 16384 || len(o.Values) > 16384 {
+		return errors.New("Redis原键/条目不规范")
+	}
+	wantType := ""
+	known := false
+	for _, p := range []struct{ prefix, kind, typ string }{{"kafka:retry:queue:", "retry", "list"}, {"kafka:dead:queue:", "dead", "list"}, {"kafka:retry:processing:", "processing", "list"}, {"kafka:retry:instances:", "instances", "zset"}, {"kafka:retry:instance_mode:", "modes", "hash"}} {
+		if !strings.HasPrefix(o.Key, p.prefix) {
+			continue
+		}
+		rest := strings.TrimPrefix(o.Key, p.prefix)
+		parts := strings.SplitN(rest, ":", 2)
+		if topics[parts[0]] == 0 || o.Topic != parts[0] || o.Kind != p.kind {
+			return errors.New("Redis未知topic/键角色")
+		}
+		if len(parts) == 2 {
+			if p.kind == "retry" {
+				part := strings.TrimPrefix(parts[1], "p")
+				n, e := strconv.Atoi(part)
+				if e != nil || n < 0 || strconv.Itoa(n) != part || parts[1] != "p"+part || n >= topics[parts[0]] {
+					return errors.New("Redis未知retry分区")
+				}
+			} else if p.kind != "processing" || parts[1] == "" || len(parts[1]) > 512 || strings.ContainsAny(parts[1], "\x00\r\n") {
+				return errors.New("Redis未知队列后缀")
+			}
+		}
+		wantType = p.typ
+		known = true
+		break
+	}
+	if o.Kind == "pending" && o.Topic == "" {
+		for _, z := range zones {
+			for b := 0; b < 64; b++ {
+				if o.Key == fmt.Sprintf("player:save_pending:%d:%d", z, b) {
+					known = true
+					wantType = "zset"
+				}
+			}
+		}
+	}
+	if o.Kind == "barrier" && o.Topic == "" {
+		id := strings.TrimSuffix(strings.TrimPrefix(o.Key, "player:{"), "}:save_barrier")
+		n, e := strconv.ParseUint(id, 10, 64)
+		if e == nil && n > 0 && savebarrier.Key(n) == o.Key {
+			known = true
+			wantType = "hash"
+		}
+	}
+	if !known || (o.Type != "none" && o.Type != wantType) || !releaseHex(o.DumpSHA, 64) {
+		return errors.New("Redis未定义键或原类型错误")
+	}
+	if o.Type == "none" {
+		empty := sha256.Sum256(nil)
+		if o.PTTL != -2 || o.Count != 0 || len(o.Members) != 0 || len(o.Values) != 0 || o.DumpSHA != hex.EncodeToString(empty[:]) {
+			return errors.New("缺键原事实冲突")
+		}
+		return nil
+	}
+	if o.PTTL != -1 || int64(len(o.Members)) != o.Count || (wantType == "hash" || wantType == "zset") && len(o.Values) != len(o.Members) {
+		return errors.New("队列原条目数/永久性不符")
+	}
+	seen := map[string]string{}
+	for i, m := range o.Members {
+		if _, ok := seen[m]; ok {
+			return errors.New("Redis原成员重复")
+		}
+		seen[m] = ""
+		if len(o.Values) > i {
+			seen[m] = o.Values[i]
+		}
+	}
+	switch o.Kind {
+	case "retry", "dead", "processing", "pending":
+		if o.Count != 0 {
+			return errors.New("Redis仍有待投原条目")
+		}
+	case "modes":
+		for _, v := range seen {
+			if v != "owner" && v != "shared" {
+				return errors.New("未知retry实例模式")
+			}
+		}
+	case "barrier":
+		p, a, b := seen["pending"], seen["player_database"], seen["player_database_1"]
+		_, pPresent := seen["pending"]
+		_, aPresent := seen["player_database"]
+		_, bPresent := seen["player_database_1"]
+		if pPresent || aPresent || bPresent {
+			e, q, err := savebarrier.Parse(p)
+			if err != nil || e == 0 || q == 0 || p != a || p != b {
+				return errors.New("原屏障双ACK未收敛")
+			}
+		}
+		for f := range seen {
+			if strings.HasPrefix(f, "outbox_") {
+				return errors.New("原屏障存在待投")
+			}
+		}
+	}
+	return nil
 }
 
 func verifyMaintenanceReleaseRedisClosure(review maintenanceReleaseReview, f maintenanceReleaseFact) error {
@@ -2627,15 +2692,22 @@ func verifyMaintenanceReleaseRedisClosure(review maintenanceReleaseReview, f mai
 		} `json:"topics"`
 	}
 	raw, err := readReleaseBound(defPin, 1<<20)
-	if err != nil || json.Unmarshal(raw, &def) != nil || def.Schema != "owned-recovery-redis-reviewed-inventory-v1" {
+	if err != nil || json.Unmarshal(raw, &def) != nil || def.Schema != "maintenance-release-redis-inventory-v1" {
 		return errors.New("Redis实际definition不是已知producer contract")
 	}
 	// definition的非策略字段由原producer强验；这里另核审定target/zone/topic全集，不能只看有若干观察。
 	approved := map[string]maintenanceReleaseReviewedRedisTarget{}
 	for _, target := range review.RedisTargets {
 		key := fmt.Sprintf("%s/%d", target.Addr, target.DB)
-		if target.Role == "" || approved[key].Role != "" || !promotionTargetID(target.InstanceNonce) || len(target.Zones) == 0 {
+		if target.Role != "core" && target.Role != "mapping" || !maintenanceAddress(target.Addr) || target.DB < 0 || approved[key].Role != "" || !promotionTargetID(target.InstanceNonce) || len(target.Zones) == 0 {
 			return errors.New("审定Redis全集重复/非法")
+		}
+		seenZones := map[uint32]bool{}
+		for _, zone := range target.Zones {
+			if zone == 0 || zone > placement.MaxZoneStorageID || seenZones[zone] {
+				return errors.New("审定Redis zone全集非法/重复")
+			}
+			seenZones[zone] = true
 		}
 		approved[key] = target
 	}
@@ -2664,6 +2736,7 @@ func verifyMaintenanceReleaseRedisClosure(review maintenanceReleaseReview, f mai
 		DB             int                                     `json:"db"`
 		RunID          string                                  `json:"run_id"`
 		KeyCount       int                                     `json:"key_count"`
+		KeyNames       []string                                `json:"key_names"`
 		PendingBuckets int                                     `json:"pending_buckets"`
 		Observations   []maintenanceReleaseRedisKeyObservation `json:"observations"`
 		Digest         string                                  `json:"observations_sha256"`
@@ -2688,7 +2761,7 @@ func verifyMaintenanceReleaseRedisClosure(review maintenanceReleaseReview, f mai
 			return errors.New("Redis实际target重复/未知")
 		}
 		definition := def.Targets[index-1]
-		if t.Role != definition.Role || t.RunID != definition.RunID || t.PendingBuckets != 64*len(definition.Zones) || t.KeyCount != len(t.Observations) || len(t.Blockers) != 0 || len(t.Observations) > 16384 {
+		if t.Role != definition.Role || t.RunID != definition.RunID || t.PendingBuckets != 64*len(definition.Zones) || t.KeyCount != len(t.Observations) || len(t.Blockers) != 0 || len(t.Observations) > 16384 || len(t.KeyNames) != len(t.Observations) {
 			return errors.New("Redis实际epoch/64桶/数量或阻断不符")
 		}
 		delete(defs, key)
@@ -2708,8 +2781,13 @@ func verifyMaintenanceReleaseRedisClosure(review maintenanceReleaseReview, f mai
 			}
 		}
 		seen := map[string]bool{}
+		actualNames := []string{}
 		stable := append([]maintenanceReleaseRedisKeyObservation{}, t.Observations...)
 		for i, o := range t.Observations {
+			if err := releaseRedisObservation(o, topicsForReleaseInventory(inv), definition.Zones); err != nil {
+				return err
+			}
+			actualNames = append(actualNames, o.Key)
 			if !releaseHex(o.KeySHA, 64) || seen[o.KeySHA] || !releaseHex(o.DumpSHA, 64) || o.Count < 0 || o.OutboxTopic != "" {
 				return errors.New("Redis原key摘要重复/未知待投")
 			}
@@ -2733,6 +2811,9 @@ func verifyMaintenanceReleaseRedisClosure(review maintenanceReleaseReview, f mai
 		}
 		if len(required) != 0 {
 			return errors.New("Redis缺固定64桶/topic/processing必读全集")
+		}
+		if !releaseExactStrings(t.KeyNames, actualNames) {
+			return errors.New("Redis原扫描目录与逐键原件非等集")
 		}
 		encoded, _ := json.Marshal(stable)
 		sum := sha256.Sum256(encoded)

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"player_inbox/internal/constants"
+	"player_inbox/internal/inbox"
 
 	inboxpb "proto/player_inbox"
 	"shared/serviceauth"
@@ -89,6 +90,41 @@ func TestBattleProducerMethodsRequireIndependentSignatureAndBindReply(t *testing
 	}
 	if _, err = s.LookupBattleSettlement(context.Background(), r); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestBattleProducerDistinguishesOriginalConflictFromUnknownFailure(t *testing.T) {
+	const secret = "fixture-only-match-inbox-secret-000000000000"
+	t.Setenv("MMORPG_PLAYER_INBOX_SECRET_MATCH", secret)
+	for _, tc := range []struct {
+		name string
+		err  error
+		code codes.Code
+	}{
+		{"原件永久冲突", inbox.ErrBattleSettlementOriginal, codes.FailedPrecondition},
+		{"角色冻结仍可恢复", inbox.ErrOriginalRole, codes.Unavailable},
+		{"未知SQL错误", errors.New("fixture DB error"), codes.Unavailable},
+		{"提交取消仍未知", context.DeadlineExceeded, codes.Unavailable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &fakeBattleProducer{fakeConsumer: fakeConsumer{err: tc.err}}
+			s := newTestConsumer(t, store, time.Second)
+			for _, method := range []string{inboxpb.PlayerInbox_EnqueueBattleSettlement_FullMethodName, inboxpb.PlayerInbox_LookupBattleSettlement_FullMethodName} {
+				req := &inboxpb.BattleSettlementInboxRequest{PlayerId: 11, BattleId: 21, ExpectedOwnerAccount: "original", ExpectedOwnerRevision: 3, IssuedAtMs: 7, SettlementPayload: []byte{1}}
+				if err := serviceauth.Sign(method, req, "match", secret, uint64(time.Now().UnixMilli())); err != nil {
+					t.Fatal(err)
+				}
+				var err error
+				if method == inboxpb.PlayerInbox_EnqueueBattleSettlement_FullMethodName {
+					_, err = s.EnqueueBattleSettlement(context.Background(), req)
+				} else {
+					_, err = s.LookupBattleSettlement(context.Background(), req)
+				}
+				if status.Code(err) != tc.code {
+					t.Fatalf("原分类=%s，期望=%s", status.Code(err), tc.code)
+				}
+			}
+		})
 	}
 }
 

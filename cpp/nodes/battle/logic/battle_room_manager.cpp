@@ -580,6 +580,16 @@ void BattleRoomManager::EraseRoom(const uint64_t battleId)
     rooms_.Erase(battleId);
 }
 
+bool BattleRoomManager::OutcomeSigningKeyReady(std::string_view secret)
+{
+    if (token_security::TrimAscii(secret).size() >= 32) return true;
+    if (!outcomeKeyUnavailableLogged_) {
+        outcomeKeyUnavailableLogged_ = true;
+        LOG_ERROR << "metric=battle_sql_outcome_key_unavailable protocol_version=1 disabled=1";
+    }
+    return false;
+}
+
 void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
                                            ::CreateBattleResponse &response)
 {
@@ -622,6 +632,14 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     }
     else if(request.required_physical_region()!=0||!request.target_instance_id().empty())
     {response.mutable_error_message()->set_id(kInvalidParameter);return;}
+
+    // 既有操作在上方仍按原房间回显 adopted；缺密钥只禁止创建新的v1房间，不降级。
+    const char* outcomeSecret = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
+    if (request.outcome_protocol_version() == 1 &&
+        !OutcomeSigningKeyReady(outcomeSecret ? outcomeSecret : "")) {
+        response.mutable_error_message()->set_id(kFeatureUnavailable);
+        return;
+    }
 
     // 幂等:match 补偿路径可能重试 CreateBattle
     if (FindRoom(battleId) != nullptr)
@@ -835,7 +853,8 @@ void BattleRoomManager::HandleQueryBattleCreation(const ::QueryBattleCreationReq
 {
     if(!gNode||request.target_instance_id()!=gNode->GetNodeInfo().node_uuid()||request.placement_operation_id().empty())return;
     response.set_target_instance_id(gNode->GetNodeInfo().node_uuid());
-    response.set_supported_outcome_protocol_version(1);
+    const char* secret = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
+    response.set_supported_outcome_protocol_version(OutcomeSigningKeyReady(secret ? secret : "") ? 1 : 0);
     const auto found=creationOperations_.find(request.battle_id());
     if(found==creationOperations_.end()){response.set_state(BATTLE_CREATION_ABSENT);return;}
     if(found->second.operationId!=request.placement_operation_id())return;
@@ -1568,7 +1587,7 @@ void BattleRoomManager::PumpSqlOutcomes()
         if (room->outcomeInFlight || now < room->nextOutcomeAttempt) continue;
         room->nextOutcomeAttempt = now + std::chrono::seconds(5);
         const char* secret = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
-        if (!secret || room->targetInstance.empty() || room->placementOperation.empty()) continue;
+        if (!OutcomeSigningKeyReady(secret ? secret : "") || room->targetInstance.empty() || room->placementOperation.empty()) continue;
         auto& registry = tlsNodeContextManager.GetRegistry(common::base::MatchNodeService);
         std::vector<entt::entity> ready;
         // 沿Inbox相同的READY候选随机选择；跨Match副本仍只重放同一SQL原件，不固定首个实例。

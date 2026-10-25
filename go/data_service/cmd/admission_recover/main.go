@@ -18,7 +18,6 @@ import (
 	"syscall"
 	"time"
 
-	"data_service/cmd/debugutil"
 	"data_service/internal/store"
 	"github.com/go-sql-driver/mysql"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -26,8 +25,8 @@ import (
 )
 
 type recoveryOptions struct {
-	requestFile, requestSHA, dsnEnv, schema, stores, mode, planFile, planSHA, localTarget string
-	maintenance                                                                           bool
+	requestFile, requestSHA, dsnEnv, schema, stores, mode, planFile, planSHA, localTarget, sqlTarget string
+	maintenance                                                                                      bool
 }
 
 // 只封装执行目标/原文件摘要/校验得到的SQL摘要，不复制proto请求的业务模型。
@@ -36,6 +35,7 @@ type recoveryCLIPlan struct {
 	RequestSHA  string `json:"request_sha256"`
 	Schema      string `json:"schema"`
 	LocalTarget string `json:"local_target_id"`
+	SQLTarget   string `json:"physical_sql_addr"`
 	SQLProof    string `json:"sql_proof_sha256"`
 }
 
@@ -50,7 +50,8 @@ func main() {
 	flag.StringVar(&o.mode, "mode", "plan", "plan默认只读；apply才实际退休指定旧holder")
 	flag.StringVar(&o.planFile, "plan", "", "plan新建审定封套；apply只读")
 	flag.StringVar(&o.planSHA, "plan-sha256", "", "apply必填封套原文件SHA-256")
-	flag.StringVar(&o.localTarget, "local-target-id", "", "本次专用本地SQL标记的32位小写hex实例nonce；工具不创建标记")
+	flag.StringVar(&o.localTarget, "local-target-id", "", "审定maintenance-recovery SQL目标的32位小写hex永久nonce；此历史参数名不授予调试写权限")
+	flag.StringVar(&o.sqlTarget, "sql-target-address", "", "审定SQL物理host:port，必须逐字等于环境DSN和专用维护标记，不含凭据")
 	flag.Parse()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	code := runRecovery(ctx, o, os.Stdout, os.Stderr, nil)
@@ -82,12 +83,8 @@ func runRecovery(ctx context.Context, o recoveryOptions, out, errOut io.Writer, 
 	if execute == nil {
 		// 从环境读DSN后只取连接配置，错误中绝不回显原DSN或密码。
 		cfg, err := mysql.ParseDSN(os.Getenv(o.dsnEnv))
-		if err != nil || cfg.DBName != o.schema || cfg.Net != "tcp" || cfg.Addr == "" {
+		if err != nil || cfg.DBName != o.schema || cfg.Net != "tcp" || cfg.Addr != o.sqlTarget {
 			fmt.Fprintln(errOut, "恢复SQL连接参数无效")
-			return 2
-		}
-		if err := debugutil.CheckLocalWriteTarget("维护SQL", cfg.Addr, ""); err != nil {
-			fmt.Fprintln(errOut, "只允许显式本地回环SQL目标")
 			return 2
 		}
 		directory, err := store.NewAccountDirectoryStore(store.MySQLConfig{Host: cfg.Addr, User: cfg.User, Password: cfg.Passwd, DBName: o.schema}, true, 100, 1)
@@ -108,9 +105,9 @@ func runRecovery(ctx context.Context, o recoveryOptions, out, errOut io.Writer, 
 		}
 		execute = func(ctx context.Context, in *dbpb.AccountRoleAdmissionRecovery_Request) (*dbpb.AccountRoleAdmissionRecovery, error) {
 			if o.mode == "plan" {
-				return admissions.PlanCrashedTradeHolder(ctx, in, verifier, o.localTarget)
+				return admissions.PlanCrashedTradeHolder(ctx, in, verifier, store.MaintenanceRecoveryTarget{ID: o.localTarget, SQLAddr: o.sqlTarget})
 			}
-			return admissions.ApplyCrashedTradeHolder(ctx, in, verifier, o.localTarget, expected)
+			return admissions.ApplyCrashedTradeHolder(ctx, in, verifier, store.MaintenanceRecoveryTarget{ID: o.localTarget, SQLAddr: o.sqlTarget}, expected)
 		}
 	}
 	receipt, err := execute(ctx, in)
@@ -127,7 +124,7 @@ func runRecovery(ctx context.Context, o recoveryOptions, out, errOut io.Writer, 
 		return 1
 	}
 	if o.mode == "plan" {
-		plan := recoveryCLIPlan{Format: "old-holder-recovery-cli-plan-v1", RequestSHA: o.requestSHA, Schema: o.schema, LocalTarget: o.localTarget, SQLProof: hex.EncodeToString(receipt.SqlProofDigest)}
+		plan := recoveryCLIPlan{Format: "old-holder-recovery-cli-plan-v2", RequestSHA: o.requestSHA, Schema: o.schema, LocalTarget: o.localTarget, SQLTarget: o.sqlTarget, SQLProof: hex.EncodeToString(receipt.SqlProofDigest)}
 		body, err := json.MarshalIndent(plan, "", "  ")
 		if err != nil {
 			fmt.Fprintln(errOut, "只读计划编码失败")
@@ -165,8 +162,8 @@ func runRecovery(ctx context.Context, o recoveryOptions, out, errOut io.Writer, 
 }
 
 func readRecoveryRequest(o recoveryOptions) (*dbpb.AccountRoleAdmissionRecovery_Request, []uint32, error) {
-	if !o.maintenance || o.requestFile == "" || o.dsnEnv == "" || o.schema == "" || len(o.schema) > 64 || strings.Trim(o.schema, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") != "" || len(o.requestSHA) != 64 || o.planFile == "" || len(o.localTarget) != 32 || strings.Trim(o.localTarget, "0123456789abcdef") != "" || (o.mode != "plan" && o.mode != "apply") || (o.mode == "plan" && o.planSHA != "") || (o.mode == "apply" && len(o.planSHA) != 64) {
-		return nil, nil, errors.New("须指定审定请求、具名本地目标、plan/apply及受控维护窗口")
+	if !o.maintenance || o.requestFile == "" || o.dsnEnv == "" || o.schema == "" || len(o.schema) > 64 || strings.Trim(o.schema, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") != "" || len(o.requestSHA) != 64 || o.planFile == "" || !(store.MaintenanceRecoveryTarget{ID: o.localTarget, SQLAddr: o.sqlTarget}).Valid() || (o.mode != "plan" && o.mode != "apply") || (o.mode == "plan" && o.planSHA != "") || (o.mode == "apply" && len(o.planSHA) != 64) {
+		return nil, nil, errors.New("须指定审定请求、具名维护目标、plan/apply及受控维护窗口")
 	}
 	var ids []uint32
 	seen := map[uint64]bool{}
@@ -226,7 +223,7 @@ func readRecoveryCLIPlan(o recoveryOptions) ([]byte, error) {
 		return nil, errors.New("执行封套有额外内容")
 	}
 	proof, err := hex.DecodeString(p.SQLProof)
-	if err != nil || len(proof) != 32 || hex.EncodeToString(proof) != p.SQLProof || p.Format != "old-holder-recovery-cli-plan-v1" || p.RequestSHA != o.requestSHA || p.Schema != o.schema || p.LocalTarget != o.localTarget {
+	if err != nil || len(proof) != 32 || hex.EncodeToString(proof) != p.SQLProof || p.Format != "old-holder-recovery-cli-plan-v2" || p.RequestSHA != o.requestSHA || p.Schema != o.schema || p.LocalTarget != o.localTarget || p.SQLTarget != o.sqlTarget {
 		return nil, errors.New("执行封套与当前请求/SQL实例不符")
 	}
 	return proof, nil

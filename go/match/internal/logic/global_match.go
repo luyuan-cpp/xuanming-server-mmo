@@ -208,6 +208,11 @@ func globalDirectGather(s *svc.ServiceContext, mode pb.MatchMode, config uint32,
 
 func releaseGlobalFinished(ctx context.Context, s *svc.ServiceContext, t *pb.MatchAuthorityTicketRecord) (bool, error) {
 	// 原实例消失/内存墓碑都不能证明个人到账；旧协议保持UNKNOWN。
+	if s.RefreshBattleSettlement != nil {
+		if err := s.RefreshBattleSettlement(ctx, t); err != nil {
+			return false, err
+		}
+	}
 	return s.Authority.ReleaseCompletedReady(ctx, t)
 }
 
@@ -475,6 +480,11 @@ func CommitBattleOutcome(ctx context.Context, s *svc.ServiceContext, in *pb.Comm
 	}
 	decision, err := s.Authority.CommitBattleOutcome(ctx, in)
 	if err != nil {
+		if errors.Is(err, authority.ErrBattleOutcomeOriginal) {
+			logx.Error("metric=match_terminal_outcome_rejected reason=original_conflict")
+			return nil, status.Error(codes.FailedPrecondition, "终局原件存在永久冲突")
+		}
+		logx.Error("metric=match_terminal_outcome_unconfirmed reason=storage_or_transport")
 		return nil, status.Error(codes.Unavailable, "终局原提交尚未确认")
 	}
 	out := &pb.CommitBattleOutcomeResponse{Decision: decision, RequestDigest: digest}

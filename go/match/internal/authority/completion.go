@@ -28,6 +28,17 @@ const maxCompletionBytes = 960 * 1024
 // COMPLETE已永久决定，不再参与AcquireWork/到期恢复；双outbox有各自独立的next_retry_ms。
 const terminalOutcomeNoRetryMs uint64 = 1<<63 - 1
 
+// Battle在deadline强制结束后仍需提交原终局；给重投与时钟偏差留固定60秒。
+// 工作租约仍在原deadline停止续租，宽限只延后ABORT，不推迟COMPLETE。
+const terminalOutcomeGraceMs uint64 = 60 * 1000
+
+// 只标记原请求或永久原件冲突；SQL/传输错误及提交未知不能据错误文本推成永久拒绝。
+var ErrBattleOutcomeOriginal = errors.New("战斗终局原件冲突")
+
+func terminalAbortDue(deadline, stamp uint64) bool {
+	return deadline != 0 && stamp >= deadline && stamp-deadline >= terminalOutcomeGraceMs
+}
+
 // ArchiveCompletion 只保全完整结算来源，不投递资产、不确认玩家到账，也不销账。
 // 同一事务保存 Kafka 原字节及全部个人原件；重复局只接受完全相同的原字节。
 // 原提交结果未知时按原消息重放，不得重算另一份结算。来源位点记录第一次成功归档的位置。
@@ -194,43 +205,14 @@ func supportedOutcomeOriginal(f *pb.MatchFormationRecord) (*battlepb.CreateBattl
 	return r, nil
 }
 
-func validateTerminalResult(f *pb.MatchFormationRecord, event *kafkapb.BattleResultEvent, raw []byte) error {
+func validateTerminalPayload(event *kafkapb.BattleResultEvent, raw []byte) error {
 	if err := validateCompletion(event, raw); err != nil {
 		return err
 	}
 	if event.SettlementFormatVersion != 1 || completionHasUnknown(event.ProtoReflect()) {
 		return errors.New("终局执行要求完整已知语义的版本1原件")
 	}
-	r, err := supportedOutcomeOriginal(f)
-	if err != nil {
-		return err
-	}
-	if event.BattleId != r.BattleId || event.BattleConfigId != r.BattleConfigId || event.MatchMode != r.MatchMode || event.FinishedAtMs < r.CreatedAtMs || !proto.Equal(event.ActivityContext, r.ActivityContext) {
-		return errors.New("终局配置、活动或原时间不符")
-	}
-	members := map[uint64]uint32{}
-	for _, p := range r.Players {
-		if p == nil || p.PlayerId == 0 {
-			return errors.New("创建成员为空")
-		}
-		if _, exists := members[p.PlayerId]; exists {
-			return errors.New("创建成员重复")
-		}
-		members[p.PlayerId] = p.TeamIndex
-	}
-	for _, m := range f.Members {
-		if _, ok := members[m.PlayerId]; !ok {
-			return errors.New("终局缺原成局成员")
-		}
-	}
-	if len(event.Settlements) != len(members) {
-		return errors.New("终局个人原件全集与持久创建成员不符")
-	}
 	for _, s := range event.Settlements {
-		team, ok := members[s.PlayerId]
-		if !ok || team != s.PlayerTeamIndex {
-			return errors.New("终局成员或队伍与创建原件不符")
-		}
 		body, err := proto.MarshalOptions{Deterministic: true}.Marshal(s)
 		if err != nil {
 			return err
@@ -262,6 +244,45 @@ func validateTerminalResult(f *pb.MatchFormationRecord, event *kafkapb.BattleRes
 		}
 		if len(seen) != len(want) {
 			return errors.New("终局缺逃跑或阵亡原成员")
+		}
+	}
+	return nil
+}
+
+func validateTerminalResult(f *pb.MatchFormationRecord, event *kafkapb.BattleResultEvent, raw []byte) error {
+	// 锁前已做纯校验；提交时仍复核同一完整语义和当前持久创建/成员原件。
+	if err := validateTerminalPayload(event, raw); err != nil {
+		return err
+	}
+	r, err := supportedOutcomeOriginal(f)
+	if err != nil {
+		return err
+	}
+	if event.BattleId != r.BattleId || event.BattleConfigId != r.BattleConfigId || event.MatchMode != r.MatchMode || event.FinishedAtMs < r.CreatedAtMs || !proto.Equal(event.ActivityContext, r.ActivityContext) {
+		return errors.New("终局配置、活动或原时间不符")
+	}
+	members := map[uint64]uint32{}
+	for _, p := range r.Players {
+		if p == nil || p.PlayerId == 0 {
+			return errors.New("创建成员为空")
+		}
+		if _, exists := members[p.PlayerId]; exists {
+			return errors.New("创建成员重复")
+		}
+		members[p.PlayerId] = p.TeamIndex
+	}
+	for _, m := range f.Members {
+		if _, ok := members[m.PlayerId]; !ok {
+			return errors.New("终局缺原成局成员")
+		}
+	}
+	if len(event.Settlements) != len(members) {
+		return errors.New("终局个人原件全集与持久创建成员不符")
+	}
+	for _, s := range event.Settlements {
+		team, ok := members[s.PlayerId]
+		if !ok || team != s.PlayerTeamIndex {
+			return errors.New("终局成员或队伍与创建原件不符")
 		}
 	}
 	return nil
@@ -333,27 +354,33 @@ func replayTerminal(r *pb.MatchBattleCompletionRecord, req *pb.CommitBattleOutco
 		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, nil
 	}
 	if r.OutcomeProtocolVersion != 1 || r.PlacementOperationId != req.PlacementOperationId || r.TargetInstanceId != req.TargetInstanceId {
-		return 0, errors.New("原终局身份冲突")
+		return 0, fmt.Errorf("%w: 原终局身份冲突", ErrBattleOutcomeOriginal)
 	}
 	if r.Decision == pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_COMPLETE {
 		d := sha256.Sum256(req.RawResultPayload)
 		if !bytes.Equal(r.RawPayload, req.RawResultPayload) || !bytes.Equal(r.PayloadDigest, d[:]) {
-			return 0, errors.New("同局COMPLETE原字节冲突")
+			return 0, fmt.Errorf("%w: 同局COMPLETE原字节冲突", ErrBattleOutcomeOriginal)
 		}
 	} else if r.Decision != pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT {
-		return 0, errors.New("非法持久终局")
+		return 0, fmt.Errorf("%w: 非法持久终局", ErrBattleOutcomeOriginal)
 	}
 	return r.Decision, nil
 }
 
 // CommitBattleOutcome 在任何个人副作用前持久唯一决定和两个outbox。Commit未知绝不返回成功。
 func (s *Store) CommitBattleOutcome(ctx context.Context, req *pb.CommitBattleOutcomeRequest) (pb.BattleOutcomeDecision, error) {
-	if s == nil || s.DB == nil || req == nil || req.BattleId == 0 || req.PlacementOperationId == "" || req.TargetInstanceId == "" || len(req.RawResultPayload) == 0 || len(req.RawResultPayload) > maxCompletionBytes || completionHasUnknown(req.ProtoReflect()) {
-		return 0, errors.New("终局请求原件不完整")
+	if s == nil || s.DB == nil {
+		return 0, errors.New("终局权威未装配")
+	}
+	if req == nil || req.BattleId == 0 || req.PlacementOperationId == "" || req.TargetInstanceId == "" || len(req.RawResultPayload) == 0 || len(req.RawResultPayload) > maxCompletionBytes || completionHasUnknown(req.ProtoReflect()) {
+		return 0, fmt.Errorf("%w: 终局请求原件不完整", ErrBattleOutcomeOriginal)
 	}
 	event := &kafkapb.BattleResultEvent{}
 	if err := proto.Unmarshal(req.RawResultPayload, event); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("%w: 终局原字节不能解码", ErrBattleOutcomeOriginal)
+	}
+	if err := validateTerminalPayload(event, req.RawResultPayload); err != nil {
+		return 0, fmt.Errorf("%w: %v", ErrBattleOutcomeOriginal, err)
 	}
 	old, err := readTerminal(ctx, s.DB, req.BattleId)
 	if err != nil {
@@ -364,14 +391,17 @@ func (s *Store) CommitBattleOutcome(ctx context.Context, req *pb.CommitBattleOut
 	}
 	tx, f, roles, err := s.terminalFormation(ctx, req.BattleId)
 	if err != nil {
+		if errors.Is(err, ErrOriginalPlayer) {
+			return 0, fmt.Errorf("%w: 原成员或归属失效", ErrBattleOutcomeOriginal)
+		}
 		return 0, err
 	}
 	defer tx.Rollback()
 	if f.OperationId != req.PlacementOperationId || f.TargetInstanceId != req.TargetInstanceId || f.State == 5 {
-		return 0, errors.New("终局原操作、实例或成局状态不符")
+		return 0, fmt.Errorf("%w: 终局原操作、实例或成局状态不符", ErrBattleOutcomeOriginal)
 	}
 	if err = validateTerminalResult(f, event, req.RawResultPayload); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("%w: %v", ErrBattleOutcomeOriginal, err)
 	}
 	old, err = readTerminal(ctx, tx, f.BattleId)
 	if err != nil {
@@ -437,7 +467,7 @@ func (s *Store) abortTerminalTx(ctx context.Context, tx *sql.Tx, f *pb.MatchForm
 	if err != nil {
 		return 0, err
 	}
-	if stamp < r.DeadlineMs {
+	if !terminalAbortDue(r.DeadlineMs, stamp) {
 		return 0, nil
 	}
 	// 旧恢复流程可能先将运行时ABORTED收为state5；它自身不是终局证明。
@@ -518,23 +548,26 @@ func (s *Store) PublishBattleOutcomesOnce(ctx context.Context, client func(conte
 			return err
 		}
 	}
-	rows, err = s.DB.QueryContext(ctx, "SELECT battle_id,player_id,settlement_proto,payload_digest,owner_account,owner_revision,issued_at_ms,inbox_seq,next_retry_ms FROM match_battle_settlement_source WHERE dispatch_state=1 AND next_retry_ms<=? ORDER BY next_retry_ms,battle_id,player_id LIMIT 8", stamp)
-	if err != nil {
-		return err
-	}
 	var people []*pb.MatchBattleSettlementSourceRecord
-	for rows.Next() {
-		r := &pb.MatchBattleSettlementSourceRecord{}
-		if err = rows.Scan(&r.BattleId, &r.PlayerId, &r.SettlementProto, &r.PayloadDigest, &r.OwnerAccount, &r.OwnerRevision, &r.IssuedAtMs, &r.InboxSeq, &r.NextRetryMs); err != nil {
-			rows.Close()
+	// 首投与等待APPLIED各保四个名额，总预算仍八人；离线积压不能占满首投页。
+	for _, seqCondition := range []string{"=0", ">0"} {
+		rows, err = s.DB.QueryContext(ctx, "SELECT battle_id,player_id,settlement_proto,payload_digest,owner_account,owner_revision,issued_at_ms,inbox_seq,next_retry_ms FROM match_battle_settlement_source WHERE dispatch_state=1 AND inbox_seq"+seqCondition+" AND next_retry_ms<=? ORDER BY next_retry_ms,battle_id,player_id LIMIT 4", stamp)
+		if err != nil {
 			return err
 		}
-		people = append(people, r)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return err
+		for rows.Next() {
+			r := &pb.MatchBattleSettlementSourceRecord{}
+			if err = rows.Scan(&r.BattleId, &r.PlayerId, &r.SettlementProto, &r.PayloadDigest, &r.OwnerAccount, &r.OwnerRevision, &r.IssuedAtMs, &r.InboxSeq, &r.NextRetryMs); err != nil {
+				rows.Close()
+				return err
+			}
+			people = append(people, r)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
 	}
 	for _, r := range people {
 		lease := stamp + 30000
@@ -565,11 +598,61 @@ func (s *Store) PublishBattleOutcomesOnce(ctx context.Context, client func(conte
 		if state == inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_APPLIED {
 			dispatch = 2
 		}
-		if _, err = s.DB.ExecContext(ctx, "UPDATE match_battle_settlement_source SET inbox_seq=?,inbox_state=?,dispatch_state=?,next_retry_ms=? WHERE battle_id=? AND player_id=? AND dispatch_state=1 AND next_retry_ms=? AND (inbox_seq=0 OR inbox_seq=?)", seq, uint32(state), dispatch, stamp+2000, r.BattleId, r.PlayerId, lease, seq); err != nil {
+		next := stamp + pendingSettlementDelayMs(r.IssuedAtMs, stamp)
+		if dispatch == 2 {
+			next = 0
+		}
+		if _, err = s.DB.ExecContext(ctx, "UPDATE match_battle_settlement_source SET inbox_seq=?,inbox_state=?,dispatch_state=?,next_retry_ms=? WHERE battle_id=? AND player_id=? AND dispatch_state=1 AND next_retry_ms=? AND (inbox_seq=0 OR inbox_seq=?)", seq, uint32(state), dispatch, next, r.BattleId, r.PlayerId, lease, seq); err != nil {
 			return err
 		}
 	}
 	return errors.Join(failures...)
+}
+
+// 由原签发时间和SQL时钟决定5秒至5分钟的有界退避，不改原件或新增重试账本。
+func pendingSettlementDelayMs(issued, stamp uint64) uint64 {
+	const maximum uint64 = 5 * 60 * 1000
+	delay := uint64(5000)
+	if stamp <= issued {
+		return delay
+	}
+	age := stamp - issued
+	for delay < maximum && age >= delay {
+		age -= delay
+		delay *= 2
+	}
+	if delay > maximum {
+		return maximum
+	}
+	return delay
+}
+
+// 查询发生在任何SQL/P锁之外；随后只按同一不可变来源CAS，再由ReleaseCompletedReady
+// 重新持原P及票据校验。网络回包从不直接释放票，也不以入箱/水位猜APPLIED。
+func (s *Store) RefreshBattleSettlementReceipt(ctx context.Context, ticket *pb.MatchAuthorityTicketRecord, resolve func(context.Context) (inboxpb.PlayerInboxClient, error), secret string) error {
+	if ticket == nil || ticket.State != 3 || ticket.FormationId == 0 || ticket.OwnerAccount == "" || ticket.OwnerRevision == 0 {
+		return nil
+	}
+	r := &pb.MatchBattleSettlementSourceRecord{}
+	err := s.DB.QueryRowContext(ctx, "SELECT battle_id,player_id,settlement_proto,payload_digest,owner_account,owner_revision,issued_at_ms,inbox_seq FROM match_battle_settlement_source WHERE battle_id=? AND player_id=? AND owner_account=? AND owner_revision=? AND dispatch_state=1 AND inbox_seq>0", ticket.FormationId, ticket.PlayerId, ticket.OwnerAccount, ticket.OwnerRevision).Scan(&r.BattleId, &r.PlayerId, &r.SettlementProto, &r.PayloadDigest, &r.OwnerAccount, &r.OwnerRevision, &r.IssuedAtMs, &r.InboxSeq)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	digest := sha256.Sum256(r.SettlementProto)
+	if !bytes.Equal(digest[:], r.PayloadDigest) {
+		return errors.New("个人outbox原摘要损坏")
+	}
+	call, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	seq, state, err := deliverBattleOriginal(call, r, resolve, secret)
+	if err != nil || state != inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_APPLIED {
+		return err
+	}
+	_, err = s.DB.ExecContext(ctx, "UPDATE match_battle_settlement_source SET inbox_state=2,dispatch_state=2,next_retry_ms=0 WHERE battle_id=? AND player_id=? AND owner_account=? AND owner_revision=? AND inbox_seq=? AND payload_digest=? AND dispatch_state=1", r.BattleId, r.PlayerId, r.OwnerAccount, r.OwnerRevision, seq, r.PayloadDigest)
+	return err
 }
 
 func deliverBattleOriginal(ctx context.Context, r *pb.MatchBattleSettlementSourceRecord, resolve func(context.Context) (inboxpb.PlayerInboxClient, error), secret string) (uint64, inboxpb.PlayerInboxItemState, error) {
@@ -603,31 +686,24 @@ func deliverBattleOriginal(ctx context.Context, r *pb.MatchBattleSettlementSourc
 		}
 		return nil
 	}
-	method := inboxpb.PlayerInbox_EnqueueBattleSettlement_FullMethodName
+	method := inboxpb.PlayerInbox_LookupBattleSettlement_FullMethodName
+	if r.InboxSeq == 0 {
+		method = inboxpb.PlayerInbox_EnqueueBattleSettlement_FullMethodName
+	}
 	if err = serviceauth.Sign(method, req, "match", secret, uint64(time.Now().UnixMilli())); err != nil {
 		return 0, 0, err
 	}
-	resp, err := client.EnqueueBattleSettlement(ctx, req)
+	var resp *inboxpb.BattleSettlementInboxResponse
+	if r.InboxSeq == 0 {
+		resp, err = client.EnqueueBattleSettlement(ctx, req)
+	} else {
+		resp, err = client.LookupBattleSettlement(ctx, req)
+	}
 	if err != nil {
 		return 0, 0, err
 	}
 	if err = validate(method, resp); err != nil {
 		return 0, 0, err
 	}
-	seq := resp.Seq
-	method = inboxpb.PlayerInbox_LookupBattleSettlement_FullMethodName
-	if err = serviceauth.Sign(method, req, "match", secret, uint64(time.Now().UnixMilli())); err != nil {
-		return 0, 0, err
-	}
-	resp, err = client.LookupBattleSettlement(ctx, req)
-	if err != nil {
-		return 0, 0, err
-	}
-	if err = validate(method, resp); err != nil {
-		return 0, 0, err
-	}
-	if seq != resp.Seq {
-		return 0, 0, errors.New("入箱与查询原序号冲突")
-	}
-	return seq, resp.State, nil
+	return resp.Seq, resp.State, nil
 }

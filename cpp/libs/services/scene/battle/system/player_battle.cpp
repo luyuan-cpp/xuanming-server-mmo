@@ -1849,18 +1849,18 @@ bool HasNestedUnknownFields(const google::protobuf::Message& message)
 bool CollectExactSettlementItems(const ::BattleSettlementData& settlement,
                                 ItemCountMap& consumed, ItemCountMap& gained)
 {
-    const auto collect = [](const auto& entries, ItemCountMap& target, bool consumption) {
+    const auto collect = [](const auto& entries, ItemCountMap& target) {
         for (const auto& item : entries) {
             if (item.item_table_id() == 0 || item.count() == 0 ||
-                item.count() > std::numeric_limits<uint32_t>::max() ||
-                (consumption && !IsBattleUsableItem(item.item_table_id()))) return false;
+                item.count() > std::numeric_limits<uint32_t>::max()) return false;
             auto& total = target[item.item_table_id()];
             if (item.count() > std::numeric_limits<uint32_t>::max() - total) return false;
             total += static_cast<uint32_t>(item.count());
         }
         return true;
     };
-    return collect(settlement.items_consumed(), consumed, true) && collect(settlement.items_gained(), gained, false);
+    // 可战斗使用性已在原开局快照审定；终局不按热更后的标记重判这份已提交消耗事实。
+    return collect(settlement.items_consumed(), consumed) && collect(settlement.items_gained(), gained);
 }
 
 bool CanCreditWholeBattleGold(entt::entity player, uint64_t gold)
@@ -1884,6 +1884,56 @@ bool CanCreditWholeBattleGold(entt::entity player, uint64_t gold)
     return net <= std::numeric_limits<uint64_t>::max() - balance;
 }
 
+// 数量副本没有GUID；只从当前完整实例候选中扣已知普通单位，未知schema/实例不能当普通数量。
+bool HasUnsupportedInboxConsumption(entt::entity player, const ::BattleSettlementData& settlement)
+{
+    std::set<uint32_t> configs;
+    for (const auto& entry : settlement.items_consumed()) {
+        const auto* row = ItemTableManager::Instance().FindByIdSilent(entry.item_table_id()).first;
+        if (!row || HasNestedUnknownFields(*row)) return true;
+        configs.insert(entry.item_table_id());
+    }
+    const auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(player);
+    if (!bags) return false; // 缺持久组件仍由整笔加载闸拒绝，不能解释为零库存。
+    bool unsupported = false;
+    bags->bags[kInventory].ForEachItem([&](Guid guid, const ItemComp& item) {
+        if (!configs.contains(item.config_id())) return;
+        if (guid == 0 || item.item_id() != guid || item.size() == 0 || !ItemStore::IsCountableByConfig(item)
+            || HasNestedUnknownFields(item)) unsupported = true;
+    });
+    return unsupported;
+}
+
+bool CollectApplicableInboxPets(entt::entity player, const ::BattleSettlementData& settlement,
+                               std::set<uint64_t>& applicable, std::map<std::string, uint32_t>& skipped)
+{
+    if (settlement.pets_size() == 0) return true;
+    const auto* owned = tlsEcs.actorRegistry.try_get<PlayerPetComp>(player);
+    if (!owned || HasNestedUnknownFields(*owned)) return false;
+    std::set<uint64_t> ownedIds, effects;
+    for (const auto& pet : owned->pets())
+        if (pet.pet_id() == 0 || !ownedIds.insert(pet.pet_id()).second) return false;
+    bool hasPool = false, unknownPool = false;
+    for (const auto& pool : AttributePoolTableManager::Instance().FindAll().data())
+        if (pool.owner_type() == PetSystem::kPoolOwnerPet) {
+            hasPool = true; unknownPool = HasNestedUnknownFields(pool); break;
+        }
+    for (const auto& effect : settlement.pets()) {
+        if (effect.pet_id() == 0 || !effects.insert(effect.pet_id()).second) return false;
+        const auto pet = std::find_if(owned->pets().begin(), owned->pets().end(), [&effect](const auto& entry) {
+            return entry.pet_id() == effect.pet_id();
+        });
+        if (pet == owned->pets().end()) { ++skipped["pet_no_longer_owned"]; continue; }
+        const auto* row = PetTableManager::Instance().FindByIdSilent(pet->pet_table_id()).first;
+        if (!row) { ++skipped["pet_table_missing"]; continue; }
+        if (HasNestedUnknownFields(*row)) return false;
+        if (!hasPool) { ++skipped["pet_pool_missing"]; continue; }
+        if (unknownPool) return false;
+        applicable.insert(effect.pet_id());
+    }
+    return true;
+}
+
 bool HasCompleteBattleEffectInputs(entt::entity player, const ::BattleSettlementData& settlement)
 {
     if (!tlsEcs.actorRegistry.all_of<BaseAttributesComp, DerivedAttributesComp, CurrencyComp, PlayerCurrencyComp>(player))
@@ -1896,25 +1946,9 @@ bool HasCompleteBattleEffectInputs(entt::entity player, const ::BattleSettlement
         const auto* missions = tlsEcs.actorRegistry.try_get<MissionsContainerComp>(player);
         if (!missions || !missions->Get(MissionListComp::kPlayerMission)) return false;
     }
-    if (settlement.pets_size() > 0) {
-        const auto* owned = tlsEcs.actorRegistry.try_get<PlayerPetComp>(player);
-        if (!owned) return false;
-        bool hasPool = false;
-        for (const auto& pool : AttributePoolTableManager::Instance().FindAll().data())
-            if (pool.owner_type() == PetSystem::kPoolOwnerPet) { hasPool = true; break; }
-        if (!hasPool) return false;
-        std::set<uint64_t> seen;
-        for (const auto& effect : settlement.pets()) {
-            if (effect.pet_id() == 0 || !seen.insert(effect.pet_id()).second) return false;
-            const PetInstance* pet = nullptr;
-            for (const auto& candidate : owned->pets()) {
-                if (candidate.pet_id() != effect.pet_id()) continue;
-                if (pet != nullptr) return false; // 损坏的重复owned GUID也不允许部分落地。
-                pet = &candidate;
-            }
-            if (!pet || !PetTableManager::Instance().FindByIdSilent(pet->pet_table_id()).first) return false;
-        }
-    }
+    std::set<uint64_t> applicable;
+    std::map<std::string, uint32_t> skipped;
+    if (!CollectApplicableInboxPets(player, settlement, applicable, skipped)) return false;
     return CanCreditWholeBattleGold(player, settlement.gold_gain());
 }
 } // namespace
@@ -1926,6 +1960,7 @@ PlayerInboxExecResult PlayerBattleSystem::ApplyInboxSettlement(entt::entity play
         !::eBattleOutcome_IsValid(settlement.outcome()) || settlement.outcome() == ::BATTLE_OUTCOME_ONGOING)
         return {PlayerInboxExecKind::kVersionSkew, 0};
     if (!tlsEcs.actorRegistry.valid(player)) return {PlayerInboxExecKind::kDefer, 0};
+    if (HasUnsupportedInboxConsumption(player, settlement)) return {PlayerInboxExecKind::kVersionSkew, 0};
     if (settlement.gold_gain() > 0 && CurrencySystem::DebtCarriesUnknownFields(player, kCurrencyGold))
         return {PlayerInboxExecKind::kVersionSkew, 0};
     if (!ApplySettlementToEntity(player, settlement, nullptr, true)) return {PlayerInboxExecKind::kDefer, 0};
@@ -2010,9 +2045,21 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     const auto inboxIdentity = fromInbox ? RoleAdmissionSystem::ConfirmedIdentity(playerId) : std::nullopt;
     if (fromInbox && !inboxIdentity) return false;
     const auto originalIdentity = inboxIdentity ? inboxIdentity->SerializeAsString() : std::string{};
-    ItemCountMap inboxConsumed, inboxGained;
+    ItemCountMap inboxConsumed, inboxGained, actualConsumption;
+    std::set<uint64_t> inboxPets;
+    std::map<std::string, uint32_t> skippedPets;
+    std::string originalPets;
     if (fromInbox && (!HasCompleteBattleEffectInputs(player, settlement) ||
         !CollectExactSettlementItems(settlement, inboxConsumed, inboxGained))) return false;
+    if (fromInbox) {
+        if (!CollectApplicableInboxPets(player, settlement, inboxPets, skippedPets)) return false;
+        if (settlement.pets_size() > 0) originalPets = tlsEcs.actorRegistry.get<PlayerPetComp>(player).SerializeAsString();
+        if (!inboxConsumed.empty()) {
+            const auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
+            for (const auto& [config, count] : inboxConsumed)
+                actualConsumption[config] = static_cast<uint32_t>(std::min<uint64_t>(count, inventory.GetTotalItemCount(config)));
+        }
+    }
 
     // 掉落要铸的新实例身份必须先有着落(审计 cpp-economy#0)。号段暂缺是会自己消失的条件,
     // 与跨区冻结同类:整笔延后、零副作用,保留 pending 等重投。不能等到入包失败才发现 ——
@@ -2057,7 +2104,10 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             // AddCurrency失败零副作用；成功后包提交不再有业务失败分支。
             const auto credit = [&]() -> uint32_t {
                 const auto currentIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+                const auto* currentPets = tlsEcs.actorRegistry.try_get<PlayerPetComp>(player);
                 if (!currentIdentity || currentIdentity->SerializeAsString() != originalIdentity ||
+                    (settlement.pets_size() > 0 && (!currentPets || currentPets->SerializeAsString() != originalPets)) ||
+                    HasUnsupportedInboxConsumption(player, settlement) ||
                     !IsSettlementApplicable(player) || !HasCompleteBattleEffectInputs(player, settlement) ||
                     !tlsEcs.actorRegistry.all_of<BaseAttributesComp, DerivedAttributesComp>(player)) return kInvalidParameter;
                 return settlement.gold_gain() == 0 ? kSuccess : CurrencySystem::AddCurrency(
@@ -2067,6 +2117,16 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
                 BagService::ConsumeInventoryAndGrant(player, inboxConsumed, inboxGained, battleId,
                     "{\"source\":\"battle-inbox\"}", credit);
             if (result != kSuccess) return false;
+            for (const auto& [config, requested] : inboxConsumed) {
+                const auto applied = actualConsumption.at(config);
+                if (applied < requested)
+                    LOG_ERROR << "metric=battle_inbox_consumption_shortfall reason=held_less_than_committed"
+                              << " battle_id=" << battleId << " config_id=" << config
+                              << " requested=" << requested << " consumed=" << applied;
+            }
+            for (const auto& [reason, count] : skippedPets)
+                LOG_ERROR << "metric=battle_inbox_pet_effect_skipped reason=" << reason
+                          << " battle_id=" << battleId << " count=" << count;
             baseAttributes = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(player); // 初始化回调后不持旧storage地址。
         }
 	    else if (settlement.gold_gain() > 0)
@@ -2130,9 +2190,10 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 		{
 			for (const auto& petSettlement : settlement.pets())
 			{
+				if (fromInbox && !inboxPets.contains(petSettlement.pet_id())) continue;
 				PetSystem::ApplyBattleSettlement(player, petSettlement);
 			}
-			PetSystem::PushList(player);
+			if (!fromInbox || !inboxPets.empty()) PetSystem::PushList(player);
 		}
 
 		// 经验系统尚未接入,一期仅记日志留痕;升级后果见 PlayerAttributeSystem::GmSetLevel,

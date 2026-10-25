@@ -2170,7 +2170,8 @@ TEST_F(PlayerInboxSystemTest, LateAckFromAPreviousEntityIsDiscardedAfterRelandin
 // 上面的 Leaving* 用例都直接调 OnPlayerLeaving,钉不住生产里那一行调用:它还在不在、是不是排在 DestroyPlayer 之前
 // (OnPlayerLeaving 在实体无效时直接返回)。这里走真正的收尾入口 FinishExitOrAwaitDbTaskAck(闸门判 kFinish)
 // → FinishExitAfterPersist,实体带着生产里此刻一定在的退出标记;把那一行挪到销毁之后或合并时弄丢,这个用例就会红。
-TEST_F(PlayerInboxSystemTest, ExitFinishAcksTheDurableOutcomeBeforeTheEntityIsDestroyed)
+// 同步确认是依赖允许的边界，不代表真实异步Redis回包能赶在实体销毁之前。
+TEST_F(PlayerInboxSystemTest, ExitFinishAcksBeforeDestroyWhenSqlConfirmationCompletesSynchronously)
 {
 	BindSession(player_);
 	player_inbox::FetchPlayerInboxRequest fetch;
@@ -2202,6 +2203,64 @@ TEST_F(PlayerInboxSystemTest, ExitFinishAcksTheDurableOutcomeBeforeTheEntityIsDe
 
 	EXPECT_FALSE(tlsEcs.actorRegistry.valid(player_)) << "收尾之后实体已销毁";
 	EXPECT_EQ(entt::entity{entt::null}, tlsEcs.GetPlayer(kTestPlayerId));
+}
+
+// 正式退出路径不等待只读SQL探针：迟到回包不能碰新实体，新E依永久账本补确认而不重复入账。
+TEST_F(PlayerInboxSystemTest, ExitFinishDropsAsyncSqlReplyAndRelandingAcksWithoutPayingAgain)
+{
+    g_transportDomain = player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT;
+    BindSession(player_);
+    auto& attributes = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player_);
+    attributes.set_health(100); attributes.set_mana(50);
+    auto& derived = tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(player_);
+    derived.set_max_health(100); derived.set_max_mana(50);
+    BattleSettlementData settlement;
+    settlement.set_battle_id(792); settlement.set_player_id(kTestPlayerId);
+    settlement.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+    settlement.set_health(80); settlement.set_mana(30); settlement.set_gold_gain(5);
+    const auto item = MakeItem(10, player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, 272,
+        settlement.SerializeAsString());
+    player_inbox::FetchPlayerInboxRequest fetch;
+    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+    PlayerInboxSystem::OnFetchReply(kTestPlayerId, g_transportDomain, fetch.correlation_id(), FetchReplyFor(fetch, {item}));
+    ASSERT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold));
+    MarkExiting(player_);
+    CompleteFakeSave(player_);
+    const PlayerAllData persisted = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot;
+    const auto originalAck = g_sqlAck;
+    g_deferSqlReply = true;
+    EXPECT_TRUE(PlayerLifecycleSystem::FinishExitOrAwaitDbTaskAck(kTestPlayerId));
+    ASSERT_EQ(1u, g_sqlReplies.size());
+    auto oldReply = g_sqlReplies.front();
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player_));
+    oldReply(originalAck);
+    EXPECT_TRUE(g_sentAcks.empty()) << "实体销毁后不得从旧SQL确认补发Ack";
+
+    player_ = CreateLoadedPlayer(kEpoch + 1, persisted.player_database_data().inbox_ledger());
+    tlsEcs.actorRegistry.get<CurrencyComp>(player_).CopyFrom(persisted.player_database_data().currency());
+    auto& reloaded = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player_);
+    reloaded.set_health(80); reloaded.set_mana(30);
+    auto& reloadedDerived = tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(player_);
+    reloadedDerived.set_max_health(100); reloadedDerived.set_max_mana(50);
+    g_deferSqlReply = false;
+    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+    PlayerInboxSystem::OnFetchReply(kTestPlayerId, g_transportDomain, fetch.correlation_id(), FetchReplyFor(fetch, {item}));
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold)) << "永久水位回放不得重发金币";
+    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player_).health());
+    CompleteFakeSave(player_, false);
+    PlayerInboxSystem::Tick();
+    EXPECT_TRUE(g_sentAcks.empty()) << "原E双ACK不能证明新E提交";
+    CompleteFakeSqlSave(player_);
+    PlayerInboxSystem::Tick();
+    ASSERT_EQ(1u, g_sentAcks.size());
+    const auto ack = g_sentAcks.back();
+    EXPECT_EQ(kEpoch + 1, ack.owner_epoch());
+    ASSERT_EQ(1, ack.decisions_size());
+    ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 272);
+    oldReply(originalAck);
+    EXPECT_EQ(1u, g_sentAcks.size()) << "旧闭包再到也不能给新实体补资格";
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold));
+    PlayerInboxSystem::OnAckReply(kTestPlayerId, g_transportDomain, ack.correlation_id(), AckReplyFor(ack));
 }
 
 // Battle专域只回放APPLIED，效果先和永久水位同snapshot保存，再等原E/q双SQLACK。
