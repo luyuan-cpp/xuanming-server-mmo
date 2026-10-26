@@ -101,7 +101,7 @@ func newNativeTeamFixture(t *testing.T) *nativeTeamFixture {
 		_, err = db.ExecContext(ctx, "INSERT INTO player_route VALUES(?,?,1,1,NULL)", placement.RouteRowShard(player), player)
 		require.NoError(t, err)
 	}
-	owner := &authority.Store{DB: db, Secret: []byte("fixture-only-network-secret-0000000000"), Config: config.GlobalMatchConf{HardLatencyMs: 180, CrossRegionWaitSeconds: 30}, TeamConfig: config.TeamConf{AllowCrossZone: true}}
+	owner := &authority.Store{DB: db, Secret: []byte("fixture-only-network-secret-0000000000"), Config: config.GlobalMatchConf{RequireTiDB: true, HardLatencyMs: 180, CrossRegionWaitSeconds: 30}, TeamConfig: config.TeamConf{AllowCrossZone: true}}
 	require.NoError(t, owner.ConfigureRoleAuthority(ctx, schema))
 	require.NoError(t, owner.ConfigureMatchEntryAuthority(ctx, schema))
 	require.NoError(t, owner.CheckTeamRouteContract(ctx))

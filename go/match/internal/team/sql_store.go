@@ -90,7 +90,7 @@ func sqlTeamSnapshot(player, teamID, stamp uint64, index IndexEntry, row *sqlTea
 }
 
 func (s *sqlTeamStore) read(ctx context.Context, player, teamID uint64, free bool) (*Snapshot, error) {
-	tx, err := s.authority.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: !free, Isolation: sql.LevelRepeatableRead})
+	tx, err := s.authority.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: !free && !s.authority.Config.RequireTiDB, Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (s *sqlTeamStore) read(ctx context.Context, player, teamID uint64, free boo
 }
 
 func (s *sqlTeamStore) readMembers(ctx context.Context, teamID uint64) (*MembersSnapshot, error) {
-	tx, err := s.authority.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
+	tx, err := s.authority.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: !s.authority.Config.RequireTiDB, Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, err
 	}

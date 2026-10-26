@@ -61,6 +61,7 @@ func terminalResultFixtureWithDeadline(t *testing.T, s *Store, deadlineDelta int
 	f := &pb.MatchFormationRecord{BattleId: 901, OperationId: "terminal-original-op", State: 1, TargetNodeId: 7, TargetInstanceId: "10000000-0000-4000-8000-000000000007", TargetEndpoint: "127.0.0.1:1", PhysicalRegion: 1, Mode: 3, ConfigId: 1, CreatedMs: stamp - 2000, DeadlineMs: stamp + 300000, RetryAtMs: stamp - 2000, Members: []*pb.MatchFormationMember{{PlayerId: 11, Ticket: a.Ticket}, {PlayerId: 22, Ticket: b.Ticket}}}
 	f.CreatedMs = stamp - terminalOutcomeGraceMs - 2000
 	f.DeadlineMs = uint64(int64(stamp) + deadlineDelta)
+	f.RetryAtMs = f.CreatedMs
 	members, err := proto.Marshal(&pb.MatchFormationRecord{Members: f.Members})
 	require.NoError(t, err)
 	_, err = s.DB.ExecContext(ctx, "INSERT INTO match_formation("+formationColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", f.BattleId, f.OperationId, f.State, f.PhysicalRegion, f.TargetNodeId, f.TargetInstanceId, f.TargetEndpoint, f.Mode, f.ConfigId, members, []byte{}, f.CreatedMs, f.DeadlineMs, f.RetryAtMs, []byte{}, false, []byte{}, uint32(0), uint32(0), "", uint32(0), false)
@@ -189,6 +190,10 @@ func TestTerminalTiDBCancelledFormationDistinguishesUnissuedAndPersistedCreate(t
 			s := testStore(t)
 			ctx := context.Background()
 			a, b := testJoin(t, s, 11), testJoin(t, s, 22)
+			// 先正式撤销原queued票；直接开局只能接无占用角色，原探测档案和原票快照仍保留。
+			for _, ticket := range []*pb.MatchAuthorityTicketRecord{a, b} {
+				require.NoError(t, s.CancelIntent(ctx, ticket.PlayerId, ticket.Ticket, ticket.RequestId))
+			}
 			stamp, err := s.Now(ctx)
 			require.NoError(t, err)
 			f := &pb.MatchFormationRecord{BattleId: 901, OperationId: "original-cancel-op", PhysicalRegion: 1, TargetNodeId: 3, TargetInstanceId: "original-instance", TargetEndpoint: "endpoint", Mode: a.Mode, ConfigId: a.ConfigId}

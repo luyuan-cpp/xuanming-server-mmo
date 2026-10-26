@@ -63,7 +63,7 @@ func testStore(t *testing.T) *Store {
 	_, e = schemamigrate.Up(ctx, db, schemamigrate.Options{Database: name, Tables: Tables()})
 	require.NoError(t, e)
 	// 本夹具只验证独立匹配SQL状态机，明确注入P与跨域准入替身；原生夹具覆盖实际原件围栏。
-	return &Store{DB: db, Secret: []byte("fixture-only-probe-key-00000000000"), Config: config.GlobalMatchConf{HardLatencyMs: 180, CrossRegionWaitSeconds: 30}, roleGuard: func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord) error { return nil }, entryGuard: func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord, *matchEntryOriginal) error {
+	return &Store{DB: db, Secret: []byte("fixture-only-probe-key-00000000000"), Config: config.GlobalMatchConf{RequireTiDB: true, HardLatencyMs: 180, CrossRegionWaitSeconds: 30}, roleGuard: func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord) error { return nil }, entryGuard: func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord, *matchEntryOriginal) error {
 		return nil
 	}}
 }
@@ -327,6 +327,129 @@ func TestAuthorityTiDBDirectIntentCommitsWholeGroupAndReplaysOriginalFormation(t
 	require.Equal(t, uint32(5), replayed.State)
 	_, e = s.Formation(ctx, 511)
 	require.ErrorIs(t, e, sql.ErrNoRows)
+	t.Run("cancelled-original-rejects-late-prepare-without-partial-tickets", func(t *testing.T) {
+		s := testStore(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		a, b := testJoin(t, s, 101), testJoin(t, s, 102)
+		require.NoError(t, s.Cancel(ctx, a.PlayerId, a.Ticket))
+		require.NoError(t, s.Cancel(ctx, b.PlayerId, b.Ticket))
+		beforeA, err := s.Ticket(ctx, a.PlayerId)
+		require.NoError(t, err)
+		beforeB, err := s.Ticket(ctx, b.PlayerId)
+		require.NoError(t, err)
+		key := &pb.MatchDirectIntentRecord{Kind: 2, OwnerId: 44, RequestLow: 7001}
+		body := []byte("permanent-cancel-original")
+		receipt, err := s.CancelActivity(ctx, key, body)
+		require.NoError(t, err)
+		require.True(t, receipt.RequestCancelled)
+		a.Mode, b.Mode = 5, 5
+		formation := &pb.MatchFormationRecord{BattleId: 1701, OperationId: uuid.NewString(), PhysicalRegion: 1, TargetNodeId: 3, TargetInstanceId: "instance", TargetEndpoint: "endpoint", Mode: 5, ConfigId: 1}
+		_, err = s.PrepareDirectAdmission(ctx, key, body, formation, []*pb.MatchAuthorityTicketRecord{a, b})
+		require.ErrorIs(t, err, ErrDirectCancelled)
+		_, err = s.PrepareDirectAdmission(ctx, key, []byte("changed-original"), formation, []*pb.MatchAuthorityTicketRecord{a, b})
+		require.ErrorIs(t, err, ErrDirectConflict)
+		actualA, err := s.Ticket(ctx, a.PlayerId)
+		require.NoError(t, err)
+		actualB, err := s.Ticket(ctx, b.PlayerId)
+		require.NoError(t, err)
+		require.True(t, proto.Equal(beforeA, actualA))
+		require.True(t, proto.Equal(beforeB, actualB))
+		current, err := s.DirectAdmission(ctx, key)
+		require.NoError(t, err)
+		require.NotNil(t, current)
+		require.True(t, current.Cancelled)
+		require.False(t, current.ExitPrepared)
+		require.Zero(t, current.BattleId)
+		require.Equal(t, body, current.Payload)
+		var formations int
+		require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_formation").Scan(&formations))
+		require.Zero(t, formations)
+		replay, err := s.CancelActivity(ctx, key, body)
+		require.NoError(t, err)
+		require.Equal(t, receipt, replay)
+	})
+	t.Run("concurrent-cancel-and-prepare-have-one-original-decision", func(t *testing.T) {
+		s := testStore(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		for n := uint64(1); n <= 8; n++ {
+			a, b := testJoin(t, s, 200+n*2), testJoin(t, s, 201+n*2)
+			require.NoError(t, s.Cancel(ctx, a.PlayerId, a.Ticket))
+			require.NoError(t, s.Cancel(ctx, b.PlayerId, b.Ticket))
+			beforeA, err := s.Ticket(ctx, a.PlayerId)
+			require.NoError(t, err)
+			beforeB, err := s.Ticket(ctx, b.PlayerId)
+			require.NoError(t, err)
+			a.Mode, b.Mode = 5, 5
+			key := &pb.MatchDirectIntentRecord{Kind: 2, OwnerId: 44, RequestLow: 8000 + n}
+			body := []byte("concurrent-original")
+			formation := &pb.MatchFormationRecord{BattleId: 1800 + n, OperationId: uuid.NewString(), PhysicalRegion: 1, TargetNodeId: 3, TargetInstanceId: "instance", TargetEndpoint: "endpoint", Mode: 5, ConfigId: 1}
+			start := make(chan struct{})
+			var wg sync.WaitGroup
+			var reserveErr, cancelErr error
+			var reserved *pb.MatchFormationRecord
+			var receipt *pb.CancelActivityBattleResponse
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				<-start
+				reserved, reserveErr = s.ReserveDirect(ctx, key, body, formation, []*pb.MatchAuthorityTicketRecord{a, b})
+			}()
+			go func() {
+				defer wg.Done()
+				<-start
+				receipt, cancelErr = s.CancelActivity(ctx, key, body)
+			}()
+			close(start)
+			wg.Wait()
+			require.NoError(t, cancelErr)
+			require.NotNil(t, receipt)
+			current, err := s.DirectAdmission(ctx, key)
+			require.NoError(t, err)
+			require.NotNil(t, current)
+			require.Equal(t, body, current.Payload)
+			actualA, err := s.Ticket(ctx, a.PlayerId)
+			require.NoError(t, err)
+			actualB, err := s.Ticket(ctx, b.PlayerId)
+			require.NoError(t, err)
+			var formations int
+			require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_formation WHERE battle_id=?", formation.BattleId).Scan(&formations))
+			if receipt.RequestCancelled {
+				require.ErrorIs(t, reserveErr, ErrDirectCancelled)
+				require.Nil(t, reserved)
+				require.True(t, current.Cancelled)
+				require.Zero(t, current.BattleId)
+				require.Zero(t, formations)
+				for _, ticket := range []*pb.MatchAuthorityTicketRecord{actualA, actualB} {
+					require.Equal(t, uint32(4), ticket.State)
+					require.Zero(t, ticket.FormationId)
+				}
+				if !current.ExitPrepared {
+					require.True(t, proto.Equal(beforeA, actualA))
+					require.True(t, proto.Equal(beforeB, actualB))
+				}
+			} else {
+				require.NoError(t, reserveErr)
+				require.NotNil(t, reserved)
+				require.Equal(t, formation.BattleId, reserved.BattleId)
+				require.Equal(t, formation.BattleId, receipt.BattleId)
+				require.EqualValues(t, 1, receipt.FormationState)
+				require.False(t, current.Cancelled)
+				require.Equal(t, formation.BattleId, current.BattleId)
+				require.Equal(t, 1, formations)
+				for _, ticket := range []*pb.MatchAuthorityTicketRecord{actualA, actualB} {
+					require.Equal(t, uint32(2), ticket.State)
+					require.Equal(t, formation.BattleId, ticket.FormationId)
+				}
+			}
+			replay, err := s.CancelActivity(ctx, key, body)
+			require.NoError(t, err)
+			require.Equal(t, receipt, replay)
+			_, err = s.CancelActivity(ctx, key, []byte("changed-original"))
+			require.ErrorIs(t, err, ErrDirectConflict)
+		}
+	})
 }
 
 func TestAuthorityTiDBDeclineTombstonePreventsLateAcceptAndPartialReservation(t *testing.T) {

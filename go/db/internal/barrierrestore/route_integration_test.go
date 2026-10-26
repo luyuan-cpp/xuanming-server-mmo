@@ -219,11 +219,15 @@ func TestIntegrationDBFirstSplitRedisAndGlobalStorage(t *testing.T) {
 		plan, err := split.Prepare(f.ctx, f.schema, f.zone, f.maintenance, []string{strconv.FormatUint(id, 10)}, false)
 		require.NoError(t, err)
 		require.Empty(t, plan.Players[0].RouteGeneration)
+		var restored string
 		for attempt := 0; attempt < 2; attempt++ {
 			require.NoError(t, split.ApplyOne(f.ctx, plan, 0))
 			fields, err := cache.HGetAll(f.ctx, savebarrier.Key(id)).Result()
 			require.NoError(t, err)
-			require.Equal(t, map[string]string{"pending": savebarrier.Version(19, 1), "player_database": savebarrier.Version(19, 1), "player_database_1": savebarrier.Version(19, 1), "schema_gen": "1"}, fields)
+			next := assertRestoredFence(t, fields["handoff_fence"], "19", "", "0", strings.Repeat("0", 32))
+			require.NotEqual(t, restored, next, "同一计划重放也必须轮换撤销令牌")
+			restored = next
+			require.Equal(t, map[string]string{"pending": savebarrier.Version(19, 1), "player_database": savebarrier.Version(19, 1), "player_database_1": savebarrier.Version(19, 1), "schema_gen": "1", "handoff_fence": restored}, fields)
 			ttl, err := cache.PTTL(f.ctx, savebarrier.Key(id)).Result()
 			require.NoError(t, err)
 			require.Equal(t, -time.Nanosecond, ttl)
@@ -270,7 +274,8 @@ func TestIntegrationDBFirstSplitRedisAndGlobalStorage(t *testing.T) {
 				require.Zero(t, n)
 			}
 		})
-		created, err := cache.SetNX(local.ctx, ownerepoch.OwnerEpochKey(localID), "19", 0).Result()
+		localOwnerFloor := "19" // 本角色原Redis发号floor；SQL的8:90不降低撤销围栏。
+		created, err := cache.SetNX(local.ctx, ownerepoch.OwnerEpochKey(localID), localOwnerFloor, 0).Result()
 		require.NoError(t, err)
 		require.True(t, created)
 		restore := r
@@ -281,14 +286,20 @@ func TestIntegrationDBFirstSplitRedisAndGlobalStorage(t *testing.T) {
 		plan, err := restore.Prepare(local.ctx, local.schema, local.zone, local.maintenance, []string{strconv.FormatUint(localID, 10)}, false)
 		require.NoError(t, err)
 		require.Empty(t, plan.Players[0].Placement)
+		var restored string
 		for attempt := 0; attempt < 2; attempt++ {
 			require.NoError(t, restore.ApplyOne(local.ctx, plan, 0))
 			require.Equal(t, localBefore, local.assets(t, localID))
 			local.rowsEqual(t, localFirst, localSecond)
+			fence, err := cache.HGet(local.ctx, savebarrier.Key(localID), "handoff_fence").Result()
+			require.NoError(t, err)
+			next := assertRestoredFence(t, fence, localOwnerFloor, "", "0", strings.Repeat("0", 32))
+			require.NotEqual(t, restored, next, "同一计划重放也必须轮换撤销令牌")
+			restored = next
 		}
 		fields, err := cache.HGetAll(local.ctx, savebarrier.Key(localID)).Result()
 		require.NoError(t, err)
-		require.Equal(t, map[string]string{"pending": savebarrier.Version(8, 90), "player_database": savebarrier.Version(8, 90), "player_database_1": savebarrier.Version(8, 90), "schema_gen": "1"}, fields)
+		require.Equal(t, map[string]string{"pending": savebarrier.Version(8, 90), "player_database": savebarrier.Version(8, 90), "player_database_1": savebarrier.Version(8, 90), "schema_gen": "1", "handoff_fence": restored}, fields)
 		ttl, err := cache.PTTL(local.ctx, savebarrier.Key(localID)).Result()
 		require.NoError(t, err)
 		require.Equal(t, -time.Nanosecond, ttl)
