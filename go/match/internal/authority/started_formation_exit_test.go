@@ -10,7 +10,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 	battlepb "proto/battle"
-	kafkapb "proto/contracts/kafka"
 	pb "proto/match"
 	inboxpb "proto/player_inbox"
 )
@@ -23,7 +22,7 @@ import (
 // go/guild/internal/data/trial_launch_abort_tidb_test.go）。
 // 复用 formation_recovery_exit_test.go 的夹具；不起 Battle、不依赖真实墙钟，截止用数据库当前时刻之前的固定值注入。
 
-// expireStartedFormation 把已持久 v1 原件的创建 / 截止时刻同时改到数据库当前时刻之前，模拟这一局已过权威截止。
+// expireStartedFormation 同时改写已持久 v1 原件与 SQL 时刻，模拟这一局已过权威截止与终局提交宽限。
 // formation 行与 Create 原件里的两个时刻必须一致（supportedOutcomeOriginal 逐项核对），所以连原件一起重写。
 func expireStartedFormation(t *testing.T, s *Store, battleID uint64) {
 	t.Helper()
@@ -34,10 +33,10 @@ func expireStartedFormation(t *testing.T, s *Store, battleID uint64) {
 	require.NoError(t, proto.Unmarshal(f.CreateRequest, request))
 	stamp, err := s.Now(ctx)
 	require.NoError(t, err)
-	request.CreatedAtMs, request.DeadlineMs = stamp-2000, stamp-1000
+	request.CreatedAtMs, request.DeadlineMs = stamp-terminalOutcomeGraceMs-2000, stamp-terminalOutcomeGraceMs-1000
 	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(request)
 	require.NoError(t, err)
-	_, err = s.DB.ExecContext(ctx, "UPDATE match_formation SET created_ms=?,deadline_ms=?,create_request=? WHERE battle_id=?", stamp-2000, stamp-1000, raw, battleID)
+	_, err = s.DB.ExecContext(ctx, "UPDATE match_formation SET created_ms=?,deadline_ms=?,create_request=? WHERE battle_id=?", request.CreatedAtMs, request.DeadlineMs, raw, battleID)
 	require.NoError(t, err)
 }
 
@@ -60,8 +59,27 @@ func startFormation(t *testing.T, s *Store, battleID uint64) {
 func lateCompleteAfterAbort(t *testing.T, s *Store, f *pb.MatchFormationRecord) {
 	t.Helper()
 	ctx := context.Background()
-	raw, err := proto.Marshal(&kafkapb.BattleResultEvent{BattleId: f.BattleId, Outcome: battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN, SettlementFormatVersion: 1})
+	original := &battlepb.CreateBattleRequest{}
+	require.NoError(t, proto.Unmarshal(f.CreateRequest, original))
+	event := completeResult()
+	require.Len(t, original.Players, len(event.Settlements))
+	require.Len(t, event.Teams, len(original.Players))
+	event.BattleId = f.BattleId
+	event.MatchMode = original.MatchMode
+	event.BattleConfigId = original.BattleConfigId
+	event.ActivityContext = original.ActivityContext
+	event.FinishedAtMs = original.DeadlineMs
+	for i, player := range original.Players {
+		require.NotNil(t, player)
+		event.Teams[i].TeamIndex = player.TeamIndex
+		event.Teams[i].PlayerIds = []uint64{player.PlayerId}
+		event.Settlements[i].BattleId = f.BattleId
+		event.Settlements[i].PlayerId = player.PlayerId
+		event.Settlements[i].PlayerTeamIndex = player.TeamIndex
+	}
+	raw, err := proto.Marshal(event)
 	require.NoError(t, err)
+	require.NoError(t, validateTerminalResult(f, event, raw))
 	decision, err := s.CommitBattleOutcome(ctx, &pb.CommitBattleOutcomeRequest{BattleId: f.BattleId, PlacementOperationId: f.OperationId, TargetInstanceId: f.TargetInstanceId, RawResultPayload: raw})
 	require.NoError(t, err)
 	require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, decision)
@@ -149,6 +167,9 @@ func TestStartedActivityFormationTiDBCancelSignsAbortOnlyAfterDeadline(t *testin
 	ctx := context.Background()
 	const battleID = 1801
 	a, b := testJoin(t, s, 18011), testJoin(t, s, 18012)
+	// Join 只用于构造原票快照；直接开局前必须先释放排队占用。
+	require.NoError(t, s.Cancel(ctx, a.PlayerId, a.Ticket))
+	require.NoError(t, s.Cancel(ctx, b.PlayerId, b.Ticket))
 	tickets := []*pb.MatchAuthorityTicketRecord{a, b}
 	formation := &pb.MatchFormationRecord{BattleId: battleID, OperationId: uuid.NewString(), PhysicalRegion: 1, TargetNodeId: 3,
 		TargetInstanceId: "original-instance", TargetEndpoint: "127.0.0.1:1", Mode: a.Mode, ConfigId: a.ConfigId}
@@ -234,9 +255,15 @@ func (l *lockedInbox) seenPerPlayer() map[uint64]int {
 	return out
 }
 
+func (l *lockedInbox) callCounts() (int, int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.inner.enqueues, l.inner.lookups
+}
+
 // COMPLETE 已落库、battle 随即崩溃（或停机补提交刚拿到 COMPLETE 就退出）：结果与全员个人结算只剩 match 发件箱投递，
 // 不依赖 battle 进程。两个 match 副本同时巡检，同一行在一个认领租约内只有一方投递（next_retry_ms CAS）：结果只发一次，
-// 每名成员只入箱一次（Enqueue + Lookup 各一次）。认领者投递后崩溃、没来得及标记时，租约到期由另一副本重投同一份原字节
+// 每名成员首轮只 Enqueue，后续到期轮只 Lookup。认领者投递后崩溃、没来得及标记时，租约到期由另一副本重投同一份原字节
 // —— 至少一次，评分 / 帮会按 battle_id、Inbox 按 (player, producer, battle_id) 去重。
 func TestTerminalTiDBCommittedOutcomeIsDeliveredByOneReplicaPerLease(t *testing.T) {
 	s := testStore(t)
@@ -275,7 +302,23 @@ func TestTerminalTiDBCommittedOutcomeIsDeliveredByOneReplicaPerLease(t *testing.
 	require.Len(t, published, 1, "同一认领租约内结果只发一次")
 	require.Equal(t, []uint64{request.BattleId}, publishedBattles)
 	require.Equal(t, request.RawResultPayload, published[0])
+	require.Equal(t, map[uint64]int{11: 1, 22: 1}, inbox.seenPerPlayer(), "首轮每名成员只 Enqueue 一次")
+	enqueues, lookups := inbox.callCounts()
+	require.Equal(t, 2, enqueues)
+	require.Zero(t, lookups)
+
+	// 不等待真实墙钟：只让本局 PENDING 来源到期，下一轮应只查入箱结果。
+	retry, err := s.DB.ExecContext(ctx, "UPDATE match_battle_settlement_source SET next_retry_ms=1 WHERE battle_id=? AND dispatch_state=1 AND inbox_seq>0", request.BattleId)
+	require.NoError(t, err)
+	changed, err := retry.RowsAffected()
+	require.NoError(t, err)
+	require.EqualValues(t, 2, changed)
+	require.NoError(t, replica.PublishBattleOutcomesOnce(ctx, resolve, terminalFixtureSecret, publish))
+	require.Len(t, published, 1, "个人 Lookup 不重发结果")
 	require.Equal(t, map[uint64]int{11: 2, 22: 2}, inbox.seenPerPlayer(), "每名成员一次 Enqueue + 一次 Lookup")
+	enqueues, lookups = inbox.callCounts()
+	require.Equal(t, 2, enqueues, "已入箱来源不重复 Enqueue")
+	require.Equal(t, 2, lookups)
 
 	// 认领者发出之后、标记 result_published 之前崩溃：行停在未发布、租约到期。另一副本重投同一份原字节，不重算。
 	_, err = s.DB.ExecContext(ctx, "UPDATE match_battle_completion SET result_published=0,next_retry_ms=1 WHERE battle_id=?", request.BattleId)

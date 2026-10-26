@@ -632,6 +632,8 @@ func TestTeamTiDBPreparedLaunchCapturesOnlyOriginalSpectatorAndResumesWholeQueue
 	require.Len(t, tickets, 2)
 	_, err = f.owner.CancelTeamLaunchForActor(f.actor(t, 1), 1, queued)
 	require.NoError(t, err)
+	_, err = f.owner.SpectatorIntent(f.actor(t, 1), 1, later)
+	require.NoError(t, err)
 	current, err := f.owner.BeginSpectator(f.actor(t, 1), 1, later, room, add)
 	require.NoError(t, err)
 	closed, err := f.owner.SpectatorExitClosed(context.Background(), data.SpectatorExits[0])

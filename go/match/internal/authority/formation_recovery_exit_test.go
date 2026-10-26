@@ -33,7 +33,7 @@ func exitFormationFixture(t *testing.T, s *Store, battleID uint64, requeue bool)
 }
 
 // persistV1Intent 以本代租约持久完整 v1 Create 原件，等同 gather 发出 Create 之前的提交点。
-// expired=true 时先把原件的创建 / 截止时刻改到数据库当前时刻之前，模拟已过权威截止。
+// expired=true 时把原件的创建 / 截止时刻移到终局宽限之前，模拟已过权威截止与提交宽限。
 func persistV1Intent(t *testing.T, s *Store, work *pb.MatchFormationRecord, expired bool) {
 	t.Helper()
 	ctx := context.Background()
@@ -41,7 +41,7 @@ func persistV1Intent(t *testing.T, s *Store, work *pb.MatchFormationRecord, expi
 	if expired {
 		stamp, err := s.Now(ctx)
 		require.NoError(t, err)
-		created, deadline = stamp-2000, stamp-1000
+		created, deadline = stamp-terminalOutcomeGraceMs-2000, stamp-terminalOutcomeGraceMs-1000
 		_, err = s.DB.ExecContext(ctx, "UPDATE match_formation SET created_ms=?,deadline_ms=? WHERE battle_id=?", created, deadline, work.BattleId)
 		require.NoError(t, err)
 	}
