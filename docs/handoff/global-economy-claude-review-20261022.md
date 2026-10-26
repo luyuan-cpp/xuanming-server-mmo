@@ -1,6 +1,6 @@
 # 全球同服、交易与角色归属：Claude Code 审核入口
 
-状态：**整体尚未完成，不能交付为完成**。历练终局与旧 Scene 登记恢复本批最新授权为最多150个唯一手写路径（call_b045f21aeb1d4f88b2c6992054ff36cb），其中143个已明确，另7个仅供本批实际构建暴露的既有测试适配；新架构、地图、客户端与新增生产路径不在预留范围。当前143个已明确路径均已落地：原124、Go匹配本次5个新路径（实际改7个文件）、Java另14个新路径；本轮新增修复的编译和真库回归仍待完成。Guild两文件此前普通Maven原生退出0，664项中485通过、179外部跳过；后处理先后暴露单模块摘要与UTC时间类型误判，原失败均保留，不作为真库验收，下一次按全部当前修复正式clean构建。核心协议、必要服务器导表及官方Java同步已有实际记录，当前继续最新源码构建、真库与双区故障验收。首存前新号恢复、Java历史快照缺失和迟到释放标记的实际剩余验证仍保留。本文件是负责人要求的审核入口；完整实施过程与失败原件见[原交接](global-economy-review-20261021.md)。历史通过只覆盖其记录的源码、依赖、环境与命令，不能替代后来变化的源码或重启后的数据库验收。
+状态：**整体尚未完成，不能交付为完成**。历练终局与旧 Scene 登记恢复本批最新授权为最多150个唯一手写路径（call_b045f21aeb1d4f88b2c6992054ff36cb），其中143个已明确，另7个仅供本批实际构建暴露的既有测试适配；新架构、地图、客户端与新增生产路径不在预留范围。当前143个已明确路径均已落地：原124、Go匹配本次5个新路径（实际改7个文件）、Java另14个新路径；最新Go普通5叶及Observer2叶均正式通过；独立Java当前完整30模块已通过，826 suites／10944＝9930通过＋1014普通跳过，30JAR／18Boot和40个内部生成类型及首尾源码均已核验。普通通过不替代真库和双区：原SQL失败仍保留，当前PD已按单独授权仅把RAM256升512MiB并恢复，同CID／卷／其它配置保留，新的G3／S1强会话／尾资格及后续真库回归仍待完成。核心协议、必要服务器导表及官方Java同步已有实际记录，当前继续最新源码构建、真库与双区故障验收。首存前新号恢复、Java历史快照缺失和迟到释放标记的实际剩余验证仍保留。本文件是负责人要求的审核入口；完整实施过程与失败原件见[原交接](global-economy-review-20261021.md)。历史通过只覆盖其记录的源码、依赖、环境与命令，不能替代后来变化的源码或重启后的数据库验收。
 
 最新121授权原件：`C:/Users/luyua/.codex/tmp/global-current-maintenance-contract-B1-B2-implementation-r1/Guild-Trade-verified-legacy-fixtures-pending-r1/two-legacy-test-paths-121.authorization.json`，SHA `419D35344A8A6487CEBA904E153937459493705A5DF2C111B8DBAC8544A0B728`。两文件已按最新before SHA独占句柄CAS落地，实际记录1BB4673B；Guild当前01240898、Trade当前A7C9AE55，各+7/-0，未改生产代码、开关或原断言。当前Guild126／Trade20真MySQL及两组Vet均已实际通过，源适配与运行证据分别保留。
 
@@ -1085,3 +1085,11 @@ Go七文件CAS原件为临时证据目录`Match7-scope150-canonical-CAS-20261026
 Java窗口完成修正后fresh Full30，outer955001957A55EAA7A17F91DB1F04BB507C35E3C867506C04C42EA94A65ED2C16、innerB984F152307CD0E99A687AC49FCB0422E90F89889F1039F5ED1764A92AA938EC均实际passed；Maven原生0、826 suites／10944＝9930PASS＋1014普通SKIP，0FAIL／ERROR。30JAR、18Boot、Guild35／Match5内部生成资格及完整2671源码／252受管／253工具／6506第三方首尾核验均完成；普通SKIP仍不当真库通过。outer108／inner93为各自家族观察行，均严格退出，不相加冒独立进程数。原DA7F／0E0F编译红、旧Guild后处理红及辅助释放元数据脚本别名错误诊断都保留，未改原实际。
 
 Root按DC251FB9原子交还重读了两实际pin、0退出、当前native空及完整资格字段。下一唯一执行窗口交数据库，只允许一条已备10CID白名单caps只读补齐；PD256→512MiB仍是未批候选，MemorySwap等需实测后再提明确决策，不擅改上限或重启。Java继续纯ReadFull当前分支/六组freshCaseRoot准备，双区窗口继续混合Observer和真实Battle缺失故障叶，架构窗口继续隔离候选。总143／150、新地图和他人代码不动，整体未完成，下游SDK／Docker窗口尚未释放。
+
+### 2026-10-26：PD单项内存例外获批且恢复实跑完成
+
+负责人call_886f1727已明确批准仅PD RAM256→512MiB、MemorySwap总额仍512MiB（容器swap256→0）、原CID正常启动一次和原G3／S1／尾复验。独立授权EBEB979F保留原人类答复；AF91纯准备的大小写变量冲突被拦下，0update／start，原invalid保留。纠正HOLD63A5／runnerD75C／contract705D经独立根审08779AB9，全部参数为原生字符串、两控制CID为字面完整值、after-update恰一项Memory差异；仅三技术位＋human ref绑定为批准B8CA9B39，未修改历史97F3。
+
+数据库窗口五步实际CCDF62F6全部5native0、03精确核验通过后才启动，原PD新Started已记录、running／exit0／OOMfalse／restart0，Memory536870912与MemorySwap536870912；其它9容器36个捕获字段及PD其它配置保留，未清数据或改系统。Root重新核了真实pin和结果。新SQL强会话尚未验收，不以start冒ready；后续每段fresh pwsh按原G3／S1／尾case和时限单次执行，任何红停，不继续加内存或重start。
+
+四窗口继续分工：Java普通Full30已绿且新ReadFull345C正式交接，六组真库需各自freshCaseRoot保护已验产物；Java与双区各自准备真实Battle终局故障叶，临时JDI控制器归双区唯一owner。架构197候选与143并集314、名义保7需321，但完整非SQL排空阶段、部署身份入口及JDBC支持矩阵尚待补齐，未请求或取得新架构授权、未落地。当前143／150，新地图与他人代码保留，整体和下游SDK交接仍未完成。
