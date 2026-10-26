@@ -1,0 +1,87 @@
+diff --git a/src/rdkafka_cgrp.c b/src/rdkafka_cgrp.c
+index d26a0e3..d41d736 100644
+--- a/src/rdkafka_cgrp.c
++++ b/src/rdkafka_cgrp.c
+@@ -1602,15 +1602,15 @@ static void rd_kafka_cgrp_rejoin(rd_kafka_cgrp_t *rkcg, const char *fmt, ...) {
+         char reason[512];
+         va_list ap;
+         char astr[128];
+-        if (rkcg->rkcg_group_protocol == RD_KAFKA_GROUP_PROTOCOL_CONSUMER) {
+-                rd_kafka_cgrp_consumer_rejoin(rkcg, fmt, ap);
+-                return;
+-        }
+-
+         va_start(ap, fmt);
+         rd_vsnprintf(reason, sizeof(reason), fmt, ap);
+         va_end(ap);
+ 
++        if (rkcg->rkcg_group_protocol == RD_KAFKA_GROUP_PROTOCOL_CONSUMER) {
++                rd_kafka_cgrp_consumer_rejoin(rkcg, "%s", reason);
++                return;
++        }
++
+         if (rkcg->rkcg_group_assignment)
+                 rd_snprintf(astr, sizeof(astr), " with %d owned partition(s)",
+                             rkcg->rkcg_group_assignment->cnt);
+diff --git a/src/rdkafka_ssl.c b/src/rdkafka_ssl.c
+index 42b4780..ce107a2 100644
+--- a/src/rdkafka_ssl.c
++++ b/src/rdkafka_ssl.c
+@@ -45,6 +45,7 @@
+ #pragma comment(lib, "libssl.lib")
+ #endif
+ 
++#include <openssl/hmac.h>
+ #include <openssl/x509.h>
+ #include <openssl/x509_vfy.h>
+ 
+@@ -1676,7 +1677,14 @@ static int rd_kafka_ssl_set_certs(rd_kafka_t *rk,
+                 PKCS12_free(p12);
+                 BIO_free(bio);
+ 
++#if defined(OPENSSL_IS_BORINGSSL)
++                /* set1 保留 ca 所有权；任一步失败仍走原释放路径，并销毁尚未发布的 ctx。 */
++                r = SSL_CTX_use_certificate(ctx, cert) == 1 &&
++                    SSL_CTX_use_PrivateKey(ctx, pkey) == 1 &&
++                    SSL_CTX_set1_chain(ctx, ca) == 1;
++#else
+                 r = SSL_CTX_use_cert_and_key(ctx, cert, pkey, ca, 1);
++#endif
+                 RD_IF_FREE(cert, X509_free);
+                 RD_IF_FREE(pkey, EVP_PKEY_free);
+                 if (ca != NULL)
+diff --git a/src/rdrand.c b/src/rdrand.c
+index 4f6139e..2e28800 100644
+--- a/src/rdrand.c
++++ b/src/rdrand.c
+@@ -78,7 +78,12 @@ static int rd_rand() {
+ static rd_bool_t rd_rand_bytes_by_ossl(unsigned char *buf, int num) {
+         int res     = -1;
+         int retries = 0;
++#if defined(OPENSSL_IS_BORINGSSL)
++        /* BoringSSL 的密码学随机入口为 RAND_bytes，保留原有成功检查与重试上限。 */
++        while ((res = RAND_bytes(buf, num)) != 1) {
++#else
+         while ((res = RAND_priv_bytes(buf, num)) != 1) {
++#endif
+                 if (++retries == 5)
+                         break;
+ 
+diff --git a/tests/test.c b/tests/test.c
+index 4db6df8..94b7e56 100644
+--- a/tests/test.c
++++ b/tests/test.c
+@@ -2085,9 +2085,10 @@ int main(int argc, char **argv) {
+                                         exit(1);
+                                 }
+                         }
+-                } else if (*argv[i] != '-')
+-                        tests_to_run = argv[i];
+-                else {
++                } else if (*argv[i] != '-') {
++                        RD_IF_FREE(tests_to_run, rd_free);
++                        tests_to_run = rd_strdup(argv[i]);
++                } else {
+                         printf(
+                             "Unknown option: %s\n"
+                             "\n"

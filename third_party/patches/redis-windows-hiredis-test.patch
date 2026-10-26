@@ -1,0 +1,26 @@
+diff --git a/deps/hiredis/test.c b/deps/hiredis/test.c
+index f47e9ef..46d0e01 100644
+--- a/deps/hiredis/test.c
++++ b/deps/hiredis/test.c
+@@ -900,6 +900,12 @@ static void test_blocking_connection_errors(void) {
+         test("Returns error when host cannot be resolved: ");
+         // First see if this domain name *actually* resolves to NXDOMAIN
+         c = redisConnect(HIREDIS_BAD_DOMAIN, 6379);
++#ifdef _WIN32
++        /* Windows 错误文本随系统语言变化，按相同错误码生成预期文本。 */
++        const char *host_not_found = gai_strerror(EAI_NONAME);
++#else
++        const char *host_not_found = "No such host is known. ";
++#endif
+         test_cond(
+             c->err == REDIS_ERR_OTHER &&
+             (strcmp(c->errstr, "Name or service not known") == 0 ||
+@@ -911,7 +917,7 @@ static void test_blocking_connection_errors(void) {
+              strcmp(c->errstr, "Temporary failure in name resolution") == 0 ||
+              strcmp(c->errstr, "hostname nor servname provided, or not known") == 0 ||
+              strcmp(c->errstr, "no address associated with name") == 0 ||
+-             strcmp(c->errstr, "No such host is known. ") == 0));
++             strcmp(c->errstr, host_not_found) == 0));
+         redisFree(c);
+     } else {
+         printf("Skipping NXDOMAIN test. Found evil ISP!\n");

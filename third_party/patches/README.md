@@ -20,10 +20,24 @@
 
 | 补丁 | 目标子模块 | 上游 | 内容 |
 |---|---|---|---|
+| `grpc-windows-compat.patch` | `third_party/grpc` 内嵌的 `third_party/boringssl-with-bazel` | `grpc/grpc` / `google/boringssl` | Windows 下在声明 `X509_NAME` 类型前清除同名宏，避免系统头文件冲突 |
+| `librdkafka-runtime-compat.patch` | `third_party/librdkafka` | `confluentinc/librdkafka` | 修复消费者重新入组时可变参数使用、BoringSSL 证书与随机数兼容、测试参数字符串所有权 |
 | `librdkafka-utf8.patch` | `third_party/librdkafka` | `confluentinc/librdkafka`（**上游，无法推送**） | 9 个 `win32/*.vcxproj` 加 `/utf-8` 编译选项 + BOM |
+| `redis-windows-hiredis-test.patch` | `third_party/redis` | `redis/redis` | hiredis 测试按 Windows 错误码获取本地化域名解析错误文本 |
+| `sol2-optional-reference.patch` | `third_party/sol2` | `ThePhD/sol2` | 引用 optional 的 `emplace` 保存左值地址并禁止右值，避免临时对象悬垂 |
 | `ue5navmesh-utf8.patch` | `third_party/ue5navmesh` | `lhl-cpp/ue5navmesh`（自有 fork） | `Navmesh.vcxproj` 加 `/utf-8`；`DetourNavMeshBuilder.cpp` 补 `#include <cassert>` |
 
 `/utf-8` 是必需的：这两个工程里有中文注释，MSVC 默认按本地代码页解析会报错或乱码。
+
+补丁基于以下钉住的子模块提交；升级依赖后须重新检查能否应用：
+
+- `grpc`：`3252a89f10d8e92997862167ca7d095ecda85973`；内嵌 BoringSSL：`2b44a3701a4788e1ef866ddc7f143060a3d196c9`。补丁路径以 `third_party/boringssl-with-bazel/` 为前缀，由脚本在 `grpc` 目录应用。
+- `librdkafka`：`c6c9973cf1b25394c58e0cade13a36f386856f77`；运行时补丁只包含四个 C 源码与测试文件，与原编码补丁互不重叠。
+- `redis`：`498ecd0d6d007db11ddb3aea9428552598a78622`。
+- `sol2`：`eba86625b707e3c8c99bbfc4624e51f42dc9e561`。
+- `ue5navmesh`：`aacf2f82af2e24c56474855fce057018928735bb`。
+
+这些补丁保存源码改动，不包含 `install_vs2026_dbg/` 等本机构建安装产物；不需要修改子模块提交指针或向第三方上游推送。
 
 ## 用法
 
@@ -42,9 +56,12 @@ pwsh -File third_party/patches/apply.ps1 -DryRun
 
 改了子模块内容之后重新导出补丁：
 
-```bash
-cd third_party/librdkafka && git diff > ../patches/librdkafka-utf8.patch
+```powershell
+git -C third_party/librdkafka diff --binary --no-ext-diff --output=../patches/librdkafka-runtime-compat.patch -- src/rdkafka_cgrp.c src/rdkafka_ssl.c src/rdrand.c tests/test.c
+git -C third_party/librdkafka apply --reverse --check ../patches/librdkafka-runtime-compat.patch
 ```
+
+使用 Git 的 `--output` 直接保存补丁字节，避免 PowerShell 管道或重定向改变编码；保留 `.gitattributes` 的 `*.patch -text` 规则。新增补丁按 `<子模块名>-<用途>.patch` 命名，脚本会自动发现。导出内嵌 BoringSSL 补丁时，为 `git diff` 指定 `--src-prefix=a/third_party/boringssl-with-bazel/` 与 `--dst-prefix=b/third_party/boringssl-with-bazel/`，并在 `third_party/grpc` 执行反向检查。
 
 `ue5navmesh` 是自有 fork，长期正解是**在 fork 里提交并推送，再回主仓 bump 指针**，
 那样就不需要补丁了。在此之前先用补丁兜着。

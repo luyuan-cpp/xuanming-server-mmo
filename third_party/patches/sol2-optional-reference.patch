@@ -1,0 +1,25 @@
+diff --git a/include/sol/optional_implementation.hpp b/include/sol/optional_implementation.hpp
+index 26f41d0..95bebea 100644
+--- a/include/sol/optional_implementation.hpp
++++ b/include/sol/optional_implementation.hpp
+@@ -2186,14 +2186,15 @@ namespace sol {
+ 		/// one.
+ 		///
+ 		/// \group emplace
+-		template <class... Args>
+-		T& emplace(Args&&... args) noexcept {
+-			static_assert(std::is_constructible<T, Args&&...>::value, "T must be constructible with Args");
+-
++		T& emplace(T& arg) noexcept {
+ 			*this = nullopt;
+-			this->construct(std::forward<Args>(args)...);
++			m_value = std::addressof(arg);
++			return **this;
+ 		}
+ 
++		// 引用不持有对象，禁止将临时对象绑定到 const 引用后悬垂。
++		T& emplace(T&&) = delete;
++
+ 		/// Swaps this optional with the other.
+ 		///
+ 		/// If neither optionals have a value, nothing happens.
