@@ -1049,3 +1049,39 @@ Go匹配原100个互不重复顶层均已执行，无跳过：61通过、39失�
 公会whole正常构建已真实完成唯一Maven native、退出0，无原生超时或清理／证据错误；原67 suites、664用例的精确结果为485通过、179按普通口径跳过、0失败／错误。179个外部用例仍未因此通过。验收脚本随后在多reactor摘要校验处失败：单模块stdout恰一条Building game-guild及BUILD SUCCESS、没有Reactor Summary。外层原件 `D4A7B6E8354A05F716A4C525B635ECBA55185CA324787B40EC2BC0DA2DDFD879`、内层 `BD65E230911DC72C2153C58F39AC532EFEC9DF0EE0D76F6A1C392B8FEF2A57E9` 均保留false；closed索引 `D9DAEAC25E6A4627DDD2D1E960C74E1E9E4B7E11CBAD42D26E22A6B68EB2F3B3`。外层11行与内层6行家族观察全部退出、可重叠，不能说17个不同进程。finally的final完整输入核验实际执行且证据错误为空；新JAR、内部proto及after/Seal1新29等try后续仍未完成。下一步只修单模块解析并以原native日志／XML续做全部剩余末核，不无故重复已通过的Maven，也不提前封Current30。
 
 范围仍只授权124，新增源码0写入。已把旧待答140方案统一更新为143个具名必要路径、最多150的[待批方案](</C:/Users/luyua/.codex/tmp/java-battle-terminal-recovery-implementation-20261023-r1/current-external-login-and-store-risk-r3/scope143-optional150-remaining-real-failures.HUMAN-UNAPPROVED.json>)（1097EEB2）；余7仅供本批旧测试适配。PlayerStore新r2候选 `B006FD84B77BA214EDA3B8CE0CFA95C3CD32F068AAC336CB882DC27480A05846` 明确把原queryTimeout业务上限纳入server cap，取消响应与清理另有同一有界窗口并恢复原值、未知取消隔离；原89个plain@Test全文保留、新增15候选方法，尚未编译／运行或写canonical，不能据源静态推导原127完整复验已绿。原r1计时竞争草案保留HOLD。150提案不包含尚未闭合的全球写资格／严格排空架构改造或TiDB采集开关，这两项仍未批准、未实施。
+
+## 2026-10-25重启后：本批新增修复的审核顺序
+
+这批150路径授权目前已使用143个唯一手写路径，余7个仅供本批实际构建暴露的旧测试适配。前124路径及历史生成、构建、失败证据保留；以下是本轮追加的具体接缝，不把整个工作区diff归为本批。
+
+| 审核域 | 实际改动 | 必须核对的契约 |
+| --- | --- | --- |
+| Go Match开战／取消 | direct_admission.go、direct_admission_native_test.go、既有store_test.go | 开战准备和永久取消竞争同一SQL主键；只处理确证1062，其他SQL错误保留；观战先正式登记原意图，旧请求不能改变新观战 |
+| Go队伍读事务 | team/sql_store.go、authority/team_candidates.go及原测试 | TiDB不声明不支持的READ ONLY事务选项，原隔离级别、SQL、提交／回滚及MySQL行为保持；真实TiDB夹具明确后端 |
+| Go终局测试夹具 | completion_test.go、store_test.go | 工作租约RetryAt与创建时间一致；已有排队票经正式取消后才ReserveDirect；有Create必须等永久SQL终局，不用删除SQL行绕过 |
+| Java玩家时限 | PlayerStore.java、StrongTiDbConnectionPolicy.java、PlayerStoreSqlTest.java | 每句服务器业务预算受原单调截止约束，JDBC取消响应只有有界余量；同一物理事务连接恢复原SELECT／DML／网络／queryTimeout；未知取消和恢复错误隔离连接，commit／rollback错误不得变成TimedOut |
+| Java建表同步 | SchemaSync.java、PbMysqlMysqlIntegrationTest.java | TiDB给既有表新增AUTO_INCREMENT在任何DDL前拒绝；两次拒绝后原结构、索引、行字节不变；MySQL原成功行为必须另以真实MySQL验证 |
+| Java队伍原请求 | SqlTeamAuthority.java、TeamSqlAuthorityTiDbTest.java | 历史开战按原UUID、actor、名单和token回读，不能因当前队伍已变化而改写历史请求；当前重放校验仍保留 |
+| Java交易 | CommerceEngine.java、CommerceTiDbTest.java | 仅校验当前非零参与者，原买方历史保留；身份版本不符不推进资产；终局operation缺失按损坏拒绝，不拿伪造终局夹具背书 |
+| Java公会终局 | GuildActivityStore.java、GuildActivityStoreTiDbTest.java | 正常结算、隔离毒战报和签名取消，在原SQL事务中关闭匹配的旧大厅／槽位；不能关闭下一局大厅；原22项加3项 |
+| Java真库旧夹具 | 公会4文件、好友JdbcFriendStoreMysqlTest.java | 保留真实死锁、原库命名空间、整主键点计划、先持久后确认和未知字段断言；不把TiDB不支持的MySQL诊断视图当业务失败或删除断言 |
+
+Go七文件CAS原件为临时证据目录`Match7-scope150-canonical-CAS-20261026T015417271Z-7998bed0/Match7-scope150-exclusive-CAS.actual-pure.json`（7A7B7943）；Java十四文件原件为`Java14-scope150-canonical-CAS-20261026T023455874Z-787db141/Java14-scope150-exclusive-CAS.actual.json`（98C17F51）。二者均有逐文件before／候选／备份／after，写前逐SHA核对，未覆盖其它最新内容。Root重启后复读14个Java after全部匹配，Go七个after也全部匹配。
+
+匹配当前普通验证已完成：fresh Capture83D540DE，BuildB95EFC31，Unit6C84F40E，Vet70729500，Runtime0A44B3E4；完整966源码／34458依赖核验，Unit710个PASS事件、0FAIL、131外部SKIP。新AMD64生产PE为3C97E7EB，未启动业务main。外部SKIP、最新Observer PE、Go原100项真库及双区业务仍须独立补验，不将普通绿折算为这些项目已通过。
+
+重启后的PD／TiKV／TiDB及JavaRedis四原CID已正常启动（51FBEB16），其余Kafka／主Redis／Etcd／MySQL仍等待按原身份恢复。当前G3／S1／尾资格链、Java全30模块clean构建、两版完整故障验收仍未完成。全局写热点与严格排空架构没有纳入150路径授权，也没有实现；不能据这一轮源码收口宣称所有逻辑服已无限水平扩展。当前继续占有验证窗口，下游尚不能把本条当作完成交接。
+
+### 2026-10-25（纽约）：按用户要求开四个协作窗口并交接
+
+- 人类明确要求“你可以协调，开四个窗口去做，不然太慢了”。已通过正式工具创建并确认四窗口active：Java修复与完整验证（01a17646-8537-7c12-814e-a55eb6180773）、数据库诊断与真库验收（01a17646-8809-71b0-95aa-76fedb7edb55）、双区与故障验收（01a17646-8a76-73d3-bcb8-46e0a2061f47）、写入围栏与排空架构方案（01a17646-8d2e-75f0-81d8-40c73ec6edda）。独立工作并行推进，业务源码、临时consumer与文件归属已明确；重型仍按97F3和前置依赖交接，不覆盖新地图或其它任务。
+- 旧三个子代理已完成正式交接并停止。Go普通5叶和Observer2叶均绿，交接02DB0312；混合Observer消费接线仍HOLD，private Module原合同只读探针通过但尚缺严格双安装组合和来源投影，不冒MainSourceBind绿。最新Main基准0D975而非旧F96D。
+- Java本次真实Full30因PlayerStoreSqlTest的AssertJ泛型重载testCompile失败，原DA7F／0E0F保false。实际22模块成功、1编译失败、7下游跳过（纠正先前“8下游”表述），已完成499 suites／7379＝6679PASS＋700普通SKIP。新Java窗口只把SQLException实参显式转Throwable，原断言保留，CAS19CD4D63已落同143内、7预留未用；准备fresh目录的下一次完整构建，不重复旧目录。
+- 新数据库窗口固定storage5一次实际BB5EF0A1全部5native0、17家族观察全退出，交还956D24DB。实证PD当前exited且OOMKilled=true，TiKV与TiDB仍running；不能用G3版本绿代强会话。当前仅备最小修复，不擅改此前保留的容器上限、不重S1、不清数据。已把唯一重型窗口转Java；其它三线继续只读／隔离候选准备。
+- 总体仍未完成，当前143／150，未释放给下游SDK／Docker调试构建。协调总记录位于C:/Users/luyua/.codex/tmp/global-four-window-coordination-20261026-r1/，原actual、红绿、源码备份均保留。
+
+### 2026-10-26（纽约）：最新Java全30正式通过，数据库精确配置核验接棒
+
+Java窗口完成修正后fresh Full30，outer955001957A55EAA7A17F91DB1F04BB507C35E3C867506C04C42EA94A65ED2C16、innerB984F152307CD0E99A687AC49FCB0422E90F89889F1039F5ED1764A92AA938EC均实际passed；Maven原生0、826 suites／10944＝9930PASS＋1014普通SKIP，0FAIL／ERROR。30JAR、18Boot、Guild35／Match5内部生成资格及完整2671源码／252受管／253工具／6506第三方首尾核验均完成；普通SKIP仍不当真库通过。outer108／inner93为各自家族观察行，均严格退出，不相加冒独立进程数。原DA7F／0E0F编译红、旧Guild后处理红及辅助释放元数据脚本别名错误诊断都保留，未改原实际。
+
+Root按DC251FB9原子交还重读了两实际pin、0退出、当前native空及完整资格字段。下一唯一执行窗口交数据库，只允许一条已备10CID白名单caps只读补齐；PD256→512MiB仍是未批候选，MemorySwap等需实测后再提明确决策，不擅改上限或重启。Java继续纯ReadFull当前分支/六组freshCaseRoot准备，双区窗口继续混合Observer和真实Battle缺失故障叶，架构窗口继续隔离候选。总143／150、新地图和他人代码不动，整体未完成，下游SDK／Docker窗口尚未释放。

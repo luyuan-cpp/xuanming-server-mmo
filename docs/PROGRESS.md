@@ -17232,3 +17232,17 @@ Go两红候选A6B已只读审过，124→126仅两新增路径的范围问题待
 - Guild单次后处理原8722C788／0FF089CE保false；完整来源和664账目、JAR检查通过，原freshness检查把已解析UTC DateTime先转无时区字符串再Parse，导致纽约时区多4小时，错误拒绝35个实际已于Maven启动后产生的生成文件。原argv确为clean install，原生成与Maven0证据保留；未来正式验证在类型边界保UTC和精度，不放宽freshness，不重复旧Maven。
 - 本任务PD／TiKV／TiDB／JavaRedis四原CID已正常恢复一次，六条命令全0、六family十观察行全退，收据51FBEB16。新Started为02:33:37–39Z；原镜像、卷、上限、配置及网络不变，FinishedAt保留原停止值。尚未据start宣称SQLready，G3／S1及其余依赖新运行资格继续准备。
 - Go七路径后继ordinary验证正在准备最新966完整来源与已批97F3门禁；原旧source、旧100项61／39、旧PE与失败原件不改。Main36／Java33和故障验收仍待，未交还验证窗口，未通知下游重建。
+
+### 2026-10-25（纽约）：按用户要求开四个协作窗口并交接
+
+- 人类明确要求“你可以协调，开四个窗口去做，不然太慢了”。已通过正式工具创建并确认四窗口active：Java修复与完整验证（01a17646-8537-7c12-814e-a55eb6180773）、数据库诊断与真库验收（01a17646-8809-71b0-95aa-76fedb7edb55）、双区与故障验收（01a17646-8a76-73d3-bcb8-46e0a2061f47）、写入围栏与排空架构方案（01a17646-8d2e-75f0-81d8-40c73ec6edda）。独立工作并行推进，业务源码、临时consumer与文件归属已明确；重型仍按97F3和前置依赖交接，不覆盖新地图或其它任务。
+- 旧三个子代理已完成正式交接并停止。Go普通5叶和Observer2叶均绿，交接02DB0312；混合Observer消费接线仍HOLD，private Module原合同只读探针通过但尚缺严格双安装组合和来源投影，不冒MainSourceBind绿。最新Main基准0D975而非旧F96D。
+- Java本次真实Full30因PlayerStoreSqlTest的AssertJ泛型重载testCompile失败，原DA7F／0E0F保false。实际22模块成功、1编译失败、7下游跳过（纠正先前“8下游”表述），已完成499 suites／7379＝6679PASS＋700普通SKIP。新Java窗口只把SQLException实参显式转Throwable，原断言保留，CAS19CD4D63已落同143内、7预留未用；准备fresh目录的下一次完整构建，不重复旧目录。
+- 新数据库窗口固定storage5一次实际BB5EF0A1全部5native0、17家族观察全退出，交还956D24DB。实证PD当前exited且OOMKilled=true，TiKV与TiDB仍running；不能用G3版本绿代强会话。当前仅备最小修复，不擅改此前保留的容器上限、不重S1、不清数据。已把唯一重型窗口转Java；其它三线继续只读／隔离候选准备。
+- 总体仍未完成，当前143／150，未释放给下游SDK／Docker调试构建。协调总记录位于C:/Users/luyua/.codex/tmp/global-four-window-coordination-20261026-r1/，原actual、红绿、源码备份均保留。
+
+### 2026-10-26（纽约）：最新Java全30正式通过，数据库精确配置核验接棒
+
+Java窗口完成修正后fresh Full30，outer955001957A55EAA7A17F91DB1F04BB507C35E3C867506C04C42EA94A65ED2C16、innerB984F152307CD0E99A687AC49FCB0422E90F89889F1039F5ED1764A92AA938EC均实际passed；Maven原生0、826 suites／10944＝9930PASS＋1014普通SKIP，0FAIL／ERROR。30JAR、18Boot、Guild35／Match5内部生成资格及完整2671源码／252受管／253工具／6506第三方首尾核验均完成；普通SKIP仍不当真库通过。outer108／inner93为各自家族观察行，均严格退出，不相加冒独立进程数。原DA7F／0E0F编译红、旧Guild后处理红及辅助释放元数据脚本别名错误诊断都保留，未改原实际。
+
+Root按DC251FB9原子交还重读了两实际pin、0退出、当前native空及完整资格字段。下一唯一执行窗口交数据库，只允许一条已备10CID白名单caps只读补齐；PD256→512MiB仍是未批候选，MemorySwap等需实测后再提明确决策，不擅改上限或重启。Java继续纯ReadFull当前分支/六组freshCaseRoot准备，双区窗口继续混合Observer和真实Battle缺失故障叶，架构窗口继续隔离候选。总143／150、新地图和他人代码不动，整体未完成，下游SDK／Docker窗口尚未释放。
