@@ -8,8 +8,8 @@
 线程。Kafka、日志和 lifecycle 组件都有后台线程。gRPC 没有：gRPC 迁到 muduo
 驱动（第 3、4 批，`docs/design/grpc-muduo-transport.md` §14–§15）之后，生成的
 gRPC 客户端与 scene / battle 的 gRPC 服务端都经 `muduo_grpc` 跑在节点自己的
-EventLoop 上，不建线程。官方 gRPC 库仍然链接，但节点进程里绝不能初始化它的
-运行时；由运行期守卫核对（见 [gRPC 运行时守卫](#grpc-运行时守卫)）。
+EventLoop 上，不建线程。2026-10-26 起，C++ 工程不再链接官方 gRPC SDK；
+Protobuf、Abseil、GoogleTest 与必要的 BoringSSL 各自独立管理，协议与 Go 服务保持兼容。
 
 ---
 
@@ -22,7 +22,6 @@ EventLoop 上，不建线程。官方 gRPC 库仍然链接，但节点进程里�
   - Windows: `CreateToolhelp32Snapshot` + `Thread32First/Next`
   - Linux: `readdir("/proc/self/task")`
 - **行为**: 仅被动监控 — 输出警告日志，**不会**强制限制或终止线程
-- **gRPC 运行时守卫**: 注册时与每次采样时核对官方 gRPC 运行时仍未初始化（见下文）
 
 ### 环境变量
 
@@ -33,66 +32,34 @@ EventLoop 上，不建线程。官方 gRPC 库仍然链接，但节点进程里�
 | `NODE_THREAD_MONITOR_STABLE_WINDOW_SECONDS` | `60` | 等待此时长后设定基线值 |
 | `NODE_THREAD_MONITOR_GROWTH_WARN_CONSECUTIVE_SAMPLES` | `6` | 连续增长采样次数达到此值后触发警告 |
 | `NODE_THREAD_MONITOR_GROWTH_WARN_ABSOLUTE_INCREASE` | `16` | 基线以上的最小绝对增量才触发警告 |
-| `NODE_GRPC_RUNTIME_GUARD_FATAL` | 不设(关) | 设为 `1` / `true` / `on` 时,gRPC 运行时守卫第一次发现官方运行时被初始化即 `LOG_FATAL` 退出,而不是只记日志。CI 与冒烟环境设上,生产不设(有意 fail-open) |
 
 ### 日志输出示例
 
 ```
-[INFO]  Gate thread metrics: total_threads=12, delta_threads=0, peak_threads=14, uptime_sec=120, grpc_runtime_initialized=0
+[INFO]  Gate thread metrics: total_threads=12, delta_threads=0, peak_threads=14, uptime_sec=120
 [INFO]  Gate thread baseline (stable window reached): baseline_threads=12, ...
 [WARN]  Gate thread growth warning: total_threads=30, increase_from_baseline=+18, consecutive_growth_samples=7, ...
-[ERROR] Scene official gRPC runtime is initialized (grpc_is_initialized()=1, detected_at=sample, uptime_sec=3610): its threads (...) are not controlled by the node, ...
 ```
 
-`thread metrics` 行在第一次采样时打一次，此后最多每小时一次。`ERROR` 行只在
-下面的守卫触发时出现，每个进程最多一次。
+`thread metrics` 行在第一次采样时输出，此后最多每小时一次；持续增长告警继续使用原有基线与阈值。
 
-### gRPC 运行时守卫
+### C++ SDK 依赖边界（2026-10-26）
 
-负责人的目标是线程数可控：gRPC 库可以继续链接，但不得启动任何官方 gRPC
-线程。官方运行时一旦被初始化（显式 `grpc_init()`，或构造继承
-`grpc::internal::GrpcLibrary` 的官方对象时隐式初始化：`grpc::CreateChannel`
-建的通道、`grpc::ServerBuilder::BuildAndStart` 建的服务端、`grpc::CompletionQueue`、
-通道 / 服务端凭据、`grpc::ResourceQuota`、`grpc::Alarm`；`*.grpc.pb.h` 的 Stub
-要先有通道，所以同样意味着初始化），就会起 EventEngine worker、Lifeguard 和
-定时器线程，这些线程不受节点控制。
+节点使用 `muduo_grpc` 与 nghttp2 实现标准 gRPC 协议，消息序列化由独立 Protobuf 提供。
+官方 gRPC C++ SDK、官方桩生成插件及其运行时链接项已经退出 C++ 构建。原运行时探针、
+配套守卫配置、日志字段与仅检查该探针的旧测试同步移除；ThreadMonitor 的采样、基线、
+增长告警和启停配置继续生效。
 
-- **探针**: `cpp/libs/engine/core/node/system/node/grpc_runtime_probe.{h,cpp}`，
-  `node::observability::IsGrpcRuntimeInitialized()` 包装 `grpc_is_initialized()`。
-  头文件不 include 任何 gRPC 头，只有 `.cpp` include `<grpc/grpc.h>`。进程内
-  第一次调用会执行 gRPC 的一次性基础准备（建内部互斥量、读 `GRPC_*` 环境变量），
-  它不建线程、也不计入初始化次数，所以探针自身不会把结果变成 true。
-- **何时核对**: `RegisterThreadObservability()` 里核对一次（不受
-  `NODE_THREAD_MONITOR_ENABLED` 影响），之后 ThreadMonitor 每次采样都核对
-  （仅在监控开启时）。
-- **怎么报**: 第一次发现已初始化时打一条 `ERROR`：
-  `<Node> official gRPC runtime is initialized (grpc_is_initialized()=1, detected_at=registration|sample, uptime_sec=N): ...`，
-  附排查方向；每小时的 `thread metrics` 行始终带 `grpc_runtime_initialized=0|1`。
-- **有意 fail-open**（AGENTS.md §11.3）：守卫只记日志，不终止进程、不拒绝流量。CI 与冒烟环境设 `NODE_GRPC_RUNTIME_GUARD_FATAL=1` 改为 fail-closed（发现即 `LOG_FATAL`），生产不设。
-  运行时被初始化影响的是「线程数是否可控」这一运维属性，不涉及玩家资产、数据
-  一致性或安全；为此让在线的 scene / battle / gate 退出代价远大于多出一批线程。
-  风险由 ERROR 行、`grpc_runtime_initialized` 字段和下面的回归用例兜住。
-- **回归用例**: `cpp/tests/rpc_controller_test/grpc_runtime_not_initialized_test.cpp`
-  走一遍生成客户端的本地拒绝和一次真实的 `muduo_grpc` 回环调用（生成客户端 →
-  `muduo_grpc::Channel` → 同进程 `muduo_grpc::Server` → `GrpcUnaryCall`），断言
-  官方运行时仍未初始化，拆除之后再断言一次。`rpc_controller_test` 进程里不得有
-  任何用例构造官方 gRPC 对象：该状态是进程级的，`grpc_shutdown` 还可能在后台
-  线程上异步收尾。
+依赖边界由 `tools/scripts/tests/test_cpp_grpc_dependency_boundary.py` 检查：覆盖全部
+Windows 工程配置及继承 targets，拒绝官方 SDK 路径、专用库、头文件、运行时调用和官方
+生成桩，核对 Linux CMake 不再查找官方 SDK，同时允许自有 `grpc_client` 与 `muduo_grpc`。
+生成客户端的本地拒绝与真实回环行为分别保留在 `grpc_client_local_reject_test.cpp` 和
+`grpc_client_loopback_test.cpp`；静态边界检查不能代替这些行为测试、实际构建与互通验证。
 
-核对一个节点：
-
-1. 日志：没有 `official gRPC runtime is initialized` 行；每小时的
-   `thread metrics` 行是 `grpc_runtime_initialized=0`。
-2. 对比不同版本、不同主机的 `thread baseline (stable window reached): total_threads=`；
-   它不应再随 CPU 核数变化。
-3. Linux：`for t in /proc/<pid>/task/*; do cat $t/comm; done | sort | uniq -c`
-   不得出现官方 gRPC 线程名（`comm` 只保留 15 个字符）：`event_engine`、
-   `lifeguard`、`grpc_global_tim`、`grpcpp_sync_ser`、`grpc_shutdown`。
-4. 代码：`rg -n --type cpp "grpcpp|\bgrpc::|grpc_init\(" cpp --glob '!cpp/generated/**'`
-   只应命中注释和诊断文案（`thread_observability.h` 里守卫自己的 ERROR 文案、
-   回归用例的失败信息）；不加 `--type cpp` 还会命中各 `.vcxproj` 里
-   `grpcpp_*.lib` 的链接项。`rg -n --type cpp "#include <grpc" cpp --glob '!cpp/generated/**'`
-   只应命中 `grpc_runtime_probe.cpp`，它是手写代码里唯一 include 官方 gRPC 头的文件。
+核对节点线程时，继续比较同等条件下的 `thread baseline (stable window reached)` 和
+`thread metrics`；Linux 可通过
+`for t in /proc/<pid>/task/*; do cat $t/comm; done | sort | uniq -c`
+核实实际线程来源。移除官方 SDK 不给 Kafka、日志或其它组件增加固定线程数保证。
 
 ---
 
@@ -109,7 +76,7 @@ worker 的线程数由实现决定，生产基线必须来自 ThreadMonitor 实�
 |---|---|---|---|
 | muduo EventLoop（业务主线程） | 1 | — | 持有 ECS，并串行执行所有业务状态变更；同时驱动 `muduo_grpc` 客户端通道与服务端、muduo_h2 etcd 传输 |
 | gRPC 客户端与服务端（`muduo_grpc`，基于 nghttp2 的 h2c） | 0（不另起） | — | 跑在节点 EventLoop 上；服务端上限（每连接 256 条流、全节点 1024 个在途调用、每轮 loop 至多派发 64 个 / 2ms）见 `grpc-muduo-transport.md` §15 |
-| 官方 gRPC 运行时（EventEngine、Lifeguard、定时器、sync server poller） | 0 —— 必须保持未初始化 | — | 库仍然链接，但任何代码都不得初始化其运行时；由 [gRPC 运行时守卫](#grpc-运行时守卫)及其回归用例把关 |
+| 官方 gRPC C++ SDK | 0（不链接） | — | 官方运行时与桩生成插件已移除；依赖边界由源码及工程静态检查把关 |
 | Kafka consumer / librdkafka | 由实现决定 | librdkafka 内部管理 | 后台线程；应实测，不能假定固定数量 |
 | 异步日志和 lifecycle worker | 由组件决定 | 组件各自配置 | 包括启用时 scene / battle 的 Agones lifecycle 工作线程 |
 | 操作系统 / 运行库线程 | 由平台决定 | — | 例如 Windows 加载器线程池的 worker，可能自行退出；应实测，不能假定 |
@@ -121,15 +88,14 @@ worker 的线程数由实现决定，生产基线必须来自 ThreadMonitor 实�
 - `GRPC_MAX_THREADS` 配的是 `GrpcChannelCache` 里官方 client channel 的
   `ResourceQuota`，第 3 批已删掉 `GrpcChannelCache`，现在没有任何代码读它。
 - `GRPC_THREAD_POOL_RESERVE_THREADS` 和 `GRPC_THREAD_POOL_MAX_THREADS` 从来不是
-  gRPC v1.83 内置 EventEngine 的公开控制项；官方运行时未初始化，它们也无从生效。
+  gRPC v1.83 内置 EventEngine 的公开控制项；官方 SDK 移除后节点没有对应配置入口。
   以上变量都不能用于容量规划。
 
 ### Gate 节点
 
 Gate 的业务状态归属与 transport 工作相互分离。第 3 批起，它的 gRPC 客户端
 通道（路由转发及其他生成客户端）都是 gate EventLoop 上的 `muduo_grpc::Channel`，
-创建通道不再初始化官方 gRPC 运行时或 EventEngine；Kafka 与日志组件仍会增加
-自己的后台线程。
+创建通道不依赖官方 gRPC SDK；Kafka 与日志组件仍会增加自己的后台线程。
 
 ### Scene 与 Battle 节点
 
@@ -187,8 +153,8 @@ handler 在 loop 上同步执行，已经在跑的 handler 一定先于任何排
 
 1. **C++ 监控是被动的** — 仅记录日志和发出警告，不会终止或限制线程。
 2. **业务单线程是状态所有权规则** — 它不描述进程总线程数。
-3. **gRPC 不建线程** — `muduo_grpc` 客户端与服务端跑在节点 EventLoop 上；官方 gRPC 库仍然链接，但其运行时绝不能被初始化。
-4. **官方运行时有运行期守卫** — 注册时与每次采样时核对；第一次发现打一条 `ERROR`，每小时指标行带 `grpc_runtime_initialized`，守卫有意 fail-open（AGENTS.md §11.3）。
+3. **gRPC 协议收发不新增线程** — `muduo_grpc` 客户端与服务端跑在节点 EventLoop 上，官方 gRPC C++ SDK 已退出构建。
+4. **依赖边界由源码与工程检查把关** — 检查全部工程配置、生成产物与 Linux 导出入口；ThreadMonitor 继续负责实际线程观测。
 5. **`GRPC_SERVER_MAX_POLLERS` 与 `GRPC_MAX_THREADS` 已退役** — 它们配置的 sync server poller 与 client `ResourceQuota` 都已不存在。
 6. **Go 服务没有 goroutine 硬上限** — 依赖 `GOMAXPROCS` 调度；`runtime.SetMaxThreads()` 管的是 OS 线程，不是 goroutine 数量。
 7. **Kafka 内部线程由实现管理** — 生产基线必须来自 ThreadMonitor 实测。
@@ -200,9 +166,10 @@ handler 在 loop 上同步执行，已经在跑的 handler 一定先于任何排
 
 | 文件 | 用途 |
 |------|---------|
-| `cpp/libs/engine/core/node/system/node/thread_observability.h` | ThreadMonitor 类、环境变量解析、gRPC 运行时守卫、`RegisterThreadObservability()` |
-| `cpp/libs/engine/core/node/system/node/grpc_runtime_probe.{h,cpp}` | `IsGrpcRuntimeInitialized()`（包装 `grpc_is_initialized()`）；头文件不 include 任何 gRPC 头 |
+| `cpp/libs/engine/core/node/system/node/thread_observability.h` | ThreadMonitor 类、环境变量解析、`RegisterThreadObservability()` |
 | `cpp/libs/engine/core/node/system/node/node.cpp` | 注册 ThreadMonitor；启动 `muduo_grpc` 服务端并在 loop 内执行关机排空 |
 | `cpp/libs/engine/muduo_grpc/` | muduo 驱动的 gRPC 客户端通道与服务端（不建线程） |
-| `cpp/tests/rpc_controller_test/grpc_runtime_not_initialized_test.cpp` | 回归用例：生成客户端的本地拒绝与一次真实的 `muduo_grpc` 调用之后，官方运行时仍未初始化 |
+| `tools/scripts/tests/test_cpp_grpc_dependency_boundary.py` | 官方 SDK 的源码、生成产物与全配置工程依赖边界检查 |
+| `cpp/tests/rpc_controller_test/grpc_client_local_reject_test.cpp` | 生成客户端本地拒绝与异步完成回归 |
+| `cpp/tests/rpc_controller_test/grpc_client_loopback_test.cpp` | 生成客户端经 muduo 通道的真实回环回归 |
 | `go/db/internal/kafka/key_ordered_consumer.go` | Kafka 分区 worker 池（结构化 goroutine 控制） |

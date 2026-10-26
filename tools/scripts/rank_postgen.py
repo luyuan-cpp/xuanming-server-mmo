@@ -164,11 +164,11 @@ def plan_table(edits: list[ProjectEdit], missing: list[str]) -> None:
 
 def plan_proto(edits: list[ProjectEdit], missing: list[str]) -> None:
     base = "cpp/generated/proto"
-    stems = [f"rank/{name}{suffix}" for name in PROTO_STEMS for suffix in (".pb", ".grpc.pb")]
+    stems = [f"rank/{name}{suffix}" for name in PROTO_STEMS for suffix in (".pb",)]
     files = present_files(base, [s + ".cc" for s in stems] + [s + ".h" for s in stems], missing)
     cc = [f for f in files if f.endswith(".cc")]
     h = [f for f in files if f.endswith(".h")]
-    friend_cc = ["friend/friend.grpc.pb.cc", "friend/friend.pb.cc"]
+    friend_cc = ["friend/friend.pb.cc"]
     friend_h = [p[:-3] + ".h" for p in friend_cc]
     e = ProjectEdit(base + "/CMakeLists.txt")
     e.plan(["    " + p for p in friend_cc], [cmake_entry(p) for p in cc])
@@ -215,7 +215,7 @@ def unexpected_rank_outputs() -> list[str]:
     known = {f"cpp/generated/rpc/service_metadata/{name}_service_metadata.h" for name in GRPC_CLIENT_STEMS}
     known.update({"cpp/generated/table/proto/tip/rank_error_tip.pb.cc", "cpp/generated/table/proto/tip/rank_error_tip.pb.h"})
     for name in PROTO_STEMS:
-        for suffix in (".pb.cc", ".pb.h", ".grpc.pb.cc", ".grpc.pb.h"):
+        for suffix in (".pb.cc", ".pb.h"):
             known.add(f"cpp/generated/proto/rank/{name}{suffix}")
     for name in GRPC_CLIENT_STEMS:
         for suffix in ("_grpc_client.cpp", "_grpc_client.h"):

@@ -31,7 +31,7 @@ try {
         goctl rpc protoc `
             ../../generated/proto/db/proto/db/db.proto `
             --proto_path=../../generated/proto/db `
-            --proto_path=../../third_party/grpc/third_party/protobuf/src/ `
+            --proto_path=../../third_party/protobuf/src/ `
             --go_out=./proto/ --go-grpc_out=./proto/ `
             --zrpc_out=./ -m
         Pop-Location
@@ -41,7 +41,7 @@ try {
         goctl rpc protoc `
             ../../generated/proto/login/proto/login/login.proto `
             --proto_path=../../generated/proto/login `
-            --proto_path=../../third_party/grpc/third_party/protobuf/src/ `
+            --proto_path=../../third_party/protobuf/src/ `
             --go_out=./proto/ --go-grpc_out=./proto/ `
             --zrpc_out=./ -m
         Pop-Location

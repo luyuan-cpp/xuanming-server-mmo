@@ -14,6 +14,18 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
+func TestRpcMetadataIncludesOnlyProtobufMessages(t *testing.T) {
+	setGrpcPreservationTestConfig(t)
+	for _, generic := range []bool{false, true} {
+		method := buildBattleGrpcPreservationMethods()[0]
+		method.Fd.Options = &descriptorpb.FileOptions{CcGenericServices: proto.Bool(generic)}
+		include := method.IncludeName()
+		if !strings.Contains(include, "battle_node.pb.h") || strings.Contains(include, ".grpc.pb.h") {
+			t.Fatalf("两类服务元数据都只能引用普通 Protobuf 消息: %s", include)
+		}
+	}
+}
+
 func TestGrpcServiceHandler_NewBattleSkeleton(t *testing.T) {
 	setGrpcPreservationTestConfig(t)
 	methods := buildBattleGrpcPreservationMethods()
@@ -987,7 +999,6 @@ func setGrpcPreservationTestConfig(t *testing.T) {
 	_config.Global.FileExtensions.PbH = ".pb.h"
 	_config.Global.FileExtensions.GrpcHandlerH = ".h"
 	_config.Global.FileExtensions.GrpcHandlerCpp = ".cpp"
-	_config.Global.FileExtensions.GrpcPbH = ".grpc.pb.h"
 	_config.Global.Naming.IncludeBegin = "#include \""
 	t.Cleanup(func() { _config.Global.FileExtensions = oldExt })
 }

@@ -120,7 +120,7 @@
       "group": "build"
     },
     {
-      "label": "third_party: grpc build",
+      "label": "third_party: protobuf build",
       "type": "shell",
       "command": "pwsh",
       "args": [
@@ -128,13 +128,15 @@
         "-File",
         "${workspaceFolder}/tools/scripts/dev_tools.ps1",
         "-Command",
-        "third-party-grpc-build"
+        "third-party-protobuf-build",
+        "-Configuration",
+        "Debug"
       ],
       "group": "build",
       "problemMatcher": []
     },
     {
-      "label": "third_party: grpc build release",
+      "label": "third_party: protobuf build release",
       "type": "shell",
       "command": "pwsh",
       "args": [
@@ -142,14 +144,15 @@
         "-File",
         "${workspaceFolder}/tools/scripts/dev_tools.ps1",
         "-Command",
-        "third-party-grpc-build",
-        "-BuildDebug:$false"
+        "third-party-protobuf-build",
+        "-Configuration",
+        "Release"
       ],
       "group": "build",
       "problemMatcher": []
     },
     {
-      "label": "third_party: grpc build debug",
+      "label": "third_party: protobuf build debug",
       "type": "shell",
       "command": "pwsh",
       "args": [
@@ -157,8 +160,9 @@
         "-File",
         "${workspaceFolder}/tools/scripts/dev_tools.ps1",
         "-Command",
-        "third-party-grpc-build",
-        "-BuildRelease:$false"
+        "third-party-protobuf-build",
+        "-Configuration",
+        "Debug"
       ],
       "group": "build",
       "problemMatcher": []

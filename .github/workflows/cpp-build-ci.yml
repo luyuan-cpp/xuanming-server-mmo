@@ -9,11 +9,11 @@ name: C++ 构建门禁
 #
 # ── 分层与取舍（重要，别删）─────────────────────────────────────────────
 # 完整编译的依赖极重：deploy/k8s/Dockerfile.cpp 的 deps 阶段要从源码编
-# gRPC v1.84.0（连带 protobuf v35.1 / BoringSSL / abseil），Dockerfile 自
+# Protobuf / Abseil / BoringSSL v1.84.0（连带 protobuf v35.1 / BoringSSL / abseil），Dockerfile 自
 # 己的注释写着「首次构建 ~30–60 min」，后面还有 muduo / librdkafka / redis /
 # yaml-cpp / zlib，再往后才是 cpp/generated/proto 这堆巨型生成物。
 # 而且 cpp/generated 的 protobuf 版本硬校验（7035001）钉死了必须用这一套
-# 自编 gRPC，apt 的 libgrpc++-dev 版本对不上，换不了轻量路线。
+# 自编 Protobuf / Abseil / BoringSSL，apt 的 libgrpc++-dev 版本对不上，换不了轻量路线。
 #
 # 所以拆成两层：
 #   1) build-script-contract —— 每个 PR 都跑，秒级。校验构建脚本本身与工程
@@ -27,7 +27,7 @@ name: C++ 构建门禁
 # 为什么 compile-nodes 暂时不阻塞 PR：
 #   落这个文件时无法在本机验证它能在 GitHub runner 上跑绿——本机是
 #   Windows，跑不了 Linux 全量构建，也没法预估 runner 的磁盘/时长/GHA 缓存
-#   10GB 上限是否扛得住 gRPC 那一层。把一个没验证过的重型 job 直接设成
+#   10GB 上限是否扛得住 Protobuf / Abseil / BoringSSL 那一层。把一个没验证过的重型 job 直接设成
 #   必过项，最可能的结果是流水线长期红，然后所有人学会无视它——那比没有
 #   门禁更糟。正确顺序是：先让它按 push/定时跑，确认连续绿之后，把
 #   compile-nodes 的 `if:` 里 `github.event_name != 'pull_request' ||`
@@ -151,12 +151,12 @@ jobs:
       github.event_name != 'pull_request' ||
       contains(github.event.pull_request.labels.*.name, 'cpp-full-build')
     runs-on: ubuntu-latest
-    # gRPC 冷编译 30–60 min，再加游戏节点本体；给足余量。
+    # Protobuf / Abseil / BoringSSL 冷编译 30–60 min，再加游戏节点本体；给足余量。
     timeout-minutes: 240
     steps:
       - name: 释放磁盘空间
         # ubuntu-latest 默认镜像预装了 Android SDK / .NET / GHC 等，
-        # 占掉十几 GB。gRPC 源码 + 构建中间产物 + Docker 层很容易把
+        # 占掉十几 GB。Protobuf / Abseil / BoringSSL 源码 + 构建中间产物 + Docker 层很容易把
         # 根分区撑爆，报错形式是莫名其妙的 "no space left on device"。
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
@@ -168,9 +168,7 @@ jobs:
           # Dockerfile.cpp 的 builder 阶段 COPY 的是这些子模块的工作区内容，
           # 不是 git 里的 gitlink，所以必须先把它们 checkout 出来。
           # 刻意不用 `submodules: recursive`：
-          #   * third_party/grpc 与 third_party/openssl 已被 .dockerignore
-          #     排除（gRPC 由 Dockerfile 内部按固定 revision 自己 clone），
-          #     递归拉下来是几 GB 的纯浪费；
+          #   * third_party/openssl 未参与本镜像；TLS 使用独立 BoringSSL。
           #   * cpp/libs/engine/muduo_windows/src/... 是 Windows 专用；
           #   * 客户端在同级独立仓库 mmorpg-client 中，与本次编译无关。
           submodules: false
@@ -206,6 +204,9 @@ jobs:
           # 递归拉下来只会让 Docker COPY 与 setup_dependencies.sh 的源码树哈希白白变大。
           SUBMODULES_NO_RECURSE=(
             third_party/nghttp2
+            third_party/protobuf
+            third_party/abseil-cpp
+            third_party/boringssl
           )
           # --depth 1 省下几个 GB，但子模块钉的 SHA 若不是分支尖端，浅克隆会
           # 报 "fatal: reference is not a tree"。所以浅拉失败就退回全深度，
@@ -219,7 +220,7 @@ jobs:
             git submodule update --init -- "${SUBMODULES_NO_RECURSE[@]}" || exit 1
           fi
           # 镜像构建前复放已登记的源码兼容补丁，尤其是 ue5navmesh 的 cassert 修正。
-          # gRPC 在 Docker 内按独立固定 SHA 构建，OpenSSL 不属于该构建目标。
+          # 独立 SDK 也校验主仓固定 SHA；OpenSSL 不属于该构建目标。
           LOCK_ARGS=(--apply-patches)
           for path in "${SUBMODULES[@]}" "${SUBMODULES_NO_RECURSE[@]}"; do
             LOCK_ARGS+=(--path "$path")
@@ -243,7 +244,7 @@ jobs:
           target: builder
           push: false
           load: false
-          # 用 GitHub Actions 缓存保住 deps 层（gRPC 那一层最贵）。
+          # 用 GitHub Actions 缓存保住 deps 层（Protobuf / Abseil / BoringSSL 那一层最贵）。
           # 风险登记：GHA 缓存单仓库上限 10 GB，deps 层未必装得下；
           # 装不下的表现是每次都冷编译（慢，但不会红）。若确认放不下，
           # 改成 ghcr.io 的 registry cache（需要 packages: write 权限）。

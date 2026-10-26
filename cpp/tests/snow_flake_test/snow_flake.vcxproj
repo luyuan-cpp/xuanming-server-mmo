@@ -121,7 +121,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;_TCHAR_DEFINED;UNICODE;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../../third_party/;../../../third_party/boost/;../../../third_party/muduo/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/grpc/third_party/abseil-cpp/;../../libs/;../../libs/engine/;../../libs/engine/core/;./;../../../third_party/grpc/third_party/googletest/googletest/include/;../../../third_party/grpc/third_party/googletest/googletest/</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../third_party/;../../../third_party/boost/;../../../third_party/muduo/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/abseil-cpp/;../../libs/;../../libs/engine/;../../libs/engine/core/;./;../../../third_party/googletest/googletest/include/;../../../third_party/googletest/googletest/</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <ObjectFileName>$(IntDir)</ObjectFileName>
@@ -148,7 +148,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;_TCHAR_DEFINED;UNICODE;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../../third_party/;../../../third_party/boost/;../../../third_party/muduo/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/grpc/third_party/abseil-cpp/;../../libs/;../../libs/engine/;../../libs/engine/core/;./;../../../third_party/grpc/third_party/googletest/googletest/include/;../../../third_party/grpc/third_party/googletest/googletest/</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../third_party/;../../../third_party/boost/;../../../third_party/muduo/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/abseil-cpp/;../../libs/;../../libs/engine/;../../libs/engine/core/;./;../../../third_party/googletest/googletest/include/;../../../third_party/googletest/googletest/</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
@@ -166,11 +166,11 @@
   <ItemGroup>
     <ClCompile Include="snow_flake_test.cpp" />
     <!-- 直接编译仓库自带的 googletest 源码(与 agones_lifecycle_test 同一套做法)。
-         原来的配置指向 third_party/grpc/third_party/googletest —— 那个子模块没初始化,
+         原来的配置指向 third_party/googletest —— 那个子模块没初始化,
          而且 AdditionalDependencies 里列的 gtest.lib / core.lib / scene.lib 等几十个 .lib
          在 lib/ 下根本不存在,所以这个测试工程在本仓从来没编译成功过。
          发号器是全服唯一性的根,它的单测必须能跑。 -->
-    <ClCompile Include="..\..\..\third_party\grpc\third_party\googletest\googletest\src\gtest-all.cc" />
+    <ClCompile Include="..\..\..\third_party\googletest\googletest\src\gtest-all.cc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets"></ImportGroup>

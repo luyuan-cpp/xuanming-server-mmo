@@ -616,7 +616,7 @@ try {
         Initialize-LocalKafkaTopics $kafkaContract $compose
         Start-LocalGoServices @('db','data_service')
         Write-Step '4/6 Start zone 1 Kafka consumers and battle server'
-        $env:PATH = (Join-Path $serverRoot 'third_party/grpc/install_vs2026_dbg/bin') + ';' + $oldPath
+        $env:PATH = (Join-Path $serverRoot 'third_party/protobuf/install_vs2026_dbg/bin') + ';' + $oldPath
         $env:RPC_PORT = $null
         # 路由模式翻转落在部署层（C++ 默认值不改）：gate 启动时读一次 GATE_CLIENT_RPC_ROUTER 并缓存，
         # 必须在 cpp-node-start 之前设好，经 dev_tools 子进程继承；scene / battle / Go 服务继承到也不读。

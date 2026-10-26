@@ -37,7 +37,7 @@ C++ 节点镜像有两条现役路径(2026-09-16 按代码核对;详表与风险
 | 路径 | 编译在哪 | 调用方 | 构建入口自带门禁 |
 |---|---|---|---|
 | `deploy/k8s/Dockerfile.runtime` | 镜像外:Linux 主机 `build_linux.sh` → `k8s-stage-runtime` 拷进 `deploy/k8s/runtime/linux/` | `k8s-build-image` / `k8s-push-image` / `k8s-release-zone` / `k8s-release-all`(`tools/scripts/k8s_image.ps1`,`-DockerfilePath` 默认值)、`publish_images.ps1` 的 cpp 族 | 仅 `release-zone` / `release-all` 构建前跑不可变 tag 校验 + `release_preflight.ps1`;`build-image` / `publish_images.ps1` 不跑 |
-| `deploy/k8s/Dockerfile.cpp` | 镜像内全量编译(gRPC `v1.83.0` 起) | `k8s-build-all`、`.github/workflows/cpp-build-ci.yml`(只到 `--target builder`) | 无(`k8s-build-all` 只构建) |
+| `deploy/k8s/Dockerfile.cpp` | 镜像内全量编译(独立 Protobuf / Abseil / BoringSSL) | `k8s-build-all`、`.github/workflows/cpp-build-ci.yml`(只到 `--target builder`) | 无(`k8s-build-all` 只构建) |
 
 - 部署侧门禁与镜像出自哪个 Dockerfile **无关**:`k8s_deploy.ps1 -ReleaseProfile staging|prod` 的 `zone-up` / `all-up` / `infra-up` 对任意 `-NodeImage` 都做不可变 tag 校验与 `release_preflight.ps1`。上表只说明构建入口自己多不多查一次。
 - 版本化发布(`publish_images.ps1` → `make_release.ps1`,见下方「发布打包」)走 `Dockerfile.runtime`。
@@ -65,7 +65,7 @@ docker build -f deploy/k8s/Dockerfile.cpp --target=symbols -o ./debug-symbols .
 
 或在 Linux 主机上直接编译(`Dockerfile.runtime` 路径的前置步骤)。仓库里**没有** `build_grpc_linux.sh`:
 `build_linux.sh` 不带 `--skip-deps` 时会先 `git submodule update --init --recursive`,
-再跑 `tools/archived/setup_dependencies.sh` 编 gRPC / muduo / librdkafka / yaml-cpp / hiredis / zlib(已装且源码 stamp 未变则跳过)。
+再跑 `tools/archived/setup_dependencies.sh` 编独立 Protobuf / Abseil / BoringSSL / muduo / librdkafka / yaml-cpp / hiredis / zlib(已装且源码 stamp 未变则跳过)。
 
 ```bash
 # 产出 bin/{gate,scene,battle};--split-debug 另出 bin/symbols/*.debug(publish_images.ps1 归档用)

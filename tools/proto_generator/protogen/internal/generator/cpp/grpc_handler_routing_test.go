@@ -31,7 +31,6 @@ func setupGrpcHandlerRouting(t *testing.T) string {
 	_config.Global.DirectoryNames.ProtoDirName = "proto/"
 	_config.Global.FileExtensions.Proto = ".proto"
 	_config.Global.FileExtensions.PbH = ".pb.h"
-	_config.Global.FileExtensions.GrpcPbH = ".grpc.pb.h"
 	_config.Global.FileExtensions.GrpcHandlerH = ".h"
 	_config.Global.FileExtensions.GrpcHandlerCpp = ".cpp"
 	_config.Global.Naming.IncludeBegin = "#include \""

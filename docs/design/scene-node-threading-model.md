@@ -17,8 +17,8 @@ Kafka 后台线程只收取并投递，不能直接改 Scene 的 registry。
 进程仍可有 librdkafka、异步日志与 Agones lifecycle worker 等后台线程。
 当前设计不构造官方 gRPC poller、EventEngine、Lifeguard 或 gRPC 关机 worker；
 这不代表运行进程的线程数已被本轮实测为零。
-运行期 GrpcRuntimeGuard 源码已存在，探测到官方运行时初始化时默认 ERROR，
-`NODE_GRPC_RUNTIME_GUARD_FATAL=1/true/on` 可升级为 FATAL；守卫不能代替实际线程基线采样。
+2026-10-26 起移除官方 C++ SDK、初始化探针及其运行期守卫。依赖边界由构建与源码契约检查；
+ThreadMonitor 继续采样实际线程基线，不再查询官方库的初始化状态。
 `GRPC_SERVER_MAX_POLLERS` 已退役，不能用它或旧线程池变量调当前节点线程数。
 
 ## 2. 当前帧与派发预算

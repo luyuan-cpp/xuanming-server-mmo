@@ -50,14 +50,6 @@ func (info *ProtoFileInfo) PbcHeadName() string {
 	return strings.Replace(info.FileBaseName(), _config.Global.FileExtensions.Proto, _config.Global.FileExtensions.PbH, 1)
 }
 
-func (info *ProtoFileInfo) GrpcHeadName() string {
-	return strings.Replace(info.FileBaseName(), _config.Global.FileExtensions.Proto, _config.Global.FileExtensions.GrpcPbH, 1)
-}
-
-func (info *ProtoFileInfo) GrpcIncludeHeadName() string {
-	return _config.Global.Naming.IncludeBegin + strings.Replace(info.Path(), _config.Global.Paths.ProtoDir, _config.Global.DirectoryNames.ProtoDirName, 1) + info.GrpcHeadName() + "\"\n"
-}
-
 func (info *ProtoFileInfo) Package() string {
 	if nil == info.Fd.Package {
 		return ""
@@ -200,10 +192,8 @@ func (info *MethodInfo) Method() string {
 }
 
 func (info *MethodInfo) IncludeName() string {
-	if info.CcGenericServices() {
-		return _config.Global.Naming.IncludeBegin + strings.Replace(info.Path(), _config.Global.Paths.ProtoDir, _config.Global.DirectoryNames.ProtoDirName, 1) + info.PbcHeadName() + "\"\n"
-	}
-	return info.GrpcIncludeHeadName()
+	// RPC0 与 muduo_grpc 都只需要消息类型，不依赖官方 gRPC C++ 服务桩。
+	return _config.Global.Naming.IncludeBegin + strings.Replace(info.Path(), _config.Global.Paths.ProtoDir, _config.Global.DirectoryNames.ProtoDirName, 1) + info.PbcHeadName() + "\"\n"
 }
 
 func (info *MethodInfo) CppHandlerIncludeName() string {

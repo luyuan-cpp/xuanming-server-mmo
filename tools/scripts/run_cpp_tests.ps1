@@ -125,10 +125,8 @@ if ($Build) {
 }
 
 # 运行期 DLL:缺了会以 0xC0000135 静默退出,连 gtest 头一行都不会打。
-# zlibd.dll 并不在 bin/ 下(节点静态链 zlib),只在 gRPC 的安装目录里;凡是把
-# game_channel / ProtobufCodecLite 链进来的测试(帧尾 adler32 校验)都要它 ——
-# rpc_controller_test 首跑就栽在这。按目录顺序找,找到第一份就用。
-$dllSourceDirs = @('bin', 'third_party\grpc\install_vs2026_dbg\bin')
+# 独立依赖的 DLL 只从本仓库正式安装目录取用，避免 PATH 中的旧 SDK 掩盖缺项。
+$dllSourceDirs = @('bin', 'third_party\protobuf\install_vs2026_dbg\bin', 'third_party\zlib\install_vs2026_dbg\bin')
 foreach ($dll in @('zlibd.dll', 'rdkafka.dll', 'rdkafka++.dll')) {
     foreach ($dir in $dllSourceDirs) {
         $src = Join-Path $repoRoot (Join-Path $dir $dll)

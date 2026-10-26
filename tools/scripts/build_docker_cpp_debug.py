@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import sys
 
-from docker_cpp_sdk_guard import guard_files, grpc_files, physical_files
+from docker_cpp_sdk_guard import guard_files, dependency_files, physical_files
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -66,25 +66,17 @@ def validate_sdk() -> dict:
         raise RuntimeError("缺少本机 cpp-toolchain.json；须先准备与当前依赖匹配的 Linux SDK，不能借用旧 SDK")
     config = json.loads(TOOLCHAIN.read_text("utf-8-sig"))
     files = config.get("guardFiles", {})
-    if config.get("schema") != 1 or not files or image_id(config["image"]) != config["imageId"]:
+    if config.get("schema") != 2 or not files or image_id(config["image"]) != config["imageId"]:
         raise RuntimeError("SDK 来源配置或镜像身份不匹配")
-    if not config.get("guardRoots") or not config.get("guardPolicy") or not config.get("grpcSource"):
+    if not config.get("guardRoots") or not config.get("guardPolicy") or not config.get("dependencySource"):
         raise RuntimeError("SDK 配置缺少完整的源码集合守卫；不能仅凭历史路径或 Git HEAD 放行")
     actual = {name: sha(path) for name, path in
               guard_files(REPO, config["guardRoots"], config["guardPolicy"]).items()}
     differences = sorted(name for name in files.keys() | actual.keys() if files.get(name) != actual.get(name))
-    grpc_paths = {"grpc": "third_party/grpc", "protobuf": "third_party/grpc/third_party/protobuf",
-                  "boringssl": "third_party/grpc/third_party/boringssl-with-bazel"}
-    for name, expected in config.get("grpcCommits", {}).items():
-        if name not in grpc_paths:
-            raise RuntimeError("SDK gRPC 提交键非法")
-        path = REPO / grpc_paths[name]
-        if capture(["git", "-C", str(path), "rev-parse", "HEAD"]) != expected:
-            differences.append(name)
-    grpc_expected = config["grpcSource"]["files"]
-    grpc_actual = grpc_files(REPO, config["grpcSource"])
-    differences.extend(sorted(name for name in grpc_expected.keys() | grpc_actual.keys()
-                              if grpc_expected.get(name) != grpc_actual.get(name)))
+    dependency_expected = config["dependencySource"]["files"]
+    dependency_actual = dependency_files(REPO, config["dependencySource"])
+    differences.extend(sorted(name for name in dependency_expected.keys() | dependency_actual.keys()
+                              if dependency_expected.get(name) != dependency_actual.get(name)))
     if differences:
         raise RuntimeError("SDK 依赖输入已变化，须先更新 SDK；首项：" + differences[0])
     return config

@@ -7,8 +7,7 @@ paths:
   proto_dir: "{{output_root}}proto/"
   proto_parent_include_path: "{{output_root}}"
   third_party_dir: "third_party/"
-  grpc_dir: "{{output_root}}{{third_party_dir}}grpc/"
-  protobuf_dir: "{{grpc_dir}}third_party/protobuf/src/"
+  protobuf_dir: "{{output_root}}{{third_party_dir}}protobuf/src/"
 
   # Node and generated directories
   node_go_dir: "{{output_root}}go/"
@@ -34,7 +33,6 @@ paths:
   temp_file_gen_dir: "{{output_root}}{{tool_dir}}generated/temp/files/"
   proto_buf_desc_dir: "{{temp_file_gen_dir}}proto_desc/"
   all_in_one_desc: "{{proto_buf_desc_dir}}all_in_one.desc"
-  grpc_temp_dir: "{{temp_file_gen_dir}}grpc/"
   proto_buf_c_temp_dir: "{{temp_file_gen_dir}}"
   player_storage_temp_dir: "{{temp_file_gen_dir}}/node/game/storage/"
 
@@ -42,7 +40,6 @@ paths:
   proto_buf_c_proto_output_dir: "{{output_root}}{{generated_dir}}"
   generated_output_dir: "{{output_root}}{{generated_dir}}"
   grpc_output_dir: "{{output_root}}{{generated_dir}}"
-  grpc_proto_output_dir: "{{output_root}}{{generated_dir}}proto/"
   robot_generated_output_dir: "{{output_root}}{{robot}}generated/"
   robot_go_game_pb_dir: "{{robot_generated_output_dir}}pb/game"
   # robot 类型化调用桩(Go 包 rpc,docs/design/client-rpc-callback.md §5.5),与 proto_gen.yaml 同步。
@@ -106,8 +103,6 @@ file_extensions:
   proto: ".proto"
   pb_cc: ".pb.cc"
   pb_h: ".pb.h"
-  grpc_pb_cc: ".grpc.pb.cc"
-  grpc_pb_h: ".grpc.pb.h"
   header: ".h"
   cpp: ".cpp"
   handler_h: "_handler.h"

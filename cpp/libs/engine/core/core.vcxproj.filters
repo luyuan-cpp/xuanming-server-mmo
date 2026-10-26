@@ -15,7 +15,6 @@
     <ClCompile Include="node\system\node\client_endpoint.cpp" />
     <ClCompile Include="node\system\grpc_call_deadline.cpp" />
     <ClCompile Include="node\system\node\node_util.cpp" />
-    <ClCompile Include="node\system\node\grpc_runtime_probe.cpp" />
     <ClCompile Include="node\system\registration\registration_manager.cpp" />
     <ClCompile Include="node\system\discovery\service_discovery_manager.cpp" />
     <ClCompile Include="time\comp\timer_task_boost_comp.cpp" />
@@ -118,7 +117,6 @@
     <ClInclude Include="node\system\node\node_kafka_command_handler.h" />
     <ClInclude Include="node\system\node\node_entry.h" />
     <ClInclude Include="node\system\node\thread_observability.h" />
-    <ClInclude Include="node\system\node\grpc_runtime_probe.h" />
     <ClInclude Include="network\traffic_statistics.h" />
     <ClInclude Include="utils\bit_index\bit_index_util.h" />
     <ClInclude Include="utils\data_structures\double_buffer_queue.h" />

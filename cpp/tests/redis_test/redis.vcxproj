@@ -126,8 +126,8 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>third_party.lib;common.lib;libprotobufd.lib;game_proto.lib;zlib.lib;gtestd.lib;hiredis.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>../../bin/</AdditionalLibraryDirectories>
+      <AdditionalDependencies>third_party.lib;common.lib;libprotobufd.lib;game_proto.lib;zlib.lib;gtest.lib;hiredis.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>../../../third_party/protobuf/install_vs2026_dbg/lib/;../../../third_party/googletest/install_vs2026_dbg/lib/;../../bin/</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

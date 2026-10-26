@@ -51,8 +51,6 @@ include_directories(
     ../third_party/lua/src/
     ../third_party/muduo-linux/
     ../third_party/mysql/include/
-    ../third_party/protobuf/src/
-    ../third_party/protobuf/third_party/abseil-cpp/
     ../third_party/redis/
     ../third_party/redis/deps/
     ../third_party/sol2/include/

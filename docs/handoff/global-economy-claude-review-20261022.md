@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | 1 | 本次PD恢复资格已完成 | 新G3三命令已通过（896D6F34）；原四物理连接强会话通过，核心133BFFE4、外壳B277D8A8；尾核F106D014实际通过且full_bracket_complete=true。三段共5条native均退出0，不代替业务通过。旧世代B136不可替代。 |
 | 2 | Go Match原100已闭合；继续Java六组410项真库 | 新29项AAE8C51C正式29通过／0失败／0跳过；r7六收据完整核5BE4A1A7已签原100唯一用例，输入索引324F0A16，source0EA3。前71项按精确test-only差异复用原真实结果，没有冒称新100全量重跑或新编PE。三份旧夹具CAS84754469、3658F8A7、7EFFA429保留原断言，生产0变；B716／9624等历史红仍为红，TiDB旧超时根因仍未确认。Java六组尚未实际执行。 |
-| 3 | Main完整来源核验及Java七辅助合读 | 三份测试精确来源链已接真实0EA3／AAE8及r7完整100，临时Main排他CAS为D94553A4、bindings AA1390C1，原9263及失败均保留。新SourceBind命令16B0EA95、成功后Java33合读命令79129AEB已备，均未执行。七辅助复用原javac退出0、7主类／12class及资源资格DB7142B9，不重复编译；Java合读已接原345C与日期入口5E5C，PD适配196D8991另待正常Main前接入。 |
+| 3 | Main完整来源核验及Java七辅助合读 | 新SourceBind命令16B0EA95已实际执行，外壳A60F2634失败，服务未启动、两个监管家族均退出；旧Trade读取器先读取当前canonical Robot 6651不存在的purpose，尚未走到逐包来源扫描。限定适配候选317EB22C／FC9A7122已备、未换live。AA139还从旧0D975继承了login、trade-cross-zone-test、ownership-db-test、mail-attachments-test四个空槽，须补正式当前构建事实后才可重跑；不能借历史PE。Java33合读79129AEB因此未启动。原Go100、七辅助DB7142B9、日期入口5E5C与PD适配196D8991均保，不冒称Main来源已闭合。 |
 | 4 | Main36、Java33完整双区及两版战斗终局故障链 | 必须恢复并验证本任务所需Kafka／Redis／Etcd等当前世代。Main商城68＋网关16已有同源实际，独立Java重建不触发这84项重跑。 |
 | 5 | Pbmysql的MySQL原成功路径及剩余Kafka实测 | TiDB对不支持DDL的安全拒绝不证明MySQL新增自增列仍成功；须使用恢复后的13316新UUID。Kafka不能以H2替代。 |
 | 6 | Java共享StatementBudgetFilter真实物理连接补验 | Player142待跑能覆盖正式BPP基本链；精确caps／network恢复等旧夹具使用Mockito，不能称物理连接恢复已测。最小临时helper复用当前B984产物，仍待编译及真库执行。 |
@@ -22,6 +22,8 @@ JDI调试停点及后续常规RPC故障装配均被平台自动风险检查拒�
 状态：**整体尚未完成，不能交付为完成**。已授权上限现为527个唯一手写路径，具名522个，其中canonical已落地145个、新架构377个新增唯一路径仍在隔离实现；原旧测试预留用2／7、余5。Windows平台支持与限定本地文件helper已含后继授权，未因此安装依赖或改系统。地图和客户端均不在本项范围。
 
 当前可确认的运行结果：Go普通5叶及Observer2叶已有实际，匹配原100唯一用例现按精确test-only来源组合正式闭合5BE4A1A7；独立Java完整30模块实际826 suites／10944＝9930通过＋1014普通跳过，30JAR／18Boot及40个内部生成类型已有首尾核验，EF66新准备读取复核了完整原证据。其余Java410、MySQL原成功分支、Main36／Java33业务、维护恢复及故障仍待。最新PB10的r9已完成原630B复制→BFE实际核验与合法物化收据CB3962，随后在Maven前因同进程CLR监控类型重复装配被首次加载保护拒绝（阶段EA93A801、外壳D899DB2B）；6个进程家族均退出，释放412DF9E4。Maven／SQL仍未启动，不计10项失败或通过；原BEC810失败保留。正在以独立pwsh接续现成实际收据，不重复复制或放松监控保护。新架构尚未合入或完成最终三语言构建、权限／并发／排空及双区验收，旧基线通过不能替代这些验证。首存前新号恢复、Java历史快照缺失和迟到释放标记的剩余实际验证继续保留。本文件是负责人要求的审核入口；完整实施过程与失败原件见[原交接](global-economy-review-20261021.md)。历史通过仅覆盖当时绑定的源码、依赖、环境和命令；当前原件与实际状态见顶部及文末新记录。
+
+2026-10-26隔离实现续：Root已交付gRPC三路径候选84065B94与Hiredis六路径候选E00A3D29，新增7／11项回归但均尚未编译运行。两者明确区分本机引用／回调尚未退出与远端持久结局UNKNOWN；前者须真实join，后者不得生成成功前沿。gRPC原测试前缀完整保留，Hiredis原8项断言保留。随后protocol owner已接回gRPC继续集成Node，最终SHA不能再用Root初次6251／566F替代。DS五路径也已交互斥实现，Reader／snapshot三个文件已实际落候选；main／svc与真实消费组分配前沿仍在接线，不能用首条Fetch或空计数冒P8准备成功。
 
 最新121授权原件：`C:/Users/luyua/.codex/tmp/global-current-maintenance-contract-B1-B2-implementation-r1/Guild-Trade-verified-legacy-fixtures-pending-r1/two-legacy-test-paths-121.authorization.json`，SHA `419D35344A8A6487CEBA904E153937459493705A5DF2C111B8DBAC8544A0B728`。两文件已按最新before SHA独占句柄CAS落地，实际记录1BB4673B；Guild当前01240898、Trade当前A7C9AE55，各+7/-0，未改生产代码、开关或原断言。当前Guild126／Trade20真MySQL及两组Vet均已实际通过，源适配与运行证据分别保留。
 

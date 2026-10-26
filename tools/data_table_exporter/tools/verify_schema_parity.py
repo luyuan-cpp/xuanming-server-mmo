@@ -37,8 +37,8 @@ from core.schema_proto import build_table_schema, schema_proto_path  # noqa: E40
 logger = logging.getLogger("verify_parity")
 
 _REPO = _ROOT.parent.parent
-_REPO_PROTOC = _REPO / "third_party" / "grpc" / "install_vs2026_dbg" / "bin" / "protoc.exe"
-_PROTOBUF_SRC = _REPO / "third_party" / "grpc" / "third_party" / "protobuf" / "src"
+_REPO_PROTOC = _REPO / "third_party" / "protobuf" / "install_vs2026_dbg" / "bin" / "protoc.exe"
+_PROTOBUF_SRC = _REPO / "third_party" / "protobuf" / "src"
 
 
 def lint_with_protoc(schema_dir: Path, protoc: Path) -> bool:

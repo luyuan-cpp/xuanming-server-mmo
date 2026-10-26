@@ -8,7 +8,7 @@ endif()
 set(MMORPG_SOURCE_ROOT "/src" CACHE PATH "本轮仓库源码根目录")
 set(MMORPG_SDK_ROOT "/src" CACHE PATH "已锁定依赖的 SDK 源码根目录")
 set(MMORPG_GTEST_ROOT
-    "${MMORPG_SOURCE_ROOT}/third_party/grpc/third_party/googletest/googletest"
+    "${MMORPG_SOURCE_ROOT}/third_party/googletest/googletest"
     CACHE PATH "锁定的 GoogleTest 源码目录")
 option(MMORPG_ENABLE_SANITIZERS "启用地址及未定义行为检查" ON)
 

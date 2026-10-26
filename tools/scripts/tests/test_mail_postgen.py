@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import mail_postgen
+import rank_postgen
 
 
 class ProjectRegistrationTest(unittest.TestCase):
@@ -140,6 +141,38 @@ class ProjectRegistrationTest(unittest.TestCase):
         edit.plan([], [mail_postgen.compile_entry('mail/mail.pb.cc')])
         self.save(edit)
         self.assertEqual(path.read_bytes(), text.encode('utf-8'))
+
+    def test_mail_and_rank_register_without_official_grpc_stubs(self):
+        for module, domain, names in (
+            (mail_postgen, 'mail', ('mail', 'mail_admin', 'mail_table')),
+            (rank_postgen, 'rank', rank_postgen.PROTO_STEMS),
+        ):
+            with self.subTest(domain=domain), patch.object(module, 'REPO', self.root):
+                base = self.root / 'cpp/generated/proto'
+                (base / domain).mkdir(parents=True, exist_ok=True)
+                for name in names:
+                    for extension in ('.pb.cc', '.pb.h'):
+                        (base / domain / (name + extension)).write_text('', encoding='utf-8')
+                (base / 'CMakeLists.txt').write_text('set(SOURCE_FILES\n    friend/friend.pb.cc\n)\n', encoding='utf-8')
+                xml = ('<Project>\n  <ItemGroup>\n'
+                       '    <ClCompile Include="friend\\friend.pb.cc" />\n'
+                       '    <ClInclude Include="friend\\friend.pb.h" />\n'
+                       '  </ItemGroup>\n</Project>\n')
+                (base / 'proto.vcxproj').write_text(xml, encoding='utf-8')
+                filters = ('<Project>\n  <ItemGroup>\n' +
+                           '\n'.join(mail_postgen.filter_lines('ClCompile', 'friend/friend.pb.cc', mail_postgen.SRC)) + '\n' +
+                           '\n'.join(mail_postgen.filter_lines('ClInclude', 'friend/friend.pb.h', mail_postgen.HDR)) +
+                           '\n  </ItemGroup>\n</Project>\n')
+                (base / 'proto.vcxproj.filters').write_text(filters, encoding='utf-8')
+                edits, missing = [], []
+                module.plan_proto(edits, missing)
+                self.assertEqual(missing, [], '只应要求普通 Protobuf 消息产物')
+                for edit in edits:
+                    self.save(edit)
+                for filename in ('CMakeLists.txt', 'proto.vcxproj', 'proto.vcxproj.filters'):
+                    text = (base / filename).read_text(encoding='utf-8')
+                    self.assertNotIn('.grpc.pb.', text)
+                    self.assertIn(domain + ('/' if filename == 'CMakeLists.txt' else '\\'), text)
 
 
 if __name__ == '__main__':

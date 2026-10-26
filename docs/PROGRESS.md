@@ -17308,6 +17308,12 @@ Root已读取架构聊天内人类原回复并核实497、527及本地文件help
 
 Java Prepare EF66已实际读取完整原证据并通过；PB10 r9随后真实完成630B复制、BFE核验及物化收据CB3962。Maven前监控首次加载保护拒绝同进程CLR类型重复装配，阶段EA93A801、外壳D899DB2B失败；Maven／SQL均未启动，不能计10项红绿。443次采样unknown为0、最大124ms，6个进程家族均退出，release412DF9E4；保留fresh roots和真实收据，不重复物化或关闭保护。唯一重型时段已按负责人持续协调授权交排队Java批次2.10执行一次verify，当前任务继续纯诊断与隔离实现，地图和客户端未动。
 
+### 2026-10-26：来源核验失败如实保留，继续并行补实际生命周期
+
+Root执行Main SourceBind原16B0命令，监管外壳A60F2634失败，服务未启动、33932／63448实际退出，cleanup／output／evidence错误均空。首个确定旧入口是Trade读取器DB7C直接读当前canonical Robot6651不存在的purpose；尚未到db-migrate，不补默认字段或改旧proof。有限候选317EB22C／FC9A7122已备但未替换live；旧AA139从0D975起另有四个空包槽，须正式当前构建补齐，不能借旧PE重跑。Java33合读仍未执行。
+
+Root另实际完成隔离gRPC三路径84065B94及Hiredis六路径E00A3D29，新增7／11项回归、原断言保留；未编译测试，不计通过。Joined与成功前沿分开：本机回调／引用退出允许资源收尾，durable UNKNOWN仍阻成功收据。protocol owner接回gRPC继续Node装配，DS五路径由互斥owner继续实际Reader／worker／main／svc接线。Java独立静态审计E16E3B72确认两个P1：显式commit／完整rollback后存活可更新ResultSet可绕首锁，以及禁止自动重连配置YES的解析差异；均已交Java owner在既有授权路径修复并补回归，尚无运行绿。对应两版全球排空功能均仍在实现，地图和客户端未动。
+
 ### 2026-10-26：按用户要求更新并保存当前改动及第三方补丁
 
 本轮先同步远端，再提交并推送当前改动；用户明确测试失败暂不阻塞，本轮未启动构建或测试，既有失败与未验收状态保留。第三方现有有效源码改动沿用补丁机制保存：librdkafka 可变参数、BoringSSL 兼容与测试参数所有权，Redis hiredis 的 Windows 错误文本，sol2 引用 optional 生命周期，以及 gRPC 内嵌 BoringSSL 的 Windows 宏冲突。四份新增补丁反向检查及全部六份补丁 DryRun 均通过；这仅证明补丁与当前工作树对应，不等于运行验证。编译安装产物留在本地，子模块提交指针不变。Java 续移植 8c9a47da 已包含批次2.10并推送 origin/main；客户端 9ccb99c51 与 origin/main 一致，无新增改动。

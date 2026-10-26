@@ -2,7 +2,7 @@
 #
 # setup_dependencies.sh — Build third-party C++ dependencies for Linux
 #
-# Builds: gRPC (+ protobuf, abseil, re2, c-ares, utf8_range),
+# Builds: 独立 Protobuf、Abseil、BoringSSL（protobuf 自带 utf8_range），
 #         muduo-linux, curl, librdkafka, yaml-cpp, hiredis, zlib, nghttp2
 #
 # Run from repo root:  ./tools/archived/setup_dependencies.sh
@@ -91,97 +91,63 @@ if [ "$(printf '%s\n' "$CMAKE_MIN" "$CMAKE_VER" | sort -V | head -1)" != "$CMAKE
 fi
 echo "cmake: $(cmake --version | head -1)"
 
-# ── 2. gRPC + protobuf + abseil (from third_party/grpc) ────────────────────
+# ── 5. zlib（先于 curl 与 librdkafka 安装固定版本）───────────────────────
 
-GRPC_DIR="$REPO_ROOT/third_party/grpc"
-GRPC_BUILD="$GRPC_DIR/.build_linux"
-GRPC_STAMP_FILE="/usr/local/share/mmorpg-deps/grpc-linux.stamp"
-EXPECTED_GRPC_GIT_SHA="3252a89f10d8e92997862167ca7d095ecda85973"
-EXPECTED_PROTOBUF_GIT_SHA="35cd01f9fe9afbeea38cc7b979a3b6bfcde82c03"
-GRPC_REPO_STAMP="grpc-linux-v1:grpc=$EXPECTED_GRPC_GIT_SHA:protobuf=$EXPECTED_PROTOBUF_GIT_SHA"
-GRPC_ARTIFACTS=(
-    /usr/local/lib/libgrpc++.a
-    /usr/local/lib/libgrpc.a
-    /usr/local/lib/libprotobuf.a
-    /usr/local/include/google/protobuf/runtime_version.h
-    /usr/local/lib/cmake/grpc/gRPCConfig.cmake
-    /usr/local/lib/cmake/protobuf/protobuf-config.cmake
+ZLIB_DIR="$REPO_ROOT/third_party/zlib"
+ZLIB_BUILD="$ZLIB_DIR/.build_linux"
+ZLIB_STAMP_FILE="/usr/local/share/mmorpg-deps/zlib-linux.stamp"
+ZLIB_SOURCE_ID="$(source_identity zlib "$ZLIB_DIR")"
+ZLIB_EXPECTED_STAMP="zlib-linux-v2:source=$ZLIB_SOURCE_ID:shared=1:static=1:ctest=1"
+ZLIB_INSTALLED_STAMP="$(read_stamp "$ZLIB_STAMP_FILE")"
+ZLIB_ARTIFACTS=(
+    "$LIB_DIR/libz.a"
+    /usr/local/lib/libz.a
+    /usr/local/lib/libz.so
+    /usr/local/include/zlib.h
+    /usr/local/include/zconf.h
 )
-
-if [ -f "$GRPC_DIR/CMakeLists.txt" ]; then
-    if ! is_git_worktree_root "$GRPC_DIR"; then
-        GRPC_EXPECTED_STAMP="grpc-linux-v1:tree=$(hash_source_tree "$GRPC_DIR")"
-    else
-        PROTOBUF_DIR="$GRPC_DIR/third_party/protobuf"
-        if ! is_git_worktree_root "$PROTOBUF_DIR"; then
-            echo "ERROR: protobuf is not checked out as its own git worktree under $GRPC_DIR." >&2
-            echo "Run: git submodule update --init --recursive" >&2
-            exit 1
-        fi
-        ACTUAL_GRPC_GIT_SHA="$(git -C "$GRPC_DIR" rev-parse HEAD)"
-        ACTUAL_PROTOBUF_GIT_SHA="$(git -C "$PROTOBUF_DIR" rev-parse HEAD)"
-        if [ "$ACTUAL_GRPC_GIT_SHA" != "$EXPECTED_GRPC_GIT_SHA" ] \
-            || [ "$ACTUAL_PROTOBUF_GIT_SHA" != "$EXPECTED_PROTOBUF_GIT_SHA" ]; then
-            echo "ERROR: unexpected gRPC/protobuf source revision." >&2
-            echo "  expected: grpc=$EXPECTED_GRPC_GIT_SHA protobuf=$EXPECTED_PROTOBUF_GIT_SHA" >&2
-            echo "  actual  : grpc=$ACTUAL_GRPC_GIT_SHA protobuf=$ACTUAL_PROTOBUF_GIT_SHA" >&2
-            exit 1
-        fi
-        GRPC_EXPECTED_STAMP="$GRPC_REPO_STAMP"
-    fi
-    GRPC_INSTALLED_STAMP="$(read_stamp "$GRPC_STAMP_FILE")"
-
-    if have_all_files "${GRPC_ARTIFACTS[@]}" \
-        && [ "$GRPC_INSTALLED_STAMP" = "$GRPC_EXPECTED_STAMP" ]; then
-        echo "gRPC/protobuf source stamp matches, skipping"
-    else
-        if have_all_files "${GRPC_ARTIFACTS[@]}"; then
-            echo "=== gRPC/protobuf source stamp changed; rebuilding ==="
-        else
-            echo "=== gRPC/protobuf install incomplete; rebuilding ==="
-        fi
-
-        # 版本升级可能删除 target 或生成文件；复用旧 CMake 目录会保留残留产物。
-        # 因此 stamp 失配时清掉整个构建目录，不依赖旧目录里的文件时间戳。
-        rm -f "$GRPC_STAMP_FILE"
-        rm -rf "$GRPC_BUILD"
-        mkdir -p "$GRPC_BUILD"
-        cmake -S "$GRPC_DIR" -B "$GRPC_BUILD" \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/usr/local \
-            -DCMAKE_CXX_STANDARD=23 \
-            -DgRPC_INSTALL=ON \
-            -DgRPC_BUILD_TESTS=OFF \
-            -DgRPC_BUILD_CSHARP_EXT=OFF \
-            -DgRPC_BUILD_GRPC_CSHARP_PLUGIN=OFF \
-            -DgRPC_BUILD_GRPC_NODE_PLUGIN=OFF \
-            -DgRPC_BUILD_GRPC_OBJECTIVE_C_PLUGIN=OFF \
-            -DgRPC_BUILD_GRPC_PHP_PLUGIN=OFF \
-            -DgRPC_BUILD_GRPC_PYTHON_PLUGIN=OFF \
-            -DgRPC_BUILD_GRPC_RUBY_PLUGIN=OFF \
-            -DABSL_PROPAGATE_CXX_STD=TRUE
-
-        cmake --build "$GRPC_BUILD" -j "$CPU"
-        cmake --install "$GRPC_BUILD"
-        ldconfig
-        if ! have_all_files "${GRPC_ARTIFACTS[@]}"; then
-            echo "ERROR: gRPC/protobuf install completed without all required artifacts." >&2
-            exit 1
-        fi
-        write_stamp "$GRPC_STAMP_FILE" "$GRPC_EXPECTED_STAMP"
-        echo "gRPC/protobuf install ok ($GRPC_EXPECTED_STAMP)"
-    fi
+if have_all_files "${ZLIB_ARTIFACTS[@]}" \
+    && [ "$ZLIB_INSTALLED_STAMP" = "$ZLIB_EXPECTED_STAMP" ] \
+    && cmp -s /usr/local/lib/libz.a "$LIB_DIR/libz.a"; then
+    echo "zlib 源码 stamp 与归档一致，跳过构建"
 else
-    # Dockerfile.cpp 构建重依赖层后会主动删除 clone 源码，并在删除前写入同格式
-    # stamp；没有精确 stamp 时，不信任无源码可核对的归档。
-    GRPC_INSTALLED_STAMP="$(read_stamp "$GRPC_STAMP_FILE")"
-    if ! have_all_files "${GRPC_ARTIFACTS[@]}" \
-        || [ "$GRPC_INSTALLED_STAMP" != "$GRPC_REPO_STAMP" ]; then
-        echo "ERROR: gRPC source is absent and the prebuilt install has no valid source stamp." >&2
+    echo "=== zlib 源码变化或安装不完整，重新构建 ==="
+    rm -f "$ZLIB_STAMP_FILE"
+    rm -rf "$ZLIB_BUILD"
+    # CMake 不依赖 configure 的 shebang 换行；明确构建两种库并启用全部上游测试。
+    # v1.3.2 的静态 suffix=s 仅由 WIN32 设置，Linux 原生名称仍为 libz.a。
+    # 保留静态归档标准名称，不改第三方源码。
+    cmake -S "$ZLIB_DIR" -B "$ZLIB_BUILD" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr/local \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DZLIB_BUILD_SHARED=ON \
+        -DZLIB_BUILD_STATIC=ON \
+        -DZLIB_BUILD_TESTING=ON
+    cmake --build "$ZLIB_BUILD" -j "$CPU"
+    ctest --test-dir "$ZLIB_BUILD" --output-on-failure --no-tests=error
+    if ! have_all_files "$ZLIB_BUILD/libz.a" "$ZLIB_BUILD/libz.so"; then
+        echo "ERROR: zlib 本轮构建未产出所需静态库和共享库。" >&2
         exit 1
     fi
-    echo "gRPC/protobuf prebuilt source stamp present, skipping ($GRPC_INSTALLED_STAMP)"
+    cmake --install "$ZLIB_BUILD"
+    cp -f "$ZLIB_BUILD/libz.a" "$LIB_DIR/libz.a"
+    if ! have_all_files "${ZLIB_ARTIFACTS[@]}" \
+        || ! cmp -s "$ZLIB_BUILD/libz.a" /usr/local/lib/libz.a \
+        || ! cmp -s "$ZLIB_BUILD/libz.a" "$LIB_DIR/libz.a"; then
+        echo "ERROR: zlib 安装缺少产物，或安装归档与本轮构建不一致。" >&2
+        exit 1
+    fi
+    ldconfig
+    write_stamp "$ZLIB_STAMP_FILE" "$ZLIB_EXPECTED_STAMP"
+    echo "zlib 上游测试与安装完成 ($ZLIB_EXPECTED_STAMP)"
 fi
+
+# ── 2. 独立序列化与 TLS SDK ─────────────────────────────────────────
+
+BUILD_JOBS="$CPU" bash "$REPO_ROOT/tools/scripts/third_party/build_linux_sdk.sh"
+ldconfig
 
 # ── 3. hiredis (must be before muduo so muduo finds it) ─────────────────────
 
@@ -368,59 +334,6 @@ MUDUO_COMPAT_EOF
     echo "muduo install ok ($MUDUO_EXPECTED_STAMP)"
 fi
 
-# ── 5. zlib（先于 curl 与 librdkafka 安装固定版本）───────────────────────
-
-ZLIB_DIR="$REPO_ROOT/third_party/zlib"
-ZLIB_BUILD="$ZLIB_DIR/.build_linux"
-ZLIB_STAMP_FILE="/usr/local/share/mmorpg-deps/zlib-linux.stamp"
-ZLIB_SOURCE_ID="$(source_identity zlib "$ZLIB_DIR")"
-ZLIB_EXPECTED_STAMP="zlib-linux-v2:source=$ZLIB_SOURCE_ID:shared=1:static=1:ctest=1"
-ZLIB_INSTALLED_STAMP="$(read_stamp "$ZLIB_STAMP_FILE")"
-ZLIB_ARTIFACTS=(
-    "$LIB_DIR/libz.a"
-    /usr/local/lib/libz.a
-    /usr/local/lib/libz.so
-    /usr/local/include/zlib.h
-    /usr/local/include/zconf.h
-)
-if have_all_files "${ZLIB_ARTIFACTS[@]}" \
-    && [ "$ZLIB_INSTALLED_STAMP" = "$ZLIB_EXPECTED_STAMP" ] \
-    && cmp -s /usr/local/lib/libz.a "$LIB_DIR/libz.a"; then
-    echo "zlib 源码 stamp 与归档一致，跳过构建"
-else
-    echo "=== zlib 源码变化或安装不完整，重新构建 ==="
-    rm -f "$ZLIB_STAMP_FILE"
-    rm -rf "$ZLIB_BUILD"
-    # CMake 不依赖 configure 的 shebang 换行；明确构建两种库并启用全部上游测试。
-    # v1.3.2 的静态 suffix=s 仅由 WIN32 设置，Linux 原生名称仍为 libz.a。
-    # 保留该名称，兼容已安装 gRPC export 中的绝对归档路径，不改第三方源码。
-    cmake -S "$ZLIB_DIR" -B "$ZLIB_BUILD" \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX=/usr/local \
-        -DCMAKE_INSTALL_LIBDIR=lib \
-        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-        -DZLIB_BUILD_SHARED=ON \
-        -DZLIB_BUILD_STATIC=ON \
-        -DZLIB_BUILD_TESTING=ON
-    cmake --build "$ZLIB_BUILD" -j "$CPU"
-    ctest --test-dir "$ZLIB_BUILD" --output-on-failure --no-tests=error
-    if ! have_all_files "$ZLIB_BUILD/libz.a" "$ZLIB_BUILD/libz.so"; then
-        echo "ERROR: zlib 本轮构建未产出所需静态库和共享库。" >&2
-        exit 1
-    fi
-    cmake --install "$ZLIB_BUILD"
-    cp -f "$ZLIB_BUILD/libz.a" "$LIB_DIR/libz.a"
-    if ! have_all_files "${ZLIB_ARTIFACTS[@]}" \
-        || ! cmp -s "$ZLIB_BUILD/libz.a" /usr/local/lib/libz.a \
-        || ! cmp -s "$ZLIB_BUILD/libz.a" "$LIB_DIR/libz.a"; then
-        echo "ERROR: zlib 安装缺少产物，或安装归档与本轮构建不一致。" >&2
-        exit 1
-    fi
-    ldconfig
-    write_stamp "$ZLIB_STAMP_FILE" "$ZLIB_EXPECTED_STAMP"
-    echo "zlib 上游测试与安装完成 ($ZLIB_EXPECTED_STAMP)"
-fi
-
 # ── 6. curl（Agones HTTP 与 librdkafka 共用固定源码版本）──────────────────
 
 CURL_DIR="$REPO_ROOT/third_party/curl"
@@ -432,7 +345,7 @@ if [ ! -f "$CURL_DIR/CMakeLists.txt" ]; then
     exit 1
 fi
 
-# 三个静态消费者统一使用已固定的 gRPC BoringSSL；不能把这套头与系统 OpenSSL 库混配。
+# TLS 消费者统一使用独立固定的 BoringSSL；不能把这套头与系统 OpenSSL 库混配。
 BORINGSSL_INCLUDE_DIR=/usr/local/include
 BORINGSSL_SSL_LIBRARY=/usr/local/lib/libssl.a
 BORINGSSL_CRYPTO_LIBRARY=/usr/local/lib/libcrypto.a
@@ -440,12 +353,12 @@ if ! have_all_files "$BORINGSSL_INCLUDE_DIR/openssl/base.h" \
     "$BORINGSSL_INCLUDE_DIR/openssl/ssl.h" \
     "$BORINGSSL_SSL_LIBRARY" "$BORINGSSL_CRYPTO_LIBRARY" \
     || ! grep -Eq '^#define OPENSSL_IS_BORINGSSL([[:space:]]|$)' "$BORINGSSL_INCLUDE_DIR/openssl/base.h"; then
-    echo "ERROR: 缺少当前 gRPC SDK 的完整 BoringSSL 头与静态库。" >&2
+    echo "ERROR: 缺少独立 BoringSSL 的完整头与静态库。" >&2
     exit 1
 fi
 BORINGSSL_HEADERS_HASH="$(hash_source_tree "$BORINGSSL_INCLUDE_DIR/openssl")"
 BORINGSSL_ARCHIVES_HASH="$(sha256sum "$BORINGSSL_SSL_LIBRARY" "$BORINGSSL_CRYPTO_LIBRARY" | sha256sum | awk '{print $1}')"
-BORINGSSL_SOURCE_ID="grpc-boringssl-v1:grpc=$EXPECTED_GRPC_GIT_SHA:boringssl=2b44a3701a4788e1ef866ddc7f143060a3d196c9:headers=$BORINGSSL_HEADERS_HASH:archives=$BORINGSSL_ARCHIVES_HASH"
+BORINGSSL_SOURCE_ID="boringssl-v2:boringssl=2b44a3701a4788e1ef866ddc7f143060a3d196c9:headers=$BORINGSSL_HEADERS_HASH:archives=$BORINGSSL_ARCHIVES_HASH"
 
 CURL_SOURCE_ID="$(source_identity curl "$CURL_DIR")"
 CURL_EXPECTED_STAMP="curl-linux-v3:source=$CURL_SOURCE_ID:zlib=$ZLIB_SOURCE_ID:tls=$BORINGSSL_SOURCE_ID:shared=1:versioned=1:no-undefined=1"

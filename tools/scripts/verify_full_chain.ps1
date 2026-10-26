@@ -2,7 +2,7 @@ param(
     [string]$Configuration = "Debug",
     [string]$Platform = "x64",
     [switch]$SkipClean,
-    [switch]$SkipGrpcBuild,
+    [switch]$SkipProtobufBuild,
     [switch]$SkipGrpcClientVerify
 )
 
@@ -47,20 +47,20 @@ Push-Location $repoRoot
 try {
     $msbuild = Resolve-MSBuildPath
 
+    if (-not $SkipProtobufBuild) {
+        Invoke-Step -Name "Build standalone Protobuf" -Action {
+            & "pwsh" -NoProfile -File "tools/scripts/dev_tools.ps1" -Command "third-party-protobuf-build" -Configuration $Configuration
+        }
+    }
+
     if (-not $SkipClean) {
         Invoke-Step -Name "Clean game.sln ($Configuration|$Platform)" -Action {
-            & $msbuild "game.sln" /t:Clean /m /p:Configuration=$Configuration /p:Platform=$Platform /nologo /clp:ErrorsOnly
+            & $msbuild "game.sln" /t:Clean /m:1 /p:Configuration=$Configuration /p:Platform=$Platform /nologo /clp:ErrorsOnly
         }
     }
 
     Invoke-Step -Name "Build game.sln ($Configuration|$Platform)" -Action {
-        & $msbuild "game.sln" /m /p:Configuration=$Configuration /p:Platform=$Platform /nologo /clp:ErrorsOnly
-    }
-
-    if (-not $SkipGrpcBuild) {
-        Invoke-Step -Name "Build third_party grpc" -Action {
-            & "pwsh" -NoProfile -File "tools/scripts/dev_tools.ps1" -Command "third-party-grpc-build"
-        }
+        & $msbuild "game.sln" /m:1 /p:Configuration=$Configuration /p:Platform=$Platform /nologo /clp:ErrorsOnly
     }
 
     if (-not $SkipGrpcClientVerify) {

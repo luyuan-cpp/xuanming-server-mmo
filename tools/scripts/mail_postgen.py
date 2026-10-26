@@ -358,11 +358,11 @@ def plan_table(edits: list[ProjectEdit], missing: list[str]) -> None:
 
 def plan_proto(edits: list[ProjectEdit], missing: list[str]) -> None:
     base = "cpp/generated/proto"
-    stems = [f"mail/{name}{suffix}" for name in ("mail", "mail_admin", "mail_table") for suffix in (".pb", ".grpc.pb")]
+    stems = [f"mail/{name}{suffix}" for name in ("mail", "mail_admin", "mail_table") for suffix in (".pb",)]
     files = present_files(base, [s + ".cc" for s in stems] + [s + ".h" for s in stems], missing)
     cc = [f for f in files if f.endswith(".cc")]
     h = [f for f in files if f.endswith(".h")]
-    friend_cc = ["friend/friend.grpc.pb.cc", "friend/friend.pb.cc"]
+    friend_cc = ["friend/friend.pb.cc"]
     friend_h = [p[:-3] + ".h" for p in friend_cc]
     e = ProjectEdit(base + "/CMakeLists.txt")
     e.plan(["    " + p for p in friend_cc], [cmake_entry(p) for p in cc])
@@ -412,7 +412,7 @@ def unexpected_mail_outputs() -> list[str]:
         "cpp/generated/rpc/service_metadata/mail_service_metadata.h", "cpp/generated/rpc/service_metadata/mail_admin_service_metadata.h",
     }
     for stem in ("mail", "mail_admin", "mail_table"):
-        for suffix in (".pb.cc", ".pb.h", ".grpc.pb.cc", ".grpc.pb.h"):
+        for suffix in (".pb.cc", ".pb.h"):
             known.add(f"cpp/generated/proto/mail/{stem}{suffix}")
     for stem in ("mail", "mail_admin"):
         for suffix in ("_grpc_client.cpp", "_grpc_client.h"):

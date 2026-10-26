@@ -1,6 +1,6 @@
 ﻿param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "tree", "naming-audit", "naming-apply", "third-party-lock-check", "third-party-zlib-build", "third-party-grpc-build", "no-raw-pointer-setup", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-redis-split-status", "k8s-redis-wipe", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-zone-rollback", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "k8s-route-tool", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "merge-zone-unmerge", "merge-zone-relocate", "merge-zone-relocate-abort", "merge-zone-pin-placement", "merge-zone-storage-audit", "merge-zone-capability-check", "kafka-offset-reset", "git-stats")]
+    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "tree", "naming-audit", "naming-apply", "third-party-lock-check", "third-party-zlib-build", "third-party-protobuf-build", "third-party-boringssl-build", "no-raw-pointer-setup", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-redis-split-status", "k8s-redis-wipe", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-zone-rollback", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "k8s-route-tool", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "merge-zone-unmerge", "merge-zone-relocate", "merge-zone-relocate-abort", "merge-zone-pin-placement", "merge-zone-storage-audit", "merge-zone-capability-check", "kafka-offset-reset", "git-stats")]
     [string]$Command,
 
     [string]$ConfigPath = "",
@@ -22,6 +22,11 @@
     [switch]$ApplyPatches,
     [string]$BuildRoot = "",
     [string]$ZlibInstallRoot = "",
+    [ValidateSet("Debug", "Release")]
+    [string]$Configuration = "Debug",
+    [ValidateSet("x64", "x86")]
+    [string]$Architecture = "x64",
+    [string]$PreferredMsvcVersion = "14.51",
 
     [string]$ZoneName = "yesterday",
     [int]$ZoneId = 101,
@@ -185,8 +190,6 @@
     [switch]$SkipJavaSvc,
     [string]$JavaSvcRegistry = "ghcr.io/luyuancpp",
     [string]$JavaSvcTag = "",
-    [bool]$BuildRelease = $true,
-    [bool]$BuildDebug = $true,
     # iwyu-run
     [string[]]$NodePath = @("cpp/nodes/scene"),
     [ValidateSet("auto", "iwyu", "clang-tidy")]
@@ -811,40 +814,25 @@ function Invoke-ThirdPartyZlibBuild {
     exit $LASTEXITCODE
 }
 
-function Invoke-ThirdPartyGrpcBuild {
-    $scriptPath = Join-Path $ScriptDir "third_party\build_grpc.ps1"
-    if (-not (Test-Path $scriptPath)) {
-        throw "third_party/build_grpc.ps1 not found: $scriptPath"
+function Invoke-ThirdPartySdkBuild {
+    param([ValidateSet('protobuf', 'boringssl')][string]$Sdk)
+    $scriptPath = Join-Path $ScriptDir "third_party/build_$Sdk.ps1"
+    if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
+        throw "第三方 SDK 构建脚本不存在: $scriptPath"
     }
-
     $bound = $script:PSBoundParameters
-    $args = @{}
-    if ($bound.ContainsKey('BuildRelease')) {
-        $args.BuildRelease = $BuildRelease
+    $buildArgs = @{
+        Configuration = $Configuration
+        Architecture = $Architecture
+        PreferredMsvcVersion = $PreferredMsvcVersion
+        Clean = $Clean
+        SkipToolCheck = $SkipToolCheck
+        UseVSGenerator = $UseVSGenerator
     }
-    if ($bound.ContainsKey('BuildDebug')) {
-        $args.BuildDebug = $BuildDebug
-    }
-    if ($bound.ContainsKey('Jobs')) {
-        $args.Jobs = $Jobs
-    }
-    if ($Clean) {
-        $args.Clean = $true
-    }
-    if ($SkipToolCheck) {
-        $args.SkipToolCheck = $true
-    }
-    if ($UseVSGenerator) {
-        $args.UseVSGenerator = $true
-    }
-    if (-not [string]::IsNullOrWhiteSpace($BuildRoot)) {
-        $args.BuildRoot = $BuildRoot
-    }
-    if (-not [string]::IsNullOrWhiteSpace($ZlibInstallRoot)) {
-        $args.ZlibInstallRoot = $ZlibInstallRoot
-    }
-
-    & $scriptPath @args
+    if ($bound.ContainsKey('Jobs')) { $buildArgs.Jobs = $Jobs }
+    if ($BuildRoot) { $buildArgs.BuildRoot = $BuildRoot }
+    if ($Sdk -eq 'protobuf' -and $ZlibInstallRoot) { $buildArgs.ZlibInstallRoot = $ZlibInstallRoot }
+    & $scriptPath @buildArgs
     exit $LASTEXITCODE
 }
 
@@ -1801,7 +1789,8 @@ Other common commands:
         默认只读校验 third_party/releases.lock.json；显式 -ApplyPatches 时恢复登记补丁。
     -Command third-party-zlib-build [-BuildRoot <全新目录>] [-Jobs 1]
         隔离构建 Debug/MDd zlib，必须通过上游 ctest 后才安装。
-    -Command third-party-grpc-build [-BuildRoot <目录>] [-ZlibInstallRoot <zlib安装目录>]
+    -Command third-party-protobuf-build [-Configuration Debug|Release] [-Architecture x64|x86] [-BuildRoot <目录>] [-ZlibInstallRoot <zlib安装目录>]
+    -Command third-party-boringssl-build [-Configuration Debug|Release] [-Architecture x64|x86] [-BuildRoot <目录>]
     -Command no-raw-pointer-setup [-LlvmRoot <path>] [-DownloadOnly] [-DryRun]
         自动下载 LLVM/Clang 开发库并串行编译裸指针成员检查器。
     -Command iwyu-run
@@ -1928,7 +1917,8 @@ switch ($Command) {
     "naming-apply" { Invoke-NamingApply }
     "third-party-lock-check" { Invoke-ThirdPartyLockCheck }
     "third-party-zlib-build" { Invoke-ThirdPartyZlibBuild }
-    "third-party-grpc-build" { Invoke-ThirdPartyGrpcBuild }
+    "third-party-protobuf-build" { Invoke-ThirdPartySdkBuild -Sdk protobuf }
+    "third-party-boringssl-build" { Invoke-ThirdPartySdkBuild -Sdk boringssl }
     "no-raw-pointer-setup" {
         & (Join-Path $ScriptDir "third_party/setup_no_raw_pointer_check.ps1") -LlvmRoot $LlvmRoot -DownloadOnly:$DownloadOnly -DryRun:$DryRun
     }
