@@ -39,10 +39,12 @@ const (
 // 字段都可以为 nil(启动失败时部分资源尚未创建):nil 的步骤直接跳过。
 // 字段必须在第一次 Stop 之前、由同一个 goroutine 填好;Stop 可并发调用。
 type Shutdown struct {
-	Server          *grpc.Server
-	ServeDone       <-chan struct{}
-	Unregister      func()
-	CloseResources  func()
+	Server         *grpc.Server
+	ServeDone      <-chan struct{}
+	Unregister     func()
+	CloseResources func()
+	// CloseAndReport 保留资源关闭的真实错误；优先于旧的无错误回调。
+	CloseAndReport  func() error
 	FinishFramework func()
 	DrainTimeout    time.Duration
 	FinishTimeout   time.Duration
@@ -69,7 +71,9 @@ func (s *Shutdown) Stop() error {
 			}
 			timer.Stop()
 		}
-		if s.CloseResources != nil {
+		if s.CloseAndReport != nil {
+			s.err = errors.Join(s.err, s.CloseAndReport())
+		} else if s.CloseResources != nil {
 			s.CloseResources()
 		}
 

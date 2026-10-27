@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include <exception>
 
 // KafkaProducer 的纯决策逻辑:produce() 的返回码该怎么处置、重建生产者的最小间隔、
 // 失败日志的限流、逐条回执的关联号登记(DeliveryTracker)。刻意做成 header-only、只依赖 RdKafka::ErrorCode 这一个枚举、不调用
@@ -14,7 +15,11 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <memory>
+#include <mutex>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 #include <rdkafkacpp.h>
 
@@ -188,6 +193,121 @@ private:
 // 0 表示「不跟踪」(普通 send()),Accept(0) 忽略、Resolve(0) 恒为 false。
 // id 的唯一性由调用方保证(scene 侧是 DbTaskDispatch 账本单调递增的票据号);这里不做去重以外的校验。
 // 线程模型同 KafkaProducer:只在拥有它的那个线程上读写,不加锁。
+// 每个producer线程的全部发送账本，普通send与sendTracked都计入。只读快照不解除准入。
+// 失败/超时/purge一律保留UNKNOWN；重建生产者不清账，不能由outq_len==0推断永久闭合。
+class PublicationFrontier {
+public:
+	void Accepted() {
+		if (accepted_ == std::numeric_limits<std::uint64_t>::max()) { unknown_ = true; return; }
+		++accepted_;
+	}
+	void Delivered(bool confirmed) {
+		if (!confirmed || confirmed_ == accepted_) { unknown_ = true; return; }
+		++confirmed_;
+	}
+	void MarkUnknown() { unknown_ = true; }
+	bool Settled() const { return !unknown_ && accepted_ == confirmed_; }
+	std::uint64_t AcceptedCount() const { return accepted_; }
+	std::uint64_t ConfirmedCount() const { return confirmed_; }
+	bool HasUnknown() const { return unknown_; }
+private:
+	std::uint64_t accepted_ = 0;
+	std::uint64_t confirmed_ = 0;
+	bool unknown_ = false;
+};
+
+// 跨线程只共享账本，不跨线程调用 librdkafka。句柄仍由创建线程 flush/reset/join。
+// CloseAdmission 与 BeginSend 由同一锁线性化；任何线程未 join、失败回执或溢出均不能签闭合。
+class PublicationRegistry {
+public:
+    struct Owner {
+        PublicationFrontier frontier;
+        std::uint64_t activeSends = 0, activeCallbacks = 0;
+        bool handleOpen = false;
+        bool closed = false;
+    };
+    struct Snapshot {
+        std::uint64_t accepted = 0;
+        std::uint64_t confirmed = 0;
+        std::uint64_t activeSends = 0, activeCallbacks = 0;
+        std::uint64_t openHandles = 0;
+        bool closed = false;
+        bool unknown = false;
+        bool Settled() const { return closed && !unknown && activeSends == 0 && activeCallbacks == 0 && openHandles == 0 && accepted == confirmed; }
+    };
+    using OwnerPtr = std::shared_ptr<Owner>;
+
+    OwnerPtr Register() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto owner = std::make_shared<Owner>();
+        owner->closed = closed_;
+        // 有限进程线程目录；超界永久 HOLD，不在排空时静默漏掉新 owner。
+        if (owners_.size() >= 4096) { unknown_ = true; owner->closed = true; }
+        else { owners_.push_back(owner); }
+        return owner;
+    }
+    bool BeginSend(const OwnerPtr& owner) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (closed_ || owner->closed) { return false; }
+        if (owner->activeSends == std::numeric_limits<std::uint64_t>::max()) { unknown_ = true; return false; }
+        ++owner->activeSends;
+        return true;
+    }
+    void EndSend(const OwnerPtr& owner) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (owner->activeSends == 0) { unknown_ = true; return; }
+        --owner->activeSends;
+    }
+    bool BeginCallback(const OwnerPtr& owner) {std::lock_guard<std::mutex> lock(mutex_);if(owner->activeCallbacks==std::numeric_limits<std::uint64_t>::max()){unknown_=true;return false;}++owner->activeCallbacks;return true;}
+    void EndCallback(const OwnerPtr& owner,bool known) {std::lock_guard<std::mutex> lock(mutex_);if(!known)owner->frontier.MarkUnknown();if(owner->activeCallbacks==0){unknown_=true;return;}--owner->activeCallbacks;}
+    bool OwnerCallbacksActive(const OwnerPtr& owner)const{std::lock_guard<std::mutex> lock(mutex_);return owner->activeCallbacks!=0;}
+    void Accepted(const OwnerPtr& owner) { std::lock_guard<std::mutex> lock(mutex_); owner->frontier.Accepted(); }
+    void Delivered(const OwnerPtr& owner, bool confirmed) { std::lock_guard<std::mutex> lock(mutex_); owner->frontier.Delivered(confirmed); }
+    bool OwnerSettled(const OwnerPtr& owner) const { std::lock_guard<std::mutex> lock(mutex_); return owner->activeCallbacks==0 && owner->frontier.Settled(); }
+    void MarkUnknown(const OwnerPtr& owner) { std::lock_guard<std::mutex> lock(mutex_); owner->frontier.MarkUnknown(); }
+    void HandleOpened(const OwnerPtr& owner) { std::lock_guard<std::mutex> lock(mutex_); owner->handleOpen = true; }
+    // 只有原线程的 native producer 析构真正返回后才调用；注销监听器或 outq_len==0 不等于 join。
+    void HandleJoined(const OwnerPtr& owner) { std::lock_guard<std::mutex> lock(mutex_); owner->handleOpen = false; }
+    void CloseOwner(const OwnerPtr& owner) { std::lock_guard<std::mutex> lock(mutex_); owner->closed = true; }
+    void CloseAdmission() { std::lock_guard<std::mutex> lock(mutex_); closed_ = true; }
+    bool Closed() const { std::lock_guard<std::mutex> lock(mutex_); return closed_; }
+    Snapshot Read() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        Snapshot out; out.closed = closed_; out.unknown = unknown_;
+        const auto add = [&out](std::uint64_t& target, std::uint64_t value) {
+            if (value > std::numeric_limits<std::uint64_t>::max() - target) { out.unknown = true; return; }
+            target += value;
+        };
+        for (const auto& owner : owners_) {
+            add(out.accepted, owner->frontier.AcceptedCount());
+            add(out.confirmed, owner->frontier.ConfirmedCount());
+            add(out.activeSends, owner->activeSends);
+            add(out.activeCallbacks, owner->activeCallbacks);
+            if (owner->handleOpen) { ++out.openHandles; }
+            out.unknown = out.unknown || owner->frontier.HasUnknown();
+        }
+        return out;
+    }
+private:
+    mutable std::mutex mutex_;
+    std::vector<OwnerPtr> owners_;
+    bool closed_ = false;
+    bool unknown_ = false;
+};
+
+
+// 声明在用户callback副本之前；副本target析构及其派生调用也必须先于EndCallback。
+class PublicationCallbackScope {
+public:
+    PublicationCallbackScope(std::shared_ptr<PublicationRegistry> registry,PublicationRegistry::OwnerPtr owner)
+        :registry_(std::move(registry)),owner_(std::move(owner)),exceptions_(std::uncaught_exceptions()),active_(registry_->BeginCallback(owner_)){}
+    ~PublicationCallbackScope(){if(active_)registry_->EndCallback(owner_,std::uncaught_exceptions()==exceptions_);}
+    PublicationCallbackScope(const PublicationCallbackScope&)=delete;
+    PublicationCallbackScope& operator=(const PublicationCallbackScope&)=delete;
+private:
+    std::shared_ptr<PublicationRegistry> registry_;PublicationRegistry::OwnerPtr owner_;int exceptions_;bool active_;
+};
+
 class DeliveryTracker {
 public:
 	void Accept(std::uint64_t id) {

@@ -207,7 +207,9 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command third-party-zlib-build -BuildRoo
 
 Protobuf 35.1、Abseil、GoogleTest 1.17.0、BoringSSL 都是独立子模块，提交固定于
 `third_party/releases.lock.json`。Protobuf 自带 utf8_range；不再构建官方 gRPC、插件或官方桩。
-构建入口只使用已有 MSVC 14.51、CMake、Ninja，串行执行，不安装或升级工具。
+构建入口只使用已有 MSVC 14.51、CMake 和 VS / Ninja，串行执行，不安装或升级工具。
+MSVC 缺少英文诊断包时自动选择已有 VS 生成器，避免 Ninja 的本地化依赖前缀转码失真；
+VS / Ninja 使用不同构建缓存目录，安装前缀保持相同。
 
 ```powershell
 # zlib 安装目录需与目标配置、架构一致；下面复用已有的 Debug 安装。

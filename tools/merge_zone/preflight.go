@@ -27,9 +27,9 @@ package main
 // 「玩家最后一次存盘有没有落库」)。所以 lag 的来源是一个接口:
 //   - kafkaCLILagSource   对每个候选组跑一次 kafka-consumer-groups(.sh|.bat) --describe,
 //                         认定唯一权威组后解析它的 LAG 列,再用同目录的 kafka-get-offsets 核对非空分区全覆盖 —— 生产用法
-//   - attestedLagSource   运维显式声明「我已经确认排空了」—— 本地 / 无 CLI 环境
+//   - attestedLagSource   仅保留旧参数的明确拒绝出口，人工声明不能给出成功排空
 //   - fakeLagSource       测试注入
-// 三者都没有 = 拒绝。默认不能是「查不到就当 0」。
+// 缺正式NORMAL冻结原件或CLI复核 = 拒绝，不能把「查不到」当0。
 //
 // P3 为什么是「唯一权威组」(2026-10-15,docs/design/db-consumer-group-per-zone.md §7):
 // go/db 的存盘消费组正从全 zone 共用的 db_rpc_consumer_group 逐 zone 交接到 db_rpc_consumer_group_z<zone>。
@@ -633,11 +633,11 @@ func parseConsumerGroupLag(out, topic string) (int64, error) {
 type attestedLagSource struct{}
 
 func (attestedLagSource) Describe() string {
-	return "OPERATOR ATTESTATION (-assume-kafka-drained): no lag was actually measured"
+	return "已拒绝的人工排空声明"
 }
 
 func (attestedLagSource) TotalLag(context.Context, string, []string) (int64, string, error) {
-	return 0, "(attested)", nil
+	return 0, "", errNormalFreezeProof
 }
 
 // fakeLagSource 只给测试用。group 是假装认定的权威组名(可省略)。
@@ -816,6 +816,8 @@ type preflightDeps struct {
 
 // preflightParams 是本次运行的参数面。
 type preflightParams struct {
+	// readOnly只表达预览。实际写仍需独立TOOL和NORMAL冻结原件。
+	readOnly bool
 	// zone 是写之前必须已经停干净的那个 zone:场景节点全下线、它的 db_task topic 无积压、重试 / 死信队列为空。
 	// 合服是源区:源区玩家最后的存盘在源 topic 上,没落库就拷 = 拷走一份旧的。
 	// 撤销是目标区:合服后这批玩家的存盘走目标 topic,没落库就改回路由、删目标行 = 把这些存盘丢掉。
@@ -832,7 +834,26 @@ type preflightParams struct {
 
 // runPreflight 依次跑 P2~P7(P1 在 MySQL 侧,由调用方先做)。任何一条不过就返回错误;
 // 调用方此时已立围栏、还没写任何东西,走 mergeFence.refuseAndRelease(释放围栏再非零退出)。
-func runPreflight(ctx context.Context, d preflightDeps, p preflightParams) error {
+func runPreflight(ctx context.Context, d preflightDeps, p preflightParams) (err error) {
+	finish, err := enterMaintenanceWork(ctx)
+	if err != nil {
+		return err
+	}
+	returned := false
+	defer func() {
+		if !returned || err != nil {
+			holdMaintenanceTool(ctx)
+		}
+		finish()
+	}()
+	if !p.readOnly {
+		if normalFreezeFromContext(ctx) == nil {
+			return errNormalFreezeProof
+		}
+		if err := checkMaintenanceTool(ctx); err != nil {
+			return err
+		}
+	}
 	// P2 那个 zone 的场景节点全下线。
 	if d.sceneRdb == nil {
 		return fmt.Errorf("preflight: no scene_manager Redis handle — cannot prove the %s zone %d is down", p.scope, p.zone)
@@ -844,8 +865,7 @@ func runPreflight(ctx context.Context, d preflightDeps, p preflightParams) error
 
 	// P3 Kafka 消费积压。
 	if d.lag == nil {
-		return errors.New("preflight P3: no Kafka lag source configured — pass -kafka-consumer-groups-cmd, " +
-			"or -assume-kafka-drained if you have verified the backlog by other means")
+		return errors.New("preflight P3: 缺少Kafka只读复核入口；人工声明不能替代已绑定的永久非SQL闭合原件")
 	}
 	if len(p.kafkaGroups) == 0 {
 		return errors.New("preflight P3: no candidate consumer group (internal error: kafkaGroups is empty)")
@@ -924,6 +944,7 @@ func runPreflight(ctx context.Context, d preflightDeps, p preflightParams) error
 		return fmt.Errorf("preflight P7: %d名玩家仍有SQL队伍成员关系，必须先安全离队或解散；Redis缺失不能解除此门禁", inTeam)
 	}
 	log.Printf("preflight P7 OK: none of the %d players in scope is in a live team", len(p.playerIDs))
+	returned = true
 	return nil
 }
 
@@ -944,6 +965,10 @@ func countExistingKeys(ctx context.Context, rdb *redis.Client, ids []uint64, pre
 			return found, fmt.Errorf("exists %s*: %w", prefix, err)
 		}
 		for _, c := range cmds {
+			if err := c.Err(); err != nil {
+				holdMaintenanceTool(ctx)
+				return found, fmt.Errorf("exists %s*: %w", prefix, err)
+			}
 			if c.Val() > 0 {
 				found++
 			}

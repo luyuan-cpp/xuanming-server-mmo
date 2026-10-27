@@ -75,4 +75,46 @@ Test-Case 'SQL角色证明从独立正规玩家库清单反解，拒绝畸形/�
         Assert-True -Condition $denied -Because '不能从畸形/重复/超过1024的玩家存储清单授权跨schema强读'
     }
 }
+Test-Case 'runtime唯一权限叶不再由initdb共享账号ALL旁路' {
+    $root=Join-Path $PSScriptRoot '../../..'
+    $init=Get-Content -LiteralPath (Join-Path $root 'deploy/mysql-init/00_init_zone_dbs.sql') -Raw
+    $statements=($init -split "\r?\n" | Where-Object {$_ -notmatch '^\s*--'}) -join "\n"
+    Assert-True -Condition ($statements -notmatch '(?i)GRANT\s+ALL|GRANT\s+.+\.\*.+appuser') -Because '只建库，不能从第二权限叶给runtime全schema'
+    $runtime=Get-Content -LiteralPath (Join-Path $root 'deploy/sql/authority_runtime_role.sql') -Raw
+    Assert-Match -Text $runtime -Pattern 'writer_lifecycle_receipt' -Because 'runtime按永久原REGISTER核boot部署/锁资格'
+    Assert-Match -Text $runtime -Pattern 'LOCK_TOUCH_GRANT' -Because '受限锁写只由正式已资格REGISTER选择，不自行升级表权限'
+}
+
+Test-Case 'Java authority镜像带R根proto与固定Linux生成器输入，缺原件不得启动构建' {
+    $tokens=$null;$parseErrors=$null
+    $imageAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot '../java_svc_image.ps1'),[ref]$tokens,[ref]$parseErrors)
+    if($parseErrors.Count){throw 'Java镜像脚本解析失败'}
+    foreach($name in @('Get-ImageFullName','Invoke-Build')){
+        $definition=$imageAst.Find({param($node)$node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$true)
+        Set-Item -Path "Function:script:$name" -Value $definition.Body.GetScriptBlock()
+    }
+    $root=Join-Path ([IO.Path]::GetTempPath()) ('mmorpg-java-image-input-'+[Guid]::NewGuid().ToString('N'))
+    $null=[IO.Directory]::CreateDirectory($root)
+    try {
+        $RepoRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'));$JavaRoot=Join-Path $RepoRoot 'java';$Dockerfile=Join-Path $RepoRoot 'deploy/k8s/Dockerfile.java-svc'
+        $Catalogue=[ordered]@{gateway=@{Dir='gateway_node';ImageName='fixture-gateway'}};$Registry='fixture.invalid';$Tag='fixture';$DryRun=$true
+        $BuildVersion='fixture';$BuildCommit='fixture';$BuildTime='fixture';$LinuxProtocDir='';$LinuxProtocSha256=''
+        $message='';try{Invoke-Build}catch{$message=$_.Exception.Message}
+        Assert-Match -Text $message -Pattern '明确已批准LinuxProtocDir' -Because '缺生成器不能静默下载或继续构建错误descriptor'
+        # 只有格式校验与DryRun夹具；四字节不是可运行protoc，更不构成生成器资格证据。
+        $LinuxProtocDir=$root;$tool=Join-Path $root 'protoc';[IO.File]::WriteAllBytes($tool,[byte[]]@(127,69,76,70))
+        $LinuxProtocSha256=(Get-FileHash -LiteralPath $tool -Algorithm SHA256).Hash.ToLowerInvariant()
+        $output=(Invoke-Build 6>&1 | Out-String)
+        Assert-Match -Text $output -Pattern ([regex]::Escape('--build-context qualified-protoc='+$root)) -Because 'Docker接收独立明确的正规tool输入'
+        Assert-Match -Text $output -Pattern ([regex]::Escape('LINUX_PROTOC_SHA256='+$LinuxProtocSha256)) -Because '容器内重新核同一SHA防读写间变化'
+        Assert-Match -Text $output -Pattern ([regex]::Escape($RepoRoot)) -Because '根proto与java reactor均可见'
+        $LinuxProtocSha256='0'*64;$message='';try{Invoke-Build}catch{$message=$_.Exception.Message}
+        Assert-Match -Text $message -Pattern 'SHA不符' -Because '不同生成器不能借相同路径替换'
+    } finally {
+        $full=[IO.Path]::GetFullPath($root);$allowed=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar
+        if(-not $full.StartsWith($allowed,[StringComparison]::OrdinalIgnoreCase) -or (Split-Path -Leaf $full) -notlike 'mmorpg-java-image-input-*'){throw '镜像夹具清理范围非法'}
+        Remove-Item -LiteralPath $full -Recurse -Force
+    }
+}
+
 exit (Complete-TestRun -SuiteName '全球SQL与本机证明注入')

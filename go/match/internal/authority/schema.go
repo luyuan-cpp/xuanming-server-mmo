@@ -6,13 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"match/internal/config"
 	pb "proto/match"
 	teampb "proto/team"
 	"schemamigrate"
+	"shared/authoritysql"
 
 	"github.com/go-sql-driver/mysql"
 	"google.golang.org/protobuf/proto"
@@ -50,7 +50,11 @@ func requireCurrentSchema(ctx context.Context, db *sql.DB, database string, plan
 // Migrate 只执行显式 schema 迁移，不读取探测密钥或装配节点、消费者、匹配循环。
 // 返回报告及错误原样交给 schemamigrate.ExitCode；改列只接受本次 CLI 的显式授权。
 func Migrate(ctx context.Context, c config.GlobalMatchConf, allowModify bool) (schemamigrate.Report, error) {
-	db, err := openAuthorityDatabase(ctx, c)
+	permission, err := authoritysql.LoadSchemaPermission(os.Getenv)
+	if err != nil {
+		return schemamigrate.Report{}, err
+	}
+	db, err := openAuthorityDatabaseWithPermission(ctx, c, permission)
 	if err != nil {
 		return schemamigrate.Report{}, err
 	}
@@ -69,6 +73,14 @@ func Migrate(ctx context.Context, c config.GlobalMatchConf, allowModify bool) (s
 
 // openAuthorityDatabase 共用原强读池，迁移与常驻形态只在 schema 写权限上分离。
 func openAuthorityDatabase(ctx context.Context, c config.GlobalMatchConf) (*sql.DB, error) {
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	return openAuthorityDatabaseWithPermission(ctx, c, authoritysql.Writer(writer))
+}
+
+func openAuthorityDatabaseWithPermission(ctx context.Context, c config.GlobalMatchConf, permission authoritysql.Permission) (*sql.DB, error) {
 	if c.Host == "" || c.User == "" || c.Database != "mmorpg_match" {
 		return nil, errors.New("全球匹配数据库配置无效")
 	}
@@ -83,36 +95,10 @@ func openAuthorityDatabase(ctx context.Context, c config.GlobalMatchConf) (*sql.
 			mc.Params[k] = v
 		}
 	}
-	db, err := sql.Open("mysql", mc.FormatDSN())
+	db, err := authoritysql.Open(ctx, mc.FormatDSN(), c.Database, c.RequireTiDB, 16, permission)
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(16)
 	db.SetMaxIdleConns(4)
-	ok := false
-	defer func() {
-		if !ok {
-			db.Close()
-		}
-	}()
-	if err = db.PingContext(ctx); err != nil {
-		return nil, errors.New("匹配权威数据库不可用")
-	}
-	var database, version, comment string
-	if err = db.QueryRowContext(ctx, "SELECT DATABASE(),VERSION(),@@version_comment").Scan(&database, &version, &comment); err != nil {
-		return nil, err
-	}
-	if database != c.Database || (c.RequireTiDB && !strings.Contains(strings.ToLower(version+comment), "tidb")) {
-		return nil, errors.New("匹配权威事务域校验失败")
-	}
-	if c.RequireTiDB {
-		var mode, isolation, replica, consistency, snapshot string
-		var stale, low int64
-		err = db.QueryRowContext(ctx, "SELECT @@tidb_txn_mode,@@transaction_isolation,@@tidb_replica_read,@@tidb_read_consistency,@@tidb_snapshot,@@tidb_read_staleness,@@tidb_low_resolution_tso").Scan(&mode, &isolation, &replica, &consistency, &snapshot, &stale, &low)
-		if err != nil || mode != "pessimistic" || isolation != "READ-COMMITTED" || replica != "leader" || consistency != "strict" || snapshot != "" || stale != 0 || low != 0 {
-			return nil, errors.New("匹配权威连接必须使用完整TiDB强读策略")
-		}
-	}
-	ok = true
 	return db, nil
 }

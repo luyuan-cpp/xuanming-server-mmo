@@ -43,8 +43,6 @@ func reconcileStmtLabel(query string) string {
 		return "R26"
 	case routeAdvanceReconcileSQL:
 		return "R27"
-	case routeLeaderFreezeSQL:
-		return "R28"
 	case routeScanUpdatedSinceSQL:
 		return "R29"
 	case routeDBNowSQL:
@@ -484,65 +482,56 @@ func TestAdvanceReconcileCacheVerifiedExactWrite(t *testing.T) {
 	}
 }
 
-// TestAdvanceReconcileFreezeIssuesNoWatermarkUpdate:有回档证据时只发 R28、**不发 R27**(GREATEST 会把证据洗掉),
-// cvm 即使给了也不写;R28 被 route_tool freeze 抢先(0 行、复读已冻结)→ AlreadyFrozen、回滚;0 行而复读仍可写 → 报错。
+// TestAdvanceReconcileFreezeIssuesNoWatermarkUpdate:危险只返回带完整观察的错误，事务回滚、零控制写；原水位与 cvm 不变。
 func TestAdvanceReconcileFreezeIssuesNoWatermarkUpdate(t *testing.T) {
-	frozenResult := func(reason RouteFreezeReason) ReconcileTickResult {
-		return ReconcileTickResult{Outcome: ReconcileTickFrozen, FreezeReason: reason, Generation: rcGen, WatermarkMs: rcWM, CacheVerifiedMs: rcCvm, NowMs: rcNow}
-	}
 	for _, tc := range []struct {
 		name   string
 		key    *placement.RouteWatermark
 		tol    uint64
-		want   ReconcileTickResult
-		labels []string
+		reason RouteFreezeReason
 	}{
-		{"世代不符", rcKey("ffffffffffffffffffffffffffffffff", 1), 0,
-			frozenResult(RouteFreezeGenerationMismatch), []string{"BEGIN", "R26", "R18", "R28", "COMMIT"}},
-		{"水位倒退_容差0", rcKey(rcGen, rcWM+1), 0,
-			frozenResult(RouteFreezeWatermarkRegressed), []string{"BEGIN", "R26", "R18", "R28", "COMMIT"}},
-		{"水位倒退_容差1000_超出", rcKey(rcGen, rcWM+1001), 1000,
-			frozenResult(RouteFreezeWatermarkRegressed), []string{"BEGIN", "R26", "R18", "R28", "COMMIT"}},
+		{"世代不符", rcKey("ffffffffffffffffffffffffffffffff", 1), 0, RouteFreezeGenerationMismatch},
+		{"水位倒退_容差0", rcKey(rcGen, rcWM+1), 0, RouteFreezeWatermarkRegressed},
+		{"水位倒退_容差1000_超出", rcKey(rcGen, rcWM+1001), 1000, RouteFreezeWatermarkRegressed},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			st, fake := newReconcileFakeStore(t, map[string][]fakeRouteReply{
-				"R26": {rcHeld()}, "R18": {rcMeta(rcGen, 1)}, "R28": {replyAffected(1)},
-			})
+			st, fake := newReconcileFakeStore(t, map[string][]fakeRouteReply{"R26": {rcHeld()}, "R18": {rcMeta(rcGen, 1)}})
 			got, err := st.AdvanceReconcile(context.Background(), rcTick(func(r *ReconcileTickRequest) {
 				r.WatermarkKey, r.ToleranceMs, r.SetCacheVerifiedMs = tc.key, tc.tol, rcU64(rcNow)
 			}))
-			if err != nil {
-				t.Fatalf("AdvanceReconcile: %v", err)
+			var danger *RouteEmergencyError
+			if !errors.As(err, &danger) {
+				t.Fatalf("危险必须返回正式观察错误: %v", err)
 			}
-			assertTickResult(t, got, tc.want)
-			assertReconcileLabels(t, fake, tc.labels...)
-			assertReconcileArgs(t, fake, "R28")
-			if n := len(fake.callsWithLabel("R27")); n != 0 {
-				t.Fatalf("a freeze must not advance the watermark: R27 sent %d times", n)
+			assertTickResult(t, got, ReconcileTickResult{})
+			assertTickResult(t, danger.Observation, ReconcileTickResult{Outcome: ReconcileTickFrozen, FreezeReason: tc.reason,
+				Generation: rcGen, WatermarkMs: rcWM, CacheVerifiedMs: rcCvm, NowMs: rcNow})
+			assertReconcileLabels(t, fake, "BEGIN", "R26", "R18", "ROLLBACK")
+			if len(fake.callsWithLabel("R27")) != 0 {
+				t.Fatal("危险观察不得推进水位或 cvm")
 			}
 		})
 	}
-
-	t.Run("被route_tool抢先冻结", func(t *testing.T) {
-		st, fake := newReconcileFakeStore(t, map[string][]fakeRouteReply{
-			"R26": {rcHeld()}, "R18": {rcMeta(rcGen, 1), rcMeta(rcGen, 0)}, "R28": {replyAffected(0)},
-		})
+	t.Run("独立operator已先冻结", func(t *testing.T) {
+		st, fake := newReconcileFakeStore(t, map[string][]fakeRouteReply{"R26": {rcHeld()}, "R18": {rcMeta(rcGen, 0)}})
 		got, err := st.AdvanceReconcile(context.Background(), rcTick(func(r *ReconcileTickRequest) { r.WatermarkKey = rcKey(rcGen, rcWM+1) }))
 		if err != nil {
-			t.Fatalf("AdvanceReconcile: %v", err)
+			t.Fatal(err)
 		}
 		assertTickResult(t, got, ReconcileTickResult{Outcome: ReconcileTickAlreadyFrozen, Generation: rcGen, WatermarkMs: rcWM, CacheVerifiedMs: rcCvm, NowMs: rcNow})
-		assertReconcileLabels(t, fake, "BEGIN", "R26", "R18", "R28", "R18", "ROLLBACK")
+		assertReconcileLabels(t, fake, "BEGIN", "R26", "R18", "ROLLBACK")
 	})
-
-	t.Run("R28零行而复读仍可写_报错", func(t *testing.T) {
-		st, fake := newReconcileFakeStore(t, map[string][]fakeRouteReply{
-			"R26": {rcHeld()}, "R18": {rcMeta(rcGen, 1), rcMeta(rcGen, 1)}, "R28": {replyAffected(0)},
-		})
-		if _, err := st.AdvanceReconcile(context.Background(), rcTick(func(r *ReconcileTickRequest) { r.WatermarkKey = rcKey(rcGen, rcWM+1) })); err == nil {
-			t.Fatal("R28 affected 0 rows while writable is still 1: must fail closed")
+	t.Run("危险重试仍不得自行冻结", func(t *testing.T) {
+		st, fake := newReconcileFakeStore(t, map[string][]fakeRouteReply{"R26": {rcHeld(), rcHeld()}, "R18": {rcMeta(rcGen, 1), rcMeta(rcGen, 1)}})
+		for i := 0; i < 2; i++ {
+			got, err := st.AdvanceReconcile(context.Background(), rcTick(func(r *ReconcileTickRequest) { r.WatermarkKey = rcKey(rcGen, rcWM+1) }))
+			var danger *RouteEmergencyError
+			if !errors.As(err, &danger) || danger.Observation.FreezeReason != RouteFreezeWatermarkRegressed {
+				t.Fatalf("错误猜测已冻结: %+v %v", got, err)
+			}
+			assertTickResult(t, got, ReconcileTickResult{})
 		}
-		assertReconcileLabels(t, fake, "BEGIN", "R26", "R18", "R28", "R18", "ROLLBACK")
+		assertReconcileLabels(t, fake, "BEGIN", "R26", "R18", "ROLLBACK", "BEGIN", "R26", "R18", "ROLLBACK")
 	})
 }
 
@@ -730,8 +719,7 @@ func TestAdvanceReconcileRetriesOnlyDeadlockAndWriteConflict(t *testing.T) {
 
 // ── leader 冻结 ─────────────────────────────────────────────────────────────────
 
-// TestFreezeByLeader:持有租约且可写 → R28 → COMMIT → Frozen(reason),水位不动;已冻结 / 租约丢失 → 零写入回滚;
-// R28 被抢先 → AlreadyFrozen。
+// TestFreezeByLeader:持有租约且可写只返回危险观察；已冻结 / 租约丢失照旧零写入回滚。
 func TestFreezeByLeader(t *testing.T) {
 	base := ReconcileTickResult{Generation: rcGen, WatermarkMs: rcWM, CacheVerifiedMs: rcCvm, NowMs: rcNow}
 	withOutcome := func(o ReconcileTickOutcome, r RouteFreezeReason) ReconcileTickResult {
@@ -745,19 +733,25 @@ func TestFreezeByLeader(t *testing.T) {
 		want    ReconcileTickResult
 		labels  []string
 	}{
-		{"冻结", map[string][]fakeRouteReply{"R26": {rcHeld()}, "R18": {rcMeta(rcGen, 1)}, "R28": {replyAffected(1)}},
-			withOutcome(ReconcileTickFrozen, RouteFreezeCacheAhead), []string{"BEGIN", "R26", "R18", "R28", "COMMIT"}},
+		{"冻结", map[string][]fakeRouteReply{"R26": {rcHeld()}, "R18": {rcMeta(rcGen, 1)}},
+			withOutcome(ReconcileTickFrozen, RouteFreezeCacheAhead), []string{"BEGIN", "R26", "R18", "ROLLBACK"}},
 		{"已冻结", map[string][]fakeRouteReply{"R26": {rcHeld()}, "R18": {rcMeta(rcGen, 0)}},
 			withOutcome(ReconcileTickAlreadyFrozen, RouteFreezeNone), []string{"BEGIN", "R26", "R18", "ROLLBACK"}},
 		{"租约丢失", map[string][]fakeRouteReply{"R26": {rcRow26(rcOther, rcNow+5000, rcWM, rcCvm, rcNow)}, "R18": {rcMeta(rcGen, 1)}},
 			withOutcome(ReconcileTickLeaseLost, RouteFreezeNone), []string{"BEGIN", "R26", "R18", "ROLLBACK"}},
-		{"被抢先冻结", map[string][]fakeRouteReply{"R26": {rcHeld()}, "R18": {rcMeta(rcGen, 1), rcMeta(rcGen, 0)}, "R28": {replyAffected(0)}},
-			withOutcome(ReconcileTickAlreadyFrozen, RouteFreezeNone), []string{"BEGIN", "R26", "R18", "R28", "R18", "ROLLBACK"}},
+		{"被抢先冻结", map[string][]fakeRouteReply{"R26": {rcHeld()}, "R18": {rcMeta(rcGen, 0)}},
+			withOutcome(ReconcileTickAlreadyFrozen, RouteFreezeNone), []string{"BEGIN", "R26", "R18", "ROLLBACK"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			st, fake := newReconcileFakeStore(t, tc.replies)
 			got, err := st.FreezeByLeader(context.Background(), rcLeader, RouteFreezeCacheAhead, RouteFreezeTimeoutMin)
-			if err != nil {
+			if tc.want.Outcome == ReconcileTickFrozen {
+				var danger *RouteEmergencyError
+				if !errors.As(err, &danger) {
+					t.Fatalf("必须交付危险观察: %v", err)
+				}
+				assertTickResult(t, danger.Observation, tc.want)
+			} else if err != nil {
 				t.Fatalf("FreezeByLeader: %v", err)
 			}
 			assertTickResult(t, got, tc.want)

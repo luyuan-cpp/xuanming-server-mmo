@@ -150,7 +150,7 @@
 工作目录除特别说明外均为仓库根 `E:\work\xuanming-server-mmo`。**动手前先 `git status --porcelain --ignore-submodules=all`**:本轮工作区里还有并行会话的改动(帮会二期、发布打包、merge_zone、go/guild、go/friend),不要把它们混进同一次验证结论。
 
 1. **导表**(改了 `data/schema/*.proto` 与两张 xlsx,必须先于一切 C++ 编译):
-   前置 `PATH` 里要有 `protoc-gen-go` / `protoc-gen-go-grpc`,仓内 protoc 必须是 `libprotoc 35.1`(`third_party\grpc\install_vs2026_dbg\bin\protoc.exe`);先关掉 Excel(避免 `~$` 锁文件)。
+   前置 `PATH` 里要有 `protoc-gen-go` / `protoc-gen-go-grpc`,仓内 protoc 必须是 `libprotoc 35.1`(`third_party\protobuf\install_vs2026_dbg\bin\protoc.exe`，2026-10-26 起为独立安装);先关掉 Excel(避免 `~$` 锁文件)。
    - 零副作用预检:`py tools/data_table_exporter/tools/sandbox_export.py --out <临时目录> --compare`
    - 正式导表:`py tools\data_table_exporter\run.py tools\data_table_exporter\exporter_config.yaml`(不要直接跑 `dev.bat`,它失败路径带 `pause`,非交互会卡住)
    - 刷新索引:`py tools/data_table_exporter/tools/gen_schema_index.py`
@@ -181,6 +181,8 @@
 7. 任一步失败:保留该步完整 stdout/stderr(导表器是 fail-closed,报错即"产出未落盘")、MSBuild 首个 error 段、scene/battle 日志与失败 step 名;**不重试、不改判据**,回报后等决策。
 
 ## 8. 已执行:导表 + proto 重生成(2026-09-18)
+
+2026-10-26 工具路径注记：本节命令和结果保留 09-18 的实际记录。今后重跑使用 §7 的独立 Protobuf 路径，不再从下文历史 gRPC SDK 目录取工具。
 
 本会话按用户指示替 Codex 跑完了生成链的两步。**这两步不是编译**,产物已随仓库的每小时自动提交进入 `main`。
 

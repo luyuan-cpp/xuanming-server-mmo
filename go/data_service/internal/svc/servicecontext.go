@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"data_service/internal/config"
@@ -20,6 +21,8 @@ import (
 	guildpb "proto/guild"
 	loginpb "proto/login"
 	"shared/accountdirectory"
+	"shared/authoritysql"
+	"shared/drainproof"
 	"shared/placement"
 	"shared/serviceauth"
 	"shared/sqlpoolstats"
@@ -113,6 +116,17 @@ type RollbackFence interface {
 }
 
 type ServiceContext struct {
+	// 与所有业务池共用的本boot；main必须先关闭接纳并join真实工作，再Seal。
+	Writer                    authoritysql.WriterConfig
+	RootAdmission             *drainproof.Session
+	RelayAdmission            *drainproof.Session
+	RelayIngress              *drainproof.Session
+	DrainRuntime              *drainproof.Runtime
+	lifecycleMu               sync.Mutex
+	closeOnce                 sync.Once
+	closeErr                  error
+	closeCompleted            bool
+	upstreamClosers           []interface{ Close() error }
 	AccountDirectory          accountdirectory.Directory
 	AccountDirectoryAuth      *serviceauth.Verifier
 	SceneManagerDirectoryAuth *serviceauth.Verifier
@@ -224,6 +238,19 @@ func (s *ServiceContext) RouteReadGateUnassembled() error {
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
+	return NewServiceContextWithRouteDangerOwner(c, nil)
+}
+
+// 危险回调由进程真实root/relay owner注入；不得在reconcile worker内等待自身退出。
+func NewServiceContextWithRouteDangerOwner(c config.Config, onDanger func(context.Context, *store.RouteEmergencyError) error) *ServiceContext {
+	return NewServiceContextWithAdmission(c, drainproof.New(), drainproof.New(), onDanger)
+}
+
+// 门禁必须在构造前确定；prepared SOURCE 与正常服务复用同一 SQL boot，不能运行中换 gate。
+func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Session, onDanger func(context.Context, *store.RouteEmergencyError) error) *ServiceContext {
+	if root == nil || relay == nil || root == relay {
+		panic("data_service 缺独立 SOURCE/RELAY 门禁")
+	}
 	resolved, err := c.ResolveGlobalAuthority(os.Getenv)
 	if err != nil {
 		panic(fmt.Sprintf("全球SQL装配拒绝: %v", err))
@@ -242,30 +269,27 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	c.PlayerName = c.PlayerName.Normalize()
 	// RouteStore 段同理(零值 = 没配);合法性 main 启动时已校验,routing.NewRouter 还会再校验一次(非法即 panic)。
 	c.RouteStore = c.RouteStore.Normalize()
+	if c.RouteStore.ReconcileEnabled() && onDanger == nil {
+		panic("data_service对账缺真实危险关闭owner，拒绝启动")
+	}
 
 	mysqlCfg := MySQLConfigOf(c)
-
-	// 表结构只有 proto 一个真源,建表/补列集中在 store.MigrateSchema(见 store/schema.go)。
-	// 迁移失败时三个 store 全部保持 nil(fail-closed):列缺失的表上跑业务 SQL 只会得到
-	// 更难定位的运行期错误,不如让所有依赖它的 RPC 立刻返回 *DBError。
-	// ShouldAutoMigrate 而不是 c.Schema.AutoMigrate:整段 `Schema:` 缺失时 go-zero
-	// 不回填结构里的 default,安全默认(建表)只能由那个方法给(见 config.SchemaConfig)。
-	schemaReady := true
-	if c.ShouldAutoMigrate() {
-		ctx, cancel := context.WithTimeout(context.Background(), autoMigrateTimeout)
-		// 启动路径与 -migrate 传同一份 BootstrapTags:号段行在生产只能由迁移创建
-		// (运行期补种关着),两条路径少传一处就会让 AllocateIdSegment 对那个 tag 直接拒绝。
-		// LockWait 给满整个启动期迁移时限:多副本同时启动时,后到的等先到的迁完,再跑一遍幂等的空迁移。
-		migrateOpts := store.MigrateOptions{BootstrapTags: c.IdSegment.EffectiveBootstrapTags(), LockWait: autoMigrateTimeout}
-		if err := store.MigrateSchema(ctx, mysqlCfg, migrateOpts); err != nil {
-			logx.Errorf("[ServiceContext] schema auto-migrate failed; snapshot/txlog/idsegment stores disabled: %v", err)
-			schemaReady = false
-		}
-		cancel()
-	} else {
-		logx.Infof("[ServiceContext] Schema.AutoMigrate=false: startup runs no DDL and seeds no id_segment rows; run `data_service -f <yaml> -migrate` during deploy (bootstraps %v)",
-			c.IdSegment.EffectiveBootstrapTags())
+	var writerConfig authoritysql.WriterConfig
+	// 常驻进程没有 schema 凭据。历史上缺省启动迁移的行为在这里收口，
+	// 显式要求自动迁移则拒启；未配置时仅使用部署阶段已准备的表。
+	if c.Schema.AutoMigrate != nil && *c.Schema.AutoMigrate {
+		panic("常驻 data_service 禁止 Schema.AutoMigrate，请使用独立 -migrate 部署入口")
 	}
+	if mysqlCfg.Host != "" {
+		writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+		if err != nil {
+			panic(fmt.Sprintf("data_service 写者启动授权拒绝: %v", err))
+		}
+		writerConfig = writer
+		mysqlCfg.Permission = authoritysql.Writer(writerConfig)
+	}
+	schemaReady := true
+	logx.Info("[ServiceContext] 常驻启动只读核对表形状；schema 与号段初值必须由独立 -migrate 入口预建")
 
 	var (
 		snapshotStore       SnapshotStore
@@ -366,17 +390,18 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// 对账 leader(D1 第 1b-2 批):只在 ReconcileEnabled(db_first 且 Reconcile.Enabled 不是 false)时构造;构造不开连接。
 	// 失败只记 ERROR、保持 nil;Store.Required=true 时 MissingStores 带上 "route_reconciler",main 拒启(核实意见 should)。
-	routeReconciler, err := newRouteReconciler(c, reconcileStore, productionRouteReconcilerDeps())
+	routeReconciler, err := newRouteReconciler(c, reconcileStore, productionRouteReconcilerDeps(onDanger))
 	if err != nil {
-		logx.Errorf("[ServiceContext] route reconcile leader not assembled (no orphan-row republish, no rollback detection, "+
-			"no fence mirror reconciliation; Store.Required=true refuses to start): %v", err)
+		panic(fmt.Sprintf("data_service对账owner装配失败，拒绝启动: %v", err))
 	}
 
 	// Optional: login admin gRPC client for orphan account cleanup during rollback
 	var loginClient loginpb.LoginAdminClient
+	var upstreamClosers []interface{ Close() error }
 	if c.LoginAdminRpc.Etcd.Key != "" {
 		conn := zrpc.MustNewClient(c.LoginAdminRpc)
 		loginClient = loginpb.NewLoginAdminClient(conn.Conn())
+		upstreamClosers = append(upstreamClosers, conn.Conn())
 		logx.Info("[ServiceContext] login admin RPC client connected")
 	}
 
@@ -396,7 +421,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		}
 	}
 
+	divergence := newGuildDivergenceChecker(c, func(closer interface{ Close() error }) { upstreamClosers = append(upstreamClosers, closer) })
 	s := &ServiceContext{
+		upstreamClosers:      upstreamClosers,
+		Writer:               writerConfig,
+		RootAdmission:        root,
+		RelayAdmission:       relay,
+		RelayIngress:         drainproof.New(),
 		Config:               c,
 		Router:               routing.NewRouter(c, routerOpts...),
 		SnapshotStore:        snapshotStore,
@@ -407,7 +438,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		PlayerRouteStore:     playerRouteStore,
 		RouteReconciler:      routeReconciler,
 		LoginAdminClient:     loginClient,
-		GuildDivergence:      newGuildDivergenceChecker(c),
+		GuildDivergence:      divergence,
 	}
 	if directory != nil {
 		s.AccountDirectory = directory
@@ -453,14 +484,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 // routeReconcilerDeps 是 newRouteReconciler 的外部依赖(单测接缝):mapping Redis 客户端的构造、本机名、预热令牌与 leader 标识的随机源。
 // 生产值见 productionRouteReconcilerDeps;单测注入假实现,不连 Redis、不碰环境。
 type routeReconcilerDeps struct {
+	onDanger func(context.Context, *store.RouteEmergencyError) error
 	newCache func(mapping redis.RedisConf, rc config.RouteStoreConfig) (routereconcile.Cache, error)
 	hostname func() (string, error)
 	random   io.Reader
 }
 
 // productionRouteReconcilerDeps:独立 go-redis 客户端(routereconcile.NewRedisCache,不经 go-zero 熔断器)、os.Hostname、crypto/rand。
-func productionRouteReconcilerDeps() routeReconcilerDeps {
+func productionRouteReconcilerDeps(onDanger func(context.Context, *store.RouteEmergencyError) error) routeReconcilerDeps {
 	return routeReconcilerDeps{
+		onDanger: onDanger,
 		newCache: func(mapping redis.RedisConf, rc config.RouteStoreConfig) (routereconcile.Cache, error) {
 			// 先判错再转接口:NewRedisCache 失败时回的是 nil 的 *RedisCache,直接 return 会包出非 nil 接口。
 			cache, err := routereconcile.NewRedisCache(mapping, rc)
@@ -487,6 +520,9 @@ func newRouteReconciler(c config.Config, rs routereconcile.Store, deps routeReco
 	if rs == nil {
 		return nil, errors.New("RouteStore.Mode=db_first but the route store (player_route) is not assembled; see the route store error above")
 	}
+	if deps.onDanger == nil {
+		return nil, errors.New("对账缺真实root/relay关闭owner")
+	}
 	cache, err := deps.newCache(c.MappingRedis, c.RouteStore)
 	if err != nil {
 		return nil, fmt.Errorf("mapping redis client for the reconcile leader: %w", err)
@@ -502,7 +538,7 @@ func newRouteReconciler(c config.Config, rs routereconcile.Store, deps routeReco
 		_ = cache.Close()
 		return nil, fmt.Errorf("route reconcile leader id: %w", err)
 	}
-	r, err := routereconcile.New(c.RouteStore, routereconcile.Deps{Store: rs, Cache: cache, LeaderID: leaderID, Random: deps.random})
+	r, err := routereconcile.New(c.RouteStore, routereconcile.Deps{Store: rs, Cache: cache, LeaderID: leaderID, Random: deps.random, OnDanger: deps.onDanger})
 	if err != nil {
 		_ = cache.Close()
 		return nil, err
@@ -635,7 +671,7 @@ func routeRouterOptions(rs PlayerRouteStore) []routing.RouterOption {
 // 返回 nil = 回档一律被拒,**不是**"跳过检查"(与 LoginAdminClient 的 nil 语义相反,见 ServiceContext.GuildDivergence)。
 // 任何失败都只记日志、不拒启:这三项配置只关系到回档,而 guild 启动要用 data_service(领号段、查归属),
 // 这里再反向阻塞就是启动死锁(07 §7.5.5)。
-func newGuildDivergenceChecker(c config.Config) guildcheck.GuildDivergenceChecker {
+func newGuildDivergenceChecker(c config.Config, track ...func(interface{ Close() error })) guildcheck.GuildDivergenceChecker {
 	if err := c.ValidateGuildCheck(); err != nil {
 		logx.Errorf("[ServiceContext] guild check config invalid; every Rollback* will be rejected (ErrCodeRollbackGuildCheckFailed): %v", err)
 		return nil
@@ -656,6 +692,9 @@ func newGuildDivergenceChecker(c config.Config) guildcheck.GuildDivergenceChecke
 	logx.Infof("[ServiceContext] guild divergence checker ready: endpoints=%v target=%q timeout=%dms margin=%dms budget=%ds",
 		c.GuildInternalRpc.Endpoints, c.GuildInternalRpc.Target, c.GuildInternalRpc.Timeout,
 		c.GuildClockSkewMarginMs, c.GuildCheckBudgetSeconds)
+	if len(track) == 1 && track[0] != nil {
+		track[0](cli.Conn())
+	}
 	return guildcheck.New(guildpb.NewGuildInternalClient(cli.Conn()))
 }
 
@@ -700,30 +739,94 @@ func sqlPoolSamples(stores []namedStore, statsOf func(any) (sql.DBStats, bool)) 
 	return samples
 }
 
-// Close releases every store and the router. nil-safe on each member.
+// BindDrainRuntime 只认已消费的 Writer 身份；进程所有池与角色共用该 boot，不重读 grant。
+func (s *ServiceContext) BindDrainRuntime(runtime *drainproof.Runtime) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if runtime == nil || s.DrainRuntime != nil || s.RootAdmission == nil || s.RelayAdmission == nil ||
+		runtime.Seed("SOURCE") == nil || runtime.Seed("RELAY") == nil {
+		return drainproof.ErrHold
+	}
+	if err := runtime.BindBoot(s.Writer.InstanceID(), s.Writer.WriterKey()); err != nil {
+		return err
+	}
+	s.DrainRuntime = runtime
+	return nil
+}
+
+// CloseRootAndRelayIngress 是 worker 可同步调用的止血接缝；不等待 worker 自身，也不关闭已接受工作需要的池。
+func (s *ServiceContext) CloseRootAndRelayIngress() {
+	if s.RootAdmission != nil {
+		s.RootAdmission.CloseAdmission()
+	}
+	if s.RelayIngress != nil {
+		s.RelayIngress.CloseAdmission()
+	}
+}
+
+// Close 保留旧入口，但不能把未完成的关闭结果吞成成功或提前销毁 SQL。
 func (s *ServiceContext) Close() {
-	if s.accountDirectoryCloser != nil {
-		_ = s.accountDirectoryCloser.Close()
+	if err := s.CloseAndReport(); err != nil {
+		logx.Errorf("data_service 关闭 HOLD，保留未决 owner/SQL: %v", err)
 	}
+}
+
+// CloseAndReport 只释放已经由进程 owner 真实 join 的资源；超时、未知或角色未关闭时保留池。
+func (s *ServiceContext) CloseAndReport() error {
 	if s == nil {
-		return
+		return nil
 	}
-	if s.Router != nil {
-		s.Router.Close()
+	s.lifecycleMu.Lock()
+	if s.closeCompleted {
+		previous := s.closeErr
+		s.lifecycleMu.Unlock()
+		return previous
 	}
-	if s.SnapshotStore != nil {
-		_ = s.SnapshotStore.Close()
+	s.lifecycleMu.Unlock()
+	if s.RootAdmission == nil || s.RelayAdmission == nil || s.RelayIngress == nil ||
+		!s.RootAdmission.Closed() || !s.RelayAdmission.Closed() || !s.RelayIngress.Closed() ||
+		s.RootAdmission.Pending() != 0 || s.RelayAdmission.Pending() != 0 || s.RelayIngress.Pending() != 0 {
+		return drainproof.ErrHold
 	}
-	if s.TxLogStore != nil {
-		_ = s.TxLogStore.Close()
+	for _, gate := range []*drainproof.Session{s.RootAdmission, s.RelayIngress, s.RelayAdmission} {
+		if err := gate.Wait(context.Background()); err != nil {
+			return err
+		}
 	}
-	if s.IdSegmentStore != nil {
-		_ = s.IdSegmentStore.Close()
-	}
-	if s.PlayerNameStore != nil {
-		_ = s.PlayerNameStore.Close()
-	}
-	if s.PlayerRouteStore != nil {
-		_ = s.PlayerRouteStore.Close()
-	}
+	s.closeOnce.Do(func() {
+		s.Writer.Seal()
+		for _, closer := range s.upstreamClosers {
+			if closer != nil {
+				s.closeErr = errors.Join(s.closeErr, closer.Close())
+			}
+		}
+		if s.accountDirectoryCloser != nil {
+			s.closeErr = errors.Join(s.closeErr, s.accountDirectoryCloser.Close())
+		}
+		if s.Router != nil {
+			s.closeErr = errors.Join(s.closeErr, s.Router.CloseAndReport())
+		}
+		if s.SnapshotStore != nil {
+			s.closeErr = errors.Join(s.closeErr, s.SnapshotStore.Close())
+		}
+		if s.TxLogStore != nil {
+			s.closeErr = errors.Join(s.closeErr, s.TxLogStore.Close())
+		}
+		if s.IdSegmentStore != nil {
+			s.closeErr = errors.Join(s.closeErr, s.IdSegmentStore.Close())
+		}
+		if s.PlayerNameStore != nil {
+			s.closeErr = errors.Join(s.closeErr, s.PlayerNameStore.Close())
+		}
+		if s.PlayerRouteStore != nil {
+			s.closeErr = errors.Join(s.closeErr, s.PlayerRouteStore.Close())
+		}
+		if s.closeErr != nil {
+			s.RelayAdmission.Hold()
+		}
+		s.lifecycleMu.Lock()
+		s.closeCompleted = true
+		s.lifecycleMu.Unlock()
+	})
+	return s.closeErr
 }

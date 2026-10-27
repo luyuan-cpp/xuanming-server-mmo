@@ -697,6 +697,7 @@ func (c *KeyOrderedKafkaConsumer) consumeOneOwnedRetry(l *claimLease) bool {
 		retryDone:          l.exit,
 		enqueuedAt:         time.Now(),
 	}
+	c.trackTask(retryTask)
 	select {
 	case w.taskCh <- retryTask:
 		metrics.CountRetryRoute(metrics.RetryModeOwner, metrics.RetryRouteExecuted)
@@ -945,6 +946,9 @@ func scanRetryPartitionKeys(ctx context.Context, rc redis.Cmdable, topic string)
 
 // RetryQueueDepthReport 是一个 topic 重试链路各列表的长度(只读盘点)。
 type RetryQueueDepthReport struct {
+	// OrphanProcessing来自完整processing前缀SCAN，不能只从registry反查而漏掉孤儿。
+	OrphanProcessing  map[string]int64
+	ModesWithoutLease []string
 	// Shared 是共享收件箱 kafka:retry:queue:{topic} 的长度。
 	Shared int64
 	// Partitioned 是 p 键 → 长度:p0..p{N-1} 全部列出(不存在为 0),另加 SCAN 到的越界 / 多余 p 键。
@@ -987,12 +991,12 @@ func (r RetryQueueDepthReport) OwnerInstances() []string {
 // 正常回滚前 shared 实例在线、紧急回滚后旧镜像实例也在续租,登记表都不为空;全为空多半是 topic / Redis / DB / zone 指错了
 // (所有键都不存在时盘点照样全 0、不报错)。只有该 zone 全部 go/db 都已正常停机时才会真的全空。
 func (r RetryQueueDepthReport) LooksUnused() bool {
-	return len(r.Instances) == 0 && r.Shared == 0 && r.Dead == 0 && r.LegacyProcessing == 0 && r.PartitionedTotal() == 0
+	return len(r.Instances) == 0 && len(r.OrphanProcessing) == 0 && len(r.ModesWithoutLease) == 0 && r.Shared == 0 && r.Dead == 0 && r.LegacyProcessing == 0 && r.PartitionedTotal() == 0
 }
 
 // RetryQueueDepths 盘点 topic 的重试链路:各列表 LLEN、ZRANGE 登记表、HMGET 模式 HASH、SCAN p*。只读;任一读失败返回 error。
 func RetryQueueDepths(ctx context.Context, rc redis.Cmdable, topic string, partitionCount int32) (RetryQueueDepthReport, error) {
-	report := RetryQueueDepthReport{Partitioned: map[string]int64{}, Instances: map[string]int64{}, InstanceModes: map[string]string{}}
+	report := RetryQueueDepthReport{OrphanProcessing: map[string]int64{}, Partitioned: map[string]int64{}, Instances: map[string]int64{}, InstanceModes: map[string]string{}}
 	if err := validateRetryQueueTarget(topic, partitionCount); err != nil {
 		return report, err
 	}
@@ -1039,9 +1043,57 @@ func RetryQueueDepths(ctx context.Context, rc redis.Cmdable, topic string, parti
 			return report, err
 		}
 	}
+
+	registered := map[string]bool{}
+	for _, id := range instances {
+		registered[id] = true
+	}
+	cursor := uint64(0)
+	seenProcessing := map[string]bool{}
+	for {
+		keys, next, scanErr := rc.Scan(ctx, cursor, escapeRedisGlob(retryLegacyProcessingKey(topic))+":*", 256).Result()
+		if scanErr != nil {
+			return report, scanErr
+		}
+		for _, key := range keys {
+			if seenProcessing[key] {
+				continue
+			}
+			seenProcessing[key] = true
+			if len(seenProcessing) > 16384 {
+				return report, errors.New("retry processing扫描超过16K预算")
+			}
+			id := strings.TrimPrefix(key, retryLegacyProcessingKey(topic)+":")
+			if id == "" {
+				return report, errors.New("retry processing实例名为空")
+			}
+			if !registered[id] {
+				n, err := llen(key)
+				if err != nil {
+					return report, err
+				}
+				report.OrphanProcessing[key] = n
+			}
+		}
+		cursor = next
+		if cursor == 0 {
+			break
+		}
+	}
+	allModes, err := rc.HGetAll(ctx, retryInstanceModesKey(topic)).Result()
+	if err != nil {
+		return report, err
+	}
+	for id := range allModes {
+		if !registered[id] {
+			report.ModesWithoutLease = append(report.ModesWithoutLease, id)
+		}
+	}
+	sort.Strings(report.ModesWithoutLease)
 	if len(instances) == 0 {
 		return report, nil
 	}
+
 	modes, err := rc.HMGet(ctx, retryInstanceModesKey(topic), instances...).Result()
 	if err != nil {
 		return report, fmt.Errorf("retry queue depths: hmget %s: %w", retryInstanceModesKey(topic), err)

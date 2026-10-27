@@ -29,7 +29,13 @@ $patchDir = $PSScriptRoot
 $repoRoot = Split-Path -Parent (Split-Path -Parent $patchDir)
 
 # 补丁文件名约定:<子模块名>-<用途>.patch,子模块目录 = third_party/<子模块名>
-$patches = Get-ChildItem -Path $patchDir -Filter '*.patch' | Sort-Object Name
+$patches = @(Get-ChildItem -Path $patchDir -Filter '*.patch' | Sort-Object Name)
+# BoringSSL 已独立，复用固定清单中的同一补丁，不保留第二份内容。
+$boringSslPatch = Join-Path $repoRoot 'tools/patches/boringssl/windows-x509-name.patch'
+if (-not (Test-Path -LiteralPath $boringSslPatch -PathType Leaf)) {
+    throw "缺少登记的独立 BoringSSL 补丁：$boringSslPatch"
+}
+$patches += Get-Item -LiteralPath $boringSslPatch
 
 if ($patches.Count -eq 0) {
     Write-Host "没有找到任何 .patch 文件" -ForegroundColor Yellow
@@ -42,7 +48,7 @@ $failed  = 0
 
 foreach ($patch in $patches) {
     # 取第一个 '-' 之前的部分作为子模块名
-    $submodule = ($patch.BaseName -split '-')[0]
+    $submodule = if ($patch.FullName -eq $boringSslPatch) { 'boringssl' } else { ($patch.BaseName -split '-')[0] }
     $target = Join-Path $repoRoot "third_party/$submodule"
 
     if (-not (Test-Path $target)) {

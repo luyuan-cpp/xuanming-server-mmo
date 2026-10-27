@@ -8,7 +8,7 @@
     deploy/k8s/Dockerfile.java-svc 构建成独立镜像。
     镜像命名:{Registry}/{ImageName}:{Tag}
 
-    Dockerfile.java-svc 的 build context 必须是 java/<service>/ 目录
+    Dockerfile.java-svc 的 build context 必须是R仓库根目录，包含java reactor及正式proto源。
     (多阶段:temurin JDK + maven 打包 → temurin JRE alpine 运行)。
 
     dev_tools.ps1 的 java-svc-build-image / java-svc-push-image / build-images
@@ -44,7 +44,10 @@ param(
     # 发布版本号 vX.Y.Z(可空 = 快照构建),为空时回落 $env:MMORPG_RELEASE_VERSION;非空时脏树一律拒绝。
     [string]$Version = "",
     # push / release 推送后把 "ref -> repo@sha256:..." 合并写进这个 JSON;回读不到 digest 视为失败。
-    [string]$DigestsOut = ""
+    [string]$DigestsOut = "",
+    # 显式已批准的Linux protoc原件目录(只含protoc)；不安装、下载或使用Windows exe替代。
+    [string]$LinuxProtocDir = "",
+    [string]$LinuxProtocSha256 = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -95,7 +98,7 @@ $BuildCommit = if ($script:ReleaseStamp.Ok) { $script:ReleaseStamp.Commit } else
 # InvariantCulture + 引号包住分隔符:自定义格式里的 ':' 是"区域时间分隔符",不是字面冒号。
 $BuildTime = [DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH':'mm':'ss'Z'", [System.Globalization.CultureInfo]::InvariantCulture)
 
-# 服务目录表:name → { Dir (java/ 下的目录,即 build context), ImageName }
+# 服务目录表:name → { Dir (java/ 下的reactor module), ImageName }
 # ImageName 必须与 k8s_deploy.ps1 $JavaSvcCatalogue 的 ImageName 一致,否则 zone-up 拉不到镜像。
 # auth(mmorpg-auth)在 $JavaSvcCatalogue 里有条目,但仓库里没有对应的 java/<auth>/ 独立工程
 # (springboot_satoken_auth_starter 是 starter 库,不是可打包的服务),所以这里刻意不列:
@@ -114,13 +117,21 @@ function Invoke-Build {
         throw "Dockerfile not found: $Dockerfile"
     }
 
+    if(-not [IO.Path]::IsPathRooted($LinuxProtocDir) -or $LinuxProtocSha256 -cnotmatch '^[a-f0-9]{64}$'){throw '构建必须明确已批准LinuxProtocDir与LinuxProtocSha256；不猜下载地址或借Windows生成器'}
+    $toolDir=Get-Item -LiteralPath $LinuxProtocDir -ErrorAction Stop
+    if(-not $toolDir.PSIsContainer -or $toolDir.Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Linux protoc输入必须为非链接原件目录'}
+    $toolFiles=@(Get-ChildItem -LiteralPath $LinuxProtocDir -Force)
+    if($toolFiles.Count -ne 1 -or $toolFiles[0].Name -cne 'protoc' -or $toolFiles[0].PSIsContainer -or $toolFiles[0].Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Linux protoc上下文只能包含具名非链接protoc原件'}
+    if((Get-FileHash -LiteralPath $toolFiles[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant() -cne $LinuxProtocSha256){throw 'Linux protoc原件SHA不符'}
+    $toolStream=[IO.File]::OpenRead($toolFiles[0].FullName)
+    try{$magic=[byte[]]::new(4);if($toolStream.Read($magic,0,4) -ne 4 -or [Convert]::ToHexString($magic) -cne '7F454C46'){throw 'Linux protoc必须为已批准ELF原件，不能传入PE或脚本'}}finally{$toolStream.Dispose()}
     foreach ($kv in $Catalogue.GetEnumerator()) {
         $svc  = $kv.Key
         $info = $kv.Value
-        $context = Join-Path $JavaRoot $info.Dir
+        $context = $RepoRoot
         $fullImage = Get-ImageFullName -ImageName $info.ImageName
 
-        if (-not (Test-Path (Join-Path $context "pom.xml"))) {
+        if (-not (Test-Path (Join-Path (Join-Path $JavaRoot $info.Dir) "pom.xml")) -or -not (Test-Path (Join-Path $JavaRoot "pom.xml")) -or -not (Test-Path (Join-Path $RepoRoot 'proto/common/database/rollback_database_table.proto'))) {
             throw "Java 服务 $svc 的 build context 里没有 pom.xml:$context"
         }
 
@@ -132,6 +143,9 @@ function Invoke-Build {
         $buildArgs = @(
             "build",
             "-f", $Dockerfile,
+            "--build-context", "qualified-protoc=$LinuxProtocDir",
+            "--build-arg", "LINUX_PROTOC_SHA256=$LinuxProtocSha256",
+            "--build-arg", "SERVICE=$($info.Dir)",
             "--build-arg", "BUILD_VERSION=$BuildVersion",
             "--build-arg", "BUILD_COMMIT=$BuildCommit",
             "--build-arg", "BUILD_TIME=$BuildTime",

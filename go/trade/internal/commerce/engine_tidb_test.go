@@ -3,11 +3,9 @@ package commerce
 import (
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	"net/http"
@@ -17,7 +15,7 @@ import (
 	tradepb "proto/trade"
 	"schemamigrate"
 	"shared/assetop"
-	"shared/authoritysql"
+	"shared/authoritysql/sqltest"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -47,35 +45,27 @@ func tiDBEngine(t *testing.T) *Engine {
 // requireTiDB=false 给一次性 MySQL 用(tick_isolation_db_test.go 的 realDBEngine):会话仍固定 RC,只是不设 TiDB 专用变量。
 func openEngineDB(t *testing.T, dsn string, requireTiDB bool) *Engine {
 	t.Helper()
-	cfg, err := mysql.ParseDSN(dsn)
-	require.NoError(t, err)
-	cfg.DBName = ""
-	admin, err := sql.Open("mysql", cfg.FormatDSN())
-	require.NoError(t, err)
+	if !requireTiDB {
+		t.Fatal("全球writer真实fixture必须使用已核TiDB资格，不能将MySQL冒充TiDB")
+	}
 	raw := make([]byte, 10)
-	_, err = rand.Read(raw)
+	_, err := rand.Read(raw)
 	require.NoError(t, err)
 	name := "commerce_it_" + hex.EncodeToString(raw)
-	_, err = admin.Exec("CREATE DATABASE `" + name + "`")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	opts, err := sqltest.OptionsFromEnv(dsn, name+"_writer", name)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		_, e := admin.Exec("DROP DATABASE `" + name + "`")
-		require.NoError(t, e)
-		require.NoError(t, admin.Close())
-	})
-	cfg.DBName = name
-	// TiDB 建表/预切 Region 可能超过运行池的 5s socket 预算。迁移使用正式独立迁移池，
-	// 完成后关闭；状态机仍使用原运行池及其业务超时，不因测试建表放宽资产请求预算。
-	migrationDB, err := authoritysql.OpenForMigration(context.Background(), cfg.FormatDSN(), name, requireTiDB)
+	fixture, err := sqltest.New(ctx, t, opts)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, migrationDB.Close()) })
-	report, err := schemamigrate.Up(context.Background(), migrationDB, schemamigrate.Options{Database: name, Tables: data.Tables()})
+	migrationDB, err := fixture.OpenSchema(ctx, name)
+	require.NoError(t, err)
+	report, err := schemamigrate.Up(ctx, migrationDB, schemamigrate.Options{Database: name, Tables: data.Tables()})
 	require.NoError(t, err)
 	require.Empty(t, report.Manual)
-	require.NoError(t, migrationDB.Close())
-	db, err := authoritysql.Open(context.Background(), cfg.FormatDSN(), name, requireTiDB, 12)
+	require.NoError(t, fixture.GrantProtoTables(ctx, name, data.Tables()))
+	db, err := fixture.Open(ctx, name, 12)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	ops, err := data.NewAssetOpRepo(db, 3*time.Second)
 	require.NoError(t, err)
 	require.NoError(t, ops.EnsureSeqGuardRow(context.Background(), uint64(time.Now().UnixMilli())))

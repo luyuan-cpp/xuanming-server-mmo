@@ -32,6 +32,8 @@ import (
 	"data_service/internal/store"
 	"data_service/internal/store/storetest"
 
+	pb "proto/common/database"
+	"shared/authoritysql"
 	"shared/placement"
 
 	"github.com/stretchr/testify/assert"
@@ -228,27 +230,38 @@ func TestRouteReconcile_WatermarkKeyDetectsRollback(t *testing.T) {
 	r4, err := st.AdvanceReconcile(ctx, reconcileTick(id, func(r *store.ReconcileTickRequest) {
 		r.WatermarkKey, r.SetCacheVerifiedMs = key, &cvm
 	}))
-	require.NoError(t, err)
+	var danger *store.RouteEmergencyError
+	require.ErrorAs(t, err, &danger)
+	require.Zero(t, r4, "失败不返回可提交结果")
+	r4 = danger.Observation
 	require.Equal(t, store.ReconcileTickFrozen, r4.Outcome, "③ watermark key ahead of the DB watermark is a rollback")
 	assert.Equal(t, store.RouteFreezeWatermarkRegressed, r4.FreezeReason)
 	assert.Equal(t, rolledBack, r4.WatermarkMs)
 	assert.Equal(t, before, readReconcileRowIT(t, db), "a freeze must not touch the watermark (GREATEST would wash the evidence) nor cvm")
+	observed, err := st.ReadRouteMeta(ctx)
+	require.NoError(t, err)
+	require.False(t, observed.Frozen(), "危险观察不冒充控制提交")
+	frozenReceipt, err := db.Freeze(freezeCtx(t))
+	require.NoError(t, err)
+	frozenStore := newMaintenanceRouteStore(t, db, frozenReceipt)
 	frozen, err := st.ReadRouteMeta(ctx)
 	require.NoError(t, err)
 	require.True(t, frozen.Frozen(), "writable=0")
 	assert.Equal(t, meta.Generation, frozen.Generation, "the freeze keeps the generation (deviation B1)")
 	_, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 8801, HomeZone: 7})
-	require.ErrorIs(t, err, store.ErrRouteNotWritable, "W1 is refused after the leader froze the writers")
+	require.ErrorIs(t, err, authoritysql.ErrWriterDenied, "正式冻结已永久退役原boot")
 
-	r5, err := st.AdvanceReconcile(ctx, reconcileTick(id, func(r *store.ReconcileTickRequest) { r.WatermarkKey = key }))
+	r5, err := frozenStore.AdvanceReconcile(ctx, reconcileTick(id, func(r *store.ReconcileTickRequest) { r.WatermarkKey = key }))
 	require.NoError(t, err)
 	assert.Equal(t, store.ReconcileTickAlreadyFrozen, r5.Outcome, "the next tick sees the freeze and writes nothing")
 	assert.Equal(t, rolledBack, readReconcileWatermark(t, db))
 
 	// ④ 出口(规格 §13.1 第 4 条):解冻把库水位抬到水位键给本世代的下限,之后同一把水位键不再触发冻结,W1 恢复。
-	changed, err := st.UnfreezeRouteWriters(freezeCtx(t), key.FloorFor(meta.Generation))
+	released, err := db.Release(freezeCtx(t), key.FloorFor(meta.Generation))
 	require.NoError(t, err)
-	require.True(t, changed)
+	require.Equal(t, pb.SqlWriterMaintenanceReceipt_RELEASED, released.Phase)
+	st = newRouteStore(t, db)
+	mustHoldLease(t, ctx, st, id)
 	assert.GreaterOrEqual(t, readReconcileWatermark(t, db), key.WatermarkMs)
 	r6, err := st.AdvanceReconcile(ctx, reconcileTick(id, func(r *store.ReconcileTickRequest) { r.WatermarkKey = key }))
 	require.NoError(t, err)
@@ -281,18 +294,27 @@ func TestRouteReconcile_GenerationMismatchFreezes(t *testing.T) {
 
 	before := readReconcileRowIT(t, db)
 	res, err := st.AdvanceReconcile(ctx, reconcileTick(id, func(r *store.ReconcileTickRequest) { r.WatermarkKey = key }))
-	require.NoError(t, err)
+	var danger *store.RouteEmergencyError
+	require.ErrorAs(t, err, &danger)
+	require.Zero(t, res)
+	res = danger.Observation
 	require.Equal(t, store.ReconcileTickFrozen, res.Outcome)
 	assert.Equal(t, store.RouteFreezeGenerationMismatch, res.FreezeReason)
 	assert.Equal(t, meta.Generation, res.Generation)
 	assert.Equal(t, before, readReconcileRowIT(t, db), "a freeze writes neither the watermark nor cvm")
+	observed, err := st.ReadRouteMeta(ctx)
+	require.NoError(t, err)
+	require.False(t, observed.Frozen(), "观察必须零控制DML")
+	frozenReceipt, err := db.Freeze(freezeCtx(t))
+	require.NoError(t, err)
+	frozenStore := newMaintenanceRouteStore(t, db, frozenReceipt)
 	after, err := st.ReadRouteMeta(ctx)
 	require.NoError(t, err)
 	assert.True(t, after.Frozen())
 	assert.Equal(t, meta.Generation, after.Generation, "the leader never changes the generation")
 	_, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 8901, HomeZone: 7})
-	require.ErrorIs(t, err, store.ErrRouteNotWritable)
-	again, err := st.FreezeByLeader(ctx, id, store.RouteFreezeCacheAhead, store.RouteFreezeTimeoutMin)
+	require.ErrorIs(t, err, authoritysql.ErrWriterDenied)
+	again, err := frozenStore.FreezeByLeader(ctx, id, store.RouteFreezeCacheAhead, store.RouteFreezeTimeoutMin)
 	require.NoError(t, err)
 	assert.Equal(t, store.ReconcileTickAlreadyFrozen, again.Outcome)
 }
@@ -316,13 +338,22 @@ func TestRouteReconcile_FreezeByLeaderCacheAhead(t *testing.T) {
 
 	before := readReconcileRowIT(t, db)
 	res, err := st.FreezeByLeader(ctx, id, store.RouteFreezeCacheAhead, store.RouteFreezeTimeoutMin)
-	require.NoError(t, err)
-	assert.Equal(t, store.ReconcileTickFrozen, res.Outcome)
+	var danger *store.RouteEmergencyError
+	require.ErrorAs(t, err, &danger)
+	require.Zero(t, res)
+	res = danger.Observation
+	require.Equal(t, store.ReconcileTickFrozen, res.Outcome)
 	assert.Equal(t, store.RouteFreezeCacheAhead, res.FreezeReason)
 	assert.Equal(t, before, readReconcileRowIT(t, db))
+	observed, err := st.ReadRouteMeta(ctx)
+	require.NoError(t, err)
+	require.False(t, observed.Frozen(), "观察必须零控制DML")
+	frozenReceipt, err := db.Freeze(freezeCtx(t))
+	require.NoError(t, err)
+	frozenStore := newMaintenanceRouteStore(t, db, frozenReceipt)
 	_, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 9001, HomeZone: 7})
-	require.ErrorIs(t, err, store.ErrRouteNotWritable)
-	again, err := st.FreezeByLeader(ctx, id, store.RouteFreezeCacheAhead, store.RouteFreezeTimeoutMin)
+	require.ErrorIs(t, err, authoritysql.ErrWriterDenied)
+	again, err := frozenStore.FreezeByLeader(ctx, id, store.RouteFreezeCacheAhead, store.RouteFreezeTimeoutMin)
 	require.NoError(t, err)
 	assert.Equal(t, store.ReconcileTickAlreadyFrozen, again.Outcome)
 }
@@ -388,105 +419,101 @@ func TestRouteReconcile_WatermarkMonotonic(t *testing.T) {
 func TestRouteReconcile_TickAndUnfreezeNoDeadlock(t *testing.T) {
 	requireReadsIT(t)
 	db := storetest.NewMigratedDB(t)
-	leaderStore, toolStore, w1Store := newRouteStore(t, db), newRouteStore(t, db), newRouteStore(t, db)
 	ctx := reconcileITCtx(t)
 	id := newReconcileLeaderID(t, "it-concurrent")
-	mustHoldLease(t, ctx, leaderStore, id)
-
 	const rounds = 40
-	var (
-		mu       sync.Mutex
-		failures []string
-		outcomes = map[string]int{}
-	)
+	var mu sync.Mutex
+	var failures []string
+	outcomes := map[string]int{}
+	var leaderRetries, w1Retries uint64
 	fail := func(format string, args ...any) {
 		mu.Lock()
 		defer mu.Unlock()
 		failures = append(failures, fmt.Sprintf(format, args...))
 	}
-	count := func(label string) {
-		mu.Lock()
-		defer mu.Unlock()
-		outcomes[label]++
-	}
-
-	start := make(chan struct{})
-	var wg sync.WaitGroup
-	wg.Add(3)
-	go func() { // leader:每拍一次;每 4 拍插一次 leader 冻结(cache_ahead)
-		defer wg.Done()
-		<-start
-		for i := 0; i < rounds; i++ {
+	count := func(label string) { mu.Lock(); defer mu.Unlock(); outcomes[label]++ }
+	// 每轮必须采用新boot；该SQL夹具没有外部队列，不把本用例当作生产非SQL排空验收。
+	for round := 0; round < rounds; round++ {
+		leaderStore, w1Store := newRouteStore(t, db), newRouteStore(t, db)
+		mustHoldLease(t, ctx, leaderStore, id)
+		floor, err := leaderStore.DBNowMs(ctx)
+		require.NoError(t, err)
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			<-start
 			res, err := leaderStore.AdvanceReconcile(ctx, reconcileTick(id, nil))
 			switch {
+			case errors.Is(err, authoritysql.ErrWriterDenied):
+				count("tick_retired")
 			case err != nil:
-				fail("tick %d: %v", i, err)
+				fail("tick %d: %v", round, err)
 			case res.Outcome == store.ReconcileTickAdvanced || res.Outcome == store.ReconcileTickAlreadyFrozen:
 				count("tick_" + res.Outcome.String())
 			default:
-				fail("tick %d: unexpected outcome %s", i, res.Outcome)
+				fail("tick %d: unexpected %s", round, res.Outcome)
 			}
-			if i%4 != 3 {
-				continue
+			if round%4 != 3 {
+				return
 			}
 			fr, err := leaderStore.FreezeByLeader(ctx, id, store.RouteFreezeCacheAhead, store.RouteFreezeTimeoutMin)
+			var danger *store.RouteEmergencyError
 			switch {
+			case errors.Is(err, authoritysql.ErrWriterDenied):
+				count("leader_retired")
+			case errors.As(err, &danger):
+				if danger.Observation.FreezeReason != store.RouteFreezeCacheAhead {
+					fail("危险原因不符")
+				}
+				count("leader_danger")
 			case err != nil:
-				fail("leader freeze %d: %v", i, err)
-			case fr.Outcome == store.ReconcileTickFrozen || fr.Outcome == store.ReconcileTickAlreadyFrozen:
-				count("leader_freeze_" + fr.Outcome.String())
+				fail("leader danger %d: %v", round, err)
+			case fr.Outcome == store.ReconcileTickAlreadyFrozen:
+				count("leader_already_frozen")
 			default:
-				fail("leader freeze %d: unexpected outcome %s", i, fr.Outcome)
+				fail("leader danger %d: unexpected %s", round, fr.Outcome)
 			}
-		}
-	}()
-	go func() { // route_tool:冻结 → 解冻;最低水位取库时钟 + 1,逼出 R21(并让下一拍的水位落在库时钟之后、走 R27 的 0 行分支)
-		defer wg.Done()
-		<-start
-		for i := 0; i < rounds; i++ {
-			fctx, fcancel := context.WithTimeout(ctx, store.RouteFreezeTimeoutMin)
-			if _, err := toolStore.FreezeRouteWriters(fctx); err != nil {
-				fail("tool freeze %d: %v", i, err)
-			}
-			floor, err := toolStore.DBNowMs(fctx)
-			if err != nil {
-				fail("tool clock %d: %v", i, err)
-			}
-			if _, err := toolStore.UnfreezeRouteWriters(fctx, floor+1); err != nil {
-				fail("tool unfreeze %d: %v", i, err)
-			}
-			fcancel()
-		}
-	}()
-	go func() { // W1:冻结期被拒是预期结局,其余错误都不该出现
-		defer wg.Done()
-		<-start
-		for i := 0; i < rounds; i++ {
-			res, err := w1Store.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 950001 + uint64(i), HomeZone: 7})
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			res, err := w1Store.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 950001 + uint64(round), HomeZone: 7})
 			switch {
-			case errors.Is(err, store.ErrRouteNotWritable):
+			case errors.Is(err, authoritysql.ErrWriterDenied) || errors.Is(err, store.ErrRouteNotWritable):
 				count("w1_not_writable")
 			case err != nil:
-				fail("w1 %d: %v", i, err)
+				fail("W1 %d: %v", round, err)
 			default:
 				count("w1_" + res.Outcome.String())
 			}
+		}()
+		close(start)
+		_, freezeErr := db.Freeze(freezeCtx(t))
+		wg.Wait()
+		if freezeErr != nil {
+			t.Fatalf("正式控制器冻结 %d: %v", round, freezeErr)
 		}
-	}()
-	close(start)
-	wg.Wait()
-
-	t.Logf("outcomes=%v lockRetries leader=%d tool=%d w1=%d", outcomes,
-		leaderStore.LockRetriesForTest(), toolStore.LockRetriesForTest(), w1Store.LockRetriesForTest())
-	require.Empty(t, failures, "concurrent tick / leader freeze / unfreeze / W1 must not fail")
-	assert.Zero(t, leaderStore.LockRetriesForTest(), "the tick and the leader freeze lock route_reconcile -> route_meta: no deadlock to retry")
-	assert.Zero(t, toolStore.LockRetriesForTest(), "unfreeze locks route_reconcile -> route_meta, the same direction: no deadlock to retry")
-	peek, err := leaderStore.PeekReconcileLease(ctx)
+		_, err = db.Release(freezeCtx(t), floor+1)
+		require.NoError(t, err)
+		_, err = w1Store.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 960001 + uint64(round), HomeZone: 7})
+		require.ErrorIs(t, err, authoritysql.ErrWriterDenied, "释放后旧池也不得复活")
+		leaderRetries += leaderStore.LockRetriesForTest()
+		w1Retries += w1Store.LockRetriesForTest()
+		require.NoError(t, leaderStore.Close())
+		require.NoError(t, w1Store.Close())
+	}
+	t.Logf("outcomes=%v lockRetries leader=%d w1=%d", outcomes, leaderRetries, w1Retries)
+	require.Empty(t, failures, "并发tick/正式控制器/W1不能形成锁环")
+	assert.Zero(t, leaderRetries, "新的统一锁顺序不应触发死锁重试")
+	assert.Zero(t, w1Retries, "W1与正式控制器不应死锁")
+	last := newRouteStore(t, db)
+	peek, err := last.PeekReconcileLease(ctx)
 	require.NoError(t, err)
-	assert.True(t, peek.HeldBy(id), "the leader still holds its lease")
+	assert.True(t, peek.HeldBy(id), "控制器不夺取对账租约")
 }
 
-// seedRouteRowUpdatedAtIT 绕过 store 造一行指定 updated_at_ms 的玩家(seedRouteRow 的 updated_at_ms 固定为 1)。
 func seedRouteRowUpdatedAtIT(t *testing.T, db *storetest.DB, player uint64, updatedAtMs uint64) {
 	t.Helper()
 	_, err := db.Raw.Exec(

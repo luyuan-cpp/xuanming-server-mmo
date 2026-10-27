@@ -24,7 +24,6 @@ import (
 	"proto/common/component"
 	plpb "proto/player_locator"
 	smpb "proto/scene_manager"
-	"shared/authoritysql"
 	"shared/ownerepoch"
 	"shared/savebarrier"
 	"shared/scenenode"
@@ -73,7 +72,7 @@ func TestFullstackOwnershipFaults(t *testing.T) {
 		t.Fatal("只允许显式专用玩家库")
 	}
 	ownershipFaultLocal(t, cfg.Addr)
-	r.db, err = authoritysql.Open(ctx, cfg.FormatDSN(), cfg.DBName, true, 4)
+	r.db, err = openFenceAdminPool(t, ctx, cfg.FormatDSN(), cfg.DBName, true, 4, false)
 	if err != nil {
 		t.Fatal("专用 TiDB 强会话校验失败")
 	}

@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -404,3 +406,162 @@ func decodeIntent(reply []interface{}) (intent, int64, error) {
 	}
 	return intent{version: fields[0], topic: fields[1], first: fields[2], second: fields[3]}, attempts, nil
 }
+
+// DrainHistorical在普通Run已join后由唯一owner调用。它完整读64桶及未索引barrier，
+// 原topic/两条原body按审定全集投递；只有既有双ACK脚本可回收已完成意图，不清理dead或未完成pending。
+// 返回值是本次实际发现仍待双ACK的意图数；0也必须再经portable verifier的独立全量闭包。
+func (r *Replay) DrainHistorical(ctx context.Context, topics []string) (int, error) {
+	if len(topics) == 0 || len(topics) > 128 {
+		return 0, errors.New("历史drain缺审定topic全集")
+	}
+	allowed := map[string]bool{}
+	for _, topic := range topics {
+		zone, err := topicZone(topic)
+		if err != nil || zone != r.cfg.ZoneID || allowed[topic] {
+			return 0, errors.New("历史drain topic不属于本zone或重复")
+		}
+		allowed[topic] = true
+	}
+	budget, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	indexed := map[uint64]float64{}
+	for b := uint64(0); b < BucketCount; b++ {
+		rows, err := r.rc.ZRangeWithScores(budget, pendingIndexKey(r.cfg.ZoneID, b), 0, -1).Result()
+		if err != nil {
+			return 0, err
+		}
+		if len(indexed)+len(rows) > 16384 {
+			return 0, errors.New("历史drain索引超过16K预算")
+		}
+		for _, row := range rows {
+			id, ok := row.Member.(string)
+			player, err := strconv.ParseUint(id, 10, 64)
+			if !ok || err != nil || player == 0 || kafkautil.DBTaskKey(player) != id || player%BucketCount != b || math.IsNaN(row.Score) || math.IsInf(row.Score, 0) {
+				return 0, errors.New("历史drain索引损坏")
+			}
+			if _, exists := indexed[player]; exists {
+				return 0, errors.New("历史drain重复玩家索引")
+			}
+			indexed[player] = row.Score
+		}
+	}
+	barriers := map[uint64]map[string]string{}
+	cursor := uint64(0)
+	for {
+		keys, next, err := r.rc.Scan(budget, cursor, "player:{*}:save_barrier", 256).Result()
+		if err != nil {
+			return 0, err
+		}
+		for _, key := range keys {
+			raw := strings.TrimSuffix(strings.TrimPrefix(key, "player:{"), "}:save_barrier")
+			id, err := strconv.ParseUint(raw, 10, 64)
+			if err != nil || id == 0 || savebarrier.Key(id) != key {
+				return 0, errors.New("历史drain遇到未知barrier键")
+			}
+			if _, seen := barriers[id]; seen {
+				continue
+			}
+			if len(barriers) >= 16384 {
+				return 0, errors.New("历史drain屏障超过16K预算")
+			}
+			fields, err := r.rc.HGetAll(budget, key).Result()
+			if err != nil {
+				return 0, err
+			}
+			barriers[id] = fields
+		}
+		cursor = next
+		if cursor == 0 {
+			break
+		}
+	}
+	for id := range indexed {
+		if _, exists := barriers[id]; !exists {
+			return 0, errors.New("历史drain索引没有原屏障")
+		}
+	}
+	remaining := 0
+	for id, fields := range barriers {
+		if err := budget.Err(); err != nil {
+			return remaining, err
+		}
+		in := intent{version: fields[fieldVersion], topic: fields[fieldTopic], first: fields[fieldFirst], second: fields[fieldSecond]}
+		hasOutbox := false
+		for name := range fields {
+			if strings.HasPrefix(name, "outbox_") {
+				hasOutbox = true
+			}
+		}
+		pending := fields["pending"]
+		if !hasOutbox {
+			if pending != "" || fields["player_database"] != "" || fields["player_database_1"] != "" {
+				epoch, seq, err := savebarrier.Parse(pending)
+				if err != nil || epoch == 0 || seq == 0 || fields["player_database"] != pending || fields["player_database_1"] != pending {
+					return remaining, errors.New("历史drain未索引屏障未完成")
+				}
+			}
+			if _, exists := indexed[id]; exists {
+				return remaining, errors.New("历史drain索引缺意图，保持原件")
+			}
+			continue
+		}
+		zone, err := validateIntent(id, in)
+		if err != nil {
+			return remaining, err
+		}
+		if zone != r.cfg.ZoneID {
+			continue
+		} // 同实例其它zone由其具名relay负责；最终verifier仍检查全体。
+		if !allowed[in.topic] || pending != in.version {
+			return remaining, errors.New("历史drain原topic未审定或版本漂移")
+		}
+		score, indexedHere := indexed[id]
+		if !indexedHere {
+			restored, err := restoreHistoricalIndexScript.Run(budget, r.rc, []string{savebarrier.Key(id), pendingIndexKey(r.cfg.ZoneID, id%BucketCount)}, kafkautil.DBTaskKey(id), in.version, in.topic, in.first, in.second).Int64()
+			if err != nil || restored != 1 {
+				return remaining, errors.New("历史drain未索引outbox的原子索引修复未确认")
+			}
+			score = 0
+			indexed[id] = score
+		}
+		if fields["player_database"] == pending && fields["player_database_1"] == pending {
+			now := r.now().UnixMilli()
+			if score >= float64(now) {
+				if score > float64(1<<52) {
+					return remaining, errors.New("历史drain索引时间超界")
+				}
+				now = int64(score) + 1
+			}
+			reply, err := claimScript.Run(budget, r.rc, []string{savebarrier.Key(id), pendingIndexKey(r.cfg.ZoneID, id%BucketCount)}, kafkautil.DBTaskKey(id), now, r.cfg.FirstReplayAfter.Milliseconds(), r.cfg.RetryAfter.Milliseconds(), r.cfg.MaxRetryAfter.Milliseconds(), r.cfg.MaxAttempts, 0, r.cfg.InflightWindow.Milliseconds(), r.cfg.RecheckAfter.Milliseconds()).Slice()
+			if err != nil || len(reply) == 0 || reply[0] != int64(2) {
+				return remaining, errors.New("历史drain双ACK回收未确认")
+			}
+			continue
+		}
+		remaining++
+		if fields[fieldTerminal] != "" {
+			return remaining, errors.New("历史drain存在terminal意图，保持原字节")
+		}
+		for _, payload := range []string{in.first, in.second} {
+			if err := r.pub.Publish(budget, in.topic, kafkautil.DBTaskKey(id), []byte(payload)); err != nil {
+				return remaining, err
+			}
+		}
+	}
+	return remaining, nil
+}
+
+// 未索引意图是完整扫描发现的原事实；只在原version/topic/两body逐字节仍相同时补回NX索引。
+// 不重写意图、版本、次数或terminal，不删除任何未完成pending。
+var restoreHistoricalIndexScript = redis.NewScript(`
+if redis.call('TYPE',KEYS[1]).ok ~= 'hash' then return redis.error_reply('historical barrier type') end
+local index_type=redis.call('TYPE',KEYS[2]).ok
+if index_type ~= 'none' and index_type ~= 'zset' then return redis.error_reply('historical index type') end
+if redis.call('HGET',KEYS[1],'pending') ~= ARGV[2]
+ or redis.call('HGET',KEYS[1],'outbox_version') ~= ARGV[2]
+ or redis.call('HGET',KEYS[1],'outbox_topic') ~= ARGV[3]
+ or redis.call('HGET',KEYS[1],'outbox_player_database') ~= ARGV[4]
+ or redis.call('HGET',KEYS[1],'outbox_player_database_1') ~= ARGV[5] then return 0 end
+redis.call('ZADD',KEYS[2],'NX',0,ARGV[1])
+return 1
+`)

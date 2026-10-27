@@ -408,7 +408,7 @@
       </PrecompiledHeaderFile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <AdditionalIncludeDirectories>./src/;../third_party/protobuf/src/;../third_party/protobuf/third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>./src/;../third_party/protobuf/src/;../third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>
@@ -445,7 +445,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>
       </PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>../../libs/base/common/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/muduo;../../../third_party/boost/;../../../third_party/exprtk/;../../../third_party/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;../../generated/;../../libs/engine/config/;../../libs/;../../libs/engine/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../libs/base/common/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/muduo;../../../third_party/boost/;../../../third_party/exprtk/;../../../third_party/;../../../third_party/protobuf/src/;../../../third_party/abseil-cpp/;../../generated/;../../libs/engine/config/;../../libs/;../../libs/engine/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4018;4244;4082;4267;4819;</DisableSpecificWarnings>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
@@ -473,7 +473,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>../../libs/base/common/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/muduo;../../../third_party/boost/;../../../third_party/exprtk/;../../../third_party/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;../../generated/;../../libs/engine/config/;../../libs/;../../libs/engine/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../libs/base/common/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/muduo;../../../third_party/boost/;../../../third_party/exprtk/;../../../third_party/;../../../third_party/protobuf/src/;../../../third_party/abseil-cpp/;../../generated/;../../libs/engine/config/;../../libs/;../../libs/engine/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>

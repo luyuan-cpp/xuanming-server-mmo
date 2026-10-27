@@ -40,7 +40,34 @@ function Invoke-DeployDryRun {
     if (-not ($fixtureArgs | Where-Object { $_ -match '^-GlobalAuthorityTiDBHost(?::|$)' })) {
         $fixtureArgs += @('-GlobalAuthorityTiDBHost', 'tidb.invalid:4000')
     }
-    return Invoke-CapturedPwsh -ScriptPath (Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1') -Arguments $fixtureArgs -Env $fixtureEnv
+    # 仅部署渲染夹具：两条空entry检验有限容量；实际registrar仍必须校验完整正式请求，不能用本夹具注册。
+    $fixtureRoot=Join-Path ([IO.Path]::GetTempPath()) ('mmorpg-roster-render-'+[Guid]::NewGuid().ToString('N'))
+    $null=[IO.Directory]::CreateDirectory($fixtureRoot)
+    try {
+        if(-not $fixtureEnv.ContainsKey('MMORPG_SQL_K8S_BOOT_CATALOG')){
+            $rosterPath=Join-Path $fixtureRoot 'roster.json'
+            [IO.File]::WriteAllText($rosterPath,'{"format":"SQL_WRITER_BOOT_ROSTER_V1","entries":[{},{}]}',[Text.UTF8Encoding]::new($false))
+            $rosterSha=(Get-FileHash -LiteralPath $rosterPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            $zone='contract-test';$prefix='mmorpg-zone';$infra='mmorpg-infra'
+            for($i=0;$i -lt $fixtureArgs.Count-1;$i++){
+                switch($fixtureArgs[$i]){'-ZoneName'{$zone=$fixtureArgs[$i+1]};'-NamespacePrefix'{$prefix=$fixtureArgs[$i+1]};'-InfraNamespace'{$infra=$fixtureArgs[$i+1]}}
+            }
+            $catalog=@{}
+            foreach($ns in @(($prefix+'-'+$zone),$infra)){
+                foreach($svc in @('login','gateway','data-service','db','chat','friend','guild','mail','match','player-inbox','rank','trade')){
+                    $catalog[$ns+'/'+$svc]=@{requestSecret='fixture-request';registrarSecret='fixture-registrar';registrarImage=('fixture.invalid/registrar@sha256:'+('a'*64));physicalAuthoritySha256=('b'*64);runtimeConfigSecret='fixture-runtime';replicas=2;rosterFile=$rosterPath;rosterSha256=$rosterSha;schemaConfigSecret='fixture-schema-config';schemaPermissionSecret='fixture-schema-permission'}
+                }
+            }
+            $catalogPath=Join-Path $fixtureRoot 'catalog.json'
+            [IO.File]::WriteAllText($catalogPath,($catalog | ConvertTo-Json -Depth 8 -Compress),[Text.UTF8Encoding]::new($false))
+            $fixtureEnv.MMORPG_SQL_K8S_BOOT_CATALOG=$catalogPath
+        }
+        return Invoke-CapturedPwsh -ScriptPath (Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1') -Arguments $fixtureArgs -Env $fixtureEnv
+    } finally {
+        $full=[IO.Path]::GetFullPath($fixtureRoot);$allowed=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar
+        if(-not $full.StartsWith($allowed,[StringComparison]::OrdinalIgnoreCase) -or (Split-Path -Leaf $full) -notlike 'mmorpg-roster-render-*'){throw '渲染夹具清理范围非法'}
+        Remove-Item -LiteralPath $full -Recurse -Force
+    }
 }
 
 # 一次 DryRun 供多个用例复用(子进程启动比断言贵得多)
@@ -8787,6 +8814,58 @@ Test-Case 'B0-4 lib 纵深防御:Get-ClientEntryNodeBaseEnv 只写小写 enforce
         $message = ''
         try { Get-ClientEntryNodeBaseEnv -PodCommon (New-ClientEntryPodCommon @common -OpenFileLimitMode $bad) -RpcPort 20000 | Out-Null } catch { $message = $_.Exception.Message }
         Assert-Match -Text $message -Pattern 'OpenFileLimitMode 只收小写' -Because "'$bad' 必须在渲染时 throw:C++ 只认小写,其余值会被进程静默当成 enforce"
+    }
+}
+
+Test-Case '有限roster模板绑定真实PodUID且normal不持registrar或其他boot配置' {
+    . "$PSScriptRoot/../maintenance_drain.ps1"
+    $source=Join-Path $PSScriptRoot '../k8s_deploy.ps1'
+    $tk=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($source,[ref]$tk,[ref]$errors)
+    if($errors.Count){throw '部署源解析失败，不能用其它断言掩盖'}
+    foreach($name in @('Get-SqlRuntimeManifestRange','Get-SqlWriterDeploymentEntry','Add-SqlWriterBootManifest')){
+        $definition=$ast.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name},$true)
+        Set-Item -Path "Function:script:$name" -Value $definition.Body.GetScriptBlock()
+    }
+    $taskRoot=Join-Path ([IO.Path]::GetTempPath()) ('mmorpg-sql-deploy-'+[Guid]::NewGuid().ToString('N'))
+    $null=[IO.Directory]::CreateDirectory($taskRoot)
+    $savedCatalog=[Environment]::GetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG','Process')
+    $savedRepo=$RepoRoot
+    try {
+        $RepoRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
+        $template=Get-Content -LiteralPath (Join-Path $RepoRoot 'deploy/k8s/manifests/go-svc/data-service.yaml') -Raw
+        # 容量来自正式roster原件；每个Pod只能由init领取一个未消费的entry。
+        $single=[regex]::Replace($template,'(?m)^  replicas:\s*\d+\s*$','  replicas: 1')
+        $roster=Join-Path $taskRoot 'roster.json';$null=Write-MaintenanceImmutableJson -Path $roster -Value @{format='SQL_WRITER_BOOT_ROSTER_V1';entries=@(@{},@{})}
+        $entry=@{requestSecret='fixture-request';registrarSecret='fixture-registrar';registrarImage=('fixture.invalid/registrar@sha256:'+('a'*64));physicalAuthoritySha256=('b'*64);runtimeConfigSecret='fixture-runtime';replicas=1;rosterFile=$roster;rosterSha256=(Get-FileHash -LiteralPath $roster -Algorithm SHA256).Hash.ToLowerInvariant()}
+        $catalog=Join-Path $taskRoot 'catalog.json';$null=Write-MaintenanceImmutableJson -Path $catalog -Value @{'fixture/data-service'=$entry}
+        [Environment]::SetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG',$catalog,'Process')
+        $rendered=Add-SqlWriterBootManifest -ManifestContent $single -Namespace fixture -SvcName data-service
+        Assert-True -Condition ($rendered -notmatch 'PLACEHOLDER_SQL_WRITER_') -Because '真实boot占位全部必须固定'
+        Assert-Match -Text $rendered -Pattern 'fieldPath: metadata.uid' -Because '部署身份必须来自真实PodUID'
+        Assert-Match -Text $rendered -Pattern '"-roster-sha256"' -Because 'init必须再次核已批准有限roster原件'
+        $range=Get-SqlRuntimeManifestRange -ManifestContent $rendered -SvcName data-service
+        $normal=$rendered.Substring($range.Start,$range.End-$range.Start)
+        Assert-True -Condition ($normal -notmatch 'MMORPG_SQL_REGISTRAR_DSN|MMORPG_SQL_OPERATOR_PRINCIPAL|name: sql-writer-runtime-input|name: sql-writer-request') -Because 'init控制能力和其他boot完整凭据不泄漏给normal容器'
+        Assert-Match -Text $normal -Pattern 'readOnly: true' -Because 'grant源对normal只读'
+        $multi=[regex]::Replace($single,'(?m)^  replicas: 1\s*$','  replicas: 2')
+        $message='';try{$null=Add-SqlWriterBootManifest -ManifestContent $multi -Namespace fixture -SvcName data-service}catch{$message=$_.Exception.Message}
+        Assert-Match -Text $message -Pattern '副本集合不符' -Because '真实副本数必须与已批准部署输入相符'
+        $entry.replicas=2
+        $multiCatalog=Join-Path $taskRoot 'multi-catalog.json';$null=Write-MaintenanceImmutableJson -Path $multiCatalog -Value @{'fixture/data-service'=$entry}
+        [Environment]::SetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG',$multiCatalog,'Process')
+        $renderedMulti=Add-SqlWriterBootManifest -ManifestContent $multi -Namespace fixture -SvcName data-service
+        Assert-Match -Text $renderedMulti -Pattern '(?m)^  replicas: 2\s*$' -Because '两个独立entry允许两个Pod，不得退化为强制单副本'
+        $entry.replicas=3
+        $tooManyCatalog=Join-Path $taskRoot 'too-many-catalog.json';$null=Write-MaintenanceImmutableJson -Path $tooManyCatalog -Value @{'fixture/data-service'=$entry}
+        [Environment]::SetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG',$tooManyCatalog,'Process')
+        $message='';try{$null=Get-SqlWriterDeploymentEntry -Namespace fixture -SvcName data-service}catch{$message=$_.Exception.Message}
+        Assert-Match -Text $message -Pattern '有限roster不能覆盖' -Because '容量不足必须在渲染前拒绝，不能由重启临时补entry'
+    } finally {
+        $RepoRoot=$savedRepo
+        [Environment]::SetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG',$savedCatalog,'Process')
+        $full=[IO.Path]::GetFullPath($taskRoot);$allowed=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar
+        if(-not $full.StartsWith($allowed,[StringComparison]::OrdinalIgnoreCase) -or (Split-Path -Leaf $full) -notlike 'mmorpg-sql-deploy-*'){throw '夹具清理范围非法'}
+        Remove-Item -LiteralPath $full -Recurse -Force
     }
 }
 

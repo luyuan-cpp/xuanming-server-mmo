@@ -54,7 +54,7 @@ func newAccountDirectoryStore(cfg MySQLConfig, requireTiDB bool, maxRoles, maxOp
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	db, err := authoritysql.Open(ctx, buildDSN(cfg), cfg.DBName, requireTiDB, maxOpenConn)
+	db, err := authoritysql.Open(ctx, buildDSN(cfg), cfg.DBName, requireTiDB, maxOpenConn, cfg.Permission)
 	if err != nil {
 		return nil, err
 	}

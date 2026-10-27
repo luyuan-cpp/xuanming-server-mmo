@@ -15,7 +15,7 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 @Configuration
 public class DatabaseConfiguration {
     @Bean Clock commerceClock() { return Clock.systemUTC(); }
-    @Bean DataSource dataSource(DataSourceProperties source, CommerceProperties props) {
+    @Bean DataSource dataSource(DataSourceProperties source, CommerceProperties props) throws java.io.IOException, java.sql.SQLException {
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl(source.getUrl()); config.setUsername(source.getUsername()); config.setPassword(source.getPassword());
         config.setMaximumPoolSize(16); config.setConnectionTimeout(3000); config.setValidationTimeout(2000);
@@ -30,7 +30,14 @@ public class DatabaseConfiguration {
         } else if (source.getUrl() != null && source.getUrl().startsWith("jdbc:mysql:")) {
             config.setConnectionInitSql("SET SESSION sql_mode='STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION',innodb_lock_wait_timeout=5");
         }
-        return new HikariDataSource(config);
+        var credentials=new java.util.Properties();credentials.putAll(config.getDataSourceProperties());
+        credentials.setProperty("user",source.getUsername());credentials.setProperty("password",source.getPassword());
+        String init=config.getConnectionInitSql();
+        var boot=com.game.authority.WriterAuthority.consumeEnvironment();
+        config.setDataSource(new com.game.authority.AuthorityDataSource(source.getUrl(),credentials,
+                boot,props.isRequireTidb(),init==null?java.util.List.of():java.util.List.of(init)));
+        config.setConnectionInitSql(null);
+        return new HikariDataSource(config){@Override public void close(){boot.seal();super.close();}};
     }
     @Bean @DependsOnDatabaseInitialization
     InitializingBean commerceSchemaReady(JdbcTemplate jdbc, CommerceProperties props, DataSource source) {

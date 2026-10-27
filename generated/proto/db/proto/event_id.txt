@@ -25,7 +25,7 @@
 24=reserved:OnSceneCreated
 25=reserved:OnSceneDestroyed
 26=reserved:OnServerStart
-27=PlayerMigrationEvent
+27=reserved:PlayerMigrationEvent
 28=reserved:PlayerUpgradeEvent
 29=reserved:RegisterPlayerEvent
 30=reserved:S2CEnterScene
@@ -39,7 +39,7 @@
 38=ContractsKafkaBroadcastToPlayersEvent
 39=ContractsKafkaPushToPlayerEvent
 40=ContractsKafkaBroadcastToSceneEvent
-41=PlayerMigrationAckEvent
+41=reserved:PlayerMigrationAckEvent
 42=BattleSettlementEvent
 43=reserved:ContractsKafkaBindBattleEvent
 44=reserved:ContractsKafkaUnbindBattleEvent

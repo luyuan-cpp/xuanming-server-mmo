@@ -83,7 +83,7 @@ MySQL:
 # 建表策略(D-14 §4):不写或 true = 启动时 schemamigrate.Up(GET_LOCK 串行,锁忙重试 3 次);
 # false = 只跑只读 Plan,不干净就拒绝启动,并提示 `guild -f etc/guild.yaml -migrate`。K8s 非 dev 档固定 false。
 Schema:
-  AutoMigrate: true
+  AutoMigrate: false
 
 Node:
   ZoneId: 1

@@ -652,7 +652,7 @@ Agones 段 7000–7009 → 7100–7109;前置条件新增端口预检、「先�
 ### 上线之前:代码验证(由 Codex 执行,Claude 未编译、未测试)
 
 1. **proto 重生**。注意:`cd go && build.bat` 只包装 goctl,**不会**重生 pb 产物。AGENTS.md §4.1 的旧写法要等用户确认后再改,本文不改 AGENTS.md。正确做法(仓库根):
-   - 把 `third_party\grpc\install_vs2026_dbg\bin` 放到 PATH 最前,`protoc --version` 必须是 `libprotoc 35.1`。
+   - 把独立 Protobuf 安装目录 `third_party\protobuf\install_vs2026_dbg\bin` 放到当前子进程 PATH 最前,`protoc --version` 必须是 `libprotoc 35.1`；2026-10-26 起不再使用旧 gRPC SDK 目录。
    - 核对客户端仓 `tools/gen_proto.ps1` 收录了 team / jubaozhai / friend 三行;缺任何一行,就用一份 `enable_unity_client: false` 的配置副本。
    - `pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command proto-gen-build`,再 `pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -UseBinary -ConfigPath tools/proto_generator/protogen/etc/proto_gen.yaml`。
    - 之后在 `robot` 目录执行 `go mod vendor`。

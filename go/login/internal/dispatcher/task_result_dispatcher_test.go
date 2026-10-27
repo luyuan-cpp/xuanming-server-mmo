@@ -399,3 +399,34 @@ func TestSweepExpired_TimesOutWithoutResult(t *testing.T) {
 		t.Fatal("expired registration still pending after sweep")
 	}
 }
+
+func TestStopAndReportDoesNotDiscardPendingCallbacks(t *testing.T) {
+	d, _ := newUnitDispatcher(t)
+	delivered := false
+	d.Register("drain-pending", time.Hour, func(*db_proto.TaskResult, error) { delivered = true })
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := d.StopAndReport(ctx); err == nil {
+		t.Fatal("pending未完成却成功停止")
+	}
+	if delivered || !isPending(d, "drain-pending") {
+		t.Fatal("超时清掉了pending或伪造回调")
+	}
+	callback := d.take("drain-pending")
+	callback(nil, nil)
+	if err := d.WaitIdle(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDrainTimeoutCallbackRemainsUnknown(t *testing.T) {
+	d, _ := newUnitDispatcher(t)
+	d.Register("unknown-server", time.Hour, func(*db_proto.TaskResult, error) {})
+	d.BeginDrain()
+	cb := d.take("unknown-server")
+	cb(nil, context.DeadlineExceeded)
+	d.callbacks.CloseAdmission()
+	if err := d.callbacks.Wait(context.Background()); err == nil {
+		t.Fatal("TTL/取消被当成server undo")
+	}
+}

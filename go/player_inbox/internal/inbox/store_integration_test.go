@@ -33,11 +33,14 @@ package inbox
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
 	"os"
+	"shared/authoritysql/sqltest"
 	"sort"
 	"strconv"
 	"strings"
@@ -56,7 +59,6 @@ import (
 	inboxpb "proto/player_inbox"
 
 	"schemamigrate"
-	"shared/authoritysql"
 
 	"github.com/go-sql-driver/mysql"
 	"google.golang.org/protobuf/proto"
@@ -226,25 +228,24 @@ func openIntegration(t *testing.T) *itEnv {
 	if parsed.Net != "tcp" || addrErr != nil || portErr != nil || port == 0 || address == nil || !address.IsLoopback() {
 		t.Fatal("全球Inbox原生SQL夹具只允许数值loopback的合法TiDB端口")
 	}
-	db, err := authoritysql.Open(context.Background(), dsn, parsed.DBName, true, 64)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	var nonce [8]byte
+	if _, err = rand.Read(nonce[:]); err != nil {
+		t.Fatal(err)
+	}
+	dbName := "player_inbox_it_" + strconv.FormatUint(binary.LittleEndian.Uint64(nonce[:]), 10) + "_1"
+	opts, err := sqltest.OptionsFromEnv(dsn, dbName+"_writer", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
-	db.SetMaxOpenConns(64)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	var dbName string
-	if err := db.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&dbName); err != nil || dbName == "" {
-		t.Fatalf("DSN 必须带库名: %v", err)
+	fixture, err := sqltest.New(ctx, t, opts)
+	if err != nil {
+		t.Fatal(err)
 	}
-	// 下面每个用例都会 DROP 表与 schemamigrate 台账:DSN 指错库(mmorpg_player_inbox、testdb、zone_N_db …)就会清掉
-	// 那个库的数据。所以第一条 DROP 之前按白名单断言库名(评审 L14,照 go/guild 的 guildTestDBNamePattern)。
-	if !inboxTestDBNamePattern.MatchString(dbName) {
-		t.Fatalf("测试 DSN 指向库 %q:只允许 player_inbox_it 或 player_inbox_it_<pid>_<n>"+
-			"(本组用例会 DROP 收件箱三张表与 schema_migrations,防止误删 mmorpg_player_inbox / data_service / trade / go/db 的表与台账)",
-			dbName)
+	db, err := fixture.OpenSchema(ctx, dbName)
+	if err != nil {
+		t.Fatal(err)
 	}
 	for _, stmt := range []string{
 		"DROP TABLE IF EXISTS account_role_admission",
@@ -274,6 +275,16 @@ func openIntegration(t *testing.T) *itEnv {
 		}
 	}
 	if err = createInboxFixtureRouteTables(ctx, db, dbName); err != nil {
+		t.Fatal(err)
+	}
+	if err = fixture.GrantProtoTables(ctx, dbName, data.Tables()); err != nil {
+		t.Fatal(err)
+	}
+	if err = fixture.GrantTables(ctx, dbName, "account_role", "account_role_admission", "route_meta", "player_route", "zone_merge_fence", "zone_merged_into", "route_reconcile"); err != nil {
+		t.Fatal(err)
+	}
+	db, err = fixture.Open(ctx, dbName, 64)
+	if err != nil {
 		t.Fatal(err)
 	}
 	roles, err := NewSQLRoleAuthority(ctx, db, dbName)

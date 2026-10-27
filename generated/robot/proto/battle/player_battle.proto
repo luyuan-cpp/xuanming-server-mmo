@@ -6,7 +6,7 @@ import "proto/common/base/tip.proto";
 import "proto/common/base/empty.proto";
 import "proto/battle/battle_data.proto";
 
-// 注意:不能加 cc_generic_services(与 grpc_cpp_plugin 冲突)。
+// 本契约只生成普通 Protobuf 消息，不启用 cc_generic_services 或官方 gRPC 服务桩。
 // service BattleClientPlayer 与 (OptionFileDefaultNode)=NODE_BATTLE 必须保留:直连面的上行白名单
 // (BattleClientPlayer*MessageId)与全部 Notify* 消息号都由它发号,删了会重新发号、打破客户端契约。
 // battle 节点不再实现它的 gRPC 服务端(gate 中继已删,turn-based §22 D66/D67)。

@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"shared/authoritysql/sqltest"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -20,10 +21,14 @@ import (
 	mailpb "proto/mail"
 	rankpb "proto/rank"
 	"schemamigrate"
-	"shared/authoritysql"
 )
 
 func rankFixture(t *testing.T) (context.Context, *sql.DB, NextID) {
+	ctx, db, next, _ := rankFixtureWithWriter(t)
+	return ctx, db, next
+}
+
+func rankFixtureWithWriter(t *testing.T) (context.Context, *sql.DB, NextID, *sqltest.Fixture) {
 	t.Helper()
 	address := os.Getenv("MAIL_RANK_TEST_TIDB")
 	if address == "" {
@@ -42,33 +47,31 @@ func rankFixture(t *testing.T) (context.Context, *sql.DB, NextID) {
 		t.Fatal(err)
 	}
 	database := "rank_it_" + hex.EncodeToString(random[:])
-	admin, err := authoritysql.Open(ctx, "root@tcp("+address+")/mysql", "mysql", true, 2)
+	opts, err := sqltest.OptionsFromEnv("root@tcp("+address+")/mysql", database+"_writer", database)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = admin.ExecContext(ctx, "CREATE DATABASE "+database); err != nil {
-		admin.Close()
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		defer admin.Close()
-		clean, stop := context.WithTimeout(context.Background(), 5*time.Second)
-		defer stop()
-		if _, e := admin.ExecContext(clean, "DROP DATABASE "+database); e != nil {
-			t.Errorf("清随机库: %v", e)
-		}
-	})
-	db, err := authoritysql.Open(ctx, "root@tcp("+address+")/"+database, database, true, 8)
+	fixture, err := sqltest.New(ctx, t, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close() })
-	report, err := schemamigrate.Up(ctx, db, schemamigrate.Options{Database: database, Tables: Tables()})
+	install, err := fixture.OpenSchema(ctx, database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := schemamigrate.Up(ctx, install, schemamigrate.Options{Database: database, Tables: Tables()})
 	if err != nil || len(report.Manual) > 0 {
 		t.Fatalf("schema: %v %+v", err, report)
 	}
+	if err = fixture.GrantProtoTables(ctx, database, Tables()); err != nil {
+		t.Fatal(err)
+	}
+	db, err := fixture.Open(ctx, database, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var next atomic.Uint64
-	return ctx, db, func(context.Context) (uint64, error) { return next.Add(1), nil }
+	return ctx, db, func(context.Context) (uint64, error) { return next.Add(1), nil }, fixture
 }
 
 func rankDataFixtureEndpoint(address string) error {
@@ -197,14 +200,14 @@ func TestTiDBFreezeFailureRollsBackEverySnapshotAndIntent(t *testing.T) {
 	}
 }
 
-func independentRankPool(t *testing.T, ctx context.Context, original *sql.DB) *sql.DB {
+func independentRankPool(t *testing.T, ctx context.Context, original *sql.DB, fixture *sqltest.Fixture) *sql.DB {
 	t.Helper()
 	var database string
 	require.NoError(t, original.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&database))
 	require.Regexp(t, regexp.MustCompile(`^rank_it_[0-9a-f]{16}$`), database)
 	address := os.Getenv("MAIL_RANK_TEST_TIDB")
 	require.NoError(t, rankDataFixtureEndpoint(address))
-	db, err := authoritysql.Open(ctx, "root@tcp("+address+")/"+database, database, true, 8)
+	db, err := fixture.Open(ctx, database, 8)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	first, err := original.Conn(ctx)
@@ -221,8 +224,8 @@ func independentRankPool(t *testing.T, ctx context.Context, original *sql.DB) *s
 }
 
 func TestTiDBRankIndependentPoolsReplayConflictFreezeAndRewardFence(t *testing.T) {
-	ctx, db, next := rankFixture(t)
-	peerDB := independentRankPool(t, ctx, db)
+	ctx, db, next, fixture := rankFixtureWithWriter(t)
+	peerDB := independentRankPool(t, ctx, db, fixture)
 	first := New(db, next, next, next, func(uint32) bool { return true })
 	second := New(peerDB, next, next, next, func(uint32) bool { return true })
 	// 固定业务时钟，不靠真实等待驱动租约过期。

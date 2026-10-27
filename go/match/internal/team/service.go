@@ -615,12 +615,12 @@ func (s *Service) launchMatch(ctx context.Context, caller uint64, configId uint3
 		// 补偿不继承请求 ctx(§A.3 第 7 条):后台清锁,结果推全员(含发起人)。回包里的视图可能仍是 STARTING,
 		// 客户端按 (epoch, version) 排序,随后到达的 MATCH_FAILED 视图版本更新。
 		tip := tipOf(ErrMemberNotReady, failed) // 推给队员的 MATCH_FAILED 带同一个原因(§E.1 第 7 步、§H.2)
-		asyncFn("match.team.end_match", func() { s.finishMatch(teamId, token, lockTTL, false, roster, tip) })
+		s.launchRelay("match.team.end_match", func() { s.finishMatch(teamId, token, lockTTL, false, roster, tip) })
 		return s.respond(ctx, caller, ErrMemberNotReady, failed)
 	}
 	resp := s.commitResponse(ctx, caller, lock)
 	log.Infof("[team] Team battle start accepted team=%d config=%d roster=%v", teamId, configId, roster)
-	asyncFn("match.gather.pve_team", func() {
+	s.launchRelay("match.gather.pve_team", func() {
 		ok := s.starter.RunGather(configId, roster, tickets)
 		if formation != nil {
 			query, stop := context.WithTimeout(context.Background(), 3*time.Second)
@@ -682,7 +682,7 @@ func (s *Service) finishMatch(teamId uint64, token string, lockTTL time.Duration
 // 一场从没开始过的开战。锁没写入时 EndMatch 读到 token 不符即停止,不写。
 // lockTTL 是这次加锁(可能已落盘)用的锁时长。
 func (s *Service) releaseLockInBackground(teamId uint64, token string, lockTTL time.Duration) {
-	asyncFn("match.team.end_match", func() {
+	s.launchRelay("match.team.end_match", func() {
 		res := s.store.EndMatch(teamId, token, false, lockTTL)
 		commits := repairCommits(res.Repairs)
 		if res.Commit != nil {

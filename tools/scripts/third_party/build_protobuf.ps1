@@ -29,7 +29,7 @@ try {
     if (-not $ZlibInstallRoot) {
         $archSuffix = if ($Architecture -eq 'x86') { '_x86' } else { '' }
         $configSuffix = if ($Configuration -eq 'Debug') { 'dbg' } else { 'rel' }
-        $ZlibInstallRoot = Join-Path $context.RepoRoot "third_party/zlib/install_vs2026${archSuffix}_$configSuffix"
+        $ZlibInstallRoot = Join-Path $context.RepoRoot "build/third_party/zlib-v1.3.2${archSuffix}-$configSuffix/install"
     }
     $zlibRoot = (Resolve-Path -LiteralPath $ZlibInstallRoot).Path.Replace('\', '/')
     $zlibName = if ($Configuration -eq 'Debug') { 'zlibstaticd.lib' } else { 'zlibstatic.lib' }
@@ -45,14 +45,15 @@ try {
     $prefix = $context.InstallPath.Replace('\', '/')
     Invoke-SdkCMake $context $context.SourceRoot (Join-Path $context.BuildPath 'protobuf') -Options @(
         '-Dprotobuf_BUILD_TESTS=OFF', '-Dprotobuf_BUILD_CONFORMANCE=OFF', '-Dprotobuf_BUILD_EXAMPLES=OFF',
-        '-Dprotobuf_BUILD_SHARED_LIBS=OFF', '-Dprotobuf_MSVC_STATIC_RUNTIME=OFF', '-Dprotobuf_BUILD_LIBUPB=OFF',
+        # Protobuf 35.1 的 libprotoc 自身依赖 libupb；它属于编译器实现，不是 gRPC 运行时。
+        '-Dprotobuf_BUILD_SHARED_LIBS=OFF', '-Dprotobuf_MSVC_STATIC_RUNTIME=OFF', '-Dprotobuf_BUILD_LIBUPB=ON',
         '-Dprotobuf_BUILD_PROTOC_BINARIES=ON', '-Dprotobuf_LOCAL_DEPENDENCIES_ONLY=ON',
         '-Dprotobuf_FORCE_FETCH_DEPENDENCIES=OFF', "-Dabsl_DIR=$prefix/lib/cmake/absl", "-DCMAKE_PREFIX_PATH=$prefix",
         '-Dprotobuf_WITH_ZLIB=ON', '-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=OFF', '-DZLIB_USE_STATIC_LIBS=ON',
         "-DZLIB_INCLUDE_DIR=$zlibRoot/include", "-DZLIB_LIBRARY=$zlibRoot/lib/$zlibName",
         "-DZLIB_LIBRARY_DEBUG=$zlibRoot/lib/$zlibName", "-DZLIB_LIBRARY_RELEASE=$zlibRoot/lib/$zlibName")
     $postfix = if ($Configuration -eq 'Debug') { 'd' } else { '' }
-    Assert-SdkArtifacts $context @("lib/libprotobuf$postfix.lib", "lib/libprotoc$postfix.lib", 'bin/protoc.exe',
+    Assert-SdkArtifacts $context @("lib/libprotobuf$postfix.lib", "lib/libprotoc$postfix.lib", "lib/libupb$postfix.lib", 'bin/protoc.exe',
         'lib/absl_base.lib', 'lib/libutf8_range.lib', 'lib/libutf8_validity.lib',
         'include/google/protobuf/message.h', 'include/utf8_validity.h', 'lib/cmake/protobuf/protobuf-config.cmake')
 } finally { Restore-SdkEnvironment $savedEnvironment }

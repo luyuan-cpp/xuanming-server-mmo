@@ -22,6 +22,7 @@ import (
 	databasepb "proto/common/database"
 
 	"shared/assetop"
+	"shared/authoritysql"
 	"shared/generated/persistschema"
 	"shared/ownerepoch"
 	"shared/placement"
@@ -54,6 +55,8 @@ import (
 // owner 挡住;带 -replace 重跑即可收敛。不会出现半套数据被当成有效存档加载,也不会让本地旧父快照借快路径复活。
 
 type bundleImportOptions struct {
+	// 一次装配后显式传到每个SQL池，不能从env再次消费同boot。
+	permission   authoritysql.Permission
 	dbConfigPath string
 	configPath   string
 	localZone    uint32
@@ -312,7 +315,7 @@ func persistSchemaGenOf(msg proto.Message) uint64 {
 
 // ── 执行 ───────────────────────────────────────────────────────────────
 
-func runBundleImport(ctx context.Context, raw []byte, opts bundleImportOptions) error {
+func runBundleImport(ctx context.Context, raw []byte, opts bundleImportOptions) (runErr error) {
 	b, err := parseBundle(raw)
 	if err != nil {
 		return err
@@ -355,6 +358,10 @@ func runBundleImport(ctx context.Context, raw []byte, opts bundleImportOptions) 
 		return nil
 	}
 
+	if opts.permission.Kind() != "writer" {
+		return errors.New("实际导入必须显式注入同boot Writer Permission")
+	}
+
 	// 写前闸门一:写目标必须是本机(或显式放行的本地服务名)。先按配置校验,再建任何连接。
 	if err := debugutil.CheckLocalWriteTarget("MySQL", cfg.ServerConfig.Database.Hosts, opts.allowHosts); err != nil {
 		return err
@@ -366,34 +373,34 @@ func runBundleImport(ctx context.Context, raw []byte, opts bundleImportOptions) 
 		return err
 	}
 
-	db, _, _, err := debugutil.OpenZoneDBNamed(ctx, opts.dbConfigPath, localZone, targetDB)
+	db, _, _, err := debugutil.OpenZoneDBNamedWithPermission(ctx, opts.dbConfigPath, localZone, targetDB, opts.permission)
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { runErr = errors.Join(runErr, db.Close()) }()
 	rdb, err := debugutil.OpenRedis(ctx, core)
 	if err != nil {
 		return err
 	}
-	defer rdb.Close()
+	defer func() { runErr = errors.Join(runErr, rdb.Close()) }()
 	mappingClient := rdb
 	if mapping != core {
 		if mappingClient, err = debugutil.OpenRedis(ctx, mapping); err != nil {
 			return fmt.Errorf("go/db 映射 Redis: %w", err)
 		}
-		defer mappingClient.Close()
+		defer func() { runErr = errors.Join(runErr, mappingClient.Close()) }()
 	}
 
 	// 写前闸门二:目标实例不能就是导出来源。port-forward 之后线上实例也在 127.0.0.1,只看地址拦不住。
-	if err := checkNotExportSource(ctx, b.Sources, db, rdb, mappingClient, dsCfg, opts.allowUnverifiedTarget); err != nil {
+	if err := checkNotExportSource(ctx, b.Sources, db, rdb, mappingClient, dsCfg, opts.allowUnverifiedTarget, opts.permission); err != nil {
 		return err
 	}
 
-	svcCtx, cleanup, err := debugutil.NewServiceContext(opts.configPath)
+	svcCtx, cleanup, err := debugutil.NewServiceContextWithPermissionAndReport(opts.configPath, opts.permission)
 	if err != nil {
 		return err
 	}
-	defer cleanup()
+	defer func() { runErr = errors.Join(runErr, cleanup()) }()
 
 	local, err := inspectLocalPlayer(ctx, db, rdb, mappingClient, svcCtx.Router, plan)
 	if err != nil {
@@ -406,11 +413,13 @@ func runBundleImport(ctx context.Context, raw []byte, opts bundleImportOptions) 
 	if err != nil {
 		return err
 	}
-	directory, err := store.NewAccountDirectoryStore(svc.MySQLConfigOf(dsCfg), true, dsCfg.AccountDirectory.MaxRoles(), directoryMaxOpen)
+	directoryConfig := svc.MySQLConfigOf(dsCfg)
+	directoryConfig.Permission = opts.permission
+	directory, err := store.NewAccountDirectoryStore(directoryConfig, true, dsCfg.AccountDirectory.MaxRoles(), directoryMaxOpen)
 	if err != nil {
 		return fmt.Errorf("目标全局账号目录未就绪: %w", err)
 	}
-	defer directory.Close()
+	defer func() { runErr = errors.Join(runErr, directory.Close()) }()
 	if err := directory.ConfigureAssetContracts(dsCfg.AccountDirectory.RoleTradeTradeSchema, dsCfg.AccountDirectory.RoleTradeGuildSchema, dsCfg.AccountDirectory.RoleTradeMailSchema, dsCfg.AccountDirectory.RoleTradeMatchSchema, dsCfg.AccountDirectory.RoleTradeInboxSchema); err != nil {
 		return err
 	}
@@ -529,18 +538,18 @@ func printBundlePlan(b *debugutil.Bundle, plan *importPlan, localZone uint32, op
 // checkNotExportSource 是写前闸门二:每个写目标都要证明自己不是导出来源,证明不了就拒绝(fail-closed)。
 // 这里只补开 data_service 的两个探测连接(MappingRedis、全局库);取身份与本地标记、判定都在
 // target_identity.go 的 checkBundleWriteTargets(2026-10-22,r2-ds#1 及评审补充)。
-func checkNotExportSource(ctx context.Context, src debugutil.BundleSources, db *sql.DB, core, mapping *redis.Client, dsCfg config.Config, allowUnverified bool) error {
+func checkNotExportSource(ctx context.Context, src debugutil.BundleSources, db *sql.DB, core, mapping *redis.Client, dsCfg config.Config, allowUnverified bool, permission authoritysql.Permission) (runErr error) {
 	targets := bundleWriteTargets{zoneDB: db, coreRedis: core, mappingRedis: mapping}
 	if host := strings.TrimSpace(dsCfg.MappingRedis.Host); host != "" {
 		client := redis.NewClient(&redis.Options{Addr: host, Password: dsCfg.MappingRedis.Pass})
-		defer client.Close()
+		defer func() { runErr = errors.Join(runErr, client.Close()) }()
 		targets.dataServiceMapping = client
 	}
-	global, err := debugutil.OpenMySQL(ctx, debugutil.GlobalMySQL(dsCfg), 1)
+	global, err := debugutil.OpenMySQLWithPermission(ctx, debugutil.GlobalMySQL(dsCfg), 1, permission)
 	if err != nil {
 		return fmt.Errorf("核对目标全局SQL实例失败: %w", err)
 	}
-	defer global.Close()
+	defer func() { runErr = errors.Join(runErr, global.Close()) }()
 	targets.globalDB = global
 	return checkBundleWriteTargets(ctx, src, targets, allowUnverified)
 }

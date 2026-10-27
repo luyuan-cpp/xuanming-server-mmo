@@ -15,11 +15,14 @@ package main
 // TestMain只在探针全部通过后创建、结束时删除固定一次性库：zone_901_db、zone_902_db、
 // player_store_1000901_db、merge_zone_it_db/_guild/_trade/_friend/_route。所有业务真实库均不触碰。
 // 路由五表直接读取go/data_service/internal/store/schema.go权威DDL，保持聚簇主键、CHECK与64行片一致。
-// Redis只清TestMain已确认原本为空的DB9/10/11；Kafka积压通过显式attestation或fakeLagSource注入。
+// MERGE_ZONE_IT_SQL_DOMAIN_ONLY=1时只运行TestIT_SQLDomain*，使用真实sqltest自有随机schema；不连Redis、不构建CLI。
+// 全CLI用例需正式全栈runner提供实际Kafka/Redis/P0原件，不以attestation或假队列补票。
 // 每个集成测试第一句requireIT(t)，普通构建中的AST守卫检查此约束；未运行任何用例不得声称通过。
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,7 +36,180 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/redis/go-redis/v9"
+	"shared/authoritysql/sqltest"
+	"shared/drainproof"
 )
+
+// SQL域使用真实自有schema/注册/退休/NORMAL冻结；TOOL仅注入本机Session接缝。
+// 此处不构造完整Kafka/Redis P0，不发布MAINTENANCE原件，也不代替全CLI runner。
+func itSQLMaintenanceDomain(t *testing.T) (context.Context, *maintenanceTool, *sql.DB, string, string) {
+	t.Helper()
+	var nonce [8]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		t.Fatal(err)
+	}
+	prefix := "merge_domain_" + hex.EncodeToString(nonce[:])
+	authority, source, target := prefix+"_a", prefix+"_s", prefix+"_t"
+	opts, err := sqltest.OptionsFromEnv(itMySQLBase, authority, source, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+	fixture, err := sqltest.New(base, t, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, schema := range []string{source, target} {
+		if err := fixture.PrepareOwnedSchema(base, schema, func(ctx context.Context, db *sql.DB) error {
+			_, err := db.ExecContext(ctx, "CREATE TABLE player_database(player_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,transform VARBINARY(128) NOT NULL)")
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seed, err := fixture.OpenSchema(base, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := seed.ExecContext(base, "INSERT INTO player_database(player_id,transform) VALUES(1,'source-one'),(2,'source-two')"); err != nil {
+		t.Fatal(err)
+	}
+	frozen, err := fixture.Freeze(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if frozen.Evidence == nil || frozen.Evidence.GetTicket() == nil {
+		t.Fatal("缺正式NORMAL ticket evidence")
+	}
+	proof := &normalFreezeProof{runID: frozen.RunId, ticketID: frozen.Evidence.GetTicket().TicketId,
+		requestID: frozen.RequestId, receiptDigest: frozen.ReceiptDigest, epoch: frozen.AfterEpoch, authoritySchema: authority}
+	owner := &maintenanceTool{session: drainproof.New(), check: func(ctx context.Context) error { return proof.check(ctx, fixture.Operator) }}
+	ctx := context.WithValue(base, maintenanceContextKey{}, owner)
+	ctx = withNormalFreezeProof(ctx, proof)
+	owner.context = ctx
+	if err := checkMaintenanceTool(ctx); err != nil {
+		t.Fatal(err)
+	}
+	return ctx, owner, fixture.Operator, source, target
+}
+
+func TestIT_SQLDomainMaintenanceCopyDeleteUsesRealNormalFreeze(t *testing.T) {
+	requireIT(t)
+	ctx, owner, db, source, target := itSQLMaintenanceDomain(t)
+	if n, err := copyOneTable(ctx, db, source+".player_database", target+".player_database", []string{"player_id", "transform"}, []uint64{1, 2}); err != nil || n != 2 {
+		t.Fatalf("真实冻结维护copy: n=%d err=%v", n, err)
+	}
+	if owner.session.Pending() != 0 {
+		t.Fatal("copy提交/回滚返回前不能settle")
+	}
+	var count int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM `"+target+"`.player_database").Scan(&count); err != nil || count != 2 {
+		t.Fatalf("目标实际行: %d %v", count, err)
+	}
+	n, refused, err := deletePlayerRows(ctx, db, source, target, "player_database", []uint64{1, 2}, false)
+	if err != nil || n != 2 || len(refused) != 0 {
+		t.Fatalf("真实冻结维护delete: n=%d refused=%v err=%v", n, refused, err)
+	}
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM `"+target+"`.player_database").Scan(&count); err != nil || count != 0 {
+		t.Fatalf("删除实际行: %d %v", count, err)
+	}
+	owner.session.CloseAdmission()
+	if err := owner.session.Wait(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := copyOneTable(ctx, db, source+".player_database", target+".player_database", []string{"player_id", "transform"}, []uint64{1}); !errors.Is(err, drainproof.ErrClosed) {
+		t.Fatalf("TOOL闭合后不得新BEGIN: %v", err)
+	}
+}
+
+func TestIT_SQLDomainMaintenanceRejectsDriftBeforeWrite(t *testing.T) {
+	requireIT(t)
+	ctx, owner, db, source, target := itSQLMaintenanceDomain(t)
+	proof := *normalFreezeFromContext(ctx)
+	proof.receiptDigest = append([]byte(nil), proof.receiptDigest...)
+	proof.receiptDigest[0] ^= 1
+	bad := withNormalFreezeProof(ctx, &proof)
+	if _, err := copyOneTable(bad, db, source+".player_database", target+".player_database", []string{"player_id", "transform"}, []uint64{1}); !errors.Is(err, errNormalFreezeProof) {
+		t.Fatalf("事务内真实冻结原件漂移必须拒写: %v", err)
+	}
+	var count int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM `"+target+"`.player_database").Scan(&count); err != nil || count != 0 {
+		t.Fatalf("漂移后必须零写: %d %v", count, err)
+	}
+	owner.session.CloseAdmission()
+	if err := owner.session.Wait(ctx); !errors.Is(err, drainproof.ErrHold) {
+		t.Fatalf("拒绝/rollback不得清除HOLD: %v", err)
+	}
+}
+
+// 此两例只验证真实Redis工厂/返回边界；SQL资格读取通过测试接缝注入，不声称覆盖正式P0/NORMAL票据。
+func TestIT_MaintenanceRedisFactoryRejectsAfterPermanentClose(t *testing.T) {
+	requireIT(t)
+	itReset(t)
+	ctx, owner := testMaintenanceContext()
+	client, err := newToolDataRedisClient(ctx, []string{itRedisAddr}, "", itMappingRD)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := client.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	key := "merge:it:tool:closed"
+	if err := client.Set(context.Background(), key, "before", 0).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if owner.session.Pending() != 0 {
+		t.Fatal("命令真实返回后必须settle")
+	}
+	owner.session.CloseAdmission()
+	if err := client.Set(context.Background(), key, "after", 0).Err(); !errors.Is(err, drainproof.ErrClosed) {
+		t.Fatalf("闭合后必须拒新命令: %v", err)
+	}
+	control := itRedis(t, itMappingRD)
+	value, err := control.Get(context.Background(), key).Result()
+	if err != nil || value != "before" {
+		t.Fatalf("被拒命令不得到达真实Redis: %q %v", value, err)
+	}
+	if err := owner.session.Wait(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+func TestIT_MaintenanceRedisPipelineErrorHoldsActualPartialResult(t *testing.T) {
+	requireIT(t)
+	itReset(t)
+	ctx, owner := testMaintenanceContext()
+	client, err := newToolDataRedisClient(ctx, []string{itRedisAddr}, "", itMappingRD)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := client.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	if err := client.Set(ctx, "merge:it:tool:wrongtype", "string", 0).Err(); err != nil {
+		t.Fatal(err)
+	}
+	pipe := client.Pipeline()
+	good := pipe.Set(ctx, "merge:it:tool:partial", "sent", 0)
+	bad := pipe.HSet(ctx, "merge:it:tool:wrongtype", "field", "value")
+	if _, err := pipe.Exec(ctx); err == nil || bad.Err() == nil || good.Err() != nil {
+		t.Fatalf("必须保真实逐命令返回: top=%v good=%v bad=%v", err, good.Err(), bad.Err())
+	}
+	if owner.session.Pending() != 0 {
+		t.Fatal("真实pipeline返回后才能settle")
+	}
+	owner.session.CloseAdmission()
+	if err := owner.session.Wait(ctx); !errors.Is(err, drainproof.ErrHold) {
+		t.Fatalf("部分成功不能生成工具成功: %v", err)
+	}
+	if value, err := itRedis(t, itMappingRD).Get(ctx, "merge:it:tool:partial").Result(); err != nil || value != "sent" {
+		t.Fatalf("保留实际部分副作用: %q %v", value, err)
+	}
+}
 
 // 真实TiDB与Redis测试地址；旧MySQL环境变量仅保留参数名兼容。
 const (
@@ -79,6 +255,7 @@ func itPlayerSchemas() []string {
 }
 
 var itBinary string
+var itSQLDomainOnly bool
 
 func itDSN() string {
 	return itSchemaDSN(itDefaultDB)
@@ -88,6 +265,16 @@ func itDSN() string {
 // `go test` 也只打一行 ok,看不出一个用例都没跑。现在不可达时照样 m.Run(),每个用例由 requireIT 逐条 SKIP
 // (MERGE_ZONE_IT_REQUIRE=1 时 FAIL)。依赖就绪之后的建库 / 编译失败仍是真失败,退出码 1。
 func TestMain(m *testing.M) {
+	if os.Getenv("MERGE_ZONE_IT_SQL_DOMAIN_ONLY") == "1" {
+		itSQLDomainOnly = true
+		var err error
+		raw := firstNonEmpty(os.Getenv(itTiDBEnv), os.Getenv(itMySQLEnv))
+		itMySQLBase, err = itNormalizeMySQLBase(raw)
+		if raw == "" || err != nil {
+			itUnavailable = "SQL域runner必须显式注入已核loopback TiDB基址"
+		}
+		os.Exit(m.Run())
+	}
 	root, reason := itProbeDependencies()
 	if reason != "" {
 		itUnavailable = reason
@@ -204,6 +391,15 @@ func itMissing(t *testing.T, reason string) {
 // requireIT 是每个集成用例的第一句(it_guard_test.go 钉住):TestMain 探测到依赖不可达时 SKIP / FAIL。
 func requireIT(t *testing.T) {
 	t.Helper()
+	if itSQLDomainOnly {
+		if !strings.HasPrefix(t.Name(), "TestIT_SQLDomain") {
+			t.Fatal("SQL域runner不能代替全CLI/Redis夹具；请显式选择TestIT_SQLDomain")
+		}
+		if itUnavailable != "" {
+			t.Fatal(itUnavailable)
+		}
+		return
+	}
 	if itUnavailable != "" {
 		itMissing(t, itUnavailable)
 	}
@@ -1772,7 +1968,6 @@ func itCommand(t *testing.T, args ...string) *exec.Cmd {
 		"-notice-redis-db", strconv.Itoa(itSharedRD),
 		"-scene-redis-db", strconv.Itoa(itSceneRD),
 		"-table-list-json", itTableListFile(t),
-		"-assume-kafka-drained",
 		"-trade-schema", itTradeDB,
 		"-guild-schema", itGuildDB,
 		"-friend-schema", itFriendDB,

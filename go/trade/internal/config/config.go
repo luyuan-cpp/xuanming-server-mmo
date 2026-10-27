@@ -397,7 +397,7 @@ func (c MySQLConf) RequiresTiDB() bool { return c.RequireTiDB == nil || *c.Requi
 
 // SchemaConf 建表策略(D-14 第 4 条)。
 type SchemaConf struct {
-	// AutoMigrate 为 nil(没写)或 true:启动时跑 schemamigrate.Up;false:启动时只跑只读 Plan,
+	// AutoMigrate 为 nil(没写)或 false 时常驻启动仅核对；显式迁移才跑 schemamigrate.Up;false:启动时只跑只读 Plan,
 	// 发现待执行语句或需人工项即拒绝启动。
 	//
 	// 用 *bool 而不是 `bool json:",default=true"`:go-zero 不下钻一个整段 optional 且未出现的
@@ -440,9 +440,9 @@ func (c Config) RequestBudget() time.Duration {
 	return time.Duration(c.Timeout)*time.Millisecond - InBandReplyReserve
 }
 
-// ShouldAutoMigrate 是启动路径跑 Up 还是只跑 Plan 的唯一判据:没写 = Up。
+// ShouldAutoMigrate 识别显式自动迁移请求；常驻入口会拒绝true，没写默认只读核对。
 func (c Config) ShouldAutoMigrate() bool {
-	return c.Schema.AutoMigrate == nil || *c.Schema.AutoMigrate
+	return c.Schema.AutoMigrate != nil && *c.Schema.AutoMigrate
 }
 
 // IsRelaxedMode 报告 go-zero Mode 是否为 dev / test(与 go/login/internal/config/secrets.go 同一判据)。

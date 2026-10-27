@@ -32,7 +32,8 @@ param(
     [switch]$Build,
     [string]$Filter = '',
     [int]$TimeoutSeconds = 120,
-    [string]$Configuration = 'Debug',
+    # 当前统一输出目录只由 Debug|x64 工程保证；不把旧 Debug EXE 冒充 Release。
+    [ValidateSet('Debug')][string]$Configuration = 'Debug',
     [string]$LogDir = ''
 )
 
@@ -65,10 +66,12 @@ $projects = [ordered]@{
     'missions_test'            = 'cpp\tests\missions_test\missions.vcxproj'
     'muduo_grpc_test'          = 'cpp\tests\muduo_grpc_test\muduo_grpc_test.vcxproj'
     'node_sequence_test'       = 'cpp\tests\node_sequence_test\server_sequence.vcxproj'
+    'player_landing_test'      = 'cpp\tests\player_landing_test\player_landing_test.vcxproj'
     'proto_field_checker_test' = 'cpp\tests\proto_field_checker_test\proto_field_checker_test.vcxproj'
     'readfile2string_test'     = 'cpp\tests\readfile2string_test\readfile2string.vcxproj'
     'reward_test'              = 'cpp\tests\reward_test\reward.vcxproj'
     'rpc_controller_test'      = 'cpp\tests\rpc_controller_test\rpc_controller_test.vcxproj'
+    'routing_identity_test'    = 'cpp\tests\routing_identity_test\routing_identity_test.vcxproj'
     'skill_test'               = 'cpp\tests\skill_test\skill_test.vcxproj'
     'snow_flake_test'          = 'cpp\tests\snow_flake_test\snow_flake.vcxproj'
     'time_meter_test'          = 'cpp\tests\time_meter_test\time_meter_test.vcxproj'
@@ -115,9 +118,11 @@ if ($Build) {
         }
         # 串行 /m:1:并发会报假的 C1041/LNK1104
         $log = & $msbuild $proj /m:1 /p:Configuration=$Configuration /p:Platform=x64 /nologo /v:minimal 2>&1
+        $buildExitCode = $LASTEXITCODE
+        if ($LogDir) { $log | Set-Content -LiteralPath (Join-Path $LogDir "$name.build.log") -Encoding utf8 }
         $err = $log | Select-String -Pattern 'error [A-Z]+[0-9]+' | Select-Object -First 1
-        if ($err) {
-            $msg = ($err.ToString().Trim() -replace '\s+', ' ')
+        if ($buildExitCode -ne 0 -or $err) {
+            $msg = if ($err) { $err.ToString().Trim() -replace '\s+', ' ' } else { "MSBuild 退出码 $buildExitCode，禁止运行旧 EXE" }
             if ($msg.Length -gt 160) { $msg = $msg.Substring(0, 160) }
             $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'FAIL'; 结果 = $msg })
         }
@@ -131,80 +136,116 @@ foreach ($dll in @('zlibd.dll', 'rdkafka.dll', 'rdkafka++.dll')) {
     foreach ($dir in $dllSourceDirs) {
         $src = Join-Path $repoRoot (Join-Path $dir $dll)
         if ((Test-Path $src) -and (Test-Path $testOutDir)) {
-            Copy-Item $src $testOutDir -Force -ErrorAction SilentlyContinue
+            Copy-Item $src $testOutDir -Force
             break
         }
     }
 }
 
 $failed = 0
-foreach ($name in $projects.Keys) {
-    if ($results | Where-Object { $_.名称 -eq $name -and $_.构建 -eq 'FAIL' }) { $failed++; continue }
-    $exe = Join-Path $testOutDir "$name.exe"
-    if (-not (Test-Path $exe)) {
-        $results.Add([pscustomobject]@{ 名称 = $name; 构建 = '-'; 结果 = '无 exe(先跑 -Build)' })
-        $failed++
-        continue
+$gtestEnvironment = @{}
+# 每个 EXE 应按自己的默认全集运行；同时隔离 flagfile、调试器及日志输出开关的外部副作用。
+foreach ($variable in [Environment]::GetEnvironmentVariables('Process').Keys) {
+    if ($variable -like 'GTEST_*') {
+        $gtestEnvironment[$variable] = [Environment]::GetEnvironmentVariable($variable, 'Process')
     }
-    if ($LogDir) {
-        # 验证与失败交接需要完整 gtest 输出，指定目录时保留原始日志。
-        $stdout = Join-Path $LogDir "$name.stdout.log"
-        $stderr = Join-Path $LogDir "$name.stderr.log"
-    }
-    else {
-        $stdout = [IO.Path]::GetTempFileName()
-        $stderr = "$stdout.err"
-    }
-    # 启动失败(被安全软件拦截、文件被占用、Access is denied)只记一条 FAIL 继续跑下一个;
-    # 不能让整张汇总表随 $ErrorActionPreference='Stop' 一起消失
-    # (2026-09-13 agones_lifecycle_test.exe 一个 Access is denied 就把全套 21 个工程的结果吞掉了)。
-    try {
-        $proc = Start-Process -FilePath $exe -WorkingDirectory $repoRoot -NoNewWindow -PassThru `
-            -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-    }
-    catch {
-        $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "启动失败:$($_.Exception.Message)" })
-        $failed++
-        continue
-    }
-    if (-not $proc.WaitForExit($TimeoutSeconds * 1000)) {
-        try { $proc.Kill() } catch { }
-        $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "超时 ${TimeoutSeconds}s 被杀" })
-        $failed++
-    }
-    else {
-        $out = Get-Content $stdout -Raw
-        if ($null -eq $out) { $out = '' }
-        $ran = [regex]::Match($out, 'Running (\d+) test')
-        $pass = [regex]::Match($out, '\[  PASSED  \] (\d+)')
-        $fail = [regex]::Match($out, '\[  FAILED  \] (\d+)')
-        if (-not $ran.Success) {
-            $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "退出码 $($proc.ExitCode),无 gtest 输出" })
+}
+foreach ($variable in @('GTEST_FILTER', 'GTEST_REPEAT')) {
+    if (-not $gtestEnvironment.ContainsKey($variable)) { $gtestEnvironment[$variable] = $null }
+}
+try {
+    foreach ($variable in $gtestEnvironment.Keys) { [Environment]::SetEnvironmentVariable($variable, $null, 'Process') }
+    $env:GTEST_FILTER = '*'
+    $env:GTEST_REPEAT = '1'
+    foreach ($name in $projects.Keys) {
+        if ($results | Where-Object { $_.名称 -eq $name -and $_.构建 -eq 'FAIL' }) { $failed++; continue }
+        $exe = Join-Path $testOutDir "$name.exe"
+        if (-not (Test-Path $exe)) {
+            $results.Add([pscustomobject]@{ 名称 = $name; 构建 = '-'; 结果 = '无 exe(先跑 -Build)' })
             $failed++
+            continue
         }
-        elseif ($proc.ExitCode -ne 0 -and -not $fail.Success) {
-            # 跑了用例、没有 [FAILED] 却非 0 退出:典型是用例中途 LOG_FATAL / 崩溃,
-            # gtest 来不及打 PASSED 汇总。不能按「没失败」放行(readfile2string_test 就是这样假绿的)。
-            $lastRun = ([regex]::Matches($out, '\[ RUN      \] ([A-Za-z0-9_]+\.[A-Za-z0-9_]+)') | Select-Object -Last 1)
-            $where = if ($lastRun) { $lastRun.Groups[1].Value } else { '?' }
-            $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "退出码 $($proc.ExitCode),疑似崩在 $where(无 PASSED 汇总)" })
+        if ($LogDir) {
+            # 验证与失败交接需要完整 gtest 输出，指定目录时保留原始日志。
+            $stdout = Join-Path $LogDir "$name.stdout.log"
+            $stderr = Join-Path $LogDir "$name.stderr.log"
+        }
+        else {
+            $stdout = [IO.Path]::GetTempFileName()
+            $stderr = "$stdout.err"
+        }
+        # 启动失败(被安全软件拦截、文件被占用、Access is denied)只记一条 FAIL 继续跑下一个;
+        # 不能让整张汇总表随 $ErrorActionPreference='Stop' 一起消失
+        # (2026-09-13 agones_lifecycle_test.exe 一个 Access is denied 就把全套 21 个工程的结果吞掉了)。
+        try {
+            $proc = Start-Process -FilePath $exe -WorkingDirectory $repoRoot -WindowStyle Hidden -PassThru `
+                -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+        }
+        catch {
+            $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "启动失败:$($_.Exception.Message)" })
             $failed++
+            continue
         }
-        elseif (-not $pass.Success) {
-            $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "退出码 0 但无 PASSED 汇总,输出异常" })
-            $failed++
-        }
-        elseif ($fail.Success) {
-            $names = ([regex]::Matches($out, '\[  FAILED  \] ([A-Za-z0-9_]+\.[A-Za-z0-9_]+)') |
-                ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique) -join ', '
-            $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "$($pass.Groups[1].Value)/$($ran.Groups[1].Value) 过,挂:$names" })
+        if (-not $proc.WaitForExit($TimeoutSeconds * 1000)) {
+            $killError = ''
+            try { $proc.Kill() } catch { $killError = $_.Exception.Message }
+            if (-not $proc.WaitForExit(5000)) {
+                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "超时且自有测试进程未退出，PID=$($proc.Id)；$killError" })
+                $results | Format-Table -AutoSize
+                throw "$name 超时后未能退出，停止后续测试；保留日志：$stdout；$stderr"
+            }
+            $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "超时 ${TimeoutSeconds}s，已确认进程退出" })
             $failed++
         }
         else {
-            $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "$($pass.Groups[1].Value)/$($ran.Groups[1].Value) 全过" })
+            $out = Get-Content $stdout -Raw
+            if ($null -eq $out) { $out = '' }
+            $ran = [regex]::Match($out, 'Running (\d+) test')
+            $pass = [regex]::Match($out, '\[  PASSED  \] (\d+)')
+            $fail = [regex]::Match($out, '\[  FAILED  \] (\d+)')
+            $skip = [regex]::Match($out, '\[  SKIPPED \] (\d+) test')
+            $runCount = if ($ran.Success) { [int]$ran.Groups[1].Value } else { 0 }
+            $passCount = if ($pass.Success) { [int]$pass.Groups[1].Value } else { 0 }
+            $skipCount = if ($skip.Success) { [int]$skip.Groups[1].Value } else { 0 }
+            if (-not $ran.Success) {
+                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "退出码 $($proc.ExitCode),无 gtest 输出" })
+                $failed++
+            }
+            elseif ($proc.ExitCode -ne 0 -and -not $fail.Success) {
+                # 跑了用例、没有 [FAILED] 却非 0 退出:典型是用例中途 LOG_FATAL / 崩溃,
+                # gtest 来不及打 PASSED 汇总。不能按「没失败」放行(readfile2string_test 就是这样假绿的)。
+                $lastRun = ([regex]::Matches($out, '\[ RUN      \] ([A-Za-z0-9_]+\.[A-Za-z0-9_]+)') | Select-Object -Last 1)
+                $where = if ($lastRun) { $lastRun.Groups[1].Value } else { '?' }
+                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "退出码 $($proc.ExitCode),疑似崩在 $where(无 PASSED 汇总)" })
+                $failed++
+            }
+            elseif (-not $pass.Success) {
+                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "退出码 0 但无 PASSED 汇总,输出异常" })
+                $failed++
+            }
+            elseif ($fail.Success) {
+                $names = ([regex]::Matches($out, '\[  FAILED  \] ([A-Za-z0-9_]+\.[A-Za-z0-9_]+)') |
+                    ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique) -join ', '
+                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "$($pass.Groups[1].Value)/$($ran.Groups[1].Value) 过,挂:$names" })
+                $failed++
+            }
+            elseif ($runCount -le 0 -or ($passCount + $skipCount) -ne $runCount) {
+                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "用例汇总不完整：运行 $runCount，通过 $passCount，跳过 $skipCount" })
+                $failed++
+            }
+            elseif ($skip.Success) {
+                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "$($pass.Groups[1].Value)/$($ran.Groups[1].Value) 通过，$($skip.Groups[1].Value) 跳过" })
+            }
+            else {
+                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "$($pass.Groups[1].Value)/$($ran.Groups[1].Value) 全过" })
+            }
         }
+        if (-not $LogDir) { Remove-Item $stdout, $stderr -ErrorAction SilentlyContinue }
     }
-    if (-not $LogDir) { Remove-Item $stdout, $stderr -ErrorAction SilentlyContinue }
+} finally {
+    foreach ($variable in $gtestEnvironment.Keys) {
+        [Environment]::SetEnvironmentVariable($variable, $gtestEnvironment[$variable], 'Process')
+    }
 }
 
 $results | Format-Table -AutoSize
@@ -212,5 +253,5 @@ if ($failed -gt 0) {
     Write-Host "$failed test projects failed" -ForegroundColor Red
     exit 1
 }
-Write-Host "All passed ($($projects.Count) projects)" -ForegroundColor Green
+Write-Host "全部 $($projects.Count) 个测试程序正常完成；用例跳过情况见汇总。" -ForegroundColor Green
 exit 0

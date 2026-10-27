@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc"
 	"net/http"
 	"os"
 	"strconv"
@@ -21,6 +22,7 @@ import (
 
 	"shared/assetop"
 	"shared/authoritysql"
+	"shared/drainproof"
 	"shared/idsegment"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -77,12 +79,36 @@ type ServiceContext struct {
 	RmbIdentity   *RmbIdentity
 	rmbLoginRedis *redis.Client
 
-	stopOnce sync.Once
+	// 同一 boot 的 SQL 身份与两个独立角色；P1 不关闭 RELAY 或 SQL 池。
+	WriterConfig     authoritysql.WriterConfig
+	RootAdmission    *drainproof.Session
+	RelayAdmission   *drainproof.Session
+	RelayIngress     *drainproof.Session
+	DrainRuntime     *drainproof.Runtime
+	lifecycleMu      sync.Mutex
+	sourceMu         sync.Mutex
+	sourceStop       func(context.Context) error
+	sourceClosed     bool
+	resourcesClosed  bool
+	resourceCloseErr error
+	directoryConn    *grpc.ClientConn
 }
 
 // NewServiceContext 建全部依赖。任何一项建不出来都 panic(启动致命):
 // 没有库、没有 data_service 客户端、没有号段客户端的 trade 没有可用形态。
 func NewServiceContext(c config.Config) *ServiceContext {
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		panic(fmt.Errorf("trade SQL boot 装配失败: %w", err))
+	}
+	return NewServiceContextWithAdmission(c, writer, drainproof.New(), drainproof.New())
+}
+
+// 新 boot 的 prepared 门禁在构造时显式传入，不能在后台或 handler 已持有门禁后替换它。
+func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterConfig, root, relay *drainproof.Session) *ServiceContext {
+	if len(writer.InstanceID()) != 16 || len(writer.WriterKey()) != 16 || root == nil || relay == nil || root == relay {
+		panic("trade SQL boot 与 SOURCE/RELAY 装配缺失或角色复用")
+	}
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:   c.Etcd.Hosts,
 		DialTimeout: etcdDialTimeout,
@@ -91,7 +117,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic("trade: failed to create etcd client: " + err.Error())
 	}
 
-	db, err := OpenMySQL(c.MySQL)
+	db, err := openMySQL(c.MySQL, authoritysql.Writer(writer))
 	if err != nil {
 		panic(fmt.Errorf("trade: %w", err))
 	}
@@ -99,7 +125,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	conn := zrpc.MustNewClient(c.DataServiceRpc)
 	dsClient := dspb.NewDataServiceClient(conn.Conn())
 
-	seg, err := NewListingIDSegment(c.IdSegment, dsClient)
+	seg, err := NewListingIDSegment(c.IdSegment, dsClient, relay)
 	if err != nil {
 		panic(fmt.Errorf("trade: listing id segment client: %w", err))
 	}
@@ -131,7 +157,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 				"预发 / 生产由部署侧注入;不打算开通道就把 AssetOp.Enabled 改回 false", err))
 		}
 		// 共享 Redis 连不上即启动致命(理由见 newAssetChannel)。
-		assets, err = newAssetChannel(c, db, dsClient)
+		assets, err = newAssetChannel(c, db, dsClient, relay)
 		if err != nil {
 			panic(fmt.Errorf("trade: 资产通道装配失败: %w", err))
 		}
@@ -171,14 +197,26 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		}
 	}
 	sc := &ServiceContext{
+		WriterConfig:      writer,
+		RootAdmission:     root,
+		RelayAdmission:    relay,
+		RelayIngress:      drainproof.New(),
 		Config:            c,
 		Etcd:              etcdCli,
 		DB:                db,
 		DataServiceClient: dsClient,
+		directoryConn:     conn.Conn(),
 		ListingIDSegment:  seg,
 		Assets:            assets,
 		Commerce:          commerceEngine,
 		Mall:              mall,
+	}
+	if sc.Assets != nil {
+		sc.Assets.RelayAdmission = relay
+		sc.Assets.RootAdmission = root
+		if err := sc.Assets.Pipeline.BindRelayAdmission(relay); err != nil {
+			panic(err)
+		}
 	}
 	if err := sc.initRmb(); err != nil {
 		panic(err)
@@ -224,7 +262,13 @@ func (sc *ServiceContext) bootstrapAssetOpSeqGuardRow(ctx context.Context) {
 	if sc.Assets == nil || sc.Assets.Ops == nil {
 		return // AssetOp.Enabled=false:通道整体没装配
 	}
-	bootCtx, cancel := context.WithTimeout(ctx, seqGuardBootstrapTimeout)
+	finish, enterErr := sc.RelayAdmission.Enter()
+	if enterErr != nil {
+		sc.RelayAdmission.Hold()
+		return
+	}
+	defer finish()
+	bootCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), seqGuardBootstrapTimeout)
 	defer cancel()
 	nowMs := time.Now().UnixMilli()
 	if nowMs <= 0 {
@@ -235,6 +279,7 @@ func (sc *ServiceContext) bootstrapAssetOpSeqGuardRow(ctx context.Context) {
 		return
 	}
 	if err := sc.Assets.Ops.EnsureSeqGuardRow(bootCtx, uint64(nowMs)); err != nil {
+		sc.RelayAdmission.Hold()
 		data.ObserveSeqGuardBootstrapFailure()
 		if isLockContentionErr(err) {
 			logx.Errorf("[trade] Could not confirm trade_player_op_seq sentinel guard row within %v (lock contention / budget exhausted): %v -- "+
@@ -294,25 +339,41 @@ func MySQLTarget(c config.MySQLConf) string {
 // OpenMySQL 建池、设上限、ping。返回错误时池已关闭;错误信息点名库名
 // (库不存在时 -migrate 以 1 退出并点名库名,D-14 第 5 条)。
 func OpenMySQL(c config.MySQLConf) (*sql.DB, error) {
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	return openMySQL(c, authoritysql.Writer(writer))
+}
+
+// OpenSchemaMySQL只属于显式迁移入口。
+func OpenSchemaMySQL(c config.MySQLConf) (*sql.DB, error) {
+	permission, err := authoritysql.LoadSchemaPermission(os.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	return openMySQL(c, permission)
+}
+
+func openMySQL(c config.MySQLConf, permission authoritysql.Permission) (*sql.DB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
 	defer cancel()
-	return authoritysql.Open(ctx, BuildDSN(c), c.DBName, c.RequiresTiDB(), c.MaxOpenConn)
+	return authoritysql.Open(ctx, BuildDSN(c), c.DBName, c.RequiresTiDB(), c.MaxOpenConn, permission)
 }
 
 // NewListingIDSegment 按 IdSegment 配置建 listing_id 号段客户端。Enabled=false 或客户端为 nil 直接报错:
 // trade 没有 snowflake,静默退化只会让所有上架在运行期失败。
-func NewListingIDSegment(cfg idsegment.Conf, client dspb.DataServiceClient) (*idsegment.Client, error) {
+func NewListingIDSegment(cfg idsegment.Conf, client dspb.DataServiceClient, roles ...*drainproof.Session) (*idsegment.Client, error) {
 	if !cfg.Enabled {
 		return nil, errors.New("IdSegment.Enabled=false: trade mints listing_id only from id_segment (biz_tag=" + ListingIDBizTag + ")")
 	}
 	if client == nil {
 		return nil, errors.New("data_service client is nil: listing_id minting needs data_service.AllocateIdSegment")
 	}
-	return idsegment.New(
-		idsegment.Adapt(client.AllocateIdSegment,
-			func(bizTag string, step uint32) *dspb.AllocateIdSegmentRequest {
-				return &dspb.AllocateIdSegmentRequest{BizTag: bizTag, Step: step}
-			}),
+	allocate := idsegment.Adapt(client.AllocateIdSegment, func(bizTag string, step uint32) *dspb.AllocateIdSegmentRequest {
+		return &dspb.AllocateIdSegmentRequest{BizTag: bizTag, Step: step}
+	})
+	return idsegment.New(bindAllocationOwner(allocate, roles...),
 		idsegment.Options{
 			BizTag:  ListingIDBizTag,
 			Step:    cfg.StepOrDefault(),
@@ -336,29 +397,147 @@ func (sc *ServiceContext) WarmListingIDSegment() {
 	}
 }
 
-// Stop 依次关号段、DB、etcd。幂等。
-// 调用方须保证 noderegistry.Close() 与 killswitch 的 ctx 取消都**先于**它(二者共用 etcd 连接)。
+// BindDrainRuntime 绑定已经消费的同一 SQL boot；不会重新读 grant 或替换门禁。
+// 实际 main 仍须将 RootAdmission 接进 RPC/cleanup，并将 RelayAdmission 接进资产与回执链。
+func (sc *ServiceContext) BindDrainRuntime(runtime *drainproof.Runtime) error {
+	sc.lifecycleMu.Lock()
+	defer sc.lifecycleMu.Unlock()
+	if runtime == nil || sc.DrainRuntime != nil || sc.RootAdmission == nil || sc.RelayAdmission == nil ||
+		sc.RootAdmission == sc.RelayAdmission || runtime.Seed("SOURCE") == nil || runtime.Seed("RELAY") == nil {
+		return drainproof.ErrHold
+	}
+	if err := runtime.BindBoot(sc.WriterConfig.InstanceID(), sc.WriterConfig.WriterKey()); err != nil {
+		return err
+	}
+	sc.DrainRuntime = runtime
+	return nil
+}
+
+// BindSourceStop 由 main 交付唯一 cleanup 发起者；停止只影响取新，不取消已接纳 SQL。
+func (sc *ServiceContext) BindSourceStop(stop func(context.Context) error) error {
+	sc.sourceMu.Lock()
+	defer sc.sourceMu.Unlock()
+	if stop == nil || sc.sourceStop != nil || sc.sourceClosed {
+		return drainproof.ErrHold
+	}
+	sc.sourceStop = stop
+	return nil
+}
+func (sc *ServiceContext) CloseSource(ctx context.Context) error {
+	sc.sourceMu.Lock()
+	defer sc.sourceMu.Unlock()
+	if sc.RootAdmission == nil {
+		return drainproof.ErrHold
+	}
+	if sc.sourceClosed {
+		return nil
+	}
+	sc.RootAdmission.CloseAdmission()
+	if sc.sourceStop != nil {
+		if err := sc.sourceStop(ctx); err != nil {
+			sc.RootAdmission.Hold()
+			return err
+		}
+	}
+	if err := sc.RootAdmission.Wait(ctx); err != nil {
+		return err
+	}
+	// listing_id 同时被商城/RMB恢复使用；实际 Allocate 与预取归 RELAY，直到 P3 join 后关闭。
+	sc.sourceClosed = true
+	return nil
+}
+func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
+	sc.lifecycleMu.Lock()
+	defer sc.lifecycleMu.Unlock()
+	if sc.resourcesClosed {
+		return sc.resourceCloseErr
+	}
+	if err := sc.CloseSource(ctx); err != nil {
+		return err
+	}
+	if sc.RelayAdmission == nil {
+		return drainproof.ErrHold
+	}
+	if sc.RelayIngress != nil {
+		sc.RelayIngress.CloseAdmission()
+		if err := sc.RelayIngress.Wait(ctx); err != nil {
+			return err
+		}
+	}
+	if err := sc.Assets.CloseAndReport(ctx); err != nil {
+		sc.RelayAdmission.Hold()
+		return err
+	}
+	if sc.ListingIDSegment != nil {
+		digest, err := sc.ListingIDSegment.DrainAndReport(ctx)
+		if err != nil {
+			sc.RelayAdmission.Hold()
+			return err
+		}
+		if err = sc.RelayAdmission.MergeSettled(digest); err != nil {
+			return err
+		}
+	}
+	if err := sc.RelayAdmission.WaitIdle(ctx); err != nil {
+		return err
+	}
+	sc.RelayAdmission.CloseAdmission()
+	if err := sc.RelayAdmission.Wait(ctx); err != nil {
+		return err
+	}
+	sc.WriterConfig.Seal()
+	var result error
+	if sc.directoryConn != nil {
+		result = errors.Join(result, sc.directoryConn.Close())
+	}
+	if sc.rmbLoginRedis != nil {
+		result = errors.Join(result, sc.rmbLoginRedis.Close())
+	}
+	if sc.DB != nil {
+		result = errors.Join(result, sc.DB.Close())
+	}
+	if sc.Etcd != nil {
+		result = errors.Join(result, sc.Etcd.Close())
+	}
+	sc.resourcesClosed = true
+	sc.resourceCloseErr = result
+	if result != nil {
+		sc.RelayAdmission.Hold()
+	}
+	return result
+}
 func (sc *ServiceContext) Stop() {
-	sc.stopOnce.Do(func() {
-		// 资产通道先停:循环里在途的投递要在关 DB / etcd 之前收手。
-		sc.Assets.Close()
-		if sc.rmbLoginRedis != nil {
-			_ = sc.rmbLoginRedis.Close()
+	if err := sc.StopAndReport(context.Background()); err != nil {
+		logx.Errorf("trade 排空 HOLD: %v", err)
+	}
+}
+
+// 号段客户端可后台预取；每一次真正 Allocate 在同 boot RELAY 内登记，根返回不会丢掉后继。
+func bindAllocationOwner(allocate idsegment.AllocateFunc, roles ...*drainproof.Session) idsegment.AllocateFunc {
+	if len(roles) == 0 {
+		return allocate
+	}
+	if len(roles) != 1 || roles[0] == nil {
+		panic("trade 号段 RELAY owner 缺失")
+	}
+	owner := roles[0]
+	return func(ctx context.Context, tag string, step uint32) (lo, hi uint64, resultErr error) {
+		finish, err := owner.Enter()
+		if err != nil {
+			return 0, 0, err
 		}
-		if sc.ListingIDSegment != nil {
-			sc.ListingIDSegment.Close()
-		}
-		if sc.DB != nil {
-			if err := sc.DB.Close(); err != nil {
-				logx.Errorf("[trade] MySQL close failed: %v", err)
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				owner.Hold()
+				panic(recovered)
 			}
-		}
-		if sc.Etcd != nil {
-			if err := sc.Etcd.Close(); err != nil {
-				logx.Errorf("[trade] etcd client close failed: %v", err)
+			if resultErr != nil {
+				owner.Hold()
 			}
-		}
-	})
+		}()
+		return allocate(ctx, tag, step)
+	}
 }
 
 // ---------------------------------------------------------------------------

@@ -81,6 +81,33 @@ spec:
                   matchLabels:
                     app: player-inbox
                 topologyKey: kubernetes.io/hostname
+      # 独立registrar只在init读取有限预批准roster与控制凭据；normal只见本Pod选中配置。
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      initContainers:
+        - name: sql-writer-registrar
+          image: PLACEHOLDER_SQL_WRITER_REGISTRAR_IMAGE
+          command: ["/bin/sh", "-ec"]
+          args: ["umask 077; mkdir -p /run/sql-writer/runtime/env; exec /app/service \"$@\"","--","-command","register","-roster","/run/sql-writer/input/request/roster.json","-roster-sha256","PLACEHOLDER_SQL_WRITER_ROSTER_SHA256","-input-root","/run/sql-writer/input","-lock-qualification","/run/sql-writer/input/request/lock-qualification.original","-runtime-config-output","/run/sql-writer/runtime/player_inbox.yaml","-runtime-env-output","/run/sql-writer/runtime/env","-boot-output","/run/sql-writer/grant/boot-grant.json","-deployment-id","$(MMORPG_SQL_DEPLOYMENT_ID)"]
+          env:
+            - name: MMORPG_SQL_DEPLOYMENT_ID
+              valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+            - name: MMORPG_SQL_OPERATOR_PRINCIPAL
+              valueFrom:
+                secretKeyRef: {name: PLACEHOLDER_SQL_WRITER_REGISTRAR_SECRET, key: principal, optional: false}
+            - name: MMORPG_SQL_REGISTRAR_DSN
+              valueFrom:
+                secretKeyRef: {name: PLACEHOLDER_SQL_WRITER_REGISTRAR_SECRET, key: dsn, optional: false}
+            - name: MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256
+              value: "PLACEHOLDER_SQL_WRITER_PHYSICAL_SHA256"
+          volumeMounts:
+            - {name: sql-writer-request, mountPath: /run/sql-writer/input/request, readOnly: true}
+            - {name: sql-writer-runtime-input, mountPath: /run/sql-writer/input/runtime, readOnly: true}
+            - {name: sql-writer-grant, mountPath: /run/sql-writer/grant}
+            - {name: svc-config, mountPath: /run/sql-writer/runtime}
       containers:
         - name: player-inbox
           image: PLACEHOLDER_IMAGE
@@ -89,6 +116,15 @@ spec:
           # 追加 secretKeyRef(Add-GoSvcSecretEnv);手写同名变量会被脚本拒绝(一处真相)。
           # KAFKA_COMMAND_TOPIC_* / KAFKA_TOPIC_REPLICATION_FACTOR 同样由脚本注入(在线提醒发往 scene-cmd 的分区契约)。
           env:
+          # grant只读，consume留在同PodemptyDir；同Podrestart不得重复消费boot。
+            - name: MMORPG_SQL_WRITER_GRANT_FILE
+              value: /run/sql-writer/grant/boot-grant.json
+            - name: MMORPG_SQL_WRITER_CONSUME_DIR
+              value: /run/sql-writer/consume
+            - name: MMORPG_SQL_DEPLOYMENT_ID
+              valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+            - name: MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256
+              value: "PLACEHOLDER_SQL_WRITER_PHYSICAL_SHA256"
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn
             # C++ 约定注册(PlayerInboxNodeService.rpc)写进 NodeInfo 的对外 IP:ListenOn 是 0.0.0.0,不能原样写;
@@ -98,7 +134,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-          args: ["-f", "/app/etc/player_inbox.yaml"]
+          command: ["/bin/sh", "-ec"]
+          args: ["MMORPG_SQL_WRITER_GRANT_SHA256=\"$(cat /run/sql-writer/grant/boot-grant.json.sha256)\"; export MMORPG_SQL_WRITER_GRANT_SHA256; exec /app/service \"$@\"","--","-f","/app/etc/player_inbox.yaml"]
           ports:
             - containerPort: 50950
               name: grpc
@@ -122,6 +159,8 @@ spec:
               exec:
                 command: ["sh", "-c", "sleep 5"]
           volumeMounts:
+            - {name: sql-writer-grant, mountPath: /run/sql-writer/grant, readOnly: true}
+            - {name: sql-writer-consume, mountPath: /run/sql-writer/consume}
             - name: svc-config
               mountPath: /app/etc
               readOnly: true
@@ -135,9 +174,16 @@ spec:
               memory: 256Mi
       terminationGracePeriodSeconds: 30
       volumes:
+        - name: sql-writer-request
+          secret: {secretName: PLACEHOLDER_SQL_WRITER_REQUEST_SECRET, defaultMode: 288}
+        - name: sql-writer-runtime-input
+          secret: {secretName: PLACEHOLDER_SQL_WRITER_RUNTIME_SECRET, defaultMode: 288}
+        - name: sql-writer-grant
+          emptyDir: {medium: Memory, sizeLimit: 1Mi}
+        - name: sql-writer-consume
+          emptyDir: {medium: Memory, sizeLimit: 1Mi}
         - name: svc-config
-          configMap:
-            name: go-svc-player-inbox-config
+          emptyDir: {medium: Memory, sizeLimit: 20Mi}
 ---
 # PDB 与主 manifest 同文件:k8s_deploy.ps1 只 apply 目录条目里的主 manifest。
 apiVersion: policy/v1

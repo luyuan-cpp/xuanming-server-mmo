@@ -1,8 +1,8 @@
 param(
-    [string]$Configuration = "Debug",
-    [string]$Platform = "x64",
+    [ValidateSet('Debug', 'Release')][string]$Configuration = "Debug",
+    [ValidateSet('x64', 'Win32')][string]$Platform = "x64",
     [switch]$SkipClean,
-    [switch]$SkipProtobufBuild,
+    [switch]$SkipSdkBuild,
     [switch]$SkipGrpcClientVerify
 )
 
@@ -47,9 +47,16 @@ Push-Location $repoRoot
 try {
     $msbuild = Resolve-MSBuildPath
 
-    if (-not $SkipProtobufBuild) {
+    $architecture = if ($Platform -eq 'Win32') { 'x86' } else { 'x64' }
+    if (-not $SkipSdkBuild) {
         Invoke-Step -Name "Build standalone Protobuf" -Action {
-            & "pwsh" -NoProfile -File "tools/scripts/dev_tools.ps1" -Command "third-party-protobuf-build" -Configuration $Configuration
+            & "pwsh" -NoProfile -File "tools/scripts/dev_tools.ps1" -Command "third-party-protobuf-build" -Configuration $Configuration -Architecture $architecture
+        }
+        Invoke-Step -Name "Build standalone BoringSSL" -Action {
+            & "pwsh" -NoProfile -File "tools/scripts/dev_tools.ps1" -Command "third-party-boringssl-build" -Configuration $Configuration -Architecture $architecture
+        }
+        Invoke-Step -Name "Build standalone GoogleTest" -Action {
+            & "pwsh" -NoProfile -File "tools/scripts/third_party/build_gtest.ps1" -Configuration $Configuration -Architecture $architecture
         }
     }
 
@@ -65,7 +72,7 @@ try {
 
     if (-not $SkipGrpcClientVerify) {
         Invoke-Step -Name "Verify grpc_client build" -Action {
-            & "pwsh" -NoProfile -File "tools/scripts/verify_grpc_client_build.ps1"
+            & "pwsh" -NoProfile -File "tools/scripts/verify_grpc_client_build.ps1" -Configuration $Configuration -Platform $Platform
         }
     }
 

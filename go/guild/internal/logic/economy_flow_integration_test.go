@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"shared/authoritysql/sqltest"
 	"sort"
 	"strings"
 	"sync"
@@ -42,7 +43,6 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	mysqldriver "github.com/go-sql-driver/mysql"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,7 +56,6 @@ import (
 	scenepb "proto/scene"
 	"schemamigrate"
 	"shared/assetop"
-	"shared/authoritysql"
 	"shared/gameday"
 	tablepb "shared/generated/pb/table"
 )
@@ -142,54 +141,24 @@ var economyFlowDBCounter atomic.Uint32
 // 账号建不了库时直接失败而不是 Skip:DSN 是显式设的,悄悄跳过等于把端到端覆盖静默丢掉。
 func openEconomyFlowDB(t *testing.T, rawDSN string) *sql.DB {
 	t.Helper()
-	cfg, err := mysqldriver.ParseDSN(rawDSN)
-	require.NoError(t, err, "解析 GUILD_TEST_MYSQL_DSN")
-	cfg.DBName = ""
-	// 安装连接只受下面的DDL上下文约束。业务DSN的readTimeout曾在
-	// TiDB预切Region尚未结束时先切断socket，不能把它挪成业务预算。
-	cfg.ReadTimeout = 0
-	cfg.WriteTimeout = 0
-	admin, err := sql.Open("mysql", cfg.FormatDSN())
-	require.NoError(t, err)
-	t.Cleanup(func() { admin.Close() })
-
-	// 只限隔离库安装：TiDB逐表预切Region时，11张表的累计DDL曾超过30秒。
-	// 运行时投递/租约/请求截止预算保持原值，不能用安装耗时冒充业务超时。
+	name := fmt.Sprintf("guild_it_%d_%d", os.Getpid(), economyFlowDBCounter.Add(1))
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	require.NoError(t, admin.PingContext(ctx))
-	var version string
-	require.NoError(t, admin.QueryRowContext(ctx, "SELECT VERSION()").Scan(&version))
-	requireTiDB := strings.Contains(strings.ToLower(version), "tidb")
-	name := fmt.Sprintf("guild_it_%d_%d", os.Getpid(), economyFlowDBCounter.Add(1))
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"` DEFAULT CHARACTER SET utf8mb4"); err != nil {
-		t.Fatalf("用 GUILD_TEST_MYSQL_DSN 的账号建一次性库 %s 失败(该账号需要 CREATE / DROP DATABASE 权限): %v", name, err)
-	}
-	// Cleanup 后进先出:业务连接先关(下面注册)→ DROP → admin 关(上面注册)。
-	t.Cleanup(func() {
-		dropCtx, dropCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer dropCancel()
-		if _, err := admin.ExecContext(dropCtx, "DROP DATABASE IF EXISTS `"+name+"`"); err != nil {
-			t.Errorf("DROP DATABASE %s 失败(请手工清理): %v", name, err)
-		}
-	})
-
-	// 与生产同一条 DSN 改写:innodb_lock_wait_timeout=1 且 ClientFoundRows=false ——
-	// 计数器带上限 upsert 的 RowsAffected(1 新插 / 2 累加 / 0 达上限)依赖后者。
-	cfg.DBName = name
-	dsn, err := data.WithLockWaitTimeout(cfg.FormatDSN())
+	dsn, err := data.WithLockWaitTimeout(rawDSN)
 	require.NoError(t, err)
-	installDB, err := authoritysql.OpenForMigration(ctx, dsn, name, requireTiDB)
+	opts, err := sqltest.OptionsFromEnv(dsn, name+"_writer", name)
 	require.NoError(t, err)
-	t.Cleanup(func() { installDB.Close() })
-	require.NoError(t, installDB.PingContext(ctx))
+	// 该既有测试同时覆盖显式本地 MySQL；不把它冒充 TiDB 锁资格验收。
+	opts.AllowMySQL = true
+	fixture, err := sqltest.New(ctx, t, opts)
+	require.NoError(t, err)
+	installDB, err := fixture.OpenSchema(ctx, name)
+	require.NoError(t, err)
 	resetEconomyFlowSchema(t, ctx, installDB)
-	require.NoError(t, installDB.Close())
-	// 运行连接与服务端复用逐物理连接强会话初始化；安装连接不会流入业务池。
-	// 显式设置的DSN也允许本地旧MySQL夹具，不把该兼容误报成TiDB证据。
-	db, err := authoritysql.Open(ctx, dsn, name, requireTiDB, 20)
+	require.NoError(t, fixture.GrantProtoTables(ctx, name, data.Tables()))
+	db, err := fixture.Open(ctx, name, 20)
 	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
+
 	return db
 }
 

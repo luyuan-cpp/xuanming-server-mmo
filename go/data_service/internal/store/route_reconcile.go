@@ -81,9 +81,7 @@ const (
 		" cache_verified_ms = COALESCE(?, cache_verified_ms)" +
 		" WHERE id = 1 AND leader = ? AND lease_until_ms >= " + dbNowMsSQL
 
-	// R28 leader 冻结映射写者。`AND writable = 1`:只从可写翻到冻结;受影响 0 行再用 R18 区分「已被别人冻结」与不可能状态。
-	// 与 route_tool freeze 的 R19(`writable <> 0`)文本不同:契约用例按文本区分两类写者。
-	routeLeaderFreezeSQL = "UPDATE route_meta SET writable = 0 WHERE id = 1 AND writable = 1"
+	// 危险检测不拥有 writable 控制权限；独立 Catalog owner 使用正式紧急票据。
 
 	// R29 按片增量扫描(提案 §11.2 G1a「后续批次的读方模板」的「1b 增量推送」行):片前缀等值 + (updated_at_ms, player_id) 键集,
 	// 走 idx_route_updated (route_shard, updated_at_ms, player_id),ORDER BY 与索引序一致。
@@ -465,7 +463,7 @@ func (d reconcileDecision) result(row routeReconcileRow, meta RouteMeta) Reconci
 //
 // 只有 1213 / 9007 整事务重跑;整个调用受 req.FreezeTimeout 约束(见文件头「超时」)。
 // 错误只表示故障(入参非法 ErrRouteInvalidArgument、缺行 ErrRouteReconcileMissing / ErrRouteMetaMissing、SQL 错误);
-// 租约丢失、冻结都走 Outcome。调用方提交之后才推进水位键(规格 §4.3 第 4 步「提交后:若未冻结,单调推进水位键」)。
+// 租约丢失/已冻结走 Outcome；新危险返回 RouteEmergencyError，不能把观察误报为已冻结。
 // COMMIT 出错时结果不确定,按 err 返回;下一拍重跑是安全的(R27 幂等、R28 只从 1 翻到 0)。
 func (s *RouteStore) AdvanceReconcile(ctx context.Context, req ReconcileTickRequest) (ReconcileTickResult, error) {
 	if err := req.validate(); err != nil {
@@ -509,14 +507,8 @@ func (s *RouteStore) advanceReconcileTx(ctx context.Context, req ReconcileTickRe
 	case ReconcileTickLeaseLost, ReconcileTickAlreadyFrozen:
 		return res, nil // 零写入,由 defer 回滚
 	case ReconcileTickFrozen:
-		frozen, err := freezeRouteMetaInTx(ctx, tx)
-		if err != nil {
-			return ReconcileTickResult{}, err
-		}
-		if !frozen {
-			res.Outcome, res.FreezeReason = ReconcileTickAlreadyFrozen, RouteFreezeNone
-			return res, nil
-		}
+		// normal 只观察危险；控制表只能由持正式票据的独立 operator 修改。
+		return res, &RouteEmergencyError{Observation: res}
 	case ReconcileTickAdvanced:
 		var cvmArg any
 		if d.SetCacheVerified {
@@ -567,7 +559,7 @@ func (s *RouteStore) advanceReconcileTx(ctx context.Context, req ReconcileTickRe
 }
 
 // FreezeByLeader 由持有租约的 leader 冻结映射写者(给 cache_ahead 用:推送时复读确认缓存比库新)。事务形状同 AdvanceReconcile:
-// R26 → R18 → 不持有租约 → LeaseLost;已冻结 → AlreadyFrozen;否则 R28 → COMMIT → Frozen(reason)。水位与 cvm 不动。
+// R26 → R18 → 不持有租约 → LeaseLost；已冻结 → AlreadyFrozen；否则返回真实危险观察，事务回滚且不改控制表。
 // reason 必须是三个冻结原因之一;freezeTimeout 的约束同 ReconcileTickRequest.FreezeTimeout。
 func (s *RouteStore) FreezeByLeader(ctx context.Context, leaderID string, reason RouteFreezeReason, freezeTimeout time.Duration) (ReconcileTickResult, error) {
 	if err := validateRouteLeaderArgs(leaderID, freezeTimeout); err != nil {
@@ -616,20 +608,9 @@ func (s *RouteStore) freezeByLeaderTx(ctx context.Context, leaderID string, reas
 		d.Outcome = ReconcileTickAlreadyFrozen
 		return d.result(row, meta), nil
 	}
-	frozen, err := freezeRouteMetaInTx(ctx, tx)
-	if err != nil {
-		return ReconcileTickResult{}, err
-	}
-	if !frozen {
-		d.Outcome = ReconcileTickAlreadyFrozen
-		return d.result(row, meta), nil
-	}
-	if err := tx.Commit(); err != nil {
-		return ReconcileTickResult{}, fmt.Errorf("commit route_reconcile leader freeze (outcome unknown; rerun it, it is idempotent): %w", err)
-	}
-	committed = true
 	d.Outcome, d.FreezeReason = ReconcileTickFrozen, reason
-	return d.result(row, meta), nil
+	res := d.result(row, meta)
+	return res, &RouteEmergencyError{Observation: res}
 }
 
 // lockReconcileAndReadMeta 是每拍 / leader 冻结事务的前两句:R26 锁对账行(含库时钟),R18 普通读 route_meta。
@@ -661,34 +642,12 @@ func lockReconcileAndReadMeta(ctx context.Context, tx *sql.Tx) (routeReconcileRo
 	return row, meta, nil
 }
 
-// freezeRouteMetaInTx 在持有 R26 行锁的事务里执行 R28。frozen=true 表示本事务把 writable 从 1 改成了 0;
-// false 表示 R28 受影响 0 行且复读确认 writable 已不是 1(R18 之后被 route_tool freeze 抢先冻结)。
-// 0 行而复读仍是 1 是不可能状态(解冻要 route_reconcile 的行锁,在本事务手里),fail-closed 报错。
-func freezeRouteMetaInTx(ctx context.Context, tx *sql.Tx) (bool, error) {
-	res, err := tx.ExecContext(ctx, routeLeaderFreezeSQL)
-	if err != nil {
-		return false, fmt.Errorf("leader freeze of route writers (route_meta.writable=0): %w", err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, fmt.Errorf("leader freeze of route writers rows affected: %w", err)
-	}
-	switch n {
-	case 1:
-		return true, nil
-	case 0:
-		meta, err := readRouteMeta(ctx, tx, routeReadMetaSQL)
-		if err != nil {
-			return false, err
-		}
-		if meta.Frozen() {
-			return false, nil
-		}
-		return false, fmt.Errorf("leader freeze of route writers: affected 0 rows but route_meta.writable=%d right after (generation=%s)",
-			meta.Writable, meta.Generation)
-	default:
-		return false, fmt.Errorf("leader freeze of route writers: 受影响行数 %d 不在 {1=冻结, 0=已被冻结} 之内", n)
-	}
+// RouteEmergencyError 是实际强读所得危险观察，不是已冻结或已排空收据。
+// 装配 owner 必须关闭本 boot 接纳并保存原件；独立 operator 重新核验证据后申请紧急票据。
+type RouteEmergencyError struct{ Observation ReconcileTickResult }
+
+func (e *RouteEmergencyError) Error() string {
+	return fmt.Sprintf("路由危险需独立维护授权: reason=%s generation=%s watermark_ms=%d observed_ms=%d", e.Observation.FreezeReason, e.Observation.Generation, e.Observation.WatermarkMs, e.Observation.NowMs)
 }
 
 // ── 按片增量扫描与库时钟 ─────────────────────────────────────────────────────────

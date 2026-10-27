@@ -36,7 +36,7 @@ const (
 	MaxDataServiceRpcTimeoutMs int64 = 3000
 )
 
-// SchemaConf 建表策略(port-decisions D-14 §4)。AutoMigrate 为 nil(没写)或 true:启动时跑
+// SchemaConf 建表策略(port-decisions D-14 §4)。AutoMigrate 为 nil(没写)或 false 时常驻启动仅核对；显式迁移才跑
 // schemamigrate.Up;false:只跑只读 Plan,不干净就拒绝启动。用 *bool 的理由同 go/trade/internal/config.SchemaConf:
 // 要把"没写"与"显式写 false"区分开。
 type SchemaConf struct {
@@ -567,9 +567,9 @@ func hasRpcTarget(c zrpc.RpcClientConf) bool {
 	return c.Etcd.Key != "" || len(c.Endpoints) > 0 || c.Target != ""
 }
 
-// ShouldAutoMigrate 是启动路径跑 Up 还是只跑 Plan 的唯一判据:没写 = Up。
+// ShouldAutoMigrate 识别显式自动迁移请求；常驻入口会拒绝true，没写默认只读核对。
 func (c Config) ShouldAutoMigrate() bool {
-	return c.Schema.AutoMigrate == nil || *c.Schema.AutoMigrate
+	return c.Schema.AutoMigrate != nil && *c.Schema.AutoMigrate
 }
 
 // RequestBudget 是一次请求内全部 I/O(归属区查询、发号、Redis、MySQL)共用的业务预算,

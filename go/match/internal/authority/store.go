@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"os"
+	"shared/authoritysql"
 	"sort"
 	"strings"
 
@@ -36,6 +37,15 @@ const formationColumns = "battle_id,operation_id,state,physical_region,target_no
 var ErrJoinCancelled = errors.New("匹配请求已经撤销")
 
 func Open(ctx context.Context, c config.GlobalMatchConf) (*Store, error) {
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	return OpenWithPermission(ctx, c, authoritysql.Writer(writer))
+}
+
+// OpenWithPermission 保留全部既有校验，由进程显式传同一 boot 的能力。
+func OpenWithPermission(ctx context.Context, c config.GlobalMatchConf, permission authoritysql.Permission) (*Store, error) {
 	secret := []byte(os.Getenv(c.ProbeSecretEnv))
 	if len(secret) < 32 {
 		return nil, errors.New("全球匹配探测密钥至少32字节，必须从环境注入")
@@ -43,7 +53,7 @@ func Open(ctx context.Context, c config.GlobalMatchConf) (*Store, error) {
 	if c.CrossRegionWaitSeconds == 0 || c.HardLatencyMs < 20 || c.HardLatencyMs > 1000 || c.ProbeTTLSeconds < 30 || c.ProbeTTLSeconds > 600 {
 		return nil, errors.New("全球匹配数据库或地域配置无效")
 	}
-	db, err := openAuthorityDatabase(ctx, c)
+	db, err := openAuthorityDatabaseWithPermission(ctx, c, permission)
 	if err != nil {
 		return nil, err
 	}

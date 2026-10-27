@@ -58,13 +58,13 @@ MySQL:
   MaxIdleConn: 5
 
 # 建表策略(D-14 第 4 条):
-#   AutoMigrate 不写或 true:启动时跑 schemamigrate.Up(有 GET_LOCK,多副本并发安全);
+#   AutoMigrate 不写或 false:常驻启动只核对；表由独立 -migrate 预建。
 #     出错或出现需人工项(类型漂移 / 缺主键)即拒绝启动。
 #   false:启动时只跑一次只读 plan,有待执行语句或需人工项就拒绝启动,并打印补救命令
 #     trade -f etc/trade.yaml -migrate
 # K8s 非 dev 档由 ConfigMap 固定 false,表由 trade-migrate Job 建。
 Schema:
-  AutoMigrate: true
+  AutoMigrate: false
 
 # data_service 客户端:查玩家 home_zone(BatchGetPlayerHomeZone)与领 listing_id 号段(AllocateIdSegment)。
 # 无条件拨号,是 P1 的硬依赖。这里写 Key: dataservice.rpc 不违反 D-13:D-13 禁止的是指向**全局服务**的

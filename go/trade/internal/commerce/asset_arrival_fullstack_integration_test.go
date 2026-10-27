@@ -34,6 +34,7 @@ import (
 	"math"
 	"net"
 	"os"
+	"shared/authoritysql/sqltest"
 	"strconv"
 	"strings"
 	"testing"
@@ -405,7 +406,7 @@ func newTradeFullstackRig(t *testing.T) *tradeFullstackRig {
 	}
 	for player, key := range map[uint64]string{rig.seller: "SELLER_DSN", rig.buyer: "BUYER_DSN"} {
 		cfg := tradeFullstackDSN(t, key, true)
-		db, err := authoritysql.Open(ctx, cfg.FormatDSN(), cfg.DBName, true, 2)
+		db, err := authoritysql.Open(ctx, cfg.FormatDSN(), cfg.DBName, true, 2, authoritysql.Reader())
 		if err != nil {
 			t.Fatalf("实际玩家TiDB连接失败: %v", err)
 		}
@@ -486,35 +487,34 @@ func newTradeFullstackRig(t *testing.T) *tradeFullstackRig {
 	caller := &assetop.Caller{Resolver: locator, Signer: signer}
 	rig.caller = caller
 	adminCfg := tradeFullstackDSN(t, "ADMIN_DSN", false)
-	admin, err := sql.Open("mysql", adminCfg.FormatDSN())
-	if err != nil {
-		t.Fatal("随机交易库连接配置无效")
-	}
-	t.Cleanup(func() { _ = admin.Close() })
 	var nonce [8]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		t.Fatal(err)
 	}
 	name := "trade_fullstack_" + hex.EncodeToString(nonce[:])
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
-		t.Fatalf("创建随机交易库失败: %v", err)
-	}
-	t.Cleanup(func() {
-		clean, stop := context.WithTimeout(context.Background(), 20*time.Second)
-		defer stop()
-		if _, err := admin.ExecContext(clean, "DROP DATABASE `"+name+"`"); err != nil {
-			t.Errorf("清理本次随机交易库失败: %v", err)
-		}
-	})
-	adminCfg.DBName = name
-	db, err := authoritysql.Open(ctx, adminCfg.FormatDSN(), name, true, 2)
+	opts, err := sqltest.OptionsFromEnv(adminCfg.FormatDSN(), name+"_writer", name)
 	if err != nil {
-		t.Fatalf("随机交易库权威TiDB连接失败: %v", err)
+		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
-	report, err := schemamigrate.Up(ctx, db, schemamigrate.Options{Database: name, Tables: data.Tables()})
+	fixture, err := sqltest.New(ctx, t, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	install, err := fixture.OpenSchema(ctx, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	schemaTables := data.Tables()
+	report, err := schemamigrate.Up(ctx, install, schemamigrate.Options{Database: name, Tables: schemaTables})
 	if err != nil || len(report.Manual) != 0 {
-		t.Fatalf("正式交易schema迁移未完成: %v", err)
+		t.Fatalf("正式业务schema迁移未完成: %v", err)
+	}
+	if err = fixture.GrantProtoTables(ctx, name, schemaTables); err != nil {
+		t.Fatal(err)
+	}
+	db, err := fixture.Open(ctx, name, 2)
+	if err != nil {
+		t.Fatal(err)
 	}
 	ops, err := data.NewAssetOpRepo(db, 3*time.Second)
 	if err != nil {

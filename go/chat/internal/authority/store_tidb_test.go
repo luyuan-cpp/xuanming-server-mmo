@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
+	"shared/authoritysql/sqltest"
 	"strings"
 	"sync"
 	"testing"
@@ -12,10 +12,8 @@ import (
 
 	"chat/internal/constants"
 	chatpb "proto/chat"
-	"shared/authoritysql"
 	"shared/placement"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
@@ -48,18 +46,14 @@ func count(t *testing.T, s *Store) int {
 }
 
 // 副本重新走生产连接入口；共享事务域，不共享进程内 Store 或 SQL 池。
-func independentStore(t *testing.T, s *Store) *Store {
+func independentStore(t *testing.T, s *Store, fixture *sqltest.Fixture) *Store {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var database string
 	require.NoError(t, s.db.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&database))
 	require.Regexp(t, `^chat_it_[0-9a-f]{32}$`, database)
-	config := mysql.NewConfig()
-	config.Net, config.Addr, config.User, config.DBName = "tcp", os.Getenv("CHAT_IT_TIDB"), "root", database
-	require.Equal(t, "127.0.0.1:24000", config.Addr)
-	config.Timeout, config.ReadTimeout, config.WriteTimeout = time.Second, 5*time.Second, 5*time.Second
-	db, err := authoritysql.Open(ctx, config.FormatDSN(), database, true, 8)
+	db, err := fixture.Open(ctx, database, 8)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	first, err := s.db.Conn(ctx)
@@ -78,7 +72,7 @@ func independentStore(t *testing.T, s *Store) *Store {
 }
 
 func TestChatTiDBSQLSendPullPreserveOriginalAndIgnoreRedis(t *testing.T) {
-	s := nativeStore(t)
+	s, fixture := nativeStoreFixture(t, false)
 	ctx := original(t, 11)
 	in := sendRequest("original", 22)
 	before := proto.Clone(in)
@@ -95,7 +89,7 @@ func TestChatTiDBSQLSendPullPreserveOriginalAndIgnoreRedis(t *testing.T) {
 		require.Greater(t, messages[0].SendTimeMs, int64(1))
 	}
 	// 故意没有任何Redis依赖：重建Store实例仍从同一SQL原件读取完整窗口。
-	restarted := independentStore(t, s)
+	restarted := independentStore(t, s, fixture)
 	r, err = restarted.Send(ctx, in)
 	require.NoError(t, err)
 	require.True(t, r.Duplicate)
@@ -111,8 +105,8 @@ func TestChatTiDBSQLSendPullPreserveOriginalAndIgnoreRedis(t *testing.T) {
 func TestChatTiDBOldOwnerTransferABAAndFreezeRejectAllEntrances(t *testing.T) {
 	for _, kind := range []string{"transfer", "same-account-ABA", "freeze"} {
 		t.Run(kind, func(t *testing.T) {
-			s := nativeStore(t)
-			peer := independentStore(t, s)
+			s, fixture := nativeStoreFixture(t, false)
+			peer := independentStore(t, s, fixture)
 			old := original(t, 11)
 			_, err := s.Send(old, sendRequest("old", 22))
 			require.NoError(t, err)
@@ -150,8 +144,8 @@ func TestChatTiDBOldOwnerTransferABAAndFreezeRejectAllEntrances(t *testing.T) {
 }
 
 func TestChatTiDBConcurrentSameOriginalCommitsOnce(t *testing.T) {
-	s := nativeStore(t)
-	peer := independentStore(t, s)
+	s, fixture := nativeStoreFixture(t, false)
+	peer := independentStore(t, s, fixture)
 	ctx := original(t, 11)
 	var wg sync.WaitGroup
 	results := make(chan error, 8)
@@ -171,7 +165,7 @@ func TestChatTiDBConcurrentSameOriginalCommitsOnce(t *testing.T) {
 	changed.Message.Content = "同原件不同正文"
 	_, err := peer.Send(ctx, changed)
 	require.ErrorIs(t, err, ErrConflict)
-	restored := independentStore(t, peer)
+	restored := independentStore(t, peer, fixture)
 	replayed, err := restored.Send(ctx, sendRequest("concurrent", 22))
 	require.NoError(t, err)
 	require.True(t, replayed.Duplicate)
@@ -200,7 +194,7 @@ func TestChatTiDBConcurrentSameOriginalCommitsOnce(t *testing.T) {
 }
 
 func TestChatTiDBSQLRateRejectDoesNotConsumeUUID(t *testing.T) {
-	s := nativeStore(t)
+	s, _ := nativeStoreFixture(t, false)
 	ctx := original(t, 11)
 	// 只控制时间接缝使固定秒边界确定；TiDB角色/route/P/唯一行与事务均为真实实现。
 	now := uint64(100000)
@@ -222,7 +216,7 @@ func TestChatTiDBSQLRateRejectDoesNotConsumeUUID(t *testing.T) {
 }
 
 func TestChatTiDBCallerCanReadHistoryAfterPeerDeletion(t *testing.T) {
-	s := nativeStore(t)
+	s, _ := nativeStoreFixture(t, false)
 	ctx := original(t, 11)
 	_, err := s.Send(ctx, sendRequest("peer-gone", 22))
 	require.NoError(t, err)
@@ -237,7 +231,7 @@ func TestChatTiDBCallerCanReadHistoryAfterPeerDeletion(t *testing.T) {
 }
 
 func TestChatTiDBTransferHoldingPWinsAgainstLateSendAndPull(t *testing.T) {
-	s := nativeStore(t)
+	s, _ := nativeStoreFixture(t, false)
 	ctx := original(t, 11)
 	tx, err := s.db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	require.NoError(t, err)
@@ -269,7 +263,7 @@ func TestChatTiDBTransferHoldingPWinsAgainstLateSendAndPull(t *testing.T) {
 }
 
 func TestChatTiDBAcceptedSendHoldsPThroughCommitThenTransferPreservesHistory(t *testing.T) {
-	s := nativeStore(t)
+	s, _ := nativeStoreFixture(t, false)
 	ctx, cancel := context.WithTimeout(original(t, 11), 10*time.Second)
 	defer cancel()
 	locked := make(chan struct{})
@@ -319,7 +313,7 @@ func TestChatTiDBAcceptedSendHoldsPThroughCommitThenTransferPreservesHistory(t *
 }
 
 func TestChatTiDBSQLWindowExpiryGapAndMaximumRemainBounded(t *testing.T) {
-	s := nativeStore(t)
+	s, _ := nativeStoreFixture(t, false)
 	s.rules.RateLimitPerSecond = 100
 	s.rules.HistoryTTLSeconds = 10
 	s.rules.HistoryMaxEntries = 3
@@ -350,7 +344,7 @@ func TestChatTiDBSQLWindowExpiryGapAndMaximumRemainBounded(t *testing.T) {
 func TestChatTiDBMergeAndFrozenRouteRejectBeforeAnyChatRow(t *testing.T) {
 	for _, kind := range []string{"meta", "zone-fence", "frozen-route"} {
 		t.Run(kind, func(t *testing.T) {
-			s := nativeStore(t)
+			s, _ := nativeStoreFixture(t, false)
 			switch kind {
 			case "meta":
 				_, err := s.db.Exec("UPDATE route_meta SET writable=0 WHERE id=1")
@@ -377,7 +371,7 @@ func TestChatTiDBPolicyMismatchAndMissingIndexFailClosed(t *testing.T) {
 	boundary := fixtureRules()
 	boundary.HistoryMaxLimit = 200
 	boundary.HistoryMaxEntries = 1000
-	s := nativeStore(t, boundary)
+	s, fixture := nativeStoreFixture(t, false, boundary)
 	tooLarge := boundary
 	tooLarge.HistoryMaxLimit = 201
 	_, err := New(context.Background(), s.db, s.roleSchema, tooLarge)
@@ -386,14 +380,16 @@ func TestChatTiDBPolicyMismatchAndMissingIndexFailClosed(t *testing.T) {
 	rules.RateLimitPerSecond++
 	_, err = New(context.Background(), s.db, s.roleSchema, rules)
 	require.ErrorIs(t, err, ErrPolicy)
-	_, err = s.db.Exec("ALTER TABLE chat_send_authority DROP INDEX idx_chat_stream")
+	install, err := fixture.OpenSchema(context.Background(), s.roleSchema)
+	require.NoError(t, err)
+	_, err = install.Exec("ALTER TABLE chat_send_authority DROP INDEX idx_chat_stream")
 	require.NoError(t, err)
 	_, err = New(context.Background(), s.db, s.roleSchema, s.rules)
 	require.ErrorContains(t, err, "索引")
 }
 
 func TestChatTiDBUnsignedPlayerAndOriginalBodySurviveRestart(t *testing.T) {
-	s := nativeStore(t)
+	s, _ := nativeStoreFixture(t, false)
 	id := ^uint64(0)
 	ctx := original(t, id)
 	in := sendRequest("unsigned", 11)
@@ -412,7 +408,7 @@ func TestChatTiDBUnsignedPlayerAndOriginalBodySurviveRestart(t *testing.T) {
 }
 
 func TestChatTiDBMissingOriginalAndCorruptReceiptFailClosed(t *testing.T) {
-	s := nativeStore(t)
+	s, _ := nativeStoreFixture(t, false)
 	in := sendRequest("permanent", 22)
 	_, err := s.Send(context.Background(), in)
 	require.ErrorIs(t, err, ErrOriginal)

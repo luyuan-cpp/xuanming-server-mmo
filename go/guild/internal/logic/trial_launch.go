@@ -46,7 +46,7 @@ type trialLaunchRecovery struct {
 	after uint64
 }
 
-func (r *trialLaunchRecovery) round(ctx context.Context) {
+func (r *trialLaunchRecovery) round(ctx context.Context) (resultErr error) {
 	store, ok := r.d.trials.(trialLaunchStore)
 	if !ok || !store.TrialLaunchEnabled() || r.d.Cancellation == nil {
 		return
@@ -54,7 +54,7 @@ func (r *trialLaunchRecovery) round(ctx context.Context) {
 	page, err := store.PendingTrialLaunches(ctx, r.after, 20)
 	if err != nil {
 		logx.Errorf("[GuildTrial] 原开战合同扫描失败: %v", err)
-		return
+		return err
 	}
 	if len(page) == 0 {
 		r.after = 0
@@ -64,16 +64,18 @@ func (r *trialLaunchRecovery) round(ctx context.Context) {
 	defer cancel()
 	for _, original := range page {
 		if budget.Err() != nil {
-			return
+			return errors.Join(resultErr, budget.Err())
 		}
 		call, cancelOne := context.WithTimeout(budget, 2*time.Second)
 		err := r.recoverOne(call, store, original)
 		cancelOne()
 		r.after = original.RequestId
 		if err != nil {
+			resultErr = errors.Join(resultErr, err)
 			logx.Errorf("[GuildTrial] 原开战合同恢复失败 request_id=%d: %v", original.RequestId, err)
 		}
 	}
+	return resultErr
 }
 func (r *trialLaunchRecovery) recoverOne(ctx context.Context, store trialLaunchStore, original *pb.GuildTrialLaunchOriginal) error {
 	battle := data.TrialBattleKey{GuildID: original.GuildId, ActivityID: original.ActivityId, PeriodKey: original.PeriodKey, GuildPeriodKey: original.GuildPeriodKey, InitiatorPlayerID: original.InitiatorPlayerId, LaunchRequestID: original.RequestId}

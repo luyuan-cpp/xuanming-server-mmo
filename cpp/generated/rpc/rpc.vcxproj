@@ -150,7 +150,7 @@
       <PrecompiledHeaderFile></PrecompiledHeaderFile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <AdditionalIncludeDirectories>./src/;../third_party/protobuf/src/;../third_party/protobuf/third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>./src/;../third_party/protobuf/src/;../third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem></SubSystem>
@@ -184,7 +184,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile></PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>../;../../libs/engine/;../../../third_party/grpc/include/;../../../third_party/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../;../../libs/engine/;../../../third_party/;../../../third_party/protobuf/src/;../../../third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4018;4244;4082;4267;4819;</DisableSpecificWarnings>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
@@ -211,7 +211,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>../;../../libs/engine/;../../../third_party/grpc/include/;../../../third_party/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../;../../libs/engine/;../../../third_party/;../../../third_party/protobuf/src/;../../../third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>

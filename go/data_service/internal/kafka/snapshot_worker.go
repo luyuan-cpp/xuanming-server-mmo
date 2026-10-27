@@ -53,11 +53,18 @@ func (c *SnapshotConsumer) Run(ctx context.Context) error {
 	defer cancelRun()
 	stop := &runStop{cancel: cancelRun}
 	var wg sync.WaitGroup
+	// dispatcher panic 时也先取消并 join 分区 worker，再让 supervisor 关闭 reader。
+	defer func() { cancelRun(); wg.Wait() }()
 	workers := make(map[int]*snapshotPartitionWorker)
+	graceful := false
 
 	for runCtx.Err() == nil {
 		msg, err := c.reader.FetchMessage(runCtx)
 		if err != nil {
+			if errors.Is(err, errFetchDrained) {
+				graceful = true
+				break
+			}
 			if runCtx.Err() != nil {
 				break
 			}
@@ -76,7 +83,13 @@ func (c *SnapshotConsumer) Run(ctx context.Context) error {
 			// 某个分区已停(或进程关停):这条不投递、不提交,重建 / 重启后从断点重放。
 		}
 	}
-	cancelRun()
+	if graceful {
+		for _, worker := range workers {
+			close(worker.in)
+		}
+	} else {
+		cancelRun()
+	}
 	wg.Wait()
 
 	if err := stop.firstErr(); err != nil && ctx.Err() == nil {
@@ -151,6 +164,7 @@ func (b *snapshotBatch) reset() {
 func (w *snapshotPartitionWorker) run(ctx context.Context) error {
 	cfg := w.c.cfg
 	b := &snapshotBatch{}
+	draining := false
 	for {
 		// 先单独看一次 ctx:上一批若因 ctx 取消而安静返回(没提交),绝不能再取后面的消息去落库、提交 ——
 		// 下面那个 select 在 ctx.Done 与通道都就绪时是随机选的,不能只靠它。
@@ -160,14 +174,21 @@ func (w *snapshotPartitionWorker) run(ctx context.Context) error {
 		select { // 阻塞等这一批的第一条
 		case <-ctx.Done():
 			return nil
-		case msg := <-w.in:
+		case msg, ok := <-w.in:
+			if !ok {
+				return nil
+			}
 			w.add(b, msg)
 		}
 		deadline := time.Now().Add(cfg.FlushInterval) // 单调时钟
 	fill:
 		for !w.full(b) {
 			select { // 先无等待地拿已排队的(FlushInterval=0 时的「自然攒批」)
-			case msg := <-w.in:
+			case msg, ok := <-w.in:
+				if !ok {
+					draining = true
+					break fill
+				}
 				w.add(b, msg)
 				continue
 			default:
@@ -178,8 +199,12 @@ func (w *snapshotPartitionWorker) run(ctx context.Context) error {
 			}
 			timer := time.NewTimer(wait)
 			select {
-			case msg := <-w.in:
+			case msg, ok := <-w.in:
 				timer.Stop()
+				if !ok {
+					draining = true
+					break fill
+				}
 				w.add(b, msg)
 			case <-timer.C:
 				break fill
@@ -192,6 +217,9 @@ func (w *snapshotPartitionWorker) run(ctx context.Context) error {
 			return err
 		}
 		b.reset()
+		if draining {
+			return nil
+		}
 	}
 }
 

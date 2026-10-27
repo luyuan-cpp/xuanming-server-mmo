@@ -7,7 +7,6 @@ package routetool
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -16,6 +15,9 @@ import (
 
 	"data_service/internal/store"
 
+	"google.golang.org/protobuf/proto"
+	pb "proto/common/database"
+	"shared/drainproof"
 	"shared/placement"
 
 	"github.com/stretchr/testify/assert"
@@ -87,7 +89,9 @@ func runRepair(t *testing.T, rd mappingReader, db repairDB, dryRun, resolveTies 
 	t.Helper()
 	var out, errOut bytes.Buffer
 	var sleeps []time.Duration
+	receipt := unitFrozenReceipt(t)
 	rep, err := ReconcileFromCache(context.Background(), rd, db, RepairOptions{
+		Catalog: &unitMaintenanceCatalog{frozen: receipt, meta: db.ReadRouteMeta}, FrozenReceipt: receipt, Maintenance: drainproof.New(),
 		DryRun:      dryRun,
 		ResolveTies: resolveTies,
 		Batch:       2,
@@ -117,7 +121,7 @@ func TestReconcileFromCache_RefusedWhenWritable(t *testing.T) {
 	assert.Empty(t, db.mergedCalls)
 	assert.Empty(t, sleeps, "没冻结就不该等宽限")
 	assert.Empty(t, run.stdout)
-	assert.Contains(t, run.stderr, RepairNote)
+	assert.NotContains(t, run.stderr, RepairNote, "正式冻结校验先于业务恢复输出")
 }
 
 // TestReconcileFromCache_FenceExitsThree:开头有围栏 → 退出码 3,一行都不修;途中才立的围栏由结尾复查发现,已修的保留、统计行照出。
@@ -284,8 +288,7 @@ func TestReconcileFromCache_MergedIntoInsertedNeverDeleted(t *testing.T) {
 	assert.Contains(t, run.stderr, "MALFORMED merged_into key=merge:merged_into:7")
 }
 
-// TestReconcileFromCache_GraceUsesInjectedSleeper:冻结之后、扫描之前恰好等一次 -freeze-grace(注入的 Sleep,不真睡);
-// 等待出错(ctx 结束)就退出码 2、一行都不修。
+// 正式冻结原件替代固定宽限等待；等待器既不能补授权，也不决定已经闭合后的恢复结果。
 func TestReconcileFromCache_GraceUsesInjectedSleeper(t *testing.T) {
 	mr, rd := newMappingRedis(t)
 	setKeys(t, mr, map[string]string{"player:zone:1": "1"})
@@ -293,17 +296,19 @@ func TestReconcileFromCache_GraceUsesInjectedSleeper(t *testing.T) {
 
 	_, run, sleeps := runRepair(t, rd, db, false, false)
 	assert.Equal(t, ExitClean, run.code, run.stderr)
-	assert.Equal(t, []time.Duration{10 * time.Second}, sleeps)
+	assert.Empty(t, sleeps, "永久冻结收据替代按时间猜排空")
 
 	db = newFrozenRepairDB()
 	var out, errOut bytes.Buffer
+	receipt := unitFrozenReceipt(t)
 	rep, err := ReconcileFromCache(context.Background(), rd, db, RepairOptions{
+		Catalog: &unitMaintenanceCatalog{frozen: receipt, meta: db.ReadRouteMeta}, FrozenReceipt: receipt, Maintenance: drainproof.New(),
 		Batch: 2, FreezeGrace: time.Second, Stdout: &out, Stderr: &errOut,
 		Sleep: func(context.Context, time.Duration) error { return context.Canceled },
 	})
-	assert.True(t, errors.Is(err, context.Canceled), "err = %v", err)
-	assert.Equal(t, ExitFailed, RepairExitCode(rep, err))
-	assert.Empty(t, db.calls)
+	assert.NoError(t, err, "已经核验正式冻结时不调用过期的等待器")
+	assert.Equal(t, ExitClean, RepairExitCode(rep, err))
+	assert.NotEmpty(t, db.calls)
 }
 
 // TestRouteAudit_FrozenRecoveryIgnoresDBOnlyUnpublished:冻结期恢复口径下 db_only_unpublished 照常计数与打明细,但不计入退出码;
@@ -342,4 +347,81 @@ func TestRouteAudit_FrozenRecoveryIgnoresDBOnlyUnpublished(t *testing.T) {
 	}, true)
 	assert.Equal(t, ExitAttention, run.code, "其余类别在恢复口径下照样要为 0")
 	assert.Equal(t, 1, rep.ValueMismatch)
+}
+
+func TestReconcileFromCacheRequiresBoundPermanentFreeze(t *testing.T) {
+	for _, name := range []string{"missing-catalog", "missing-receipt", "different-run", "wrong-kind", "wrong-run-phase", "different-generation"} {
+		t.Run(name, func(t *testing.T) {
+			_, rd := newMappingRedis(t)
+			db := newFrozenRepairDB()
+			permanent := unitFrozenReceipt(t)
+			input := proto.Clone(permanent).(*pb.SqlWriterMaintenanceReceipt)
+			catalog := &unitMaintenanceCatalog{frozen: permanent, meta: db.ReadRouteMeta}
+			var out, errOut bytes.Buffer
+			opts := RepairOptions{Catalog: catalog, FrozenReceipt: input, Maintenance: drainproof.New(), Batch: 2, MaxReport: 10, Stdout: &out, Stderr: &errOut}
+			switch name {
+			case "missing-catalog":
+				opts.Catalog = nil
+			case "missing-receipt":
+				opts.FrozenReceipt = nil
+			case "different-run":
+				input.RunId[0] ^= 1
+			case "wrong-kind":
+				permanent.Kind = pb.SqlWriterMaintenanceReceipt_EMERGENCY_FREEZE
+				input.Kind = permanent.Kind
+			case "wrong-run-phase":
+				permanent.RunPhase = pb.SqlWriterDrainRun_DRAINING
+				input.RunPhase = permanent.RunPhase
+			case "different-generation":
+				db.meta.Generation = "fedcba9876543210fedcba9876543210"
+			}
+			rep, err := ReconcileFromCache(context.Background(), rd, db, opts)
+			assert.Error(t, err)
+			assert.Equal(t, ExitFailed, RepairExitCode(rep, err))
+			assert.Empty(t, db.calls)
+			assert.Empty(t, db.mergedCalls)
+			assert.Empty(t, out.String())
+			assert.NotContains(t, errOut.String(), RepairNote)
+		})
+	}
+}
+
+func TestReconcileFromCacheClosedOrMissingToolDoesNotWrite(t *testing.T) {
+	for _, missing := range []bool{false, true} {
+		t.Run(fmt.Sprint(missing), func(t *testing.T) {
+			mr, rd := newMappingRedis(t)
+			setKeys(t, mr, map[string]string{"player:zone:1": "1"})
+			db := newFrozenRepairDB()
+			receipt := unitFrozenReceipt(t)
+			work := drainproof.New()
+			work.CloseAdmission()
+			var out, errOut bytes.Buffer
+			opts := RepairOptions{Catalog: &unitMaintenanceCatalog{frozen: receipt, meta: db.ReadRouteMeta}, FrozenReceipt: receipt, Maintenance: work, Batch: 2, MaxReport: 10, Stdout: &out, Stderr: &errOut}
+			if missing {
+				opts.Maintenance = nil
+			}
+			rep, err := ReconcileFromCache(context.Background(), rd, db, opts)
+			require.Error(t, err)
+			require.Equal(t, ExitFailed, RepairExitCode(rep, err))
+			require.Empty(t, db.calls)
+			require.Empty(t, db.mergedCalls)
+			require.Empty(t, out.String())
+			require.NoError(t, work.Wait(context.Background()), "本地拒绝没有接受恢复任务")
+		})
+	}
+}
+
+func TestReconcileFromCacheFailureKeepsToolHoldAfterReturn(t *testing.T) {
+	_, rd := newMappingRedis(t)
+	db := newFrozenRepairDB()
+	receipt := unitFrozenReceipt(t)
+	db.meta.Writable = 1
+	work := drainproof.New()
+	var out, errOut bytes.Buffer
+	_, err := ReconcileFromCache(context.Background(), rd, db, RepairOptions{Catalog: &unitMaintenanceCatalog{frozen: receipt, meta: db.ReadRouteMeta}, FrozenReceipt: receipt, Maintenance: work, Batch: 2, MaxReport: 10, Stdout: &out, Stderr: &errOut})
+	require.Error(t, err)
+	require.Zero(t, work.Pending())
+	work.CloseAdmission()
+	require.ErrorIs(t, work.Wait(context.Background()), drainproof.ErrHold)
+	require.Empty(t, db.calls)
 }

@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"os"
+	"shared/drainproof"
 	"sync"
 	"time"
 
@@ -91,6 +93,8 @@ var ErrAssetSecretMissing = errors.New("trade: 资产通道密钥未配置")
 // AssetChannel 是资产通道的一整套依赖。Pipeline 为 nil 表示通道未启用(密钥缺失),
 // 调用方必须判空:nil 管线上不存在"先写进 outbox 再说"的中间态。
 type AssetChannel struct {
+	RelayAdmission *drainproof.Session
+	RootAdmission  *drainproof.Session
 	// Redis 共享单库客户端(SharedRedis)。读位置键 player:{id}:location(scenenode.Locator);另写两类本服务自己的键:
 	// 落地唤醒的跨副本去重键 assetop:wake:trade:{player_id}(SET NX EX,shared/assetopwake),
 	// 与维护选主锁 trade:assetop:maintenance:leader(shared/leader,值带属主校验)。唤醒订阅的 assetop:wake 频道也在这一实例上。
@@ -120,9 +124,13 @@ type AssetChannel struct {
 	// 对账与放弃都关着时为 nil(不竞选,省一把锁)。构造后只读。
 	maintenance *leader.Elector
 
-	startOnce sync.Once
-	stopOnce  sync.Once
-	stopLoops context.CancelFunc
+	startOnce       sync.Once
+	stopOnce        sync.Once
+	stopLoops       context.CancelFunc
+	stopDone        chan struct{}
+	closeMu         sync.Mutex
+	resourcesClosed bool
+	closeErr        error
 
 	// mu 只保护 closed 与 Start 里的 wg.Add:让 Start 与 Close 无论怎么交错都不会在 wg.Wait 之后再 wg.Add
 	// (WaitGroup 不允许 Add 与 Wait 并发)。closed 之后 Start 是空操作。
@@ -141,7 +149,7 @@ func (a *AssetChannel) Enabled() bool { return a != nil && a.Pipeline != nil }
 
 // newAssetChannel 建整套依赖。返回错误 = 启动致命(共享 Redis 连不上、outbox 表名非法、
 // op_id 号段建不出来);密钥缺失只降级,不返回错误。
-func newAssetChannel(c config.Config, db *sql.DB, ds dspb.DataServiceClient) (*AssetChannel, error) {
+func newAssetChannel(c config.Config, db *sql.DB, ds dspb.DataServiceClient, roles ...*drainproof.Session) (*AssetChannel, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     c.SharedRedis.Host,
 		Password: c.SharedRedis.Password,
@@ -167,7 +175,7 @@ func newAssetChannel(c config.Config, db *sql.DB, ds dspb.DataServiceClient) (*A
 		return nil, err
 	}
 
-	opIDs, err := NewAssetOpIDSegment(c.IdSegment, ds)
+	opIDs, err := NewAssetOpIDSegment(c.IdSegment, ds, roles...)
 	if err != nil {
 		_ = rdb.Close()
 		return nil, fmt.Errorf("op_id segment client: %w", err)
@@ -347,7 +355,7 @@ func maintenanceLeaderID() string {
 // (不拨共享 Redis、不建节点镜像)。只删保留期外的 APPLIED / REJECTED / ABORTED / ABANDONED,
 // PENDING 与 APPLIED_PARTIAL 永不删(data.AssetOpRepo.CleanupTerminalOps)。调用方只在 AssetOp.CleanupEnabled 时调用,
 // 且必须在建表(ensureSchema)之后。
-func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf) (stop func(), err error) {
+func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf, roots ...*drainproof.Session) (stop func(), err error) {
 	if db == nil {
 		return nil, errors.New("trade: 终态资产指令清理缺 MySQL 连接池")
 	}
@@ -356,12 +364,53 @@ func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf) (stop func(), err err
 		return nil, fmt.Errorf("trade: 终态资产指令清理装配失败: %w", err)
 	}
 	conf := cleanupConfFrom(c)
+	if len(roots) > 1 || (len(roots) == 1 && roots[0] == nil) {
+		return nil, drainproof.ErrHold
+	}
+	if conf.Interval <= 0 || conf.TerminalRetention <= 0 {
+		return nil, errors.New("trade cleanup 时间预算非法")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	safego.Go(assetOpCleanupPoint, func() {
 		// close 放在 defer 里:safego 兜住 panic 时它照样执行,stop 不会永远等下去。
 		defer close(done)
-		repo.RunCleanup(ctx, conf)
+		if len(roots) == 0 {
+			repo.RunCleanup(ctx, conf)
+			return
+		}
+		owner := roots[0]
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				owner.Hold()
+				panic(recovered)
+			}
+		}()
+		timer := time.NewTimer(time.Duration(rand.Int64N(int64(conf.Interval))))
+		defer timer.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+			}
+			finish, enterErr := owner.Enter()
+			if enterErr == nil {
+				func() {
+					defer finish()
+					budget, release := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+					defer release()
+					if _, err := repo.CleanupTerminalOps(budget, time.Now(), conf.TerminalRetention); err != nil {
+						owner.Hold()
+						logx.Errorf("trade cleanup 失败: %v", err)
+					}
+				}()
+			} else if !errors.Is(enterErr, drainproof.ErrClosed) {
+				owner.Hold()
+				return
+			}
+			timer.Reset(conf.Interval)
+		}
 	})
 	logx.Infof("[trade] Asset cleanup started: goroutine %s interval=%v terminal_retention=%v",
 		assetOpCleanupPoint, conf.Interval, conf.TerminalRetention)
@@ -397,6 +446,7 @@ func (a *AssetChannel) Start(ctx context.Context, etcd *clientv3.Client) {
 		// wg.Done 一律放在 fn 自己的 defer 里:safego 兜住 panic 时 defer 照样执行,Close 不会永远等下去。
 		safego.Go(sceneWatcherPoint, func() {
 			defer a.wg.Done()
+			defer a.holdPanic()
 			a.Watcher.Run(loopCtx, etcd)
 		})
 		if a.Pipeline == nil {
@@ -410,12 +460,14 @@ func (a *AssetChannel) Start(ctx context.Context, etcd *clientv3.Client) {
 		a.wg.Add(1)
 		safego.Go(assetOpLoopPoint, func() {
 			defer a.wg.Done()
+			defer a.holdPanic()
 			a.Pipeline.Run(loopCtx) // 阻塞到 loopCtx 结束、本轮 Tick 的 worker 全部落库完
 		})
 		if a.Commerce != nil {
 			a.wg.Add(1)
 			safego.Go("trade.commerce.reconcile", func() {
 				defer a.wg.Done()
+				defer a.holdPanic()
 				ticker := time.NewTicker(time.Second)
 				defer ticker.Stop()
 				phase := 0
@@ -424,30 +476,53 @@ func (a *AssetChannel) Start(ctx context.Context, etcd *clientv3.Client) {
 					case <-loopCtx.Done():
 						return
 					case <-ticker.C:
-						budget, cancel := context.WithTimeout(loopCtx, 10*time.Second)
-						// 各通道保留子预算并轮换起点，离线角色/商城故障不能吃光其它通道整个10秒窗口。
-						for n := 0; n < 3; n++ {
-							child, release := context.WithTimeout(budget, 3*time.Second)
-							var err error
-							switch (phase + n) % 3 {
-							case 0:
-								err = a.Commerce.Tick(child)
-							case 1:
-								if a.Mall != nil {
-									err = a.Mall.Tick(child)
-								}
-							case 2:
-								if a.Rmb != nil {
-									err = a.Rmb.Tick(child)
-								}
+						finish := func() {}
+						if a.RelayAdmission != nil {
+							accepted, err := a.RelayAdmission.Enter()
+							if err != nil {
+								return
 							}
-							release()
-							if err != nil && loopCtx.Err() == nil {
-								logx.Errorf("交易恢复通道失败 phase=%d: %v", (phase+n)%3, err)
-							}
+							finish = accepted
 						}
-						phase = (phase + 1) % 3
-						cancel()
+						func() {
+							defer finish()
+							budget, cancel := context.WithTimeout(context.WithoutCancel(loopCtx), 10*time.Second)
+							defer cancel()
+							// 各通道保留子预算并轮换起点，离线角色/商城故障不能吃光其它通道整个10秒窗口。
+							for n := 0; n < 3; n++ {
+								child, release := context.WithTimeout(budget, 3*time.Second)
+								var err error
+								switch (phase + n) % 3 {
+								case 0:
+									err = a.Commerce.Tick(child)
+								case 1:
+									if a.Mall != nil {
+										if a.RootAdmission == nil {
+											err = a.Mall.Tick(child)
+										} else {
+											finishSource, enterErr := a.RootAdmission.Enter()
+											if enterErr == nil {
+												func() { defer finishSource(); err = a.Mall.Tick(child) }()
+											} else if !errors.Is(enterErr, drainproof.ErrClosed) {
+												err = enterErr
+											}
+										}
+									}
+								case 2:
+									if a.Rmb != nil {
+										err = a.Rmb.Tick(child)
+									}
+								}
+								release()
+								if err != nil && a.RelayAdmission != nil {
+									a.RelayAdmission.Hold()
+								}
+								if err != nil && loopCtx.Err() == nil {
+									logx.Errorf("交易恢复通道失败 phase=%d: %v", (phase+n)%3, err)
+								}
+							}
+							phase = (phase + 1) % 3
+						}()
 					}
 				}
 			})
@@ -456,6 +531,7 @@ func (a *AssetChannel) Start(ctx context.Context, etcd *clientv3.Client) {
 			a.wg.Add(1)
 			safego.Go(assetOpMaintenancePoint, func() {
 				defer a.wg.Done()
+				defer a.holdPanic()
 				a.maintenance.Run(loopCtx, a.Pipeline.RunMaintenance)
 			})
 		}
@@ -476,32 +552,99 @@ func (a *AssetChannel) Start(ctx context.Context, etcd *clientv3.Client) {
 //
 // 在途的资产 RPC 被连接关闭打断不会丢数据:那一行仍是 PENDING,下次循环照常重投,
 // scene 见过的 seq 只会把原结局再答一遍(不变量 I2)。
+func (a *AssetChannel) holdPanic() {
+	if recovered := recover(); recovered != nil {
+		if a.RelayAdmission != nil {
+			a.RelayAdmission.Hold()
+		}
+		if a.RootAdmission != nil {
+			a.RootAdmission.Hold()
+		}
+		panic(recovered)
+	}
+}
+func (a *AssetChannel) stopAndJoin() <-chan struct{} {
+	a.stopOnce.Do(func() {
+		a.mu.Lock()
+		a.closed = true
+		stop := a.stopLoops
+		a.stopDone = make(chan struct{})
+		a.mu.Unlock()
+		if stop != nil {
+			stop()
+		}
+		go func() { a.Wake.Stop(); a.wg.Wait(); close(a.stopDone) }()
+	})
+	return a.stopDone
+}
+
+// CloseAndReport 先停止发起并实际 join；确定持久 PENDING 可以留给新 boot，未返回 RPC 不能冒充结局。
+func (a *AssetChannel) CloseAndReport(ctx context.Context) error {
+	if a == nil {
+		return nil
+	}
+	a.closeMu.Lock()
+	defer a.closeMu.Unlock()
+	if a.resourcesClosed {
+		return a.closeErr
+	}
+	if a.RelayAdmission == nil {
+		return drainproof.ErrHold
+	}
+	select {
+	case <-ctx.Done():
+		a.RelayAdmission.Hold()
+		return errors.Join(drainproof.ErrHold, ctx.Err())
+	case <-a.stopAndJoin():
+	}
+	if a.OpIDs != nil {
+		digest, err := a.OpIDs.DrainAndReport(ctx)
+		if err != nil {
+			return err
+		}
+		if err = a.RelayAdmission.MergeSettled(digest); err != nil {
+			return err
+		}
+	}
+	if err := a.RelayAdmission.WaitIdle(ctx); err != nil {
+		return err
+	}
+	if a.Conns != nil {
+		a.Conns.Close()
+	}
+	if a.Redis != nil {
+		a.closeErr = a.Redis.Close()
+	}
+	a.resourcesClosed = true
+	return a.closeErr
+}
 func (a *AssetChannel) Close() {
 	if a == nil {
 		return
 	}
-	a.stopOnce.Do(func() {
-		a.mu.Lock()
-		a.closed = true
-		stopLoops := a.stopLoops
-		a.mu.Unlock()
-		if stopLoops != nil {
-			stopLoops()
+	if a.RelayAdmission != nil {
+		if err := a.CloseAndReport(context.Background()); err != nil {
+			logx.Errorf("trade asset owner HOLD: %v", err)
 		}
-		a.Wake.Stop() // 等在途唤醒结束;nil 接收者与没 Start 过都安全
-		a.wg.Wait()   // 等节点镜像、重投循环(含在途行落库)与维护(卸任、释放选主锁)全部退出
-		if a.OpIDs != nil {
-			a.OpIDs.Close()
-		}
-		if a.Conns != nil {
-			a.Conns.Close()
-		}
-		if a.Redis != nil {
-			if err := a.Redis.Close(); err != nil {
-				logx.Errorf("[trade] Failed to close shared Redis: %v", err)
-			}
-		}
-	})
+		return
+	}
+	// 仅构造失败、尚未交付 service owner 的资源清理，不生成维护原件。
+	a.closeMu.Lock()
+	defer a.closeMu.Unlock()
+	if a.resourcesClosed {
+		return
+	}
+	<-a.stopAndJoin()
+	if a.OpIDs != nil {
+		a.OpIDs.Close()
+	}
+	if a.Conns != nil {
+		a.Conns.Close()
+	}
+	if a.Redis != nil {
+		a.closeErr = a.Redis.Close()
+	}
+	a.resourcesClosed = true
 }
 
 // WarmAssetOpIDSegment 启动时同步领第一段 op_id;失败只告警(之后每次 Next 会自己再试)。
@@ -535,18 +678,17 @@ func NewAssetOpSigner() (*assetop.Signer, error) {
 // NewAssetOpIDSegment 按 IdSegment 配置建 op_id 号段客户端(biz_tag = trade_asset_op)。
 // 与 listing_id 共用同一份 Step / MinStep / MaxStep:两者都是"每次上架各取一个"的量级。
 // 同样没有 snowflake 回退 —— 发不出号就当场拒绝上架,绝不自造 id(自造 = outbox 撞主键)。
-func NewAssetOpIDSegment(cfg idsegment.Conf, client dspb.DataServiceClient) (*idsegment.Client, error) {
+func NewAssetOpIDSegment(cfg idsegment.Conf, client dspb.DataServiceClient, roles ...*drainproof.Session) (*idsegment.Client, error) {
 	if !cfg.Enabled {
 		return nil, errors.New("IdSegment.Enabled=false: op_id 只由号段发(biz_tag=" + AssetOpIDBizTag + ")")
 	}
 	if client == nil {
 		return nil, errors.New("data_service client is nil: op_id 发号需要 data_service.AllocateIdSegment")
 	}
-	return idsegment.New(
-		idsegment.Adapt(client.AllocateIdSegment,
-			func(bizTag string, step uint32) *dspb.AllocateIdSegmentRequest {
-				return &dspb.AllocateIdSegmentRequest{BizTag: bizTag, Step: step}
-			}),
+	allocate := idsegment.Adapt(client.AllocateIdSegment, func(bizTag string, step uint32) *dspb.AllocateIdSegmentRequest {
+		return &dspb.AllocateIdSegmentRequest{BizTag: bizTag, Step: step}
+	})
+	return idsegment.New(bindAllocationOwner(allocate, roles...),
 		idsegment.Options{
 			BizTag:  AssetOpIDBizTag,
 			Step:    cfg.StepOrDefault(),

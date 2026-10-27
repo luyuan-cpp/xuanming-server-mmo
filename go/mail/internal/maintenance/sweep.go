@@ -8,6 +8,7 @@ import (
 	"mail/internal/data"
 	"mail/internal/metrics"
 	"math/rand/v2"
+	"shared/drainproof"
 	"time"
 )
 
@@ -41,7 +42,17 @@ func (c Config) Validate() error {
 }
 
 // Run由主进程的同一个取消和等待链管理，不另起lifecycle/session主干。
-func Run(ctx context.Context, repo *data.Repo, c Config) {
+func Run(ctx context.Context, repo *data.Repo, c Config, admissions ...*drainproof.Session) {
+	var root *drainproof.Session
+	if len(admissions) > 1 {
+		return
+	}
+	if len(admissions) == 1 {
+		root = admissions[0]
+		if root == nil {
+			return
+		}
+	}
 	c = c.Defaults()
 	if err := c.Validate(); err != nil {
 		logx.Error("[mail] sweep配置无效，未启动清理")
@@ -59,7 +70,28 @@ func Run(ctx context.Context, repo *data.Repo, c Config) {
 	ticker := time.NewTicker(c.Interval)
 	defer ticker.Stop()
 	for {
-		round(ctx, repo, c)
+		if root == nil {
+			round(ctx, repo, c)
+		} else {
+			finish, err := root.Enter()
+			if err != nil && !errors.Is(err, drainproof.ErrClosed) {
+				return
+			}
+			if err == nil {
+				func() {
+					defer finish()
+					defer func() {
+						if recovered := recover(); recovered != nil {
+							root.Hold()
+							panic(recovered)
+						}
+					}()
+					if err := sweepRound(context.WithoutCancel(ctx), repo, c); err != nil && c.Mode == config.SweepModeDelete {
+						root.Hold()
+					}
+				}()
+			}
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -67,11 +99,13 @@ func Run(ctx context.Context, repo *data.Repo, c Config) {
 		}
 	}
 }
-func round(ctx context.Context, repo *data.Repo, c Config) {
+func round(ctx context.Context, repo *data.Repo, c Config) { _ = sweepRound(ctx, repo, c) }
+
+func sweepRound(ctx context.Context, repo *data.Repo, c Config) error {
 	defer metrics.MarkSweepRun(time.Now())
 	cutoff := time.Now().Add(-time.Duration(c.RetentionDays) * 24 * time.Hour).UnixMilli()
 	if cutoff <= 0 {
-		return
+		return nil
 	}
 	budget := 30 * time.Second
 	if c.Interval < budget {
@@ -91,4 +125,5 @@ func round(ctx context.Context, repo *data.Repo, c Config) {
 	if err != nil {
 		logx.Errorf("[mail] bounded sweep failed mode=%s reason=%T", c.Mode, err)
 	}
+	return err
 }

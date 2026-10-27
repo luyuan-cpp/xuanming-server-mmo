@@ -34,8 +34,6 @@ include_directories(
     ../../../third_party/fmt/include
     ../../../third_party/spdlog/include
     ../../libs/engine/
-    ../third_party/protobuf/src/
-    ../third_party/protobuf/third_party/abseil-cpp/
     ./src/
     /usr/local/include
 )

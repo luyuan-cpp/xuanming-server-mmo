@@ -45,8 +45,8 @@ func TestEtcYamlContractValues(t *testing.T) {
 	if c.MySQL.DBName != data.DatabaseName {
 		t.Errorf("MySQL.DBName = %q, want %q(D-14 独占库)", c.MySQL.DBName, data.DatabaseName)
 	}
-	if !c.ShouldAutoMigrate() {
-		t.Error("本地 dev 应启动期自动建表(Schema.AutoMigrate: true)")
+	if c.ShouldAutoMigrate() {
+		t.Error("本地dev也必须显式迁移，常驻默认仅核对表结构")
 	}
 	if c.CoreRedis.Host == "" || c.CoreRedis.DB != 0 {
 		t.Errorf("CoreRedis = %+v:段名必须逐字是 CoreRedis,DB 必须是 0(owner_epoch / location 所在库)", c.CoreRedis)
@@ -289,8 +289,8 @@ func TestRequestBudgetAndAutoMigrate(t *testing.T) {
 	if got := c.RequestBudget(); got != 2500*time.Millisecond {
 		t.Errorf("RequestBudget = %v, want 2.5s", got)
 	}
-	if !c.ShouldAutoMigrate() {
-		t.Error("没写 Schema 段 = 自动建表")
+	if c.ShouldAutoMigrate() {
+		t.Error("没写Schema段默认只读核对")
 	}
 	no := false
 	c.Schema.AutoMigrate = &no

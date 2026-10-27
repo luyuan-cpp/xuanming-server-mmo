@@ -64,6 +64,7 @@ import (
 	"db/internal/metrics"
 	"errors"
 	"fmt"
+	"shared/drainproof"
 	"sync"
 	"time"
 
@@ -632,6 +633,7 @@ func (q *aofGroupEnqueue) close() {
 		started := q.started
 		q.mu.Unlock()
 
+		// 正式排空由外层 drainEnqueue 等待 pending；底层关闭仍须及时中止失败重试。
 		q.cancel()
 		q.submitters.Wait()
 		close(q.reqs)
@@ -731,3 +733,35 @@ func waitAOFBudgetMs(now, deadline time.Time, hasDeadline bool, configured, marg
 	}
 	return ms, true
 }
+
+// drainEnqueue把done本身纳入join。回调全部返回以后才允许retry owner归还或报告QUIESCED。
+type drainEnqueue struct {
+	inner   durableEnqueue
+	pending *drainproof.Session
+	mu      sync.Mutex
+	err     error
+}
+
+func (q *drainEnqueue) start(ctx context.Context) error { return q.inner.start(ctx) }
+func (q *drainEnqueue) submit(ctx context.Context, target, key string, body []byte, callback func(error)) {
+	done, err := q.pending.Enter()
+	if err != nil {
+		callback(err)
+		return
+	}
+	q.inner.submit(ctx, target, key, body, func(err error) {
+		defer done()
+		if err != nil && q.pending.Closed() {
+			q.mu.Lock()
+			q.err = errors.Join(q.err, err)
+			q.mu.Unlock()
+		}
+		callback(err)
+	})
+}
+func (q *drainEnqueue) close() {
+	q.pending.CloseAdmission()
+	_ = q.pending.Wait(context.Background())
+	q.inner.close()
+}
+func (q *drainEnqueue) drainError() error { q.mu.Lock(); defer q.mu.Unlock(); return q.err }

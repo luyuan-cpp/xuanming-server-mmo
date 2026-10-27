@@ -34,8 +34,6 @@ include_directories(
     ../third_party/googletest/googletest/include/
     ../third_party/muduo-linux/
     ../third_party/muduo-linux/contrib/
-    ../third_party/protobuf/third_party/abseil-cpp/
-    ../third_party/protobuf/third_party/utf8_range/
     ../third_party/redis
     ../third_party/redis/deps/
     ../third_party/spdlog/include

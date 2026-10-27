@@ -58,20 +58,29 @@ type appliedMigration struct {
 // GET_LOCK、SET SESSION 都是会话级的,DDL 必须和它们在同一条连接上才受保护,
 // 所以全部 DDL 与台账写入都经 conn 执行;只有超时后的 KILL QUERY 走连接池里的另一条连接。
 type session struct {
-	db     *sql.DB
-	conn   *sql.Conn
-	connID uint64
-	opts   Options
+	db       *sql.DB
+	conn     *sql.Conn
+	connID   uint64
+	opts     Options
+	readOnly bool
 }
 
 // openSession 取连接 → 库名断言 → 读 CONNECTION_ID → 收紧会话锁等待。
 func openSession(ctx context.Context, db *sql.DB, opts Options) (*session, error) {
+	return openSessionMode(ctx, db, opts, false)
+}
+
+func openReadSession(ctx context.Context, db *sql.DB, opts Options) (*session, error) {
+	return openSessionMode(ctx, db, opts, true)
+}
+
+func openSessionMode(ctx context.Context, db *sql.DB, opts Options, readOnly bool) (*session, error) {
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("schemamigrate: 连接库 %q 失败(库不存在时先按 deploy/mysql-init/00_init_zone_dbs.sql 建库,本包不建库): %w",
 			opts.Database, err)
 	}
-	s := &session{db: db, conn: conn, opts: opts}
+	s := &session{db: db, conn: conn, opts: opts, readOnly: readOnly}
 	if err := s.prepare(ctx); err != nil {
 		s.close()
 		return nil, err
@@ -92,6 +101,9 @@ func (s *session) prepare(ctx context.Context) error {
 		return fmt.Errorf("%w: 连接实际选中 %q,期望 %q", ErrDatabaseMismatch, current.String, s.opts.Database)
 	}
 
+	if s.readOnly {
+		return nil
+	}
 	if err := s.conn.QueryRowContext(ctx, "SELECT CONNECTION_ID()").Scan(&s.connID); err != nil {
 		return fmt.Errorf("schemamigrate: 读取库 %q 迁移连接的 CONNECTION_ID() 失败: %w", s.opts.Database, err)
 	}

@@ -32,6 +32,7 @@ import (
 	"math"
 	"net"
 	"os"
+	"shared/authoritysql/sqltest"
 	"strconv"
 	"strings"
 	"testing"
@@ -236,7 +237,7 @@ func newMailFullstackRig(t *testing.T) *mailFullstackRig {
 	rig := &mailFullstackRig{ctx: ctx, player: player, item: uint32(item)}
 
 	playerCfg := mailFullstackDSN(t, "PLAYER_DSN", true)
-	rig.playerDB, err = authoritysql.Open(ctx, playerCfg.FormatDSN(), playerCfg.DBName, true, 2)
+	rig.playerDB, err = authoritysql.Open(ctx, playerCfg.FormatDSN(), playerCfg.DBName, true, 2, authoritysql.Reader())
 	if err != nil {
 		t.Fatalf("实际玩家TiDB不可用: %v", err)
 	}
@@ -296,38 +297,34 @@ func newMailFullstackRig(t *testing.T) *mailFullstackRig {
 	rig.caller = &assetop.Caller{Resolver: locator, Signer: signer}
 
 	adminCfg := mailFullstackDSN(t, "ADMIN_DSN", false)
-	admin, err := sql.Open("mysql", adminCfg.FormatDSN())
-	if err != nil {
-		t.Fatal("随机业务库连接配置无效")
-	}
-	t.Cleanup(func() { _ = admin.Close() })
 	var nonce [8]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		t.Fatal(err)
 	}
 	name := "mail_fullstack_" + hex.EncodeToString(nonce[:])
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
-		t.Fatalf("创建独立随机邮件库失败: %v", err)
-	}
-	t.Cleanup(func() {
-		clean, stop := context.WithTimeout(context.Background(), 20*time.Second)
-		defer stop()
-		if _, err := admin.ExecContext(clean, "DROP DATABASE `"+name+"`"); err != nil {
-			t.Errorf("清理本次随机邮件库失败: %v", err)
-		}
-	})
-	adminCfg.DBName = name
-	db, err := authoritysql.Open(ctx, adminCfg.FormatDSN(), name, true, 2)
+	opts, err := sqltest.OptionsFromEnv(adminCfg.FormatDSN(), name+"_writer", name)
 	if err != nil {
-		t.Fatalf("随机邮件库权威TiDB连接失败: %v", err)
+		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
-	// 可见性 SQL 会同时解析个人、全服与帮会分支；即使本次只领个人邮件，
-	// 随机库也须具备正式 guild_member schema。沿用排行到邮件夹具的迁移装配，不伪造成员数据。
+	fixture, err := sqltest.New(ctx, t, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	install, err := fixture.OpenSchema(ctx, name)
+	if err != nil {
+		t.Fatal(err)
+	}
 	schemaTables := append(Tables(), &guildpb.GuildMemberRecord{})
-	report, err := schemamigrate.Up(ctx, db, schemamigrate.Options{Database: name, Tables: schemaTables})
+	report, err := schemamigrate.Up(ctx, install, schemamigrate.Options{Database: name, Tables: schemaTables})
 	if err != nil || len(report.Manual) != 0 {
-		t.Fatalf("正式邮件schema迁移未完成: %v", err)
+		t.Fatalf("正式业务schema迁移未完成: %v", err)
+	}
+	if err = fixture.GrantProtoTables(ctx, name, schemaTables); err != nil {
+		t.Fatal(err)
+	}
+	db, err := fixture.Open(ctx, name, 2)
+	if err != nil {
+		t.Fatal(err)
 	}
 	rig.repo = New(db, ids.IDs["mail"].Next, ids.IDs["mail_asset_op"].Next, func(id uint32) bool { _, ok := items.FindById(id); return ok }, name)
 	rows, err := db.QueryContext(ctx, "SELECT m.mail_id FROM mail_message m WHERE "+rig.repo.visiblePredicate()+" LIMIT 0", 0, 0, 0)

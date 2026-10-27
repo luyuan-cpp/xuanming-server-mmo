@@ -27,6 +27,8 @@ import (
 )
 
 type GameDB struct {
+	// writer 由进程唯一启动入口消费一次，按需落点池复用该身份，不重新登记。
+	writer   authoritysql.WriterConfig
 	SqlModel *proto2mysql.DB
 	DB       *sql.DB
 	// Connector 是建这个连接池用的连接器。探活(store_health.go)用它绕过连接池新建一条连接:
@@ -280,11 +282,14 @@ func isUnknownDatabaseError(err error) bool {
 }
 
 func newPlayerConnector(cfg *mysql.Config) (driver.Connector, error) {
+	if DB == nil || DB.writer.AuthoritySchema() == "" {
+		return nil, errors.New("玩家SQL池缺少本boot已消费写资格")
+	}
 	inner, err := mysql.NewConnector(cfg)
 	if err != nil {
 		return nil, err
 	}
-	return authoritysql.PinCurrentSession(inner, config.AppConfig.ServerConfig.Database.RequireTiDB), nil
+	return authoritysql.PinCurrentSession(inner, config.AppConfig.ServerConfig.Database.RequireTiDB, authoritysql.Writer(DB.writer))
 }
 
 func openDB(policy DDLPolicy) error {
@@ -335,7 +340,9 @@ func openDB(policy DDLPolicy) error {
 		return err
 	}
 
+	writer := DB.writer
 	DB = &GameDB{
+		writer:    writer,
 		DB:        databaseHandle,
 		SqlModel:  proto2mysql.NewDB(),
 		Connector: conn,
@@ -537,6 +544,29 @@ func assertDriftKeysArePhysicalNames(tables []proto.Message) error {
 // 直接返回错误(见 assertSchemaUpToDate),调用方据此拒绝启动。
 func InitDB() error {
 	policy := ResolveDDLPolicy()
+	if policy.AllowCreateDatabase || policy.AllowCreateOrUpdateTable {
+		return errors.New("常驻db进程禁止启动DDL，请由独立schema入口预建")
+	}
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		return err
+	}
+	return InitDBWithWriter(writer)
+}
+
+// InitDBWithWriter 供进程装配与自有fixture显式复用已消费的同boot资格。
+func InitDBWithWriter(writer authoritysql.WriterConfig) error {
+	if writer.AuthoritySchema() == "" {
+		return errors.New("玩家SQL启动缺少完整writer资格")
+	}
+	if DB != nil && DB.DB != nil {
+		return errors.New("玩家SQL启动已完成，禁止更换boot身份")
+	}
+	policy := ResolveDDLPolicy()
+	if policy.AllowCreateDatabase || policy.AllowCreateOrUpdateTable {
+		return errors.New("常驻db进程禁止启动DDL，请由独立schema入口预建")
+	}
+	DB = &GameDB{writer: writer}
 	logx.Infof("db DDL policy: createDatabase=%v createOrUpdateTable=%v source=%s",
 		policy.AllowCreateDatabase, policy.AllowCreateOrUpdateTable, policy.Source)
 
@@ -562,6 +592,35 @@ func InitDB() error {
 	logx.Errorf("STARTUP-DDL: Startup path executing table creation / column additions (policy=%s). This is a dev / compatibility option; production should use cmd/migrate",
 		policy.Source)
 	return CreateOrUpdateTables(tables)
+}
+
+// CurrentWriterConfig 只返回同一个不可变normal能力，不含连接或operator权限。
+func CurrentWriterConfig() (authoritysql.WriterConfig, error) {
+	if DB == nil || DB.DB == nil || DB.writer.AuthoritySchema() == "" {
+		return authoritysql.WriterConfig{}, errors.New("本boot玩家SQL尚未装配")
+	}
+	return DB.writer, nil
+}
+
+// Close 的调用前提是全部consumer、outbox、retry及按需开池调用已确定join。
+// 关闭本身不证明服务端提交结局；UNKNOWN必须在调用前由生命周期owner保留HOLD。
+func (r *StoreRegistry) Close() error {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	pools := make(map[*sql.DB]bool)
+	for _, store := range r.stores {
+		if store != nil && store.DB != nil {
+			pools[store.DB] = true
+		}
+	}
+	r.mu.RUnlock()
+	var result error
+	for pool := range pools {
+		result = errors.Join(result, pool.Close())
+	}
+	return result
 }
 
 // readJSONFile reads a JSON file and returns the message type names.

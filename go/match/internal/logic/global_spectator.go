@@ -20,7 +20,6 @@ import (
 	"match/internal/svc"
 	battlepb "proto/battle"
 	pb "proto/match"
-	"shared/safego"
 )
 
 // errGlobalSpectatePending 标记原观战操作尚未拿到 battle 的终局证明：取消回执未确认、准入查询非终态，
@@ -430,7 +429,7 @@ func StartGlobalSpectatorRecovery(ctx context.Context, s *svc.ServiceContext) {
 	}
 	startGlobalDirectAdmissionRecovery(ctx, s)
 	startGlobalJoinAdmissionRecovery(ctx, s)
-	safego.Go("match.global_spectator_recovery", func() {
+	s.LaunchRelayTask("match.global_spectator_recovery", func() {
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
 		var after, through uint64
@@ -448,7 +447,7 @@ func StartGlobalSpectatorRecovery(ctx context.Context, s *svc.ServiceContext) {
 			if len(slots) == cap(slots) {
 				continue
 			}
-			work, cancel := context.WithTimeout(ctx, 3*time.Second)
+			work, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 			if !active {
 				var err error
 				through, err = s.Authority.SpectatorRecoveryHighWater(work)
@@ -482,12 +481,13 @@ func StartGlobalSpectatorRecovery(ctx context.Context, s *svc.ServiceContext) {
 				slots <- struct{}{}
 				after = row.PlayerId
 				original := row
-				safego.Go("match.global_spectator_operation", func() {
+				s.LaunchRelayTask("match.global_spectator_operation", func() {
 					defer func() { <-slots }()
-					work, cancel := context.WithTimeout(ctx, 3*time.Second)
+					work, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 					defer cancel()
 					// 原op CAS允许在新head之后收尾旧取消，但绝不推进别的current。
 					if err := resumeGlobalSpectator(work, s, original, ""); err != nil {
+						s.HoldRelay(err)
 						operationWarningMu.Lock()
 						if time.Since(lastOperationWarning) >= 10*time.Second {
 							lastOperationWarning = time.Now()

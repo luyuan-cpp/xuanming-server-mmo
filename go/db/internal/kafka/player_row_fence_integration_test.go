@@ -62,7 +62,7 @@ func openAssetFenceFixture(t *testing.T) *proto2mysql.DB {
 		}
 	})
 	parsed.DBName = name
-	handle, err := authoritysql.Open(ctx, parsed.FormatDSN(), name, os.Getenv("ASSET_FENCE_REQUIRE_TIDB") == "1", 8)
+	handle, err := openFenceAdminPool(t, ctx, parsed.FormatDSN(), name, os.Getenv("ASSET_FENCE_REQUIRE_TIDB") == "1", 8, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -448,4 +448,26 @@ func TestIntegrationPlayerSQLRejectsPersistSchemaRegression(t *testing.T) {
 			require.EqualValues(t, 60, got.Currency.Values[1])
 		})
 	}
+}
+
+// 本helper只装配原随机夹具的显式schema/operator连接；不冒充普通writer权限/slot验收。
+func openFenceAdminPool(t *testing.T, ctx context.Context, dsn, schema string, requireTiDB bool, maxOpen int, migration bool) (*sql.DB, error) {
+	t.Helper()
+	probe, err := authoritysql.Open(ctx, dsn, schema, requireTiDB, 1, authoritysql.Reader())
+	if err != nil {
+		return nil, err
+	}
+	var principal string
+	err = probe.QueryRowContext(ctx, "SELECT CURRENT_USER()").Scan(&principal)
+	closeErr := probe.Close()
+	if err != nil {
+		return nil, err
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
+	if migration {
+		return authoritysql.OpenForMigration(ctx, dsn, schema, requireTiDB, authoritysql.Schema(principal))
+	}
+	return authoritysql.Open(ctx, dsn, schema, requireTiDB, maxOpen, authoritysql.Operator(principal))
 }

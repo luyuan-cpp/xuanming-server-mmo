@@ -23,6 +23,8 @@ import (
 // Router resolves player_id → home_zone_id → Redis client.
 // It is the ONLY component that knows about cross-realm topology.
 type Router struct {
+	closeOnce    sync.Once
+	closeErr     error
 	mappingRedis *redis.Redis                      // global mapping: player_id → home_zone_id
 	zoneToClient map[uint32]*goredis.ClusterClient // zone_id → Redis Cluster
 	devClient    *goredis.Client                   // non-nil in dev mode (single Redis for all)
@@ -859,19 +861,37 @@ func (r *Router) DeletePlayerZoneIfLocked(ctx context.Context, playerID uint64, 
 }
 
 // Close shuts down all Redis connections.
-func (r *Router) Close() {
-	if r.devClient != nil {
-		r.devClient.Close()
-	}
-	if r.publishRedis != nil {
-		// db_first 的发布客户端(含单测注入的):归 Router 所有。mappingRedis 是 go-zero 按地址共享的客户端,不归这里关。
-		_ = r.publishRedis.Close()
-	}
-	closed := make(map[*goredis.ClusterClient]bool)
-	for _, client := range r.zoneToClient {
-		if !closed[client] {
-			client.Close()
-			closed[client] = true
+func (r *Router) Close() { _ = r.CloseAndReport() }
+
+// CloseAndReport 只报告资源关闭；调用者必须先关闭接纳并 join 发布者，不能把 Close 当作发布终局证明。
+// 同一 Router 只关闭一次，并永久保留第一次错误；mappingRedis 是共享客户端，不归这里关闭。
+func (r *Router) CloseAndReport() error {
+	r.closeOnce.Do(func() {
+		r.mu.RLock()
+		clients := []*goredis.Client{r.devClient, r.publishRedis}
+		clusters := make([]*goredis.ClusterClient, 0, len(r.zoneToClient))
+		for _, client := range r.zoneToClient {
+			clusters = append(clusters, client)
 		}
-	}
+		r.mu.RUnlock()
+		closed := map[*goredis.Client]bool{}
+		for _, client := range clients {
+			if client != nil && !closed[client] {
+				closed[client] = true
+				if err := client.Close(); err != nil {
+					r.closeErr = errors.Join(r.closeErr, fmt.Errorf("关闭 Router Redis 客户端: %w", err))
+				}
+			}
+		}
+		closedClusters := map[*goredis.ClusterClient]bool{}
+		for _, client := range clusters {
+			if client != nil && !closedClusters[client] {
+				closedClusters[client] = true
+				if err := client.Close(); err != nil {
+					r.closeErr = errors.Join(r.closeErr, fmt.Errorf("关闭 Router Redis Cluster 客户端: %w", err))
+				}
+			}
+		}
+	})
+	return r.closeErr
 }

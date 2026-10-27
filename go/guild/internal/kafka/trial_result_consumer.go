@@ -50,8 +50,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"shared/drainproof"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	kafkago "github.com/segmentio/kafka-go"
@@ -66,6 +68,7 @@ import (
 
 // TrialResultConsumerConfig 是消费者参数,由 guild.go 从 config.Config 装配。
 type TrialResultConsumerConfig struct {
+	RelayAdmission *drainproof.Session
 	// Brokers 是 Kafka 地址(= guild 的 Kafka.Brokers)。
 	Brokers []string
 	// Topic 必须与 match 的 ResultTopic、battle 的 kMatchResultsTopic 相同(默认 match-results,全局、不带 zone 段)。
@@ -142,6 +145,8 @@ type trialReader interface {
 
 // TrialResultConsumer 是历练对局结果的消费者。构造后只被 Run 的那一个 goroutine 使用。
 type TrialResultConsumer struct {
+	bound    *kafkautil.BoundConsumerGroup
+	serial   sync.Mutex
 	cfg      TrialResultConsumerConfig
 	handle   TrialResultHandler
 	counters TrialResultCounters
@@ -175,14 +180,32 @@ func NewTrialResultConsumer(cfg TrialResultConsumerConfig, handle TrialResultHan
 		return nil, fmt.Errorf("guild trial result consumer: Partitions(%d)必须 ≥ 1,且与 match 的 ResultTopicPartitions 相同", cfg.Partitions)
 	}
 	cfg.Brokers = brokers
-	return &TrialResultConsumer{
+	consumer := &TrialResultConsumer{
 		cfg:          cfg,
 		handle:       handle,
 		counters:     counters,
 		ensureTopics: kafkautil.EnsureTopics,
 		openReader:   openTrialResultReader,
 		sleep:        sleepTrialResult,
-	}, nil
+	}
+	if cfg.RelayAdmission != nil {
+		owner, err := kafkautil.NewBoundConsumerGroup(kafkautil.BoundConsumerGroupConfig{Group: kafkago.ConsumerGroupConfig{ID: cfg.GroupID, Brokers: cfg.Brokers, Topics: []string{cfg.Topic}, StartOffset: kafkago.FirstOffset}, Reader: kafkago.ReaderConfig{MinBytes: 1, MaxBytes: 1 << 20, MaxWait: 500 * time.Millisecond}, HandlerTimeout: 5 * time.Minute}, cfg.RelayAdmission, func(call context.Context, message kafkago.Message) error {
+			consumer.serial.Lock()
+			defer consumer.serial.Unlock()
+			if err := call.Err(); err != nil {
+				return err
+			}
+			if !consumer.processRecord(call, message) {
+				return errors.Join(drainproof.ErrHold, call.Err())
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		consumer.bound = owner
+	}
+	return consumer, nil
 }
 
 // openTrialResultReader 建消费组 reader(参数照 match 的结果消费者)。
@@ -222,12 +245,28 @@ func sleepTrialResult(ctx context.Context, d time.Duration) bool {
 // 正在进行的"确保 topic"(sarama 的管理连接不接受 ctx)会被丢下,由它自己的套接字超时收尾。
 // 返回前关闭 reader(离开消费组,分区交还给别的副本)。Run 只应调用一次。
 func (c *TrialResultConsumer) Run(ctx context.Context) {
+	if c.bound != nil {
+		// 正式 owner 的启动检查同步返回，不能遗留未 join 的 topic 管理任务。
+		if err := c.ensureTopics(c.cfg.Brokers, []kafkautil.TopicSpec{c.cfg.TopicSpec()}); err != nil {
+			c.cfg.RelayAdmission.Hold()
+			logx.Errorf("历练结果启动 HOLD: %v", err)
+			return
+		}
+		if err := c.bound.Run(ctx); err != nil {
+			c.cfg.RelayAdmission.Hold()
+			logx.Errorf("历练结果消费者 HOLD: %v", err)
+		}
+		return
+	}
 	if !c.waitForTopic(ctx) {
 		return
 	}
 	reader := c.openReader(c.cfg)
 	defer func() {
 		if err := reader.Close(); err != nil {
+			if c.cfg.RelayAdmission != nil {
+				c.cfg.RelayAdmission.Hold()
+			}
 			logx.Errorf("[GuildTrial] Failed to close trial result reader: %v", err)
 		}
 	}()
@@ -287,8 +326,17 @@ func (c *TrialResultConsumer) ensureTopicWithin(ctx context.Context) error {
 // 所以一条消息在 settle 里重调期间,别的分区的消息同样不被取走(文件头纪律 2 的影响面就来自这里)。
 func (c *TrialResultConsumer) consume(ctx context.Context, reader trialReader) {
 	for {
+		finish := func() {}
+		if c.cfg.RelayAdmission != nil {
+			accepted, err := c.cfg.RelayAdmission.Enter()
+			if err != nil {
+				return
+			}
+			finish = accepted
+		}
 		msg, err := reader.FetchMessage(ctx)
 		if err != nil {
+			finish()
 			// 只认自己的 ctx:它没结束而错误恰好是 context.Canceled 时(reader 内部的取消),按普通拉取失败退避重试,
 			// 不能据此退出 —— 那会让消费者不出声地停掉。
 			if ctx.Err() != nil {
@@ -305,7 +353,22 @@ func (c *TrialResultConsumer) consume(ctx context.Context, reader trialReader) {
 			}
 			continue
 		}
-		if !c.process(ctx, reader, msg) {
+		processed := func() (ok bool) {
+			defer finish()
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					if c.cfg.RelayAdmission != nil {
+						c.cfg.RelayAdmission.Hold()
+					}
+					panic(recovered)
+				}
+				if !ok && c.cfg.RelayAdmission != nil {
+					c.cfg.RelayAdmission.Hold()
+				}
+			}()
+			return c.process(ctx, reader, msg)
+		}()
+		if !processed {
 			return
 		}
 	}
@@ -313,6 +376,14 @@ func (c *TrialResultConsumer) consume(ctx context.Context, reader trialReader) {
 
 // process 处理一条消息。返回 false = ctx 已结束,**这条消息没有提交**,调用方应退出。
 func (c *TrialResultConsumer) process(ctx context.Context, reader trialReader, msg kafkago.Message) bool {
+	if !c.processRecord(ctx, msg) {
+		return false
+	}
+	c.commit(ctx, reader, msg)
+	return true
+}
+
+func (c *TrialResultConsumer) processRecord(ctx context.Context, msg kafkago.Message) bool {
 	ev := &kafkapb.BattleResultEvent{}
 	if err := proto.Unmarshal(msg.Value, ev); err != nil {
 		// 坏消息跳过并提交:留在 topic 里只会每次重启都撞一遍(match 的消费者对同一条消息也是这样处理)。
@@ -320,11 +391,9 @@ func (c *TrialResultConsumer) process(ctx context.Context, reader trialReader, m
 		logx.Errorf("[GuildTrial] Failed to deserialize battle result; skipping partition=%d offset=%d key=%s: %v",
 			msg.Partition, msg.Offset, string(msg.Key), err)
 		countIfSet(c.counters.DecodeError)
-		c.commit(ctx, reader, msg)
 		return true
 	}
 	if !isGuildTrialResult(ev) {
-		c.commit(ctx, reader, msg)
 		return true
 	}
 	if key := string(msg.Key); key != "" && key != strconv.FormatUint(ev.GetBattleId(), 10) {
@@ -335,7 +404,6 @@ func (c *TrialResultConsumer) process(ctx context.Context, reader trialReader, m
 	if !c.settle(ctx, msg, ev) {
 		return false
 	}
-	c.commit(ctx, reader, msg)
 	return true
 }
 
@@ -377,6 +445,9 @@ func (c *TrialResultConsumer) attempt(ctx context.Context, ev *kafkapb.BattleRes
 	defer cancel()
 	var err error
 	if ok := safego.Run(trialResultHandlePoint, func() { err = c.handle(attemptCtx, ev) }); !ok {
+		if c.cfg.RelayAdmission != nil {
+			c.cfg.RelayAdmission.Hold()
+		}
 		return errTrialHandlerPanicked
 	}
 	return err
@@ -385,7 +456,10 @@ func (c *TrialResultConsumer) attempt(ctx context.Context, ev *kafkapb.BattleRes
 // commit 同步提交一条消息的位点。失败只记日志:下一次提交会覆盖它;在那之前崩溃则重放到上次成功提交处,
 // 由幂等闸门兜住。ctx 已结束时的失败不记(进程正在退出,重启后重放一条)。
 func (c *TrialResultConsumer) commit(ctx context.Context, reader trialReader, msg kafkago.Message) {
-	if err := reader.CommitMessages(ctx, msg); err != nil && ctx.Err() == nil {
+	if err := reader.CommitMessages(ctx, msg); err != nil {
+		if c.cfg.RelayAdmission != nil {
+			c.cfg.RelayAdmission.Hold()
+		}
 		logx.Errorf("[GuildTrial] Failed to commit trial result offset partition=%d offset=%d: %v", msg.Partition, msg.Offset, err)
 	}
 }
@@ -396,3 +470,6 @@ func countIfSet(fn func()) {
 		fn()
 	}
 }
+
+// Owner 返回同一个实际 ConsumerGroup，供主程序装配停止、P8 与 P9；旧无 owner 构造返回 nil。
+func (c *TrialResultConsumer) Owner() *kafkautil.BoundConsumerGroup { return c.bound }

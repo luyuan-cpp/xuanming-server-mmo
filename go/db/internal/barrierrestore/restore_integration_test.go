@@ -54,18 +54,18 @@ func TestIntegrationFenceOnlyPromotionCLIConvergedSnapshotAndPendingPreserved(t 
 	id, first, second := f.player(t, 8, 90)
 	before := f.assets(t, id)
 	routeSchema := fmt.Sprintf("promote_routes_%d", f.zone)
-	_, err := f.r.DB.ExecContext(f.ctx, "CREATE DATABASE `"+routeSchema+"`")
+	_, err := f.schemaAdmin.ExecContext(f.ctx, "CREATE DATABASE `"+routeSchema+"`")
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		_, err := f.r.DB.ExecContext(ctx, "DROP DATABASE `"+routeSchema+"`")
+		_, err := f.schemaAdmin.ExecContext(ctx, "DROP DATABASE `"+routeSchema+"`")
 		require.NoError(t, err)
 	})
 	parsed, err := mysql.ParseDSN(dsn)
 	require.NoError(t, err)
 	parsed.DBName = routeSchema
-	migration, err := authoritysql.OpenForMigration(f.ctx, parsed.FormatDSN(), routeSchema, true)
+	migration, err := openRestoreAdminPool(t, f.ctx, parsed.FormatDSN(), routeSchema, true, 1, true)
 	require.NoError(t, err)
 	defer migration.Close()
 	for _, ddl := range productionRouteDDL(t) {
@@ -95,7 +95,7 @@ func TestIntegrationFenceOnlyPromotionCLIConvergedSnapshotAndPendingPreserved(t 
 	require.NoError(t, err)
 	localTarget := hex.EncodeToString(targetNonce[:])
 	for _, schema := range []string{f.schema, routeSchema} {
-		_, err := f.r.DB.ExecContext(f.ctx, "CREATE TABLE `"+schema+"`.maintenance_recovery_target(purpose VARBINARY(16) NOT NULL,zone_id INT UNSIGNED NOT NULL,schema_name VARBINARY(64) NOT NULL,target_nonce VARBINARY(32) NOT NULL,physical_addr VARBINARY(255) NOT NULL,PRIMARY KEY(purpose,zone_id,schema_name))")
+		_, err := f.schemaAdmin.ExecContext(f.ctx, "CREATE TABLE `"+schema+"`.maintenance_recovery_target(purpose VARBINARY(16) NOT NULL,zone_id INT UNSIGNED NOT NULL,schema_name VARBINARY(64) NOT NULL,target_nonce VARBINARY(32) NOT NULL,physical_addr VARBINARY(255) NOT NULL,PRIMARY KEY(purpose,zone_id,schema_name))")
 		require.NoError(t, err)
 		_, err = f.r.DB.ExecContext(f.ctx, "INSERT INTO `"+schema+"`.maintenance_recovery_target(purpose,zone_id,schema_name,target_nonce,physical_addr) VALUES('promotion',?,?,?,?)", f.zone, []byte(schema), localTarget, parsed.Addr)
 		require.NoError(t, err)
@@ -301,7 +301,11 @@ func TestIntegrationFenceOnlyPromotionCLIConvergedSnapshotAndPendingPreserved(t 
 		base, err := mysql.NewConnector(&cfg)
 		require.NoError(t, err)
 		fault := &promotionCommitReplyLoss{}
-		faultDB := sql.OpenDB(promotionCommitReplyConnector{inner: authoritysql.PinCurrentSession(base, true), fault: fault})
+		var principal string
+		require.NoError(t, r.DB.QueryRowContext(f.ctx, "SELECT CURRENT_USER()").Scan(&principal))
+		pinned, err := authoritysql.PinCurrentSession(base, true, authoritysql.Operator(principal))
+		require.NoError(t, err)
+		faultDB := sql.OpenDB(promotionCommitReplyConnector{inner: pinned, fault: fault})
 		defer faultDB.Close()
 		faultDB.SetMaxOpenConns(1)
 		require.NoError(t, authoritysql.AssertCurrentSession(f.ctx, faultDB, true))
@@ -484,6 +488,7 @@ redis.call('ZADD',KEYS[1],0,ARGV[1]); return 1`, []string{key}, strconv.FormatUi
 }
 
 type restoreIntegrationFixture struct {
+	schemaAdmin *sql.DB
 	ctx         context.Context
 	r           Restorer
 	model       *proto2mysql.DB
@@ -527,7 +532,7 @@ func newRestoreIntegrationFixture(t *testing.T, dsn, addr string, global ...bool
 		t.Logf("SQL 清理确认：%s 剩余 0", schema)
 	})
 	parsed.DBName = schema
-	migration, err := authoritysql.OpenForMigration(ctx, parsed.FormatDSN(), schema, true)
+	migration, err := openRestoreAdminPool(t, ctx, parsed.FormatDSN(), schema, true, 1, true)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, migration.Close()) })
 	ddlModel := proto2mysql.NewDB()
@@ -542,7 +547,7 @@ func newRestoreIntegrationFixture(t *testing.T, dsn, addr string, global ...bool
 		t.Logf("正式夹具 DDL（%s）：%s", name, ddl)
 	}
 	require.NoError(t, migration.Close())
-	handle, err := authoritysql.Open(ctx, parsed.FormatDSN(), schema, true, 1)
+	handle, err := openRestoreAdminPool(t, ctx, parsed.FormatDSN(), schema, true, 1, false)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, handle.Close()) })
 	require.NoError(t, authoritysql.AssertCurrentSession(ctx, handle, true))
@@ -553,7 +558,10 @@ func newRestoreIntegrationFixture(t *testing.T, dsn, addr string, global ...bool
 	rc := redis.NewClient(&redis.Options{Addr: addr, DB: 0, MaxRetries: -1, DialTimeout: time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second})
 	t.Cleanup(func() { require.NoError(t, rc.Close()) })
 	require.NoError(t, rc.Ping(ctx).Err())
-	f := &restoreIntegrationFixture{ctx: ctx, r: Restorer{DB: handle, Redis: rc, RoutingMode: RoutingModeRedis}, model: model, schema: schema, zone: zone, maintenance: "barrier-integration-" + schema}
+	schemaAdmin, err := openRestoreAdminPool(t, ctx, parsed.FormatDSN(), schema, true, 1, true)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, schemaAdmin.Close()) })
+	f := &restoreIntegrationFixture{schemaAdmin: schemaAdmin, ctx: ctx, r: Restorer{DB: handle, Redis: rc, RoutingMode: RoutingModeRedis}, model: model, schema: schema, zone: zone, maintenance: "barrier-integration-" + schema}
 	t.Cleanup(func() {
 		cleanup, done := context.WithTimeout(context.Background(), 10*time.Second)
 		defer done()
@@ -702,7 +710,7 @@ func TestIntegrationMaintenanceReleaseCommittedReplyLossAndOriginalReplay(t *tes
 	require.NoError(t, err)
 	require.Equal(t, "tcp", cfg.Net)
 	require.Equal(t, plan.SQLAddr, cfg.Addr)
-	db, err := authoritysql.Open(ctx, dsn, plan.RouteSchema, true, 1)
+	db, err := openRestoreAdminPool(t, ctx, dsn, plan.RouteSchema, true, 1, false)
 	require.NoError(t, err)
 	defer db.Close()
 	r := Restorer{DB: db, RoutingMode: RoutingModeDBFirst, RouteSchema: plan.RouteSchema, LocalTargetID: plan.LocalTarget, MaintenanceSQLAddr: cfg.Addr}
@@ -745,4 +753,26 @@ func TestIntegrationMaintenanceReleaseCommittedReplyLossAndOriginalReplay(t *tes
 	changed.Intent = strings.Repeat("a", 64)
 	require.Error(t, r.ApplyMaintenanceRelease(ctx, changed, planPin.SHA256, second))
 	// 本函数不执行route_tool unfreeze/重登；B最终还需那些独立正式叶，不能以本例冒全部B绿。
+}
+
+// 本helper只装配原随机夹具的显式schema/operator连接；不冒充普通writer权限/slot验收。
+func openRestoreAdminPool(t *testing.T, ctx context.Context, dsn, schema string, requireTiDB bool, maxOpen int, migration bool) (*sql.DB, error) {
+	t.Helper()
+	probe, err := authoritysql.Open(ctx, dsn, schema, requireTiDB, 1, authoritysql.Reader())
+	if err != nil {
+		return nil, err
+	}
+	var principal string
+	err = probe.QueryRowContext(ctx, "SELECT CURRENT_USER()").Scan(&principal)
+	closeErr := probe.Close()
+	if err != nil {
+		return nil, err
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
+	if migration {
+		return authoritysql.OpenForMigration(ctx, dsn, schema, requireTiDB, authoritysql.Schema(principal))
+	}
+	return authoritysql.Open(ctx, dsn, schema, requireTiDB, maxOpen, authoritysql.Operator(principal))
 }

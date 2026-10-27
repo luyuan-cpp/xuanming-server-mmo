@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"shared/authoritysql"
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
@@ -21,11 +22,12 @@ import (
 
 // MySQLEndpoint 是一个 MySQL / TiDB 连接目标。
 type MySQLEndpoint struct {
-	Hosts    string
-	User     string
-	Password string
-	Net      string
-	DBName   string
+	RequireTiDB bool
+	Hosts       string
+	User        string
+	Password    string
+	Net         string
+	DBName      string
 }
 
 // RedisEndpoint 是一个 Redis 连接目标(db.yaml 的 RedisClient / Placement.Redis 形状)。
@@ -58,23 +60,27 @@ func PasswordFromEnv(envName, fallback string) (string, error) {
 //
 // interpolateParams 保持默认关闭:参数走预处理语句的二进制协议,BIGINT UNSIGNED 读成 uint64,不经十进制字符串往返。
 func OpenMySQL(ctx context.Context, ep MySQLEndpoint, maxOpen int) (*sql.DB, error) {
+	return OpenMySQLWithPermission(ctx, ep, maxOpen, authoritysql.Reader())
+}
+
+// OpenMySQLWithPermission 保留唯一池装配；写工具必须传入已消费一次的 boot 能力，
+// 读工具沿 OpenMySQL，不能因为共享 helper 而自动取得写权限。
+func OpenMySQLWithPermission(ctx context.Context, ep MySQLEndpoint, maxOpen int, permission authoritysql.Permission) (*sql.DB, error) {
 	cfg, err := mysqlConfig(ep)
 	if err != nil {
 		return nil, err
 	}
-	connector, err := mysql.NewConnector(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("build mysql connector: %w", err)
-	}
-	db := sql.OpenDB(connector)
 	if maxOpen < 1 {
 		maxOpen = 1
+	}
+	db, err := authoritysql.Open(ctx, cfg.FormatDSN(), ep.DBName, ep.RequireTiDB, maxOpen, permission)
+	if err != nil {
+		return nil, err
 	}
 	db.SetMaxOpenConns(maxOpen)
 	db.SetMaxIdleConns(maxOpen)
 	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("ping mysql %s: %w", ep.Describe(), err)
+		return nil, errors.Join(fmt.Errorf("ping mysql %s: %w", ep.Describe(), err), db.Close())
 	}
 	return db, nil
 }
@@ -232,8 +238,7 @@ func OpenRedis(ctx context.Context, ep RedisEndpoint) (*redis.Client, error) {
 	}
 	client := redis.NewClient(&redis.Options{Addr: ep.Hosts, Password: ep.Password, DB: ep.DB})
 	if err := client.Ping(ctx).Err(); err != nil {
-		_ = client.Close()
-		return nil, fmt.Errorf("ping redis %s: %w", ep.Describe(), err)
+		return nil, errors.Join(fmt.Errorf("ping redis %s: %w", ep.Describe(), err), client.Close())
 	}
 	return client, nil
 }

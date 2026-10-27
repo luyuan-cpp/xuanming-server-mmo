@@ -1784,6 +1784,47 @@ DBTask TopicGeneration 换代的排空集合同时包含旧代 Kafka、retry 与
 - **指标**：`db_save_outbox_total{result}` 新增 `route_not_ready`，启动即以 0 建出。不加新告警：闸关着由 `GoDbRouteGateClosed` 覆盖。
 - **Java 版**：不适用。Java 不经 Kafka / go/db 落库，没有补投器与读方就绪闸（AGENTS §12）。
 
+
+### 2026-10-26：单次 writer 身份与永久排空收据（v4 实施中）
+
+本节约束本批隔离候选；尚未正规生成、编译、测试或通过真实环境验收，不能据此执行线上维护。两版各自实现内部协议。物理目标为本任务已核 TiDB 8.5.8 维护构建；锁原语必须由该目标实际最小权限资格原件选定。
+
+每个进程启动使用预先固定的 writer key、instance、独立 SQL principal 与 REGISTER 全文。主体和 instance 永久唯一，重启不能复用旧身份。normal 装配一次消费私有 grant，连接池共享同一 WriterConfig；只有独立 Schema/Operator 装配持有预建或维护能力。normal 不建表、不注册、不冻结、不解冻。fresh-prestart 遇已有表或部分失败残留就拒绝，保留现场。Windows 使用真实 ACL、无 reparse 路径与本地 NTFS 的耐久独占创建；该平台候选尚待合并与实际验证，不能把 Mode().Perm() 当作 Windows ACL。
+
+维护职责按逻辑角色划分：P1 永久关闭 SOURCE 并等待已接收集合确定收敛。兼任 RELAY 的同一物理 writer 保留原 SQL handle，直到 P3 的消费、重试、补投、回调和最终存盘全部确定结束。无 RELAY 的 writer 可在 P1 退役；兼任者只能在 P3 同轮退役。退役先锁自身全部 64 个 slot，再锁 meta/run，核对永久 ROLE_CLOSED / RELAY_QUIESCED 原件中的同 boot、同角色、复活围栏和已收敛前沿，最后原子 REVOKE registry/slots、增加 catalog_revision 并追加 RETIRE 全文收据。超时、取消、purge、PID 消失及 UNKNOWN 不生成成功闭合事实。
+
+P0 的 ManifestProto、初始 ACTIVE 全集、E 和 catalog_revision 永久不回写。初始角色的物理 key 并集必须覆盖 ACTIVE 全集。后续按 (catalog_revision, request_id) 有界读取 P0 之后的永久生命周期收据，只接受连续版本、同 run、同原 E、完整摘要匹配、每 key 恰一次的 RETIRE。预期 ACTIVE 等于初始集合减去这些合法退役；出现新 REGISTER、外来 run、版本缺口、重复或未知 key 都拒绝。正常 NON_SQL_CLOSED 要求全部旧 writer 已退役，紧急 HOLD 则可保留尚在途的精确 ACTIVE 集。
+
+冻结固定锁序为 R 的 slots→reconcile→meta→run→ticket、J 的 slots→meta→run→ticket。锁前推导预期 ACTIVE，锁后按同一实际目录版本重新折叠并核精确等集；全部退役后的空集仍须原子推进 E 和 writable。正常票据只能消费同轮 NON_SQL_CLOSED，票据 ID、目标冻结请求及完整时间窗均进入授权请求摘要。冻结原请求的 prior 固定为 grant 之前已知的排空/危险收据；事务通过 ticket.grant_receipt 核验真正的授权收据及其 prior，避免冻结摘要与尚未生成的 grant 收据互相依赖。
+
+正常解冻只消费原 NORMAL frozen ticket、原冻结收据和 RELEASE_READY 的完整恢复审核。Plan 的 E 始终是 P0 值；冻结前 E、解冻前 E+1、解冻后 E+2。R 的 route_watermark_floor_ms 由原审核证据固定，并在已有 reconcile 锁内与 writable 同一事务取 GREATEST；J 无此行时要求该字段为 0。紧急冻结只进入 EMERGENCY_FROZEN_HOLD，不能自动升级为正常成功或自动解冻。
+
+SQL_RELEASED 后只允许同 run 的全新预批准身份注册。新 boot 先准备消费者、保持 SOURCE 关闭；实际 open 产生正式 ACK 后才追加 PUBLICATION_REOPENED。旧 boot 不重新开闸。缺少真实应用 admission/join/ACK 接缝的入口必须继续保留维护状态，不能用部署脚本、日志或进程退出替应用事实。所有未完成接缝统一进入精确范围清单。
+
+本批新增回归覆盖：P1/P3 合法退役、共享 boot 提前退役拒绝、连续目录折叠与空 ACTIVE 冻结、外来目录变化拒绝、票据换参拒绝、UNKNOWN 不返回成功收据，以及 Schema 专用的既有迁移语句边界。这里只记录用例源码；执行证据仍为零。
+
+
+补充边界：RR 下普通 meta/registry SELECT 可能读取旧快照；事务进入时被 CURRENT 锁住的 writer_slot 状态与 E 才是拒绝旧事务的依据。新增真实 TiDB 回归以可控驱动屏障和实际 DATA_LOCK_WAITS 观测固定交错，不以 sleep 猜测锁等待，分别要求 LOCK_TOUCH/SELECT_ONLY 独立资格。
+
+同 run 的失败重试只能从 ABORTED_CLOSED 进入 DRAINING 并递增 attempt，完整 P0 字节不变。已永久关闭且没有重开的 root/relay 原件可来自较早 attempt；新 NON_SQL 观察与票据仍必须属于当前 attempt。若真实 relay 重新工作，旧闭合原件不得替代新完成事实，已退休 boot 仍不允许复活。
+
+
+2026-10-26 接线补充（候选实现中，运行证据仍为零）：
+
+- P6 维护工具在 P0 的 maintenance_issuers 中具名，角色为 MAINTENANCE、无 NORMAL writer key；开工前强读同轮 NORMAL consumed ticket、冻结全文和当前 meta/run。消费目录固定到 P0 该工具证据目录，不能换目录重复启动。P7 与实际释放事务均要求这些工具的完整闭合原件，关闭时间不得早于原冻结提交；业务恢复审核仍独立核 SQL 结果，工具退出或闭合不能代替业务审核。
+- P8 每个 boot 都必须恰有一个 pin 的 SHA256 等于 ConsumerReadyFrontierDigest。它指向正式 ConsumerReadiness 的原字节；无消费者也必须在真实入口准备后报告显式空组。消费组按真实 generation/member 与完整配置目录聚合各副本 assignment，并集等于配置分区全集；P9 在同消费 owner 锁或线程内复核当前状态并开放 SOURCE。
+- C++ 新命令流使用 assign(node_id % P)，不参加消费组，也不写 broker committed。它保持原 target_instance_id 防僵尸语义：P0 记录真实手动 assignment/物理 topic UUID 与位置；P3 poll 到固定尾部后停止并 join，P4 用本窗 leader 实读 end 核其位置。手动分区原件不伪填 generation 或 committed；允许不同 node 同读一个分区。新 boot 的 node_id 可重新分配，P8 按稳定 SOURCE、原 topic UUID/P 核新 node_id % P 与新 instance，实际初始化时读 end 并固定绝对起点后暂停；P8 保证 start == position 且 earliest <= position <= 当前 end，允许暂停期间新增消息。P9 从这个原起点继续，不重新 seek 到已增长的新 end。legacy per-node topic/group 若新 ID 不属于 P0 固定目录则 HOLD；完整采用新命令流的部署应在 P0 固定既有 DisableLegacyPerNodeTopic 配置。
+- 不改写 IssuerClosure 的 P0 SourceEvidence。P3 新生成的 manual-closure.report.json 由 NonSqlClosureEvidence 的原件 pin 引用，在固定 boot 私有目录独占创建；P4 leader 原件分别保留采样时刻，不把 P3 时间伪作 P4 观察。P3 relay 前沿包含真实 manual 报告摘要。
+- Kafka 手动批处理接口的 ProcessingNotCommitted 只接收已证明未提交的失败，保留原 T/P/O 票据并由同 reader/owner 跨代重放，实际 commit 后才结清。ProcessingOutcomeUnknown 永久 HOLD。调用方不能以重建 group 丢弃旧票据，也不能为提交再复制大 payload。
+- SQL inbox 的持久 PENDING/DELIVERED 是待办事实，不是本机未返回调用。P3 等已接收 RPC、轮次、通知 CAS 与资源实际结束，待办留在冻结库供新 boot 幂等续做。Redis PubSub 去重若仅抑制优化唤醒且 SQL ListDue 定时兜底，不被虚构成持久消费组；其线程和回调仍必须真实 join。
+- 普通常态工具保留 NORMAL 权限与既有业务门禁，只读命令使用 Reader。有限工具无 run 时的正常退役使用既有非 run RETIRE：先真实结束并关闭资源，再由独立 Operator 原子退役；如 P0 已经建立，必须转同 run 的闭合证据或 HOLD。Seal 只关闭本机 SQL 能力，不能冒充目录 RETIRED。该启动器已在候选脚本中接入固定二进制/参数、真实退出与原请求 RETIRE；仍须实际执行验证。有限工具若绑定 SQL_RELEASED runtime 必须拒绝，不能绕过 prepared/open 流程立即发起业务。
+
+- P7 的合服与路由恢复审核分别使用正式 MergeRecoveryAudit / RouteRecoveryAudit，引用原冻结、固定维护闭合、实际业务查询来源与原始数据；合服始终核完整 14 项当前 SQL/缓存检查，RULE 不替代 OBSERVATION。路由保留 frozen-recovery 的 db_only_unpublished 语义，其他差异须为零；可信缓存标记与水位原件决定 RouteWatermarkFloorMs，不能手填数值或以工具闭合代替审核。
+- 消费者从未启动且已确定关闭时，延迟到达的 Run 返回确定成功且保持 Started=false，不打开网络资源；重复启动仍拒绝，防止调用者把零工作终局误记成 UNKNOWN。Kafka delivery callback 的本机活动票据覆盖通知函数及其目标对象析构，只有真正返回后才满足 P1/P3 静止条件。
+
+- Redis 维护 nonce 由同 run 固定键 `sql:writer:maintenance:<run_id 小写十六进制>:nonce` 承载，值为 P0 固定的 16 字节 nonce 小写十六进制，类型必须是 string、PTTL 必须为 -1。P0 在持久独占 attempt 文件之后只执行一次 SET NX；已有 attempt 只允许读回，缺键或 FLUSHDB 后不能重新播种。每个实际 address/DB 恰有一份 BASELINE_V1 原件进 Plan.SourcePins；P4 的 SCAN_V2 在实际扫描前后读取身份、nonce 与 PTTL，并把原件时间窗纳入同轮观察。不能用输入 nonce 回填或旧恢复标记代替实际观察。
+- 路由 P7 使用单次 Redis Lua 同时读取 INFO 身份、nonce、ready marker 和 watermark，审核前后的身份、nonce 与标记原件必须一致；SQL 前后也比较完整 run/meta 与原冻结收据，不能只分别接受 FROZEN/RELEASE_READY 阶段。审核来源固定为 P0 已钉的四份实际查询源码。大二进制不作为 16 MiB 证据正文读取；正规构建与实际启动产物的 SHA 由执行记录另行绑定，P7 来源 pin 本身不证明源码与二进制对应。
+
 **上线状态（负责人 2026-10-18 确认：尚未上线）**
 
 没有存量 zone，也没有在跑的旧版 go/db / scene / login，因此下面几条在上线前都不是阻塞项，也不需要迁移或灰度方案：

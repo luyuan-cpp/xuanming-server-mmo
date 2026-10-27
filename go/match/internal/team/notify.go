@@ -80,7 +80,7 @@ func (s *Service) publish(caller uint64, commits []*CommitResult, healed []uint6
 	for _, c := range commits {
 		s.cancelPartyOnRosterChange(c)
 	}
-	asyncFn("match.team.publish", func() {
+	s.launchRelay("match.team.publish", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), pushBatchBudget)
 		defer cancel()
 		// 摘要先于推送:推送至多一次、丢了靠拉取自愈,而 bump 正是落地后那次拉取的触发条件。
@@ -104,7 +104,7 @@ func (s *Service) publish(caller uint64, commits []*CommitResult, healed []uint6
 
 // publishOnline GetMyTeam{notify_online}:把当前视图推给其他在线队员(MEMBER_ONLINE,version 不变)。
 func (s *Service) publishOnline(caller, teamId uint64, knownMembers []uint64) {
-	asyncFn("match.team.online", func() {
+	s.launchRelay("match.team.online", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), pushBatchBudget)
 		defer cancel()
 		s.pushOnlineRefresh(ctx, caller, teamId, knownMembers)
@@ -120,7 +120,7 @@ func (s *Service) publishRegroup(caller uint64, team *teampb.TeamView) {
 		return
 	}
 	teamId, leaderId := team.GetTeamId(), team.GetLeaderId()
-	asyncFn("match.team.regroup", func() {
+	s.launchRelay("match.team.regroup", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), pushBatchBudget)
 		defer cancel()
 		logx.WithContext(ctx).Infof("[team] Regroup requested player=%d team=%d leader=%d", caller, teamId, leaderId)
@@ -298,6 +298,7 @@ func (s *Service) refreshScene(ctx context.Context, playerId uint64) {
 		EventId:          proto.Uint32(uint32(game.PlayerTeamRefreshEventEventId)),
 	}
 	if err := sceneRefreshFn(ctx, s.svcCtx, cmd); err != nil {
+		s.svcCtx.HoldRelay(err)
 		metrics.ObserveTeamSceneRefresh(sceneOutcomeError)
 		log.Errorf("[team] Failed to write scene refresh signal to Kafka player=%d node=%d: %v", playerId, entry.NodeId, err)
 		return
@@ -323,4 +324,27 @@ func writeSceneCommand(ctx context.Context, svcCtx *svc.ServiceContext, cmd *kaf
 		return err
 	}
 	return svcCtx.Kafka.WriteMessages(ctx, msg)
+}
+
+// launchRelay 在异步测试/生产调度器之前登记同一 boot；保留既有 asyncFn 注入接缝。
+func (s *Service) launchRelay(point string, fn func()) {
+	gate := s.svcCtx.RelayAdmission
+	if gate == nil {
+		return
+	}
+	finish, err := gate.Enter()
+	if err != nil {
+		gate.Hold()
+		return
+	}
+	asyncFn(point, func() {
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				gate.Hold()
+				panic(recovered)
+			}
+		}()
+		fn()
+	})
 }

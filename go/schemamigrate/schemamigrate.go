@@ -85,6 +85,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -114,12 +115,12 @@ const (
 
 // Options 是一次迁移的输入与安全阀。
 type Options struct {
-	Database          string          // 必填;连接后 SELECT DATABASE() 必须等于它,否则 ErrDatabaseMismatch
-	Tables            []proto.Message // 必填、非空;每个 message 必须带 OptionTableName,表名不许重复
-	AllowModifyColumn bool            // 默认 false:类型漂移只进 Manual
-	AdvisoryLockWait  time.Duration   // GET_LOCK 等待,0 → 10s
-	SessionLockWait   time.Duration   // SET SESSION lock_wait_timeout / innodb_lock_wait_timeout,0 → 5s
-	StatementTimeout  time.Duration   // 每条 DDL 硬超时(超时旁路 KILL QUERY),0 → 60s
+	Database          string                           // 必填;连接后 SELECT DATABASE() 必须等于它,否则 ErrDatabaseMismatch
+	Tables            []proto.Message                  // 必填、非空;每个 message 必须带 OptionTableName,表名不许重复
+	AllowModifyColumn bool                             // 默认 false:类型漂移只进 Manual
+	AdvisoryLockWait  time.Duration                    // GET_LOCK 等待,0 → 10s
+	SessionLockWait   time.Duration                    // SET SESSION lock_wait_timeout / innodb_lock_wait_timeout,0 → 5s
+	StatementTimeout  time.Duration                    // 每条 DDL 硬超时(超时旁路 KILL QUERY),0 → 60s
 	Logf              func(format string, args ...any) // nil → 不打日志
 }
 
@@ -172,8 +173,9 @@ var (
 
 // Plan 只读地计算把库对齐到 Tables 需要执行的语句与需人工项。
 //
-// 不建台账、不执行 DDL、不写台账;为了读到一致的结构,同样会在同一条连接上
-// SET SESSION 超时并持有迁移锁(二者都是会话级,断开即消)。台账有 dirty 行时返回 ErrDirty。
+// 不建台账、不执行DDL、不写台账，也不SET SESSION或获取advisory锁。
+// 同一连接前后复核台账与结构；发现变化拒绝，台账有dirty行返回ErrDirty。
+// schema迁移由独立预启动流程完成；本只读核对不能代替迁移owner的排他准入。
 // 服务在 Schema.AutoMigrate=false 时用它做启动门禁:!Clean() 就拒绝启动。
 func Plan(ctx context.Context, db *sql.DB, opts Options) (Report, error) {
 	return run(ctx, db, opts, false)
@@ -219,7 +221,7 @@ func run(ctx context.Context, db *sql.DB, opts Options, apply bool) (Report, err
 	}
 	// 连接池只允许 1 条连接时,超时后的 KILL QUERY 拿不到旁路连接,只能等到 killTimeout 放弃,
 	// 而服务端那条 DDL 仍在锁表 —— 硬超时形同虚设,所以直接拒绝。
-	if db.Stats().MaxOpenConnections == 1 {
+	if apply && db.Stats().MaxOpenConnections == 1 {
 		return report, fmt.Errorf("schemamigrate: 库 %q 的连接池 MaxOpenConns=1,至少需要 2(1 条执行 DDL,1 条留给超时后的 KILL QUERY)", opts.Database)
 	}
 
@@ -229,17 +231,24 @@ func run(ctx context.Context, db *sql.DB, opts Options, apply bool) (Report, err
 	}
 	opts.logf("schemamigrate %s: database=%s tables=%d allowModifyColumn=%v", mode, opts.Database, len(sch.tables), opts.AllowModifyColumn)
 
-	s, err := openSession(ctx, db, opts)
+	var s *session
+	if apply {
+		s, err = openSession(ctx, db, opts)
+	} else {
+		s, err = openReadSession(ctx, db, opts)
+	}
 	if err != nil {
 		return report, err
 	}
 	defer s.close()
 
-	release, err := s.acquireLock(ctx)
-	if err != nil {
-		return report, err
+	if apply {
+		release, err := s.acquireLock(ctx)
+		if err != nil {
+			return report, err
+		}
+		defer release()
 	}
-	defer release()
 
 	applied, err := s.loadLedger(ctx, apply)
 	if err != nil {
@@ -271,6 +280,22 @@ func run(ctx context.Context, db *sql.DB, opts Options, apply bool) (Report, err
 	live, err := loadLiveSchema(ctx, s.conn, opts.Database)
 	if err != nil {
 		return report, err
+	}
+	if !apply {
+		afterLedger, err := s.loadLedger(ctx, false)
+		if err != nil {
+			return report, err
+		}
+		if err = refuseDirty(afterLedger); err != nil {
+			return report, err
+		}
+		afterSchema, err := loadLiveSchema(ctx, s.conn, opts.Database)
+		if err != nil {
+			return report, err
+		}
+		if !reflect.DeepEqual(applied, afterLedger) || !reflect.DeepEqual(live, afterSchema) {
+			return report, errors.New("schemamigrate: 只读核对期间台账或表结构改变，拒绝启动")
+		}
 	}
 	d := sch.drift(live, driftOptions{
 		AllowModifyColumn: opts.AllowModifyColumn,

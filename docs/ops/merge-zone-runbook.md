@@ -1559,3 +1559,17 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone -MergeSourceZone <SRC
   - **§13** 补全 dev_tools.ps1 的全部 merge 参数名。
 - **2026-05-23 v1.1**: 现状对齐(删 5 个空跑 auditor,`player.name` 改为显式「不适用」提示)。
 - **2026-05-23 v1**: 初版。
+
+
+### 2026-10-26：v4 写资格与严格排空接入（实现候选，未验收）
+
+本段记录本轮候选的接口变更及尚未通过的门禁；不是已经可以执行的发布说明。正式状态机见 [存盘围栏设计](../design/db-write-fencing-mysql.md) 的 v4 实施段。当前文件仍为隔离候选，没有覆盖仓库工作区，也没有运行生成、构建、SQL 或排空验收。
+
+- P0 固定完整计划与初始 ACTIVE 集。P1 关闭真实 SOURCE，P3 关闭真实 RELAY；每个物理 boot 的全部既有角色完成后，才能用同 run 的永久 RETIRE 收据退役。目录版本逐次递增，E 保持不变；后继阶段按连续 RETIRE 原件折叠 P0。无 ACTIVE 写者仍可正常冻结。不能原地改 P0，不能以进程退出、队列空或取消代替完成证明。
+- freeze 请求绑定已经存在的 NON_SQL_CLOSED 原收据。GrantTicket 将完整 freeze 摘要写入永久票据，冻结时经票据核对 grant 与其前序原件，避免摘要循环。超期、写入 UNKNOWN、不同 ticket 参数或不同原请求一律保持维护。旧收据认重仍核票据参数。
+- merge_zone 的 apply/unmerge 必须带 maintenance-run-id、freeze-ticket-id、freeze-request-id、freeze-receipt-sha256、frozen-writer-epoch；它们绑定同一 NORMAL 已消费票据与永久 SQL_FROZEN 原件。工具不把 writable 改回 1，不接受人工 attestedLag 代替传输闭包。路由写事务和已接入的公会/交易事务在自身提交事务里锁 meta 并核原冻结。玩家行复制/删除的同事务守卫仍在追加路径提案，未经纳入与验证不能声称全部写面闭合。
+- Redis 等非 SQL 维护动作还必须有本 run 的真实停写、在途完成与不可重入原件。单次 preflight 或另外一条连接长持 meta 锁不能覆盖其它连接或 Redis 的提交结果；SQL_RELEASED 前所需维护工具 owner 接线仍待明确落地。这个缺口不能用超时或运维约定冒认完成。
+- RELEASE_READY 保留原恢复审计与冻结收据；R 的 route_watermark_floor_ms 固定到正式协议，在既有 reconcile 锁内以 GREATEST 与 E/writable 同事务提交。正常恢复后只接纳同 run 的新 boot，消费者真实准备完成且 SOURCE 保持关闭，最后实际 open 产生 ACK；旧 boot 不复活。
+- Windows 私有文件必须由实际本地固定 NTFS、ACL 与祖先句柄校验支持。Go/Java 共用一个无特权文件 I/O owner 的提案正在等待追加范围确认；Java NIO 的 NTFS 名称或日志不能替代真实平台证明。
+
+本轮验收源码增加了 RR 旧快照、真实 slot 锁等待和 E+2 交错后的业务 SQL 零发送断言；LOCK_TOUCH 与 SELECT_ONLY 各自需要独立真实最小权限资格原件。普通 meta/registry SELECT 可能读取事务快照，安全判断依赖锁内 CURRENT slot 状态与 E，不能把这些 SELECT 统称 CURRENT。所有运行结论须等正式生成、构建及独立夹具执行后填写。

@@ -48,7 +48,8 @@ func (cursor *globalReadyCursor) round(ctx context.Context, s *svc.ServiceContex
 			if err == nil {
 				_, err = releaseGlobalFinished(call, s, original)
 			}
-			if err != nil && call.Err() == nil {
+			if err != nil {
+				s.HoldRelay(err)
 				logx.Error("全球匹配已建房票巡检失败，保留原票")
 			}
 		})

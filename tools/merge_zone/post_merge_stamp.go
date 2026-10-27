@@ -110,6 +110,9 @@ func stampPostMergeFlags(
 	if noticeRdb == nil {
 		return 0, 0, fmt.Errorf("no notice Redis handle (-notice-redis-addr): post-merge flags not stamped")
 	}
+	if err := checkMaintenanceTool(ctx); err != nil {
+		return 0, 0, err
+	}
 
 	tsStr := strconv.FormatInt(mergeTimestamp, 10)
 
@@ -125,6 +128,7 @@ func stampPostMergeFlags(
 				pipe.Set(ctx, prefix+strconv.FormatUint(pid, 10), tsStr, 0)
 			}
 			if _, err := pipe.Exec(ctx); err != nil {
+				holdMaintenanceTool(ctx)
 				// 已写进去的键不回滚 —— 重复打标是幂等的(plain SET),
 				// 重跑 -apply 会把漏掉的补上。
 				if first == nil {

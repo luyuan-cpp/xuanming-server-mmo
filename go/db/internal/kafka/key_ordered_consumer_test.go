@@ -1661,3 +1661,44 @@ func TestConcurrentWorkers_FinalStateIsGlobalMax(t *testing.T) {
 	t.Logf("soak: produced=%d, totalKeys=%d, writesPerPlayer=%d",
 		produced.Load(), totalKeys, writesPerPlayer)
 }
+
+func TestRelayAcceptedFrontierWaitsActualTaskCompletion(t *testing.T) {
+	consumer := &KeyOrderedKafkaConsumer{}
+	task := &workerTask{}
+	consumer.trackTask(task)
+	consumer.relayWork.CloseAdmission()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := consumer.relayWork.Wait(ctx); err == nil {
+		t.Fatal("实际接收任务尚未完成却排空成功")
+	}
+	task.finishRetry()
+	task.finishRetry()
+	if err := consumer.relayWork.Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSingleSubShardCancellationReturnsAcceptedReceipt(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	returned := 0
+	task := &workerTask{retryDone: func() { returned++ }}
+	worker := &worker{ctx: ctx, subShardCount: 1, subShardChans: []chan *workerTask{make(chan *workerTask)}}
+	done := make(chan struct{})
+	go func() { worker.routeToSubShard(task); close(done) }()
+	defer func() {
+		select {
+		case <-worker.subShardChans[0]:
+		case <-done:
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("取消后单shard路由未退出")
+	}
+	if returned != 1 {
+		t.Fatal("单shard退出后路由仍阻塞或未交还收据")
+	}
+}

@@ -402,10 +402,20 @@ robot battle 动作、匹配负载均衡、Excel 回合列(替代 kRoundDuration
 > 各模块的细化步骤见 PROGRESS.md 对应条目;本节是跨模块的**总顺序**,乱序必失败。
 > 全部 C++ MSBuild 必须 `/m:1` 串行(并发报假 C1041/LNK1104)。
 
-**阶段 0:proto 重生成(一切之先)** — `cd go && build.bat`(必要时再走 `dev_tools.ps1 -Command proto-gen-run`)。验收:
-- `cpp/generated/proto/battle/{battle_data,battle_node,player_battle}.pb.*` 及 `{battle_node,player_battle}.grpc.pb.*`(两 proto 均已去掉 `cc_generic_services`);
+> **2026-10-26 当前依赖口径**：官方 gRPC C++ SDK 与桩生成插件退出构建，协议仍由 `muduo_grpc` 承载。
+> Windows Debug x64 的 protoc、Protobuf、Abseil 和 utf8 库来自 `third_party/protobuf/install_vs2026_dbg`；
+> GoogleTest 来自 `third_party/googletest/install_vs2026_dbg`，票据签名所需 BoringSSL 来自
+> `third_party/boringssl/install_vs2026_dbg`。Release 使用各自 `install_vs2026_rel`，不混用 Debug CRT。
+> SDK 缺失应先报告并按已授权的独立依赖构建入口准备，不借共享 `lib/` 或旧 SDK 归档兜底。
+> §18.8 的 2026-09-05 实测段保留历史原文，不能作为当前工具路径、生成产物或插件前置要求。
+> 本注记只更新执行口径，不代表当前互通、冒烟或其它未执行项已通过。
+
+**阶段 0:proto 重生成(一切之先)** — 仓库根先执行 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build`，
+再执行 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -UseBinary -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。
+`go/build.bat` 不代替完整生成。验收:
+- `cpp/generated/proto/battle/{battle_data,battle_node,player_battle}.pb.*`；自有客户端在 `cpp/generated/grpc_client/battle/`，不再生成或编译官方 `*.grpc.pb.*`；
 - `node.pb.h` 含 `BattleNodeService=28`;`gate_event.pb.h` 含 `BindBattleEvent/UnbindBattleEvent`;`battle_comp.pb.h`(InBattleComp);`battle_event.pb.*`;
-- `scene.pb.h` 含 `PrepareBattle*/CancelBattlePrepare*`;`scene_node_service.grpc.pb.h` 的 `SceneNodeGrpc` 新增同名两 rpc(消息共用 scene.proto 一份);
+- `scene.pb.h` 含 `PrepareBattle*/CancelBattlePrepare*`；`cpp/nodes/scene/handler/grpc/scene_node_service.h` 与自有 `scene_node_service_grpc_client.h` 含对应 muduo 调用入口(消息共用 scene.proto 一份)；
 - `rpc/service_metadata/player_battle_service_metadata.h` 的 6 个 `BattleClientPlayer*MessageId`;`contracts_kafka_gate_event_event_id.h` 的 `ContractsKafka(Un)BindBattleEventEventId`;`common_event_battle_event_event_id.h` 的 `BattleSettlementEventEventId`;
 - `message_id.txt` 出现 `BattleClientPlayer*` / `MatchService*` 13 个键;
 - 生成骨架:`cpp/nodes/battle/handler/grpc/battle_node.{h,cpp}`、`cpp/nodes/scene/handler/event/battle_event_handler.{h,cpp}`、`scene_handler` 与 `scene_node_service` 新方法。
@@ -472,13 +482,13 @@ etcdctl 验 `BattleNodeService.rpc` 记录 `protocolType=PROTOCOL_GRPC` → 登�
 > 总顺序与 §12 相同:proto 重生成 → C++ 串行编译 → go/match → 客户端 → 冒烟。
 > C++ MSBuild 一律 `/m:1`。
 
-**阶段 0:proto 重生成** — `cd go && build.bat`(必要时 `dev_tools.ps1 -Command proto-gen-run`)。验收:
+**阶段 0:proto 重生成** — 按 §12 的独立 Protobuf 与 no-unity 正规生成步骤执行，不需要官方 C++ 桩生成插件。验收:
 - `battle_data.pb.h`:`BattleActorState` 含 `is_auto`;
 - `player_battle.pb.h`:`SpectateStateS2C`/`SpectateEndS2C`/`eSpectateEndReason`/
   `StopWatchBattle*`/`SetAutoBattle*`;`player_battle_service_metadata.h` 新增 5 个
   `BattleClientPlayer*MessageId`(StopWatchBattle/SetAutoBattle/NotifySpectateState/
   NotifySpectateTurnResult/NotifySpectateEnd);
-- `battle_node.pb.h` + `battle_node.grpc.pb.h`:`AddObserver`/`RemoveObserver`;
+- `battle_node.pb.h` 中的观战消息、`cpp/nodes/battle/handler/grpc/battle_node.h` 与自有 `battle_node_grpc_client.h` 中的 `AddObserver`/`RemoveObserver`；
 - `match_service.pb.go` 等 Go 产物:`WatchBattle`/`ListWatchableBattles`/
   `BattleWatchSummary`/`SpectateBattleRecord`;`message_id.txt` 新增
   `MatchServiceWatchBattle`/`MatchServiceListWatchableBattles` 与 5 个 BattleClientPlayer 键;
@@ -650,6 +660,21 @@ B 收到观战结束推送;B 观战中点排队 → 观战被清退(NotifySpecta
 > **2026-10-17 契约勘误**：需要保留的是通用回包行为，现由 `gate_rpc_reply_bridge::DeliverReply` 收口；`SetIfEmptyHandler` 全局安装已删除，直连和路由的每次调用回调分别调用同一桥接。battle 收缩结论不变。
 
 ### 18.8 Codex 验证清单(按序;任一步红即停)
+
+> **2026-10-26 当前执行说明**：以下 2026-09-05 实跑坑点、旧工具路径、旧生成分派方式与通过数量均为历史记录，原文保留。
+> 新运行采用 §12 的独立依赖与 no-unity 生成口径，不把旧 SDK、官方插件或 `*.grpc.pb.*` 作为前置条件。
+> 独立安全测试可在已初始化 x64 工具链的 PowerShell 中使用下面的当前命令；结果以新运行原件为准，
+> 不沿用下文的旧用例数量。产物目录须为本次已创建的仓库 ignored 证据目录 `$ev`，不覆盖既有验收产物。
+>
+> ```powershell
+> $gt = "$PWD/third_party/googletest/install_vs2026_dbg"
+> $tls = "$PWD/third_party/boringssl/install_vs2026_dbg"
+> cl /std:c++latest /EHsc /MDd /utf-8 /I cpp/nodes/battle /I cpp/libs/engine/core /I "$gt/include" /I "$tls/include" cpp/nodes/battle/tests/battle_ticket_test.cpp /Fo:"$ev/battle_ticket_test.obj" /Fe:"$ev/battle_ticket_test.exe" /link /LIBPATH:"$gt/lib" /LIBPATH:"$tls/lib" gtest_main.lib gtest.lib crypto.lib ws2_32.lib advapi32.lib
+> cl /std:c++latest /EHsc /MDd /utf-8 /I cpp/nodes/gate /I cpp/libs/engine/core /I "$gt/include" /I "$tls/include" cpp/nodes/gate/tests/gate_security_test.cpp /Fo:"$ev/gate_security_test.obj" /Fe:"$ev/gate_security_test.exe" /link /LIBPATH:"$gt/lib" /LIBPATH:"$tls/lib" gtest_main.lib gtest.lib crypto.lib ws2_32.lib advapi32.lib
+> ```
+>
+> 两条命令分别串行运行，检查各自退出码后再执行对应 EXE，并保留完整日志；失败即停。Linux 使用
+> `third_party/googletest/googletest` 源码与已独立安装到 `/usr/local` 的同源 BoringSSL，不能混用系统 OpenSSL 的头库。
 
 1. **重生成 proto**(仓库根):`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`。期望:`proto/message_id.txt` 末尾新增 `BattleClientPlayerNotifyBattleAssigned` / `BattleNodeIssueBattleTicket` / `MatchServiceRequestBattleTicket`(`BattleClientPlayerRequestBattleTicket` 已删,不再出现);`cpp/generated/rpc/service_metadata/{player_battle,battle_node,match_service}_service_metadata.h` 出现同名 `*MessageId` 常量;`robot/generated/pb/game/message_id.go` 同;`robot/logic/handler/message_body_handler.go` 的 map 只多一行 `BattleClientPlayerNotifyBattleAssigned`(生成器 `robot_case.go` 只收服务名含 `ClientPlayer` / `GamePlayer` 的服务,`MatchService*` 应答由 `match_service_responses.go` 的 `init()` 自行登记,handler 函数已手写);`client/unity/Assets/Scripts/Net/Generated/` 多两个 handler 桩(客户端仓的事,不在本仓验)。**第 1 步之前 C++ / robot 编译不过是预期的。**
    **2026-09-05 实跑踩到的三个坑(照此做,否则第 3 步链接必红):**
@@ -1138,15 +1163,13 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
    通过:全绿、无 import cycle。**第 1、2 步未绿不得进入第 3 步**(否则 regen 会给 11 个 Go 服务写入非法标识符)。
 3. **proto 重生**。前置:第 1–2 步绿;gate / battle / scene 收缩改动全部落盘;与有未提交 proto 改动的会话约定时段;
    `PROTOGEN_ALLOW_MASS_EVENT_TOMBSTONE` **不设**。注意**不是** `cd go && build.bat`(它只对 db / login 跑 goctl,不产出 pb;末尾还有 `pause`)。
-   1. `$env:PATH = "$PWD\third_party\grpc\install_vs2026_dbg\bin;$env:PATH"`,`protoc --version` 必须是 `libprotoc 35.1`
+   1. 本次子进程 `$env:PATH = "$PWD\third_party\protobuf\install_vs2026_dbg\bin;$env:PATH"`，`protoc --version` 必须是 `libprotoc 35.1`；官方 C++ 桩生成插件不再需要。
       (C++ 生成物断言 `PROTOBUF_VERSION == 7035001`);`protoc-gen-go` / `protoc-gen-go-grpc` 要在 PATH 上且与现有产物头部一致
       (v1.36.10 / v1.6.0),不一致即停下报告。
-   2. 客户端门禁:`proto_gen.yaml` 设了 `enable_unity_client: true`,会改写 `../mmorpg-client` 的生成物。先确认
-      `../mmorpg-client/tools/gen_proto.ps1` 收录了 `proto/team/team.proto`、`proto/trade/jubaozhai.proto`、`proto/friend/friend.proto` 三行;
-      缺任何一行,就复制一份只把 `enable_unity_client` 改成 `false` 的配置副本,经 `-ConfigPath` 传入(原配置不改)。
+   2. 客户端门禁：未获客户端任务授权时直接使用 `tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`，不读取或修改独立客户端。
    3. `pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command proto-gen-build`(失败即停;不可省,09-20 出过旧二进制吞守护段的事故)。
-   4. `pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -UseBinary -ConfigPath tools/proto_generator/protogen/etc/proto_gen.yaml`
-      (或上面的副本)。**不信退出码**(复制失败只打 Warn,脚本也不检查生成器退出码),先查输出里没有 Fatal / ERROR,再按 grep 验收:
+   4. `pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -UseBinary -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。
+      核对原生退出码与完整日志，再按当前输入基线验收；以下固定墓碑与计数是收缩批的历史核对项，不代替当前生成基线：
       - 日志恰有两条 WARN `Event no longer in proto…`,event_id 为 43、44;若 Fatal `Event proto input looks incomplete; refusing to tombstone event IDs`,
         **不许**设放行变量,保留日志报告;
       - `Select-String proto/event_id.txt -Pattern '^(43|44)='` 恰为 `43=reserved:ContractsKafkaBindBattleEvent`、`44=reserved:ContractsKafkaUnbindBattleEvent`,
@@ -1186,8 +1209,8 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
      (退出码 0,汇总表里没有「无 exe」行)。至此 C++ 顺序为「重生(第 3 步)→ `game.sln` 全量 → `run_cpp_tests -Build`」,与该文档一致。
 6. **独立 gtest**(不进 vcxproj):
    - `battle_push_policy_test`,Linux / 带 g++ 的容器:
-     `GT=third_party/grpc/third_party/googletest/googletest; g++ -std=c++23 -I cpp/nodes/battle -I "$GT/include" -I "$GT" cpp/nodes/battle/tests/battle_push_policy_test.cpp "$GT/src/gtest-all.cc" "$GT/src/gtest_main.cc" -lpthread -o /tmp/battle_push_policy_test && /tmp/battle_push_policy_test`
-     → 6 条 PASSED。Windows(Developer PowerShell):`$GT='third_party\grpc\third_party\googletest\googletest'` 后
+     `GT=third_party/googletest/googletest; g++ -std=c++23 -I cpp/nodes/battle -I "$GT/include" -I "$GT" cpp/nodes/battle/tests/battle_push_policy_test.cpp "$GT/src/gtest-all.cc" "$GT/src/gtest_main.cc" -lpthread -o /tmp/battle_push_policy_test && /tmp/battle_push_policy_test`。
+     通过标准是本次实际运行退出 0、无失败；不沿用历史的 6 条计数。Windows(Developer PowerShell):`$GT='third_party\googletest\googletest'` 后
      `cl /std:c++latest /EHsc /utf-8 /I cpp\nodes\battle /I $GT\include /I $GT cpp\nodes\battle\tests\battle_push_policy_test.cpp $GT\src\gtest-all.cc $GT\src\gtest_main.cc /Fe:build\battle_push_policy_test.exe`,运行后同一判据。
    - 回归 `gate_security_test`(D-12:测试一字未改,C++ 默认仍是直连模式)与 `battle_ticket_test`:按 §18.8 第 4 步的命令编译运行,全绿。
 7. **PowerShell 契约测试(D75;不依赖 regen,可与任一步并行)**:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`

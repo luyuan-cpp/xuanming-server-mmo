@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"shared/drainproof"
 	"sync"
 	"time"
 
@@ -62,6 +63,7 @@ const (
 
 // TrialBackgroundConf 是两个后台循环的节律,由 guild.go 从 config.ActivityConf 的四个方法换算后给出。
 type TrialBackgroundConf struct {
+	RelayAdmission *drainproof.Session
 	// OwedInterval:待入队物品循环两轮的间隔(ActivityConf.OwedLoopInterval)。
 	OwedInterval time.Duration
 	// SweepInterval:巡检两轮的间隔(ActivityConf.TrialSweepInterval)。
@@ -117,22 +119,33 @@ func (l *GuildLogic) StartTrialBackground(c TrialBackgroundConf) (stop func(), e
 				next, err := d.Lobby.ExpirePendingSQL(budget, lobbyCursor)
 				lobbyCursor = next
 				if err != nil {
+					if c.RelayAdmission != nil {
+						c.RelayAdmission.Hold()
+					}
 					logx.Errorf("[GuildTrial] SQL pending lobby recovery failed: %v", err)
 				}
 				next, err = d.Lobby.ExpireUnpreparedSQL(budget, unpreparedCursor)
 				unpreparedCursor = next
 				cancel()
 				if err != nil {
+					if c.RelayAdmission != nil {
+						c.RelayAdmission.Hold()
+					}
 					logx.Errorf("[GuildTrial] SQL unprepared lobby recovery failed: %v", err)
 				}
 			}
-			launches.round(ctx)
-			owed.round(ctx)
-		})
+			if err := launches.round(ctx); err != nil && c.RelayAdmission != nil {
+				c.RelayAdmission.Hold()
+			}
+			stats := owed.round(ctx)
+			if stats.failed != 0 && c.RelayAdmission != nil {
+				c.RelayAdmission.Hold()
+			}
+		}, c.RelayAdmission)
 	})
 	safego.Go(trialSweeperPoint, func() {
 		defer wg.Done()
-		runTrialLoop(ctx, trialSweeperPoint, c.SweepInterval, func(ctx context.Context) { l.trialSweepRound(ctx, d, c) })
+		runTrialLoop(ctx, trialSweeperPoint, c.SweepInterval, func(ctx context.Context) { l.trialSweepRound(ctx, d, c) }, c.RelayAdmission)
 	})
 	logx.Infof("[GuildTrial] Background loops started: goroutine %s interval=%v; %s interval=%v overdue=%v abandon=%v lease_owner=%s",
 		trialOwedLoopPoint, c.OwedInterval, trialSweeperPoint, c.SweepInterval, c.ResultOverdue, c.Abandon, c.Owner)
@@ -143,7 +156,11 @@ func (l *GuildLogic) StartTrialBackground(c TrialBackgroundConf) (stop func(), e
 }
 
 // runTrialLoop 阻塞运行一个定时循环,ctx 取消即返回。每一轮各自 recover(纪律 2)。interval 必须为正。
-func runTrialLoop(ctx context.Context, point string, interval time.Duration, round func(ctx context.Context)) {
+func runTrialLoop(ctx context.Context, point string, interval time.Duration, round func(ctx context.Context), admissions ...*drainproof.Session) {
+	var relay *drainproof.Session
+	if len(admissions) == 1 {
+		relay = admissions[0]
+	}
 	timer := time.NewTimer(time.Duration(rand.Int64N(int64(interval))))
 	defer timer.Stop()
 	for {
@@ -152,7 +169,24 @@ func runTrialLoop(ctx context.Context, point string, interval time.Duration, rou
 			return
 		case <-timer.C:
 		}
-		safego.Run(point, func() { round(ctx) })
+		safego.Run(point, func() {
+			if relay != nil {
+				finish, err := relay.Enter()
+				if err != nil {
+					return
+				}
+				defer finish()
+				defer func() {
+					if recovered := recover(); recovered != nil {
+						relay.Hold()
+						panic(recovered)
+					}
+				}()
+			}
+			work, release := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+			defer release()
+			round(work)
+		})
 		timer.Reset(interval)
 	}
 }
@@ -233,6 +267,7 @@ func (o *owedRewardLoop) convert(ctx context.Context, owed data.OwedReward, full
 	d := o.d
 	opID, err := d.OpIDs.Mint(ctx)
 	if err != nil || opID == 0 {
+		stats.failed++
 		if ctx.Err() == nil {
 			logx.Errorf("[GuildTrial] mint op id for owed reward failed, round ends (battle %d): id=%d err=%v", owed.BattleID, opID, err)
 			guildTrialOwedTotal.Inc(trialOwedError)
@@ -313,6 +348,9 @@ func (l *GuildLogic) trialSweepRound(ctx context.Context, d *ActivityDeps, c Tri
 	if d.Lobby != nil {
 		acquired, err := d.Lobby.AcquireSweepLease(ctx, c.Owner, sweepLeaseTTL(c.SweepInterval))
 		if err != nil {
+			if c.RelayAdmission != nil {
+				c.RelayAdmission.Hold()
+			}
 			if ctx.Err() == nil {
 				logx.Errorf("[GuildTrial] acquire sweep lease failed, round skipped: %v", err)
 			}
@@ -355,7 +393,10 @@ func (l *GuildLogic) trialSweepRound(ctx context.Context, d *ActivityDeps, c Tri
 			// 逐局兜 panic(文件头纪律 2):只丢这一局,下一轮再试;栈由 safego 打在日志里,
 			// 计 safego_panic_total{point="guild.trial_sweeper"}(与整轮的兜底同一个点位)。
 			recovered := false
-			if ok := safego.Run(trialSweeperPoint, func() { recovered = l.recoverTrialResult(ctx, d, row, payload, nowMs) }); !ok {
+			if ok := safego.Run(trialSweeperPoint, func() { recovered = l.recoverTrialResult(ctx, d, row, payload, nowMs, c.RelayAdmission) }); !ok {
+				if c.RelayAdmission != nil {
+					c.RelayAdmission.Hold()
+				}
 				logx.Errorf("[GuildTrial] sweeper panicked while settling battle %d of guild %d from its result record, skipped this round and will retry next round",
 					row.BattleID, row.GuildID)
 			}
@@ -364,6 +405,9 @@ func (l *GuildLogic) trialSweepRound(ctx context.Context, d *ActivityDeps, c Tri
 			}
 		case row.CreatedMs < nowMs-abandonMs:
 			expired, err := d.trials.ExpireTrialBattle(ctx, row.BattleID, row.GuildID, nowMs)
+			if err != nil && c.RelayAdmission != nil {
+				c.RelayAdmission.Hold()
+			}
 			switch {
 			case err != nil:
 				if ctx.Err() == nil {
@@ -392,7 +436,12 @@ func (l *GuildLogic) trialSweepRound(ctx context.Context, d *ActivityDeps, c Tri
 // 记录解不开、或它描述的根本不是这一局(battle_id 不符、不是帮会历练的上下文):这是确定性的坏数据,
 // 把这一局标成 POISON 并销账 —— 否则它会永远停在候选里(有记录就不会被判过期)。
 // 结算回暂时性错误时什么都不做,下一轮再来。
-func (l *GuildLogic) recoverTrialResult(ctx context.Context, d *ActivityDeps, row data.OverdueTrialBattle, payload []byte, nowMs uint64) bool {
+func (l *GuildLogic) recoverTrialResult(ctx context.Context, d *ActivityDeps, row data.OverdueTrialBattle, payload []byte, nowMs uint64, admissions ...*drainproof.Session) bool {
+	hold := func() {
+		if len(admissions) == 1 && admissions[0] != nil {
+			admissions[0].Hold()
+		}
+	}
 	key := data.TrialBattleKey{BattleID: row.BattleID, GuildID: row.GuildID}
 	ev := &kafkapb.BattleResultEvent{}
 	cause := ""
@@ -405,6 +454,7 @@ func (l *GuildLogic) recoverTrialResult(ctx context.Context, d *ActivityDeps, ro
 	}
 	if cause != "" {
 		if _, err := l.poisonTrialBattle(ctx, d, key, 0, nowMs, cause); err != nil {
+			hold()
 			if ctx.Err() == nil {
 				logx.Errorf("[GuildTrial] sweeper could not mark battle %d as poison, will retry next round: %v", row.BattleID, err)
 			}
@@ -414,6 +464,7 @@ func (l *GuildLogic) recoverTrialResult(ctx context.Context, d *ActivityDeps, ro
 	}
 	outcome, err := l.SettleTrialResult(ctx, ev)
 	if err != nil {
+		hold()
 		if ctx.Err() == nil {
 			logx.Errorf("[GuildTrial] sweeper could not settle battle %d of guild %d from its result record, will retry next round: %v",
 				row.BattleID, row.GuildID, err)

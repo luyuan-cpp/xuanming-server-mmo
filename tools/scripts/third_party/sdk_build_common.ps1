@@ -74,7 +74,6 @@ function Initialize-SdkBuild {
     $configSuffix = if ($Configuration -eq 'Debug') { 'dbg' } else { 'rel' }
     $sdkSuffix = "vs2026${archSuffix}_$configSuffix"
     $installPath = Resolve-SdkArtifactPath $repoRoot (Join-Path $artifactRoot "install_$sdkSuffix")
-    $buildPath = Resolve-SdkArtifactPath $repoRoot (Join-Path $artifactRoot ".build_$sdkSuffix")
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
     if (-not (Test-Path -LiteralPath $vswhere -PathType Leaf)) { throw "缺少已安装的 vswhere：$vswhere" }
     $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
@@ -83,10 +82,21 @@ function Initialize-SdkBuild {
         Where-Object { $_.Name -eq $PreferredMsvcVersion -or $_.Name.StartsWith($PreferredMsvcVersion + '.') } |
         Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
     if (-not $toolset) { throw "缺少已安装的 MSVC $PreferredMsvcVersion；不切换工具集。" }
+    # 只有本地化消息包时，CMake/Ninja 的 /showIncludes 前缀可能转码失真。
+    # 使用已有 VS 的跟踪机制，不安装语言包，也不依赖不可靠的增量头文件扫描。
+    $englishMessages = Join-Path $toolset.FullName "bin/Hostx64/$Architecture/1033/clui.dll"
+    $effectiveUseVS = [bool]$UseVSGenerator -or -not (Test-Path -LiteralPath $englishMessages -PathType Leaf)
+    if ($effectiveUseVS -and -not $UseVSGenerator) {
+        Write-Host '[SDK] 当前 MSVC 没有英文诊断包，使用已有 VS 生成器保证依赖跟踪。'
+    }
+    $generatorSuffix = if ($effectiveUseVS) { 'vs' } else { 'ninja' }
+    $buildPath = Resolve-SdkArtifactPath $repoRoot (Join-Path $artifactRoot ".build_${sdkSuffix}_$generatorSuffix")
     $vcvars = Join-Path $vsPath 'VC/Auxiliary/Build/vcvarsall.bat'
     $vcvarsArch = if ($Architecture -eq 'x86') { 'x64_x86' } else { 'x64' }
     $versionParts = $toolset.Name.Split('.')
     $vcvarsVersion = "$($versionParts[0]).$($versionParts[1])"
+    # Ninja 依赖扫描需要稳定的 /showIncludes 前缀；仅设置当前构建子进程语言。
+    $env:VSLANG = '1033'
     $environmentLines = & cmd.exe /d /c "`"$vcvars`" $vcvarsArch -vcvars_ver=$vcvarsVersion >nul && set"
     if ($LASTEXITCODE -ne 0) { throw "加载 MSVC $vcvarsVersion/$Architecture 环境失败。" }
     foreach ($line in $environmentLines) {
@@ -97,7 +107,7 @@ function Initialize-SdkBuild {
     }
     $cmake = (Get-Command cmake -ErrorAction Stop).Source
     $null = Get-Command cl -ErrorAction Stop
-    $generatorArgs = if ($UseVSGenerator) {
+    $generatorArgs = if ($effectiveUseVS) {
         @('-G', 'Visual Studio 18 2026', '-A', $(if ($Architecture -eq 'x86') { 'Win32' } else { 'x64' }),
             '-T', "v145,version=$($toolset.Name)")
     } else {
@@ -113,8 +123,9 @@ function Initialize-SdkBuild {
     }
     if (-not $SkipToolCheck) {
         $version = & $cmake --version
-        if ($LASTEXITCODE -ne 0 -or @($version)[0] -notmatch '(\d+\.\d+\.\d+)' -or [version]$Matches[1] -lt [version]'3.24') {
-            throw '需要已安装的 CMake 3.24 或以上版本。'
+        $minimumCMake = if ($effectiveUseVS) { [version]'4.2' } else { [version]'3.24' }
+        if ($LASTEXITCODE -ne 0 -or @($version)[0] -notmatch '(\d+\.\d+\.\d+)' -or [version]$Matches[1] -lt $minimumCMake) {
+            throw "需要已安装的 CMake $minimumCMake 或以上版本；不自动升级。"
         }
     }
     $env:CMAKE_BUILD_PARALLEL_LEVEL = '1'
@@ -123,7 +134,7 @@ function Initialize-SdkBuild {
     $runtime = if ($Configuration -eq 'Debug') { 'MultiThreadedDebugDLL' } else { 'MultiThreadedDLL' }
     return @{
         RepoRoot = $repoRoot; SourceRoot = $sourceRoot; BuildPath = $buildPath; InstallPath = $installPath
-        CMake = $cmake; Configuration = $Configuration; Architecture = $Architecture; UseVSGenerator = [bool]$UseVSGenerator
+        CMake = $cmake; Configuration = $Configuration; Architecture = $Architecture; UseVSGenerator = $effectiveUseVS
         ConfigureArgs = $generatorArgs + @("-DCMAKE_BUILD_TYPE=$Configuration", '-DCMAKE_CXX_STANDARD=20',
             '-DCMAKE_CXX_STANDARD_REQUIRED=ON', '-DCMAKE_C_FLAGS=/utf-8', '-DCMAKE_CXX_FLAGS=/utf-8',
             "-DCMAKE_MSVC_RUNTIME_LIBRARY=$runtime", '-DBUILD_SHARED_LIBS=OFF',

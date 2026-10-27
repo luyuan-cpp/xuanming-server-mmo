@@ -72,6 +72,10 @@ def validate_sdk() -> dict:
         raise RuntimeError("SDK 配置缺少完整的源码集合守卫；不能仅凭历史路径或 Git HEAD 放行")
     actual = {name: sha(path) for name, path in
               guard_files(REPO, config["guardRoots"], config["guardPolicy"]).items()}
+    for recipe in ("tools/scripts/third_party/build_linux_sdk.sh", "tools/archived/setup_dependencies.sh",
+                   "deploy/k8s/Dockerfile.cpp"):
+        if recipe not in files or recipe not in actual:
+            raise RuntimeError("SDK 来源守卫缺少现役构建入口：" + recipe)
     differences = sorted(name for name in files.keys() | actual.keys() if files.get(name) != actual.get(name))
     dependency_expected = config["dependencySource"]["files"]
     dependency_actual = dependency_files(REPO, config["dependencySource"])

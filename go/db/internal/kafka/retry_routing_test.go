@@ -1451,3 +1451,18 @@ func TestStop_RetryLoopJoinsWaitGroup(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, ready, string(payload), "the claimed receipt is returned to the shared inbox")
 }
+
+func TestRetryDepthsIncludesUnregisteredProcessingAndMode(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rc := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rc.Close()
+	ctx := context.Background()
+	require.NoError(t, rc.LPush(ctx, retryInstanceProcessingKey(routingTestTopic, "orphan"), "原收据").Err())
+	require.NoError(t, rc.HSet(ctx, retryInstanceModesKey(routingTestTopic), "orphan", "owner").Err())
+	report, err := RetryQueueDepths(ctx, rc, routingTestTopic, 1)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), report.OrphanProcessing[retryInstanceProcessingKey(routingTestTopic, "orphan")])
+	require.Equal(t, []string{"orphan"}, report.ModesWithoutLease)
+	require.False(t, report.LooksUnused())
+	require.Equal(t, int64(1), rc.LLen(ctx, retryInstanceProcessingKey(routingTestTopic, "orphan")).Val(), "只读盘点不能删孤儿")
+}

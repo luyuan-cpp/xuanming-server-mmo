@@ -1,6 +1,7 @@
 #include "channel.h"
 
 #include <algorithm>
+#include <limits>
 
 #include "muduo/base/Logging.h"
 #include "muduo/net/EventLoop.h"
@@ -31,6 +32,127 @@ UnaryCallResult FailureResult(Status status)
 
 } // namespace
 
+
+std::shared_ptr<MaintenanceState> Channel::ProcessMaintenance()
+{
+    static const auto state = std::make_shared<MaintenanceState>();
+    return state;
+}
+std::shared_ptr<MaintenanceState> Channel::ProcessControlMaintenance()
+{
+    static const auto state = std::make_shared<MaintenanceState>();
+    return state;
+}
+bool MaintenanceState::Begin()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) return false;
+    if (accepted_ == std::numeric_limits<std::uint64_t>::max()) { unknown_ = true; return false; }
+    ++accepted_; return true;
+}
+void MaintenanceState::Complete(bool known)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!known || accepted_ == completed_) unknown_ = true;
+    if (completed_ < accepted_) ++completed_;
+}
+void MaintenanceState::Close() { std::lock_guard<std::mutex> lock(mutex_); closed_ = true; }
+bool MaintenanceState::Closed() const { std::lock_guard<std::mutex> lock(mutex_); return closed_; }
+bool MaintenanceState::Joined() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return closed_ && !callbackTrackingLost_ && accepted_ == completed_ && callbacksAccepted_ == callbacksCompleted_;
+}
+bool MaintenanceState::SettledFrontier(std::string& value) const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (unknown_ || callbackTrackingLost_ || accepted_ != completed_ || callbacksAccepted_ != callbacksCompleted_) return false;
+    value = "grpc-call-v2:" + std::to_string(accepted_) + ":" + std::to_string(completed_) + ":" +
+        std::to_string(callbacksAccepted_) + ":" + std::to_string(callbacksCompleted_);
+    return true;
+}
+void MaintenanceState::OwnerOpened()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (liveOwners_ == std::numeric_limits<std::uint64_t>::max()) { callbackTrackingLost_ = true; unknown_ = true; }
+    else ++liveOwners_;
+}
+void MaintenanceState::OwnerJoined()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (liveOwners_ == 0) { callbackTrackingLost_ = true; unknown_ = true; } else --liveOwners_;
+}
+bool MaintenanceState::NativeJoined() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return closed_ && !callbackTrackingLost_ && liveOwners_ == 0;
+}
+void MaintenanceState::BeginCallback()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (callbacksAccepted_ == std::numeric_limits<std::uint64_t>::max())
+    {
+        unknown_ = true;
+        callbackTrackingLost_ = true;
+        return;
+    }
+    ++callbacksAccepted_;
+}
+void MaintenanceState::CompleteCallback(bool returned)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!returned || callbacksAccepted_ == callbacksCompleted_) unknown_ = true;
+    if (callbacksCompleted_ < callbacksAccepted_) ++callbacksCompleted_;
+}
+bool MaintenanceState::Frontier(std::string& value) const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!closed_ || unknown_ || callbackTrackingLost_ || accepted_ != completed_ || callbacksAccepted_ != callbacksCompleted_) return false;
+    value = "grpc-call-v2:" + std::to_string(accepted_) + ":" + std::to_string(completed_) + ":" +
+        std::to_string(callbacksAccepted_) + ":" + std::to_string(callbacksCompleted_);
+    return true;
+}
+namespace detail {
+struct MaintenanceOperation {
+    explicit MaintenanceOperation(std::shared_ptr<MaintenanceState> owner) : state(std::move(owner)) {}
+    MaintenanceOperation(const MaintenanceOperation&) = delete;
+    std::shared_ptr<MaintenanceState> state;
+    bool known = false;
+    ~MaintenanceOperation() { state->Complete(known); }
+};
+// 排队闭包持有此票据；只有实际执行并从业务回调返回，才确认本机完成。
+// 它不持有 Channel，回调销毁通道也不会留下裸对象引用。
+struct MaintenanceCompletion {
+    explicit MaintenanceCompletion(std::shared_ptr<MaintenanceState> owner) : state(std::move(owner))
+    {
+        state->BeginCallback();
+    }
+    MaintenanceCompletion(const MaintenanceCompletion&) = delete;
+    std::shared_ptr<MaintenanceState> state;
+    bool returned = false;
+    ~MaintenanceCompletion() { state->CompleteCallback(returned); }
+};
+struct UnaryCompletionOwner {
+    // 显式成员顺序，不依赖 lambda capture 的未指定析构顺序。
+    std::shared_ptr<MaintenanceOperation> operation;
+    std::shared_ptr<MaintenanceCompletion> completion;
+    UnaryCallback callback;
+    void Run(UnaryCallResult&& result) {
+        const bool known = result.status.ok();
+        callback(std::move(result));
+        callback = {}; // target 析构可继续派生拒绝回调，票据此时仍然在途。
+        if (operation) operation->known = known;
+        if (completion) completion->returned = true;
+    }
+};
+struct StreamCompletionOwner {
+    StreamCompletionOwner(std::shared_ptr<MaintenanceState> state, std::shared_ptr<StreamRecord> target)
+        : completion(std::make_shared<MaintenanceCompletion>(std::move(state))), record(std::move(target)) {}
+    std::shared_ptr<MaintenanceCompletion> completion;
+    std::shared_ptr<StreamRecord> record;
+};
+}
+
 const char *ConnectivityStateName(ConnectivityState state)
 {
     switch (state)
@@ -58,13 +180,15 @@ std::shared_ptr<Channel> Channel::Create(muduo::net::EventLoop &loop, const std:
 
 Channel::Channel(PrivateTag, muduo::net::EventLoop &loop, const std::string &ip, uint16_t port,
                  ChannelOptions options)
-    : loop_(loop),
+    : maintenance_(options.maintenance ? options.maintenance : ProcessMaintenance()),
+      loop_(loop),
       target_(ip + ":" + std::to_string(port)),
       address_(ip, port),
       options_(std::move(options)),
       nextBackoffMs_(static_cast<double>(options_.backoff.initial.count())),
       rng_(std::random_device{}())
 {
+    maintenance_->OwnerOpened();
     transportOptions_.session.authority = options_.authority.empty() ? target_ : options_.authority;
     transportOptions_.session.userAgent = options_.userAgent;
     transportOptions_.session.maxReceiveMessageBytes = options_.maxReceiveMessageBytes;
@@ -143,6 +267,13 @@ Channel::~Channel()
     }
     // loop 不在本线程(漏了关机清理)时只能就地析构;这条兜底路径的根治见设计 §10.1 F012 / F022。
     draining_.clear();
+    if (loopIsCurrent) {
+        // released.reset 先排 forceClose，再排 connectDestroyed；在它们之后两跳才确认本机传输退出。
+        auto* loop = &loop_;
+        loop->queueInLoop([loop, state = maintenance_] {
+            loop->queueInLoop([loop, state] { loop->queueInLoop([state] { state->OwnerJoined(); }); });
+        });
+    }
 }
 
 void Channel::StartUnaryCall(UnaryCallRequest request, UnaryCallback done)
@@ -188,6 +319,8 @@ void Channel::StartUnaryCall(UnaryCallRequest request, UnaryCallback done)
         return;
     }
 
+    if (!maintenance_->Begin()) { FailSoon(std::move(done), Status(StatusCode::kUnavailable, "maintenance publications closed")); return; }
+    const auto operation = std::make_shared<detail::MaintenanceOperation>(maintenance_);
     auto framed = std::make_shared<std::string>();
     AppendLengthPrefixedMessage(*framed, request.message);
 
@@ -198,7 +331,9 @@ void Channel::StartUnaryCall(UnaryCallRequest request, UnaryCallback done)
     call.framedMessage = std::move(framed);
     call.metadata = std::move(request.metadata);
     call.deadline = request.deadline;
-    call.done = std::move(done);
+    const auto owner = std::make_shared<detail::UnaryCompletionOwner>();
+    owner->operation = operation; owner->callback = std::move(done);
+    call.done = [owner](UnaryCallResult&& result) { owner->Run(std::move(result)); };
     calls_.emplace(callId, std::move(call));
     deadlines_.emplace(request.deadline, callId);
     ArmDeadlineTimer();
@@ -358,8 +493,9 @@ void Channel::CompleteCall(uint64_t callId, UnaryCallResult result)
 
 void Channel::FailSoon(UnaryCallback done, Status status)
 {
-    loop_.queueInLoop([done = std::move(done), status = std::move(status)]() mutable
-                      { done(FailureResult(std::move(status))); });
+    const auto owner = std::make_shared<detail::UnaryCompletionOwner>();
+    owner->completion = std::make_shared<detail::MaintenanceCompletion>(maintenance_); owner->callback = std::move(done);
+    loop_.queueInLoop([owner, status = std::move(status)]() mutable { owner->Run(FailureResult(std::move(status))); });
 }
 
 void Channel::ExpireCall(uint64_t callId)
@@ -811,6 +947,12 @@ std::shared_ptr<ClientStream> Channel::StartStream(std::string method, Metadata 
             return handle;
         }
     }
+    if (!maintenance_->Begin()) {
+        streams_.emplace(record->id, record);
+        CloseStream(record, Status(StatusCode::kUnavailable, "maintenance publications closed"), Metadata());
+        return handle;
+    }
+    record->maintenance = std::make_shared<detail::MaintenanceOperation>(maintenance_);
     streams_.emplace(record->id, record);
     DispatchStream(record->id);
     return handle;
@@ -904,12 +1046,17 @@ void Channel::CloseStream(const StreamRecordPtr &record, Status status, Metadata
     }
     streams_.erase(record->id);
     // pendingStreams_ 里可能还留着这个 id:FlushPending / EnterTransientFailure 按 streams_ 查不到就跳过。
-    loop_.queueInLoop([record, status = std::move(status), trailing = std::move(trailingMetadata)]
+    const auto owner = std::make_shared<detail::StreamCompletionOwner>(maintenance_, record);
+    loop_.queueInLoop([owner, status = std::move(status), trailing = std::move(trailingMetadata)]
                       {
+        const auto& record = owner->record;
         if (!record->cancelled && record->callbacks.onClose)
         {
             record->callbacks.onClose(status, trailing);
-        } });
+            if (record->maintenance) record->maintenance->known = status.ok();
+        }
+        owner->completion->returned = true;
+    });
 }
 
 bool Channel::StreamWrite(uint64_t id, std::string message)
@@ -921,7 +1068,7 @@ bool Channel::StreamWrite(uint64_t id, std::string message)
         return false;
     }
     const StreamRecordPtr record = it->second;
-    if (record->closed || record->cancelled || record->writesDone)
+    if (maintenance_->Closed() || record->closed || record->cancelled || record->writesDone)
     {
         return false;
     }
@@ -1050,12 +1197,16 @@ void Channel::OnTransportStreamHeaders(Http2Transport &transport, int32_t stream
         return;
     }
     const StreamRecordPtr record = it->second;
-    loop_.queueInLoop([record, metadata = initialMetadata]
+    const auto owner = std::make_shared<detail::StreamCompletionOwner>(maintenance_, record);
+    loop_.queueInLoop([owner, metadata = initialMetadata]
                       {
+        const auto& record = owner->record;
         if (!record->cancelled)
         {
             record->callbacks.onHeaders(metadata);
-        } });
+        }
+        owner->completion->returned = true;
+    });
 }
 
 void Channel::OnTransportStreamMessage(Http2Transport &transport, int32_t streamId, std::string message)
@@ -1071,12 +1222,16 @@ void Channel::OnTransportStreamMessage(Http2Transport &transport, int32_t stream
         return;
     }
     const StreamRecordPtr record = it->second;
-    loop_.queueInLoop([record, message = std::move(message)]() mutable
+    const auto owner = std::make_shared<detail::StreamCompletionOwner>(maintenance_, record);
+    loop_.queueInLoop([owner, message = std::move(message)]() mutable
                       {
+        const auto& record = owner->record;
         if (!record->cancelled)
         {
             record->callbacks.onMessage(std::move(message));
-        } });
+        }
+        owner->completion->returned = true;
+    });
 }
 
 } // namespace muduo_grpc

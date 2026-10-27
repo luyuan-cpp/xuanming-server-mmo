@@ -25,6 +25,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	base "proto/common/base"
+	"shared/drainproof"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/noderegistry"
@@ -115,7 +116,29 @@ func Guard(clientMethods map[string]bool, budget time.Duration) grpc.UnaryServer
 }
 
 // Serve先监听再注册NodeInfo；返回前注销、关闭入口并有界等待在途处理。
-func Serve(ctx context.Context, c Config, nodeType base.ENodeType, clients map[string]bool, register func(*grpc.Server)) (runErr error) {
+func Serve(ctx context.Context, c Config, nodeType base.ENodeType, clients map[string]bool, register func(*grpc.Server), roots ...*drainproof.Session) error {
+	return serve(ctx, c, nodeType, clients, register, nil, roots...)
+}
+
+// ServeWithReady 在真实监听和注册成功后通知同一生命周期 owner；通知不等于开放 SOURCE。
+func ServeWithReady(ctx context.Context, c Config, nodeType base.ENodeType, clients map[string]bool, register func(*grpc.Server), listening func(), roots ...*drainproof.Session) error {
+	return serve(ctx, c, nodeType, clients, register, listening, roots...)
+}
+func serve(ctx context.Context, c Config, nodeType base.ENodeType, clients map[string]bool, register func(*grpc.Server), listening func(), roots ...*drainproof.Session) (runErr error) {
+	if len(roots) < 1 || len(roots) > 3 || roots[0] == nil {
+		return errors.New("领域服务缺少显式根发行者门禁")
+	}
+	root := roots[0]
+	var relay *drainproof.Session
+	if len(roots) >= 2 {
+		relay = roots[1]
+	}
+	var ingress []*drainproof.Session
+	if len(roots) == 3 {
+		ingress = roots[2:]
+	}
+	relayMethods := map[string]bool{}
+	defer root.CloseAdmission()
 	ctx, cancelServe := context.WithCancel(ctx)
 	defer cancelServe()
 	kill := killswitch.New(killswitch.Config{Prefix: c.KillSwitchPrefix})
@@ -139,6 +162,15 @@ func Serve(ctx context.Context, c Config, nodeType base.ENodeType, clients map[s
 			go s.Stop()
 		} else {
 			register(s)
+			// 内部签名方法承接上游已接收工作；客户端白名单仍归本进程 SOURCE。
+			for serviceName, serviceInfo := range s.GetServiceInfo() {
+				for _, method := range serviceInfo.Methods {
+					full := "/" + serviceName + "/" + method.Name
+					if !clients[full] {
+						relayMethods[full] = true
+					}
+				}
+			}
 		}
 		close(ready)
 	})
@@ -146,7 +178,7 @@ func Serve(ctx context.Context, c Config, nodeType base.ENodeType, clients map[s
 		return err
 	}
 	framework.AddOptions(grpc.MaxRecvMsgSize(4 << 20))
-	framework.AddUnaryInterceptors(Guard(clients, time.Duration(c.Timeout-500)*time.Millisecond), traffic.UnaryServerInterceptor(), kill.UnaryServerInterceptor(), serverbase.UnaryInterceptor(serverbase.Options{}))
+	framework.AddUnaryInterceptors(serverbase.PublicationAdmission(root, relay, relayMethods, ingress...), Guard(clients, time.Duration(c.Timeout-500)*time.Millisecond), traffic.UnaryServerInterceptor(), kill.UnaryServerInterceptor(), serverbase.UnaryInterceptor(serverbase.Options{}))
 	done := make(chan error, 1)
 	go func() {
 		var failure error
@@ -162,6 +194,7 @@ func Serve(ctx context.Context, c Config, nodeType base.ENodeType, clients map[s
 	var etcd *clientv3.Client
 	var healthy atomic.Bool
 	defer func() {
+		root.CloseAdmission()
 		healthy.Store(false)
 		if registration != nil {
 			registration.Close()
@@ -250,6 +283,9 @@ func Serve(ctx context.Context, c Config, nodeType base.ENodeType, clients map[s
 		return err
 	}
 	registration.KeepAlive()
+	if listening != nil {
+		listening()
+	}
 	healthy.Store(true)
 	fmt.Printf("%s SERVICE STARTED SUCCESSFULLY\n", strings.ToUpper(strings.TrimSuffix(c.Name, ".rpc")))
 	select {

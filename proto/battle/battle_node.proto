@@ -7,8 +7,8 @@ import "proto/common/base/empty.proto";
 import "proto/battle/battle_data.proto";
 import "proto/battle/player_battle.proto";
 
-// 注意:不能加 cc_generic_services(与 grpc_cpp_plugin 冲突,先例见 proto/scene_manager/scene_node_service.proto);
-// battle 节点是纯 gRPC 服务,C++ 侧消费 battle_node.grpc.pb.h 的 BattleNode::Service。
+// 本契约由 muduo_grpc 承载，只生成普通 Protobuf 消息，不启用 cc_generic_services。
+// C++ 服务骨架继承 muduo_grpc::Service，不依赖官方 gRPC 插件或服务桩。
 option (OptionFileDefaultNode) = NODE_BATTLE;
 
 // 非战斗服务在角色首锁内首次捕获的退出原件；只可取消此op，不得重读当前观战补齐。

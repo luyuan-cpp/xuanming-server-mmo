@@ -360,22 +360,31 @@ int main(int argc, char *argv[])
             // 2026-10-23 修复(审计 r2-battle#2):第 1) 步对全球(v1)房间另有分支 —— 已算出、还没拿到 SQL 决定的终局
             // 不作废,立即再提交一轮;下面的排空谓词等它们落定,拆除前钩子才装停止闸。上面「个人结算在结果发出前已落 pending」
             // 只适用于旧协议确认模式房间,match 的全球成局已一律走 v1(cross-zone-matchmaking.md §13.6)。
-            node.SetBeforeShutdown([&context](Node &)
+            auto closeSource = [&context](Node &n)
                                    {
+                // 只替换后续新连接的回调；既有连接保留原 DOWN 回调，ConnectionCount 归零前不能签 P1。
+                if (n.IsServiceStarted()) {
+                    n.GetTcpServer().setConnectionCallback([](const TcpConnectionPtr& conn) { if (conn->connected()) conn->forceClose(); });
+                    n.GetTcpServer().setMessageCallback([](const TcpConnectionPtr& conn, muduo::net::Buffer* buffer, Timestamp) { buffer->retrieveAll(); conn->forceClose(); });
+                }
                 context.battleNodeService->CloseAdmission();
                 BattleRoomManager::Instance().AbortAllRooms("node_shutdown");
                 if (context.clientEdge)
                 {
                     context.clientEdge->DisconnectAll("node_shutdown");
                 }
-                agones::GameServerLifecycle::Instance().Stop(); });
+                agones::GameServerLifecycle::Instance().Stop(); };
+            node.SetBeforeShutdown(closeSource);
+            node.SetMaintenanceInboundRelay(); // match已接收调用的下游；直连客户端/建房根单独关闭。
+            node.SetMaintenanceSourceClose(closeSource);
+            node.SetMaintenanceRelayStop([](Node &) { BattleRoomManager::Instance().StopSqlOutcomes(); });
             // 停机排空门:补提交的 v1 终局都拿到 COMPLETE / ABORT 才放行收尾,出站到 match 的通道在此之前一直可用
             // (FinalizeShutdownInLoop 才关)。有界:Node 的排空预算(node.cpp kShutdownDrainBudget,15s)到了照常收尾,
             // battle 的 terminationGracePeriodSeconds(tools/scripts/lib/k8s_client_entry.ps1 New-BattleFleetYaml 默认 30s)
             // 覆盖这段等待。没有待提交终局时立即为真。
             // 单例寿命覆盖 loop,回调不捕获任何对象。
-            node.SetShutdownDrainComplete([](Node &)
-                                          { return BattleRoomManager::Instance().SqlOutcomesFlushed(); });
+            node.SetShutdownDrainComplete([&context](Node &)
+                                          { return (!context.clientEdge || context.clientEdge->ConnectionCount() == 0) && BattleRoomManager::Instance().SqlOutcomesFlushed(); });
             // 拆除前钩子:出站通道已关、在途调用的失败回调已跑完。此后到达的回复不能有任何副作用,所以停止闸在这里才装,
             // 并把排空预算内仍没落定的终局逐局打进日志(match 在权威截止后判 ABORT)。
             node.SetBeforeTeardown([](Node &)

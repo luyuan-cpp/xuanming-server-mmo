@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <ctime>
 #include <sstream>
+#include <limits>
 
 #include "muduo/base/Logging.h"
 #include "muduo/net/EventLoop.h"
@@ -181,6 +182,87 @@ bool IsDispatchableMessageId(uint32_t messageId)
     return meta.serviceName != nullptr && meta.methodName != nullptr;
 }
 
+
+std::shared_ptr<RpcMaintenanceState> RpcChannel::ProcessMaintenance()
+{
+    static const auto state = std::make_shared<RpcMaintenanceState>();
+    return state;
+}
+bool RpcMaintenanceState::EnableAcknowledgedSends()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (sourcesClosed_ || publicationsClosed_ || sourceAccepted_ != 0 || outputAccepted_ != 0 || localAccepted_ != 0) return false;
+    acknowledgedSends_ = true; return true;
+}
+bool RpcMaintenanceState::AcknowledgedSends() const { std::lock_guard<std::mutex> lock(mutex_); return acknowledgedSends_; }
+bool RpcMaintenanceState::PrepareSources(){std::lock_guard<std::mutex> lock(mutex_);if(sourcesClosed_||sourceAccepted_!=0||preparedOpened_)return false;sourcesPrepared_=true;return true;}
+bool RpcMaintenanceState::OpenPreparedSources(){std::lock_guard<std::mutex> lock(mutex_);if(!sourcesPrepared_||preparedOpened_||sourcesClosed_||sourceUnknown_||sourceAccepted_!=0)return false;sourcesPrepared_=false;preparedOpened_=true;return true;}
+bool RpcMaintenanceState::Begin(bool source)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (source ? (sourcesClosed_ || sourcesPrepared_) : publicationsClosed_) return false;
+    auto& accepted = source ? sourceAccepted_ : outputAccepted_;
+    auto& unknown = source ? sourceUnknown_ : outputUnknown_;
+    if (accepted == std::numeric_limits<std::uint64_t>::max()) { unknown = true; return false; }
+    ++accepted;
+    return true;
+}
+void RpcMaintenanceState::Complete(bool source, bool known)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto& accepted = source ? sourceAccepted_ : outputAccepted_;
+    auto& completed = source ? sourceCompleted_ : outputCompleted_;
+    auto& unknown = source ? sourceUnknown_ : outputUnknown_;
+    if (!known || accepted == completed) unknown = true;
+    if (completed < accepted) ++completed;
+}
+void RpcMaintenanceState::CloseSources() { std::lock_guard<std::mutex> lock(mutex_); sourcesClosed_ = true; }
+void RpcMaintenanceState::ClosePublications() { std::lock_guard<std::mutex> lock(mutex_); publicationsClosed_ = true; }
+bool RpcMaintenanceState::LocalCallbacksJoined() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return sourceAccepted_ == sourceCompleted_ && outputAccepted_ == outputCompleted_ && localAccepted_ == localCompleted_;
+}
+bool RpcMaintenanceState::BeginLocalCompletion()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (localAccepted_ == std::numeric_limits<std::uint64_t>::max()) { outputUnknown_ = true; return false; }
+    ++localAccepted_;
+    return true;
+}
+void RpcMaintenanceState::CompleteLocalCompletion(bool delivered)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!delivered || localAccepted_ == localCompleted_) outputUnknown_ = true;
+    if (localCompleted_ < localAccepted_) ++localCompleted_;
+}
+bool RpcMaintenanceState::Frontier(bool sourcesOnly, std::string& value) const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!sourcesClosed_ || sourceUnknown_ || sourceAccepted_ != sourceCompleted_) return false;
+    if (outputUnknown_ || outputAccepted_ != outputCompleted_ || localAccepted_ != localCompleted_) return false;
+    if (!sourcesOnly && !publicationsClosed_) return false;
+    value = "rpc0-v1:" + std::to_string(sourceAccepted_) + ":" + std::to_string(sourceCompleted_);
+    value += ":" + std::to_string(outputAccepted_) + ":" + std::to_string(outputCompleted_);
+    return true;
+}
+bool RpcMaintenanceState::SettledFrontier(std::string& value) const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if(sourceUnknown_ || outputUnknown_ || sourceAccepted_!=sourceCompleted_ || outputAccepted_!=outputCompleted_ || localAccepted_!=localCompleted_)return false;
+    value="rpc0-v1:"+std::to_string(sourceAccepted_)+":"+std::to_string(sourceCompleted_)+":"+std::to_string(outputAccepted_)+":"+std::to_string(outputCompleted_);
+    return true;
+}
+struct RpcMaintenanceOperation {
+    RpcMaintenanceOperation(std::shared_ptr<RpcMaintenanceState> owner, bool isSource, bool isLocal = false) : state(std::move(owner)), source(isSource), local(isLocal) {}
+    RpcMaintenanceOperation(const RpcMaintenanceOperation&) = delete;
+    std::shared_ptr<RpcMaintenanceState> state;
+    bool source;
+    bool local;
+    bool known = false;
+    ~RpcMaintenanceOperation() { if (local) state->CompleteLocalCompletion(known); else state->Complete(source, known); }
+};
+
 // ====================== 服务端:done 与延后完成 ======================
 
 // 延后完成的共享状态。所有 RpcDoneCallback 副本共享一份;只持 weak_ptr<RpcChannel>(§11.7)。
@@ -193,6 +275,7 @@ struct RpcDoneCallback::State
     MessagePtr request;
     MessagePtr response;
     bool completed{false};
+    std::shared_ptr<RpcMaintenanceOperation> maintenance;
 
     ~State();
 };
@@ -205,13 +288,15 @@ class RpcChannel::DoneClosure final : public ::google::protobuf::Closure
 {
 public:
     DoneClosure(RpcChannel &channel, const GameRpcMessage &message, const MessagePtr &request,
-                const MessagePtr &response, const RpcController &controller)
+                const MessagePtr &response, const RpcController &controller,
+                 std::shared_ptr<RpcMaintenanceOperation> maintenance)
         : channel_(channel),
           id_(message.id()),
           messageId_(message.message_id()),
           request_(request),
           response_(response),
-          controller_(controller)
+          controller_(controller),
+          maintenance_(std::move(maintenance))
     {
     }
 
@@ -250,6 +335,7 @@ public:
         state_->messageId = messageId_;
         state_->request = request_;
         state_->response = response_;
+        if (!completed_) state_->maintenance = maintenance_;
         if (completed_)
         {
             // handler 已经同步 Run 过:交出一个已完成的句柄,之后的 Run 都是空操作。
@@ -289,7 +375,7 @@ private:
             channel_.DoneCallback(id_, messageId_, nullptr, HANDLER_FAILED);
             return;
         }
-        channel_.DoneCallback(id_, messageId_, response_.get(), RPC_NO_ERROR);
+        maintenance_->known = channel_.DoneCallback(id_, messageId_, response_.get(), RPC_NO_ERROR);
     }
 
     RpcChannel &channel_;
@@ -298,6 +384,7 @@ private:
     const MessagePtr &request_;
     const MessagePtr &response_;
     const RpcController &controller_;
+    std::shared_ptr<RpcMaintenanceOperation> maintenance_;
     std::shared_ptr<RpcDoneCallback::State> state_;
     bool completed_{false};
 };
@@ -393,6 +480,7 @@ void RpcChannel::CompleteDeferred(RpcDoneCallback::State &state, GameErrorCode e
         return;
     }
     state.completed = true;
+    const auto maintenance = std::move(state.maintenance);
     if (error == HANDLER_FAILED)
     {
         Bump(GetRpcChannelStats().handlerFailed);
@@ -410,21 +498,23 @@ void RpcChannel::CompleteDeferred(RpcDoneCallback::State &state, GameErrorCode e
         Bump(GetRpcChannelStats().replyChannelGone);
         return;
     }
-    locked->DoneCallback(state.id, state.messageId, error == RPC_NO_ERROR ? state.response.get() : nullptr, error);
+    const bool sent = locked->DoneCallback(state.id, state.messageId, error == RPC_NO_ERROR ? state.response.get() : nullptr, error);
+    if (maintenance) maintenance->known = sent && error == RPC_NO_ERROR;
 }
 
 // ====================== RpcChannel ======================
 
 std::shared_ptr<RpcChannel> RpcChannel::Create(muduo::net::EventLoop &loop,
                                                const TcpConnectionPtr &connection,
-                                               RpcServiceMap services)
+                                               RpcServiceMap services, std::shared_ptr<RpcMaintenanceState> maintenance)
 {
-    return std::make_shared<RpcChannel>(PrivateTag{}, loop, connection, std::move(services));
+    return std::make_shared<RpcChannel>(PrivateTag{}, loop, connection, std::move(services), std::move(maintenance));
 }
 
 RpcChannel::RpcChannel(PrivateTag, muduo::net::EventLoop &loop, const TcpConnectionPtr &connection,
-                       RpcServiceMap services)
-    : loop_(loop),
+                       RpcServiceMap services, std::shared_ptr<RpcMaintenanceState> maintenance)
+    : maintenance_(std::move(maintenance)),
+      loop_(loop),
       connection_(connection),
       services_(std::move(services)),
       codec_(std::bind(&RpcChannel::OnRpcMessage, this, _1, _2, _3))
@@ -453,7 +543,7 @@ RpcChannel::~RpcChannel()
 }
 
 void RpcChannel::FailNotSent(muduo::net::EventLoop &loop, uint32_t messageId, ClientDoneCallback done,
-                             const char *reason, const std::string &peer)
+                             const char *reason, const std::string &peer, std::shared_ptr<RpcMaintenanceState> maintenance)
 {
     auto &stats = GetRpcChannelStats();
     Bump(stats.started);
@@ -464,30 +554,28 @@ void RpcChannel::FailNotSent(muduo::net::EventLoop &loop, uint32_t messageId, Cl
         LOG_WARN << "[RpcChannel] call not sent: reason=" << reason << ", method=" << MethodNameOf(messageId)
                  << ", message_id=" << messageId << ", peer=" << peer;
     }
-    FailSoon(loop, std::move(done), RpcStatus{RpcStatusCode::kNotSent});
+    FailSoon(loop, std::move(done), RpcStatus{RpcStatusCode::kNotSent}, std::move(maintenance));
 }
 
-void RpcChannel::FailSoon(muduo::net::EventLoop &loop, ClientDoneCallback done, RpcStatus status)
+void RpcChannel::FailSoon(muduo::net::EventLoop &loop, ClientDoneCallback done, RpcStatus status, std::shared_ptr<RpcMaintenanceState> maintenance)
 {
-    loop.queueInLoop([done = std::move(done), status, trace = tracing::Current()]() mutable
-    {
-        OutstandingCall call;
-        call.done = std::move(done);
-        call.trace = trace;
-        Deliver(call, status, nullptr);
-    });
+    std::shared_ptr<RpcMaintenanceOperation> operation;
+    if (maintenance && maintenance->BeginLocalCompletion()) operation = std::make_shared<RpcMaintenanceOperation>(maintenance, false, true);
+    auto call = std::make_shared<OutstandingCall>();
+    call->done = std::move(done); call->trace = tracing::Current(); call->maintenance = std::move(operation);
+    loop.queueInLoop([call, status] { Deliver(*call, status, nullptr); });
 }
 
 void RpcChannel::Deliver(OutstandingCall &call, const RpcStatus &status, const MessagePtr &response)
 {
+    const auto operation = std::move(call.maintenance);
+    auto done = std::move(call.done); // 后构造先析构；target 释放及其派生工作仍在票据内。
     RecordOutcome(status);
-    if (call.trace.IsValid())
-    {
+    if (call.trace.IsValid()) {
         tracing::ScopedSpan span(call.trace);
-        call.done(status, response);
-        return;
-    }
-    call.done(status, response);
+        done(status, response);
+    } else { done(status, response); }
+    if (operation) operation->known = status.ok() || status.DefinitelyNotExecuted();
 }
 
 void RpcChannel::CallMethod(uint32_t messageId, const ProtobufMessage &request, ClientDoneCallback done,
@@ -511,7 +599,7 @@ void RpcChannel::CallMethodWithResponseType(uint32_t messageId, const ProtobufMe
     // 本地确定没发出:不登记、经 queueInLoop 以 kNotSent 投递,done 绝不在本函数返回前被调用。
     auto notSent = [&](const char *reason)
     {
-        FailNotSent(loop_, messageId, std::move(done), reason, PeerOf(connection_));
+        FailNotSent(loop_, messageId, std::move(done), reason, PeerOf(connection_), maintenance_);
     };
 
     if (closed_)
@@ -552,11 +640,14 @@ void RpcChannel::CallMethodWithResponseType(uint32_t messageId, const ProtobufMe
     {
         return notSent("request serialization failed");
     }
+    if (!maintenance_ || !maintenance_->Begin(false)) return notSent("maintenance publications closed");
+    auto operation = std::make_shared<RpcMaintenanceOperation>(maintenance_, false);
     const InflightCallId id = ++id_;
     message.set_id(id);
     Bump(stats.started);
 
     OutstandingCall call;
+    call.maintenance = std::move(operation);
     call.expiresAt = Clock::now() + options.timeout;
     call.messageId = messageId;
     call.done = std::move(done);
@@ -585,6 +676,7 @@ bool RpcChannel::SendRequest(uint32_t messageId, const ProtobufMessage &request)
         return false;
     };
 
+    if (closed_) return reject("channel closed");
     if (!IsDispatchableMessageId(messageId))
     {
         return reject("message id not dispatchable");
@@ -607,7 +699,23 @@ bool RpcChannel::SendRequest(uint32_t messageId, const ProtobufMessage &request)
     {
         return reject("request serialization failed");
     }
+    const bool acknowledged = maintenance_ && maintenance_->AcknowledgedSends();
+    if (acknowledged && (outstandings_.Size() >= kMaxOutstandingRpcCalls || id_ == std::numeric_limits<std::uint64_t>::max())) return reject("maintenance acknowledgement capacity exhausted");
+    if (!maintenance_ || !maintenance_->Begin(false)) return reject("maintenance publications closed");
+    const auto operation = std::make_shared<RpcMaintenanceOperation>(maintenance_, false);
+    if (acknowledged) {
+        // 仍返回本地接受 bool，但内部用既有 nonzero-id 协议等待对端真实 handler/Adopt 完成。
+        // 代价是每个单向业务保留一条有界在途记录，失败或超时保留 UNKNOWN，绝不自动重发。
+        message.set_id(++id_);
+        OutstandingCall call; call.maintenance = operation; call.messageId = messageId;
+        call.expiresAt = Clock::now() + kDefaultRpcCallTimeout; call.trace = tracing::Current();
+        call.done = [](const RpcStatus&, const MessagePtr&) {};
+        outstandings_.Insert(message.id(), std::move(call));
+        Bump(stats.started); RaiseMax(stats.maxInFlight, outstandings_.Size());
+    }
+    // 默认旧 id0 无远端确认，保留 UNKNOWN；只有显式维护模式才由上面的 RESPONSE/RPC_ERROR 收账。
     SendFrame(connection, message);
+    if (acknowledged) ArmTimeoutTick();
     Bump(stats.onewaySent);
     return true;
 }
@@ -903,6 +1011,8 @@ void RpcChannel::CallServiceMethod(const TcpConnectionPtr &connection, const Gam
         RejectRequest(message, INVALID_REQUEST);
         return;
     }
+    if (!maintenance_ || !maintenance_->Begin(true)) { RejectRequest(message, NO_SERVICE); return; }
+    const auto operation = std::make_shared<RpcMaintenanceOperation>(maintenance_, true);
     MessagePtr response(service->GetResponsePrototype(method).New());
     Bump(GetRpcChannelStats().requestsDispatched);
 
@@ -911,7 +1021,7 @@ void RpcChannel::CallServiceMethod(const TcpConnectionPtr &connection, const Gam
     // 规则:handler 内不得同步释放本连接所属 RpcClient 的最后一个引用 —— 回调期间 muduo 的 tie_ 守卫与这个
     // 栈对象各持一份强引用,~TcpClient 会因 use_count>1 跳过 forceClose;节点摘除必须经 queueInLoop 延后。
     RpcController controller(connection);
-    DoneClosure done(*this, message, request, response, controller);
+    DoneClosure done(*this, message, request, response, controller, operation);
     service->CallMethod(method, &controller, request.get(), response.get(), &done);
     done.CompleteIfPending();
 }
@@ -938,17 +1048,17 @@ void RpcChannel::RejectRequest(const GameRpcMessage &request, GameErrorCode erro
     DoneCallback(request.id(), request.message_id(), nullptr, error);
 }
 
-void RpcChannel::DoneCallback(uint64_t id, uint32_t messageId, const ProtobufMessage *response, GameErrorCode error)
+bool RpcChannel::DoneCallback(uint64_t id, uint32_t messageId, const ProtobufMessage *response, GameErrorCode error)
 {
     if (id == kNoInflightCallId)
     {
-        return;   // 单向:调用方声明不要应答,永不回 RESPONSE / RPC_ERROR
+        return error == RPC_NO_ERROR;   // 单向:调用方声明不要应答,永不回 RESPONSE / RPC_ERROR
     }
     const auto connection = LockConnectedConnection();
     if (!connection)
     {
         Bump(GetRpcChannelStats().replyChannelGone);
-        return;
+        return false;
     }
 
     GameRpcMessage reply;
@@ -973,4 +1083,5 @@ void RpcChannel::DoneCallback(uint64_t id, uint32_t messageId, const ProtobufMes
         }
     }
     SendFrame(connection, reply);
+    return reply.type() == RESPONSE;
 }

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"shared/drainproof"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -280,7 +281,8 @@ func TestNewServiceContextWiresDependencies(t *testing.T) {
 	if n == nil || n.EventID == 0 || n.EventID != uint32(game.PlayerInboxNotifyEventEventId) {
 		t.Fatalf("在线提醒的事件号 = %v, want 生成的 PlayerInboxNotifyEventEventId(%d)", n, game.PlayerInboxNotifyEventEventId)
 	}
-	if n.Writer != sc.Kafka || n.Nodes != sc.SceneNodes || n.Locations == nil {
+	writer, ok := n.Writer.(*relayMessageWriter)
+	if !ok || writer.writer != sc.Kafka || writer.admission != sc.RelayAdmission || n.Nodes != sc.SceneNodes || n.Locations == nil {
 		t.Error("在线提醒器必须写同一个 Kafka writer、查同一份 scene 节点镜像")
 	}
 
@@ -338,7 +340,7 @@ func TestStartStopOrder(t *testing.T) {
 	logtest.Discard(t)
 	db := openFakeDB(t)
 	a, b := &fakeTask{db: db}, &fakeTask{db: db}
-	sc := &ServiceContext{DB: db, stopTimeout: 5 * time.Second,
+	sc := &ServiceContext{RootAdmission: drainproof.New(), RelayAdmission: drainproof.New(), RelayIngress: drainproof.New(), DB: db, stopTimeout: 5 * time.Second,
 		background: []backgroundTask{{name: "test.a", run: a.run}, {name: "test.b", run: b.run}}}
 
 	sc.Start(context.Background())
@@ -365,7 +367,7 @@ func TestStartStopOrder(t *testing.T) {
 func TestStartAfterStopIsNoop(t *testing.T) {
 	logtest.Discard(t)
 	task := &fakeTask{}
-	sc := &ServiceContext{stopTimeout: time.Second, background: []backgroundTask{{name: "test.task", run: task.run}}}
+	sc := &ServiceContext{RootAdmission: drainproof.New(), RelayAdmission: drainproof.New(), RelayIngress: drainproof.New(), stopTimeout: time.Second, background: []backgroundTask{{name: "test.task", run: task.run}}}
 	sc.Stop()
 	sc.Start(context.Background())
 	time.Sleep(20 * time.Millisecond)
@@ -374,25 +376,30 @@ func TestStartAfterStopIsNoop(t *testing.T) {
 	}
 }
 
-// TestStopIsBoundedWhenTaskHangs:任务无视取消时 Stop 只等 stopTimeout,然后照常关连接(不让关停卡死在硬截止上)。
+// TestStopIsBoundedWhenTaskHangs:有界返回 HOLD 并保留资源，不能用强关连接伪造任务已完成。
 func TestStopIsBoundedWhenTaskHangs(t *testing.T) {
 	logtest.Discard(t)
 	db := openFakeDB(t)
+	t.Cleanup(func() { _ = db.Close() })
 	release := make(chan struct{})
 	var releaseOnce sync.Once
 	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }) })
 	task := &fakeTask{ignoreCancel: release}
-	sc := &ServiceContext{DB: db, stopTimeout: 50 * time.Millisecond, background: []backgroundTask{{name: "test.hang", run: task.run}}}
+	sc := &ServiceContext{RootAdmission: drainproof.New(), RelayAdmission: drainproof.New(), RelayIngress: drainproof.New(), DB: db, stopTimeout: 50 * time.Millisecond, background: []backgroundTask{{name: "test.hang", run: task.run}}}
 
 	sc.Start(context.Background())
 	waitFor(t, func() bool { return task.started.Load() == 1 }, "任务启动")
 	begin := time.Now()
-	sc.Stop()
+	stopCtx, cancel := context.WithTimeout(context.Background(), sc.stopTimeout)
+	defer cancel()
+	if err := sc.StopAndReport(stopCtx); !errors.Is(err, drainproof.ErrHold) {
+		t.Fatalf("未 join 的任务必须保持 HOLD: %v", err)
+	}
 	if elapsed := time.Since(begin); elapsed > 2*time.Second {
 		t.Fatalf("Stop 用了 %v,应在 stopTimeout(50ms)附近返回", elapsed)
 	}
-	if !dbClosed(db) {
-		t.Fatal("等不到任务退出也要照常关连接")
+	if dbClosed(db) {
+		t.Fatal("未知在途任务仍可能访问 SQL，不能提前关连接")
 	}
 	releaseOnce.Do(func() { close(release) })
 	waitFor(t, task.exited.Load, "放行后任务退出")
@@ -402,7 +409,7 @@ func TestStopIsBoundedWhenTaskHangs(t *testing.T) {
 func TestStartFollowsParentContext(t *testing.T) {
 	logtest.Discard(t)
 	task := &fakeTask{}
-	sc := &ServiceContext{stopTimeout: 5 * time.Second, background: []backgroundTask{{name: "test.task", run: task.run}}}
+	sc := &ServiceContext{RootAdmission: drainproof.New(), RelayAdmission: drainproof.New(), RelayIngress: drainproof.New(), stopTimeout: 5 * time.Second, background: []backgroundTask{{name: "test.task", run: task.run}}}
 	ctx, cancel := context.WithCancel(context.Background())
 	sc.Start(ctx)
 	waitFor(t, func() bool { return task.started.Load() == 1 }, "任务启动")

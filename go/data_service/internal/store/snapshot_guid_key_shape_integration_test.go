@@ -65,7 +65,7 @@ func TestSnapshotMigration_RefusesKeyPresentColumnBroken(t *testing.T) {
 	}
 	brokenGuidKeyOnPlainColumn(t, ctx, db)
 
-	err := store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{})
+	err := db.Migrate(ctx, store.MigrateOptions{})
 	require.Error(t, err, "「键在、列坏」必须让迁移失败 —— 只按索引名判断会直接跳过整步,"+
 		"而那个唯一键挂在一个恒为 NULL 的普通列上,同一个 guid 会静默落成多行")
 	assert.Contains(t, err.Error(), store.SnapshotGuidNzColumn, "错误里要指名是哪一列,运维才知道去处理什么")

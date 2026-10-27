@@ -11,7 +11,7 @@
 > 完成证据须包含无旧 SDK 的正规生成、串行编译、相关回归及实际完成的平台范围；本决策本身不代表验证通过。
 
 - 日期:2026-10-14
-- 状态:决策已定;第 1 批代码已落(**未编译、未测试,待 Codex 验证**,步骤见 §11)
+- 当前状态（2026-10-26）：官方 C++ SDK 已移除，独立依赖与正规生成、Windows Debug 完整构建通过；运行回归及 Linux 验证继续，见 §17。下文分批记录保留当时状态。
 - 范围:C++ 节点(gate / scene / battle)作为 gRPC 客户端与服务端的传输层。Go / Java 服务与线上协议不变
 - 授权:负责人 2026-10-14 拍板「分 5 批推进、本次做第 1 批」「引入 nghttp2 v1.70.0 子模块」「etcd 走原生 gRPC 接口」
 - 关联:[client-rpc-router.md](client-rpc-router.md)(第 1 批接入点)、
@@ -1850,3 +1850,50 @@ FinalizeShutdownInLoop(阶段 0)
 启动生效值日志 `[GrpcClient] unary call deadlines (ms)` 与正常排空完成日志均为 INFO；muduo 的 `LogLevel: 2` 即 INFO，可以看到，无需为此降低日志级别。缺 done 会触发 `requires a done callback`，不再检查已删除的全局处理器漏装日志。
 
 本次合并仅依据当前源码和配置整理契约，不代表编译、单测、Linux、联机或压测已通过；历史未验计划和当时故障数量不作为现状。Java 内部传输不由本节约束，本次没有功能或共享客户端契约变更，无需同步 Java 实现或登记 PARITY。
+
+## 17. 官方 C++ SDK 移除与独立依赖（2026-10-26）
+
+C++ 控制面继续使用标准 gRPC 协议，传输由 `muduo_grpc` / nghttp2 实现，序列化由独立 Protobuf 实现。官方 gRPC 仓库不再是源码、构建、链接、生成或工具来源；Go gRPC 生成和服务实现保持现状。
+
+### 17.1 独立源码与安装契约
+
+四个子模块的精确提交由 `third_party/releases.lock.json` 固定，沿用拆分前版本，不在本次迁移升级：
+
+| 源码目录 | 固定提交 | 职责 |
+|---|---|---|
+| `third_party/protobuf` | `35cd01f9fe9afbeea38cc7b979a3b6bfcde82c03` | 消息运行库、protoc、自带 utf8_range；libprotoc 依赖其内部 libupb |
+| `third_party/abseil-cpp` | `76bb24329e8bf5f39704eb10d21b9a80befa7c81` | Protobuf 与业务代码共用的基础类型及日志 |
+| `third_party/googletest` | `52eb8108c5bdec04579160ae17225d66034bd723` | C++ 测试框架 |
+| `third_party/boringssl` | `2b44a3701a4788e1ef866ddc7f143060a3d196c9` | 已有 TLS 消费者，保留登记的 Windows X509_NAME 补丁 |
+
+Windows 的 Protobuf / Abseil / utf8 共用 Protobuf 安装前缀，BoringSSL 与 GoogleTest 各用自身前缀。x64 Debug 为 `install_vs2026_dbg`（`/MDd`），x64 Release 为 `install_vs2026_rel`（`/MD`）；x86 对应 `install_vs2026_x86_dbg/rel`，不混用架构或 CRT。工程中的独立 SDK 目录优先于根 `lib/`，旧归档不得兜底。具体入口及 zlib 前置见 `tools/scripts/README.md` 的“独立 C++ 依赖构建”。构建只使用已有工具；本地化 MSVC 缺少英文诊断包时选择已有 VS 生成器，避免 Ninja 依赖前缀转码失真。
+
+Linux 安装契约固定为 `/usr/local`：先构建固定 zlib，再由 `build_linux_sdk.sh` 依次构建独立 Abseil、Protobuf、BoringSSL。Protobuf 禁止 FetchContent 网络兜底。来源摘要包含源码、构建配方、上游依赖和安装产物，缺失或变化时重建。curl / librdkafka 明确使用同一 BoringSSL 头和归档，节点通过独立导出目标链接，不回退系统 OpenSSL。Docker 的 COPY 来自主仓子模块，不在镜像内拉取官方 gRPC。
+
+### 17.2 生成与依赖边界
+
+- 删除官方初始化探针及其守卫、环境开关、日志字段；正常 ThreadMonitor 继续生效。
+- 生成器不再查找或运行官方 C++ 插件；普通 `.pb.*`、自有 `*_grpc_client.*` 与 muduo 服务骨架照常生成。服务 metadata 统一引用普通 `.pb.h`。
+- 正规同步只删除受管 proto 根下、带官方生成标记的 `.grpc.pb.cc/.h`；先校验清单、目录链接、条件和自定义编译元数据，再写入。单文件采用既有原子替换，整批不宣称跨文件事务；中途 I/O 失败显式报错并保留现场。
+- mail/rank 后处理与生成工程同步均不再登记官方桩。权威 CMake 导出器与静态契约拒绝重新引入官方 SDK 路径、库和产物，保留自有 `grpc_client` / `muduo_grpc`。
+- 调试 SDK 来源清单使用 schema 2，完整核对独立依赖和现役构建配方；旧 schema 1 安装不能冒充新的独立 SDK。
+
+### 17.3 实际验证与边界
+
+本轮证据统一保存在 `build/verification/official-grpc-removal-20261026/`，首次失败原件保留，后继成功不改写原结果：
+
+- 独立 Protobuf / Abseil、BoringSSL、GoogleTest 的 Windows Debug x64 构建安装实际退出 0，protoc 为 35.1。首次 Protobuf 构建误关其内部 libupb 的失败已修正并重验。
+- 生成器完整 Go 回归、mail/rank 10 项回归及依赖边界 8 项检查通过。123 份协议源及消息号 / 事件号不变，137 个非空手写守护段核对一致；82 个官方桩由正规生成清除，二次生成 697 个 C++ 产物逐字节不变。
+- 标准 `game.sln` Debug x64 串行 Build 实际退出 0，三节点均链接成功，1620 个源码与工程输入前后相同，适用 NoRaw 检查通过。原官方目录与根 `lib/` 的旧 SDK 归档在构建前已移至 ignored 备份，不能作为本轮构建兜底。该结果不称 clean Rebuild。
+- `proto.lib` 成员没有官方桩对象，三节点直接 DLL 导入没有官方 gRPC；这项只读检查不宣称递归 DLL 闭包。
+- 当前工作树的 8 项 SDK 边界和限定生成器三组回归再次通过，126 项生成器输入前后相同。四个独立子模块的远端与登记一致，无 alternates 或 gitdir 借用旧 gRPC 存储。
+- Linux 正式 Dockerfile 的 `--target deps` 已实际构建成功，38,191 项依赖输入完整封存并在构建前后复核一致，镜像为 `local/xuanming-independent-sdk:grpc-removal-r2`（`sha256:4a84f833d9f882e7abf1916ad4f6bf5de86371b31f5e97347dc25bbf8cd08658`）。首次 r1 在新合入 Hiredis overlay 的同名参数处触发 `-Werror=shadow`，仅改参数名后 r2 通过；首红原件与上下文保留，不关闭警告检查。
+- 新 Linux 镜像的一次性无网络消费者实际通过：独立 protoc 35.1 生成消息，CMake 使用安装导出目标编译运行 Protobuf 往返及 BoringSSL / nghttp2 链接；三项 SDK 的安装摘要及二次复用检查通过，动态导入无官方 gRPC、无缺失库。完整依赖层同时编译了 muduo、curl、librdkafka、yaml-cpp、nghttp2，zlib 上游 18 项测试通过。证据为 `linux-deps-r2/build-result.json` 与 `installed-sdk-result.json`；这不替代节点或业务回归。
+- 本机调试 SDK 清单已从 schema 1 原子切换为 schema 2，原件逐字节备份，现役 `validate_sdk()` 再次通过。来源守卫覆盖 25,298 项一般依赖输入与三独立仓的 12,897 项完整文件：实际镜像输入为 38,191 项，另 4 项为固定提交中未参与本次构建的上游安装测试文件（Protobuf 的 `csharp/install_dotnet_sdk.ps1`，Abseil 的 `CMake/install_test_project/` 三文件）。它们因封存脚本过宽的 `install_*` 排除规则未进入镜像，已记录 Git blob、实际字节和未消费证据并额外守卫，未将其冒称已编译输入；后继封存规则已限定为依赖根安装目录。资格与切换记录位于 `sdk-schema2-candidate-r2/`，验证器本身未放宽。
+- 运行回归、四个方案外测试工程补编、Go 互通及 Linux 三节点构建尚待接续。Windows Release / Win32 只有配置清理证据，不宣称已编译；后继实际追加本节或进度记录，不据 Windows Debug 或 Linux 依赖层成功扩大范围。
+
+本次属于 C++ 内部依赖整理，没有功能或共享客户端契约变化，Java 无对应 SDK 移除任务，独立客户端未读取或修改。
+
+2026-10-26 后续协作说明：上述 Windows 成功后，共享主仓合入了另一批架构源码。原构建证据仅绑定原 1620 项输入；当前新主线由其协调聊天先正规生成、构建，本任务的运行回归和 Linux 三节点验证须基于完整新来源接续，不沿用旧成功冒充新主线验收。Linux 依赖层已在独立快照中完成，未消费该主线中途生成的应用产物。
+
+2026-10-27 备份清理：负责人明确要求不保留旧 gRPC 备份后，已物理删除旧源码及构建产物备份、127 个旧库归档和闲置的 `.git/modules/third_party/grpc`，并清除本地过期子模块配置。删除后目标路径及登记均不存在，四个独立依赖的关键文件和 Git HEAD/config 保持原字节；只保留删除证明及既有验证日志。首次两次文件占用中断原件与最终成功记录均在上述证据目录，不代表应用剩余验收已完成。

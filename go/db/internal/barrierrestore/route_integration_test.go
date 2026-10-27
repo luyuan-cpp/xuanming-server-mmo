@@ -17,7 +17,6 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	"shared/authoritysql"
 	"shared/ownerepoch"
 	"shared/placement"
 	"shared/savebarrier"
@@ -88,18 +87,18 @@ func TestIntegrationDBFirstSplitRedisAndGlobalStorage(t *testing.T) {
 	id, first, second := f.player(t, 0, 0)
 	before := f.assets(t, id)
 	routeSchema := fmt.Sprintf("restore_routes_%d", f.zone)
-	_, err := f.r.DB.ExecContext(f.ctx, "CREATE DATABASE `"+routeSchema+"`")
+	_, err := f.schemaAdmin.ExecContext(f.ctx, "CREATE DATABASE `"+routeSchema+"`")
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		_, err := f.r.DB.ExecContext(ctx, "DROP DATABASE `"+routeSchema+"`")
+		_, err := f.schemaAdmin.ExecContext(ctx, "DROP DATABASE `"+routeSchema+"`")
 		require.NoError(t, err)
 	})
 	parsed, err := mysql.ParseDSN(dsn)
 	require.NoError(t, err)
 	parsed.DBName = routeSchema
-	migration, err := authoritysql.OpenForMigration(f.ctx, parsed.FormatDSN(), routeSchema, true)
+	migration, err := openRestoreAdminPool(t, f.ctx, parsed.FormatDSN(), routeSchema, true, 1, true)
 	require.NoError(t, err)
 	t.Cleanup(func() { migration.Close() })
 	for _, ddl := range productionRouteDDL(t) {
@@ -176,7 +175,7 @@ func TestIntegrationDBFirstSplitRedisAndGlobalStorage(t *testing.T) {
 	}
 	// SQL 已锁路由期间，真实解冻必须排队失败；不能穿过发布点。
 	parsed.DBName = f.schema
-	other, err := authoritysql.Open(f.ctx, parsed.FormatDSN(), f.schema, true, 1)
+	other, err := openRestoreAdminPool(t, f.ctx, parsed.FormatDSN(), f.schema, true, 1, false)
 	require.NoError(t, err)
 	defer other.Close()
 	tx, err := f.r.DB.BeginTx(f.ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})

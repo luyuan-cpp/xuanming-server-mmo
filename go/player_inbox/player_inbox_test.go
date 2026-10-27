@@ -161,14 +161,14 @@ func TestEnsureSchema(t *testing.T) {
 	planOnly := config.Config{Schema: config.SchemaConf{AutoMigrate: &no}}
 
 	up, plan, check := &fakeSchemaRunner{}, &fakeSchemaRunner{}, &fakeLayoutCheck{}
-	if err := ensureSchema(context.Background(), nil, auto, up.run, plan.run, check.run); err != nil || up.calls != 1 || plan.calls != 0 {
-		t.Fatalf("AutoMigrate=true 应只跑 Up: err=%v up=%d plan=%d", err, up.calls, plan.calls)
+	if err := ensureSchema(context.Background(), nil, auto, up.run, plan.run, check.run); err == nil || up.calls != 0 || plan.calls != 0 {
+		t.Fatalf("AutoMigrate=true 必须在 runner 前拒绝: err=%v up=%d plan=%d", err, up.calls, plan.calls)
 	}
-	if check.calls != 1 {
-		t.Fatalf("Up 成功后必须跑一次行布局核对,实际 %d 次", check.calls)
+	if check.calls != 0 {
+		t.Fatalf("自动 DDL 被拒绝后不得继续核验,实际 %d 次", check.calls)
 	}
-	if up.opts.Database != data.DatabaseName || len(up.opts.Tables) != 3 {
-		t.Fatalf("迁移选项 = %+v,应断言独占库并包含三张表", up.opts)
+	if opts := schemaOptions(); opts.Database != data.DatabaseName || len(opts.Tables) != 3 {
+		t.Fatalf("迁移选项 = %+v,应断言独占库并包含三张表", opts)
 	}
 	up, check = &fakeSchemaRunner{report: schemamigrate.Report{Manual: []string{"type drift"}}}, &fakeLayoutCheck{}
 	if err := ensureSchema(context.Background(), nil, auto, up.run, plan.run, check.run); err == nil || check.calls != 0 {
@@ -200,6 +200,12 @@ func TestEnsureSchemaRefusesBadRowLayout(t *testing.T) {
 	} {
 		check := &fakeLayoutCheck{err: bad}
 		err := ensureSchema(context.Background(), nil, c, (&fakeSchemaRunner{}).run, (&fakeSchemaRunner{}).run, check.run)
+		if c.ShouldAutoMigrate() {
+			if err == nil || check.calls != 0 {
+				t.Fatalf("自动 DDL 应先拒绝: err=%v check=%d", err, check.calls)
+			}
+			continue
+		}
 		if err == nil || !errors.Is(err, bad) || check.calls != 1 {
 			t.Fatalf("AutoMigrate=%v: 布局核对失败必须拒启并包住原因: err=%v check=%d", *c.Schema.AutoMigrate, err, check.calls)
 		}

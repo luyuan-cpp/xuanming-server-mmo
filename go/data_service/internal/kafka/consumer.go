@@ -16,13 +16,25 @@
 package kafka
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"data_service/internal/metrics"
+	"data_service/internal/store"
+
+	databasepb "proto/common/database"
+	"shared/authoritysql"
+	"shared/drainproof"
+	"shared/kafkautil"
 
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -148,37 +160,555 @@ func isReaderOffsetTraceLine(format string) bool {
 
 // newReader 建 kafka-go reader。NewReader 不拨号,连不上只会让 FetchMessage 报错并按
 // 退避重试,所以这里不是启动失败点。
-func newReader(brokers []string, topic, group string) *kafkago.Reader {
-	return kafkago.NewReader(kafkago.ReaderConfig{
-		Brokers: brokers,
-		GroupID: group,
-		Topic:   topic,
-		// 新消费组从最早开始:data_service 晚于 scene 启动时,先发的流水/快照不能丢。
-		StartOffset: kafkago.FirstOffset,
-		MinBytes:    1,
-		MaxBytes:    16 << 20, // 快照单条几百 KB,给足
-		MaxWait:     500 * time.Millisecond,
-		// CommitInterval=0:同步提交,由消费循环自己决定何时提交(插库成功之后)。
-		CommitInterval: 0,
-		// 保留期删掉未消费的消息之后 kafka-go 会自动跳到日志起点。它留下什么记录分两种情形
-		// (v0.4.47 reader.go,已按 tag 源码核对;组 / 非组模式的分区 reader 同走 (*reader).run):
-		//   - 运行中被保留期追上(fetch 返回 OffsetOutOfRange 且 offset < first):经 ErrorLogger 打
-		//     `... skipping from offset X to Y (N messages)`,是该情形的精确记录;
-		//   - 分区 reader 每次(重新)initialize(进程重启 / STOPPED 冷却后重建 / rebalance / 断线重连)时,已提交位点早于
-		//     日志起点会在 initialize 里**静默**改到起点,ErrorLogger 不出声。这条路径靠下面 Logger 放行的两行:
-		//     `starting at offset A`(传入位点;负数 = 这个组没提交过,不算丢)与 `seeking to offset B`(实际起读位点),
-		//     A >= 0 且 B > A 时 B − A 就是被跳过的条数。DB 故障 → 停机 → 冷却 → 重建走的正是这条。
-		// 两个都不配,这一跳完全静默,而 lag 探针的 retention_gap 会在消费者越过缺口、提交之后自行归零
-		// (探针的 `AUDIT DATA LOST` 行只是采样到的下界)。只加日志,不改消费行为。
-		ErrorLogger: kafkago.LoggerFunc(func(format string, args ...interface{}) {
-			logx.Errorf("[kafka-go] topic=%s group=%s: "+format, append([]interface{}{topic, group}, args...)...)
-		}),
-		// 只放行上面说的两行位点记录,其余丢弃(见 isReaderOffsetTraceLine)。量:每个分区每次(重新)初始化两行;
-		// broker 不可达期间每次初始化重试多一行 `starting at offset`,与 ErrorLogger 上已有的 `error initializing` 行同频。
-		Logger: kafkago.LoggerFunc(func(format string, args ...interface{}) {
-			if isReaderOffsetTraceLine(format) {
-				logx.Infof("[kafka-go] topic=%s group=%s: "+format, append([]interface{}{topic, group}, args...)...)
+func newReader(brokers []string, topic, group string, relay *drainproof.Session) (*kafkautil.BoundConsumerGroup, error) {
+	return kafkautil.NewBoundMessageReader(kafkautil.BoundConsumerGroupConfig{
+		Group: kafkago.ConsumerGroupConfig{ID: group, Brokers: brokers, Topics: []string{topic}, StartOffset: kafkago.FirstOffset, Timeout: 10 * time.Second},
+		Reader: kafkago.ReaderConfig{
+			Brokers: brokers,
+			// 新消费组从最早开始:data_service 晚于 scene 启动时,先发的流水/快照不能丢。
+			StartOffset: kafkago.FirstOffset,
+			MinBytes:    1,
+			MaxBytes:    16 << 20, // 快照单条几百 KB,给足
+			MaxWait:     500 * time.Millisecond,
+			// CommitInterval=0:同步提交,由消费循环自己决定何时提交(插库成功之后)。
+			CommitInterval: 0,
+			// 保留期删掉未消费的消息之后 kafka-go 会自动跳到日志起点。它留下什么记录分两种情形
+			// (v0.4.47 reader.go,已按 tag 源码核对;组 / 非组模式的分区 reader 同走 (*reader).run):
+			//   - 运行中被保留期追上(fetch 返回 OffsetOutOfRange 且 offset < first):经 ErrorLogger 打
+			//     `... skipping from offset X to Y (N messages)`,是该情形的精确记录;
+			//   - 分区 reader 每次(重新)initialize(进程重启 / STOPPED 冷却后重建 / rebalance / 断线重连)时,已提交位点早于
+			//     日志起点会在 initialize 里**静默**改到起点,ErrorLogger 不出声。这条路径靠下面 Logger 放行的两行:
+			//     `starting at offset A`(传入位点;负数 = 这个组没提交过,不算丢)与 `seeking to offset B`(实际起读位点),
+			//     A >= 0 且 B > A 时 B − A 就是被跳过的条数。DB 故障 → 停机 → 冷却 → 重建走的正是这条。
+			// 两个都不配,这一跳完全静默,而 lag 探针的 retention_gap 会在消费者越过缺口、提交之后自行归零
+			// (探针的 `AUDIT DATA LOST` 行只是采样到的下界)。只加日志,不改消费行为。
+			ErrorLogger: kafkago.LoggerFunc(func(format string, args ...interface{}) {
+				logx.Errorf("[kafka-go] topic=%s group=%s: "+format, append([]interface{}{topic, group}, args...)...)
+			}),
+			// 只放行上面说的两行位点记录,其余丢弃(见 isReaderOffsetTraceLine)。量:每个分区每次(重新)初始化两行;
+			// broker 不可达期间每次初始化重试多一行 `starting at offset`,与 ErrorLogger 上已有的 `error initializing` 行同频。
+			Logger: kafkago.LoggerFunc(func(format string, args ...interface{}) {
+				if isReaderOffsetTraceLine(format) {
+					logx.Infof("[kafka-go] topic=%s group=%s: "+format, append([]interface{}{topic, group}, args...)...)
+				}
+			}),
+		},
+	}, relay)
+}
+
+// ConsumerOwner 归属同一 boot 的真实 Fetch、SQL 与 offset 提交；supervisor 重建不替换它。
+// ingress 只控制拉新，relay 保留给已接收消息的 SQL/提交；未知结果不能因重建或取消清零。
+type ConsumerOwner struct {
+	relay          *drainproof.Session
+	ingress        *drainproof.Session
+	fetchCtx       context.Context
+	cancelFetch    context.CancelFunc
+	mu             sync.Mutex
+	draining       bool
+	started        bool
+	unknown        error
+	sqlUnknown     error
+	accepted       map[messagePosition]func()
+	committed      map[partitionPosition]int64
+	acceptedCount  uint64
+	settledCount   uint64
+	closedReaders  uint64
+	readerEvidence [][]byte
+	readers        map[string]configuredReader
+	changed        chan struct{}
+	errors         chan error
+}
+
+type configuredReader struct {
+	reader       MessageReader
+	group, topic string
+}
+type partitionPosition struct {
+	topic     string
+	partition int
+}
+type messagePosition struct {
+	partitionPosition
+	offset int64
+}
+
+var errFetchDrained = errors.New("Kafka 新 fetch 已永久关闭")
+
+func NewConsumerOwner(relay, ingress *drainproof.Session) (*ConsumerOwner, error) {
+	if relay == nil || ingress == nil || relay == ingress {
+		return nil, drainproof.ErrHold
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	return &ConsumerOwner{relay: relay, ingress: ingress, fetchCtx: ctx, cancelFetch: cancel,
+		accepted: make(map[messagePosition]func()), committed: make(map[partitionPosition]int64),
+		errors: make(chan error, 1), readers: make(map[string]configuredReader), changed: make(chan struct{})}, nil
+}
+
+func (o *ConsumerOwner) Errors() <-chan error { return o.errors }
+
+// RecordUnknown 供同一启动 owner 的真实 panic/未知结果使用，不允许重建时清除。
+func (o *ConsumerOwner) RecordUnknown(err error) { o.hold(err) }
+func (o *ConsumerOwner) Draining() bool          { o.mu.Lock(); defer o.mu.Unlock(); return o.draining }
+func (o *ConsumerOwner) BeginDrain() {
+	o.mu.Lock()
+	o.draining = true
+	readers := make([]MessageReader, 0, len(o.readers))
+	for _, entry := range o.readers {
+		readers = append(readers, entry.reader)
+	}
+	close(o.changed)
+	o.changed = make(chan struct{})
+	o.mu.Unlock()
+	o.ingress.CloseAdmission()
+	o.cancelFetch()
+	for _, reader := range readers {
+		if owner, ok := reader.(interface{ StopFetching() }); ok {
+			owner.StopFetching()
+		}
+	}
+}
+func (o *ConsumerOwner) attach() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.draining || o.started {
+		return drainproof.ErrClosed
+	}
+	o.started = true
+	return nil
+}
+func (o *ConsumerOwner) hold(err error) {
+	if err == nil {
+		err = drainproof.ErrHold
+	}
+	o.mu.Lock()
+	first := o.unknown == nil
+	if first {
+		o.unknown = err
+	}
+	o.mu.Unlock()
+	if first {
+		o.relay.Hold()
+		o.errors <- err
+	}
+	o.BeginDrain()
+}
+func (o *ConsumerOwner) sqlFailure() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.sqlUnknown
+}
+func (o *ConsumerOwner) observeSQL(err error) {
+	if errors.Is(err, authoritysql.ErrOutcomeUnknown) {
+		o.mu.Lock()
+		if o.sqlUnknown == nil {
+			o.sqlUnknown = err
+		}
+		o.mu.Unlock()
+		o.hold(err)
+	}
+}
+
+// accepted 只登记已经实际返回给现有 consumer 的消息；finish 必须晚于同分区真实 Commit 成功。
+func (o *ConsumerOwner) accept(msg kafkago.Message, onFinish func()) (bool, error) {
+	key := messagePosition{partitionPosition: partitionPosition{topic: msg.Topic, partition: msg.Partition}, offset: msg.Offset}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	// 同 T/P/O 的确定性重投沿用原票据，不能每次重建再制造一份未决接纳或增长回调列表。
+	if o.accepted[key] != nil {
+		return false, nil
+	}
+	finish, err := o.relay.Enter()
+	if err != nil {
+		return false, err
+	}
+	o.accepted[key] = func() { onFinish(); finish() }
+	o.acceptedCount++
+	return true, nil
+}
+func (o *ConsumerOwner) commit(msgs []kafkago.Message) {
+	var finished []func()
+	o.mu.Lock()
+	for _, msg := range msgs {
+		part := partitionPosition{topic: msg.Topic, partition: msg.Partition}
+		if previous, ok := o.committed[part]; !ok || msg.Offset > previous {
+			o.committed[part] = msg.Offset
+		}
+		for key, callback := range o.accepted {
+			if key.partitionPosition == part && key.offset <= msg.Offset {
+				finished = append(finished, callback)
+				o.settledCount++
+				delete(o.accepted, key)
 			}
-		}),
+		}
+	}
+	o.mu.Unlock()
+	for _, finish := range finished {
+		finish()
+	}
+}
+
+// SettledDigest 只证明本 owner 实际接收消息的 SQL/提交前沿；不作为 P8 分区分配就绪证明。
+func (o *ConsumerOwner) SettledDigest(ctx context.Context) ([]byte, error) {
+	if err := o.ingress.Wait(ctx); err != nil {
+		return nil, err
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.unknown != nil {
+		return nil, errors.Join(drainproof.ErrHold, o.unknown)
+	}
+	if len(o.accepted) != 0 {
+		return nil, fmt.Errorf("%w: Kafka 仍有 %d 个未确定提交的位置", drainproof.ErrHold, len(o.accepted))
+	}
+	keys := make([]partitionPosition, 0, len(o.committed))
+	for key := range o.committed {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].topic != keys[j].topic {
+			return keys[i].topic < keys[j].topic
+		}
+		return keys[i].partition < keys[j].partition
 	})
+	h := sha256.New()
+	var value [8]byte
+	for _, count := range []uint64{o.acceptedCount, o.settledCount, o.closedReaders} {
+		binary.BigEndian.PutUint64(value[:], count)
+		h.Write(value[:])
+	}
+	for _, key := range keys {
+		binary.BigEndian.PutUint64(value[:], uint64(len(key.topic)))
+		h.Write(value[:])
+		h.Write([]byte(key.topic))
+		binary.BigEndian.PutUint64(value[:], uint64(key.partition))
+		h.Write(value[:])
+		binary.BigEndian.PutUint64(value[:], uint64(o.committed[key]))
+		h.Write(value[:])
+	}
+	sort.Slice(o.readerEvidence, func(i, j int) bool { return bytes.Compare(o.readerEvidence[i], o.readerEvidence[j]) < 0 })
+	for _, proof := range o.readerEvidence {
+		h.Write(proof)
+	}
+	return h.Sum(nil), nil
+}
+
+func (o *ConsumerOwner) bindReader(name, group, topic string, reader MessageReader) {
+	o.mu.Lock()
+	o.readers[name] = configuredReader{reader: reader, group: group, topic: topic}
+	draining := o.draining
+	close(o.changed)
+	o.changed = make(chan struct{})
+	o.mu.Unlock()
+	if draining {
+		if owner, ok := reader.(interface{ StopFetching() }); ok {
+			owner.StopFetching()
+		}
+	}
+}
+
+// PreparedFrontier 仅接受实际 consumer-group owner 的正式原件；普通 Reader 没有该证明时明确 HOLD。
+func (o *ConsumerOwner) PreparedFrontier(ctx context.Context, runtime *drainproof.Runtime, role string) ([]byte, []byte, error) {
+	var entries []configuredReader
+	for {
+		o.mu.Lock()
+		if o.draining || o.unknown != nil {
+			o.mu.Unlock()
+			return nil, nil, drainproof.ErrHold
+		}
+		if len(o.readers) == 2 {
+			for _, name := range []string{ConsumerTxLog, ConsumerSnapshot} {
+				entry, ok := o.readers[name]
+				if !ok {
+					o.mu.Unlock()
+					return nil, nil, drainproof.ErrHold
+				}
+				entries = append(entries, entry)
+			}
+			o.mu.Unlock()
+			break
+		}
+		changed := o.changed
+		o.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		case <-changed:
+		}
+	}
+	if runtime == nil || runtime.Plan == nil {
+		return nil, nil, drainproof.ErrHold
+	}
+	var reports [][]byte
+	for _, entry := range entries {
+		provider, ok := entry.reader.(interface {
+			ExpectedPartitions(*drainproof.Runtime) ([]*databasepb.SqlWriterMaintenanceReceipt_KafkaPartitionClosure, error)
+			PreparedFrontier(context.Context, *drainproof.Runtime, string, []*databasepb.SqlWriterMaintenanceReceipt_KafkaPartitionClosure) ([]byte, []byte, error)
+		})
+		if !ok {
+			return nil, nil, fmt.Errorf("%w: DS Reader 缺保留攒批语义的实际 assigned/generation/commit 前沿 API", drainproof.ErrHold)
+		}
+		expected, err := provider.ExpectedPartitions(runtime)
+		if err != nil {
+			return nil, nil, err
+		}
+		_, raw, err := provider.PreparedFrontier(ctx, runtime, role, expected)
+		if err != nil {
+			return nil, nil, err
+		}
+		reports = append(reports, raw)
+	}
+	return kafkautil.MergeConsumerReadiness(reports...)
+}
+
+// WithReady 将同 boot 的未知状态、全部实际组代次核验与 root open 放在同一临界区。
+func (o *ConsumerOwner) WithReady(ctx context.Context, raw []byte, commit func() ([]byte, error)) ([]byte, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.draining || o.unknown != nil || len(o.readers) != 2 {
+		return nil, drainproof.ErrHold
+	}
+	var owners []*kafkautil.BoundConsumerGroup
+	for _, name := range []string{ConsumerTxLog, ConsumerSnapshot} {
+		entry, ok := o.readers[name]
+		if !ok {
+			return nil, drainproof.ErrHold
+		}
+		owner, ok := entry.reader.(*kafkautil.BoundConsumerGroup)
+		if !ok {
+			return nil, drainproof.ErrHold
+		}
+		owners = append(owners, owner)
+	}
+	return kafkautil.WithConsumerReadiness(ctx, raw, owners, commit)
+}
+
+type ownedRunner struct {
+	runner
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+func (r *ownedRunner) Run(context.Context) error { defer r.cancel(); return r.runner.Run(r.ctx) }
+
+type ownedReader struct {
+	reader    MessageReader
+	owner     *ConsumerOwner
+	txlog     bool
+	stopRun   context.CancelFunc
+	pending   atomic.Int64
+	closeOnce sync.Once
+	closeErr  error
+	activeMu  sync.Mutex
+	active    map[messagePosition]kafkago.Message
+	groupDone chan struct{}
+	groupErr  error
+}
+
+func (r *ownedReader) drainFetch(ctx context.Context) (kafkago.Message, error) {
+	if !r.txlog {
+		return kafkago.Message{}, errFetchDrained
+	}
+	if r.pending.Load() == 0 {
+		r.stopRun()
+		return kafkago.Message{}, context.Canceled
+	}
+	// 现有 TxLogConsumer 的批截止到点后会走原 flush；不取消它手里的 SQL/offset 上下文。
+	if _, ok := ctx.Deadline(); !ok {
+		r.owner.hold(errors.New("txlog 已接受但未提交的批已离开原处理栈"))
+		r.stopRun()
+		return kafkago.Message{}, drainproof.ErrHold
+	}
+	<-ctx.Done()
+	return kafkago.Message{}, ctx.Err()
+}
+
+func (r *ownedReader) FetchMessage(ctx context.Context) (kafkago.Message, error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			r.owner.hold(errors.New("Kafka Fetch panic，接收边界未知"))
+			panic(recovered)
+		}
+	}()
+	finishFetch, err := r.owner.ingress.Enter()
+	if err != nil {
+		return r.drainFetch(ctx)
+	}
+	defer finishFetch()
+	fetchCtx, cancel := context.WithCancel(ctx)
+	stop := context.AfterFunc(r.owner.fetchCtx, cancel)
+	msg, err := r.reader.FetchMessage(fetchCtx)
+	stop()
+	cancel()
+	if err != nil {
+		if r.owner.Draining() {
+			return r.drainFetch(ctx)
+		}
+		return msg, err
+	}
+	fresh, err := r.owner.accept(msg, func() { r.pending.Add(-1) })
+	if err != nil {
+		r.owner.hold(err)
+		return kafkago.Message{}, err
+	}
+	if fresh {
+		r.pending.Add(1)
+	}
+	r.activeMu.Lock()
+	if r.active == nil {
+		r.active = make(map[messagePosition]kafkago.Message)
+	}
+	position := messagePosition{partitionPosition: partitionPosition{topic: msg.Topic, partition: msg.Partition}, offset: msg.Offset}
+	r.active[position] = kafkago.Message{Topic: msg.Topic, Partition: msg.Partition, Offset: msg.Offset}
+	r.activeMu.Unlock()
+	return msg, nil
+}
+func (r *ownedReader) CommitMessages(ctx context.Context, msgs ...kafkago.Message) error {
+	commitCtx := ctx
+	cancel := func() {}
+	if ctx.Err() != nil {
+		// 调用点已确认这是持久前缀；兄弟 worker 取消不能撤销该 SQL 或跳过原 offset 确认。
+		commitCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	}
+	defer cancel()
+	err := r.reader.CommitMessages(commitCtx, msgs...)
+	if err != nil {
+		r.owner.hold(err)
+		return err
+	}
+	r.activeMu.Lock()
+	for _, message := range msgs {
+		for position := range r.active {
+			if position.topic == message.Topic && position.partition == message.Partition && position.offset <= message.Offset {
+				delete(r.active, position)
+			}
+		}
+	}
+	r.activeMu.Unlock()
+	r.owner.commit(msgs)
+	return nil
+}
+func (r *ownedReader) Close() error {
+	r.closeOnce.Do(func() {
+		var raw []byte
+		if reporter, ok := r.reader.(interface {
+			CloseAndReport(context.Context) ([]byte, error)
+		}); ok {
+			raw, r.closeErr = reporter.CloseAndReport(context.Background())
+		} else {
+			r.closeErr = r.reader.Close()
+		}
+		if r.groupDone != nil {
+			<-r.groupDone
+			r.closeErr = errors.Join(r.closeErr, r.groupErr)
+		}
+		if r.closeErr != nil {
+			r.owner.hold(r.closeErr)
+			return
+		}
+		r.owner.mu.Lock()
+		r.owner.closedReaders++
+		if len(raw) > 0 {
+			sum := sha256.Sum256(raw)
+			r.owner.readerEvidence = append(r.owner.readerEvidence, append([]byte(nil), sum[:]...))
+		}
+		r.owner.mu.Unlock()
+	})
+	return r.closeErr
+}
+
+func (o *ConsumerOwner) effect(ctx context.Context, call func() error) (err error) {
+	if err = o.sqlFailure(); err != nil {
+		return err
+	}
+	finish, err := o.relay.Enter()
+	if err != nil {
+		return err
+	}
+	returned := false
+	defer func() {
+		if !returned {
+			o.hold(errors.New("Kafka SQL owner panic，服务器结果未知"))
+		}
+		finish()
+	}()
+	err = call()
+	returned = true
+	o.observeSQL(err)
+	return err
+}
+
+type ownedTxLogSink struct {
+	owner *ConsumerOwner
+	sink  TxLogSink
+}
+
+func (s *ownedTxLogSink) InsertBatchIgnore(ctx context.Context, rows []*store.TransactionLogRow) (out int64, err error) {
+	err = s.owner.effect(ctx, func() error { var e error; out, e = s.sink.InsertBatchIgnore(ctx, rows); return e })
+	return
+}
+
+type ownedSnapshotSink struct {
+	owner *ConsumerOwner
+	sink  SnapshotSink
+}
+
+func (s *ownedSnapshotSink) InsertSnapshotIfGuidAbsent(ctx context.Context, row *store.SnapshotRow) (id uint64, inserted bool, err error) {
+	err = s.owner.effect(ctx, func() error { var e error; id, inserted, e = s.sink.InsertSnapshotIfGuidAbsent(ctx, row); return e })
+	return
+}
+func (s *ownedSnapshotSink) InsertSnapshotsIfGuidAbsent(ctx context.Context, rows []*store.SnapshotRow) (out int64, err error) {
+	err = s.owner.effect(ctx, func() error { var e error; out, e = s.sink.InsertSnapshotsIfGuidAbsent(ctx, rows); return e })
+	return
+}
+
+// startGroup 只在唯一工厂第一次创建此 Reader 时调用；业务 consumer 重建不会重开组或丢票据。
+func (r *ownedReader) startGroup(ctx context.Context, group *kafkautil.BoundConsumerGroup) {
+	r.groupDone = make(chan struct{})
+	go func() {
+		defer close(r.groupDone)
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				r.groupErr = errors.New("Kafka group owner panic，结果未知")
+				r.owner.RecordUnknown(r.groupErr)
+			}
+		}()
+		r.groupErr = group.Run(ctx)
+		if r.groupErr != nil {
+			r.owner.RecordUnknown(r.groupErr)
+		}
+	}()
+}
+
+// finishAttempt 在原有批/分区 worker 全部返回后报告未提交前缀。
+// 成功 SQL 的前缀已由 CommitMessages 确认；driver 明确 UNKNOWN 或任何提交不明时只能报告 UNKNOWN。
+func (r *ownedReader) finishAttempt(result error) error {
+	r.activeMu.Lock()
+	messages := make([]kafkago.Message, 0, len(r.active))
+	for _, message := range r.active {
+		messages = append(messages, message)
+	}
+	r.activeMu.Unlock()
+	if len(messages) == 0 {
+		return nil
+	}
+	outcome := kafkautil.ProcessingOutcomeUnknown
+	r.owner.mu.Lock()
+	unknown := r.owner.unknown
+	r.owner.mu.Unlock()
+	if errors.Is(result, ErrConsumerStoppedOnDB) && unknown == nil {
+		outcome = kafkautil.ProcessingNotCommitted
+	}
+	group, ok := r.reader.(*kafkautil.BoundConsumerGroup)
+	if !ok {
+		return drainproof.ErrHold
+	}
+	reportErr := group.ReportProcessingFailure(context.Background(), outcome, messages...)
+	if outcome == kafkautil.ProcessingOutcomeUnknown || reportErr != nil {
+		r.owner.RecordUnknown(errors.Join(drainproof.ErrHold, result, reportErr))
+		return errors.Join(drainproof.ErrHold, result, reportErr)
+	}
+	r.activeMu.Lock()
+	clear(r.active)
+	r.activeMu.Unlock()
+	return nil
 }

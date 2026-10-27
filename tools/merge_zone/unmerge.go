@@ -52,6 +52,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"strconv"
@@ -73,8 +74,21 @@ func runUnmerge(o options) {
 	if err := requireTeamRouteDomain(o.mysqlDSN, o.routeDBDSN, o.routeSource); err != nil {
 		log.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
+	ctx, cancel := context.WithTimeout(maintenanceParent(o), o.timeout)
 	defer cancel()
+	var freeze *normalFreezeProof
+	var freezeDB *sql.DB
+	if !o.dryRun {
+		if err := checkMaintenanceTool(ctx); err != nil {
+			log.Fatal(err)
+		}
+		var freezeErr error
+		freeze, freezeDB, freezeErr = openNormalFreezeProof(ctx, o)
+		if freezeErr != nil {
+			log.Fatal(freezeErr)
+		}
+		ctx = withNormalFreezeProof(ctx, freeze)
+	}
 
 	// dry-run 预览(<path>.dryrun.json)一律拒读(A3):它记的是彩排那一刻的名单,不是任何一次写入。
 	m, err := loadRunManifest(o.manifestPath)
@@ -120,20 +134,23 @@ func runUnmerge(o options) {
 	log.Printf("    NOTHING outside this list is touched — target-zone natives are safe by construction.")
 
 	db := mustOpenMySQL(ctx, o.mysqlDSN)
-	defer db.Close()
+	defer closeUnownedMaintenanceResource(ctx, db)
 	teamAuthority, err := openTeamAuthority(ctx, o.mysqlDSN, firstNonEmpty(o.teamSchema, defaultTeamSchema))
 	if err != nil {
 		log.Fatalf("组队权威门禁: %v", err)
 	}
-	defer teamAuthority.db.Close()
+	if err := registerMaintenanceResource(ctx, teamAuthority.db); err != nil {
+		log.Fatal(err)
+	}
+	defer closeUnownedMaintenanceResource(ctx, teamAuthority.db)
 	mapRdb := mustDial(ctx, "mapping", o.mappingAddr, o.mappingPwd, o.mappingDB)
-	defer mapRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, mapRdb)
 	guildRdb := mustDial(ctx, "guild", o.redisAddr, o.redisPwd, o.redisDB)
-	defer guildRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, guildRdb)
 	sharedRdb := mustDial(ctx, "login/shared(DB0)", o.noticeAddr, o.noticePwd, o.noticeDB)
-	defer sharedRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, sharedRdb)
 	sceneRdb := mustDial(ctx, "scene_manager", o.sceneAddr, o.scenePwd, o.sceneDB)
-	defer sceneRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, sceneRdb)
 	// preflight P2(目标区口径)要 etcd 注册表的正面证据,见 scene_registry.go。写入之前校验参数。
 	sceneNodes, rerr := newEtcdGatewayRegistry(o.etcdEndpoints)
 	if rerr != nil {
@@ -164,16 +181,34 @@ func runUnmerge(o options) {
 	if err != nil {
 		log.Fatalf("route source: %v", err)
 	}
-	defer rb.Close()
+	if maintenanceFromContext(ctx) == nil {
+		defer rb.Close()
+	}
 	fence, err := acquireRunFence(ctx, rb, mapRdb, routeFenceParams{src: src, dst: dst, runID: runID, purpose: routeFencePurposeUnmerge,
 		manifestPath: o.manifestPath, runTimeout: o.timeout, dryRun: o.dryRun, takeOverRunID: o.takeOverFenceRunID})
 	if err != nil {
 		log.Fatalf("merge fence: %v", err)
 	}
-	defer fence.release(context.Background())
+	if o.dryRun {
+		defer fence.release(ctx)
+	}
 	// db 源:围栏一旦失权,看门狗取消之后的一切写;gate 是每批之前的显式判据。redis 源两者都不生效。
-	ctx = fence.writeContext(ctx)
-	gate := writeGate(fence.check)
+	ctx, err = maintenanceFenceContext(ctx, fence)
+	if err != nil {
+		log.Fatal(err)
+	}
+	gate := writeGate(func() error {
+		if err := fence.check(); err != nil {
+			return err
+		}
+		if o.dryRun {
+			return nil
+		}
+		if err := checkMaintenanceTool(ctx); err != nil {
+			return err
+		}
+		return freeze.check(ctx, freezeDB)
+	})
 	// abortKeepingFence:MySQL / 公会缓存改回到一半的失败走这里,围栏故意不释放并给出续跑指引
 	// (撤销口径的文案,见 fenceKeptAbortMessage;db 源见 routeFenceKeptAbortMessage)。
 	// dry-run 从没写过围栏,只报原因。errs 是本步骤带回的错误(可省):db 源里批事务内的 fencing token 复核判了 errRouteFenceLost
@@ -236,6 +271,7 @@ func runUnmerge(o options) {
 		sharedRdb:     sharedRdb,
 		lag:           lagSrc,
 	}, preflightParams{
+		readOnly:        o.dryRun,
 		zone:            dst,
 		scope:           "target",
 		kafkaGroups:     kafkaGroupCandidates(o.kafkaGroup, o.kafkaLegacyGroup, dst),
@@ -443,6 +479,11 @@ func runUnmerge(o options) {
 			totalRefused, refusedSample, src, dstSchema)
 	}
 
+	if !o.dryRun {
+		if err := finishMaintenanceFence(ctx, fence); err != nil {
+			log.Fatal(err)
+		}
+	}
 	log.Printf("=== Unmerge done (players=%d guilds=%d rank=%d trade_listings=%d/%d rows_deleted=%d rows_refused=%d) ===",
 		len(m.PlayerIDs), len(m.GuildIDs), len(m.RankMembers), tradeRestored, len(m.TradeListingIDs), totalDeleted, totalRefused)
 	if o.migrateBlobs {

@@ -1,8 +1,12 @@
+//go:build integration
+
 package store_test
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
@@ -13,20 +17,23 @@ import (
 	"time"
 
 	"data_service/internal/store"
+	"google.golang.org/protobuf/proto"
+	pb "proto/common/database"
+	"shared/authoritysql/sqltest"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 )
 
-// 只允许显式指定的专用本地验收库；不自动选现有全局库，不创建或删除数据库。
-func openTiDBGuidFixture(t *testing.T) (*sql.DB, store.MySQLConfig) {
+// 显式本地TiDB目标，仅创建随机自有schema；主体、归属原件与控制目录由共享fixture统一持有。
+func openTiDBGuidFixture(t *testing.T) (*sql.DB, store.MySQLConfig, *sqltest.Fixture) {
 	t.Helper()
 	dsn := os.Getenv("DATA_SERVICE_GUID_TIDB_DSN")
 	if dsn == "" {
 		if os.Getenv("DATA_SERVICE_GUID_REQUIRE_TIDB") == "1" {
-			t.Fatal("真实 TiDB GUID 验收要求显式 DSN")
+			t.Fatal("真实TiDB GUID验收要求显式DSN")
 		}
-		t.Skip("未启用独立 TiDB GUID 验收")
+		t.Skip("未启用独立TiDB GUID验收")
 	}
 	require.Equal(t, "dev", os.Getenv("DATA_SERVICE_GUID_MODE"))
 	require.Equal(t, "1", os.Getenv("DATA_SERVICE_GUID_DEDICATED"))
@@ -34,34 +41,40 @@ func openTiDBGuidFixture(t *testing.T) (*sql.DB, store.MySQLConfig) {
 	require.NoError(t, err)
 	host, _, err := net.SplitHostPort(parsed.Addr)
 	require.NoError(t, err)
-	require.True(t, net.ParseIP(host) != nil && net.ParseIP(host).IsLoopback(), "只允许本地专用 TiDB")
-	require.True(t, strings.HasPrefix(parsed.DBName, "asset_arrival_"), "仅允许验收命名空间")
-	require.Equal(t, os.Getenv("DATA_SERVICE_GUID_DATABASE"), parsed.DBName, "数据库必须二次显式指定")
-	db, err := sql.Open("mysql", parsed.FormatDSN())
+	require.True(t, net.ParseIP(host) != nil && net.ParseIP(host).IsLoopback(), "只允许本地专用TiDB")
+	var nonce [12]byte
+	_, err = rand.Read(nonce[:])
 	require.NoError(t, err)
-	db.SetMaxOpenConns(4)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	name := "guid_it_" + hex.EncodeToString(nonce[:])
+	opts, err := sqltest.OptionsFromEnv(dsn, name, name)
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
+	fixture, err := sqltest.New(ctx, t, opts)
+	require.NoError(t, err)
+	require.NoError(t, store.MigrateOwnedFixtureSchema(ctx, fixture, name, store.MigrateOptions{}))
+	require.NoError(t, fixture.GrantProtoTables(ctx, name, []proto.Message{&pb.PlayerSnapshot{}, &pb.TransactionLog{}}))
+	normal, err := mysql.ParseDSN(fixture.DSN(name))
+	require.NoError(t, err)
+	cfg := store.MySQLConfig{Host: normal.Addr, User: normal.User, Password: normal.Passwd, DBName: name, MaxOpenConn: 4, MaxIdleConn: 1, Permission: fixture.Permission}
 	var version string
-	require.NoError(t, db.QueryRowContext(ctx, "SELECT VERSION()").Scan(&version))
+	require.NoError(t, fixture.Schema.QueryRowContext(ctx, "SELECT VERSION()").Scan(&version))
 	require.Contains(t, strings.ToUpper(version), "TIDB")
 	for _, table := range []string{"player_snapshot", "transaction_log"} {
 		var count int
-		require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM `"+table+"`").Scan(&count))
-		require.Zero(t, count, "专用验收开始前 %s 必须无业务行", table)
+		require.NoError(t, fixture.Schema.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count))
+		require.Zero(t, count, "自有验收开始前业务行必须为空")
 	}
-	return db, store.MySQLConfig{Host: parsed.Addr, User: parsed.User, Password: parsed.Passwd,
-		DBName: parsed.DBName, MaxOpenConn: 4, MaxIdleConn: 1}
+	return fixture.Schema, cfg, fixture
 }
 
 func TestTiDBSnapshotGuidMigrationAndStore(t *testing.T) {
-	db, cfg := openTiDBGuidFixture(t)
+	db, cfg, fixture := openTiDBGuidFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	// 正式部署入口必须在默认严格配置下完成，并能在同一库重入。
-	require.NoError(t, store.MigrateSchema(ctx, cfg, store.MigrateOptions{}))
-	require.NoError(t, store.MigrateSchema(ctx, cfg, store.MigrateOptions{}))
+	// 仅测试专用迁移入口验证同一正式迁移引擎的严格形状及幂等；生产fresh门禁另验。
+	require.NoError(t, store.MigrateOwnedFixtureSchema(ctx, fixture, cfg.DBName, store.MigrateOptions{}))
+	require.NoError(t, store.MigrateOwnedFixtureSchema(ctx, fixture, cfg.DBName, store.MigrateOptions{}))
 	ss, err := store.NewSnapshotStore(cfg)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, ss.Close()) })
@@ -132,13 +145,13 @@ func TestTiDBSnapshotGuidMigrationAndStore(t *testing.T) {
 	require.Zero(t, n)
 }
 
-// 这些 DDL 只施加于显式专用、无业务行的验收库，并逐例恢复正式结构。
+// 这些DDL只施加于本fixture持有归属原件的随机schema，并逐例恢复正式结构。
 // 迁移和建池必须拒绝“名字正确但不能约束同 GUID”的结构，不能退回 TiDB 无效的间隙锁去重。
 func TestTiDBSnapshotGuidRejectsInvalidShape(t *testing.T) {
-	db, cfg := openTiDBGuidFixture(t)
+	db, cfg, fixture := openTiDBGuidFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	require.NoError(t, store.MigrateSchema(ctx, cfg, store.MigrateOptions{}))
+	require.NoError(t, store.MigrateOwnedFixtureSchema(ctx, fixture, cfg.DBName, store.MigrateOptions{}))
 	for _, tc := range []struct {
 		name      string
 		columnDDL string
@@ -169,7 +182,7 @@ func TestTiDBSnapshotGuidRejectsInvalidShape(t *testing.T) {
 						exec("ALTER TABLE player_snapshot DROP COLUMN snapshot_guid_nz")
 					}
 				}
-				require.NoError(t, store.MigrateSchema(ctx, cfg, store.MigrateOptions{}), "恢复正式结构")
+				require.NoError(t, store.MigrateOwnedFixtureSchema(ctx, fixture, cfg.DBName, store.MigrateOptions{}), "恢复正式结构")
 			})
 			exec("ALTER TABLE player_snapshot DROP INDEX uk_snapshot_guid_nz")
 			if tc.columnDDL != "" {
@@ -185,9 +198,9 @@ func TestTiDBSnapshotGuidRejectsInvalidShape(t *testing.T) {
 			}
 			require.Error(t, err, "TiDB 不得在唯一约束缺失或失真时启用写池")
 			if tc.name == "missing_key" {
-				require.NoError(t, store.MigrateSchema(ctx, cfg, store.MigrateOptions{}), "正确生成列已存在时可补键重入")
+				require.NoError(t, store.MigrateOwnedFixtureSchema(ctx, fixture, cfg.DBName, store.MigrateOptions{}), "正确生成列已存在时可补键重入")
 			} else {
-				require.Error(t, store.MigrateSchema(ctx, cfg, store.MigrateOptions{}), "坏形状必须人工确认，迁移不能静默修复")
+				require.Error(t, store.MigrateOwnedFixtureSchema(ctx, fixture, cfg.DBName, store.MigrateOptions{}), "坏形状必须人工确认，迁移不能静默修复")
 			}
 		})
 	}

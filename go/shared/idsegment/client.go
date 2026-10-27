@@ -53,6 +53,8 @@ package idsegment
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -103,6 +105,8 @@ var (
 	ErrRangeViolation = errors.New("idsegment: server returned an invalid range")
 	// ErrClosed 表示 Close 之后又调了 Next。
 	ErrClosed = errors.New("idsegment: client closed")
+	// ErrDrainUnknown表示至少一次Allocate没有确定服务端结局；取消或耗尽等待不消除未知。
+	ErrDrainUnknown = errors.New("idsegment: allocate结局未知，保持维护")
 )
 
 // Options 控制 Client 行为。零值字段取默认。
@@ -202,8 +206,10 @@ type Client struct {
 	// notBefore 是上次失败后允许再次领段的最早时刻。
 	notBefore time.Time
 	// highWater 是校验通过的最大 hi。
-	highWater uint64
-	closed    bool
+	highWater                      uint64
+	closed                         bool
+	draining                       bool
+	fetchesSettled, fetchesUnknown uint64
 
 	// bg 是后台领段的父 ctx,Close 时取消,让在途 RPC 立刻返回。
 	bg     context.Context
@@ -364,18 +370,52 @@ func (c *Client) Warm(ctx context.Context) error {
 	}
 }
 
-// Close 取消在途领段并等它退出;幂等。之后 Next 一律 ErrClosed。
-// 已领到但没发完的号就此作废 —— 号段模式本来就允许浪费,不需要归还。
+// Close用于普通退出；维护Drain一旦关闭入口，就不再取消已受理Allocate。
 func (c *Client) Close() {
 	c.mu.Lock()
-	if c.closed {
-		c.mu.Unlock()
-		return
-	}
 	c.closed = true
+	cancelPending := !c.draining
 	c.mu.Unlock()
-	c.cancel()
+	if cancelPending {
+		c.cancel()
+	}
 	c.wg.Wait()
+}
+
+// DrainAndReport与Next/Warm共用admission锁，只等待原RPC自然结局；ctx超时保留关闭状态。
+// 范围违规说明号源一致性已失效；与传输错误、超时、取消或panic一样永久阻止排空原件，不能以重试成功冲销。
+func (c *Client) DrainAndReport(ctx context.Context) ([]byte, error) {
+	c.mu.Lock()
+	c.closed = true
+	c.draining = true
+	pending := c.inflight
+	c.mu.Unlock()
+	if pending != nil {
+		select {
+		case <-pending.done:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	// pending.done在finishFetch退出时关闭；此后只剩wg.Done，没有用户回调或新RPC。
+	c.wg.Wait()
+	c.cancel()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.fetchesUnknown != 0 || c.fetchesStarted != c.fetchesSettled {
+		return nil, ErrDrainUnknown
+	}
+	var frontier [32]byte
+	binary.BigEndian.PutUint64(frontier[0:8], c.fetchesStarted)
+	binary.BigEndian.PutUint64(frontier[8:16], c.fetchesSettled)
+	binary.BigEndian.PutUint64(frontier[16:24], c.issued)
+	binary.BigEndian.PutUint64(frontier[24:32], c.highWater)
+	h := sha256.New()
+	h.Write([]byte("ID_SEGMENT_DRAIN_V1\x00"))
+	h.Write([]byte(c.opt.BizTag))
+	h.Write([]byte{0})
+	h.Write(frontier[:])
+	return h.Sum(nil), nil
 }
 
 // Stats 返回观测快照。
@@ -411,7 +451,7 @@ func (c *Client) unavailable(cause error) error {
 // 必须过它 —— 预取若绕过退避,服务端倒下期间只要手里还有号,每个 Next 都会再打一次
 // RPC,「防雪崩」的退避就成了摆设。
 func (c *Client) canStartFetchLocked() bool {
-	return c.inflight == nil && c.next == nil && !c.now().Before(c.notBefore)
+	return !c.closed && c.inflight == nil && c.next == nil && !c.now().Before(c.notBefore)
 }
 
 // onRangeExhaustedLocked 在当前段发出最后一个号时按 Leaf 口径调 step(见包注释
@@ -469,6 +509,11 @@ func (c *Client) finishFetch(st *fetchState, lo, hi uint64, err error) {
 	c.inflight = nil
 	if err == nil {
 		err = c.validateLocked(lo, hi)
+	}
+	if err == nil {
+		c.fetchesSettled++
+	} else {
+		c.fetchesUnknown++
 	}
 	if err != nil {
 		st.err = err

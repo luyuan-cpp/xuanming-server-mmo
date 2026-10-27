@@ -92,6 +92,13 @@ bool RegisterKafkaCommandHandler(Node& node,
                 return;
             }
 
+            if (node.RequiresMaintenanceTargetIdentity()) {
+                uint64_t targetNode=0;std::string nodeField,targetInstance,instanceField;
+                if(!detail::TryReadUintField(*command,filter.nodeIdFieldNames,targetNode,nodeField) ||
+                   !detail::TryReadStringField(*command,filter.instanceIdFieldNames,targetInstance,instanceField) ||
+                   targetNode!=node.GetNodeId() || targetInstance!=node.GetNodeInfo().node_uuid()) return;
+                // P8之后共享manual分区必须精确目标boot；不把空兼容位视为本实例命令。
+            }
             if (!detail::ValidateCommandTarget(t, *command, node.GetNodeId(),
                     node.GetNodeInfo().node_uuid(), filter)) {
                 return;

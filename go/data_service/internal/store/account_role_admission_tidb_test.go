@@ -7,13 +7,14 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"database/sql/driver"
-	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -48,7 +49,7 @@ func TestMaintenanceRecoveryTargetSeparatesScopeFromDebugAuthorization(t *testin
 
 // 真实维护正向链从正式初始SQL双行与真实登记/Begin开始；目标高E只由已编译维护CLI产生。
 // 专用parent与mapping Redis必须为空命名空间；不SCAN/FLUSH，不清父或待投来制造前置。
-func recoveredHolderTiDBFixture(t *testing.T) (*AccountDirectoryStore, *sql.DB, *AccountRoleAdmissionStore, *SQLRoleFreezeVerifier, *dbpb.AccountRoleAdmissionRecovery_Request) {
+func recoveredHolderTiDBFixture(t *testing.T) (*AccountDirectoryStore, *sql.DB, *AccountRoleAdmissionStore, *SQLRoleFreezeVerifier, *dbpb.AccountRoleAdmissionRecovery_Request, *directorySQLFixture) {
 	t.Helper()
 	addr, mappingAddr, binaryPath := os.Getenv("ADMISSION_RECOVERY_TEST_REDIS"), os.Getenv("ADMISSION_RECOVERY_TEST_MAPPING_REDIS"), os.Getenv("BARRIER_RESTORE_TEST_BINARY")
 	if addr == "" && mappingAddr == "" && binaryPath == "" && os.Getenv("ADMISSION_RECOVERY_REQUIRE_TESTS") == "" {
@@ -59,7 +60,7 @@ func recoveredHolderTiDBFixture(t *testing.T) (*AccountDirectoryStore, *sql.DB, 
 	require.NotEmpty(t, mappingAddr)
 	require.NotEqual(t, addr, mappingAddr)
 	require.NotEmpty(t, binaryPath)
-	d, global := accountDirectoryTiDB(t)
+	d, global, fixture := accountDirectoryTiDBWithWriter(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	t.Cleanup(cancel)
 	_, err := createInitialRoleForTest(d, ctx, "seller", &base.AccountSimplePlayer{PlayerId: 11, ZoneId: 1})
@@ -79,21 +80,24 @@ func recoveredHolderTiDBFixture(t *testing.T) (*AccountDirectoryStore, *sql.DB, 
 	require.NoError(t, global.QueryRowContext(ctx, "SELECT storage_id,placement_version,rev FROM player_route WHERE route_shard=? AND player_id=11", placement.RouteRowShard(11)).Scan(&storage, &placementVersion, &routeRevision))
 	rowSchema, ok := placement.StoreDBName(storage)
 	require.True(t, ok)
-	// 沿正式维护方法冻结路由并钉当前已审水位，不修改玩家版本/业务数据。
-	routes := &RouteStore{db: global}
-	_, err = routes.FreezeRouteWriters(ctx)
+	// 这是本例同步完成的正常对账写；进入维护后不再用Schema或旧writable入口改状态。
+	_, err = d.db.ExecContext(ctx, "UPDATE route_reconcile SET watermark_ms=1000 WHERE id=1")
 	require.NoError(t, err)
-	_, err = routes.UnfreezeRouteWriters(ctx, 1000)
-	require.NoError(t, err)
-	_, err = routes.FreezeRouteWriters(ctx)
-	require.NoError(t, err)
+	freezeDirectorySQLFixture(t, ctx, d, fixture)
+	// 以下只执行已冻结环境的维护恢复。业务池已经封闭，维护能力显式来自本例operator。
+	maintenanceDirectory := *d
+	maintenanceDirectory.db = fixture.SQL.Operator
+	d = &maintenanceDirectory
+	a = NewAccountRoleAdmissionStore(d)
 	require.NoError(t, global.QueryRowContext(ctx, "SELECT generation FROM route_meta WHERE id=1").Scan(&generation))
 	require.NoError(t, global.QueryRowContext(ctx, "SELECT watermark_ms FROM route_reconcile WHERE id=1").Scan(&watermark))
 	require.Positive(t, watermark)
 	cfg, err := mysql.ParseDSN(os.Getenv("ACCOUNT_DIRECTORY_TEST_DSN"))
 	require.NoError(t, err)
 	cfg.DBName = rowSchema
-	rows, err := authoritysql.Open(ctx, cfg.FormatDSN(), rowSchema, true, 1)
+	var operatorPrincipal string
+	require.NoError(t, fixture.SQL.Operator.QueryRowContext(ctx, "SELECT CURRENT_USER()").Scan(&operatorPrincipal))
+	rows, err := authoritysql.Open(ctx, fixture.SQL.DSN(rowSchema), rowSchema, true, 1, authoritysql.Reader())
 	require.NoError(t, err)
 	t.Cleanup(func() { rows.Close() })
 	model := proto2mysql.NewDB()
@@ -187,7 +191,7 @@ func recoveredHolderTiDBFixture(t *testing.T) (*AccountDirectoryStore, *sql.DB, 
 			extra = append(extra, "-target-observation", filepath.Join(temp, "target-"+strconv.FormatInt(time.Now().UnixNano(), 10)+".json"))
 		}
 		cmd := exec.CommandContext(ctx, binaryPath, append(append([]string{}, args...), extra...)...)
-		cmd.Env = append(os.Environ(), "SAVE_BARRIER_RESTORE_DSN="+cfg.FormatDSN())
+		cmd.Env = append(os.Environ(), "SAVE_BARRIER_RESTORE_DSN="+cfg.FormatDSN(), "MMORPG_SQL_OPERATOR_PRINCIPAL="+operatorPrincipal)
 		output, err := cmd.CombinedOutput()
 		require.NoError(t, err, "正式维护CLI输出: %s", string(output))
 		return output
@@ -207,11 +211,11 @@ func recoveredHolderTiDBFixture(t *testing.T) (*AccountDirectoryStore, *sql.DB, 
 	in := &dbpb.AccountRoleAdmissionRecovery_Request{RequestId: roleImportTestID(23), SellerAccount: "seller", Seal: listing.Holders[0].Seal, Admission: identity.Identity, AdmissionRequestDigest: admissionDigest, MaintenanceReceiptId: receipt.ReceiptId, MaintenanceRequestDigest: receipt.RequestDigest}
 	verifier, err := NewSQLRoleFreezeVerifier([]uint32{storage})
 	require.NoError(t, err)
-	return d, global, a, verifier, in
+	return d, global, a, verifier, in, fixture
 }
 
 func TestTiDBRecoverOldHolderFromRealPromotionCLIAndPermanentReplay(t *testing.T) {
-	d, global, a, verifier, in := recoveredHolderTiDBFixture(t)
+	d, global, a, verifier, in, fixture := recoveredHolderTiDBFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	var localTarget MaintenanceRecoveryTarget
@@ -277,7 +281,11 @@ func TestTiDBRecoverOldHolderFromRealPromotionCLIAndPermanentReplay(t *testing.T
 	connector, err := mysql.NewConnector(cfg)
 	require.NoError(t, err)
 	fault := &admissionRecoveryCommitReplyLoss{}
-	faultDB := sql.OpenDB(admissionRecoveryCommitReplyConnector{inner: authoritysql.PinCurrentSession(connector, true), fault: fault})
+	var maintenancePrincipal string
+	require.NoError(t, fixture.SQL.Operator.QueryRowContext(ctx, "SELECT CURRENT_USER()").Scan(&maintenancePrincipal))
+	guarded, err := authoritysql.PinCurrentSession(connector, true, authoritysql.Operator(maintenancePrincipal))
+	require.NoError(t, err)
+	faultDB := sql.OpenDB(admissionRecoveryCommitReplyConnector{inner: guarded, fault: fault})
 	defer faultDB.Close()
 	faultDB.SetMaxOpenConns(1)
 	require.NoError(t, authoritysql.AssertCurrentSession(ctx, faultDB, true))
@@ -514,30 +522,20 @@ func TestTiDBRoleAdmissionFixedHolderCancelAndLateGenerations(t *testing.T) {
 }
 
 // 真实 TiDB、独立随机 storage schema、正式 proto2mysql 建两张完整玩家表；只删本例已创建的库。
-func roleProofStorage(t *testing.T, global *sql.DB, player uint64) (uint32, string, *sql.DB) {
+func roleProofStorage(t *testing.T, global *sql.DB, player uint64, fixture *directorySQLFixture) (uint32, string, *sql.DB) {
 	t.Helper()
-	var nonce [4]byte
-	_, err := rand.Read(nonce[:])
-	require.NoError(t, err)
-	id := placement.FirstNonZoneStorageID + binary.BigEndian.Uint32(nonce[:])%4000000000
+	require.NotNil(t, fixture)
+	id := fixture.ProofStorageID
 	name, ok := placement.StoreDBName(id)
 	require.True(t, ok)
-	_, err = global.Exec("CREATE DATABASE `" + name + "`")
-	require.NoError(t, err)
-	t.Cleanup(func() { _, err := global.Exec("DROP DATABASE `" + name + "`"); require.NoError(t, err) })
-	cfg, err := mysql.ParseDSN(os.Getenv("ACCOUNT_DIRECTORY_TEST_DSN"))
-	require.NoError(t, err)
-	cfg.DBName = name
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	handle, err := authoritysql.Open(ctx, cfg.FormatDSN(), name, true, 4)
+	handle, err := fixture.SQL.Open(ctx, name, 4)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, handle.Close()) })
 	model := proto2mysql.NewDB()
 	require.NoError(t, model.OpenDB(handle, name))
 	for _, row := range []proto.Message{&dbpb.PlayerDatabase{PlayerId: player}, &dbpb.PlayerDatabase_1{PlayerId: player}} {
 		model.RegisterTable(row)
-		require.NoError(t, model.CreateOrUpdateTable(row))
 		require.NoError(t, model.Insert(row))
 	}
 	_, err = global.Exec("INSERT INTO player_route(route_shard,player_id,home_zone,storage_id,placement_version,rev,updated_by,created_at_ms,updated_at_ms) VALUES (?,?,1,?,1,1,'role-proof-test',1,1) ON DUPLICATE KEY UPDATE home_zone=VALUES(home_zone),storage_id=VALUES(storage_id),placement_version=VALUES(placement_version),rev=rev+1", placement.RouteRowShard(player), player, id)
@@ -556,13 +554,13 @@ func setProofFence(t *testing.T, db *sql.DB, player, epoch, seq uint64) {
 }
 
 func TestTiDBRoleAdmissionStrongSQLProofRejectsUnsyncedRowsAndKeepsReceipt(t *testing.T) {
-	d, global := accountDirectoryTiDB(t)
+	d, global, fixture := accountDirectoryTiDBWithWriter(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
 	_, err := createInitialRoleForTest(d, ctx, "seller", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11})
 	require.NoError(t, err)
 	// 目录按正式初始事务建立后，本例再把路由切到专门的旧版/追盘证据夹具。
-	id, _, rows := roleProofStorage(t, global, 11)
+	id, _, rows := roleProofStorage(t, global, 11, fixture)
 	v, err := NewSQLRoleFreezeVerifier([]uint32{id})
 	require.NoError(t, err)
 	trades, admissions := newTestAccountRoleTradeStore(d, v), NewAccountRoleAdmissionStore(d)
@@ -604,13 +602,13 @@ func TestTiDBRoleAdmissionStrongSQLProofRejectsUnsyncedRowsAndKeepsReceipt(t *te
 }
 
 func TestTiDBRoleAdmissionSQLProofNoAdmissionAndHistoricalFloor(t *testing.T) {
-	d, global := accountDirectoryTiDB(t)
+	d, global, fixture := accountDirectoryTiDBWithWriter(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
 	_, err := createInitialRoleForTest(d, ctx, "seller", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11})
 	require.NoError(t, err)
 	// 目录按正式初始事务建立后，本例再把路由切到专门的旧版/追盘证据夹具。
-	id, _, rows := roleProofStorage(t, global, 11)
+	id, _, rows := roleProofStorage(t, global, 11, fixture)
 	v, err := NewSQLRoleFreezeVerifier([]uint32{id})
 	require.NoError(t, err)
 	trades := newTestAccountRoleTradeStore(d, v)
@@ -673,13 +671,13 @@ func TestTiDBRoleAdmissionRegisterAndBeginShareCommitLock(t *testing.T) {
 }
 
 func TestTiDBRoleAdmissionSQLProofRejectsRouteAndSchemaFailures(t *testing.T) {
-	d, global := accountDirectoryTiDB(t)
+	d, global, fixture := accountDirectoryTiDBWithWriter(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
 	_, err := createInitialRoleForTest(d, ctx, "seller", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11})
 	require.NoError(t, err)
 	// 目录按正式初始事务建立后，本例再把路由切到专门的旧版/追盘证据夹具。
-	id, _, rows := roleProofStorage(t, global, 11)
+	id, _, rows := roleProofStorage(t, global, 11, fixture)
 	v, err := NewSQLRoleFreezeVerifier([]uint32{id})
 	require.NoError(t, err)
 	trades := newTestAccountRoleTradeStore(d, v)
@@ -797,4 +795,172 @@ func TestTiDBRoleImportReceiptRevokesOldRoutesAndDoesNotBumpOnResume(t *testing.
 	var receipts int
 	require.NoError(t, global.QueryRowContext(ctx, "SELECT COUNT(*) FROM account_role_import_receipt").Scan(&receipts))
 	require.Equal(t, 2, receipts)
+}
+
+// freezeDirectorySQLFixture 只证明本例的纯SQL输入已关；本例没有Kafka消费者、Redis发布者或后台重试。
+// 后续创建的Redis键是恢复工具的显式输入，不能拿这份收据替代任何真实服务的全历史排空。
+func freezeDirectorySQLFixture(t *testing.T, ctx context.Context, directory *AccountDirectoryStore, fixture *directorySQLFixture) {
+	t.Helper()
+	catalog := fixture.SQL.Catalog
+	config := fixture.SQL.Config
+	var owner, physical, principal []byte
+	require.NoError(t, fixture.SQL.Schema.QueryRowContext(ctx, "SELECT owner_nonce,physical_sha256,normal_principal FROM __sql_fixture_owner WHERE id=1").Scan(&owner, &physical, &principal))
+	require.Len(t, owner, 32)
+	require.Len(t, physical, 32)
+	ownerPath := filepath.Join(os.Getenv("MMORPG_SQL_FIXTURE_RECEIPT_DIR"), "sql-fixture-"+hex.EncodeToString(owner)+".owner")
+	ownerBytes, err := os.ReadFile(ownerPath)
+	require.NoError(t, err)
+	require.Equal(t, append(append([]byte(nil), owner...), physical...), ownerBytes)
+	_, source, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	pin := func(name string) *dbpb.SqlWriterMaintenanceReceipt_SourcePin {
+		t.Helper()
+		require.True(t, filepath.IsAbs(name))
+		raw, err := os.ReadFile(name)
+		require.NoError(t, err)
+		sum := sha256.Sum256(raw)
+		return &dbpb.SqlWriterMaintenanceReceipt_SourcePin{AbsolutePath: name, Sha256: sum[:]}
+	}
+	newID := func() []byte {
+		value := make([]byte, 16)
+		_, err := rand.Read(value)
+		require.NoError(t, err)
+		return value
+	}
+	encode := func(message proto.Message) []byte {
+		raw, err := (proto.MarshalOptions{Deterministic: true}).Marshal(message)
+		require.NoError(t, err)
+		return raw
+	}
+	meta, err := catalog.CurrentMeta(ctx)
+	require.NoError(t, err)
+	keys, err := catalog.ActiveWriterKeys(ctx)
+	require.NoError(t, err)
+	require.Equal(t, [][]byte{config.WriterKey()}, keys, "本fixture不能接管其他writer")
+	var registrationDigest, registrationRaw []byte
+	require.NoError(t, fixture.SQL.Operator.QueryRowContext(ctx, "SELECT registration_digest FROM writer_registry WHERE writer_key=?", config.WriterKey()).Scan(&registrationDigest))
+	require.NoError(t, fixture.SQL.Operator.QueryRowContext(ctx, "SELECT request_proto FROM writer_lifecycle_receipt WHERE kind=1 AND request_digest=?", registrationDigest).Scan(&registrationRaw))
+	registration := &dbpb.SqlWriterLifecycleReceipt_Request{}
+	require.NoError(t, proto.Unmarshal(registrationRaw, registration))
+	require.Equal(t, principal, registration.Writer.SqlPrincipal)
+	require.Equal(t, config.InstanceID(), registration.Writer.InstanceId)
+	require.Equal(t, config.WriterKey(), registration.Writer.WriterKey)
+	canonical, err := authoritysql.CanonicalRegistrationRequest(registration)
+	require.NoError(t, err)
+	require.True(t, proto.Equal(canonical, registration))
+	seed := &dbpb.SqlWriterMaintenanceReceipt_IssuerClosure{
+		IssuerId: config.WriterKey(), InstanceId: config.InstanceID(), PhysicalWriterKey: config.WriterKey(),
+		LogicalRole: "fixture-synchronous-sql", PermanentRevivalFenceId: config.WriterKey(),
+		SourceEvidence: []*dbpb.SqlWriterMaintenanceReceipt_SourcePin{pin(source), pin(ownerPath)},
+	}
+	plan := &dbpb.SqlWriterMaintenanceReceipt_Plan{PhysicalClusterIdentity: physical, AuthoritySchema: config.AuthoritySchema(), ProtectedSchemas: config.ProtectedSchemas(), ActiveWriterKeys: keys, BeforeEpoch: meta.WriterEpoch, CatalogRevision: meta.CatalogRevision, RunId: newID(), RootIssuers: []*dbpb.SqlWriterMaintenanceReceipt_IssuerClosure{seed}, SourcePins: seed.SourceEvidence}
+	manifest := encode(plan)
+	manifestHash := sha256.Sum256(manifest)
+	run := &dbpb.SqlWriterDrainRun{OperationId: plan.RunId, RequestDigest: manifestHash[:], Generation: config.Generation(), AttemptRevision: 1, ManifestProto: manifest, ManifestDigest: manifestHash[:]}
+	var previous *dbpb.SqlWriterMaintenanceReceipt
+	makeRequest := func(kind dbpb.SqlWriterMaintenanceReceipt_Kind, phase dbpb.SqlWriterDrainRun_Phase, evidence *dbpb.SqlWriterMaintenanceReceipt_Evidence) *dbpb.SqlWriterMaintenanceReceipt {
+		t.Helper()
+		current, err := catalog.CurrentMeta(ctx)
+		require.NoError(t, err)
+		evidence.OperationId, evidence.ManifestDigest = plan.RunId, manifestHash[:]
+		request := &dbpb.SqlWriterMaintenanceReceipt{RequestId: newID(), RunId: plan.RunId, Generation: config.Generation(), BeforeEpoch: current.WriterEpoch, AfterEpoch: current.WriterEpoch, CatalogRevision: current.CatalogRevision, Kind: kind, RunPhase: phase, AttemptRevision: 1, PlanProto: manifest, Evidence: evidence}
+		if previous != nil {
+			request.PriorReceiptId = previous.RequestId
+			request.PriorReceiptDigest = previous.ReceiptDigest
+		}
+		return request
+	}
+	advance := func(kind dbpb.SqlWriterMaintenanceReceipt_Kind, phase dbpb.SqlWriterDrainRun_Phase, evidence *dbpb.SqlWriterMaintenanceReceipt_Evidence) *dbpb.SqlWriterMaintenanceReceipt {
+		t.Helper()
+		request, err := authoritysql.SealMaintenanceRequest(makeRequest(kind, phase, evidence))
+		require.NoError(t, err)
+		next := proto.Clone(run).(*dbpb.SqlWriterDrainRun)
+		next.Phase = phase
+		receipt, err := catalog.Advance(ctx, next, request)
+		require.NoError(t, err)
+		previous = receipt
+		run = next
+		return receipt
+	}
+	advance(dbpb.SqlWriterMaintenanceReceipt_PHASE_EVENT, dbpb.SqlWriterDrainRun_PLAN_FIXED, &dbpb.SqlWriterMaintenanceReceipt_Evidence{})
+	// 测试同步入口在此以后只持operator。Seal先禁止任何新借用；Close确认现有业务池退出。
+	config.Seal()
+	require.Zero(t, directory.db.Stats().InUse, "本例全部SQL步骤必须已同步确认，没有悬挂事务")
+	require.NoError(t, directory.db.Close())
+	require.Zero(t, directory.db.Stats().OpenConnections)
+	var closedMs uint64
+	require.NoError(t, fixture.SQL.Operator.QueryRowContext(ctx, "SELECT CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED)").Scan(&closedMs))
+	closedBody, err := json.Marshal(struct {
+		Scope             string
+		WriterKey         []byte
+		InstanceID        []byte
+		ClosedMs          uint64
+		OpenConnections   int
+		InUse             int
+		KafkaPublishers   int
+		RedisPublishers   int
+		BackgroundRetries int
+	}{"此测试同步SQL入口；不代表生产服务", config.WriterKey(), config.InstanceID(), closedMs, directory.db.Stats().OpenConnections, directory.db.Stats().InUse, 0, 0, 0})
+	require.NoError(t, err)
+	frontier := sha256.Sum256(closedBody)
+	closedPath := filepath.Join(filepath.Dir(ownerPath), "directory-fixture-"+hex.EncodeToString(plan.RunId)+".closed.json")
+	file, err := os.OpenFile(closedPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY|os.O_SYNC, 0600)
+	require.NoError(t, err)
+	_, writeErr := file.Write(closedBody)
+	syncErr := file.Sync()
+	closeErr := file.Close()
+	require.NoError(t, writeErr)
+	require.NoError(t, syncErr)
+	require.NoError(t, closeErr)
+	closed := proto.Clone(seed).(*dbpb.SqlWriterMaintenanceReceipt_IssuerClosure)
+	closed.AcceptingClosedMs = closedMs
+	closed.AcceptedSettledMs = closedMs
+	closed.AcceptedFrontierDigest = frontier[:]
+	inventoryHash := sha256.Sum256(encode(&dbpb.SqlWriterMaintenanceReceipt_PublicationEvidence{LogicalRoles: plan.RootIssuers}))
+	rootReceipt := advance(dbpb.SqlWriterMaintenanceReceipt_ROLE_CLOSED, dbpb.SqlWriterDrainRun_ROOTS_CLOSED, &dbpb.SqlWriterMaintenanceReceipt_Evidence{Detail: &dbpb.SqlWriterMaintenanceReceipt_Evidence_Publication{Publication: &dbpb.SqlWriterMaintenanceReceipt_PublicationEvidence{LogicalRoles: []*dbpb.SqlWriterMaintenanceReceipt_IssuerClosure{closed}, IssuerInventoryDigest: inventoryHash[:], SourceEvidence: []*dbpb.SqlWriterMaintenanceReceipt_SourcePin{pin(closedPath)}}}})
+	retire := proto.Clone(registration).(*dbpb.SqlWriterLifecycleReceipt_Request)
+	retire.RequestId = newID()
+	retire.Kind = dbpb.SqlWriterLifecycleReceipt_RETIRE
+	retire.MaintenanceRunId = plan.RunId
+	current, err := catalog.CurrentMeta(ctx)
+	require.NoError(t, err)
+	retire.ExpectedEpoch = current.WriterEpoch
+	retire.ExpectedCatalogRevision = current.CatalogRevision
+	retired, err := catalog.Retire(ctx, retire)
+	require.NoError(t, err)
+	require.Equal(t, current.CatalogRevision+1, retired.CatalogRevision)
+	keys, err = catalog.ActiveWriterKeys(ctx)
+	require.NoError(t, err)
+	require.Empty(t, keys)
+	advance(dbpb.SqlWriterMaintenanceReceipt_PHASE_EVENT, dbpb.SqlWriterDrainRun_DRAINING, &dbpb.SqlWriterMaintenanceReceipt_Evidence{})
+	emptyInventory := sha256.Sum256(encode(&dbpb.SqlWriterMaintenanceReceipt_PublicationEvidence{}))
+	relayReceipt := advance(dbpb.SqlWriterMaintenanceReceipt_RELAY_QUIESCED, dbpb.SqlWriterDrainRun_DRAINING, &dbpb.SqlWriterMaintenanceReceipt_Evidence{Detail: &dbpb.SqlWriterMaintenanceReceipt_Evidence_Publication{Publication: &dbpb.SqlWriterMaintenanceReceipt_PublicationEvidence{IssuerInventoryDigest: emptyInventory[:], SourceEvidence: []*dbpb.SqlWriterMaintenanceReceipt_SourcePin{pin(closedPath)}}}})
+	closure := &dbpb.SqlWriterMaintenanceReceipt_NonSqlClosureEvidence{RootClosedReceiptId: rootReceipt.RequestId, RootClosedReceiptDigest: rootReceipt.ReceiptDigest, RelayQuiescedReceiptId: relayReceipt.RequestId, RelayQuiescedReceiptDigest: relayReceipt.ReceiptDigest, HistoricalInventoryDigest: emptyInventory[:], ObservedStartMs: closedMs, ObservedEndMs: closedMs, SourceEvidence: []*dbpb.SqlWriterMaintenanceReceipt_SourcePin{pin(source), pin(ownerPath), pin(closedPath)}}
+	closedReceipt := advance(dbpb.SqlWriterMaintenanceReceipt_PHASE_EVENT, dbpb.SqlWriterDrainRun_NON_SQL_CLOSED, &dbpb.SqlWriterMaintenanceReceipt_Evidence{Detail: &dbpb.SqlWriterMaintenanceReceipt_Evidence_NonSqlClosure{NonSqlClosure: closure}})
+	freeze := makeRequest(dbpb.SqlWriterMaintenanceReceipt_FREEZE, dbpb.SqlWriterDrainRun_SQL_FROZEN, &dbpb.SqlWriterMaintenanceReceipt_Evidence{Detail: &dbpb.SqlWriterMaintenanceReceipt_Evidence_NonSqlClosure{NonSqlClosure: closure}})
+	freeze.Phase = dbpb.SqlWriterMaintenanceReceipt_FROZEN
+	freeze.AfterEpoch = freeze.BeforeEpoch + 1
+	freeze, err = authoritysql.SealMaintenanceRequest(freeze)
+	require.NoError(t, err)
+	var nowMs uint64
+	require.NoError(t, fixture.SQL.Operator.QueryRowContext(ctx, "SELECT CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED)").Scan(&nowMs))
+	ticket := &dbpb.SqlWriterFreezeTicket{TicketId: newID(), OperationId: plan.RunId, AttemptRevision: 1, Generation: config.Generation(), ManifestDigest: manifestHash[:], NonSqlReceiptDigest: closedReceipt.ReceiptDigest, FreezeRequestId: freeze.RequestId, FreezeRequestDigest: freeze.RequestDigest, NotBeforeMs: nowMs, ExpiresMs: nowMs + 60000, State: dbpb.SqlWriterFreezeTicket_AVAILABLE, AuthorizationKind: dbpb.SqlWriterFreezeTicket_NORMAL_DRAIN_FREEZE}
+	ticketDigest, err := authoritysql.SealFreezeTicketRequest(ticket)
+	require.NoError(t, err)
+	grant := makeRequest(dbpb.SqlWriterMaintenanceReceipt_TICKET_GRANTED, dbpb.SqlWriterDrainRun_FREEZE_AUTHORIZED, &dbpb.SqlWriterMaintenanceReceipt_Evidence{Detail: &dbpb.SqlWriterMaintenanceReceipt_Evidence_Ticket{Ticket: &dbpb.SqlWriterMaintenanceReceipt_TicketEvidence{TicketId: ticket.TicketId, BoundRequestId: freeze.RequestId, BoundRequestDigest: freeze.RequestDigest, AuthorityOperationId: plan.RunId, TicketRequestDigest: ticketDigest}}})
+	grant, err = authoritysql.SealMaintenanceRequest(grant)
+	require.NoError(t, err)
+	_, err = catalog.GrantTicket(ctx, ticket, grant)
+	require.NoError(t, err)
+	frozen, err := catalog.Freeze(ctx, ticket.TicketId, freeze)
+	require.NoError(t, err)
+	require.Equal(t, dbpb.SqlWriterMaintenanceReceipt_FROZEN, frozen.Phase)
+	require.Equal(t, plan.BeforeEpoch+1, frozen.AfterEpoch)
+	finalMeta, err := catalog.CurrentMeta(ctx)
+	require.NoError(t, err)
+	require.Zero(t, finalMeta.Writable)
+	require.Equal(t, plan.CatalogRevision+1, finalMeta.CatalogRevision)
+	storedRun, err := catalog.DrainRun(ctx, plan.RunId)
+	require.NoError(t, err)
+	require.Equal(t, manifest, storedRun.ManifestProto, "P1退役不得回写P0目录快照")
 }

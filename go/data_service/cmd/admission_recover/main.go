@@ -22,6 +22,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"google.golang.org/protobuf/encoding/protojson"
 	dbpb "proto/common/database"
+	"shared/authoritysql"
 )
 
 type recoveryOptions struct {
@@ -81,13 +82,18 @@ func runRecovery(ctx context.Context, o recoveryOptions, out, errOut io.Writer, 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	if execute == nil {
+		permission, permissionErr := authoritysql.LoadOperatorPermission(os.Getenv)
+		if permissionErr != nil {
+			fmt.Fprintln(errOut, "缺少独立SQL维护Operator主体")
+			return 2
+		}
 		// 从环境读DSN后只取连接配置，错误中绝不回显原DSN或密码。
 		cfg, err := mysql.ParseDSN(os.Getenv(o.dsnEnv))
 		if err != nil || cfg.DBName != o.schema || cfg.Net != "tcp" || cfg.Addr != o.sqlTarget {
 			fmt.Fprintln(errOut, "恢复SQL连接参数无效")
 			return 2
 		}
-		directory, err := store.NewAccountDirectoryStore(store.MySQLConfig{Host: cfg.Addr, User: cfg.User, Password: cfg.Passwd, DBName: o.schema}, true, 100, 1)
+		directory, err := store.NewAccountDirectoryStore(store.MySQLConfig{Host: cfg.Addr, User: cfg.User, Password: cfg.Passwd, DBName: o.schema, Permission: permission}, true, 100, 1)
 		if err != nil {
 			fmt.Fprintln(errOut, "权威SQL强读或目录形状核对失败")
 			return 2

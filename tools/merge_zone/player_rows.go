@@ -527,7 +527,7 @@ func columnsNotIn(a, b []string) []string {
 //
 // cols 由 alignedPlayerColumns 产出:已确认两库列集合相同、列名不含反引号,
 // 可以按列名对位并直接用反引号包裹。
-func copyOneTable(ctx context.Context, db *sql.DB, srcQ, dstQ string, cols []string, ids []uint64) (int, error) {
+func copyOneTable(ctx context.Context, db *sql.DB, srcQ, dstQ string, cols []string, ids []uint64) (copied int, err error) {
 	if len(cols) == 0 {
 		return 0, fmt.Errorf("refusing to copy %s → %s with an empty column list", srcQ, dstQ)
 	}
@@ -536,14 +536,39 @@ func copyOneTable(ctx context.Context, db *sql.DB, srcQ, dstQ string, cols []str
 		quoted = append(quoted, "`"+c+"`")
 	}
 	colList := strings.Join(quoted, ",")
+	if err := checkMaintenanceTool(ctx); err != nil {
+		return 0, err
+	}
+	finish, err := enterMaintenanceWork(ctx)
+	if err != nil {
+		return 0, err
+	}
+	returned := false
+	defer func() {
+		if !returned || err != nil {
+			holdMaintenanceTool(ctx)
+		}
+		finish()
+	}()
+	// 正常错误同样经过真实 rollback；panic 不得把已受理任务伪装成成功。
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("begin tx for %s: %w", dstQ, err)
 	}
-	defer func() { _ = tx.Rollback() }() // 已 Commit 后是 no-op
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+			err = errors.Join(err, rollbackErr)
+		}
+	}()
+	proof := normalFreezeFromContext(ctx)
+	if proof == nil {
+		return 0, errNormalFreezeProof
+	}
+	if err := proof.lockTransaction(ctx, tx); err != nil {
+		return 0, err
+	}
 
-	copied := 0
 	for _, batch := range chunkUint64(ids, playerRowsBatchSize) {
 		// 列名两侧都写出来:目标列清单固定了写入位置,源列清单固定了读取顺序,
 		// 两库列序如何都不影响结果(见 alignedPlayerColumns)。
@@ -559,12 +584,16 @@ func copyOneTable(ctx context.Context, db *sql.DB, srcQ, dstQ string, cols []str
 			}
 			return copied, fmt.Errorf("insert into %s: %w", dstQ, err)
 		}
-		n, _ := res.RowsAffected()
+		n, affectedErr := res.RowsAffected()
+		if affectedErr != nil {
+			return copied, fmt.Errorf("rows affected for %s: %w", dstQ, affectedErr)
+		}
 		copied += int(n)
 	}
 	if err := tx.Commit(); err != nil {
 		return copied, fmt.Errorf("commit %s: %w", dstQ, err)
 	}
+	returned = true
 	return copied, nil
 }
 
@@ -574,74 +603,104 @@ func copyOneTable(ctx context.Context, db *sql.DB, srcQ, dstQ string, cols []str
 //
 // 逐字节比较用 CHECKSUM 不行(表级),用 SELECT * 逐列比又要泛型 Scan;
 // 这里用 MySQL 自己算:把两库的整行拼成一个可比较的串。
-func deletePlayerRows(
-	ctx context.Context,
-	db *sql.DB,
-	srcSchema, dstSchema, table string,
-	ids []uint64,
-	dryRun bool,
-) (deleted int, refused []uint64, err error) {
-	srcQ := srcSchema + "." + table
-	dstQ := dstSchema + "." + table
-
-	// 「逐字节相同」怎么判:不能用 CHECKSUM(表级)、也不能整行 JSON 化
-	// (player_database 的列是 MEDIUMBLOB,JSON 化会炸内存)。按**列**比:
-	// 取列名,拼一串 NULL-safe 的 `d.col <=> s.col AND ...` 交给 MySQL 算。
-	//
-	// 列清单与 copy 路径共用 alignedPlayerColumns,不再只取目标库的列
-	// (2026-09-19 审稿 minor):下面的条件两侧分别落在 d(目标库)和 s(源库),
-	// 只按目标库取列时,目标库独有的列会让 MySQL 回 `Unknown column 's.xxx'`,
-	// 包装后只剩「compare A vs B: ...」,看不出该做什么。共用之后两条路径给出
-	// 同一句 SCHEMA MISMATCH + 「先在两个库跑齐 go/db migrate」的指引。
-	cols, cerr := alignedPlayerColumns(ctx, db, srcSchema, dstSchema, table)
-	if cerr != nil {
-		return 0, nil, cerr
+func deletePlayerRows(ctx context.Context, db *sql.DB, srcSchema, dstSchema, table string, ids []uint64, dryRun bool) (deleted int, refused []uint64, err error) {
+	proof := normalFreezeFromContext(ctx)
+	if !dryRun && proof == nil {
+		return 0, nil, errNormalFreezeProof
+	}
+	returned := dryRun
+	if !dryRun {
+		if err := checkMaintenanceTool(ctx); err != nil {
+			return 0, nil, err
+		}
+		finish, workErr := enterMaintenanceWork(ctx)
+		if workErr != nil {
+			return 0, nil, workErr
+		}
+		defer func() {
+			if !returned || err != nil {
+				holdMaintenanceTool(ctx)
+			}
+			finish()
+		}()
+	}
+	srcQ, dstQ := srcSchema+"."+table, dstSchema+"."+table
+	cols, err := alignedPlayerColumns(ctx, db, srcSchema, dstSchema, table)
+	if err != nil {
+		return 0, nil, err
 	}
 	cond := identicalRowCondition(cols)
-
 	for _, batch := range chunkUint64(ids, playerRowsBatchSize) {
-		in := inListLiteral(batch)
-		// JOIN 找出「目标库有、且与源库整行相同」的 id;不同的进 refused。
-		q := fmt.Sprintf(
-			`SELECT d.%s, (%s) AS identical
-			   FROM %s d JOIN %s s ON d.%s = s.%s
-			  WHERE d.%s IN (%s)`,
-			playerIDColumn, cond,
-			dstQ, srcQ, playerIDColumn, playerIDColumn, playerIDColumn, in)
-		rows, qerr := db.QueryContext(ctx, q)
-		if qerr != nil {
-			return deleted, refused, fmt.Errorf("compare %s vs %s: %w", dstQ, srcQ, qerr)
-		}
-		var identical []uint64
-		for rows.Next() {
-			var id uint64
-			var same sql.NullBool
-			if serr := rows.Scan(&id, &same); serr != nil {
-				rows.Close()
-				return deleted, refused, serr
+		n, rejected, batchErr := func() (count int, rejected []uint64, batchErr error) {
+			query := db.QueryContext
+			var tx *sql.Tx
+			lockSuffix := ""
+			if !dryRun {
+				var err error
+				tx, err = db.BeginTx(ctx, nil)
+				if err != nil {
+					return 0, nil, err
+				}
+				defer func() {
+					if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+						batchErr = errors.Join(batchErr, rollbackErr)
+					}
+				}()
+				if err = proof.lockTransaction(ctx, tx); err != nil {
+					return 0, nil, err
+				}
+				query = tx.QueryContext
+				lockSuffix = " FOR UPDATE"
 			}
-			if same.Valid && same.Bool {
-				identical = append(identical, id)
-			} else {
-				refused = append(refused, id)
+			// 相同元数据锁保护比较与删除，同批原件不在事务外预读。
+			q := fmt.Sprintf("SELECT d.%s,(%s) AS identical FROM %s d JOIN %s s ON d.%s=s.%s WHERE d.%s IN (%s) ORDER BY d.%s%s", playerIDColumn, cond, dstQ, srcQ, playerIDColumn, playerIDColumn, playerIDColumn, inListLiteral(batch), playerIDColumn, lockSuffix)
+			rows, err := query(ctx, q)
+			if err != nil {
+				return 0, nil, err
 			}
+			var identical []uint64
+			for rows.Next() {
+				var id uint64
+				var same sql.NullBool
+				if err = rows.Scan(&id, &same); err != nil {
+					return 0, nil, errors.Join(err, rows.Close())
+				}
+				if same.Valid && same.Bool {
+					identical = append(identical, id)
+				} else {
+					rejected = append(rejected, id)
+				}
+			}
+			err = errors.Join(rows.Err(), rows.Close())
+			if err != nil {
+				return 0, nil, err
+			}
+			if dryRun || len(identical) == 0 {
+				return 0, rejected, nil
+			}
+			result, err := tx.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE %s IN (%s)", dstQ, playerIDColumn, inListLiteral(identical)))
+			if err != nil {
+				return 0, rejected, err
+			}
+			n, err := result.RowsAffected()
+			if err != nil {
+				return 0, rejected, err
+			}
+			if n != int64(len(identical)) {
+				return 0, rejected, fmt.Errorf("维护删除受影响行数不符，整批回滚")
+			}
+			if err = tx.Commit(); err != nil {
+				return 0, rejected, err
+			}
+			return int(n), rejected, nil
+		}()
+		refused = append(refused, rejected...)
+		if batchErr != nil {
+			return deleted, refused, batchErr
 		}
-		rerr := rows.Err()
-		rows.Close()
-		if rerr != nil {
-			return deleted, refused, rerr
-		}
-		if len(identical) == 0 || dryRun {
-			continue
-		}
-		res, derr := db.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE %s IN (%s)",
-			dstQ, playerIDColumn, inListLiteral(identical)))
-		if derr != nil {
-			return deleted, refused, fmt.Errorf("delete from %s: %w", dstQ, derr)
-		}
-		n, _ := res.RowsAffected()
-		deleted += int(n)
+		deleted += n
 	}
+	returned = true
 	return deleted, refused, nil
 }
 
@@ -799,6 +858,11 @@ func deletePlayerKeys(
 	if rdb == nil || len(ids) == 0 {
 		return 0, nil
 	}
+	if !dryRun {
+		if err := checkMaintenanceTool(ctx); err != nil {
+			return 0, err
+		}
+	}
 	deleted := 0
 	for _, batch := range chunkUint64(ids, 200) {
 		keys := make([]string, 0, len(batch)*(len(defaultCacheMsgTypes)+len(tables)+2)) // +2:资产 SQL 提交证据与父快照屏障
@@ -815,9 +879,14 @@ func deletePlayerKeys(
 			cmds = append(cmds, pipe.Del(ctx, k))
 		}
 		if _, err := pipe.Exec(ctx); err != nil {
+			holdMaintenanceTool(ctx)
 			return deleted, fmt.Errorf("delete player cache keys: %w", err)
 		}
 		for _, c := range cmds {
+			if err := c.Err(); err != nil {
+				holdMaintenanceTool(ctx)
+				return deleted, fmt.Errorf("delete player cache key: %w", err)
+			}
 			deleted += int(c.Val())
 		}
 	}

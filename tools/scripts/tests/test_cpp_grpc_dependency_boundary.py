@@ -18,6 +18,13 @@ EXPORTER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(EXPORTER)
 
 
+def cpp_source_paths(pattern):
+    # 只检查源码和受管生成工程；本机构建缓存不属于仓库依赖契约。
+    return [path for path in (REPO / "cpp").rglob(pattern)
+            if not any(part in {"build", "Debug", "Release", "x64", "CMakeFiles", "boost-download"}
+                       or part.startswith(".build") for part in path.relative_to(REPO).parts)]
+
+
 def official_library(name):
     name = name.strip().lower()
     return (
@@ -31,9 +38,16 @@ def official_library(name):
 
 
 class CppDependencyBoundaryTest(unittest.TestCase):
+    def test_submodules_use_independent_sdk_sources(self):
+        modules = (REPO / ".gitmodules").read_text(encoding="utf-8")
+        self.assertNotIn("https://github.com/grpc/grpc.git", modules)
+        for dependency in ("protobuf", "abseil-cpp", "googletest", "boringssl"):
+            self.assertIn(f"path = third_party/{dependency}", modules)
+
     def test_all_project_configurations_and_inherited_targets_drop_official_sdk(self):
-        paths = list((REPO / "cpp").rglob("*.vcxproj"))
-        paths += list((REPO / "cpp").rglob("*.vcxproj.filters"))
+        paths = cpp_source_paths("*.vcxproj")
+        paths += cpp_source_paths("*.vcxproj.filters")
+        paths += [REPO / "third_party/third_party.vcxproj", REPO / "third_party/third_party.vcxproj.filters"]
         paths.append(REPO / "Directory.Build.targets")
         self.assertGreater(len(paths), 40, "必须检查整个 C++ 工程树，不能只检查一个节点")
         for path in paths:
@@ -44,6 +58,7 @@ class CppDependencyBoundaryTest(unittest.TestCase):
                     value = (element.text or "").replace("\\", "/")
                     if tag in {"AdditionalIncludeDirectories", "AdditionalLibraryDirectories"}:
                         self.assertNotRegex(value.lower(), r"third_party/grpc(?:/|;|$)")
+                        self.assertNotIn("protobuf/third_party/abseil-cpp", value.lower())
                     elif tag == "AdditionalDependencies":
                         self.assertFalse(
                             any(official_library(item) for item in value.split(";")),
@@ -53,10 +68,8 @@ class CppDependencyBoundaryTest(unittest.TestCase):
                         self.assertNotRegex(element.get("Include", ""), r"\.grpc\.pb\.(?:cc|h)$")
 
     def test_cpp_source_and_generated_outputs_do_not_use_official_runtime(self):
-        for path in (REPO / "cpp").rglob("*"):
+        for path in cpp_source_paths("*"):
             if not path.is_file() or path.suffix not in {".h", ".hpp", ".cpp", ".cc"}:
-                continue
-            if any(part in {"build", "Debug", "Release", "x64"} for part in path.relative_to(REPO).parts):
                 continue
             with self.subTest(path=str(path.relative_to(REPO))):
                 self.assertNotRegex(path.name, r"\.grpc\.pb\.(?:cc|h)$")
@@ -66,7 +79,8 @@ class CppDependencyBoundaryTest(unittest.TestCase):
                 self.assertNotRegex(text, r"\bgrpc_(?:init|shutdown|is_initialized)\s*\(")
 
     def test_independent_windows_installs_match_configuration_and_architecture(self):
-        for path in (REPO / "cpp").rglob("*.vcxproj"):
+        paths = cpp_source_paths("*.vcxproj") + [REPO / "third_party/third_party.vcxproj"]
+        for path in paths:
             document = ET.parse(path)
             for group in document.iter():
                 if not group.tag.endswith("ItemDefinitionGroup"):
@@ -88,16 +102,51 @@ class CppDependencyBoundaryTest(unittest.TestCase):
                             self.assertEqual(prefix, expected, "不能将 x64 Debug 库默默链接进其它配置")
 
     def test_checked_in_linux_projects_do_not_require_official_sdk(self):
-        for path in (REPO / "cpp").rglob("CMakeLists.txt"):
+        paths = cpp_source_paths("CMakeLists.txt") + [REPO / "third_party/CMakeLists.txt"]
+        for path in paths:
             with self.subTest(path=str(path.relative_to(REPO))):
                 text = path.read_text(encoding="utf-8-sig")
                 self.assertNotRegex(text, r"find_package\s*\(\s*gRPC\b|\bgRPC::")
                 self.assertNotRegex(text, r"third_party[/\\]grpc[/\\]|\.grpc\.pb\.cc\b")
+                self.assertNotIn("protobuf/third_party/abseil-cpp", text.replace("\\", "/").lower())
+
+    def test_independent_windows_installs_precede_shared_archive_directory(self):
+        paths = cpp_source_paths("*.vcxproj") + [REPO / "third_party/third_party.vcxproj"]
+        checked = 0
+        for path in paths:
+            for element in ET.parse(path).getroot().iter():
+                if not element.tag.endswith("AdditionalLibraryDirectories") or not element.text:
+                    continue
+                directories = [item.strip().replace("\\", "/") for item in element.text.split(";")]
+                sdk_positions = [
+                    index for index, value in enumerate(directories)
+                    if re.search(r"third_party/(?:protobuf|boringssl|googletest)/install_vs2026_", value.lower())
+                ]
+                if not sdk_positions:
+                    continue
+                shared_positions = []
+                for index, value in enumerate(directories):
+                    value = value.replace("$(MSBuildThisFileDirectory)", path.parent.as_posix() + "/")
+                    value = value.replace("$(ProjectDir)", path.parent.as_posix() + "/")
+                    value = value.replace("$(SolutionDir)", REPO.as_posix() + "/")
+                    if not value or "$(" in value or "%(" in value:
+                        continue
+                    if (path.parent / value).resolve() == (REPO / "lib").resolve():
+                        shared_positions.append(index)
+                if shared_positions:
+                    checked += 1
+                    with self.subTest(path=str(path.relative_to(REPO))):
+                        self.assertLess(
+                            max(sdk_positions), min(shared_positions),
+                            "独立依赖目录必须先于共享 lib，避免旧 SDK 归档掩盖缺失或错误的新依赖",
+                        )
+        self.assertGreater(checked, 0, "目录优先级检查必须实际覆盖链接独立 SDK 的工程")
 
     def test_exporter_rejects_sdk_reintroduction_in_inactive_configurations(self):
         for tag, value in [
             ("AdditionalIncludeDirectories", r"..\third_party\grpc\include"),
             ("AdditionalLibraryDirectories", "../third_party/grpc/install_vs2026_dbg/lib"),
+            ("AdditionalIncludeDirectories", "../third_party/protobuf/third_party/abseil-cpp"),
             ("AdditionalDependencies", "grpc.lib;grpc_client.lib;muduo_grpc.lib"),
             ("AdditionalDependencies", "gpr.lib"),
             ("AdditionalDependencies", "upb_message_lib.lib"),
@@ -111,12 +160,12 @@ class CppDependencyBoundaryTest(unittest.TestCase):
                     encoding="utf-8",
                 )
                 with self.assertRaises(ValueError):
-                    EXPORTER.parse_vcxproj(project)
+                    EXPORTER.parse_vcxproj(str(project))
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory) / "fixture.vcxproj"
             project.write_text('<Project><ItemGroup><ClCompile Include="mail/mail.grpc.pb.cc" /></ItemGroup></Project>', encoding="utf-8")
             with self.assertRaises(ValueError):
-                EXPORTER.parse_vcxproj(project)
+                EXPORTER.parse_vcxproj(str(project))
 
     def test_exporter_preserves_custom_protocol_and_independent_dependencies(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -128,7 +177,7 @@ class CppDependencyBoundaryTest(unittest.TestCase):
                 '</AdditionalDependencies></Link></ItemDefinitionGroup></Project>',
                 encoding="utf-8",
             )
-            sources, includes = EXPORTER.parse_vcxproj(project)
+            sources, includes = EXPORTER.parse_vcxproj(str(project))
             previous = list(EXPORTER.built_libs)
             try:
                 EXPORTER.built_libs[:] = ["core", "grpc_client", "muduo_grpc"]

@@ -19,6 +19,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 
+	"shared/drainproof"
 	"shared/safego"
 	"shared/taskresult"
 )
@@ -37,6 +38,7 @@ type ResultCallback func(res *db_proto.TaskResult, err error)
 
 type pendingEntry struct {
 	cb        ResultCallback
+	cancel    func()
 	expiresAt time.Time
 }
 
@@ -68,8 +70,14 @@ type TaskResultDispatcher struct {
 	// reuse. On saturation we still fall back to an ad-hoc goroutine so
 	// the subscriber loop never blocks — graceful degradation, not
 	// back-pressure into pub/sub.
-	dispatchJobs chan dispatchJob
-	workersWg    sync.WaitGroup
+	dispatchJobs    chan dispatchJob
+	workersWg       sync.WaitGroup
+	callbacks       *drainproof.Session
+	stopOnce        sync.Once
+	ready           chan struct{}
+	readyOnce       sync.Once
+	subscriberReady bool
+	draining        bool
 }
 
 // dispatchJob bundles a taken callback with its taskID for the worker pool.
@@ -119,6 +127,8 @@ func newTaskResultDispatcher(rc redis.UniversalClient, defaultTTL time.Duration,
 		replyInstance:   replyInstance,
 		instanceChannel: instanceChannel,
 		pending:         make(map[string]pendingEntry),
+		callbacks:       drainproof.New(),
+		ready:           make(chan struct{}),
 		stopCh:          make(chan struct{}),
 		doneCh:          make(chan struct{}),
 		dispatchJobs:    make(chan dispatchJob, dispatchJobsBuffer),
@@ -148,29 +158,37 @@ func (d *TaskResultDispatcher) Start() {
 // Stop terminates background goroutines and fires every pending callback with
 // a shutdown error so EnterGame chains can unwind cleanly.
 func (d *TaskResultDispatcher) Stop() {
-	close(d.stopCh)
-	<-d.doneCh
-	d.workersWg.Wait()
-	// Drain any dispatch jobs the workers had not yet picked up — their
-	// callbacks were already taken out of d.pending so the cleanup loop
-	// below would miss them otherwise.
-	for {
-		select {
-		case job := <-d.dispatchJobs:
-			cb := job.cb
-			safego.Go(pointCallback, func() { cb(nil, fmt.Errorf("dispatcher stopped")) })
-		default:
-			goto drained
-		}
+	if err := d.StopAndReport(context.Background()); err != nil {
+		logx.Errorf("结果分发排空未完成: %v", err)
 	}
-drained:
+}
+
+// StopAndReport保留订阅和TTL兜底直至实际回调全部返回；截止只返回HOLD，不清空pending伪造收敛。
+// 登记与关闭都在mu下；callback账先于pending移除建立，包含池溢出和GC回调。
+func (d *TaskResultDispatcher) StopAndReport(ctx context.Context) error {
 	d.mu.Lock()
-	for _, e := range d.pending {
-		cb := e.cb
-		safego.Go(pointCallback, func() { cb(nil, fmt.Errorf("dispatcher stopped")) })
+	if d.callbacks == nil {
+		d.callbacks = drainproof.New()
 	}
-	d.pending = nil
+	callbacks := d.callbacks
 	d.mu.Unlock()
+	if err := callbacks.WaitIdle(ctx); err != nil {
+		return err
+	}
+	d.mu.Lock()
+	callbacks.CloseAdmission()
+	d.mu.Unlock()
+	if err := callbacks.Wait(ctx); err != nil {
+		return err
+	}
+	d.stopOnce.Do(func() { close(d.stopCh) })
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-d.doneCh:
+	}
+	d.workersWg.Wait()
+	return nil
 }
 
 // Register associates `cb` with `taskID`. The callback is invoked exactly once
@@ -182,12 +200,45 @@ func (d *TaskResultDispatcher) Register(taskID string, ttl time.Duration, cb Res
 		ttl = d.defaultTTL
 	}
 	d.mu.Lock()
-	if d.pending == nil {
+	if d.callbacks == nil {
+		d.callbacks = drainproof.New()
+	}
+	done, err := d.callbacks.Enter()
+	if err != nil || d.pending == nil {
 		d.mu.Unlock()
-		safego.Go(pointCallback, func() { cb(nil, fmt.Errorf("dispatcher stopped")) })
+		if done != nil {
+			done()
+		}
+		cb(nil, drainproof.ErrClosed)
 		return
 	}
-	d.pending[taskID] = pendingEntry{cb: cb, expiresAt: time.Now().Add(ttl)}
+	if _, exists := d.pending[taskID]; exists {
+		d.mu.Unlock()
+		done()
+		cb(nil, fmt.Errorf("重复结果登记"))
+		return
+	}
+	var once sync.Once
+	wrapped := func(result *db_proto.TaskResult, err error) {
+		once.Do(func() {
+			defer func() {
+				if fault := recover(); fault != nil {
+					d.callbacks.Hold()
+					done()
+					panic(fault)
+				}
+				done()
+			}()
+			d.mu.Lock()
+			draining := d.draining
+			d.mu.Unlock()
+			if draining && err != nil {
+				d.callbacks.Hold()
+			}
+			cb(result, err)
+		})
+	}
+	d.pending[taskID] = pendingEntry{cb: wrapped, cancel: func() { once.Do(done) }, expiresAt: time.Now().Add(ttl)}
 	d.mu.Unlock()
 }
 
@@ -203,6 +254,12 @@ func (d *TaskResultDispatcher) Cancel(taskIDs ...string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	for _, id := range taskIDs {
+		if e, ok := d.pending[id]; ok && e.cancel != nil {
+			if d.draining && d.callbacks != nil {
+				d.callbacks.Hold()
+			}
+			e.cancel()
+		}
 		delete(d.pending, id)
 	}
 }
@@ -286,6 +343,16 @@ func (d *TaskResultDispatcher) subscribeLoop(ctx context.Context, gc *time.Ticke
 	if _, err := psub.Receive(ctx); err != nil {
 		return fmt.Errorf("subscribe receive: %w", err)
 	}
+
+	d.mu.Lock()
+	d.subscriberReady = true
+	d.mu.Unlock()
+	d.readyOnce.Do(func() {
+		if d.ready != nil {
+			close(d.ready)
+		}
+	})
+	defer func() { d.mu.Lock(); d.subscriberReady = false; d.mu.Unlock() }()
 
 	// 2026-06-01 Round 13 postmortem: under 45k-z1 burst we saw ~4% of
 	// preload registrations time out at the 5s SLO while the corresponding
@@ -458,3 +525,51 @@ func (d *TaskResultDispatcher) sweepExpired(ctx context.Context) {
 		})
 	}
 }
+
+// WaitIdle在上游闭合后保留已接收回调的派生能力；它不把TTL视作服务端撤销。
+func (d *TaskResultDispatcher) WaitIdle(ctx context.Context) error {
+	d.mu.Lock()
+	if d.callbacks == nil {
+		d.callbacks = drainproof.New()
+	}
+	callbacks := d.callbacks
+	d.mu.Unlock()
+	return callbacks.WaitIdle(ctx)
+}
+
+func (d *TaskResultDispatcher) FrontierDigest(ctx context.Context) ([]byte, error) {
+	if err := d.StopAndReport(ctx); err != nil {
+		return nil, err
+	}
+	d.mu.Lock()
+	callbacks := d.callbacks
+	d.mu.Unlock()
+	return callbacks.SettledDigest(ctx)
+}
+
+// NewTaskResultDispatcherForBoot让受控维护启动的真实回复UUID与已固定同boot身份一致。
+func NewTaskResultDispatcherForBoot(rc redis.UniversalClient, ttl time.Duration, instance []byte) (*TaskResultDispatcher, error) {
+	id, err := uuid.FromBytes(instance)
+	if err != nil {
+		return nil, err
+	}
+	return newTaskResultDispatcher(rc, ttl, id.String()), nil
+}
+
+func (d *TaskResultDispatcher) ReadyFrontier(ctx context.Context) ([]byte, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-d.ready:
+	}
+	d.mu.Lock()
+	ready, callbacks := d.subscriberReady, d.callbacks
+	d.mu.Unlock()
+	if !ready || callbacks == nil {
+		return nil, drainproof.ErrHold
+	}
+	return callbacks.SnapshotDigest(), nil
+}
+
+// BeginDrain保留回调派生能力，但TTL/取消/Redis错误在此后不能算作server undo。
+func (d *TaskResultDispatcher) BeginDrain() { d.mu.Lock(); d.draining = true; d.mu.Unlock() }

@@ -50,6 +50,7 @@ func collectPlayerIDsWithHomeZone(ctx context.Context, rdb *redis.Client, zone u
 				}
 				pid, perr := strconv.ParseUint(strings.TrimPrefix(key, playerZoneKeyPrefix), 10, 64)
 				if perr != nil {
+					holdMaintenanceTool(ctx)
 					log.Printf("WARN: skip bad mapping key %q", key)
 					continue
 				}
@@ -106,6 +107,43 @@ func newDataRedisClient(addrs []string, password string, db int) redis.Universal
 	})
 }
 
+// newToolDataRedisClient 把本次工具 boot 显式带到全部 Cluster 节点工厂。
+// 原工厂保留给真正只读的 audit；维护写入口不得退回无 Hook 的客户端。
+func newToolDataRedisClient(ctx context.Context, addrs []string, password string, db int) (redis.UniversalClient, error) {
+	if len(addrs) == 0 {
+		return nil, errors.New("维护工具缺少 data Redis 地址")
+	}
+	var client redis.UniversalClient
+	if len(addrs) == 1 {
+		client = redis.NewClient(&redis.Options{Addr: addrs[0], Password: password, DB: db, MaxRetries: -1})
+	} else {
+		client = redis.NewClusterClient(&redis.ClusterOptions{
+			Addrs: addrs, Password: password, MaxRetries: -1,
+			NewClient: func(options *redis.Options) *redis.Client {
+				// 内层网络重试在 Hook 以内，会抹去第一次未知；每次真实发送必须可见。
+				options.MaxRetries = -1
+				node := redis.NewClient(options)
+				if err := bindMaintenanceRedisNode(ctx, node); err != nil {
+					// NewClient 没有 error 返回值；关闭节点使后续命令确定拒绝，不能交还裸客户端。
+					holdMaintenanceTool(ctx)
+					if closeErr := node.Close(); closeErr != nil {
+						holdMaintenanceTool(ctx)
+					}
+				}
+				return node
+			},
+		})
+	}
+	if err := bindMaintenanceRedis(ctx, client); err != nil {
+		closeErr := client.Close()
+		if closeErr != nil {
+			holdMaintenanceTool(ctx)
+		}
+		return nil, errors.Join(err, closeErr)
+	}
+	return client, nil
+}
+
 // playerDataLockKey 是 data_service 的 per-player 数据锁
 // (go/data_service/internal/routing/router.go::PlayerDataLockKey)。
 // 它与 player:{id}:* 同 slot,所以会被 SCAN 命中 —— 但**绝不能拷**:
@@ -160,6 +198,17 @@ func scanPlayerKeys(ctx context.Context, src redis.UniversalClient, playerID uin
 	seen := map[string]struct{}{}
 	var all []string
 	collect := func(ctx context.Context, c *redis.Client) error {
+		finish, err := enterMaintenanceWork(ctx)
+		if err != nil {
+			return err
+		}
+		returned := false
+		defer func() {
+			if !returned {
+				holdMaintenanceTool(ctx)
+			}
+			finish()
+		}()
 		var cur uint64
 		for {
 			keys, next, err := c.Scan(ctx, cur, pat, 200).Result()
@@ -177,6 +226,7 @@ func scanPlayerKeys(ctx context.Context, src redis.UniversalClient, playerID uin
 			mu.Unlock()
 			cur = next
 			if cur == 0 {
+				returned = true
 				return nil
 			}
 		}
@@ -244,6 +294,9 @@ func copyPlayerStringKeys(ctx context.Context, src, dst redis.UniversalClient, p
 	if dryRun {
 		return len(all), nil
 	}
+	if err := checkMaintenanceTool(ctx); err != nil {
+		return 0, err
+	}
 
 	// Read values from source
 	vals, err := src.MGet(ctx, all...).Result()
@@ -266,6 +319,7 @@ func copyPlayerStringKeys(ctx context.Context, src, dst redis.UniversalClient, p
 		written++
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
+		holdMaintenanceTool(ctx)
 		return 0, fmt.Errorf("pipeline set player %d: %w", playerID, err)
 	}
 	return written, nil

@@ -9,7 +9,7 @@
 # 改这里之前先 grep 上面几个 Dockerfile 的 COPY 源。
 
 # TLS 使用独立 BoringSSL；未消费的 OpenSSL 源码不进入构建上下文。
-# OpenSSL headers come from apt libssl-dev
+# 构建消费者使用独立 BoringSSL 安装头。
 third_party/openssl/
 
 # Windows pre-built libraries — not used in Linux Docker builds

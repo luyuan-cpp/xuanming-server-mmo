@@ -311,6 +311,9 @@ message route_meta
   uint32 id         = 1;
   string generation = 2;  // 1..32 位 hex
   uint32 writable   = 3;  // 0 = 全体映射写者拒写
+  uint64 writer_epoch = 4;
+  uint64 catalog_revision = 5;
+  bytes freeze_run_id = 6;
 }
 
 // route_reconcile:对账表,单行(id=1),对账 leader 的租约、水位与缓存校验时刻。
@@ -529,5 +532,490 @@ message account_role_admission_recovery {
     uint64 expected_required_save_seq = 8;
     bytes maintenance_receipt_id = 9;
     bytes maintenance_request_digest = 10;
+  }
+}
+
+
+// 永久SQL写资格；本段只作正规typed原件及DDL形状守卫，不交通用proto2mysql建表。
+message sql_writer_registry {
+  option(OptionTableName) = "writer_registry";
+  option(OptionPrimaryKey) = "writer_key";
+  bytes writer_key = 1;
+  string generation = 2;
+  bytes instance_id = 3;
+  bytes sql_principal = 4; // VARBINARY(288)，永久UNIQUE；每boot主体不得重用。
+  bytes registration_digest = 5;
+  enum State { STATE_UNKNOWN = 0; ACTIVE = 1; REVOKED = 2; }
+  State state = 6;
+  uint64 registered_ms = 7;
+  bytes retirement_request_id = 8;
+  bytes retirement_digest = 9;
+  uint64 retired_ms = 10;
+}
+message sql_writer_slot {
+  option(OptionTableName) = "writer_slot";
+  option(OptionPrimaryKey) = "writer_key,slot";
+  bytes writer_key = 1;
+  uint32 slot = 2; // 精确0..63；缺片拒绝，不补片。
+  string generation = 3;
+  uint64 writer_epoch = 4;
+  sql_writer_registry.State state = 5;
+  uint32 lock_touch = 6; // 仅0/1同步列，绝无权限含义；8.5.8备选锁写须先真库验证。
+}
+message sql_writer_lifecycle_receipt {
+  option(OptionTableName) = "writer_lifecycle_receipt";
+  option(OptionPrimaryKey) = "request_id";
+  option(OptionIndex) = "kind,request_digest;catalog_revision,request_id";
+  bytes request_id = 1;
+  enum Kind { KIND_UNKNOWN = 0; REGISTER = 1; RETIRE = 2; reserved 3, 4, 5; }
+  Kind kind = 2; // freeze/release/DDL事实统一追加sql_writer_maintenance_receipt，不复制owner。
+  string generation = 3;
+  bytes request_digest = 4;
+  bytes request_proto = 5; // 下列Request的完整确定性编码；只存摘要不足以审计。
+  uint64 previous_epoch = 6;
+  uint64 resulting_epoch = 7;
+  uint64 catalog_revision = 8;
+  message Request {
+    bytes request_id = 1;
+    Kind kind = 2;
+    sql_writer_registry writer = 3;
+    uint64 expected_epoch = 4;
+    uint64 expected_catalog_revision = 5;
+    string authority_schema = 6;
+    repeated string protected_schemas = 7;
+    bytes deployment_digest = 8;
+    bytes maintenance_run_id = 9; // REGISTER仅同run SQL_RELEASED后fresh注册；RETIRE绑定本轮P1根闭合或P3 relay闭合永久事实。普通生命周期为空。
+    string deployment_id = 10; // 必须非空且进入永久请求摘要；init绑定真实PodUID，重放不得换部署。
+    sql_writer_boot_grant.LockPrimitive lock_primitive = 11;
+    bytes lock_qualification_sha256 = 12; // 同REGISTER原件永久绑定，必须精确等boot grant15/16；无I3资格不发grant。
+  }
+}
+// 本地启动授权文件的唯一正规消息；不是SQL表。proto JSON用lowerCamelCase，bytes用标准base64。
+// registrar先固定永久registry/64片；normal启动原子消费privateEmptyDir marker，不持registrar凭据。
+message sql_writer_boot_grant {
+  string format = 1; // 必须SQL_WRITER_BOOT_V1。
+  bytes writer_key = 2;
+  bytes instance_id = 3;
+  string generation = 4;
+  string authority_schema = 5;
+  repeated string protected_schemas = 6;
+  bytes sql_principal = 7;
+  bytes registration_digest = 8;
+  string deployment_id = 9; // Kubernetes Pod UID或本地启动器一次固定bootID。
+  bytes grant_id = 10;
+  uint64 granted_ms = 11;
+  string permission = 12; // runtime严格NORMAL；控制principal不借此文件提升。
+  bytes physical_authority_sha256 = 13; // 独立PD物理身份原件摘要，不能从客户端SQL变量冒充。
+  bytes maintenance_run_id = 14; // 非空只准同run SQL_RELEASED的prepare-only启动；不授权root admission。
+  enum LockPrimitive { LOCK_PRIMITIVE_UNKNOWN = 0; SELECT_ONLY = 1; LOCK_TOUCH = 2; }
+  LockPrimitive lock_primitive = 15;
+  bytes lock_qualification_sha256 = 16; // 必须32字节，操作者真实I3原件SHA；无资格拒启动，不自探针或扩权。
+}
+
+// r3唯一schema候选，不执行生成。正式落地前核即时源/字段号，沿no-unity正规生成。
+// 仅服务端内部；Java用自己的正式源实现语义，不经ContractSync复制。
+message sql_writer_drain_run {
+  option(OptionTableName) = "sql_writer_drain_run";
+  option(OptionPrimaryKey) = "operation_id";
+  bytes operation_id = 1;
+  bytes request_digest = 2;
+  string generation = 3;
+  uint64 attempt_revision = 4;
+  bytes manifest_proto = 5; // 正规typed完整目录原件；摘要不能代替正文。
+  bytes manifest_digest = 6;
+  enum Phase {
+    UNKNOWN = 0;
+    PLAN_FIXED = 1;
+    reserved 2; // r2探索CUTOFF_REQUESTED未落canonical；r3不使用此阶段，保数值不漂。
+    ROOTS_CLOSED = 3;
+    DRAINING = 4;
+    NON_SQL_CLOSED = 5;
+    FREEZE_AUTHORIZED = 6; // DRAIN_READY仅逻辑别名，不增enum。
+    SQL_FROZEN = 7;
+    RELEASE_READY = 8;
+    SQL_RELEASED = 9;
+    PUBLICATION_REOPENED = 10;
+    ABORTED_CLOSED = 11;
+    EMERGENCY_FROZEN_HOLD = 12;
+  }
+  Phase phase = 7;
+  bytes latest_receipt_digest = 8;
+  bytes frozen_request_id = 9;
+  uint64 updated_ms = 10;
+  bytes latest_receipt_id = 11;
+}
+
+message sql_writer_freeze_ticket {
+  option(OptionTableName) = "sql_writer_freeze_ticket";
+  option(OptionPrimaryKey) = "ticket_id";
+  bytes ticket_id = 1;
+  bytes operation_id = 2;
+  uint64 attempt_revision = 3;
+  string generation = 4;
+  bytes manifest_digest = 5;
+  bytes non_sql_receipt_digest = 6; // NORMAL必须同attempt的NON_SQL_CLOSED；EMERGENCY不能伪填成功闭合。
+  bytes freeze_request_id = 7;
+  bytes freeze_request_digest = 8;
+  uint64 not_before_ms = 9;
+  uint64 expires_ms = 10; // 只限制授权新尝试，不自动解开publication/revival fence。
+  enum State {
+    STATE_UNKNOWN = 0;
+    AVAILABLE = 1;
+    CONSUMED = 2;
+    REVOKED = 3;
+  }
+  State state = 11;
+  bytes consumed_receipt_digest = 12;
+  bytes revocation_digest = 13;
+  uint64 updated_ms = 14;
+  enum AuthorizationKind {
+    AUTHORIZATION_UNKNOWN = 0;
+    NORMAL_DRAIN_FREEZE = 1;
+    EMERGENCY_HOLD_FREEZE = 2;
+  }
+  AuthorizationKind authorization_kind = 15;
+  bytes grant_receipt_id = 16;
+  bytes grant_receipt_digest = 17;
+}
+
+// 这是对root既有候选同名message的合并全文，不另创建阶段fact/maintenance_run表。
+// PK和1..10原字段保留；所有阶段/授权/取消/危险事实只INSERT此owner的唯一request_id。
+message sql_writer_maintenance_receipt {
+  option(OptionTableName) = "sql_writer_maintenance_receipt";
+  option(OptionPrimaryKey) = "request_id";
+  bytes request_id = 1;
+  bytes request_digest = 2;
+  bytes run_id = 3;
+  string generation = 4;
+  uint64 before_epoch = 5;
+  uint64 after_epoch = 6;
+  uint64 catalog_revision = 7;
+  enum Phase {
+    PHASE_UNKNOWN = 0;
+    FROZEN = 1;
+    RELEASED = 2;
+  }
+  Phase phase = 8; // 只表示正常最终freeze/release结局；阶段fact/紧急HOLD不得伪写FROZEN。
+  bytes plan_proto = 9;
+  uint64 committed_ms = 10;
+  enum Kind {
+    KIND_UNKNOWN = 0;
+    FREEZE = 1;
+    RELEASE = 2;
+    PHASE_EVENT = 3;
+    ROLE_CLOSED = 4;
+    RELAY_QUIESCED = 5;
+    TICKET_GRANTED = 6;
+    TICKET_REVOKED = 7;
+    EMERGENCY_FREEZE = 8;
+  }
+  Kind kind = 11;
+  sql_writer_drain_run.Phase run_phase = 12;
+  uint64 attempt_revision = 13;
+  bytes prior_receipt_id = 14; // FREEZE固定grant之前已知NON_SQL_CLOSED（emergency为danger），经ticket核实际grant后消费；避免grant/freeze摘要循环。
+  bytes prior_receipt_digest = 15;
+  Evidence evidence = 16;
+  bytes receipt_digest = 17; // 除本字段外全原件确定性编码摘要；只能同request只读认重。
+  message Plan {
+    bytes physical_cluster_identity = 1;
+    string authority_schema = 2;
+    repeated string protected_schemas = 3;
+    repeated bytes active_writer_keys = 4;
+    uint64 before_epoch = 5;
+    uint64 catalog_revision = 6;
+    bytes run_id = 7;
+    bytes prior_freeze_request_id = 8;
+    bytes recovery_audit_digest = 9;
+    repeated IssuerClosure root_issuers = 10; // P0精确预期logical role/boot，不是事后发现。
+    repeated IssuerClosure queue_mutators = 11;
+    repeated KafkaPartitionClosure kafka_partitions = 12; // 全历史topic ID/group/partition/baseline全集。
+    repeated RedisTargetClosure redis_targets = 13; // 实际物理目标/DB/固定与动态前缀目录。
+    repeated SourcePin source_pins = 14;
+    repeated LaunchClosure launchers = 15;
+    // P6冻结维护工具的有限单次boot目录；不是P1/P3已经关闭的旧业务发行者。
+    repeated IssuerClosure maintenance_issuers = 16;
+    repeated ManualConsumerAssignment manual_assignments = 17; // P0实际manual owner配置和物理位置基线。
+  }
+  message LaunchClosure {
+    bytes launcher_id = 1;
+    repeated SourcePin source_pins = 2;
+    bytes permanent_fence_id = 3;
+  }
+  message SourcePin {
+    string absolute_path = 1;
+    bytes sha256 = 2;
+  }
+  message IssuerClosure {
+    bytes issuer_id = 1;
+    bytes instance_id = 2;
+    bytes physical_writer_key = 3; // 同process可兼任逻辑root/relay，P1不能提前retire此key。
+    string logical_role = 4;
+    bytes permanent_revival_fence_id = 5;
+    uint64 accepting_closed_ms = 6;
+    uint64 accepted_settled_ms = 7;
+    bytes accepted_frontier_digest = 8;
+    uint64 unresolved_publications = 9; // 成功ROLE_CLOSED/QUIESCED必须0，不以TTL猜测。
+    repeated SourcePin source_evidence = 10;
+  }
+  message KafkaPartitionClosure {
+    bytes cluster_id = 1;
+    bytes topic_id = 2;
+    string topic_name = 3;
+    string group = 4;
+    uint32 partition = 5;
+    int64 protected_committed_floor = 6;
+    int64 initial_earliest = 7;
+    int64 final_earliest = 8;
+    int64 final_exclusive_end = 9;
+    int64 final_committed = 10;
+  }
+  message RedisKeyClosure {
+    string key = 1;
+    string kind = 2;
+    string topic = 3;
+    string redis_type = 4;
+    int64 pttl_ms = 5;
+    uint64 count = 6;
+    repeated bytes members = 7;
+    repeated bytes values = 8;
+    bytes dump_sha256 = 9;
+  }
+  message RedisTargetClosure {
+    string role = 1;
+    string address = 2;
+    int32 db = 3;
+    bytes server_run_id = 4;
+    bytes maintenance_nonce = 5;
+    repeated uint32 zones = 6;
+    repeated RedisKeyClosure observations = 7;
+    repeated SourcePin scan_source_evidence = 8; // 完整cursor0→0原件，固定64桶+动态前缀等集交叉。
+  }
+  message PublicationEvidence {
+    repeated IssuerClosure logical_roles = 1;
+    bytes issuer_inventory_digest = 2;
+    repeated SourcePin source_evidence = 3; // 实际app IssuerClosure报告原件，不能只抄字段或自pin自身。
+  }
+  message NonSqlClosureEvidence {
+    repeated IssuerClosure queue_mutators = 1;
+    repeated KafkaPartitionClosure kafka_partitions = 2;
+    repeated RedisTargetClosure redis_targets = 3;
+    bytes root_closed_receipt_id = 4;
+    bytes root_closed_receipt_digest = 5;
+    bytes relay_quiesced_receipt_id = 6;
+    bytes relay_quiesced_receipt_digest = 7;
+    bytes historical_inventory_digest = 8;
+    uint64 observed_start_ms = 9;
+    uint64 observed_end_ms = 10;
+    repeated SourcePin source_evidence = 11;
+    repeated ManualConsumerEvidence manual_consumers = 12;
+  }
+  message TicketEvidence {
+    bytes ticket_id = 1;
+    bytes bound_request_id = 2;
+    bytes bound_request_digest = 3;
+    bytes authority_operation_id = 4;
+    bytes ticket_request_digest = 5; // ticket原请求确定性SHA：清SQL-owned grant/updated/consumed/revocation字段；时间窗必须被授权请求绑定。
+  }
+  message EmergencyEvidence {
+    string reason = 1;
+    bytes danger_receipt_id = 2;
+    bytes danger_receipt_digest = 3;
+    repeated SourcePin source_evidence = 4;
+    TicketEvidence authorization = 5; // 只在紧急grant绑定完整ticket请求；freeze用SQL ticket原freeze_request_id/digest，避免摘要自引用。
+  }
+  // 解冻前原件独立于不可变P0计划；不回填Plan里的历史before_epoch/原freeze字段。
+  message MergeRecoveryAudit {
+    bytes audit_instance_id = 1; // 只读审核进程本次nonce，不是可复活的MAINTENANCE身份。
+    bytes run_id = 2;
+    string generation = 3;
+    uint64 attempt_revision = 4;
+    bytes plan_digest = 5;
+    bytes original_freeze_receipt_id = 6;
+    bytes original_freeze_receipt_digest = 7;
+    PublicationEvidence maintenance_publication = 8; // P0维护boot全集的实际永久closure及文件pins。
+    SourcePin merge_manifest = 9; // 原mergeManifest JSON原始字节摘要；审核前后重pin。
+    string merge_run_id = 10;
+    uint32 source_zone = 11;
+    uint32 target_zone = 12;
+    bool verify_merged = 13; // P7必须true。
+    uint64 observed_start_ms = 14;
+    uint64 observed_end_ms = 15;
+    repeated MergeRecoveryCheck checks = 16;
+    repeated SourcePin audit_source_pins = 17; // 实际auditor/查询实现来源，必须在P0 source_pins全集。
+  }
+  message MergeRecoveryCheck {
+    enum Kind { KIND_UNSPECIFIED = 0; OBSERVATION = 1; RULE = 2; }
+    enum Status { STATUS_UNSPECIFIED = 0; COMPLETE = 1; INCOMPLETE = 2; }
+    string name = 1;
+    int64 source_count = 2;
+    int64 target_count = 3;
+    string unique_scope = 4;
+    int64 conflict_count = 5;
+    string severity = 6; // 原runAuditMode原样info/warn/block；P7只放info。
+    Status status = 7;
+    string notes = 8; // 原始结论与读取错误，不以notes代替结构化status。
+    repeated SourcePin query_source_pins = 9;
+    Kind kind = 10; // player.name(global)仅RULE，不能冒称实际查询或抵扣缺失OBSERVATION。
+  }
+  
+  // 既有route_tool audit -frozen-recovery的正式只读P7原件；不以MAINTENANCE闭合代替数据审核。
+  message RouteRecoveryAudit {
+    bytes audit_instance_id = 1;
+    bytes run_id = 2;
+    string generation = 3;
+    uint64 attempt_revision = 4;
+    bytes plan_digest = 5;
+    bytes original_freeze_receipt_id = 6;
+    bytes original_freeze_receipt_digest = 7;
+    PublicationEvidence maintenance_publication = 8;
+    string authority_schema = 9;
+    RedisTargetClosure mapping_target = 10; // 同P0具名物理实例；审计前后实际核INFO与nonce。
+    uint64 observed_start_ms = 11;
+    uint64 observed_end_ms = 12;
+    RouteRecoveryStats stats = 13;
+    bytes ready_marker_raw = 14; // 实际只读原值，按placement正式契约验证完整缓存身份。
+    bytes watermark_raw = 15; // 缺失为空；不能由命令行手填水位。
+    bytes info_server_raw = 16;
+    bytes info_replication_raw = 17;
+    uint64 route_watermark_floor_ms = 18;
+    repeated SourcePin audit_source_pins = 19; // 实际auditor和查询来源，属于P0 source_pins。
+  }
+  message RouteRecoveryStats {
+    uint64 db_rows = 1;
+    uint64 redis_players = 2;
+    uint64 db_only_unpublished = 3;
+    uint64 missing_in_redis = 4;
+    uint64 missing_in_db = 5;
+    uint64 value_mismatch = 6;
+    uint64 redis_malformed = 7;
+    uint64 db_invalid = 8;
+    uint64 redis_rev_ahead = 9;
+    uint64 redis_rev_behind = 10;
+    uint64 merged_into_missing_in_redis = 11;
+    uint64 merged_into_missing_in_db = 12;
+    uint64 merged_into_mismatch = 13;
+    uint64 redis_fences_active = 14;
+    uint64 transient_cleared = 15;
+    bool frozen_recovery = 16;
+    bool require_map_rev = 17;
+    bool completed = 18; // 仅实际Audit完整成功且资源关闭成功后填写。
+  }
+  message ReleaseReadiness {
+    bytes original_freeze_receipt_id = 1;
+    bytes original_freeze_receipt_digest = 2;
+    repeated SourcePin recovery_audit = 3;
+    bytes non_sql_closed_receipt_id = 4;
+    bytes non_sql_closed_receipt_digest = 5;
+    uint64 route_watermark_floor_ms = 6; // 仅R有reconcile时由正式路由审核原件绑定，同释放事务GREATEST推进；J必须0。
+    // 同P0维护工具全集逐个永久关闭、真实SQL/Redis/回调join，并pin实际应用报告。
+    PublicationEvidence maintenance_publication = 7;
+  }
+  // 实际consumer-group代次原件；P8按group聚合各boot的assignment，不能要求单副本独占全组。
+  message ConsumerGroupReadiness {
+    bytes operation_id = 1;
+    bytes manifest_digest = 2;
+    bytes issuer_id = 3;
+    bytes instance_id = 4;
+    string group = 5;
+    int32 generation_id = 6;
+    string member_id = 7;
+    repeated KafkaPartitionClosure expected_partitions = 8; // 本consumer配置group/topics在P0中的完整目录。
+    // 实际Generation.Assignments子集；final_committed是已确认next offset，final_earliest/end来自真实leader。
+    repeated KafkaPartitionClosure assigned_partitions = 9;
+  }
+  // 手动assign不加入group、不提交broker offset；其本机位置与目标boot单独证明。
+  message ManualConsumerAssignment {
+    bytes issuer_id = 1;
+    bytes instance_id = 2;
+    string consumer_id = 3;
+    bytes cluster_id = 4;
+    bytes topic_id = 5;
+    string topic_name = 6;
+    uint32 partition_count = 7;
+    uint32 partition = 8;
+    uint32 target_node_id = 9;
+    bytes target_instance_id = 10;
+    uint64 assignment_revision = 11; // 本机owner修订，不是Kafka group generation。
+    int64 start_offset = 12; // 实际assign的绝对offset，禁止OFFSET_END占位。
+    int64 position = 13; // native实际next position。
+    int64 earliest = 14;
+    int64 exclusive_end = 15;
+    uint64 observed_ms = 16;
+  }
+  message ManualConsumerEvidence {
+    bytes operation_id = 1;
+    bytes manifest_digest = 2; // P0基线为空以免Plan摘要自引用；P3/P8绑定原manifest。
+    repeated ManualConsumerAssignment assignments = 3;
+    bool accepting_closed = 4; // P3永久停收；P8暂停fetch等待同owner开放。
+    bool callbacks_joined = 5; // P3包括poller退出和loop callback返回；P8无已接收工作。
+    uint64 accepted = 6;
+    uint64 settled = 7;
+    uint64 unresolved_publications = 8;
+    repeated SourcePin source_pins = 9;
+  }
+  message ConsumerReadiness {
+    repeated ConsumerGroupReadiness groups = 1; // 一个boot全部配置消费者的实际报告；不能省略失败owner。
+    repeated ManualConsumerEvidence manual_assignments = 2;
+  }
+  message IssuerReadiness {
+    bytes issuer_id = 1;
+    bytes instance_id = 2;
+    bytes physical_writer_key = 3;
+    string logical_role = 4;
+    bytes registration_receipt_id = 5;
+    bytes registration_receipt_digest = 6;
+    uint64 prepared_closed_ms = 7;
+    bytes consumer_ready_frontier_digest = 8;
+    repeated SourcePin source_pins = 9;
+  }
+  // source_open_acks的每个SourcePin指向此正式protojson；准备就绪不是实际开放ACK。
+  message SourceOpenAck {
+    bytes issuer_id = 1;
+    bytes instance_id = 2;
+    bytes physical_writer_key = 3;
+    string logical_role = 4;
+    bytes registration_receipt_id = 5;
+    bytes registration_receipt_digest = 6;
+    bytes operation_id = 7;
+    bytes manifest_digest = 8;
+    uint64 opened_ms = 9;
+    bytes open_request_id = 10;
+    bytes accepted_frontier_digest = 11;
+    repeated SourcePin source_pins = 12;
+  }
+  message PublicationReadiness {
+    bytes release_receipt_id = 1;
+    bytes release_receipt_digest = 2;
+    repeated IssuerReadiness prepared_boots = 3;
+    repeated SourcePin source_open_acks = 4; // 外部实际幂等open后的ACK原件，不能以prepared代已开。
+  }
+  message Evidence {
+    bytes operation_id = 1;
+    bytes manifest_digest = 2;
+    oneof detail {
+      PublicationEvidence publication = 10;
+      NonSqlClosureEvidence non_sql_closure = 11;
+      TicketEvidence ticket = 12;
+      EmergencyEvidence emergency = 13;
+      ReleaseReadiness release_readiness = 14;
+      PublicationReadiness publication_readiness = 15;
+    }
+  }
+}
+
+// init受限有限授权roster；每entry的身份/主体全预固定，不铸新UUID或复制runtime秘密进grant。
+message sql_writer_boot_roster {
+  string format = 1; // SQL_WRITER_BOOT_ROSTER_V1。
+  repeated Entry entries = 2; // 至多现有issuer预算1024，duplicate key/instance/principal/request拒绝。
+  message Entry {
+    sql_writer_lifecycle_receipt.Request request = 1;
+    string runtime_config_path = 2; // 只在受限init input-root内解析，normal只挂选中副本。
+    bytes runtime_config_sha256 = 3;
+    repeated RuntimeEnvironment runtime_environment = 4; // 仅固定SQL环境变量白名单；原件只存私有文件路径/SHA，不存秘密值。
+  }
+  message RuntimeEnvironment {
+    string name = 1;
+    string value_path = 2;
+    bytes value_sha256 = 3;
   }
 }

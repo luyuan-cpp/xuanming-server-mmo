@@ -416,8 +416,8 @@ func TestEtcYamlPassesValidate(t *testing.T) {
 	if c.DataServiceRpc.Timeout != 2000 {
 		t.Errorf("DataServiceRpc.Timeout = %d,期望 2000", c.DataServiceRpc.Timeout)
 	}
-	if !c.ShouldAutoMigrate() {
-		t.Error("dev 档 etc/guild.yaml 应当开启 Schema.AutoMigrate")
+	if c.ShouldAutoMigrate() {
+		t.Error("dev档etc/guild.yaml也应关闭Schema.AutoMigrate")
 	}
 	if got := c.RequestBudget(); got != 3500*time.Millisecond {
 		t.Errorf("RequestBudget = %v,期望 3500ms", got)
@@ -1066,8 +1066,8 @@ func TestEtcYamlTrialBlock(t *testing.T) {
 
 func TestShouldAutoMigrateDefaults(t *testing.T) {
 	var c Config
-	if !c.ShouldAutoMigrate() {
-		t.Error("没写 Schema 段时应当建表(dev 默认)")
+	if c.ShouldAutoMigrate() {
+		t.Error("没写Schema段时应默认只读核对")
 	}
 	no := false
 	c.Schema.AutoMigrate = &no

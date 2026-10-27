@@ -455,6 +455,9 @@ func routePublishRetryBackoff() time.Duration {
 //
 // 每次 Pipelined 只取一条连接,EVAL / SET 与 WAITAOF 在同一条连接上(go-redis 自身的 MaxRetries 也是整条 pipeline 换连接重发)。
 func (p *routePublisher) durableWrite(ctx context.Context, what string, write func(pipe redis.Pipeliner) func() (bool, error)) error {
+	if err := checkMaintenanceTool(ctx); err != nil {
+		return err
+	}
 	deadline, hasDeadline := ctx.Deadline()
 	var lastErr error
 	for attempt := 1; attempt <= routePublishAttempts; attempt++ {
@@ -472,13 +475,21 @@ func (p *routePublisher) durableWrite(ctx context.Context, what string, write fu
 		var check func() (bool, error)
 		var wait *redis.Cmd
 		// pipeline 的返回值只是第一条失败命令的错误;逐条命令的结果才是判据。
-		_, _ = p.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		_, pipelineErr := p.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 			check = write(pipe)
 			wait = pipe.Do(ctx, "WAITAOF", p.dur.NumLocal, p.dur.NumReplicas, waitMs)
 			return nil
 		})
+		if pipelineErr != nil {
+			holdMaintenanceTool(ctx)
+		}
+		if check == nil || wait == nil {
+			holdMaintenanceTool(ctx)
+			return errors.Join(fmt.Errorf("%s: pipeline did not construct its write/WAITAOF result", what), pipelineErr)
+		}
 		retry, err := check()
 		if err != nil {
+			holdMaintenanceTool(ctx)
 			if !retry {
 				return fmt.Errorf("%s: %w", what, err)
 			}
@@ -487,6 +498,7 @@ func (p *routePublisher) durableWrite(ctx context.Context, what string, write fu
 		}
 		acks, werr := wait.Slice()
 		if werr != nil {
+			holdMaintenanceTool(ctx)
 			if isRouteRedisErrorReply(werr) {
 				return fmt.Errorf("%s: WAITAOF %d %d %d rejected (needs appendonly yes and Redis >= 7.2; not retried): %w",
 					what, p.dur.NumLocal, p.dur.NumReplicas, waitMs, werr)
@@ -495,11 +507,15 @@ func (p *routePublisher) durableWrite(ctx context.Context, what string, write fu
 			continue
 		}
 		if aerr := checkRouteWaitAOFReply(acks, p.dur.NumLocal, p.dur.NumReplicas); aerr != nil {
+			holdMaintenanceTool(ctx)
 			if errors.Is(aerr, errUnexpectedRouteWaitAOFReply) {
 				return fmt.Errorf("%s: %w", what, aerr)
 			}
 			lastErr = aerr
 			continue
+		}
+		if pipelineErr != nil {
+			return fmt.Errorf("%s: %w", what, pipelineErr)
 		}
 		return nil
 	}
@@ -828,12 +844,17 @@ func (p *routePublisher) deleteMergedIntoMirror(ctx context.Context, src uint32,
 }
 
 func (p *routePublisher) compareAndDelete(ctx context.Context, key, value string) (bool, error) {
+	if err := checkMaintenanceTool(ctx); err != nil {
+		return false, err
+	}
 	v, err := p.rdb.Eval(ctx, routeCompareAndDeleteScript, []string{key}, value).Result()
 	if err != nil {
+		holdMaintenanceTool(ctx)
 		return false, fmt.Errorf("compare-and-delete %s: %w", key, err)
 	}
 	n, ok := v.(int64)
 	if !ok || (n != 0 && n != 1) {
+		holdMaintenanceTool(ctx)
 		return false, fmt.Errorf("%w: compare-and-delete %s replied %T %v", errUnexpectedRouteScriptReply, key, v, v)
 	}
 	return n == 1, nil

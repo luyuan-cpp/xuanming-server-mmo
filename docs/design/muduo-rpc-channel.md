@@ -548,11 +548,17 @@ C++ 节点没有 Prometheus 出口(`dirty_save_stats.h:25-30`),沿用"relaxed �
 
 工作目录 `D:\luyuan\xuanming-server-mmo-cpp`,PowerShell,证据放仓库外 `$ev = "$env:TEMP\codex-rpc-channel-<ts>"`。
 
-0. 前置与基线:`git status --short > $ev\status-before.txt`;`Test-Path` 检查 `third_party\boost\boost\any.hpp`、`third_party\grpc\install_vs2026_dbg\lib`、
-   googletest 头文件,任一缺失就停下报告(不装工具、不跑 b2,§10.2);`Get-Process MSBuild,cl` 必须为空;`dev_tools.ps1 -Command dev-stop` 释放 bin。
-1. 只在改了 proto 的批次:`pwsh -File tools\scripts\dev_tools.ps1 -Command proto-gen-build`;把 `proto_gen.yaml` 的 `enable_unity_client` 改成 false 另存到 `$ev`;
-   `proto-gen-run -UseBinary -ConfigPath <副本>`。通过标准:`rpc_message.pb.h` 有 `kIdFieldNumber = 6`;`message_id.txt` 与 `kMaxRpcMethodCount = 253` 不变;
-   `git -C ..\mmorpg-client status` 不变;新增 diff 只有本批预期的生成物。随后 robot 下 `go mod vendor`;`$env:GOTOOLCHAIN='local'`,`go\proto` 下 `go build ./...`,robot 下 `go build -mod=vendor ./...`。不要跑 `go\build.bat`(只做 goctl,末尾还有 pause)。
+0. 前置与基线:`git status --short > $ev\status-before.txt`;`Test-Path` 检查 `third_party\boost\boost\any.hpp`、
+   独立 `third_party\protobuf\install_vs2026_dbg\bin\protoc.exe` 与同目录 SDK 的 `lib\libprotobufd.lib`、
+   `third_party\googletest\install_vs2026_dbg\include\gtest\gtest.h`、`third_party\boringssl\install_vs2026_dbg\lib\crypto.lib`。
+   2026-10-26 起按独立依赖检查，Abseil 与 utf8 库由 Protobuf 安装前缀提供；不再要求官方 gRPC SDK 或 C++ 桩生成插件。
+   任一缺失就停下报告(不装工具、不跑 b2,§10.2);确认共享构建时段已交还，`Get-Process MSBuild,cl` 必须为空;`dev_tools.ps1 -Command dev-stop` 释放 bin。
+1. 只在改了 proto 的批次:`pwsh -File tools\scripts\dev_tools.ps1 -Command proto-gen-build`，再执行
+   `pwsh -File tools\scripts\dev_tools.ps1 -Command proto-gen-run -UseBinary -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。
+   需要手工调用 protoc 时，仅在本次子进程 PATH 前置独立 Protobuf 的 `bin`，版本应为 `libprotoc 35.1`。
+   通过标准:`rpc_message.pb.h` 有 `kIdFieldNumber = 6`;消息号及总数与本次输入基线一致，不用早期固定总数替代当前基线；
+   新增 diff 只有本批预期的服务端生成物，未获客户端授权时不读取或修改独立客户端。随后 robot 下 `go mod vendor`;
+   `$env:GOTOOLCHAIN='local'`,`go\proto` 下 `go build ./...`,robot 下 `go build -mod=vendor ./...`。不要跑 `go\build.bat`(只做 goctl,末尾还有 pause)。
 2. 库:严格串行 `/m:1 /p:Configuration=Debug /p:Platform=x64`,按 proto → rpc → proto_helpers → config → infra → session → thread_context → grpc_client → core → table → modules →
    services\battle → services\scene → services\gate,任一失败即停,日志逐个落到 `$ev`。`RpcClient` 全在头文件内联,core、服务库、节点、测试必须在同一份头文件状态下重编。
 3. 节点:gate、scene 必编;battle 的 `boost/any.hpp` C1083 是既有阻塞,单列,不算到本改动头上。

@@ -224,7 +224,8 @@ local function matches(v, rec)
 	return redis.sha1hex(v) == string.sub(rec, sep + 1)
 end
 local rec = redis.call('GET', KEYS[1])
-if not rec or rec == 'resolved' then
+if not rec then return -1 end -- 防重记录缺失不能证明原命令未执行。
+if rec == 'resolved' then
 	return 0
 end
 local t = redis.call('TYPE', KEYS[3]).ok
@@ -365,12 +366,8 @@ func (o *retryOwnership) resolveUnresolvedClaims(ctx context.Context) bool {
 	for i, u := range pending {
 		returned, err := o.rc.Eval(ctx, retryClaimResolveScript, []string{u.recordKey, o.processingKey, u.readyKey},
 			retryGuardTTL.Milliseconds()).Int64()
-		if err != nil && isRedisErrorReply(err) {
-			// 确定性拒绝(例如 ready 键类型不对):重试也不会好,不能让它挡住以后每一拍的认领。放弃这一条:
-			// 收据(如果那次认领真的执行了)留在本实例 processing,直到停机 release 归还。
-			logx.Errorf("resolve unknown-result retry claim refused by redis; any receipt it claimed stays in this instance's processing list until shutdown release: topic=%s instance=%s ready=%s err=%v",
-				o.topic, o.instanceID, u.readyKey, err)
-			continue
+		if err == nil && returned < 0 {
+			err = errors.New("结果未知认领的原防重记录已缺失，不能以TTL当撤销")
 		}
 		if err != nil {
 			o.mu.Lock()
@@ -419,7 +416,7 @@ func (o *retryOwnership) drainInstance(ctx context.Context, instanceID string, r
 			return moved, false, nil
 		}
 	}
-	return moved, false, nil
+	return moved, false, errors.New("retry processing超过单次归还预算，不能证明已排空")
 }
 
 // drainLegacy 把旧版共享 processing 列表里的收据搬回 ready(一拍有上限)。
@@ -557,6 +554,25 @@ func (o *retryOwnership) release(ctx context.Context) error {
 	moved, _, err := o.drainInstance(ctx, o.instanceID, false)
 	if err != nil {
 		return fmt.Errorf("return retry receipts from %s: %w", o.processingKey, err)
+	}
+	remaining, err := o.rc.LLen(ctx, o.processingKey).Result()
+	if err != nil {
+		return err
+	}
+	if remaining != 0 {
+		return errors.New("retry processing归还后仍有收据")
+	}
+	if _, err = o.rc.ZScore(ctx, o.instancesKey, o.instanceID).Result(); !errors.Is(err, redis.Nil) {
+		if err != nil {
+			return err
+		}
+		return errors.New("retry owner仍在registry")
+	}
+	if _, err = o.rc.HGet(ctx, o.modesKey, o.instanceID).Result(); !errors.Is(err, redis.Nil) {
+		if err != nil {
+			return err
+		}
+		return errors.New("retry owner仍在mode registry")
 	}
 	if moved > 0 {
 		logx.Infof("returned %d unfinished retry receipts to the ready queue on shutdown: topic=%s instance=%s",

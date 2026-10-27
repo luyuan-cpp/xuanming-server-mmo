@@ -154,6 +154,11 @@ public:
 		const std::string ip = ResolveIpv4OrDie(parsed.host);
 
 		muduo_grpc::ChannelOptions options;
+		// 本 owner 仅承载 etcd 注册/发现控制面：Watch 只读，KeepAlive、Lease、KV 只更新 etcd。
+		// 不把长控制流或 best-effort LeaseRevoke 的 UNKNOWN 当成业务 SQL/Kafka/Redis 发布；
+		// 未知仍留在独立账本，Shutdown 的 shutdown_ 门禁、原 channel 析构与全部回调退出必须参加 P3 join。
+		// 此分类由真实 owner 显式注入，通用 channel 不按方法名或 CANCELLED 状态猜测。
+		options.maintenance = muduo_grpc::Channel::ProcessControlMaintenance();
 		options.authority = parsed.host + ":" + std::to_string(parsed.port);
 		options.keepaliveTime = kKeepaliveTime;
 		options.keepaliveTimeout = kKeepaliveTimeout;

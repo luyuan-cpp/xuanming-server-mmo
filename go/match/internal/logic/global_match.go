@@ -22,7 +22,6 @@ import (
 	battlepb "proto/battle"
 	pb "proto/match"
 	"shared/generated/pb/table"
-	"shared/safego"
 	"shared/serviceauth"
 )
 
@@ -217,12 +216,15 @@ func releaseGlobalFinished(ctx context.Context, s *svc.ServiceContext, t *pb.Mat
 }
 
 func runGlobalRound(ctx context.Context, s *svc.ServiceContext) {
+	ctx, cancelRound := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelRound()
 	// 成功开房的state4不在旧Pending集合内，必须独立巡检；不依赖Guild取消或Battle存活。
 	recoverCtx, recoverCancel := context.WithTimeout(ctx, 3*time.Second)
 	var recoverErr error
 	s.GlobalOutcomeRetryMs, s.GlobalOutcomeBattle, recoverErr = s.Authority.RecoverExpiredOutcomes(recoverCtx, s.GlobalOutcomeRetryMs, s.GlobalOutcomeBattle)
 	recoverCancel()
-	if recoverErr != nil && ctx.Err() == nil {
+	if recoverErr != nil {
+		s.HoldRelay(recoverErr)
 		logx.Error("全球匹配到期终局恢复未确认，保留原件等待下轮")
 	}
 	pending, e := s.Authority.Pending(ctx)
@@ -245,6 +247,7 @@ func runGlobalRound(ctx context.Context, s *svc.ServiceContext) {
 	}
 	repairMs, repairPlayer, repairErr := s.Authority.RepairCandidateRegionsThrough(ctx, s.GlobalRegionRepairMs, s.GlobalRegionRepairPlayer, s.GlobalRegionRepairThroughMs, s.GlobalRegionRepairThroughPlayer)
 	if repairErr != nil {
+		s.HoldRelay(repairErr)
 		logx.Error("全球匹配候选投影维护失败")
 		return
 	}
@@ -290,6 +293,7 @@ func runGlobalRound(ctx context.Context, s *svc.ServiceContext) {
 	a := choice.group[0]
 	f := &pb.MatchFormationRecord{BattleId: id, OperationId: uuid.NewString(), PhysicalRegion: choice.region, TargetNodeId: choice.node.NodeId, TargetInstanceId: choice.node.NodeUuid, TargetEndpoint: choice.node.Endpoint, Mode: a.Mode, ConfigId: a.ConfigId, RequeueOnFailure: true}
 	if e = s.Authority.Claim(ctx, f, choice.group); e != nil {
+		s.HoldRelay(e)
 		metrics.ObserveGlobalFlow("claim", "conflict")
 		return
 	}
@@ -299,7 +303,7 @@ func runGlobalRound(ctx context.Context, s *svc.ServiceContext) {
 
 func launchGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 	if s.GlobalGatherSlots == nil {
-		runGlobalFormation(s, f)
+		_ = s.RunRelay(func() error { runGlobalFormation(s, f); return nil })
 		return
 	}
 	select {
@@ -307,7 +311,9 @@ func launchGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 	default:
 		return
 	}
-	safego.Go("match.global.gather", func() { defer func() { <-s.GlobalGatherSlots }(); runGlobalFormation(s, f) })
+	if !s.LaunchRelayTask("match.global.gather", func() { defer func() { <-s.GlobalGatherSlots }(); runGlobalFormation(s, f) }) {
+		<-s.GlobalGatherSlots
+	}
 }
 
 func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
@@ -317,6 +323,9 @@ func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 	var acquireErr error
 	f, acquireErr = s.Authority.AcquireWork(ctx, f.BattleId)
 	if acquireErr != nil {
+		if !errors.Is(acquireErr, authority.ErrWorkLease) && !errors.Is(acquireErr, authority.ErrAwaitingExpiredOutcome) {
+			s.HoldRelay(acquireErr)
+		}
 		return
 	}
 	if f.State == 1 {
@@ -344,7 +353,8 @@ func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 	}
 	conn, e := discovery.DialEndpoint(f.TargetEndpoint)
 	if e != nil {
-		_ = s.Authority.Unknown(ctx, f)
+		s.HoldRelay(errors.New("匹配外部结局 UNKNOWN"))
+		s.HoldRelay(s.Authority.Unknown(ctx, f))
 		return
 	}
 	client := battlepb.NewBattleNodeClient(conn)
@@ -353,23 +363,27 @@ func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 	qcancel()
 	if e != nil || result.State == battlepb.BattleCreationState_BATTLE_CREATION_UNKNOWN {
 		metrics.ObserveGlobalFlow("recover", "unknown")
-		_ = s.Authority.Unknown(ctx, f)
+		s.HoldRelay(errors.New("匹配外部结局 UNKNOWN"))
+		s.HoldRelay(s.Authority.Unknown(ctx, f))
 		return
 	}
 	if result.State == battlepb.BattleCreationState_BATTLE_CREATION_PRESENT {
 		if f.OutcomeProtocolVersion != 1 || result.GetTargetInstanceId() != f.TargetInstanceId {
-			_ = s.Authority.Unknown(ctx, f)
+			s.HoldRelay(errors.New("匹配外部结局 UNKNOWN"))
+			s.HoldRelay(s.Authority.Unknown(ctx, f))
 			return
 		}
 		if e = s.Authority.RecordBattleAdopted(ctx, f, result.TargetInstanceId, result.AdoptedOutcomeProtocolVersion); e != nil {
+			s.HoldRelay(e)
 			return
 		}
 		if result.AdoptedOutcomeProtocolVersion != 1 {
-			_ = s.Authority.Unknown(ctx, f)
+			s.HoldRelay(errors.New("匹配外部结局 UNKNOWN"))
+			s.HoldRelay(s.Authority.Unknown(ctx, f))
 			return
 		}
 		metrics.ObserveGlobalFlow("recover", "present")
-		_ = s.Authority.Finish(ctx, f, true)
+		s.HoldRelay(s.Authority.Finish(ctx, f, true))
 		return
 	}
 	if result.State == battlepb.BattleCreationState_BATTLE_CREATION_ABORTED {
@@ -378,7 +392,8 @@ func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 	}
 	request := &battlepb.CreateBattleRequest{}
 	if proto.Unmarshal(f.CreateRequest, request) != nil {
-		_ = s.Authority.Unknown(ctx, f)
+		s.HoldRelay(errors.New("匹配外部结局 UNKNOWN"))
+		s.HoldRelay(s.Authority.Unknown(ctx, f))
 		return
 	}
 	n, e := s.Authority.Now(ctx)
@@ -388,26 +403,31 @@ func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 	if n < request.AdmitBeforeMs {
 		// 只重放发起前已持久的v1能力原件；不向旧实例补发或追认历史0。
 		if f.OutcomeProtocolVersion != 1 || f.PreflightSupportedVersion != 1 || f.PreflightInstanceId != f.TargetInstanceId || request.OutcomeProtocolVersion != 1 || result.GetTargetInstanceId() != f.TargetInstanceId || result.GetSupportedOutcomeProtocolVersion() != 1 {
-			_ = s.Authority.Unknown(ctx, f)
+			s.HoldRelay(errors.New("匹配外部结局 UNKNOWN"))
+			s.HoldRelay(s.Authority.Unknown(ctx, f))
 			return
 		}
 		if e = createBattle(discovery.NodeEntry{NodeId: f.TargetNodeId, NodeUuid: f.TargetInstanceId, Endpoint: f.TargetEndpoint, PhysicalRegion: f.PhysicalRegion}, request); e == nil {
 			if e = s.Authority.RecordBattleAdopted(ctx, f, f.TargetInstanceId, 1); e == nil {
-				_ = s.Authority.Finish(ctx, f, true)
+				s.HoldRelay(s.Authority.Finish(ctx, f, true))
+			} else {
+				s.HoldRelay(e)
 			}
 			return
 		}
 		var adoption *outcomeAdoptionError
 		if errors.As(e, &adoption) {
-			_ = s.Authority.RecordBattleAdopted(ctx, f, adoption.instance, adoption.version)
-			_ = s.Authority.Unknown(ctx, f)
+			s.HoldRelay(s.Authority.RecordBattleAdopted(ctx, f, adoption.instance, adoption.version))
+			s.HoldRelay(errors.New("匹配外部结局 UNKNOWN"))
+			s.HoldRelay(s.Authority.Unknown(ctx, f))
 			return
 		}
 	}
 	if globalDestroy(s.Authority, f) {
 		globalAbortPrepared(s, f)
 	} else {
-		_ = s.Authority.Unknown(ctx, f)
+		s.HoldRelay(errors.New("匹配外部结局 UNKNOWN"))
+		s.HoldRelay(s.Authority.Unknown(ctx, f))
 	}
 }
 
@@ -554,6 +574,7 @@ func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 		// UNKNOWN等原工作租约/固定deadline巡检收尾，COMPLETE仍等待个人APPLIED。
 		terminalCtx, terminalCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		decision, err := s.Authority.RecoverExpiredOutcome(terminalCtx, f)
+		s.HoldRelay(err)
 		terminalCancel()
 		if err == nil && decision == pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT {
 			cancelPrepared(s, prepared, f.BattleId)
@@ -573,6 +594,7 @@ func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 	// 原先在 globalDestroy 判定时就计 abort/no_create_intent，之后租约变化、CheckWork 或 Finish 失败都没有释放，
 	// 值班会把「尝试」读成「已释放」。
 	if e := s.Authority.Finish(finishCtx, f, false); e != nil {
+		s.HoldRelay(e)
 		metrics.ObserveGlobalFlow("abort", "no_create_intent_unconfirmed")
 		logx.Error("全球匹配中止提交未确认")
 		return

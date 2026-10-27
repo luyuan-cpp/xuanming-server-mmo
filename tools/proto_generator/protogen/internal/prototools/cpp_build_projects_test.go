@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"protogen/logger"
 	"strings"
 	"testing"
+
+	"go.uber.org/zap"
 )
 
 func TestCppBuildRegistrationAddsNewDomainsWithoutDuplicates(t *testing.T) {
@@ -146,6 +149,9 @@ func TestOfficialGrpcRemovalRejectsCustomMetadataAndEscapingPaths(t *testing.T) 
 }
 
 func TestOfficialGrpcFilesAreRemovedOnlyAfterAllManifestsValidate(t *testing.T) {
+	previousLogger := logger.Global
+	logger.Global = zap.NewNop()
+	t.Cleanup(func() { logger.Global = previousLogger })
 	for _, broken := range []bool{false, true} {
 		t.Run(fmt.Sprint(broken), func(t *testing.T) {
 			root := t.TempDir()
@@ -217,7 +223,7 @@ func TestGeneratedDependencyConfigurationUsesIndependentSdkPerConfiguration(t *t
 		t.Run(variant.configuration, func(t *testing.T) {
 			original := `<Project><ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='` + variant.configuration + `'">` +
 				`<ClCompile><AdditionalIncludeDirectories>../../../third_party/grpc/include/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/protobuf/third_party/abseil-cpp/;local/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile>` +
-				`<Link><AdditionalLibraryDirectories>../../../third_party/grpc/install_vs2026_dbg/lib/;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>` +
+				`<Link><AdditionalLibraryDirectories>custom-before/;../../../lib/;../../../third_party/grpc/install_vs2026_dbg/lib/;custom-after/;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>` +
 				`<AdditionalDependencies>grpc++.lib;grpc.lib;gpr.lib;grpc_client.lib;muduo_grpc.lib;libprotobufd.lib;utf8_range.lib;upb_base_lib.lib;custom.lib;%(AdditionalDependencies)</AdditionalDependencies></Link></ItemDefinitionGroup></Project>`
 			got, err := migrateGeneratedDependencyConfiguration(original)
 			if err != nil {
@@ -232,6 +238,10 @@ func TestGeneratedDependencyConfigurationUsesIndependentSdkPerConfiguration(t *t
 				if strings.Contains(got, forbidden) {
 					t.Fatalf("残留官方 SDK 依赖 %s: %s", forbidden, got)
 				}
+			}
+			wantDirectories := "<AdditionalLibraryDirectories>../../../third_party/protobuf/" + variant.prefix + "/lib/;../../../third_party/boringssl/" + variant.prefix + "/lib/;../../../third_party/googletest/" + variant.prefix + "/lib/;custom-before/;../../../lib/;custom-after/;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>"
+			if !strings.Contains(got, wantDirectories) {
+				t.Fatalf("SDK 搜索目录必须前置，其他目录的相对顺序不变: %s", got)
 			}
 			again, err := migrateGeneratedDependencyConfiguration(got)
 			if err != nil || again != got {

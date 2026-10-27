@@ -20,6 +20,8 @@ import (
 	"data_service/internal/store"
 	"data_service/internal/store/storetest"
 
+	pb "proto/common/database"
+	"shared/drainproof"
 	"shared/placement"
 
 	"github.com/alicebob/miniredis/v2"
@@ -27,6 +29,17 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 )
+
+// SQL控制链使用真实owned fixture；miniredis数据只验证工具业务逻辑，不代表真实外部队列排空。
+func toolMaintenanceStore(t *testing.T, db *storetest.DB, receipt *pb.SqlWriterMaintenanceReceipt) *store.RouteStore {
+	t.Helper()
+	cfg, err := db.MaintenanceCfg(context.Background())
+	require.NoError(t, err)
+	st, err := store.NewRouteStore(cfg, store.RouteStoreOptions{FenceShards: placement.DefaultRouteFenceShards, Writer: store.NewRouteWriterID("route_tool_it", "localhost"), MaintenanceFreeze: receipt})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = st.Close() })
+	return st
+}
 
 func TestRouteToolImportThenAuditOnRealStore(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
@@ -169,13 +182,19 @@ func TestReconcileFromCache_RealDBEndToEnd(t *testing.T) {
 
 	freezeCtx, cancel := context.WithTimeout(ctx, store.RouteFreezeTimeoutMin)
 	defer cancel()
-	_, err = st.FreezeRouteWriters(freezeCtx)
+	frozenReceipt, err := db.Freeze(freezeCtx)
 	require.NoError(t, err)
+	require.NoError(t, st.Close())
+	st = toolMaintenanceStore(t, db, frozenReceipt)
 
 	repair := func(dryRun bool) RepairReport {
 		t.Helper()
 		var out, errOut bytes.Buffer
-		rep, err := ReconcileFromCache(ctx, rd, st, RepairOptions{DryRun: dryRun, Batch: 2, MaxReport: 100, Stdout: &out, Stderr: &errOut})
+		// 此会话只收口本用例的同步SQL；miniredis不是全CLI排空证据，也不输出MAINTENANCE closure。
+		work := drainproof.New()
+		rep, err := ReconcileFromCache(ctx, rd, st, RepairOptions{Catalog: db.Fixture().Catalog, FrozenReceipt: frozenReceipt, Maintenance: work, DryRun: dryRun, Batch: 2, MaxReport: 100, Stdout: &out, Stderr: &errOut})
+		work.CloseAdmission()
+		require.NoError(t, work.Wait(ctx))
 		require.Equal(t, ExitClean, RepairExitCode(rep, err), "stdout=%s stderr=%s", out.String(), errOut.String())
 		return rep
 	}
@@ -198,8 +217,11 @@ func TestReconcileFromCache_RealDBEndToEnd(t *testing.T) {
 	_, code = auditOnce(false)
 	assert.Equal(t, ExitAttention, code, "默认口径下孤儿行仍算差异")
 
+	ticket, request, err := db.PrepareRelease(ctx, 0)
+	require.NoError(t, err)
 	var uout, uerr bytes.Buffer
 	urep, err := Unfreeze(ctx, rd, st, UnfreezeOptions{
+		Catalog: db.Fixture().Catalog, TicketID: ticket, Request: request,
 		CacheUnverifiedAcknowledged: true,
 		Timeout:                     store.RouteFreezeTimeoutMin,
 		Identity:                    func(context.Context) (RedisIdentity, error) { return RedisIdentity{}, nil },
@@ -208,7 +230,11 @@ func TestReconcileFromCache_RealDBEndToEnd(t *testing.T) {
 	})
 	require.Equal(t, ExitClean, UnfreezeExitCode(urep, err), uerr.String())
 	assert.True(t, urep.Changed)
-	res, err := st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 9199, HomeZone: 1})
+	require.NoError(t, db.ReopenAfterRelease(ctx))
+	normal, err := store.NewRouteStore(db.Cfg, store.RouteStoreOptions{FenceShards: placement.DefaultRouteFenceShards, Writer: store.NewRouteWriterID("route_tool_it", "localhost")})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = normal.Close() })
+	res, err := normal.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 9199, HomeZone: 1})
 	require.NoError(t, err)
 	assert.Equal(t, store.RouteRegisterInserted, res.Outcome, "解冻之后 W1 恢复")
 }
@@ -237,11 +263,16 @@ func TestUnfreeze_RealDBRaisesWatermarkToKey(t *testing.T) {
 
 	freezeCtx, cancel := context.WithTimeout(ctx, store.RouteFreezeTimeoutMin)
 	defer cancel()
-	_, err = st.FreezeRouteWriters(freezeCtx)
+	frozenReceipt, err := db.Freeze(freezeCtx)
 	require.NoError(t, err)
+	require.NoError(t, st.Close())
+	st = toolMaintenanceStore(t, db, frozenReceipt)
 
+	ticket, request, err := db.PrepareRelease(ctx, keyWm)
+	require.NoError(t, err)
 	var out, errOut bytes.Buffer
 	rep, err := Unfreeze(ctx, rd, st, UnfreezeOptions{
+		Catalog: db.Fixture().Catalog, TicketID: ticket, Request: request,
 		CacheUnverifiedAcknowledged: true,
 		Timeout:                     store.RouteFreezeTimeoutMin,
 		Identity:                    func(context.Context) (RedisIdentity, error) { return RedisIdentity{}, nil },
@@ -259,4 +290,5 @@ func TestUnfreeze_RealDBRaisesWatermarkToKey(t *testing.T) {
 	got, err := mr.Get(placement.RouteWatermarkKey)
 	require.NoError(t, err)
 	assert.Equal(t, key, got)
+	require.NoError(t, db.ReopenAfterRelease(ctx))
 }

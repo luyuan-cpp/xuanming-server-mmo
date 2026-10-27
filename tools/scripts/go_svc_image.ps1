@@ -139,9 +139,8 @@ $DockerCommand = Resolve-ReleaseDockerCommand
 
 # Service catalogue: name → { Dir (in go/), Entry (.go file), ImageName }
 $Catalogue = [ordered]@{
-    guild = @{ Dir = "guild"; Entry = "guild.go"; ImageName = "mmorpg-guild" }
-    mail = @{ Dir = "mail"; Entry = "mail.go"; ImageName = "mmorpg-mail" }
-    rank = @{ Dir = "rank"; Entry = "rank.go"; ImageName = "mmorpg-rank" }
+    # 独立registrar工件：复用data_service模块与既有Dockerfile，ENTRY编译完整cmd包。
+    "writer-authority" = @{ Dir = "data_service"; Entry = "./cmd/writer_authority"; ImageName = "mmorpg-writer-authority" }
     db              = @{ Dir = "db";              Entry = "db.go";                  ImageName = "mmorpg-db" }
     "data-service"  = @{ Dir = "data_service";    Entry = "data_service.go";         ImageName = "mmorpg-data-service" }
     login           = @{ Dir = "login";           Entry = "login.go";               ImageName = "mmorpg-login" }

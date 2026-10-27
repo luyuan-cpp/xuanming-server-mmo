@@ -5,7 +5,7 @@
 //
 // 职责(全服唯一一个 leader,由全局库 route_reconcile 的租约选出):
 //   - 补发「已提交、未发布」的孤儿行(增量推送),Redis 重启 / 切主之后回看修补,Redis 整体丢失之后全量预热;
-//   - 每拍做库回档检测(水位键 M3 + 世代 + 推送时复读确认的 cache_ahead),命中就冻结映射写者(route_meta.writable=0);
+//   - 每拍检测库回档；命中后关闭本 boot 接纳并交独立维护 owner，normal 不修改 writable;
 //   - 维护合服围栏镜像 merge:in_progress:{zone}(以库 zone_merge_fence 为准,双向)与合走标记 merge:merged_into:{src}(只增);
 //   - ArmReadyMarker=true 时在完整预热 / 修补之后挂就绪标记 mapping:route:ready(预热令牌 M2 fencing + 同连接 WAITAOF),
 //     false 时每拍撤掉现存标记(M4);每拍用读方同一段脚本自检并导出 verdict。
@@ -79,6 +79,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -86,6 +87,7 @@ import (
 	"data_service/internal/metrics"
 	"data_service/internal/store"
 
+	"shared/drainproof"
 	"shared/placement"
 	"shared/safego"
 
@@ -320,6 +322,9 @@ var ErrDisabled = errors.New("route reconcile leader is disabled (needs RouteSto
 
 // Deps 是 New 的依赖。Store / Cache / LeaderID / Random 必填;Clock、Observer 为 nil 时用真实时钟与 metrics 包。
 type Deps struct {
+	// OnDanger 必须同步关闭本进程 root/relay 接纳并落真实危险原件；不能在此等待本 worker 自己退出。
+	// 它不持 operator，也不把观察改成已冻结收据；独立维护 owner 负责申请紧急票据。
+	OnDanger func(context.Context, *store.RouteEmergencyError) error
 	Store    Store
 	Cache    Cache
 	LeaderID string
@@ -390,13 +395,20 @@ func optionsFrom(rc config.RouteStoreConfig) options {
 
 // Reconciler 是对账 leader。构造时不开连接、不起 goroutine(单测可以多次构造);Start / Run 才开始工作。
 type Reconciler struct {
-	opts     options
-	st       Store
-	cache    Cache
-	clock    Clock
-	rnd      io.Reader
-	obs      Observer
-	leaderID string
+	onDanger    func(context.Context, *store.RouteEmergencyError) error
+	dangerOnce  sync.Once
+	halted      atomic.Bool
+	started     atomic.Bool
+	stopping    atomic.Bool
+	effects     *drainproof.Session
+	shutdownErr error
+	opts        options
+	st          Store
+	cache       Cache
+	clock       Clock
+	rnd         io.Reader
+	obs         Observer
+	leaderID    string
 
 	// epoch 是本地单调时钟的基准;leaseDeadlineNs = 「本地租约有效至」相对 epoch 的纳秒数(0 = 不持有),发布给任务 goroutine。
 	epoch           time.Time
@@ -467,6 +479,8 @@ func New(rc config.RouteStoreConfig, d Deps) (*Reconciler, error) {
 		return nil, fmt.Errorf("route reconcile: %w", err)
 	}
 	switch {
+	case d.OnDanger == nil:
+		return nil, errors.New("route reconcile 缺少关闭本 boot 接纳与保存危险原件的 owner")
 	case d.Store == nil:
 		return nil, errors.New("route reconcile: the route store is required")
 	case d.Cache == nil:
@@ -482,10 +496,13 @@ func New(rc config.RouteStoreConfig, d Deps) (*Reconciler, error) {
 	if d.Observer == nil {
 		d.Observer = metricsObserver{}
 	}
+	effects := drainproof.New()
 	r := &Reconciler{
+		effects:  effects,
 		opts:     optionsFrom(rc),
-		st:       d.Store,
-		cache:    d.Cache,
+		onDanger: d.OnDanger,
+		st:       &drainStore{Store: d.Store, effects: effects},
+		cache:    &drainCache{Cache: d.Cache, effects: effects},
 		clock:    d.Clock,
 		rnd:      d.Random,
 		obs:      d.Observer,
@@ -507,29 +524,53 @@ func (r *Reconciler) ArmEnabled() bool { return r.opts.arm }
 // 关停顺序(规格 §4.2):data_service.go 把 stop 注册在 Kafka 的 defer 之前(LIFO,在 Kafka flush 之后执行)、等待 ≤ 500ms;
 // 释放租约是 Run 退出路径上的尽力而为(独立 1s 时限,失败不重试,租约 LeaseMs 后自然过期)。整个关停不超过 go-zero proc 的 5.5s。
 func (r *Reconciler) Start(parent context.Context) (stop func(wait time.Duration) bool) {
+	life, cancelLife := context.WithCancel(parent)
+	finish := r.StartWithReport(life)
+	return func(wait time.Duration) bool {
+		cancelLife()
+		ctx, cancel := context.WithTimeout(context.Background(), wait)
+		defer cancel()
+		return finish(ctx) == nil
+	}
+}
+
+// StartWithReport 只在真实 worker 已 join 且无未决结果后成功；超时返回错误，后台任务仍由 owner 保留并等待。
+func (r *Reconciler) StartWithReport(parent context.Context) func(context.Context) error {
+	if !r.started.CompareAndSwap(false, true) {
+		return func(context.Context) error { return errors.New("reconciler 不能重复启动") }
+	}
 	ctx, cancel := context.WithCancel(parent)
 	done := make(chan struct{})
 	safego.Go("data_service.route_reconcile", func() {
 		defer close(done)
+		defer cancel()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				r.shutdownErr = errors.Join(r.shutdownErr, errors.New("reconciler panic，排空结局未知"))
+				if r.effects != nil {
+					r.effects.Hold()
+				}
+			}
+		}()
 		r.Run(ctx)
 	})
-	return func(wait time.Duration) bool {
-		cancel()
+	return func(wait context.Context) error {
+		r.stopping.Store(true)
 		select {
 		case <-done:
-			return true
-		case <-r.clock.After(wait):
-			return false
+			return r.shutdownErr
+		case <-wait.Done():
+			return wait.Err()
 		}
 	}
 }
 
-// Run 是决策循环:每 TickInterval 一拍,直到 ctx 结束。退出时取消在途任务(最多等 taskStopWait)、尽力释放租约、关 Redis 客户端。
+// Run 是唯一决策循环；退出等待真实任务 join。调用者超时仍须保留该 owner，不能宣称排空。
 func (r *Reconciler) Run(ctx context.Context) {
 	defer r.shutdown()
 	logx.Infof("[RouteReconcile] started: leader_id=%s arm_ready_marker=%t lease_ms=%d tick=%s incremental=%s overlap_ms=%d lookback_ms=%d push_batch=%d push_rate=%d/s",
 		r.leaderID, r.opts.arm, r.opts.leaseMs, r.opts.tick, r.opts.incrementalInterval, r.opts.overlapMs, r.opts.lookbackMs, r.opts.pushBatch, r.opts.pushRate)
-	for ctx.Err() == nil {
+	for ctx.Err() == nil && !r.halted.Load() && !r.stopping.Load() {
 		r.tickOnce(ctx)
 		if err := r.clock.Sleep(ctx, r.opts.tick); err != nil {
 			return
@@ -538,15 +579,23 @@ func (r *Reconciler) Run(ctx context.Context) {
 }
 
 func (r *Reconciler) shutdown() {
+	if r.halted.Load() || len(r.pending) != 0 || r.pendingOverflow {
+		r.shutdownErr = errors.Join(r.shutdownErr, errors.New("reconciler 存在危险或历史未决状态"))
+	}
 	if rt := r.running; rt != nil {
-		rt.abort("shutdown")
+		// 正式排空只停新拍，允许原任务以原上下文结束；外部取消仍保留UNKNOWN。
+		if !r.stopping.Load() {
+			rt.abort("shutdown")
+		}
+		var result taskResult
 		if r.syncResult == nil {
-			select {
-			case <-r.taskDone:
-			case <-r.clock.After(taskStopWait):
-				logx.Errorf("[RouteReconcile] shutdown: task %s seq=%d did not stop within %s; leaving it (its pushes are idempotent and lease-checked)",
-					rt.task.phase, rt.task.seq, taskStopWait)
-			}
+			result = <-r.taskDone
+		} else {
+			result = *r.syncResult
+			r.syncResult = nil
+		}
+		if result.err != nil || result.freezeErr != nil || len(result.unresolved) != 0 || result.overflow || !result.complete {
+			r.shutdownErr = errors.Join(r.shutdownErr, errors.New("reconciler 任务已 join，但仍有取消或未决发布结果，不能声明排空"), result.err, result.freezeErr)
 		}
 		r.running = nil
 	}
@@ -556,6 +605,7 @@ func (r *Reconciler) shutdown() {
 		cancel()
 		switch {
 		case err != nil:
+			r.shutdownErr = errors.Join(r.shutdownErr, err)
 			logx.Errorf("[RouteReconcile] shutdown: releasing the lease failed (it expires on its own after %dms): %v", r.opts.leaseMs, err)
 		case !released:
 			logx.Infof("[RouteReconcile] shutdown: the lease was no longer ours")
@@ -568,7 +618,15 @@ func (r *Reconciler) shutdown() {
 	r.obs.Leader(false)
 	r.obs.ClearLeaderObservations()
 	if err := r.cache.Close(); err != nil {
+		r.shutdownErr = errors.Join(r.shutdownErr, err)
 		logx.Errorf("[RouteReconcile] shutdown: close mapping redis client: %v", err)
+	}
+	if r.effects != nil {
+		if r.shutdownErr != nil {
+			r.effects.Hold()
+		}
+		r.effects.CloseAdmission()
+		r.shutdownErr = errors.Join(r.shutdownErr, r.effects.Wait(context.Background()))
 	}
 	logx.Infof("[RouteReconcile] stopped")
 }
@@ -931,6 +989,9 @@ func (r *Reconciler) runTask(ctx context.Context, t task) taskResult {
 
 // gate 在每批之前检查:ctx 没结束、本地租约仍有效(规格 scout「LeaseExpiryMidPrewarmAbortsBeforeNextBatch」)。
 func (run *taskRun) gate(ctx context.Context) error {
+	if run.r.halted.Load() {
+		return errors.New("本 boot 已因路由危险永久停止发布")
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -1143,8 +1204,7 @@ func (run *taskRun) push(ctx context.Context, rows []store.RouteRow) error {
 	if len(ahead) > unresolvedLogSample {
 		ahead = append(ahead[:unresolvedLogSample], fmt.Sprintf("... %d more", len(ahead)-unresolvedLogSample))
 	}
-	logx.Errorf("[RouteReconcile] %s: CACHE AHEAD of player_route for %s; freezing the route writers (route_meta.writable=0). "+
-		"Recover with route_tool freeze → reconcile-from-cache → audit -frozen-recovery → unfreeze (runbook §9.4)", phase, strings.Join(ahead, ", "))
+	logx.Errorf("[RouteReconcile] %s: 实际缓存版本领先 SQL: %s；关闭本 boot 并请求独立维护 owner 核验", phase, strings.Join(ahead, ", "))
 	run.res.cacheAhead = true
 	// 冻结是 fail-closed 动作,不随任务被取消而回滚(核实意见 A1-2):TiDB 档冻结要等缓存表读租约(至多 FreezeTimeout),这几秒里
 	// 循环可能因令牌被换 / 身份变化 / 排修补 / 降级取消本任务;用任务 ctx 的话冻结事务跟着回滚,结果又被整份丢弃。
@@ -1152,7 +1212,8 @@ func (run *taskRun) push(ctx context.Context, rows []store.RouteRow) error {
 	fr, ferr := r.st.FreezeByLeader(context.WithoutCancel(ctx), r.leaderID, store.RouteFreezeCacheAhead, r.opts.freezeTimeout)
 	run.res.freezeOutcome, run.res.freezeErr = fr.Outcome, ferr
 	if ferr != nil {
-		logx.Errorf("[RouteReconcile] freezing the route writers after cache_ahead failed (the leader loop retries every tick): %v", ferr)
+		r.handleDanger(ctx, ferr)
+		logx.Errorf("[RouteReconcile] 危险观察未形成正式冻结收据，本 boot 保持停止: %v", ferr)
 	}
 	return errCacheAhead
 }
@@ -1669,6 +1730,7 @@ func (r *Reconciler) advance(ctx context.Context, now time.Time, wm watermarkSta
 	if r.cacheAheadPending {
 		fr, err := r.st.FreezeByLeader(ctx, r.leaderID, store.RouteFreezeCacheAhead, r.opts.freezeTimeout)
 		if err != nil {
+			r.handleDanger(ctx, err)
 			logx.Errorf("[RouteReconcile] retrying the cache_ahead freeze failed: %v", err)
 			return metrics.RouteReconcileTickDBError, false
 		}
@@ -1694,6 +1756,7 @@ func (r *Reconciler) advance(ctx context.Context, now time.Time, wm watermarkSta
 		FreezeTimeout:      r.opts.freezeTimeout,
 	})
 	if err != nil {
+		r.handleDanger(ctx, err)
 		logx.Errorf("[RouteReconcile] advance: %v", err)
 		return metrics.RouteReconcileTickDBError, false
 	}
@@ -1722,6 +1785,7 @@ func (r *Reconciler) advance(ctx context.Context, now time.Time, wm watermarkSta
 	if ms.kind == keyValid && ms.m.Generation != res.Generation {
 		fr, err := r.st.FreezeByLeader(ctx, r.leaderID, store.RouteFreezeGenerationMismatch, r.opts.freezeTimeout)
 		if err != nil {
+			r.handleDanger(ctx, err)
 			logx.Errorf("[RouteReconcile] marker generation %s != db generation %s; freezing failed: %v", ms.m.Generation, res.Generation, err)
 			return metrics.RouteReconcileTickDBError, false
 		}
@@ -2339,4 +2403,133 @@ func newWarmToken(rnd io.Reader) (string, error) {
 		return "", fmt.Errorf("read random warm token: %w", err)
 	}
 	return hex.EncodeToString(b[:]), nil
+}
+
+func (r *Reconciler) handleDanger(ctx context.Context, err error) {
+	var danger *store.RouteEmergencyError
+	if !errors.As(err, &danger) {
+		return
+	}
+	r.halted.Store(true)
+	r.dangerOnce.Do(func() {
+		reportCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), r.opts.freezeTimeout)
+		defer cancel()
+		if reportErr := r.onDanger(reportCtx, danger); reportErr != nil {
+			logx.Errorf("[RouteReconcile] 关闭接纳或保存危险原件未确认，保持维护: %v", reportErr)
+		}
+	})
+}
+
+// SettledDigest只在整个worker、派生任务、SQL租约和Redis调用已确定join后可用。
+func (r *Reconciler) SettledDigest(ctx context.Context) ([]byte, error) {
+	if r.effects == nil {
+		return nil, drainproof.ErrHold
+	}
+	return r.effects.SettledDigest(ctx)
+}
+
+// 同一Session跟踪所有有副作用的依赖调用；错误/恐慌永久HOLD，不因后续成功拍清零。
+func trackEffect(ctx context.Context, effects *drainproof.Session, call func() error) (err error) {
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	done, err := effects.Enter()
+	if err != nil {
+		return err
+	}
+	returned := false
+	defer func() {
+		if !returned || err != nil {
+			effects.Hold()
+		}
+		done()
+	}()
+	err = call()
+	returned = true
+	return err
+}
+
+type drainStore struct {
+	Store
+	effects *drainproof.Session
+}
+
+func (s *drainStore) RenewReconcileLease(ctx context.Context, id string, ms uint64) (out store.RouteLease, err error) {
+	err = trackEffect(ctx, s.effects, func() error { var e error; out, e = s.Store.RenewReconcileLease(ctx, id, ms); return e })
+	return
+}
+func (s *drainStore) ReleaseReconcileLease(ctx context.Context, id string) (out bool, err error) {
+	err = trackEffect(ctx, s.effects, func() error { var e error; out, e = s.Store.ReleaseReconcileLease(ctx, id); return e })
+	return
+}
+func (s *drainStore) AdvanceReconcile(ctx context.Context, req store.ReconcileTickRequest) (out store.ReconcileTickResult, err error) {
+	err = trackEffect(ctx, s.effects, func() error { var e error; out, e = s.Store.AdvanceReconcile(ctx, req); return e })
+	return
+}
+func (s *drainStore) FreezeByLeader(ctx context.Context, id string, reason store.RouteFreezeReason, timeout time.Duration) (out store.ReconcileTickResult, err error) {
+	err = trackEffect(ctx, s.effects, func() error { var e error; out, e = s.Store.FreezeByLeader(ctx, id, reason, timeout); return e })
+	return
+}
+
+type drainCache struct {
+	Cache
+	effects *drainproof.Session
+}
+
+func (c *drainCache) SetWarmToken(ctx context.Context, v string) error {
+	return trackEffect(ctx, c.effects, func() error { return c.Cache.SetWarmToken(ctx, v) })
+}
+func (c *drainCache) ArmReady(ctx context.Context, v string, m placement.RouteReadyMarker) (out placement.RouteReadyArmOutcome, err error) {
+	err = trackEffect(ctx, c.effects, func() error { var e error; out, e = c.Cache.ArmReady(ctx, v, m); return e })
+	return
+}
+func (c *drainCache) CompareAndSetReady(ctx context.Context, old, next string) (out bool, err error) {
+	err = trackEffect(ctx, c.effects, func() error { var e error; out, e = c.Cache.CompareAndSetReady(ctx, old, next); return e })
+	return
+}
+func (c *drainCache) CompareAndDeleteReady(ctx context.Context, old string) (out bool, err error) {
+	err = trackEffect(ctx, c.effects, func() error { var e error; out, e = c.Cache.CompareAndDeleteReady(ctx, old); return e })
+	return
+}
+func (c *drainCache) DeleteReadyWrongType(ctx context.Context) error {
+	return trackEffect(ctx, c.effects, func() error { return c.Cache.DeleteReadyWrongType(ctx) })
+}
+func (c *drainCache) DeleteWatermarkWrongType(ctx context.Context) error {
+	return trackEffect(ctx, c.effects, func() error { return c.Cache.DeleteWatermarkWrongType(ctx) })
+}
+func (c *drainCache) AdvanceWatermark(ctx context.Context, prev *string, next string) (out bool, err error) {
+	err = trackEffect(ctx, c.effects, func() error { var e error; out, e = c.Cache.AdvanceWatermark(ctx, prev, next); return e })
+	return
+}
+func (c *drainCache) Push(ctx context.Context, rows []store.RouteRow) (out []PushRowResult, err error) {
+	err = trackEffect(ctx, c.effects, func() error {
+		var e error
+		out, e = c.Cache.Push(ctx, rows)
+		for _, r := range out {
+			if r.Outcome == PushError {
+				c.effects.Hold()
+			}
+		}
+		return e
+	})
+	return
+}
+func (c *drainCache) MirrorMergedInto(ctx context.Context, rows []store.MergedIntoRow) (out MergedIntoMirrorResult, err error) {
+	err = trackEffect(ctx, c.effects, func() error {
+		var e error
+		out, e = c.Cache.MirrorMergedInto(ctx, rows)
+		if out.Errors != 0 {
+			c.effects.Hold()
+		}
+		return e
+	})
+	return
+}
+func (c *drainCache) SetFenceMirror(ctx context.Context, z uint32, v string, e, expires uint64) (out placement.MergeFenceMirrorOutcome, err error) {
+	err = trackEffect(ctx, c.effects, func() error { var fail error; out, fail = c.Cache.SetFenceMirror(ctx, z, v, e, expires); return fail })
+	return
+}
+func (c *drainCache) CompareAndDeleteFenceMirror(ctx context.Context, key, value string) (out bool, err error) {
+	err = trackEffect(ctx, c.effects, func() error { var e error; out, e = c.Cache.CompareAndDeleteFenceMirror(ctx, key, value); return e })
+	return
 }

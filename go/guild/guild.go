@@ -7,8 +7,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net"
 	"os"
+	"shared/authoritysql"
+	"shared/drainproof"
 	"strconv"
 	"strings"
 	"time"
@@ -76,6 +79,11 @@ const economySyncBudget = 2500 * time.Millisecond
 // routeReadyProbeTimeout 是 MergeMarkerRedis.RequireRouteReady=true 时启动探针(一次读脚本)的预算。
 const routeReadyProbeTimeout = 3 * time.Second
 
+var maintenancePlan = flag.String("maintenance-drain-plan", "", "正式 typed 排空 runtime 原件")
+var maintenanceDir = flag.String("maintenance-drain-dir", "", "私有排空原件目录")
+var maintenanceSHA = flag.String("maintenance-drain-sha256", "", "runtime 原文件 SHA256")
+var maintenanceControlDir = flag.String("maintenance-drain-control-dir", os.Getenv("MMORPG_MAINTENANCE_CONTROL_DIR"), "同一 boot 接收排空请求的私有目录")
+
 func main() {
 	flag.Parse()
 	// 版本行直写 stdout,先于读配置与 logx 初始化:进程在配置 / 依赖阶段就崩溃时也已留下"跑的是哪一版"
@@ -95,8 +103,23 @@ func main() {
 		logx.Must(fmt.Errorf("guild global result topic durability: %w", err))
 	}
 
-	svcCtx := svc.NewServiceContext(config.AppConfig)
-	defer svcCtx.Stop()
+	runtime, root, relay, err := serverbase.LoadPublicationRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
+	if err != nil {
+		panic(err)
+	}
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		panic(err)
+	}
+	svcCtx := svc.NewServiceContextWithAdmission(config.AppConfig, writer, root, relay)
+
+	// 主生命周期接管后，只有真实 join 成功才释放外层依赖。
+	ownerReady, shutdownComplete := false, false
+	defer func() {
+		if !ownerReady {
+			svcCtx.Stop()
+		}
+	}()
 
 	// 帮会规则表 / 等级表自洽校验(设计 docs/design/guild-phase2/02-management.md §3.3):
 	// 缺行或数值越界一律拒启,**不降级成警告**。
@@ -122,12 +145,15 @@ func main() {
 	}
 
 	// 表结构不对的实例不能对外服务,也不能注册进 etcd:建表 / 核对放在节点注册之前。
-	if err := ensureStartupSchema(config.AppConfig); err != nil {
+	if err := ensureSchema(context.Background(), svcCtx.DB, config.AppConfig, schemamigrate.Up, schemamigrate.Plan); err != nil {
 		logx.Must(err)
 	}
 
 	// Initialize data repo with singleflight + cache-aside
 	repo := data.NewGuildRepo(svcCtx.RedisClient, svcCtx.DB, config.AppConfig.Cache.DefaultTTL)
+	if err := repo.BindPublication(relay); err != nil {
+		panic(err)
+	}
 	if err := repo.ConfigureRoleAuthority(config.AppConfig.AccountRoleSchema); err != nil {
 		logx.Must(err)
 	}
@@ -139,7 +165,11 @@ func main() {
 		loginPool = 8
 	}
 	loginRedis := redis.NewClient(&redis.Options{Addr: config.AppConfig.LoginRedis.Host, Password: config.AppConfig.LoginRedis.Password, DB: config.AppConfig.LoginRedis.DB, PoolSize: loginPool, MaxActiveConns: loginPool, MaxIdleConns: loginPool, PoolTimeout: time.Second, MaxRetries: -1})
-	defer loginRedis.Close()
+	defer func() {
+		if !ownerReady || shutdownComplete {
+			loginRedis.Close()
+		}
+	}()
 	loginProbe, loginCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	loginErr := loginRedis.Ping(loginProbe).Err()
 	loginCancel()
@@ -163,10 +193,9 @@ func main() {
 	// 全局插入守卫哨兵行(guild_player_state.player_id = 0;data/guild_manage_repo.go 文件头 (d)):
 	// 建帮、审批通过、首次建状态行都在事务内锁它,缺了一律 fail-closed。所以放在建表之后、创建 repo 之后、
 	// 节点注册与任何 goroutine / RPC 启动之前:建不出来的实例既不能对外服务,也不该注册进 etcd。
-	// 幂等:行已在(常态)只是一次普通读,不排在运行中实例持有的锁后面;多实例同时首建时在会话级命名锁下串行
-	// (死锁复核 C1,等锁上限 5s,短于这里的 10s 预算,拿不到锁时复读一次、仍缺才拒启)。
+	// 常驻启动只读核对；哨兵缺失必须先运行独立 Schema -migrate，不在 NORMAL 池补种或取命名锁。
 	guardCtx, guardCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	guardErr := repo.EnsureGlobalInsertGuard(guardCtx, uint64(time.Now().UnixMilli()))
+	guardErr := repo.VerifyGlobalInsertGuard(guardCtx)
 	guardCancel()
 	if guardErr != nil {
 		logx.Must(fmt.Errorf("ensure guild global insert guard row: %w", guardErr))
@@ -188,7 +217,11 @@ func main() {
 	if err != nil {
 		logx.Must(fmt.Errorf("create node: %w", err))
 	}
-	defer n.Close()
+	defer func() {
+		if !ownerReady || shutdownComplete {
+			n.Close()
+		}
+	}()
 
 	if err := n.KeepAlive(); err != nil {
 		logx.Must(fmt.Errorf("keep alive: %w", err))
@@ -215,7 +248,11 @@ func main() {
 	if err != nil {
 		logx.Must(fmt.Errorf("snowflake etcd client: %w", err))
 	}
-	defer etcdCli.Close()
+	defer func() {
+		if !ownerReady || shutdownComplete {
+			etcdCli.Close()
+		}
+	}()
 
 	host_name, err := os.Hostname()
 	if err != nil {
@@ -234,7 +271,11 @@ func main() {
 	if err != nil {
 		logx.Must(fmt.Errorf("snowflake worker id alloc: %w", err))
 	}
-	defer sfHandle.Close()
+	defer func() {
+		if !ownerReady || shutdownComplete {
+			sfHandle.Close()
+		}
+	}()
 	logx.Infof("Guild snowflake %s worker_id=%d (host=%s)", sfHandle.LogFields(), sfHandle.WorkerID, host_name)
 
 	// RPC 级热关停(shared/killswitch):线上某个方法把 DB 打爆时,往 etcd 写一个
@@ -267,7 +308,9 @@ func main() {
 	// 由 IdSegment.FallbackToSnowflake 决定,默认不回退。snowflake 节点本身照旧申领 /
 	// 写水位 / 失租 fence —— 它既是可选回退,也是解码存量 guild_id 的依据。
 	guildIDs := svc.NewGuildIDMinter(config.AppConfig.IdSegment, svcCtx.GuildIDSegment, sf.Generate)
-	svcCtx.WarmGuildIDSegment()
+	if finish, err := root.Enter(); err == nil {
+		func() { defer finish(); svcCtx.WarmGuildIDSegment() }()
+	}
 
 	// ── 帮会经济:资产通道(B5b,docs/design/guild-phase2/05-economy.md §5.29)──
 	// 经济仓储与 outbox Store 无论通道开关都建:升级与两个读接口不经资产通道,关着通道也照常服务;
@@ -314,6 +357,7 @@ func main() {
 		// 必须紧跟建管线、在把 Loop 交给同步投递路径(下面的 EconomyDeps.Loop / ActivityDeps.Loop)与 Start 之前接上
 		// —— Loop.Ledger 是无锁字段。没配 DataServiceRpc 时方法保持 Ledger=nil;开关打开时随后的 CheckWiring 拒启
 		// (docs/design/db-write-fencing-mysql.md §6.6),开关关闭时按 HEAD 口径只是少了离线读账本与自动放弃。
+		assetPipe.Loop.Relay = relay
 		assetPipe.AttachPersistedLedger(svcCtx.DataServiceClient)
 		if err := assetPipe.Loop.CheckWiring(); err != nil {
 			logx.Must(fmt.Errorf("guild asset pipeline wiring: %w", err))
@@ -322,7 +366,9 @@ func main() {
 		// 同样必须在 Start 之前接上。竞选者标识用节点 uuid(每个进程实例唯一,与历练巡检租约的持有者标识同源)。
 		// 自动放弃另需 Loop.Ledger(上一行;没配 DataServiceRpc 时不放弃)与 Loop.Locator(NewAssetPipeline 已接),缺一不跑。
 		assetPipe.AttachMaintenanceLeader(svcCtx.RedisClient, n.Info.NodeUuid)
-		svcCtx.WarmAssetOpIDSegment()
+		if finish, err := relay.Enter(); err == nil {
+			func() { defer finish(); svcCtx.WarmAssetOpIDSegment() }()
+		}
 	} else {
 		// go-zero logx 没有 WARN 级;沿用本文件"降级形态打一条 ERROR"的写法(同 DataServiceRpc 未配置)。
 		logx.Error("Guild: AssetOp.Enabled=false; asset channel disabled: guild donations / shop exchanges all return kGuildAssetPending, " +
@@ -465,26 +511,32 @@ func main() {
 		DialTimeout: logic.ApplicationQuotaBudget, ReadTimeout: logic.ApplicationQuotaBudget,
 		WriteTimeout: logic.ApplicationQuotaBudget, PoolTimeout: logic.ApplicationQuotaBudget,
 	})
-	defer quotaRedis.Close()
+	defer func() {
+		if !ownerReady || shutdownComplete {
+			quotaRedis.Close()
+		}
+	}()
 	applicationQuota, err := logic.NewApplicationQuota(quotaRedis, config.AppConfig.ApplicationQuotaPerMinute)
 	if err != nil {
 		logx.Must(err)
 	}
 	guildLogic := logic.NewGuildLogic(repo, guildIDs, onlineResolver, mergeFence, homeZones,
 		logic.WithApplicationQuota(applicationQuota),
-		logic.WithNotifier(logic.NewGuildNotifier(svcCtx.KafkaWriter, svcCtx.GateCommandBuilder, svcCtx.PlayerLocatorRedisClient)),
+		logic.WithNotifier(logic.NewGuildNotifier(svcCtx.KafkaWriter, svcCtx.GateCommandBuilder, svcCtx.PlayerLocatorRedisClient, relay)),
 		logic.WithApplyPushGate(repo.TryMarkApplyPush),
 		logic.WithPlayerNames(playerNames),
 		logic.WithEconomy(economy),
 		logic.WithActivities(activities),
-		logic.WithSyncBumper(logic.NewGuildSyncBumper(svcCtx.PlayerSyncBumper)))
+		logic.WithSyncBumper(logic.NewGuildSyncBumper(svcCtx.PlayerSyncBumper, relay)))
 
 	// 终结推送回调。必须在重投循环与 gRPC server 启动**之前**赋值:此后只读,不需要同步。
 	// 晚于它们赋值 = 启动初期被循环终结的行不推送,且与读它的 worker 构成数据竞争。
 	assetStore.OnFinalized = guildLogic.OnAssetFinalized
 
 	// Start gRPC server
+	serverRegistered := make(chan struct{})
 	s := zrpc.MustNewServer(config.AppConfig.RpcServerConf, func(grpcServer *grpc.Server) {
+		defer close(serverRegistered)
 		pb.RegisterGuildServiceServer(grpcServer, server.NewGuildServer(guildLogic))
 		// 帮会内部服务(B5d-2a,docs/design/guild-phase2/07-rollback-fail-closed.md §7.4.4):data_service 回档前检查用的只读 RPC。
 		// 方法不进 session.ClientMethods,客户端来源一律 PermissionDenied;拦截器链对它同样生效。
@@ -504,6 +556,7 @@ func main() {
 	if config.AppConfig.MergeMarkerRedis.RequireRouteReady {
 		logic.PrimeRouteReadyMetrics()
 	}
+	s.AddUnaryInterceptors(serverbase.RootAdmission(root))
 	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget(), session.OriginalIdentityInterceptor(loginRedis, repo.CheckOriginalRole))...)
 	defer s.Stop()
 
@@ -521,7 +574,19 @@ func main() {
 		defer assetPipe.Stop()
 	}
 	if config.AppConfig.AssetOp.CleanupEnabled {
-		stopCleanup := startAssetOpCleanup(assetStore, svc.CleanupConfFrom(config.AppConfig.AssetOp))
+		stopCleanup := startAssetOpCleanup(assetStore, svc.CleanupConfFrom(config.AppConfig.AssetOp), root)
+		if err := svcCtx.BindSourceStop(func(ctx context.Context) error {
+			done := make(chan struct{})
+			go func() { stopCleanup(); close(done) }()
+			select {
+			case <-done:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}); err != nil {
+			panic(err)
+		}
 		defer stopCleanup()
 	}
 
@@ -538,10 +603,11 @@ func main() {
 	// 后台两个循环**无条件跑**(不看历练此刻开没开,理由见上面的活动依赖装配)。它们没有外部开关,
 	// 起不来只可能是装配错误,所以拒启。
 	stopTrialBackground, err := guildLogic.StartTrialBackground(logic.TrialBackgroundConf{
-		OwedInterval:  config.AppConfig.Activity.OwedLoopInterval(),
-		SweepInterval: config.AppConfig.Activity.TrialSweepInterval(),
-		ResultOverdue: config.AppConfig.Activity.TrialResultOverdue(),
-		Abandon:       config.AppConfig.Activity.TrialAbandon(),
+		RelayAdmission: relay,
+		OwedInterval:   config.AppConfig.Activity.OwedLoopInterval(),
+		SweepInterval:  config.AppConfig.Activity.TrialSweepInterval(),
+		ResultOverdue:  config.AppConfig.Activity.TrialResultOverdue(),
+		Abandon:        config.AppConfig.Activity.TrialAbandon(),
 		// 巡检租约的持有者标识:节点 uuid 每个进程实例唯一,排障时看 guild:trial:sweep:lease 的值就知道是谁在扫。
 		Owner: n.Info.NodeUuid,
 	})
@@ -553,12 +619,27 @@ func main() {
 	// 结果消费者只看"结果消费是否打开"(TrialResultActive),**不看 MatchRpc 配没配**:运维删掉 MatchRpc 来关历练时,
 	// 关之前已经开打的对局仍要结算。全局模式已在注册前严格核验topic；
 	// 仅显式本地旧MySQL模式保留首次连接失败后后台每30s恢复的兼容行为。
+	stopTrialResults := func() {}
 	if trialResultActive {
-		stopTrialResults, err := startTrialResultConsumer(config.AppConfig, guildLogic)
+		var err error
+		stopTrialResults, err = startTrialResultConsumerWithOwner(config.AppConfig, guildLogic, relay, svcCtx.BindConsumerOwner)
 		if err != nil {
 			logx.Must(fmt.Errorf("guild trial result consumer: %w", err))
 		}
 		defer stopTrialResults()
+	}
+
+	if err := svcCtx.BindRelayOwners(repo, func(closeCtx context.Context) error {
+		done := make(chan struct{})
+		go func() { stopTrialBackground(); stopTrialResults(); close(done) }()
+		select {
+		case <-done:
+		case <-closeCtx.Done():
+			return closeCtx.Err()
+		}
+		return assetPipe.StopAndReport(closeCtx)
+	}); err != nil {
+		panic(err)
 	}
 
 	// Lost() 关闭 = 本进程**确认**不再是这个槽的持有者(slots key 被挂到了别的 uuid 上:
@@ -589,19 +670,138 @@ func main() {
 	})
 
 	logx.Infof("Starting Guild RPC server at %s...", config.AppConfig.ListenOn)
+	controlCtx, cancelControl := context.WithCancel(context.Background())
+	controlDone := make(chan struct{})
+	go func() {
+		defer close(controlDone)
+		if err := serverbase.DriveDrainRuntime(controlCtx, runtime, *maintenanceControlDir, root, relay, svcCtx.BindDrainRuntime, svcCtx.CloseSource, svcCtx.StopAndReport, func(prepareCtx context.Context) (*serverbase.PreparedPublication, error) {
+			select {
+			case <-serverRegistered:
+			case <-prepareCtx.Done():
+				return nil, prepareCtx.Err()
+			}
+			probeHost, probePort, err := splitHostPort(config.AppConfig.ListenOn)
+			if err != nil {
+				return nil, err
+			}
+			if probeHost == "" || probeHost == "0.0.0.0" || probeHost == "::" {
+				probeHost = "127.0.0.1"
+			}
+			address := net.JoinHostPort(probeHost, strconv.FormatUint(uint64(probePort), 10))
+			ticker := time.NewTicker(50 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				connection, err := (&net.Dialer{Timeout: time.Second}).DialContext(prepareCtx, "tcp", address)
+				if err == nil {
+					if err = connection.Close(); err != nil {
+						return nil, err
+					}
+					break
+				}
+				select {
+				case <-prepareCtx.Done():
+					return nil, prepareCtx.Err()
+				case <-ticker.C:
+				}
+			}
+			if root.Pending() != 0 {
+				return nil, drainproof.ErrHold
+			}
+			if trialResultActive {
+				owner := svcCtx.ConsumerOwner
+				if owner == nil {
+					return nil, drainproof.ErrHold
+				}
+				bound := svcCtx.DrainRuntime
+				expected, err := owner.ExpectedPartitions(bound)
+				if err != nil {
+					return nil, err
+				}
+				digest, raw, err := owner.PreparedFrontier(prepareCtx, bound, "SOURCE", expected)
+				if err != nil {
+					return nil, err
+				}
+				return &serverbase.PreparedPublication{Digest: digest, Raw: raw, WithReady: func(openCtx context.Context, commit func() ([]byte, error)) ([]byte, error) {
+					return kafkautil.WithConsumerReadiness(openCtx, raw, []*kafkautil.BoundConsumerGroup{owner}, commit)
+				}}, nil
+			}
+			return &serverbase.PreparedPublication{NoConsumers: true}, nil
+		}); err != nil && controlCtx.Err() == nil {
+			logx.Errorf("guild 排空 HOLD: %v", err)
+		}
+	}()
+	defer func() {
+		root.CloseAdmission()
+		cancelControl()
+		<-controlDone
+		closeCtx, cancelClose := context.WithTimeout(context.Background(), time.Minute)
+		defer cancelClose()
+		if err := svcCtx.StopAndReport(closeCtx); err != nil {
+			logx.Errorf("guild 退出保留资源，排空 HOLD: %v", err)
+			return
+		}
+		shutdownComplete = true
+	}()
+	ownerReady = true
 	s.Start()
 }
 
 // startAssetOpCleanup 起终态资产指令 / 过期计数行的清理 goroutine(guild.asset_op_cleanup,§5.22),
 // 返回的 stop 取消它并**等它退出**:清理语句跑在 MySQL 上,必须在 svcCtx.Stop 关库之前停下。
 // 与资产通道开关独立:通道关着时历史终态行照样要清。
-func startAssetOpCleanup(store *data.GuildAssetStore, c data.CleanupConf) (stop func()) {
+func startAssetOpCleanup(store *data.GuildAssetStore, c data.CleanupConf, admissions ...*drainproof.Session) (stop func()) {
+	var root *drainproof.Session
+	if len(admissions) == 1 {
+		root = admissions[0]
+	}
+	if len(admissions) > 1 {
+		panic("cleanup SOURCE 重复绑定")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	safego.Go("guild.asset_op_cleanup", func() {
 		// close 放在 defer 里:safego 兜住 panic 时它照样执行,stop 不会永远等下去。
 		defer close(done)
-		store.RunCleanup(ctx, c)
+		if root == nil {
+			store.RunCleanup(ctx, c)
+			return
+		}
+		if c.Interval <= 0 {
+			root.Hold()
+			return
+		}
+		timer := time.NewTimer(time.Duration(rand.Int64N(int64(c.Interval))))
+		defer timer.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+			}
+			if ctx.Err() != nil {
+				return
+			}
+			safego.Run("guild.asset_op_cleanup", func() {
+				finish, err := root.Enter()
+				if err != nil {
+					return
+				}
+				defer finish()
+				defer func() {
+					if recovered := recover(); recovered != nil {
+						root.Hold()
+						panic(recovered)
+					}
+				}()
+				work, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+				defer cancel()
+				if err := store.CleanupOnce(work, time.Now(), c); err != nil {
+					root.Hold()
+					logx.Errorf("guild cleanup HOLD: %v", err)
+				}
+			})
+			timer.Reset(c.Interval)
+		}
 	})
 	logx.Infof("[guild] Asset cleanup started: goroutine guild.asset_op_cleanup interval=%v terminal_retention=%v counter_retention=%v",
 		c.Interval, c.TerminalRetention, c.CounterRetention)
@@ -626,9 +826,22 @@ const trialResultsPoint = "guild.kafka.trial_results"
 //   - 结算入口:消费者只关心"提交位点还是退避重调",所以丢掉 SettleTrialResult 的去向、只留 error。
 //     销账(删 battle 落在 SharedRedis 的结果记录)、幂等闸门、毒消息标记都在 SettleTrialResult 里,这里不重复;
 //   - 两个计数出口:指标在 logic 包注册,消费者(internal/kafka)不 import logic,经回调计数。
-func startTrialResultConsumer(c config.Config, guildLogic *logic.GuildLogic) (stop func(), err error) {
+func startTrialResultConsumer(c config.Config, guildLogic *logic.GuildLogic, admissions ...*drainproof.Session) (stop func(), err error) {
+	if len(admissions) > 1 {
+		return nil, drainproof.ErrHold
+	}
+	var relay *drainproof.Session
+	if len(admissions) == 1 {
+		relay = admissions[0]
+	}
+	return startTrialResultConsumerWithOwner(c, guildLogic, relay, nil)
+}
+
+func startTrialResultConsumerWithOwner(c config.Config, guildLogic *logic.GuildLogic, relay *drainproof.Session, bind func(*kafkautil.BoundConsumerGroup) error) (stop func(), err error) {
+	consumerConfig := trialConsumerConfigFrom(c)
+	consumerConfig.RelayAdmission = relay
 	resultConf := c.Activity.TrialResult
-	consumer, err := guildkafka.NewTrialResultConsumer(trialConsumerConfigFrom(c), func(ctx context.Context, ev *kafkapb.BattleResultEvent) error {
+	consumer, err := guildkafka.NewTrialResultConsumer(consumerConfig, func(ctx context.Context, ev *kafkapb.BattleResultEvent) error {
 		_, err := guildLogic.SettleTrialResult(ctx, ev)
 		return err
 	}, guildkafka.TrialResultCounters{
@@ -637,6 +850,11 @@ func startTrialResultConsumer(c config.Config, guildLogic *logic.GuildLogic) (st
 	})
 	if err != nil {
 		return nil, err
+	}
+	if bind != nil {
+		if err = bind(consumer.Owner()); err != nil {
+			return nil, err
+		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -782,7 +1000,7 @@ func runWithLockRetry(ctx context.Context, runner schemaRunner, db *sql.DB, opts
 }
 
 // ensureSchema 是启动期建表策略(port-decisions D-14 第 4 条):
-//   - Schema.AutoMigrate 没写或 true:跑 Up;err 非 nil 或出现需人工项 → 返回错误(调用方拒绝启动)。
+//   - 常驻入口拒绝 AutoMigrate=true；表结构必须先由独立迁移命令准备。
 //   - false:只跑只读 Plan;有待执行语句或需人工项 → 返回错误,并带上补救命令。
 //
 // 两种模式都额外把"缺普通索引"从 schemamigrate 的 Warning 升级成阻断:它不会自动补建,
@@ -790,16 +1008,7 @@ func runWithLockRetry(ctx context.Context, runner schemaRunner, db *sql.DB, opts
 func ensureSchema(ctx context.Context, db *sql.DB, c config.Config, up, plan schemaRunner) error {
 	opts := schemaOptions()
 	if c.ShouldAutoMigrate() {
-		report, err := runWithLockRetry(ctx, up, db, opts)
-		logReport("schemamigrate.Up", report)
-		if err != nil {
-			return fmt.Errorf("[guild] 启动期建表失败(库 %s),拒绝启动: %w", data.DatabaseName, err)
-		}
-		if len(report.Manual) > 0 {
-			return fmt.Errorf("[guild] 启动期建表发现 %d 项需人工处理(库 %s),拒绝启动: %s",
-				len(report.Manual), data.DatabaseName, strings.Join(report.Manual, "; "))
-		}
-		return missingIndexError(report)
+		return errors.New("常驻服务禁止自动DDL，请关闭AutoMigrate并显式运行 -migrate")
 	}
 
 	report, err := runWithLockRetry(ctx, plan, db, opts)
@@ -861,6 +1070,13 @@ func runMigration(c config.Config) int {
 			fmt.Fprintf(os.Stderr, "schema migration needs manual action (exit %d): %v\n", schemamigrate.ExitManual, missErr)
 			return schemamigrate.ExitManual
 		}
+		seedCtx, seedCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		seedErr := data.SeedGlobalInsertGuard(seedCtx, db, uint64(time.Now().UnixMilli()))
+		seedCancel()
+		if seedErr != nil {
+			fmt.Fprintf(os.Stderr, "guild Schema 守卫播种失败: %v\n", seedErr)
+			return schemamigrate.ExitFailed
+		}
 	}
 	switch {
 	case err != nil:
@@ -876,7 +1092,7 @@ func runMigration(c config.Config) int {
 
 func ensureStartupSchema(c config.Config) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	db, err := svc.OpenSchemaMySQL(ctx, c.MySQL)
+	db, err := svc.OpenReadOnlyMySQL(ctx, c.MySQL)
 	cancel()
 	if err != nil {
 		return err

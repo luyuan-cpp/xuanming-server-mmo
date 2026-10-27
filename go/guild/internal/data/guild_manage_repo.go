@@ -539,6 +539,21 @@ type cacheTarget struct {
 // **永不返回错误**:MySQL 已经是真相,把缓存失效的失败报成写失败只会让客户端白白进入隔离。
 // 幂等:失效 Lua 本身是 INCR generation + DEL,重复执行无害。
 func (r *GuildRepo) invalidateAfterCommit(ctx context.Context, op string, guildID uint64, players ...uint64) {
+	finish, hold, admitErr := r.beginPublication()
+	if admitErr != nil {
+		logx.Errorf("[guild] cache invalidation admission HOLD: %v", admitErr)
+		return
+	}
+	transferred := false
+	defer func() {
+		if !transferred {
+			finish()
+		}
+		if recovered := recover(); recovered != nil {
+			hold()
+			panic(recovered)
+		}
+	}()
 	targets := make([]cacheTarget, 0, 1+len(players))
 	if guildID != 0 {
 		targets = append(targets, cacheTarget{guildID: guildID})
@@ -558,7 +573,16 @@ func (r *GuildRepo) invalidateAfterCommit(ctx context.Context, op string, guildI
 	}
 	logx.Infof("[guild] %s: cache invalidation deferred for %d keys: %v", op, len(remaining), lastErr)
 
+	// 在 RPC 返回和 goroutine 排队之前移交同一 accepted token，不能从首次同步成功猜后继已结束。
+	transferred = true
 	safego.Go("guild.cache_invalidate", func() {
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				hold()
+				panic(recovered)
+			}
+		}()
 		bg, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
@@ -578,6 +602,7 @@ func (r *GuildRepo) invalidateAfterCommit(ctx context.Context, op string, guildI
 			}
 		}
 		logx.Errorf("[guild] %s: cache invalidation gave up on %d keys: %v", op, len(pending), err)
+		hold()
 		invalidateGaveUp(op)
 	})
 }
@@ -894,6 +919,39 @@ func lockGlobalInsertGuard(ctx context.Context, tx *sql.Tx) error {
 // 插完再普通读一次确认(INSERT IGNORE 会把非重复类的异常降级成告警,不能只看返回值)。now 只写进 updated_ms(诊断用)。
 // TiDB 上本来没有这个环(查重用 X 悲观锁,没有 S 锁,也没有间隙继承),命名锁多余但无害;
 // 同一启动流程里 schemamigrate 已经在用 GET_LOCK,不新增部署前提。
+// VerifyGlobalInsertGuard 是常驻 normal 的只读启动门禁；不会申请命名锁或播种哨兵。
+func (r *GuildRepo) VerifyGlobalInsertGuard(ctx context.Context) error {
+	missing, err := missingPlayerStateRows(ctx, r.db, []uint64{globalInsertGuardPlayerID})
+	if err != nil {
+		return err
+	}
+	if len(missing) != 0 {
+		return fmt.Errorf("请先执行 guild -migrate 播种全局插入守卫: %w", errGlobalInsertGuardMissing)
+	}
+	return nil
+}
+
+// SeedGlobalInsertGuard 只由显式 Schema 入口调用；固定主键点写，沿用数据库唯一键和有界死锁重试。
+func SeedGlobalInsertGuard(ctx context.Context, db *sql.DB, now uint64) error {
+	if db == nil || now == 0 {
+		return errors.New("全局插入守卫 Schema 参数缺失")
+	}
+	if err := retryOnDeadlock(ctx, opInsertGuard, func() error {
+		_, err := db.ExecContext(ctx, sqlEnsurePlayerState, globalInsertGuardPlayerID, now)
+		return err
+	}); err != nil {
+		return err
+	}
+	missing, err := missingPlayerStateRows(ctx, db, []uint64{globalInsertGuardPlayerID})
+	if err != nil {
+		return err
+	}
+	if len(missing) != 0 {
+		return errGlobalInsertGuardMissing
+	}
+	return nil
+}
+
 func (r *GuildRepo) EnsureGlobalInsertGuard(ctx context.Context, now uint64) error {
 	guardIDs := []uint64{globalInsertGuardPlayerID}
 	missing, err := missingPlayerStateRows(ctx, r.db, guardIDs)

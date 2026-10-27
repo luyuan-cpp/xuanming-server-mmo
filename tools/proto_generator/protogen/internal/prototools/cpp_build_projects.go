@@ -189,6 +189,19 @@ func migrateGeneratedDependencyConfiguration(text string) (string, error) {
 						entries = append(entries, value)
 					}
 				}
+				if tag == "AdditionalLibraryDirectories" {
+					// 独立 SDK 必须先于公共 lib 搜索，避免同名旧归档覆盖已重建的依赖。
+					sdkPath := regexp.MustCompile(`(?i)(?:^|/)third_party/(?:protobuf|boringssl|googletest)/` + regexp.QuoteMeta(prefix) + `/lib/?$`)
+					var sdk, other []string
+					for _, entry := range entries {
+						if sdkPath.MatchString(strings.ReplaceAll(entry, "\\", "/")) {
+							sdk = append(sdk, entry)
+						} else {
+							other = append(other, entry)
+						}
+					}
+					entries = append(sdk, other...)
+				}
 				return "<" + tag + ">" + strings.Join(entries, ";") + "</" + tag + ">"
 			})
 		}

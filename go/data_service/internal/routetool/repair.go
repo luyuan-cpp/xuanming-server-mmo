@@ -1,6 +1,7 @@
 package routetool
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 
 	"data_service/internal/store"
 
+	"google.golang.org/protobuf/proto"
+	pb "proto/common/database"
 	"shared/placement"
 )
 
@@ -20,8 +23,7 @@ import (
 //
 //  1. ReadRouteMeta:writable == 1 → 退出码 2,提示先 freeze(库内每批事务还会用 R18x 加锁复核一次);
 //  2. SCAN merge:in_progress:*,有一把就退出码 3,一行都不写(冻结窗口内本不该有合服);
-//  3. 等 FreezeGrace(缺省 10s):冻结只拦「之后」读开关的 W1,已经过了检查的 W1 仍会提交并发布,等它们走完
-//     (服务端 W1 预算 2s,其中加锁等待最多 1s);
+//  3. 强读正式正常冻结收据与当前 epoch / run；每批提交在同一 meta 行锁下复核；
 //  4. 三遍 SCAN,**无状态去重**(内存只占一页,不像 import 那样保留 O(N) 的已见集合):
 //     A 遍 player:zone:*;B 遍 player:placement:*,MGET 出的 zone 非空就跳过(A 遍处理过);
 //     C 遍 player:maprev:*,zone 或落点非空就跳过,剩下的只有 maprev → MALFORMED。
@@ -47,8 +49,17 @@ type repairDB interface {
 	RepairMergedIntoFromCache(ctx context.Context, rows []store.MergedIntoRow, dryRun bool) (store.MergedIntoImportStats, error)
 }
 
+// FrozenCatalog 提供同一永久冻结收据及当前目录，只读核验不能制造控制权限。
+type FrozenCatalog interface {
+	MaintenanceReceipt(context.Context, []byte) (*pb.SqlWriterMaintenanceReceipt, error)
+	CurrentMeta(context.Context) (*pb.RouteMeta, error)
+}
+
 // RepairOptions 是 reconcile-from-cache 的参数(routetoolcli 的命令行一一对应)。
 type RepairOptions struct {
+	Maintenance   MaintenanceWork
+	Catalog       FrozenCatalog
+	FrozenReceipt *pb.SqlWriterMaintenanceReceipt
 	// DryRun 只判定不写(库里只发不加锁的 SELECT),同样给出统计。命令行默认 true。
 	DryRun bool
 	// ResolveTies:同 rev 而值不同时用缓存覆盖(-resolve-ties=cache);默认只报告(-resolve-ties=report)。
@@ -57,9 +68,9 @@ type RepairOptions struct {
 	Batch int
 	// MaxReport 是 stderr 明细行的上限;计数始终精确。
 	MaxReport int
-	// FreezeGrace 是开始扫描之前的等待(见文件头第 3 步),不得为负。
+	// FreezeGrace 是兼容参数，不参与正式排空或放行判断；不得为负。
 	FreezeGrace time.Duration
-	// Sleep 是那段等待;nil = 真睡(可被 ctx 取消)。单测注入它,不真睡。
+	// Sleep 仅保留源码兼容；正式永久冻结收据替代固定等待，不调用它。
 	Sleep func(ctx context.Context, d time.Duration) error
 	// Target 非空时作为 stderr 第二行(连接目标,只含 host 与库名)。
 	Target string
@@ -147,11 +158,48 @@ type repairer struct {
 // ReconcileFromCache 跑一次 reconcile-from-cache(步骤见文件头)。返回 ErrMergeFenceActive 时退出码为 3;
 // 其它 error(没冻结、Redis / 库出错、超时)退出码为 2。只有跑到结尾才往 Stdout 写统计行(结尾命中围栏时也写)。
 func ReconcileFromCache(ctx context.Context, rd mappingReader, db repairDB, opts RepairOptions) (RepairReport, error) {
+	if opts.DryRun {
+		return reconcileFromCache(ctx, rd, db, opts)
+	}
+	if opts.Maintenance == nil {
+		return RepairReport{}, errors.New("实际恢复缺少有限维护工具接收门")
+	}
+	done, err := opts.Maintenance.Enter()
+	if err != nil {
+		return RepairReport{}, err
+	}
+	returned := false
+	defer func() {
+		if !returned {
+			opts.Maintenance.Hold()
+		}
+		done()
+	}()
+	rep, err := reconcileFromCache(ctx, rd, db, opts)
+	if err != nil && !errors.Is(err, ErrMergeFenceActive) {
+		opts.Maintenance.Hold()
+	}
+	returned = true
+	return rep, err
+}
+
+func reconcileFromCache(ctx context.Context, rd mappingReader, db repairDB, opts RepairOptions) (RepairReport, error) {
 	if err := opts.validate(); err != nil {
 		return RepairReport{DryRun: opts.DryRun}, err
 	}
-	if opts.Sleep == nil {
-		opts.Sleep = sleepCtx
+	if opts.Catalog == nil || opts.FrozenReceipt == nil {
+		return RepairReport{}, errors.New("恢复缺少正式正常冻结原件")
+	}
+	frozen, err := opts.Catalog.MaintenanceReceipt(ctx, opts.FrozenReceipt.RequestId)
+	if err != nil {
+		return RepairReport{}, err
+	}
+	current, err := opts.Catalog.CurrentMeta(ctx)
+	if err != nil {
+		return RepairReport{}, err
+	}
+	if !proto.Equal(frozen, opts.FrozenReceipt) || frozen.Kind != pb.SqlWriterMaintenanceReceipt_FREEZE || frozen.Phase != pb.SqlWriterMaintenanceReceipt_FROZEN || frozen.RunPhase != pb.SqlWriterDrainRun_SQL_FROZEN || current.Generation != frozen.Generation || current.Writable != 0 || current.WriterEpoch != frozen.AfterEpoch || current.CatalogRevision != frozen.CatalogRevision || !bytes.Equal(current.FreezeRunId, frozen.RunId) {
+		return RepairReport{}, errors.New("恢复所绑定的正常冻结与当前目录不一致")
 	}
 	fmt.Fprintln(opts.Stderr, RepairNote)
 	if opts.Target != "" {
@@ -175,9 +223,7 @@ func ReconcileFromCache(ctx context.Context, rd mappingReader, db repairDB, opts
 	if err := rp.checkFences(ctx, "before the repair; nothing was written"); err != nil {
 		return rp.report, err
 	}
-	if err := opts.Sleep(ctx, opts.FreezeGrace); err != nil {
-		return rp.report, fmt.Errorf("wait -freeze-grace=%s for in-flight route writers: %w", opts.FreezeGrace, err)
-	}
+	// 正式冻结收据已证明排空；等待固定秒数不能替代证明，也不参与放行。
 
 	for _, prefix := range []string{homeZoneKeyPrefix, placement.KeyPrefix, placement.MapRevKeyPrefix} {
 		if err := rp.repairPass(ctx, prefix); err != nil {

@@ -87,6 +87,11 @@ RUN ln -s ../contrib third_party/muduo-linux/muduo/contrib
 
 # 同一入口先构建 zlib，再构建独立 Protobuf / Abseil / BoringSSL 及其消费者。
 RUN BUILD_JOBS="$BUILD_JOBS" bash tools/archived/setup_dependencies.sh
+# 镜像依赖层不能悄悄带回官方 SDK；自有 muduo_grpc 位于业务源码中。
+RUN test ! -d /usr/local/include/grpc \
+    && test ! -d /usr/local/include/grpcpp \
+    && test ! -e /usr/local/lib/libgrpc.a \
+    && test ! -e /usr/local/bin/grpc_cpp_plugin
 
 # ── Stage 2: Build game nodes ────────────────────────────────────────────
 FROM deps AS builder

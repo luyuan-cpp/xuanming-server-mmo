@@ -360,6 +360,7 @@ func sourceZoneFixedKeys(src uint32) []string {
 // assertZoneDown 是前置门禁,两条都满足才放行:
 //   - etcd 场景节点注册表里该 zone 一条注册都没有(正面证据,scene_registry.go);registry 为 nil 或读失败一律拒绝;
 //   - 负载集 scene_nodes:zone:{S}:load 为空(辅助条件:注册已消失、scene_manager 还没摘干净负载集时不抢跑)。
+//
 // 只看负载集不够:负载键丢失 / 被淘汰时 ZCARD 读作 0,活着的 zone 会被当成已下线(cross-zone-scene-travel.md §13.10)。
 func assertZoneDown(ctx context.Context, rdb redis.UniversalClient, registry sceneRegistry, zone uint32) error {
 	if registry == nil {
@@ -387,6 +388,11 @@ func assertZoneDown(ctx context.Context, rdb redis.UniversalClient, registry sce
 // 不回滚 —— 每一步都是幂等的删除,重跑即可补齐)。
 func clearSourceZoneHotState(ctx context.Context, rdb redis.UniversalClient, registry sceneRegistry, src uint32, playerIDs []uint64, dryRun bool) (hotStateClearReport, error) {
 	var rep hotStateClearReport
+	if !dryRun {
+		if err := checkMaintenanceTool(ctx); err != nil {
+			return rep, err
+		}
+	}
 	if err := assertZoneDown(ctx, rdb, registry, src); err != nil {
 		return rep, err
 	}
@@ -447,14 +453,27 @@ func clearSourceZoneHotState(ctx context.Context, rdb redis.UniversalClient, reg
 				for i, k := range keys {
 					v, err := gets[i].Result()
 					if err != nil {
-						continue // 扫描与读取之间被删了,跳过
+						if errors.Is(err, redis.Nil) {
+							continue
+						} // 扫描与读取之间被删了
+						holdMaintenanceTool(ctx)
+						return rep, fmt.Errorf("get scene zone %s: %w", k, err)
 					}
 					z, perr := strconv.ParseUint(v, 10, 32)
-					if perr != nil || uint32(z) != src {
+					if perr != nil {
+						if !dryRun {
+							holdMaintenanceTool(ctx)
+						}
+						continue
+					}
+					if uint32(z) != src {
 						continue
 					}
 					id, ok := parseSceneIDFromZoneKey(k)
 					if !ok {
+						if !dryRun {
+							holdMaintenanceTool(ctx)
+						}
 						continue
 					}
 					rep.ScenesMatched++
@@ -571,10 +590,17 @@ func clearLocationBatch(ctx context.Context, rdb redis.UniversalClient, src uint
 	for i, k := range keys {
 		raw, err := gets[i].Result()
 		if err != nil {
-			continue // 不存在
+			if errors.Is(err, redis.Nil) {
+				continue
+			}
+			holdMaintenanceTool(ctx)
+			return c, fmt.Errorf("get location %s: %w", k, err)
 		}
 		loc, derr := decodePlayerLocation([]byte(raw))
 		if derr != nil {
+			if !dryRun {
+				holdMaintenanceTool(ctx)
+			}
 			// 解不开就判断不了 zone_id,两种范围都算作「看过、判不出」,留给人查。
 			log.Printf("WARN: %s: undecodable PlayerLocation (%v) — kept", k, derr)
 			c.Checked++
@@ -607,7 +633,11 @@ func clearLocationBatch(ctx context.Context, rdb redis.UniversalClient, src uint
 			return c, fmt.Errorf("pipeline get scene zones for legacy locations: %w", err)
 		}
 		for i, p := range lookups {
-			sz, _ := zones[i].Result() // Nil → ""
+			sz, err := zones[i].Result()
+			if err != nil && !errors.Is(err, redis.Nil) {
+				holdMaintenanceTool(ctx)
+				return c, fmt.Errorf("get legacy location scene %d zone: %w", p.loc.SceneID, err)
+			}
 			switch decideLocationZone(p.loc, src, sz) {
 			case locationDelete:
 				direct = append(direct, p.key)
@@ -615,6 +645,9 @@ func clearLocationBatch(ctx context.Context, rdb redis.UniversalClient, src uint
 				c.Undecided++
 			}
 		}
+	}
+	if !dryRun && c.Undecided > 0 {
+		holdMaintenanceTool(ctx)
 	}
 	c.Matched += len(direct)
 	n, err := deleteKeysBatched(ctx, rdb, direct, dryRun)
@@ -673,6 +706,9 @@ func deleteKeysBatched(ctx context.Context, rdb redis.UniversalClient, keys []st
 	if len(keys) == 0 || dryRun {
 		return 0, nil
 	}
+	if err := checkMaintenanceTool(ctx); err != nil {
+		return 0, err
+	}
 	deleted := 0
 	for start := 0; start < len(keys); start += hotStatePipelineBatch {
 		end := start + hotStatePipelineBatch
@@ -687,9 +723,14 @@ func deleteKeysBatched(ctx context.Context, rdb redis.UniversalClient, keys []st
 			cmds = append(cmds, pipe.Del(ctx, k))
 		}
 		if _, err := pipe.Exec(ctx); err != nil {
+			holdMaintenanceTool(ctx)
 			return deleted, fmt.Errorf("pipeline del: %w", err)
 		}
 		for _, c := range cmds {
+			if err := c.Err(); err != nil {
+				holdMaintenanceTool(ctx)
+				return deleted, fmt.Errorf("del key: %w", err)
+			}
 			deleted += int(c.Val())
 		}
 	}

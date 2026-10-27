@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"shared/drainproof"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -452,6 +453,8 @@ type Processed struct {
 
 // Loop 是重投循环。构造后除下面几个可选字段外只读。
 type Loop struct {
+	// Relay 在 worker、唤醒与同步投递启动前由实际进程 owner 注入。
+	Relay   *drainproof.Session
 	cfg     LoopConfig
 	store   Store
 	applier Applier
@@ -586,7 +589,9 @@ func (l *Loop) RunMaintenance(ctx context.Context) {
 		ticker := time.NewTicker(l.cfg.AuditInterval)
 		defer ticker.Stop()
 		auditC = ticker.C
-		safego.Run("assetop.audit", func() { _ = l.AuditOnce(ctx, l.nowMs()) })
+		safego.Run("assetop.audit", func() {
+			l.maintenanceRound(ctx, func(call context.Context) error { return l.AuditOnce(call, l.nowMs()) })
+		})
 	}
 	if l.cfg.AbandonAfter > 0 {
 		ticker := time.NewTicker(l.cfg.AbandonInterval)
@@ -599,9 +604,13 @@ func (l *Loop) RunMaintenance(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-auditC:
-			safego.Run("assetop.audit", func() { _ = l.AuditOnce(ctx, l.nowMs()) })
+			safego.Run("assetop.audit", func() {
+				l.maintenanceRound(ctx, func(call context.Context) error { return l.AuditOnce(call, l.nowMs()) })
+			})
 		case <-abandonC:
-			safego.Run("assetop.abandon", func() { _, _ = l.AbandonOnce(ctx, l.nowMs()) })
+			safego.Run("assetop.abandon", func() {
+				l.maintenanceRound(ctx, func(call context.Context) error { _, err := l.AbandonOnce(call, l.nowMs()); return err })
+			})
 		}
 	}
 }
@@ -671,6 +680,19 @@ func (l *Loop) drain(ctx context.Context, queue <-chan uint64, processed *atomic
 // 调用方的 ctx 先到期,行带着租约却没人处理。不够一整个 OpBudget 就不领,行原样留给下一次。
 // Tick 用的是没有截止时刻的 Run ctx,这一步对它只等于「ctx 还没结束」。
 func (l *Loop) claimAndProcess(ctx context.Context, opID uint64) bool {
+	if l.Relay != nil {
+		finish, err := l.Relay.Enter()
+		if err != nil {
+			return false
+		}
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				l.Relay.Hold()
+				panic(recovered)
+			}
+		}()
+	}
 	if !l.acquireSlot(ctx) {
 		return false
 	}
@@ -679,11 +701,16 @@ func (l *Loop) claimAndProcess(ctx context.Context, opID uint64) bool {
 		return false
 	}
 
-	op, claimed := l.claim(ctx, opID)
+	work, cancel := context.WithTimeout(context.WithoutCancel(ctx), l.cfg.OpBudget)
+	defer cancel()
+	op, claimed := l.claim(work, opID)
 	if claimed != claimOK {
 		return false
 	}
-	if _, err := l.ProcessOne(ctx, op); err != nil {
+	if _, err := l.processOne(work, op); err != nil {
+		if l.Relay != nil {
+			l.Relay.Hold()
+		}
 		logx.Errorf("[AssetOp] Failed to process pending row op_id=%d stream=%d seq=%d: %v",
 			op.OpID, op.Stream, op.Seq, err)
 	}
@@ -820,6 +847,9 @@ func (l *Loop) claim(ctx context.Context, opID uint64) (Op, claimResult) {
 		logx.Errorf("[AssetOp] Could not decode pending row payload; postponed for manual handling op_id=%d", opID)
 		return Op{}, claimLost
 	case err != nil:
+		if l.Relay != nil {
+			l.Relay.Hold()
+		}
 		l.metrics.incStoreError("claim")
 		logx.Errorf("[AssetOp] Failed to claim pending row op_id=%d: %v", opID, err)
 		return Op{}, claimFailed
@@ -836,7 +866,32 @@ func (l *Loop) claim(ctx context.Context, opID uint64) (Op, claimResult) {
 // 业务写 RPC 在提交自己的事务之后可以**同步**调用它,让玩家当场看到结果;
 // 那条路径的 ctx 预算是 2500ms(= OpBudget):投递分到 1800ms(CallTimeout 800ms +
 // 重查 700ms 仍在内),落库另有 settleBudget 的 700ms,且不受父 ctx 过期/取消影响。
-func (l *Loop) ProcessOne(ctx context.Context, op Op) (Processed, error) {
+func (l *Loop) ProcessOne(ctx context.Context, op Op) (out Processed, resultErr error) {
+	if err := ctx.Err(); err != nil {
+		return Processed{}, err
+	}
+	if l.Relay != nil {
+		finish, err := l.Relay.Enter()
+		if err != nil {
+			return Processed{}, err
+		}
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				l.Relay.Hold()
+				panic(recovered)
+			}
+			if resultErr != nil {
+				l.Relay.Hold()
+			}
+		}()
+	}
+	work, cancel := context.WithTimeout(context.WithoutCancel(ctx), l.cfg.OpBudget)
+	defer cancel()
+	return l.processOne(work, op)
+}
+
+func (l *Loop) processOne(ctx context.Context, op Op) (Processed, error) {
 	nowMs := l.nowMs()
 
 	rpc, ok := l.rpcFor(op, nowMs)
@@ -873,6 +928,9 @@ func (l *Loop) ProcessOne(ctx context.Context, op Op) (Processed, error) {
 	case ActionFinalize:
 		return l.finalize(ctx, op, rpc, res, nowMs)
 	case ActionAwaitDurable:
+		if l.Relay != nil {
+			l.Relay.Hold()
+		}
 		next := nowMs + uint64(l.cfg.AwaitDurableDelay/time.Millisecond)
 		return l.reschedule(ctx, op, next, res, nowMs, "await_durable")
 	case ActionRetry:
@@ -884,10 +942,16 @@ func (l *Loop) ProcessOne(ctx context.Context, op Op) (Processed, error) {
 			reason = "offline"
 		}
 		if err != nil {
+			if l.Relay != nil {
+				l.Relay.Hold()
+			}
 			return l.rescheduleTransportFailure(ctx, op, next, res, nowMs)
 		}
 		return l.reschedule(ctx, op, next, res, nowMs, reason)
 	default: // ActionAlert
+		if l.Relay != nil {
+			l.Relay.Hold()
+		}
 		if errors.Is(err, ErrOutcomeFlip) {
 			// 翻转已由 Caller 计过 assetop_outcome_flip_total,这里只留日志证据。
 			logx.Errorf("[AssetOp] Outcome changed; not finalizing op_id=%d stream=%d seq=%d: %v",
@@ -1273,4 +1337,29 @@ func newLeaseToken() (uint64, error) {
 		return 0, fmt.Errorf("assetop: 读随机数失败: %w", err)
 	}
 	return binary.LittleEndian.Uint64(buf[:]) | 1, nil
+}
+
+// maintenanceRound 与重投共用同一角色；清理/放弃的提交失败也不能伪装成已结算。
+func (l *Loop) maintenanceRound(ctx context.Context, round func(context.Context) error) {
+	if ctx.Err() != nil {
+		return
+	}
+	if l.Relay != nil {
+		finish, err := l.Relay.Enter()
+		if err != nil {
+			return
+		}
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				l.Relay.Hold()
+				panic(recovered)
+			}
+		}()
+	}
+	work, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+	defer cancel()
+	if err := round(work); err != nil && l.Relay != nil {
+		l.Relay.Hold()
+	}
 }

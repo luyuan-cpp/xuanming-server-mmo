@@ -282,10 +282,14 @@ func invalidateGuildCaches(ctx context.Context, rdb *redis.Client, guildIDs []ui
 	if dryRun {
 		return len(guildIDs), nil
 	}
+	if err := checkMaintenanceTool(ctx); err != nil {
+		return 0, err
+	}
 	// 必须先 SCRIPT LOAD。Script.Run 在**普通调用**上会自己处理 NOSCRIPT 回退,
 	// 但在 pipeline 里回退不可能发生:整批 EVALSHA 已经发出去了,回来的是
 	// 一片 NOSCRIPT。先 Load 一次,后面每批都命中同一个 sha。
 	if err := invalidateGuildVersionedCacheScript.Load(ctx, rdb).Err(); err != nil {
+		holdMaintenanceTool(ctx)
 		return 0, fmt.Errorf("load guild cache invalidation script: %w", err)
 	}
 	done := 0
@@ -297,10 +301,12 @@ func invalidateGuildCaches(ctx context.Context, rdb *redis.Client, guildIDs []ui
 				[]string{guildCacheGenerationKey(id), guildCacheKey(id)}))
 		}
 		if _, err := pipe.Exec(ctx); err != nil {
+			holdMaintenanceTool(ctx)
 			return done, fmt.Errorf("invalidate guild caches: %w", err)
 		}
 		for _, c := range cmds {
 			if err := c.Err(); err != nil {
+				holdMaintenanceTool(ctx)
 				return done, fmt.Errorf("invalidate guild cache: %w", err)
 			}
 			done++
@@ -362,6 +368,11 @@ func chooseRankWrite(reread, snapshot []manifestRankMember, snapshotMayBeWritten
 // 那一份。它返回错误时一个字节都不写。返回记进清单的集合,以及是否走了「源榜已不在」这一支。
 func mergeGuildRank(ctx context.Context, rdb *redis.Client, src, dst uint32, snapshot []manifestRankMember,
 	snapshotMayBeWritten, dryRun bool, recordBeforeWrite func([]manifestRankMember) error) ([]manifestRankMember, bool, error) {
+	if !dryRun {
+		if err := checkMaintenanceTool(ctx); err != nil {
+			return nil, false, err
+		}
+	}
 	release, err := acquireGuildRankLock(ctx, rdb, dryRun)
 	if err != nil {
 		return nil, false, fmt.Errorf("guild rank lock: %w", err)
@@ -399,6 +410,11 @@ func mergeRankZSET(
 	members []manifestRankMember,
 	dryRun bool,
 ) (int, error) {
+	if !dryRun {
+		if err := checkMaintenanceTool(ctx); err != nil {
+			return 0, err
+		}
+	}
 	srcKey, dstKey := guildZoneRankKey(src), guildZoneRankKey(dst)
 	if len(members) == 0 {
 		log.Printf("Redis: source %s is empty, nothing to merge", srcKey)
@@ -406,6 +422,7 @@ func mergeRankZSET(
 		// -verify-merged 的 EXISTS 断言能过。
 		if !dryRun {
 			if err := rdb.Del(ctx, srcKey).Err(); err != nil {
+				holdMaintenanceTool(ctx)
 				return 0, fmt.Errorf("del %s: %w", srcKey, err)
 			}
 		}
@@ -424,6 +441,7 @@ func mergeRankZSET(
 		pipe.Del(ctx, srcKey)
 		return nil
 	}); err != nil {
+		holdMaintenanceTool(ctx)
 		return 0, fmt.Errorf("atomic rank merge %s → %s: %w", srcKey, dstKey, err)
 	}
 	return len(members), nil
@@ -446,6 +464,9 @@ func unmergeRankZSET(
 		log.Printf("[DRY-RUN] Would restore %d members to %s and ZREM them from %s", len(members), srcKey, dstKey)
 		return len(members), nil
 	}
+	if err := checkMaintenanceTool(ctx); err != nil {
+		return 0, err
+	}
 	zm := make([]redis.Z, 0, len(members))
 	rem := make([]any, 0, len(members))
 	for _, m := range members {
@@ -457,6 +478,7 @@ func unmergeRankZSET(
 		pipe.ZRem(ctx, dstKey, rem...)
 		return nil
 	}); err != nil {
+		holdMaintenanceTool(ctx)
 		return 0, fmt.Errorf("atomic rank unmerge %s ← %s: %w", srcKey, dstKey, err)
 	}
 	return len(members), nil

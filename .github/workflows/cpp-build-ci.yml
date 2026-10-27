@@ -9,11 +9,10 @@ name: C++ 构建门禁
 #
 # ── 分层与取舍（重要，别删）─────────────────────────────────────────────
 # 完整编译的依赖极重：deploy/k8s/Dockerfile.cpp 的 deps 阶段要从源码编
-# Protobuf / Abseil / BoringSSL v1.84.0（连带 protobuf v35.1 / BoringSSL / abseil），Dockerfile 自
-# 己的注释写着「首次构建 ~30–60 min」，后面还有 muduo / librdkafka / redis /
+# 独立 Protobuf 35.1、Abseil 和 BoringSSL，提交由主仓固定；后面还有 muduo / librdkafka / redis /
 # yaml-cpp / zlib，再往后才是 cpp/generated/proto 这堆巨型生成物。
 # 而且 cpp/generated 的 protobuf 版本硬校验（7035001）钉死了必须用这一套
-# 自编 Protobuf / Abseil / BoringSSL，apt 的 libgrpc++-dev 版本对不上，换不了轻量路线。
+# 自编 Protobuf，不能混用不同生成器与运行库版本。
 #
 # 所以拆成两层：
 #   1) build-script-contract —— 每个 PR 都跑，秒级。校验构建脚本本身与工程
@@ -43,6 +42,8 @@ on:
       - "cpp/**"
       - "third_party/**"
       - "tools/scripts/build_linux.sh"
+      - "tools/scripts/third_party/**"
+      - "tools/scripts/tests/test_cpp*"
       - "tools/archived/vcxproj2cmake.py"
       - "tools/archived/setup_dependencies.sh"
       - "deploy/k8s/Dockerfile.cpp"
@@ -56,6 +57,8 @@ on:
       - "cpp/**"
       - "third_party/**"
       - "tools/scripts/build_linux.sh"
+      - "tools/scripts/third_party/**"
+      - "tools/scripts/tests/test_cpp*"
       - "tools/archived/vcxproj2cmake.py"
       - "tools/archived/setup_dependencies.sh"
       - "deploy/k8s/Dockerfile.cpp"
@@ -81,11 +84,17 @@ jobs:
     timeout-minutes: 10
     steps:
       # 不要 submodules：这一层只读仓库自己的文件，
-      # third_party 的子模块（尤其 grpc）拉下来要好几分钟。
+      # 这一层无需下载第三方子模块。
       - uses: actions/checkout@v4
 
       - name: bash 语法检查 build_linux.sh
-        run: bash -n tools/scripts/build_linux.sh
+        run: |
+          bash -n tools/scripts/build_linux.sh
+          bash -n tools/archived/setup_dependencies.sh
+          bash -n tools/scripts/third_party/build_linux_sdk.sh
+
+      - name: C++ 独立 SDK 依赖边界
+        run: python3 -m unittest discover -s tools/scripts/tests -p 'test_cpp*' -v
 
       - name: 工程清单与文件系统对账
         shell: bash

@@ -76,7 +76,7 @@ if __name__ == "__main__":
     # 公共 proto include 目录
     common_includes = [
         Path(paths.PROJECT_GENERATED_CODE_DIR) / "proto",  # 你的 proto 根目录
-        Path("../../../third_party/grpc/third_party/protobuf/src"),
+        Path("../../../third_party/protobuf/src"),
     ]
 
     # 多个任务配置（不同 source_dir -> 不同输出目录）

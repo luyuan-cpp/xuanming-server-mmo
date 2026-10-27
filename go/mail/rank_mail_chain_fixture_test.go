@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"github.com/go-sql-driver/mysql"
+	"github.com/luyuancpp/proto2mysql"
 	"net"
 	"os"
 	"regexp"
@@ -53,26 +55,65 @@ func TestRankMailChainFixture(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	db, err := authoritysql.Open(ctx, "root@tcp("+address+")/"+database, database, true, 8)
+	adminDSN := os.Getenv("RANK_MAIL_CHAIN_SCHEMA_DSN")
+	normalDSN := os.Getenv("RANK_MAIL_CHAIN_NORMAL_DSN")
+	adminConfig, err := mysql.ParseDSN(adminDSN)
+	if err != nil || adminConfig.Net != "tcp" || adminConfig.Addr != address || adminConfig.DBName != database {
+		t.Fatal("整链安装DSN与本例目标不符")
+	}
+	normalConfig, err := mysql.ParseDSN(normalDSN)
+	if err != nil || normalConfig.Net != "tcp" || normalConfig.Addr != address || normalConfig.DBName != database || normalConfig.User == adminConfig.User || !regexp.MustCompile(`^chain_writer_[0-9a-f]{16}$`).MatchString(normalConfig.User) {
+		t.Fatal("整链normal主体未隔离")
+	}
+	schemaPermission, err := authoritysql.LoadSchemaPermission(os.Getenv)
 	if err != nil {
-		t.Fatalf("打开邮件强读连接: %v", err)
+		t.Fatal(err)
+	}
+	install, err := authoritysql.OpenForMigration(ctx, adminDSN, database, true, schemaPermission)
+	if err != nil {
+		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("关闭邮件连接: %v", err)
+		if err := install.Close(); err != nil {
+			t.Errorf("关闭安装池: %v", err)
 		}
 	})
 	tables := append(data.Tables(), &guildpb.GuildMemberRecord{})
-	if report, err := schemamigrate.Up(ctx, db, schemamigrate.Options{Database: database, Tables: tables}); err != nil || len(report.Manual) > 0 {
-		t.Fatalf("邮件整链 schema: %v %+v", err, report)
+	if report, err := schemamigrate.Up(ctx, install, schemamigrate.Options{Database: database, Tables: tables}); err != nil || len(report.Manual) != 0 {
+		t.Fatalf("整链schema: %v %+v", err, report)
 	}
+	for _, model := range tables {
+		table, ok := proto2mysql.TableNameFromDescriptor(model.ProtoReflect().Descriptor())
+		if !ok || !regexp.MustCompile(`^[A-Za-z0-9_]{1,64}$`).MatchString(table) {
+			t.Fatal("正式表名无效")
+		}
+		if _, err = install.ExecContext(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON `"+database+"`.`"+table+"` TO '"+normalConfig.User+"'@'%'"); err != nil {
+			t.Fatal("整链具名业务表授权失败")
+		}
+	}
+	if _, err = install.ExecContext(ctx, "CREATE TABLE account_role (player_id BIGINT UNSIGNED PRIMARY KEY,account VARBINARY(191) NOT NULL,owner_revision BIGINT UNSIGNED NOT NULL,trade_listing_id BIGINT UNSIGNED NOT NULL)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = install.ExecContext(ctx, "GRANT SELECT,INSERT,UPDATE ON `"+database+"`.account_role TO '"+normalConfig.User+"'@'%'"); err != nil {
+		t.Fatal("整链角色原件授权失败")
+	}
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := authoritysql.Open(ctx, normalDSN, database, true, 8, authoritysql.Writer(writer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("关闭normal池: %v", err)
+		}
+	})
 	var ids atomic.Uint64
 	next := func(context.Context) (uint64, error) { return ids.Add(1), nil }
 	repo := data.New(db, next, next, func(uint32) bool { return true }, database)
 	// 全局角色目录与原登录态是客户端列表的真实依赖；只在此随机夹具库种原件。
-	if _, err := db.ExecContext(ctx, "CREATE TABLE account_role (player_id BIGINT UNSIGNED PRIMARY KEY,account VARBINARY(191) NOT NULL,owner_revision BIGINT UNSIGNED NOT NULL,trade_listing_id BIGINT UNSIGNED NOT NULL)"); err != nil {
-		t.Fatal(err)
-	}
 	for _, player := range []uint64{7, 8} {
 		if _, err := db.ExecContext(ctx, "INSERT INTO account_role VALUES (?, ?,3,0)", player, []byte("整链原账号")); err != nil {
 			t.Fatal(err)

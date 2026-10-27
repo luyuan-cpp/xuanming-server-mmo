@@ -66,7 +66,7 @@ MySQL:
 # 建表策略(D-14 第 4 条):不写或 true = 启动时跑 schemamigrate.Up;false = 只跑只读 plan,不一致即拒启,
 # 补救命令 player_inbox -f etc/player_inbox.yaml -migrate。K8s 非 dev 档由 ConfigMap 固定 false。
 Schema:
-  AutoMigrate: true
+  AutoMigrate: false
 
 # 核心 Redis(与 C++ scene / scene_manager 同一实例,DB 0):
 #   player:{id}:owner_epoch —— 围栏上界 R(IB-8);

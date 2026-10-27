@@ -26,6 +26,7 @@ package kafka
 // 一把互斥锁。全部方法对 nil 接收者安全(直接拼结构体的单测没有这张表):add 返回 false,调用方退回原来的日志。
 
 import (
+	"context"
 	"sync"
 
 	"db/internal/metrics"
@@ -137,4 +138,23 @@ func (c *KeyOrderedKafkaConsumer) retryStrandedReceipts() {
 		}
 		logx.Infof("stranded retry receipt moved: topic=%s dest=%s what=%s", c.topic, r.dest, r.what)
 	}
+}
+
+// drainStranded只在worker/retry/owner循环join后执行，不依赖已取消的c.ctx或租约超时。
+func (c *KeyOrderedKafkaConsumer) drainStranded(ctx context.Context) error {
+	for c.stranded.size() > 0 {
+		batch := c.stranded.take(strandedRetryPerTick)
+		for i, r := range batch {
+			_, err := moveRetryReceipt(ctx, c.redisClient, r.processingKey, r.dest, r.receipt, r.replacement)
+			if err != nil {
+				c.stranded.restore(batch[i:])
+				return err
+			}
+			if r.onMoved != nil {
+				r.onMoved()
+			}
+		}
+	}
+	metrics.SetRetryStrandedReceipts(0)
+	return nil
 }

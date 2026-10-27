@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"friend/internal/config"
+	"shared/authoritysql"
 
 	drivermysql "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
@@ -55,7 +56,7 @@ func authorityTestConfig(t *testing.T, envName string) config.MySQLConf {
 
 func TestAuthorityDB_MySQLDevelopmentAndProductionGate(t *testing.T) {
 	c := authorityTestConfig(t, "FRIEND_TEST_MYSQL_DSN")
-	db, err := OpenMySQL(c, false)
+	db, err := openMySQL(c, false, authoritysql.Reader())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -63,7 +64,7 @@ func TestAuthorityDB_MySQLDevelopmentAndProductionGate(t *testing.T) {
 	var isolation string
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT @@transaction_isolation").Scan(&isolation))
 	assert.Equal(t, "READ-COMMITTED", strings.ToUpper(isolation))
-	wrong, err := OpenMySQL(c, true)
+	wrong, err := openMySQL(c, true, authoritysql.Reader())
 	if wrong != nil {
 		_ = wrong.Close()
 	}
@@ -72,7 +73,7 @@ func TestAuthorityDB_MySQLDevelopmentAndProductionGate(t *testing.T) {
 
 func TestAuthorityDB_TiDBPessimisticOnEveryConnection(t *testing.T) {
 	c := authorityTestConfig(t, "FRIEND_TEST_TIDB_DSN")
-	db, err := OpenMySQL(c, true)
+	db, err := openMySQL(c, true, authoritysql.Reader())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

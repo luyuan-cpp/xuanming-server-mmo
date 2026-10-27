@@ -30,7 +30,7 @@ func TestMigrateSchema_CreatesGlobalTablesAndIsIdempotent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}), "first migration")
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}), "first migration")
 
 	// 表与列:每张表的关键列都得在(以前手写 DDL 与 proto 漂移的正是这些列)。
 	wantColumns := map[string][]string{
@@ -112,7 +112,7 @@ func TestMigrateSchema_CreatesGlobalTablesAndIsIdempotent(t *testing.T) {
 	for table := range wantColumns {
 		before[table] = db.ShowCreateTable(t, table)
 	}
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}), "second migration must be a no-op")
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}), "second migration must be a no-op")
 	for table := range wantColumns {
 		assert.Equalf(t, before[table], db.ShowCreateTable(t, table), "table %s DDL changed on second migration", table)
 	}
@@ -139,7 +139,7 @@ func TestMigrateSchema_ConcurrentFirstBootIsSerialized(t *testing.T) {
 	errs := make(chan error, instances)
 	for i := 0; i < instances; i++ {
 		go func() {
-			errs <- store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{BootstrapTags: tags, LockWait: 4 * time.Minute})
+			errs <- db.Migrate(ctx, store.MigrateOptions{BootstrapTags: tags, LockWait: 4 * time.Minute})
 		}()
 	}
 	for i := 0; i < instances; i++ {
@@ -168,12 +168,12 @@ func TestMigrateSchema_LockBusyReturnsSentinel(t *testing.T) {
 	require.NoError(t, holder.QueryRowContext(ctx, "SELECT GET_LOCK(?, 0)", lockName).Scan(&got))
 	require.Equal(t, 1, got, "the test must hold the migrate lock first")
 
-	err = store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{LockWait: time.Second})
+	err = db.Migrate(ctx, store.MigrateOptions{LockWait: time.Second})
 	require.ErrorIs(t, err, store.ErrMigrateLockBusy)
 	assert.Empty(t, db.Columns(t, "transaction_log"), "a busy lock must not let any DDL run")
 
 	require.NoError(t, holder.QueryRowContext(ctx, "SELECT RELEASE_LOCK(?)", lockName).Scan(&got))
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{LockWait: time.Second}),
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{LockWait: time.Second}),
 		"once the other instance releases the lock the migration must go through")
 	assert.NotEmpty(t, db.Columns(t, "transaction_log"))
 }

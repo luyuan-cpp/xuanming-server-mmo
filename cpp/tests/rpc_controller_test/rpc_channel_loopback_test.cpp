@@ -692,7 +692,7 @@ protected:
             serverConn_ = conn;
             if (serverMode_ == ServerMode::kChannel)
             {
-                RpcChannelPtr channel = RpcChannel::Create(Loop(), conn, serverServices_);
+                RpcChannelPtr channel = RpcChannel::Create(Loop(), conn, serverServices_, serverMaintenance_);
                 std::weak_ptr<RpcChannel> weakChannel = channel;
                 conn->setMessageCallback(
                     [weakChannel](const TcpConnectionPtr& c, muduo::net::Buffer* buffer, muduo::Timestamp receiveTime)
@@ -784,7 +784,7 @@ protected:
     {
         if (conn->connected())
         {
-            probeChannel_ = RpcChannel::Create(Loop(), conn, RpcServiceMap{});
+            probeChannel_ = RpcChannel::Create(Loop(), conn, RpcServiceMap{}, probeMaintenance_);
             return;
         }
         if (probeChannel_ && probeChannel_->IsBoundTo(conn))
@@ -884,6 +884,8 @@ protected:
     std::unique_ptr<muduo::net::TcpClient> probe_;
     RpcChannelPtr probeChannel_;   // 只在 loop 线程上读写
     FrameRecorder probeRecorder_;
+    std::shared_ptr<RpcMaintenanceState> serverMaintenance_{std::make_shared<RpcMaintenanceState>()};
+    std::shared_ptr<RpcMaintenanceState> probeMaintenance_{std::make_shared<RpcMaintenanceState>()};
 };
 
 } // namespace
@@ -2122,3 +2124,193 @@ TEST(RpcDoneCallbackDeathTest, AdoptRejectsNullAndForeignClosures)
 }
 
 #endif // GTEST_HAS_DEATH_TEST
+
+// 维护关闭不能把本机回调退出与远端确定结果混为一谈；使用每夹具独立账本避免用例顺序污染。
+TEST_F(RpcChannelLoopback, MaintenanceSourceWaitsForAdoptedReplyAndRejectsNewDispatch)
+{
+    serverMode_ = ServerMode::kChannel;
+    ASSERT_NO_FATAL_FAILURE(ConnectProbe());
+    auto log = std::make_shared<CallLog>();
+    RunInLoopAndWait([&] { Issue(*probeChannel_, log, "accepted", kPrepareId, PrepareBattleRequest{}); });
+    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 1; }));
+    RunInLoopAndWait([&] {
+        serverMaintenance_->CloseSources();
+        std::string frontier;
+        EXPECT_FALSE(serverMaintenance_->Frontier(true, frontier));
+        EXPECT_FALSE(serverMaintenance_->LocalCallbacksJoined());
+        Issue(*probeChannel_, log, "rejected", kProcessId, ProcessRequest(9));
+        service_.parked.front().Run();
+        EXPECT_TRUE(serverMaintenance_->LocalCallbacksJoined());
+        EXPECT_TRUE(serverMaintenance_->Frontier(true, frontier));
+    });
+    ASSERT_TRUE(log->WaitForCount(2));
+    ASSERT_TRUE(log->Find("accepted").has_value());
+    EXPECT_TRUE(log->Find("accepted")->status.ok());
+    ASSERT_TRUE(log->Find("rejected").has_value());
+    EXPECT_TRUE(log->Find("rejected")->status.DefinitelyNotExecuted());
+    RunInLoopAndWait([&] { EXPECT_EQ(service_.processCalls, 0); });
+}
+
+TEST_F(RpcChannelLoopback, MaintenanceOutputDoesNotJoinInsideTheBusinessCallback)
+{
+    serverMode_ = ServerMode::kChannel;
+    ASSERT_NO_FATAL_FAILURE(ConnectProbe());
+    std::atomic<bool> callbackReturned{false};
+    RunInLoopAndWait([&] {
+        probeChannel_->CallMethod(kProcessId, ProcessRequest(3),
+            [state = probeMaintenance_, &callbackReturned](const RpcStatus& status, const MessagePtr&) {
+                EXPECT_TRUE(status.ok());
+                state->CloseSources();
+                state->ClosePublications();
+                std::string frontier;
+                EXPECT_FALSE(state->LocalCallbacksJoined());
+                EXPECT_FALSE(state->Frontier(false, frontier));
+                callbackReturned = true;
+            });
+    });
+    ASSERT_TRUE(WaitUntil([&] { return callbackReturned.load() && probeMaintenance_->LocalCallbacksJoined(); }));
+    std::string frontier;
+    EXPECT_TRUE(probeMaintenance_->Frontier(false, frontier));
+}
+
+TEST_F(RpcChannelLoopback, MaintenanceTimeoutJoinsLocallyButKeepsStickyUnknown)
+{
+    serverMode_ = ServerMode::kChannel;
+    ASSERT_NO_FATAL_FAILURE(ConnectProbe());
+    auto log = std::make_shared<CallLog>();
+    RunInLoopAndWait([&] { Issue(*probeChannel_, log, "unknown", kPrepareId, PrepareBattleRequest{}); });
+    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 1; }));
+    RunInLoopAndWait([&] {
+        probeMaintenance_->CloseSources();
+        probeMaintenance_->ClosePublications();
+        EXPECT_FALSE(probeMaintenance_->LocalCallbacksJoined());
+        probeChannel_->SweepTimeouts(RpcChannel::Clock::now() + kLongTimeout + 1s);
+    });
+    ASSERT_TRUE(log->WaitForCount(1));
+    ASSERT_TRUE(log->Find("unknown").has_value());
+    EXPECT_TRUE(log->Find("unknown")->status.OutcomeUnknown());
+    ASSERT_TRUE(WaitUntil([this] { return probeMaintenance_->LocalCallbacksJoined(); }));
+    std::string frontier;
+    EXPECT_FALSE(probeMaintenance_->Frontier(false, frontier));
+    // 已关闭后的本地拒绝仍有排队回调；不能在它返回前拆业务对象。
+    RunInLoopAndWait([&] {
+        Issue(*probeChannel_, log, "local_rejection", kProcessId, ProcessRequest(4));
+        EXPECT_FALSE(probeMaintenance_->LocalCallbacksJoined());
+    });
+    ASSERT_TRUE(log->WaitForCount(2));
+    ASSERT_TRUE(WaitUntil([this] { return probeMaintenance_->LocalCallbacksJoined(); }));
+    EXPECT_FALSE(probeMaintenance_->Frontier(false, frontier));
+}
+
+
+TEST_F(RpcChannelLoopback, AcknowledgedSendWaitsForActualAdoptedServerCompletion)
+{
+    ASSERT_TRUE(probeMaintenance_->EnableAcknowledgedSends());
+    serverMode_ = ServerMode::kChannel;
+    ASSERT_NO_FATAL_FAILURE(ConnectProbe());
+    RunInLoopAndWait([&] { EXPECT_TRUE(probeChannel_->SendRequest(kPrepareId, PrepareBattleRequest{})); });
+    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 1; }));
+    RunInLoopAndWait([&] {
+        probeMaintenance_->CloseSources(); probeMaintenance_->ClosePublications();
+        EXPECT_FALSE(probeMaintenance_->LocalCallbacksJoined());
+        std::string frontier; EXPECT_FALSE(probeMaintenance_->Frontier(false, frontier));
+        service_.parked.front().Run();
+    });
+    ASSERT_TRUE(WaitUntil([this] { return probeMaintenance_->LocalCallbacksJoined(); }));
+    std::string frontier; EXPECT_TRUE(probeMaintenance_->Frontier(false, frontier));
+}
+
+TEST_F(RpcChannelLoopback, AcknowledgedSendRetainsServerFailureAsUnknown)
+{
+    ASSERT_TRUE(probeMaintenance_->EnableAcknowledgedSends());
+    serverMode_ = ServerMode::kChannel;
+    ASSERT_NO_FATAL_FAILURE(ConnectProbe());
+    RunInLoopAndWait([&] {
+        EXPECT_TRUE(probeChannel_->SendRequest(kCancelId, CancelBattlePrepareRequest{}));
+        probeMaintenance_->CloseSources(); probeMaintenance_->ClosePublications();
+    });
+    ASSERT_TRUE(WaitUntil([this] { return service_.cancelCalls == 1 && probeMaintenance_->LocalCallbacksJoined(); }));
+    std::string frontier; EXPECT_FALSE(probeMaintenance_->Frontier(false, frontier));
+}
+
+TEST_F(RpcChannelLoopback, AcknowledgedSendDisconnectDoesNotForgeRemoteCompletion)
+{
+    ASSERT_TRUE(probeMaintenance_->EnableAcknowledgedSends());
+    serverMode_ = ServerMode::kChannel;
+    ASSERT_NO_FATAL_FAILURE(ConnectProbe());
+    RunInLoopAndWait([&] { EXPECT_TRUE(probeChannel_->SendRequest(kPrepareId, PrepareBattleRequest{})); });
+    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 1; }));
+    RunInLoopAndWait([&] {
+        probeMaintenance_->CloseSources(); probeMaintenance_->ClosePublications();
+        probe_->connection()->forceClose();
+    });
+    ASSERT_TRUE(WaitUntil([this] { return probeMaintenance_->LocalCallbacksJoined(); }));
+    std::string frontier; EXPECT_FALSE(probeMaintenance_->Frontier(false, frontier));
+}
+
+TEST_F(RpcChannelLoopback, AcknowledgedSendTimeoutDoesNotForgetAnAcceptedRequest)
+{
+    ASSERT_TRUE(probeMaintenance_->EnableAcknowledgedSends());
+    serverMode_ = ServerMode::kChannel;
+    ASSERT_NO_FATAL_FAILURE(ConnectProbe());
+    RunInLoopAndWait([&] { EXPECT_TRUE(probeChannel_->SendRequest(kPrepareId, PrepareBattleRequest{})); });
+    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 1; }));
+    RunInLoopAndWait([&] {
+        probeMaintenance_->CloseSources(); probeMaintenance_->ClosePublications();
+        probeChannel_->SweepTimeouts(RpcChannel::Clock::now() + kDefaultRpcCallTimeout + 1s);
+    });
+    ASSERT_TRUE(WaitUntil([this] { return probeMaintenance_->LocalCallbacksJoined(); }));
+    std::string frontier; EXPECT_FALSE(probeMaintenance_->Frontier(false, frontier));
+    RunInLoopAndWait([&] { service_.parked.front().Run(); });
+    PumpLoop(3);
+    EXPECT_FALSE(probeMaintenance_->Frontier(false, frontier));
+}
+
+TEST_F(RpcChannelLoopback, MaintenanceJoinIncludesCallbackTargetDestructionAndDerivedRejection)
+{
+    serverMode_ = ServerMode::kChannel;
+    ASSERT_NO_FATAL_FAILURE(ConnectProbe());
+    auto callbacks = std::make_shared<std::atomic<int>>(0);
+    RunInLoopAndWait([&] {
+        const auto state = probeMaintenance_;
+        const std::weak_ptr<RpcChannel> weak = probeChannel_;
+        state->CloseSources(); state->ClosePublications();
+        auto target = std::shared_ptr<int>(new int(0), [state, weak, callbacks](int* value) {
+            delete value;
+            EXPECT_FALSE(state->LocalCallbacksJoined()) << "target 析构仍可派生工作";
+            if (const auto channel = weak.lock()) channel->CallMethod(kProcessId, ProcessRequest(9), [state, callbacks](const RpcStatus& status, const MessagePtr&) {
+                EXPECT_TRUE(status.DefinitelyNotExecuted()); EXPECT_FALSE(state->LocalCallbacksJoined()); ++*callbacks;
+            });
+        });
+        probeChannel_->CallMethod(kProcessId, ProcessRequest(8), [target, callbacks](const RpcStatus& status, const MessagePtr&) {
+            EXPECT_TRUE(status.DefinitelyNotExecuted()); ++*callbacks;
+        });
+    });
+    ASSERT_TRUE(WaitUntil([&] { return callbacks->load() == 2 && probeMaintenance_->LocalCallbacksJoined(); }));
+    std::string frontier; EXPECT_TRUE(probeMaintenance_->Frontier(false, frontier));
+}
+
+TEST_F(RpcChannelLoopback, MaintenanceSettledSnapshotKeepsExplicitRelayDispatchOpenUntilP3)
+{
+    serverMode_ = ServerMode::kChannel;
+    ASSERT_NO_FATAL_FAILURE(ConnectProbe());
+    auto log=std::make_shared<CallLog>();
+    RunInLoopAndWait([&]{std::string frontier;EXPECT_TRUE(serverMaintenance_->SettledFrontier(frontier));Issue(*probeChannel_,log,"relay-after-P1",kProcessId,ProcessRequest(1));});
+    ASSERT_TRUE(log->WaitForCount(1)); ASSERT_TRUE(log->Find("relay-after-P1").has_value()); EXPECT_TRUE(log->Find("relay-after-P1")->status.ok());
+    RunInLoopAndWait([&]{serverMaintenance_->CloseSources();Issue(*probeChannel_,log,"after-P3",kProcessId,ProcessRequest(2));});
+    ASSERT_TRUE(log->WaitForCount(2)); ASSERT_TRUE(log->Find("after-P3").has_value()); EXPECT_TRUE(log->Find("after-P3")->status.DefinitelyNotExecuted());
+    RunInLoopAndWait([&]{EXPECT_EQ(service_.processCalls,1);});
+}
+
+TEST_F(RpcChannelLoopback, PreparedBootRejectsWireDispatchUntilAtomicOpenAndCannotReopen)
+{
+    ASSERT_TRUE(serverMaintenance_->PrepareSources());
+    serverMode_=ServerMode::kChannel;ASSERT_NO_FATAL_FAILURE(ConnectProbe());
+    auto log=std::make_shared<CallLog>();
+    RunInLoopAndWait([&]{Issue(*probeChannel_,log,"prepared",kProcessId,ProcessRequest(1));});
+    ASSERT_TRUE(log->WaitForCount(1));ASSERT_TRUE(log->Find("prepared").has_value());EXPECT_TRUE(log->Find("prepared")->status.DefinitelyNotExecuted());
+    RunInLoopAndWait([&]{EXPECT_EQ(service_.processCalls,0);EXPECT_TRUE(serverMaintenance_->OpenPreparedSources());EXPECT_FALSE(serverMaintenance_->OpenPreparedSources());Issue(*probeChannel_,log,"opened",kProcessId,ProcessRequest(2));});
+    ASSERT_TRUE(log->WaitForCount(2));ASSERT_TRUE(log->Find("opened").has_value());EXPECT_TRUE(log->Find("opened")->status.ok());
+    RunInLoopAndWait([&]{EXPECT_EQ(service_.processCalls,1);serverMaintenance_->CloseSources();EXPECT_FALSE(serverMaintenance_->PrepareSources());EXPECT_FALSE(serverMaintenance_->OpenPreparedSources());Issue(*probeChannel_,log,"closed",kProcessId,ProcessRequest(3));});
+    ASSERT_TRUE(log->WaitForCount(3));ASSERT_TRUE(log->Find("closed").has_value());EXPECT_TRUE(log->Find("closed")->status.DefinitelyNotExecuted());
+}

@@ -17,6 +17,9 @@ import (
 
 	"data_service/cmd/debugutil"
 	"data_service/internal/config"
+	databasepb "proto/common/database"
+	"shared/authoritysql"
+	"shared/drainproof"
 
 	goredis "github.com/redis/go-redis/v9"
 )
@@ -58,6 +61,14 @@ type tableMatch struct {
 var fencedPlayerTables = map[string]bool{"player_database": true, "player_database_1": true}
 
 func main() {
+	if err := runDebugImport(); err != nil {
+		fmt.Fprintf(os.Stderr, "import failed: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// 所有实际清理在此函数返回前完成；main 的 os.Exit 不跨过资源 defer。
+func runDebugImport() error {
 	var (
 		configPath   = flag.String("config", "etc/data_service.yaml", "path to data_service config (Redis import / player:zone mapping)")
 		dbConfigPath = flag.String("db-config", "../db/etc/db.yaml", "path to db config (MySQL import; player-bundle: also core Redis)")
@@ -66,6 +77,9 @@ func main() {
 		zoneID       = flag.Uint("zone", 0, "override zone ID for import (player-bundle: local zone, default db config ZoneId)")
 		playerID     = flag.Uint64("player", 0, "override player ID for import (default: use value from export; not allowed for player-bundle)")
 		timeoutSec   = flag.Int("timeout-seconds", 30, "request timeout in seconds")
+		runtimePath  = flag.String("maintenance-drain-plan", "", "固定 NORMAL boot 的正式排空 runtime")
+		runtimeDir   = flag.String("maintenance-drain-dir", "", "固定 runtime 私有目录")
+		runtimeSHA   = flag.String("maintenance-drain-sha256", "", "固定 runtime 原件 SHA256")
 		source       = flag.String("source", sourceAuto, "player-bundle: auto | redis-parent | sql")
 		localAccount = flag.String("local-account", "", "player-bundle: local dev_/robot_ account that will own the imported role")
 		replace      = flag.Bool("replace", false, "player-bundle: overwrite an existing local save of the same player_id")
@@ -79,8 +93,7 @@ func main() {
 	flag.Parse()
 
 	if *inputFile == "" {
-		fmt.Fprintln(os.Stderr, "error: -file is required")
-		os.Exit(1)
+		return errors.New("-file is required")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeoutSec)*time.Second)
@@ -88,30 +101,25 @@ func main() {
 
 	raw, err := os.ReadFile(*inputFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: read export: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("read export: %w", err)
 	}
 	if isBundleFile(raw) {
 		if *playerID > 0 {
-			fmt.Fprintln(os.Stderr, "error: player-bundle 不支持 -player 换号导入(blob 内的身份不会跟着改);本地撞号时用 -replace 覆盖")
-			os.Exit(1)
+			return errors.New("player-bundle 不支持 -player 换号导入(blob 内的身份不会跟着改);本地撞号时用 -replace 覆盖")
 		}
-		err = runBundleImport(ctx, raw, bundleImportOptions{
-			dbConfigPath: *dbConfigPath, configPath: *configPath, localZone: uint32(*zoneID),
-			source: *source, localAccount: *localAccount, replace: *replace,
-			dryRun: *dryRun, allowHosts: *allowHosts, allowUnverifiedTarget: *allowUnverifiedTarget,
+		return runNormalImport(ctx, *dryRun, *runtimePath, *runtimeDir, *runtimeSHA, func(permission authoritysql.Permission) error {
+			return runBundleImport(ctx, raw, bundleImportOptions{
+				permission:   permission,
+				dbConfigPath: *dbConfigPath, configPath: *configPath, localZone: uint32(*zoneID),
+				source: *source, localAccount: *localAccount, replace: *replace,
+				dryRun: *dryRun, allowHosts: *allowHosts, allowUnverifiedTarget: *allowUnverifiedTarget,
+			})
 		})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "import failed: %v\n", err)
-			os.Exit(1)
-		}
-		return
 	}
 
 	data, err := parseExportFile(raw)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: load export: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("load export: %w", err)
 	}
 
 	if *zoneID > 0 {
@@ -122,27 +130,111 @@ func main() {
 		overridePlayerID(data, *playerID)
 	}
 
-	legacyOpts := legacyImportOptions{
-		dryRun: *dryRun, allowHosts: *allowHosts, allowFencedTables: *allowFenced, allowUnverifiedTarget: *allowUnverifiedTarget,
+	if data.Mode != "player" && data.Mode != "playerdb" {
+		return fmt.Errorf("unsupported import mode %q (only player and playerdb exports are supported)", data.Mode)
 	}
-	switch data.Mode {
-	case "player":
-		fmt.Fprintln(os.Stderr, "注意:player 导出写回的是 data_service 的 player:{id}:<field> 键族,不在登录加载链路上;本地复现玩家请用 player-bundle")
-		err = importPlayerRedis(ctx, *configPath, data, legacyOpts)
-	case "playerdb":
-		err = importPlayerDB(ctx, *dbConfigPath, data, legacyOpts)
-	default:
-		err = fmt.Errorf("unsupported import mode %q (only player and playerdb exports are supported)", data.Mode)
-	}
+	return runNormalImport(ctx, *dryRun, *runtimePath, *runtimeDir, *runtimeSHA, func(permission authoritysql.Permission) error {
+		legacyOpts := legacyImportOptions{
+			permission: permission,
+			dryRun:     *dryRun, allowHosts: *allowHosts, allowFencedTables: *allowFenced, allowUnverifiedTarget: *allowUnverifiedTarget,
+		}
+		switch data.Mode {
+		case "player":
+			fmt.Fprintln(os.Stderr, "注意:player 导出写回的是 data_service 的 player:{id}:<field> 键族,不在登录加载链路上;本地复现玩家请用 player-bundle")
+			err = importPlayerRedis(ctx, *configPath, data, legacyOpts)
+		case "playerdb":
+			err = importPlayerDB(ctx, *dbConfigPath, data, legacyOpts)
+		default:
+			err = fmt.Errorf("unsupported import mode %q (only player and playerdb exports are supported)", data.Mode)
+		}
 
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "import failed: %v\n", err)
-		os.Exit(1)
+		return err
+	})
+}
+
+// runNormalImport 只为真实有限命令装配一次 NORMAL boot；预览不消费 grant，也不制造闭合原件。
+func runNormalImport(ctx context.Context, dryRun bool, plan, directory, digest string, call func(authoritysql.Permission) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
+	if dryRun {
+		if plan != "" || directory != "" || digest != "" {
+			return errors.New("只读预览不绑定NORMAL排空runtime")
+		}
+		return call(authoritysql.Reader())
+	}
+	var runtime *drainproof.Runtime
+	if plan != "" || directory != "" || digest != "" {
+		var err error
+		runtime, err = drainproof.LoadRuntime(plan, directory, digest)
+		if err != nil {
+			return err
+		}
+		if runtime.Seed("SOURCE") == nil || runtime.Seed("RELAY") == nil ||
+			runtime.Request.RunPhase == databasepb.SqlWriterDrainRun_SQL_RELEASED {
+			return drainproof.ErrHold
+		}
+	}
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		return err
+	}
+	return executeNormalImport(ctx, writer, runtime, call)
+}
+
+// SQL/Redis 与 Router 发布全部同步返回；双角色票据覆盖命令及其实际资源清理，不造后台线程。
+func executeNormalImport(ctx context.Context, writer authoritysql.WriterConfig, runtime *drainproof.Runtime, call func(authoritysql.Permission) error) (runErr error) {
+	if len(writer.InstanceID()) != 16 || len(writer.WriterKey()) != 16 {
+		return errors.New("有限导入缺少真实NORMAL boot")
+	}
+	defer writer.Seal()
+	root, relay := drainproof.New(), drainproof.New()
+	if runtime != nil {
+		if runtime.Seed("SOURCE") == nil || runtime.Seed("RELAY") == nil {
+			return drainproof.ErrHold
+		}
+		if err := runtime.BindBoot(writer.InstanceID(), writer.WriterKey()); err != nil {
+			return err
+		}
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			root.Hold()
+			relay.Hold()
+			panic(recovered)
+		}
+		root.CloseAdmission()
+		relay.CloseAdmission()
+		// call 已同步返回且其 defer 已结束。超时或未知不能写成功原件。
+		closeCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		runErr = errors.Join(runErr, root.Wait(closeCtx), relay.Wait(closeCtx))
+		writer.Seal()
+		if runErr == nil && runtime != nil {
+			runErr = errors.Join(runtime.Write("SOURCE", root), runtime.Write("RELAY", relay))
+		}
+	}()
+	finishRoot, err := root.Enter()
+	if err != nil {
+		return err
+	}
+	defer finishRoot()
+	finishRelay, err := relay.Enter()
+	if err != nil {
+		return err
+	}
+	defer finishRelay()
+	runErr = call(authoritysql.Writer(writer))
+	if runErr != nil {
+		root.Hold()
+		relay.Hold()
+	}
+	return runErr
 }
 
 // legacyImportOptions 是旧 player / playerdb 两种导入共用的开关。
 type legacyImportOptions struct {
+	permission authoritysql.Permission
 	dryRun     bool
 	allowHosts string
 	// allowFencedTables 只对 playerdb:放行两张带行内围栏的表(只写行、不对齐屏障,本地 login 必拒)。
@@ -154,7 +246,7 @@ type legacyImportOptions struct {
 
 // ── Player Redis import ─────────────────────────────────────────
 
-func importPlayerRedis(ctx context.Context, configPath string, data *exportFile, opts legacyImportOptions) error {
+func importPlayerRedis(ctx context.Context, configPath string, data *exportFile, opts legacyImportOptions) (runErr error) {
 	if data.PlayerID == 0 {
 		return errors.New("export file has no player_id (use -player to override)")
 	}
@@ -204,11 +296,14 @@ func importPlayerRedis(ctx context.Context, configPath string, data *exportFile,
 		return err
 	}
 
-	svcCtx, cleanup, err := debugutil.NewServiceContext(configPath)
+	if opts.permission.Kind() != "writer" {
+		return errors.New("实际导入缺少同boot NORMAL Permission")
+	}
+	svcCtx, cleanup, err := debugutil.NewServiceContextWithPermissionAndReport(configPath, opts.permission)
 	if err != nil {
 		return err
 	}
-	defer cleanup()
+	defer func() { runErr = errors.Join(runErr, cleanup()) }()
 
 	// In dev mode, ClientForZone returns devClient for any zone.
 	// In cluster mode, we need a valid zone ID.
@@ -218,7 +313,7 @@ func importPlayerRedis(ctx context.Context, configPath string, data *exportFile,
 	}
 	// 写前闸门二:地址闸挡不住 port-forward 到 127.0.0.1 的线上实例,而旧导出文件不记来源实例身份,
 	// 所以每个写目标都要凭本地调试环境标记证明自己是本地(2026-10-22,r2-ds#1 评审补充)。
-	if err := checkLegacyPlayerTargetsMarked(ctx, dsCfg, client, data.HomeZoneID, opts.allowUnverifiedTarget); err != nil {
+	if err := checkLegacyPlayerTargetsMarked(ctx, dsCfg, client, data.HomeZoneID, opts.allowUnverifiedTarget, opts.permission); err != nil {
 		return err
 	}
 
@@ -271,18 +366,25 @@ func checkLegacyRedisTargets(c config.Config, homeZone uint32, allowHosts string
 // 玩家字段写进的数据 Redis(dataRedis,DevRedis 或 Regions 集群);homeZone>0 时还要登记映射,写 MappingRedis,
 // RouteStore 为 db_first 时还先写全局库的 player_route。旧导出文件不记来源身份,每个实例都只能凭本地调试环境标记
 // 证明自己是本地,否则要 -allow-unverified-target-identity 显式放行。
-func checkLegacyPlayerTargetsMarked(ctx context.Context, c config.Config, dataRedis goredis.Cmdable, homeZone uint32, allowUnverified bool) error {
+func checkLegacyPlayerTargetsMarked(ctx context.Context, c config.Config, dataRedis goredis.Cmdable, homeZone uint32, allowUnverified bool, permissions ...authoritysql.Permission) (runErr error) {
+	permission := authoritysql.Reader()
+	if len(permissions) > 1 {
+		return errors.New("重复SQL Permission装配")
+	}
+	if len(permissions) == 1 {
+		permission = permissions[0]
+	}
 	targets := []importTarget{redisImportTarget(ctx, "data_service 数据 Redis", dataRedis)}
 	if homeZone > 0 {
 		mapping := goredis.NewClient(&goredis.Options{Addr: c.MappingRedis.Host, Password: c.MappingRedis.Pass})
-		defer mapping.Close()
+		defer func() { runErr = errors.Join(runErr, mapping.Close()) }()
 		targets = append(targets, redisImportTarget(ctx, "data_service MappingRedis", mapping))
 		if c.RouteStore.Normalize().DBFirst() {
-			global, err := debugutil.OpenMySQL(ctx, debugutil.GlobalMySQL(c), 1)
+			global, err := debugutil.OpenMySQLWithPermission(ctx, debugutil.GlobalMySQL(c), 1, permission)
 			if err != nil {
 				return fmt.Errorf("核对目标全局库(player_route)失败: %w", err)
 			}
-			defer global.Close()
+			defer func() { runErr = errors.Join(runErr, global.Close()) }()
 			targets = append(targets, mysqlImportTarget(ctx, roleGlobalDB, "data_service 全局库(player_route)", global))
 		}
 	}
@@ -313,7 +415,7 @@ func writeLegacyPlayerFields(ctx context.Context, client goredis.Cmdable, player
 
 // ── Player DB (MySQL) import ────────────────────────────────────
 
-func importPlayerDB(ctx context.Context, dbConfigPath string, data *exportFile, opts legacyImportOptions) error {
+func importPlayerDB(ctx context.Context, dbConfigPath string, data *exportFile, opts legacyImportOptions) (runErr error) {
 	if data.PlayerID == 0 {
 		return errors.New("export file has no player_id (use -player to override)")
 	}
@@ -410,11 +512,14 @@ func importPlayerDB(ctx context.Context, dbConfigPath string, data *exportFile, 
 	if err := debugutil.CheckLocalWriteTarget("MySQL", cfg.ServerConfig.Database.Hosts, opts.allowHosts); err != nil {
 		return err
 	}
-	db, _, _, err := debugutil.OpenZoneDB(ctx, dbConfigPath, zoneID)
+	if opts.permission.Kind() != "writer" {
+		return errors.New("实际导入缺少同boot NORMAL Permission")
+	}
+	db, _, _, err := debugutil.OpenZoneDBNamedWithPermission(ctx, dbConfigPath, zoneID, "", opts.permission)
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { runErr = errors.Join(runErr, db.Close()) }()
 
 	// 写前闸门二(2026-10-22,r2-ds#1 评审补充):线上 TiDB / MySQL 经 port-forward 到 127.0.0.1 时地址闸放行,
 	// 本模式会把该玩家的其它表 DELETE + INSERT 成导出时的旧状态(带 -allow-fenced-tables 时连两张围栏表也写)。

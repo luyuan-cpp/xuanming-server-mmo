@@ -1,8 +1,16 @@
 package kafkautil
 
 import (
+	"bytes"
+	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	kafkago "github.com/segmentio/kafka-go"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	pb "proto/common/database"
+	"shared/drainproof"
 	"strings"
 	"testing"
 	"time"
@@ -333,5 +341,300 @@ func TestComputeGroupLagUnknownTopic(t *testing.T) {
 	}
 	if got != (GroupLag{}) {
 		t.Fatalf("a failed probe must not hand back partial numbers, got %+v", got)
+	}
+}
+
+func TestStableDrainCatalogExcludesOnlyCaptureWindow(t *testing.T) {
+	first := []byte(`{"schema":"SQL_DRAIN_KAFKA_CATALOG_V2","observed_start_ms":1,"observed_end_ms":2,"cluster_id":"Yw==","topic_partitions":{},"topic_ids":{},"topic_names":[],"group_names":[],"broker_configs":{},"topic_configs":{}}`)
+	second := bytes.ReplaceAll(bytes.ReplaceAll(first, []byte(`"observed_start_ms":1`), []byte(`"observed_start_ms":3`)), []byte(`"observed_end_ms":2`), []byte(`"observed_end_ms":4`))
+	a, err := StableDrainCatalogDigest(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := StableDrainCatalogDigest(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(a, b) {
+		t.Fatal("观察时间改变了稳定目录摘要")
+	}
+	changed := bytes.ReplaceAll(second, []byte("Yw=="), []byte("ZA=="))
+	c, err := StableDrainCatalogDigest(changed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(a, c) {
+		t.Fatal("换cluster未改变稳定目录摘要")
+	}
+}
+
+func TestBoundConsumerGroupRejectsImplicitOrUnboundedOwnership(t *testing.T) {
+	config := BoundConsumerGroupConfig{Group: kafkago.ConsumerGroupConfig{ID: "results", Brokers: []string{"localhost:9092"}, Topics: []string{"results"}}, Reader: kafkago.ReaderConfig{MinBytes: 1, MaxBytes: 1024}, HandlerTimeout: time.Second}
+	handler := func(context.Context, kafkago.Message) error { return nil }
+	if _, err := NewBoundConsumerGroup(config, nil, handler); err == nil {
+		t.Fatal("未给真实 relay owner 却接纳构造")
+	}
+	if _, err := NewBoundConsumerGroup(config, drainproof.New(), nil); err == nil {
+		t.Fatal("未给实际处理函数却接纳构造")
+	}
+	invalid := config
+	invalid.Group.StartOffset = kafkago.LastOffset
+	if _, err := NewBoundConsumerGroup(invalid, drainproof.New(), handler); err == nil {
+		t.Fatal("允许 latest 跳过无提交历史")
+	}
+	invalid = config
+	invalid.Reader.GroupID = "second-group"
+	if _, err := NewBoundConsumerGroup(invalid, drainproof.New(), handler); err == nil {
+		t.Fatal("允许第二个隐式 consumer group")
+	}
+	invalid = config
+	invalid.HandlerTimeout = 0
+	if _, err := NewBoundConsumerGroup(invalid, drainproof.New(), handler); err == nil {
+		t.Fatal("允许没有时间预算的 accepted handler")
+	}
+	owner, err := NewBoundConsumerGroup(config, drainproof.New(), handler)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner.StopFetching()
+	// 故意移除 broker：若 Run 越过终局分支，构造校验立即失败，不允许回归用例连接网络。
+	owner.config.Group.Brokers = nil
+	if err := owner.Run(context.Background()); err != nil {
+		t.Fatalf("未启动已停止属于已知零接纳终局: %v", err)
+	}
+	raw, err := owner.CloseAndReport(context.Background())
+	if err != nil {
+		t.Fatalf("Stop→Run→Close 必须完成: %v", err)
+	}
+	if owner.started || owner.generation != nil || len(owner.history) != 0 || !bytes.Contains(raw, []byte(`"Started":false`)) {
+		t.Fatalf("未启动终局伪造了实际运行: %s", raw)
+	}
+	again, err := owner.CloseAndReport(context.Background())
+	if err != nil || !bytes.Equal(raw, again) {
+		t.Fatalf("重复关闭必须保留同一零接纳原件: %v", err)
+	}
+}
+
+func TestMergeConsumerReadinessBindsActualBootAndRejectsDuplicateGroup(t *testing.T) {
+	makeReport := func(group string, instance byte) []byte {
+		t.Helper()
+		report := &pb.SqlWriterMaintenanceReceipt_ConsumerReadiness{Groups: []*pb.SqlWriterMaintenanceReceipt_ConsumerGroupReadiness{{OperationId: bytes.Repeat([]byte{1}, 16), ManifestDigest: bytes.Repeat([]byte{2}, 32), IssuerId: bytes.Repeat([]byte{3}, 16), InstanceId: bytes.Repeat([]byte{instance}, 16), Group: group, GenerationId: 5, MemberId: "actual-member", ExpectedPartitions: []*pb.SqlWriterMaintenanceReceipt_KafkaPartitionClosure{{Group: group, TopicName: "results", Partition: 0}}}}}
+		raw, err := (protojson.MarshalOptions{EmitUnpopulated: true}).Marshal(report)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	first, second := makeReport("a", 4), makeReport("b", 4)
+	digest, raw, err := MergeConsumerReadiness(second, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := sha256.Sum256(raw)
+	if !bytes.Equal(digest, expected[:]) {
+		t.Fatal("摘要没有绑定实际合并原件")
+	}
+	decoded := &pb.SqlWriterMaintenanceReceipt_ConsumerReadiness{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(raw, decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.Groups) != 2 || decoded.Groups[0].Group != "a" || len(decoded.Groups[0].AssignedPartitions) != 0 {
+		t.Fatal("合并改变了真实组集合或为空 assignment 伪造分区")
+	}
+	if _, _, err := MergeConsumerReadiness(first, first); err == nil {
+		t.Fatal("重复 consumer group 未拒绝")
+	}
+	if _, _, err := MergeConsumerReadiness(first, makeReport("b", 9)); err == nil {
+		t.Fatal("跨 boot 的报告被合并")
+	}
+	if _, _, err := MergeConsumerReadiness(); err == nil {
+		t.Fatal("无实际消费者的空报告被当作 readiness")
+	}
+}
+
+// 代次/提交边界替身不连接 Kafka，验证批 SQL caller 可观察的交付、确定性重放与元数据提交合同。
+func TestBoundMessageReaderReplaysSameTicketAndAcceptsMetadataCommit(t *testing.T) {
+	relay := drainproof.New()
+	owner, err := NewBoundMessageReader(BoundConsumerGroupConfig{Group: kafkago.ConsumerGroupConfig{ID: "snapshots", Brokers: []string{"localhost:9092"}, Topics: []string{"snapshots"}}, Reader: kafkago.ReaderConfig{MinBytes: 1, MaxBytes: 1024}}, relay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	install := func(id int32) *boundPartition {
+		generation := &kafkago.Generation{ID: id, GroupID: "snapshots", MemberID: "member"}
+		partition := &boundPartition{topic: "snapshots", partition: 0, initial: 10, committed: 10, pending: map[int64]*boundDelivery{}}
+		owner.generation = generation
+		owner.generationContext = context.Background()
+		owner.generationCancel = func() {}
+		owner.partitions = map[string]*boundPartition{"snapshots/0": partition}
+		owner.initialized = true
+		return partition
+	}
+	message := kafkago.Message{Topic: "snapshots", Partition: 0, Offset: 10, Key: []byte("key"), Value: []byte("actual-payload")}
+	first := install(1)
+	owner.messages <- &boundDelivery{generation: owner.generation, partition: first, message: message}
+	delivered, err := owner.FetchMessage(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if relay.Pending() != 1 {
+		t.Fatal("实际交付没有登记 accepted")
+	}
+	metadata := kafkago.Message{Topic: delivered.Topic, Partition: delivered.Partition, Offset: delivered.Offset}
+	if err = owner.ReportProcessingFailure(context.Background(), ProcessingNotCommitted, metadata); err != nil {
+		t.Fatal(err)
+	}
+	if relay.Pending() != 1 {
+		t.Fatal("已证明未提交仍须等实际重放，不能伪造 settled")
+	}
+	second := install(2)
+	owner.messages <- &boundDelivery{generation: owner.generation, partition: second, message: message}
+	if _, err = owner.FetchMessage(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if relay.Pending() != 1 {
+		t.Fatal("同 T/P/O 重放重复创建原票据")
+	}
+	committed := false
+	owner.commitOffsets = func(generation *kafkago.Generation, offsets map[string]map[int]int64) error {
+		if generation.ID != 2 || offsets["snapshots"][0] != 11 {
+			t.Fatalf("错误的代次或 exclusive commit: %v", offsets)
+		}
+		committed = true
+		return nil
+	}
+	if err = owner.CommitMessages(context.Background(), metadata); err != nil {
+		t.Fatal(err)
+	}
+	if !committed || relay.Pending() != 0 {
+		t.Fatal("实际新代次提交之后原票据没有 settled")
+	}
+}
+
+func TestBoundMessageReaderUnknownCannotBecomeReplaySuccess(t *testing.T) {
+	relay := drainproof.New()
+	owner, err := NewBoundMessageReader(BoundConsumerGroupConfig{Group: kafkago.ConsumerGroupConfig{ID: "g", Brokers: []string{"localhost:9092"}, Topics: []string{"t"}}, Reader: kafkago.ReaderConfig{MinBytes: 1, MaxBytes: 1024}}, relay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generation := &kafkago.Generation{ID: 1, GroupID: "g", MemberID: "member"}
+	partition := &boundPartition{topic: "t", partition: 0, pending: map[int64]*boundDelivery{}}
+	owner.generation = generation
+	owner.generationContext = context.Background()
+	owner.partitions = map[string]*boundPartition{"t/0": partition}
+	owner.initialized = true
+	owner.messages <- &boundDelivery{generation: generation, partition: partition, message: kafkago.Message{Topic: "t", Partition: 0, Offset: 0, Value: []byte("x")}}
+	message, err := owner.FetchMessage(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = owner.ReportProcessingFailure(context.Background(), ProcessingOutcomeUnknown, message); !errors.Is(err, drainproof.ErrHold) {
+		t.Fatalf("UNKNOWN 被接受成确定性恢复: %v", err)
+	}
+	owner.waitDelivered(context.Background(), generation, owner.partitions)
+	if err = relay.WaitIdle(context.Background()); !errors.Is(err, drainproof.ErrHold) {
+		t.Fatalf("UNKNOWN 没有保持 HOLD: %v", err)
+	}
+	if err = owner.CommitMessages(context.Background(), message); !errors.Is(err, drainproof.ErrHold) {
+		t.Fatalf("UNKNOWN 被后一次 commit 洗白: %v", err)
+	}
+}
+
+// P9 复核和本机门禁提交必须共用真实 owner 锁，不能留下预检后换代的窗口。
+func TestWithConsumerReadinessKeepsGenerationLockedThroughOpen(t *testing.T) {
+	owner, err := NewBoundMessageReader(BoundConsumerGroupConfig{Group: kafkago.ConsumerGroupConfig{ID: "g", Brokers: []string{"localhost:9092"}, Topics: []string{"t"}}, Reader: kafkago.ReaderConfig{MinBytes: 1, MaxBytes: 1024}}, drainproof.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner.generation = &kafkago.Generation{ID: 7, GroupID: "g", MemberID: "member"}
+	owner.generationContext = context.Background()
+	owner.initialized = true
+	owner.partitions = map[string]*boundPartition{"t/0": {topic: "t", partition: 0, committed: 12}}
+	report := &pb.SqlWriterMaintenanceReceipt_ConsumerReadiness{Groups: []*pb.SqlWriterMaintenanceReceipt_ConsumerGroupReadiness{{Group: "g", GenerationId: 7, MemberId: "member", AssignedPartitions: []*pb.SqlWriterMaintenanceReceipt_KafkaPartitionClosure{{Group: "g", TopicName: "t", Partition: 0, FinalCommitted: 12}}}}}
+	raw, err := protojson.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	commit := func() ([]byte, error) {
+		calls++
+		if owner.mu.TryLock() {
+			owner.mu.Unlock()
+			t.Fatal("本机 open 没有持有实际代次锁")
+		}
+		return []byte("opened"), nil
+	}
+	result, err := WithConsumerReadiness(context.Background(), raw, []*BoundConsumerGroup{owner}, commit)
+	if err != nil || string(result) != "opened" || calls != 1 {
+		t.Fatalf("同代次开放失败: %q %v", result, err)
+	}
+	owner.generation = &kafkago.Generation{ID: 8, GroupID: "g", MemberID: "member"}
+	if _, err = WithConsumerReadiness(context.Background(), raw, []*BoundConsumerGroup{owner}, commit); err == nil || calls != 1 {
+		t.Fatal("换代后仍执行旧 open")
+	}
+	owner.generation = &kafkago.Generation{ID: 7, GroupID: "g", MemberID: "member"}
+	report.ManualAssignments = []*pb.SqlWriterMaintenanceReceipt_ManualConsumerAssignment{{}}
+	raw, err = protojson.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = WithConsumerReadiness(context.Background(), raw, []*BoundConsumerGroup{owner}, commit); err == nil || calls != 1 {
+		t.Fatal("group owner 忽略了未拥有的 manual assignment")
+	}
+	if _, _, err = MergeConsumerReadiness(raw); err == nil {
+		t.Fatal("合并悄悄丢弃 manual assignment")
+	}
+}
+
+func TestManualAssignmentKeepsNativeIdentityAndPositionFloor(t *testing.T) {
+	base := &pb.SqlWriterMaintenanceReceipt_ManualConsumerAssignment{IssuerId: []byte("scene-source"), InstanceId: bytes.Repeat([]byte{1}, 16), ConsumerId: "scene-rpc", ClusterId: []byte("cluster"), TopicId: bytes.Repeat([]byte{2}, 16), TopicName: "scene-cmd", Partition: 0, PartitionCount: 2, TargetNodeId: 9, TargetInstanceId: bytes.Repeat([]byte{1}, 16), AssignmentRevision: 3, StartOffset: 4, Position: 10, Earliest: 4, ExclusiveEnd: 12, ObservedMs: 1}
+	clone := func() *pb.SqlWriterMaintenanceReceipt_ManualConsumerAssignment {
+		return proto.Clone(base).(*pb.SqlWriterMaintenanceReceipt_ManualConsumerAssignment)
+	}
+	settled := clone()
+	settled.Position = 12
+	settled.ExclusiveEnd = 12
+	settled.ObservedMs = 2
+	if !sameManualAssignment(base, settled) {
+		t.Fatal("同一本机 assignment 的真实位置推进被拒绝")
+	}
+	changed := clone()
+	changed.AssignmentRevision++
+	if sameManualAssignment(base, changed) {
+		t.Fatal("换 assignment 被接纳")
+	}
+	changed = clone()
+	changed.StartOffset++
+	if sameManualAssignment(base, changed) {
+		t.Fatal("改写本机起点被接纳")
+	}
+	changed = clone()
+	changed.Position--
+	if sameManualAssignment(base, changed) {
+		t.Fatal("本机位置回退被接纳")
+	}
+	changed = clone()
+	changed.Earliest = 11
+	changed.Position = 12
+	if sameManualAssignment(base, changed) {
+		t.Fatal("已丢失 P0 保护范围仍被接纳")
+	}
+}
+
+// 已启动的重复 Run 与未完成的非法停止状态仍拒绝，不能广泛吞掉 ErrClosed。
+func TestBoundConsumerGroupRunRejectsDuplicateAndIncompleteStop(t *testing.T) {
+	for _, state := range []struct {
+		name                        string
+		started, stopping, complete bool
+	}{
+		{name: "重复启动", started: true},
+		{name: "已启动后停止", started: true, stopping: true, complete: true},
+		{name: "未完成的停止", stopping: true},
+	} {
+		t.Run(state.name, func(t *testing.T) {
+			owner := &BoundConsumerGroup{started: state.started, stopping: state.stopping, complete: state.complete}
+			if err := owner.Run(context.Background()); !errors.Is(err, drainproof.ErrClosed) {
+				t.Fatalf("非法生命周期必须拒绝: %v", err)
+			}
+		})
 	}
 }

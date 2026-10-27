@@ -30,15 +30,6 @@
     <ClCompile Include="login\login.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="etcd\etcd.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="etcd\kv.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="etcd\version.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="common\base\common.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -174,28 +165,13 @@
     <ClCompile Include="team\team.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="team\team.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="db\db.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="db\db.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="db\db_task.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="db\db_task.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="db\proto_option.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="login\login.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="scene_manager\scene_manager_service.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="scene_manager\scene_manager_service.pb.cc">
@@ -228,9 +204,6 @@
     <ClCompile Include="scene_manager\storage.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="scene_manager\storage.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="contracts\kafka\gate_command.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -243,43 +216,22 @@
     <ClCompile Include="data_service\data_service.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="data_service\data_service.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="chat\chat.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="chat\chat.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="contracts\kafka\player_event.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="friend\friend.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="friend\friend.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="rank\rank.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="rank\rank.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="mail\mail.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="mail\mail.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="mail\mail_admin.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="mail\mail_admin.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="guild\guild.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="guild\guild.pb.cc">
@@ -288,43 +240,22 @@
     <ClCompile Include="guild\guild_db.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="guild\guild_internal.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="guild\guild_internal.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="trade\jubaozhai.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="trade\jubaozhai.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="trade\trade_admin.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="trade\trade_admin.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="trade\trade_table.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="trade\trade_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="player_inbox\player_inbox.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="player_inbox\player_inbox.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="player_inbox\player_inbox_admin.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="player_inbox\player_inbox_admin.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="player_inbox\player_inbox_table.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="player_inbox\player_inbox_table.pb.cc">
@@ -354,12 +285,6 @@
     <ClCompile Include="common\rollback\transaction_log.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="db\proto_option.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="scene_manager\scene_node_service.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="scene_manager\scene_node_service.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -370,9 +295,6 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="match\match_internal.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="match\match_internal.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
@@ -390,15 +312,6 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="login\login.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="etcd\etcd.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="etcd\kv.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="etcd\version.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="common\base\user_accounts.pb.h">
@@ -536,31 +449,16 @@
     <ClInclude Include="team\team.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="team\team.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="db\db.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="db\db.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="db\db_task.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="db\db_task.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="db\proto_option.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="login\login.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="scene_manager\scene_manager_service.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="scene_manager\scene_manager_service.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="scene\client_player_common.pb.h">
@@ -590,9 +488,6 @@
     <ClInclude Include="scene_manager\storage.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="scene_manager\storage.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="contracts\kafka\gate_command.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -605,43 +500,22 @@
     <ClInclude Include="data_service\data_service.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="data_service\data_service.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="chat\chat.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="chat\chat.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="contracts\kafka\player_event.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="friend\friend.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="friend\friend.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="rank\rank.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="rank\rank.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="mail\mail.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="mail\mail.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="mail\mail_admin.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="mail\mail_admin.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="guild\guild.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="guild\guild.pb.h">
@@ -650,19 +524,10 @@
     <ClInclude Include="guild\guild_db.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="guild\guild_internal.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="guild\guild_internal.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="trade\jubaozhai.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="trade\jubaozhai.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="trade\trade_admin.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="trade\trade_admin.pb.h">
@@ -671,19 +536,10 @@
     <ClInclude Include="trade\trade_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="player_inbox\player_inbox.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="player_inbox\player_inbox.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="player_inbox\player_inbox_admin.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="player_inbox\player_inbox_admin.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="player_inbox\player_inbox_table.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="player_inbox\player_inbox_table.pb.h">
@@ -713,12 +569,6 @@
     <ClInclude Include="common\rollback\transaction_log.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="db\proto_option.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="scene_manager\scene_node_service.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="scene_manager\scene_node_service.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -731,25 +581,13 @@
     <ClInclude Include="battle\battle_data.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="battle\battle_data.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="battle\battle_node.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="battle\battle_node.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="battle\player_battle.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="battle\player_battle.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="client_rpc_router\client_rpc_router.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="client_rpc_router\client_rpc_router.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="common\component\battle_comp.pb.h">
@@ -767,16 +605,7 @@
     <ClInclude Include="match\match_service.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="match\match_service.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="match\match_internal.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="match\match_internal.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="trade\trade_table.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
@@ -791,25 +620,13 @@
     <ClInclude Include="scene\player_mystery_merchant.pb.h" />
   </ItemGroup>
   <ItemGroup Label="ProtoGeneratorSources">
-    <ClCompile Include="battle\battle_data.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="battle\battle_data.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="battle\battle_node.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="battle\battle_node.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="battle\player_battle.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="battle\player_battle.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="client_rpc_router\client_rpc_router.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="client_rpc_router\client_rpc_router.pb.cc">
@@ -839,46 +656,22 @@
     <ClCompile Include="contracts\kafka\match_event.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="friend\friend_table.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="friend\friend_table.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="guild\guild_db.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="mail\mail_table.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="mail\mail_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="match\match_authority.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="match\match_authority.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="match\match_network.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="match\match_network.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="match\match_service.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="match\match_service.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="rank\rank_admin.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="rank\rank_admin.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="rank\rank_table.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="rank\rank_table.pb.cc">
@@ -888,9 +681,6 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="scene\player_pet.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="trade\commerce.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="trade\commerce.pb.cc">
@@ -908,40 +698,19 @@
     <ClInclude Include="common\component\player_pet_comp.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="friend\friend_table.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="friend\friend_table.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="guild\guild_db.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="mail\mail_table.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="mail\mail_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="match\match_authority.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="match\match_authority.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="match\match_network.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="match\match_network.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="rank\rank_admin.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="rank\rank_admin.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="rank\rank_table.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="rank\rank_table.pb.h">
@@ -953,23 +722,14 @@
     <ClInclude Include="scene\player_pet.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="trade\commerce.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="trade\commerce.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup Label="ProtoGeneratorSources">
-    <ClCompile Include="player_locator\player_locator.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="player_locator\player_locator.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClInclude Include="player_locator\player_locator.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="player_locator\player_locator.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -978,16 +738,10 @@
     <ClCompile Include="common\base\role_admission.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="team\team_authority.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="team\team_authority.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClInclude Include="common\base\role_admission.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="team\team_authority.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="team\team_authority.pb.h">

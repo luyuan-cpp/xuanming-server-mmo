@@ -98,6 +98,13 @@ function Get-TrackedKeys {
 try {
     New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
 
+    Test-Case '私有配置路径含空格、引号或尾反斜线时保持单个启动参数' {
+        Assert-Equal '"C:\private boot\config.yaml"' (ConvertTo-ServiceProcessArgument 'C:\private boot\config.yaml') '路径不能拆成两个argv'
+        Assert-Equal '"C:\private boot\\"' (ConvertTo-ServiceProcessArgument 'C:\private boot\') '结尾反斜线不能吞掉闭合引号'
+        Assert-Equal '"a\"b"' (ConvertTo-ServiceProcessArgument 'a"b') '字面引号必须留在同一个argv'
+        Assert-Equal '""' (ConvertTo-ServiceProcessArgument '') '空参数不丢失'
+    }
+
     Test-Case '优雅停:Ctrl+C 后在时限内退出,不强杀,移除 PID 记录' {
         Reset-TestState
         $script:Processes[101] = 'running'
@@ -300,4 +307,16 @@ finally {
     }
     if (Test-Path -LiteralPath $resolvedRoot) { Remove-Item -LiteralPath $resolvedRoot -Recurse -Force }
 }
+Test-Case '严格StopAndReport拒ForceStop与缺原件，不复用普通强杀成功结论' {
+    $savedForce=$ForceStop;$savedPlan=$MaintenancePlanPath;$savedReport=$StopReportPath
+    try {
+        $ForceStop=$true;$MaintenancePlanPath='fixture-plan';$StopReportPath='fixture-output'
+        $message='';try{Invoke-StopAndReport}catch{$message=$_.Exception.Message}
+        Assert-Match -Text $message -Pattern '禁止ForceStop' -Because '不让普通stop强杀签成永久排空'
+        $ForceStop=$false;$MaintenancePlanPath='';$StopReportPath=''
+        $message='';try{Invoke-StopAndReport}catch{$message=$_.Exception.Message}
+        Assert-Match -Text $message -Pattern '固定维护计划' -Because '无固定issuer/应用frontier不能根据PID消失声称成功'
+    } finally {$ForceStop=$savedForce;$MaintenancePlanPath=$savedPlan;$StopReportPath=$savedReport}
+}
+
 exit (Complete-TestRun -SuiteName 'go_services 优雅停')

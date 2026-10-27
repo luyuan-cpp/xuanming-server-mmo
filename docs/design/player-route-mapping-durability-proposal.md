@@ -1613,3 +1613,12 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 - G4a（[shared-redis-split-by-purpose.md](./shared-redis-split-by-purpose.md)）：不再需要 redis-mapping 实例；`MappingRedis` 只留给 data_service 玩家写锁。§18 / §21 / §25.2 第 7 条由 G4a 会话加「被取代」指向注。
 - D1：[d1-review-fix-handoff-20261023.md](../handoff/d1-review-fix-handoff-20261023.md) §2 仍成立的项并入本节各批；§3 作废项不再修。
 - **Java 版**：不适用。Java 没有映射层，归属区就是单库 `game.player.zone_id` 列，按约定不往 `PARITY.md` 加行。
+
+
+### 2026-10-26：全 SQL 写资格与路由维护接缝（候选，未验证）
+
+本批采用 [存盘围栏设计的 v4 实施段](db-write-fencing-mysql.md) 中的 writer 目录、维护阶段和永久票据。route_meta.writable 不再接受无正式请求的独立翻转；route_tool 的冻结和解冻通过显式 Operator 与 Catalog 操作，normal data_service 保持自己的 WriterConfig。对账检测到危险时只能关闭本 boot 的入口、保留危险事实，再由独立维护 owner 申请紧急 HOLD；normal 服务不能暗持 Operator 凭据。
+
+冻结、解冻均保留原世代与业务行语义。正常释放所需水位下限固定到 ReleaseReadiness.route_watermark_floor_ms，必须覆盖审核时同世代可信 ReadyMarker 与 Redis watermark 下限；Catalog 在 slots→reconcile→meta→run→ticket 顺序下，于同一事务抬 route_reconcile.watermark_ms 并推进 E/writable。请求或审核原件一旦封装，不因当前观测变化而原地重封。已有 Redis CAS 后处理继续按原结果判断，UNKNOWN 保持维护。
+
+当前生产主入口、真实发行者关闭/新 boot prepare-open 仍在逐项接线；相应遗漏路径单列待范围决策。候选只读形状检查、独立 fresh-prestart 与测试夹具的 Schema 能力已分开；未执行生成、构建、真库或压力测试。Java 版由同批独立实现对齐，不复制 R 的 route_reconcile 结构。

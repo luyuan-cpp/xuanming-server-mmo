@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"net"
 	"os"
+	"shared/authoritysql/sqltest"
 	"strconv"
 	"testing"
 	"time"
@@ -17,7 +18,6 @@ import (
 	pb "proto/guild"
 	matchpb "proto/match"
 	teampb "proto/team"
-	"shared/authoritysql"
 	"shared/roleidentity"
 
 	"github.com/alicebob/miniredis/v2"
@@ -46,33 +46,30 @@ func guildRoleTiDB(t *testing.T) (context.Context, *sql.DB, *GuildRepo, *Activit
 	portNumber, err := strconv.Atoi(port)
 	require.NoError(t, err)
 	require.True(t, portNumber > 0 && portNumber <= 65535, "只接受显式本地数值端口；本任务ownedTiDB为24000")
-	cfg.DBName = ""
-	admin, err := sql.Open("mysql", cfg.FormatDSN())
-	require.NoError(t, err)
 	random := make([]byte, 8)
 	_, err = rand.Read(random)
 	require.NoError(t, err)
 	schema := "guild_role_it_" + hex.EncodeToString(random)
-	_, err = admin.Exec("CREATE DATABASE `" + schema + "`")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_, err := admin.Exec("DROP DATABASE `" + schema + "`")
-		require.NoError(t, err)
-		require.NoError(t, admin.Close())
-	})
-	cfg.DBName = schema
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	t.Cleanup(cancel)
-	db, err := authoritysql.Open(ctx, cfg.FormatDSN(), schema, true, 8)
+	opts, err := sqltest.OptionsFromEnv(dsn, schema+"_writer", schema)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	fixture, err := sqltest.New(ctx, t, opts)
+	require.NoError(t, err)
+	db, err := fixture.OpenSchema(ctx, schema)
+	require.NoError(t, err)
 	model := proto2mysql.NewDB()
 	require.NoError(t, model.OpenDB(db, schema))
-	for _, row := range append(Tables(), []proto.Message{&dbpb.AccountRole{}, &matchpb.MatchAuthorityTicketRecord{}, &teampb.TeamLaunchRecord{}, &teampb.TeamLaunchRoleRecord{}}...) {
+	tables := append(Tables(), []proto.Message{&dbpb.AccountRole{}, &matchpb.MatchAuthorityTicketRecord{}, &teampb.TeamLaunchRecord{}, &teampb.TeamLaunchRoleRecord{}}...)
+	for _, row := range tables {
 		model.RegisterTable(row)
 		require.NoError(t, model.CreateOrUpdateTable(row))
 	}
 	createGuildRouteFixture(t, ctx, db)
+	require.NoError(t, fixture.GrantProtoTables(ctx, schema, tables))
+	require.NoError(t, fixture.GrantTables(ctx, schema, "route_meta", "player_route", "zone_merge_fence", "zone_merged_into", "route_reconcile"))
+	db, err = fixture.Open(ctx, schema, 8)
+	require.NoError(t, err)
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { require.NoError(t, rdb.Close()) })

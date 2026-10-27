@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+ <modelVersion>4.0.0</modelVersion><groupId>com.game</groupId><artifactId>authority-jdbc</artifactId><version>0.1.0-SNAPSHOT</version>
+ <properties><maven.compiler.release>21</maven.compiler.release><protoc.spec>file:/__MMORPG_EXPLICIT_PROTOC_REQUIRED__</protoc.spec><project.build.sourceEncoding>UTF-8</project.build.sourceEncoding></properties>
+ <dependencies><dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId><version>2.17.2</version></dependency>
+ <dependency><groupId>com.google.protobuf</groupId><artifactId>protobuf-java</artifactId><version>3.25.5</version></dependency>
+ <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.11.4</version><scope>test</scope></dependency>
+ <dependency><groupId>org.mockito</groupId><artifactId>mockito-core</artifactId><version>5.14.2</version><scope>test</scope></dependency>
+ <dependency><groupId>com.zaxxer</groupId><artifactId>HikariCP</artifactId><version>6.3.0</version><scope>test</scope></dependency>
+ <dependency><groupId>com.mysql</groupId><artifactId>mysql-connector-j</artifactId><version>9.2.0</version><scope>test</scope></dependency></dependencies>
+ <build><resources><resource><directory>${project.build.directory}/generated-resources/sql-authority</directory><targetPath>META-INF/sql-authority</targetPath></resource></resources><plugins><plugin><groupId>io.github.ascopes</groupId><artifactId>protobuf-maven-plugin</artifactId><version>5.1.10</version>
+ <executions><execution><id>authority-descriptor</id><goals><goal>generate</goal></goals><configuration>
+  <protoc kind="url"><url>${protoc.spec}</url></protoc><javaEnabled>false</javaEnabled><kotlinEnabled>false</kotlinEnabled>
+  <ignoreProjectDependencies>true</ignoreProjectDependencies><embedSourcesInClassOutputs>false</embedSourcesInClassOutputs>
+  <sourceDirectories><sourceDirectory>${project.basedir}/../..</sourceDirectory></sourceDirectories>
+  <includes><include>proto/common/database/rollback_database_table.proto</include></includes>
+  <importPaths><importPath>${project.basedir}/../..</importPath></importPaths>
+  <outputDescriptorFile>${project.build.directory}/generated-resources/sql-authority/route-authority.desc</outputDescriptorFile>
+  <outputDescriptorIncludeImports>true</outputDescriptorIncludeImports><outputDescriptorAttached>false</outputDescriptorAttached>
+ </configuration></execution></executions></plugin><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.13.0</version></plugin><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.2.5</version></plugin></plugins></build>
+</project>

@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
-	"net"
 	"os"
 	"sync"
 	"testing"
@@ -16,6 +15,7 @@ import (
 	comp "proto/common/component"
 	dbpb "proto/common/database"
 	"shared/authoritysql"
+	"shared/authoritysql/sqltest"
 	"shared/generated/persistschema"
 
 	"github.com/go-sql-driver/mysql"
@@ -25,45 +25,44 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func importRowsTiDB(t *testing.T) (*sql.DB, *proto2mysql.DB) {
+func importRowsTiDB(t *testing.T, capture ...func(*sqltest.Fixture, string)) (*sql.DB, *proto2mysql.DB) {
 	t.Helper()
 	dsn := os.Getenv("ACCOUNT_DIRECTORY_TEST_DSN")
 	if dsn == "" {
 		if os.Getenv("ACCOUNT_DIRECTORY_REQUIRE_TIDB") == "1" {
-			t.Fatal("缺少本线程专用ACCOUNT_DIRECTORY_TEST_DSN")
+			t.Fatal("缺少本线程专用 ACCOUNT_DIRECTORY_TEST_DSN")
 		}
-		t.Skip("未配置专用导入TiDB")
+		t.Skip("未配置专用导入 TiDB")
 	}
-	cfg, err := mysql.ParseDSN(dsn)
-	require.NoError(t, err)
-	host, _, err := net.SplitHostPort(cfg.Addr)
-	require.NoError(t, err)
-	require.True(t, host == "localhost" || (net.ParseIP(host) != nil && net.ParseIP(host).IsLoopback()))
-	cfg.DBName = ""
-	admin, err := sql.Open("mysql", cfg.FormatDSN())
-	require.NoError(t, err)
 	var nonce [8]byte
-	_, err = rand.Read(nonce[:])
+	_, err := rand.Read(nonce[:])
 	require.NoError(t, err)
 	name := "role_import_it_" + hex.EncodeToString(nonce[:])
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	_, err = admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`")
+	opts, err := sqltest.OptionsFromEnv(dsn, name+"_writer", name)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		_, err := admin.Exec("DROP DATABASE `" + name + "`")
-		require.NoError(t, err)
-		require.NoError(t, admin.Close())
-	})
-	cfg.DBName = name
-	db, err := authoritysql.Open(ctx, cfg.FormatDSN(), name, true, 8)
+	fixture, err := sqltest.New(ctx, t, opts)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	install, err := fixture.OpenSchema(ctx, name)
+	require.NoError(t, err)
+	models := []proto.Message{&dbpb.PlayerDatabase{}, &dbpb.PlayerDatabase_1{}}
+	prepare := proto2mysql.NewDB()
+	require.NoError(t, prepare.OpenDB(install, name))
+	for _, row := range models {
+		prepare.RegisterTable(row)
+		require.NoError(t, prepare.CreateOrUpdateTable(row))
+	}
+	require.NoError(t, fixture.GrantProtoTables(ctx, name, models))
+	db, err := fixture.Open(ctx, name, 8)
+	require.NoError(t, err)
 	model := proto2mysql.NewDB()
 	require.NoError(t, model.OpenDB(db, name))
-	for _, row := range []proto.Message{&dbpb.PlayerDatabase{}, &dbpb.PlayerDatabase_1{}} {
+	for _, row := range models {
 		model.RegisterTable(row)
-		require.NoError(t, model.CreateOrUpdateTable(row))
+	}
+	if len(capture) == 1 && capture[0] != nil {
+		capture[0](fixture, name)
 	}
 	return db, model
 }
@@ -161,4 +160,56 @@ func TestTiDBBundleConcurrentImportsCannotDeleteNewerSQLFence(t *testing.T) {
 	}
 	require.Equal(t, 2, count)
 	requireImportedRows(t, ctx, db, 25, importRowsPlan(2500))
+}
+
+func TestNormalImportPreviewDoesNotConsumeWriterGrant(t *testing.T) {
+	t.Setenv("MMORPG_SQL_WRITER_GRANT_FILE", "invalid-preview-grant")
+	calls := 0
+	require.NoError(t, runNormalImport(context.Background(), true, "", "", "", func(permission authoritysql.Permission) error {
+		calls++
+		require.Equal(t, "reader", permission.Kind())
+		return nil
+	}))
+	require.Equal(t, 1, calls)
+	require.Error(t, runNormalImport(context.Background(), true, "runtime", "", "", func(authoritysql.Permission) error {
+		calls++
+		return nil
+	}))
+	require.Equal(t, 1, calls, "预览不得伪造绑定到维护run的收据")
+}
+
+func TestNormalImportRejectsMissingBootBeforeEffects(t *testing.T) {
+	calls := 0
+	require.Error(t, executeNormalImport(context.Background(), authoritysql.WriterConfig{}, nil, func(authoritysql.Permission) error {
+		calls++
+		return nil
+	}))
+	require.Zero(t, calls)
+}
+
+func TestTiDBNormalImportSealsOnlyAfterSynchronousWritesAndCleanup(t *testing.T) {
+	var fixture *sqltest.Fixture
+	var schema string
+	db, _ := importRowsTiDB(t, func(f *sqltest.Fixture, name string) { fixture = f; schema = name })
+	require.NoError(t, db.Close())
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	defer cancel()
+	closed := false
+	err := executeNormalImport(ctx, fixture.Config, nil, func(permission authoritysql.Permission) (callErr error) {
+		pool, err := authoritysql.Open(ctx, fixture.DSN(schema), schema, true, 1, permission)
+		if err != nil {
+			return err
+		}
+		defer func() { callErr = errors.Join(callErr, pool.Close()); closed = true }()
+		incoming := importRowsPlan(200)
+		if err := writeLocalRows(ctx, pool, incoming, 23); err != nil {
+			return err
+		}
+		requireImportedRows(t, ctx, pool, 23, incoming)
+		return nil
+	})
+	require.NoError(t, err)
+	require.True(t, closed, "返回前实际连接池必须已关闭")
+	_, err = fixture.Open(ctx, schema, 1)
+	require.Error(t, err, "完成后同boot Permission必须永久拒绝重开")
 }

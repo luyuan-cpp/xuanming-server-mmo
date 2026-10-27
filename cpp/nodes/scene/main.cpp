@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
 			context->worldTimer.Cancel();
 			// 收件箱 tick 一并停:停机期间不再拉取 / 确认。已应用、未确认的结局随退出存盘落地,
 			// 下次落地时由账本补确认(设计 §7.7)。
-			context->playerInboxTimer.Cancel();
+			// P1 保留持久收件箱 relay；普通停机与 P3 才取消此计时器。
 			PlayerBattleSystem::StopReaper();
 			PlayerMysteryMerchantSystem::Stop();
 			tlsRedisSystem.BeginShutdown();
@@ -186,9 +186,12 @@ int main(int argc, char *argv[])
 			}
 			LOG_INFO << "Shutdown save initiated; waiting for Redis ACK and Kafka producer flush.";
         };
-        node.SetBeforeShutdown(exitAllPlayers);
+        node.SetMaintenanceInboundRelay(); // gate/Go已接收链的下游，保留到P3；根是本机世界/玩家输入。
+        node.SetMaintenanceSourceClose(exitAllPlayers);
+        node.SetMaintenanceRelayStop([&context](Node &) { context->playerInboxTimer.Cancel(); tlsRedisSystem.StopDbTaskDispatch(); });
+        node.SetBeforeShutdown([&context, exitAllPlayers](Node &n) { context->playerInboxTimer.Cancel(); exitAllPlayers(n); });
 
-		// 每次轮询都重新扫描在线实体。Kafka 入口已经由 Node 封住;gRPC 在 OnGrpcServerDrained 之前仍在排空,
+		// 每次轮询都重新扫描在线实体。P1保留Kafka/RPC下游推进，P3才停止并join；gRPC在OnGrpcServerDrained前仍在排空,
 		// 已收完的调用照常派发,停机瞬间已经排入 EventLoop 的请求也会执行,都可能晚一拍创建玩家;不能只信首次快照。
 		node.SetShutdownDrainComplete([&context](Node &n)
 									  {
@@ -286,8 +289,8 @@ int main(int argc, char *argv[])
         // (合服 / 回档以 MySQL 为准时追查旧档的唯一证据)。以前它只在 Node 析构之后的 tlsRedisSystem.Shutdown() 里打,
         // 那时 logSystem 已停、gNodeAtomic 已置空,Linux 上静默丢失;Pump 也一直跑到那时,会在半拆的节点上推下线收尾。
         // 两种停机路径都经过这里;下面 Node 作用域之后的 tlsRedisSystem.Shutdown() 仍保留为幂等兜底。
-        node.SetBeforeTeardown([](Node &)
-                               { tlsRedisSystem.StopDbTaskDispatch(); });
+        node.SetBeforeTeardown([&context](Node &)
+                               { context->playerInboxTimer.Cancel(); tlsRedisSystem.StopDbTaskDispatch(); });
 
         // 身份冲突(etcd 租约过期 / node_id 被别人抢走)和普通 SIGTERM 不是一回事:
         // 这台节点马上就不再是 node_id 的合法持有者,但玩家的 gate 会话还连着。

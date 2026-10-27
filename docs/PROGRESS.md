@@ -17317,3 +17317,207 @@ Root另实际完成隔离gRPC三路径84065B94及Hiredis六路径E00A3D29，新�
 ### 2026-10-26：按用户要求更新并保存当前改动及第三方补丁
 
 本轮先同步远端，再提交并推送当前改动；用户明确测试失败暂不阻塞，本轮未启动构建或测试，既有失败与未验收状态保留。第三方现有有效源码改动沿用补丁机制保存：librdkafka 可变参数、BoringSSL 兼容与测试参数所有权，Redis hiredis 的 Windows 错误文本，sol2 引用 optional 生命周期，以及 gRPC 内嵌 BoringSSL 的 Windows 宏冲突。四份新增补丁反向检查及全部六份补丁 DryRun 均通过；这仅证明补丁与当前工作树对应，不等于运行验证。编译安装产物留在本地，子模块提交指针不变。Java 续移植 8c9a47da 已包含批次2.10并推送 origin/main；客户端 9ccb99c51 与 origin/main 一致，无新增改动。
+
+### 2026-10-26（纽约）：官方 gRPC C++ SDK 移除与独立依赖拆分（验收进行中）
+
+- 负责人明确批准完整 30+ 文件范围：删除官方运行时探针、官方库链接、官方 C++ 插件和服务桩，独立保留同提交 Protobuf、Abseil、GoogleTest 与 BoringSSL；继续使用 muduo_grpc 的标准协议，不改业务字段或 Go/Java 内部实现。本次属于 C++ 内部依赖整理，Java 不适用，无功能或共享客户端契约变更。
+- 四个独立子模块已登记，原 third_party/grpc 已移到 build/retired-dependencies/grpc-20261026 保留本机原件，旧 gitlink 与模块登记移除。新依赖没有借用旧对象库的 alternates，BoringSSL 原 Windows 补丁按同一内容迁移并复放。其它既有脏子模块保持。
+- 手写工程、权威 CMake 导出器、生成器、导表/启动/测试入口及 Linux/Docker 依赖入口已调整；正式协议生成尚未运行，因此 82 个官方桩的清理由后继正规生成完成，不把静态修改当删除验收。
+- 独立 Abseil 已完成构建安装；首轮独立 Protobuf Debug 原生退出 1，原件 build/verification/official-grpc-removal-20261026/protobuf-debug-result.json 与 protobuf-debug.log 保留。错误为 libprotoc 的 Rust 生成器缺少 google/protobuf/descriptor.upb.h；已从固定上游 CMake 证实 libprotoc 本身依赖 Protobuf 自带 libupb，将误设的 protobuf_BUILD_LIBUPB=OFF 改回 ON，尚未重验。它是 Protobuf 编译器内部组件，不重新引入 gRPC SDK。
+- 负责人另明确允许修复本次迁移暴露的错误并继续验证；一次 Git 元数据前置拒绝已按授权完成，一次后续 git add 被其它进程 index.lock 挡住，未删除锁或干预其它 Git 进程。本聊天未执行 commit/push/tag；共享仓库存在其它聊天提交活动，后续以即时源码为准。
+- 首轮 SDK 结束后，本聊天已核 MSBuild/cl/cmake/ninja/protoc 全退出，按全球验收聊天的共享时段请求让出后续重型窗口，继续编辑与只读核对。业务构建、单测、Linux、互通和 Release/Win32 均未由本条验证。
+
+### 2026-10-26 09:44（纽约）：Docker 调试前置协调任务因模型容量中止，仍待交接
+
+- 本聊天只读续查确认“全球同服迁移查漏与双区故障验收”最新 turn `01a1786a-e499-7ad3-bf25-cdf70bbe1b8a` 为 failed／systemError，原错误为 `Selected model is at capacity. Please try a different model.`；不能把此次中止、先前部分验收或已退出的构建当作完成交接。
+- “评估 muduo_windows 改动范围”仍在执行，进度已记录官方 gRPC SDK 拆分与独立依赖验收尚未完成。下游须等两方明确交接后重新读取最新规范、依赖与源码，不能沿用旧 SDK 或历史健康结论。
+- 按用户最新约束未重复唤醒或给其他聊天发消息，未构建、测试、生成、更新 SDK 或操作调试容器；保留原 `docker` 续查，向用户仅通知需要在原协调聊天恢复执行或选择可用模型这一阻塞。独立 Java 版本无本聊天新增功能修改，最新部署与断点／进场仍待。
+
+### 2026-10-26：528授权同步与DataService／MERGE隔离交付
+
+Root已直接核人类call_58728f批准528，原件7C9A7738，仅新增etcd独立控制面账本路径；具名523、旧测试预留余5，canonical本批仍145。DS五路径1C2B1AFD／最小diff EE01533A已封盘，正式SOURCE P8、同锁开门及批处理恢复已接；共享消费者未Run先Stop终局仍待。MERGE十七路径65A248DB／逐项F3DF0FC1已封，TOOL、Redis工厂、真实join与closure已实现；P7业务审计、旧IT正式维护夹具及dry-run预检误拒仍须收口。gRPC／Hiredis独立审的callback target析构顺序已交后继owner修，不以调用operator返回冒引用全退。上述两版功能仍是隔离实现，尚未编译测试，未标PARITY完成。
+
+PB10 r10精确包863B8963已审，入口4442C684复用CB3962、分离CLR进程、原保护／超时不变；尚未启动。当前另一个人类任务正在主仓迁移C++独立依赖并构建完整game.sln；Root按持续授权协调其自然退出后交时段，不强停。该任务对依赖、生成器、工程及probe删除的全部最新改动保留，最终合入按即时before三方处理，不把新dirty归本批或恢复旧代码。Main四空包与来源核验红、Java实际10项无红绿继续如实保留。
+
+### 2026-10-26（纽约）：独立 SDK 与正规生成完成，完整 C++ 构建在途
+
+- 独立 Protobuf/Abseil 修正后第二轮 Debug x64 实际退出 0，protoc 返回 libprotoc 35.1；BoringSSL 与 GoogleTest 也分别实际退出 0。三组安装前缀独立，版本与原 SDK 固定提交相同；BoringSSL/GoogleTest 在本机仅有中文 MSVC 诊断包的情况下使用已有 VS 生成器串行构建。原 Protobuf 红保留，后继没有覆盖原件。
+- 生成器完整 Go 回归与 mail/rank 10 项回归通过。新增生成测试的日志夹具初始化缺口、依赖边界测试的 Path/字符串夹具缺口已最小修正，原红保留，后继 8 项依赖边界回归全部通过，没有修改生产逻辑或放宽断言。
+- 正规 no-unity 生成实际退出 0，由生成器删除 82 个官方桩文件。123 份协议源、message_id/event_id 不变，137 个非空手写守护段与生成前基线一致；CMake 经权威导出器正规同步。二次正规生成后 697 个 C++ 生成文件逐字节不变，官方桩仍为 0；不读取或修改独立客户端。
+- 为排除旧产物兜底，根 lib 中原 SDK 拥有的 127 个旧归档已按 SHA256 原样移至 build/retired-dependencies/root-sdk-libs-20261026；自有 grpc_client/muduo_grpc 及其它业务库保留。四个独立子模块版本、补丁及 gitlink 校验通过。
+- 目前标准 game.sln Debug x64 正在 /m:1、/nr:false、CL_MPCount=1 下编译，尚无完整方案通过证据；core NoRaw 已实际通过，部分库已完成。按共享验收聊天请求，以本次 solution 退出作为交接边界，不紧接下一测试/生成/构建。Linux 固定 gcc 基础镜像已准备，Linux 编译与 C++ 运行回归仍待；未停止其它进程、未修改系统环境、未提交或推送。
+
+### 2026-10-26：535授权与工具最后接线继续
+
+Root直接读取架构聊天人类call_066c6e授权535／新增7路径，原件9446D099、清单0F576CA2；当前具名530、旧测试预留余5。可变候选观察A74D5E19为425份候选、104原仓保留、1调用方归属待核，0越界，不当最终封存或完成计数。候选/原仓同名漂移须逐文件三方合并，所有新地图及他人C++依赖迁移改动保持。
+
+TOOLS后继三组按4AE8F027互斥继续：NORMAL导入五路径、route_tool八路径、MERGE十七路径。共享mappingRedis经逐源分类7D98F3FF确认仅同步调用，实际发行者join且写结果已定后，共享idle SDK池不属于资产发行者，不关闭其他调用方全局池；UNKNOWN仍Hold，owned发布／zone连接仍须关闭。MERGE正式审计已按双proto接口实接，源码不代替真库绿。route_tool实际区分NORMAL、Reader、Schema、P6与Operator，未以控制动作冒MAINTENANCE。网络权限故障中止后各owner已按磁盘实际SHA接续，未重置覆盖；本轮仍未编译运行新增架构。
+
+### 2026-10-26（纽约）：移除官方 gRPC SDK 后完整 Windows Debug 构建通过
+
+- 标准 `game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64 /p:BuildInParallel=false /p:CL_MPCount=1 /p:UseMultiToolTask=false` 于 10:20:08–11:24:21（纽约）实际退出 0，46 个启用的原生工程完成。Gate、Scene、Battle 三节点与方案内测试程序成功链接，全部适用 NoRaw 检查实际通过；这是当前增量 Build，不称 clean Rebuild。
+- 1620 个 C++ 源码/工程输入构建前后 SHA256 完全一致。原件为 `build/verification/official-grpc-removal-20261026/game-debug-result.json`、`game-debug.log`、`game-debug-verification.json`。`third_party/grpc` 不存在，官方桩文件为 0，根 lib 的旧 SDK 归档仍隔离备份；普通 proto.lib 归档成员中没有官方桩对象，三个节点直接 DLL 导入无 grpc/gpr。只读导入检查不冒递归 DLL 闭包。
+- MSBuild/cl/link/cmake/ninja/protoc 已全部退出，`shared-slot-handoff.json` 记录窗口交全球验收聊天；本聊天没有接续启动测试/生成/构建。后继还需补编未在 solution 中的 aoi_delivery、ecs_context、muduo_grpc、rpc_controller 四工程，运行完整 29 EXE 普通回归及 Go→C++ 互通，再完成 Linux 验证。统一 runner 补入方案已构建而原表遗漏的 player_landing/routing_identity 两工程；尚无运行通过证据。
+- Linux 独立 SDK 入口的只读复查补齐固定 `/usr/local` 安装契约、无尾换行 manifest 的完整产物摘要、固定来源失败传播和构建配方守卫；旧 schema1 调试 SDK 按预期拒用。现役补丁入口也改为复用独立 BoringSSL 的唯一补丁源，不保留指向退役 grpc 目录的补丁应用路径。Linux 编译、Release/Win32、运行回归仍待，不据 Windows 成功扩大结论。
+- 本聊天没有执行 commit/push/tag，工作区中其它聊天的源码与既有修改保持；本次只是 C++ 内部依赖整理，Java 无等价 SDK 移除任务且共享客户端契约不变。
+
+### 2026-10-26：PB10 r10受控停止与最终三方预览
+
+外部SDK拆分完整game.sln实际退出0并交槽（其自身handoff BA52159C），Root核heavy0后执行一次PB10 r10。014a1504原proof9B108EF1／release5A9859DD：原2秒资源复核硬界触发，四家族全退，Maven/SQL均未启动，10例无XML结论。45样本body最大139ms、unknown0、提交余量最低42,153,582,592字节；原B578把GetSample+SaveNew一并计时，两层文件创建至最后写入约4.0/4.9秒，同窗口停顿但不能细分磁盘/调度原因。未原样重试、未降低门槛、未清掉失败。正在准备仅during证据IO的有界受控子进程接缝与2CPU实际限制，保真实1000/2000ms采样、失败停止、原预算及完整IO/家族闭包，尚无新执行资格。
+
+十个双边J改动的精确base5F708E84已齐，三方临时预览D6B15B78为7文本无冲突/3需实际冲突解（GuildMysqlFixture、SceneNode、StoragePlayerRepository）；另7保当前、2Rootdocs不merge。原仓/candidate均未被预览写回；人家最新活动表初始化、Team provider、transfer continuation均须保留，不能目录覆盖。NORMAL导入最终9AC27690和route8 81072E82已交回，MERGE17 v2 EB4C985D实接P7正式审核；静态不等运行绿。routeP7后继cli已由唯一owner更新，Root补审要求首尾完整run/meta一致并明确大binary pin消费合同，当前不并行写同文件。
+
+### 2026-10-26：535冻结源码已实际三方合入，进入正规生成与新源验证
+
+Root核最终seal682301A9／inventoryA3D203CE（425候选、105原仓保留、0越界、双读无漂移）后，执行计划A92CDF0B。实际applied-20261026T160309837Z-db7181bf/actual.json SHA CBC6384745F4BF0D4EF4F07B3AAC4A928F6AE663C7CE7BF9C18B7C08BC3D4838，passed=true：390直接+10真正三方，共400文件已写（R288/J112），全部独占before备份及全批after核验通过。另128保当前、2Root文档仅追加。三处冲突实解保当前Guild活动表初始化/重置、Scene Team provider与Storage transfer continuation，再接本批维护/两恢复方法；精确三方来源和diff齐全。未改客户端/CurrentMaps/生成产物，未commit/push/tag；其他人类任务SDK拆分、生成器/工程/官方桩清理保留，不能把其dirty/删行计本批。
+
+canonical现为新架构源码，旧C++PE、GoPE和B984 Full30等只保当时覆盖，不可冒本次当前资格；下一步用最新no-unity正规生成，再格式化与三语言build/test/真库/双区。原410真库用例仍完整保留，在新源码资格后执行，不再为旧143/CB39重复拷贝或退回最新代码。3个未获批的在线NORMAL工具路径保持独立proposal，未应用，不冒全功能完成。新源运行门禁仍须commit12/8、真实采样1000/2000ms、单heavy、原时限及实际2CPU与证据IO闭包；有限监控修复尚待资格，不以源码合入冒验收。
+
+### 2026-10-26（纽约）：SDK 移除补验等待新主线来源交接
+
+- 完整 Windows Debug 上轮成功、28 个链接命令记录与 proto 归档/三节点直接导入的只读检查均保留原件。两份 tlog 的历史输入键含旧 SDK，已按当前工程完整对象集合精确认领本轮命令，当前命令无官方库；原始全记录扫描与纠正后的来源限定记录分别保存，不删除历史键或改写原结果。
+- 全球验收聊天随后按其人类授权合入另一批架构源码，明确通知当前 C++ 来源已与上轮 1620 输入不同，并持有唯一生成/构建时段。上轮通过只绑定当时来源，不冒当前新主线资格。本聊天保持补编/运行/互通/Linux 全部未启动，待新主线正规生成构建与窗口交接后先重绑来源。
+- 剩余入口已准备在本轮 ignored 证据目录：run-windows-remaining.ps1、run-go-cpp-interop.ps1。普通 runner 补齐 29 工程、隔离父 GTest 过滤/分片环境、检查真实用例计数/跳过及 native 退出码、超时确认自有进程退出；互通入口覆盖外层截止、两端结果及来源/产物指纹。这些后继修正仅静态准备，尚无新运行通过结果。原有失败、旧来源清单及编译产物指纹不覆写。
+- 现役 SDK 工具文档与主传输设计 §17 已收口，历史实跑证据原段保留。当前任务的官方依赖删除与 Windows 构建证据已交付，运行回归和 Linux 验证仍待，不把共享时段等待或代码静态核对算验收通过。
+
+### 2026-10-26：资源IO首次资格红与两处字节缓冲区修复
+
+两项独立资源资格首次执行原件0E185D953194982553EF57E658F39A9AE275BA05B4B90D462064D74ECB2ADCFE，fixture-fast在握手阶段失败；primary未启动、0样本，IO worker37564及conhost41276均已真实退出。错误同时包含零帧长拒绝，不能据文案断定真实超大帧。CPU本次self/worker原句柄实际读回mask0x3，旧014a的CPU缺证不回写。纯MemoryStream回归45D23A13十项均匹配：PowerShell if表达式枚举byte[]为Object[]，ReadAsync填临时转换副本而原header仍零；r2仅两处改为直接引用原byte[]，逆构82465F04完整回原parent。Root核plan620D5A43、parentC6549D4F及未变入口EF6671EF后交一次修复后资格槽；未原样自动重试、未降低8项/32KiB/2秒/commit12/8门禁、未跑业务用例。正规生成与新535构建仍待，旧构建结果仅保原来源。
+
+### 2026-10-26：资源IO r2两场景实际通过，接续正规生成
+
+原25844CB9在native前因外部Java39908/16932拒绝，提交余量35,126,255,616B已足，未修改资源合同；Root只读确认外部进程自然退出、heavy0后重新交一轮明确资格槽。实际resource-io-qualification-20261026T163417353Z-2e909e13/proof.json SHA46A6E096363D7C6F5B86E583307267D736A32F42C0A79A8CBC5051E7DF5E3D80，2case/4条native全部exit0、各8样本；正常与首写4100ms延迟均闭合真实EOF/ledger/exit0/pending0，16份真实样本bytes/SHA及两case/ledger SHA由Root另读复核，8个family记录全退。CPU90次原handle读回均mask0x3、2核；采样正常max154ms/UTC startgap max1021.1824ms，延迟max87ms/gap1013.8663ms；受控IO停顿期间采样持续，原2秒门禁不变。仅两组件资格通过，负向套件、正规生成、535新源构建与业务410/双区仍待，不能扩大结论。
+
+### 2026-10-26：正式生成部分写出后采样超预算，家族全退及540待批候选
+
+正式入口首轮C3AC9FAC在文件模式集合单元素Count检查前停止、零native；仅数组外层包装后纯回归DEC6AE56 0/1/N等十项匹配，入口6ABBD279/计划99C2EE49再按Root明确交槽一次。实际official-no-unity-20261026T170102534Z-a47a1bfc/proof.json SHA BC02FBAF63D795B2D2D69AF6F1ED25150D43BAFC574C2F5AB451C473AE4F95D0：独立protocA90E已经运行、部分生成物写出，GetFast内GetRemaining触2秒总预算，失败样本catch elapsed2321ms，未进入该样本CPU回读，不能把它归成异步SaveNew耗时。失败内段无栈／阶段记录；同窗至少16个protoc并行、原CPU句柄读回确2核，不代表其内部进程数受限。原family cleanup也有两次Capture超时，首after原件78C154B1有8活、其余17已退，Root保槽只做本轮owned收尾；随后8个均自然退出，F8410835934D0B98BEE4362221B292B0E1488C09C6E5C133DBF5E66FF8397068保存原身份逐项当前消失，0强杀、0外部进程动作，当前零在途，旧失败不回写。
+
+wire独立当前后验091B6F84：26文件／182守护段body/block与整文件SHA均等59787352原始基线，含END尾随括号原样，未改他人逻辑；该结论不代替完整生成。Root只读确认生成器没有子protoc并发开关，GOMAXPROCS也不控制已启动进程数；已在tmp备2文件最小串行gate及2个标准库synctest确定性回归，原命令／Fatal／错误原件语义保留，独立静态快审无阻塞但未编译运行。具体提案scope540.proposal.pending.json SHA CEF0F961F0DB529A591768285E3A3345FA39E5F5861A7BF342E5F7D22B2D221B，将这2个遗漏工具路径与旧待批3个在线NORMAL路径合并535→540、旧5预留不变，按AGENTS10.2已向人类询问，尚未获答；canonical未写新2路径。原范围Go格式化和其它独立准备继续，不能先编译半成生成物或放宽资源硬界。
+
+### 2026-10-26：205Go格式化与工具候选实际验证完成；新PD停止阻断真库
+
+现成阶段入口AE1030/计划3CF888AF实际12.088秒完成Go205精确格式化，proof D1E1D449A262D81C3D21C7622E03A08A1CE05881D309051D08C6149D6E3E56DC；7批/14native全0，28族全退，205首尾集合相等、176标准gofmt字节变化，Root再读205after全一致，无生成器2路径/客户端/地图写。Root用临时overlay验证待批串行补丁，实际utils包14顶层PASS/0FAIL/0SKIP（默认vet保、两synctest通过），proof8A90819E80368F216B87E1715AF5817D664AE4719A5406A4514B6978FBC6EFEE；源工具两canonical仍3F9936B8/E32F3636，未落待批源。候选完整generator及rawSQL工具仅tmp编译通过630A3E0AAB9E7DC73FF756394817FDC7168F16490F73E9BDFF4D86A53370E56B，2命令4native/14族退出，工具exe35D52C39(24,510,976B)／rawSQL exe34B1B784(9,437,184B)均未执行生成或SQL。
+
+首raw权限资格外壳实际BBDE807D175359549547F77F57418DB48D7E7D95EA030661A5C2E519C4B19C42，前置inspect拒绝：内层D0933AC9显示PD stopped/OOM=true/137，Go程序未启动、0schema/user，已保前后相同inspect03F3E843。Root再按只读inspect/log/past-events三命令8秒实际E7C98A95F11A71203D1E70248BA1461D868F7C14851B20E0A41FD136629DBE8F：PD同CID a0c1...于15:40:42.933Z停止，RAM536870912/MemorySwap536870912（无额外容器swap），TiKV/TiDB仍running/0exit。日志保原件，选定过去窗口events为空，不据此确定外部actor或精确内核时序。旧CDD5等运行世代资格现只作历史，不复用为当前绿。Root没有start/update/kill/delete；已向人类给出单PD同CID一次恢复两固定选择BED01183（建议RAM1GiB/总swap2GiB，或保持512/512只启动一次），保CPU/镜像/卷/其他容器，首次旧授权已用所以另请决策。
+
+独立J当前顶层已核D:/luyuan/xuanming-server-mmo、HEAD03a0708d35；112合入after当前全无漂移。新真实MatchMaintenanceDrainTiDbTest没有普通外测门控且需专用外部state，因此不跳不改断言，先准备独立J全reactor clean test-compile（生产和测试源码）以避R半生成物依赖，完整clean install及真实测试门禁仍待，不把仅编译当通过。raw四会话bootstrap正在独立tmp准备，避免新S1与I3循环；当前无新SQL执行。
+
+### 2026-10-26：当前Java全reactor编译29成功／2失败，Scene一行修正及545统一待批
+
+Root实际运行JF当前canonical全reactor clean test-compile，原件4B7D6AB6B09647A1D878027F58016500B7EF322DEEC354220A527DA8ECCEBEE3，151.385秒、31项目29成功／2失败／0跳过，未执行测试；9839输入首尾一致，资源／cleanup／output／evidence错误均空，6家族记录全退。两处实错为Scene JsonFormat未依赖、Match SqlWriterMaintenanceReceipt不在classpath，原失败保留不自动重跑。Scene在已授权535路径内仅一行沿既有Jackson输出合法空ConsumerReadiness JSON，写前独占核BA898461、备份及写后D9C3D6A6全吻合，actual23749F4884E039E9C43D05DAF33F0FF75561A2F171D647E147548982D70F436E；尚未重编，不计绿。
+
+Match已备paired POM最小候选68C120E1：common单一生成正式route_authority Java类型，player-store排除重复生成，原descriptor、DDL资源及消费者FQCN不变，不引入PlayerStore自动配置。player-store POM不在原535，两个canonical均未写。Root已call_d092d3e8统一询问最多545替代旧540：前述在线合服3＋生成器2＋本次POM1，共6已知新路径，另4预留仅实际构建暴露的既有POM依赖／生成配置适配；原5旧测试预留不变。提案0B7492D16663BDFCFB39908608BBCEC770615A1BCDE3D3EF24230984C5B51AE9，人类尚未答，当前仍535。单PD恢复BED01183另待直接选择，不能由扩围推导恢复容器授权。
+
+Root三子线并行准备正式生成、干净Java再编译及独立raw四强会话bootstrap；均不写待批canonical、不启动SQL或新容器。现时整体未完成，Main36／Java33、410真库及真实战斗终局故障仍未通过；客户端和CurrentMaps未读写，最新他人代码保留。首次生成、旧数据库世代、旧Full30等原件均保来源边界，不冒当前绿。启动门禁续核当前开放PR／Issue只读查询均空，本轮未登录远端、提交或推送。
+
+### 2026-10-26：独立raw四强会话工具实际编译通过，候选POM临时全reactor开始验证
+
+Root按原AE1030／C654／AB7和97F3执行单build计划9427093B，actual N/native-stage-20261026T190726515Z-84640648/proof.json SHA8E2C7CDBBA4B9A5371D18DD82365ECDE3BD97EBF3AA0AD5E15D04513A14BFCE3，28.121秒、1命令／2native均0、6family记录全退、源AD451B83首尾不变。新raw_four_session_bootstrap.exe为9,381,376字节、SHA964B09904E95B4DA38E7599BB13A1070AFCA2C42B564F6E67FD709FCF5C2F6BB。仅编译，不连接SQL、不控制容器；PD恢复仍待人类答复，不以工具可编译代替强会话通过。
+
+两POM候选未写canonical；Root使用既有095095r4监管入口和新计划6127F6AA，仅在2752普通输入组成、无.git／target／旧业务产物的32.8MB临时投影上实际启动完整clean test-compile。当前在途，尚无结果；此轮只验证候选生成归属和classpath，不冒canonical修后编译。保原7200秒native时限、7500秒外层预算及全部断言／无跳过参数，不借旧PlayerStore生成类。545扩围与单PD恢复两项仍无直接答复，不把继续执行独立工作解释为扩大授权。
+
+### 2026-10-26：候选POM短根实编30成功／1测试源码失败
+
+临时投影第一次493962A038B88E87FF261CE2F4C75B68F9A6396143B195FEB09CB2D07F13A996，原protoc两个实际文件均存在、13,069,053B且SHA C77B7F51，路径各277字符，Win32 CreateProcess error2；未到候选common/Match编译。只缩短tmp源根及新业务head、2752输入逐字节保持后，Root按594BFC66明确新槽执行，原095095监管、7200秒native／7500秒外限不变。后继实际87F455BBAFE1E0EAB44B591657B4736C4CFEEE04721EA73658D5935726743B36，187.801秒、31项目30SUCCESS／1Scene testCompileFAIL／0SKIPPED，2native、12family记录全退，资源／清理／输出／证据错误均空。Match以及common/player-store候选生成归属已实际编译，Scene生产Jackson修正也已编译；唯一剩余错误是SceneMaintenanceDrainTiDbTest:27的row.getLevel()为long、PlayerSave第三参为int。候选是Math.toIntExact，不裸窄化、不改SceneConfigId；尚未重编。这是临时候选，两个canonical POM仍未写、扩围545仍待人类，不能计canonical全31绿或测试通过。
+
+三项本批新默认TiDB测试的启动env接缝也已查清：各自consumeEnvironment不能共用一次性grant。四个相关文件均已在原535（共同Fixture及Discovery/Match/Scene测试），现交Java owner准备沿现有AuthoritySqlFixture的每fixture隔离主体／schema／boot，不建新全局env分发器、不删断言或加跳过。实际SQL须等PD恢复和新物理／I3/helper资格，当前没有新数据库写入。正式生成build计划4E8FA1F9及run模板29DBD603已经封存，仍不执行待批source pin；25原生成家族全退、26/182guard再核无漂移。
+
+### 2026-10-26：Scene临时补编真实成功；结果脚本红单独保留并只读补核
+
+Root仅对tmp测试的row.getLevel()做Math.toIntExact，单一delta7B5E6C7D、12591来源仅此条刷新，按2DF7A14D执行-pl game-scene -am test-compile（不clean、不重跑其它独立模块、原7200／7500预算）。Maven实际12项Scene依赖子reactor全部SUCCESS，stdout EA8AC6DAF31BF259BDC359E64AF528B7B97E112A0B5668C7F5B58A8F48289F78；primary／IO均exit0、无native错误。外壳结果变量$row的native_exit属性不存在导致阶段83879EF0857BDACEEE2F26B54A4021001D04AFED49DFE3393AACEDD205550F25保持passed:false，不改原proof、不自动重编，返回值缺属性原因尚未定位。
+
+独立只读补核C:/Users/luyua/.codex/tmp/jp26-acaced9b.scene-readonly-supplement.actual.json SHA206AC3484EDE2E6BB6C1F428D80F701AAF7611417D831C22FCEC837EDC78DBBF，直接选两真实native记录而不依赖该返回变量；99实际样本逐SHA／bytes及ledger原JSON token链与实际ACK B19F18D7吻合，最大样本UTC间隔1147.1646ms、pending0／EOF／worker0；12591来源plan／proof前后／独立来源文件及当前字节全等，8个原birth身份家族全退，508个native CPU读回均不超过2核、0fail。原C654最终validator在属性错误前已现场正常返回，没有用重建ledger伪造Session.Stored。Root再读补核及原native字段确认：只复用tmp编译／原生资源事实，不称外壳绿、canonical绿、测试执行绿或SQL绿。canonical两个POM及Scene测试均仍原before，待批535→545、同PD一次恢复仍无答复。
+
+### 2026-10-26：四份自有Java夹具实际落地，14项相关项目候选编译通过
+
+本批新Discovery／Match／Scene三个测试改用已有AuthoritySqlFixture，各自持有随机schema、NORMAL主体及一次性boot，不共用consumeEnvironment。共同helper新增固定正式player源接缝：authority DDL→player DDL→业务seed→正式initialize/register；原prepare顺序和注册／清理保留。正式SQL原件仍raw491427、8148B含2CRLF；只在读取时严格UTF8、拒BOM／裸CR并CRLF→LF，规范字节8146B／7ECA35D7；不改真实SQL、不冒raw哈希。Match真实合法PB父1／个人1及未来retry计数2，Scene真实Mapper／两TX／9原断言和等级Math.toIntExact，Discovery原13断言及缺grant负例保留。
+
+Root按A7963925、r5入口84EF6D7B实际执行tmp指定三模块及依赖test-compile，actual C:/Users/luyua/.codex/tmp/java-match-generated-receipt-classpath-fix-20261026-r1/native-stage-20261026T194501873Z-df1cb954/proof.json SHA A0842A4FF44B5376B6656C721BEEC8BE66444D8C383FF04716CC64591050994F；14项全部SUCCESS、159.759秒／2native均0／6family记录全退、12591源首尾一致，阶段passed:true。r5只改结果后处理为从真实记录唯一选择primary；原资源函数、2CPU、1000/2000ms、7200/7500预算保留，原83879失败不回写。本轮仅编译，未执行测试／SQL；临时编译另含common/player-store协议归属POM及Discovery test driver POM候选，不能称canonical全量绿。
+
+四个既有535路径已在所有最新before同时独占核对后一次落地，actual C:/Users/luyua/.codex/tmp/java-self-owned-three-fixtures-20261026-r1/applied-four-20261026T194942567Z-05490c12/actual.json SHA5D6415B9D53F7B14FC6DE47DB97171831384634E3DE74B8B7728FFF601399B68；四原件完整备份、after为8420BCB4／749DD663／E4A4534B／C3B11AA7，全吻合。没有新增业务路径，当前cap仍535；0POM／SQL／容器／客户端／地图／commit动作。三个POM原before仍854AD69E／DC3DB0E7／C12DEE0D，driver候选属于待批545预留，未借旧测试预留。545统一范围与新PD恢复仍待人类，整体未完成，下一步还需正式生成、当前三语言全构建／真实权限和410SQL及双区验收。
+
+### 2026-10-26：公开文件入口真实正向验证通过，本轮无在途等待两项直接答复
+
+固定新helper public API的单一文件case实际完成，proof C:/Users/luyua/.codex/tmp/wire-trade-inbox-proposal-20261026-r1/native-stage-entry-20261026-r1/native-stage-20261026T195659504Z-b36694c2/proof.json SHAFF3E761E5038BAF4ADBBE846E0F183AE2C0A2F6D374584A5F56A359B5BE8D818，5.893秒／2native均0／4family记录全退、源D5A6F4F5首尾同。stdout7682F2BF真实记录1case passed／network_attempts0／schema_callback_calls0；classpath只有本次C277及nested／标准固定JAR，没有JDBC driver。公开prepareWithPlayerSchema真正读取正式491427文件、执行严格UTF8／规范LF7ECA及8表parser后，才得到固定非法root构造器SQLException；其他异常一律FAIL。未执行SQL、不读取secret、不写schema／owner／正式SQL，不把这项非SQL证据包装成TiDB测试或Linux实机。前一次工具调用在dispatch前中止，Root核阶段目录没有新增后才重新派发，第一次无native或失败业务。
+
+本轮可独立的实现和验证已收口：四个535内Java修复实际5D641、候选14项目编译A084、公开文件入口FF3E；旧83879脚本红和206AC补核保留。新POM／生成器／在线合服路径仍等call_d092d3e8（545或明确541），同PD一次恢复仍等call_fde813；人类尚未直接答复，未扩大授权。当前无在途native或IO家族、没有后台续跑；共享重型时段将归还协调。整体未完成，正式完整生成及当前三语言全构建／实际测试、410真库和Main36／Java33仍待；战斗终局故障装配此前被自动审批审查以可能涉及网络安全风险拒绝，相关分支不换工具重试，仍未验收。现有新地图、客户端和其他人的最新代码均保留，本轮未commit／push／tag。
+
+### 2026-10-26：官方 gRPC SDK 移除后接续静态回归，Linux 依赖层首次失败保留
+
+8 项 C++ 官方 SDK 边界回归已在当前工作树再次通过（build/verification/official-grpc-removal-20261026/cpp-boundary-r3/result.json）；限定生成器的工程迁移、纯 Protobuf 消息头、muduo 客户端模板三组 Go 回归退出 0，126 项生成器输入前后一致（generator-isolated-r3）。测试入口与后继验证入口的 PowerShell 语法检查通过；补清本机 VS Code 补全配置及两个旧导表入口的旧 SDK 路径。上述边界检查不证明另一任务的新协议源已经完整生成。
+
+共享主线 BC02 尚未完成正规生成，本轮没有补编或运行旧 C++ EXE。独立封存正式 Dockerfile 的 deps 输入 38191 文件、486810376 字节，before/after/context 三份 SHA 清单一致（linux-deps-r1）；四个独立子模块的固定提交、gitlink 与登记补丁再次核对通过。正规 --target deps、BUILD_JOBS=1 已实际执行：zlib 上游 18 项通过，独立 Abseil、Protobuf（libprotoc 35.1）、BoringSSL 及 hiredis 完成编译安装步骤；但完整 Docker build 退出 1，内层 make 退出 2，在新合入的 Linux muduo Hiredis overlay 的 CallbackPhase 构造参数 active 遮蔽同名成员处被 -Werror=shadow 拒绝。linux-deps-r1/build-result.json 保持 passed=false，原 context 与日志不改写，尚无成功依赖镜像或消费者运行证据。
+
+按负责人已批准的“修复迁移暴露错误并继续验证”，仅将 tools/archived/muduo_linux_overlay/contrib/hiredis/Hiredis.cc 的该参数改为 activeState，不改成员、控制流或检查器，不触碰 Windows 对应实现和其它架构逻辑。正在准备具名 linux-deps-r2 后继封存并核实际差异；未把旧 1620 项 Windows 成功当当前主线成功。C++ 29 程序运行、真实 Go 互通、Linux 三节点及 Windows Release/Win32 仍未验收；本聊天未执行 commit/push/tag。
+
+### 2026-10-26：Linux 独立 SDK 完整依赖层及实际消费者验证通过
+
+具名 linux-deps-r2 已完成正式 Dockerfile.cpp --target deps、BUILD_JOBS=1 构建，build-result.json passed=true、exitCode=0；38,191 文件、486,810,386 字节的封存来源与构建后上下文一致，r1→r2 唯一差异为 Hiredis CallbackPhase 参数名 active→activeState。首红 linux-deps-r1/build-result.json 与原上下文全部保留，原上下文构建后再次核对通过；没有改写首次失败或关闭 -Werror。新镜像 local/xuanming-independent-sdk:grpc-removal-r2，精确 ID sha256:4a84f833d9f882e7abf1916ad4f6bf5de86371b31f5e97347dc25bbf8cd08658；Docker 官方 SDK 头/库/插件缺失门禁实际通过。该正规依赖层已完整构建独立 Abseil、Protobuf、BoringSSL 与 hiredis、muduo、curl、librdkafka、yaml-cpp、nghttp2；zlib 上游 18 项测试通过。
+
+同镜像随后在一次性 --network none 容器内执行安装验证（linux-deps-r2/installed-sdk-result.json）：原生退出 0，三项 SDK 全安装产物摘要校验及二次运行三项 skip 通过，libprotoc 35.1 生成临时消息，CMake 使用安装导出目标真实编译并运行 Protobuf 序列化/反序列化、BoringSSL SHA256 与 nghttp2 链接；实际链接行没有官方 gRPC，ldd 无官方 gRPC 或缺失项。此项不是 Go/C++ 网络互通或业务回归。调试 SDK 前置只读核对同镜像 Python 3.11.2、CMake 3.25.1、GCC 13.4.0 和 binutils 及必要归档均可用。四个独立子模块远端与 .gitmodules 一致、无 alternates、gitdir 不指向旧 gRPC（independent-git-storage-r3.json）。全部证据位于 build/verification/official-grpc-removal-20261026/。
+
+共享主线仍未取得完整正规生成资格，最新只读协调状态仍为等待两项人类确认；本轮没有启动主仓应用生成/构建或旧 EXE。后续仍须基于新完整来源补编四个方案外测试工程、29 程序普通回归、真实 Go 互通、Linux 三节点；Windows Release/Win32 仍只有配置证据。SDK 依赖层通过不能冒充当前新主线全源通过。本聊天未 commit/push/tag，也未操作他人数据库、容器或独立客户端。
+
+### 2026-10-26：本机 Debug SDK 清单切换 schema 2，独立验收收口
+
+sdk-schema2-candidate-r2 的来源资格及现役 validate_sdk 均实际通过，原 schema1 SHA1702AD13F43BA33B3061764CDFF1818E2406147815603DAFCD221234CB7CE82F 已逐字节备份；仅在确认其未被他人更新后原子替换 build/docker-debug-current/cpp-toolchain.json，新 SHA80E4FD97F44FB450FFC488DA29B91D6F89BFA591609631F9581D01DD226D3CBA。现役 active-validation-result.json 退出0，schema2，精确镜像4a84f833…，一般guard25298 + 三独立仓完整inventory12897。当前脚本未放宽validate_sdk，没有借旧SDK放行。
+
+来源资格首次候选r1 false保留：完整三仓inventory核对发现r2封存脚本按任意层级排install_*，误排4个上游跟踪测试文件（protobuf/csharp/install_dotnet_sdk.ps1，abseil-cpp/CMake/install_test_project的CMakeLists.txt/simple.cc/test.sh）。这四项不被本次固定的C++库/protoc目标及测试OFF配置消费，r2实际38191项构建输入未漂移；具名候选r2另外逐文件核固定HEAD blob、过滤后当前blob、无本地修改及原始SHA，并明确断言它们不在镜像context，保存CMake/参数不消费证据。新守卫完整覆盖38195项来源，严格区分38191项实际镜像输入与4个额外未消费测试夹具；不是伪造完整镜像源码或跳过测试。后继ignored封存准备规则已只排依赖根安装目录，不修改已执行的r1/r2原件，不为未消费夹具重复SDK编译。
+
+本轮所有自有原生构建、一次性消费者及校验进程已退出，无后台续跑；已完成原迁移来源Windows Debug、当前静态/限定生成器回归、Linux完整依赖层与实际独立消费者及新SDK资格。完整任务仍未全部验收：共享新主线BC02正规生成尚未完成，四个方案外工程补编、29程序回归、真实Go互通与Linux三节点须绑定新完整来源；现有旧1620入口保持先验失败门禁，不重新标成当前新源。Release/Win32未实际编译。本聊天未commit/push/tag、未向其它聊天发送消息、未操作他人数据库或独立客户端。
+
+### 2026-10-26：不依赖PD和协议生成的schemamigrate完整默认回归通过
+Root按442763AF171504AC23C965BDA094178AED8A5BDBE974F5E658E00195E553EE72计划，沿原AE1030资源入口实际执行schemamigrate整模块build、test、vet，proof为C:/Users/luyua/.codex/tmp/wire-trade-inbox-proposal-20261026-r1/native-stage-entry-20261026-r1/native-stage-20261027T022542180Z-3c8ffe6e/proof.json，SHA1B65F1D713B8431721E130058AB12E15C9618F2BA4B600B0D4C0613D00D65F01。31.958秒、三命令全部完成、六条native均退出0且错误集合为空；16个原身份家族记录均已退，1517项源码／缓存首尾和Root再读一致。日志A7C982BF33B0D8D2A121DB90521EEBC77B798E47D4DA3B28F5FFDA67BA4D10F3实际52项通过，按日志为37顶层＋15子测试，0测试失败／0测试跳过；internal/dbtest包没有测试，保留其包级skip。此前静态38项函数的数字不能代替实际可执行测试数，用户更新以本条实录为准。
+该module明确不导入本仓proto/shared，使用现场dynamicpb夹具，故可以独立于BC02半生成状态和停机PD验证；原integration真库标签未运行，不把默认绿算真库。准备r1误将各命令预算填5400，会被原总5400门禁启动前拒绝，尚未执行；r2只将三单命令改1800，总预算与Go默认10分钟测试时限均保留，原件和2F2C53F0更正保留。没有改资源门槛、测试断言、业务源码或地图，没有安装／联网补依赖。
+545扩围与同PD1GiB／2GiB一次恢复仍无明确选项答复，本轮将它们合并为一次确认；未动新增路径或容器。剩余13个Go模块、正式生成、C++与两组Java全量、真实权限／410SQL及Main36／Java33仍待，整体未完成。
+### 2026-10-27：当前Java公共模块完整回归出现三处真实失败，原件保留
+Root按A22888B20132509F7DB4393B4F73FACDE1A213109818368FFB9189A6F7D2B349，在无overlay的新短投影jc26-cee6818e执行parent／game-proto／game-common完整clean test；三个POM均canonical未改，源码2752份来自当前03a0708d。proof C:/Users/luyua/.codex/tmp/java-match-generated-receipt-classpath-fix-20261026-r1/native-stage-20261027T023520392Z-a8c41418/proof.json SHA CE062DF78C9FEA5CE365C084A1FC2E634A3D423614C42AF9D3925B9C6DC03973，passed:false／103.584秒、primary1／IO0、清理输出证据错误空、13个家族记录全退。12591项输入首尾及Root再读无漂移；HEAD、status107、全输入集合及8项隐式Maven输入缺失首尾均核，Root-boundary-after-and-tests.actual.json SHA C9E19C4C6872E3CD6A79655E6B26495756BE9C79F32DAFDC27084EC54089BDB7。
+实际26份XML共173项：game-proto10通过；game-common163中160通过／2FAIL／1ERROR／0SKIP。AuthorityConnectionTest第47行在thenReturn内调用还要stub的keys()，触发Mockito UnfinishedStubbing；PlayerSessionAuthorityTest两条仍把路由meta当事务锁入口。当前正式设计是pre-BEGIN E→own-slot CURRENT锁→meta／registry只读，zone提交围栏仍由sharedLock按数据库方言选择，不能为了旧断言恢复全局meta锁。两文件最小候选准备中，生产逻辑尚未修改；PlayerSession旧测试不在530，已明确允许从535原五条旧测试预留具名使用1条，实际写入后再登记531／余4，当前未写不冒已占路径。未自动重跑原失败。
+
+### 2026-10-27：部署／排空25项合同测试与新I3工具纯编译通过
+三原脚本在72D成熟入口实际运行，计划42EA5C12、proof C:/Users/luyua/.codex/tmp/wire-trade-inbox-proposal-20261026-r1/native-stage-entry-20261026-r1/native-stage-20261027T060309444Z-a53b1942/proof.json SHA B00C9B5D1CFF371B60B3C8330EAD794FB9D91E22F14395C8C77ED100C1999C08。9.981秒／3命令／6native退出0／12家族记录全退，17输入首尾及再读一致。日志分别真实3／3、15／15、7／7通过，共25项，无失败；只验证本地函数合同／临时文件／DryRun，不冒Docker镜像、真SQL／Redis或实际发布通过。
+新raw到I3三候选交付EFEC520767856F1CD4D61857C8D322F781444E3AC58067C46E8DA84E24E55DFC，保留旧D9／39D2，不改canonical。Root按B868B85B纯build，proof C:/Users/luyua/.codex/tmp/wire-trade-inbox-proposal-20261026-r1/native-stage-entry-20261026-r1/native-stage-20261027T060337116Z-e322f2c4/proof.json SHA B9C4B8A4164789923F6B6998D54061F99E5B6D156E5D4C7756F9175C4EB80EC1；9.794秒、2native均0、5家族记录全退，新EXE SHA EC09DB10CA3159B5979360E6AB06464D5CA87685C10BABEDDA46B72E027007E0。正式DDL与私有后格式副本均CFEA且pin；只编译，不执行EXE／SQL／容器，不创建物理binding或资格。后继reader仍须与实际raw原件结构核对，不能只由编译推出运行可用。
+本轮Root所有native／IO已退出，heavy交还独立Java批次2.10窗口一次31-reactor验证；Root仅继续候选和交接，不并行重型。545范围与同PD1GiB／2GiB一次恢复仍待明确答复，整体未完成，原真库／双区及平台拒绝的战斗终局故障边界保持。
+### 2026-10-27：三处common测试失败的最小修正实际落地，使用535旧测预留1条
+Root已审候选915655F643024399C1C40508595A6BE817F8E5AD1D8601126820CC104F97FEF1，在两份最新before同时独占核对／完整备份后CAS，actual C:/Users/luyua/.codex/tmp/java-common-three-test-failure-20261026-r1/applied-two-20261027T060812133Z-e0cb1345/actual.json SHA6DD96E501F505AEC69583266C7F24FEFD2F9525512F95DE3B82E5FC392E34DBE。AuthorityConnectionTest 2F6B→2E731C1904BD2E683888827DF752A677FD5897D525C8E1E3E49CFF55ED0B0706，仅提前构造generated ResultSet再thenReturn，13原case断言保留；PlayerSessionAuthorityTest 36E3→84E708565272B1D58FE4A75ED92455C4A7465A79926F4EC5BB66066497B6C29A，旧4方言／未知版本／metadata故障断言迁真实zone64片锁入口，另补CURRENT首锁拒绝后零业务SQL、meta只读但冻结／缺片仍拒绝，5case→7。原前两身份case及只读meta case保留，不恢复全局meta锁，不改生产实现／POM／业务超时。
+PlayerSession旧测试不在原530清单，按既有人类535范围的5条旧测试适配预留具名使用1条，现具名531、余4，总上限仍535；不是待批545的生产／POM预留。两原件备份after再读均吻合。CE062原红proof／日志／原XML26＋TXT26逐字节留存9CBB56D2，当前尚未重测，不预写绿；Java owner正刷新当前after完整源和新短投影计划，Root已接回heavy时段。
+### 2026-10-27：官方 SDK 移除验收继续准备独立 ecs_context 原工程，时段仍待交接
+
+本轮只读核共享主线仍无 BC02 后继完整正规生成资格；原 SDK 迁移/Linux依赖及消费者/schema2通过结果继续保留，不把它们冒作新主线全源验收。已编辑 ignored prepare-ecs-context-snapshot-r1.py 与 run-ecs-context-isolated-r1.ps1，并通过 Python AST/PowerShell Parser语法检查（ecs-isolated-runner-syntax.json）；未执行封存、MSBuild、NoRaw或测试EXE。该独立完整工程仅含原4个TU（本仓测试及ecs_context实现、GoogleTest两个入口），无ProjectReference/业务归档/应用生成物，预期8个具名用例。
+
+准备入口保留原vcxproj、Directory.Build.targets、NoRaw脚本/查询字节，源码快照将放现有ignored run/verification目录以免build祖先被原门禁排除。Abseil/GTest头按原工程源码路径绑定；检查器使用已安装VS18 x64 clang-query，仅前置本入口子进程PATH，不安装工具或修改系统环境。执行入口要求原工程求值MSVC14.51、串行/m:1、NoRaw实际两本仓TU非缓存通过、新EXE8/8且0跳过；CL.read只准快照或核定MSVC/WindowsSDK目录，首尾绑定源码/工具/实际头与产物。该资格只针对独立ecs工程，不替代当前主线29程序和真实互通。
+
+本机唯一heavy时段仍按全球验收协调留给Java验证；最新协调主线仍active准备重跑公共模块测试，未明确归还。本任务无在途原生作业，未把对方idle、失败或无cl进程当作归还。仅协调本任务时段的跨聊天消息授权已异步询问，仍未获人类明确答复，没有发送消息。所有业务代码、生成物和其它任务改动保持现状，本聊天未commit/push/tag。
+
+### 2026-10-27：公共模块三处失败修后完整175项实际通过，后置来源复核完成
+Root按B735BEFE90068D594F241C61BC127C6263F8386407C659AB4F17073B772420C4计划与原r5资源器执行parent／game-proto／game-common完整clean test；使用CAS后当前正式2752源的全新无overlay短投影jc26-eb3b2628、正式POM及fresh业务仓，无filter／skip／SQLenv。proof C:/Users/luyua/.codex/tmp/java-match-generated-receipt-classpath-fix-20261026-r1/native-stage-20261027T061102663Z-781f3c76/proof.json SHA88AA94FCBAF41B9158751197F3A454A3A4D675D417421A6581C5E71B030F938F，passed:true／88.104秒／primary与IO均0、错误集合空、12家族记录全退。
+Root实际解析26份新XML，proto10＋common165＝175PASS，0FAIL／0ERROR／0SKIP，新XML清单Root-test-XML.actual.json SHA5FB5C7A1FE82C95511366D1EAFDB6BD56259E3D06312F5F5EED41D9CF0B95752。后置独立复核12591项首尾／当前字节、Java HEAD03a0708d、status108、完整2752源路径及8项隐式输入仍缺失；Root-boundary-after.actual.json SHA8041B2DA256CB6F833F0816A149CCE58E4C009FE7D5BE6C0E2D4069D1A17BFE8。原CE062三红和全部原XML／TXT留存9CBB56D2不改；本轮只完成当前common闭包，不能推为全31reactor或真SQL通过。scope现531／535、旧测试预留余4，两生产规则及POM均未变。Root native／IO已全退，heavy再次明确归还独立Java批次2.10窗口，Root无后台续跑。
+
+### 2026-10-27：新raw→I3读取器有限ABI更正，实际SQL仍未执行
+r1资源读取9731F98C发现reader额外错误要求stale_snapshot_rows空，实际8E2中原句柄已退出且最终family可精确核同的compile行被拒。后继r2交付C:/Users/luyua/.codex/tmp/raw-four-to-I3-successor-20261027-r2/DELIVERY.r2.frozen.json SHA BD004AAAA7456535E8481A684C8A97DAF55C8EA2801A5828285B04479ADC8021，仅补严格原句柄退出事实读取：PID／birth／exit等最终已退family，native_error／fallback0且exit不晚于该样本实际completed；unknown及伴随豁免仍为零，无完成时刻拒绝。实际8E2资源原件读取与缺birth／exit不等两项纯内存负例均通过042623369130CEB703BED69E39F314620C7D3B8FABB8F864CEB9B73FE82388A3；producer字段静态对齐，非完整raw正向资格。
+reader为9EF268E6、launcherD99187AD；Go仍917351原字节，沿实际B9C4／EXE EC09来源复用，无重复build。raw启动的binary路径后续须用原生Windows规范绝对路径以与os.Executable一致。旧EFEC候选／失败／构建均保留，没有native／SQL／容器动作，没有生成当前物理binding、grant或锁资格。545新增生产／POM路径与同PD1GiB／2GiB一次恢复仍未收到明确选项答复；正式生成、余13Go模块／C++／全量Java、410真库及完整双区仍待，整体尚未完成。
+### 2026-10-27：人类直接批准545范围及同PD1GiB／总2GiB一次恢复，三POM实际集成
+本聊天人类明确授权“按已备方案扩至545个文件，PD调整为1 GiB内存、2 GiB内存与交换区总额并恢复一次”，并要求继续编译、真库和双区验收、只基于最新代码且保留新地图／他人改动。原件 C:/Users/luyua/.codex/tmp/global-scope545-PD1G-direct-authorization-20261027-r1/human-authorization.actual.json SHA137E0EFDCBDDD4ACF1F1CF6564CF78ACF736FC502AFEB9E3ACAEC8F5715BEC4A，绑定0B7492范围方案和BED01183推荐PD方案；不再等待旧问题回复。535已具名531／旧测试余4；新增6个固定路径及4条仅既有POM配置预留获准，本次Discovery POM使用1条POM预留，余3，旧测试余4保留。PD只准方案固定同CID更新两个cap并start一次，不自动重试、不动其他容器或数据。
+Root核最新三before并同时独占备份后实际合入Java三个POM，actual C:/Users/luyua/.codex/tmp/global-scope545-PD1G-direct-authorization-20261027-r1/applied-J-three-POM-20261027T062228774Z/actual.json SHA2B8DCF6521C132320C2A90495B5E84A803A0A2F2B88975BD306020C913BEB35C：common8AB0单一生成正式route_authority类型，player-store2DF1排除重复，Discovery1F8E仅test-scope沿BOM和现缓存MySQL驱动。原descriptor／DDL及业务规则保留、无安装／生成物手改／SQL动作。生成器2路径和在线NORMAL8路径由独立agent在精确范围内按最新CAS／三方合并，Root统一验证；PD执行入口准备中，尚未更新／启动容器。唯一heavy仍在独立Java批次2.10第三轮，Root未并行启动编译或Docker；交还后直接执行已获授权的后续。
+### 2026-10-27：按负责人明确要求物理删除旧 gRPC 全部迁移备份
+
+负责人明确要求“旧 gRPC 的备份也删除，不用保留”。删除前逐绝对路径验证三目标均在本仓，目录及内部无链接跳转；只读核对17个注册worktree均未引用它们，四个现役独立SDK的Git存储及HEAD独立、无alternates/commondir借用。实际已删除 build/retired-dependencies/grpc-20261026（最初43205文件/13676870091字节，含旧源码与构建产物）、root-sdk-libs-20261026（127旧归档及inventory共128文件/3597137817字节）以及 .git/modules/third_party/grpc（620文件/171682737字节），同时移除主仓本地过期submodule.third_party/grpc配置节。现役third_party/grpc此前已无目录及gitlink；其它任务自足worktree克隆不在本次范围，未动。
+
+首次与第二次删除分别被cares及protoc-gen-validate的.git文件短暂占用而中断，passed=false原件保留；只读RestartManager查询无占用者，没有关闭外部进程、改ACL或系统环境。具名第三次先清过期登记和旧归档/模块存储，再清剩余源码目录，实际退出0且passed=true。最后四个目标路径均不存在，本地旧登记0项，四个独立依赖的.git、CMake入口及Git HEAD/config的删除前后SHA一致且HEAD可读；证明位于build/verification/official-grpc-removal-20261026/retired-grpc-deletion-20261027-r3.json与retired-grpc-deletion-final-check-20261027.json。只保留删除证据和既有验证日志，没有重新保存旧源码/库字节。
+
+本次为明确授权的物理清理，没有构建/测试/生成或commit/push/tag；独立Protobuf/Abseil/GoogleTest/BoringSSL、当前SDK安装和验证证据保留。原任务尚待共享完整生成、应用构建/运行和互通的验收边界不变，不能把清理通过当作这些未跑验证通过。
+
+### 2026-10-27：8路径正式格式化、官方生成器构建及PD一次恢复实际完成
+在线NORMAL实际6增量路径已按3既有／3新增合入239DAAFF，main／route_store10处纯gofmt布局冲突保留最新布局，其他3份无语义增量保持原样；此前“8路径”仅记忆不准，本批正式格式8＝合服6＋生成器2。Root格式阶段初绝对argv被旧Join-Path预检拒绝、零native，修正同8相对路径并移除复制旧205的元数据后，最终76F8D8DD计划实际通过，N/native-stage-20261027T063448576Z-50e36a6d/proof.json SHA2CBB97176DE262FEDEB68BD3F1B510924A8303363EF11986FC66653BED56EC37。utils仍F9ECCE、proto_test成为17278440；Go14尚未重跑。
+官方build计划4E8冻结保留，Root同步格式后source与两处重复canonical test pin；中间B3D因两重复pin仍旧在预检拒绝、零native，精确更正后705E9E46计划实际执行正规dev_tools proto-gen-build。proof N/native-stage-20261027T063642209Z-76c819f4/proof.json SHA D4FAD18CD24462C1756A15C7B95D14EE08DBF158D3D4E0FA76D30D3031D5BFCC，13.744秒／2native0／9家族全退／92source首尾一致。pbgen.exe和proto-gen.exe实际均35D52C39CD3C8A941281F9F187092F8BEEAB56125E78DF0160B82CFCEA066E74；虽与相同源码历史候选hash相同，本次由正规构建产生并有实际来源，未复制tmp候选，不能仅以hash相同否认可复现构建。完整no-unity生成正在刷新真实before／原35输出边界与26／182守护段，尚未执行完成。
+PD按本次人类137E0EFD推荐方案只执行一次固定五步，outer plan34A6F1B3（旧6F8仅scope只读声明遗留已单独纠正、不执行）。outer N/native-stage-20261027T063803661Z-e390956b/proof.json SHAE1575FB2AAB2681366BA205B8322EB01606B3FBE5EDBACCBFE2964084FE38F7C，7.349秒／2native0；inner T/owned-PD1G2G-recovery-exact-five-20261027-r1/actual-five-20261027T063807140Z-e99dc355/proof.json SHA403B15C4ACECD7D9AB6F297EDC338C8080187E6E50B7B5116CE389644BF15262，5Docker全0，update/start各一次，健康新PID／StartedAt，仅RAM1GiB及MemorySwap总2GiB变化，原CID／镜像／卷／配置保留，其他容器未操作。尚不把容器Running计成SQL/G3/raw资格；后继会取本次3CID真实fullinspect及raw四强会话／I3。不可再次消费本次恢复授权。
+R authority JDBC同根Mockito夹具已在原535路径核最新before并CAS，actual E977DE6623A4FC195639FB41CDF86418FB3997834B88D9F78230BCB38C977E51，仅13原单测中的构造顺序两行，13单元＋1真实TiDB共14默认测试仍未执行，真实10env／独立boot外部fixture另准备，不借J七env或旧grant。
+### 2026-10-27：备份删除后再审官方 gRPC C++ SDK 残留，当前生效依赖未见残留
+
+按负责人“再检查有没有官方gRPC残留依赖”的要求，完成源码/工程/生成工具链与现有二进制只读交叉核查。原8项依赖边界再次全部通过，检查脚本及权威CMake导出器SHA首尾不变。独立代理覆盖54个正式vcxproj、36个filters、1根targets及用户/父目录Import注入、37份正式CMake及导出器，另核1395个第三方构建文件；23个锁定依赖、4个SDK安装前缀均无官方头/库/插件或生效官方路径。主静态脚本在去本机缓存的1520个cpp物理源码中没有官方include、grpc namespace及init/shutdown探针；扩大到工具/第三方源码后，主仓命中仅7条说明注释。*.grpc.pb.cc/.h物理文件0，旧grpc目录/备份/Git模块/登记均不存在，根lib仅保留自有grpc_client、muduo_grpc，未发现官方库名。
+
+生成C++只调用--cpp_out，模板用自有Channel/Service；dev/导表/protoc、CI子模块和Docker来源均独立。旧路径残留字符串属于迁移清理/拒绝规则、防回归/旧handler兼容夹具和历史补丁清单；历史local-worktree清单的唯一恢复读取器明确只选Boost，不能恢复旧grpc树。--go-grpc_out和Go/Java gRPC保留属预期。普通消息文件名etcd_grpc.pb.h不等于官方桩；libprotoc内部libupb由Protobuf自身需要，不是gRPC SDK。
+
+本轮还实际调用现有dumpbin/lib工具只读核三个节点及其bin/build副本SHA、全部3个随附DLL的依赖/导入表、根lib全部23个归档的公共符号/DEFAULTLIB，以及proto.lib对象成员；没有官方gRPC DLL/C函数/namespace公共符号/默认链接项/官方桩对象。binary-audit-result及extra-local-dll-result均passed=true；各条输入SHA、输出摘要和DLL导入原文保留。首次精确rg的lookbehind不被默认引擎支持，错误日志保留，改PCRE2后完整完成；未把搜索错误算零命中。统一证据build/verification/official-grpc-removal-20261026/residual-audit-20261027/summary.json。
+
+结论限于当前工作树生效依赖及记录SHA对应既有Debug产物：未发现官方gRPC C++ SDK残留，仍使用标准gRPC协议及自有muduo_grpc。没有重编/重生成业务或运行节点/真实互通，不把静态/旧产物核查算共享主线最新源全量绿。Root已明确接回连续heavy并正在正式no-unity接续，本轮没有覆盖主仓proto/生成器/生成产物或地图，也未commit/push/tag。

@@ -39,6 +39,7 @@ import (
 
 // pinPlacementEntryParams 是 -mode pin-placement 的纯数据输入(main 管 flag,本文件管语义)。
 type pinPlacementEntryParams struct {
+	parent      context.Context // main装配的同boot NORMAL owner；dry-run可为空。
 	zone        uint32
 	mappingAddr string
 	mappingPwd  string
@@ -50,17 +51,28 @@ type pinPlacementEntryParams struct {
 }
 
 func runPinPlacementEntry(p pinPlacementEntryParams) {
-	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
+	parent := p.parent
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, p.timeout)
 	defer cancel()
+	if !p.dryRun {
+		if err := checkMaintenanceTool(ctx); err != nil {
+			log.Fatal(err)
+		}
+	}
 	log.Printf("=== Pin placement \"%d:1\" for players with home_zone=%d and no record (dry-run=%v, mapping=%s db=%d, route-source=%s) ===",
 		p.zone, p.zone, p.dryRun, p.mappingAddr, p.mappingDB, p.route.source)
 	mapRdb := mustDial(ctx, "mapping", p.mappingAddr, p.mappingPwd, p.mappingDB)
-	defer mapRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, mapRdb)
 	rb, err := openRunRouteBackend(ctx, p.route, mapRdb, newToolRunID("pin", p.zone, time.Now()))
 	if err != nil {
 		log.Fatalf("pin-placement: route source: %v", err)
 	}
-	defer rb.Close()
+	if maintenanceFromContext(ctx) == nil {
+		defer rb.Close()
+	}
 
 	rep, err := stepPinZonePlacements(ctx, rb, mapRdb, p.zone, p.dryRun)
 	if err != nil {

@@ -17,6 +17,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -88,6 +89,37 @@ struct RpcCallOptions
     std::chrono::milliseconds timeout{kDefaultRpcCallTimeout};
 };
 
+struct RpcMaintenanceOperation;
+
+// 进程内运行账本，不是持久化协议；测试可显式注入独立域，生产所有通道默认共用同一域。
+class RpcMaintenanceState {
+public:
+    // 仅显式维护装配在首次发布前启用；既有默认 id0/noreturn 契约不变。
+    bool EnableAcknowledgedSends();
+    bool AcknowledgedSends() const;
+    bool PrepareSources(); // 新boot在首次业务接收前关闭，P9可且只能开放一次。
+    bool OpenPreparedSources();
+    bool Begin(bool source);
+    void Complete(bool source, bool known);
+    void CloseSources();
+    void ClosePublications();
+    // 本机回调已退出与远端结果确定是两个问题；UNKNOWN 不阻止安全析构，但禁止永久闭合收据。
+    bool LocalCallbacksJoined() const;
+    bool BeginLocalCompletion();
+    void CompleteLocalCompletion(bool delivered);
+    bool Frontier(bool sourcesOnly, std::string& value) const;
+    // P1只读取已知终局，不封仍承接上游accepted工作的RELAY。
+    bool SettledFrontier(std::string& value) const;
+private:
+    mutable std::mutex mutex_;
+    std::uint64_t sourceAccepted_ = 0, sourceCompleted_ = 0;
+    std::uint64_t outputAccepted_ = 0, outputCompleted_ = 0;
+    bool sourcesClosed_ = false, publicationsClosed_ = false;
+    bool acknowledgedSends_ = false, sourcesPrepared_ = false, preparedOpened_ = false;
+    bool sourceUnknown_ = false, outputUnknown_ = false;
+    std::uint64_t localAccepted_ = 0, localCompleted_ = 0;
+};
+
 class RpcChannel final : public std::enable_shared_from_this<RpcChannel>
 {
     struct PrivateTag
@@ -96,12 +128,15 @@ class RpcChannel final : public std::enable_shared_from_this<RpcChannel>
 
 public:
     using Clock = std::chrono::steady_clock;
+    static std::shared_ptr<RpcMaintenanceState> ProcessMaintenance();
 
     static std::shared_ptr<RpcChannel> Create(muduo::net::EventLoop& loop,
                                               const TcpConnectionPtr& connection,
-                                              RpcServiceMap services);
+                                              RpcServiceMap services,
+                                              std::shared_ptr<RpcMaintenanceState> maintenance = ProcessMaintenance());
 
-    RpcChannel(PrivateTag, muduo::net::EventLoop& loop, const TcpConnectionPtr& connection, RpcServiceMap services);
+    RpcChannel(PrivateTag, muduo::net::EventLoop& loop, const TcpConnectionPtr& connection, RpcServiceMap services,
+               std::shared_ptr<RpcMaintenanceState> maintenance = ProcessMaintenance());
     ~RpcChannel();
 
     RpcChannel(const RpcChannel&) = delete;
@@ -167,7 +202,8 @@ public:
     // 一次「本地确定没发出」的调用:计入 started、采样记录原因,在 loop 上以 kNotSent 投递给 done
     // (恰好一次、不同步执行)。RpcClient / RpcSession 当前没有可用 channel 时也走这里。
     static void FailNotSent(muduo::net::EventLoop& loop, uint32_t messageId, ClientDoneCallback done,
-                            const char* reason, const std::string& peer);
+                            const char* reason, const std::string& peer,
+                            std::shared_ptr<RpcMaintenanceState> maintenance = ProcessMaintenance());
 
 private:
     friend class RpcDoneCallback;
@@ -178,6 +214,7 @@ private:
     {
         InflightSteadyTime expiresAt;   // InflightIndex 要求的成员
         uint32_t messageId{0};
+        std::shared_ptr<RpcMaintenanceOperation> maintenance;
         ClientDoneCallback done;
         tracing::TraceContext trace;    // 发起时的 trace,回调前恢复成它的子 span
     };
@@ -197,14 +234,15 @@ private:
     void RejectRequest(const GameRpcMessage& request, GameErrorCode error);
 
     // 按原 id 回包(muduo doneCallback)。id == 0(单向)什么都不发。response 为空且 error == RPC_NO_ERROR 时回 0 字节响应。
-    void DoneCallback(uint64_t id, uint32_t messageId, const ProtobufMessage* response, GameErrorCode error);
+    bool DoneCallback(uint64_t id, uint32_t messageId, const ProtobufMessage* response, GameErrorCode error);
 
     // 延后完成:RpcDoneCallback::Run / Fail 与 DoneClosure::Run 共用,只有第一次生效。
     static void CompleteDeferred(RpcDoneCallback::State& state, GameErrorCode error);
 
     // 整表摘出,经 queueInLoop 以 status 批量失败。
     void FailAll(RpcStatus status);
-    static void FailSoon(muduo::net::EventLoop& loop, ClientDoneCallback done, RpcStatus status);
+    static void FailSoon(muduo::net::EventLoop& loop, ClientDoneCallback done, RpcStatus status,
+                         std::shared_ptr<RpcMaintenanceState> maintenance);
     static void Deliver(OutstandingCall& call, const RpcStatus& status, const MessagePtr& response);
 
     void ArmTimeoutTick();
@@ -213,6 +251,7 @@ private:
     void SendFrame(const TcpConnectionPtr& connection, const GameRpcMessage& message);
     TcpConnectionPtr LockConnectedConnection() const;
 
+    std::shared_ptr<RpcMaintenanceState> maintenance_;
     muduo::net::EventLoop& loop_;
     std::weak_ptr<muduo::net::TcpConnection> connection_;
     RpcServiceMap services_;

@@ -6,19 +6,138 @@
 #include "muduo/net/SocketsOps.h"
 
 #include <hiredis/async.h>
+#include <limits>
+#include <utility>
 
 using namespace muduo;
 using namespace muduo::net;
 using namespace hiredis;
 
-static void dummy(const std::shared_ptr<Channel>&)
+
+std::shared_ptr<Hiredis::MaintenanceState> Hiredis::ProcessMaintenance()
 {
+  static const auto state = std::make_shared<MaintenanceState>();
+  return state;
+}
+bool Hiredis::MaintenanceState::Begin()
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (closed_) return false;
+  if (accepted_ == std::numeric_limits<std::uint64_t>::max()) { unknown_ = true; return false; }
+  ++accepted_;
+  return true;
+}
+void Hiredis::MaintenanceState::Complete(bool known)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!known || completed_ == accepted_) unknown_ = true;
+  if (completed_ < accepted_) ++completed_;
+}
+void Hiredis::MaintenanceState::Close()
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  closed_ = true;
+}
+bool Hiredis::MaintenanceState::HoldLocal(bool newClient)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (newClient && closed_) return false;
+  if (localHeld_ == std::numeric_limits<std::uint64_t>::max())
+  {
+    localAccountingUnknown_ = true;
+    unknown_ = true;
+    return false;
+  }
+  ++localHeld_;
+  return true;
+}
+void Hiredis::MaintenanceState::ReleaseLocal(bool joined)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!joined) unknown_ = true;
+  if (localReleased_ == localHeld_) localAccountingUnknown_ = true;
+  else ++localReleased_;
+}
+bool Hiredis::MaintenanceState::AllowConnect() const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  return !closed_ && !localAccountingUnknown_;
+}
+void Hiredis::MaintenanceState::MarkUnknown()
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  unknown_ = true;
+}
+bool Hiredis::MaintenanceState::Joined() const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  return closed_ && !localAccountingUnknown_ && accepted_ == completed_ && localHeld_ == localReleased_;
+}
+bool Hiredis::MaintenanceState::Frontier(std::string& value) const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!closed_ || unknown_ || localAccountingUnknown_ || accepted_ != completed_ || localHeld_ != localReleased_) return false;
+  value = "redis-command-v2:" + std::to_string(accepted_) + ":" + std::to_string(completed_)
+      + ":" + std::to_string(localHeld_) + ":" + std::to_string(localReleased_);
+  return true;
 }
 
-std::shared_ptr<Hiredis> Hiredis::Create(EventLoop* loop, const InetAddress& serverAddr)
+bool Hiredis::MaintenanceState::SettledFrontier(std::string& value) const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (unknown_ || localAccountingUnknown_ || accepted_ != completed_) return false;
+  value = "redis-command-settled-v2:" + std::to_string(accepted_) + ":" + std::to_string(completed_);
+  return true;
+}
+
+// wrapper 最后一个引用与 removeChannel 的排队引用分别登记。队列被丢弃仅释放本机引用，不能伪造成功前沿。
+class Hiredis::LocalReference
+{
+ public:
+  LocalReference(std::shared_ptr<MaintenanceState> state, bool newClient,
+                 std::shared_ptr<Channel> channel = {})
+    : state_(std::move(state)), channel_(std::move(channel)), held_(state_ && state_->HoldLocal(newClient)) {}
+  ~LocalReference()
+  {
+    channel_.reset();
+    if (held_) state_->ReleaseLocal(joined_);
+  }
+  bool held() const { return held_; }
+  void Join() { channel_.reset(); joined_ = true; }
+ private:
+  std::shared_ptr<MaintenanceState> state_;
+  std::shared_ptr<Channel> channel_;
+  bool held_;
+  bool joined_ = false;
+};
+namespace {
+// native 在用户回调返回后仍要完成旧 context 的 cleanup，不能在同一 wrapper 上递归重连。
+struct CallbackPhase {
+  explicit CallbackPhase(std::shared_ptr<bool> active) : active(std::move(active)), previous(*this->active)
+  { *this->active = true; }
+  ~CallbackPhase() { *active = previous; }
+  std::shared_ptr<bool> active;
+  bool previous;
+};
+struct PendingMaintenanceCommand {
+  Hiredis::CommandCallback callback;
+  std::shared_ptr<Hiredis::MaintenanceState> state;
+  bool admitted = false;
+  bool known = false;
+  ~PendingMaintenanceCommand()
+  {
+    // 捕获对象的析构也可能交还本机引用；必须先释放 target，再登记 terminal。
+    callback = {};
+    if (admitted) state->Complete(known);
+  }
+};
+}
+
+
+std::shared_ptr<Hiredis> Hiredis::Create(EventLoop* loop, const InetAddress& serverAddr, std::shared_ptr<MaintenanceState> maintenance)
 {
   if (loop) loop->assertInLoopThread();
-  return std::shared_ptr<Hiredis>(new Hiredis(loop, serverAddr), [loop](Hiredis* client)
+  return std::shared_ptr<Hiredis>(new Hiredis(loop, serverAddr, std::move(maintenance)), [loop](Hiredis* client)
   {
     if (loop) loop->assertInLoopThread();
     if (loop && loop->eventHandling())
@@ -34,8 +153,10 @@ std::shared_ptr<Hiredis> Hiredis::Create(EventLoop* loop, const InetAddress& ser
   });
 }
 
-Hiredis::Hiredis(EventLoop* loop, const InetAddress& serverAddr)
-  : loop_(loop),
+Hiredis::Hiredis(EventLoop* loop, const InetAddress& serverAddr, std::shared_ptr<MaintenanceState> maintenance)
+  : maintenance_(std::move(maintenance)),
+    lifetime_(std::make_shared<LocalReference>(maintenance_, true)),
+    loop_(loop),
     serverAddr_(serverAddr),
     context_(NULL)
 {
@@ -52,6 +173,8 @@ Hiredis::~Hiredis()
     context_ = NULL;
   }
   assert(!channel_ || channel_->isNoneEvent());
+  // 成员 callback target 随后先析构，lifetime_ 最后才释放本机登记。
+  lifetime_->Join();
 }
 
 bool Hiredis::connected() const
@@ -61,17 +184,31 @@ bool Hiredis::connected() const
 
 const char* Hiredis::errstr() const
 {
-  assert(context_ != NULL);
-  return context_->errstr;
+  return context_ ? context_->errstr : lastError_.c_str();
 }
 
 void Hiredis::connect()
 {
   assert(loop_);
   loop_->assertInLoopThread();
+  // Close 与此准入同锁线性化。已关闭的新占位对象不会登记任何 native/loop 工作。
+  const auto self = weak_from_this().lock();
+  if (!self || *callbackActive_ || !maintenance_ || !lifetime_->held() || !maintenance_->AllowConnect()) return;
   assert(!context_);
 
   context_ = ::redisAsyncConnect(serverAddr_.toIp().c_str(), serverAddr_.port());
+  if (!context_ || context_->err)
+  {
+    lastError_ = context_ && context_->errstr ? context_->errstr : "hiredis context allocation failed";
+    if (context_) ::redisAsyncFree(context_);
+    context_ = NULL;
+    const auto state = maintenance_;
+    CallbackPhase phase(callbackActive_);
+    const ConnectCallback callback = connectCb_;
+    state->MarkUnknown();
+    if (callback) callback(this, REDIS_ERR);
+    return;
+  }
 
   context_->ev.addRead = addRead;
   context_->ev.delRead = delRead;
@@ -142,8 +279,8 @@ void Hiredis::removeChannel()
   }
   channel_->disableAll();
   channel_->remove();
-  loop_->queueInLoop(std::bind(dummy, channel_));
-  channel_.reset();
+  auto retired = std::make_shared<LocalReference>(maintenance_, false, std::move(channel_));
+  loop_->queueInLoop([retired] { retired->Join(); });
 }
 
 void Hiredis::handleRead(muduo::Timestamp receiveTime)
@@ -205,19 +342,18 @@ void Hiredis::connectCallback(int status)
     setChannel();
   }
 
-  // 业务回调可能 Shutdown / Connect 并清掉成员回调，局部副本保住正在执行的 target。
+  const auto state = maintenance_;
+  CallbackPhase phase(callbackActive_);
   const ConnectCallback callback = connectCb_;
-  if (callback)
-  {
-    callback(this, status);
-  }
-
-  // 连接失败时 hiredis 会在 connect callback 返回后自动释放 context。
-  // 外部 callback 仍可在返回前读取 errstr,随后必须清空 wrapper 中的悬空指针。
   if (status != REDIS_OK)
   {
+    // native context 随回调返回自动释放；先存错误并清指针，回调后不再访问 wrapper。
+    lastError_ = context_->errstr ? context_->errstr : "";
     context_ = NULL;
+    state->MarkUnknown();
   }
+  try { if (callback) callback(this, status); }
+  catch (...) { state->MarkUnknown(); throw; }
 }
 
 /* static */ void Hiredis::disconnectCallback(const redisAsyncContext* ac, int status)
@@ -231,15 +367,15 @@ void Hiredis::disconnectCallback(int status)
   logConnection(false);
   removeChannel();
 
+  const auto state = maintenance_;
+  CallbackPhase phase(callbackActive_);
   const DisconnectCallback callback = disconnectCb_;
-  if (callback)
-  {
-    callback(this, status);
-  }
-
-  // hiredis 在 disconnect callback 返回后立即释放 redisAsyncContext;
-  // 及时清空,避免下次重连析构 wrapper 时对悬空指针二次 free。
+  lastError_ = context_->errstr ? context_->errstr : "";
+  // 先清旧 context；同一 wrapper 的回调内重连由 CallbackPhase 拒绝，调用方可在下一轮显式重连。
   context_ = NULL;
+  if (status != REDIS_OK) state->MarkUnknown();
+  try { if (callback) callback(this, status); }
+  catch (...) { state->MarkUnknown(); throw; }
 }
 
 void Hiredis::addRead(void* privdata)
@@ -279,11 +415,17 @@ void Hiredis::cleanup(void* privdata)
 
 int Hiredis::command(const CommandCallback& cb, muduo::StringArg cmd, ...)
 {
-  if (!connected()) return REDIS_ERR;
+  if (!connected() || !cb) return REDIS_ERR;
   loop_->assertInLoopThread();
 
+  // target 拷贝分配失败发生在接纳之前；失败不能留下永远不返回的 accepted 计数。
+  auto pending = std::make_unique<PendingMaintenanceCommand>();
+  pending->callback = cb;
+  pending->state = maintenance_;
+  if (!maintenance_ || !maintenance_->Begin()) return REDIS_ERR;
+  pending->admitted = true;
   LOG_TRACE;
-  CommandCallback* p = new CommandCallback(cb);
+  auto* p = pending.get();
   va_list args;
   va_start(args, cmd);
   int ret = ::redisvAsyncCommand(context_, commandCallback, p, cmd.c_str(), args);
@@ -297,7 +439,11 @@ int Hiredis::command(const CommandCallback& cb, muduo::StringArg cmd, ...)
     // 唯一例外是多频道 (P)SUBSCRIBE 中途 OOM(已写进订阅字典的频道仍持有 p),但本封装不支持订阅
     // (commandCallback 每次回调后都 delete)。升级 hiredis 时必须重核这条前提。
     // Windows 与 Linux 覆盖件必须保持同样的释放语义；端口访问器按各平台的 muduo 接口适配。
-    delete p;
+    p->known = true; // 同步拒绝发生在 hiredis 接受之前，确定零副作用。
+  }
+  else
+  {
+    pending.release(); // 只有真实 native 接受后才把唯一完成责任交给应答队列。
   }
   return ret;
 }
@@ -305,10 +451,13 @@ int Hiredis::command(const CommandCallback& cb, muduo::StringArg cmd, ...)
 /* static */ void Hiredis::commandCallback(redisAsyncContext* ac, void* r, void* privdata)
 {
   redisReply* reply = static_cast<redisReply*>(r);
-  std::unique_ptr<CommandCallback> cb(static_cast<CommandCallback*>(privdata));
+  std::unique_ptr<PendingMaintenanceCommand> cb(static_cast<PendingMaintenanceCommand*>(privdata));
   // 正常分发由 Channel tie 保活，析构中的 null-reply 由析构体同步 free 保活。
   // 回调返回后只清理本地回调副本，不再通过业务指针访问 wrapper。
-  (*cb)(getHiredis(ac), reply);
+  const bool known = reply != nullptr && reply->type != REDIS_REPLY_ERROR;
+  cb->callback(getHiredis(ac), reply);
+  cb->known = known;
+  // 析构在业务回调返回后计完成；空回包、服务端错误或异常永久 HOLD。
 }
 
 int Hiredis::ping()

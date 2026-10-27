@@ -20,7 +20,7 @@
 // 进程级计数器(各线程的 thread_local 生产者共用一份)。写法与 owner_epoch_stats 一致:
 // C++ 侧没有 prometheus,先用原子计数 + 日志;将来接指标时从这里读,不要另起一套。
 namespace kafka_producer_stats {
-	// 投递回执报告失败的消息数 = **确定没送到 broker 的消息数**(含超时、fatal、重建时 purge 掉的)。
+	// 投递回执失败数；超时、fatal、purge包含UNKNOWN，不能当作确定未送达或排空证据。
 	inline std::atomic<std::uint64_t>& DeliveryFailed()
 	{
 		static std::atomic<std::uint64_t> g_counter{0};
@@ -111,7 +111,13 @@ public:
 	};
 	using DeliveryListener = std::function<void(const DeliveryReport&)>;
 
+	KafkaProducer();
 	~KafkaProducer();
+	// 仅封 producer 准入；P1 仍需 relay 时不得调用，P3 才汇总所有线程。
+	static void CloseProcessAdmission();
+	static kafka_producer_policy::PublicationRegistry::Snapshot ProcessPublicationFrontier();
+	// 在创建线程 flush 后销毁 native handle，返回后才记 native join。
+	bool StopAndJoin(std::chrono::milliseconds timeout);
 
 	// Store brokers for deferred creation. Does not create the producer yet.
 	void setBrokers(const std::string& brokers);
@@ -150,6 +156,8 @@ public:
 
 	// 已入队、还没拿到回执的被跟踪消息条数。诊断与单测用。
 	std::size_t trackedInFlight() const;
+	// 包含普通send；UNKNOWN永久保留到该boot结束，调用者仍须先封准入和join全部producer线程。
+	bool publicationsSettled() const { return publicationRegistry_->OwnerSettled(publicationOwner_); }
 
 	void poll();
 	// 驱动投递回调,直到 producer 队列为空或超时;只有 librdkafka
@@ -192,6 +200,9 @@ private:
 	kafka_producer_policy::FailureLogThrottle failureLogThrottle_{20, std::chrono::seconds(10)};
 	// 已入队、还没拿到回执的被跟踪关联号(只属于当前实例;重建时 TakeAll 合成失败回执后清空)。
 	kafka_producer_policy::DeliveryTracker deliveryTracker_;
+	std::shared_ptr<kafka_producer_policy::PublicationRegistry> publicationRegistry_;
+	kafka_producer_policy::PublicationRegistry::OwnerPtr publicationOwner_;
+	bool publicationClosed_ = false;
 	DeliveryListener deliveryListener_;
 
 	// 关联号经 msg_opaque(void*)往返:指针宽度必须装得下 64 位关联号,否则高位被截断、回执对不上号。

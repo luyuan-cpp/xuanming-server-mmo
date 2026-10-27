@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
-	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -69,19 +68,15 @@ func (tx replyLossTx) Commit() error {
 }
 
 func TestChatTiDBCommittedReplyLossReplaysOriginalOnce(t *testing.T) {
-	s := nativeStore(t)
-	cfg := mysql.NewConfig()
-	cfg.Net = "tcp"
-	cfg.Addr = os.Getenv("CHAT_IT_TIDB")
-	cfg.User = "root"
-	cfg.DBName = s.roleSchema
-	cfg.Timeout = time.Second
-	cfg.ReadTimeout = 5 * time.Second
-	cfg.WriteTimeout = 5 * time.Second
+	s, fixture := nativeStoreFixture(t, false)
+	cfg, err := mysql.ParseDSN(fixture.DSN(s.roleSchema))
+	require.NoError(t, err)
 	inner, err := mysql.NewConnector(cfg)
 	require.NoError(t, err)
 	armed := &atomic.Bool{}
-	db := sql.OpenDB(replyLossConnector{inner: authoritysql.PinCurrentSession(inner, true), armed: armed})
+	guarded, err := authoritysql.PinCurrentSession(inner, true, fixture.Permission)
+	require.NoError(t, err)
+	db := sql.OpenDB(replyLossConnector{inner: guarded, armed: armed})
 	db.SetMaxOpenConns(2)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	ctx, cancel := context.WithTimeout(original(t, 11), 10*time.Second)

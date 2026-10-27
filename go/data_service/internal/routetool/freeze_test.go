@@ -7,7 +7,12 @@ package routetool
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
+	"google.golang.org/protobuf/proto"
+	pb "proto/common/database"
+	"shared/authoritysql"
+	"shared/drainproof"
 	"strconv"
 	"strings"
 	"testing"
@@ -28,6 +33,7 @@ var (
 	_ readyMarkerRedis = (*redis.Redis)(nil)
 	_ freezeDB         = (*store.RouteStore)(nil)
 	_ unfreezeDB       = (*store.RouteStore)(nil)
+	_ MaintenanceWork  = (*drainproof.Session)(nil)
 )
 
 const testGeneration = "0123456789abcdef0123456789abcdef"
@@ -79,10 +85,99 @@ func readyMarkerFor(t *testing.T, id RedisIdentity, gen string, watermarkMs uint
 	return raw
 }
 
+// 以下只隔离工具的SQL控制调用，不证明实际Catalog授权或数据库锁；SQL验收另用真实owned fixture。
+type unitMaintenanceCatalog struct {
+	frozen   *pb.SqlWriterMaintenanceReceipt
+	meta     func(context.Context) (store.RouteMeta, error)
+	freezer  freezeDB
+	releaser unfreezeDB
+}
+
+func unitReceipt(t *testing.T, kind pb.SqlWriterMaintenanceReceipt_Kind, floor uint64) *pb.SqlWriterMaintenanceReceipt {
+	t.Helper()
+	run := bytes.Repeat([]byte{1}, 16)
+	plan, err := proto.MarshalOptions{Deterministic: true}.Marshal(&pb.SqlWriterMaintenanceReceipt_Plan{RunId: run, BeforeEpoch: 1, CatalogRevision: 1})
+	require.NoError(t, err)
+	manifest := sha256.Sum256(plan)
+	request := &pb.SqlWriterMaintenanceReceipt{RequestId: bytes.Repeat([]byte{byte(kind) + 2}, 16), RunId: run, Generation: testGeneration, BeforeEpoch: 1, CatalogRevision: 1, Kind: kind, AttemptRevision: 1, PlanProto: plan, Evidence: &pb.SqlWriterMaintenanceReceipt_Evidence{OperationId: run, ManifestDigest: manifest[:]}}
+	if kind == pb.SqlWriterMaintenanceReceipt_RELEASE {
+		request.Evidence.Detail = &pb.SqlWriterMaintenanceReceipt_Evidence_ReleaseReadiness{ReleaseReadiness: &pb.SqlWriterMaintenanceReceipt_ReleaseReadiness{OriginalFreezeReceiptId: bytes.Repeat([]byte{3}, 16), OriginalFreezeReceiptDigest: bytes.Repeat([]byte{4}, 32), RouteWatermarkFloorMs: floor}}
+	}
+	sealed, err := authoritysql.SealMaintenanceRequest(request)
+	require.NoError(t, err)
+	return sealed
+}
+func unitFrozenReceipt(t *testing.T) *pb.SqlWriterMaintenanceReceipt {
+	r := unitReceipt(t, pb.SqlWriterMaintenanceReceipt_FREEZE, 0)
+	r.AfterEpoch = 2
+	r.Phase = pb.SqlWriterMaintenanceReceipt_FROZEN
+	r.RunPhase = pb.SqlWriterDrainRun_SQL_FROZEN
+	r, err := authoritysql.SealMaintenanceRequest(r)
+	require.NoError(t, err)
+	r.CommittedMs = 1
+	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(r)
+	require.NoError(t, err)
+	sum := sha256.Sum256(raw)
+	r.ReceiptDigest = sum[:]
+	return r
+}
+func (c *unitMaintenanceCatalog) Freeze(ctx context.Context, ticket []byte, r *pb.SqlWriterMaintenanceReceipt) (*pb.SqlWriterMaintenanceReceipt, error) {
+	if len(ticket) != 16 || r == nil || r.Kind != pb.SqlWriterMaintenanceReceipt_FREEZE {
+		return nil, errors.New("单测typed冻结输入不符")
+	}
+	if _, err := c.freezer.FreezeRouteWriters(ctx); err != nil {
+		return nil, err
+	}
+	return proto.Clone(r).(*pb.SqlWriterMaintenanceReceipt), nil
+}
+func (c *unitMaintenanceCatalog) Release(ctx context.Context, ticket []byte, r *pb.SqlWriterMaintenanceReceipt) (*pb.SqlWriterMaintenanceReceipt, error) {
+	if len(ticket) != 16 || r == nil || r.Kind != pb.SqlWriterMaintenanceReceipt_RELEASE || r.GetEvidence().GetReleaseReadiness() == nil {
+		return nil, errors.New("单测typed释放输入不符")
+	}
+	if _, err := c.releaser.UnfreezeRouteWriters(ctx, r.GetEvidence().GetReleaseReadiness().RouteWatermarkFloorMs); err != nil {
+		return nil, err
+	}
+	return proto.Clone(r).(*pb.SqlWriterMaintenanceReceipt), nil
+}
+func (c *unitMaintenanceCatalog) MaintenanceReceipt(_ context.Context, id []byte) (*pb.SqlWriterMaintenanceReceipt, error) {
+	if c.frozen == nil || !bytes.Equal(id, c.frozen.RequestId) {
+		return nil, errors.New("单测冻结原件ID不同")
+	}
+	return proto.Clone(c.frozen).(*pb.SqlWriterMaintenanceReceipt), nil
+}
+func (c *unitMaintenanceCatalog) CurrentMeta(ctx context.Context) (*pb.RouteMeta, error) {
+	m, err := c.meta(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.RouteMeta{Generation: m.Generation, Writable: uint32(m.Writable), WriterEpoch: c.frozen.AfterEpoch, CatalogRevision: c.frozen.CatalogRevision, FreezeRunId: bytes.Clone(c.frozen.RunId)}, nil
+}
+
+// 准备固定P8输入，使用测试当前安排的原始Redis值；调用后不会随被测流程重封或重取输入。
+func unitReleaseRequest(t *testing.T, rd readyMarkerRedis, db unfreezeDB) *pb.SqlWriterMaintenanceReceipt {
+	t.Helper()
+	var floor uint64
+	m, err := db.ReadRouteMeta(context.Background())
+	if err == nil && rd != nil && m.Frozen() {
+		if raw, err := rd.GetCtx(context.Background(), placement.RouteReadyKey); err == nil {
+			if marker, err := placement.DecodeRouteReadyMarker(raw); err == nil && marker.RedisRunID == testIdentity.RunID && marker.MasterReplID == testIdentity.MasterReplID {
+				floor = marker.WatermarkMs
+			}
+		}
+		if raw, err := rd.GetCtx(context.Background(), placement.RouteWatermarkKey); err == nil {
+			if key, err := placement.DecodeRouteWatermark(raw); err == nil {
+				floor = max(floor, key.FloorFor(m.Generation))
+			}
+		}
+	}
+	return unitReceipt(t, pb.SqlWriterMaintenanceReceipt_RELEASE, floor)
+}
+
 func runUnfreeze(t *testing.T, rd readyMarkerRedis, db unfreezeDB, ack bool) (UnfreezeReport, cliRun) {
 	t.Helper()
 	var out, errOut bytes.Buffer
 	rep, err := Unfreeze(context.Background(), rd, db, UnfreezeOptions{
+		Catalog: &unitMaintenanceCatalog{releaser: db}, TicketID: bytes.Repeat([]byte{7}, 16), Request: unitReleaseRequest(t, rd, db),
 		CacheUnverifiedAcknowledged: ack,
 		Timeout:                     store.RouteFreezeTimeoutMin,
 		Identity:                    func(context.Context) (RedisIdentity, error) { return testIdentity, nil },
@@ -258,6 +353,7 @@ func TestUnfreeze_RedisModeNeedsAckAndSkipsMarker(t *testing.T) {
 	run := func(db unfreezeDB, ack bool) (UnfreezeReport, cliRun, error) {
 		var out, errOut bytes.Buffer
 		rep, err := Unfreeze(context.Background(), nil, db, UnfreezeOptions{
+			Catalog: &unitMaintenanceCatalog{releaser: db}, TicketID: bytes.Repeat([]byte{7}, 16), Request: unitReleaseRequest(t, nil, db),
 			CacheUnverifiedAcknowledged: ack,
 			RedisMode:                   true,
 			Timeout:                     store.RouteFreezeTimeoutMin,
@@ -296,6 +392,7 @@ func TestFreeze_OutputAndRedisModeWarning(t *testing.T) {
 	run := func(db *fakeUnfreezeDB, redisMode bool, timeout time.Duration) cliRun {
 		var out, errOut bytes.Buffer
 		rep, err := Freeze(context.Background(), db, FreezeOptions{
+			Catalog: &unitMaintenanceCatalog{freezer: db}, TicketID: bytes.Repeat([]byte{7}, 16), Request: unitReceipt(t, pb.SqlWriterMaintenanceReceipt_FREEZE, 0),
 			Reason: "PITR 2026-10-18", Timeout: timeout, RedisMode: redisMode, Stdout: &out, Stderr: &errOut,
 		})
 		return cliRun{code: FreezeExitCode(rep, err), stdout: out.String(), stderr: errOut.String()}
@@ -311,7 +408,7 @@ func TestFreeze_OutputAndRedisModeWarning(t *testing.T) {
 
 	r = run(&fakeUnfreezeDB{}, true, store.RouteFreezeTimeoutMin)
 	assert.Equal(t, ExitClean, r.code)
-	assert.Equal(t, "route_freeze changed=false writable=0\n", r.stdout)
+	assert.Equal(t, "route_freeze changed=true writable=0\n", r.stdout) // 正式Catalog成功也涵盖同request永久收据重读，旧affected-rows布尔不再是API。
 	assert.Contains(t, r.stderr, "WARN: RouteStore.Mode=redis")
 
 	db = &fakeUnfreezeDB{}
@@ -400,6 +497,7 @@ func runUnfreezeErr(t *testing.T, rd readyMarkerRedis, db unfreezeDB, ack bool) 
 	t.Helper()
 	var out, errOut bytes.Buffer
 	rep, err := Unfreeze(context.Background(), rd, db, UnfreezeOptions{
+		Catalog: &unitMaintenanceCatalog{releaser: db}, TicketID: bytes.Repeat([]byte{7}, 16), Request: unitReleaseRequest(t, rd, db),
 		CacheUnverifiedAcknowledged: ack,
 		Timeout:                     store.RouteFreezeTimeoutMin,
 		Identity:                    func(context.Context) (RedisIdentity, error) { return testIdentity, nil },

@@ -610,8 +610,8 @@ func TestLockBusyReturnsErrLockBusy(t *testing.T) {
 	if writes := writesAfter(rec, 0); len(writes) != 0 {
 		t.Fatalf("拿不到锁时不许写库(连台账都不建),got %v", collapseAll(writes))
 	}
-	if _, err := Plan(ctx, db, testOpts(t, listing)); !errors.Is(err, ErrLockBusy) {
-		t.Fatalf("Plan err = %v, want ErrLockBusy", err)
+	if _, err := Plan(ctx, db, testOpts(t, listing)); err != nil {
+		t.Fatalf("Plan只读核对不得申请迁移锁: %v", err)
 	}
 }
 
@@ -719,7 +719,11 @@ func TestPlanExecutesNoWrites(t *testing.T) {
 	if f.ledgerExists || f.hasTable("trade_listing") {
 		t.Fatal("Plan 不许建台账或建表")
 	}
-	mustIndex(t, rec.Statements(), "SELECT RELEASE_LOCK(")
+	for _, statement := range rec.Statements() {
+		if !strings.HasPrefix(statement, "SELECT ") || strings.Contains(statement, "GET_LOCK(") || strings.Contains(statement, "RELEASE_LOCK(") {
+			t.Fatalf("Plan不得修改会话或取得锁: %s", statement)
+		}
+	}
 }
 
 func TestInterruptedStatementIsKilledAndLeavesLedgerDirty(t *testing.T) {
@@ -930,5 +934,34 @@ func TestDefaultsApplyToZeroOptions(t *testing.T) {
 	o := Options{}.withDefaults()
 	if o.AdvisoryLockWait != 10*time.Second || o.SessionLockWait != 5*time.Second || o.StatementTimeout != 60*time.Second {
 		t.Fatalf("零值 Options 的默认值与规格不符: %+v", o)
+	}
+}
+
+func TestPlanSingleConnectionAndConcurrentSchemaChange(t *testing.T) {
+	f := newFakeMySQL(testDatabase)
+	db, _ := openFake(t, f)
+	listing := listingTable().build(t)
+	if _, err := Up(context.Background(), db, testOpts(t, listing)); err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	if _, err := Plan(context.Background(), db, testOpts(t, listing)); err != nil {
+		t.Fatalf("纯读Plan只需一条连接: %v", err)
+	}
+	columnsRead := 0
+	f.setIntercept(func(ctx context.Context, query string) error {
+		if !strings.HasPrefix(query, "SELECT ") || strings.Contains(query, "GET_LOCK(") || strings.Contains(query, "RELEASE_LOCK(") {
+			return errors.New("只读主体拒绝会话写或advisory锁")
+		}
+		if strings.Contains(query, "information_schema.COLUMNS") {
+			columnsRead++
+			if columnsRead == 2 {
+				f.dropTable("trade_listing")
+			}
+		}
+		return nil
+	})
+	if _, err := Plan(context.Background(), db, testOpts(t, listing)); err == nil {
+		t.Fatal("核对期间结构变化必须拒绝")
 	}
 }

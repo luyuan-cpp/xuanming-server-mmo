@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"net"
 	"os"
 	"sync"
 	"testing"
@@ -22,74 +21,93 @@ import (
 	databasepb "proto/common/database"
 	dspb "proto/data_service"
 	"shared/accountdirectory"
-	"shared/authoritysql"
+	"shared/authoritysql/sqltest"
 	"shared/placement"
 )
 
 // 显式专用 TiDB DSN；每例只建／删自己的随机库，不借用其它任务的现有库或端口假设。
+type directorySQLFixture struct {
+	SQL              *sqltest.Fixture
+	InitialStorageID uint32
+	ProofStorageID   uint32
+}
+
 func accountDirectoryTiDB(t *testing.T) (*AccountDirectoryStore, *sql.DB) {
+	t.Helper()
+	directory, schema, _ := accountDirectoryTiDBWithWriter(t)
+	return directory, schema
+}
+
+func accountDirectoryTiDBWithWriter(t *testing.T) (*AccountDirectoryStore, *sql.DB, *directorySQLFixture) {
 	t.Helper()
 	dsn := os.Getenv("ACCOUNT_DIRECTORY_TEST_DSN")
 	if dsn == "" {
 		if os.Getenv("ACCOUNT_DIRECTORY_REQUIRE_TIDB") == "1" {
-			t.Fatal("缺少ACCOUNT_DIRECTORY_TEST_DSN")
+			t.Fatal("缺少 ACCOUNT_DIRECTORY_TEST_DSN")
 		}
-		t.Skip("未配置专用账号目录TiDB")
+		t.Skip("未配置专用账号目录 TiDB")
 	}
-	cfg, err := mysql.ParseDSN(dsn)
+	_, err := mysql.ParseDSN(dsn)
 	require.NoError(t, err)
-	host, _, err := net.SplitHostPort(cfg.Addr)
+	var nonce [8]byte
+	_, err = rand.Read(nonce[:])
 	require.NoError(t, err)
-	require.True(t, host == "localhost" || (net.ParseIP(host) != nil && net.ParseIP(host).IsLoopback()))
-	cfg.DBName = ""
-	admin, err := sql.Open("mysql", cfg.FormatDSN())
-	require.NoError(t, err)
-	raw := make([]byte, 8)
-	_, err = rand.Read(raw)
-	require.NoError(t, err)
-	name := "account_directory_it_" + hex.EncodeToString(raw)
-	_, err = admin.Exec("CREATE DATABASE `" + name + "`")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_, err := admin.Exec("DROP DATABASE `" + name + "`")
-		require.NoError(t, err)
-		require.NoError(t, admin.Close())
-	})
-	cfg.DBName = name
-	db, err := authoritysql.Open(context.Background(), cfg.FormatDSN(), name, true, 8)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	conf := MySQLConfig{Host: cfg.Addr, User: cfg.User, Password: cfg.Passwd, DBName: name, MaxOpenConn: 8, MaxIdleConn: 2}
-	require.NoError(t, MigrateSchema(ctx, conf, MigrateOptions{}))
-	s, err := NewAccountDirectoryStore(conf, true, 2, 8)
-	require.NoError(t, err)
-	// 正式创建现在必须有真实路由和同后端玩家表；每个用例拥有独立随机落点库。
-	storageID := binary.BigEndian.Uint32(raw[:4]) | 0x80000000
+	name := "account_directory_it_" + hex.EncodeToString(nonce[:])
+	storageID := binary.BigEndian.Uint32(nonce[:4]) | 0x80000000
+	proofStorageID := storageID ^ 1
 	playerSchema, ok := placement.StoreDBName(storageID)
 	require.True(t, ok)
-	_, err = admin.Exec("CREATE DATABASE `" + playerSchema + "`")
+	proofSchema, ok := placement.StoreDBName(proofStorageID)
+	require.True(t, ok)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	// 同boot可能访问的两个存储库在注册之前固定，proof测试不能运行中扩展保护集合。
+	opts, err := sqltest.OptionsFromEnv(dsn, name, playerSchema, proofSchema)
 	require.NoError(t, err)
-	t.Cleanup(func() { _, err := admin.Exec("DROP DATABASE `" + playerSchema + "`"); require.NoError(t, err) })
-	playerConfig := *cfg
-	playerConfig.DBName = playerSchema
-	playerDB, err := authoritysql.Open(ctx, playerConfig.FormatDSN(), playerSchema, true, 4)
+	fixture, err := sqltest.New(ctx, t, opts)
 	require.NoError(t, err)
-	model := proto2mysql.NewDB()
-	require.NoError(t, model.OpenDB(playerDB, playerSchema))
-	for _, row := range []proto.Message{&databasepb.PlayerDatabase{}, &databasepb.PlayerDatabase_1{}} {
-		model.RegisterTable(row)
-		require.NoError(t, model.CreateOrUpdateTable(row))
+	require.NoError(t, fixture.PrepareOwnedSchema(ctx, name, func(ctx context.Context, db *sql.DB) error {
+		opts := MigrateOptions{}
+		release, err := acquireMigrateLock(ctx, db, name, opts.LockWait)
+		if err != nil {
+			return err
+		}
+		defer release()
+		return migrateSchemaOn(ctx, db, name, opts)
+	}))
+	var business []proto.Message
+	for _, model := range TableMessages() {
+		table, ok := proto2mysql.TableNameFromDescriptor(model.ProtoReflect().Descriptor())
+		require.True(t, ok)
+		switch table {
+		case "route_meta", "writer_registry", "writer_slot", "writer_lifecycle_receipt", "sql_writer_drain_run", "sql_writer_freeze_ticket", "sql_writer_maintenance_receipt":
+			continue
+		}
+		business = append(business, model)
 	}
-	require.NoError(t, playerDB.Close())
-	require.NoError(t, s.ConfigureInitialPlayerCommit([]uint32{storageID}))
-	_, err = db.Exec("UPDATE route_meta SET writable=1 WHERE id=1")
+	require.NoError(t, fixture.GrantProtoTables(ctx, name, business))
+	playerModels := []proto.Message{&databasepb.PlayerDatabase{}, &databasepb.PlayerDatabase_1{}}
+	for _, schema := range []string{playerSchema, proofSchema} {
+		install, err := fixture.OpenSchema(ctx, schema)
+		require.NoError(t, err)
+		model := proto2mysql.NewDB()
+		require.NoError(t, model.OpenDB(install, schema))
+		for _, row := range playerModels {
+			model.RegisterTable(row)
+			require.NoError(t, model.CreateOrUpdateTable(row))
+		}
+		require.NoError(t, fixture.GrantProtoTables(ctx, schema, playerModels))
+	}
+	normal, err := mysql.ParseDSN(fixture.DSN(name))
 	require.NoError(t, err)
-	// 此夹具隔离目录原有契约；跨域挂起资产互锁由专门用例装配真实交易表后启用。
-	s.contracts = &roleAssetContractGuard{disabled: true}
-	t.Cleanup(func() { require.NoError(t, s.Close()) })
-	return s, db
+	conf := MySQLConfig{Host: normal.Addr, User: normal.User, Password: normal.Passwd, DBName: name, MaxOpenConn: 8, MaxIdleConn: 2, Permission: fixture.Permission}
+	directory, err := NewAccountDirectoryStore(conf, true, 2, 8)
+	require.NoError(t, err)
+	require.NoError(t, directory.ConfigureInitialPlayerCommit([]uint32{storageID}))
+	// 只隔离原目录契约；跨域资产互锁仍由对应正式用例装配。
+	directory.contracts = &roleAssetContractGuard{disabled: true}
+	t.Cleanup(func() { require.NoError(t, directory.Close()) })
+	return directory, fixture.Schema, &directorySQLFixture{SQL: fixture, InitialStorageID: storageID, ProofStorageID: proofStorageID}
 }
 
 func TestTiDBAccountDirectoryCapReplayRepairAndRemoval(t *testing.T) {

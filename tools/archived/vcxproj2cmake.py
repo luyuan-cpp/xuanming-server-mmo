@@ -135,6 +135,8 @@ def parse_vcxproj(vcxproj_file):
         for item in xmldoc.getElementsByTagName(name):
             if item.firstChild and "third_party/grpc" in item.firstChild.data.replace("\\", "/").lower():
                 raise ValueError("工程仍引用官方 gRPC SDK: %s" % vcxproj_file)
+            if item.firstChild and "protobuf/third_party/abseil-cpp" in item.firstChild.data.replace("\\", "/").lower():
+                raise ValueError("工程仍引用已拆出的嵌套 Abseil 路径: %s" % vcxproj_file)
     for item in xmldoc.getElementsByTagName("AdditionalDependencies"):
         if not item.firstChild:
             continue

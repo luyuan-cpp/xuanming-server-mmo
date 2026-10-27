@@ -10,8 +10,8 @@ spring:
       mode: never
   datasource:
     url: ${COMMERCE_JDBC_URL}
-    username: ${COMMERCE_DB_USER}
-    password: ${COMMERCE_DB_PASSWORD}
+    username: ${MMORPG_SQL_USERNAME}
+    password: ${MMORPG_SQL_PASSWORD}
 commerce:
   run-mode: ${COMMERCE_RUN_MODE:prod}
   require-tidb: ${COMMERCE_REQUIRE_TIDB:true}
@@ -29,3 +29,9 @@ commerce:
     cooling-ms: ${COMMERCE_CONSIGNMENT_COOLING_MS:259200000}
     fee-bps: ${COMMERCE_CONSIGNMENT_FEE_BPS:500}
     currencies: ${COMMERCE_CONSIGNMENT_CURRENCIES:0}
+
+# 每boot独立NORMAL主体；启动grant缺失时拒启。
+mmorpg:
+  run-mode: ${MMORPG_RUN_MODE:prod}
+  sql:
+    require-tidb: ${MMORPG_SQL_REQUIRE_TIDB:true}

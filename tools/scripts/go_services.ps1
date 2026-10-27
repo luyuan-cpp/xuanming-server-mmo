@@ -49,7 +49,7 @@
 #>
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("start", "start-exe", "stop", "status", "list", "build")]
+    [ValidateSet("start", "start-exe", "stop", "stop-and-report", "signal-only", "status", "list", "build")]
     [string]$Command,
 
     [string[]]$Services = @(),
@@ -97,7 +97,13 @@ param(
     [switch]$ForceStop,
 
     # stop:Ctrl+C 后等待优雅退出的秒数,>0 时覆盖所有服务;0 = 按目录键 StopTimeoutSeconds(缺省 25)。
-    [int]$StopTimeoutSeconds = 0
+    [int]$StopTimeoutSeconds = 0,
+    [string]$MaintenancePlanPath = "",
+    [string]$StopReportPath = "",
+    [int]$SignalProcessId = 0,
+    [string]$MaintenanceDrainPlan = "",
+    [string]$MaintenanceDrainDir = "",
+    [string]$MaintenanceDrainSha256 = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -250,6 +256,8 @@ $DerivedEtcDir = Join-Path $RunDir "etc\go_services"
 # Normalize $Counts (which may arrive as a hashtable, string, or string[]) to a
 # plain hashtable<string,int>. pwsh -File serializes hashtable args to a string,
 # so we accept the string form 'name=N,name=N' as a fallback.
+. (Join-Path $PSScriptRoot "maintenance_drain.ps1")
+
 function ConvertTo-CountsHashtable {
     param($Raw)
     $result = @{}
@@ -807,6 +815,15 @@ function Reserve-RunningInstancePorts {
     }
 }
 
+function ConvertTo-ServiceProcessArgument {
+    param([AllowEmptyString()][Parameter(Mandatory)][string]$Value)
+    if($Value.Contains([char]0) -or $Value.Contains("`r") -or $Value.Contains("`n")){throw '启动参数不能包含NUL或换行'}
+    # Start-Process会把数组重新拼成命令行，完整私有路径必须保留为一个argv。
+    $escaped=[regex]::Replace($Value,'(\\*)"','${1}${1}\"')
+    $escaped=[regex]::Replace($escaped,'(\\+)$','${1}${1}')
+    return '"'+$escaped+'"'
+}
+
 function Start-ServiceInstance {
     param(
         [string]$Name,
@@ -831,13 +848,31 @@ function Start-ServiceInstance {
         }
     }
     $cfg = Resolve-InstanceConfig -Name $Name -Info $Info -Index $Index -Total $Total -ReservedPorts $ReservedPorts
-    if ($Name -eq 'chat') { $null = Get-LocalChatAuthoritySettings -ConfigPath $cfg.FullPath -RequireDsn }
-
+    $writerEnvironment=$null
+    $bootMaintenanceArgs=@()
+    if ($Name -in @('db','data_service','login','chat','friend','guild','mail','rank','match','trade','player_inbox')) {
+        $selectedConfig=''
+        $writerEnvironment=Get-SqlWriterBootEnvironment -InstanceKey $instanceKey -RepoRoot $RepoRoot -ServiceName $Name -SelectedRuntimeConfigFile ([ref]$selectedConfig) -PreparedRuntimeArguments ([ref]$bootMaintenanceArgs) -PrepareOnlySupported:($Name -in @('db','data_service','login','chat','friend','guild','mail','rank','match','trade','player_inbox'))
+        $listen=Get-YamlScalar -Path $selectedConfig -KeyPath 'ListenOn'
+        if($listen -cnotmatch '^(?:\[[0-9A-Fa-f:]+\]|[A-Za-z0-9_.-]+):(?<port>[1-9][0-9]{0,4})$' -or [int]$Matches.port -ne $cfg.Port){throw '每boot完整配置的ListenOn与本次实例固定端口不符，不能写回或挪用别人的配置'}
+        if($Zone -gt 0 -and [int](Get-YamlScalar -Path $selectedConfig -KeyPath 'ZoneId') -ne $Zone){throw '每boot完整配置ZoneId与本次实例不符'}
+        $cfg.Path=$selectedConfig;$cfg.FullPath=$selectedConfig;$cfg.Derived=$false
+    }else{Assert-PublicationStartAllowed -RepoRoot $RepoRoot}
     $logOut  = Join-Path $LogDir "$instanceKey.stdout.log"
     $logErr  = Join-Path $LogDir "$instanceKey.stderr.log"
 
     $configFlag = $Info.ConfigFlag
     $configArg  = $cfg.Path
+    $maintenanceArgs=$bootMaintenanceArgs
+    if($MaintenanceDrainPlan -or $MaintenanceDrainDir -or $MaintenanceDrainSha256){
+        if($Name -notin @('db','login')){throw '该服务没有正式runtime drain入口，不能把未知flag当维护闭合'}
+        if(-not [IO.Path]::IsPathRooted($MaintenanceDrainPlan) -or -not [IO.Path]::IsPathRooted($MaintenanceDrainDir) -or $MaintenanceDrainSha256 -cnotmatch '^[a-f0-9]{64}$' -or (Get-MaintenanceSha256 -Path $MaintenanceDrainPlan) -cne $MaintenanceDrainSha256){throw 'runtime drain Receipt/私有目录/rawSHA必须显式完整绑定'}
+        if(-not [IO.Directory]::Exists($MaintenanceDrainDir) -or (Get-Item -LiteralPath $MaintenanceDrainDir).Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'runtime drain目录缺失或为重解析点'}
+        $explicit=@('-maintenance-drain-plan',[IO.Path]::GetFullPath($MaintenanceDrainPlan),'-maintenance-drain-dir',[IO.Path]::GetFullPath($MaintenanceDrainDir),'-maintenance-drain-sha256',$MaintenanceDrainSha256)
+        if($bootMaintenanceArgs.Count -ne 0 -and ($bootMaintenanceArgs -join "`n") -cne ($explicit -join "`n")){throw '显式维护参数不能替换同新boot已固定prepare-only原件'}
+        $maintenanceArgs=$explicit
+    }
+
 
     # 资产通道签名密钥(规格 §4.32,90 清单 G-04 指派 B5b)。guild 的 etc/guild.yaml 打开了 AssetOp,
     # 启动时读不到 ≥32 字节的 MMORPG_ASSET_OP_SECRET_GUILD 即拒启;值取自 run/secrets/assetop-dev.env
@@ -855,11 +890,14 @@ function Start-ServiceInstance {
     # 无条件调用会让那些用例报「命令未找到」。
     $injectMailAdminToken = ($Name -eq 'mail')
     $prevMailAdminToken = $null
+    $savedWriterEnvironment = $null
     $savedChatDsn = [Environment]::GetEnvironmentVariable('CHAT_AUTHORITY_DSN', 'Process')
 	$savedMatchMigrationUser = [Environment]::GetEnvironmentVariable('MATCH_MIGRATION_USER', 'Process')
 	$savedMatchMigrationPassword = [Environment]::GetEnvironmentVariable('MATCH_MIGRATION_PASSWORD', 'Process')
 	$savedDatabaseAllowlist = [Environment]::GetEnvironmentVariable('DB_ALLOWED_DATABASES','Process')
     try {
+        if($null -ne $writerEnvironment){$savedWriterEnvironment=Enter-SqlWriterBootEnvironment -Environment $writerEnvironment}
+        if ($Name -eq 'chat') { $null = Get-LocalChatAuthoritySettings -ConfigPath $cfg.FullPath -RequireDsn }
 		# 显式迁移CLI的凭据不能被任意常驻服务顺带继承。
 		[Environment]::SetEnvironmentVariable('MATCH_MIGRATION_USER', $null, 'Process')
 		[Environment]::SetEnvironmentVariable('MATCH_MIGRATION_PASSWORD', $null, 'Process')
@@ -900,7 +938,7 @@ function Start-ServiceInstance {
             Write-Host "[start-exe] $instanceKey  :$($cfg.Port)  ($($Info.Desc))" -ForegroundColor Cyan
 
             $proc = Start-Process -FilePath $exePath `
-                -ArgumentList @($configFlag, $configArg) `
+                -ArgumentList (@(@($configFlag, $configArg)+$maintenanceArgs | ForEach-Object {ConvertTo-ServiceProcessArgument -Value $_})) `
                 -WorkingDirectory $svcDir `
                 -RedirectStandardOutput $logOut `
                 -RedirectStandardError  $logErr `
@@ -911,7 +949,7 @@ function Start-ServiceInstance {
             Write-Host "[start] $instanceKey  :$($cfg.Port)  ($($Info.Desc))" -ForegroundColor Cyan
 
             $proc = Start-Process -FilePath "go" `
-                -ArgumentList @("run", (Join-Path $svcDir $Info.Entry), $configFlag, $configArg) `
+                -ArgumentList (@(@("run", (Join-Path $svcDir $Info.Entry), $configFlag, $configArg)+$maintenanceArgs | ForEach-Object {ConvertTo-ServiceProcessArgument -Value $_})) `
                 -WorkingDirectory $svcDir `
                 -RedirectStandardOutput $logOut `
                 -RedirectStandardError  $logErr `
@@ -919,6 +957,7 @@ function Start-ServiceInstance {
                 -WindowStyle Hidden
         }
     } finally {
+        Restore-SqlWriterBootEnvironment -Saved $savedWriterEnvironment
 		[Environment]::SetEnvironmentVariable('MATCH_MIGRATION_USER', $savedMatchMigrationUser, 'Process')
 		[Environment]::SetEnvironmentVariable('MATCH_MIGRATION_PASSWORD', $savedMatchMigrationPassword, 'Process')
 		[Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES',$savedDatabaseAllowlist,'Process')
@@ -933,6 +972,10 @@ function Start-ServiceInstance {
         Pid     = $proc.Id
         Port    = $cfg.Port
         Service = $Name
+        StartTimeUtcTicks = $proc.StartTime.ToUniversalTime().Ticks
+        ExecutablePath = $proc.Path
+        ExecutableSha256 = Get-MaintenanceSha256 -Path $proc.Path
+        AllowChildProcess = -not $UseExe
     }
     $Pids | Add-Member -NotePropertyName $instanceKey -NotePropertyValue $entry -Force
     if ($cfg.Derived) {
@@ -1382,11 +1425,19 @@ function Invoke-Build {
     Write-Host "`nAll requested services built -> bin\go_services\" -ForegroundColor Green
 }
 
+function Invoke-StopAndReport {
+    if ($ForceStop) { throw '严格StopAndReport禁止ForceStop；不能将强杀签为排空' }
+    if ([string]::IsNullOrWhiteSpace($MaintenancePlanPath) -or [string]::IsNullOrWhiteSpace($StopReportPath)) { throw '严格停止必须有固定维护计划和永久收集输出' }
+    Invoke-LocalStopAndCollect -PlanFile $MaintenancePlanPath -ReportFile $StopReportPath -Family go -RepoRoot $RepoRoot -Tracked (Read-PidFile) -Signal { param($processId) Send-ConsoleCtrlC -ProcessId $processId }
+}
+
 # ── Dispatch ─────────────────────────────────────────────────────────
 switch ($Command) {
     "start"      { Invoke-Start }
     "start-exe"  { Invoke-Start -UseExe }
     "stop"   { Invoke-Stop }
+    "stop-and-report" { Invoke-StopAndReport }
+    "signal-only" { if($SignalProcessId -lt 1){throw "信号PID非法"};if(-not (Send-ConsoleCtrlC -ProcessId $SignalProcessId)){throw "优雅停止信号未投递"} }
     "status" { Invoke-Status }
     "list"   { Invoke-List }
     "build"  { Invoke-Build }

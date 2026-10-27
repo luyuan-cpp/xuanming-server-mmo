@@ -660,6 +660,8 @@ $script:LoginQueueMergeGateCleared = $false
 
 # -GatewayRateLimit / -LoginQueue 的取值规则:on / off 为显式覆盖,auto 跟随发布档位(dev 关,其余开)。
 # -LoginQueue 另经 Resolve-LoginQueueSwitch 套一层合入门槛;门槛已清时两者结论相同。
+. (Join-Path $PSScriptRoot "maintenance_drain.ps1")
+
 function Resolve-PeakShavingSwitch {
 	param(
 		[Parameter(Mandatory = $true)][string]$Value,
@@ -11128,6 +11130,7 @@ function Apply-GoSvcMigrateJob {
 	$content = Get-Content -Path $path -Raw
 	$content = $content.Replace("PLACEHOLDER_IMAGE", $SvcImage)
 	$content = $content.Replace("PLACEHOLDER_PULL_POLICY", $PullPolicy)
+	$content=Add-SchemaPermissionManifest -Content $content -Namespace $Namespace -SvcName $SvcName
 	# initContainer 等 MySQL 用的地址:Job 与 MySQL 不一定同 namespace(目录允许非 Global 服务将来也挂 MigrateJob),写 FQDN 前缀。
 	$content = $content.Replace("__INFRA_NAMESPACE__", $InfraNamespace)
 	# 与 Apply-Infra 同一条 fail-closed:任何占位没替换就拒绝 apply,不把占位原样送进集群。
@@ -11423,6 +11426,10 @@ function Add-GoSvcEnvEntries {
 	}
 
 	$envMatches = [regex]::Matches($ManifestContent, '(?m)^(?<indent>[ ]*)env:[ \t]*\r?$')
+	if($ManifestContent.Contains('initContainers:')){
+		$range=Get-SqlRuntimeManifestRange -ManifestContent $ManifestContent -SvcName $SvcName
+		$envMatches=@($envMatches | Where-Object { $_.Index -gt $range.Start -and $_.Index -lt $range.End })
+	}
 	if ($envMatches.Count -ne 1) {
 		throw "Go service $SvcName 的 manifest 应当恰好有 1 个 env: 段(实际 $($envMatches.Count) 个),无法注入${Purpose}。多容器或无 env 的 manifest 需要先在 Add-GoSvcEnvEntries 里明确注入目标"
 	}
@@ -11520,7 +11527,6 @@ function Add-MatchAuthoritySecretEnv {
 	$settings = Get-GlobalMatchDeploymentSettings -Profile $ReleaseProfile -TiDBHost $MatchTiDBHost -Region $PhysicalRegion
 	if (-not $settings.Enabled) { return $ManifestContent }
 	foreach ($entry in @(
-		@{ Field = 'PasswordEnv'; Key = 'match-mysql-password' },
 		@{ Field = 'ProbeSecretEnv'; Key = 'match-probe' },
 		@{ Field = 'RankSecretEnv'; Key = 'rank-producer-match' }
 	)) {
@@ -11563,6 +11569,10 @@ function Add-GoSvcSecretEnv {
 	}
 
 	$envMatches = [regex]::Matches($ManifestContent, '(?m)^(?<indent>[ ]*)env:[ \t]*\r?$')
+	if($ManifestContent.Contains('initContainers:')){
+		$range=Get-SqlRuntimeManifestRange -ManifestContent $ManifestContent -SvcName $SvcName
+		$envMatches=@($envMatches | Where-Object { $_.Index -gt $range.Start -and $_.Index -lt $range.End })
+	}
 	if ($envMatches.Count -ne 1) {
 		throw "服务 $SvcName 的 manifest 应当恰好有 1 个 env: 段(实际 $($envMatches.Count) 个),无法注入 $EnvName。"
 	}
@@ -11788,6 +11798,113 @@ function Apply-LoginOAuthSecret {
 }
 
 # 单个 Go 服务的 ConfigMap + 主 manifest apply。zone 循环与全局循环共用同一段逻辑。
+function Get-SqlRuntimeManifestRange {
+    param([string]$ManifestContent,[string]$SvcName)
+    $main=[regex]::Matches($ManifestContent,'(?m)^      containers:\s*\r?$')
+    if($main.Count -ne 1){throw '工作负载必须有唯一普通containers段；init不参与runtime密钥注入'}
+    $namePattern='(?m)^        - name:\s*"?'+[regex]::Escape($SvcName)+'(?:-migrate)?"?\s*\r?$'
+    $candidates=@([regex]::Matches($ManifestContent,$namePattern) | Where-Object { $_.Index -gt $main[0].Index })
+    if($candidates.Count -ne 1){throw 'runtime具名容器缺失/重复，拒绝注入而不猜第一个env'}
+    $start=$candidates[0].Index
+    $tail=$ManifestContent.Substring($start+$candidates[0].Length)
+    $next=[regex]::Match($tail,'(?m)^(?:        - name:|      [A-Za-z]|---)')
+    $end=if($next.Success){$start+$candidates[0].Length+$next.Index}else{$ManifestContent.Length}
+    return @{Start=$start;End=$end}
+}
+
+function Get-SqlWriterDeploymentEntry {
+    param([string]$Namespace,[string]$SvcName)
+    $catalogFile=[Environment]::GetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG','Process')
+    if([string]::IsNullOrWhiteSpace($catalogFile)){throw 'SQL部署必须提供MMORPG_SQL_K8S_BOOT_CATALOG，不使用共享runtime账号默认值'}
+    $catalog=Read-MaintenanceJson -Path $catalogFile
+    $key=$Namespace+'/'+$SvcName
+    if(-not $catalog.Contains($key)){throw '部署实例缺少预固定per-boot计划及独立Secret'}
+    $entry=$catalog[$key]
+    Assert-MaintenanceProperties -Value $entry -Required @('requestSecret','registrarSecret','registrarImage','physicalAuthoritySha256','runtimeConfigSecret','replicas','rosterFile','rosterSha256') -Optional @('schemaConfigSecret','schemaPermissionSecret')
+    $secrets=@($entry.requestSecret,$entry.registrarSecret,$entry.runtimeConfigSecret)
+    foreach($name in $secrets){if($name -cnotmatch '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'){throw 'boot Secret名称非法'}}
+    if(@($secrets | Select-Object -Unique).Count -ne 3){throw '运行配置全集、registrar和注册计划必须用不同Secret'}
+    if($entry.Contains('schemaConfigSecret') -and $entry.schemaConfigSecret -cin $secrets){throw 'schema配置不得复用normal/registrar/roster Secret'}
+    if($entry.Contains('schemaPermissionSecret') -and ($entry.schemaPermissionSecret -cin $secrets -or $entry.schemaPermissionSecret -ceq $entry.schemaConfigSecret)){throw 'schema/registrar/normal凭据Secret必须不同'}
+    if($entry.physicalAuthoritySha256 -cnotmatch '^[a-f0-9]{64}$' -or $entry.rosterSha256 -cnotmatch '^[a-f0-9]{64}$' -or $entry.registrarImage -cnotmatch '^[A-Za-z0-9._:/-]+@sha256:[a-f0-9]{64}$'){throw 'registrar镜像、roster或物理authority未固定不可变摘要'}
+    if(-not [IO.Path]::IsPathRooted($entry.rosterFile)){throw '有限roster必须明确本地已批准原件路径'}
+    $roster=Read-MaintenanceJson -Path $entry.rosterFile -ExpectedSha256 $entry.rosterSha256
+    Assert-MaintenanceProperties -Value $roster -Required @('format','entries')
+    if($roster.format -cne 'SQL_WRITER_BOOT_ROSTER_V1' -or @($roster.entries).Count -lt [int]$entry.replicas -or @($roster.entries).Count -gt 1024 -or [int]$entry.replicas -lt 1){throw '有限roster不能覆盖本次副本或超过既有1024预算'}
+    # 这里仅校验本地批准原件；init再次核同SHA、所有entry身份及真实永久REGISTER结局后才选中一个。
+    return $entry
+}
+
+function Add-SqlWriterBootManifest {
+    param([string]$ManifestContent,[string]$Namespace,[string]$SvcName,[ValidateSet('go','java')][string]$RuntimeKind='go')
+    $entry=Get-SqlWriterDeploymentEntry -Namespace $Namespace -SvcName $SvcName
+    $replicas=[regex]::Matches($ManifestContent,'(?m)^  replicas:\s*(\d+)\s*$')
+    if($replicas.Count -ne 1 -or [int]$replicas[0].Groups[1].Value -ne [int]$entry.replicas){throw 'boot计划与真实Deployment副本集合不符'}
+    if(-not $ManifestContent.Contains('sql-writer-registrar')){
+        # 注入块只来自同批data-service模板；所有normal编辑限定具名containers范围，绝不误改init。
+        $prototype=[IO.File]::ReadAllText((Join-Path $RepoRoot 'deploy/k8s/manifests/go-svc/data-service.yaml'))
+        $init=[regex]::Match($prototype,'(?ms)^      # 独立registrar.*?(?=^      containers:)').Value
+        $protoRange=Get-SqlRuntimeManifestRange -ManifestContent $prototype -SvcName data-service
+        $protoRuntime=$prototype.Substring($protoRange.Start,$protoRange.End-$protoRange.Start)
+        $env=[regex]::Match($protoRuntime,'(?ms)^          # grant只读.*?^              value: "PLACEHOLDER_SQL_WRITER_PHYSICAL_SHA256"\r?\n').Value
+        $volumes=[regex]::Match($prototype,'(?ms)^        - name: sql-writer-request\r?\n.*?(?=^        - name: svc-config)').Value
+        $range=Get-SqlRuntimeManifestRange -ManifestContent $ManifestContent -SvcName $SvcName
+        $runtime=$ManifestContent.Substring($range.Start,$range.End-$range.Start)
+        if(-not $init -or -not $env -or -not $volumes -or [regex]::Matches($runtime,'(?m)^          env:\s*$').Count -ne 1 -or [regex]::Matches($runtime,'(?m)^          volumeMounts:\s*$').Count -ne 1 -or [regex]::Matches($ManifestContent,'(?m)^      volumes:\s*$').Count -ne 1 -or $ManifestContent -match '(?m)^      (?:securityContext|initContainers):'){throw 'SQL boot注入形状变化，拒绝猜测或覆盖现有init/securityContext'}
+        $envAt=[regex]::Match($runtime,'(?m)^          env:\s*\r?$')
+        $runtime=$runtime.Insert($envAt.Index+$envAt.Length,[Environment]::NewLine+$env.TrimEnd())
+        $mountAt=[regex]::Match($runtime,'(?m)^          volumeMounts:\s*\r?$')
+        $mounts='            - {name: sql-writer-grant, mountPath: /run/sql-writer/grant, readOnly: true}'+[Environment]::NewLine+'            - {name: sql-writer-consume, mountPath: /run/sql-writer/consume}'
+        $runtime=$runtime.Insert($mountAt.Index+$mountAt.Length,[Environment]::NewLine+$mounts)
+        if($RuntimeKind -ceq 'go'){
+            $match=[regex]::Match($runtime,'(?m)^          args: (\[[^\r\n]+\])\s*$')
+            if(-not $match.Success){throw 'Go runtime参数形状不符，不能遗漏grant SHA导入'}
+            $originalArgs=@($match.Groups[1].Value | ConvertFrom-Json)
+            if($originalArgs.Count -lt 2 -or $originalArgs[0] -cne '-f' -or $originalArgs[1] -cnotmatch '^/app/etc/(?<file>[A-Za-z0-9_.-]+\.yaml)$'){throw 'Go配置必须显式固定/app/etc下单文件'}
+            $configName=$Matches.file
+            $command='MMORPG_SQL_WRITER_GRANT_SHA256="$(cat /run/sql-writer/grant/boot-grant.json.sha256)"; export MMORPG_SQL_WRITER_GRANT_SHA256; exec /app/service "$@"'
+            $args=@($command,'--')+$originalArgs
+            $replacement='          command: ["/bin/sh", "-ec"]'+[Environment]::NewLine+'          args: '+(ConvertTo-Json -InputObject $args -Compress)
+            $runtime=$runtime.Substring(0,$match.Index)+$replacement+$runtime.Substring($match.Index+$match.Length)
+        }else{$configName='application-k8s.yaml'}
+        $init=$init.Replace('/run/sql-writer/runtime/data_service.yaml','/run/sql-writer/runtime/'+$configName)
+        $ManifestContent=$ManifestContent.Substring(0,$range.Start)+$runtime+$ManifestContent.Substring($range.End)
+        $containers=[regex]::Match($ManifestContent,'(?m)^      containers:\s*\r?$')
+        $ManifestContent=$ManifestContent.Insert($containers.Index,$init)
+        $volumeAt=[regex]::Match($ManifestContent,'(?m)^      volumes:\s*\r?$')
+        $ManifestContent=$ManifestContent.Insert($volumeAt.Index+$volumeAt.Length,[Environment]::NewLine+$volumes.TrimEnd())
+        $configPattern='(?m)^        - name: svc-config\r?\n(?:          configMap:\s*\r?\n            name: [^\r\n]+|          configMap: \{name: [^\r\n]+\})'
+        $configMatch=[regex]::Match($ManifestContent,$configPattern)
+        if(-not $configMatch.Success -or [regex]::Matches($ManifestContent,$configPattern).Count -ne 1){throw 'runtime必须唯一完整配置卷，不能复用旧共享凭据ConfigMap'}
+        $replacement='        - name: svc-config'+[Environment]::NewLine+'          emptyDir: {medium: Memory, sizeLimit: 20Mi}'
+        $ManifestContent=$ManifestContent.Substring(0,$configMatch.Index)+$replacement+$ManifestContent.Substring($configMatch.Index+$configMatch.Length)
+    }
+    if(-not $ManifestContent.Contains('"-roster"') -or -not $ManifestContent.Contains('"-runtime-config-output"') -or -not $ManifestContent.Contains('sql-writer-runtime-input')){throw '现有boot模板没有真正有限roster与选中配置隔离'}
+    $replace=@{PLACEHOLDER_SQL_WRITER_REQUEST_SECRET=$entry.requestSecret;PLACEHOLDER_SQL_WRITER_RUNTIME_SECRET=$entry.runtimeConfigSecret;PLACEHOLDER_SQL_WRITER_REGISTRAR_SECRET=$entry.registrarSecret;PLACEHOLDER_SQL_WRITER_REGISTRAR_IMAGE=$entry.registrarImage;PLACEHOLDER_SQL_WRITER_PHYSICAL_SHA256=$entry.physicalAuthoritySha256;PLACEHOLDER_SQL_WRITER_ROSTER_SHA256=$entry.rosterSha256}
+    foreach($key in $replace.Keys){$ManifestContent=$ManifestContent.Replace($key,[string]$replace[$key])}
+    if($ManifestContent -match 'PLACEHOLDER_SQL_WRITER_'){throw 'SQL boot占位残留，拒绝部署'}
+    $normalRange=Get-SqlRuntimeManifestRange -ManifestContent $ManifestContent -SvcName $SvcName
+    $normal=$ManifestContent.Substring($normalRange.Start,$normalRange.End-$normalRange.Start)
+    if($normal -match 'MMORPG_SQL_(?:REGISTRAR|MAINTENANCE|SCHEMA)_DSN|name: sql-writer-request|name: sql-writer-runtime-input'){throw 'normal不能读取控制凭据、完整roster或其他boot配置'}
+    return $ManifestContent
+}
+
+function Add-SchemaPermissionManifest {
+    param([string]$Content,[string]$Namespace,[string]$SvcName)
+    $entry=Get-SqlWriterDeploymentEntry -Namespace $Namespace -SvcName $SvcName
+    if(-not $entry.Contains('schemaConfigSecret') -or -not $entry.Contains('schemaPermissionSecret')){throw 'fresh schema Job缺独立schema配置/权限Secret，禁止借normal'}
+    foreach($name in @($entry.schemaConfigSecret,$entry.schemaPermissionSecret)){if($name -cnotmatch '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'){throw 'schema Secret名称非法'}}
+    $pattern='(?m)^(        - name: svc-config\r?\n)          configMap:\r?\n            name: [^\r\n]+'
+    if([regex]::Matches($Content,$pattern).Count -ne 1){throw 'schema Job必须唯一独立配置挂载'}
+    $Content=[regex]::Replace($Content,$pattern,('$1          secret:'+[Environment]::NewLine+'            secretName: '+$entry.schemaConfigSecret))
+    $range=Get-SqlRuntimeManifestRange -ManifestContent $Content -SvcName $SvcName
+    $envMatches=@([regex]::Matches($Content,'(?m)^          env:\s*\r?$') | Where-Object { $_.Index -gt $range.Start -and $_.Index -lt $range.End })
+    if($envMatches.Count -ne 1){throw 'schema Job权限env形状不符'}
+    $env='            - name: MMORPG_SQL_SCHEMA_DSN'+[Environment]::NewLine+'              valueFrom: {secretKeyRef: {name: '+$entry.schemaPermissionSecret+', key: dsn, optional: false}}'+[Environment]::NewLine+'            - name: MMORPG_SQL_SCHEMA_PRINCIPAL'+[Environment]::NewLine+'              valueFrom: {secretKeyRef: {name: '+$entry.schemaPermissionSecret+', key: principal, optional: false}}'
+    $at=$envMatches[0].Index+$envMatches[0].Length
+    return $Content.Substring(0,$at)+[Environment]::NewLine+$env+$Content.Substring($at)
+}
+
 function Apply-OneGoSvc {
 	param(
 		[Parameter(Mandatory = $true)][string]$SvcName,
@@ -11813,6 +11930,10 @@ function Apply-OneGoSvc {
 	$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
 	$manifestContent = (Get-Content $manifestPath -Raw) -replace 'PLACEHOLDER_IMAGE', $svcImage
 	$manifestContent = $manifestContent -replace 'PLACEHOLDER_PULL_POLICY', $svcPullPolicy
+	if ($SvcName -in @('db','data-service','login','chat','friend','guild','mail','rank','match','trade','player-inbox')) {
+		$manifestContent=Add-SqlWriterBootManifest -ManifestContent $manifestContent -Namespace $Namespace -SvcName $SvcName -RuntimeKind go
+	}
+
 	$commandTopic = Get-GoSvcCommandTopicContract
 	$manifestContent = Add-GoSvcCommandTopicEnv -SvcName $SvcName -ManifestContent $manifestContent `
 		-Partitions $commandTopic.Partitions -Generation $commandTopic.Generation
@@ -12296,6 +12417,8 @@ function Apply-JavaSvcManifests {
 		$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
 		$manifestContent = (Get-Content $manifestPath -Raw) -replace 'PLACEHOLDER_IMAGE', $svcImage
 		$manifestContent = $manifestContent -replace 'PLACEHOLDER_PULL_POLICY', $svcPullPolicy
+		$manifestContent=Add-SqlWriterBootManifest -ManifestContent $manifestContent -Namespace $Namespace -SvcName $svcName -RuntimeKind java
+
 
 		# gateway 管理面口令(admin.api-key)只经 Secret 进容器(见 $script:GatewayAdminApiKeyEnv 处的说明):env 走 secretKeyRef,
 		# Pod 模板带口令指纹注解 —— 只改 Secret 时模板不变、apply 是 no-op,旧 Pod 会一直认旧口令;指纹让轮换自动滚动。

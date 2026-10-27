@@ -778,3 +778,104 @@ func waitFor(t *testing.T, cond func() bool, msg string) {
 	}
 	t.Fatal(msg)
 }
+
+// 维护取消只结束本次等待；在途Allocate仍属于原boot，不能把取消RPC当作排空。
+func TestDrainAndReportWaitsForAcceptedRPC(t *testing.T) {
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	observed := make(chan error, 1)
+	var once sync.Once
+	c := mustNew(t, func(ctx context.Context, _ string, _ uint32) (uint64, uint64, error) {
+		close(entered)
+		<-release
+		observed <- ctx.Err()
+		return 1, 11, nil
+	}, Options{BizTag: "player", Step: 10, FetchTimeout: time.Minute})
+	t.Cleanup(func() { once.Do(func() { close(release) }) })
+	warm := make(chan error, 1)
+	go func() { warm <- c.Warm(context.Background()) }()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Allocate未到达可控屏障")
+	}
+	wait, cancel := context.WithCancel(context.Background())
+	cancel()
+	if proof, err := c.DrainAndReport(wait); !errors.Is(err, context.Canceled) || proof != nil {
+		t.Fatalf("等待取消不能产生排空原件: %x %v", proof, err)
+	}
+	if _, err := c.Next(context.Background()); !errors.Is(err, ErrClosed) {
+		t.Fatalf("关闭后仍接纳Next: %v", err)
+	}
+	if err := c.Warm(context.Background()); !errors.Is(err, ErrClosed) {
+		t.Fatalf("关闭后仍接纳Warm: %v", err)
+	}
+	// 普通Close与维护交错也不能取消已受理RPC；由同一关闭锁决定。
+	closed := make(chan struct{})
+	go func() { c.Close(); close(closed) }()
+	once.Do(func() { close(release) })
+	select {
+	case err := <-observed:
+		if err != nil {
+			t.Fatalf("维护错误取消了原RPC: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("RPC未越过屏障")
+	}
+	select {
+	case err := <-warm:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("已受理Warm未终结")
+	}
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close未join")
+	}
+	proof, err := c.DrainAndReport(context.Background())
+	if err != nil || len(proof) != 32 {
+		t.Fatalf("实际RPC已终结仍无原件: %x %v", proof, err)
+	}
+	again, err := c.DrainAndReport(context.Background())
+	if err != nil || string(again) != string(proof) {
+		t.Fatalf("同boot关闭原件不稳定: %x %v", again, err)
+	}
+}
+
+func TestDrainAndReportPreservesUnknownRPC(t *testing.T) {
+	c := mustNew(t, func(context.Context, string, uint32) (uint64, uint64, error) { return 0, 0, context.DeadlineExceeded }, Options{BizTag: "player", Step: 10})
+	if err := c.Warm(context.Background()); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("原RPC错误丢失: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		proof, err := c.DrainAndReport(context.Background())
+		if !errors.Is(err, ErrDrainUnknown) || proof != nil {
+			t.Fatalf("UNKNOWN被清除或冒认排空: %x %v", proof, err)
+		}
+	}
+}
+
+func TestDrainAndReportPreservesInvalidRange(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		lo, hi uint64
+	}{
+		{"空范围", 10, 10}, {"零起点", 0, 10}, {"超过域", 1, ^uint64(0)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := mustNew(t, func(context.Context, string, uint32) (uint64, uint64, error) { return tc.lo, tc.hi, nil }, Options{BizTag: "player", Step: 10})
+			if err := c.Warm(context.Background()); !errors.Is(err, ErrRangeViolation) {
+				t.Fatalf("未拒非法范围: %v", err)
+			}
+			for i := 0; i < 2; i++ {
+				proof, err := c.DrainAndReport(context.Background())
+				if !errors.Is(err, ErrDrainUnknown) || proof != nil {
+					t.Fatalf("号源违规被冒认为成功前沿: %x %v", proof, err)
+				}
+			}
+		})
+	}
+}

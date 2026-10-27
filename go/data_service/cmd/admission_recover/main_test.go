@@ -132,3 +132,13 @@ func TestAdmissionRecoveryCLIRejectsChangedSQLInstanceBeforeApply(t *testing.T) 
 	require.Empty(t, out.String())
 	require.Contains(t, errOut.String(), "SQL实例不符")
 }
+
+func TestAdmissionRecoveryProductionRequiresOperator(t *testing.T) {
+	o, _ := recoveryCLIFixture(t)
+	t.Setenv("MMORPG_SQL_OPERATOR_PRINCIPAL", "")
+	var out, errOut bytes.Buffer
+	code := runRecovery(context.Background(), o, &out, &errOut, nil)
+	require.Equal(t, 2, code)
+	require.Empty(t, out.String())
+	require.Contains(t, errOut.String(), "缺少独立SQL维护Operator主体")
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"shared/authoritysql/sqltest"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,30 +38,22 @@ func testStore(t *testing.T) *Store {
 	c.User = "root"
 	c.Timeout, c.ReadTimeout, c.WriteTimeout = 3*time.Second, 3*time.Second, 3*time.Second
 	c.Params = map[string]string{"tidb_txn_mode": "'pessimistic'", "transaction_isolation": "'READ-COMMITTED'", "tidb_read_staleness": "0", "tidb_low_resolution_tso": "OFF", "tidb_read_consistency": "'strict'", "tidb_replica_read": "'leader'", "tidb_snapshot": "''"}
-	admin, e := sql.Open("mysql", c.FormatDSN())
-	require.NoError(t, e)
-	check, checked := context.WithTimeout(context.Background(), 5*time.Second)
-	defer checked()
-	var version, comment string
-	require.NoError(t, admin.QueryRowContext(check, "SELECT VERSION(),@@version_comment").Scan(&version, &comment))
-	require.Contains(t, strings.ToLower(version+comment), "tidb", "隔离端口必须是真实TiDB，不能回退MySQL")
 	name := "matchit_" + uuid.NewString()[:8]
-	_, e = admin.Exec("CREATE DATABASE `" + name + "`")
-	require.NoError(t, e)
-	c.DBName = name
-	db, e := sql.Open("mysql", c.FormatDSN())
-	require.NoError(t, e)
-	t.Cleanup(func() {
-		db.Close()
-		_, e := admin.Exec("DROP DATABASE `" + name + "`")
-		if e != nil {
-			t.Errorf("清理隔离库失败: %v", e)
-		}
-		admin.Close()
-	})
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	_, e = schemamigrate.Up(ctx, db, schemamigrate.Options{Database: name, Tables: Tables()})
+	opts, e := sqltest.OptionsFromEnv(c.FormatDSN(), name+"_writer", name)
+	require.NoError(t, e)
+	fixture, e := sqltest.New(ctx, t, opts)
+	require.NoError(t, e)
+	install, e := fixture.OpenSchema(ctx, name)
+	require.NoError(t, e)
+	var version, comment string
+	require.NoError(t, install.QueryRowContext(ctx, "SELECT VERSION(),@@version_comment").Scan(&version, &comment))
+	require.Contains(t, strings.ToLower(version+comment), "tidb", "隔离端口必须是真实TiDB，不能回退MySQL")
+	_, e = schemamigrate.Up(ctx, install, schemamigrate.Options{Database: name, Tables: Tables()})
+	require.NoError(t, e)
+	require.NoError(t, fixture.GrantProtoTables(ctx, name, Tables()))
+	db, e := fixture.Open(ctx, name, 16)
 	require.NoError(t, e)
 	// 本夹具只验证独立匹配SQL状态机，明确注入P与跨域准入替身；原生夹具覆盖实际原件围栏。
 	return &Store{DB: db, Secret: []byte("fixture-only-probe-key-00000000000"), Config: config.GlobalMatchConf{RequireTiDB: true, HardLatencyMs: 180, CrossRegionWaitSeconds: 30}, roleGuard: func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord) error { return nil }, entryGuard: func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord, *matchEntryOriginal) error {

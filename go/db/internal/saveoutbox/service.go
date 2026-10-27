@@ -18,6 +18,9 @@ type Service struct {
 	parent  *redis.Client
 	mapping *redis.Client
 	once    sync.Once
+	replay  *Replay
+	drainMu sync.Mutex
+	stopErr error
 }
 
 // Start只接主parentRedis，不把只读OwnerEpochRedis误当可写父缓存实例。
@@ -61,7 +64,7 @@ func Start(ctx context.Context, app dbconfig.Config, parent, mapping *redis.Clie
 		return nil, err
 	}
 	loopCtx, cancel := context.WithCancel(ctx)
-	s := &Service{cancel: cancel, done: make(chan struct{}), pub: pub, parent: parentReplay, mapping: mappingReplay}
+	s := &Service{replay: replay, cancel: cancel, done: make(chan struct{}), pub: pub, parent: parentReplay, mapping: mappingReplay}
 	go func() {
 		defer close(s.done)
 		replay.Run(loopCtx)
@@ -70,20 +73,50 @@ func Start(ctx context.Context, app dbconfig.Config, parent, mapping *redis.Clie
 }
 
 func (s *Service) Stop() {
-	if s == nil {
-		return
+	if err := s.StopAndReport(context.Background()); err != nil {
+		logx.Errorf("[SaveOutbox] 排空HOLD: %v", err)
 	}
+}
+
+// StopAndReport先join普通/历史owner，再close等待writer内部pending批次；close错误不能冒充已确认。
+func (s *Service) StopAndReport(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	s.cancel()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-s.done:
+	}
+	s.drainMu.Lock()
+	defer s.drainMu.Unlock()
 	s.once.Do(func() {
-		s.cancel()
-		<-s.done
-		_ = s.parent.Close()
+		s.stopErr = errors.Join(s.pub.close(), s.parent.Close())
 		if s.mapping != s.parent {
-			_ = s.mapping.Close()
-		}
-		if err := s.pub.close(); err != nil {
-			logx.Errorf("[SaveOutbox] Kafka补投发布器关闭失败；未完成意图仍保留")
+			s.stopErr = errors.Join(s.stopErr, s.mapping.Close())
 		}
 	})
+	return s.stopErr
+}
+
+// DrainHistorical只暂停普通轮询；不关闭同boot发布器，直到P3真正QUIESCED才StopAndReport。
+func (s *Service) DrainHistorical(ctx context.Context, topics []string) (int, error) {
+	if s == nil {
+		return 0, errors.New("历史drain relay未装配")
+	}
+	s.cancel()
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	case <-s.done:
+	}
+	s.drainMu.Lock()
+	defer s.drainMu.Unlock()
+	if err := s.pub.allowHistorical(topics); err != nil {
+		return 0, err
+	}
+	return s.replay.DrainHistorical(ctx, topics)
 }
 
 func replayRedis(source *redis.Client) *redis.Client {
@@ -94,4 +127,14 @@ func replayRedis(source *redis.Client) *redis.Client {
 	options.PoolSize, options.MaxActiveConns, options.MaxConcurrentDials = 2, 2, 2
 	options.MinIdleConns, options.MaxIdleConns = 0, 2
 	return redis.NewClient(&options)
+}
+
+func (s *Service) FrontierDigest(ctx context.Context) ([]byte, error) {
+	if s == nil {
+		return nil, errors.New("补投owner缺失")
+	}
+	if err := s.StopAndReport(ctx); err != nil {
+		return nil, err
+	}
+	return s.pub.sends.SettledDigest(ctx)
 }

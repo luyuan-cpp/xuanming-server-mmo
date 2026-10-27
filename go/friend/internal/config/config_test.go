@@ -137,8 +137,8 @@ func TestEtcYamlContractValues(t *testing.T) {
 		t.Errorf("MySQL 连接池上限 = %d/%d, 必须为正(MaxOpenConns 零值是不限连接数)",
 			c.MySQL.MaxOpenConn, c.MySQL.MaxIdleConn)
 	}
-	if !c.ShouldAutoMigrate() {
-		t.Error("本地 dev 应启动期自动建表(Schema.AutoMigrate: true)")
+	if c.ShouldAutoMigrate() {
+		t.Error("本地dev也必须显式迁移，常驻默认仅核对表结构")
 	}
 
 	// 阈值逐项钉死:它们是硬上限与限流,被人"顺手调大"就等于取消了这层保护。
@@ -366,7 +366,7 @@ func TestValidateAcceptsMaxFriendsAtCeiling(t *testing.T) {
 }
 
 // TestValidateAcceptsOptionalSections 证明"整段可缺失"的几段真的可以缺:
-// Schema 缺失 = 自动建表;FriendRedis 缺失 = 回落共享库;Kafka.Brokers 缺失 = 不推送。
+// Schema缺失 = 只读核对;FriendRedis 缺失 = 回落共享库;Kafka.Brokers 缺失 = 不推送。
 // 这三条都是本地 / 冒烟环境的常态,不能被 Validate 拒。
 func TestValidateAcceptsOptionalSections(t *testing.T) {
 	c := validConfig()
@@ -376,8 +376,8 @@ func TestValidateAcceptsOptionalSections(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatalf("Schema / FriendRedis / Kafka 整段缺失应通过校验: %v", err)
 	}
-	if !c.ShouldAutoMigrate() {
-		t.Error("Schema 段缺失时应按自动建表处理")
+	if c.ShouldAutoMigrate() {
+		t.Error("Schema段缺失时不得请求自动DDL")
 	}
 
 	// FriendRedis 配上独立实例(甚至 cluster)同样合法:私有 key 全是单 key 操作。
@@ -488,7 +488,7 @@ func TestShouldAutoMigrate(t *testing.T) {
 		v    *bool
 		want bool
 	}{
-		{"没写 = 建表", nil, true},
+		{"没写 = 只读核对", nil, false},
 		{"显式 true", &yes, true},
 		{"显式 false", &no, false},
 	}

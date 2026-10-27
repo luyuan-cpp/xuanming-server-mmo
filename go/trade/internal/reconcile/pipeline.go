@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"shared/drainproof"
 	"time"
 
 	"trade/internal/data"
@@ -540,3 +541,12 @@ func (p *Pipeline) nowMs() uint64 {
 
 // 重投循环领取用的随机令牌由 shared/assetop 自己生成(Loop.claim → newLeaseToken),
 // 本包不再提供第二份实现:两处各生成一份令牌只会让"这一行现在归谁"多一种说法。
+
+// BindRelayAdmission 仅在 Start/同步业务入口之前装配，同一私有 Loop 覆盖重投、维护、唤醒和首次投递。
+func (p *Pipeline) BindRelayAdmission(relay *drainproof.Session) error {
+	if p == nil || p.loop == nil || relay == nil || p.loop.Relay != nil {
+		return drainproof.ErrHold
+	}
+	p.loop.Relay = relay
+	return nil
+}

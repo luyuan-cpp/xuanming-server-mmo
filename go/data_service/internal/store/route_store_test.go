@@ -398,10 +398,6 @@ func allRouteSQLForTest() map[string]string {
 		"R17":             routeRepairOverwriteSQL,
 		"R18":             routeReadMetaSQL,
 		"R18x":            routeLockMetaSQL,
-		"R19":             routeFreezeSQL,
-		"R20":             routeLockReconcileWatermarkSQL,
-		"R21":             routeRaiseWatermarkSQL,
-		"R22":             routeUnfreezeSQL,
 		"P0":              routeLockProbeGuardSQL,
 		"P4":              routeProbeShardCheckSQL,
 		"P5":              routeProbeShardModulusSQL,
@@ -543,6 +539,7 @@ func TestRouteMetaAndReconcileWritesOnlyInStoreFiles(t *testing.T) {
 	}
 	write := regexp.MustCompile("(?i)(INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|REPLACE\\s+INTO|TRUNCATE\\s+TABLE)\\s+`?(" +
 		RouteMetaTableName + "|" + RouteReconcileTableName + ")\\b")
+	metaMutation := regexp.MustCompile("(?i)(UPDATE|DELETE\\s+FROM|REPLACE\\s+INTO|TRUNCATE\\s+TABLE)\\s+`?" + RouteMetaTableName + "\\b")
 	allowed := map[string]bool{"internal/store/route_store.go": true, "internal/store/route_reconcile.go": true}
 
 	var files, allowedHits int
@@ -580,7 +577,9 @@ func TestRouteMetaAndReconcileWritesOnlyInStoreFiles(t *testing.T) {
 			if err != nil || !write.MatchString(s) {
 				return true
 			}
-			if allowed[rel] {
+			if metaMutation.MatchString(s) {
+				offenders = append(offenders, rel+": 服务代码不得控制 route_meta: "+s)
+			} else if allowed[rel] {
 				allowedHits++
 			} else {
 				offenders = append(offenders, rel+": "+s)
@@ -595,10 +594,10 @@ func TestRouteMetaAndReconcileWritesOnlyInStoreFiles(t *testing.T) {
 	if files == 0 {
 		t.Fatalf("在 %s 下一个 .go 文件都没扫到:守卫失效", root)
 	}
-	// 至少九条:route_store.go 的 R15 / R16(种行)、R19(冻结)、R21(抬水位)、R22(解冻),
-	// 加上 route_reconcile.go(第 1b-2 批)的 R23(续约 / 抢租约)、R25(释放)、R27(推进水位)、R28(leader 冻结)。
-	if allowedHits < 9 {
-		t.Fatalf("允许的文件里只匹配到 %d 条 route_meta / route_reconcile 写语句(至少应有 R15 / R16 / R19 / R21 / R22 / R23 / R25 / R27 / R28):正则失效", allowedHits)
+	// 仍必须识别五条真实写：Schema 的 R15/R16 与 normal 的 R23/R25/R27。
+	// writable/epoch/catalog 的 UPDATE 属于独立 authoritysql.Catalog，服务模块绝不拥有。
+	if allowedHits < 5 {
+		t.Fatalf("允许的文件里只匹配到 %d 条 route_meta / route_reconcile 写语句(至少应有 R15/R16/R23/R25/R27):正则失效", allowedHits)
 	}
 	if len(offenders) > 0 {
 		t.Fatalf("route_meta / route_reconcile 的写入只许出现在 %v,以下位置绕过了它:\n%s", allowed, strings.Join(offenders, "\n"))
@@ -1170,6 +1169,19 @@ func TestRouteTiDBPrepareStatements(t *testing.T) {
 	} {
 		if _, _, err := normalizeRouteTiDBPrepareIDs(tc.zones, tc.storages); !errors.Is(err, ErrRouteInvalidArgument) {
 			t.Fatalf("%s: err = %v, want ErrRouteInvalidArgument", tc.name, err)
+		}
+	}
+}
+
+func TestRouteShardConstraintExactReadOnlyShape(t *testing.T) {
+	for _, clause := range []string{"route_shard = player_id % 64", "(`route_shard` = (`player_id` % 64))", "((route_shard) = ((player_id) % (64)))"} {
+		if !routeShardClauseMatches(clause) {
+			t.Fatalf("合法MySQL/TiDB表达式被拒绝：%q", clause)
+		}
+	}
+	for _, clause := range []string{"(route_shard=player_id)%64", "route_shard=player_id%16", "route_shard=player_id%128", "route_shard=player_id%64 OR 1", "(route_shard=player_id%64", "route_shard=player_id%64)", "route_shard=(player_id%64)+0", "route_shard=player_id%64;SELECT 1", "route_shard=other_id%64", "route_shard=player_id%0"} {
+		if routeShardClauseMatches(clause) {
+			t.Fatalf("未知或改变语义的CHECK必须拒绝：%q", clause)
 		}
 	}
 }
