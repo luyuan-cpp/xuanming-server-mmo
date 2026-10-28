@@ -10,7 +10,7 @@
 #include <set>
 #include <limits>
 #include <stdexcept>
-#include <rdkafka.h>
+#include <librdkafka/src/rdkafka.h>
 #include "google/protobuf/util/message_differencer.h"
 
 namespace

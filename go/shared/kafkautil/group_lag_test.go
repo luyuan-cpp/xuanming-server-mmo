@@ -531,11 +531,16 @@ func TestBoundMessageReaderUnknownCannotBecomeReplaySuccess(t *testing.T) {
 		t.Fatalf("UNKNOWN 被接受成确定性恢复: %v", err)
 	}
 	owner.waitDelivered(context.Background(), generation, owner.partitions)
-	if err = relay.WaitIdle(context.Background()); !errors.Is(err, drainproof.ErrHold) {
+	// WaitIdle 只回收本地等待资源；最终闭合必须先关闭准入，再核永久 UNKNOWN。
+	relay.CloseAdmission()
+	if err = relay.Wait(context.Background()); !errors.Is(err, drainproof.ErrHold) {
 		t.Fatalf("UNKNOWN 没有保持 HOLD: %v", err)
 	}
 	if err = owner.CommitMessages(context.Background(), message); !errors.Is(err, drainproof.ErrHold) {
 		t.Fatalf("UNKNOWN 被后一次 commit 洗白: %v", err)
+	}
+	if err = relay.Wait(context.Background()); !errors.Is(err, drainproof.ErrHold) {
+		t.Fatalf("后续 commit 尝试清除了最终闭合 HOLD: %v", err)
 	}
 }
 
@@ -549,10 +554,19 @@ func TestWithConsumerReadinessKeepsGenerationLockedThroughOpen(t *testing.T) {
 	owner.generationContext = context.Background()
 	owner.initialized = true
 	owner.partitions = map[string]*boundPartition{"t/0": {topic: "t", partition: 0, committed: 12}}
-	report := &pb.SqlWriterMaintenanceReceipt_ConsumerReadiness{Groups: []*pb.SqlWriterMaintenanceReceipt_ConsumerGroupReadiness{{Group: "g", GenerationId: 7, MemberId: "member", AssignedPartitions: []*pb.SqlWriterMaintenanceReceipt_KafkaPartitionClosure{{Group: "g", TopicName: "t", Partition: 0, FinalCommitted: 12}}}}}
+	report := &pb.SqlWriterMaintenanceReceipt_ConsumerReadiness{Groups: []*pb.SqlWriterMaintenanceReceipt_ConsumerGroupReadiness{{
+		OperationId: bytes.Repeat([]byte{1}, 16), ManifestDigest: bytes.Repeat([]byte{2}, 32),
+		IssuerId: bytes.Repeat([]byte{3}, 16), InstanceId: bytes.Repeat([]byte{4}, 16),
+		Group: "g", GenerationId: 7, MemberId: "member",
+		ExpectedPartitions: []*pb.SqlWriterMaintenanceReceipt_KafkaPartitionClosure{{Group: "g", TopicName: "t", Partition: 0}},
+		AssignedPartitions: []*pb.SqlWriterMaintenanceReceipt_KafkaPartitionClosure{{Group: "g", TopicName: "t", Partition: 0, FinalCommitted: 12}},
+	}}}
 	raw, err := protojson.Marshal(report)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, _, err = MergeConsumerReadiness(raw); err != nil {
+		t.Fatalf("纯 group 基线本应可合并: %v", err)
 	}
 	calls := 0
 	commit := func() ([]byte, error) {
@@ -572,7 +586,19 @@ func TestWithConsumerReadinessKeepsGenerationLockedThroughOpen(t *testing.T) {
 		t.Fatal("换代后仍执行旧 open")
 	}
 	owner.generation = &kafkago.Generation{ID: 7, GroupID: "g", MemberID: "member"}
-	report.ManualAssignments = []*pb.SqlWriterMaintenanceReceipt_ManualConsumerAssignment{{}}
+	// manual 是独立 owner 的正式证据封装，不能把分区 assignment 直接塞进 ConsumerReadiness。
+	// 本用例只构造进程内拒绝夹具；原件 pin 由后续 runtime 固化，不伪造文件或真实 Kafka 采样。
+	report.ManualAssignments = []*pb.SqlWriterMaintenanceReceipt_ManualConsumerEvidence{{
+		OperationId: bytes.Clone(report.Groups[0].OperationId), ManifestDigest: bytes.Clone(report.Groups[0].ManifestDigest),
+		Assignments: []*pb.SqlWriterMaintenanceReceipt_ManualConsumerAssignment{{
+			IssuerId: bytes.Clone(report.Groups[0].IssuerId), InstanceId: bytes.Clone(report.Groups[0].InstanceId),
+			ConsumerId: "manual-unit-owner", ClusterId: []byte("unit-kafka-cluster"), TopicId: bytes.Repeat([]byte{5}, 16),
+			TopicName: "manual-t", PartitionCount: 1, Partition: 0, TargetNodeId: 9,
+			TargetInstanceId: bytes.Clone(report.Groups[0].InstanceId), AssignmentRevision: 3,
+			StartOffset: 4, Position: 12, Earliest: 4, ExclusiveEnd: 12, ObservedMs: 1,
+		}},
+		AcceptingClosed: true, CallbacksJoined: true,
+	}}
 	raw, err = protojson.Marshal(report)
 	if err != nil {
 		t.Fatal(err)

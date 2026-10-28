@@ -175,17 +175,32 @@ func TestRouteToolRealImportUnderDBFirstNeedsExplicitFlag(t *testing.T) {
 }
 
 // TestRouteToolTiDBPrepareDoesNotTouchRedis:tidb-prepare 只碰全局库,不连 mapping Redis。两个地址都指向刚关掉的
-// 不同端口:失败必须来自全局库(stderr 带 MySQL 的地址),而不是 Redis(不带 Redis 的地址、没有 Redis 的 unreachable 文案)。
+// 不同端口:经原装配接口核实际全局库目标与调用次数；错误必须脱敏，不能靠泄露 MySQL 地址识别来源。
 // SnapshotMySQL.Host 必须显式写:不写会回落默认 127.0.0.1:3306,本机可能真有 MySQL。
 func TestRouteToolTiDBPrepareDoesNotTouchRedis(t *testing.T) {
 	redisAddr, mysqlAddr := twoClosedLocalAddrs(t)
 	path := writeYaml(t, fmt.Sprintf(minimalYaml, redisAddr)+fmt.Sprintf("SnapshotMySQL:\n  Host: %s\n", mysqlAddr))
 
-	code, stdout, stderr := runCLI("-f", path, "tidb-prepare", "-zones=1,2")
+	globalOpens, redisOpens := 0, 0
+	d := defaultDeps()
+	openGlobal := d.openRouteStore
+	d.openRouteStore = func(c config.Config, permission authoritysql.Permission, frozen *pb.SqlWriterMaintenanceReceipt) (routeStore, error) {
+		globalOpens++
+		assert.Equal(t, mysqlAddr, c.SnapshotMySQL.Host, "失败应来自本例指定的全局库")
+		return openGlobal(c, permission, frozen)
+	}
+	d.connectRedis = func(context.Context, redis.RedisConf) (routeRedis, error) {
+		redisOpens++
+		return nil, errors.New("tidb-prepare 不应装配 mapping Redis")
+	}
+	code, stdout, stderr := runCLIWith(d, "-f", path, "tidb-prepare", "-zones=1,2")
 
 	assert.Equal(t, routetool.ExitFailed, code)
 	assert.Empty(t, stdout)
-	assert.Contains(t, stderr, mysqlAddr, "失败应来自全局库")
+	assert.Equal(t, 1, globalOpens, "必须真实进入全局库建池失败路径")
+	assert.Zero(t, redisOpens, "tidb-prepare 不得尝试连接 mapping Redis")
+	assert.Contains(t, stderr, "cannot open the route tables on the global DB", "失败应来自全局库")
+	assert.NotContains(t, stderr, mysqlAddr, "权威SQL物理连接失败不得泄露目标地址")
 	assert.NotContains(t, stderr, redisAddr, "tidb-prepare 不该去连 mapping Redis")
 	assert.NotContains(t, stderr, "unreachable", "那是 mapping Redis 的文案")
 }
@@ -246,13 +261,29 @@ func TestRunReconcileAndUnfreezeRefusedInRedisMode(t *testing.T) {
 		{"-f", path, "audit", "-frozen-recovery"},
 	} {
 		t.Run(strings.Join(args[2:], " "), func(t *testing.T) {
-			code, stdout, stderr := runCLI(withMaintenanceShape(args...)...)
+			shaped := withMaintenanceShape(args...)
+			if strings.Contains(strings.Join(args, " "), "-dry-run=false") {
+				// 只补语法形状以到达原模式门禁；该门禁必须先于任何原件读取，不能制造票据或runtime收据。
+				private := t.TempDir()
+				shaped = append(shaped, "-drain-runtime-plan="+filepath.Join(private, "must-not-read-runtime.json"),
+					"-drain-runtime-directory="+private, "-drain-runtime-sha256="+strings.Repeat("a", 64))
+			}
+			code, stdout, stderr := runCLI(shaped...)
 			assert.Equal(t, routetool.ExitFailed, code)
 			assert.Empty(t, stdout)
 			assert.Contains(t, stderr, "RouteStore.Mode=redis")
 			assert.NotContains(t, stderr, "unreachable", "必须在连 Redis 之前就拒绝")
 		})
 	}
+
+	t.Run("P6缺runtime先于模式门禁拒绝", func(t *testing.T) {
+		code, stdout, stderr := runCLI(withMaintenanceShape("-f", path, "reconcile-from-cache", "-dry-run=false")...)
+		assert.Equal(t, routetool.ExitFailed, code)
+		assert.Empty(t, stdout)
+		assert.Contains(t, stderr, "P6恢复必须绑定P0预列runtime及同NORMAL票据")
+		assert.NotContains(t, stderr, "RouteStore.Mode=redis", "缺P0原件不能越过更早的参数门禁")
+		assert.NotContains(t, stderr, "unreachable", "缺P0原件不得尝试外部连接")
+	})
 
 	t.Run("freeze 允许_打WARN", func(t *testing.T) {
 		st := &fakeStore{meta: store.RouteMeta{Generation: testGen, Writable: 1}}

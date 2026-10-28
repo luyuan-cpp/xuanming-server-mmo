@@ -707,7 +707,7 @@ func (l *Loop) claimAndProcess(ctx context.Context, opID uint64) bool {
 	if claimed != claimOK {
 		return false
 	}
-	if _, err := l.processOne(work, op); err != nil {
+	if _, err := l.processOne(work, op, time.Time{}); err != nil {
 		if l.Relay != nil {
 			l.Relay.Hold()
 		}
@@ -886,12 +886,15 @@ func (l *Loop) ProcessOne(ctx context.Context, op Op) (out Processed, resultErr 
 			}
 		}()
 	}
+	// 同步调用方的绝对截止只约束投递与取证，不恢复父取消传播。
+	// 已准入工作和终局写回仍使用各自独立的有界预算。
+	callerApplyDeadline, _ := ctx.Deadline()
 	work, cancel := context.WithTimeout(context.WithoutCancel(ctx), l.cfg.OpBudget)
 	defer cancel()
-	return l.processOne(work, op)
+	return l.processOne(work, op, callerApplyDeadline)
 }
 
-func (l *Loop) processOne(ctx context.Context, op Op) (Processed, error) {
+func (l *Loop) processOne(ctx context.Context, op Op, callerApplyDeadline time.Time) (Processed, error) {
 	nowMs := l.nowMs()
 
 	rpc, ok := l.rpcFor(op, nowMs)
@@ -904,7 +907,12 @@ func (l *Loop) processOne(ctx context.Context, op Op) (Processed, error) {
 	}
 
 	// 投递只拿 OpBudget 的一部分,剩下的 settleBudget 是留给落库的,不能让 RPC 吃掉。
-	applyCtx, cancel := context.WithTimeout(ctx, l.cfg.OpBudget-settleBudget)
+	// 已领行的后台路径传零值；同步路径还须守住调用方已确定的绝对投递截止。
+	applyDeadline := time.Now().Add(l.cfg.OpBudget - settleBudget)
+	if !callerApplyDeadline.IsZero() && callerApplyDeadline.Before(applyDeadline) {
+		applyDeadline = callerApplyDeadline
+	}
+	applyCtx, cancel := context.WithDeadline(ctx, applyDeadline)
 	defer cancel()
 	res, err := l.applier.Do(applyCtx, rpc, op.Request())
 

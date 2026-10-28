@@ -299,7 +299,7 @@ func TestTiDBRankIndependentPoolsReplayConflictFreezeAndRewardFence(t *testing.T
 	require.NotEqual(t, frozen[0].Duplicated, frozen[1].Duplicated)
 	require.Equal(t, frozen[0].SettlementId, frozen[1].SettlementId)
 	require.NoError(t, db.Close())
-	recovered := New(independentRankPool(t, ctx, peerDB), next, next, next, func(uint32) bool { return true })
+	recovered := New(independentRankPool(t, ctx, peerDB, fixture), next, next, next, func(uint32) bool { return true })
 	recovered.now = second.now
 	replayed, err := recovered.Freeze(ctx, "match", freeze)
 	require.NoError(t, err)

@@ -153,7 +153,14 @@ protected:
     void RunInLoopAndWait(F&& fn)
     {
         muduo::CountDownLatch done(1);
-        Loop().runInLoop([&] { fn(); done.countDown(); });
+        Loop().runInLoop([&] {
+            fn();
+            // 第一跳和 removeChannel 的清理可能同批；第二跳才保证该批捕获已析构。
+            // 只等函数体返回不足以证明 MaintenanceState 的本机引用已经释放。
+            Loop().queueInLoop([this, &done] {
+                Loop().queueInLoop([&done] { done.countDown(); });
+            });
+        });
         done.wait();
     }
 

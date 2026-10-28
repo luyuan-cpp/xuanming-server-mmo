@@ -751,10 +751,14 @@ func TestFreezeByLeader(t *testing.T) {
 					t.Fatalf("必须交付危险观察: %v", err)
 				}
 				assertTickResult(t, danger.Observation, tc.want)
-			} else if err != nil {
-				t.Fatalf("FreezeByLeader: %v", err)
+				// 观察只在带类型错误中交给root/relay owner；成功返回值必须为空，不能冒充控制表已冻结。
+				assertTickResult(t, got, ReconcileTickResult{})
+			} else {
+				if err != nil {
+					t.Fatalf("FreezeByLeader: %v", err)
+				}
+				assertTickResult(t, got, tc.want)
 			}
-			assertTickResult(t, got, tc.want)
 			assertReconcileLabels(t, fake, tc.labels...)
 		})
 	}

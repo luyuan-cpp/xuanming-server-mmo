@@ -60,6 +60,8 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <string>
+#include <string_view>
 #include <fstream>
 #include <future>
 #include <thread>
@@ -73,6 +75,9 @@
 #include "muduo_grpc/channel.h"
 #ifdef _WIN32
 #include <windows.h>
+#ifdef GetMessage
+#undef GetMessage
+#endif
 #else
 #include <fcntl.h>
 #include <poll.h>
@@ -86,8 +91,12 @@ extern char **environ;
 namespace {
 using MaintenanceReceipt = sql_writer_maintenance_receipt;
 constexpr std::size_t kControlLimit = 16 * 1024 * 1024;
+// 维护文件名按 UTF-8 解释，char8_t 字符串保留 Windows 路径编码语义。
+std::filesystem::path PathFromUtf8(std::string_view value) {
+    return std::filesystem::path(std::u8string(value.begin(), value.end()));
+}
 std::string ReadPinnedBytes(const std::string& file, std::size_t limit) {
-    const std::filesystem::path p = std::filesystem::u8path(file);
+    const std::filesystem::path p = PathFromUtf8(file);
     if (!p.is_absolute() || !std::filesystem::is_regular_file(std::filesystem::symlink_status(p))) throw std::runtime_error("维护原件无效");
     const auto size = std::filesystem::file_size(p);
     if (size == 0 || size > limit) throw std::runtime_error("维护原件大小无效");
@@ -119,12 +128,12 @@ bool NoUnknownProto(const google::protobuf::Message& message) {
 std::string PrivateControlCommand(const std::string& helper, const std::string& expectedHash,
                                   const std::string& command, const std::string& file,
                                   const std::string& input = {}) {
-    if (!std::filesystem::u8path(helper).is_absolute() || !std::filesystem::u8path(file).is_absolute() ||
+    if (!PathFromUtf8(helper).is_absolute() || !PathFromUtf8(file).is_absolute() ||
         expectedHash.size() != 64 || input.size() > kControlLimit) throw std::runtime_error("维护文件助手配置无效");
     std::string output;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
 #ifdef _WIN32
-    const auto wide = [](const std::string& s) { return std::filesystem::u8path(s).wstring(); };
+    const auto wide = [](const std::string& s) { return PathFromUtf8(s).wstring(); };
     const auto quote = [](const std::wstring& s) {
         std::wstring out = L"\""; std::size_t slashes = 0;
         for (wchar_t c : s) { if (c == L'\\') { ++slashes; continue; }
@@ -285,23 +294,23 @@ struct NodeMaintenanceControl {
                            const std::string& instance, bool loaded, bool prepareBoot, bool baselineWritten) {
         ReadResult out;
         try {
-            const auto join = [&](const char* name) { return PathUtf8(std::filesystem::u8path(directory) / name); };
+            const auto join = [&](const char* name) { return PathUtf8(PathFromUtf8(directory) / name); };
             PrivateControlCommand(helper, helperHash, "validate-directory", directory);
             if(!loaded&&!baselineWritten&&!prepareBoot){
                 const auto file=join("manual-baseline.request.json");
-                if(std::filesystem::exists(std::filesystem::u8path(file))){
+                if(std::filesystem::exists(PathFromUtf8(file))){
                     MaintenanceReceipt::ManualConsumerEvidence intent;
                     if(!google::protobuf::util::JsonStringToMessage(PrivateControlCommand(helper,helperHash,"read-file",file),&intent).ok()||!NoUnknownProto(intent)||intent.operation_id().size()!=16||!intent.manifest_digest().empty()||intent.assignments_size()!=1||intent.accepting_closed()||intent.callbacks_joined()||intent.accepted()!=0||intent.settled()!=0||intent.unresolved_publications()!=0)throw std::runtime_error("manual P0意图无效");
                     auto identity=intent.assignments(0);if(identity.issuer_id().size()!=16||identity.instance_id()!=instance)throw std::runtime_error("manual P0 boot无效");
                     identity.clear_issuer_id();identity.clear_instance_id();if(identity.ByteSizeLong()!=0)throw std::runtime_error("manual P0不能预填native事实");
                     VerifyPins(intent.source_pins());
-                    bool ownDirectory=false;for(const auto& pin:intent.source_pins())if(std::filesystem::u8path(pin.absolute_path()).parent_path()==std::filesystem::u8path(directory))ownDirectory=true;if(!ownDirectory)throw std::runtime_error("manual P0目录无效");
+                    bool ownDirectory=false;for(const auto& pin:intent.source_pins())if(PathFromUtf8(pin.absolute_path()).parent_path()==PathFromUtf8(directory))ownDirectory=true;if(!ownDirectory)throw std::runtime_error("manual P0目录无效");
                     out.baseline=std::move(intent);
                 }
             }
             if (!loaded) {
                 const auto runtimePath = join("active.runtime.json"), hashPath = join("active.runtime.sha256");
-                if (!std::filesystem::exists(std::filesystem::u8path(runtimePath)) || !std::filesystem::exists(std::filesystem::u8path(hashPath))) return out;
+                if (!std::filesystem::exists(PathFromUtf8(runtimePath)) || !std::filesystem::exists(PathFromUtf8(hashPath))) return out;
                 const auto raw = PrivateControlCommand(helper, helperHash, "read-file", runtimePath);
                 auto hash = PrivateControlCommand(helper, helperHash, "read-file", hashPath);
                 if (hash.size() == 65 && hash.back() == '\n') hash.pop_back();
@@ -338,12 +347,12 @@ struct NodeMaintenanceControl {
                 out.active = true;
             }
             const auto requested = [&](const char* name, const char* value) {
-                const auto file = join(name); if (!std::filesystem::exists(std::filesystem::u8path(file))) return false;
+                const auto file = join(name); if (!std::filesystem::exists(PathFromUtf8(file))) return false;
                 const auto raw = PrivateControlCommand(helper, helperHash, "read-file", file);
                 if (raw != std::string(value) + "\n") throw std::runtime_error("维护关闭请求无效"); return true;
             };
             if(prepareBoot){
-                const auto file=join("open-source.request");if(std::filesystem::exists(std::filesystem::u8path(file))){MaintenanceReceipt::SourceOpenAck intent;
+                const auto file=join("open-source.request");if(std::filesystem::exists(PathFromUtf8(file))){MaintenanceReceipt::SourceOpenAck intent;
                     if(!google::protobuf::util::JsonStringToMessage(PrivateControlCommand(helper,helperHash,"read-file",file),&intent).ok()||!NoUnknownProto(intent))throw std::runtime_error("SOURCE开放意图无效");VerifyPins(intent.source_pins());out.open=std::move(intent);}
             }
             out.sourceRequested = requested("close-source.request", "CLOSE_SOURCE");
@@ -362,15 +371,15 @@ struct NodeMaintenanceControl {
         std::string raw;if(!google::protobuf::util::MessageToJsonString(value,&raw,options).ok())throw std::runtime_error("维护proto编码失败");return raw;
     }
     void WriteIdentity(const NodeInfo& info){
-        const auto file=PathUtf8(std::filesystem::u8path(directory)/"boot-identity.nodeinfo.json"),raw=Json(info);writingOther=5;
+        const auto file=PathUtf8(PathFromUtf8(directory)/"boot-identity.nodeinfo.json"),raw=Json(info);writingOther=5;
         writing=std::async(std::launch::async,[helper=helper,hash=helperHash,file,raw]{try{PrivateControlCommand(helper,hash,"create-file",file,raw);return true;}catch(...){return false;}});
     }
     void WriteManual(MaintenanceReceipt::ManualConsumerEvidence report,bool baseline){
         if(writing.valid())return;
         const auto& pins=baseline?baselineIntent->source_pins():runtime.source->source_evidence();
         report.mutable_source_pins()->CopyFrom(pins);VerifyPins(pins);
-        bool ownDirectory=false;for(const auto& pin:pins)if(std::filesystem::u8path(pin.absolute_path()).parent_path()==std::filesystem::u8path(directory))ownDirectory=true;if(!ownDirectory)throw std::runtime_error("manual原件不在SOURCE固定私有目录");
-        const auto file=PathUtf8(std::filesystem::u8path(directory)/(baseline?"manual-baseline.report.json":"manual-closure.report.json"));
+        bool ownDirectory=false;for(const auto& pin:pins)if(PathFromUtf8(pin.absolute_path()).parent_path()==PathFromUtf8(directory))ownDirectory=true;if(!ownDirectory)throw std::runtime_error("manual原件不在SOURCE固定私有目录");
+        const auto file=PathUtf8(PathFromUtf8(directory)/(baseline?"manual-baseline.report.json":"manual-closure.report.json"));
         const auto raw=Json(report);if(!baseline)manualDigest=Sha256::HashToBytes(raw);
         writingOther=baseline?1:4;
         writing=std::async(std::launch::async,[helper=helper,hash=helperHash,file,raw]{try{PrivateControlCommand(helper,hash,"create-file",file,raw);return true;}catch(...){return false;}});
@@ -379,10 +388,10 @@ struct NodeMaintenanceControl {
         consumers=std::move(actual);readiness.Clear();readiness.set_issuer_id(runtime.source->issuer_id());readiness.set_instance_id(instance);readiness.set_logical_role("SOURCE");
         readiness.set_prepared_closed_ms(NowMs());readiness.mutable_source_pins()->CopyFrom(runtime.source->source_evidence());
         auto consumerProof=consumers;for(auto& manual:*consumerProof.mutable_manual_assignments())manual.mutable_source_pins()->CopyFrom(runtime.source->source_evidence());
-        const auto consumerPath=PathUtf8(std::filesystem::u8path(directory)/"consumer-readiness.report.json");const auto consumerRaw=Json(consumerProof);
+        const auto consumerPath=PathUtf8(PathFromUtf8(directory)/"consumer-readiness.report.json");const auto consumerRaw=Json(consumerProof);
         readiness.set_consumer_ready_frontier_digest(Sha256::HashToBytes(consumerRaw));
         auto* pin=readiness.add_source_pins();pin->set_absolute_path(consumerPath);pin->set_sha256(readiness.consumer_ready_frontier_digest());
-        const auto readyPath=PathUtf8(std::filesystem::u8path(directory)/"prepared.source.json"),readyRaw=Json(readiness);
+        const auto readyPath=PathUtf8(PathFromUtf8(directory)/"prepared.source.json"),readyRaw=Json(readiness);
         writingOther=2;writing=std::async(std::launch::async,[helper=helper,hash=helperHash,consumerPath,consumerRaw,readyPath,readyRaw,pins=runtime.source->source_evidence()]{try{VerifyPins(pins);PrivateControlCommand(helper,hash,"create-file",consumerPath,consumerRaw);PrivateControlCommand(helper,hash,"create-file",readyPath,readyRaw);return true;}catch(...){return false;}});
     }
     bool ValidOpen()const{
@@ -394,7 +403,7 @@ struct NodeMaintenanceControl {
     void WriteOpen(){
         auto ack=*openIntent;ack.set_opened_ms(NowMs());ack.mutable_source_pins()->CopyFrom(readiness.source_pins());
         ack.set_accepted_frontier_digest(Sha256::HashToBytes(ack.open_request_id()+ack.operation_id()+ack.manifest_digest()+instance+readiness.consumer_ready_frontier_digest()));
-        const auto file=PathUtf8(std::filesystem::u8path(directory)/"source.open.ack.json"),raw=Json(ack);
+        const auto file=PathUtf8(PathFromUtf8(directory)/"source.open.ack.json"),raw=Json(ack);
         writingOther=3;writing=std::async(std::launch::async,[helper=helper,hash=helperHash,file,raw]{try{PrivateControlCommand(helper,hash,"create-file",file,raw);return true;}catch(...){return false;}});
     }
 
@@ -407,8 +416,8 @@ struct NodeMaintenanceControl {
         closure.set_unresolved_publications(0);
         closure.set_accepted_frontier_digest(Sha256::HashToBytes(closure.issuer_id() + instance + closure.logical_role() +
             runtime.request.evidence().manifest_digest() + frontier));
-        const auto runtimePath = PathUtf8(std::filesystem::u8path(directory) / "active.runtime.json");
-        const auto outputPath = PathUtf8(std::filesystem::u8path(directory) / (source ? "source.issuer.json" : "relay.issuer.json"));
+        const auto runtimePath = PathUtf8(PathFromUtf8(directory) / "active.runtime.json");
+        const auto outputPath = PathUtf8(PathFromUtf8(directory) / (source ? "source.issuer.json" : "relay.issuer.json"));
         writingOther=0;writingSource = source;
         writing = std::async(std::launch::async, [closure = std::move(closure), runtimePath, outputPath,
             helper = helper, helperHash = helperHash, expected = runtime.request]() mutable {
@@ -1646,8 +1655,8 @@ void Node::InitMaintenanceControl()
     if (!directory) {if(prepare)FatalStartupConfig("maintenance","prepare-only缺私有控制目录");return;}
     const char* helper = GetNonEmptyEnv("MMORPG_SQL_PRIVATE_FILE_HELPER");
     const char* helperHash = GetNonEmptyEnv("MMORPG_SQL_PRIVATE_FILE_HELPER_SHA256");
-    if (!helper || !helperHash || !std::filesystem::u8path(directory).is_absolute() ||
-        !std::filesystem::u8path(helper).is_absolute() || !std::regex_match(helperHash, std::regex("[0-9a-fA-F]{64}")) ||
+    if (!helper || !helperHash || !PathFromUtf8(directory).is_absolute() ||
+        !PathFromUtf8(helper).is_absolute() || !std::regex_match(helperHash, std::regex("[0-9a-fA-F]{64}")) ||
         !RpcChannel::ProcessMaintenance()->EnableAcknowledgedSends()) {
         FatalStartupConfig("maintenance", "维护控制目录/固定文件助手配置无效，或首次发布已经发生");
     }
@@ -1658,7 +1667,7 @@ void Node::InitMaintenanceControl()
     control->helperHash = boost::to_lower_copy(std::string(helperHash));
     try {
         const auto uuid = boost::uuids::string_generator()(GetNodeInfo().node_uuid());
-        control->instance.assign(reinterpret_cast<const char*>(uuid.data), uuid.size());
+        control->instance.assign(reinterpret_cast<const char*>(uuid.data()), uuid.size());
     } catch (...) { FatalStartupConfig("maintenance", "实际节点 boot UUID 无效"); }
     maintenanceControl_ = std::move(control);
     maintenanceControlTimer_.RunEvery(0.1, [this] { PollMaintenanceControl(); });

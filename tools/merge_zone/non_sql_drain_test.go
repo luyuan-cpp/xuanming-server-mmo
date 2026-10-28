@@ -112,7 +112,7 @@ func TestMaintenanceRouteTransactionLocksMetaBeforeActualWrite(t *testing.T) {
 			script := routeScript{}.on("GUARD", rsRows([]driver.Value{int64(0)}))
 			if valid {
 				count = 1
-				script = script.on("GUARD", rsRows([]driver.Value{int64(0)}), rsRows([]driver.Value{int64(0)})).on("MOVE_HOME", rsAffected(1))
+				script = script.on("GUARD", rsRows([]driver.Value{int64(0)})).on("MOVE_HOME", rsAffected(1))
 			}
 			db, f := freezeProofDB(t, rsRows([]driver.Value{count}), script)
 			st := &mergeRouteStore{db: db, sleep: sleepCtx, backoff: routeLockRetryBackoff}

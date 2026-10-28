@@ -511,12 +511,23 @@ function ConvertTo-AuthorityRoleSql {
     $business = [Collections.Generic.List[string]]::new()
     $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach ($table in $Plan.tables) {
-        Assert-MaintenanceProperties -Value $table -Required @('schema','table','operations')
+        Assert-MaintenanceProperties -Value $table -Required @('schema','table','operations') -Optional @('updateColumns')
         $schema = ConvertTo-AuthoritySqlIdentifier $table.schema; $name = ConvertTo-AuthoritySqlIdentifier $table.table
-        if (-not $seen.Add($table.schema+'.'+$table.table) -or $table.table -cin @('route_meta','route_reconcile','writer_registry','writer_slot','writer_lifecycle_receipt','sql_writer_drain_run','sql_writer_freeze_ticket','sql_writer_maintenance_receipt')) { throw '业务GRANT重复或触及权限真值表' }
+        if (-not $seen.Add($table.schema+'.'+$table.table)) { throw '业务GRANT重复或触及权限真值表' }
         $ops = @($table.operations)
         if ($ops.Count -eq 0 -or ($ops | Select-Object -Unique).Count -ne $ops.Count) { throw '业务GRANT操作空或重复' }
         foreach ($op in $ops) { if ($op -cnotin @('SELECT','INSERT','UPDATE','DELETE')) { throw 'runtime禁止DDL/GRANT/注册能力' } }
+        if ($table.table -ieq 'route_reconcile') {
+            # 对账租约/水位属于DataService业务调度；writable/epoch/catalog仍只归正式Catalog owner。
+            # 只接受同authority和固定四列的显式请求，绝不将整个控制表放进一般UPDATE叶。
+            if ($table.table -cne 'route_reconcile' -or $table.schema -cne $Plan.authoritySchema -or ($ops -join ',') -cne 'SELECT,UPDATE' -or -not $table.Contains('updateColumns') -or (@($table.updateColumns) -join ',') -cne 'leader,lease_until_ms,watermark_ms,cache_verified_ms') { throw 'route_reconcile只准同authority固定四列调度权限' }
+            $columns = (@($table.updateColumns) | ForEach-Object { ConvertTo-AuthoritySqlIdentifier $_ }) -join ','
+            $business.Add("GRANT SELECT ON $schema.$name TO $($values.RUNTIME_ACCOUNT);")
+            $business.Add("GRANT UPDATE ($columns) ON $schema.$name TO $($values.RUNTIME_ACCOUNT);")
+            continue
+        }
+        if ($table.Contains('updateColumns')) { throw '列级调度特例只准route_reconcile，不解释任意业务列' }
+        if ($table.table -iin @('route_reconcile','route_meta','writer_registry','writer_slot','writer_lifecycle_receipt','sql_writer_drain_run','sql_writer_freeze_ticket','sql_writer_maintenance_receipt')) { throw '业务GRANT重复或触及权限真值表' }
         $business.Add("GRANT $($ops -join ',') ON $schema.$name TO $($values.RUNTIME_ACCOUNT);")
     }
     $values.BUSINESS_TABLE_GRANTS=$business -join "`n"

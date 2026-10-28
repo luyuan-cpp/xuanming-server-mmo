@@ -16,6 +16,10 @@ public final class AuthoritySql {
     private static final Set<String> PROTECTED = Set.of("ROUTE_META","WRITER_REGISTRY","WRITER_SLOT",
             "WRITER_LIFECYCLE_RECEIPT","SQL_WRITER_DRAIN_RUN","SQL_WRITER_FREEZE_TICKET",
             "SQL_WRITER_MAINTENANCE_RECEIPT");
+    // 与既有StrongPolicy精确期限SET共用JDBC毫秒上界，不增加新的超时预算。
+    private static final long MAX_DEADLINE_MILLIS = Integer.MAX_VALUE;
+    private static final java.util.regex.Pattern SELECT_HINT = java.util.regex.Pattern.compile(
+            "\\+\\s+(?:MAX_EXECUTION_TIME\\(([1-9][0-9]{0,9})\\)(?:\\s+SEMIJOIN\\(FIRSTMATCH\\))?|SEMIJOIN\\(FIRSTMATCH\\)(?:\\s+MAX_EXECUTION_TIME\\(([1-9][0-9]{0,9})\\))?)\\s*", java.util.regex.Pattern.CASE_INSENSITIVE);
     private AuthoritySql() {}
     static Kind validate(String sql) throws SQLException {
         List<Token> tokens = scan(sql);
@@ -82,31 +86,48 @@ public final class AuthoritySql {
         for(int i:new int[]{4,8}) {
             String number=t.get(i).text();
             if(t.get(i).kind()!=TokenKind.VALUE||!number.matches("[0-9]+"))throw denied("期限必须为非负整数");
-            try{if(Long.parseLong(number)>Integer.MAX_VALUE)throw denied("期限超出原JDBC范围");}
+            try{if(Long.parseLong(number)>MAX_DEADLINE_MILLIS)throw denied("期限超出原JDBC范围");}
             catch(NumberFormatException invalid){throw denied("期限溢出");}
         }
+    }
+    private static boolean selectHint(String body,boolean allowDeadline) {
+        var match=SELECT_HINT.matcher(body);
+        if(!match.matches())return false;
+        String deadline=match.group(1)!=null?match.group(1):match.group(2);
+        return deadline==null||allowDeadline&&Long.parseLong(deadline)<=MAX_DEADLINE_MILLIS;
     }
     private static boolean word(List<Token> t,int i,String value) {
         return i>=0&&i<t.size()&&t.get(i).kind()==TokenKind.WORD&&t.get(i).text().equals(value);
     }
     private static List<Token> scan(String sql)throws SQLException {
         if(sql==null||sql.indexOf('\0')>=0)throw denied("SQL为空或含NUL");
-        List<Token> tokens=new ArrayList<>();int depth=0;boolean ended=false;
+        List<Token> tokens=new ArrayList<>();int depth=0;boolean ended=false;int selectHead=-1;
         for(int i=0;i<sql.length();) {
             char c=sql.charAt(i);
             if(Character.isWhitespace(c)){i++;continue;}
             if(c=='#'||c=='-'&&i+2<sql.length()&&sql.charAt(i+1)=='-'&&Character.isWhitespace(sql.charAt(i+2))) {
+                selectHead=-1;
                 while(i<sql.length()&&sql.charAt(i)!='\n'&&sql.charAt(i)!='\r')i++;continue;
             }
             if(c=='/'&&i+1<sql.length()&&sql.charAt(i+1)=='*') {
                 int close=sql.indexOf("*/",i+2);if(close<0)throw denied("未闭合注释");
                 String body=sql.substring(i+2,close).stripLeading();
-                if(body.startsWith("!")||body.startsWith("+")||body.toUpperCase(Locale.ROOT).startsWith("T!"))
-                    throw denied("拒绝可执行注释与会话提示");
+                if(body.startsWith("+")) {
+                    // root必须仍是SELECT；每个SELECT头只消费一条完整有限hint，不全局禁掉后续子查询头。
+                    if(sql.charAt(i+2)!='+'||ended||!word(tokens,0,"SELECT")||selectHead!=tokens.size()-1
+                            ||!word(tokens,selectHead,"SELECT")||!selectHint(body,depth==0&&selectHead==0))
+                        throw denied("仅允许SELECT头的单个有限MAX_EXECUTION_TIME/SEMIJOIN(FIRSTMATCH)提示");
+                    selectHead=-1;
+                } else {
+                    selectHead=-1;
+                    if(body.startsWith("!")||body.toUpperCase(Locale.ROOT).startsWith("T!"))
+                        throw denied("拒绝可执行注释与会话提示");
+                }
                 i=close+2;continue;
             }
             if(ended)throw denied("禁止多语句");
             if(c==';'){ended=true;i++;continue;}
+            selectHead=-1;
             if(c=='\''||c=='"'||c==96) {
                 char quote=c;StringBuilder literal=new StringBuilder();boolean closed=false;i++;
                 while(i<sql.length()) {
@@ -124,7 +145,10 @@ public final class AuthoritySql {
             if(Character.isLetter(c)||c=='_'||c=='$') {
                 int start=i++;
                 while(i<sql.length()&&(Character.isLetterOrDigit(sql.charAt(i))||sql.charAt(i)=='_'||sql.charAt(i)=='$'))i++;
-                tokens.add(new Token(TokenKind.WORD,sql.substring(start,i).toUpperCase(Locale.ROOT)));continue;
+                String value=sql.substring(start,i).toUpperCase(Locale.ROOT);
+                tokens.add(new Token(TokenKind.WORD,value));
+                if(value.equals("SELECT"))selectHead=tokens.size()-1;
+                continue;
             }
             if(Character.isDigit(c)) {
                 int start=i++;

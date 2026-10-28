@@ -55,6 +55,33 @@ try {
         $plan.tables=@(@{schema='authority_fixture';table='writer_registry';operations=@('UPDATE')})
         $message='';try{$null=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')}catch{$message=$_.Exception.Message}
         Assert-Match -Text $message -Pattern '权限真值' -Because '业务表清单不能混入registry自助篡改'
+        $columns=@('leader','lease_until_ms','watermark_ms','cache_verified_ms')
+        $plan.tables=@(@{schema='authority_fixture';table='route_reconcile';operations=@('SELECT','UPDATE');updateColumns=$columns})
+        $reconcile=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')
+        Assert-Match -Text $reconcile.runtime -Pattern ([regex]::Escape('GRANT SELECT ON `authority_fixture`.`route_reconcile`')) -Because '对账只读取同authority调度原件'
+        Assert-Match -Text $reconcile.runtime -Pattern ([regex]::Escape('GRANT UPDATE (`leader`,`lease_until_ms`,`watermark_ms`,`cache_verified_ms`) ON `authority_fixture`.`route_reconcile`')) -Because '只允许续约与推进实际写到的固定四列'
+        Assert-True -Condition ($reconcile.runtime -notmatch '(?i)GRANT\s+UPDATE\s+ON[^;]+route_reconcile') -Because '不能退化成route_reconcile整表UPDATE'
+        $badRows=@(
+            @{schema='domain_fixture';table='route_reconcile';operations=@('SELECT','UPDATE');updateColumns=$columns},
+            @{schema='authority_fixture';table='route_reconcile';operations=@('SELECT','INSERT','UPDATE');updateColumns=$columns},
+            @{schema='authority_fixture';table='route_reconcile';operations=@('SELECT','UPDATE','DELETE');updateColumns=$columns},
+            @{schema='authority_fixture';table='route_reconcile';operations=@('SELECT','UPDATE')},
+            @{schema='authority_fixture';table='route_reconcile';operations=@('SELECT','UPDATE');updateColumns=@('leader','lease_until_ms','watermark_ms')},
+            @{schema='authority_fixture';table='route_reconcile';operations=@('SELECT','UPDATE');updateColumns=@('leader','lease_until_ms','watermark_ms','cache_verified_ms','writer_epoch')},
+            @{schema='authority_fixture';table='route_reconcile';operations=@('SELECT','UPDATE');updateColumns=@('leader','leader','watermark_ms','cache_verified_ms')},
+            @{schema='domain_fixture';table='player';operations=@('SELECT','UPDATE');updateColumns=$columns}
+        )
+        # TiDB表名大小写等价；所有变体必须先进入固定特例再严格拒非canonical原名，不能落一般整表DML。
+        foreach($tableCase in @('Route_Reconcile','ROUTE_RECONCILE','rOuTe_ReCoNcIlE')){
+            foreach($schemaCase in @('authority_fixture','domain_fixture','AUTHORITY_FIXTURE')){
+                foreach($operations in @(@('UPDATE'),@('INSERT'),@('DELETE'),@('SELECT','UPDATE'))){
+                    $badRows+=@{schema=$schemaCase;table=$tableCase;operations=$operations}
+                    $badRows+=@{schema=$schemaCase;table=$tableCase;operations=$operations;updateColumns=$columns}
+                }
+            }
+        }
+        foreach($bad in $badRows){$plan.tables=@($bad);$message='';try{$null=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')}catch{$message=$_.Exception.Message};Assert-Match -Text $message -Pattern 'route_reconcile' -Because '异库/额外操作/缺列/外列/重列和通用列授权均拒绝'}
+        foreach($forbidden in @('route_meta','ROUTE_META','Route_Meta','writer_registry','WRITER_REGISTRY','writer_slot','WRITER_SLOT','writer_lifecycle_receipt','WRITER_LIFECYCLE_RECEIPT','sql_writer_drain_run','SQL_WRITER_DRAIN_RUN','sql_writer_freeze_ticket','SQL_WRITER_FREEZE_TICKET','sql_writer_maintenance_receipt','SQL_WRITER_MAINTENANCE_RECEIPT')){$plan.tables=@(@{schema='authority_fixture';table=$forbidden;operations=@('UPDATE')});$message='';try{$null=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')}catch{$message=$_.Exception.Message};Assert-Match -Text $message -Pattern '权限真值' -Because '所有真正权限真值表仍禁止business清单写入'}
     }
     Test-Case '在线激活保留原runtime字节且拒绝替换既有上下文' {
         $control=Join-Path $taskRoot 'control';$null=[IO.Directory]::CreateDirectory($control)

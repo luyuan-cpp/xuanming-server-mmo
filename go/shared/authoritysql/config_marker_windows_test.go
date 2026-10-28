@@ -1,6 +1,8 @@
 package authoritysql
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -9,6 +11,58 @@ import (
 
 	"golang.org/x/sys/windows"
 )
+
+// Windows 的 t.TempDir 继承宿主默认 ACL，不保证私有正文契约。
+// 本包只为测试进程预置私有临时根；不修改系统设置或任何既有目录 ACL。
+func TestMain(m *testing.M) {
+	code, err := runWindowsPrivateControlTests(m)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Windows私有文件测试夹具未确认:", err)
+		code = 1
+	}
+	os.Exit(code)
+}
+
+func runWindowsPrivateControlTests(m *testing.M) (code int, err error) {
+	parent, err := os.MkdirTemp("", "authoritysql-windows-tests-")
+	if err != nil {
+		return 1, err
+	}
+	defer func() { err = errors.Join(err, os.RemoveAll(parent)) }()
+	user, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		return 1, err
+	}
+	sid := user.User.Sid.String()
+	sd, err := windows.SecurityDescriptorFromString("O:" + sid + "D:P(A;OICI;FA;;;" + sid + ")(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
+	if err != nil {
+		return 1, err
+	}
+	dir := filepath.Join(parent, "private")
+	wide, err := windows.UTF16PtrFromString(dir)
+	if err != nil {
+		return 1, err
+	}
+	// CREATE 的同一次调用带上私有 DACL，避免先创建再收紧的可读窗口。
+	sa := &windows.SecurityAttributes{Length: uint32(unsafe.Sizeof(windows.SecurityAttributes{})), SecurityDescriptor: sd}
+	if err = windows.CreateDirectory(wide, sa); err != nil {
+		return 1, err
+	}
+	for _, name := range []string{"TMP", "TEMP"} {
+		previous, existed := os.LookupEnv(name)
+		if err = os.Setenv(name, dir); err != nil {
+			return 1, err
+		}
+		defer func(name, previous string, existed bool) {
+			if existed {
+				err = errors.Join(err, os.Setenv(name, previous))
+			} else {
+				err = errors.Join(err, os.Unsetenv(name))
+			}
+		}(name, previous, existed)
+	}
+	return m.Run(), nil
+}
 
 func TestWindowsGrantMarkerRejectsUnsupportedPathsAndVolumes(t *testing.T) {
 	for _, path := range []string{`relative`, `C:relative`, `C:\`, `\\server\share\consume`, `\\?\C:\consume`, `C:\consume:stream`, `C:\consume.`, `C:\consume `} {

@@ -82,7 +82,7 @@ func delOneEach(_ int, cmd redis.Cmder) (any, error) {
 }
 
 func TestInvalidatePlayerCachesKeepBarrier_ForwardCopyLeavesTheBarrier(t *testing.T) {
-	ctx := context.Background()
+	ctx, _ := testMaintenanceContext()
 	ids := []uint64{42, 43}
 
 	rdb, f := newFakeRouteRedis(t, delOneEach)

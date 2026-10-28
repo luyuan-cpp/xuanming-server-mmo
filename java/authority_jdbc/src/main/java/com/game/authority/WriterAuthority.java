@@ -101,12 +101,27 @@ public final class WriterAuthority {
         var value=view.readAttributes();var permissions=value.permissions();var current=absolute.getFileSystem().getUserPrincipalLookupService().lookupPrincipalByName(System.getProperty("user.name"));
         if(!value.owner().equals(current)||permissions.contains(java.nio.file.attribute.PosixFilePermission.GROUP_WRITE)||permissions.contains(java.nio.file.attribute.PosixFilePermission.OTHERS_WRITE))throw new IOException("私有目录所有者或写权限不符");
     }
+    /** 文件写入与祖先替换是不同权限；目录新建子项不能覆盖已存在的私有路径。 */
+    static void requireHelperPathAcl(boolean executableFile,java.nio.file.attribute.UserPrincipal owner,
+            List<java.nio.file.attribute.AclEntry> entries,Set<java.nio.file.attribute.UserPrincipal> trusted)throws IOException{
+        if(!trusted.contains(owner))throw new IOException("helper owner未取得资格");
+        Set<java.nio.file.attribute.AclEntryPermission> mutation=EnumSet.of(java.nio.file.attribute.AclEntryPermission.WRITE_NAMED_ATTRS,java.nio.file.attribute.AclEntryPermission.DELETE_CHILD,java.nio.file.attribute.AclEntryPermission.WRITE_ATTRIBUTES,java.nio.file.attribute.AclEntryPermission.DELETE,java.nio.file.attribute.AclEntryPermission.WRITE_ACL,java.nio.file.attribute.AclEntryPermission.WRITE_OWNER);
+        // 在文件上两位表示写入/追加；在祖先目录上只表示创建兄弟文件/目录，替换仍受上列权限约束。
+        if(executableFile){mutation.add(java.nio.file.attribute.AclEntryPermission.WRITE_DATA);mutation.add(java.nio.file.attribute.AclEntryPermission.APPEND_DATA);}
+        for(var entry:entries)if(entry.type()==java.nio.file.attribute.AclEntryType.ALLOW&&!entry.flags().contains(java.nio.file.attribute.AclEntryFlag.INHERIT_ONLY)&&!trusted.contains(entry.principal())&&!Collections.disjoint(entry.permissions(),mutation))throw new IOException("helper可被非受信主体替换");
+    }
+
     private static void qualifiedHelper(Path executable,byte[] expected)throws IOException{
         if(!executable.isAbsolute()||!Files.isRegularFile(executable,LinkOption.NOFOLLOW_LINKS))throw new IOException("私有文件helper必须为固定绝对原件");
         for(Path part=executable;part!=null;part=part.getParent()){var a=Files.readAttributes(part,java.nio.file.attribute.BasicFileAttributes.class,LinkOption.NOFOLLOW_LINKS);if(a.isSymbolicLink()||a.isOther())throw new IOException("helper路径含重解析入口");}
         var lookup=executable.getFileSystem().getUserPrincipalLookupService();var current=lookup.lookupPrincipalByName(System.getProperty("user.name"));Set<java.nio.file.attribute.UserPrincipal> trusted=new HashSet<>();trusted.add(current);trusted.add(lookup.lookupPrincipalByName("NT AUTHORITY\\SYSTEM"));trusted.add(lookup.lookupPrincipalByName("BUILTIN\\Administrators"));
-        Set<java.nio.file.attribute.AclEntryPermission> mutation=EnumSet.of(java.nio.file.attribute.AclEntryPermission.WRITE_DATA,java.nio.file.attribute.AclEntryPermission.APPEND_DATA,java.nio.file.attribute.AclEntryPermission.WRITE_NAMED_ATTRS,java.nio.file.attribute.AclEntryPermission.DELETE_CHILD,java.nio.file.attribute.AclEntryPermission.WRITE_ATTRIBUTES,java.nio.file.attribute.AclEntryPermission.DELETE,java.nio.file.attribute.AclEntryPermission.WRITE_ACL,java.nio.file.attribute.AclEntryPermission.WRITE_OWNER);
-        for(Path protectedPath=executable;protectedPath!=null;protectedPath=protectedPath.getParent()){var acl=Files.getFileAttributeView(protectedPath,java.nio.file.attribute.AclFileAttributeView.class,LinkOption.NOFOLLOW_LINKS);if(acl==null||!trusted.contains(acl.getOwner()))throw new IOException("helper owner未取得资格");for(var entry:acl.getAcl())if(entry.type()==java.nio.file.attribute.AclEntryType.ALLOW&&!entry.flags().contains(java.nio.file.attribute.AclEntryFlag.INHERIT_ONLY)&&!trusted.contains(entry.principal())&&!Collections.disjoint(entry.permissions(),mutation))throw new IOException("helper可被非受信主体替换");}
+        // Windows卷根可由系统安装服务持有；仍按固定OS主体解析，不信任环境中的账号名。
+        trusted.add(lookup.lookupPrincipalByName("NT SERVICE\\TrustedInstaller"));
+        for(Path protectedPath=executable;protectedPath!=null;protectedPath=protectedPath.getParent()){
+            var acl=Files.getFileAttributeView(protectedPath,java.nio.file.attribute.AclFileAttributeView.class,LinkOption.NOFOLLOW_LINKS);
+            if(acl==null)throw new IOException("helper owner未取得资格");
+            requireHelperPathAcl(protectedPath.equals(executable),acl.getOwner(),acl.getAcl(),trusted);
+        }
         try(var in=Files.newInputStream(executable,LinkOption.NOFOLLOW_LINKS)){MessageDigest hash;try{hash=MessageDigest.getInstance("SHA-256");}catch(NoSuchAlgorithmException impossible){throw new IOException(impossible);}long total=0;byte[] block=new byte[65536];int n;while((n=in.read(block))!=-1){total+=n;if(total>64*1024*1024)throw new IOException("helper超过资格界限");hash.update(block,0,n);}if(!MessageDigest.isEqual(expected,hash.digest()))throw new IOException("helper SHA256不符");}
     }
     private static byte[] privateFileHelper(String command,Path path,int maximum,byte[] input,Map<String,String> environment)throws IOException{
@@ -176,7 +191,7 @@ public final class WriterAuthority {
                 if(!progressed)throw new SQLException("authority descriptor导入不完整或形成循环");
             }
             for(var file:files.values()){
-                var receipt=file.findMessageTypeByName("SqlWriterLifecycleReceipt");
+                var receipt=file.findMessageTypeByName("sql_writer_lifecycle_receipt");
                 if(receipt!=null){var request=receipt.findNestedTypeByName("Request");if(request!=null)return request;}
             }
             throw new SQLException("descriptor缺少正式SqlWriterLifecycleReceipt.Request");

@@ -90,8 +90,22 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 			t.Fatalf("%s 有 %d 个 ascii 列,只有 %d 个显式 COLLATE ascii_bin(MySQL 默认 ascii_general_ci、TiDB 只有 ascii_bin)", name, n, m)
 		}
 	}
-	if got := len(bootstrapTables); got != 16 {
-		t.Fatalf("bootstrapTables 有 %d 项,want 16(id_segment、player_name、七张账号目录/交易/入场/导入表、两张永久维护/恢复收据 + 五张路由表)", got)
+	// 16张既有业务/路由/恢复事实表之外，正式authority catalog新增六张永久写资格控制表。
+	writerControlDDLs := map[string]string{
+		"writer_registry":                writerRegistryBootstrapDDL,
+		"writer_slot":                    writerSlotBootstrapDDL,
+		"writer_lifecycle_receipt":       writerLifecycleReceiptBootstrapDDL,
+		"sql_writer_drain_run":           writerDrainRunBootstrapDDL,
+		"sql_writer_freeze_ticket":       writerFreezeTicketBootstrapDDL,
+		"sql_writer_maintenance_receipt": writerMaintenanceReceiptBootstrapDDL,
+	}
+	if got, want := len(bootstrapTables), 16+len(writerControlDDLs); got != want {
+		t.Fatalf("bootstrapTables 有 %d 项,want %d(既有16表加六张正式authority控制表)", got, want)
+	}
+	for name, ddl := range writerControlDDLs {
+		if bootstrapTables[name] != ddl {
+			t.Fatalf("正式authority控制表 %s 未按原catalog DDL装配", name)
+		}
 	}
 	for name, ddl := range map[string]string{SaveBarrierMaintenanceTableName: saveBarrierMaintenanceDDL, AccountRoleAdmissionRecoveryTableName: accountRoleAdmissionRecoveryDDL} {
 		if bootstrapTables[name] != ddl {

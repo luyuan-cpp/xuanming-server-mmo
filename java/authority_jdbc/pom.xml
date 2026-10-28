@@ -14,7 +14,7 @@
   <ignoreProjectDependencies>true</ignoreProjectDependencies><embedSourcesInClassOutputs>false</embedSourcesInClassOutputs>
   <sourceDirectories><sourceDirectory>${project.basedir}/../..</sourceDirectory></sourceDirectories>
   <includes><include>proto/common/database/rollback_database_table.proto</include></includes>
-  <importPaths><importPath>${project.basedir}/../..</importPath></importPaths>
+  <importPaths><importPath>${project.basedir}/../..</importPath><importPath>${project.basedir}/../../third_party/protobuf/src</importPath></importPaths>
   <outputDescriptorFile>${project.build.directory}/generated-resources/sql-authority/route-authority.desc</outputDescriptorFile>
   <outputDescriptorIncludeImports>true</outputDescriptorIncludeImports><outputDescriptorAttached>false</outputDescriptorAttached>
  </configuration></execution></executions></plugin><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.13.0</version></plugin><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.2.5</version></plugin></plugins></build>

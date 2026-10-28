@@ -38,6 +38,7 @@ import (
 	"shared/buildinfo"
 	"shared/grpcstats"
 	sharedregistry "shared/noderegistry"
+	"shared/serverbase"
 	"shared/serviceauth"
 
 	"github.com/zeromicro/go-zero/core/conf"

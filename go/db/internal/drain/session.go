@@ -125,12 +125,6 @@ func runOwners(ctx context.Context, runtime *drainproof.Runtime, app config.Conf
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	var drainCtx context.Context
-	var cancel context.CancelFunc
-	defer func() {
-		if cancel != nil {
-			cancel()
-		}
-	}()
 	for {
 		select {
 		case <-ctx.Done():
@@ -142,7 +136,9 @@ func runOwners(ctx context.Context, runtime *drainproof.Runtime, app config.Conf
 			return err
 		}
 		if requested && !sourceWritten {
-			drainCtx, cancel = context.WithTimeout(ctx, 60*time.Second)
+			sourceDrainCtx, cancelDrain := context.WithTimeout(ctx, 60*time.Second)
+			defer cancelDrain()
+			drainCtx = sourceDrainCtx
 			if closeSource != nil {
 				digest, err := closeSource(drainCtx)
 				if err != nil {

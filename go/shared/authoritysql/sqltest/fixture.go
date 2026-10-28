@@ -45,6 +45,7 @@ type Fixture struct {
 	bootOptions         Options
 	registration        *pb.SqlWriterLifecycleReceipt_Request
 	registrationReceipt *pb.SqlWriterLifecycleReceipt
+	registrationPending bool // REGISTER已开始而grant/Config未完整落定时，清理只保留，不猜测删除。
 	maintenance         *fixtureMaintenance
 	admin               *mysql.Config
 	adminPrincipal      string
@@ -419,7 +420,7 @@ func (f *Fixture) Close() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		// 所有归属先核，再做第一个清理副作用；未知或被替换的对象保留，不猜测接管。
-		owned := f.Schema != nil
+		owned := f.Schema != nil && !f.registrationPending
 		if len(f.created) > 0 {
 			raw, err := authoritysql.ReadPrivateControlFile(f.receiptPath, 64)
 			if err != nil || !bytes.Equal(raw, append(append([]byte(nil), f.owner...), f.physical...)) {
@@ -437,7 +438,7 @@ func (f *Fixture) Close() {
 			}
 		}
 		if !owned {
-			f.t.Errorf("fixture归属原件未确认，保留全部剩余对象与原件 %s", f.receiptPath)
+			f.t.Errorf("fixture归属或启动登记原件未完整确认，保留全部剩余对象与原件 %s", f.receiptPath)
 		} else {
 			if f.userCreated {
 				if _, err := f.Schema.ExecContext(ctx, "DROP USER '"+f.user+"'@'%'"); err != nil {
@@ -523,21 +524,26 @@ func (f *Fixture) registerBoot(ctx context.Context, runID []byte) error {
 		return err
 	}
 	writer = request.Writer
+	// 在第一次提交前保存同一canonical请求并置pending；错误可能发生于提交之后，禁止清理猜测。
+	f.registration = request
+	f.registrationReceipt = nil
+	f.registrationPending = true
 	registered, err := f.Catalog.Register(ctx, request)
 	if err != nil {
 		return err
 	}
+	// REGISTER已经确认；随后的本机grant/Config失败也必须保留这次真实登记，不覆盖或换身份重试。
+	f.registrationReceipt = registered
 	grant := &pb.SqlWriterBootGrant{Format: "SQL_WRITER_BOOT_V1", WriterKey: writerID, InstanceId: instance, Generation: f.Generation, AuthoritySchema: f.authority, ProtectedSchemas: opts.ProtectedSchemas, SqlPrincipal: writer.SqlPrincipal, RegistrationDigest: writer.RegistrationDigest, DeploymentId: deployment, GrantId: grantID, GrantedMs: writer.RegisteredMs, Permission: "NORMAL", PhysicalAuthoritySha256: f.physical, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256, MaintenanceRunId: bytes.Clone(runID)}
 	raw, err := protojson.Marshal(grant)
 	if err != nil {
 		return err
 	}
 	sum := sha256.Sum256(raw)
-	dir := f.t.TempDir()
-	if err = os.Chmod(dir, 0700); err != nil {
-		return err
-	}
-	path := filepath.Join(dir, "grant.json")
+	// 复用New已核私有ACL且保留原件的本run目录；Windows的Chmod不提供私有DACL。
+	// grantID每次登记都是新随机原件，CREATE_NEW拒碰撞，消费标记也只属于本次grant。
+	dir := filepath.Dir(f.receiptPath)
+	path := filepath.Join(dir, "fixture-grant-"+hex.EncodeToString(grantID)+".json")
 	if err = authoritysql.WritePrivateControlFile(path, raw); err != nil {
 		return err
 	}
@@ -548,8 +554,7 @@ func (f *Fixture) registerBoot(ctx context.Context, runID []byte) error {
 	}
 	f.Config = config
 	f.Permission = authoritysql.Writer(config)
-	f.registration = request
-	f.registrationReceipt = registered
+	f.registrationPending = false
 	return nil
 }
 
