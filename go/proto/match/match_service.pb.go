@@ -35,6 +35,7 @@ const (
 	MatchMode_MATCH_MODE_PVE_SOLO      MatchMode = 4 // 回合制 PVE 单人,即时开战(伪匹配)
 	MatchMode_MATCH_MODE_PVE_TEAM      MatchMode = 5 // 回合制 PVE 组队:按 JoinQueueRequest.team_size 的人数档 FIFO 凑满(1 人档即时开战)
 	MatchMode_MATCH_MODE_PVP_CHALLENGE MatchMode = 6 // 场景发起 PK(切磋):点名成局,不入队
+	MatchMode_MATCH_MODE_PVP_TEAM      MatchMode = 7 // 真人人数档PVP：每侧1..5人，整支队伍保持同侧，等待真人对手。
 )
 
 // Enum value maps for MatchMode.
@@ -47,6 +48,7 @@ var (
 		4: "MATCH_MODE_PVE_SOLO",
 		5: "MATCH_MODE_PVE_TEAM",
 		6: "MATCH_MODE_PVP_CHALLENGE",
+		7: "MATCH_MODE_PVP_TEAM",
 	}
 	MatchMode_value = map[string]int32{
 		"MATCH_MODE_UNSPECIFIED":   0,
@@ -56,6 +58,7 @@ var (
 		"MATCH_MODE_PVE_SOLO":      4,
 		"MATCH_MODE_PVE_TEAM":      5,
 		"MATCH_MODE_PVP_CHALLENGE": 6,
+		"MATCH_MODE_PVP_TEAM":      7,
 	}
 )
 
@@ -156,7 +159,9 @@ type JoinQueueRequest struct {
 	PartyMemberIds []uint64 `protobuf:"varint,4,rep,packed,name=party_member_ids,json=partyMemberIds,proto3" json:"party_member_ids,omitempty"`
 	ZoneId         uint32   `protobuf:"varint,5,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                           // Player's current zone
 	BattleConfigId uint32   `protobuf:"varint,6,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // 回合制战斗配置(DungeonTable id:怪物组/人数/回合上限)
-	// PVE 人数档(只有 MATCH_MODE_PVE_TEAM 读它,docs/design/pve-team-size-matching.md):想凑成几人的队伍。
+	// 人数档：PVE_TEAM 为同场玩家数，PVP_TEAM 为每侧玩家数(1..5)。
+	// PVP_TEAM 的0按单人档处理；已有队伍由 StartTeamMatch 读取权威名单，不从本请求信任成员数组。
+	// 以下副本人数上限规则仅用于PVE_TEAM(docs/design/pve-team-size-matching.md)。
 	// 怪物只数跟着实际参战人数走(每人一整组怪:单人打一组,N 人打 N 组)。
 	//
 	//	0        = 该副本的人数上限(加这个字段之前的行为;老客户端不填就是它)
@@ -1474,7 +1479,7 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\n" +
 	"team_index\x18\x01 \x01(\rR\tteamIndex\x12\x1d\n" +
 	"\n" +
-	"player_ids\x18\x02 \x03(\x04R\tplayerIds*\xb3\x01\n" +
+	"player_ids\x18\x02 \x03(\x04R\tplayerIds*\xcc\x01\n" +
 	"\tMatchMode\x12\x1a\n" +
 	"\x16MATCH_MODE_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eMATCH_MODE_5V5\x10\x01\x12\x12\n" +
@@ -1482,7 +1487,8 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x0eMATCH_MODE_1V1\x10\x03\x12\x17\n" +
 	"\x13MATCH_MODE_PVE_SOLO\x10\x04\x12\x17\n" +
 	"\x13MATCH_MODE_PVE_TEAM\x10\x05\x12\x1c\n" +
-	"\x18MATCH_MODE_PVP_CHALLENGE\x10\x06*\xa7\x01\n" +
+	"\x18MATCH_MODE_PVP_CHALLENGE\x10\x06\x12\x17\n" +
+	"\x13MATCH_MODE_PVP_TEAM\x10\a*\xa7\x01\n" +
 	"\n" +
 	"QueueState\x12\x1b\n" +
 	"\x17QUEUE_STATE_UNSPECIFIED\x10\x00\x12\x16\n" +

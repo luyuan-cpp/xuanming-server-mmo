@@ -145,6 +145,8 @@ func RunActivityGather(svcCtx *svc.ServiceContext, battleConfigId uint32, member
 // CreateBattleRequest 不带活动上下文。
 type gatherOptions struct {
 	directTeamID uint64
+	// PVP分边由撮合提交点决定；完整队伍不能在收快照时重新蛇形分配。
+	teamByPlayer map[uint64]uint32
 	// 非nil时地域、实例与battle_id均已在TiDB成局事务固定，禁止随机重选。
 	formation *matchpb.MatchFormationRecord
 	// presetBattleID 非 0:调用方已用 svcCtx.BattleIDGen 生成 battle_id,gather 直接用它。
@@ -242,6 +244,11 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 		logx.Errorf("[gather] No available battle node battle=%d mode=%s members=%v", battleId, modeName, members)
 		return fail("no_battle_node", 0, nil, 0)
 	}
+	teams, err := gatherTeamAssignment(svcCtx, mode, battleId, members, opts)
+	if err != nil {
+		logx.Errorf("[gather] Invalid explicit team assignment battle=%d: %v", battleId, err)
+		return fail("internal", 0, nil, battleId)
+	}
 
 	deadlineMs := nowMs() + uint64(svcCtx.Config.BattleMaxDurationSeconds)*1000
 	// prepare_deadline_ms:备战作废期限,与本组票据的 matched TTL 对齐
@@ -265,7 +272,6 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 	}
 
 	// 2.6 分队:5v5 按评分蛇形平衡(§11),其余模式按弹出序(teamIndexFor)。
-	teams := teamAssignment(svcCtx, mode, battleId, members)
 
 	// 3. 逐参与者冻结收快照。
 	var prepared []preparedMember
@@ -504,6 +510,42 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 		battleId, modeName, battleConfigId, battleNode.NodeId, members, time.Since(start))
 	metrics.ObserveGather(modeName, "success", time.Since(start))
 	return true
+}
+
+func gatherTeamAssignment(s *svc.ServiceContext, mode matchpb.MatchMode, battleID uint64,
+	members []uint64, opts gatherOptions) ([]uint32, error) {
+	if mode != matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
+		return teamAssignment(s, mode, battleID, members), nil
+	}
+	assignments := opts.teamByPlayer
+	if opts.formation != nil {
+		assignments = make(map[uint64]uint32, len(opts.formation.Members))
+		for _, member := range opts.formation.Members {
+			if _, duplicate := assignments[member.PlayerId]; duplicate {
+				return nil, fmt.Errorf("成局原件成员重复")
+			}
+			assignments[member.PlayerId] = member.TeamIndex
+		}
+	}
+	if len(assignments) != len(members) {
+		return nil, fmt.Errorf("PVP分边名单不完整")
+	}
+	counts := [2]uint32{}
+	teams := make([]uint32, len(members))
+	seen := make(map[uint64]bool, len(members))
+	for i, player := range members {
+		side, ok := assignments[player]
+		if !ok || side > 1 || player == 0 || seen[player] {
+			return nil, fmt.Errorf("PVP分边成员或队号无效")
+		}
+		seen[player] = true
+		teams[i] = side
+		counts[side]++
+	}
+	if counts[0] == 0 || counts[0] != counts[1] || counts[0] > kMaxBattleTeamSize {
+		return nil, fmt.Errorf("PVP双方人数须相同且各为1到5人")
+	}
+	return teams, nil
 }
 
 // preparePlayer 定位玩家所在 scene 节点并调 PrepareBattle,返回校验过的响应

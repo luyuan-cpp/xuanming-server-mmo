@@ -1,5 +1,7 @@
 # PVE 人数档匹配:人越多怪越多
 
+> 2026-10-29入口调整：默认PVE按当前实际人数立即开战。未组队走单人入口；已有1～5人队伍由队长发起整队开战，不等待队外成员。原人数档补位保留显式协议能力，不能把已有五人队的队长单独放进五人档等待。统一规则见[队伍匹配](team-backfill-matching.md)开头的2026-10-29补充；怪物缩放、准入、奖励和结算规则不因入口调整改变。
+
 > 2026-10-09 起草,2026-10-10 按对抗复核修订 · 状态:**match(Go)已编译并全量测试通过;C++ 未编译、未跑测试**(验证清单见 §7)
 > 相关:[turn-based-battle-server.md](turn-based-battle-server.md)(开局管线、PVE 数据化 §15)、
 > [team-system.md](team-system.md)(整队开战 §E)、[cross-zone-matchmaking.md](cross-zone-matchmaking.md)(队列 key 与评分镜像)

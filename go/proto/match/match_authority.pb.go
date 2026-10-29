@@ -1339,6 +1339,7 @@ type MatchFormationMember struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	Ticket        string                 `protobuf:"bytes,2,opt,name=ticket,proto3" json:"ticket,omitempty"`
+	TeamIndex     uint32                 `protobuf:"varint,3,opt,name=team_index,json=teamIndex,proto3" json:"team_index,omitempty"` // PVP_TEAM成局时持久化0/1分边，恢复不能重新排序或拆散原队伍。
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1385,6 +1386,13 @@ func (x *MatchFormationMember) GetTicket() string {
 		return x.Ticket
 	}
 	return ""
+}
+
+func (x *MatchFormationMember) GetTeamIndex() uint32 {
+	if x != nil {
+		return x.TeamIndex
+	}
+	return 0
 }
 
 type MatchFormationRecord struct {
@@ -2354,10 +2362,12 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\tbattle_id\x18\f \x01(\x04R\bbattleId:\xa5\x01\x8a\x92\xf4\x01\x1amatch_challenge_invitation\x92\x92\xf4\x01\fchallenge_idڒ\xf4\x01atarget_player_id,state,expires_ms,challenge_id;challenger_player_id,state,expires_ms,challenge_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x87\x01\n" +
 	"\x17MatchGlobalPolicyRecord\x12\x1b\n" +
 	"\tpolicy_id\x18\x01 \x01(\rR\bpolicyId\x12'\n" +
-	"\x0fcontract_digest\x18\x02 \x01(\fR\x0econtractDigest:&\x8a\x92\xf4\x01\x13match_global_policy\x92\x92\xf4\x01\tpolicy_id\"K\n" +
+	"\x0fcontract_digest\x18\x02 \x01(\fR\x0econtractDigest:&\x8a\x92\xf4\x01\x13match_global_policy\x92\x92\xf4\x01\tpolicy_id\"j\n" +
 	"\x14MatchFormationMember\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x16\n" +
-	"\x06ticket\x18\x02 \x01(\tR\x06ticket\"\xff\a\n" +
+	"\x06ticket\x18\x02 \x01(\tR\x06ticket\x12\x1d\n" +
+	"\n" +
+	"team_index\x18\x03 \x01(\rR\tteamIndex\"\xff\a\n" +
 	"\x14MatchFormationRecord\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12!\n" +
 	"\foperation_id\x18\x02 \x01(\tR\voperationId\x12\x14\n" +

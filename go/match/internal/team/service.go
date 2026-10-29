@@ -82,6 +82,23 @@ type BattleStarter interface {
 	PartyQueueState(ctx context.Context, playerId, teamId uint64) (uint32, uint32, uint32, uint64, error)
 }
 
+// 新模式端口不改变既有PVE端口，未接线的服务端也不会宣告PVP能力。
+type pvpPartyStarter interface {
+	EnqueuePartyMode(context.Context, uint32, uint32, uint32, uint64, []uint64, map[uint64]uint32) (uint64, error)
+	PartyQueueMode(context.Context, uint64, uint64) (uint32, error)
+}
+
+func normalizeTeamMatchMode(raw uint32) (matchpb.MatchMode, bool) {
+	switch matchpb.MatchMode(raw) {
+	case matchpb.MatchMode_MATCH_MODE_UNSPECIFIED, matchpb.MatchMode_MATCH_MODE_PVE_TEAM:
+		return matchpb.MatchMode_MATCH_MODE_PVE_TEAM, true
+	case matchpb.MatchMode_MATCH_MODE_PVP_TEAM:
+		return matchpb.MatchMode_MATCH_MODE_PVP_TEAM, true
+	default:
+		return matchpb.MatchMode_MATCH_MODE_UNSPECIFIED, false
+	}
+}
+
 // afterPreflightHook 测试缝(生产恒为 nil):StartTeamMatch 每轮预检通过之后、开战锁提交之前调用,
 // 确定性地插入"预检期间名单变化"(§I.3 #28)与"并发两次开战"。
 var afterPreflightHook func(teamId uint64, roster []uint64)
@@ -399,6 +416,10 @@ func (s *Service) disbandTeam(ctx context.Context, caller uint64, in *teampb.Dis
 // 补位分支(target_team_size 大于当前人数,docs/design/team-backfill-matching.md §4.1):第 1–5 步相同,
 // 之后不加开战锁,改走 startBackfill —— 整队进人数档队列,回包是 QUEUED 视图;凑满后由 matcher 开局。
 func (s *Service) StartTeamMatch(ctx context.Context, caller uint64, in *teampb.StartTeamMatchRequest) *teampb.TeamResponse {
+	mode, validMode := normalizeTeamMatchMode(uint32(in.GetMatchMode()))
+	if !validMode {
+		return s.respond(ctx, caller, ErrDungeonNotOpen, 0)
+	}
 	if s.store.sql != nil {
 		return s.startSQLTeamMatch(ctx, caller, in)
 	}
@@ -427,7 +448,6 @@ func (s *Service) StartTeamMatch(ctx context.Context, caller uint64, in *teampb.
 		return s.matchReject(ctx, caller, ErrInternal, 0, nil)
 	}
 	configId := in.GetBattleConfigId()
-	targetSize := in.GetTargetTeamSize()
 	bind := BindCaller(caller, in.GetExpectedTeamId())
 	for round := 0; round < matchStartRounds && ctx.Err() == nil; round++ {
 		res, err := s.store.Mutate(ctx, bind, RefreshOp(caller))
@@ -451,17 +471,27 @@ func (s *Service) StartTeamMatch(ctx context.Context, caller uint64, in *teampb.
 			return s.matchReject(ctx, caller, code, 0, &snap)
 		}
 		limit := s.starter.TeamSizeFor(configId)
+		if mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
+			limit = Capacity
+			if _, wired := s.starter.(pvpPartyStarter); !wired {
+				return s.matchReject(ctx, caller, ErrDungeonNotOpen, 0, &snap)
+			}
+		}
 		if code := CheckMatchTeamSize(rec, limit); code != 0 {
 			return s.matchReject(ctx, caller, code, 0, &snap)
 		}
 		// 目标人数(team-backfill-matching.md §3.2):0 或等于当前人数 = 直接开战;大于当前人数 = 进队列补位;
 		// 小于当前人数或超过副本上限 → 人数不符。
 		memberCount := uint32(len(rec.GetMembers()))
+		targetSize := in.GetTargetTeamSize()
+		if targetSize == 0 {
+			targetSize = memberCount
+		}
 		backfill := targetSize > memberCount
 		if targetSize != 0 && (targetSize < memberCount || targetSize > limit) {
 			return s.matchReject(ctx, caller, ErrSizeExceeded, 0, &snap)
 		}
-		if backfill && (s.svcCtx.Config.Team.FillQueueDisabled || s.svcCtx.Authority != nil) {
+		if mode != matchpb.MatchMode_MATCH_MODE_PVP_TEAM && backfill && (s.svcCtx.Config.Team.FillQueueDisabled || s.svcCtx.Authority != nil) {
 			return s.matchReject(ctx, caller, ErrDungeonNotOpen, 0, &snap)
 		}
 		roster := MatchRoster(rec)
@@ -479,8 +509,8 @@ func (s *Service) StartTeamMatch(ctx context.Context, caller uint64, in *teampb.
 		if hook := afterPreflightHook; hook != nil {
 			hook(snap.TeamId, roster)
 		}
-		if backfill {
-			return s.startBackfill(ctx, caller, configId, targetSize, &snap, roster, zones)
+		if backfill || mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
+			return s.startBackfillMode(ctx, caller, uint32(mode), configId, targetSize, &snap, roster, zones)
 		}
 
 		token := uuid.NewString()

@@ -16,8 +16,17 @@ import (
 // ClaimTeamUnits 将所有完整队伍与单排占用一次提交。全部P→全部Team→全部launch
 // →全部票→formation，不得让两个实例把同一队拆进不同房间。
 func (s *Store) ClaimTeamUnits(ctx context.Context, formation *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord, units []*teampb.TeamLaunchRecord) error {
-	if len(group) == 0 || len(group) > config.TeamCapacity || formation.Mode != uint32(pb.MatchMode_MATCH_MODE_PVE_TEAM) {
+	target := uint32(len(group))
+	maxPlayers := config.TeamCapacity
+	if formation.Mode == uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) {
+		target = uint32(len(group) / 2)
+		maxPlayers *= 2
+	}
+	if len(group) == 0 || len(group) > maxPlayers || !validTeamQueueMode(formation.Mode) {
 		return ErrDirectConflict
+	}
+	if err := validatePvpTeamFormation(formation, group); err != nil {
+		return err
 	}
 	if _, err := TeamUnitHomeZone(group); err != nil {
 		return err
@@ -75,7 +84,7 @@ func (s *Store) ClaimTeamUnits(ctx context.Context, formation *pb.MatchFormation
 		if err != nil {
 			return err
 		}
-		if current.State != 2 || current.ConfigId != formation.ConfigId || current.TargetSize != uint32(len(group)) || version == math.MaxUint64 {
+		if current.State != 2 || current.ConfigId != formation.ConfigId || current.TargetSize != target || TeamLaunchMode(current) != formation.Mode || version == math.MaxUint64 {
 			return ErrDirectConflict
 		}
 		data, err := DecodeTeamLaunch(current)
@@ -140,7 +149,7 @@ func (s *Store) ClaimTeamUnits(ctx context.Context, formation *pb.MatchFormation
 		if readErr != nil {
 			return readErr
 		}
-		if current.ZoneId != want.ZoneId || current.TeamId != want.TeamId || current.Mode != formation.Mode || current.ConfigId != formation.ConfigId || current.TeamSize != uint32(len(group)) {
+		if current.ZoneId != want.ZoneId || current.TeamId != want.TeamId || current.Mode != formation.Mode || current.ConfigId != formation.ConfigId || current.TeamSize != target {
 			return ErrDirectConflict
 		}
 		profile, decodeErr := DecodeProfile(current.NetworkProfile)

@@ -138,11 +138,12 @@ message TeamLaunchRecord {
   bytes payload = 14;
   string owner_account = 15;
   uint64 owner_revision = 16;
+  uint32 mode = 17; // 0按旧PVE_TEAM解释；新人数档PVP为7，须与原请求一致。
 }
 message TeamLaunchRegionRecord {
   option (OptionTableName) = "team_launch_region";
   option (OptionPrimaryKey) = "actor_id,request_high,request_low,physical_region";
-  option (OptionIndex) = "physical_region,config_id,target_size,member_count,local_preferred,enqueued_ms,actor_id,request_high,request_low;physical_region,config_id,target_size,member_count,enqueued_ms,actor_id,request_high,request_low;expires_ms,actor_id,request_high,request_low,physical_region;physical_region,config_id,target_size,member_count,home_zone,local_preferred,enqueued_ms,actor_id,request_high,request_low;physical_region,config_id,target_size,member_count,home_zone,enqueued_ms,actor_id,request_high,request_low";
+  option (OptionIndex) = "physical_region,mode,config_id,target_size,member_count,local_preferred,enqueued_ms,actor_id,request_high,request_low;physical_region,mode,config_id,target_size,member_count,enqueued_ms,actor_id,request_high,request_low;expires_ms,actor_id,request_high,request_low,physical_region;physical_region,mode,config_id,target_size,member_count,home_zone,local_preferred,enqueued_ms,actor_id,request_high,request_low;physical_region,mode,config_id,target_size,member_count,home_zone,enqueued_ms,actor_id,request_high,request_low";
   uint64 actor_id = 1;
   uint64 request_high = 2;
   uint64 request_low = 3;
@@ -155,6 +156,7 @@ message TeamLaunchRegionRecord {
   uint64 expires_ms = 10;
   uint32 max_rtt_ms = 11;
   uint32 home_zone = 12; // 0仅表示已允许跨home的混合unit；禁止跨home时不能入候选。
+  uint32 mode = 13; // 与原launch的模式一致；候选扫描在LIMIT前隔离PVE/PVP。
 }
 // 仅为玩家挂起域护栏检索；必须JOIN原launch核状态，不可作为另一个权威来源。
 message TeamLaunchRoleRecord {

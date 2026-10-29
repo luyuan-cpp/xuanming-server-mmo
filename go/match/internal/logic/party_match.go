@@ -7,6 +7,8 @@ import (
 
 	"match/internal/constants"
 	"match/internal/metrics"
+	"match/internal/poolgroup"
+	matchpb "proto/match"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -234,6 +236,10 @@ func (p *groupPicker) abandonUnreturned(unit *queueUnit, pushes []queuePush) {
 func (p *groupPicker) selectCheckedUnits(units []*queueUnit, required uint32, checkDeadline time.Time) ([]*queueUnit, bool) {
 	for {
 		group := selectUnits(units, int(required))
+		mode, _, _ := parseQueueKey(p.queueKey)
+		if matchpb.MatchMode(mode) == matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
+			group = p.selectPvpUnits(units, int(queueTeamSize(p.queueKey)))
+		}
 		if group == nil {
 			return nil, true
 		}
@@ -262,6 +268,38 @@ func (p *groupPicker) selectCheckedUnits(units []*queueUnit, required uint32, ch
 			return group, true
 		}
 	}
+}
+
+// 两侧装箱共用纯函数；每个补位单只能完整进入同一侧，不能在人数凑齐后再蛇形拆队。
+func (p *groupPicker) selectPvpUnits(units []*queueUnit, sideSize int) []*queueUnit {
+	var eligible []*queueUnit
+	for _, unit := range units {
+		if unit.usable() && len(unit.members) <= sideSize {
+			eligible = append(eligible, unit)
+		}
+	}
+	for anchor := range eligible {
+		candidates := eligible[anchor:]
+		sizes := make([]int, len(candidates))
+		for i, unit := range candidates {
+			sizes[i] = len(unit.members)
+		}
+		indices, sides := poolgroup.PickPvpUnits(sizes, sideSize)
+		if len(indices) == 0 {
+			continue
+		}
+		clear(p.teamByPlayer)
+		group := make([]*queueUnit, 0, len(indices))
+		for i, index := range indices {
+			unit := candidates[index]
+			group = append(group, unit)
+			for _, player := range unit.members {
+				p.teamByPlayer[player] = sides[i]
+			}
+		}
+		return group
+	}
+	return nil
 }
 
 // selectUnits 在可用单位里找人数之和**恰好**等于 required 的一组;多解时取等待序字典序最小的那组

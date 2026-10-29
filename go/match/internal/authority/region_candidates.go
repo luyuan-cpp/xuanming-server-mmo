@@ -53,7 +53,7 @@ func (s *Store) CheckCandidateIndexes(ctx context.Context) error {
 		"team_invite_index":          {"invitee_id,expires_ms,team_id"},
 		"team_application_index":     {"applicant_id,expires_ms,team_id"},
 		"team_launch":                {"state,enqueued_ms,actor_id,request_high,request_low", "team_id,state,enqueued_ms,actor_id,request_high,request_low"},
-		"team_launch_region":         {"physical_region,config_id,target_size,member_count,local_preferred,enqueued_ms,actor_id,request_high,request_low", "physical_region,config_id,target_size,member_count,enqueued_ms,actor_id,request_high,request_low", "physical_region,config_id,target_size,member_count,home_zone,local_preferred,enqueued_ms,actor_id,request_high,request_low", "physical_region,config_id,target_size,member_count,home_zone,enqueued_ms,actor_id,request_high,request_low", "expires_ms,actor_id,request_high,request_low,physical_region"},
+		"team_launch_region":         {"physical_region,mode,config_id,target_size,member_count,local_preferred,enqueued_ms,actor_id,request_high,request_low", "physical_region,mode,config_id,target_size,member_count,enqueued_ms,actor_id,request_high,request_low", "physical_region,mode,config_id,target_size,member_count,home_zone,local_preferred,enqueued_ms,actor_id,request_high,request_low", "physical_region,mode,config_id,target_size,member_count,home_zone,enqueued_ms,actor_id,request_high,request_low", "expires_ms,actor_id,request_high,request_low,physical_region"},
 		"team_launch_role":           {"player_id,state,actor_id,request_high,request_low"},
 	} {
 		for _, columns := range required {
@@ -158,7 +158,7 @@ func (s *Store) CandidatePeers(ctx context.Context, anchor *pb.MatchAuthorityTic
 
 // CandidateTeamPeers 将最终整队的home资格放在LIMIT之前；网络机房与home是独立维度。
 func (s *Store) CandidateTeamPeers(ctx context.Context, anchor *pb.MatchAuthorityTicketRecord, region uint32, local bool, now uint64) ([]*pb.MatchAuthorityTicketRecord, error) {
-	if anchor == nil || anchor.Mode != uint32(pb.MatchMode_MATCH_MODE_PVE_TEAM) || anchor.TeamSize > config.TeamCapacity {
+	if anchor == nil || !validTeamQueueMode(anchor.Mode) || anchor.TeamSize > config.TeamCapacity {
 		return nil, ErrDirectConflict
 	}
 	var home uint32
@@ -175,7 +175,7 @@ func (s *Store) candidatePeers(ctx context.Context, anchor *pb.MatchAuthorityTic
 	if anchor == nil || anchor.TeamSize == 0 || anchor.TeamSize > 10 || region == 0 {
 		return nil, errors.New("候选组人数或目标机房无效")
 	}
-	if anchor.TeamSize == 1 {
+	if anchor.TeamSize == 1 && anchor.Mode != uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) {
 		return nil, nil
 	}
 	q := `SELECT t.` + strings.ReplaceAll(ticketColumns, ",", ",t.") + ` FROM match_ticket_region r
@@ -217,7 +217,11 @@ func (s *Store) candidatePeers(ctx context.Context, anchor *pb.MatchAuthorityTic
 		args = append(args, low, high)
 	}
 	q += " ORDER BY r.enqueued_ms,r.player_id LIMIT ?"
-	args = append(args, anchor.TeamSize-1)
+	limit := anchor.TeamSize - 1
+	if anchor.Mode == uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) {
+		limit = anchor.TeamSize*2 - 1
+	}
+	args = append(args, limit)
 	rows, err := s.DB.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err

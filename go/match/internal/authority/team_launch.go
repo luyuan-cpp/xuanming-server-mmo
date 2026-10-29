@@ -14,11 +14,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const teamLaunchColumns = "actor_id,request_high,request_low,team_id,team_version,lock_token,config_id,target_size,member_count,state,enqueued_ms,not_before_ms,battle_id,payload,owner_account,owner_revision"
+const teamLaunchColumns = "actor_id,request_high,request_low,team_id,team_version,lock_token,config_id,target_size,member_count,state,enqueued_ms,not_before_ms,battle_id,payload,owner_account,owner_revision,mode"
 
 func scanTeamLaunch(row scanner) (*teampb.TeamLaunchRecord, error) {
 	launch := &teampb.TeamLaunchRecord{}
-	err := row.Scan(&launch.ActorId, &launch.RequestHigh, &launch.RequestLow, &launch.TeamId, &launch.TeamVersion, &launch.LockToken, &launch.ConfigId, &launch.TargetSize, &launch.MemberCount, &launch.State, &launch.EnqueuedMs, &launch.NotBeforeMs, &launch.BattleId, &launch.Payload, &launch.OwnerAccount, &launch.OwnerRevision)
+	err := row.Scan(&launch.ActorId, &launch.RequestHigh, &launch.RequestLow, &launch.TeamId, &launch.TeamVersion, &launch.LockToken, &launch.ConfigId, &launch.TargetSize, &launch.MemberCount, &launch.State, &launch.EnqueuedMs, &launch.NotBeforeMs, &launch.BattleId, &launch.Payload, &launch.OwnerAccount, &launch.OwnerRevision, &launch.Mode)
 	return launch, err
 }
 
@@ -38,7 +38,7 @@ func (s *Store) InsertTeamLaunchTx(ctx context.Context, tx *sql.Tx, launch *team
 	if err = s.requireTeamLaunchHomesTx(ctx, tx, data); err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO team_launch("+teamLaunchColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", launch.ActorId, launch.RequestHigh, launch.RequestLow, launch.TeamId, launch.TeamVersion, launch.LockToken, launch.ConfigId, launch.TargetSize, launch.MemberCount, launch.State, launch.EnqueuedMs, launch.NotBeforeMs, launch.BattleId, launch.Payload, launch.OwnerAccount, launch.OwnerRevision)
+	_, err = tx.ExecContext(ctx, "INSERT INTO team_launch("+teamLaunchColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", launch.ActorId, launch.RequestHigh, launch.RequestLow, launch.TeamId, launch.TeamVersion, launch.LockToken, launch.ConfigId, launch.TargetSize, launch.MemberCount, launch.State, launch.EnqueuedMs, launch.NotBeforeMs, launch.BattleId, launch.Payload, launch.OwnerAccount, launch.OwnerRevision, launch.Mode)
 	if err != nil {
 		return err
 	}
@@ -56,6 +56,20 @@ func DecodeTeamLaunch(launch *teampb.TeamLaunchRecord) (*teampb.TeamLaunchData, 
 		return nil, errors.New("team: 开战原件损坏")
 	}
 	original := data.Original
+	mode := uint32(original.GetRequest().GetMatchMode())
+	if mode == 0 {
+		mode = uint32(pb.MatchMode_MATCH_MODE_PVE_TEAM)
+	}
+	if !validTeamQueueMode(mode) || TeamLaunchMode(launch) != mode {
+		return nil, errors.New("team: 开战模式与原意图不一致")
+	}
+	target := original.GetRequest().GetTargetTeamSize()
+	if target == 0 {
+		target = launch.MemberCount
+	}
+	if target != launch.TargetSize || target < launch.MemberCount || target > config.TeamCapacity {
+		return nil, errors.New("team: 开战人数与原意图不一致")
+	}
 	request, err := proto.MarshalOptions{Deterministic: true}.Marshal(original.Request)
 	if err != nil || !bytes.Equal(request, data.RequestPayload) || original.TeamId != launch.TeamId || original.TeamVersion != launch.TeamVersion || original.LockToken != launch.LockToken || original.Actor.GetPlayerId() != launch.ActorId || original.Actor.GetOwnerAccount() != launch.OwnerAccount || original.Actor.GetOwnerRevision() != launch.OwnerRevision || original.GetRequest().GetBattleConfigId() != launch.ConfigId || original.EnqueuedMs != launch.EnqueuedMs {
 		return nil, errors.New("team: 开战原件投影不一致")
@@ -146,7 +160,7 @@ func (s *Store) lockTeamLaunch(ctx context.Context, tx *sql.Tx, observed *teampb
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	if !bytes.Equal(current.Payload, observed.Payload) || current.TeamId != observed.TeamId || current.TeamVersion != observed.TeamVersion || current.LockToken != observed.LockToken || current.OwnerAccount != observed.OwnerAccount || current.OwnerRevision != observed.OwnerRevision {
+	if !bytes.Equal(current.Payload, observed.Payload) || current.TeamId != observed.TeamId || current.TeamVersion != observed.TeamVersion || current.LockToken != observed.LockToken || current.OwnerAccount != observed.OwnerAccount || current.OwnerRevision != observed.OwnerRevision || TeamLaunchMode(current) != TeamLaunchMode(observed) {
 		return nil, nil, 0, ErrDirectConflict
 	}
 	data, err := DecodeTeamLaunch(current)

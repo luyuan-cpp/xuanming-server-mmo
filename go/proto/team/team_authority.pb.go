@@ -994,6 +994,7 @@ type TeamLaunchRecord struct {
 	Payload       []byte                 `protobuf:"bytes,14,opt,name=payload,proto3" json:"payload,omitempty"`
 	OwnerAccount  string                 `protobuf:"bytes,15,opt,name=owner_account,json=ownerAccount,proto3" json:"owner_account,omitempty"`
 	OwnerRevision uint64                 `protobuf:"varint,16,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
+	Mode          uint32                 `protobuf:"varint,17,opt,name=mode,proto3" json:"mode,omitempty"` // 0按旧PVE_TEAM解释；新人数档PVP为7，须与原请求一致。
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1140,6 +1141,13 @@ func (x *TeamLaunchRecord) GetOwnerRevision() uint64 {
 	return 0
 }
 
+func (x *TeamLaunchRecord) GetMode() uint32 {
+	if x != nil {
+		return x.Mode
+	}
+	return 0
+}
+
 type TeamLaunchRegionRecord struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	ActorId        uint64                 `protobuf:"varint,1,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
@@ -1154,6 +1162,7 @@ type TeamLaunchRegionRecord struct {
 	ExpiresMs      uint64                 `protobuf:"varint,10,opt,name=expires_ms,json=expiresMs,proto3" json:"expires_ms,omitempty"`
 	MaxRttMs       uint32                 `protobuf:"varint,11,opt,name=max_rtt_ms,json=maxRttMs,proto3" json:"max_rtt_ms,omitempty"`
 	HomeZone       uint32                 `protobuf:"varint,12,opt,name=home_zone,json=homeZone,proto3" json:"home_zone,omitempty"` // 0仅表示已允许跨home的混合unit；禁止跨home时不能入候选。
+	Mode           uint32                 `protobuf:"varint,13,opt,name=mode,proto3" json:"mode,omitempty"`                         // 与原launch的模式一致；候选扫描在LIMIT前隔离PVE/PVP。
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1268,6 +1277,13 @@ func (x *TeamLaunchRegionRecord) GetMaxRttMs() uint32 {
 func (x *TeamLaunchRegionRecord) GetHomeZone() uint32 {
 	if x != nil {
 		return x.HomeZone
+	}
+	return 0
+}
+
+func (x *TeamLaunchRegionRecord) GetMode() uint32 {
+	if x != nil {
+		return x.Mode
 	}
 	return 0
 }
@@ -1439,7 +1455,7 @@ const file_proto_team_team_authority_proto_rawDesc = "" +
 	"\vteam_record\x18\x03 \x01(\v2\x12.teampb.TeamRecordR\n" +
 	"teamRecord\x126\n" +
 	"\boriginal\x18\x04 \x01(\v2\x1a.teampb.TeamLaunchOriginalR\boriginal\x12D\n" +
-	"\x0fspectator_exits\x18\x05 \x03(\v2\x1b.match.MatchSpectatorRecordR\x0espectatorExits\"\xb8\x05\n" +
+	"\x0fspectator_exits\x18\x05 \x03(\v2\x1b.match.MatchSpectatorRecordR\x0espectatorExits\"\xcc\x05\n" +
 	"\x10TeamLaunchRecord\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x12!\n" +
 	"\frequest_high\x18\x02 \x01(\x04R\vrequestHigh\x12\x1f\n" +
@@ -1461,7 +1477,8 @@ const file_proto_team_team_authority_proto_rawDesc = "" +
 	"\tbattle_id\x18\r \x01(\x04R\bbattleId\x12\x18\n" +
 	"\apayload\x18\x0e \x01(\fR\apayload\x12#\n" +
 	"\rowner_account\x18\x0f \x01(\tR\fownerAccount\x12%\n" +
-	"\x0eowner_revision\x18\x10 \x01(\x04R\rownerRevision:\xaa\x01\x8a\x92\xf4\x01\vteam_launch\x92\x92\xf4\x01!actor_id,request_high,request_lowڒ\xf4\x01ostate,enqueued_ms,actor_id,request_high,request_low;team_id,state,enqueued_ms,actor_id,request_high,request_low\"\xef\a\n" +
+	"\x0eowner_revision\x18\x10 \x01(\x04R\rownerRevision\x12\x12\n" +
+	"\x04mode\x18\x11 \x01(\rR\x04mode:\xaa\x01\x8a\x92\xf4\x01\vteam_launch\x92\x92\xf4\x01!actor_id,request_high,request_lowڒ\xf4\x01ostate,enqueued_ms,actor_id,request_high,request_low;team_id,state,enqueued_ms,actor_id,request_high,request_low\"\x97\b\n" +
 	"\x16TeamLaunchRegionRecord\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x12!\n" +
 	"\frequest_high\x18\x02 \x01(\x04R\vrequestHigh\x12\x1f\n" +
@@ -1480,7 +1497,8 @@ const file_proto_team_team_authority_proto_rawDesc = "" +
 	" \x01(\x04R\texpiresMs\x12\x1c\n" +
 	"\n" +
 	"max_rtt_ms\x18\v \x01(\rR\bmaxRttMs\x12\x1b\n" +
-	"\thome_zone\x18\f \x01(\rR\bhomeZone:\xc7\x04\x8a\x92\xf4\x01\x12team_launch_region\x92\x92\xf4\x011actor_id,request_high,request_low,physical_regionڒ\xf4\x01\xf4\x03physical_region,config_id,target_size,member_count,local_preferred,enqueued_ms,actor_id,request_high,request_low;physical_region,config_id,target_size,member_count,enqueued_ms,actor_id,request_high,request_low;expires_ms,actor_id,request_high,request_low,physical_region;physical_region,config_id,target_size,member_count,home_zone,local_preferred,enqueued_ms,actor_id,request_high,request_low;physical_region,config_id,target_size,member_count,home_zone,enqueued_ms,actor_id,request_high,request_low\"\xa5\x02\n" +
+	"\thome_zone\x18\f \x01(\rR\bhomeZone\x12\x12\n" +
+	"\x04mode\x18\r \x01(\rR\x04mode:\xdb\x04\x8a\x92\xf4\x01\x12team_launch_region\x92\x92\xf4\x011actor_id,request_high,request_low,physical_regionڒ\xf4\x01\x88\x04physical_region,mode,config_id,target_size,member_count,local_preferred,enqueued_ms,actor_id,request_high,request_low;physical_region,mode,config_id,target_size,member_count,enqueued_ms,actor_id,request_high,request_low;expires_ms,actor_id,request_high,request_low,physical_region;physical_region,mode,config_id,target_size,member_count,home_zone,local_preferred,enqueued_ms,actor_id,request_high,request_low;physical_region,mode,config_id,target_size,member_count,home_zone,enqueued_ms,actor_id,request_high,request_low\"\xa5\x02\n" +
 	"\x14TeamLaunchRoleRecord\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x12!\n" +
 	"\frequest_high\x18\x02 \x01(\x04R\vrequestHigh\x12\x1f\n" +

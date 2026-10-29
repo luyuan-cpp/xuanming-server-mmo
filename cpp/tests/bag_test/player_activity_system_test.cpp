@@ -298,7 +298,7 @@ TEST(PlayerActivityHandlerTest, GeneratedClaimDispatchReturnsIdentityAndEntityEr
     ClaimActivityVitalityRewardResponse response;
     response.set_claimed(true);
     response.set_durable(true);
-    EXPECT_EQ(345u, SceneActivityClientPlayerClaimActivityVitalityRewardMessageId);
+    EXPECT_EQ(348u, SceneActivityClientPlayerClaimActivityVitalityRewardMessageId);
     handler.CallMethod(SceneActivityClientPlayerClaimActivityVitalityRewardMethod,
         entt::null, &request, &response);
     EXPECT_EQ(kThisEntityIsInvalid, response.error_message().id());

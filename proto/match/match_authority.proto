@@ -184,6 +184,7 @@ message MatchGlobalPolicyRecord {
 message MatchFormationMember {
   uint64 player_id = 1;
   string ticket = 2;
+  uint32 team_index = 3; // PVP_TEAM成局时持久化0/1分边，恢复不能重新排序或拆散原队伍。
 }
 message MatchFormationRecord {
   option (OptionTableName) = "match_formation";

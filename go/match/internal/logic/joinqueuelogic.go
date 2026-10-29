@@ -96,6 +96,16 @@ func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQ
 		required = 2
 	case matchpb.MatchMode_MATCH_MODE_5V5:
 		required = required5v5Players
+	case matchpb.MatchMode_MATCH_MODE_PVP_TEAM:
+		sideSize := in.TeamSize
+		if sideSize == 0 {
+			sideSize = 1
+		}
+		if sideSize > kMaxBattleTeamSize {
+			return &matchpb.JoinQueueResponse{ErrorCode: constants.ErrModeNotOpen,
+				ErrorMessage: tipErr(constants.ErrModeNotOpen, "PVP每方人数须为1到5人")}, nil
+		}
+		required = sideSize * 2
 	default:
 		// 3v3 未开放;切磋(PVP_CHALLENGE)点名成局,不走排队入口。
 		metrics.ObserveJoinQueue(modeName, "mode_not_open")

@@ -1077,6 +1077,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchRegionRecord final : publ
     kMaxRttMsFieldNumber = 11,
     kExpiresMsFieldNumber = 10,
     kHomeZoneFieldNumber = 12,
+    kModeFieldNumber = 13,
   };
   // uint64 actor_id = 1;
   void clear_actor_id() ;
@@ -1198,11 +1199,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchRegionRecord final : publ
   void _internal_set_home_zone(::uint32_t value);
 
   public:
+  // uint32 mode = 13;
+  void clear_mode() ;
+  [[nodiscard]] ::uint32_t mode() const;
+  void set_mode(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_mode() const;
+  void _internal_set_mode(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:teampb.TeamLaunchRegionRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 12,
+      ::google::protobuf::internal::TcParseTable<4, 13,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1243,6 +1254,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchRegionRecord final : publ
     ::uint32_t max_rtt_ms_;
     ::uint64_t expires_ms_;
     ::uint32_t home_zone_;
+    ::uint32_t mode_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1414,6 +1426,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchRecord final : public ::g
     kNotBeforeMsFieldNumber = 12,
     kBattleIdFieldNumber = 13,
     kOwnerRevisionFieldNumber = 16,
+    kModeFieldNumber = 17,
   };
   // string lock_token = 6;
   void clear_lock_token() ;
@@ -1590,11 +1603,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchRecord final : public ::g
   void _internal_set_owner_revision(::uint64_t value);
 
   public:
+  // uint32 mode = 17;
+  void clear_mode() ;
+  [[nodiscard]] ::uint32_t mode() const;
+  void set_mode(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_mode() const;
+  void _internal_set_mode(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:teampb.TeamLaunchRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 16,
+      ::google::protobuf::internal::TcParseTable<5, 17,
                           0, 71,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1639,6 +1662,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchRecord final : public ::g
     ::uint64_t not_before_ms_;
     ::uint64_t battle_id_;
     ::uint64_t owner_revision_;
+    ::uint32_t mode_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -8057,6 +8081,30 @@ inline void TeamLaunchRecord::_internal_set_owner_revision(::uint64_t value) {
   _impl_.owner_revision_ = value;
 }
 
+// uint32 mode = 17;
+inline void TeamLaunchRecord::clear_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mode_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint32_t TeamLaunchRecord::mode() const {
+  // @@protoc_insertion_point(field_get:teampb.TeamLaunchRecord.mode)
+  return _internal_mode();
+}
+inline void TeamLaunchRecord::set_mode(::uint32_t value) {
+  _internal_set_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:teampb.TeamLaunchRecord.mode)
+}
+inline ::uint32_t TeamLaunchRecord::_internal_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.mode_;
+}
+inline void TeamLaunchRecord::_internal_set_mode(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mode_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // TeamLaunchRegionRecord
@@ -8347,6 +8395,30 @@ inline ::uint32_t TeamLaunchRegionRecord::_internal_home_zone() const {
 inline void TeamLaunchRegionRecord::_internal_set_home_zone(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.home_zone_ = value;
+}
+
+// uint32 mode = 13;
+inline void TeamLaunchRegionRecord::clear_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mode_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint32_t TeamLaunchRegionRecord::mode() const {
+  // @@protoc_insertion_point(field_get:teampb.TeamLaunchRegionRecord.mode)
+  return _internal_mode();
+}
+inline void TeamLaunchRegionRecord::set_mode(::uint32_t value) {
+  _internal_set_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:teampb.TeamLaunchRegionRecord.mode)
+}
+inline ::uint32_t TeamLaunchRegionRecord::_internal_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.mode_;
+}
+inline void TeamLaunchRegionRecord::_internal_set_mode(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mode_ = value;
 }
 
 // -------------------------------------------------------------------

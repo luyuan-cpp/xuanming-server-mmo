@@ -237,6 +237,7 @@ enum MatchMode : int {
   MATCH_MODE_PVE_SOLO = 4,
   MATCH_MODE_PVE_TEAM = 5,
   MATCH_MODE_PVP_CHALLENGE = 6,
+  MATCH_MODE_PVP_TEAM = 7,
   MatchMode_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   MatchMode_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -247,11 +248,11 @@ extern const uint32_t MatchMode_internal_data_[];
 inline constexpr MatchMode MatchMode_MIN =
     static_cast<MatchMode>(0);
 inline constexpr MatchMode MatchMode_MAX =
-    static_cast<MatchMode>(6);
+    static_cast<MatchMode>(7);
 [[nodiscard]] inline bool MatchMode_IsValid(int value) {
-  return 0 <= value && value <= 6;
+  return 0 <= value && value <= 7;
 }
-inline constexpr int MatchMode_ARRAYSIZE = 6 + 1;
+inline constexpr int MatchMode_ARRAYSIZE = 7 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 MatchMode_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(MatchMode) {
@@ -266,7 +267,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& MatchMode_Name(MatchMode value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<MatchMode_descriptor, 0, 6>(
+  return ::google::protobuf::internal::NameOfDenseEnum<MatchMode_descriptor, 0, 7>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool MatchMode_Parse(

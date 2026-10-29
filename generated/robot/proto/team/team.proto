@@ -4,6 +4,7 @@ package teampb;
 import "proto/db/proto_option.proto";
 import "proto/common/base/empty.proto";
 import "proto/common/base/tip.proto";
+import "proto/match/match_service.proto";
 
 option go_package = "robot/proto/team";
 // gRPC(非 muduo TCP)。两个开关分工不同,都必须保持:
@@ -113,12 +114,15 @@ message DisbandTeamRequest {
 }
 
 message StartTeamMatchRequest {
-  uint32 battle_config_id = 1;  // DungeonTable id;模式固定 PVE_TEAM
+  uint32 battle_config_id = 1;  // DungeonTable id；匹配模式由match_mode指定。
   uint64 expected_team_id = 2;
   string request_id = 3; // 全球权威模式必填 UUID；重试原意图复用，旧空值明确拒绝。
   // 目标人数(team-backfill-matching.md):0 或等于当前队伍人数 = 有几个人就几个人直接开战(加字段前的行为);
   // 大于当前人数 = 整队进该人数档的队列等补位,凑满后同场开战;小于当前人数或超过副本上限 → kTeamSizeExceeded。
   uint32 target_team_size = 4;
+  // 0或PVE_TEAM：当前人数直接PVE，显式更大目标仍可补位；PVP_TEAM：每侧目标人数，0取当前人数。
+  // PVP始终等待真人对手，队伍作为不可拆单位；其余模式明确拒绝。
+  match.MatchMode match_mode = 5;
 }
 
 // ---------------- 回包 / 显示层视图(AGENTS §11.6:在线态只出现在这里) ----------------
@@ -208,6 +212,9 @@ message TeamView {
   // 「目标人数」选项:不认识 target_team_size 的服务端(旧版本 / 另一版服务端)会把它静默当成直接开战,
   // 那些服务端的视图里这一位天然是 false。无队伍的空视图不填。
   bool match_fill_supported = 16;
+  match.MatchMode match_mode = 17; // 本次排队模式；空闲时为0。
+  // 不支持新字段的服务端会忽略PVP意图，客户端必须见到此能力才允许整队PVP。
+  bool pvp_match_supported = 18;
 }
 
 enum TeamChangeReason {

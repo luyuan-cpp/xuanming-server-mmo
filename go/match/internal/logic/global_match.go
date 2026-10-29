@@ -43,6 +43,9 @@ func globalJoin(l *JoinQueueLogic, in *pb.JoinQueueRequest, required, zone uint3
 	}
 
 	t := &pb.MatchAuthorityTicketRecord{PlayerId: d.PlayerId, Ticket: uuid.NewString(), RequestId: in.RequestId, Mode: uint32(in.Mode), ConfigId: in.BattleConfigId, TeamSize: required, ZoneId: zone, RatingCenti: int64(math.Round(loadRatingOrDefault(l.svcCtx, d.PlayerId) * 100))}
+	if in.Mode == pb.MatchMode_MATCH_MODE_PVP_TEAM {
+		t.TeamSize = required / 2
+	}
 	prepared, exit, pending, e := l.svcCtx.Authority.PrepareJoin(l.ctx, t, in, binding)
 	if e != nil {
 		return &pb.JoinQueueResponse{ErrorCode: constants.ErrInternal, ErrorMessage: tipErr(constants.ErrInternal, "匹配原意图暂不可用")}, nil

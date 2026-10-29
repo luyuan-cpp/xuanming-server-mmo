@@ -27,7 +27,7 @@ func (s *TeamBattleStarter) ReserveSQLTeamMatch(ctx context.Context, launch *tea
 			return nil, err
 		}
 	}
-	if launch.TargetSize > launch.MemberCount {
+	if authority.TeamLaunchMode(launch) == uint32(matchpb.MatchMode_MATCH_MODE_PVP_TEAM) || launch.TargetSize > launch.MemberCount {
 		if err = s.svcCtx.Authority.EnqueuePreparedTeamLaunch(ctx, launch); err != nil {
 			return nil, err
 		}

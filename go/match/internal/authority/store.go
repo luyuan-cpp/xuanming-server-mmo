@@ -500,6 +500,9 @@ func (s *Store) Claim(ctx context.Context, f *pb.MatchFormationRecord, group []*
 }
 
 func (s *Store) claimTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord, source *matchEntryOriginal) error {
+	if err := validatePvpTeamFormation(f, group); err != nil {
+		return err
+	}
 	if e := s.lockOriginalPlayers(ctx, tx, group); e != nil {
 		return e
 	}
@@ -528,6 +531,15 @@ func (s *Store) claimTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRec
 		return e
 	}
 	allPreferred := true
+	if f.Mode == uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) {
+		current := make([]*pb.MatchAuthorityTicketRecord, 0, len(group))
+		for _, want := range group {
+			current = append(current, actual[want.PlayerId])
+		}
+		if err := validatePvpTeamFormation(f, current); err != nil {
+			return err
+		}
+	}
 	for _, want := range locked {
 		t := actual[want.PlayerId]
 		p, e := DecodeProfile(t.NetworkProfile)
@@ -555,9 +567,13 @@ func (s *Store) claimTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRec
 	f.DeadlineMs = n + 300000
 	f.State = 1
 	f.RetryAtMs = n
+	sides := map[uint64]uint32{}
+	for _, member := range f.Members {
+		sides[member.PlayerId] = member.TeamIndex
+	}
 	f.Members = nil
 	for _, t := range group {
-		f.Members = append(f.Members, &pb.MatchFormationMember{PlayerId: t.PlayerId, Ticket: t.Ticket})
+		f.Members = append(f.Members, &pb.MatchFormationMember{PlayerId: t.PlayerId, Ticket: t.Ticket, TeamIndex: sides[t.PlayerId]})
 	}
 	// repeated 消息按 proto2mysql 的同一序列化格式写入，不制造平行成员模型。
 	memberValue := &pb.MatchFormationRecord{Members: f.Members}

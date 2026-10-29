@@ -568,11 +568,11 @@ constexpr TeamLaunchRegionRecord::ParseTableT_ TeamLaunchRegionRecord::InternalG
     {
       PROTOBUF_FIELD_OFFSET(TeamLaunchRegionRecord, _impl_._has_bits_),
       0, // no _extensions_
-      12, 120,  // max_field_number, fast_idx_mask
+      13, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294963200,  // skipmap
+      4294959104,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      12,  // num_field_entries
+      13,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -631,7 +631,10 @@ constexpr TeamLaunchRegionRecord::ParseTableT_ TeamLaunchRegionRecord::InternalG
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TeamLaunchRegionRecord, _impl_.home_zone_), 11>(),
        {96, 11, 0,
         PROTOBUF_FIELD_OFFSET(TeamLaunchRegionRecord, _impl_.home_zone_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 mode = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TeamLaunchRegionRecord, _impl_.mode_), 12>(),
+       {104, 12, 0,
+        PROTOBUF_FIELD_OFFSET(TeamLaunchRegionRecord, _impl_.mode_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
@@ -661,6 +664,8 @@ constexpr TeamLaunchRegionRecord::ParseTableT_ TeamLaunchRegionRecord::InternalG
       {PROTOBUF_FIELD_OFFSET(TeamLaunchRegionRecord, _impl_.max_rtt_ms_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 home_zone = 12;
       {PROTOBUF_FIELD_OFFSET(TeamLaunchRegionRecord, _impl_.home_zone_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 mode = 13;
+      {PROTOBUF_FIELD_OFFSET(TeamLaunchRegionRecord, _impl_.mode_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -684,7 +689,8 @@ inline constexpr TeamLaunchRegionRecord::Impl_::Impl_(
         local_preferred_{false},
         max_rtt_ms_{0u},
         expires_ms_{::uint64_t{0u}},
-        home_zone_{0u} {}
+        home_zone_{0u},
+        mode_{0u} {}
 
 template <typename>
 constexpr TeamLaunchRegionRecord::TeamLaunchRegionRecord(::_pbi::ConstantInitialized,
@@ -790,11 +796,11 @@ constexpr TeamLaunchRecord::ParseTableT_ TeamLaunchRecord::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(TeamLaunchRecord, _impl_._has_bits_),
       0, // no _extensions_
-      16, 120,  // max_field_number, fast_idx_mask
+      17, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294901760,  // skipmap
+      4294836224,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      16,  // num_field_entries
+      17,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -804,10 +810,7 @@ constexpr TeamLaunchRecord::ParseTableT_ TeamLaunchRecord::InternalGenerateParse
       ::_pbi::TcParser::GetTable<::teampb::TeamLaunchRecord>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 owner_revision = 16;
-      {::_pbi::TcParser::FastV64S2,
-       {384, 15, 0,
-        PROTOBUF_FIELD_OFFSET(TeamLaunchRecord, _impl_.owner_revision_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 actor_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TeamLaunchRecord, _impl_.actor_id_), 3>(),
        {8, 3, 0,
@@ -868,6 +871,28 @@ constexpr TeamLaunchRecord::ParseTableT_ TeamLaunchRecord::InternalGenerateParse
       {::_pbi::TcParser::FastUS1,
        {122, 2, 0,
         PROTOBUF_FIELD_OFFSET(TeamLaunchRecord, _impl_.owner_account_)}},
+      // uint64 owner_revision = 16;
+      {::_pbi::TcParser::FastV64S2,
+       {384, 15, 0,
+        PROTOBUF_FIELD_OFFSET(TeamLaunchRecord, _impl_.owner_revision_)}},
+      // uint32 mode = 17;
+      {::_pbi::TcParser::FastV32S2,
+       {392, 16, 0,
+        PROTOBUF_FIELD_OFFSET(TeamLaunchRecord, _impl_.mode_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -903,6 +928,8 @@ constexpr TeamLaunchRecord::ParseTableT_ TeamLaunchRecord::InternalGenerateParse
       {PROTOBUF_FIELD_OFFSET(TeamLaunchRecord, _impl_.owner_account_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 owner_revision = 16;
       {PROTOBUF_FIELD_OFFSET(TeamLaunchRecord, _impl_.owner_revision_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 mode = 17;
+      {PROTOBUF_FIELD_OFFSET(TeamLaunchRecord, _impl_.mode_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -940,7 +967,8 @@ inline constexpr TeamLaunchRecord::Impl_::Impl_(
         enqueued_ms_{::uint64_t{0u}},
         not_before_ms_{::uint64_t{0u}},
         battle_id_{::uint64_t{0u}},
-        owner_revision_{::uint64_t{0u}} {}
+        owner_revision_{::uint64_t{0u}},
+        mode_{0u} {}
 
 template <typename>
 constexpr TeamLaunchRecord::TeamLaunchRecord(::_pbi::ConstantInitialized,
@@ -3380,7 +3408,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRecord, _impl_._has_bits_),
-        19, // hasbit index offset
+        20, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRecord, _impl_.actor_id_),
         PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRecord, _impl_.request_high_),
         PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRecord, _impl_.request_low_),
@@ -3397,6 +3425,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRecord, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRecord, _impl_.owner_account_),
         PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRecord, _impl_.owner_revision_),
+        PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRecord, _impl_.mode_),
         3,
         4,
         5,
@@ -3413,9 +3442,10 @@ const ::uint32_t
         1,
         2,
         15,
+        16,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRegionRecord, _impl_._has_bits_),
-        15, // hasbit index offset
+        16, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRegionRecord, _impl_.actor_id_),
         PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRegionRecord, _impl_.request_high_),
         PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRegionRecord, _impl_.request_low_),
@@ -3428,6 +3458,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRegionRecord, _impl_.expires_ms_),
         PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRegionRecord, _impl_.max_rtt_ms_),
         PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRegionRecord, _impl_.home_zone_),
+        PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRegionRecord, _impl_.mode_),
         0,
         1,
         2,
@@ -3440,6 +3471,7 @@ const ::uint32_t
         10,
         9,
         11,
+        12,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::teampb::TeamLaunchRoleRecord, _impl_._has_bits_),
         8, // hasbit index offset
@@ -3472,8 +3504,8 @@ static const ::_pbi::MigrationSchema
         {128, sizeof(::teampb::TeamLaunchOriginal)},
         {153, sizeof(::teampb::TeamLaunchData)},
         {166, sizeof(::teampb::TeamLaunchRecord)},
-        {201, sizeof(::teampb::TeamLaunchRegionRecord)},
-        {228, sizeof(::teampb::TeamLaunchRoleRecord)},
+        {203, sizeof(::teampb::TeamLaunchRegionRecord)},
+        {232, sizeof(::teampb::TeamLaunchRoleRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3563,7 +3595,7 @@ const char descriptor_table_protodef_proto_2fteam_2fteam_5fauthority_2eproto[] A
     "cord\030\003 \001(\0132\022.teampb.TeamRecord\022,\n\010origin"
     "al\030\004 \001(\0132\032.teampb.TeamLaunchOriginal\0224\n\017"
     "spectator_exits\030\005 \003(\0132\033.match.MatchSpect"
-    "atorRecord\"\203\004\n\020TeamLaunchRecord\022\020\n\010actor"
+    "atorRecord\"\221\004\n\020TeamLaunchRecord\022\020\n\010actor"
     "_id\030\001 \001(\004\022\024\n\014request_high\030\002 \001(\004\022\023\n\013reque"
     "st_low\030\003 \001(\004\022\017\n\007team_id\030\004 \001(\004\022\024\n\014team_ve"
     "rsion\030\005 \001(\004\022\022\n\nlock_token\030\006 \001(\t\022\021\n\tconfi"
@@ -3571,43 +3603,44 @@ const char descriptor_table_protodef_proto_2fteam_2fteam_5fauthority_2eproto[] A
     "r_count\030\t \001(\r\022\r\n\005state\030\n \001(\r\022\023\n\013enqueued"
     "_ms\030\013 \001(\004\022\025\n\rnot_before_ms\030\014 \001(\004\022\021\n\tbatt"
     "le_id\030\r \001(\004\022\017\n\007payload\030\016 \001(\014\022\025\n\rowner_ac"
-    "count\030\017 \001(\t\022\026\n\016owner_revision\030\020 \001(\004:\252\001\212\222"
-    "\364\001\013team_launch\222\222\364\001!actor_id,request_high"
-    ",request_low\332\222\364\001ostate,enqueued_ms,actor"
-    "_id,request_high,request_low;team_id,sta"
-    "te,enqueued_ms,actor_id,request_high,req"
-    "uest_low\"\337\006\n\026TeamLaunchRegionRecord\022\020\n\010a"
-    "ctor_id\030\001 \001(\004\022\024\n\014request_high\030\002 \001(\004\022\023\n\013r"
-    "equest_low\030\003 \001(\004\022\027\n\017physical_region\030\004 \001("
-    "\r\022\021\n\tconfig_id\030\005 \001(\r\022\023\n\013target_size\030\006 \001("
-    "\r\022\024\n\014member_count\030\007 \001(\r\022\027\n\017local_preferr"
-    "ed\030\010 \001(\010\022\023\n\013enqueued_ms\030\t \001(\004\022\022\n\nexpires"
-    "_ms\030\n \001(\004\022\022\n\nmax_rtt_ms\030\013 \001(\r\022\021\n\thome_zo"
-    "ne\030\014 \001(\r:\307\004\212\222\364\001\022team_launch_region\222\222\364\0011a"
-    "ctor_id,request_high,request_low,physica"
-    "l_region\332\222\364\001\364\003physical_region,config_id,"
-    "target_size,member_count,local_preferred"
-    ",enqueued_ms,actor_id,request_high,reque"
-    "st_low;physical_region,config_id,target_"
-    "size,member_count,enqueued_ms,actor_id,r"
-    "equest_high,request_low;expires_ms,actor"
-    "_id,request_high,request_low,physical_re"
-    "gion;physical_region,config_id,target_si"
-    "ze,member_count,home_zone,local_preferre"
-    "d,enqueued_ms,actor_id,request_high,requ"
-    "est_low;physical_region,config_id,target"
-    "_size,member_count,home_zone,enqueued_ms"
-    ",actor_id,request_high,request_low\"\362\001\n\024T"
-    "eamLaunchRoleRecord\022\020\n\010actor_id\030\001 \001(\004\022\024\n"
-    "\014request_high\030\002 \001(\004\022\023\n\013request_low\030\003 \001(\004"
-    "\022\021\n\tplayer_id\030\004 \001(\004\022\r\n\005state\030\005 \001(\r:{\212\222\364\001"
-    "\020team_launch_role\222\222\364\001+actor_id,request_h"
-    "igh,request_low,player_id\332\222\364\0011player_id,"
-    "state,actor_id,request_high,request_low2"
-    "h\n\rTeamAuthority\022W\n\016ReadMembership\022!.tea"
-    "mpb.ReadTeamMembershipRequest\032\".teampb.R"
-    "eadTeamMembershipResponseB\rZ\004team\200\001\000\230\324a\017"
-    "b\006proto3"
+    "count\030\017 \001(\t\022\026\n\016owner_revision\030\020 \001(\004\022\014\n\004m"
+    "ode\030\021 \001(\r:\252\001\212\222\364\001\013team_launch\222\222\364\001!actor_i"
+    "d,request_high,request_low\332\222\364\001ostate,enq"
+    "ueued_ms,actor_id,request_high,request_l"
+    "ow;team_id,state,enqueued_ms,actor_id,re"
+    "quest_high,request_low\"\201\007\n\026TeamLaunchReg"
+    "ionRecord\022\020\n\010actor_id\030\001 \001(\004\022\024\n\014request_h"
+    "igh\030\002 \001(\004\022\023\n\013request_low\030\003 \001(\004\022\027\n\017physic"
+    "al_region\030\004 \001(\r\022\021\n\tconfig_id\030\005 \001(\r\022\023\n\013ta"
+    "rget_size\030\006 \001(\r\022\024\n\014member_count\030\007 \001(\r\022\027\n"
+    "\017local_preferred\030\010 \001(\010\022\023\n\013enqueued_ms\030\t "
+    "\001(\004\022\022\n\nexpires_ms\030\n \001(\004\022\022\n\nmax_rtt_ms\030\013 "
+    "\001(\r\022\021\n\thome_zone\030\014 \001(\r\022\014\n\004mode\030\r \001(\r:\333\004\212"
+    "\222\364\001\022team_launch_region\222\222\364\0011actor_id,requ"
+    "est_high,request_low,physical_region\332\222\364\001"
+    "\210\004physical_region,mode,config_id,target_"
+    "size,member_count,local_preferred,enqueu"
+    "ed_ms,actor_id,request_high,request_low;"
+    "physical_region,mode,config_id,target_si"
+    "ze,member_count,enqueued_ms,actor_id,req"
+    "uest_high,request_low;expires_ms,actor_i"
+    "d,request_high,request_low,physical_regi"
+    "on;physical_region,mode,config_id,target"
+    "_size,member_count,home_zone,local_prefe"
+    "rred,enqueued_ms,actor_id,request_high,r"
+    "equest_low;physical_region,mode,config_i"
+    "d,target_size,member_count,home_zone,enq"
+    "ueued_ms,actor_id,request_high,request_l"
+    "ow\"\362\001\n\024TeamLaunchRoleRecord\022\020\n\010actor_id\030"
+    "\001 \001(\004\022\024\n\014request_high\030\002 \001(\004\022\023\n\013request_l"
+    "ow\030\003 \001(\004\022\021\n\tplayer_id\030\004 \001(\004\022\r\n\005state\030\005 \001"
+    "(\r:{\212\222\364\001\020team_launch_role\222\222\364\001+actor_id,r"
+    "equest_high,request_low,player_id\332\222\364\0011pl"
+    "ayer_id,state,actor_id,request_high,requ"
+    "est_low2h\n\rTeamAuthority\022W\n\016ReadMembersh"
+    "ip\022!.teampb.ReadTeamMembershipRequest\032\"."
+    "teampb.ReadTeamMembershipResponseB\rZ\004tea"
+    "m\200\001\000\230\324a\017b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fteam_2fteam_5fauthority_2eproto_deps[6] = {
@@ -3622,7 +3655,7 @@ static ::absl::once_flag descriptor_table_proto_2fteam_2fteam_5fauthority_2eprot
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fteam_2fteam_5fauthority_2eproto = {
     false,
     false,
-    4408,
+    4456,
     descriptor_table_protodef_proto_2fteam_2fteam_5fauthority_2eproto,
     "proto/team/team_authority.proto",
     &descriptor_table_proto_2fteam_2fteam_5fauthority_2eproto_once,
@@ -7981,9 +8014,9 @@ TeamLaunchRecord::TeamLaunchRecord(
                offsetof(Impl_, actor_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, actor_id_),
-           offsetof(Impl_, owner_revision_) -
+           offsetof(Impl_, mode_) -
                offsetof(Impl_, actor_id_) +
-               sizeof(Impl_::owner_revision_));
+               sizeof(Impl_::mode_));
 
   // @@protoc_insertion_point(copy_constructor:teampb.TeamLaunchRecord)
 }
@@ -8000,9 +8033,9 @@ inline void TeamLaunchRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, actor_id_),
            0,
-           offsetof(Impl_, owner_revision_) -
+           offsetof(Impl_, mode_) -
                offsetof(Impl_, actor_id_) +
-               sizeof(Impl_::owner_revision_));
+               sizeof(Impl_::mode_));
 }
 TeamLaunchRecord::~TeamLaunchRecord() {
   // @@protoc_insertion_point(destructor:teampb.TeamLaunchRecord)
@@ -8076,6 +8109,7 @@ PROTOBUF_NOINLINE void TeamLaunchRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.owner_revision_) -
         reinterpret_cast<char*>(&_impl_.config_id_)) + sizeof(_impl_.owner_revision_));
   }
+  _impl_.mode_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -8244,6 +8278,15 @@ PROTOBUF_NOINLINE void TeamLaunchRecord::Clear() {
     }
   }
 
+  // uint32 mode = 17;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_mode() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          17, this_._internal_mode(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -8385,6 +8428,15 @@ PROTOBUF_NOINLINE void TeamLaunchRecord::Clear() {
       }
     }
   }
+   {
+    // uint32 mode = 17;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_mode() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_mode());
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -8498,6 +8550,11 @@ void TeamLaunchRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (from._internal_mode() != 0) {
+      _this->_impl_.mode_ = from._impl_.mode_;
+    }
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -8521,8 +8578,8 @@ void TeamLaunchRecord::InternalSwap(TeamLaunchRecord* PROTOBUF_RESTRICT PROTOBUF
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.payload_, &other->_impl_.payload_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.owner_account_, &other->_impl_.owner_account_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(TeamLaunchRecord, _impl_.owner_revision_)
-      + sizeof(TeamLaunchRecord::_impl_.owner_revision_)
+      PROTOBUF_FIELD_OFFSET(TeamLaunchRecord, _impl_.mode_)
+      + sizeof(TeamLaunchRecord::_impl_.mode_)
       - PROTOBUF_FIELD_OFFSET(TeamLaunchRecord, _impl_.actor_id_)>(
           reinterpret_cast<char*>(&_impl_.actor_id_),
           reinterpret_cast<char*>(&other->_impl_.actor_id_));
@@ -8563,9 +8620,9 @@ inline void TeamLaunchRegionRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE a
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, actor_id_),
            0,
-           offsetof(Impl_, home_zone_) -
+           offsetof(Impl_, mode_) -
                offsetof(Impl_, actor_id_) +
-               sizeof(Impl_::home_zone_));
+               sizeof(Impl_::mode_));
 }
 TeamLaunchRegionRecord::~TeamLaunchRegionRecord() {
   // @@protoc_insertion_point(destructor:teampb.TeamLaunchRegionRecord)
@@ -8620,10 +8677,10 @@ PROTOBUF_NOINLINE void TeamLaunchRegionRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.enqueued_ms_) -
         reinterpret_cast<char*>(&_impl_.actor_id_)) + sizeof(_impl_.enqueued_ms_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     ::memset(&_impl_.local_preferred_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.home_zone_) -
-        reinterpret_cast<char*>(&_impl_.local_preferred_)) + sizeof(_impl_.home_zone_));
+        reinterpret_cast<char*>(&_impl_.mode_) -
+        reinterpret_cast<char*>(&_impl_.local_preferred_)) + sizeof(_impl_.mode_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -8756,6 +8813,15 @@ PROTOBUF_NOINLINE void TeamLaunchRegionRecord::Clear() {
     }
   }
 
+  // uint32 mode = 13;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_mode() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          13, this_._internal_mode(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -8839,7 +8905,7 @@ PROTOBUF_NOINLINE void TeamLaunchRegionRecord::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     // bool local_preferred = 8;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_local_preferred() != 0) {
@@ -8865,6 +8931,13 @@ PROTOBUF_NOINLINE void TeamLaunchRegionRecord::Clear() {
       if (this_._internal_home_zone() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_home_zone());
+      }
+    }
+    // uint32 mode = 13;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_mode() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_mode());
       }
     }
   }
@@ -8927,7 +9000,7 @@ void TeamLaunchRegionRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_local_preferred() != 0) {
         _this->_impl_.local_preferred_ = from._impl_.local_preferred_;
@@ -8946,6 +9019,11 @@ void TeamLaunchRegionRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_home_zone() != 0) {
         _this->_impl_.home_zone_ = from._impl_.home_zone_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_mode() != 0) {
+        _this->_impl_.mode_ = from._impl_.mode_;
       }
     }
   }
@@ -8967,8 +9045,8 @@ void TeamLaunchRegionRecord::InternalSwap(TeamLaunchRegionRecord* PROTOBUF_RESTR
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(TeamLaunchRegionRecord, _impl_.home_zone_)
-      + sizeof(TeamLaunchRegionRecord::_impl_.home_zone_)
+      PROTOBUF_FIELD_OFFSET(TeamLaunchRegionRecord, _impl_.mode_)
+      + sizeof(TeamLaunchRegionRecord::_impl_.mode_)
       - PROTOBUF_FIELD_OFFSET(TeamLaunchRegionRecord, _impl_.actor_id_)>(
           reinterpret_cast<char*>(&_impl_.actor_id_),
           reinterpret_cast<char*>(&other->_impl_.actor_id_));

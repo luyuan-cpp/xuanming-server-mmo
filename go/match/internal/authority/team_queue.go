@@ -20,7 +20,8 @@ func (s *Store) EnqueueTeamLaunchTx(ctx context.Context, tx *sql.Tx, launch *tea
 	if err != nil {
 		return err
 	}
-	if launch.State != 1 || launch.TargetSize <= launch.MemberCount || launch.TargetSize > config.TeamCapacity {
+	mode := TeamLaunchMode(launch)
+	if launch.State != 1 || !validTeamQueueMode(mode) || launch.TargetSize < launch.MemberCount || (launch.TargetSize == launch.MemberCount && mode != uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM)) || launch.TargetSize > config.TeamCapacity {
 		return ErrDirectConflict
 	}
 	entryGroup := make([]*pb.MatchAuthorityTicketRecord, 0, len(data.Members))
@@ -67,7 +68,7 @@ func (s *Store) EnqueueTeamLaunchTx(ctx context.Context, tx *sql.Tx, launch *tea
 		if expiry <= stamp || len(Latencies(profile, stamp, s.Config.HardLatencyMs)) == 0 {
 			return errors.New("team: 原成员地域测量已失效")
 		}
-		ticket := &pb.MatchAuthorityTicketRecord{PlayerId: player, Ticket: member.Ticket, RequestId: data.Original.Request.RequestId, Mode: uint32(pb.MatchMode_MATCH_MODE_PVE_TEAM), ConfigId: launch.ConfigId, TeamSize: launch.TargetSize, State: 1, EnqueuedMs: launch.EnqueuedMs, NotBeforeMs: launch.NotBeforeMs, ZoneId: data.Original.Zones[player], TeamId: launch.TeamId, NetworkProfile: payload, ExpiresMs: expiry, OwnerAccount: member.Original.OwnerAccount, OwnerRevision: member.Original.OwnerRevision}
+		ticket := &pb.MatchAuthorityTicketRecord{PlayerId: player, Ticket: member.Ticket, RequestId: data.Original.Request.RequestId, Mode: mode, ConfigId: launch.ConfigId, TeamSize: launch.TargetSize, State: 1, EnqueuedMs: launch.EnqueuedMs, NotBeforeMs: launch.NotBeforeMs, ZoneId: data.Original.Zones[player], TeamId: launch.TeamId, NetworkProfile: payload, ExpiresMs: expiry, OwnerAccount: member.Original.OwnerAccount, OwnerRevision: member.Original.OwnerRevision}
 		if _, err = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket=?,request_id=?,mode=?,config_id=?,team_size=?,state=1,enqueued_ms=?,not_before_ms=?,zone_id=?,rating_centi=0,formation_id=0,team_id=?,network_profile=?,expires_ms=?,selected_region=0,owner_account=?,owner_revision=? WHERE player_id=?", ticket.Ticket, ticket.RequestId, ticket.Mode, ticket.ConfigId, ticket.TeamSize, ticket.EnqueuedMs, ticket.NotBeforeMs, ticket.ZoneId, ticket.TeamId, ticket.NetworkProfile, ticket.ExpiresMs, ticket.OwnerAccount, ticket.OwnerRevision, player); err != nil {
 			return err
 		}
@@ -120,7 +121,7 @@ func (s *Store) replaceTeamLaunchRegions(ctx context.Context, tx *sql.Tx, launch
 		preferred := PreferredRegion(profile, stamp)
 		if index == 0 {
 			for region, rtt := range latencies {
-				common[region] = &teampb.TeamLaunchRegionRecord{ActorId: launch.ActorId, RequestHigh: launch.RequestHigh, RequestLow: launch.RequestLow, PhysicalRegion: region, ConfigId: launch.ConfigId, TargetSize: launch.TargetSize, MemberCount: launch.MemberCount, LocalPreferred: preferred == region, EnqueuedMs: launch.EnqueuedMs, ExpiresMs: ticket.ExpiresMs, MaxRttMs: rtt, HomeZone: home}
+				common[region] = &teampb.TeamLaunchRegionRecord{ActorId: launch.ActorId, RequestHigh: launch.RequestHigh, RequestLow: launch.RequestLow, PhysicalRegion: region, ConfigId: launch.ConfigId, TargetSize: launch.TargetSize, MemberCount: launch.MemberCount, LocalPreferred: preferred == region, EnqueuedMs: launch.EnqueuedMs, ExpiresMs: ticket.ExpiresMs, MaxRttMs: rtt, HomeZone: home, Mode: TeamLaunchMode(launch)}
 			}
 		} else {
 			for region, row := range common {
@@ -142,7 +143,7 @@ func (s *Store) replaceTeamLaunchRegions(ctx context.Context, tx *sql.Tx, launch
 	sort.Slice(regions, func(i, j int) bool { return regions[i] < regions[j] })
 	for _, region := range regions {
 		row := common[region]
-		if _, err := tx.ExecContext(ctx, "INSERT INTO team_launch_region(actor_id,request_high,request_low,physical_region,config_id,target_size,member_count,local_preferred,enqueued_ms,expires_ms,max_rtt_ms,home_zone) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", row.ActorId, row.RequestHigh, row.RequestLow, row.PhysicalRegion, row.ConfigId, row.TargetSize, row.MemberCount, row.LocalPreferred, row.EnqueuedMs, row.ExpiresMs, row.MaxRttMs, row.HomeZone); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO team_launch_region(actor_id,request_high,request_low,physical_region,config_id,target_size,member_count,local_preferred,enqueued_ms,expires_ms,max_rtt_ms,home_zone,mode) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", row.ActorId, row.RequestHigh, row.RequestLow, row.PhysicalRegion, row.ConfigId, row.TargetSize, row.MemberCount, row.LocalPreferred, row.EnqueuedMs, row.ExpiresMs, row.MaxRttMs, row.HomeZone, row.Mode); err != nil {
 			return err
 		}
 	}

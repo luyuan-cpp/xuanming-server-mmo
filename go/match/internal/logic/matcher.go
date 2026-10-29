@@ -56,6 +56,12 @@ const maxAnchorAttempts = 32
 // 测试能把它换成记录器 —— 真 RunGather 要 gRPC 到 scene / battle 节点。
 var runGatherFn = RunGather
 
+// 新PVP按完整单位确定分边；旧模式继续使用原测试缝和原分队规则。
+var runPvpTeamGatherFn = func(s *svc.ServiceContext, mode matchpb.MatchMode, config uint32,
+	members []uint64, tickets map[uint64]string, teams map[uint64]uint32) {
+	runGatherWithOptions(s, mode, config, members, true, true, tickets, gatherOptions{teamByPlayer: teams})
+}
+
 // setQueueDepthFn 是 queue_depth gauge 的写入口,同样留作测试注入点
 // (验证"只有持锁实例上报、剔除归零",见设计决策 D5c)。
 var setQueueDepthFn = metrics.SetQueueDepth
@@ -262,7 +268,8 @@ func matchQueueOnce(svcCtx *svc.ServiceContext, queueKey string) {
 		if time.Now().After(holdDeadline) {
 			return
 		}
-		members, tickets, ok := popGroup(svcCtx, queueKey, required)
+		teams := make(map[uint64]uint32, required)
+		members, tickets, ok := popGroup(svcCtx, queueKey, required, teams)
 		if !ok {
 			return
 		}
@@ -307,6 +314,10 @@ func matchQueueOnce(svcCtx *svc.ServiceContext, queueKey string) {
 		logx.Infof("[matcher] Match formed successfully queue=%s members=%v matched_ttl=%ds", queueKey, members, matchedTTL)
 		group := members
 		svcCtx.LaunchRelayTask("match.gather.queue", func() {
+			if matchpb.MatchMode(mode) == matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
+				runPvpTeamGatherFn(svcCtx, matchpb.MatchMode(mode), config, group, tickets, teams)
+				return
+			}
 			runGatherFn(svcCtx, matchpb.MatchMode(mode), config, group, true, tickets)
 		})
 	}
@@ -342,6 +353,8 @@ func requiredPlayers(svcCtx *svc.ServiceContext, mode int32, config uint32) uint
 		return 2
 	case matchpb.MatchMode_MATCH_MODE_5V5:
 		return required5v5Players
+	case matchpb.MatchMode_MATCH_MODE_PVP_TEAM:
+		return kMaxBattleTeamSize * 2
 	case matchpb.MatchMode_MATCH_MODE_PVE_TEAM:
 		required := svcCtx.Config.PveTeamSizeFor(config)
 		// 队伍上限 5 收口(D14),与 JoinQueue 同口径。
@@ -360,6 +373,9 @@ func requiredPlayers(svcCtx *svc.ServiceContext, mode int32, config uint32) uint
 // 这里把凑满人数写进 key,那里读回来,两边不会再各算各的。
 // 前置条件:PVE_TEAM 的 required 已由 JoinQueue 校验在 2..副本上限 以内(1 人档不入队)。
 func queueKeyForJoin(mode matchpb.MatchMode, battleConfigId uint32, required uint32) string {
+	if mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
+		return matchSizedQueueKey(int32(mode), battleConfigId, required/2)
+	}
 	if mode == matchpb.MatchMode_MATCH_MODE_PVE_TEAM {
 		return matchSizedQueueKey(int32(mode), battleConfigId, required)
 	}
@@ -374,6 +390,12 @@ func queueKeyForJoin(mode matchpb.MatchMode, battleConfigId uint32, required uin
 func requiredPlayersForQueue(svcCtx *svc.ServiceContext, queueKey string, mode int32, config uint32) uint32 {
 	limit := requiredPlayers(svcCtx, mode, config)
 	size := queueTeamSize(queueKey)
+	if matchpb.MatchMode(mode) == matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
+		if size == 0 || size > kMaxBattleTeamSize {
+			return 0
+		}
+		return size * 2
+	}
 	if size == 0 {
 		return limit
 	}
@@ -434,7 +456,8 @@ type groupPicker struct {
 	dropped  map[int]bool            // 已从队列剔除 / 判定无效的快照下标
 	// deferred 本轮搁置的成员(player_id → 票据):票据有效、但带着上一局开局失败没清掉的备战锁。
 	// 不删票、不摘 list,只是本轮不进组;补位单里有这样的成员时整单本轮不可用(见 party_match.go)。
-	deferred map[uint64]*queueTicket
+	deferred     map[uint64]*queueTicket
+	teamByPlayer map[uint64]uint32
 }
 
 // validate 校验一个队列成员并缓存结果:ticket 必须存在且处于 queued 态(取消
@@ -544,7 +567,7 @@ func (p *groupPicker) drop(idx int) {
 //     (校验与摘出之间被 CancelQueue 摘走)→ 已摘出者放回队首,本轮不弹。
 //
 // 校验失败 / 摘出发生在摘出之前的成员都不需要回滚;Redis 抖动直接结束本轮。
-func popGroup(svcCtx *svc.ServiceContext, queueKey string, required uint32) ([]uint64, map[uint64]string, bool) {
+func popGroup(svcCtx *svc.ServiceContext, queueKey string, required uint32, assignments ...map[uint64]uint32) ([]uint64, map[uint64]string, bool) {
 	mode, config, err := parseQueueKey(queueKey)
 	if err != nil {
 		logx.Errorf("[matcher] Could not parse queue key %q: %v", queueKey, err)
@@ -562,15 +585,19 @@ func popGroup(svcCtx *svc.ServiceContext, queueKey string, required uint32) ([]u
 		return nil, nil, false
 	}
 	p := &groupPicker{
-		svcCtx:   svcCtx,
-		queueKey: queueKey,
-		rankKey:  rankKey,
-		modeName: matchpb.MatchMode(mode).String(),
-		rated:    isRatedMode(matchpb.MatchMode(mode)),
-		entries:  entries,
-		tickets:  make(map[uint64]*queueTicket, required),
-		dropped:  make(map[int]bool),
-		deferred: make(map[uint64]*queueTicket),
+		svcCtx:       svcCtx,
+		queueKey:     queueKey,
+		rankKey:      rankKey,
+		modeName:     matchpb.MatchMode(mode).String(),
+		rated:        isRatedMode(matchpb.MatchMode(mode)),
+		entries:      entries,
+		tickets:      make(map[uint64]*queueTicket, required),
+		dropped:      make(map[int]bool),
+		deferred:     make(map[uint64]*queueTicket),
+		teamByPlayer: make(map[uint64]uint32),
+	}
+	if len(assignments) > 0 && assignments[0] != nil {
+		p.teamByPlayer = assignments[0]
 	}
 	if !p.rated {
 		// 非评分队列(PVE 人数档 / 旧格式 PVE_TEAM 队列)不看评分,按「单位」凑满:单人是 1 人单位,

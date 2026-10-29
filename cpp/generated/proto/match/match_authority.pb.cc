@@ -2279,11 +2279,11 @@ constexpr MatchFormationMember::ParseTableT_ MatchFormationMember::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(MatchFormationMember, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -2293,14 +2293,19 @@ constexpr MatchFormationMember::ParseTableT_ MatchFormationMember::InternalGener
       ::_pbi::TcParser::GetTable<::match::MatchFormationMember>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string ticket = 2;
-      {::_pbi::TcParser::FastUS1,
-       {18, 0, 0,
-        PROTOBUF_FIELD_OFFSET(MatchFormationMember, _impl_.ticket_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchFormationMember, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(MatchFormationMember, _impl_.player_id_)}},
+      // string ticket = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(MatchFormationMember, _impl_.ticket_)}},
+      // uint32 team_index = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchFormationMember, _impl_.team_index_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(MatchFormationMember, _impl_.team_index_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -2308,6 +2313,8 @@ constexpr MatchFormationMember::ParseTableT_ MatchFormationMember::InternalGener
       {PROTOBUF_FIELD_OFFSET(MatchFormationMember, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string ticket = 2;
       {PROTOBUF_FIELD_OFFSET(MatchFormationMember, _impl_.ticket_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 team_index = 3;
+      {PROTOBUF_FIELD_OFFSET(MatchFormationMember, _impl_.team_index_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -2326,7 +2333,8 @@ inline constexpr MatchFormationMember::Impl_::Impl_(
         ticket_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
-        player_id_{::uint64_t{0u}} {}
+        player_id_{::uint64_t{0u}},
+        team_index_{0u} {}
 
 template <typename>
 constexpr MatchFormationMember::MatchFormationMember(::_pbi::ConstantInitialized,
@@ -4613,11 +4621,13 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::MatchFormationMember, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::match::MatchFormationMember, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::match::MatchFormationMember, _impl_.ticket_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchFormationMember, _impl_.team_index_),
         1,
         0,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::MatchFormationRecord, _impl_._has_bits_),
         25, // hasbit index offset
@@ -4793,14 +4803,14 @@ static const ::_pbi::MigrationSchema
         {208, sizeof(::match::MatchChallengeInvitationRecord)},
         {235, sizeof(::match::MatchGlobalPolicyRecord)},
         {242, sizeof(::match::MatchFormationMember)},
-        {249, sizeof(::match::MatchFormationRecord)},
-        {296, sizeof(::match::MatchPreparedEndpoint)},
-        {303, sizeof(::match::MatchRatingRecord)},
-        {314, sizeof(::match::MatchRatingAppliedRecord)},
-        {323, sizeof(::match::MatchRankSourceRecord)},
-        {336, sizeof(::match::MatchRankOutboxRecord)},
-        {347, sizeof(::match::MatchBattleCompletionRecord)},
-        {380, sizeof(::match::MatchBattleSettlementSourceRecord)},
+        {251, sizeof(::match::MatchFormationRecord)},
+        {298, sizeof(::match::MatchPreparedEndpoint)},
+        {305, sizeof(::match::MatchRatingRecord)},
+        {316, sizeof(::match::MatchRatingAppliedRecord)},
+        {325, sizeof(::match::MatchRankSourceRecord)},
+        {338, sizeof(::match::MatchRankOutboxRecord)},
+        {349, sizeof(::match::MatchBattleCompletionRecord)},
+        {382, sizeof(::match::MatchBattleSettlementSourceRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4929,71 +4939,72 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fauthority_2eproto[]
     "\364\001\001\260\223\364\001\004\270\223\364\001\004\"m\n\027MatchGlobalPolicyRecord"
     "\022\021\n\tpolicy_id\030\001 \001(\r\022\027\n\017contract_digest\030\002"
     " \001(\014:&\212\222\364\001\023match_global_policy\222\222\364\001\tpolic"
-    "y_id\"9\n\024MatchFormationMember\022\021\n\tplayer_i"
-    "d\030\001 \001(\004\022\016\n\006ticket\030\002 \001(\t\"\253\005\n\024MatchFormati"
-    "onRecord\022\021\n\tbattle_id\030\001 \001(\004\022\024\n\014operation"
-    "_id\030\002 \001(\t\022\r\n\005state\030\003 \001(\r\022\027\n\017physical_reg"
-    "ion\030\004 \001(\r\022\026\n\016target_node_id\030\005 \001(\r\022\032\n\022tar"
-    "get_instance_id\030\006 \001(\t\022\027\n\017target_endpoint"
-    "\030\007 \001(\t\022\014\n\004mode\030\010 \001(\r\022\021\n\tconfig_id\030\t \001(\r\022"
-    ",\n\007members\030\n \003(\0132\033.match.MatchFormationM"
-    "ember\022\026\n\016create_request\030\013 \001(\014\022\022\n\ncreated"
-    "_ms\030\014 \001(\004\022\023\n\013deadline_ms\030\r \001(\004\022\023\n\013retry_"
-    "at_ms\030\016 \001(\004\022\030\n\020activity_context\030\017 \001(\014\022\032\n"
-    "\022requeue_on_failure\030\020 \001(\010\022.\n\010prepared\030\021 "
-    "\003(\0132\034.match.MatchPreparedEndpoint\022 \n\030out"
-    "come_protocol_version\030\022 \001(\r\022#\n\033preflight"
-    "_supported_version\030\023 \001(\r\022\035\n\025preflight_in"
-    "stance_id\030\024 \001(\t\022(\n adopted_outcome_proto"
-    "col_version\030\025 \001(\r\022 \n\030adopted_outcome_obs"
-    "erved\030\026 \001(\010:8\212\222\364\001\017match_formation\222\222\364\001\tba"
-    "ttle_id\332\222\364\001\021state,retry_at_ms\"<\n\025MatchPr"
-    "eparedEndpoint\022\021\n\tplayer_id\030\001 \001(\004\022\020\n\010end"
-    "point\030\002 \001(\t\"\200\001\n\021MatchRatingRecord\022\021\n\tpla"
-    "yer_id\030\001 \001(\004\022\024\n\014rating_centi\030\002 \001(\003\022\r\n\005ga"
-    "mes\030\003 \001(\004\022\022\n\nupdated_ms\030\004 \001(\004:\037\212\222\364\001\014matc"
-    "h_rating\222\222\364\001\tplayer_id\"\202\001\n\030MatchRatingAp"
-    "pliedRecord\022\021\n\tbattle_id\030\001 \001(\004\022\026\n\016payloa"
-    "d_digest\030\002 \001(\014\022\022\n\napplied_ms\030\003 \001(\004:\'\212\222\364\001"
-    "\024match_rating_applied\222\222\364\001\tbattle_id\"\254\001\n\025"
-    "MatchRankSourceRecord\022\024\n\014source_epoch\030\001 "
-    "\001(\004\022\027\n\017produced_cursor\030\002 \001(\004\022\030\n\020committe"
-    "d_cursor\030\003 \001(\004\022\020\n\010board_id\030\004 \001(\004\022\017\n\007stop"
-    "ped\030\005 \001(\010:\'\212\222\364\001\021match_rank_source\222\222\364\001\014so"
-    "urce_epoch\"\240\001\n\025MatchRankOutboxRecord\022\024\n\014"
-    "source_epoch\030\001 \001(\004\022\025\n\rsource_cursor\030\002 \001("
-    "\004\022\022\n\nrequest_id\030\003 \001(\004\022\017\n\007entries\030\004 \001(\014:5"
-    "\212\222\364\001\021match_rank_outbox\222\222\364\001\032source_epoch,"
-    "source_cursor\"\257\004\n\033MatchBattleCompletionR"
-    "ecord\022\021\n\tbattle_id\030\001 \001(\004\022\023\n\013raw_payload\030"
-    "\002 \001(\014\022\026\n\016payload_digest\030\003 \001(\014\022\026\n\016format_"
-    "version\030\004 \001(\r\022\023\n\013archived_ms\030\005 \001(\004\022\024\n\014so"
-    "urce_topic\030\006 \001(\t\022\030\n\020source_partition\030\007 \001"
-    "(\005\022\025\n\rsource_offset\030\010 \001(\003\022.\n\010decision\030\t "
-    "\001(\0162\034.match.BattleOutcomeDecision\022;\n\013sou"
-    "rce_kind\030\n \001(\0162&.match.MatchBattleComple"
-    "tionSourceKind\022\036\n\026placement_operation_id"
-    "\030\013 \001(\t\022\032\n\022target_instance_id\030\014 \001(\t\022 \n\030ou"
-    "tcome_protocol_version\030\r \001(\r\022\030\n\020result_p"
-    "ublished\030\016 \001(\010\022\025\n\rnext_retry_ms\030\017 \001(\004:`\212"
-    "\222\364\001\027match_battle_completion\222\222\364\001\tbattle_i"
-    "d\332\222\364\0011decision,result_published,next_ret"
-    "ry_ms,battle_id\"\236\003\n!MatchBattleSettlemen"
-    "tSourceRecord\022\021\n\tbattle_id\030\001 \001(\004\022\021\n\tplay"
-    "er_id\030\002 \001(\004\022\030\n\020settlement_proto\030\003 \001(\014\022\026\n"
-    "\016payload_digest\030\004 \001(\014\022\023\n\013archived_ms\030\005 \001"
-    "(\004\022\025\n\rowner_account\030\006 \001(\t\022\026\n\016owner_revis"
-    "ion\030\007 \001(\004\022\024\n\014issued_at_ms\030\010 \001(\004\022\021\n\tinbox"
-    "_seq\030\t \001(\004\022\023\n\013inbox_state\030\n \001(\r\022\026\n\016dispa"
-    "tch_state\030\013 \001(\r\022\025\n\rnext_retry_ms\030\014 \001(\004:p"
-    "\212\222\364\001\036match_battle_settlement_source\222\222\364\001\023"
-    "battle_id,player_id\332\222\364\0010dispatch_state,n"
-    "ext_retry_ms,battle_id,player_id*\252\001\n\037Mat"
-    "chBattleCompletionSourceKind\022.\n*MATCH_BA"
-    "TTLE_COMPLETION_SOURCE_UNSPECIFIED\020\000\022(\n$"
-    "MATCH_BATTLE_COMPLETION_SOURCE_KAFKA\020\001\022-"
-    "\n)MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_"
-    "RPC\020\002B\rZ\013match/matchb\006proto3"
+    "y_id\"M\n\024MatchFormationMember\022\021\n\tplayer_i"
+    "d\030\001 \001(\004\022\016\n\006ticket\030\002 \001(\t\022\022\n\nteam_index\030\003 "
+    "\001(\r\"\253\005\n\024MatchFormationRecord\022\021\n\tbattle_i"
+    "d\030\001 \001(\004\022\024\n\014operation_id\030\002 \001(\t\022\r\n\005state\030\003"
+    " \001(\r\022\027\n\017physical_region\030\004 \001(\r\022\026\n\016target_"
+    "node_id\030\005 \001(\r\022\032\n\022target_instance_id\030\006 \001("
+    "\t\022\027\n\017target_endpoint\030\007 \001(\t\022\014\n\004mode\030\010 \001(\r"
+    "\022\021\n\tconfig_id\030\t \001(\r\022,\n\007members\030\n \003(\0132\033.m"
+    "atch.MatchFormationMember\022\026\n\016create_requ"
+    "est\030\013 \001(\014\022\022\n\ncreated_ms\030\014 \001(\004\022\023\n\013deadlin"
+    "e_ms\030\r \001(\004\022\023\n\013retry_at_ms\030\016 \001(\004\022\030\n\020activ"
+    "ity_context\030\017 \001(\014\022\032\n\022requeue_on_failure\030"
+    "\020 \001(\010\022.\n\010prepared\030\021 \003(\0132\034.match.MatchPre"
+    "paredEndpoint\022 \n\030outcome_protocol_versio"
+    "n\030\022 \001(\r\022#\n\033preflight_supported_version\030\023"
+    " \001(\r\022\035\n\025preflight_instance_id\030\024 \001(\t\022(\n a"
+    "dopted_outcome_protocol_version\030\025 \001(\r\022 \n"
+    "\030adopted_outcome_observed\030\026 \001(\010:8\212\222\364\001\017ma"
+    "tch_formation\222\222\364\001\tbattle_id\332\222\364\001\021state,re"
+    "try_at_ms\"<\n\025MatchPreparedEndpoint\022\021\n\tpl"
+    "ayer_id\030\001 \001(\004\022\020\n\010endpoint\030\002 \001(\t\"\200\001\n\021Matc"
+    "hRatingRecord\022\021\n\tplayer_id\030\001 \001(\004\022\024\n\014rati"
+    "ng_centi\030\002 \001(\003\022\r\n\005games\030\003 \001(\004\022\022\n\nupdated"
+    "_ms\030\004 \001(\004:\037\212\222\364\001\014match_rating\222\222\364\001\tplayer_"
+    "id\"\202\001\n\030MatchRatingAppliedRecord\022\021\n\tbattl"
+    "e_id\030\001 \001(\004\022\026\n\016payload_digest\030\002 \001(\014\022\022\n\nap"
+    "plied_ms\030\003 \001(\004:\'\212\222\364\001\024match_rating_applie"
+    "d\222\222\364\001\tbattle_id\"\254\001\n\025MatchRankSourceRecor"
+    "d\022\024\n\014source_epoch\030\001 \001(\004\022\027\n\017produced_curs"
+    "or\030\002 \001(\004\022\030\n\020committed_cursor\030\003 \001(\004\022\020\n\010bo"
+    "ard_id\030\004 \001(\004\022\017\n\007stopped\030\005 \001(\010:\'\212\222\364\001\021matc"
+    "h_rank_source\222\222\364\001\014source_epoch\"\240\001\n\025Match"
+    "RankOutboxRecord\022\024\n\014source_epoch\030\001 \001(\004\022\025"
+    "\n\rsource_cursor\030\002 \001(\004\022\022\n\nrequest_id\030\003 \001("
+    "\004\022\017\n\007entries\030\004 \001(\014:5\212\222\364\001\021match_rank_outb"
+    "ox\222\222\364\001\032source_epoch,source_cursor\"\257\004\n\033Ma"
+    "tchBattleCompletionRecord\022\021\n\tbattle_id\030\001"
+    " \001(\004\022\023\n\013raw_payload\030\002 \001(\014\022\026\n\016payload_dig"
+    "est\030\003 \001(\014\022\026\n\016format_version\030\004 \001(\r\022\023\n\013arc"
+    "hived_ms\030\005 \001(\004\022\024\n\014source_topic\030\006 \001(\t\022\030\n\020"
+    "source_partition\030\007 \001(\005\022\025\n\rsource_offset\030"
+    "\010 \001(\003\022.\n\010decision\030\t \001(\0162\034.match.BattleOu"
+    "tcomeDecision\022;\n\013source_kind\030\n \001(\0162&.mat"
+    "ch.MatchBattleCompletionSourceKind\022\036\n\026pl"
+    "acement_operation_id\030\013 \001(\t\022\032\n\022target_ins"
+    "tance_id\030\014 \001(\t\022 \n\030outcome_protocol_versi"
+    "on\030\r \001(\r\022\030\n\020result_published\030\016 \001(\010\022\025\n\rne"
+    "xt_retry_ms\030\017 \001(\004:`\212\222\364\001\027match_battle_com"
+    "pletion\222\222\364\001\tbattle_id\332\222\364\0011decision,resul"
+    "t_published,next_retry_ms,battle_id\"\236\003\n!"
+    "MatchBattleSettlementSourceRecord\022\021\n\tbat"
+    "tle_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\030\n\020settl"
+    "ement_proto\030\003 \001(\014\022\026\n\016payload_digest\030\004 \001("
+    "\014\022\023\n\013archived_ms\030\005 \001(\004\022\025\n\rowner_account\030"
+    "\006 \001(\t\022\026\n\016owner_revision\030\007 \001(\004\022\024\n\014issued_"
+    "at_ms\030\010 \001(\004\022\021\n\tinbox_seq\030\t \001(\004\022\023\n\013inbox_"
+    "state\030\n \001(\r\022\026\n\016dispatch_state\030\013 \001(\r\022\025\n\rn"
+    "ext_retry_ms\030\014 \001(\004:p\212\222\364\001\036match_battle_se"
+    "ttlement_source\222\222\364\001\023battle_id,player_id\332"
+    "\222\364\0010dispatch_state,next_retry_ms,battle_"
+    "id,player_id*\252\001\n\037MatchBattleCompletionSo"
+    "urceKind\022.\n*MATCH_BATTLE_COMPLETION_SOUR"
+    "CE_UNSPECIFIED\020\000\022(\n$MATCH_BATTLE_COMPLET"
+    "ION_SOURCE_KAFKA\020\001\022-\n)MATCH_BATTLE_COMPL"
+    "ETION_SOURCE_BATTLE_RPC\020\002B\rZ\013match/match"
+    "b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto_deps[3] = {
@@ -5005,7 +5016,7 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5fauthority_2epr
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto = {
     false,
     false,
-    6628,
+    6648,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5fauthority_2eproto,
     "proto/match/match_authority.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto_once,
@@ -10124,7 +10135,13 @@ MatchFormationMember::MatchFormationMember(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  _impl_.player_id_ = from._impl_.player_id_;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, team_index_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::team_index_));
 
   // @@protoc_insertion_point(copy_constructor:match.MatchFormationMember)
 }
@@ -10136,7 +10153,12 @@ PROTOBUF_NDEBUG_INLINE MatchFormationMember::Impl_::Impl_(
 
 inline void MatchFormationMember::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.player_id_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, team_index_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::team_index_));
 }
 MatchFormationMember::~MatchFormationMember() {
   // @@protoc_insertion_point(destructor:match.MatchFormationMember)
@@ -10190,7 +10212,11 @@ PROTOBUF_NOINLINE void MatchFormationMember::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.ticket_.ClearNonDefaultToEmpty();
   }
-  _impl_.player_id_ = ::uint64_t{0u};
+  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.team_index_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.team_index_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -10233,6 +10259,15 @@ PROTOBUF_NOINLINE void MatchFormationMember::Clear() {
     }
   }
 
+  // uint32 team_index = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_team_index() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_team_index(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -10258,7 +10293,7 @@ PROTOBUF_NOINLINE void MatchFormationMember::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // string ticket = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_ticket().empty()) {
@@ -10271,6 +10306,13 @@ PROTOBUF_NOINLINE void MatchFormationMember::Clear() {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
+      }
+    }
+    // uint32 team_index = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_team_index() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_team_index());
       }
     }
   }
@@ -10291,7 +10333,7 @@ void MatchFormationMember::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_ticket().empty()) {
         _this->_internal_set_ticket(from._internal_ticket());
@@ -10304,6 +10346,11 @@ void MatchFormationMember::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_team_index() != 0) {
+        _this->_impl_.team_index_ = from._impl_.team_index_;
       }
     }
   }
@@ -10327,7 +10374,12 @@ void MatchFormationMember::InternalSwap(MatchFormationMember* PROTOBUF_RESTRICT 
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ticket_, &other->_impl_.ticket_, arena);
-  swap(_impl_.player_id_, other->_impl_.player_id_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(MatchFormationMember, _impl_.team_index_)
+      + sizeof(MatchFormationMember::_impl_.team_index_)
+      - PROTOBUF_FIELD_OFFSET(MatchFormationMember, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
 }
 
 ::google::protobuf::Metadata MatchFormationMember::GetMetadata() const {

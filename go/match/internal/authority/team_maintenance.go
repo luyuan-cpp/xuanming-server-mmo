@@ -192,7 +192,7 @@ func (s *Store) FinishTeamLaunchTx(ctx context.Context, tx *sql.Tx, launch *team
 	if state != 4 && state != 5 {
 		return ErrDirectConflict
 	}
-	if state == 5 && launch.TargetSize > launch.MemberCount {
+	if state == 5 && (launch.TargetSize > launch.MemberCount || TeamLaunchMode(launch) == uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM)) {
 		return s.requeueFailedTeamLaunchTx(ctx, tx, launch)
 	}
 	if _, err := tx.ExecContext(ctx, "UPDATE team_launch SET state=? WHERE actor_id=? AND request_high=? AND request_low=? AND state=3", state, launch.ActorId, launch.RequestHigh, launch.RequestLow); err != nil {

@@ -3520,41 +3520,42 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fservice_2eproto[] A
     "p_config_id\030\003 \001(\r\022\031\n\021dungeon_config_id\030\004"
     " \001(\r\022\037\n\005teams\030\005 \003(\0132\020.match.MatchTeam\022\017\n"
     "\007zone_id\030\006 \001(\r\"3\n\tMatchTeam\022\022\n\nteam_inde"
-    "x\030\001 \001(\r\022\022\n\nplayer_ids\030\002 \003(\004*\263\001\n\tMatchMod"
+    "x\030\001 \001(\r\022\022\n\nplayer_ids\030\002 \003(\004*\314\001\n\tMatchMod"
     "e\022\032\n\026MATCH_MODE_UNSPECIFIED\020\000\022\022\n\016MATCH_M"
     "ODE_5V5\020\001\022\022\n\016MATCH_MODE_3V3\020\002\022\022\n\016MATCH_M"
     "ODE_1V1\020\003\022\027\n\023MATCH_MODE_PVE_SOLO\020\004\022\027\n\023MA"
     "TCH_MODE_PVE_TEAM\020\005\022\034\n\030MATCH_MODE_PVP_CH"
-    "ALLENGE\020\006*\247\001\n\nQueueState\022\033\n\027QUEUE_STATE_"
-    "UNSPECIFIED\020\000\022\026\n\022QUEUE_STATE_QUEUED\020\001\022\027\n"
-    "\023QUEUE_STATE_MATCHED\020\002\022\025\n\021QUEUE_STATE_RE"
-    "ADY\020\003\022\030\n\024QUEUE_STATE_ENTERING\020\004\022\032\n\026QUEUE"
-    "_STATE_NOT_QUEUED\020\0052\311\007\n\014MatchService\022^\n\023"
-    "GetNetworkProbePlan\022!.match.GetNetworkPr"
-    "obePlanRequest\032\".match.GetNetworkProbePl"
-    "anResponse\"\000\022[\n\022CommitNetworkProbe\022 .mat"
-    "ch.CommitNetworkProbeRequest\032!.match.Com"
-    "mitNetworkProbeResponse\"\000\022@\n\tJoinQueue\022\027"
-    ".match.JoinQueueRequest\032\030.match.JoinQueu"
-    "eResponse\"\000\0222\n\013CancelQueue\022\031.match.Cance"
-    "lQueueRequest\032\006.Empty\"\000\022O\n\016GetQueueStatu"
-    "s\022\034.match.GetQueueStatusRequest\032\035.match."
-    "GetQueueStatusResponse\"\000\022R\n\017ChallengePla"
-    "yer\022\035.match.ChallengePlayerRequest\032\036.mat"
-    "ch.ChallengePlayerResponse\"\000\022U\n\020RespondC"
-    "hallenge\022\036.match.RespondChallengeRequest"
-    "\032\037.match.RespondChallengeResponse\"\000\022A\n\025N"
-    "otifyChallengeInvite\022\031.match.ChallengeIn"
-    "viteS2C\032\006.Empty\"\005\210\231\310\001\002\022A\n\025NotifyChalleng"
-    "eResult\022\031.match.ChallengeResultS2C\032\006.Emp"
-    "ty\"\005\210\231\310\001\002\022F\n\013WatchBattle\022\031.match.WatchBa"
-    "ttleRequest\032\032.match.WatchBattleResponse\""
-    "\000\022R\n\023RequestBattleTicket\022\033.RequestBattle"
-    "TicketRequest\032\034.RequestBattleTicketRespo"
-    "nse\"\000\022a\n\024ListWatchableBattles\022\".match.Li"
-    "stWatchableBattlesRequest\032#.match.ListWa"
-    "tchableBattlesResponse\"\000\032\005\210\250\303\001\001B\021Z\013match"
-    "/match\230\324a\025b\006proto3"
+    "ALLENGE\020\006\022\027\n\023MATCH_MODE_PVP_TEAM\020\007*\247\001\n\nQ"
+    "ueueState\022\033\n\027QUEUE_STATE_UNSPECIFIED\020\000\022\026"
+    "\n\022QUEUE_STATE_QUEUED\020\001\022\027\n\023QUEUE_STATE_MA"
+    "TCHED\020\002\022\025\n\021QUEUE_STATE_READY\020\003\022\030\n\024QUEUE_"
+    "STATE_ENTERING\020\004\022\032\n\026QUEUE_STATE_NOT_QUEU"
+    "ED\020\0052\311\007\n\014MatchService\022^\n\023GetNetworkProbe"
+    "Plan\022!.match.GetNetworkProbePlanRequest\032"
+    "\".match.GetNetworkProbePlanResponse\"\000\022[\n"
+    "\022CommitNetworkProbe\022 .match.CommitNetwor"
+    "kProbeRequest\032!.match.CommitNetworkProbe"
+    "Response\"\000\022@\n\tJoinQueue\022\027.match.JoinQueu"
+    "eRequest\032\030.match.JoinQueueResponse\"\000\0222\n\013"
+    "CancelQueue\022\031.match.CancelQueueRequest\032\006"
+    ".Empty\"\000\022O\n\016GetQueueStatus\022\034.match.GetQu"
+    "eueStatusRequest\032\035.match.GetQueueStatusR"
+    "esponse\"\000\022R\n\017ChallengePlayer\022\035.match.Cha"
+    "llengePlayerRequest\032\036.match.ChallengePla"
+    "yerResponse\"\000\022U\n\020RespondChallenge\022\036.matc"
+    "h.RespondChallengeRequest\032\037.match.Respon"
+    "dChallengeResponse\"\000\022A\n\025NotifyChallengeI"
+    "nvite\022\031.match.ChallengeInviteS2C\032\006.Empty"
+    "\"\005\210\231\310\001\002\022A\n\025NotifyChallengeResult\022\031.match"
+    ".ChallengeResultS2C\032\006.Empty\"\005\210\231\310\001\002\022F\n\013Wa"
+    "tchBattle\022\031.match.WatchBattleRequest\032\032.m"
+    "atch.WatchBattleResponse\"\000\022R\n\023RequestBat"
+    "tleTicket\022\033.RequestBattleTicketRequest\032\034"
+    ".RequestBattleTicketResponse\"\000\022a\n\024ListWa"
+    "tchableBattles\022\".match.ListWatchableBatt"
+    "lesRequest\032#.match.ListWatchableBattlesR"
+    "esponse\"\000\032\005\210\250\303\001\001B\021Z\013match/match\230\324a\025b\006pro"
+    "to3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto_deps[5] = {
@@ -3568,7 +3569,7 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5fservice_2eprot
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto = {
     false,
     false,
-    3618,
+    3643,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5fservice_2eproto,
     "proto/match/match_service.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto_once,
@@ -3588,7 +3589,7 @@ MatchMode_descriptor() {
   return file_level_enum_descriptors_proto_2fmatch_2fmatch_5fservice_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t MatchMode_internal_data_[] = {
-    458752u, 0u, };
+    524288u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 QueueState_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto);

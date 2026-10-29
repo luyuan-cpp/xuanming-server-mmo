@@ -12,6 +12,7 @@ import (
 	"match/internal/playercontract"
 
 	base "proto/common/base"
+	matchpb "proto/match"
 	plpb "proto/player_locator"
 	teampb "proto/team"
 
@@ -54,9 +55,25 @@ const (
 func (s *Service) startBackfill(ctx context.Context, caller uint64, configId, targetSize uint32, snap *Snapshot,
 	roster []uint64, zones map[uint64]uint32,
 ) *teampb.TeamResponse {
+	return s.startBackfillMode(ctx, caller, uint32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), configId, targetSize, snap, roster, zones)
+}
+
+func (s *Service) startBackfillMode(ctx context.Context, caller uint64, mode, configId, targetSize uint32, snap *Snapshot,
+	roster []uint64, zones map[uint64]uint32,
+) *teampb.TeamResponse {
 	log := logx.WithContext(ctx)
 	teamId := snap.TeamId
-	failed, err := s.starter.EnqueueParty(ctx, configId, targetSize, teamId, roster, zones)
+	var failed uint64
+	var err error
+	if mode == uint32(matchpb.MatchMode_MATCH_MODE_PVP_TEAM) {
+		port, wired := s.starter.(pvpPartyStarter)
+		if !wired {
+			return s.matchReject(ctx, caller, ErrDungeonNotOpen, 0, snap)
+		}
+		failed, err = port.EnqueuePartyMode(ctx, mode, configId, targetSize, teamId, roster, zones)
+	} else {
+		failed, err = s.starter.EnqueueParty(ctx, configId, targetSize, teamId, roster, zones)
+	}
 	if failed != 0 {
 		return s.matchReject(ctx, caller, ErrMemberNotReady, failed, snap)
 	}
@@ -208,6 +225,16 @@ func (s *Service) decorateQueueState(ctx context.Context, viewer uint64, view *t
 		}
 		return
 	}
+	if state == constants.PartyQueueQueued || state == constants.PartyQueueMatched {
+		view.MatchMode = matchpb.MatchMode_MATCH_MODE_PVE_TEAM
+		if port, wired := s.starter.(pvpPartyStarter); wired {
+			mode, err := port.PartyQueueMode(ctx, viewer, view.GetTeamId())
+			if err != nil {
+				return
+			}
+			view.MatchMode = matchpb.MatchMode(mode)
+		}
+	}
 	switch state {
 	case constants.PartyQueueQueued:
 		view.MatchState = teampb.TeamMatchState_TEAM_MATCH_STATE_QUEUED
@@ -228,6 +255,7 @@ func (s *Service) markFillSupported(view *teampb.TeamView) {
 		return
 	}
 	view.MatchFillSupported = s.starter != nil && !s.svcCtx.Config.Team.FillQueueDisabled
+	_, view.PvpMatchSupported = s.starter.(pvpPartyStarter)
 }
 
 // pushMembersSnapshot 由一次 S_READ_MEMBERS 给 recipients 里仍在本队的人推当前视图(epoch 同源,§C.4)。

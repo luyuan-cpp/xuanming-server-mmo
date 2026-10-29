@@ -10,6 +10,7 @@ import (
 	"match/internal/config"
 	"match/internal/constants"
 	"match/internal/discovery"
+	"match/internal/poolgroup"
 	"match/internal/svc"
 
 	pb "proto/match"
@@ -22,6 +23,7 @@ import (
 type globalTeamUnit struct {
 	tickets []*pb.MatchAuthorityTicketRecord
 	launch  *teampb.TeamLaunchRecord
+	side    uint32
 }
 
 type globalTeamCursor struct {
@@ -183,11 +185,11 @@ func teamRegionNodes(nodes []discovery.NodeEntry) map[uint32]discovery.NodeEntry
 }
 
 func validTeamUnit(unit globalTeamUnit, stamp uint64, hard uint32) bool {
-	if len(unit.tickets) == 0 || len(unit.tickets) > config.TeamCapacity {
+	if len(unit.tickets) == 0 || len(unit.tickets) > config.TeamCapacity || uint32(len(unit.tickets)) > unit.tickets[0].TeamSize {
 		return false
 	}
 	for _, ticket := range unit.tickets {
-		if ticket.State != 1 || ticket.ExpiresMs <= stamp || ticket.NotBeforeMs > stamp || ticket.TeamSize == 0 || ticket.TeamSize > config.TeamCapacity {
+		if ticket.State != 1 || ticket.ExpiresMs <= stamp || ticket.NotBeforeMs > stamp || ticket.TeamSize == 0 || ticket.TeamSize > config.TeamCapacity || ticket.Mode != unit.tickets[0].Mode || ticket.ConfigId != unit.tickets[0].ConfigId || ticket.TeamSize != unit.tickets[0].TeamSize || (ticket.Mode != uint32(pb.MatchMode_MATCH_MODE_PVE_TEAM) && ticket.Mode != uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM)) {
 			return false
 		}
 		profile, err := authority.DecodeProfile(ticket.NetworkProfile)
@@ -248,7 +250,8 @@ func findTeamUnitGroup(ctx context.Context, s *svc.ServiceContext, anchor global
 		if _, ok := nodes[region]; !ok {
 			continue
 		}
-		if uint32(len(anchor.tickets)) == a.TeamSize {
+		pvp := a.Mode == uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM)
+		if !pvp && uint32(len(anchor.tickets)) == a.TeamSize {
 			return []globalTeamUnit{anchor}, region, nil
 		}
 		var peers []globalTeamUnit
@@ -260,7 +263,11 @@ func findTeamUnitGroup(ctx context.Context, s *svc.ServiceContext, anchor global
 			peers = append(peers, globalTeamUnit{tickets: []*pb.MatchAuthorityTicketRecord{ticket}})
 		}
 		remaining := a.TeamSize - uint32(len(anchor.tickets))
-		for size := uint32(2); size <= remaining; size++ {
+		firstSize := uint32(2)
+		if pvp {
+			remaining, firstSize = a.TeamSize, 1
+		}
+		for size := firstSize; size <= remaining; size++ {
 			parties, err := s.Authority.TeamLaunchPeers(ctx, a, anchor.launch, region, size, local, stamp)
 			if err != nil {
 				return nil, 0, err
@@ -297,11 +304,77 @@ func findTeamUnitGroup(ctx context.Context, s *svc.ServiceContext, anchor global
 				return nil, 0, errors.New("team: 候选原home已变化，须重新读取完整集合")
 			}
 		}
-		if group := packTeamUnits(anchor, peers, int(a.TeamSize), home); len(group) > 0 {
+		var group []globalTeamUnit
+		if pvp {
+			group = packPvpTeamUnits(anchor, peers, int(a.TeamSize), home)
+		} else {
+			group = packTeamUnits(anchor, peers, int(a.TeamSize), home)
+		}
+		if len(group) > 0 {
 			return group, region, nil
 		}
 	}
 	return nil, 0, nil
+}
+
+// 两侧分别装箱，单位只会整体落入一边；人数相加够2N不代表能分成NvN。
+func packPvpTeamUnits(anchor globalTeamUnit, peers []globalTeamUnit, target int, home uint32) []globalTeamUnit {
+	if len(anchor.tickets) == 0 {
+		return nil
+	}
+	if actual, err := authority.TeamUnitHomeZone(anchor.tickets); err != nil || (home != 0 && actual != home) {
+		return nil
+	}
+	peers = append([]globalTeamUnit(nil), peers...)
+	sort.SliceStable(peers, func(i, j int) bool {
+		a, b := teamUnitOrder(peers[i])
+		c, d := teamUnitOrder(peers[j])
+		if a != c {
+			return a < c
+		}
+		return b < d
+	})
+	units := []globalTeamUnit{anchor}
+	seen := map[uint64]bool{}
+	for _, ticket := range anchor.tickets {
+		if seen[ticket.PlayerId] {
+			return nil
+		}
+		seen[ticket.PlayerId] = true
+	}
+	for _, peer := range peers {
+		if len(peer.tickets) == 0 {
+			continue
+		}
+		if actual, err := authority.TeamUnitHomeZone(peer.tickets); err != nil || (home != 0 && actual != home) {
+			continue
+		}
+		valid := true
+		for _, ticket := range peer.tickets {
+			if seen[ticket.PlayerId] || ticket.Mode != anchor.tickets[0].Mode || ticket.ConfigId != anchor.tickets[0].ConfigId || ticket.TeamSize != uint32(target) {
+				valid = false
+			}
+		}
+		if !valid {
+			continue
+		}
+		for _, ticket := range peer.tickets {
+			seen[ticket.PlayerId] = true
+		}
+		units = append(units, peer)
+	}
+	sizes := make([]int, len(units))
+	for i := range units {
+		sizes[i] = len(units[i].tickets)
+	}
+	indices, sides := poolgroup.PickPvpUnits(sizes, target)
+	var out []globalTeamUnit
+	for i, index := range indices {
+		unit := units[index]
+		unit.side = sides[i]
+		out = append(out, unit)
+	}
+	return out
 }
 
 func checkGlobalTeamUnit(ctx context.Context, s *svc.ServiceContext, unit globalTeamUnit) (bool, error) {
@@ -396,7 +469,14 @@ func claimTeamUnitGroup(ctx context.Context, s *svc.ServiceContext, units []glob
 	if err != nil {
 		return
 	}
-	formation := &pb.MatchFormationRecord{BattleId: id, OperationId: uuid.NewString(), PhysicalRegion: region, TargetNodeId: node.NodeId, TargetInstanceId: node.NodeUuid, TargetEndpoint: node.Endpoint, Mode: uint32(pb.MatchMode_MATCH_MODE_PVE_TEAM), ConfigId: tickets[0].ConfigId}
+	formation := &pb.MatchFormationRecord{BattleId: id, OperationId: uuid.NewString(), PhysicalRegion: region, TargetNodeId: node.NodeId, TargetInstanceId: node.NodeUuid, TargetEndpoint: node.Endpoint, Mode: tickets[0].Mode, ConfigId: tickets[0].ConfigId}
+	if formation.Mode == uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) {
+		for _, unit := range units {
+			for _, ticket := range unit.tickets {
+				formation.Members = append(formation.Members, &pb.MatchFormationMember{PlayerId: ticket.PlayerId, Ticket: ticket.Ticket, TeamIndex: unit.side})
+			}
+		}
+	}
 	if err = s.Authority.ClaimTeamUnits(ctx, formation, tickets, parties); err != nil {
 		if !errors.Is(err, authority.ErrDirectConflict) && !errors.Is(err, authority.ErrTeamLaunchActive) && !errors.Is(err, authority.ErrOriginalPlayer) {
 			s.HoldRelay(err)

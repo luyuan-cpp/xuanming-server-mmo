@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"match/internal/authority"
+	"match/internal/config"
 
 	matchpb "proto/match"
 	teampb "proto/team"
@@ -20,6 +21,10 @@ type sqlTeamBattleStarter interface {
 }
 
 func (s *Service) startSQLTeamMatch(ctx context.Context, caller uint64, in *teampb.StartTeamMatchRequest) *teampb.TeamResponse {
+	mode, validMode := normalizeTeamMatchMode(uint32(in.GetMatchMode()))
+	if !validMode {
+		return s.respond(ctx, caller, ErrDungeonNotOpen, 0)
+	}
 	if _, err := authority.DirectUUIDKey(1, caller, in.GetRequestId()); err != nil {
 		return s.respond(ctx, caller, uint32(table.CommonError_kInvalidParameter), 0)
 	}
@@ -58,6 +63,9 @@ func (s *Service) startSQLTeamMatch(ctx context.Context, caller uint64, in *team
 			return s.matchReject(ctx, caller, code, 0, &snap)
 		}
 		limit := s.starter.TeamSizeFor(in.BattleConfigId)
+		if mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
+			limit = config.TeamCapacity
+		}
 		if code := CheckMatchTeamSize(snap.Record, limit); code != 0 {
 			return s.matchReject(ctx, caller, code, 0, &snap)
 		}
@@ -68,7 +76,7 @@ func (s *Service) startSQLTeamMatch(ctx context.Context, caller uint64, in *team
 		if size < uint32(len(snap.Record.Members)) || size > limit {
 			return s.matchReject(ctx, caller, ErrSizeExceeded, 0, &snap)
 		}
-		if size > uint32(len(snap.Record.Members)) && s.svcCtx.Config.Team.FillQueueDisabled {
+		if mode != matchpb.MatchMode_MATCH_MODE_PVP_TEAM && size > uint32(len(snap.Record.Members)) && s.svcCtx.Config.Team.FillQueueDisabled {
 			return s.matchReject(ctx, caller, ErrDungeonNotOpen, 0, &snap)
 		}
 		roster := MatchRoster(snap.Record)
@@ -192,6 +200,10 @@ func (s *sqlTeamStore) createLaunch(ctx context.Context, snap *Snapshot, caller 
 		return nil, nil, err
 	}
 	size := request.TargetTeamSize
+	mode, validMode := normalizeTeamMatchMode(uint32(request.GetMatchMode()))
+	if !validMode {
+		return nil, nil, authority.ErrDirectConflict
+	}
 	if size == 0 {
 		size = uint32(len(roster))
 	}
@@ -199,7 +211,8 @@ func (s *sqlTeamStore) createLaunch(ctx context.Context, snap *Snapshot, caller 
 	if decision.Code != 0 {
 		return &PinnedResult{Code: decision.Code, CodeParam: decision.CodeParam}, nil, nil
 	}
-	if size > uint32(len(roster)) && len(exits) == 0 {
+	queued := mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM || size > uint32(len(roster))
+	if queued && len(exits) == 0 {
 		decision.Record.MatchLockToken = ""
 		decision.Record.MatchLockExpireAtMs = 0
 		decision.Record.MatchLockRoster = nil
@@ -230,11 +243,11 @@ func (s *sqlTeamStore) createLaunch(ctx context.Context, snap *Snapshot, caller 
 	if err != nil {
 		return nil, nil, err
 	}
-	launch := &teampb.TeamLaunchRecord{ActorId: caller, RequestHigh: key.RequestHigh, RequestLow: key.RequestLow, TeamId: snap.TeamId, TeamVersion: commit.Version, LockToken: token, ConfigId: request.BattleConfigId, TargetSize: size, MemberCount: uint32(len(roster)), State: 1, EnqueuedMs: stamp, Payload: payload, OwnerAccount: original.Actor.OwnerAccount, OwnerRevision: original.Actor.OwnerRevision}
+	launch := &teampb.TeamLaunchRecord{ActorId: caller, RequestHigh: key.RequestHigh, RequestLow: key.RequestLow, TeamId: snap.TeamId, TeamVersion: commit.Version, LockToken: token, ConfigId: request.BattleConfigId, TargetSize: size, MemberCount: uint32(len(roster)), State: 1, EnqueuedMs: stamp, Payload: payload, OwnerAccount: original.Actor.OwnerAccount, OwnerRevision: original.Actor.OwnerRevision, Mode: uint32(mode)}
 	if err = s.authority.InsertTeamLaunchTx(ctx, tx, launch); err != nil {
 		return nil, nil, err
 	}
-	if size > uint32(len(roster)) && len(exits) == 0 {
+	if queued && len(exits) == 0 {
 		if err = s.authority.EnqueueTeamLaunchTx(ctx, tx, launch); err != nil {
 			return nil, nil, err
 		}

@@ -74,7 +74,7 @@ func nativeEntryTeam(t *testing.T, group []*pb.MatchAuthorityTicketRecord) *team
 
 // 夹具只模拟首次事务提交的正规原件，不伪造Match票；实际角色P由调用处持有。
 func insertNativeEntryTeam(ctx context.Context, tx *sql.Tx, launch *teampb.TeamLaunchRecord, group []*pb.MatchAuthorityTicketRecord) error {
-	_, err := tx.ExecContext(ctx, "INSERT INTO team_launch("+teamLaunchColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", launch.ActorId, launch.RequestHigh, launch.RequestLow, launch.TeamId, launch.TeamVersion, launch.LockToken, launch.ConfigId, launch.TargetSize, launch.MemberCount, launch.State, launch.EnqueuedMs, launch.NotBeforeMs, launch.BattleId, launch.Payload, launch.OwnerAccount, launch.OwnerRevision)
+	_, err := tx.ExecContext(ctx, "INSERT INTO team_launch("+teamLaunchColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", launch.ActorId, launch.RequestHigh, launch.RequestLow, launch.TeamId, launch.TeamVersion, launch.LockToken, launch.ConfigId, launch.TargetSize, launch.MemberCount, launch.State, launch.EnqueuedMs, launch.NotBeforeMs, launch.BattleId, launch.Payload, launch.OwnerAccount, launch.OwnerRevision, launch.Mode)
 	if err != nil {
 		return err
 	}

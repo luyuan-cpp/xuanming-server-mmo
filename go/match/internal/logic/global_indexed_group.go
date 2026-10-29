@@ -29,7 +29,7 @@ func pickIndexedGlobalGroup(ctx context.Context, s *svc.ServiceContext, anchors 
 			break
 		}
 		for _, anchor := range anchors {
-			if anchor.Mode == uint32(pb.MatchMode_MATCH_MODE_PVE_TEAM) || anchor.TeamId != 0 {
+			if anchor.Mode == uint32(pb.MatchMode_MATCH_MODE_PVE_TEAM) || anchor.Mode == uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) || anchor.TeamId != 0 {
 				continue // PVE_TEAM由完整unit装箱调度，不能逐人消耗队伍票。
 			}
 			if anchor.NotBeforeMs > now || anchor.ExpiresMs <= now || anchor.TeamSize == 0 || anchor.TeamSize > 10 {

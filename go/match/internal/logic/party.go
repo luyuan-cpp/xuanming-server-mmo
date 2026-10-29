@@ -523,13 +523,31 @@ func healPartyTicket(svcCtx *svc.ServiceContext, log logx.Logger, playerId uint6
 func (s *TeamBattleStarter) EnqueueParty(ctx context.Context, battleConfigId, targetSize uint32, teamId uint64,
 	roster []uint64, zones map[uint64]uint32,
 ) (uint64, error) {
+	return s.EnqueuePartyMode(ctx, uint32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), battleConfigId, targetSize, teamId, roster, zones)
+}
+
+// targetSize对PVP表示每侧人数，完整的满员队伍也必须等待另一方真人。
+func (s *TeamBattleStarter) EnqueuePartyMode(ctx context.Context, rawMode, battleConfigId, targetSize uint32, teamId uint64,
+	roster []uint64, zones map[uint64]uint32,
+) (uint64, error) {
 	log := logx.WithContext(ctx)
 	limit := s.TeamSizeFor(battleConfigId)
-	if len(roster) == 0 || teamId == 0 || uint32(len(roster)) >= targetSize || targetSize > limit {
+	mode := matchpb.MatchMode(rawMode)
+	if mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
+		limit = kMaxBattleTeamSize
+	}
+	if mode != matchpb.MatchMode_MATCH_MODE_PVE_TEAM && mode != matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
+		return 0, fmt.Errorf("invalid party match mode: %d", rawMode)
+	}
+	fullPve := mode == matchpb.MatchMode_MATCH_MODE_PVE_TEAM && uint32(len(roster)) == targetSize
+	if len(roster) == 0 || teamId == 0 || uint32(len(roster)) > targetSize || fullPve || targetSize > limit {
 		return 0, fmt.Errorf("invalid party enqueue arguments: team=%d roster=%d target=%d limit=%d", teamId, len(roster), targetSize, limit)
 	}
-	mode := matchpb.MatchMode_MATCH_MODE_PVE_TEAM
-	queueKey := queueKeyForJoin(mode, battleConfigId, targetSize)
+	required := targetSize
+	if mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
+		required *= 2
+	}
+	queueKey := queueKeyForJoin(mode, battleConfigId, required)
 	partyId := uuid.New().String()
 	enqueuedAt := nowMs()
 	ttl := ticketTTLSeconds(s.svcCtx)
@@ -596,6 +614,22 @@ func (s *TeamBattleStarter) EnqueueParty(ctx context.Context, battleConfigId, ta
 	// 与单人入队同一条指标(join_queue_total),outcome 单列:一支补位单记一次,不按人头。
 	metrics.ObserveJoinQueue(mode.String(), "party_ok")
 	return 0, nil
+}
+
+// 视图模式来自本人当前票据；不在队伍记录里制造第二份匹配状态。
+func (s *TeamBattleStarter) PartyQueueMode(ctx context.Context, playerId, teamId uint64) (uint32, error) {
+	if s.svcCtx.Authority != nil {
+		ticket, err := s.svcCtx.Authority.Ticket(ctx, playerId)
+		if err != nil || ticket == nil || ticket.TeamId != teamId {
+			return 0, err
+		}
+		return ticket.Mode, nil
+	}
+	ticket, err := loadTicketCtx(ctx, s.svcCtx, playerId)
+	if err != nil || ticket == nil || ticket.TeamId != teamId || ticket.PartyId == "" {
+		return 0, err
+	}
+	return uint32(ticket.Mode), nil
 }
 
 // CancelParty 撤掉 teamId 仍在排的补位单(team-backfill-matching.md §4.3:名单变化、入队后复核不过)。

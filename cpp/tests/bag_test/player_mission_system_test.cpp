@@ -17,7 +17,9 @@
 #include "services/scene/player/comp/player_frozen_comp.h"
 #include "services/scene/player/system/bag_marshal.h"
 #include "services/scene/player/system/mission_marshal.h"
+#include "services/scene/player/system/player_level_rules.h"
 #include "services/scene/player/system/player_mission.h"
+#include "table/code/activityschedule_table.h"
 #include "table/code/condition_table.h"
 #include "table/code/dungeon_table.h"
 #include "table/code/monster_table.h"
@@ -423,6 +425,52 @@ TEST_F(PlayerMissionSystemTest, InvalidEntityAndMissingBagDoNotConsumeReward) {
     EXPECT_EQ(kServiceUnavailable, PlayerMissionSystem::ClaimReward(player, 0, 12));
     EXPECT_TRUE(Missions().IsClaimable(12));
 }
+TEST_F(PlayerMissionSystemTest, ActivityAcceptUsesCappedLevelWithoutChangingStoredLevel) {
+    ActivityScheduleTableManager::Instance().Load();
+    const auto* mission = MissionTableManager::Instance().FindByIdSilent(15).first;
+    const auto* schedule = ActivityScheduleTableManager::Instance().FindByIdSilent(15).first;
+    const auto* condition = ConditionTableManager::Instance().FindByIdSilent(24).first;
+    ASSERT_NE(nullptr, mission);
+    ASSERT_NE(nullptr, schedule);
+    ASSERT_NE(nullptr, condition);
+    auto& missionRow = *const_cast<MissionTable*>(mission);
+    auto& scheduleRow = *const_cast<ActivityScheduleTable*>(schedule);
+    auto& conditionRow = *const_cast<ConditionTable*>(condition);
+    ScopedTestRestore restoreMission(missionRow);
+    ScopedTestRestore restoreSchedule(scheduleRow);
+    ScopedTestRestore restoreCondition(conditionRow);
+    missionRow.clear_condition_id();
+    missionRow.add_condition_id(24);
+    missionRow.clear_target_count();
+    missionRow.add_target_count(1);
+    missionRow.set_auto_reward(0);
+    conditionRow.set_condition_category(static_cast<uint32_t>(eConditionType::kConditionLevelUp));
+    conditionRow.clear_condition1();
+    conditionRow.set_quantity_type(1);
+    conditionRow.set_comparison_op(0);
+    scheduleRow.set_baseline_start_at_ms(1000);
+    scheduleRow.set_baseline_end_at_ms(2000);
+    auto& level = tlsEcs.actorRegistry.emplace<LevelComp>(player);
+    for (const uint32_t storedLevel : {0u, playerlevel::kMaxLevel + 1}) {
+        // 仅重建本例的任务夹具，正式配表与存储等级均不被接取路径修改。
+        tlsEcs.actorRegistry.remove<MissionsContainerComp>(player);
+        ASSERT_EQ(kSuccess, PlayerMissionSystem::Initialize(player));
+        level.set_level(storedLevel);
+        const uint32_t effectiveLevel = storedLevel == 0 ? 1 : playerlevel::kMaxLevel;
+        missionRow.set_target_count(0, effectiveLevel + 1);
+        scheduleRow.set_enabled(false);
+        EXPECT_EQ(kFeatureUnavailable, PlayerMissionSystem::Accept(player, 0, 15, 1500));
+        EXPECT_FALSE(Missions().IsAccepted(15));
+        scheduleRow.set_enabled(true);
+        ASSERT_EQ(kSuccess, PlayerMissionSystem::Accept(player, 0, 15, 1500));
+        ASSERT_TRUE(Missions().IsAccepted(15));
+        ASSERT_EQ(1, Missions().GetMissionList().missions().at(15).progress_size());
+        EXPECT_EQ(effectiveLevel, Missions().GetMissionList().missions().at(15).progress(0));
+        EXPECT_FALSE(Missions().IsComplete(15));
+        EXPECT_EQ(storedLevel, level.level());
+    }
+}
+
 TEST_F(PlayerMissionSystemTest, OwnedLevelFactsReplaceProgressInsteadOfAccumulating) {
     struct LevelConfig : MissionConfig {
         google::protobuf::RepeatedField<uint32_t> conditions;

@@ -68,3 +68,55 @@ func TestGlobalTeamHardLatencyAndExpiryApplyToEveryMember(t *testing.T) {
 	unit.tickets[1].ExpiresMs = 99999
 	require.False(t, validTeamUnit(unit, 100000, 180))
 }
+
+func fixtureGlobalPvpUnit(target uint32, players ...uint64) globalTeamUnit {
+	unit := fixtureGlobalTeamUnit(players...)
+	for _, ticket := range unit.tickets {
+		ticket.Mode = uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM)
+		ticket.TeamSize = target
+	}
+	return unit
+}
+
+func TestGlobalPvpPackSameSizeAndWholeTeams(t *testing.T) {
+	for size := 1; size <= 5; size++ {
+		var left, right []uint64
+		for i := 0; i < size; i++ {
+			left = append(left, uint64(i+1))
+			right = append(right, uint64(i+11))
+		}
+		a, b := fixtureGlobalPvpUnit(uint32(size), left...), fixtureGlobalPvpUnit(uint32(size), right...)
+		require.Nil(t, packPvpTeamUnits(a, nil, size, 1), "没有真人对手只能等待")
+		group := packPvpTeamUnits(a, []globalTeamUnit{b}, size, 1)
+		require.Len(t, group, 2)
+		require.Equal(t, uint32(0), group[0].side)
+		require.Equal(t, uint32(1), group[1].side)
+		require.Equal(t, left, func() []uint64 {
+			var ids []uint64
+			for _, ticket := range group[0].tickets {
+				ids = append(ids, ticket.PlayerId)
+			}
+			return ids
+		}())
+	}
+}
+
+func TestGlobalPvpPackFillsSidesWithoutSplittingParty(t *testing.T) {
+	a := fixtureGlobalPvpUnit(5, 1, 2, 3)
+	group := packPvpTeamUnits(a, []globalTeamUnit{fixtureGlobalPvpUnit(5, 4, 5), fixtureGlobalPvpUnit(5, 6, 7, 8, 9), fixtureGlobalPvpUnit(5, 10)}, 5, 1)
+	require.Len(t, group, 4)
+	var counts [2]int
+	for _, unit := range group {
+		counts[unit.side] += len(unit.tickets)
+	}
+	require.Equal(t, [2]int{5, 5}, counts)
+	require.Equal(t, group[0].side, group[1].side)
+	require.Equal(t, group[2].side, group[3].side)
+}
+
+func TestGlobalPvpPackRejectsMixedModesSizesAndOverlappingPlayers(t *testing.T) {
+	a := fixtureGlobalPvpUnit(2, 1, 2)
+	for _, peer := range []globalTeamUnit{fixtureGlobalTeamUnit(3, 4), fixtureGlobalPvpUnit(3, 3, 4), fixtureGlobalPvpUnit(2, 2, 3)} {
+		require.Nil(t, packPvpTeamUnits(a, []globalTeamUnit{peer}, 2, 1))
+	}
+}

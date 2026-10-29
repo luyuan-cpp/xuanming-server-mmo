@@ -3662,6 +3662,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationMember final : public
   enum : int {
     kTicketFieldNumber = 2,
     kPlayerIdFieldNumber = 1,
+    kTeamIndexFieldNumber = 3,
   };
   // string ticket = 2;
   void clear_ticket() ;
@@ -3688,11 +3689,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationMember final : public
   void _internal_set_player_id(::uint64_t value);
 
   public:
+  // uint32 team_index = 3;
+  void clear_team_index() ;
+  [[nodiscard]] ::uint32_t team_index() const;
+  void set_team_index(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_team_index() const;
+  void _internal_set_team_index(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:match.MatchFormationMember)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 41,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3723,6 +3734,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationMember final : public
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr ticket_;
     ::uint64_t player_id_;
+    ::uint32_t team_index_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -10604,6 +10616,30 @@ inline void MatchFormationMember::set_allocated_ticket(::std::string* PROTOBUF_N
     _impl_.ticket_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:match.MatchFormationMember.ticket)
+}
+
+// uint32 team_index = 3;
+inline void MatchFormationMember::clear_team_index() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_index_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t MatchFormationMember::team_index() const {
+  // @@protoc_insertion_point(field_get:match.MatchFormationMember.team_index)
+  return _internal_team_index();
+}
+inline void MatchFormationMember::set_team_index(::uint32_t value) {
+  _internal_set_team_index(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.MatchFormationMember.team_index)
+}
+inline ::uint32_t MatchFormationMember::_internal_team_index() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_index_;
+}
+inline void MatchFormationMember::_internal_set_team_index(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_index_ = value;
 }
 
 // -------------------------------------------------------------------
