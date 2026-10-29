@@ -636,7 +636,8 @@ func syncSmokeIsRecorded(messageId uint32) bool {
 
 // onMessage:先留底,再分发。
 //   - 好友请求与 TravelToZone 的回包带请求号,由 GameClient 交给 caller / 在途的那次 TravelToZone 调用,不会到这里。
-//     这些消息号上 id = 0 的消息说明服务端没回显请求号,交给 smokeDropUncorrelatedReply 丢弃;好友推送
+//     这些消息号上 id = 0 的消息说明服务端没回显请求号,交给 smokeDropUncorrelatedReply 丢弃(TravelToZone 的
+//     丢弃前持 b.mu 记一条诊断,含回包体里的同步拒绝码,travelTo 的超时文案据此说出真实原因,判定不变);好友推送
 //     NotifyFriendEvent 本场景不消费,直接丢掉。两者都不进通用分发(见 friendSmokeIsFriendMessage 的注释);
 //   - gate 的 SendTipToClient 交给 caller:kServiceUnavailable 让正在等的好友请求立刻失败;
 //   - 其余无条件转发:NotifyEnterScene 靠通用 handler 放行 WaitSceneReady;msg 124 在转发里同步跑完整个搬迁
@@ -650,6 +651,11 @@ func (b *syncSmokeBot) onMessage(client *pkg.GameClient, msg *base.MessageConten
 		return
 	}
 	if friendSmokeIsFriendMessage(messageId) || messageId == travelToZoneMessageId {
+		if messageId == travelToZoneMessageId {
+			b.mu.Lock()
+			b.progress.uncorrelatedTravel.note(msg)
+			b.mu.Unlock()
+		}
 		smokeDropUncorrelatedReply(b.account, msg)
 		return
 	}
@@ -934,9 +940,16 @@ func (b *syncSmokeBot) travelTo(targetZone, sceneConfigId uint32) error {
 			}
 		}
 		if !time.Now().Before(deadline) {
-			return fmt.Errorf("TravelToZone{zone=%d} did not land within %s: reply_seen=%t redirect_seen=%t relogin_started=%t relogin_done=%t arrived=%t late_tips=%v. "+
-				"Diagnose the travel chain itself with travel-smoke (etc/travel_smoke.yaml)",
-				targetZone, syncSmokeRedirectTimeout, scan.replySeen, scan.hop != nil, reloginStarted, reloginDone, scan.arrived, scan.lateTips)
+			// 回包与 124 都没到、窗口内却收到过没回显请求号的回包时,优先报它(理由见 travelSmokeUncorrelatedCause)。
+			uncorrelated := progress.uncorrelatedTravel.since(before.uncorrelatedTravel)
+			hint := "Diagnose the travel chain itself with travel-smoke (etc/travel_smoke.yaml)"
+			if cause := travelSmokeUncorrelatedCause(scan, uncorrelated); cause != "" {
+				hint = cause
+			}
+			return fmt.Errorf("TravelToZone{zone=%d} did not land within %s: reply_seen=%t uncorrelated_replies=%d redirect_seen=%t relogin_started=%t "+
+				"relogin_done=%t arrived=%t late_tips=%v. %s",
+				targetZone, syncSmokeRedirectTimeout, scan.replySeen, uncorrelated.count, scan.hop != nil, reloginStarted,
+				reloginDone, scan.arrived, scan.lateTips, hint)
 		}
 		time.Sleep(syncSmokePollInterval)
 	}

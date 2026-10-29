@@ -55,7 +55,15 @@ func EnsurePlayerAllDataInRedisAsync(
 	perTaskTTL time.Duration,
 	onComplete func(error),
 ) {
-	// 骨架与建角写的新号种子同源(newPlayerAllDataSkeleton):子表读空时父键就是它。
+	ensurePlayerAllDataInRedisAsync(ctx, rc, defaultParentLoadScripts,
+		config.AppConfig.ParentLoad.VerifyOnRedisIdentityChange, disp, producer, playerId, perTaskTTL, onComplete)
+}
+
+// 身份读取脚本显式注入；替身只替换不支持的 INFO，不替换判定、SQL 回包校验或原子提交。
+func ensurePlayerAllDataInRedisAsync(ctx context.Context, rc redis.Cmdable, scripts parentLoadScripts,
+	verifyOnIdentityChange bool, disp readResultRegistrar, producer dbTaskProducer, playerId uint64,
+	perTaskTTL time.Duration, onComplete func(error)) {
+	// 先建解码容器；任一 SQL Data 缺失必须拒绝，不能把此容器当真实初始行。
 	parent := newPlayerAllDataSkeleton(playerId)
 	parentKey := buildParentKey(parent, playerId)
 
@@ -69,7 +77,7 @@ func EnsurePlayerAllDataInRedisAsync(
 
 	// 预检与最终发布都复核归属和 SQL 提交屏障；Redis 故障不能按缓存未命中继续。
 	cacheCheckStart := time.Now()
-	snapshot, snapshotErr := beginParentLoad(ctx, rc, parentKey, playerId, regressionMode)
+	snapshot, snapshotErr := beginParentLoad(ctx, rc, scripts, parentKey, playerId, regressionMode)
 	hitLabel := "miss"
 	if snapshotErr == nil && snapshot.raw != "" {
 		hitLabel = "hit"
@@ -80,9 +88,14 @@ func EnsurePlayerAllDataInRedisAsync(
 		return
 	}
 
-	// Fast path
-	if snapshot.raw != "" {
+	// 父键存在也不等于可用：身份变化、ACK 超前与历史缺口必须先读两张 SQL 权威行。
+	route, _ := snapshot.route(verifyOnIdentityChange)
+	switch route {
+	case parentLoadFast:
 		onComplete(nil)
+		return
+	case parentLoadWait:
+		onComplete(errParentBarrierNotCommitted)
 		return
 	}
 
@@ -96,7 +109,7 @@ func EnsurePlayerAllDataInRedisAsync(
 	var tasks []*dbReadTask
 	subs := collectSubMessages(parent)
 
-	// 父键缺失时强制读两张 SQL 行。子表缓存可能落后，不能作为恢复权威。
+	// 核验路径强制读两张 SQL 行。子表缓存可能落后，不能作为恢复权威。
 	subCacheStart := time.Now()
 	for _, sub := range subs {
 		subKey := fmt.Sprintf("%s:%s", sub.ProtoReflect().Descriptor().FullName(), playerIdStr)
@@ -113,7 +126,7 @@ func EnsurePlayerAllDataInRedisAsync(
 	)
 
 	if len(tasks) == 0 {
-		if err := snapshot.publish(ctx, rc, parentKey, playerId, parent); err != nil {
+		if _, err := snapshot.settle(ctx, rc, scripts, parentKey, playerId, parent, regressionMode); err != nil {
 			onComplete(fmt.Errorf("set parent key %s: %w", parentKey, err))
 			return
 		}
@@ -159,7 +172,7 @@ func EnsurePlayerAllDataInRedisAsync(
 				onComplete(fmt.Errorf("%s", *errPtr))
 				return
 			}
-			if err := snapshot.publish(ctx, rc, parentKey, playerId, parent); err != nil {
+			if _, err := snapshot.settle(ctx, rc, scripts, parentKey, playerId, parent, regressionMode); err != nil {
 				onComplete(fmt.Errorf("set parent key %s: %w", parentKey, err))
 				return
 			}
@@ -194,7 +207,12 @@ func EnsurePlayerAllDataInRedisAsync(
 				firstErr.CompareAndSwap(nil, &errStr)
 				return
 			}
-			// Empty Data == row not found; sub stays at default (player_id only).
+			// 缺行不能等同已提交的初始空行，否则会把历史数据丢失伪装成新号。
+			if len(res.Data) == 0 {
+				errStr := fmt.Sprintf("玩家 SQL 权威历史行缺失，拒绝重建初始数据: %s", p.sub.ProtoReflect().Descriptor().FullName())
+				firstErr.CompareAndSwap(nil, &errStr)
+				return
+			}
 			if len(res.Data) > 0 {
 				mu.Lock()
 				if uerr := proto.Unmarshal(res.Data, p.sub); uerr != nil {
@@ -205,7 +223,7 @@ func EnsurePlayerAllDataInRedisAsync(
 				}
 				mu.Unlock()
 			}
-			if validationErr := snapshot.validateSQLSub(p.sub, playerId); validationErr != nil {
+			if validationErr := validateSQLRowIdentity(p.sub, playerId); validationErr != nil {
 				errStr := fmt.Sprintf("task %s: %v", p.taskID, validationErr)
 				firstErr.CompareAndSwap(nil, &errStr)
 			}

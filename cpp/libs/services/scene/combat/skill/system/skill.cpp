@@ -14,6 +14,7 @@
 #include "combat/skill/comp/skill_comp.h"
 #include "combat/skill/constants/skill.h"
 #include "player/comp/player_frozen_comp.h"  // cross-zone-readiness-audit.md §11.3 / §11.4
+#include "player/system/player_level_rules.h"  // CappedLevel:等级公式按生效等级
 #include "proto/common/component/battle_comp.pb.h"  // InBattleComp:回合制战斗局中闸(§5.3 冻结清单)
 #include "spatial/system/view.h"
 #include "macros/return_define.h"
@@ -275,6 +276,7 @@ uint32_t SkillSystem::ReleaseSkill(const entt::entity casterEntity, const Releas
 
 uint32_t CheckPlayerLevel(const entt::entity casterEntity, const SkillTable* skillTable) {
 	// TODO: Implement level requirement validation for non-NPC casters
+	// 落地时读 playerlevel::CappedLevel(LevelComp.level()),不直读存储等级(player_level_rules.h)
 	return kSuccess;
 }
 
@@ -738,11 +740,12 @@ double CalculateFinalDamage(const entt::entity casterEntity, const entt::entity 
 	{
 		defense = targetDerived->defense();
 	}
-	// 没有等级组件的目标(部分 NPC)按 1 级算
+	// 没有等级组件的目标(NPC / 怪物)按 1 级算。LevelComp 只有玩家有(加载时挂上),
+	// 按生效等级取:超上限的存储等级按上限(player_level_rules.h)
 	uint32_t targetLevel = 1;
 	if (const auto* targetLevelComp = tlsEcs.actorRegistry.try_get<LevelComp>(target))
 	{
-		targetLevel = targetLevelComp->level();
+		targetLevel = playerlevel::CappedLevel(targetLevelComp->level());
 	}
 
 	double finalDamage = combatdamage::DamageBeforeCritical(
@@ -781,7 +784,9 @@ bool CalculateSkillDamage(const entt::entity casterEntity, DamageEventComp& dama
 			<< " skill_id=" << damageEvent.skill_id();
 		return false;
 	}
-	SkillTableManager::Instance().SetDamageParam({static_cast<double>(levelComponent->level())});
+	// 伤害表达式的 level 参数按生效等级(超上限的存储等级按上限,player_level_rules.h)
+	SkillTableManager::Instance().SetDamageParam(
+		{static_cast<double>(playerlevel::CappedLevel(levelComponent->level()))});
 
 	damageEvent.set_attacker_id(entt::to_integral(casterEntity));
 

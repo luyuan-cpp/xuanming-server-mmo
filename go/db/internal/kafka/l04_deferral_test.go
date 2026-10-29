@@ -155,8 +155,8 @@ func TestRetryBudgetExempt_StoreTaggedErrors(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.wantWrite, retryBudgetExempt(&db_proto.DBTask{Op: "write"}, tc.cause), "write")
-			assert.Equal(t, tc.wantRead, retryBudgetExempt(&db_proto.DBTask{Op: "read"}, tc.cause), "read")
+			assert.Equal(t, tc.wantWrite, retryBudgetExempt(&db_proto.DBTask{Op: db_proto.DBOp_DB_OP_WRITE}, tc.cause), "write")
+			assert.Equal(t, tc.wantRead, retryBudgetExempt(&db_proto.DBTask{Op: db_proto.DBOp_DB_OP_READ}, tc.cause), "read")
 		})
 	}
 }
@@ -303,7 +303,7 @@ func TestConsumeOneRetryTask_ExhaustedReadIsDroppedNotDeadLettered(t *testing.T)
 // 载荷逐字节不变;deferred{write,conn_lost} 每轮 +1。
 func TestStoreDeferral_RetryWriteKeepsBudgetAndPayload(t *testing.T) {
 	w, _, _ := newTestWorker(t, 0)
-	dbOpHandlers["write"] = func(context.Context, *proto2mysql.DB, *db_proto.DBTask, proto.Message) (writeOutcome, error) {
+	dbOpHandlers[db_proto.DBOp_DB_OP_WRITE] = func(context.Context, *proto2mysql.DB, *db_proto.DBTask, proto.Message) (writeOutcome, error) {
 		return writeOutcome{kind: writeApplied}, storeTagged(storeerr.KindConnLost)
 	}
 	task := makeWriteTask(t, 9441, placementTestMsgType, 10).dbTask

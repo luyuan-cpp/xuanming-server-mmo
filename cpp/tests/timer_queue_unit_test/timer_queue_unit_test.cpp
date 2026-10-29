@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -138,6 +139,262 @@ TEST(TimerQueueTest, SafeWithoutEventLoop)
 	timer.Cancel();
 
 	EXPECT_FALSE(timer.IsActive());
+}
+
+TEST(TimerTaskRegressionTest, InvalidRepeatingIntervalDoesNotArmOrReplace)
+{
+	EventLoop loop;
+	TimerTaskComp timer;
+	for (const double interval : {0.0, -1.0}) {
+		timer.RunEvery(interval, [] {});
+		EXPECT_FALSE(timer.IsActive());
+		timer.Cancel();
+	}
+	int fires = 0;
+	timer.RunAfter(0.0, [&] { ++fires; loop.quit(); });
+	timer.RunEvery(0.0, [] {});
+	loop.runAfter(1.0, [&loop] { loop.quit(); });
+	loop.loop();
+	EXPECT_EQ(1, fires);
+}
+
+TEST(TimerTaskRegressionTest, CancelCleanupSeesInactiveAndCanCancelAgain)
+{
+	EventLoop loop;
+	TimerTaskComp timer;
+	bool activeInCleanup = true;
+	int cleanups = 0;
+	auto cleanup = std::shared_ptr<void>(nullptr, [&](void*) {
+		++cleanups;
+		activeInCleanup = timer.IsActive();
+		timer.Cancel();
+	});
+	timer.RunAfter(60.0, [cleanup = std::move(cleanup)] {});
+	timer.Cancel();
+	EXPECT_FALSE(activeInCleanup);
+	EXPECT_FALSE(timer.IsActive());
+	EXPECT_EQ(1, cleanups);
+}
+
+TEST(TimerTaskRegressionTest, CancelCleanupCanRearmSameComponent)
+{
+	EventLoop loop;
+	TimerTaskComp timer;
+	int fires = 0;
+	auto cleanup = std::shared_ptr<void>(nullptr, [&](void*) {
+		timer.RunAfter(0.0, [&] { ++fires; loop.quit(); });
+	});
+	timer.RunAfter(60.0, [cleanup = std::move(cleanup)] {});
+	timer.Cancel();
+	EXPECT_TRUE(timer.IsActive());
+	loop.runAfter(1.0, [&loop] { loop.quit(); });
+	loop.loop();
+	EXPECT_EQ(1, fires);
+	EXPECT_FALSE(timer.IsActive());
+}
+
+TEST(TimerTaskRegressionTest, ReplacementCleanupRearmWins)
+{
+	EventLoop loop;
+	TimerTaskComp timer;
+	int nestedFires = 0;
+	int replacedFires = 0;
+	auto cleanup = std::shared_ptr<void>(nullptr, [&](void*) {
+		timer.RunAfter(0.0, [&] { ++nestedFires; loop.quit(); });
+	});
+	timer.RunAfter(60.0, [cleanup = std::move(cleanup)] {});
+	timer.RunAfter(0.0, [&] { ++replacedFires; loop.quit(); });
+	loop.runAfter(1.0, [&loop] { loop.quit(); });
+	loop.loop();
+	EXPECT_EQ(1, nestedFires);
+	EXPECT_EQ(0, replacedFires);
+}
+
+TEST(TimerTaskRegressionTest, ReplacementCleanupCanCancelNewTimer)
+{
+	EventLoop loop;
+	TimerTaskComp timer;
+	auto cleanup = std::shared_ptr<void>(nullptr, [&](void*) { timer.Cancel(); });
+	timer.RunAfter(60.0, [cleanup = std::move(cleanup)] {});
+	timer.RunAfter(60.0, [] {});
+	EXPECT_FALSE(timer.IsActive());
+}
+
+TEST(TimerTaskRegressionTest, ReplacementCleanupCanDestroyOwner)
+{
+	EventLoop loop;
+	auto owner = std::make_unique<TimerTaskComp>();
+	int fires = 0;
+	auto cleanup = std::shared_ptr<void>(nullptr, [&](void*) { owner.reset(); });
+	owner->RunAfter(60.0, [cleanup = std::move(cleanup)] {});
+	owner->RunAt(addTime(Timestamp::now(), -2.0), [&] { ++fires; });
+	loop.runAt(addTime(Timestamp::now(), -1.0), [&loop] { loop.quit(); });
+	loop.loop();
+	EXPECT_EQ(nullptr, owner);
+	EXPECT_EQ(0, fires);
+}
+
+TEST(TimerTaskRegressionTest, ReplacementCleanupCanMoveOwner)
+{
+	EventLoop loop;
+	TimerTaskComp source;
+	TimerTaskComp destination;
+	int fires = 0;
+	auto cleanup = std::shared_ptr<void>(nullptr, [&](void*) { destination = std::move(source); });
+	source.RunAfter(60.0, [cleanup = std::move(cleanup)] {});
+	source.RunAfter(0.0, [&] { ++fires; loop.quit(); });
+	EXPECT_FALSE(source.IsActive());
+	EXPECT_TRUE(destination.IsActive());
+	loop.runAfter(1.0, [&loop] { loop.quit(); });
+	loop.loop();
+	EXPECT_EQ(1, fires);
+}
+
+TEST(TimerTaskRegressionTest, MoveAssignmentCleanupRearmWins)
+{
+	EventLoop loop;
+	TimerTaskComp source;
+	TimerTaskComp destination;
+	int sourceFires = 0;
+	int nestedFires = 0;
+	auto cleanup = std::shared_ptr<void>(nullptr, [&](void*) {
+		destination.RunAfter(0.0, [&] { ++nestedFires; loop.quit(); });
+	});
+	destination.RunAfter(60.0, [cleanup = std::move(cleanup)] {});
+	source.RunAfter(0.0, [&] { ++sourceFires; loop.quit(); });
+	destination = std::move(source);
+	loop.runAfter(1.0, [&loop] { loop.quit(); });
+	loop.loop();
+	EXPECT_FALSE(source.IsActive());
+	EXPECT_EQ(1, nestedFires);
+	EXPECT_EQ(0, sourceFires);
+}
+
+TEST(TimerTaskRegressionTest, MoveAssignmentCleanupCanDestroySource)
+{
+	EventLoop loop;
+	auto source = std::make_unique<TimerTaskComp>();
+	TimerTaskComp destination;
+	int fires = 0;
+	auto cleanup = std::shared_ptr<void>(nullptr, [&](void*) { source.reset(); });
+	destination.RunAfter(60.0, [cleanup = std::move(cleanup)] {});
+	source->RunAfter(0.0, [&] { ++fires; loop.quit(); });
+	destination = std::move(*source);
+	EXPECT_EQ(nullptr, source);
+	loop.runAfter(1.0, [&loop] { loop.quit(); });
+	loop.loop();
+	EXPECT_EQ(1, fires);
+}
+
+TEST(TimerTaskRegressionTest, InvalidDelayAndEmptyCallbackPreserveCurrentTimer)
+{
+	EventLoop loop;
+	TimerTaskComp timer;
+	int fires = 0;
+	ASSERT_TRUE(timer.RunAfter(0.0, [&] { ++fires; loop.quit(); }));
+	for (const double delay : {std::numeric_limits<double>::quiet_NaN(),
+		std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity(),
+		std::numeric_limits<double>::max(), -std::numeric_limits<double>::max()}) {
+		EXPECT_FALSE(timer.RunAfter(delay, [] {}));
+		EXPECT_FALSE(timer.RunEvery(delay, [] {}));
+		EXPECT_TRUE(timer.IsActive());
+	}
+	EXPECT_FALSE(timer.RunEvery(0.0, [] {}));
+	EXPECT_FALSE(timer.RunEvery(-1.0, [] {}));
+	EXPECT_FALSE(timer.RunAfter(0.0, {}));
+	EXPECT_FALSE(timer.RunEvery(1.0, {}));
+	EXPECT_FALSE(timer.RunAt(Timestamp::now(), {}));
+	EXPECT_TRUE(timer.IsActive());
+	loop.runAfter(1.0, [&loop] { loop.quit(); });
+	loop.loop();
+	EXPECT_EQ(1, fires);
+}
+
+TEST(TimerTaskRegressionTest, SchedulingWithoutLoopReportsFailure)
+{
+	TimerTaskComp timer;
+	EXPECT_FALSE(timer.RunAfter(0.0, [] {}));
+	EXPECT_FALSE(timer.RunEvery(1.0, [] {}));
+	EXPECT_FALSE(timer.RunAt(Timestamp::now(), [] {}));
+	EXPECT_FALSE(timer.IsActive());
+}
+
+TEST(TimerTaskRegressionTest, CancelCleanupCanDestroyOwner)
+{
+	EventLoop loop;
+	auto owner = std::make_unique<TimerTaskComp>();
+	int cleanups = 0;
+	auto cleanup = std::shared_ptr<void>(nullptr, [&](void*) { ++cleanups; owner.reset(); });
+	owner->RunAfter(60.0, [cleanup = std::move(cleanup)] {});
+	owner->Cancel();
+	EXPECT_EQ(nullptr, owner);
+	EXPECT_EQ(1, cleanups);
+}
+
+TEST(TimerTaskRegressionTest, RepeatingCallbackCanCancelItself)
+{
+	EventLoop loop;
+	TimerTaskComp timer;
+	int fires = 0;
+	timer.RunEvery(kImmediateRepeatIntervalSeconds, [&] {
+		++fires;
+		timer.Cancel();
+		timer.Cancel();
+		loop.queueInLoop([&loop] { loop.runAfter(0.0, [&loop] { loop.quit(); }); });
+	});
+	loop.runAfter(1.0, [&loop] { loop.quit(); });
+	loop.loop();
+	EXPECT_EQ(1, fires);
+	EXPECT_FALSE(timer.IsActive());
+}
+
+TEST(TimerTaskRegressionTest, RepeatingCallbackCanDestroyOwner)
+{
+	EventLoop loop;
+	auto owner = std::make_unique<TimerTaskComp>();
+	int fires = 0;
+	owner->RunEvery(kImmediateRepeatIntervalSeconds, [&] {
+		++fires;
+		owner.reset();
+		loop.queueInLoop([&loop] { loop.runAfter(0.0, [&loop] { loop.quit(); }); });
+	});
+	loop.runAfter(1.0, [&loop] { loop.quit(); });
+	loop.loop();
+	EXPECT_EQ(1, fires);
+	EXPECT_EQ(nullptr, owner);
+}
+
+TEST(TimerTaskRegressionTest, RepeatingCallbackCanReplaceItselfWithOneShot)
+{
+	EventLoop loop;
+	TimerTaskComp timer;
+	int repeats = 0;
+	int oneShots = 0;
+	timer.RunEvery(kImmediateRepeatIntervalSeconds, [&] {
+		++repeats;
+		timer.RunAfter(0.0, [&] { ++oneShots; loop.quit(); });
+	});
+	loop.runAfter(1.0, [&loop] { loop.quit(); });
+	loop.loop();
+	EXPECT_EQ(1, repeats);
+	EXPECT_EQ(1, oneShots);
+	EXPECT_FALSE(timer.IsActive());
+}
+
+TEST(TimerTaskRegressionTest, NonPositiveOneShotDelayStillFiresOnce)
+{
+	EventLoop loop;
+	TimerTaskComp zero;
+	TimerTaskComp negative;
+	int fires = 0;
+	auto tick = [&] { if (++fires == 2) loop.quit(); };
+	EXPECT_TRUE(zero.RunAfter(0.0, tick));
+	EXPECT_TRUE(negative.RunAfter(-1.0, tick));
+	loop.runAfter(1.0, [&loop] { loop.quit(); });
+	loop.loop();
+	EXPECT_EQ(2, fires);
+	EXPECT_FALSE(zero.IsActive());
+	EXPECT_FALSE(negative.IsActive());
 }
 
 TEST(TimerQueueTest, MoveAndCopyAreSafe)

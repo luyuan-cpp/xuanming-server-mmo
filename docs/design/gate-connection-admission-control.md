@@ -274,6 +274,30 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 - 否则 `TcpServer.cc:80` / `:109` 两行 per-connection INFO 会让**连接风暴照样是日志风暴**，
   handler 里 1/1024 的克制被完全抵消。
 
+> **（2026-10-22 部分落地，未执行，待 Codex 验证）** 只做了配置口径这一半：
+> - `bin/etc/base_deploy_config.yaml` 的注释已改成上面的真实枚举；值仍是 **2(INFO)**，没有按本节建议定到 3(WARN)——
+>   运维手册与演练取证大量依赖 INFO 行（如 `Player marked for unregistration`、`[DirtySave]`、启动横幅），改 WARN 要先逐条换掉这些判据，另行决策。
+>   因此上面 per-connection 两行 INFO 仍在打，本节「连接风暴即日志风暴」的结论不变。
+> - 新发现并修掉：`k8s_deploy.ps1` 生成的 `node-config` / `battle-node-config` 原先写死 `LogLevel: 1`，K8s 上实际一直是 **DEBUG**；
+>   现改为从 `bin/etc` 镜像，生成期校验是 0..5 的整数。`release_preflight.ps1` 的 `debug.cpp.loglevel` 原先按「0=DEBUG」把下界设成 1（放过 DEBUG），现改为 2。
+> - **未做**：`Node::InitLogSystem` 的越界 / 缺键校验（缺键仍得 0 = TRACE）。K8s 生成期总会写出这一键，本机靠注释提醒。
+
+> **（2026-10-22 后半落地：缺键 / 越界校验，未编译，待 Codex 验证）** 即上一条「未做」那一项。
+> - **语义：fail-closed，启动失败，不回落 INFO。** 缺键、YAML 空值（`LogLevel:` / `~`）、序列或映射、非十进制整数（`INFO`、`-1`、`+2`、`2.5`、`0x2`、带空白）、越界（> 5）一律拒启：
+>   先同步写一行 stderr `FATAL LogLevel config: ...`（`kubectl logs --previous` 可见，文本带枚举对照），再 `LOG_FATAL`。写法同节点里的 `FatalStartupConfig`。
+>   理由：
+>   1. 项目未上线，没有缺这一键的存量部署。仓库里实际的配置来源都写了这一键：`bin/etc`、`k8s_deploy.ps1` 生成的两份 node ConfigMap、`prepare_docker_debug.py` 从 `bin/etc` 复制的 debug 配置；`tools/archived/debug_gate.sh` 写的是 1，也合法。
+>   2. 落 INFO 再打 ERROR，会把「配置生成器漏键」这类错误再藏一次。K8s 写死 `LogLevel: 1` 跑了很久没人发现，就是同一类静默。
+>   3. 与同文件 `PersistSchemaRegressionMode`（非法值拒启）、同一启动段的 fd 上限门槛（`FatalStartupConfig`）口径一致。
+>
+>   代价：手写的本机 yaml 漏了这一键会起不来，按报错补一行即可。滚动发布时配置错的新 Pod 起不来，旧 Pod 不受影响；K8s 生成期已先拦下非法值。
+> - **C++ 侧只核结构（0..5 的整数），不核下界。** 0 / 1（TRACE / DEBUG）仍合法，本机临时调级是正常用法；生产下界 2 是发布策略，仍由 `release_preflight.ps1` 的 `debug.cpp.loglevel` 判。没有引入映射表，数值仍直接是 muduo 枚举。
+> - **位置**：
+>   - 纯判定：`cpp/libs/engine/config/node_log_level.h` 的 `Parse` / `IsValidValue`。不依赖 muduo，单测在 `cpp/tests/client_endpoint_test/node_log_level_test.cpp`。
+>   - 拒启：`config.cpp::readBaseDeployConfig`。只有那里分得清「缺键」与「写了 0」，因为 proto3 的 uint32 没有 presence。测试工程经 `test_config_helper.h` 读同一份 `bin/etc`，同样受这条约束。
+>   - `Node::InitLogSystem`：`static_cast` 前再核一次数值（越界值转枚举是未定义行为），并用 `static_assert` 把上界钉在 `muduo::Logger::FATAL` 上。
+> - 生产值是否定到 3(WARN) 仍未决，见上一条。
+
 ### P0-4 · 降级 muduo 的三条必崩路径（对应 G6，3 行改动）
 
 `SocketsOps.cc` 的 errno switch 里，把 `ENFILE`/`ENOBUFS`/`ENOMEM` 从 `LOG_FATAL`

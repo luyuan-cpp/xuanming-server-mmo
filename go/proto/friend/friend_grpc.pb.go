@@ -39,9 +39,9 @@ const (
 //
 // ── 服务声明 ─────────────────────────────────────────────────────────
 //
-// 服务名从 FriendService 改成 ClientPlayerFriend:见上面 S2C 段的注释 ——
-// 生成器靠服务名里的 ClientPlayer 前缀决定是否给客户端出推送 handler,
-// 改名是本期新增 S2C 推送的前提,不是为了好看。
+// 服务名早先从 FriendService 改成 ClientPlayerFriend,是为了满足当时生成器按服务名含
+// ClientPlayer 过滤客户端服务的规则;该过滤已删除(docs/design/client-rpc-callback.md
+// §5.2 第 4 条),现在是否生成客户端调用面只看下方的 OptionIsClientProtocolService,与服务名无关。
 // NotifyOnline / NotifyOffline 两个 rpc 与它们的四个 message 已删除:全仓非生成
 // 代码里零调用方(已 Grep 确认),在线状态改读契约 key player:session:{id}。
 type ClientPlayerFriendClient interface {
@@ -185,9 +185,9 @@ func (c *clientPlayerFriendClient) NotifyFriendEvent(ctx context.Context, in *Fr
 //
 // ── 服务声明 ─────────────────────────────────────────────────────────
 //
-// 服务名从 FriendService 改成 ClientPlayerFriend:见上面 S2C 段的注释 ——
-// 生成器靠服务名里的 ClientPlayer 前缀决定是否给客户端出推送 handler,
-// 改名是本期新增 S2C 推送的前提,不是为了好看。
+// 服务名早先从 FriendService 改成 ClientPlayerFriend,是为了满足当时生成器按服务名含
+// ClientPlayer 过滤客户端服务的规则;该过滤已删除(docs/design/client-rpc-callback.md
+// §5.2 第 4 条),现在是否生成客户端调用面只看下方的 OptionIsClientProtocolService,与服务名无关。
 // NotifyOnline / NotifyOffline 两个 rpc 与它们的四个 message 已删除:全仓非生成
 // 代码里零调用方(已 Grep 确认),在线状态改读契约 key player:session:{id}。
 type ClientPlayerFriendServer interface {

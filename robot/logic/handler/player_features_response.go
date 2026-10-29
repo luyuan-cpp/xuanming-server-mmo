@@ -23,8 +23,8 @@ func HandleFeatureMessage(player *gameobject.Player, message *base.MessageConten
 		response = &scene.SortBagResponse{}
 	case game.SceneBagClientPlayerEquipItemMessageId:
 		// 穿 / 脱 / GM 发物(equipment-attributes.md §3.2):供 features-smoke 这条收包路径以后发这三条消息时用,
-		// 与 GetBag 同一套「信封错误先于解包」的口径。equip-smoke **不经过这里** —— 它走 prepareBehaviorClient
-		// 的通用分发(信封错误只打日志,随后 stub → RecordFeatureBody 把全零响应落成 failure)。
+		// 与 GetBag 同一套「信封错误先于解包」的口径。equip-smoke **不经过这里**:它用 smokeCaller.callDispatch 发请求,
+		// 成功回包在 RecvLoop 上交通用分发 → stub → RecordFeatureBody 落快照;信封拒绝不进 handler,由场景按 envelopeTip 报错。
 		response = &scene.EquipItemResponse{}
 	case game.SceneBagClientPlayerUnequipItemMessageId:
 		response = &scene.UnequipItemResponse{}
@@ -32,7 +32,7 @@ func HandleFeatureMessage(player *gameobject.Player, message *base.MessageConten
 		response = &scene.GmGrantItemResponse{}
 	case game.SceneBagClientPlayerEnhanceEquipMessageId:
 		// 强化 / 镶嵌 / 取下(equipment-enhance-inlay.md §3.3):与上面穿 / 脱那三条同理 —— 留给 features-smoke 这条
-		// 收包路径,equip-forge-smoke 走的是通用分发 → stub → RecordFeatureBody。
+		// 收包路径,equip-forge-smoke 同样经 callDispatch 把成功回包交通用分发 → stub → RecordFeatureBody。
 		response = &scene.EnhanceEquipResponse{}
 	case game.SceneBagClientPlayerInlayGemMessageId:
 		response = &scene.InlayGemResponse{}
@@ -80,7 +80,7 @@ func RecordFeatureBody(player *gameobject.Player, messageID uint32, response pro
 		}
 	case *scene.EquipItemResponse:
 		// 穿 / 脱成功必须同时带回人物背包与装备栏两份全量,缺任何一份都不能算成功:
-		// gate 级拒绝(限流 / GM 闸)被通用分发器解出来的就是一份全零响应,要落成 failure 而不是「空包」。
+		// 残缺的响应(以及服务端没回显请求号时、id = 0 的信封被通用分发器解出的全零响应)要落成 failure 而不是「空包」。
 		// 业务拒绝(tip != 0)时两个包本来就不填,函数末尾统一改写成 server rejected。
 		tip = body.GetErrorMessage().GetId()
 		if body.GetBag().GetLayout() == nil || body.GetEquipment().GetLayout() == nil {

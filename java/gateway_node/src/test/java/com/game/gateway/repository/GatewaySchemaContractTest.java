@@ -132,9 +132,15 @@ class GatewaySchemaContractTest {
     private static Connection strongTiDbConnection(Connection connection) throws java.sql.SQLException {
         try (Statement statement = connection.createStatement()) {
             statement.setQueryTimeout(5);
-            try (ResultSet rows = statement.executeQuery("SELECT TIDB_VERSION()")) {
+            try (ResultSet rows = statement.executeQuery("SELECT VERSION(), TIDB_VERSION()")) {
                 assertTrue(rows.next());
                 assertTrue(rows.getString(1).toLowerCase(Locale.ROOT).contains("tidb"), "必须验证真实 TiDB");
+                String buildDetails = rows.getString(2);
+                assertNotNull(buildDetails, "必须取得 TiDB 构建原件");
+                String releaseVersion = buildDetails.lines().findFirst().orElse("");
+                assertTrue(releaseVersion.startsWith("Release Version: "), "必须取得 TiDB 发布版本行");
+                assertFalse(releaseVersion.substring("Release Version: ".length()).isBlank(),
+                        "TiDB 发布版本不能为空");
             }
             connection.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
             statement.execute("SET SESSION tidb_txn_mode='pessimistic',tidb_read_staleness=0,"

@@ -10,7 +10,8 @@ package main
 //   - 能力标记:-db-capability-zones 必须显式列出在跑的 zone(没有缺省值;搬库在线进行,不接受 none,
 //     main 里已由 requireCapabilityZones 拒绝),另外把清单玩家的 home_zone 全部并进去一起核实 —— 处理他们存盘的正是 home 所在 zone
 //     的 go/db,它不按落点选库,切换之后照样把写落进自己的 zone 库;
-//   - 清单落盘。续跑时 S / T / 表集合 / topic 世代号必须与清单一致。
+//   - 清单落盘。续跑时 S / T / 表集合 / topic 世代号必须与清单一致;映射来源(-route-source)续跑与 relocate-abort
+//     都必须与清单一致(relocateRouteSourceRefusal,B2-1)。
 //
 // 落点读写的来源(D1 第 2 批,规格 §6.3 W11 / R8、§13.3 第 2、3、6 条):-route-source=db 时 relocatePlacements 换成
 // sqlRelocatePlacements(全局库 player_route 是真源,提交后发布到 mapping Redis 并 WAITAOF 确认),R0 的枚举与读也走库;
@@ -26,6 +27,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -87,9 +89,11 @@ type relocateRoutePublisher interface {
 //     「与 ops 同序的前缀结果 + error」,前缀截在本批第一个写成的 op 之前(之前的非 Written 结局是确定的,可以给);
 //     已提交未确认的行由续跑的 read 补发布(上一条),或由对账 leader 的增量推送补齐。
 //
-// 「提交即安全」(规格 §6.3 W11):R1 冻结提交未发布 —— 缓存仍是未冻结,go/db 照写 S,数据仍在 S,正确;引擎拿不到 Written
-// 不进 R2。R5 切换提交未发布 —— 缓存停在 R1 已确认的冻结态,go/db 延后写,安全;引擎拿不到 Written 不记 switched,
-// 续跑按库认领已切换(decideFreeze 的 freezeAdoptSwitched),认领之前先补发布。解冻同理。
+// 「提交即安全」(规格 §6.3 W11):「发布没确认」不等于「缓存没变」—— EVAL 与 WAITAOF 在同一条 pipeline 里,份数不足时 EVAL 已经
+// 生效,只是没确认落盘(B2-6)。R1 冻结提交、发布没确认 —— 缓存是未冻结(go/db 照写 S,数据仍在 S)或未确认的冻结值(go/db 延后写),
+// 两者都正确;引擎拿不到 Written 不进 R2,续跑先把冻结再发布确认一次。R5 切换提交、发布没确认 —— 缓存是 R1 已确认的冻结态
+// (go/db 延后写)或未确认的 "{T}:{v+1}"(go/db 开始写 T,T 是 R4 比对过的完整一份;即便随后切主回到冻结态也只是延后写),都安全;
+// 引擎拿不到 Written 不记 switched,续跑按库认领已切换(decideFreeze 的 freezeAdoptSwitched),认领之前先补发布。解冻同理。
 //
 // readOnly(dry-run)时 read 只读库、不发布(dry-run 一个字节都不写),cas 一律拒绝。
 type sqlRelocatePlacements struct {
@@ -216,7 +220,8 @@ func (p sqlRelocatePlacements) cas(ctx context.Context, ops []placementCAS) ([]p
 					out = append(out, res.placementCASResult)
 				}
 				return out, fmt.Errorf("publish %d placement change(s) committed in the route DB but NOT confirmed in the mapping Redis "+
-					"(go/db still sees the previous placement, which stays safe; a resume publishes them before acting on them%s): %w",
+					"(go/db sees either the previous placement or this one — both are safe; this one is just not confirmed durable "+
+					"yet — and a resume publishes them again before acting on them%s): %w",
 					len(written), routePublishRollbackHint(err), err)
 			}
 		}
@@ -345,13 +350,15 @@ func byteIdenticalRowCondition(cols []string) string {
 // go/db 对同一名玩家的写一次只锁一张表的一行、且在切换之前根本不会路由到 T(T 不是当前落点,R1 已证明),
 // 两边不可能互相等待成环。R4 的比对全是非锁定读。
 type sqlRelocateRows struct {
-	db       *sql.DB
-	srcQ     map[string]string // 表 → S 库全限定名
-	dstQ     map[string]string
-	tables   []string // 升序
-	cols     map[string][]string
-	delStmt  map[string]*sql.Stmt
-	copyStmt map[string]*sql.Stmt
+	closeOnce sync.Once
+	closeErr  error
+	db        *sql.DB
+	srcQ      map[string]string // 表 → S 库全限定名
+	dstQ      map[string]string
+	tables    []string // 升序
+	cols      map[string][]string
+	delStmt   map[string]*sql.Stmt
+	copyStmt  map[string]*sql.Stmt
 }
 
 func newSQLRelocateRows(ctx context.Context, db *sql.DB, srcSchema, dstSchema string, tables []string,
@@ -362,55 +369,74 @@ func newSQLRelocateRows(ctx context.Context, db *sql.DB, srcSchema, dstSchema st
 	}
 	for _, t := range r.tables {
 		if len(cols[t]) == 0 {
-			r.Close()
-			return nil, fmt.Errorf("no aligned columns for table %s", t)
+			return nil, errors.Join(fmt.Errorf("no aligned columns for table %s", t), r.Close())
 		}
 		r.srcQ[t] = srcSchema + "." + t
 		r.dstQ[t] = dstSchema + "." + t
 		del, err := db.PrepareContext(ctx, relocateDeleteSQL(r.dstQ[t]))
 		if err != nil {
-			r.Close()
-			return nil, fmt.Errorf("prepare delete on %s: %w", r.dstQ[t], err)
+			return nil, errors.Join(fmt.Errorf("prepare delete on %s: %w", r.dstQ[t], err), r.Close())
 		}
 		r.delStmt[t] = del
 		cp, err := db.PrepareContext(ctx, relocateCopySQL(r.dstQ[t], r.srcQ[t], cols[t]))
 		if err != nil {
-			r.Close()
-			return nil, fmt.Errorf("prepare copy %s → %s: %w", r.srcQ[t], r.dstQ[t], err)
+			return nil, errors.Join(fmt.Errorf("prepare copy %s → %s: %w", r.srcQ[t], r.dstQ[t], err), r.Close())
 		}
 		r.copyStmt[t] = cp
+	}
+	if err := registerMaintenanceResource(ctx, r); err != nil {
+		return nil, errors.Join(err, r.Close())
 	}
 	return r, nil
 }
 
 // Close 释放预编译语句。
-func (r *sqlRelocateRows) Close() {
-	for _, s := range r.delStmt {
-		_ = s.Close()
-	}
-	for _, s := range r.copyStmt {
-		_ = s.Close()
-	}
+func (r *sqlRelocateRows) Close() error {
+	r.closeOnce.Do(func() {
+		for _, s := range r.delStmt {
+			r.closeErr = errors.Join(r.closeErr, s.Close())
+		}
+		for _, s := range r.copyStmt {
+			r.closeErr = errors.Join(r.closeErr, s.Close())
+		}
+	})
+	return r.closeErr
 }
 
-func (r *sqlRelocateRows) copyPlayer(ctx context.Context, playerID uint64) (int, error) {
+func (r *sqlRelocateRows) copyPlayer(ctx context.Context, playerID uint64) (cold int, err error) {
+	if err := checkMaintenanceTool(ctx); err != nil {
+		return 0, err
+	}
+	finish, err := enterMaintenanceWork(ctx)
+	if err != nil {
+		return 0, err
+	}
+	returned := false
+	defer func() {
+		if !returned || err != nil {
+			holdMaintenanceTool(ctx)
+		}
+		finish()
+	}()
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("begin: %w", err)
 	}
-	committed := false
 	defer func() {
-		if !committed {
-			_ = tx.Rollback()
+		rollbackErr := tx.Rollback()
+		if rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+			err = errors.Join(err, rollbackErr)
 		}
 	}()
-	cold := 0
 	for _, t := range r.tables {
 		res, err := tx.StmtContext(ctx, r.delStmt[t]).ExecContext(ctx, playerID)
 		if err != nil {
 			return 0, fmt.Errorf("delete the old copy in %s: %w", r.dstQ[t], err)
 		}
-		n, _ := res.RowsAffected()
+		n, affectedErr := res.RowsAffected()
+		if affectedErr != nil {
+			return 0, affectedErr
+		}
 		cold += int(n)
 		if _, err := tx.StmtContext(ctx, r.copyStmt[t]).ExecContext(ctx, playerID); err != nil {
 			return 0, fmt.Errorf("copy %s → %s: %w", r.srcQ[t], r.dstQ[t], err)
@@ -419,7 +445,7 @@ func (r *sqlRelocateRows) copyPlayer(ctx context.Context, playerID uint64) (int,
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("commit: %w", err)
 	}
-	committed = true
+	returned = true
 	return cold, nil
 }
 
@@ -558,11 +584,63 @@ func checkRelocateResume(m *relocateManifest, s, t uint32, tables []string, gene
 	return nil
 }
 
+// relocateRouteSourceRefusal 核对搬库清单记录的映射来源与本次 -route-source(B2-1;续跑与 -mode relocate-abort 共用,纯函数):
+// 一致回 nil;不一致、或清单记录了不认识的值,一律拒绝 —— 冻结 / 切换写在哪一边,认领与解冻就只能在哪一边做。判定本身就是
+// checkManifestRouteSource(与合服共用的那一份),这里只把拒绝文案换成按方向给出的出路。调用方在打开映射接缝之前调用,拒绝时
+// 什么都没读、没写。
+//
+// 撤销也拒绝、不按「此刻的真源」放行(10-22 协调结论):db 源的 R1 已在库里提交、发布没确认,随后环境回退成 redis 模式且没按库
+// 重灌缓存 —— 用 redis 源撤销会把这些人记成 skipped、把清单标成 Aborted,而库里的冻结从此成了没有任何清单认领的孤儿。
+//
+// 出路(都在拒绝文案里,TestRelocateRouteSourceRefusal 钉住):用清单记录的来源重跑同一条命令;那个来源过不了成对核对
+// (openRelocateRouteBackend → openRouteBackend → decideRoutePairing,在任何读写之前)时按报错分两种:
+//   - 清单是 db、报水位键不在:先按 runbook §15.2 第一行排查(等对账 leader 一拍、核对 RouteStore.Mode 与 -mapping-redis-addr)。
+//     环境确实已回退成 redis 模式时,水位键只有 db_first 的对账 leader(或 db_first 下的 route_tool unfreeze)会写,
+//     rewarm 只删不建 —— 本工具没有出路,停下升级;这批人保持冻结、go/db 延后他们的写,不丢数据。
+//   - 清单是 redis(含没有这个字段的旧清单)、报水位键存在:环境已切到 db_first,同样没有出路,停下升级;不要 DEL 水位键
+//     (§15.2:那等于关掉回档检测)。
+//
+// 这两种都是上线切换 / 回退跨过了一次没收尾的搬库(提案 §13.4 P1~P4 禁止 merge_zone 写模式);负责人决定前不加放行开关。
+func relocateRouteSourceRefusal(recorded, current, manifestPath string) error {
+	err := checkManifestRouteSource("relocate", recorded, current)
+	got := recordedRouteSource(recorded)
+	if err == nil || (got != routeSourceDB && got != routeSourceRedis) {
+		return err
+	}
+	head := fmt.Sprintf("the relocate manifest was written with -route-source %s but this run uses -route-source %s", got, current)
+	if recorded == "" {
+		head = fmt.Sprintf("the relocate manifest has no route_source (written by the Redis-only tool, i.e. -route-source redis) but "+
+			"this run uses -route-source %s", current)
+	}
+	keep := "Until then the frozen players stay frozen: go/db defers their writes, nothing is lost"
+	if got == routeSourceDB {
+		return fmt.Errorf("%s. This run's freezes and switches were committed in the global route DB (player_route.frozen_run_id): "+
+			"resume it, or give it up with -mode relocate-abort -manifest-path %s -apply, ONLY with -route-source db -route-db-dsn "+
+			"<the global route DB> (the same route arguments as the relocation). If that is refused with %q, follow runbook §15.2 "+
+			"(wait one reconcile-leader tick, check RouteStore.Mode and -mapping-redis-addr); if data_service has been rolled back to "+
+			"RouteStore.Mode=redis while this run was half done, no command of this tool can finish or undo it (only a db_first "+
+			"reconcile leader re-creates that key; rewarm only drops it) — stop and escalate (runbook §15). %s. Never give it up "+
+			"with -route-source redis: players whose freeze is only in the DB would be recorded as skipped and the manifest marked "+
+			"aborted, leaving those DB freezes orphaned", head, manifestPath, routeWatermarkKey+" is missing", keep)
+	}
+	return fmt.Errorf("%s. This run froze its players in the mapping Redis only: resume it, or give it up with -mode relocate-abort "+
+		"-manifest-path %s -apply, ONLY with -route-source redis (no -route-db-dsn). If that is refused with %q, data_service is "+
+		"already on RouteStore.Mode=db_first — the rollout crossed P1~P4 (which forbid merge_zone writes) while this run was half "+
+		"done, and no command of this tool can finish or undo it: stop and escalate (runbook §15); do NOT delete %s (runbook §15.2: "+
+		"that disables rollback detection). %s", head, manifestPath, routeWatermarkKey+" exists on this mapping Redis",
+		routeWatermarkKey, keep)
+}
+
 // ── 入口 ─────────────────────────────────────────────────────────
 
 func runRelocateEntry(o options) {
-	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
+	ctx, cancel := context.WithTimeout(maintenanceParent(o), o.timeout)
 	defer cancel()
+	if !o.dryRun {
+		if err := checkMaintenanceTool(ctx); err != nil {
+			log.Fatal(err)
+		}
+	}
 	s, t := o.relocateSource, o.relocateTarget
 	now := time.Now()
 	manifestPath := o.manifestPath
@@ -577,12 +655,12 @@ func runRelocateEntry(o options) {
 		o.kafkaTopicGen, o.routeSource)
 
 	db := mustOpenMySQL(ctx, o.mysqlDSN)
-	defer db.Close()
+	defer closeUnownedMaintenanceResource(ctx, db)
 	mapRdb := mustDial(ctx, "mapping", o.mappingAddr, o.mappingPwd, o.mappingDB)
-	defer mapRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, mapRdb)
 	// go/db 的排序锁与重试队列在它的 RedisClient 上:shared DB 0(-notice-redis-*)。
 	sharedRdb := mustDial(ctx, "login/shared(DB0, go/db ordering locks)", o.noticeAddr, o.noticePwd, o.noticeDB)
-	defer sharedRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, sharedRdb)
 
 	// ── R0 ─────────────────────────────────────────────────
 	for _, schema := range []string{srcSchema, dstSchema} {
@@ -627,7 +705,8 @@ func runRelocateEntry(o options) {
 		if err := checkRelocateResume(m, s, t, tables, uint32(o.kafkaTopicGen), flagIDs); err != nil {
 			log.Fatalf("manifest %s: %v", manifestPath, err)
 		}
-		if err := checkManifestRouteSource("relocate", m.RouteSource, o.routeSource); err != nil {
+		// 续跑与撤销都只认清单记录的来源(B2-1,出路见 relocateRouteSourceRefusal);在打开映射接缝之前,拒绝时什么都没读写。
+		if err := relocateRouteSourceRefusal(m.RouteSource, o.routeSource, manifestPath); err != nil {
 			log.Fatalf("manifest %s: %v", manifestPath, err)
 		}
 		runID = m.RunID
@@ -640,7 +719,9 @@ func runRelocateEntry(o options) {
 	if err != nil {
 		log.Fatalf("R0: route source %q: %v", o.routeSource, err)
 	}
-	defer backend.close()
+	if maintenanceFromContext(ctx) == nil {
+		defer backend.close()
+	}
 	log.Printf("R0 OK: player placements are read and written through %s", backend.source())
 	if resumed {
 		log.Printf("RESUME: run_id=%s — %s (players come from the manifest; nothing is re-enumerated)", m.RunID, m.relocSummary())
@@ -739,36 +820,40 @@ func runRelocateEntry(o options) {
 	if err != nil {
 		log.Fatalf("R0: %v", err)
 	}
-	defer rows.Close()
+	defer closeUnownedMaintenanceResource(ctx, rows)
 	save := func(m *relocateManifest) error { return saveRelocateManifest(manifestPath, m) }
 	engine := newRelocateEngine(m, save, backend.places, redisOrderingLocks{rdb: sharedRdb}, rows,
 		capSet, o.relocateBatch, o.relocateLockWait)
 	runErr := engine.run(ctx)
 	// 出错路径上内存里的状态也可能已经推进(解冻了一部分),最后再落一次盘。
 	if err := save(m); err != nil {
+		holdMaintenanceTool(ctx)
 		log.Printf("ERROR: final manifest save failed: %v — the manifest on disk may lag behind the %s placements; a resume adopts "+
 			"this run's freezes and switches from there", err, backend.source())
 	}
 	log.Printf("=== Relocate %s → %s: %s ===", srcSchema, dstSchema, m.relocSummary())
 	if runErr != nil {
-		// db 源多一句(R8-8):R1 冻结已在库里提交、发布没确认的那批人,缓存还是未冻结,go/db 照写 S —— 他们的数据也还没拷,
-		// 所以「nothing is lost」仍然成立;续跑先确认冻结再拷。redis 源文案逐字不变。
+		// db 源多一句(R8-8):R1 冻结已在库里提交、发布没确认的那批人,缓存是未冻结(go/db 照写 S)或未确认的冻结值(go/db 延后写,
+		// B2-6:EVAL 执行了、WAITAOF 份数不足)—— 他们的数据都还没拷,所以「nothing is lost」仍然成立;续跑先确认冻结再拷。
+		// redis 源文案逐字不变。
 		dbNote := ""
 		if backend.source() == routeSourceDB {
-			dbNote = "; players whose freeze was committed in the route DB but not confirmed in the mapping Redis are still written " +
-				"to S by go/db and were not copied (the resume confirms their freeze before copying)"
+			dbNote = "; players whose freeze was committed in the route DB but not confirmed in the mapping Redis are either still " +
+				"written to S by go/db or already deferred, and were not copied (the resume confirms their freeze before copying)"
 		}
 		log.Fatalf("relocate stopped: %v. Players frozen by run_id=%s stay frozen (go/db defers their writes, nothing is lost; "+
 			"db_placement_guard_total{outcome=\"frozen_deferred\"} keeps rising): resume with the same command, or give up with "+
 			"-mode relocate-abort -manifest-path %s -apply. With -route-source=db a change committed in the route DB but not "+
 			"confirmed in the mapping Redis is published by the resume before it is acted on%s", runErr, m.RunID, manifestPath, dbNote)
 	}
-	reportRelocateOutcome(m, manifestPath)
+	if err := reportRelocateOutcome(m, manifestPath); err != nil {
+		normalToolFailure(ctx, err)
+	}
 }
 
 // reportRelocateOutcome 打收尾摘要。不是所有人都切换成功时 exit 1:没切过去的人要么留在 S(skipped / unfrozen),
 // 要么需要人看(cas_failed),都不能当成「搬完了」。要再搬用新的 -manifest-path 另起一次(终态不会被续跑重做)。
-func reportRelocateOutcome(m *relocateManifest, manifestPath string) {
+func reportRelocateOutcome(m *relocateManifest, manifestPath string) error {
 	c := m.relocStateCounts()
 	for _, state := range []string{relocCASFailed, relocUnfrozen, relocSkipped} {
 		if c[state] > 0 {
@@ -778,12 +863,12 @@ func reportRelocateOutcome(m *relocateManifest, manifestPath string) {
 	if c[relocSwitched] == len(m.Players) {
 		log.Printf("All %d players now live in storage %d. The rows left in storage %d are cold copies (P-1); "+
 			"`-mode storage-audit -storage %d` shows what still points there.", len(m.Players), m.TargetStorage, m.SourceStorage, m.SourceStorage)
-		return
+		return nil
 	}
 	log.Printf("NOT all players were relocated (manifest %s). Players left in storage %d keep working there; relocate them with "+
 		"a new -manifest-path once the cause is fixed. cas_failed players need a human: their placement record changed under this run.",
 		manifestPath, m.SourceStorage)
-	os.Exit(1)
+	return fmt.Errorf("relocate部分玩家未终局，保留原manifest")
 }
 
 // previewRelocation 是 dry-run:按 R1 的判定分类(不冻结、不拷贝),预览写到 <path>.dryrun.json。
@@ -822,8 +907,13 @@ func previewRelocation(m *relocateManifest, reads []placementRead, todo []uint64
 }
 
 func runRelocateAbortEntry(o options) {
-	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
+	ctx, cancel := context.WithTimeout(maintenanceParent(o), o.timeout)
 	defer cancel()
+	if !o.dryRun {
+		if err := checkMaintenanceTool(ctx); err != nil {
+			log.Fatal(err)
+		}
+	}
 	m, err := loadRelocateManifest(o.manifestPath)
 	if err != nil {
 		log.Fatalf("load relocate manifest: %v", err)
@@ -835,21 +925,23 @@ func runRelocateAbortEntry(o options) {
 		log.Fatalf("the manifest is for storage %d → %d but the flags say %d → %d",
 			m.SourceStorage, m.TargetStorage, o.relocateSource, o.relocateTarget)
 	}
-	// 解冻只能在冻结写下的那一边做(理由见 relocateManifest.RouteSource)。
-	if err := checkManifestRouteSource("relocate", m.RouteSource, o.routeSource); err != nil {
+	// 解冻只能在冻结写下的那一边做(B2-1:来源不一致即拒绝,拒绝文案给出路,理由见 relocateRouteSourceRefusal)。
+	if err := relocateRouteSourceRefusal(m.RouteSource, o.routeSource, o.manifestPath); err != nil {
 		log.Fatalf("manifest %s: %v", o.manifestPath, err)
 	}
 	log.Printf("=== Relocate ABORT run_id=%s (%d → %d, dry-run=%v): %s ===", m.RunID, m.SourceStorage, m.TargetStorage,
 		o.dryRun, m.relocSummary())
 	log.Printf("    Make sure the relocate process of this run has exited: both would rewrite the same manifest.")
 	mapRdb := mustDial(ctx, "mapping", o.mappingAddr, o.mappingPwd, o.mappingDB)
-	defer mapRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, mapRdb)
 	// 与 relocate 同一个接缝:db 源下解冻写库、发布确认之后才算解冻;dry-run 只读库、不发布。
 	backend, err := openRelocateRouteBackend(ctx, routeEntryOptionsOf(o), mapRdb, m.RunID, o.dryRun)
 	if err != nil {
 		log.Fatalf("route source %q: %v", o.routeSource, err)
 	}
-	defer backend.close()
+	if maintenanceFromContext(ctx) == nil {
+		defer backend.close()
+	}
 	log.Printf("    player placements are read and written through %s", backend.source())
 
 	engine := newRelocateEngine(m, nil, backend.places, nil, nil, nil, max(o.relocateBatch, 1), 0)
@@ -863,6 +955,7 @@ func runRelocateAbortEntry(o options) {
 	}
 	m.Aborted = true
 	if serr := saveRelocateManifest(o.manifestPath, m); serr != nil {
+		holdMaintenanceTool(ctx)
 		log.Printf("ERROR: save the aborted manifest: %v", serr)
 	}
 	if err != nil {
@@ -872,6 +965,7 @@ func runRelocateAbortEntry(o options) {
 	if rep.Failed > 0 {
 		log.Printf("%d players could not be unfrozen: their record is no longer this run's frozen value (first: %v)",
 			rep.Failed, m.relocSample(relocCASFailed))
-		os.Exit(1)
+		normalToolFailure(ctx, fmt.Errorf("relocate-abort仍有%d玩家不能解冻", rep.Failed))
+		return
 	}
 }

@@ -34,13 +34,10 @@ include_directories(
     ../../../../third_party/boost/
     ../../../../third_party/entt/single_include
     ../../../../third_party/fmt/include
-    ../../../../third_party/grpc/third_party/
-    ../../../../third_party/grpc/third_party/boringssl-with-bazel/include/
     ../../../../third_party/hexagons_grids/
     ../../../../third_party/librdkafka/src-cpp/
     ../../../../third_party/lua/src/
     ../../../../third_party/muduo-linux/
-    ../../../../third_party/openssl/include/
     ../../../../third_party/recastnavigation/
     ../../../../third_party/redis/
     ../../../../third_party/redis/deps/
@@ -62,8 +59,6 @@ include_directories(
     ../third_party/lua/src/
     ../third_party/muduo-linux/
     ../third_party/mysql/include/
-    ../third_party/protobuf/src/
-    ../third_party/protobuf/third_party/abseil-cpp/
     ../third_party/redis/
     ../third_party/redis/deps/
     ../third_party/sol2/include/
@@ -109,6 +104,7 @@ set(SOURCE_FILES
     player/system/db_task_dispatch_ledger.cpp
     player/system/db_task_dispatch_system.cpp
     player/system/player_lifecycle.cpp
+    player/system/player_ownership_metrics.cpp
     player/system/role_admission_system.cpp
     player/system/player_scene.cpp
     player/system/player_team.cpp

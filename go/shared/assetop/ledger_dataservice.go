@@ -10,9 +10,10 @@ import (
 	dspb "proto/data_service"
 )
 
-// DataServiceLedger 用 data_service.GetPlayerAssetOpLedger 实现 LedgerReader 与 SQLCommitLedgerReader
-// (docs/design/guild-phase2/07-rollback-fail-closed.md §7.8.3,90 清单 Y-06;SQL 证据读法见
-// docs/design/db-write-fencing-mysql.md §6.6)。两个方法只差请求里的 require_sql_commit。
+// DataServiceLedger 用 data_service.GetPlayerAssetOpLedger 实现 LedgerReader、SQLCommitLedgerReader 与
+// VerifiedLedgerReader(docs/design/guild-phase2/07-rollback-fail-closed.md §7.8.3,90 清单 Y-06;SQL 证据读法见
+// docs/design/db-write-fencing-mysql.md §6.6;副本核验见 zone-redis-regression-guard-20261022.md §4.5)。
+// 三个方法只差请求里的 require_sql_commit / verify_redis_copy。
 //
 // 放在 shared 而不是 guild:trade 的重投循环留着同一个空位(go/trade/internal/reconcile/pipeline.go
 // 只设了 Manual),两个服务各写一份迟早分叉。
@@ -41,7 +42,8 @@ var errDataServiceLedgerNoClient = errors.New("assetop: DataServiceLedger 未装
 
 // ReadPersistedLedger 实现 LedgerReader:读 zone Redis 里的玩家父键 blob(require_sql_commit=false,HEAD 口径)。
 func (d *DataServiceLedger) ReadPersistedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, error) {
-	return d.read(ctx, playerID, false)
+	ledger, _, err := d.read(ctx, &dspb.GetPlayerAssetOpLedgerRequest{PlayerId: playerID})
+	return ledger, err
 }
 
 // ReadSQLCommittedLedger 实现 SQLCommitLedgerReader:只读 go/db 发布的资产 SQL 提交证据(require_sql_commit=true,
@@ -49,12 +51,22 @@ func (d *DataServiceLedger) ReadPersistedLedger(ctx context.Context, playerID ui
 // 旧版 data_service 不认识这个字段、照旧回 Redis blob(sql_committed=false),必须当错误拒绝,不能冒充 SQL 证据
 // (上线顺序见同文 §8.7 第 ① 步)。映射的其余部分与 ReadPersistedLedger 相同。
 func (d *DataServiceLedger) ReadSQLCommittedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, error) {
-	return d.read(ctx, playerID, true)
+	ledger, _, err := d.read(ctx, &dspb.GetPlayerAssetOpLedgerRequest{PlayerId: playerID, RequireSqlCommit: true})
+	return ledger, err
 }
 
-func (d *DataServiceLedger) read(ctx context.Context, playerID uint64, requireSQLCommit bool) (*componentpb.PlayerAssetOpLedgerComp, error) {
+// ReadVerifiedPersistedLedger 实现 VerifiedLedgerReader:读 Redis 父键 blob(verify_redis_copy=true),verified 取回包的
+// redis_copy_verified —— data_service 在读 blob 的同一段 Lua 里核对本实例身份等于屏障身份戳且是主
+// (docs/design/zone-redis-regression-guard-20261022.md §4.5)。对端没做核验时这一位是缺省 false,按未核验处理,
+// 不需要另判版本。found=false 时 verified 一律为假。映射的其余部分与 ReadPersistedLedger 相同。
+func (d *DataServiceLedger) ReadVerifiedPersistedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, bool, error) {
+	return d.read(ctx, &dspb.GetPlayerAssetOpLedgerRequest{PlayerId: playerID, VerifyRedisCopy: true})
+}
+
+// read 发一次 GetPlayerAssetOpLedger。返回的 bool 是回包的 redis_copy_verified,只对 verify_redis_copy 请求有意义。
+func (d *DataServiceLedger) read(ctx context.Context, req *dspb.GetPlayerAssetOpLedgerRequest) (*componentpb.PlayerAssetOpLedgerComp, bool, error) {
 	if d == nil || d.Client == nil {
-		return nil, errDataServiceLedgerNoClient
+		return nil, false, errDataServiceLedgerNoClient
 	}
 	if d.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -62,20 +74,21 @@ func (d *DataServiceLedger) read(ctx context.Context, playerID uint64, requireSQ
 		defer cancel()
 	}
 
-	resp, err := d.Client.GetPlayerAssetOpLedger(ctx, &dspb.GetPlayerAssetOpLedgerRequest{PlayerId: playerID, RequireSqlCommit: requireSQLCommit})
+	resp, err := d.Client.GetPlayerAssetOpLedger(ctx, req)
 	if err != nil {
 		// %w 保留 gRPC status:调用方可用 status.Code(err) 取原 code。
-		return nil, fmt.Errorf("data_service.GetPlayerAssetOpLedger player_id=%d: %w", playerID, err)
+		return nil, false, fmt.Errorf("data_service.GetPlayerAssetOpLedger player_id=%d: %w", req.GetPlayerId(), err)
 	}
 	if !resp.GetFound() {
-		return nil, nil
+		return nil, false, nil
 	}
-	if requireSQLCommit && !resp.GetSqlCommitted() {
-		return nil, errors.New("data_service 未提供 SQL 提交证据，不能以 Redis 快照终结资产操作")
+	if req.GetRequireSqlCommit() && !resp.GetSqlCommitted() {
+		return nil, false, errors.New("data_service 未提供 SQL 提交证据，不能以 Redis 快照终结资产操作")
 	}
+	verified := req.GetVerifyRedisCopy() && resp.GetRedisCopyVerified()
 	if ledger := resp.GetLedger(); ledger != nil {
-		return ledger, nil
+		return ledger, verified, nil
 	}
 	// found=true 但账本字段缺席(对端没显式带上空消息):按"有 blob、账本为空"处理,不得回 nil 冒充"没有 blob"。
-	return &componentpb.PlayerAssetOpLedgerComp{}, nil
+	return &componentpb.PlayerAssetOpLedgerComp{}, verified, nil
 }

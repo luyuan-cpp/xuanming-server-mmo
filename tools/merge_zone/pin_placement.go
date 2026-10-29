@@ -22,7 +22,9 @@ package main
 // -route-source=db(W10,规格 §6.3、§13.3 第 5 条):每批 ≤ 200 人一个库事务(PinZonePlacementBatch:zone 的 63 号片围栏未生效 →
 // 库里没有该 zone 的合走标记 → home = N 且无落点的行按键集游标 `route_shard > ? OR (route_shard = ? AND player_id > ?)` 加锁 →
 // 钉)→ 提交 → 本批发布 + WAITAOF → 下一批;最后对 home = N 且记录已是 "{N}:1" 的行做一遍 catch-up(库 rev 领先缓存的先发布确认),
-// 上一次运行提交了却没发布成的钉,重跑时由它补上(加锁扫描只挑还没钉的行,看不见它们)。钉的值等于 home,早晚可见都安全。
+// 上一次运行提交了却没发布成的钉,重跑时由它补上(加锁扫描只挑还没钉的行,看不见它们)。缓存里已是这一版的不再发布、也不补
+// 确认(catchUpRoutes 的口径,B1-8):「EVAL 执行了、WAITAOF 份数不足」的那一批由对账 leader 兜底 —— Redis 切主后它撤就绪标记、
+// 按 RepairLookbackMs 回看修补,期间读方门禁 fail-closed。钉的值等于 home,早晚可见都不会把人路由到别的库。
 
 import (
 	"context"
@@ -37,6 +39,7 @@ import (
 
 // pinPlacementEntryParams 是 -mode pin-placement 的纯数据输入(main 管 flag,本文件管语义)。
 type pinPlacementEntryParams struct {
+	parent      context.Context // main装配的同boot NORMAL owner；dry-run可为空。
 	zone        uint32
 	mappingAddr string
 	mappingPwd  string
@@ -48,17 +51,28 @@ type pinPlacementEntryParams struct {
 }
 
 func runPinPlacementEntry(p pinPlacementEntryParams) {
-	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
+	parent := p.parent
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, p.timeout)
 	defer cancel()
+	if !p.dryRun {
+		if err := checkMaintenanceTool(ctx); err != nil {
+			log.Fatal(err)
+		}
+	}
 	log.Printf("=== Pin placement \"%d:1\" for players with home_zone=%d and no record (dry-run=%v, mapping=%s db=%d, route-source=%s) ===",
 		p.zone, p.zone, p.dryRun, p.mappingAddr, p.mappingDB, p.route.source)
 	mapRdb := mustDial(ctx, "mapping", p.mappingAddr, p.mappingPwd, p.mappingDB)
-	defer mapRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, mapRdb)
 	rb, err := openRunRouteBackend(ctx, p.route, mapRdb, newToolRunID("pin", p.zone, time.Now()))
 	if err != nil {
 		log.Fatalf("pin-placement: route source: %v", err)
 	}
-	defer rb.Close()
+	if maintenanceFromContext(ctx) == nil {
+		defer rb.Close()
+	}
 
 	rep, err := stepPinZonePlacements(ctx, rb, mapRdb, p.zone, p.dryRun)
 	if err != nil {
@@ -194,8 +208,11 @@ func pinZonePlacementsDB(ctx context.Context, rb *routeBackend, zone uint32, lim
 		rep.Candidates += len(res.Target)
 		rep.Pinned += res.Changed
 		if _, err := rb.pub.publishRoutes(ctx, res.Target); err != nil {
-			return rep, fmt.Errorf("a pin batch of %d players committed in player_route but its publish failed — re-run (the final "+
-				"catch-up republishes rows that are already pinned): %w", len(res.Target), err)
+			// 文案不承诺「重跑补确认」(B1-8):收尾 catch-up 只补发缓存还没有这一版的行;已执行、没确认落盘的由对账 leader 兜底。
+			return rep, fmt.Errorf("a pin batch of %d players committed in player_route but its publish was not confirmed — re-run: "+
+				"the final catch-up republishes pinned rows the mapping Redis does not show yet; a pin that already reached the "+
+				"cache but was not confirmed durable is left to the data_service reconcile leader (after a Redis failover it "+
+				"withdraws the ready marker and re-pushes recent rows); the pinned value equals home either way: %w", len(res.Target), err)
 		}
 		if done {
 			break

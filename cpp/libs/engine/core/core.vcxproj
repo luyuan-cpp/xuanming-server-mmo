@@ -92,7 +92,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;NOMINMAX;GOOGLE_CHECK_EQ=ABSL_CHECK_EQ;GOOGLE_LOG=ABSL_LOG;GOOGLE_DCHECK=ABSL_DCHECK;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../../../third_party/boost/;../../../../third_party/muduo/;../../....//third_party/redis/;../../../../third_party/sol2/include/;../../../../third_party/lua/src/;../../../../third_party/muduo/contrib/windows/include/;../../../../third_party/zlib/;../../../../third_party/grpc/include/;../../../../third_party/grpc/third_party/abseil-cpp/;../../../generated/;../../../../third_party/grpc/third_party/;../../../../third_party/;../../../../third_party/grpc/third_party/protobuf/src/;./;../../../../third_party/redis/deps/;../../../../third_party/redis/;../;../infra/;../../../../third_party/librdkafka/src-cpp/;../config/;../../../generated/grpc_client/;../../;../../../../third_party/openssl/include/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../../third_party/boost/;../../../../third_party/muduo/;../../....//third_party/redis/;../../../../third_party/sol2/include/;../../../../third_party/lua/src/;../../../../third_party/muduo/contrib/windows/include/;../../../../third_party/zlib/;../../../../third_party/abseil-cpp/;../../../generated/;../../../../third_party/;../../../../third_party/protobuf/src/;./;../../../../third_party/redis/deps/;../../../../third_party/redis/;../;../infra/;../../../../third_party/librdkafka/src-cpp/;../config/;../../../generated/grpc_client/;../../;../../../../third_party/boringssl/install_vs2026_dbg/include/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <ForceSynchronousPDBWrites>true</ForceSynchronousPDBWrites>
       <DisableSpecificWarnings>4200;4819;4146;4244;4267;4018;</DisableSpecificWarnings>
@@ -117,7 +117,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;NOMINMAX;GOOGLE_CHECK_EQ=ABSL_CHECK_EQ;GOOGLE_LOG=ABSL_LOG;GOOGLE_DCHECK=ABSL_DCHECK</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../../../third_party/boost/;../../../../third_party/muduo/;../../....//third_party/redis/;../../../../third_party/sol2/include/;../../../../third_party/lua/src/;../../../../third_party/muduo/contrib/windows/include/;../../../../third_party/zlib/;../../../../third_party/grpc/include/;../../../../third_party/grpc/third_party/abseil-cpp/;../../../generated/;../../../../third_party/grpc/third_party/;../../../../third_party/;../../../../third_party/grpc/third_party/protobuf/src/;./;../../../../third_party/redis/deps/;../../../../third_party/redis/;../;../infra/;../../../../third_party/librdkafka/src-cpp/;../configs/;../../../generated/grpc_client/;../../;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../../third_party/boost/;../../../../third_party/muduo/;../../....//third_party/redis/;../../../../third_party/sol2/include/;../../../../third_party/lua/src/;../../../../third_party/muduo/contrib/windows/include/;../../../../third_party/zlib/;../../../../third_party/abseil-cpp/;../../../generated/;../../../../third_party/;../../../../third_party/protobuf/src/;./;../../../../third_party/redis/deps/;../../../../third_party/redis/;../;../infra/;../../../../third_party/librdkafka/src-cpp/;../configs/;../../../generated/grpc_client/;../../;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <DisableSpecificWarnings>4200;4819;4146</DisableSpecificWarnings>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -138,7 +138,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;NOMINMAX;GOOGLE_CHECK_EQ=ABSL_CHECK_EQ;GOOGLE_LOG=ABSL_LOG;GOOGLE_DCHECK=ABSL_DCHECK;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../../../third_party/boost/;../../../../third_party/muduo/;../../....//third_party/redis/;../../../../third_party/sol2/include/;../../../../third_party/lua/src/;../../../../third_party/muduo/contrib/windows/include/;../../../../third_party/zlib/;../../../../third_party/grpc/include/;../../../../third_party/grpc/third_party/abseil-cpp/;../../../generated/;../../../../third_party/grpc/third_party/;../../../../third_party/;../../../../third_party/grpc/third_party/protobuf/src/;./;../../../../third_party/redis/deps/;../../../../third_party/redis/;../;../infra/;../../../../third_party/librdkafka/src-cpp/;../config/;../../../generated/grpc_client/;../../;../../../../third_party/openssl/include/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../../third_party/boost/;../../../../third_party/muduo/;../../....//third_party/redis/;../../../../third_party/sol2/include/;../../../../third_party/lua/src/;../../../../third_party/muduo/contrib/windows/include/;../../../../third_party/zlib/;../../../../third_party/abseil-cpp/;../../../generated/;../../../../third_party/;../../../../third_party/protobuf/src/;./;../../../../third_party/redis/deps/;../../../../third_party/redis/;../;../infra/;../../../../third_party/librdkafka/src-cpp/;../config/;../../../generated/grpc_client/;../../;../../../../third_party/boringssl/install_vs2026_rel/include/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <AdditionalOptions>/bigobj /utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -171,6 +171,9 @@
     <ClCompile Include="network\codec\codec.cpp" />
     <ClCompile Include="network\rpc_channel.cpp" />
     <ClCompile Include="network\rpc_channel_stats.cpp" />
+    <ClCompile Include="metrics\prometheus_text.cpp" />
+    <ClCompile Include="metrics\metrics_registry.cpp" />
+    <ClCompile Include="metrics\metrics_http_exporter.cpp" />
     <ClCompile Include="network\message_statistics.cpp" />
     <ClCompile Include="network\network_utils.cpp" />
     <ClCompile Include="network\node_utils.cpp" />
@@ -189,7 +192,6 @@
     <ClCompile Include="node\system\node\client_endpoint.cpp" />
     <ClCompile Include="node\system\grpc_call_deadline.cpp" />
     <ClCompile Include="node\system\node\node_util.cpp" />
-    <ClCompile Include="node\system\node\grpc_runtime_probe.cpp" />
     <ClCompile Include="node\system\registration\registration_manager.cpp" />
     <ClCompile Include="node\system\discovery\service_discovery_manager.cpp" />
     <ClCompile Include="time\comp\timer_task_boost_comp.cpp" />
@@ -271,7 +273,7 @@
       <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;NOMINMAX;GOOGLE_CHECK_EQ=ABSL_CHECK_EQ;GOOGLE_LOG=ABSL_LOG;GOOGLE_DCHECK=ABSL_DCHECK;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;YAML_CPP_STATIC_DEFINE;_WIN32_WINNT=0x0A00</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>../../../../third_party/boost/;../../../../third_party/muduo/;../../../../third_party/redis/;../../../../third_party/sol2/include/;../../../../third_party/lua/src/;../../../../third_party/redis/deps/;../../../../third_party/muduo/contrib/windows/include/;../../../../third_party/lua/;../../../../third_party/;../../../../third_party/zlib/;../../../../third_party/spdlog/include/;../../../generated/;../../../../third_party/grpc/third_party/protobuf/src/;../../../../third_party/grpc/third_party/abseil-cpp/;../../../../third_party/yaml-cpp/include/;../../../../third_party/xxhash/;../../../../third_party/librdkafka/src-cpp/;./;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../../third_party/boost/;../../../../third_party/muduo/;../../../../third_party/redis/;../../../../third_party/sol2/include/;../../../../third_party/lua/src/;../../../../third_party/redis/deps/;../../../../third_party/muduo/contrib/windows/include/;../../../../third_party/lua/;../../../../third_party/;../../../../third_party/zlib/;../../../../third_party/spdlog/include/;../../../generated/;../../../../third_party/protobuf/src/;../../../../third_party/abseil-cpp/;../../../../third_party/yaml-cpp/include/;../../../../third_party/xxhash/;../../../../third_party/librdkafka/src-cpp/;./;</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <DisableSpecificWarnings>4200;4819;4146;4244;4267;4018;</DisableSpecificWarnings>
       <AdditionalOptions>/bigobj /utf-8 </AdditionalOptions>
@@ -351,7 +353,7 @@
       <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;NOMINMAX;GOOGLE_CHECK_EQ=ABSL_CHECK_EQ;GOOGLE_LOG=ABSL_LOG;GOOGLE_DCHECK=ABSL_DCHECK;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;YAML_CPP_STATIC_DEFINE;_WIN32_WINNT=0x0A00</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>../../../../third_party/boost/;../../../../third_party/muduo/;../../../../third_party/redis/;../../../../third_party/sol2/include/;../../../../third_party/lua/src/;../../../../third_party/redis/deps/;../../../../third_party/muduo/contrib/windows/include/;../../../../third_party/lua/;../../../../third_party/;../../../../third_party/zlib/;../../../../third_party/spdlog/include/;../../../generated/;../../../../third_party/grpc/third_party/protobuf/src/;../../../../third_party/grpc/third_party/abseil-cpp/;../../../../third_party/yaml-cpp/include/;../../../../third_party/xxhash/;../../../../third_party/librdkafka/src-cpp/;./;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../../third_party/boost/;../../../../third_party/muduo/;../../../../third_party/redis/;../../../../third_party/sol2/include/;../../../../third_party/lua/src/;../../../../third_party/redis/deps/;../../../../third_party/muduo/contrib/windows/include/;../../../../third_party/lua/;../../../../third_party/;../../../../third_party/zlib/;../../../../third_party/spdlog/include/;../../../generated/;../../../../third_party/protobuf/src/;../../../../third_party/abseil-cpp/;../../../../third_party/yaml-cpp/include/;../../../../third_party/xxhash/;../../../../third_party/librdkafka/src-cpp/;./;</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <DisableSpecificWarnings>4200;4819;4146;4244;4267;4018;</DisableSpecificWarnings>
       <AdditionalOptions>/bigobj /utf-8 </AdditionalOptions>
@@ -377,6 +379,9 @@
     <ClInclude Include="network\codec\dispatcher.h" />
     <ClInclude Include="network\rpc_channel.h" />
     <ClInclude Include="network\rpc_channel_stats.h" />
+    <ClInclude Include="metrics\prometheus_text.h" />
+    <ClInclude Include="metrics\metrics_registry.h" />
+    <ClInclude Include="metrics\metrics_http_exporter.h" />
     <ClInclude Include="network\rpc_controller.h" />
     <ClInclude Include="network\rpc_done_callback.h" />
     <ClInclude Include="network\rpc_status.h" />
@@ -414,7 +419,6 @@
     <ClInclude Include="node\system\node\node_kafka_command_handler.h" />
     <ClInclude Include="node\system\node\node_util.h" />
     <ClInclude Include="node\system\node\thread_observability.h" />
-    <ClInclude Include="node\system\node\grpc_runtime_probe.h" />
     <ClInclude Include="node\system\registration\registration_manager.h" />
     <ClInclude Include="node\system\discovery\service_discovery_manager.h" />
     <ClInclude Include="time\comp\timer_task_comp.h" />

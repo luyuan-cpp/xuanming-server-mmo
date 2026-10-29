@@ -149,7 +149,7 @@ func TestMigrateSchema_UpgradesLegacyHandWrittenTables(t *testing.T) {
 	require.NoError(t, err)
 
 	// ── 升级 ────────────────────────────────────────────────────────────
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}), "migrate a database whose tables came from the old hand-written DDL")
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}), "migrate a database whose tables came from the old hand-written DDL")
 
 	// 1) 数据没被重写掉。
 	assert.EqualValues(t, 1, db.Count(t, "player_snapshot", "id = ?", legacySnapshotID))
@@ -219,7 +219,7 @@ func TestMigrateSchema_UpgradesLegacyHandWrittenTables(t *testing.T) {
 	for _, table := range []string{"player_snapshot", "transaction_log", "rollback_audit_log"} {
 		before[table] = db.ShowCreateTable(t, table)
 	}
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}), "second migration on an upgraded database must be a no-op")
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}), "second migration on an upgraded database must be a no-op")
 	for table, ddl := range before {
 		assert.Equalf(t, ddl, db.ShowCreateTable(t, table), "table %s DDL changed on the second migration", table)
 	}

@@ -85,7 +85,7 @@ func (c *fakeLeaseClock) tick(t *testing.T) {
 }
 
 func leaseTestTask(key uint64) *db_proto.DBTask {
-	return &db_proto.DBTask{Key: key, Op: "write", MsgType: placementTestMsgType, TaskId: "lease-test"}
+	return &db_proto.DBTask{Key: key, Op: db_proto.DBOp_DB_OP_WRITE, MsgType: placementTestMsgType, TaskId: "lease-test"}
 }
 
 // orderingLockRedisKey 是排序锁在 Redis 里的完整键(locker 的默认前缀 + orderingLockKey)。

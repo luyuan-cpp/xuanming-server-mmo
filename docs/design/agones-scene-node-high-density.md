@@ -388,15 +388,13 @@ RBAC 见 `deploy/k8s/manifests/go-svc/scene-manager-agones-rbac.yaml`:
 
 ## 11. Windows Debug 构建闭环
 
-`Debug|x64` 必须使用同一套 `/MDd` 第三方产物。Gate 实际链接的是 gRPC 随附的
-BoringSSL,所以 Debug include 必须优先使用
-`third_party/grpc/third_party/boringssl-with-bazel/include`;不能生成独立 OpenSSL 3
-的 `configuration.h` 后与 BoringSSL 库混用。
+`Debug|x64` 必须使用同一套 `/MDd` 第三方产物。2026-10-26 起官方 gRPC SDK
+退出构建，BoringSSL 使用独立固定源码及 `third_party/boringssl/install_vs2026_dbg`，
+Protobuf / Abseil / utf8 使用 `third_party/protobuf/install_vs2026_dbg`；头文件与库必须同批，
+不能把系统 OpenSSL 的配置头与 BoringSSL 静态库混用。
 
-当前 Abseil 已把 `crc_cpu_detect` 迁为 `base_cpu_detect`,并删除了
-`low_level_hash` / `string_view` 两个独立库产物。Gate/Scene Debug 链接优先读取
-`third_party/grpc/install_vs2026_dbg/lib`,其中 gRPC、Abseil、Protobuf、BoringSSL、
-zlib、hiredis、yaml-cpp 均按 `/MDd` 构建;Debug 的 `/WHOLEARCHIVE` 也必须指向
+依赖版本保持迁移前提交，具体库清单以当前独立构建的安装产物为准。
+zlib、hiredis、yaml-cpp 也必须按 `/MDd` 构建；Debug 的 `/WHOLEARCHIVE` 必须指向
 `hiredisd.lib` / `yaml-cppd.lib`。
 
 2026-07-28 本地验证:

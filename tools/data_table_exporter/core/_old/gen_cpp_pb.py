@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
     # 公共依赖目录（protobuf 源码路径、第三方 proto 等）
     common_includes = [
-        Path("../../third_party/grpc/third_party/protobuf/src"),
+        Path("../../third_party/protobuf/src"),
         Path(paths.PROJECT_GENERATED_CODE_DIR) / "proto",
     ]
 

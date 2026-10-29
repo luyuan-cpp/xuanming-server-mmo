@@ -120,7 +120,7 @@
      - **部署默认路由模式**:本地 `start_game.ps1 -GateRouterMode` 默认 `'1'`(`start_game.ps1:22`);K8s `k8s_deploy.ps1 -GateRouterMode` 默认 `"1"`(`k8s_deploy.ps1:163-164`,turn-based §22 D75,2026-09-29 起;此前为 `"0"`)。`dev_tools.ps1` / `k8s_image.ps1` / `k8s_zone_rollback.ps1` 的同名参数留空即不覆盖。
      - chat / guild / trade 等新服务只承诺路由模式可达;以 `"0"` 回退运行的 zone 每次重新部署都要显式再传 `-GateRouterMode 0`(回退态不粘滞)。
      - 战斗与本开关无关:两种模式下 gate 都不中继战斗(turn-based §22 D66)。K8s 路由模式 battle-smoke 至今未跑(D65 豁免、事后补验),**未编译、未测试,待 Codex 验证**。
-5. **失败语义统一** — 所有锁走 `RedisLocker`(UUID + Lua CAS,见 [login-simplification-2026-04.md](./login-simplification-2026-04.md))
+5. **登录锁按属主令牌保护** — login 的账号／玩家锁使用 `RedisLocker`，UUID 令牌配合 Lua 校验后释放／续租，见本文 §3.3。
 
 ---
 
@@ -162,11 +162,12 @@
 
 ### 3.3 并发安全
 
-两层保证同玩家串行:
-1. `player_locker:{playerId}` 分布式锁(`RedisLocker`,UUID+Lua CAS)
-2. Kafka db_task 分区契约:key = playerId 十进制,partition = CRC-32(key) mod N(login 的读与 C++ scene 的写用同一个函数,见 [db-task-kafka-partition-contract.md](./db-task-kafka-partition-contract.md)「分区函数契约」),同一 topic 内同一玩家的读写落同一分区、按 offset 串行;访客和合服后跨 zone 的读写分属两个 topic,不在此保证之内。(2026-10-16 订正:原文「playerId 一致性哈希到同一分区」从来没生效;已落码,未编译、未测试,待 Codex 验证)
+登录互斥、会话栅栏与 DB 分区分别约束不同阶段，不能合并成“同玩家整条链始终串行”的保证。
 
-详见: [login-simplification-2026-04.md](./login-simplification-2026-04.md)
+- **锁的属主**：`go/login/internal/logic/pkg/locker/player_locker.go` 的 `RedisLocker` 用 SETNX 写入 UUID；释放和续租都由 Lua 原子比较令牌，防止旧属主删掉或延长继任者的锁。Login / CreatePlayer 分别使用账号锁，EnterGame 使用 `player_locker:{playerId}`。
+- **异步生命周期**：EnterGame 单次 `TryLock`，争用立即回 `kLoginInProgress`，不在 RPC 内重试睡眠；拿锁后以心跳覆盖异步预加载与会话提交，丢锁时取消后台链。RPC 无错只表示受理，不等于进场成功。
+- **提交栅栏**：锁的续租不能代替提交校验；后台续跑仍按连接身份、会话代际及玩家属主条件校验，见[客户端请求顺序 §6.2](./client-request-ordering.md)与[登录事件流](./player_login_flow.md)。旧 `loginstep` 已退役，现用 `loginsession` / `sessionfence`；`session_incarnation=0` 或缺少 `gate_instance_id` 的兼容请求跳过 sessionfence，不能视为具有同等会话栅栏保证。
+- **DB 顺序**：db_task 的 key 为 playerId 十进制，分区为 CRC-32(key) mod N；login 的读与 C++ scene 的写在同一 topic 时共享分区契约。跨 topic 不因此获得顺序保证，读后写屏障、applied cursor 与换代规则统一见 [DBTask 分区契约](./db-task-kafka-partition-contract.md)。
 
 ---
 
@@ -353,31 +354,21 @@ Sa-Token **不直接服务 C++ gate**,只在 Java Gateway 这一层发挥作用:
 ## 8. 开服削峰与容量保护
 
 ### 现状(已落地)
-- `RedisLocker` 防同账号并发登录冲突
-- `KeyOrderedKafkaProducer` 防同玩家消息乱序
-- `db_task_zone_*` 的 partition 数在同一 `TopicGeneration` 内不可变；扩容必须停写排空并切新 topic，见 [DB Task Kafka 分区不可变契约](./db-task-kafka-partition-contract.md)
-- `loginstep` 状态机防非法状态转移
 
-### 缺口(任务 #10)
-开服 5 万人同时点登录时,**需要 Java Gateway 层做削峰**:
+- Java Gateway 的 `/api/login` 与 `/api/assign-gate` 已共用 Bucket4j + Redis zone／IP 桶；账号冷却在本机 Map，按端点、账号与 IP 区分，不是分布式账号锁。
+- `RedisLocker`、连接登录态与会话栅栏约束登录并发及异步提交，见本文 §3.3；旧 `loginstep` 已退役。
+- DBTask 在同一 topic 与世代内遵守固定分区及读写屏障，扩容必须停写排空并切新 topic，见 [DBTask 分区契约](./db-task-kafka-partition-contract.md)。
+- 有序排位与放行票由 login 真排队负责；Gateway 的 ratelimit 回包仅提示重试，不提供真实队列位次。
 
-```
-1. /api/assign-gate 加 Bucket4j+Redis 全局令牌桶 (e.g. 2000 token/s)
-2. 拿不到令牌 → 返回 { code: QUEUEING, queue_pos, retry_after }
-3. 客户端 UI 显示"前面还有 N 人",定时重试
-4. 按 zone 分批放人(T+0s zone1/2 / T+30s zone3/4 ...)
-```
+### 开关与剩余验收
 
-为什么放在 Gateway 而不是 login: Gateway 是 HTTP 短连接、Java 限流生态成熟、削峰失败也不影响游戏中玩家。
+K8s Gateway 限流的 auto 在 dev 关闭、staging／prod 开启；login 真排队仍受未清的合入门禁约束，auto 各档位关闭、显式 on 拒绝。
+波次代码已存在但默认关闭，当前没有后台动态重载。持 queue_token 的客户端轮询、恢复与退避契约见[削峰设计 §11.5](./open-server-rate-limit-design.md)。
 
-### 容量预估
+### 容量证据
 
-| 组件 | 单实例承载 | 横向扩 | 备注 |
-|---|---|---|---|
-| Java Gateway | 1万 RPS | 2-3 实例 | 限流在这层 |
-| go-zero login | 1.5万 QPS | 2-3 实例 | etcd 注册 |
-| Redis | 10万 QPS | 主从 | token / locker / locator |
-| gate | 5万长连接 | 按玩家数 | muduo 单进程 |
+zone 2000/s、burst 5000 等是部署起步值；原表的 Gateway／login／Redis／gate 单实例承载没有足够对比证据，不再作为容量结论。
+专项指标、真实故障放行、排队合入与尖峰压测仍按[削峰设计](./open-server-rate-limit-design.md)和对应运行记录分别验收。
 
 ---
 
@@ -415,9 +406,8 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 - [player_login_flow.md](./player_login_flow.md) — 登录/重连/顶号/超时清理事件流(权威)
 - [auth-provider-framework.md](./auth-provider-framework.md) — 第三方登录扩展框架
 - [dual-token-authentication.md](./dual-token-authentication.md) — Access + Refresh 双 token
-- [login-simplification-2026-04.md](./login-simplification-2026-04.md) — FSM→loginstep / RedisLocker
-- [login-gate-assignment-migration.md](./login-gate-assignment-migration.md) — Gateway 演进
-- [login-test-anti-stuck-system.md](./login-test-anti-stuck-system.md) — 测试卡死防护
+- [java-gateway-portal-decision.md](./java-gateway-portal-decision.md) — HTTP Gateway 职责；当前登录与待验收边界见[第三方登录设计](./third-party-login-end-to-end-design.md)
+- [login-test-anti-stuck-system.md](./login-test-anti-stuck-system.md) — 登录回归、单次超时与结果判定边界
 - [async-load-disconnect-reconnect-race.md](./async-load-disconnect-reconnect-race.md) — 加载/断线竞态
 - [login-node-stateless-no-affinity.md](./login-node-stateless-no-affinity.md) — login 无状态化
 - [login-queue-2026-05.md](./login-queue-2026-05.md) — AssignGate 真排队(Redis ZSET + 每 zone 一个 dispatcher leader)
@@ -426,7 +416,6 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 - [gate-load-balancing-design.md](./gate-load-balancing-design.md) — gate 负载均衡设计 + L4 LB 排除
 - [gate-scene-relay-architecture.md](./gate-scene-relay-architecture.md) — Gate↔Scene 中继
 - [gate_client_high_water_mark.md](./gate_client_high_water_mark.md) — 高水位反压
-- [gate-entity-id-truncation-fix.md](./gate-entity-id-truncation-fix.md) — entity id 截断修复
 - [k8s_gate_exposure_guidance.md](./k8s_gate_exposure_guidance.md) — K8s 暴露
 - [java-gateway-portal-decision.md](./java-gateway-portal-decision.md) — Java Gateway 选型决策
 - [client-rpc-router.md](./client-rpc-router.md) — 客户端 RPC 路由服:gate 唯一的 gRPC 目标(2026-09-05)
@@ -435,7 +424,7 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 
 ### 对局 / 战斗
 - [turn-based-battle-server.md](./turn-based-battle-server.md) — 回合制 battle 节点设计与决策(§18 票据直连;§22 直连收缩 D65–D75)
-- [moba-battle-target-architecture.md](../notes/slg-moba/moba-battle-target-architecture.md) — 会话制对局目标形态与本仓现状映射、验收判据
+- [moba-battle-target-architecture.md](../notes/moba/moba-battle-target-architecture.md) — 会话制对局目标形态与本仓现状映射、验收判据
 - [cross-zone-matchmaking.md](./cross-zone-matchmaking.md) — 全服跨 zone 匹配、match 全局池与票据自愈
 
 ### 跨服与场景
@@ -443,8 +432,8 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 - [mmo_cross_server_architecture.md](./mmo_cross_server_architecture.md)
 - [cross_scene_player_messaging.md](./cross_scene_player_messaging.md)
 - [scene-creation-architecture.md](./scene-creation-architecture.md)
-- [scene-grpc-server-design.md](./scene-grpc-server-design.md)
-- [scene-node-threading-model.md](./scene-node-threading-model.md)
+- [gRPC 传输与节点双端口](./grpc-muduo-transport.md#node-grpc-endpoints)
+- [scene-node-threading-model.md](./scene-node-threading-model.md) — 业务线程归属、50ms 固定步长与整体停机顺序
 - [enter-scene-zone-routing.md](./enter-scene-zone-routing.md)
 
 ### 数据与持久化
@@ -470,7 +459,7 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 
 ### 玩法 / ECS / SLG
 - [ecs.md](./ecs.md) / [ecs-component-access-rules.md](./ecs-component-access-rules.md)
-- [slg-server-architecture-design.md](../notes/slg-moba/slg-server-architecture-design.md)
+- [slg-server-architecture-design.md](../notes/slg/slg-server-architecture-design.md)
 - [aoi_priority_design.md](./aoi_priority_design.md)
 
 ### 压测 / 调优
@@ -489,14 +478,14 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 | 3 | Gate 不能挂 L4 LB,改"Login 分配 + HMAC token" | 2026-03 | [gate-load-balancing-design.md](./gate-load-balancing-design.md) |
 | 4 | 双 token (Access 2h + Refresh 30d) 对齐微信/QQ 标准 | 2026-04-20 | [dual-token-authentication.md](./dual-token-authentication.md) |
 | 5 | 第三方登录 Provider 化,新增渠道仅改配置 | 2026-04 | [auth-provider-framework.md](./auth-provider-framework.md) |
-| 6 | login 服务从 FSM 简化为 `loginstep` + `RedisLocker` | 2026-04 | [login-simplification-2026-04.md](./login-simplification-2026-04.md) |
+| 6 | 登录流程取消 FSM；后续 `loginstep` 亦已退役，现用连接登录态与会话栅栏，账号／玩家锁按令牌保护 | 2026-04 起，2026-10-23 按现状订正 | 本文 §3.3、[客户端请求顺序 §6.2](./client-request-ordering.md) |
 | 7 | Kafka `gate-{gateId}` topic 解耦控制流 | 2026-04 | [player_login_flow.md](./player_login_flow.md) |
 | 8 | muduo 框架代码不动,优化只在业务层 + 内核 | 持续 | 本文 §2 |
 | 9 | **首次 Login 上移到 Java Gateway `/api/login`**,OAuth 校验、限流、排队都在 HTTP 层;cpp gate 的 `ClientPlayerLogin.Login` 保留兼容(带 deprecation 日志) | **2026-05-08** | [open-server-rate-limit-design.md](./open-server-rate-limit-design.md), [third-party-login-end-to-end-design.md](./third-party-login-end-to-end-design.md) |
 | 10 | **`/api/refresh-token` 独立 HTTP 通道**,token 续签不再占用 gate TCP | **2026-05-08** | [dual-token-authentication.md](./dual-token-authentication.md) |
-| 11 | **cpp gate→login gRPC 加 HTTP/2 keepalive**(30s/10s/permit-without-calls=1),防 NAT/LB 空闲踢连接 | **2026-05-08** | [gate-grpc-long-connection-audit-2026-05.md](./gate-grpc-long-connection-audit-2026-05.md) |
+| 11 | **C++ gRPC 连接复用与保活**：旧 30s/10s 空闲 PING 方案已由 muduo 传输替代；业务通道默认关闭周期 keepalive，使用截止触发探测 | **2026-05-08**（后由传输迁移替代） | [grpc-muduo-transport.md](./grpc-muduo-transport.md) §4.4、§14 |
 | 12 | **gate 的 `HandleGrpcNodeMessage` 保留为"协议路由器"**,登录只是它转发的 RPC 之一(EnterGame/LeaveGame/CreatePlayer/Disconnect 必须经它)| **2026-05-08** | [gate-login-rpc-boundary.md](./gate-login-rpc-boundary.md) |
-| 13 | **Gateway 限流**:Bucket4j + Redis,三层叠加(zone/ip/account cooldown)+ 开服波次 | **2026-05-08** | [open-server-rate-limit-design.md](./open-server-rate-limit-design.md) |
+| 13 | **Gateway 限流**：共享 zone／IP 桶与进程内冷却；波次默认关闭，K8s 真排队仍受合入门禁约束 | **2026-05-08 起，2026-10-23 订正** | [open-server-rate-limit-design.md](./open-server-rate-limit-design.md) |
 | 14 | **AssignGate 真排队**:权威源放 go-zero login(不是 Java Gateway),Redis ZSET 做有序 FIFO + 单 leader dispatcher(2026-10-12 G1b 起改为每 zone 一个 leader,见 login-queue-2026-05.md §7.1);Java AssignGateService 删本地签 HMAC,改成 gRPC 转发;Bucket4j 保留作为前置闸,两层互补 | **2026-05-14** | [login-queue-2026-05.md](./login-queue-2026-05.md) |
 | 15 | **Server-list 走 OSS + CDN 静态发布**:玩家读路径不经过 Java Gateway / MySQL;运维改 zone 后异步生成 json 推 OSS + purge CDN;Gateway `/api/server-list` 仅作降级兜底(Caffeine 30s + Bucket4j);客户端三档:CDN 主 → CDN 备 → Gateway。zone 数据仍存 MySQL `zone_config`,**不进 Excel** | **2026-05-23** | [serverlist-static-publish-2026-05.md](./serverlist-static-publish-2026-05.md) |
 | 16 | **`db_task_zone_{ZoneId}` partition 5→10**:解掉 2026-05-25 §N 基线的 db worker 池容量瓶颈;实测拐点从"开服打开就崩"上移到 **25k conn 之内 100% 干净 / 25k–45k 逐步降级**(单 zone smoke);AUTHORITY 在 `login.yaml`(EnsureTopics),`db.yaml` 是 MIRROR,两处必须同步改否则 worker/partition skew;下一瓶颈不再是 partition 而是 `entergamelogic.go` 里 `player_locker:{playerId}` 的 120s TTL 滞留(异步链没归还锁 + robot 6s 重连节奏命中)— 不是 PreloadPool 池满(实测 dropped=0)| **2026-05-27** | [stress-1zone-45k-2026-05-partition-10.md](../stress/stress-1zone-45k-2026-05-partition-10.md) |
@@ -506,6 +495,7 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 | 20 | **Worker sub-shard(方案 A)**:`worker.start` 改造成 router goroutine + `SubShardCount=4` 个并行 `runSubShard` goroutine,按 `hash(task.Key) % N` 路由,保 per-key 顺序。10×4=40 路实际并发。**实测:robot 23 分钟全跑 0 失败 + max_login 209ms(Round 6: 571ms,-64%) + Kafka final lag 4,233(Round 6: 80,055,-95%) + db consumer throughput ~190/s(Round 6: 73/s,+160%) + entergame fail% 17.8%(Round 6: 29%)**。同时把 stress 复盘脚本化:`tools/scripts/stress_summarize.ps1` 直接吃 RunDir + prom snapshots 出 2KB 二维表,以后压测复盘只读它输出 | **2026-05-28** | [stress-1zone-25k-2026-05-28-subshard.md](../stress/stress-1zone-25k-2026-05-28-subshard.md) |
 | 21 | **全区全服数据层 + TiDB**:玩家数据层收敛为单一 TiDB 集群(v8.5 LTS),按 player_id 组织,home_zone 表达逻辑归属;跨区 = 客户端 redirect 重连 + 全局层直读(废弃 player_migrate 的数据搬运职责);合服 = RemapHomeZoneForMerge 零迁移。硬前提:snowflake 主键建表必须 NONCLUSTERED + SHARD_ROW_ID_BITS(写热点)、`txn-entry-size-limit` ≥32MB(16MB 存档默认必炸)、proto2mysql 升新版须逐表锁表名。partition 契约与 L1-L4 验收体系不变 | **2026-08-15** | [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md)(注:2026-10-12 起 `RemapHomeZoneForMerge` 停用,见 [player-route-mapping-durability-proposal.md](./player-route-mapping-durability-proposal.md) §4.3) |
 | 22 | **battle 直连收缩 + 集群外入口一次落地**(用户拍板「一次全做,事后验」,豁免「K8s 路由模式 battle-smoke 先跑通」前提):① gate 两种路由模式都不中继战斗,直连是战斗唯一通路,battle → gate 只剩 Kafka 大厅公告(Assigned / Start,无直连才回落),删 Kafka Bind/Unbind 契约(事件号墓碑不复用),D26 改 fail-closed(签不出票不建房),scene 换会话只推重连提示(D65–D74);② K8s `-GateRouterMode` 默认翻 `"1"`,C++ 进程默认仍直连(D75 / D-12 修订);③ 集群外入口:进程自报 `NodeInfo.client_endpoint`(=11;仅 static / agones 形态,默认 podip 不自报、回落 endpoint),login / scene_manager / battle 三出口同一选择规则,battle = Agones Fleet `portPolicy: Dynamic` + 分配许可与排空标签,gate = StatefulSet + 每序号 Service(D76–D93)。**全部未编译、未测试、未上集群,待 Codex / 用户验证** | **2026-09-29** | [turn-based-battle-server.md](./turn-based-battle-server.md) §22, [k8s-client-entry.md](./k8s-client-entry.md), [battle-transport-decision.md](./battle-transport-decision.md), [xuanming-port-decisions-20260910.md](./xuanming-port-decisions-20260910.md) D-12 修订 |
+| 23 | **玩家数据不再用 Redis 存储,Redis 其他用途照旧**:玩家持久存档以 TiDB 为唯一存储,Redis 不再保存、缓存或中转玩家数据(父快照 `PlayerAllData`、子表缓存、outbox 载荷、重试与死信队列里的 DBTask 载荷、资产 SQL 证据、战斗结算原件等移出;补投索引等只服务于它们的协调键随之失去用途);会话、锁、归属与位置投影、排队与限流、队列、Pub/Sub 等协调用途继续用 Redis,新功能该用 Redis 的照用。修订 #21 文档 §D5 的「Redis 权威读缓存」与经 Redis 缓冲玩家数据的部分,D5 其余条目随新设计逐条裁定。**只定方向,存盘与加载新路径未设计、未落码** | **2026-10-24** | [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) §9 |
 
 ---
 

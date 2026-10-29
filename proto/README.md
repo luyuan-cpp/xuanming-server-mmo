@@ -28,15 +28,17 @@ proto/
 
 带 `option (OptionIsClientProtocolService) = true` 的服务是客户端契约,改动要和客户端同批发布:
 `login`、`match`、`team`、`chat`、`friend`、`mail/mail.proto`、`guild`、`trade`、`battle/player_battle.proto`,
-以及 `scene/` 下面向玩家的那一组(`client_player_common` 与 `player_*`)。其余都是服务端内部接口。
+以及 `scene/` 下显式标注该 option 的服务。文件名前缀不能决定可调用范围，例如 `player_lifecycle.proto` 是内部接口；方法调用形态以 `OptionClientRpcKind` 为准，详见[客户端调用桩设计](../docs/design/client-rpc-callback.md)。其余服务不能仅凭名称当作客户端接口。
 
 ## 改协议的流程
 
 ```powershell
 # 1. 改 proto/ 下的 .proto
-# 2. 重新生成各语言代码
-dev.bat proto
-# 3. 重新编译受影响的 C++ / Go / Java 工程
+# 2. 生成器源码有变更或本机尚无工具时先构建
+pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build
+# 3. 仅服务端任务使用 no-unity 配置；默认配置会写独立客户端仓
+pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml
+# 4. 重新编译受影响的 C++ / Go / Java 工程
 ```
 
 生成产物的去向:

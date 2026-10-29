@@ -12,7 +12,6 @@ proto_generator/protogen/*.log
 
 # Local binary/tool drops
 proto/zlibd.dll
-proto_generator/grpc_cpp_plugin.exe
 proto_generator/protogen/*.exe
 proto_generator/protogen/*.dll
 proto/protogen/*.exe

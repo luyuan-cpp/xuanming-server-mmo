@@ -2430,6 +2430,43 @@ TEST(KickFence, VerdictNamesAreDistinct)
 }
 
 // ===========================================================================
+// scene 推来的踢线(34)来源栅栏 ClassifySceneKickSource(cross-zone-scene-travel.md §13.2「上限到期一律踢线」残余)
+// ===========================================================================
+//
+// 同 zone 交接其实已放行、会话已改绑到目标节点时,源 scene 收口推来的 34 不得断掉这条合法会话:
+// 34 只认会话当前绑定的那个 scene 进程。任一侧认不出时照发 —— 34 是让客户端脱困的出口。
+
+namespace
+{
+    constexpr std::string_view kSourceSceneInstance = "11111111-1111-4111-8111-111111111111";
+    constexpr std::string_view kTargetSceneInstance = "22222222-2222-4222-8222-222222222222";
+} // namespace
+
+TEST(SceneKickSourceFence, KickFromBoundSceneIsDelivered)
+{
+    EXPECT_EQ(gate_session_fence::SceneKickSourceVerdict::kDeliver,
+              gate_session_fence::ClassifySceneKickSource(kSourceSceneInstance, kSourceSceneInstance));
+}
+
+// 会话已被路由改绑到目标进程,迟到的源进程 34 丢弃。
+TEST(SceneKickSourceFence, KickFromSceneTheSessionLeftIsDropped)
+{
+    EXPECT_EQ(gate_session_fence::SceneKickSourceVerdict::kDropNotBoundScene,
+              gate_session_fence::ClassifySceneKickSource(kTargetSceneInstance, kSourceSceneInstance));
+}
+
+// 会话还没绑 scene / 绑定的实体已失效(空)、或认不出发送方(空):照发,与旧行为相同。
+TEST(SceneKickSourceFence, UnverifiableSourceIsStillDelivered)
+{
+    EXPECT_EQ(gate_session_fence::SceneKickSourceVerdict::kDeliverUnverified,
+              gate_session_fence::ClassifySceneKickSource("", kSourceSceneInstance));
+    EXPECT_EQ(gate_session_fence::SceneKickSourceVerdict::kDeliverUnverified,
+              gate_session_fence::ClassifySceneKickSource(kTargetSceneInstance, ""));
+    EXPECT_EQ(gate_session_fence::SceneKickSourceVerdict::kDeliverUnverified,
+              gate_session_fence::ClassifySceneKickSource("", ""));
+}
+
+// ===========================================================================
 // 未登录闸(docs/design/data-overwrite-rollback-audit-20261018.md §2.3、client-request-ordering.md §7.2 第 2 条)。
 //
 // gate 被 kill -9 后以同一 node_id 重启、session 序号从 0 开始,新连接撞上旧进程同号连接在 login 留下的登录态;

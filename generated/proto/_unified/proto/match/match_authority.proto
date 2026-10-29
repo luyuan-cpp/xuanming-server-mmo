@@ -3,6 +3,7 @@ package match;
 option go_package = "proto/match";
 import "proto/db/proto_option.proto";
 import "proto/match/match_network.proto";
+import "proto/match/match_internal.proto";
 
 message MatchNetworkProfile {
   string plan_id = 1;
@@ -42,6 +43,7 @@ message MatchSpectatorIntentRecord {
   string owner_account = 6;
   uint64 owner_revision = 7;
   uint32 state = 8; // 1尚未发出Add、2已绑定current原件、5已关闭；未知一律拒绝。
+  uint32 close_tip = 9; // 关闭原因(客户端tip)，先写为准，同request_id重放回同一结论；0=未记录原因，state1必须为0。
 }
 message MatchSpectatorHeadRecord {
   option (OptionTableName) = "match_spectator_head";
@@ -204,6 +206,11 @@ message MatchFormationRecord {
   bytes activity_context = 15; // 备战前崩溃恢复也保留活动归属，内容为BattleActivityContext。
   bool requeue_on_failure = 16; // 排队失败保持原票号与最早等待；整队/点名不能拆散回队。
   repeated MatchPreparedEndpoint prepared = 17; // 备战时真实端点；恢复取消不能重新猜玩家当前所在场景。
+  uint32 outcome_protocol_version = 18;
+  uint32 preflight_supported_version = 19;
+  string preflight_instance_id = 20; // 发任何Create之前与完整version1正文同事务保存。
+  uint32 adopted_outcome_protocol_version = 21; // 独立保存真实Create/PRESENT回执，不能由能力推算。
+  bool adopted_outcome_observed = 22; // 未回包与原身份明确回显0不同；首个实际回执永久不变。
 }
 message MatchPreparedEndpoint {
   uint64 player_id = 1;
@@ -244,10 +251,17 @@ message MatchRankOutboxRecord {
   bytes entries = 4; // 确定性序列化 SubmitRankScoresRequest（未签名）；重投只重签 auth。
 }
 
-// 完整结算来源归档；只由收到的Kafka原字节写入，不作为第二套资产权威或自动补发队列。
+enum MatchBattleCompletionSourceKind {
+  MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED = 0;
+  MATCH_BATTLE_COMPLETION_SOURCE_KAFKA = 1;
+  MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC = 2;
+}
+
+// 唯一终局与原结果outbox；RPC来源不伪造Kafka位点。
 message MatchBattleCompletionRecord {
   option (OptionTableName) = "match_battle_completion";
   option (OptionPrimaryKey) = "battle_id";
+  option (OptionIndex) = "decision,result_published,next_retry_ms,battle_id";
   uint64 battle_id = 1;
   bytes raw_payload = 2;
   bytes payload_digest = 3;
@@ -256,15 +270,30 @@ message MatchBattleCompletionRecord {
   string source_topic = 6;
   int32 source_partition = 7;
   int64 source_offset = 8;
+  BattleOutcomeDecision decision = 9;
+  MatchBattleCompletionSourceKind source_kind = 10;
+  string placement_operation_id = 11;
+  string target_instance_id = 12;
+  uint32 outcome_protocol_version = 13;
+  bool result_published = 14;
+  uint64 next_retry_ms = 15;
 }
 
 // 与整局原件同一事务登记；稳定身份为battle_id+player_id，保留到显式迁移/恢复流程接管。
 message MatchBattleSettlementSourceRecord {
   option (OptionTableName) = "match_battle_settlement_source";
   option (OptionPrimaryKey) = "battle_id,player_id";
+  option (OptionIndex) = "dispatch_state,next_retry_ms,battle_id,player_id";
   uint64 battle_id = 1;
   uint64 player_id = 2;
   bytes settlement_proto = 3;
   bytes payload_digest = 4;
   uint64 archived_ms = 5;
+  string owner_account = 6;
+  uint64 owner_revision = 7;
+  uint64 issued_at_ms = 8;
+  uint64 inbox_seq = 9;
+  uint32 inbox_state = 10;
+  uint32 dispatch_state = 11; // 0旧归档、1待入箱/核原收据、2已确认APPLIED。
+  uint64 next_retry_ms = 12;
 }

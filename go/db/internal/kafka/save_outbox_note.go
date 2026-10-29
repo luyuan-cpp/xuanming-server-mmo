@@ -30,7 +30,7 @@ var (
 
 // isSaveBarrierWrite 判定任务是否受父快照提交屏障约束:dual、严格版本、两张玩家表之一的写。
 func isSaveBarrierWrite(t *db_proto.DBTask) bool {
-	return fencingDual.Load() && t != nil && t.Op == "write" && t.OwnerEpoch != 0 && t.SaveSeq != 0 &&
+	return fencingDual.Load() && t != nil && t.Op == db_proto.DBOp_DB_OP_WRITE && t.OwnerEpoch != 0 && t.SaveSeq != 0 &&
 		(t.MsgType == playerDatabaseMsgType || t.MsgType == playerDatabase1MsgType)
 }
 

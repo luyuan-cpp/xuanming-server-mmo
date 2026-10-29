@@ -9,6 +9,7 @@ package logic
 
 import (
 	"context"
+	"crypto/sha1"
 	"errors"
 	"fmt"
 	"slices"
@@ -75,7 +76,17 @@ func identValue(t *testing.T, sc *svc.ServiceContext, key string) string {
 	return v
 }
 
-// identHookOnceBeforeEval 在第一条参数里带 key 的 EVAL / EVALSHA **执行之前**跑一次 mutate,模拟
+// identReadOnlySnapshotEval 识别生产原子快照读取，不把「读取前」误当成「提交前」。
+// EVALSHA 沿同一生产脚本计算摘要，避免改脚本后测试仍拦截过期文本。
+func identReadOnlySnapshotEval(cmd string, args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	return cmd == "EVAL" && args[0] == luaReadLocationSnapshot ||
+		cmd == "EVALSHA" && args[0] == fmt.Sprintf("%x", sha1.Sum([]byte(luaReadLocationSnapshot)))
+}
+
+// identHookOnceBeforeEval 在第一条参数里带 key 的写入 EVAL / EVALSHA **执行之前**跑一次 mutate,模拟
 // 「本次 EnterScene 观察之后、落点提交之前」的并发写入。用 CompareAndSwap 先消费「只触发一次」的标志:
 // Lua 里的 redis.call 会带着 miniredis 的锁重入钩子,那时标志已被消费,走不到 mutate(否则死锁)。
 // 与 mr.SetError 共用钩子槽位,装了它的用例不要再用 SetError。返回值供断言「钩子确实触发过」。
@@ -86,7 +97,7 @@ func identHookOnceBeforeEval(t *testing.T, mr *miniredis.Miniredis, key string, 
 		if cmd != "EVAL" && cmd != "EVALSHA" {
 			return false
 		}
-		if !slices.Contains(args, key) || !fired.CompareAndSwap(false, true) {
+		if identReadOnlySnapshotEval(cmd, args) || !slices.Contains(args, key) || !fired.CompareAndSwap(false, true) {
 			return false
 		}
 		mutate()

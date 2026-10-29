@@ -79,8 +79,25 @@ func (s *Store) cancelActivityAttempt(ctx context.Context, key *pb.MatchDirectIn
 		if cancelled {
 			return nil, false, errors.New("已取消活动意图却带有成局，保留原件等待处理")
 		}
-		if err = tx.QueryRowContext(ctx, "SELECT state FROM match_formation WHERE battle_id=? FOR UPDATE", battle).Scan(&out.FormationState); err != nil {
+		formation, readErr := scanFormation(tx.QueryRowContext(ctx, "SELECT "+formationColumns+" FROM match_formation WHERE battle_id=? FOR UPDATE", battle))
+		if readErr != nil {
+			return nil, false, readErr
+		}
+		out.FormationState = formation.State
+		if start == nil || start.Formation.BattleId != formation.BattleId || start.Formation.OperationId != formation.OperationId {
+			return nil, false, ErrDirectConflict
+		}
+		out.TerminalDecision, err = s.abortTerminalTx(ctx, tx, formation)
+		if err != nil {
 			return nil, false, err
+		}
+		if out.TerminalDecision == pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT {
+			out.FormationState = 5
+		}
+		// 无持久Create才证明发房前中止；已有Create的旧state5不能被旧调用方
+		// 仅凭状态号当作战斗后安全取消。新协议必须取得同事务SQL ABORT。
+		if out.FormationState == 5 && len(formation.CreateRequest) != 0 && out.TerminalDecision != pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT {
+			return nil, false, errors.New("已有创建原件但无持久ABORT，取消终局保持UNKNOWN")
 		}
 		if out.FormationState < 1 || out.FormationState > 5 {
 			return nil, false, errors.New("活动原成局状态非法")

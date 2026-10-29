@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"match/internal/constants"
+	"match/internal/discovery"
+	"match/internal/metrics"
 	"match/internal/pkg/ctxkeys"
 	"match/internal/svc"
 
@@ -38,6 +40,8 @@ type fakeObserverRPCs struct {
 	removes []*battlepb.RemoveObserverRequest
 	// onAdd 决定 AddObserver 的响应;nil = 成功。
 	onAdd func(req *battlepb.AddObserverRequest) (*battlepb.AddObserverResponse, error)
+	// onRemove 决定 RemoveObserver 的结果(非 nil 错误 = 没有取消证明);nil = 成功。
+	onRemove func(req *battlepb.RemoveObserverRequest) error
 }
 
 func stubObserverRPCs(t *testing.T) *fakeObserverRPCs {
@@ -56,8 +60,12 @@ func stubObserverRPCs(t *testing.T) *fakeObserverRPCs {
 	}
 	removeObserverFn = func(_ string, req *battlepb.RemoveObserverRequest) error {
 		f.mu.Lock()
-		defer f.mu.Unlock()
 		f.removes = append(f.removes, req)
+		onRemove := f.onRemove
+		f.mu.Unlock()
+		if onRemove != nil {
+			return onRemove(req)
+		}
 		return nil
 	}
 	t.Cleanup(func() { addObserverFn, removeObserverFn = prevAdd, prevRemove })
@@ -103,7 +111,8 @@ func watchBattle(t *testing.T, svcCtx *svc.ServiceContext, playerId, battleId ui
 	return resp
 }
 
-// watchingMark 读观战互斥标记;不存在返回空串。
+// watchingMark 读观战互斥标记,返回原件里的 battle_id 十进制;不存在返回空串,解析不出原件时原样返回值
+// (用例写入的非法 / 他人标记)。
 func watchingMark(t *testing.T, mr *miniredis.Miniredis, playerId uint64) string {
 	t.Helper()
 	if !mr.Exists(spectateWatchingKey(playerId)) {
@@ -111,7 +120,43 @@ func watchingMark(t *testing.T, mr *miniredis.Miniredis, playerId uint64) string
 	}
 	v, err := mr.Get(spectateWatchingKey(playerId))
 	require.NoError(t, err)
+	if original, err := decodeWatchingMark(playerId, v); err == nil {
+		return strconv.FormatUint(original.GetBattleId(), 10)
+	}
 	return v
+}
+
+// watchingOriginal 读观战标记里固定的 AddObserver 原件(必须存在且合法)。
+func watchingOriginal(t *testing.T, mr *miniredis.Miniredis, playerId uint64) *battlepb.AddObserverRequest {
+	t.Helper()
+	v, err := mr.Get(spectateWatchingKey(playerId))
+	require.NoError(t, err)
+	original, err := decodeWatchingMark(playerId, v)
+	require.NoError(t, err)
+	return original
+}
+
+// setWatchingMark 按生产格式铺一条「正在观战 battleId」的标记(原件指向 newGatherSvcCtx 的节点 7 实例),
+// 返回原件供断言清退时的 RemoveObserver 带的是同一个 op。
+func setWatchingMark(t *testing.T, mr *miniredis.Miniredis, playerId, battleId uint64) *battlepb.AddObserverRequest {
+	t.Helper()
+	original := newLocalObserverAdd(battleId, playerId, "acc_"+strconv.FormatUint(playerId, 10),
+		&battlepb.BattleRouting{SessionId: 1, GateNodeId: 3, GateInstanceId: "gate-inst-3"}, testBattle7Instance)
+	mark, err := encodeWatchingMark(original)
+	require.NoError(t, err)
+	require.NoError(t, mr.Set(spectateWatchingKey(playerId), mark))
+	return original
+}
+
+// requireRemoveOf 断言一次 RemoveObserver 带的是原件的 battle / 观众 / op / 准入截止 / 实例(观战账本只认原 op)。
+func requireRemoveOf(t *testing.T, original *battlepb.AddObserverRequest, remove *battlepb.RemoveObserverRequest, reason string) {
+	t.Helper()
+	require.Equal(t, original.GetBattleId(), remove.GetBattleId())
+	require.Equal(t, original.GetObserverPlayerId(), remove.GetObserverPlayerId())
+	require.Equal(t, original.GetSpectatorOperationId(), remove.GetSpectatorOperationId(), "Remove 必须带原 Add 的 op")
+	require.Equal(t, original.GetAdmitBeforeMs(), remove.GetAdmitBeforeMs(), "Remove 必须带原 Add 的准入截止")
+	require.Equal(t, original.GetTargetInstanceId(), remove.GetTargetInstanceId(), "Remove 必须带原 Add 的实例")
+	require.Equal(t, reason, remove.GetReason())
 }
 
 func activeIndexSize(t *testing.T, svcCtx *svc.ServiceContext) int {
@@ -317,7 +362,17 @@ func TestWatchBattleBindsObserverWithGateOnlyRouting(t *testing.T) {
 	require.Zero(t, routing.GetSceneNodeId(), "观众路由 scene 字段必须为 0(不变量 6)")
 	require.Empty(t, routing.GetSceneInstanceId())
 
+	// 观战账本三字段(battle_room_manager.cpp HandleAddObserver):规范 UUID op、准入截止在 (now, now+30s]、
+	// 实例 = 节点 7 登记的 uuid;缺任何一项 battle 都回 kInvalidParameter。
+	require.True(t, validSpectatorOperation(req.GetSpectatorOperationId()), "op=%q", req.GetSpectatorOperationId())
+	now := nowMs()
+	require.Greater(t, req.GetAdmitBeforeMs(), now)
+	require.LessOrEqual(t, req.GetAdmitBeforeMs(), now+30000, "准入截止不得超过 now+30s")
+	require.Equal(t, testBattle7Instance, req.GetTargetInstanceId())
+	require.Equal(t, req.GetSpectatorOperationId(), resp.GetSpectatorOperationId(), "回包带回本次观战的 op")
+
 	require.Equal(t, "880050", watchingMark(t, mr, watcher))
+	require.True(t, proto.Equal(req, watchingOriginal(t, mr, watcher)), "观战标记固定的就是发出的 Add 原件")
 	require.Equal(t, time.Duration(spectateTTLSeconds(svcCtx))*time.Second, mr.TTL(spectateWatchingKey(watcher)))
 	require.Empty(t, fake.removes)
 }
@@ -401,12 +456,11 @@ func TestWatchBattleDoubleCheckSelfEvictsOnConcurrentQueue(t *testing.T) {
 	require.Len(t, fake.adds, 1)
 	require.Len(t, fake.removes, 1)
 	require.Equal(t, uint64(880080), fake.removes[0].GetBattleId())
-	require.Equal(t, watcher, fake.removes[0].GetObserverPlayerId())
-	require.Equal(t, "concurrent_queue", fake.removes[0].GetReason())
+	requireRemoveOf(t, fake.adds[0], fake.removes[0], "concurrent_queue")
 	require.Empty(t, watchingMark(t, mr, watcher))
 }
 
-// 换场:已在观战 A 时请求 B → 先对 A 发 RemoveObserver(rewatch)再挂 B,标记改为 B。
+// 换场:已在观战 A 时请求 B → 先按 A 的原件发 RemoveObserver(rewatch)再挂 B,标记改为 B。
 func TestWatchBattleRewatchEvictsPreviousBattle(t *testing.T) {
 	svcCtx, mr := newGatherSvcCtx(t)
 	fake := stubObserverRPCs(t)
@@ -422,13 +476,15 @@ func TestWatchBattleRewatchEvictsPreviousBattle(t *testing.T) {
 	require.Equal(t, uint64(880091), resp.GetBattleId())
 	require.Len(t, fake.removes, 1)
 	require.Equal(t, uint64(880090), fake.removes[0].GetBattleId())
-	require.Equal(t, "rewatch", fake.removes[0].GetReason())
+	requireRemoveOf(t, fake.adds[0], fake.removes[0], "rewatch")
 	require.Len(t, fake.adds, 2)
+	require.NotEqual(t, fake.adds[0].GetSpectatorOperationId(), fake.adds[1].GetSpectatorOperationId(), "新观战新 op")
 	require.Equal(t, "880091", watchingMark(t, mr, watcher))
 }
 
-// 重看同一场:只删旧标记重抢,不对仍存活的会话发 RemoveObserver(避免推假 SpectateEnd)。
-func TestWatchBattleSameBattleRewatchDoesNotRemoveObserver(t *testing.T) {
+// 重看同一场:先按旧原件 RemoveObserver(rewatch)再用新 op 挂观众。battle 名单里挂着旧 op 时,
+// 新 op 的 Add 会被观战账本拒绝,旧原件的准入截止又多半已过、不能原样重放(与全局路径同口径)。
+func TestWatchBattleSameBattleRewatchRemovesOriginalFirst(t *testing.T) {
 	svcCtx, mr := newGatherSvcCtx(t)
 	fake := stubObserverRPCs(t)
 	const watcher = uint64(7111)
@@ -437,30 +493,32 @@ func TestWatchBattleSameBattleRewatchDoesNotRemoveObserver(t *testing.T) {
 
 	require.Zero(t, watchBattle(t, svcCtx, watcher, 880095).GetErrorMessage().GetId())
 	require.Zero(t, watchBattle(t, svcCtx, watcher, 880095).GetErrorMessage().GetId())
-	require.Empty(t, fake.removes, "重看同场不能 RemoveObserver")
-	require.Len(t, fake.adds, 2, "重绑由 battle 侧 AddObserver 幂等分支负责")
+	require.Len(t, fake.adds, 2)
+	require.Len(t, fake.removes, 1, "重看同场先摘旧 op")
+	requireRemoveOf(t, fake.adds[0], fake.removes[0], "rewatch")
+	require.NotEqual(t, fake.adds[0].GetSpectatorOperationId(), fake.adds[1].GetSpectatorOperationId())
 	require.Equal(t, "880095", watchingMark(t, mr, watcher))
+	require.True(t, proto.Equal(fake.adds[1], watchingOriginal(t, mr, watcher)), "标记换成新原件")
 }
 
 // ---- 清退 ----
 
-// stopWatchingIfAny 三形态:记录在 → 摘观众 + 删标记;记录已清 → 只删标记;标记非法 → 只删标记。
+// stopWatchingIfAny 各形态:记录在 → 按原件摘观众 + 删标记;记录已清 → 只删标记;标记非法 / 缺原 op 的
+// 十进制旧标记 / 他人原件 → 只删标记;节点已换实例 → 不发 Remove、只删标记。
 func TestStopWatchingIfAnyPaths(t *testing.T) {
 	svcCtx, mr := newGatherSvcCtx(t)
 	fake := stubObserverRPCs(t)
 
-	// 1) 战斗仍在:RemoveObserver + 删标记
+	// 1) 战斗仍在:按原件 RemoveObserver(同 op / 截止 / 实例)+ 删标记
 	registerBattle(t, svcCtx, 880110, nowMs())
-	require.NoError(t, mr.Set(spectateWatchingKey(7301), "880110"))
+	original := setWatchingMark(t, mr, 7301, 880110)
 	stopWatchingIfAny(svcCtx, 7301, "unit")
 	require.Len(t, fake.removes, 1)
-	require.Equal(t, uint64(880110), fake.removes[0].GetBattleId())
-	require.Equal(t, uint64(7301), fake.removes[0].GetObserverPlayerId())
-	require.Equal(t, "unit", fake.removes[0].GetReason())
+	requireRemoveOf(t, original, fake.removes[0], "unit")
 	require.Empty(t, watchingMark(t, mr, 7301))
 
 	// 2) 战斗已收尾(记录 TTL 自清):只删标记,不打 battle
-	require.NoError(t, mr.Set(spectateWatchingKey(7302), "880111"))
+	setWatchingMark(t, mr, 7302, 880111)
 	stopWatchingIfAny(svcCtx, 7302, "unit")
 	require.Len(t, fake.removes, 1)
 	require.Empty(t, watchingMark(t, mr, 7302))
@@ -474,6 +532,28 @@ func TestStopWatchingIfAnyPaths(t *testing.T) {
 	// 4) 没在观战:无副作用
 	stopWatchingIfAny(svcCtx, 7304, "unit")
 	require.Len(t, fake.removes, 1)
+
+	// 5) 账本上线前的十进制 battle_id 旧标记:拿不出原 op,battle 不会据它摘人,只删标记
+	require.NoError(t, mr.Set(spectateWatchingKey(7305), "880110"))
+	stopWatchingIfAny(svcCtx, 7305, "unit")
+	require.Len(t, fake.removes, 1)
+	require.Empty(t, watchingMark(t, mr, 7305))
+
+	// 6) 标记里的原件属于别的玩家:不拿它去摘人,只删标记
+	foreign := setWatchingMark(t, mr, 7306, 880110)
+	mark, err := encodeWatchingMark(foreign)
+	require.NoError(t, err)
+	require.NoError(t, mr.Set(spectateWatchingKey(7307), mark))
+	stopWatchingIfAny(svcCtx, 7307, "unit")
+	require.Len(t, fake.removes, 1)
+	require.Empty(t, watchingMark(t, mr, 7307))
+
+	// 7) 节点 7 已换实例(进程重启):原实例的房间与观众已随进程消失,不发 Remove,只删标记
+	svcCtx.BattleNodes.Upsert(svc.BattleNodeRpcPrefix+"7",
+		discovery.NodeEntry{NodeId: 7, NodeUuid: "0d7c2f55-3b9e-4a61-8c4f-6e1a2b3c4d5e", Endpoint: "battle-7"})
+	stopWatchingIfAny(svcCtx, 7306, "unit")
+	require.Len(t, fake.removes, 1)
+	require.Empty(t, watchingMark(t, mr, 7306))
 }
 
 // D11 排队侧 + D9:进 gather 的成员若在观战,入口清退(RemoveObserver enter_gather + 删标记);
@@ -483,15 +563,13 @@ func TestGatherEntryEvictsSpectatorAndRegistersBattle(t *testing.T) {
 	rpcs := stubGatherRPCs(t, map[uint64]string{7201: "fp", 7202: "fp"})
 	observers := stubObserverRPCs(t)
 	registerBattle(t, svcCtx, 880100, nowMs(), "旧甲", "旧乙")
-	require.NoError(t, mr.Set(spectateWatchingKey(7201), "880100")) // 7201 正在观战旧场
+	original := setWatchingMark(t, mr, 7201, 880100) // 7201 正在观战旧场
 	members, tickets, _ := popMatchedPair(t, svcCtx, mr, 7201, 7202)
 
 	RunGather(svcCtx, matchpb.MatchMode_MATCH_MODE_1V1, 0, members, true, tickets)
 
 	require.Len(t, observers.removes, 1)
-	require.Equal(t, uint64(880100), observers.removes[0].GetBattleId())
-	require.Equal(t, uint64(7201), observers.removes[0].GetObserverPlayerId())
-	require.Equal(t, "enter_gather", observers.removes[0].GetReason())
+	requireRemoveOf(t, original, observers.removes[0], "enter_gather")
 	require.Empty(t, watchingMark(t, mr, 7201))
 	require.Empty(t, observers.adds)
 
@@ -656,15 +734,19 @@ func TestWatchBattleRandomModeSkipsRecordlessMember(t *testing.T) {
 	require.Equal(t, strconv.FormatUint(liveBattle, 10), watchingMark(t, mr, watcher))
 }
 
-// battle 用「非房间不存在」的 tip 拒绝(观众满 / 观众是参战者):索引不许剔除(战斗还在打),
+// battle 用「非房间不存在」的 tip 拒绝(观众席位满 / 墓碑表满 / 观众是参战者):索引不许剔除(战斗还在打),
 // 标记要回滚,且随机模式下不换场重试 —— 这三条正是 spectate.go 顶部注释声明的契约。
+// 席位满回专用的「观战人数已满」,其余拒绝回「该战斗当前无法观战」(映射见 spectateRejectVerdict)。
 func TestWatchBattleNonMissingTipKeepsIndexAndDoesNotRetry(t *testing.T) {
 	cases := []struct {
-		name string
-		tip  uint32
+		name        string
+		tip         uint32
+		wantTip     uint32
+		wantOutcome string
 	}{
-		{"观众已满", uint32(table.CommonError_kRateLimitExceeded)},
-		{"观众是参战者", uint32(table.CommonError_kInvalidParameter)},
+		{"观众已满", uint32(table.MatchError_kMatchSpectateFull), constants.ErrSpectateFull, "full"},
+		{"墓碑表满", uint32(table.CommonError_kRateLimitExceeded), constants.ErrBattleNotWatchable, "rejected"},
+		{"观众是参战者", uint32(table.CommonError_kInvalidParameter), constants.ErrBattleNotWatchable, "rejected"},
 	}
 	for i, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -677,9 +759,11 @@ func TestWatchBattleNonMissingTipKeepsIndexAndDoesNotRetry(t *testing.T) {
 			fake.onAdd = func(*battlepb.AddObserverRequest) (*battlepb.AddObserverResponse, error) {
 				return &battlepb.AddObserverResponse{ErrorMessage: tipErr(c.tip, c.name)}, nil
 			}
+			before := metrics.WatchBattleValue(c.wantOutcome)
 
 			resp := watchBattle(t, svcCtx, watcher, 0) // 随机模式
-			require.Equal(t, constants.ErrBattleNotWatchable, resp.GetErrorMessage().GetId())
+			require.Equal(t, c.wantTip, resp.GetErrorMessage().GetId())
+			require.Equal(t, before+1, metrics.WatchBattleValue(c.wantOutcome), "出口必须按结论计指标")
 			require.Len(t, fake.adds, 1, "非『房间不存在』不换场重试")
 			require.True(t, mr.Exists(spectateBattleKey(battleId)), "战斗仍在打,索引不许剔除")
 			require.Equal(t, 1, activeIndexSize(t, svcCtx))
@@ -825,7 +909,7 @@ func TestStopWatchingIfAnyWithCorruptRecordStillClearsMark(t *testing.T) {
 	svcCtx, mr := newGatherSvcCtx(t)
 	fake := stubObserverRPCs(t)
 	const watcher = uint64(7310)
-	require.NoError(t, mr.Set(spectateWatchingKey(watcher), "880300"))
+	setWatchingMark(t, mr, watcher, 880300)
 	require.NoError(t, mr.Set(spectateBattleKey(880300), "\x08")) // 截断的 varint,必定反序列化失败
 
 	stopWatchingIfAny(svcCtx, watcher, "unit")
@@ -869,7 +953,7 @@ func TestGatherFailureLeavesNoSpectateIndexAndKeepsObserverEvicted(t *testing.T)
 	rpcs := stubGatherRPCs(t, map[uint64]string{7210: "fp", 7211: "fp"})
 	observers := stubObserverRPCs(t)
 	registerBattle(t, svcCtx, 880330, nowMs(), "旧甲", "旧乙")
-	require.NoError(t, mr.Set(spectateWatchingKey(7210), "880330"))
+	setWatchingMark(t, mr, 7210, 880330)
 
 	prevCreate := createBattleFn
 	createBattleFn = func(string, *battlepb.CreateBattleRequest) (*battlepb.CreateBattleResponse, error) {
@@ -891,9 +975,9 @@ func TestGatherFailureLeavesNoSpectateIndexAndKeepsObserverEvicted(t *testing.T)
 
 // ---- turn-based §22 D70:battle 签不出票(kServiceUnavailable)时的观战回滚 ----
 
-// battle 侧 AddObserver 预签票失败回 kServiceUnavailable:新观众不登记;同场重看走的幂等重推
-// 路径由 battle 摘出名单并关其直连。match 必须:回「该战斗当前无法观战」、回滚观战标记、
-// 不剔除索引(战斗仍在打)、随机模式不换场、不补发 RemoveObserver(battle 侧已不留该观众);
+// battle 侧 AddObserver 预签票失败回 kServiceUnavailable:新观众不登记(同场重看已先按旧原件摘掉旧 op,
+// 新 op 也走新观众分支)。match 必须:回「该战斗当前无法观战」、回滚观战标记、
+// 不剔除索引(战斗仍在打)、随机模式不换场、不为被拒的新 op 补发 RemoveObserver(battle 侧已不留该观众);
 // 标记回滚彻底,battle 恢复后同一玩家能正常再接入。
 func TestWatchBattleServiceUnavailableRollsBackMark(t *testing.T) {
 	unavailable := func(*battlepb.AddObserverRequest) (*battlepb.AddObserverResponse, error) {
@@ -929,7 +1013,7 @@ func TestWatchBattleServiceUnavailableRollsBackMark(t *testing.T) {
 		require.Equal(t, strconv.FormatUint(battleId, 10), watchingMark(t, mr, watcher))
 	})
 
-	t.Run("同场重看走幂等重推", func(t *testing.T) {
+	t.Run("同场重看", func(t *testing.T) {
 		svcCtx, mr := newGatherSvcCtx(t)
 		fake := stubObserverRPCs(t)
 		const watcher = uint64(7161)
@@ -943,9 +1027,153 @@ func TestWatchBattleServiceUnavailableRollsBackMark(t *testing.T) {
 		resp := watchBattle(t, svcCtx, watcher, battleId)
 		require.Equal(t, constants.ErrBattleNotWatchable, resp.GetErrorMessage().GetId())
 		require.Len(t, fake.adds, 2)
-		require.Empty(t, fake.removes, "battle 侧已把该观众摘出名单,match 不补发 RemoveObserver")
-		require.Empty(t, watchingMark(t, mr, watcher), "与 battle 摘除观众一致:标记必须回滚")
+		// 唯一一次 Remove 是重看前按旧原件摘旧 op;新 op 被拒后 battle 侧不留该观众,不再补发。
+		require.Len(t, fake.removes, 1)
+		requireRemoveOf(t, fake.adds[0], fake.removes[0], "rewatch")
+		require.Empty(t, watchingMark(t, mr, watcher), "与 battle 不留该观众一致:标记必须回滚")
 		require.True(t, mr.Exists(spectateBattleKey(battleId)), "战斗仍在打,索引不许剔除")
 		require.Equal(t, 1, activeIndexSize(t, svcCtx))
 	})
+}
+
+// ---- 观战账本(battle_room_manager.cpp HandleAddObserver / HandleRemoveObserver)----
+
+// observerLedgerBattle 是按 battle 观战账本契约校验的桩 battle 节点(房间一直在):
+//   - Add:实例 = 节点 7 的 uuid、op 是规范 UUID、准入截止在 (now, now+30s],否则 kInvalidParameter;
+//     同 op 只接受未取消、与原件相同的重放;名单里挂着别的 op 时新 op 被拒,并封闭该新 op;
+//   - Remove:实例 / op 合规、截止与原件相同才给取消证明;取消后同 op 迟到的 Add 永久被拒,
+//     名单里挂着的正是原 op 才摘人。
+type observerLedgerBattle struct {
+	mu        sync.Mutex
+	originals map[string]*battlepb.AddObserverRequest // op → 原 Add
+	admits    map[string]uint64                       // op → 原准入截止(Remove 先到时也登记)
+	cancelled map[string]bool
+	roster    map[uint64]string // observer → 当前登记的 op
+}
+
+func newObserverLedgerBattle(fake *fakeObserverRPCs) *observerLedgerBattle {
+	b := &observerLedgerBattle{
+		originals: map[string]*battlepb.AddObserverRequest{},
+		admits:    map[string]uint64{},
+		cancelled: map[string]bool{},
+		roster:    map[uint64]string{},
+	}
+	fake.mu.Lock()
+	fake.onAdd, fake.onRemove = b.add, b.remove
+	fake.mu.Unlock()
+	return b
+}
+
+func (b *observerLedgerBattle) add(req *battlepb.AddObserverRequest) (*battlepb.AddObserverResponse, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	invalid := &battlepb.AddObserverResponse{
+		ErrorMessage: tipErr(uint32(table.CommonError_kInvalidParameter), "观战账本拒绝"),
+	}
+	now, op := nowMs(), req.GetSpectatorOperationId()
+	if req.GetTargetInstanceId() != testBattle7Instance || !validSpectatorOperation(op) ||
+		req.GetAdmitBeforeMs() <= now || req.GetAdmitBeforeMs()-now > 30000 {
+		return invalid, nil
+	}
+	if admit, known := b.admits[op]; known {
+		if b.cancelled[op] || admit != req.GetAdmitBeforeMs() || !proto.Equal(b.originals[op], req) {
+			return invalid, nil
+		}
+	} else {
+		b.admits[op] = req.GetAdmitBeforeMs()
+		b.originals[op] = proto.Clone(req).(*battlepb.AddObserverRequest)
+	}
+	if active, ok := b.roster[req.GetObserverPlayerId()]; ok && active != op {
+		b.cancelled[op] = true
+		return invalid, nil
+	}
+	b.roster[req.GetObserverPlayerId()] = op
+	return &battlepb.AddObserverResponse{}, nil
+}
+
+func (b *observerLedgerBattle) remove(req *battlepb.RemoveObserverRequest) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	noProof := errors.New("battle 未确认取消原观战操作")
+	now, op, admit := nowMs(), req.GetSpectatorOperationId(), req.GetAdmitBeforeMs()
+	if req.GetTargetInstanceId() != testBattle7Instance || !validSpectatorOperation(op) || admit == 0 ||
+		(admit > now && admit-now > 30000) {
+		return noProof
+	}
+	if known, ok := b.admits[op]; ok && known != admit {
+		return noProof
+	}
+	b.admits[op], b.cancelled[op] = admit, true
+	if b.roster[req.GetObserverPlayerId()] == op {
+		delete(b.roster, req.GetObserverPlayerId())
+	}
+	return nil
+}
+
+// activeOp 返回观众当前登记的 op;不在名单返回空串。
+func (b *observerLedgerBattle) activeOp(observer uint64) string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.roster[observer]
+}
+
+// 回归(本地模式观战被 battle 一律拒绝):本地路径发出的 Add 带齐观战账本三字段,按账本准入;
+// 重看同一场先按旧原件摘旧 op 再以新 op 准入;清退 Remove 带当前原件的 op 才能摘人,
+// 并让同 op 迟到的 Add 永久失效。修复前 Add 不带 op / 截止 / 实例,第一步就被账本拒绝。
+func TestWatchBattleLocalPathHonorsBattleObserverLedger(t *testing.T) {
+	svcCtx, mr := newGatherSvcCtx(t)
+	fake := stubObserverRPCs(t)
+	ledger := newObserverLedgerBattle(fake)
+	const watcher = uint64(7170)
+	const battleId = uint64(880250)
+	setPlayerSessionOnline(t, mr, watcher)
+	registerBattle(t, svcCtx, battleId, nowMs())
+
+	resp := watchBattle(t, svcCtx, watcher, battleId)
+	require.Zero(t, resp.GetErrorMessage().GetId(), "账本必须准入本地观战 tip=%v", resp.GetErrorMessage())
+	require.Len(t, fake.adds, 1)
+	first := fake.adds[0]
+	require.Equal(t, first.GetSpectatorOperationId(), ledger.activeOp(watcher))
+	require.Equal(t, first.GetSpectatorOperationId(), resp.GetSpectatorOperationId())
+
+	// 重看同一场:不先摘旧 op,新 op 会被账本拒绝。
+	resp = watchBattle(t, svcCtx, watcher, battleId)
+	require.Zero(t, resp.GetErrorMessage().GetId(), "重看同场必须成功 tip=%v", resp.GetErrorMessage())
+	require.Len(t, fake.adds, 2)
+	second := fake.adds[1]
+	require.Len(t, fake.removes, 1)
+	requireRemoveOf(t, first, fake.removes[0], "rewatch")
+	require.Equal(t, second.GetSpectatorOperationId(), ledger.activeOp(watcher))
+
+	// gather 入口清退:Remove 带当前原件的 op,账本摘人、删标记;同 op 迟到的 Add 永久被拒。
+	stopWatchingIfAny(svcCtx, watcher, "enter_gather")
+	require.Len(t, fake.removes, 2)
+	requireRemoveOf(t, second, fake.removes[1], "enter_gather")
+	require.Empty(t, ledger.activeOp(watcher), "同 op 的 Remove 必须把观众摘掉")
+	require.Empty(t, watchingMark(t, mr, watcher))
+	late, err := ledger.add(second)
+	require.NoError(t, err)
+	require.Equal(t, uint32(table.CommonError_kInvalidParameter), late.GetErrorMessage().GetId(),
+		"取消后的同 op Add 不得再准入")
+}
+
+// battle 节点没登记实例 uuid:组不出合规原件,fail-closed —— 回「该战斗当前无法观战」,
+// 不写标记、不打 battle、不动索引(战斗仍在打)。
+func TestWatchBattleRejectsBattleNodeWithoutInstance(t *testing.T) {
+	svcCtx, mr := newGatherSvcCtx(t)
+	fake := stubObserverRPCs(t)
+	svcCtx.BattleNodes.Upsert(svc.BattleNodeRpcPrefix+"7", discovery.NodeEntry{NodeId: 7, Endpoint: "battle-7"})
+	const watcher = uint64(7171)
+	const battleId = uint64(880251)
+	setPlayerSessionOnline(t, mr, watcher)
+	registerBattle(t, svcCtx, battleId, nowMs())
+	before := metrics.WatchBattleValue("rejected")
+
+	resp := watchBattle(t, svcCtx, watcher, battleId)
+	require.Equal(t, constants.ErrBattleNotWatchable, resp.GetErrorMessage().GetId())
+	require.Equal(t, before+1, metrics.WatchBattleValue("rejected"))
+	require.Empty(t, fake.adds, "没有实例就组不出合规 Add,不得打 battle")
+	require.Empty(t, watchingMark(t, mr, watcher))
+	require.True(t, mr.Exists(spectateBattleKey(battleId)), "节点定位失败不剔除索引")
+	require.Equal(t, 1, activeIndexSize(t, svcCtx))
 }

@@ -99,6 +99,8 @@ func (s *featureSmokeSession) runFeatureBattle(cfg *config.Config) error {
 	if s.player.GetBattleId() != 0 {
 		return fmt.Errorf("feature role already has a battle; refusing to join another")
 	}
+	// cursor 取在 JoinQueue 之前:开战 / 终局 waiter 只认它之后的快照。JoinQueue 走大厅的 callVia,
+	// 回包经 HandleFeatureBattleMessage 记进快照(waiter 也看它),被拒时在这里就失败。
 	cursor := s.player.FeatureSequence()
 	if _, err := s.call(game.MatchServiceJoinQueueMessageId, &match.JoinQueueRequest{
 		PlayerId: s.gc.PlayerId, Mode: match.MatchMode_MATCH_MODE_PVE_SOLO,
@@ -160,19 +162,31 @@ func (s *featureSmokeSession) openFeatureBattleDirect(battleID uint64) (*battleD
 	return direct, nil
 }
 
-// onFeatureBattleDirectMessage 是 features-smoke 的直连回调:应答与战斗推送先交给
-// HandleFeatureBattleMessage(与大厅连接进同一组 waiter,信封拒绝也在这里变成失败快照),
-// 没认领的(如就绪补拉的 GetBattleState 应答)走直连的通用分发。
+// onFeatureBattleDirectMessage 是 features-smoke 交给 dialBattleDirect 的直连回调,跑在直连的 RecvLoop 上。
+// 它收两类消息:直连 RecvLoop 上的推送(id = 0),先交 HandleFeatureBattleMessage(与大厅连接进同一组 waiter),
+// 没认领的走直连的通用分发;以及 pullBattleState 转交的就绪补拉 GetBattleState 应答,HandleFeatureBattleMessage
+// 不认领,同样走通用分发。
+//
+// SetAutoBattle 只经 callDirect 发出,回包带请求号、由 GameClient 交给那次调用,不会到这里;同号的消息只可能是
+// id = 0,说明 battle 没回显请求号,那次调用将以超时收场。丢弃而不交 HandleFeatureBattleMessage:写进快照会盖掉
+// 调用刚认领、还没来得及读的那一份。
 func (s *featureSmokeSession) onFeatureBattleDirectMessage(client *pkg.GameClient, message *base.MessageContent) {
+	if message.GetMessageId() == game.BattleClientPlayerSetAutoBattleMessageId {
+		smokeDropUncorrelatedReply(client.Account, message)
+		return
+	}
 	if handler.HandleFeatureBattleMessage(s.player, message) {
 		return
 	}
 	dispatchBattleDirectDefault(client, message)
 }
 
-// callDirect 经战斗直连发一条战斗客户端 RPC,按与大厅相同的 FeatureResponse(cursor) 口径等应答。
+// callDirect 经战斗直连发一条战斗客户端 RPC,与大厅连接同一套 callVia:回包按请求号认领,写进同一个 Player 的
+// feature 快照后再返回。直连面对验票之后的每条请求恰好回一个包(应答,或回显请求号的信封错误,
+// battle_client_edge.cpp DispatchVerifiedRequest),所以可以同步等;唯一例外是已被新直连顶替的旧连接,
+// battle 不回包、直接关连接,调用以超时收场。
 func (s *featureSmokeSession) callDirect(direct *battleDirectConn, id uint32, request proto.Message) (proto.Message, error) {
-	return s.callVia(direct.Send, id, request)
+	return s.callVia(direct.gc, id, request)
 }
 
 // BattleEnd 可先于 scene 应用结算；只轮询服务器任务快照，不在机器人本地累加击杀。

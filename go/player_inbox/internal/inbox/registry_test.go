@@ -2,12 +2,17 @@ package inbox
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"math"
 	"strings"
 	"testing"
 
 	"player_inbox/internal/constants"
 
+	battlepb "proto/battle"
+	base "proto/common/base"
+	dspb "proto/data_service"
 	inboxpb "proto/player_inbox"
 
 	"google.golang.org/protobuf/proto"
@@ -24,8 +29,92 @@ const (
 	gmDomain  = inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION
 )
 
+func TestBattleOriginalPermanentErrorsPrecedeStorage(t *testing.T) {
+	valid := &inboxpb.BattleSettlementInboxRequest{PlayerId: 11, BattleId: 21, ExpectedOwnerAccount: "owner", ExpectedOwnerRevision: 1, IssuedAtMs: 5}
+	valid.SettlementPayload = marshal(t, &battlepb.BattleSettlementData{PlayerId: 11, BattleId: 21, Outcome: battlepb.EBattleOutcome_BATTLE_OUTCOME_DRAW})
+	for _, edit := range []func(*inboxpb.BattleSettlementInboxRequest){
+		func(r *inboxpb.BattleSettlementInboxRequest) { r.PlayerId = 0 },
+		func(r *inboxpb.BattleSettlementInboxRequest) { r.BattleId++ },
+		func(r *inboxpb.BattleSettlementInboxRequest) { r.SettlementPayload = []byte{0xff} },
+		func(r *inboxpb.BattleSettlementInboxRequest) {
+			r.SettlementPayload = append(r.SettlementPayload, 0xf8, 0x07, 0x01)
+		},
+	} {
+		req := proto.Clone(valid).(*inboxpb.BattleSettlementInboxRequest)
+		edit(req)
+		// 没有DB的同一个正式入口仍能先拒纯原件错误，不触P/流或资产。
+		store := &Store{}
+		if _, err := store.EnqueueBattleSettlement(context.Background(), req); !errors.Is(err, ErrBattleSettlementOriginal) {
+			t.Fatalf("Enqueue原件错误应明确分类: %v", err)
+		}
+		if _, err := store.LookupBattleSettlement(context.Background(), req); !errors.Is(err, ErrBattleSettlementOriginal) {
+			t.Fatalf("Lookup原件错误应明确分类: %v", err)
+		}
+	}
+}
+
+func TestBattleSettlementRegistryAndImmutableOriginal(t *testing.T) {
+	r := mustRegistry(t)
+	typ := inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT
+	e, ok := r.Type(typ)
+	if !ok || e.Spec.GetMaxPayloadBytes() != 16384 || e.Spec.GetPayloadMessage() != "BattleSettlementData" {
+		t.Fatal("Battle类型规格不完整")
+	}
+	d, ok := r.Domain(e.Spec.Domain)
+	if !ok || d.MaxPending != 1 || d.RequiresOutOfBattle {
+		t.Fatal("Battle专域必须单槽且不等待战斗退出")
+	}
+	p := &battlepb.BattleSettlementData{BattleId: 21, PlayerId: 11, Outcome: battlepb.EBattleOutcome_BATTLE_OUTCOME_DRAW, ItemsGained: []*battlepb.BattleItemEntry{{ItemTableId: 3, Count: 1}}}
+	raw, err := proto.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &inboxpb.BattleSettlementInboxRequest{PlayerId: 11, BattleId: 21, ExpectedOwnerAccount: "original-owner", ExpectedOwnerRevision: 7, IssuedAtMs: testNowMs, SettlementPayload: raw}
+	if err = validateBattleOriginal(req); err != nil {
+		t.Fatal(err)
+	}
+	role := &dspb.AccountRoleOwnership{Account: "original-owner", OwnerRevision: 7, Role: &base.AccountSimplePlayer{PlayerId: 11}}
+	if !battleOriginalMatches(req, role) {
+		t.Fatal("完整原归属应匹配")
+	}
+	role.OwnerRevision++
+	if battleOriginalMatches(req, role) {
+		t.Fatal("不得用新目录修订补旧源权限")
+	}
+	p.ItemsGained[0].ProtoReflect().SetUnknown([]byte{0xF8, 0x07, 0x01})
+	raw, err = proto.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.SettlementPayload = raw
+	if validateBattleOriginal(req) == nil {
+		t.Fatal("嵌套未知字段必须在执行前拒绝")
+	}
+	if _, code := r.ValidatePayload(typ, allTypesAllowed(), raw); code != constants.ErrPayloadInvalid {
+		t.Fatalf("未知字段不是有效执行原件: %d", code)
+	}
+	req.SettlementPayload = make([]byte, 16385)
+	if validateBattleOriginal(req) == nil {
+		t.Fatal("大于16KiB必须拒绝")
+	}
+}
+
+func TestBattleProducerCannotUseGenericEnqueueOrVoid(t *testing.T) {
+	s := &Store{registry: mustRegistry(t)}
+	r, err := s.Enqueue(context.Background(), EnqueueParams{PlayerID: 11, RequestID: 21, IssuedAtMs: testNowMs, Producer: inboxpb.PlayerInboxProducerKind_PLAYER_INBOX_PRODUCER_MATCH, Type: inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT}, nil)
+	if err != nil || r.Code != constants.ErrInvalidParameter {
+		t.Fatalf("普通入口不可伪造Match来源: %+v %v", r, err)
+	}
+	for _, mode := range []inboxpb.PlayerInboxVoidMode{inboxpb.PlayerInboxVoidMode_PLAYER_INBOX_VOID_MODE_NORMAL, inboxpb.PlayerInboxVoidMode_PLAYER_INBOX_VOID_MODE_FORCE_MISMATCH} {
+		resp, err := s.Void(context.Background(), VoidParams{PlayerID: 11, Domain: inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT, Seq: 1, Mode: mode}, nil)
+		if err != nil || resp.GetErrorMessage().GetId() != constants.ErrItemStateConflict {
+			t.Fatalf("Battle不得通用VOID: %+v %v", resp, err)
+		}
+	}
+}
+
 func allTypesAllowed() map[inboxpb.PlayerInboxMessageType]struct{} {
-	return map[inboxpb.PlayerInboxMessageType]struct{}{gmBlock: {}, gmUnblock: {}, gmDebt: {}}
+	return map[inboxpb.PlayerInboxMessageType]struct{}{gmBlock: {}, gmUnblock: {}, gmDebt: {}, inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT: {}}
 }
 
 func mustRegistry(t *testing.T) *Registry {
@@ -145,8 +234,9 @@ func goodTypes() []synthValue {
 
 func copyRules() map[inboxpb.PlayerInboxMessageType]payloadRule {
 	out := make(map[inboxpb.PlayerInboxMessageType]payloadRule, len(payloadRules))
-	for k, v := range payloadRules {
-		out[k] = v
+	// 合成描述符明确只建原GM三类型，不能被生产新增Battle规则遮住各原负例的实际错因。
+	for _, k := range []inboxpb.PlayerInboxMessageType{gmBlock, gmUnblock, gmDebt} {
+		out[k] = payloadRules[k]
 	}
 	return out
 }

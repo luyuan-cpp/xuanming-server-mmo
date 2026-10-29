@@ -65,13 +65,13 @@ func TestOnlineDirectoryFiltersAndPreservesLastBatch(t *testing.T) {
 	for id := uint64(1); id <= 15; id++ {
 		zones[id] = 1
 		putPlayerSession(t, mr, id, plpb.PlayerSessionState_SESSION_STATE_ONLINE, 123)
-		require.NoError(t, mr.Set(fmt.Sprintf("%s:%d", prefix, id), directoryProfile(t, id, fmt.Sprintf("道人%d", id))))
+		require.NoError(t, mr.Set(fmt.Sprintf("%s:{%d}", prefix, id), directoryProfile(t, id, fmt.Sprintf("道人%d", id))))
 	}
 	// 不同 home zone、断线重连、缺资料、错误身份、自身和排除项都不得出现。
 	zones[3] = 2
 	putPlayerSession(t, mr, 4, plpb.PlayerSessionState_SESSION_STATE_DISCONNECTING, 123)
-	mr.Del(fmt.Sprintf("%s:5", prefix))
-	require.NoError(t, mr.Set(fmt.Sprintf("%s:6", prefix), directoryProfile(t, 99, "错误身份")))
+	mr.Del(fmt.Sprintf("%s:{5}", prefix))
+	require.NoError(t, mr.Set(fmt.Sprintf("%s:{6}", prefix), directoryProfile(t, 99, "错误身份")))
 	directory := OnlineDirectory{Redis: reader.rdb, DataService: directoryDataService{zones: zones}}
 	seen := map[uint64]bool{}
 	cursor := ""
@@ -155,7 +155,7 @@ func TestOnlineDirectoryEmptyPageContinuesWithinScanBudget(t *testing.T) {
 	})
 	putPlayerSession(t, mr, 1999, plpb.PlayerSessionState_SESSION_STATE_ONLINE, 123)
 	prefix := string((&dbpb.PlayerAllData{}).ProtoReflect().Descriptor().FullName())
-	require.NoError(t, mr.Set(prefix+":1999", directoryProfile(t, 1999, "最后的在线玩家")))
+	require.NoError(t, mr.Set(prefix+":{1999}", directoryProfile(t, 1999, "最后的在线玩家")))
 	directory := OnlineDirectory{Redis: reader.rdb, DataService: directoryDataService{zones: map[uint64]uint32{1: 1, 1999: 1}}}
 	cursor := ""
 	seenEmptyPage := false
@@ -182,7 +182,7 @@ func TestOnlineDirectoryEmptyPageContinuesWithinScanBudget(t *testing.T) {
 func TestFriendProfilesFillCacheAndResolveOfflineNames(t *testing.T) {
 	reader, mr := newSessionReaderOnMiniredis(t, 64)
 	prefix := string((&dbpb.PlayerAllData{}).ProtoReflect().Descriptor().FullName())
-	require.NoError(t, mr.Set(prefix+":2", directoryProfile(t, 2, "青云")))
+	require.NoError(t, mr.Set(prefix+":{2}", directoryProfile(t, 2, "青云")))
 	friends := []*pb.FriendEntry{{FriendPlayerId: 2, IsOnline: true}, {FriendPlayerId: 3}}
 	directory := OnlineDirectory{Redis: reader.rdb, DataService: directoryDataService{zones: map[uint64]uint32{2: 1, 3: 2}, names: map[uint64]string{3: "离线好友"}}}
 	require.NoError(t, directory.FillFriendProfiles(context.Background(), friends))

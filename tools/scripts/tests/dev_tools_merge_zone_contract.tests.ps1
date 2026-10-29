@@ -130,6 +130,17 @@ try {
         $script:MergeKafkaGroup = ''
     }
 
+    Test-Case '公共参数:-MergeEtcdEndpoints 原样转发为 -etcd-endpoints,没给就不转发(缺参数由 merge_zone 在任何写入之前拒绝)' {
+        Reset-MergeParams
+        $script:MergeSourceZone = 1; $script:MergeTargetZone = 2; $script:MergeDbCapabilityZones = 'none'
+        Assert-True (-not ((Get-CmdArgs 'merge-zone') -contains '-etcd-endpoints')) '没给 -MergeEtcdEndpoints 时不得转发空值'
+        $script:MergeEtcdEndpoints = 'http://127.0.0.1:2379'
+        foreach ($cmd in @('merge-zone', 'merge-zone-audit')) {
+            Assert-Equal 'http://127.0.0.1:2379' (Get-ArgValue (Get-CmdArgs $cmd) '-etcd-endpoints') "${cmd}:-MergeEtcdEndpoints 必须原样转发(preflight P2 与审计要 etcd 注册表的正证,tools/merge_zone/scene_registry.go)"
+        }
+        $script:MergeEtcdEndpoints = ''
+    }
+
     # 源码断言:dev_tools.ps1 与回滚脚本 / kafka_offset_reset.ps1 的透传口径(2026-10-15)。
     # 分支文本按 switch 分支的起止锚点切出,只断本分支,不受参数块注释影响。
     function Get-DevToolsBranchText([string]$Branch, [string]$NextBranch) {
@@ -496,7 +507,7 @@ try {
         Reset-RouteToolParams
     }
 
-    Test-Case 'k8s-route-tool:pwsh -File 下原样透传 k8s_route_tool.ps1 的退出码 0/1/2/3;没给子命令在调用之前拒绝' {
+    Test-Case 'k8s-route-tool:pwsh -File 下原样透传 k8s_route_tool.ps1 的退出码 0/1/2/3;没给子命令在调用之前以 2 拒绝;下游抛异常也是 2(不落到 pwsh 的 1)' {
         $names = @('Get-K8sRouteToolArgs', 'Invoke-K8sRouteTool')
         $defs = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $names }, $false))
         $childDir = Join-Path $testRoot 'route_tool_child'
@@ -508,6 +519,8 @@ try {
         })
         Set-Content -LiteralPath (Join-Path $childDir 'k8s_route_tool.ps1') -Encoding utf8 -Value @(
             ('param(' + ($fakeParams -join ', ') + ')'),
+            # RT_TEST_THROW=1:模拟下游没兜住的异常(review B3-7 / OPS-5),包装层必须以 2 退出。
+            'if ($env:RT_TEST_THROW -eq ''1'') { throw ''fake route tool internal failure'' }',
             'Set-Content -LiteralPath $env:RT_TEST_RECORD -Value @("zone=$ZoneName", "args=$($RouteToolArgs -join ''|'')", "dry=$DryRun")',
             'exit [int]$env:RT_TEST_EXIT')
         $childPath = Join-Path $childDir 'run_route_tool.ps1'
@@ -520,8 +533,9 @@ try {
                 '$DryRun = $false', '$KubeContext = ''''', '$KubeConfig = ''''', 'Invoke-K8sRouteTool', 'exit 99'))
         }
         $pwshPath = (Get-Process -Id $PID).Path
-        $saved = @{ RT_TEST_RECORD = $env:RT_TEST_RECORD; RT_TEST_EXIT = $env:RT_TEST_EXIT }
+        $saved = @{ RT_TEST_RECORD = $env:RT_TEST_RECORD; RT_TEST_EXIT = $env:RT_TEST_EXIT; RT_TEST_THROW = $env:RT_TEST_THROW }
         try {
+            $env:RT_TEST_THROW = ''
             & $writeChild "@('audit', '-frozen-recovery')"
             foreach ($code in @(0, 1, 2, 3)) {
                 Remove-Item -LiteralPath $record -Force -ErrorAction SilentlyContinue
@@ -543,9 +557,19 @@ try {
             $out = & $pwshPath -NoProfile -NonInteractive -File $childPath 2>&1 | Out-String
             $got = $LASTEXITCODE
             $ErrorActionPreference = 'Stop'
-            Assert-True ($got -ne 0 -and $got -ne 99) "没给 -RouteToolArgs 必须在调用之前失败(exit=$got)"
+            Assert-Equal 2 $got "没给 -RouteToolArgs 必须在调用之前以 2 失败(本入口自己的失败;1 会与「完成但需要人工处理」撞号,99 = 漏了 exit)。输出: $out"
             Assert-Match $out 'RouteToolArgs' '提示必须点名 -RouteToolArgs'
             Assert-True (-not (Test-Path -LiteralPath $record)) '没给子命令时不得调用 k8s_route_tool.ps1'
+
+            # 下游抛出未捕获的异常(真脚本的入口已兜成 2,这里防的是包装层这一跳):进程退出码必须是 2,不是 pwsh 的 1。
+            & $writeChild "@('audit')"
+            $env:RT_TEST_THROW = '1'; $env:RT_TEST_EXIT = '0'
+            $ErrorActionPreference = 'Continue'
+            $out = & $pwshPath -NoProfile -NonInteractive -File $childPath 2>&1 | Out-String
+            $got = $LASTEXITCODE
+            $ErrorActionPreference = 'Stop'
+            Assert-Equal 2 $got "k8s_route_tool.ps1 抛异常时 dev_tools 必须以 2 退出(exit=$got)。输出: $out"
+            Assert-Match $out 'fake route tool internal failure' '报错要带上下游的异常文本'
         }
         finally {
             foreach ($n in $saved.Keys) { [Environment]::SetEnvironmentVariable($n, $saved[$n], 'Process') }
@@ -637,6 +661,42 @@ function go {
         }
         finally {
             foreach ($n in $envNames) { [Environment]::SetEnvironmentVariable($n, $saved[$n], 'Process') }
+        }
+    }
+
+    # capability-check 的 1 是业务结论(有 missing);漏给 -MergeDbCapabilityZones 时一个标记都没查,属于「没查成」,必须是 2。
+    # 以前 Get-MergeZoneCommandArgs 的 throw 冒到 pwsh -File,退出码是 1,与 missing 撞号(runbook §8 Step 6 按 1 会去换 go/db)。
+    Test-Case '退出码:merge-zone-capability-check 漏给 -MergeDbCapabilityZones 以 2 退出、不编译不运行工具;其余命令的参数错误照旧为 1' {
+        $runnerNames = $functionNames + @('New-MergeZoneExePath', 'Invoke-MergeZoneGo')
+        $definitions = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $runnerNames }, $false))
+        $paramAssignments = foreach ($p in $mergeParams) {
+            $rhs = if ($null -ne $p.DefaultValue) { $p.DefaultValue.Extent.Text } elseif ($p.StaticType -eq [switch]) { '$false' } else { '$null' }
+            '${0} = {1}' -f $p.Name.VariablePath.UserPath, $rhs
+        }
+        $childDir = Join-Path $testRoot 'capability_exit_child'
+        New-Item -ItemType Directory -Path $childDir -Force | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $testRoot 'tools/merge_zone') -Force | Out-Null
+        $goRecord = Join-Path $childDir 'go_record.txt'
+        $childPath = Join-Path $childDir 'run_capability.ps1'
+        $pwshPath = (Get-Process -Id $PID).Path
+        # 假 go:一旦被调用就留记录(参数没给齐时不得编译);真 go 不会被碰到。
+        $fakeGo = 'function go {{ Set-Content -LiteralPath ''{0}'' -Value ''go called''; $global:LASTEXITCODE = 0 }}' -f $goRecord.Replace("'", "''")
+        foreach ($case in @(
+                @{ Command = 'merge-zone-capability-check'; Expected = 2; Pattern = 'MergeDbCapabilityZones[\s\S]*NOT run'; Why = '没查成按 2,不与 missing 的 1 混用' }
+                @{ Command = 'merge-zone-relocate'; Expected = 1; Pattern = 'MergeRelocateSourceStorage'; Why = '其余命令的参数错误照旧往上抛(pwsh -File 下为 1 = 拒绝、什么都没做),本条只改 capability-check' }
+            )) {
+            Remove-Item -LiteralPath $goRecord -Force -ErrorAction SilentlyContinue
+            Set-Content -LiteralPath $childPath -Encoding utf8 -Value (@('$ErrorActionPreference = ''Stop''') +
+                @($definitions | ForEach-Object { $_.Extent.Text }) + @($paramAssignments) +
+                @(('$ScriptDir = ''{0}''' -f $script:ScriptDir.Replace("'", "''")), $fakeGo, '$MergeDbCapabilityZones = ''''', '$MergeZoneRouteSource = ''redis''',
+                  ('Invoke-MergeZoneGo -MergeCommand ''{0}''' -f $case.Command), 'exit 99'))
+            $ErrorActionPreference = 'Continue'
+            $out = & $pwshPath -NoProfile -NonInteractive -File $childPath 2>&1 | Out-String
+            $got = $LASTEXITCODE
+            $ErrorActionPreference = 'Stop'
+            Assert-Equal $case.Expected $got "$($case.Command) 参数没给齐:$($case.Why)(99 = 函数正常返回、漏了 exit)。子进程输出: $out"
+            Assert-Match $out $case.Pattern "$($case.Command):报错点名缺的参数"
+            Assert-True (-not (Test-Path -LiteralPath $goRecord)) "$($case.Command):参数没给齐时不编译、不运行工具"
         }
     }
 

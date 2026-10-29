@@ -36,6 +36,9 @@ import (
 	"data_service/internal/store"
 	"data_service/internal/store/storetest"
 
+	"google.golang.org/protobuf/proto"
+	pb "proto/common/database"
+	"shared/authoritysql"
 	"shared/placement"
 
 	"github.com/go-sql-driver/mysql"
@@ -58,6 +61,34 @@ func newRouteStore(t *testing.T, db *storetest.DB) *store.RouteStore {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
 	return st
+}
+
+// newMaintenanceRouteStore 使用真实Operator；普通业务池的权限与boot不改变。
+func newMaintenanceRouteStore(t *testing.T, db *storetest.DB, frozen *pb.SqlWriterMaintenanceReceipt) *store.RouteStore {
+	t.Helper()
+	cfg, err := db.MaintenanceCfg(context.Background())
+	require.NoError(t, err)
+	opts := routeTestOpts()
+	opts.MaintenanceFreeze = frozen
+	st, err := store.NewRouteStore(cfg, opts)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = st.Close() })
+	return st
+}
+
+// 行为探针只在测试专用Schema池执行；NORMAL启动仅做只读资格核验。
+func openRouteBehaviorProbe(ctx context.Context, db *storetest.DB) (*store.RouteStore, error) {
+	pool, err := db.Fixture().OpenSchema(ctx, db.Name)
+	if err != nil {
+		return nil, err
+	}
+	pool.SetMaxOpenConns(1)
+	pool.SetMaxIdleConns(1)
+	if _, err = pool.ExecContext(ctx, "SET SESSION lock_wait_timeout=1,innodb_lock_wait_timeout=1"); err != nil {
+		_ = pool.Close()
+		return nil, err
+	}
+	return store.NewRouteStoreFromDBForTest(ctx, pool, routeTestOpts())
 }
 
 func itNull32(v uint32) any {
@@ -149,7 +180,7 @@ func TestRouteSchema_MigrationCreatesTablesSeedsMetaAndIsIdempotent(t *testing.T
 	db := storetest.NewEmptyDB(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}), "first migration")
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}), "first migration")
 
 	wantPK := map[string][]string{
 		store.PlayerRouteTableName:    {"route_shard", "player_id"},
@@ -187,7 +218,7 @@ func TestRouteSchema_MigrationCreatesTablesSeedsMetaAndIsIdempotent(t *testing.T
 	assert.Zero(t, verified)
 	assert.False(t, leader.Valid, "种出来的对账行没有 leader")
 
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}), "second migration must be a no-op")
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}), "second migration must be a no-op")
 	for table := range wantPK {
 		assert.Equalf(t, before[table], db.ShowCreateTable(t, table), "table %s DDL changed on second migration", table)
 	}
@@ -239,7 +270,7 @@ func TestRouteSchema_ShapeGuardRejectsTamperedTable(t *testing.T) {
 		// 不能删 rev:它被 chk_route_rev 引用,MySQL 会以 3959 拒绝删列。
 		_, err := db.Raw.Exec("ALTER TABLE player_route DROP COLUMN updated_by")
 		require.NoError(t, err)
-		err = store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{})
+		err = db.Migrate(ctx, store.MigrateOptions{})
 		require.Error(t, err, "形状不对的存量表必须让迁移失败")
 		assert.Contains(t, err.Error(), "updated_by")
 	})
@@ -248,7 +279,7 @@ func TestRouteSchema_ShapeGuardRejectsTamperedTable(t *testing.T) {
 		db := storetest.NewMigratedDB(t)
 		_, err := db.Raw.Exec("ALTER TABLE zone_merged_into DROP PRIMARY KEY, ADD PRIMARY KEY (src_zone, dst_zone)")
 		require.NoError(t, err)
-		err = store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{})
+		err = db.Migrate(ctx, store.MigrateOptions{})
 		require.Error(t, err, "主键被改过的存量表必须让迁移失败(ODKU 的判定建在主键上)")
 		assert.Contains(t, err.Error(), "primary key")
 	})
@@ -257,7 +288,7 @@ func TestRouteSchema_ShapeGuardRejectsTamperedTable(t *testing.T) {
 		db := storetest.NewMigratedDB(t)
 		_, err := db.Raw.Exec("ALTER TABLE player_route DROP PRIMARY KEY, ADD PRIMARY KEY (player_id)")
 		require.NoError(t, err)
-		err = store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{})
+		err = db.Migrate(ctx, store.MigrateOptions{})
 		require.Error(t, err, "player_route 主键不是 (route_shard, player_id) 时迁移必须失败")
 		assert.Contains(t, err.Error(), "primary key")
 		assert.Contains(t, err.Error(), "G1a", "主键分支也要带上 G1a 的处理提示")
@@ -271,7 +302,7 @@ func TestRouteSchema_ShapeGuardRejectsTamperedTable(t *testing.T) {
 		require.NoError(t, err)
 		_, err = db.Raw.Exec(preG1aPlayerRouteDDL)
 		require.NoError(t, err)
-		err = store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{})
+		err = db.Migrate(ctx, store.MigrateOptions{})
 		require.Error(t, err, "G1a 之前的旧形状必须让迁移失败,且绝不自动 DROP")
 		assert.Contains(t, err.Error(), "route_shard")
 		assert.Contains(t, err.Error(), "DROP TABLE player_route, zone_merge_fence, zone_merged_into, route_meta",
@@ -284,7 +315,7 @@ func TestRouteSchema_ShapeGuardRejectsTamperedTable(t *testing.T) {
 		db := storetest.NewMigratedDB(t)
 		_, err := db.Raw.Exec("ALTER TABLE route_reconcile DROP COLUMN cache_verified_ms")
 		require.NoError(t, err)
-		err = store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{})
+		err = db.Migrate(ctx, store.MigrateOptions{})
 		require.Error(t, err, "route_reconcile 缺列必须让迁移失败")
 		assert.Contains(t, err.Error(), "cache_verified_ms")
 	})
@@ -659,24 +690,33 @@ func TestRouteStore_MetaMissingAndNotWritableFailClosed(t *testing.T) {
 	ctx := context.Background()
 	req := store.RouteRegisterRequest{PlayerID: 7101, HomeZone: 7}
 
-	_, err := db.Raw.Exec("UPDATE route_meta SET writable = 0 WHERE id = 1")
+	originalMeta, err := db.Fixture().Catalog.CurrentMeta(ctx)
+	require.NoError(t, err)
+
+	_, err = db.Raw.Exec("UPDATE route_meta SET writable = 0 WHERE id = 1")
 	require.NoError(t, err)
 	_, err = st.RegisterHome(ctx, req)
-	require.ErrorIs(t, err, store.ErrRouteNotWritable)
+	require.ErrorIs(t, err, authoritysql.ErrWriterDenied)
 
 	_, err = db.Raw.Exec("DELETE FROM route_meta WHERE id = 1")
 	require.NoError(t, err)
 	_, err = st.RegisterHome(ctx, req)
-	require.ErrorIs(t, err, store.ErrRouteMetaMissing)
+	require.ErrorIs(t, err, authoritysql.ErrWriterDenied)
 	assert.EqualValues(t, 0, db.Count(t, store.PlayerRouteTableName, ""), "meta 缺失 / 不可写时零写入")
 
 	_, err = store.NewRouteStore(db.Cfg, routeTestOpts())
 	require.ErrorIs(t, err, store.ErrRouteMetaMissing, "建 store 的探针同样拒绝")
 
-	// 迁移会把 meta 行补种回来(writable=1),之后照常可写。
+	// 故障注入恢复本用例保存的真实原身份；不能用新 generation 让旧 boot 复活。
+	_, err = db.Raw.Exec("INSERT INTO route_meta (id,generation,writable,writer_epoch,catalog_revision,freeze_run_id) VALUES (1,?,?,?,?,?)",
+		originalMeta.Generation, originalMeta.Writable, originalMeta.WriterEpoch, originalMeta.CatalogRevision, originalMeta.FreezeRunId)
+	require.NoError(t, err)
 	migrateCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	require.NoError(t, store.MigrateSchema(migrateCtx, db.Cfg, store.MigrateOptions{}))
+	require.NoError(t, db.Migrate(migrateCtx, store.MigrateOptions{}))
+	restoredMeta, err := db.Fixture().Catalog.CurrentMeta(ctx)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(originalMeta, restoredMeta), "幂等迁移保留原 generation / epoch / catalog / freeze 身份")
 	res, err := st.RegisterHome(ctx, req)
 	require.NoError(t, err)
 	assert.Equal(t, store.RouteRegisterInserted, res.Outcome)
@@ -884,7 +924,7 @@ func TestRouteStore_ProbeRejectsTableBuiltWithAnotherShardModulus(t *testing.T) 
 	for _, modulus := range []uint32{16, 128} {
 		rebuild(t, modulus)
 		// 迁移照样通过(CREATE TABLE IF NOT EXISTS 不碰已有的表,形状守卫只查列名与主键):这正是要靠探针认出来的原因。
-		require.NoErrorf(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}), "按 %% %d 建的表,迁移不该报错", modulus)
+		require.NoErrorf(t, db.Migrate(ctx, store.MigrateOptions{}), "按 %% %d 建的表,迁移不该报错", modulus)
 		_, err := store.NewRouteStore(db.Cfg, routeTestOpts())
 		require.ErrorIsf(t, err, store.ErrRouteShardModulusMismatch, "按 %% %d 建的表必须被建池探针 P5 认出", modulus)
 		assert.EqualValuesf(t, 0, db.Count(t, store.PlayerRouteTableName, ""), "按 %% %d 建的表:探针行必须已回滚", modulus)
@@ -947,8 +987,11 @@ func TestRouteStore_ProbeKeysHeldByRealPlayers(t *testing.T) {
 		"SELECT player_id FROM player_route WHERE route_shard = ? AND player_id = ? FOR UPDATE",
 		uint64(placement.RouteRowShard(n)), n).Scan(&locked))
 
+	normal, err := store.NewRouteStore(db.Cfg, routeTestOpts())
+	require.NoError(t, err, "NORMAL只读启动不应等待玩家行锁")
+	require.NoError(t, normal.Close())
 	start := time.Now()
-	_, err = store.NewRouteStore(db.Cfg, routeTestOpts())
+	_, err = openRouteBehaviorProbe(ctx, db)
 	elapsed := time.Since(start)
 	t.Logf("建池撞上被持锁的探针键:耗时 %s,err=%v", elapsed, err)
 	var me *mysql.MySQLError
@@ -986,9 +1029,12 @@ func TestRouteStore_ProbesQueueOnMetaGuard(t *testing.T) {
 	_, err = holder.ExecContext(ctx, store.RouteProbeShardModulusSQLForTest, uint64(placement.RouteRowShard(n)), n)
 	require.NoError(t, err, "空表上 P5 的第一行应当插得进去(未提交)")
 
+	normal, err := store.NewRouteStore(db.Cfg, routeTestOpts())
+	require.NoError(t, err, "NORMAL只读启动不应等待metaX")
+	require.NoError(t, normal.Close())
 	done := make(chan error, 1)
 	go func() {
-		st, err := store.NewRouteStore(db.Cfg, routeTestOpts())
+		st, err := openRouteBehaviorProbe(ctx, db)
 		if st != nil {
 			_ = st.Close()
 		}
@@ -1194,6 +1240,7 @@ func TestRouteStore_TiDBClusteredShardsAndPresplit(t *testing.T) {
 	}
 
 	require.NoError(t, store.BootstrapRouteTablesOnlyForTest(ctx, db.Raw, db.Name))
+	require.NoError(t, db.Fixture().GrantTables(ctx, db.Name, "player_route", "zone_merge_fence", "zone_merged_into", "route_reconcile"))
 	pkTypes := map[string]string{}
 	rows, err := db.Raw.QueryContext(ctx, "SELECT TABLE_NAME, TIDB_PK_TYPE FROM information_schema.TABLES"+
 		" WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN ('player_route', 'zone_merge_fence')", db.Name)
@@ -1244,8 +1291,12 @@ func TestRouteStore_TiDBClusteredShardsAndPresplit(t *testing.T) {
 	assert.EqualValues(t, 2, db.Count(t, store.PlayerRouteTableName, "player_id IN (?, ?) AND rev = 1", probeN, probeN-1),
 		"P5 撞键不许改这两行")
 
+	// DDL 预切由自有 Schema 池执行，正常业务仍使用受围栏保护的 NORMAL 池。
+	schemaTool, err := openRouteBehaviorProbe(ctx, db)
+	require.NoError(t, err)
+	defer schemaTool.Close()
 	req := store.RouteTiDBPrepareRequest{Zones: []uint32{zone}, Storages: []uint32{1000000}}
-	rep, err := st.PrepareTiDB(ctx, req)
+	rep, err := schemaTool.PrepareTiDB(ctx, req)
 	require.NoError(t, err)
 	for _, step := range rep.Steps {
 		t.Logf("tidb-prepare: %s → executed=%t split_regions=%d", step.SQL, step.Executed, step.SplitRegions)
@@ -1283,7 +1334,7 @@ func TestRouteStore_TiDBClusteredShardsAndPresplit(t *testing.T) {
 			outcomes[i] = registerOutcome{res: res, err: err}
 		}()
 	}
-	_, err = st.PrepareTiDB(ctx, req)
+	_, err = schemaTool.PrepareTiDB(ctx, req)
 	wg.Wait()
 	require.NoError(t, err, "第二次 tidb-prepare 必须幂等")
 	for i, o := range outcomes {
@@ -1387,16 +1438,18 @@ func TestRouteStore_RepairFromCacheRestoresRolledBackRows(t *testing.T) {
 		{PlayerID: 8102, HomeZone: 7, MapRev: 2},
 	}
 	_, err = st.RepairRoutesFromCache(ctx, cache, store.RouteRepairOptions{})
-	require.ErrorIs(t, err, store.ErrRouteNotFrozen, "可写时不许反向修库")
+	require.Error(t, err, "NORMAL且没有正式冻结原件时不许反向修库")
 
-	changed, err := st.FreezeRouteWriters(freezeCtx(t))
+	normalBefore := st
+	frozenReceipt, err := db.Freeze(freezeCtx(t))
 	require.NoError(t, err)
-	require.True(t, changed)
-	changed, err = st.FreezeRouteWriters(freezeCtx(t))
+	require.Equal(t, pb.SqlWriterMaintenanceReceipt_FROZEN, frozenReceipt.Phase)
+	againReceipt, err := db.Freeze(freezeCtx(t))
 	require.NoError(t, err)
-	assert.False(t, changed, "二次冻结是 no-op")
-	_, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 8199, HomeZone: 7})
-	require.ErrorIs(t, err, store.ErrRouteNotWritable, "冻结期 W1 拒写")
+	assert.True(t, proto.Equal(frozenReceipt, againReceipt), "二次冻结复用同一永久收据，不能生成新轮次")
+	_, err = normalBefore.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 8199, HomeZone: 7})
+	require.ErrorIs(t, err, authoritysql.ErrWriterDenied, "冻结前boot已永久退役")
+	st = newMaintenanceRouteStore(t, db, frozenReceipt)
 
 	ids := []uint64{8101, 8102}
 	before, err := st.GetRoutes(ctx, ids)
@@ -1437,12 +1490,15 @@ func TestRouteStore_RepairFromCacheRestoresRolledBackRows(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, miStats.Matched)
 
-	changed, err = st.UnfreezeRouteWriters(freezeCtx(t), 0)
+	released, err := db.Release(freezeCtx(t), 0)
 	require.NoError(t, err)
-	require.True(t, changed)
+	require.Equal(t, pb.SqlWriterMaintenanceReceipt_RELEASED, released.Phase)
 	_, err = st.RepairRoutesFromCache(ctx, cache, store.RouteRepairOptions{})
 	require.ErrorIs(t, err, store.ErrRouteNotFrozen, "解冻之后不许再修库")
-	res, err := st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 8199, HomeZone: 7})
+	_, err = normalBefore.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 8199, HomeZone: 7})
+	require.ErrorIs(t, err, authoritysql.ErrWriterDenied, "释放不复活旧boot")
+	normalAfter := newRouteStore(t, db)
+	res, err := normalAfter.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 8199, HomeZone: 7})
 	require.NoError(t, err)
 	assert.Equal(t, store.RouteRegisterInserted, res.Outcome, "解冻之后 W1 恢复")
 }
@@ -1456,8 +1512,9 @@ func TestRouteStore_RepairTieReportedUnlessResolved(t *testing.T) {
 
 	_, err := st.ImportRoutes(ctx, []store.RouteImportRow{{PlayerID: 8201, HomeZone: 7, MapRev: 4}}, false)
 	require.NoError(t, err)
-	_, err = st.FreezeRouteWriters(freezeCtx(t))
+	frozenReceipt, err := db.Freeze(freezeCtx(t))
 	require.NoError(t, err)
+	st = newMaintenanceRouteStore(t, db, frozenReceipt)
 	before, ok := readRoute(t, st, 8201)
 	require.True(t, ok)
 
@@ -1486,52 +1543,54 @@ func TestRouteStore_FreezeUnfreezeRoundTrip(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
 	st := newRouteStore(t, db)
 	ctx := context.Background()
-
 	meta0, err := st.ReadRouteMeta(ctx)
 	require.NoError(t, err)
 	require.False(t, meta0.Frozen())
 	wm0 := readReconcileWatermark(t, db)
-
-	changed, err := st.UnfreezeRouteWriters(freezeCtx(t), wm0+12345)
-	require.NoError(t, err)
-	assert.False(t, changed, "已可写时解冻是 no-op")
-	assert.Equal(t, wm0, readReconcileWatermark(t, db), "no-op 不抬水位")
-
-	_, err = st.FreezeRouteWriters(freezeCtx(t))
+	// 无本轮票据的释放现在明确拒绝；既有可写状态和水位仍须不变。
+	missing, err := db.Fixture().Catalog.Release(freezeCtx(t), nil, nil)
+	require.Error(t, err)
+	assert.Nil(t, missing)
+	assert.Equal(t, wm0, readReconcileWatermark(t, db), "无正式释放权限不得抬水位")
+	_, err = db.Freeze(freezeCtx(t))
 	require.NoError(t, err)
 	frozen, err := st.ReadRouteMeta(ctx)
 	require.NoError(t, err)
 	require.True(t, frozen.Frozen())
-
-	changed, err = st.UnfreezeRouteWriters(freezeCtx(t), wm0+12345)
+	ticket, request, err := db.PrepareRelease(freezeCtx(t), wm0+12345)
 	require.NoError(t, err)
-	require.True(t, changed)
-	assert.Equal(t, wm0+12345, readReconcileWatermark(t, db), "解冻先把水位抬到要求值")
+	released, err := db.Fixture().Catalog.Release(freezeCtx(t), ticket, request)
+	require.NoError(t, err)
+	require.Equal(t, pb.SqlWriterMaintenanceReceipt_RELEASED, released.Phase)
+	assert.Equal(t, wm0+12345, readReconcileWatermark(t, db), "解冻先抬到请求绑定水位")
+	replay, err := db.Fixture().Catalog.Release(freezeCtx(t), ticket, request)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(released, replay), "同请求重放必须复用永久收据")
+	assert.Equal(t, wm0+12345, readReconcileWatermark(t, db), "重放不再次改水位")
+	require.NoError(t, db.ReopenAfterRelease(freezeCtx(t)))
 	meta1, err := st.ReadRouteMeta(ctx)
 	require.NoError(t, err)
 	assert.False(t, meta1.Frozen())
-	assert.Equal(t, meta0.Generation, meta1.Generation, "解冻不换 generation(偏离 B1)")
-
-	_, err = st.FreezeRouteWriters(freezeCtx(t))
+	assert.Equal(t, meta0.Generation, meta1.Generation, "解冻不换generation")
+	_, err = db.Freeze(freezeCtx(t))
 	require.NoError(t, err)
-	changed, err = st.UnfreezeRouteWriters(freezeCtx(t), wm0+100)
+	released, err = db.Release(freezeCtx(t), wm0+100)
 	require.NoError(t, err)
-	require.True(t, changed)
-	assert.Equal(t, wm0+12345, readReconcileWatermark(t, db), "水位只增不减(GREATEST)")
+	require.Equal(t, pb.SqlWriterMaintenanceReceipt_RELEASED, released.Phase)
+	assert.Equal(t, wm0+12345, readReconcileWatermark(t, db), "水位只增不减")
 }
 
-// TestRouteStore_UnfreezeWaitsForRepairMetaLock:反向修库的写事务持着 route_meta(id=1) 的行锁(R18x)时,解冻的 R22 必须等它
-// —— 这是「冻结期内修库」在提交点仍成立的依据(普通读复核做不到)。用同一段生产文本在另一个事务里持锁扮演修库:
-// 解冻等满会话锁等待 1s 后以 1205 失败、整笔回滚(水位不动、仍冻结);持锁方回滚之后解冻照常成功。
 func TestRouteStore_UnfreezeWaitsForRepairMetaLock(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
 	st := newRouteStore(t, db)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	_, err := st.FreezeRouteWriters(freezeCtx(t))
+	_, err := db.Freeze(freezeCtx(t))
 	require.NoError(t, err)
 	wm0 := readReconcileWatermark(t, db)
+	ticket, request, err := db.PrepareRelease(freezeCtx(t), wm0+777)
+	require.NoError(t, err)
 
 	holder, err := db.Raw.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	require.NoError(t, err)
@@ -1541,17 +1600,18 @@ func TestRouteStore_UnfreezeWaitsForRepairMetaLock(t *testing.T) {
 	require.NoError(t, holder.QueryRowContext(ctx, store.RouteLockMetaSQLForTest).Scan(&generation, &writable))
 	require.Zero(t, writable)
 
-	changed, err := st.UnfreezeRouteWriters(freezeCtx(t), wm0+777)
+	released, err := db.Fixture().Catalog.Release(freezeCtx(t), ticket, request)
 	var me *mysql.MySQLError
-	require.Truef(t, errors.As(err, &me) && me.Number == 1205, "解冻必须排在修库事务之后、等满 1s 以 1205 失败,got (%t, %v)", changed, err)
-	assert.False(t, changed)
+	require.Truef(t, errors.As(err, &me) && me.Number == 1205, "解冻必须排在修库事务之后、等满 1s 以 1205 失败,got (%v, %v)", released, err)
+	assert.Nil(t, released)
 	meta, err := st.ReadRouteMeta(ctx)
 	require.NoError(t, err)
 	assert.True(t, meta.Frozen(), "1205 之后整笔回滚:仍冻结")
 	assert.Equal(t, wm0, readReconcileWatermark(t, db), "1205 之后整笔回滚:水位不动")
 
 	require.NoError(t, holder.Rollback())
-	changed, err = st.UnfreezeRouteWriters(freezeCtx(t), wm0+777)
+	released, err = db.Fixture().Catalog.Release(freezeCtx(t), ticket, request)
 	require.NoError(t, err)
-	assert.True(t, changed)
+	assert.Equal(t, pb.SqlWriterMaintenanceReceipt_RELEASED, released.Phase)
+	require.NoError(t, db.ReopenAfterRelease(freezeCtx(t)))
 }

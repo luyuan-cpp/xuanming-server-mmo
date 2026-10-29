@@ -322,7 +322,7 @@ func (f *fakeSchemaRunner) run(_ context.Context, _ *sql.DB, opts schemamigrate.
 	return f.report, f.err
 }
 
-// TestEnsureSchema 钉住启动期建表策略(D-14 第 4 条):AutoMigrate 没写 / true 跑 Up,false 只跑 Plan;
+// TestEnsureSchema 钉住启动期建表策略(D-14 第 4 条):AutoMigrate 省略 / false 只跑只读 Plan，true 在任何 I/O 前拒绝；原有 Plan;
 // 出错、需人工项、(Plan 下)有待执行语句都拒绝启动,Plan 拒绝时带补救命令。
 func TestEnsureSchema(t *testing.T) {
 	logtest.Discard(t)
@@ -336,7 +336,7 @@ func TestEnsureSchema(t *testing.T) {
 		wantErr     bool
 		wantRemedy  bool
 	}{
-		{name: "没写 Schema 段 = Up,建表成功", report: schemamigrate.Report{Statements: []string{"CREATE TABLE trade_listing ..."}}, wantUp: true},
+		{name: "省略 Schema 时只读核对，缺表拒启", report: schemamigrate.Report{Statements: []string{"CREATE TABLE trade_listing ..."}}, wantErr: true, wantRemedy: true},
 		{name: "显式 true,库已是最新", autoMigrate: &yes, wantUp: true},
 		{name: "Up 只有告警照常启动", autoMigrate: &yes, report: schemamigrate.Report{Warnings: []string{"extra column"}}, wantUp: true},
 		{name: "Up 出错拒绝启动", autoMigrate: &yes, err: schemamigrate.ErrLockBusy, wantUp: true, wantErr: true},
@@ -362,6 +362,12 @@ func TestEnsureSchema(t *testing.T) {
 			c := config.Config{Schema: config.SchemaConf{AutoMigrate: tc.autoMigrate}}
 
 			err := ensureSchema(context.Background(), nil, c, up.run, plan.run)
+			if c.ShouldAutoMigrate() {
+				if err == nil || up.calls != 0 || plan.calls != 0 {
+					t.Fatalf("常驻启动不得申请 DDL: err=%v up=%d plan=%d", err, up.calls, plan.calls)
+				}
+				return
+			}
 
 			if tc.wantUp && (up.calls != 1 || plan.calls != 0) {
 				t.Fatalf("应只跑 Up:up=%d plan=%d", up.calls, plan.calls)

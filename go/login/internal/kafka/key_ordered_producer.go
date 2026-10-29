@@ -2,6 +2,8 @@ package kafka
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"login/internal/config"
 	"sync"
@@ -9,6 +11,7 @@ import (
 	"time"
 
 	db_proto "proto/db"
+	"shared/drainproof"
 	"shared/kafkacmd"
 	"shared/kafkautil"
 	"shared/safego"
@@ -47,6 +50,12 @@ type KeyOrderedKafkaProducer struct {
 
 	// Separate non-transactional producer for cross-topic fire-and-forget sends (e.g. gate commands).
 	plainProducer sarama.SyncProducer
+	stateMu       sync.Mutex
+	sends         *drainproof.Session
+	background    sync.WaitGroup
+	closeOnce     sync.Once
+	closeErr      error
+	draining      bool
 }
 
 // newDBTaskProducerConfig 建 db_task 主生产者的 sarama 配置。
@@ -56,6 +65,7 @@ type KeyOrderedKafkaProducer struct {
 // ProducerMessage.Partition —— 这就是旧的一致性哈希环与「不可用分区重映射」从来没生效过的原因。
 func newDBTaskProducerConfig(cfg config.KafkaConfig) *sarama.Config {
 	saramaCfg := sarama.NewConfig()
+	saramaCfg.Metadata.AllowAutoTopicCreation = false
 	saramaCfg.Version = sarama.V3_6_0_0 // requires Kafka >= 0.11.0.0
 	saramaCfg.Net.DialTimeout = cfg.DialTimeout
 	saramaCfg.Net.ReadTimeout = cfg.ReadTimeout
@@ -117,6 +127,7 @@ func NewKeyOrderedKafkaProducer(cfg config.KafkaConfig) (*KeyOrderedKafkaProduce
 
 	// Create a separate non-transactional producer for cross-topic fire-and-forget sends.
 	plainCfg := sarama.NewConfig()
+	plainCfg.Metadata.AllowAutoTopicCreation = false
 	plainCfg.Version = sarama.V3_6_0_0
 	plainCfg.Net.DialTimeout = cfg.DialTimeout
 	plainCfg.Net.ReadTimeout = cfg.ReadTimeout
@@ -148,6 +159,7 @@ func NewKeyOrderedKafkaProducer(cfg config.KafkaConfig) (*KeyOrderedKafkaProduce
 		ctx:           ctx,
 		cancel:        cancel,
 		closed:        false,
+		sends:         drainproof.New(),
 		plainProducer: plainProducer,
 	}
 	kp.payloadPool.New = func() interface{} {
@@ -157,18 +169,34 @@ func NewKeyOrderedKafkaProducer(cfg config.KafkaConfig) (*KeyOrderedKafkaProduce
 	// safego:这两条后台循环任意一条 panic,旧写法都会直接打死 login 进程,
 	// 而日志里只剩一段 runtime 栈。换成命名点位后,
 	// safego_panic_total{point="login.kafka_*"} 能直接指出是哪条。
-	safego.Go("login.kafka_sync_partitions", func() { kp.syncPartitions(cfg.SyncInterval) })
-	safego.Go("login.kafka_monitor_stats", func() { kp.monitorStats(cfg.StatsInterval) })
+	kp.background.Add(2)
+	safego.Go("login.kafka_sync_partitions", func() { defer kp.background.Done(); kp.syncPartitions(cfg.SyncInterval) })
+	safego.Go("login.kafka_monitor_stats", func() { defer kp.background.Done(); kp.monitorStats(cfg.StatsInterval) })
 
 	return kp, nil
 }
 
 // SendTasks sends a batch of tasks using SyncProducer.SendMessages.
 func (p *KeyOrderedKafkaProducer) SendTasks(ctx context.Context, tasks []*db_proto.DBTask, key string) error {
+	done, admissionErr := p.beginSend()
+	if admissionErr != nil {
+		return admissionErr
+	}
+	defer func() {
+		if fault := recover(); fault != nil {
+			p.stateMu.Lock()
+			gate := p.sends
+			p.stateMu.Unlock()
+			gate.Hold()
+			done()
+			panic(fault)
+		}
+		done()
+	}()
 	if p.routingFenced.Load() {
 		return fmt.Errorf("producer routing fenced: Kafka partition contract drifted for topic=%s", p.topic)
 	}
-	if p.closed {
+	if p.isClosed() {
 		return fmt.Errorf("producer closed: batch send failed")
 	}
 	if len(tasks) == 0 || key == "" {
@@ -186,6 +214,10 @@ func (p *KeyOrderedKafkaProducer) SendTasks(ctx context.Context, tasks []*db_pro
 		if want := kafkautil.DBTaskKey(task.Key); key != want {
 			p.recycleMessages(msgs)
 			return fmt.Errorf("db_task kafka key %q does not match task key %d (want %q)", key, task.Key, want)
+		}
+		if task.Op != db_proto.DBOp_DB_OP_READ && task.Op != db_proto.DBOp_DB_OP_WRITE {
+			p.recycleMessages(msgs)
+			return fmt.Errorf("unsupported db_task op: %d", task.Op)
 		}
 
 		payload := p.payloadPool.Get().([]byte)
@@ -217,6 +249,7 @@ func (p *KeyOrderedKafkaProducer) SendTasks(ctx context.Context, tasks []*db_pro
 		p.mu.Lock()
 		err := p.producer.SendMessages(msgs)
 		if err != nil {
+			p.noteSendError(err)
 			atomic.AddInt64(&p.errorCount, int64(len(msgs)))
 			logx.Errorf("batch send failed: topic=%s, partition=%d, key=%s, count=%d, err=%v",
 				p.topic, msgs[0].Partition, key, len(msgs), err)
@@ -258,10 +291,15 @@ func (p *KeyOrderedKafkaProducer) SendTasks(ctx context.Context, tasks []*db_pro
 
 // SendTask sends a single task using SyncProducer.SendMessage.
 func (p *KeyOrderedKafkaProducer) SendTask(ctx context.Context, task *db_proto.DBTask, key string) error {
+	done, admissionErr := p.beginSend()
+	if admissionErr != nil {
+		return admissionErr
+	}
+	defer done()
 	if p.routingFenced.Load() {
 		return fmt.Errorf("producer routing fenced: Kafka partition contract drifted for topic=%s", p.topic)
 	}
-	if p.closed {
+	if p.isClosed() {
 		return fmt.Errorf("producer closed: task=%s", task.TaskId)
 	}
 	if task.TaskId == "" || key == "" {
@@ -270,6 +308,9 @@ func (p *KeyOrderedKafkaProducer) SendTask(ctx context.Context, task *db_proto.D
 	// 分区契约:Kafka key 必须是 DBTaskKey(task.Key),理由同 SendTasks。
 	if want := kafkautil.DBTaskKey(task.Key); key != want {
 		return fmt.Errorf("db_task kafka key %q does not match task key %d (want %q)", key, task.Key, want)
+	}
+	if task.Op != db_proto.DBOp_DB_OP_READ && task.Op != db_proto.DBOp_DB_OP_WRITE {
+		return fmt.Errorf("unsupported db_task op: %d", task.Op)
 	}
 
 	payload := p.payloadPool.Get().([]byte)
@@ -299,6 +340,7 @@ func (p *KeyOrderedKafkaProducer) SendTask(ctx context.Context, task *db_proto.D
 		p.mu.Lock()
 		partition, offset, err := p.producer.SendMessage(msg)
 		if err != nil {
+			p.noteSendError(err)
 			atomic.AddInt64(&p.errorCount, 1)
 			logx.Errorf("send failed: task=%s, topic=%s, partition=%d, err=%v", task.TaskId, p.topic, msg.Partition, err)
 
@@ -371,6 +413,11 @@ func (p *KeyOrderedKafkaProducer) verifyPartitionContract(partitions []int32) er
 // DBTaskKey(task.Key),分区由契约分区器决定;从这个通用口子发出去的 key 不受校验,
 // 同一玩家的读可能落到别的分区,go/db 的读后写屏障随之失效。
 func (p *KeyOrderedKafkaProducer) SendToTopic(topic string, data []byte, key string) error {
+	done, admissionErr := p.beginSend()
+	if admissionErr != nil {
+		return admissionErr
+	}
+	defer done()
 	if kafkacmd.IsCommandTopic(topic) {
 		return fmt.Errorf("refusing to send to command topic %s without an explicit partition: use SendToTopicPartition", topic)
 	}
@@ -385,6 +432,7 @@ func (p *KeyOrderedKafkaProducer) SendToTopic(topic string, data []byte, key str
 		msg.Key = sarama.StringEncoder(key)
 	}
 	_, _, err := p.plainProducer.SendMessage(msg)
+	p.noteSendError(err)
 	return err
 }
 
@@ -398,6 +446,11 @@ func (p *KeyOrderedKafkaProducer) SendToTopic(topic string, data []byte, key str
 // db_task topic 在这里也拒绝:plainProducer 对 db_task_zone_ 前缀装的是契约分区器,
 // 会按 key 覆盖调用方给的显式分区,"指定分区"在这类 topic 上本来就不成立;db_task 只能经 SendTask / SendTasks 发。
 func (p *KeyOrderedKafkaProducer) SendToTopicPartition(topic string, partition int32, data []byte, key string) error {
+	done, admissionErr := p.beginSend()
+	if admissionErr != nil {
+		return admissionErr
+	}
+	defer done()
 	if kafkautil.IsDBTaskTopic(topic) {
 		return fmt.Errorf("refusing to send db_task topic %s through the plain producer: use SendTask/SendTasks (partition contract)", topic)
 	}
@@ -417,26 +470,38 @@ func (p *KeyOrderedKafkaProducer) SendToTopicPartition(topic string, partition i
 }
 
 // Close gracefully shuts down the producer with transaction commit.
-func (p *KeyOrderedKafkaProducer) Close() error {
+func (p *KeyOrderedKafkaProducer) closeResources() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.closed {
+	if p.isClosed() {
 		logx.Errorf("producer already closed: topic=%s", p.topic)
 		return nil
 	}
 
+	p.stateMu.Lock()
 	p.closed = true
-	p.cancel()
+	p.stateMu.Unlock()
+	if p.cancel != nil {
+		p.cancel()
+	}
+	p.background.Wait()
 
 	var txnErr error
-	if p.producer.IsTransactional() {
+	if p.producer != nil && p.producer.IsTransactional() {
 		txnErr = p.producer.CommitTxn()
 	}
 
-	producerErr := p.producer.Close()
-	plainErr := p.plainProducer.Close()
-	clientErr := p.client.Close()
+	var producerErr, plainErr, clientErr error
+	if p.producer != nil {
+		producerErr = p.producer.Close()
+	}
+	if p.plainProducer != nil {
+		plainErr = p.plainProducer.Close()
+	}
+	if p.client != nil {
+		clientErr = p.client.Close()
+	}
 
 	var finalErr error
 	if txnErr != nil {
@@ -525,6 +590,122 @@ func (p *KeyOrderedKafkaProducer) recycleMessages(msgs []*sarama.ProducerMessage
 	for _, msg := range msgs {
 		if meta, ok := msg.Metadata.(*ProducerMeta); ok {
 			meta.producer.payloadPool.Put(meta.payload)
+		}
+	}
+}
+
+func (p *KeyOrderedKafkaProducer) beginSend() (func(), error) {
+	p.stateMu.Lock()
+	defer p.stateMu.Unlock()
+	if p.sends == nil {
+		p.sends = drainproof.New()
+	}
+	if p.closed {
+		return nil, drainproof.ErrClosed
+	}
+	return p.sends.Enter()
+}
+func (p *KeyOrderedKafkaProducer) isClosed() bool {
+	p.stateMu.Lock()
+	defer p.stateMu.Unlock()
+	return p.closed
+}
+
+// StopAndReport先拒绝新send，等同步发送的真实回执，再flush/close两个producer及客户端，最后返回真实关闭错误。
+func (p *KeyOrderedKafkaProducer) StopAndReport(ctx context.Context) error {
+	p.stateMu.Lock()
+	if p.sends == nil {
+		p.sends = drainproof.New()
+	}
+	sends := p.sends
+	sends.CloseAdmission()
+	p.stateMu.Unlock()
+	if err := sends.Wait(ctx); err != nil {
+		return err
+	}
+	p.closeOnce.Do(func() { p.closeErr = p.closeResources() })
+	return p.closeErr
+}
+func (p *KeyOrderedKafkaProducer) Close() error { return p.StopAndReport(context.Background()) }
+
+func (p *KeyOrderedKafkaProducer) FrontierDigest(ctx context.Context) ([]byte, error) {
+	if err := p.StopAndReport(ctx); err != nil {
+		return nil, err
+	}
+	p.stateMu.Lock()
+	sends := p.sends
+	p.stateMu.Unlock()
+	return sends.SettledDigest(ctx)
+}
+
+func (p *KeyOrderedKafkaProducer) ReadyFrontier(ctx context.Context) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.isClosed() {
+		return nil, drainproof.ErrClosed
+	}
+	if err := p.client.RefreshMetadata(p.topic); err != nil {
+		return nil, err
+	}
+	partitions, err := p.client.Partitions(p.topic)
+	if err != nil {
+		return nil, err
+	}
+	if err = p.verifyPartitionContract(partitions); err != nil {
+		return nil, err
+	}
+	p.stateMu.Lock()
+	if p.sends == nil {
+		p.sends = drainproof.New()
+	}
+	gate := p.sends
+	p.stateMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(struct {
+		Topic      string
+		Partitions []int32
+		Accepted   []byte
+	}{p.topic, partitions, gate.SnapshotDigest()})
+	if err != nil {
+		return nil, err
+	}
+	sum := sha256.Sum256(raw)
+	return sum[:], nil
+}
+
+func (p *KeyOrderedKafkaProducer) BeginDrain() {
+	p.stateMu.Lock()
+	p.draining = true
+	p.stateMu.Unlock()
+}
+func (p *KeyOrderedKafkaProducer) noteSendError(err error) {
+	if err == nil {
+		return
+	}
+	p.stateMu.Lock()
+	draining, gate := p.draining, p.sends
+	p.stateMu.Unlock()
+	if draining && gate != nil {
+		gate.Hold()
+	}
+}
+
+// RunJoined只改变循环的owner，不复制分区校验；ServiceContext在调用前Add，返回后Done。
+// 原Start无可join句柄，维护启动改由该显式调用面拥有goroutine。
+func (m *ExpandMonitor) RunJoined(ctx context.Context) {
+	ticker := time.NewTicker(m.checkInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-m.ctx.Done():
+			return
+		case <-ticker.C:
+			safego.Run("login.kafka_expand_monitor", m.checkAndHandleExpand)
 		}
 	}
 }

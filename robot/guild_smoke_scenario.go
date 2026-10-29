@@ -841,7 +841,7 @@ func guildSmokeLogin(cfg *config.Config, account string, stats *metrics.Stats) (
 // 与 battle-smoke 同一套。所以这里**不要**把战斗消息号加进认领名单 —— 认领了,Player 就再也收不到信号。
 func (b *guildSmokeBot) onMessage(client *pkg.GameClient, msg *base.MessageContent) {
 	b.stats.MsgRecv()
-	// NotifyGuildChanged 是服务端主动下行,不是任何请求的回包:交给通用分发只会得到一条"未知消息号"。
+	// NotifyGuildChanged 是服务端主动下行,不是任何请求的回包:通用分发里登记的只是生成的空桩,不消费它。
 	// 本场景是它唯一的消费者,留底后即返回。
 	if msg.GetMessageId() == game.GuildServiceNotifyGuildChangedMessageId {
 		change := &guildpb.GuildChangedS2C{}

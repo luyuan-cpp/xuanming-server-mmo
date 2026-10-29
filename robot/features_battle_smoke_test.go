@@ -15,6 +15,7 @@ import (
 	"robot/generated/pb/game"
 	"robot/logic/gameobject"
 	"robot/metrics"
+	"robot/pkg"
 
 	tiptable "shared/generated/pb/table"
 )
@@ -79,10 +80,57 @@ func TestFeatureBattleWaiterHonorsFreshErrorSourceAndIgnoresStaleResponse(t *tes
 	}
 }
 
-// 直连上的自动战斗应答与拒绝进大厅同一套 waiter(turn-based §22 D73):callVia 经给定的发送函数发出,
-// 直连回来的拒绝变成 featureServerError 而不是超时;直连上未认领的信封错误(如补拉应答)只丢弃,
-// 不产生 feature 快照、也不交给通用分发(client 为 nil 仍不 panic)。
+// 直连上的自动战斗应答与拒绝进大厅同一套 feature 快照(turn-based §22 D73):callDirect 经 callVia 用 CallSyncThen 发出,
+// 回包在直连的 RecvLoop 上由 recordFeatureReply 交给 HandleFeatureBattleMessage,返回后 featureCallResult 按发送前的游标
+// 读快照。这里不经网络、不依赖墙钟,按 CallSyncThen 的结局形状直接喂回包(CallSyncThen 先调 onReply 再返回,由
+// pkg 的 TestCallSyncThen* 覆盖):信封拒绝报包裹 *pkg.ServerTipError 的 error,既不是业务拒绝也不是超时,
+// 但仍记进快照供 waiter 看;业务拒绝报 featureServerError;受理返回应答。
 func TestFeatureBattleDirectRepliesShareTheLobbyWaiter(t *testing.T) {
+	p := gameobject.NewPlayer(44)
+	s := &featureSmokeSession{player: p, stats: metrics.NewStats(), done: make(chan struct{})}
+	unavailable := uint32(tiptable.CommonError_kServiceUnavailable)
+	autoID := uint32(game.BattleClientPlayerSetAutoBattleMessageId)
+	var server *featureServerError
+	var envelope *pkg.ServerTipError
+
+	cursor := p.FeatureSequence()
+	tipErr := &pkg.ServerTipError{Tip: unavailable}
+	s.recordFeatureReply(&base.MessageContent{Id: 1, MessageId: autoID, ErrorMessage: &base.TipInfoMessage{Id: unavailable}}, tipErr)
+	_, err := s.featureCallResult(autoID, cursor, tipErr)
+	if !errors.As(err, &envelope) || envelope.Tip != unavailable || errors.As(err, &server) || errors.Is(err, pkg.ErrRPCTimeout) {
+		t.Fatalf("direct auto-battle envelope rejection not surfaced as an envelope error: %v", err)
+	}
+	if snapshot, ok := p.FeatureResponse(autoID, cursor); !ok || snapshot.TipID != unavailable {
+		t.Fatal("direct auto-battle envelope rejection was not recorded for the battle waiter")
+	}
+
+	rejected, err := proto.Marshal(&battle.SetAutoBattleResponse{ErrorMessage: &base.TipInfoMessage{Id: 71}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cursor = p.FeatureSequence()
+	s.recordFeatureReply(&base.MessageContent{Id: 2, MessageId: autoID, SerializedMessage: rejected}, nil)
+	_, err = s.featureCallResult(autoID, cursor, nil)
+	if !errors.As(err, &server) || server.MessageID != autoID || server.TipID != 71 || errors.As(err, &envelope) {
+		t.Fatalf("direct auto-battle business rejection not surfaced as featureServerError: %v", err)
+	}
+
+	accepted, err := proto.Marshal(&battle.SetAutoBattleResponse{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cursor = p.FeatureSequence()
+	s.recordFeatureReply(&base.MessageContent{Id: 3, MessageId: autoID, SerializedMessage: accepted}, nil)
+	resp, err := s.featureCallResult(autoID, cursor, nil)
+	if err != nil || resp == nil {
+		t.Fatalf("direct auto-battle acceptance lost: resp=%v err=%v", resp, err)
+	}
+}
+
+// 直连 RecvLoop 回调(id = 0 的消息):未认领的信封错误(如补拉应答)只丢弃,不产生 feature 快照、也不交给通用分发
+// (client 为 nil 仍不 panic);SetAutoBattle 号上的消息只可能是 battle 没回显请求号的回包,丢弃,不写快照 ——
+// 否则会盖掉 callDirect 刚认领的那一份。
+func TestFeatureBattleDirectCallbackDropsUnclaimedAndUncorrelatedReplies(t *testing.T) {
 	p := gameobject.NewPlayer(44)
 	s := &featureSmokeSession{player: p, stats: metrics.NewStats(), done: make(chan struct{})}
 	unavailable := uint32(tiptable.CommonError_kServiceUnavailable)
@@ -94,29 +142,32 @@ func TestFeatureBattleDirectRepliesShareTheLobbyWaiter(t *testing.T) {
 		t.Fatal("unclaimed direct envelope error became a feature snapshot")
 	}
 
-	sent := 0
-	rejectingSend := func(id uint32, _ proto.Message) error {
-		sent++
-		s.onFeatureBattleDirectMessage(nil, &base.MessageContent{MessageId: id, ErrorMessage: &base.TipInfoMessage{Id: unavailable}})
-		return nil
+	accepted, err := proto.Marshal(&battle.SetAutoBattleResponse{})
+	if err != nil {
+		t.Fatal(err)
 	}
-	_, err := s.callVia(rejectingSend, game.BattleClientPlayerSetAutoBattleMessageId, &battle.SetAutoBattleRequest{BattleId: 7, Enabled: true})
-	var server *featureServerError
-	if sent != 1 || !errors.As(err, &server) || server.MessageID != game.BattleClientPlayerSetAutoBattleMessageId || server.TipID != unavailable {
-		t.Fatalf("direct auto-battle rejection not surfaced: sent=%d err=%v", sent, err)
+	direct := &pkg.GameClient{Account: "robot_t", PlayerId: 44}
+	s.onFeatureBattleDirectMessage(direct, &base.MessageContent{MessageId: game.BattleClientPlayerSetAutoBattleMessageId,
+		SerializedMessage: accepted})
+	s.onFeatureBattleDirectMessage(direct, &base.MessageContent{MessageId: game.BattleClientPlayerSetAutoBattleMessageId,
+		ErrorMessage: &base.TipInfoMessage{Id: unavailable}})
+	if p.FeatureSequence() != before {
+		t.Fatal("auto-battle reply without request id became a feature snapshot")
 	}
+}
 
-	acceptingSend := func(id uint32, _ proto.Message) error {
-		body, err := proto.Marshal(&battle.SetAutoBattleResponse{})
-		if err != nil {
-			return err
-		}
-		s.onFeatureBattleDirectMessage(nil, &base.MessageContent{MessageId: id, SerializedMessage: body})
-		return nil
+// callDirect 走 Call:直连客户端没有连接时本地不发出,报 ErrRPCNotSent,不等满超时、不写快照。
+func TestFeatureBattleCallDirectReportsNotSent(t *testing.T) {
+	p := gameobject.NewPlayer(44)
+	s := &featureSmokeSession{player: p, stats: metrics.NewStats(), done: make(chan struct{})}
+	direct := &battleDirectConn{gc: &pkg.GameClient{Account: "robot_t", PlayerId: 44}, battleId: 7}
+	before := p.FeatureSequence()
+	_, err := s.callDirect(direct, game.BattleClientPlayerSetAutoBattleMessageId, &battle.SetAutoBattleRequest{BattleId: 7, Enabled: true})
+	if !errors.Is(err, pkg.ErrRPCNotSent) {
+		t.Fatalf("callDirect on a client without connection returned err=%v, want ErrRPCNotSent", err)
 	}
-	resp, err := s.callVia(acceptingSend, game.BattleClientPlayerSetAutoBattleMessageId, &battle.SetAutoBattleRequest{BattleId: 7, Enabled: true})
-	if err != nil || resp == nil {
-		t.Fatalf("direct auto-battle acceptance lost: resp=%v err=%v", resp, err)
+	if p.FeatureSequence() != before {
+		t.Fatal("unsent auto-battle request wrote a feature snapshot")
 	}
 }
 

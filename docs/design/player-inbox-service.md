@@ -936,7 +936,7 @@ func (s *Store) Enqueue(ctx context.Context, p EnqueueParams, inTx func(*sql.Tx,
 - 不在本地等闸再续做。等闸的这段时间里（冻结、交接、战斗都可能很久），服务端可能给条目挂上 VOID，按旧副本续做会把已作废的处置照样执行并报 APPLIED。代价只是服务端 `delivery_count` 多 +1。
 - `ackQueue` 为空：回到 Idle，按延后原因退避，下一次 Fetch 重新过闸。
 - `ackQueue` 非空（只可能来自执行器 DEFER 之后的续做）：先转 AwaitDurable 把已定的前缀确认掉，再按 `recheckRequested` 重拉。直接回 Idle 会让重投的前缀回放后与队列里的同一 seq 重复，服务端判 InvalidParameter。
-- **只有执行器 DEFER**（闸已过、条目已开始处理）才保留本地续做；续做时仍先过闸，闸不过同样丢掉剩下的副本，先确认前缀再重拉。这条例外的前提是 DEFER 的原因在会话内不会自愈（v1 只有缺持久组件）；会在会话内消失的原因（例如版本错位）不得用 DEFER，执行器回 `VERSION_SKEW`，收件箱停用本域、下次落地重拉（§7.6 第 3 步）。
+- **只有执行器 DEFER**（闸已过、条目已开始处理）才保留本地续做；续做时仍先过闸，闸不过同样丢掉剩下的副本，先确认前缀再重拉。这条例外的前提是 DEFER 的原因在会话内不会自愈（v1 只有缺持久组件）；会在会话内消失的原因（例如版本错位）不得用 DEFER，执行器回 `VERSION_SKEW`，收件箱停用本域，实体重建后重拉（§7.6 第 3 步）。
 - 退出期（`kExiting`）丢掉的这批多半再也拉不回来，另打一行 INFO `metric=inbox_leave_ack result=delivered_undecided source=apply_gate_exiting`（§7.7）。
 
 **不会自愈的延后**：目前只有 `ledger_invalid`（账本损坏）。除了延后原因变化时的 INFO `metric=inbox_deferred`，每次落地后首次出现打一条 WARN `metric=inbox_ledger_invalid source=apply_gate`，之后每 8 次失败（退避封顶 60 秒时约 8 分钟）再打一条（`kStuckWarnEveryFailures`）。节拍由 `player_inbox_rules.h` 的 `static_assert` 钉在 10 分钟告警窗口（`kSceneLogAlertWindowMs`）之内，改告警窗口要同步改这些常量。
@@ -971,7 +971,7 @@ func (s *Store) Enqueue(ctx context.Context, p EnqueueParams, inTx func(*sql.Tx,
       - `APPLIED`：记账。
       - `REJECTED(reason)`：记账。认识的类型但载荷解码失败，按 `REJECTED(kPlayerInboxPayloadInvalid)` 记账。
       - `DEFER(reason)`：在这一条**停下**（严格顺序），已处理的前缀从本地缓存摘掉，剩下的本地退避后续做，不重新 Fetch；续做时仍先过前置闸（§7.5）。v1 的执行器只在持久货币组件缺失（加载不变量被破坏）时返回 DEFER，不把这条处置因本地缺陷钉成终态。**只有会话内不会自愈的原因才能用 DEFER**：本地续做看不到服务端之后挂的 VOID，原因一旦在会话内消失，续做就会执行一条可能已作废的处置（§7.5 评审 L1）。
-      - `VERSION_SKEW`（`PlayerInboxExecKind::kVersionSkew`，2026-10-19 起）：认识的类型，但本二进制不能安全执行这一条。与未知类型同口径：在这一条停下，不记账、不 Ack 这一条（已定的前缀照常确认），halt，`metric=inbox_halted reason=version_skew`。这一行留在 PENDING，实体下次在本节点新建（重新登录或换节点）时重拉：已挂 VOID 就记 SKIPPED，落到新版本节点就正常执行。v1 唯一的来源：挂欠款时，同币种的既有欠款带着本版本不认识的字段（`mixed-version-persist-field-protection.md` §4.4）。`AttachDebt` 不会把新的一笔并进这种欠款，执行器在调用它之前用 `CurrencySystem::DebtCarriesUnknownFields` 判定。不能用 DEFER：这笔欠款可能在会话内被还清删除，错位随之消失，按本地旧副本续做就会把一条可能已作废的欠款挂上并报 APPLIED（2026-10-19 对抗复核 A-1）。
+      - `VERSION_SKEW`（`PlayerInboxExecKind::kVersionSkew`，2026-10-19 起）：认识的类型，但本二进制不能安全执行这一条。与未知类型同口径：在这一条停下，不记账、不 Ack 这一条（已定的前缀照常确认），halt，`metric=inbox_halted reason=version_skew`。这一行留在 PENDING，实体下次在本节点新建（退出完成后再登录）或换节点新建时重拉：已挂 VOID 就记 SKIPPED，落到新版本节点就正常执行。退出保留期内重登会复用实体（owner_epoch +1 的同节点复用），停用仍有效、不重拉。v1 唯一的来源：挂欠款时，同币种的既有欠款带着本版本不认识的字段（`mixed-version-persist-field-protection.md` §4.4）。`AttachDebt` 不会把新的一笔并进这种欠款，执行器在调用它之前用 `CurrencySystem::DebtCarriesUnknownFields` 判定。不能用 DEFER：这笔欠款可能在会话内被还清删除，错位随之消失，按本地旧副本续做就会把一条可能已作废的欠款挂上并报 APPLIED（2026-10-19 对抗复核 A-1）。
 
    **记账**的含义：在同一个 loop 帧里写效果，推进 `decided_through=seq`，把 (seq, 结局, request_id, msg_type) 压入最近结局环（超过 32 条就挤掉最旧的）。
 

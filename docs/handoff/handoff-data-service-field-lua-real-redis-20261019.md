@@ -69,7 +69,9 @@ Codex 的运行结果,按第 3.4 节核对回填是否正确;没有结果就不�
 ### 3.2 每轮步骤(PowerShell,工作目录 `go/data_service`,`GOTOOLCHAIN=local`、`GOFLAGS=-p=1`;复验原样 c35e1133d 时先按第 10 节在隔离副本补齐缺失的 Go 绑定)
 
 1. 选镜像:第一轮 `$img='redis:7.2'`,第二轮 `$img='redis:8.10.2'`(或按 3.1 确认过的 `redis:latest`)。
-2. 起两个一次性容器(**不借 codex-* 容器**;6390、7001–7003 端口被占就换端口并同步改环境变量):
+2. 起两个一次性容器(**不借 codex-* 容器**)。端口被占时(2026-10-22 订正):
+   - 6390 被占:只换 `-p` 的宿主端口,同步改 `DATA_SERVICE_IT_REDIS_HOST`。
+   - 7001–7003 被占:**不能只改 `-p` 映射**。集群节点按监听端口对外宣告,go-redis 会照宣告的 `127.0.0.1:700x` 连回去,只改映射会连到占着这几个端口的另一套集群上(`deploy/docker-compose.yml` 的 redis-cluster profile 就占 7000–7005)。要把下面命令里 `-p` 两侧、`for p in`、`--cluster create` 和就绪循环中的端口一起换成同一组新端口(2026-10-20 Codex 用的是 7101–7103),再同步改 `DATA_SERVICE_IT_REDIS_CLUSTER_ADDRS`。
 
    ```powershell
    docker run --rm -d -p 6390:6379 --name ds-it-fields $img --appendonly yes
@@ -93,10 +95,12 @@ Codex 的运行结果,按第 3.4 节核对回填是否正确;没有结果就不�
    ```powershell
    $env:DATA_SERVICE_IT_REDIS_HOST='127.0.0.1:6390'
    $env:DATA_SERVICE_IT_REDIS_CLUSTER_ADDRS='127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003'
+   $env:DATA_SERVICE_IT_REQUIRE='1'
    go test -tags=integration ./internal/logic/ -run RealRedis -count=1 -v
    ```
 
-   遇 `Access is denied`(杀毒扫描新生成的二进制):`go test -c -tags=integration -o $env:TEMP\logic_it.test.exe ./internal/logic/`,同一会话设好上面两个环境变量后执行 `& $env:TEMP\logic_it.test.exe -test.run RealRedis -test.count=1 -test.v`。
+   `DATA_SERVICE_IT_REQUIRE=1`(2026-10-22 起本文件的用例也认这个开关,见 `requireRealRedisIT`):任何 SKIP 都直接判 FAIL,不用再靠肉眼看 `-v` 输出。
+   遇 `Access is denied`(杀毒扫描新生成的二进制):`go test -c -tags=integration -o $env:TEMP\logic_it.test.exe ./internal/logic/`,同一会话设好上面三个环境变量后执行 `& $env:TEMP\logic_it.test.exe -test.run RealRedis -test.count=1 -test.v`。
 5. `docker stop ds-it-fields ds-it-cluster`(`--rm` 会删容器;ds-it-cluster 的 PID 1 是 sh,stop 要等 10 秒,正常)。
 
 ### 3.3 通过标准与失败处理

@@ -39,6 +39,11 @@ type VoidParams struct {
 // 强制模式(mode=FORCE_MISMATCH)见 forceVoid;ledgers 只有它用,普通模式可传 nil。
 func (s *Store) Void(ctx context.Context, p VoidParams, ledgers LedgerReader) (*inboxpb.VoidPlayerInboxItemResponse, error) {
 	resp := &inboxpb.VoidPlayerInboxItemResponse{}
+	// Battle永久来源不能由通用运维VOID绕过到账；该域只允许真实APPLIED终结。
+	if p.Domain == inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT {
+		resp.ErrorMessage = tipOf(constants.ErrItemStateConflict)
+		return resp, nil
+	}
 	if _, ok := s.registry.Domain(p.Domain); !ok || p.PlayerID == 0 || p.Seq == 0 ||
 		p.Reason == inboxpb.PlayerInboxVoidReason_PLAYER_INBOX_VOID_UNSPECIFIED ||
 		inboxpb.PlayerInboxVoidReason_name[int32(p.Reason)] == "" ||

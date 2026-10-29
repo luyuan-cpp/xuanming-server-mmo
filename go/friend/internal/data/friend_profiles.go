@@ -3,12 +3,12 @@ package data
 import (
 	"context"
 	"errors"
-	"strconv"
 
 	"google.golang.org/protobuf/proto"
 	dbpb "proto/common/database"
 	dspb "proto/data_service"
 	pb "proto/friend"
+	"shared/savebarrier"
 )
 
 // FillFriendProfiles 只填显示态，不写好友表或好友缓存。离线好友的档案可能已不在
@@ -21,7 +21,6 @@ func (d OnlineDirectory) FillFriendProfiles(ctx context.Context, friends []*pb.F
 	if d.Redis == nil {
 		return errors.New("好友展示缓存未配置")
 	}
-	prefix := string((&dbpb.PlayerAllData{}).ProtoReflect().Descriptor().FullName())
 	for start := 0; start < len(friends); start += directoryScanCount {
 		end := start + directoryScanCount
 		if end > len(friends) {
@@ -32,7 +31,7 @@ func (d OnlineDirectory) FillFriendProfiles(ctx context.Context, friends []*pb.F
 		ids := make([]uint64, len(batch))
 		for i, entry := range batch {
 			ids[i] = entry.GetFriendPlayerId()
-			keys[i] = prefix + ":" + strconv.FormatUint(ids[i], 10)
+			keys[i] = savebarrier.ParentKey(ids[i])
 		}
 		blobs, err := d.Redis.MgetCtx(ctx, keys...)
 		if err != nil {

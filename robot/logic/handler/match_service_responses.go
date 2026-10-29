@@ -14,11 +14,12 @@ import (
 	"robot/logic/gameobject"
 )
 
-// MatchService 应答的分发登记。生成的 message_body_handler.go 只收服务名含
-// "ClientPlayer" / "GamePlayer" 的服务(tools/proto_generator/protogen/internal/generator/go/
-// robot_case.go 的 isRelevantService),MatchService 不在其列,生成表里永远不会出现这三条;
+// MatchService 应答的分发登记。生成的 message_body_handler.go 按 OptionIsClientProtocolService 判定客户端协议服务:
+// PUSH 一律登记(缺桩就建);REQUEST / ONE_WAY / SERVER_ONLY 不建桩,只在标准文件名 <snake_service_method>.go 的
+// handler 存在时登记。这三个应答 handler 写在本文件(不是标准文件名),所以生成表里没有它们;
 // 不手改生成物,在本手写文件里 init() 补登记(包级 var 先于 init 初始化,map 此时已建好),
 // 消息号仍用生成常量。少了这一步,三个 handler 是死代码,补签拿到的票据永远唤不醒直连场景。
+// 只有 id = 0 的回包(SendRequest 发出的请求)会走到这里;经 Call 发出的请求,回包按请求号交给调用方。
 func init() {
 	messageHandlers[game.MatchServiceJoinQueueMessageId] = unmarshalAndCall(MatchServiceJoinQueueHandler)
 	messageHandlers[game.MatchServiceWatchBattleMessageId] = unmarshalAndCall(MatchServiceWatchBattleHandler)

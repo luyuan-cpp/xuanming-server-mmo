@@ -11,6 +11,7 @@
 #     guild 目前在 K8s 上没有部署清单;trade 的资产通道默认关闭(AssetOp.Enabled=false)。
 #     这两件事落地之前,本文件里 assetop_* 与 guild_trial_* 规则不会触发。
 #   - assetop_* 的 service 是 ConstLabel(guild / trade),按服务区分时用 by (service)。
+#   - trade_commerce_* 只由 trade 暴露,同样要等 trade 的资产通道打开(AssetOp.Enabled=true)才会有数据。
 #
 # 为什么「最老年龄」只看 online_retry 类:离线玩家的 PENDING 行会把不分类的
 # assetop_pending_oldest_age_seconds 永久推高(停放档 30 分钟一次、180 天后才放弃),
@@ -28,11 +29,27 @@
 #   info    : count_over_time({app="scene"} |= "metric=battle_settlement_freeze_expiry_pending_hit" [1h]) > 0(在线补读命中,观察用)
 #   critical: count_over_time({app="battle"} |= "metric=battle_activity_result_not_durable" [10m]) > 0
 #   critical: count_over_time({app="battle"} |= "metric=battle_activity_result_serialize_failed" [10m]) > 0
-#   critical: count_over_time({app="battle"} |= "metric=battle_personal_settlement_staging_exhausted" [10m]) > 0
-#             全球对局发结果之前的个人结算落库轮次用尽(审计 r2-battle#4,cross-zone-matchmaking.md §13.6):
-#             结果不发、房间留在节点上,节点不会自然排空。每房间只响一次,同一行带 battle_id;
-#             紧随其后的 "not staged after staging exhausted" 行列出没落库的成员。先排除 zone Redis 故障
-#             (OOM / NOAUTH / ACL / 键类型错),再删除该 battle Pod,停机收尾 AbortAllRooms 清房。
+#   critical: count_over_time({app="battle"} |= "metric=battle_personal_settlement_staging_exhausted_rooms" [10m]) > 0
+#             全球对局发结果之前的个人结算落库到总跨度上限(6 小时,审计 r2-battle#4,cross-zone-matchmaking.md §13.6
+#             「2026-10-22 修复」):结果不发、房间留在节点上,节点不会自然排空。积压报数定时器每 60s 报一行
+#             count=滞留房间数 node_rooms=本节点房间总数,正文列出 battle_id,房间清掉之前一直会响(2026-10-22 起按这条判,
+#             不再按每房间只响一次的 metric=battle_personal_settlement_staging_exhausted;那一行与紧随其后的
+#             "not staged after staging exhausted" 行仍保留,用来查没落库的成员)。
+#             处置:先排除 zone Redis 故障(OOM / NOAUTH / ACL / 键类型错),再分三步,不要直接删 Pod
+#             (会把同节点上正在打的房间一起作废):
+#               1. kubectl -n mmorpg-infra label gs <name> mmorpg.io/drain=true(进程 5s 内读到,拒绝新房间);
+#               2. 等提醒行的 node_rooms 降到与 stuck_total 相等(其余房间打完,单局上限 BattleMaxDurationSeconds 默认 300s);
+#               3. kubectl -n mmorpg-infra delete gs <name>,优雅停机由 AbortAllRooms 清房。
+#             2026-10-22 评审补:这一行同时数另两类同样排不空的房间 —— sql_unconfirmed=(终局协议 v1 的 CommitBattleOutcome
+#             到上限仍没拿到 SQL 终局或终局原件生成失败,另有一次性的 metric=battle_sql_outcome_unconfirmed /
+#             battle_sql_outcome_source_invalid)与 placeholder=(结果序列化失败 /
+#             个人结算与成员对不上的占位,另有一次性的 battle_result_commit_serialization_failed /
+#             battle_personal_settlement_source_mismatch);stuck_total= 是 count + sql_unconfirmed + placeholder。
+#             第 2 步按 stuck_total 判(原写「与 count 相等」,同节点有另两类房间时永远等不到)。count=0 时这一行照样会打。
+#   warning : count_over_time({app="battle"} |= "metric=battle_personal_settlement_staged_late" [1h]) > 0
+#             (2026-10-22 评审补)全球对局个人结算在低频重试阶段才落库:派发时冻结已解除,在线、无战斗锁的成员
+#             可能被 scene 直接销账而不应用(cross-service-assets#1 落地前)。正文列出 battle_id 与整局成员,
+#             按 scene 结算账本逐人核对是否到账,缺的走补偿流程;不得手写 pending 键补发。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up
@@ -162,6 +179,82 @@ spec:
               过去 1 小时有 {{ $value | printf "%.0f" }} 次:SQL 提交证据未见这笔 seq,但 Redis 父键账本已见。
               自动放弃已跳过,待办保留。按 "[AssetOp] Abandon skipped: player blob has an outcome that asset SQL commit evidence has not seen" 日志定位,核对 go/db 是否在该 zone 处于 dual、
               证据发布是否失败、回档后是否清理了证据键;不得手工放弃或伪造到账。
+
+    # 交易合同推进(go/trade commerce.Engine.Tick,docs/design/jubaozhai-market.md §15.3,2026-10-22 补)。
+    # 指标没有 service 标签(只有 trade 一个服务);每个副本各自计数,所以用 sum。
+    # 处置统一见 docs/ops/trade-commerce-quarantine-runbook.md。
+    - name: trade-commerce.contracts
+      interval: 60s
+      rules:
+        # 隔离为 Manual 之后托管资产一直扣在合同里,没有自动出口,必须有人看。
+        - alert: TradeCommerceQuarantined
+          expr: |
+            sum(increase(trade_commerce_quarantined_total[10m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "trade 有交易合同因确定性坏数据被隔离为人工"
+            description: >-
+              过去 10 分钟有约 {{ $value | printf "%.0f" }} 条交易合同(含被移出盘口的坏对手单)被隔离为 Manual。
+              托管资产仍在合同里,隔离时在途的托管扣款已截止改发 Abort。按日志
+              "[Commerce] Contract quarantined as manual" / "Market counterparty quarantined" 取 commerce_id 与原 stage,
+              按 docs/ops/trade-commerce-quarantine-runbook.md 对账;不得手改 trade_commerce / trade_asset_op 行。
+
+        # 参与角色已换主 / 被另一条挂单冻结 / 目录行不合格:合同与对方的托管一直扣着,每 5 分钟复查一次。
+        - alert: TradeCommerceRoleConflict
+          expr: |
+            sum(increase(trade_commerce_tick_row_failures_total{class="role_conflict"}[1h])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "trade 有交易合同因参与角色换主或被冻结而停住"
+            description: >-
+              过去 1 小时有约 {{ $value | printf "%.0f" }} 次合同推进撞上 role_conflict(每条停住的合同约每 5 分钟一次)。
+              按日志 "[Commerce] Contract blocked by a party role" 取 commerce_id,
+              按 docs/ops/trade-commerce-quarantine-runbook.md 判断是暂时冻结还是已换主。
+
+        # 一般暂时失败持续不断:存储 / 号段 / 依赖 RPC 长时间不可用,或某几条合同反复卡满子预算。
+        # 单条失败会推迟 10s±20%,偶发锁冲突不会让每个 5 分钟窗口都有失败。
+        - alert: TradeCommerceRetryFailuresPersistent
+          expr: |
+            sum(rate(trade_commerce_tick_row_failures_total{class="retry"}[5m])) > 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "trade 交易合同推进持续出现暂时失败"
+            description: >-
+              最近 30 分钟每个 5 分钟窗口都有 retry 类推进失败(当前约 {{ $value | printf "%.2f" }} 次/秒)。
+              按日志 "[Commerce] Contract step failed" 的 commerce_id 与错误原因排查存储、号段与依赖 RPC。
+
+        # 撮合在 taker 推进之后失败(不含乐观冲突):不推迟、下一轮重撮,持续出现说明盘口被挡住。
+        - alert: TradeCommerceMarketMatchFailing
+          expr: |
+            sum(rate(trade_commerce_market_match_failures_total{class!="conflict"}[5m])) > 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "trade 市场订单撮合持续失败"
+            description: >-
+              最近 30 分钟每个 5 分钟窗口都有撮合失败。按日志 "[Commerce] Market match failed" 的 taker_id 与 class 排查;
+              class=role_conflict 多半是盘口上对手单的角色被另一条挂单冻结(该单不会被自动移出盘口)。
+
+        # Due 每轮都没取完:推进吞吐跟不上,或有行反复卡满子预算(此时 retry 类失败也会同时上涨)。
+        - alert: TradeCommerceTickTruncated
+          expr: |
+            sum(rate(trade_commerce_tick_truncated_total[5m])) > 0.5
+          for: 15m
+          labels:
+            severity: info
+          annotations:
+            summary: "trade 合同推进每轮都用完预算"
+            description: >-
+              最近 15 分钟各副本合计每秒有超过 0.5 轮推进在预算用完时 Due 里还有合同没开始推进
+              (每个副本每秒一轮,单副本即超过一半的轮次)。
+              合同仍会在后续轮次推进,但到期处理会变慢;检查 TiDB 延迟、retry 类失败与副本数。
 
     - name: guild-trial.results
       interval: 60s

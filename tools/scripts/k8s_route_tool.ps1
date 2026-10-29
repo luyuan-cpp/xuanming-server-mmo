@@ -28,6 +28,10 @@
     退出码:route-tool 容器的退出码原样返回 —— 0 干净 / 1 完成但需要人工处理 / 2 失败 / 3 有生效的合服围栏。
     本脚本自己失败(参数不合法、kubectl 失败、namespace 不存在、已有在途 Job、等不到终态、容器退出码不在 0..3、取不到退出码)一律 2,
     控制台与 summary.txt 写明是哪一种;等不到终态时 Job 可能还在跑,不要立刻再起一次。
+    未预料的异常由入口兜成 2(pwsh -File 下未捕获异常的退出码是 1,会与「完成但需要人工处理」撞号);Job 结束之后写报告
+    (stdout.txt / stderr.txt / summary.txt)失败只告警,退出码仍按容器退出码,不让写盘失败盖掉 0..3。
+    例外:参数绑定失败(pwsh -File 下缺 -ZoneName / -RouteToolArgs、-ZoneName 不合格式)发生在脚本运行之前,退出码是 pwsh 的 1;
+    经 dev_tools.ps1 -Command k8s-route-tool 调用时由包装层兜成 2。
 
     口令不进输出:本脚本不读 ConfigMap 内容(口令在里面),清单里只有 ConfigMap 的名字;route-tool 的 stderr 只带主机与库名。
     所有 kubectl 调用都有 HTTP 超时与进程级截止;kind 上务必显式传 -KubeContext kind-mmorpg。
@@ -432,6 +436,31 @@ function Write-RouteToolSummary {
     [IO.File]::WriteAllText($Path, (($lines -join "`n") + "`n"), [Text.UTF8Encoding]::new($false))
 }
 
+# Job apply 之后的落盘一律经这两个函数:写不了(磁盘满、目录没权限)只告警,不 throw。到这一步 Job 已经建了、可能已经跑完,
+# 退出码必须仍按容器退出码(或本脚本已判出的 2)返回;让写盘异常冒到入口,会把真实的 0..3 盖成 2,而且 done 一行打不出来。
+function Save-RouteToolSummary {
+    param([Parameter(Mandatory = $true)][string]$Path, [Parameter(Mandatory = $true)][System.Collections.IDictionary]$Fields)
+    try {
+        Write-RouteToolSummary -Path $Path -Fields $Fields
+    }
+    catch {
+        Write-Warning "[route-tool] could not write ${Path}: $($_.Exception.Message); the exit code still follows the container exit code (summary: verdict=$($Fields['verdict']) exit_code=$($Fields['exit_code']) note=$($Fields['note']))"
+    }
+}
+
+# 返回 $true = 写成。
+function Save-RouteToolReportText {
+    param([Parameter(Mandatory = $true)][string]$Path, [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text)
+    try {
+        [IO.File]::WriteAllText($Path, $Text, [Text.UTF8Encoding]::new($false))
+        return $true
+    }
+    catch {
+        Write-Warning "[route-tool] could not write ${Path}: $($_.Exception.Message); the exit code still follows the container exit code"
+        return $false
+    }
+}
+
 function Invoke-RouteTool {
     $contract = Get-RouteToolContract
     $argErrors = @(Get-RouteToolArgErrors -Arguments $RouteToolArgs)
@@ -443,15 +472,27 @@ function Invoke-RouteTool {
     $runId = New-RouteToolRunId -Now (Get-Date) -Random (Get-Random -Minimum 0 -Maximum 65536)
     $jobName = "$($contract.JobNamePrefix)-$runId"
     $templatePath = Join-Path $RepoRoot $contract.JobTemplate
-    if (-not (Test-Path -LiteralPath $templatePath)) { throw "找不到 Job 模板 $($contract.JobTemplate)" }
-    $templateText = [IO.File]::ReadAllText($templatePath)
+    try {
+        if (-not (Test-Path -LiteralPath $templatePath)) { throw "找不到 Job 模板 $($contract.JobTemplate)" }
+        $templateText = [IO.File]::ReadAllText($templatePath)
+    }
+    catch {
+        Write-Host "[route-tool] cannot read the Job template, nothing was created: $($_.Exception.Message)"
+        return $contract.ExitFailed
+    }
     $subcommand = $RouteToolArgs[0]
 
     if ($DryRun) {
-        $jobImage = if ([string]::IsNullOrWhiteSpace($Image)) { "(resolved at run time from deployment/$($contract.DeploymentName) in $namespace)" } else { $Image }
-        $jobPullPolicy = if ([string]::IsNullOrWhiteSpace($Image)) { 'IfNotPresent' } else { Resolve-ImagePullPolicy -ImageRef $Image }
-        $manifest = New-RouteToolJobManifest -TemplateText $templateText -RunId $runId -Image $jobImage -PullPolicy $jobPullPolicy `
-            -Arguments $RouteToolArgs -TimeoutSeconds $TimeoutSeconds
+        try {
+            $jobImage = if ([string]::IsNullOrWhiteSpace($Image)) { "(resolved at run time from deployment/$($contract.DeploymentName) in $namespace)" } else { $Image }
+            $jobPullPolicy = if ([string]::IsNullOrWhiteSpace($Image)) { 'IfNotPresent' } else { Resolve-ImagePullPolicy -ImageRef $Image }
+            $manifest = New-RouteToolJobManifest -TemplateText $templateText -RunId $runId -Image $jobImage -PullPolicy $jobPullPolicy `
+                -Arguments $RouteToolArgs -TimeoutSeconds $TimeoutSeconds
+        }
+        catch {
+            Write-Host "[route-tool] cannot render the Job manifest, nothing was created: $($_.Exception.Message)"
+            return $contract.ExitFailed
+        }
         Write-Host "[dry-run] route-tool job=$jobName namespace=$namespace subcommand=$subcommand timeout=${TimeoutSeconds}s (kubectl is not called, no report directory is created)"
         if ([string]::IsNullOrWhiteSpace($Image)) {
             Write-Host "[dry-run] -Image not given: a real run reads image and imagePullPolicy from deployment/$($contract.DeploymentName); the rendered imagePullPolicy is a placeholder"
@@ -493,9 +534,16 @@ function Invoke-RouteTool {
     }
 
     $report = if ([string]::IsNullOrWhiteSpace($ReportDir)) { Join-Path $RepoRoot (Join-Path 'run/route-tool' "$ZoneName-$runId") } else { $ReportDir }
-    $null = New-Item -ItemType Directory -Force -Path $report
     $manifestPath = Join-Path $report 'manifest.yaml'
-    [IO.File]::WriteAllText($manifestPath, $manifest, [Text.UTF8Encoding]::new($false))
+    # apply 读的就是这份文件:建不了目录或写不了清单时什么都还没建,按本脚本自己的失败(2)返回。
+    try {
+        $null = New-Item -ItemType Directory -Force -Path $report
+        [IO.File]::WriteAllText($manifestPath, $manifest, [Text.UTF8Encoding]::new($false))
+    }
+    catch {
+        Write-Host "[route-tool] cannot write the report directory $report, nothing was created: $($_.Exception.Message)"
+        return $contract.ExitFailed
+    }
     $summary = [ordered]@{
         run_id = $runId; zone = $ZoneName; namespace = $namespace; job = $jobName; image = $jobImage
         subcommand = $subcommand; args = ($RouteToolArgs -join ' '); timeout_seconds = $TimeoutSeconds
@@ -510,7 +558,7 @@ function Invoke-RouteTool {
     }
     catch {
         $summary.note = "apply failed: $($_.Exception.Message)"; $summary.exit_code = $contract.ExitFailed
-        Write-RouteToolSummary -Path $summaryPath -Fields $summary
+        Save-RouteToolSummary -Path $summaryPath -Fields $summary
         Write-Host "[route-tool] $($summary.note)"
         return $contract.ExitFailed
     }
@@ -537,7 +585,7 @@ function Invoke-RouteTool {
     if ($state.Phase -notin @('complete', 'failed')) {
         $summary.note = if ($state.Phase -eq 'absent') { 'job disappeared before reaching a terminal state' } else { "job did not reach a terminal state within ${budgetSeconds}s; it may still be running: do not start another run, check kubectl -n $namespace logs job/$jobName" }
         $summary.exit_code = $contract.ExitFailed
-        Write-RouteToolSummary -Path $summaryPath -Fields $summary
+        Save-RouteToolSummary -Path $summaryPath -Fields $summary
         Write-Host "[route-tool] $($summary.note)"
         return $contract.ExitFailed
     }
@@ -561,10 +609,13 @@ function Invoke-RouteTool {
         }
         else {
             $split = Split-RouteToolLog -Text ([string]$logs.Output) -RunId $runId
-            [IO.File]::WriteAllText((Join-Path $report 'stdout.txt'), $split.Stdout, [Text.UTF8Encoding]::new($false))
-            [IO.File]::WriteAllText((Join-Path $report 'stderr.txt'), $split.Stderr, [Text.UTF8Encoding]::new($false))
+            $stdoutSaved = Save-RouteToolReportText -Path (Join-Path $report 'stdout.txt') -Text $split.Stdout
+            $stderrSaved = Save-RouteToolReportText -Path (Join-Path $report 'stderr.txt') -Text $split.Stderr
             if (-not $split.MarkersFound) {
                 $summary.note = 'stdout markers not found (process killed before the wrapper printed them); whole log saved as stderr.txt'
+            }
+            if (-not ($stdoutSaved -and $stderrSaved)) {
+                $summary.note = (@($summary.note, 'logs not saved to the report directory (see warnings above)') | Where-Object { $_ }) -join '; '
             }
             if (-not [string]::IsNullOrWhiteSpace($split.Stdout)) { Write-Host "[route-tool] stdout: $($split.Stdout.TrimEnd())" }
             $tail = @(($split.Stderr.TrimEnd() -split "`n") | Select-Object -Last $contract.StderrTailLines)
@@ -579,12 +630,19 @@ function Invoke-RouteTool {
     $summary.verdict = $verdict.Verdict
     $summary.exit_code = $verdict.ExitCode
     if ($null -eq $pod.ExitCode -and [string]::IsNullOrEmpty($summary.note)) { $summary.note = "no container exit code: $($pod.Reason)" }
-    Write-RouteToolSummary -Path $summaryPath -Fields $summary
+    Save-RouteToolSummary -Path $summaryPath -Fields $summary
     Write-Host ("[route-tool] done: job_phase={0} container_exit={1} verdict={2} exit={3} report={4}" -f $state.Phase, $summary.container_exit_code, $verdict.Verdict, $verdict.ExitCode, $report)
     return $verdict.ExitCode
 }
 
 # ─── 入口 ───
-
-$exitCode = Invoke-RouteTool
+# 本脚本自己的失败一律 2(文件头「退出码」)。Invoke-RouteTool 在 apply 前后的已知失败点都自己返回 2、Job 之后的落盘失败只告警;
+# 这里兜的是没预料到的异常:pwsh -File 下未捕获异常的退出码是 1,与 route-tool 的「1 = 完成但需要人工处理」撞号。
+try {
+    $exitCode = Invoke-RouteTool
+}
+catch {
+    Write-Host "[route-tool] internal error (exit 2): $($_.Exception.Message). If a 'run=... job=...' line was printed above, the Job may already exist: check it (kubectl get jobs --all-namespaces -l app=data-service-route-tool) before starting another run."
+    $exitCode = (Get-RouteToolContract).ExitFailed
+}
 exit ([int]$exitCode)

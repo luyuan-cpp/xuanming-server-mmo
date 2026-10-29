@@ -904,15 +904,16 @@ func (x *SetAutoBattleResponse) GetErrorMessage() *base.TipInfoMessage {
 // 签名 = hex(HMAC-SHA256(secret, 序列化后的本消息字节)),形态与 GateTokenPayload 一致。
 // 寿命 = 房间作废期限(D25):同一票可重复用于战斗中重连;房间销毁即失效。
 type BattleTicketPayload struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	BattleId         uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	PlayerId         uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	BattleNodeId     uint32                 `protobuf:"varint,3,opt,name=battle_node_id,json=battleNodeId,proto3" json:"battle_node_id,omitempty"`            // 签发节点 node_id,验签侧必须等于自身
-	BattleInstanceId string                 `protobuf:"bytes,4,opt,name=battle_instance_id,json=battleInstanceId,proto3" json:"battle_instance_id,omitempty"` // 签发节点实例 UUID(node_uuid),防节点重启后 node_id 复用
-	ExpireAtMs       uint64                 `protobuf:"varint,5,opt,name=expire_at_ms,json=expireAtMs,proto3" json:"expire_at_ms,omitempty"`                  // Unix 毫秒;与房间 deadline_ms 同值
-	Role             EBattleTicketRole      `protobuf:"varint,6,opt,name=role,proto3,enum=EBattleTicketRole" json:"role,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	BattleId             uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	PlayerId             uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	BattleNodeId         uint32                 `protobuf:"varint,3,opt,name=battle_node_id,json=battleNodeId,proto3" json:"battle_node_id,omitempty"`            // 签发节点 node_id,验签侧必须等于自身
+	BattleInstanceId     string                 `protobuf:"bytes,4,opt,name=battle_instance_id,json=battleInstanceId,proto3" json:"battle_instance_id,omitempty"` // 签发节点实例 UUID(node_uuid),防节点重启后 node_id 复用
+	ExpireAtMs           uint64                 `protobuf:"varint,5,opt,name=expire_at_ms,json=expireAtMs,proto3" json:"expire_at_ms,omitempty"`                  // Unix 毫秒;与房间 deadline_ms 同值
+	Role                 EBattleTicketRole      `protobuf:"varint,6,opt,name=role,proto3,enum=EBattleTicketRole" json:"role,omitempty"`
+	SpectatorOperationId string                 `protobuf:"bytes,7,opt,name=spectator_operation_id,json=spectatorOperationId,proto3" json:"spectator_operation_id,omitempty"` // 观众原准入UUID，验签后仍须与房内当前operation相同。
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *BattleTicketPayload) Reset() {
@@ -985,6 +986,13 @@ func (x *BattleTicketPayload) GetRole() EBattleTicketRole {
 		return x.Role
 	}
 	return EBattleTicketRole_BATTLE_TICKET_ROLE_NONE
+}
+
+func (x *BattleTicketPayload) GetSpectatorOperationId() string {
+	if x != nil {
+		return x.SpectatorOperationId
+	}
+	return ""
 }
 
 // 直连握手首包(客户端 → battle 节点)。
@@ -1353,7 +1361,7 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x18\n" +
 	"\aenabled\x18\x02 \x01(\bR\aenabled\"M\n" +
 	"\x15SetAutoBattleResponse\x124\n" +
-	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"\xed\x01\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"\xa3\x02\n" +
 	"\x13BattleTicketPayload\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12$\n" +
@@ -1361,7 +1369,8 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x12battle_instance_id\x18\x04 \x01(\tR\x10battleInstanceId\x12 \n" +
 	"\fexpire_at_ms\x18\x05 \x01(\x04R\n" +
 	"expireAtMs\x12&\n" +
-	"\x04role\x18\x06 \x01(\x0e2\x12.eBattleTicketRoleR\x04role\"R\n" +
+	"\x04role\x18\x06 \x01(\x0e2\x12.eBattleTicketRoleR\x04role\x124\n" +
+	"\x16spectator_operation_id\x18\a \x01(\tR\x14spectatorOperationId\"R\n" +
 	"\x18BattleTokenVerifyRequest\x12\x18\n" +
 	"\apayload\x18\x01 \x01(\fR\apayload\x12\x1c\n" +
 	"\tsignature\x18\x02 \x01(\fR\tsignature\"h\n" +

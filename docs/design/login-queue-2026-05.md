@@ -13,7 +13,7 @@
 
 ## 1. 为什么再做一层"真排队"
 
-`open-server-rate-limit-design.md`(2026-05-08)在 Java Gateway 上落地了 Bucket4j 三层限流(zone / IP / account cooldown)+ 开服波次。**它解决的是"挡住请求洪峰"**,但不能告诉玩家"前面还有多少人"。
+Java Gateway 已实现共享 zone／IP 桶与进程内账号冷却，波次默认关闭，当前契约见[削峰设计](./open-server-rate-limit-design.md)。它限制入口速率，但不提供真实排位；本队列负责有序容量准入，是否可启用仍受合入门禁约束。
 
 实战中两个场景是 Bucket4j 解不了的:
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	mathrand "math/rand/v2"
+	"shared/drainproof"
 	"sync"
 	"time"
 
@@ -88,12 +89,15 @@ type MaintenanceStore interface {
 
 // Loops 持有后台循环的依赖。构造后只读。
 type Loops struct {
-	store    MaintenanceStore
-	ledgers  LedgerReader
-	cfg      LoopConfig
-	campaign Campaign
-	now      func() time.Time
-	jitter   func(time.Duration) time.Duration
+	// 启动前显式绑定；清理是 SOURCE，通知与对账承接历史工作归 RELAY。
+	RootAdmission  *drainproof.Session
+	RelayAdmission *drainproof.Session
+	store          MaintenanceStore
+	ledgers        LedgerReader
+	cfg            LoopConfig
+	campaign       Campaign
+	now            func() time.Time
+	jitter         func(time.Duration) time.Duration
 }
 
 // NewLoops 校验参数并构造。ledgers 可为 nil:此时不跑对账(只在 ReconcileInterval > 0 时要求非 nil)。
@@ -173,7 +177,7 @@ func everyAfter(ctx context.Context, wg *sync.WaitGroup, point string, first, in
 		defer wg.Done()
 		runRound := func() {
 			safego.Run(point, func() {
-				roundCtx, cancel := context.WithTimeout(ctx, min(interval, roundBudgetCap))
+				roundCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), min(interval, roundBudgetCap))
 				defer cancel()
 				round(roundCtx)
 			})
@@ -279,12 +283,28 @@ func (l *Loops) nowMs() uint64 {
 
 // sweepRound 清理保留期外的终态行(设计 §9.1)。
 func (l *Loops) sweepRound(ctx context.Context) {
+	if l.RootAdmission != nil {
+		finish, err := l.RootAdmission.Enter()
+		if err != nil {
+			return
+		}
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				l.RootAdmission.Hold()
+				panic(recovered)
+			}
+		}()
+	}
 	nowMs := l.nowMs()
 	retentionMs := uint64(l.cfg.TerminalRetention.Milliseconds())
 	if nowMs <= retentionMs {
 		return
 	}
 	deleted, err := l.store.SweepTerminal(ctx, nowMs-retentionMs, sweepBudgetPerRound)
+	if err != nil && l.RootAdmission != nil {
+		l.RootAdmission.Hold()
+	}
 	if err != nil && !errors.Is(err, context.Canceled) {
 		logx.Errorf("[player_inbox] Sweep round failed after deleting %d rows: %v", deleted, err)
 		return
@@ -296,6 +316,19 @@ func (l *Loops) sweepRound(ctx context.Context) {
 
 // notifyRound 按分片轮转一轮补发到期提醒(设计 §6.3)。
 func (l *Loops) notifyRound(ctx context.Context) {
+	if l.RelayAdmission != nil {
+		finish, err := l.RelayAdmission.Enter()
+		if err != nil {
+			return
+		}
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				l.RelayAdmission.Hold()
+				panic(recovered)
+			}
+		}()
+	}
 	nowMs := l.nowMs()
 	grace := uint64(notifyGrace.Milliseconds())
 	if nowMs <= grace {
@@ -315,7 +348,9 @@ func (l *Loops) notifyRound(ctx context.Context) {
 				return
 			}
 			// 单次提醒的预算在 ResendNotify 里加;没落定的行被推到 now + 退避,不会下一轮又排在队头(评审 L6)。
-			l.store.ResendNotify(ctx, d)
+			if result := l.store.ResendNotify(ctx, d); result == NotifyError && l.RelayAdmission != nil {
+				l.RelayAdmission.Hold()
+			}
 		}
 	}
 }
@@ -353,6 +388,19 @@ func (l *Loops) gaugeRound(ctx context.Context) {
 // 记 reconcile_rounds_total{result},把本轮的分片读数记进 tally,再以各片读数之和刷新不一致行数 gauge。
 // 收集阶段就失败的轮次没有分片读数,gauge 保持原值。tally 属于当前任期(whileLeader 建)。
 func (l *Loops) reconcileRound(ctx context.Context, tally *reconcileTally) {
+	if l.RelayAdmission != nil {
+		finish, err := l.RelayAdmission.Enter()
+		if err != nil {
+			return
+		}
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				l.RelayAdmission.Hold()
+				panic(recovered)
+			}
+		}()
+	}
 	nowMs := l.nowMs()
 	window := uint64(l.cfg.ReconcileWindow.Milliseconds())
 	since := uint64(0)

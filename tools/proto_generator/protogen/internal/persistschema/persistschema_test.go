@@ -529,7 +529,11 @@ func TestParseLedgerRejectsMalformed(t *testing.T) {
 
 func TestRenderOutputs(t *testing.T) {
 	s := CollectSchema(files(fixture()))
-	cpp := string(RenderCppHeader(3, s))
+	retired, err := RetiredFieldsOf([]string{"ItemComp#7", "CurrencyDebtEntry#9", "ItemComp#4"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cpp := string(RenderCppHeader(3, s, retired))
 	for _, want := range []string{
 		"inline constexpr uint32_t kPersistSchemaGen = 3;",
 		"std::array<std::string_view, 3> kFrozenMessageTypes",
@@ -537,17 +541,28 @@ func TestRenderOutputs(t *testing.T) {
 		"std::array<std::string_view, 2> kUncarriedFields",
 		`"ItemEntry.equip",`,
 		`"player_database.probe",`,
+		// 退役清单按消息全名、字段号升序,与台账里的书写顺序无关。
+		"inline constexpr std::array<RetiredField, 3> kRetiredFields = {{\n" +
+			"    {\"CurrencyDebtEntry\", 9},\n    {\"ItemComp\", 4},\n    {\"ItemComp\", 7},\n}};",
+		"[[nodiscard]] constexpr bool IsRetiredField(std::string_view message, int number)",
 	} {
 		if !strings.Contains(cpp, want) {
 			t.Errorf("C++ 头文件缺少 %q:\n%s", want, cpp)
 		}
 	}
-	if string(RenderCppHeader(3, s)) != cpp {
+	if string(RenderCppHeader(3, s, retired)) != cpp {
 		t.Error("C++ 输出不稳定")
 	}
-	empty := string(RenderCppHeader(1, Schema{}))
+	empty := string(RenderCppHeader(1, Schema{}, nil))
 	if !strings.Contains(empty, "std::array<std::string_view, 0> kFrozenMessageTypes = {};") {
 		t.Errorf("空清单应输出 {}: %s", empty)
+	}
+	if !strings.Contains(empty, "inline constexpr std::array<RetiredField, 0> kRetiredFields = {};") ||
+		!strings.Contains(empty, "constexpr bool IsRetiredField(") {
+		t.Errorf("没有退役字段时也要输出空清单与查询函数(C++ 调用方不分情况): %s", empty)
+	}
+	if _, err := RetiredFieldsOf([]string{"ItemComp"}); err == nil {
+		t.Error("不合法的退役身份应报错")
 	}
 	goSrc := string(RenderGo(3))
 	if !strings.Contains(goSrc, "package persistschema") || !strings.Contains(goSrc, "const Gen uint32 = 3") ||

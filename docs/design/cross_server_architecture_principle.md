@@ -1,123 +1,123 @@
-# MMO Cross-Server Architecture (跨服架构 — 全局设计文档)
+# MMO 跨服架构（全局设计文档）
 
-> **修订(2026-08-15)**: "每 realm 独立存储、数据永远留在 home realm"的前提被 [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) 修订为"TiDB 全局数据层 + home_zone 逻辑归属";**位置透明核心原则本身不变**,且因数据全局化而更容易成立。
+> **修订（2026-08-15）**：“每个区服独立存储、数据永远留在归属服”的前提被 [全局数据层 TiDB 决策](./global-data-layer-tidb-decision.md) 修订为“TiDB 全局数据层 + home_zone 逻辑归属”；**位置透明核心原则本身不变**，且因数据全局化而更容易成立。
 
-## Game Model
-- MMO (魔兽世界类), ~1000 大区 (realms)
-- Player belongs to one home realm but can freely visit any realm
-- Each realm has its own Redis
-- Scene switching latency is acceptable; **stability & correctness** are the top priority
+## 游戏模型
+- MMO（魔兽世界类），约 1000 个大区（realm）
+- 玩家归属于一个区服，但可以自由前往任意区服
+- 每个区服都有独立的 Redis
+- 可以接受切换场景的延迟；**稳定性与正确性**是最高优先级
 
-## **CORE PRINCIPLE: Location Transparency (位置透明)**
+## **核心原则：位置透明**
 > 不管玩家在哪个服务器上，处理逻辑都和在本服一样，不需要判断"是否跨服"。
-> This principle must be applied to ALL future cross-server related work.
+> 今后所有跨服相关工作都必须遵循这一原则。
 
-- Logic layer NEVER branches on "is this player cross-server or local"
-- All game logic treats every player identically regardless of origin realm
-- No data sync/copy to destination server — player data stays at home realm
-- Eliminates: login-time cross-server checks, data consistency issues, scattered if-cross-server branches
+- 逻辑层绝不根据“玩家是跨服玩家还是本服玩家”执行不同分支
+- 所有游戏逻辑都以相同方式处理每个玩家，不区分玩家的来源区服
+- 不向目标服务器同步或复制数据，玩家数据保留在归属服
+- 消除登录时的跨服检查、数据一致性问题，以及散落各处的跨服判断分支
 
-## Pain Points (Previous Experience — Avoid Repeating)
-- Data sync approach: copying data to destination server → consistency nightmares
-- Checking "is cross-server?" at every processing point → error-prone, unmaintainable
-- Login flow detecting cross-server state → over-complicated, fragile
+## 历史痛点（避免重蹈覆辙）
+- 采用数据同步方案，将数据复制到目标服务器，导致难以处理的一致性问题
+- 在每个处理环节判断“是否跨服”，容易出错且难以维护
+- 在登录流程中检测跨服状态，使流程过度复杂且脆弱
 
-## Chosen Architecture: Plan A — Independent Data Service (数据代理微服务)
-- A dedicated Go (go-zero) microservice that owns ALL cross-realm data routing
-- Scene Server calls Data Service via gRPC with unified interface (e.g. `GetPlayerBag(player_id)`)
-- Data Service internally resolves `player_id → home_realm_id → correct Redis` and routes transparently
-- Scene Server has ONE gRPC address, knows NOTHING about Redis topology or realm routing
-- Reason for choosing: **stability > latency** — scene switching tolerates extra ms; fewer moving parts in Scene Server, all routing complexity centralized in one service, easier to maintain/debug/update routing rules
+## 选定架构：方案 A——独立数据服务（数据代理微服务）
+- 由专门的 Go（go-zero）微服务统一负责所有跨服数据路由
+- 场景服务器通过 gRPC 调用数据服务，使用统一接口，例如 `GetPlayerBag(player_id)`
+- 数据服务在内部解析 `player_id → home_realm_id`，找到对应的 Redis 并透明路由
+- 场景服务器只使用一个 gRPC 地址，无需了解 Redis 拓扑或区服路由
+- 选择理由：**稳定性优先于低延迟**。切换场景可以接受额外几毫秒的延迟；场景服务器需要协调的环节更少，所有路由复杂性集中在一个服务中，更便于维护、调试和更新路由规则
 
-### Why NOT Plan B (Embedded Routing)
-- Each Scene Server connecting to 1000 Redis instances = connection explosion
-- Routing logic scattered across all Scene Server instances = harder to update
-- Plan A centralizes complexity; Plan B distributes it
+### 不选择方案 B（内嵌路由）的原因
+- 每个场景服务器都连接 1000 个 Redis 实例，会导致连接数爆炸
+- 路由逻辑散落在所有场景服务器实例中，更新更加困难
+- 方案 A 集中管理复杂性，方案 B 则将其分散到各处
 
-### Data Flow
+### 数据流
 ```
-Player → Gate → Scene Server (any realm)
-                    │
-                    │ gRPC (unified interface, realm-agnostic)
-                    ▼
-              Data Service (Go, go-zero)
-                    │
-                    │ routes by player_id → home_realm_id
-                    ▼
-              Redis (player's home realm)
-```
-
-### Scene Switching Flow
-```
-Player in realm 1, wants to visit realm 500
-→ Client requests realm change
-→ Player Locator updates player's current scene_node to realm 500's Scene
-→ Gate routes connection to realm 500's Scene Server
-→ Realm 500's Scene Server handles normally via Data Service
-→ Data Service transparently reads/writes realm 1's Redis
-→ Zero data migration, zero cross-server branching
+玩家 → Gate → 场景服务器（任意区服）
+                  │
+                  │ gRPC（统一接口，无需感知区服）
+                  ▼
+              数据服务（Go、go-zero）
+                  │
+                  │ 根据 player_id → home_realm_id 路由
+                  ▼
+              Redis（玩家归属服）
 ```
 
-### Data Service Design Notes
-- Horizontally scalable: shard by realm range (instances 1→区1~200, 2→区201~400, etc.)
-- Routing table: `player_id → home_realm_id → redis_addr` (consistent hash or lookup table)
-- Unified retry/circuit-breaker/fallback at this layer — Scene Server never worries about Redis failures
-- Can add LRU cache for hot data (HP, position, buffs) to reduce cross-realm Redis calls
-- Extend existing `go/db/` service or create new `go/data_service/`
+### 场景切换流程
+```
+玩家当前位于区服 1，希望前往区服 500
+→ 客户端请求切换区服
+→ 玩家定位服务（Player Locator）将玩家当前的 scene_node 更新为区服 500 的场景节点
+→ Gate 将连接路由到区服 500 的场景服务器
+→ 区服 500 的场景服务器通过数据服务正常处理请求
+→ 数据服务透明地读写区服 1 的 Redis
+→ 无需迁移数据，也无需跨服判断分支
+```
 
-## Zone / Region Hierarchy (区/大区层级)
-- **Zone** (区/服): game-logical realm, e.g. Zone 1~10000
-- **Region** (大区/分组区): grouping of zones, e.g. Region A = Zone 1~100
-- Redis allocated **per Region**, NOT per Zone: 10000 zones / 100 per region = 100 Redis Clusters
-- **Lock Region (锁区)**: if Region locked, players can only visit zones within their home Region; if unlocked, free to visit any zone 1~10000
-- Lock logic lives in **Scene Manager**, NOT in Data Service
+### 数据服务设计要点
+- 支持水平扩展：按区服范围分片，例如实例 1 负责区服 1～200，实例 2 负责区服 201～400，以此类推
+- 路由表：`player_id → home_realm_id → redis_addr`，通过一致性哈希或查找表实现
+- 在这一层统一处理重试、熔断和降级，场景服务器无需处理 Redis 故障
+- 可以为热点数据（生命值、位置、增益效果）增加 LRU 缓存，减少跨服 Redis 调用
+- 扩展现有的 `go/db/` 服务，或新建 `go/data_service/` 服务
 
-## Player ID Design (Snowflake)
-- Uses existing `snow_flake.h`: `[time:32b][node_id:17b][step:15b]`
-- **DO NOT encode zone_id in player_id** — this breaks on server merge (合服)
-- node_id = physical node that generated the ID, NOT zone_id
-- player_id is immutable forever, even across merges
+## 区服与大区层级（Zone / Region）
+- **区服（Zone）**：游戏逻辑上的区服，例如区服 1～10000
+- **大区（Region）**：由多个区服组成的分组，例如大区 A 包含区服 1～100
+- Redis **按大区分配**，而不是按区服分配：10000 个区服，每个大区 100 个区服，共需 100 个 Redis 集群
+- **锁区**：大区锁定时，玩家只能前往归属大区内的区服；解锁后，可以自由前往区服 1～10000 中的任意区服
+- 锁区逻辑位于**场景管理器（Scene Manager）**，不在数据服务中
 
-## Routing: Independent Mapping Table
-- `player_id → home_zone_id`: global mapping table (separate from game Redis)
-- `home_zone_id → region_id`: config table
-- `region_id → redis_cluster_addr`: config table
-- Mapping table stored in a dedicated Global Redis (~2-3 GB for 100M players) or MySQL with local cache
-- Player registration writes mapping: `player_mapping[player_id] = home_zone_id`
+## 玩家 ID 设计（Snowflake）
+- 使用现有的 `snow_flake.h`：`[time:32b][node_id:17b][step:15b]`
+- **不要将 zone_id 编入 player_id**，否则合服时会出问题
+- node_id 表示生成该 ID 的物理节点，不是 zone_id
+- player_id 永久不变，合服时也不例外
 
-## Server Merge (合服) Strategy
-- **player_id never changes** — no data migration of IDs
-- Option 1 (recommended): migrate Zone 2 Redis data into Zone 1 Redis, update mapping table (all zone_2 players → zone_1)
-- Option 2 (faster): point both zone_1 and zone_2 routes to same Redis, import data, no mapping change needed
-- Zero business code changes in either case
+## 路由：独立映射表
+- `player_id → home_zone_id`：全局映射表，与游戏 Redis 分离
+- `home_zone_id → region_id`：配置表
+- `region_id → redis_cluster_addr`：配置表
+- 映射表存储在专用的全局 Redis 中（1 亿玩家约需 2～3 GB），或使用 MySQL 并配合本地缓存
+- 玩家注册时写入映射：`player_mapping[player_id] = home_zone_id`
 
-## Data Consistency & Ordering Guarantees
-- **Redis single-thread guarantee**: same key on same connection = strict FIFO, no reordering
-- **Real danger is upstream concurrency**: two Scene Servers writing same player simultaneously
-- **Solution: single-writer per player** — a player is on exactly ONE Scene Server at any time
-- **Scene switching serialization** (enforced by Scene Manager):
-  1. Notify old Scene: "release player 1001"
-  2. Wait for old Scene confirmation: "saved & released"  ← MUST wait
-  3. Only then notify new Scene: "load player 1001"
-  4. Timeout at step 2 → abort, don't proceed to step 3
-- **Defense layers**:
-  - Layer 1: Scene Manager enforces serial handoff (normal case)
-  - Layer 2: Data Service per-player distributed lock (Redis SETNX, TTL ~3s) for abnormal cases
-  - Layer 3: Optimistic lock / version field on critical data (WATCH+MULTI or version column) as ultimate fallback
+## 合服策略
+- **player_id 永远不变**，无需迁移 ID
+- 方案 1（推荐）：将区服 2 的 Redis 数据迁入区服 1 的 Redis，更新映射表，将所有 zone_2 玩家映射到 zone_1
+- 方案 2（更快）：将 zone_1 和 zone_2 的路由都指向同一个 Redis，导入数据，无需修改映射关系
+- 两种方案都无需修改业务代码
 
-## Key Design Rules
-1. **Data Service is the ONLY place that knows about cross-realm routing** — everything above it is realm-agnostic
-2. **Player data never moves** — always lives in home realm's Redis/DB, single source of truth
-3. **No "cross-server mode" flag** on any player or session object
-4. **New features must follow this principle** — if a feature needs to ask "which realm is this player from?", the design is wrong (only Data Service may ask this)
-5. **Stability > latency** — scene switching can tolerate extra ms; data correctness cannot be compromised
-6. **Single point of routing truth** — change routing rules in Data Service only, zero changes to Scene/Gate/Centre
-7. **player_id is zone-agnostic** — never encode zone info in ID, use mapping table
-8. **Single writer per player** — no concurrent writes to same player from different Scene Servers
+## 数据一致性与顺序保证
+- **Redis 单线程保证**：同一连接上对同一个键的操作严格遵循先进先出（FIFO）顺序，不会乱序
+- **真正的风险在于上游并发**：两个场景服务器同时写入同一玩家的数据
+- **解决方案：每个玩家只有一个写入者**。任意时刻，一个玩家只位于一个场景服务器上
+- **场景切换串行化**（由场景管理器强制执行）：
+  1. 通知旧场景节点：“释放玩家 1001”
+  2. 等待旧场景节点确认：“已保存并释放”——必须等待
+  3. 收到确认后，才能通知新场景节点：“加载玩家 1001”
+  4. 第 2 步超时则中止，不得继续第 3 步
+- **分层防护**：
+  - 第 1 层：场景管理器强制串行交接，覆盖正常情况
+  - 第 2 层：数据服务为每个玩家设置分布式锁（Redis SETNX，TTL 约 3 秒），覆盖异常情况
+  - 第 3 层：关键数据使用乐观锁或版本字段（WATCH+MULTI 或版本列），作为最终兜底
 
-## Integration with Existing Architecture
-- `player_locator` already tracks which Scene a player is on — extend to track home_zone_id
-- Gate + Kafka command routing works unchanged — Gate doesn't care about player's home realm
-- Scene Manager routes player to any realm's Scene Server — also enforces scene-switch serialization
-- Extend existing `go/db/` service as the Data Service, or create a new `go/data_service/` microservice
-- Existing snowflake (`snow_flake.h`) is correct as-is — do NOT modify to embed zone info
+## 关键设计规则
+1. **只有数据服务了解跨服路由**，它的所有上层模块都无需感知区服
+2. **玩家数据永不搬迁**，始终保存在归属服的 Redis 或数据库中，保持单一事实源
+3. 任何玩家或会话对象都**不得设置“跨服模式”标志**
+4. **新功能必须遵循这一原则**：如果某项功能需要判断“这个玩家来自哪个区服”，说明设计有误；只有数据服务可以做此判断
+5. **稳定性优先于低延迟**：切换场景可以接受额外几毫秒的延迟，但不能牺牲数据正确性
+6. **路由规则只有一个事实源**：只在数据服务中修改路由规则，Scene、Gate、Centre 均无需修改
+7. **player_id 与区服无关**：不要在 ID 中编码区服信息，使用映射表
+8. **每个玩家只有一个写入者**：禁止不同场景服务器并发写入同一玩家的数据
+
+## 与现有架构集成
+- `player_locator` 已经跟踪玩家所在的场景节点，可扩展为同时跟踪 home_zone_id
+- Gate 与 Kafka 命令路由保持不变，Gate 无需关心玩家的归属服
+- 场景管理器将玩家路由到任意区服的场景服务器，同时强制执行场景切换串行化
+- 将现有的 `go/db/` 服务扩展为数据服务，或新建 `go/data_service/` 微服务
+- 现有 Snowflake 实现（`snow_flake.h`）本身符合要求，不要为嵌入区服信息而修改它

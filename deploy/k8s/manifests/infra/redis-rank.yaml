@@ -3,6 +3,9 @@
 # 里面只有两个键:lb:{rating}:z(ZSET,名次与分数)与 lb:{rating}:v(HASH,版本 "<rating_gen>:<games>")。
 # 为什么不放共享 Redis / redis-match-cluster:
 #   - 这两个键**无 TTL**,在 allkeys-lfu / volatile-lru 的库上会被悄悄驱逐 —— 榜上少人没有任何报错(§3.5);
+#     (2026-10-22 更正,上句原文保留:共享库是 noeviction、不设 maxmemory,不会淘汰,但会与契约 key 争内存、将来设了上限写满即拒写;
+#      redis-match-cluster 的 volatile-lru 只淘汰带 TTL 的键,这两个键在那里满了是拒写而不是被驱逐。不放这两处的实际理由是故障与容量隔离,
+#      独立实例 + noeviction 的结论不变。)
 #   - 它们是 match 评分的派生视图,丢了能靠 Kafka offset 重放恢复(快照 topic 保留 7 天,runbook 在 §3.5),
 #     但"能恢复"不等于"可以随便丢",所以按契约 §4 的严格档部署。
 #

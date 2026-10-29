@@ -52,6 +52,10 @@ const (
 	barrierSiteStaleLocation = "stale_location"
 	// 单节点判死后的玩家接管(enterscenelogic.go playerLocationOwnerDead)。
 	barrierSiteDeadOwnerTakeover = "dead_owner_takeover"
+	// 节点号被同号新进程复用后的玩家接管(owner_replaced.go playerLocationOwnerReplaced,GO-3):EnterScene 一侧。
+	barrierSiteReplacedOwnerTakeover = "replaced_owner_takeover"
+	// 同一判定在 LeaveScene 释放判定里的那一侧(清理任务按自己的节奏重试,分开记才不会把重登次数抬高)。
+	barrierSiteReplacedOwnerLeaveRelease = "replaced_owner_leave_release"
 )
 
 // ErrReentryBarrierPending 表示老属主节点刚判死,但再入屏障还没走完。
@@ -212,6 +216,9 @@ type deadNodeReconcile struct {
 var (
 	pendingDeadNodesMu sync.Mutex
 	pendingDeadNodes   = make(map[string]deadNodeReconcile)
+	// deadNodeReconcilePublishedZones:上一次发布时队列深度非 0 的 zone(受 pendingDeadNodesMu 保护)。
+	// 见 publishDeadNodeReconcilePending。
+	deadNodeReconcilePublishedZones = make(map[uint32]struct{})
 )
 
 func pendingDeadNodeKey(zoneID uint32, nodeID string) string {
@@ -223,9 +230,9 @@ func enqueueDeadNodeReconcile(svcCtx *svc.ServiceContext, entry nodeEntry) {
 	setKey := nodeScenesKey(entry.reg.ZoneId, entry.nodeID)
 	scenes, err := svcCtx.Redis.Smembers(setKey)
 	if err != nil {
-		// 快照读不到就别猜:留着反向索引,等下一次机会(fullSync 的陈旧清理或
-		// 节点再次死亡)重新抄。这里若退化成「收尾时现读」,就把上面说的
-		// 「误杀新场景」风险放了回来。
+		// 快照读不到就别猜:留着反向索引,等同一 node_id 下次判死时重新抄(此时节点已摘出
+		// 负载集,fullSync 的陈旧清理只扫负载集,扫不到它)。这里若退化成「收尾时现读」,就把
+		// 上面说的「误杀新场景」风险放了回来。
 		logx.Errorf("[ReentryBarrier] Failed to capture dead node scene snapshot; skipping cleanup: zone=%d node=%s err=%v",
 			entry.reg.ZoneId, entry.nodeID, err)
 		return
@@ -272,8 +279,8 @@ func drainPendingDeadNodeReconciles(ctx context.Context, svcCtx *svc.ServiceCont
 
 		reconcileDeadNodeScenes(ctx, svcCtx, task.entry, task.scenes)
 		// scene_count / player_count 必须在 reconcile **之后**清:
-		// reconcile 里的 destroyInstanceForce 自己还会对这两个键做减法,
-		// 先删会被它们重新建出来。(理由详见 removeNodeFromRedis)
+		// reconcile 里的 destroyOrphanOfDeadNode 认领成功时还会对死节点的这两个键做减法,
+		// 先删会被它们重新建出来。(理由详见 deleteNodeCounters)
 		deleteNodeCounters(svcCtx, zoneID, task.entry.nodeID)
 
 		pendingDeadNodesMu.Lock()
@@ -289,17 +296,32 @@ func drainPendingDeadNodeReconciles(ctx context.Context, svcCtx *svc.ServiceCont
 }
 
 // publishDeadNodeReconcilePending 把队列深度按 zone 发到 Prometheus。
-// 已经归零的 zone 也要显式写 0,否则仪表盘会一直停在最后一个非零值上。
+// 已经归零的 zone 也要显式写 0,否则仪表盘会一直停在最后一个非零值上。"归零的 zone"包括已经不在 GetActiveZones 里的:
+// 一个 zone 的最后一个节点死掉(或换到别的 zone)之后,它的收尾任务 drain 完时这个 zone 已不再活跃,所以记住上一次发布过
+// 非 0 的 zone,这次没有任务的一并写 0。
 func publishDeadNodeReconcilePending() {
 	pendingDeadNodesMu.Lock()
 	counts := make(map[uint32]int, len(pendingDeadNodes))
 	for _, task := range pendingDeadNodes {
 		counts[task.entry.reg.ZoneId]++
 	}
+	drained := make([]uint32, 0, len(deadNodeReconcilePublishedZones))
+	for zoneID := range deadNodeReconcilePublishedZones {
+		if counts[zoneID] == 0 {
+			drained = append(drained, zoneID)
+		}
+	}
+	deadNodeReconcilePublishedZones = make(map[uint32]struct{}, len(counts))
+	for zoneID := range counts {
+		deadNodeReconcilePublishedZones[zoneID] = struct{}{}
+	}
 	pendingDeadNodesMu.Unlock()
 
 	for _, zoneID := range GetActiveZones() {
 		metrics.SetDeadNodeReconcilePending(zoneID, counts[zoneID])
+	}
+	for _, zoneID := range drained {
+		metrics.SetDeadNodeReconcilePending(zoneID, 0)
 	}
 	for zoneID, n := range counts {
 		metrics.SetDeadNodeReconcilePending(zoneID, n)
@@ -347,8 +369,10 @@ func publishDeadNodeReconcilePending() {
 //   - 写 death_at:截止 = 一个屏障(默认 20s),每个节点约 4~5 次,每次 1 条 SET;
 //   - ZREM:放弃期限 deferredNodeDetachGiveUpAfter(10 分钟),最多约 120 次,每次 1 条 SET + 1 条
 //     ZREM。过了它,任何写成的 death_at 都已过期、屏障早已走完,节点继续留在负载集只剩可用性代价
-//     (按存活处理,方向 fail-closed),放弃后由下一次 fullSync(watch 重连 / 领导权变化 / 进程
-//     重启)在负载集里重扫到它。
+//     (按存活处理,方向 fail-closed),放弃后由下一次 fullSync 在负载集里重扫到它。2026-10-22 起放弃时
+//     主动请求一次 fullSync(RequestLoadReporterResync,非阻塞、合并信号),不再干等 watch 重连 / 领导权
+//     变化 / 进程重启:此前死节点会一直留在负载集,名下玩家一直回 18(cross-zone-scene-travel.md §13.4 复审
+//     建议)。重扫若仍摘不掉,会以新的首次观察时刻再推迟,每个卡住的节点最多每个放弃期限触发一次 fullSync。
 //   - 不加退避与抖动:单写者(领导者)对每个死节点一两条命令,节拍固定;退避和抖动是为打散大量
 //     并发客户端,这里只有一个领导者。
 //   - 所有时间判断都用 time.Since(单调读数)。
@@ -520,6 +544,8 @@ func retryDeferredNodeDetaches(svcCtx *svc.ServiceContext) int {
 				}
 				logx.Errorf("[ReentryBarrier][DeferDetach] Still unable to remove from load set after %v since first attempt; abandoning, node retained as alive for next fullSync rescan: zone=%d node=%s err=%v",
 					waited, z, n, err)
+				// 让那次 fullSync 马上来,而不是等 watch 中断 / 换领导者 / 重启(见上面「有界性」)。
+				RequestLoadReporterResync()
 				continue
 			}
 			logx.Errorf("[ReentryBarrier][DeferDetach] Failed to remove from load set; retrying next tick (waited %v / abandonment deadline %v): zone=%d node=%s err=%v",

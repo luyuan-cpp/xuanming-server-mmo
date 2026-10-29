@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -13,6 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+	pb "proto/common/database"
 	"shared/placement"
 
 	"github.com/go-sql-driver/mysql"
@@ -286,16 +289,8 @@ const (
 	// 与建池探针的守卫(routeLockProbeGuardSQL)锁同一行、文本不同:多取一列 generation 进错误信息,契约用例也靠文本区分两者。
 	routeLockMetaSQL = routeReadMetaSQL + " FOR UPDATE"
 
-	// R19 冻结(单条自动提交)。`AND writable <> 0`:已冻结时受影响 0 行,再用 R18 区分「已冻结」与「缺行」,
-	// 不依赖引擎对「值没变」的受影响行数口径。
-	routeFreezeSQL = "UPDATE route_meta SET writable = 0 WHERE id = 1 AND writable <> 0"
+	// writable / epoch / catalog 仅由 shared authoritysql.Catalog 的正式维护事务修改。
 
-	// R20 解冻事务的第一句:锁对账行、读当前水位。锁序 route_reconcile → route_meta 与第 1b-2 批 leader 每拍的事务一致。
-	routeLockReconcileWatermarkSQL = "SELECT watermark_ms FROM route_reconcile WHERE id = 1 FOR UPDATE"
-	// R21 抬高水位(只增不减)。实参:要求的最低水位。
-	routeRaiseWatermarkSQL = "UPDATE route_reconcile SET watermark_ms = GREATEST(watermark_ms, ?) WHERE id = 1"
-	// R22 解冻。`AND writable = 0`:只从冻结态翻回可写;generation 不换(提案 §11.2 第 1b 批偏离 B1)。
-	routeUnfreezeSQL = "UPDATE route_meta SET writable = 1 WHERE id = 1 AND writable = 0"
 )
 
 // RouteFreezeTimeoutMin 是含冻结写(R19 / R22)的调用至少要给的时限。TiDB 把 route_meta 设成缓存表之后
@@ -405,6 +400,8 @@ func nullString(s string) any {
 
 // RouteStoreOptions 是 RouteStore 的行为参数,来自 config.RouteStoreConfig。
 type RouteStoreOptions struct {
+	// MaintenanceFreeze 仅给恢复工具；必须是该库永久正常冻结收据，不能使用紧急冻结。
+	MaintenanceFreeze *pb.SqlWriterMaintenanceReceipt
 	// FenceShards 围栏分片数,1..placement.MaxRouteFenceShards。各进程可以不同:围栏持有者写满全部 64 行。
 	FenceShards uint32
 	// Writer 写进 updated_by 的写者标识,用 NewRouteWriterID 生成(只含 [A-Za-z0-9._@:-],不超过 96 字节)。
@@ -426,9 +423,10 @@ func (o RouteStoreOptions) validate() error {
 // 与快照 / 流水 / 名字共用池会把这两个会话变量带给别人,也会互相拖慢建角路径。
 // 并发安全(sql.DB 与 atomic 计数器都是)。
 type RouteStore struct {
-	db          *sql.DB
-	fenceShards uint32
-	writer      string
+	db                *sql.DB
+	fenceShards       uint32
+	writer            string
+	maintenanceFreeze *pb.SqlWriterMaintenanceReceipt
 
 	// lockRetries 累计因 1213 / 9007 重来的次数(按实例)。只给日志与真库用例用:
 	// 只看"最终结果正确"分不清是写法真的不成环,还是环被重试悄悄吸收了。
@@ -447,7 +445,7 @@ func NewRouteStore(cfg MySQLConfig, opts RouteStoreOptions) (*RouteStore, error)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), routeProbeTimeout)
 	defer cancel()
-	st, err := newRouteStoreFromDB(ctx, db, opts)
+	st, err := newVerifiedRouteStoreFromDB(ctx, db, opts, cfg.DBName)
 	if err != nil {
 		return nil, fmt.Errorf("route store on %s/%s: %w", cfg.Host, cfg.DBName, err)
 	}
@@ -455,6 +453,160 @@ func NewRouteStore(cfg MySQLConfig, opts RouteStoreOptions) (*RouteStore, error)
 		"(session READ-COMMITTED, innodb_lock_wait_timeout=%ds)",
 		cfg.Host, cfg.DBName, cfg.MaxOpenConn, cfg.MaxIdleConn, opts.FenceShards, opts.Writer, routeLockWaitTimeoutSec)
 	return st, nil
+}
+
+// newVerifiedRouteStoreFromDB 是常驻/工具的只读启动核验。
+// CHECK 的行为探针留给独立 schema/真库验收，normal 不为启动探针取得 metaX。
+func newVerifiedRouteStoreFromDB(ctx context.Context, db *sql.DB, opts RouteStoreOptions, schema string) (*RouteStore, error) {
+	fail := func(err error) (*RouteStore, error) { _ = db.Close(); return nil, err }
+	if err := opts.validate(); err != nil {
+		return fail(err)
+	}
+	if err := probeRouteSession(ctx, db); err != nil {
+		return fail(err)
+	}
+	if err := assertRouteTableShapes(ctx, db, schema); err != nil {
+		return fail(err)
+	}
+	if err := verifyRouteShardConstraint(ctx, db, schema); err != nil {
+		return fail(err)
+	}
+	if err := assertWriterAuthoritySchema(ctx, db, schema); err != nil {
+		return fail(err)
+	}
+	if _, err := readRouteWritable(ctx, db); err != nil {
+		return fail(err)
+	}
+	st := &RouteStore{db: db, fenceShards: opts.FenceShards, writer: opts.Writer}
+	if opts.MaintenanceFreeze != nil {
+		st.maintenanceFreeze = proto.Clone(opts.MaintenanceFreeze).(*pb.SqlWriterMaintenanceReceipt)
+	}
+	return st, nil
+}
+
+// verifyRouteShardConstraint 在正常启动时只读校验，避免用业务写探针绕过写者首锁。
+// 表级 ENFORCED、精确表达式及 TiDB 总开关必须同时成立；读取失败一律拒绝启动。
+func verifyRouteShardConstraint(ctx context.Context, db *sql.DB, schema string) error {
+	var enforced, clause string
+	err := db.QueryRowContext(ctx, "SELECT tc.ENFORCED,cc.CHECK_CLAUSE FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc JOIN INFORMATION_SCHEMA.CHECK_CONSTRAINTS cc ON cc.CONSTRAINT_SCHEMA=tc.CONSTRAINT_SCHEMA AND cc.CONSTRAINT_NAME=tc.CONSTRAINT_NAME WHERE tc.TABLE_SCHEMA=? AND tc.TABLE_NAME='player_route' AND tc.CONSTRAINT_NAME='chk_route_shard' AND tc.CONSTRAINT_TYPE='CHECK'", schema).Scan(&enforced, &clause)
+	if err != nil {
+		return fmt.Errorf("%w: read chk_route_shard metadata: %v", ErrRouteCheckNotEnforced, err)
+	}
+	if !strings.EqualFold(enforced, "YES") {
+		return fmt.Errorf("%w: chk_route_shard ENFORCED=%q", ErrRouteCheckNotEnforced, enforced)
+	}
+	if !routeShardClauseMatches(clause) {
+		return fmt.Errorf("%w: chk_route_shard does not match route_shard = player_id %% %d", ErrRouteShardModulusMismatch, placement.RouteRowShards)
+	}
+	isTiDB, _, err := serverIsTiDB(ctx, db)
+	if err != nil {
+		return err
+	}
+	if isTiDB {
+		var enabled string
+		if err := db.QueryRowContext(ctx, "SELECT @@GLOBAL.tidb_enable_check_constraint").Scan(&enabled); err != nil {
+			return fmt.Errorf("%w: read TiDB CHECK switch: %v", ErrRouteCheckNotEnforced, err)
+		}
+		if enabled != "1" && !strings.EqualFold(enabled, "ON") {
+			return fmt.Errorf("%w: TiDB CHECK switch is disabled", ErrRouteCheckNotEnforced)
+		}
+	}
+	return nil
+}
+
+// routeShardClauseMatches 只接受同一棵等式/取模表达式树；不能删光括号后比较，否则
+// (route_shard=player_id)%64 也会被误认作正确约束。未知函数、标识符和运算符均拒绝。
+func routeShardClauseMatches(clause string) bool {
+	s := strings.ToLower(clause)
+	s = strings.ReplaceAll(s, "`route_shard`", "route_shard")
+	s = strings.ReplaceAll(s, "`player_id`", "player_id")
+	if strings.ContainsRune(s, '`') {
+		return false
+	}
+	s = strings.Map(func(r rune) rune {
+		switch r {
+		case ' ', '\t', '\r', '\n':
+			return -1
+		}
+		return r
+	}, s)
+	strip := func(v string) (string, bool) {
+		for {
+			depth, firstClose := 0, -1
+			for i, ch := range v {
+				if ch == '(' {
+					depth++
+				}
+				if ch == ')' {
+					depth--
+					if depth < 0 {
+						return "", false
+					}
+					if depth == 0 && firstClose < 0 {
+						firstClose = i
+					}
+				}
+			}
+			if depth != 0 || v == "" {
+				return "", false
+			}
+			if v[0] != '(' || firstClose != len(v)-1 {
+				return v, true
+			}
+			v = v[1 : len(v)-1]
+		}
+	}
+	split := func(v string, operator byte) (string, string, bool) {
+		depth, index := 0, -1
+		for i := 0; i < len(v); i++ {
+			switch v[i] {
+			case '(':
+				depth++
+			case ')':
+				depth--
+			default:
+				if depth == 0 && v[i] == operator {
+					if index >= 0 {
+						return "", "", false
+					}
+					index = i
+				}
+			}
+		}
+		if index < 1 || index == len(v)-1 {
+			return "", "", false
+		}
+		return v[:index], v[index+1:], true
+	}
+	s, ok := strip(s)
+	if !ok {
+		return false
+	}
+	left, right, ok := split(s, '=')
+	if !ok {
+		return false
+	}
+	left, ok = strip(left)
+	if !ok || left != "route_shard" {
+		return false
+	}
+	right, ok = strip(right)
+	if !ok {
+		return false
+	}
+	value, modulus, ok := split(right, '%')
+	if !ok {
+		return false
+	}
+	value, ok = strip(value)
+	if !ok || value != "player_id" {
+		return false
+	}
+	modulus, ok = strip(modulus)
+	if !ok || modulus != strconv.FormatUint(uint64(placement.RouteRowShards), 10) {
+		return false
+	}
+	return true
 }
 
 // OpenRouteStoreHint 是 NewRouteStore 失败时给运维的一句处理提示(英文,拼进日志、错误或 stderr 的括号里),建 route store 的
@@ -1827,110 +1979,14 @@ func requireRouteFrozenWith(ctx context.Context, q routeQueryer, query string) e
 	return nil
 }
 
-// FreezeRouteWriters 冻结映射写者(R19,单条自动提交)。changed=false 表示本来就是冻结的;缺行回 ErrRouteMetaMissing。
-//
-// 冻结只拦「之后」读开关的事务:W1 与导入对 writable 是普通读,已经过了检查的事务仍会提交(提案 §11.2 第 1a 批
-// 「仍未解决的风险」第 3 条)。所以反向修库在扫描之前先等一段宽限(route_tool -freeze-grace,缺省 10s,覆盖 W1 的 2s
-// 服务端预算),写事务里再用 R18x 加锁复核。ctx 的时限至少给 RouteFreezeTimeoutMin。
-// redis 模式的 W1 不读 writable:那时冻结只拦导入与反向修库,由调用方提示。
+// FreezeRouteWriters 保留旧调用的显式拒绝；维护必须提交固定请求、正式票据与完整排空收据。
 func (s *RouteStore) FreezeRouteWriters(ctx context.Context) (bool, error) {
-	res, err := s.db.ExecContext(ctx, routeFreezeSQL)
-	if err != nil {
-		return false, fmt.Errorf("freeze route writers (route_meta.writable=0): %w", err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, fmt.Errorf("freeze route writers rows affected: %w", err)
-	}
-	switch n {
-	case 1:
-		return true, nil
-	case 0:
-		m, err := s.ReadRouteMeta(ctx)
-		if err != nil {
-			return false, err
-		}
-		if m.Writable == 0 {
-			return false, nil
-		}
-		// R19 与 R18 之间有人把它改成了非 0(并发的解冻,或手工 SQL):不猜,让运维重跑。
-		return false, fmt.Errorf("freeze route writers: affected 0 rows but route_meta.writable=%d right after; it changed concurrently, rerun", m.Writable)
-	default:
-		return false, fmt.Errorf("freeze route writers: 受影响行数 %d 不在 {1=冻结, 0=已冻结或缺行} 之内", n)
-	}
+	return false, errors.New("冻结必须使用 authoritysql.Catalog.Freeze 与正式维护收据")
 }
 
-// UnfreezeRouteWriters 解冻映射写者。一个事务:R20(锁对账行、读水位)→ R18(普通读开关)→ 已可写就整笔回滚、changed=false
-// → minWatermarkMs 大于当前水位时 R21 抬高 → R22 → COMMIT。缺对账行回 ErrRouteReconcileMissing,缺 meta 行回 ErrRouteMetaMissing。
-//
-// 先抬水位、再翻 writable:minWatermarkMs 是就绪标记里记的「缓存截至」时刻,库被回档后库水位低于它,不先抬的话
-// 第 1b-2 批的 leader 会把「库水位 < 标记水位」再判成回档、立刻又冻结;中途崩溃整笔回滚,重跑幂等。generation 不换(偏离 B1)。
-// 锁序 route_reconcile → route_meta,与第 1b-2 批 leader 每拍的事务同序;两个并发解冻在 R20 上串行,后到的读到 writable=1 即 no-op。
-// 进行中的反向修库持着 route_meta 的行锁(R18x),R22 会排在它提交之后 —— 最多等会话锁等待 1s,等满即 1205、整笔回滚、
-// 不重试(文件头不变量 4),修库结束后重跑即可。ctx 的时限至少给 RouteFreezeTimeoutMin。
+// UnfreezeRouteWriters 不再接受没有 P8 原件的水位参数；水位下限由 Catalog.Release 在提交事务内落实。
 func (s *RouteStore) UnfreezeRouteWriters(ctx context.Context, minWatermarkMs uint64) (bool, error) {
-	var changed bool
-	err := s.runRouteTx(ctx, "route_meta unfreeze", func() error {
-		var attemptErr error
-		changed, attemptErr = s.unfreezeTx(ctx, minWatermarkMs)
-		return attemptErr
-	})
-	if err != nil {
-		return false, err
-	}
-	return changed, nil
-}
-
-// unfreezeTx 一次解冻事务尝试。
-func (s *RouteStore) unfreezeTx(ctx context.Context, minWatermarkMs uint64) (bool, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return false, fmt.Errorf("begin route_meta unfreeze tx: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
-
-	var watermark uint64
-	err = tx.QueryRowContext(ctx, routeLockReconcileWatermarkSQL).Scan(&watermark)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, ErrRouteReconcileMissing
-	}
-	if err != nil {
-		return false, fmt.Errorf("lock route_reconcile(id=%d): %w", routeMetaRowID, err)
-	}
-	meta, err := readRouteMeta(ctx, tx, routeReadMetaSQL)
-	if err != nil {
-		return false, err
-	}
-	if !meta.Frozen() {
-		return false, nil // 已经可写:什么都不写(水位也不抬),由 defer 回滚
-	}
-	if minWatermarkMs > watermark {
-		res, err := tx.ExecContext(ctx, routeRaiseWatermarkSQL, minWatermarkMs)
-		if err != nil {
-			return false, fmt.Errorf("raise route_reconcile.watermark_ms %d -> %d: %w", watermark, minWatermarkMs, err)
-		}
-		if err := requireOneRowAffected(res, "raise route_reconcile.watermark_ms"); err != nil {
-			return false, err
-		}
-	}
-	res, err := tx.ExecContext(ctx, routeUnfreezeSQL)
-	if err != nil {
-		return false, fmt.Errorf("unfreeze route writers (route_meta.writable=1): %w", err)
-	}
-	if err := requireOneRowAffected(res, fmt.Sprintf("unfreeze route_meta (writable was %d)", meta.Writable)); err != nil {
-		// writable 既不是 1 也不是 0(有人手工写了别的值):不猜,拒绝。
-		return false, err
-	}
-	if err := tx.Commit(); err != nil {
-		return false, fmt.Errorf("commit route_meta unfreeze (outcome unknown; rerun the unfreeze, it is idempotent): %w", err)
-	}
-	committed = true
-	return true, nil
+	return false, errors.New("解冻必须使用 authoritysql.Catalog.Release 与固定 ReleaseReadiness 原件")
 }
 
 // RouteRepairOptions 是反向修库(RepairRoutesFromCache)的行为参数。
@@ -1983,7 +2039,7 @@ func (s *RouteStore) RepairRoutesFromCache(ctx context.Context, rows []RouteImpo
 	}
 
 	if opts.DryRun {
-		if err := requireRouteFrozen(ctx, s.db); err != nil {
+		if err := s.requireMaintenanceFrozen(ctx, s.db, false); err != nil {
 			return RouteRepairStats{}, err
 		}
 		existing, err := loadRoutes(ctx, s.db, ids, false)
@@ -2019,7 +2075,7 @@ func (s *RouteStore) repairRoutesTx(ctx context.Context, ids []uint64, rows []Ro
 		}
 	}()
 
-	if err := requireRouteFrozenLocked(ctx, tx); err != nil {
+	if err := s.requireMaintenanceFrozen(ctx, tx, true); err != nil {
 		return RouteRepairStats{}, err
 	}
 	existing, err := loadRoutes(ctx, tx, ids, true)
@@ -2220,11 +2276,11 @@ func (s *RouteStore) RepairMergedIntoFromCache(ctx context.Context, rows []Merge
 		if err := validateMergedIntoRows(rows); err != nil {
 			return MergedIntoImportStats{}, err
 		}
-		if err := requireRouteFrozen(ctx, s.db); err != nil {
+		if err := s.requireMaintenanceFrozen(ctx, s.db, false); err != nil {
 			return MergedIntoImportStats{}, err
 		}
 	}
-	return s.addMergedInto(ctx, rows, dryRun, "repair", requireRouteFrozenLocked)
+	return s.addMergedInto(ctx, rows, dryRun, "repair", func(ctx context.Context, q routeQueryer) error { return s.requireMaintenanceFrozen(ctx, q, true) })
 }
 
 // ── 只读接口(route_tool audit 用;都是一致读,不取锁)──────────────────────────
@@ -2395,4 +2451,44 @@ func newRouteGeneration() (string, error) {
 		return "", fmt.Errorf("generate route_meta generation: %w", err)
 	}
 	return hex.EncodeToString(b[:]), nil
+}
+
+// requireMaintenanceFrozen 将恢复写与本次正常冻结绑定。锁持到提交，跨 run / epoch 的再次冻结不能放行旧修复任务。
+func (s *RouteStore) requireMaintenanceFrozen(ctx context.Context, q routeQueryer, lock bool) error {
+	r := s.maintenanceFreeze
+	if r == nil || r.Kind != pb.SqlWriterMaintenanceReceipt_FREEZE || r.Phase != pb.SqlWriterMaintenanceReceipt_FROZEN || r.RunPhase != pb.SqlWriterDrainRun_SQL_FROZEN || r.CommittedMs == 0 || len(r.RequestId) != 16 || len(r.ReceiptDigest) != 32 {
+		return errors.New("恢复写缺少正式正常冻结原件")
+	}
+	query := "SELECT generation,writable,writer_epoch,catalog_revision,freeze_run_id FROM route_meta WHERE id=1"
+	if lock {
+		query += " FOR UPDATE"
+	}
+	var generation string
+	var writable, epoch, revision uint64
+	var runID []byte
+	if err := q.QueryRowContext(ctx, query).Scan(&generation, &writable, &epoch, &revision, &runID); err != nil {
+		return err
+	}
+	if writable != 0 {
+		return fmt.Errorf("恢复写要求当前已冻结: %w", ErrRouteNotFrozen)
+	}
+	if generation != r.Generation || epoch != r.AfterEpoch || revision != r.CatalogRevision || !bytes.Equal(runID, r.RunId) {
+		return errors.New("恢复写所绑定的冻结 epoch / run 已变化")
+	}
+	var digest, requestDigest []byte
+	var kind, phase uint32
+	if err := q.QueryRowContext(ctx, "SELECT request_digest,receipt_digest,kind,phase FROM sql_writer_maintenance_receipt WHERE request_id=?", r.RequestId).Scan(&requestDigest, &digest, &kind, &phase); err != nil {
+		return err
+	}
+	if !bytes.Equal(requestDigest, r.RequestDigest) || !bytes.Equal(digest, r.ReceiptDigest) || kind != uint32(pb.SqlWriterMaintenanceReceipt_FREEZE) || phase != uint32(pb.SqlWriterMaintenanceReceipt_FROZEN) {
+		return errors.New("恢复写的永久冻结收据不匹配")
+	}
+	var runPhase uint32
+	if err := q.QueryRowContext(ctx, "SELECT phase FROM sql_writer_drain_run WHERE operation_id=?", r.RunId).Scan(&runPhase); err != nil {
+		return err
+	}
+	if runPhase != uint32(pb.SqlWriterDrainRun_SQL_FROZEN) {
+		return errors.New("恢复写只允许在正式 SQL_FROZEN 阶段提交")
+	}
+	return nil
 }

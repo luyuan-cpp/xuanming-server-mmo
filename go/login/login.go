@@ -17,9 +17,12 @@ import (
 	"login/internal/svc"
 	"net"
 	"os"
+	"os/signal"
 	login_proto "proto/common/base"
+	databasepb "proto/common/database"
 	login_proto_login "proto/login"
 	"shared/buildinfo"
+	"shared/drainproof"
 	"shared/grpcstats"
 	"shared/kafkautil"
 	"shared/killswitch"
@@ -27,8 +30,10 @@ import (
 	"shared/serverbase"
 	"shared/snowflakealloc"
 	"strconv"
+	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/service"
@@ -36,10 +41,17 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 )
 
 var configFile = flag.String("loginService", "etc/login.yaml", "the config file path")
+
+var maintenanceControlDir = flag.String("maintenance-drain-control-dir", os.Getenv("MMORPG_MAINTENANCE_CONTROL_DIR"), "正常boot受控排空的私有目录")
+var maintenancePlan = flag.String("maintenance-drain-plan", "", "正式typed维护runtime Receipt路径；不serve或声明topic")
+var maintenanceDir = flag.String("maintenance-drain-dir", "", "私有stop/report目录")
+var maintenanceSHA = flag.String("maintenance-drain-sha256", "", "runtime Receipt原文件SHA256")
 
 var showVersion = flag.Bool("version", false, "打印版本信息并退出")
 
@@ -113,23 +125,101 @@ func main() {
 	// 分区数一旦与契约不符,命令就落到没人 assign 的分区上、静默全丢。
 	// 见 docs/design/control-plane-topic-partitioning-20260908.md §3.1 / §7。
 	// (老的一节点一 topic gate-<id> / scene-<id> 已停用,login 是最后一个切换的生产者。)
-	if err := kafkautil.EnsureTopics(config.AppConfig.Kafka.Brokers, []kafkautil.TopicSpec{
-		{
-			Name:           config.AppConfig.Kafka.Topic,
-			Partitions:     config.AppConfig.Kafka.PartitionCnt,
-			RetentionMs:    config.AppConfig.Kafka.RetentionMs,
-			RetentionBytes: config.AppConfig.Kafka.RetentionBytes,
-		},
-	}); err != nil {
-		panic(fmt.Sprintf("Kafka db-task partition contract rejected: %v", err))
+	var maintenanceRuntime *drainproof.Runtime
+	if *maintenancePlan != "" {
+		maintenanceRuntime, err = drainproof.LoadRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
+		if err != nil {
+			panic(fmt.Errorf("维护runtime拒绝: %w", err))
+		}
+	} else if *maintenanceDir != "" || *maintenanceSHA != "" {
+		panic("维护参数必须完整提供")
+	}
+	if maintenanceRuntime == nil {
+		if err := kafkautil.EnsureTopics(config.AppConfig.Kafka.Brokers, []kafkautil.TopicSpec{
+			{
+				Name:           config.AppConfig.Kafka.Topic,
+				Partitions:     config.AppConfig.Kafka.PartitionCnt,
+				RetentionMs:    config.AppConfig.Kafka.RetentionMs,
+				RetentionBytes: config.AppConfig.Kafka.RetentionBytes,
+			},
+		}); err != nil {
+			panic(fmt.Sprintf("Kafka db-task partition contract rejected: %v", err))
+		}
+
 	}
 
-	ctx := svc.NewServiceContext()
+	var ctx *svc.ServiceContext
+	if maintenanceRuntime != nil {
+		ctx, err = svc.NewServiceContextForDrain(maintenanceRuntime)
+		if err != nil {
+			panic(fmt.Errorf("维护boot身份拒绝: %w", err))
+		}
+	} else {
+		ctx = svc.NewServiceContext()
+	}
 
 	defer ctx.Stop()
 
-	ctx.Start()
+	if maintenanceRuntime != nil && maintenanceRuntime.Request.RunPhase != databasepb.SqlWriterDrainRun_SQL_RELEASED {
+		ctx.StartForDrain()
+	} else {
+		ctx.Start()
+	}
+	if maintenanceRuntime != nil && maintenanceRuntime.Request.RunPhase != databasepb.SqlWriterDrainRun_SQL_RELEASED {
+		maintenanceCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := runMaintenanceLogin(maintenanceCtx, maintenanceRuntime, ctx); err != nil {
+			panic(fmt.Errorf("login维护排空HOLD: %w", err))
+		}
+		return
+	}
 
+	controlCtx, stopControl := context.WithCancel(context.Background())
+	defer stopControl()
+	if maintenanceRuntime != nil && maintenanceRuntime.Request.RunPhase == databasepb.SqlWriterDrainRun_SQL_RELEASED {
+		safego.Go("login.maintenance_prepared", func() {
+			prepareCtx, cancel := context.WithTimeout(controlCtx, 60*time.Second)
+			digest, err := ctx.PreparedFrontier(prepareCtx)
+			cancel()
+			if err != nil {
+				logx.Errorf("维护新boot准备HOLD: %v", err)
+				return
+			}
+			ready, err := maintenanceRuntime.Readiness("SOURCE", digest)
+			if err != nil {
+				logx.Errorf("维护新boot身份HOLD: %v", err)
+				return
+			}
+			if err = maintenanceRuntime.AwaitOpen(controlCtx, ready, ctx.OpenPreparedRoot); err != nil {
+				logx.Errorf("维护新boot开放HOLD: %v", err)
+			}
+		})
+	}
+	if *maintenanceControlDir != "" {
+		safego.Go("login.maintenance_live_control", func() {
+			runtime, err := drainproof.WaitRuntime(controlCtx, *maintenanceControlDir)
+			if err != nil {
+				if controlCtx.Err() == nil {
+					ctx.CloseRootAdmission()
+					logx.Errorf("维护控制输入HOLD: %v", err)
+				}
+				return
+			}
+			instance, err := uuid.Parse(ctx.TaskResultDispatcher.ReplyInstance())
+			if err == nil {
+				err = runtime.BindBoot(instance[:], nil)
+			}
+			if err != nil {
+				ctx.CloseRootAdmission()
+				logx.Errorf("维护同boot身份HOLD: %v", err)
+				return
+			}
+			if err = runMaintenanceLogin(controlCtx, runtime, ctx); err != nil {
+				ctx.CloseRootAdmission()
+				logx.Errorf("维护同boot排空HOLD: %v", err)
+			}
+		})
+	}
 	// Start gRPC service
 	if err := startGRPCServer(config.AppConfig, ctx); err != nil {
 		logx.Errorf("Failed to start GRPC server: %v", err)
@@ -415,6 +505,7 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 	loginlogic.PrimeCreatePlayerMetrics()
 	loginlogic.PrimeEnterGameMetrics()
 	dataloader.PrimePersistSchemaRegressionMetrics()
+	dataloader.PrimeParentLoadVerifyMetrics()
 
 	// 拦截器顺序有讲究(go-zero 把它们交给 grpc.ChainUnaryInterceptor,
 	// **排在前面的在外层、先执行**;注意 recover/timeout/stat 等 go-zero
@@ -461,7 +552,15 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 	//
 	// 代价写在这里备查:被①短路的请求不进③④的指标,关停期间该方法在常规
 	// 面板上 QPS 直接归零;想看还有多少流量在撞墙,看 killswitch_blocked_total。
-	interceptors := make([]grpc.UnaryServerInterceptor, 0, 4)
+	interceptors := make([]grpc.UnaryServerInterceptor, 0, 5)
+	interceptors = append(interceptors, func(callCtx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		done, err := ctx.EnterRoot()
+		if err != nil {
+			return nil, status.Error(codes.Unavailable, "维护排空入口已关闭")
+		}
+		defer done()
+		return handler(callCtx, req)
+	})
 	if ks := newKillSwitch(watchCtx, cfg, etcdCli); ks != nil {
 		interceptors = append(interceptors, ks.UnaryServerInterceptor())
 	}
@@ -486,6 +585,12 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 	}
 	fmt.Printf("  kafka:       %v\n", cfg.Kafka.Brokers)
 	fmt.Printf("  redis:       %s\n", cfg.Node.RedisClient.Host)
+	// 排队与放行锁所在实例(G4a 第 1a 批):没配 Node.QueueRedis 时与上一行共用同一个 client。
+	if cfg.Node.QueueRedis != nil {
+		fmt.Printf("  queue redis: %s\n", cfg.Node.QueueRedis.Host)
+	} else {
+		fmt.Printf("  queue redis: shared\n")
+	}
 	fmt.Println("=============================================================")
 	server.Start()
 
@@ -503,4 +608,58 @@ func splitHostPort(address string) (string, uint32, error) {
 		return "", 0, err
 	}
 	return host, uint32(portInt), nil
+}
+
+func runMaintenanceLogin(ctx context.Context, runtime *drainproof.Runtime, service *svc.ServiceContext) error {
+	source, relay := drainproof.New(), drainproof.New()
+	sourceWritten := false
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+		sourceRequested, err := runtime.Requested("SOURCE")
+		if err != nil {
+			return err
+		}
+		if sourceRequested && !sourceWritten {
+			stopCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			digest, err := service.SourceFrontier(stopCtx)
+			cancel()
+			if err != nil {
+				return err
+			}
+			if err = source.MergeSettled(digest); err != nil {
+				return err
+			}
+			source.CloseAdmission()
+			if err = runtime.Write("SOURCE", source); err != nil {
+				return err
+			}
+			sourceWritten = true
+		}
+		relayRequested, err := runtime.Requested("RELAY")
+		if err != nil {
+			return err
+		}
+		if relayRequested {
+			if !sourceWritten {
+				return errors.New("login RELAY关闭先于SOURCE")
+			}
+			stopCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			digest, err := service.RelayFrontier(stopCtx)
+			cancel()
+			if err != nil {
+				return err
+			}
+			if err = relay.MergeSettled(digest); err != nil {
+				return err
+			}
+			relay.CloseAdmission()
+			return runtime.Write("RELAY", relay)
+		}
+	}
 }

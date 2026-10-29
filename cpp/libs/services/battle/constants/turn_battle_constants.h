@@ -15,6 +15,9 @@ namespace turnbattle {
 // 一回合等效的挂钟毫秒数:rounds = max(1, ceil(ms / kRoundDurationMs))
 inline constexpr uint64_t kRoundDurationMs = 6000;
 
+// 手动回合收集指令的等待上限,与技能/buff 的时间→回合换算独立。
+inline constexpr uint64_t kActionTimeoutMs = 25000;
+
 // DungeonTable.time_limit 为 0 时的回合上限缺省值
 inline constexpr uint32_t kDefaultMaxRounds = 300;
 

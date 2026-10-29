@@ -516,10 +516,11 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 // KEYS[3] = node:zone:{zoneId}:{newNode}:scenes
 // KEYS[4] = node:zone:{zoneId}:{oldNode}:scene_count
 // KEYS[5] = node:zone:{zoneId}:{newNode}:scene_count
+// KEYS[6] = (可选)world_channels:zone:{zoneId}:{confId};传了就要求 sceneId 仍是它的成员
 // ARGV[1] = oldNode;空串表示期望映射不存在(懒改派里没有属主的频道)
 // ARGV[2] = newNode
 // ARGV[3] = sceneId
-// 返回 1 = 已改派;0 = 当前属主不是 oldNode,一个键都没动。
+// 返回 1 = 已改派;0 = 当前属主不是 oldNode;2 = 频道已不在役(KEYS[6] 里没有它)。0 和 2 都一个键没动。
 //
 // 新节点的 INCR 放在所有其它写之前:Lua 脚本中途报错时已执行的写不会回滚,计数键里
 // 若是非整数(INCR 唯一会失败的情形),要在动归属之前就失败,不留半截改派。
@@ -532,6 +533,9 @@ if not cur then
 end
 if cur ~= ARGV[1] then
     return 0
+end
+if #KEYS >= 6 and redis.call('SISMEMBER', KEYS[6], ARGV[3]) == 0 then
+    return 2
 end
 redis.call('INCR', KEYS[5])
 redis.call('SET', KEYS[1], ARGV[2])
@@ -549,17 +553,18 @@ return 1
 // reassignSceneNode 把场景归属从 oldNode 原子地改到 newNode:scene:{id}:node、两侧的
 // node:zone:{zoneId}:{nodeId}:scenes 反向索引、两侧的 scene_count 在一个 Lua 脚本里一起改。
 //
-// 这是**所有权改写的收口点**:全模块改写 scene:{id}:node 的路径都应经过它。
-// 例外是 enterscenelogic.go resolveScene 的死节点自愈:屏障判定同源,但写入至今仍是
-// 无条件 SET、不同步反向索引与计数,不受这里的 CAS 保护(已登记残留,见
-// docs/handoff/handoff-launch-line-remaining-20261019.md §3 第 6 项)。
+// 这是**所有权改写的收口点**:全模块改写已有场景的 scene:{id}:node 的路径都经过它
+// (建场景时的首次写入不算改写,见 createscenelogic.go allocateScene 与本文件的频道补建)。
 // 再入屏障在这里再判一次 —— 调用方在计划阶段判过的那次可能已经隔了几个
 // RPC,期间老节点的死亡时刻才刚写进 Redis。
 //
 // 写入是比较并交换。改派者不止一个,彼此也不共用锁:领导者的 rebalance
 // (migrateWorldChannel,不持 zone 锁)、任意副本上的 initWorldScenesForZone(持 zone 锁)、
-// EnterScene 路径上的懒改派(GetBestWorldChannel / ReserveBestWorldChannelForEnter)。
-// 它们选新节点的哈希输入不同,同时判定老节点已死时会把同一个场景派给两个不同的节点。
+// EnterScene 路径上的懒改派(GetBestWorldChannel / ReserveBestWorldChannelForEnter),以及
+// EnterScene 指定场景时的死节点自愈(enterscenelogic.go reassignSceneOffDeadNode,2026-10-22 起,
+// 2026-10-23 起经带在役核对的 reassignWorldChannelNode)。
+// 它们选新节点的依据不同(前三者按各自的哈希输入,死节点自愈按最低负载),同时判定老节点
+// 已死时会把同一个场景派给两个不同的节点。
 // 以前无条件 SET 的结果是两边都以为自己成功:各建一份实体、各转一次 Agones 名额、
 // scene_count 双减。现在只有 scene:{id}:node 仍等于 oldNode 时才写,后到的一方拿到 false。
 //
@@ -570,6 +575,30 @@ return 1
 // 归属的节点上建实体。例外是 Redis 出错:脚本可能已经执行,结论未知,所以调用方
 // 想回收自己预建的实体前,必须先重读归属(见 migrateWorldChannel)。
 func reassignSceneNode(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, oldNode, newNode string) bool {
+	return casReassignSceneNode(svcCtx, zoneId, sceneId, oldNode, newNode, "")
+}
+
+// reassignWorldChannelNode 与 reassignSceneNode 相同,另在同一个脚本里要求 sceneId 仍是在役频道
+// (channelSetKey = world_channels:zone:{z}:{conf} 的成员),不在就什么都不写、返回 false。
+//
+// 缩容排空(world_autoscale.go)先把频道从在役集合里 SREM,之后才读属主、非原子地删映射与记账。
+// 调用方在改派前单独读一次成员资格的话,读与提交之间排空恰好开始,CAS 仍会落地,随后被排空删掉
+// 映射:新节点上留下孤儿实体与记账,玩家可能被派进一个谁也进不来的频道。成员资格与改归属在同一个
+// 脚本里判定,CAS 落地就说明它落在 SREM 之前,排空随后读到的是新属主,按新属主收尾。
+func reassignWorldChannelNode(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, oldNode, newNode, channelSetKey string) bool {
+	return casReassignSceneNode(svcCtx, zoneId, sceneId, oldNode, newNode, channelSetKey)
+}
+
+// luaReassignSceneNode 的返回值。
+const (
+	reassignOwnerChanged        = 0
+	reassignApplied             = 1
+	reassignChannelOutOfService = 2
+)
+
+// casReassignSceneNode 是 reassignSceneNode / reassignWorldChannelNode 的共同实现;channelSetKey 为空
+// 表示不核对在役成员资格。
+func casReassignSceneNode(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, oldNode, newNode, channelSetKey string) bool {
 	if newNode == "" || newNode == oldNode {
 		return false
 	}
@@ -583,18 +612,26 @@ func reassignSceneNode(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64
 		nodeSceneCountKey(zoneId, oldNode),
 		nodeSceneCountKey(zoneId, newNode),
 	}
+	if channelSetKey != "" {
+		keys = append(keys, channelSetKey)
+	}
 	res, err := svcCtx.Redis.Eval(luaReassignSceneNode, keys, oldNode, newNode, strconv.FormatUint(sceneId, 10))
 	if err != nil {
 		logx.Errorf("[reassign] zone=%d scene=%d: CAS %q -> %q failed, outcome unknown: %v",
 			zoneId, sceneId, oldNode, newNode, err)
 		return false
 	}
-	if toInt64(res) != 1 {
+	switch toInt64(res) {
+	case reassignApplied:
+		return true
+	case reassignChannelOutOfService:
+		logx.Infof("[reassign] zone=%d scene=%d: channel is no longer in service (%s); move %q -> %q not applied",
+			zoneId, sceneId, channelSetKey, oldNode, newNode)
+	default:
 		logx.Infof("[reassign] zone=%d scene=%d: owner is no longer %q (another writer reassigned it first); move to %q not applied",
 			zoneId, sceneId, oldNode, newNode)
-		return false
 	}
-	return true
+	return false
 }
 
 // GetAllWorldChannels returns all channel sceneIds for a confId in a zone.

@@ -13,6 +13,7 @@
 #include "services/scene/player/comp/player_persist_carry_comp.h"
 #include "player_skill.h"
 #include "player_attribute.h"
+#include "player_level_rules.h"
 #include "player_pet.h"
 #include "bag_marshal.h"
 #include "mission_marshal.h"
@@ -129,14 +130,16 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 	// 上限此刻还没算(DerivedAttributesComp 由下面的 InitializeOnLoad 产出),
 	// 先按职业初值落地,拿到 outcome 决定后面要不要顶到真实上限。
 	const auto reviveOutcome = ApplyClassInitialAttributesOrReviveFromTable(baseAttrs);
-	auto& levelComp = tlsEcs.actorRegistry.emplace<LevelComp>(player, message.level_component());
-	// 等级上限下调(2026-09-10:200 → 85)前 GM 设过的超限存档、以及回档到这类快照,都在这里压回上限。
-	// 不压的话总点数 / 面板 / 战斗快照 / 怪物参考等级都按超限等级算;压完后下面 InitializeOnLoad 的
-	// "已分配 > 总量"收敛会整池返还多出的点,宝宝等级(跟随主人)也随之回到上限内。
-	if (const auto clamped = playerlevel::ClampToMaxLevel(levelComp.level()); clamped != levelComp.level()) {
-		LOG_WARN << "[PlayerInit] Saved level exceeds limit;clamped to limit: player_id=" << message.player_id()
-				 << " level=" << levelComp.level() << " -> " << clamped;
-		levelComp.set_level(clamped);
+	const auto& levelComp = tlsEcs.actorRegistry.emplace<LevelComp>(player, message.level_component());
+	// 存储等级原样携带,不按本版本上限压回(docs/design/mixed-version-persist-field-protection.md §12.1):
+	// 新版本提高上限后回滚 scene、混版本跨 zone 迁移,以及上限下调(2026-09-10:200 → 85)前 GM 设过的老存档,
+	// 都会带着超上限的等级进来;压回会随下一次存盘把等级永久降下来,升回新版本也恢复不了。
+	// 总点数 / 面板 / 战斗快照 / 怪物参考等级等玩法一律按 playerlevel::CappedLevel 生效(player_level_rules.h),
+	// 这里只告警、不改组件。
+	if (levelComp.level() > playerlevel::kMaxLevel) {
+		LOG_WARN << "[PlayerInit] metric=level_above_cap player_id=" << message.player_id()
+				 << " stored_level=" << levelComp.level() << " cap=" << playerlevel::kMaxLevel
+				 << "; stored level carried as-is, gameplay uses the cap";
 	}
 	tlsEcs.actorRegistry.emplace<PlayerAttributeComp>(player, message.attribute_component());
 	tlsEcs.actorRegistry.emplace<PlayerPetComp>(player, message.pet_component());
@@ -183,12 +186,15 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 	// 这里就是 PlayerCurrencyComp 的唯一创建点(实体由 InitPlayerFromAllData 新建,此前没有路径会挂它),
 	// 用 emplace 表达「创建」而不是「有就复用」:若将来有人在加载前提前挂了它,断言会立刻指出重复创建。
 	tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player).LoadFromProto(message.currency());
-	// 技能:清理存档 + 按当前职业补初始技能。必须在属性重算之前 —— 被动技能的加成是重算的输入之一
-	// (docs/design/class-skills.md §3.2 / §7)
+	// 技能:只剔除 id 为 0 / 重复的坏条目(其余条目原样携带,按本版本技能表生效)+ 按当前职业补初始技能。
+	// 必须在属性重算之前 —— 被动技能的加成是重算的输入之一(docs/design/class-skills.md §3.2 / §7)
 	PlayerSkillSystem::InitializeOnLoad(player);
-	// 属性加点:补默认方案 + 按等级/方案重算二级属性(max_health 等此前无写者,战斗快照靠它)
+	// 属性加点:补默认方案 + 按生效等级 / 方案重算二级属性(max_health 等此前无写者,战斗快照靠它)。
+	// 加载与重算不改写、不返还 allocated:已知维度超过本版本总量(或单项上限)的池整池按 0 生效,
+	// 本版本不认识的维度键原样携带、不生效(attribute_allocation_rules.h)
 	PlayerAttributeSystem::InitializeOnLoad(player);
-	// 宝宝:同步等级(跟随主人)+ 按上限夹当前 HP/MP;必须在主人等级已 emplace 之后
+	// 宝宝:等级跟随主人生效等级,只升不降 + 按上限夹当前 HP/MP;加点与角色同一规则,超额的池不生效、
+	// 不清空。必须在主人等级已 emplace 之后
 	PetSystem::InitializeOnLoad(player);
 	// 新号/复活的玩家在这里才拿得到真实上限,顶满(活着的玩家不碰,保住残血语义)
 	if (reviveOutcome != PlayerReviveOutcome::kUntouched) {

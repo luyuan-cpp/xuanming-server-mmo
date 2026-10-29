@@ -28,7 +28,19 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"shared/authoritysql"
+	"shared/drainproof"
 )
+
+// 这些是同步SQL状态机域测，原writable=1语义保留。只注入明确本机owner，
+// 实际fake driver仍验证全部BEGIN/DML/COMMIT/ROLLBACK；不造P0/Kafka或对外原件。
+func routeSQLTestContext() context.Context {
+	config := authoritysql.WriterConfig{}
+	owner := &maintenanceTool{normalSQL: &config, session: drainproof.New(), check: func(context.Context) error { return nil }}
+	ctx := context.WithValue(context.Background(), maintenanceContextKey{}, owner)
+	owner.context = ctx
+	return ctx
+}
 
 const (
 	testRouteWriter = "merge_zone@unit-test:run-1"
@@ -337,7 +349,7 @@ func (c *fakeRouteSQLConn) Prepare(string) (driver.Stmt, error) {
 func (c *fakeRouteSQLConn) Close() error { return nil }
 
 func (c *fakeRouteSQLConn) Begin() (driver.Tx, error) {
-	return c.BeginTx(context.Background(), driver.TxOptions{})
+	return c.BeginTx(routeSQLTestContext(), driver.TxOptions{})
 }
 
 func (c *fakeRouteSQLConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, error) {
@@ -470,19 +482,30 @@ func rsFenceExpired(run string) fakeRouteSQLReply { return rsRows([]driver.Value
 
 func rsFenceFree() fakeRouteSQLReply { return rsRows([]driver.Value{nil, int64(0)}) }
 
-// rsFenceAll 是一个 zone 的 64 片(LOCK_FENCE_ALL 的应答):全部同一个 run_id / 生效与否 / epoch。
+// rsFenceAll 是一个 zone 的 64 片(LOCK_FENCE_ALL 的应答):全部同一个 run_id / 生效与否 / epoch。有 run_id 的片记着
+// testFenceAcquire 的 zone 对(101 → 102),holder_json 不带 manifest_path(接手核对只比 zone 对)。
 func rsFenceAll(run string, active bool, epoch uint64) fakeRouteSQLReply {
+	holder := ""
+	if run != "" {
+		holder = `{"run_id":"` + run + `"}`
+	}
+	return rsFenceAllHeld(run, active, epoch, 101, 102, holder)
+}
+
+// rsFenceAllHeld 同 rsFenceAll,分片上的 zone 对(src_zone / dst_zone)与 holder_json 由调用方给;run 为空时这三列一律 NULL
+// (列序同 routeLockFenceAllSQL:shard、run_id、active、fence_epoch、holder_json、src_zone、dst_zone)。
+func rsFenceAllHeld(run string, active bool, epoch uint64, src, dst uint32, holder string) fakeRouteSQLReply {
 	rows := make([][]driver.Value, routeFenceShards)
 	for s := range rows {
-		var runV, holder driver.Value
+		var runV, holderV, srcV, dstV driver.Value
 		if run != "" {
-			runV, holder = run, `{"run_id":"`+run+`"}`
+			runV, holderV, srcV, dstV = run, rsNullStr(holder), int64(src), int64(dst)
 		}
 		act := int64(0)
 		if active {
 			act = 1
 		}
-		rows[s] = []driver.Value{int64(s), runV, act, int64(epoch), holder}
+		rows[s] = []driver.Value{int64(s), runV, act, int64(epoch), holderV, srcV, dstV}
 	}
 	return fakeRouteSQLReply{rows: rows}
 }
@@ -554,7 +577,7 @@ func routeProbeHappy() routeScript {
 
 func TestRouteStoreProbe_TiDBHappyPath(t *testing.T) {
 	st, f := newFakeRouteSQLStore(t, routeProbeHappy())
-	meta, err := st.probe(context.Background())
+	meta, err := st.probe(routeSQLTestContext())
 	if err != nil {
 		t.Fatalf("probe: %v", err)
 	}
@@ -570,7 +593,7 @@ func TestRouteStoreProbe_TiDBHappyPath(t *testing.T) {
 func TestRouteStoreProbe_TiDBNeedsPessimistic(t *testing.T) {
 	script := routeProbeHappy()
 	st, f := newFakeRouteSQLStore(t, script)
-	if _, err := st.probe(context.Background()); err != nil {
+	if _, err := st.probe(routeSQLTestContext()); err != nil {
 		t.Fatalf("pessimistic TiDB must pass: %v", err)
 	}
 	assertRouteLabels(t, f, "SESSION", "VERSION", "TXN_MODE", "META", "BEGIN", "GUARD", "P4", "P5", "P5", "ROLLBACK")
@@ -579,7 +602,7 @@ func TestRouteStoreProbe_TiDBNeedsPessimistic(t *testing.T) {
 		on("SESSION", rsRows([]driver.Value{"READ-COMMITTED", int64(1)})).
 		on("VERSION", rsRows([]driver.Value{"8.0.11-TiDB-v8.5.0", "TiDB Server"})).
 		on("TXN_MODE", rsRows([]driver.Value{"optimistic", "READ-COMMITTED", "leader", "strict", "", int64(0), int64(0)})))
-	if _, err := st.probe(context.Background()); !errors.Is(err, errCurrentTiDB) {
+	if _, err := st.probe(routeSQLTestContext()); !errors.Is(err, errCurrentTiDB) {
 		t.Fatalf("optimistic TiDB error = %v, want errCurrentTiDB", err)
 	}
 }
@@ -618,7 +641,7 @@ func TestRouteStoreProbe_Refusals(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			st, _ := newFakeRouteSQLStore(t, tc.script)
-			_, err := st.probe(context.Background())
+			_, err := st.probe(routeSQLTestContext())
 			switch {
 			case err == nil:
 				t.Fatal("probe must refuse")
@@ -637,7 +660,7 @@ func TestRouteStoreProbe_DeadlockRetriesWholeProbeTx(t *testing.T) {
 	script["GUARD"] = []fakeRouteSQLReply{rsOne(), rsOne()}
 	script["P4"] = []fakeRouteSQLReply{rsMySQLErr(mysqlErrDeadlock, "Deadlock found"), rsMySQLErr(mysqlErrCheckConstraintViolated, routeCheckViolated)}
 	st, f := newFakeRouteSQLStore(t, script)
-	if _, err := st.probe(context.Background()); err != nil {
+	if _, err := st.probe(routeSQLTestContext()); err != nil {
 		t.Fatalf("probe after one deadlock: %v", err)
 	}
 	assertRouteLabels(t, f, "SESSION", "VERSION", "TXN_MODE", "META", "BEGIN", "GUARD", "P4", "ROLLBACK", "SLEEP",
@@ -756,7 +779,7 @@ func TestRouteTxRetriesDeadlockNotLockWait(t *testing.T) {
 	script := held().on("WRITABLE", rsOne(), rsOne()).on("LOCK_FENCE", rsFenceHeld(testRouteRun), rsFenceHeld(testRouteRun),
 		rsFenceHeld(testRouteRun), rsFenceHeld(testRouteRun)).on("DELETE_MERGED", rsMySQLErr(mysqlErrDeadlock, "Deadlock found"), rsAffected(1))
 	st, f := newFakeRouteSQLStore(t, script)
-	deleted, err := st.ClearMergedInto(context.Background(), 101, 102, testRouteRun, mark)
+	deleted, err := st.ClearMergedInto(routeSQLTestContext(), 101, 102, testRouteRun, mark)
 	if err != nil || !deleted {
 		t.Fatalf("ClearMergedInto after one deadlock = (%v, %v)", deleted, err)
 	}
@@ -765,7 +788,7 @@ func TestRouteTxRetriesDeadlockNotLockWait(t *testing.T) {
 
 	st, f = newFakeRouteSQLStore(t, held().on("WRITABLE", rsOne()).on("LOCK_FENCE", rsFenceHeld(testRouteRun), rsFenceHeld(testRouteRun)).
 		on("DELETE_MERGED", rsMySQLErr(mysqlErrLockWaitTimeout, "Lock wait timeout exceeded")))
-	_, err = st.ClearMergedInto(context.Background(), 101, 102, testRouteRun, mark)
+	_, err = st.ClearMergedInto(routeSQLTestContext(), 101, 102, testRouteRun, mark)
 	var me *mysql.MySQLError
 	if !errors.As(err, &me) || me.Number != mysqlErrLockWaitTimeout {
 		t.Fatalf("1205 error = %v, want the MySQLError unretried", err)
@@ -778,7 +801,7 @@ func TestRouteTxRetriesDeadlockNotLockWait(t *testing.T) {
 			on("DELETE_MERGED", rsMySQLErr(mysqlErrDeadlock, "Deadlock found"))
 	}
 	st, _ = newFakeRouteSQLStore(t, script)
-	_, err = st.ClearMergedInto(context.Background(), 101, 102, testRouteRun, mark)
+	_, err = st.ClearMergedInto(routeSQLTestContext(), 101, 102, testRouteRun, mark)
 	if !errors.As(err, &me) || me.Number != mysqlErrDeadlock || !strings.Contains(err.Error(), "gave up after 4 attempts") {
 		t.Fatalf("exhausted retries error = %v", err)
 	}
@@ -799,7 +822,7 @@ func TestAcquireFence_EpochHolderAndStatements(t *testing.T) {
 		on("LOCK_FENCE_ALL", rsFenceAll("", false, 4), rsFenceAll("old-run", false, 9)).
 		on("NOW", rsRows([]driver.Value{now})).
 		on("ACQUIRE", rsAffected(64), rsAffected(64)))
-	grant, err := st.AcquireFence(context.Background(), testFenceAcquire(testRouteRun))
+	grant, err := st.AcquireFence(routeSQLTestContext(), testFenceAcquire(testRouteRun))
 	if err != nil {
 		t.Fatalf("AcquireFence: %v", err)
 	}
@@ -840,7 +863,7 @@ func TestAcquireFence_RefusesAnotherLiveHolderAllowsTheSameRun(t *testing.T) {
 		on("ENSURE_FENCE", rsAffected(0)).
 		on("WRITABLE", rsOne()).
 		on("LOCK_FENCE_ALL", rsFenceAll("other-run", true, 3)))
-	if _, err := st.AcquireFence(context.Background(), testFenceAcquire(testRouteRun)); !errors.Is(err, errRouteFenceHeld) {
+	if _, err := st.AcquireFence(routeSQLTestContext(), testFenceAcquire(testRouteRun)); !errors.Is(err, errRouteFenceHeld) {
 		t.Fatalf("error = %v, want errRouteFenceHeld", err)
 	}
 	assertRouteLabels(t, f, "ENSURE_FENCE", "BEGIN", "WRITABLE", "LOCK_FENCE_ALL", "ROLLBACK")
@@ -851,20 +874,20 @@ func TestAcquireFence_RefusesAnotherLiveHolderAllowsTheSameRun(t *testing.T) {
 		on("LOCK_FENCE_ALL", rsFenceAll(testRouteRun, true, 3), rsFenceAll(testRouteRun, true, 3)).
 		on("NOW", rsRows([]driver.Value{int64(1_760_000_000_000)})).
 		on("ACQUIRE", rsAffected(64), rsAffected(64)))
-	grant, err := st.AcquireFence(context.Background(), testFenceAcquire(testRouteRun))
+	grant, err := st.AcquireFence(routeSQLTestContext(), testFenceAcquire(testRouteRun))
 	if err != nil || grant.Epoch != 4 {
 		t.Fatalf("re-acquiring this run's own fence = (%+v, %v), want epoch 4", grant, err)
 	}
 
 	st, f = newFakeRouteSQLStore(t, routeScript{}.on("ENSURE_FENCE", rsAffected(0)).on("WRITABLE", rsRows([]driver.Value{int64(0)})))
-	if _, err := st.AcquireFence(context.Background(), testFenceAcquire(testRouteRun)); !errors.Is(err, errRouteNotWritable) {
+	if _, err := st.AcquireFence(routeSQLTestContext(), testFenceAcquire(testRouteRun)); !errors.Is(err, errRouteNotWritable) {
 		t.Fatalf("frozen error = %v, want errRouteNotWritable", err)
 	}
 	assertRouteLabels(t, f, "ENSURE_FENCE", "BEGIN", "WRITABLE", "ROLLBACK")
 
 	bad := testFenceAcquire(testRouteRun)
 	bad.TTL = time.Minute
-	if _, err := st.AcquireFence(context.Background(), bad); !errors.Is(err, errRouteInvalidArgument) {
+	if _, err := st.AcquireFence(routeSQLTestContext(), bad); !errors.Is(err, errRouteInvalidArgument) {
 		t.Fatalf("short ttl error = %v", err)
 	}
 }
@@ -879,7 +902,7 @@ func TestTakeOverFence_OnlyThePreviousRunIsTakenOver(t *testing.T) {
 		on("LOCK_FENCE_ALL", rsFenceAll(prev, true, 5), rsFenceAll(prev, true, 5)).
 		on("NOW", rsRows([]driver.Value{int64(1_760_000_000_000)})).
 		on("ACQUIRE", rsAffected(64), rsAffected(64)))
-	grant, err := st.TakeOverFence(context.Background(), testFenceAcquire(testRouteRun), prev)
+	grant, err := st.TakeOverFence(routeSQLTestContext(), testFenceAcquire(testRouteRun), prev)
 	if err != nil || grant.Epoch != 6 {
 		t.Fatalf("take over = (%+v, %v), want epoch 6", grant, err)
 	}
@@ -891,19 +914,100 @@ func TestTakeOverFence_OnlyThePreviousRunIsTakenOver(t *testing.T) {
 		on("ENSURE_FENCE", rsAffected(0)).
 		on("WRITABLE", rsOne()).
 		on("LOCK_FENCE_ALL", rsFenceAll("third-run", true, 5)))
-	if _, err := st.TakeOverFence(context.Background(), testFenceAcquire(testRouteRun), prev); !errors.Is(err, errRouteFenceHeld) {
+	_, err = st.TakeOverFence(routeSQLTestContext(), testFenceAcquire(testRouteRun), prev)
+	if !errors.Is(err, errRouteFenceHeld) {
 		t.Fatalf("a third run's live fence: error = %v, want errRouteFenceHeld", err)
+	}
+	// MZ2-5:Held 文案点名持有者并给出唯一的出路(工具没有别的释放入口),不再说「release it through the tool that owns it」。
+	if msg := err.Error(); !strings.Contains(msg, "-take-over-fence third-run") || !strings.Contains(msg, "same -manifest-path") ||
+		strings.Contains(msg, "tool that owns it") {
+		t.Fatalf("held message = %q", msg)
 	}
 	assertRouteLabels(t, f, "ENSURE_FENCE", "BEGIN", "WRITABLE", "LOCK_FENCE_ALL", "ROLLBACK")
 
 	for _, bad := range []string{"", testRouteRun, "bad run"} {
 		st, f = newFakeRouteSQLStore(t, routeScript{})
-		if _, err := st.TakeOverFence(context.Background(), testFenceAcquire(testRouteRun), bad); !errors.Is(err, errRouteInvalidArgument) {
+		if _, err := st.TakeOverFence(routeSQLTestContext(), testFenceAcquire(testRouteRun), bad); !errors.Is(err, errRouteInvalidArgument) {
 			t.Fatalf("previous run %q: error = %v, want errRouteInvalidArgument", bad, err)
 		}
 		if got := f.labels(); len(got) != 0 {
 			t.Fatalf("previous run %q sent statements %v", bad, got)
 		}
+	}
+}
+
+// TestTakeOverFence_RefusesAMismatchedOrPartialFence:被接手的分片必须记着本次的 zone 对、holder_json 里的清单路径与本次相同,
+// 且每个 zone 要么 64 片全接、要么一片不接;不满足一律 errRouteInvalidArgument,事务在第一次写之前回滚,旧围栏原样留在 previousRunID 上。
+// (MZ2-2 / B1-2:zone 对写错时只接走一区、另一区挂在已死的运行上过期解封;续跑落到别的清单会被当成首跑。)
+func TestTakeOverFence_RefusesAMismatchedOrPartialFence(t *testing.T) {
+	const prev = "101-102-20261018T000000Z-0ld0ld00"
+	partial := rsFenceAll(prev, true, 5)
+	partial.rows[10] = []driver.Value{int64(10), nil, int64(0), int64(5), nil, nil, nil}
+	for _, tc := range []struct {
+		name  string
+		zone  fakeRouteSQLReply
+		wants []string
+	}{
+		{"wrong-zone-pair", rsFenceAllHeld(prev, true, 5, 101, 103, `{"run_id":"`+prev+`"}`), []string{"zone pair 101 → 103", "this run is 101 → 102"}},
+		{"reversed-zone-pair", rsFenceAllHeld(prev, true, 5, 102, 101, `{"run_id":"`+prev+`"}`), []string{"zone pair 102 → 101"}},
+		{"other-manifest", rsFenceAllHeld(prev, true, 5, 101, 102, `{"run_id":"`+prev+`","manifest_path":"/srv/merge_101_to_102_old.json"}`),
+			[]string{"-manifest-path", "/srv/merge_101_to_102_old.json"}},
+		{"unreadable-holder", rsFenceAllHeld(prev, true, 5, 101, 102, `{"run_id":`), []string{"holder_json is not readable"}},
+		{"partial", partial, []string{"only 63 of 64 shards"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st, f := newFakeRouteSQLStore(t, routeScript{}.
+				on("ENSURE_FENCE", rsAffected(0)).
+				on("WRITABLE", rsOne()).
+				on("LOCK_FENCE_ALL", tc.zone))
+			_, err := st.TakeOverFence(routeSQLTestContext(), testFenceAcquire(testRouteRun), prev)
+			if !errors.Is(err, errRouteInvalidArgument) {
+				t.Fatalf("error = %v, want errRouteInvalidArgument", err)
+			}
+			for _, want := range tc.wants {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("error %q lacks %q", err, want)
+				}
+			}
+			assertRouteLabels(t, f, "ENSURE_FENCE", "BEGIN", "WRITABLE", "LOCK_FENCE_ALL", "ROLLBACK")
+		})
+	}
+
+	// 同一份清单(路径写法不同,filepath.Clean 后相同)照常接手;那次运行在另一区的围栏已按库时钟过期 = 那一区按普通获取(接 0 片)。
+	st, f := newFakeRouteSQLStore(t, routeScript{}.
+		on("ENSURE_FENCE", rsAffected(0)).
+		on("WRITABLE", rsOne()).
+		on("LOCK_FENCE_ALL", rsFenceAllHeld(prev, true, 5, 101, 102, `{"run_id":"`+prev+`","manifest_path":"./merge_101_to_102.json"}`),
+			rsFenceAll(prev, false, 5)).
+		on("NOW", rsRows([]driver.Value{int64(1_760_000_000_000)})).
+		on("ACQUIRE", rsAffected(64), rsAffected(64)))
+	grant, err := st.TakeOverFence(routeSQLTestContext(), testFenceAcquire(testRouteRun), prev)
+	if err != nil || grant.Epoch != 6 {
+		t.Fatalf("take over with the same manifest = (%+v, %v), want epoch 6", grant, err)
+	}
+	assertRouteLabels(t, f, "ENSURE_FENCE", "BEGIN", "WRITABLE", "LOCK_FENCE_ALL", "LOCK_FENCE_ALL", "NOW", "ACQUIRE", "ACQUIRE", "COMMIT")
+}
+
+// TestCheckTakeOverShard:接手核对的纯判定 —— 只比 zone 对与清单路径,不比 purpose(合服中止后改跑撤销是认可的续跑路径)。
+func TestCheckTakeOverShard(t *testing.T) {
+	req := testFenceAcquire(testRouteRun)
+	req.Purpose = routeFencePurposeUnmerge
+	st := routeFenceShardState{shard: 63, runID: "prev", active: true, srcZone: 101, dstZone: 102,
+		holderJSON: `{"run_id":"prev","manifest_path":"merge_101_to_102.json"}`}
+	if err := checkTakeOverShard(101, st, req); err != nil {
+		t.Fatalf("same zone pair and manifest, other purpose: %v", err)
+	}
+	st.holderJSON = ""
+	if err := checkTakeOverShard(101, st, req); err != nil {
+		t.Fatalf("no holder_json (nothing to compare the manifest with): %v", err)
+	}
+	st.holderJSON = `{"run_id":"prev"}`
+	if err := checkTakeOverShard(101, st, req); err != nil {
+		t.Fatalf("holder_json without manifest_path: %v", err)
+	}
+	st.srcZone = 0
+	if err := checkTakeOverShard(101, st, req); !errors.Is(err, errRouteInvalidArgument) {
+		t.Fatalf("NULL src_zone on a live shard = %v, want errRouteInvalidArgument", err)
 	}
 }
 
@@ -914,7 +1018,7 @@ func TestRenewFence(t *testing.T) {
 		on("NOW", rsRows([]driver.Value{now})).
 		on("RENEW", rsAffected(64), rsAffected(64)).
 		on("FENCE_EXPIRY", rsRows([]driver.Value{int64(now + 5_400_000)}), rsRows([]driver.Value{int64(now + 5_400_001)})))
-	exp, err := st.RenewFence(context.Background(), []uint32{102, 101}, testRouteRun, ttl)
+	exp, err := st.RenewFence(routeSQLTestContext(), []uint32{102, 101}, testRouteRun, ttl)
 	if err != nil {
 		t.Fatalf("RenewFence: %v", err)
 	}
@@ -926,7 +1030,7 @@ func TestRenewFence(t *testing.T) {
 
 	// 受影响行数不足 = 确定失权:整笔回滚,不读过期时刻。
 	st, f = newFakeRouteSQLStore(t, routeScript{}.on("NOW", rsRows([]driver.Value{now})).on("RENEW", rsAffected(64), rsAffected(0)))
-	if _, err := st.RenewFence(context.Background(), []uint32{101, 102}, testRouteRun, ttl); !errors.Is(err, errRouteFenceLost) {
+	if _, err := st.RenewFence(routeSQLTestContext(), []uint32{101, 102}, testRouteRun, ttl); !errors.Is(err, errRouteFenceLost) {
 		t.Fatalf("short renew error = %v, want errRouteFenceLost", err)
 	}
 	assertRouteLabels(t, f, "BEGIN", "NOW", "RENEW", "RENEW", "ROLLBACK")
@@ -934,7 +1038,7 @@ func TestRenewFence(t *testing.T) {
 	// 1205:原样返回,不是失权(调用方退避重试)。
 	st, _ = newFakeRouteSQLStore(t, routeScript{}.on("NOW", rsRows([]driver.Value{now})).
 		on("RENEW", rsMySQLErr(mysqlErrLockWaitTimeout, "Lock wait timeout exceeded")))
-	_, err = st.RenewFence(context.Background(), []uint32{101}, testRouteRun, ttl)
+	_, err = st.RenewFence(routeSQLTestContext(), []uint32{101}, testRouteRun, ttl)
 	var me *mysql.MySQLError
 	if errors.Is(err, errRouteFenceLost) || !errors.As(err, &me) || me.Number != mysqlErrLockWaitTimeout {
 		t.Fatalf("1205 renew error = %v, want the MySQLError and not errRouteFenceLost", err)
@@ -943,7 +1047,7 @@ func TestRenewFence(t *testing.T) {
 
 func TestReleaseFence_ReturnsPerZoneCounts(t *testing.T) {
 	st, f := newFakeRouteSQLStore(t, routeScript{}.on("RELEASE", rsAffected(64), rsAffected(0)))
-	got, err := st.ReleaseFence(context.Background(), []uint32{102, 101}, testRouteRun)
+	got, err := st.ReleaseFence(routeSQLTestContext(), []uint32{102, 101}, testRouteRun)
 	if err != nil {
 		t.Fatalf("ReleaseFence: %v", err)
 	}
@@ -1002,7 +1106,7 @@ func TestRouteFenceGuard_LocalDeadlineAndLoss(t *testing.T) {
 		refreshed = exp
 		return errors.New("mirror refresh failed")
 	}
-	if err := g.renewOnce(context.Background()); err != nil {
+	if err := g.renewOnce(routeSQLTestContext()); err != nil {
 		t.Fatalf("renewOnce: %v", err)
 	}
 	if refreshed == nil {
@@ -1015,7 +1119,7 @@ func TestRouteFenceGuard_LocalDeadlineAndLoss(t *testing.T) {
 
 	// 1205 / 网络错误不当失权。
 	r.errs = []error{&mysql.MySQLError{Number: mysqlErrLockWaitTimeout}}
-	if err := g.renewOnce(context.Background()); err == nil || errors.Is(err, errRouteFenceLost) {
+	if err := g.renewOnce(routeSQLTestContext()); err == nil || errors.Is(err, errRouteFenceLost) {
 		t.Fatalf("transient renew error = %v", err)
 	}
 	if err := g.Check(); err != nil {
@@ -1024,7 +1128,7 @@ func TestRouteFenceGuard_LocalDeadlineAndLoss(t *testing.T) {
 
 	// 受影响行数不足 = 确定失权,之后 Check 一直失败。
 	r.errs = []error{fmt.Errorf("%w: zone 101 renewed 0/64 shards", errRouteFenceLost)}
-	if err := g.renewOnce(context.Background()); !errors.Is(err, errRouteFenceLost) {
+	if err := g.renewOnce(routeSQLTestContext()); !errors.Is(err, errRouteFenceLost) {
 		t.Fatalf("lost renew error = %v", err)
 	}
 	if err := g.Check(); !errors.Is(err, errRouteFenceLost) {
@@ -1037,7 +1141,8 @@ func TestRouteFenceGuard_LocalDeadlineAndLoss(t *testing.T) {
 }
 
 // TestRouteFenceGuard_LoopRetriesTransientAndStopsOnLoss:续期循环成功后按 interval 等,瞬时错误按 retryWait 重试,
-// 确定失权即退出(不再续期)。睡眠注入,不依赖墙钟。
+// 确定失权即退出(不再续期)。interval = min(ttl/3, routeFenceRenewMaxInterval):ttl=1h 时是 30s 而不是 20 分钟
+// (MZ2-3:被接手而其实还活着的旧进程,不碰映射的写只能靠下一次续期失败才停)。睡眠注入,不依赖墙钟。
 func TestRouteFenceGuard_LoopRetriesTransientAndStopsOnLoss(t *testing.T) {
 	r := &fakeFenceRenewer{errs: []error{errors.New("connection refused"), nil, fmt.Errorf("%w: zone 101", errRouteFenceLost)}}
 	g, err := newRouteFenceGuard(r, []uint32{101}, testRouteRun, time.Hour, time.Unix(1_760_000_000, 0))
@@ -1050,8 +1155,8 @@ func TestRouteFenceGuard_LoopRetriesTransientAndStopsOnLoss(t *testing.T) {
 		return nil
 	}
 	g.done = make(chan struct{})
-	g.loop(context.Background())
-	if want := []time.Duration{20 * time.Minute, routeFenceRetryWait, 20 * time.Minute}; !reflect.DeepEqual(waits, want) {
+	g.loop(routeSQLTestContext())
+	if want := []time.Duration{routeFenceRenewMaxInterval, routeFenceRetryWait, routeFenceRenewMaxInterval}; !reflect.DeepEqual(waits, want) {
 		t.Fatalf("waits = %v, want %v", waits, want)
 	}
 	if r.calls != 3 {
@@ -1073,7 +1178,7 @@ func TestRemapHomeBatch_StatementSequenceAndTarget(t *testing.T) {
 			rsRouteRow(mergeRouteRow{PlayerID: 130, HomeZone: 102, StorageID: 101, PlacementVersion: 1, Rev: 5}),
 			rsRouteRow(mergeRouteRow{PlayerID: 7, HomeZone: 999, Rev: 1}))).
 		on("MOVE_HOME", rsAffected(1)))
-	res, err := st.RemapHomeBatch(context.Background(), 101, 102, testRouteRun, []uint64{200, 7, 130, 65})
+	res, err := st.RemapHomeBatch(routeSQLTestContext(), 101, 102, testRouteRun, []uint64{200, 7, 130, 65})
 	if err != nil {
 		t.Fatalf("RemapHomeBatch: %v", err)
 	}
@@ -1123,7 +1228,7 @@ func TestRemapHomeBatch_RefusalsWriteNothing(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			st, f := newFakeRouteSQLStore(t, tc.script)
-			if _, err := st.RemapHomeBatch(context.Background(), 101, 102, testRouteRun, []uint64{65}); !errors.Is(err, tc.want) {
+			if _, err := st.RemapHomeBatch(routeSQLTestContext(), 101, 102, testRouteRun, []uint64{65}); !errors.Is(err, tc.want) {
 				t.Fatalf("error = %v, want %v", err, tc.want)
 			}
 			assertRouteLabels(t, f, tc.labels...)
@@ -1139,7 +1244,7 @@ func TestRemapHomeBatch_EnsuresMissingCheckShard(t *testing.T) {
 		on("WRITABLE", rsOne()).
 		on("LOCK_FENCE", rsFenceHeld(testRouteRun), rsFenceHeld(testRouteRun)).
 		on("LOCK_ROWS", rsNone()))
-	res, err := st.RemapHomeBatch(context.Background(), 101, 102, testRouteRun, []uint64{65})
+	res, err := st.RemapHomeBatch(routeSQLTestContext(), 101, 102, testRouteRun, []uint64{65})
 	if err != nil || res.Verdicts[65] != mappingMissing || len(res.Target) != 0 {
 		t.Fatalf("RemapHomeBatch = (%+v, %v)", res, err)
 	}
@@ -1154,7 +1259,7 @@ func TestRestoreHomeBatch_MovesDstBackToSrc(t *testing.T) {
 		on("LOCK_FENCE", rsFenceHeld(testRouteRun), rsFenceHeld(testRouteRun)).
 		on("LOCK_ROWS", rsRows(rsRouteRow(mergeRouteRow{PlayerID: 65, HomeZone: 102, Rev: 4}), rsRouteRow(mergeRouteRow{PlayerID: 66, HomeZone: 101, Rev: 2}))).
 		on("MOVE_HOME", rsAffected(1)))
-	res, err := st.RestoreHomeBatch(context.Background(), 101, 102, testRouteRun, []uint64{65, 66})
+	res, err := st.RestoreHomeBatch(routeSQLTestContext(), 101, 102, testRouteRun, []uint64{65, 66})
 	if err != nil {
 		t.Fatalf("RestoreHomeBatch: %v", err)
 	}
@@ -1174,7 +1279,7 @@ func TestPinPlacementBatch_Verdicts(t *testing.T) {
 			rsRouteRow(mergeRouteRow{PlayerID: 2, HomeZone: 101, StorageID: 5, PlacementVersion: 3, Rev: 4}),
 			rsRouteRow(mergeRouteRow{PlayerID: 3, HomeZone: 102, Rev: 1}))).
 		on("PIN", rsAffected(1)))
-	res, err := st.PinPlacementBatch(context.Background(), 101, 102, testRouteRun, []uint64{1, 2, 3, 4, 64})
+	res, err := st.PinPlacementBatch(routeSQLTestContext(), 101, 102, testRouteRun, []uint64{1, 2, 3, 4, 64})
 	if err != nil {
 		t.Fatalf("PinPlacementBatch: %v", err)
 	}
@@ -1202,7 +1307,7 @@ func TestPinZonePlacementBatch_CursorTemplateAndTarget(t *testing.T) {
 		on("LOCK_MERGED", rsNone()).
 		on("PIN_ZONE_SELECT", rsRows(rsRouteRow(mergeRouteRow{PlayerID: 64, HomeZone: 101, Rev: 1}), rsRouteRow(mergeRouteRow{PlayerID: 129, HomeZone: 101, Rev: 6}))).
 		on("PIN", rsAffected(1), rsAffected(1)))
-	res, next, done, err := st.PinZonePlacementBatch(context.Background(), 101, routeScanCursor{}, 2)
+	res, next, done, err := st.PinZonePlacementBatch(routeSQLTestContext(), 101, routeScanCursor{}, 2)
 	if err != nil {
 		t.Fatalf("PinZonePlacementBatch: %v", err)
 	}
@@ -1216,12 +1321,12 @@ func TestPinZonePlacementBatch_CursorTemplateAndTarget(t *testing.T) {
 		t.Fatalf("result = %+v next = %+v done = %v", res, next, done)
 	}
 
-	if _, _, _, err := st.PinZonePlacementBatch(context.Background(), 101, routeScanCursor{}, routePinZoneBatchLimit+1); !errors.Is(err, errRouteInvalidArgument) {
+	if _, _, _, err := st.PinZonePlacementBatch(routeSQLTestContext(), 101, routeScanCursor{}, routePinZoneBatchLimit+1); !errors.Is(err, errRouteInvalidArgument) {
 		t.Fatalf("over-limit batch error = %v", err)
 	}
 
 	st, f = newFakeRouteSQLStore(t, routeScript{}.on("FENCE_EXISTS", rsOne()).on("WRITABLE", rsOne()).on("LOCK_FENCE", rsFenceHeld("merge-run")))
-	if _, _, _, err := st.PinZonePlacementBatch(context.Background(), 101, routeScanCursor{}, 2); !errors.Is(err, errRouteZoneFenced) {
+	if _, _, _, err := st.PinZonePlacementBatch(routeSQLTestContext(), 101, routeScanCursor{}, 2); !errors.Is(err, errRouteZoneFenced) {
 		t.Fatalf("fenced zone error = %v", err)
 	}
 	assertRouteLabels(t, f, "FENCE_EXISTS", "BEGIN", "WRITABLE", "LOCK_FENCE", "ROLLBACK")
@@ -1238,7 +1343,7 @@ func TestBackfillHomeBatch_InsertFillAlreadyConflict(t *testing.T) {
 			rsRouteRow(mergeRouteRow{PlayerID: 3, HomeZone: 999, Rev: 1}))).
 		on("FILL_HOME", rsAffected(1)).
 		on("INSERT_HOME", rsAffected(1)))
-	res, err := st.BackfillHomeBatch(context.Background(), 101, []uint64{3, 2, 1, 64})
+	res, err := st.BackfillHomeBatch(routeSQLTestContext(), 101, []uint64{3, 2, 1, 64})
 	if err != nil {
 		t.Fatalf("BackfillHomeBatch: %v", err)
 	}
@@ -1278,7 +1383,7 @@ func TestBackfillHomeBatch_Refusals(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			st, f := newFakeRouteSQLStore(t, tc.script)
-			if _, err := st.BackfillHomeBatch(context.Background(), 101, []uint64{1}); !errors.Is(err, tc.want) {
+			if _, err := st.BackfillHomeBatch(routeSQLTestContext(), 101, []uint64{1}); !errors.Is(err, tc.want) {
 				t.Fatalf("error = %v, want %v", err, tc.want)
 			}
 			if got := f.labels(); got[len(got)-1] != "ROLLBACK" || len(f.callsOf("LOCK_ROWS")) != 0 {
@@ -1297,7 +1402,7 @@ func TestBackfillHomeBatch_RacedInsertRetriesWholeTx(t *testing.T) {
 		on("LOCK_MERGED", rsNone(), rsNone()).
 		on("LOCK_ROWS", rsNone(), rsRows(rsRouteRow(mergeRouteRow{PlayerID: 64, HomeZone: 101, Rev: 1}))).
 		on("INSERT_HOME", rsAffected(0)))
-	res, err := st.BackfillHomeBatch(context.Background(), 101, []uint64{64})
+	res, err := st.BackfillHomeBatch(routeSQLTestContext(), 101, []uint64{64})
 	if err != nil || res.Verdicts[64] != routeBackfillAlready {
 		t.Fatalf("BackfillHomeBatch = (%+v, %v)", res, err)
 	}
@@ -1314,7 +1419,7 @@ func TestMarkMergedInto(t *testing.T) {
 	wantValue := `{"dst":102,"run_id":"` + mark + `"}`
 
 	st, f := newFakeRouteSQLStore(t, held().on("LOCK_MERGED", rsNone()).on("INSERT_MERGED", rsAffected(1)))
-	value, err := st.MarkMergedInto(context.Background(), 101, 102, testRouteRun, mark)
+	value, err := st.MarkMergedInto(routeSQLTestContext(), 101, 102, testRouteRun, mark)
 	if err != nil || value != wantValue {
 		t.Fatalf("insert = (%q, %v), want %q", value, err, wantValue)
 	}
@@ -1322,19 +1427,19 @@ func TestMarkMergedInto(t *testing.T) {
 	assertRouteArgs(t, f.callsOf("INSERT_MERGED")[0], uint64(101), uint64(102), mark)
 
 	st, f = newFakeRouteSQLStore(t, held().on("LOCK_MERGED", rsRows([]driver.Value{int64(102), "older-run"})).on("UPDATE_MERGED", rsAffected(1)))
-	if _, err := st.MarkMergedInto(context.Background(), 101, 102, testRouteRun, mark); err != nil {
+	if _, err := st.MarkMergedInto(routeSQLTestContext(), 101, 102, testRouteRun, mark); err != nil {
 		t.Fatalf("same dst: %v", err)
 	}
 	assertRouteArgs(t, f.callsOf("UPDATE_MERGED")[0], mark, uint64(101), uint64(102))
 
 	st, f = newFakeRouteSQLStore(t, held().on("LOCK_MERGED", rsRows([]driver.Value{int64(102), mark})))
-	if _, err := st.MarkMergedInto(context.Background(), 101, 102, testRouteRun, mark); err != nil {
+	if _, err := st.MarkMergedInto(routeSQLTestContext(), 101, 102, testRouteRun, mark); err != nil {
 		t.Fatalf("same dst and run: %v", err)
 	}
 	assertRouteLabels(t, f, "FENCE_EXISTS", "FENCE_EXISTS", "BEGIN", "WRITABLE", "LOCK_FENCE", "LOCK_FENCE", "LOCK_MERGED", "COMMIT")
 
 	st, f = newFakeRouteSQLStore(t, held().on("LOCK_MERGED", rsRows([]driver.Value{int64(103), "x-run"})))
-	if _, err := st.MarkMergedInto(context.Background(), 101, 102, testRouteRun, mark); !errors.Is(err, errRouteMergedIntoConflict) {
+	if _, err := st.MarkMergedInto(routeSQLTestContext(), 101, 102, testRouteRun, mark); !errors.Is(err, errRouteMergedIntoConflict) {
 		t.Fatalf("other dst error = %v", err)
 	}
 	assertRouteLabels(t, f, "FENCE_EXISTS", "FENCE_EXISTS", "BEGIN", "WRITABLE", "LOCK_FENCE", "LOCK_FENCE", "LOCK_MERGED", "ROLLBACK")
@@ -1344,7 +1449,7 @@ func TestClearMergedInto_DeletesOnlyTheMatchingMarker(t *testing.T) {
 	const mark = "101-102-20261018T000000Z-cafebabe"
 	st, f := newFakeRouteSQLStore(t, routeScript{}.on("FENCE_EXISTS", rsOne(), rsOne()).on("WRITABLE", rsOne()).
 		on("LOCK_FENCE", rsFenceHeld(testRouteRun), rsFenceHeld(testRouteRun)).on("DELETE_MERGED", rsAffected(0)))
-	deleted, err := st.ClearMergedInto(context.Background(), 101, 102, testRouteRun, mark)
+	deleted, err := st.ClearMergedInto(routeSQLTestContext(), 101, 102, testRouteRun, mark)
 	if err != nil || deleted {
 		t.Fatalf("ClearMergedInto = (%v, %v), want (false, nil)", deleted, err)
 	}
@@ -1369,7 +1474,7 @@ func TestRelocateCAS_OutcomesMirrorTheScript(t *testing.T) {
 			rsRouteRow(mergeRouteRow{PlayerID: 67, HomeZone: 102, Rev: 1}),
 			rsRouteRow(mergeRouteRow{PlayerID: 68, HomeZone: 101, StorageID: 5, PlacementVersion: 3, FrozenRunID: "run1", Rev: 7}))).
 		on("SET_PLACEMENT", rsAffected(1), rsAffected(1)))
-	res, err := st.RelocateCAS(context.Background(), ops)
+	res, err := st.RelocateCAS(routeSQLTestContext(), ops)
 	if err != nil {
 		t.Fatalf("RelocateCAS: %v", err)
 	}
@@ -1396,13 +1501,13 @@ func TestRelocateCAS_P2AssertionRollsBack(t *testing.T) {
 	st, f := newFakeRouteSQLStore(t, routeScript{}.
 		on("WRITABLE", rsOne()).
 		on("LOCK_ROWS", rsRows(rsRouteRow(mergeRouteRow{PlayerID: 68, HomeZone: 101, StorageID: 5, PlacementVersion: 3, FrozenRunID: "run1", Rev: 7}))))
-	_, err := st.RelocateCAS(context.Background(), []placementCAS{{PlayerID: 68, ExpectRecord: "5:3:frozen:run1", ExpectHome: "101", NewValue: "5:2"}})
+	_, err := st.RelocateCAS(routeSQLTestContext(), []placementCAS{{PlayerID: 68, ExpectRecord: "5:3:frozen:run1", ExpectHome: "101", NewValue: "5:2"}})
 	if !errors.Is(err, errRouteInvariant) {
 		t.Fatalf("error = %v, want errRouteInvariant", err)
 	}
 	assertRouteLabels(t, f, "BEGIN", "WRITABLE", "LOCK_ROWS", "ROLLBACK")
 
-	if _, err := st.RelocateCAS(context.Background(), []placementCAS{
+	if _, err := st.RelocateCAS(routeSQLTestContext(), []placementCAS{
 		{PlayerID: 9, ExpectAbsent: true, NewValue: "5:1"}, {PlayerID: 9, ExpectAbsent: true, NewValue: "5:1"},
 	}); !errors.Is(err, errRouteInvalidArgument) {
 		t.Fatalf("duplicate players error = %v", err)
@@ -1415,19 +1520,19 @@ func TestScanByHome_ValidatesThePage(t *testing.T) {
 			rsRows(rsRouteRow(mergeRouteRow{PlayerID: 65, HomeZone: 101, Rev: 1}), rsRouteRow(mergeRouteRow{PlayerID: 129, HomeZone: 101, Rev: 1})),
 			rsRows(rsRouteRow(mergeRouteRow{PlayerID: 66, HomeZone: 999, Rev: 1}))))
 	after := routeScanCursor{Shard: 1, PlayerID: 1}
-	rows, err := st.ScanByHome(context.Background(), 101, after, 10)
+	rows, err := st.ScanByHome(routeSQLTestContext(), 101, after, 10)
 	if err != nil || len(rows) != 2 {
 		t.Fatalf("ScanByHome = (%v, %v)", rows, err)
 	}
 	assertRouteArgs(t, f.callsOf("SCAN_HOME")[0], uint64(101), uint64(1), uint64(1), uint64(1), int64(10))
 	// 第二页的游标就是 (1, 65),库却又回了 (1, 65):键没有严格大于游标,整页作废。
-	if _, err := st.ScanByHome(context.Background(), 101, routeScanCursor{Shard: 1, PlayerID: 65}, 10); !errors.Is(err, errRouteInvariant) {
+	if _, err := st.ScanByHome(routeSQLTestContext(), 101, routeScanCursor{Shard: 1, PlayerID: 65}, 10); !errors.Is(err, errRouteInvariant) {
 		t.Fatalf("a key not after the cursor must void the page: %v", err)
 	}
-	if _, err := st.ScanByHome(context.Background(), 101, routeScanCursor{}, 10); !errors.Is(err, errRouteInvariant) {
+	if _, err := st.ScanByHome(routeSQLTestContext(), 101, routeScanCursor{}, 10); !errors.Is(err, errRouteInvariant) {
 		t.Fatalf("a row of another zone must void the page: %v", err)
 	}
-	if _, err := st.ScanByHome(context.Background(), 0, routeScanCursor{}, 10); !errors.Is(err, errRouteInvalidArgument) {
+	if _, err := st.ScanByHome(routeSQLTestContext(), 0, routeScanCursor{}, 10); !errors.Is(err, errRouteInvalidArgument) {
 		t.Fatalf("zone 0 error = %v", err)
 	}
 }
@@ -1447,7 +1552,7 @@ func (r *fakeWatermarkReader) readWatermark(context.Context) (string, bool, erro
 }
 
 func TestOpenRouteBackend(t *testing.T) {
-	ctx := context.Background()
+	ctx := routeSQLTestContext()
 	st, err := openRouteBackend(ctx, routeSourceRedis, "", testRouteWriter, &fakeWatermarkReader{})
 	if err != nil || st != nil {
 		t.Fatalf("redis mode without a watermark = (%v, %v)", st, err)

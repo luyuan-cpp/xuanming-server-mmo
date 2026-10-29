@@ -7,7 +7,7 @@
 - **事实准绳**:以磁盘代码为准。文中「路径:行号」取自 2026-09-29 写作时的磁盘状态,后续改动会让行号漂移,查找时以符号名为准。
 - **冲突处理**:[k8s_gate_exposure_guidance*.md](k8s_gate_exposure_guidance.md)、[gate-load-balancing-design.md](gate-load-balancing-design.md)、[gateway-k8s-deployment.md](gateway-k8s-deployment.md) 与本文冲突的,以本文为准。turn-based §21.1 关于「K8s 上直连失败回落 gate 中继」的推断已被本文取代(见背景第 4 条)。
 - **引用本文的文件**(2026-09-29 更正:初稿只列了 kind-config.yaml,漏了其余按节名引用的位置)。改下列节名时,必须同改对应位置,否则会留下悬空引用:
-  - 「kind 端到端验证」:`deploy/k8s/kind-config.yaml` 第 2、9、60 行;`deploy/k8s/README.md:259`、`:749`。另有不带书名号的提法:`docs/design/turn-based-battle-server.md:1061`、`docs/notes/slg-moba/moba-battle-target-architecture.md:229`。
+  - 「kind 端到端验证」:`deploy/k8s/kind-config.yaml` 第 2、9、60 行;`deploy/k8s/README.md:259`、`:749`。另有不带书名号的提法:`docs/design/turn-based-battle-server.md:1061`、`docs/notes/moba/moba-battle-target-architecture.md:229`。
   - 「运维手册」:`deploy/k8s/README.md:259`、`:380`;`docs/design/k8s_gate_exposure_guidance.md:3`、`k8s_gate_exposure_guidance_zh.md:3`、`k8s_gate_exposure_guidance_en.md:4`;`tools/scripts/k8s_gate_drain.ps1:12`。
   - 「模式矩阵」:`docs/design/battle-transport-decision.md:111`。
   - 下列位置只链接全文或引用 D 号,改节名不受影响,改 D 号要同改:`docs/design/ARCH.md:430`、`:504`,以及 turn-based-battle-server.md、moba-battle-target-architecture.md、battle-transport-decision.md、cross-zone-matchmaking.md、gate-connection-admission-control.md、xuanming-port-decisions-20260910.md 等设计文档;代码注释方面有 `tools/scripts/lib/k8s_client_entry.ps1`、`tools/scripts/k8s_deploy.ps1`、`tools/scripts/k8s_image.ps1`、`tools/scripts/dev_tools.ps1`、`tools/scripts/k8s_gate_drain.ps1`、`cpp/nodes/battle/**`、`cpp/libs/engine/infra/agones/**`、`go/match/**`、`go/scene_manager/**`、`go/shared/**`。行号取自 2026-09-29 的 grep。
@@ -652,7 +652,7 @@ Agones 段 7000–7009 → 7100–7109;前置条件新增端口预检、「先�
 ### 上线之前:代码验证(由 Codex 执行,Claude 未编译、未测试)
 
 1. **proto 重生**。注意:`cd go && build.bat` 只包装 goctl,**不会**重生 pb 产物。AGENTS.md §4.1 的旧写法要等用户确认后再改,本文不改 AGENTS.md。正确做法(仓库根):
-   - 把 `third_party\grpc\install_vs2026_dbg\bin` 放到 PATH 最前,`protoc --version` 必须是 `libprotoc 35.1`。
+   - 把独立 Protobuf 安装目录 `third_party\protobuf\install_vs2026_dbg\bin` 放到当前子进程 PATH 最前,`protoc --version` 必须是 `libprotoc 35.1`；2026-10-26 起不再使用旧 gRPC SDK 目录。
    - 核对客户端仓 `tools/gen_proto.ps1` 收录了 team / jubaozhai / friend 三行;缺任何一行,就用一份 `enable_unity_client: false` 的配置副本。
    - `pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command proto-gen-build`,再 `pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -UseBinary -ConfigPath tools/proto_generator/protogen/etc/proto_gen.yaml`。
    - 之后在 `robot` 目录执行 `go mod vendor`。

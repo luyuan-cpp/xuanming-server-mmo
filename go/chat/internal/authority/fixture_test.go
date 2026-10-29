@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"shared/authoritysql"
+	"shared/authoritysql/sqltest"
 	"strconv"
 	"testing"
 	"time"
@@ -19,7 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 	base "proto/common/base"
 	dspb "proto/data_service"
-	"shared/authoritysql"
 	"shared/placement"
 	"shared/roleidentity"
 )
@@ -29,6 +30,12 @@ func fixtureRules() Rules {
 }
 
 func nativeStore(t *testing.T, configured ...Rules) *Store {
+	store, _ := nativeStoreFixture(t, false, configured...)
+	return store
+}
+
+// 同例副本显式共享immutable boot配置，不通过进程级池映射查找资格。
+func nativeStoreFixture(t *testing.T, withGlobal bool, configured ...Rules) (*Store, *sqltest.Fixture) {
 	t.Helper()
 	address := os.Getenv("CHAT_IT_TIDB")
 	if address == "" {
@@ -47,34 +54,25 @@ func nativeStore(t *testing.T, configured ...Rules) *Store {
 	controlConfig.Timeout = time.Second
 	controlConfig.ReadTimeout = 5 * time.Second
 	controlConfig.WriteTimeout = 5 * time.Second
-	connector, err := mysql.NewConnector(controlConfig)
-	require.NoError(t, err)
-	admin := sql.OpenDB(authoritysql.PinCurrentSession(connector, true))
-	admin.SetMaxOpenConns(2)
-	require.NoError(t, authoritysql.AssertCurrentSession(ctx, admin, true))
 	var random [16]byte
-	_, err = rand.Read(random[:])
+	_, err := rand.Read(random[:])
 	require.NoError(t, err)
 	name := "chat_it_" + hex.EncodeToString(random[:])
-	_, err = admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`")
+	schemas := []string{name}
+	if withGlobal {
+		schemas = append(schemas, name+"_global")
+	}
+	opts, err := sqltest.OptionsFromEnv(controlConfig.FormatDSN(), name+"_writer", schemas...)
 	require.NoError(t, err)
-	// 先登记原成功CREATE的清理；后续Close以LIFO先于DROP，只清本例随机库。
-	t.Cleanup(func() {
-		cleanup, done := context.WithTimeout(context.Background(), 15*time.Second)
-		defer done()
-		_, e := admin.ExecContext(cleanup, "DROP DATABASE `"+name+"`")
-		require.NoError(t, e)
-		require.NoError(t, admin.Close())
-	})
-	controlConfig.DBName = name
-	db, err := authoritysql.OpenForMigration(ctx, controlConfig.FormatDSN(), name, true)
+	fixture, err := sqltest.New(ctx, t, opts)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db, err := fixture.OpenSchema(ctx, name)
+	require.NoError(t, err)
 	require.NoError(t, Migrate(ctx, db))
 	loadFormalRoleFixtures(t, ctx, db)
-	runtimeDB, err := authoritysql.Open(ctx, controlConfig.FormatDSN(), name, true, 8)
+	require.NoError(t, fixture.GrantTables(ctx, name, "chat_send_authority", "chat_policy", "account_role", "player_route", "zone_merge_fence", "zone_merged_into", "route_meta", "route_reconcile"))
+	runtimeDB, err := fixture.Open(ctx, name, 8)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, runtimeDB.Close()) })
 	rules := fixtureRules()
 	require.LessOrEqual(t, len(configured), 1)
 	if len(configured) == 1 {
@@ -82,7 +80,7 @@ func nativeStore(t *testing.T, configured ...Rules) *Store {
 	}
 	s, err := New(ctx, runtimeDB, name, rules)
 	require.NoError(t, err)
-	return s
+	return s, fixture
 }
 
 // AST读取DS唯一正式nullable路由及account_role DDL，不复制第二份权威表形状。
@@ -91,8 +89,9 @@ func loadFormalRoleFixtures(t *testing.T, ctx context.Context, db *sql.DB) {
 	_, source, _, ok := runtime.Caller(0)
 	require.True(t, ok)
 	root := filepath.Join(filepath.Dir(source), "..", "..", "..", "data_service", "internal", "store")
-	wanted := map[string]bool{"playerRouteBootstrapDDL": true, "zoneMergeFenceBootstrapDDL": true, "zoneMergedIntoBootstrapDDL": true, "routeMetaBootstrapDDL": true, "routeReconcileBootstrapDDL": true, "accountRoleDDL": true}
-	values := map[string]string{}
+	wanted := map[string]bool{"playerRouteBootstrapDDL": true, "zoneMergeFenceBootstrapDDL": true, "zoneMergedIntoBootstrapDDL": true, "accountRoleDDL": true}
+	catalogDDL := authoritysql.CatalogBootstrapStatements()
+	values := map[string]string{"routeMetaBootstrapDDL": catalogDDL["route_meta"], "routeReconcileBootstrapDDL": catalogDDL["route_reconcile"]}
 	var literal func(ast.Expr) string
 	literal = func(e ast.Expr) string {
 		switch v := e.(type) {

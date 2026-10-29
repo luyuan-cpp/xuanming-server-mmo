@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	MatchInternal_StartActivityBattle_FullMethodName  = "/match.MatchInternal/StartActivityBattle"
 	MatchInternal_CancelActivityBattle_FullMethodName = "/match.MatchInternal/CancelActivityBattle"
+	MatchInternal_CommitBattleOutcome_FullMethodName  = "/match.MatchInternal/CommitBattleOutcome"
 )
 
 // MatchInternalClient is the client API for MatchInternal service.
@@ -29,6 +30,7 @@ const (
 type MatchInternalClient interface {
 	StartActivityBattle(ctx context.Context, in *StartActivityBattleRequest, opts ...grpc.CallOption) (*StartActivityBattleResponse, error)
 	CancelActivityBattle(ctx context.Context, in *CancelActivityBattleRequest, opts ...grpc.CallOption) (*CancelActivityBattleResponse, error)
+	CommitBattleOutcome(ctx context.Context, in *CommitBattleOutcomeRequest, opts ...grpc.CallOption) (*CommitBattleOutcomeResponse, error)
 }
 
 type matchInternalClient struct {
@@ -59,12 +61,23 @@ func (c *matchInternalClient) CancelActivityBattle(ctx context.Context, in *Canc
 	return out, nil
 }
 
+func (c *matchInternalClient) CommitBattleOutcome(ctx context.Context, in *CommitBattleOutcomeRequest, opts ...grpc.CallOption) (*CommitBattleOutcomeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommitBattleOutcomeResponse)
+	err := c.cc.Invoke(ctx, MatchInternal_CommitBattleOutcome_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchInternalServer is the server API for MatchInternal service.
 // All implementations must embed UnimplementedMatchInternalServer
 // for forward compatibility.
 type MatchInternalServer interface {
 	StartActivityBattle(context.Context, *StartActivityBattleRequest) (*StartActivityBattleResponse, error)
 	CancelActivityBattle(context.Context, *CancelActivityBattleRequest) (*CancelActivityBattleResponse, error)
+	CommitBattleOutcome(context.Context, *CommitBattleOutcomeRequest) (*CommitBattleOutcomeResponse, error)
 	mustEmbedUnimplementedMatchInternalServer()
 }
 
@@ -80,6 +93,9 @@ func (UnimplementedMatchInternalServer) StartActivityBattle(context.Context, *St
 }
 func (UnimplementedMatchInternalServer) CancelActivityBattle(context.Context, *CancelActivityBattleRequest) (*CancelActivityBattleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CancelActivityBattle not implemented")
+}
+func (UnimplementedMatchInternalServer) CommitBattleOutcome(context.Context, *CommitBattleOutcomeRequest) (*CommitBattleOutcomeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CommitBattleOutcome not implemented")
 }
 func (UnimplementedMatchInternalServer) mustEmbedUnimplementedMatchInternalServer() {}
 func (UnimplementedMatchInternalServer) testEmbeddedByValue()                       {}
@@ -138,6 +154,24 @@ func _MatchInternal_CancelActivityBattle_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchInternal_CommitBattleOutcome_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CommitBattleOutcomeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchInternalServer).CommitBattleOutcome(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchInternal_CommitBattleOutcome_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchInternalServer).CommitBattleOutcome(ctx, req.(*CommitBattleOutcomeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchInternal_ServiceDesc is the grpc.ServiceDesc for MatchInternal service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +186,10 @@ var MatchInternal_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CancelActivityBattle",
 			Handler:    _MatchInternal_CancelActivityBattle_Handler,
+		},
+		{
+			MethodName: "CommitBattleOutcome",
+			Handler:    _MatchInternal_CommitBattleOutcome_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

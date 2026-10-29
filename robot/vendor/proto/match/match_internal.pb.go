@@ -10,6 +10,7 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	battle "proto/battle"
+	base "proto/common/base"
 	_ "proto/db"
 	reflect "reflect"
 	sync "sync"
@@ -162,9 +163,10 @@ type StartActivityBattleResponse struct {
 	// reject == NONE 时非 0:match 同步生成(shared/snowflake,battle_id 唯一生产者)并已为全员建好 matched 票、
 	// 异步启动 gather;guild 据此登记 guild_trial_battle。gather 之后失败时全员删票、不回队列,
 	// 该 battle_id 不会产生结果事件,由 guild 巡检器兜底判 EXPIRED。
-	BattleId      uint64 `protobuf:"varint,3,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	BattleId       uint64 `protobuf:"varint,3,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	FormationState uint32 `protobuf:"varint,4,opt,name=formation_state,json=formationState,proto3" json:"formation_state,omitempty"` // 全球SQL成局状态1..5；不独自作为可安全撤销的证明。
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *StartActivityBattleResponse) Reset() {
@@ -218,30 +220,177 @@ func (x *StartActivityBattleResponse) GetBattleId() uint64 {
 	return 0
 }
 
+func (x *StartActivityBattleResponse) GetFormationState() uint32 {
+	if x != nil {
+		return x.FormationState
+	}
+	return 0
+}
+
+// 取消必须绑定整份原Start；未知结果只能按原request重放，不能换名单或活动上下文。
+type CancelActivityBattleRequest struct {
+	state         protoimpl.MessageState      `protogen:"open.v1"`
+	Original      *StartActivityBattleRequest `protobuf:"bytes,1,opt,name=original,proto3" json:"original,omitempty"`
+	Auth          *base.ServiceCallAuth       `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelActivityBattleRequest) Reset() {
+	*x = CancelActivityBattleRequest{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelActivityBattleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelActivityBattleRequest) ProtoMessage() {}
+
+func (x *CancelActivityBattleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelActivityBattleRequest.ProtoReflect.Descriptor instead.
+func (*CancelActivityBattleRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *CancelActivityBattleRequest) GetOriginal() *StartActivityBattleRequest {
+	if x != nil {
+		return x.Original
+	}
+	return nil
+}
+
+func (x *CancelActivityBattleRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type CancelActivityBattleResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	BattleId         uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	RequestCancelled bool                   `protobuf:"varint,2,opt,name=request_cancelled,json=requestCancelled,proto3" json:"request_cancelled,omitempty"` // true且battle_id=0：持久墓碑已提交，迟到Start不能再开战。
+	FormationState   uint32                 `protobuf:"varint,3,opt,name=formation_state,json=formationState,proto3" json:"formation_state,omitempty"`
+	Auth             *base.ServiceCallAuth  `protobuf:"bytes,4,opt,name=auth,proto3" json:"auth,omitempty"`
+	RequestDigest    string                 `protobuf:"bytes,5,opt,name=request_digest,json=requestDigest,proto3" json:"request_digest,omitempty"` // 清空原Cancel.auth后请求摘要；签名回复必须与本请求原件匹配。
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *CancelActivityBattleResponse) Reset() {
+	*x = CancelActivityBattleResponse{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelActivityBattleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelActivityBattleResponse) ProtoMessage() {}
+
+func (x *CancelActivityBattleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelActivityBattleResponse.ProtoReflect.Descriptor instead.
+func (*CancelActivityBattleResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *CancelActivityBattleResponse) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *CancelActivityBattleResponse) GetRequestCancelled() bool {
+	if x != nil {
+		return x.RequestCancelled
+	}
+	return false
+}
+
+func (x *CancelActivityBattleResponse) GetFormationState() uint32 {
+	if x != nil {
+		return x.FormationState
+	}
+	return 0
+}
+
+func (x *CancelActivityBattleResponse) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+func (x *CancelActivityBattleResponse) GetRequestDigest() string {
+	if x != nil {
+		return x.RequestDigest
+	}
+	return ""
+}
+
 var File_proto_match_match_internal_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\n" +
-	" proto/match/match_internal.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1eproto/battle/battle_data.proto\"\xd4\x01\n" +
+	" proto/match/match_internal.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1eproto/battle/battle_data.proto\x1a)proto/common/base/service_call_auth.proto\"\xd4\x01\n" +
 	"\x1aStartActivityBattleRequest\x12(\n" +
 	"\x10battle_config_id\x18\x01 \x01(\rR\x0ebattleConfigId\x12*\n" +
 	"\x11member_player_ids\x18\x02 \x03(\x04R\x0fmemberPlayerIds\x12A\n" +
 	"\x10activity_context\x18\x03 \x01(\v2\x16.BattleActivityContextR\x0factivityContext\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x04 \x01(\x04R\trequestId\"\x9d\x01\n" +
+	"request_id\x18\x04 \x01(\x04R\trequestId\"\xc6\x01\n" +
 	"\x1bStartActivityBattleResponse\x123\n" +
 	"\x06reject\x18\x01 \x01(\x0e2\x1b.match.ActivityBattleRejectR\x06reject\x12,\n" +
 	"\x12offender_player_id\x18\x02 \x01(\x04R\x10offenderPlayerId\x12\x1b\n" +
-	"\tbattle_id\x18\x03 \x01(\x04R\bbattleId*\x8e\x02\n" +
+	"\tbattle_id\x18\x03 \x01(\x04R\bbattleId\x12'\n" +
+	"\x0fformation_state\x18\x04 \x01(\rR\x0eformationState\"\x8e\x01\n" +
+	"\x1bCancelActivityBattleRequest\x12=\n" +
+	"\boriginal\x18\x01 \x01(\v2!.match.StartActivityBattleRequestR\boriginal\x120\n" +
+	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xea\x01\n" +
+	"\x1cCancelActivityBattleResponse\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12+\n" +
+	"\x11request_cancelled\x18\x02 \x01(\bR\x10requestCancelled\x12'\n" +
+	"\x0fformation_state\x18\x03 \x01(\rR\x0eformationState\x120\n" +
+	"\x04auth\x18\x04 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x12%\n" +
+	"\x0erequest_digest\x18\x05 \x01(\tR\rrequestDigest*\x8e\x02\n" +
 	"\x14ActivityBattleReject\x12\x1f\n" +
 	"\x1bACTIVITY_BATTLE_REJECT_NONE\x10\x00\x12+\n" +
 	"'ACTIVITY_BATTLE_REJECT_INVALID_ARGUMENT\x10\x01\x12)\n" +
 	"%ACTIVITY_BATTLE_REJECT_MEMBER_OFFLINE\x10\x02\x12+\n" +
 	"'ACTIVITY_BATTLE_REJECT_MEMBER_IN_BATTLE\x10\x03\x12+\n" +
 	"'ACTIVITY_BATTLE_REJECT_MEMBER_NOT_READY\x10\x04\x12#\n" +
-	"\x1fACTIVITY_BATTLE_REJECT_INTERNAL\x10\x052m\n" +
+	"\x1fACTIVITY_BATTLE_REJECT_INTERNAL\x10\x052\xce\x01\n" +
 	"\rMatchInternal\x12\\\n" +
-	"\x13StartActivityBattle\x12!.match.StartActivityBattleRequest\x1a\".match.StartActivityBattleResponseB\x14\x98\xd4a\x15Z\vproto/match\x80\x01\x00b\x06proto3"
+	"\x13StartActivityBattle\x12!.match.StartActivityBattleRequest\x1a\".match.StartActivityBattleResponse\x12_\n" +
+	"\x14CancelActivityBattle\x12\".match.CancelActivityBattleRequest\x1a#.match.CancelActivityBattleResponseB\x14\x98\xd4a\x15Z\vproto/match\x80\x01\x00b\x06proto3"
 
 var (
 	file_proto_match_match_internal_proto_rawDescOnce sync.Once
@@ -256,23 +405,31 @@ func file_proto_match_match_internal_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_match_match_internal_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_match_match_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_match_match_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_proto_match_match_internal_proto_goTypes = []any{
 	(ActivityBattleReject)(0),            // 0: match.ActivityBattleReject
 	(*StartActivityBattleRequest)(nil),   // 1: match.StartActivityBattleRequest
 	(*StartActivityBattleResponse)(nil),  // 2: match.StartActivityBattleResponse
-	(*battle.BattleActivityContext)(nil), // 3: BattleActivityContext
+	(*CancelActivityBattleRequest)(nil),  // 3: match.CancelActivityBattleRequest
+	(*CancelActivityBattleResponse)(nil), // 4: match.CancelActivityBattleResponse
+	(*battle.BattleActivityContext)(nil), // 5: BattleActivityContext
+	(*base.ServiceCallAuth)(nil),         // 6: common.base.ServiceCallAuth
 }
 var file_proto_match_match_internal_proto_depIdxs = []int32{
-	3, // 0: match.StartActivityBattleRequest.activity_context:type_name -> BattleActivityContext
+	5, // 0: match.StartActivityBattleRequest.activity_context:type_name -> BattleActivityContext
 	0, // 1: match.StartActivityBattleResponse.reject:type_name -> match.ActivityBattleReject
-	1, // 2: match.MatchInternal.StartActivityBattle:input_type -> match.StartActivityBattleRequest
-	2, // 3: match.MatchInternal.StartActivityBattle:output_type -> match.StartActivityBattleResponse
-	3, // [3:4] is the sub-list for method output_type
-	2, // [2:3] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	1, // 2: match.CancelActivityBattleRequest.original:type_name -> match.StartActivityBattleRequest
+	6, // 3: match.CancelActivityBattleRequest.auth:type_name -> common.base.ServiceCallAuth
+	6, // 4: match.CancelActivityBattleResponse.auth:type_name -> common.base.ServiceCallAuth
+	1, // 5: match.MatchInternal.StartActivityBattle:input_type -> match.StartActivityBattleRequest
+	3, // 6: match.MatchInternal.CancelActivityBattle:input_type -> match.CancelActivityBattleRequest
+	2, // 7: match.MatchInternal.StartActivityBattle:output_type -> match.StartActivityBattleResponse
+	4, // 8: match.MatchInternal.CancelActivityBattle:output_type -> match.CancelActivityBattleResponse
+	7, // [7:9] is the sub-list for method output_type
+	5, // [5:7] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_proto_match_match_internal_proto_init() }
@@ -286,7 +443,7 @@ func file_proto_match_match_internal_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_match_match_internal_proto_rawDesc), len(file_proto_match_match_internal_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   2,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

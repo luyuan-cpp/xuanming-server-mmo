@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"shared/drainproof"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -15,19 +16,54 @@ import (
 )
 
 // RunRankPublisher 只从已提交 outbox 顺发；RPC超时不推进本地游标，重试同业务ID/载荷仅更新认证时间。
-func RunRankPublisher(ctx context.Context, s *Store, endpoint, secret string) {
+func RunRankPublisher(ctx context.Context, s *Store, endpoint, secret string, admissions ...*drainproof.Session) {
+	var relay *drainproof.Session
+	if len(admissions) > 1 {
+		return
+	}
+	if len(admissions) == 1 {
+		relay = admissions[0]
+		if relay == nil {
+			return
+		}
+	}
 	conn, e := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if e != nil {
 		logx.Error("评级投榜连接初始化失败")
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil && relay != nil {
+			relay.Hold()
+		}
+	}()
 	client := rankpb.NewRankAdminClient(conn)
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {
-		call, cancel := context.WithTimeout(ctx, 5*time.Second)
-		e = s.PublishRankOnce(call, client, secret)
+		if ctx.Err() != nil {
+			return
+		}
+		call, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		e = func() (resultErr error) {
+			if relay != nil {
+				finish, err := relay.Enter()
+				if err != nil {
+					return err
+				}
+				defer finish()
+				defer func() {
+					if recovered := recover(); recovered != nil {
+						relay.Hold()
+						panic(recovered)
+					}
+					if resultErr != nil {
+						relay.Hold()
+					}
+				}()
+			}
+			return s.PublishRankOnce(call, client, secret)
+		}()
 		cancel()
 		if e != nil && ctx.Err() == nil {
 			logx.Errorf("评级投榜等待恢复: %v", e)

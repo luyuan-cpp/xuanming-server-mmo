@@ -729,6 +729,70 @@ func TestCheckRelocateResume(t *testing.T) {
 	}
 }
 
+// TestRelocateRouteSourceRefusal(B2-1):续跑与 relocate-abort 都只认清单记录的映射来源,不一致即拒绝(撤销也不例外:换来源撤销会把
+// 只在另一边冻结的人记成 skipped、把清单标成 Aborted,那边的冻结成孤儿)。拒绝文案必须给出可执行的出路:用记录的来源重跑同一条
+// 命令(续跑或撤销);那个来源过不了成对核对时按报错分方向处置。文案里引用的成对核对报错子串与 decideRoutePairing 的实际报错
+// 逐字对上 —— 运维照着文案去比日志,对不上就等于没给出路。
+func TestRelocateRouteSourceRefusal(t *testing.T) {
+	const path = "relocate_901_to_1000000.json"
+	// 文案引用的两句成对核对报错,确实是 decideRoutePairing 在这两种处境下说的话。
+	dbMissing := routeWatermarkKey + " is missing"
+	redisPaired := routeWatermarkKey + " exists on this mapping Redis"
+	if err := decideRoutePairing(routeSourceDB, "", false, "0a"); err == nil || !strings.Contains(err.Error(), dbMissing) {
+		t.Fatalf("db source without a watermark: pairing error = %v, want it to contain %q", err, dbMissing)
+	}
+	wm := `{"v":1,"generation":"0a","watermark_ms":1}`
+	if err := decideRoutePairing(routeSourceRedis, wm, true, ""); err == nil || !strings.Contains(err.Error(), redisPaired) {
+		t.Fatalf("redis source with a watermark: pairing error = %v, want it to contain %q", err, redisPaired)
+	}
+
+	// 两个方向共有的:点名续跑与撤销的完整命令形状,说明人不丢数据,并给出升级路径。
+	common := []string{"-mode relocate-abort -manifest-path " + path + " -apply", "stop and escalate (runbook §15)", "nothing is lost"}
+	for _, tc := range []struct {
+		name, recorded, current string
+		want                    []string // nil = 期望放行
+	}{
+		{"same db", routeSourceDB, routeSourceDB, nil},
+		{"same redis", routeSourceRedis, routeSourceRedis, nil},
+		{"legacy manifest with redis", "", routeSourceRedis, nil},
+		// 冻结在库里:只能用 db 源;db 源过不了成对核对(环境回退成 redis 模式)时没有工具出路,且明令不许用 redis 源撤销。
+		{"db run with redis", routeSourceDB, routeSourceRedis, []string{
+			"-route-source db but this run uses -route-source redis", "ONLY with -route-source db -route-db-dsn", dbMissing,
+			"runbook §15.2", "rolled back to RouteStore.Mode=redis", "Never give it up with -route-source redis", "orphaned"}},
+		// 冻结只在 Redis 里:只能用 redis 源;redis 源过不了成对核对(环境已是 db_first)时没有工具出路,且不许删水位键。
+		{"redis run with db", routeSourceRedis, routeSourceDB, []string{
+			"-route-source redis but this run uses -route-source db", "ONLY with -route-source redis (no -route-db-dsn)", redisPaired,
+			"RouteStore.Mode=db_first", "do NOT delete " + routeWatermarkKey}},
+		{"legacy run with db", "", routeSourceDB, []string{
+			"no route_source", "ONLY with -route-source redis (no -route-db-dsn)", redisPaired, "do NOT delete " + routeWatermarkKey}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := relocateRouteSourceRefusal(tc.recorded, tc.current, path)
+			if tc.want == nil {
+				if err != nil {
+					t.Fatalf("relocateRouteSourceRefusal(%q, %q) = %v, want nil", tc.recorded, tc.current, err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("relocateRouteSourceRefusal(%q, %q) = nil, want a refusal (resume and abort alike)", tc.recorded, tc.current)
+			}
+			for _, sub := range append(tc.want, common...) {
+				if !strings.Contains(err.Error(), sub) {
+					t.Errorf("refusal = %q, want it to contain %q", err, sub)
+				}
+			}
+			// 判定与合服共用的 checkManifestRouteSource 是同一份:它放行的这里也放行,它拒绝的这里也拒绝。
+			if checkManifestRouteSource("relocate", tc.recorded, tc.current) == nil {
+				t.Errorf("checkManifestRouteSource(%q, %q) passes but relocateRouteSourceRefusal refuses", tc.recorded, tc.current)
+			}
+		})
+	}
+	if err := relocateRouteSourceRefusal("mysql", routeSourceDB, path); err == nil || !strings.Contains(err.Error(), "unknown route_source") {
+		t.Fatalf("unknown recorded source = %v, want a refusal", err)
+	}
+}
+
 func TestRelocateManifestSummary(t *testing.T) {
 	m := relocTestManifest(1, 2, 3)
 	m.Players[0].State = relocSwitched

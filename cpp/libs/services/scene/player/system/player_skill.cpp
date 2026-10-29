@@ -12,6 +12,7 @@
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"  // PlayerTravelHandoffComp
 #include "player/system/player_attribute.h"
+#include "player/system/player_level_rules.h"
 #include "services/battle/constants/turn_battle_constants.h"
 #include "services/battle/system/class_skill_rules.h"
 #include "table/code/buff_table.h"
@@ -40,11 +41,13 @@ namespace
 		return identity != nullptr ? identity->class_() : 0;
 	}
 
-	// 新号加载时 LevelComp 还是 0(InitPlayerFromAllData 随后才写 1),与属性系统同口径按 1 级算
+	// 玩法用的角色等级 = CappedLevel(存储等级):新号加载时 LevelComp 还是 0(InitPlayerFromAllData 随后才写 1)
+	// 按 1 级算;超过本版本 kMaxLevel 的存储等级(新版本写入 / 上限下调)按上限算,存储值原样携带不改写。
+	// 缺组件按 1 级算(既有行为)。
 	uint32_t PlayerLevel(entt::entity player)
 	{
 		const auto *level = tlsEcs.actorRegistry.try_get<LevelComp>(player);
-		return level != nullptr && level->level() > 0 ? level->level() : 1;
+		return level != nullptr ? playerlevel::CappedLevel(level->level()) : 1;
 	}
 
 	const SkillTable *FindSkillRow(uint32_t skillTableId)
@@ -115,6 +118,8 @@ namespace
 		return entry != nullptr ? entry->rank() : 0;
 	}
 
+	// 生效等级 = min(存储重数, RankLimit(角色等级)),RankLimit 不超过本版本 max_rank:存储重数高于上限
+	// (新版本写入 / 上限下调)时原样携带、按上限生效;rank 0 与未学同义,生效为 0
 	uint32_t EffectiveRankOf(const SkillTable &row, uint32_t storedRank, uint32_t playerLevel)
 	{
 		return classskill::EffectiveRank(storedRank, playerLevel, row.unlock_level(), row.max_rank());
@@ -179,6 +184,8 @@ namespace
 	}
 
 	// 按 Class.skill 补初始技能,返回补了几条。职业技能补 1 重(仍须到解锁等级),旧通用技能不分等级。
+	// rank 0 的职业技能条目与未学同义:种子已有这样一条时原地补到 1 重(复用条目,条目上的未知字段与位置不动),
+	// 不另加一条。已学(rank >= 1)的职业技能与已在列表里的旧通用技能都不碰。幂等。
 	uint32_t GrantInitialSkills(entt::entity player, PlayerSkillListComp &list)
 	{
 		const auto classId = PlayerClassId(player);
@@ -202,28 +209,34 @@ namespace
 				}
 				continue;
 			}
-			if (FindEntry(list, skillTableId) != nullptr)
+			const bool classSkill = PlayerSkillSystem::IsClassSkill(*row);
+			auto *existing = FindEntry(list, skillTableId);
+			if (existing != nullptr && (!classSkill || existing->rank() > 0))
 			{
 				continue;
 			}
-			const bool classSkill = PlayerSkillSystem::IsClassSkill(*row);
 			if (classSkill && (row->class_id() != classId || EffectiveRankOf(*row, 1, level) == 0))
 			{
-				// 种子配成别的职业的技能 / 初始技能解锁等级配高了:是表错,不发
+				// 种子配成别的职业的技能 / 初始技能解锁等级配高了:是表错,不发(已有的 rank 0 条目也原样不动)
 				LOG_WARN << "[PlayerSkill] Class seed skill cannot be learned: class_id=" << classId
 						 << " skill_table_id=" << skillTableId << " skill_class=" << row->class_id()
 						 << " unlock_level=" << row->unlock_level() << " level=" << level;
 				continue;
 			}
-			auto *entry = list.add_skill_list();
-			entry->set_skill_table_id(skillTableId);
+			auto *entry = existing;
+			if (entry == nullptr)
+			{
+				entry = list.add_skill_list();
+				entry->set_skill_table_id(skillTableId);
+			}
 			if (classSkill)
 			{
 				entry->set_rank(1);
 			}
 			++granted;
 			LOG_INFO << "[PlayerSkill] Initial skill granted: player_id=" << GuidForLog(player)
-					 << " class_id=" << classId << " skill_table_id=" << skillTableId << " rank=" << entry->rank();
+					 << " class_id=" << classId << " skill_table_id=" << skillTableId << " rank=" << entry->rank()
+					 << " reused_entry=" << (existing != nullptr);
 		}
 		return granted;
 	}
@@ -338,10 +351,18 @@ void PlayerSkillSystem::SanitizeSkillList(entt::entity player)
 		return;
 	}
 
+	// 只剔除与版本无关的坏记录(ID 为 0、重复 ID 保留首条);其余条目一律原样携带,加载期不按本版本的表改写
+	// (docs/design/mixed-version-persist-field-protection.md §12.1 D5 / D6):以前这里会把职业技能重数压回 max_rank、
+	// 删掉 rank 0 的职业技能、把通用技能的 rank 清 0,随下一次存盘落库;新版本调大上限或改了归属后回滚 scene,
+	// 玩家修过的重数就再也回不来。现在这些值只在运行期按本版本的表解释:
+	//   * 生效等级 = min(存储重数, RankLimit),上限之上的部分不生效(EffectiveRankOf);
+	//   * rank 0 的职业技能与未学同义(修习复用这一条,初始种子原地补 1 重,见 GrantInitialSkills);
+	//   * 旧通用技能读写都忽略 rank。
 	PlayerSkillListComp sanitizedSkillList;
 	std::unordered_set<uint32_t> seenSkillIds;
 	bool changed = false;
-	uint32_t inactiveSkills = 0;
+	uint32_t unknownSkills = 0;
+	uint32_t ranksAboveMax = 0;
 
 	for (const auto &skill : skillList->skill_list())
 	{
@@ -361,55 +382,32 @@ void PlayerSkillSystem::SanitizeSkillList(entt::entity player)
 			continue;
 		}
 
+		sanitizedSkillList.add_skill_list()->CopyFrom(skill);
+
 		// 本版本技能表查不到的技能**保留但不生效**(docs/design/mixed-version-persist-field-protection.md §12,第 5 批):
 		// 新版本加了技能后回滚 scene,旧表里没有这一行;以前这里直接删掉,旧版本一存盘玩家就永久失去这个技能。
-		// 生效与否由消费侧按表判定:HasSkill、ListSkills、战斗快照都跳过查不到表的 id(IsActiveSkill)。
+		// 生效与否由消费侧各自按表判定:HasSkill、BuildSkillBook、战斗快照、被动加成都用 FindSkillRow 查不到即跳过,
+		// 与 IsActiveSkill 同一口径。
 		const auto *row = FindSkillRow(skillId);
 		if (row == nullptr)
 		{
-			++inactiveSkills;
-			sanitizedSkillList.add_skill_list()->CopyFrom(skill);
+			++unknownSkills;
 			continue;
 		}
-		if (IsClassSkill(*row))
+		// 存储重数高于本版本 max_rank:可能是新版本调大上限后写入的,也可能是本版本把上限调低了。
+		// 两种都原样携带、按上限生效,只计数告警
+		if (IsClassSkill(*row) && skill.rank() > row->max_rank())
 		{
-			// 职业技能的"未学"是不在列表里;rank 0 的条目没有任何合法来源
-			if (skill.rank() == 0)
-			{
-				LOG_WARN << "Removing class skill with rank 0: skill_table_id=" << skillId
-						 << " entity=" << entt::to_integral(player);
-				changed = true;
-				continue;
-			}
-			auto *kept = sanitizedSkillList.add_skill_list();
-			kept->CopyFrom(skill);
-			if (row->max_rank() > 0 && kept->rank() > row->max_rank())
-			{
-				LOG_WARN << "Clamping class skill rank to table max: skill_table_id=" << skillId
-						 << " rank=" << kept->rank() << " max_rank=" << row->max_rank()
-						 << " entity=" << entt::to_integral(player);
-				kept->set_rank(row->max_rank());
-				changed = true;
-			}
-			continue;
-		}
-
-		auto *kept = sanitizedSkillList.add_skill_list();
-		kept->CopyFrom(skill);
-		if (kept->rank() != 0)
-		{
-			// 旧通用技能不分等级,写进来的等级没有含义
-			kept->set_rank(0);
-			changed = true;
+			++ranksAboveMax;
 		}
 	}
 
-	if (inactiveSkills > 0)
+	if (unknownSkills > 0 || ranksAboveMax > 0)
 	{
-		// 每次加载只打一行汇总:混版本窗口里这是正常现象;表被裁掉技能时同一行也足够定位。
-		LOG_WARN << "Keeping " << inactiveSkills
-				 << " player skill(s) unknown to this version's SkillTable, inactive until the table knows them, entity="
-				 << entt::to_integral(player);
+		// 每次加载只打一行汇总:混版本窗口里这是正常现象;表被裁掉技能 / 下调上限时同一行也足够定位。
+		LOG_WARN << "Carrying player skills this version's SkillTable cannot fully apply: unknown_skill_ids="
+				 << unknownSkills << " (inactive) ranks_above_max_rank=" << ranksAboveMax
+				 << " (effective capped at max_rank) entity=" << entt::to_integral(player);
 	}
 
 	if (changed)
@@ -445,13 +443,21 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 
 	// skill_list 只放现在能用的条目:robot / 旧客户端拿它当"可施放技能",不生效的条目放进去会被拿去施放然后被拒。
 	// 字段本身必须在场(哪怕是空表):robot 把缺字段读成"技能被清空"。
+	// 显式投影、不 CopyFrom 存档条目:只带 skill_table_id,职业技能再带存储重数(与 catalog.rank 同口径)。
+	// 存档条目的内部 id 与本版本解释不了的未知字段(新版本加的)不下发;旧通用技能的 rank 读写都忽略,回包里恒为 0。
 	auto *owned = response.mutable_skill_list();
 	for (const auto &entry : list.skill_list())
 	{
 		const auto *row = FindSkillRow(entry.skill_table_id());
-		if (row != nullptr && IsUsable(*row, entry, classId, classHasClassSkills, level))
+		if (row == nullptr || !IsUsable(*row, entry, classId, classHasClassSkills, level))
 		{
-			owned->add_skill_list()->CopyFrom(entry);
+			continue;
+		}
+		auto *ownedEntry = owned->add_skill_list();
+		ownedEntry->set_skill_table_id(entry.skill_table_id());
+		if (IsClassSkill(*row))
+		{
+			ownedEntry->set_rank(entry.rank());
 		}
 	}
 	response.set_class_id(classId);
@@ -472,6 +478,8 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 	const uint32_t busyTip = CheckSkillWritable(player);
 	for (const auto *row : rows)
 	{
+		// rank 是存储重数,也是 UpgradeSkill 比较 expected_rank 的口径。它可能高于本版本 max_rank(新版本写入 /
+		// 上限下调):此时 next_rank_cost = 0、阻断原因为满重,与 UpgradeSkill 经 PlanUpgrade 停在满重一致
 		const auto rank = StoredRank(list, row->id());
 		const auto rankLimit = classskill::RankLimit(level, row->unlock_level(), row->max_rank());
 		const uint64_t nextCost = rank < row->max_rank() ? classskill::UpgradeCost(rank + 1, row->unlock_level()) : 0;
@@ -581,6 +589,9 @@ void PlayerSkillSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequ
 		return;
 	}
 
+	// 存储重数可能高于本版本 max_rank(新版本写入 / 上限下调,加载期原样携带)。这里不另加守卫:
+	// PlanUpgrade 每一步先判"已到 max_rank",存储重数 >= max_rank 时第一步就停在 kMaxRank,
+	// steps = 0、totalCost = 0,走下面的整笔拒绝(不扣钱、不改等级,也不会算 rank + 1 回绕)。
 	const auto level = PlayerLevel(player);
 	const auto rankLimit = classskill::RankLimit(level, row->unlock_level(), row->max_rank());
 	const auto plan = classskill::PlanUpgrade(storedRank, row->max_rank(), rankLimit, row->unlock_level(),
@@ -600,6 +611,7 @@ void PlayerSkillSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequ
 		finish(err);
 		return;
 	}
+	// 已有条目(含 rank 0 的未学条目)原地改等级,保留其未知字段;没有才新增,列表里不会出现重复 id
 	auto *entry = FindEntry(list, row->id());
 	if (entry == nullptr)
 	{

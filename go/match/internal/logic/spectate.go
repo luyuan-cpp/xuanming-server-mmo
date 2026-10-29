@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"match/internal/constants"
 	"match/internal/discovery"
 	"match/internal/svc"
 
@@ -17,6 +18,7 @@ import (
 
 	"shared/generated/pb/table"
 
+	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -27,7 +29,8 @@ import (
 //
 //	spectate:battle:{battle_id}   string  SpectateBattleRecord pb,TTL = 战斗最长期限 + 60s
 //	spectate:battles:active       zset    member=battle_id 十进制,score=created_at_ms
-//	spectate:watching:{player_id} string  battle_id 十进制,TTL 同上(gather 互斥清退反查用)
+//	spectate:watching:{player_id} string  本次观战固定的 AddObserverRequest 原件 pb(battle_id / op / 准入截止 /
+//	                                      实例),TTL 同上(gather 互斥清退与换场按它发同 op 的 RemoveObserver)
 //
 // ZSET 成员没有 TTL,靠三条路清理:AddObserver 报房间不存在时懒剔除、
 // 读到过期 score 时现场剔除、matcher loop 每轮 ZREMRANGEBYSCORE 兜底。
@@ -39,10 +42,17 @@ const (
 	removeObserverTimeout = 3 * time.Second
 )
 
+// spectateAdmitWindow 本地观战原件的准入窗口:admit_before_ms = match 墙钟 now + 本值。battle 观战账本只接受
+// admit_before_ms ∈ (now, now+30s](battle 墙钟,battle_room_manager.cpp HandleAddObserver)。全局路径按 TiDB now()
+// + 30s 取值(authority BeginSpectator);本地没有统一时钟源,match 与 battle 各用本机墙钟,留 5s 给两边的时钟偏差:
+// match 快于 battle 不超过 5s 时,Add 不会因截止过远被拒。Add 本身受 addObserverTimeout 约束,25s 足够送达。
+const spectateAdmitWindow = 25 * time.Second
+
 // battle 侧 AddObserver 的房间不存在信号 = table.CommonError_kEntityIsNull
 // (与 battle_room_manager.cpp AddObserver 契约对齐,match 据此懒剔除索引);
-// 观众满=kRateLimitExceeded、观众是参战者=kInvalidParameter、签不出票=
-// kServiceUnavailable(turn-based §22 D70)不触发剔除 —— 这些情况战斗仍在打,索引是好的。
+// 观众席位满=MatchError_kMatchSpectateFull、墓碑表满=kRateLimitExceeded、观众是参战者=kInvalidParameter、
+// 签不出票=kServiceUnavailable(turn-based §22 D70)不触发剔除 —— 这些情况战斗仍在打,索引是好的。
+// 拒绝码到客户端结论的映射见 spectateRejectVerdict(Redis 与全局两条路径共用)。
 
 func spectateBattleKey(battleId uint64) string {
 	return fmt.Sprintf("spectate:battle:%d", battleId)
@@ -318,12 +328,20 @@ func stopWatchingIfAny(svcCtx *svc.ServiceContext, playerId uint64, reason strin
 	if raw == "" {
 		return
 	}
-	battleId, err := strconv.ParseUint(raw, 10, 64)
+	stopWatching(svcCtx, playerId, raw, reason)
+}
+
+// stopWatching 按观战标记里固定的原件清退一次观战并删标记(gather 入口与 WatchBattle 换场共用)。
+// RemoveObserver 必须带原 Add 的 op / 准入截止 / 实例:battle 只认原 op 摘人(观战账本,与全局
+// cancelGlobalSpectator 同口径)。标记解析不出原件(值损坏 / 缺账本字段)时拿不出原 op,只能删标记。
+func stopWatching(svcCtx *svc.ServiceContext, playerId uint64, raw, reason string) {
+	original, err := decodeWatchingMark(playerId, raw)
 	if err != nil {
-		logx.Errorf("[spectate] Invalid spectator marker value player=%d value=%q; clearing directly", playerId, raw)
+		logx.Errorf("[spectate] Invalid spectator marker player=%d len=%d: %v; clearing directly", playerId, len(raw), err)
 		deleteSpectateWatching(svcCtx, playerId)
 		return
 	}
+	battleId := original.GetBattleId()
 	record, err := loadSpectateBattle(svcCtx, battleId)
 	switch {
 	case err != nil:
@@ -331,10 +349,62 @@ func stopWatchingIfAny(svcCtx *svc.ServiceContext, playerId uint64, reason strin
 	case record == nil:
 		// 战斗已收尾,标记是残留,删标记即可。
 	default:
-		removeObserver(svcCtx, record.GetBattleNodeId(), battleId, playerId, reason)
+		removeObserver(svcCtx, record.GetBattleNodeId(), original, reason)
 	}
 	deleteSpectateWatching(svcCtx, playerId)
 	logx.Infof("[spectate] Spectator removed player=%d battle=%d reason=%s", playerId, battleId, reason)
+}
+
+// validSpectatorOperation 与 battle 侧 battle_security::ValidSpectatorOperation 同口径:
+// 36 位小写规范 UUID、非全 0(全局入口校验 request_id 用的也是这条规则)。
+func validSpectatorOperation(op string) bool {
+	id, err := uuid.Parse(op)
+	return err == nil && id != uuid.Nil && id.String() == op
+}
+
+// newLocalObserverAdd 按 battle 观战账本契约组本地观战的 AddObserver 原件(与全局 BeginSpectator 同口径):
+//   - spectator_operation_id:新生成的规范 UUID。本地没有 request_id 意图账本,一次 WatchBattle 每选中一场
+//     只生成一次;同一观战的 Add 与之后的补偿 / 清退 Remove 都用这一个 op;
+//   - admit_before_ms:now + spectateAdmitWindow(battle 只接受至多未来 30s);
+//   - target_instance_id:spectateTarget 定位到的 battle 实例。
+//
+// 原件先随观战标记落 Redis,再发 Add;battle 对同 op 只接受逐字节相同的重放,重试必须原样复用。
+func newLocalObserverAdd(battleId, observerId uint64, observerName string, routing *battlepb.BattleRouting,
+	instance string,
+) *battlepb.AddObserverRequest {
+	return &battlepb.AddObserverRequest{
+		BattleId:             battleId,
+		ObserverPlayerId:     observerId,
+		Routing:              routing,
+		ObserverName:         observerName,
+		SpectatorOperationId: uuid.NewString(),
+		AdmitBeforeMs:        nowMs() + uint64(spectateAdmitWindow.Milliseconds()),
+		TargetInstanceId:     instance,
+	}
+}
+
+// encodeWatchingMark 把原件序列化成观战标记值(确定性序列化,与全局原件 add_request 同口径)。
+func encodeWatchingMark(original *battlepb.AddObserverRequest) (string, error) {
+	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(original)
+	if err != nil {
+		return "", fmt.Errorf("序列化观战原件失败: %w", err)
+	}
+	return string(raw), nil
+}
+
+// decodeWatchingMark 从观战标记还原原件。值损坏、不属于该玩家、缺账本字段(含账本上线前写的十进制
+// battle_id 旧标记)一律报错:那种标记拿不出原 op,battle 不会据它摘人。
+func decodeWatchingMark(playerId uint64, raw string) (*battlepb.AddObserverRequest, error) {
+	original := &battlepb.AddObserverRequest{}
+	if err := proto.Unmarshal([]byte(raw), original); err != nil {
+		return nil, fmt.Errorf("观战标记反序列化失败: %w", err)
+	}
+	if original.GetBattleId() == 0 || original.GetObserverPlayerId() != playerId ||
+		!validSpectatorOperation(original.GetSpectatorOperationId()) ||
+		original.GetAdmitBeforeMs() == 0 || original.GetTargetInstanceId() == "" {
+		return nil, errors.New("观战标记缺少原操作字段")
+	}
+	return original, nil
 }
 
 // deleteSpectateWatching 删观战互斥标记(WatchBattle 失败回滚 / 清退共用)。
@@ -346,7 +416,7 @@ func deleteSpectateWatching(svcCtx *svc.ServiceContext, playerId uint64) {
 
 // battle 节点观战 RPC 的可替换缝(单测用记录器顶替真 gRPC;与 gather.go 的
 // prepareBattleFn / createBattleFn 等四个缝同一模式)。生产实现只做"建连 + 发一次
-// 请求",节点定位与索引懒剔除判定留在 addObserver / removeObserver 里,
+// 请求",节点与实例定位(spectateTarget)、原件组装与索引懒剔除判定留在缝外,
 // 这样单测能覆盖到判定逻辑而不需要起 battle 节点。
 var (
 	addObserverFn    = addObserverRPC
@@ -366,7 +436,9 @@ func addObserverRPC(ctx context.Context, endpoint string, req *battlepb.AddObser
 	return battlepb.NewBattleNodeClient(conn).AddObserver(callCtx, req)
 }
 
-// removeObserverRPC 是 removeObserverFn 的生产实现。
+// removeObserverRPC 是 removeObserverFn 的生产实现。battle 对不合账本契约的 Remove(实例不符、op 非法、
+// 截止与原件不同)回空包、不摘人,所以只有带回原 op 与实例的 cancelled 才算取消证明(与全局
+// cancelGlobalSpectator 同一判据);没有证明按失败返回,由调用方记日志。
 func removeObserverRPC(endpoint string, req *battlepb.RemoveObserverRequest) error {
 	conn, err := discovery.DialEndpoint(endpoint)
 	if err != nil {
@@ -374,8 +446,15 @@ func removeObserverRPC(endpoint string, req *battlepb.RemoveObserverRequest) err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), removeObserverTimeout)
 	defer cancel()
-	_, err = battlepb.NewBattleNodeClient(conn).RemoveObserver(ctx, req)
-	return err
+	reply, err := battlepb.NewBattleNodeClient(conn).RemoveObserver(ctx, req)
+	if err != nil {
+		return err
+	}
+	if !reply.GetCancelled() || reply.GetSpectatorOperationId() != req.GetSpectatorOperationId() ||
+		reply.GetTargetInstanceId() != req.GetTargetInstanceId() {
+		return errors.New("battle 未确认取消原观战操作")
+	}
+	return nil
 }
 
 // errAddObserverOutcomeUnknown 标记「AddObserver 可能已在 battle 落地」的失败:截止 / 取消 / 不可用时请求可能
@@ -392,68 +471,99 @@ func addObserverOutcomeUnknown(err error) bool {
 	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
 }
 
-// addObserver 调 battle 节点挂观众。返回 roomMissing=true 表示 battle 回
-// "房间不存在"(战斗已收尾),调用方据此懒剔除索引;其余错误(节点定位失败/
-// RPC 失败/满员/观众是参战者/签不出票)不动索引。ctx 是请求 ctx,见 addObserverRPC。
-func addObserver(ctx context.Context, svcCtx *svc.ServiceContext, battleNodeId uint32, battleId, observerId uint64,
-	observerName string, routing *battlepb.BattleRouting,
-) (roomMissing bool, err error) {
-	endpoint, err := spectateEndpoint(ctx, svcCtx, battleNodeId, battleId)
-	if err != nil {
-		return false, fmt.Errorf("定位 battle 节点失败(node=%d): %w", battleNodeId, err)
+// spectateRejectVerdict 把 battle AddObserver 的拒绝码映射为客户端结论(Redis 与全局两条路径共用):
+//   - kEntityIsNull(房间不存在,战斗已收尾)→ ErrBattleNotWatchable / not_found,roomMissing=true:
+//     Redis 路径据此懒剔除索引(建房窗口内除外),随机模式换一场;
+//   - kMatchSpectateFull(直连观众席位已满)→ ErrSpectateFull / full:战斗仍在打,索引不动,随机模式也不换场;
+//   - 其它(墓碑表满 kRateLimitExceeded、观众是参战者 kInvalidParameter、签不出票 kServiceUnavailable)
+//     → ErrBattleNotWatchable / rejected,索引不动、不换场。
+func spectateRejectVerdict(battleTip uint32) (clientTip uint32, outcome string, roomMissing bool) {
+	switch battleTip {
+	case uint32(table.CommonError_kEntityIsNull):
+		return constants.ErrBattleNotWatchable, "not_found", true
+	case uint32(table.MatchError_kMatchSpectateFull):
+		return constants.ErrSpectateFull, "full", false
+	default:
+		return constants.ErrBattleNotWatchable, "rejected", false
 	}
-	if err := ctx.Err(); err != nil {
-		return false, fmt.Errorf("请求已截止,不再挂观众: %w", err)
-	}
-	resp, err := addObserverFn(ctx, endpoint, &battlepb.AddObserverRequest{
-		BattleId:         battleId,
-		ObserverPlayerId: observerId,
-		Routing:          routing,
-		ObserverName:     observerName,
-	})
-	if err != nil {
-		if addObserverOutcomeUnknown(err) {
-			return false, fmt.Errorf("AddObserver RPC 结果未知: %w: %w", errAddObserverOutcomeUnknown, err)
-		}
-		return false, fmt.Errorf("AddObserver RPC 失败: %w", err)
-	}
-	if tipId := resp.GetErrorMessage().GetId(); tipId != 0 {
-		return tipId == uint32(table.CommonError_kEntityIsNull), fmt.Errorf("battle 节点拒绝观战 tip_id=%d", tipId)
-	}
-	return false, nil
 }
 
-// removeObserver 尽力调 battle 节点摘观众(清退路径;失败只记日志)。
-func removeObserver(svcCtx *svc.ServiceContext, battleNodeId uint32, battleId, observerId uint64, reason string) {
+// addObserver 按原件(newLocalObserverAdd,已随观战标记落盘)调 battle 节点挂观众。battle 明确拒绝时返回其
+// tip(rejectTip≠0,err 同时非 nil),调用方用 spectateRejectVerdict 得出客户端结论与是否懒剔除;RPC 失败返回
+// rejectTip=0,不动索引。endpoint 是 spectateTarget 按原件实例定位的地址;ctx 是请求 ctx,见 addObserverRPC。
+func addObserver(ctx context.Context, endpoint string, original *battlepb.AddObserverRequest) (rejectTip uint32, err error) {
+	if err := ctx.Err(); err != nil {
+		return 0, fmt.Errorf("请求已截止,不再挂观众: %w", err)
+	}
+	resp, err := addObserverFn(ctx, endpoint, original)
+	if err != nil {
+		if addObserverOutcomeUnknown(err) {
+			return 0, fmt.Errorf("AddObserver RPC 结果未知: %w: %w", errAddObserverOutcomeUnknown, err)
+		}
+		return 0, fmt.Errorf("AddObserver RPC 失败: %w", err)
+	}
+	if tipId := resp.GetErrorMessage().GetId(); tipId != 0 {
+		return tipId, fmt.Errorf("battle 节点拒绝观战 tip_id=%d", tipId)
+	}
+	return 0, nil
+}
+
+// removeObserver 尽力按原件让 battle 节点摘观众(补偿 / 清退路径;失败只记日志)。op / 准入截止 / 实例一律取自
+// 原件:battle 只按原 op 摘人,并在原截止前给原 op 立封闭墓碑,挡住仍在途中的同 op Add(观战账本)。
+func removeObserver(svcCtx *svc.ServiceContext, battleNodeId uint32, original *battlepb.AddObserverRequest, reason string) {
+	battleId, observerId := original.GetBattleId(), original.GetObserverPlayerId()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	endpoint, err := spectateEndpoint(ctx, svcCtx, battleNodeId, battleId)
+	endpoint, instance, err := spectateTarget(ctx, svcCtx, battleNodeId, battleId)
 	if err != nil {
 		logx.Errorf("[spectate] Failed to locate battle node during removal battle=%d node=%d player=%d: %v",
 			battleId, battleNodeId, observerId, err)
 		return
 	}
+	if instance != original.GetTargetInstanceId() {
+		// 节点已换实例(进程重启):原实例的房间与观众随进程消失,新实例也不认原 op,发了只会被拒。
+		logx.Infof("[spectate] Battle instance changed since admission; nothing to remove battle=%d node=%d player=%d reason=%s",
+			battleId, battleNodeId, observerId, reason)
+		return
+	}
 	if err := removeObserverFn(endpoint, &battlepb.RemoveObserverRequest{
-		BattleId:         battleId,
-		ObserverPlayerId: observerId,
-		Reason:           reason,
+		BattleId:             battleId,
+		ObserverPlayerId:     observerId,
+		Reason:               reason,
+		SpectatorOperationId: original.GetSpectatorOperationId(),
+		AdmitBeforeMs:        original.GetAdmitBeforeMs(),
+		TargetInstanceId:     original.GetTargetInstanceId(),
 	}); err != nil {
 		logx.Errorf("[spectate] RemoveObserver failed battle=%d player=%d reason=%s: %v",
 			battleId, observerId, reason, err)
 	}
 }
-func spectateEndpoint(ctx context.Context, s *svc.ServiceContext, node uint32, battle uint64) (string, error) {
+
+// spectateTarget 定位观战 RPC 的对端:gRPC 地址与 battle 实例(观战账本的 target_instance_id)。
+// 本地模式按观战记录的 battle_node_id 查注册表,实例取该节点登记的 NodeUuid —— 观战记录只有 node_id、没有实例
+// 字段;节点在建房后重启时这里拿到的是新实例,房间已随旧进程消失,Add 会回房间不存在,语义正确。
+// 全局模式取成局记录上固定的实例。实例为空时 fail-closed:battle 按实例拒绝,空实例的请求必然被拒。
+func spectateTarget(ctx context.Context, s *svc.ServiceContext, node uint32, battle uint64) (endpoint, instance string, err error) {
 	if s.Authority == nil {
-		return s.BattleNodes.EndpointOfNode(node)
+		entry, e := s.BattleNodes.EntryOfNode(node)
+		if e != nil {
+			return "", "", e
+		}
+		endpoint, instance = entry.Endpoint, entry.NodeUuid
+	} else {
+		f, e := s.Authority.Formation(ctx, battle)
+		if e != nil {
+			return "", "", e
+		}
+		if f.State != 4 {
+			return "", "", errors.New("成局尚未确认或已经中止")
+		}
+		endpoint, instance = f.TargetEndpoint, f.TargetInstanceId
 	}
-	f, e := s.Authority.Formation(ctx, battle)
-	if e != nil {
-		return "", e
+	if instance == "" {
+		return "", "", fmt.Errorf("battle 节点未登记实例 uuid(node=%d)", node)
 	}
-	if f.State != 4 {
-		return "", errors.New("成局尚未确认或已经中止")
-	}
-	return f.TargetEndpoint, nil
+	return endpoint, instance, nil
 }
 
 // cleanupExpiredSpectateIndex 清理观战索引里 score 早于 TTL 窗口的残留成员

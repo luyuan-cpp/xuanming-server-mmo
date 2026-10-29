@@ -444,7 +444,7 @@ Step 6 行含 `-DbConsumerGroup zone`,输出里没有 Step 2 的排空等待。
 | 步 | 做什么 | 拒绝时的状态与出路 |
 |---|---|---|
 | 入口 E1–E4 | TargetTime 只收早于当前的 UTC `yyyy-MM-ddTHH:mm:ss[.fff]Z`,`-PitrRestoredTo` 须等于它;`-Apply` 必须显式给 `-RedisHost`、`-MySqlDsnEnv`(变量非空)、`-RollbackDiscardTool`、`-BarrierProtocol legacy`,`-SkipMySqlPause` 必须配 `-PitrRestoredTo`;口令与 DSN 只给环境变量名;`-BarrierProtocol strict`(#3)与 `-AcceptBlockedPlayers`(#4)入口即拒;生成 rollback-id 与报告目录 `run/logs/zone-rollback/<rid>/` | 什么都没动 |
-| 0 a | 留空的 `-GateRouterMode` / `-ClientEntryMode` / Ingress 与集群现状核对。第 0 步全部通过后把 Step 6 的入口决定与读到的集群现状写进 `entry-state.json`;同一 rid 重跑、namespace 已删时沿用存档核对,入口决定与存档不同即拒 | 停服之前 |
+| 0 a | 留空的 `-GateRouterMode` / `-ClientEntryMode` / Ingress 与集群现状核对。第 0 步全部通过后把 Step 6 的入口决定与读到的集群现状写进 `entry-state.json`;同一 rid 重跑、namespace 已删时沿用存档核对,入口决定与存档不同即拒。(2026-10-22 补,B0-4:`-NodeOpenFileLimitMode` 留空时同一步另核对 gate / scene(含 Agones Fleet)模板里的 `NODE_OPEN_FILE_LIMIT_MODE`,任一为 `warn` 或读不到即拒;现状随集群现状存档(Schema 3),不进入口决定) | 停服之前 |
 | 0 b | Step 6 的同一份参数加 `-DryRun` 交给 k8s_deploy 静态预检 | 停服之前 |
 | 0 c | 两组在本 topic 上的 LAG 只读快照(只告警) | — |
 | 0 d | zone 组没有位点时以 dry-run 预演 Step 5(`-ToLatest`) | 停服之前 |

@@ -30,6 +30,8 @@ spec:
       labels:
         app: login
         tier: go-svc
+      # 这里不能手写 annotations:Pod 模板注解(削峰 / 微信密钥指纹与 prometheus.io/* 抓取注解)全部由
+      # tools/scripts/k8s_deploy.ps1 的 Add-PodTemplateAnnotation 一次写入,已有 annotations: 段时它会拒绝部署。
     spec:
       affinity:
         podAntiAffinity:
@@ -60,6 +62,10 @@ spec:
           ports:
             - containerPort: 50000
               name: grpc
+            # 与 ConfigMap 的 Prometheus.Port 9101 及 k8s_deploy.ps1 写入的 prometheus.io/port 注解一致(9101 = login),
+            # 三处同批发布;契约测试 tools/scripts/tests/login_metrics_contract.tests.ps1。
+            - containerPort: 9101
+              name: metrics
           readinessProbe:
             grpc:
               port: 50000

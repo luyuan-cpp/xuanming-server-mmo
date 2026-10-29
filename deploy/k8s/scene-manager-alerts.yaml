@@ -293,23 +293,18 @@ spec:
         # 它有过一段恒为空向量、永远不会响的时期(Prometheus 对恒空表达式不报错):
         #   - "scene_gone" 的唯一发射点在提交 a0152a5b8(2026-05-02)随 destroy-while-entering
         #     分支一起被删。这条分支在提交 d41219ca7(2026-05-30)加了回来(go/scene_manager/internal/logic/enterscenelogic.go
-        #     (2026-10-12 历史改写后,这两个提交号分别是 0e26844b5 与 f3f08e2ad,旧号在本仓已查不到。)
         #     里 AtomicIncrPlayerCountIfSceneExists 返回 <0 → ErrNoAvailableNode
         #     "scene %d disappeared during enter"),但当时**没有**带回 enter_scene_rejected_total,
         #     只记了 enter_scene_stage_seconds{stage="reserve"} 的耗时。
+        #     (2026-10-12 历史改写后对应的新号是 0e26844b5 与 f3f08e2ad,内容相同;2026-10-21 起旧历史经 6c7f507cc
+        #     吸收为 main 的祖先,旧号也能 git show。引用以新号为准。)
         #   - 2026-09-20 已在该分支补回 ObserveEnterSceneRejected(zone, "scene_gone")(常量
         #     rejectReasonSceneGone),对应告警是本组最后的 SceneManagerEnterSceneSceneGone,
         #     阈值 / for / severity 沿用原告警。
         #
         # 现在真实发射的 reason:下面 9 个(metrics.go 的 Help;发射点在 enterscenelogic.go / home_zone.go),
         # 外加列在它们之后的 channel_* 5 个(玩家主动选线预检,发射点在 channel_pick.go):
-        # (2026-10-20 补:Help 里另有 3 个本清单没列的 reason,本组都不按它们告警。
-        #   home_zone_merging:归属 zone 处于合服围栏内,zone_id 是 gate zone,只应在合服窗口里非 0;
-        #   session_stale:落点会话身份裁决拒绝,顶号竞态下偶发属正常;
-        #   session_conflict:同上一类裁决,应恒 0,已由下面 scene-manager.placement-identity 组按
-        #   placement_identity_total 告警。
-        #  逐个 reason 的含义以 metrics.go 里 enterSceneRejectedTotal 的注释为准。)
-        #   handoff_pending_no_marker     **不告警**。生产配置(AllowUnsafeCrossNodeHandoff=false)下,
+        #   handoff_pending_no_marker    **不告警**。生产配置(AllowUnsafeCrossNodeHandoff=false)下,
         #                                 客户端每一次跨节点换图的第一跳都注定拿到它:源 scene 收到 18 才
         #                                 冻结 → 存盘 → 写 handoff 标记 → 重发(docs/design/
         #                                 cross-zone-scene-travel.md §11.2)。它的速率只反映换图有多频繁。
@@ -340,6 +335,15 @@ spec:
         #                                 任何状态,玩家留在原地收 tip。scene_conf_id 是客户端可控字段。
         #   pending_map_fallback          跨 zone 传送第二条腿:第一条腿记下的目标地图解析失败,已回落默认
         #                                 大世界(人照常落地)。不该有稳定速率。
+        #
+        # (2026-10-20 补,10-22 订正:Help 里另有 3 个本清单没列的 reason,本组都不按它们告警。
+        #   home_zone_merging:归属 zone 处于合服围栏内,zone_id 是 gate zone,只应在合服窗口里非 0;窗口外持续
+        #   非 0 = 围栏残留,由 deploy/k8s/player-placement-alerts.yaml 的 SceneManagerHomeZoneMerging 告警。
+        #   session_stale:落点会话身份裁决拒绝,顶号竞态下偶发属正常;
+        #   session_conflict:同上一类裁决,应恒 0,由下面 scene-manager.placement-identity 组按
+        #   placement_identity_total 告警。
+        #  逐个 reason 的含义见 enterscenelogic.go / home_zone.go / channel_pick.go 的 rejectReason* 常量注释,
+        #  以及 metrics.go 里 enterSceneRejectedTotal 的注释。)
         #
         # 另有玩家主动选线预检发出的 5 个 reason(发射点 go/scene_manager/internal/logic/channel_pick.go,
         # 设计 docs/design/world-channel-switch.md §4.4;只有带 client_channel_pick 的 EnterScene 会发出,

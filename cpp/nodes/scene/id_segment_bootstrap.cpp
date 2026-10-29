@@ -214,7 +214,7 @@ std::size_t ConfigureGuidSegmentClients(Node & /*node*/)
 {
     const IdSegmentConfig &config = gNodeConfigManager.GetBaseDeployConfig().id_segment();
     // 单次领段的兜底期限从 DataService 的 gRPC deadline 派生、比它宽 1s(上游比下游宽,
-    // docs/design/grpc-client-deadline-failure-callback.md §4.2):失败通知必须先于它到,
+    // docs/design/grpc-muduo-transport.md §16.3):失败通知必须先于它到,
     // 否则持有者先放弃、共享路径进迟到窗口,随后到的失败 / 响应只能靠 abandoned_ 归属。
     // Node 构造时已 Apply,这里读到的就是生效值。
     const double fetchTimeoutSec =

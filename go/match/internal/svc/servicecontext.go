@@ -2,8 +2,13 @@ package svc
 
 import (
 	"context"
+	"crypto/sha256"
+	"errors"
 	"fmt"
 	"os"
+	"shared/authoritysql"
+	"shared/drainproof"
+	"shared/safego"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,6 +20,8 @@ import (
 	"match/internal/metrics"
 
 	dspb "proto/data_service"
+	matchpb "proto/match"
+	inboxpb "proto/player_inbox"
 
 	"shared/kafkacmd"
 	"shared/kafkautil"
@@ -35,21 +42,44 @@ import (
 // SceneNodeRpcPrefix / BattleNodeRpcPrefix 是 match 侧 watch 的两个发现前缀。
 // 与 load_reporter 的 sceneNodePrefix 同写法:字符串字面量,不依赖生成的枚举名。
 const (
-	SceneNodeRpcPrefix  = "SceneNodeService.rpc/"
-	BattleNodeRpcPrefix = "BattleNodeService.rpc/"
+	SceneNodeRpcPrefix   = "SceneNodeService.rpc/"
+	BattleNodeRpcPrefix  = "BattleNodeService.rpc/"
+	PlayerInboxRpcPrefix = "PlayerInboxNodeService.rpc/"
 )
 
 type ServiceContext struct {
-	Config        config.Config
-	Authority     *authority.Store
-	LoginSessions *redv9.Client
+	lifecycleMu      sync.Mutex
+	sourceMu         sync.Mutex
+	sourceStops      []context.CancelFunc
+	sourceWorkers    sync.WaitGroup
+	sourceClosed     bool
+	stopBackground   context.CancelFunc
+	resourcesClosed  bool
+	resourceCloseErr error
+	ConsumerOwner    *kafkautil.BoundConsumerGroup
+	WriterConfig     authoritysql.WriterConfig
+	RootAdmission    *drainproof.Session
+	RelayAdmission   *drainproof.Session
+	RelayIngress     *drainproof.Session
+	DrainRuntime     *drainproof.Runtime
+	Config           config.Config
+	Authority        *authority.Store
+	LoginSessions    *redv9.Client
 	// 仅main显式装配，缺失时CancelActivityBattle拒绝；不复用网络探测或其它服务秘密。
 	ActivityCancelAuth   *serviceauth.Verifier
 	ActivityCancelSecret string
+	BattleOutcomeAuth    *serviceauth.Verifier
+	BattleOutcomeSecret  string
+	// 启动时装配，随后只读；调用方必须在取得SQL/P锁之前调用。
+	RefreshBattleSettlement func(context.Context, *matchpb.MatchAuthorityTicketRecord) error
+	resultPublisher         *kafka.Writer
 	// 候选扫描游标是可重建调度状态，只由matcher循环访问；不参与SQL写决策。
 	GlobalScanMs      uint64
 	GlobalScanPlayer  uint64
 	GlobalGatherSlots chan struct{}
+	// 终局恢复与候选游标独立；只由同一matcher循环访问，不参与SQL终局裁决。
+	GlobalOutcomeRetryMs uint64
+	GlobalOutcomeBattle  uint64
 	// 投影维护独立走有界游标；首次完整修复前不以缺投影宣称本区人数不足。
 	GlobalRegionRepairMs            uint64
 	GlobalRegionRepairPlayer        uint64
@@ -157,6 +187,17 @@ func (s *ServiceContext) PartyTeam() PartyTeamPort {
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		panic(err)
+	}
+	return NewServiceContextWithAdmission(c, writer, drainproof.New(), drainproof.New())
+}
+
+func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterConfig, root, relay *drainproof.Session) *ServiceContext {
+	if root == nil || relay == nil || root == relay {
+		panic("匹配真实角色门禁未装配")
+	}
 	if c.Mode != "dev" && c.Mode != "test" && (!c.GlobalMatch.Enabled || !c.GlobalMatch.RequireTiDB) {
 		panic("生产匹配必须启用全球TiDB事务权威")
 	}
@@ -199,6 +240,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	matchRds, sharedRds := NewRedisHandles(c)
 	sc := &ServiceContext{
+		WriterConfig: writer, RootAdmission: root, RelayAdmission: relay, RelayIngress: drainproof.New(),
 		Config:             c,
 		MatchRedis:         matchRds,
 		SharedRedis:        sharedRds,
@@ -216,7 +258,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		kafkaWriteTimeout = 5 * time.Second
 	}
 	sc.Kafka = &kafka.Writer{
-		Addr: kafka.TCP(c.Kafka.Brokers...),
+		Completion: func(_ []kafka.Message, err error) { sc.HoldRelay(err) },
+		Addr:       kafka.TCP(c.Kafka.Brokers...),
 		// 控制面命令 topic(gate-cmd_gN)必须按 node_id % P 落到**指定分区**:
 		// 消费端 assign 的就是那一个分区,落错分区 = 目标 gate 永远收不到,
 		// 而 Kafka 一个错都不报(docs/design/control-plane-topic-partitioning-20260908.md)。
@@ -246,7 +289,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if c.GlobalMatch.Enabled {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		store, err := authority.Open(ctx, c.GlobalMatch)
+		store, err := authority.OpenWithPermission(ctx, c.GlobalMatch, authoritysql.Writer(writer))
 		if err != nil {
 			sc.Stop()
 			panic(fmt.Errorf("全球匹配权威初始化失败: %w", err))
@@ -265,7 +308,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			panic(fmt.Errorf("全球匹配跨域提交围栏不可用: %w", err))
 		}
 		// 先只读核准全部跨域真源；错误schema不能先固化为不可覆盖的全局策略原件。
-		if err := store.EnsureGlobalPolicy(ctx, c); err != nil {
+		if err := sc.RunRelay(func() error { return store.EnsureGlobalPolicy(ctx, c) }); err != nil {
 			sc.Stop()
 			panic(err)
 		}
@@ -283,10 +326,84 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		pubctx, pubcancel := context.WithCancel(context.Background())
 		sc.rankPublisherCancel = pubcancel
 		sc.rankPublisherDone = make(chan struct{})
+		outcomeSecret := os.Getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE")
+		outcomeVerifier, err := serviceauth.New(map[string]string{"battle": outcomeSecret})
+		inboxSecret := os.Getenv("MMORPG_PLAYER_INBOX_SECRET_MATCH")
+		if err != nil || len(inboxSecret) < 32 {
+			pubcancel()
+			close(sc.rankPublisherDone)
+			sc.Stop()
+			panic("全球终局必须配置独立Battle/Match入箱签名密钥")
+		}
+		sc.BattleOutcomeAuth, sc.BattleOutcomeSecret = outcomeVerifier, outcomeSecret
+		inboxNodes := discovery.NewNodeWatcher("player_inbox", PlayerInboxRpcPrefix, nil, func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) })
+		sc.resultPublisher = &kafka.Writer{Completion: func(_ []kafka.Message, err error) { sc.HoldRelay(err) }, Addr: kafka.TCP(c.Kafka.Brokers...), Balancer: &kafka.Hash{}, RequiredAcks: kafka.RequireAll, Async: false, MaxAttempts: 1, WriteTimeout: 2 * time.Second, AllowAutoTopicCreation: false}
+		resolveInbox := func(ctx context.Context) (inboxpb.PlayerInboxClient, error) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			node, ok := inboxNodes.PickRandom()
+			if !ok {
+				return nil, fmt.Errorf("收件箱尚无正式发现端点")
+			}
+			conn, err := discovery.DialEndpoint(node.Endpoint)
+			if err != nil {
+				return nil, err
+			}
+			return inboxpb.NewPlayerInboxClient(conn), nil
+		}
+		publishResult := func(ctx context.Context, battle uint64, raw []byte) error {
+			return sc.resultPublisher.WriteMessages(ctx, kafka.Message{Topic: c.ResultTopic, Key: []byte(fmt.Sprint(battle)), Value: raw})
+		}
+		sc.RefreshBattleSettlement = func(ctx context.Context, ticket *matchpb.MatchAuthorityTicketRecord) error {
+			return store.RefreshBattleSettlementReceipt(ctx, ticket, resolveInbox, inboxSecret)
+		}
+		var publishers sync.WaitGroup
+		publishers.Add(3)
 		go func() {
-			defer close(sc.rankPublisherDone)
-			authority.RunRankPublisher(pubctx, store, c.GlobalMatch.RankEndpoint, secret)
+			defer publishers.Done()
+			authority.RunRankPublisher(pubctx, store, c.GlobalMatch.RankEndpoint, secret, relay)
 		}()
+		go func() { defer publishers.Done(); inboxNodes.Run(pubctx, etcdCli) }()
+		go func() {
+			defer publishers.Done()
+			ticker := time.NewTicker(2 * time.Second)
+			defer ticker.Stop()
+			for {
+				if pubctx.Err() != nil {
+					return
+				}
+				call, cancel := context.WithTimeout(context.WithoutCancel(pubctx), 40*time.Second)
+				finish, enterErr := relay.Enter()
+				if enterErr != nil {
+					cancel()
+					return
+				}
+				err := func() (resultErr error) {
+					defer finish()
+					defer func() {
+						if recovered := recover(); recovered != nil {
+							relay.Hold()
+							panic(recovered)
+						}
+						if resultErr != nil {
+							relay.Hold()
+						}
+					}()
+					return store.PublishBattleOutcomesOnce(call, resolveInbox, inboxSecret, publishResult)
+				}()
+				cancel()
+				if err != nil && pubctx.Err() == nil {
+					logx.Errorf("终局原件投递等待恢复: %v", err)
+				}
+				select {
+				case <-pubctx.Done():
+					return
+				case <-ticker.C:
+				}
+			}
+		}()
+		go func() { publishers.Wait(); close(sc.rankPublisherDone) }()
 	}
 
 	return sc
@@ -339,26 +456,274 @@ func (sc *ServiceContext) SnowflakeLost() <-chan struct{} {
 
 // Stop 先关 Kafka writer(flush 在途批次),再释放 Snowflake worker lease。
 // 幂等,正常 defer 与失租强退路径可安全共用。
+func (sc *ServiceContext) BindDrainRuntime(runtime *drainproof.Runtime) error {
+	sc.lifecycleMu.Lock()
+	defer sc.lifecycleMu.Unlock()
+	if runtime == nil || sc.DrainRuntime != nil || runtime.Seed("SOURCE") == nil || runtime.Seed("RELAY") == nil {
+		return drainproof.ErrHold
+	}
+	if err := runtime.BindBoot(sc.WriterConfig.InstanceID(), sc.WriterConfig.WriterKey()); err != nil {
+		return err
+	}
+	sc.DrainRuntime = runtime
+	return nil
+}
+
+// BindBackgroundStop 由 main 交付已有后台上下文；控制面使用独立 context，不会取消自己的关闭请求。
+func (sc *ServiceContext) BindBackgroundStop(stop context.CancelFunc) error {
+	sc.lifecycleMu.Lock()
+	defer sc.lifecycleMu.Unlock()
+	if stop == nil || sc.stopBackground != nil || sc.resourcesClosed {
+		return drainproof.ErrHold
+	}
+	sc.stopBackground = stop
+	return nil
+}
+func (sc *ServiceContext) CloseSource(ctx context.Context) error {
+	sc.sourceMu.Lock()
+	defer sc.sourceMu.Unlock()
+	if sc.RootAdmission == nil {
+		return drainproof.ErrHold
+	}
+	sc.RootAdmission.CloseAdmission()
+	sc.sourceClosed = true
+	for _, stop := range sc.sourceStops {
+		stop()
+	}
+	done := make(chan struct{})
+	go func() { sc.sourceWorkers.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		sc.RootAdmission.Hold()
+		return errors.Join(drainproof.ErrHold, ctx.Err())
+	}
+	return sc.RootAdmission.Wait(ctx)
+}
+func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
+	sc.lifecycleMu.Lock()
+	defer sc.lifecycleMu.Unlock()
+	if sc.resourcesClosed {
+		return sc.resourceCloseErr
+	}
+	if err := sc.CloseSource(ctx); err != nil {
+		return err
+	}
+	if sc.RelayAdmission == nil {
+		return drainproof.ErrHold
+	}
+	if sc.RelayIngress != nil {
+		sc.RelayIngress.CloseAdmission()
+		if err := sc.RelayIngress.Wait(ctx); err != nil {
+			return err
+		}
+	}
+	if sc.stopBackground != nil {
+		sc.stopBackground()
+	}
+	if sc.rankPublisherCancel != nil {
+		sc.rankPublisherCancel()
+	}
+	if sc.ConsumerOwner != nil {
+		raw, err := sc.ConsumerOwner.CloseAndReport(ctx)
+		if err != nil {
+			return err
+		}
+		digest := sha256.Sum256(raw)
+		if err = sc.RelayAdmission.MergeSettled(digest[:]); err != nil {
+			return err
+		}
+	}
+	if sc.rankPublisherDone != nil {
+		select {
+		case <-sc.rankPublisherDone:
+		case <-ctx.Done():
+			sc.RelayAdmission.Hold()
+			return errors.Join(drainproof.ErrHold, ctx.Err())
+		}
+	}
+	// 循环、已发出的 RPC、队伍异步通知均持有同一 RELAY；停止新轮次后再等所有实际后继。
+	if err := sc.RelayAdmission.WaitIdle(ctx); err != nil {
+		return err
+	}
+	if sc.resultPublisher != nil {
+		if err := sc.resultPublisher.Close(); err != nil {
+			sc.RelayAdmission.Hold()
+			return err
+		}
+	}
+	if sc.Kafka != nil {
+		if err := sc.Kafka.Close(); err != nil {
+			sc.RelayAdmission.Hold()
+			return err
+		}
+	}
+	sc.RelayAdmission.CloseAdmission()
+	if err := sc.RelayAdmission.Wait(ctx); err != nil {
+		return err
+	}
+	sc.WriterConfig.Seal()
+	var result error
+	if sc.Authority != nil {
+		result = errors.Join(result, sc.Authority.DB.Close())
+	}
+	if sc.LoginSessions != nil {
+		result = errors.Join(result, sc.LoginSessions.Close())
+	}
+	if sc.snowflakeHd != nil {
+		sc.snowflakeHd.Close()
+	}
+	if sc.Etcd != nil {
+		result = errors.Join(result, sc.Etcd.Close())
+	}
+	sc.resourcesClosed = true
+	sc.resourceCloseErr = result
+	if result != nil {
+		sc.RelayAdmission.Hold()
+	}
+	return result
+}
 func (sc *ServiceContext) Stop() {
-	sc.stopOnce.Do(func() {
-		if sc.rankPublisherCancel != nil {
-			sc.rankPublisherCancel()
-			<-sc.rankPublisherDone
-		}
-		if sc.Authority != nil {
-			_ = sc.Authority.DB.Close()
-		}
-		if sc.LoginSessions != nil {
-			_ = sc.LoginSessions.Close()
-		}
-		if sc.Kafka != nil {
-			if err := sc.Kafka.Close(); err != nil {
-				logx.Errorf("[match] Kafka writer close/flush failed: %v", err)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if err := sc.StopAndReport(ctx); err != nil {
+		logx.Errorf("匹配关闭 HOLD: %v", err)
+	}
+}
+
+// StartSourceLoop 拥有新撮合发起者；prepared 阶段不执行新轮次，P1 真正停止并 join。
+func (sc *ServiceContext) StartSourceLoop(parent context.Context, point string, interval time.Duration, round func(context.Context)) {
+	if interval <= 0 || round == nil {
+		sc.RootAdmission.Hold()
+		return
+	}
+	sc.sourceMu.Lock()
+	defer sc.sourceMu.Unlock()
+	if sc.sourceClosed {
+		return
+	}
+	ctx, stop := context.WithCancel(parent)
+	sc.sourceStops = append(sc.sourceStops, stop)
+	sc.sourceWorkers.Add(1)
+	safego.Go(point, func() {
+		defer sc.sourceWorkers.Done()
+		defer stop()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				sc.RootAdmission.Hold()
+				panic(recovered)
 			}
-		}
-		if sc.snowflakeHd != nil {
-			sc.snowflakeHd.Close()
-			sc.snowflakeHd = nil
+		}()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+			finish, err := sc.RootAdmission.Enter()
+			if err != nil {
+				if errors.Is(err, drainproof.ErrClosed) {
+					continue
+				}
+				sc.RootAdmission.Hold()
+				return
+			}
+			func() { defer finish(); round(context.WithoutCancel(ctx)) }()
 		}
 	})
+}
+
+// LaunchRelay 在派生 goroutine 之前接纳；调用方的 RPC 结束不影响已接纳工作。
+// fn 必须保留原有有界预算，未知 I/O 由返回值或 HoldRelay 明确报告。
+func (sc *ServiceContext) LaunchRelay(point string, fn func() error) bool {
+	if sc.RelayAdmission == nil {
+		return false
+	}
+	finish, err := sc.RelayAdmission.Enter()
+	if err != nil {
+		return false
+	}
+	safego.Go(point, func() {
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				sc.RelayAdmission.Hold()
+				panic(recovered)
+			}
+		}()
+		if err := fn(); err != nil {
+			sc.RelayAdmission.Hold()
+		}
+	})
+	return true
+}
+
+// RunRelay 用于已有 owner 负责 join 的同步一轮，不能替代 reader/轮次自身的真实停止。
+func (sc *ServiceContext) RunRelay(fn func() error) error {
+	if sc.RelayAdmission == nil {
+		return drainproof.ErrHold
+	}
+	finish, err := sc.RelayAdmission.Enter()
+	if err != nil {
+		return err
+	}
+	defer finish()
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			sc.RelayAdmission.Hold()
+			panic(recovered)
+		}
+	}()
+	err = fn()
+	if err != nil {
+		sc.RelayAdmission.Hold()
+	}
+	return err
+}
+
+func (sc *ServiceContext) HoldRelay(err error) {
+	if err != nil && sc.RelayAdmission != nil {
+		sc.RelayAdmission.Hold()
+	}
+}
+
+// LaunchRelayTask 供已有 void 工作体接纳；业务错误必须在原观察点 HoldRelay，panic 不会当作完成。
+func (sc *ServiceContext) LaunchRelayTask(point string, fn func()) bool {
+	return sc.LaunchRelay(point, func() error { fn(); return nil })
+}
+
+// StartRelayLoop 拥有计时器及整个循环的生命周期；每轮保留原有超时，停止只阻止新轮。
+func (sc *ServiceContext) StartRelayLoop(ctx context.Context, point string, interval time.Duration, round func(context.Context)) {
+	if interval <= 0 {
+		sc.HoldRelay(drainproof.ErrHold)
+		return
+	}
+	sc.LaunchRelayTask(point, func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+			// 让已接受的一轮用其自身有界预算结束，不能把主循环取消当作 SQL 终局。
+			if !safego.Run(point, func() { round(context.WithoutCancel(ctx)) }) {
+				sc.HoldRelay(drainproof.ErrHold)
+			}
+		}
+	})
+}
+
+// BindConsumerOwner 只登记本服务真实消费组，不能在维护时换成另一个代次 owner。
+func (sc *ServiceContext) BindConsumerOwner(owner *kafkautil.BoundConsumerGroup) error {
+	sc.lifecycleMu.Lock()
+	defer sc.lifecycleMu.Unlock()
+	if owner == nil || sc.ConsumerOwner != nil {
+		return drainproof.ErrHold
+	}
+	sc.ConsumerOwner = owner
+	return nil
 }

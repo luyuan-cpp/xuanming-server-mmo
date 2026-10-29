@@ -17,12 +17,12 @@
     使用 nghttp2.h 的翻译单元必须定义 NGHTTP2_STATICLIB(muduo_grpc.vcxproj 已加)。
 
     构建目录 build/third_party/nghttp2-vs2026-dbg 在仓库根的 build/ 下(已被 .gitignore);
-    安装目录在子模块内,.gitmodules 对该子模块配了 ignore = dirty,与 grpc 同做法。
+    安装目录在子模块内,.gitmodules 对该子模块配了 ignore = dirty。
 
 .PARAMETER Jobs
     并行编译数,传给 cmake --build -j。默认取逻辑 CPU 数。
 .PARAMETER PreferredMsvcVersion
-    优先选用的 MSVC 工具集版本前缀(与 build_grpc.ps1 一致);找不到就用最新的。
+    优先选用的 MSVC 工具集版本前缀;找不到就用最新的。
 .PARAMETER Clean
     构建前删除构建目录与安装目录,从零开始。
 .PARAMETER UseVSGenerator
@@ -229,7 +229,7 @@ if ($UseVSGenerator) {
     $GeneratorArgs = @('-G', $GeneratorName, '-A', 'x64')
 } else {
     $GeneratorName = 'Ninja'
-    # vcvars64 已把 cl 放进 PATH,用短名避免 CMake 对带空格长路径的转义问题(与 build_grpc.ps1 同理)。
+    # vcvars64 已把 cl 放进 PATH,用短名避免 CMake 对带空格长路径的转义问题。
     $GeneratorArgs = @(
         '-G', $GeneratorName,
         '-DCMAKE_C_COMPILER=cl',

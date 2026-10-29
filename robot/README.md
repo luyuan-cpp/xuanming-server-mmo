@@ -15,6 +15,28 @@ cd robot && go run . -c etc/robot.yaml     # 直接运行
 
 唯一的命令行参数是 `-c <配置文件>`,跑什么由配置里的 `mode` 决定。
 
+## 网关与选区
+
+当前 Gate 分配只走 HTTP，配置要求 `gateway_addr` 非空，不再有 gRPC 分配或 `gate_mode` 分支。
+
+```yaml
+gateway_addr: "http://127.0.0.1:8081"
+zone_id: 0
+```
+
+显式配置非零 `zone_id` 时直接向该区分配，不请求 server-list；配置为 0 时先以 5 秒超时读取
+`GET /api/server-list`，选择响应中第一个推荐区，否则取第一项。请求、读取、解码失败或列表为空时，
+本次分配回退为传 0，由服务端继续决定；这不保证一定获得 Gate。当前自动选择不筛区服状态、不按负载排序，
+也不单独检查 server-list 的 HTTP 状态，不能解释成“选择首个可进入区服”。默认样例实际为 `zone_id: 1`。
+
+通用登录与选区入口是 `main.go` 的 `resolveGateAddrLocal` / `resolveGateViaHTTPLocal`；选区只保存在本次局部变量，
+不回写 `cfg.ZoneID`。跨区或指定区验收应显式配置区号。`gate.go` 旧函数链没有当前外部调用者，不能把两份实现视为等价入口；
+本次只整理文档，不清理该代码。旧 `deploy/k8s/robot_stress.ps1` 模板仍含 gRPC／空 Gateway 配置，不能直接当作当前可运行配置。
+
+`asset-arrival-prepare` 使用独立分配入口并要求显式非零区号，不经过这条自动选区链。
+
+分配后的持票查询与恢复由 `AssignGateWithQueue` 处理，契约见[开服削峰设计 §11.5](../docs/design/open-server-rate-limit-design.md)。
+
 ## 模式
 
 | `mode` | 做什么 |

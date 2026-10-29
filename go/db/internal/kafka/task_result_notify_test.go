@@ -96,7 +96,7 @@ func receiveNotify(t *testing.T, got <-chan miniredis.PubsubMessage) miniredis.P
 }
 
 func readTask(taskID, replyInstance string) *db_proto.DBTask {
-	return &db_proto.DBTask{Key: 42, Op: "read", MsgType: "taskpb.TaskResult", TaskId: taskID, ReplyInstance: replyInstance}
+	return &db_proto.DBTask{Key: 42, Op: db_proto.DBOp_DB_OP_READ, MsgType: "taskpb.TaskResult", TaskId: taskID, ReplyInstance: replyInstance}
 }
 
 func TestTaskResultNotifyTarget(t *testing.T) {

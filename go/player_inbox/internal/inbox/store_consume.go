@@ -345,6 +345,11 @@ func (s *Store) Ack(ctx context.Context, req *inboxpb.AckPlayerInboxRequest) (*i
 				return err
 			}
 			d := decideAck(rows[report.GetSeq()], report)
+			// Battle不能把未知、拒绝或跳过变成销账；永久原收据必须明确APPLIED。
+			if row := rows[report.GetSeq()]; row != nil && row.GetMsgType() == uint32(inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT) && report.GetOutcome() != inboxpb.PlayerInboxOutcome_PLAYER_INBOX_OUTCOME_APPLIED {
+				results = append(results, &inboxpb.PlayerInboxAckItem{Seq: report.GetSeq(), Result: inboxpb.PlayerInboxAckResult_PLAYER_INBOX_ACK_CONFLICT, State: inboxpb.PlayerInboxItemState(row.GetState())})
+				continue
+			}
 			if d.finalize {
 				upd, err := tx.ExecContext(ctx, "UPDATE "+itemTable+
 					" SET `state` = ?, `finalized_by` = ?, `decided_epoch` = ?, `outcome_reason` = ?, `updated_ms` = ?"+

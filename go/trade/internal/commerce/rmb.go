@@ -118,7 +118,7 @@ func (s *RmbConsignments) save(ctx context.Context, old *tradepb.TradeCommerceRe
 			return err
 		}
 		if r.Version != old.Version {
-			return ErrConflict
+			return staleObservation() // 读到之后被别的写者推进过:下一轮按新行重来,不推迟
 		}
 		w, err := data.Workflow(r)
 		if err != nil {
@@ -364,8 +364,9 @@ func (s *RmbConsignments) checkAssetIdentity(ctx context.Context, r *tradepb.Tra
 	if err != nil {
 		return err
 	}
+	// 换主 / 被冻结是长期状态,按 role_conflict 分钟级复查(2026-10-22),与 checkContractIdentities 同一分类。
 	if owned.Account != t.SellerAccount || owned.OwnerRevision != t.SellerOwnerRevision || owned.TradeListingId != 0 {
-		return ErrConflict
+		return roleConflict()
 	}
 	if w.Stage == "rmb_delivery" {
 		buyer, err := s.Directory.Lookup(ctx, r.BuyerPlayerId)
@@ -373,7 +374,7 @@ func (s *RmbConsignments) checkAssetIdentity(ctx context.Context, r *tradepb.Tra
 			return err
 		}
 		if buyer.Account != t.BuyerAccount || buyer.OwnerRevision != t.BuyerOwnerRevision || buyer.TradeListingId != 0 {
-			return ErrConflict
+			return roleConflict()
 		}
 	}
 	return nil

@@ -15,6 +15,7 @@
 #include "proto/common/component/actor_comp.pb.h"
 #include "services/scene/player/system/player_activity_schedule.h"
 #include "services/scene/player/system/player_activity.h"
+#include "services/scene/player/system/player_level_rules.h"
 #include "services/scene/player/system/player_lifecycle.h"
 #include "table/code/condition_table.h"
 #include "table/code/dungeon_table.h"
@@ -169,11 +170,13 @@ uint32_t PlayerMissionSystem::Accept(entt::entity player, uint32_t scope,
     if (result == kSuccess) {
         (*missions.GetMutableMissionList().mutable_mission_begin_time())[missionId] = nowMs;
         if (const auto* level = tlsEcs.actorRegistry.try_get<LevelComp>(player); level != nullptr) {
+            // 等级条件与其他玩法同口径,按生效等级判(超上限的存储等级按上限,0 按 1,player_level_rules.h)
+            const uint32_t effectiveLevel = playerlevel::CappedLevel(level->level());
             ConditionEvent currentLevel;
             currentLevel.player = player;
             currentLevel.conditionType = static_cast<uint32_t>(eConditionType::kConditionLevelUp);
-            currentLevel.conditionIds.push_back(level->level());
-            currentLevel.amount = level->level();
+            currentLevel.conditionIds.push_back(effectiveLevel);
+            currentLevel.amount = effectiveLevel;
             MissionSystem::HandleConditionEvent(currentLevel, missions, MissionConfig::GetSingleton(), followUps, missionId);
         }
         // 完成事实已持久化：晚接取依赖任务也能补齐，但只更新本次新任务。

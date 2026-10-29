@@ -69,6 +69,10 @@ AutoAllocate)现在都过 `IsPlayerPool()`,拿到宝宝池一律按"池不存在
 "等级从哪来"的真相。因此核心线让宝宝等级完全派生:主人升级 → `PlayerUpgradeEvent` →
 `PetSystem::RecalculateAll(kLevelChanged)` → 推列表。宝宝的独立经验是二期(§8)。
 
+主人等级一律读生效等级 `playerlevel::CappedLevel`(0 按 1、超上限的存储等级按上限,2026-10-23)。
+主人等级低于出战宝宝时取消出战**只在 `kLevelChanged` 做**;加载(`kLoad`)不写 `active_pet_id` ——
+召唤与战斗快照本来就按主人等级拦截,留着的出战指针带不进战斗,而加载期按本版本解读改写出战状态会随存盘落库。
+
 ### 3.3 一级 → 二级
 
 ```
@@ -89,7 +93,19 @@ AutoAllocate)现在都过 `IsPlayerPool()`,拿到宝宝池一律按"池不存在
 - **加载 / 加点 / 洗点**:按比例保持 `hp × newMax / oldMax`(活着至少留 1)。
   不这么做的话"洗点降上限 → 再把点加回来"就是宝宝的免费回血,和角色那条 2026-09-04
   被堵掉的白嫖路径一模一样。
-- **已分配 > 总量的收敛**:主人降级(GM / 回档)或改表缩点后整池清零返还并打 WARN。
+- **已分配 > 总量不再收敛**(2026-10-23,`mixed-version-persist-field-protection.md` §12.1 D3 / D4):
+  与角色同一套"加点统一规则"(`player-attribute-allocation.md` §3.3,纯规则在 `attribute_allocation_rules.h`):
+  - 加载与重算不改写、不返还 `PetInstance.allocated`;以前加载时删掉不属于宝宝池的键(`SanitizeAllocations`)、
+    超额整只清空返还(`RecalculateOne`),回滚一次就删、升回也恢复不了;
+  - 已知维度 = 本版本表里属于宝宝池的维度;其余的键(新版本加的维度、角色维度、表里查不到的)是未知键:原样携带、永不生效、计入已用;
+  - 宝宝池生效 ⇔ Σ已知 ≤ 按宝宝等级算的总量且不超单项上限;不生效时全部已知维度按 0 参与二级属性、列表 `value`、
+    战斗快照与结算夹取 —— 唯一出处是 `BuildDimensionInputs`(`ComputeDerived` 与 `FillPetInfo` 都经它,不另写判定);
+  - 剩余点 = 生效 ? max(0, 总量 − Σ已知 − Σ未知) : 0;加点只写变化的键,不生效时回 `kPetPointsNotEnough`;
+  - 洗点只清宝宝池已知维度、未知键原样保留;Σ已知 == 0 回 `kPetNothingToChange` 不扣费;不生效时免费并打 WARN
+    (`metric=allocation_reset_free_ineffective`),列表 `reset_cost_gold` 与实际扣费同一个函数;
+  - 旧上限 / 新上限都按生效值算,从不生效状态洗点 HP/MP 不变;
+  - `kLoad` 时对不生效 / 带未知键的宝宝各打一条 WARN(`metric=allocation_not_effective`),不写数据。
+  用例:`player_feature_handler_test.cpp` 的 `PetAllocationTest`(未编译,待 Codex 验证)。
 
 ## 4. 协议(`proto/scene/player_pet.proto`,service `ScenePetClientPlayer`)
 
@@ -198,6 +214,7 @@ UI 连点第 4 个包就 `kRateLimitExceeded(1008)`,现象是"请求无响应"�
 4. 战斗在途 / 跨 zone 冻结期间拒绝一切宝宝写操作。
 5. 种类行缺失(改表 / 删行)时**保留实例**、召唤时拒绝、日志 WARN ——
    玩家资产不能因为策划删了一行表就悄悄消失。
+6. 加载与重算不改写 `PetInstance.allocated`(未知键原样携带、超额整池按 0 生效),`kLoad` 不写 `active_pet_id`(§3.2 / §3.3)。
 
 ## 8. 已知缺口 / 二期
 

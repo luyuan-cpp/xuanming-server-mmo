@@ -20,7 +20,14 @@ namespace muduo
 /// This class is immutable.
 /// It's recommended to pass it by value, since it's passed in register on x64.
 ///
-class Timestamp : public muduo::copyable
+class
+#ifdef _MSC_VER
+// 保留原版比较基类，同时让 MSVC 的多重空基类仍保持八字节值布局。
+__declspec(empty_bases)
+#endif
+Timestamp : public muduo::copyable,
+                  public boost::equality_comparable<Timestamp>,
+                  public boost::less_than_comparable<Timestamp>
 {
  public:
   ///

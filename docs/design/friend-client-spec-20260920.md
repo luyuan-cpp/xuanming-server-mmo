@@ -61,6 +61,7 @@
 
 - proto 源:`--proto_path=$ProtoRoot`,`$ProtoRoot` 默认值见上(错的,必须显式传)。
 - protoc:`[string]$Protoc = "protoc"`,走 PATH;仓内 `tools/` 下没有 `protoc.exe`。服务端仓自带一份:`third_party/grpc/install_vs2026_dbg/bin/protoc.exe`(`libprotoc 35.1`),可用 `-Protoc <绝对路径>` 传入。⚠ **protoc 35.1 生成的 C# 与客户端内置的 Google.Protobuf 3.28.3 运行时是否兼容,未核实**(现有 `Proto/Generated` 是用哪个版本的 protoc 生成的也未核实)—— 重生成后若出现大面积无关 diff 或编译错误,先查这一条。
+  **2026-10-26 工具路径更新**：上一行保留 09-20 核对记录；今后从服务端独立安装的 `third_party/protobuf/install_vs2026_dbg/bin/protoc.exe` 取用 `libprotoc 35.1`，不再使用旧 gRPC SDK 路径。这只更新工具来源，不改变上段 C# 运行时兼容性尚未核实的结论，也不授予读取或修改独立客户端的权限。
 - 输出:`Assets/Scripts/Proto/Generated`,平铺,文件名由 proto 文件名转 PascalCase。
 - `$files` 中货币块(`player_currency.proto` 上方)的注释原文:「handler 生成器…是按服务端 proto 全量出 handler 的,这份清单漏配哪个 proto,就会多出一批引用不存在类型的 handler(CS0246)。服务端新增 proto 时,这里必须同步加,否则下次重生成必红。」
 - **清单里已有这三行,不用再补**(客户端 `120e2d8` + 工作区,2026-09-20 核对):`proto/trade/jubaozhai.proto`(连同 `trade_error_tip` / `common_error_tip`)和 `proto/team/team.proto`(连同 `team_error_tip`)由 `120e2d8` 带入。`"proto/friend/friend.proto"` 是工作区未提交的改动,附两行注释,并给 `team_error_tip` 行补了逗号;它现在是末项,没有尾逗号。实现者只需确认 friend 行还在,并随本批一起提交(本批提交里要显式列出 `tools/gen_proto.ps1`)。(2026-09-20 客户端基线 d2b165a → 120e2d8 后更正)

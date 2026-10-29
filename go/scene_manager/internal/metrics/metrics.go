@@ -102,7 +102,7 @@ var (
 	instanceDestroyedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "instance_destroyed_total",
-		Help:      "Instance/mirror destroys by kind (instance|mirror) and reason (idle|explicit|cascade|node_death|source_migrated).",
+		Help:      "Instance/mirror destroys by kind (instance|mirror) and reason (idle|explicit|cascade|node_death|source_migrated|source_scaled_in).",
 	}, []string{"zone_id", "kind", "reason"})
 
 	// enterSceneRejectedTotal 统计 EnterScene 在「归属交接 / 归属查询 / 跨 zone 传送目标地图 /
@@ -114,8 +114,8 @@ var (
 	// 未到、Redis 读写失败、Kafka 路由失败等快速失败路径只回错误码,不记这条指标。
 	// scene_gone = destroy-while-entering(AtomicIncrPlayerCountIfSceneExists 返回 <0,场景在解析
 	// 之后、预占之前被回收;只有请求指定 scene_id 的进入走这条预占路径)。这个发射点曾在 a0152a5b8
-	// 被删、d41219ca7 加回分支时漏带,2026-09-20 补回。(2026-10-12 历史改写后,这两个提交号
-	// 分别是 0e26844b5 与 f3f08e2ad。)
+	// 被删、d41219ca7 加回分支时漏带,2026-09-20 补回。(2026-10-12 历史改写后对应的新号是 0e26844b5
+	// 与 f3f08e2ad;10-21 起旧号经 6c7f507cc 也作为祖先保留在 main 里,引用以新号为准。)
 	//
 	// 读数注意:handoff_pending_no_marker 在生产配置(AllowUnsafeCrossNodeHandoff=false)下是
 	// 跨节点换图的常规第一跳,恒非 0,不能拿来告警;告警口径见 deploy/k8s/scene-manager-alerts.yaml。
@@ -261,7 +261,7 @@ var (
 	enterSceneStageSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Subsystem: subsystem,
 		Name:      "enter_scene_stage_seconds",
-		Help:      "EnterScene RPC sub-stage latency (zone_id, stage). Stage values: dedup|scene_resolve|reserve|update_loc|route_gate|release_dispatch|cross_zone.",
+		Help:      "EnterScene RPC sub-stage latency (zone_id, stage). Stage values: dedup|scene_resolve|reserve|update_loc|route_gate|release_dispatch|cross_zone|home_zone|role_lookup.",
 		Buckets:   []float64{0.0005, 0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5},
 	}, []string{"zone_id", "stage"})
 
@@ -345,6 +345,36 @@ var (
 		Help:      "owner_epoch mint EVALs replayed by the redis client after the first execution already applied, recognised as the request's own write (handoff-marker mints only).",
 	})
 
+	// ownerEpochMintClockBehindTotal 统计墙钟地板没起作用的铸造(docs/design/zone-redis-regression-guard-20261022.md §4.3.1 G3a):
+	// 铸造目标值 = max(观察值 + 1, 当前毫秒),当前毫秒 ≤ 观察值时只能取观察值 + 1。稳态下观察值是上一次铸造取的墙钟,
+	// 所以它非 0 多半说明铸造的 scene_manager 副本之间、或与上一次铸造的副本之间有时钟偏差(或同一玩家在同一毫秒内连续换手)。
+	// 持续增长时按 §14 第 13 条的主机时钟偏差监控排查。不带任何 label(不带 player_id)。
+	ownerEpochMintClockBehindTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "owner_epoch_mint_clock_behind_total",
+		Help:      "owner_epoch mints whose wall-clock floor did not apply (current ms <= stored epoch), so the mint fell back to stored+1; a host clock skew signal.",
+	})
+
+	// ownerEpochMintDurableTotal / Seconds 是铸造之后 WAITAOF 落盘确认的结果与耗时(§4.3.2 G3b)。只对真的写进 Redis 的
+	// 铸造计(首发生效或重放识别命中);CAS 落败、标记已撤回的铸造什么都没写,不计。两项份数都配 0(不发 WAITAOF)时也不计。
+	//   confirmed    份数满足,随后才推路由 / 重定向
+	//   not_durable  WAITAOF 正常返回但份数不足(含服务端等满超时):本次落点按「推送失败」单调回滚,客户端回可重试错误
+	//   error        WAITAOF 被拒 / 回复形状不对 / 传输失败:同 not_durable 处置
+	// 耗时是整条 pipeline(铸造 EVAL + WAITAOF)的往返,everysec 下预期均值约 0.5s、上界约 1s(未实测,以 §8.3 R-b 为准)。
+	// 起服预置全部 result 为 0(告警的 increase() 看不到序列从「不存在」到 1 的第一次跳变)。
+	ownerEpochMintDurableTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "owner_epoch_mint_durable_total",
+		Help:      "WAITAOF confirmations after an owner_epoch mint, by result (confirmed|not_durable|error). not_durable/error placements are rolled back as a failed route push.",
+	}, []string{"result"})
+
+	ownerEpochMintDurableSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: subsystem,
+		Name:      "owner_epoch_mint_durable_seconds",
+		Help:      "Round trip of the owner_epoch mint pipeline (EVAL + WAITAOF on one connection), by result (confirmed|not_durable|error).",
+		Buckets:   []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2},
+	}, []string{"result"})
+
 	// reentryBarrierBlockedTotal 统计因「老属主节点刚判死、再入屏障未到」而被
 	// 拒绝的改派/销毁/清理次数。site 是**代码里写死的常量点位名**
 	// (resolve_scene|rebalance|reassign|world_channel_lazy|orphan_cleanup|
@@ -369,6 +399,34 @@ var (
 		Name:      "enter_scene_owner_dead_takeover_total",
 		Help:      "EnterScene placements that treated a player's location as ownerless because its scene node was confirmed dead and the re-entry barrier had elapsed.",
 	}, []string{"zone_id"})
+
+	// enterSceneOwnerReplacedTakeoverTotal:节点号还在册,但在册的已是重启后复用该号的新进程,持有这名玩家的旧进程实例
+	// 已从注册表消失且再入屏障已过,EnterScene 把位置当作无持有者落点(owner_replaced.go playerLocationOwnerReplaced,GO-3)。
+	// 与上一条分开计,口径相同:稳态恒 0,scene 进程崩溃并以原号重启后约等于「当时挂在它上面、随后回来的玩家数」。
+	enterSceneOwnerReplacedTakeoverTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "enter_scene_owner_replaced_takeover_total",
+		Help:      "EnterScene placements that treated a player's location as ownerless because the process instance holding the player was gone from the registry (its node id reused by a new process) and the re-entry barrier had elapsed.",
+	}, []string{"zone_id"})
+
+	// enterSceneHandoffAdmittedTotal:凭源 scene 的落盘标记放行、且落点已提交的跨节点 / 跨 zone 交接(同 zone 换节点的落点,
+	// 与跨 zone 第一条腿的等待落点)。它是 enter_scene_rejected_total{reason="handoff_pending_no_marker"} 比值告警的分母
+	// (cross-zone-scene-travel.md §13.9「口径 B」):健康时每次放行之前约有一次 no_marker 拒绝(第一跳),只拒不放才是异常。
+	// 告警阈值等首轮压测基线,本计数先落。
+	enterSceneHandoffAdmittedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "enter_scene_handoff_admitted_total",
+		Help:      "Cross-node / cross-zone handoffs admitted on the source scene's persisted handoff marker whose placement was committed.",
+	}, []string{"zone_id"})
+
+	// ownerReplacedRecheckTotal:GO-3 判「持有进程已被顶替」时向 etcd 做的线性一致复核(owner_replaced.go),按结果分。
+	// result 取值见 OwnerReplacedRecheck* 常量。absent 在节点崩溃并以原号重启后约等于名下回来的玩家数;
+	// present 非 0 = 本副本镜像滞后;error 持续非 0 = etcd 不可用,名下玩家一直回 17。
+	ownerReplacedRecheckTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "owner_replaced_recheck_total",
+		Help:      "etcd re-checks made while deciding whether a player's holding scene process was replaced by a new process reusing its node id, by result.",
+	}, []string{"zone_id", "result"})
 
 	// deadNodeReconcilePending 是「已判死、但收尾动作还被屏障压着」的节点数。
 	// 它应该在一个屏障时长内回到 0;长期不为 0 = 收尾链路卡住了。
@@ -480,6 +538,13 @@ const (
 	EnterSceneStageRouteGate       = "route_gate"
 	EnterSceneStageReleaseDispatch = "release_dispatch"
 	EnterSceneStageCrossZone       = "cross_zone"
+	// EnterSceneStageHomeZone 只包住 resolveHomeZone 里实际发出的 data_service GetPlayerHomeZone(没配 DataServiceRpc 的
+	// 旁路不计),zone_id 取 gate zone(同 home_zone_lookup_total)。
+	EnterSceneStageHomeZone = "home_zone"
+	// EnterSceneStageRoleLookup 只包住 lookupCurrentRole 里的 data_service LookupAccountRole(全局 TiDB 点查)。
+	// lookupCurrentRole 在 zone 解析之前跑、签名里没有 zone,zone_id 恒为 "0";LeaveScene 走同一函数,样本数 = EnterScene + LeaveScene
+	// 的调用次数 —— 压测要的是这条依赖的单次耗时与总调用量,两者都正好。
+	EnterSceneStageRoleLookup = "role_lookup"
 )
 
 func register() {
@@ -496,8 +561,10 @@ func register() {
 			agonesCounterRollbackTotal, agonesMappingFailureTotal,
 			agonesCounterDrift, worldAutoscaleTotal,
 			kafkaDeliveryTotal, enterSceneRollbackTotal, enterSceneMintReplayRecognizedTotal,
+			ownerEpochMintClockBehindTotal, ownerEpochMintDurableTotal, ownerEpochMintDurableSeconds,
 			reentryBarrierBlockedTotal, deadNodeReconcilePending,
-			enterSceneOwnerDeadTakeoverTotal,
+			enterSceneOwnerDeadTakeoverTotal, enterSceneOwnerReplacedTakeoverTotal, enterSceneHandoffAdmittedTotal,
+			ownerReplacedRecheckTotal,
 			homeZoneLookupTotal,
 			nodeDetachDeferredTotal,
 			worldChannelDirectoryPublishTotal,
@@ -510,7 +577,38 @@ func register() {
 		for _, outcome := range loadRefreshOutcomes {
 			loadRefreshTotal.WithLabelValues(outcome).Add(0)
 		}
+		for _, result := range ownerEpochMintDurableResults {
+			ownerEpochMintDurableTotal.WithLabelValues(result).Add(0)
+			ownerEpochMintDurableSeconds.WithLabelValues(result)
+		}
 	})
+}
+
+// owner_epoch_mint_durable_total / _seconds 的 result 标签取值。**必须是常量**:它们直接变成 Prometheus label。
+const (
+	OwnerEpochMintDurableConfirmed  = "confirmed"
+	OwnerEpochMintDurableNotDurable = "not_durable"
+	OwnerEpochMintDurableError      = "error"
+)
+
+// ownerEpochMintDurableResults 是注册时预置为 0 的全部 result,新增取值时同步加在这里。
+var ownerEpochMintDurableResults = [...]string{
+	OwnerEpochMintDurableConfirmed,
+	OwnerEpochMintDurableNotDurable,
+	OwnerEpochMintDurableError,
+}
+
+// ObserveOwnerEpochMintClockBehind 记一次墙钟地板没起作用的铸造,见 ownerEpochMintClockBehindTotal。
+func ObserveOwnerEpochMintClockBehind() {
+	register()
+	ownerEpochMintClockBehindTotal.Inc()
+}
+
+// ObserveOwnerEpochMintDurable 记一次铸造之后的落盘确认结果(result 取 OwnerEpochMintDurable*)与 pipeline 往返耗时。
+func ObserveOwnerEpochMintDurable(result string, d time.Duration) {
+	register()
+	ownerEpochMintDurableTotal.WithLabelValues(result).Inc()
+	ownerEpochMintDurableSeconds.WithLabelValues(result).Observe(d.Seconds())
 }
 
 // load_refresh_total 的 outcome 标签取值。**必须是常量**:它们直接变成 Prometheus label。
@@ -660,6 +758,31 @@ func ResetLeaderGauges() {
 func ObserveEnterSceneOwnerDeadTakeover(zoneID uint32) {
 	register()
 	enterSceneOwnerDeadTakeoverTotal.WithLabelValues(strconv.FormatUint(uint64(zoneID), 10)).Inc()
+}
+
+// ObserveEnterSceneOwnerReplacedTakeover 记一次「持有进程已被同号新进程顶替、按无持有者落点」(GO-3)。
+func ObserveEnterSceneOwnerReplacedTakeover(zoneID uint32) {
+	register()
+	enterSceneOwnerReplacedTakeoverTotal.WithLabelValues(strconv.FormatUint(uint64(zoneID), 10)).Inc()
+}
+
+// ObserveEnterSceneHandoffAdmitted 记一次凭落盘标记放行、且落点已提交的交接。
+func ObserveEnterSceneHandoffAdmitted(zoneID uint32) {
+	register()
+	enterSceneHandoffAdmittedTotal.WithLabelValues(strconv.FormatUint(uint64(zoneID), 10)).Inc()
+}
+
+// owner_replaced_recheck_total 的 result 标签取值。**必须是常量**:它们直接变成 Prometheus label。
+const (
+	OwnerReplacedRecheckAbsent  = "absent"
+	OwnerReplacedRecheckPresent = "present"
+	OwnerReplacedRecheckError   = "error"
+)
+
+// ObserveOwnerReplacedRecheck 记一次 GO-3 的 etcd 复核结果,result 取 OwnerReplacedRecheck* 常量。
+func ObserveOwnerReplacedRecheck(zoneID uint32, result string) {
+	register()
+	ownerReplacedRecheckTotal.WithLabelValues(strconv.FormatUint(uint64(zoneID), 10), result).Inc()
 }
 
 // ObserveReentryBarrierBlocked 记一次被再入屏障挡下的所有权变更尝试。

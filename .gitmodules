@@ -37,10 +37,6 @@
 	path = third_party/boost
 	url = https://github.com/boostorg/boost.git
 	ignore = dirty
-[submodule "third_party/grpc"]
-	path = third_party/grpc
-	url = https://github.com/grpc/grpc.git
-	ignore = dirty
 [submodule "third_party/curl"]
 	path = third_party/curl
 	url = https://github.com/curl/curl.git
@@ -63,4 +59,20 @@
 [submodule "third_party/nghttp2"]
 	path = third_party/nghttp2
 	url = https://github.com/nghttp2/nghttp2.git
+	ignore = dirty
+[submodule "third_party/protobuf"]
+	path = third_party/protobuf
+	url = https://github.com/protocolbuffers/protobuf.git
+	ignore = dirty
+[submodule "third_party/abseil-cpp"]
+	path = third_party/abseil-cpp
+	url = https://github.com/abseil/abseil-cpp.git
+	ignore = dirty
+[submodule "third_party/googletest"]
+	path = third_party/googletest
+	url = https://github.com/google/googletest.git
+	ignore = dirty
+[submodule "third_party/boringssl"]
+	path = third_party/boringssl
+	url = https://github.com/google/boringssl.git
 	ignore = dirty

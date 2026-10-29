@@ -29,6 +29,7 @@ package main
 //   任一步失败 → `EQUIP_SMOKE_FAIL step=… reason=…`,退出码 1。
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -44,6 +45,7 @@ import (
 	"robot/config"
 	"robot/generated/pb/game"
 	"robot/logic/gameobject"
+	"robot/logic/handler"
 	"robot/metrics"
 	"robot/pkg"
 
@@ -56,6 +58,12 @@ const equipSmokeAccount = "robot_9103"
 
 // 单次 RPC 的等待预算。背包 / 穿脱是纯内存 + 表查询,正常 <50ms;给 10s 是覆盖 gate→scene 首次路由建立。
 const equipSmokeRpcTimeout = 10 * time.Second
+
+// errEquipSmokeTimeout 是 equipSmokeSession 的请求等满 equipSmokeRpcTimeout 仍没回包时的超时哨兵(smokeCaller 包裹它)。
+// 文案点名 gate 不回显请求号这一种原因,是因为 prepareBehaviorClient 不丢弃背包 / 属性消息号上 id = 0 的回包,
+// 会交给 handler 静默落进 Player,不会打 `reply without request id dropped`;此时超时是唯一的现象。
+var errEquipSmokeTimeout = errors.New("等响应超时(scene 没有这个方法?robot 不是用 proto-gen 之后的产物重编的?" +
+	"或 gate 没回显请求号:直连模式需要带 2026-10-19 rpc_reply_bridge 修复的 gate)")
 
 // 同一个消息号两次发送之间至少隔这么久。
 //
@@ -154,7 +162,7 @@ type equipChange struct {
 	bag       *scene.BagInfo // 人物背包全量(仅 tip == 0 时有)
 	equipment *scene.BagInfo // 装备栏全量(仅 tip == 0 时有)
 	tip       uint32         // 0 = 成功;否则是响应体 error_message 里的业务拒绝码
-	panelSeq  uint64         // 发请求前的属性面板序号:成功后服务器推的那份面板,序号必然比它大
+	panelSeq  uint64         // 发请求前的属性面板序号:成功后服务器推的那份面板,序号必然比它大(序号只由推送推进,见 attributePanel)
 }
 
 // equipBaseAttr 是表里的一条基础属性(Item.base_attr)。
@@ -192,9 +200,9 @@ func RunEquipSmoke(cfg *config.Config) {
 	zap.L().Info("[equip-smoke] in scene", zap.Uint64("player", session.gc.PlayerId))
 
 	// ---- 步骤 0:预备,把账号拉回已知起点(同账号可反复跑) ----
-	// 等级归 1:第 3 步要用「1 级穿不上 80 级武器」;GmSetPlayerLevel 先推面板再回包,attributePanel 按来源认领
+	// 等级归 1:第 3 步要用「1 级穿不上 80 级武器」;GmSetPlayerLevel 先推面板再回包,attributePanel 只认带本次请求号的回包
 	if _, err := session.attributePanel(game.SceneAttributeClientPlayerGmSetPlayerLevelMessageId,
-		&scene.GmSetPlayerLevelRequest{Level: 1}); err != nil {
+		&scene.GmSetPlayerLevelRequest{Level: 1}, &scene.GmSetPlayerLevelResponse{}); err != nil {
 		fail("prep-level", "%v", err)
 	}
 	// 上一轮若在穿上之后中途失败,账号会带着装备进来:无条件全卸,否则第 4 步的面板基线就不是裸装,
@@ -353,7 +361,7 @@ func RunEquipSmoke(cfg *config.Config) {
 
 	// ---- 步骤 4:穿武器 A ----
 	bare, err := session.attributePanel(game.SceneAttributeClientPlayerGetAttributePanelMessageId,
-		&scene.GetAttributePanelRequest{})
+		&scene.GetAttributePanelRequest{}, &scene.GetAttributePanelResponse{})
 	if err != nil {
 		fail("panel-bare", "%v", err)
 	}
@@ -455,7 +463,7 @@ func RunEquipSmoke(cfg *config.Config) {
 		fail("relogin-layout", "%v", err)
 	}
 	restored, err := session.attributePanel(game.SceneAttributeClientPlayerGetAttributePanelMessageId,
-		&scene.GetAttributePanelRequest{})
+		&scene.GetAttributePanelRequest{}, &scene.GetAttributePanelResponse{})
 	if err != nil {
 		fail("relogin-panel", "%v", err)
 	}
@@ -618,39 +626,60 @@ func (s *equipSmokeSession) throttle(messageId uint32) {
 	s.lastSent[messageId] = time.Now()
 }
 
-// call 发一个背包 / 装备 RPC 并等**它自己的**响应,按「来源消息号 + 序号游标」认领:
-// 游标在发送前取,只认序号更新、来源等于本次消息号的那一份(handler.RecordFeatureBody 落的快照)。
+// rpc 返回本次等待用的 smokeCaller(回包按 MessageContent.id 认领)。
+//
+// 每次现建、不存成会话字段:mall_arrival_smoke_scenario.go 用字面量构造 equipSmokeSession,新加的字段在那里是 nil;
+// 现建也天然满足「一个 smokeCaller 同一时刻只服务一次等待」。prepareBehaviorClient 的收包回调不转发 SendTipToClient,
+// 所以没有 gate kServiceUnavailable 的快速失败,与迁移前一样等满超时。
+func (s *equipSmokeSession) rpc() *smokeCaller {
+	return newSmokeCaller(s.gc, s.stats, s.gc.Account, equipSmokeRpcTimeout, errEquipSmokeTimeout)
+}
+
+// call 发一个背包 / 装备 RPC 并等**它自己的**回包(smokeCaller.callDispatch,按 MessageContent.id 认领)。
+//
+// 成功回包在 RecvLoop 上交给 handler.MessageBodyHandler → 生成 handler → handler.RecordFeatureBody 落快照,执行完
+// callDispatch 才返回。「被受理就必须带回 layout」这类完整性判据只在 RecordFeatureBody 一处,这里不复制一份:
+// 返回后按发送前取的序号游标读本次的快照(FeatureResponse)即可,不必轮询。上一次超时请求的迟到回包由 GameClient
+// 丢弃,不会落快照、更不会被当成本次结果。
 //
 //	成功          → (响应体, 0, nil)
 //	业务拒绝      → (nil, tip, nil):tip 来自响应体 error_message,是不是预期内由调用方判断
-//	其它          → (nil, 0, err):发送失败 / 超时 / 全零或残缺的响应
+//	其它          → (nil, 0, err):发送失败 / 超时 / gate 信封拒绝 / 残缺的响应
 //
-// 「全零响应」专门说一句:gate 级拒绝(限流、GM 闸、超长包)把错误码写在信封 MessageContent.error_message、
-// body 为空。prepareBehaviorClient 的收包回调目前只把属性消息的信封错误翻译成 tip,背包这几条会被照常分发成
-// 一份全零响应 —— 没有 tip、也没有包。这里必须把它判成失败,否则穿 / 脱会被当成「成功但两个包都是空的」。
-// 真实的拒绝码看紧挨着的那条 `gate envelope error` 日志。
+// gate / 路由服的信封拒绝(限流、GM 闸、R1 的 1003)不交 dispatch,作为 envelopeTip 回到这里,一律报 error 并点名信封码:
+// 现有调用方(本文件、equip_forge_smoke、equip_forge_topup、asset_arrival_prepare)没有一个把信封码当预期结果,
+// 参数粗检(kInvalidParameter)与 scene GM 闸都写在响应体里,走的是业务拒绝那一支。
 func (s *equipSmokeSession) call(messageId uint32, request proto.Message) (proto.Message, uint32, error) {
 	s.throttle(messageId)
 	cursor := s.player.FeatureSequence()
-	if err := s.gc.SendRequest(messageId, request); err != nil {
-		return nil, 0, fmt.Errorf("send message_id=%d: %w", messageId, err)
+	envelopeTip, err := s.rpc().callDispatch(messageId, request, nil, equipSmokeRpcTimeout, handler.MessageBodyHandler)
+	if err != nil {
+		return nil, 0, err
 	}
-	s.stats.MsgSent()
-	deadline := time.Now().Add(equipSmokeRpcTimeout)
-	for time.Now().Before(deadline) {
-		if snapshot, ok := s.player.FeatureResponse(messageId, cursor); ok {
-			if snapshot.TipID != 0 {
-				return nil, snapshot.TipID, nil
-			}
-			if snapshot.Failure != "" || snapshot.Response == nil {
-				return nil, 0, fmt.Errorf("message_id=%d 回了全零 / 残缺的响应(%s):多半是 gate 级拒绝(限流 / GM 闸),"+
-					"拒绝码见紧挨着的 `gate envelope error` 日志", messageId, snapshot.Failure)
-			}
-			return snapshot.Response, 0, nil
-		}
-		time.Sleep(25 * time.Millisecond)
+	snapshot, recorded := s.player.FeatureResponse(messageId, cursor)
+	return equipFeatureOutcome(messageId, envelopeTip, snapshot, recorded)
+}
+
+// equipFeatureOutcome 把一次背包 / 装备请求的结局归成 call 的三元返回。envelopeTip 是 callDispatch 返回的信封拒绝码;
+// snapshot / recorded 是回包交给生成 handler 之后、按发送前游标读到的快照(Player.FeatureResponse)。
+// 判定顺序:信封拒绝 → 生成 handler 没落快照 → 响应体业务拒绝 → 残缺响应 → 成功。
+func equipFeatureOutcome(messageId, envelopeTip uint32, snapshot gameobject.FeatureSnapshot, recorded bool) (proto.Message, uint32, error) {
+	if envelopeTip != 0 {
+		return nil, 0, sceneRequestEnvelopeRejection(messageId, envelopeTip)
 	}
-	return nil, 0, fmt.Errorf("等响应超时 message_id=%d(scene 没有这个方法,或 robot 不是用 proto-gen 之后的产物重编的?)", messageId)
+	if !recorded {
+		// 回包已交 dispatch 却没有快照:响应体解不开、handler 表里没有这个消息号,或 Player 不在 PlayerList(handler 打了日志)
+		return nil, 0, fmt.Errorf("message_id=%d reply was not recorded by the generated handler "+
+			"(body failed to decode, no handler for this message id, or player missing from PlayerList)", messageId)
+	}
+	if snapshot.TipID != 0 {
+		return nil, snapshot.TipID, nil
+	}
+	if snapshot.Failure != "" || snapshot.Response == nil {
+		// 信封拒绝已在上面分出去,走到这里是 scene 真回了一份缺包的响应(判据见 RecordFeatureBody)
+		return nil, 0, fmt.Errorf("message_id=%d returned an incomplete response (%s)", messageId, snapshot.Failure)
+	}
+	return snapshot.Response, 0, nil
 }
 
 // getBag 读一个包的全量快照,并复核快照自身一致(布局引用的实例都存在、不重复、不悬空)。
@@ -750,35 +779,25 @@ func (s *equipSmokeSession) expectBagsUnchanged(inventory, equipment *scene.BagI
 	return nil
 }
 
-// attributePanel 发一个属性 RPC 并等它带回的面板。只认「来源 = 本次请求消息号」的那一份:
-// GmSetPlayerLevel 会先推一份(NotifyAttributePanelChanged)再回响应,不看来源就会把推送当成响应消费。
-// 属性消息的 gate 信封错误已由 prepareBehaviorClient 翻译成 tip,这里按 tip 报错即可。
-func (s *equipSmokeSession) attributePanel(messageId uint32, request proto.Message) (*scene.AttributePanelInfo, error) {
+// attributePanel 发一个属性 RPC 并等**它自己的**回包,直接从回包解出面板(requestAttributePanel,按 MessageContent.id 认领);
+// 任何拒绝都是 error,判据与 attribute / pet 冒烟共用 attributePanelOutcome。response 传与请求配对的响应类型的空实例。
+//
+// 回包不经生成 handler、不写 Player 上的面板:这份面板只有调用方要。于是 Player 上的面板 / 序号 / 来源只由推送
+// (NotifyAttributePanelChanged,经 prepareBehaviorClient 的收包回调交 handler)推进,panelAfter 认推送靠的正是这一点。
+// GmSetPlayerLevel 会先推一份面板再回响应:回包按请求号认领,那份推送不会被当成响应。
+func (s *equipSmokeSession) attributePanel(messageId uint32, request proto.Message, response attributePanelResponse) (*scene.AttributePanelInfo, error) {
 	s.throttle(messageId)
-	s.player.SetAttributePanel(nil, 0, 0) // 只清上一次留下的 tip;面板传 nil 时序号不动
-	_, cursor := s.player.GetAttributePanel()
-	if err := s.gc.SendRequest(messageId, request); err != nil {
-		return nil, fmt.Errorf("send message_id=%d: %w", messageId, err)
-	}
-	s.stats.MsgSent()
-	deadline := time.Now().Add(equipSmokeRpcTimeout)
-	for time.Now().Before(deadline) {
-		if tip := s.player.GetAttributeLastTip(); tip != 0 {
-			return nil, fmt.Errorf("属性请求 message_id=%d 被拒: tip=%s", messageId, equipTipText(tip))
-		}
-		panel, seq := s.player.GetAttributePanel()
-		if panel != nil && seq > cursor && s.player.GetAttributePanelSource() == messageId {
-			return panel, nil
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	return nil, fmt.Errorf("等属性响应超时 message_id=%d", messageId)
+	panel, _, err := requestAttributePanel(s.rpc(), messageId, request, response)
+	return panel, err
 }
 
 // panelAfter 取一次成功穿 / 脱之后的面板。两件事都验(设计文档 §4.3:成功后 Recalculate + PushPanel):
 //  1. 服务器主动推了面板(来源 = NotifyAttributePanelChanged、序号比发请求前新)——
 //     客户端开着的属性窗只靠这条推送刷新,漏推就是「换了装备数值不动」;
 //  2. 再主动取一份作权威值,且与推送那份数值一致(推的不是中间态)。
+//
+// 第 1 条等的是推送,不是请求回包,所以仍按「序号游标 + 来源」轮询 Player:推送不带请求号,照旧经收包回调交 handler 写进 Player。
+// 本会话的属性 RPC 回包不再写 Player(见 attributePanel),change.panelSeq 之后的新序号都来自推送;来源条件照旧保留。
 func (s *equipSmokeSession) panelAfter(change equipChange) (*scene.AttributePanelInfo, error) {
 	var pushed *scene.AttributePanelInfo
 	deadline := time.Now().Add(equipSmokeRpcTimeout)
@@ -795,7 +814,7 @@ func (s *equipSmokeSession) panelAfter(change equipChange) (*scene.AttributePane
 		return nil, fmt.Errorf("穿 / 脱成功后 %s 内没收到属性面板推送(NotifyAttributePanelChanged)", equipSmokeRpcTimeout)
 	}
 	fetched, err := s.attributePanel(game.SceneAttributeClientPlayerGetAttributePanelMessageId,
-		&scene.GetAttributePanelRequest{})
+		&scene.GetAttributePanelRequest{}, &scene.GetAttributePanelResponse{})
 	if err != nil {
 		return nil, err
 	}

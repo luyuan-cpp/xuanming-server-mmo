@@ -1,0 +1,202 @@
+# 按用途拆出的 Redis 实例模板(G4a 第 1a 批:排队与限流 → redis-queue-g<N>;docs/design/shared-redis-split-by-purpose.md §25.3、§4.3)。
+#
+# 由 tools/scripts/k8s_deploy.ps1 的 New-RedisQueueInstanceManifests 渲染:-RedisSplit queue 的 infra-up / 不带 -SkipInfra 的 all-up,
+# 按 zones 配置里出现过的每个 redisQueueGroup 各 apply 一份(实例名 redis-queue-g<N>)。占位(前后各两个下划线,这里不写全,免得注释也被替换):
+#   REDIS_NAME        实例名:Service、headless、PDB、StatefulSet 与 app 标签都用它
+#   REDIS_MAXMEMORY   redis-server 的 maxmemory(-RedisQueueMaxMemory;dev 档缺省 128mb,release 档必须显式给,初值每组 1gb)
+#   REDIS_MEM         容器 requests 与 limits 的内存 = 2 × maxmemory(AOF 重写 fork 时写时复制最坏会翻倍)
+#   REDIS_STORAGE     PVC 大小(脚本常量:volumeClaimTemplates 创建后不可改,所以不随 maxmemory 变)
+# 有占位没替换就拒绝 apply(k8s_deploy.ps1 的 Assert-InfraManifestPlaceholdersReplaced)。
+#
+# 里面放什么:login 的 Node.QueueRedis(排队 queue:* / 准入 admit:* / 在线 admitted:* 与放行锁)和 Java gateway 的 Bucket4j 限流桶
+# (rl:zone / rl:ip)。gate 排空标记、会话、锁、映射、存盘控制面等其余一切都在核心 redis(redis.yaml),不在这里。这些键都带 TTL:
+# 实例重启期间只影响本组 zone 的新登录(排队打开时新登录失败;排队关着时 login 不碰它,gateway 限流 fail-open),已在游戏里的玩家不受影响。
+#
+# 与 redis.yaml 的差别(其余照抄):
+#   - 标签与 selector 一律 app: <实例名>,**绝不能是 app: redis**:核心 Service redis 的 selector 是 app: redis,带上它新 Pod 就被挂到
+#     核心 Service 后面,核心的客户端会随机落到排队实例上(tools/scripts/tests/k8s_redis_split_contract.tests.ps1 钉住)。
+#   - 显式 --maxmemory + --maxmemory-policy noeviction(§6.3:承载状态的实例一律 noeviction,写满时写命令报错、由告警发现,
+#     而不是静默淘汰在途排位与 gate 令牌);limits 写成 2 × maxmemory,OOMKill 比写报错更糟。
+#   - 显式 --appendfsync everysec(Redis 缺省也是它,写出来防被改)。
+#   - MAXCLIENTS 10000:客户端只有本组各 zone 的 login(每副本一个 QueueRedis 池)与 gateway(每副本 ≤ 2 条),
+#     总账见 k8s_deploy.ps1 的「Redis queue connection ledger」一行(MAXCLIENTS 从本文件读)。
+#   - 不写 StatefulSet 上的模板摘要注解与重启闸:排队数据都带 TTL、可丢,重启只影响本组新登录,不需要核心那样的维护窗口确认。
+#   - 本批所有档位都是单实例(§25.3 的 2026-10-23 订正):redis-ha.yaml 的对象名写死,要先参数化才能复用;高可用变体是后续项。
+# 改本文件 template 段任一行、或换 -RedisQueueMaxMemory,都会改 Pod 模板 = 重启该组实例(AOF 重放期间本组新登录受影响)。
+apiVersion: v1
+kind: Service
+metadata:
+  name: __REDIS_NAME__
+  labels:
+    app: __REDIS_NAME__
+spec:
+  selector:
+    app: __REDIS_NAME__
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+# StatefulSet 要求的 governing service。客户端不用它,一律走上面的 ClusterIP Service。
+apiVersion: v1
+kind: Service
+metadata:
+  name: __REDIS_NAME__-headless
+  labels:
+    app: __REDIS_NAME__
+spec:
+  clusterIP: None
+  selector:
+    app: __REDIS_NAME__
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+# 与 redis.yaml 的 PDB 同一含义:单实例没有冗余,minAvailable 1 = 不允许自愿驱逐 —— kubectl drain 会在这里挂住,逼出一次人工决策
+# (这台节点上的排队实例一停,本组 zone 的新登录跟着受影响),而不是让一次例行排空悄悄重启它。确实要搬走时显式 kubectl delete pod。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: __REDIS_NAME__-pdb
+  labels:
+    app: __REDIS_NAME__
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: __REDIS_NAME__
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: __REDIS_NAME__
+  labels:
+    app: __REDIS_NAME__
+spec:
+  serviceName: __REDIS_NAME__-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: __REDIS_NAME__
+  template:
+    metadata:
+      labels:
+        app: __REDIS_NAME__
+      # default-container:Pod 里有 redis-exporter sidecar,不带 -c 的 kubectl exec / logs 仍落到 redis 容器(运维脚本一律显式 -c redis)。
+      # prometheus.io/*:与 redis.yaml 同一种抓取注解,指向 redis-exporter 的 9121;告警见 deploy/k8s/redis-alerts.yaml。
+      annotations:
+        kubectl.kubernetes.io/default-container: redis
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9121"
+        prometheus.io/path: "/metrics"
+    spec:
+      # SIGTERM 后 redis-server 要把 AOF 缓冲刷盘再退出,给足时间。
+      terminationGracePeriodSeconds: 30
+      containers:
+        # 容器名必须叫 redis、StatefulSet 与 Service 同名:stress_snap.ps1 / k8s_deploy.ps1 的 redis-wipe 与 maxclients 核对都按
+        # 「pod/<实例名>-<序号> -c redis」exec 进来。
+        - name: redis
+          image: redis:7.2
+          # 用 sh 包一层的理由同 redis.yaml:官方镜像不支持用环境变量设密码;"$REDIS_PASSWORD" 在双引号内展开,口令里的字符不会被
+          # shell 再解释;exec 让 redis-server 成为 1 号进程,SIGTERM 直达。口令来自**可选**的 Secret redis-auth(与核心同一把,
+          # k8s_deploy.ps1 在 apply 核心 Redis 时按 MMORPG_REDIS_PASSWORD 建或删):dev 档不注入时无口令启动,release 档 --requirepass。
+          # MAXCLIENTS 只在这里定义一次,两条 exec 都引用它;启动前打印 fd 限值(做法与理由同 redis.yaml:被容器 nofile 硬限下调时,
+          # 这一行与 infra-up -WaitReady 的 CONFIG GET maxclients 核对是仅有的证据)。
+          # --enable-debug-command no:Redis 7 缺省就是 no,显式写出来防被改(同 redis.yaml)。
+          command:
+            - sh
+            - -c
+            - |
+              MAXCLIENTS=10000
+              need=$((MAXCLIENTS + 32))
+              soft=$(ulimit -Sn 2>/dev/null || echo unknown)
+              hard=$(ulimit -Hn 2>/dev/null || echo unknown)
+              echo "redis fd limit: soft=$soft hard=$hard need=$need maxclients=$MAXCLIENTS"
+              case "$hard" in
+                unlimited|unknown) ;;
+                *) if [ "$hard" -lt "$need" ]; then echo "ERROR: nofile hard limit $hard < $need, redis-server will lower maxclients below $MAXCLIENTS" >&2; fi ;;
+              esac
+              if [ -n "$REDIS_PASSWORD" ]; then
+                exec redis-server --appendonly yes --appendfsync everysec --maxclients "$MAXCLIENTS" --enable-debug-command no --maxmemory __REDIS_MAXMEMORY__ --maxmemory-policy noeviction --requirepass "$REDIS_PASSWORD"
+              fi
+              exec redis-server --appendonly yes --appendfsync everysec --maxclients "$MAXCLIENTS" --enable-debug-command no --maxmemory __REDIS_MAXMEMORY__ --maxmemory-policy noeviction
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+                  optional: true
+          ports:
+            - containerPort: 6379
+              name: redis
+          # 探针照搬 redis.yaml:PONG(无口令)或 NOAUTH(设了口令、未认证)都说明已加载完 AOF;加载期间回 LOADING,按未就绪处理。
+          # startupProbe 给 AOF 重放留 5 分钟;liveness 只看端口,避免把"慢"当成"死"反复重启。
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - 'r=$(redis-cli -h 127.0.0.1 -p 6379 ping 2>&1); case "$r" in PONG|NOAUTH*) exit 0 ;; *) exit 1 ;; esac'
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - 'r=$(redis-cli -h 127.0.0.1 -p 6379 ping 2>&1); case "$r" in PONG|NOAUTH*) exit 0 ;; *) exit 1 ;; esac'
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          # 内存 requests = limits = 2 × maxmemory(Guaranteed 的内存部分):数据上限由 --maxmemory 定,余量留给 AOF 重写 fork 的写时复制。
+          # CPU 只写 requests、不设 limits:Redis 单线程,被 CFS 限流时延迟抖动比多占一点 CPU 更糟;开服首日排队轮询是这里最吵的流量(§3.2.1)。
+          resources:
+            requests:
+              cpu: 250m
+              memory: __REDIS_MEM__
+            limits:
+              memory: __REDIS_MEM__
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+        # Redis 指标出口:照 redis.yaml 逐字抄(redis_exporter 连本 Pod 的 127.0.0.1:6379,在 9121 出 Prometheus 指标,
+        # 告警规则在 deploy/k8s/redis-alerts.yaml)。口令走环境变量 REDIS_PASSWORD(redis_exporter 原生读取),不上命令行、不进日志。
+        - name: redis-exporter
+          image: oliver006/redis_exporter:v1.62.0
+          env:
+            - name: REDIS_ADDR
+              value: redis://127.0.0.1:6379
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+                  optional: true
+          ports:
+            - containerPort: 9121
+              name: metrics
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+  # 不写 storageClassName = 用集群默认 StorageClass(与 redis.yaml / etcd.yaml 一致)。
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: __REDIS_STORAGE__

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <optional>
+#include <string>
 
 #include "entt/src/entt/entity/registry.hpp"
 #include "muduo/base/Logging.h"
@@ -10,6 +11,7 @@
 #include "persist_schema/persist_schema_gen.h"
 #include "proto/common/database/player_cache.pb.h"
 #include "services/scene/player/comp/player_persist_carry_comp.h"
+#include "services/scene/player/comp/player_persist_writer_comp.h"
 #include "services/scene/player/system/player_data_loader.h"
 #include "thread_context/ecs_context.h"
 
@@ -64,6 +66,20 @@ namespace player_persist
     main->set_persist_schema_gen(gen);
     second->set_persist_schema_gen(gen);
     return true;
+}
+
+// ── 严格屏障覆盖世代校验 C3 的 C++ 侧参数(设计 §5.2)────────────────────────────────────────────
+
+// 写方令牌(ARGV[11]):本实体第一次走严格屏障存盘时生成,实体生命期内不变;实体销毁即作废,重新加载得到新令牌。
+// 运行时派生数据,只在存盘写入口调用(懒建);读路径用 try_get。
+[[nodiscard]] inline const std::string &WriterTokenForSave(entt::entity player)
+{
+    auto &writer = tlsEcs.actorRegistry.get_or_emplace<PlayerPersistWriterComp>(player);
+    if (writer.token.empty())
+    {
+        writer.token = player_persist_writer::NewToken();
+    }
+    return writer.token;
 }
 
 } // namespace player_persist

@@ -277,6 +277,7 @@ func relocDBHomeRow(id uint64, rev uint64) mergeRouteRow {
 // TestSQLRelocateRead_PublishesWhenTheDBIsAheadBeforeReturning:库 rev 领先缓存(或缓存没有 maprev)的行,read 先按库值
 // 发布 + WAITAOF,再把与 Redis 同编码的值串交出去;缓存已是这一版的行不发。
 func TestSQLRelocateRead_PublishesWhenTheDBIsAheadBeforeReturning(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	frozen := mergeRouteRow{PlayerID: 1, HomeZone: relocTestS, StorageID: relocTestS, PlacementVersion: 3, FrozenRunID: relocTestRun, Rev: 5}
 	current := mergeRouteRow{PlayerID: 2, HomeZone: relocTestS, StorageID: relocTestS, PlacementVersion: 1, Rev: 2}
 	homeOnly := relocDBHomeRow(3, 1)
@@ -286,7 +287,7 @@ func TestSQLRelocateRead_PublishesWhenTheDBIsAheadBeforeReturning(t *testing.T) 
 	cache.seed(current)
 	p, f := newMemRelocatePlacements(t, db, cache)
 
-	reads, err := p.read(context.Background(), []uint64{1, 2, 3, 4})
+	reads, err := p.read(ctx, []uint64{1, 2, 3, 4})
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -321,38 +322,40 @@ func TestSQLRelocateRead_PublishesWhenTheDBIsAheadBeforeReturning(t *testing.T) 
 // TestSQLRelocateRead_FrozenRowIsConfirmedEvenWhenTheCacheIsCurrent:缓存已是库里这一版的冻结值(上一次 EVAL 执行了、
 // WAITAOF 没确认),read 仍发布 + WAITAOF;确认不了即 error —— R2 之前必须证明冻结已落盘,不能信「它已经在那里」。
 func TestSQLRelocateRead_FrozenRowIsConfirmedEvenWhenTheCacheIsCurrent(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	row := mergeRouteRow{PlayerID: 1, HomeZone: relocTestS, StorageID: relocTestS, PlacementVersion: 1, FrozenRunID: relocTestRun, Rev: 2}
 	cache := newMemRouteCache()
 	cache.seed(row)
 	cache.acks = []any{int64(0), int64(0)}
 	p, f := newMemRelocatePlacements(t, newMemRouteDB(row), cache)
-	if _, err := p.read(context.Background(), []uint64{1}); !errors.Is(err, errRoutePublishNotDurable) {
+	if _, err := p.read(ctx, []uint64{1}); !errors.Is(err, errRoutePublishNotDurable) {
 		t.Fatalf("read = %v, want errRoutePublishNotDurable (the current frozen value must still be confirmed)", err)
 	}
 	if f.pipelineCount() == 0 || f.names(0)[len(f.names(0))-1] != "waitaof" {
 		t.Fatal("the frozen row was not re-published with a WAITAOF")
 	}
 	cache.acks = []any{int64(1), int64(0)}
-	if reads, err := p.read(context.Background(), []uint64{1}); err != nil || !reads[0].Record.Frozen {
+	if reads, err := p.read(ctx, []uint64{1}); err != nil || !reads[0].Record.Frozen {
 		t.Fatalf("read once WAITAOF acks = (%+v, %v)", reads, err)
 	}
 }
 
 // TestSQLRelocateRead_UnconfirmedPublishIsAnError:发布确认不了(WAITAOF 份数不足 / 连不上)或缓存与库冲突时,read 一个结果都不给。
 func TestSQLRelocateRead_UnconfirmedPublishIsAnError(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	row := mergeRouteRow{PlayerID: 1, HomeZone: relocTestS, StorageID: relocTestS, PlacementVersion: 1, FrozenRunID: relocTestRun, Rev: 2}
 
 	cache := newMemRouteCache()
 	cache.acks = []any{int64(0), int64(0)}
 	p, _ := newMemRelocatePlacements(t, newMemRouteDB(row), cache)
-	if reads, err := p.read(context.Background(), []uint64{1}); !errors.Is(err, errRoutePublishNotDurable) || reads != nil {
+	if reads, err := p.read(ctx, []uint64{1}); !errors.Is(err, errRoutePublishNotDurable) || reads != nil {
 		t.Fatalf("WAITAOF never acked: (%v, %v), want (nil, errRoutePublishNotDurable)", reads, err)
 	}
 
 	cache = newMemRouteCache()
 	cache.down = true
 	p, _ = newMemRelocatePlacements(t, newMemRouteDB(row), cache)
-	if reads, err := p.read(context.Background(), []uint64{1}); err == nil || reads != nil {
+	if reads, err := p.read(ctx, []uint64{1}); err == nil || reads != nil {
 		t.Fatalf("mapping Redis down: (%v, %v), want an error and no result", reads, err)
 	}
 
@@ -360,7 +363,7 @@ func TestSQLRelocateRead_UnconfirmedPublishIsAnError(t *testing.T) {
 	cache = newMemRouteCache()
 	cache.seed(mergeRouteRow{PlayerID: 1, HomeZone: relocTestS, StorageID: relocTestT, PlacementVersion: 2, Rev: 7})
 	p, _ = newMemRelocatePlacements(t, newMemRouteDB(row), cache)
-	if _, err := p.read(context.Background(), []uint64{1}); !errors.Is(err, errRoutePublishRejected) {
+	if _, err := p.read(ctx, []uint64{1}); !errors.Is(err, errRoutePublishRejected) {
 		t.Fatalf("cache ahead of the DB with another value: %v, want errRoutePublishRejected", err)
 	}
 }
@@ -403,6 +406,7 @@ func TestSQLRelocateRead_ReadOnlyDoesNotPublish(t *testing.T) {
 // TestSQLRelocateRead_FrozenWritersRefuseToPublish(R8-5):route_meta.writable != 1(回档恢复中)时 read 不发布、一个结果都不给,
 // 错误包着 errRouteNotWritable 并指向 runbook §9.4;读不到开关同样不发布、原因原样带出。没有可发布的行、dry-run 不查开关。
 func TestSQLRelocateRead_FrozenWritersRefuseToPublish(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	db := newMemRouteDB(relocDBHomeRow(1, 1))
 	db.writableErr = fmt.Errorf("%w (writable=0)", errRouteNotWritable)
 	cache := newMemRouteCache()
@@ -438,7 +442,7 @@ func TestSQLRelocateRead_FrozenWritersRefuseToPublish(t *testing.T) {
 	// 解冻之后照常先发布再交出结果。
 	p.readOnly = false
 	db.writableErr = nil
-	if _, err := p.read(context.Background(), []uint64{1}); err != nil || cache.cached(1) != "901|-|1" {
+	if _, err := p.read(ctx, []uint64{1}); err != nil || cache.cached(1) != "901|-|1" {
 		t.Fatalf("after unfreeze: err=%v cache=%s, want home published at rev 1", err, cache.cached(1))
 	}
 	if db.writableChecks != 1 {
@@ -449,6 +453,7 @@ func TestSQLRelocateRead_FrozenWritersRefuseToPublish(t *testing.T) {
 // TestSQLRelocate_PublishRejectionNamesTheRollbackRunbook(R8-5 文案):发布被确定性拒绝时,read 与 cas 的错误都带上回档提示
 // (指向 runbook §9.4);WAITAOF 确认不了之类的非拒绝错误不带。
 func TestSQLRelocate_PublishRejectionNamesTheRollbackRunbook(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	if got := routePublishRollbackHint(fmt.Errorf("%w: conflict", errRoutePublishRejected)); !strings.Contains(got, "runbook §9.4") {
 		t.Fatalf("hint for a rejection = %q, want the rollback runbook", got)
 	}
@@ -461,7 +466,7 @@ func TestSQLRelocate_PublishRejectionNamesTheRollbackRunbook(t *testing.T) {
 	cache := newMemRouteCache()
 	cache.seed(mergeRouteRow{PlayerID: 1, HomeZone: relocTestS, StorageID: relocTestT, PlacementVersion: 2, Rev: 7})
 	p, _ := newMemRelocatePlacements(t, newMemRouteDB(row), cache)
-	if _, err := p.read(context.Background(), []uint64{1}); !errors.Is(err, errRoutePublishRejected) || !strings.Contains(err.Error(), "runbook §9.4") {
+	if _, err := p.read(ctx, []uint64{1}); !errors.Is(err, errRoutePublishRejected) || !strings.Contains(err.Error(), "runbook §9.4") {
 		t.Fatalf("rejected read = %v, want errRoutePublishRejected with the rollback hint", err)
 	}
 
@@ -471,7 +476,7 @@ func TestSQLRelocate_PublishRejectionNamesTheRollbackRunbook(t *testing.T) {
 	cache.seed(mergeRouteRow{PlayerID: 2, HomeZone: relocTestS, StorageID: relocTestT, PlacementVersion: 2, Rev: 9})
 	p, _ = newMemRelocatePlacements(t, db, cache)
 	op := placementCAS{PlayerID: 2, ExpectAbsent: true, ExpectHome: "901", NewValue: frozenValue(relocTestS, 1, relocTestRun)}
-	if _, err := p.cas(context.Background(), []placementCAS{op}); !errors.Is(err, errRoutePublishRejected) || !strings.Contains(err.Error(), "runbook §9.4") {
+	if _, err := p.cas(ctx, []placementCAS{op}); !errors.Is(err, errRoutePublishRejected) || !strings.Contains(err.Error(), "runbook §9.4") {
 		t.Fatalf("rejected cas publish = %v, want errRoutePublishRejected with the rollback hint", err)
 	}
 
@@ -479,7 +484,7 @@ func TestSQLRelocate_PublishRejectionNamesTheRollbackRunbook(t *testing.T) {
 	cache = newMemRouteCache()
 	cache.acks = []any{int64(0), int64(0)}
 	p, _ = newMemRelocatePlacements(t, newMemRouteDB(relocDBHomeRow(3, 1)), cache)
-	if _, err := p.read(context.Background(), []uint64{3}); !errors.Is(err, errRoutePublishNotDurable) || strings.Contains(err.Error(), "runbook §9.4") {
+	if _, err := p.read(ctx, []uint64{3}); !errors.Is(err, errRoutePublishNotDurable) || strings.Contains(err.Error(), "runbook §9.4") {
 		t.Fatalf("not durable read = %v, want errRoutePublishNotDurable without the rollback hint", err)
 	}
 }
@@ -489,6 +494,7 @@ func TestSQLRelocate_PublishRejectionNamesTheRollbackRunbook(t *testing.T) {
 // TestSQLRelocateCAS_OnlyConfirmedWritesAreWritten:提交后发布确认了才回 Written;确认不了时返回「本批第一个写成的 op 之前」的
 // 前缀(那些结局是确定的)+ error,库里已提交的行由下一次 read 补发布。
 func TestSQLRelocateCAS_OnlyConfirmedWritesAreWritten(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	db := newMemRouteDB(
 		mergeRouteRow{PlayerID: 1, HomeZone: relocTestS, StorageID: 902, PlacementVersion: 1, Rev: 4}, // 有效落点不是 S
 		relocDBHomeRow(2, 1),
@@ -502,7 +508,7 @@ func TestSQLRelocateCAS_OnlyConfirmedWritesAreWritten(t *testing.T) {
 	}
 	ops := []placementCAS{freezeOp(1), freezeOp(2), freezeOp(3)}
 
-	results, err := p.cas(context.Background(), ops)
+	results, err := p.cas(ctx, ops)
 	if !errors.Is(err, errRoutePublishNotDurable) {
 		t.Fatalf("cas with an unconfirmed publish: %v, want errRoutePublishNotDurable", err)
 	}
@@ -517,7 +523,7 @@ func TestSQLRelocateCAS_OnlyConfirmedWritesAreWritten(t *testing.T) {
 
 	// 发布恢复之后:同一个 read 先把已提交的冻结补发布,再交出冻结值(续跑据此认领)。
 	cache.acks = []any{int64(1), int64(0)}
-	reads, err := p.read(context.Background(), []uint64{2, 3})
+	reads, err := p.read(ctx, []uint64{2, 3})
 	if err != nil || reads[0].RecordRaw != frozenValue(relocTestS, 1, relocTestRun) {
 		t.Fatalf("read after recovery = (%+v, %v)", reads, err)
 	}
@@ -527,7 +533,7 @@ func TestSQLRelocateCAS_OnlyConfirmedWritesAreWritten(t *testing.T) {
 
 	// 确认得了:全部结局原样交出,写成的行已在缓存。
 	unfreeze := placementCAS{PlayerID: 2, ExpectRecord: frozenValue(relocTestS, 1, relocTestRun), NewValue: stableValue(relocTestS, 1)}
-	results, err = p.cas(context.Background(), []placementCAS{unfreeze})
+	results, err = p.cas(ctx, []placementCAS{unfreeze})
 	if err != nil || len(results) != 1 || results[0].Outcome != placementCASWritten {
 		t.Fatalf("confirmed cas = (%+v, %v)", results, err)
 	}
@@ -539,6 +545,7 @@ func TestSQLRelocateCAS_OnlyConfirmedWritesAreWritten(t *testing.T) {
 // TestSQLRelocateCAS_DBRefusalWritesNothingAndPassesThePrefix:库拒绝(写者冻结、P-2、锁冲突用尽)时这一批一条都没提交,
 // 返回此前各批已确认的结果 + error;不发布任何东西。
 func TestSQLRelocateCAS_DBRefusalWritesNothingAndPassesThePrefix(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	var rows []mergeRouteRow
 	var ops []placementCAS
 	for id := uint64(1); id <= routeWriteBatchLimit+1; id++ {
@@ -555,7 +562,7 @@ func TestSQLRelocateCAS_DBRefusalWritesNothingAndPassesThePrefix(t *testing.T) {
 			db.casErr = errRouteNotWritable // 第二批之前写者被冻结
 		}
 	}
-	results, err := p.cas(context.Background(), ops)
+	results, err := p.cas(ctx, ops)
 	if !errors.Is(err, errRouteNotWritable) {
 		t.Fatalf("cas = %v, want errRouteNotWritable from the second batch", err)
 	}
@@ -587,6 +594,7 @@ func relocDBEngine(m *relocateManifest, places relocatePlacements, rows *fakeRow
 
 // TestRelocateEngineDB_SwitchesThroughTheDB:R1–R5 经库接缝跑通:库里落点三列与 rev、缓存三键都到 "{T}:{v+1}"。
 func TestRelocateEngineDB_SwitchesThroughTheDB(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	db := newMemRouteDB(relocDBHomeRow(1, 1),
 		mergeRouteRow{PlayerID: 2, HomeZone: relocTestS, StorageID: relocTestS, PlacementVersion: 3, Rev: 4})
 	cache := newMemRouteCache()
@@ -594,7 +602,7 @@ func TestRelocateEngineDB_SwitchesThroughTheDB(t *testing.T) {
 	cache.seed(db.rows[2])
 	p, _ := newMemRelocatePlacements(t, db, cache)
 	m := relocTestManifest(1, 2)
-	if err := relocDBEngine(m, p, newFakeRows()).run(context.Background()); err != nil {
+	if err := relocDBEngine(m, p, newFakeRows()).run(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if got := relocStates(m); got != "1:switched 2:switched" {
@@ -616,7 +624,7 @@ func TestRelocateResumeAfterRedisLossClaimsFromSQL(t *testing.T) {
 	db := newMemRouteDB(relocDBHomeRow(1, 1), relocDBHomeRow(2, 1))
 	cache := newMemRouteCache()
 	p, _ := newMemRelocatePlacements(t, db, cache)
-	ctx := context.Background()
+	ctx, _ := testMaintenanceContext()
 
 	first := relocTestManifest(1, 2)
 	if err := relocDBEngine(first, p, newFakeRows()).freeze(ctx, []int{0, 1}); err != nil {
@@ -656,7 +664,7 @@ func TestRelocateEngineDB_UnpublishedFreezeIsPublishedBeforeR2(t *testing.T) {
 	cache := newMemRouteCache()
 	cache.seed(db.rows[1])
 	p, _ := newMemRelocatePlacements(t, db, cache)
-	ctx := context.Background()
+	ctx, _ := testMaintenanceContext()
 	db.afterCAS = func() { cache.down = true } // 提交之后、发布之前 Redis 断了
 
 	m := relocTestManifest(1)
@@ -691,6 +699,7 @@ func TestRelocateEngineDB_UnpublishedFreezeIsPublishedBeforeR2(t *testing.T) {
 
 // TestRelocateAbortDB_UnfreezesThroughTheDB:撤销经库接缝解冻,发布确认之后才计 unfrozen;dry-run 只读库。
 func TestRelocateAbortDB_UnfreezesThroughTheDB(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	db := newMemRouteDB(mergeRouteRow{PlayerID: 1, HomeZone: relocTestS, StorageID: relocTestS, PlacementVersion: 3, FrozenRunID: relocTestRun, Rev: 7})
 	cache := newMemRouteCache()
 	cache.seed(db.rows[1])
@@ -706,11 +715,36 @@ func TestRelocateAbortDB_UnfreezesThroughTheDB(t *testing.T) {
 	if f.pipelineCount() != 0 || db.rows[1].FrozenRunID == "" {
 		t.Fatal("a dry-run abort wrote something")
 	}
-	rep, err := relocDBEngine(m, p, nil).abort(context.Background(), false)
+	rep, err := relocDBEngine(m, p, nil).abort(ctx, false)
 	if err != nil || rep.Unfrozen != 1 || relocPlayer(m, 1).State != relocUnfrozen {
 		t.Fatalf("abort = (%s, %v), state %s", rep, err, relocPlayer(m, 1).State)
 	}
 	if got := cache.cached(1); got != "901|901:3|8" {
 		t.Fatalf("cache after the abort = %s, want 901:3 at rev 8", got)
+	}
+}
+
+// TestRelocateAbortDB_CacheOnlyFreezeFailsClosed:db 源撤销按库判定。缓存里有本次的冻结值、库里却没有(两份分叉:同 rev、值不同,
+// 例如绕过发布脚本的写者)时,read 先按库值发布被拒,这一批一个人都不记、库与缓存都不动 —— 不按缓存那一份去解冻,也不把分叉盖过去。
+// (清单来源与本次不一致的撤销在入口就被 relocateRouteSourceRefusal 拒绝,走不到这里,B2-1。)
+func TestRelocateAbortDB_CacheOnlyFreezeFailsClosed(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
+	diverged := mergeRouteRow{PlayerID: 3, HomeZone: relocTestS, StorageID: relocTestS, PlacementVersion: 1, Rev: 3}
+	db := newMemRouteDB(diverged)
+	cache := newMemRouteCache()
+	cache.seed(mergeRouteRow{PlayerID: 3, HomeZone: relocTestS, StorageID: relocTestS, PlacementVersion: 1, FrozenRunID: relocTestRun, Rev: 3})
+	before := cache.cached(3)
+	p, _ := newMemRelocatePlacements(t, db, cache)
+	m := relocTestManifest(3)
+	m.RouteSource = routeSourceDB
+	m.Players[0].State, m.Players[0].Version = relocFrozen, 1
+	if _, err := relocDBEngine(m, p, nil).abort(ctx, false); !errors.Is(err, errRoutePublishRejected) {
+		t.Fatalf("diverged copies: abort = %v, want errRoutePublishRejected (fail closed)", err)
+	}
+	if got := relocStates(m); got != "3:frozen" {
+		t.Fatalf("diverged copies: states = %s, want the player left as frozen (nothing recorded)", got)
+	}
+	if got := cache.cached(3); got != before || db.rows[3] != diverged || len(db.casSizes) != 0 {
+		t.Fatalf("diverged copies: cache %s (was %s), DB %+v, CAS batches %v — want nothing written", got, before, db.rows[3], db.casSizes)
 	}
 }

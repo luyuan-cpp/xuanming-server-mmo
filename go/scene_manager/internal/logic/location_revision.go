@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	dspb "proto/data_service"
 	smpb "proto/scene_manager"
+	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
 
 	"google.golang.org/grpc/codes"
@@ -69,7 +71,10 @@ func lookupCurrentRole(ctx context.Context, sc *svc.ServiceContext, player uint6
 	if sc.RoleDirectory == nil {
 		return nil, status.Error(codes.Unavailable, "角色目录只读依赖未就绪")
 	}
+	// enter_scene_stage_seconds{stage="role_lookup"} 只量这一次 RPC(不论结局);口径(zone_id 恒为 0、含 LeaveScene)见 EnterSceneStageRoleLookup。
+	lookupStart := time.Now()
 	role, err := sc.RoleDirectory.Lookup(ctx, player)
+	metrics.ObserveEnterSceneStage(0, metrics.EnterSceneStageRoleLookup, time.Since(lookupStart))
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, "角色目录强读失败")
 	}

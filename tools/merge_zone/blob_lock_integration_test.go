@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -45,8 +46,11 @@ func (r *cmdNameRecorder) index(name string) int {
 //   - apply + 锁在:报错、目标端一个键都不写,且锁在时根本不 SCAN / MGET(检查早于 SCAN);
 //   - dry-run + 锁在:只告警,照常计数;
 //   - 锁不在:正常拷贝,目标端残留的字段索引被删,锁键不拷;EXISTS 先于 SCAN。
-// 用 Redis DB 13 / 14,任一库非空就跳过(不 flush 别人的数据),只清本用例写过的键。
+//
+// 用 Redis DB 13 / 14,任一库非空就按依赖缺失处理(itMissing:默认 SKIP,MERGE_ZONE_IT_REQUIRE=1 时 FAIL;
+// 不 flush 别人的数据),只清本用例写过的键。
 func TestIT_CopyPlayerStringKeys_RefusesWhileDataLockHeld(t *testing.T) {
+	requireIT(t)
 	ctx := context.Background()
 	src, dst := itRedis(t, 13), itRedis(t, 14)
 	for _, c := range []*redis.Client{src, dst} {
@@ -55,7 +59,7 @@ func TestIT_CopyPlayerStringKeys_RefusesWhileDataLockHeld(t *testing.T) {
 			t.Fatal(err)
 		}
 		if n != 0 {
-			t.Skipf("redis DB %d is not empty (%d keys); refusing to share it", c.Options().DB, n)
+			itMissing(t, fmt.Sprintf("redis DB %d is not empty (%d keys); refusing to share it", c.Options().DB, n))
 		}
 	}
 	const pid uint64 = 9201

@@ -24,6 +24,8 @@ package main
 // login_test_scenarios.go 的 prepareBehaviorClient(登录 → 进场 → 起 RecvLoop),
 // 战斗/观战信号走 gameobject.Player 的 WaitXxx/SignalXxx 通道
 // (由 robot/logic/handler 下的 battle_* handler 触发)。
+// JoinQueue / WatchBattle 走 Call,只等本次请求自己的回包(按 MessageContent.id 认领):拒绝(信封或响应体)
+// 立即 FAIL;受理后开战 / 观众分配仍等上面的推送信号。
 
 import (
 	"context"
@@ -156,14 +158,20 @@ func RunBattleSmoke(cfg *config.Config) {
 
 	// ---- 步骤 2:A 排队开战(goroutine 里跑完参战全程) ----
 	aDone := make(chan battleSmokeFighterResult, 1)
-	go func() { aDone <- runBattleSmokeFighter(cfg, botA, stats) }()
+	// aFailed 在 A 带着 error 结束时关闭(先交出结果再关;成功结束不关),让下面对 A 开战的等待提前醒来。
+	aFailed := make(chan struct{})
+	go func() {
+		res := runBattleSmokeFighter(cfg, botA, stats)
+		aDone <- res
+		if res.err != nil {
+			close(aFailed)
+		}
+	}()
 
 	// ---- 步骤 3:B 等 A 的开战信号后进观战 ----
 	// B 等在 A 的 battleStart 通道上(close 即广播,和 A 自己的等待互不抢占)。
-	// 比 A 的 30s 预算略宽,保证先看到 A 侧的失败原因而不是 B 这边的超时。
-	bStartCtx, bStartCancel := context.WithTimeout(context.Background(), battleSmokeStartTimeout+10*time.Second)
-	aBattleId, err := botA.player.WaitBattleStart(bStartCtx)
-	bStartCancel()
+	// 比 A 的 30s 预算略宽,保证先看到 A 侧的失败原因而不是 B 这边的超时;A 先失败(如 JoinQueue 被拒)时立即醒来。
+	aBattleId, err := battleSmokeWaitStart(botA.player, battleSmokeStartTimeout+10*time.Second, aFailed)
 	if err != nil {
 		// A 侧大概率已经带着更具体的原因失败了;把它的结果捞出来优先呈现。
 		select {
@@ -179,18 +187,20 @@ func RunBattleSmoke(cfg *config.Config) {
 
 	// battle_id=0 走"观战匹配"(服务端随机挑一场可观战对局)。
 	// 当前全服只有 A 这一场,所以随后断言观战到的就是 A 的对局。
-	if err := botB.gc.SendRequest(game.MatchServiceWatchBattleMessageId, &match.WatchBattleRequest{
-		PlayerId: botB.gc.PlayerId,
-		BattleId: 0,
-	}); err != nil {
-		fail("b-watch-battle", "send WatchBattle: %v", err)
+	// 观众分配的预算从发 WatchBattle 起算,回包与 NotifyBattleAssigned 推送共用(与迁移前同口径)。
+	assignCtx, assignCancel := context.WithTimeout(context.Background(), battleSmokeSpectateTimeout)
+	watchedBattleId, err := battleSmokeWatchBattle(botB, stats, battleSmokeSpectateTimeout)
+	if err != nil {
+		fail("b-watch-battle", "%v", err)
 	}
-	stats.MsgSent()
+	if watchedBattleId != aBattleId {
+		fail("b-watch-battle-id", "WatchBattle picked battle_id=%d, expected A's battle_id=%d", watchedBattleId, aBattleId)
+	}
 
 	// B 的观战首帧只从直连来(D69):AddObserver 先为观众预签票据,经大厅推
 	// NotifyBattleAssigned(role=OBSERVER);B 凭它直连,battle 在握手成功时经直连推一份
 	// NotifySpectateState。所以顺序是"等观众分配 → 直连 → 等握手快照",不能先等快照。
-	assignCtx, assignCancel := context.WithTimeout(context.Background(), battleSmokeSpectateTimeout)
+	// 分配推送可能先于 WatchBattle 回包到达:它经 handler 写进 Player 的一次性广播,不会丢。
 	bAssigned, err := botB.player.WaitBattleAssigned(assignCtx)
 	assignCancel()
 	if err != nil {
@@ -301,6 +311,104 @@ func battleSmokeLogin(cfg *config.Config, account string, stats *metrics.Stats) 
 	return &battleSmokeBot{account: account, gate: host + ":" + portStr, gc: gc, player: player}, nil
 }
 
+// battleSmokeWaitStart 等 player 的开战推送,至多 timeout;fighterFailed 关闭(参战 goroutine 带着 error 结束)时
+// 提前返回 ctx 取消的错误。主流程据此立即呈现参战侧的具体原因(如 JoinQueue 被拒),不必等满预算才报一条笼统的超时。
+// 只有失败才关 fighterFailed:参战方成功结束只可能在开战之后,不该打断任何开战等待。
+func battleSmokeWaitStart(player *gameobject.Player, timeout time.Duration, fighterFailed <-chan struct{}) (uint64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	go func() {
+		select {
+		case <-fighterFailed:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return player.WaitBattleStart(ctx)
+}
+
+// battleSmokeJoinQueue 经大厅连接发 JoinQueue,只等它自己的回包(smokeCaller,按请求号认领),受理时返回 nil。
+// battle-smoke 参战方与跨 zone 冒烟的 runCrossZoneFighter(rank-smoke 也复用)共用。
+//
+// 迁移前回包按消息号落进 MatchServiceJoinQueueHandler,它只打日志、不写 Player 状态,所以这里直接解析回包,
+// 不再交给 handler。开战仍等 NotifyBattleStart 推送(handler 写进 Player 的一次性广播,先于回包到达也不会丢);
+// 这里只让拒绝立即失败,不必等满开战预算才看到一条笼统的 "no BattleStart"。拒绝口径与 team-smoke 的
+// startSoloBattle、features-smoke 的 HandleFeatureBattleMessage 一致:信封拒绝,或响应体 error_code / error_message
+// 非零(已在队列中也带 queue_ticket,仍算拒绝)。
+//
+// 每次现建一个 smokeCaller:它同一时刻只服务一次等待,不与场景里别的 caller(如 rank-smoke 的)共用等待槽。
+// 必须在大厅连接的 RecvLoop 已经起来之后、且不在 RecvLoop goroutine 上调用(prepareBehaviorClient /
+// rankSmokeLogin 起 RecvLoop,调用方是参战 goroutine)。
+func battleSmokeJoinQueue(bot *battleSmokeBot, stats *metrics.Stats, request *match.JoinQueueRequest, timeout time.Duration) (err error) {
+	defer func() {
+		if err != nil {
+			// 调用方可能先报另一侧的失败并直接退出(rank-smoke 的 collect 先读 A 再读 B),本侧的拒绝原因就没人呈现;
+			// 迁移前由 MatchServiceJoinQueueHandler 打的拒绝日志随回包不再经 handler 而消失,所以在这里先留一行。
+			zap.L().Warn("[battle-smoke] JoinQueue failed",
+				zap.String("account", bot.account),
+				zap.String("mode", request.GetMode().String()),
+				zap.Error(err))
+		}
+	}()
+
+	resp := &match.JoinQueueResponse{}
+	caller := newSmokeCaller(bot.gc, stats, bot.account, timeout, nil)
+	envelopeTip, err := caller.call(game.MatchServiceJoinQueueMessageId, request, resp)
+	if err != nil {
+		return fmt.Errorf("JoinQueue: %w", err)
+	}
+	if envelopeTip != 0 {
+		// 1003 不只表示「没到 match」:路由 lane / rpc_reply_bridge 在 match 的调用失败或超时后也回它,此时 match 可能已受理。
+		return fmt.Errorf("JoinQueue envelope rejected tip=%d by gate / client_rpc_router (tip=%d: no reachable match instance, "+
+			"or the match call failed / timed out with outcome unknown)", envelopeTip, smokeTipServiceUnavailable)
+	}
+	if resp.GetErrorCode() != 0 || resp.GetErrorMessage().GetId() != 0 {
+		return fmt.Errorf("JoinQueue rejected error_code=%d tip=%d params=%v",
+			resp.GetErrorCode(), resp.GetErrorMessage().GetId(), resp.GetErrorMessage().GetParameters())
+	}
+	zap.L().Info("[battle-smoke] JoinQueue accepted",
+		zap.String("account", bot.account),
+		zap.String("mode", request.GetMode().String()),
+		zap.Bool("ticket_present", resp.GetQueueTicket() != ""))
+	return nil
+}
+
+// battleSmokeWatchBattle 经大厅连接发 WatchBattle(battle_id=0,观战匹配),只等它自己的回包(按请求号认领),
+// 受理时返回 match 选中的 battle_id。
+//
+// 迁移前回包按消息号落进 MatchServiceWatchBattleHandler,它只打日志、不写 Player 状态,所以这里直接解析回包。
+// 拒绝(信封,或响应体 error_message,如对局已销毁时回的 kMatchBattleNotWatchable)立即返回 error,不必等满观众
+// 分配的预算才看到一条笼统的超时;观众分配仍等 NotifyBattleAssigned 推送。调用约束同 battleSmokeJoinQueue。
+func battleSmokeWatchBattle(bot *battleSmokeBot, stats *metrics.Stats, timeout time.Duration) (battleId uint64, err error) {
+	defer func() {
+		if err != nil {
+			// 与 battleSmokeJoinQueue 对称:拒绝原因在帮助函数里先留一行,不依赖调用方怎样呈现。
+			zap.L().Warn("[battle-smoke] WatchBattle failed",
+				zap.String("account", bot.account),
+				zap.Error(err))
+		}
+	}()
+
+	request := &match.WatchBattleRequest{PlayerId: bot.gc.PlayerId, BattleId: 0}
+	resp := &match.WatchBattleResponse{}
+	caller := newSmokeCaller(bot.gc, stats, bot.account, timeout, nil)
+	envelopeTip, err := caller.call(game.MatchServiceWatchBattleMessageId, request, resp)
+	if err != nil {
+		return 0, fmt.Errorf("WatchBattle: %w", err)
+	}
+	if envelopeTip != 0 {
+		// 1003 的含义同 battleSmokeJoinQueue:可能根本没到 match,也可能 match 的调用失败或超时、结果未知。
+		return 0, fmt.Errorf("WatchBattle envelope rejected tip=%d by gate / client_rpc_router (tip=%d: no reachable match instance, "+
+			"or the match call failed / timed out with outcome unknown)", envelopeTip, smokeTipServiceUnavailable)
+	}
+	if tip := resp.GetErrorMessage().GetId(); tip != 0 {
+		return 0, fmt.Errorf("WatchBattle rejected tip=%d params=%v", tip, resp.GetErrorMessage().GetParameters())
+	}
+	zap.L().Info("[battle-smoke] WatchBattle accepted",
+		zap.String("account", bot.account), zap.Uint64("battle_id", resp.GetBattleId()))
+	return resp.GetBattleId(), nil
+}
+
 // runBattleSmokeFighter 是参战方(A)的完整流程:
 // JoinQueue(PVE_SOLO) → 等 NotifyBattleStart → 直连(含 GetBattleState 补拉)→ 等观战屏障
 // → 直连上 SetAutoBattle → 等 NotifyBattleEnd。
@@ -309,18 +417,19 @@ func runBattleSmokeFighter(cfg *config.Config, bot *battleSmokeBot, stats *metri
 		zap.String("account", bot.account),
 		zap.String("mode", match.MatchMode_MATCH_MODE_PVE_SOLO.String()))
 
+	// 开战预算从发 JoinQueue 起算,回包与 NotifyBattleStart 推送共用(与迁移前同口径)。
+	startCtx, startCancel := context.WithTimeout(context.Background(), battleSmokeStartTimeout)
 	// PVE solo 即时开战(伪匹配);battle_config_id=1 用表里第一行的战斗配置。
-	if err := bot.gc.SendRequest(game.MatchServiceJoinQueueMessageId, &match.JoinQueueRequest{
+	if err := battleSmokeJoinQueue(bot, stats, &match.JoinQueueRequest{
 		PlayerId:       bot.gc.PlayerId,
 		Mode:           match.MatchMode_MATCH_MODE_PVE_SOLO,
 		BattleConfigId: 1,
 		ZoneId:         cfg.ZoneID,
-	}); err != nil {
-		return battleSmokeFighterResult{step: "a-join-queue", err: fmt.Errorf("send JoinQueue: %w", err)}
+	}, battleSmokeStartTimeout); err != nil {
+		startCancel()
+		return battleSmokeFighterResult{step: "a-join-queue", err: err}
 	}
-	stats.MsgSent()
 
-	startCtx, startCancel := context.WithTimeout(context.Background(), battleSmokeStartTimeout)
 	battleId, err := bot.player.WaitBattleStart(startCtx)
 	startCancel()
 	if err != nil {

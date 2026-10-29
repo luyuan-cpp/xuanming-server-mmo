@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
+	"match/internal/constants"
 	battlepb "proto/battle"
 	pb "proto/match"
 )
@@ -64,6 +65,7 @@ func TestSpectatorTiDBHeadPrecedesSelectionAndOldUUIDNeverRetakesHead(t *testing
 	require.NoError(t, err)
 	_, err = f.store.BeginSpectator(f.actor, 11, a, f.formation, f.add)
 	require.ErrorIs(t, err, ErrSpectatorBusy)
+	require.ErrorIs(t, err, ErrSpectatorSuperseded, "旧请求头被替代须可区分,客户端回「已在观战中」")
 	original, err := f.store.BeginSpectator(f.actor, 11, b, f.formation, f.add)
 	require.NoError(t, err)
 	// ACK未知后重放Begin不能重选随机场或刷新准入截止。
@@ -179,6 +181,8 @@ func TestSpectatorTiDBActiveTicketAndSpectatorExcludeEachOtherAndUnknownNeverMea
 		require.NoError(t, err)
 		_, err = f.store.BeginSpectator(f.actor, 11, request, f.formation, f.add)
 		require.ErrorIs(t, err, ErrSpectatorBusy)
+		require.ErrorIs(t, err, ErrTicketQueued, "非建房占用一律按匹配中区分")
+		require.NotErrorIs(t, err, ErrTicketInBattle)
 	}
 	_, err = f.store.DB.ExecContext(f.actor, "UPDATE match_authority_ticket SET state=1 WHERE player_id=11")
 	require.NoError(t, err)
@@ -337,8 +341,10 @@ func TestSpectatorTiDBBusinessExitCaptureClosesUnpreparedAndRollsBackWithOrigina
 	intent, err := f.store.SpectatorIntent(f.actor, 11, unprepared)
 	require.NoError(t, err)
 	require.Equal(t, uint32(5), intent.State)
+	require.Zero(t, intent.CloseTip, "业务退出关闭不记原因,重放回通用的「原观战请求已关闭」")
 	_, err = f.store.BeginSpectator(f.actor, 11, unprepared, f.formation, f.add)
 	require.ErrorIs(t, err, ErrSpectatorBusy)
+	require.ErrorIs(t, err, ErrSpectatorIntentClosed)
 	request := f.request()
 	original := f.begin(t, request)
 	tx, err = f.store.DB.BeginTx(f.actor, nil)
@@ -355,4 +361,182 @@ func TestSpectatorTiDBBusinessExitCaptureClosesUnpreparedAndRollsBackWithOrigina
 	closed, err := f.store.SpectatorExitClosed(f.actor, original)
 	require.NoError(t, err)
 	require.False(t, closed)
+}
+
+// SpectatorIntent 事务内的票据占用拒绝按票状态细分，仍是 ErrMatchEntryOccupied；整个事务回滚、不占请求头，重放重新判定。
+func TestSpectatorTiDBTypedTicketOccupancyRejectsWithoutHead(t *testing.T) {
+	f := nativeSpectator(t)
+	stamp, err := f.store.Now(f.actor)
+	require.NoError(t, err)
+	profile := &pb.MatchNetworkProfile{PlanId: "spectator-plan", SessionBinding: "bound", Receipts: []*pb.NetworkProbeReceipt{{Grant: &pb.NetworkProbeGrant{PlayerId: 11, PhysicalRegion: 1, ExpiresAtMs: stamp + 120000}, RttMs: 20, SampleCount: 3, MeasuredAtMs: stamp, ExpiresAtMs: stamp + 120000}}}
+	require.NoError(t, f.store.SavePlan(f.actor, 11, profile, stamp+120000))
+	_, created, err := f.store.Join(f.actor, &pb.MatchAuthorityTicketRecord{PlayerId: 11, Ticket: uuid.NewString(), RequestId: uuid.NewString(), Mode: 3, ConfigId: 1, TeamSize: 2}, profile.PlanId, profile.SessionBinding)
+	require.NoError(t, err)
+	require.True(t, created)
+	_, err = f.store.SpectatorIntent(f.actor, 11, f.request())
+	require.ErrorIs(t, err, ErrTicketQueued)
+	require.ErrorIs(t, err, ErrMatchEntryOccupied)
+	require.NotErrorIs(t, err, ErrTicketInBattle)
+	_, err = f.store.DB.ExecContext(f.actor, "UPDATE match_authority_ticket SET state=3 WHERE player_id=11")
+	require.NoError(t, err)
+	_, err = f.store.SpectatorIntent(f.actor, 11, f.request())
+	require.ErrorIs(t, err, ErrTicketInBattle, "已建房须与排队区分，客户端回「战斗中」")
+	require.ErrorIs(t, err, ErrMatchEntryOccupied)
+	var heads int
+	require.NoError(t, f.store.DB.QueryRowContext(f.actor, "SELECT COUNT(*) FROM match_spectator_head WHERE player_id=11").Scan(&heads))
+	require.Zero(t, heads, "事务内拒绝整体回滚，不占请求头")
+}
+
+// 成局已变（非已建房或端点已变）可区分且不落原件；未发Add的意图直接关闭并记原因，之后不能再Begin。
+func TestSpectatorTiDBFormationClosedIsTypedAndClosesUnprepared(t *testing.T) {
+	f := nativeSpectator(t)
+	request := f.request()
+	_, err := f.store.SpectatorIntent(f.actor, 11, request)
+	require.NoError(t, err)
+	ended := proto.Clone(f.formation).(*pb.MatchFormationRecord)
+	ended.State = 5
+	_, err = f.store.BeginSpectator(f.actor, 11, request, ended, f.add)
+	require.ErrorIs(t, err, ErrSpectatorFormationClosed)
+	require.ErrorIs(t, err, ErrSpectatorBusy)
+	moved := proto.Clone(f.formation).(*pb.MatchFormationRecord)
+	moved.TargetEndpoint = "127.0.0.1:2"
+	_, err = f.store.BeginSpectator(f.actor, 11, request, moved, f.add)
+	require.ErrorIs(t, err, ErrSpectatorFormationClosed, "端点已变同样按成局已变处理")
+	var rows int
+	require.NoError(t, f.store.DB.QueryRowContext(f.actor, "SELECT COUNT(*) FROM match_spectator WHERE player_id=11").Scan(&rows))
+	require.Zero(t, rows, "成局已变时不落原件，Add不会发出")
+	stored, err := f.store.CloseUnpreparedSpectator(f.actor, 11, request, constants.ErrBattleNotWatchable)
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrBattleNotWatchable, stored)
+	_, err = f.store.BeginSpectator(f.actor, 11, request, f.formation, f.add)
+	require.ErrorIs(t, err, ErrSpectatorIntentClosed)
+}
+
+// close_tip先写为准：首答与同request_id重放读同一字段；拒绝即终态，迟到的同op Add不能翻成准入。
+func TestSpectatorTiDBCloseTipStickyOnReplay(t *testing.T) {
+	f := nativeSpectator(t)
+	background := context.Background()
+
+	// 未准备线：关闭时记原因，再关不改写。
+	unprepared := f.request()
+	_, err := f.store.SpectatorIntent(f.actor, 11, unprepared)
+	require.NoError(t, err)
+	stored, err := f.store.CloseUnpreparedSpectator(f.actor, 11, unprepared, constants.ErrNoWatchableBattle)
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrNoWatchableBattle, stored)
+	stored, err = f.store.CloseUnpreparedSpectator(f.actor, 11, unprepared, constants.ErrBattleNotWatchable)
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrNoWatchableBattle, stored, "已关闭的意图不能改写原因")
+	intent, err := f.store.SpectatorIntent(f.actor, 11, unprepared)
+	require.NoError(t, err)
+	require.Equal(t, uint32(5), intent.State)
+	require.Equal(t, constants.ErrNoWatchableBattle, intent.CloseTip)
+
+	// 拒绝线：1→3记原因，迟到Add不能推进，3→5关闭证明保留原因。
+	rejected := f.request()
+	original := f.begin(t, rejected)
+	_, err = f.store.RejectSpectator(background, original, 0, "")
+	require.Error(t, err, "拒绝必须携带原因")
+	ok, err := f.store.RejectSpectator(background, original, constants.ErrSpectateFull, "")
+	require.NoError(t, err)
+	require.True(t, ok)
+	ok, err = f.store.RejectSpectator(f.actor, original, constants.ErrBattleNotWatchable, rejected.RequestId)
+	require.NoError(t, err)
+	require.True(t, ok, "重复拒绝幂等")
+	for _, state := range []uint32{2, 4} {
+		ok, err = f.store.AdvanceSpectator(background, original, state)
+		require.NoError(t, err)
+		require.False(t, ok, "拒绝即终态：迟到的Add回包不能复活原op")
+	}
+	ok, err = f.store.AdvanceSpectator(background, original, 5)
+	require.NoError(t, err)
+	require.True(t, ok)
+	intent, err = f.store.SpectatorIntent(f.actor, 11, rejected)
+	require.NoError(t, err)
+	require.Equal(t, uint32(5), intent.State)
+	require.Equal(t, constants.ErrSpectateFull, intent.CloseTip, "先写的拒绝原因不被后写覆盖")
+	ok, err = f.store.RejectSpectator(background, original, constants.ErrBattleNotWatchable, "")
+	require.NoError(t, err)
+	require.False(t, ok, "已证实关闭的原op不再记原因")
+	intent, err = f.store.SpectatorIntent(f.actor, 11, rejected)
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrSpectateFull, intent.CloseTip)
+
+	// 被新请求头关闭的旧请求记「已在观战中」，与旧handler续做时的首答同码。
+	older, newer := f.request(), f.request()
+	_, err = f.store.SpectatorIntent(f.actor, 11, older)
+	require.NoError(t, err)
+	_, err = f.store.SpectatorIntent(f.actor, 11, newer)
+	require.NoError(t, err)
+	intent, err = f.store.SpectatorIntent(f.actor, 11, older)
+	require.NoError(t, err)
+	require.Equal(t, uint32(5), intent.State)
+	require.Equal(t, constants.ErrAlreadyWatching, intent.CloseTip)
+
+	// 尚未发出Add的意图带原因即损坏，读路径fail-closed。
+	high, low, err := joinRequestParts(newer.RequestId)
+	require.NoError(t, err)
+	_, err = f.store.DB.ExecContext(f.actor, "UPDATE match_spectator_intent SET close_tip=? WHERE player_id=11 AND request_high=? AND request_low=?", constants.ErrSpectateFull, high, low)
+	require.NoError(t, err)
+	_, err = f.store.SpectatorIntent(f.actor, 11, newer)
+	require.ErrorIs(t, err, ErrOriginalPlayer)
+}
+
+// 被更新请求替代的旧请求：旧handler续做时的首答（ErrSpectatorSuperseded →「已在观战中」）与同request_id重放
+// 读到的关闭原因同码。未准备线替代即关闭并记原因；已绑定原件线替代时先记原因，新请求清退旧op关闭到5后保留；
+// 已有拒绝原因的旧op被替代时原因不改写（先写为准）。
+func TestSpectatorTiDBSupersededRequestFirstAnswerMatchesReplay(t *testing.T) {
+	f := nativeSpectator(t)
+	background := context.Background()
+
+	// 未准备线：A尚未发Add，B占定请求头。
+	a, b := f.request(), f.request()
+	_, err := f.store.SpectatorIntent(f.actor, 11, a)
+	require.NoError(t, err)
+	_, err = f.store.SpectatorIntent(f.actor, 11, b)
+	require.NoError(t, err)
+	_, err = f.store.SpectatorForActor(f.actor, 11, a.RequestId)
+	require.ErrorIs(t, err, ErrSpectatorSuperseded, "A的handler续做：首答回「已在观战中」")
+	_, err = f.store.CloseUnpreparedSpectator(f.actor, 11, a, constants.ErrNoWatchableBattle)
+	require.ErrorIs(t, err, ErrSpectatorSuperseded, "被替代后A的handler不能改写原因")
+	replay, err := f.store.SpectatorIntent(f.actor, 11, a)
+	require.NoError(t, err)
+	require.Equal(t, uint32(5), replay.State)
+	require.Equal(t, constants.ErrAlreadyWatching, replay.CloseTip)
+
+	// 已绑定原件线：B已发Add并准入，C占定请求头。
+	original := f.begin(t, b)
+	ok, err := f.store.AdvanceSpectatorForHead(f.actor, original, 2, b.RequestId)
+	require.NoError(t, err)
+	require.True(t, ok)
+	c := f.request()
+	_, err = f.store.SpectatorIntent(f.actor, 11, c)
+	require.NoError(t, err)
+	_, err = f.store.SpectatorIntent(f.actor, 11, b)
+	require.ErrorIs(t, err, ErrSpectatorSuperseded, "旧op关闭前重放：已在观战中")
+	ok, err = f.store.AdvanceSpectatorForHead(f.actor, original, 3, c.RequestId)
+	require.NoError(t, err)
+	require.True(t, ok)
+	ok, err = f.store.AdvanceSpectatorForHead(f.actor, original, 5, c.RequestId)
+	require.NoError(t, err)
+	require.True(t, ok)
+	replay, err = f.store.SpectatorIntent(f.actor, 11, b)
+	require.NoError(t, err)
+	require.Equal(t, uint32(5), replay.State)
+	require.Equal(t, constants.ErrAlreadyWatching, replay.CloseTip, "新请求清退旧op关闭后重放仍回同一原因")
+
+	// 先写为准：C已被battle拒绝并记原因，D替代C时不改写。
+	rejected := f.begin(t, c)
+	ok, err = f.store.RejectSpectator(f.actor, rejected, constants.ErrSpectateFull, c.RequestId)
+	require.NoError(t, err)
+	require.True(t, ok)
+	_, err = f.store.SpectatorIntent(f.actor, 11, f.request())
+	require.NoError(t, err)
+	ok, err = f.store.AdvanceSpectator(background, rejected, 5)
+	require.NoError(t, err)
+	require.True(t, ok)
+	replay, err = f.store.SpectatorIntent(f.actor, 11, c)
+	require.NoError(t, err)
+	require.Equal(t, uint32(5), replay.State)
+	require.Equal(t, constants.ErrSpectateFull, replay.CloseTip)
 }

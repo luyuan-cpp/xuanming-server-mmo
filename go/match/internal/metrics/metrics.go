@@ -85,10 +85,15 @@ var (
 		Help:      "Challenge S2C pushes via gate Kafka by outcome (ok|error).",
 	}, []string{"outcome"})
 
+	// watchBattleTotal WatchBattle 每个出口记一次(Redis 与全局两条路径同一组标签;一个进程只走一条路径)。
+	// full = battle 回观众席位已满;closed = 全局路径重放已关闭且未记录原因的原请求;
+	// pending = 全局路径原操作尚未拿到 battle 的终局证明,复用原 request_id 重试;internal 含参数错与服务端故障。
+	// 口径差异:全局路径的 outcome 由意图上持久化的客户端 tip 推出,16018(成局已变 / 准入截止 / battle 的各类拒绝,
+	// 含房间不存在)一律记 not_found,不出 rejected;Redis 路径对 battle 的非「房间不存在」拒绝记 rejected。
 	watchBattleTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "watch_battle_total",
-		Help:      "WatchBattle requests by outcome (ok|queued|in_battle|already_watching|offline|no_battle|not_found|rejected|internal).",
+		Help:      "WatchBattle requests by outcome (ok|queued|in_battle|already_watching|offline|no_battle|not_found|rejected|full|closed|pending|internal). Global path counts every 16018 close as not_found.",
 	}, []string{"outcome"})
 
 	// requestBattleTicketTotal 丢票补签(MatchService.RequestBattleTicket → BattleNode.IssueBattleTicket)
@@ -406,6 +411,11 @@ func KafkaPushValue(outcome string) float64 {
 // ObserveWatchBattle 记录一次 WatchBattle 请求结果。
 func ObserveWatchBattle(outcome string) {
 	watchBattleTotal.WithLabelValues(outcome).Inc()
+}
+
+// WatchBattleValue 读回某 outcome 的 WatchBattle 计数,只给单测断言用。
+func WatchBattleValue(outcome string) float64 {
+	return counterVecValue(watchBattleTotal, outcome)
 }
 
 // ObserveRequestBattleTicket 记录一次 RequestBattleTicket(丢票补签)请求结果。

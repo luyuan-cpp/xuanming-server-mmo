@@ -178,34 +178,55 @@ func (x *SkillcostResource) GetCostResourceCost() uint32 {
 }
 
 type SkillTable struct {
-	state            protoimpl.MessageState   `protogen:"open.v1"`
-	Id               uint32                   `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	SkillType        []uint32                 `protobuf:"varint,2,rep,packed,name=skill_type,json=skillType,proto3" json:"skill_type,omitempty"`
-	TargetingMode    []uint32                 `protobuf:"varint,3,rep,packed,name=targeting_mode,json=targetingMode,proto3" json:"targeting_mode,omitempty"`
-	RequireTarget    uint32                   `protobuf:"varint,4,opt,name=require_target,json=requireTarget,proto3" json:"require_target,omitempty"`
-	TargetStatus     uint32                   `protobuf:"varint,5,opt,name=target_status,json=targetStatus,proto3" json:"target_status,omitempty"`
-	CastPoint        float64                  `protobuf:"fixed64,6,opt,name=cast_point,json=castPoint,proto3" json:"cast_point,omitempty"`
-	RecoveryTime     float64                  `protobuf:"fixed64,7,opt,name=recovery_time,json=recoveryTime,proto3" json:"recovery_time,omitempty"`
-	Immediate        uint32                   `protobuf:"varint,8,opt,name=immediate,proto3" json:"immediate,omitempty"`
-	Effect           []uint32                 `protobuf:"varint,9,rep,packed,name=effect,proto3" json:"effect,omitempty"`
-	ChannelThink     uint32                   `protobuf:"varint,10,opt,name=channel_think,json=channelThink,proto3" json:"channel_think,omitempty"`
-	ChannelFinish    uint32                   `protobuf:"varint,11,opt,name=channel_finish,json=channelFinish,proto3" json:"channel_finish,omitempty"`
-	ThinkInterval    uint32                   `protobuf:"varint,12,opt,name=think_interval,json=thinkInterval,proto3" json:"think_interval,omitempty"`
-	ChannelTime      uint32                   `protobuf:"varint,13,opt,name=channel_time,json=channelTime,proto3" json:"channel_time,omitempty"`
-	Range            float64                  `protobuf:"fixed64,14,opt,name=range,proto3" json:"range,omitempty"`
-	MaxRange         float64                  `protobuf:"fixed64,15,opt,name=max_range,json=maxRange,proto3" json:"max_range,omitempty"`
-	MinRange         float64                  `protobuf:"fixed64,16,opt,name=min_range,json=minRange,proto3" json:"min_range,omitempty"`
-	SelfStatus       uint32                   `protobuf:"varint,17,opt,name=self_status,json=selfStatus,proto3" json:"self_status,omitempty"`
-	RequiredStatus   uint32                   `protobuf:"varint,18,opt,name=required_status,json=requiredStatus,proto3" json:"required_status,omitempty"`
-	CooldownId       uint32                   `protobuf:"varint,19,opt,name=cooldown_id,json=cooldownId,proto3" json:"cooldown_id,omitempty"`
-	Damage           string                   `protobuf:"bytes,20,opt,name=damage,proto3" json:"damage,omitempty"`
-	DamageType       uint32                   `protobuf:"varint,24,opt,name=damage_type,json=damageType,proto3" json:"damage_type,omitempty"`
-	AttackMultiplier float64                  `protobuf:"fixed64,25,opt,name=attack_multiplier,json=attackMultiplier,proto3" json:"attack_multiplier,omitempty"`
-	RequiredItem     []*SkillrequiredItem     `protobuf:"bytes,21,rep,name=required_item,json=requiredItem,proto3" json:"required_item,omitempty"`
-	RequiredResource []*SkillrequiredResource `protobuf:"bytes,22,rep,name=required_resource,json=requiredResource,proto3" json:"required_resource,omitempty"`
-	CostResource     []*SkillcostResource     `protobuf:"bytes,23,rep,name=cost_resource,json=costResource,proto3" json:"cost_resource,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state                protoimpl.MessageState   `protogen:"open.v1"`
+	Id                   uint32                   `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	SkillType            []uint32                 `protobuf:"varint,2,rep,packed,name=skill_type,json=skillType,proto3" json:"skill_type,omitempty"`
+	TargetingMode        []uint32                 `protobuf:"varint,3,rep,packed,name=targeting_mode,json=targetingMode,proto3" json:"targeting_mode,omitempty"`
+	RequireTarget        uint32                   `protobuf:"varint,4,opt,name=require_target,json=requireTarget,proto3" json:"require_target,omitempty"`
+	TargetStatus         uint32                   `protobuf:"varint,5,opt,name=target_status,json=targetStatus,proto3" json:"target_status,omitempty"`
+	CastPoint            float64                  `protobuf:"fixed64,6,opt,name=cast_point,json=castPoint,proto3" json:"cast_point,omitempty"`
+	RecoveryTime         float64                  `protobuf:"fixed64,7,opt,name=recovery_time,json=recoveryTime,proto3" json:"recovery_time,omitempty"`
+	Immediate            uint32                   `protobuf:"varint,8,opt,name=immediate,proto3" json:"immediate,omitempty"`
+	Effect               []uint32                 `protobuf:"varint,9,rep,packed,name=effect,proto3" json:"effect,omitempty"`
+	ChannelThink         uint32                   `protobuf:"varint,10,opt,name=channel_think,json=channelThink,proto3" json:"channel_think,omitempty"`
+	ChannelFinish        uint32                   `protobuf:"varint,11,opt,name=channel_finish,json=channelFinish,proto3" json:"channel_finish,omitempty"`
+	ThinkInterval        uint32                   `protobuf:"varint,12,opt,name=think_interval,json=thinkInterval,proto3" json:"think_interval,omitempty"`
+	ChannelTime          uint32                   `protobuf:"varint,13,opt,name=channel_time,json=channelTime,proto3" json:"channel_time,omitempty"`
+	Range                float64                  `protobuf:"fixed64,14,opt,name=range,proto3" json:"range,omitempty"`
+	MaxRange             float64                  `protobuf:"fixed64,15,opt,name=max_range,json=maxRange,proto3" json:"max_range,omitempty"`
+	MinRange             float64                  `protobuf:"fixed64,16,opt,name=min_range,json=minRange,proto3" json:"min_range,omitempty"`
+	SelfStatus           uint32                   `protobuf:"varint,17,opt,name=self_status,json=selfStatus,proto3" json:"self_status,omitempty"`
+	RequiredStatus       uint32                   `protobuf:"varint,18,opt,name=required_status,json=requiredStatus,proto3" json:"required_status,omitempty"`
+	CooldownId           uint32                   `protobuf:"varint,19,opt,name=cooldown_id,json=cooldownId,proto3" json:"cooldown_id,omitempty"`
+	Damage               string                   `protobuf:"bytes,20,opt,name=damage,proto3" json:"damage,omitempty"`
+	DamageType           uint32                   `protobuf:"varint,24,opt,name=damage_type,json=damageType,proto3" json:"damage_type,omitempty"`
+	AttackMultiplier     float64                  `protobuf:"fixed64,25,opt,name=attack_multiplier,json=attackMultiplier,proto3" json:"attack_multiplier,omitempty"`
+	ClassId              uint32                   `protobuf:"varint,26,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"`
+	Name                 string                   `protobuf:"bytes,27,opt,name=name,proto3" json:"name,omitempty"`
+	Description          string                   `protobuf:"bytes,28,opt,name=description,proto3" json:"description,omitempty"`
+	IconKey              string                   `protobuf:"bytes,29,opt,name=icon_key,json=iconKey,proto3" json:"icon_key,omitempty"`
+	Category             string                   `protobuf:"bytes,30,opt,name=category,proto3" json:"category,omitempty"`
+	UnlockLevel          uint32                   `protobuf:"varint,31,opt,name=unlock_level,json=unlockLevel,proto3" json:"unlock_level,omitempty"`
+	MaxRank              uint32                   `protobuf:"varint,32,opt,name=max_rank,json=maxRank,proto3" json:"max_rank,omitempty"`
+	TargetTeam           uint32                   `protobuf:"varint,33,opt,name=target_team,json=targetTeam,proto3" json:"target_team,omitempty"`
+	MaxTargets           uint32                   `protobuf:"varint,34,opt,name=max_targets,json=maxTargets,proto3" json:"max_targets,omitempty"`
+	ManaPercent          float64                  `protobuf:"fixed64,35,opt,name=mana_percent,json=manaPercent,proto3" json:"mana_percent,omitempty"`
+	CooldownRounds       uint32                   `protobuf:"varint,36,opt,name=cooldown_rounds,json=cooldownRounds,proto3" json:"cooldown_rounds,omitempty"`
+	HealMultiplier       float64                  `protobuf:"fixed64,37,opt,name=heal_multiplier,json=healMultiplier,proto3" json:"heal_multiplier,omitempty"`
+	HealPerLevel         float64                  `protobuf:"fixed64,38,opt,name=heal_per_level,json=healPerLevel,proto3" json:"heal_per_level,omitempty"`
+	ExecuteHealThreshold float64                  `protobuf:"fixed64,39,opt,name=execute_heal_threshold,json=executeHealThreshold,proto3" json:"execute_heal_threshold,omitempty"`
+	ExecuteHealBonus     float64                  `protobuf:"fixed64,40,opt,name=execute_heal_bonus,json=executeHealBonus,proto3" json:"execute_heal_bonus,omitempty"`
+	RestoreManaPercent   float64                  `protobuf:"fixed64,41,opt,name=restore_mana_percent,json=restoreManaPercent,proto3" json:"restore_mana_percent,omitempty"`
+	DispelCount          uint32                   `protobuf:"varint,42,opt,name=dispel_count,json=dispelCount,proto3" json:"dispel_count,omitempty"`
+	Initiative           int32                    `protobuf:"varint,43,opt,name=initiative,proto3" json:"initiative,omitempty"`
+	PassiveStat          string                   `protobuf:"bytes,44,opt,name=passive_stat,json=passiveStat,proto3" json:"passive_stat,omitempty"`
+	PassivePercent       float64                  `protobuf:"fixed64,45,opt,name=passive_percent,json=passivePercent,proto3" json:"passive_percent,omitempty"`
+	BuffPercent          float64                  `protobuf:"fixed64,46,opt,name=buff_percent,json=buffPercent,proto3" json:"buff_percent,omitempty"`
+	RequiredItem         []*SkillrequiredItem     `protobuf:"bytes,21,rep,name=required_item,json=requiredItem,proto3" json:"required_item,omitempty"`
+	RequiredResource     []*SkillrequiredResource `protobuf:"bytes,22,rep,name=required_resource,json=requiredResource,proto3" json:"required_resource,omitempty"`
+	CostResource         []*SkillcostResource     `protobuf:"bytes,23,rep,name=cost_resource,json=costResource,proto3" json:"cost_resource,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *SkillTable) Reset() {
@@ -392,6 +413,153 @@ func (x *SkillTable) GetAttackMultiplier() float64 {
 	return 0
 }
 
+func (x *SkillTable) GetClassId() uint32 {
+	if x != nil {
+		return x.ClassId
+	}
+	return 0
+}
+
+func (x *SkillTable) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SkillTable) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *SkillTable) GetIconKey() string {
+	if x != nil {
+		return x.IconKey
+	}
+	return ""
+}
+
+func (x *SkillTable) GetCategory() string {
+	if x != nil {
+		return x.Category
+	}
+	return ""
+}
+
+func (x *SkillTable) GetUnlockLevel() uint32 {
+	if x != nil {
+		return x.UnlockLevel
+	}
+	return 0
+}
+
+func (x *SkillTable) GetMaxRank() uint32 {
+	if x != nil {
+		return x.MaxRank
+	}
+	return 0
+}
+
+func (x *SkillTable) GetTargetTeam() uint32 {
+	if x != nil {
+		return x.TargetTeam
+	}
+	return 0
+}
+
+func (x *SkillTable) GetMaxTargets() uint32 {
+	if x != nil {
+		return x.MaxTargets
+	}
+	return 0
+}
+
+func (x *SkillTable) GetManaPercent() float64 {
+	if x != nil {
+		return x.ManaPercent
+	}
+	return 0
+}
+
+func (x *SkillTable) GetCooldownRounds() uint32 {
+	if x != nil {
+		return x.CooldownRounds
+	}
+	return 0
+}
+
+func (x *SkillTable) GetHealMultiplier() float64 {
+	if x != nil {
+		return x.HealMultiplier
+	}
+	return 0
+}
+
+func (x *SkillTable) GetHealPerLevel() float64 {
+	if x != nil {
+		return x.HealPerLevel
+	}
+	return 0
+}
+
+func (x *SkillTable) GetExecuteHealThreshold() float64 {
+	if x != nil {
+		return x.ExecuteHealThreshold
+	}
+	return 0
+}
+
+func (x *SkillTable) GetExecuteHealBonus() float64 {
+	if x != nil {
+		return x.ExecuteHealBonus
+	}
+	return 0
+}
+
+func (x *SkillTable) GetRestoreManaPercent() float64 {
+	if x != nil {
+		return x.RestoreManaPercent
+	}
+	return 0
+}
+
+func (x *SkillTable) GetDispelCount() uint32 {
+	if x != nil {
+		return x.DispelCount
+	}
+	return 0
+}
+
+func (x *SkillTable) GetInitiative() int32 {
+	if x != nil {
+		return x.Initiative
+	}
+	return 0
+}
+
+func (x *SkillTable) GetPassiveStat() string {
+	if x != nil {
+		return x.PassiveStat
+	}
+	return ""
+}
+
+func (x *SkillTable) GetPassivePercent() float64 {
+	if x != nil {
+		return x.PassivePercent
+	}
+	return 0
+}
+
+func (x *SkillTable) GetBuffPercent() float64 {
+	if x != nil {
+		return x.BuffPercent
+	}
+	return 0
+}
+
 func (x *SkillTable) GetRequiredItem() []*SkillrequiredItem {
 	if x != nil {
 		return x.RequiredItem
@@ -470,7 +638,7 @@ const file_skill_table_proto_rawDesc = "" +
 	"\x17required_resource_value\x18\x02 \x01(\rR\x15requiredResourceValue\"l\n" +
 	"\x12Skillcost_resource\x12(\n" +
 	"\x10cost_resource_id\x18\x01 \x01(\rR\x0ecostResourceId\x12,\n" +
-	"\x12cost_resource_cost\x18\x02 \x01(\rR\x10costResourceCost\"\x99\a\n" +
+	"\x12cost_resource_cost\x18\x02 \x01(\rR\x10costResourceCost\"\x84\r\n" +
 	"\n" +
 	"SkillTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x1d\n" +
@@ -500,7 +668,32 @@ const file_skill_table_proto_rawDesc = "" +
 	"\x06damage\x18\x14 \x01(\tR\x06damage\x12\x1f\n" +
 	"\vdamage_type\x18\x18 \x01(\rR\n" +
 	"damageType\x12+\n" +
-	"\x11attack_multiplier\x18\x19 \x01(\x01R\x10attackMultiplier\x128\n" +
+	"\x11attack_multiplier\x18\x19 \x01(\x01R\x10attackMultiplier\x12\x19\n" +
+	"\bclass_id\x18\x1a \x01(\rR\aclassId\x12\x12\n" +
+	"\x04name\x18\x1b \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x1c \x01(\tR\vdescription\x12\x19\n" +
+	"\bicon_key\x18\x1d \x01(\tR\aiconKey\x12\x1a\n" +
+	"\bcategory\x18\x1e \x01(\tR\bcategory\x12!\n" +
+	"\funlock_level\x18\x1f \x01(\rR\vunlockLevel\x12\x19\n" +
+	"\bmax_rank\x18  \x01(\rR\amaxRank\x12\x1f\n" +
+	"\vtarget_team\x18! \x01(\rR\n" +
+	"targetTeam\x12\x1f\n" +
+	"\vmax_targets\x18\" \x01(\rR\n" +
+	"maxTargets\x12!\n" +
+	"\fmana_percent\x18# \x01(\x01R\vmanaPercent\x12'\n" +
+	"\x0fcooldown_rounds\x18$ \x01(\rR\x0ecooldownRounds\x12'\n" +
+	"\x0fheal_multiplier\x18% \x01(\x01R\x0ehealMultiplier\x12$\n" +
+	"\x0eheal_per_level\x18& \x01(\x01R\fhealPerLevel\x124\n" +
+	"\x16execute_heal_threshold\x18' \x01(\x01R\x14executeHealThreshold\x12,\n" +
+	"\x12execute_heal_bonus\x18( \x01(\x01R\x10executeHealBonus\x120\n" +
+	"\x14restore_mana_percent\x18) \x01(\x01R\x12restoreManaPercent\x12!\n" +
+	"\fdispel_count\x18* \x01(\rR\vdispelCount\x12\x1e\n" +
+	"\n" +
+	"initiative\x18+ \x01(\x05R\n" +
+	"initiative\x12!\n" +
+	"\fpassive_stat\x18, \x01(\tR\vpassiveStat\x12'\n" +
+	"\x0fpassive_percent\x18- \x01(\x01R\x0epassivePercent\x12!\n" +
+	"\fbuff_percent\x18. \x01(\x01R\vbuffPercent\x128\n" +
 	"\rrequired_item\x18\x15 \x03(\v2\x13.Skillrequired_itemR\frequiredItem\x12D\n" +
 	"\x11required_resource\x18\x16 \x03(\v2\x17.Skillrequired_resourceR\x10requiredResource\x128\n" +
 	"\rcost_resource\x18\x17 \x03(\v2\x13.Skillcost_resourceR\fcostResource\"1\n" +

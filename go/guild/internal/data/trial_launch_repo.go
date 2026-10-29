@@ -300,10 +300,33 @@ func (r *ActivityRepo) PendingTrialLaunches(ctx context.Context, after uint64, l
 	return out, rows.Err()
 }
 
+// TrialCancelReceiptIsTerminal 判一份已验签的 match 取消回执能否终结原 launch 与参与者 ACTIVE 占用
+// (2026-10-23 修复，审计 r2-guild#1；恢复器 recoverOne 与 FinishCancelledTrialLaunch 共用这一条规则)。只认两种权威终态：
+//
+//   - 零 battle 的永久取消墓碑(RequestCancelled 且 BattleId==0)：原 Start 从未成局；
+//   - formation=5 且不是 COMPLETE：发房前中止(没有 Create 原件)，或开局成功(formation=4)后战斗不出结果，
+//     match 在权威截止后与 COMPLETE 争同一主键、原子提交的 SQL ABORT(同一事务把原票置 4)。
+//     有 Create 原件却没有 SQL ABORT 的 state5，match 直接报错、不签回执(direct_cancel.go)。
+//
+// formation=1..4(含开局成功、截止前还没出结果)、RPC 超时或失败都不是终态，占用保留到下一轮 —— 一次超时就释放，
+// 同一批角色可能被这一局与下一局同时占用。formation=5 却带 COMPLETE 是自相矛盾的回执：COMPLETE 的局要经结果事件结算，
+// 不能当作废按 LOSS 收尾，资产路径 fail-closed。
+func TrialCancelReceiptIsTerminal(receipt *matchpb.CancelActivityBattleResponse) bool {
+	if receipt == nil {
+		return false
+	}
+	if receipt.RequestCancelled && receipt.BattleId == 0 {
+		return true
+	}
+	return receipt.FormationState == 5 && receipt.BattleId != 0 &&
+		receipt.TerminalDecision != matchpb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_COMPLETE
+}
+
 // receipt仅由显式注入且验证match回复签名/原请求摘要的适配器传入，客户端无此入口。
 // 终局证明与ACTIVE解除同事务保存；未知提交重读原launch，不发新Start/新名单。
+// 多副本同时拿到同一份终态回执时只有一次真正迁移：原 launch 行 FOR UPDATE，已是 state3 的重放只关闭大厅、不再改任何行。
 func (r *ActivityRepo) FinishCancelledTrialLaunch(ctx context.Context, original *pb.GuildTrialLaunchOriginal, receipt *matchpb.CancelActivityBattleResponse, nowMs uint64) error {
-	if original == nil || receipt == nil || !(receipt.RequestCancelled && receipt.BattleId == 0 || receipt.FormationState == 5 && receipt.BattleId != 0) {
+	if original == nil || !TrialCancelReceiptIsTerminal(receipt) {
 		return ErrWriteConflict
 	}
 	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(receipt)

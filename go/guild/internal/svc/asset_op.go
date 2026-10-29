@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"shared/drainproof"
 	"sync"
 	"time"
 
@@ -174,11 +175,12 @@ type AssetPipeline struct {
 
 	// mu 只保护 started / stopped / cancel(以及 Start 之前的 Attach*),让 Start 与 Stop 的先后无论怎么交错都不会
 	// 在 Stop 的 wg.Wait 之后再 wg.Add(WaitGroup 不允许 Add 与 Wait 并发)。
-	mu      sync.Mutex
-	started bool
-	stopped bool
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
+	mu       sync.Mutex
+	started  bool
+	stopped  bool
+	cancel   context.CancelFunc
+	stopDone chan struct{}
+	wg       sync.WaitGroup
 }
 
 // maintenanceLeaderKey 是"资产通道维护(日对账 + 自动放弃)"选主锁的键,放在 guild 全局 Redis(RedisClient,全体副本共享)。
@@ -373,10 +375,26 @@ func (p *AssetPipeline) Start(ctx context.Context, etcdCli *clientv3.Client) {
 	// 一条 goroutine 炸掉而永远等下去。
 	safego.Go("guild.scene_node_watch", func() {
 		defer p.wg.Done()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				if p.Loop != nil && p.Loop.Relay != nil {
+					p.Loop.Relay.Hold()
+				}
+				panic(recovered)
+			}
+		}()
 		p.watcher.Run(runCtx, etcdCli)
 	})
 	safego.Go("guild.asset_op_reconcile", func() {
 		defer p.wg.Done()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				if p.Loop != nil && p.Loop.Relay != nil {
+					p.Loop.Relay.Hold()
+				}
+				panic(recovered)
+			}
+		}()
 		p.Loop.Run(runCtx)
 	})
 	if p.maintenance != nil {
@@ -385,6 +403,14 @@ func (p *AssetPipeline) Start(ctx context.Context, etcdCli *clientv3.Client) {
 		// 释放锁(leader.Elector.Run 的收尾,自带 2s 预算 —— 所以 Stop 必须早于关 Redis)。
 		safego.Go("guild.asset_op_maintenance", func() {
 			defer p.wg.Done()
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					if p.Loop != nil && p.Loop.Relay != nil {
+						p.Loop.Relay.Hold()
+					}
+					panic(recovered)
+				}
+			}()
 			p.maintenance.Run(runCtx, p.Loop.RunMaintenance)
 		})
 	}
@@ -405,28 +431,43 @@ func (p *AssetPipeline) Start(ctx context.Context, etcdCli *clientv3.Client) {
 // 唤醒订阅先停:它的在途唤醒用的是 Loop 与连接缓存,必须在关连接之前结束。
 //
 // 在途的资产 RPC 被连接关闭打断不会丢数据:那一行仍是 PENDING,下次循环照常重投(不变量 I2)。
-func (p *AssetPipeline) Stop() {
+func (p *AssetPipeline) StopAndReport(ctx context.Context) error {
 	if p == nil {
-		return
+		return nil
 	}
 	p.mu.Lock()
-	if p.stopped {
-		p.mu.Unlock()
-		return
+	if !p.stopped {
+		p.stopped = true
+		p.stopDone = make(chan struct{})
+		cancel := p.cancel
+		if cancel != nil {
+			cancel()
+		}
+		go func() {
+			p.wake.Stop()
+			p.wg.Wait()
+			if p.conns != nil {
+				p.conns.Close()
+			}
+			close(p.stopDone)
+		}()
 	}
-	p.stopped = true
-	cancel := p.cancel
+	done := p.stopDone
 	p.mu.Unlock()
-
-	if cancel != nil {
-		cancel()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		if p.Loop != nil && p.Loop.Relay != nil {
+			p.Loop.Relay.Hold()
+		}
+		return errors.Join(drainproof.ErrHold, ctx.Err())
 	}
-	p.wake.Stop() // 等在途唤醒结束;nil 接收者与没 Start 过都安全
-	p.wg.Wait()
-	if p.conns != nil {
-		p.conns.Close()
+}
+func (p *AssetPipeline) Stop() {
+	if err := p.StopAndReport(context.Background()); err != nil {
+		logx.Errorf("guild asset owner HOLD: %v", err)
 	}
-	logx.Info("[guild] Asset channel stopped: redelivery loop, maintenance, landing wake and scene node mirror exited")
 }
 
 // initAssetOpIDSegment 按 IdSegment 配置建 op_id 号段客户端(biz_tag = guild_asset_op),写法同

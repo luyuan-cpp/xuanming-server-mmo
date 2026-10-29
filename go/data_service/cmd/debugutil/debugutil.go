@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"shared/authoritysql"
 	"strings"
+	"sync"
 	"unicode"
 
 	"data_service/internal/config"
@@ -74,7 +76,7 @@ func LoadDataServiceConfig(path string) (config.Config, error) {
 
 // GlobalMySQL 返回 data_service 的全局库(SnapshotMySQL)连接目标。
 func GlobalMySQL(c config.Config) MySQLEndpoint {
-	return MySQLEndpoint{Hosts: c.SnapshotMySQL.Host, User: c.SnapshotMySQL.User,
+	return MySQLEndpoint{RequireTiDB: c.SnapshotMySQL.RequireTiDB, Hosts: c.SnapshotMySQL.Host, User: c.SnapshotMySQL.User,
 		Password: c.SnapshotMySQL.Password, Net: "tcp", DBName: c.SnapshotMySQL.DBName}
 }
 
@@ -106,6 +108,10 @@ func OpenZoneDB(ctx context.Context, dbConfigPath string, zoneID uint32) (*sql.D
 // OpenZoneDBNamed 同 OpenZoneDB;dbOverride 非空时直接连这个库(同一实例上的全局库、其他服务的独占库)。
 // 库名优先级:dbOverride > db.yaml 的 DBName > zone_{zone}_db。
 func OpenZoneDBNamed(ctx context.Context, dbConfigPath string, zoneID uint32, dbOverride string) (*sql.DB, uint32, string, error) {
+	return OpenZoneDBNamedWithPermission(ctx, dbConfigPath, zoneID, dbOverride, authoritysql.Reader())
+}
+
+func OpenZoneDBNamedWithPermission(ctx context.Context, dbConfigPath string, zoneID uint32, dbOverride string, permission authoritysql.Permission) (*sql.DB, uint32, string, error) {
 	cfg, err := LoadDBConfig(dbConfigPath)
 	if err != nil {
 		return nil, 0, "", err
@@ -138,7 +144,7 @@ func OpenZoneDBNamed(ctx context.Context, dbConfigPath string, zoneID uint32, db
 		dbName,
 	)
 
-	db, err := sql.Open("mysql", dsn)
+	db, err := authoritysql.Open(ctx, dsn, dbName, permission.Kind() == "writer", 1, permission)
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("open mysql connection: %w", err)
 	}
@@ -146,8 +152,7 @@ func OpenZoneDBNamed(ctx context.Context, dbConfigPath string, zoneID uint32, db
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
-		return nil, 0, "", fmt.Errorf("ping mysql: %w", err)
+		return nil, 0, "", errors.Join(fmt.Errorf("ping mysql: %w", err), db.Close())
 	}
 
 	return db, zoneID, dbName, nil
@@ -172,6 +177,38 @@ func QuoteIdentifier(name string) (string, error) {
 // db_first 路径,docs/design/player-route-mapping-durability-proposal.md §4.3 W1「含 debug_import」),cleanup 时关闭。
 // 装不起来就返回 error,不退化成 redis 模式:工具与服务对同一份 yaml 必须是同一个提交点。
 func NewServiceContext(configPath string) (*svc.ServiceContext, func(), error) {
+	return NewServiceContextWithPermission(configPath, authoritysql.Reader())
+}
+
+func NewServiceContextWithPermission(configPath string, permission authoritysql.Permission) (*svc.ServiceContext, func(), error) {
+	svcCtx, closeReport, err := NewServiceContextWithPermissionAndReport(configPath, permission)
+	if err != nil {
+		return nil, nil, err
+	}
+	return svcCtx, func() {
+		if err := closeReport(); err != nil {
+			fmt.Fprintf(os.Stderr, "debugutil资源关闭失败: %v\n", err)
+		}
+	}, nil
+}
+
+// 写工具使用可返回实际关闭错误的接缝；只读旧调用面保留，不能靠 void cleanup 签成功前沿。
+func NewServiceContextWithPermissionAndReport(configPath string, permission authoritysql.Permission) (result *svc.ServiceContext, closeReport func() error, resultErr error) {
+	var routeStore *store.RouteStore
+	var ownedRouter *routing.Router
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			result = nil
+			closeReport = nil
+			resultErr = fmt.Errorf("debugutil Router装配失败: %v", recovered)
+			if ownedRouter != nil {
+				resultErr = errors.Join(resultErr, ownedRouter.CloseAndReport())
+			}
+			if routeStore != nil {
+				resultErr = errors.Join(resultErr, routeStore.Close())
+			}
+		}
+	}()
 	var c config.Config
 	if err := MustLoadConfig(configPath, &c); err != nil {
 		return nil, nil, fmt.Errorf("load data_service config: %w", err)
@@ -182,12 +219,19 @@ func NewServiceContext(configPath string) (*svc.ServiceContext, func(), error) {
 		return nil, nil, fmt.Errorf("invalid RouteStore config: %w", err)
 	}
 
-	var (
-		routerOpts []routing.RouterOption
-		routeStore *store.RouteStore
-	)
+	// 在打开 RouteStore 前完成 Router 会拒绝的纯配置检查，避免后续 panic 泄漏已建 SQL 池。
+	if c.DevRedis.PoolSize < 0 {
+		return nil, nil, errors.New("DevRedis.PoolSize 必须非负")
+	}
+	if c.DevRedis.Host == "" {
+		if err := config.ValidateRegions(c.Regions); err != nil {
+			return nil, nil, err
+		}
+	}
+	var routerOpts []routing.RouterOption
 	if c.RouteStore.DBFirst() {
 		routeCfg := svc.MySQLConfigOf(c)
+		routeCfg.Permission = permission
 		routeCfg.MaxOpenConn = c.RouteStore.MaxOpenConn
 		routeCfg.MaxIdleConn = c.RouteStore.MaxIdleConn
 		host, _ := os.Hostname() // 取不到时 NewRouteWriterID 用 "unknown"
@@ -206,22 +250,30 @@ func NewServiceContext(configPath string) (*svc.ServiceContext, func(), error) {
 		routerOpts = append(routerOpts, routing.WithRouteStore(rs), routing.WithRouteReader(rs))
 	}
 
+	ownedRouter = routing.NewRouter(c, routerOpts...)
 	svcCtx := &svc.ServiceContext{
 		Config: c,
-		Router: routing.NewRouter(c, routerOpts...),
+		Router: ownedRouter,
 	}
 	if routeStore != nil {
 		// 只在非 nil 时赋给接口字段,免得包出「非 nil 接口包着 nil 指针」。
 		svcCtx.PlayerRouteStore = routeStore
 	}
 
-	cleanup := func() {
-		if svcCtx.Router != nil {
-			svcCtx.Router.Close()
-		}
-		if svcCtx.PlayerRouteStore != nil {
-			_ = svcCtx.PlayerRouteStore.Close()
-		}
+	var closeOnce sync.Once
+	var closeErr error
+	cleanup := func() error {
+		closeOnce.Do(func() {
+			if svcCtx.Router != nil {
+				closeErr = errors.Join(closeErr, svcCtx.Router.CloseAndReport())
+			}
+			if svcCtx.PlayerRouteStore != nil {
+				closeErr = errors.Join(closeErr, svcCtx.PlayerRouteStore.Close())
+			}
+			// mappingRedis 命令在调用栈内同步完成；共享 idle 池不发行资产，不在此关闭全局他人连接。
+			// 调用者仍须等实际写结果；网络 UNKNOWN 与上面的 owned 资源关闭错误不能排除。
+		})
+		return closeErr
 	}
 
 	return svcCtx, cleanup, nil
@@ -237,6 +289,8 @@ func NewServiceContextWithSnapshot(configPath string) (*svc.ServiceContext, func
 	c := svcCtx.Config
 	if strings.TrimSpace(c.SnapshotMySQL.Host) != "" {
 		ss, err := store.NewSnapshotStore(store.MySQLConfig{
+			Permission:  authoritysql.Reader(),
+			RequireTiDB: c.SnapshotMySQL.RequireTiDB,
 			Host:        c.SnapshotMySQL.Host,
 			User:        c.SnapshotMySQL.User,
 			Password:    c.SnapshotMySQL.Password,
@@ -244,9 +298,11 @@ func NewServiceContextWithSnapshot(configPath string) (*svc.ServiceContext, func
 			MaxOpenConn: c.SnapshotMySQL.MaxOpenConn,
 			MaxIdleConn: c.SnapshotMySQL.MaxIdleConn,
 		})
-		if err == nil {
-			svcCtx.SnapshotStore = ss
+		if err != nil {
+			baseCleanup()
+			return nil, nil, err
 		}
+		svcCtx.SnapshotStore = ss
 	}
 
 	cleanup := func() {

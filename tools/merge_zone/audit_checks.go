@@ -186,12 +186,25 @@ func auditKafkaQueues(ctx context.Context, cfg auditConfig) ResourceAudit {
 	return r
 }
 
-// auditSourceZoneNodes 查源区场景节点负载集。与 merge 的 preflight P2 同一判据,
-// 放进审计是为了让 T-1 彩排就能发现「zone-down 其实没做干净」。
+// auditSourceZoneNodes 查源区场景节点:etcd 注册表(正面证据)与负载集。与 merge 的 preflight P2 同一判据
+// (assertZoneDown),放进审计是为了让 T-1 彩排就能发现「zone-down 其实没做干净」。
 func auditSourceZoneNodes(ctx context.Context, cfg auditConfig) ResourceAudit {
 	r := ResourceAudit{Name: "source_scene_nodes", UniqueScope: "per_zone"}
 	if cfg.sceneRDB == nil {
 		return infraAudit(r.Name, "no scene_manager Redis handle (-scene-redis-addr/-scene-redis-db)")
+	}
+	if cfg.sceneNodes == nil {
+		return infraAudit(r.Name, "no etcd scene-node registry (-etcd-endpoints): an empty load set alone does not prove the zone is down")
+	}
+	registered, err := cfg.sceneNodes.SceneNodesInZone(ctx, cfg.src)
+	if err != nil {
+		return infraAudit(r.Name, "read etcd scene-node registry: %v", err)
+	}
+	if registered > 0 {
+		r.SourceCount = int64(registered)
+		r.Severity = "block"
+		r.Notes = fmt.Sprintf("etcd still registers %d scene node(s) of zone %d — zone-down is not complete", registered, cfg.src)
+		return r
 	}
 	key := fmt.Sprintf(sceneNodeLoadKeyFmt, cfg.src)
 	n, err := cfg.sceneRDB.ZCard(ctx, key).Result()
@@ -205,7 +218,7 @@ func auditSourceZoneNodes(ctx context.Context, cfg auditConfig) ResourceAudit {
 		return r
 	}
 	r.Severity = "info"
-	r.Notes = key + " is empty"
+	r.Notes = fmt.Sprintf("no scene node of zone %d registered in etcd; %s is empty", cfg.src, key)
 	return r
 }
 
@@ -545,12 +558,25 @@ func verifySourceHotStateGone(ctx context.Context, cfg auditConfig) ResourceAudi
 
 // verifyFenceReleased: merge:in_progress:{src|dst} 必须已经释放。
 // 忘了释放 = data_service / guild 会永久拒绝新建玩家与公会。
+//
+// -route-source=db(B2-4 / R8-3):围栏的真源是库(W1 在库内复核它),镜像只是给 scene_manager / guild 读的副本 —— 两边都要已释放。
+// 库读方没装成时这一行报 INFRA(没查真源就不能说「已释放」);库围栏仍生效时处置是让持有它的那次运行释放(或等库时钟过期),
+// **不能** DEL 镜像:对账 leader 会按库里生效的围栏把镜像补回来,删掉只会让 guild / scene_manager 在补回之前提前放行。
+// redis 源的判定与文案逐字不变。
 func verifyFenceReleased(ctx context.Context, cfg auditConfig) ResourceAudit {
 	r := ResourceAudit{Name: "verify:merge_fence", UniqueScope: "global"}
 	if cfg.mappingDB == nil {
 		return infraAudit(r.Name, "no mapping Redis handle")
 	}
+	dbSource := cfg.routeSource == routeSourceDB
+	if dbSource && cfg.routeDB == nil {
+		if cfg.routeErr != nil {
+			return infraAudit(r.Name, "%v", cfg.routeErr)
+		}
+		return infraAudit(r.Name, "no route DB handle (-route-source=db): the authoritative zone_merge_fence was not checked")
+	}
 	var held []string
+	dbHeld := 0
 	for _, z := range []uint32{cfg.src, cfg.dst} {
 		key := mergeFenceKey(z)
 		n, err := cfg.mappingDB.Exists(ctx, key).Result()
@@ -560,7 +586,6 @@ func verifyFenceReleased(ctx context.Context, cfg auditConfig) ResourceAudit {
 		if n > 0 {
 			held = append(held, key)
 		}
-		// -route-source=db:围栏的真源是库(W1 在库内复核它),镜像只是给 scene_manager / guild 读的副本 —— 两边都要已释放。
 		if cfg.routeDB != nil {
 			st, err := cfg.routeDB.ReadFence(ctx, z)
 			if err != nil {
@@ -568,11 +593,29 @@ func verifyFenceReleased(ctx context.Context, cfg auditConfig) ResourceAudit {
 			}
 			if st.Active {
 				held = append(held, fmt.Sprintf("zone_merge_fence(zone=%d, run_id=%s)", z, st.RunID))
+				dbHeld++
 			}
 		}
 	}
 	r.SourceCount = int64(len(held))
-	if len(held) > 0 {
+	switch {
+	case dbHeld > 0:
+		r.Severity = "block"
+		r.Notes = fmt.Sprintf("merge fence still set: %v — data_service RegisterPlayerZone and guild CreateGuild "+
+			"are refusing new objects in those zones. The DB fence (zone_merge_fence) is authoritative and still active: "+
+			"resume / re-run the run that holds it with the same command (add -take-over-fence <run_id> if that run aborted "+
+			"and kept its fence) so it releases it, or wait until the DB clock passes its expires_at_ms (runbook §15.4). "+
+			"Do NOT DEL merge:in_progress:* by hand: the reconcile leader re-mirrors an active DB fence, and guild / "+
+			"scene_manager would unfence early until it does.", held)
+		return r
+	case len(held) > 0 && dbSource:
+		r.Severity = "block"
+		r.Notes = fmt.Sprintf("merge fence mirror still set: %v, but zone_merge_fence is already released — the data_service "+
+			"reconcile leader compare-and-deletes such stale mirrors on its next tick: wait for it and verify again. A mirror "+
+			"without fence_epoch (old merge_zone binary or a manual write) is never deleted by the leader: DEL it once no "+
+			"merge_zone process is alive.", held)
+		return r
+	case len(held) > 0:
 		r.Severity = "block"
 		r.Notes = fmt.Sprintf("merge fence still set: %v — data_service RegisterPlayerZone and guild CreateGuild "+
 			"are refusing new objects in those zones. DEL them once no merge_zone process is alive.", held)
@@ -580,6 +623,9 @@ func verifyFenceReleased(ctx context.Context, cfg auditConfig) ResourceAudit {
 	}
 	r.Severity = "info"
 	r.Notes = "no merge:in_progress:* fence left behind"
+	if dbSource {
+		r.Notes = "no merge fence left behind (zone_merge_fence released in the route DB, no merge:in_progress:* mirror)"
+	}
 	return r
 }
 
@@ -618,7 +664,10 @@ func verifyRouteCache(ctx context.Context, cfg auditConfig) ResourceAudit {
 		r.Severity = "block"
 		r.Notes = fmt.Sprintf("%d of the %d manifest players have a mapping-Redis copy that differs from player_route (first: %v) — "+
 			"do NOT open zone %d: let the data_service reconcile leader push them (or re-run the merge step that wrote them; "+
-			"publishing is idempotent) and verify again", bad, len(m.PlayerIDs), sample, cfg.dst)
+			"publishing is idempotent) and verify again. If a sample says AHEAD and still does when you verify again (a writer "+
+			"that committed between this check's DB read and its MGET shows up as AHEAD once), the route DB lost committed writes "+
+			"(rollback signature): neither the leader nor a re-run can lower a cached rev — the leader freezes the route writers "+
+			"(route_meta.writable=0); follow the global-DB rollback recovery (runbook §9.4) instead", bad, len(m.PlayerIDs), sample, cfg.dst)
 		return r
 	}
 	r.Severity = "info"
@@ -693,9 +742,19 @@ func routeCacheMatches(row mergeRouteRow, present bool, cacheHome, cachePlc, cac
 	}
 	wantRev := formatRouteRev(row.Rev)
 	home := row.homeValue()
+	// 缓存 rev 领先库单独点名(B2-5):这是库回档的特征,leader 推送与重跑都压不低缓存 rev,处置不同(runbook §9.4)。
+	// maprev 不规范时比不出先后,落到下面的 != 分支。
+	cacheAhead := false
+	if has[2] {
+		if cmp, err := compareRouteRev(vals[2], wantRev); err == nil && cmp > 0 {
+			cacheAhead = true
+		}
+	}
 	switch {
 	case !has[2]:
 		return false, fmt.Sprintf("player:maprev is absent (DB rev %s)", wantRev), nil
+	case cacheAhead:
+		return false, fmt.Sprintf("player:maprev %q is AHEAD of DB rev %s (route DB rolled back?)", vals[2], wantRev), nil
 	case vals[2] != wantRev:
 		return false, fmt.Sprintf("player:maprev %q != DB rev %s", vals[2], wantRev), nil
 	case has[0] != (home != "") || vals[0] != home:

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"errors"
+	"fmt"
 	"regexp"
 	"sort"
 
@@ -17,6 +18,23 @@ import (
 )
 
 var ErrMatchEntryOccupied = errors.New("角色已有未终结的队伍或历练原意图")
+
+// 匹配票占用按票状态细分，均包装 ErrMatchEntryOccupied：既有 errors.Is 判断不变，
+// 观战入口据此区分「匹配中」与「战斗中」两种客户端结论。
+var (
+	// ErrTicketQueued：票在排队或成局中；空占位以外的 state0 与未知状态同样按此处理。
+	ErrTicketQueued = fmt.Errorf("%w: 匹配票排队或成局中", ErrMatchEntryOccupied)
+	// ErrTicketInBattle：票已建房（state3）。
+	ErrTicketInBattle = fmt.Errorf("%w: 匹配票已建房", ErrMatchEntryOccupied)
+)
+
+// ticketOccupiedErr 只给 TicketOccupied 为真的票选细分原因。
+func ticketOccupiedErr(ticket *pb.MatchAuthorityTicketRecord) error {
+	if ticket.GetState() == 3 {
+		return ErrTicketInBattle
+	}
+	return ErrTicketQueued
+}
 
 // 仅传递调用者已持有的正规原件，不复制另一套业务状态。例外仍须与本事务读到的SQL原件逐项相等。
 type matchEntryOriginal struct {
@@ -86,7 +104,7 @@ func (s *Store) requireIdleMatchTicketsTx(ctx context.Context, tx *sql.Tx, group
 			return err
 		}
 		if TicketOccupied(ticket) {
-			return ErrMatchEntryOccupied
+			return ticketOccupiedErr(ticket)
 		}
 	}
 	return nil

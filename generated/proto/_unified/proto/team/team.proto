@@ -18,7 +18,8 @@ option (OptionFileDefaultNode) = NODE_TEAM;
 // 组队系统客户端协议(设计文档 docs/design/team-system.md §B.1)。
 // 链路:gate(路由服模式) → client_rpc_router → TeamNodeService(与 match 同进程,internal/team)。
 // 节点类型由生成器按目录名 team/ 映射到 ENodeType_TeamNodeService(proto/common/base/node.proto)。
-// service 名必须带 ClientPlayer,Unity / robot 生成器才会收录。
+// service 必须标 option (OptionIsClientProtocolService) = true(与服务名无关),Unity / robot 生成器才会收录;
+// 推送方法另需标 option (OptionClientRpcKind) = CLIENT_RPC_PUSH。
 // 身份一律取自 session metadata,请求体不带 player_id;缺 session 回 kTeamPlayerId(fail-closed)。
 // 推送写成返回 Empty 的 rpc 以获得消息号(照 proto/match/match_service.proto 的 NotifyChallenge*),
 // 服务端实现为空操作,客户端调用不产生任何副作用。

@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"proto/{{.ImportDir}}"
+	{{.Alias}} "{{.ImportPath}}"
 	"robot/logic/gameobject"
 )
 
-func {{.HandlerName}}(player *gameobject.Player, response *{{.ResponseType}}) {
+func {{.HandlerName}}(player *gameobject.Player, response *{{.PayloadType}}) {
 }

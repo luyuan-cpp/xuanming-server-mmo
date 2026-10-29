@@ -230,7 +230,7 @@ func register() {
 		for _, reason := range deadLetterReasons {
 			taskDeadLetterTotal.WithLabelValues(reason).Add(0)
 		}
-		for _, reason := range []string{ReadAbandonedStoreUnavailable, ReadAbandonedBudgetExhausted, ReadAbandonedSchemaTooNew} {
+		for _, reason := range []string{ReadAbandonedStoreUnavailable, ReadAbandonedBudgetExhausted, ReadAbandonedSchemaTooNew, ReadAbandonedMissingPlayerRow} {
 			taskReadAbandonedTotal.WithLabelValues(reason).Add(0)
 		}
 		// 世代仪表在 SetPersistSchemaGen / SetPersistSchemaBootstrapClosed 里赋值;计数器注册即以 0 存在。
@@ -336,9 +336,10 @@ var deadLetterReasons = []string{
 
 // 读任务被放弃的原因(db_task_read_abandoned_total 的 reason)。
 const (
-	ReadAbandonedStoreUnavailable = "store_unavailable" // 库打不开或在冷却期内:立即回失败回执
-	ReadAbandonedBudgetExhausted  = "budget_exhausted"  // 重试次数用完:丢弃,不进死信
-	ReadAbandonedSchemaTooNew     = "schema_too_new"    // 行的持久 schema 世代高于本实例(C2):立即回失败回执,不回填缓存
+	ReadAbandonedStoreUnavailable = "store_unavailable"  // 库打不开或在冷却期内:立即回失败回执
+	ReadAbandonedBudgetExhausted  = "budget_exhausted"   // 重试次数用完:丢弃,不进死信
+	ReadAbandonedSchemaTooNew     = "schema_too_new"     // 行的持久 schema 世代高于本实例(C2):立即回失败回执,不回填缓存
+	ReadAbandonedMissingPlayerRow = "player_row_missing" // 正式玩家双表缺行：立即回失败，不把请求体冒充真实存档
 )
 
 // SetPersistSchemaGen 记下本二进制的持久 schema 世代,启动时调用一次。
@@ -1038,4 +1039,37 @@ func Start(addr string) {
 			logx.Errorf("db /metrics ListenAndServe failed: %v", err)
 		}
 	}()
+}
+
+// ── 落点计数器预置(deploy/k8s/player-placement-alerts.yaml)────────────────────────
+//
+// db_placement_guard_total 与 db_placement_store_open_total 原先只在第一次计数时才建出序列:increase() 对「序列从无到 1」
+// 只有一个样本,恰好漏掉第一次,「出现一次就报」的告警(stale_topic / missing_required / rejected / error)因此在告警文件里
+// 多写了一支 `unless … offset 10m`。PrimePlacement 以 0 建出两者的全部序列。label 都是封闭集合(op 2 × outcome 9 = 18 条,
+// result 3 条),不含 player_id(AGENTS.md §9)。
+
+// placementGuardOps / placementGuardOutcomes 是 db_placement_guard_total 的封闭 label 集合,outcome 与上面的 Placement* 常量
+// 一一对应。其中 read×stale_topic、read×frozen_deferred 不可达(读不适用 P-6、不看冻结),预置后恒为 0;route_not_ready 只在
+// Placement.RequireRouteReady=true 时出现,与 db_task_deferred_total{reason="route_not_ready"} 同口径无条件预置,开关关着时恒为 0。
+var (
+	placementGuardOps      = []string{"read", "write"}
+	placementGuardOutcomes = []string{
+		PlacementPlaced, PlacementHome, PlacementLegacy, PlacementStaleTopic, PlacementFrozenDeferred,
+		PlacementMissingRequired, PlacementLookupError, PlacementRecheckMoved, PlacementRouteNotReady,
+	}
+	placementStoreOpenResults = []string{StoreOpenOK, StoreOpenError, StoreOpenRejected}
+)
+
+// PrimePlacement 注册指标并以 0 建出 db_placement_guard_total 与 db_placement_store_open_total 的全部序列。由按落点选库的
+// 消费者装配时调用(kafka.NewKeyOrderedKafkaConsumer,早于 Start 暴露 /metrics,第一次抓取就有这些序列);可重复调用。
+func PrimePlacement() {
+	register()
+	for _, op := range placementGuardOps {
+		for _, outcome := range placementGuardOutcomes {
+			placementGuardTotal.WithLabelValues(op, outcome).Add(0)
+		}
+	}
+	for _, result := range placementStoreOpenResults {
+		placementStoreOpenTotal.WithLabelValues(result).Add(0)
+	}
 }

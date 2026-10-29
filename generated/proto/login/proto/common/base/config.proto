@@ -62,7 +62,7 @@ message IdSegmentConfig {
     repeated IdSegmentKindConfig kinds = 1;
 }
 
-// C++ 节点发出的 unary gRPC 调用的 deadline(docs/design/grpc-client-deadline-failure-callback.md §4)。
+// C++ 节点发出的 unary gRPC 调用的 deadline(docs/design/grpc-muduo-transport.md §16.3)。
 // 按**目标**节点类型配;没配到的类型用客户端调用公共头中的 kDefaultGrpcCallDeadlineMs(core/network/grpc_client_call.h)。
 // 取值遵守「上游比下游宽」:大于目标服务的服务端超时,小于依赖这次调用结果的 C++ 看门狗。
 message GrpcClientConfig {

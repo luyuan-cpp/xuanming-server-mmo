@@ -18,6 +18,7 @@
 #include <google/protobuf/descriptor.pb.h>
 #include <google/protobuf/message.h>
 #include <google/protobuf/unknown_field_set.h>
+#include <google/protobuf/util/message_differencer.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -41,9 +42,12 @@
 #include "proto/common/database/player_cache.pb.h"
 #include "services/scene/player/comp/player_persist_carry_comp.h"
 #include "services/scene/player/system/asset_op_ledger.h"
+#include "services/scene/player/system/player_attribute.h"
 #include "services/scene/player/system/player_data_loader.h"
 #include "services/scene/player/system/player_inbox_rules.h"
+#include "services/scene/player/system/player_level_rules.h"
 #include "services/scene/player/system/player_persist_marshal.h"
+#include "services/scene/player/system/player_pet.h"
 #include "table/code/attributedimension_table.h"
 #include "table/code/attributepool_table.h"
 #include "table/code/attributerule_table.h"
@@ -246,6 +250,47 @@ std::string Join(const std::vector<std::string> &names)
         joined += name;
     }
     return joined;
+}
+
+// MessageDifferencer 逐字段比较(map 字段不看顺序)。不比两个实例的 SerializeAsString:map 的序列化顺序不保证,
+// 内容相同字节也可能不同。相等时返回空串,否则返回差异报告。
+std::string DiffAgainst(const Message &expected, const Message &actual)
+{
+    google::protobuf::util::MessageDifferencer differencer;
+    std::string report;
+    differencer.ReportDifferencesToString(&report);
+    return differencer.Compare(expected, actual) ? std::string() : report;
+}
+
+// 只留 allocated 的投影:宝宝的当前 HP / MP 会被加载重算夹到本版本上限(§12.1 W3),整只实例比不了。
+PetInstance AllocatedOnly(const PetInstance &pet)
+{
+    PetInstance projection;
+    *projection.mutable_allocated() = pet.allocated();
+    return projection;
+}
+
+// 值域往返的断言:等级、技能列表、属性加点整份与输入相等;宝宝逐只比 pet_id、等级与 allocated,外加出战指向。
+void ExpectValueDomainsKept(const player_database &input, const player_database &saved)
+{
+    const auto expectSame = [](const Message &want, const Message &got, const char *what) {
+        const std::string diff = DiffAgainst(want, got);
+        EXPECT_TRUE(diff.empty()) << what << " 被改写:\n" << diff;
+    };
+    expectSame(input.level_component(), saved.level_component(), "level_component");
+    expectSame(input.skill_list(), saved.skill_list(), "skill_list");
+    expectSame(input.attribute_component(), saved.attribute_component(), "attribute_component");
+    EXPECT_EQ(input.pet_component().active_pet_id(), saved.pet_component().active_pet_id()) << "出战指向被改写";
+    ASSERT_EQ(input.pet_component().pets_size(), saved.pet_component().pets_size());
+    for (int i = 0; i < input.pet_component().pets_size(); ++i)
+    {
+        const auto &want = input.pet_component().pets(i);
+        const auto &got = saved.pet_component().pets(i);
+        SCOPED_TRACE(testing::Message() << "pet_id=" << want.pet_id());
+        EXPECT_EQ(want.pet_id(), got.pet_id());
+        EXPECT_EQ(want.level(), got.level()) << "宝宝等级被改写";
+        expectSame(AllocatedOnly(want), AllocatedOnly(got), "pet.allocated");
+    }
 }
 
 } // namespace
@@ -639,5 +684,170 @@ TEST_F(PersistRoundTripTest, MarshalRefusesWhenEitherCarryComponentIsMissing)
         EXPECT_EQ(previousBytes, previous.SerializeAsString()) << "拒绝必须保留原输出";
         EXPECT_FALSE((tlsEcs.actorRegistry.all_of<PlayerDatabaseCarryComp, PlayerDatabase1CarryComp>(player)))
             << "存盘只读,不得补建缺失的载体";
+    }
+}
+
+// §12.1 持久值域:新版本写下、超出本版本值域的值,经两跳「加载 → 统一存盘入口」原样往返。
+// 本版本只按自己的配置算生效值(超上限的存储等级按上限、超额的加点池不生效、未知维度键不生效、
+// 超 max_rank 的重数按表上限生效……),不改写持久组件 —— 加载期改掉的东西会随下一次存盘落库,升回新版本也恢复不了。
+//
+// 只比本批规则管的组件:level_component、skill_list、attribute_component 整份,以及每只宝宝的 allocated
+// (外加宝宝等级与出战指向)。不比的字段与原因:
+//   - derived_attributes_component(BaseAttributesComp)与宝宝实例的当前 HP / MP:加载重算按本版本上限向下夹,
+//     是设计内接受的改写(§12.1 W3,消耗型状态);speed / armor 等是每次加载按本版本重算的派生缓存(§12.1 N13);
+//   - 其余组件(背包、任务、货币、各本账本):不涉及本用例构造的值域,由上面几个用例与各自的测试覆盖。
+TEST_F(PersistRoundTripTest, ValueDomainsBeyondThisBuildSurviveLoadAndSave)
+{
+    constexpr uint32_t kClassId = 1;
+    constexpr uint32_t kStoredLevel = playerlevel::kMaxLevel + 15;
+    constexpr uint32_t kUnknownDimensionId = 987654;    // 本版本维度表里没有的维度,写在角色方案里
+    constexpr uint32_t kUnknownPetDimensionId = 987655; // 同上,写在宝宝身上
+
+    // 在共享夹具的一份拷贝上改,不动 BuildEveryPersistedType:其余用例测的是版本内认识这些值的正常路径。
+    PlayerAllData input = BuildEveryPersistedType(0, 0);
+    auto &db = *input.mutable_player_database_data();
+
+    // —— 职业与存储等级:新版本把上限提高到 kMaxLevel 以上之后升上去的等级 ——
+    db.mutable_uint32_pb_component()->set_class_(kClassId);
+    db.mutable_level_component()->set_level(kStoredLevel);
+
+    // —— 技能列表。表 ID 从本版本的表里现取,只存 id 不存表行指针(表行只在下一次 Load 之前有效)——
+    const auto *classRow = ClassTableManager::Instance().FindByIdSilent(kClassId).first;
+    ASSERT_NE(nullptr, classRow) << "职业表里没有职业 " << kClassId;
+    std::set<uint32_t> seedIds;
+    for (const uint32_t seedId : classRow->skill())
+    {
+        if (seedId != 0)
+        {
+            seedIds.insert(seedId);
+        }
+    }
+    ASSERT_FALSE(seedIds.empty()) << "职业 " << kClassId << " 没有初始技能,覆盖不到「种子已在列表里」这条路径";
+    uint32_t overRankSkillId = 0; // 本职业、非种子、有重数上限:存一个高于本版本 max_rank 的重数
+    uint32_t overRankMaxRank = 0;
+    uint32_t unrankedSkillId = 0; // 本职业、非种子:存 rank 0(新版本里它可能已改成通用技能)
+    uint32_t generalSkillId = 0;  // 通用技能:存非 0 的 rank(新版本里它可能已改成职业技能)
+    for (const auto &row : SkillTableManager::Instance().FindAll().data())
+    {
+        if (seedIds.contains(row.id()))
+        {
+            continue;
+        }
+        if (row.class_id() == kClassId)
+        {
+            if (overRankSkillId == 0 && row.max_rank() > 0)
+            {
+                overRankSkillId = row.id();
+                overRankMaxRank = row.max_rank();
+            }
+            else if (unrankedSkillId == 0)
+            {
+                unrankedSkillId = row.id();
+            }
+        }
+        else if (row.class_id() == 0 && generalSkillId == 0)
+        {
+            generalSkillId = row.id();
+        }
+    }
+    ASSERT_NE(0u, overRankSkillId) << "技能表里没有职业 " << kClassId << " 的、max_rank > 0 的非种子技能";
+    ASSERT_NE(0u, unrankedSkillId) << "技能表里没有职业 " << kClassId << " 的第二个非种子技能";
+    ASSERT_NE(0u, generalSkillId) << "技能表里没有通用技能(class_id = 0)";
+
+    auto &skillList = *db.mutable_skill_list();
+    skillList.clear_skill_list();
+    uint64_t nextSkillGuid = (uint64_t{1} << 60) + 860;
+    const auto addSkill = [&skillList, &nextSkillGuid](uint32_t skillTableId, uint32_t rank) {
+        auto *entry = skillList.add_skill_list();
+        entry->set_id(nextSkillGuid++);
+        entry->set_skill_table_id(skillTableId);
+        entry->set_rank(rank);
+    };
+    // 种子全在列表里且已学(职业技能 1 重):GrantInitialSkills 既不追加、也不原地补重数,列表只经历加载本身的处理。
+    for (const uint32_t seedId : seedIds)
+    {
+        const auto *seedRow = SkillTableManager::Instance().FindByIdSilent(seedId).first;
+        addSkill(seedId, (seedRow != nullptr && seedRow->class_id() != 0) ? 1 : 0);
+    }
+    addSkill(overRankSkillId, overRankMaxRank + 5);
+    addSkill(unrankedSkillId, 0);
+    addSkill(generalSkillId, 3);
+
+    // —— 角色加点:已知维度合计超过本版本 kMaxLevel 级的总量(新版本按更高的上限加的点),外加一个未知维度 ——
+    std::vector<uint32_t> playerDims;
+    uint64_t playerTotalBound = 0;
+    for (const auto &pool : AttributePoolTableManager::Instance().FindAll().data())
+    {
+        for (const auto *dim : AttributeDimensionTableManager::Instance().GetByPoolId(pool.id()))
+        {
+            if (PlayerAttributeSystem::IsPlayerDimension(dim->id()))
+            {
+                playerDims.push_back(dim->id());
+            }
+        }
+        if (!playerDims.empty())
+        {
+            // kMaxLevel 级总量的上界:TotalPoints 还要扣掉解锁前的等级,只会更小;夹具没有 bonus_points。
+            playerTotalBound =
+                uint64_t{pool.base_points()} + uint64_t{pool.points_per_level()} * playerlevel::kMaxLevel;
+            break;
+        }
+    }
+    ASSERT_FALSE(playerDims.empty()) << "属性池表里没有角色池维度";
+    ASSERT_LT(playerTotalBound, uint64_t{UINT32_MAX});
+    ASSERT_EQ(1, db.attribute_component().schemes_size());
+    auto &allocated = *db.mutable_attribute_component()->mutable_schemes(0)->mutable_allocated();
+    allocated[playerDims[0]] = static_cast<uint32_t>(playerTotalBound + 1);
+    if (playerDims.size() > 1)
+    {
+        allocated[playerDims[1]] = 7;
+    }
+    ASSERT_FALSE(AttributeDimensionTableManager::Instance().Exists(kUnknownDimensionId));
+    allocated[kUnknownDimensionId] = 30;
+
+    // —— 宝宝:等级不低于主人的生效等级(kMaxLevel),加载时的等级跟随只升不降,不会改它;宝宝池已知维度超过本版本
+    //     按宝宝等级算的总量,外加两个对宝宝未知的键(表里没有的维度、归角色池的维度)——
+    bool foundPetPool = false;
+    uint32_t petPoolId = 0;
+    uint64_t petTotalBound = 0;
+    for (const auto &pool : AttributePoolTableManager::Instance().FindAll().data())
+    {
+        if (pool.owner_type() == PetSystem::kPoolOwnerPet)
+        {
+            foundPetPool = true;
+            petPoolId = pool.id();
+            petTotalBound = uint64_t{pool.base_points()} + uint64_t{pool.points_per_level()} * kStoredLevel;
+            break;
+        }
+    }
+    ASSERT_TRUE(foundPetPool) << "属性池表里没有宝宝池(owner_type=" << PetSystem::kPoolOwnerPet << ")";
+    ASSERT_LT(petTotalBound, uint64_t{UINT32_MAX});
+    const auto &petDims = AttributeDimensionTableManager::Instance().GetByPoolId(petPoolId);
+    ASSERT_FALSE(petDims.empty()) << "宝宝池没有维度";
+    ASSERT_EQ(1, db.pet_component().pets_size());
+    auto &pet = *db.mutable_pet_component()->mutable_pets(0);
+    pet.set_level(kStoredLevel);
+    auto &petAllocated = *pet.mutable_allocated();
+    petAllocated[petDims.front()->id()] = static_cast<uint32_t>(petTotalBound + 1);
+    ASSERT_FALSE(AttributeDimensionTableManager::Instance().Exists(kUnknownPetDimensionId));
+    petAllocated[kUnknownPetDimensionId] = 20;
+    petAllocated[playerDims[0]] = 4;
+    // 出战指向这只宝宝:主人生效等级低于宝宝等级,加载不取消出战(只在升级重算时取消;召唤与战斗快照在运行期按等级拦)。
+    db.mutable_pet_component()->set_active_pet_id(pet.pet_id());
+
+    // 第一跳:本二进制读到新版本写下的记录,原样存回。
+    PlayerAllData firstHop;
+    ASSERT_TRUE(LoadAndMarshal(input, firstHop));
+    {
+        SCOPED_TRACE("第一跳");
+        ExpectValueDomainsKept(input.player_database_data(), firstHop.player_database_data());
+    }
+
+    // 第二跳:存回去的记录再被读一次,仍与新版本写下的输入相同(没有攒到下一次加载才发生的改写)。
+    PlayerAllData secondHop;
+    ASSERT_TRUE(LoadAndMarshal(firstHop, secondHop));
+    {
+        SCOPED_TRACE("第二跳");
+        ExpectValueDomainsKept(input.player_database_data(), secondHop.player_database_data());
     }
 }

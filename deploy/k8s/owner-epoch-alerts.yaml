@@ -154,3 +154,85 @@ spec:
               evidence_ahead 表示 Redis 已有更新证据,本次保留较新证据;通常需要核对回档后清理范围。
               两种情况都可能使资产到账通道卡住或错账,按 ASSET-SQL-COMMIT-CONFLICT / ASSET-SQL-COMMIT-AHEAD 日志
               核对 SQL、父缓存与证据版本,保留现场,不得绕过 require_sql_commit 伪造到账。
+
+    # zone Redis 回退防护(docs/design/zone-redis-regression-guard-20261022.md §7)。
+    # 抓取前提:login 的 :9101、scene_manager 的 :9150、go/db 的 :9160 都有 ServiceMonitor / PodMonitor。
+    # 序列都在启动时预建;「应当恒为 0」的不变量用本次进程的绝对累计,其余用 increase。
+    # scene 侧的 owner_counter_behind(存盘时 Redis 计数器比实体缓存的 epoch 小 = 铸造丢失)只在 scene 日志里,
+    # 与本文件头所述其他 scene 信号一样,作为值班固定 LogQL 查询:{app="scene"} |= "metric=owner_counter_behind"。
+    - name: owner-epoch.redis-regression
+      interval: 30s
+      rules:
+        - alert: LoginParentLoadSQLBehind
+          expr: |
+            sum by (namespace) (login_parent_load_verify_total{verdict="sql_behind"}) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 有玩家的 SQL 行低于 Redis 屏障记录的 ACK"
+            description: >-
+              ACK 只在 SQL 提交之后才写,SQL 低于 ACK 只能是 SQL 侧回档或损坏。该玩家登录被拒(fail-closed),
+              按 PARENT-LOAD-SQL-BEHIND 日志定位玩家,按 docs/design/db-write-fencing-mysql.md §9.2 处置,不要手工改屏障。
+
+        - alert: LoginParentLoadReconcilingPersistent
+          expr: |
+            sum by (namespace) (increase(login_parent_load_verify_total{verdict="reconciling"}[10m])) > 0
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 有玩家的两张 SQL 表持续停在不同版本"
+            description: >-
+              正常情况下落后的那张表会在 Kafka 积压或重试队列消化后追平;持续 30 分钟以上说明那笔任务丢了或进了死信。
+              查该玩家的死信与 db_task 积压,确认真源后用 save_barrier_restore 处置。
+
+        - alert: LoginParentLoadAdoptedSQL
+          expr: |
+            sum by (namespace) (increase(login_parent_load_verify_total{verdict="adopted"}[10m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 登录时按 SQL 修复了回退的 Redis 屏障"
+            description: >-
+              过去 10 分钟约 {{ $value | printf "%.0f" }} 名玩家的 Redis 父快照落后于已提交的 SQL,登录已自动采纳 SQL。
+              每一次都说明 zone Redis 丢过已确认的写(崩溃丢尾、切主丢尾或从备份恢复)。核对 Redis 的重启 / 切主记录,
+              按 PARENT-LOAD-ADOPT-SQL 日志抽查玩家;单独出现无需处置,与 DbSaveBarrierAckAhead 同时持续出现要查 Redis 持久化配置。
+
+        - alert: DbSaveBarrierAckAhead
+          expr: |
+            sum by (namespace, kind) (db_save_barrier_ack_ahead_total) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的存盘屏障出现 ACK 高于 pending({{ $labels.kind }})"
+            description: >-
+              go/db 在 SQL 提交后发布 ACK 时发现它高于屏障的 pending。正常流程里 ACK 不会高于 pending,
+              只能是 zone Redis 回退、手工改写或合服拷错屏障。玩家下次登录会按 SQL 自动修复(LoginParentLoadAdoptedSQL);
+              按 SAVE-BARRIER-ACK-AHEAD 日志定位玩家,核对 Redis 重启 / 切主记录。
+
+        - alert: SceneManagerOwnerEpochMintNotDurable
+          expr: |
+            sum by (namespace, result) (increase(scene_manager_owner_epoch_mint_durable_total{result!="confirmed"}[10m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 owner_epoch 铸造未能确认落盘({{ $labels.result }})"
+            description: >-
+              铸造后 WAITAOF 没有确认到要求的落盘份数,本次进场已回滚并让客户端重试。偶发属正常;持续出现说明
+              Redis 刷盘或复制落后,进场会持续失败。核对 Redis 的 AOF 与从库状态;比例阈值待压测基线确定。
+
+        - alert: SceneManagerOwnerEpochMintClockBehind
+          expr: |
+            sum by (namespace) (increase(scene_manager_owner_epoch_mint_clock_behind_total[10m])) > 0
+          for: 0m
+          labels:
+            severity: info
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene_manager 墙钟不大于已铸的 owner_epoch"
+            description: >-
+              铸造的墙钟地板没有起作用(退化为当前值 + 1)。通常是 scene_manager 主机之间时钟偏差,
+              或主机时钟回拨。Redis 回退后重铸同值的防护依赖墙钟单调,核对主机 NTP 与时钟偏差监控。

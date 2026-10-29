@@ -170,8 +170,13 @@ Kafka:
 - `player:{id}:<field>` 键族只有 data_service 自己写(Save / SetField / 回档 / debug_import),不在游戏存档主链上(主链是 `PlayerAllData:{id}`)。`LoadPlayerData` 的生产调用方只有 GM 快照、快照 diff 和 debug_fetch,都不用返回的 Version。
 - `ClientForPlayer` 真正的生产用途是账本读:`persisted_player_database.go` 读 `PlayerAllData:<id>`,`asset_sql_commit.go` 读 `player:{id}:asset_sql_commit`,供 guild / trade / mail / player_inbox 使用。它们读的是 scene 和 go/db 写的键,正确性完全依赖配置同址。
 
-### 已整改(2026-10-19,三批)
-第一批 Codex 已跑过定向与全量单测(见 PROGRESS 同日 Codex 条目);第二、三批(下表标「二」「三」,第三批是对第二批的对抗评审修正)未编译、未测试,待 Codex 验证。
+### 已整改(2026-10-19 三批,2026-10-22 第四批)
+下表标「二」「三」「四」:第三批是对第二批的对抗评审修正,第四批是 10-19/20 只读核对中复核成立的遗留项。验证状态(2026-10-22 订正):
+- 第一批 data_service 部分:Codex 在 `e611b5d8d` 上跑过定向与全量单测(PROGRESS 同日 Codex 条目)。之后第二、三批改了同一批文件,这份结果只作历史证据。
+- 第一批 DevRedis 同址契约:在 `k8s_deploy_contract` 套件里实跑通过。
+- 第一批 merge_zone `checkDataRedisBlobFlags`:从未编译、运行。第三批 merge_zone 集成用例同样从未运行。
+- 第二、三批的 `internal/logic` 包:2026-10-20 在 `c35e1133d` 授权副本上编译、单测通过,真 Redis 两版也通过(见下文「字段 Lua 验证结果」)。
+- routing 包、data_service 全量单测:当前提交上还没有运行证据。第四批未编译、未测试,待 Codex 验证。
 
 | 批 | 问题 | 改法 | 位置 |
 |----|------|------|------|
@@ -187,6 +192,9 @@ Kafka:
 | 三 | `cmd/debug_import` 的 player 模式把版本重置为 `"1"` 却不删字段索引:玩家恰好只存过一次(戳 `"1"`)时,导入的字段被可信索引藏掉,下一次存盘还会固化 | `writeLegacyPlayerFields`:一个 MULTI 里先 DEL 索引、再写字段、最后重置版本 | `go/data_service/cmd/debug_import/main.go` |
 | 三 | 写脚本的版本守卫放过 `"007"` 这类前导零串,真 Redis 的 INCR 会拒绝它,此时字段已 SET,留下半截写(miniredis 接受,单测测不出) | 守卫改成规范十进制;读路径 `parseVersionValue` 同一口径 fail-closed | `internal/logic/data_logic.go` |
 | 三 | merge_zone 拷 blob 前查数据锁、且必须早于 SCAN,没有任何测试 | 真 Redis 集成测试 `TestIT_CopyPlayerStringKeys_RefusesWhileDataLockHeld`(tag `merge_integration`);字段索引键名在 data_service 与 merge_zone 两边各钉一次字面量 | `tools/merge_zone/blob_lock_integration_test.go`、`internal/logic/player_fields_test.go` |
+| 四 | 读路径把「版本键存在、值为空串」当成无版本,回 Version=0 成功,与 LoadPlayerData 的 fail-closed 契约和写侧守卫不一致 | `parseVersionValue` 空串按损坏处理;「键不存在」只由 `parseVersionReply` 的 nil 分支表达 | `internal/logic/data_logic.go` |
+| 四 | 拿锁时 SETNX 结果不明:回包丢失、或客户端重试撞上自己写入的 token。此时只回滚 mapping 锁,自己写下的数据锁挂到 `PlayerLockTTLSec`,期间该玩家的写全部 LockConflict | 任一把锁没拿到,都把可能已落地的锁按 token 释放:mapping 失败释放 mapping,数据失败两把都释放。只删自己的,代价是锁冲突时多一次释放往返 | `internal/routing/router.go` `AcquirePlayerLock`、`router_lock_test.go`(新) |
+| 四 | 合服集成用例第一句不是 `requireIT(t)`,AST 守卫 `TestIntegrationTestsCallRequireIT` 必然 FAIL;它与本文件的真 Redis 用例都不认 REQUIRE 开关,SKIP 会被当成通过 | merge_zone 用例补 `requireIT(t)`,DB 13/14 非空改走 `itMissing`;真 Redis 用例加 `requireRealRedisIT`(`DATA_SERVICE_IT_REQUIRE=1` 时 SKIP 判 FAIL) | `tools/merge_zone/blob_lock_integration_test.go`、`internal/logic/data_logic_integration_test.go` |
 
 ### 字段索引与保留名(2026-10-20:c35 业务源码加授权生成绑定,字段 Lua 验证通过)
 - **结构**:`player:{id}:__fields`(HASH,与 `__version` / `__lock` / 字段键同 `{id}` slot),成员 `<字段名>` = 空串,保留成员 `__version` = 戳(索引在哪个版本上完整)。
@@ -199,7 +207,7 @@ Kafka:
 - **保留名**:`__` 前缀、`save_barrier`、`asset_sql_commit`(键名取自 `shared/savebarrier`、`shared/assetop` 的规范键函数)。Load(指定字段)/ Save / SetField 回 InvalidRequest,GetField 回错误(server 折成 1,既有口径)。今后新增 `player:{%d}:` 花括号键必须同时登记(见 `shared-redis-split-by-purpose.md` 2026-10-19 增补)。
 - **删除边界**:`KeysDeleted` = 实际删掉的字段 string 键数 + 版本键(索引不计);别的模块的 HASH 与保留名不删;只由带外半截写造成的「有字段、无版本」残留在全量读里不可见、删除时也不删;`__` 前缀的老字段不读、不删。
 - **带外写者**:任何绕过 `saveFieldsScript` 直接改 `__version` 的工具,必须在同一个 MULTI 里 `DEL player:{id}:__fields`,或改走 `SavePlayerData`。否则旧戳可能恰好等于被重置的版本:索引被当成可信,带外写的字段从全量读与删除里消失,下一次存盘还会把这个不完整的索引固化(`saveFieldsScript` 的「不维护就删索引」只兜得住戳与版本不等的情形)。`cmd/debug_import` 的 player 模式(唯一的这类工具,写 `"1"`)已改成 `writeLegacyPlayerFields`:一个 MULTI 里先删索引、再写字段、最后重置版本(2026-10-19 第三批)。
-- **版本格式**:`__version` 必须是规范十进制(无前导零);写侧另限当前版本 ≤15 位。真 Redis 的 INCR 拒绝 `"007"` 这类前导零串,miniredis 却接受,所以写脚本的守卫按规范十进制检查;读路径(`parseVersionValue`)同样拒绝非规范值,但不设位数上限(见下一条)。
+- **版本格式**:`__version` 必须是规范十进制(无前导零);写侧另限当前版本 ≤15 位。真 Redis 的 INCR 拒绝 `"007"` 这类前导零串,miniredis 却接受,所以写脚本的守卫按规范十进制检查;读路径(`parseVersionValue`)同样拒绝非规范值,空串也算损坏(2026-10-22;版本键不存在才读成 0),但不设位数上限(见下一条)。
 - **版本精度上限(2026-10-19,由 ≤18 位收紧为 ≤15 位)**:版本经 `tonumber` 与 INCR 进入 Lua 都是 double,只在 2^53 以内精确。旧守卫放行到 18 位时,2^53+1 与过期一格的 `expected_version=2^53` 会被舍入成同一个数,CAS 误放行并写入,返回的新版本也不准。≤15 位时当前版本 < 10^15、INCR 后 ≤ 10^15,都在 2^53 以内;`expected_version` 超过 2^53 时虽也被舍入,但舍入后仍 ≥ 2^53,不会与当前版本相等。超出上限的版本只可能是带外写坏的,写侧按损坏拒写(fail-closed),单玩家存盘次数到不了 10^15。上限只在写侧:读路径不经 Lua 数字,版本以字符串回到 Go、`ParseUint` 对整个 uint64 都精确,所以 `parseVersionValue` 不设位数上限;读到超限版本的调用方去 CAS 只会撞上写侧拒绝,不会被误放行。守卫正好落在 15 位最大值时,存盘照常、新版本是 10^15,此后再写按超限拒绝。回归用例:`TestSave_VersionPrecisionCap`(miniredis,2026-10-20 Codex 运行 PASS;旧守卫下红为既有记录,本次未重放)、`TestRealRedisSaveRefusalsHaveNoSideEffects` 的 `version_9007199254740993` / `version_1000000000000000` 与 `TestRealRedisStampMatchesVersionBytes` 的上界段(2026-10-20 真 Redis 7.2.16 / 8.10.2 实测 PASS,两轮命令均退出 0)。本次通过范围为 `c35e1133d` 的业务源码加经授权补生成的 Go 绑定,详见下一节。
 - **滚动升级**:旧副本只 INCR、不维护戳,索引自动失效、读方退回 SCAN,不会漏读;旧副本的 `DeletePlayerData` 仍会连带删掉别家 HASH(旧缺陷),升级完成后消失。
 
@@ -222,6 +230,7 @@ Kafka:
 - **顺序**:`Router.AcquirePlayerWriteLock` = 预检(`GetPlayerHomeZoneAndMergeFence`,home 与围栏同一段 Lua / 同一条 SQL)→ 按 home 取数据客户端 → 两把锁 → **数据锁 SETNX 成功之后**复核。复核看到围栏、home 变了或读失败,先释放两把锁再拒绝。Save / SetField / Delete 唯一的拿锁入口;读路径(Load / GetField / 账本读)不拦,继续用 `ClientForPlayer`。
 - **为什么复核必须晚于数据锁**:提交脚本校验数据锁 token,merge_zone 拷 blob 前 `EXISTS` 的也是数据锁。复核晚于数据锁时,立围栏之后才拿到锁的写者复核必然看见围栏;立围栏之前拿到锁的写者,要么在锁有效期内提交(锁在,合服拷贝中止),要么锁过期后提交被 token 拒绝。复核若早于数据锁,写者可能在 merge_zone 查锁之后才拿到锁、在拷贝之后提交。
 - **码**:围栏 / home 变化 → `ErrCodeZoneMergeInProgress`(22,规则拒绝,零写入,不进 FaultCodeSet);锁冲突 → 2;其余(Regions 下映射缺席、Redis 故障、回源失败、zone 未配集群)→ 1。回档里 22 不算「走到写那一步」,不触发写后帮会复查。指标 `data_service_player_lock_total{outcome="merge_fenced"}`、`save_player_data_total{outcome="merge_fenced"|"type_conflict"}`;日志 `[PlayerWriteLock]` / `[DataRoute]`。
+- **拿锁失败的回滚(2026-10-22)**:`AcquirePlayerLock` 里任一把锁没拿到,都按 token 释放可能已落地的锁。原因是 SETNX 报错不等于没写入,回 false 也可能是客户端重试撞上自己。只删自己的,别人持有的锁不动。
 - **dev 与 Regions**:围栏两种模式同口径(合服窗口内 src / dst 两个 zone 的写入一律拒绝)。dev 模式下映射缺席照常可写:数据位置不依赖映射,这类玩家也不可能在合服清单里(清单按 `player:zone` 收集,登记受同一道围栏约束),行为与引入门禁之前一致;Regions 下映射缺席照旧是故障。
 - **代价**:每次写多两次 mapping Redis 往返(ReadRequiresReady=true 时是两次就绪读,缓存不可信时两次库点查,`route_read_total{path="home_fence"}` 会混入写门禁的读);复核耗时计入 3s 锁 TTL,慢到锁过期时提交被拒成 LockConflict,只损活性。db_first 下 SQL 回源读 `zone_merge_fence`,merge_zone 目前只写 Redis 围栏,沿用「第 2 批落地前禁止 merge_zone 写模式」的冻结前提。
 - **部署**:merge_zone 的拷贝前查锁只有在所有 data_service 副本都含写门禁时才成立;Regions 下合服(含 unmerge)之前必须确认副本已全部升级。

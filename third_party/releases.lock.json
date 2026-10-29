@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "resolved_on": "2026-10-20",
-  "说明": "顶层子模块以正式 release 对应提交固定；无 release 保留原提交。嵌套子模块服从父版本的 gitlink，不独立追新。",
+  "resolved_on": "2026-10-26",
+  "说明": "顶层子模块固定提交；Protobuf、Abseil、GoogleTest、BoringSSL 从原SDK独立，保持迁移前版本。嵌套子模块服从父gitlink。",
   "dependencies": [
     {
       "path": "third_party/entt",
@@ -112,22 +112,6 @@
       "release": "https://github.com/boostorg/boost/releases/tag/boost-1.92.0"
     },
     {
-      "path": "third_party/grpc",
-      "url": "https://github.com/grpc/grpc.git",
-      "policy": "latest-release",
-      "commit": "3252a89f10d8e92997862167ca7d095ecda85973",
-      "tag": "v1.84.0",
-      "release": "https://github.com/grpc/grpc/releases/tag/v1.84.0",
-      "nested_patches": [
-        {
-          "repository": "third_party/grpc/third_party/boringssl-with-bazel",
-          "commit": "2b44a3701a4788e1ef866ddc7f143060a3d196c9",
-          "path": "tools/patches/grpc/v1.83.0-boringssl-windows-x509-name.patch",
-          "sha256": "3d1004635c3e26886fbe99b752248ebd2988319afc5e594dcc8ec667df7e9752"
-        }
-      ]
-    },
-    {
       "path": "third_party/curl",
       "url": "https://github.com/curl/curl.git",
       "policy": "latest-release",
@@ -200,6 +184,36 @@
       "commit": "85e300c79fb6dbcfa9c1013215c8710c1c2cd3d2",
       "tag": "v1.70.0",
       "release": "https://github.com/nghttp2/nghttp2/releases/tag/v1.70.0"
+    },
+    {
+      "path": "third_party/protobuf",
+      "url": "https://github.com/protocolbuffers/protobuf.git",
+      "policy": "current-commit",
+      "commit": "35cd01f9fe9afbeea38cc7b979a3b6bfcde82c03"
+    },
+    {
+      "path": "third_party/abseil-cpp",
+      "url": "https://github.com/abseil/abseil-cpp.git",
+      "policy": "current-commit",
+      "commit": "76bb24329e8bf5f39704eb10d21b9a80befa7c81"
+    },
+    {
+      "path": "third_party/googletest",
+      "url": "https://github.com/google/googletest.git",
+      "policy": "current-commit",
+      "commit": "52eb8108c5bdec04579160ae17225d66034bd723"
+    },
+    {
+      "path": "third_party/boringssl",
+      "url": "https://github.com/google/boringssl.git",
+      "policy": "current-commit",
+      "commit": "2b44a3701a4788e1ef866ddc7f143060a3d196c9",
+      "patches": [
+        {
+          "path": "tools/patches/boringssl/windows-x509-name.patch",
+          "sha256": "3d1004635c3e26886fbe99b752248ebd2988319afc5e594dcc8ec667df7e9752"
+        }
+      ]
     }
   ]
 }

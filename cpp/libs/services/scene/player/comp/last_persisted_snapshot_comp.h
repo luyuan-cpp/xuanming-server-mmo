@@ -50,6 +50,20 @@ struct PlayerLastPersistedSnapshotComp
     // save-skip cadence. 0 when snapshot is nullptr.
     int64_t saved_at_ms{0};
 
+    // 仅原严格Redis提交钩子提供的(E,q)，不是SQL已经完成的缓存。body中的fence仍保持0，
+    // last_save_seq仍从dirty快照剥离；确认SQL时必须用这两个数读同一Lua视图。
+    uint64_t committed_owner_epoch{0};
+    uint64_t committed_save_seq{0};
+
+    // 钩子先于全局saved回调；只匹配同一个不可变源对象，旧/合并快照不借新回包补资格。
+    // weak不延长异步客户端payload寿命，至多一个候选，下一次实际提交覆盖它。
+    void RememberRedisCommit(const std::shared_ptr<const PlayerAllData>& source, uint64_t epoch, uint64_t seq)
+    {
+        committed_source_ = source;
+        source_owner_epoch_ = epoch;
+        source_save_seq_ = seq;
+    }
+
     // Helper: replace the snapshot in one call. Allocates a new
     // PlayerAllData copy and stamps the timestamp. Cheap to call
     // from HandlePlayerAsyncSaved.
@@ -61,6 +75,12 @@ struct PlayerLastPersistedSnapshotComp
     // 「已落盘」判定)都不读这个字段。
     void Replace(const PlayerAllData& fresh)
     {
+        const auto source = committed_source_.lock();
+        const bool exact = source && source.get() == &fresh && source_owner_epoch_ != 0
+            && source_save_seq_ != 0 && fresh.last_save_seq() == source_save_seq_;
+        committed_owner_epoch = exact ? source_owner_epoch_ : 0;
+        committed_save_seq = exact ? source_save_seq_ : 0;
+        committed_source_.reset(); source_owner_epoch_ = 0; source_save_seq_ = 0;
         if (!snapshot)
         {
             snapshot = std::make_unique<PlayerAllData>(fresh);
@@ -76,4 +96,9 @@ struct PlayerLastPersistedSnapshotComp
 
     // True iff a snapshot has been recorded (first save completed).
     bool HasSnapshot() const { return snapshot != nullptr; }
+
+private:
+    std::weak_ptr<const PlayerAllData> committed_source_;
+    uint64_t source_owner_epoch_{0};
+    uint64_t source_save_seq_{0};
 };

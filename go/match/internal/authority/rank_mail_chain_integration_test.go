@@ -1,19 +1,24 @@
 package authority
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/go-sql-driver/mysql"
+	"google.golang.org/protobuf/encoding/protojson"
 	"io"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"shared/authoritysql/sqltest"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +29,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 	base "proto/common/base"
+	dbpb "proto/common/database"
 	kafkapb "proto/contracts/kafka"
 	mailpb "proto/mail"
 	rankpb "proto/rank"
@@ -56,24 +62,22 @@ func TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss(t *testing.T) {
 	}
 	require.True(t, filepath.IsAbs(evidence), "证据目录必须是绝对路径")
 	require.NoError(t, os.MkdirAll(evidence, 0700))
-	admin, err := sql.Open("mysql", "root@tcp("+address+")/?timeout=1s&readTimeout=5s&writeTimeout=5s")
+	opts, err := sqltest.OptionsFromEnv("root@tcp("+address+")/mysql", name+"_writer", mailDatabase, rankDatabase)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, admin.Close()) })
+	fixture, err := sqltest.New(ctx, t, opts)
+	require.NoError(t, err)
+	_, err = fixture.Schema.ExecContext(ctx, "CREATE TABLE __rank_mail_chain_subject_owner(name VARBINARY(64) NOT NULL,owner_nonce BINARY(32) NOT NULL,physical_sha256 BINARY(32) NOT NULL,PRIMARY KEY(name))")
+	require.NoError(t, err)
 	var engine string
-	require.NoError(t, admin.QueryRowContext(ctx, "SELECT VERSION()").Scan(&engine))
+	require.NoError(t, fixture.Schema.QueryRowContext(ctx, "SELECT VERSION()").Scan(&engine))
 	require.Contains(t, strings.ToLower(engine), "tidb")
+	// 观察池只读同一任务的自有库；每个业务子进程仍使用自己的最小权限 normal 主体。
 	openIsolated := func(database string) *sql.DB {
 		t.Helper()
-		_, err := admin.ExecContext(ctx, "CREATE DATABASE "+database)
+		observer, err := mysql.ParseDSN(opts.AdminDSN)
 		require.NoError(t, err)
-		// 库名只来自固定前缀和 crypto/rand；清理在所有自有子进程退出后执行。
-		t.Cleanup(func() {
-			clean, stop := context.WithTimeout(context.Background(), 5*time.Second)
-			defer stop()
-			_, err := admin.ExecContext(clean, "DROP DATABASE "+database)
-			require.NoError(t, err, "清理本次隔离库")
-		})
-		db, err := authoritysql.Open(ctx, "root@tcp("+address+")/"+database, database, true, 2)
+		observer.DBName = database
+		db, err := authoritysql.Open(ctx, observer.FormatDSN(), database, true, 2, authoritysql.Reader())
 		require.NoError(t, err)
 		t.Cleanup(func() { require.NoError(t, db.Close()) })
 		return db
@@ -84,14 +88,16 @@ func TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss(t *testing.T) {
 	mailDirectory := t.TempDir()
 	mailReady := filepath.Join(mailDirectory, "ready")
 	common := []string{"RANK_MAIL_CHAIN_IT_TIDB=" + address, "RANK_MAIL_CHAIN_SECRET=" + secret}
-	mailProcess := startChainFixture(t, mailExecutable, append(append([]string{}, common...),
+	mailEnvironment := append(append([]string{}, common...), chainBootEnvironment(t, ctx, fixture, opts, mailDatabase)...)
+	mailProcess := startChainFixture(t, mailExecutable, append(mailEnvironment,
 		"RANK_MAIL_CHAIN_FIXTURE=mail", "RANK_MAIL_CHAIN_DATABASE="+mailDatabase,
 		"RANK_MAIL_CHAIN_READY_FILE="+mailReady), filepath.Join(evidence, name+"_mail.log"))
 	mailEndpoint := chainReady(t, ctx, mailProcess, mailReady)
 	newRank := func(label string) (*chainFixture, string) {
 		t.Helper()
 		directory := t.TempDir()
-		process := startChainFixture(t, rankExecutable, append(append([]string{}, common...),
+		rankEnvironment := append(append([]string{}, common...), chainBootEnvironment(t, ctx, fixture, opts, rankDatabase)...)
+		process := startChainFixture(t, rankExecutable, append(rankEnvironment,
 			"RANK_MAIL_CHAIN_FIXTURE=rank", "RANK_MAIL_CHAIN_DATABASE="+rankDatabase,
 			"RANK_MAIL_CHAIN_MAIL_ENDPOINT="+mailEndpoint, "RANK_MAIL_CHAIN_CONTROL_DIR="+directory),
 			filepath.Join(evidence, name+"_"+label+".log"))
@@ -424,4 +430,86 @@ func chainCount(t *testing.T, ctx context.Context, db *sql.DB, query string, exp
 	var count uint64
 	require.NoError(t, db.QueryRowContext(ctx, query).Scan(&count))
 	require.Equal(t, expected, count)
+}
+
+// 每次真实进程启动申请新boot原件；重启绝不重复消费上一进程的grant。
+func chainBootEnvironment(t *testing.T, ctx context.Context, fixture *sqltest.Fixture, opts sqltest.Options, database string) []string {
+	t.Helper()
+	normal, err := mysql.ParseDSN(fixture.DSN(database))
+	require.NoError(t, err)
+	var writerID, instance, requestID, grantID [16]byte
+	for _, value := range [][]byte{writerID[:], instance[:], requestID[:], grantID[:]} {
+		_, err = rand.Read(value)
+		require.NoError(t, err)
+	}
+	normal.User = "chain_writer_" + hex.EncodeToString(instance[:8])
+	var password, owner [32]byte
+	_, err = rand.Read(password[:])
+	require.NoError(t, err)
+	_, err = rand.Read(owner[:])
+	require.NoError(t, err)
+	normal.Passwd = hex.EncodeToString(password[:])
+	_, err = fixture.Schema.ExecContext(ctx, "CREATE USER '"+normal.User+"'@'%' IDENTIFIED BY '"+normal.Passwd+"'")
+	require.NoError(t, err)
+	directory := os.Getenv("MMORPG_SQL_FIXTURE_RECEIPT_DIR")
+	require.True(t, filepath.IsAbs(directory))
+	ownerFile := filepath.Join(directory, "chain-subject-"+normal.User+".owner")
+	file, err := os.OpenFile(ownerFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	require.NoError(t, err)
+	expected := append(append([]byte(nil), owner[:]...), opts.PhysicalAuthoritySHA256...)
+	_, writeErr := file.Write(expected)
+	require.NoError(t, writeErr)
+	require.NoError(t, file.Sync())
+	require.NoError(t, file.Close())
+	_, err = fixture.Schema.ExecContext(ctx, "INSERT INTO __rank_mail_chain_subject_owner(name,owner_nonce,physical_sha256) VALUES(?,?,?)", normal.User, owner[:], opts.PhysicalAuthoritySHA256)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		clean, stop := context.WithTimeout(context.Background(), 10*time.Second)
+		defer stop()
+		raw, err := os.ReadFile(ownerFile)
+		if err != nil || !bytes.Equal(raw, expected) {
+			t.Errorf("链主体原件未确认，保留对象及原件 %s", ownerFile)
+			return
+		}
+		var actualOwner, actualPhysical []byte
+		err = fixture.Schema.QueryRowContext(clean, "SELECT owner_nonce,physical_sha256 FROM __rank_mail_chain_subject_owner WHERE name=?", normal.User).Scan(&actualOwner, &actualPhysical)
+		if err != nil || !bytes.Equal(actualOwner, owner[:]) || !bytes.Equal(actualPhysical, opts.PhysicalAuthoritySHA256) {
+			t.Errorf("链主体归属未确认，保留对象及原件 %s", ownerFile)
+			return
+		}
+		_, err = fixture.Schema.ExecContext(clean, "DROP USER '"+normal.User+"'@'%'")
+		require.NoError(t, err)
+	})
+	for _, table := range []string{"route_meta", "writer_registry", "writer_slot", "writer_lifecycle_receipt", "sql_writer_drain_run", "sql_writer_freeze_ticket", "sql_writer_maintenance_receipt"} {
+		_, err = fixture.Schema.ExecContext(ctx, "GRANT SELECT ON "+fixture.Config.AuthoritySchema()+"."+table+" TO '"+normal.User+"'@'%'")
+		require.NoError(t, err)
+	}
+	if opts.LockPrimitive == dbpb.SqlWriterBootGrant_LOCK_TOUCH {
+		_, err = fixture.Schema.ExecContext(ctx, "GRANT UPDATE(lock_touch) ON "+fixture.Config.AuthoritySchema()+".writer_slot TO '"+normal.User+"'@'%'")
+		require.NoError(t, err)
+	}
+	meta, err := fixture.Catalog.CurrentMeta(ctx)
+	require.NoError(t, err)
+	deployment := "chain-" + hex.EncodeToString(instance[:])
+	writer := &dbpb.SqlWriterRegistry{WriterKey: writerID[:], InstanceId: instance[:], Generation: fixture.Config.Generation(), SqlPrincipal: []byte(normal.User + "@%"), State: dbpb.SqlWriterRegistry_ACTIVE, RegisteredMs: uint64(time.Now().UnixMilli())}
+	request := &dbpb.SqlWriterLifecycleReceipt_Request{RequestId: requestID[:], Kind: dbpb.SqlWriterLifecycleReceipt_REGISTER, Writer: writer, ExpectedEpoch: meta.WriterEpoch, ExpectedCatalogRevision: meta.CatalogRevision, AuthoritySchema: fixture.Config.AuthoritySchema(), ProtectedSchemas: fixture.Config.ProtectedSchemas(), DeploymentDigest: opts.PhysicalAuthoritySHA256, DeploymentId: deployment, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256}
+	request, err = authoritysql.CanonicalRegistrationRequest(request)
+	require.NoError(t, err)
+	_, err = fixture.Catalog.Register(ctx, request)
+	require.NoError(t, err)
+	writer = request.Writer
+	grant := &dbpb.SqlWriterBootGrant{Format: "SQL_WRITER_BOOT_V1", WriterKey: writerID[:], InstanceId: instance[:], Generation: writer.Generation, AuthoritySchema: fixture.Config.AuthoritySchema(), ProtectedSchemas: fixture.Config.ProtectedSchemas(), SqlPrincipal: writer.SqlPrincipal, RegistrationDigest: writer.RegistrationDigest, DeploymentId: deployment, GrantId: grantID[:], GrantedMs: writer.RegisteredMs, Permission: "NORMAL", PhysicalAuthoritySha256: opts.PhysicalAuthoritySHA256, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256}
+	raw, err := protojson.Marshal(grant)
+	require.NoError(t, err)
+	sum := sha256.Sum256(raw)
+	grantDirectory := t.TempDir()
+	require.NoError(t, os.Chmod(grantDirectory, 0700))
+	grantFile := filepath.Join(grantDirectory, "grant.json")
+	require.NoError(t, os.WriteFile(grantFile, raw, 0600))
+	admin, err := mysql.ParseDSN(opts.AdminDSN)
+	require.NoError(t, err)
+	admin.DBName = database
+	var principal string
+	require.NoError(t, fixture.Schema.QueryRowContext(ctx, "SELECT CURRENT_USER()").Scan(&principal))
+	return []string{"MMORPG_SQL_WRITER_GRANT_FILE=" + grantFile, "MMORPG_SQL_WRITER_GRANT_SHA256=" + hex.EncodeToString(sum[:]), "MMORPG_SQL_WRITER_CONSUME_DIR=" + grantDirectory, "MMORPG_SQL_DEPLOYMENT_ID=" + deployment, "MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256=" + hex.EncodeToString(opts.PhysicalAuthoritySHA256), "MMORPG_SQL_SCHEMA_PRINCIPAL=" + principal, "RANK_MAIL_CHAIN_SCHEMA_DSN=" + admin.FormatDSN(), "RANK_MAIL_CHAIN_NORMAL_DSN=" + normal.FormatDSN()}
 }

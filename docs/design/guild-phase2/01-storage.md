@@ -910,7 +910,7 @@ func resetGuildSchemaViaMigrate(t *testing.T, ctx context.Context, db *sql.DB) {
 ### 17.3 生成物与文档
 
 - **生成物(不手改)**:`go/proto/guild/guild_db.pb.go`、`cpp/generated/proto/guild/guild_db.pb.cc/.h`(及可能的 `.grpc.pb.*`)、`go/guild/go.sum`(tidy)。
-- **文档(不计入 30,随批次追加)**:`docs/design/xuanming-port-decisions-20260910.md`(D-14 §5/§7/§8/遗留,正文见 §20,随 B1 提交)、`docs/design/guild-phase2.md`、`PROGRESS.md`;B1b 附带 `docs/ops/merge-zone-runbook.md`(第 400 行及 `-guild-schema` 说明);文档批再处理 `deploy/k8s/README.md:351`、`docs/design/friend-persistence-architecture.md:58-79`、`docs/design/guild_friend_service_notes{,_en,_zh}.md:34-38`、`docs/design/guild-zone-client-access.md` 的存储段。
+- **文档(不计入 30,随批次追加)**:`docs/design/xuanming-port-decisions-20260910.md`(D-14 §5/§7/§8/遗留,正文见 §20,随 B1 提交)、`docs/design/guild-phase2.md`、`PROGRESS.md`;B1b 附带 `docs/ops/merge-zone-runbook.md`(第 400 行及 `-guild-schema` 说明);文档批再处理 `deploy/k8s/README.md:351`、`docs/design/friend-persistence-architecture.md:58-79`、[公会与好友中文说明](../guild_friend_service_notes_zh.md)、`docs/design/guild-zone-client-access.md` 的存储段。2026-10-23 补记：公会／好友说明已按当前源码更新，仅保留中文版，旧主文与英文副本已删除；不再沿用旧副本及其行号。
 
 ### 17.4 并行会话状态
 

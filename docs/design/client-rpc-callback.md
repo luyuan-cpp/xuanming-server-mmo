@@ -204,6 +204,8 @@ namespace MmorpgClient.Net.Generated
 - 已存在即跳过的单方法桩(`robot_handler.go:68-78`)不再为 `REQUEST` 方法新建;已有且带副作用的 58 个手写 handler 不删,随场景迁移逐个退役。
 - 同样改用 option 判定(§5.2 第 4 条),修掉取 `service.Methods[0]` 前不判空(`robot_case.go:27`)。
 
+> 2026-10-23 落地形状(以代码为准,实施记录见 §5.7):同步版带 `timeout` 参数(`pkg.GameClient.CallSync` 要求正的超时预算),签名是 `<Method>Sync(ctx context.Context, c *pkg.GameClient, req *<ReqType>, timeout time.Duration) (*<RespType>, error)`。同一个 Go 包里多个服务有同名方法,所以调用桩挂在每服务一个导出零值变量上:`var <Service> <lowerCamelService>Rpc`,调用形如 `rpc.ClientPlayerFriend.AddFriend(c, req, timeout, done)`,与 Unity 的 `ClientPlayerFriendRpc.AddFriend` 对应。结局形状:成功 `(resp, nil)`;信封错误 `(nil, *pkg.ServerTipError)`;解码失败返回包裹了服务.方法的错误;其余错误原样返回。`ONE_WAY` 是 `<Method>(c, req) error`,走 `SendRequest`(id = 0)。注册表规则:`PUSH` 一律登记,缺桩就建;`REQUEST` / `ONE_WAY` / `SERVER_ONLY` 不再建桩,只在标准文件名 `<snake_service_method>.go` 的 handler 存在时登记,所以 id = 0 路径的行为不变。删掉旧 handler 文件后,必须先重跑 proto 生成再编译 robot。
+
 ### 5.6 迁移 `XxxHandler.MessageId` 引用(Codex,生成之后、编译之前)
 
 删 Handler 后以下引用会断,逐个改为 `<Service>Rpc.<Method>MessageId`(或已有的 `MessageIds.X`,二选一,同一文件内统一):
@@ -241,13 +243,25 @@ namespace MmorpgClient.Net.Generated
 | 接通与生成 | `cmd/pipeline.go` 换成 `UnityClientRpcGenerator`;`internal/config/config.go` 加 `UnityRpcDir`;两份 `etc/proto_gen*.yaml` 换成 `unity_rpc_dir`;BOM 字面量改转义;跑 proto 生成。客户端仓生成 21 个 `Net/Generated/Rpc/<Service>Rpc.cs` 与确定性 `.meta`(含新纳入的 `GuildService`、`MatchService`、`BattleClientPlayer`) | Codex;本仓 `10fa5d939`,客户端仓 `4472db1d`、`e80926a1` |
 | 客户端引用迁移(§5.6) | 15 个文件 60 处 `XxxHandler.MessageId` → `<Service>Rpc.<Method>MessageId`,16 个常量全部来自 REQUEST / PUSH 方法,没有改用 `MessageIds.X` 的;删 `Net/Generated/Handlers/`(281 个文件)、`Handlers.meta`、`HandlerRegistry.cs(.meta)`;三处注释与 `tools/gen_proto.ps1` 两处注释改为调用桩说法。已与生成产物逐个核对常量名 | Claude(代理 CL),随客户端仓快照入库 |
 
-**剩余(等 Codex 当前的改动停手后由 Claude 续做)**:
+~~**剩余(等 Codex 当前的改动停手后由 Claude 续做)**~~ 2026-10-22 ~ 23 已做完(未经 Claude 编译或测试):
 
-1. 删旧生成器:`internal/generator/unity/unity_client_handler.go`、`internal/template/unity_client_handler.cs.tmpl`、`unity_client_handler_registry.cs.tmpl`,以及 `config.go` 里已无配置键的 `UnityHandlerDir` / `UnityHandlerRegistryFile`。
-2. §5.4 生成器单测:共享层与 Unity 生成器目前都没有单测。
-3. §5.5 robot 生成器:仍按服务名过滤,没有产出 `robot/generated/rpc/`。robot 场景迁移直接用 `gc.Call` / `smokeCaller`,不依赖它。
+1. 删旧生成器:`internal/generator/unity/unity_client_handler.go`、`internal/template/unity_client_handler.cs.tmpl`、`unity_client_handler_registry.cs.tmpl`,以及 `config.go` 里已无配置键的 `UnityHandlerDir` / `UnityHandlerRegistryFile`。**已删**(主会话);两份 yaml 里描述旧 Handler 产物的注释改为调用桩说法。
+2. §5.4 生成器单测:**已补**。Codex 先写了 7 条(`internal/client_rpc_kind_test.go`、`internal/generator/unity/unity_client_rpc_test.go`);工作流 `wf_7e4688f1-354` 代理 T 补了缺口,新增 `internal/method_comment_test.go`,覆盖一次报全多条违例、合法形态被接受、类名与成员名冲突、孤立 `.meta`、目录布局校验、稳定排序、注释提取。
+3. §5.5 robot 生成器:**已实施**(代理 R 写完源码后撞额度中断,Codex 随即用它跑出 `robot/generated/rpc/` 20 个文件,`message_body_handler.go` 只新增 3 条新服务推送、没有减少,本仓提交 `2c07f2c28`)。文件:`internal/generator/go/{robot_rpc.go,robot_go_type.go,robot_handler.go,robot_case.go}`、模板 `robot_rpc.go.tmpl` / `robot_handler.go.tmpl`、配置 `RobotRpcDir` / `robot_rpc_dir`、`cmd/pipeline.go` 的 `GoRobotRpcGenerator`。单测:`robot_rpc_test.go`(调用桩)、`robot_handler_test.go`(注册规则、推送建桩、注册表渲染,工作流 `wf_b7585ecd-bee`)。
+4. 复核(`wf_b7585ecd-bee`,robot 与共享层 / Unity 两个视角):12 条发现,0 条 major。处理结果:
+   - 已修:R1 推送 handler 写在非标准文件名时会重复建桩、文件名冲突检测(修复代理与 Codex 在 `9d2784fbf` / `f83da2e18` 完成)。
+   - 已修:其余 R2 / B2 / B3 / B4 / B5 / R4 / R7 与 B1 陈旧注释,由工作流 `wf_3db7ae9d-706` 修复,另派复核员核对,只报了 2 条 nit。
+     - R2:注册表对已存在的非 PUSH handler 文件校验 Go 构建后缀,stat 出错即报错。按复核 N1 收窄为「文件存在才校验」,方法名带 Test / Windows 等后缀但没有 handler 文件的,不会让整次生成失败。删掉了 `fileExists`。
+     - B2:Unity 整写目录拒绝覆盖同名手写 `.cs`,保留集合按小写比较。复核 N2 指出大小写敏感文件系统上只差大小写的旧桩不会被清理,这个代价已写进 Unity 与 robot 两处注释。
+     - B3:no-unity 配置的自相矛盾注释。
+     - B4 / R7:补单测(map entry、无注释不出 `<summary>`、`__` / 超 uint32 / 小写名被拒、服务输入顺序不影响产物)。
+     - B5 / R4:注释订正。
+     - B1:`proto/friend/friend.proto`、`proto/team/team.proto`、`go/friend/internal/session/session.go`、`go/friend/internal/server/friend_server.go` 里「按服务名判定」的陈旧注释,只改注释,proto 的 source info 随下次生成更新。
+   - 转交 robot 会话:R3,robot 侧三处注释。
+   - 本节订正:R5,本文档与实现不符的地方。
+   - 不在本轮:R6,`internal/model.go` 的 `GoRequest` / `GoResponse` 一类死代码,留给单独的整理改动。
 
-## 6. robot 运行时改造细则(第 1–3、5、6 条已实施;第 4 步 A / B 类已迁、C 类待迁,见 §6.1;未编译)
+## 6. robot 运行时改造细则(第 1–6 条已全部实施,A / B / C 三类等待都已迁,见 §6.1;未编译,待 Codex 验证)
 
 `robot/pkg/client.go`:
 
@@ -289,7 +303,7 @@ namespace MmorpgClient.Net.Generated
 |---|---|
 | 已迁(Call,10-19) | friend / guild(含 guild_economy、guild_activity 经同一 `call`)/ team(含 team_follow、team_backfill 复用的 `teamSmokeBot.call`)/ trade |
 | 已迁(Call,10-20 第一批) | A 类:mail、rank、sync 的 `friendRpc`。B 类:travel 与 sync 的 `travelTo`、travel 的 `expectTravelRejected` 与金币读写、channel 的 `requestEnterScene`、mystery_merchant 的 `merchantCall`、ordering 的单发与流水线等待(`callAll`)、team 的排队请求(`matchCall`:JoinQueue / CancelQueue / GetQueueStatus,含 team_backfill)与 `startSoloBattle` |
-| 待迁:依赖生成 handler 副作用(C 类) | attribute / pet / equip(含 equip_forge、equip_forge_topup、asset_arrival_prepare)/ features(含 features_battle_smoke 直连)/ currency_crash_window 的 `readGoldBalance`、`gmAddGold` / chat / battle 大厅侧与 battle_direct_conn 的 GetBattleState 补拉 / main.go 与 login_test_scenarios 的 ListSkills、技能、换场景。分组与做法见 robot 交接 §8 |
+| 已迁(Call,10-22 ~ 10-23 第二批,C 类) | currency_crash_window 的 `readGoldBalance` / `gmAddGold`(直接解析)/ chat / battle 大厅侧 JoinQueue、WatchBattle 与 battle_direct_conn 的 GetBattleState 补拉 / main.go 与 login_test_scenarios 的 ListSkills(回包在 RecvLoop 上交 handler)、ReleaseSkill、EnterScene / attribute / pet / equip(含 equip_forge、equip_forge_topup、asset_arrival_prepare)/ features(含 features_battle_smoke 直连)。逐处做法见 robot 交接 §9 |
 | 不迁 | 登录与重定向重登录的同步握手(`login.go`、`login_test_scenarios.go`、`main.go`、`pkg/redirect.go`):跑在 RecvLoop 前或 RecvLoop 上,只能 `SendRequest + RecvOne`。scene TCP 上响应恰好是 Empty 的单向方法(Move*、SceneInfoC2S、GetSyncDigest)与发出即走的请求保留 `SendRequest` |
 
 逐处待迁清单(带行号)、按等待对象的重新归类(chat / currency_crash_window / battle_smoke 大厅侧 / channel requestSceneInfo 实属「依赖生成 handler 副作用」)与迁移陷阱见 [robot 交接](../handoff/client-rpc-callback-robot-handoff-20261019.md) §5;以那里为准。
@@ -302,7 +316,14 @@ namespace MmorpgClient.Net.Generated
 - 评审修复:mail 第 7 步的反向断言(「MailAdmin 号应被 gate 丢弃 → 超时」)加了「无请求号回包」计数,未回显请求号的信封不再被当成 gate 丢弃;ordering 的回包超时由 8s 提到 15s(满足 §2.3 不变式 I4:流水线里第二条的定时器从发出起算,而 lane 要等第一条完成才转发);其余是陈旧注释。
 - 已随用户快照 `c35e1133d`(10-20 03:08)入库;评审的修复在其后,见 robot 交接 §1。
 
-**未覆盖**:`smokeCaller` 没有单测,靠四个冒烟验证。muduo 被对端断开后会静默重拨,在途调用只能以超时收场(第 5 条)。
+**10-22 ~ 10-23 续做(第二批 C 类,工作流 `wf_562937ab-7ad`、`wf_d1b64090-2f6`、`wf_dd238941-6ce`;未编译)**:
+
+- C 类每个等待点二选一:(a) 直接解析 Call 结果(Player 上那份状态别处没人读时,大多数点如此:currency、chat、attribute、pet、battle 大厅侧、ReleaseSkill、EnterScene);(b) 回包在 RecvLoop 上交原分发函数后才唤醒调用方(`callDispatch` / `CallSyncThen` 的 onReply / `gc.Call` 的 done):压测主循环与 `prepareBehaviorClient` 的 ListSkills(AI 循环读 Player 技能,被动技能由 handler 剔除)、equip 的背包请求(`RecordFeatureBody` 是完整性判据的唯一权威)、features 的大厅与直连请求(`HandleFeature*` 自己处理信封)、直连 GetBattleState 补拉(done 里计 `stateReplies` 再交 onMessage)。
+- 信封错误与业务拒绝分开报:迁移前 `prepareBehaviorClient` 把属性信封翻成 Player tip、背包信封被解成全零响应,两者分不清;现在信封拒绝统一走 `sceneRequestEnvelopeRejection` / `sceneRequestEnvelopeHint`(1003 写明「也可能是结局未知」),只有业务码进 allowedTips。属性请求的判定收敛为 attribute / pet / equip 共用的纯函数 `attributePanelOutcome`;金币槽规则收敛为 `goldSlotValue`。
+- 交接 §6 两个既有缺陷已修:`sendAndRecvLocal` 补信封错误检查;握手超时后的 RecvOne 残留 goroutine 经核实有调用方会在同一连接上回落重试,改为超时(`errLoginStuck`)后不再在同一连接上回落,由外层换新连接。
+- 每组都经语义评审,中高级发现逐条对抗复核后修复;未修的低优先级项与限制见 robot 交接 §9。
+
+**未覆盖**:`smokeCaller` 没有单测,靠冒烟验证。muduo 被对端断开后会静默重拨,在途调用只能以超时收场(第 5 条)。
 
 ## 7. 残余与后续
 
@@ -333,7 +354,17 @@ namespace MmorpgClient.Net.Generated
 2. **Unity EditMode**(客户端仓 `D:\luyuan\mmorpg-client`,Unity 6000.6.0f1):
    `Unity.exe -batchmode -nographics -projectPath D:\luyuan\mmorpg-client -runTests -testPlatform EditMode -testResults <scratch>\editmode.xml -logFile <scratch>\editmode.log`
    通过标准:全部 EditMode 通过,重点 `MmorpgClient.Tests.EditMode.Net.OutstandingCallsTests`(9 条,TearDown 断言回调无异常)、`ActorWorldFoundationTests.MovementEmptyReplies_AreConsumedWithoutFourHertzUnhandledLogs`、`BattleDirectLinkTests`(含新增 `Call_FailsImmediately_WhenNewAssignmentReplacesTheConnection`)、`DirectRoutingBattleTransportTests`(错误串不变;两类都在 TearDown 断言回调无异常)。失败保留 xml 与 log 中 `error CS` / 失败用例段落。
-3. **生成器(§5;2026-10-20 注:Codex 已在 `10fa5d939` 接通并跑过一次生成,§5.7 剩余项落码后重跑本步)**:实施后在 `tools/proto_generator/protogen` 下 `go test ./...`;再 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build`、`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`(默认配置,写客户端仓;本任务已获客户端授权)。期望:客户端仓 `Net/Generated/Handlers/` 与 `HandlerRegistry.cs` 消失,`Net/Generated/Rpc/*.cs` + `.meta` 出现;本仓除 proto option 标注带来的生成物外无意外 diff;再跑一次生成为零 diff。之后按 §5.6 迁移引用,重跑第 2 步。
+3. **生成器(§5;2026-10-23 更新:剩余项已全部落码,按下面顺序验)**:工作目录 `tools/proto_generator/protogen`,不需要环境变量。
+   - ① `gofmt -l ./internal ./cmd`:期望没有输出。有输出就把文件名与 `gofmt -d` 的差异交回 Claude,**不要** `-w`。
+   - ② `go vet ./...`。
+   - ③ `go build ./...`:确认已删的 `fileExists`、旧 Unity handler 生成器没有残留调用方。
+   - ④ `go test ./internal/ ./internal/generator/go/ ./internal/generator/unity/ -count=1 -v`。重点看这些用例:
+     - 共享层:`TestClientRpcKinds*`、`TestMethodLeadingComments*`;
+     - Unity:`TestUnityClientRpc*`,其中 `TestUnityClientRpcKeepsStubWhoseOldNameDiffersOnlyInCase` 要在本机 NTFS 上跑;
+     - robot:`TestRobotRpc*`、`TestRobotHandlerCases*`、`TestRobotPushHandlers*`、`TestRobotTotalHandlerFile*`。
+   - ⑤ `go test ./... -count=1` 全量回归。
+   - 失败时保留失败用例的完整 `-v` 输出(含 want / got),不要改断言或生产代码让它变绿。
+   - 然后重跑生成(下一句),期望:`robot/logic/handler/message_body_handler.go` 相对 `2c07f2c28` 只可能增加新推送条目、不得减少;`robot/generated/rpc/` 与客户端 `Net/Generated/Rpc/` 再跑一次为零 diff;`proto/friend/friend.proto`、`proto/team/team.proto` 只改了注释,对应生成物只有描述符字节变化。原步骤如下:实施后在 `tools/proto_generator/protogen` 下 `go test ./...`;再 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build`、`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`(默认配置,写客户端仓;本任务已获客户端授权)。期望:客户端仓 `Net/Generated/Handlers/` 与 `HandlerRegistry.cs` 消失,`Net/Generated/Rpc/*.cs` + `.meta` 出现;本仓除 proto option 标注带来的生成物外无意外 diff;再跑一次生成为零 diff。之后按 §5.6 迁移引用,重跑第 2 步。
 4. **冒烟**(直连模式与路由模式各一次;直连 = gate 进程不设 `GATE_CLIENT_RPC_ROUTER`):`pwsh -File tools/run_crosszone_pair.ps1`(客户端仓)走完登录 → 建角 → 进场 → 传送;客户端日志里 `[rpc] late reply dropped` 为 0、没有 `rpc timeout`;直连模式下 Login / CreatePlayer / EnterGame 回包的 `MessageContent.id` 非 0(gate TRACE 或客户端日志可见)。
 5. robot(§6,已实施):**10-20 起完整命令、冒烟清单与通过标准以 [robot 交接](../handoff/client-rpc-callback-robot-handoff-20261019.md) §2 为准**(新增 `TestCallSyncThen*` 与第一批迁移的冒烟)。以下是 10-19 首批的原文,保留备查。在 `robot/` 下依次执行 `go build -mod=vendor ./...`、`go vet -mod=vendor ./...`、`go test -mod=vendor -race ./pkg/...`,再执行 `go test -mod=vendor ./...`,确认主包既有单测不受影响。通过标准:全绿;`-race` 无 DATA RACE;`TestCallDoneExactlyOnceUnderConcurrentOutcomes` 不超时。随后跑四个冒烟。前置条件见各自 yaml 文件头与设计文档,包括两区 gate 以 `GATE_CLIENT_RPC_ROUTER=1` 启动、对应服务就绪。gate 须是含 §3 修复的新编译版,否则直连模式的回包不带请求号。在 `robot/` 下执行:`.\robot.exe -c etc/friend_smoke.yaml`、`etc/guild_smoke.yaml`、`etc/team_smoke.yaml`、`etc/trade_smoke.yaml`;改了构造的 `etc/team_follow_smoke.yaml` 可选加跑。通过标准:各自输出 `*_SMOKE_OK` 并退出 0;日志里 `reply without request id dropped` 与 `[rpc] late reply dropped` 都为 0(trade 第 2 步的超时是 gate 丢弃请求,本就不会有回包)。失败时保留 robot 输出中的 `*_SMOKE_FAIL step=… reason=…` 行,以及同窗口的 gate、路由服日志。
 6. **Java 版(R1 与契约同步,2026-10-20 补)**:在 Java 仓 `D:\luyuan\xuanming-server-mmo` 根目录执行:

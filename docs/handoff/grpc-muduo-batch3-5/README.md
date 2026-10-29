@@ -153,7 +153,7 @@ core 与 grpc_client 从此依赖 muduo_grpc + nghttp2:
 - 可与第 5 批去 grpc 链接项**合并成一次扫荡**。
 
 ### 3.7 文档
-- `docs/design/grpc-client-deadline-failure-callback.md`:§11 的「未 regen」,以及 :316「两种传输都在 grpc::ChannelInterface 之下」,都与事实不符,要改;同时写明 `GrpcCallFailure` 的新形状。
+- [历史设计 docs/design/grpc-client-deadline-failure-callback.md](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md):§11 的「未 regen」,以及 :316「两种传输都在 grpc::ChannelInterface 之下」,都与事实不符,要改;同时写明 `GrpcCallFailure` 的新形状。
 - 设计 §14 补一节「落地记录」。
 - PROGRESS 追加条目,注明每一项是否已编译。
 

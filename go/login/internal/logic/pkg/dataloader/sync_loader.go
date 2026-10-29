@@ -97,7 +97,7 @@ func newDBReadTask(t *dbReadTask, playerId uint64, playerIdStr, replyInstance st
 	return &login_proto.DBTask{
 		Key:           playerId,
 		WhereCase:     "player_id='" + playerIdStr + "'",
-		Op:            "read",
+		Op:            login_proto.DBOp_DB_OP_READ,
 		MsgType:       string(t.message.ProtoReflect().Descriptor().FullName()),
 		Body:          body,
 		TaskId:        t.taskID,

@@ -32,6 +32,13 @@ const (
 	SkillError_kSkillCannotBeCastInCurrentState     SkillError = 7004
 	SkillError_kSkillCannotBeCastSilenceRestriction SkillError = 7005
 	SkillError_kSkillCannotBeCastStunRestriction    SkillError = 7006
+	SkillError_kSkillNotInClass                     SkillError = 7007
+	SkillError_kSkillRankChanged                    SkillError = 7008
+	SkillError_kSkillUpgradeCountInvalid            SkillError = 7009
+	SkillError_kSkillLevelNotEnough                 SkillError = 7010
+	SkillError_kSkillMaxRankReached                 SkillError = 7011
+	SkillError_kSkillGoldNotEnough                  SkillError = 7012
+	SkillError_kSkillUpgradeBusy                    SkillError = 7013
 )
 
 // Enum value maps for SkillError.
@@ -45,6 +52,13 @@ var (
 		7004: "kSkillCannotBeCastInCurrentState",
 		7005: "kSkillCannotBeCastSilenceRestriction",
 		7006: "kSkillCannotBeCastStunRestriction",
+		7007: "kSkillNotInClass",
+		7008: "kSkillRankChanged",
+		7009: "kSkillUpgradeCountInvalid",
+		7010: "kSkillLevelNotEnough",
+		7011: "kSkillMaxRankReached",
+		7012: "kSkillGoldNotEnough",
+		7013: "kSkillUpgradeBusy",
 	}
 	SkillError_value = map[string]int32{
 		"kSkill_errorOK":                       0,
@@ -55,6 +69,13 @@ var (
 		"kSkillCannotBeCastInCurrentState":     7004,
 		"kSkillCannotBeCastSilenceRestriction": 7005,
 		"kSkillCannotBeCastStunRestriction":    7006,
+		"kSkillNotInClass":                     7007,
+		"kSkillRankChanged":                    7008,
+		"kSkillUpgradeCountInvalid":            7009,
+		"kSkillLevelNotEnough":                 7010,
+		"kSkillMaxRankReached":                 7011,
+		"kSkillGoldNotEnough":                  7012,
+		"kSkillUpgradeBusy":                    7013,
 	}
 )
 
@@ -89,7 +110,7 @@ var File_skill_error_tip_proto protoreflect.FileDescriptor
 
 const file_skill_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15skill_error_tip.proto*\x8a\x02\n" +
+	"\x15skill_error_tip.proto*\xc1\x03\n" +
 	"\vskill_error\x12\x12\n" +
 	"\x0ekSkill_errorOK\x10\x00\x12\x1a\n" +
 	"\x15kSkillUnInterruptible\x10\xd86\x12\x1a\n" +
@@ -98,7 +119,14 @@ const file_skill_error_tip_proto_rawDesc = "" +
 	"\x16kSkillCooldownNotReady\x10\xdb6\x12%\n" +
 	" kSkillCannotBeCastInCurrentState\x10\xdc6\x12)\n" +
 	"$kSkillCannotBeCastSilenceRestriction\x10\xdd6\x12&\n" +
-	"!kSkillCannotBeCastStunRestriction\x10\xde6B$\n" +
+	"!kSkillCannotBeCastStunRestriction\x10\xde6\x12\x15\n" +
+	"\x10kSkillNotInClass\x10\xdf6\x12\x16\n" +
+	"\x11kSkillRankChanged\x10\xe06\x12\x1e\n" +
+	"\x19kSkillUpgradeCountInvalid\x10\xe16\x12\x19\n" +
+	"\x14kSkillLevelNotEnough\x10\xe26\x12\x19\n" +
+	"\x14kSkillMaxRankReached\x10\xe36\x12\x18\n" +
+	"\x13kSkillGoldNotEnough\x10\xe46\x12\x16\n" +
+	"\x11kSkillUpgradeBusy\x10\xe56B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

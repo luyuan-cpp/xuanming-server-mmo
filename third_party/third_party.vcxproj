@@ -154,7 +154,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;GOOGLE_CHECK_EQ=ABSL_CHECK_EQ;GOOGLE_LOG=ABSL_LOG;GOOGLE_DCHECK=ABSL_DCHECK</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>./boost/;./;./protobuf/src/;../third_party/;../third_party/zlib/;../third_party/muduo/;../third_party/googletest/googletest/include/;../third_party/muduo/contrib/windows/include;../third_party/redis;../third_party/redis/deps/;../third_party/muduo/contrib/;../third_party/ue5navmesh/Public/;../third_party/protobuf/third_party/abseil-cpp/;../third_party/protobuf/third_party/utf8_range/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>./boost/;./;./protobuf/src/;../third_party/;../third_party/zlib/;../third_party/muduo/;../third_party/googletest/googletest/include/;../third_party/muduo/contrib/windows/include;../third_party/redis;../third_party/redis/deps/;../third_party/muduo/contrib/;../third_party/ue5navmesh/Public/;../third_party/abseil-cpp/;../third_party/protobuf/third_party/utf8_range/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <EnableParallelCodeGeneration>false</EnableParallelCodeGeneration>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <LanguageStandard>stdcpplatest</LanguageStandard>

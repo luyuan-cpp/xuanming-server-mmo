@@ -1,17 +1,77 @@
-# Guild Actor 化架构设计
+# Guild 存储架构现状与 Actor 历史提案
 
-> 状态: 草案 / 设计阶段
-> 范围: `go/guild` 服务
-> 日期: 2026-06-04
-> 关联: 已完成的 NodeInfo node_id 全局唯一改造、Snowflake worker id 独立分配改造
+> 状态：当前实现见 §0；§1–§15 为未实施的历史 Actor 草案，不作为现行实现契约。
+> 范围：本仓库 `go/guild` 服务。
+> 初稿：2026-06-04；源码复核：2026-10-23。
+> 当前结论：**TiDB 权威直写＋Redis 旁路缓存；没有每公会常驻内存的 GuildActor，也没有定时快照刷盘。**
+
+## 0. 当前实现（2026-10-23 源码复核）
+
+本节说明代码与配置契约，不代表已对某个运行环境完成连接或容量验收。后文保留原提案以便追溯，示例接口、参数、拓扑与性能估算均不能据此认定已落地。
+
+### 0.1 三层职责
+
+| 层 | 当前职责 | 边界 |
+|---|---|---|
+| TiDB | `mmorpg_guild` 独占逻辑库，保存公会、成员、申请、资金与帮贡、资产指令、活动和历练大厅原件 | SQL 事务及其锁序裁决写入与授权；公会持久数据以这里为准 |
+| Redis | 公会展示及玩家公会归属缓存、排行榜 ZSET、通知冷却、协调锁、巡检租约；通过相应连接读取会话与推送路由、合服标记和战斗结果记录 | Redis 仍是运行依赖；这些用途不能合并理解为“整份公会内存权威” |
+| Go 进程内存 | 请求快照、业务计算与后台任务运行状态 | 没有 `guild_id → 常驻 GuildActor` 的状态所有权，也没有通用 `FlushScheduler` |
+
+配置段与函数仍沿用 `MySQL` / `OpenMySQL` 名称，但实际通过兼容 MySQL 协议的 SQL 驱动连接。`MySQL.RequireTiDB` 默认开启，仓库 `guild.yaml` 显式为 `true`；只有 dev/test 可显式关闭以兼容旧 MySQL。启动经 `authoritysql.Open` 校验数据库及强会话要求，不能单凭函数名判断后台还是 MySQL。
+
+### 0.2 实际读写路径
+
+```text
+普通公会展示 / 玩家公会归属查询
+  → Redis 命中：返回展示快照
+  → Redis 未命中：读 TiDB → 带缓存代际校验回填 Redis → 返回
+
+建帮 / 管理 / 审批等写入
+  → logic 校验 → repo SQL 事务
+  → 按锁序锁定记录并复核权限、状态与约束
+  → 更新 TiDB → COMMIT → 失效 Redis 缓存、发送变更提示
+
+捐献 / 商店等跨玩家资产操作
+  → SQL 持久化资产指令与去重记录
+  → 资产通道推进玩家侧执行 → SQL 幂等结算资金 / 帮贡 / 指令状态
+```
+
+普通缓存读目前遇到 Redis 错误会返回错误，不能把“缓存非权威”解释成“Redis 故障时自动绕过”。缓存未命中由进程内互斥合并加载；代际 Lua 防止并发写已提交后又回填旧快照。缓存快照可用于展示与预检，**提交事务仍须读取并复核权威记录**。
+
+建帮、管理与经济预留等前台事务经 `GuildRepo.inTx`；资产后台终结等事务经 `assetop.WithTxRetry`。两者都使用 `READ COMMITTED`，但预算与重试错误分类按调用场景分别约束。建帮会在同一事务写成员与公会记录，成功后失效相关缓存；管理写可直接使用事务内读取的结果生成响应。采用 `invalidateAfterCommit` 的路径会独立记录缓存失效失败并有界重试，不会因此把已经提交的 SQL 写伪报成失败；`UpdateGuildScore` 仍可能在 SQL 提交后因 Redis 缓存或榜更新失败返回错误，不能将前述语义泛化到所有写入口。
+
+资产通道的后台重投与结算推进的是**已持久化指令**，不能理解为“先只改内存，等 100ms 再刷盘”。同道历练大厅的邀请、同意与占位也已接 `NewSQLTrialLobbyRepo`，结果记录与巡检仍按各自 Redis / SQL 接缝处理。
+
+排行榜查询仍读取 Redis 的全局榜与按区 ZSET；`guild.score` 是 SQL 权威副本，榜可从 SQL 重建。这与公会主体数据的事务提交点是两回事。
+
+### 0.3 源码与现行设计入口
+
+| 事实 | 入口 |
+|---|---|
+| SQL / Redis 仓储装配、历练 SQL 大厅装配 | [`guild.go`](../../go/guild/guild.go)：`NewGuildRepo`、`NewSQLTrialLobbyRepo` |
+| TiDB 门禁与 SQL 连接 | [`config.go`](../../go/guild/internal/config/config.go)：`MySQLConf.RequiresTiDB`、`Config.Validate`；[`servicecontext.go`](../../go/guild/internal/svc/servicecontext.go)：`OpenMySQL` |
+| 普通缓存读、建帮事务、榜读与重建 | [`guild_repo.go`](../../go/guild/internal/data/guild_repo.go)：`GetGuild`、`GetPlayerGuildID`、`CreateGuild`、`GetGuildRankPage`、`RebuildRanks` |
+| 事务、授权复核、缓存失效 | [`guild_manage_repo.go`](../../go/guild/internal/data/guild_manage_repo.go)：`inTx`、`runTxBody`、`invalidateAfterCommit`、`ReviewApplication` |
+| 资产持久指令与结算 | [`economy_repo.go`](../../go/guild/internal/data/economy_repo.go)、[`asset_store.go`](../../go/guild/internal/data/asset_store.go) |
+| schema 唯一事实源与表清单 | [`guild_db.proto`](../../proto/guild/guild_db.proto)、[`tables.go`](../../go/guild/internal/data/tables.go)；结构由 `go/schemamigrate` 管理 |
+
+好友服务的现行契约见 [好友持久化架构](friend-persistence-architecture.md)；全局库归属见 [TiDB 数据层决策](global-data-layer-tidb-decision.md)；帮会管理、资产和活动约束见 [二期一致性修正](guild-phase2/90-consistency.md) 与 [落码交接](guild-phase2/92-handoff.md)。这些服务内部接缝只描述本仓 C++/Go 版，不能据此推定独立 Java 版实现。
+
+### 0.4 历史提案的适用边界
+
+- `ActorRouter`、`GuildActor`、`FlushScheduler`、`Actor.Enabled`、100ms flush、5min idle evict、读快照允许 100ms 滞后，均未落地。
+- §1–§15 的单实例假设、框架比较、命令映射与工作量是历史讨论，不是当前实施排期；原来表格里的勾选仅表示当时拟议范围。
+- 旧稿中的延迟、QPS、写次数降幅没有本仓对比压测依据，不能作为当前容量基线或优化结论。
+- “内存权威＋接受最近一次 flush 周期的数据丢失”没有被当前实现采用，尤其不能用于资金、帮贡与资产指令；当前路径以 SQL 提交和幂等账本为准。
+- 若以后重新评估 Actor，须先证明现有 SQL 路径的实际瓶颈，再设计多副本所有权、提交点、崩溃恢复与存储围栏；进程内串行本身不替代这些约束。
 
 ---
 
-## 1. 背景与问题
+## 1. 历史背景与假设
 
-### 1.1 当前 guild 写路径
+### 1.1 原草案的读改写示意（不是当前代码）
 
-guild_service 处理写请求(创建公会、申请入会、踢人、捐献、聊天、状态变更)的典型路径:
+原稿用下面的整体读改写模型解释 Actor 动机。`Donate` / `SaveGuild` 是概念示例；当前捐献走持久资产指令与 SQL 结算，不能套用此示例：
 
 ```go
 func (l *GuildLogic) Donate(ctx, req) {
@@ -27,9 +87,11 @@ func (l *GuildLogic) Donate(ctx, req) {
 }
 ```
 
-这个路径在低 QPS / 公会写竞争稀疏时完全够用。问题出在**同一个 guild_id 高并发写**的场景。
+以下讨论仅针对这个假设模型，不构成当前 `go/guild` 已有瓶颈的证据。
 
-### 1.2 50000 人公会场景下的锁竞争
+### 1.2 假设的 5000 人公会场景下的锁竞争
+
+> 本节的耗时、吞吐、排队延迟与竞争比例均为历史示意，未经当前 SQL 实现的压测验证。公会实际容量来自配表；不能把假设人数当作已支持或已验收的规模。
 
 设想最坏场景: **1 个 5000 人的超大公会**,正常活跃 1000 人,每人每秒 1 次公会操作 =
 **单 guild_id 1000 QPS**。下面对比三种锁方案的表现。
@@ -74,25 +136,15 @@ repo.Save(...)
 
 #### 方案 C: DB 行锁(`SELECT ... FOR UPDATE`)
 
-类似 B,但锁竞争发生在 MySQL 行上。MySQL 单行的 lock wait 队列在高竞争下 p99 几秒起步,
-还会拖累整个 InnoDB 实例的事务系统。**比 Redis 锁还差**。
+竞争发生在数据库记录上，实际锁集、事务长度与数据库执行计划决定排队情况；不能仅凭使用行锁就认定比 Redis 锁更慢。当前 TiDB 写路径的锁序与预算见 §0。
 
-### 1.3 共同瓶颈
+### 1.3 原提案的动机与限制
 
-不管选 A / B / C, **核心瓶颈都一样**:
-
-> **同一个 guild_id 的所有写操作 = 一次跨进程同步原语 + 多次跨进程 IO,串行执行**
-
-每次操作至少 3-5ms 的"协调成本",且这成本花在和业务逻辑无关的事情上(争锁、读 IO、写 IO)。
-真正的业务计算(`Resources += 100`)耗时不到 1 微秒。
-
-**协调成本是业务计算的 3000 倍。**
-
-要把这个比例改回正常水位,**必须把"读-改-写"事务从跨进程改成进程内**。这就是 actor 化要做的事情。
+原稿希望用进程内排队减少热点记录的重复加载和协调开销。当前仓储已经使用具体业务记录的 SQL 事务与锁序，不能据此假定所有写都持有一个 Redis 公会大锁，也不能由这个模型推出必须 Actor 化。
 
 ---
 
-## 2. 方案概述
+## 2. 历史提案概述（未实施）
 
 ### 2.1 核心思想
 
@@ -111,27 +163,15 @@ gRPC handler                    gRPC handler
 所有同 guild_id 的请求**走 channel 串行进入这个 goroutine**,
 goroutine 直接操作内存状态,**进程内串行,无 IO,无跨进程协调**。
 
-刷盘改为**后台批量异步**: 每 100ms 或每 N 次修改,把内存状态写回 Redis/DB。
-N 次操作合并成 1 次 IO, **DB 写流量降低 99%**。
+原提案设想每 100ms 或每 N 次修改合并一次写回 Redis/DB。具体能减少多少 IO 未经验证；当前服务没有采用这种持久化方式。
 
-### 2.2 性能对比
+### 2.2 性能结论状态
 
-同 guild_id 1000 QPS 写场景:
+原稿的“333 → 30000 QPS”“写流量减少 99%”等数字是模型估算，撤回其作为性能结论的表述。没有当前实现与候选方案的同口径对比表，不能声明性能提升。
 
-| 维度 | 锁方案(B) | actor 化 |
-|------|------------|---------|
-| 单请求延迟 | ~3ms(锁+IO) | <1ms(channel 排队 + 内存) |
-| 1000 QPS 总耗时 | 3 秒(串行 IO) | ~1 毫秒(串行内存) |
-| DB 写次数 | 1000 次/秒 | 10 次/秒(100ms 合并) |
-| Redis 锁压力 | 4000 ops/秒(单 key) | 0 |
-| p99 延迟 | 几秒 | <10ms |
+### 2.3 重新评估的前提
 
-**单实例从 ~333 QPS/公会 提升到 ~30000 QPS/公会**, 一个数量级以上的跳变。
-
-### 2.3 为什么这是"真正"的解决方案
-
-锁方案在 ~3ms 这个量级里找 10%-30% 的改进; actor 化是**协调成本本身的数量级变化**(3ms → 50μs)。
-其他方案优化的是常数,actor 化优化的是渐近行为。
+减少同步 IO 可能改变延迟与持久化语义，不能只比较内存计算耗时。以后若评估，须把数据库提交、恢复、所有权校验和调用方可观察结果一起纳入测试与压测。
 
 ---
 
@@ -450,29 +490,17 @@ type Router struct {
 | 二进制大小 | +数 MB(框架依赖) | +几 KB |
 | 升级风险 | 框架版本升级可能 break | 没有外部依赖 |
 
-### 5.3 决策(本轮不下)
+### 5.3 决策（2026-10-12：不引入框架）
 
-> **2026-10-12 定论:不引入框架。** 联网核实 ergo 与 protoactor-go 之后两个都不引入:
-> protoactor-go 的 Go 版自 2026-01-18 起没有新提交,grain 单激活所在的集群成员恢复有未修缺陷(#1133);
-> ergo 不按 key 放置,EDF 序列化与 proto 契约重复。本项目 actor 能替代的只有「进程内同 key 串行」,
-> 这部分已有现成机制;真正的缺口在存储侧 fencing,框架不提供。
-> 证据与对比表见 [db-task-pipeline-bottlenecks.md](db-task-pipeline-bottlenecks.md) §1。下文保留当时的推导。
+不引入 ergo 或 protoactor-go 的既有结论保持不变；当时的核实依据见 [db-task-pipeline-bottlenecks.md](db-task-pipeline-bottlenecks.md) §1，本文不把历史版本比较作为当前上游状态。
 
-**这一轮先把对比留在文档里,下一轮再定**。
-
-倾向: **自己写 ~200 行**,理由:
-
-- 已经有 jump hash 路由方案
-- 不需要"跨进程 actor"抽象
-- 单实例先做完,看效果再决定是否需要 Cluster
-- 自己写,后期迁 protoactor-go 接口可控
-- "先做不要的功能 = 浪费时间,事后还得反学"
-
-但若团队对 Akka/Orleans 有经验,protoactor-go 也合理。**等下一轮和团队评审一起决定**。
+进程内按 key 串行不能提供跨副本所有权或存储侧 fencing。**不引入框架不等于已决定自研 Actor**；当前没有 Actor 实施任务或已落地的 Router / Flusher。
 
 ---
 
-## 6. 数据一致性
+## 6. 历史提案的数据一致性讨论（未采用）
+
+> 当前持久数据以 SQL 为权威，见 §0。本节的内存权威、定时 flush 与崩溃恢复只是旧稿设想，其中“接受已应答写丢失”的方案不适用于当前资金、帮贡与资产指令契约。
 
 ### 6.1 内存权威 + 异步刷盘
 
@@ -484,10 +512,9 @@ actor 化下, **内存状态是权威, DB 是落盘备份**。这与"每次写�
 
 应对策略(三选一,按业务容忍度):
 
-##### 策略 1: 接受丢失(适合多数场景)
+##### 历史策略 1: 接受丢失（未采用）
 
-100ms 丢失窗口对绝大多数公会操作可接受(捐献掉一秒、聊天少一句)。
-配上"重启时从 DB 重新 load"机制,服务恢复透明。
+这一设想会丢失尚未持久化但已应答的操作，重启读取旧快照不能恢复这些操作。不能据此允许捐献、资金或帮贡丢失。
 
 ##### 策略 2: WAL(Write-Ahead Log)
 
@@ -507,7 +534,7 @@ gRPC handler → actor → ① 写 Kafka WAL(同步) → ② 改内存(同步) �
 - 10ms flush 间隔,丢失窗口 10ms
 - DB 写压力相对回升, 但仍比锁方案低 90%(原来每次写都刷)
 
-**推荐**: 默认走策略 1; 关键操作(创建公会、解散公会)单独走策略 2 或同步写 DB。
+**当前结论**：不采用本节任一异步快照策略；以现有 SQL 事务与持久化资产指令的提交、幂等和恢复契约为准。重新设计前不得把旧稿的丢失窗口当成已批准的业务容忍度。
 
 #### Q2: 如何保证 actor 崩了之后,DB 仍能恢复出最新一致状态?
 
@@ -724,9 +751,9 @@ jump_hash(guild_id=42, 2) = 0 → A
 
 **解决方案**:
 
-##### 方案 1: 接受丢失(单 guild 场景下危害不大)
+##### 历史方案 1: 接受丢失（未采用）
 
-100ms 丢失对捐献、聊天可接受。
+原稿曾假定 100ms 写丢失可接受，该假定已撤回，不能用于当前捐献、资金或帮贡契约，见 §0.4 与 §6。
 
 ##### 方案 2: WAL + 重放
 
@@ -744,29 +771,29 @@ jump_hash(guild_id=42, 2) = 0 → A
 instance B 没真挂,只是网络分区。jump_hash 把 guild=42 路由到 A,但 B 仍以为自己是 owner。
 **双主写**风险。
 
-防双主:
+原草案曾提出以下 lease 预检方案（未实施）：
 
 1. 每个 actor 启动时,在 etcd 拿一个 lease lock: `/guild/owner/{guild_id} = {instance_uuid}`
 2. CAS Version==0 才能拿,拿不到说明别人已 own
 3. lease 过期 → 锁释放,新 owner 能 CAS 成功
 4. 老 owner 要在每次 flush 前**校验** lease 还在: `If Value(lockKey) == myUUID Then OpPut snapshot`
 
-这套机制和 NodeInfo allocator 完全同构, 我们已经验证过。
+此处 lease 预检与 SQL 写入跨存储，不能原子阻止失去所有权的旧进程继续写 SQL；即使 etcd 条件更新成功，也不等于 TiDB 写入受到了围栏保护。该方案没有形成有效防双主的验收证据，不能援引 NodeInfo 分配机制作为已验证的结论。重新设计必须在权威存储提交点原子复核所有权版本。
 
-### 8.3 本次设计的工作量裁剪
+### 8.3 原草案拟议范围（全部未实施）
 
-| 阶段 | 内容 | 是否本次做 |
+| 阶段 | 内容 | 原草案范围 |
 |------|------|-----------|
-| 阶段 1 | actor 框架(Router + Actor + lazy spawn + evict) | ✅ |
-| 阶段 2 | guild_logic 改造成命令式(GuildActor + Cmds) | ✅ |
-| 阶段 3 | 异步刷盘(FlushScheduler + dirtyVersion) | ✅ |
-| 阶段 4 | 优雅关闭(Shutdown drain) | ✅ |
-| 阶段 5 | 单实例压测验证 | ✅ |
-| 阶段 6 | jump hash 路由 | ❌ 需要 C++ 配合 |
-| 阶段 7 | 故障转移 + WAL | ❌ 需要 C++ 配合 |
-| 阶段 8 | 跨实例分布式锁(防双主) | ❌ 需要 C++ 配合 |
+| 阶段 1 | actor 框架(Router + Actor + lazy spawn + evict) | 曾拟纳入，未实施 |
+| 阶段 2 | guild_logic 改造成命令式(GuildActor + Cmds) | 曾拟纳入，未实施 |
+| 阶段 3 | 异步刷盘(FlushScheduler + dirtyVersion) | 曾拟纳入，未实施 |
+| 阶段 4 | Actor 优雅关闭(Shutdown drain) | 曾拟纳入，未实施 |
+| 阶段 5 | Actor 单实例压测验证 | 曾拟纳入，未实施 |
+| 阶段 6 | jump hash 路由 | 当时排除，未实施 |
+| 阶段 7 | Actor 故障转移 + WAL | 当时排除，未实施 |
+| 阶段 8 | Actor 跨实例所有权与围栏 | 当时排除，未实施 |
 
-**本次只做阶段 1-5**, 单实例 actor 化, 纯 Go 改造, 不依赖 C++ 端。
+此表仅保留当时的裁剪记录，不代表当前排期或完成情况。重新评估时必须先解决多副本所有权与持久化语义，不能直接启动阶段 1–5。
 
 ---
 
@@ -803,6 +830,8 @@ docs/design/guild-actor-architecture.md   # 本文档
 | `go/guild/internal/svc/servicecontext.go` | 增加 `Router` 引用 |
 
 ### 9.3 不动
+
+> 以下是原草案对改造面的估计。当前 repo 已有细粒度事务、资产账本和活动 SQL 接缝，不能继续假定只调用 `repo.Save` / `repo.Get` 即可完整实现，也不能据此认定仓储层无需修改。
 
 - `go/guild/internal/data/` 仓储层不变,actor 内部仍调用 repo.Save / repo.Get
 - `proto/guild/` proto 不变
@@ -947,9 +976,9 @@ if config.Actor.Enabled && req.GuildId % 100 < config.Actor.RolloutPercent {
 
 ### 13.3 压测对比
 
-按 CLAUDE.md §9 流程:
+若重新立项，按 `AGENTS.md` §6 的现行流程执行；以下仅保留原草案的比较维度：
 
-1. **跑测前**: 跑一轮**当前(锁方案)**guild 压测, 存为 `prev-summary.txt`
+1. **跑测前**: 跑当前 TiDB 事务实现的 guild 压测，用 `stress_summarize.ps1` 输出保存 `prev-summary.txt`
 2. **改造完**: 跑同一份压测脚本
 3. **出对比表**:
    - 单 guild_id 1000 QPS 下 p50/p99
@@ -958,9 +987,9 @@ if config.Actor.Enabled && req.GuildId % 100 < config.Actor.RolloutPercent {
    - Redis CPU
 4. **复盘文档**: `docs/stress/stress-guild-actor-<date>.md`
 
-成功标准:
+历史候选目标（未验收，重新立项时需重新确认）：
 
-- 单 guild p99 < 50ms (锁方案 ~几秒)
+- 单 guild p99 < 50ms
 - DB 写 QPS 降低 ≥ 90%
 - 总吞吐 ≥ 锁方案 5x
 - 无数据不一致(订单一致性、余额一致性 sanity check)
@@ -968,6 +997,8 @@ if config.Actor.Enabled && req.GuildId % 100 < config.Actor.RolloutPercent {
 ---
 
 ## 14. 工作量估计
+
+以下约 7 人天是 2026-06-04 对旧代码与单实例原型的估计，未覆盖后来落地的管理、资产与活动契约，不作为当前承诺。
 
 | 阶段 | 内容 | 工作量 |
 |------|------|------|
@@ -996,28 +1027,27 @@ if config.Actor.Enabled && req.GuildId % 100 < config.Actor.RolloutPercent {
 
 ---
 
-## 16. 决策记录
+## 16. 决策与实施状态（2026-10-23 复核）
 
 | # | 决策 | 状态 | 备注 |
 |---|------|------|------|
-| 1 | 单实例 actor 化(本次范围) | 已定 | 不做横向扩展,等 C++ 方案 |
-| 2 | actor 框架选型 | 已定(2026-10-12) | 不引入框架,需要时自己写。ergo、protoactor-go 联网核实后都不引入,依据见 [db-task-pipeline-bottlenecks.md](db-task-pipeline-bottlenecks.md) §1 |
-| 3 | flush 间隔默认 100ms | 已定 | 可配置, 关键操作单独同步写 |
-| 4 | 读路径走快照不进 actor | 已定 | 提升读吞吐, 100ms 滞后可接受 |
-| 5 | actor evict idle = 5min | 已定 | 平衡内存占用与重 load 成本 |
-| 6 | inbox buffer = 256 | 已定 | 突发流量缓冲, 满了上游限流 |
-| 7 | 子订阅满直接丢事件 | 已定 | 用 metrics 监控丢事件率 |
-| 8 | 提供 `Actor.Enabled` 开关灰度 | 已定 | 按 guild_id 段灰度推进 |
+| 1 | 单实例 Actor 化 | 历史提案，未实施 | 当前是共享 SQL 事务路径；不能假定实例独占某个公会 |
+| 2 | Actor 框架选型 | 既有结论：不引入(2026-10-12) | 不引入 ergo、protoactor-go；不等于批准自研 Actor，依据见 §5.3 |
+| 3 | flush 间隔默认 100ms | 未实施 | 当前没有通用 Flusher，不适用内存写后定时落盘 |
+| 4 | 读路径走 Actor 快照、容忍 100ms 滞后 | 未实施 | 当前普通读走 Redis 缓存；提交权限由 SQL 事务复核 |
+| 5 | actor evict idle = 5min | 未实施 | 当前无常驻公会 Actor |
+| 6 | inbox buffer = 256 | 未实施 | 原草案参数 |
+| 7 | 子订阅满直接丢事件 | 未实施 | 原草案订阅语义，不能套用当前持久业务事件 |
+| 8 | `Actor.Enabled` 灰度开关 | 未实施 | 当前无此配置开关 |
+| 9 | TiDB 权威直写＋Redis 旁路缓存 | 当前实现 | SQL 提交、缓存代际失效与资产幂等账本，见 §0 |
 
 ---
 
 ## 17. 后续动作
 
-1. ~~等下一轮评审决定**框架选型**(本文 §5)~~ 2026-10-12 已定:不引入框架(§16 #2)。actor 化本身仍未落地(go/guild 里没有 ActorRouter / FlushScheduler),是否需要先看 guild 压测(见 db-task-pipeline-bottlenecks.md 的 guild 一节)
-2. 决定后启动**阶段 1-5 实施**
-3. 实施完成跑**对比压测**, 出复盘文档
-4. 稳定 1 周后删除 legacy 路径
-5. 评估**第三阶段 C++ 端配合**: 多实例 + jump hash + WAL
+1. 维护文档时先核对 §0 的代码入口，区分 SQL 权威、Redis 运行依赖与进程内临时状态。
+2. 如果真实压测发现 guild 瓶颈，先保留当前 TiDB 实现的基线，并按业务锁集、SQL 与缓存路径定位原因。
+3. 只有确认需要 Actor 后才重新立项，先定义提交点、幂等、所有权、存储围栏、故障恢复与验收，再评估框架或自研。不以本历史草案作为开工授权。
 
 ---
 
@@ -1026,14 +1056,14 @@ if config.Actor.Enabled && req.GuildId % 100 < config.Actor.RolloutPercent {
 - NodeInfo node_id 全局唯一改造(2026-06-04)—— 解决 Snowflake worker id 跨 zone 冲突
 - Snowflake worker id 独立分配改造(2026-06-04)—— 解耦 Snowflake seed 与 NodeInfo.NodeId
 
-actor 化改造完成后, guild 服务的核心组件将是:
+原草案设想 Actor 化完成后增加以下组件；该组合未落地，当前装配以 §0 为准：
 
 - NodeInfo allocator → 服务发现 node_id
 - snowflakealloc → Snowflake worker id
 - ActorRouter → guild_id 进程内路由
 - FlushScheduler → 异步刷盘
 
-四套机制各司其职, 边界清晰。
+NodeInfo 与号源的当前接线须另外按源码核对；当前 guild_id 默认使用号段，不能把本历史列表当作仍全部使用 Snowflake 的依据。
 
 ---
 
@@ -1048,4 +1078,4 @@ actor 化改造完成后, guild 服务的核心组件将是:
 
 ---
 
-*文档完。框架选型结果出来后, 本文 §5.3 / §16 #2 会更新。*
+*当前实现以 §0 与 §16 为入口；历史提案中的示例与参数未经实施或压测验收。*

@@ -52,7 +52,7 @@
 ### GrpcDone 新重载已生成，但生产代码一处都没用
 【已生成】20 个生成头文件里每个 unary 方法都有 Send<Svc><Method>(registry, entity, req, GrpcDone<Resp>, const GrpcCallOptions& = {}) 重载，例如 scene_manager_service_grpc_client.h:51。muduo-rpc-channel.md §19.2 也写了“已随用户快照提交并 regen”。
 
-【文档不一致】grpc-client-deadline-failure-callback.md §11 开头仍写“未 regen”，与生成物不符。
+【文档不一致】[历史设计 grpc-client-deadline-failure-callback.md](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md) §11 开头仍写“未 regen”，与生成物不符。
 
 【使用情况】在 cpp/ 下排除 generated 搜 GrpcDone / GrpcCallOutcome / GrpcCallOptions，只命中 grpc_client_lifecycle_test.cpp:464、495、556。
 
@@ -62,7 +62,7 @@
 - 该 worktree 的 scene_manager_response_handler.cpp:71 起不再安装 CreateScene 的全局处理器。
 
 主工作区 player_scene.cpp:382 仍是三参 Send，仍走全局处理器。
-files: D:\luyuan\xuanming-server-mmo-cpp\cpp\generated\grpc_client\scene_manager\scene_manager_service_grpc_client.h, D:\luyuan\xuanming-server-mmo-cpp\cpp\generated\grpc_client\grpc_call_tag.h, D:\luyuan\xuanming-server-mmo-cpp\cpp\tests\rpc_controller_test\grpc_client_lifecycle_test.cpp, D:\luyuan\xuanming-server-mmo-cpp\.claude\worktrees\blissful-morse-969d44\cpp\libs\services\scene\player\system\player_scene.cpp, D:\luyuan\xuanming-server-mmo-cpp\docs\design\grpc-client-deadline-failure-callback.md, D:\luyuan\xuanming-server-mmo-cpp\docs\design\muduo-rpc-channel.md
+files: D:\luyuan\xuanming-server-mmo-cpp\cpp\generated\grpc_client\scene_manager\scene_manager_service_grpc_client.h, D:\luyuan\xuanming-server-mmo-cpp\cpp\generated\grpc_client\grpc_call_tag.h, D:\luyuan\xuanming-server-mmo-cpp\cpp\tests\rpc_controller_test\grpc_client_lifecycle_test.cpp, D:\luyuan\xuanming-server-mmo-cpp\.claude\worktrees\blissful-morse-969d44\cpp\libs\services\scene\player\system\player_scene.cpp, [历史设计 D:\luyuan\xuanming-server-mmo-cpp\docs\design\grpc-client-deadline-failure-callback.md](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md), D:\luyuan\xuanming-server-mmo-cpp\docs\design\muduo-rpc-channel.md
 ### 生成客户端的发送与完成流程（模板）
 【发送】所有 unary Send 重载都汇到 Start<Svc><Method>Call（grpc_async_client.cpp.tmpl:186-211），步骤如下：
 1. 对每个 metadata 原值调 context.AddMetadata(key, Base64Encode(value))。所有键都编码，不只是 -bin 键，例如 x-idseg-seq 也会编码。
@@ -405,7 +405,7 @@ files: D:\luyuan\xuanming-server-mmo-cpp\cpp\libs\services\scene\player\system\p
 - [third-party] D:\luyuan\xuanming-server-mmo-cpp\third_party\muduo\muduo\net\TcpClient.cc: 补连接失败回调（第 3 批前置）。另外两份树也要补：third_party/muduo-linux/muduo/net/TcpClient.cc，cpp/libs/engine/muduo_windows/src/muduo/net/TcpClient.cc。
 - [generated-output] D:\luyuan\xuanming-server-mmo-cpp\cpp\generated\grpc_client: 模板改完要重新生成，不能手改。
 - [handwritten] D:\luyuan\xuanming-server-mmo-cpp\cpp\tests\routing_identity_test\scene_manager_selector_test.cpp: 用例直接用 GRPC_CHANNEL_* 构造输入，要跟着改。cross_zone_test.cpp:1856 和 grpc_client_lifecycle_test.cpp 依赖 InitGrpcNode 与 CQ，也要改。
-- [doc] D:\luyuan\xuanming-server-mmo-cpp\docs\design\grpc-client-deadline-failure-callback.md: §11 开头仍写“未 regen”，与生成物不符。第 3 批落地后，§11.3 里关于 CANCELLED 与 UNAVAILABLE 的说明也要更新。
+- [doc] [历史设计 D:\luyuan\xuanming-server-mmo-cpp\docs\design\grpc-client-deadline-failure-callback.md](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md): §11 开头仍写“未 regen”，与生成物不符。第 3 批落地后，§11.3 里关于 CANCELLED 与 UNAVAILABLE 的说明也要更新。
 ## risks
 - 【全局处理器签名带 grpc 类型】ClientContext 与 GrpcCallFailure 的 context、status 都是 grpc 类型。生成器换了传输但签名不变，这些位置都会编译不过：gate main.cpp:361 和 :374-375、scene_manager_response_handler.cpp:21-25、player_inbox_response_handler.cpp:20-21 和 :31-32、id_segment_bootstrap.cpp:184 和 :232-233、grpc_etcd_transport.cpp:53-70。设计说“第 3 批调用方不改”，这只对已经改用 GrpcDone 的调用方成立，而主工作区目前一个都没有。
 - 【GrpcCallOutcome 不带响应头】它拿不到 initial metadata，有两处做不到“按回显认领”：G1 路由 Forward 的成功桥（按回显的 x-session-detail-bin）、号段 OnResponse 的 x-idseg-seq 精确归属。
@@ -434,5 +434,5 @@ files: D:\luyuan\xuanming-server-mmo-cpp\cpp\libs\services\scene\player\system\p
 - muduo 通道工厂按节点类型逐个安装（每类一个开关，比照 GATE_ROUTER_TRANSPORT），还是 node_connector 统一默认走 muduo？回退方案是什么？
 - Go 侧 scene_manager、data_service、player_inbox、login、match 注册的 grpc_endpoint.ip 是否都是 IPv4 字面量？本次未核实。
 - blissful-morse-969d44 的镜像 CreateScene 每次调用回调，计划什么时候合回 main？
-- grpc-client-deadline-failure-callback.md §11 写着“未 regen”，与生成物和 muduo-rpc-channel.md §19.2 不一致，以哪份为准？regen 产物是否已经编译验证过？
+- [历史设计 grpc-client-deadline-failure-callback.md](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md) §11 写着“未 regen”，与生成物和 muduo-rpc-channel.md §19.2 不一致，以哪份为准？regen 产物是否已经编译验证过？
 

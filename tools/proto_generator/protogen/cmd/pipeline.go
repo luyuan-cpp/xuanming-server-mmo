@@ -70,6 +70,8 @@ func runGenerationPipeline(runner *ExecutionRunner) {
 		{Name: "goGen.GoRobotHandlerGenerator", Run: goGen.GoRobotHandlerGenerator},
 		{Name: "goGen.GoRobotTotalHandlerGenerator", Run: goGen.GoRobotTotalHandlerGenerator},
 		{Name: "unityGen.UnityClientRpcGenerator", Run: unityGen.UnityClientRpcGenerator},
+		// robot 类型化调用桩 robot/generated/rpc/(docs/design/client-rpc-callback.md §5.5),与 Unity 调用桩同一份方法形态分类。
+		{Name: "goGen.GoRobotRpcGenerator", Run: goGen.GoRobotRpcGenerator},
 		{Name: "cppGen.CppPlayerDataLoadGenerator", Run: cppGen.CppPlayerDataLoadGenerator},
 		// 玩家持久 schema 世代台账:违反可携带性规则时整次生成失败(docs/design/mixed-version-persist-field-protection.md §3)。
 		{Name: "persistschema.Generate", Run: persistschema.Generate},

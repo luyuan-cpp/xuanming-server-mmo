@@ -34,7 +34,6 @@ include_directories(
     ../../../../third_party/boost/
     ../../../../third_party/entt/single_include
     ../../../../third_party/fmt/include
-    ../../../../third_party/grpc/third_party/
     ../../../../third_party/hexagons_grids/
     ../../../../third_party/librdkafka/src-cpp/
     ../../../../third_party/lua/src/
@@ -60,8 +59,6 @@ include_directories(
     ../third_party/lua/src/
     ../third_party/muduo-linux/
     ../third_party/mysql/include/
-    ../third_party/protobuf/src/
-    ../third_party/protobuf/third_party/abseil-cpp/
     ../third_party/redis/
     ../third_party/redis/deps/
     ../third_party/sol2/include/

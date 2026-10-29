@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "engine/core/type_define/type_define.h"
+#include "engine/core/utils/proto/unknown_field_carry.h"
 
 #include "modules/bag/bag_service.h"
 #include "modules/bag/bag_system.h"
@@ -1136,6 +1137,39 @@ TEST_F(BagInstanceDataTest, CanStackRefusesAnySideCarryingUnknownFields)
 	EXPECT_FALSE(ItemStore::CanStack(fromNewerVersion, fromNewerVersion));
 }
 
+// 守卫只认"更新版本才有的字段";已退役字段(台账 retired 行)的残留字节在之后每个版本里都是未知字段、照样携带,
+// 但不能让对象被永远当成新版本数据(设计 §3.1、§4.4)。生产里的退役清单来自生成产物,目前为空,
+// 这里用 ContainsUnretiredFields 的谓词参数给出非空清单,钉住过滤本身。
+TEST(UnknownFieldCarryTest, OnlyUnretiredUnknownFieldsCountAsNewerVersionFields)
+{
+	constexpr int kRetiredNumber = 7;
+	constexpr int kNewNumber = 412345;
+	const auto isRetired = [](int fieldNumber) { return fieldNumber == kRetiredNumber; };
+
+	google::protobuf::UnknownFieldSet onlyRetired;
+	onlyRetired.AddVarint(kRetiredNumber, 1);
+	EXPECT_FALSE(unknown_field_carry::ContainsUnretiredFields(onlyRetired, isRetired))
+		<< "只有退役残留:不算更新版本的数据";
+
+	google::protobuf::UnknownFieldSet mixed;
+	mixed.AddVarint(kRetiredNumber, 1);
+	mixed.AddVarint(kNewNumber, 2);
+	EXPECT_TRUE(unknown_field_carry::ContainsUnretiredFields(mixed, isRetired));
+
+	EXPECT_FALSE(unknown_field_carry::ContainsUnretiredFields(google::protobuf::UnknownFieldSet{}, isRetired));
+
+	// 消息与字节两种形态口径一致;生产退役清单为空时,任何未知字段都算。
+	ItemComp item = MakeInstance(kGuidA, kStackable);
+	EXPECT_FALSE(unknown_field_carry::CarriesNewerVersionFields(item));
+	item.mutable_unknown_fields()->AddVarint(kNewNumber, 1);
+	EXPECT_TRUE(unknown_field_carry::CarriesNewerVersionFields(item));
+	const std::string captured = unknown_field_carry::Capture(item);
+	EXPECT_TRUE(unknown_field_carry::CarriesNewerVersionFields("ItemComp", captured));
+	EXPECT_FALSE(unknown_field_carry::CarriesNewerVersionFields("ItemComp", std::string{}));
+	// 携带的字节坏了只可能是内存被破坏:按"带着"处理,守卫拒绝即 fail-closed。
+	EXPECT_TRUE(unknown_field_carry::CarriesNewerVersionFields("ItemComp", std::string("\x0b", 1)));
+}
+
 // 行为级:入包并堆、整理(早退判据与合并)、reserve 侧的空余估算都不碰这种堆,未知字段原样留在实例上。
 TEST_F(BagInstanceDataTest, StacksCarryingUnknownFieldsAreNeverMergedInto)
 {
@@ -1168,7 +1202,8 @@ TEST_F(BagInstanceDataTest, StacksCarryingUnknownFieldsAreNeverMergedInto)
 	ASSERT_TRUE(bag.MergeAndCompact(&destroyed, CompactPolicy::kMergeAndReorder));
 	EXPECT_TRUE(destroyed.empty()) << "nothing may be merged away";
 	EXPECT_EQ(2u, bag.OccupiedGridCount());
-	EXPECT_EQ(5u, bag.GetTotalItemCount(kStackable));
+	// 按 config 计数只认可互换的普通单位(第 6 批):带新版本字段的那 1 个不计,普通堆的 4 个照计。
+	EXPECT_EQ(4u, bag.GetTotalItemCount(kStackable));
 	ASSERT_NO_FATAL_FAILURE(expectUnknownKept(bag));
 	EXPECT_TRUE(bag.IsLayerConsistent());
 
@@ -1225,7 +1260,57 @@ TEST_F(BagInstanceDataTest, AddItemsPlansIncomingInstancesCarryingUnknownFieldsA
 	EXPECT_NE(opened, written[0].front());
 	EXPECT_NE(opened, written[1].front());
 	EXPECT_EQ(4u, bag.OccupiedGridCount());
-	EXPECT_EQ(1u + 3u + 3u + 2u, bag.GetTotalItemCount(kStackable));
+	// 按 config 计数只认普通单位(第 6 批):三堆带新版本字段的(3、3、2)不计,只剩普通半堆的 1 个。
+	EXPECT_EQ(1u, bag.GetTotalItemCount(kStackable));
+	EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+// ── 按 config 计数和扣数量:带更新版本字段的单位不当普通单位(混版本设计 §4.4 第 6 批)──────
+//
+// 新版本给可叠加物品加的属性(例如绑定),旧代码看不懂;按数量计数、预检、扣除三处同口径跳过这种堆,
+// 预检三态区分"版本错位"(可重试)与"确定不足"(可记终态)。has_equip 的实例照算(由调用方的配置表排除)。
+TEST_F(BagInstanceDataTest, QuantityPathsSkipStacksCarryingNewerVersionFields)
+{
+	ItemComp plain = MakeInstance(kGuidA, kStackable);
+	plain.set_size(3);
+	ItemComp fromNewerVersion = MakeInstanceFromNewerVersion(kGuidB, kStackable);
+	fromNewerVersion.set_size(5);
+	ASSERT_TRUE(ItemStore::IsCountableByConfig(plain));
+	ASSERT_FALSE(ItemStore::IsCountableByConfig(fromNewerVersion));
+	Bag bag;
+	bag.RestoreItems({{plain, 0}, {fromNewerVersion, 1}});
+
+	EXPECT_EQ(3u, bag.GetTotalItemCount(kStackable)) << "只计普通单位";
+	EXPECT_EQ(ItemStore::QuantityVerdict::kEnough, bag.CheckQuantities({{kStackable, 3}}));
+	EXPECT_EQ(ItemStore::QuantityVerdict::kVersionSkew, bag.CheckQuantities({{kStackable, 4}}))
+		<< "算上带新字段的 5 个才够:版本错位,不能记成终态不足";
+	EXPECT_EQ(ItemStore::QuantityVerdict::kVersionSkew, bag.CheckQuantities({{kStackable, 8}}));
+	EXPECT_EQ(ItemStore::QuantityVerdict::kInsufficient, bag.CheckQuantities({{kStackable, 9}}))
+		<< "连算上都不够:确定不足";
+	EXPECT_EQ(ItemStore::QuantityVerdict::kInsufficient,
+			  bag.CheckQuantities({{kStackable, 4}, {kPlainNonStack, 1}}))
+		<< "多项时确定不足优先于版本错位";
+	EXPECT_EQ(ItemStore::QuantityVerdict::kEnough, bag.CheckQuantities({{kStackable, 0}})) << "需求为 0 视为满足";
+	EXPECT_EQ(kSuccess, bag.CheckItemsAvailable({{kStackable, 3}}));
+	EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), bag.CheckItemsAvailable({{kStackable, 4}}));
+	EXPECT_EQ(static_cast<uint32_t>(kBagInsufficientItems), bag.CheckItemsAvailable({{kStackable, 9}}));
+
+	// 全或无的扣除:版本错位时整体失败、一个单位都不动。
+	const BagState before = Capture(bag);
+	EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), bag.RemoveItems({{kStackable, 4}}));
+	ExpectUnchanged(before, bag);
+
+	// 夹紧的扣除(战斗消耗)只从普通堆抽,带新字段的堆原样保留(未知字段也在)。
+	std::vector<DrainedInstance> drained;
+	ASSERT_EQ(kSuccess, bag.RemoveItemsClamped({{kStackable, 8}}, &drained));
+	ASSERT_EQ(1u, drained.size());
+	EXPECT_EQ(kGuidA, drained.front().guid);
+	EXPECT_EQ(3u, drained.front().amount);
+	EXPECT_EQ(nullptr, bag.GetItemCompByGuid(kGuidA)) << "普通堆抽光后成对销毁";
+	const ItemComp *kept = bag.GetItemCompByGuid(kGuidB);
+	ASSERT_NE(nullptr, kept);
+	EXPECT_EQ(5u, kept->size());
+	EXPECT_TRUE(unknown_field_carry::CarriesNewerVersionFields(*kept));
 	EXPECT_TRUE(bag.IsLayerConsistent());
 }
 

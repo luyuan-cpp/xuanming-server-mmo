@@ -282,7 +282,7 @@ func (r *placementRoute) confirm(ctx context.Context) error {
 // 调用方直接 return。写任务必须在排序锁、游标守卫、owner_epoch 守卫之后调用:被判为过期的写不值得再花
 // 一次 MGET;选库结果必须在持锁期间用掉 —— 锁挡着搬库工具的「等在途写完成」(R2)。
 func (w *worker) routeTask(task *workerTask, dbTask *db_proto.DBTask) (*placementRoute, bool) {
-	op := dbTask.Op
+	op := taskOpLabel(dbTask)
 	router := w.placement
 	if router == nil || router.rc == nil || router.stores == nil {
 		// 装配缺失是编程错误。fail-closed 成可重试错误(耗重试次数,最终进死信由人处理),绝不回落到某个
@@ -430,7 +430,7 @@ func retryBudgetExempt(dbTask *db_proto.DBTask, cause error) bool {
 		storeerr.KindOf(cause) != storeerr.KindNone:
 		// errSchemaTooNew(C1,persist_schema.go):写方世代高于本实例,等新版实例来处理;耗预算会把完好的存盘推进死信。
 		// 读的世代超前(C2)在 handleTask 里直接回失败回执,不会走到这里。
-		return dbTask.Op == "write"
+		return dbTask.Op == db_proto.DBOp_DB_OP_WRITE
 	}
 	return false
 }

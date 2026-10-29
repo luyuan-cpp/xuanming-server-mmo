@@ -8,7 +8,7 @@
 //
 // 跑法(仓库根目录,Linux 或带 g++ 的容器;gtest 用仓库里已经 vendored 的那份):
 //
-//   GT=third_party/grpc/third_party/googletest/googletest
+//   GT=third_party/googletest/googletest
 //   g++ -std=c++23 -I cpp/nodes/battle -I cpp/libs/engine/core -I "$GT/include" -I "$GT"
 //       cpp/nodes/battle/tests/battle_ticket_test.cpp
 //       "$GT/src/gtest-all.cc" "$GT/src/gtest_main.cc"

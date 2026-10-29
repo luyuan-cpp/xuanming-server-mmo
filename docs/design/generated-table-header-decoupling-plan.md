@@ -88,7 +88,7 @@ include 过任意 `*_table_fk.h`，5 个 fk 头里 4 个零消费者，全部 fk
 python tools/data_table_exporter/tools/sandbox_export.py --out <scratch>/baseline
 ```
 `sandbox_export.py:110-114` 从**活动工作树**复制 `templates/`，一旦改了 `.j2` 就再也造不出基线。
-前置条件：`third_party/grpc/install_vs2026_dbg/bin/protoc.exe` 在位（`sandbox_export.py:48` 钉死），
+前置条件：独立安装的 `third_party/protobuf/install_vs2026_dbg/bin/protoc.exe` 在位且版本为 `libprotoc 35.1`（`sandbox_export.py` 的 `_REPO_PROTOC` 为当前入口），
 tip / bit-index 状态干净；任一腿失败就**没有基线**（`:219-222` 直接 return），后续步骤失去唯一回归对照。
 
 ### Step 0b — 记录构建基线
@@ -475,6 +475,7 @@ Step 1a 的验收是「改完 `grep -l table_expression.h` 只剩 2 个文件」
 在 build 真正使用的那棵 protobuf 里：
 `third_party/grpc/third_party/protobuf/src/google/protobuf/port_def.inc:145`
 （`table.vcxproj:288` 的 include 列表里就是这条路径，原稿去搜的 `install_vs2026` 不是这棵）。
+2026-10-26 路径注记：以上保留当时的源码定位证据；当前同版本 Protobuf 已独立到 `third_party/protobuf/`，后续核对该宏时从 `third_party/protobuf/src/google/protobuf/port_def.inc` 按符号查找，不沿用旧 SDK 目录或旧行号。
 它是**纯警告属性**（`__attribute__((warn_unused))` / `ABSL_ATTRIBUTE_WARN_UNUSED`），无链接/可见性效应，
 **声明上省略是合法的**。→ 这条不推翻 ②，反而**加强**它：现在前向声明的依据有两条独立事实，
 protoc 自己写了裸的 `class MirrorTable;`（`mirror_table.pb.h:56`），且定义上那个属性（`:81`）可省。

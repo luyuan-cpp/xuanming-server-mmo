@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <string>
 
+#include "engine/infra/storage/redis_cluster/redis_slot.h"
+
 // 玩家归属三件套 —— 跨 zone 场景传送阶段 1 的 C++ 半边。
 //
 // 设计:docs/design/cross-zone-scene-travel.md §3 CZ-2..CZ-5、§6 不变量;
@@ -49,9 +51,11 @@
 //   Redis 当前值"才允许写,否则本节点已被废黜。
 namespace player_ownership
 {
+	// 玩家域键,带 {player_id} hash tag(docs/design/redis-player-store-cluster.md §5.2),与 go/shared/ownerepoch.OwnerEpochKey
+	// 逐字一致。存盘严格 Lua(redis_client.h kSaveWithCommitBarrierLuaScript)按这个形状逐字核对 KEYS[2]。
 	inline std::string OwnerEpochRedisKey(uint64_t playerId)
 	{
-		return "player:" + std::to_string(playerId) + ":owner_epoch";
+		return "player:" + redis_slot::PlayerTag(playerId) + ":owner_epoch";
 	}
 
 	inline std::string HandoffRedisKey(uint64_t playerId)
@@ -101,6 +105,8 @@ struct PlayerHomeZoneComp
 struct PlayerOwnerEpochComp
 {
 	uint64_t epoch{0};
+	// 只由本次已确认入场的原 fence 登记回包写入；冻结/退出/补写不得反查新 holder。
+	std::string handoffFence;
 };
 
 // 归属交接在途(CZ-5 源端释放链):冻结输入 → 存盘落地 → 写 handoff 标记 → 请求 EnterScene(目标)
@@ -163,6 +169,12 @@ struct PlayerOwnerEpochComp
 // destroyDeferralReported
 //               "handoff 标记已发出、该销毁了,但还有未落地的存盘,推迟销毁"(ConcludeHandoffAfterMarkSent)的
 //               ERROR 与 destroy_deferred_unsettled_save 计数每次交接只打 / 只计一次;随组件销毁。
+// sqlBarrierWaits
+//               本次交接里,BeginTravelHandoff 的标记脚本因冻结快照两张子表的 SQL ACK 还没与 pending 同版而回 0 的次数
+//               (handoff_sql_barrier.h;每次 250ms 后重试,直到标记写成或交接收口)。0 → 1 时打一条 INFO 并计
+//               sql_barrier_waited;等过之后交接在标记写成前收口(通常是 30s 存盘看门狗,快路径上是 35s 晚发闸,
+//               也可能是冻结上限),或标记写成太晚被 enter_scene 阶段的晚发闸拦下时,另打一条 WARN 并计
+//               sql_barrier_expired,把"等 SQL ACK 超时"与"存盘落地太晚"分开。只用于观测,不参与任何判定;纯内存,随组件销毁。
 struct PlayerTravelHandoffComp
 {
 	uint32_t targetZoneId{0};
@@ -175,6 +187,19 @@ struct PlayerTravelHandoffComp
 	uint64_t enterSceneCorrelationId{0};
 	std::chrono::steady_clock::time_point frozenAtSteady{};
 	bool destroyDeferralReported{false};
+	uint32_t sqlBarrierWaits{0};
+    bool sqlBarrierExpiryReported{false};
+	// 值捕获冻结前资格、拟发布资格及稳定撤销后继。回调必须同时核这些原值，不能命中新实体。
+	std::string holderFence;
+	std::string publishedFence;
+	std::string revokedFence;
+	std::string resumeFence; // 发出前固定，已提交丢回包只重放同一候选
+	std::string resumeLocation;
+	uint64_t resumeOwnerEpoch{0};
+	std::string cancelFence;
+	bool cancellationPending{false};
+	bool cancellationNotifyFailure{true};
+	std::string cancellationReason;
 };
 
 // 本节点替在线玩家发出、应答还没回来的**普通** EnterScene(客户端换图 / 镜像创建后的自动进场 /

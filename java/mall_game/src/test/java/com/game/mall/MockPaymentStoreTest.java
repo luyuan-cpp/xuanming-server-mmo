@@ -269,6 +269,24 @@ class MockPaymentStoreTest {
         }
     }
 
+    @Test void 退款与原付款幂等重放并发只形成一笔原件与原回执() throws Exception {
+        try (var f = fixture()) {
+            f.sku(1, 5, 100);
+            var order = create(f, 1, "parallel-refund-replay-order");
+            f.store.cancel("1", new CommerceApi.OwnedOrder(order.orderId(), "测试账号", "1"));
+            worker(f).pay(new MockPaymentApi.Pay(order.orderId(), "parallel-refund-replay-request"));
+            var results = parallel(() -> worker(f).reconcile(),
+                () -> worker(f).pay(new MockPaymentApi.Pay(order.orderId(), "parallel-refund-replay-request")));
+            var result = (MockPaymentApi.Reconcile) results.getFirst();
+            assertEquals(0, result.failed()); assertEquals(0, result.scanFailures()); assertFalse(result.busy());
+            assertTrue(result.succeeded() >= 1);
+            assertEquals(2, f.count("commerce_mock_transaction"));
+            assertEquals(1, f.count("commerce_refund_receipt"));
+            assertEquals("REFUNDED", f.store.get("1", new CommerceApi.OwnedOrder(order.orderId(), "测试账号", "1")).state());
+            assertEquals(5, f.value("pms_sku_stock", "stock"));
+        }
+    }
+
     @Test void 扫描存储错误不伪装成功且未知项游标不前移() {
         try (var f = fixture()) {
             f.jdbc.execute("DROP TABLE commerce_mock_transaction");

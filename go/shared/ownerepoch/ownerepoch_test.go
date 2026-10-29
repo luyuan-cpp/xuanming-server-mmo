@@ -3,15 +3,27 @@ package ownerepoch
 import (
 	"errors"
 	"testing"
+
+	"shared/redisslot"
 )
 
 // 键名是与 C++ 的跨语言契约,拼错一个字符两边就各写各的、且没有任何报错。
 func TestKeyFormats(t *testing.T) {
-	if got := OwnerEpochKey(12345); got != "player:12345:owner_epoch" {
+	if got := OwnerEpochKey(12345); got != "player:{12345}:owner_epoch" {
 		t.Fatalf("OwnerEpochKey = %q", got)
 	}
 	if got := HandoffKey(12345); got != "player:12345:handoff" {
 		t.Fatalf("HandoffKey = %q", got)
+	}
+}
+
+// owner_epoch 是玩家域键:必须带 tag,且与玩家所在 slot 一致(存盘屏障 Lua 把它与父快照、屏障放进同一段脚本)。
+func TestOwnerEpochKeyInPlayerSlot(t *testing.T) {
+	for _, pid := range []uint64{1, 42, 12345, 18446744073709551615} {
+		key := OwnerEpochKey(pid)
+		if !redisslot.HasHashTag(key) || redisslot.HashSlot(key) != redisslot.PlayerSlot(pid) {
+			t.Fatalf("OwnerEpochKey(%d) = %q 不在玩家 slot %d", pid, key, redisslot.PlayerSlot(pid))
+		}
 	}
 }
 

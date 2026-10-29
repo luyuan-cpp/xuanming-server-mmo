@@ -83,6 +83,9 @@ func TestDirectTiDBCapturesOriginalExitAndProfileThenRecoversWithoutTouchingNewW
 	work, err := f.store.AcquireWork(f.actor, result.BattleId)
 	require.NoError(t, err)
 	require.NoError(t, f.store.Finish(f.actor, work, false))
+	// pending期间的Intent已回滚；空闲后先沿正式入口建立later的head与原件。
+	_, err = f.store.SpectatorIntent(f.actor, 11, later)
+	require.NoError(t, err)
 	current, err := f.store.BeginSpectator(f.actor, 11, later, f.formation, f.add)
 	require.NoError(t, err)
 	result, err = f.store.ReserveDirect(f.actor, key, body, nil, nil)

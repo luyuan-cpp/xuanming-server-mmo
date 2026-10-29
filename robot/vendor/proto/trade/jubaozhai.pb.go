@@ -1249,7 +1249,7 @@ const file_proto_trade_jubaozhai_proto_rawDesc = "" +
 	"\vMarketScope\x12\x1c\n" +
 	"\x18MARKET_SCOPE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11MARKET_SCOPE_ZONE\x10\x01\x12\x17\n" +
-	"\x13MARKET_SCOPE_GLOBAL\x10\x022\xcd\x0f\n" +
+	"\x13MARKET_SCOPE_GLOBAL\x10\x022\xf0\x16\n" +
 	"\x15ClientPlayerJubaozhai\x12M\n" +
 	"\x0eBrowseListings\x12\x1c.trade.BrowseListingsRequest\x1a\x1d.trade.BrowseListingsResponse\x12S\n" +
 	"\x10GetListingDetail\x12\x1e.trade.GetListingDetailRequest\x1a\x1f.trade.GetListingDetailResponse\x12D\n" +
@@ -1275,7 +1275,18 @@ const file_proto_trade_jubaozhai_proto_rawDesc = "" +
 	"\rGetAuctionLot\x12\x1b.trade.GetAuctionLotRequest\x1a\x19.trade.AuctionLotResponse\x12M\n" +
 	"\x10CancelAuctionLot\x12\x1e.trade.CancelAuctionLotRequest\x1a\x19.trade.AuctionLotResponse\x12_\n" +
 	"\x14BrowseCommerceOffers\x12\".trade.BrowseCommerceOffersRequest\x1a#.trade.BrowseCommerceOffersResponse\x12S\n" +
-	"\x10ListTradeMarkets\x12\x1e.trade.ListTradeMarketsRequest\x1a\x1f.trade.ListTradeMarketsResponse\x1a\x05\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x11Z\vproto/trade\x80\x01\x00b\x06proto3"
+	"\x10ListTradeMarkets\x12\x1e.trade.ListTradeMarketsRequest\x1a\x1f.trade.ListTradeMarketsResponse\x12Y\n" +
+	"\x14CreateRmbConsignment\x12\".trade.CreateRmbConsignmentRequest\x1a\x1d.trade.RmbConsignmentResponse\x12S\n" +
+	"\x11GetRmbConsignment\x12\x1f.trade.GetRmbConsignmentRequest\x1a\x1d.trade.RmbConsignmentResponse\x12\\\n" +
+	"\x13ListRmbConsignments\x12!.trade.ListRmbConsignmentsRequest\x1a\".trade.ListRmbConsignmentsResponse\x12R\n" +
+	"\x11BuyRmbConsignment\x12\x1f.trade.BuyRmbConsignmentRequest\x1a\x1c.trade.CommerceOrderResponse\x12Y\n" +
+	"\x14CancelRmbConsignment\x12\".trade.CancelRmbConsignmentRequest\x1a\x1d.trade.RmbConsignmentResponse\x12K\n" +
+	"\vGetRmbOrder\x12\x1e.trade.GetCommerceOrderRequest\x1a\x1c.trade.CommerceOrderResponse\x12T\n" +
+	"\rListRmbOrders\x12 .trade.ListCommerceOrdersRequest\x1a!.trade.ListCommerceOrdersResponse\x12Q\n" +
+	"\x0eCancelRmbOrder\x12!.trade.CancelCommerceOrderRequest\x1a\x1c.trade.CommerceOrderResponse\x12V\n" +
+	"\x11ListSellerIncomes\x12\x1f.trade.ListSellerIncomesRequest\x1a .trade.ListSellerIncomesResponse\x12M\n" +
+	"\x10CreateWithdrawal\x12\x1e.trade.CreateWithdrawalRequest\x1a\x19.trade.WithdrawalResponse\x12G\n" +
+	"\rGetWithdrawal\x12\x1b.trade.GetWithdrawalRequest\x1a\x19.trade.WithdrawalResponse\x1a\x05\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x11Z\vproto/trade\x80\x01\x00b\x06proto3"
 
 var (
 	file_proto_trade_jubaozhai_proto_rawDescOnce sync.Once
@@ -1329,15 +1340,27 @@ var file_proto_trade_jubaozhai_proto_goTypes = []any{
 	(*CancelAuctionLotRequest)(nil),      // 34: trade.CancelAuctionLotRequest
 	(*BrowseCommerceOffersRequest)(nil),  // 35: trade.BrowseCommerceOffersRequest
 	(*ListTradeMarketsRequest)(nil),      // 36: trade.ListTradeMarketsRequest
-	(*ListOfficialSkusResponse)(nil),     // 37: trade.ListOfficialSkusResponse
-	(*CommerceOrderResponse)(nil),        // 38: trade.CommerceOrderResponse
-	(*ListCommerceOrdersResponse)(nil),   // 39: trade.ListCommerceOrdersResponse
-	(*MarketOrderResponse)(nil),          // 40: trade.MarketOrderResponse
-	(*ListMarketOrdersResponse)(nil),     // 41: trade.ListMarketOrdersResponse
-	(*GetMarketDepthResponse)(nil),       // 42: trade.GetMarketDepthResponse
-	(*AuctionLotResponse)(nil),           // 43: trade.AuctionLotResponse
-	(*BrowseCommerceOffersResponse)(nil), // 44: trade.BrowseCommerceOffersResponse
-	(*ListTradeMarketsResponse)(nil),     // 45: trade.ListTradeMarketsResponse
+	(*CreateRmbConsignmentRequest)(nil),  // 37: trade.CreateRmbConsignmentRequest
+	(*GetRmbConsignmentRequest)(nil),     // 38: trade.GetRmbConsignmentRequest
+	(*ListRmbConsignmentsRequest)(nil),   // 39: trade.ListRmbConsignmentsRequest
+	(*BuyRmbConsignmentRequest)(nil),     // 40: trade.BuyRmbConsignmentRequest
+	(*CancelRmbConsignmentRequest)(nil),  // 41: trade.CancelRmbConsignmentRequest
+	(*ListSellerIncomesRequest)(nil),     // 42: trade.ListSellerIncomesRequest
+	(*CreateWithdrawalRequest)(nil),      // 43: trade.CreateWithdrawalRequest
+	(*GetWithdrawalRequest)(nil),         // 44: trade.GetWithdrawalRequest
+	(*ListOfficialSkusResponse)(nil),     // 45: trade.ListOfficialSkusResponse
+	(*CommerceOrderResponse)(nil),        // 46: trade.CommerceOrderResponse
+	(*ListCommerceOrdersResponse)(nil),   // 47: trade.ListCommerceOrdersResponse
+	(*MarketOrderResponse)(nil),          // 48: trade.MarketOrderResponse
+	(*ListMarketOrdersResponse)(nil),     // 49: trade.ListMarketOrdersResponse
+	(*GetMarketDepthResponse)(nil),       // 50: trade.GetMarketDepthResponse
+	(*AuctionLotResponse)(nil),           // 51: trade.AuctionLotResponse
+	(*BrowseCommerceOffersResponse)(nil), // 52: trade.BrowseCommerceOffersResponse
+	(*ListTradeMarketsResponse)(nil),     // 53: trade.ListTradeMarketsResponse
+	(*RmbConsignmentResponse)(nil),       // 54: trade.RmbConsignmentResponse
+	(*ListRmbConsignmentsResponse)(nil),  // 55: trade.ListRmbConsignmentsResponse
+	(*ListSellerIncomesResponse)(nil),    // 56: trade.ListSellerIncomesResponse
+	(*WithdrawalResponse)(nil),           // 57: trade.WithdrawalResponse
 }
 var file_proto_trade_jubaozhai_proto_depIdxs = []int32{
 	0,  // 0: trade.ListingSummary.category:type_name -> trade.ListingCategory
@@ -1379,32 +1402,54 @@ var file_proto_trade_jubaozhai_proto_depIdxs = []int32{
 	34, // 36: trade.ClientPlayerJubaozhai.CancelAuctionLot:input_type -> trade.CancelAuctionLotRequest
 	35, // 37: trade.ClientPlayerJubaozhai.BrowseCommerceOffers:input_type -> trade.BrowseCommerceOffersRequest
 	36, // 38: trade.ClientPlayerJubaozhai.ListTradeMarkets:input_type -> trade.ListTradeMarketsRequest
-	9,  // 39: trade.ClientPlayerJubaozhai.BrowseListings:output_type -> trade.BrowseListingsResponse
-	11, // 40: trade.ClientPlayerJubaozhai.GetListingDetail:output_type -> trade.GetListingDetailResponse
-	13, // 41: trade.ClientPlayerJubaozhai.SetFavorite:output_type -> trade.SetFavoriteResponse
-	15, // 42: trade.ClientPlayerJubaozhai.GetMyShelf:output_type -> trade.GetMyShelfResponse
-	37, // 43: trade.ClientPlayerJubaozhai.ListOfficialSkus:output_type -> trade.ListOfficialSkusResponse
-	38, // 44: trade.ClientPlayerJubaozhai.CreateOfficialOrder:output_type -> trade.CommerceOrderResponse
-	38, // 45: trade.ClientPlayerJubaozhai.GetCommerceOrder:output_type -> trade.CommerceOrderResponse
-	38, // 46: trade.ClientPlayerJubaozhai.CancelCommerceOrder:output_type -> trade.CommerceOrderResponse
-	39, // 47: trade.ClientPlayerJubaozhai.ListCommerceOrders:output_type -> trade.ListCommerceOrdersResponse
-	38, // 48: trade.ClientPlayerJubaozhai.CreatePlayerTrade:output_type -> trade.CommerceOrderResponse
-	38, // 49: trade.ClientPlayerJubaozhai.ConfirmPlayerTrade:output_type -> trade.CommerceOrderResponse
-	38, // 50: trade.ClientPlayerJubaozhai.CreateConsignment:output_type -> trade.CommerceOrderResponse
-	38, // 51: trade.ClientPlayerJubaozhai.BuyConsignment:output_type -> trade.CommerceOrderResponse
-	38, // 52: trade.ClientPlayerJubaozhai.CancelConsignment:output_type -> trade.CommerceOrderResponse
-	40, // 53: trade.ClientPlayerJubaozhai.PlaceMarketOrder:output_type -> trade.MarketOrderResponse
-	40, // 54: trade.ClientPlayerJubaozhai.CancelMarketOrder:output_type -> trade.MarketOrderResponse
-	41, // 55: trade.ClientPlayerJubaozhai.ListMarketOrders:output_type -> trade.ListMarketOrdersResponse
-	42, // 56: trade.ClientPlayerJubaozhai.GetMarketDepth:output_type -> trade.GetMarketDepthResponse
-	43, // 57: trade.ClientPlayerJubaozhai.CreateAuctionLot:output_type -> trade.AuctionLotResponse
-	43, // 58: trade.ClientPlayerJubaozhai.PlaceAuctionBid:output_type -> trade.AuctionLotResponse
-	43, // 59: trade.ClientPlayerJubaozhai.GetAuctionLot:output_type -> trade.AuctionLotResponse
-	43, // 60: trade.ClientPlayerJubaozhai.CancelAuctionLot:output_type -> trade.AuctionLotResponse
-	44, // 61: trade.ClientPlayerJubaozhai.BrowseCommerceOffers:output_type -> trade.BrowseCommerceOffersResponse
-	45, // 62: trade.ClientPlayerJubaozhai.ListTradeMarkets:output_type -> trade.ListTradeMarketsResponse
-	39, // [39:63] is the sub-list for method output_type
-	15, // [15:39] is the sub-list for method input_type
+	37, // 39: trade.ClientPlayerJubaozhai.CreateRmbConsignment:input_type -> trade.CreateRmbConsignmentRequest
+	38, // 40: trade.ClientPlayerJubaozhai.GetRmbConsignment:input_type -> trade.GetRmbConsignmentRequest
+	39, // 41: trade.ClientPlayerJubaozhai.ListRmbConsignments:input_type -> trade.ListRmbConsignmentsRequest
+	40, // 42: trade.ClientPlayerJubaozhai.BuyRmbConsignment:input_type -> trade.BuyRmbConsignmentRequest
+	41, // 43: trade.ClientPlayerJubaozhai.CancelRmbConsignment:input_type -> trade.CancelRmbConsignmentRequest
+	19, // 44: trade.ClientPlayerJubaozhai.GetRmbOrder:input_type -> trade.GetCommerceOrderRequest
+	21, // 45: trade.ClientPlayerJubaozhai.ListRmbOrders:input_type -> trade.ListCommerceOrdersRequest
+	20, // 46: trade.ClientPlayerJubaozhai.CancelRmbOrder:input_type -> trade.CancelCommerceOrderRequest
+	42, // 47: trade.ClientPlayerJubaozhai.ListSellerIncomes:input_type -> trade.ListSellerIncomesRequest
+	43, // 48: trade.ClientPlayerJubaozhai.CreateWithdrawal:input_type -> trade.CreateWithdrawalRequest
+	44, // 49: trade.ClientPlayerJubaozhai.GetWithdrawal:input_type -> trade.GetWithdrawalRequest
+	9,  // 50: trade.ClientPlayerJubaozhai.BrowseListings:output_type -> trade.BrowseListingsResponse
+	11, // 51: trade.ClientPlayerJubaozhai.GetListingDetail:output_type -> trade.GetListingDetailResponse
+	13, // 52: trade.ClientPlayerJubaozhai.SetFavorite:output_type -> trade.SetFavoriteResponse
+	15, // 53: trade.ClientPlayerJubaozhai.GetMyShelf:output_type -> trade.GetMyShelfResponse
+	45, // 54: trade.ClientPlayerJubaozhai.ListOfficialSkus:output_type -> trade.ListOfficialSkusResponse
+	46, // 55: trade.ClientPlayerJubaozhai.CreateOfficialOrder:output_type -> trade.CommerceOrderResponse
+	46, // 56: trade.ClientPlayerJubaozhai.GetCommerceOrder:output_type -> trade.CommerceOrderResponse
+	46, // 57: trade.ClientPlayerJubaozhai.CancelCommerceOrder:output_type -> trade.CommerceOrderResponse
+	47, // 58: trade.ClientPlayerJubaozhai.ListCommerceOrders:output_type -> trade.ListCommerceOrdersResponse
+	46, // 59: trade.ClientPlayerJubaozhai.CreatePlayerTrade:output_type -> trade.CommerceOrderResponse
+	46, // 60: trade.ClientPlayerJubaozhai.ConfirmPlayerTrade:output_type -> trade.CommerceOrderResponse
+	46, // 61: trade.ClientPlayerJubaozhai.CreateConsignment:output_type -> trade.CommerceOrderResponse
+	46, // 62: trade.ClientPlayerJubaozhai.BuyConsignment:output_type -> trade.CommerceOrderResponse
+	46, // 63: trade.ClientPlayerJubaozhai.CancelConsignment:output_type -> trade.CommerceOrderResponse
+	48, // 64: trade.ClientPlayerJubaozhai.PlaceMarketOrder:output_type -> trade.MarketOrderResponse
+	48, // 65: trade.ClientPlayerJubaozhai.CancelMarketOrder:output_type -> trade.MarketOrderResponse
+	49, // 66: trade.ClientPlayerJubaozhai.ListMarketOrders:output_type -> trade.ListMarketOrdersResponse
+	50, // 67: trade.ClientPlayerJubaozhai.GetMarketDepth:output_type -> trade.GetMarketDepthResponse
+	51, // 68: trade.ClientPlayerJubaozhai.CreateAuctionLot:output_type -> trade.AuctionLotResponse
+	51, // 69: trade.ClientPlayerJubaozhai.PlaceAuctionBid:output_type -> trade.AuctionLotResponse
+	51, // 70: trade.ClientPlayerJubaozhai.GetAuctionLot:output_type -> trade.AuctionLotResponse
+	51, // 71: trade.ClientPlayerJubaozhai.CancelAuctionLot:output_type -> trade.AuctionLotResponse
+	52, // 72: trade.ClientPlayerJubaozhai.BrowseCommerceOffers:output_type -> trade.BrowseCommerceOffersResponse
+	53, // 73: trade.ClientPlayerJubaozhai.ListTradeMarkets:output_type -> trade.ListTradeMarketsResponse
+	54, // 74: trade.ClientPlayerJubaozhai.CreateRmbConsignment:output_type -> trade.RmbConsignmentResponse
+	54, // 75: trade.ClientPlayerJubaozhai.GetRmbConsignment:output_type -> trade.RmbConsignmentResponse
+	55, // 76: trade.ClientPlayerJubaozhai.ListRmbConsignments:output_type -> trade.ListRmbConsignmentsResponse
+	46, // 77: trade.ClientPlayerJubaozhai.BuyRmbConsignment:output_type -> trade.CommerceOrderResponse
+	54, // 78: trade.ClientPlayerJubaozhai.CancelRmbConsignment:output_type -> trade.RmbConsignmentResponse
+	46, // 79: trade.ClientPlayerJubaozhai.GetRmbOrder:output_type -> trade.CommerceOrderResponse
+	47, // 80: trade.ClientPlayerJubaozhai.ListRmbOrders:output_type -> trade.ListCommerceOrdersResponse
+	46, // 81: trade.ClientPlayerJubaozhai.CancelRmbOrder:output_type -> trade.CommerceOrderResponse
+	56, // 82: trade.ClientPlayerJubaozhai.ListSellerIncomes:output_type -> trade.ListSellerIncomesResponse
+	57, // 83: trade.ClientPlayerJubaozhai.CreateWithdrawal:output_type -> trade.WithdrawalResponse
+	57, // 84: trade.ClientPlayerJubaozhai.GetWithdrawal:output_type -> trade.WithdrawalResponse
+	50, // [50:85] is the sub-list for method output_type
+	15, // [15:50] is the sub-list for method input_type
 	15, // [15:15] is the sub-list for extension type_name
 	15, // [15:15] is the sub-list for extension extendee
 	0,  // [0:15] is the sub-list for field type_name

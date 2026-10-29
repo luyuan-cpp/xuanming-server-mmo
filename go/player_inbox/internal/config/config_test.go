@@ -17,7 +17,7 @@ import (
 
 const etcYaml = "../../etc/player_inbox.yaml"
 
-// TestEtcYamlContractValues 钉住 etc/player_inbox.yaml 的关键值(D14 端口、D-13 Key、D-14 库名、默认停用)。
+// TestEtcYamlContractValues 钉住 etc/player_inbox.yaml 的关键值(D14 端口、D-13 Key、D-14 库名、仅专用 Battle 默认启用)。
 // 段名 / 键名写错时 go-zero 会静默保持零值,这里是编译进测试二进制的第二道网。
 func TestEtcYamlContractValues(t *testing.T) {
 	var c Config
@@ -45,8 +45,8 @@ func TestEtcYamlContractValues(t *testing.T) {
 	if c.MySQL.DBName != data.DatabaseName {
 		t.Errorf("MySQL.DBName = %q, want %q(D-14 独占库)", c.MySQL.DBName, data.DatabaseName)
 	}
-	if !c.ShouldAutoMigrate() {
-		t.Error("本地 dev 应启动期自动建表(Schema.AutoMigrate: true)")
+	if c.ShouldAutoMigrate() {
+		t.Error("本地dev也必须显式迁移，常驻默认仅核对表结构")
 	}
 	if c.CoreRedis.Host == "" || c.CoreRedis.DB != 0 {
 		t.Errorf("CoreRedis = %+v:段名必须逐字是 CoreRedis,DB 必须是 0(owner_epoch / location 所在库)", c.CoreRedis)
@@ -61,9 +61,9 @@ func TestEtcYamlContractValues(t *testing.T) {
 	if c.DataServiceRpc.Etcd.Key != "dataservice.rpc" || !c.DataServiceRpc.NonBlock {
 		t.Errorf("DataServiceRpc = %+v, want Key dataservice.rpc 且 NonBlock", c.DataServiceRpc.Etcd)
 	}
-	// 入箱默认全部停用(设计 §3.3)、运维面默认停用(设计 §1.6):这份 yaml 是最容易被整份抄走的一份。
-	if len(c.PlayerInbox.EnqueueTypes) != 0 {
-		t.Errorf("EnqueueTypes = %v:仓库里的 yaml 必须默认全部停用,上线按 §11.7 顺序打开", c.PlayerInbox.EnqueueTypes)
+	// 新终局默认仅开启 Match 专用 Battle 类型；GM 入箱与运维面仍停用，禁止借新版配置开放旧 GM 类型。
+	if len(c.PlayerInbox.EnqueueTypes) != 1 || c.PlayerInbox.EnqueueTypes[0] != inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT.String() {
+		t.Errorf("EnqueueTypes = %v:默认必须精确仅有 Match 专用 Battle 类型，GM 类型仍停用", c.PlayerInbox.EnqueueTypes)
 	}
 	if c.PlayerInbox.AdminToken != "" {
 		t.Error("仓库里的 yaml 不得带 AdminToken(口令只经 k8s Secret 注入;本地临时写了也不要提交)")
@@ -74,7 +74,7 @@ func TestEtcYamlContractValues(t *testing.T) {
 		t.Errorf("AdminTokenEnv = %q, want PLAYER_INBOX_ADMIN_TOKEN(与 k8s_deploy.ps1 的 PlayerInboxAdminTokenEnv 一致)",
 			c.PlayerInbox.AdminTokenEnv)
 	}
-	// 评审 L12:Stat 拦截器照开(慢调用记录保留),只屏蔽 Fetch / Ack 的请求体;GM 运维接口的请求体是审计线索,不屏蔽。
+	// Stat 保留方法与慢调用记录；四个内部方法的玩家、结算和签名正文必须屏蔽，GM 运维接口仍保留审计线索。
 	if !c.Middlewares.Stat || c.Middlewares.StatConf.SlowThreshold <= 0 {
 		t.Errorf("Middlewares.Stat = %v SlowThreshold = %v:Stat 必须开着、慢调用阈值有效", c.Middlewares.Stat, c.Middlewares.StatConf.SlowThreshold)
 	}
@@ -82,7 +82,7 @@ func TestEtcYamlContractValues(t *testing.T) {
 	for _, m := range c.Middlewares.StatConf.IgnoreContentMethods {
 		ignored[m] = true
 	}
-	for _, m := range []string{inboxpb.PlayerInbox_FetchItems_FullMethodName, inboxpb.PlayerInbox_AckItems_FullMethodName} {
+	for _, m := range []string{inboxpb.PlayerInbox_FetchItems_FullMethodName, inboxpb.PlayerInbox_AckItems_FullMethodName, inboxpb.PlayerInbox_EnqueueBattleSettlement_FullMethodName, inboxpb.PlayerInbox_LookupBattleSettlement_FullMethodName} {
 		if !ignored[m] {
 			t.Errorf("IgnoreContentMethods 缺 %s", m)
 		}
@@ -289,8 +289,8 @@ func TestRequestBudgetAndAutoMigrate(t *testing.T) {
 	if got := c.RequestBudget(); got != 2500*time.Millisecond {
 		t.Errorf("RequestBudget = %v, want 2.5s", got)
 	}
-	if !c.ShouldAutoMigrate() {
-		t.Error("没写 Schema 段 = 自动建表")
+	if c.ShouldAutoMigrate() {
+		t.Error("没写Schema段默认只读核对")
 	}
 	no := false
 	c.Schema.AutoMigrate = &no

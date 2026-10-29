@@ -56,6 +56,9 @@
     <ClCompile Include="src\muduo\net\TcpClient.cc" />
     <ClCompile Include="src\muduo\net\TcpConnection.cc" />
     <ClCompile Include="src\muduo\net\TcpServer.cc" />
+    <ClCompile Include="src\muduo\net\http\HttpContext.cc" />
+    <ClCompile Include="src\muduo\net\http\HttpResponse.cc" />
+    <ClCompile Include="src\muduo\net\http\HttpServer.cc" />
     <ClCompile Include="src\muduo\net\Timer.cc" />
     <ClCompile Include="src\muduo\net\TimerQueue.cc" />
     <ClCompile Include="src\muduo\net\WindowsWakeup.cc" />
@@ -112,6 +115,10 @@
     <ClInclude Include="src\muduo\net\TcpClient.h" />
     <ClInclude Include="src\muduo\net\TcpConnection.h" />
     <ClInclude Include="src\muduo\net\TcpServer.h" />
+    <ClInclude Include="src\muduo\net\http\HttpContext.h" />
+    <ClInclude Include="src\muduo\net\http\HttpRequest.h" />
+    <ClInclude Include="src\muduo\net\http\HttpResponse.h" />
+    <ClInclude Include="src\muduo\net\http\HttpServer.h" />
     <ClInclude Include="src\muduo\net\Timer.h" />
     <ClInclude Include="src\muduo\net\TimerId.h" />
     <ClInclude Include="src\muduo\net\TimerQueue.h" />
@@ -193,7 +200,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;GOOGLE_CHECK_EQ=ABSL_CHECK_EQ;GOOGLE_LOG=ABSL_LOG;GOOGLE_DCHECK=ABSL_DCHECK;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../../../third_party/boost/;./;../../../../third_party/protobuf/src/;../../../../third_party/;../../../../third_party/zlib/;../../../../third_party/muduo/contrib/windows/include;../../../../third_party/redis;../../../../third_party/redis/deps/;../../../../third_party/muduo/contrib/;./src/;../../../../third_party/grpc/third_party/protobuf/src/;../../../../third_party/grpc/third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../../third_party/boost/;./;../../../../third_party/protobuf/src/;../../../../third_party/;../../../../third_party/zlib/;../../../../third_party/muduo/contrib/windows/include;../../../../third_party/redis;../../../../third_party/redis/deps/;../../../../third_party/muduo/contrib/;./src/;../../../../third_party/protobuf/src/;../../../../third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <EnableParallelCodeGeneration>false</EnableParallelCodeGeneration>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -216,7 +223,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;GOOGLE_CHECK_EQ=ABSL_CHECK_EQ;GOOGLE_LOG=ABSL_LOG;GOOGLE_DCHECK=ABSL_DCHECK</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>./boost/;./;./protobuf/src/;../third_party/;../third_party/zlib/;../third_party/muduo/;../third_party/googletest/googletest/include/;../third_party/muduo/contrib/windows/include;../third_party/redis;../third_party/redis/deps/;../third_party/muduo/contrib/;../third_party/ue5navmesh/Public/;../third_party/protobuf/third_party/abseil-cpp/;../third_party/protobuf/third_party/utf8_range/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>./boost/;./;./protobuf/src/;../third_party/;../third_party/zlib/;../third_party/muduo/;../third_party/googletest/googletest/include/;../third_party/muduo/contrib/windows/include;../third_party/redis;../third_party/redis/deps/;../third_party/muduo/contrib/;../third_party/ue5navmesh/Public/;../third_party/abseil-cpp/;../third_party/protobuf/third_party/utf8_range/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <EnableParallelCodeGeneration>false</EnableParallelCodeGeneration>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -237,7 +244,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;GOOGLE_CHECK_EQ=ABSL_CHECK_EQ;GOOGLE_LOG=ABSL_LOG;GOOGLE_DCHECK=ABSL_DCHECK;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../../../third_party/boost/;./;../../../../third_party/protobuf/src/;../../../../third_party/;../../../../third_party/zlib/;../../../../third_party/muduo/contrib/windows/include;../../../../third_party/redis;../../../../third_party/redis/deps/;../../../../third_party/muduo/contrib/;./src/;../../../../third_party/grpc/third_party/protobuf/src/;../../../../third_party/grpc/third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../../third_party/boost/;./;../../../../third_party/protobuf/src/;../../../../third_party/;../../../../third_party/zlib/;../../../../third_party/muduo/contrib/windows/include;../../../../third_party/redis;../../../../third_party/redis/deps/;../../../../third_party/muduo/contrib/;./src/;../../../../third_party/protobuf/src/;../../../../third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>

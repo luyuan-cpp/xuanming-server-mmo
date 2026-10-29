@@ -1,291 +1,217 @@
-# 客户端/服务端导航数据、出生点与位置纠正契约统一(2026-09-05)
+# 客户端/服务端导航数据、出生点与位置纠正契约
 
-状态:**代码就位、客户端离线 Roslyn 编译通过;服务端 C++ 与烘焙器未编译、导航未重烘、未验收 —— 见 §5 Codex 执行清单。**
-基线:`xuanming-server-mmo` HEAD `d08843042` + 本次未提交改动;`mmorpg-client` HEAD `99d891f` + 本次未提交改动。
+初版：2026-09-05；现状核对：2026-10-23。
 
-## 1. 问题(已确认的证据)
+当前场景 1/2/3 已于 2026-10-18 换为主城、八仙岛、渔村的新导航与出生点。烘焙器、服务端和旧地图的联机验证已有执行记录，本文原来的“未编译、未重烘、未验收”不再代表当前状态；新地图的离线验证与完整联机验收仍须分别判断，见 §6、§9。
 
-- 服务端 `data/scene_nav_bin/main_scene.bin`(及 dungeon/mirror 两份同 md5)仍是 20648 字节的 UE 时代占位导航,
-  与天墉城 400×300 地图无关;仓库有烘焙器 `tools/navmesh_baker` 但**从未编译运行过**(`scene-navmesh-pipeline.md` §6)。
-- 角色 `281594980286332928`(账号 `robot_move_self_20260905_0734`)的 Redis 存档 Transform 为服务器坐标 `(0,0,0)`
-  —— 新号的 proto 默认值,`PlayerDatabaseMessageFieldsUnmarshal` 原样 emplace,进场无任何校验。
-- 客户端 `TianyongMapRuntime.AttachLocalController` 发现出生点不可走会**本地**把角色挪到 Unity `(200,0,180)`,
-  但没有告诉服务器;服务器仍在 `(0,0,0)`。
-- 移动诊断日志 `E:/work/image/movement_diagnostics/move_20260905_082427.log:293` 记录首次移动后
-  `[move] reconcile snap input_seq=1`:移动包发出、收到了 MoveAck、客户端被硬拉。
+本文维护服务端落位与移动裁决契约；资源同步管线见 [场景导航网格管线 §9](scene-navmesh-pipeline.md#9-2026-10-18-当前三张地图替换正式场景)。本次只核对本仓源码、合同副本与既有执行记录，未读取独立客户端、重启服务或重跑联机验收。客户端函数名、表现和日志仅在明确注明的历史记录中保留。
 
-故障链(最吻合现象):客户端本地放到城内 → 首次 MoveStart 上报城内坐标 → 服务端从 `(0,0,0)` 用旧导航裁决
-(`ApplyReportedLocation`:起点不在网格 → 吸附上报点 → 旧网格里吸不到 → `accepted = current = (0,0,0)`)→
-MoveAck 回原点 → 客户端 `WarpTo` 的 `ClampXZ(…, 2)` 钳到 `(2,0,2)` → 该处不在 WalkMask 上 → WASD/寻路全被客户端
-mask 挡住、镜头跟丢。
-**"该次回包目标恰为原点"此前没有日志能证实**(旧 ack 日志不带坐标),本次已补坐标日志(§3 客户端第 5 条),
-Codex 验收时可回放旧包看。
+## 1. 历史问题与故障链（2026-09-05）
 
-## 2. 契约(两端唯一真相)
+当时三份 `main/dungeon/mirror_scene.bin` 是同一份 20648 字节的 UE 占位导航，和客户端天墉城地图不匹配。新角色 Transform 为 `(0,0,0)`，进场没有服务端落位校验；客户端自行挪到 Unity `(200,0,180)` 后没有回报，形成两端位置分歧。
 
-| 项 | 值 | 出处 |
+最吻合当时现象的链路是：客户端本地进城 → 首次移动上报城内位置 → 服务端以旧网格裁决失败，保留原点 → MoveAck 拉回 → 客户端钳制到不可走区域，移动与镜头随之异常。当时旧 ack 日志未记录坐标，不能把“该次回包目标恰为原点”当作已证实事实。
+
+修复由三个接缝共同承担：同源 mask 烘焙导航、服务端在下发自身 Actor 前校验落位、移动裁决避免把已知非法的旧位置继续回给客户端。历史地图、账号和机器路径不再作为当前验收的固定输入。
+
+## 2. 当前数据与坐标契约
+
+### 2.1 地图来源与出生点
+
+当前三图的来源清单是 [current_maps_20261009.json](../../data/scene_nav_bin/current_maps_20261009.json)，合同副本位于 [current_maps/](../../data/scene_nav_bin/current_maps/)。资源来源为客户端 `World/CurrentMaps20261009/{main,island,village}`；服务端副本由同步工具导出，不在服务端独立改图或改出生点。
+
+三图合同仍标记为 `layout_preview`；300×300 米是此次接入尺度，不代表容量设计已验收。
+
+| 场景配置 ID | 地图 key / 地点 | 正式导航文件 | Unity 出生 `(x,y,z)` | 服务端出生 `(x,y,z)` |
+|---|---|---|---|---|
+| 1 | main / 主城 | main_scene.bin | (199,0,133) | (133,199,0) |
+| 2 | island / 八仙岛 | penglai_scene.bin | (195,0,173) | (173,195,0) |
+| 3 | village / 渔村 | donghai_scene.bin | (201,0,147) | (147,201,0) |
+
+`penglai_scene.bin` 现在承载八仙岛新图，不能仅凭旧文件名推断地图内容。场景 5–16 复用主城网格，出生点也同步为 `(133,199,0)`；场景 4、17–21 保留原导航与出生点。不要将一份天墉 bin 覆盖到所有正式文件。
+
+运行时出生点的唯一读取入口是 [`SceneSpawnSystem::DefaultSpawnFor`](../../cpp/libs/services/scene/spatial/system/scene_spawn.cpp)，读取 `BaseScene.spawn_x/y/z`；权威 schema 为 [`basescene_table.proto`](../../data/schema/basescene_table.proto)，三个字段均为 `double`，编号 3/4/5。表行不存在、坐标非有限或三轴全零时才回落到旧天墉常量 `(180,200,0)`。这组常量是兼容兜底，新增地图应通过正式配置管线填表。
+
+### 2.2 位图、网格与查询
+
+| 项目 | 当前契约 | 实现入口 |
 |---|---|---|
-| 阻挡真相 | 客户端 `TianyongPaintedCity.WalkMaskBase64`(150×150,2m/格,x∈[50,350] z∈[0,300]) | `TianyongPaintedCity.cs` |
-| 服务端导航 | 用同一份 mask 经 `tools/navmesh_baker --painted-city` 烘成 `MSET` v1(ue5navmesh 同源码,dtReal=double) | `scene-navmesh-pipeline.md` |
-| 换轴 | Unity `(x,y,z)` → 服务器 `(x'=z, y'=x, z'=y)`;导航在 Unity 系,`nav_query.cpp` 内部换轴 | `WorldCoordinateConverter.cs` / `nav_query.h` |
-| 出生点 | Unity `(200,0,180)` == 服务器 `(180,200,0)`;服务器权威 | `TianyongMapDefinition.DefaultSpawn` / `spatial/constants/nav.h` `kTianyongSpawn*` |
-| 出生点探针 | 烘焙器出包前、scene 节点加载时都用 `findNearestPoly`(±2m 水平 / ±4m 垂直)校验出生点在网格上 | `navmesh_baker.cpp ProbeNavMesh` / `navigation.cpp` |
-| 纠偏 | `MoveAck.server_location` 恒为网格上的合法点(或无导航时的上报点本身) | `player_movement_handler.cpp` |
+| 位图 | 150×150 格，2m/格；Unity 世界矩形 x=50–350、z=0–300；从上向下逐行、MSB-first，2813 字节，尾部填充位为零 | 各图 `source.json` / `walkmask.txt`、`sync_current_maps.py` |
+| 二进制导航 | `MSET` v1；烘焙器和运行时使用同一套 `ue5navmesh`，`dtReal=double` | `navmesh_baker.cpp` / `recast.cpp` |
+| 换轴与单位 | 米；Unity `(x,y,z)` → 服务端 `(z,x,y)`；查询内部 `nav=(server.y,server.z,server.x)` | `nav_query.h/.cpp` |
+| 平面 mask 烘焙 | radius=0、cs=0.25m、地面 y=-0.2m；quad 内缩 0.01m，默认跳过悬崖过滤以对齐格线；OBJ 模式仍默认启用悬崖过滤 | `navmesh_baker.cpp` |
+| 运行时吸附 | `findNearestPoly` 搜索水平 ±2m、垂直 ±4m；找到邻近多边形即成功，不等于输入点精确位于可走面上 | `NavQuerySystem::SnapToMesh` |
+| 出包校验 | `--mask-base64` 必须显式提供 Unity 坐标 `--probe x,y,z`；探针除邻近搜索成功外，还要求三轴吸附误差均 ≤0.02m；独立 mask 模式另查询全部 22500 个格心，任一不一致即拒绝落盘 | `navmesh_baker.cpp` / `sync_current_maps.py` |
 
-mask 已离线解码核对:出生格 `cx=75, cy=59` 可走;沿 z=180 的可走走廊是 x∈[190,206],四周最近的墙:西 x=188、东 x=208、
-南 z=164、北 z=200(客户端撞墙验收就用这些)。
+旧文“保留悬崖过滤造成 0.25m 内缩，再靠纠偏阈值吞差值”的方案已被 2026-09-08 实测否定，不能用于当前平面地图出包。格心全量一致也不替代墙边、拐角与连续移动的联机验收。
 
-## 3. 改动清单
+## 3. 当前实现与失败语义
 
-### 服务端 `xuanming-server-mmo`
+### 3.1 进场落位
 
-1. `cpp/libs/services/scene/spatial/constants/nav.h`:新增 `kTianyongSpawnX/Y/Z = (180, 200, 0)` 及换轴注释。
-2. **新增** `cpp/libs/services/scene/spatial/system/scene_spawn.{h,cpp}`:`SceneSpawnSystem`
-   - `DefaultSpawnFor(sceneConfigId)`:当前所有场景同一张图,统一返回天墉城出生点(分场景后改读 BaseScene 表)。
-   - `ResolveSpawnOnMesh(nav, id)`:出生点吸附到网格;无导航/吸不上时 ERROR 并返回未吸附点(不卡人)。
-   - `EnsureValidEnterLocation(player, scene)`:进场落位 —— 在网格上则只写回吸附点;不在网格上(含 `(0,0,0)`
-     与旧图坐标)则落到出生点;场景无导航时只修全零的"未初始化"位置。写 Transform + 置脏位 + INFO 日志
-     `EnterScene spawn: player … location (…) off navmesh -> spawn (…)`。
-   - `FallbackLocationForPlayer(player, nav)`:移动裁决"两头都不在网格"时的兜底点(出生点)。
-   - 已登记 `scene.vcxproj` / `.filters` / `CMakeLists.txt`。
-3. `cpp/libs/services/scene/player/system/player_scene.cpp` `HandleEnterScene` 第 3.5 步:绑定场景之后、自身
-   ActorCreate(4.5)与 AOI 之前调用 `EnsureValidEnterLocation`。跨场景/跨 zone 的合法坐标原样保留(吸附成功即不改)。
-4. `cpp/nodes/scene/handler/rpc/player/player_movement_handler.cpp` `ApplyReportedLocation`:
-   "服务器当前位置与上报位置都不在网格" 分支从 `accepted = current`(把非法原位回给客户端 → 拉进墙)改为
-   `SceneSpawnSystem::FallbackLocationForPlayer`;每次发 MoveAck 时打 INFO
-   `move corrected: entity=… seq=… verdict=blocked|guided|respawned current=(…) reported=(…) accepted=(…)`。
-5. `cpp/libs/services/scene/spatial/system/navigation.cpp` `LoadNavBins` + `spatial/manager/scene_nav.h`:
-   同一个 `nav_bin_file` 只加载/探针一次(21 行 → 3 个文件,`SceneNavMapComp` 改 `shared_ptr` 共享);注册前探针出生点,
-   **不在网格上的 bin(旧占位数据)拒绝注册并 ERROR**(fail-open:该场景无导航、移动不校验,但玩家不会被拉进墙);
-   成功时每个文件一条 `nav loaded: … tiles=T orig=(…) tile=WxH spawn=(180,200,0) snapped=(…)`,每个场景一条
-   `nav registered for scene N: …`。
-6. `tools/navmesh_baker/navmesh_baker.cpp` + `CMakeLists.txt`:新增 `--probe x,y,z`(Unity 坐标,可多个)与
-   `--no-default-probe`;`--painted-city` 模式默认探针 `(200,0,180)`;任一探针不在网格 → 不写文件、退出码 1。探针范围与
-   `nav_query.cpp kSnapExtents` 一致,保证"烘焙器说在网格上 ⇔ scene 说在网格上"。审查修正(§8):锚定常量定义、
-   `UNICODE/_TCHAR_DEFINED`、`/utf-8`、头部清零、空几何守卫、地面下移一个体素(`kGroundY=-0.2`)。
-7. `spatial/constants/nav.h` `kMoveCorrectionEpsilon` 0.25 → **0.5**:烘焙的 `rcFilterLedgeSpans` 会把紧邻不可走格
-   的一圈体素当悬崖剔掉,网格边界比 mask 格线内缩 0.25m,客户端贴墙停下时服务器阻挡点最多差 ~0.3m,这是数据契约
-   的固有差值,不能为它刷 ack。(这圈内缩同时保证服务器吸附出的边界点永远落在客户端可走格内,不会压在格线上被
-   `floor` 判到墙那侧。)
+[`PlayerSceneSystem::HandleEnterScene`](../../cpp/libs/services/scene/player/system/player_scene.cpp) 在绑定目标场景之后、发送 `EnterSceneS2C` 与自身 `ActorCreateS2C` 之前调用 `EnsureValidEnterLocation`。Transform 属于加载边界应创建的持久组件；此处缺失时拒绝入场，落位函数不补建组件，遵守 [组件访问规则](ecs-component-access-rules.md)。
 
-### 客户端 `mmorpg-client`
+| 输入状态 | 当前处理 |
+|---|---|
+| 已绑定同一场景实体 | 幂等返回，不重复落位与通知 |
+| 旧场景信息可读，且新旧 `scene_config_id` 不同 | `useSceneSpawn=true`，采用目标场景出生点，即使旧坐标在目标网格也可吸附 |
+| 不强制使用出生点，且有导航 | 保存位置可吸附则写回吸附结果；吸附失败则采用目标出生点 |
+| 不强制使用出生点，且无导航 | 仅修全零的未初始化位置，其余位置保留 |
+| 强制使用出生点，且无导航 | 使用目标场景配置出生点 |
 
-1. `TianyongNavigationGrid.TryFindNearestWalkable(world, out result)`:公开"最近可走点"。
-2. `TianyongPlayerController`:
-   - `WarpFromServer(feet)`:服务器权威 snap;落点不在 mask 上时恢复到最近可走格并 `ReportPositionToServer()`
-     (发 MoveStop 让服务器采纳,服务端 `guided` 分支会吸附它),返回是否发生了恢复。
-   - `ReportPositionToServer()`:在当前脚底点发一次 MoveStop。
-   - `Navigation` 属性;`SetDebugDirection(dir)`(等价按住 WASD,不受 UI 键盘门控)与 `SetDebugIgnoreMask(bool)`
-     (验收专用:绕过客户端 mask 硬冲墙,证明服务端还会挡)。`Update` 里脚本方向优先于键盘。
-3. `ActorWorld.Teleport` 本地分支改调 `WarpFromServer`(MoveAck reconcile 与 TeleportS2C 都走这里)。
-4. `TianyongMapRuntime.AttachLocalController`:服务器出生点不可走时(现在只剩兜底意义)改为最近可走点 +
-   `ReportPositionToServer()`,并打 Warning —— 不再"本地挪了不告诉服务器"。
-5. `GameClient`:每个 MoveAck 打 `[move] ack input_seq=N server=(x,y,z) unity=(…) local=(…) dist=D moving=…`;
-   应用纠偏时打 `[move] reconcile snap|settle input_seq=N to=(…) after=(…)`——**移动中**只应用 >1.5m 的(预测死区),
-   **静止时**任何幅度的 ack 都应用(`settle`:停在墙边时服务器的阻挡点就是最终位置,不能留在墙里 0.3~1.5m);
-   自身 ActorCreate 打 `[actor] self entity=… server=(…) unity=(…)`;新增 `MoveAckCount` / `MoveReconcileCount` /
-   `OnMoveReconcile`。坐标一律 InvariantCulture 格式化(脚本按 '.' 解析)。
-6. `DevAutoPilot -moveTest [-quitOnMoveTestEnd] [-moveTestTimeout 90]`:进场后按脚本走
-   出生点检查 → 四向 WASD 各 1.2s → 客户端撞最近的墙 → 绕过 mask 硬冲同一堵墙 1.5s(服务器必须回 MoveAck)→
-   点击寻路到 ≥8m 的可达点;每步 `move: …` 日志,末行 `RESULT=PASS stage=move_test spawn=(…) final=(…) acks=N snaps=0`。
-   判 FAIL 的条件写在 `MoveTestRoutine` 注释里(出生点不可走 / 合法移动被 snap / 穿墙 / 冲墙无 ack / 寻路未到达)。
-7. `tools/run_move_test.ps1`:同一账号跑两轮(R1、R2)+ 可选新账号(NEW),断言 RESULT=PASS、出生点可走、
-   R2 出生点 == R1 终点(≤2m,重登落位)、NEW 出生点 == (200,0,180)(≤2m),退出码 0/1。
+“同图重入保位”具体指保留可吸附的位置，允许高度或贴边吸附带来的微调。`EnsureValidEnterLocation` 返回值表示是否走重定位分支，`false` 也可能是合法保位，不能解释成入场失败。
 
-## 4. 验收标准(对应用户四条)
+当前 `mapChanged` 判断依赖本地旧场景绑定；没有旧场景信息的跨节点或跨 zone 入场不由这个判断无条件强制出生点，而是按目标网格校验所加载的坐标。跨服务归属与交接语义见 [场景切换与释放设计](scene-switch-release-design.md)。
 
-| # | 要求 | 判据 | 证据位置 |
-|---|---|---|---|
-| 1 | 服务端导航与客户端 WalkMask 一致,实际场景加载正确数据 | 烘焙器 stdout `probe unity=(200.00,0.00,180.00) … ON MESH nearest=(…, y≈0.00, …)`、`saved …: T tiles`(T>0);三份 bin 尺寸不再是 20648;scene 启动日志 `nav loaded: … tiles=T … snapped=(…)` + `nav registered for scene 1`,**没有** `skip nav registration` | 烘焙器 stdout / scene stdout |
-| 2 | 服务器决定合法出生点,旧存档无效位置被处理 | 旧账号首登 scene 日志 `EnterScene spawn: player 281594980286332928 … (0,0,0) unset (0,0,0) -> spawn (180,200,0)`;客户端 `[actor] self … server=(180.00,200.00,0.00) unity=(200.00,0.00,180.00)`;新账号同样 | scene stdout / 播放器日志 |
-| 3 | 纠正后不卡在不可走区域 | `run_move_test.ps1` 全部 `move: … walkable=True`;`server_wall` 阶段 `acks≥1` 且 `walkable=True`;全程无 `[TianyongPlayerController] server snap … is not walkable` Warning(出现说明服务器给了 mask 外的点,要查) | 播放器日志 |
-| 4 | 新/旧角色:登录、首次移动、连续 WASD、点击寻路、重登正常;合法道路不回拉,墙体阻挡有效 | `run_move_test.ps1` 输出 `[move] PASS`:R1/R2/NEW 三轮 `RESULT=PASS … snaps=0`;`relogin … distXZ ≤ 2`;`wall … along ≤ wall_at+0.5`;`server_wall … acks≥1` | 脚本汇总 + 三份日志 |
+### 3.2 网格加载与寿命
 
-## 5. Codex 执行清单(串行)
+[`NavigationSystem::LoadNavBins`](../../cpp/libs/services/scene/spatial/system/navigation.cpp) 对同一路径只加载和初始化一次，以 `shared_ptr<NavComp>` 共享稳定地址；每行 BaseScene 的出生点仍单独探针，成功后才注册对应配置 ID。`NavComp` 不可拷贝、不可移动，避免 `navQuery` 内部指针悬垂。
 
-所有 shell 先 `. E:\work\tools\buildenv.ps1`。开工前做并行会话体检(memory `parallel-sessions-same-repo`):
-`tasklist | findstr /i "gate.exe scene.exe battle.exe"`、`bin\*.exe` mtime;客户端先跑离线编译体检(§5.4 第 1 步)。
+文件加载、查询初始化或出生探针失败时，不注册该行导航并打 ERROR。这里拒绝注册坏网格，但后续查询拿不到导航时移动仍按 fail-open 放行；不能把“不注册”理解为节点拒启或玩家拒入场。验收仍要求所有配置的导航正常注册。
 
-### 5.1 烘焙器构建(工作目录 `E:\work\xuanming-server-mmo`)
+`SceneNavManager` 为 `thread_local`，查询在所属线程内串行执行。配置成功回调调用 `LoadNavBins`；当前不是跨线程共享或导航热更新协议。`nav loaded` 在逐行出生探针成功时输出，不能再断言“仅三个文件，所以恰好三条 nav loaded”。
 
-cmake 不在 PATH,用 VS 自带的:
+### 3.3 移动与纠偏
+
+[`player_movement_handler.cpp`](../../cpp/nodes/scene/handler/rpc/player/player_movement_handler.cpp) 对位置上报执行：
+
+1. 有导航且起点可吸附：沿当前位置到上报位置射线裁决；撞墙夹持至阻挡点并回退 0.05m。
+2. 起点不可吸附：尝试吸附上报点（`guided`）；两端均失败则回落场景出生点（`respawned`）。
+3. 无导航：原样接受位置，导航阻挡校验失效。
+4. 写回 Transform、rotation 并置脏；裁决位置与上报位置的**服务端水平 x/y 距离严格大于 0.5m** 才发送 MoveAck，并记录 `current/reported/accepted` 与 `blocked/guided/respawned` 等裁决信息。高度差本身不触发 ack。
+
+速度矢量独立截断到 10m/s；[`MovementSystem`](../../cpp/libs/services/scene/spatial/system/movement.cpp) 逐 tick 积分时也做导航夹持。速度截断不等于已实现按时间预算约束上报位置的完整防超速校验。
+
+`InBattleComp` 或 `PlayerFrozenComp` 存在时，MoveStart/MoveSync 丢弃；MoveStop 跳过位置更新，但仍清零速度并广播停止。瞬移后的过期位置上报另由 `ShouldDropReportAfterTeleport` 过滤。
+
+在导航与出生点一致的正常配置下，裁决输出应位于合法网格上；`ResolveSpawnOnMesh` 若连出生点都吸附失败，会报 ERROR 后返回未吸附出生点。因此不能写成“所有 MoveAck 无条件保证在网格上”。无导航放行时接受点等于上报点，通常也不会产生位置差触发的 ack。
+
+## 4. 当前验收标准
+
+| 验收项 | 判据与证据 |
+|---|---|
+| 数据一致 | 三图 source 关键字段与来源清单一致，mask/bin 的 SHA256 与清单一致，BaseScene 源表及正式 JSON/PB 清单一致；重烘时三份 bin 逐字节一致、67500 格心查询零差异，出生探针无需位移 |
+| 启动注册 | 各已配置 `nav_bin_file` 对应场景均有 `nav registered for scene N`；无 `nav bin load failed` / `skip nav registration`；日志中出生点匹配该表行 |
+| 新号与非法旧位置 | 自身 Actor 初次下发前已采用当前目标出生点；非法存档自然修复，不直接改 Redis 或重置角色 |
+| 保位与换图 | 同图重入保留合法位置；本地可判定换图时采用目标出生点；跨节点/跨 zone 单独核对交接目标与最终落位 |
+| 正常移动 | 当前地图可走道路、墙边与拐角的 WASD / 点击寻路持续可走，无反复回拉；移动后重登位置与退出终点在约定误差内 |
+| 导航拒绝 | 从真实权威起点发送足以穿越墙体的非法上报，裁决与上报差 >0.5m 时收到对应 input_seq 的 MoveAck；服务端日志与网络坐标一致；客户端纠正后仍可移动 |
+
+“绕过客户端 mask”不一定绕过 CharacterController 物理碰撞。若实际只在墙前移动了几厘米，未收到 ack 不能据此断定服务端导航失效；必须先证明测试确实送达了非法位置。
+
+客户端当前脚本及断言应在获得客户端任务授权后核对。旧 `run_move_test.ps1` 的 `(200,0,180)` 新生点和固定墙坐标仅适用于旧天墉图，不能直接用于新三图。旧验收允许 `server_wall` 阶段有预期纠偏，不能把总 `snaps=0` 当作所有阶段统一的通过标准。
+
+## 5. 验证与出包入口
+
+以下是后续相关代码或数据变更的执行入口，本次文档更新未执行这些构建、重烘或联机步骤。工作目录统一为本仓根目录，使用已有工具链；构建日志与临时包放本项目忽略目录或系统 `%TEMP%`。不再依赖旧 `E:\work\tools\buildenv.ps1`、固定局域网 IP、临时重拉脚本或旧副本工程路径。
+
+### 5.1 仅服务端数据检查
+
+无需读取客户端即可核对 [来源清单](../../data/scene_nav_bin/current_maps_20261009.json)、合同副本、正式 bin 和 BaseScene 表。若要复现烘焙，先用已有 CMake 构建工具：
 
 ```powershell
-$cmake = "D:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
-& "D:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\Tools\Launch-VsDevShell.ps1" -Arch amd64 -SkipAutomaticLocation
-& $cmake -S tools/navmesh_baker -B tools/navmesh_baker/build -A x64
-& $cmake --build tools/navmesh_baker/build --config Release
+cmake -S tools/navmesh_baker -B tools/navmesh_baker/build -A x64
+if ($LASTEXITCODE -ne 0) { throw '烘焙器配置失败，停止' }
+cmake --build tools/navmesh_baker/build --config Release -- /m:1
+if ($LASTEXITCODE -ne 0) { throw '烘焙器构建失败，停止' }
 ```
 
-通过:`tools\navmesh_baker\build\Release\navmesh_baker.exe` 存在、零 error。若默认生成器选不到 VS 18,
-加 `-G "Visual Studio 18 2026"`(`cmake --help` 看生成器名)。烘焙器从未编过,编译错误直接贴回(本文档 §6 列了
-已静态核对过的 API 面,报错多半是 UE fork 的签名差异,按头文件改烘焙器即可,**不要改 third_party**)。
-
-### 5.2 烘焙 + 探针 + 落盘
+以主城为例，输出到临时目录，不覆盖正式 bin：
 
 ```powershell
-tools\navmesh_baker\build\Release\navmesh_baker.exe --painted-city ..\mmorpg-client\Assets\Scripts\World\Tianyong\TianyongPaintedCity.cs --out data\scene_nav_bin\tianyong_scene.bin
-Copy-Item data\scene_nav_bin\tianyong_scene.bin data\scene_nav_bin\main_scene.bin -Force
-Copy-Item data\scene_nav_bin\tianyong_scene.bin data\scene_nav_bin\dungeon_scene.bin -Force
-Copy-Item data\scene_nav_bin\tianyong_scene.bin data\scene_nav_bin\mirror_scene.bin -Force
-Get-Item data\scene_nav_bin\*.bin | Select-Object Name, Length, LastWriteTime
+$navProbeFile = Join-Path ([IO.Path]::GetTempPath()) ('main-nav-probe-' + [guid]::NewGuid().ToString('N') + '.bin')
+& tools/navmesh_baker/build/Release/navmesh_baker.exe --mask-base64 data/scene_nav_bin/current_maps/main/walkmask.txt --probe 199,0,133 --out $navProbeFile
+if ($LASTEXITCODE -ne 0) { throw '主城导航重烘失败，保留输出并停止' }
+Get-FileHash $navProbeFile, data/scene_nav_bin/main_scene.bin -Algorithm SHA256
 ```
 
-通过:stdout 依次有 `mask geometry: N quads … (ground y=-0.20)`、`bounds: (50.00 … )-(350.00 … ), tiles 10x10`(32m tile)、
-`built T tiles`(T>0)、`probe unity=(200.00,0.00,180.00) server=(180.00,200.00,0.00): ON MESH nearest=(…)`、`saved …: T tiles`;
-退出码 0;三份 bin 同尺寸且 ≠ 20648。探针 `OFF MESH` 则不落盘,把 stdout 全文贴回(mask 映射或换轴出了问题,不要绕过探针)。
-`nearest=` 的 y 分量期望 ≈ 0.00:若读到 ±0.20,是 Recast 光栅取整与 `kGroundY` 假设不符,把 `navmesh_baker.cpp` 的
-`kGroundY` 改成让它归零的值再烘一次(只影响高度,不影响水平语义),并把实际值贴回。
+通过标准：精确出生探针成功，stdout 含 `mask cells checked=22500 mismatches=0`，退出 0，临时 bin 与正式 bin SHA256 相同；八仙岛与渔村分别使用对应 mask 和 §2.1 的 Unity 出生点。这只证明本仓合同副本到导航的对应，不能证明副本仍与独立客户端当前版本一致。失败时保留烘焙 stdout/stderr 与临时文件，不绕过探针或自动覆盖正式数据。
 
-### 5.3 scene 库 + scene 节点编译、替换、重启
+### 5.2 正式资源同步（需要客户端任务授权）
+
+[`sync_current_maps.py`](../../tools/navmesh_baker/sync_current_maps.py) 的默认同步和 `--verify` **都会读取同级客户端**，包括图片与 `navigation.json`；即使只验证也不是服务端范围内的操作。获得两端资源同步授权后按以下顺序执行：
 
 ```powershell
-$msb = "D:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
-& $msb cpp\libs\services\scene\scene.vcxproj /m:1 /p:Configuration=Debug /p:Platform=x64
-& $msb cpp\nodes\scene\scene.vcxproj        /m:1 /p:Configuration=Debug /p:Platform=x64
+python tools/navmesh_baker/sync_current_maps.py
+if ($LASTEXITCODE -ne 0) { throw '地图同步失败，停止' }
+python tools/data_table_exporter/run.py
+if ($LASTEXITCODE -ne 0) { throw '正式导表失败，停止' }
+python tools/navmesh_baker/sync_current_maps.py --verify
+if ($LASTEXITCODE -ne 0) { throw '地图与导表核对失败，停止' }
+python -m unittest discover -s tools/navmesh_baker -p 'test_*.py'
+if ($LASTEXITCODE -ne 0) { throw '烘焙器合同测试失败，停止' }
 ```
 
-节点 post-build 拷 `bin\scene.exe` 时若 scene 在跑会报 MSB3073:先只停 scene(`Get-Process scene | Stop-Process -Force`,
-**不要**用 `dev.bat`/`go_services.ps1 stop`,会连坐 gate/battle),≥5s 后再编或手动把 `build\cpp\nodes\scene.exe` 拷到 `bin\`。
-重拉 scene(经 WMI 逃逸,显式端口;z1 20000/20001,z2 22000/22001,`NODE_IP=192.168.43.7`,`ZONE_ID`/`RPC_PORT` 环境变量),
-模板见 `C:\Users\luyua\AppData\Local\Temp\claude\E--work\3f3f6928-3172-48ea-9ae4-d84fff460133\scratchpad\relaunch_cpp_nodes.ps1`
-(只取 scene 那几行)或 `tools/scripts/cpp_nodes.ps1 -Command start -Nodes scene -SceneCount 2`。
-起来后 `http://127.0.0.1:8081/api/server-list` 两个 zone `OPEN`,scene stdout 里:
+沿用已配置的正式导表器，不手改生成 JSON/PB 或合同副本。源 schema 未变时不因改出生数据额外重生成协议；若 schema 变化则执行根规范的完整生成与受影响服务编译流程。部署前核对本轮改动范围和全部导表清单，完整规则见 [导航管线 §9](scene-navmesh-pipeline.md#9-2026-10-18-当前三张地图替换正式场景)。
 
-- 有 3 条 `nav loaded: ../data/scene_nav_bin/{main,dungeon,mirror}_scene.bin tiles=T … spawn=(180,200,0) snapped=(…)`
-  和 21 条 `nav registered for scene N: …`;
-- **没有** `skip nav registration` / `nav bin load failed`。出现 `spawn point off navmesh — stale/mismatched nav bin`
-  = bin 没换成功或 `DataRootDirectory`(`bin/etc/base_deploy_config.yaml`,`../`)指错。
+### 5.3 服务端编译与回归
 
-### 5.4 客户端出包(编辑器开着时用副本工程)
-
-1. 离线编译体检(~2s,退出码 0 = 绿):
-   `pwsh -File E:\work\mmorpg-client\tools\client_compile_check.ps1`
-   (引用/宏在 `tools/compile_check/runtime_refs.rsp`,Unity 升版本后要从 `MmorpgClient.csproj` 重抽;缺失的引用 DLL 会被跳过并列出)。
-   **2026-09-05 交接时的实况**:本次改动在 09:42 体检 `exit=0 files=132 errors=0`;之后另一个并行会话开始从客户端仓拆除
-   FairyGUI(`git status` 里 `Assets/Plugins/FairyGUI/**`、`UI/Theme.cs`、`UI/V3Art.cs` 等 400+ 文件是 `D`,`AppBootstrap.cs`/
-   `BattleUiRoot.cs` 是他们改的),01:44 再跑变成 `files=126 errors=14`,错误全部是
-   `Game/Battle/Presentation/BattleSequencer.cs` 与 `UI/Ugui/Battle/{BattleFx,BattleHud,BattlePresenter,BattleResultPanel,
-   BattleScreenFx,BattleUnitView,DamageNumber}.cs` 里的 `FairyGUI` / `GTweener` / `EaseType` 引用——**是对方的中间态,
-   不是本次改动**(本次改动的 7 个文件零错误)。出包前轮询体检直到绿灯,别替对方补这些引用;若久不绿,提醒用户协调那个会话。
-2. 同步到副本工程并出包(与 `showcase_player` 同一条产线,产物覆盖 `E:/work/tmp/showcase_player/mmorpg.exe`):
+修改导航、出生点或进场逻辑后，按依赖顺序构建表库、scene 库、scene 节点；MSBuild 串行执行 `/m:1`，不在服务运行时覆盖其产物：
 
 ```powershell
-robocopy E:\work\mmorpg-client\Assets          E:\work\tmp\shotverify_project\Assets          /MIR /NFL /NDL /NJH /NJS
-robocopy E:\work\mmorpg-client\ProjectSettings E:\work\tmp\shotverify_project\ProjectSettings /MIR /NFL /NDL /NJH /NJS
-robocopy E:\work\mmorpg-client\Packages        E:\work\tmp\shotverify_project\Packages        /MIR /NFL /NDL /NJH /NJS
-# 本机 Unity 已升到 6000.6.0f1(2026-09-08,6000.5.8f1 已卸载),路径按已安装版本探测,别写死
-$unity = (Get-ChildItem "C:\Program Files\Unity\Hub\Editor" -Directory | Sort-Object Name -Descending | Select-Object -First 1).FullName + "\Editor\Unity.exe"
-& $unity -batchmode -nographics -quit -projectPath E:/work/tmp/shotverify_project -executeMethod MmorpgClient.Editor.ShowcaseBuild.Build -showcaseOut E:/work/tmp/showcase_player -logFile E:/work/tmp/showcase_build.log
-Select-String -Path E:\work\tmp\showcase_build.log -Pattern "\[ShowcaseBuild\] result=|error CS" | Select-Object -Last 5
+foreach ($navBuildTarget in @(
+    'cpp/generated/table/table.vcxproj',
+    'cpp/libs/services/scene/scene.vcxproj',
+    'cpp/nodes/scene/scene.vcxproj',
+    'cpp/tests/bag_test/bag_test.vcxproj'
+)) {
+    & msbuild $navBuildTarget /m:1 /p:Configuration=Debug /p:Platform=x64
+    if ($LASTEXITCODE -ne 0) { throw "构建失败：$navBuildTarget，停止后续验证" }
+}
+pwsh -NoProfile -File tools/scripts/run_cpp_tests.ps1 -Filter bag_test -LogDir build/verification/nav-spawn
+if ($LASTEXITCODE -ne 0) { throw 'bag_test 验证失败，保留日志并停止' }
 ```
 
-通过:`result=Succeeded`、`mmorpg.exe` mtime 更新。robocopy 退出码 ≤7 都算成功。副本 batchmode 首轮导入可能十几分钟,
-Unity.exe 自身 CPU 不涨是正常的(memory `unity-copy-project-upm-hang`)。
+每一步退出 0 才进入下一步。这里显式检查 MSBuild 退出码，不使用测试脚本的 `-Build`：该分支当前仅匹配错误文本，可能漏判失败并运行旧 exe。现有 [`SceneSpawnTest`](../../cpp/tests/bag_test/scene_spawn_test.cpp) 覆盖逐行出生导航、独立地图网格、非法保存位置、保位/目标出生、无导航兼容及缺失 Transform 不补建；脚本实际会运行整个 bag_test，不将其中无关失败隐去。通过标准以本轮真实测试日志为准，不固定沿用历史 6 项或 220 项计数。失败时保留首个错误、完整构建日志与测试摘要，按根规范停止并报告。
 
-### 5.5 移动验收(需 5.3 的 scene 与 5.4 的播放器都是新版)
+运行期验收另按 §4 进行，使用明确的本地开发环境和本轮配置，保留 scene 启动、落位与裁决日志。不能用离线烘焙、编译或健康检查代替玩家登录、换图和连续移动验收。
 
-```powershell
-pwsh -File E:\work\mmorpg-client\tools\run_move_test.ps1 -Account robot_move_self_20260905_0734 -FreshAccount ("robot_move_new_" + (Get-Date -Format HHmmss))
-```
+## 6. 验证证据与适用范围
 
-密码 `123456`(login 的 `LOGIN_DEV_PASSWORD_SHARED_SECRET`)。通过:末行 `[move] PASS`。三份日志在 `E:/work/tmp/move_test/`。
-失败时把 `[move]` 汇总 + 对应日志里全部 `[AutoPilot]` / `[GameClient] [move]` / `[actor] self` 行 + scene stdout 里
-`EnterScene spawn` / `move corrected` 行贴回。
-补充人工核对(可选):手动起播放器进游戏,城内街道 WASD/点击各走一段,scene stdout 不应出现 `move corrected`;
-朝建筑走应被客户端挡住,也没有 `move corrected`。
+| 日期 | 已有证据 | 适用范围与限制 |
+|---|---|---|
+| 2026-09-08 | 烘焙器构建、旧天墉导航重烘、服务端库与节点重编、R1/R2/NEW 移动脚本最终 PASS | 证明当时旧图故障闭环，详见 §9；不代表当前三图通过 |
+| 2026-09-13 | 旧三地地图接入；C++ 四工程构建，bag_test 220/220（当时 SceneSpawnTest 6/6），烘焙契约 6/6；真实 2→3→4→1 传送及移动通过 | 旧蓬莱/东海/揽仙地图；详见 [导航管线 §7–8](scene-navmesh-pipeline.md#7-2026-09-12-三地节庆地图接入) |
+| 2026-10-16 | 冻结试玩包四向移动均可走且无回拉；完整 moveTest 在 server_wall 失败，点击寻路未执行；另一个网络探针已证明服务端拒绝穿墙并回正确 ack | 完整脚本失败保留；独立探针只覆盖导航拒绝，详见 [进度记录](../PROGRESS.md) 当日“本地 Docker 试玩交付” |
+| 2026-10-18 | 新三图 Release 烘焙器构建、13 项合同测试、67500 格心零差异、精确出生探针、重烘字节与导表清单一致 | 当前三图离线证据；当次没有运行完整 scene/gate/Unity 联机，详见 [导航管线 §9](scene-navmesh-pipeline.md#9-2026-10-18-当前三张地图替换正式场景) |
+| 2026-10-23（本文） | 三份 bin 大小/SHA 与清单一致，MSET v1、tile 数 55/40/47；三图 mask 编码、哈希、可走格数与出生格一致；BaseScene.xlsx 的 21 行与正式 JSON 逐字段相等，源表及 JSON/PB 大小/SHA 与导表清单一致；文档链接、命令语法及差异检查通过 | 仅静态核对；PB 未重新解码，未读取客户端图片/navigation 实体，未重跑 Detour 查询、构建、测试或联机 |
 
-## 6. 静态核对过的 API 面(供编译报错时定位)
+历史测试数量、日志路径和机器环境只描述当时执行，不构成当前工作区或部署产物的重新验证。当前三图的完整登录、换图、WASD、点击寻路、重登和墙边纠偏仍需一次与本轮部署身份绑定的联机证据。
 
-2026-09-08 实际首次编译烘焙器又抓到一条静态审查漏掉的:`third_party/ue5navmesh/Private/Detour/DetourNavMeshBuilder.cpp:536`
-裸用 `assert(false)`,而 `DetourAssert.h` 只在 Debug 下 `#include <assert.h>`;scene 是 Debug 构建碰不到,烘焙器 Release 构建
-报 C3861。CMake 已加 `/FIcassert`(GCC/Clang `-include cassert`)强制包含,`NDEBUG` 下 `assert` 展开为空,不改变行为。
+## 7. 当前边界与后续
 
-烘焙器与 scene 侧改动只用到 ue5navmesh 这些符号,均已按 `third_party/ue5navmesh/Public` 头文件核对签名:
-`rcCreateHeightfield / rcMarkWalkableTriangles / rcRasterizeTriangles / rcFilterLowHangingWalkableObstacles /
-rcFilterLedgeSpans / rcFilterWalkableLowHeightSpans / rcBuildCompactHeightfield / rcErodeWalkableArea /
-rcBuildDistanceField / rcBuildRegions / rcBuildContours / rcBuildPolyMesh / rcBuildPolyMeshDetail / rcContext::doLog(const rcLogCategory, const char*, const int)`、
-`dtNavMesh::init/addTile(data,size,flags,lastRef,result*)/getTile(i)/getTileRef(tile)/getMaxTiles()/getParams()`、
-`dtNavMeshQuery::init(nav,maxNodes)/findNearestPoly(center,extents,filter,ref*,pt*)`、`dtNavMeshParams{walkableHeight,walkableRadius,walkableClimb,bvQuantFactor,orig,tileWidth,tileHeight,maxTiles,maxPolys}`、
-`dtCreateNavMeshData`、`dtReal=double`、`NAVMESH_API` 为空宏。
+- 无导航仍 fail-open；出生点吸附异常仍可能回未吸附点。加载、初始化、出生探针失败及出生点吸附异常会记 ERROR，无导航放行本身不保证错误日志；这些兼容路径不能作为正式地图数据验收通过项。
+- 进场和导航读路径不补建缺失持久组件；合法旧坐标是否保留按目标网格吸附判断，旧存档无需手工改 Redis。
+- `SceneNavManager` 为 thread_local，当前只在配置加载回调装载；新增场景线程或热更新前须重新设计装载、查询归属与生命周期，不能把 `shared_ptr` 解释为可跨线程并发查询。
+- `NavQuerySystem::FindPath` 仍无业务调用方，dtCrowd 未接；`TeleportRequest` RPC 仍为空桩，已有域内 `TeleportWithinScene` 与上报收敛逻辑不能当作该 RPC 已实现。
+- 已有速度截断与阻挡夹持；当前不据此宣称完整防超速、client_time 单调性检查或违规计数已完成。
+- 本次没有读取独立客户端，未重核预测、ack 应用死区、自动移动脚本与当前资源的适配；§8–9 中的客户端行为属于历史执行口径。
+- Java 对应实现与两版对账由独立仓库的 `PARITY.md` 记录。此次只更新本仓文档，无功能或共享协议变化，不修改 Java 仓或登记新版本，也不替另一版宣称验证通过。
 
-## 8. 多智能体对抗审查结论(2026-09-05,5 个视角 × 3 个反驳者)
+## 8. 历史多智能体审查结论（2026-09-05）
 
-确认并已修(代码已改):
-- **[blocker] 烘焙器 `ExtractWalkMask` 锚在文件里第一次出现的 `WalkMaskBase64`**——那是 `LoadMask()` 里的用法
-  `Convert.FromBase64String(WalkMaskBase64);`,往后扫到分号没有任何字符串,base64 为空 → `--painted-city` 永远失败。
-  改锚 `const string WalkMaskBase64`(回退 `WalkMaskBase64 =`)+ 空串守卫。审查者用 PowerShell 独立重实现了提取器:
-  3752 个 base64 字符 → 2813 字节,5892/22500 可走格,出生格及其 8 邻格全部可走。
-- **[blocker] CMake 只定义 `WIN32` 不定义 `UNICODE`**:`CoreMinimal.h` 先 `#include <Windows.h>` 再 `using TCHAR = wchar_t;`,
-  非 UNICODE 分支的 winnt.h 已经 `typedef char TCHAR` → 每个 TU 都 C2371。补 `UNICODE _UNICODE _TCHAR_DEFINED`(照抄 scene.vcxproj)
-  和 `/utf-8 /bigobj`。审查同时逐一核对了烘焙器用到的全部 rc*/dt* 签名、`dtNavMeshParams` UE 扩展字段、MSET 头布局与
-  `recast.cpp` 逐字节一致、CMake 源文件集自洽(Private/Recast/*.cpp + 6 个 Detour 文件不依赖 Crowd/TileCache)。
-- **[major] `server_wall` 验收会误判**:最后一个 MoveStop 的 ack 若 <1.5m 客户端不应用,角色停在墙里 0.3~1.5m,
-  `walkable=False` 判 FAIL 而服务器其实裁决正确。产品侧修法:静止时应用任何幅度的 ack(`reconcile settle`)。
-- [minor] `<cstdlib>`;坐标格式化 InvariantCulture;`run_move_test.ps1` 文档声称但没做的"回拉计数"断言现已真的断言
-  (整轮 reconcile 行数 − server_wall 阶段自报 snaps == 0)。
+保留本节编号，供既有审查引用定位；以下描述当时问题及修复，不替代 §2–5 的现行契约。
 
-审查提出、我复核后一并处理的(反驳者因会话额度未跑完):
-- `rcFilterLedgeSpans` 让网格边界内缩 0.25m(源码 `RecastFilter.cpp` 确认:邻格无 span 时 `nbot=-walkableClimb`):
-  不改几何(这圈内缩反而让吸附边界点稳落在客户端可走格内),改 `kMoveCorrectionEpsilon=0.5` 吞掉差值并写进文档。
-- 平面放在 y=0 时可走面落在 +ch:几何下移到 `kGroundY=-0.2`,由探针输出的 `nearest` y 核对。
-- `NavMeshSetHeader/TileHeader` 填充字节未清零导致 bin 不可复现:`memset` 清零。
-- 全零 mask 让 bounds 停在 ±1e300、`NextPow2` 死循环:空几何直接报错退出。
-- 21 行 BaseScene 各自加载同一 bin(旧数据下刷 21 条 ERROR):按路径去重,`shared_ptr` 共享。
-- `nav.h` 注释"全部指向 main_scene.bin"不准确:实际 main(1-16)/dungeon(17-19)/mirror(20-21),但三份是同一次烘焙的拷贝,
-  探针对三份都成立;分场景后必须迁表并按行探针(已写进注释)。
-- `WarpFromServer` 恢复 + MoveStop 与服务器 ack 在两端数据不一致时可能来回:加 2s 内超过 3 次就停止回报的熔断
-  (只 LogError 一次,停在客户端合法点)。
-- `MoveTestRoutine` 在 yield 之后继续用已销毁的 `ctrl`:每个阶段后 `MoveCtrlGone` 检查,`Finish` 里 `ResetMoveDrive` 清脚本驱动标志。
-- 进场兜底落位的 MoveStop 在 `InGame` 置真前被吞:`ReportPositionToServer` 改为挂起、`Update` 里补发(审查前已修,审查复核通过)。
+- mask 提取器曾锚定第一次使用 `WalkMaskBase64` 的位置而不是常量声明，导致提取为空；修正声明锚点并拒绝空串。
+- Windows 烘焙构建补 `UNICODE _UNICODE _TCHAR_DEFINED`、`/utf-8 /bigobj`；MSET 头部清零以保证可复现，空几何提前拒绝，地面下移一个体素。
+- NavComp 先在堆上定址再初始化查询器，同路径共享，避免浅拷贝悬垂与重复加载；之后进一步改为逐行出生探针。
+- 当时客户端修复了静止 ack 的 settle、非法服务端落点的最近可走点回报及熔断、进场回报挂起补发、自动移动中控制器销毁检查等问题。这些是历史客户端记录，本次未重核其现状。
+- 当时决定保留 `rcFilterLedgeSpans` 并把纠偏阈值改到 0.5m；**悬崖过滤方案已在 09-08 联机中撤回**。现存 0.5m 阈值是纠偏容差，不能继续用旧内缩方案解释当前烘焙规则。
 
-审查追踪确认无缺陷的路径:新号首登 → 旧存档 → 同节点重连(第 0 步幂等返回,Transform 未动所以无需再校验)→ 跨 zone 迁移
-(合法坐标吸附成功不改写)→ 无导航 fail-open → `respawned` 兜底 → `MovementSystem` 起点不在网格时冻结 → `LoadNavBins`
-在 `ConfigSystem::OnConfigLoadSuccessful` 跑、与 handler 同线程。
+## 9. 历史实际执行记录（2026-09-08）
 
-未处理(不影响本次验收):`kMoveCorrectionEpsilon`(0.5)与客户端 1.5m 死区之间的移动中纠偏只记日志不应用(设计如此);
-`FindPath` 无调用方;dtCrowd 未接。
+当时已按顺序完成烘焙器构建、重烘、依赖库与节点重编、本地栈拉起、Unity 6000.6.0f1 播放器出包及五轮移动验收迭代，结束于 `[move] PASS`。
 
-## 9. 2026-09-08 实际执行记录(用户授权由本会话执行 §5 清单)
+| 现象 | 当时根因 | 当时处理 |
+|---|---|---|
+| 烘焙器 Release 首编 C3861 `assert` | UE fork 裸用 assert，Release 头文件未包含声明 | 构建强制包含 cassert |
+| 节点首链出现 RPC / Kafka 未解析符号 | 部分依赖库早于接口变化 | 按依赖顺序重编再链接 |
+| 本地角色控制器不就绪 | 当时客户端将 EnTT 首实体 0 当作“无角色” | 当时增加显式本地角色标志；当前服务端下发的是独立 actor 网络号，不再以 ECS 句柄作为网络身份 |
+| 寻路沿墙反复回拉 | 悬崖过滤使网格内缩，与 mask 可走边界不一致 | 平面 mask 烘焙跳过悬崖过滤 |
+| 单格柱旁卡住 | 客户端路径平滑与物理侧滑进入阻挡格 | 当时增加横向余量、受阻重规划和 mask 外回退 |
+| 关闭过滤后导航外扩 | quad 边落在体素边界，退化裁剪覆盖邻格 | quad 内缩 0.01m |
+| scene 重拉后一度无法进场 | 当时 gate 持有旧 RPC 连接 | 当次整组节点重拉后完成验收；该绕行不作为现行恢复方案 |
 
-按顺序做完:烘焙器 cmake 构建 → 重烘 → 库链重编(proto/proto_helpers/grpc_client/rpc/config/core/infra/modules 8 个 9-05 之后
-有源码变动的库 + scene 库)→ 三个节点重链 → 整栈拉起 → 播放器出包(Unity 6000.6.0f1)→ `run_move_test.ps1` 五轮迭代。
-每一轮验收都暴露一个真问题,全部已修:
+最终 06:50 轮旧账号 R1 终点 Unity `(188.34,0.01,116.25)`；R2 重登出生 `(188.34,0,116.25)`，水平误差 0.00m；新账号出生 `(200,0,180)`。R1 的 `acks=6 snaps=6` 均发生在预期 `server_wall` 阶段，合法移动未发生额外回拉。旧图日志记录 `tiles=74` 和服务端出生 `(180,200,0)`，这不是当前主城的 tile 数或出生点。
 
-| 轮次 | 现象 | 根因 | 修法 |
-|---|---|---|---|
-| 烘焙器首编 | `DetourNavMeshBuilder.cpp:536` C3861 `assert` | 裸 `assert(false)`,`DetourAssert.h` 只在 Debug 含 `<assert.h>` | CMake `/FIcassert`(§6) |
-| 节点首链 | `gRpcMethodRegistry<…,180>` + `RdKafka::*` `__imp_` 未解析 | `rpc.lib`(9-03)/`infra.lib`(9-01)早于 9-06 的 RPC 数与 kafka 静态封装改动 | 按依赖顺序重编有变动的库再链节点 |
-| 验收 1 | 旧账号"控制器 15s 未就绪";自身 ActorCreate `entity=0` | scene 进程重启后第一个实体 entt id 就是 0,客户端把 0 当"无本地角色"哨兵 | `ActorWorld.HasLocalPlayer` 显式标志,所有 `== 0` 判断改掉 |
-| 验收 2 | 寻路段每秒 4 次回拉循环 | 悬崖过滤让网格比 mask 内缩 0.25m,客户端沿墙走在 mask 可走/网格不可走的带子里 | painted-city 模式跳过 `rcFilterLedgeSpans`;客户端纠偏重规划加熔断 |
-| 验收 3 | 寻路在 (212,148) 单格柱子旁卡死 | 平滑直线擦柱子边,CC 侧滑几厘米踩进柱子格,跟随器只会 StopMoving | LOS 平滑带 0.35m 横向余量;被挡时从当前位置重规划(≤3 次);CC 移动后落到 mask 外就退回 |
-| 验收 4 | (190–192,144–146) 不可走格里服务器截在 145.82 | 关掉悬崖过滤后网格反而**外扩**一个体素:quad 边压在体素边界,退化裁剪被当作覆盖 | 每个 quad 内缩 `kQuadInset=1cm`;探针实测边界 146.01/192.01,与格线重合 |
-| 验收 4/5 | 旧账号 scene 重拉后 60s 内进不了场 | scene_manager 把玩家分到重新注册的 node 3,gate 到它的 RPC 客户端仍是旧连接("Client is not connected") | **既有基础设施问题,不在本次范围**;绕过:gate/scene/battle 一起重拉并等 etcd 端口租约释放 |
-
-**最终通过的证据(2026-09-08 06:50 轮,`run_move_test.ps1` 末行 `[move] PASS`)**:
-- 旧账号 R1:`RESULT=PASS stage=move_test spawn=(189.72,0,149.73) final=(188.34,0.01,116.25) acks=6 snaps=6`(6 次全在 server_wall 段);
-- 旧账号 R2(重登):`spawn=(188.34,0,116.25)` == R1.final,`distXZ=0.00m`;`final=(188.19,0.01,86.29)` PASS;
-- 新账号:`spawn=(200,0,180)` 距默认出生点 0.00m,PASS;
-- scene 日志:首登 `EnterScene spawn: player … (0,0,0) unset (0,0,0) -> spawn (180,200,0)`;`nav loaded … tiles=74 … snapped=(180,200,0)`;
-  `move corrected` 只出现在 server_wall 段(verdict=blocked)。
-- 日志:`E:\work\tmp\move_test\move_{R1,R2,NEW}.log`。
-
-顺带发现、**未处理**的环境/基础设施问题(交给对应负责人):
-- `tools/scripts/start_game.ps1`(一键启动)起 gate 时把 `third_party/grpc/install_vs2026_dbg/bin` 插到 PATH 最前,gate 连上
-  Redis 后立刻死于 entt 断言 `is_power_of_two(mod)`(`run/logs/cpp_nodes/z1_gate.stderr.log`);同一个 gate.exe 用默认 PATH、
-  显式 ZONE_ID/RPC_PORT/NODE_IP 启动完全正常。怀疑是那条 PATH 让它加载了另一套 DLL。
-- `E:\work\tools\`(go126、buildenv.ps1、ffmpeg、gtest_build、grpc_cpp_plugin)09-07 11:16 被清空,只剩 `figma-context-mcp`;
-  Go 服务现在只能跑 `bin/go_services/*.exe` 预编译产物。
-- Unity 已升 6000.6.0f1,csproj 的 HintPath 仍指 6000.5.8f1(编辑器重生成工程文件前);`client_compile_check.ps1` 已能自动映射。
-- Docker Desktop 再次因 `%LOCALAPPDATA%\Docker\run\dockerInference` 残留 socket 启动即退,按 runbook 改名两目录后正常。
-- 并行的 Codex 会话在同一时段反复运行 `start_game.ps1`;本会话的节点重拉与它互相踩过一次。
-
-## 7. 边界与后续
-
-- 出生点仍是代码常量(`nav.h`),因为所有场景配置共用一张图;分场景时把 `spawn_x/y/z` 加进 `data/BaseScene.xlsx` +
-  `data/schema/basescene_table.proto`,`SceneSpawnSystem::DefaultSpawnFor` 是唯一读取点。
-- `SceneNavManager` 仍是 thread_local、`LoadNavBins` 只在配置加载线程跑(`scene-navmesh-pipeline.md` §5 原有边界)。
-- 客户端仍无预测回滚;>1.5m 的 ack 才 snap。`WarpFromServer` 的"最近可走格 + 回报"是对**服务器给了 mask 外的点**的兜底,
-  正常数据下不应触发(触发即打 Warning,验收时视为需要查的信号)。
-- 旧存档不需要手工改 Redis:下次登录 `EnsureValidEnterLocation` 会落到出生点,退出时按新位置存盘。
-- 反作弊面不变(速度截断 + 阻挡夹持);`SetDebugIgnoreMask` 只有 DevAutoPilot 会调,真实输入路径不受影响。
+原始日志当时位于 `E:\work\tmp\move_test\move_{R1,R2,NEW}.log`；路径仅作历史索引，本次未确认其仍存在。旧 `buildenv.ps1`、固定端口/IP、PATH/DLL 排查、Unity 副本出包及并行会话中间态已退出当前操作清单；后续使用仓库现行工具和本轮环境。

@@ -18,12 +18,35 @@ func OpenAuthority(ctx context.Context, c config.Config, migrate bool) (*sql.DB,
 	if !c.RequireTiDB {
 		return nil, nil, errors.New("聊天权威存储只允许TiDB")
 	}
+	var permission authoritysql.Permission
+	var loadErr error
+	if migrate {
+		permission, loadErr = authoritysql.LoadSchemaPermission(os.Getenv)
+		if loadErr != nil {
+			return nil, nil, loadErr
+		}
+
+	} else {
+		writer, loadErr := authoritysql.LoadWriterConfig(os.Getenv)
+		if loadErr != nil {
+			return nil, nil, loadErr
+		}
+		permission = authoritysql.Writer(writer)
+	}
+	return OpenAuthorityWithPermission(ctx, c, migrate, permission)
+}
+
+// OpenAuthorityWithPermission 由进程显式传同一已消费 boot，避免 SQL 与排空身份分裂。
+func OpenAuthorityWithPermission(ctx context.Context, c config.Config, migrate bool, permission authoritysql.Permission) (*sql.DB, *authority.Store, error) {
+	if !c.RequireTiDB {
+		return nil, nil, errors.New("聊天权威存储只允许TiDB")
+	}
 	var db *sql.DB
 	var err error
 	if migrate {
-		db, err = authoritysql.OpenForMigration(ctx, os.Getenv(c.DSNEnv), authority.DatabaseName, true)
+		db, err = authoritysql.OpenForMigration(ctx, os.Getenv(c.DSNEnv), authority.DatabaseName, true, permission)
 	} else {
-		db, err = authoritysql.Open(ctx, os.Getenv(c.DSNEnv), authority.DatabaseName, true, c.MaxOpenConns)
+		db, err = authoritysql.Open(ctx, os.Getenv(c.DSNEnv), authority.DatabaseName, true, c.MaxOpenConns, permission)
 	}
 	if err != nil {
 		return nil, nil, err

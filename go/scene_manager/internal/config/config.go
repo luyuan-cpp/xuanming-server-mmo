@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -157,7 +158,12 @@ type Config struct {
 	// RequireOne broker ACK; the caller context does not cancel an already
 	// queued kafka-go batch because that can return before delivery actually ends.
 	// Default 5 seconds.
+	// 读取走 EffectiveKafkaWriteTimeout():writer 的构造(svc)与铸造的时间预算(logic owner_epoch.go)要按同一个值算。
 	KafkaWriteTimeoutSeconds int64 `json:",default=5"`
+
+	// OwnerEpochMint: 铸造 owner_epoch 之后的落盘确认(WAITAOF,docs/design/zone-redis-regression-guard-20261022.md §4.3.2 G3b)。
+	// 整块可缺省,缺省即「本地 AOF 落盘 1 份、不等副本、最多等 1500ms」。
+	OwnerEpochMint OwnerEpochMintConfig `json:",optional"`
 
 	// MirrorSourceNodeLoadCap: soft cap on the source node's scene_count
 	// above which mirror requests fall back to GetBestNode instead of
@@ -521,6 +527,99 @@ func (c *Config) EffectiveLeaveSceneHolderReleaseWait() (wait time.Duration, ena
 		seconds = defaultLeaveSceneHolderReleaseWaitSeconds
 	}
 	return time.Duration(seconds) * time.Second, true
+}
+
+// defaultKafkaWriteTimeoutSeconds 是 KafkaWriteTimeoutSeconds 配成 ≤ 0 时的取值,与该字段的 default= 标签一致。
+const defaultKafkaWriteTimeoutSeconds int64 = 5
+
+// EffectiveKafkaWriteTimeout 返回 Gate 命令同步 produce 的 writer 超时,恒为正:配置 ≤ 0 时取默认 5s。
+//
+// 两处要按同一个值算,所以只在这里兜底:svc 构造 kafka.Writer 的 WriteTimeout;logic 给铸造留时间预算时,
+// 要把铸造之后的这一次同步写整段留出来(owner_epoch.go ownerEpochMintContext)。
+func (c *Config) EffectiveKafkaWriteTimeout() time.Duration {
+	seconds := c.KafkaWriteTimeoutSeconds
+	if seconds <= 0 {
+		seconds = defaultKafkaWriteTimeoutSeconds
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+// OwnerEpochMintConfig 是铸造 owner_epoch 之后的落盘确认(WAITAOF)参数
+// (docs/design/zone-redis-regression-guard-20261022.md §4.3.2 G3b)。
+//
+// 为什么要等落盘:铸造写进 zone Redis 内存之后,EnterScene 才把新 epoch 随路由 / 重定向交给目标节点缓存。
+// everysec 下 Redis 崩溃或切主会丢最近约 1 秒的写;丢的若是这次铸造,目标节点缓存着一个 Redis 里已经不存在的值,
+// 它的下一次存盘被等值 CAS 拒掉、实体按废黜销毁(丢 ≤300s 进度)。所以铸造之后先等 WAITAOF 确认,再推路由。
+//
+// 口径与 go/db 的 ServerConfig.RedisClient.WaitAOF* 一致(go/db/internal/config/config.go):
+//   - 两个份数用 *int:默认值 1 不是零值,而「显式写 0」又有合法语义 —— 两项都写 0 = 不发 WAITAOF(启动打一行 ERROR),
+//     只给确实没开 AOF 的环境用。nil(没写)取默认;访问一律经 NumLocal / NumReplicas;
+//   - WaitAOFTimeoutMs 0 / 不写 = 1500;实际等待取 min(本值, 请求剩余预算 − 余量),见 logic/owner_epoch.go;
+//   - 取值越界由 Validate 拒绝,svc.NewServiceContext 据此拒启;开启时启动先探一次 WAITAOF,失败同样拒启。
+//
+// K8s 上 WaitAOFNumReplicas 由 tools/scripts/k8s_deploy.ps1 按共享 Redis 拓扑渲染(单实例 0、高可用 1),
+// 与 go/db、data_service 同一个函数;本地 yaml 那一项保持 0 给 compose 单实例用。
+type OwnerEpochMintConfig struct {
+	WaitAOFNumLocal    *int `json:",optional"` // 0 | 1;nil = 1
+	WaitAOFNumReplicas *int `json:",optional"` // [0, 16];nil = 0
+	WaitAOFTimeoutMs   int  `json:",optional"` // [1, 2000];0 / 不写 = 1500,负数拒启
+}
+
+// OwnerEpochMint 的默认值与上界,与 go/db 的 RedisClient.WaitAOF* 同值。
+// 超时上界 2000:专用客户端读超时 = 本值 + 1s;everysec 下本地确认最长约 1s,2000 已留出一倍余量。
+const (
+	DefaultOwnerEpochMintWaitAOFNumLocal    = 1
+	DefaultOwnerEpochMintWaitAOFNumReplicas = 0
+	DefaultOwnerEpochMintWaitAOFTimeoutMs   = 1500
+	MaxOwnerEpochMintWaitAOFNumReplicas     = 16
+	MaxOwnerEpochMintWaitAOFTimeoutMs       = 2000
+)
+
+// NumLocal 是 WAITAOF 的 numlocal;没写(nil)= 默认 1。
+func (c OwnerEpochMintConfig) NumLocal() int {
+	if c.WaitAOFNumLocal == nil {
+		return DefaultOwnerEpochMintWaitAOFNumLocal
+	}
+	return *c.WaitAOFNumLocal
+}
+
+// NumReplicas 是 WAITAOF 的 numreplicas;没写(nil)= 默认 0。
+func (c OwnerEpochMintConfig) NumReplicas() int {
+	if c.WaitAOFNumReplicas == nil {
+		return DefaultOwnerEpochMintWaitAOFNumReplicas
+	}
+	return *c.WaitAOFNumReplicas
+}
+
+// WaitsForAOF 报告铸造之后要不要发 WAITAOF:两项都是 0(显式写的)才不发。
+func (c OwnerEpochMintConfig) WaitsForAOF() bool {
+	return c.NumLocal() > 0 || c.NumReplicas() > 0
+}
+
+// EffectiveWaitAOFTimeout 返回单次 WAITAOF 的等待上限:0 取默认 1500ms。必须先过 Validate(负数在那里拒绝)。
+func (c OwnerEpochMintConfig) EffectiveWaitAOFTimeout() time.Duration {
+	ms := c.WaitAOFTimeoutMs
+	if ms == 0 {
+		ms = DefaultOwnerEpochMintWaitAOFTimeoutMs
+	}
+	return time.Duration(ms) * time.Millisecond
+}
+
+// Validate 只拒绝写出来的非法值(没写 = 默认,合法),错误文本英文并点名键。
+// WAITAOF 的 timeout 0 在 Redis 里是无限阻塞,所以 0 只能表示「没写」、由 EffectiveWaitAOFTimeout 换成默认值。
+func (c OwnerEpochMintConfig) Validate() error {
+	if local := c.NumLocal(); local != 0 && local != 1 {
+		return fmt.Errorf("OwnerEpochMint.WaitAOFNumLocal must be 0 or 1, got %d", local)
+	}
+	if replicas := c.NumReplicas(); replicas < 0 || replicas > MaxOwnerEpochMintWaitAOFNumReplicas {
+		return fmt.Errorf("OwnerEpochMint.WaitAOFNumReplicas must be in [0, %d], got %d",
+			MaxOwnerEpochMintWaitAOFNumReplicas, replicas)
+	}
+	if t := c.WaitAOFTimeoutMs; t != 0 && (t < 1 || t > MaxOwnerEpochMintWaitAOFTimeoutMs) {
+		return fmt.Errorf("OwnerEpochMint.WaitAOFTimeoutMs must be in [1, %d] (0 or unset = %d), got %d",
+			MaxOwnerEpochMintWaitAOFTimeoutMs, DefaultOwnerEpochMintWaitAOFTimeoutMs, t)
+	}
+	return nil
 }
 
 // ChannelCountFor returns the effective world-channel count for a confId,

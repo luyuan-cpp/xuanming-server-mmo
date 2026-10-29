@@ -37,7 +37,7 @@ C++ 节点镜像有两条现役路径(2026-09-16 按代码核对;详表与风险
 | 路径 | 编译在哪 | 调用方 | 构建入口自带门禁 |
 |---|---|---|---|
 | `deploy/k8s/Dockerfile.runtime` | 镜像外:Linux 主机 `build_linux.sh` → `k8s-stage-runtime` 拷进 `deploy/k8s/runtime/linux/` | `k8s-build-image` / `k8s-push-image` / `k8s-release-zone` / `k8s-release-all`(`tools/scripts/k8s_image.ps1`,`-DockerfilePath` 默认值)、`publish_images.ps1` 的 cpp 族 | 仅 `release-zone` / `release-all` 构建前跑不可变 tag 校验 + `release_preflight.ps1`;`build-image` / `publish_images.ps1` 不跑 |
-| `deploy/k8s/Dockerfile.cpp` | 镜像内全量编译(gRPC `v1.83.0` 起) | `k8s-build-all`、`.github/workflows/cpp-build-ci.yml`(只到 `--target builder`) | 无(`k8s-build-all` 只构建) |
+| `deploy/k8s/Dockerfile.cpp` | 镜像内全量编译(独立 Protobuf / Abseil / BoringSSL) | `k8s-build-all`、`.github/workflows/cpp-build-ci.yml`(只到 `--target builder`) | 无(`k8s-build-all` 只构建) |
 
 - 部署侧门禁与镜像出自哪个 Dockerfile **无关**:`k8s_deploy.ps1 -ReleaseProfile staging|prod` 的 `zone-up` / `all-up` / `infra-up` 对任意 `-NodeImage` 都做不可变 tag 校验与 `release_preflight.ps1`。上表只说明构建入口自己多不多查一次。
 - 版本化发布(`publish_images.ps1` → `make_release.ps1`,见下方「发布打包」)走 `Dockerfile.runtime`。
@@ -65,7 +65,7 @@ docker build -f deploy/k8s/Dockerfile.cpp --target=symbols -o ./debug-symbols .
 
 或在 Linux 主机上直接编译(`Dockerfile.runtime` 路径的前置步骤)。仓库里**没有** `build_grpc_linux.sh`:
 `build_linux.sh` 不带 `--skip-deps` 时会先 `git submodule update --init --recursive`,
-再跑 `tools/archived/setup_dependencies.sh` 编 gRPC / muduo / librdkafka / yaml-cpp / hiredis / zlib(已装且源码 stamp 未变则跳过)。
+再跑 `tools/archived/setup_dependencies.sh` 编独立 Protobuf / Abseil / BoringSSL / muduo / librdkafka / yaml-cpp / hiredis / zlib(已装且源码 stamp 未变则跳过)。
 
 ```bash
 # 产出 bin/{gate,scene,battle};--split-debug 另出 bin/symbols/*.debug(publish_images.ps1 归档用)
@@ -402,6 +402,18 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
 - `-NamespacePrefix`: change namespace prefix.
 - `-CentreReplicas`, `-GateReplicas`, `-SceneReplicas`: per-zone replica overrides for `k8s-zone-up`.
 - `-GrpcServerMaxPollers`:**已退役**,默认 `0`。只为兼容旧命令保留:传入大于 `0` 的值只打一条 `Write-Warning`,取值被忽略,任何清单都不再写 `GRPC_SERVER_MAX_POLLERS`(原因见上面 Runtime Behavior)。
+- `-NodeOpenFileLimitMode`(2026-10-22 补登记,已落码、未验证;权威口径是 `tools/scripts/k8s_deploy.ps1` 的参数注释):B0-4 的运维豁免开关,写进 C++ 进程读的环境变量 `NODE_OPEN_FILE_LIMIT_MODE`。
+  - 留空(默认)= 不写,进程按 `enforce`:nofile 软限抬到硬限后仍低于需求就拒启。只收小写 `enforce` / `warn`,大写或拼错在入口就拒。
+  - 写进本次部署的全部 C++ 工作负载:`zone-up` 的 gate(Deployment / external StatefulSet)与 scene(Deployment / Agones Fleet),`infra-up` 的 battle(Deployment / hostPort / Agones Fleet)。
+  - `warn` 只作短时应急,每次部署打一条 `Write-Warning`;代价与首选做法(调低准入上限)见下文「C++ 节点的文件描述符上限」与 runbook §3.1。
+  - **不粘滞**:脚本不从集群读回旧值,以 `warn` 运行的环境下一次部署不传就落回 `enforce`。external gate 是 OnDelete,模板改了还要按 `k8s_gate_drain.ps1` 逐台换 Pod。
+  - `dev_tools.ps1` / `k8s_image.ps1` / `k8s_zone_rollback.ps1` **尚未透传**,要直接调 `k8s_deploy.ps1`。
+    - (2026-10-22 更正,已落码、未验证)三个包装入口已透传同名参数 `-NodeOpenFileLimitMode`:`dev_tools.ps1` 的 `k8s-infra-up` / `k8s-zone-up` / `k8s-all-up`、`k8s-release-*`(经 `k8s_image.ps1`)与 `k8s-zone-rollback`(经 `k8s_zone_rollback.ps1` 的 Step 6),以及直接调 `k8s_image.ps1` / `k8s_zone_rollback.ps1`。写法同 `-GateRouterMode`:包装层默认留空 = 不透传,默认值只在 `k8s_deploy.ps1` 一处;包装层同样只收小写,大写或拼错在包装入口就拒。
+    - 回档时尤其要照传:`k8s_zone_rollback.ps1` 第 0 步不读集群里的这个 env,以 `warn` 运行的 zone 漏传会在 Step 6(已停服、已回档)拒启,只能补上参数重跑 Step 6。详见该脚本 `-NodeOpenFileLimitMode` 参数注释。
+      - (2026-10-22 再更正,已落码、未验证)回滚脚本第 0 步 a 现在核对这个 env。`-NodeOpenFileLimitMode` 留空时,`-Apply` 在 Step 1 停服之前读该 zone 的 gate(Deployment / external StatefulSet)与 scene Deployment(与入口核对同一次 kubectl);集群装了 Agones 时再读同名 scene Fleet。
+        - 任一工作负载带着 `NODE_OPEN_FILE_LIMIT_MODE=warn` 就拒绝,报错给出照传的 `-NodeOpenFileLimitMode warn`;硬限已修好时显式传 `enforce` 回到 enforce。
+        - 读不到同样拒绝(kubectl / Agones 探测失败、没有 gate、`valueFrom`、变量重复)。放行条件跟着 `k8s_deploy.ps1` 的默认值走,口径同 `-GateRouterMode`。
+        - 显式给值即操作者的决定,不核对。核对过的现状存进 `entry-state.json`(Schema 3)的集群现状;同一 rid 重跑、namespace 已删时据此核对。它不进入口决定,显式值重跑可以改。
 - `-GateServiceType`: `ClusterIP`, `NodePort`, or `LoadBalancer`.
 - `-GateServicePort`: external gate service port.
 - `-OpsProfile`: `managed-cloud`, `bare-metal`, or `custom`.
@@ -1377,6 +1389,7 @@ staging / prod 档缺省即此形态,见下一节)。两种形态共用本节这
   按 player_id 分片后每片的连接数约等于今天单实例的总数。
 - **第 3 批**:go-redis 直连客户端显式 `PoolSize`(见上「显式池上限」)与 C++ 断连日志带原因已于 2026-10-16 落码(未编译、未测试)。
   **未做**:告警(connected_clients ÷ maxclients、rejected_connections 增量、生效值 < 清单值;依赖 redis_exporter,待拍板,届时照 `mysql-connection-alerts.yaml` 写);
+  *(2026-10-23 更正,上一条原文保留:前两项已做。redis.yaml、redis-ha.yaml、redis-match-cluster.yaml 的每个 Redis Pod 带 `redis-exporter` sidecar(镜像钉 `oliver006/redis_exporter:v1.62.0`,指标端口 9121,口令只走 `REDIS_PASSWORD` 环境变量),告警在 `deploy/k8s/redis-alerts.yaml`,手工 `kubectl apply -n observability`,另需一个指向 9121 的 PodMonitor。加 sidecar 改了核心 Pod 模板,下一次 infra-up 要 `-ConfirmRedisCoreRestart`。「生效值 < 清单值」仍靠 `-WaitReady` 的部署后核对。静态契约 `tools/scripts/tests/redis_exporter_contract.tests.ps1`。)*
   go-zero 客户端的池上限(要换掉 go-zero 封装,不在本批)。player-inbox 的 `CoreRedis.PoolSize` 已于 2026-10-16 补上。在告警落地前只有部署后核对与输入钉子。
 - **验证(交 Codex,未运行)**:`pwsh -NoProfile -File tools/scripts/tests/redis_maxclients_contract.tests.ps1`(第 1 批静态契约);
   `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(第 2 批:规划档 ≤ 80%、输入钉子、公式自检、写路径打印、重启闸四种判定与拒绝文本、
@@ -1563,6 +1576,95 @@ pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command infra-up -DryRun -Sk
 - 最后一条 DryRun 只渲染、不连集群:输出里应有 `Redis topology: replicas=3 manifest=redis-ha.yaml high_availability=true waitaof_replicas=1`。
 
 真实集群:在 staging 上按「切换」步骤做一次 1 → 3(含第 4 步),再按上表做一遍删主 Pod 与杀主进程,用 robot 登录压测看中断时长与丢写。
+
+## 共享 Redis 按用途拆实例(G4a 第 1a 批:queue;2026-10-23,未编译、未测试,待 Codex 验证)
+
+设计:`docs/design/shared-redis-split-by-purpose.md` §25.3(2026-10-23 拍板记录,最后的「由此对第 1a 批的修订」)、§3.2.1;§4 的部署形态以 §25.3 为准。
+本批**只拆排队与限流一个用途**,不做迁移工具、迁移标记、墓碑与 purge(项目未上线,数据可清空,首次上线直接按新拓扑部署)。
+
+### 拆走什么、留下什么
+
+| 实例 | 放什么 | 谁连 |
+|---|---|---|
+| `redis-queue-g<N>`(新,每个 zone 组一个) | 排队 `queue:*`、准入 `admit:*`、在线 `admitted:*`、放行锁;gateway 的 Bucket4j 限流桶 `rl:zone` / `rl:ip` | login 的 `Node.QueueRedis`;gateway 的 `spring.data.redis` |
+| `redis`(核心,不变) | 其余一切:会话、锁、位置、gate 排空标记 `gate:<id>:draining` / `drained`、映射、存盘控制面…… | C++ `zoneredis`、login 的 `Node.RedisClient`、go/db、data-service、auth 与其余全部服务 |
+
+- 组 `<N>` = zones 配置里该 zone 的 `redisQueueGroup`(可选整数,≥ 0,不写 = 0;负数、非整数在任何写操作之前拒绝)。首发 1 组,所有 zone 都是 g0。
+  `zone-up` 按 `-ZoneId` 在 zones 配置里找组,找不到 = 0。
+- gate 排空标记**留在核心**:`k8s_gate_drain.ps1` 与 scene_manager 的跨 zone 重定向都不用改,也不需要跨组寻址(§25.3 的 2026-10-23 订正)。
+- `redis-queue-g<N>` 本批**所有档位都是单实例**(`manifests/infra/redis-purpose.yaml`;高可用变体是后续项:`redis-ha.yaml` 的对象名写死,要先参数化)。
+  排队数据都带 TTL、可丢:实例重启期间只影响本组 zone 的新登录(排队打开时新登录失败;排队关着时 login 不碰它,gateway 限流 fail-open),
+  已在游戏里的玩家、断线重连与存盘不受影响。
+- queue 实例显式 `--maxmemory <值> --maxmemory-policy noeviction --appendonly yes --appendfsync everysec --maxclients 10000 --enable-debug-command no`,
+  容器内存 requests = limits = 2 × maxmemory,PVC 8Gi(常量:volumeClaimTemplates 不可变),带 redis-exporter sidecar(与 `redis.yaml` 同形),
+  标签一律 `app: redis-queue-g<N>`(带 `app: redis` 会被挂到核心 Service 后面)。
+
+### 参数(`k8s_deploy.ps1`;`dev_tools.ps1` / `k8s_image.ps1` 同名透传,非缺省才透传)
+
+| 参数 | 取值 | 说明 |
+|---|---|---|
+| `-RedisSplit` | `auto`(缺省)/ `none` / `queue` | `none` 不拆(渲染与引入前逐字节相同);`queue` 拆出排队实例。`auto` 在所有档位都解析为 `none`;例外是非 DryRun 的 zone 写路径(zone-up / all-up 部署 login 或 gateway)跟随线上:本 zone 线上 login ConfigMap 有 `Node.QueueRedis` 即 queue,没有或 ConfigMap 不存在即 none。DryRun 的 auto 按 none。infra-up 的 auto 按 none:**不 apply、也不删除**已有的 queue 实例 |
+| `-ConfirmRedisSplitSwitch` | switch | 本次要写的排队地址与本 zone 线上不同(none ↔ queue、换组)时必须给。是许可不是指令,不粘滞 |
+| `-RedisQueueMaxMemory` | `<正整数><kb\|mb\|gb>`,如 `1gb` | 每个 queue 实例的 maxmemory。dev 档(`-ReleaseProfile dev` 且 `-OpsProfile custom`)缺省 `128mb`;release 档要 apply queue 实例而没给即拒绝。初值每组 `1gb`(§25.3 第 19 条),待 L-14 压测复核 |
+| `-ConfirmWipeAllRedis` | switch | 只给 `redis-wipe` 用,见下 |
+
+部署闸(写路径入口,任何写操作之前;只有两条,§25.3):
+
+1. 地址要变必须 `-ConfirmRedisSplitSwitch`:漏带 `-RedisSplit` 的例行部署等于想切回共享拓扑,会被拦下,报错写明线上现状与应带的参数;
+2. 本 zone 线上 login 的 `Queue.Enabled` 为 true 时拒绝切换,确认开关不豁免:滚动时新旧 login 副本各连一个实例、两套队列,准入最多翻倍(§3.2.1 约束 2)。先以 `-LoginQueue off` 部署本 zone 关掉排队再切。
+
+DryRun 不查集群,只打出每个 zone 将要写的地址(`Redis split: zone=… resolved=… queue_redis=…`)。zone 写路径同时打印 queue 实例的连接总账
+(`Redis queue connection ledger: instance=redis-queue-g<N> …`,MAXCLIENTS 从 `redis-purpose.yaml` 读;全部 zone 都拆时核心总账去掉 gateway 那一行)。
+
+### 首次上线的部署命令
+
+上线前以拆出 queue 的拓扑直接首次部署(没有切换窗口,§25.3 第 19 条原 §13 第 10 条):先拆 queue,再打开排队。
+
+```powershell
+# 1) 基础设施:核心 Redis + 每个组的 redis-queue-g<N>(组取 zones 配置;release 档必须给容量)
+pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-infra-up -ReleaseProfile prod -RedisSplit queue -RedisQueueMaxMemory 1gb -WaitReady ...
+# 2) 各 zone:login 写 Node.QueueRedis、gateway 指向 redis-queue-g<N>(全新 namespace 没有线上现状,不需要确认开关)
+pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-up -SkipInfra -ReleaseProfile prod -RedisSplit queue -WaitReady ...
+# 3) 核对:每个 zone 的 login 与 gateway 指向同一实例且都已滚完
+pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-redis-split-status -ZonesConfigPath <同上>
+```
+
+之后的例行部署可以不带 `-RedisSplit`:zone 写路径跟随线上;infra-up 不带它就不碰 queue 实例(要改容量或模板时再带 `-RedisSplit queue`)。
+**zone 回档**(`k8s_zone_rollback.ps1`)Step 1 会删掉 zone namespace,Step 6 读不到线上,以 queue 运行的 zone 回档**必须显式给 `-RedisSplit queue`**,
+否则回档后的 login / gateway 静默连回核心(脚本不在停服前核对这一项)。
+
+已经以 none 跑起来的环境要切到 queue(例如 staging):确认各 zone 排队关着 → `infra-up -RedisSplit queue` → 逐 zone 或一次 all-up 带
+`-RedisSplit queue -ConfirmRedisSplitSwitch` → `k8s-redis-split-status` 退出码 0 之前,不执行 `k8s_gate_drain.ps1`、不滚动 gate(§3.2.1 约束 3)。
+排队与限流数据不迁移(都带 TTL);核心上的旧排队键随 TTL 自然过期。
+
+### `redis-split-status` 与 `redis-wipe`
+
+- `-Command redis-split-status`(`dev_tools.ps1 -Command k8s-redis-split-status`):只读。zone 列表取 zones 配置(`-ZonesConfigPath`,json / yaml),
+  对每个 zone 打印 login 的 `RedisClient` / `QueueRedis` Host、gateway 的 `spring.data.redis.host`、组号,以及 `deployment/login`、`deployment/gateway`
+  的 rollout 是否完成(`kubectl rollout status --timeout 10s`)。同一 zone 的 login 与 gateway 指向不同实例、或任一 rollout 没完成 / 读不到,退出码 1。
+  ConfigMap 或 Deployment 不存在只打印 `<absent>`,不算失败。
+- `-Command redis-wipe -ConfirmWipeAllRedis`(`dev_tools.ps1 -Command k8s-redis-wipe -ConfirmWipeAllRedis -InfraNamespace mmorpg-stress-…`):
+  AGENTS.md §6.2 压测前清库的 K8s 做法。要求 infra namespace 匹配脚本里写死的 `^mmorpg-stress-`,且显式给 `-ConfirmWipeAllRedis`,缺一即拒绝(DryRun 同样先判)。
+  实例按 infra namespace 里**实际存在**的 StatefulSet 列(不按本次参数,漏写一个用途也不会漏清):核心 `redis`(单实例或高可用,清其中的主)、
+  每个 `redis-queue-g<N>`、`redis-match-cluster`(逐主节点)。每个 Pod `kubectl exec -c redis` 进去先问 `ROLE`,主节点 `FLUSHALL SYNC`,再读 `DBSIZE`;
+  口令用 Pod 自己的 `REDIS_PASSWORD` 经 `REDISCLI_AUTH` 交给 redis-cli,不上本机命令行。每个实例至少一个主、每个主 FLUSHALL 回 OK 且 DBSIZE=0
+  才算通过,否则退出码 1;从节点的 DBSIZE 只打印。只清 Redis:MySQL / etcd / Kafka 仍按 AGENTS.md §6.2 另行处理。
+
+### 已知限制
+
+- queue 实例单实例,没有重启闸(改 `redis-purpose.yaml` 的模板或换 `-RedisQueueMaxMemory` 会直接重启该组实例);高可用变体后续再做。
+- 部署闸只核对 login / gateway 的 ConfigMap 地址,不核对目标 `redis-queue-g<N>` Service 是否存在:zone-up 先于 infra-up 带 queue 时,
+  新 login Pod 连不上即拒启(CrashLoop),旧 Pod 照常服务;顺序按上面的首次上线命令走。
+- 改 zones 配置里的组号 = 换实例,同样要 `-ConfirmRedisSplitSwitch`;旧组实例不会被删除,确认不再使用后人工删(连同 PVC)。
+- Java 版(`D:\luyuan\xuanming-server-mmo`)没有 K8s 生产形态,按用途拆实例待做(设计稿 §26)。
+
+### 验证(交 Codex,未运行)
+
+```powershell
+pwsh -NoProfile -File tools/scripts/tests/k8s_redis_split_contract.tests.ps1
+pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
+pwsh -NoProfile -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1
+```
 
 ## Kafka 审计 topic 预建(kafka-topic-init,2026-09-08,node-id-overhaul-plan §2.0c)
 
@@ -1884,7 +1986,7 @@ kubectl logs -n mmorpg-zone-<name> deploy/data-service | grep NodeRegistry
 #  → [NodeRegistry] DataService registered: ... endpoint=<POD_IP>:9000 lease_ttl=60s
 ```
 
-## C++ gRPC 客户端 deadline:GrpcClient 块搬运 + 预算门禁(2026-09-28,grpc-client-deadline-failure-callback.md §4.4)
+## C++ gRPC 客户端 deadline:GrpcClient 块搬运 + 预算门禁(2026-09-28,grpc-muduo-transport.md §16.4)
 
 C++ 节点(gate / scene / battle)发出的每次 unary gRPC 调用现在都带 deadline,按**目标**节点类型配在
 `bin/etc/base_deploy_config.yaml` 的顶层 `GrpcClient.CallDeadlineMs`(键 = `ENodeType` 枚举名,单位毫秒)。
@@ -1902,25 +2004,25 @@ C++ 节点(gate / scene / battle)发出的每次 unary gRPC 调用现在都带 d
   | `SceneManagerNodeService` | `go/scene_manager/etc/scene_manager_service.yaml` | 10000 / 8000 |
   | `DataServiceNodeService` | `go/data_service/etc/data_service.yaml`(不写 = go-zero 默认 2000) | 4000 / 2000 |
   | `ClientRpcRouterNodeService` | `go/client_rpc_router/etc/client_rpc_router.yaml` | 8000 / 6000 |
-  | `MatchNodeService` | `go/match/etc/match_service.yaml`(gate 直连模式) | 7000 / 5000 |
-  | `LoginNodeService` | `go/login/etc/login.yaml`(gate 直连模式) | 12000 / 10000 |
-  | `PlayerInboxNodeService` | `go/player_inbox/etc/player_inbox.yaml`(scene 调 FetchItems / AckItems;2026-10-15 起,见「玩家收件箱 player-inbox」) | 6000 / ≤ 4000(服务 yaml 显式写) |
+  | `MatchNodeService` | `go/match/etc/match_service.yaml`(gate 直连模式) | 7000 / 4000 |
+  | `LoginNodeService` | `go/login/etc/login.yaml`(gate 直连模式) | 12000 / 4000 |
+  | `PlayerInboxNodeService` | `go/player_inbox/etc/player_inbox.yaml`(scene 调 FetchItems / AckItems;2026-10-15 起,见「玩家收件箱 player-inbox」) | 6000 / 3000 |
 
   判定口径:这六项必须在 `CallDeadlineMs` 里显式写成正整数(缺席 / 0 = 落到隐式默认,不算数);服务 yaml 不写 `Timeout` 按
   go-zero `RpcServerConf.Timeout` 的 `default=2000` 算(go.mod 钉的 v1.9.2 / v1.10.0 相同),写了就必须是正整数(0 = go-zero 不装超时拦截器,
   服务端没有上界);服务 yaml 的 `MethodTimeouts` 逐条核对:每一条都要满足「deadline ≥ 该方法超时 + 2000」,除非该方法登记在 `k8s_deploy.ps1` 的
   `Get-GrpcClientMethodsNotCalledFromCpp`(C++ 节点从不调用;今天是 data_service 回档的三个 RPC,通过时那一行会列出来)。
   这张表只认「顶格不带引号的键 + 缩进的块式列表」,超时只认带单位的写法(`300s`),读不懂一律拒(2026-10-09 起,
-  此前是出现即拒;`docs/design/grpc-client-deadline-failure-callback.md` §4.4)。`Battle` / `Etcd` 没有 Go 服务端超时,不在表里;
+  此前是出现即拒;`docs/design/grpc-muduo-transport.md` §16.4)。`Battle` / `Etcd` 没有 Go 服务端超时,不在表里;
   chat / friend / guild / team / trade 不在 C++ 节点白名单里,只经路由服。
 - **改服务端超时 = 两处同拍**:调大上表任一服务的 `Timeout` 必须同时调 `CallDeadlineMs` 对应项,否则下一次 `*-up` 被门禁拒绝。
   改完重跑 `zone-up`(以及 `infra-up`,battle 用的是 `battle-node-config`)重新生成 ConfigMap,并滚更 C++ 节点让它们重新读配置。
 - **DataService 2500 → 4000(2026-09-28)**:第一批落码时写的是 2500,与该块自己注释的「+2000 余量」不符(data_service 服务端默认 2000);
   改为 4000 后号段 `fetchTimeoutSec` 从 3.5s 变成 5s。login 的 `Timeout` 原为 100000(行尾注释写 10s),
-  2026-09-29 确认是笔误,改为 10000,`LoginNodeService` 同步由 102000 改为 12000(`docs/design/grpc-client-deadline-failure-callback.md` §4.3)。
+  2026-09-29 确认是笔误,改为 10000,`LoginNodeService` 同步由 102000 改为 12000(`docs/design/grpc-muduo-transport.md` §16.3)。
 - **login ConfigMap 的 `Timeout` 改为镜像 `go/login/etc/login.yaml`(2026-09-29)**:以前 `New-GoSvcConfigMapYaml` 在模板里写死 `100000`,
   而预算门禁核对的是 login.yaml,两边一分家,门禁放行的就不是集群里生效的值。现在与 scene-manager / match / 路由服同法镜像,
-  读不到或不是正整数时生成期直接 throw。镜像落地时两边都是 100000,行为不变;随后值已改正为 10000(见上一条),ConfigMap 自动跟随。
+  读不到或不是正整数时生成期直接 throw。镜像落地时两边都是 100000,行为不变;随后在 2026-09-29 改正为 10000，2026-10-14 再调为 4000，ConfigMap 自动跟随。
   以后再改只需动 login.yaml 与 `LoginNodeService` 两处,生成器不用动。
 - 契约测试:`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的「C++ gRPC 客户端 deadline 预算」一节 —— 两份 node ConfigMap 的块与权威文件逐项相等、
   门禁先于任何 `kubectl` 写操作、K8s 生成物(login 镜像 login.yaml 的 Timeout、data-service 不写 Timeout)同样满足不等式、判定口径自检(含 `MethodTimeouts` 逐条核对、解析器与时长换算)、
@@ -1991,10 +2093,13 @@ C++ 节点(gate / scene / battle)连共享 Redis(`redis.<InfraNamespace>:6379`)�
   - external gate(OnDelete)一次坏一台;
   - 全新 zone-up 整区起不来。
   - 所以发布前先读各节点池硬限是硬前置。
+  - (2026-10-22 更正,已落码、未验证)`New-NodeDeploymentYaml` 现在显式写 `maxUnavailable: 0`(maxSurge 仍取缺省 25%):gate / scene / battle 的 Deployment 拒启时只停在滚动中途,上面「scene 先少一台」不再成立。hostPort battle、external gate、Agones Fleet 的行为不变。
+  - (同上)`-WaitReady` 等 gate / scene / battle 失败时,脚本对未就绪 Pod 读 `kubectl logs --previous`(没有上一个实例时读当前实例),把 `FATAL open file limit` 行打印出来。Agones scene 不等待,脚本只打印对应的 logs 命令。
 - **运维豁免 `NODE_OPEN_FILE_LIMIT_MODE=warn`**:只打 WARN、继续启动。
   - 代价:客户端连接可能先占满 fd 表,之后重连与日志滚动也会 EMFILE,节点可能被 etcd 摘除或崩溃。
   - gate / battle 的应急首选是把准入上限调到 ≤ 软限 − 4096,这样检查直接通过。
   - 生成器目前**没有接线**这个变量(没有 ConfigMap / env / 参数)。临时手设用 `kubectl set env`;撤销必须显式写 `NODE_OPEN_FILE_LIMIT_MODE-`,因为 set env 加的变量不在 last-applied 里。
+  - (2026-10-22 更正,已落码、未验证)生成器已接线:`k8s_deploy.ps1 -NodeOpenFileLimitMode enforce|warn`,见上文 Optional Flags。手设过 `kubectl set env` 的工作负载,撤销仍按上一条显式删。
 - **清单不做这件事**:
   - K8s 没有按容器的 ulimit 字段;
   - initContainer 改不了别的进程的限值;
@@ -2427,8 +2532,15 @@ kubectl -n <infra> exec kafka-0 -c kafka -- /bin/sh -c "KAFKA_HEAP_OPTS='-Xms16m
   客户端收到通用的进场失败(不新增 tip)。冷加载不判。模式键 `PersistSchemaRegressionMode` 在 `go/login/etc/login.yaml`,
   `k8s_deploy.ps1` 镜像进 login ConfigMap,生成期只认两个字面量;login 读到其他值拒绝启动。告警 `LoginPersistSchemaRegression`
   在 `persist-schema-alerts.yaml` 的 `login.persist-schema` 组,四条序列起服即以 0 建出。处置同上一条「处置 `PersistSchemaRegression`」。
+- **巡检 `schema_regressed`**(切 enforce 门禁的第三项,设计 §8.1 第 5 步):warn 判倒退的写方会在 `save_barrier` hash 里留下
+  `schema_regressed`(它的写方令牌),之后不随别的写方清除,只有 `save_barrier_restore` 重建时清掉。判倒退那次的回包丢失、写方随即被废黜时,
+  LogQL 与 login 计数都可能漏掉,只有这个字段留着。巡检(只读,按 SCAN 分批,避开高峰;`<redis>` 为父快照所在的共享核心 Redis):
+  ```bash
+  redis-cli -h <redis> --scan --pattern 'player:{*}:save_barrier' --count 1000 | while read -r k; do [ "$(redis-cli -h <redis> HEXISTS "$k" schema_regressed)" = "1" ] && echo "$k"; done
+  ```
+  有输出就不能切 enforce;逐个按上一条「处置 `PersistSchemaRegression`」处理,以 SQL 为准恢复后字段会被清掉。
 - **切 enforce**:改 `bin/etc/base_deploy_config.yaml`(scene)与 `go/login/etc/login.yaml`(login,C4)的 `PersistSchemaRegressionMode`,
-  按正常发布流程滚动;两边可分别切。前提见设计 §8.1 第 5 步:staging 真实升世代演练中 C3 / C4 倒退计数为 0,且线上 warn 观察期计数为 0。
+  按正常发布流程滚动;两边可分别切。前提见设计 §8.1 第 5 步:staging 真实升世代演练中 C3 / C4 倒退计数为 0,且线上 warn 观察期内三项都为 0(C++ `regression_warned`、`login_persist_schema_regression_total`、上一条 `schema_regressed` 巡检);开着 dev 旁路 `AllowUnsafeCrossNodeHandoff` 的环境不切。
 
 ## player_locator 会话对账告警(PrometheusRule,手工 apply;2026-10-18 登记,未在集群上 apply 过)
 

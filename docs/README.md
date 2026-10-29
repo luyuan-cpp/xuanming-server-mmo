@@ -7,6 +7,10 @@
 3. [ops/k8s-open-server-runbook.md](ops/k8s-open-server-runbook.md) —— 开服与部署的操作步骤
 4. 之后按要改的模块,到下面的索引里找对应的设计文档
 
+协议生成的当前命令、输入完整性与守护段规则见[生成器主说明](../tools/proto_generator/README.md)；旧 pbgen 三语杂记已由该入口与专项设计承接。
+
+脚本归属见[脚本主说明](../tools/scripts/README.md)；C++ 串行构建与 scene 编译器 PDB 隔离见[C++ 主说明](../cpp/README.md)。
+
 ## 目录约定
 
 | 目录 | 放什么 | 不放什么 |
@@ -33,6 +37,10 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 
 跨 zone 的完整节点图、源端双表 SQL ACK 交接时序、目标重登入场时序、[抵达后存盘与 go/db 选库](design/cross-zone-scene-travel.md#1551-zone-2-scene-正常存盘的完整时序)及水平扩展边界见 [跨 zone 场景传送 §15](design/cross-zone-scene-travel.md#15-跨-zone-完整节点与数据流程2026-10-20源码核对)（2026-10-20 源码核对，非本轮运行验收）。
 
+Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口与后续验收要求见 [Claude Code 接手文档](handoff/redis-horizontal-scaling-requirements-20261022.md)；选定方案（玩家域 Redis Cluster 按 `{player_id}` 分片、控制域留原实例、C++ 自研路由层同 slot 停等、补投索引按 slot、Redis ≥ 8.4 原子迁移）与分批计划见 [玩家态 Redis 集群化设计](design/redis-player-store-cluster.md)（2026-10-23 v2，第 1 批已落码未编译）。
+
+全类型节点的平滑停机／缩容、水平扩展、灰度与金丝雀发布需求，及 C++/Go、独立 Java 两版的现状差距与验收口径，见 [节点生命周期与发布需求](design/node-lifecycle-elasticity-release-20261023.md)（2026-10-23，仅文档，尚未完成全类型验收）。
+
 ## 索引
 
 <!-- BEGIN GENERATED INDEX: tools/scripts/gen_docs_index.py -->
@@ -47,11 +55,7 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 - [ecs.md](design/ecs.md) — ECS 设计规则 · [EN](design/ecs_en.md) · [中文](design/ecs_zh.md)
 - [ecs-component-access-rules.md](design/ecs-component-access-rules.md) — ECS Component Access Rules
 - [ecs-entt-misuse-audit-20261015.md](design/ecs-entt-misuse-audit-20261015.md) — entt 误用审计（2026-10-15）
-- [data-overwrite-rollback-audit-20261018.md](design/data-overwrite-rollback-audit-20261018.md) — 全仓数据问题与覆盖回档审计（2026-10-18）
-- [data-consistency-guarantee-map-20261020.md](design/data-consistency-guarantee-map-20261020.md) — 数据一致性等级核对：各类数据实际做到哪一级、Redis 回退一族与战斗到期结算丢失（2026-10-20）
 - [onboarding.md](design/onboarding.md) — 开发者上手指南 — MMO Server
-- [root_level_cleanup_findings.md](design/root_level_cleanup_findings.md) — Root Level & Tools Directory Audit (2026-03-24) · [EN](design/root_level_cleanup_findings_en.md) · [中文](design/root_level_cleanup_findings_zh.md)
-- [script_directory_rules.md](design/script_directory_rules.md) — Script Directory Rules · [EN](design/script_directory_rules_en.md) · [中文](design/script_directory_rules_zh.md)
 - [table-api-reference.md](design/table-api-reference.md) — Configuration Table API Reference · [中文](design/table-api-reference-zh.md)
 
 #### 接入层:网关、gate 与登录
@@ -59,12 +63,9 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 - [auth-provider-framework.md](design/auth-provider-framework.md) — Auth Provider Framework
 - [client-access-band-routing.md](design/client-access-band-routing.md) — 客户端接入的标准形态，与 gate 按号段整体转发给路由服（client-rpc-router 续篇，D51–D64）
 - [client-request-ordering.md](design/client-request-ordering.md) — 客户端请求按会话保序:路由服水平扩展下的乱序修复(gate 路由 lane)
-- [client-rpc-callback.md](design/client-rpc-callback.md) — 客户端请求自带回调:按请求号认领回包,生成类型化调用桩取代每消息 Handler(含给 Codex 的生成器细则)
 - [client-rpc-router.md](design/client-rpc-router.md) — 客户端 RPC 路由服(client_rpc_router):gate 唯一的 gRPC 目标
 - [dual-token-authentication.md](design/dual-token-authentication.md) — Dual Token Authentication Design (Access + Refresh)
 - [gate-connection-admission-control.md](design/gate-connection-admission-control.md) — gate 连接准入控制：muduo 无条件 accept 的业界解法与本仓落地 (2026-09-03)
-- [gate-entity-id-truncation-fix.md](design/gate-entity-id-truncation-fix.md) — Gate Entity ID Truncation Fix (2026-04-04)
-- [gate-grpc-long-connection-audit-2026-05.md](design/gate-grpc-long-connection-audit-2026-05.md) — Gate→Login gRPC 长连接核查 (2026-05)
 - [gate-load-balancing-design.md](design/gate-load-balancing-design.md) — Gate 负载均衡、票据与重连边界
 - [gate-login-rpc-boundary.md](design/gate-login-rpc-boundary.md) — Gate ↔ Login RPC 边界 (2026-05)
 - [gate-scene-relay-architecture.md](design/gate-scene-relay-architecture.md) — Gate–Scene 连接规模与跨 zone 换 Gate
@@ -73,13 +74,9 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 - [java-gateway-portal-decision.md](design/java-gateway-portal-decision.md) — Java Gateway Portal Decision (2026-04-14)
 - [k8s-client-entry.md](design/k8s-client-entry.md) — gate / battle 集群外客户端入口(D76–D93)
 - [k8s_gate_exposure_guidance.md](design/k8s_gate_exposure_guidance.md) — K8s Gate Exposure Guidance / K8s gate 暴露方式指南 · [EN](design/k8s_gate_exposure_guidance_en.md) · [中文](design/k8s_gate_exposure_guidance_zh.md)
-- [login-gate-assignment-migration.md](design/login-gate-assignment-migration.md) — Login Gate Assignment Migration Plan · [中文](design/login-gate-assignment-migration_zh.md)
 - [login-node-stateless-no-affinity.md](design/login-node-stateless-no-affinity.md) — Login Node: Stateless, No Session Affinity
-- [account-role-authority.md](design/account-role-authority.md) — 账号角色目录的全局 SQL 权威、登录接线及上线前数据边界
 - [login-queue-2026-05.md](design/login-queue-2026-05.md) — Login Queue (AssignGate Real Queue) — 2026-05
-- [login-simplification-2026-04.md](design/login-simplification-2026-04.md) — Login Service Simplification (2026-04)
-- [login_gate_assignment_migration.md](design/login_gate_assignment_migration.md) — 登录网关分配改造计划：当前架构 → 大厂标准架构
-- [open-server-rate-limit-design.md](design/open-server-rate-limit-design.md) — 开服登录削峰设计 (Gateway 限流 + 排队)
+- [open-server-rate-limit-design.md](design/open-server-rate-limit-design.md) — 开服登录削峰与排队入口
 - [player-locator-gate-session-index.md](design/player-locator-gate-session-index.md) — player_locator 会话对账:按 gate 实例建会话索引(2026-10-18)
 - [player_login_flow.md](design/player_login_flow.md) — 玩家登录/断线/重连/替换登录/超时清理 — 最终态事件流 · [EN](design/player_login_flow_en.md) · [中文](design/player_login_flow_zh.md)
 - [serverlist-static-publish-2026-05.md](design/serverlist-static-publish-2026-05.md) — Server-List 静态发布架构 (Static Publish via OSS + CDN) — 2026-05
@@ -92,16 +89,14 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 - [aoi_priority_design.md](design/aoi_priority_design.md) — AOI Priority, Capacity & Visibility Design · [EN](design/aoi_priority_design_en.md) · [中文](design/aoi_priority_design_zh.md)
 - [broadcast-message-size-analysis.md](design/broadcast-message-size-analysis.md) — BroadcastToPlayers 消息体积分析
 - [cross_scene_player_messaging.md](design/cross_scene_player_messaging.md) — Cross-Scene Player Messaging (跨场景玩家消息投递) · [EN](design/cross_scene_player_messaging_en.md) · [中文](design/cross_scene_player_messaging_zh.md)
-- [enter-scene-zone-routing.md](design/enter-scene-zone-routing.md) — EnterScene Zone Routing Design (updated 2026-08-03; handoff-gate, login-side and merge sections re-verified against code 2026-09-20)
-- [nav-spawn-fix-2026-09-05.md](design/nav-spawn-fix-2026-09-05.md) — 客户端/服务端导航数据、出生点与位置纠正契约统一(2026-09-05)
+- [enter-scene-zone-routing.md](design/enter-scene-zone-routing.md) — EnterScene 选区路由设计
+- [nav-spawn-fix-2026-09-05.md](design/nav-spawn-fix-2026-09-05.md) — 客户端/服务端导航数据、出生点与位置纠正契约
 - [scene-creation-architecture.md](design/scene-creation-architecture.md) — Scene Creation Architecture
-- [scene-enter-chain-residuals.md](design/scene-enter-chain-residuals.md) — 进场链余项 a–e:踢线、离场、落点、释放与断线上报的身份栅栏(设计稿,2026-10-16)
+- [scene-enter-chain-residuals.md](design/scene-enter-chain-residuals.md) — 进场链余项 a–e:踢线、离场、落点、释放与断线上报的身份栅栏
 - [scene-enter-session-fence.md](design/scene-enter-session-fence.md) — 入场会话栅栏:登录代次(login_generation)
-- [scene-grpc-server-design.md](design/scene-grpc-server-design.md) — Scene Node gRPC Server Design
 - [scene-navmesh-pipeline.md](design/scene-navmesh-pipeline.md) — 场景导航网格管线(Recast 烘焙 + 服务器寻路阻挡校验)
-- [scene-node-threading-model.md](design/scene-node-threading-model.md) — Scene Node 线程模型决策
+- [scene-node-threading-model.md](design/scene-node-threading-model.md) — Scene Node 线程归属、帧循环与停机
 - [scene-owner-reentry-barrier.md](design/scene-owner-reentry-barrier.md) — 场景所有权：再入屏障与 owner_epoch
-- [location-release-binding.md](design/location-release-binding.md) — 删 location 绑定"持有者已释放"(审计 §2.1 修复:LeaveScene 释放证据、ReleasePlayer.session_ended、gate LeaveGame 与同节点新 epoch,2026-10-18)
 - [scene-switch-release-design.md](design/scene-switch-release-design.md) — SceneManager跨节点切场景释放玩家方案选型
 - [world-channel-autoscale.md](design/world-channel-autoscale.md) — 按人数自动扩缩容:大世界频道 / gate / Scene Node 进程
 - [world-channel-switch.md](design/world-channel-switch.md) — 玩家主动切线(分线列表 + 选线切换)
@@ -110,7 +105,9 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 #### 战斗
 
 - [battle-art-prompts.md](design/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
+- [battle-spectate-tiered-fanout.md](design/battle-spectate-tiered-fanout.md) — 观战分级扩容：直连席 → gate 中继 → 全服广播（提案）
 - [battle-transport-decision.md](design/battle-transport-decision.md) — battle 节点传输选型定谳(gRPC vs muduo TCP RPC vs Go)
+- [global-match-hierarchical-pools.md](design/global-match-hierarchical-pools.md) — 全服匹配：按模板分池、zone→大区→全服逐级扩大范围、每池单写者（2026-10-24 拍板，分批落码）
 - [pve-team-size-matching.md](design/pve-team-size-matching.md) — PVE 人数档匹配:人越多怪越多
 - [session-extractability-mmo-slg.md](design/session-extractability-mmo-slg.md) — 「战斗抽出去」这套做法能套到哪些玩法:MOBA / MMO / SLG 定谳
 - [team-backfill-matching.md](design/team-backfill-matching.md) — 队伍补位匹配(已组好的队伍进人数档队列凑满 N 人)
@@ -127,26 +124,22 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 - [bag-service-srp-refactor.md](design/bag-service-srp-refactor.md) — Bag → BagService SRP Refactor (2026-03-26) · [EN](design/bag-service-srp-refactor_en.md) · [中文](design/bag-service-srp-refactor_zh.md)
 - [character-appearance-identity.md](design/character-appearance-identity.md) — 人物外观身份链
 - [chat-sensitive-word-filter.md](design/chat-sensitive-word-filter.md) — Chat Sensitive-Word Filter — Design (todo.md #68)
-- [configurable-templates.md](design/configurable-templates.md) — 战斗策略 / 活动 / 玩法模板可配置化(原子字典 + 模板 + 实例,含玩家自定义模板;设计稿,未落码,2026-10-19)
 - [equipment-attributes.md](design/equipment-attributes.md) — 装备属性系统(问道式:基础属性 + 蓝/粉/黄随机属性)
 - [equipment-enhance-inlay.md](design/equipment-enhance-inlay.md) — 装备强化与镶嵌(装备属性系统二期)
 - [exploit_loss_prevention.md](design/exploit_loss_prevention.md) — Exploit & Loss Prevention Systems (漏洞止损与回收系统) · [EN](design/exploit_loss_prevention_en.md) · [中文](design/exploit_loss_prevention_zh.md)
 - [friend-client-spec-20260920.md](design/friend-client-spec-20260920.md) — friend 客户端任务规格(Unity,2026-09-20)
 - [friend-persistence-architecture.md](design/friend-persistence-architecture.md) — Friend Service Persistence Architecture
 - [friend-port-20260918.md](design/friend-port-20260918.md) — friend:移植为全局服务 + 客户端经路由服可达
-- [guild-actor-architecture.md](design/guild-actor-architecture.md) — Guild Actor 化架构设计
+- [guild-actor-architecture.md](design/guild-actor-architecture.md) — Guild 存储架构现状与 Actor 历史提案
 - [guild-zone-client-access.md](design/guild-zone-client-access.md) — 公会:按 zone 隔离的客户端接入
-- [guild_friend_service_notes.md](design/guild_friend_service_notes.md) — Guild & Friend Service Implementation Notes (2025-03-25) · [EN](design/guild_friend_service_notes_en.md) · [中文](design/guild_friend_service_notes_zh.md)
+- [guild_friend_service_notes_zh.md](design/guild_friend_service_notes_zh.md) — 公会与好友服务实现笔记
 - [guild_ranking_architecture.md](design/guild_ranking_architecture.md) — Guild Ranking Architecture (2025-03-25) · [EN](design/guild_ranking_architecture_en.md) · [中文](design/guild_ranking_architecture_zh.md)
 - [jubaozhai-market.md](design/jubaozhai-market.md) — 聚宝斋(玩家间人民币寄售交易)设计 — 2026-09-14
-- [mall-administration.md](design/mall-administration.md) — 商城后台受限经济命令、幂等日志与库存预占保护
-- [jubaozhai-rmb-consignment-plan.md](design/jubaozhai-rmb-consignment-plan.md) — 人民币寄售主流程分步计划与负责人拍板 — 2026-10-19
 - [leaderboard-system.md](design/leaderboard-system.md) — 排行榜(leaderboard / rank)v1 设计
 - [mail-system.md](design/mail-system.md) — mail(邮件)M1:全局服务 + 系统邮件 / 定向邮件 + 领取短路
 - [mystery-merchant.md](design/mystery-merchant.md) — 神秘商人(定时随机落线的折扣 NPC)
 - [payment-recharge.md](design/payment-recharge.md) — 真钱充值设计(苹果 IAP / Google Play / 国内安卓 / 小游戏)
 - [player-attribute-allocation.md](design/player-attribute-allocation.md) — 角色属性加点系统
-- [class-skills.md](design/class-skills.md) — 四职业技能(class skills)服务端设计
 - [player-features-ui.md](design/player-features-ui.md) — 背包、任务、活动客户端读取接口
 - [player-pet.md](design/player-pet.md) — 宝宝(宠物)系统 —— 核心线
 - [stall-system.md](design/stall-system.md) — 摆摊系统设计(草案)
@@ -155,7 +148,6 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 #### 玩家数据与存储
 
 - [async-load-disconnect-reconnect-race.md](design/async-load-disconnect-reconnect-race.md) — 异步加载竞态：Redis 加载期间的断线与重连
-- [disconnect-reconnect-audit-20261020.md](design/disconnect-reconnect-audit-20261020.md) — 断线重连恢复审计：当前状态重同步、业务补投、客户端接线与遗漏（含 Java 版有限核对，静态审计）
 - [data_service_role_and_scope.md](design/data_service_role_and_scope.md) — data_service 定位与边界
 - [db-consumer-group-per-zone.md](design/db-consumer-group-per-zone.md) — go/db 存盘消费组按 zone 拆分与不停服交接
 - [db-retry-owner-routing.md](design/db-retry-owner-routing.md) — go/db 重试只交给分区属主（④）与 Kafka 源入队的落盘确认（WAITAOF）
@@ -168,16 +160,15 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 - [db_write_behind_dirty_flag_race.md](design/db_write_behind_dirty_flag_race.md) — DB Write-Behind 脏标记方案竞态分析 · [EN](design/db_write_behind_dirty_flag_race_en.md) · [中文](design/db_write_behind_dirty_flag_race_zh.md)
 - [db_zone_isolation.md](design/db_zone_isolation.md) — DB Zone Isolation (2026-04-11)
 - [global-data-layer-tidb-decision.md](design/global-data-layer-tidb-decision.md) — 全区全服数据层 + TiDB 架构决策
-- [mixed-version-persist-field-protection.md](design/mixed-version-persist-field-protection.md) — 新旧版本混跑时的玩家持久字段保护：未知字段跟着对象走、覆盖世代校验、go/db 超前延后与倒退拒写（v0.5 已拍板；第 1 批已验证，第 2 批构建通过、单测未跑，第 3a 批已落码未编译，3b / 4 / 5 未开工；交接见 handoff/mixed-version-persist-handoff-20261019.md）
 - [landing-recovery-sync-digest.md](design/landing-recovery-sync-digest.md) — 落地恢复：按域版本摘要、场景侧待办唤醒与超窗处置（2026-10-14）
 - [new-player-first-enter-no-cold-read.md](design/new-player-first-enter-no-cold-read.md) — 新号首次进场免冷读:建角时写入 PlayerAllData 种子
-- [player-async-save-loss-windows.md](design/player-async-save-loss-windows.md) — 玩家异步存盘的丢失窗口（置脏 / 快照跳过 / 重试耗尽）
+- [player-async-save-loss-windows.md](design/player-async-save-loss-windows.md) — 玩家异步存盘：已修复问题、剩余丢失窗口与修复任务
 - [player-inbox-service.md](design/player-inbox-service.md) — 玩家持久收件箱服务（player_inbox）设计
 - [player-route-mapping-durability-proposal.md](design/player-route-mapping-durability-proposal.md) — 玩家归属与落点映射持久化:库为真源 + Redis 完整副本 + 就绪标记(已拍板;第 0 ~ 3 批已落码,未验证;2026-10-19 起读方按身份绑定的就绪标记判可信,见 §13)
 - [player-storage-placement.md](design/player-storage-placement.md) — 玩家存储落点(Placement):归属与存储拆分、单玩家搬库、Phase 2 全局库
 - [player_live_data_export_runbook.md](design/player_live_data_export_runbook.md) — 玩家线上数据下线导出操作记录
 - [proto-compare-dirty-save.md](design/proto-compare-dirty-save.md) — Proto-Compare-Driven Dirty Save — Design (todo.md #204 + #226)
-- [redis-async-client-retry-fix.md](design/redis-async-client-retry-fix.md) — Redis 重连、认证、同批 socket 事件与 Hiredis 生命周期
+- [redis-async-client-retry-fix.md](design/redis-async-client-retry-fix.md) — Redis 异步客户端重试、重连与生命周期
 - [reliable-player-inbox-20261014.md](design/reliable-player-inbox-20261014.md) — 重要玩家消息：持久收件箱、拉取恢复与迁移围栏（2026-10-14）
 - [tidb-phase1-and-launch-readiness.md](design/tidb-phase1-and-launch-readiness.md) — TiDB Phase 1 设计与实施清单（含开服准备）
 
@@ -189,7 +180,7 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 - [cross-zone-matchmaking.md](design/cross-zone-matchmaking.md) — 全服跨 Zone 匹配(Cross-Zone Matchmaking)
 - [cross-zone-readiness-audit.md](design/cross-zone-readiness-audit.md) — 跨 Zone 就绪审计(Cross-Zone Readiness Audit)
 - [cross-zone-scene-travel.md](design/cross-zone-scene-travel.md) — 跨 zone 场景传送(玩家去别的 zone 的地图游玩)
-- [cross_server_architecture_principle.md](design/cross_server_architecture_principle.md) — MMO Cross-Server Architecture (跨服架构 — 全局设计文档) · [EN](design/cross_server_architecture_principle_en.md) · [中文](design/cross_server_architecture_principle_zh.md)
+- [cross_server_architecture_principle.md](design/cross_server_architecture_principle.md) — MMO 跨服架构（全局设计文档） · [EN](design/cross_server_architecture_principle_en.md) · [中文](design/cross_server_architecture_principle_zh.md)
 - [merge-zone-overhaul-20260908.md](design/merge-zone-overhaul-20260908.md) — 合服（merge_zone）链路整改 —— 全部修复与验证记录（2026-09-08）
 - [microservice-zone-contract-20260914.md](design/microservice-zone-contract-20260914.md) — Go 微服务接入 zone 体系的契约 v1(首个落地:chat)
 - [mmo_cross_server_architecture.md](design/mmo_cross_server_architecture.md) — MMO Cross-Server Architecture Design (Complete Reference) · [EN](design/mmo_cross_server_architecture_en.md) · [中文](design/mmo_cross_server_architecture_zh.md)
@@ -202,11 +193,11 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 #### ID、节点身份与寻址
 
 - [control-plane-topic-partitioning-20260908.md](design/control-plane-topic-partitioning-20260908.md) — 控制面命令 topic:从"一节点一 topic"改为"固定分区 + 按 node_id 取模寻址"
-- [grpc_node_entity_id_collision.md](design/grpc_node_entity_id_collision.md) — GRPC Node Entity ID Collision (Fixed 2026-04-02)
 - [id-routing-session-status-20260909.md](design/id-routing-session-status-20260909.md) — ID / 寻址改造 —— 会话总结与遗留清单(2026-09-09)
 - [node-id-overhaul-changelog-20260908.md](design/node-id-overhaul-changelog-20260908.md) — ID 与寻址身份改造 —— 逐文件改动说明(2026-09-08 最终版)
 - [node-id-overhaul-plan-20260908.md](design/node-id-overhaul-plan-20260908.md) — Node ID / 永久 ID 改造方案(2026-09-08 草案,未落码)
 - [node-id-overhaul-qa-20260908.md](design/node-id-overhaul-qa-20260908.md) — Node ID 改造 —— 问答全记录与改动细节(2026-09-08)
+- [node-lifecycle-elasticity-release-20261023.md](design/node-lifecycle-elasticity-release-20261023.md) — 全类型节点：平滑停机、水平扩展与灰度／金丝雀发布需求
 - [node-removal-grace-period.md](design/node-removal-grace-period.md) — Node Removal Grace Period (Consumer-side)
 - [node_id_conflict_design.md](design/node_id_conflict_design.md) — Node ID 冲突处理设计（重要架构决策） · [EN](design/node_id_conflict_design_en.md) · [中文](design/node_id_conflict_design_zh.md)
 - [routing-identity-audit-20260908.md](design/routing-identity-audit-20260908.md) — 路由身份(routing node_id)对抗审计 —— 结论与修复清单(2026-09-08)
@@ -220,14 +211,12 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 - [double-buffer-queue-optimizations.md](design/double-buffer-queue-optimizations.md) — DoubleBufferQueue Optimizations (2026-04-16)
 - [error-reporting.md](design/error-reporting.md) — Error Aggregation & Reporting — Design (todo.md #250)
 - [go-zero-rpc-timeout-fix.md](design/go-zero-rpc-timeout-fix.md) — go-zero RPC Client Timeout Fix
-- [grpc-client-deadline-failure-callback.md](design/grpc-client-deadline-failure-callback.md) — C++ 生成 gRPC 客户端:每次调用设 deadline + 失败也回调(2026-09-28)
 - [grpc-muduo-transport.md](design/grpc-muduo-transport.md) — C++ gRPC 传输改由 muduo 驱动(nghttp2 + 自有 gRPC 调用语义)
 - [hashed-timing-wheel.md](design/hashed-timing-wheel.md) — Hashed Timing Wheel
 - [infra-reconnect-overview.md](design/infra-reconnect-overview.md) — Infrastructure Reconnection Overview
-- [kafka-producer-txn-concurrency-bug.md](design/kafka-producer-txn-concurrency-bug.md) — Kafka Producer Transactional Concurrency Bug
-- [kafka-topic-retention-strategy.md](design/kafka-topic-retention-strategy.md) — Kafka Topic Retention Strategy
+- [kafka-topic-retention-strategy.md](design/kafka-topic-retention-strategy.md) — Kafka topic 保留与耐久策略
 - [muduo-rpc-channel.md](design/muduo-rpc-channel.md) — 节点间 muduo RPC:每次调用的回调、延后回包与完整的完成语义(RpcChannel 改造)
-- [muduo-timer-cancellation-hazards.md](design/muduo-timer-cancellation-hazards.md) — muduo 同批取消、清理重入、单调时钟与两端回归
+- [muduo-timer-cancellation-hazards.md](design/muduo-timer-cancellation-hazards.md) — muduo 定时器取消语义与野引用
 - [no-single-node-horizontal-scaling-20261001.md](design/no-single-node-horizontal-scaling-20261001.md) — 消除单节点:所有服务都能水平扩展(2026-10-01)
 - [player-handler-deferred-reply.md](design/player-handler-deferred-reply.md) — 玩家级 handler 延后完成(PlayerCallContext)
 - [shared-redis-split-by-purpose.md](design/shared-redis-split-by-purpose.md) — 共享 Redis 按用途拆实例(G4a 设计稿)
@@ -236,13 +225,8 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 
 #### 协议与配表工具链
 
-- [published-contract-compatibility-20261017.md](design/published-contract-compatibility-20261017.md) — 两套已发布契约的合并兼容方案（双入口方向已批准；来源与实施状态见文内）
 - [excel-6row-header-format.md](design/excel-6row-header-format.md) — 配置表格式说明入口（旧六行表头已停用） · [EN](design/excel-6row-header-format_en.md) · [中文](design/excel-6row-header-format_zh.md)
 - [generated-table-header-decoupling-plan.md](design/generated-table-header-decoupling-plan.md) — 交接：mmorpg 导表器生成头文件解耦（①exprtk ②FK声明化 ③muduo）
-- [pbgen_notes.md](design/pbgen_notes.md) — Proto-Gen (pbgen) Notes · [EN](design/pbgen_notes_en.md) · [中文](design/pbgen_notes_zh.md)
-- [proto-event-message-suffix-rename-2026-06.md](design/proto-event-message-suffix-rename-2026-06.md) — Proto Event Message Suffix Rename (2026-06)
-- [proto-scene-file-rename-2026-04.md](design/proto-scene-file-rename-2026-04.md) — Proto Scene File Rename (2026-04)
-- [proto3_enum_zero_requirement.md](design/proto3_enum_zero_requirement.md) — Proto3 Enum Zero Requirement · [EN](design/proto3_enum_zero_requirement_en.md) · [中文](design/proto3_enum_zero_requirement_zh.md)
 - [tip-code-axis.md](design/tip-code-axis.md) — tip 码轴：段是发号器的输入
 
 #### 构建、部署与发布
@@ -252,20 +236,36 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 - [gateway-k8s-deployment.md](design/gateway-k8s-deployment.md) — Gateway Service Notes
 - [release-packaging-standard-20260914.md](design/release-packaging-standard-20260914.md) — 服务端发布打包标准(对标 luyuan-go/xuanming-server)
 - [rolling-update-restart-resilience-tests.md](design/rolling-update-restart-resilience-tests.md) — Rolling Update & Node Restart Resilience Tests
-- [scene_build_pdb_note.md](design/scene_build_pdb_note.md) — Scene Build PDB Note · [EN](design/scene_build_pdb_note_en.md) · [中文](design/scene_build_pdb_note_zh.md)
 - [vs2026_cross_machine_compatibility.md](design/vs2026_cross_machine_compatibility.md) — VS2026 跨电脑兼容性维护记录 · [EN](design/vs2026_cross_machine_compatibility_en.md) · [中文](design/vs2026_cross_machine_compatibility_zh.md)
 
 #### 测试与机器人
 
 - [data-consistency-stress-testing.md](design/data-consistency-stress-testing.md) — Player-Data Consistency: Stress Testing & Verification
-- [login-test-anti-stuck-system.md](design/login-test-anti-stuck-system.md) — Login Test Anti-Stuck System
+- [login-test-anti-stuck-system.md](design/login-test-anti-stuck-system.md) — 登录回归套件与超时检测
 - [robot-login-test-scenarios.md](design/robot-login-test-scenarios.md) — Robot Login Test Scenarios
-- [robot-zone-auto-select.md](design/robot-zone-auto-select.md) — Robot Zone Auto-Select Feature
 
 #### 移植记录
 
 - [xuanming-port-decisions-20260910.md](design/xuanming-port-decisions-20260910.md) — 玄冥移植:开工前决策记录(2026-09-10)
 - [xuanming-port-feasibility-20260902.md](design/xuanming-port-feasibility-20260902.md) — XuanMing-Server → mmorpg/go 移植可行性定谳（2026-09-02）
+
+#### 未分类
+
+- [account-role-authority.md](design/account-role-authority.md) — 账号角色目录的全局 SQL 权威
+- [class-skills.md](design/class-skills.md) — 四职业技能(class skills)服务端设计
+- [client-rpc-callback.md](design/client-rpc-callback.md) — 客户端请求自带回调:按请求号认领回包,生成类型化调用桩取代每消息 Handler
+- [configurable-templates.md](design/configurable-templates.md) — 战斗策略 / 活动 / 玩法模板可配置化（含玩家自定义模板）
+- [data-consistency-guarantee-map-20261020.md](design/data-consistency-guarantee-map-20261020.md) — 数据一致性等级核对（2026-10-20）
+- [data-overwrite-rollback-audit-20261018.md](design/data-overwrite-rollback-audit-20261018.md) — 全仓数据问题与覆盖回档审计（2026-10-18）
+- [data-overwrite-rollback-audit-r2-20261019.md](design/data-overwrite-rollback-audit-r2-20261019.md) — 全仓数据问题与覆盖回档审计·第二轮（2026-10-19）
+- [disconnect-reconnect-audit-20261020.md](design/disconnect-reconnect-audit-20261020.md) — 断线重连恢复审计（2026-10-20）
+- [jubaozhai-rmb-consignment-plan.md](design/jubaozhai-rmb-consignment-plan.md) — 聚宝斋人民币寄售：买卖主流程分步计划（D-17 mall 路线）
+- [location-release-binding.md](design/location-release-binding.md) — 删 location 绑定"持有者已释放"(审计 §2.1 修复)
+- [mall-administration.md](design/mall-administration.md) — 商城后台的受限经济命令
+- [mixed-version-persist-field-protection.md](design/mixed-version-persist-field-protection.md) — 新旧版本混跑时的玩家持久字段保护
+- [published-contract-compatibility-20261017.md](design/published-contract-compatibility-20261017.md) — 两套已发布客户端契约的合并兼容方案
+- [redis-player-store-cluster.md](design/redis-player-store-cluster.md) — 玩家态 Redis 集群化：物理水平扩展设计
+- [zone-redis-regression-guard-20261022.md](design/zone-redis-regression-guard-20261022.md) — zone Redis 回退防护：「Redis 回退一族」6 条 low 的合并设计
 
 #### 成套设计
 
@@ -278,7 +278,7 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 - [incident-friend-lock-order-deadlock-2026-09-21.md](ops/incident-friend-lock-order-deadlock-2026-09-21.md) — 事故报告:friend 锁定读被规划成索引全扫描,锁集越出守卫,真死锁 1213
 - [incident-gate-tcpconnection-dtor-assert-2026-09-13.md](ops/incident-gate-tcpconnection-dtor-assert-2026-09-13.md) — 事故报告:gate 在 `~TcpConnection` 断言崩溃(thread_local 持有连接强引用)
 - [incident-local-enter-game-3023-2026-10-22.md](ops/incident-local-enter-game-3023-2026-10-22.md) — 本地测试环境进场失败严重事故记录：3023 与存档协议、数据世代未闭环
-- [incident-location-delete-rollback-2026-10-18.md](ops/incident-location-delete-rollback-2026-10-18.md) — 事故报告:删 location 不等持有者落盘,玩家回档到上一次成功存盘(审计 §2.1,修复见 location-release-binding.md)
+- [incident-location-delete-rollback-2026-10-18.md](ops/incident-location-delete-rollback-2026-10-18.md) — 事故报告:删 location 不等持有者落盘,玩家回档到上一次成功存盘
 - [incident-scene-ecs-gameplay-20261014.md](ops/incident-scene-ecs-gameplay-20261014.md) — 严重事故记录：任务、实时技能、Buff 与节点生命周期缺陷（2026-10-14）
 
 #### 运维手册
@@ -296,11 +296,12 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 - [login-queue-stress-runbook.md](ops/login-queue-stress-runbook.md) — 登录排队压测 — 判读清单
 - [merge-zone-runbook.md](ops/merge-zone-runbook.md) — Merge-Zone Runbook(合服操作手册)
 - [mysql-backup-pitr-runbook.md](ops/mysql-backup-pitr-runbook.md) — MySQL Backup & PITR Runbook
-- [online-debug-data-fetch.md](ops/online-debug-data-fetch.md) — 线上玩家数据拉取(player-bundle)与本地复现导入
+- [online-debug-data-fetch.md](ops/online-debug-data-fetch.md) — 线上玩家数据拉取与本地复现
 - [player-inbox-runbook.md](ops/player-inbox-runbook.md) — 玩家持久收件箱(player_inbox)运维手册
 - [release-checklist.md](ops/release-checklist.md) — 服务端发布清单
 - [run-directory.md](ops/run-directory.md) — `run/` — Runtime Artifacts
 - [stress-3zone-runbook.md](ops/stress-3zone-runbook.md) — 3 Zone × 15000 压测 — Runbook(2026-05)
+- [trade-commerce-quarantine-runbook.md](ops/trade-commerce-quarantine-runbook.md) — 交易合同隔离与角色冲突处置手册
 - [wechat-qq-sandbox-runbook.md](ops/wechat-qq-sandbox-runbook.md) — WeChat / QQ Sandbox 接入清单 (todo #223 / U)
 
 #### 其他
@@ -333,43 +334,46 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 
 ### 交接说明(`handoff/`)
 
-- [client-rpc-callback-handoff-20261019.md](handoff/client-rpc-callback-handoff-20261019.md) — 交接:客户端请求自带回调(按请求号认领回包),Unity / robot / gate 进度、未提交文件、待拍板的 Java Empty 回包与 scene 早退(2026-10-19)
-- [client-rpc-callback-robot-handoff-20261019.md](handoff/client-rpc-callback-robot-handoff-20261019.md) — 交接:robot 按请求号认领回包——已迁 friend / guild / team / trade,静态复核结论、逐处待迁清单与迁移陷阱(2026-10-19)
-- [global-economy-review-20261021.md](handoff/global-economy-review-20261021.md) — 全球交易与角色归属双版审核交接；区分源码、当前运行证据与未完成验收
-- [configurable-templates-handoff-20261019.md](handoff/configurable-templates-handoff-20261019.md) — 交接：战斗策略 / 活动 / 玩法模板可配置化（含玩家自定义模板）——设计 v0.2 已定稿、代码未开工，待授权与拍板后按批落码（2026-10-19）
-- [data-overwrite-audit-r2-20261019/README.md](handoff/data-overwrite-audit-r2-20261019/README.md) — 交接：第二轮数据与覆盖回档审计——第一、二波已完成（3 medium + 22 low），第三、四波与定稿待续，含工作流脚本副本（2026-10-19）
+- [class-skills-handoff-20261019.md](handoff/class-skills-handoff-20261019.md) — 四职业技能接入:交 Codex 的生成 / 编译 / 测试清单(2026-10-19)
+- [client-rpc-callback-handoff-20261019.md](handoff/client-rpc-callback-handoff-20261019.md) — 交接:客户端请求自带回调(按请求号认领回包)(2026-10-19)
+- [client-rpc-callback-robot-handoff-20261019.md](handoff/client-rpc-callback-robot-handoff-20261019.md) — 交接:robot 请求自带回调(按 MessageContent.id 认领回包)(2026-10-19)
+- [configurable-templates-handoff-20261019.md](handoff/configurable-templates-handoff-20261019.md) — 交接：战斗策略 / 活动 / 玩法模板可配置化（含玩家自定义模板）——从设计到落码（2026-10-19）
+- [d1-review-fix-handoff-20261023.md](handoff/d1-review-fix-handoff-20261023.md) — 交接:D1 最终语义评审与修复(10-19 ~ 10-23)——移交「映射直读 TiDB」新方向
 - [friend-handoff-20260920.md](handoff/friend-handoff-20260920.md) — friend 服务移植 —— 交接文档(2026-09-20)
+- [global-economy-claude-review-20261022.md](handoff/global-economy-claude-review-20261022.md) — 全球同服、交易与角色归属：Claude Code 审核入口
+- [global-economy-review-20261021.md](handoff/global-economy-review-20261021.md) — 全球交易、角色归属与双版交付审核交接
+- [global-final-acceptance-resume-20261027.md](handoff/global-final-acceptance-resume-20261027.md) — 全球同服剩余验收：全新主窗口交接（545范围、实际失败及续跑入口）
+- [global-id-prelaunch-claude-20261028.md](handoff/global-id-prelaunch-claude-20261028.md) — 交接：全球同服 ID 发号上线前决策与修复（交 Claude Code，2026-10-28）
 - [global-singletons-p0-codex-tasksheet-20261014.md](handoff/global-singletons-p0-codex-tasksheet-20261014.md) — Codex 任务单:全局单点 P0 五项的实测核实(2026-10-14)
 - [global-singletons-p0-findings-20261014.md](handoff/global-singletons-p0-findings-20261014.md) — 全局单点 P0 五项:静态调查记录与修复设计(2026-10-14)
 - [global-singletons-p0-measure-steps-20261014.md](handoff/global-singletons-p0-measure-steps-20261014.md) — 全局单点 P0 五项:实测步骤原文(2026-10-14)
-- [grpc-muduo-batch3-5/README.md](handoff/grpc-muduo-batch3-5/README.md) — 交接:C++ gRPC 迁到 muduo 驱动第 3–5 批(第 3 批做到一半,含五份现状调查附录,2026-10-15)
 - [godb-pipeline-codex-tasksheet-20261013.md](handoff/godb-pipeline-codex-tasksheet-20261013.md) — Codex 任务单：存盘管线第 0 批与 proto2mysql 条件写原语的验证（2026-10-13）
 - [godb-pipeline-handoff-20261013.md](handoff/godb-pipeline-handoff-20261013.md) — 交接：玩家存盘管线（go/db）瓶颈修复与条件写（2026-10-13）
 - [godb-pipeline-handoff-20261013-appendix.md](handoff/godb-pipeline-handoff-20261013-appendix.md) — 附录：存盘管线修复方案明细（工作流原始产出）
-- [godb-pipeline-impl-handoff-20261015.md](handoff/godb-pipeline-impl-handoff-20261015.md) — 交接：存盘管线剩余代码落码（①③④、WAITAOF、脏快照、保留期；2026-10-15）
+- [godb-pipeline-impl-handoff-20261015.md](handoff/godb-pipeline-impl-handoff-20261015.md) — 交接：存盘管线剩余代码落码（2026-10-15）
 - [handoff-backlog-2026-09-05.md](handoff/handoff-backlog-2026-09-05.md) — 交接清单:2026-09-02 ~ 09-05 三天工作的留档待办(经代码核实)
 - [handoff-client-request-ordering-20261015.md](handoff/handoff-client-request-ordering-20261015.md) — 交接:客户端请求按会话保序(路由服水平扩展下的乱序修复,2026-10-15)
 - [handoff-crosszone-20260920.md](handoff/handoff-crosszone-20260920.md) — 跨 zone 场景传送:交接说明(2026-09-20)
 - [handoff-d1-remaining-20261019.md](handoff/handoff-d1-remaining-20261019.md) — 交接:D1 归属与落点映射持久化——剩余收尾(2026-10-19)
-- [handoff-data-service-field-lua-real-redis-20261019.md](handoff/handoff-data-service-field-lua-real-redis-20261019.md) — 交接:data_service 字段索引三段 Lua 的真 Redis 集成测试(已写未跑,7.2 / 8.10.2 两轮验证步骤,2026-10-19)
+- [handoff-data-service-field-lua-real-redis-20261019.md](handoff/handoff-data-service-field-lua-real-redis-20261019.md) — 交接:data_service 字段索引三段 Lua 的真 Redis 集成测试(2026-10-19)
 - [handoff-gate-dtor-fix-verify-and-stress-20260914.md](handoff/handoff-gate-dtor-fix-verify-and-stress-20260914.md) — 交接:gate `~TcpConnection` 事故第二批修复 —— 构建 / 验证 / 压测(执行方:ChatGPT;方案方:Claude Code)
 - [handoff-global-singletons-10m-ccu-20261013.md](handoff/handoff-global-singletons-10m-ccu-20261013.md) — 交接:全局单点盘点、解法与 1000 万在线容量核算(2026-10-13)
 - [handoff-global-singletons-p0-20261015.md](handoff/handoff-global-singletons-p0-20261015.md) — 交接:全局单点 P0 五项的落码现状与剩余工作(2026-10-15)
 - [handoff-global-singletons-p0-20261015-appendix.md](handoff/handoff-global-singletons-p0-20261015-appendix.md) — 附录:全局单点 P0 部署侧四批的实现报告(2026-10-15)
-- [handoff-landing-recovery-and-fencing-20261016.md](handoff/handoff-landing-recovery-and-fencing-20261016.md) — 交接:落地恢复、超窗处置、进场链余项 a–e 与 MySQL 行内围栏的落码现状与剩余工作(2026-10-16)
-- [landing-fencing-takeover-20261016/README.md](handoff/landing-fencing-takeover-20261016/README.md) — 接手记录:上条交接的复核结论(客户端/robot/在途围栏/v0.3/a–e)、负责人拍板、选定做法与落码批次(2026-10-16)
+- [handoff-landing-recovery-and-fencing-20261016.md](handoff/handoff-landing-recovery-and-fencing-20261016.md) — 交接：落地恢复、超窗处置、进场链余项与 MySQL 行内围栏（2026-10-16）
 - [handoff-launch-line-remaining-20261019.md](handoff/handoff-launch-line-remaining-20261019.md) — 交接:开服线剩余工作(2026-10-19)
 - [handoff-launch-readiness-and-d1-20261013.md](handoff/handoff-launch-readiness-and-d1-20261013.md) — 交接:开服首日瓶颈修复、D1 映射持久化与 S3 容量目标(2026-10-13)
 - [handoff-launch-readiness-decisions-20261015.md](handoff/handoff-launch-readiness-decisions-20261015.md) — 交接:开服瓶颈负责人四项决定的收尾与验证(2026-10-15)
 - [handoff-orcontinue-closure-20260914.md](handoff/handoff-orcontinue-closure-20260914.md) — 交接：`Lookup*OrContinue` 修复收尾 + exporter-tests CI 复活
-- [class-skills-handoff-20261019.md](handoff/class-skills-handoff-20261019.md) — 四职业技能接入:交 Codex 的生成 / 编译 / 测试清单(2026-10-19)
 - [handoff-tip-axis-and-port-20260903.md](handoff/handoff-tip-axis-and-port-20260903.md) — 交接清单：tip 码轴收尾 + 玄冥移植未开工项
-- [handoff-tip-fault-gateway-500-20261018.md](handoff/handoff-tip-fault-gateway-500-20261018.md) — 交接：两版 Java 网关按 fault 列回 500，补丁对账、验证证据与剩余验收
-- [mixed-version-persist-handoff-20261019.md](handoff/mixed-version-persist-handoff-20261019.md) — 交接：新旧版本混跑的玩家持久字段保护——各批状态、待 Codex 验证命令、第 3b / 4 / 5 批开工清单与坑（2026-10-19）
+- [handoff-tip-fault-gateway-500-20261018.md](handoff/handoff-tip-fault-gateway-500-20261018.md) — 交接：Java 网关按 fault 列把登录故障回 500
+- [mixed-version-persist-handoff-20261019.md](handoff/mixed-version-persist-handoff-20261019.md) — 混版本持久字段保护：交接（2026-10-19）
 - [placement-line-handoff-20261019.md](handoff/placement-line-handoff-20261019.md) — 交接:玩家存储落点这条线——完成度核查与剩余工作(落点 + D1 映射持久化,2026-10-19)
 - [placement-reverify-checklist-20261012.md](handoff/placement-reverify-checklist-20261012.md) — 玩家存储落点:当前 HEAD 复验清单(交 Codex)
 - [player-inbox-handoff-20261015.md](handoff/player-inbox-handoff-20261015.md) — 玩家持久收件箱：实现交接（2026-10-15）
-- [redis-ha-deploy-path-handoff-20261019.md](handoff/redis-ha-deploy-path-handoff-20261019.md) — 交接：共享 Redis 高可用形态接进部署路径（maxclients、连接总账、WAITAOF 副本份数按拓扑、zone 跟随线上、半截切换闸）——提交清单、待 Codex 验证命令与剩余事项（2026-10-19）
+- [redis-ha-deploy-path-handoff-20261019.md](handoff/redis-ha-deploy-path-handoff-20261019.md) — 交接：共享 Redis 高可用形态接进部署路径（2026-10-19）
+- [redis-horizontal-scaling-requirements-20261022.md](handoff/redis-horizontal-scaling-requirements-20261022.md) — 交接：Redis 物理水平扩展需求与当前存盘链问题（2026-10-22）
+- [redis-player-store-batch2-brief-20261023.md](handoff/redis-player-store-batch2-brief-20261023.md) — 交接：玩家态 Redis 集群化第 2 批（2a–2d）落码简报（2026-10-23）
 - [repo-layout-20261007.md](handoff/repo-layout-20261007.md) — 仓库目录整理:交接说明(2026-10-07)
 - [rpc-channel-batch7-handoff-20261015.md](handoff/rpc-channel-batch7-handoff-20261015.md) — 交接:RpcChannel 改造收尾——第 7 批、剩余调用点迁移与玩家级延后完成(2026-10-15)
 - [session-summary-20260908-09.md](handoff/session-summary-20260908-09.md) — 本轮会话总览与遗留清单（2026-09-08 ~ 09-09）
@@ -393,23 +397,26 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 - [server-crash-memory-debugging-qa.md](notes/server-crash-memory-debugging-qa.md) — 游戏服务器线上崩溃和内存问题排查问答
 - [todo_zh.md](notes/todo_zh.md) — 工程待办 / 设计备忘 · [EN](notes/todo_en.md)
 
-### 笔记(`notes/slg-moba/`)
+### 笔记(`notes/moba/`)
 
-- [moba-battle-target-architecture.md](notes/slg-moba/moba-battle-target-architecture.md) — 会话制对局(MOBA 形态)目标架构基准
-- [moba-ds-server-interview-qa.md](notes/slg-moba/moba-ds-server-interview-qa.md) — MOBA 服务器面试 Q&A — DS（Dedicated Server / 战斗服）
-- [moba-ds-server-interview-qa-advanced.md](notes/slg-moba/moba-ds-server-interview-qa-advanced.md) — MOBA DS 服务器面试 Q&A — 进阶篇
-- [moba-non-ds-server-interview-qa.md](notes/slg-moba/moba-non-ds-server-interview-qa.md) — MOBA 服务器面试 Q&A — 非 DS（大厅 / 匹配 / 房间 / 战绩 / 段位 / 社交）
-- [slg-battle-interview-qa.md](notes/slg-moba/slg-battle-interview-qa.md) — SLG 沙盘战斗系统面试 Q&A（率土之滨风格）
-- [slg-interview-qa.md](notes/slg-moba/slg-interview-qa.md) — 率土之滨 SLG 游戏服务器主程序面试 Q&A
-- [slg-march-position-formula.md](notes/slg-moba/slg-march-position-formula.md) — SLG 行军位置公式
-- [slg-march-system-complete.md](notes/slg-moba/slg-march-system-complete.md) — SLG 行军系统完整设计（率土之滨风格）
-- [slg-pathfinding-interview-qa.md](notes/slg-moba/slg-pathfinding-interview-qa.md) — SLG 沙盘寻路面试 Q&A（率土之滨风格）
-- [slg-performance-interview-qa.md](notes/slg-moba/slg-performance-interview-qa.md) — SLG 沙盘性能优化面试 Q&A（率土之滨风格）
-- [slg-server-architecture-design.md](notes/slg-moba/slg-server-architecture-design.md) — SLG Server Architecture Design (率土之滨 Style)
-- [slg-server-complete-framework.md](notes/slg-moba/slg-server-complete-framework.md) — 率土之滨 SLG 游戏服务器 —— 完整框架设计
-- [slg-server-framework-complete.md](notes/slg-moba/slg-server-framework-complete.md) — 率土之滨风格 SLG 游戏服务器框架 — 完整设计文档
-- [slg-server-interview-complete-qa.md](notes/slg-moba/slg-server-interview-complete-qa.md) — 率土之滨 SLG 服务器主程序面试 —— 全面 Q&A
-- [slg-server-mainprog-interview-qa.md](notes/slg-moba/slg-server-mainprog-interview-qa.md) — SLG 服务器主程序面试 Q&A（率土之滨风格）
+- [moba-battle-target-architecture.md](notes/moba/moba-battle-target-architecture.md) — 会话制对局(MOBA 形态)目标架构基准
+- [moba-ds-server-interview-qa.md](notes/moba/moba-ds-server-interview-qa.md) — MOBA 服务器面试 Q&A — DS（Dedicated Server / 战斗服）
+- [moba-ds-server-interview-qa-advanced.md](notes/moba/moba-ds-server-interview-qa-advanced.md) — MOBA DS 服务器面试 Q&A — 进阶篇
+- [moba-non-ds-server-interview-qa.md](notes/moba/moba-non-ds-server-interview-qa.md) — MOBA 服务器面试 Q&A — 非 DS（大厅 / 匹配 / 房间 / 战绩 / 段位 / 社交）
+
+### 笔记(`notes/slg/`)
+
+- [slg-battle-interview-qa.md](notes/slg/slg-battle-interview-qa.md) — SLG 沙盘战斗系统面试 Q&A（率土之滨风格）
+- [slg-interview-qa.md](notes/slg/slg-interview-qa.md) — 率土之滨 SLG 游戏服务器主程序面试 Q&A
+- [slg-march-position-formula.md](notes/slg/slg-march-position-formula.md) — SLG 行军位置公式
+- [slg-march-system-complete.md](notes/slg/slg-march-system-complete.md) — SLG 行军系统完整设计（率土之滨风格）
+- [slg-pathfinding-interview-qa.md](notes/slg/slg-pathfinding-interview-qa.md) — SLG 沙盘寻路面试 Q&A（率土之滨风格）
+- [slg-performance-interview-qa.md](notes/slg/slg-performance-interview-qa.md) — SLG 沙盘性能优化面试 Q&A（率土之滨风格）
+- [slg-server-architecture-design.md](notes/slg/slg-server-architecture-design.md) — SLG Server Architecture Design (率土之滨 Style)
+- [slg-server-complete-framework.md](notes/slg/slg-server-complete-framework.md) — 率土之滨 SLG 游戏服务器 —— 完整框架设计
+- [slg-server-framework-complete.md](notes/slg/slg-server-framework-complete.md) — 率土之滨风格 SLG 游戏服务器框架 — 完整设计文档
+- [slg-server-interview-complete-qa.md](notes/slg/slg-server-interview-complete-qa.md) — 率土之滨 SLG 服务器主程序面试 —— 全面 Q&A
+- [slg-server-mainprog-interview-qa.md](notes/slg/slg-server-mainprog-interview-qa.md) — SLG 服务器主程序面试 Q&A（率土之滨风格）
 
 ### 历史归档(`archive/`)
 

@@ -275,16 +275,19 @@ func TestGetPlayerHomeZone_RealRedisMissingIsTyped(t *testing.T) {
 
 // ── 映射持久化第 1a 批:发布 pipeline 与 db_first 端到端 ─────────────────
 
-// TestPublishRoute_RealRedisSameConnection 是规格 Q3 的实测证据:经 go-zero 的 PipelinedCtx 发
+// TestPublishRoute_RealRedisSameConnection 是规格 Q3 的实测证据:经**实际发布用的客户端**(r.publishRedis 的 Pipelined)发
 // [CLIENT ID, EVAL, WAITAOF, CLIENT ID],两次 CLIENT ID 必须相等 —— WAITAOF 只确认**本连接**之前的写,
-// 发布脚本与 WAITAOF 不在同一条连接上,落盘确认就是假的。FAIL 时按 Q3 改用独立的 go-redis 客户端做发布。
+// 发布脚本与 WAITAOF 不在同一条连接上,落盘确认就是假的。
+// 2026-10-21(A2-1):发布已改用独立的 go-redis 客户端(publish_redis.go),不再经 go-zero 的 PipelinedCtx;本用例只验同一连接,
+// 所以 Router 取 db_first(redis 模式不建发布客户端)。用例名与 PASS 口径不变。
 // WAITAOF 这里发 0 0(不要求落盘),只看连接身份;真实的落盘回复由 TestPublishRoute_RealRedisWaitAOF 验。
 func TestPublishRoute_RealRedisSameConnection(t *testing.T) {
-	r, _ := newIntegrationRouter(t)
+	r, _ := newIntegrationRouterWith(t, config.RouteStoreConfig{Mode: config.RouteStoreModeDBFirst})
 	ctx := context.Background()
+	require.NotNil(t, r.publishRedis, "db_first must build the publish client")
 
 	var firstID, evalCmd, waitCmd, secondID *goredis.Cmd
-	pipeErr := r.mappingRedis.PipelinedCtx(ctx, func(p redis.Pipeliner) error {
+	_, pipeErr := r.publishRedis.Pipelined(ctx, func(p goredis.Pipeliner) error {
 		firstID = p.Do(ctx, "CLIENT", "ID")
 		evalCmd = p.Eval(ctx, placement.PublishRouteScript, placement.PublishRouteKeys(90301, 51), "1", "51", "")
 		waitCmd = p.Do(ctx, "WAITAOF", 0, 0, 100)
@@ -302,16 +305,19 @@ func TestPublishRoute_RealRedisSameConnection(t *testing.T) {
 	require.NoError(t, err)
 	second, err := secondID.Int64()
 	require.NoError(t, err)
-	assert.Equal(t, first, second, "go-zero PipelinedCtx must run the whole pipeline on one connection")
+	assert.Equal(t, first, second, "the publish client's Pipelined must run the whole pipeline on one connection")
 }
 
 // TestPublishRoute_RealRedisWaitAOF:WAITAOF 1 0 的真实回复是 [1, 0](本地 fsync 已确认、无副本),
 // 且整条发布路径(publishRoute,默认配置 WAITAOF 1 0)在真 Redis 上成功。
 // appendonly 关着(CONFIG GET appendonly = no)或 Redis < 7.2(unknown command)时 Skip —— 复验必须用
 // `redis:7.2 --appendonly yes` 跑出 PASS(规格 h 节第 4 步),Skip 要如实报成"未验证"。
+// 2026-10-21(A2-1):Router 取 db_first(publishRoute 只用发布客户端,redis 模式不建它,直接调会 fail-closed),
+// 前半段的手工 pipeline 也走 r.publishRedis。
 func TestPublishRoute_RealRedisWaitAOF(t *testing.T) {
-	r, _ := newIntegrationRouter(t)
+	r, _ := newIntegrationRouterWith(t, config.RouteStoreConfig{Mode: config.RouteStoreModeDBFirst})
 	ctx := context.Background()
+	require.NotNil(t, r.publishRedis, "db_first must build the publish client")
 	on, err := redisAppendOnly(ctx, resolveRedisHost(t))
 	if err != nil {
 		t.Skipf("CONFIG GET appendonly failed, cannot tell whether WAITAOF can work: %v", err)
@@ -321,7 +327,7 @@ func TestPublishRoute_RealRedisWaitAOF(t *testing.T) {
 	}
 
 	var evalCmd, waitCmd *goredis.Cmd
-	_ = r.mappingRedis.PipelinedCtx(ctx, func(p redis.Pipeliner) error {
+	_, _ = r.publishRedis.Pipelined(ctx, func(p goredis.Pipeliner) error {
 		evalCmd = p.Eval(ctx, placement.PublishRouteScript, placement.PublishRouteKeys(90311, 52), "1", "52", "")
 		waitCmd = p.Do(ctx, "WAITAOF", 1, 0, 1500)
 		return nil

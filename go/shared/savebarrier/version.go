@@ -4,7 +4,48 @@ package savebarrier
 import (
 	"fmt"
 	"strconv"
+
+	databasepb "proto/common/database"
+	"shared/generated/persistschema"
+	"shared/redisslot"
+
+	"google.golang.org/protobuf/proto"
 )
+
+// InitialOwnerEpoch/InitialSaveSeq 只供严格全新 ID 的目录和两张玩家 SQL 行共同提交使用。
+// 这不是 actor 号源：加载先采纳此地板，首任 actor 仍由 SceneManager 从 1 铸为 2。
+const InitialOwnerEpoch uint64 = 1
+const InitialSaveSeq uint64 = 1
+
+// InitialPlayerData 与初始 SQL INSERT 的列值相同，不包含注册、职业或资产等业务初值。
+func InitialPlayerData(playerID uint64) *databasepb.PlayerAllData {
+	return &databasepb.PlayerAllData{
+		PlayerDatabaseData: &databasepb.PlayerDatabase{PlayerId: playerID, FenceOwnerEpoch: InitialOwnerEpoch,
+			FenceSaveSeq: InitialSaveSeq, PersistSchemaGen: persistschema.Gen},
+		PlayerDatabase_1Data: &databasepb.PlayerDatabase_1{PlayerId: playerID, FenceOwnerEpoch: InitialOwnerEpoch,
+			FenceSaveSeq: InitialSaveSeq, PersistSchemaGen: persistschema.Gen},
+		LastSaveSeq: InitialSaveSeq,
+	}
+}
+
+// IsInitialPlayerData 拒绝额外业务内容和未知字段，不能拿任意玩家快照当成可写种子。
+func IsInitialPlayerData(parent *databasepb.PlayerAllData) bool {
+	return parent != nil && parent.GetPlayerDatabaseData().GetPlayerId() != 0 &&
+		proto.Equal(parent, InitialPlayerData(parent.GetPlayerDatabaseData().GetPlayerId()))
+}
+
+// ParentKey 返回父快照键 PlayerAllData:{<pid>}：PlayerAllData 的 proto 全名（proto 无 package 声明，全名即消息名）
+// 加玩家 hash tag（docs/design/redis-player-store-cluster.md §5.2）。与 C++ MessageAsyncClient::RedisKeyFor 逐字一致，
+// C++ 严格存盘 Lua 要求父键以 ":{<pid>}" 结尾；父快照与 owner_epoch、本屏障、补投索引同槽，一次存盘在同一段 Lua 里原子提交。
+// 读写父快照的服务一律经它构造，不再手拼 "<全名>:<pid>"。tools/merge_zone 是独立 module，在 player_rows.go 镜像一份。
+func ParentKey(playerID uint64) string {
+	return ParentKeyFor(&databasepb.PlayerAllData{}, playerID)
+}
+
+// ParentKeyFor 是按父消息类型泛化的 ParentKey，供按消息列表预热的路径使用（login dataloader.buildParentKey）。
+func ParentKeyFor(msg proto.Message, playerID uint64) string {
+	return string(msg.ProtoReflect().Descriptor().FullName()) + ":" + redisslot.PlayerTag(playerID)
+}
 
 // Key 不设 TTL；恢复或合服时必须与父快照、SQL 提交证据一起处理。
 func Key(playerID uint64) string {

@@ -7,7 +7,9 @@ import (
 	base "proto/common/base"
 	comppb "proto/common/component"
 	dbpb "proto/common/database"
+	"shared/savebarrier"
 
+	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -30,7 +32,7 @@ func (l *EnterGameLogic) backfillPlayerIdentity(ctx context.Context, existing *s
 		return fmt.Errorf("身份补齐缺少玩家登录锁: player=%d", state.playerID)
 	}
 	parent := &dbpb.PlayerAllData{}
-	key := fmt.Sprintf("%s:%d", parent.ProtoReflect().Descriptor().FullName(), state.playerID)
+	key := savebarrier.ParentKey(state.playerID)
 	previous, err := l.svcCtx.RedisClient.Get(ctx, key).Bytes()
 	if err != nil {
 		return fmt.Errorf("读取身份补齐存档: %w", err)
@@ -115,3 +117,20 @@ func (l *EnterGameLogic) repairAccountAppearance(ctx context.Context, state ente
 	}, state.ownerRevision)
 	return err
 }
+
+// backfillPlayerClassScript 沿用原名:脚本本身与返回码语义没有变,只是写入的字节里多了名字;
+// go/shared/scenenode/locator.go 等处的注释按这个名字引用 KEYS[4]。
+
+var backfillPlayerClassScript = redis.NewScript(`
+if redis.call("GET", KEYS[2]) ~= ARGV[1] then
+    return -1
+end
+if redis.call("EXISTS", KEYS[3], KEYS[4]) > 0 then
+    return 2
+end
+if redis.call("GET", KEYS[1]) ~= ARGV[2] then
+    return 0
+end
+redis.call("SET", KEYS[1], ARGV[3], "KEEPTTL")
+return 1
+`)

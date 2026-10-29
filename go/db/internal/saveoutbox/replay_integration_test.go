@@ -63,7 +63,7 @@ func TestRealRedisPendingSaveOutboxSurvivesWorkerRestart(t *testing.T) {
 	storeObservedIntent(t, rc, playerID, zone, in)
 	pub := &recordingPublisher{failAt: 2}
 	cfg := Config{ZoneID: zone, Batch: 16, Interval: 10 * time.Millisecond, Budget: 100 * time.Millisecond, RetryAfter: time.Second}
-	r, err := New(rc, rc, pub, nil, cfg, prometheus.NewRegistry())
+	r, err := New(rc, rc, pub, nil, openRouteGate(), cfg, prometheus.NewRegistry())
 	require.NoError(t, err)
 	firstTime := time.Now()
 	r.now = func() time.Time { return firstTime }
@@ -73,7 +73,7 @@ func TestRealRedisPendingSaveOutboxSurvivesWorkerRestart(t *testing.T) {
 	require.Equal(t, 1, n)
 	// 只有补投worker重建；Redis里的原始两表意图未删除。
 	pub2 := &recordingPublisher{}
-	r2, err := New(rc, rc, pub2, nil, cfg, prometheus.NewRegistry())
+	r2, err := New(rc, rc, pub2, nil, openRouteGate(), cfg, prometheus.NewRegistry())
 	require.NoError(t, err)
 	r2.now = func() time.Time { return firstTime.Add(2 * time.Second) }
 	r2.jitter = func() time.Duration { return 0 }

@@ -2,11 +2,11 @@ package team
 
 import (
 	"context"
-	"fmt"
 
 	"match/internal/playercontract"
 
 	dbpb "proto/common/database"
+	"shared/savebarrier"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
@@ -20,7 +20,7 @@ import (
 //
 //	player:session:<id>      player_locator  在线态唯一真值(只有 SESSION_STATE_ONLINE 算在线)
 //	battle:lock:<id>         C++ scene       咨询性"战斗中"(值是 battle_id,非空)
-//	<PlayerAllData 全名>:<id> login / db      等级、职业、昵称、外观、性别(尽力而为,缺失或解析失败填零值)
+//	PlayerAllData:{<id>}     C++ scene / login 等级、职业、昵称、外观、性别(尽力而为,缺失或解析失败填零值)
 //
 // 失败语义:任何一次 MGET 失败只让对应字段按"离线 / 不在战斗 / 0"处理并记日志,
 // 不让 RPC 失败(照 guild online_status_resolver)。惰性转让用的 SessionLoader 例外:
@@ -45,12 +45,9 @@ type presenceReader struct {
 	rds *redis.Redis // svcCtx.SharedRedis
 }
 
-// playerAllDataKeyPrefix PlayerAllData 缓存 key 前缀取 message 全名,与 login 的拼法同源
-// (player_class_backfill.go:%s:%d),不手写字面量。
-var playerAllDataKeyPrefix = string((&dbpb.PlayerAllData{}).ProtoReflect().Descriptor().FullName())
-
+// playerAllDataKey 是父快照键 PlayerAllData:{<id>},与 scene / login 同经 savebarrier.ParentKey 构造,不手写字面量。
 func playerAllDataKey(playerId uint64) string {
-	return fmt.Sprintf("%s:%d", playerAllDataKeyPrefix, playerId)
+	return savebarrier.ParentKey(playerId)
 }
 
 // loadSessions 实现 SessionLoader:key 不存在 → SessionAbsent;ONLINE → SessionOnline;

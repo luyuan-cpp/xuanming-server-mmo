@@ -296,31 +296,41 @@ func (w *NodeWatcher) EndpointOf(zoneId uint32, nodeId string) (string, error) {
 	return entry.Endpoint, nil
 }
 
-// EndpointOfNode 按 node_id 找节点 gRPC 地址(battle 节点是全局池不分 zone,
-// 观战路径按 SpectateBattleRecord.battle_node_id 定位对端时用;歧义拒绝语义
-// 与 EndpointOf 一致:同一 node_id 出现多条注册说明租约/部署链分叉,拒选)。
-func (w *NodeWatcher) EndpointOfNode(nodeId uint32) (string, error) {
+// EntryOfNode 按 node_id 找节点的完整登记(battle 节点是全局池不分 zone,
+// 观战路径按 SpectateBattleRecord.battle_node_id 定位对端,并取 NodeUuid 作 battle
+// 观战账本要求的 target_instance_id;歧义拒绝语义与 EntryOf 一致:同一 node_id
+// 出现多条注册说明租约/部署链分叉,拒选)。与 EntryOf 一样不替调用方判空 NodeUuid。
+func (w *NodeWatcher) EntryOfNode(nodeId uint32) (NodeEntry, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	var endpoint string
+	var found NodeEntry
 	matches := 0
 	for _, entry := range w.nodes {
 		if entry.NodeId != nodeId {
 			continue
 		}
 		matches++
-		if endpoint != "" && endpoint != entry.Endpoint {
-			return "", fmt.Errorf("节点身份歧义 node=%d: 多个 endpoint 注册", nodeId)
+		if matches > 1 && found.Endpoint != entry.Endpoint {
+			return NodeEntry{}, fmt.Errorf("节点身份歧义 node=%d: 多个 endpoint 注册", nodeId)
 		}
-		endpoint = entry.Endpoint
+		found = entry
 	}
 	if matches > 1 {
-		return "", fmt.Errorf("节点身份歧义 node=%d: %d 条注册", nodeId, matches)
+		return NodeEntry{}, fmt.Errorf("节点身份歧义 node=%d: %d 条注册", nodeId, matches)
 	}
 	if matches == 0 {
-		return "", fmt.Errorf("节点未注册 node=%d", nodeId)
+		return NodeEntry{}, fmt.Errorf("节点未注册 node=%d", nodeId)
 	}
-	return endpoint, nil
+	return found, nil
+}
+
+// EndpointOfNode 按 node_id 找节点 gRPC 地址;查找与歧义拒绝语义见 EntryOfNode。
+func (w *NodeWatcher) EndpointOfNode(nodeId uint32) (string, error) {
+	entry, err := w.EntryOfNode(nodeId)
+	if err != nil {
+		return "", err
+	}
+	return entry.Endpoint, nil
 }
 
 // PickRandom 随机取一个节点(battle 节点 v1 选法:随机,负载上报二期)。

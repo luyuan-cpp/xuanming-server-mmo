@@ -2,9 +2,9 @@ package server
 
 import (
 	"context"
-	"database/sql"
 	"net"
 	"os"
+	"shared/authoritysql/sqltest"
 	"strconv"
 	"strings"
 	"testing"
@@ -15,7 +15,6 @@ import (
 	battlepb "proto/battle"
 	pb "proto/match"
 	"schemamigrate"
-	"shared/authoritysql"
 	"shared/serviceauth"
 
 	"github.com/go-sql-driver/mysql"
@@ -44,28 +43,25 @@ func TestTiDBActivityCancellationRPCSignsOriginalReceiptAndBlocksLateStart(t *te
 	cfg.Net = "tcp"
 	cfg.Addr = addr
 	cfg.User = "root"
-	admin, err := sql.Open("mysql", cfg.FormatDSN())
+	schema := "match_cancel_it_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	opts, err := sqltest.OptionsFromEnv(cfg.FormatDSN(), schema+"_writer", schema)
+	require.NoError(t, err)
+	fixture, err := sqltest.New(ctx, t, opts)
+	require.NoError(t, err)
+	install, err := fixture.OpenSchema(ctx, schema)
 	require.NoError(t, err)
 	var engine string
-	require.NoError(t, admin.QueryRow("SELECT VERSION()").Scan(&engine))
+	require.NoError(t, install.QueryRowContext(ctx, "SELECT VERSION()").Scan(&engine))
 	require.Contains(t, strings.ToLower(engine), "tidb")
-	schema := "match_cancel_it_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	_, err = admin.Exec("CREATE DATABASE `" + schema + "`")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_, err := admin.Exec("DROP DATABASE `" + schema + "`")
-		require.NoError(t, err)
-		require.NoError(t, admin.Close())
-	})
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	cfg.DBName = schema
-	db, err := authoritysql.Open(ctx, cfg.FormatDSN(), schema, true, 4)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
-	report, err := schemamigrate.Up(ctx, db, schemamigrate.Options{Database: schema, Tables: []proto.Message{&pb.MatchDirectIntentRecord{}, &pb.MatchFormationRecord{}}})
+	tables := []proto.Message{&pb.MatchDirectIntentRecord{}, &pb.MatchFormationRecord{}}
+	report, err := schemamigrate.Up(ctx, install, schemamigrate.Options{Database: schema, Tables: tables})
 	require.NoError(t, err)
 	require.Empty(t, report.Manual)
+	require.NoError(t, fixture.GrantProtoTables(ctx, schema, tables))
+	db, err := fixture.Open(ctx, schema, 4)
+	require.NoError(t, err)
 	secret := strings.Repeat("z", 32)
 	verifier, err := serviceauth.New(map[string]string{"guild": secret})
 	require.NoError(t, err)

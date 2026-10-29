@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"player_inbox/internal/constants"
+	"player_inbox/internal/inbox"
 
 	base "proto/common/base"
 	inboxpb "proto/player_inbox"
@@ -36,14 +37,23 @@ type ConsumerStore interface {
 // PlayerInboxServer 实现 inboxpb.PlayerInboxServer。
 type PlayerInboxServer struct {
 	inboxpb.UnimplementedPlayerInboxServer
-	store    ConsumerStore
-	budget   time.Duration
-	verifier *serviceauth.Verifier
+	store         ConsumerStore
+	budget        time.Duration
+	verifier      *serviceauth.Verifier
+	matchVerifier *serviceauth.Verifier
+	matchSecret   string
 }
 
 // NewPlayerInboxServer。budget 是整请求 I/O 预算(config.RequestBudget,= Timeout − 回包余量)。
 func NewPlayerInboxServer(store ConsumerStore, budget time.Duration, verifier *serviceauth.Verifier) *PlayerInboxServer {
-	return &PlayerInboxServer{store: store, budget: budget, verifier: verifier}
+	s := &PlayerInboxServer{store: store, budget: budget, verifier: verifier}
+	// 专用producer面缺key只拒该面；不能把Scene/GM密钥借给Match。
+	secret := os.Getenv("MMORPG_PLAYER_INBOX_SECRET_MATCH")
+	if v, err := serviceauth.New(map[string]string{"match": secret}); err == nil {
+		s.matchVerifier = v
+		s.matchSecret = secret
+	}
+	return s
 }
 
 func NewConsumerVerifier() (*serviceauth.Verifier, error) {
@@ -115,6 +125,63 @@ func (s *PlayerInboxServer) AckItems(ctx context.Context, in *inboxpb.AckPlayerI
 			ErrorMessage: storeUnavailable(),
 			PlayerId:     in.GetPlayerId(), Domain: in.GetDomain(), CorrelationId: in.GetCorrelationId(),
 		}, nil
+	}
+	return resp, nil
+}
+
+type battleSettlementStore interface {
+	EnqueueBattleSettlement(context.Context, *inboxpb.BattleSettlementInboxRequest) (*inboxpb.BattleSettlementInboxResponse, error)
+	LookupBattleSettlement(context.Context, *inboxpb.BattleSettlementInboxRequest) (*inboxpb.BattleSettlementInboxResponse, error)
+}
+
+func (s *PlayerInboxServer) EnqueueBattleSettlement(ctx context.Context, in *inboxpb.BattleSettlementInboxRequest) (*inboxpb.BattleSettlementInboxResponse, error) {
+	return s.battleSettlement(ctx, in, true)
+}
+func (s *PlayerInboxServer) LookupBattleSettlement(ctx context.Context, in *inboxpb.BattleSettlementInboxRequest) (*inboxpb.BattleSettlementInboxResponse, error) {
+	return s.battleSettlement(ctx, in, false)
+}
+func (s *PlayerInboxServer) battleSettlement(ctx context.Context, in *inboxpb.BattleSettlementInboxRequest, enqueue bool) (*inboxpb.BattleSettlementInboxResponse, error) {
+	method := inboxpb.PlayerInbox_LookupBattleSettlement_FullMethodName
+	if enqueue {
+		method = inboxpb.PlayerInbox_EnqueueBattleSettlement_FullMethodName
+	}
+	if md, ok := metadata.FromIncomingContext(ctx); ok && len(md.Get("x-session-detail-bin")) != 0 {
+		return nil, status.Error(codes.PermissionDenied, "结算生产仅限Match内部调用")
+	}
+	if s.matchVerifier == nil {
+		return nil, status.Error(codes.Unavailable, "Match结算密钥未装配")
+	}
+	caller, err := s.matchVerifier.Verify(ctx, method, in)
+	if err != nil || caller != "match" {
+		return nil, status.Error(codes.PermissionDenied, "Match结算原件证明无效")
+	}
+	store, ok := s.store.(battleSettlementStore)
+	if !ok {
+		return nil, status.Error(codes.Unavailable, "结算存储未装配")
+	}
+	digest, err := serviceauth.Digest(in)
+	if err != nil {
+		return nil, err
+	}
+	call, cancel := withBudget(ctx, s.budget)
+	defer cancel()
+	var resp *inboxpb.BattleSettlementInboxResponse
+	if enqueue {
+		resp, err = store.EnqueueBattleSettlement(call, in)
+	} else {
+		resp, err = store.LookupBattleSettlement(call, in)
+	}
+	if err != nil || resp == nil {
+		if errors.Is(err, inbox.ErrBattleSettlementOriginal) {
+			logx.Error("metric=inbox_battle_original_rejected reason=original_conflict")
+			return nil, status.Error(codes.FailedPrecondition, "结算原件存在永久冲突")
+		}
+		logx.Error("metric=inbox_battle_receipt_unconfirmed reason=storage_or_transport")
+		return nil, status.Error(codes.Unavailable, "结算原收据尚未确认")
+	}
+	resp.RequestDigest = digest
+	if err = serviceauth.Sign(method+"/reply", resp, "inbox", s.matchSecret, uint64(time.Now().UnixMilli())); err != nil {
+		return nil, status.Error(codes.Unavailable, "结算回执签名不可用")
 	}
 	return resp, nil
 }

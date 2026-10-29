@@ -28,6 +28,7 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"proto/scene_manager"
+	"scene_manager/internal/constants"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
 )
@@ -188,6 +189,28 @@ func barrierBlockedCountForTest(t *testing.T, zoneID uint32, site string) float6
 	})
 }
 
+// takeLoadReporterResyncForTest 取走 loadReporterResync 里挂着的信号(包级全局、容量 1),报告取之前有没有。
+func takeLoadReporterResyncForTest() bool {
+	select {
+	case <-loadReporterResync:
+		return true
+	default:
+		return false
+	}
+}
+
+// forgetLocalGoneObservationForTest 删掉本副本对 (zone,node) 的「看到它消失」记录,用例前后各删一次(包级全局表)。
+func forgetLocalGoneObservationForTest(t *testing.T, zoneID uint32, nodeID string) {
+	t.Helper()
+	forget := func() {
+		nodeGoneObservedMu.Lock()
+		delete(nodeGoneObservedAt, nodeGoneObservedKey(zoneID, nodeID))
+		nodeGoneObservedMu.Unlock()
+	}
+	forget()
+	t.Cleanup(forget)
+}
+
 // newNodeDetachTestCtx:干净的注册表镜像与两张队列 + 自己的 miniredis(熔断计数按 svcCtx 隔离)+ 故障钩子。
 func newNodeDetachTestCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis, *nodeDetachFaultForTest) {
 	t.Helper()
@@ -330,12 +353,15 @@ func TestRetryDeferredNodeDetaches_KeepsTaskWhileLoadSetRemovalFails(t *testing.
 		assert.False(t, allowed)
 
 		faults.failLoadZrem.Store(false)
+		takeLoadReporterResyncForTest()
+		t.Cleanup(func() { takeLoadReporterResyncForTest() })
 		assert.Equal(t, 1, retryDeferredNodeDetaches(sc))
 		assert.NotContains(t, loadSetMembersForTest(t, mr, testZoneId), "10")
 		_, pending = pendingDeadNodeForTest(testZoneId, "10")
 		assert.True(t, pending)
 		assert.False(t, isNodeDetachDeferred(testZoneId, "10"))
 		assert.Equal(t, recoveredBefore+1, detachOutcomeCountForTest(t, testZoneId, metrics.NodeDetachOutcomeRecovered))
+		assert.False(t, takeLoadReporterResyncForTest(), "摘成了就不需要重扫")
 	})
 
 	t.Run("abandons_after_give_up", func(t *testing.T) {
@@ -347,6 +373,8 @@ func TestRetryDeferredNodeDetaches_KeepsTaskWhileLoadSetRemovalFails(t *testing.
 		removeNodeFromRedis(sc, deadNodeEntryForTest(testZoneId, "10"))
 		setDeferredNodeDetachFirstObservedAtForTest(t, testZoneId, "10",
 			time.Now().Add(-(deferredNodeDetachGiveUpAfter + time.Second)))
+		takeLoadReporterResyncForTest()
+		t.Cleanup(func() { takeLoadReporterResyncForTest() })
 
 		assert.Equal(t, 0, retryDeferredNodeDetaches(sc))
 		assert.False(t, isNodeDetachDeferred(testZoneId, "10"), "过了放弃期限就出队,不无限重试")
@@ -355,6 +383,8 @@ func TestRetryDeferredNodeDetaches_KeepsTaskWhileLoadSetRemovalFails(t *testing.
 		assert.True(t, mr.Exists(nodeSceneNodeTypeKey(testZoneId, "10")))
 		_, pending := pendingDeadNodeForTest(testZoneId, "10")
 		assert.False(t, pending)
+		// 放弃时主动请求一次 fullSync:陈旧清扫会在负载集里重扫到它、重新推迟,而不是一直留到 watch 中断 / 换领导者。
+		assert.True(t, takeLoadReporterResyncForTest(), "放弃时必须请求 load reporter 重跑 fullSync")
 	})
 }
 
@@ -419,6 +449,127 @@ func TestHandleWatchPut_CancelsDeferredNodeDetachAndHandsOverSnapshot(t *testing
 	assert.Equal(t, []string{"7001"}, reconcile.scenes)
 	assert.False(t, mr.Exists(nodeDeathAtKey(testZoneId, "10")))
 	assert.Contains(t, loadSetMembersForTest(t, mr, testZoneId), "10")
+}
+
+// 同一个 etcd 键换了 zone(cross-zone-scene-travel.md §13.9「handleWatchEvent 换 zone」):旧 zone 的身份按 DELETE 收尾。
+// 旧代码在每个副本上裸 ZREM 旧 zone 负载集、不写 death_at、不记本地消失时刻。节点 10 是 zone 1 唯一的节点时,
+// isZoneGoneFromRegistry(1) 随即为真,playerLocationOwnerGone / playerLocationOwnerDead 就不经再入屏障放行陈旧位置。
+func TestHandleWatchPut_ZoneFlipRetiresOldZoneIdentity(t *testing.T) {
+	const (
+		flipKey  = "SceneNodeService.rpc/flip-10"
+		otherKey = "SceneNodeService.rpc/other-10"
+		newZone  = uint32(2)
+	)
+	staleLoc := &scene_manager.PlayerLocation{SceneId: 7001, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1}
+
+	setup := func(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis, *nodeDetachFaultForTest) {
+		t.Helper()
+		// 空的 World 表:PUT / 收尾都不去补频道、不 rebalance,只测注册镜像与摘除路径。
+		t.Cleanup(SetWorldConfIdsForTest([]uint64{}))
+		sc, mr, faults := newNodeDetachTestCtx(t)
+		markKnownNodesSyncedForTest(t)
+		forgetLocalGoneObservationForTest(t, testZoneId, "10")
+		entry := nodeEntry{nodeID: "10"}
+		entry.reg.NodeId = 10
+		entry.reg.ZoneId = testZoneId
+		entry.reg.SceneNodeType = constants.SceneNodeTypeInstance
+		knownNodesMu.Lock()
+		knownNodes[flipKey] = entry
+		knownNodesMu.Unlock()
+		// 节点 10 是 zone 1 唯一的节点,名下场景 {7001}。
+		_, err := mr.ZAdd(nodeLoadKey(testZoneId), 0, "10")
+		require.NoError(t, err)
+		require.NoError(t, mr.Set(nodeSceneNodeTypeKey(testZoneId, "10"), "1"))
+		_, err = mr.SAdd(nodeScenesKey(testZoneId, "10"), "7001")
+		require.NoError(t, err)
+		return sc, mr, faults
+	}
+	flip := func(sc *svc.ServiceContext) {
+		handleWatchEvent(context.Background(), sc, &clientv3.Event{
+			Type: clientv3.EventTypePut,
+			Kv: &mvccpb.KeyValue{
+				Key:   []byte(flipKey),
+				Value: []byte(`{"nodeId":10,"zoneId":2,"sceneNodeType":1}`),
+			},
+		})
+	}
+
+	t.Run("leader_marks_death_before_detaching", func(t *testing.T) {
+		sc, mr, faults := setup(t)
+		flip(sc)
+
+		require.True(t, isZoneGoneFromRegistry(testZoneId), "前提:换走之后 zone 1 在注册表里一个节点都没有")
+		deathKey := nodeDeathAtKey(testZoneId, "10")
+		assert.True(t, mr.Exists(deathKey), "旧 zone 身份必须写 death_at")
+		ops := faults.passedOps()
+		setAt := slices.Index(ops, "SET "+deathKey)
+		zremAt := slices.Index(ops, "ZREM "+nodeLoadKey(testZoneId))
+		require.GreaterOrEqual(t, setAt, 0)
+		require.GreaterOrEqual(t, zremAt, 0)
+		assert.Less(t, setAt, zremAt, "先写 death_at 再摘负载集")
+		assert.NotContains(t, loadSetMembersForTest(t, mr, testZoneId), "10")
+		assert.False(t, mr.Exists(nodeSceneNodeTypeKey(testZoneId, "10")))
+		reconcile, ok := pendingDeadNodeForTest(testZoneId, "10")
+		require.True(t, ok, "旧 zone 名下的孤儿实例要交给屏障后的收尾队列")
+		assert.Equal(t, []string{"7001"}, reconcile.scenes)
+		assert.Contains(t, loadSetMembersForTest(t, mr, newZone), "10", "新 zone 身份照常进负载集")
+		assert.True(t, localGoneBarrierBlocks(sc, testZoneId, "10"), "每个副本都要记下旧身份消失的时刻")
+
+		logic := NewEnterSceneLogic(context.Background(), sc)
+		assert.False(t, logic.playerLocationOwnerGone(staleLoc, testZoneId), "刚换走:屏障压着,不得当作整 zone 已下线")
+		assert.False(t, logic.playerLocationOwnerDead(staleLoc, testZoneId), "刚换走:屏障压着,不得接管")
+
+		// 逐层撤掉,确认挡住它的确实是屏障,而不是用例搭错了别的条件。
+		forgetLocalGoneObservationForTest(t, testZoneId, "10")
+		assert.False(t, logic.playerLocationOwnerGone(staleLoc, testZoneId), "本地记录没了,death_at 接着压")
+		assert.False(t, logic.playerLocationOwnerDead(staleLoc, testZoneId), "本地记录没了,death_at 接着压")
+		mr.Del(deathKey)
+		assert.True(t, logic.playerLocationOwnerGone(staleLoc, testZoneId), "屏障过后照常放行,不能永久挡住")
+		assert.True(t, logic.playerLocationOwnerDead(staleLoc, testZoneId), "屏障过后照常判死,不能永久挡住")
+	})
+
+	t.Run("death_mark_failure_defers_detach", func(t *testing.T) {
+		sc, mr, faults := setup(t)
+		faults.failDeathAt.Store(true)
+		flip(sc)
+
+		assert.False(t, mr.Exists(nodeDeathAtKey(testZoneId, "10")))
+		assert.Contains(t, loadSetMembersForTest(t, mr, testZoneId), "10", "death_at 写不进就不摘(GO-6)")
+		assert.True(t, isNodeDetachDeferred(testZoneId, "10"))
+		logic := NewEnterSceneLogic(context.Background(), sc)
+		assert.False(t, logic.playerLocationOwnerGone(staleLoc, testZoneId))
+		assert.False(t, logic.playerLocationOwnerDead(staleLoc, testZoneId))
+		// 撤掉本地消失记录,验证挡住它们的是 GO-6 那几层:节点留在负载集(ZCARD > 0、IsNodeAlive 为真),
+		// 本领导者推迟队列里有它(CanReclaimDeadNode 恒拒)。旧代码写失败照样 ZREM,这两条在这里会变绿。
+		forgetLocalGoneObservationForTest(t, testZoneId, "10")
+		assert.False(t, logic.playerLocationOwnerGone(staleLoc, testZoneId), "death_at 没落地:节点留在负载集,不得当作已下线")
+		assert.False(t, logic.playerLocationOwnerDead(staleLoc, testZoneId), "death_at 没落地:节点留在负载集,不得接管")
+	})
+
+	t.Run("follower_leaves_redis_alone", func(t *testing.T) {
+		sc, mr, _ := setup(t)
+		t.Cleanup(SetLeaderCheckForTest(func() bool { return false }))
+		flip(sc)
+
+		assert.False(t, mr.Exists(nodeDeathAtKey(testZoneId, "10")), "跟随者不写 Redis")
+		assert.Contains(t, loadSetMembersForTest(t, mr, testZoneId), "10", "跟随者不摘负载集,留给领导者")
+		assert.True(t, mr.Exists(nodeSceneNodeTypeKey(testZoneId, "10")))
+		assert.True(t, localGoneBarrierBlocks(sc, testZoneId, "10"), "跟随者同样记下本地消失时刻")
+		logic := NewEnterSceneLogic(context.Background(), sc)
+		assert.False(t, logic.playerLocationOwnerGone(staleLoc, testZoneId))
+	})
+
+	t.Run("identity_still_registered_elsewhere", func(t *testing.T) {
+		sc, mr, _ := setup(t)
+		registerKnownNodeForTest(t, otherKey, testZoneId, "10")
+		flip(sc)
+
+		assert.False(t, isZoneGoneFromRegistry(testZoneId))
+		assert.False(t, mr.Exists(nodeDeathAtKey(testZoneId, "10")), "旧身份还挂在别的键上,不能判死")
+		assert.Contains(t, loadSetMembersForTest(t, mr, testZoneId), "10")
+		assert.False(t, localGoneBarrierBlocks(sc, testZoneId, "10"))
+		assert.False(t, isNodeDetachDeferred(testZoneId, "10"))
+	})
 }
 
 // fullSync 的陈旧清扫与 watch DELETE 走同一条摘除路径:写不进就推迟,不 ZREM。

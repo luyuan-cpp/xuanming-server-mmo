@@ -1711,6 +1711,7 @@ d) 改 tools/scripts/run_cpp_tests.ps1
 12. §9 的状态要这样读:§9 点名的那一批(k8s_deploy.ps1、docker-compose.yml、loginqueue、kafka_offset_reset.ps1、shared-redis-split-by-purpose.md)已随 d5cbb8a8e 提交(`git show --stat d5cbb8a8e` 证实)。但之后工作区又出现新的他人未提交改动,而且有并发会话正在写:本轮 04:31 的 `git status --short` 有 15 个已改文件、5 个未跟踪文件,其中包括 tools/scripts/k8s_deploy.ps1(+431 行,G2b 的 MySQL 连接总账)、tools/scripts/tests/k8s_deploy_contract.tests.ps1(几分钟内从 +33 行涨到 +300 行)、deploy/k8s/README.md、docs/PROGRESS.md。§9 的「完整清单以 git status 为准」仍然有效。原报告「工作区干净,§9 已过时」的说法作废。
 
 13. 顺带发现(另案,不在本项修):日志级别口径三处不一致。K8s 模板 `LogLevel: 1`(HEAD:1790);bin/etc/base_deploy_config.yaml:25 注释写「0=DEBUG,1=INFO」;tools/scripts/release_preflight.ps1:445-446 按「0=DEBUG」把下限设成 1。而 node.cpp:1232-1234 直接 static_cast 成 muduo 枚举,Windows 分支里 1 是 DEBUG。Linux 枚举未核实。
+    - (2026-10-22 已处理,未执行,待 Codex 验证)三处已统一到 muduo 枚举:K8s 模板改为从 bin/etc 镜像(默认 2 = INFO,不再写死 1),预检下限改为 2,bin/etc 注释改正。Linux 构建用的 third_party/muduo-linux 是上游 chenshuo/muduo 子模块(tools/archived/muduo_linux_overlay 不覆盖 Logging.h),上游枚举顺序同为 TRACE / DEBUG / INFO / WARN / ERROR / FATAL(本机子模块未检出,按上游源码,未在本机核对)。见 PROGRESS 同日条目。
 
 ### 原报告:同类入口盘点
 
@@ -2882,7 +2883,7 @@ PARITY.md 登记(只追加一行,7 栏,格式照 :25 的表头):
 
 claim_verdict 的把握:high(仓库内的因果链);medium(依赖外部语义的后果细节);实测方案的可执行性:low(受环境阻塞)。
 
-high 的部分:「ok=false 被顶层分发丢弃 → 不再续读、写标志卡死 → 没有任何重建 → 续租无 ACK → 约 181s 本地判失租并重注册、循环;2s 的 Range 只增不删」。链上每一步我都回到 HEAD 逐行重读(E1~E15),流的创建点和完成队列轮询点都是全仓唯一,模板和生成物一致,相关路径在 73b852f32..HEAD 之间没有差异。两位复核人各自重读后同意,并专门找过能让缺陷不成立的保护逻辑(第二个轮询点、通道或存根重建、失租自杀后被拉起、探针杀容器),都不存在。仓库自己的设计文档(grpc-client-deadline-failure-callback.md:17、:261)在 2026-09-28 独立写过同一结论。
+high 的部分:「ok=false 被顶层分发丢弃 → 不再续读、写标志卡死 → 没有任何重建 → 续租无 ACK → 约 181s 本地判失租并重注册、循环;2s 的 Range 只增不删」。链上每一步我都回到 HEAD 逐行重读(E1~E15),流的创建点和完成队列轮询点都是全仓唯一,模板和生成物一致,相关路径在 73b852f32..HEAD 之间没有差异。两位复核人各自重读后同意,并专门找过能让缺陷不成立的保护逻辑(第二个轮询点、通道或存根重建、失租自杀后被拉起、探针杀容器),都不存在。仓库自己的设计文档([历史设计 grpc-client-deadline-failure-callback.md](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md):17、:261)在 2026-09-28 独立写过同一结论。
 
 medium 的部分:
 1. gRPC 对断开的流返回 ok=false、流不会自愈。这是该异步接口的标准语义,但两棵工作树的 gRPC 子模块都是空的,没能对着头文件核实。
@@ -3150,7 +3151,7 @@ I7 触发面不限于 etcd 成员重启。E4 不区分原因,任何一次到 etc
    - ok 在生成的顶层分发里就被吞了;
    - InitEtcdGrpcNode 用 registry.emplace,不可重入;
    - 手写代码看不到流上还有没有在途操作,无法安全销毁 ClientContext。
-7. 这不是新发现。docs/design/grpc-client-deadline-failure-callback.md:17 和 :261(§10 第 1 条,2026-09-28)已写明「流的 !ok 分支:泄漏 tag、提前 return 跳过本轮其余事件、流不重建(KeepAlive 死后约每个 TTL 重注册一轮)。另立项」;docs/handoff/handoff-backlog-2026-09-05.md:636-654(P1-13)也点过 `!ok` return 和 tag 泄漏。落码时回写这两处。
+7. 这不是新发现。[历史设计 docs/design/grpc-client-deadline-failure-callback.md](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md):17 和 :261(§10 第 1 条,2026-09-28)已写明「流的 !ok 分支:泄漏 tag、提前 return 跳过本轮其余事件、流不重建(KeepAlive 死后约每个 TTL 重注册一轮)。另立项」;docs/handoff/handoff-backlog-2026-09-05.md:636-654(P1-13)也点过 `!ok` return 和 tag 泄漏。落码时回写这两处。
 8. 「连在它上面的 C++ 节点」:K8s 上 C++ 连的是 ClusterIP Service `etcd.${InfraNamespace}:2379`(k8s_deploy.ps1 HEAD :1777,工作区 :2118;deploy/k8s/manifests/infra/etcd.yaml:18-31),只取 Hosts 第一项(etcd_service.cpp:17),不是成员列表。连到哪个成员由 kube-proxy 在建连时决定,节点日志里看不出来。
 9. 漏了两处连带缺陷:
    - 生成物里 WRITES_DONE / FINISH 是死分支,FINISH 分支写的是 `cq.Shutdown()`(etcd_grpc_client.cpp:412-414、:638-640),真走到会把整条 etcd 完成队列关掉。
@@ -3249,7 +3250,7 @@ I7 触发面不限于 etcd 成员重启。E4 不区分原因,任何一次到 etc
 - 生成的假服务基类可用:cpp/generated/proto/etcd/etcd.grpc.pb.h:982、:991(Watch::Service)、:1276、:1288(Lease::Service)。
 
 【文档】
-- docs/design/grpc-client-deadline-failure-callback.md:17、:29、:233-238、:242、:261。
+- [历史设计 docs/design/grpc-client-deadline-failure-callback.md](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md):17、:29、:233-238、:242、:261。
 - docs/handoff/handoff-backlog-2026-09-05.md:636-654。
 - docs/ops/incident-gate-tcpconnection-dtor-assert-2026-09-13.md:499。
 - docs/design/node-id-overhaul-plan-20260908.md:191、:276。
@@ -3434,7 +3435,7 @@ Linux 构建(deploy/k8s/Dockerfile.cpp)未验证;本修复不新增 core 源文�
 
 【七、文档与登记】
 - 新增 docs/design/etcd-stream-rebuild.md,并在 docs/README.md 登记一行。
-- 回写 grpc-client-deadline-failure-callback.md §10 第 1 条、handoff-backlog-2026-09-05.md 的 P1-13、node-id-overhaul-plan-20260908.md:191 / :276 的验收口径(加「且零重注册」)、handoff-global-singletons-10m-ccu-20261013.md §3 的状态列。
+- 回写 [历史设计 grpc-client-deadline-failure-callback.md](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md) §10 第 1 条、handoff-backlog-2026-09-05.md 的 P1-13、node-id-overhaul-plan-20260908.md:191 / :276 的验收口径(加「且零重注册」)、handoff-global-singletons-10m-ccu-20261013.md §3 的状态列。
 - docs/PROGRESS.md 只在文件最末尾另起一条(该文件和 docs/README.md 当前都有他人未提交的修改),写明 Java 状态;没有 Codex 结果前写「未编译,待 Codex 验证」。
 - Java 仓库 PARITY.md 追加一行(见 java_parity)。
 
@@ -3533,7 +3534,7 @@ PARITY.md「功能对齐」表末尾追加一行(七列,列序见 PARITY.md:25;�
 - cpp/tests/rpc_controller_test/etcd_stream_lifecycle_test.cpp
 - cpp/tests/rpc_controller_test/rpc_controller_test.vcxproj
 - docs/design/etcd-stream-rebuild.md
-- docs/design/grpc-client-deadline-failure-callback.md
+- [历史设计 docs/design/grpc-client-deadline-failure-callback.md](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md)
 - docs/design/node-id-overhaul-plan-20260908.md
 - docs/handoff/handoff-backlog-2026-09-05.md
 - docs/handoff/handoff-global-singletons-10m-ccu-20261013.md

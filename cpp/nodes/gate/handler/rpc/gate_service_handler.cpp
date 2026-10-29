@@ -10,7 +10,12 @@
 #include "network/rpc_controller.h"
 
 #include "proto/common/component/player_network_comp.pb.h"
+#include "proto/common/base/common.pb.h"
+#include "proto/common/base/node.pb.h"
 #include "network/broadcast_target_codec.h"
+#include "handler/event/scene_entry_dispatch.h"
+#include "rpc/service_metadata/client_player_common_service_metadata.h"
+#include "thread_context/node_context_manager.h"
 #include <session/manager/session_manager.h>
 #include <session/system/session_identity_fence.h>
 
@@ -48,6 +53,43 @@ namespace
 		LOG_INFO << where << ": received a push without target_player_id (legacy sender). "
 				 << "Identity fence is inactive for such messages; this is logged once. "
 				 << "See docs/design/routing-identity-audit-20260908.md R13.";
+	}
+
+	// 会话当前绑定的 scene 进程实例号(踢线来源栅栏用)。没绑定、实体已失效、注册不带 uuid 时返回空。
+	std::string BoundSceneInstance(const SessionInfo &session)
+	{
+		const auto sceneNode = session.GetNodeEntity(common::base::SceneNodeService);
+		auto &sceneNodeRegistry = tlsNodeContextManager.GetRegistry(common::base::SceneNodeService);
+		if (sceneNode == entt::null || !sceneNodeRegistry.valid(sceneNode))
+		{
+			return {};
+		}
+		const auto *info = sceneNodeRegistry.try_get<NodeInfo>(sceneNode);
+		return info != nullptr ? info->node_uuid() : std::string{};
+	}
+
+	// 本次 RPC 所在连接对应的 scene 进程实例号。scene 经 gate 拨过去的那条连接回推;只认在**当前连接**上握手核验过
+	// 对端 uuid 的连接(SceneLinkHandshakeComp,scene_entry_dispatch.cpp OnSceneLinkHandshaken 写入):同地址换了进程、
+	// 旧 RpcClient 重连到新进程而握手被拒时,不能拿注册表里的旧 uuid 认发送方。认不出返回空(按 kDeliverUnverified 照发)。
+	// 只在踢线这条罕见消息上遍历,不进普通推送的热路径。
+	std::string SenderSceneInstance(const muduo::net::TcpConnectionPtr &conn)
+	{
+		if (!conn)
+		{
+			return {};
+		}
+		auto &sceneNodeRegistry = tlsNodeContextManager.GetRegistry(common::base::SceneNodeService);
+		for (const auto &[entity, handshake, info] :
+			 sceneNodeRegistry.view<gate_scene_entry::SceneLinkHandshakeComp, NodeInfo>().each())
+		{
+			// lock() 的强引用只活在本次比较内,不留存连接(AGENTS §11.7)。
+			const auto linked = handshake.conn.lock();
+			if (linked && linked.get() == conn.get())
+			{
+				return info.node_uuid();
+			}
+		}
+		return {};
 	}
 } // namespace
 
@@ -91,6 +133,23 @@ void GateHandler::SendMessageToPlayer(::google::protobuf::RpcController* control
 		break;
 	case gate_session_fence::PushVerdict::kDeliver:
 		break;
+	}
+	// 踢线来源栅栏:34 只认会话当前绑定的 scene 进程(session_identity_fence.h ClassifySceneKickSource)。
+	// 同 zone 交接其实已放行、会话已改绑到目标节点时,源 scene 收口推来的 34 会断掉这条合法会话。
+	if (request->message_content().message_id() == SceneClientPlayerCommonKickPlayerMessageId)
+	{
+		const auto boundScene = BoundSceneInstance(sessionIt->second);
+		const auto senderScene = SenderSceneInstance(RpcController::From(controller).conn());
+		if (gate_session_fence::ClassifySceneKickSource(boundScene, senderScene) ==
+			gate_session_fence::SceneKickSourceVerdict::kDropNotBoundScene)
+		{
+			LOG_WARN << "SendMessageToPlayer: dropping KickPlayer from a scene process the session is no longer bound to"
+					 << " (the session was re-routed, e.g. a same-zone handoff that was admitted although the source"
+					 << " missed the reply). session_id=" << request->header().session_id()
+					 << " player_id=" << sessionIt->second.playerId << " sender_scene=" << senderScene
+					 << " bound_scene=" << boundScene;
+			return;
+		}
 	}
 	GetGateCodec().send(conn, request->message_content());
 	///<<< END WRITING YOUR CODE

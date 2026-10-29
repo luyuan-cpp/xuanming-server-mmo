@@ -23,6 +23,8 @@ import (
 // Router resolves player_id → home_zone_id → Redis client.
 // It is the ONLY component that knows about cross-realm topology.
 type Router struct {
+	closeOnce    sync.Once
+	closeErr     error
 	mappingRedis *redis.Redis                      // global mapping: player_id → home_zone_id
 	zoneToClient map[uint32]*goredis.ClusterClient // zone_id → Redis Cluster
 	devClient    *goredis.Client                   // non-nil in dev mode (single Redis for all)
@@ -641,23 +643,43 @@ func (r *Router) AcquirePlayerLock(ctx context.Context, dataClient goredis.Cmdab
 	}
 	token = hex.EncodeToString(buf)
 
+	// 任一把锁没拿到,都把「可能已经落在服务端」的锁按 token 释放掉,再返回:
+	//   - SETNX 报错不等于没写入:命令可能已在服务端执行、只是回包丢了;
+	//   - 回 false 也不一定是别人持锁:客户端对断连自动重试时,第二次会撞上第一次已写入的自己的 token。
+	// 这两种情况不释放,锁要挂到 PlayerLockTTLSec 过期,期间该玩家的写全部 LockConflict。
+	// token 校验保证只删自己的,别人持有的锁不受影响;代价是锁冲突时多一次释放往返。
+	// 请求 ctx 已超时 / 取消也照常释放(lockReleaseContext)。
 	ok, err = r.mappingRedis.SetnxExCtx(ctx, mappingPlayerLockKey(playerID), token, r.lockTTLSec)
 	if err != nil || !ok {
-		return "", ok, err
+		return "", false, r.lockAcquireFailure(playerID, "mapping", err, r.releaseMappingLock(ctx, playerID, token))
 	}
 
 	ttl := time.Duration(r.lockTTLSec) * time.Second
 	ok, err = dataClient.SetNX(ctx, PlayerDataLockKey(playerID), token, ttl).Result()
 	if err != nil || !ok {
-		// 第二把锁失败时必须释放第一把；token 校验保证不会误删后来者。
-		// 第二把锁失败的常见原因正是请求 ctx 已超时 / 取消,释放走 lockReleaseContext。
-		releaseErr := r.releaseMappingLock(ctx, playerID, token)
-		if err == nil && releaseErr != nil {
-			err = releaseErr
-		}
-		return "", ok, err
+		return "", false, r.lockAcquireFailure(playerID, "data", err, r.ReleasePlayerLock(ctx, dataClient, playerID, token))
 	}
 	return token, true, nil
+}
+
+// lockAcquireFailure 决定拿锁失败时返回的错误,并记下回滚释放的失败:
+//   - 拿锁本身的错误优先返回;
+//   - 拿锁只是没抢到(acquireErr == nil)而回滚释放失败时返回释放错误:锁可能还挂在服务端,不能当成普通的锁冲突。
+//
+// 回滚释放失败一律记日志:之后最多 PlayerLockTTLSec 内该玩家的写都回 LockConflict,日志是唯一的解释
+// (与 lockAndRecheckRoute 释放失败同一口径)。failedLock 只用于日志,标明哪把锁的 SETNX 没成功。
+func (r *Router) lockAcquireFailure(playerID uint64, failedLock string, acquireErr, releaseErr error) error {
+	if releaseErr != nil {
+		logx.Errorf("[PlayerLock] rollback after a failed %s lock acquire could not release the locks, they expire in %ds: player=%d acquire_err=%v: %v",
+			failedLock, r.lockTTLSec, playerID, acquireErr, releaseErr)
+	}
+	if acquireErr != nil {
+		return acquireErr
+	}
+	if releaseErr != nil {
+		return fmt.Errorf("player %d: releasing locks after a lock conflict failed: %w", playerID, releaseErr)
+	}
+	return nil
 }
 
 // writeRoute 是写门禁读到的路由快照,home 与合服围栏同一瞬间读出(GetPlayerHomeZoneAndMergeFence)。
@@ -772,6 +794,10 @@ const playerLockReleaseTimeout = time.Second
 // 释放发生在 defer 和获取失败的回滚里,这时请求 ctx 往往已经超时或被取消;go-redis 取连接前先看
 // ctx.Done(),沿用它释放命令根本发不出去,两把锁只能等 PlayerLockTTLSec 过期,期间同一玩家的写
 // 全部回 LockConflict。WithoutCancel 保留 ctx 里的值(trace 等),另套短超时,免得挂住的 Redis 卡住 defer。
+//
+// 1s 约束的是取连接、拨号与重试退避,不是单次读写:数据 / mapping 客户端都没开 ContextTimeoutEnabled,
+// go-redis 的套接字读写截止只取 ReadTimeout / WriteTimeout(缺省 3s)。所以 Redis 挂住时释放一份副本最坏约 3s,
+// 超过 1s 后不再重试。
 func lockReleaseContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.WithoutCancel(ctx), playerLockReleaseTimeout)
 }
@@ -835,19 +861,37 @@ func (r *Router) DeletePlayerZoneIfLocked(ctx context.Context, playerID uint64, 
 }
 
 // Close shuts down all Redis connections.
-func (r *Router) Close() {
-	if r.devClient != nil {
-		r.devClient.Close()
-	}
-	if r.publishRedis != nil {
-		// db_first 的发布客户端(含单测注入的):归 Router 所有。mappingRedis 是 go-zero 按地址共享的客户端,不归这里关。
-		_ = r.publishRedis.Close()
-	}
-	closed := make(map[*goredis.ClusterClient]bool)
-	for _, client := range r.zoneToClient {
-		if !closed[client] {
-			client.Close()
-			closed[client] = true
+func (r *Router) Close() { _ = r.CloseAndReport() }
+
+// CloseAndReport 只报告资源关闭；调用者必须先关闭接纳并 join 发布者，不能把 Close 当作发布终局证明。
+// 同一 Router 只关闭一次，并永久保留第一次错误；mappingRedis 是共享客户端，不归这里关闭。
+func (r *Router) CloseAndReport() error {
+	r.closeOnce.Do(func() {
+		r.mu.RLock()
+		clients := []*goredis.Client{r.devClient, r.publishRedis}
+		clusters := make([]*goredis.ClusterClient, 0, len(r.zoneToClient))
+		for _, client := range r.zoneToClient {
+			clusters = append(clusters, client)
 		}
-	}
+		r.mu.RUnlock()
+		closed := map[*goredis.Client]bool{}
+		for _, client := range clients {
+			if client != nil && !closed[client] {
+				closed[client] = true
+				if err := client.Close(); err != nil {
+					r.closeErr = errors.Join(r.closeErr, fmt.Errorf("关闭 Router Redis 客户端: %w", err))
+				}
+			}
+		}
+		closedClusters := map[*goredis.ClusterClient]bool{}
+		for _, client := range clusters {
+			if client != nil && !closedClusters[client] {
+				closedClusters[client] = true
+				if err := client.Close(); err != nil {
+					r.closeErr = errors.Join(r.closeErr, fmt.Errorf("关闭 Router Redis Cluster 客户端: %w", err))
+				}
+			}
+		}
+	})
+	return r.closeErr
 }

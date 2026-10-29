@@ -4,10 +4,14 @@
 #include "muduo/base/Condition.h"
 #include "muduo/base/CurrentThread.h"
 #include "muduo/base/Thread.h"
+#include "muduo/base/Timestamp.h"
 
+#include <array>
 #include <chrono>
 #include <concepts>
+#include <cstdint>
 #include <future>
+#include <limits>
 #include <memory>
 #include <string>
 #include <thread>
@@ -16,6 +20,49 @@
 namespace
 {
 using namespace std::chrono_literals;
+
+template <typename Timestamp>
+concept OriginalTimestampComparisons = requires(const Timestamp& left, const Timestamp& right)
+{
+    { left == right } -> std::same_as<bool>;
+    { left != right } -> std::same_as<bool>;
+    { left < right } -> std::same_as<bool>;
+    { left > right } -> std::same_as<bool>;
+    { left <= right } -> std::same_as<bool>;
+    { left >= right } -> std::same_as<bool>;
+};
+
+template <typename Timestamp>
+void CheckTimestampComparisonsAndLayout()
+{
+    EXPECT_EQ(sizeof(Timestamp), sizeof(int64_t)) << "Timestamp 必须保留原版八字节值布局";
+    EXPECT_EQ(alignof(Timestamp), alignof(int64_t));
+    if constexpr (OriginalTimestampComparisons<Timestamp>)
+    {
+        // 比较只取决于原始微秒值，覆盖负值、相等及整数边界，不读取真实时钟。
+        const std::array<int64_t, 5> values{
+            std::numeric_limits<int64_t>::min(), -1, 0, 1, std::numeric_limits<int64_t>::max()};
+        for (const int64_t leftValue : values)
+        {
+            for (const int64_t rightValue : values)
+            {
+                SCOPED_TRACE("左值=" + std::to_string(leftValue) + "，右值=" + std::to_string(rightValue));
+                const Timestamp left(leftValue);
+                const Timestamp right(rightValue);
+                EXPECT_EQ(left == right, leftValue == rightValue);
+                EXPECT_EQ(left != right, leftValue != rightValue);
+                EXPECT_EQ(left < right, leftValue < rightValue);
+                EXPECT_EQ(left > right, leftValue > rightValue);
+                EXPECT_EQ(left <= right, leftValue <= rightValue);
+                EXPECT_EQ(left >= right, leftValue >= rightValue);
+            }
+        }
+    }
+    else
+    {
+        ADD_FAILURE() << "缺少原版 Timestamp 的完整六种比较运算";
+    }
+}
 
 template <typename Condition>
 concept OriginalCondition = std::is_constructible_v<Condition, muduo::MutexLock&> &&
@@ -146,6 +193,11 @@ void CheckThreadStartAndJoin()
 TEST(MuduoBaseContractTest, ConditionPreservesFractionalTimeoutAndTimeoutResult)
 {
     CheckConditionTimeout<muduo::Condition>();
+}
+
+TEST(MuduoBaseContractTest, TimestampPreservesAllComparisonsAndValueLayout)
+{
+    CheckTimestampComparisonsAndLayout<muduo::Timestamp>();
 }
 
 TEST(MuduoBaseContractTest, AtomicOperationsReturnThePromisedOldOrNewValue)

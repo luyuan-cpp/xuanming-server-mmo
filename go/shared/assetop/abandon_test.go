@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	assetpb "proto/common/asset"
+	componentpb "proto/common/component"
 
 	"shared/scenenode"
 )
@@ -74,6 +75,38 @@ type abandonRig struct {
 	applier  *fakeApplier
 }
 
+// 两个替身只用于自动放弃夹具；核验位是与 blob 同次返回的独立事实，不把所有 fakeLedger 默认为已核验。
+type verifiedAbandonLedger struct {
+	*fakeLedger
+	verified bool
+}
+
+func (v *verifiedAbandonLedger) ReadVerifiedPersistedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, bool, error) {
+	ledger, err := v.fakeLedger.ReadPersistedLedger(ctx, playerID)
+	return ledger, v.verified && ledger != nil && err == nil, err
+}
+
+type verifiedSQLAbandonLedger struct {
+	*splitLedger
+	verified bool
+}
+
+func (v *verifiedSQLAbandonLedger) ReadVerifiedPersistedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, bool, error) {
+	ledger, err := v.splitLedger.ReadPersistedLedger(ctx, playerID)
+	return ledger, v.verified && ledger != nil && err == nil, err
+}
+
+// 只缺SQL能力的反例仍提供Redis核验能力，避免被另一道装配门禁遮住。
+type verifiedBlobOnlyAbandonLedger struct {
+	blobOnlyLedger
+	verified bool
+}
+
+func (v *verifiedBlobOnlyAbandonLedger) ReadVerifiedPersistedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, bool, error) {
+	ledger, err := v.blobOnlyLedger.ReadPersistedLedger(ctx, playerID)
+	return ledger, v.verified && ledger != nil && err == nil, err
+}
+
 // abandonableOp 是一行「早该放弃」的待办:创建于截止时刻之前一小时,最后一次可能的发送在两小时前。
 func abandonableOp() Op {
 	op := testOp(1)
@@ -94,7 +127,7 @@ func newAbandonRig(t *testing.T, op Op) *abandonRig {
 	// 同纪元账本里只见过 seq 99,这一行的 seq 在窗内未见:「确定未见」。
 	ledger := &fakeLedger{ledger: ledgerWithApplied(op.Stream, op.StreamEpoch, 99, false)}
 	resolver := &fakeResolver{err: scenenode.ErrNotOnline}
-	loop.Ledger = ledger
+	loop.Ledger = &verifiedAbandonLedger{fakeLedger: ledger, verified: true}
 	loop.Locator = resolver
 	return &abandonRig{loop: loop, m: m, store: store, ledger: ledger, resolver: resolver, applier: applier}
 }
@@ -257,7 +290,7 @@ func newSQLAbandonRig(t *testing.T, op Op) (*abandonRig, *splitLedger) {
 	rig := newAbandonRig(t, op)
 	rig.loop.cfg.RequireSQLCommit = true
 	split := &splitLedger{blob: rig.ledger, sql: &fakeLedger{ledger: ledgerWithApplied(op.Stream, op.StreamEpoch, 99, false)}}
-	rig.loop.Ledger = split
+	rig.loop.Ledger = &verifiedSQLAbandonLedger{splitLedger: split, verified: true}
 	return rig, split
 }
 
@@ -344,7 +377,7 @@ func TestAbandonWithSQLCommitEvidence(t *testing.T) {
 func TestAbandonNotRunningWithoutSQLLedgerWhenSwitchOn(t *testing.T) {
 	rig := newAbandonRig(t, abandonableOp())
 	rig.loop.cfg.RequireSQLCommit = true
-	rig.loop.Ledger = blobOnlyLedger{inner: rig.ledger}
+	rig.loop.Ledger = &verifiedBlobOnlyAbandonLedger{blobOnlyLedger: blobOnlyLedger{inner: rig.ledger}, verified: true}
 	n, err := rig.loop.AbandonOnce(context.Background(), testNowMs)
 	if err != nil || n != 0 {
 		t.Fatalf("装配不齐应回 (0, nil),实际 (%d, %v)", n, err)
@@ -406,7 +439,7 @@ func TestAbandonOnceNotRunningWhenNotAssembled(t *testing.T) {
 
 	// Store 没实现 Abandoner。
 	loop, _ := newTestLoop(t, newFakeStore(abandonableOp()), appliedApplier(), nil)
-	loop.Ledger = &fakeLedger{}
+	loop.Ledger = &verifiedAbandonLedger{fakeLedger: &fakeLedger{}, verified: true}
 	loop.Locator = &fakeResolver{err: scenenode.ErrNotOnline}
 	if n, err := loop.AbandonOnce(context.Background(), testNowMs); err != nil || n != 0 {
 		t.Fatalf("Store 没实现 Abandoner 时应回 (0, nil),实际 (%d, %v)", n, err)
@@ -442,7 +475,7 @@ func TestAbandonOnceListErrorReported(t *testing.T) {
 func TestAbandonOnceCursorPages(t *testing.T) {
 	store := &abandonStore{fakeStore: newFakeStore(), candidates: []uint64{7, 3}}
 	loop, _ := newTestLoop(t, store, appliedApplier(), func(c *LoopConfig) { c.AbandonBatch = 2 })
-	loop.Ledger = &fakeLedger{}
+	loop.Ledger = &verifiedAbandonLedger{fakeLedger: &fakeLedger{}, verified: true}
 	loop.Locator = &fakeResolver{err: scenenode.ErrNotOnline}
 
 	// 第一页满(2 条,行都不存在 → Claim 落空,只计 lease_lost)。
@@ -509,5 +542,51 @@ func TestAbandonSkipNames(t *testing.T) {
 		if got := r.String(); got != name {
 			t.Fatalf("abandonSkip(%d) 名字应为 %q,实际 %q", r, name, got)
 		}
+	}
+}
+
+// 通过正式 AbandonOnce 验证默认核验闸；未提供能力、未核验与已见终局三种事实分开。
+func TestAbandonRequiresVerifiedRedisCopy(t *testing.T) {
+	for _, name := range []string{"缺少核验能力", "副本未核验", "已见终局不靠核验位"} {
+		t.Run(name, func(t *testing.T) {
+			op := abandonableOp()
+			rig := newAbandonRig(t, op)
+			if !rig.loop.cfg.RequireVerifiedRedisCopy {
+				t.Fatal("默认核验闸必须开启，不能以关闭优化夹具")
+			}
+			switch name {
+			case "缺少核验能力":
+				rig.loop.Ledger = rig.ledger
+			case "副本未核验":
+				rig.loop.Ledger = &verifiedAbandonLedger{fakeLedger: rig.ledger, verified: false}
+			case "已见终局不靠核验位":
+				rig.ledger.ledger = sqlLedgerFixture(true, op).ledger
+				rig.loop.Ledger = &verifiedAbandonLedger{fakeLedger: rig.ledger, verified: false}
+			}
+			_, err := rig.loop.AbandonOnce(context.Background(), testNowMs)
+			if err != nil {
+				t.Fatalf("核验边界不应使该轮失败：%v", err)
+			}
+			finalized, _ := rig.store.snapshot()
+			if len(rig.store.abandoned) != 0 || rig.applier.calls.Load() != 0 {
+				t.Fatalf("未核验不能放弃或投递：abandoned=%d apply=%d", len(rig.store.abandoned), rig.applier.calls.Load())
+			}
+			if name == "已见终局不靠核验位" {
+				if len(finalized) != 1 {
+					t.Fatalf("已见原件仍应终结，实际 %d", len(finalized))
+				}
+				return
+			}
+			if len(finalized) != 0 {
+				t.Fatal("缺核验原件不得终结")
+			}
+			if name == "缺少核验能力" {
+				if len(rig.store.listCalls) != 0 || rig.ledger.reads.Load() != 0 {
+					t.Fatal("没有核验能力必须在列候选/读账本前拒绝")
+				}
+			} else if rig.skipped("redis_unverified") != 1 || len(rig.store.released) != 1 {
+				t.Fatalf("未核验应计数并归还本次租约：skip=%v release=%d", rig.skipped("redis_unverified"), len(rig.store.released))
+			}
+		})
 	}
 }

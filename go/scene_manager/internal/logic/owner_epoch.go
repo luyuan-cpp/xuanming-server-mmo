@@ -1,12 +1,15 @@
 package logic
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	smpb "proto/scene_manager"
+	"scene_manager/internal/config"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
 	"shared/ownerepoch"
@@ -21,8 +24,10 @@ import (
 // 两把键的格式契约在 shared/ownerepoch(Go 与 C++ 两边一字不差)。本文件只放
 // scene_manager 自己的读写:
 //
-//  1. 铸造 + CAS 写 location 的 Lua(placePlayerLocation 用);
-//  2. 路由 / 重定向投递失败后的**单调**回滚(GO-2 根治,cross-zone-scene-travel.md §12.8):
+//  1. 铸造 + CAS 写 location 的 Lua(placePlayerLocation 用)。铸造 EVAL 与紧随的 WAITAOF 走 svc.OwnerEpochMint 的
+//     同一条连接,确认落盘之后才把新 epoch 交给路由 / 重定向(docs/design/zone-redis-regression-guard-20261022.md
+//     §4.3.2 G3b);墙钟地板(§4.3.1 G3a)**尚未落地**,铸造仍是恰好 +1,前置条件见该节;
+//  2. 路由 / 重定向投递失败(含铸造没确认落盘)后的**单调**回滚(GO-2 根治,cross-zone-scene-travel.md §12.8):
 //     location 退回本次写入之前的值,铸造过的 epoch 再 INCR 一格(N+1 → N+2),从不退回旧值;
 //     凭标记铸造的回滚以「所凭标记原样还在」为前提,同时在恢复出的 location 里写回滚回执、把
 //     标记转写到新 epoch。例外 keep:没铸造的落点,以及同物理节点 epoch 0 的铸造(§12.6.9(c)),
@@ -33,10 +38,12 @@ import (
 // 闸口推进,而且**只在持有者真的换了的时候**推进:首次落点、过了换手门的跨节点
 // 交接、放行跨 zone 交接、等待落点的第二条腿。新值随路由事件带给目标节点;C++
 // 存盘用 Lua 比对「缓存值 == Redis 当前值」,老 epoch 的写一律被拒。
-// epoch 只经 INCR 前进 —— 路由失败的回滚也是 INCR,任何值都不会被铸两次(补种只按 location
+// epoch 只经 INCR 前进 —— 路由失败的回滚也是 INCR,在 Redis 不回退的前提下任何值都不会被铸两次(补种只按 location
 // 记录值补回缺失的键,见 enterscenelogic.go sameNodeZeroMint 一段)。除下面「唯一例外」里的同节点 epoch 0
 // 铸造外,bump 回滚是另一种「持有者没换也推进」的情形:它让被回滚掉的那个值作废,仍持有玩家的源 scene
 // 凭 location 里的回滚回执采纳新值。
+// 现有判据依赖「铸造恰好前进一格」:铸造的重放识别比 cur == ARGV[1]+1;C++ 源端采纳回滚要求 epoch == 标记 epoch + 2
+// (player_lifecycle.h travel_outcome::ClassifyOwnership)。G3a 墙钟地板会打破这两条,落地时必须两边同批改。
 //
 // 持有者没换就不许推进 —— 同节点换图、同落点重连、dev 旁路下无标记的跨节点
 // 交接都只做「epoch 不变才写 location」的 CAS。原因:持有节点要等 Kafka → gate →
@@ -96,8 +103,9 @@ end
 // 回滚只 INCR、从不把键退回旧值(见 luaRollbackPlayerPlacement),所以不存在「回滚之后
 // 再铸出同一个值」。
 //
-// 重放识别(epoch CAS 不过、`return 0` 之前那一段):go-zero 给 go-redis 设了 MaxRetries=3,
-// go-redis 对读超时 / EOF 会把**同一条** EVAL 原样重发。首发其实已经执行(epoch 已是
+// 重放识别(epoch CAS 不过、`return 0` 之前那一段):铸造走 svc.OwnerEpochMint,EVAL 结果未知(传输错误)时
+// 它会在新连接上把**同一条** EVAL(连同 WAITAOF)原样重发(svc/owner_epoch_mint.go EvalAndConfirm,最多 3 次)。
+// 首发其实已经执行(epoch 已是
 // ARGV[1]+1、location 已写成 ARGV[2])、只是应答丢了时,重发在这里读到 cur ≠ ARGV[1],
 // 原本会回 0 被当成「并发推进」(errOwnerEpochConflict → 19):状态已经推进,调用方却既不发
 // 重定向 / 路由、也不回滚 —— 与「推重定向失败 + 回滚失败」同一个终态(源端静默销毁实体、
@@ -114,6 +122,11 @@ end
 // 「标记检查与铸造同一原子步骤」的承诺一致 —— 源端删标记后读 epoch / location 做裁决,此时识别与否都不
 // 改变它的结论,只影响本请求回 0 还是回成功)。本请求的落点已被 bump 回滚之后(epoch 已是
 // ARGV[1]+2),原样重发同样回 0:「恰好只前进一格」不成立,不会把回滚掉的落点重新认成已生效。
+//
+// 识别命中时把 owner_epoch 原值 SET 回去一次(值不变,该键没有 TTL):重发走的是新连接,紧随的 WAITAOF 等的是
+// 「本连接最后一次写」的复制偏移(Redis call() 只在命令产生传播时更新 client woff)。只读的识别分支不传播,
+// 新连接的 woff 停在 0,WAITAOF 会立即回满份数,而首发那次铸造其实未必落盘。原值写回让本连接的偏移越过首发
+// 的写,WAITAOF 的确认才覆盖它(AOF 与复制流都是单一有序日志)。
 //
 // 不带标记的铸造(首次落点 / 等待落点)**不做**识别,维持回 0:UpdateTime 是秒级,同一秒内
 // 目标相同的两个并发请求序列化字节完全一样,没有标记就区分不开「我已生效」与「别人抢先写了
@@ -139,6 +152,7 @@ if cur ~= ARGV[1] then
     if ARGV[3] ~= "" and tonumber(cur) == tonumber(ARGV[1]) + 1
         and redis.call("GET", KEYS[2]) == ARGV[2]
         and redis.call("GET", KEYS[3]) == ARGV[3] then
+        redis.call("SET", KEYS[1], cur)
         return -tonumber(cur)
     end
     return 0
@@ -310,6 +324,54 @@ const (
 // epoch,或 location 原文在本次观察之后被改写 / 删除(luaLocationExpectCheck)。Redis 未被改动,调用方翻成
 // constants.ErrOwnerEpochConflict(可重试)。
 var errOwnerEpochConflict = errors.New("owner epoch advanced by a concurrent EnterScene")
+
+// errOwnerEpochMintNotDurable 表示铸造已经写进 zone Redis 内存(epoch 与 location 都已推进),但 WAITAOF 没有确认
+// 它落盘:份数不足、等满超时、WAITAOF 被拒或回复读失败(docs/design/zone-redis-regression-guard-20261022.md §4.3.2)。
+// 与其余落点错误不同,placePlayerLocation 返回它时 placedLocation **有效**,调用方必须按「推路由失败」收尾:不推
+// 路由 / 重定向,用这份 placed 走单调回滚,回 ErrKafkaRoute(可重试)。新 epoch 不得交给任何节点 —— Redis 崩溃或
+// 切主丢掉它时,缓存着它的持有者下一次存盘会被等值 CAS 拒掉、按废黜销毁(丢 ≤300s 进度)。
+// 用 errors.Is 判;具体原因在包装链里,只进日志。忘了特判它的调用方落进通用错误分支(回 3、不回滚、不发路由),
+// 新 epoch 照样没交出去,方向是 fail-closed。
+var errOwnerEpochMintNotDurable = errors.New("owner epoch mint not confirmed durable")
+
+// errOwnerEpochMinterMissing:svcCtx.OwnerEpochMint 为 nil(生产恒非 nil,servicecontext.go)。不退回 go-zero 上无确认
+// 的铸造,一个字节都不写,调用方按通用落点错误回 3。
+var errOwnerEpochMinterMissing = errors.New("owner epoch minter not configured; refusing to mint without durability confirmation")
+
+// ownerEpochMintRouteReserveSlack:给铸造截止时间时,在 Kafka 同步写超时之外再给回滚 Lua 与回包留的时间。
+const ownerEpochMintRouteReserveSlack = 300 * time.Millisecond
+
+// ownerEpochMintContext 给铸造(EVAL + WAITAOF)一个比请求更早的截止时间:请求截止 − (Kafka 同步写超时 + 余量)。
+//
+// 铸造之后还要同步推一次路由 / 重定向(kafka.Writer 的 WriteTimeout,不受请求 ctx 约束),失败再跑回滚 Lua。
+// WAITAOF 若把请求预算用光,推路由失败的应答就赶不上 zrpc 服务端超时:调用方只拿到 DeadlineExceeded,
+// C++ 源 scene 按「结果未知」冻满 30s 看门狗(scene_manager_service.yaml Timeout 注释的不等式)。
+// svc 的 EvalAndConfirm 再按这个截止算 WAITAOF 的等待上限(min(配置值, 剩余 − 100ms)),不够 1ms 就一条都不发
+// (svc.ErrOwnerEpochMintNotSent)。请求没有截止时间(测试夹具、无超时的调用方)时原样返回,WAITAOF 按配置值等。
+func ownerEpochMintContext(ctx context.Context, c *config.Config) (context.Context, context.CancelFunc) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return ctx, func() {}
+	}
+	return context.WithDeadline(ctx, deadline.Add(-(c.EffectiveKafkaWriteTimeout() + ownerEpochMintRouteReserveSlack)))
+}
+
+// observeMintDurability 把一次**已写进 Redis** 的铸造的落盘结论翻成 placePlayerLocation 的返回:Disabled / Confirmed
+// 返回 nil;NotDurable / Error 返回包装了 errOwnerEpochMintNotDurable 的错误。两项份数都配 0(Disabled)时不计指标。
+func observeMintDurability(result svc.MintEvalResult) error {
+	switch result.Durability {
+	case svc.MintDurabilityDisabled:
+		return nil
+	case svc.MintDurabilityConfirmed:
+		metrics.ObserveOwnerEpochMintDurable(metrics.OwnerEpochMintDurableConfirmed, result.Elapsed)
+		return nil
+	case svc.MintDurabilityNotDurable:
+		metrics.ObserveOwnerEpochMintDurable(metrics.OwnerEpochMintDurableNotDurable, result.Elapsed)
+	default:
+		metrics.ObserveOwnerEpochMintDurable(metrics.OwnerEpochMintDurableError, result.Elapsed)
+	}
+	return fmt.Errorf("%w: %v", errOwnerEpochMintNotDurable, result.DurableErr)
+}
 
 // errHandoffWithdrawn 表示预检时读到的 handoff 标记在落点那一刻已经不在(或被换过):
 // 源 scene 撤回了交接(应答超时 / 玩家取消),它即将解冻继续持有玩家。Redis 未被改动,

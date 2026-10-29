@@ -693,31 +693,163 @@ func TestTravelSmokeJudgeRejection(t *testing.T) {
 	accepted := travelTestReply(t, &scene.TravelToZoneResponse{})
 	envelope := &base.MessageContent{ErrorMessage: &base.TipInfoMessage{Id: tipSyncRateLimited}}
 
-	tip, err := travelSmokeJudgeRejection(zone, travelTestSettled(rejected, nil))
+	tip, err := travelSmokeJudgeRejection(zone, travelTestSettled(rejected, nil), travelSmokeUncorrelatedReplies{})
 	if err != nil || tip != 7 {
 		t.Fatalf("rejected reply: got tip=%d err=%v, want tip=7 and no error", tip, err)
 	}
 
+	// 窗口内收到过一条没回显请求号、回包体拒绝码为 7 的回包:超时原因要说出它,而不是"没有回包"。
+	var uncorrelated travelSmokeUncorrelatedReplies
+	uncorrelated.note(rejected)
+
 	fail := []struct {
-		name    string
-		reply   travelSmokeReplyOutcome
-		wantErr string
+		name         string
+		reply        travelSmokeReplyOutcome
+		uncorrelated travelSmokeUncorrelatedReplies
+		wantErr      string
+		wantNot      string // 非空 = 失败原因里不得出现
 	}{
-		{"accepted", travelTestSettled(accepted, nil), "tip=0"},
+		{"accepted", travelTestSettled(accepted, nil), travelSmokeUncorrelatedReplies{}, "tip=0", ""},
 		{"envelope rejection is not a business rejection", travelTestSettled(envelope, &pkg.ServerTipError{Tip: tipSyncRateLimited}),
-			fmt.Sprintf("被 gate 信封拒绝 tip=%d", tipSyncRateLimited)},
-		{"no reply", travelTestSettled(nil, pkg.ErrRPCTimeout), "内没有回包"},
-		{"disconnected", travelTestSettled(nil, pkg.ErrRPCDisconnected), pkg.ErrRPCDisconnected.Error()},
-		{"not settled", travelSmokeReplyOutcome{}, "caller bug"},
+			travelSmokeUncorrelatedReplies{}, fmt.Sprintf("被 gate 信封拒绝 tip=%d", tipSyncRateLimited), ""},
+		{"no reply", travelTestSettled(nil, pkg.ErrRPCTimeout), travelSmokeUncorrelatedReplies{}, "内没有回包", "without a request id"},
+		// 判定不变(仍是失败),只是原因改写:回包到了、带拒绝码,但服务端没回显请求号。
+		{"reply arrived without request id", travelTestSettled(nil, pkg.ErrRPCTimeout), uncorrelated,
+			"received 1 TravelToZone reply(ies) without a request id", "内没有回包"},
+		{"reply without request id carries the body tip", travelTestSettled(nil, pkg.ErrRPCTimeout), uncorrelated, "body tip=7", ""},
+		{"disconnected", travelTestSettled(nil, pkg.ErrRPCDisconnected), uncorrelated, pkg.ErrRPCDisconnected.Error(), "without a request id"},
+		{"not settled", travelSmokeReplyOutcome{}, travelSmokeUncorrelatedReplies{}, "caller bug", ""},
 	}
 	for _, c := range fail {
 		t.Run(c.name, func(t *testing.T) {
-			tip, err := travelSmokeJudgeRejection(zone, c.reply)
+			tip, err := travelSmokeJudgeRejection(zone, c.reply, c.uncorrelated)
 			if err == nil {
 				t.Fatalf("expected an error, got tip=%d", tip)
 			}
 			if !strings.Contains(err.Error(), c.wantErr) {
 				t.Fatalf("error %q does not mention %q", err, c.wantErr)
+			}
+			if c.wantNot != "" && strings.Contains(err.Error(), c.wantNot) {
+				t.Fatalf("error %q must not mention %q", err, c.wantNot)
+			}
+		})
+	}
+}
+
+// 没回显请求号的 TravelToZone 回包:计数、最近一条的信封 tip 与回包体 tip、按等待窗口截取、文案。
+func TestTravelSmokeUncorrelatedReplies(t *testing.T) {
+	var u travelSmokeUncorrelatedReplies
+	if got := u.describe(); got != "" {
+		t.Fatalf("zero value must describe nothing, got %q", got)
+	}
+
+	u.note(travelTestReply(t, &scene.TravelToZoneResponse{ErrorMessage: &base.TipInfoMessage{Id: 7}}))
+	if u.count != 1 || u.lastEnvelopeTip != 0 || u.lastBodyTip != 7 || u.lastBodyUndecodable {
+		t.Fatalf("after a body rejection: got %+v, want count=1 envelope=0 body=7", u)
+	}
+	before := u
+
+	// 信封拒绝:回包体为空,回包体 tip 归 0,不能沿用上一条的 7。
+	u.note(&base.MessageContent{ErrorMessage: &base.TipInfoMessage{Id: tipSyncRateLimited}})
+	if u.count != 2 || u.lastEnvelopeTip != tipSyncRateLimited || u.lastBodyTip != 0 || u.lastBodyUndecodable {
+		t.Fatalf("after an envelope rejection: got %+v, want count=2 envelope=%d body=0", u, tipSyncRateLimited)
+	}
+	described := u.describe()
+	wants := []string{
+		"received 2 TravelToZone reply(ies) without a request id",
+		fmt.Sprintf("envelope tip=%d", tipSyncRateLimited),
+		"kRateLimitExceeded",
+		"body empty (envelope rejection)",
+		"ClientRequest.id",
+	}
+	for _, want := range wants {
+		if !strings.Contains(described, want) {
+			t.Fatalf("describe %q does not mention %q", described, want)
+		}
+	}
+	// 信封拒绝时回包体为空:不得写出 body tip 与「0 = accepted」图例,免得被读成 scene 已受理。
+	for _, wantNot := range []string{"body tip=", "accepted"} {
+		if strings.Contains(described, wantNot) {
+			t.Fatalf("describe %q of an envelope rejection must not mention %q", described, wantNot)
+		}
+	}
+
+	// 按窗口截取:只算 before 之后到的;窗口内一条都没有时返回零值,不能拿更早那条来解释这一次。
+	if got := u.since(before); got.count != 1 || got.lastEnvelopeTip != tipSyncRateLimited {
+		t.Fatalf("since: got %+v, want count=1 with the latest tips", got)
+	}
+	if got := u.since(u); got != (travelSmokeUncorrelatedReplies{}) {
+		t.Fatalf("empty window: got %+v, want zero value", got)
+	}
+
+	u.note(&base.MessageContent{SerializedMessage: []byte{0xff, 0xff, 0xff}})
+	if u.count != 3 || !u.lastBodyUndecodable || u.lastBodyTip != 0 {
+		t.Fatalf("after an undecodable body: got %+v, want count=3 undecodable", u)
+	}
+	if got := u.describe(); !strings.Contains(got, "body undecodable") {
+		t.Fatalf("describe %q does not mention the undecodable body", got)
+	}
+}
+
+// 「回包没回显请求号」只在调用既没见到回包、也没见到 124 时才是首要原因。
+func TestTravelSmokeUncorrelatedCause(t *testing.T) {
+	var uncorrelated travelSmokeUncorrelatedReplies
+	uncorrelated.note(travelTestReply(t, &scene.TravelToZoneResponse{ErrorMessage: &base.TipInfoMessage{Id: 7}}))
+	cases := []struct {
+		name         string
+		scan         travelSmokeScan
+		uncorrelated travelSmokeUncorrelatedReplies
+		want         bool
+	}{
+		{"nothing seen, uncorrelated reply arrived", travelSmokeScan{}, uncorrelated, true},
+		{"nothing seen, no uncorrelated reply", travelSmokeScan{}, travelSmokeUncorrelatedReplies{}, false},
+		{"call saw its reply", travelSmokeScan{replySeen: true}, uncorrelated, false},
+		{"redirect seen", travelSmokeScan{hop: &travelSmokeHop{targetAddr: "127.0.0.1:7001"}}, uncorrelated, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := travelSmokeUncorrelatedCause(c.scan, c.uncorrelated) != ""; got != c.want {
+				t.Fatalf("got cause=%t, want %t", got, c.want)
+			}
+		})
+	}
+}
+
+// 一跳超时的文案:回包与 124 都没到、窗口内却收到过没回显请求号的回包时,优先报它;
+// 那条回包在窗口之前到的不算;其余分支照旧,只在现场字段里带上计数。
+func TestTravelSmokeDescribeTimeout(t *testing.T) {
+	const gate = "127.0.0.1:7001"
+	const nothingArrived = "回包与 msg 124 都没到"
+	var noted travelSmokeProgress
+	noted.uncorrelatedTravel.note(travelTestReply(t, &scene.TravelToZoneResponse{ErrorMessage: &base.TipInfoMessage{Id: 7}}))
+	hop := &travelSmokeHop{targetAddr: "127.0.0.2:7002"}
+
+	cases := []struct {
+		name             string
+		scan             travelSmokeScan
+		progress, before travelSmokeProgress
+		want             []string
+		wantNot          string
+	}{
+		{"uncorrelated reply is the cause", travelSmokeScan{}, noted, travelSmokeProgress{},
+			[]string{"uncorrelated_replies=1", "without a request id", "body tip=7", gate}, nothingArrived},
+		{"uncorrelated reply before the window does not count", travelSmokeScan{}, noted, noted,
+			[]string{"uncorrelated_replies=0", nothingArrived}, "without a request id"},
+		{"nothing arrived at all", travelSmokeScan{}, travelSmokeProgress{}, travelSmokeProgress{},
+			[]string{"uncorrelated_replies=0", nothingArrived}, "without a request id"},
+		{"redirect seen keeps its own hint", travelSmokeScan{hop: hop}, noted, travelSmokeProgress{},
+			[]string{"uncorrelated_replies=1", "还没开始重登"}, "without a request id"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := travelSmokeDescribeTimeout(c.scan, c.progress, c.before, gate, travelSmokeRedirectTimeout)
+			for _, want := range c.want {
+				if !strings.Contains(got, want) {
+					t.Fatalf("description %q does not mention %q", got, want)
+				}
+			}
+			if c.wantNot != "" && strings.Contains(got, c.wantNot) {
+				t.Fatalf("description %q must not mention %q", got, c.wantNot)
 			}
 		})
 	}
@@ -733,8 +865,8 @@ func TestTravelSmokeReplyRejection(t *testing.T) {
 		wantErr     string // 空 = 应放行
 	}{
 		{"accepted", 0, &scene.GmAddCurrencyResponse{BalanceAfter: 18}, ""},
-		{"gate GM guard", gmGuard, &scene.GmAddCurrencyResponse{}, "GM 闸拒绝"},
-		{"other envelope rejection", tipSyncRateLimited, &scene.GetCurrencyListResponse{}, "被 gate 信封拒绝"},
+		{"gate GM guard", gmGuard, &scene.GmAddCurrencyResponse{}, "gate GM guard rejected it"},
+		{"other envelope rejection", tipSyncRateLimited, &scene.GetCurrencyListResponse{}, "travelSmokeRequestSpacing"},
 		{"business rejection", 0, &scene.GetCurrencyListResponse{ErrorMessage: &base.TipInfoMessage{Id: 9}}, "scene 业务拒绝 tip=9"},
 	}
 	for _, c := range cases {
@@ -757,7 +889,8 @@ func TestTravelSmokeReplyRejection(t *testing.T) {
 }
 
 // 金币槽越界按 0(新号没有任何货币记录时空列表是合法回包),与改造前经 Player.GetCurrencyValue 读出的值一致。
-func TestTravelSmokeGold(t *testing.T) {
+// goldSlotValue 是 currency_crash_window_scenario.go 的共享规则,travel 的 readGold 与 readGoldBalance 共用它。
+func TestGoldSlotValue(t *testing.T) {
 	cases := []struct {
 		name     string
 		response *scene.GetCurrencyListResponse
@@ -769,7 +902,7 @@ func TestTravelSmokeGold(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := travelSmokeGold(c.response); got != c.want {
+			if got := goldSlotValue(c.response); got != c.want {
 				t.Fatalf("got %d, want %d", got, c.want)
 			}
 		})

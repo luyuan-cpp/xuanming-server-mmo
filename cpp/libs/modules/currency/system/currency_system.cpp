@@ -22,18 +22,16 @@
 // Internal helper
 // ---------------------------------------------------------------------------
 
+// 币种判定统一用 currency.h 的 IsKnownCurrencyType。它**纯判定,零副作用、不碰 ECS**,
+// 所以下面各原语把它排在业务条件(冻结 / 封禁)之前 —— 而且必须排在前面:原语的调用方
+// 传的是编译期常量或启动期已校验的配置,越界币种是调用方写错了,永远不可能成功;
+// 若让冻结先命中,会拿到 RETRY 类的 kAssetFrozen,对一个注定失败的请求无限重投
+// (04-asset-channel.md §4.10 的 RETRY / REJECTED 分类)。
+// 外部载荷的不认识币种不会走到这里:收件箱执行器与资产通道在原语之前先判,按版本错位处理。
+// 这与背包侧"纯预检必须全部跑在 ReserveOrEvict 之前"是同一条纪律。
+
 namespace
 {
-
-// 币种是否在枚举范围内。**纯判定,零副作用、不碰 ECS**,所以允许排在业务条件
-// (冻结 / 封禁)之前 —— 而且必须排在前面:越界币种是调用方写错了,永远不可能
-// 成功;若让冻结先命中,资产通道会拿到 RETRY 类的 kAssetFrozen,对一个注定失败的
-// 请求无限重投(04-asset-channel.md §4.10 的 RETRY / REJECTED 分类)。
-// 这与背包侧"纯预检必须全部跑在 ReserveOrEvict 之前"是同一条纪律。
-bool IsKnownCurrencyType(CurrencyType type)
-{
-    return static_cast<uint32_t>(type) < static_cast<uint32_t>(kCurrencyMax);
-}
 
 // PlayerCurrencyComp(补缴欠款 + 脏标记)是玩家的**必需组件**,唯一创建点是加载
 // (PlayerDatabaseMessageFieldsUnmarshal 从 CurrencyComp.debts 装载)。增减路径只取不建:
@@ -102,7 +100,7 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
     }
 
     // 币种越界与 amount<=0 同类,都是编程错误,必须在冻结 / 封禁这些**会自己消失或
-    // 需要记账**的业务条件之前判掉(理由见 IsKnownCurrencyType 注释)。
+    // 需要记账**的业务条件之前判掉(理由见文件开头的币种判定注释)。
     if (!IsKnownCurrencyType(type))
     {
         LOG_ERROR << "CurrencySystem::AddCurrency: unknown CurrencyType="
@@ -359,7 +357,7 @@ uint32_t CurrencySystem::AttachDebt(entt::entity player, CurrencyType type, int6
     // 本原语只负责 fail-closed 拒绝、不合并。这是版本错位,不是确定性拒绝:调用方必须先用
     // DebtCarriesUnknownFields 判定,按版本错位处理(不执行、不记终态拒绝,之后重新取一次处置再判),
     // 不能按本地副本原地重试 —— 这笔欠款在会话内可能被还清删除,错位随之消失,而那条处置可能已被作废
-    // (收件箱执行器 GmSanctionInboxExecutor::AttachCurrencyDebt 回 kVersionSkew,收件箱停用本域、下次落地重拉)。
+    // (收件箱执行器 GmSanctionInboxExecutor::AttachCurrencyDebt 回 kVersionSkew,收件箱停用本域,实体重建后重拉(退出完成后再登录,或换节点);退出保留期内重登会复用实体,不重拉)。
     if (DebtCarriesUnknownFields(player, type))
     {
         LOG_ERROR << "CurrencySystem::AttachDebt: existing debt carries fields unknown to this version, refusing to merge"
@@ -407,7 +405,14 @@ bool CurrencySystem::DebtCarriesUnknownFields(entt::entity player, CurrencyType 
         return false;
     }
     const auto existing = comp->debts.find(static_cast<uint32_t>(type));
-    return existing != comp->debts.end() && !existing->second.unknownFields.empty();
+    if (existing == comp->debts.end())
+    {
+        return false;
+    }
+    // 只认更新版本加的字段;已退役字段的残留字节不算(否则带残留的欠款会被永远当成新版本数据,再也挂不上新欠款)。
+    const auto debtEntryName = CurrencyDebtEntry::descriptor()->full_name();
+    return unknown_field_carry::CarriesNewerVersionFields(
+        std::string_view(debtEntryName.data(), debtEntryName.size()), existing->second.unknownFields);
 }
 
 // ---------------------------------------------------------------------------
@@ -601,7 +606,7 @@ std::vector<CurrencyDebtEntry> CurrencySystem::QueryDebts(entt::entity player)
 
 uint32_t CurrencySystem::BlockCurrency(entt::entity player, CurrencyType type)
 {
-    if (static_cast<uint32_t>(type) >= static_cast<uint32_t>(kCurrencyMax))
+    if (!IsKnownCurrencyType(type))
     {
         LOG_ERROR << "CurrencySystem::BlockCurrency: invalid CurrencyType="
                   << static_cast<uint32_t>(type) << " entity=" << entt::to_integral(player);
@@ -638,7 +643,7 @@ uint32_t CurrencySystem::BlockCurrency(entt::entity player, CurrencyType type)
 
 uint32_t CurrencySystem::UnblockCurrency(entt::entity player, CurrencyType type)
 {
-    if (static_cast<uint32_t>(type) >= static_cast<uint32_t>(kCurrencyMax))
+    if (!IsKnownCurrencyType(type))
     {
         LOG_ERROR << "CurrencySystem::UnblockCurrency: invalid CurrencyType="
                   << static_cast<uint32_t>(type) << " entity=" << entt::to_integral(player);

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"login/internal/logic/pkg/dataloader"
 	login_proto_common "proto/common/base"
+	databasepb "proto/common/database"
 	"shared/generated/pb/table"
 	"time"
 
@@ -36,7 +37,7 @@ const newPlayerSeedTimeout = time.Second
 // 客户端没开 ContextTimeoutEnabled,ctx 截止不约束 socket 读写,但 go-redis 取连接(连接池排队)与拨号认 ctx:
 // 1s 子预算会让连接池等满超过 1s 的探测以 DeadlineExceeded 失败,而探测 fail-closed,它就成了唯一一个预算短于
 // handler、又会拒绝建角的 Redis 步骤(读 blob、围栏写都用请求 ctx)。用请求 ctx 后它对池等待的容忍度与读 blob
-// 一致,上界是 handler 截止;6c 之后的写仍由 6c'' 的 abandonAfterDeadline 把关,login.yaml 锁 TTL 的推导不变。
+// 一致,上界是 handler 截止;6c 之后的写仍由 6c” 的 abandonAfterDeadline 把关,login.yaml 锁 TTL 的推导不变。
 // 只读 EXISTS 在预算内被 go-redis 重发是无害的。
 func (l *CreatePlayerLogic) probeMintedID(account string, playerID uint64) *login_proto_common.TipInfoMessage {
 	// 发出之前先查请求 ctx:截止之后不再发任何命令(docs/design/client-request-ordering.md §6.1)。
@@ -77,51 +78,33 @@ func (l *CreatePlayerLogic) probeMintedID(account string, playerID uint64) *logi
 	return loginTip(table.LoginError_kLoginDataSerializeFailed)
 }
 
-// seedNewPlayer 是 CreatePlayer 的 6d' 步:写新号的 PlayerAllData 父键种子
-// (dataloader.SeedNewPlayerAllData;docs/design/new-player-first-enter-no-cold-read.md)。
-//
-// 返回 nil = 继续建角;返回 tip = 必须拒绝建角(只有下面两种 id 复用结局)。调用方负责补偿(释放 6c 的名字)。
-//
-// 种子本身尽力而为:written / idempotent / error 都不改变建角结果。种子是首次入场的缓存优化,不是任何数据的
-// 真源;没写成时,首次 EnterGame 照旧冷读数据库,读到空就是真值(号段 id 不复用)。
-//
-// parent_exists / owner_epoch_exists 对新铸的 id 不该出现:6b' 的只读探测已经确认过这两把键都不在,
-// 走到这里还看到,说明它们恰好在探测与种子写之间的窗口里出现 —— 这个 id 上已有既有状态(发号器把在役 id
-// 又发了一次,或 id_segment 表被重置而 Redis 没清),与名字登记的 FailedPrecondition 同属 ID 安全事件。
-// 负责人 2026-10-15 按「最标准」把它从「只告警」升级为**拒绝建角**(设计 §10 P2;此前的现状是记 ERROR、计数,
-// 仍把 id 交给新账号,让首次入场读到那份既有缓存)。拒绝时的残留与第 7 步失败同类:
-//   - 6c 登记的名字由调用方按「确定已登记」释放一次;
-//   - 6d 登记的 player:zone 映射**撤不掉**:它是 SET NX、无 TTL,login 没有删除入口(data_service 的
-//     DeletePlayerData 会连同该 id 的玩家数据一起删,id 复用时删的正是旧持有者的数据,绝不能用)。
-//     旧持有者若经现行建角流程创建,映射本来就在(同 zone 时 6d 是幂等空操作,不新增);只有旧持有者没有
-//     映射时才会留下一条,与第 7 步失败留下的那条同类,ERROR 日志带 player_id 供核对。
-//
-// idempotent(父键已是这份种子)单独记一条 INFO:本调用点的 1s ctx 预算掐掉了读超时(3s)之后的重发,
-// 所以它只会来自连接层快速失败(EOF / 连接被重置)后的重发,或者这个 id 以前铸出过、那份种子恰好在探测之后
-// 才落地(滞留的旧请求)。稳态应接近 0,持续出现要按 id 复用排查。它不拒绝:本次 EVAL 被重发时看到的正是
-// 自己写的种子,拒绝就会把正常建角判死。
-func (l *CreatePlayerLogic) seedNewPlayer(account string, playerID uint64) *login_proto_common.TipInfoMessage {
+// cacheCommittedNewPlayer 只在目录与两张 SQL 行提交成功后发布本次初始快照。
+// 缓存未确认或被并发新版本拒绝时保留已提交角色，首次登录沿 SQL 权威核验，不执行名字补偿。
+func (l *CreatePlayerLogic) cacheCommittedNewPlayer(account string, parent *databasepb.PlayerAllData) {
 	ctx, cancel := context.WithTimeout(l.ctx, newPlayerSeedTimeout)
 	defer cancel()
-	result, err := dataloader.SeedNewPlayerAllData(ctx, l.svcCtx.RedisClient, playerID)
+	result, err := dataloader.SeedCommittedNewPlayerAllData(ctx, l.svcCtx.RedisClient, parent)
 	createPlayerSeedTotal.Inc(result.String())
-	switch result {
-	case dataloader.SeedWritten:
-		// 正常结局,只计数。
-	case dataloader.SeedIdempotent:
-		logx.Infof("[new-player-seed] parent key already holds this exact seed (EVAL re-sent after a transport error, "+
-			"or this id was minted before and never entered) player_id=%d account=%s", playerID, account)
-	case dataloader.SeedParentExists, dataloader.SeedOwnerEpochExists:
-		logx.Errorf("[new-player-seed] freshly minted player_id=%d already has %s — id reuse? "+
-			"seed not written; refusing to create (releasing the reserved name; the player:zone mapping, "+
-			"if this attempt created it, cannot be removed and is left behind) (account=%s)",
-			playerID, result, account)
-		return loginTip(table.LoginError_kLoginDataSerializeFailed)
-	default:
-		// SeedError = 写入未确认:读超时的 EVAL 可能已经在服务端执行,不能写成「没写成」。
-		logx.Errorf("[new-player-seed] seed write not confirmed (it may or may not have landed); "+
-			"first EnterGame takes the fast path if it did, otherwise the DB read (player_id=%d account=%s): %v",
-			playerID, account, err)
+	if result != dataloader.SeedWritten && result != dataloader.SeedIdempotent {
+		logx.Errorf("[new-player-seed] 已提交角色的初始缓存未确认或被拒绝，保留 SQL 原件并回落权威读取 account=%s result=%s: %v", account, result, err)
 	}
-	return nil
+}
+
+// 原种子写入具有 ID 复用拒绝语义；移到 SQL 提交后不能再释放在役名字，故提交前保留只读检查。
+func (l *CreatePlayerLogic) checkInitialSeedState(account string, playerID uint64) *login_proto_common.TipInfoMessage {
+	ctx, cancel := context.WithTimeout(l.ctx, newPlayerSeedTimeout)
+	defer cancel()
+	state, err := dataloader.ProbeMintedPlayerState(ctx, l.svcCtx.RedisClient, playerID)
+	switch state {
+	case dataloader.MintedIDClear:
+		return nil
+	case dataloader.MintedIDParentExists:
+		createPlayerSeedTotal.Inc(dataloader.SeedParentExists.String())
+	case dataloader.MintedIDOwnerEpochExists:
+		createPlayerSeedTotal.Inc(dataloader.SeedOwnerEpochExists.String())
+	default:
+		createPlayerSeedTotal.Inc(dataloader.SeedError.String())
+	}
+	logx.Errorf("[new-player-seed] 提交前缓存身份不再是本次全新 ID，拒绝创建 account=%s: %v", account, err)
+	return loginTip(table.LoginError_kLoginDataSerializeFailed)
 }

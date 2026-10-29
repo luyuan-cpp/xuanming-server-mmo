@@ -29,10 +29,12 @@ ApplicationQuotaPerMinute: 10
 # 三段 Redis 的 PoolSize 是各自 go-redis 连接池上限(P0-E 第 3 批):0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,
 # 随 CPU limit 漂移(本机 Windows 上是 10 × 核数);负数 config.Validate 拒启。20 = K8s 上 GOMAXPROCS 按 2 时的缺省值。
 # guild 现在没有 K8s 清单、不进共享 Redis 连接总账;接入 K8s 时要在 tools/scripts/k8s_deploy.ps1 镜像这三个键并记账。
+# DB 用 0(2026-10-23 由 2 改为 0,上线前改、不搬数据):Redis Cluster 只有 DB 0,guild 私有键都带
+# guild: / guild_rank: / player_guild: 前缀,与共享库 DB 0 上的其他键族不冲突(shared-redis-split-by-purpose.md §25.3)。
 RedisClient:
   Host: 127.0.0.1:6379
   Password: ""
-  DB: 2
+  DB: 0
   PoolSize: 20
 
 # Online status source (player_locator session store)
@@ -81,7 +83,7 @@ MySQL:
 # 建表策略(D-14 §4):不写或 true = 启动时 schemamigrate.Up(GET_LOCK 串行,锁忙重试 3 次);
 # false = 只跑只读 Plan,不干净就拒绝启动,并提示 `guild -f etc/guild.yaml -migrate`。K8s 非 dev 档固定 false。
 Schema:
-  AutoMigrate: true
+  AutoMigrate: false
 
 Node:
   ZoneId: 1

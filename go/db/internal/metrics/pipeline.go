@@ -18,6 +18,7 @@ package metrics
 //	db_fence_cache_publish_total{path,result} 6 个合法组合
 //	db_fence_body_mismatch_total             无 label
 //	db_fence_rejected_bytes_total{outcome}    6 个取值
+//	db_save_barrier_ack_ahead_total{kind}     2 个取值
 //
 // 指标名与取值和 tools/scripts/stress_summarize.ps1 的 2d / 2e 段逐字对应(那边按精确 key 读序列);
 // 改名或改取值要同改脚本、test_stress_summarize.ps1 与本包的 TestRedisStepNamesPinned。
@@ -345,6 +346,14 @@ var fenceCacheWriteResults = []string{"written", "not_owner", "evidence_ahead", 
 var fenceCacheReadResults = []string{"written", "exists"}
 var fenceRejectedOutcomes = []string{"equal", "older_seq", "stale_owner", "owner_epoch_regressed", "legacy_after_seq", "epoch_override", "schema_regression"}
 
+// db_save_barrier_ack_ahead_total 的 kind 取值(docs/design/zone-redis-regression-guard-20261022.md §4.2 G2、§7)。
+const (
+	SaveBarrierAckAbovePending   = "above_pending"   // 本次发布的 ACK 严格大于屏障 pending
+	SaveBarrierAckPendingMissing = "pending_missing" // 屏障里没有 pending,却有已提交的 SQL 版本要发布 ACK
+)
+
+var saveBarrierAckAheadKinds = []string{SaveBarrierAckAbovePending, SaveBarrierAckPendingMissing}
+
 var (
 	fenceWriteTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
@@ -371,12 +380,21 @@ var (
 		Help: "Row-body bytes submitted by SQL writes rejected by fences. outcome: equal | older_seq | stale_owner | " +
 			"owner_epoch_regressed | legacy_after_seq | epoch_override | schema_regression. Epoch override counts rejected writes admitted by the ordering override.",
 	}, []string{"outcome"})
+	// saveBarrierAckAheadTotal 记 go/db 发布的存盘屏障 ACK 高于 pending(不变量「ACK ≤ pending」被破坏)。ACK 照写,
+	// 这里只计数:多半是 zone Redis 丢了已确认的写,玩家下次登录时 login 会拿 SQL 交叉核验。不带 player_id。
+	saveBarrierAckAheadTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "save_barrier_ack_ahead_total",
+		Help: "Save barrier ACKs published above the barrier's pending version (invariant: ACK <= pending). kind: above_pending | " +
+			"pending_missing. The ACK is still written because it is a committed SQL fact. A nonzero value almost always means the " +
+			"zone Redis lost acknowledged writes (crash, failover or restore); login re-verifies the player against SQL on the next load.",
+	}, []string{"kind"})
 	fenceOnce sync.Once
 )
 
 func registerFence() {
 	fenceOnce.Do(func() {
-		prometheus.MustRegister(fenceWriteTotal, fenceCacheTotal, fenceBodyMismatch, fenceRejectedBytes)
+		prometheus.MustRegister(fenceWriteTotal, fenceCacheTotal, fenceBodyMismatch, fenceRejectedBytes, saveBarrierAckAheadTotal)
 		for _, class := range fenceClasses {
 			for _, outcome := range fenceWriteOutcomes {
 				fenceWriteTotal.WithLabelValues(class, outcome).Add(0)
@@ -395,6 +413,9 @@ func registerFence() {
 		for _, outcome := range fenceRejectedOutcomes {
 			fenceRejectedBytes.WithLabelValues(outcome).Add(0)
 		}
+		for _, kind := range saveBarrierAckAheadKinds {
+			saveBarrierAckAheadTotal.WithLabelValues(kind).Add(0)
+		}
 	})
 }
 
@@ -408,6 +429,12 @@ func CountFenceWrite(class, outcome string) {
 func CountFenceCache(path, result string) {
 	registerFence()
 	fenceCacheTotal.WithLabelValues(path, result).Inc()
+}
+
+// CountSaveBarrierAckAhead 记一次存盘屏障 ACK 领先 pending,kind 用 SaveBarrierAck* 常量。
+func CountSaveBarrierAckAhead(kind string) {
+	registerFence()
+	saveBarrierAckAheadTotal.WithLabelValues(kind).Inc()
 }
 
 // CountFenceBodyMismatch 记一次生产者 body 错带非零围栏字段。

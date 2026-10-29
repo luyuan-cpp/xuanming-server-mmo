@@ -473,6 +473,10 @@ void RedisManager::DropUnresponsive(std::uint64_t generation)
 			  << "reconnecting every " << options_.reconnectIntervalSec << "s (metric=zone_redis_liveness_timeout)";
 	ResetLivenessProbe();
 
+	// 空应答 = 结果未知,不是"没执行":close 之后内核仍会重传已写出的命令,它们可能晚于重连后新连接上的命令到达 Redis
+	// 并被执行(第二轮审计 r2-lc#1 / r2-lc#2)。上层不得假设"摘连接前发出的命令先于重连后发出的命令";需要这种保证的写
+	// 必须在 Redis 端用围栏令牌原子判定(例:scene 的 handoff 标记围栏 save_barrier.handoff_fence)。
+
 	// 先换上占位对象再释放:释放时在途命令以空应答回调,回调里若再取 GetZoneRedis(),看到的是 connected()==false 的
 	// 占位对象,新命令当场 REDIS_ERR,不会发到正在释放的连接上。释放发生在本类的成员函数里、不在任何 hiredis 回调栈内;
 	// 被摘下连接的断线回调先被清掉,不会再走一遍断线日志与 ScheduleReconnect。

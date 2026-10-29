@@ -20,7 +20,8 @@ package reconcile
 //  4. outbox 的插入排在分配之后、与分配同一个事务。
 //
 // 提交后的那次同步投递(ProcessOne)必然失败(Caller 没有 Resolver),但 EnqueueEscrowDebit
-// 只记日志不算失败,所以它不影响上面的断言;它会再发一条自动提交的重排 UPDATE,录音带里允许有。
+// 只记日志不算失败。重排在独立事务中先锁 op 主键再 CAS;用例单独核对该尾段,
+// 上面的事务数量与锁序断言仍完整作用于提交前的入队语句。
 
 import (
 	"context"
@@ -115,6 +116,8 @@ func (c *lockOrderConn) QueryContext(_ context.Context, query string, _ []driver
 
 	case strings.HasPrefix(query, "SELECT seq FROM "+data.AssetOpTableName):
 		return &lockOrderRows{cols: []string{"seq"}}, nil // 零未决行,I5 守卫不拒
+	case query == "SELECT `op_id` FROM "+data.AssetOpTableName+" WHERE `op_id` = ? FOR UPDATE":
+		return &lockOrderRows{cols: []string{"op_id"}, data: [][]driver.Value{{int64(1)}}}, nil
 	}
 	return nil, fmt.Errorf("录制驱动遇到未预期的查询: %s", query)
 }
@@ -132,7 +135,7 @@ func (c *lockOrderConn) ExecContext(_ context.Context, query string, _ []driver.
 	case strings.HasPrefix(query, "INSERT INTO "+data.AssetOpTableName):
 		return driver.RowsAffected(1), nil
 	case strings.HasPrefix(query, "UPDATE "+data.AssetOpTableName):
-		// 提交后那次同步投递失败(Caller 没有 Resolver)之后的重排;与本用例的断言无关。
+		// 提交后那次同步投递失败(Caller 没有 Resolver)之后的重排;尾段另行核对其事务和主键锁。
 		return driver.RowsAffected(1), nil
 	}
 	return nil, fmt.Errorf("录制驱动遇到未预期的写语句: %s", query)
@@ -173,6 +176,30 @@ const (
 	stmtRollback = "ROLLBACK"
 )
 
+// enqueueStatements 保留完整入队前缀,另行严格核对提交后重排的新事务。
+// 不直接从总事务数减一,避免把多开的入队事务或错误的重排锁序藏进容许范围。
+func enqueueStatements(t *testing.T, script *lockOrderScript) []string {
+	t.Helper()
+	all := script.recorded()
+	insert := indexOfPrefix(all, "INSERT INTO "+data.AssetOpTableName)
+	commit := -1
+	for i := insert + 1; insert >= 0 && i < len(all); i++ {
+		if all[i] == stmtCommit {
+			commit = i
+			break
+		}
+	}
+	if commit < 0 {
+		t.Fatalf("未看到outbox插入后业务事务提交\n%s", strings.Join(all, "\n"))
+	}
+	tail := all[commit+1:]
+	lock := "SELECT `op_id` FROM " + data.AssetOpTableName + " WHERE `op_id` = ? FOR UPDATE"
+	if len(tail) != 4 || tail[0] != stmtBegin || tail[1] != lock || !strings.HasPrefix(tail[2], "UPDATE "+data.AssetOpTableName+" SET ") || tail[3] != stmtCommit {
+		t.Fatalf("提交后重排必须独立事务先锁op主键再CAS并提交\n%s", strings.Join(all, "\n"))
+	}
+	return all[:commit+1]
+}
+
 // ── 用例 ────────────────────────────────────────────────────
 
 // TestEnqueueEscrowDebitStatementOrder 钉住产品调用点的端到端语句顺序。
@@ -202,7 +229,7 @@ func TestEnqueueEscrowDebitStatementOrder(t *testing.T) {
 		t.Fatalf("EnqueueEscrowDebit: %v", err)
 	}
 
-	got := script.recorded()
+	got := enqueueStatements(t, script)
 	dump := strings.Join(got, "\n")
 
 	guardStmt := "SELECT 1 FROM " + data.AssetOpSeqTableName
@@ -288,7 +315,7 @@ func TestEnqueueEscrowDebitSkipsShortTxWhenSeqRowExists(t *testing.T) {
 		t.Fatalf("EnqueueEscrowDebit: %v", err)
 	}
 
-	got := script.recorded()
+	got := enqueueStatements(t, script)
 	dump := strings.Join(got, "\n")
 	if n := len(indexesOf(got, stmtBegin)); n != 1 {
 		t.Fatalf("稳态路径开了 %d 个事务,应为 1 个(seq 行已存在时不该开建行短事务)\n%s", n, dump)

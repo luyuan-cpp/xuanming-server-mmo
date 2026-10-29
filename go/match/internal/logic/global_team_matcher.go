@@ -14,7 +14,6 @@ import (
 
 	pb "proto/match"
 	teampb "proto/team"
-	"shared/safego"
 
 	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -37,7 +36,7 @@ func StartGlobalTeamMatcher(ctx context.Context, s *svc.ServiceContext) {
 		return
 	}
 	cursor := &globalTeamCursor{}
-	safego.Loop(ctx, "match.global.team", 500*time.Millisecond, func(ctx context.Context) { cursor.round(ctx, s) })
+	s.StartSourceLoop(ctx, "match.global.team", 500*time.Millisecond, func(ctx context.Context) { cursor.round(ctx, s) })
 }
 
 func (cursor *globalTeamCursor) round(parent context.Context, s *svc.ServiceContext) {
@@ -53,6 +52,7 @@ func (cursor *globalTeamCursor) round(parent context.Context, s *svc.ServiceCont
 		}
 		next, complete, err := s.Authority.RepairTeamLaunchProjectionThrough(ctx, cursor.repair, cursor.through)
 		if err != nil {
+			s.HoldRelay(err)
 			return
 		}
 		cursor.repair, cursor.projectionReady = next, complete
@@ -325,6 +325,7 @@ func checkGlobalTeamUnit(ctx context.Context, s *svc.ServiceContext, unit global
 	}
 	closed, err := s.Authority.WithdrawObservedTeamQueue(ctx, unit.launch)
 	if err != nil {
+		s.HoldRelay(err)
 		return false, err
 	}
 	if closed {
@@ -397,6 +398,9 @@ func claimTeamUnitGroup(ctx context.Context, s *svc.ServiceContext, units []glob
 	}
 	formation := &pb.MatchFormationRecord{BattleId: id, OperationId: uuid.NewString(), PhysicalRegion: region, TargetNodeId: node.NodeId, TargetInstanceId: node.NodeUuid, TargetEndpoint: node.Endpoint, Mode: uint32(pb.MatchMode_MATCH_MODE_PVE_TEAM), ConfigId: tickets[0].ConfigId}
 	if err = s.Authority.ClaimTeamUnits(ctx, formation, tickets, parties); err != nil {
+		if !errors.Is(err, authority.ErrDirectConflict) && !errors.Is(err, authority.ErrTeamLaunchActive) && !errors.Is(err, authority.ErrOriginalPlayer) {
+			s.HoldRelay(err)
+		}
 		logx.Error("全球整队装箱提交冲突，保留原unit")
 		return
 	}

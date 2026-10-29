@@ -148,14 +148,30 @@ return {nodeId, agonesGs}
 `
 
 // luaAtomicDestroyInstanceForce 是 luaAtomicDestroyInstance 的 force 版:
-// 不做 player_count 守卫,无条件抹掉场景键,并返回抹除前的
-// {nodeId, agonesGs, playerCount}。GET 与 DEL 在同一脚本里原子执行,
-// 并发的多个 force 销毁只有第一个能拿到非空返回 —— 计数减法 / Agones
-// 名额归还 / 镜像级联这些副作用因此恰好执行一次。这是 force 分支在
-// 多副本(空闲清理 vs 死节点 reconcile,或领导者降级窗口里新旧领导者
-// 清理同一批场景)下不双减计数、不双还名额的关键。
+// 不做 player_count 守卫;ARGV[2] 为空时无条件抹掉场景键,非空时只在属主等于它时抹;
+// 返回抹除前的 {nodeId, agonesGs, playerCount}。GET 与 DEL 在同一脚本里原子执行,
+// 并发的销毁(空闲回收的非 force 脚本、explicit / 级联 / 收尾的 force 脚本,或领导者降级
+// 窗口里的新旧领导者)只有第一个能拿到非空返回 —— 计数减法 / Agones 名额归还 / 镜像级联
+// 这些副作用因此恰好执行一次,不双减计数、不双还名额。
+//
+// KEYS 与 luaAtomicDestroyInstance 相同。
+// ARGV[1] = sceneId(ZREM 用)
+// ARGV[2] = 期望属主;空串表示不比对(explicit / source_migrated / source_scaled_in 经
+// destroyInstanceForce,以及镜像级联,语义同前)。空闲回收走的是 luaAtomicDestroyInstance,不经这里。
+// 非空时只有 scene:{id}:node 仍等于它才抹,否则一个键都不动,返回 {'', '', '0'}。
+// 死节点收尾靠它(2026-10-22):收尾读到「属主是死节点」之后,只要有写者用 reassignSceneNode 把实例
+// 改派到活节点并 CreateScene,不比对的话这里会把新属主的场景抹掉、向新节点发 DestroyScene、扣新节点的
+// 计数。比较必须和删除在同一个脚本里,收尾自己的读挡不住这个窗口。(修复时这样的写者是 resolveScene 的
+// 死节点自愈;10-23 起它只重建世界频道,比对作为纵深防御保留,见 destroyOrphanOfDeadNode。)
+// ARGV[2] 非空而映射已不存在时同样不动(GET 返回 false,不等于 ARGV[2]):删映射的那条路径(并发销毁,
+// 或 rollbackInstanceAllocation)负责其余清理,这里再抹会和它双还 Agones 名额。ARGV[2] 为空时不做这个
+// 判断,映射缺失仍会抹掉余下的键并返回 agonesGs,与 rollbackInstanceAllocation 交错时可能双还名额 ——
+// 这是既有残余(docs/PROGRESS.md 2026-10-23「死节点收尾与显式 DestroyScene…」条目 R3)。
 const luaAtomicDestroyInstanceForce = `
 local nodeId = redis.call('GET', KEYS[1])
+if ARGV[2] ~= nil and ARGV[2] ~= '' and nodeId ~= ARGV[2] then
+    return {'', '', '0'}
+end
 local agonesGs = redis.call('GET', KEYS[7])
 local pc = redis.call('GET', KEYS[2])
 redis.call('DEL', KEYS[1], KEYS[2], KEYS[4], KEYS[5], KEYS[6], KEYS[7])
@@ -175,7 +191,11 @@ return {nodeId, agonesGs, pc}
 // AtomicDestroyForce 原子认领并抹掉一个场景的全部 Redis 键(不看人数)。
 // 返回抹除前的 (nodeId, agonesGs, playerCount)。三者全空/零说明别的进程
 // 已抢先抹掉 —— 调用方必须跳过一切副作用(计数、归还、级联、RPC)。
-func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) (string, string, int64, error) {
+//
+// expectedOwner 非空时只在 scene:{id}:node 仍等于它时才抹;不等(含映射已不存在)时什么都不动,
+// 返回值同样全空/零。认领成功时返回的 nodeId 必然等于 expectedOwner,所以调用方仍按「全空即未认领」判断。
+// 空串表示不比对。
+func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, expectedOwner string) (string, string, int64, error) {
 	keys := []string{
 		sceneNodeKey(sceneId),
 		fmt.Sprintf(InstancePlayerCountKey, sceneId),
@@ -185,7 +205,7 @@ func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint6
 		sceneZoneKey(sceneId),
 		sceneAgonesGsKey(sceneId),
 	}
-	raw, err := svcCtx.Redis.Eval(luaAtomicDestroyInstanceForce, keys, fmt.Sprintf("%d", sceneId))
+	raw, err := svcCtx.Redis.Eval(luaAtomicDestroyInstanceForce, keys, fmt.Sprintf("%d", sceneId), expectedOwner)
 	if err != nil {
 		return "", "", 0, err
 	}

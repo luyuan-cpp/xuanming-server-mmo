@@ -28,6 +28,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"time"
 
@@ -35,6 +36,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"proto/common/base"
 	"proto/scene"
 	"robot/config"
 	"robot/generated/pb/game"
@@ -77,12 +79,22 @@ var (
 	tipPetNothingToChange      = uint32(tiptable.PetError_kPetNothingToChange)
 )
 
-// petSmokeSession 是一个已登录进场的机器人会话 + 列表序号游标。
+// petSmokeSession 是一个已登录进场的机器人会话。宝宝与角色属性请求都经 caller 发出、只等本次请求自己的回包
+// (按 MessageContent.id 认领),所以不再需要列表序号游标,也不再读 gameobject.Player 上的宝宝状态。
 type petSmokeSession struct {
 	gc     *pkg.GameClient
-	player *gameobject.Player
 	stats  *metrics.Stats
-	seq    uint64 // 已消费到的列表序号,保证每次等的是"这次请求的新列表"
+	caller *smokeCaller
+}
+
+// newPetSmokeSession 包装一个已进场的连接。gc 的 RecvLoop 必须已启动(prepareBehaviorClient 返回前已起),
+// 否则 caller 等不到回包。
+func newPetSmokeSession(gc *pkg.GameClient, stats *metrics.Stats) *petSmokeSession {
+	return &petSmokeSession{
+		gc:     gc,
+		stats:  stats,
+		caller: newSmokeCaller(gc, stats, petSmokeAccount, petSmokeRpcTimeout, nil),
+	}
 }
 
 // RunPetSmoke 是 main.go `mode: pet-smoke` 的入口。
@@ -120,13 +132,13 @@ func RunPetSmoke(cfg *config.Config) {
 	if err != nil {
 		fail("login", "account=%s err=%v", petSmokeAccount, err)
 	}
-	session = &petSmokeSession{gc: gc, player: player, stats: stats}
+	session = newPetSmokeSession(gc, stats)
 	zap.L().Info("[pet-smoke] step 1: in scene", zap.Uint64("player", gc.PlayerId))
 
 	// ---- 步骤 0:预备,把账号拉回已知起点(同账号可反复跑) ----
 	// 等级归 1:后面第 3 步要断言 1→30 的点数增量,必须从 1 级起跳
 	if _, err := session.callAttributePanel(game.SceneAttributeClientPlayerGmSetPlayerLevelMessageId,
-		&scene.GmSetPlayerLevelRequest{Level: 1}); err != nil {
+		&scene.GmSetPlayerLevelRequest{Level: 1}, &scene.GmSetPlayerLevelResponse{}); err != nil {
 		fail("prep-level", "%v", err)
 	}
 	if _, err := gmAddGold(gc, player, stats, petSmokeGoldGrant, petSmokeRpcTimeout); err != nil {
@@ -137,11 +149,12 @@ func RunPetSmoke(cfg *config.Config) {
 	// kPetAlreadyActive 直接拒掉、整条冒烟从此在这个账号上永久红。无条件先收回一次
 	// (本来就没出战时服务器回 kPetNotActive,容忍掉)。
 	if _, _, err := session.callTolerant(game.ScenePetClientPlayerRecallPetMessageId,
-		&scene.RecallPetRequest{}, tipPetNotActive); err != nil {
+		&scene.RecallPetRequest{}, &scene.RecallPetResponse{}, tipPetNotActive); err != nil {
 		fail("prep-recall", "%v", err)
 	}
 
-	list, err := session.call(game.ScenePetClientPlayerGetPetListMessageId, &scene.GetPetListRequest{})
+	list, err := session.call(game.ScenePetClientPlayerGetPetListMessageId, &scene.GetPetListRequest{},
+		&scene.GetPetListResponse{})
 	if err != nil {
 		fail("prep-list", "%v", err)
 	}
@@ -155,14 +168,15 @@ func RunPetSmoke(cfg *config.Config) {
 	// 让脚本在同一账号上永远可重复(设计文档 §8 缺口 4)。
 	target := uint64(0)
 	if uint32(len(list.Pets)) < list.MaxPets {
+		grantResponse := &scene.GmGrantPetResponse{}
 		granted, tip, err := session.callTolerant(game.ScenePetClientPlayerGmGrantPetMessageId,
-			&scene.GmGrantPetRequest{PetTableId: petSmokeTableId}, tipPetSlotFull)
+			&scene.GmGrantPetRequest{PetTableId: petSmokeTableId}, grantResponse, tipPetSlotFull)
 		if err != nil {
 			fail("prep-grant", "%v", err)
 		}
 		if tip == 0 {
 			list = granted
-			target = player.GetPetGranted()
+			target = grantResponse.GetPetId()
 			if target == 0 {
 				fail("prep-grant-id", "GmGrantPet succeeded but returned no pet_id")
 			}
@@ -183,7 +197,8 @@ func RunPetSmoke(cfg *config.Config) {
 		zap.Int("pets", len(list.Pets)), zap.Uint32("max_pets", list.MaxPets))
 
 	// ---- 步骤 2:列表形状 + 池隔离 ----
-	list, err = session.call(game.ScenePetClientPlayerGetPetListMessageId, &scene.GetPetListRequest{})
+	list, err = session.call(game.ScenePetClientPlayerGetPetListMessageId, &scene.GetPetListRequest{},
+		&scene.GetPetListResponse{})
 	if err != nil {
 		fail("get-list", "%v", err)
 	}
@@ -211,7 +226,7 @@ func RunPetSmoke(cfg *config.Config) {
 	}
 	// 反向:角色面板里绝不能出现宝宝池 —— 这是 owner_type 分流的核心断言
 	charPanel, err := session.callAttributePanel(game.SceneAttributeClientPlayerGetAttributePanelMessageId,
-		&scene.GetAttributePanelRequest{})
+		&scene.GetAttributePanelRequest{}, &scene.GetAttributePanelResponse{})
 	if err != nil {
 		fail("char-panel", "%v", err)
 	}
@@ -234,10 +249,11 @@ func RunPetSmoke(cfg *config.Config) {
 	beforeTotal := pet.TotalPoints
 	beforeLevel := pet.Level
 	if _, err := session.callAttributePanel(game.SceneAttributeClientPlayerGmSetPlayerLevelMessageId,
-		&scene.GmSetPlayerLevelRequest{Level: targetLevel}); err != nil {
+		&scene.GmSetPlayerLevelRequest{Level: targetLevel}, &scene.GmSetPlayerLevelResponse{}); err != nil {
 		fail("gm-set-level", "%v", err)
 	}
-	list, err = session.call(game.ScenePetClientPlayerGetPetListMessageId, &scene.GetPetListRequest{})
+	list, err = session.call(game.ScenePetClientPlayerGetPetListMessageId, &scene.GetPetListRequest{},
+		&scene.GetPetListResponse{})
 	if err != nil {
 		fail("list-after-level", "%v", err)
 	}
@@ -258,7 +274,7 @@ func RunPetSmoke(cfg *config.Config) {
 
 	// ---- 步骤 4:洗点回到干净起点 ----
 	if reset, tip, err := session.callTolerant(game.ScenePetClientPlayerResetPetPointsMessageId,
-		&scene.ResetPetPointsRequest{PetId: target}, tipPetNothingToChange); err != nil {
+		&scene.ResetPetPointsRequest{PetId: target}, &scene.ResetPetPointsResponse{}, tipPetNothingToChange); err != nil {
 		fail("reset", "%v", err)
 	} else if tip == 0 {
 		list = reset
@@ -276,11 +292,7 @@ func RunPetSmoke(cfg *config.Config) {
 	attackBefore := pet.Derived.PhysicalAttack
 
 	// ---- 步骤 5:自动加点只算不落 ----
-	if err := session.send(game.ScenePetClientPlayerAutoAllocatePetPointsMessageId,
-		&scene.AutoAllocatePetPointsRequest{PetId: target}); err != nil {
-		fail("auto-send", "%v", err)
-	}
-	suggested, err := session.waitSuggestion(target)
+	suggested, err := session.autoAllocate(target)
 	if err != nil {
 		fail("auto-wait", "%v", err)
 	}
@@ -292,7 +304,8 @@ func RunPetSmoke(cfg *config.Config) {
 		fail("auto-sum", "Suggested sum should equal total points (allocated points are 0 after reset): suggested=%d total=%d",
 			suggestedSum, pet.TotalPoints)
 	}
-	after, err := session.call(game.ScenePetClientPlayerGetPetListMessageId, &scene.GetPetListRequest{})
+	after, err := session.call(game.ScenePetClientPlayerGetPetListMessageId, &scene.GetPetListRequest{},
+		&scene.GetPetListResponse{})
 	if err != nil {
 		fail("auto-recheck", "%v", err)
 	}
@@ -305,7 +318,7 @@ func RunPetSmoke(cfg *config.Config) {
 
 	// ---- 步骤 6:按建议提交 → 剩余归零、二级属性变大 ----
 	list, err = session.call(game.ScenePetClientPlayerAllocatePetPointsMessageId,
-		&scene.AllocatePetPointsRequest{PetId: target, Allocated: suggested})
+		&scene.AllocatePetPointsRequest{PetId: target, Allocated: suggested}, &scene.AllocatePetPointsResponse{})
 	if err != nil {
 		fail("allocate", "%v", err)
 	}
@@ -322,10 +335,11 @@ func RunPetSmoke(cfg *config.Config) {
 		zap.Uint64("physical_attack", pet.Derived.PhysicalAttack))
 
 	// ---- 步骤 7:幂等 —— 重发同一份目标值被判"无变化" ----
-	if tip := session.callExpectTip(game.ScenePetClientPlayerAllocatePetPointsMessageId,
-		&scene.AllocatePetPointsRequest{PetId: target, Allocated: suggested}); tip != tipPetNothingToChange {
-		fail("allocate-idempotent", "Resending the same target values should return kPetNothingToChange(%d), got tip=%d",
-			tipPetNothingToChange, tip)
+	if err := session.callExpectTip(game.ScenePetClientPlayerAllocatePetPointsMessageId,
+		&scene.AllocatePetPointsRequest{PetId: target, Allocated: suggested}, &scene.AllocatePetPointsResponse{},
+		tipPetNothingToChange); err != nil {
+		fail("allocate-idempotent", "Resending the same target values should return kPetNothingToChange(%d): %v",
+			tipPetNothingToChange, err)
 	}
 
 	// ---- 步骤 8:只增不减 ----
@@ -339,22 +353,24 @@ func RunPetSmoke(cfg *config.Config) {
 	if len(lower) == 0 {
 		fail("decrease-setup", "No suggested dimension is greater than 0; cannot construct a smaller target value")
 	}
-	if tip := session.callExpectTip(game.ScenePetClientPlayerAllocatePetPointsMessageId,
-		&scene.AllocatePetPointsRequest{PetId: target, Allocated: lower}); tip != tipPetPointsCannotDecrease {
-		fail("allocate-decrease", "Submitting smaller values should return kPetPointsCannotDecrease(%d), got tip=%d",
-			tipPetPointsCannotDecrease, tip)
+	if err := session.callExpectTip(game.ScenePetClientPlayerAllocatePetPointsMessageId,
+		&scene.AllocatePetPointsRequest{PetId: target, Allocated: lower}, &scene.AllocatePetPointsResponse{},
+		tipPetPointsCannotDecrease); err != nil {
+		fail("allocate-decrease", "Submitting smaller values should return kPetPointsCannotDecrease(%d): %v",
+			tipPetPointsCannotDecrease, err)
 	}
 
 	// ---- 步骤 9:不存在的 pet_id ----
-	if tip := session.callExpectTip(game.ScenePetClientPlayerAllocatePetPointsMessageId,
-		&scene.AllocatePetPointsRequest{PetId: target + 999999, Allocated: suggested}); tip != tipPetNotFound {
-		fail("unknown-pet", "A nonexistent pet_id should return kPetNotFound(%d), got tip=%d", tipPetNotFound, tip)
+	if err := session.callExpectTip(game.ScenePetClientPlayerAllocatePetPointsMessageId,
+		&scene.AllocatePetPointsRequest{PetId: target + 999999, Allocated: suggested}, &scene.AllocatePetPointsResponse{},
+		tipPetNotFound); err != nil {
+		fail("unknown-pet", "A nonexistent pet_id should return kPetNotFound(%d): %v", tipPetNotFound, err)
 	}
 	zap.L().Info("[pet-smoke] steps 7-9: idempotent / no-decrease / unknown-pet rejections ok")
 
 	// ---- 步骤 10:出战 ----
 	list, err = session.call(game.ScenePetClientPlayerSummonPetMessageId,
-		&scene.SummonPetRequest{PetId: target})
+		&scene.SummonPetRequest{PetId: target}, &scene.SummonPetResponse{})
 	if err != nil {
 		fail("summon", "%v", err)
 	}
@@ -364,9 +380,9 @@ func RunPetSmoke(cfg *config.Config) {
 	if p := mustPet(list, target, fail, "summon"); !p.IsActive {
 		fail("summon-flag", "After deploying the pet, is_active should be true")
 	}
-	if tip := session.callExpectTip(game.ScenePetClientPlayerSummonPetMessageId,
-		&scene.SummonPetRequest{PetId: target}); tip != tipPetAlreadyActive {
-		fail("summon-twice", "Repeated summoning should return kPetAlreadyActive(%d), got tip=%d", tipPetAlreadyActive, tip)
+	if err := session.callExpectTip(game.ScenePetClientPlayerSummonPetMessageId,
+		&scene.SummonPetRequest{PetId: target}, &scene.SummonPetResponse{}, tipPetAlreadyActive); err != nil {
+		fail("summon-twice", "Repeated summoning should return kPetAlreadyActive(%d): %v", tipPetAlreadyActive, err)
 	}
 
 	// ---- 步骤 11:下线重登,数据往返 ----
@@ -376,7 +392,8 @@ func RunPetSmoke(cfg *config.Config) {
 		fail("relogin", "%v", err)
 	}
 	session = newSession
-	list, err = session.call(game.ScenePetClientPlayerGetPetListMessageId, &scene.GetPetListRequest{})
+	list, err = session.call(game.ScenePetClientPlayerGetPetListMessageId, &scene.GetPetListRequest{},
+		&scene.GetPetListResponse{})
 	if err != nil {
 		fail("list-after-relogin", "%v", err)
 	}
@@ -411,16 +428,17 @@ func RunPetSmoke(cfg *config.Config) {
 		zap.Uint32("level", restored.Level), zap.Uint32("growth", restored.Growth))
 
 	// ---- 步骤 12:收回 ----
-	list, err = session.call(game.ScenePetClientPlayerRecallPetMessageId, &scene.RecallPetRequest{})
+	list, err = session.call(game.ScenePetClientPlayerRecallPetMessageId, &scene.RecallPetRequest{},
+		&scene.RecallPetResponse{})
 	if err != nil {
 		fail("recall", "%v", err)
 	}
 	if list.ActivePetId != 0 {
 		fail("recall-active", "After recalling the pet, active_pet_id should be 0, got %d", list.ActivePetId)
 	}
-	if tip := session.callExpectTip(game.ScenePetClientPlayerRecallPetMessageId,
-		&scene.RecallPetRequest{}); tip != tipPetNotActive {
-		fail("recall-twice", "Recalling with no active pet should return kPetNotActive(%d), got tip=%d", tipPetNotActive, tip)
+	if err := session.callExpectTip(game.ScenePetClientPlayerRecallPetMessageId,
+		&scene.RecallPetRequest{}, &scene.RecallPetResponse{}, tipPetNotActive); err != nil {
+		fail("recall-twice", "Recalling with no active pet should return kPetNotActive(%d): %v", tipPetNotActive, err)
 	}
 
 	zap.L().Info(fmt.Sprintf(
@@ -435,98 +453,98 @@ func RunPetSmoke(cfg *config.Config) {
 // 会话辅助
 // ---------------------------------------------------------------------------
 
-// call 发一个宝宝 RPC 并等它带回的新列表(成功路径);tip != 0 视为失败。
-func (s *petSmokeSession) call(messageId uint32, request proto.Message) (*scene.PetListInfo, error) {
-	list, tip, err := s.callTolerant(messageId, request)
-	if err != nil {
-		return nil, err
-	}
-	if tip != 0 {
-		return nil, fmt.Errorf("服务器拒绝: tip=%d", tip)
-	}
-	return list, nil
+// petListResponse 是回全量宝宝列表的响应的公共形状(error_message + pets):除 AutoAllocatePetPoints 外,
+// 本冒烟发的宝宝 RPC 的响应都满足。
+type petListResponse interface {
+	proto.Message
+	GetErrorMessage() *base.TipInfoMessage
+	GetPets() *scene.PetListInfo
 }
 
-// callTolerant 发一个宝宝 RPC:成功回 (列表, 0, nil);被拒且 tip 在 allowedTips 里回 (nil, tip, nil);
-// 其它拒绝回 error。只认"来源 = 本次请求消息号"的列表 —— 服务器会在升级等路径主动推
-// NotifyPetListChanged,不看来源就会把推送当成本次响应消费,之后每一步都拿到旧列表。
-func (s *petSmokeSession) callTolerant(messageId uint32, request proto.Message, allowedTips ...uint32) (*scene.PetListInfo, uint32, error) {
-	if err := s.send(messageId, request); err != nil {
+// call 发一个宝宝 RPC 并取它带回的新列表(成功路径);任何拒绝都视为失败。
+func (s *petSmokeSession) call(messageId uint32, request proto.Message, response petListResponse) (*scene.PetListInfo, error) {
+	list, _, err := s.callTolerant(messageId, request, response)
+	return list, err
+}
+
+// callTolerant 发一个宝宝 RPC,只等本次请求自己的回包并直接解析(按 MessageContent.id 认领,
+// docs/design/client-rpc-callback.md §6)。response 传该请求对应响应类型的空值,返回后调用方还能从中读列表以外的
+// 字段(GmGrantPet 的 pet_id)。
+// 结局:受理回 (列表, 0, nil);scene 在响应体里拒绝、且码在 allowedTips 里回 (nil, tip, nil);其余一律返回 error:
+// scene 的其它拒绝码(tip 一并返回)、gate 信封拒绝、超时 / 断线 / 没发出、受理却不带列表。
+// allowedTips 只对 scene 的业务码生效:信封拒绝说明请求没到 scene 的宝宝逻辑,现有调用方容忍 / 期待的都是业务码。
+//
+// 迁移前等的是生成 handler 写进 gameobject.Player 的「列表序号 + 来源消息号」(信封错误则落成超时):服务器会在升级等
+// 路径主动推 NotifyPetListChanged,不看来源就会把推送当成本次响应。现在回包按请求号认领,拿到的就是本次的响应;
+// 推送照旧经 handler 写 Player。Player 上的宝宝状态(列表 / tip / 建议 / 新发 pet_id)全包只有本场景读过,
+// 所以直接解析(交接 §8.1 做法 1),不再经 handler。
+//
+// 调用约束:连接的 RecvLoop 必须已启动;不得在 RecvLoop goroutine 上调用(同步等回包会自锁)。
+func (s *petSmokeSession) callTolerant(messageId uint32, request proto.Message, response petListResponse,
+	allowedTips ...uint32) (*scene.PetListInfo, uint32, error) {
+	envelopeTip, err := s.caller.call(messageId, request, response)
+	if err != nil {
 		return nil, 0, err
 	}
-	deadline := time.Now().Add(petSmokeRpcTimeout)
-	for time.Now().Before(deadline) {
-		if tip := s.player.GetPetLastTip(); tip != 0 {
-			for _, allowed := range allowedTips {
-				if tip == allowed {
-					return nil, tip, nil
-				}
-			}
-			return nil, tip, fmt.Errorf("服务器拒绝: tip=%d", tip)
-		}
-		list, seq := s.player.GetPetList()
-		if list != nil && seq > s.seq && s.player.GetPetListSource() == messageId {
-			s.seq = seq
-			return list, 0, nil
-		}
-		time.Sleep(50 * time.Millisecond)
+	if envelopeTip != 0 {
+		return nil, 0, sceneRequestEnvelopeRejection(messageId, envelopeTip)
 	}
-	return nil, 0, fmt.Errorf("等响应超时 message_id=%d", messageId)
+	if tip := response.GetErrorMessage().GetId(); tip != 0 {
+		if slices.Contains(allowedTips, tip) {
+			return nil, tip, nil
+		}
+		return nil, tip, fmt.Errorf("rejected by scene: message_id=%d tip=%d", messageId, tip)
+	}
+	// 迁移前受理却不带列表的回包不推进序号,表现为等满超时;现在回包就是本次的,不会再有下一份,直接判失败
+	list := response.GetPets()
+	if list == nil {
+		return nil, 0, fmt.Errorf("message_id=%d was accepted but the response carries no pet list", messageId)
+	}
+	return list, 0, nil
 }
 
-// callExpectTip 发一个预期会被拒绝的请求,返回服务器给的 tip id(0 = 没被拒或超时,均视为断言失败)。
-func (s *petSmokeSession) callExpectTip(messageId uint32, request proto.Message) uint32 {
-	_, tip, _ := s.callTolerant(messageId, request, 0xFFFFFFFF)
-	return tip
-}
-
-// callAttributePanel 借用角色属性通道(改等级 / 查角色面板)。宝宝的等级来自主人,
-// 所以这条冒烟必须同时驱动两套协议。
-func (s *petSmokeSession) callAttributePanel(messageId uint32, request proto.Message) (*scene.AttributePanelInfo, error) {
-	s.player.SetAttributePanel(nil, 0, 0)
-	_, cur := s.player.GetAttributePanel()
-	if err := s.gc.SendRequest(messageId, request); err != nil {
-		return nil, fmt.Errorf("send message_id=%d: %w", messageId, err)
+// callExpectTip 发一个预期被 scene 以 want 拒绝的请求:响应体 tip == want 返回 nil;受理、别的拒绝码、gate 信封拒绝
+// 与超时都返回描述实际结局的 error。迁移前这几种结局挤在一个 tip 返回值里(受理与超时都是 0)。
+func (s *petSmokeSession) callExpectTip(messageId uint32, request proto.Message, response petListResponse, want uint32) error {
+	_, tip, err := s.callTolerant(messageId, request, response, want)
+	if err != nil {
+		return err
 	}
-	s.stats.MsgSent()
-	deadline := time.Now().Add(petSmokeRpcTimeout)
-	for time.Now().Before(deadline) {
-		if tip := s.player.GetAttributeLastTip(); tip != 0 {
-			return nil, fmt.Errorf("服务器拒绝: tip=%d", tip)
-		}
-		panel, seq := s.player.GetAttributePanel()
-		if panel != nil && seq > cur && s.player.GetAttributePanelSource() == messageId {
-			return panel, nil
-		}
-		time.Sleep(50 * time.Millisecond)
+	if tip != want {
+		return fmt.Errorf("message_id=%d was accepted", messageId)
 	}
-	return nil, fmt.Errorf("等属性响应超时 message_id=%d", messageId)
-}
-
-func (s *petSmokeSession) send(messageId uint32, request proto.Message) error {
-	// 每次发请求前清 tip / 建议,并把游标同步到当前列表序号:
-	// 上一步没被消费的列表(推送 / 迟到响应)不能算作本次结果
-	s.seq = s.player.ResetPetWaiters()
-	if err := s.gc.SendRequest(messageId, request); err != nil {
-		return fmt.Errorf("send message_id=%d: %w", messageId, err)
-	}
-	s.stats.MsgSent()
 	return nil
 }
 
-func (s *petSmokeSession) waitSuggestion(petId uint64) (map[uint32]uint32, error) {
-	deadline := time.Now().Add(petSmokeRpcTimeout)
-	for time.Now().Before(deadline) {
-		gotPet, suggested := s.player.GetPetSuggestion()
-		if gotPet == petId && len(suggested) > 0 {
-			return suggested, nil
-		}
-		if tip := s.player.GetPetLastTip(); tip != 0 {
-			return nil, fmt.Errorf("服务器拒绝自动加点: tip=%d", tip)
-		}
-		time.Sleep(50 * time.Millisecond)
+// callAttributePanel 借用角色属性通道(改等级 / 查角色面板)。宝宝的等级来自主人,
+// 所以这条冒烟必须同时驱动两套协议。任何拒绝都视为失败;认领方式与结局判据见
+// requestAttributePanel(attribute_smoke_scenario.go)。
+func (s *petSmokeSession) callAttributePanel(messageId uint32, request proto.Message, response attributePanelResponse) (*scene.AttributePanelInfo, error) {
+	panel, _, err := requestAttributePanel(s.caller, messageId, request, response)
+	return panel, err
+}
+
+// autoAllocate 发 AutoAllocatePetPoints 并直接解析本次回包,返回 petId 的建议目标已分配值(只算不落)。
+// 响应不带列表,所以不走 callTolerant;scene 拒绝、gate 信封拒绝、超时,以及建议不属于该宝宝或为空,都返回 error。
+func (s *petSmokeSession) autoAllocate(petId uint64) (map[uint32]uint32, error) {
+	messageId := uint32(game.ScenePetClientPlayerAutoAllocatePetPointsMessageId)
+	response := &scene.AutoAllocatePetPointsResponse{}
+	envelopeTip, err := s.caller.call(messageId, &scene.AutoAllocatePetPointsRequest{PetId: petId}, response)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("等自动加点建议超时")
+	if envelopeTip != 0 {
+		return nil, sceneRequestEnvelopeRejection(messageId, envelopeTip)
+	}
+	if tip := response.GetErrorMessage().GetId(); tip != 0 {
+		return nil, fmt.Errorf("auto allocation rejected by scene: tip=%d", tip)
+	}
+	// 迁移前这两种回包不满足等待条件,表现为等满超时;现在回包就是本次的,不会再有下一份,直接判失败
+	if response.GetPetId() != petId || len(response.GetSuggested()) == 0 {
+		return nil, fmt.Errorf("auto allocation returned pet_id=%d with %d suggested dimensions, expected pet_id=%d with a nonempty suggestion",
+			response.GetPetId(), len(response.GetSuggested()), petId)
+	}
+	return response.GetSuggested(), nil
 }
 
 // relogin 下线(LeaveGame + Disconnect)后用同一账号重新登录进场,返回新会话。
@@ -544,11 +562,11 @@ func (s *petSmokeSession) relogin(cfg *config.Config) (*petSmokeSession, error) 
 		return nil, fmt.Errorf("resolve gate: %w", err)
 	}
 	port, _ := strconv.Atoi(portStr)
-	gc, player, err := prepareBehaviorClient(host, port, petSmokeAccount, cfg.Password, s.stats, tokenPayload, tokenSig)
+	gc, _, err := prepareBehaviorClient(host, port, petSmokeAccount, cfg.Password, s.stats, tokenPayload, tokenSig)
 	if err != nil {
 		return nil, fmt.Errorf("relogin: %w", err)
 	}
-	return &petSmokeSession{gc: gc, player: player, stats: s.stats}, nil
+	return newPetSmokeSession(gc, s.stats), nil
 }
 
 // ---------------------------------------------------------------------------

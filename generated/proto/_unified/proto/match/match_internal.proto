@@ -10,14 +10,14 @@ option cc_generic_services = false;
 option (OptionFileDefaultNode) = NODE_MATCH;
 
 // match 内部服务(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.16–§6.18)。
-// 唯一合法调用方是 go/guild(全员同意邀请后确认开战);客户端与组队服务都不得直接调用。
+// Start/Cancel 的调用方为 Guild；Commit 的调用方为 Battle。
+// 按完整方法分别核固定签名白名单，缺密钥拒绝；客户端与组队服务不得直接调用。
 // 照 proto/trade/trade_admin.proto 的隔离做法:
 //   - 刻意不标 OptionIsClientProtocolService,且与客户端协议 match_service.proto 分文件:
 //     gate 的 IsClientMessageId 不收这些消息号,客户端发来直接丢弃;
 //   - 路由服对 ClientProtocol=false 的条目回信封拒绝;
 //   - match 的会话拦截器对"带会话 metadata 调 MatchInternal.*"回 gRPC PermissionDenied;
-//   - v1 只靠上一条 + 部署层 NetworkPolicy(只放行 gate 路由服与 guild 访问 match gRPC 端口)收口,
-//     v1.1 把 callerauth 提到 go/shared 后要求 guild 签名(契约偏差 13);
+//   - 内部签名由 shared/serviceauth 核验，NetworkPolicy 只是额外网络边界；
 //   - 客户端 tools/gen_proto.ps1 不列本文件,内部 schema 不进客户端包。
 
 // 拒绝原因。业务拒绝一律走响应里的 reject,不回 gRPC 错误;
@@ -63,9 +63,31 @@ message CancelActivityBattleResponse {
   uint32 formation_state = 3;
   common.base.ServiceCallAuth auth = 4;
   string request_digest = 5; // 清空原Cancel.auth后请求摘要；签名回复必须与本请求原件匹配。
+  BattleOutcomeDecision terminal_decision = 6;
+}
+
+enum BattleOutcomeDecision {
+  BATTLE_OUTCOME_DECISION_UNKNOWN = 0;
+  BATTLE_OUTCOME_DECISION_COMPLETE = 1;
+  BATTLE_OUTCOME_DECISION_ABORT = 2;
+}
+
+// 完整原事件在个人副作用前提交；相同局只接受相同字节，未知提交重放原件。
+message CommitBattleOutcomeRequest {
+  uint64 battle_id = 1;
+  string placement_operation_id = 2;
+  string target_instance_id = 3;
+  bytes raw_result_payload = 4;
+  common.base.ServiceCallAuth auth = 5;
+}
+message CommitBattleOutcomeResponse {
+  BattleOutcomeDecision decision = 1;
+  string request_digest = 2;
+  common.base.ServiceCallAuth auth = 3;
 }
 
 service MatchInternal {
   rpc StartActivityBattle(StartActivityBattleRequest) returns (StartActivityBattleResponse);
   rpc CancelActivityBattle(CancelActivityBattleRequest) returns (CancelActivityBattleResponse);
+  rpc CommitBattleOutcome(CommitBattleOutcomeRequest) returns (CommitBattleOutcomeResponse);
 }

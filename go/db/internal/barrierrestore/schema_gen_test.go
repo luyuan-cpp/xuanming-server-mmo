@@ -3,25 +3,29 @@ package barrierrestore
 import (
 	"context"
 	"database/sql/driver"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"shared/savebarrier"
 )
 
-// 使用既有Prepare/ApplyOne、双行锁录制驱动和真实Lua接缝；没有直接调用内部floor函数。
-func TestSchemaGenRestoreSQLMaximumAndExistingFloor(t *testing.T) {
+// 使用既有Prepare/ApplyOne、双行锁录制驱动和真实Lua接缝；没有直接调用内部世代函数。
+// 恢复以 SQL 为准:schema_gen = 两行戳最小值(0 按 1),即恢复后冷加载出的数据的加载世代(与 scene C3、login C4 同口径);
+// hash 里已有的值只是索引,一律覆盖 —— 保留更高的旧值会让恢复后的第一次加载与存盘被判倒退(混版本持久字段保护 §13 第 8 条)。
+func TestSchemaGenRestoreUsesSQLMinimumAndOverwritesIndex(t *testing.T) {
 	for _, tc := range []struct {
 		name, first, second, existing, want string
 		barrier                             bool
 	}{
 		{"missing_hash_legacy_zero", "0", "0", "", "1", false},
-		{"missing_hash_two_sql_generations", "4", "7", "", "7", false},
-		{"existing_three_fields", "7", "4", "", "7", true},
-		{"legal_fourth_field", "4", "7", "3", "7", true},
-		{"existing_floor_not_lowered", "4", "7", "9", "9", true},
-		{"sql_uint32_maximum", "4294967295", "0", "", "4294967295", false},
-		{"redis_uint32_maximum", "4", "7", "4294967295", "4294967295", true},
+		{"missing_hash_two_sql_generations", "4", "7", "", "4", false},
+		{"existing_three_fields", "7", "4", "", "4", true},
+		{"lower_fourth_field_overwritten", "4", "7", "3", "4", true},
+		{"higher_fourth_field_overwritten", "4", "7", "9", "4", true},
+		{"one_table_unstamped", "0", "7", "", "1", false},
+		{"sql_uint32_maximum", "4294967295", "4294967295", "", "4294967295", false},
+		{"redis_uint32_maximum_overwritten", "4", "7", "4294967295", "4", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r, store, cache := fixture(t, "8", "90")
@@ -45,7 +49,8 @@ func TestSchemaGenRestoreSQLMaximumAndExistingFloor(t *testing.T) {
 				require.Equal(t, tc.want, cache.HGet(savebarrier.Key(7), "schema_gen"))
 				fields, err := r.Redis.HGetAll(context.Background(), savebarrier.Key(7)).Result()
 				require.NoError(t, err)
-				require.Len(t, fields, 4)
+				require.Len(t, fields, 5)
+				assertRestoredFence(t, fields["handoff_fence"], "9", "", "0", strings.Repeat("0", 32))
 			}
 			require.Equal(t, beforeRows, store.rows, "世代索引恢复不能改SQL原戳或资产")
 			require.Zero(t, store.commits)
@@ -53,32 +58,47 @@ func TestSchemaGenRestoreSQLMaximumAndExistingFloor(t *testing.T) {
 	}
 }
 
-// C++ 严格屏障会在 hash 里写写方令牌 schema_writer(混版本持久字段保护 §5.2)。恢复必须接受它、原样保留,
-// 否则任何经过新版 scene 存盘的玩家都无法恢复屏障。
-func TestSchemaGenRestoreAcceptsAndKeepsSchemaWriter(t *testing.T) {
+// C++ 严格屏障会在 hash 里写写方令牌 schema_writer,warn 下判过倒退时还有证据字段 schema_regressed
+// (混版本持久字段保护 §5.2)。恢复必须接受它们(否则任何经过新版 scene 存盘的玩家都无法恢复屏障),
+// 写入时清掉:以 SQL 为准之后,任何写方的下一次严格屏障存盘都要重新比较,不能凭旧令牌跳过。
+func TestSchemaGenRestoreAcceptsAndClearsWriterFields(t *testing.T) {
 	r, store, cache := fixture(t, "8", "90")
 	store.rows[0][4], store.rows[1][4] = []byte("4"), []byte("7")
 	version := savebarrier.Version(8, 90)
 	const writer = "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
 	cache.HSet(savebarrier.Key(7), "pending", version, "player_database", version, "player_database_1", version,
-		"schema_gen", "9", "schema_writer", writer)
+		"schema_gen", "9", "schema_writer", writer, "schema_regressed", writer)
 	plan := prepare(t, r, false)
 	for attempt := 0; attempt < 2; attempt++ {
 		require.NoError(t, r.ApplyOne(context.Background(), plan, 0))
 		fields, err := r.Redis.HGetAll(context.Background(), savebarrier.Key(7)).Result()
 		require.NoError(t, err)
 		require.Equal(t, map[string]string{"pending": version, "player_database": version, "player_database_1": version,
-			"schema_gen": "9", "schema_writer": writer}, fields)
+			"schema_gen": "4", "handoff_fence": assertRestoredFence(t, fields["handoff_fence"], "9", "", "0", strings.Repeat("0", 32))}, fields)
 	}
 	require.Zero(t, store.commits)
 }
 
+// hash 里已有的 schema_gen 只是索引:格式损坏时恢复照样以 SQL 为准覆盖成两行最小值,不拒绝(拒绝的话唯一的修复手段
+// 也用不了)。混版本持久字段保护 §13 第 8 条。
+func TestSchemaGenRestoreOverwritesMalformedIndex(t *testing.T) {
+	for _, value := range []string{"", "0", "01", "-1", "+1", "1.0", "1e1", " 1", "4294967296", "18446744073709551615"} {
+		t.Run("schema_gen="+value, func(t *testing.T) {
+			r, store, cache := fixture(t, "8", "90")
+			store.rows[0][4], store.rows[1][4] = []byte("4"), []byte("7")
+			plan := prepare(t, r, false)
+			version := savebarrier.Version(8, 90)
+			cache.HSet(savebarrier.Key(7), "pending", version, "player_database", version, "player_database_1", version, "schema_gen", value)
+			require.NoError(t, r.ApplyOne(context.Background(), plan, 0))
+			require.Equal(t, "4", cache.HGet(savebarrier.Key(7), "schema_gen"))
+			require.Zero(t, store.commits)
+		})
+	}
+}
+
 func TestSchemaGenRejectsInvalidRedisFieldsWithoutWrites(t *testing.T) {
 	for _, tc := range []struct{ field, value string }{
-		{"schema_gen", ""}, {"schema_gen", "0"}, {"schema_gen", "01"},
-		{"schema_gen", "-1"}, {"schema_gen", "+1"}, {"schema_gen", "1.0"},
-		{"schema_gen", "1e1"}, {"schema_gen", " 1"}, {"schema_gen", "4294967296"},
-		{"schema_gen", "18446744073709551615"}, {"future_field", "1"},
+		{"future_field", "1"},
 		{"outbox_version", savebarrier.Version(8, 90)}, {"outbox_generation", "1"},
 	} {
 		t.Run(tc.field+"="+tc.value, func(t *testing.T) {
@@ -186,7 +206,7 @@ func TestSchemaGenRecoveryAcrossRedisSplitAndDBFirst(t *testing.T) {
 				require.NoError(t, r.ApplyOne(context.Background(), plan, 0))
 				got, err := r.Redis.HGetAll(context.Background(), savebarrier.Key(7)).Result()
 				require.NoError(t, err)
-				require.Equal(t, map[string]string{"pending": plan.Players[0].Target, "player_database": plan.Players[0].Target, "player_database_1": plan.Players[0].Target, "schema_gen": "7"}, got)
+				require.Equal(t, map[string]string{"pending": plan.Players[0].Target, "player_database": plan.Players[0].Target, "player_database_1": plan.Players[0].Target, "schema_gen": "4", "handoff_fence": assertRestoredFence(t, got["handoff_fence"], "9", "", "0", strings.Repeat("0", 32))}, got) // 两行 7 与 4 取最小值
 			}
 			require.Equal(t, 1, store.commits)
 			if dbFirst {

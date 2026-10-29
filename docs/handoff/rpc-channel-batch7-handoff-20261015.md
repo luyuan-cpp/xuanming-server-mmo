@@ -15,7 +15,7 @@
 |---|---|
 | 批 1–5(RpcChannel 核心、改名、tag、切换) | 已提交,未编译(§18) |
 | 批 6 玩家回包死链 | 已提交 `de4960bee`,未编译(§19.1) |
-| gRPC 每次调用回调 | 已提交并 regen;`grpc_client_lifecycle_test.cpp` 有 `PerCallDone*` 三条(§19.2、[grpc-client-deadline-failure-callback.md](../design/grpc-client-deadline-failure-callback.md) §11) |
+| gRPC 每次调用回调 | 已提交并 regen;`grpc_client_lifecycle_test.cpp` 有 `PerCallDone*` 三条(§19.2、[历史设计 grpc-client-deadline-failure-callback.md](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md) §11) |
 | GM 停机鉴权被拒返回 `RPC_ERROR(HANDLER_FAILED)` | 已提交(§19.3、`cpp/nodes/gate/SECURITY.md`) |
 | 镜像 CreateScene 改每次调用回调 | **别的会话做**,在 worktree 分支 `claude/blissful-morse-969d44`(基线 `526780b4e`,未合并);不要碰 `player_scene.{h,cpp}`、`scene_manager_response_handler.cpp`、`player_ownership_comp.h`、`player_lifecycle.{h,cpp}` 的 `IsSceneChangeBusy` |
 | Java `MessageIdRegistry` 识别墓碑 | 已提交 Java 仓 `15058ad`,`./mvnw -pl game-proto -am test -Dtest=MessageIdRegistryTest` 10/10 通过 |

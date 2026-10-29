@@ -2,7 +2,7 @@
 
 **Created:** 2026-10-14
 **状态:** 已定稿,分批实施中(进度见 §16)。2026-10-14 用户确认按完整方案实施(「我不怕改动,我要最标准、可以水平扩展的做法」「记录到文档并开始做吧」),§11 的 Q1、Q2 按推荐项执行,Q3 授权已取得。各批**未编译、未验证**,编译与测试由 Codex 按 §13 执行。
-**关联:** [client-rpc-router.md](./client-rpc-router.md)(D29–D34)、[client-access-band-routing.md](./client-access-band-routing.md)(D51–D64,阶段 0b/0d/0g)、[grpc-client-deadline-failure-callback.md](./grpc-client-deadline-failure-callback.md)、[microservice-zone-contract-20260914.md](./microservice-zone-contract-20260914.md)(预算链)、[team-system.md](./team-system.md)(expected_team_id、epoch/version)、[friend-client-spec-20260920.md](./friend-client-spec-20260920.md)(客户端单飞约定)、[scene-enter-session-fence.md](./scene-enter-session-fence.md)(登录代次 login_generation,与 §6.2 互补)、参考项目 `../xuanming-server/docs/design/protocol-ordering-rules.md`、Java 版 `D:\luyuan\xuanming-server-mmo` 的 `game-gate` 与 `PARITY.md`。
+**关联:** [client-rpc-router.md](./client-rpc-router.md)(D29–D34)、[client-access-band-routing.md](./client-access-band-routing.md)(D51–D64,阶段 0b/0d/0g)、[grpc-muduo-transport.md](./grpc-muduo-transport.md)、[microservice-zone-contract-20260914.md](./microservice-zone-contract-20260914.md)(预算链)、[team-system.md](./team-system.md)(expected_team_id、epoch/version)、[friend-client-spec-20260920.md](./friend-client-spec-20260920.md)(客户端单飞约定)、[scene-enter-session-fence.md](./scene-enter-session-fence.md)(登录代次 login_generation,与 §6.2 互补)、参考项目 `../xuanming-server/docs/design/protocol-ordering-rules.md`、Java 版 `D:\luyuan\xuanming-server-mmo` 的 `game-gate` 与 `PARITY.md`。
 
 **证据标注:**
 - 【码】代码或配置事实,写成 `路径:行号`,行号以 2026-10-14 当时的工作区为准(main 上有别的会话的未提交改动)。
@@ -207,7 +207,7 @@ while lane.inFlightSeq == 0 && !lane.queued.empty():     // 循环 ≤ 32 次
 
 ### 4.5 认领(Complete)
 
-> **2026-10-17 契约勘误**：下表入口随删除全局处理器 A–C 更新；主程序不再安装全局回包函数。路由 lane 的代次、队头、恰好一次和放行规则不变，见 `grpc-client-deadline-failure-callback.md` §12。
+> **2026-10-17 契约勘误**：下表入口随删除全局处理器 A–C 更新；主程序不再安装全局回包函数。路由 lane 的代次、队头、恰好一次和放行规则不变，见 `grpc-muduo-transport.md` §16.1。
 
 | 来源 | 入口 | 拿 seq 的方式 |
 |---|---|---|
@@ -476,7 +476,7 @@ go-zero 超时拦截器用 `context.WithTimeout` 派生 ctx 交给 handler,超�
 | client-access-band-routing D60 | 照用 7 号字段 | 无 |
 | client-access-band-routing §12.4 | 「惰性清理、不挂定时器」 | 改为「主动扫描(TimerTaskComp,回调不捕获对象)+ 惰性清理」 |
 | client-access-band-routing 阶段 0b / 0d / 0g | 0b(player_id 归一)、0d(失败回执带 id)并入本方案批次 C;0g(节点摘除排空)与本方案兼容:0g 落地后,晚到的真实完成会因 extract 取不到而被丢弃(2026-10-16 订正:0g 已不需要 —— gRPC 传输第 3 批后节点摘除时 `~Channel` 以 UNAVAILABLE 完成在途调用,经失败桥认领) | 在阶段表里注明 0b、0d 由本文批次 C 承担 |
-| grpc-client-deadline-failure-callback | 失败桥行为变化 | 失败回执改为带 id 的 1003 信封 |
+| [gRPC 客户端契约](grpc-muduo-transport.md#grpc-client-call-sites) | 失败桥行为变化 | 失败回执改为带 id 的 1003 信封 |
 | xuanming-port-decisions D-12 | **兼容**:lane 只在路由模式启用,C++ 默认值和现有单测都不改 | 无 |
 | AGENTS §4 字段类型清单 | 新增两个 uint64 计数字段 | 是否登记进清单,由用户决定 |
 
@@ -633,7 +633,7 @@ go-zero 超时拦截器用 `context.WithTimeout` 派生 ctx 交给 handler,超�
 | D login 会话栅栏 | 已改完(2026-10-15) | 新包 `go/login/internal/logic/pkg/sessionfence/{fence.go,fence_test.go}`(CommitLogin / Close / CheckEnterGame / BindPlayer / Recheck / Leave,单测 11 例);`loginsession.go` 导出 `Key` / `TTL`;`loginlogic.go`(有代次时原子提交)、`disconnectlogic.go`(Close + 用绑定玩家补挂租约)、`leavegamelogic.go`(Leave + 用绑定玩家删会话)、`entergamelogic.go`(入口 CheckEnterGame;persist 之后 `bindSessionFence`;EnterScene 前 Recheck;`chainBudget` 提为包级常量 `enterGameChainBudget`,登录代次铸造顺序不变)、新测试 `session_fence_wiring_test.go`(5 例)。旧版 gate(incarnation = 0)全部跳过,行为不变 | 待 Codex:`cd go/login && go build ./... && go vet ./... && go test ./... -count=1` |
 | F Java(第 2 部分:gate 侧) | 已改完(2026-10-15,Java 仓未提交) | `ClientDispatcher.java`(`MAX_BACKEND_LANE_DEPTH = 32` 满回 1008 不断连;`MAX_BACKEND_LANE_WAIT_NANOS` 5s 排队超时回 1003;login 失败改带 id 的信封)、`ClientSession.java`(BackendPending 带入队时刻)、`GateMetrics.java`(新增 `LANE_FULL`、`QUEUE_EXPIRED`)、`ClientDispatcherTest.java`(改写 1 例、新增 2 例)、`PARITY.md` 行状态 | 待 Java 仓构建测试 |
 | F Java(第 3 部分) | 未开始 | `ClientMessageService.handle` 下传 gate 截止、后端提交前检查;game-match JoinQueue 复核会话身份 | — |
-| 文档修订 | 已改(2026-10-15) | `client-access-band-routing.md` §12.4 修订注、`grpc-client-deadline-failure-callback.md` #8 修订注;此前已改 `client-rpc-router.md`、`microservice-zone-contract-20260914.md`、`team-system.md` | — |
+| 文档修订 | 已改(2026-10-15) | `client-access-band-routing.md` §12.4 修订注、`grpc-muduo-transport.md` §16.5（现行失败桥归属）;此前已改 `client-rpc-router.md`、`microservice-zone-contract-20260914.md`、`team-system.md` | — |
 | E2 guild expected_guild_id | 未开始 | 客户端可见的 proto 改动,两版加客户端仓同批,需要客户端仓授权(AGENTS §9) | — |
 | C 回包桥 | 已合(2026-10-15,muduo 会话合入) | 成功 / 失败回包统一由 `cpp/nodes/gate/handler/rpc/rpc_reply_bridge.{h,cpp}` 认领:`DeliverReply` 第一行 `gate_lane::OnRouterReply`,`NotifyCallFailure` 采样日志之后 `gate_lane::OnRouterCallFailed`;官方 gRPC 与 muduo_h2 两种传输都走它。`SendRawViaRouter` 签名不变,内部多了 muduo 分支 | 待 Codex |
 | F Java(第 3 部分,部分) | 已改(2026-10-15,Java 仓未提交) | game-match `QueueService.join(SessionContext, …)` 跨会话栅栏:在线目录条目存在、且会话号或 gate 实例不同就拒(16020);条目缺席放行,因为 gate 进场后才异步写入。`QueueHandlers` 改调新重载;`FakePlayerStatus` 导出 `GATE_INSTANCE` / `sessionIdOf`,`QueueHandlersTest`、`MatchClientMessageServiceTest` 的会话按它构造。**还没加**「旧会话被拒」的专门用例;`handle` 下传截止、Redisson 超时重发 EVAL 仍待评估 | 待 Java 仓构建测试 |

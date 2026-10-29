@@ -21,8 +21,9 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"shared/authoritysql"
+	"shared/drainproof"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -61,7 +62,7 @@ var (
 	configFile = flag.String("f", "etc/player_inbox.yaml", "the config file")
 
 	// migrateOnly 是生产用的显式建表入口(D-14 第 4 条):`player_inbox -f <yaml> -migrate` 只对 mmorpg_player_inbox
-	// 跑一次 schemamigrate.Up(与 Schema.AutoMigrate=true 的启动路径是同一份表清单与选项),跑完即退出。
+	// 用独立 Schema 能力执行一次正式迁移后退出；常驻启动仅核对表结构。
 	// 退出码按 schemamigrate.ExitCode:0 成功 / 1 错误 / 3 锁被占(K8s Job 按 backoff 重试)/ 4 需人工。
 	migrateOnly = flag.Bool("migrate", false, "run schemamigrate.Up on mmorpg_player_inbox and exit (0 ok / 1 error / 3 lock busy / 4 manual)")
 	// 改列授权只属于显式迁移,不得被常驻服务启动期的 AutoMigrate 继承。
@@ -83,6 +84,11 @@ const (
 // migrateRemedyCommand 是 Schema.AutoMigrate=false 且库与 proto 不一致时打印给运维的补救命令。
 const migrateRemedyCommand = "player_inbox -f etc/player_inbox.yaml -migrate"
 
+var maintenancePlan = flag.String("maintenance-drain-plan", "", "正式 typed 排空 runtime 原件")
+var maintenanceDir = flag.String("maintenance-drain-dir", "", "私有排空原件目录")
+var maintenanceSHA = flag.String("maintenance-drain-sha256", "", "runtime 原文件 SHA256")
+var maintenanceControlDir = flag.String("maintenance-drain-control-dir", os.Getenv("MMORPG_MAINTENANCE_CONTROL_DIR"), "同一 boot 接收排空请求的私有目录")
+
 func main() {
 	flag.Parse()
 	// 版本行直写 stdout,先于读配置与 logx 初始化:进程在配置 / 依赖阶段就崩溃时也已留下"跑的是哪一版"。
@@ -100,7 +106,7 @@ func main() {
 	conf.MustLoad(*configFile, &c)
 
 	if *migrateOnly {
-		os.Exit(runMigration(c, *allowModify, svc.OpenMySQL, schemamigrate.Up, checkRowShardLayout))
+		os.Exit(runMigration(c, *allowModify, svc.OpenSchemaMySQL, schemamigrate.Up, checkRowShardLayout))
 	}
 	if err := runPlayerInbox(c); err != nil {
 		fmt.Fprintf(os.Stderr, "[player_inbox] %v\n", err)
@@ -144,7 +150,15 @@ func runPlayerInbox(c config.Config) (runErr error) {
 		return err
 	}
 
-	svcCtx, err := svc.NewServiceContext(c)
+	runtime, root, relay, err := serverbase.LoadPublicationRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
+	if err != nil {
+		return err
+	}
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		return err
+	}
+	svcCtx, err := svc.NewServiceContextWithAdmission(c, writer, root, relay)
 	if err != nil {
 		return err
 	}
@@ -157,11 +171,18 @@ func runPlayerInbox(c config.Config) (runErr error) {
 		FinishTimeout: lifecycle.FinishTimeout,
 		// killswitch watch、节点镜像与注销共用 svcCtx 的 etcd 客户端;后台循环跑在 MySQL / 核心 Redis 上:
 		// 都必须在 svcCtx.Stop 关连接之前停(Stop 先取消循环并有界等待)。
-		CloseResources:  func() { stopKillSwitch(); stopMetrics(); svcCtx.Stop() },
+		CloseAndReport: func() error {
+			stopKillSwitch()
+			stopMetrics()
+			closeCtx, cancel := context.WithTimeout(context.Background(), lifecycle.DrainTimeout)
+			defer cancel()
+			return svcCtx.StopAndReport(closeCtx)
+		},
 		FinishFramework: proc.Shutdown,
 	}
 	defer func() {
 		stopSignals()
+		root.CloseAdmission()
 		shutdown.Server = serverSlot.TakeForShutdown()
 		if err := shutdown.Stop(); err != nil {
 			logx.Errorf("[player_inbox] Shutdown cleanup exceeded its budget: %v", err)
@@ -211,6 +232,12 @@ func runPlayerInbox(c config.Config) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("player_inbox RPC construction failed: %w", err)
 	}
+	s.AddUnaryInterceptors(serverbase.PublicationAdmission(root, relay, map[string]bool{
+		inboxpb.PlayerInbox_FetchItems_FullMethodName:              true,
+		inboxpb.PlayerInbox_AckItems_FullMethodName:                true,
+		inboxpb.PlayerInbox_EnqueueBattleSettlement_FullMethodName: true,
+		inboxpb.PlayerInbox_LookupBattleSettlement_FullMethodName:  true,
+	}, svcCtx.RelayIngress))
 	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, adminToken)...)
 
 	// **先起 gRPC,再注册**(契约 §2)。Start 在监听失败时 panic:recover 成错误交回主线程。
@@ -262,6 +289,24 @@ func runPlayerInbox(c config.Config) (runErr error) {
 	}
 	shutdown.Unregister = nr.Close
 	nr.KeepAlive()
+
+	controlCtx, cancelControl := context.WithCancel(ctx)
+	controlDone := make(chan struct{})
+	go func() {
+		defer close(controlDone)
+		if err := serverbase.DriveDrainRuntime(controlCtx, runtime, *maintenanceControlDir, root, relay, svcCtx.BindDrainRuntime, svcCtx.CloseSource, svcCtx.StopAndReport, func(prepareCtx context.Context) (*serverbase.PreparedPublication, error) {
+			if err := prepareCtx.Err(); err != nil {
+				return nil, err
+			}
+			if svcCtx.Store == nil || svcCtx.DB == nil || root.Pending() != 0 {
+				return nil, drainproof.ErrHold
+			}
+			return &serverbase.PreparedPublication{NoConsumers: true}, nil
+		}); err != nil && controlCtx.Err() == nil {
+			logx.Errorf("player_inbox 排空 HOLD: %v", err)
+		}
+	}()
+	defer func() { cancelControl(); <-controlDone }()
 
 	fmt.Println("\n=============================================================")
 	fmt.Println("  PLAYER INBOX SERVICE STARTED SUCCESSFULLY")
@@ -367,21 +412,12 @@ func checkRowShardLayout(ctx context.Context, db *sql.DB) error {
 	return inbox.CheckRowShards(ctx, db)
 }
 
-// ensureSchema 是启动期建表策略(D-14 第 4 条,同 go/trade):AutoMigrate 没写或 true 跑 Up(出错 / 需人工项即拒启);
+// ensureSchema 只核对常驻进程依赖的表结构；显式请求自动 DDL 时拒绝启动。
 // false 只跑只读 Plan,有待执行语句或需人工项即拒启并带补救命令。表结构对齐之后再跑一次行布局核对,不一致即拒启。
 func ensureSchema(ctx context.Context, db *sql.DB, c config.Config, up, plan schemaRunner, check rowLayoutCheck) error {
 	opts := schemaOptions()
 	if c.ShouldAutoMigrate() {
-		report, err := up(ctx, db, opts)
-		logReport("schemamigrate.Up", report)
-		if err != nil {
-			return fmt.Errorf("[player_inbox] startup schema migration failed (database %s), refusing to start: %w", data.DatabaseName, err)
-		}
-		if len(report.Manual) > 0 {
-			return fmt.Errorf("[player_inbox] startup schema migration found %d manual item(s) (database %s), refusing to start: %s",
-				len(report.Manual), data.DatabaseName, strings.Join(report.Manual, "; "))
-		}
-		return checkLayoutBeforeServing(ctx, db, check)
+		return errors.New("常驻服务禁止自动DDL，请关闭AutoMigrate并显式运行 -migrate")
 	}
 
 	report, err := plan(ctx, db, opts)
@@ -477,7 +513,7 @@ func logReport(stage string, r schemamigrate.Report) {
 // schemaModeLabel 是横幅里的建表策略描述。
 func schemaModeLabel(c config.Config) string {
 	if c.ShouldAutoMigrate() {
-		return "auto-migrate (schemamigrate.Up at startup)"
+		return "拒绝常驻自动迁移；请先执行独立 -migrate"
 	}
 	return "plan-only (tables owned by " + migrateRemedyCommand + ")"
 }

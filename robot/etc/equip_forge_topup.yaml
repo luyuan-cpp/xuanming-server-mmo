@@ -10,7 +10,8 @@
 # 它只发东西:不强化、不镶嵌、不卸装备。要一把能强化的装备,先跑一次 etc/equip_forge_smoke.yaml(它会发一把「新手木剑」并穿上)。
 #
 # 前置:与 equip-forge-smoke 相同(导表、全量 proto-gen、同批重编并重启 scene / gate / battle 与读表的 Go 服务,GM 闸为 dev / test,
-# 见 etc/equip_forge_smoke.yaml 的前置 1–5)。闸关着时:step=verify 报「GM 指令没有全部生效」。
+# 见 etc/equip_forge_smoke.yaml 的前置 1–5)。闸关着时:step=grant / gold 直接报 gate 信封拒绝(原因写 kFeatureUnavailable);
+# 走到 step=verify 才失败说明指令都回了成功、背包却没到账。
 #
 # 下面的缺省量:强化表 +1 → +12 一共要银两 331000、强化石 49 颗(data/EquipEnhance.xlsx,2026-10 的数值),
 # 所以一次补 40 万银两、60 颗强化石够把一把装备从 +0 强化到满级(失败不掉级、但照扣,运气差时可能要再跑一次)。

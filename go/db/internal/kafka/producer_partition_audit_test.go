@@ -55,12 +55,12 @@ func TestObserveProducerPartitionVerdicts(t *testing.T) {
 	}
 
 	for _, opCase := range []struct {
-		taskOp string
+		taskOp db_proto.DBOp
 		label  string
 	}{
-		{"read", metrics.ProducerPartitionOpRead},
-		{"write", metrics.ProducerPartitionOpWrite},
-		{"delete", metrics.ProducerPartitionOpOther},
+		{db_proto.DBOp_DB_OP_READ, metrics.ProducerPartitionOpRead},
+		{db_proto.DBOp_DB_OP_WRITE, metrics.ProducerPartitionOpWrite},
+		{db_proto.DBOp(99), metrics.ProducerPartitionOpOther},
 	} {
 		for _, tc := range []struct {
 			name      string
@@ -75,7 +75,7 @@ func TestObserveProducerPartitionVerdicts(t *testing.T) {
 			{"nil_key", nil, exp, n, metrics.ProducerPartitionKeyMismatch},
 			{"invalid_partition_count", []byte("1001"), exp, 0, metrics.ProducerPartitionInvalid},
 		} {
-			t.Run(opCase.taskOp+"/"+tc.name, func(t *testing.T) {
+			t.Run(opCase.taskOp.String()+"/"+tc.name, func(t *testing.T) {
 				msg := &sarama.ConsumerMessage{Topic: "db_task_zone_1", Partition: tc.partition, Offset: 7, Key: tc.key}
 				task := &db_proto.DBTask{Key: 1001, Op: opCase.taskOp, MsgType: "player_database", TaskId: "audit"}
 
@@ -94,7 +94,7 @@ func TestObserveProducerPartitionVerdicts(t *testing.T) {
 
 func TestObserveProducerPartitionPreRegistersAllSeries(t *testing.T) {
 	msg := &sarama.ConsumerMessage{Topic: "db_task_zone_1", Partition: 0, Key: []byte("1001")}
-	observeProducerPartition(msg, &db_proto.DBTask{Key: 1001, Op: "write"}, 10)
+	observeProducerPartition(msg, &db_proto.DBTask{Key: 1001, Op: db_proto.DBOp_DB_OP_WRITE}, 10)
 
 	series := producerPartitionSeries(t)
 	if len(series) != 12 {
@@ -111,7 +111,7 @@ func TestObserveProducerPartitionPreRegistersAllSeries(t *testing.T) {
 }
 
 func TestObserveProducerPartitionNilInputs(t *testing.T) {
-	task := &db_proto.DBTask{Key: 1001, Op: "write"}
+	task := &db_proto.DBTask{Key: 1001, Op: db_proto.DBOp_DB_OP_WRITE}
 	msg := &sarama.ConsumerMessage{Topic: "db_task_zone_1", Key: []byte("1001")}
 	if got := observeProducerPartition(nil, task, 10); got != metrics.ProducerPartitionInvalid {
 		t.Errorf("nil msg: verdict = %q, want invalid", got)

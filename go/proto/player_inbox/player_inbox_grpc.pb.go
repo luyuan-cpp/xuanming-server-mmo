@@ -19,8 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PlayerInbox_FetchItems_FullMethodName = "/player_inbox.PlayerInbox/FetchItems"
-	PlayerInbox_AckItems_FullMethodName   = "/player_inbox.PlayerInbox/AckItems"
+	PlayerInbox_FetchItems_FullMethodName              = "/player_inbox.PlayerInbox/FetchItems"
+	PlayerInbox_AckItems_FullMethodName                = "/player_inbox.PlayerInbox/AckItems"
+	PlayerInbox_EnqueueBattleSettlement_FullMethodName = "/player_inbox.PlayerInbox/EnqueueBattleSettlement"
+	PlayerInbox_LookupBattleSettlement_FullMethodName  = "/player_inbox.PlayerInbox/LookupBattleSettlement"
 )
 
 // PlayerInboxClient is the client API for PlayerInbox service.
@@ -31,6 +33,8 @@ type PlayerInboxClient interface {
 	FetchItems(ctx context.Context, in *FetchPlayerInboxRequest, opts ...grpc.CallOption) (*FetchPlayerInboxResponse, error)
 	// 报告**已落盘**的结局(设计 §7.7)。不受 consumer_enabled 等前置闸限制。
 	AckItems(ctx context.Context, in *AckPlayerInboxRequest, opts ...grpc.CallOption) (*AckPlayerInboxResponse, error)
+	EnqueueBattleSettlement(ctx context.Context, in *BattleSettlementInboxRequest, opts ...grpc.CallOption) (*BattleSettlementInboxResponse, error)
+	LookupBattleSettlement(ctx context.Context, in *BattleSettlementInboxRequest, opts ...grpc.CallOption) (*BattleSettlementInboxResponse, error)
 }
 
 type playerInboxClient struct {
@@ -61,6 +65,26 @@ func (c *playerInboxClient) AckItems(ctx context.Context, in *AckPlayerInboxRequ
 	return out, nil
 }
 
+func (c *playerInboxClient) EnqueueBattleSettlement(ctx context.Context, in *BattleSettlementInboxRequest, opts ...grpc.CallOption) (*BattleSettlementInboxResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BattleSettlementInboxResponse)
+	err := c.cc.Invoke(ctx, PlayerInbox_EnqueueBattleSettlement_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerInboxClient) LookupBattleSettlement(ctx context.Context, in *BattleSettlementInboxRequest, opts ...grpc.CallOption) (*BattleSettlementInboxResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BattleSettlementInboxResponse)
+	err := c.cc.Invoke(ctx, PlayerInbox_LookupBattleSettlement_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlayerInboxServer is the server API for PlayerInbox service.
 // All implementations must embed UnimplementedPlayerInboxServer
 // for forward compatibility.
@@ -69,6 +93,8 @@ type PlayerInboxServer interface {
 	FetchItems(context.Context, *FetchPlayerInboxRequest) (*FetchPlayerInboxResponse, error)
 	// 报告**已落盘**的结局(设计 §7.7)。不受 consumer_enabled 等前置闸限制。
 	AckItems(context.Context, *AckPlayerInboxRequest) (*AckPlayerInboxResponse, error)
+	EnqueueBattleSettlement(context.Context, *BattleSettlementInboxRequest) (*BattleSettlementInboxResponse, error)
+	LookupBattleSettlement(context.Context, *BattleSettlementInboxRequest) (*BattleSettlementInboxResponse, error)
 	mustEmbedUnimplementedPlayerInboxServer()
 }
 
@@ -84,6 +110,12 @@ func (UnimplementedPlayerInboxServer) FetchItems(context.Context, *FetchPlayerIn
 }
 func (UnimplementedPlayerInboxServer) AckItems(context.Context, *AckPlayerInboxRequest) (*AckPlayerInboxResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AckItems not implemented")
+}
+func (UnimplementedPlayerInboxServer) EnqueueBattleSettlement(context.Context, *BattleSettlementInboxRequest) (*BattleSettlementInboxResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method EnqueueBattleSettlement not implemented")
+}
+func (UnimplementedPlayerInboxServer) LookupBattleSettlement(context.Context, *BattleSettlementInboxRequest) (*BattleSettlementInboxResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LookupBattleSettlement not implemented")
 }
 func (UnimplementedPlayerInboxServer) mustEmbedUnimplementedPlayerInboxServer() {}
 func (UnimplementedPlayerInboxServer) testEmbeddedByValue()                     {}
@@ -142,6 +174,42 @@ func _PlayerInbox_AckItems_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlayerInbox_EnqueueBattleSettlement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BattleSettlementInboxRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerInboxServer).EnqueueBattleSettlement(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerInbox_EnqueueBattleSettlement_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerInboxServer).EnqueueBattleSettlement(ctx, req.(*BattleSettlementInboxRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerInbox_LookupBattleSettlement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BattleSettlementInboxRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerInboxServer).LookupBattleSettlement(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerInbox_LookupBattleSettlement_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerInboxServer).LookupBattleSettlement(ctx, req.(*BattleSettlementInboxRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlayerInbox_ServiceDesc is the grpc.ServiceDesc for PlayerInbox service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -156,6 +224,14 @@ var PlayerInbox_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AckItems",
 			Handler:    _PlayerInbox_AckItems_Handler,
+		},
+		{
+			MethodName: "EnqueueBattleSettlement",
+			Handler:    _PlayerInbox_EnqueueBattleSettlement_Handler,
+		},
+		{
+			MethodName: "LookupBattleSettlement",
+			Handler:    _PlayerInbox_LookupBattleSettlement_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

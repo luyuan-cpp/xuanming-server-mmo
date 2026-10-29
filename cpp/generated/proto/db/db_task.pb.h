@@ -29,6 +29,7 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 // @@protoc_insertion_point(includes)
 
@@ -54,6 +55,8 @@ extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fdb_2fdb_5ftask_2eproto;
 }  // extern "C"
 namespace taskpb {
+enum DBOp : int;
+extern const uint32_t DBOp_internal_data_[];
 class DBTask;
 struct DBTaskGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -73,10 +76,56 @@ extern const TaskResultGlobalsTypeInternal TaskResult_globals_;
 }  // namespace taskpb
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::taskpb::DBOp_internal_data_>
+    internal::EnumTraitsImpl::value<::taskpb::DBOp>;
 }  // namespace protobuf
 }  // namespace google
 
 namespace taskpb {
+enum DBOp : int {
+  DB_OP_UNSPECIFIED = 0,
+  DB_OP_READ = 1,
+  DB_OP_WRITE = 2,
+  DBOp_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  DBOp_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t DBOp_internal_data_[];
+inline constexpr DBOp DBOp_MIN =
+    static_cast<DBOp>(0);
+inline constexpr DBOp DBOp_MAX =
+    static_cast<DBOp>(2);
+[[nodiscard]] inline bool DBOp_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int DBOp_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+DBOp_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(DBOp) {
+  return DBOp_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& DBOp_Name(T value) {
+  static_assert(::std::is_same<T, DBOp>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to DBOp_Name().");
+  return DBOp_Name(static_cast<DBOp>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& DBOp_Name(DBOp value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<DBOp_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool DBOp_Parse(
+    ::absl::string_view name, DBOp* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<DBOp>(DBOp_descriptor(), name,
+                                           value);
+}
+using ::google::protobuf::internal::generated_enum::AbslParseFlag;
+using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 
 // ===================================================================
 
@@ -479,15 +528,15 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DBTask final : public ::google::pro
   // accessors -------------------------------------------------------
   enum : int {
     kWhereCaseFieldNumber = 2,
-    kOpFieldNumber = 3,
     kMsgTypeFieldNumber = 4,
     kBodyFieldNumber = 5,
     kTaskIdFieldNumber = 6,
     kReplyInstanceFieldNumber = 10,
     kKeyFieldNumber = 1,
+    kOpFieldNumber = 3,
+    kRetryCountFieldNumber = 7,
     kOwnerEpochFieldNumber = 8,
     kSaveSeqFieldNumber = 9,
-    kRetryCountFieldNumber = 7,
   };
   // string where_case = 2;
   void clear_where_case() ;
@@ -502,21 +551,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DBTask final : public ::google::pro
   const ::std::string& _internal_where_case() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_where_case(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_where_case();
-
-  public:
-  // string op = 3;
-  void clear_op() ;
-  [[nodiscard]] const ::std::string& op() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_op(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_op();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_op();
-  void set_allocated_op(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_op() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_op(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_op();
 
   public:
   // string msg_type = 4;
@@ -589,6 +623,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DBTask final : public ::google::pro
   void _internal_set_key(::uint64_t value);
 
   public:
+  // .taskpb.DBOp op = 3;
+  void clear_op() ;
+  [[nodiscard]] ::taskpb::DBOp op() const;
+  void set_op(::taskpb::DBOp value);
+
+  private:
+  ::taskpb::DBOp _internal_op() const;
+  void _internal_set_op(::taskpb::DBOp value);
+
+  public:
+  // int32 retry_count = 7;
+  void clear_retry_count() ;
+  [[nodiscard]] ::int32_t retry_count() const;
+  void set_retry_count(::int32_t value);
+
+  private:
+  ::int32_t _internal_retry_count() const;
+  void _internal_set_retry_count(::int32_t value);
+
+  public:
   // uint64 owner_epoch = 8;
   void clear_owner_epoch() ;
   [[nodiscard]] ::uint64_t owner_epoch() const;
@@ -609,22 +663,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DBTask final : public ::google::pro
   void _internal_set_save_seq(::uint64_t value);
 
   public:
-  // int32 retry_count = 7;
-  void clear_retry_count() ;
-  [[nodiscard]] ::int32_t retry_count() const;
-  void set_retry_count(::int32_t value);
-
-  private:
-  ::int32_t _internal_retry_count() const;
-  void _internal_set_retry_count(::int32_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:taskpb.DBTask)
  private:
   class _Internal;
   using ParseTableT_ =
       ::google::protobuf::internal::TcParseTable<4, 10,
-                          0, 71,
+                          0, 69,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -653,15 +697,15 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DBTask final : public ::google::pro
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr where_case_;
-    ::google::protobuf::internal::ArenaStringPtr op_;
     ::google::protobuf::internal::ArenaStringPtr msg_type_;
     ::google::protobuf::internal::ArenaStringPtr body_;
     ::google::protobuf::internal::ArenaStringPtr task_id_;
     ::google::protobuf::internal::ArenaStringPtr reply_instance_;
     ::uint64_t key_;
+    int op_;
+    ::int32_t retry_count_;
     ::uint64_t owner_epoch_;
     ::uint64_t save_seq_;
-    ::int32_t retry_count_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -688,7 +732,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DBTask final : public ::google::pro
 inline void DBTask::clear_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.key_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t DBTask::key() const {
   // @@protoc_insertion_point(field_get:taskpb.DBTask.key)
@@ -696,7 +740,7 @@ inline ::uint64_t DBTask::key() const {
 }
 inline void DBTask::set_key(::uint64_t value) {
   _internal_set_key(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:taskpb.DBTask.key)
 }
 inline ::uint64_t DBTask::_internal_key() const {
@@ -772,75 +816,35 @@ inline void DBTask::set_allocated_where_case(::std::string* PROTOBUF_NULLABLE va
   // @@protoc_insertion_point(field_set_allocated:taskpb.DBTask.where_case)
 }
 
-// string op = 3;
+// .taskpb.DBOp op = 3;
 inline void DBTask::clear_op() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.op_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.op_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
-inline const ::std::string& DBTask::op() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+inline ::taskpb::DBOp DBTask::op() const {
   // @@protoc_insertion_point(field_get:taskpb.DBTask.op)
   return _internal_op();
 }
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void DBTask::set_op(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  _impl_.op_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+inline void DBTask::set_op(::taskpb::DBOp value) {
+  _internal_set_op(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:taskpb.DBTask.op)
 }
-inline ::std::string* PROTOBUF_NONNULL DBTask::mutable_op()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  ::std::string* _s = _internal_mutable_op();
-  // @@protoc_insertion_point(field_mutable:taskpb.DBTask.op)
-  return _s;
-}
-inline const ::std::string& DBTask::_internal_op() const {
+inline ::taskpb::DBOp DBTask::_internal_op() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.op_.Get();
+  return static_cast<::taskpb::DBOp>(_impl_.op_);
 }
-inline void DBTask::_internal_set_op(const ::std::string& value) {
+inline void DBTask::_internal_set_op(::taskpb::DBOp value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.op_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL DBTask::_internal_mutable_op() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.op_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE DBTask::release_op() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:taskpb.DBTask.op)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
-    return nullptr;
-  }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  auto* released = _impl_.op_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.op_.Set("", GetArena());
-  }
-  return released;
-}
-inline void DBTask::set_allocated_op(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  }
-  _impl_.op_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.op_.IsDefault()) {
-    _impl_.op_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:taskpb.DBTask.op)
+  _impl_.op_ = value;
 }
 
 // string msg_type = 4;
 inline void DBTask::clear_msg_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.msg_type_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline const ::std::string& DBTask::msg_type() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -850,13 +854,13 @@ inline const ::std::string& DBTask::msg_type() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void DBTask::set_msg_type(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   _impl_.msg_type_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:taskpb.DBTask.msg_type)
 }
 inline ::std::string* PROTOBUF_NONNULL DBTask::mutable_msg_type()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::std::string* _s = _internal_mutable_msg_type();
   // @@protoc_insertion_point(field_mutable:taskpb.DBTask.msg_type)
   return _s;
@@ -876,10 +880,10 @@ inline ::std::string* PROTOBUF_NONNULL DBTask::_internal_mutable_msg_type() {
 inline ::std::string* PROTOBUF_NULLABLE DBTask::release_msg_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:taskpb.DBTask.msg_type)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   auto* released = _impl_.msg_type_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.msg_type_.Set("", GetArena());
@@ -889,9 +893,9 @@ inline ::std::string* PROTOBUF_NULLABLE DBTask::release_msg_type() {
 inline void DBTask::set_allocated_msg_type(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
   _impl_.msg_type_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.msg_type_.IsDefault()) {
@@ -904,7 +908,7 @@ inline void DBTask::set_allocated_msg_type(::std::string* PROTOBUF_NULLABLE valu
 inline void DBTask::clear_body() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.body_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::std::string& DBTask::body() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -914,13 +918,13 @@ inline const ::std::string& DBTask::body() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void DBTask::set_body(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   _impl_.body_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:taskpb.DBTask.body)
 }
 inline ::std::string* PROTOBUF_NONNULL DBTask::mutable_body()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::std::string* _s = _internal_mutable_body();
   // @@protoc_insertion_point(field_mutable:taskpb.DBTask.body)
   return _s;
@@ -940,10 +944,10 @@ inline ::std::string* PROTOBUF_NONNULL DBTask::_internal_mutable_body() {
 inline ::std::string* PROTOBUF_NULLABLE DBTask::release_body() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:taskpb.DBTask.body)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   auto* released = _impl_.body_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.body_.Set("", GetArena());
@@ -953,9 +957,9 @@ inline ::std::string* PROTOBUF_NULLABLE DBTask::release_body() {
 inline void DBTask::set_allocated_body(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   _impl_.body_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.body_.IsDefault()) {
@@ -968,7 +972,7 @@ inline void DBTask::set_allocated_body(::std::string* PROTOBUF_NULLABLE value) {
 inline void DBTask::clear_task_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.task_id_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline const ::std::string& DBTask::task_id() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -978,13 +982,13 @@ inline const ::std::string& DBTask::task_id() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void DBTask::set_task_id(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   _impl_.task_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:taskpb.DBTask.task_id)
 }
 inline ::std::string* PROTOBUF_NONNULL DBTask::mutable_task_id()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::std::string* _s = _internal_mutable_task_id();
   // @@protoc_insertion_point(field_mutable:taskpb.DBTask.task_id)
   return _s;
@@ -1004,10 +1008,10 @@ inline ::std::string* PROTOBUF_NONNULL DBTask::_internal_mutable_task_id() {
 inline ::std::string* PROTOBUF_NULLABLE DBTask::release_task_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:taskpb.DBTask.task_id)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   auto* released = _impl_.task_id_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.task_id_.Set("", GetArena());
@@ -1017,9 +1021,9 @@ inline ::std::string* PROTOBUF_NULLABLE DBTask::release_task_id() {
 inline void DBTask::set_allocated_task_id(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   _impl_.task_id_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.task_id_.IsDefault()) {
@@ -1032,7 +1036,7 @@ inline void DBTask::set_allocated_task_id(::std::string* PROTOBUF_NULLABLE value
 inline void DBTask::clear_retry_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.retry_count_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::int32_t DBTask::retry_count() const {
   // @@protoc_insertion_point(field_get:taskpb.DBTask.retry_count)
@@ -1040,7 +1044,7 @@ inline ::int32_t DBTask::retry_count() const {
 }
 inline void DBTask::set_retry_count(::int32_t value) {
   _internal_set_retry_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:taskpb.DBTask.retry_count)
 }
 inline ::int32_t DBTask::_internal_retry_count() const {
@@ -1056,7 +1060,7 @@ inline void DBTask::_internal_set_retry_count(::int32_t value) {
 inline void DBTask::clear_owner_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_epoch_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t DBTask::owner_epoch() const {
   // @@protoc_insertion_point(field_get:taskpb.DBTask.owner_epoch)
@@ -1064,7 +1068,7 @@ inline ::uint64_t DBTask::owner_epoch() const {
 }
 inline void DBTask::set_owner_epoch(::uint64_t value) {
   _internal_set_owner_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:taskpb.DBTask.owner_epoch)
 }
 inline ::uint64_t DBTask::_internal_owner_epoch() const {
@@ -1080,7 +1084,7 @@ inline void DBTask::_internal_set_owner_epoch(::uint64_t value) {
 inline void DBTask::clear_save_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.save_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t DBTask::save_seq() const {
   // @@protoc_insertion_point(field_get:taskpb.DBTask.save_seq)
@@ -1088,7 +1092,7 @@ inline ::uint64_t DBTask::save_seq() const {
 }
 inline void DBTask::set_save_seq(::uint64_t value) {
   _internal_set_save_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:taskpb.DBTask.save_seq)
 }
 inline ::uint64_t DBTask::_internal_save_seq() const {
@@ -1104,7 +1108,7 @@ inline void DBTask::_internal_set_save_seq(::uint64_t value) {
 inline void DBTask::clear_reply_instance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.reply_instance_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline const ::std::string& DBTask::reply_instance() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -1114,13 +1118,13 @@ inline const ::std::string& DBTask::reply_instance() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void DBTask::set_reply_instance(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   _impl_.reply_instance_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:taskpb.DBTask.reply_instance)
 }
 inline ::std::string* PROTOBUF_NONNULL DBTask::mutable_reply_instance()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::std::string* _s = _internal_mutable_reply_instance();
   // @@protoc_insertion_point(field_mutable:taskpb.DBTask.reply_instance)
   return _s;
@@ -1140,10 +1144,10 @@ inline ::std::string* PROTOBUF_NONNULL DBTask::_internal_mutable_reply_instance(
 inline ::std::string* PROTOBUF_NULLABLE DBTask::release_reply_instance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:taskpb.DBTask.reply_instance)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   auto* released = _impl_.reply_instance_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.reply_instance_.Set("", GetArena());
@@ -1153,9 +1157,9 @@ inline ::std::string* PROTOBUF_NULLABLE DBTask::release_reply_instance() {
 inline void DBTask::set_allocated_reply_instance(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
   _impl_.reply_instance_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reply_instance_.IsDefault()) {
@@ -1351,6 +1355,19 @@ inline void TaskResult::_internal_set_timestamp(::int64_t value) {
 // @@protoc_insertion_point(namespace_scope)
 }  // namespace taskpb
 
+
+namespace google {
+namespace protobuf {
+
+template <>
+struct is_proto_enum<::taskpb::DBOp> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::taskpb::DBOp>() {
+  return ::taskpb::DBOp_descriptor();
+}
+
+}  // namespace protobuf
+}  // namespace google
 
 // @@protoc_insertion_point(global_scope)
 

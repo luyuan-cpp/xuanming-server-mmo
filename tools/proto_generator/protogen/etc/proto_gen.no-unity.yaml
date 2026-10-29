@@ -7,8 +7,7 @@ paths:
   proto_dir: "{{output_root}}proto/"
   proto_parent_include_path: "{{output_root}}"
   third_party_dir: "third_party/"
-  grpc_dir: "{{output_root}}{{third_party_dir}}grpc/"
-  protobuf_dir: "{{grpc_dir}}third_party/protobuf/src/"
+  protobuf_dir: "{{output_root}}{{third_party_dir}}protobuf/src/"
 
   # Node and generated directories
   node_go_dir: "{{output_root}}go/"
@@ -34,7 +33,6 @@ paths:
   temp_file_gen_dir: "{{output_root}}{{tool_dir}}generated/temp/files/"
   proto_buf_desc_dir: "{{temp_file_gen_dir}}proto_desc/"
   all_in_one_desc: "{{proto_buf_desc_dir}}all_in_one.desc"
-  grpc_temp_dir: "{{temp_file_gen_dir}}grpc/"
   proto_buf_c_temp_dir: "{{temp_file_gen_dir}}"
   player_storage_temp_dir: "{{temp_file_gen_dir}}/node/game/storage/"
 
@@ -42,9 +40,10 @@ paths:
   proto_buf_c_proto_output_dir: "{{output_root}}{{generated_dir}}"
   generated_output_dir: "{{output_root}}{{generated_dir}}"
   grpc_output_dir: "{{output_root}}{{generated_dir}}"
-  grpc_proto_output_dir: "{{output_root}}{{generated_dir}}proto/"
   robot_generated_output_dir: "{{output_root}}{{robot}}generated/"
   robot_go_game_pb_dir: "{{robot_generated_output_dir}}pb/game"
+  # robot 类型化调用桩(Go 包 rpc,docs/design/client-rpc-callback.md §5.5),与 proto_gen.yaml 同步。
+  robot_rpc_dir: "{{robot_generated_output_dir}}rpc/"
   robot_go_gen_dir: "{{output_root}}{{robot_generated}}"
   generated_rpc_dir: "{{generated_output_dir}}rpc/"
   service_info_dir: "{{generated_rpc_dir}}service_metadata/"
@@ -104,8 +103,6 @@ file_extensions:
   proto: ".proto"
   pb_cc: ".pb.cc"
   pb_h: ".pb.h"
-  grpc_pb_cc: ".grpc.pb.cc"
-  grpc_pb_h: ".grpc.pb.h"
   header: ".h"
   cpp: ".cpp"
   handler_h: "_handler.h"
@@ -535,14 +532,15 @@ domain_meta:
   # 漏掉本块 = team.proto 根本不被解析:没有消息号、没有路由表条目,客户端包在 gate 被当非法包踢线。
   # 副作用:生成器按 source 目录名必定建 go/team/generated/pb/game/(J-15 接受,不代表有独立 team 服务)。
   # 客户端门禁:mmorpg-client 的 tools/gen_proto.ps1 收录 proto/team/team.proto 之前(设计 §H.1),
-  # 不得用本默认配置跑 proto 生成(dev.bat proto / dev.bat gen):enable_unity_client 没有按域开关,
-  # 会往客户端写 15 个 ClientPlayerTeam*Handler.cs 并重写 HandlerRegistry.cs,引用的 Teampb.* 不存在 → 客户端 CS0246。
+  # 不得用 proto_gen.yaml 跑 proto 生成(dev.bat proto / dev.bat gen):enable_unity_client 没有按域开关,
+  # 会往客户端写 ClientPlayerTeamRpc.cs(2026-10-20 前是 15 个 ClientPlayerTeam*Handler.cs + HandlerRegistry.cs),引用的 Teampb.* 不存在 → 客户端 CS0246。
   # 期间一律用 enable_unity_client: false 的副本跑 proto-gen-run(设计 §B.5 / §I.6 / R.4)。
   # 门禁状态(2026-09-20):客户端 main(120e2d8 起)的 gen_proto.ps1 已收录 team / jubaozhai;friend 一行
   # 由 friend 收尾批补在客户端工作区(用户授权,截至本注释写下时未提交)。**客户端清单不随本仓走**:
   # 跑默认配置之前先确认你手上的客户端 gen_proto.ps1 同时有 proto/team/team.proto、proto/trade/jubaozhai.proto、
-  # proto/friend/friend.proto 三行(缺哪个就是哪个域的 handler 桩 CS0246);缺了就仍按上一行用副本跑。
-  # 不要为规避而删掉本块(DV-5:未解析的域会丢号),也不要在本文件关掉 enable_unity_client(其他域的客户端 handler 会失去同步)。
+  # proto/friend/friend.proto 三行(缺哪个就是哪个域的调用桩 CS0246);缺了就仍按上一行用副本跑。
+  # 不要为规避而删掉本块(DV-5:未解析的域会丢号)。
+  # 本文件就是 enable_unity_client: false 的副本:只校验方法形态、不写客户端仓;proto_gen.yaml 里不要关它。
   team:
     source: "{{proto_dir}}team/"
     rpc:

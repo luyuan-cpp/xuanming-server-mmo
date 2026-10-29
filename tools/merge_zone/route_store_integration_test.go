@@ -167,6 +167,51 @@ func TestIT_Route_FenceMutualExclusionRenewAndRelease(t *testing.T) {
 	}
 }
 
+// TestIT_Route_TakeOverChecksZonePairAndManifest(MZ2-2,真库):接手核对读的是库里真实的 src_zone / dst_zone 列与 holder_json 的
+// manifest_path —— zone 对写反、清单路径不同都 errRouteInvalidArgument,事务不写,围栏原样留在旧 run_id 上(epoch 不变);
+// 同一份清单(路径写法不同、规整后相同)照常接手,epoch + 1。
+func TestIT_Route_TakeOverChecksZonePairAndManifest(t *testing.T) {
+	requireIT(t)
+	st := itRouteStore(t)
+	ctx := context.Background()
+	const manifest = "merge_981_to_982_it.json"
+	withManifest := func(req routeFenceAcquire, path string) routeFenceAcquire {
+		req.Holder.ManifestPath = path
+		return req
+	}
+	g1, err := st.AcquireFence(ctx, withManifest(itRouteFence(itRouteRunA, routeFencePurposeMerge), manifest))
+	if err != nil {
+		t.Fatalf("acquire A: %v", err)
+	}
+	reversed := withManifest(itRouteFence(itRouteRunB, routeFencePurposeMerge), manifest)
+	reversed.Src, reversed.Dst = itRouteZoneB, itRouteZoneA
+	for _, tc := range []struct {
+		name string
+		req  routeFenceAcquire
+	}{
+		{"reversed-zone-pair", reversed},
+		{"other-manifest", withManifest(itRouteFence(itRouteRunB, routeFencePurposeMerge), "merge_981_to_982_other.json")},
+	} {
+		if _, err := st.TakeOverFence(ctx, tc.req, itRouteRunA); !errors.Is(err, errRouteInvalidArgument) {
+			t.Fatalf("%s: take over = %v, want errRouteInvalidArgument", tc.name, err)
+		}
+		for _, zone := range []uint32{itRouteZoneA, itRouteZoneB} {
+			state, err := st.ReadFence(ctx, zone)
+			if err != nil || !state.Active || state.RunID != itRouteRunA || state.Epoch != g1.Epoch {
+				t.Fatalf("%s: zone %d fence = (%+v, %v), want A's fence untouched at epoch %d", tc.name, zone, state, err, g1.Epoch)
+			}
+		}
+	}
+	g2, err := st.TakeOverFence(ctx, withManifest(itRouteFence(itRouteRunB, routeFencePurposeUnmerge), "./"+manifest), itRouteRunA)
+	if err != nil || g2.Epoch != g1.Epoch+1 {
+		t.Fatalf("take over with the same manifest (unmerge after a merge) = (%+v, %v), want epoch %d", g2, err, g1.Epoch+1)
+	}
+	state, err := st.ReadFence(ctx, itRouteZoneB)
+	if err != nil || !state.Active || state.RunID != itRouteRunB || state.Epoch != g2.Epoch {
+		t.Fatalf("fence after the take-over = (%+v, %v), want B at epoch %d", state, err, g2.Epoch)
+	}
+}
+
 // TestIT_Route_RemapHomeBatchThenPublish:批事务改 home → 发布 + WAITAOF;重跑走「已是目标」分支、发布回 Confirmed;
 // catch-up 认得出缓存已是这一版。
 func TestIT_Route_RemapHomeBatchThenPublish(t *testing.T) {

@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+// PlayMode 表的权威 schema。源表 data/PlayMode.xlsx。
+// 匹配入口白名单：一行 = 一个 (match_mode, battle_config_id) 组合可以排队或开战。
+// Dungeon 只描述"打什么"（怪物组、时长）；"能不能进、几个人进"只在这里表达
+// （AGENTS.md §11.6，docs/design/global-match-hierarchical-pools.md §7）。
+// 不在表里或 enabled=false 的组合，JoinQueue / StartTeamMatch / ChallengePlayer 一律回 16002。
+// 校验（match 启动时，失败拒启）：(match_mode, battle_config_id) 唯一；PVE 行 battle_config_id 非 0
+// 且 Dungeon 行存在、怪物组非空；PVE_TEAM 行 1 ≤ team_size_max ≤ min(Dungeon.max_team_size, 5)；
+// PVE_SOLO 行 team_size_max = 1；PVP 与切磋行 team_size_max = 0（人数由模式决定）。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message PlayModeTable {
+  option (cfg_sheet)       = "PlayMode";
+  option (cfg_source_file) = "PlayMode.xlsx";
+  option (cfg_primary_key) = "id";
+
+  uint32 id = 1;
+  // MatchMode 枚举值（proto/match/match_service.proto）：1=5V5 3=1V1 4=PVE_SOLO 5=PVE_TEAM 6=PVP_CHALLENGE
+  uint32 match_mode = 2;
+  // FK -> Dungeon.id。PVE 是怪物战斗模板；PVP 只借用它的 time_limit；切磋填 0 表示默认切磋规则
+  uint32 battle_config_id = 3 [(cfg_fk) = "Dungeon"];
+  // 是否开放。改成 false 后新入队被拒，排队中的票由池写者撤掉
+  bool enabled = 4;
+  // PVE_SOLO 填 1；PVE_TEAM 填人数上限（实际上限再与 Dungeon.max_team_size、引擎每队上限 5 取小）；其它模式填 0
+  uint32 team_size_max = 5;
+}

@@ -708,6 +708,12 @@ spec:
     metadata:
       labels:
         app: redis
+      # 与 redis.yaml 相同:default-container 让不带 -c 的 kubectl exec / logs 落到 redis 容器;抓取注解指向 redis-exporter 的 9121。
+      annotations:
+        kubectl.kubernetes.io/default-container: redis
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9121"
+        prometheus.io/path: "/metrics"
     spec:
       # 停机顺序:preStop 交接主(通常 3 ~ 5 秒;上一个 Pod 刚重启完时要先等哨兵重新连上它,约 15 秒;最坏约 60 秒)
       # → SIGTERM → redis 把 AOF 刷盘后退出。
@@ -836,6 +842,29 @@ spec:
             - name: scripts
               mountPath: /scripts
               readOnly: true
+        # 指标出口,与 redis.yaml 的 redis-exporter 逐字同形(2026-10-23):每个 redis Pod 一个,主从都出指标,
+        # 主从链路告警靠从节点上的 redis_master_link_up。哨兵不单独出指标。
+        - name: redis-exporter
+          image: oliver006/redis_exporter:v1.62.0
+          env:
+            - name: REDIS_ADDR
+              value: redis://127.0.0.1:6379
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+                  optional: true
+          ports:
+            - containerPort: 9121
+              name: metrics
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
       volumes:
         - name: scripts
           configMap:

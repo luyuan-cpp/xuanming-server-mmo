@@ -207,8 +207,19 @@ func installBufconnDialer(t *testing.T, harnesses ...*sceneNodeHarness) {
 // this package that covers the watch-event handler with synthetic events.)
 func newIntegrationSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis) {
 	t.Helper()
+	return newIntegrationSvcCtxWithRedisOptions(t)
+}
+
+// newIntegrationSvcCtxWithRedisOptions 同 newIntegrationSvcCtx,另把 opts 交给 MustNewRedis,
+// 例如用 redis.WithHook 在两条命令之间注入另一个写者(见 owner_read_interleave_test.go)。
+// go-zero 按地址永久缓存底层 go-redis 客户端,hook 只在该地址首次建客户端时挂上。每次新起的 miniredis
+// 通常是新地址,hook 一般能挂上;但 miniredis 用内核分配的临时端口,同一测试进程里先前关掉的端口可能被
+// 复用(Linux 上一般要等旧端口的 FIN_WAIT2 / TIME_WAIT 约 60 秒消失之后),这时拿到的是缓存的旧客户端,
+// 新 hook 挂不上。用 hook 的用例都断言 hook 确实触发过,这种情况会被报红,不会假绿。
+func newIntegrationSvcCtxWithRedisOptions(t *testing.T, opts ...redis.Option) (*svc.ServiceContext, *miniredis.Miniredis) {
+	t.Helper()
 	mr := miniredis.RunT(t)
-	rds := redis.MustNewRedis(redis.RedisConf{Host: mr.Addr(), Type: "node"})
+	rds := redis.MustNewRedis(redis.RedisConf{Host: mr.Addr(), Type: "node"}, opts...)
 
 	c := config.Config{}
 	c.WorldChannelCount = 1
@@ -221,10 +232,11 @@ func newIntegrationSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Minired
 	c.AllowGateZoneAsHomeZone = true
 
 	return &svc.ServiceContext{
-		Config:        c,
-		Redis:         rds,
-		RoleDirectory: testRoleDirectory(1),
-		SceneIDGen:    snowflake.NewNode(0),
+		Config:         c,
+		Redis:          rds,
+		RoleDirectory:  testRoleDirectory(1),
+		OwnerEpochMint: newFakeOwnerEpochMinter(rds),
+		SceneIDGen:     snowflake.NewNode(0),
 	}, mr
 }
 

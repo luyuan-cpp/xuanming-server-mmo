@@ -157,6 +157,19 @@
 | go-asset-services#0 | `Commerce.Tick` 只要单条合同出错就整轮返回。失败行的 `updated_ms` 不变，永远排在队头，全服交易被卡住。最容易触发的是离线买家累计 16 条未决 credit 后返回的 `ErrTooManyPending` | `go/trade/internal/commerce/engine.go:768-822` | 成立，medium | `AssetOp.Enabled` |
 | go-asset-services#1 | 被自动放弃（180 天）或人工终结的托管扣款腿不写 `durable`，合同永远停在 pay/escrow，卖家托管的资产被扣留。买家点击购买后下线，就能把卖家资产扣作人质 | `engine.go:676-686`；`go/trade/internal/data/asset_op_repo.go:1013-1021` | 成立，medium | `AssetOp.Enabled` |
 
+**修复（social-match-battle#0：2026-10-23，Claude，复核部分成立，未编译、未测试，待 Codex 验证；负责人 2026-10-23 拍板首发开全球匹配，本条为上线阻塞）：**
+- 并行会话的 v1 终局协议已给「有 Create 原件」的成局加了截止后 SQL ABORT，第一轮 §4 第 11 条也被它覆盖。仍成立两处：没有原件的成局要等目标 battle 回 ABORTED，目标消失、换 UUID、拨号失败时永无出口；有原件且已过截止的成局被 `AcquireWork` / `Pending` 反复续租，到期 ABORT 被无限推迟。
+- 修复：本代租约下无原件即正面证据（`Store.CreateIntentPersisted`），`globalDestroy` 不再等目标应答，由 `Finish(false)` 在行锁内复核同租约且仍无原件，多副本只有持租者能提交；过截止的有原件成局不再发租约（`ErrAwaitingExpiredOutcome`），交给 `RecoverExpiredOutcomes` 争唯一一次 SQL ABORT。截止前一次超时或实例消失仍只记 UNKNOWN，不释放。没有采用「注册中心 UUID 消失超过宽限期」作证据。另加到期巡检 `expired_unrecoverable` 指标。说明见 [cross-zone-matchmaking.md](cross-zone-matchmaking.md) §13.3；命令见 PROGRESS「2026-10-24 Claude：第一轮审计 §2.5 social-match-battle#0」。
+- 残余：截止竞态（强制平局与到期 ABORT 抢同一主键）归并行 v1 轨道，须在其验收前加宽限；安全论证依赖该轨道未提交的 `Finish(false)` 复核。
+- Java 版：无原件卡死同样存在，Java 待做，已登记 PARITY。
+
+**修复（go-asset-services#0 / #1：2026-10-20 落码，2026-10-22 按独立评审修正；Claude，未编译、未测试，待 Codex 验证）：**
+- **#0**：`Engine.Tick` 改为单行隔离（`go/trade/internal/commerce/tick_isolation.go`）。失败分 retry / too_many_pending / corrupt / conflict / role_conflict：暂时失败按有界抖动退避推迟，推迟以 Due 读到的 version 为条件、不改 version，不会旧盖新；确定性坏数据隔离为 Manual，不再无限重试；Due 只取 `updated_ms<=now`。评审发现 `7d9208237` 起每通道只给 3s、而单行子预算固定 5s，卡住的行与整轮同时到期、不推迟，队头阻塞复现；已改为单行预算从父截止时刻推出，并预留 ACK 与推迟的余量。bid_held、acceptBid、撮合、收据 ACK、商城各循环同样处理。
+- **#1**：`LegResult` 终局只看 status、不看 durable，放弃与人工终结的扣款腿走与 scene 判拒同一条补偿，只补偿一次；人工判 APPLIED 的实例扣款没有原件时立即隔离，不上架。
+- 新增 trade-commerce 告警 5 条与 [trade-commerce-quarantine-runbook.md](../ops/trade-commerce-quarantine-runbook.md)。说明见 [jubaozhai-market.md](jubaozhai-market.md) §15.3；命令见 PROGRESS「2026-10-24 Claude：第一轮审计 §2.5 go-asset-services#0 / #1 交易合同推进修复」。
+- 残余：人质窗口只是有界（到自动放弃天数或人工终结）；隔离为 Manual 的合同没有管理入口，只有手册里的只读 SQL。
+- Java 版：#0 / #1 本体已有等价；本次评审修正的单行预算余量与分类细节 Java 待做，已登记 PARITY。
+
 ## 3. 复核后降为 low 的（10 条）
 
 | 编号 | 问题 | 降级理由 |

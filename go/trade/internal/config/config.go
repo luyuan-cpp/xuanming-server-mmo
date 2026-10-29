@@ -22,6 +22,7 @@ import (
 	tradepb "proto/trade"
 
 	"shared/assetopwake"
+	"shared/currencytype"
 	"shared/idsegment"
 
 	"github.com/zeromicro/go-zero/core/service"
@@ -396,7 +397,7 @@ func (c MySQLConf) RequiresTiDB() bool { return c.RequireTiDB == nil || *c.Requi
 
 // SchemaConf 建表策略(D-14 第 4 条)。
 type SchemaConf struct {
-	// AutoMigrate 为 nil(没写)或 true:启动时跑 schemamigrate.Up;false:启动时只跑只读 Plan,
+	// AutoMigrate 为 nil(没写)或 false 时常驻启动仅核对；显式迁移才跑 schemamigrate.Up;false:启动时只跑只读 Plan,
 	// 发现待执行语句或需人工项即拒绝启动。
 	//
 	// 用 *bool 而不是 `bool json:",default=true"`:go-zero 不下钻一个整段 optional 且未出现的
@@ -439,9 +440,9 @@ func (c Config) RequestBudget() time.Duration {
 	return time.Duration(c.Timeout)*time.Millisecond - InBandReplyReserve
 }
 
-// ShouldAutoMigrate 是启动路径跑 Up 还是只跑 Plan 的唯一判据:没写 = Up。
+// ShouldAutoMigrate 识别显式自动迁移请求；常驻入口会拒绝true，没写默认只读核对。
 func (c Config) ShouldAutoMigrate() bool {
-	return c.Schema.AutoMigrate == nil || *c.Schema.AutoMigrate
+	return c.Schema.AutoMigrate != nil && *c.Schema.AutoMigrate
 }
 
 // IsRelaxedMode 报告 go-zero Mode 是否为 dev / test(与 go/login/internal/config/secrets.go 同一判据)。
@@ -593,7 +594,7 @@ func (c *Config) Validate() error {
 			}
 		}
 		for _, currency := range c.Commerce.CurrencyTypes {
-			if currency > 1 {
+			if !isTradableCurrency(currency) {
 				return errors.New("交易货币只允许金币0与显式启用钻石1，绑定币禁售")
 			}
 		}
@@ -613,7 +614,7 @@ func (c *Config) Validate() error {
 			return errors.New("人民币寄售必须开启商城与SQL资产通道")
 		}
 		for _, currency := range c.Rmb.CurrencyTypes {
-			if currency > 1 {
+			if !isTradableCurrency(currency) {
 				return errors.New("人民币寄售不能交易绑定币")
 			}
 		}
@@ -631,4 +632,11 @@ func (c *Config) Validate() error {
 // 与 go/guild/internal/svc.hasRpcTarget 同一判据。
 func HasRpcTarget(c zrpc.RpcClientConf) bool {
 	return c.Etcd.Key != "" || len(c.Endpoints) > 0 || c.Target != ""
+}
+
+// isTradableCurrency:交易与人民币寄售可用的币种,是取值表(shared/currencytype)的子集。只点名常量、
+// 不写数字:扩白名单时不可能写出表外的值,否则 scene 会把它判成版本错位,截止为 0 的交付流将永久 RETRY。
+// 绑定灵石禁售。
+func isTradableCurrency(currency uint32) bool {
+	return currency == currencytype.Gold || currency == currencytype.Diamond
 }

@@ -214,8 +214,10 @@ func (TeamEventType) EnumDescriptor() ([]byte, []int) {
 	return file_proto_team_team_proto_rawDescGZIP(), []int{2}
 }
 
+// 写请求的 UUID 代表原业务意图；传输重试必须复用，新操作另发，回执绑定原角色归属。
 type CreateTeamRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -248,6 +250,13 @@ func (x *CreateTeamRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use CreateTeamRequest.ProtoReflect.Descriptor instead.
 func (*CreateTeamRequest) Descriptor() ([]byte, []int) {
 	return file_proto_team_team_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *CreateTeamRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
 }
 
 type GetMyTeamRequest struct {
@@ -317,6 +326,7 @@ func (x *GetMyTeamRequest) GetRegroup() bool {
 type ApplyJoinTeamRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	TargetPlayerId uint64                 `protobuf:"varint,1,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"` // 申请加入"该玩家所在的队伍"
+	RequestId      string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -358,11 +368,19 @@ func (x *ApplyJoinTeamRequest) GetTargetPlayerId() uint64 {
 	return 0
 }
 
+func (x *ApplyJoinTeamRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
 type HandleApplicationRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	ApplicantId    uint64                 `protobuf:"varint,1,opt,name=applicant_id,json=applicantId,proto3" json:"applicant_id,omitempty"`
 	Approve        bool                   `protobuf:"varint,2,opt,name=approve,proto3" json:"approve,omitempty"`
 	ExpectedTeamId uint64                 `protobuf:"varint,3,opt,name=expected_team_id,json=expectedTeamId,proto3" json:"expected_team_id,omitempty"`
+	RequestId      string                 `protobuf:"bytes,4,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -418,10 +436,18 @@ func (x *HandleApplicationRequest) GetExpectedTeamId() uint64 {
 	return 0
 }
 
+func (x *HandleApplicationRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
 type InviteToTeamRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	TargetPlayerId uint64                 `protobuf:"varint,1,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`
 	ExpectedTeamId uint64                 `protobuf:"varint,2,opt,name=expected_team_id,json=expectedTeamId,proto3" json:"expected_team_id,omitempty"`
+	RequestId      string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -470,10 +496,18 @@ func (x *InviteToTeamRequest) GetExpectedTeamId() uint64 {
 	return 0
 }
 
+func (x *InviteToTeamRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
 type RespondInviteRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TeamId        uint64                 `protobuf:"varint,1,opt,name=team_id,json=teamId,proto3" json:"team_id,omitempty"` // team_id 本身已绑定队伍
 	Accept        bool                   `protobuf:"varint,2,opt,name=accept,proto3" json:"accept,omitempty"`
+	RequestId     string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -522,6 +556,13 @@ func (x *RespondInviteRequest) GetAccept() bool {
 	return false
 }
 
+func (x *RespondInviteRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
 type ListMyInvitesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -561,6 +602,7 @@ func (*ListMyInvitesRequest) Descriptor() ([]byte, []int) {
 type LeaveTeamRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	ExpectedTeamId uint64                 `protobuf:"varint,1,opt,name=expected_team_id,json=expectedTeamId,proto3" json:"expected_team_id,omitempty"`
+	RequestId      string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -602,10 +644,18 @@ func (x *LeaveTeamRequest) GetExpectedTeamId() uint64 {
 	return 0
 }
 
+func (x *LeaveTeamRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
 type KickMemberRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	TargetPlayerId uint64                 `protobuf:"varint,1,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`
 	ExpectedTeamId uint64                 `protobuf:"varint,2,opt,name=expected_team_id,json=expectedTeamId,proto3" json:"expected_team_id,omitempty"`
+	RequestId      string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -654,10 +704,18 @@ func (x *KickMemberRequest) GetExpectedTeamId() uint64 {
 	return 0
 }
 
+func (x *KickMemberRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
 type TransferLeaderRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	TargetPlayerId uint64                 `protobuf:"varint,1,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`
 	ExpectedTeamId uint64                 `protobuf:"varint,2,opt,name=expected_team_id,json=expectedTeamId,proto3" json:"expected_team_id,omitempty"`
+	RequestId      string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -706,9 +764,17 @@ func (x *TransferLeaderRequest) GetExpectedTeamId() uint64 {
 	return 0
 }
 
+func (x *TransferLeaderRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
 type DisbandTeamRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	ExpectedTeamId uint64                 `protobuf:"varint,1,opt,name=expected_team_id,json=expectedTeamId,proto3" json:"expected_team_id,omitempty"`
+	RequestId      string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -748,6 +814,13 @@ func (x *DisbandTeamRequest) GetExpectedTeamId() uint64 {
 		return x.ExpectedTeamId
 	}
 	return 0
+}
+
+func (x *DisbandTeamRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
 }
 
 type StartTeamMatchRequest struct {
@@ -1684,7 +1757,7 @@ type TeamRecord struct {
 	Invites             []*TeamInviteRecord      `protobuf:"bytes,7,rep,name=invites,proto3" json:"invites,omitempty"`
 	NextJoinSeq         uint32                   `protobuf:"varint,8,opt,name=next_join_seq,json=nextJoinSeq,proto3" json:"next_join_seq,omitempty"`
 	MatchLockToken      string                   `protobuf:"bytes,9,opt,name=match_lock_token,json=matchLockToken,proto3" json:"match_lock_token,omitempty"`                      // 非空 = 开战锁持有者(uuid)
-	MatchLockExpireAtMs uint64                   `protobuf:"varint,10,opt,name=match_lock_expire_at_ms,json=matchLockExpireAtMs,proto3" json:"match_lock_expire_at_ms,omitempty"` // 过期视为无锁
+	MatchLockExpireAtMs uint64                   `protobuf:"varint,10,opt,name=match_lock_expire_at_ms,json=matchLockExpireAtMs,proto3" json:"match_lock_expire_at_ms,omitempty"` // SQL权威中token非空且本值0为持久launch锁，仅确证终态可释放；旧Redis锁仍按正数截止。
 	MatchLockRoster     []uint64                 `protobuf:"varint,11,rep,packed,name=match_lock_roster,json=matchLockRoster,proto3" json:"match_lock_roster,omitempty"`          // 集合语义:加锁时的开战名单;锁有效期间必等于 members 的 player_id 集合
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
@@ -2013,35 +2086,53 @@ var File_proto_team_team_proto protoreflect.FileDescriptor
 
 const file_proto_team_team_proto_rawDesc = "" +
 	"\n" +
-	"\x15proto/team/team.proto\x12\x06teampb\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\"\x13\n" +
-	"\x11CreateTeamRequest\"{\n" +
+	"\x15proto/team/team.proto\x12\x06teampb\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\"2\n" +
+	"\x11CreateTeamRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\"{\n" +
 	"\x10GetMyTeamRequest\x12#\n" +
 	"\rnotify_online\x18\x01 \x01(\bR\fnotifyOnline\x12(\n" +
 	"\x10match_request_id\x18\x02 \x01(\tR\x0ematchRequestId\x12\x18\n" +
-	"\aregroup\x18\x03 \x01(\bR\aregroup\"@\n" +
+	"\aregroup\x18\x03 \x01(\bR\aregroup\"_\n" +
 	"\x14ApplyJoinTeamRequest\x12(\n" +
-	"\x10target_player_id\x18\x01 \x01(\x04R\x0etargetPlayerId\"\x81\x01\n" +
+	"\x10target_player_id\x18\x01 \x01(\x04R\x0etargetPlayerId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\"\xa0\x01\n" +
 	"\x18HandleApplicationRequest\x12!\n" +
 	"\fapplicant_id\x18\x01 \x01(\x04R\vapplicantId\x12\x18\n" +
 	"\aapprove\x18\x02 \x01(\bR\aapprove\x12(\n" +
-	"\x10expected_team_id\x18\x03 \x01(\x04R\x0eexpectedTeamId\"i\n" +
+	"\x10expected_team_id\x18\x03 \x01(\x04R\x0eexpectedTeamId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x04 \x01(\tR\trequestId\"\x88\x01\n" +
 	"\x13InviteToTeamRequest\x12(\n" +
 	"\x10target_player_id\x18\x01 \x01(\x04R\x0etargetPlayerId\x12(\n" +
-	"\x10expected_team_id\x18\x02 \x01(\x04R\x0eexpectedTeamId\"G\n" +
+	"\x10expected_team_id\x18\x02 \x01(\x04R\x0eexpectedTeamId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\"f\n" +
 	"\x14RespondInviteRequest\x12\x17\n" +
 	"\ateam_id\x18\x01 \x01(\x04R\x06teamId\x12\x16\n" +
-	"\x06accept\x18\x02 \x01(\bR\x06accept\"\x16\n" +
-	"\x14ListMyInvitesRequest\"<\n" +
+	"\x06accept\x18\x02 \x01(\bR\x06accept\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\"\x16\n" +
+	"\x14ListMyInvitesRequest\"[\n" +
 	"\x10LeaveTeamRequest\x12(\n" +
-	"\x10expected_team_id\x18\x01 \x01(\x04R\x0eexpectedTeamId\"g\n" +
+	"\x10expected_team_id\x18\x01 \x01(\x04R\x0eexpectedTeamId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\"\x86\x01\n" +
 	"\x11KickMemberRequest\x12(\n" +
 	"\x10target_player_id\x18\x01 \x01(\x04R\x0etargetPlayerId\x12(\n" +
-	"\x10expected_team_id\x18\x02 \x01(\x04R\x0eexpectedTeamId\"k\n" +
+	"\x10expected_team_id\x18\x02 \x01(\x04R\x0eexpectedTeamId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\"\x8a\x01\n" +
 	"\x15TransferLeaderRequest\x12(\n" +
 	"\x10target_player_id\x18\x01 \x01(\x04R\x0etargetPlayerId\x12(\n" +
-	"\x10expected_team_id\x18\x02 \x01(\x04R\x0eexpectedTeamId\">\n" +
+	"\x10expected_team_id\x18\x02 \x01(\x04R\x0eexpectedTeamId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\"]\n" +
 	"\x12DisbandTeamRequest\x12(\n" +
-	"\x10expected_team_id\x18\x01 \x01(\x04R\x0eexpectedTeamId\"\xb4\x01\n" +
+	"\x10expected_team_id\x18\x01 \x01(\x04R\x0eexpectedTeamId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\"\xb4\x01\n" +
 	"\x15StartTeamMatchRequest\x12(\n" +
 	"\x10battle_config_id\x18\x01 \x01(\rR\x0ebattleConfigId\x12(\n" +
 	"\x10expected_team_id\x18\x02 \x01(\x04R\x0eexpectedTeamId\x12\x1d\n" +

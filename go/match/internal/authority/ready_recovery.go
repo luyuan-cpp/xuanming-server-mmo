@@ -4,9 +4,164 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
+	"google.golang.org/protobuf/proto"
 	pb "proto/match"
 )
+
+// SQL只缩小待核候选；完整Create正文及当前角色P/工作租约仍由锁内入口复核。
+const recoverableOutcomeShapeSQL = "f.outcome_protocol_version=1 AND f.preflight_supported_version=1 AND f.operation_id<>'' AND f.target_instance_id<>'' AND f.preflight_instance_id=f.target_instance_id AND LENGTH(f.create_request)>0 AND ((f.adopted_outcome_observed=0 AND f.adopted_outcome_protocol_version=0) OR (f.adopted_outcome_observed=1 AND f.adopted_outcome_protocol_version=1))"
+
+// 同一持久原操作与实例的合法终局才退出恢复；冲突/旧来源记录不能被当作新终局证明。
+const matchingOutcomeTerminalSQL = "c.battle_id=f.battle_id AND c.outcome_protocol_version=1 AND c.placement_operation_id=f.operation_id AND c.target_instance_id=f.target_instance_id AND c.decision IN(1,2)"
+
+// 新COMPLETE在提交事务中直接退休。旧版本少量成功局每轮最多八条只退休调度字段，
+// 不动state4、deadline、原Create、票或双outbox；并发更新用原retry值与同终局原件CAS。
+func (s *Store) retireTerminalOutcomeSchedules(ctx context.Context) error {
+	rows, err := s.DB.QueryContext(ctx, "SELECT f.battle_id,f.retry_at_ms FROM match_formation f JOIN match_battle_completion c ON "+matchingOutcomeTerminalSQL+" WHERE f.state=4 AND f.retry_at_ms<? AND "+recoverableOutcomeShapeSQL+" ORDER BY f.retry_at_ms,f.battle_id LIMIT 8", terminalOutcomeNoRetryMs)
+	if err != nil {
+		return err
+	}
+	type schedule struct{ battle, retryMs uint64 }
+	var schedules []schedule
+	for rows.Next() {
+		var item schedule
+		if err := rows.Scan(&item.battle, &item.retryMs); err != nil {
+			rows.Close()
+			return err
+		}
+		schedules = append(schedules, item)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, item := range schedules {
+		if _, err := s.DB.ExecContext(ctx, "UPDATE match_formation f JOIN match_battle_completion c ON "+matchingOutcomeTerminalSQL+" SET f.retry_at_ms=? WHERE f.battle_id=? AND f.state=4 AND f.retry_at_ms=? AND "+recoverableOutcomeShapeSQL, terminalOutcomeNoRetryMs, item.battle, item.retryMs); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RecoverExpiredOutcomes 是普通PVE/PVP与活动共用的正式有界恢复入口。
+// 沿原state/retry_at_ms索引每批至多八局，只选尚无合法终局的v1资格形状。
+// 游标只用于调度；故障项仍推进，下轮重访，旧0/明确采用0保持UNKNOWN且不占候选页。
+func (s *Store) RecoverExpiredOutcomes(ctx context.Context, afterRetryMs, afterBattle uint64) (uint64, uint64, error) {
+	if err := s.retireTerminalOutcomeSchedules(ctx); err != nil {
+		return afterRetryMs, afterBattle, err
+	}
+	stamp, err := s.Now(ctx)
+	if err != nil {
+		return afterRetryMs, afterBattle, err
+	}
+	if stamp < terminalOutcomeGraceMs {
+		return 0, 0, nil
+	}
+	// 先减宽限再绑定SQL参数，避免deadline+grace的uint64溢出；锁内仍重新读SQL时钟。
+	rows, err := s.DB.QueryContext(ctx, "SELECT f.retry_at_ms,f.battle_id FROM match_formation f WHERE f.state IN(2,3,4) AND "+recoverableOutcomeShapeSQL+" AND f.retry_at_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) AND f.deadline_ms>0 AND f.deadline_ms<=? AND (f.retry_at_ms>? OR (f.retry_at_ms=? AND f.battle_id>?)) AND NOT EXISTS(SELECT 1 FROM match_battle_completion c WHERE "+matchingOutcomeTerminalSQL+") ORDER BY f.retry_at_ms,f.battle_id LIMIT 8", stamp-terminalOutcomeGraceMs, afterRetryMs, afterRetryMs, afterBattle)
+	if err != nil {
+		return afterRetryMs, afterBattle, err
+	}
+	type candidate struct{ retryMs, battle uint64 }
+	var formations []candidate
+	for rows.Next() {
+		var f candidate
+		if err := rows.Scan(&f.retryMs, &f.battle); err != nil {
+			rows.Close()
+			return afterRetryMs, afterBattle, err
+		}
+		formations = append(formations, f)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return afterRetryMs, afterBattle, err
+	}
+	if len(formations) == 0 {
+		return 0, 0, nil
+	}
+	var failures []error
+	for _, f := range formations {
+		if err := ctx.Err(); err != nil {
+			return afterRetryMs, afterBattle, errors.Join(append(failures, err)...)
+		}
+		afterRetryMs, afterBattle = f.retryMs, f.battle
+		// 先用独立标量游标推进，再解析完整原件；损坏的一条不能把整页卡在同一位置。
+		original, err := s.Formation(ctx, f.battle)
+		if err == nil && original.RetryAtMs != f.retryMs {
+			continue // 并发worker换了租约，后续完整轮次重访，绝不沿旧观察写入。
+		}
+		if err == nil {
+			_, err = s.RecoverExpiredOutcome(ctx, original)
+		}
+		if err != nil {
+			failures = append(failures, fmt.Errorf("到期成局恢复未确认 battle=%d: %w", f.battle, err))
+		}
+	}
+	return afterRetryMs, afterBattle, errors.Join(failures...)
+}
+
+// RecoverExpiredOutcome 不查询Battle、也不根据节点死亡猜终局。原发房前能力与完整
+// v1 Create证明所有个人效果必须先过本SQL门；到期后在原P→formation锁内争唯一ABORT。
+// 原工作租约仍有效时不抢占；多副本重放只读取同原操作/UUID的已提交终局。
+func (s *Store) RecoverExpiredOutcome(ctx context.Context, observed *pb.MatchFormationRecord) (pb.BattleOutcomeDecision, error) {
+	if observed == nil {
+		return 0, errors.New("到期恢复缺持久创建原件")
+	}
+	if _, err := supportedOutcomeOriginal(observed); err != nil {
+		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, nil
+	}
+	readExisting := func() (pb.BattleOutcomeDecision, bool, error) {
+		row, err := readTerminal(ctx, s.DB, observed.BattleId)
+		if err != nil || row == nil {
+			return 0, false, err
+		}
+		decision, err := replayTerminal(row, &pb.CommitBattleOutcomeRequest{BattleId: observed.BattleId, PlacementOperationId: observed.OperationId, TargetInstanceId: observed.TargetInstanceId, RawResultPayload: row.RawPayload})
+		return decision, true, err
+	}
+	if decision, exists, err := readExisting(); err != nil || exists {
+		return decision, err
+	}
+	// 兼容旧代码已经写出的state5：没有唯一终局就保留UNKNOWN。原票可能已换轮，
+	// 不能补锁当前新票或以旧状态号倒造一份安全ABORT。
+	if observed.State != 2 && observed.State != 3 && observed.State != 4 {
+		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, nil
+	}
+	tx, f, _, err := s.terminalFormation(ctx, observed.BattleId)
+	if err != nil {
+		// 另一副本可能刚持P提交ABORT并关闭原票；不能把同原件的成功重放当角色丢失。
+		if decision, exists, readErr := readExisting(); readErr != nil || exists {
+			return decision, readErr
+		}
+		return 0, err
+	}
+	defer tx.Rollback()
+	if !proto.Equal(f, observed) {
+		_ = tx.Rollback()
+		if decision, exists, err := readExisting(); err != nil || exists {
+			return decision, err
+		}
+		return 0, ErrWorkLease
+	}
+	stamp, err := now(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
+	if f.RetryAtMs > stamp || (f.State != 2 && f.State != 3 && f.State != 4) {
+		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, nil
+	}
+	decision, err := s.abortTerminalTx(ctx, tx, f)
+	if err != nil || decision != pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT {
+		return decision, err
+	}
+	if err = tx.Commit(); err != nil {
+		return 0, fmt.Errorf("到期ABORT提交未知，必须复用原件重查: %w", err)
+	}
+	return decision, nil
+}
 
 // ReadyAfter 的游标仅调度巡检，不能授权释放。即使前面的房间一直 UNKNOWN，
 // 下一页也照常访问；进程重启从头扫描不会改变任何票据的业务状态。
@@ -42,7 +197,8 @@ func (s *Store) ReleaseCompletedReady(ctx context.Context, observed *pb.MatchAut
 		return false, err
 	}
 	var battle uint64
-	err = tx.QueryRowContext(ctx, "SELECT battle_id FROM match_battle_settlement_source WHERE battle_id=? AND player_id=?", observed.FormationId, observed.PlayerId).Scan(&battle)
+	// 同一原owner的签名永久APPLIED收据才是释放依据；归档/入箱/水位猜测都不能代替。
+	err = tx.QueryRowContext(ctx, "SELECT s.battle_id FROM match_battle_settlement_source s JOIN match_battle_completion c ON c.battle_id=s.battle_id WHERE s.battle_id=? AND s.player_id=? AND s.owner_account=? AND s.owner_revision=? AND s.dispatch_state=2 AND s.inbox_state=2 AND s.inbox_seq>0 AND c.decision=1 AND c.outcome_protocol_version=1", observed.FormationId, observed.PlayerId, observed.OwnerAccount, observed.OwnerRevision).Scan(&battle)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}

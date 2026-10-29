@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MatchInternal_StartActivityBattle_FullMethodName = "/match.MatchInternal/StartActivityBattle"
+	MatchInternal_StartActivityBattle_FullMethodName  = "/match.MatchInternal/StartActivityBattle"
+	MatchInternal_CancelActivityBattle_FullMethodName = "/match.MatchInternal/CancelActivityBattle"
 )
 
 // MatchInternalClient is the client API for MatchInternal service.
@@ -27,6 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MatchInternalClient interface {
 	StartActivityBattle(ctx context.Context, in *StartActivityBattleRequest, opts ...grpc.CallOption) (*StartActivityBattleResponse, error)
+	CancelActivityBattle(ctx context.Context, in *CancelActivityBattleRequest, opts ...grpc.CallOption) (*CancelActivityBattleResponse, error)
 }
 
 type matchInternalClient struct {
@@ -47,11 +49,22 @@ func (c *matchInternalClient) StartActivityBattle(ctx context.Context, in *Start
 	return out, nil
 }
 
+func (c *matchInternalClient) CancelActivityBattle(ctx context.Context, in *CancelActivityBattleRequest, opts ...grpc.CallOption) (*CancelActivityBattleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelActivityBattleResponse)
+	err := c.cc.Invoke(ctx, MatchInternal_CancelActivityBattle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchInternalServer is the server API for MatchInternal service.
 // All implementations must embed UnimplementedMatchInternalServer
 // for forward compatibility.
 type MatchInternalServer interface {
 	StartActivityBattle(context.Context, *StartActivityBattleRequest) (*StartActivityBattleResponse, error)
+	CancelActivityBattle(context.Context, *CancelActivityBattleRequest) (*CancelActivityBattleResponse, error)
 	mustEmbedUnimplementedMatchInternalServer()
 }
 
@@ -64,6 +77,9 @@ type UnimplementedMatchInternalServer struct{}
 
 func (UnimplementedMatchInternalServer) StartActivityBattle(context.Context, *StartActivityBattleRequest) (*StartActivityBattleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StartActivityBattle not implemented")
+}
+func (UnimplementedMatchInternalServer) CancelActivityBattle(context.Context, *CancelActivityBattleRequest) (*CancelActivityBattleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelActivityBattle not implemented")
 }
 func (UnimplementedMatchInternalServer) mustEmbedUnimplementedMatchInternalServer() {}
 func (UnimplementedMatchInternalServer) testEmbeddedByValue()                       {}
@@ -104,6 +120,24 @@ func _MatchInternal_StartActivityBattle_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchInternal_CancelActivityBattle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelActivityBattleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchInternalServer).CancelActivityBattle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchInternal_CancelActivityBattle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchInternalServer).CancelActivityBattle(ctx, req.(*CancelActivityBattleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchInternal_ServiceDesc is the grpc.ServiceDesc for MatchInternal service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -114,6 +148,10 @@ var MatchInternal_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StartActivityBattle",
 			Handler:    _MatchInternal_StartActivityBattle_Handler,
+		},
+		{
+			MethodName: "CancelActivityBattle",
+			Handler:    _MatchInternal_CancelActivityBattle_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

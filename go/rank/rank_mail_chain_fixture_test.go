@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/go-sql-driver/mysql"
+	"github.com/luyuancpp/proto2mysql"
 	"net"
 	"os"
 	"path/filepath"
@@ -81,14 +83,55 @@ func TestRankMailChainFixture(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	db, err := authoritysql.Open(ctx, "root@tcp("+address+")/"+database, database, true, 2)
+	adminDSN := os.Getenv("RANK_MAIL_CHAIN_SCHEMA_DSN")
+	normalDSN := os.Getenv("RANK_MAIL_CHAIN_NORMAL_DSN")
+	adminConfig, err := mysql.ParseDSN(adminDSN)
+	if err != nil || adminConfig.Net != "tcp" || adminConfig.Addr != address || adminConfig.DBName != database {
+		t.Fatal("整链安装DSN与本例目标不符")
+	}
+	normalConfig, err := mysql.ParseDSN(normalDSN)
+	if err != nil || normalConfig.Net != "tcp" || normalConfig.Addr != address || normalConfig.DBName != database || normalConfig.User == adminConfig.User || !regexp.MustCompile(`^chain_writer_[0-9a-f]{16}$`).MatchString(normalConfig.User) {
+		t.Fatal("整链normal主体未隔离")
+	}
+	schemaPermission, err := authoritysql.LoadSchemaPermission(os.Getenv)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
-	if report, e := schemamigrate.Up(ctx, db, schemamigrate.Options{Database: database, Tables: data.Tables()}); e != nil || len(report.Manual) != 0 {
-		t.Fatalf("排行榜 schema: %v %+v", e, report)
+	install, err := authoritysql.OpenForMigration(ctx, adminDSN, database, true, schemaPermission)
+	if err != nil {
+		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := install.Close(); err != nil {
+			t.Errorf("关闭安装池: %v", err)
+		}
+	})
+	tables := data.Tables()
+	if report, err := schemamigrate.Up(ctx, install, schemamigrate.Options{Database: database, Tables: tables}); err != nil || len(report.Manual) != 0 {
+		t.Fatalf("整链schema: %v %+v", err, report)
+	}
+	for _, model := range tables {
+		table, ok := proto2mysql.TableNameFromDescriptor(model.ProtoReflect().Descriptor())
+		if !ok || !regexp.MustCompile(`^[A-Za-z0-9_]{1,64}$`).MatchString(table) {
+			t.Fatal("正式表名无效")
+		}
+		if _, err = install.ExecContext(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON `"+database+"`.`"+table+"` TO '"+normalConfig.User+"'@'%'"); err != nil {
+			t.Fatal("整链具名业务表授权失败")
+		}
+	}
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := authoritysql.Open(ctx, normalDSN, database, true, 2, authoritysql.Writer(writer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("关闭normal池: %v", err)
+		}
+	})
 	var boardIDs, settlementIDs, rewardIDs atomic.Uint64
 	// 仅替代外部号段服务；评分、封榜和奖励状态均由原生产实现写入。
 	repo := data.New(db,

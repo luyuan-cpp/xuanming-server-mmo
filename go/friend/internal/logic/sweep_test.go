@@ -33,6 +33,8 @@ import (
 	"friend/internal/config"
 	"friend/internal/metrics"
 	"friend/internal/svc"
+
+	"shared/drainproof"
 )
 
 // ── 假 SweepStore ───────────────────────────────────────────────
@@ -69,10 +71,11 @@ type sweepReturn struct {
 // 加锁:与 fakeFriendStore 不同,StartSweep 的用例里它是被后台 goroutine 调用的,
 // 测试 goroutine 同时在读调用记录,不加锁就是一个真实的 data race。
 type fakeSweepStore struct {
-	mu       sync.Mutex
-	calls    []sweepCall
-	terminal sweepReturn
-	idle     sweepReturn
+	mu        sync.Mutex
+	calls     []sweepCall
+	terminal  sweepReturn
+	idle      sweepReturn
+	afterCall func(context.Context, string) // 只在record解锁后观测当前已准入轮次，启动前一次设置。
 }
 
 var _ SweepStore = (*fakeSweepStore)(nil)
@@ -89,11 +92,17 @@ func (f *fakeSweepStore) record(ctx context.Context, method, mode string, retent
 
 func (f *fakeSweepStore) SweepTerminalRequests(ctx context.Context, mode string, retentionDays, batchLimit int, nowMs int64) (int64, int64, error) {
 	f.record(ctx, sweepMethodTerminal, mode, retentionDays, batchLimit, nowMs)
+	if f.afterCall != nil {
+		f.afterCall(ctx, sweepMethodTerminal)
+	}
 	return f.terminal.seen, f.terminal.deleted, f.terminal.err
 }
 
 func (f *fakeSweepStore) SweepIdleCapacityRows(ctx context.Context, mode string, retentionDays, batchLimit int, nowMs int64) (int64, int64, error) {
 	f.record(ctx, sweepMethodIdle, mode, retentionDays, batchLimit, nowMs)
+	if f.afterCall != nil {
+		f.afterCall(ctx, sweepMethodIdle)
+	}
 	return f.idle.seen, f.idle.deleted, f.idle.err
 }
 
@@ -117,8 +126,8 @@ func testSweepConf(mode string) config.SweepConf {
 	}
 }
 
-// newSweepDeps 手工构造只够 sweep 用的 Deps:sweep.go 只读 SvcCtx.Config、Sweeps、Now 三样,
-// 所以不起 miniredis、不装 Repo / Sessions(newFixture 那一套是给请求路径用的)。
+// newSweepDeps手工构造runSweepRound所需的Config、Sweeps、Now，不起miniredis或请求路径资源。
+// StartSweep还须显式SOURCE门禁；起循环的用例各自装真实drainproof.Session，不能把nil解释为获准。
 //
 // sweeps 的形参类型是接口而不是 *fakeSweepStore:要测"未装配"分支时传无类型的 nil,
 // 得到的才是真正的 nil 接口;传一个 (*fakeSweepStore)(nil) 进去,`deps.Sweeps == nil` 会是 false。
@@ -399,40 +408,35 @@ func TestStartSweepDoesNotStartWithNonPositiveInterval(t *testing.T) {
 	}
 }
 
-// TestStartSweepTicksThenExitsOnCancel:活 ctx 先证明节拍在跑,再取消证明循环退出。
+// TestStartSweepTicksThenExitsOnCancel:活ctx先证明节拍在跑，再由原stop/join句柄证明真实退出。
 //
-// StartSweep 是 fire-and-forget,没有"已退出"的句柄,只能从假 store 侧观察。用 1ms 的 Interval
-// + 一个**活着的** ctx 起循环,分两段断言。(不能一上来就传已取消的 ctx:抖动那个 select 会直接
-// return,safego.Loop 根本不启动,store 恒为空,后面所有断言都是对空切片的空转 —— 把 Loop 的 ctx
-// 换成 Background、删掉回调里的 runSweepRound、抖动后忘了进 Loop,三种改坏全都测不出来。)
-//
-//  1. 正向的一段:调用记录会**长出来**,两种方法都出现,入参与配置逐字一致且带截止时刻 ——
-//     证明走的确实是 抖动 → ticker → runSweepRound → 两段。
-//     这一段**不**断言 ctxErr 为 nil:Interval=1ms 时单轮预算也只有 1ms,而 record 是拿到锁之后
-//     才求 ctx.Err() 的,慢机器 / GC / -race 下合法地会读到 DeadlineExceeded。
-//  2. 退出的一段:cancel 之后调用次数会**停止增长**。循环没退出的话(比如 Loop 被传了
-//     context.Background()),1ms 的节拍下每个 50ms 观察窗都会多出一批调用,永远等不到
-//     "连续两次读数相同"。select 在 ctx.Done 与 ticker 同时就绪时是随机挑的,所以取消之后
-//     **允许**再漏跑有限几轮(次数不作断言),但这些轮次拿到的必须是已结束的 ctx ——
-//     SQL 侧会立刻因 ctx 到期返回,漏跑才是无害的。
-//
-// 墙钟在这里只作等待上限(Eventually 的 2s、观察窗合计 500ms),不参与判定:机器再慢也只是
-// 等得久一点,不会把对的实现判成错的,仍符合 AGENTS.md §11.4 对确定性的要求。
-//
-// 这条用例必须排在文件**最后**:它等 settled 之后才返回,后台轮次对 report_only Gauge 的改写
-// 因此不会波及其它用例。
+// SOURCE准入使用真实drainproof.Session；不消费grant，不冒充SQL或P3资格。正向仍保留原2秒
+// 等待、两方法、配置、固定时钟和单轮截止断言。取消只阻止后续轮次，已经Enter的一轮保留自身
+// 有界ctx，不能再要求其ctx.Err必须随parent取消。退出依据是stop等待done及同gate的Wait，
+// 不用两次计数相等或Sleep伪造退出。所有失败路径也在Cleanup内关闭准入并有界join。
 func TestStartSweepTicksThenExitsOnCancel(t *testing.T) {
 	store := &fakeSweepStore{}
 	sweep := testSweepConf(config.SweepModeReportOnly)
 	sweep.Interval = time.Millisecond
 	deps := newSweepDeps(store, sweep)
+	gate := drainproof.New()
+	deps.SvcCtx.RootAdmission = gate
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	var stop func(context.Context) error
+	require.NotPanics(t, func() { stop = StartSweep(ctx, deps) })
+	require.NotNil(t, stop)
+	join := func() error {
+		gate.CloseAdmission()
+		cancel()
+		waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer waitCancel()
+		return errors.Join(stop(waitCtx), gate.Wait(waitCtx))
+	}
+	t.Cleanup(func() { assert.NoError(t, join(), "失败收尾也必须等待真实sweep退出与准入集合收敛") })
 
-	require.NotPanics(t, func() { StartSweep(ctx, deps) })
-
-	// ── 正向路径 ──
+	// ── 正向路径：保留原断言和原等待预算 ──
 	require.Eventually(t, func() bool { return len(store.snapshot()) >= 2 },
 		2*time.Second, 5*time.Millisecond, "StartSweep 起来后必须按节拍调用 store")
 
@@ -448,27 +452,76 @@ func TestStartSweepTicksThenExitsOnCancel(t *testing.T) {
 	assert.True(t, seenMethods[sweepMethodTerminal], "节拍里必须跑到终态申请这一段")
 	assert.True(t, seenMethods[sweepMethodIdle], "节拍里必须跑到容量行这一段")
 
-	// ── 退出路径 ──
-	// 顺序不能反:record 在锁内求 ctx.Err(),snapshot 持同一把锁;先 cancel 再取 n,
-	// 才能保证下标 >= n 的调用一定是在 cancel 返回之后求的 Err。
-	cancel()
-	n := len(store.snapshot())
+	// ── 退出路径：原停止句柄是真join，关闭门禁不接受任何新一轮 ──
+	require.NoError(t, join(), "取消不能代替done与已准入轮次的真实结局")
+	assert.True(t, gate.Closed())
+	assert.Zero(t, gate.Pending())
+	finish, err := gate.Enter()
+	require.ErrorIs(t, err, drainproof.ErrClosed)
+	assert.Nil(t, finish, "已关闭SOURCE不能再接收一轮")
+	settled := store.snapshot()
+	require.NoError(t, join(), "stop/join必须可重复等待同一个已退出goroutine")
+	assert.Equal(t, settled, store.snapshot(), "真实join之后不得再出现下一轮调用")
 
-	const (
-		observeWindow = 50 * time.Millisecond
-		maxWindows    = 10
-	)
-	settled := false
-	prev := n
-	for i := 0; i < maxWindows && !settled; i++ {
-		time.Sleep(observeWindow)
-		cur := len(store.snapshot())
-		settled = cur == prev
-		prev = cur
-	}
-	assert.True(t, settled, "ctx 已取消,sweep 循环却仍在按节拍调用 store(最后一次读数 %d 次)", prev)
-
-	for _, c := range store.snapshot()[n:] {
-		assert.Error(t, c.ctxErr, "%s:取消之后漏跑的轮次拿到的必须是已结束的 ctx", c.method)
-	}
+	t.Run("已准入轮次取消后仍执行两段并保留自身截止", func(t *testing.T) {
+		// 仅隔离SweepStore外部接口，两个调用均真实穿过StartSweep和runSweepRound；不是SQL资格测试。
+		type observation struct {
+			method      string
+			ctxErr      error
+			hasDeadline bool
+			pending     uint64
+		}
+		observed := make(chan observation, 2)
+		acceptedGate := drainproof.New()
+		acceptedCtx, acceptedCancel := context.WithCancel(context.Background())
+		defer acceptedCancel()
+		acceptedStore := &fakeSweepStore{}
+		acceptedStore.afterCall = func(roundCtx context.Context, method string) {
+			if method == sweepMethodTerminal {
+				// 在实际Enter之后、同一SQL回调线程内关闭并取消，避免用测试线程的调度顺序猜准入时点。
+				acceptedGate.CloseAdmission()
+				acceptedCancel()
+			}
+			_, hasDeadline := roundCtx.Deadline()
+			// 多余调用由完整snapshot的精确计数捕捉；观测channel不能反过来阻塞生产循环收尾。
+			select {
+			case observed <- observation{method: method, ctxErr: roundCtx.Err(), hasDeadline: hasDeadline, pending: acceptedGate.Pending()}:
+			default:
+			}
+		}
+		acceptedConf := testSweepConf(config.SweepModeReportOnly)
+		acceptedConf.Interval = 20 * time.Millisecond
+		acceptedDeps := newSweepDeps(acceptedStore, acceptedConf)
+		acceptedDeps.SvcCtx.RootAdmission = acceptedGate
+		var acceptedStop func(context.Context) error
+		require.NotPanics(t, func() { acceptedStop = StartSweep(acceptedCtx, acceptedDeps) })
+		require.NotNil(t, acceptedStop)
+		joinAccepted := func() error {
+			acceptedGate.CloseAdmission()
+			acceptedCancel()
+			waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer waitCancel()
+			return errors.Join(acceptedStop(waitCtx), acceptedGate.Wait(waitCtx))
+		}
+		t.Cleanup(func() { assert.NoError(t, joinAccepted(), "子用例失败也必须收回原goroutine") })
+		observationCtx, observationCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer observationCancel()
+		for _, method := range []string{sweepMethodTerminal, sweepMethodIdle} {
+			select {
+			case got := <-observed:
+				assert.Equal(t, method, got.method, "取消不能截断同一已准入轮次的第二段")
+				assert.True(t, got.hasDeadline, "WithoutCancel仍必须重新附加单轮预算")
+				assert.NotErrorIs(t, got.ctxErr, context.Canceled, "parent取消不得伪装已准入SQL的终局；预算到期可为DeadlineExceeded")
+				assert.EqualValues(t, 1, got.pending, "一轮两段返回之前必须仍属于同一个已准入集合")
+			case <-observationCtx.Done():
+				t.Fatal("已准入轮次未在原2秒观察上限内完成两段")
+			}
+		}
+		require.NoError(t, joinAccepted())
+		assert.Zero(t, acceptedGate.Pending())
+		assert.Len(t, acceptedStore.snapshot(), 2, "关闭之后不得接纳第二轮")
+		finish, err := acceptedGate.Enter()
+		require.ErrorIs(t, err, drainproof.ErrClosed)
+		assert.Nil(t, finish)
+	})
 }

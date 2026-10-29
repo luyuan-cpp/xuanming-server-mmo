@@ -30,7 +30,7 @@ output:
 protoc:
   command: protoc
   extra_includes:
-    - ../../third_party/grpc/third_party/protobuf/src
+    - ../../third_party/protobuf/src
 
 # --- Language generation ---
 languages:

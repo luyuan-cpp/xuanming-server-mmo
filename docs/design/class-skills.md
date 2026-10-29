@@ -58,9 +58,15 @@
 
 ### 3.1 `PlayerSkillComp.rank`(字段 3)
 
-- 职业技能:已学为 `1..max_rank`。**未学的职业技能不在列表里**;`rank = 0` 的职业技能条目没有合法来源,加载时剔除。
-- 旧通用技能:不分等级,`rank` 恒 0(加载时把写错的非 0 归零)。
+2026-10-23 改(混版本持久字段保护 §12.1 D5 / D6):加载与重算**不按本版本的表改写** `rank`,本版本解释不了的值原样携带、运行期按本版本的表生效。
+
+- 职业技能:已学为 `rank >= 1`。`rank = 0` 的条目与不在列表里同义,都是**未学**:读路径都当没学,修习复用这一条(不另加条目),
+  是本职业初始种子时加载期原地补到 1 重。来源可能是新版本把通用技能改成了职业技能。
+- 存储重数可能高于本版本 `max_rank`(新版本调大上限后写入,或本版本下调了上限):**原样携带、不压回**,
+  按 `min(存储重数, RankLimit(角色等级))` 生效(`RankLimit` 不超过本版本 `max_rank`);修习停在满重、不扣钱(见 §8)。
+- 旧通用技能:不分等级,`rank` **读写都忽略**:存档里写着什么原样携带(加载不归零),技能书已拥有列表里的 `rank` 恒为 0,快照不带等级。
 - 生效等级 = `min(存档等级, RankLimit(角色等级))`:GM 降级 / 回档后不会带着超限等级进战斗,存档等级本身不动(钱花过)。
+  角色等级按 `playerlevel::CappedLevel(LevelComp.level)` 算(0 按 1、超过 `kMaxLevel` 按上限),存储等级不改写。
 - `ReleaseSkill`(实时场景)拒绝职业被动;职业主动在场景里仍可按老实时流程施放(robot login-test 的施法用例依赖它)。
 
 ### 3.2 加载整理(`PlayerSkillSystem::InitializeOnLoad`)
@@ -68,11 +74,21 @@
 调用点从 `PlayerSkillListComp` emplace 之后挪到职业 / 等级挂上之后、`PlayerAttributeSystem::InitializeOnLoad` 之前
 (被动是属性重算的输入)。顺序:`SanitizeSkillList` → 按 `Class.skill` 补初始技能(幂等)。
 
-`SanitizeSkillList` 规则,每条剔除 / 修正都打 WARN:
-- ID 为 0、重复记录:剔除;表里没有的 ID 原样保留但不生效,按混版本持久字段保护 §12 防止回退版本删掉新技能;
-- 职业技能 `rank = 0`:剔除;`rank > max_rank`:夹到上限;
+`SanitizeSkillList` 规则(2026-10-23 起只剔除与版本无关的坏记录):
+- ID 为 0、重复 ID(保留首条):剔除,每条打一行 WARN;
+- **其余条目原样保留**,含条目与组件本层的未知字段;没有要剔除的条目时组件不被替换,前后序列化逐字节相同:
+  - 表里没有的 ID:保留但不生效,按混版本持久字段保护 §12 防止回退版本删掉新技能;
+  - 职业技能 `rank = 0`(未学)、`rank > max_rank`(按上限生效)、旧通用技能写着的非 0 `rank`(忽略):都不改写;
+  - 查不到表的数量与超上限重数的数量,每次加载汇总打一行 WARN;
 - **不生效但保留**:别的职业的职业技能(将来转职)、当前职业已有职业技能时的旧占位技能(旧 RegisterPlayer 遍历所有职业种子发下的 1 / 2 / 13)。
   它们留在存档里,但 `HasSkill` / 技能书 / 战斗快照 / 被动全部看不见 —— 不静默删除玩家数据,转职 / 返还上线时再定处置。
+- 消费侧(`HasSkill`、`BuildSkillBook`、战斗快照、被动加成)各自按 `FindSkillRow` 查表,查不到即跳过,与 `IsActiveSkill` 同口径。
+
+补初始技能(`GrantInitialSkills`):种子不在列表里时追加 1 重;已有 `rank = 0` 的种子条目时**原地补到 1 重**(复用条目,位置与未知字段不动)。
+
+技能书已拥有列表(`ListSkillsResponse.skill_list`)是**显式投影**:只带 `skill_table_id`,职业技能再带存储重数;
+不 `CopyFrom` 存档条目,内部 `id` 与新版本加的未知字段不下发。目录(`catalog`)的 `rank` 是存储重数(`expected_rank` 的比较口径),
+高于本版本 `max_rank` 时 `next_rank_cost = 0`、阻断原因为满重。
 
 项目未上线(AGENTS 会话门禁),不做存档版本号与迁移脚本;上面的整理每次加载都跑,幂等。
 
@@ -94,10 +110,12 @@
 
 scene 与 battle 共用,零 ECS / 零表依赖:
 - `RankLimit(level, unlock, max) = level < unlock ? 0 : min(max, 1 + (level − unlock) / 2)`;`EffectiveRank = min(存档, RankLimit)`。
+  存档重数高于 `max` 时生效值不超过 `max`(例:`EffectiveRank(15, 30, 1, 10) = 10`);`level` 由调用方先过 `playerlevel::CappedLevel`。
 - `UpgradeCost(n, unlock) = 100 × n² + 10 × unlock`(银两,`kCurrencyGold`)。
 - 等级系数:主动伤害 / 治疗与辅助(增减益幅度、回蓝)每重 +2%,被动每重 +5%。
 - `ManaCost = ceil(maxMana × mana_percent)`,比例 > 0 至少 1。
 - `PlanUpgrade`:逐重修,碰到满重 / 等级上限 / 余额(扣完前几重后的余额)即停,返回步数、终级、总价、停止原因。
+  每一步先判满重:起点 `currentRank >= maxRank`(含高于本版本上限携带的存储重数)时一步不走、总价 0、停在 `kMaxRank`,不会算 `rank + 1` 回绕。
 - 比例运算用百万分之一整数算法(`CeilRatio` / `FloorRatio`):`0.07 × 100` 不会因浮点误差进成 8,且跨平台逐位一致。
 
 ## 6. 战斗
@@ -137,7 +155,9 @@ scene `PlayerSkillSystem::FillBattleSnapshot`:`skill_table_ids` 放能施放的(
 ## 8. 写入窗口与一致性
 
 - 拒绝窗口:战斗在途(`InBattleComp`)、跨 zone 冻结(`PlayerFrozenComp`)、交接已发起(`PlayerTravelHandoffComp`)→ `kSkillUpgradeBusy`。
-- 判定顺序:组件缺失 → count → 技能存在 → 职业 → 写入窗口 → expected_rank → 等级 / 余额(PlanUpgrade)→ 扣费。任何拒绝不扣钱、不改等级。
+- 判定顺序:组件缺失 → count → 技能存在 → 职业 → 写入窗口 → expected_rank(与存储重数比较)→ 满重 / 等级 / 余额(PlanUpgrade)→ 扣费。任何拒绝不扣钱、不改等级。
+  存储重数 ≥ 本版本 `max_rank`(含超上限携带的)不另加守卫,由 PlanUpgrade 停在满重,回 `kSkillMaxRankReached`、不扣钱;
+  `rank = 0` 的已有条目修习时原地改等级,不另加条目。
 - 扣费(`CurrencySystem::DeductCurrency`,correlation_id = skill_table_id)与改等级在同一个 scene 回调里先后完成,同属一条 `player_database` 记录,由常规存盘整份落库;不存在一边成功一边丢失的中间态(与属性洗点 Reset 同口径)。
 - 重放:同一旧请求的 expected_rank 已对不上,`kSkillRankChanged`,不会二次扣费;客户端超时不猜结果,等刷新。
 

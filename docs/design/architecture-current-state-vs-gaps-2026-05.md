@@ -3,6 +3,8 @@
 **Date:** 2026-05-08
 **Status:** Snapshot — 用于决策"还需要做什么"
 
+> 2026-10-23：下表第 8–10 行已按现状纠正并改指当前设计，其余内容仍是 2026-05 的历史快照，不能当作当前完成清单。
+
 > 起因: 压测出现 `Bound=15470 / SynSent=1540 / login 25s 长尾`,扩 ephemeral port 后 avg 414ms→78ms。
 > 复盘后发现项目其实已实现 90% 的标准 MMO 登录架构,本文对照盘点并列出真正待补缺口。
 
@@ -19,9 +21,9 @@
 | 5 | 双 token (Access 2h + Refresh 30d) | `go/login/internal/logic/pkg/token/` | [dual-token-authentication.md](./dual-token-authentication.md) |
 | 6 | Auth Provider 框架 | `go/login/internal/logic/pkg/auth/` | [auth-provider-framework.md](./auth-provider-framework.md) |
 | 7 | WeChat / QQ Provider 实现 | `providers.go` | [auth-provider-framework.md](./auth-provider-framework.md) |
-| 8 | RedisLocker (UUID + Lua CAS) | `pkg/locker/` | [login-simplification-2026-04.md](./login-simplification-2026-04.md) |
-| 9 | loginstep 状态机 | `pkg/loginstep/` | [login-simplification-2026-04.md](./login-simplification-2026-04.md) |
-| 10 | KeyOrderedKafkaProducer | `pkg/consistent/` | [login-simplification-2026-04.md](./login-simplification-2026-04.md) |
+| 8 | RedisLocker（UUID + Lua 按令牌释放／续租） | `go/login/internal/logic/pkg/locker/` | [ARCH.md §3.3](./ARCH.md#33-并发安全) |
+| 9 | 连接登录态与会话栅栏（原 loginstep 已退役） | `go/login/internal/logic/pkg/loginsession/`、`sessionfence/` | [客户端请求顺序 §6.2](./client-request-ordering.md) |
+| 10 | KeyOrderedKafkaProducer（DBTask 分区契约） | `go/login/internal/kafka/` | [DBTask 分区契约](./db-task-kafka-partition-contract.md) |
 | 11 | player_locator 会话权威源 | `go/player_locator/` | [player_login_flow.md](./player_login_flow.md) |
 | 12 | scene_manager 路由 | `go/scene_manager/` | [enter-scene-zone-routing.md](./enter-scene-zone-routing.md) |
 | 13 | Gate Kafka 命令通道 | `gate-{gateId}` topic | [player_login_flow.md](./player_login_flow.md) |

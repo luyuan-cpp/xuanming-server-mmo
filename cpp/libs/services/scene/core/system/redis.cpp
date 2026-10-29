@@ -50,8 +50,9 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         // 玩家加载之前(同一条连接 FIFO)。闸门只认 A2′ 的应答,不靠这条顺序(见 exit_release_mark.h)。
         PlayerLifecycleSystem::RetryInheritedMarkClears(/*reconnected=*/true);
         // 疏散 / 排空改派的待确认表(relocate_confirm.h):断线期间没读到、在等重试的核实立刻重发(不绕过 settle 等待),
-        // 排在重发的玩家加载之前 —— 核实读与随后的凭证补写必须走这条不重放的连接,与载入前的标记清理按 FIFO 排队。
-        // 表空时直接返回。
+        // 排在重发的玩家加载之前。核实读与随后的凭证补写走这条不重放的连接,是为了补写不被推迟到任意时刻(R7);
+        // 正确性**不**靠这条 FIFO(2026-10-23,r2-lc#2):补写在 Lua 里原子复核 owner_epoch 与条目缓存的原 H
+        // (save_barrier.handoff_fence),之后的登记已换掉原件时返回 -2、不写。表空时直接返回。
         PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::now(), /*reconnected=*/true);
         if (playerRedis)
         {
@@ -125,14 +126,21 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
             LOG_WARN << "[PlayerSave] save_marshal_refused=" << stats.marshalRefused;
         }
         // 归属健康计数单独一行、单独前缀,不动 [DirtySave] 的解析格式。
-        // 三个值在链路升级完成后都应恒 0;任一非 0 都是要查的信号(含义见 owner_epoch_stats)。
+        // 各项在链路升级完成后都应恒 0;任一非 0 都是要查的信号(含义见 owner_epoch_stats)。
+        // owner_counter_behind(Redis 回退丢了铸造,zone-redis-regression-guard-20261022.md §4.4)追加在最后,不动前几项的顺序。
         const auto ownerStats = owner_epoch_stats::Read();
         if (ownerStats.Any())
         {
-            LOG_WARN << "[OwnerEpoch] stale_owner_write_rejected=" << ownerStats.staleOwnerWriteRejected
-                     << " home_zone_unknown=" << ownerStats.homeZoneUnknown
-                     << " owner_epoch_unknown=" << ownerStats.ownerEpochUnknown
-                     << " stale_owner_rejected_exiting=" << ownerStats.staleOwnerRejectedExiting;
+            // 字段名与顺序取 owner_epoch_stats::kFields(与 Prometheus 导出同一份),输出与逐项拼写时逐字相同。
+            std::string line = "[OwnerEpoch]";
+            for (const auto &field : owner_epoch_stats::kFields)
+            {
+                line += ' ';
+                line += field.key;
+                line += '=';
+                line += std::to_string(ownerStats.*field.value);
+            }
+            LOG_WARN << line;
         }
         // 混版本持久字段保护 C3 的结局计数(persist_schema_stats),单独一行、单独前缀,不动上面几行的解析格式。
         // 两项正常都应恒 0;非 0 时逐次的 metric=persist_schema_regression 日志里有玩家号与 key。
@@ -220,6 +228,16 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
                 line += release_fence::kSessionEndedBindingNames[i];
                 line += '=';
                 line += std::to_string(releaseFenceStats.bindingDecisions[i]);
+            }
+            // 2026-10-23 追加在行尾(原有 key 的位置不变):凭证 CAS 返回 -2 的次数,与判 write 之后读资格原件的核对分布
+            // (location-release-binding.md §3.3)。no_qualification / malformed 有增长时升 WARN(release_fence::QualificationAlarming)。
+            line += " credential_superseded=" + std::to_string(releaseFenceStats.credentialSuperseded);
+            for (std::size_t i = 0; i < releaseFenceStats.credentialQualifications.size(); ++i)
+            {
+                line += " credential_qualification_";
+                line += release_fence::kCredentialQualificationNames[i];
+                line += '=';
+                line += std::to_string(releaseFenceStats.credentialQualifications[i]);
             }
             if (releaseFenceStats.AlarmingIncreaseSince(lastReleaseFence))
             {

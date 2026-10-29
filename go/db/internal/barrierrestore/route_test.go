@@ -94,7 +94,7 @@ func splitFixture(t *testing.T, dbFirst bool) (Restorer, *testStore, *miniredis.
 	mapping.Set(placement.Key(7), "1000000:3")
 	r.Redis = redis.NewClient(&redis.Options{Addr: cache.Addr(), DB: 2, MaxRetries: -1})
 	t.Cleanup(func() { r.Redis.Close() })
-	r.Redis.Set(context.Background(), "player:7:owner_epoch", "9", 0)
+	r.Redis.Set(context.Background(), "player:{7}:owner_epoch", "9", 0)
 	r.MappingRedis = redis.NewClient(&redis.Options{Addr: mapping.Addr(), MaxRetries: -1})
 	t.Cleanup(func() { r.MappingRedis.Close() })
 	r.RoutingMode = RoutingModeSplit

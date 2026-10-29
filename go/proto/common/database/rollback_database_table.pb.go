@@ -9,6 +9,7 @@ package database
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	base "proto/common/base"
 	_ "proto/common/rollback"
 	_ "proto/db"
 	reflect "reflect"
@@ -22,6 +23,599 @@ const (
 	// Verify that runtime/protoimpl is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
+
+type SaveBarrierMaintenanceReceipt_Phase int32
+
+const (
+	SaveBarrierMaintenanceReceipt_PHASE_UNKNOWN     SaveBarrierMaintenanceReceipt_Phase = 0
+	SaveBarrierMaintenanceReceipt_PLAN_FIXED        SaveBarrierMaintenanceReceipt_Phase = 1
+	SaveBarrierMaintenanceReceipt_WRITERS_REVOKED   SaveBarrierMaintenanceReceipt_Phase = 2
+	SaveBarrierMaintenanceReceipt_SQL_PROMOTED      SaveBarrierMaintenanceReceipt_Phase = 3
+	SaveBarrierMaintenanceReceipt_BARRIER_CONFIRMED SaveBarrierMaintenanceReceipt_Phase = 4
+)
+
+// Enum value maps for SaveBarrierMaintenanceReceipt_Phase.
+var (
+	SaveBarrierMaintenanceReceipt_Phase_name = map[int32]string{
+		0: "PHASE_UNKNOWN",
+		1: "PLAN_FIXED",
+		2: "WRITERS_REVOKED",
+		3: "SQL_PROMOTED",
+		4: "BARRIER_CONFIRMED",
+	}
+	SaveBarrierMaintenanceReceipt_Phase_value = map[string]int32{
+		"PHASE_UNKNOWN":     0,
+		"PLAN_FIXED":        1,
+		"WRITERS_REVOKED":   2,
+		"SQL_PROMOTED":      3,
+		"BARRIER_CONFIRMED": 4,
+	}
+)
+
+func (x SaveBarrierMaintenanceReceipt_Phase) Enum() *SaveBarrierMaintenanceReceipt_Phase {
+	p := new(SaveBarrierMaintenanceReceipt_Phase)
+	*p = x
+	return p
+}
+
+func (x SaveBarrierMaintenanceReceipt_Phase) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SaveBarrierMaintenanceReceipt_Phase) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_common_database_rollback_database_table_proto_enumTypes[0].Descriptor()
+}
+
+func (SaveBarrierMaintenanceReceipt_Phase) Type() protoreflect.EnumType {
+	return &file_proto_common_database_rollback_database_table_proto_enumTypes[0]
+}
+
+func (x SaveBarrierMaintenanceReceipt_Phase) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SaveBarrierMaintenanceReceipt_Phase.Descriptor instead.
+func (SaveBarrierMaintenanceReceipt_Phase) EnumDescriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{19, 0}
+}
+
+type SqlWriterRegistry_State int32
+
+const (
+	SqlWriterRegistry_STATE_UNKNOWN SqlWriterRegistry_State = 0
+	SqlWriterRegistry_ACTIVE        SqlWriterRegistry_State = 1
+	SqlWriterRegistry_REVOKED       SqlWriterRegistry_State = 2
+)
+
+// Enum value maps for SqlWriterRegistry_State.
+var (
+	SqlWriterRegistry_State_name = map[int32]string{
+		0: "STATE_UNKNOWN",
+		1: "ACTIVE",
+		2: "REVOKED",
+	}
+	SqlWriterRegistry_State_value = map[string]int32{
+		"STATE_UNKNOWN": 0,
+		"ACTIVE":        1,
+		"REVOKED":       2,
+	}
+)
+
+func (x SqlWriterRegistry_State) Enum() *SqlWriterRegistry_State {
+	p := new(SqlWriterRegistry_State)
+	*p = x
+	return p
+}
+
+func (x SqlWriterRegistry_State) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SqlWriterRegistry_State) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_common_database_rollback_database_table_proto_enumTypes[1].Descriptor()
+}
+
+func (SqlWriterRegistry_State) Type() protoreflect.EnumType {
+	return &file_proto_common_database_rollback_database_table_proto_enumTypes[1]
+}
+
+func (x SqlWriterRegistry_State) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SqlWriterRegistry_State.Descriptor instead.
+func (SqlWriterRegistry_State) EnumDescriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{21, 0}
+}
+
+type SqlWriterLifecycleReceipt_Kind int32
+
+const (
+	SqlWriterLifecycleReceipt_KIND_UNKNOWN SqlWriterLifecycleReceipt_Kind = 0
+	SqlWriterLifecycleReceipt_REGISTER     SqlWriterLifecycleReceipt_Kind = 1
+	SqlWriterLifecycleReceipt_RETIRE       SqlWriterLifecycleReceipt_Kind = 2
+)
+
+// Enum value maps for SqlWriterLifecycleReceipt_Kind.
+var (
+	SqlWriterLifecycleReceipt_Kind_name = map[int32]string{
+		0: "KIND_UNKNOWN",
+		1: "REGISTER",
+		2: "RETIRE",
+	}
+	SqlWriterLifecycleReceipt_Kind_value = map[string]int32{
+		"KIND_UNKNOWN": 0,
+		"REGISTER":     1,
+		"RETIRE":       2,
+	}
+)
+
+func (x SqlWriterLifecycleReceipt_Kind) Enum() *SqlWriterLifecycleReceipt_Kind {
+	p := new(SqlWriterLifecycleReceipt_Kind)
+	*p = x
+	return p
+}
+
+func (x SqlWriterLifecycleReceipt_Kind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SqlWriterLifecycleReceipt_Kind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_common_database_rollback_database_table_proto_enumTypes[2].Descriptor()
+}
+
+func (SqlWriterLifecycleReceipt_Kind) Type() protoreflect.EnumType {
+	return &file_proto_common_database_rollback_database_table_proto_enumTypes[2]
+}
+
+func (x SqlWriterLifecycleReceipt_Kind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SqlWriterLifecycleReceipt_Kind.Descriptor instead.
+func (SqlWriterLifecycleReceipt_Kind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{23, 0}
+}
+
+type SqlWriterBootGrant_LockPrimitive int32
+
+const (
+	SqlWriterBootGrant_LOCK_PRIMITIVE_UNKNOWN SqlWriterBootGrant_LockPrimitive = 0
+	SqlWriterBootGrant_SELECT_ONLY            SqlWriterBootGrant_LockPrimitive = 1
+	SqlWriterBootGrant_LOCK_TOUCH             SqlWriterBootGrant_LockPrimitive = 2
+)
+
+// Enum value maps for SqlWriterBootGrant_LockPrimitive.
+var (
+	SqlWriterBootGrant_LockPrimitive_name = map[int32]string{
+		0: "LOCK_PRIMITIVE_UNKNOWN",
+		1: "SELECT_ONLY",
+		2: "LOCK_TOUCH",
+	}
+	SqlWriterBootGrant_LockPrimitive_value = map[string]int32{
+		"LOCK_PRIMITIVE_UNKNOWN": 0,
+		"SELECT_ONLY":            1,
+		"LOCK_TOUCH":             2,
+	}
+)
+
+func (x SqlWriterBootGrant_LockPrimitive) Enum() *SqlWriterBootGrant_LockPrimitive {
+	p := new(SqlWriterBootGrant_LockPrimitive)
+	*p = x
+	return p
+}
+
+func (x SqlWriterBootGrant_LockPrimitive) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SqlWriterBootGrant_LockPrimitive) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_common_database_rollback_database_table_proto_enumTypes[3].Descriptor()
+}
+
+func (SqlWriterBootGrant_LockPrimitive) Type() protoreflect.EnumType {
+	return &file_proto_common_database_rollback_database_table_proto_enumTypes[3]
+}
+
+func (x SqlWriterBootGrant_LockPrimitive) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SqlWriterBootGrant_LockPrimitive.Descriptor instead.
+func (SqlWriterBootGrant_LockPrimitive) EnumDescriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{24, 0}
+}
+
+type SqlWriterDrainRun_Phase int32
+
+const (
+	SqlWriterDrainRun_UNKNOWN               SqlWriterDrainRun_Phase = 0
+	SqlWriterDrainRun_PLAN_FIXED            SqlWriterDrainRun_Phase = 1
+	SqlWriterDrainRun_ROOTS_CLOSED          SqlWriterDrainRun_Phase = 3
+	SqlWriterDrainRun_DRAINING              SqlWriterDrainRun_Phase = 4
+	SqlWriterDrainRun_NON_SQL_CLOSED        SqlWriterDrainRun_Phase = 5
+	SqlWriterDrainRun_FREEZE_AUTHORIZED     SqlWriterDrainRun_Phase = 6 // DRAIN_READY仅逻辑别名，不增enum。
+	SqlWriterDrainRun_SQL_FROZEN            SqlWriterDrainRun_Phase = 7
+	SqlWriterDrainRun_RELEASE_READY         SqlWriterDrainRun_Phase = 8
+	SqlWriterDrainRun_SQL_RELEASED          SqlWriterDrainRun_Phase = 9
+	SqlWriterDrainRun_PUBLICATION_REOPENED  SqlWriterDrainRun_Phase = 10
+	SqlWriterDrainRun_ABORTED_CLOSED        SqlWriterDrainRun_Phase = 11
+	SqlWriterDrainRun_EMERGENCY_FROZEN_HOLD SqlWriterDrainRun_Phase = 12
+)
+
+// Enum value maps for SqlWriterDrainRun_Phase.
+var (
+	SqlWriterDrainRun_Phase_name = map[int32]string{
+		0:  "UNKNOWN",
+		1:  "PLAN_FIXED",
+		3:  "ROOTS_CLOSED",
+		4:  "DRAINING",
+		5:  "NON_SQL_CLOSED",
+		6:  "FREEZE_AUTHORIZED",
+		7:  "SQL_FROZEN",
+		8:  "RELEASE_READY",
+		9:  "SQL_RELEASED",
+		10: "PUBLICATION_REOPENED",
+		11: "ABORTED_CLOSED",
+		12: "EMERGENCY_FROZEN_HOLD",
+	}
+	SqlWriterDrainRun_Phase_value = map[string]int32{
+		"UNKNOWN":               0,
+		"PLAN_FIXED":            1,
+		"ROOTS_CLOSED":          3,
+		"DRAINING":              4,
+		"NON_SQL_CLOSED":        5,
+		"FREEZE_AUTHORIZED":     6,
+		"SQL_FROZEN":            7,
+		"RELEASE_READY":         8,
+		"SQL_RELEASED":          9,
+		"PUBLICATION_REOPENED":  10,
+		"ABORTED_CLOSED":        11,
+		"EMERGENCY_FROZEN_HOLD": 12,
+	}
+)
+
+func (x SqlWriterDrainRun_Phase) Enum() *SqlWriterDrainRun_Phase {
+	p := new(SqlWriterDrainRun_Phase)
+	*p = x
+	return p
+}
+
+func (x SqlWriterDrainRun_Phase) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SqlWriterDrainRun_Phase) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_common_database_rollback_database_table_proto_enumTypes[4].Descriptor()
+}
+
+func (SqlWriterDrainRun_Phase) Type() protoreflect.EnumType {
+	return &file_proto_common_database_rollback_database_table_proto_enumTypes[4]
+}
+
+func (x SqlWriterDrainRun_Phase) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SqlWriterDrainRun_Phase.Descriptor instead.
+func (SqlWriterDrainRun_Phase) EnumDescriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{25, 0}
+}
+
+type SqlWriterFreezeTicket_State int32
+
+const (
+	SqlWriterFreezeTicket_STATE_UNKNOWN SqlWriterFreezeTicket_State = 0
+	SqlWriterFreezeTicket_AVAILABLE     SqlWriterFreezeTicket_State = 1
+	SqlWriterFreezeTicket_CONSUMED      SqlWriterFreezeTicket_State = 2
+	SqlWriterFreezeTicket_REVOKED       SqlWriterFreezeTicket_State = 3
+)
+
+// Enum value maps for SqlWriterFreezeTicket_State.
+var (
+	SqlWriterFreezeTicket_State_name = map[int32]string{
+		0: "STATE_UNKNOWN",
+		1: "AVAILABLE",
+		2: "CONSUMED",
+		3: "REVOKED",
+	}
+	SqlWriterFreezeTicket_State_value = map[string]int32{
+		"STATE_UNKNOWN": 0,
+		"AVAILABLE":     1,
+		"CONSUMED":      2,
+		"REVOKED":       3,
+	}
+)
+
+func (x SqlWriterFreezeTicket_State) Enum() *SqlWriterFreezeTicket_State {
+	p := new(SqlWriterFreezeTicket_State)
+	*p = x
+	return p
+}
+
+func (x SqlWriterFreezeTicket_State) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SqlWriterFreezeTicket_State) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_common_database_rollback_database_table_proto_enumTypes[5].Descriptor()
+}
+
+func (SqlWriterFreezeTicket_State) Type() protoreflect.EnumType {
+	return &file_proto_common_database_rollback_database_table_proto_enumTypes[5]
+}
+
+func (x SqlWriterFreezeTicket_State) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SqlWriterFreezeTicket_State.Descriptor instead.
+func (SqlWriterFreezeTicket_State) EnumDescriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{26, 0}
+}
+
+type SqlWriterFreezeTicket_AuthorizationKind int32
+
+const (
+	SqlWriterFreezeTicket_AUTHORIZATION_UNKNOWN SqlWriterFreezeTicket_AuthorizationKind = 0
+	SqlWriterFreezeTicket_NORMAL_DRAIN_FREEZE   SqlWriterFreezeTicket_AuthorizationKind = 1
+	SqlWriterFreezeTicket_EMERGENCY_HOLD_FREEZE SqlWriterFreezeTicket_AuthorizationKind = 2
+)
+
+// Enum value maps for SqlWriterFreezeTicket_AuthorizationKind.
+var (
+	SqlWriterFreezeTicket_AuthorizationKind_name = map[int32]string{
+		0: "AUTHORIZATION_UNKNOWN",
+		1: "NORMAL_DRAIN_FREEZE",
+		2: "EMERGENCY_HOLD_FREEZE",
+	}
+	SqlWriterFreezeTicket_AuthorizationKind_value = map[string]int32{
+		"AUTHORIZATION_UNKNOWN": 0,
+		"NORMAL_DRAIN_FREEZE":   1,
+		"EMERGENCY_HOLD_FREEZE": 2,
+	}
+)
+
+func (x SqlWriterFreezeTicket_AuthorizationKind) Enum() *SqlWriterFreezeTicket_AuthorizationKind {
+	p := new(SqlWriterFreezeTicket_AuthorizationKind)
+	*p = x
+	return p
+}
+
+func (x SqlWriterFreezeTicket_AuthorizationKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SqlWriterFreezeTicket_AuthorizationKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_common_database_rollback_database_table_proto_enumTypes[6].Descriptor()
+}
+
+func (SqlWriterFreezeTicket_AuthorizationKind) Type() protoreflect.EnumType {
+	return &file_proto_common_database_rollback_database_table_proto_enumTypes[6]
+}
+
+func (x SqlWriterFreezeTicket_AuthorizationKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SqlWriterFreezeTicket_AuthorizationKind.Descriptor instead.
+func (SqlWriterFreezeTicket_AuthorizationKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{26, 1}
+}
+
+type SqlWriterMaintenanceReceipt_Phase int32
+
+const (
+	SqlWriterMaintenanceReceipt_PHASE_UNKNOWN SqlWriterMaintenanceReceipt_Phase = 0
+	SqlWriterMaintenanceReceipt_FROZEN        SqlWriterMaintenanceReceipt_Phase = 1
+	SqlWriterMaintenanceReceipt_RELEASED      SqlWriterMaintenanceReceipt_Phase = 2
+)
+
+// Enum value maps for SqlWriterMaintenanceReceipt_Phase.
+var (
+	SqlWriterMaintenanceReceipt_Phase_name = map[int32]string{
+		0: "PHASE_UNKNOWN",
+		1: "FROZEN",
+		2: "RELEASED",
+	}
+	SqlWriterMaintenanceReceipt_Phase_value = map[string]int32{
+		"PHASE_UNKNOWN": 0,
+		"FROZEN":        1,
+		"RELEASED":      2,
+	}
+)
+
+func (x SqlWriterMaintenanceReceipt_Phase) Enum() *SqlWriterMaintenanceReceipt_Phase {
+	p := new(SqlWriterMaintenanceReceipt_Phase)
+	*p = x
+	return p
+}
+
+func (x SqlWriterMaintenanceReceipt_Phase) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SqlWriterMaintenanceReceipt_Phase) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_common_database_rollback_database_table_proto_enumTypes[7].Descriptor()
+}
+
+func (SqlWriterMaintenanceReceipt_Phase) Type() protoreflect.EnumType {
+	return &file_proto_common_database_rollback_database_table_proto_enumTypes[7]
+}
+
+func (x SqlWriterMaintenanceReceipt_Phase) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_Phase.Descriptor instead.
+func (SqlWriterMaintenanceReceipt_Phase) EnumDescriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 0}
+}
+
+type SqlWriterMaintenanceReceipt_Kind int32
+
+const (
+	SqlWriterMaintenanceReceipt_KIND_UNKNOWN     SqlWriterMaintenanceReceipt_Kind = 0
+	SqlWriterMaintenanceReceipt_FREEZE           SqlWriterMaintenanceReceipt_Kind = 1
+	SqlWriterMaintenanceReceipt_RELEASE          SqlWriterMaintenanceReceipt_Kind = 2
+	SqlWriterMaintenanceReceipt_PHASE_EVENT      SqlWriterMaintenanceReceipt_Kind = 3
+	SqlWriterMaintenanceReceipt_ROLE_CLOSED      SqlWriterMaintenanceReceipt_Kind = 4
+	SqlWriterMaintenanceReceipt_RELAY_QUIESCED   SqlWriterMaintenanceReceipt_Kind = 5
+	SqlWriterMaintenanceReceipt_TICKET_GRANTED   SqlWriterMaintenanceReceipt_Kind = 6
+	SqlWriterMaintenanceReceipt_TICKET_REVOKED   SqlWriterMaintenanceReceipt_Kind = 7
+	SqlWriterMaintenanceReceipt_EMERGENCY_FREEZE SqlWriterMaintenanceReceipt_Kind = 8
+)
+
+// Enum value maps for SqlWriterMaintenanceReceipt_Kind.
+var (
+	SqlWriterMaintenanceReceipt_Kind_name = map[int32]string{
+		0: "KIND_UNKNOWN",
+		1: "FREEZE",
+		2: "RELEASE",
+		3: "PHASE_EVENT",
+		4: "ROLE_CLOSED",
+		5: "RELAY_QUIESCED",
+		6: "TICKET_GRANTED",
+		7: "TICKET_REVOKED",
+		8: "EMERGENCY_FREEZE",
+	}
+	SqlWriterMaintenanceReceipt_Kind_value = map[string]int32{
+		"KIND_UNKNOWN":     0,
+		"FREEZE":           1,
+		"RELEASE":          2,
+		"PHASE_EVENT":      3,
+		"ROLE_CLOSED":      4,
+		"RELAY_QUIESCED":   5,
+		"TICKET_GRANTED":   6,
+		"TICKET_REVOKED":   7,
+		"EMERGENCY_FREEZE": 8,
+	}
+)
+
+func (x SqlWriterMaintenanceReceipt_Kind) Enum() *SqlWriterMaintenanceReceipt_Kind {
+	p := new(SqlWriterMaintenanceReceipt_Kind)
+	*p = x
+	return p
+}
+
+func (x SqlWriterMaintenanceReceipt_Kind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SqlWriterMaintenanceReceipt_Kind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_common_database_rollback_database_table_proto_enumTypes[8].Descriptor()
+}
+
+func (SqlWriterMaintenanceReceipt_Kind) Type() protoreflect.EnumType {
+	return &file_proto_common_database_rollback_database_table_proto_enumTypes[8]
+}
+
+func (x SqlWriterMaintenanceReceipt_Kind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_Kind.Descriptor instead.
+func (SqlWriterMaintenanceReceipt_Kind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 1}
+}
+
+type SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind int32
+
+const (
+	SqlWriterMaintenanceReceipt_MergeRecoveryCheck_KIND_UNSPECIFIED SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind = 0
+	SqlWriterMaintenanceReceipt_MergeRecoveryCheck_OBSERVATION      SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind = 1
+	SqlWriterMaintenanceReceipt_MergeRecoveryCheck_RULE             SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind = 2
+)
+
+// Enum value maps for SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind.
+var (
+	SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind_name = map[int32]string{
+		0: "KIND_UNSPECIFIED",
+		1: "OBSERVATION",
+		2: "RULE",
+	}
+	SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind_value = map[string]int32{
+		"KIND_UNSPECIFIED": 0,
+		"OBSERVATION":      1,
+		"RULE":             2,
+	}
+)
+
+func (x SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind) Enum() *SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind {
+	p := new(SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind)
+	*p = x
+	return p
+}
+
+func (x SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_common_database_rollback_database_table_proto_enumTypes[9].Descriptor()
+}
+
+func (SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind) Type() protoreflect.EnumType {
+	return &file_proto_common_database_rollback_database_table_proto_enumTypes[9]
+}
+
+func (x SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind.Descriptor instead.
+func (SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 12, 0}
+}
+
+type SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status int32
+
+const (
+	SqlWriterMaintenanceReceipt_MergeRecoveryCheck_STATUS_UNSPECIFIED SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status = 0
+	SqlWriterMaintenanceReceipt_MergeRecoveryCheck_COMPLETE           SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status = 1
+	SqlWriterMaintenanceReceipt_MergeRecoveryCheck_INCOMPLETE         SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status = 2
+)
+
+// Enum value maps for SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status.
+var (
+	SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status_name = map[int32]string{
+		0: "STATUS_UNSPECIFIED",
+		1: "COMPLETE",
+		2: "INCOMPLETE",
+	}
+	SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status_value = map[string]int32{
+		"STATUS_UNSPECIFIED": 0,
+		"COMPLETE":           1,
+		"INCOMPLETE":         2,
+	}
+)
+
+func (x SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status) Enum() *SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status {
+	p := new(SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status)
+	*p = x
+	return p
+}
+
+func (x SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_common_database_rollback_database_table_proto_enumTypes[10].Descriptor()
+}
+
+func (SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status) Type() protoreflect.EnumType {
+	return &file_proto_common_database_rollback_database_table_proto_enumTypes[10]
+}
+
+func (x SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status.Descriptor instead.
+func (SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status) EnumDescriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 12, 1}
+}
 
 // ============================================================================
 // Transaction Log — append-only audit trail for all bidirectional operations.
@@ -1199,12 +1793,15 @@ func (x *ZoneMergedInto) GetMergedAtMs() uint64 {
 
 // route_meta:开关表,单行(id=1),库世代与可写开关。
 type RouteMeta struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Generation    string                 `protobuf:"bytes,2,opt,name=generation,proto3" json:"generation,omitempty"` // 1..32 位 hex
-	Writable      uint32                 `protobuf:"varint,3,opt,name=writable,proto3" json:"writable,omitempty"`    // 0 = 全体映射写者拒写
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Generation      string                 `protobuf:"bytes,2,opt,name=generation,proto3" json:"generation,omitempty"` // 1..32 位 hex
+	Writable        uint32                 `protobuf:"varint,3,opt,name=writable,proto3" json:"writable,omitempty"`    // 0 = 全体映射写者拒写
+	WriterEpoch     uint64                 `protobuf:"varint,4,opt,name=writer_epoch,json=writerEpoch,proto3" json:"writer_epoch,omitempty"`
+	CatalogRevision uint64                 `protobuf:"varint,5,opt,name=catalog_revision,json=catalogRevision,proto3" json:"catalog_revision,omitempty"`
+	FreezeRunId     []byte                 `protobuf:"bytes,6,opt,name=freeze_run_id,json=freezeRunId,proto3" json:"freeze_run_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RouteMeta) Reset() {
@@ -1256,6 +1853,27 @@ func (x *RouteMeta) GetWritable() uint32 {
 		return x.Writable
 	}
 	return 0
+}
+
+func (x *RouteMeta) GetWriterEpoch() uint64 {
+	if x != nil {
+		return x.WriterEpoch
+	}
+	return 0
+}
+
+func (x *RouteMeta) GetCatalogRevision() uint64 {
+	if x != nil {
+		return x.CatalogRevision
+	}
+	return 0
+}
+
+func (x *RouteMeta) GetFreezeRunId() []byte {
+	if x != nil {
+		return x.FreezeRunId
+	}
+	return nil
 }
 
 // route_reconcile:对账表,单行(id=1),对账 leader 的租约、水位与缓存校验时刻。
@@ -1397,8 +2015,10 @@ type AccountRole struct {
 	OwnerRevision  uint64                 `protobuf:"varint,4,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"` // 账号归属修订号，绝不等同 scene owner_epoch。
 	UpdatedMs      uint64                 `protobuf:"varint,5,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
 	TradeListingId uint64                 `protobuf:"varint,6,opt,name=trade_listing_id,json=tradeListingId,proto3" json:"trade_listing_id,omitempty"` // 0 表示无交易锁；非零时入场、身份补齐和删除均拒绝。
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 仅首次目录与两张玩家行同事务提交为 1；旧角色及导入保持 0。
+	InitialPlayerCommit uint64 `protobuf:"varint,7,opt,name=initial_player_commit,json=initialPlayerCommit,proto3" json:"initial_player_commit,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *AccountRole) Reset() {
@@ -1469,6 +2089,13 @@ func (x *AccountRole) GetUpdatedMs() uint64 {
 func (x *AccountRole) GetTradeListingId() uint64 {
 	if x != nil {
 		return x.TradeListingId
+	}
+	return 0
+}
+
+func (x *AccountRole) GetInitialPlayerCommit() uint64 {
+	if x != nil {
+		return x.InitialPlayerCommit
 	}
 	return 0
 }
@@ -2019,11 +2646,4702 @@ func (x *AccountRoleImportReceipt) GetCreatedMs() uint64 {
 	return 0
 }
 
+// 停写维护的永久阶段收据；只由本地受控 fence-only promotion 写入。
+// phase：1=计划已固定，2=R/owner撤销已确认，3=双SQL围栏已提交，4=屏障确认。
+// 原计划正文和摘要不可变，未知提交只能按同一计划重读，不得铸造新撤销token。
+type SaveBarrierMaintenanceReceipt struct {
+	state         protoimpl.MessageState              `protogen:"open.v1"`
+	ReceiptId     []byte                              `protobuf:"bytes,1,opt,name=receipt_id,json=receiptId,proto3" json:"receipt_id,omitempty"`
+	PlayerId      uint64                              `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	RequestDigest []byte                              `protobuf:"bytes,3,opt,name=request_digest,json=requestDigest,proto3" json:"request_digest,omitempty"`
+	PlanProto     []byte                              `protobuf:"bytes,4,opt,name=plan_proto,json=planProto,proto3" json:"plan_proto,omitempty"`
+	Phase         SaveBarrierMaintenanceReceipt_Phase `protobuf:"varint,5,opt,name=phase,proto3,enum=SaveBarrierMaintenanceReceipt_Phase" json:"phase,omitempty"`
+	UpdatedMs     uint64                              `protobuf:"varint,6,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveBarrierMaintenanceReceipt) Reset() {
+	*x = SaveBarrierMaintenanceReceipt{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveBarrierMaintenanceReceipt) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveBarrierMaintenanceReceipt) ProtoMessage() {}
+
+func (x *SaveBarrierMaintenanceReceipt) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveBarrierMaintenanceReceipt.ProtoReflect.Descriptor instead.
+func (*SaveBarrierMaintenanceReceipt) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *SaveBarrierMaintenanceReceipt) GetReceiptId() []byte {
+	if x != nil {
+		return x.ReceiptId
+	}
+	return nil
+}
+
+func (x *SaveBarrierMaintenanceReceipt) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt) GetRequestDigest() []byte {
+	if x != nil {
+		return x.RequestDigest
+	}
+	return nil
+}
+
+func (x *SaveBarrierMaintenanceReceipt) GetPlanProto() []byte {
+	if x != nil {
+		return x.PlanProto
+	}
+	return nil
+}
+
+func (x *SaveBarrierMaintenanceReceipt) GetPhase() SaveBarrierMaintenanceReceipt_Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return SaveBarrierMaintenanceReceipt_PHASE_UNKNOWN
+}
+
+func (x *SaveBarrierMaintenanceReceipt) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+// 指定旧Scene holder的永久退休原件。与closed_through/drained在同一SQL事务提交；
+// 不接通用跨UUID关闭RPC，不根据TTL、新UUID或仅高于初次identity的SQL水位退休。
+type AccountRoleAdmissionRecovery struct {
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	RequestId                []byte                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	ListingId                uint64                 `protobuf:"varint,2,opt,name=listing_id,json=listingId,proto3" json:"listing_id,omitempty"`
+	PlayerId                 uint64                 `protobuf:"varint,3,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	SceneInstanceId          string                 `protobuf:"bytes,4,opt,name=scene_instance_id,json=sceneInstanceId,proto3" json:"scene_instance_id,omitempty"`
+	ThroughGeneration        uint64                 `protobuf:"varint,5,opt,name=through_generation,json=throughGeneration,proto3" json:"through_generation,omitempty"`
+	OwnerRevision            uint64                 `protobuf:"varint,6,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
+	RequestDigest            []byte                 `protobuf:"bytes,7,opt,name=request_digest,json=requestDigest,proto3" json:"request_digest,omitempty"`
+	RequestProto             []byte                 `protobuf:"bytes,8,opt,name=request_proto,json=requestProto,proto3" json:"request_proto,omitempty"`
+	MaintenanceReceiptId     []byte                 `protobuf:"bytes,9,opt,name=maintenance_receipt_id,json=maintenanceReceiptId,proto3" json:"maintenance_receipt_id,omitempty"`
+	MaintenanceRequestDigest []byte                 `protobuf:"bytes,10,opt,name=maintenance_request_digest,json=maintenanceRequestDigest,proto3" json:"maintenance_request_digest,omitempty"`
+	RequiredOwnerEpoch       uint64                 `protobuf:"varint,11,opt,name=required_owner_epoch,json=requiredOwnerEpoch,proto3" json:"required_owner_epoch,omitempty"`
+	RequiredSaveSeq          uint64                 `protobuf:"varint,12,opt,name=required_save_seq,json=requiredSaveSeq,proto3" json:"required_save_seq,omitempty"`
+	SqlProofDigest           []byte                 `protobuf:"bytes,13,opt,name=sql_proof_digest,json=sqlProofDigest,proto3" json:"sql_proof_digest,omitempty"`
+	RecoveredMs              uint64                 `protobuf:"varint,14,opt,name=recovered_ms,json=recoveredMs,proto3" json:"recovered_ms,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *AccountRoleAdmissionRecovery) Reset() {
+	*x = AccountRoleAdmissionRecovery{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountRoleAdmissionRecovery) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountRoleAdmissionRecovery) ProtoMessage() {}
+
+func (x *AccountRoleAdmissionRecovery) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountRoleAdmissionRecovery.ProtoReflect.Descriptor instead.
+func (*AccountRoleAdmissionRecovery) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *AccountRoleAdmissionRecovery) GetRequestId() []byte {
+	if x != nil {
+		return x.RequestId
+	}
+	return nil
+}
+
+func (x *AccountRoleAdmissionRecovery) GetListingId() uint64 {
+	if x != nil {
+		return x.ListingId
+	}
+	return 0
+}
+
+func (x *AccountRoleAdmissionRecovery) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *AccountRoleAdmissionRecovery) GetSceneInstanceId() string {
+	if x != nil {
+		return x.SceneInstanceId
+	}
+	return ""
+}
+
+func (x *AccountRoleAdmissionRecovery) GetThroughGeneration() uint64 {
+	if x != nil {
+		return x.ThroughGeneration
+	}
+	return 0
+}
+
+func (x *AccountRoleAdmissionRecovery) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+func (x *AccountRoleAdmissionRecovery) GetRequestDigest() []byte {
+	if x != nil {
+		return x.RequestDigest
+	}
+	return nil
+}
+
+func (x *AccountRoleAdmissionRecovery) GetRequestProto() []byte {
+	if x != nil {
+		return x.RequestProto
+	}
+	return nil
+}
+
+func (x *AccountRoleAdmissionRecovery) GetMaintenanceReceiptId() []byte {
+	if x != nil {
+		return x.MaintenanceReceiptId
+	}
+	return nil
+}
+
+func (x *AccountRoleAdmissionRecovery) GetMaintenanceRequestDigest() []byte {
+	if x != nil {
+		return x.MaintenanceRequestDigest
+	}
+	return nil
+}
+
+func (x *AccountRoleAdmissionRecovery) GetRequiredOwnerEpoch() uint64 {
+	if x != nil {
+		return x.RequiredOwnerEpoch
+	}
+	return 0
+}
+
+func (x *AccountRoleAdmissionRecovery) GetRequiredSaveSeq() uint64 {
+	if x != nil {
+		return x.RequiredSaveSeq
+	}
+	return 0
+}
+
+func (x *AccountRoleAdmissionRecovery) GetSqlProofDigest() []byte {
+	if x != nil {
+		return x.SqlProofDigest
+	}
+	return nil
+}
+
+func (x *AccountRoleAdmissionRecovery) GetRecoveredMs() uint64 {
+	if x != nil {
+		return x.RecoveredMs
+	}
+	return 0
+}
+
+// 永久SQL写资格；本段只作正规typed原件及DDL形状守卫，不交通用proto2mysql建表。
+type SqlWriterRegistry struct {
+	state               protoimpl.MessageState  `protogen:"open.v1"`
+	WriterKey           []byte                  `protobuf:"bytes,1,opt,name=writer_key,json=writerKey,proto3" json:"writer_key,omitempty"`
+	Generation          string                  `protobuf:"bytes,2,opt,name=generation,proto3" json:"generation,omitempty"`
+	InstanceId          []byte                  `protobuf:"bytes,3,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	SqlPrincipal        []byte                  `protobuf:"bytes,4,opt,name=sql_principal,json=sqlPrincipal,proto3" json:"sql_principal,omitempty"` // VARBINARY(288)，永久UNIQUE；每boot主体不得重用。
+	RegistrationDigest  []byte                  `protobuf:"bytes,5,opt,name=registration_digest,json=registrationDigest,proto3" json:"registration_digest,omitempty"`
+	State               SqlWriterRegistry_State `protobuf:"varint,6,opt,name=state,proto3,enum=SqlWriterRegistry_State" json:"state,omitempty"`
+	RegisteredMs        uint64                  `protobuf:"varint,7,opt,name=registered_ms,json=registeredMs,proto3" json:"registered_ms,omitempty"`
+	RetirementRequestId []byte                  `protobuf:"bytes,8,opt,name=retirement_request_id,json=retirementRequestId,proto3" json:"retirement_request_id,omitempty"`
+	RetirementDigest    []byte                  `protobuf:"bytes,9,opt,name=retirement_digest,json=retirementDigest,proto3" json:"retirement_digest,omitempty"`
+	RetiredMs           uint64                  `protobuf:"varint,10,opt,name=retired_ms,json=retiredMs,proto3" json:"retired_ms,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *SqlWriterRegistry) Reset() {
+	*x = SqlWriterRegistry{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterRegistry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterRegistry) ProtoMessage() {}
+
+func (x *SqlWriterRegistry) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterRegistry.ProtoReflect.Descriptor instead.
+func (*SqlWriterRegistry) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *SqlWriterRegistry) GetWriterKey() []byte {
+	if x != nil {
+		return x.WriterKey
+	}
+	return nil
+}
+
+func (x *SqlWriterRegistry) GetGeneration() string {
+	if x != nil {
+		return x.Generation
+	}
+	return ""
+}
+
+func (x *SqlWriterRegistry) GetInstanceId() []byte {
+	if x != nil {
+		return x.InstanceId
+	}
+	return nil
+}
+
+func (x *SqlWriterRegistry) GetSqlPrincipal() []byte {
+	if x != nil {
+		return x.SqlPrincipal
+	}
+	return nil
+}
+
+func (x *SqlWriterRegistry) GetRegistrationDigest() []byte {
+	if x != nil {
+		return x.RegistrationDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterRegistry) GetState() SqlWriterRegistry_State {
+	if x != nil {
+		return x.State
+	}
+	return SqlWriterRegistry_STATE_UNKNOWN
+}
+
+func (x *SqlWriterRegistry) GetRegisteredMs() uint64 {
+	if x != nil {
+		return x.RegisteredMs
+	}
+	return 0
+}
+
+func (x *SqlWriterRegistry) GetRetirementRequestId() []byte {
+	if x != nil {
+		return x.RetirementRequestId
+	}
+	return nil
+}
+
+func (x *SqlWriterRegistry) GetRetirementDigest() []byte {
+	if x != nil {
+		return x.RetirementDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterRegistry) GetRetiredMs() uint64 {
+	if x != nil {
+		return x.RetiredMs
+	}
+	return 0
+}
+
+type SqlWriterSlot struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	WriterKey     []byte                  `protobuf:"bytes,1,opt,name=writer_key,json=writerKey,proto3" json:"writer_key,omitempty"`
+	Slot          uint32                  `protobuf:"varint,2,opt,name=slot,proto3" json:"slot,omitempty"` // 精确0..63；缺片拒绝，不补片。
+	Generation    string                  `protobuf:"bytes,3,opt,name=generation,proto3" json:"generation,omitempty"`
+	WriterEpoch   uint64                  `protobuf:"varint,4,opt,name=writer_epoch,json=writerEpoch,proto3" json:"writer_epoch,omitempty"`
+	State         SqlWriterRegistry_State `protobuf:"varint,5,opt,name=state,proto3,enum=SqlWriterRegistry_State" json:"state,omitempty"`
+	LockTouch     uint32                  `protobuf:"varint,6,opt,name=lock_touch,json=lockTouch,proto3" json:"lock_touch,omitempty"` // 仅0/1同步列，绝无权限含义；8.5.8备选锁写须先真库验证。
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SqlWriterSlot) Reset() {
+	*x = SqlWriterSlot{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterSlot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterSlot) ProtoMessage() {}
+
+func (x *SqlWriterSlot) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterSlot.ProtoReflect.Descriptor instead.
+func (*SqlWriterSlot) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *SqlWriterSlot) GetWriterKey() []byte {
+	if x != nil {
+		return x.WriterKey
+	}
+	return nil
+}
+
+func (x *SqlWriterSlot) GetSlot() uint32 {
+	if x != nil {
+		return x.Slot
+	}
+	return 0
+}
+
+func (x *SqlWriterSlot) GetGeneration() string {
+	if x != nil {
+		return x.Generation
+	}
+	return ""
+}
+
+func (x *SqlWriterSlot) GetWriterEpoch() uint64 {
+	if x != nil {
+		return x.WriterEpoch
+	}
+	return 0
+}
+
+func (x *SqlWriterSlot) GetState() SqlWriterRegistry_State {
+	if x != nil {
+		return x.State
+	}
+	return SqlWriterRegistry_STATE_UNKNOWN
+}
+
+func (x *SqlWriterSlot) GetLockTouch() uint32 {
+	if x != nil {
+		return x.LockTouch
+	}
+	return 0
+}
+
+type SqlWriterLifecycleReceipt struct {
+	state           protoimpl.MessageState         `protogen:"open.v1"`
+	RequestId       []byte                         `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Kind            SqlWriterLifecycleReceipt_Kind `protobuf:"varint,2,opt,name=kind,proto3,enum=SqlWriterLifecycleReceipt_Kind" json:"kind,omitempty"` // freeze/release/DDL事实统一追加sql_writer_maintenance_receipt，不复制owner。
+	Generation      string                         `protobuf:"bytes,3,opt,name=generation,proto3" json:"generation,omitempty"`
+	RequestDigest   []byte                         `protobuf:"bytes,4,opt,name=request_digest,json=requestDigest,proto3" json:"request_digest,omitempty"`
+	RequestProto    []byte                         `protobuf:"bytes,5,opt,name=request_proto,json=requestProto,proto3" json:"request_proto,omitempty"` // 下列Request的完整确定性编码；只存摘要不足以审计。
+	PreviousEpoch   uint64                         `protobuf:"varint,6,opt,name=previous_epoch,json=previousEpoch,proto3" json:"previous_epoch,omitempty"`
+	ResultingEpoch  uint64                         `protobuf:"varint,7,opt,name=resulting_epoch,json=resultingEpoch,proto3" json:"resulting_epoch,omitempty"`
+	CatalogRevision uint64                         `protobuf:"varint,8,opt,name=catalog_revision,json=catalogRevision,proto3" json:"catalog_revision,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SqlWriterLifecycleReceipt) Reset() {
+	*x = SqlWriterLifecycleReceipt{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterLifecycleReceipt) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterLifecycleReceipt) ProtoMessage() {}
+
+func (x *SqlWriterLifecycleReceipt) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterLifecycleReceipt.ProtoReflect.Descriptor instead.
+func (*SqlWriterLifecycleReceipt) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *SqlWriterLifecycleReceipt) GetRequestId() []byte {
+	if x != nil {
+		return x.RequestId
+	}
+	return nil
+}
+
+func (x *SqlWriterLifecycleReceipt) GetKind() SqlWriterLifecycleReceipt_Kind {
+	if x != nil {
+		return x.Kind
+	}
+	return SqlWriterLifecycleReceipt_KIND_UNKNOWN
+}
+
+func (x *SqlWriterLifecycleReceipt) GetGeneration() string {
+	if x != nil {
+		return x.Generation
+	}
+	return ""
+}
+
+func (x *SqlWriterLifecycleReceipt) GetRequestDigest() []byte {
+	if x != nil {
+		return x.RequestDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterLifecycleReceipt) GetRequestProto() []byte {
+	if x != nil {
+		return x.RequestProto
+	}
+	return nil
+}
+
+func (x *SqlWriterLifecycleReceipt) GetPreviousEpoch() uint64 {
+	if x != nil {
+		return x.PreviousEpoch
+	}
+	return 0
+}
+
+func (x *SqlWriterLifecycleReceipt) GetResultingEpoch() uint64 {
+	if x != nil {
+		return x.ResultingEpoch
+	}
+	return 0
+}
+
+func (x *SqlWriterLifecycleReceipt) GetCatalogRevision() uint64 {
+	if x != nil {
+		return x.CatalogRevision
+	}
+	return 0
+}
+
+// 本地启动授权文件的唯一正规消息；不是SQL表。proto JSON用lowerCamelCase，bytes用标准base64。
+// registrar先固定永久registry/64片；normal启动原子消费privateEmptyDir marker，不持registrar凭据。
+type SqlWriterBootGrant struct {
+	state                   protoimpl.MessageState           `protogen:"open.v1"`
+	Format                  string                           `protobuf:"bytes,1,opt,name=format,proto3" json:"format,omitempty"` // 必须SQL_WRITER_BOOT_V1。
+	WriterKey               []byte                           `protobuf:"bytes,2,opt,name=writer_key,json=writerKey,proto3" json:"writer_key,omitempty"`
+	InstanceId              []byte                           `protobuf:"bytes,3,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	Generation              string                           `protobuf:"bytes,4,opt,name=generation,proto3" json:"generation,omitempty"`
+	AuthoritySchema         string                           `protobuf:"bytes,5,opt,name=authority_schema,json=authoritySchema,proto3" json:"authority_schema,omitempty"`
+	ProtectedSchemas        []string                         `protobuf:"bytes,6,rep,name=protected_schemas,json=protectedSchemas,proto3" json:"protected_schemas,omitempty"`
+	SqlPrincipal            []byte                           `protobuf:"bytes,7,opt,name=sql_principal,json=sqlPrincipal,proto3" json:"sql_principal,omitempty"`
+	RegistrationDigest      []byte                           `protobuf:"bytes,8,opt,name=registration_digest,json=registrationDigest,proto3" json:"registration_digest,omitempty"`
+	DeploymentId            string                           `protobuf:"bytes,9,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"` // Kubernetes Pod UID或本地启动器一次固定bootID。
+	GrantId                 []byte                           `protobuf:"bytes,10,opt,name=grant_id,json=grantId,proto3" json:"grant_id,omitempty"`
+	GrantedMs               uint64                           `protobuf:"varint,11,opt,name=granted_ms,json=grantedMs,proto3" json:"granted_ms,omitempty"`
+	Permission              string                           `protobuf:"bytes,12,opt,name=permission,proto3" json:"permission,omitempty"`                                                            // runtime严格NORMAL；控制principal不借此文件提升。
+	PhysicalAuthoritySha256 []byte                           `protobuf:"bytes,13,opt,name=physical_authority_sha256,json=physicalAuthoritySha256,proto3" json:"physical_authority_sha256,omitempty"` // 独立PD物理身份原件摘要，不能从客户端SQL变量冒充。
+	MaintenanceRunId        []byte                           `protobuf:"bytes,14,opt,name=maintenance_run_id,json=maintenanceRunId,proto3" json:"maintenance_run_id,omitempty"`                      // 非空只准同run SQL_RELEASED的prepare-only启动；不授权root admission。
+	LockPrimitive           SqlWriterBootGrant_LockPrimitive `protobuf:"varint,15,opt,name=lock_primitive,json=lockPrimitive,proto3,enum=SqlWriterBootGrant_LockPrimitive" json:"lock_primitive,omitempty"`
+	LockQualificationSha256 []byte                           `protobuf:"bytes,16,opt,name=lock_qualification_sha256,json=lockQualificationSha256,proto3" json:"lock_qualification_sha256,omitempty"` // 必须32字节，操作者真实I3原件SHA；无资格拒启动，不自探针或扩权。
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *SqlWriterBootGrant) Reset() {
+	*x = SqlWriterBootGrant{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterBootGrant) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterBootGrant) ProtoMessage() {}
+
+func (x *SqlWriterBootGrant) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterBootGrant.ProtoReflect.Descriptor instead.
+func (*SqlWriterBootGrant) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *SqlWriterBootGrant) GetFormat() string {
+	if x != nil {
+		return x.Format
+	}
+	return ""
+}
+
+func (x *SqlWriterBootGrant) GetWriterKey() []byte {
+	if x != nil {
+		return x.WriterKey
+	}
+	return nil
+}
+
+func (x *SqlWriterBootGrant) GetInstanceId() []byte {
+	if x != nil {
+		return x.InstanceId
+	}
+	return nil
+}
+
+func (x *SqlWriterBootGrant) GetGeneration() string {
+	if x != nil {
+		return x.Generation
+	}
+	return ""
+}
+
+func (x *SqlWriterBootGrant) GetAuthoritySchema() string {
+	if x != nil {
+		return x.AuthoritySchema
+	}
+	return ""
+}
+
+func (x *SqlWriterBootGrant) GetProtectedSchemas() []string {
+	if x != nil {
+		return x.ProtectedSchemas
+	}
+	return nil
+}
+
+func (x *SqlWriterBootGrant) GetSqlPrincipal() []byte {
+	if x != nil {
+		return x.SqlPrincipal
+	}
+	return nil
+}
+
+func (x *SqlWriterBootGrant) GetRegistrationDigest() []byte {
+	if x != nil {
+		return x.RegistrationDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterBootGrant) GetDeploymentId() string {
+	if x != nil {
+		return x.DeploymentId
+	}
+	return ""
+}
+
+func (x *SqlWriterBootGrant) GetGrantId() []byte {
+	if x != nil {
+		return x.GrantId
+	}
+	return nil
+}
+
+func (x *SqlWriterBootGrant) GetGrantedMs() uint64 {
+	if x != nil {
+		return x.GrantedMs
+	}
+	return 0
+}
+
+func (x *SqlWriterBootGrant) GetPermission() string {
+	if x != nil {
+		return x.Permission
+	}
+	return ""
+}
+
+func (x *SqlWriterBootGrant) GetPhysicalAuthoritySha256() []byte {
+	if x != nil {
+		return x.PhysicalAuthoritySha256
+	}
+	return nil
+}
+
+func (x *SqlWriterBootGrant) GetMaintenanceRunId() []byte {
+	if x != nil {
+		return x.MaintenanceRunId
+	}
+	return nil
+}
+
+func (x *SqlWriterBootGrant) GetLockPrimitive() SqlWriterBootGrant_LockPrimitive {
+	if x != nil {
+		return x.LockPrimitive
+	}
+	return SqlWriterBootGrant_LOCK_PRIMITIVE_UNKNOWN
+}
+
+func (x *SqlWriterBootGrant) GetLockQualificationSha256() []byte {
+	if x != nil {
+		return x.LockQualificationSha256
+	}
+	return nil
+}
+
+// r3唯一schema候选，不执行生成。正式落地前核即时源/字段号，沿no-unity正规生成。
+// 仅服务端内部；Java用自己的正式源实现语义，不经ContractSync复制。
+type SqlWriterDrainRun struct {
+	state               protoimpl.MessageState  `protogen:"open.v1"`
+	OperationId         []byte                  `protobuf:"bytes,1,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	RequestDigest       []byte                  `protobuf:"bytes,2,opt,name=request_digest,json=requestDigest,proto3" json:"request_digest,omitempty"`
+	Generation          string                  `protobuf:"bytes,3,opt,name=generation,proto3" json:"generation,omitempty"`
+	AttemptRevision     uint64                  `protobuf:"varint,4,opt,name=attempt_revision,json=attemptRevision,proto3" json:"attempt_revision,omitempty"`
+	ManifestProto       []byte                  `protobuf:"bytes,5,opt,name=manifest_proto,json=manifestProto,proto3" json:"manifest_proto,omitempty"` // 正规typed完整目录原件；摘要不能代替正文。
+	ManifestDigest      []byte                  `protobuf:"bytes,6,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	Phase               SqlWriterDrainRun_Phase `protobuf:"varint,7,opt,name=phase,proto3,enum=SqlWriterDrainRun_Phase" json:"phase,omitempty"`
+	LatestReceiptDigest []byte                  `protobuf:"bytes,8,opt,name=latest_receipt_digest,json=latestReceiptDigest,proto3" json:"latest_receipt_digest,omitempty"`
+	FrozenRequestId     []byte                  `protobuf:"bytes,9,opt,name=frozen_request_id,json=frozenRequestId,proto3" json:"frozen_request_id,omitempty"`
+	UpdatedMs           uint64                  `protobuf:"varint,10,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	LatestReceiptId     []byte                  `protobuf:"bytes,11,opt,name=latest_receipt_id,json=latestReceiptId,proto3" json:"latest_receipt_id,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *SqlWriterDrainRun) Reset() {
+	*x = SqlWriterDrainRun{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterDrainRun) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterDrainRun) ProtoMessage() {}
+
+func (x *SqlWriterDrainRun) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterDrainRun.ProtoReflect.Descriptor instead.
+func (*SqlWriterDrainRun) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *SqlWriterDrainRun) GetOperationId() []byte {
+	if x != nil {
+		return x.OperationId
+	}
+	return nil
+}
+
+func (x *SqlWriterDrainRun) GetRequestDigest() []byte {
+	if x != nil {
+		return x.RequestDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterDrainRun) GetGeneration() string {
+	if x != nil {
+		return x.Generation
+	}
+	return ""
+}
+
+func (x *SqlWriterDrainRun) GetAttemptRevision() uint64 {
+	if x != nil {
+		return x.AttemptRevision
+	}
+	return 0
+}
+
+func (x *SqlWriterDrainRun) GetManifestProto() []byte {
+	if x != nil {
+		return x.ManifestProto
+	}
+	return nil
+}
+
+func (x *SqlWriterDrainRun) GetManifestDigest() []byte {
+	if x != nil {
+		return x.ManifestDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterDrainRun) GetPhase() SqlWriterDrainRun_Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return SqlWriterDrainRun_UNKNOWN
+}
+
+func (x *SqlWriterDrainRun) GetLatestReceiptDigest() []byte {
+	if x != nil {
+		return x.LatestReceiptDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterDrainRun) GetFrozenRequestId() []byte {
+	if x != nil {
+		return x.FrozenRequestId
+	}
+	return nil
+}
+
+func (x *SqlWriterDrainRun) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+func (x *SqlWriterDrainRun) GetLatestReceiptId() []byte {
+	if x != nil {
+		return x.LatestReceiptId
+	}
+	return nil
+}
+
+type SqlWriterFreezeTicket struct {
+	state                 protoimpl.MessageState                  `protogen:"open.v1"`
+	TicketId              []byte                                  `protobuf:"bytes,1,opt,name=ticket_id,json=ticketId,proto3" json:"ticket_id,omitempty"`
+	OperationId           []byte                                  `protobuf:"bytes,2,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	AttemptRevision       uint64                                  `protobuf:"varint,3,opt,name=attempt_revision,json=attemptRevision,proto3" json:"attempt_revision,omitempty"`
+	Generation            string                                  `protobuf:"bytes,4,opt,name=generation,proto3" json:"generation,omitempty"`
+	ManifestDigest        []byte                                  `protobuf:"bytes,5,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	NonSqlReceiptDigest   []byte                                  `protobuf:"bytes,6,opt,name=non_sql_receipt_digest,json=nonSqlReceiptDigest,proto3" json:"non_sql_receipt_digest,omitempty"` // NORMAL必须同attempt的NON_SQL_CLOSED；EMERGENCY不能伪填成功闭合。
+	FreezeRequestId       []byte                                  `protobuf:"bytes,7,opt,name=freeze_request_id,json=freezeRequestId,proto3" json:"freeze_request_id,omitempty"`
+	FreezeRequestDigest   []byte                                  `protobuf:"bytes,8,opt,name=freeze_request_digest,json=freezeRequestDigest,proto3" json:"freeze_request_digest,omitempty"`
+	NotBeforeMs           uint64                                  `protobuf:"varint,9,opt,name=not_before_ms,json=notBeforeMs,proto3" json:"not_before_ms,omitempty"`
+	ExpiresMs             uint64                                  `protobuf:"varint,10,opt,name=expires_ms,json=expiresMs,proto3" json:"expires_ms,omitempty"` // 只限制授权新尝试，不自动解开publication/revival fence。
+	State                 SqlWriterFreezeTicket_State             `protobuf:"varint,11,opt,name=state,proto3,enum=SqlWriterFreezeTicket_State" json:"state,omitempty"`
+	ConsumedReceiptDigest []byte                                  `protobuf:"bytes,12,opt,name=consumed_receipt_digest,json=consumedReceiptDigest,proto3" json:"consumed_receipt_digest,omitempty"`
+	RevocationDigest      []byte                                  `protobuf:"bytes,13,opt,name=revocation_digest,json=revocationDigest,proto3" json:"revocation_digest,omitempty"`
+	UpdatedMs             uint64                                  `protobuf:"varint,14,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	AuthorizationKind     SqlWriterFreezeTicket_AuthorizationKind `protobuf:"varint,15,opt,name=authorization_kind,json=authorizationKind,proto3,enum=SqlWriterFreezeTicket_AuthorizationKind" json:"authorization_kind,omitempty"`
+	GrantReceiptId        []byte                                  `protobuf:"bytes,16,opt,name=grant_receipt_id,json=grantReceiptId,proto3" json:"grant_receipt_id,omitempty"`
+	GrantReceiptDigest    []byte                                  `protobuf:"bytes,17,opt,name=grant_receipt_digest,json=grantReceiptDigest,proto3" json:"grant_receipt_digest,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *SqlWriterFreezeTicket) Reset() {
+	*x = SqlWriterFreezeTicket{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterFreezeTicket) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterFreezeTicket) ProtoMessage() {}
+
+func (x *SqlWriterFreezeTicket) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterFreezeTicket.ProtoReflect.Descriptor instead.
+func (*SqlWriterFreezeTicket) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *SqlWriterFreezeTicket) GetTicketId() []byte {
+	if x != nil {
+		return x.TicketId
+	}
+	return nil
+}
+
+func (x *SqlWriterFreezeTicket) GetOperationId() []byte {
+	if x != nil {
+		return x.OperationId
+	}
+	return nil
+}
+
+func (x *SqlWriterFreezeTicket) GetAttemptRevision() uint64 {
+	if x != nil {
+		return x.AttemptRevision
+	}
+	return 0
+}
+
+func (x *SqlWriterFreezeTicket) GetGeneration() string {
+	if x != nil {
+		return x.Generation
+	}
+	return ""
+}
+
+func (x *SqlWriterFreezeTicket) GetManifestDigest() []byte {
+	if x != nil {
+		return x.ManifestDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterFreezeTicket) GetNonSqlReceiptDigest() []byte {
+	if x != nil {
+		return x.NonSqlReceiptDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterFreezeTicket) GetFreezeRequestId() []byte {
+	if x != nil {
+		return x.FreezeRequestId
+	}
+	return nil
+}
+
+func (x *SqlWriterFreezeTicket) GetFreezeRequestDigest() []byte {
+	if x != nil {
+		return x.FreezeRequestDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterFreezeTicket) GetNotBeforeMs() uint64 {
+	if x != nil {
+		return x.NotBeforeMs
+	}
+	return 0
+}
+
+func (x *SqlWriterFreezeTicket) GetExpiresMs() uint64 {
+	if x != nil {
+		return x.ExpiresMs
+	}
+	return 0
+}
+
+func (x *SqlWriterFreezeTicket) GetState() SqlWriterFreezeTicket_State {
+	if x != nil {
+		return x.State
+	}
+	return SqlWriterFreezeTicket_STATE_UNKNOWN
+}
+
+func (x *SqlWriterFreezeTicket) GetConsumedReceiptDigest() []byte {
+	if x != nil {
+		return x.ConsumedReceiptDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterFreezeTicket) GetRevocationDigest() []byte {
+	if x != nil {
+		return x.RevocationDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterFreezeTicket) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+func (x *SqlWriterFreezeTicket) GetAuthorizationKind() SqlWriterFreezeTicket_AuthorizationKind {
+	if x != nil {
+		return x.AuthorizationKind
+	}
+	return SqlWriterFreezeTicket_AUTHORIZATION_UNKNOWN
+}
+
+func (x *SqlWriterFreezeTicket) GetGrantReceiptId() []byte {
+	if x != nil {
+		return x.GrantReceiptId
+	}
+	return nil
+}
+
+func (x *SqlWriterFreezeTicket) GetGrantReceiptDigest() []byte {
+	if x != nil {
+		return x.GrantReceiptDigest
+	}
+	return nil
+}
+
+// 这是对root既有候选同名message的合并全文，不另创建阶段fact/maintenance_run表。
+// PK和1..10原字段保留；所有阶段/授权/取消/危险事实只INSERT此owner的唯一request_id。
+type SqlWriterMaintenanceReceipt struct {
+	state              protoimpl.MessageState                `protogen:"open.v1"`
+	RequestId          []byte                                `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	RequestDigest      []byte                                `protobuf:"bytes,2,opt,name=request_digest,json=requestDigest,proto3" json:"request_digest,omitempty"`
+	RunId              []byte                                `protobuf:"bytes,3,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	Generation         string                                `protobuf:"bytes,4,opt,name=generation,proto3" json:"generation,omitempty"`
+	BeforeEpoch        uint64                                `protobuf:"varint,5,opt,name=before_epoch,json=beforeEpoch,proto3" json:"before_epoch,omitempty"`
+	AfterEpoch         uint64                                `protobuf:"varint,6,opt,name=after_epoch,json=afterEpoch,proto3" json:"after_epoch,omitempty"`
+	CatalogRevision    uint64                                `protobuf:"varint,7,opt,name=catalog_revision,json=catalogRevision,proto3" json:"catalog_revision,omitempty"`
+	Phase              SqlWriterMaintenanceReceipt_Phase     `protobuf:"varint,8,opt,name=phase,proto3,enum=SqlWriterMaintenanceReceipt_Phase" json:"phase,omitempty"` // 只表示正常最终freeze/release结局；阶段fact/紧急HOLD不得伪写FROZEN。
+	PlanProto          []byte                                `protobuf:"bytes,9,opt,name=plan_proto,json=planProto,proto3" json:"plan_proto,omitempty"`
+	CommittedMs        uint64                                `protobuf:"varint,10,opt,name=committed_ms,json=committedMs,proto3" json:"committed_ms,omitempty"`
+	Kind               SqlWriterMaintenanceReceipt_Kind      `protobuf:"varint,11,opt,name=kind,proto3,enum=SqlWriterMaintenanceReceipt_Kind" json:"kind,omitempty"`
+	RunPhase           SqlWriterDrainRun_Phase               `protobuf:"varint,12,opt,name=run_phase,json=runPhase,proto3,enum=SqlWriterDrainRun_Phase" json:"run_phase,omitempty"`
+	AttemptRevision    uint64                                `protobuf:"varint,13,opt,name=attempt_revision,json=attemptRevision,proto3" json:"attempt_revision,omitempty"`
+	PriorReceiptId     []byte                                `protobuf:"bytes,14,opt,name=prior_receipt_id,json=priorReceiptId,proto3" json:"prior_receipt_id,omitempty"` // FREEZE固定grant之前已知NON_SQL_CLOSED（emergency为danger），经ticket核实际grant后消费；避免grant/freeze摘要循环。
+	PriorReceiptDigest []byte                                `protobuf:"bytes,15,opt,name=prior_receipt_digest,json=priorReceiptDigest,proto3" json:"prior_receipt_digest,omitempty"`
+	Evidence           *SqlWriterMaintenanceReceipt_Evidence `protobuf:"bytes,16,opt,name=evidence,proto3" json:"evidence,omitempty"`
+	ReceiptDigest      []byte                                `protobuf:"bytes,17,opt,name=receipt_digest,json=receiptDigest,proto3" json:"receipt_digest,omitempty"` // 除本字段外全原件确定性编码摘要；只能同request只读认重。
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt) Reset() {
+	*x = SqlWriterMaintenanceReceipt{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetRequestId() []byte {
+	if x != nil {
+		return x.RequestId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetRequestDigest() []byte {
+	if x != nil {
+		return x.RequestDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetRunId() []byte {
+	if x != nil {
+		return x.RunId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetGeneration() string {
+	if x != nil {
+		return x.Generation
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetBeforeEpoch() uint64 {
+	if x != nil {
+		return x.BeforeEpoch
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetAfterEpoch() uint64 {
+	if x != nil {
+		return x.AfterEpoch
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetCatalogRevision() uint64 {
+	if x != nil {
+		return x.CatalogRevision
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetPhase() SqlWriterMaintenanceReceipt_Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return SqlWriterMaintenanceReceipt_PHASE_UNKNOWN
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetPlanProto() []byte {
+	if x != nil {
+		return x.PlanProto
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetCommittedMs() uint64 {
+	if x != nil {
+		return x.CommittedMs
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetKind() SqlWriterMaintenanceReceipt_Kind {
+	if x != nil {
+		return x.Kind
+	}
+	return SqlWriterMaintenanceReceipt_KIND_UNKNOWN
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetRunPhase() SqlWriterDrainRun_Phase {
+	if x != nil {
+		return x.RunPhase
+	}
+	return SqlWriterDrainRun_UNKNOWN
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetAttemptRevision() uint64 {
+	if x != nil {
+		return x.AttemptRevision
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetPriorReceiptId() []byte {
+	if x != nil {
+		return x.PriorReceiptId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetPriorReceiptDigest() []byte {
+	if x != nil {
+		return x.PriorReceiptDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetEvidence() *SqlWriterMaintenanceReceipt_Evidence {
+	if x != nil {
+		return x.Evidence
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt) GetReceiptDigest() []byte {
+	if x != nil {
+		return x.ReceiptDigest
+	}
+	return nil
+}
+
+// init受限有限授权roster；每entry的身份/主体全预固定，不铸新UUID或复制runtime秘密进grant。
+type SqlWriterBootRoster struct {
+	state         protoimpl.MessageState       `protogen:"open.v1"`
+	Format        string                       `protobuf:"bytes,1,opt,name=format,proto3" json:"format,omitempty"`   // SQL_WRITER_BOOT_ROSTER_V1。
+	Entries       []*SqlWriterBootRoster_Entry `protobuf:"bytes,2,rep,name=entries,proto3" json:"entries,omitempty"` // 至多现有issuer预算1024，duplicate key/instance/principal/request拒绝。
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SqlWriterBootRoster) Reset() {
+	*x = SqlWriterBootRoster{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterBootRoster) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterBootRoster) ProtoMessage() {}
+
+func (x *SqlWriterBootRoster) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterBootRoster.ProtoReflect.Descriptor instead.
+func (*SqlWriterBootRoster) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *SqlWriterBootRoster) GetFormat() string {
+	if x != nil {
+		return x.Format
+	}
+	return ""
+}
+
+func (x *SqlWriterBootRoster) GetEntries() []*SqlWriterBootRoster_Entry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+// 本工具的审定计划，不是跨实例RPC，也不是业务写者自行提交的排空ACK。
+type SaveBarrierMaintenanceReceipt_PromotionPlan struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	Format                 string                 `protobuf:"bytes,1,opt,name=format,proto3" json:"format,omitempty"`
+	MaintenanceId          string                 `protobuf:"bytes,2,opt,name=maintenance_id,json=maintenanceId,proto3" json:"maintenance_id,omitempty"`
+	PlayerId               uint64                 `protobuf:"varint,3,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	RowSchema              string                 `protobuf:"bytes,4,opt,name=row_schema,json=rowSchema,proto3" json:"row_schema,omitempty"`
+	RouteSchema            string                 `protobuf:"bytes,5,opt,name=route_schema,json=routeSchema,proto3" json:"route_schema,omitempty"`
+	HomeZone               uint32                 `protobuf:"varint,6,opt,name=home_zone,json=homeZone,proto3" json:"home_zone,omitempty"`
+	StorageId              uint32                 `protobuf:"varint,7,opt,name=storage_id,json=storageId,proto3" json:"storage_id,omitempty"`
+	RouteRevision          uint64                 `protobuf:"varint,8,opt,name=route_revision,json=routeRevision,proto3" json:"route_revision,omitempty"`
+	RouteGeneration        string                 `protobuf:"bytes,9,opt,name=route_generation,json=routeGeneration,proto3" json:"route_generation,omitempty"`
+	RouteWatermark         uint64                 `protobuf:"varint,10,opt,name=route_watermark,json=routeWatermark,proto3" json:"route_watermark,omitempty"`
+	PlacementVersion       uint64                 `protobuf:"varint,11,opt,name=placement_version,json=placementVersion,proto3" json:"placement_version,omitempty"`
+	AuditedOwnerUpperBound uint64                 `protobuf:"varint,12,opt,name=audited_owner_upper_bound,json=auditedOwnerUpperBound,proto3" json:"audited_owner_upper_bound,omitempty"`
+	OriginalOwner          uint64                 `protobuf:"varint,13,opt,name=original_owner,json=originalOwner,proto3" json:"original_owner,omitempty"`
+	TargetOwner            uint64                 `protobuf:"varint,14,opt,name=target_owner,json=targetOwner,proto3" json:"target_owner,omitempty"`
+	OriginalSaveEpoch      uint64                 `protobuf:"varint,15,opt,name=original_save_epoch,json=originalSaveEpoch,proto3" json:"original_save_epoch,omitempty"`
+	OriginalSaveSeq        uint64                 `protobuf:"varint,16,opt,name=original_save_seq,json=originalSaveSeq,proto3" json:"original_save_seq,omitempty"`
+	TargetSaveSeq          uint64                 `protobuf:"varint,17,opt,name=target_save_seq,json=targetSaveSeq,proto3" json:"target_save_seq,omitempty"`
+	SchemaGen              uint32                 `protobuf:"varint,18,opt,name=schema_gen,json=schemaGen,proto3" json:"schema_gen,omitempty"`
+	// 全部非fence列含NULL、未知blob和原世代的逐字节摘要；不丢弃未知资产字段。
+	FirstBusinessSha256  []byte `protobuf:"bytes,19,opt,name=first_business_sha256,json=firstBusinessSha256,proto3" json:"first_business_sha256,omitempty"`
+	SecondBusinessSha256 []byte `protobuf:"bytes,20,opt,name=second_business_sha256,json=secondBusinessSha256,proto3" json:"second_business_sha256,omitempty"`
+	OriginalFence        string `protobuf:"bytes,21,opt,name=original_fence,json=originalFence,proto3" json:"original_fence,omitempty"`
+	RevokedFence         string `protobuf:"bytes,22,opt,name=revoked_fence,json=revokedFence,proto3" json:"revoked_fence,omitempty"`
+	ReceiptId            []byte `protobuf:"bytes,23,opt,name=receipt_id,json=receiptId,proto3" json:"receipt_id,omitempty"`
+	RedisAddr            string `protobuf:"bytes,24,opt,name=redis_addr,json=redisAddr,proto3" json:"redis_addr,omitempty"`
+	RedisDb              int32  `protobuf:"varint,25,opt,name=redis_db,json=redisDb,proto3" json:"redis_db,omitempty"`
+	AuditEvidenceSha256  []byte `protobuf:"bytes,26,opt,name=audit_evidence_sha256,json=auditEvidenceSha256,proto3" json:"audit_evidence_sha256,omitempty"`
+	WritersStopped       bool   `protobuf:"varint,27,opt,name=writers_stopped,json=writersStopped,proto3" json:"writers_stopped,omitempty"`
+	QueuesDrained        bool   `protobuf:"varint,28,opt,name=queues_drained,json=queuesDrained,proto3" json:"queues_drained,omitempty"`
+	MappingAddr          string `protobuf:"bytes,29,opt,name=mapping_addr,json=mappingAddr,proto3" json:"mapping_addr,omitempty"`
+	MappingDb            int32  `protobuf:"varint,30,opt,name=mapping_db,json=mappingDb,proto3" json:"mapping_db,omitempty"`
+	// 空摘要代表键原本缺席；有缓存时，必须先逐字段核对已提交SQL，执行时再CAS原bytes。
+	Caches        []*SaveBarrierMaintenanceReceipt_PromotionPlan_CacheObservation `protobuf:"bytes,31,rep,name=caches,proto3" json:"caches,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) Reset() {
+	*x = SaveBarrierMaintenanceReceipt_PromotionPlan{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveBarrierMaintenanceReceipt_PromotionPlan) ProtoMessage() {}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveBarrierMaintenanceReceipt_PromotionPlan.ProtoReflect.Descriptor instead.
+func (*SaveBarrierMaintenanceReceipt_PromotionPlan) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{19, 0}
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetFormat() string {
+	if x != nil {
+		return x.Format
+	}
+	return ""
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetMaintenanceId() string {
+	if x != nil {
+		return x.MaintenanceId
+	}
+	return ""
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetRowSchema() string {
+	if x != nil {
+		return x.RowSchema
+	}
+	return ""
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetRouteSchema() string {
+	if x != nil {
+		return x.RouteSchema
+	}
+	return ""
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetHomeZone() uint32 {
+	if x != nil {
+		return x.HomeZone
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetStorageId() uint32 {
+	if x != nil {
+		return x.StorageId
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetRouteRevision() uint64 {
+	if x != nil {
+		return x.RouteRevision
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetRouteGeneration() string {
+	if x != nil {
+		return x.RouteGeneration
+	}
+	return ""
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetRouteWatermark() uint64 {
+	if x != nil {
+		return x.RouteWatermark
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetPlacementVersion() uint64 {
+	if x != nil {
+		return x.PlacementVersion
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetAuditedOwnerUpperBound() uint64 {
+	if x != nil {
+		return x.AuditedOwnerUpperBound
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetOriginalOwner() uint64 {
+	if x != nil {
+		return x.OriginalOwner
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetTargetOwner() uint64 {
+	if x != nil {
+		return x.TargetOwner
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetOriginalSaveEpoch() uint64 {
+	if x != nil {
+		return x.OriginalSaveEpoch
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetOriginalSaveSeq() uint64 {
+	if x != nil {
+		return x.OriginalSaveSeq
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetTargetSaveSeq() uint64 {
+	if x != nil {
+		return x.TargetSaveSeq
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetSchemaGen() uint32 {
+	if x != nil {
+		return x.SchemaGen
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetFirstBusinessSha256() []byte {
+	if x != nil {
+		return x.FirstBusinessSha256
+	}
+	return nil
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetSecondBusinessSha256() []byte {
+	if x != nil {
+		return x.SecondBusinessSha256
+	}
+	return nil
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetOriginalFence() string {
+	if x != nil {
+		return x.OriginalFence
+	}
+	return ""
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetRevokedFence() string {
+	if x != nil {
+		return x.RevokedFence
+	}
+	return ""
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetReceiptId() []byte {
+	if x != nil {
+		return x.ReceiptId
+	}
+	return nil
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetRedisAddr() string {
+	if x != nil {
+		return x.RedisAddr
+	}
+	return ""
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetRedisDb() int32 {
+	if x != nil {
+		return x.RedisDb
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetAuditEvidenceSha256() []byte {
+	if x != nil {
+		return x.AuditEvidenceSha256
+	}
+	return nil
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetWritersStopped() bool {
+	if x != nil {
+		return x.WritersStopped
+	}
+	return false
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetQueuesDrained() bool {
+	if x != nil {
+		return x.QueuesDrained
+	}
+	return false
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetMappingAddr() string {
+	if x != nil {
+		return x.MappingAddr
+	}
+	return ""
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetMappingDb() int32 {
+	if x != nil {
+		return x.MappingDb
+	}
+	return 0
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan) GetCaches() []*SaveBarrierMaintenanceReceipt_PromotionPlan_CacheObservation {
+	if x != nil {
+		return x.Caches
+	}
+	return nil
+}
+
+type SaveBarrierMaintenanceReceipt_PromotionPlan_CacheObservation struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Present       bool                   `protobuf:"varint,2,opt,name=present,proto3" json:"present,omitempty"`
+	Sha256        []byte                 `protobuf:"bytes,3,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	RedisType     string                 `protobuf:"bytes,4,opt,name=redis_type,json=redisType,proto3" json:"redis_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan_CacheObservation) Reset() {
+	*x = SaveBarrierMaintenanceReceipt_PromotionPlan_CacheObservation{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan_CacheObservation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveBarrierMaintenanceReceipt_PromotionPlan_CacheObservation) ProtoMessage() {}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan_CacheObservation) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveBarrierMaintenanceReceipt_PromotionPlan_CacheObservation.ProtoReflect.Descriptor instead.
+func (*SaveBarrierMaintenanceReceipt_PromotionPlan_CacheObservation) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{19, 0, 0}
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan_CacheObservation) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan_CacheObservation) GetPresent() bool {
+	if x != nil {
+		return x.Present
+	}
+	return false
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan_CacheObservation) GetSha256() []byte {
+	if x != nil {
+		return x.Sha256
+	}
+	return nil
+}
+
+func (x *SaveBarrierMaintenanceReceipt_PromotionPlan_CacheObservation) GetRedisType() string {
+	if x != nil {
+		return x.RedisType
+	}
+	return ""
+}
+
+type AccountRoleAdmissionRecovery_Request struct {
+	state                      protoimpl.MessageState      `protogen:"open.v1"`
+	RequestId                  []byte                      `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	SellerAccount              string                      `protobuf:"bytes,2,opt,name=seller_account,json=sellerAccount,proto3" json:"seller_account,omitempty"`
+	Seal                       *base.RoleTradeSeal         `protobuf:"bytes,3,opt,name=seal,proto3" json:"seal,omitempty"`
+	Admission                  *base.RoleAdmissionIdentity `protobuf:"bytes,4,opt,name=admission,proto3" json:"admission,omitempty"`
+	AdmissionRequestDigest     []byte                      `protobuf:"bytes,5,opt,name=admission_request_digest,json=admissionRequestDigest,proto3" json:"admission_request_digest,omitempty"`
+	ExpectedClosedThrough      uint64                      `protobuf:"varint,6,opt,name=expected_closed_through,json=expectedClosedThrough,proto3" json:"expected_closed_through,omitempty"`
+	ExpectedRequiredOwnerEpoch uint64                      `protobuf:"varint,7,opt,name=expected_required_owner_epoch,json=expectedRequiredOwnerEpoch,proto3" json:"expected_required_owner_epoch,omitempty"`
+	ExpectedRequiredSaveSeq    uint64                      `protobuf:"varint,8,opt,name=expected_required_save_seq,json=expectedRequiredSaveSeq,proto3" json:"expected_required_save_seq,omitempty"`
+	MaintenanceReceiptId       []byte                      `protobuf:"bytes,9,opt,name=maintenance_receipt_id,json=maintenanceReceiptId,proto3" json:"maintenance_receipt_id,omitempty"`
+	MaintenanceRequestDigest   []byte                      `protobuf:"bytes,10,opt,name=maintenance_request_digest,json=maintenanceRequestDigest,proto3" json:"maintenance_request_digest,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *AccountRoleAdmissionRecovery_Request) Reset() {
+	*x = AccountRoleAdmissionRecovery_Request{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountRoleAdmissionRecovery_Request) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountRoleAdmissionRecovery_Request) ProtoMessage() {}
+
+func (x *AccountRoleAdmissionRecovery_Request) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountRoleAdmissionRecovery_Request.ProtoReflect.Descriptor instead.
+func (*AccountRoleAdmissionRecovery_Request) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{20, 0}
+}
+
+func (x *AccountRoleAdmissionRecovery_Request) GetRequestId() []byte {
+	if x != nil {
+		return x.RequestId
+	}
+	return nil
+}
+
+func (x *AccountRoleAdmissionRecovery_Request) GetSellerAccount() string {
+	if x != nil {
+		return x.SellerAccount
+	}
+	return ""
+}
+
+func (x *AccountRoleAdmissionRecovery_Request) GetSeal() *base.RoleTradeSeal {
+	if x != nil {
+		return x.Seal
+	}
+	return nil
+}
+
+func (x *AccountRoleAdmissionRecovery_Request) GetAdmission() *base.RoleAdmissionIdentity {
+	if x != nil {
+		return x.Admission
+	}
+	return nil
+}
+
+func (x *AccountRoleAdmissionRecovery_Request) GetAdmissionRequestDigest() []byte {
+	if x != nil {
+		return x.AdmissionRequestDigest
+	}
+	return nil
+}
+
+func (x *AccountRoleAdmissionRecovery_Request) GetExpectedClosedThrough() uint64 {
+	if x != nil {
+		return x.ExpectedClosedThrough
+	}
+	return 0
+}
+
+func (x *AccountRoleAdmissionRecovery_Request) GetExpectedRequiredOwnerEpoch() uint64 {
+	if x != nil {
+		return x.ExpectedRequiredOwnerEpoch
+	}
+	return 0
+}
+
+func (x *AccountRoleAdmissionRecovery_Request) GetExpectedRequiredSaveSeq() uint64 {
+	if x != nil {
+		return x.ExpectedRequiredSaveSeq
+	}
+	return 0
+}
+
+func (x *AccountRoleAdmissionRecovery_Request) GetMaintenanceReceiptId() []byte {
+	if x != nil {
+		return x.MaintenanceReceiptId
+	}
+	return nil
+}
+
+func (x *AccountRoleAdmissionRecovery_Request) GetMaintenanceRequestDigest() []byte {
+	if x != nil {
+		return x.MaintenanceRequestDigest
+	}
+	return nil
+}
+
+type SqlWriterLifecycleReceipt_Request struct {
+	state                   protoimpl.MessageState           `protogen:"open.v1"`
+	RequestId               []byte                           `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Kind                    SqlWriterLifecycleReceipt_Kind   `protobuf:"varint,2,opt,name=kind,proto3,enum=SqlWriterLifecycleReceipt_Kind" json:"kind,omitempty"`
+	Writer                  *SqlWriterRegistry               `protobuf:"bytes,3,opt,name=writer,proto3" json:"writer,omitempty"`
+	ExpectedEpoch           uint64                           `protobuf:"varint,4,opt,name=expected_epoch,json=expectedEpoch,proto3" json:"expected_epoch,omitempty"`
+	ExpectedCatalogRevision uint64                           `protobuf:"varint,5,opt,name=expected_catalog_revision,json=expectedCatalogRevision,proto3" json:"expected_catalog_revision,omitempty"`
+	AuthoritySchema         string                           `protobuf:"bytes,6,opt,name=authority_schema,json=authoritySchema,proto3" json:"authority_schema,omitempty"`
+	ProtectedSchemas        []string                         `protobuf:"bytes,7,rep,name=protected_schemas,json=protectedSchemas,proto3" json:"protected_schemas,omitempty"`
+	DeploymentDigest        []byte                           `protobuf:"bytes,8,opt,name=deployment_digest,json=deploymentDigest,proto3" json:"deployment_digest,omitempty"`
+	MaintenanceRunId        []byte                           `protobuf:"bytes,9,opt,name=maintenance_run_id,json=maintenanceRunId,proto3" json:"maintenance_run_id,omitempty"` // REGISTER仅同run SQL_RELEASED后fresh注册；RETIRE绑定本轮P1根闭合或P3 relay闭合永久事实。普通生命周期为空。
+	DeploymentId            string                           `protobuf:"bytes,10,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`              // 必须非空且进入永久请求摘要；init绑定真实PodUID，重放不得换部署。
+	LockPrimitive           SqlWriterBootGrant_LockPrimitive `protobuf:"varint,11,opt,name=lock_primitive,json=lockPrimitive,proto3,enum=SqlWriterBootGrant_LockPrimitive" json:"lock_primitive,omitempty"`
+	LockQualificationSha256 []byte                           `protobuf:"bytes,12,opt,name=lock_qualification_sha256,json=lockQualificationSha256,proto3" json:"lock_qualification_sha256,omitempty"` // 同REGISTER原件永久绑定，必须精确等boot grant15/16；无I3资格不发grant。
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) Reset() {
+	*x = SqlWriterLifecycleReceipt_Request{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterLifecycleReceipt_Request) ProtoMessage() {}
+
+func (x *SqlWriterLifecycleReceipt_Request) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterLifecycleReceipt_Request.ProtoReflect.Descriptor instead.
+func (*SqlWriterLifecycleReceipt_Request) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{23, 0}
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) GetRequestId() []byte {
+	if x != nil {
+		return x.RequestId
+	}
+	return nil
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) GetKind() SqlWriterLifecycleReceipt_Kind {
+	if x != nil {
+		return x.Kind
+	}
+	return SqlWriterLifecycleReceipt_KIND_UNKNOWN
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) GetWriter() *SqlWriterRegistry {
+	if x != nil {
+		return x.Writer
+	}
+	return nil
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) GetExpectedEpoch() uint64 {
+	if x != nil {
+		return x.ExpectedEpoch
+	}
+	return 0
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) GetExpectedCatalogRevision() uint64 {
+	if x != nil {
+		return x.ExpectedCatalogRevision
+	}
+	return 0
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) GetAuthoritySchema() string {
+	if x != nil {
+		return x.AuthoritySchema
+	}
+	return ""
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) GetProtectedSchemas() []string {
+	if x != nil {
+		return x.ProtectedSchemas
+	}
+	return nil
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) GetDeploymentDigest() []byte {
+	if x != nil {
+		return x.DeploymentDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) GetMaintenanceRunId() []byte {
+	if x != nil {
+		return x.MaintenanceRunId
+	}
+	return nil
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) GetDeploymentId() string {
+	if x != nil {
+		return x.DeploymentId
+	}
+	return ""
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) GetLockPrimitive() SqlWriterBootGrant_LockPrimitive {
+	if x != nil {
+		return x.LockPrimitive
+	}
+	return SqlWriterBootGrant_LOCK_PRIMITIVE_UNKNOWN
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) GetLockQualificationSha256() []byte {
+	if x != nil {
+		return x.LockQualificationSha256
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_Plan struct {
+	state                   protoimpl.MessageState                               `protogen:"open.v1"`
+	PhysicalClusterIdentity []byte                                               `protobuf:"bytes,1,opt,name=physical_cluster_identity,json=physicalClusterIdentity,proto3" json:"physical_cluster_identity,omitempty"`
+	AuthoritySchema         string                                               `protobuf:"bytes,2,opt,name=authority_schema,json=authoritySchema,proto3" json:"authority_schema,omitempty"`
+	ProtectedSchemas        []string                                             `protobuf:"bytes,3,rep,name=protected_schemas,json=protectedSchemas,proto3" json:"protected_schemas,omitempty"`
+	ActiveWriterKeys        [][]byte                                             `protobuf:"bytes,4,rep,name=active_writer_keys,json=activeWriterKeys,proto3" json:"active_writer_keys,omitempty"`
+	BeforeEpoch             uint64                                               `protobuf:"varint,5,opt,name=before_epoch,json=beforeEpoch,proto3" json:"before_epoch,omitempty"`
+	CatalogRevision         uint64                                               `protobuf:"varint,6,opt,name=catalog_revision,json=catalogRevision,proto3" json:"catalog_revision,omitempty"`
+	RunId                   []byte                                               `protobuf:"bytes,7,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	PriorFreezeRequestId    []byte                                               `protobuf:"bytes,8,opt,name=prior_freeze_request_id,json=priorFreezeRequestId,proto3" json:"prior_freeze_request_id,omitempty"`
+	RecoveryAuditDigest     []byte                                               `protobuf:"bytes,9,opt,name=recovery_audit_digest,json=recoveryAuditDigest,proto3" json:"recovery_audit_digest,omitempty"`
+	RootIssuers             []*SqlWriterMaintenanceReceipt_IssuerClosure         `protobuf:"bytes,10,rep,name=root_issuers,json=rootIssuers,proto3" json:"root_issuers,omitempty"` // P0精确预期logical role/boot，不是事后发现。
+	QueueMutators           []*SqlWriterMaintenanceReceipt_IssuerClosure         `protobuf:"bytes,11,rep,name=queue_mutators,json=queueMutators,proto3" json:"queue_mutators,omitempty"`
+	KafkaPartitions         []*SqlWriterMaintenanceReceipt_KafkaPartitionClosure `protobuf:"bytes,12,rep,name=kafka_partitions,json=kafkaPartitions,proto3" json:"kafka_partitions,omitempty"` // 全历史topic ID/group/partition/baseline全集。
+	RedisTargets            []*SqlWriterMaintenanceReceipt_RedisTargetClosure    `protobuf:"bytes,13,rep,name=redis_targets,json=redisTargets,proto3" json:"redis_targets,omitempty"`          // 实际物理目标/DB/固定与动态前缀目录。
+	SourcePins              []*SqlWriterMaintenanceReceipt_SourcePin             `protobuf:"bytes,14,rep,name=source_pins,json=sourcePins,proto3" json:"source_pins,omitempty"`
+	Launchers               []*SqlWriterMaintenanceReceipt_LaunchClosure         `protobuf:"bytes,15,rep,name=launchers,proto3" json:"launchers,omitempty"`
+	// P6冻结维护工具的有限单次boot目录；不是P1/P3已经关闭的旧业务发行者。
+	MaintenanceIssuers []*SqlWriterMaintenanceReceipt_IssuerClosure            `protobuf:"bytes,16,rep,name=maintenance_issuers,json=maintenanceIssuers,proto3" json:"maintenance_issuers,omitempty"`
+	ManualAssignments  []*SqlWriterMaintenanceReceipt_ManualConsumerAssignment `protobuf:"bytes,17,rep,name=manual_assignments,json=manualAssignments,proto3" json:"manual_assignments,omitempty"` // P0实际manual owner配置和物理位置基线。
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) Reset() {
+	*x = SqlWriterMaintenanceReceipt_Plan{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_Plan) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_Plan.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_Plan) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 0}
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetPhysicalClusterIdentity() []byte {
+	if x != nil {
+		return x.PhysicalClusterIdentity
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetAuthoritySchema() string {
+	if x != nil {
+		return x.AuthoritySchema
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetProtectedSchemas() []string {
+	if x != nil {
+		return x.ProtectedSchemas
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetActiveWriterKeys() [][]byte {
+	if x != nil {
+		return x.ActiveWriterKeys
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetBeforeEpoch() uint64 {
+	if x != nil {
+		return x.BeforeEpoch
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetCatalogRevision() uint64 {
+	if x != nil {
+		return x.CatalogRevision
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetRunId() []byte {
+	if x != nil {
+		return x.RunId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetPriorFreezeRequestId() []byte {
+	if x != nil {
+		return x.PriorFreezeRequestId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetRecoveryAuditDigest() []byte {
+	if x != nil {
+		return x.RecoveryAuditDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetRootIssuers() []*SqlWriterMaintenanceReceipt_IssuerClosure {
+	if x != nil {
+		return x.RootIssuers
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetQueueMutators() []*SqlWriterMaintenanceReceipt_IssuerClosure {
+	if x != nil {
+		return x.QueueMutators
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetKafkaPartitions() []*SqlWriterMaintenanceReceipt_KafkaPartitionClosure {
+	if x != nil {
+		return x.KafkaPartitions
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetRedisTargets() []*SqlWriterMaintenanceReceipt_RedisTargetClosure {
+	if x != nil {
+		return x.RedisTargets
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetSourcePins() []*SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.SourcePins
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetLaunchers() []*SqlWriterMaintenanceReceipt_LaunchClosure {
+	if x != nil {
+		return x.Launchers
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetMaintenanceIssuers() []*SqlWriterMaintenanceReceipt_IssuerClosure {
+	if x != nil {
+		return x.MaintenanceIssuers
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Plan) GetManualAssignments() []*SqlWriterMaintenanceReceipt_ManualConsumerAssignment {
+	if x != nil {
+		return x.ManualAssignments
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_LaunchClosure struct {
+	state            protoimpl.MessageState                   `protogen:"open.v1"`
+	LauncherId       []byte                                   `protobuf:"bytes,1,opt,name=launcher_id,json=launcherId,proto3" json:"launcher_id,omitempty"`
+	SourcePins       []*SqlWriterMaintenanceReceipt_SourcePin `protobuf:"bytes,2,rep,name=source_pins,json=sourcePins,proto3" json:"source_pins,omitempty"`
+	PermanentFenceId []byte                                   `protobuf:"bytes,3,opt,name=permanent_fence_id,json=permanentFenceId,proto3" json:"permanent_fence_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_LaunchClosure) Reset() {
+	*x = SqlWriterMaintenanceReceipt_LaunchClosure{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_LaunchClosure) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_LaunchClosure) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_LaunchClosure) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_LaunchClosure.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_LaunchClosure) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 1}
+}
+
+func (x *SqlWriterMaintenanceReceipt_LaunchClosure) GetLauncherId() []byte {
+	if x != nil {
+		return x.LauncherId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_LaunchClosure) GetSourcePins() []*SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.SourcePins
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_LaunchClosure) GetPermanentFenceId() []byte {
+	if x != nil {
+		return x.PermanentFenceId
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_SourcePin struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AbsolutePath  string                 `protobuf:"bytes,1,opt,name=absolute_path,json=absolutePath,proto3" json:"absolute_path,omitempty"`
+	Sha256        []byte                 `protobuf:"bytes,2,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourcePin) Reset() {
+	*x = SqlWriterMaintenanceReceipt_SourcePin{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourcePin) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_SourcePin) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_SourcePin) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_SourcePin.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_SourcePin) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 2}
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourcePin) GetAbsolutePath() string {
+	if x != nil {
+		return x.AbsolutePath
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourcePin) GetSha256() []byte {
+	if x != nil {
+		return x.Sha256
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_IssuerClosure struct {
+	state                   protoimpl.MessageState                   `protogen:"open.v1"`
+	IssuerId                []byte                                   `protobuf:"bytes,1,opt,name=issuer_id,json=issuerId,proto3" json:"issuer_id,omitempty"`
+	InstanceId              []byte                                   `protobuf:"bytes,2,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	PhysicalWriterKey       []byte                                   `protobuf:"bytes,3,opt,name=physical_writer_key,json=physicalWriterKey,proto3" json:"physical_writer_key,omitempty"` // 同process可兼任逻辑root/relay，P1不能提前retire此key。
+	LogicalRole             string                                   `protobuf:"bytes,4,opt,name=logical_role,json=logicalRole,proto3" json:"logical_role,omitempty"`
+	PermanentRevivalFenceId []byte                                   `protobuf:"bytes,5,opt,name=permanent_revival_fence_id,json=permanentRevivalFenceId,proto3" json:"permanent_revival_fence_id,omitempty"`
+	AcceptingClosedMs       uint64                                   `protobuf:"varint,6,opt,name=accepting_closed_ms,json=acceptingClosedMs,proto3" json:"accepting_closed_ms,omitempty"`
+	AcceptedSettledMs       uint64                                   `protobuf:"varint,7,opt,name=accepted_settled_ms,json=acceptedSettledMs,proto3" json:"accepted_settled_ms,omitempty"`
+	AcceptedFrontierDigest  []byte                                   `protobuf:"bytes,8,opt,name=accepted_frontier_digest,json=acceptedFrontierDigest,proto3" json:"accepted_frontier_digest,omitempty"`
+	UnresolvedPublications  uint64                                   `protobuf:"varint,9,opt,name=unresolved_publications,json=unresolvedPublications,proto3" json:"unresolved_publications,omitempty"` // 成功ROLE_CLOSED/QUIESCED必须0，不以TTL猜测。
+	SourceEvidence          []*SqlWriterMaintenanceReceipt_SourcePin `protobuf:"bytes,10,rep,name=source_evidence,json=sourceEvidence,proto3" json:"source_evidence,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerClosure) Reset() {
+	*x = SqlWriterMaintenanceReceipt_IssuerClosure{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerClosure) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_IssuerClosure) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerClosure) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_IssuerClosure.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_IssuerClosure) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 3}
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerClosure) GetIssuerId() []byte {
+	if x != nil {
+		return x.IssuerId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerClosure) GetInstanceId() []byte {
+	if x != nil {
+		return x.InstanceId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerClosure) GetPhysicalWriterKey() []byte {
+	if x != nil {
+		return x.PhysicalWriterKey
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerClosure) GetLogicalRole() string {
+	if x != nil {
+		return x.LogicalRole
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerClosure) GetPermanentRevivalFenceId() []byte {
+	if x != nil {
+		return x.PermanentRevivalFenceId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerClosure) GetAcceptingClosedMs() uint64 {
+	if x != nil {
+		return x.AcceptingClosedMs
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerClosure) GetAcceptedSettledMs() uint64 {
+	if x != nil {
+		return x.AcceptedSettledMs
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerClosure) GetAcceptedFrontierDigest() []byte {
+	if x != nil {
+		return x.AcceptedFrontierDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerClosure) GetUnresolvedPublications() uint64 {
+	if x != nil {
+		return x.UnresolvedPublications
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerClosure) GetSourceEvidence() []*SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.SourceEvidence
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_KafkaPartitionClosure struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	ClusterId               []byte                 `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	TopicId                 []byte                 `protobuf:"bytes,2,opt,name=topic_id,json=topicId,proto3" json:"topic_id,omitempty"`
+	TopicName               string                 `protobuf:"bytes,3,opt,name=topic_name,json=topicName,proto3" json:"topic_name,omitempty"`
+	Group                   string                 `protobuf:"bytes,4,opt,name=group,proto3" json:"group,omitempty"`
+	Partition               uint32                 `protobuf:"varint,5,opt,name=partition,proto3" json:"partition,omitempty"`
+	ProtectedCommittedFloor int64                  `protobuf:"varint,6,opt,name=protected_committed_floor,json=protectedCommittedFloor,proto3" json:"protected_committed_floor,omitempty"`
+	InitialEarliest         int64                  `protobuf:"varint,7,opt,name=initial_earliest,json=initialEarliest,proto3" json:"initial_earliest,omitempty"`
+	FinalEarliest           int64                  `protobuf:"varint,8,opt,name=final_earliest,json=finalEarliest,proto3" json:"final_earliest,omitempty"`
+	FinalExclusiveEnd       int64                  `protobuf:"varint,9,opt,name=final_exclusive_end,json=finalExclusiveEnd,proto3" json:"final_exclusive_end,omitempty"`
+	FinalCommitted          int64                  `protobuf:"varint,10,opt,name=final_committed,json=finalCommitted,proto3" json:"final_committed,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) Reset() {
+	*x = SqlWriterMaintenanceReceipt_KafkaPartitionClosure{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_KafkaPartitionClosure) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_KafkaPartitionClosure.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_KafkaPartitionClosure) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 4}
+}
+
+func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) GetClusterId() []byte {
+	if x != nil {
+		return x.ClusterId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) GetTopicId() []byte {
+	if x != nil {
+		return x.TopicId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) GetTopicName() string {
+	if x != nil {
+		return x.TopicName
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) GetPartition() uint32 {
+	if x != nil {
+		return x.Partition
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) GetProtectedCommittedFloor() int64 {
+	if x != nil {
+		return x.ProtectedCommittedFloor
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) GetInitialEarliest() int64 {
+	if x != nil {
+		return x.InitialEarliest
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) GetFinalEarliest() int64 {
+	if x != nil {
+		return x.FinalEarliest
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) GetFinalExclusiveEnd() int64 {
+	if x != nil {
+		return x.FinalExclusiveEnd
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) GetFinalCommitted() int64 {
+	if x != nil {
+		return x.FinalCommitted
+	}
+	return 0
+}
+
+type SqlWriterMaintenanceReceipt_RedisKeyClosure struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	Topic         string                 `protobuf:"bytes,3,opt,name=topic,proto3" json:"topic,omitempty"`
+	RedisType     string                 `protobuf:"bytes,4,opt,name=redis_type,json=redisType,proto3" json:"redis_type,omitempty"`
+	PttlMs        int64                  `protobuf:"varint,5,opt,name=pttl_ms,json=pttlMs,proto3" json:"pttl_ms,omitempty"`
+	Count         uint64                 `protobuf:"varint,6,opt,name=count,proto3" json:"count,omitempty"`
+	Members       [][]byte               `protobuf:"bytes,7,rep,name=members,proto3" json:"members,omitempty"`
+	Values        [][]byte               `protobuf:"bytes,8,rep,name=values,proto3" json:"values,omitempty"`
+	DumpSha256    []byte                 `protobuf:"bytes,9,opt,name=dump_sha256,json=dumpSha256,proto3" json:"dump_sha256,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) Reset() {
+	*x = SqlWriterMaintenanceReceipt_RedisKeyClosure{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_RedisKeyClosure) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_RedisKeyClosure.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_RedisKeyClosure) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 5}
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) GetTopic() string {
+	if x != nil {
+		return x.Topic
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) GetRedisType() string {
+	if x != nil {
+		return x.RedisType
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) GetPttlMs() int64 {
+	if x != nil {
+		return x.PttlMs
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) GetCount() uint64 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) GetMembers() [][]byte {
+	if x != nil {
+		return x.Members
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) GetValues() [][]byte {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) GetDumpSha256() []byte {
+	if x != nil {
+		return x.DumpSha256
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_RedisTargetClosure struct {
+	state              protoimpl.MessageState                         `protogen:"open.v1"`
+	Role               string                                         `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
+	Address            string                                         `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	Db                 int32                                          `protobuf:"varint,3,opt,name=db,proto3" json:"db,omitempty"`
+	ServerRunId        []byte                                         `protobuf:"bytes,4,opt,name=server_run_id,json=serverRunId,proto3" json:"server_run_id,omitempty"`
+	MaintenanceNonce   []byte                                         `protobuf:"bytes,5,opt,name=maintenance_nonce,json=maintenanceNonce,proto3" json:"maintenance_nonce,omitempty"`
+	Zones              []uint32                                       `protobuf:"varint,6,rep,packed,name=zones,proto3" json:"zones,omitempty"`
+	Observations       []*SqlWriterMaintenanceReceipt_RedisKeyClosure `protobuf:"bytes,7,rep,name=observations,proto3" json:"observations,omitempty"`
+	ScanSourceEvidence []*SqlWriterMaintenanceReceipt_SourcePin       `protobuf:"bytes,8,rep,name=scan_source_evidence,json=scanSourceEvidence,proto3" json:"scan_source_evidence,omitempty"` // 完整cursor0→0原件，固定64桶+动态前缀等集交叉。
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) Reset() {
+	*x = SqlWriterMaintenanceReceipt_RedisTargetClosure{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_RedisTargetClosure) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_RedisTargetClosure.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_RedisTargetClosure) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 6}
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) GetDb() int32 {
+	if x != nil {
+		return x.Db
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) GetServerRunId() []byte {
+	if x != nil {
+		return x.ServerRunId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) GetMaintenanceNonce() []byte {
+	if x != nil {
+		return x.MaintenanceNonce
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) GetZones() []uint32 {
+	if x != nil {
+		return x.Zones
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) GetObservations() []*SqlWriterMaintenanceReceipt_RedisKeyClosure {
+	if x != nil {
+		return x.Observations
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) GetScanSourceEvidence() []*SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.ScanSourceEvidence
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_PublicationEvidence struct {
+	state                 protoimpl.MessageState                       `protogen:"open.v1"`
+	LogicalRoles          []*SqlWriterMaintenanceReceipt_IssuerClosure `protobuf:"bytes,1,rep,name=logical_roles,json=logicalRoles,proto3" json:"logical_roles,omitempty"`
+	IssuerInventoryDigest []byte                                       `protobuf:"bytes,2,opt,name=issuer_inventory_digest,json=issuerInventoryDigest,proto3" json:"issuer_inventory_digest,omitempty"`
+	SourceEvidence        []*SqlWriterMaintenanceReceipt_SourcePin     `protobuf:"bytes,3,rep,name=source_evidence,json=sourceEvidence,proto3" json:"source_evidence,omitempty"` // 实际app IssuerClosure报告原件，不能只抄字段或自pin自身。
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_PublicationEvidence) Reset() {
+	*x = SqlWriterMaintenanceReceipt_PublicationEvidence{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_PublicationEvidence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_PublicationEvidence) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_PublicationEvidence) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_PublicationEvidence.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_PublicationEvidence) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 7}
+}
+
+func (x *SqlWriterMaintenanceReceipt_PublicationEvidence) GetLogicalRoles() []*SqlWriterMaintenanceReceipt_IssuerClosure {
+	if x != nil {
+		return x.LogicalRoles
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_PublicationEvidence) GetIssuerInventoryDigest() []byte {
+	if x != nil {
+		return x.IssuerInventoryDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_PublicationEvidence) GetSourceEvidence() []*SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.SourceEvidence
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_NonSqlClosureEvidence struct {
+	state                      protoimpl.MessageState                                `protogen:"open.v1"`
+	QueueMutators              []*SqlWriterMaintenanceReceipt_IssuerClosure          `protobuf:"bytes,1,rep,name=queue_mutators,json=queueMutators,proto3" json:"queue_mutators,omitempty"`
+	KafkaPartitions            []*SqlWriterMaintenanceReceipt_KafkaPartitionClosure  `protobuf:"bytes,2,rep,name=kafka_partitions,json=kafkaPartitions,proto3" json:"kafka_partitions,omitempty"`
+	RedisTargets               []*SqlWriterMaintenanceReceipt_RedisTargetClosure     `protobuf:"bytes,3,rep,name=redis_targets,json=redisTargets,proto3" json:"redis_targets,omitempty"`
+	RootClosedReceiptId        []byte                                                `protobuf:"bytes,4,opt,name=root_closed_receipt_id,json=rootClosedReceiptId,proto3" json:"root_closed_receipt_id,omitempty"`
+	RootClosedReceiptDigest    []byte                                                `protobuf:"bytes,5,opt,name=root_closed_receipt_digest,json=rootClosedReceiptDigest,proto3" json:"root_closed_receipt_digest,omitempty"`
+	RelayQuiescedReceiptId     []byte                                                `protobuf:"bytes,6,opt,name=relay_quiesced_receipt_id,json=relayQuiescedReceiptId,proto3" json:"relay_quiesced_receipt_id,omitempty"`
+	RelayQuiescedReceiptDigest []byte                                                `protobuf:"bytes,7,opt,name=relay_quiesced_receipt_digest,json=relayQuiescedReceiptDigest,proto3" json:"relay_quiesced_receipt_digest,omitempty"`
+	HistoricalInventoryDigest  []byte                                                `protobuf:"bytes,8,opt,name=historical_inventory_digest,json=historicalInventoryDigest,proto3" json:"historical_inventory_digest,omitempty"`
+	ObservedStartMs            uint64                                                `protobuf:"varint,9,opt,name=observed_start_ms,json=observedStartMs,proto3" json:"observed_start_ms,omitempty"`
+	ObservedEndMs              uint64                                                `protobuf:"varint,10,opt,name=observed_end_ms,json=observedEndMs,proto3" json:"observed_end_ms,omitempty"`
+	SourceEvidence             []*SqlWriterMaintenanceReceipt_SourcePin              `protobuf:"bytes,11,rep,name=source_evidence,json=sourceEvidence,proto3" json:"source_evidence,omitempty"`
+	ManualConsumers            []*SqlWriterMaintenanceReceipt_ManualConsumerEvidence `protobuf:"bytes,12,rep,name=manual_consumers,json=manualConsumers,proto3" json:"manual_consumers,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) Reset() {
+	*x = SqlWriterMaintenanceReceipt_NonSqlClosureEvidence{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_NonSqlClosureEvidence.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 8}
+}
+
+func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) GetQueueMutators() []*SqlWriterMaintenanceReceipt_IssuerClosure {
+	if x != nil {
+		return x.QueueMutators
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) GetKafkaPartitions() []*SqlWriterMaintenanceReceipt_KafkaPartitionClosure {
+	if x != nil {
+		return x.KafkaPartitions
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) GetRedisTargets() []*SqlWriterMaintenanceReceipt_RedisTargetClosure {
+	if x != nil {
+		return x.RedisTargets
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) GetRootClosedReceiptId() []byte {
+	if x != nil {
+		return x.RootClosedReceiptId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) GetRootClosedReceiptDigest() []byte {
+	if x != nil {
+		return x.RootClosedReceiptDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) GetRelayQuiescedReceiptId() []byte {
+	if x != nil {
+		return x.RelayQuiescedReceiptId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) GetRelayQuiescedReceiptDigest() []byte {
+	if x != nil {
+		return x.RelayQuiescedReceiptDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) GetHistoricalInventoryDigest() []byte {
+	if x != nil {
+		return x.HistoricalInventoryDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) GetObservedStartMs() uint64 {
+	if x != nil {
+		return x.ObservedStartMs
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) GetObservedEndMs() uint64 {
+	if x != nil {
+		return x.ObservedEndMs
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) GetSourceEvidence() []*SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.SourceEvidence
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) GetManualConsumers() []*SqlWriterMaintenanceReceipt_ManualConsumerEvidence {
+	if x != nil {
+		return x.ManualConsumers
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_TicketEvidence struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	TicketId             []byte                 `protobuf:"bytes,1,opt,name=ticket_id,json=ticketId,proto3" json:"ticket_id,omitempty"`
+	BoundRequestId       []byte                 `protobuf:"bytes,2,opt,name=bound_request_id,json=boundRequestId,proto3" json:"bound_request_id,omitempty"`
+	BoundRequestDigest   []byte                 `protobuf:"bytes,3,opt,name=bound_request_digest,json=boundRequestDigest,proto3" json:"bound_request_digest,omitempty"`
+	AuthorityOperationId []byte                 `protobuf:"bytes,4,opt,name=authority_operation_id,json=authorityOperationId,proto3" json:"authority_operation_id,omitempty"`
+	TicketRequestDigest  []byte                 `protobuf:"bytes,5,opt,name=ticket_request_digest,json=ticketRequestDigest,proto3" json:"ticket_request_digest,omitempty"` // ticket原请求确定性SHA：清SQL-owned grant/updated/consumed/revocation字段；时间窗必须被授权请求绑定。
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_TicketEvidence) Reset() {
+	*x = SqlWriterMaintenanceReceipt_TicketEvidence{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_TicketEvidence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_TicketEvidence) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_TicketEvidence) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_TicketEvidence.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_TicketEvidence) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 9}
+}
+
+func (x *SqlWriterMaintenanceReceipt_TicketEvidence) GetTicketId() []byte {
+	if x != nil {
+		return x.TicketId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_TicketEvidence) GetBoundRequestId() []byte {
+	if x != nil {
+		return x.BoundRequestId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_TicketEvidence) GetBoundRequestDigest() []byte {
+	if x != nil {
+		return x.BoundRequestDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_TicketEvidence) GetAuthorityOperationId() []byte {
+	if x != nil {
+		return x.AuthorityOperationId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_TicketEvidence) GetTicketRequestDigest() []byte {
+	if x != nil {
+		return x.TicketRequestDigest
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_EmergencyEvidence struct {
+	state               protoimpl.MessageState                      `protogen:"open.v1"`
+	Reason              string                                      `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
+	DangerReceiptId     []byte                                      `protobuf:"bytes,2,opt,name=danger_receipt_id,json=dangerReceiptId,proto3" json:"danger_receipt_id,omitempty"`
+	DangerReceiptDigest []byte                                      `protobuf:"bytes,3,opt,name=danger_receipt_digest,json=dangerReceiptDigest,proto3" json:"danger_receipt_digest,omitempty"`
+	SourceEvidence      []*SqlWriterMaintenanceReceipt_SourcePin    `protobuf:"bytes,4,rep,name=source_evidence,json=sourceEvidence,proto3" json:"source_evidence,omitempty"`
+	Authorization       *SqlWriterMaintenanceReceipt_TicketEvidence `protobuf:"bytes,5,opt,name=authorization,proto3" json:"authorization,omitempty"` // 只在紧急grant绑定完整ticket请求；freeze用SQL ticket原freeze_request_id/digest，避免摘要自引用。
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_EmergencyEvidence) Reset() {
+	*x = SqlWriterMaintenanceReceipt_EmergencyEvidence{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_EmergencyEvidence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_EmergencyEvidence) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_EmergencyEvidence) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_EmergencyEvidence.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_EmergencyEvidence) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 10}
+}
+
+func (x *SqlWriterMaintenanceReceipt_EmergencyEvidence) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_EmergencyEvidence) GetDangerReceiptId() []byte {
+	if x != nil {
+		return x.DangerReceiptId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_EmergencyEvidence) GetDangerReceiptDigest() []byte {
+	if x != nil {
+		return x.DangerReceiptDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_EmergencyEvidence) GetSourceEvidence() []*SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.SourceEvidence
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_EmergencyEvidence) GetAuthorization() *SqlWriterMaintenanceReceipt_TicketEvidence {
+	if x != nil {
+		return x.Authorization
+	}
+	return nil
+}
+
+// 解冻前原件独立于不可变P0计划；不回填Plan里的历史before_epoch/原freeze字段。
+type SqlWriterMaintenanceReceipt_MergeRecoveryAudit struct {
+	state                       protoimpl.MessageState                            `protogen:"open.v1"`
+	AuditInstanceId             []byte                                            `protobuf:"bytes,1,opt,name=audit_instance_id,json=auditInstanceId,proto3" json:"audit_instance_id,omitempty"` // 只读审核进程本次nonce，不是可复活的MAINTENANCE身份。
+	RunId                       []byte                                            `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	Generation                  string                                            `protobuf:"bytes,3,opt,name=generation,proto3" json:"generation,omitempty"`
+	AttemptRevision             uint64                                            `protobuf:"varint,4,opt,name=attempt_revision,json=attemptRevision,proto3" json:"attempt_revision,omitempty"`
+	PlanDigest                  []byte                                            `protobuf:"bytes,5,opt,name=plan_digest,json=planDigest,proto3" json:"plan_digest,omitempty"`
+	OriginalFreezeReceiptId     []byte                                            `protobuf:"bytes,6,opt,name=original_freeze_receipt_id,json=originalFreezeReceiptId,proto3" json:"original_freeze_receipt_id,omitempty"`
+	OriginalFreezeReceiptDigest []byte                                            `protobuf:"bytes,7,opt,name=original_freeze_receipt_digest,json=originalFreezeReceiptDigest,proto3" json:"original_freeze_receipt_digest,omitempty"`
+	MaintenancePublication      *SqlWriterMaintenanceReceipt_PublicationEvidence  `protobuf:"bytes,8,opt,name=maintenance_publication,json=maintenancePublication,proto3" json:"maintenance_publication,omitempty"` // P0维护boot全集的实际永久closure及文件pins。
+	MergeManifest               *SqlWriterMaintenanceReceipt_SourcePin            `protobuf:"bytes,9,opt,name=merge_manifest,json=mergeManifest,proto3" json:"merge_manifest,omitempty"`                            // 原mergeManifest JSON原始字节摘要；审核前后重pin。
+	MergeRunId                  string                                            `protobuf:"bytes,10,opt,name=merge_run_id,json=mergeRunId,proto3" json:"merge_run_id,omitempty"`
+	SourceZone                  uint32                                            `protobuf:"varint,11,opt,name=source_zone,json=sourceZone,proto3" json:"source_zone,omitempty"`
+	TargetZone                  uint32                                            `protobuf:"varint,12,opt,name=target_zone,json=targetZone,proto3" json:"target_zone,omitempty"`
+	VerifyMerged                bool                                              `protobuf:"varint,13,opt,name=verify_merged,json=verifyMerged,proto3" json:"verify_merged,omitempty"` // P7必须true。
+	ObservedStartMs             uint64                                            `protobuf:"varint,14,opt,name=observed_start_ms,json=observedStartMs,proto3" json:"observed_start_ms,omitempty"`
+	ObservedEndMs               uint64                                            `protobuf:"varint,15,opt,name=observed_end_ms,json=observedEndMs,proto3" json:"observed_end_ms,omitempty"`
+	Checks                      []*SqlWriterMaintenanceReceipt_MergeRecoveryCheck `protobuf:"bytes,16,rep,name=checks,proto3" json:"checks,omitempty"`
+	AuditSourcePins             []*SqlWriterMaintenanceReceipt_SourcePin          `protobuf:"bytes,17,rep,name=audit_source_pins,json=auditSourcePins,proto3" json:"audit_source_pins,omitempty"` // 实际auditor/查询实现来源，必须在P0 source_pins全集。
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) Reset() {
+	*x = SqlWriterMaintenanceReceipt_MergeRecoveryAudit{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_MergeRecoveryAudit) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_MergeRecoveryAudit.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_MergeRecoveryAudit) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 11}
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetAuditInstanceId() []byte {
+	if x != nil {
+		return x.AuditInstanceId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetRunId() []byte {
+	if x != nil {
+		return x.RunId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetGeneration() string {
+	if x != nil {
+		return x.Generation
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetAttemptRevision() uint64 {
+	if x != nil {
+		return x.AttemptRevision
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetPlanDigest() []byte {
+	if x != nil {
+		return x.PlanDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetOriginalFreezeReceiptId() []byte {
+	if x != nil {
+		return x.OriginalFreezeReceiptId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetOriginalFreezeReceiptDigest() []byte {
+	if x != nil {
+		return x.OriginalFreezeReceiptDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetMaintenancePublication() *SqlWriterMaintenanceReceipt_PublicationEvidence {
+	if x != nil {
+		return x.MaintenancePublication
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetMergeManifest() *SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.MergeManifest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetMergeRunId() string {
+	if x != nil {
+		return x.MergeRunId
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetSourceZone() uint32 {
+	if x != nil {
+		return x.SourceZone
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetTargetZone() uint32 {
+	if x != nil {
+		return x.TargetZone
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetVerifyMerged() bool {
+	if x != nil {
+		return x.VerifyMerged
+	}
+	return false
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetObservedStartMs() uint64 {
+	if x != nil {
+		return x.ObservedStartMs
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetObservedEndMs() uint64 {
+	if x != nil {
+		return x.ObservedEndMs
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetChecks() []*SqlWriterMaintenanceReceipt_MergeRecoveryCheck {
+	if x != nil {
+		return x.Checks
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryAudit) GetAuditSourcePins() []*SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.AuditSourcePins
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_MergeRecoveryCheck struct {
+	state           protoimpl.MessageState                                `protogen:"open.v1"`
+	Name            string                                                `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	SourceCount     int64                                                 `protobuf:"varint,2,opt,name=source_count,json=sourceCount,proto3" json:"source_count,omitempty"`
+	TargetCount     int64                                                 `protobuf:"varint,3,opt,name=target_count,json=targetCount,proto3" json:"target_count,omitempty"`
+	UniqueScope     string                                                `protobuf:"bytes,4,opt,name=unique_scope,json=uniqueScope,proto3" json:"unique_scope,omitempty"`
+	ConflictCount   int64                                                 `protobuf:"varint,5,opt,name=conflict_count,json=conflictCount,proto3" json:"conflict_count,omitempty"`
+	Severity        string                                                `protobuf:"bytes,6,opt,name=severity,proto3" json:"severity,omitempty"` // 原runAuditMode原样info/warn/block；P7只放info。
+	Status          SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status `protobuf:"varint,7,opt,name=status,proto3,enum=SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status" json:"status,omitempty"`
+	Notes           string                                                `protobuf:"bytes,8,opt,name=notes,proto3" json:"notes,omitempty"` // 原始结论与读取错误，不以notes代替结构化status。
+	QuerySourcePins []*SqlWriterMaintenanceReceipt_SourcePin              `protobuf:"bytes,9,rep,name=query_source_pins,json=querySourcePins,proto3" json:"query_source_pins,omitempty"`
+	Kind            SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind   `protobuf:"varint,10,opt,name=kind,proto3,enum=SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind" json:"kind,omitempty"` // player.name(global)仅RULE，不能冒称实际查询或抵扣缺失OBSERVATION。
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryCheck) Reset() {
+	*x = SqlWriterMaintenanceReceipt_MergeRecoveryCheck{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryCheck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_MergeRecoveryCheck) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryCheck) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_MergeRecoveryCheck.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_MergeRecoveryCheck) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 12}
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryCheck) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryCheck) GetSourceCount() int64 {
+	if x != nil {
+		return x.SourceCount
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryCheck) GetTargetCount() int64 {
+	if x != nil {
+		return x.TargetCount
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryCheck) GetUniqueScope() string {
+	if x != nil {
+		return x.UniqueScope
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryCheck) GetConflictCount() int64 {
+	if x != nil {
+		return x.ConflictCount
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryCheck) GetSeverity() string {
+	if x != nil {
+		return x.Severity
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryCheck) GetStatus() SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status {
+	if x != nil {
+		return x.Status
+	}
+	return SqlWriterMaintenanceReceipt_MergeRecoveryCheck_STATUS_UNSPECIFIED
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryCheck) GetNotes() string {
+	if x != nil {
+		return x.Notes
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryCheck) GetQuerySourcePins() []*SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.QuerySourcePins
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_MergeRecoveryCheck) GetKind() SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind {
+	if x != nil {
+		return x.Kind
+	}
+	return SqlWriterMaintenanceReceipt_MergeRecoveryCheck_KIND_UNSPECIFIED
+}
+
+// 既有route_tool audit -frozen-recovery的正式只读P7原件；不以MAINTENANCE闭合代替数据审核。
+type SqlWriterMaintenanceReceipt_RouteRecoveryAudit struct {
+	state                       protoimpl.MessageState                           `protogen:"open.v1"`
+	AuditInstanceId             []byte                                           `protobuf:"bytes,1,opt,name=audit_instance_id,json=auditInstanceId,proto3" json:"audit_instance_id,omitempty"`
+	RunId                       []byte                                           `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	Generation                  string                                           `protobuf:"bytes,3,opt,name=generation,proto3" json:"generation,omitempty"`
+	AttemptRevision             uint64                                           `protobuf:"varint,4,opt,name=attempt_revision,json=attemptRevision,proto3" json:"attempt_revision,omitempty"`
+	PlanDigest                  []byte                                           `protobuf:"bytes,5,opt,name=plan_digest,json=planDigest,proto3" json:"plan_digest,omitempty"`
+	OriginalFreezeReceiptId     []byte                                           `protobuf:"bytes,6,opt,name=original_freeze_receipt_id,json=originalFreezeReceiptId,proto3" json:"original_freeze_receipt_id,omitempty"`
+	OriginalFreezeReceiptDigest []byte                                           `protobuf:"bytes,7,opt,name=original_freeze_receipt_digest,json=originalFreezeReceiptDigest,proto3" json:"original_freeze_receipt_digest,omitempty"`
+	MaintenancePublication      *SqlWriterMaintenanceReceipt_PublicationEvidence `protobuf:"bytes,8,opt,name=maintenance_publication,json=maintenancePublication,proto3" json:"maintenance_publication,omitempty"`
+	AuthoritySchema             string                                           `protobuf:"bytes,9,opt,name=authority_schema,json=authoritySchema,proto3" json:"authority_schema,omitempty"`
+	MappingTarget               *SqlWriterMaintenanceReceipt_RedisTargetClosure  `protobuf:"bytes,10,opt,name=mapping_target,json=mappingTarget,proto3" json:"mapping_target,omitempty"` // 同P0具名物理实例；审计前后实际核INFO与nonce。
+	ObservedStartMs             uint64                                           `protobuf:"varint,11,opt,name=observed_start_ms,json=observedStartMs,proto3" json:"observed_start_ms,omitempty"`
+	ObservedEndMs               uint64                                           `protobuf:"varint,12,opt,name=observed_end_ms,json=observedEndMs,proto3" json:"observed_end_ms,omitempty"`
+	Stats                       *SqlWriterMaintenanceReceipt_RouteRecoveryStats  `protobuf:"bytes,13,opt,name=stats,proto3" json:"stats,omitempty"`
+	ReadyMarkerRaw              []byte                                           `protobuf:"bytes,14,opt,name=ready_marker_raw,json=readyMarkerRaw,proto3" json:"ready_marker_raw,omitempty"` // 实际只读原值，按placement正式契约验证完整缓存身份。
+	WatermarkRaw                []byte                                           `protobuf:"bytes,15,opt,name=watermark_raw,json=watermarkRaw,proto3" json:"watermark_raw,omitempty"`         // 缺失为空；不能由命令行手填水位。
+	InfoServerRaw               []byte                                           `protobuf:"bytes,16,opt,name=info_server_raw,json=infoServerRaw,proto3" json:"info_server_raw,omitempty"`
+	InfoReplicationRaw          []byte                                           `protobuf:"bytes,17,opt,name=info_replication_raw,json=infoReplicationRaw,proto3" json:"info_replication_raw,omitempty"`
+	RouteWatermarkFloorMs       uint64                                           `protobuf:"varint,18,opt,name=route_watermark_floor_ms,json=routeWatermarkFloorMs,proto3" json:"route_watermark_floor_ms,omitempty"`
+	AuditSourcePins             []*SqlWriterMaintenanceReceipt_SourcePin         `protobuf:"bytes,19,rep,name=audit_source_pins,json=auditSourcePins,proto3" json:"audit_source_pins,omitempty"` // 实际auditor和查询来源，属于P0 source_pins。
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) Reset() {
+	*x = SqlWriterMaintenanceReceipt_RouteRecoveryAudit{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_RouteRecoveryAudit) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_RouteRecoveryAudit.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_RouteRecoveryAudit) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 13}
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetAuditInstanceId() []byte {
+	if x != nil {
+		return x.AuditInstanceId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetRunId() []byte {
+	if x != nil {
+		return x.RunId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetGeneration() string {
+	if x != nil {
+		return x.Generation
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetAttemptRevision() uint64 {
+	if x != nil {
+		return x.AttemptRevision
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetPlanDigest() []byte {
+	if x != nil {
+		return x.PlanDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetOriginalFreezeReceiptId() []byte {
+	if x != nil {
+		return x.OriginalFreezeReceiptId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetOriginalFreezeReceiptDigest() []byte {
+	if x != nil {
+		return x.OriginalFreezeReceiptDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetMaintenancePublication() *SqlWriterMaintenanceReceipt_PublicationEvidence {
+	if x != nil {
+		return x.MaintenancePublication
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetAuthoritySchema() string {
+	if x != nil {
+		return x.AuthoritySchema
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetMappingTarget() *SqlWriterMaintenanceReceipt_RedisTargetClosure {
+	if x != nil {
+		return x.MappingTarget
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetObservedStartMs() uint64 {
+	if x != nil {
+		return x.ObservedStartMs
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetObservedEndMs() uint64 {
+	if x != nil {
+		return x.ObservedEndMs
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetStats() *SqlWriterMaintenanceReceipt_RouteRecoveryStats {
+	if x != nil {
+		return x.Stats
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetReadyMarkerRaw() []byte {
+	if x != nil {
+		return x.ReadyMarkerRaw
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetWatermarkRaw() []byte {
+	if x != nil {
+		return x.WatermarkRaw
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetInfoServerRaw() []byte {
+	if x != nil {
+		return x.InfoServerRaw
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetInfoReplicationRaw() []byte {
+	if x != nil {
+		return x.InfoReplicationRaw
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetRouteWatermarkFloorMs() uint64 {
+	if x != nil {
+		return x.RouteWatermarkFloorMs
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryAudit) GetAuditSourcePins() []*SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.AuditSourcePins
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_RouteRecoveryStats struct {
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	DbRows                   uint64                 `protobuf:"varint,1,opt,name=db_rows,json=dbRows,proto3" json:"db_rows,omitempty"`
+	RedisPlayers             uint64                 `protobuf:"varint,2,opt,name=redis_players,json=redisPlayers,proto3" json:"redis_players,omitempty"`
+	DbOnlyUnpublished        uint64                 `protobuf:"varint,3,opt,name=db_only_unpublished,json=dbOnlyUnpublished,proto3" json:"db_only_unpublished,omitempty"`
+	MissingInRedis           uint64                 `protobuf:"varint,4,opt,name=missing_in_redis,json=missingInRedis,proto3" json:"missing_in_redis,omitempty"`
+	MissingInDb              uint64                 `protobuf:"varint,5,opt,name=missing_in_db,json=missingInDb,proto3" json:"missing_in_db,omitempty"`
+	ValueMismatch            uint64                 `protobuf:"varint,6,opt,name=value_mismatch,json=valueMismatch,proto3" json:"value_mismatch,omitempty"`
+	RedisMalformed           uint64                 `protobuf:"varint,7,opt,name=redis_malformed,json=redisMalformed,proto3" json:"redis_malformed,omitempty"`
+	DbInvalid                uint64                 `protobuf:"varint,8,opt,name=db_invalid,json=dbInvalid,proto3" json:"db_invalid,omitempty"`
+	RedisRevAhead            uint64                 `protobuf:"varint,9,opt,name=redis_rev_ahead,json=redisRevAhead,proto3" json:"redis_rev_ahead,omitempty"`
+	RedisRevBehind           uint64                 `protobuf:"varint,10,opt,name=redis_rev_behind,json=redisRevBehind,proto3" json:"redis_rev_behind,omitempty"`
+	MergedIntoMissingInRedis uint64                 `protobuf:"varint,11,opt,name=merged_into_missing_in_redis,json=mergedIntoMissingInRedis,proto3" json:"merged_into_missing_in_redis,omitempty"`
+	MergedIntoMissingInDb    uint64                 `protobuf:"varint,12,opt,name=merged_into_missing_in_db,json=mergedIntoMissingInDb,proto3" json:"merged_into_missing_in_db,omitempty"`
+	MergedIntoMismatch       uint64                 `protobuf:"varint,13,opt,name=merged_into_mismatch,json=mergedIntoMismatch,proto3" json:"merged_into_mismatch,omitempty"`
+	RedisFencesActive        uint64                 `protobuf:"varint,14,opt,name=redis_fences_active,json=redisFencesActive,proto3" json:"redis_fences_active,omitempty"`
+	TransientCleared         uint64                 `protobuf:"varint,15,opt,name=transient_cleared,json=transientCleared,proto3" json:"transient_cleared,omitempty"`
+	FrozenRecovery           bool                   `protobuf:"varint,16,opt,name=frozen_recovery,json=frozenRecovery,proto3" json:"frozen_recovery,omitempty"`
+	RequireMapRev            bool                   `protobuf:"varint,17,opt,name=require_map_rev,json=requireMapRev,proto3" json:"require_map_rev,omitempty"`
+	Completed                bool                   `protobuf:"varint,18,opt,name=completed,proto3" json:"completed,omitempty"` // 仅实际Audit完整成功且资源关闭成功后填写。
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) Reset() {
+	*x = SqlWriterMaintenanceReceipt_RouteRecoveryStats{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_RouteRecoveryStats) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_RouteRecoveryStats.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_RouteRecoveryStats) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 14}
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetDbRows() uint64 {
+	if x != nil {
+		return x.DbRows
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetRedisPlayers() uint64 {
+	if x != nil {
+		return x.RedisPlayers
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetDbOnlyUnpublished() uint64 {
+	if x != nil {
+		return x.DbOnlyUnpublished
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetMissingInRedis() uint64 {
+	if x != nil {
+		return x.MissingInRedis
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetMissingInDb() uint64 {
+	if x != nil {
+		return x.MissingInDb
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetValueMismatch() uint64 {
+	if x != nil {
+		return x.ValueMismatch
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetRedisMalformed() uint64 {
+	if x != nil {
+		return x.RedisMalformed
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetDbInvalid() uint64 {
+	if x != nil {
+		return x.DbInvalid
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetRedisRevAhead() uint64 {
+	if x != nil {
+		return x.RedisRevAhead
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetRedisRevBehind() uint64 {
+	if x != nil {
+		return x.RedisRevBehind
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetMergedIntoMissingInRedis() uint64 {
+	if x != nil {
+		return x.MergedIntoMissingInRedis
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetMergedIntoMissingInDb() uint64 {
+	if x != nil {
+		return x.MergedIntoMissingInDb
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetMergedIntoMismatch() uint64 {
+	if x != nil {
+		return x.MergedIntoMismatch
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetRedisFencesActive() uint64 {
+	if x != nil {
+		return x.RedisFencesActive
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetTransientCleared() uint64 {
+	if x != nil {
+		return x.TransientCleared
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetFrozenRecovery() bool {
+	if x != nil {
+		return x.FrozenRecovery
+	}
+	return false
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetRequireMapRev() bool {
+	if x != nil {
+		return x.RequireMapRev
+	}
+	return false
+}
+
+func (x *SqlWriterMaintenanceReceipt_RouteRecoveryStats) GetCompleted() bool {
+	if x != nil {
+		return x.Completed
+	}
+	return false
+}
+
+type SqlWriterMaintenanceReceipt_ReleaseReadiness struct {
+	state                       protoimpl.MessageState                   `protogen:"open.v1"`
+	OriginalFreezeReceiptId     []byte                                   `protobuf:"bytes,1,opt,name=original_freeze_receipt_id,json=originalFreezeReceiptId,proto3" json:"original_freeze_receipt_id,omitempty"`
+	OriginalFreezeReceiptDigest []byte                                   `protobuf:"bytes,2,opt,name=original_freeze_receipt_digest,json=originalFreezeReceiptDigest,proto3" json:"original_freeze_receipt_digest,omitempty"`
+	RecoveryAudit               []*SqlWriterMaintenanceReceipt_SourcePin `protobuf:"bytes,3,rep,name=recovery_audit,json=recoveryAudit,proto3" json:"recovery_audit,omitempty"`
+	NonSqlClosedReceiptId       []byte                                   `protobuf:"bytes,4,opt,name=non_sql_closed_receipt_id,json=nonSqlClosedReceiptId,proto3" json:"non_sql_closed_receipt_id,omitempty"`
+	NonSqlClosedReceiptDigest   []byte                                   `protobuf:"bytes,5,opt,name=non_sql_closed_receipt_digest,json=nonSqlClosedReceiptDigest,proto3" json:"non_sql_closed_receipt_digest,omitempty"`
+	RouteWatermarkFloorMs       uint64                                   `protobuf:"varint,6,opt,name=route_watermark_floor_ms,json=routeWatermarkFloorMs,proto3" json:"route_watermark_floor_ms,omitempty"` // 仅R有reconcile时由正式路由审核原件绑定，同释放事务GREATEST推进；J必须0。
+	// 同P0维护工具全集逐个永久关闭、真实SQL/Redis/回调join，并pin实际应用报告。
+	MaintenancePublication *SqlWriterMaintenanceReceipt_PublicationEvidence `protobuf:"bytes,7,opt,name=maintenance_publication,json=maintenancePublication,proto3" json:"maintenance_publication,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_ReleaseReadiness) Reset() {
+	*x = SqlWriterMaintenanceReceipt_ReleaseReadiness{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_ReleaseReadiness) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_ReleaseReadiness) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_ReleaseReadiness) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_ReleaseReadiness.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_ReleaseReadiness) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 15}
+}
+
+func (x *SqlWriterMaintenanceReceipt_ReleaseReadiness) GetOriginalFreezeReceiptId() []byte {
+	if x != nil {
+		return x.OriginalFreezeReceiptId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ReleaseReadiness) GetOriginalFreezeReceiptDigest() []byte {
+	if x != nil {
+		return x.OriginalFreezeReceiptDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ReleaseReadiness) GetRecoveryAudit() []*SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.RecoveryAudit
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ReleaseReadiness) GetNonSqlClosedReceiptId() []byte {
+	if x != nil {
+		return x.NonSqlClosedReceiptId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ReleaseReadiness) GetNonSqlClosedReceiptDigest() []byte {
+	if x != nil {
+		return x.NonSqlClosedReceiptDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ReleaseReadiness) GetRouteWatermarkFloorMs() uint64 {
+	if x != nil {
+		return x.RouteWatermarkFloorMs
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_ReleaseReadiness) GetMaintenancePublication() *SqlWriterMaintenanceReceipt_PublicationEvidence {
+	if x != nil {
+		return x.MaintenancePublication
+	}
+	return nil
+}
+
+// 实际consumer-group代次原件；P8按group聚合各boot的assignment，不能要求单副本独占全组。
+type SqlWriterMaintenanceReceipt_ConsumerGroupReadiness struct {
+	state              protoimpl.MessageState                               `protogen:"open.v1"`
+	OperationId        []byte                                               `protobuf:"bytes,1,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	ManifestDigest     []byte                                               `protobuf:"bytes,2,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	IssuerId           []byte                                               `protobuf:"bytes,3,opt,name=issuer_id,json=issuerId,proto3" json:"issuer_id,omitempty"`
+	InstanceId         []byte                                               `protobuf:"bytes,4,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	Group              string                                               `protobuf:"bytes,5,opt,name=group,proto3" json:"group,omitempty"`
+	GenerationId       int32                                                `protobuf:"varint,6,opt,name=generation_id,json=generationId,proto3" json:"generation_id,omitempty"`
+	MemberId           string                                               `protobuf:"bytes,7,opt,name=member_id,json=memberId,proto3" json:"member_id,omitempty"`
+	ExpectedPartitions []*SqlWriterMaintenanceReceipt_KafkaPartitionClosure `protobuf:"bytes,8,rep,name=expected_partitions,json=expectedPartitions,proto3" json:"expected_partitions,omitempty"` // 本consumer配置group/topics在P0中的完整目录。
+	// 实际Generation.Assignments子集；final_committed是已确认next offset，final_earliest/end来自真实leader。
+	AssignedPartitions []*SqlWriterMaintenanceReceipt_KafkaPartitionClosure `protobuf:"bytes,9,rep,name=assigned_partitions,json=assignedPartitions,proto3" json:"assigned_partitions,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) Reset() {
+	*x = SqlWriterMaintenanceReceipt_ConsumerGroupReadiness{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_ConsumerGroupReadiness.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 16}
+}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) GetOperationId() []byte {
+	if x != nil {
+		return x.OperationId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) GetManifestDigest() []byte {
+	if x != nil {
+		return x.ManifestDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) GetIssuerId() []byte {
+	if x != nil {
+		return x.IssuerId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) GetInstanceId() []byte {
+	if x != nil {
+		return x.InstanceId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) GetGenerationId() int32 {
+	if x != nil {
+		return x.GenerationId
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) GetMemberId() string {
+	if x != nil {
+		return x.MemberId
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) GetExpectedPartitions() []*SqlWriterMaintenanceReceipt_KafkaPartitionClosure {
+	if x != nil {
+		return x.ExpectedPartitions
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) GetAssignedPartitions() []*SqlWriterMaintenanceReceipt_KafkaPartitionClosure {
+	if x != nil {
+		return x.AssignedPartitions
+	}
+	return nil
+}
+
+// 手动assign不加入group、不提交broker offset；其本机位置与目标boot单独证明。
+type SqlWriterMaintenanceReceipt_ManualConsumerAssignment struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	IssuerId           []byte                 `protobuf:"bytes,1,opt,name=issuer_id,json=issuerId,proto3" json:"issuer_id,omitempty"`
+	InstanceId         []byte                 `protobuf:"bytes,2,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	ConsumerId         string                 `protobuf:"bytes,3,opt,name=consumer_id,json=consumerId,proto3" json:"consumer_id,omitempty"`
+	ClusterId          []byte                 `protobuf:"bytes,4,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	TopicId            []byte                 `protobuf:"bytes,5,opt,name=topic_id,json=topicId,proto3" json:"topic_id,omitempty"`
+	TopicName          string                 `protobuf:"bytes,6,opt,name=topic_name,json=topicName,proto3" json:"topic_name,omitempty"`
+	PartitionCount     uint32                 `protobuf:"varint,7,opt,name=partition_count,json=partitionCount,proto3" json:"partition_count,omitempty"`
+	Partition          uint32                 `protobuf:"varint,8,opt,name=partition,proto3" json:"partition,omitempty"`
+	TargetNodeId       uint32                 `protobuf:"varint,9,opt,name=target_node_id,json=targetNodeId,proto3" json:"target_node_id,omitempty"`
+	TargetInstanceId   []byte                 `protobuf:"bytes,10,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
+	AssignmentRevision uint64                 `protobuf:"varint,11,opt,name=assignment_revision,json=assignmentRevision,proto3" json:"assignment_revision,omitempty"` // 本机owner修订，不是Kafka group generation。
+	StartOffset        int64                  `protobuf:"varint,12,opt,name=start_offset,json=startOffset,proto3" json:"start_offset,omitempty"`                      // 实际assign的绝对offset，禁止OFFSET_END占位。
+	Position           int64                  `protobuf:"varint,13,opt,name=position,proto3" json:"position,omitempty"`                                               // native实际next position。
+	Earliest           int64                  `protobuf:"varint,14,opt,name=earliest,proto3" json:"earliest,omitempty"`
+	ExclusiveEnd       int64                  `protobuf:"varint,15,opt,name=exclusive_end,json=exclusiveEnd,proto3" json:"exclusive_end,omitempty"`
+	ObservedMs         uint64                 `protobuf:"varint,16,opt,name=observed_ms,json=observedMs,proto3" json:"observed_ms,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) Reset() {
+	*x = SqlWriterMaintenanceReceipt_ManualConsumerAssignment{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_ManualConsumerAssignment) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_ManualConsumerAssignment.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_ManualConsumerAssignment) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 17}
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetIssuerId() []byte {
+	if x != nil {
+		return x.IssuerId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetInstanceId() []byte {
+	if x != nil {
+		return x.InstanceId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetConsumerId() string {
+	if x != nil {
+		return x.ConsumerId
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetClusterId() []byte {
+	if x != nil {
+		return x.ClusterId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetTopicId() []byte {
+	if x != nil {
+		return x.TopicId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetTopicName() string {
+	if x != nil {
+		return x.TopicName
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetPartitionCount() uint32 {
+	if x != nil {
+		return x.PartitionCount
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetPartition() uint32 {
+	if x != nil {
+		return x.Partition
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetTargetNodeId() uint32 {
+	if x != nil {
+		return x.TargetNodeId
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetTargetInstanceId() []byte {
+	if x != nil {
+		return x.TargetInstanceId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetAssignmentRevision() uint64 {
+	if x != nil {
+		return x.AssignmentRevision
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetStartOffset() int64 {
+	if x != nil {
+		return x.StartOffset
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetPosition() int64 {
+	if x != nil {
+		return x.Position
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetEarliest() int64 {
+	if x != nil {
+		return x.Earliest
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetExclusiveEnd() int64 {
+	if x != nil {
+		return x.ExclusiveEnd
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetObservedMs() uint64 {
+	if x != nil {
+		return x.ObservedMs
+	}
+	return 0
+}
+
+type SqlWriterMaintenanceReceipt_ManualConsumerEvidence struct {
+	state                  protoimpl.MessageState                                  `protogen:"open.v1"`
+	OperationId            []byte                                                  `protobuf:"bytes,1,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	ManifestDigest         []byte                                                  `protobuf:"bytes,2,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"` // P0基线为空以免Plan摘要自引用；P3/P8绑定原manifest。
+	Assignments            []*SqlWriterMaintenanceReceipt_ManualConsumerAssignment `protobuf:"bytes,3,rep,name=assignments,proto3" json:"assignments,omitempty"`
+	AcceptingClosed        bool                                                    `protobuf:"varint,4,opt,name=accepting_closed,json=acceptingClosed,proto3" json:"accepting_closed,omitempty"` // P3永久停收；P8暂停fetch等待同owner开放。
+	CallbacksJoined        bool                                                    `protobuf:"varint,5,opt,name=callbacks_joined,json=callbacksJoined,proto3" json:"callbacks_joined,omitempty"` // P3包括poller退出和loop callback返回；P8无已接收工作。
+	Accepted               uint64                                                  `protobuf:"varint,6,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	Settled                uint64                                                  `protobuf:"varint,7,opt,name=settled,proto3" json:"settled,omitempty"`
+	UnresolvedPublications uint64                                                  `protobuf:"varint,8,opt,name=unresolved_publications,json=unresolvedPublications,proto3" json:"unresolved_publications,omitempty"`
+	SourcePins             []*SqlWriterMaintenanceReceipt_SourcePin                `protobuf:"bytes,9,rep,name=source_pins,json=sourcePins,proto3" json:"source_pins,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) Reset() {
+	*x = SqlWriterMaintenanceReceipt_ManualConsumerEvidence{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_ManualConsumerEvidence) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_ManualConsumerEvidence.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_ManualConsumerEvidence) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 18}
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) GetOperationId() []byte {
+	if x != nil {
+		return x.OperationId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) GetManifestDigest() []byte {
+	if x != nil {
+		return x.ManifestDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) GetAssignments() []*SqlWriterMaintenanceReceipt_ManualConsumerAssignment {
+	if x != nil {
+		return x.Assignments
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) GetAcceptingClosed() bool {
+	if x != nil {
+		return x.AcceptingClosed
+	}
+	return false
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) GetCallbacksJoined() bool {
+	if x != nil {
+		return x.CallbacksJoined
+	}
+	return false
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) GetAccepted() uint64 {
+	if x != nil {
+		return x.Accepted
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) GetSettled() uint64 {
+	if x != nil {
+		return x.Settled
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) GetUnresolvedPublications() uint64 {
+	if x != nil {
+		return x.UnresolvedPublications
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) GetSourcePins() []*SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.SourcePins
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_ConsumerReadiness struct {
+	state             protoimpl.MessageState                                `protogen:"open.v1"`
+	Groups            []*SqlWriterMaintenanceReceipt_ConsumerGroupReadiness `protobuf:"bytes,1,rep,name=groups,proto3" json:"groups,omitempty"` // 一个boot全部配置消费者的实际报告；不能省略失败owner。
+	ManualAssignments []*SqlWriterMaintenanceReceipt_ManualConsumerEvidence `protobuf:"bytes,2,rep,name=manual_assignments,json=manualAssignments,proto3" json:"manual_assignments,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerReadiness) Reset() {
+	*x = SqlWriterMaintenanceReceipt_ConsumerReadiness{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerReadiness) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_ConsumerReadiness) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerReadiness) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_ConsumerReadiness.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_ConsumerReadiness) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 19}
+}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerReadiness) GetGroups() []*SqlWriterMaintenanceReceipt_ConsumerGroupReadiness {
+	if x != nil {
+		return x.Groups
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_ConsumerReadiness) GetManualAssignments() []*SqlWriterMaintenanceReceipt_ManualConsumerEvidence {
+	if x != nil {
+		return x.ManualAssignments
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_IssuerReadiness struct {
+	state                       protoimpl.MessageState                   `protogen:"open.v1"`
+	IssuerId                    []byte                                   `protobuf:"bytes,1,opt,name=issuer_id,json=issuerId,proto3" json:"issuer_id,omitempty"`
+	InstanceId                  []byte                                   `protobuf:"bytes,2,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	PhysicalWriterKey           []byte                                   `protobuf:"bytes,3,opt,name=physical_writer_key,json=physicalWriterKey,proto3" json:"physical_writer_key,omitempty"`
+	LogicalRole                 string                                   `protobuf:"bytes,4,opt,name=logical_role,json=logicalRole,proto3" json:"logical_role,omitempty"`
+	RegistrationReceiptId       []byte                                   `protobuf:"bytes,5,opt,name=registration_receipt_id,json=registrationReceiptId,proto3" json:"registration_receipt_id,omitempty"`
+	RegistrationReceiptDigest   []byte                                   `protobuf:"bytes,6,opt,name=registration_receipt_digest,json=registrationReceiptDigest,proto3" json:"registration_receipt_digest,omitempty"`
+	PreparedClosedMs            uint64                                   `protobuf:"varint,7,opt,name=prepared_closed_ms,json=preparedClosedMs,proto3" json:"prepared_closed_ms,omitempty"`
+	ConsumerReadyFrontierDigest []byte                                   `protobuf:"bytes,8,opt,name=consumer_ready_frontier_digest,json=consumerReadyFrontierDigest,proto3" json:"consumer_ready_frontier_digest,omitempty"`
+	SourcePins                  []*SqlWriterMaintenanceReceipt_SourcePin `protobuf:"bytes,9,rep,name=source_pins,json=sourcePins,proto3" json:"source_pins,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) Reset() {
+	*x = SqlWriterMaintenanceReceipt_IssuerReadiness{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_IssuerReadiness) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_IssuerReadiness.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_IssuerReadiness) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 20}
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) GetIssuerId() []byte {
+	if x != nil {
+		return x.IssuerId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) GetInstanceId() []byte {
+	if x != nil {
+		return x.InstanceId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) GetPhysicalWriterKey() []byte {
+	if x != nil {
+		return x.PhysicalWriterKey
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) GetLogicalRole() string {
+	if x != nil {
+		return x.LogicalRole
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) GetRegistrationReceiptId() []byte {
+	if x != nil {
+		return x.RegistrationReceiptId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) GetRegistrationReceiptDigest() []byte {
+	if x != nil {
+		return x.RegistrationReceiptDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) GetPreparedClosedMs() uint64 {
+	if x != nil {
+		return x.PreparedClosedMs
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) GetConsumerReadyFrontierDigest() []byte {
+	if x != nil {
+		return x.ConsumerReadyFrontierDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) GetSourcePins() []*SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.SourcePins
+	}
+	return nil
+}
+
+// source_open_acks的每个SourcePin指向此正式protojson；准备就绪不是实际开放ACK。
+type SqlWriterMaintenanceReceipt_SourceOpenAck struct {
+	state                     protoimpl.MessageState                   `protogen:"open.v1"`
+	IssuerId                  []byte                                   `protobuf:"bytes,1,opt,name=issuer_id,json=issuerId,proto3" json:"issuer_id,omitempty"`
+	InstanceId                []byte                                   `protobuf:"bytes,2,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	PhysicalWriterKey         []byte                                   `protobuf:"bytes,3,opt,name=physical_writer_key,json=physicalWriterKey,proto3" json:"physical_writer_key,omitempty"`
+	LogicalRole               string                                   `protobuf:"bytes,4,opt,name=logical_role,json=logicalRole,proto3" json:"logical_role,omitempty"`
+	RegistrationReceiptId     []byte                                   `protobuf:"bytes,5,opt,name=registration_receipt_id,json=registrationReceiptId,proto3" json:"registration_receipt_id,omitempty"`
+	RegistrationReceiptDigest []byte                                   `protobuf:"bytes,6,opt,name=registration_receipt_digest,json=registrationReceiptDigest,proto3" json:"registration_receipt_digest,omitempty"`
+	OperationId               []byte                                   `protobuf:"bytes,7,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	ManifestDigest            []byte                                   `protobuf:"bytes,8,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	OpenedMs                  uint64                                   `protobuf:"varint,9,opt,name=opened_ms,json=openedMs,proto3" json:"opened_ms,omitempty"`
+	OpenRequestId             []byte                                   `protobuf:"bytes,10,opt,name=open_request_id,json=openRequestId,proto3" json:"open_request_id,omitempty"`
+	AcceptedFrontierDigest    []byte                                   `protobuf:"bytes,11,opt,name=accepted_frontier_digest,json=acceptedFrontierDigest,proto3" json:"accepted_frontier_digest,omitempty"`
+	SourcePins                []*SqlWriterMaintenanceReceipt_SourcePin `protobuf:"bytes,12,rep,name=source_pins,json=sourcePins,proto3" json:"source_pins,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) Reset() {
+	*x = SqlWriterMaintenanceReceipt_SourceOpenAck{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_SourceOpenAck) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_SourceOpenAck.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_SourceOpenAck) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 21}
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) GetIssuerId() []byte {
+	if x != nil {
+		return x.IssuerId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) GetInstanceId() []byte {
+	if x != nil {
+		return x.InstanceId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) GetPhysicalWriterKey() []byte {
+	if x != nil {
+		return x.PhysicalWriterKey
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) GetLogicalRole() string {
+	if x != nil {
+		return x.LogicalRole
+	}
+	return ""
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) GetRegistrationReceiptId() []byte {
+	if x != nil {
+		return x.RegistrationReceiptId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) GetRegistrationReceiptDigest() []byte {
+	if x != nil {
+		return x.RegistrationReceiptDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) GetOperationId() []byte {
+	if x != nil {
+		return x.OperationId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) GetManifestDigest() []byte {
+	if x != nil {
+		return x.ManifestDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) GetOpenedMs() uint64 {
+	if x != nil {
+		return x.OpenedMs
+	}
+	return 0
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) GetOpenRequestId() []byte {
+	if x != nil {
+		return x.OpenRequestId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) GetAcceptedFrontierDigest() []byte {
+	if x != nil {
+		return x.AcceptedFrontierDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) GetSourcePins() []*SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.SourcePins
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_PublicationReadiness struct {
+	state                protoimpl.MessageState                         `protogen:"open.v1"`
+	ReleaseReceiptId     []byte                                         `protobuf:"bytes,1,opt,name=release_receipt_id,json=releaseReceiptId,proto3" json:"release_receipt_id,omitempty"`
+	ReleaseReceiptDigest []byte                                         `protobuf:"bytes,2,opt,name=release_receipt_digest,json=releaseReceiptDigest,proto3" json:"release_receipt_digest,omitempty"`
+	PreparedBoots        []*SqlWriterMaintenanceReceipt_IssuerReadiness `protobuf:"bytes,3,rep,name=prepared_boots,json=preparedBoots,proto3" json:"prepared_boots,omitempty"`
+	SourceOpenAcks       []*SqlWriterMaintenanceReceipt_SourcePin       `protobuf:"bytes,4,rep,name=source_open_acks,json=sourceOpenAcks,proto3" json:"source_open_acks,omitempty"` // 外部实际幂等open后的ACK原件，不能以prepared代已开。
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_PublicationReadiness) Reset() {
+	*x = SqlWriterMaintenanceReceipt_PublicationReadiness{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_PublicationReadiness) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_PublicationReadiness) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_PublicationReadiness) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_PublicationReadiness.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_PublicationReadiness) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 22}
+}
+
+func (x *SqlWriterMaintenanceReceipt_PublicationReadiness) GetReleaseReceiptId() []byte {
+	if x != nil {
+		return x.ReleaseReceiptId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_PublicationReadiness) GetReleaseReceiptDigest() []byte {
+	if x != nil {
+		return x.ReleaseReceiptDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_PublicationReadiness) GetPreparedBoots() []*SqlWriterMaintenanceReceipt_IssuerReadiness {
+	if x != nil {
+		return x.PreparedBoots
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_PublicationReadiness) GetSourceOpenAcks() []*SqlWriterMaintenanceReceipt_SourcePin {
+	if x != nil {
+		return x.SourceOpenAcks
+	}
+	return nil
+}
+
+type SqlWriterMaintenanceReceipt_Evidence struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OperationId    []byte                 `protobuf:"bytes,1,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	ManifestDigest []byte                 `protobuf:"bytes,2,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	// Types that are valid to be assigned to Detail:
+	//
+	//	*SqlWriterMaintenanceReceipt_Evidence_Publication
+	//	*SqlWriterMaintenanceReceipt_Evidence_NonSqlClosure
+	//	*SqlWriterMaintenanceReceipt_Evidence_Ticket
+	//	*SqlWriterMaintenanceReceipt_Evidence_Emergency
+	//	*SqlWriterMaintenanceReceipt_Evidence_ReleaseReadiness
+	//	*SqlWriterMaintenanceReceipt_Evidence_PublicationReadiness
+	Detail        isSqlWriterMaintenanceReceipt_Evidence_Detail `protobuf_oneof:"detail"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SqlWriterMaintenanceReceipt_Evidence) Reset() {
+	*x = SqlWriterMaintenanceReceipt_Evidence{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterMaintenanceReceipt_Evidence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterMaintenanceReceipt_Evidence) ProtoMessage() {}
+
+func (x *SqlWriterMaintenanceReceipt_Evidence) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterMaintenanceReceipt_Evidence.ProtoReflect.Descriptor instead.
+func (*SqlWriterMaintenanceReceipt_Evidence) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 23}
+}
+
+func (x *SqlWriterMaintenanceReceipt_Evidence) GetOperationId() []byte {
+	if x != nil {
+		return x.OperationId
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Evidence) GetManifestDigest() []byte {
+	if x != nil {
+		return x.ManifestDigest
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Evidence) GetDetail() isSqlWriterMaintenanceReceipt_Evidence_Detail {
+	if x != nil {
+		return x.Detail
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Evidence) GetPublication() *SqlWriterMaintenanceReceipt_PublicationEvidence {
+	if x != nil {
+		if x, ok := x.Detail.(*SqlWriterMaintenanceReceipt_Evidence_Publication); ok {
+			return x.Publication
+		}
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Evidence) GetNonSqlClosure() *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence {
+	if x != nil {
+		if x, ok := x.Detail.(*SqlWriterMaintenanceReceipt_Evidence_NonSqlClosure); ok {
+			return x.NonSqlClosure
+		}
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Evidence) GetTicket() *SqlWriterMaintenanceReceipt_TicketEvidence {
+	if x != nil {
+		if x, ok := x.Detail.(*SqlWriterMaintenanceReceipt_Evidence_Ticket); ok {
+			return x.Ticket
+		}
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Evidence) GetEmergency() *SqlWriterMaintenanceReceipt_EmergencyEvidence {
+	if x != nil {
+		if x, ok := x.Detail.(*SqlWriterMaintenanceReceipt_Evidence_Emergency); ok {
+			return x.Emergency
+		}
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Evidence) GetReleaseReadiness() *SqlWriterMaintenanceReceipt_ReleaseReadiness {
+	if x != nil {
+		if x, ok := x.Detail.(*SqlWriterMaintenanceReceipt_Evidence_ReleaseReadiness); ok {
+			return x.ReleaseReadiness
+		}
+	}
+	return nil
+}
+
+func (x *SqlWriterMaintenanceReceipt_Evidence) GetPublicationReadiness() *SqlWriterMaintenanceReceipt_PublicationReadiness {
+	if x != nil {
+		if x, ok := x.Detail.(*SqlWriterMaintenanceReceipt_Evidence_PublicationReadiness); ok {
+			return x.PublicationReadiness
+		}
+	}
+	return nil
+}
+
+type isSqlWriterMaintenanceReceipt_Evidence_Detail interface {
+	isSqlWriterMaintenanceReceipt_Evidence_Detail()
+}
+
+type SqlWriterMaintenanceReceipt_Evidence_Publication struct {
+	Publication *SqlWriterMaintenanceReceipt_PublicationEvidence `protobuf:"bytes,10,opt,name=publication,proto3,oneof"`
+}
+
+type SqlWriterMaintenanceReceipt_Evidence_NonSqlClosure struct {
+	NonSqlClosure *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence `protobuf:"bytes,11,opt,name=non_sql_closure,json=nonSqlClosure,proto3,oneof"`
+}
+
+type SqlWriterMaintenanceReceipt_Evidence_Ticket struct {
+	Ticket *SqlWriterMaintenanceReceipt_TicketEvidence `protobuf:"bytes,12,opt,name=ticket,proto3,oneof"`
+}
+
+type SqlWriterMaintenanceReceipt_Evidence_Emergency struct {
+	Emergency *SqlWriterMaintenanceReceipt_EmergencyEvidence `protobuf:"bytes,13,opt,name=emergency,proto3,oneof"`
+}
+
+type SqlWriterMaintenanceReceipt_Evidence_ReleaseReadiness struct {
+	ReleaseReadiness *SqlWriterMaintenanceReceipt_ReleaseReadiness `protobuf:"bytes,14,opt,name=release_readiness,json=releaseReadiness,proto3,oneof"`
+}
+
+type SqlWriterMaintenanceReceipt_Evidence_PublicationReadiness struct {
+	PublicationReadiness *SqlWriterMaintenanceReceipt_PublicationReadiness `protobuf:"bytes,15,opt,name=publication_readiness,json=publicationReadiness,proto3,oneof"`
+}
+
+func (*SqlWriterMaintenanceReceipt_Evidence_Publication) isSqlWriterMaintenanceReceipt_Evidence_Detail() {
+}
+
+func (*SqlWriterMaintenanceReceipt_Evidence_NonSqlClosure) isSqlWriterMaintenanceReceipt_Evidence_Detail() {
+}
+
+func (*SqlWriterMaintenanceReceipt_Evidence_Ticket) isSqlWriterMaintenanceReceipt_Evidence_Detail() {}
+
+func (*SqlWriterMaintenanceReceipt_Evidence_Emergency) isSqlWriterMaintenanceReceipt_Evidence_Detail() {
+}
+
+func (*SqlWriterMaintenanceReceipt_Evidence_ReleaseReadiness) isSqlWriterMaintenanceReceipt_Evidence_Detail() {
+}
+
+func (*SqlWriterMaintenanceReceipt_Evidence_PublicationReadiness) isSqlWriterMaintenanceReceipt_Evidence_Detail() {
+}
+
+type SqlWriterBootRoster_Entry struct {
+	state               protoimpl.MessageState                    `protogen:"open.v1"`
+	Request             *SqlWriterLifecycleReceipt_Request        `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
+	RuntimeConfigPath   string                                    `protobuf:"bytes,2,opt,name=runtime_config_path,json=runtimeConfigPath,proto3" json:"runtime_config_path,omitempty"` // 只在受限init input-root内解析，normal只挂选中副本。
+	RuntimeConfigSha256 []byte                                    `protobuf:"bytes,3,opt,name=runtime_config_sha256,json=runtimeConfigSha256,proto3" json:"runtime_config_sha256,omitempty"`
+	RuntimeEnvironment  []*SqlWriterBootRoster_RuntimeEnvironment `protobuf:"bytes,4,rep,name=runtime_environment,json=runtimeEnvironment,proto3" json:"runtime_environment,omitempty"` // 仅固定SQL环境变量白名单；原件只存私有文件路径/SHA，不存秘密值。
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *SqlWriterBootRoster_Entry) Reset() {
+	*x = SqlWriterBootRoster_Entry{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterBootRoster_Entry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterBootRoster_Entry) ProtoMessage() {}
+
+func (x *SqlWriterBootRoster_Entry) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterBootRoster_Entry.ProtoReflect.Descriptor instead.
+func (*SqlWriterBootRoster_Entry) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{28, 0}
+}
+
+func (x *SqlWriterBootRoster_Entry) GetRequest() *SqlWriterLifecycleReceipt_Request {
+	if x != nil {
+		return x.Request
+	}
+	return nil
+}
+
+func (x *SqlWriterBootRoster_Entry) GetRuntimeConfigPath() string {
+	if x != nil {
+		return x.RuntimeConfigPath
+	}
+	return ""
+}
+
+func (x *SqlWriterBootRoster_Entry) GetRuntimeConfigSha256() []byte {
+	if x != nil {
+		return x.RuntimeConfigSha256
+	}
+	return nil
+}
+
+func (x *SqlWriterBootRoster_Entry) GetRuntimeEnvironment() []*SqlWriterBootRoster_RuntimeEnvironment {
+	if x != nil {
+		return x.RuntimeEnvironment
+	}
+	return nil
+}
+
+type SqlWriterBootRoster_RuntimeEnvironment struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	ValuePath     string                 `protobuf:"bytes,2,opt,name=value_path,json=valuePath,proto3" json:"value_path,omitempty"`
+	ValueSha256   []byte                 `protobuf:"bytes,3,opt,name=value_sha256,json=valueSha256,proto3" json:"value_sha256,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SqlWriterBootRoster_RuntimeEnvironment) Reset() {
+	*x = SqlWriterBootRoster_RuntimeEnvironment{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SqlWriterBootRoster_RuntimeEnvironment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SqlWriterBootRoster_RuntimeEnvironment) ProtoMessage() {}
+
+func (x *SqlWriterBootRoster_RuntimeEnvironment) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SqlWriterBootRoster_RuntimeEnvironment.ProtoReflect.Descriptor instead.
+func (*SqlWriterBootRoster_RuntimeEnvironment) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{28, 1}
+}
+
+func (x *SqlWriterBootRoster_RuntimeEnvironment) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SqlWriterBootRoster_RuntimeEnvironment) GetValuePath() string {
+	if x != nil {
+		return x.ValuePath
+	}
+	return ""
+}
+
+func (x *SqlWriterBootRoster_RuntimeEnvironment) GetValueSha256() []byte {
+	if x != nil {
+		return x.ValueSha256
+	}
+	return nil
+}
+
 var File_proto_common_database_rollback_database_table_proto protoreflect.FileDescriptor
 
 const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\n" +
-	"3proto/common/database/rollback_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a+proto/common/rollback/transaction_log.proto\x1a+proto/common/rollback/player_snapshot.proto\"\x91\x05\n" +
+	"3proto/common/database/rollback_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a+proto/common/rollback/transaction_log.proto\x1a+proto/common/rollback/player_snapshot.proto\x1a&proto/common/base/role_admission.proto\"\x91\x05\n" +
 	"\x0ftransaction_log\x12\x13\n" +
 	"\x05tx_id\x18\x01 \x01(\x04R\x04txId\x12#\n" +
 	"\rtimestamp_sec\x18\x02 \x01(\x04R\ftimestampSec\x12\x17\n" +
@@ -2153,14 +7471,17 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\bdst_zone\x18\x02 \x01(\rR\adstZone\x12\x15\n" +
 	"\x06run_id\x18\x03 \x01(\tR\x05runId\x12 \n" +
 	"\fmerged_at_ms\x18\x04 \x01(\x04R\n" +
-	"mergedAtMs:\"\x8a\x92\xf4\x01\x10zone_merged_into\x92\x92\xf4\x01\bsrc_zone\"p\n" +
+	"mergedAtMs:\"\x8a\x92\xf4\x01\x10zone_merged_into\x92\x92\xf4\x01\bsrc_zone\"\xe2\x01\n" +
 	"\n" +
 	"route_meta\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x1e\n" +
 	"\n" +
 	"generation\x18\x02 \x01(\tR\n" +
 	"generation\x12\x1a\n" +
-	"\bwritable\x18\x03 \x01(\rR\bwritable:\x16\x8a\x92\xf4\x01\n" +
+	"\bwritable\x18\x03 \x01(\rR\bwritable\x12!\n" +
+	"\fwriter_epoch\x18\x04 \x01(\x04R\vwriterEpoch\x12)\n" +
+	"\x10catalog_revision\x18\x05 \x01(\x04R\x0fcatalogRevision\x12\"\n" +
+	"\rfreeze_run_id\x18\x06 \x01(\fR\vfreezeRunId:\x16\x8a\x92\xf4\x01\n" +
 	"route_meta\x92\x92\xf4\x01\x02id\"\xcb\x01\n" +
 	"\x0froute_reconcile\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x16\n" +
@@ -2171,7 +7492,7 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\x11account_directory\x12\x18\n" +
 	"\aaccount\x18\x01 \x01(\tR\aaccount\x12\x1d\n" +
 	"\n" +
-	"created_ms\x18\x02 \x01(\x04R\tcreatedMs:\"\x8a\x92\xf4\x01\x11account_directory\x92\x92\xf4\x01\aaccount\"\x84\x02\n" +
+	"created_ms\x18\x02 \x01(\x04R\tcreatedMs:\"\x8a\x92\xf4\x01\x11account_directory\x92\x92\xf4\x01\aaccount\"\xb8\x02\n" +
 	"\faccount_role\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x18\n" +
 	"\aaccount\x18\x02 \x01(\tR\aaccount\x12\x1d\n" +
@@ -2180,7 +7501,8 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\x0eowner_revision\x18\x04 \x01(\x04R\rownerRevision\x12\x1d\n" +
 	"\n" +
 	"updated_ms\x18\x05 \x01(\x04R\tupdatedMs\x12(\n" +
-	"\x10trade_listing_id\x18\x06 \x01(\x04R\x0etradeListingId:.\x8a\x92\xf4\x01\faccount_role\x92\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xe4\x03\n" +
+	"\x10trade_listing_id\x18\x06 \x01(\x04R\x0etradeListingId\x122\n" +
+	"\x15initial_player_commit\x18\a \x01(\x04R\x13initialPlayerCommit:.\x8a\x92\xf4\x01\faccount_role\x92\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xe4\x03\n" +
 	"\x12account_role_trade\x12\x1d\n" +
 	"\n" +
 	"listing_id\x18\x01 \x01(\x04R\tlistingId\x12\x1b\n" +
@@ -2249,7 +7571,616 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\rallow_restore\x18\a \x01(\rR\fallowRestore\x12\x1d\n" +
 	"\n" +
 	"created_ms\x18\b \x01(\x04R\tcreatedMs:/\x8a\x92\xf4\x01\x1baccount_role_import_receipt\x92\x92\xf4\x01\n" +
-	"request_idB\x17Z\x15proto/common/databaseb\x06proto3"
+	"request_id\"\x84\x0e\n" +
+	" save_barrier_maintenance_receipt\x12\x1d\n" +
+	"\n" +
+	"receipt_id\x18\x01 \x01(\fR\treceiptId\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12%\n" +
+	"\x0erequest_digest\x18\x03 \x01(\fR\rrequestDigest\x12\x1d\n" +
+	"\n" +
+	"plan_proto\x18\x04 \x01(\fR\tplanProto\x12=\n" +
+	"\x05phase\x18\x05 \x01(\x0e2'.save_barrier_maintenance_receipt.PhaseR\x05phase\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x06 \x01(\x04R\tupdatedMs\x1a\xdf\n" +
+	"\n" +
+	"\rPromotionPlan\x12\x16\n" +
+	"\x06format\x18\x01 \x01(\tR\x06format\x12%\n" +
+	"\x0emaintenance_id\x18\x02 \x01(\tR\rmaintenanceId\x12\x1b\n" +
+	"\tplayer_id\x18\x03 \x01(\x04R\bplayerId\x12\x1d\n" +
+	"\n" +
+	"row_schema\x18\x04 \x01(\tR\trowSchema\x12!\n" +
+	"\froute_schema\x18\x05 \x01(\tR\vrouteSchema\x12\x1b\n" +
+	"\thome_zone\x18\x06 \x01(\rR\bhomeZone\x12\x1d\n" +
+	"\n" +
+	"storage_id\x18\a \x01(\rR\tstorageId\x12%\n" +
+	"\x0eroute_revision\x18\b \x01(\x04R\rrouteRevision\x12)\n" +
+	"\x10route_generation\x18\t \x01(\tR\x0frouteGeneration\x12'\n" +
+	"\x0froute_watermark\x18\n" +
+	" \x01(\x04R\x0erouteWatermark\x12+\n" +
+	"\x11placement_version\x18\v \x01(\x04R\x10placementVersion\x129\n" +
+	"\x19audited_owner_upper_bound\x18\f \x01(\x04R\x16auditedOwnerUpperBound\x12%\n" +
+	"\x0eoriginal_owner\x18\r \x01(\x04R\roriginalOwner\x12!\n" +
+	"\ftarget_owner\x18\x0e \x01(\x04R\vtargetOwner\x12.\n" +
+	"\x13original_save_epoch\x18\x0f \x01(\x04R\x11originalSaveEpoch\x12*\n" +
+	"\x11original_save_seq\x18\x10 \x01(\x04R\x0foriginalSaveSeq\x12&\n" +
+	"\x0ftarget_save_seq\x18\x11 \x01(\x04R\rtargetSaveSeq\x12\x1d\n" +
+	"\n" +
+	"schema_gen\x18\x12 \x01(\rR\tschemaGen\x122\n" +
+	"\x15first_business_sha256\x18\x13 \x01(\fR\x13firstBusinessSha256\x124\n" +
+	"\x16second_business_sha256\x18\x14 \x01(\fR\x14secondBusinessSha256\x12%\n" +
+	"\x0eoriginal_fence\x18\x15 \x01(\tR\roriginalFence\x12#\n" +
+	"\rrevoked_fence\x18\x16 \x01(\tR\frevokedFence\x12\x1d\n" +
+	"\n" +
+	"receipt_id\x18\x17 \x01(\fR\treceiptId\x12\x1d\n" +
+	"\n" +
+	"redis_addr\x18\x18 \x01(\tR\tredisAddr\x12\x19\n" +
+	"\bredis_db\x18\x19 \x01(\x05R\aredisDb\x122\n" +
+	"\x15audit_evidence_sha256\x18\x1a \x01(\fR\x13auditEvidenceSha256\x12'\n" +
+	"\x0fwriters_stopped\x18\x1b \x01(\bR\x0ewritersStopped\x12%\n" +
+	"\x0equeues_drained\x18\x1c \x01(\bR\rqueuesDrained\x12!\n" +
+	"\fmapping_addr\x18\x1d \x01(\tR\vmappingAddr\x12\x1d\n" +
+	"\n" +
+	"mapping_db\x18\x1e \x01(\x05R\tmappingDb\x12X\n" +
+	"\x06caches\x18\x1f \x03(\v2@.save_barrier_maintenance_receipt.PromotionPlan.CacheObservationR\x06caches\x1au\n" +
+	"\x10CacheObservation\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x18\n" +
+	"\apresent\x18\x02 \x01(\bR\apresent\x12\x16\n" +
+	"\x06sha256\x18\x03 \x01(\fR\x06sha256\x12\x1d\n" +
+	"\n" +
+	"redis_type\x18\x04 \x01(\tR\tredisType\"h\n" +
+	"\x05Phase\x12\x11\n" +
+	"\rPHASE_UNKNOWN\x10\x00\x12\x0e\n" +
+	"\n" +
+	"PLAN_FIXED\x10\x01\x12\x13\n" +
+	"\x0fWRITERS_REVOKED\x10\x02\x12\x10\n" +
+	"\fSQL_PROMOTED\x10\x03\x12\x15\n" +
+	"\x11BARRIER_CONFIRMED\x10\x04:4\x8a\x92\xf4\x01 save_barrier_maintenance_receipt\x92\x92\xf4\x01\n" +
+	"receipt_id\"\xc8\t\n" +
+	"\x1faccount_role_admission_recovery\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\fR\trequestId\x12\x1d\n" +
+	"\n" +
+	"listing_id\x18\x02 \x01(\x04R\tlistingId\x12\x1b\n" +
+	"\tplayer_id\x18\x03 \x01(\x04R\bplayerId\x12*\n" +
+	"\x11scene_instance_id\x18\x04 \x01(\tR\x0fsceneInstanceId\x12-\n" +
+	"\x12through_generation\x18\x05 \x01(\x04R\x11throughGeneration\x12%\n" +
+	"\x0eowner_revision\x18\x06 \x01(\x04R\rownerRevision\x12%\n" +
+	"\x0erequest_digest\x18\a \x01(\fR\rrequestDigest\x12#\n" +
+	"\rrequest_proto\x18\b \x01(\fR\frequestProto\x124\n" +
+	"\x16maintenance_receipt_id\x18\t \x01(\fR\x14maintenanceReceiptId\x12<\n" +
+	"\x1amaintenance_request_digest\x18\n" +
+	" \x01(\fR\x18maintenanceRequestDigest\x120\n" +
+	"\x14required_owner_epoch\x18\v \x01(\x04R\x12requiredOwnerEpoch\x12*\n" +
+	"\x11required_save_seq\x18\f \x01(\x04R\x0frequiredSaveSeq\x12(\n" +
+	"\x10sql_proof_digest\x18\r \x01(\fR\x0esqlProofDigest\x12!\n" +
+	"\frecovered_ms\x18\x0e \x01(\x04R\vrecoveredMs\x1a\xa7\x04\n" +
+	"\aRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\fR\trequestId\x12%\n" +
+	"\x0eseller_account\x18\x02 \x01(\tR\rsellerAccount\x12.\n" +
+	"\x04seal\x18\x03 \x01(\v2\x1a.common.base.RoleTradeSealR\x04seal\x12@\n" +
+	"\tadmission\x18\x04 \x01(\v2\".common.base.RoleAdmissionIdentityR\tadmission\x128\n" +
+	"\x18admission_request_digest\x18\x05 \x01(\fR\x16admissionRequestDigest\x126\n" +
+	"\x17expected_closed_through\x18\x06 \x01(\x04R\x15expectedClosedThrough\x12A\n" +
+	"\x1dexpected_required_owner_epoch\x18\a \x01(\x04R\x1aexpectedRequiredOwnerEpoch\x12;\n" +
+	"\x1aexpected_required_save_seq\x18\b \x01(\x04R\x17expectedRequiredSaveSeq\x124\n" +
+	"\x16maintenance_receipt_id\x18\t \x01(\fR\x14maintenanceReceiptId\x12<\n" +
+	"\x1amaintenance_request_digest\x18\n" +
+	" \x01(\fR\x18maintenanceRequestDigest:3\x8a\x92\xf4\x01\x1faccount_role_admission_recovery\x92\x92\xf4\x01\n" +
+	"request_id\"\xfc\x03\n" +
+	"\x13sql_writer_registry\x12\x1d\n" +
+	"\n" +
+	"writer_key\x18\x01 \x01(\fR\twriterKey\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x02 \x01(\tR\n" +
+	"generation\x12\x1f\n" +
+	"\vinstance_id\x18\x03 \x01(\fR\n" +
+	"instanceId\x12#\n" +
+	"\rsql_principal\x18\x04 \x01(\fR\fsqlPrincipal\x12/\n" +
+	"\x13registration_digest\x18\x05 \x01(\fR\x12registrationDigest\x120\n" +
+	"\x05state\x18\x06 \x01(\x0e2\x1a.sql_writer_registry.StateR\x05state\x12#\n" +
+	"\rregistered_ms\x18\a \x01(\x04R\fregisteredMs\x122\n" +
+	"\x15retirement_request_id\x18\b \x01(\fR\x13retirementRequestId\x12+\n" +
+	"\x11retirement_digest\x18\t \x01(\fR\x10retirementDigest\x12\x1d\n" +
+	"\n" +
+	"retired_ms\x18\n" +
+	" \x01(\x04R\tretiredMs\"3\n" +
+	"\x05State\x12\x11\n" +
+	"\rSTATE_UNKNOWN\x10\x00\x12\n" +
+	"\n" +
+	"\x06ACTIVE\x10\x01\x12\v\n" +
+	"\aREVOKED\x10\x02:#\x8a\x92\xf4\x01\x0fwriter_registry\x92\x92\xf4\x01\n" +
+	"writer_key\"\xfe\x01\n" +
+	"\x0fsql_writer_slot\x12\x1d\n" +
+	"\n" +
+	"writer_key\x18\x01 \x01(\fR\twriterKey\x12\x12\n" +
+	"\x04slot\x18\x02 \x01(\rR\x04slot\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x03 \x01(\tR\n" +
+	"generation\x12!\n" +
+	"\fwriter_epoch\x18\x04 \x01(\x04R\vwriterEpoch\x120\n" +
+	"\x05state\x18\x05 \x01(\x0e2\x1a.sql_writer_registry.StateR\x05state\x12\x1d\n" +
+	"\n" +
+	"lock_touch\x18\x06 \x01(\rR\tlockTouch:$\x8a\x92\xf4\x01\vwriter_slot\x92\x92\xf4\x01\x0fwriter_key,slot\"\xd9\b\n" +
+	"\x1csql_writer_lifecycle_receipt\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\fR\trequestId\x126\n" +
+	"\x04kind\x18\x02 \x01(\x0e2\".sql_writer_lifecycle_receipt.KindR\x04kind\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x03 \x01(\tR\n" +
+	"generation\x12%\n" +
+	"\x0erequest_digest\x18\x04 \x01(\fR\rrequestDigest\x12#\n" +
+	"\rrequest_proto\x18\x05 \x01(\fR\frequestProto\x12%\n" +
+	"\x0eprevious_epoch\x18\x06 \x01(\x04R\rpreviousEpoch\x12'\n" +
+	"\x0fresulting_epoch\x18\a \x01(\x04R\x0eresultingEpoch\x12)\n" +
+	"\x10catalog_revision\x18\b \x01(\x04R\x0fcatalogRevision\x1a\xd2\x04\n" +
+	"\aRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\fR\trequestId\x126\n" +
+	"\x04kind\x18\x02 \x01(\x0e2\".sql_writer_lifecycle_receipt.KindR\x04kind\x12,\n" +
+	"\x06writer\x18\x03 \x01(\v2\x14.sql_writer_registryR\x06writer\x12%\n" +
+	"\x0eexpected_epoch\x18\x04 \x01(\x04R\rexpectedEpoch\x12:\n" +
+	"\x19expected_catalog_revision\x18\x05 \x01(\x04R\x17expectedCatalogRevision\x12)\n" +
+	"\x10authority_schema\x18\x06 \x01(\tR\x0fauthoritySchema\x12+\n" +
+	"\x11protected_schemas\x18\a \x03(\tR\x10protectedSchemas\x12+\n" +
+	"\x11deployment_digest\x18\b \x01(\fR\x10deploymentDigest\x12,\n" +
+	"\x12maintenance_run_id\x18\t \x01(\fR\x10maintenanceRunId\x12#\n" +
+	"\rdeployment_id\x18\n" +
+	" \x01(\tR\fdeploymentId\x12K\n" +
+	"\x0elock_primitive\x18\v \x01(\x0e2$.sql_writer_boot_grant.LockPrimitiveR\rlockPrimitive\x12:\n" +
+	"\x19lock_qualification_sha256\x18\f \x01(\fR\x17lockQualificationSha256\"D\n" +
+	"\x04Kind\x12\x10\n" +
+	"\fKIND_UNKNOWN\x10\x00\x12\f\n" +
+	"\bREGISTER\x10\x01\x12\n" +
+	"\n" +
+	"\x06RETIRE\x10\x02\"\x04\b\x03\x10\x03\"\x04\b\x04\x10\x04\"\x04\b\x05\x10\x05:`\x8a\x92\xf4\x01\x18writer_lifecycle_receipt\x92\x92\xf4\x01\n" +
+	"request_idڒ\xf4\x01/kind,request_digest;catalog_revision,request_id\"\xfd\x05\n" +
+	"\x15sql_writer_boot_grant\x12\x16\n" +
+	"\x06format\x18\x01 \x01(\tR\x06format\x12\x1d\n" +
+	"\n" +
+	"writer_key\x18\x02 \x01(\fR\twriterKey\x12\x1f\n" +
+	"\vinstance_id\x18\x03 \x01(\fR\n" +
+	"instanceId\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x04 \x01(\tR\n" +
+	"generation\x12)\n" +
+	"\x10authority_schema\x18\x05 \x01(\tR\x0fauthoritySchema\x12+\n" +
+	"\x11protected_schemas\x18\x06 \x03(\tR\x10protectedSchemas\x12#\n" +
+	"\rsql_principal\x18\a \x01(\fR\fsqlPrincipal\x12/\n" +
+	"\x13registration_digest\x18\b \x01(\fR\x12registrationDigest\x12#\n" +
+	"\rdeployment_id\x18\t \x01(\tR\fdeploymentId\x12\x19\n" +
+	"\bgrant_id\x18\n" +
+	" \x01(\fR\agrantId\x12\x1d\n" +
+	"\n" +
+	"granted_ms\x18\v \x01(\x04R\tgrantedMs\x12\x1e\n" +
+	"\n" +
+	"permission\x18\f \x01(\tR\n" +
+	"permission\x12:\n" +
+	"\x19physical_authority_sha256\x18\r \x01(\fR\x17physicalAuthoritySha256\x12,\n" +
+	"\x12maintenance_run_id\x18\x0e \x01(\fR\x10maintenanceRunId\x12K\n" +
+	"\x0elock_primitive\x18\x0f \x01(\x0e2$.sql_writer_boot_grant.LockPrimitiveR\rlockPrimitive\x12:\n" +
+	"\x19lock_qualification_sha256\x18\x10 \x01(\fR\x17lockQualificationSha256\"L\n" +
+	"\rLockPrimitive\x12\x1a\n" +
+	"\x16LOCK_PRIMITIVE_UNKNOWN\x10\x00\x12\x0f\n" +
+	"\vSELECT_ONLY\x10\x01\x12\x0e\n" +
+	"\n" +
+	"LOCK_TOUCH\x10\x02\"\xfb\x05\n" +
+	"\x14sql_writer_drain_run\x12!\n" +
+	"\foperation_id\x18\x01 \x01(\fR\voperationId\x12%\n" +
+	"\x0erequest_digest\x18\x02 \x01(\fR\rrequestDigest\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x03 \x01(\tR\n" +
+	"generation\x12)\n" +
+	"\x10attempt_revision\x18\x04 \x01(\x04R\x0fattemptRevision\x12%\n" +
+	"\x0emanifest_proto\x18\x05 \x01(\fR\rmanifestProto\x12'\n" +
+	"\x0fmanifest_digest\x18\x06 \x01(\fR\x0emanifestDigest\x121\n" +
+	"\x05phase\x18\a \x01(\x0e2\x1b.sql_writer_drain_run.PhaseR\x05phase\x122\n" +
+	"\x15latest_receipt_digest\x18\b \x01(\fR\x13latestReceiptDigest\x12*\n" +
+	"\x11frozen_request_id\x18\t \x01(\fR\x0ffrozenRequestId\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\n" +
+	" \x01(\x04R\tupdatedMs\x12*\n" +
+	"\x11latest_receipt_id\x18\v \x01(\fR\x0flatestReceiptId\"\xf3\x01\n" +
+	"\x05Phase\x12\v\n" +
+	"\aUNKNOWN\x10\x00\x12\x0e\n" +
+	"\n" +
+	"PLAN_FIXED\x10\x01\x12\x10\n" +
+	"\fROOTS_CLOSED\x10\x03\x12\f\n" +
+	"\bDRAINING\x10\x04\x12\x12\n" +
+	"\x0eNON_SQL_CLOSED\x10\x05\x12\x15\n" +
+	"\x11FREEZE_AUTHORIZED\x10\x06\x12\x0e\n" +
+	"\n" +
+	"SQL_FROZEN\x10\a\x12\x11\n" +
+	"\rRELEASE_READY\x10\b\x12\x10\n" +
+	"\fSQL_RELEASED\x10\t\x12\x18\n" +
+	"\x14PUBLICATION_REOPENED\x10\n" +
+	"\x12\x12\n" +
+	"\x0eABORTED_CLOSED\x10\v\x12\x19\n" +
+	"\x15EMERGENCY_FROZEN_HOLD\x10\f\"\x04\b\x02\x10\x02:*\x8a\x92\xf4\x01\x14sql_writer_drain_run\x92\x92\xf4\x01\foperation_id\"\xf0\a\n" +
+	"\x18sql_writer_freeze_ticket\x12\x1b\n" +
+	"\tticket_id\x18\x01 \x01(\fR\bticketId\x12!\n" +
+	"\foperation_id\x18\x02 \x01(\fR\voperationId\x12)\n" +
+	"\x10attempt_revision\x18\x03 \x01(\x04R\x0fattemptRevision\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x04 \x01(\tR\n" +
+	"generation\x12'\n" +
+	"\x0fmanifest_digest\x18\x05 \x01(\fR\x0emanifestDigest\x123\n" +
+	"\x16non_sql_receipt_digest\x18\x06 \x01(\fR\x13nonSqlReceiptDigest\x12*\n" +
+	"\x11freeze_request_id\x18\a \x01(\fR\x0ffreezeRequestId\x122\n" +
+	"\x15freeze_request_digest\x18\b \x01(\fR\x13freezeRequestDigest\x12\"\n" +
+	"\rnot_before_ms\x18\t \x01(\x04R\vnotBeforeMs\x12\x1d\n" +
+	"\n" +
+	"expires_ms\x18\n" +
+	" \x01(\x04R\texpiresMs\x125\n" +
+	"\x05state\x18\v \x01(\x0e2\x1f.sql_writer_freeze_ticket.StateR\x05state\x126\n" +
+	"\x17consumed_receipt_digest\x18\f \x01(\fR\x15consumedReceiptDigest\x12+\n" +
+	"\x11revocation_digest\x18\r \x01(\fR\x10revocationDigest\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x0e \x01(\x04R\tupdatedMs\x12Z\n" +
+	"\x12authorization_kind\x18\x0f \x01(\x0e2+.sql_writer_freeze_ticket.AuthorizationKindR\x11authorizationKind\x12(\n" +
+	"\x10grant_receipt_id\x18\x10 \x01(\fR\x0egrantReceiptId\x120\n" +
+	"\x14grant_receipt_digest\x18\x11 \x01(\fR\x12grantReceiptDigest\"D\n" +
+	"\x05State\x12\x11\n" +
+	"\rSTATE_UNKNOWN\x10\x00\x12\r\n" +
+	"\tAVAILABLE\x10\x01\x12\f\n" +
+	"\bCONSUMED\x10\x02\x12\v\n" +
+	"\aREVOKED\x10\x03\"b\n" +
+	"\x11AuthorizationKind\x12\x19\n" +
+	"\x15AUTHORIZATION_UNKNOWN\x10\x00\x12\x17\n" +
+	"\x13NORMAL_DRAIN_FREEZE\x10\x01\x12\x19\n" +
+	"\x15EMERGENCY_HOLD_FREEZE\x10\x02:+\x8a\x92\xf4\x01\x18sql_writer_freeze_ticket\x92\x92\xf4\x01\tticket_id\"\xdcf\n" +
+	"\x1esql_writer_maintenance_receipt\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\fR\trequestId\x12%\n" +
+	"\x0erequest_digest\x18\x02 \x01(\fR\rrequestDigest\x12\x15\n" +
+	"\x06run_id\x18\x03 \x01(\fR\x05runId\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x04 \x01(\tR\n" +
+	"generation\x12!\n" +
+	"\fbefore_epoch\x18\x05 \x01(\x04R\vbeforeEpoch\x12\x1f\n" +
+	"\vafter_epoch\x18\x06 \x01(\x04R\n" +
+	"afterEpoch\x12)\n" +
+	"\x10catalog_revision\x18\a \x01(\x04R\x0fcatalogRevision\x12;\n" +
+	"\x05phase\x18\b \x01(\x0e2%.sql_writer_maintenance_receipt.PhaseR\x05phase\x12\x1d\n" +
+	"\n" +
+	"plan_proto\x18\t \x01(\fR\tplanProto\x12!\n" +
+	"\fcommitted_ms\x18\n" +
+	" \x01(\x04R\vcommittedMs\x128\n" +
+	"\x04kind\x18\v \x01(\x0e2$.sql_writer_maintenance_receipt.KindR\x04kind\x128\n" +
+	"\trun_phase\x18\f \x01(\x0e2\x1b.sql_writer_drain_run.PhaseR\brunPhase\x12)\n" +
+	"\x10attempt_revision\x18\r \x01(\x04R\x0fattemptRevision\x12(\n" +
+	"\x10prior_receipt_id\x18\x0e \x01(\fR\x0epriorReceiptId\x120\n" +
+	"\x14prior_receipt_digest\x18\x0f \x01(\fR\x12priorReceiptDigest\x12D\n" +
+	"\bevidence\x18\x10 \x01(\v2(.sql_writer_maintenance_receipt.EvidenceR\bevidence\x12%\n" +
+	"\x0ereceipt_digest\x18\x11 \x01(\fR\rreceiptDigest\x1a\xdd\b\n" +
+	"\x04Plan\x12:\n" +
+	"\x19physical_cluster_identity\x18\x01 \x01(\fR\x17physicalClusterIdentity\x12)\n" +
+	"\x10authority_schema\x18\x02 \x01(\tR\x0fauthoritySchema\x12+\n" +
+	"\x11protected_schemas\x18\x03 \x03(\tR\x10protectedSchemas\x12,\n" +
+	"\x12active_writer_keys\x18\x04 \x03(\fR\x10activeWriterKeys\x12!\n" +
+	"\fbefore_epoch\x18\x05 \x01(\x04R\vbeforeEpoch\x12)\n" +
+	"\x10catalog_revision\x18\x06 \x01(\x04R\x0fcatalogRevision\x12\x15\n" +
+	"\x06run_id\x18\a \x01(\fR\x05runId\x125\n" +
+	"\x17prior_freeze_request_id\x18\b \x01(\fR\x14priorFreezeRequestId\x122\n" +
+	"\x15recovery_audit_digest\x18\t \x01(\fR\x13recoveryAuditDigest\x12P\n" +
+	"\froot_issuers\x18\n" +
+	" \x03(\v2-.sql_writer_maintenance_receipt.IssuerClosureR\vrootIssuers\x12T\n" +
+	"\x0equeue_mutators\x18\v \x03(\v2-.sql_writer_maintenance_receipt.IssuerClosureR\rqueueMutators\x12`\n" +
+	"\x10kafka_partitions\x18\f \x03(\v25.sql_writer_maintenance_receipt.KafkaPartitionClosureR\x0fkafkaPartitions\x12W\n" +
+	"\rredis_targets\x18\r \x03(\v22.sql_writer_maintenance_receipt.RedisTargetClosureR\fredisTargets\x12J\n" +
+	"\vsource_pins\x18\x0e \x03(\v2).sql_writer_maintenance_receipt.SourcePinR\n" +
+	"sourcePins\x12K\n" +
+	"\tlaunchers\x18\x0f \x03(\v2-.sql_writer_maintenance_receipt.LaunchClosureR\tlaunchers\x12^\n" +
+	"\x13maintenance_issuers\x18\x10 \x03(\v2-.sql_writer_maintenance_receipt.IssuerClosureR\x12maintenanceIssuers\x12g\n" +
+	"\x12manual_assignments\x18\x11 \x03(\v28.sql_writer_maintenance_receipt.ManualConsumerAssignmentR\x11manualAssignments\x1a\xaa\x01\n" +
+	"\rLaunchClosure\x12\x1f\n" +
+	"\vlauncher_id\x18\x01 \x01(\fR\n" +
+	"launcherId\x12J\n" +
+	"\vsource_pins\x18\x02 \x03(\v2).sql_writer_maintenance_receipt.SourcePinR\n" +
+	"sourcePins\x12,\n" +
+	"\x12permanent_fence_id\x18\x03 \x01(\fR\x10permanentFenceId\x1aH\n" +
+	"\tSourcePin\x12#\n" +
+	"\rabsolute_path\x18\x01 \x01(\tR\fabsolutePath\x12\x16\n" +
+	"\x06sha256\x18\x02 \x01(\fR\x06sha256\x1a\x84\x04\n" +
+	"\rIssuerClosure\x12\x1b\n" +
+	"\tissuer_id\x18\x01 \x01(\fR\bissuerId\x12\x1f\n" +
+	"\vinstance_id\x18\x02 \x01(\fR\n" +
+	"instanceId\x12.\n" +
+	"\x13physical_writer_key\x18\x03 \x01(\fR\x11physicalWriterKey\x12!\n" +
+	"\flogical_role\x18\x04 \x01(\tR\vlogicalRole\x12;\n" +
+	"\x1apermanent_revival_fence_id\x18\x05 \x01(\fR\x17permanentRevivalFenceId\x12.\n" +
+	"\x13accepting_closed_ms\x18\x06 \x01(\x04R\x11acceptingClosedMs\x12.\n" +
+	"\x13accepted_settled_ms\x18\a \x01(\x04R\x11acceptedSettledMs\x128\n" +
+	"\x18accepted_frontier_digest\x18\b \x01(\fR\x16acceptedFrontierDigest\x127\n" +
+	"\x17unresolved_publications\x18\t \x01(\x04R\x16unresolvedPublications\x12R\n" +
+	"\x0fsource_evidence\x18\n" +
+	" \x03(\v2).sql_writer_maintenance_receipt.SourcePinR\x0esourceEvidence\x1a\x8b\x03\n" +
+	"\x15KafkaPartitionClosure\x12\x1d\n" +
+	"\n" +
+	"cluster_id\x18\x01 \x01(\fR\tclusterId\x12\x19\n" +
+	"\btopic_id\x18\x02 \x01(\fR\atopicId\x12\x1d\n" +
+	"\n" +
+	"topic_name\x18\x03 \x01(\tR\ttopicName\x12\x14\n" +
+	"\x05group\x18\x04 \x01(\tR\x05group\x12\x1c\n" +
+	"\tpartition\x18\x05 \x01(\rR\tpartition\x12:\n" +
+	"\x19protected_committed_floor\x18\x06 \x01(\x03R\x17protectedCommittedFloor\x12)\n" +
+	"\x10initial_earliest\x18\a \x01(\x03R\x0finitialEarliest\x12%\n" +
+	"\x0efinal_earliest\x18\b \x01(\x03R\rfinalEarliest\x12.\n" +
+	"\x13final_exclusive_end\x18\t \x01(\x03R\x11finalExclusiveEnd\x12'\n" +
+	"\x0ffinal_committed\x18\n" +
+	" \x01(\x03R\x0efinalCommitted\x1a\xee\x01\n" +
+	"\x0fRedisKeyClosure\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x14\n" +
+	"\x05topic\x18\x03 \x01(\tR\x05topic\x12\x1d\n" +
+	"\n" +
+	"redis_type\x18\x04 \x01(\tR\tredisType\x12\x17\n" +
+	"\apttl_ms\x18\x05 \x01(\x03R\x06pttlMs\x12\x14\n" +
+	"\x05count\x18\x06 \x01(\x04R\x05count\x12\x18\n" +
+	"\amembers\x18\a \x03(\fR\amembers\x12\x16\n" +
+	"\x06values\x18\b \x03(\fR\x06values\x12\x1f\n" +
+	"\vdump_sha256\x18\t \x01(\fR\n" +
+	"dumpSha256\x1a\xeb\x02\n" +
+	"\x12RedisTargetClosure\x12\x12\n" +
+	"\x04role\x18\x01 \x01(\tR\x04role\x12\x18\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x0e\n" +
+	"\x02db\x18\x03 \x01(\x05R\x02db\x12\"\n" +
+	"\rserver_run_id\x18\x04 \x01(\fR\vserverRunId\x12+\n" +
+	"\x11maintenance_nonce\x18\x05 \x01(\fR\x10maintenanceNonce\x12\x14\n" +
+	"\x05zones\x18\x06 \x03(\rR\x05zones\x12S\n" +
+	"\fobservations\x18\a \x03(\v2/.sql_writer_maintenance_receipt.RedisKeyClosureR\fobservations\x12[\n" +
+	"\x14scan_source_evidence\x18\b \x03(\v2).sql_writer_maintenance_receipt.SourcePinR\x12scanSourceEvidence\x1a\xf5\x01\n" +
+	"\x13PublicationEvidence\x12R\n" +
+	"\rlogical_roles\x18\x01 \x03(\v2-.sql_writer_maintenance_receipt.IssuerClosureR\flogicalRoles\x126\n" +
+	"\x17issuer_inventory_digest\x18\x02 \x01(\fR\x15issuerInventoryDigest\x12R\n" +
+	"\x0fsource_evidence\x18\x03 \x03(\v2).sql_writer_maintenance_receipt.SourcePinR\x0esourceEvidence\x1a\xe3\x06\n" +
+	"\x15NonSqlClosureEvidence\x12T\n" +
+	"\x0equeue_mutators\x18\x01 \x03(\v2-.sql_writer_maintenance_receipt.IssuerClosureR\rqueueMutators\x12`\n" +
+	"\x10kafka_partitions\x18\x02 \x03(\v25.sql_writer_maintenance_receipt.KafkaPartitionClosureR\x0fkafkaPartitions\x12W\n" +
+	"\rredis_targets\x18\x03 \x03(\v22.sql_writer_maintenance_receipt.RedisTargetClosureR\fredisTargets\x123\n" +
+	"\x16root_closed_receipt_id\x18\x04 \x01(\fR\x13rootClosedReceiptId\x12;\n" +
+	"\x1aroot_closed_receipt_digest\x18\x05 \x01(\fR\x17rootClosedReceiptDigest\x129\n" +
+	"\x19relay_quiesced_receipt_id\x18\x06 \x01(\fR\x16relayQuiescedReceiptId\x12A\n" +
+	"\x1drelay_quiesced_receipt_digest\x18\a \x01(\fR\x1arelayQuiescedReceiptDigest\x12>\n" +
+	"\x1bhistorical_inventory_digest\x18\b \x01(\fR\x19historicalInventoryDigest\x12*\n" +
+	"\x11observed_start_ms\x18\t \x01(\x04R\x0fobservedStartMs\x12&\n" +
+	"\x0fobserved_end_ms\x18\n" +
+	" \x01(\x04R\robservedEndMs\x12R\n" +
+	"\x0fsource_evidence\x18\v \x03(\v2).sql_writer_maintenance_receipt.SourcePinR\x0esourceEvidence\x12a\n" +
+	"\x10manual_consumers\x18\f \x03(\v26.sql_writer_maintenance_receipt.ManualConsumerEvidenceR\x0fmanualConsumers\x1a\xf3\x01\n" +
+	"\x0eTicketEvidence\x12\x1b\n" +
+	"\tticket_id\x18\x01 \x01(\fR\bticketId\x12(\n" +
+	"\x10bound_request_id\x18\x02 \x01(\fR\x0eboundRequestId\x120\n" +
+	"\x14bound_request_digest\x18\x03 \x01(\fR\x12boundRequestDigest\x124\n" +
+	"\x16authority_operation_id\x18\x04 \x01(\fR\x14authorityOperationId\x122\n" +
+	"\x15ticket_request_digest\x18\x05 \x01(\fR\x13ticketRequestDigest\x1a\xb5\x02\n" +
+	"\x11EmergencyEvidence\x12\x16\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\x12*\n" +
+	"\x11danger_receipt_id\x18\x02 \x01(\fR\x0fdangerReceiptId\x122\n" +
+	"\x15danger_receipt_digest\x18\x03 \x01(\fR\x13dangerReceiptDigest\x12R\n" +
+	"\x0fsource_evidence\x18\x04 \x03(\v2).sql_writer_maintenance_receipt.SourcePinR\x0esourceEvidence\x12T\n" +
+	"\rauthorization\x18\x05 \x01(\v2..sql_writer_maintenance_receipt.TicketEvidenceR\rauthorization\x1a\x85\a\n" +
+	"\x12MergeRecoveryAudit\x12*\n" +
+	"\x11audit_instance_id\x18\x01 \x01(\fR\x0fauditInstanceId\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\fR\x05runId\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x03 \x01(\tR\n" +
+	"generation\x12)\n" +
+	"\x10attempt_revision\x18\x04 \x01(\x04R\x0fattemptRevision\x12\x1f\n" +
+	"\vplan_digest\x18\x05 \x01(\fR\n" +
+	"planDigest\x12;\n" +
+	"\x1aoriginal_freeze_receipt_id\x18\x06 \x01(\fR\x17originalFreezeReceiptId\x12C\n" +
+	"\x1eoriginal_freeze_receipt_digest\x18\a \x01(\fR\x1boriginalFreezeReceiptDigest\x12l\n" +
+	"\x17maintenance_publication\x18\b \x01(\v23.sql_writer_maintenance_receipt.PublicationEvidenceR\x16maintenancePublication\x12P\n" +
+	"\x0emerge_manifest\x18\t \x01(\v2).sql_writer_maintenance_receipt.SourcePinR\rmergeManifest\x12 \n" +
+	"\fmerge_run_id\x18\n" +
+	" \x01(\tR\n" +
+	"mergeRunId\x12\x1f\n" +
+	"\vsource_zone\x18\v \x01(\rR\n" +
+	"sourceZone\x12\x1f\n" +
+	"\vtarget_zone\x18\f \x01(\rR\n" +
+	"targetZone\x12#\n" +
+	"\rverify_merged\x18\r \x01(\bR\fverifyMerged\x12*\n" +
+	"\x11observed_start_ms\x18\x0e \x01(\x04R\x0fobservedStartMs\x12&\n" +
+	"\x0fobserved_end_ms\x18\x0f \x01(\x04R\robservedEndMs\x12J\n" +
+	"\x06checks\x18\x10 \x03(\v22.sql_writer_maintenance_receipt.MergeRecoveryCheckR\x06checks\x12U\n" +
+	"\x11audit_source_pins\x18\x11 \x03(\v2).sql_writer_maintenance_receipt.SourcePinR\x0fauditSourcePins\x1a\xda\x04\n" +
+	"\x12MergeRecoveryCheck\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12!\n" +
+	"\fsource_count\x18\x02 \x01(\x03R\vsourceCount\x12!\n" +
+	"\ftarget_count\x18\x03 \x01(\x03R\vtargetCount\x12!\n" +
+	"\funique_scope\x18\x04 \x01(\tR\vuniqueScope\x12%\n" +
+	"\x0econflict_count\x18\x05 \x01(\x03R\rconflictCount\x12\x1a\n" +
+	"\bseverity\x18\x06 \x01(\tR\bseverity\x12Q\n" +
+	"\x06status\x18\a \x01(\x0e29.sql_writer_maintenance_receipt.MergeRecoveryCheck.StatusR\x06status\x12\x14\n" +
+	"\x05notes\x18\b \x01(\tR\x05notes\x12U\n" +
+	"\x11query_source_pins\x18\t \x03(\v2).sql_writer_maintenance_receipt.SourcePinR\x0fquerySourcePins\x12K\n" +
+	"\x04kind\x18\n" +
+	" \x01(\x0e27.sql_writer_maintenance_receipt.MergeRecoveryCheck.KindR\x04kind\"7\n" +
+	"\x04Kind\x12\x14\n" +
+	"\x10KIND_UNSPECIFIED\x10\x00\x12\x0f\n" +
+	"\vOBSERVATION\x10\x01\x12\b\n" +
+	"\x04RULE\x10\x02\">\n" +
+	"\x06Status\x12\x16\n" +
+	"\x12STATUS_UNSPECIFIED\x10\x00\x12\f\n" +
+	"\bCOMPLETE\x10\x01\x12\x0e\n" +
+	"\n" +
+	"INCOMPLETE\x10\x02\x1a\x90\b\n" +
+	"\x12RouteRecoveryAudit\x12*\n" +
+	"\x11audit_instance_id\x18\x01 \x01(\fR\x0fauditInstanceId\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\fR\x05runId\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x03 \x01(\tR\n" +
+	"generation\x12)\n" +
+	"\x10attempt_revision\x18\x04 \x01(\x04R\x0fattemptRevision\x12\x1f\n" +
+	"\vplan_digest\x18\x05 \x01(\fR\n" +
+	"planDigest\x12;\n" +
+	"\x1aoriginal_freeze_receipt_id\x18\x06 \x01(\fR\x17originalFreezeReceiptId\x12C\n" +
+	"\x1eoriginal_freeze_receipt_digest\x18\a \x01(\fR\x1boriginalFreezeReceiptDigest\x12l\n" +
+	"\x17maintenance_publication\x18\b \x01(\v23.sql_writer_maintenance_receipt.PublicationEvidenceR\x16maintenancePublication\x12)\n" +
+	"\x10authority_schema\x18\t \x01(\tR\x0fauthoritySchema\x12Y\n" +
+	"\x0emapping_target\x18\n" +
+	" \x01(\v22.sql_writer_maintenance_receipt.RedisTargetClosureR\rmappingTarget\x12*\n" +
+	"\x11observed_start_ms\x18\v \x01(\x04R\x0fobservedStartMs\x12&\n" +
+	"\x0fobserved_end_ms\x18\f \x01(\x04R\robservedEndMs\x12H\n" +
+	"\x05stats\x18\r \x01(\v22.sql_writer_maintenance_receipt.RouteRecoveryStatsR\x05stats\x12(\n" +
+	"\x10ready_marker_raw\x18\x0e \x01(\fR\x0ereadyMarkerRaw\x12#\n" +
+	"\rwatermark_raw\x18\x0f \x01(\fR\fwatermarkRaw\x12&\n" +
+	"\x0finfo_server_raw\x18\x10 \x01(\fR\rinfoServerRaw\x120\n" +
+	"\x14info_replication_raw\x18\x11 \x01(\fR\x12infoReplicationRaw\x127\n" +
+	"\x18route_watermark_floor_ms\x18\x12 \x01(\x04R\x15routeWatermarkFloorMs\x12U\n" +
+	"\x11audit_source_pins\x18\x13 \x03(\v2).sql_writer_maintenance_receipt.SourcePinR\x0fauditSourcePins\x1a\x89\x06\n" +
+	"\x12RouteRecoveryStats\x12\x17\n" +
+	"\adb_rows\x18\x01 \x01(\x04R\x06dbRows\x12#\n" +
+	"\rredis_players\x18\x02 \x01(\x04R\fredisPlayers\x12.\n" +
+	"\x13db_only_unpublished\x18\x03 \x01(\x04R\x11dbOnlyUnpublished\x12(\n" +
+	"\x10missing_in_redis\x18\x04 \x01(\x04R\x0emissingInRedis\x12\"\n" +
+	"\rmissing_in_db\x18\x05 \x01(\x04R\vmissingInDb\x12%\n" +
+	"\x0evalue_mismatch\x18\x06 \x01(\x04R\rvalueMismatch\x12'\n" +
+	"\x0fredis_malformed\x18\a \x01(\x04R\x0eredisMalformed\x12\x1d\n" +
+	"\n" +
+	"db_invalid\x18\b \x01(\x04R\tdbInvalid\x12&\n" +
+	"\x0fredis_rev_ahead\x18\t \x01(\x04R\rredisRevAhead\x12(\n" +
+	"\x10redis_rev_behind\x18\n" +
+	" \x01(\x04R\x0eredisRevBehind\x12>\n" +
+	"\x1cmerged_into_missing_in_redis\x18\v \x01(\x04R\x18mergedIntoMissingInRedis\x128\n" +
+	"\x19merged_into_missing_in_db\x18\f \x01(\x04R\x15mergedIntoMissingInDb\x120\n" +
+	"\x14merged_into_mismatch\x18\r \x01(\x04R\x12mergedIntoMismatch\x12.\n" +
+	"\x13redis_fences_active\x18\x0e \x01(\x04R\x11redisFencesActive\x12+\n" +
+	"\x11transient_cleared\x18\x0f \x01(\x04R\x10transientCleared\x12'\n" +
+	"\x0ffrozen_recovery\x18\x10 \x01(\bR\x0efrozenRecovery\x12&\n" +
+	"\x0frequire_map_rev\x18\x11 \x01(\bR\rrequireMapRev\x12\x1c\n" +
+	"\tcompleted\x18\x12 \x01(\bR\tcompleted\x1a\x89\x04\n" +
+	"\x10ReleaseReadiness\x12;\n" +
+	"\x1aoriginal_freeze_receipt_id\x18\x01 \x01(\fR\x17originalFreezeReceiptId\x12C\n" +
+	"\x1eoriginal_freeze_receipt_digest\x18\x02 \x01(\fR\x1boriginalFreezeReceiptDigest\x12P\n" +
+	"\x0erecovery_audit\x18\x03 \x03(\v2).sql_writer_maintenance_receipt.SourcePinR\rrecoveryAudit\x128\n" +
+	"\x19non_sql_closed_receipt_id\x18\x04 \x01(\fR\x15nonSqlClosedReceiptId\x12@\n" +
+	"\x1dnon_sql_closed_receipt_digest\x18\x05 \x01(\fR\x19nonSqlClosedReceiptDigest\x127\n" +
+	"\x18route_watermark_floor_ms\x18\x06 \x01(\x04R\x15routeWatermarkFloorMs\x12l\n" +
+	"\x17maintenance_publication\x18\a \x01(\v23.sql_writer_maintenance_receipt.PublicationEvidenceR\x16maintenancePublication\x1a\xca\x03\n" +
+	"\x16ConsumerGroupReadiness\x12!\n" +
+	"\foperation_id\x18\x01 \x01(\fR\voperationId\x12'\n" +
+	"\x0fmanifest_digest\x18\x02 \x01(\fR\x0emanifestDigest\x12\x1b\n" +
+	"\tissuer_id\x18\x03 \x01(\fR\bissuerId\x12\x1f\n" +
+	"\vinstance_id\x18\x04 \x01(\fR\n" +
+	"instanceId\x12\x14\n" +
+	"\x05group\x18\x05 \x01(\tR\x05group\x12#\n" +
+	"\rgeneration_id\x18\x06 \x01(\x05R\fgenerationId\x12\x1b\n" +
+	"\tmember_id\x18\a \x01(\tR\bmemberId\x12f\n" +
+	"\x13expected_partitions\x18\b \x03(\v25.sql_writer_maintenance_receipt.KafkaPartitionClosureR\x12expectedPartitions\x12f\n" +
+	"\x13assigned_partitions\x18\t \x03(\v25.sql_writer_maintenance_receipt.KafkaPartitionClosureR\x12assignedPartitions\x1a\xbf\x04\n" +
+	"\x18ManualConsumerAssignment\x12\x1b\n" +
+	"\tissuer_id\x18\x01 \x01(\fR\bissuerId\x12\x1f\n" +
+	"\vinstance_id\x18\x02 \x01(\fR\n" +
+	"instanceId\x12\x1f\n" +
+	"\vconsumer_id\x18\x03 \x01(\tR\n" +
+	"consumerId\x12\x1d\n" +
+	"\n" +
+	"cluster_id\x18\x04 \x01(\fR\tclusterId\x12\x19\n" +
+	"\btopic_id\x18\x05 \x01(\fR\atopicId\x12\x1d\n" +
+	"\n" +
+	"topic_name\x18\x06 \x01(\tR\ttopicName\x12'\n" +
+	"\x0fpartition_count\x18\a \x01(\rR\x0epartitionCount\x12\x1c\n" +
+	"\tpartition\x18\b \x01(\rR\tpartition\x12$\n" +
+	"\x0etarget_node_id\x18\t \x01(\rR\ftargetNodeId\x12,\n" +
+	"\x12target_instance_id\x18\n" +
+	" \x01(\fR\x10targetInstanceId\x12/\n" +
+	"\x13assignment_revision\x18\v \x01(\x04R\x12assignmentRevision\x12!\n" +
+	"\fstart_offset\x18\f \x01(\x03R\vstartOffset\x12\x1a\n" +
+	"\bposition\x18\r \x01(\x03R\bposition\x12\x1a\n" +
+	"\bearliest\x18\x0e \x01(\x03R\bearliest\x12#\n" +
+	"\rexclusive_end\x18\x0f \x01(\x03R\fexclusiveEnd\x12\x1f\n" +
+	"\vobserved_ms\x18\x10 \x01(\x04R\n" +
+	"observedMs\x1a\xd1\x03\n" +
+	"\x16ManualConsumerEvidence\x12!\n" +
+	"\foperation_id\x18\x01 \x01(\fR\voperationId\x12'\n" +
+	"\x0fmanifest_digest\x18\x02 \x01(\fR\x0emanifestDigest\x12Z\n" +
+	"\vassignments\x18\x03 \x03(\v28.sql_writer_maintenance_receipt.ManualConsumerAssignmentR\vassignments\x12)\n" +
+	"\x10accepting_closed\x18\x04 \x01(\bR\x0facceptingClosed\x12)\n" +
+	"\x10callbacks_joined\x18\x05 \x01(\bR\x0fcallbacksJoined\x12\x1a\n" +
+	"\baccepted\x18\x06 \x01(\x04R\baccepted\x12\x18\n" +
+	"\asettled\x18\a \x01(\x04R\asettled\x127\n" +
+	"\x17unresolved_publications\x18\b \x01(\x04R\x16unresolvedPublications\x12J\n" +
+	"\vsource_pins\x18\t \x03(\v2).sql_writer_maintenance_receipt.SourcePinR\n" +
+	"sourcePins\x1a\xca\x01\n" +
+	"\x11ConsumerReadiness\x12N\n" +
+	"\x06groups\x18\x01 \x03(\v26.sql_writer_maintenance_receipt.ConsumerGroupReadinessR\x06groups\x12e\n" +
+	"\x12manual_assignments\x18\x02 \x03(\v26.sql_writer_maintenance_receipt.ManualConsumerEvidenceR\x11manualAssignments\x1a\xd9\x03\n" +
+	"\x0fIssuerReadiness\x12\x1b\n" +
+	"\tissuer_id\x18\x01 \x01(\fR\bissuerId\x12\x1f\n" +
+	"\vinstance_id\x18\x02 \x01(\fR\n" +
+	"instanceId\x12.\n" +
+	"\x13physical_writer_key\x18\x03 \x01(\fR\x11physicalWriterKey\x12!\n" +
+	"\flogical_role\x18\x04 \x01(\tR\vlogicalRole\x126\n" +
+	"\x17registration_receipt_id\x18\x05 \x01(\fR\x15registrationReceiptId\x12>\n" +
+	"\x1bregistration_receipt_digest\x18\x06 \x01(\fR\x19registrationReceiptDigest\x12,\n" +
+	"\x12prepared_closed_ms\x18\a \x01(\x04R\x10preparedClosedMs\x12C\n" +
+	"\x1econsumer_ready_frontier_digest\x18\b \x01(\fR\x1bconsumerReadyFrontierDigest\x12J\n" +
+	"\vsource_pins\x18\t \x03(\v2).sql_writer_maintenance_receipt.SourcePinR\n" +
+	"sourcePins\x1a\xaf\x04\n" +
+	"\rSourceOpenAck\x12\x1b\n" +
+	"\tissuer_id\x18\x01 \x01(\fR\bissuerId\x12\x1f\n" +
+	"\vinstance_id\x18\x02 \x01(\fR\n" +
+	"instanceId\x12.\n" +
+	"\x13physical_writer_key\x18\x03 \x01(\fR\x11physicalWriterKey\x12!\n" +
+	"\flogical_role\x18\x04 \x01(\tR\vlogicalRole\x126\n" +
+	"\x17registration_receipt_id\x18\x05 \x01(\fR\x15registrationReceiptId\x12>\n" +
+	"\x1bregistration_receipt_digest\x18\x06 \x01(\fR\x19registrationReceiptDigest\x12!\n" +
+	"\foperation_id\x18\a \x01(\fR\voperationId\x12'\n" +
+	"\x0fmanifest_digest\x18\b \x01(\fR\x0emanifestDigest\x12\x1b\n" +
+	"\topened_ms\x18\t \x01(\x04R\bopenedMs\x12&\n" +
+	"\x0fopen_request_id\x18\n" +
+	" \x01(\fR\ropenRequestId\x128\n" +
+	"\x18accepted_frontier_digest\x18\v \x01(\fR\x16acceptedFrontierDigest\x12J\n" +
+	"\vsource_pins\x18\f \x03(\v2).sql_writer_maintenance_receipt.SourcePinR\n" +
+	"sourcePins\x1a\xa7\x02\n" +
+	"\x14PublicationReadiness\x12,\n" +
+	"\x12release_receipt_id\x18\x01 \x01(\fR\x10releaseReceiptId\x124\n" +
+	"\x16release_receipt_digest\x18\x02 \x01(\fR\x14releaseReceiptDigest\x12V\n" +
+	"\x0eprepared_boots\x18\x03 \x03(\v2/.sql_writer_maintenance_receipt.IssuerReadinessR\rpreparedBoots\x12S\n" +
+	"\x10source_open_acks\x18\x04 \x03(\v2).sql_writer_maintenance_receipt.SourcePinR\x0esourceOpenAcks\x1a\x85\x05\n" +
+	"\bEvidence\x12!\n" +
+	"\foperation_id\x18\x01 \x01(\fR\voperationId\x12'\n" +
+	"\x0fmanifest_digest\x18\x02 \x01(\fR\x0emanifestDigest\x12W\n" +
+	"\vpublication\x18\n" +
+	" \x01(\v23.sql_writer_maintenance_receipt.PublicationEvidenceH\x00R\vpublication\x12_\n" +
+	"\x0fnon_sql_closure\x18\v \x01(\v25.sql_writer_maintenance_receipt.NonSqlClosureEvidenceH\x00R\rnonSqlClosure\x12H\n" +
+	"\x06ticket\x18\f \x01(\v2..sql_writer_maintenance_receipt.TicketEvidenceH\x00R\x06ticket\x12Q\n" +
+	"\temergency\x18\r \x01(\v21.sql_writer_maintenance_receipt.EmergencyEvidenceH\x00R\temergency\x12_\n" +
+	"\x11release_readiness\x18\x0e \x01(\v20.sql_writer_maintenance_receipt.ReleaseReadinessH\x00R\x10releaseReadiness\x12k\n" +
+	"\x15publication_readiness\x18\x0f \x01(\v24.sql_writer_maintenance_receipt.PublicationReadinessH\x00R\x14publicationReadinessB\b\n" +
+	"\x06detail\"4\n" +
+	"\x05Phase\x12\x11\n" +
+	"\rPHASE_UNKNOWN\x10\x00\x12\n" +
+	"\n" +
+	"\x06FROZEN\x10\x01\x12\f\n" +
+	"\bRELEASED\x10\x02\"\xa5\x01\n" +
+	"\x04Kind\x12\x10\n" +
+	"\fKIND_UNKNOWN\x10\x00\x12\n" +
+	"\n" +
+	"\x06FREEZE\x10\x01\x12\v\n" +
+	"\aRELEASE\x10\x02\x12\x0f\n" +
+	"\vPHASE_EVENT\x10\x03\x12\x0f\n" +
+	"\vROLE_CLOSED\x10\x04\x12\x12\n" +
+	"\x0eRELAY_QUIESCED\x10\x05\x12\x12\n" +
+	"\x0eTICKET_GRANTED\x10\x06\x12\x12\n" +
+	"\x0eTICKET_REVOKED\x10\a\x12\x14\n" +
+	"\x10EMERGENCY_FREEZE\x10\b:2\x8a\x92\xf4\x01\x1esql_writer_maintenance_receipt\x92\x92\xf4\x01\n" +
+	"request_id\"\xe1\x03\n" +
+	"\x16sql_writer_boot_roster\x12\x16\n" +
+	"\x06format\x18\x01 \x01(\tR\x06format\x127\n" +
+	"\aentries\x18\x02 \x03(\v2\x1d.sql_writer_boot_roster.EntryR\aentries\x1a\x89\x02\n" +
+	"\x05Entry\x12?\n" +
+	"\arequest\x18\x01 \x01(\v2%.sql_writer_lifecycle_receipt.RequestR\arequest\x12.\n" +
+	"\x13runtime_config_path\x18\x02 \x01(\tR\x11runtimeConfigPath\x122\n" +
+	"\x15runtime_config_sha256\x18\x03 \x01(\fR\x13runtimeConfigSha256\x12[\n" +
+	"\x13runtime_environment\x18\x04 \x03(\v2*.sql_writer_boot_roster.RuntimeEnvironmentR\x12runtimeEnvironment\x1aj\n" +
+	"\x12RuntimeEnvironment\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"value_path\x18\x02 \x01(\tR\tvaluePath\x12!\n" +
+	"\fvalue_sha256\x18\x03 \x01(\fR\vvalueSha256B\x17Z\x15proto/common/databaseb\x06proto3"
 
 var (
 	file_proto_common_database_rollback_database_table_proto_rawDescOnce sync.Once
@@ -2263,34 +8194,159 @@ func file_proto_common_database_rollback_database_table_proto_rawDescGZIP() []by
 	return file_proto_common_database_rollback_database_table_proto_rawDescData
 }
 
-var file_proto_common_database_rollback_database_table_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_proto_common_database_rollback_database_table_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
+var file_proto_common_database_rollback_database_table_proto_msgTypes = make([]protoimpl.MessageInfo, 59)
 var file_proto_common_database_rollback_database_table_proto_goTypes = []any{
-	(*TransactionLog)(nil),             // 0: transaction_log
-	(*PlayerSnapshot)(nil),             // 1: player_snapshot
-	(*RollbackAuditLog)(nil),           // 2: rollback_audit_log
-	(*PlayerDebt)(nil),                 // 3: player_debt
-	(*RollbackAudit)(nil),              // 4: rollback_audit
-	(*IdSegment)(nil),                  // 5: id_segment
-	(*PlayerName)(nil),                 // 6: player_name
-	(*PlayerRoute)(nil),                // 7: player_route
-	(*ZoneMergeFence)(nil),             // 8: zone_merge_fence
-	(*ZoneMergedInto)(nil),             // 9: zone_merged_into
-	(*RouteMeta)(nil),                  // 10: route_meta
-	(*RouteReconcile)(nil),             // 11: route_reconcile
-	(*AccountDirectory)(nil),           // 12: account_directory
-	(*AccountRole)(nil),                // 13: account_role
-	(*AccountRoleTrade)(nil),           // 14: account_role_trade
-	(*AccountRoleTransferReceipt)(nil), // 15: account_role_transfer_receipt
-	(*AccountRoleAdmission)(nil),       // 16: account_role_admission
-	(*AccountRoleTradeHolder)(nil),     // 17: account_role_trade_holder
-	(*AccountRoleImportReceipt)(nil),   // 18: account_role_import_receipt
+	(SaveBarrierMaintenanceReceipt_Phase)(0),                             // 0: save_barrier_maintenance_receipt.Phase
+	(SqlWriterRegistry_State)(0),                                         // 1: sql_writer_registry.State
+	(SqlWriterLifecycleReceipt_Kind)(0),                                  // 2: sql_writer_lifecycle_receipt.Kind
+	(SqlWriterBootGrant_LockPrimitive)(0),                                // 3: sql_writer_boot_grant.LockPrimitive
+	(SqlWriterDrainRun_Phase)(0),                                         // 4: sql_writer_drain_run.Phase
+	(SqlWriterFreezeTicket_State)(0),                                     // 5: sql_writer_freeze_ticket.State
+	(SqlWriterFreezeTicket_AuthorizationKind)(0),                         // 6: sql_writer_freeze_ticket.AuthorizationKind
+	(SqlWriterMaintenanceReceipt_Phase)(0),                               // 7: sql_writer_maintenance_receipt.Phase
+	(SqlWriterMaintenanceReceipt_Kind)(0),                                // 8: sql_writer_maintenance_receipt.Kind
+	(SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Kind)(0),             // 9: sql_writer_maintenance_receipt.MergeRecoveryCheck.Kind
+	(SqlWriterMaintenanceReceipt_MergeRecoveryCheck_Status)(0),           // 10: sql_writer_maintenance_receipt.MergeRecoveryCheck.Status
+	(*TransactionLog)(nil),                                               // 11: transaction_log
+	(*PlayerSnapshot)(nil),                                               // 12: player_snapshot
+	(*RollbackAuditLog)(nil),                                             // 13: rollback_audit_log
+	(*PlayerDebt)(nil),                                                   // 14: player_debt
+	(*RollbackAudit)(nil),                                                // 15: rollback_audit
+	(*IdSegment)(nil),                                                    // 16: id_segment
+	(*PlayerName)(nil),                                                   // 17: player_name
+	(*PlayerRoute)(nil),                                                  // 18: player_route
+	(*ZoneMergeFence)(nil),                                               // 19: zone_merge_fence
+	(*ZoneMergedInto)(nil),                                               // 20: zone_merged_into
+	(*RouteMeta)(nil),                                                    // 21: route_meta
+	(*RouteReconcile)(nil),                                               // 22: route_reconcile
+	(*AccountDirectory)(nil),                                             // 23: account_directory
+	(*AccountRole)(nil),                                                  // 24: account_role
+	(*AccountRoleTrade)(nil),                                             // 25: account_role_trade
+	(*AccountRoleTransferReceipt)(nil),                                   // 26: account_role_transfer_receipt
+	(*AccountRoleAdmission)(nil),                                         // 27: account_role_admission
+	(*AccountRoleTradeHolder)(nil),                                       // 28: account_role_trade_holder
+	(*AccountRoleImportReceipt)(nil),                                     // 29: account_role_import_receipt
+	(*SaveBarrierMaintenanceReceipt)(nil),                                // 30: save_barrier_maintenance_receipt
+	(*AccountRoleAdmissionRecovery)(nil),                                 // 31: account_role_admission_recovery
+	(*SqlWriterRegistry)(nil),                                            // 32: sql_writer_registry
+	(*SqlWriterSlot)(nil),                                                // 33: sql_writer_slot
+	(*SqlWriterLifecycleReceipt)(nil),                                    // 34: sql_writer_lifecycle_receipt
+	(*SqlWriterBootGrant)(nil),                                           // 35: sql_writer_boot_grant
+	(*SqlWriterDrainRun)(nil),                                            // 36: sql_writer_drain_run
+	(*SqlWriterFreezeTicket)(nil),                                        // 37: sql_writer_freeze_ticket
+	(*SqlWriterMaintenanceReceipt)(nil),                                  // 38: sql_writer_maintenance_receipt
+	(*SqlWriterBootRoster)(nil),                                          // 39: sql_writer_boot_roster
+	(*SaveBarrierMaintenanceReceipt_PromotionPlan)(nil),                  // 40: save_barrier_maintenance_receipt.PromotionPlan
+	(*SaveBarrierMaintenanceReceipt_PromotionPlan_CacheObservation)(nil), // 41: save_barrier_maintenance_receipt.PromotionPlan.CacheObservation
+	(*AccountRoleAdmissionRecovery_Request)(nil),                         // 42: account_role_admission_recovery.Request
+	(*SqlWriterLifecycleReceipt_Request)(nil),                            // 43: sql_writer_lifecycle_receipt.Request
+	(*SqlWriterMaintenanceReceipt_Plan)(nil),                             // 44: sql_writer_maintenance_receipt.Plan
+	(*SqlWriterMaintenanceReceipt_LaunchClosure)(nil),                    // 45: sql_writer_maintenance_receipt.LaunchClosure
+	(*SqlWriterMaintenanceReceipt_SourcePin)(nil),                        // 46: sql_writer_maintenance_receipt.SourcePin
+	(*SqlWriterMaintenanceReceipt_IssuerClosure)(nil),                    // 47: sql_writer_maintenance_receipt.IssuerClosure
+	(*SqlWriterMaintenanceReceipt_KafkaPartitionClosure)(nil),            // 48: sql_writer_maintenance_receipt.KafkaPartitionClosure
+	(*SqlWriterMaintenanceReceipt_RedisKeyClosure)(nil),                  // 49: sql_writer_maintenance_receipt.RedisKeyClosure
+	(*SqlWriterMaintenanceReceipt_RedisTargetClosure)(nil),               // 50: sql_writer_maintenance_receipt.RedisTargetClosure
+	(*SqlWriterMaintenanceReceipt_PublicationEvidence)(nil),              // 51: sql_writer_maintenance_receipt.PublicationEvidence
+	(*SqlWriterMaintenanceReceipt_NonSqlClosureEvidence)(nil),            // 52: sql_writer_maintenance_receipt.NonSqlClosureEvidence
+	(*SqlWriterMaintenanceReceipt_TicketEvidence)(nil),                   // 53: sql_writer_maintenance_receipt.TicketEvidence
+	(*SqlWriterMaintenanceReceipt_EmergencyEvidence)(nil),                // 54: sql_writer_maintenance_receipt.EmergencyEvidence
+	(*SqlWriterMaintenanceReceipt_MergeRecoveryAudit)(nil),               // 55: sql_writer_maintenance_receipt.MergeRecoveryAudit
+	(*SqlWriterMaintenanceReceipt_MergeRecoveryCheck)(nil),               // 56: sql_writer_maintenance_receipt.MergeRecoveryCheck
+	(*SqlWriterMaintenanceReceipt_RouteRecoveryAudit)(nil),               // 57: sql_writer_maintenance_receipt.RouteRecoveryAudit
+	(*SqlWriterMaintenanceReceipt_RouteRecoveryStats)(nil),               // 58: sql_writer_maintenance_receipt.RouteRecoveryStats
+	(*SqlWriterMaintenanceReceipt_ReleaseReadiness)(nil),                 // 59: sql_writer_maintenance_receipt.ReleaseReadiness
+	(*SqlWriterMaintenanceReceipt_ConsumerGroupReadiness)(nil),           // 60: sql_writer_maintenance_receipt.ConsumerGroupReadiness
+	(*SqlWriterMaintenanceReceipt_ManualConsumerAssignment)(nil),         // 61: sql_writer_maintenance_receipt.ManualConsumerAssignment
+	(*SqlWriterMaintenanceReceipt_ManualConsumerEvidence)(nil),           // 62: sql_writer_maintenance_receipt.ManualConsumerEvidence
+	(*SqlWriterMaintenanceReceipt_ConsumerReadiness)(nil),                // 63: sql_writer_maintenance_receipt.ConsumerReadiness
+	(*SqlWriterMaintenanceReceipt_IssuerReadiness)(nil),                  // 64: sql_writer_maintenance_receipt.IssuerReadiness
+	(*SqlWriterMaintenanceReceipt_SourceOpenAck)(nil),                    // 65: sql_writer_maintenance_receipt.SourceOpenAck
+	(*SqlWriterMaintenanceReceipt_PublicationReadiness)(nil),             // 66: sql_writer_maintenance_receipt.PublicationReadiness
+	(*SqlWriterMaintenanceReceipt_Evidence)(nil),                         // 67: sql_writer_maintenance_receipt.Evidence
+	(*SqlWriterBootRoster_Entry)(nil),                                    // 68: sql_writer_boot_roster.Entry
+	(*SqlWriterBootRoster_RuntimeEnvironment)(nil),                       // 69: sql_writer_boot_roster.RuntimeEnvironment
+	(*base.RoleTradeSeal)(nil),                                           // 70: common.base.RoleTradeSeal
+	(*base.RoleAdmissionIdentity)(nil),                                   // 71: common.base.RoleAdmissionIdentity
 }
 var file_proto_common_database_rollback_database_table_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0,  // 0: save_barrier_maintenance_receipt.phase:type_name -> save_barrier_maintenance_receipt.Phase
+	1,  // 1: sql_writer_registry.state:type_name -> sql_writer_registry.State
+	1,  // 2: sql_writer_slot.state:type_name -> sql_writer_registry.State
+	2,  // 3: sql_writer_lifecycle_receipt.kind:type_name -> sql_writer_lifecycle_receipt.Kind
+	3,  // 4: sql_writer_boot_grant.lock_primitive:type_name -> sql_writer_boot_grant.LockPrimitive
+	4,  // 5: sql_writer_drain_run.phase:type_name -> sql_writer_drain_run.Phase
+	5,  // 6: sql_writer_freeze_ticket.state:type_name -> sql_writer_freeze_ticket.State
+	6,  // 7: sql_writer_freeze_ticket.authorization_kind:type_name -> sql_writer_freeze_ticket.AuthorizationKind
+	7,  // 8: sql_writer_maintenance_receipt.phase:type_name -> sql_writer_maintenance_receipt.Phase
+	8,  // 9: sql_writer_maintenance_receipt.kind:type_name -> sql_writer_maintenance_receipt.Kind
+	4,  // 10: sql_writer_maintenance_receipt.run_phase:type_name -> sql_writer_drain_run.Phase
+	67, // 11: sql_writer_maintenance_receipt.evidence:type_name -> sql_writer_maintenance_receipt.Evidence
+	68, // 12: sql_writer_boot_roster.entries:type_name -> sql_writer_boot_roster.Entry
+	41, // 13: save_barrier_maintenance_receipt.PromotionPlan.caches:type_name -> save_barrier_maintenance_receipt.PromotionPlan.CacheObservation
+	70, // 14: account_role_admission_recovery.Request.seal:type_name -> common.base.RoleTradeSeal
+	71, // 15: account_role_admission_recovery.Request.admission:type_name -> common.base.RoleAdmissionIdentity
+	2,  // 16: sql_writer_lifecycle_receipt.Request.kind:type_name -> sql_writer_lifecycle_receipt.Kind
+	32, // 17: sql_writer_lifecycle_receipt.Request.writer:type_name -> sql_writer_registry
+	3,  // 18: sql_writer_lifecycle_receipt.Request.lock_primitive:type_name -> sql_writer_boot_grant.LockPrimitive
+	47, // 19: sql_writer_maintenance_receipt.Plan.root_issuers:type_name -> sql_writer_maintenance_receipt.IssuerClosure
+	47, // 20: sql_writer_maintenance_receipt.Plan.queue_mutators:type_name -> sql_writer_maintenance_receipt.IssuerClosure
+	48, // 21: sql_writer_maintenance_receipt.Plan.kafka_partitions:type_name -> sql_writer_maintenance_receipt.KafkaPartitionClosure
+	50, // 22: sql_writer_maintenance_receipt.Plan.redis_targets:type_name -> sql_writer_maintenance_receipt.RedisTargetClosure
+	46, // 23: sql_writer_maintenance_receipt.Plan.source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
+	45, // 24: sql_writer_maintenance_receipt.Plan.launchers:type_name -> sql_writer_maintenance_receipt.LaunchClosure
+	47, // 25: sql_writer_maintenance_receipt.Plan.maintenance_issuers:type_name -> sql_writer_maintenance_receipt.IssuerClosure
+	61, // 26: sql_writer_maintenance_receipt.Plan.manual_assignments:type_name -> sql_writer_maintenance_receipt.ManualConsumerAssignment
+	46, // 27: sql_writer_maintenance_receipt.LaunchClosure.source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
+	46, // 28: sql_writer_maintenance_receipt.IssuerClosure.source_evidence:type_name -> sql_writer_maintenance_receipt.SourcePin
+	49, // 29: sql_writer_maintenance_receipt.RedisTargetClosure.observations:type_name -> sql_writer_maintenance_receipt.RedisKeyClosure
+	46, // 30: sql_writer_maintenance_receipt.RedisTargetClosure.scan_source_evidence:type_name -> sql_writer_maintenance_receipt.SourcePin
+	47, // 31: sql_writer_maintenance_receipt.PublicationEvidence.logical_roles:type_name -> sql_writer_maintenance_receipt.IssuerClosure
+	46, // 32: sql_writer_maintenance_receipt.PublicationEvidence.source_evidence:type_name -> sql_writer_maintenance_receipt.SourcePin
+	47, // 33: sql_writer_maintenance_receipt.NonSqlClosureEvidence.queue_mutators:type_name -> sql_writer_maintenance_receipt.IssuerClosure
+	48, // 34: sql_writer_maintenance_receipt.NonSqlClosureEvidence.kafka_partitions:type_name -> sql_writer_maintenance_receipt.KafkaPartitionClosure
+	50, // 35: sql_writer_maintenance_receipt.NonSqlClosureEvidence.redis_targets:type_name -> sql_writer_maintenance_receipt.RedisTargetClosure
+	46, // 36: sql_writer_maintenance_receipt.NonSqlClosureEvidence.source_evidence:type_name -> sql_writer_maintenance_receipt.SourcePin
+	62, // 37: sql_writer_maintenance_receipt.NonSqlClosureEvidence.manual_consumers:type_name -> sql_writer_maintenance_receipt.ManualConsumerEvidence
+	46, // 38: sql_writer_maintenance_receipt.EmergencyEvidence.source_evidence:type_name -> sql_writer_maintenance_receipt.SourcePin
+	53, // 39: sql_writer_maintenance_receipt.EmergencyEvidence.authorization:type_name -> sql_writer_maintenance_receipt.TicketEvidence
+	51, // 40: sql_writer_maintenance_receipt.MergeRecoveryAudit.maintenance_publication:type_name -> sql_writer_maintenance_receipt.PublicationEvidence
+	46, // 41: sql_writer_maintenance_receipt.MergeRecoveryAudit.merge_manifest:type_name -> sql_writer_maintenance_receipt.SourcePin
+	56, // 42: sql_writer_maintenance_receipt.MergeRecoveryAudit.checks:type_name -> sql_writer_maintenance_receipt.MergeRecoveryCheck
+	46, // 43: sql_writer_maintenance_receipt.MergeRecoveryAudit.audit_source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
+	10, // 44: sql_writer_maintenance_receipt.MergeRecoveryCheck.status:type_name -> sql_writer_maintenance_receipt.MergeRecoveryCheck.Status
+	46, // 45: sql_writer_maintenance_receipt.MergeRecoveryCheck.query_source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
+	9,  // 46: sql_writer_maintenance_receipt.MergeRecoveryCheck.kind:type_name -> sql_writer_maintenance_receipt.MergeRecoveryCheck.Kind
+	51, // 47: sql_writer_maintenance_receipt.RouteRecoveryAudit.maintenance_publication:type_name -> sql_writer_maintenance_receipt.PublicationEvidence
+	50, // 48: sql_writer_maintenance_receipt.RouteRecoveryAudit.mapping_target:type_name -> sql_writer_maintenance_receipt.RedisTargetClosure
+	58, // 49: sql_writer_maintenance_receipt.RouteRecoveryAudit.stats:type_name -> sql_writer_maintenance_receipt.RouteRecoveryStats
+	46, // 50: sql_writer_maintenance_receipt.RouteRecoveryAudit.audit_source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
+	46, // 51: sql_writer_maintenance_receipt.ReleaseReadiness.recovery_audit:type_name -> sql_writer_maintenance_receipt.SourcePin
+	51, // 52: sql_writer_maintenance_receipt.ReleaseReadiness.maintenance_publication:type_name -> sql_writer_maintenance_receipt.PublicationEvidence
+	48, // 53: sql_writer_maintenance_receipt.ConsumerGroupReadiness.expected_partitions:type_name -> sql_writer_maintenance_receipt.KafkaPartitionClosure
+	48, // 54: sql_writer_maintenance_receipt.ConsumerGroupReadiness.assigned_partitions:type_name -> sql_writer_maintenance_receipt.KafkaPartitionClosure
+	61, // 55: sql_writer_maintenance_receipt.ManualConsumerEvidence.assignments:type_name -> sql_writer_maintenance_receipt.ManualConsumerAssignment
+	46, // 56: sql_writer_maintenance_receipt.ManualConsumerEvidence.source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
+	60, // 57: sql_writer_maintenance_receipt.ConsumerReadiness.groups:type_name -> sql_writer_maintenance_receipt.ConsumerGroupReadiness
+	62, // 58: sql_writer_maintenance_receipt.ConsumerReadiness.manual_assignments:type_name -> sql_writer_maintenance_receipt.ManualConsumerEvidence
+	46, // 59: sql_writer_maintenance_receipt.IssuerReadiness.source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
+	46, // 60: sql_writer_maintenance_receipt.SourceOpenAck.source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
+	64, // 61: sql_writer_maintenance_receipt.PublicationReadiness.prepared_boots:type_name -> sql_writer_maintenance_receipt.IssuerReadiness
+	46, // 62: sql_writer_maintenance_receipt.PublicationReadiness.source_open_acks:type_name -> sql_writer_maintenance_receipt.SourcePin
+	51, // 63: sql_writer_maintenance_receipt.Evidence.publication:type_name -> sql_writer_maintenance_receipt.PublicationEvidence
+	52, // 64: sql_writer_maintenance_receipt.Evidence.non_sql_closure:type_name -> sql_writer_maintenance_receipt.NonSqlClosureEvidence
+	53, // 65: sql_writer_maintenance_receipt.Evidence.ticket:type_name -> sql_writer_maintenance_receipt.TicketEvidence
+	54, // 66: sql_writer_maintenance_receipt.Evidence.emergency:type_name -> sql_writer_maintenance_receipt.EmergencyEvidence
+	59, // 67: sql_writer_maintenance_receipt.Evidence.release_readiness:type_name -> sql_writer_maintenance_receipt.ReleaseReadiness
+	66, // 68: sql_writer_maintenance_receipt.Evidence.publication_readiness:type_name -> sql_writer_maintenance_receipt.PublicationReadiness
+	43, // 69: sql_writer_boot_roster.Entry.request:type_name -> sql_writer_lifecycle_receipt.Request
+	69, // 70: sql_writer_boot_roster.Entry.runtime_environment:type_name -> sql_writer_boot_roster.RuntimeEnvironment
+	71, // [71:71] is the sub-list for method output_type
+	71, // [71:71] is the sub-list for method input_type
+	71, // [71:71] is the sub-list for extension type_name
+	71, // [71:71] is the sub-list for extension extendee
+	0,  // [0:71] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_database_rollback_database_table_proto_init() }
@@ -2298,18 +8354,27 @@ func file_proto_common_database_rollback_database_table_proto_init() {
 	if File_proto_common_database_rollback_database_table_proto != nil {
 		return
 	}
+	file_proto_common_database_rollback_database_table_proto_msgTypes[56].OneofWrappers = []any{
+		(*SqlWriterMaintenanceReceipt_Evidence_Publication)(nil),
+		(*SqlWriterMaintenanceReceipt_Evidence_NonSqlClosure)(nil),
+		(*SqlWriterMaintenanceReceipt_Evidence_Ticket)(nil),
+		(*SqlWriterMaintenanceReceipt_Evidence_Emergency)(nil),
+		(*SqlWriterMaintenanceReceipt_Evidence_ReleaseReadiness)(nil),
+		(*SqlWriterMaintenanceReceipt_Evidence_PublicationReadiness)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_database_rollback_database_table_proto_rawDesc), len(file_proto_common_database_rollback_database_table_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   19,
+			NumEnums:      11,
+			NumMessages:   59,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_proto_common_database_rollback_database_table_proto_goTypes,
 		DependencyIndexes: file_proto_common_database_rollback_database_table_proto_depIdxs,
+		EnumInfos:         file_proto_common_database_rollback_database_table_proto_enumTypes,
 		MessageInfos:      file_proto_common_database_rollback_database_table_proto_msgTypes,
 	}.Build()
 	File_proto_common_database_rollback_database_table_proto = out.File

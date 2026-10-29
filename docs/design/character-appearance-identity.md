@@ -14,6 +14,8 @@
 
 本机协议工具使用 `third_party/grpc/install_vs2026_dbg/bin/protoc.exe`（35.1）及现有 `protoc-gen-go`，仅重生成六个变更源对应的 C++/Go binding；Go 包映射与现有统一生成器相同（`proto/<目录>`）。Release 安装目录内 protoc 是 31.1，不能用于当前 C++ 7.35.1 runtime。C# 由独立客户端原有 gen_proto.ps1 生成，不复制隔离工程 GUID。
 
+2026-10-26 工具路径更新：上段保留外观批次的实际工具记录。今后服务端生成使用独立的 `third_party/protobuf/install_vs2026_dbg/bin/protoc.exe`，先核对 `protoc --version` 为 `libprotoc 35.1`，再按 `AGENTS.md §4` 的正式流程生成；没有客户端任务授权时使用 `proto_gen.no-unity.yaml`。不再从旧 gRPC SDK 取工具，旧 Release 目录的版本记录不作为当前独立安装的结论；C# 的原有生成边界不变。
+
 构建日志位于 `run/logs/appearance-identity/`。首次 C++ 构建暴露检查器缺少 WIN32/utf8_range、沙盒 FileTracker 拒绝，以及 Redis ScriptSlot 静态 Lua 源文本裸指针；本批补齐检查器参数并以 string_view 保存静态文本，未关闭检查器。运行服务使用现有本机数据，未清库、重建数据卷或重置 Kafka offset。
 
 ## 存储层核实与当前故障边界（2026-09-21）

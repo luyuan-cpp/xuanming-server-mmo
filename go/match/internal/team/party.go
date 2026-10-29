@@ -100,7 +100,7 @@ func (s *Service) startBackfill(ctx context.Context, caller uint64, configId, ta
 			recipients = append(recipients, pid)
 		}
 	}
-	asyncFn("match.team.party_queued", func() {
+	s.launchRelay("match.team.party_queued", func() {
 		pushCtx, cancel := context.WithTimeout(context.Background(), pushBatchBudget)
 		defer cancel()
 		s.pushMembersSnapshot(pushCtx, members, recipients,
@@ -120,10 +120,11 @@ func (s *Service) startBackfill(ctx context.Context, caller uint64, configId, ta
 // 他们还没收到过「开始匹配」)。独立预算,不继承请求 ctx。
 func (s *Service) cancelPartyInBackground(teamId uint64, candidates []uint64) {
 	candidates = append([]uint64(nil), candidates...)
-	asyncFn("match.team.party_cancel", func() {
+	s.launchRelay("match.team.party_cancel", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), partyCancelBudget)
 		defer cancel()
 		if _, err := s.starter.CancelParty(ctx, teamId, candidates, nil, constants.PartyEndNone, 0); err != nil {
+			s.svcCtx.HoldRelay(err)
 			logx.Errorf("[team] Failed to withdraw party after enqueue rollback (matcher re-check will remove it) team=%d: %v", teamId, err)
 		}
 	})
@@ -154,10 +155,11 @@ func (s *Service) cancelPartyOnRosterChange(c *CommitResult) {
 		committed = MemberIds(d.Record)
 	}
 	teamId := c.TeamId
-	asyncFn("match.team.party_cancel", func() {
+	s.launchRelay("match.team.party_cancel", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), partyCancelBudget)
 		defer cancel()
 		if _, err := s.starter.CancelParty(ctx, teamId, candidates, committed, constants.PartyEndRosterChanged, 0); err != nil {
+			s.svcCtx.HoldRelay(err)
 			logx.Errorf("[team] Failed to withdraw party after roster change (matcher re-check will remove it) team=%d: %v", teamId, err)
 		}
 	})
@@ -294,7 +296,7 @@ func (s *Service) CheckParty(ctx context.Context, teamId uint64, members []uint6
 func (s *Service) PartyStarted(teamId uint64, members []uint64) {
 	metrics.ObserveTeamMatch(matchOutcomeSuccess)
 	members = append([]uint64(nil), members...)
-	asyncFn("match.team.party_started", func() {
+	s.launchRelay("match.team.party_started", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), pushBatchBudget)
 		defer cancel()
 		snap, err := s.store.ReadMembers(ctx, teamId, members)
@@ -329,7 +331,7 @@ func (s *Service) PartyEnded(teamId uint64, members []uint64, reason uint32, cul
 		tip = tipOf(ErrStateChanged, 0)
 	}
 	members = append([]uint64(nil), members...)
-	asyncFn("match.team.party_ended", func() {
+	s.launchRelay("match.team.party_ended", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), pushBatchBudget)
 		defer cancel()
 		snap, err := s.store.ReadMembers(ctx, teamId, members)

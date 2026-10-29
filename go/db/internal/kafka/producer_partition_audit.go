@@ -55,9 +55,9 @@ func producerPartitionOp(task *db_proto.DBTask) string {
 		return metrics.ProducerPartitionOpOther
 	}
 	switch task.Op {
-	case "read":
+	case db_proto.DBOp_DB_OP_READ:
 		return metrics.ProducerPartitionOpRead
-	case "write":
+	case db_proto.DBOp_DB_OP_WRITE:
 		return metrics.ProducerPartitionOpWrite
 	default:
 		return metrics.ProducerPartitionOpOther

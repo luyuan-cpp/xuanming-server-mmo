@@ -9,7 +9,9 @@ import (
 	"unicode/utf8"
 
 	"player_inbox/internal/constants"
+	"shared/currencytype"
 
+	battlepb "proto/battle"
 	inboxpb "proto/player_inbox"
 
 	"google.golang.org/protobuf/proto"
@@ -60,6 +62,9 @@ const maxDebtExpiresAtSeconds = 253402300799
 
 // payloadRules 是按类型平铺的校验函数表(AGENTS §11.2:不用宏生成;NewRegistry 双向核对,漏登记即拒启)。
 var payloadRules = map[inboxpb.PlayerInboxMessageType]payloadRule{
+	inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT: {
+		message: "BattleSettlementData", validate: validateBattlePayload,
+	},
 	inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN: {
 		message: "player_inbox.GmCurrencyGainPayload", validate: validateGainPayload,
 	},
@@ -71,11 +76,51 @@ var payloadRules = map[inboxpb.PlayerInboxMessageType]payloadRule{
 	},
 }
 
-// validateGainPayload:封锁 / 解封只有 currency_type。CurrencyType 的取值表在 C++(kCurrencyGold = 0 合法),
-// Go 侧不复制一份;越界由 scene 执行器给 REJECTED(设计 §7.6)。
+// 只核原件形状，不在Inbox重算战斗奖励；业务效果由Scene同一持久账本裁决。
+func validateBattlePayload(m proto.Message) error {
+	p, ok := m.(*battlepb.BattleSettlementData)
+	if !ok || p.GetPlayerId() == 0 || p.GetBattleId() == 0 || p.GetOutcome() < battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN || p.GetOutcome() > battlepb.EBattleOutcome_BATTLE_OUTCOME_DRAW || battlePayloadHasUnknown(p.ProtoReflect()) {
+		return fmt.Errorf("%w: Battle原件身份或终局无效", errPayloadRule)
+	}
+	return nil
+}
+
+func battlePayloadHasUnknown(m protoreflect.Message) bool {
+	if len(m.GetUnknown()) != 0 {
+		return true
+	}
+	unknown := false
+	m.Range(func(f protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+		switch {
+		case f.IsMap() && f.MapValue().Message() != nil:
+			v.Map().Range(func(_ protoreflect.MapKey, e protoreflect.Value) bool {
+				unknown = battlePayloadHasUnknown(e.Message())
+				return !unknown
+			})
+		case f.IsList() && f.Message() != nil:
+			for i := 0; i < v.List().Len(); i++ {
+				if battlePayloadHasUnknown(v.List().Get(i).Message()) {
+					unknown = true
+					break
+				}
+			}
+		case f.Message() != nil && !f.IsMap() && !f.IsList():
+			unknown = battlePayloadHasUnknown(v.Message())
+		}
+		return !unknown
+	})
+	return unknown
+}
+
+// validateGainPayload:封锁 / 解封只有 currency_type,按 proto 同源取值表(shared/currencytype)拒绝写错的值。
+// scene 遇到不认识的值只可能是更新版本加的币种,判 kVersionSkew(停用本域,实体重建后重拉,设计 §7.6)。
 func validateGainPayload(m proto.Message) error {
-	if _, ok := m.(*inboxpb.GmCurrencyGainPayload); !ok {
+	p, ok := m.(*inboxpb.GmCurrencyGainPayload)
+	if !ok {
 		return fmt.Errorf("%w: want GmCurrencyGainPayload, got %T", errPayloadRule, m)
+	}
+	if !currencytype.IsKnown(p.GetCurrencyType()) {
+		return fmt.Errorf("%w: currency_type=%d not in currency_type.proto", errPayloadRule, p.GetCurrencyType())
 	}
 	return nil
 }
@@ -86,6 +131,9 @@ func validateDebtPayload(m proto.Message) error {
 	p, ok := m.(*inboxpb.GmCurrencyDebtPayload)
 	if !ok {
 		return fmt.Errorf("%w: want GmCurrencyDebtPayload, got %T", errPayloadRule, m)
+	}
+	if !currencytype.IsKnown(p.GetCurrencyType()) {
+		return fmt.Errorf("%w: currency_type=%d not in currency_type.proto", errPayloadRule, p.GetCurrencyType())
 	}
 	if p.GetOweAmount() == 0 || p.GetOweAmount() > math.MaxInt64 {
 		return fmt.Errorf("%w: owe_amount=%d not in (0, INT64_MAX]", errPayloadRule, p.GetOweAmount())

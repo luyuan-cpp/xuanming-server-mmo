@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/currency/comp/player_currency_comp.h"
@@ -1203,7 +1204,17 @@ TEST_F(AssetOpSystemTest, CompleteItemEscrowReplayAndCreditKeepIdentityGrowthAnd
 	auto compared = *restored; compared.clear_acquire_seq();
 	EXPECT_EQ(original.SerializeAsString(), compared.SerializeAsString());
 	PlayerAssetOpSystem::Credit(credit, delivered);
-	EXPECT_EQ(1u, inventory.GetTotalItemCount(1)) << "同一入账请求不能复制实例";
+	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, delivered.outcome());
+	const auto* replayed = inventory.GetItemCompByGuid(original.item_id());
+	ASSERT_NE(nullptr, replayed);
+	auto replayedOriginal = *replayed; replayedOriginal.clear_acquire_seq();
+	EXPECT_EQ(original.SerializeAsString(), replayedOriginal.SerializeAsString());
+	std::vector<uint64_t> replayedGuids;
+	inventory.ForEachItem([&replayedGuids](uint64_t guid, const ItemComp&) { replayedGuids.push_back(guid); });
+	EXPECT_EQ((std::vector<uint64_t>{original.item_id()}), replayedGuids) << "同一入账请求不能复制实例";
+	EXPECT_EQ(1u, inventory.OccupiedGridCount()) << "实例层只保留原件";
+	EXPECT_EQ(1u, inventory.GridSlotCount()) << "原件与布局保持一一对应";
+	EXPECT_EQ(0u, inventory.GetTotalItemCount(1)) << "带未知字段的原件不能降成可按配置消耗的普通单位";
 }
 
 // 携带着的本版本不认识的包类型记录(PlayerBagsComp::unsupportedBagTypes,混版本设计 §12 第 5 批)同样参与入账的
@@ -1247,5 +1258,153 @@ TEST_F(AssetOpSystemTest, CreditRejectsAnInstanceAlreadyCarriedInAnUnsupportedBa
 		EXPECT_EQ(nullptr, bags.bags[kInventory].GetItemCompByGuid(carried.item_id())) << "背包零改动 shape=" << shape;
 		EXPECT_EQ(1u, bags.unsupportedBagTypes.items.size()) << "携带记录不动 shape=" << shape;
 	}
+}
+
+// 按数量扣出只认可互换的普通单位(混版本设计 §4.4 第 6 批)。只有算上带更新版本字段的单位才够 = 版本错位:
+// 回 RETRY、不记账、背包不动(不能当普通单位交易出去,也不能记成终态让对侧白白退款);普通单位够时照常扣,
+// 且只扣普通堆。确定不够(连算上都不够)照旧记终态拒绝。
+TEST_F(AssetOpSystemTest, QuantityDebitOfStacksCarryingNewerVersionFieldsRetriesWithoutRecording)
+{
+	constexpr uint32_t kStackableConfig = 10;
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
+	const auto* row = ItemTableManager::Instance().FindByIdSilent(kStackableConfig).first;
+	ASSERT_NE(nullptr, row);
+	ASSERT_GT(row->max_stack_size(), 7u) << "数量扣出只收可叠加配置";
+	GiveBags();
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	ItemComp plain;
+	plain.set_item_id(950199991); plain.set_config_id(kStackableConfig); plain.set_size(2);
+	ItemComp fromNewerVersion;
+	fromNewerVersion.set_item_id(950199992); fromNewerVersion.set_config_id(kStackableConfig); fromNewerVersion.set_size(5);
+	fromNewerVersion.mutable_unknown_fields()->AddVarint(412345, 1); // 新版本给物品加的属性(例如绑定)
+	inventory.RestoreItems({{plain, 0}, {fromNewerVersion, 1}});
+	const auto ledgerBefore = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_).SerializeAsString();
+
+	const auto quantityDebit = [](uint64_t seq, uint32_t count)
+	{
+		::AssetOpRequest request = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_DEBIT, seq, 1, TX_TRADE);
+		request.clear_bundle();
+		auto* item = request.mutable_bundle()->add_items();
+		item->set_config_id(kStackableConfig);
+		item->set_count(count);
+		SignForTest("debit", request, "trade");
+		return request;
+	};
+
+	::AssetOpResponse skewed;
+	PlayerAssetOpSystem::Debit(quantityDebit(1, 4), skewed);
+	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, skewed.outcome()) << "版本错位不得记终态";
+	EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), skewed.reason().id());
+	EXPECT_EQ(ledgerBefore, tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_).SerializeAsString()) << "不记账";
+	EXPECT_EQ(2u, inventory.GetTotalItemCount(kStackableConfig));
+	ASSERT_NE(nullptr, inventory.GetItemCompByGuid(fromNewerVersion.item_id()));
+	EXPECT_EQ(5u, inventory.GetItemCompByGuid(fromNewerVersion.item_id())->size());
+
+	// 同一 seq 没记过账:换成普通单位够的数量照常应用,只扣普通堆,带新字段的堆原样保留。
+	::AssetOpResponse applied;
+	PlayerAssetOpSystem::Debit(quantityDebit(1, 2), applied);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, applied.outcome());
+	EXPECT_EQ(nullptr, inventory.GetItemCompByGuid(plain.item_id()));
+	ASSERT_NE(nullptr, inventory.GetItemCompByGuid(fromNewerVersion.item_id()));
+	EXPECT_EQ(5u, inventory.GetItemCompByGuid(fromNewerVersion.item_id())->size());
+
+	// 连算上带新字段的单位都不够:确定不足,照旧记终态拒绝。
+	::AssetOpResponse insufficient;
+	PlayerAssetOpSystem::Debit(quantityDebit(2, 6), insufficient);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, insufficient.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), insufficient.reason().id());
+}
+
+// ── 本二进制不认识的币种(混版本设计 §12、04-asset-channel.md §4.9 第 8b 步)────────────
+// Go 各入口已按同源取值表(proto/common/base/currency_type.proto)拒绝写错的值,scene 遇到不认识的币种
+// 只可能是更新版本加的:回 RETRY + kFeatureUnavailable,不记账、不存盘、任何资产都不动,
+// 等玩家落到认识它的节点再应用;与版本无关的坏包、中止与已见 seq 的回放仍按原口径。
+
+constexpr uint32_t kCurrencyFromNewerVersion = static_cast<uint32_t>(kCurrencyMax);
+
+// Credit 先发物品再加币:8b 必须在任何物品副作用之前判出,否则这笔入账会半应用。
+TEST_F(AssetOpSystemTest, CreditWithCurrencyUnknownToThisVersionRetriesWithoutAnyMutation)
+{
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是合法载荷的前置";
+	ASSERT_FALSE(IsKnownCurrencyType(kCurrencyFromNewerVersion));
+	GiveBags();
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	PlayerAssetOpSystem::SetAddCurrencyFnForTest(&FakeAddCurrency);
+	const auto ledgerBefore = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_).SerializeAsString();
+	const auto issuedBefore = tlsGuidSegmentRegistry.Get(GuidKind::kItem).GetStats().issued;
+
+	auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
+	auto* newer = request.mutable_bundle()->add_currencies();
+	newer->set_currency_type(kCurrencyFromNewerVersion);
+	newer->set_amount(5);
+	auto* item = request.mutable_bundle()->add_items();
+	item->set_config_id(10);
+	item->set_count(1);
+	const auto response = CallCredit(request);
+
+	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, response.outcome()) << "版本错位不得记终态";
+	EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), response.reason().id());
+	EXPECT_FALSE(response.durable());
+	EXPECT_FALSE(response.partial());
+	EXPECT_EQ(ledgerBefore, tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_).SerializeAsString()) << "不记账";
+	EXPECT_EQ(0, g_persistCalls) << "不存盘";
+	EXPECT_EQ(0, g_addCurrencyCalls) << "已知币种也不先加";
+	EXPECT_EQ(100u, Gold());
+	EXPECT_EQ(issuedBefore, tlsGuidSegmentRegistry.Get(GuidKind::kItem).GetStats().issued) << "不分配物品号";
+	EXPECT_EQ(0u, tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory].GetTotalItemCount(10)) << "不发物品";
+}
+
+TEST_F(AssetOpSystemTest, DebitWithCurrencyUnknownToThisVersionRetriesWithoutRecording)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_DEBIT, 1, 30, TX_GUILD_DONATE);
+	request.mutable_bundle()->mutable_currencies(0)->set_currency_type(kCurrencyFromNewerVersion);
+	SignForTest("debit", request);
+	::AssetOpResponse response;
+	PlayerAssetOpSystem::Debit(request, response);
+
+	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, response.outcome()) << "帮会单币种形状合法,只差在币种不认识:版本错位";
+	EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), response.reason().id());
+	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GUILD_DEBIT)) << "RETRY 不记账";
+	EXPECT_EQ(0, g_persistCalls);
+	EXPECT_EQ(100u, Gold());
+}
+
+// 重复币种与版本无关:在任何版本上都是坏包,照旧记终态拒绝,不能因为币种是新的就无限重投。
+TEST_F(AssetOpSystemTest, DuplicateUnknownCurrencyIsStillRejected)
+{
+	auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
+	request.mutable_bundle()->clear_currencies();
+	for (uint64_t amount : {5u, 6u})
+	{
+		auto* newer = request.mutable_bundle()->add_currencies();
+		newer->set_currency_type(kCurrencyFromNewerVersion);
+		newer->set_amount(amount);
+	}
+	const auto response = CallCredit(request);
+
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, response.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), response.reason().id());
+}
+
+// 中止排在 8b 之前:旧节点仍能在截止时刻给带新币种的 seq 关门;此后同 seq 的扣款回放已定的拒绝。
+TEST_F(AssetOpSystemTest, AbortStillClosesASeqWhoseBundleCarriesAnUnknownCurrency)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	auto abortRequest = MakeAbortRequest(1);
+	abortRequest.mutable_bundle()->mutable_currencies(0)->set_currency_type(kCurrencyFromNewerVersion);
+	SignForTest("abort_debit", abortRequest);
+	::AssetOpResponse aborted;
+	PlayerAssetOpSystem::AbortDebit(abortRequest, aborted);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, aborted.outcome());
+	EXPECT_EQ(0u, aborted.reason().id());
+
+	auto debit = MakeAbortRequest(1);
+	debit.mutable_bundle()->mutable_currencies(0)->set_currency_type(kCurrencyFromNewerVersion);
+	SignForTest("debit", debit);
+	::AssetOpResponse replay;
+	PlayerAssetOpSystem::Debit(debit, replay);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, replay.outcome()) << "已见 seq 先回放原结局,不走到 8b";
+	EXPECT_EQ(100u, Gold());
 }
 } // namespace

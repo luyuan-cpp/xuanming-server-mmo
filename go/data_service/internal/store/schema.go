@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
+	"shared/authoritysql"
 	"sort"
 	"strings"
 	"time"
@@ -262,26 +264,29 @@ const zoneMergedIntoBootstrapDDL = "CREATE TABLE IF NOT EXISTS `zone_merged_into
 // **很少写**(只有第 1b 批的冻结 / 回档恢复写它),而每次 W1 都普通读 writable(R1)—— 这正是它和 route_reconcile
 // 分开的原因(G1a):1b leader 每秒写的水位、每 3 秒续的租约如果还在这一行上,TiDB 的读会间歇地被更早的未提交写锁
 // 拖住(抖动直接进建角 p99),也没法把它设成缓存表(ALTER TABLE route_meta CACHE 要求表很少写)。
-const routeMetaBootstrapDDL = "CREATE TABLE IF NOT EXISTS `route_meta` (\n" +
-	"  `id` tinyint unsigned NOT NULL COMMENT 'pb:1',\n" +
-	"  `generation` varchar(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT 'pb:2',\n" +
-	"  `writable` tinyint unsigned NOT NULL DEFAULT 1 COMMENT 'pb:3',\n" +
-	"  PRIMARY KEY (`id`)\n" +
-	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='route_meta';"
+var routeMetaBootstrapDDL = authoritysql.CatalogBootstrapStatements()["route_meta"]
+
+// authority 表与路由表同属一个物理事务目标。字段真源为本仓正式 proto，
+// 短二进制键、复合唯一键与 CHECK 沿现有预建例外，不交给 MEDIUMTEXT 映射器改形。
+// 仅支持 fresh-prestart：已有旧结构缺列时形状守卫拒绝，不自动 ALTER 或清库。
+var writerRegistryBootstrapDDL = authoritysql.CatalogBootstrapStatements()["writer_registry"]
+
+var writerSlotBootstrapDDL = authoritysql.CatalogBootstrapStatements()["writer_slot"]
+
+var writerLifecycleReceiptBootstrapDDL = authoritysql.CatalogBootstrapStatements()["writer_lifecycle_receipt"]
+
+var writerDrainRunBootstrapDDL = authoritysql.CatalogBootstrapStatements()["sql_writer_drain_run"]
+
+var writerFreezeTicketBootstrapDDL = authoritysql.CatalogBootstrapStatements()["sql_writer_freeze_ticket"]
+
+var writerMaintenanceReceiptBootstrapDDL = authoritysql.CatalogBootstrapStatements()["sql_writer_maintenance_receipt"]
 
 // routeReconcileBootstrapDDL 是对账表,单行(id=1):第 1b 批对账 leader 的租约、水位与缓存校验时刻,每拍都写。
 // 第 1a 批不读不写,只由迁移种 id=1(bootstrapRouteReconcileRow,ODKU no-op)。
 //
 // leader 用 ascii(原 route_meta.leader 是 utf8mb4):leader 标识与写者标识同源(NewRouteWriterID 只产
 // [A-Za-z0-9._@:-]),第 1b 批的 leader 标识必须是同一形态的 ASCII,非 ASCII 字节在严格模式下会被库拒绝。
-const routeReconcileBootstrapDDL = "CREATE TABLE IF NOT EXISTS `route_reconcile` (\n" +
-	"  `id` tinyint unsigned NOT NULL COMMENT 'pb:1',\n" +
-	"  `leader` varchar(96) CHARACTER SET ascii COLLATE ascii_bin NULL COMMENT 'pb:2',\n" +
-	"  `lease_until_ms` bigint unsigned NULL COMMENT 'pb:3',\n" +
-	"  `watermark_ms` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:4',\n" +
-	"  `cache_verified_ms` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:5',\n" +
-	"  PRIMARY KEY (`id`)\n" +
-	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='route_reconcile';"
+var routeReconcileBootstrapDDL = authoritysql.CatalogBootstrapStatements()["route_reconcile"]
 
 // bootstrapTables 是走手写 DDL 预建、**不**交给 proto2mysql 同步的表:表名 → 建表语句。
 //
@@ -291,20 +296,28 @@ const routeReconcileBootstrapDDL = "CREATE TABLE IF NOT EXISTS `route_reconcile`
 // 再加一张这类表 = 在这里加一行 + 在 proto 里加 message(路由表再进 routeTableMessages),
 // 不要回到 migrateSchemaOn 里加 if 分支;清单化是为了让"哪些表不由 proto 驱动建"这件事只有一处答案。
 var bootstrapTables = map[string]string{
-	AccountDirectoryTableName:       accountDirectoryDDL,
-	AccountRoleTableName:            accountRoleDDL,
-	AccountRoleTradeTableName:       accountRoleTradeDDL,
-	AccountRoleTransferTableName:    accountRoleTransferDDL,
-	AccountRoleAdmissionTableName:   accountRoleAdmissionDDL,
-	AccountRoleTradeHolderTableName: accountRoleTradeHolderDDL,
-	AccountRoleImportTableName:      accountRoleImportDDL,
-	IdSegmentTableName:              idSegmentBootstrapDDL,
-	PlayerNameTableName:             playerNameBootstrapDDL,
-	PlayerRouteTableName:            playerRouteBootstrapDDL,
-	ZoneMergeFenceTableName:         zoneMergeFenceBootstrapDDL,
-	ZoneMergedIntoTableName:         zoneMergedIntoBootstrapDDL,
-	RouteMetaTableName:              routeMetaBootstrapDDL,
-	RouteReconcileTableName:         routeReconcileBootstrapDDL,
+	"writer_registry":                     writerRegistryBootstrapDDL,
+	"writer_slot":                         writerSlotBootstrapDDL,
+	"writer_lifecycle_receipt":            writerLifecycleReceiptBootstrapDDL,
+	"sql_writer_drain_run":                writerDrainRunBootstrapDDL,
+	"sql_writer_freeze_ticket":            writerFreezeTicketBootstrapDDL,
+	"sql_writer_maintenance_receipt":      writerMaintenanceReceiptBootstrapDDL,
+	AccountDirectoryTableName:             accountDirectoryDDL,
+	AccountRoleTableName:                  accountRoleDDL,
+	AccountRoleTradeTableName:             accountRoleTradeDDL,
+	AccountRoleTransferTableName:          accountRoleTransferDDL,
+	AccountRoleAdmissionTableName:         accountRoleAdmissionDDL,
+	AccountRoleTradeHolderTableName:       accountRoleTradeHolderDDL,
+	AccountRoleImportTableName:            accountRoleImportDDL,
+	AccountRoleAdmissionRecoveryTableName: accountRoleAdmissionRecoveryDDL,
+	SaveBarrierMaintenanceTableName:       saveBarrierMaintenanceDDL,
+	IdSegmentTableName:                    idSegmentBootstrapDDL,
+	PlayerNameTableName:                   playerNameBootstrapDDL,
+	PlayerRouteTableName:                  playerRouteBootstrapDDL,
+	ZoneMergeFenceTableName:               zoneMergeFenceBootstrapDDL,
+	ZoneMergedIntoTableName:               zoneMergedIntoBootstrapDDL,
+	RouteMetaTableName:                    routeMetaBootstrapDDL,
+	RouteReconcileTableName:               routeReconcileBootstrapDDL,
 }
 
 // playerRouteG1aShapeHint 是 player_route 形状守卫失败时的处理提示(G1a 改主键之后,本机跑过旧版第 1a 批迁移的库会撞上)。
@@ -335,6 +348,18 @@ func routeTableMessages() []proto.Message {
 		&dbpb.ZoneMergeFence{},
 		&dbpb.ZoneMergedInto{},
 	}
+}
+
+func writerAuthorityTableMessages() []proto.Message {
+	return []proto.Message{
+		&dbpb.SqlWriterRegistry{}, &dbpb.SqlWriterSlot{}, &dbpb.SqlWriterLifecycleReceipt{},
+		&dbpb.SqlWriterDrainRun{}, &dbpb.SqlWriterFreezeTicket{}, &dbpb.SqlWriterMaintenanceReceipt{},
+	}
+}
+
+// assertWriterAuthoritySchema 不补列、不修索引；只确认当前正式契约能够被数据库强制执行。
+func assertWriterAuthoritySchema(ctx context.Context, db *sql.DB, dbName string) error {
+	return authoritysql.VerifyCatalogSchema(ctx, db, dbName)
 }
 
 // routeTableShapeHints 是路由表形状守卫失败时追加在错误后面的处理办法(给人看的);没有登记的表不追加。
@@ -1506,7 +1531,7 @@ func serverIsTiDB(ctx context.Context, db *sql.DB) (bool, string, error) {
 // id_segment、player_name 由同步循环做列漂移与唯一键检查;
 // 末尾五张路由表(routeTableMessages)由 ensureRouteTables 守列名与主键,同步循环跳过。
 func TableMessages() []proto.Message {
-	return append([]proto.Message{
+	return append(append([]proto.Message{
 		&dbpb.TransactionLog{},
 		&dbpb.PlayerSnapshot{},
 		&dbpb.RollbackAuditLog{},
@@ -1519,7 +1544,9 @@ func TableMessages() []proto.Message {
 		&dbpb.AccountRoleAdmission{},
 		&dbpb.AccountRoleTradeHolder{},
 		&dbpb.AccountRoleImportReceipt{},
-	}, routeTableMessages()...)
+		&dbpb.AccountRoleAdmissionRecovery{},
+		&dbpb.SaveBarrierMaintenanceReceipt{},
+	}, routeTableMessages()...), writerAuthorityTableMessages()...)
 }
 
 // ddlTableNameRegex 从生成的建表语句里解出表名,用于启动期表名守卫。
@@ -1618,6 +1645,14 @@ var idSegmentFloorSources = []idSegmentFloorSource{
 // 启动路径(Schema.AutoMigrate=true)与显式入口(`data_service -migrate`)共用这一个函数,
 // 生产用后者:多副本同时启动会对同一张表并发 ALTER,MDL 阻塞会让 GM 回滚/流水查询停摆。
 func MigrateSchema(ctx context.Context, cfg MySQLConfig, opts MigrateOptions) error {
+	// -migrate 是唯一 schema 装配入口；normal 启动既不调用本函数，也不持此主体。
+	if cfg.Permission.Kind() != "schema" {
+		permission, err := authoritysql.LoadSchemaPermission(os.Getenv)
+		if err != nil {
+			return err
+		}
+		cfg.Permission = permission
+	}
 	db, err := openMySQL(cfg)
 	if err != nil {
 		return err
@@ -1632,6 +1667,20 @@ func MigrateSchema(ctx context.Context, cfg MySQLConfig, opts MigrateOptions) er
 		return err
 	}
 	defer release()
+	// v4仅开放fresh-prestart。已有表（含中途失败留下的部分表）必须走独立审核，不能自动升级或修补。
+	for _, message := range TableMessages() {
+		name, ok := proto2mysql.TableNameFromDescriptor(message.ProtoReflect().Descriptor())
+		if !ok || name == "" {
+			return errors.New("fresh-prestart表契约缺少正式表名")
+		}
+		var count uint64
+		if err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=? AND table_name=?", cfg.DBName, name).Scan(&count); err != nil {
+			return err
+		}
+		if count != 0 {
+			return errors.New("fresh-prestart拒绝已有表，保留现有数据与失败现场")
+		}
+	}
 	return migrateSchemaOn(ctx, db, cfg.DBName, opts)
 }
 
@@ -1764,6 +1813,12 @@ func migrateSchemaOn(ctx context.Context, db *sql.DB, dbName string, opts Migrat
 
 	// 路由表在这里单独守形状(列名 + 主键,事实源是各自的 proto),再种两张单行表的行;下面的循环跳过它们。
 	if err := ensureRouteTables(ctx, db, dbName); err != nil {
+		return err
+	}
+	if err := assertWriterAuthoritySchema(ctx, db, dbName); err != nil {
+		return err
+	}
+	if err := ensureInitialPlayerCommitSchema(ctx, db, dbName); err != nil {
 		return err
 	}
 	if err := ensureAccountRoleTradeSchema(ctx, db, dbName); err != nil {

@@ -3,14 +3,16 @@
 // 属性加点纯规则(零 ECS / 零表 / 零 proto 依赖,可单测),设计文档
 // docs/design/player-attribute-allocation.md §3。
 //
-// PlayerAttributeSystem 负责把表行 / 组件翻译成这里的输入,这里只回答三个问题:
+// PlayerAttributeSystem 负责把表行 / 组件翻译成这里的输入,这里只回答这几个问题:
 //   1) 某池在某等级一共有多少点;
 //   2) 一份"目标已分配"是否合法(只增不减 / 单项上限 / 总量不超剩余);
 //   3) 自动加点怎么把剩余点分下去(有上限池按优先序灌满,无上限池按权重比例);
-//   4) 角色属性点里"玩家分配的那部分"换算成多少二级属性(百分比 + 集中投资公式,2026-09-13)。
+//   4) 角色属性点里"玩家分配的那部分"换算成多少二级属性(百分比 + 集中投资公式,2026-09-13);
+//   5) 一份存储加点在本版本是否生效、还剩多少点(加点统一规则,2026-10-23,见下方 StoredPoolAllocation)。
 //
 // 单测:cpp/tests/turn_battle_engine_test/attribute_allocation_rules_test.cpp(纯头文件,不需要链接 scene.lib)。
 
+#include <cmath>
 #include <cstdint>
 #include <map>
 #include <vector>
@@ -78,6 +80,62 @@ inline uint32_t SumPoints(const std::map<uint32_t, uint32_t>& allocated) {
         sum += v;
     }
     return sum > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(sum);
+}
+
+// ---- 存储加点的生效判定(docs/design/mixed-version-persist-field-protection.md §12.1 D1–D4,2026-10-23) ----
+//
+// 加点统一规则(角色与宝宝共用;这里是与纯规则相关的部分,按表归类与写入口在 PlayerAttributeSystem / PetSystem):
+//   1) 加载与重算永不改写、不返还已分配点,只有玩家主动的加点 / 洗点与 GM 会改。存储值原样携带,生效值在运行期
+//      按本版本配置算出;本版本解释不了的内容只做保守处理(不生效、不让它变强),绝不先删掉再算。
+//      以前加载时删掉查不到表的维度(D1 / D3)、整池清空超额的分配(D2 / D4),回滚一次就删数据且升回也恢复不了。
+//   2) "已知维度" = 本版本表里属于该池、且属于该归属方(角色 / 宝宝)的维度;已分配里其余的键都是"未知键"
+//      (新版本加的维度,或本版本归不到该方的键)。调用方按表归类后填进 StoredPoolAllocation。
+//   3) 池生效 ⇔ Σ已知 ≤ 本版本总量 且(单项不限,或每个已知维度 ≤ 单项上限)。不生效时该池全部已知维度按 0 参与
+//      二级属性、面板 value 与战斗快照;未知键永不生效。不生效的来源:改表缩点、等级降低(GM / 回档 / 超上限的
+//      存储等级按上限读)、新版本扩点后回滚或混版本跨 zone。
+//   4) 剩余点 = 生效 ? max(0, 总量 − Σ已知 − Σ未知) : 0。未知键归不到任何池,保守地对该方每个池都扣:
+//      否则旧版本里玩家能把这些点再加到别的维度上,升回新版本后正好超额。
+//   5) 加点的目标仍只能是本池已知维度(ValidateAllocation),剩余点按 4);不生效时剩余为 0,自然回"点数不足"。
+//   6) 洗点只清本池已知维度,未知键原样保留;Σ已知 == 0 回"无可洗"且不扣费;池不生效时免费。
+//   7) HP/MP 的旧上限 / 新上限都按生效值算:从不生效状态洗点,上限不变,HP/MP 也不变,不制造往返回血。
+//   (第 8 条 —— 不给 AttributeScheme / PetInstance 本层未知字段加守卫 —— 写在两个系统的归类函数旁。)
+// 求和一律 64 位且饱和,判定时不先把两个和相加:存储值再大也不会回绕成"看起来合法"的小数。
+
+// 一份存储加点在某池上的汇总。纯规则不认识表,归类(哪些键是本池已知维度)由调用方按本版本表做。
+struct StoredPoolAllocation {
+    uint64_t knownUsed = 0;     // 本池已知维度的已分配点之和
+    uint32_t knownLargest = 0;  // 本池已知维度里最大的单项(只用于单项上限判定)
+    uint64_t foreignUsed = 0;   // 未知键的已分配点之和:永不生效,但计入已用(规则 4)
+
+    void AddKnown(uint32_t points) {
+        knownUsed = SaturatingAddPoints(knownUsed, points);
+        knownLargest = points > knownLargest ? points : knownLargest;
+    }
+    void AddForeign(uint32_t points) { foreignUsed = SaturatingAddPoints(foreignUsed, points); }
+
+    static uint64_t SaturatingAddPoints(uint64_t sum, uint32_t points) {
+        return sum > UINT64_MAX - points ? UINT64_MAX : sum + points;
+    }
+};
+
+// 规则 3:这份存储加点在本池是否生效。total 是本版本按生效等级算出的总量(TotalPoints)。
+// 未解锁的池总量为 0:没有加点照样"生效"(剩余 0),有加点则不生效。
+inline bool PoolAllocationEffective(const PoolRule& rule, uint32_t total, const StoredPoolAllocation& stored) {
+    if (stored.knownUsed > total) {
+        return false;
+    }
+    return rule.dimensionCap == 0 || stored.knownLargest <= rule.dimensionCap;
+}
+
+// 规则 4:本池剩余可分配点。不生效为 0;生效时饱和到 0,结果恒 ≤ total。
+inline uint32_t RemainingPoints(const PoolRule& rule, uint32_t total, const StoredPoolAllocation& stored) {
+    if (!PoolAllocationEffective(rule, total, stored)) {
+        return 0;
+    }
+    // 生效时 knownUsed ≤ total,这里的减法不会回绕;再拿 foreignUsed 与差值比较,不做 knownUsed + foreignUsed
+    // (foreignUsed 饱和到 UINT64_MAX 时相加会绕回一个小数)。
+    const uint64_t left = static_cast<uint64_t>(total) - stored.knownUsed;
+    return stored.foreignUsed >= left ? 0 : static_cast<uint32_t>(left - stored.foreignUsed);
 }
 
 // 校验"目标已分配"(target 只含本池维度;缺省维度视为不变)。

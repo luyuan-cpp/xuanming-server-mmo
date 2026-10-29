@@ -25,12 +25,13 @@ const (
 type CommerceOrderKind int32
 
 const (
-	CommerceOrderKind_COMMERCE_ORDER_KIND_UNSPECIFIED  CommerceOrderKind = 0
-	CommerceOrderKind_COMMERCE_ORDER_KIND_OFFICIAL     CommerceOrderKind = 1
-	CommerceOrderKind_COMMERCE_ORDER_KIND_PLAYER_TRADE CommerceOrderKind = 2
-	CommerceOrderKind_COMMERCE_ORDER_KIND_CONSIGNMENT  CommerceOrderKind = 3
-	CommerceOrderKind_COMMERCE_ORDER_KIND_MARKET_MATCH CommerceOrderKind = 4
-	CommerceOrderKind_COMMERCE_ORDER_KIND_AUCTION_LOT  CommerceOrderKind = 5
+	CommerceOrderKind_COMMERCE_ORDER_KIND_UNSPECIFIED     CommerceOrderKind = 0
+	CommerceOrderKind_COMMERCE_ORDER_KIND_OFFICIAL        CommerceOrderKind = 1
+	CommerceOrderKind_COMMERCE_ORDER_KIND_PLAYER_TRADE    CommerceOrderKind = 2
+	CommerceOrderKind_COMMERCE_ORDER_KIND_CONSIGNMENT     CommerceOrderKind = 3
+	CommerceOrderKind_COMMERCE_ORDER_KIND_MARKET_MATCH    CommerceOrderKind = 4
+	CommerceOrderKind_COMMERCE_ORDER_KIND_AUCTION_LOT     CommerceOrderKind = 5
+	CommerceOrderKind_COMMERCE_ORDER_KIND_RMB_CONSIGNMENT CommerceOrderKind = 6
 )
 
 // Enum value maps for CommerceOrderKind.
@@ -42,14 +43,16 @@ var (
 		3: "COMMERCE_ORDER_KIND_CONSIGNMENT",
 		4: "COMMERCE_ORDER_KIND_MARKET_MATCH",
 		5: "COMMERCE_ORDER_KIND_AUCTION_LOT",
+		6: "COMMERCE_ORDER_KIND_RMB_CONSIGNMENT",
 	}
 	CommerceOrderKind_value = map[string]int32{
-		"COMMERCE_ORDER_KIND_UNSPECIFIED":  0,
-		"COMMERCE_ORDER_KIND_OFFICIAL":     1,
-		"COMMERCE_ORDER_KIND_PLAYER_TRADE": 2,
-		"COMMERCE_ORDER_KIND_CONSIGNMENT":  3,
-		"COMMERCE_ORDER_KIND_MARKET_MATCH": 4,
-		"COMMERCE_ORDER_KIND_AUCTION_LOT":  5,
+		"COMMERCE_ORDER_KIND_UNSPECIFIED":     0,
+		"COMMERCE_ORDER_KIND_OFFICIAL":        1,
+		"COMMERCE_ORDER_KIND_PLAYER_TRADE":    2,
+		"COMMERCE_ORDER_KIND_CONSIGNMENT":     3,
+		"COMMERCE_ORDER_KIND_MARKET_MATCH":    4,
+		"COMMERCE_ORDER_KIND_AUCTION_LOT":     5,
+		"COMMERCE_ORDER_KIND_RMB_CONSIGNMENT": 6,
 	}
 )
 
@@ -2712,6 +2715,980 @@ func (x *AuctionLotResponse) GetServerNowMs() uint64 {
 	return 0
 }
 
+// 人民币寄售独立入口；旧CreateConsignment继续使用游戏币，不能改价单位。
+// 账号/修订/托管证明均由服务端核实，客户端没有声明这些身份或付款成功的字段。
+type CreateRmbConsignmentRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	ClientRequestId   string                 `protobuf:"bytes,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	Assets            *TradeAssetSelection   `protobuf:"bytes,2,opt,name=assets,proto3" json:"assets,omitempty"`
+	CharacterPlayerId uint64                 `protobuf:"varint,3,opt,name=character_player_id,json=characterPlayerId,proto3" json:"character_player_id,omitempty"` // 非0出售同账号角色，assets必须为空；其余出售一类物品/宠物/货币
+	PriceFen          uint64                 `protobuf:"varint,4,opt,name=price_fen,json=priceFen,proto3" json:"price_fen,omitempty"`
+	Title             string                 `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *CreateRmbConsignmentRequest) Reset() {
+	*x = CreateRmbConsignmentRequest{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateRmbConsignmentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateRmbConsignmentRequest) ProtoMessage() {}
+
+func (x *CreateRmbConsignmentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateRmbConsignmentRequest.ProtoReflect.Descriptor instead.
+func (*CreateRmbConsignmentRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *CreateRmbConsignmentRequest) GetClientRequestId() string {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return ""
+}
+
+func (x *CreateRmbConsignmentRequest) GetAssets() *TradeAssetSelection {
+	if x != nil {
+		return x.Assets
+	}
+	return nil
+}
+
+func (x *CreateRmbConsignmentRequest) GetCharacterPlayerId() uint64 {
+	if x != nil {
+		return x.CharacterPlayerId
+	}
+	return 0
+}
+
+func (x *CreateRmbConsignmentRequest) GetPriceFen() uint64 {
+	if x != nil {
+		return x.PriceFen
+	}
+	return 0
+}
+
+func (x *CreateRmbConsignmentRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+type GetRmbConsignmentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ListingId     uint64                 `protobuf:"varint,1,opt,name=listing_id,json=listingId,proto3" json:"listing_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRmbConsignmentRequest) Reset() {
+	*x = GetRmbConsignmentRequest{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRmbConsignmentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRmbConsignmentRequest) ProtoMessage() {}
+
+func (x *GetRmbConsignmentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRmbConsignmentRequest.ProtoReflect.Descriptor instead.
+func (*GetRmbConsignmentRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *GetRmbConsignmentRequest) GetListingId() uint64 {
+	if x != nil {
+		return x.ListingId
+	}
+	return 0
+}
+
+type ListRmbConsignmentsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cursor        string                 `protobuf:"bytes,1,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	Limit         uint32                 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRmbConsignmentsRequest) Reset() {
+	*x = ListRmbConsignmentsRequest{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRmbConsignmentsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRmbConsignmentsRequest) ProtoMessage() {}
+
+func (x *ListRmbConsignmentsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRmbConsignmentsRequest.ProtoReflect.Descriptor instead.
+func (*ListRmbConsignmentsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *ListRmbConsignmentsRequest) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+func (x *ListRmbConsignmentsRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type BuyRmbConsignmentRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ListingId       uint64                 `protobuf:"varint,1,opt,name=listing_id,json=listingId,proto3" json:"listing_id,omitempty"`
+	ClientRequestId string                 `protobuf:"bytes,2,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *BuyRmbConsignmentRequest) Reset() {
+	*x = BuyRmbConsignmentRequest{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BuyRmbConsignmentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BuyRmbConsignmentRequest) ProtoMessage() {}
+
+func (x *BuyRmbConsignmentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BuyRmbConsignmentRequest.ProtoReflect.Descriptor instead.
+func (*BuyRmbConsignmentRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *BuyRmbConsignmentRequest) GetListingId() uint64 {
+	if x != nil {
+		return x.ListingId
+	}
+	return 0
+}
+
+func (x *BuyRmbConsignmentRequest) GetClientRequestId() string {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return ""
+}
+
+type CancelRmbConsignmentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ListingId     uint64                 `protobuf:"varint,1,opt,name=listing_id,json=listingId,proto3" json:"listing_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelRmbConsignmentRequest) Reset() {
+	*x = CancelRmbConsignmentRequest{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelRmbConsignmentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelRmbConsignmentRequest) ProtoMessage() {}
+
+func (x *CancelRmbConsignmentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelRmbConsignmentRequest.ProtoReflect.Descriptor instead.
+func (*CancelRmbConsignmentRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *CancelRmbConsignmentRequest) GetListingId() uint64 {
+	if x != nil {
+		return x.ListingId
+	}
+	return 0
+}
+
+type RmbConsignmentView struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ListingId      uint64                 `protobuf:"varint,1,opt,name=listing_id,json=listingId,proto3" json:"listing_id,omitempty"`
+	SellerPlayerId uint64                 `protobuf:"varint,2,opt,name=seller_player_id,json=sellerPlayerId,proto3" json:"seller_player_id,omitempty"`
+	MarketZone     uint32                 `protobuf:"varint,3,opt,name=market_zone,json=marketZone,proto3" json:"market_zone,omitempty"`
+	AssetKind      string                 `protobuf:"bytes,4,opt,name=asset_kind,json=assetKind,proto3" json:"asset_kind,omitempty"`
+	Title          string                 `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
+	PriceFen       uint64                 `protobuf:"varint,6,opt,name=price_fen,json=priceFen,proto3" json:"price_fen,omitempty"`
+	FeeBps         uint32                 `protobuf:"varint,7,opt,name=fee_bps,json=feeBps,proto3" json:"fee_bps,omitempty"`
+	CoolingMs      uint64                 `protobuf:"varint,8,opt,name=cooling_ms,json=coolingMs,proto3" json:"cooling_ms,omitempty"`
+	NoticeEndMs    uint64                 `protobuf:"varint,9,opt,name=notice_end_ms,json=noticeEndMs,proto3" json:"notice_end_ms,omitempty"`
+	SaleEndMs      uint64                 `protobuf:"varint,10,opt,name=sale_end_ms,json=saleEndMs,proto3" json:"sale_end_ms,omitempty"`
+	State          string                 `protobuf:"bytes,11,opt,name=state,proto3" json:"state,omitempty"`
+	Phase          string                 `protobuf:"bytes,12,opt,name=phase,proto3" json:"phase,omitempty"`
+	OrderId        string                 `protobuf:"bytes,13,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RmbConsignmentView) Reset() {
+	*x = RmbConsignmentView{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RmbConsignmentView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RmbConsignmentView) ProtoMessage() {}
+
+func (x *RmbConsignmentView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RmbConsignmentView.ProtoReflect.Descriptor instead.
+func (*RmbConsignmentView) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *RmbConsignmentView) GetListingId() uint64 {
+	if x != nil {
+		return x.ListingId
+	}
+	return 0
+}
+
+func (x *RmbConsignmentView) GetSellerPlayerId() uint64 {
+	if x != nil {
+		return x.SellerPlayerId
+	}
+	return 0
+}
+
+func (x *RmbConsignmentView) GetMarketZone() uint32 {
+	if x != nil {
+		return x.MarketZone
+	}
+	return 0
+}
+
+func (x *RmbConsignmentView) GetAssetKind() string {
+	if x != nil {
+		return x.AssetKind
+	}
+	return ""
+}
+
+func (x *RmbConsignmentView) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *RmbConsignmentView) GetPriceFen() uint64 {
+	if x != nil {
+		return x.PriceFen
+	}
+	return 0
+}
+
+func (x *RmbConsignmentView) GetFeeBps() uint32 {
+	if x != nil {
+		return x.FeeBps
+	}
+	return 0
+}
+
+func (x *RmbConsignmentView) GetCoolingMs() uint64 {
+	if x != nil {
+		return x.CoolingMs
+	}
+	return 0
+}
+
+func (x *RmbConsignmentView) GetNoticeEndMs() uint64 {
+	if x != nil {
+		return x.NoticeEndMs
+	}
+	return 0
+}
+
+func (x *RmbConsignmentView) GetSaleEndMs() uint64 {
+	if x != nil {
+		return x.SaleEndMs
+	}
+	return 0
+}
+
+func (x *RmbConsignmentView) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *RmbConsignmentView) GetPhase() string {
+	if x != nil {
+		return x.Phase
+	}
+	return ""
+}
+
+func (x *RmbConsignmentView) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+type RmbConsignmentResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Listing       *RmbConsignmentView    `protobuf:"bytes,2,opt,name=listing,proto3" json:"listing,omitempty"`
+	ServerNowMs   uint64                 `protobuf:"varint,3,opt,name=server_now_ms,json=serverNowMs,proto3" json:"server_now_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RmbConsignmentResponse) Reset() {
+	*x = RmbConsignmentResponse{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RmbConsignmentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RmbConsignmentResponse) ProtoMessage() {}
+
+func (x *RmbConsignmentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RmbConsignmentResponse.ProtoReflect.Descriptor instead.
+func (*RmbConsignmentResponse) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *RmbConsignmentResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *RmbConsignmentResponse) GetListing() *RmbConsignmentView {
+	if x != nil {
+		return x.Listing
+	}
+	return nil
+}
+
+func (x *RmbConsignmentResponse) GetServerNowMs() uint64 {
+	if x != nil {
+		return x.ServerNowMs
+	}
+	return 0
+}
+
+type ListRmbConsignmentsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Listings      []*RmbConsignmentView  `protobuf:"bytes,2,rep,name=listings,proto3" json:"listings,omitempty"`
+	NextCursor    string                 `protobuf:"bytes,3,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
+	ServerNowMs   uint64                 `protobuf:"varint,4,opt,name=server_now_ms,json=serverNowMs,proto3" json:"server_now_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRmbConsignmentsResponse) Reset() {
+	*x = ListRmbConsignmentsResponse{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRmbConsignmentsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRmbConsignmentsResponse) ProtoMessage() {}
+
+func (x *ListRmbConsignmentsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRmbConsignmentsResponse.ProtoReflect.Descriptor instead.
+func (*ListRmbConsignmentsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *ListRmbConsignmentsResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *ListRmbConsignmentsResponse) GetListings() []*RmbConsignmentView {
+	if x != nil {
+		return x.Listings
+	}
+	return nil
+}
+
+func (x *ListRmbConsignmentsResponse) GetNextCursor() string {
+	if x != nil {
+		return x.NextCursor
+	}
+	return ""
+}
+
+func (x *ListRmbConsignmentsResponse) GetServerNowMs() uint64 {
+	if x != nil {
+		return x.ServerNowMs
+	}
+	return 0
+}
+
+type ListSellerIncomesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cursor        string                 `protobuf:"bytes,1,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	Limit         uint32                 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSellerIncomesRequest) Reset() {
+	*x = ListSellerIncomesRequest{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSellerIncomesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSellerIncomesRequest) ProtoMessage() {}
+
+func (x *ListSellerIncomesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSellerIncomesRequest.ProtoReflect.Descriptor instead.
+func (*ListSellerIncomesRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *ListSellerIncomesRequest) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+func (x *ListSellerIncomesRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type RmbSellerIncome struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderId       string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	GrossFen      uint64                 `protobuf:"varint,2,opt,name=gross_fen,json=grossFen,proto3" json:"gross_fen,omitempty"`
+	FeeFen        uint64                 `protobuf:"varint,3,opt,name=fee_fen,json=feeFen,proto3" json:"fee_fen,omitempty"`
+	NetFen        uint64                 `protobuf:"varint,4,opt,name=net_fen,json=netFen,proto3" json:"net_fen,omitempty"`
+	ReservedFen   uint64                 `protobuf:"varint,5,opt,name=reserved_fen,json=reservedFen,proto3" json:"reserved_fen,omitempty"`
+	PaidFen       uint64                 `protobuf:"varint,6,opt,name=paid_fen,json=paidFen,proto3" json:"paid_fen,omitempty"`
+	AvailableMs   uint64                 `protobuf:"varint,7,opt,name=available_ms,json=availableMs,proto3" json:"available_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RmbSellerIncome) Reset() {
+	*x = RmbSellerIncome{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RmbSellerIncome) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RmbSellerIncome) ProtoMessage() {}
+
+func (x *RmbSellerIncome) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RmbSellerIncome.ProtoReflect.Descriptor instead.
+func (*RmbSellerIncome) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *RmbSellerIncome) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *RmbSellerIncome) GetGrossFen() uint64 {
+	if x != nil {
+		return x.GrossFen
+	}
+	return 0
+}
+
+func (x *RmbSellerIncome) GetFeeFen() uint64 {
+	if x != nil {
+		return x.FeeFen
+	}
+	return 0
+}
+
+func (x *RmbSellerIncome) GetNetFen() uint64 {
+	if x != nil {
+		return x.NetFen
+	}
+	return 0
+}
+
+func (x *RmbSellerIncome) GetReservedFen() uint64 {
+	if x != nil {
+		return x.ReservedFen
+	}
+	return 0
+}
+
+func (x *RmbSellerIncome) GetPaidFen() uint64 {
+	if x != nil {
+		return x.PaidFen
+	}
+	return 0
+}
+
+func (x *RmbSellerIncome) GetAvailableMs() uint64 {
+	if x != nil {
+		return x.AvailableMs
+	}
+	return 0
+}
+
+type ListSellerIncomesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Incomes       []*RmbSellerIncome     `protobuf:"bytes,2,rep,name=incomes,proto3" json:"incomes,omitempty"`
+	NextCursor    string                 `protobuf:"bytes,3,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
+	ServerNowMs   uint64                 `protobuf:"varint,4,opt,name=server_now_ms,json=serverNowMs,proto3" json:"server_now_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSellerIncomesResponse) Reset() {
+	*x = ListSellerIncomesResponse{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSellerIncomesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSellerIncomesResponse) ProtoMessage() {}
+
+func (x *ListSellerIncomesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSellerIncomesResponse.ProtoReflect.Descriptor instead.
+func (*ListSellerIncomesResponse) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *ListSellerIncomesResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *ListSellerIncomesResponse) GetIncomes() []*RmbSellerIncome {
+	if x != nil {
+		return x.Incomes
+	}
+	return nil
+}
+
+func (x *ListSellerIncomesResponse) GetNextCursor() string {
+	if x != nil {
+		return x.NextCursor
+	}
+	return ""
+}
+
+func (x *ListSellerIncomesResponse) GetServerNowMs() uint64 {
+	if x != nil {
+		return x.ServerNowMs
+	}
+	return 0
+}
+
+type CreateWithdrawalRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ClientRequestId string                 `protobuf:"bytes,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	AmountFen       uint64                 `protobuf:"varint,2,opt,name=amount_fen,json=amountFen,proto3" json:"amount_fen,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *CreateWithdrawalRequest) Reset() {
+	*x = CreateWithdrawalRequest{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateWithdrawalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateWithdrawalRequest) ProtoMessage() {}
+
+func (x *CreateWithdrawalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateWithdrawalRequest.ProtoReflect.Descriptor instead.
+func (*CreateWithdrawalRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *CreateWithdrawalRequest) GetClientRequestId() string {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return ""
+}
+
+func (x *CreateWithdrawalRequest) GetAmountFen() uint64 {
+	if x != nil {
+		return x.AmountFen
+	}
+	return 0
+}
+
+type GetWithdrawalRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WithdrawalId  string                 `protobuf:"bytes,1,opt,name=withdrawal_id,json=withdrawalId,proto3" json:"withdrawal_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWithdrawalRequest) Reset() {
+	*x = GetWithdrawalRequest{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWithdrawalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWithdrawalRequest) ProtoMessage() {}
+
+func (x *GetWithdrawalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWithdrawalRequest.ProtoReflect.Descriptor instead.
+func (*GetWithdrawalRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *GetWithdrawalRequest) GetWithdrawalId() string {
+	if x != nil {
+		return x.WithdrawalId
+	}
+	return ""
+}
+
+type RmbWithdrawalView struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WithdrawalId  string                 `protobuf:"bytes,1,opt,name=withdrawal_id,json=withdrawalId,proto3" json:"withdrawal_id,omitempty"`
+	AmountFen     uint64                 `protobuf:"varint,2,opt,name=amount_fen,json=amountFen,proto3" json:"amount_fen,omitempty"`
+	State         string                 `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
+	Channel       string                 `protobuf:"bytes,4,opt,name=channel,proto3" json:"channel,omitempty"`
+	TransactionId string                 `protobuf:"bytes,5,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RmbWithdrawalView) Reset() {
+	*x = RmbWithdrawalView{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RmbWithdrawalView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RmbWithdrawalView) ProtoMessage() {}
+
+func (x *RmbWithdrawalView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RmbWithdrawalView.ProtoReflect.Descriptor instead.
+func (*RmbWithdrawalView) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *RmbWithdrawalView) GetWithdrawalId() string {
+	if x != nil {
+		return x.WithdrawalId
+	}
+	return ""
+}
+
+func (x *RmbWithdrawalView) GetAmountFen() uint64 {
+	if x != nil {
+		return x.AmountFen
+	}
+	return 0
+}
+
+func (x *RmbWithdrawalView) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *RmbWithdrawalView) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *RmbWithdrawalView) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+type WithdrawalResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Withdrawal    *RmbWithdrawalView     `protobuf:"bytes,2,opt,name=withdrawal,proto3" json:"withdrawal,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WithdrawalResponse) Reset() {
+	*x = WithdrawalResponse{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WithdrawalResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WithdrawalResponse) ProtoMessage() {}
+
+func (x *WithdrawalResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WithdrawalResponse.ProtoReflect.Descriptor instead.
+func (*WithdrawalResponse) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *WithdrawalResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *WithdrawalResponse) GetWithdrawal() *RmbWithdrawalView {
+	if x != nil {
+		return x.Withdrawal
+	}
+	return nil
+}
+
 var File_proto_trade_commerce_proto protoreflect.FileDescriptor
 
 const file_proto_trade_commerce_proto_rawDesc = "" +
@@ -2922,14 +3899,98 @@ const file_proto_trade_commerce_proto_rawDesc = "" +
 	"\x12AuctionLotResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12'\n" +
 	"\x03lot\x18\x02 \x01(\v2\x15.trade.AuctionLotViewR\x03lot\x12\"\n" +
-	"\rserver_now_ms\x18\x03 \x01(\x04R\vserverNowMs*\xf0\x01\n" +
+	"\rserver_now_ms\x18\x03 \x01(\x04R\vserverNowMs\"\xe0\x01\n" +
+	"\x1bCreateRmbConsignmentRequest\x12*\n" +
+	"\x11client_request_id\x18\x01 \x01(\tR\x0fclientRequestId\x122\n" +
+	"\x06assets\x18\x02 \x01(\v2\x1a.trade.TradeAssetSelectionR\x06assets\x12.\n" +
+	"\x13character_player_id\x18\x03 \x01(\x04R\x11characterPlayerId\x12\x1b\n" +
+	"\tprice_fen\x18\x04 \x01(\x04R\bpriceFen\x12\x14\n" +
+	"\x05title\x18\x05 \x01(\tR\x05title\"9\n" +
+	"\x18GetRmbConsignmentRequest\x12\x1d\n" +
+	"\n" +
+	"listing_id\x18\x01 \x01(\x04R\tlistingId\"J\n" +
+	"\x1aListRmbConsignmentsRequest\x12\x16\n" +
+	"\x06cursor\x18\x01 \x01(\tR\x06cursor\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\rR\x05limit\"e\n" +
+	"\x18BuyRmbConsignmentRequest\x12\x1d\n" +
+	"\n" +
+	"listing_id\x18\x01 \x01(\x04R\tlistingId\x12*\n" +
+	"\x11client_request_id\x18\x02 \x01(\tR\x0fclientRequestId\"<\n" +
+	"\x1bCancelRmbConsignmentRequest\x12\x1d\n" +
+	"\n" +
+	"listing_id\x18\x01 \x01(\x04R\tlistingId\"\x93\x03\n" +
+	"\x12RmbConsignmentView\x12\x1d\n" +
+	"\n" +
+	"listing_id\x18\x01 \x01(\x04R\tlistingId\x12(\n" +
+	"\x10seller_player_id\x18\x02 \x01(\x04R\x0esellerPlayerId\x12\x1f\n" +
+	"\vmarket_zone\x18\x03 \x01(\rR\n" +
+	"marketZone\x12\x1d\n" +
+	"\n" +
+	"asset_kind\x18\x04 \x01(\tR\tassetKind\x12\x14\n" +
+	"\x05title\x18\x05 \x01(\tR\x05title\x12\x1b\n" +
+	"\tprice_fen\x18\x06 \x01(\x04R\bpriceFen\x12\x17\n" +
+	"\afee_bps\x18\a \x01(\rR\x06feeBps\x12\x1d\n" +
+	"\n" +
+	"cooling_ms\x18\b \x01(\x04R\tcoolingMs\x12\"\n" +
+	"\rnotice_end_ms\x18\t \x01(\x04R\vnoticeEndMs\x12\x1e\n" +
+	"\vsale_end_ms\x18\n" +
+	" \x01(\x04R\tsaleEndMs\x12\x14\n" +
+	"\x05state\x18\v \x01(\tR\x05state\x12\x14\n" +
+	"\x05phase\x18\f \x01(\tR\x05phase\x12\x19\n" +
+	"\border_id\x18\r \x01(\tR\aorderId\"\xa7\x01\n" +
+	"\x16RmbConsignmentResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x123\n" +
+	"\alisting\x18\x02 \x01(\v2\x19.trade.RmbConsignmentViewR\alisting\x12\"\n" +
+	"\rserver_now_ms\x18\x03 \x01(\x04R\vserverNowMs\"\xcf\x01\n" +
+	"\x1bListRmbConsignmentsResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x125\n" +
+	"\blistings\x18\x02 \x03(\v2\x19.trade.RmbConsignmentViewR\blistings\x12\x1f\n" +
+	"\vnext_cursor\x18\x03 \x01(\tR\n" +
+	"nextCursor\x12\"\n" +
+	"\rserver_now_ms\x18\x04 \x01(\x04R\vserverNowMs\"H\n" +
+	"\x18ListSellerIncomesRequest\x12\x16\n" +
+	"\x06cursor\x18\x01 \x01(\tR\x06cursor\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\rR\x05limit\"\xdc\x01\n" +
+	"\x0fRmbSellerIncome\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\tR\aorderId\x12\x1b\n" +
+	"\tgross_fen\x18\x02 \x01(\x04R\bgrossFen\x12\x17\n" +
+	"\afee_fen\x18\x03 \x01(\x04R\x06feeFen\x12\x17\n" +
+	"\anet_fen\x18\x04 \x01(\x04R\x06netFen\x12!\n" +
+	"\freserved_fen\x18\x05 \x01(\x04R\vreservedFen\x12\x19\n" +
+	"\bpaid_fen\x18\x06 \x01(\x04R\apaidFen\x12!\n" +
+	"\favailable_ms\x18\a \x01(\x04R\vavailableMs\"\xc8\x01\n" +
+	"\x19ListSellerIncomesResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x120\n" +
+	"\aincomes\x18\x02 \x03(\v2\x16.trade.RmbSellerIncomeR\aincomes\x12\x1f\n" +
+	"\vnext_cursor\x18\x03 \x01(\tR\n" +
+	"nextCursor\x12\"\n" +
+	"\rserver_now_ms\x18\x04 \x01(\x04R\vserverNowMs\"d\n" +
+	"\x17CreateWithdrawalRequest\x12*\n" +
+	"\x11client_request_id\x18\x01 \x01(\tR\x0fclientRequestId\x12\x1d\n" +
+	"\n" +
+	"amount_fen\x18\x02 \x01(\x04R\tamountFen\";\n" +
+	"\x14GetWithdrawalRequest\x12#\n" +
+	"\rwithdrawal_id\x18\x01 \x01(\tR\fwithdrawalId\"\xae\x01\n" +
+	"\x11RmbWithdrawalView\x12#\n" +
+	"\rwithdrawal_id\x18\x01 \x01(\tR\fwithdrawalId\x12\x1d\n" +
+	"\n" +
+	"amount_fen\x18\x02 \x01(\x04R\tamountFen\x12\x14\n" +
+	"\x05state\x18\x03 \x01(\tR\x05state\x12\x18\n" +
+	"\achannel\x18\x04 \x01(\tR\achannel\x12%\n" +
+	"\x0etransaction_id\x18\x05 \x01(\tR\rtransactionId\"\x84\x01\n" +
+	"\x12WithdrawalResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x128\n" +
+	"\n" +
+	"withdrawal\x18\x02 \x01(\v2\x18.trade.RmbWithdrawalViewR\n" +
+	"withdrawal*\x99\x02\n" +
 	"\x11CommerceOrderKind\x12#\n" +
 	"\x1fCOMMERCE_ORDER_KIND_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cCOMMERCE_ORDER_KIND_OFFICIAL\x10\x01\x12$\n" +
 	" COMMERCE_ORDER_KIND_PLAYER_TRADE\x10\x02\x12#\n" +
 	"\x1fCOMMERCE_ORDER_KIND_CONSIGNMENT\x10\x03\x12$\n" +
 	" COMMERCE_ORDER_KIND_MARKET_MATCH\x10\x04\x12#\n" +
-	"\x1fCOMMERCE_ORDER_KIND_AUCTION_LOT\x10\x05*\xdd\x03\n" +
+	"\x1fCOMMERCE_ORDER_KIND_AUCTION_LOT\x10\x05\x12'\n" +
+	"#COMMERCE_ORDER_KIND_RMB_CONSIGNMENT\x10\x06*\xdd\x03\n" +
 	"\x12CommerceOrderState\x12$\n" +
 	" COMMERCE_ORDER_STATE_UNSPECIFIED\x10\x00\x12-\n" +
 	")COMMERCE_ORDER_STATE_WAITING_CONFIRMATION\x10\x01\x12)\n" +
@@ -2962,7 +4023,7 @@ func file_proto_trade_commerce_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_trade_commerce_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_trade_commerce_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
+var file_proto_trade_commerce_proto_msgTypes = make([]protoimpl.MessageInfo, 54)
 var file_proto_trade_commerce_proto_goTypes = []any{
 	(CommerceOrderKind)(0),               // 0: trade.CommerceOrderKind
 	(CommerceOrderState)(0),              // 1: trade.CommerceOrderState
@@ -3005,14 +4066,29 @@ var file_proto_trade_commerce_proto_goTypes = []any{
 	(*CancelAuctionLotRequest)(nil),      // 38: trade.CancelAuctionLotRequest
 	(*AuctionLotView)(nil),               // 39: trade.AuctionLotView
 	(*AuctionLotResponse)(nil),           // 40: trade.AuctionLotResponse
-	nil,                                  // 41: trade.TradeAssetSelection.ItemsEntry
-	(*base.TipInfoMessage)(nil),          // 42: TipInfoMessage
+	(*CreateRmbConsignmentRequest)(nil),  // 41: trade.CreateRmbConsignmentRequest
+	(*GetRmbConsignmentRequest)(nil),     // 42: trade.GetRmbConsignmentRequest
+	(*ListRmbConsignmentsRequest)(nil),   // 43: trade.ListRmbConsignmentsRequest
+	(*BuyRmbConsignmentRequest)(nil),     // 44: trade.BuyRmbConsignmentRequest
+	(*CancelRmbConsignmentRequest)(nil),  // 45: trade.CancelRmbConsignmentRequest
+	(*RmbConsignmentView)(nil),           // 46: trade.RmbConsignmentView
+	(*RmbConsignmentResponse)(nil),       // 47: trade.RmbConsignmentResponse
+	(*ListRmbConsignmentsResponse)(nil),  // 48: trade.ListRmbConsignmentsResponse
+	(*ListSellerIncomesRequest)(nil),     // 49: trade.ListSellerIncomesRequest
+	(*RmbSellerIncome)(nil),              // 50: trade.RmbSellerIncome
+	(*ListSellerIncomesResponse)(nil),    // 51: trade.ListSellerIncomesResponse
+	(*CreateWithdrawalRequest)(nil),      // 52: trade.CreateWithdrawalRequest
+	(*GetWithdrawalRequest)(nil),         // 53: trade.GetWithdrawalRequest
+	(*RmbWithdrawalView)(nil),            // 54: trade.RmbWithdrawalView
+	(*WithdrawalResponse)(nil),           // 55: trade.WithdrawalResponse
+	nil,                                  // 56: trade.TradeAssetSelection.ItemsEntry
+	(*base.TipInfoMessage)(nil),          // 57: TipInfoMessage
 }
 var file_proto_trade_commerce_proto_depIdxs = []int32{
-	41, // 0: trade.TradeAssetSelection.items:type_name -> trade.TradeAssetSelection.ItemsEntry
+	56, // 0: trade.TradeAssetSelection.items:type_name -> trade.TradeAssetSelection.ItemsEntry
 	0,  // 1: trade.CommerceOrderView.kind:type_name -> trade.CommerceOrderKind
 	1,  // 2: trade.CommerceOrderView.state:type_name -> trade.CommerceOrderState
-	42, // 3: trade.CommerceOrderResponse.error_message:type_name -> TipInfoMessage
+	57, // 3: trade.CommerceOrderResponse.error_message:type_name -> TipInfoMessage
 	4,  // 4: trade.CommerceOrderResponse.order:type_name -> trade.CommerceOrderView
 	3,  // 5: trade.CommerceOrderResponse.seller_assets:type_name -> trade.TradeAssetSelection
 	3,  // 6: trade.CommerceOrderResponse.buyer_assets:type_name -> trade.TradeAssetSelection
@@ -3020,7 +4096,7 @@ var file_proto_trade_commerce_proto_depIdxs = []int32{
 	10, // 8: trade.CommerceOrderResponse.buyer_item_instances:type_name -> trade.TradeOfferInstance
 	10, // 9: trade.CommerceOrderResponse.seller_pet:type_name -> trade.TradeOfferInstance
 	10, // 10: trade.CommerceOrderResponse.buyer_pet:type_name -> trade.TradeOfferInstance
-	42, // 11: trade.ListCommerceOrdersResponse.error_message:type_name -> TipInfoMessage
+	57, // 11: trade.ListCommerceOrdersResponse.error_message:type_name -> TipInfoMessage
 	4,  // 12: trade.ListCommerceOrdersResponse.orders:type_name -> trade.CommerceOrderView
 	4,  // 13: trade.CommerceOfferView.order:type_name -> trade.CommerceOrderView
 	3,  // 14: trade.CommerceOfferView.assets:type_name -> trade.TradeAssetSelection
@@ -3028,32 +4104,41 @@ var file_proto_trade_commerce_proto_depIdxs = []int32{
 	10, // 16: trade.CommerceOfferView.pet:type_name -> trade.TradeOfferInstance
 	39, // 17: trade.CommerceOfferView.auction:type_name -> trade.AuctionLotView
 	0,  // 18: trade.BrowseCommerceOffersRequest.kind:type_name -> trade.CommerceOrderKind
-	42, // 19: trade.BrowseCommerceOffersResponse.error_message:type_name -> TipInfoMessage
+	57, // 19: trade.BrowseCommerceOffersResponse.error_message:type_name -> TipInfoMessage
 	11, // 20: trade.BrowseCommerceOffersResponse.offers:type_name -> trade.CommerceOfferView
-	42, // 21: trade.ListOfficialSkusResponse.error_message:type_name -> TipInfoMessage
+	57, // 21: trade.ListOfficialSkusResponse.error_message:type_name -> TipInfoMessage
 	14, // 22: trade.ListOfficialSkusResponse.skus:type_name -> trade.OfficialSkuView
 	3,  // 23: trade.CreatePlayerTradeRequest.seller_assets:type_name -> trade.TradeAssetSelection
 	3,  // 24: trade.CreatePlayerTradeRequest.buyer_assets:type_name -> trade.TradeAssetSelection
 	3,  // 25: trade.CreateConsignmentRequest.assets:type_name -> trade.TradeAssetSelection
 	2,  // 26: trade.PlaceMarketOrderRequest.side:type_name -> trade.MarketOrderSide
 	2,  // 27: trade.MarketOrderView.side:type_name -> trade.MarketOrderSide
-	42, // 28: trade.MarketOrderResponse.error_message:type_name -> TipInfoMessage
+	57, // 28: trade.MarketOrderResponse.error_message:type_name -> TipInfoMessage
 	25, // 29: trade.MarketOrderResponse.order:type_name -> trade.MarketOrderView
-	42, // 30: trade.ListMarketOrdersResponse.error_message:type_name -> TipInfoMessage
+	57, // 30: trade.ListMarketOrdersResponse.error_message:type_name -> TipInfoMessage
 	25, // 31: trade.ListMarketOrdersResponse.orders:type_name -> trade.MarketOrderView
-	42, // 32: trade.GetMarketDepthResponse.error_message:type_name -> TipInfoMessage
+	57, // 32: trade.GetMarketDepthResponse.error_message:type_name -> TipInfoMessage
 	30, // 33: trade.GetMarketDepthResponse.asks:type_name -> trade.MarketDepthLevel
 	30, // 34: trade.GetMarketDepthResponse.bids:type_name -> trade.MarketDepthLevel
-	42, // 35: trade.ListTradeMarketsResponse.error_message:type_name -> TipInfoMessage
+	57, // 35: trade.ListTradeMarketsResponse.error_message:type_name -> TipInfoMessage
 	32, // 36: trade.ListTradeMarketsResponse.markets:type_name -> trade.TradeMarketView
 	3,  // 37: trade.CreateAuctionLotRequest.assets:type_name -> trade.TradeAssetSelection
-	42, // 38: trade.AuctionLotResponse.error_message:type_name -> TipInfoMessage
+	57, // 38: trade.AuctionLotResponse.error_message:type_name -> TipInfoMessage
 	39, // 39: trade.AuctionLotResponse.lot:type_name -> trade.AuctionLotView
-	40, // [40:40] is the sub-list for method output_type
-	40, // [40:40] is the sub-list for method input_type
-	40, // [40:40] is the sub-list for extension type_name
-	40, // [40:40] is the sub-list for extension extendee
-	0,  // [0:40] is the sub-list for field type_name
+	3,  // 40: trade.CreateRmbConsignmentRequest.assets:type_name -> trade.TradeAssetSelection
+	57, // 41: trade.RmbConsignmentResponse.error_message:type_name -> TipInfoMessage
+	46, // 42: trade.RmbConsignmentResponse.listing:type_name -> trade.RmbConsignmentView
+	57, // 43: trade.ListRmbConsignmentsResponse.error_message:type_name -> TipInfoMessage
+	46, // 44: trade.ListRmbConsignmentsResponse.listings:type_name -> trade.RmbConsignmentView
+	57, // 45: trade.ListSellerIncomesResponse.error_message:type_name -> TipInfoMessage
+	50, // 46: trade.ListSellerIncomesResponse.incomes:type_name -> trade.RmbSellerIncome
+	57, // 47: trade.WithdrawalResponse.error_message:type_name -> TipInfoMessage
+	54, // 48: trade.WithdrawalResponse.withdrawal:type_name -> trade.RmbWithdrawalView
+	49, // [49:49] is the sub-list for method output_type
+	49, // [49:49] is the sub-list for method input_type
+	49, // [49:49] is the sub-list for extension type_name
+	49, // [49:49] is the sub-list for extension extendee
+	0,  // [0:49] is the sub-list for field type_name
 }
 
 func init() { file_proto_trade_commerce_proto_init() }
@@ -3067,7 +4152,7 @@ func file_proto_trade_commerce_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_trade_commerce_proto_rawDesc), len(file_proto_trade_commerce_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   39,
+			NumMessages:   54,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

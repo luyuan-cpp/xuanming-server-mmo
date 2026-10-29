@@ -15,6 +15,7 @@ import (
 	dspb "proto/data_service"
 	pb "proto/friend"
 	plpb "proto/player_locator"
+	"shared/savebarrier"
 )
 
 // ErrInvalidDirectoryInput 只表示客户端参数不合法，其他错误均为依赖故障。
@@ -163,14 +164,13 @@ func (d OnlineDirectory) readEntries(ctx context.Context, keys []string, skip ma
 	}
 	ids := make([]uint64, len(keys))
 	readKeys := make([]string, 0, len(keys)*2)
-	prefix := string((&dbpb.PlayerAllData{}).ProtoReflect().Descriptor().FullName())
 	for i, key := range keys {
 		id, err := strconv.ParseUint(strings.TrimPrefix(key, playerSessionKeyPrefix), 10, 64)
 		if err != nil || id == 0 || skip[id] {
 			continue
 		}
 		ids[i] = id
-		readKeys = append(readKeys, key, prefix+":"+strconv.FormatUint(id, 10))
+		readKeys = append(readKeys, key, savebarrier.ParentKey(id))
 	}
 	if len(readKeys) == 0 {
 		return entries, nil

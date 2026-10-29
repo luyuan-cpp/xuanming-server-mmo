@@ -11,6 +11,7 @@ import "proto/common/component/player_inbox_ledger_comp.proto";
 import "proto/common/base/user_accounts.proto";
 import "proto/common/base/service_call_auth.proto";
 import "proto/common/base/role_admission.proto";
+import "proto/common/database/player_cache.proto";
 
 option go_package = "data_service/data_service";
 
@@ -83,8 +84,8 @@ service DataService {
 
   // ── 资产通道:已落盘账本只读 ─────────────────────────────────
   // 读 zone Redis 里 scene 写的 PlayerAllData blob 的 asset_op_ledger 子字段。只读、不鉴权(与
-  // BatchGetPlayerName 同级)。实现 go/shared/assetop 的 LedgerReader。
-  // 设计见 docs/design/guild-phase2/07-rollback-fail-closed.md §7.8。
+  // BatchGetPlayerName 同级)。实现 go/shared/assetop 的 LedgerReader / SQLCommitLedgerReader / VerifiedLedgerReader。
+  // 设计见 docs/design/guild-phase2/07-rollback-fail-closed.md §7.8;副本核验见 zone-redis-regression-guard-20261022.md §4.5。
   rpc GetPlayerAssetOpLedger(GetPlayerAssetOpLedgerRequest) returns (GetPlayerAssetOpLedgerResponse) {}
 
   // ── 玩家收件箱:已落盘账本只读 ───────────────────────────────
@@ -94,7 +95,12 @@ service DataService {
   rpc GetPlayerInboxLedger(GetPlayerInboxLedgerRequest) returns (GetPlayerInboxLedgerResponse) {}
 }
 
-message AccountDirectoryResponse { AccountSimplePlayerList players = 1; }
+message AccountDirectoryResponse {
+  AccountSimplePlayerList players = 1;
+  // 仅本次严格新建且 SQL 已提交的角色返回初始快照。
+  // 已有角色重放、导入、修复不补发种子凭据。
+  PlayerAllData initial_player_data = 2;
+}
 message AccountRoleOwnership {
   string account = 1;
   AccountSimplePlayer role = 2;
@@ -140,6 +146,8 @@ enum AccountRoleFreezeEvidenceKind {
   ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_UNSPECIFIED = 0;
   ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_NO_ADMISSION = 1;
   ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_SCENE = 2;
+  // 真实初始 SQL 提交，不代表存在 scene actor 或 holder。
+  ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_INITIAL_COMMIT = 3;
 }
 // 服务端验证器的返回证据，不是 Confirm 请求入参。owner_epoch/save_seq 不能替代 owner_revision。
 message AccountRoleFreezeEvidence {
@@ -684,12 +692,21 @@ message BatchGetPlayerNameResponse {
 message GetPlayerAssetOpLedgerRequest {
   uint64 player_id = 1;
   bool require_sql_commit = 2; // true 只读取 SQL 提交证据，缺失时 found=false，禁止 Redis 快照回退
+  // true:读 Redis 父键 blob 时,在同一段 Lua 里一并取本实例身份与屏障 player:{id}:save_barrier 的
+  // verified_identity,结论回在 redis_copy_verified(资产自动放弃的闸,
+  // docs/design/zone-redis-regression-guard-20261022.md §4.5)。只适用于 blob 读,与 require_sql_commit
+  // 同时为 true 回 InvalidArgument。
+  bool verify_redis_copy = 3;
 }
 
 message GetPlayerAssetOpLedgerResponse {
   bool found = 1;                          // false = 该玩家在 zone Redis 里没有 blob(从未入场,或 Redis 丢数据)
   PlayerAssetOpLedgerComp ledger = 2;      // found=true 且玩家从未有过资产操作时为空消息(不是缺席)
   bool sql_committed = 3; // SQL 提交证据分支才为 true；旧服务默认 false，强一致调用拒绝旧证据
+  // 只在 verify_redis_copy=true 时有意义:读 blob 的同一段 Lua 里,本实例身份已知、role=master,且等于
+  // login 核验时写下的身份戳。false(身份戳不等 / 身份未知 / 不是主 / 没有 blob / 对端不认识 verify_redis_copy)
+  // = 这份副本可能回退过,调用方不得拿它作「确定未见」的证据。
+  bool redis_copy_verified = 4;
 }
 
 // ── 玩家收件箱:已落盘账本 ─────────────────────────────────────

@@ -40,8 +40,6 @@ include_directories(
     ../../libs/base/common/
     ../../libs/engine/
     ../../libs/engine/config/
-    ../third_party/protobuf/src/
-    ../third_party/protobuf/third_party/abseil-cpp/
     ./src/
     /usr/local/include
 )

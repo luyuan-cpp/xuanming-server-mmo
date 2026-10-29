@@ -106,6 +106,7 @@ type auditStore struct {
 	calls            int
 	gotNowMs         uint64
 	gotAbandonBefore uint64
+	afterCount       func() // 只在实际采样返回边界触发卸任，不提前取消新一轮准入。
 }
 
 func (s *auditStore) CountPendingByClass(_ context.Context, nowMs, abandonBeforeMs uint64) ([]ClassCount, error) {
@@ -115,6 +116,9 @@ func (s *auditStore) CountPendingByClass(_ context.Context, nowMs, abandonBefore
 	s.gotNowMs, s.gotAbandonBefore = nowMs, abandonBeforeMs
 	if s.err != nil {
 		return nil, s.err
+	}
+	if s.afterCount != nil {
+		s.afterCount()
 	}
 	return append([]ClassCount(nil), s.counts...), nil
 }
@@ -295,7 +299,8 @@ func TestRunMaintenanceAuditsFirstAndResetsOnExit(t *testing.T) {
 	loop, m := newAuditLoop(t, store)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // 首轮对账在进入等待之前同步执行,随后立刻因 ctx 结束而退出。
+	defer cancel()
+	store.afterCount = cancel // 首轮已准入并取得样本后卸任，随后退出并清空 gauge。
 	loop.RunMaintenance(ctx)
 
 	if store.calls != 1 {
@@ -306,5 +311,20 @@ func TestRunMaintenanceAuditsFirstAndResetsOnExit(t *testing.T) {
 	}
 	if got := testutil.CollectAndCount(m.pendingClassOldestAge); got != 0 {
 		t.Fatalf("退出时应清空 assetop_pending_class_oldest_age_seconds,实际还剩 %d 条", got)
+	}
+}
+
+// 已卸任的调用没有新轮准入，不能靠测试用旧 ctx 强制执行一次。
+func TestRunMaintenanceRejectsAlreadyCanceledParent(t *testing.T) {
+	store := &auditStore{fakeStore: newFakeStore()}
+	loop, m := newAuditLoop(t, store)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	loop.RunMaintenance(ctx)
+	if store.calls != 0 {
+		t.Fatalf("已取消的新维护轮不得访问 store，实际 %d 次", store.calls)
+	}
+	if got := testutil.CollectAndCount(m.pendingRows); got != 0 {
+		t.Fatalf("未准入维护轮不得留下 gauge，实际 %d 条", got)
 	}
 }

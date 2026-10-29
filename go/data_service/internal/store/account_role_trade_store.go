@@ -182,7 +182,7 @@ func tradeReceiptWithHolders(ctx context.Context, tx *sql.Tx, r *dbpb.AccountRol
 				return nil, errors.New("角色交易 holder 与原 listing 身份不符")
 			}
 		}
-		if out.FreezeEvidence != nil && out.FreezeEvidence.Kind == dspb.AccountRoleFreezeEvidenceKind_ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_NO_ADMISSION && len(out.Holders) > 0 {
+		if accountdirectory.NoActorFreezeEvidence(out.FreezeEvidence) && len(out.Holders) > 0 {
 			return nil, errors.New("无入场证据不能带原生holder")
 		}
 	}

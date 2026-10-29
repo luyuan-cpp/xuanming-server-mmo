@@ -218,7 +218,7 @@ func driveOnePlayer(
 		}
 		dbTask := &taskpb.DBTask{
 			Key:     playerID,
-			Op:      "write",
+			Op:      taskpb.DBOp_DB_OP_WRITE,
 			MsgType: msgType,
 			Body:    body,
 			TaskId:  fmt.Sprintf("stress:%d:%s:%d:%d", playerID, msgType, seq, time.Now().UnixNano()),

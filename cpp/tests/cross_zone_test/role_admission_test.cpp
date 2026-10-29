@@ -11,6 +11,8 @@
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_scene.h"
 #include "player/system/role_admission_system.h"
+#include "player/system/handoff_sql_barrier.h"
+#include "player/system/release_fence.h"
 #include "battle/system/player_battle.h"
 #include "player/comp/player_frozen_comp.h"
 #include "proto/common/component/battle_comp.pb.h"
@@ -54,6 +56,25 @@ protected:
         };
         dependencies.readSqlAck = [this](Guid player, auto reply) {
             EXPECT_EQ(kPlayer, player); sqlReplies.push_back(std::move(reply)); return true;
+        };
+        dependencies.registerHandoffFence = [this](Guid player, std::string candidate, std::optional<std::string> prior,
+            std::function<bool(const std::string&)> stillQualified, Admission::FenceReply reply) {
+            EXPECT_EQ(kPlayer, player);
+            fenceCandidates.push_back(candidate); fencePriors.push_back(prior);
+            auto afterRead = [this, stillQualified = std::move(stillQualified), reply = std::move(reply)] {
+                const bool allowed = stillQualified("");
+                if (allowed) ++fenceWrites;
+                auto finish = [reply, allowed] { reply(allowed, std::string("")); };
+                if (delayFenceReply) fenceReplies.push_back(std::move(finish)); else finish();
+            };
+            if (delayFence) fenceReads.push_back(std::move(afterRead)); else afterRead();
+            return true;
+        };
+        dependencies.revokeHandoffFence = [this](Guid player, std::string candidate, std::string prior,
+            std::string revoked, std::function<void(bool)> reply) {
+            EXPECT_EQ(kPlayer, player); revokedCandidates.push_back(std::move(candidate));
+            EXPECT_TRUE(handoff_sql_barrier::ParseFence(revoked));
+            reply(true); return true;
         };
         dependencies.activate = [this](Guid player, PlayerEnterContext context) {
             EXPECT_EQ(kPlayer, player); activated.push_back(std::move(context));
@@ -161,6 +182,14 @@ protected:
     uint32_t localNodeReads{0}, clockReads{0};
     std::string lastEnterPreconditions;
     bool pendingLoad{false};
+    bool delayFence{false};
+    bool delayFenceReply{false};
+    std::vector<std::function<void()>> fenceReplies;
+    uint32_t fenceWrites{0};
+    std::vector<std::string> fenceCandidates;
+    std::vector<std::string> revokedCandidates;
+    std::vector<std::optional<std::string>> fencePriors;
+    std::vector<std::function<void()>> fenceReads;
 };
 
 TEST_F(RoleAdmissionTest, LiveBattleFinishesBeforeTradeFreezesOrUnloadsThePlayer) {
@@ -457,3 +486,101 @@ TEST(RoleAdmissionAuthentication, SignatureBindsMethodCallerBodyAndDeadline) {
     EXPECT_FALSE(service_call_auth::Verify(method, request, request.auth(), "trade", secret, now));
 }
 } // namespace
+
+TEST_F(RoleAdmissionTest, FenceReadAfterSealDoesNotSubmitOrActivate) {
+    delayFence = true;
+    Enter(); CompleteRegister(0);
+    ASSERT_EQ(1u, fenceReads.size()); EXPECT_TRUE(activated.empty());
+    ASSERT_TRUE(Admission::Seal(SealFor()));
+    fenceReads[0]();
+    EXPECT_EQ(0u, fenceWrites) << "Seal先于HGET完成，不能再发CAS登记/DEL";
+    EXPECT_TRUE(activated.empty());
+    EXPECT_FALSE(Admission::Allows(kPlayer, registers[0].identity().generation(), kRevision));
+}
+
+TEST_F(RoleAdmissionTest, FenceReadAfterOriginalDeadlineDoesNotSubmitOrActivate) {
+    delayFence = true;
+    Enter(); CompleteRegister(0);
+    ASSERT_EQ(1u, fenceReads.size());
+    now += 15s;
+    fenceReads[0]();
+    EXPECT_EQ(0u, fenceWrites); EXPECT_TRUE(activated.empty());
+    EXPECT_EQ(1u, rejections);
+}
+
+TEST_F(RoleAdmissionTest, FenceReadAfterScopeEndsCannotBorrowReplacementState) {
+    delayFence = true;
+    Enter(); CompleteRegister(0);
+    ASSERT_EQ(1u, fenceReads.size());
+    scope.reset();
+    fenceReads[0]();
+    EXPECT_EQ(0u, fenceWrites); EXPECT_TRUE(activated.empty());
+}
+
+TEST_F(RoleAdmissionTest, ContextIdentityMustMatchOriginalAdmissionAndSession) {
+    Enter(); CompleteRegister(0);
+    ASSERT_EQ(1u, activated.size());
+    auto original = activated[0];
+    ASSERT_TRUE(Admission::ConfirmedIdentityForContext(kPlayer, original));
+    const auto parsed = handoff_sql_barrier::ParseFence(original.handoffFence);
+    ASSERT_TRUE(parsed);
+    EXPECT_EQ(original.roleAdmissionGeneration, parsed->generation);
+    EXPECT_EQ(registers[0].identity().scene_instance_id(), parsed->sceneInstance);
+    auto wrong = original;
+    wrong.enterInfo.set_session_id(92);
+    EXPECT_FALSE(Admission::ConfirmedIdentityForContext(kPlayer, wrong));
+    Enter(); CompleteRegister(1);
+    ASSERT_EQ(2u, activated.size());
+    EXPECT_FALSE(Admission::ConfirmedIdentityForContext(kPlayer, original));
+    EXPECT_TRUE(Admission::ConfirmedIdentityForContext(kPlayer, activated[1]));
+    EXPECT_GT(activated[1].roleAdmissionGeneration, original.roleAdmissionGeneration);
+    EXPECT_NE(activated[1].handoffFence, original.handoffFence);
+}
+
+TEST_F(RoleAdmissionTest, SealRevokesSubmittedRegistrationBeforeItsReplyCanActivate) {
+    delayFenceReply = true;
+    Enter(); CompleteRegister(0);
+    ASSERT_EQ(1u, fenceWrites); ASSERT_EQ(1u, fenceReplies.size());
+    EXPECT_TRUE(activated.empty());
+    ASSERT_TRUE(Admission::Seal(SealFor()));
+    ASSERT_EQ(1u, revokedCandidates.size()); EXPECT_EQ(fenceCandidates[0], revokedCandidates[0]);
+    fenceReplies[0]();
+    EXPECT_TRUE(activated.empty());
+    EXPECT_FALSE(Admission::Allows(kPlayer, registers[0].identity().generation(), kRevision));
+}
+
+// 会话结束凭证(location-release-binding.md §3.3,2026-10-23):本节点完全不持有时凭证要先读 handoff_fence 原件再 CAS。
+// 登记在途时原件可能正是这条登记刚写的 H —— 一条正在建立的持有 —— 必须算作"本节点可能持有",既不读也不写;
+// 登记结清(Activate 之后由待入场条目 / 实体表示持有)才不再算。核对原件 S 用的本进程实例号与登记写入 S 同一来源。
+TEST_F(RoleAdmissionTest, RegistrationInFlightBlocksSessionEndedCredential) {
+    EXPECT_FALSE(Admission::HasAdmissionInFlight(kPlayer));
+    EXPECT_EQ("01234567-89ab-cdef-0123-456789abcdef", Admission::LocalInstanceId());
+    const auto skipLocalHolder = static_cast<std::size_t>(release_fence::SessionEndedCredential::kSkipLocalHolder);
+    const auto releaseWhileInFlight = [&](const char* stage) {
+        const auto before = release_fence_stats::Read();
+        PlayerLifecycleSystem::HandleSessionEndedRelease(kPlayer, Context().ownerEpoch, 0, 0);
+        const auto after = release_fence_stats::Read();
+        EXPECT_EQ(after.credentialDecisions[skipLocalHolder], before.credentialDecisions[skipLocalHolder] + 1) << stage;
+        EXPECT_EQ(after.credentialQualifications, before.credentialQualifications) << stage << ":不读资格原件";
+        EXPECT_EQ(after.credentialWritten + after.credentialEpochMoved + after.credentialSuperseded + after.credentialFailed,
+                  before.credentialWritten + before.credentialEpochMoved + before.credentialSuperseded + before.credentialFailed)
+            << stage << ":不写凭证";
+    };
+
+    delayFence = true;
+    ASSERT_NO_FATAL_FAILURE(Enter());
+    EXPECT_TRUE(Admission::HasAdmissionInFlight(kPlayer)) << "SQL 登记在途";
+    releaseWhileInFlight("sql registration");
+
+    ASSERT_NO_FATAL_FAILURE(CompleteRegister(0));
+    ASSERT_EQ(1u, fenceReads.size());
+    EXPECT_TRUE(Admission::HasAdmissionInFlight(kPlayer)) << "handoff_fence 登记在途(prior 读 / CAS 未回)";
+    releaseWhileInFlight("fence registration");
+
+    fenceReads[0]();
+    ASSERT_EQ(1u, activated.size());
+    EXPECT_FALSE(Admission::HasAdmissionInFlight(kPlayer)) << "登记已结清,持有改由待入场条目 / 实体表示";
+    const auto parsed = handoff_sql_barrier::ParseFence(activated[0].handoffFence);
+    ASSERT_TRUE(parsed);
+    EXPECT_EQ(Admission::LocalInstanceId(), parsed->sceneInstance) << "凭证核对 S 与登记写入 S 必须同一来源";
+}

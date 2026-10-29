@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"shared/authoritysql"
 	"strings"
 	"time"
 
@@ -58,13 +59,17 @@ func run(account, dsnEnv string, passwordStdin bool) error {
 	if err != nil || parsedDSN.DBName == "" {
 		return fmt.Errorf("migration MySQL DSN is invalid or has no database")
 	}
-	db, err := sql.Open("mysql", parsedDSN.FormatDSN())
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		return fmt.Errorf("口令迁移缺一次性writer资格: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	db, err := authoritysql.Open(ctx, parsedDSN.FormatDSN(), parsedDSN.DBName, os.Getenv("LOGIN_PASSWORD_MIGRATION_ALLOW_LOCAL_MYSQL") != "1", 1, authoritysql.Writer(writer))
 	if err != nil {
 		return fmt.Errorf("open MySQL: %w", err)
 	}
 	defer db.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	if err := db.PingContext(ctx); err != nil {
 		return fmt.Errorf("ping MySQL: %w", err)
 	}

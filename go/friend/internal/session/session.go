@@ -16,8 +16,9 @@
 //
 // friend 不像 trade 那样在同一进程里挂内部服务(TradeAdmin),表面上"整个 ClientPlayerFriend
 // 都是客户端协议"、白名单似乎多余。但本期给同一个客户端服务加了 S2C 推送方法
-// NotifyFriendEvent —— 它必须写在服务名含 ClientPlayer 的服务里,生成器才会给 Unity / robot
-// 出下行 handler;代价是它同时出现在服务端的 ServiceDesc 上,成为一个"客户端可拨"的方法名。
+// NotifyFriendEvent —— 它必须写在标了 OptionIsClientProtocolService 的客户端服务里、并标
+// option (OptionClientRpcKind) = CLIENT_RPC_PUSH,生成器才会给 Unity / robot 出下行 handler;
+// 代价是它同时出现在服务端的 ServiceDesc 上,成为一个"客户端可拨"的方法名。
 // 服务端不提供 NotifyFriendEvent 的 C2S 语义(friend_server.go 刻意不实现,继承
 // UnimplementedClientPlayerFriendServer),但"今天返回 Unimplemented"不是安全保证:
 // 将来谁手滑实现了它,就是一个凭空伪造"XX 通过了你的好友申请"事件的入口。

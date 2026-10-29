@@ -380,7 +380,7 @@ MSBuild 的增量判据是时间戳。只重建其中一个(或者用比 `.obj` 
 build/cpp/tests/bag_test.exe && build/cpp/tests/cross_zone_test.exe
 ```
 
-两个 exe 都要求工作目录能找到 `bin/etc/*.yaml`(从仓库根目录跑),并且 `bin/` 与 `third_party/grpc/install_vs2026_dbg/bin/` 在 `PATH` 上(`rdkafka.dll` / `zlibd.dll`)。
+两个 exe 都要求工作目录能找到 `bin/etc/*.yaml`(从仓库根目录跑)。2026-10-26 起复现时使用独立依赖：运行期 DLL 从 `bin/`、`third_party/protobuf/install_vs2026_dbg/bin/`、`third_party/zlib/install_vs2026_dbg/bin/` 取用；可通过 `tools/scripts/run_cpp_tests.ps1` 按该顺序准备 `rdkafka*.dll` / `zlibd.dll`。上述 2026-08-27 实测结果仍是当时的记录，不代表新依赖构建已验收。
 
 ---
 

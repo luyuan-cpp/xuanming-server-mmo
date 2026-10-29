@@ -22,8 +22,9 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// PlayerAllData — full snapshot carried across cross-zone migration,
-// persisted by SavePlayerToRedis on logout, and snapshot'd for rollback.
+// PlayerAllData — the player's full persisted snapshot: written by SavePlayerToRedis (periodic, logout and the
+// ownership-handoff save before a cross-node / cross-zone move), loaded by whichever node owns the player next,
+// and snapshot'd for rollback. (The old cross-zone "migration" chain that shipped it over Kafka was removed, CZ-1.)
 //
 // Until 2026-05-16 this only contained player_database_data and
 // player_database_1_data — meaning bag/quest/mail were silently dropped

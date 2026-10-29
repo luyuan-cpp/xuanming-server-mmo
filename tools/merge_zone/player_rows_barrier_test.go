@@ -3,14 +3,23 @@ package main
 // r2-mz#1(2026-10-20 修复)的回归:前向 copy 合服保留 player:{id}:save_barrier,撤销照删;-verify-merged 的
 // verify:save_barrier 逐人核对屏障与两表行内围栏。本 module 没有 miniredis / sqlmock(见 gap_fixes_test.go 头注释):
 // Redis 一侧用 route_publish_test.go 的 newFakeRouteRedis(go-redis 钩子,不拨号),SQL 一侧经 rowFenceReader 注入替身。
-// 真 MySQL / Redis 上的读口径(行围栏 SELECT、HMGET 只取三字段)见 save_barrier_integration_test.go(build tag merge_integration)。
+// 真 MySQL / Redis 上的读口径(行围栏 SELECT、HMGET 只取三字段、WRONGTYPE 逐人归类)见 save_barrier_integration_test.go
+// (build tag merge_integration)。
+//
+// 2026-10-22(评审跟进):judgeSaveBarrier 改为按 login 冷加载(savebarrier.Reconcile)预判,分 info / warn / block 三档。
+// 判定样例表放在 go/shared/savebarrier/testdata/merge_copy_cold_load_cases.json,login 的
+// merge_copy_cold_load_test.go 用真实冷加载入口跑同一张表,两边各自对表,判定漂移会在其中一边变红。
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -43,7 +52,7 @@ func TestPlayerCacheKeysKeepBarrier_IsTheUnmergeListMinusTheBarrier(t *testing.T
 		t.Fatal("the forward copy merge must not delete the save barrier")
 	}
 	// 缓存与资产证据照删:屏障是唯一的例外。
-	for _, want := range []string{"PlayerAllData:42", "player_database:42", "player_database_1:42", "player:{42}:asset_sql_commit"} {
+	for _, want := range []string{"PlayerAllData:{42}", "player_database:42", "player_database_1:42", "player:{42}:asset_sql_commit"} {
 		if !has[want] {
 			t.Errorf("forward-merge list lost %q: %v", want, keep)
 		}
@@ -73,7 +82,7 @@ func delOneEach(_ int, cmd redis.Cmder) (any, error) {
 }
 
 func TestInvalidatePlayerCachesKeepBarrier_ForwardCopyLeavesTheBarrier(t *testing.T) {
-	ctx := context.Background()
+	ctx, _ := testMaintenanceContext()
 	ids := []uint64{42, 43}
 
 	rdb, f := newFakeRouteRedis(t, delOneEach)
@@ -90,7 +99,7 @@ func TestInvalidatePlayerCachesKeepBarrier_ForwardCopyLeavesTheBarrier(t *testin
 			t.Fatalf("forward copy merge deleted %s — owner_epoch≠0 players would be locked out of the cold load", k)
 		}
 	}
-	for _, want := range []string{"PlayerAllData:43", "player:{43}:asset_sql_commit"} {
+	for _, want := range []string{"PlayerAllData:{43}", "player:{43}:asset_sql_commit"} {
 		if !containsString(keys, want) {
 			t.Errorf("forward copy merge must still delete %s (got %v)", want, keys)
 		}
@@ -102,7 +111,7 @@ func TestInvalidatePlayerCachesKeepBarrier_ForwardCopyLeavesTheBarrier(t *testin
 		t.Fatal(err)
 	}
 	keys = deletedKeys(f)
-	for _, want := range []string{"player:{42}:save_barrier", "player:{43}:save_barrier", "PlayerAllData:42"} {
+	for _, want := range []string{"player:{42}:save_barrier", "player:{43}:save_barrier", "PlayerAllData:{42}"} {
 		if !containsString(keys, want) {
 			t.Errorf("unmerge must delete %s (got %v)", want, keys)
 		}
@@ -182,11 +191,15 @@ func sortedKeys(m map[string]bool) []string {
 
 func TestSaveBarrierMirrorsMatchTheSharedPackages(t *testing.T) {
 	// go/shared/ownerepoch.OwnerEpochKey、go/shared/savebarrier.Key / Version 的输出,逐字。
-	if got := playerOwnerEpochKey(123); got != "player:123:owner_epoch" {
+	if got := playerOwnerEpochKey(123); got != "player:{123}:owner_epoch" {
 		t.Errorf("owner_epoch key = %q", got)
 	}
 	if got := playerSaveBarrierKey("123"); got != "player:{123}:save_barrier" {
 		t.Errorf("save_barrier key = %q", got)
+	}
+	// go/shared/savebarrier.ParentKey 的输出,逐字。
+	if got := playerParentKey("123"); got != "PlayerAllData:{123}" {
+		t.Errorf("parent key = %q", got)
 	}
 	if got := saveBarrierVersion(7, 3); got != "00000000000000000007:00000000000000000003" {
 		t.Errorf("version = %q", got)
@@ -204,40 +217,135 @@ func TestSaveBarrierMirrorsMatchTheSharedPackages(t *testing.T) {
 
 // ── 判定 ──────────────────────────────────────────────────────
 
-func committedObservation(owner string, epoch, seq uint64) saveBarrierObservation {
-	v := saveBarrierVersion(epoch, seq)
-	return saveBarrierObservation{OwnerRaw: owner, OwnerPresent: true, Pending: v, Acks: [2]string{v, v},
-		RowFence: [2]string{v, v}, RowPresent: [2]bool{true, true}}
+// coldLoadCase 是共享样例表的一行,字段含义见表头的 doc。
+type coldLoadCase struct {
+	Name        string  `json:"name"`
+	Owner       *string `json:"owner"`
+	OwnerType   string  `json:"owner_type"`
+	BarrierType string  `json:"barrier_type"`
+	Pending     *string `json:"pending"`
+	AckFirst    *string `json:"ack_first"`
+	AckSecond   *string `json:"ack_second"`
+	RowFirst    *string `json:"row_first"`
+	RowSecond   *string `json:"row_second"`
+	Verdict     string  `json:"verdict"`
+	Severity    string  `json:"severity"`
+	Login       string  `json:"login"`
 }
 
-func TestJudgeSaveBarrier_MirrorsTheLoginColdLoad(t *testing.T) {
-	stale := saveBarrierVersion(5, 2)
-	for _, c := range []struct {
-		name string
-		edit func(o *saveBarrierObservation)
-		want string
-	}{
-		{"稳态通过", func(*saveBarrierObservation) {}, barrierVerdictOK},
-		{"从没进过场景不要求", func(o *saveBarrierObservation) { *o = saveBarrierObservation{} }, barrierVerdictOK},
-		{"owner为0不要求", func(o *saveBarrierObservation) { *o = saveBarrierObservation{OwnerRaw: "0", OwnerPresent: true} }, barrierVerdictOK},
-		{"owner非规范", func(o *saveBarrierObservation) { o.OwnerRaw = "09" }, barrierVerdictOwnerMalformed},
-		{"屏障被删(旧二进制合服)", func(o *saveBarrierObservation) { o.Pending, o.Acks = "", [2]string{} }, barrierVerdictMissing},
-		{"只剩ACK没有pending", func(o *saveBarrierObservation) { o.Pending = "" }, barrierVerdictMissing},
-		{"pending畸形", func(o *saveBarrierObservation) { o.Pending = "garbage" }, barrierVerdictPendingMalformed},
-		{"pending零版本", func(o *saveBarrierObservation) { o.Pending = saveBarrierVersion(0, 0) }, barrierVerdictPendingMalformed},
-		{"owner落后pending", func(o *saveBarrierObservation) { o.OwnerRaw = "5" }, barrierVerdictOwnerBehind},
-		{"一表ACK未齐", func(o *saveBarrierObservation) { o.Acks[1] = stale }, barrierVerdictUncommitted},
-		{"落点记录畸形", func(o *saveBarrierObservation) { o.PlacementBad = true }, barrierVerdictPlacementBad},
-		{"目标库缺行", func(o *saveBarrierObservation) { o.RowPresent[1] = false }, barrierVerdictRowMissing},
-		{"目标库行围栏与屏障不同版", func(o *saveBarrierObservation) { o.RowFence[0] = stale }, barrierVerdictFenceMismatch},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			o := committedObservation("9", 8, 90)
-			c.edit(&o)
-			if got := judgeSaveBarrier(o); got != c.want {
-				t.Fatalf("judge = %q, want %q (obs %+v)", got, c.want, o)
+// coldLoadCasesPath 相对本包目录(go test 的工作目录)。
+var coldLoadCasesPath = filepath.Join("..", "..", "go", "shared", "savebarrier", "testdata", "merge_copy_cold_load_cases.json")
+
+func loadColdLoadCases(t *testing.T) []coldLoadCase {
+	t.Helper()
+	raw, err := os.ReadFile(coldLoadCasesPath)
+	if err != nil {
+		t.Fatalf("read the shared cold-load table: %v", err)
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	var table struct {
+		Doc   string         `json:"doc"`
+		Cases []coldLoadCase `json:"cases"`
+	}
+	if err := dec.Decode(&table); err != nil {
+		t.Fatalf("decode %s: %v", coldLoadCasesPath, err)
+	}
+	if len(table.Cases) == 0 {
+		t.Fatalf("%s has no cases", coldLoadCasesPath)
+	}
+	return table.Cases
+}
+
+// caseVersion 把样例里的 "v<owner_epoch>:<save_seq>" 展开成 41 字节版本串;不是这个形式的原样返回(畸形样例)。
+func caseVersion(s string) string {
+	rest, ok := strings.CutPrefix(s, "v")
+	if !ok {
+		return s
+	}
+	e, q, ok := strings.Cut(rest, ":")
+	if !ok {
+		return s
+	}
+	epoch, eerr := strconv.ParseUint(e, 10, 64)
+	seq, serr := strconv.ParseUint(q, 10, 64)
+	if eerr != nil || serr != nil {
+		return s
+	}
+	return saveBarrierVersion(epoch, seq)
+}
+
+func caseField(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return caseVersion(*p)
+}
+
+// observationOf 把样例换成 judgeSaveBarrier 的输入:与 readSaveBarrierState / readRequiredRowFences 产出的形状一致
+// (键不存在为空串、类型错置标记、行围栏照实保留零围栏)。
+func observationOf(t *testing.T, c coldLoadCase) saveBarrierObservation {
+	t.Helper()
+	o := saveBarrierObservation{Pending: caseField(c.Pending), Acks: [2]string{caseField(c.AckFirst), caseField(c.AckSecond)}}
+	switch c.OwnerType {
+	case "":
+		o.OwnerRaw = caseField(c.Owner)
+	case "hash":
+		o.OwnerWrongType = true
+	default:
+		t.Fatalf("unknown owner_type %q", c.OwnerType)
+	}
+	switch c.BarrierType {
+	case "":
+	case "string":
+		o.BarrierWrongType, o.Pending, o.Acks = true, "", [2]string{}
+	default:
+		t.Fatalf("unknown barrier_type %q", c.BarrierType)
+	}
+	for i, row := range []*string{c.RowFirst, c.RowSecond} {
+		if row != nil {
+			o.RowFence[i], o.RowPresent[i] = caseVersion(*row), true
+		}
+	}
+	return o
+}
+
+// TestJudgeSaveBarrier_MatchesTheSharedColdLoadTable:judgeSaveBarrier 对共享样例表逐条给出表里的结论与严重度,
+// 且三档与 login 的结论一一对应(info↔admit、warn↔adopt、block↔refuse)。login 一侧由 go/login 的
+// merge_copy_cold_load_test.go 用真实冷加载入口对同一张表,两边合起来证明「verify 判通过,login 一定放行」。
+func TestJudgeSaveBarrier_MatchesTheSharedColdLoadTable(t *testing.T) {
+	loginFor := map[string]string{"info": "admit", "warn": "adopt", "block": "refuse"}
+	seen := map[string]bool{}
+	for _, c := range loadColdLoadCases(t) {
+		t.Run(c.Name, func(t *testing.T) {
+			if got := judgeSaveBarrier(observationOf(t, c)); got != c.Verdict {
+				t.Fatalf("judge = %q, the table says %q", got, c.Verdict)
+			}
+			if got := barrierVerdictSeverity(c.Verdict); got != c.Severity {
+				t.Fatalf("severity of %q = %q, the table says %q", c.Verdict, got, c.Severity)
+			}
+			if loginFor[c.Severity] != c.Login {
+				t.Fatalf("severity %q must pair with login %q, the table says %q", c.Severity, loginFor[c.Severity], c.Login)
 			}
 		})
+		seen[c.Verdict] = true
+	}
+	// 每个 Redis / SQL 一侧能观测到的结论都要有样例;落点记录畸形只在 merge_zone 一侧出现,单独测。
+	for _, v := range []string{barrierVerdictOK, barrierVerdictMissingAdoptable, barrierVerdictRowsAhead,
+		barrierVerdictOwnerMalformed, barrierVerdictBarrierMalformed, barrierVerdictWithoutOwner, barrierVerdictOwnerBehind,
+		barrierVerdictUncommitted, barrierVerdictRowMissing, barrierVerdictFenceMismatch, barrierVerdictMissingNoSQLRow,
+		barrierVerdictMissingZeroFence, barrierVerdictMissingRowsDisagree} {
+		if !seen[v] {
+			t.Errorf("the shared table has no case for verdict %q", v)
+		}
+	}
+}
+
+func TestJudgeSaveBarrier_MalformedPlacementIsRefused(t *testing.T) {
+	v := saveBarrierVersion(8, 90)
+	o := saveBarrierObservation{OwnerRaw: "9", Pending: v, Acks: [2]string{v, v}, PlacementBad: true}
+	if got := judgeSaveBarrier(o); got != barrierVerdictPlacementBad || barrierVerdictSeverity(got) != "block" {
+		t.Fatalf("judge = %q", got)
 	}
 }
 
@@ -249,11 +357,14 @@ type barrierWorld struct {
 	// barriers:屏障 hash 的全部字段(字段名 → 值);没有的玩家 = hash 不存在。HMGET 按请求的字段逐个应答,
 	// 所以 hash 里多出来的字段(schema_gen / schema_writer / outbox_*)与真 Redis 一样不影响结果。
 	barriers map[uint64]map[string]string
-	records  map[uint64]string // 落点记录原值;没有 = 无记录
-	fences   map[string]map[uint64]string
-	reads    []string   // readFences 收到的 "schema.table"
-	hmgets   [][]string // 每条 HMGET 请求的字段
-	hmgetErr error
+	// ownerWrongType / barrierWrongType:该玩家的键存在但类型不对,GET / HMGET 回 WRONGTYPE(与真 Redis 同一种错误回复)。
+	ownerWrongType   map[uint64]bool
+	barrierWrongType map[uint64]bool
+	records          map[uint64]string // 落点记录原值;没有 = 无记录
+	fences           map[string]map[uint64]string
+	reads            []string   // readFences 收到的 "schema.table"
+	hmgets           [][]string // 每条 HMGET 请求的字段
+	hmgetErr         error      // 非空时每条 HMGET 都回这个错误(模拟连接级故障)
 }
 
 // committedBarrier 是 pending 与两表 ACK 同版的屏障 hash(稳态)。
@@ -261,22 +372,24 @@ func committedBarrier(v string) map[string]string {
 	return map[string]string{saveBarrierPendingField: v, saveBarrierAckTables[0]: v, saveBarrierAckTables[1]: v}
 }
 
+const fakeWrongType = fakeRedisReplyError("WRONGTYPE Operation against a key holding the wrong kind of value")
+
 func (w *barrierWorld) reply(_ int, cmd redis.Cmder) (any, error) {
 	args := cmd.Args()
 	switch cmd.Name() {
-	case "mget":
-		out := make([]any, 0, len(args)-1)
-		for _, a := range args[1:] {
-			key := a.(string)
-			var v any
-			for id, owner := range w.owners {
-				if key == playerOwnerEpochKey(id) {
-					v = owner
-				}
+	case "get":
+		key := args[1].(string)
+		for id, owner := range w.owners {
+			if key == playerOwnerEpochKey(id) {
+				return owner, nil
 			}
-			out = append(out, v)
 		}
-		return out, nil
+		for id := range w.ownerWrongType {
+			if key == playerOwnerEpochKey(id) {
+				return nil, fakeWrongType
+			}
+		}
+		return nil, redis.Nil
 	case "hmget":
 		if w.hmgetErr != nil {
 			return nil, w.hmgetErr
@@ -287,6 +400,11 @@ func (w *barrierWorld) reply(_ int, cmd redis.Cmder) (any, error) {
 			fields = append(fields, a.(string))
 		}
 		w.hmgets = append(w.hmgets, fields)
+		for id := range w.barrierWrongType {
+			if key == playerSaveBarrierKey(strconv.FormatUint(id, 10)) {
+				return nil, fakeWrongType
+			}
+		}
 		var hash map[string]string
 		for id, b := range w.barriers {
 			if key == playerSaveBarrierKey(strconv.FormatUint(id, 10)) {
@@ -406,10 +524,10 @@ func TestVerifySaveBarriers_AcceptsSchemaGenAndWriterFields(t *testing.T) {
 	if r.Severity != "info" || r.TargetCount != 2 || r.ConflictCount != 0 {
 		t.Fatalf("schema_gen / schema_writer must not fail the check: %+v", r)
 	}
-	// 每名 owner_epoch≠0 的玩家一条 HMGET(1、2 两人),字段恰为这三个。
+	// 每名清单玩家一条 HMGET(1、2、3 三人;没有 owner 的人也要读,屏障在而 owner 不在同样拒登),字段恰为这三个。
 	want := strings.Join([]string{saveBarrierPendingField, saveBarrierAckTables[0], saveBarrierAckTables[1]}, ",")
-	if len(w.hmgets) != 2 {
-		t.Fatalf("want one HMGET per required player, got %v", w.hmgets)
+	if len(w.hmgets) != 3 {
+		t.Fatalf("want one HMGET per manifest player, got %v", w.hmgets)
 	}
 	for _, fields := range w.hmgets {
 		if strings.Join(fields, ",") != want {
@@ -418,26 +536,101 @@ func TestVerifySaveBarriers_AcceptsSchemaGenAndWriterFields(t *testing.T) {
 	}
 }
 
-func TestVerifySaveBarriers_BlocksADeletedOrDivergentBarrier(t *testing.T) {
-	// 旧二进制合服删过 1 的屏障;2 的目标库行在合服后被改过(围栏前进了,屏障没跟上)。
+func TestVerifySaveBarriers_BlocksRefusalsAndListsAdoptions(t *testing.T) {
+	// 1 的屏障被删(旧二进制合服),两行同版非零:login 按 V7 采纳,warn。2 的一张表行围栏前进了、屏障没跟上,
+	// 两行不同版:login 拒登,block。整行取最重的 block,Notes 里两类都列出来。
 	w := newBarrierWorld()
 	delete(w.barriers, 1)
 	w.setFence("zone_901_db", "player_database_1", 2, saveBarrierVersion(7, 1))
 	r := verifySaveBarriersWith(context.Background(), barrierVerifyConfig(t, w, true), w.readFences)
-	if r.Severity != "block" || isInfraAudit(r) || r.ConflictCount != 2 {
+	if r.Severity != "block" || isInfraAudit(r) || r.ConflictCount != 2 || r.TargetCount != 0 {
 		t.Fatalf("got %+v", r)
 	}
-	for _, want := range []string{barrierVerdictMissing + "=1 (first ids: [1])", barrierVerdictFenceMismatch + "=1 (first ids: [2])",
-		"save_barrier_restore", "§10.1"} {
+	for _, want := range []string{barrierVerdictFenceMismatch + "=1 (first ids: [2])",
+		barrierVerdictMissingAdoptable + "=1 (first ids: [1])", "PARENT-LOAD-ADOPT-SQL", "§10.1"} {
 		if !strings.Contains(r.Notes, want) {
 			t.Errorf("notes %q do not contain %q", r.Notes, want)
 		}
 	}
 }
 
+func TestVerifySaveBarriers_AdoptionsAloneAreAWarn(t *testing.T) {
+	// 没有人会被拒,但 1(屏障缺失,V7)与 2(两行新于屏障,V2)都要靠 login 采纳 SQL 才进得来:warn,不是 info。
+	w := newBarrierWorld()
+	delete(w.barriers, 1)
+	for _, table := range saveBarrierAckTables {
+		w.setFence("zone_901_db", table, 2, saveBarrierVersion(6, 9))
+	}
+	r := verifySaveBarriersWith(context.Background(), barrierVerifyConfig(t, w, true), w.readFences)
+	if r.Severity != "warn" || isInfraAudit(r) || r.ConflictCount != 2 || r.TargetCount != 0 {
+		t.Fatalf("got %+v", r)
+	}
+	for _, want := range []string{barrierVerdictMissingAdoptable + "=1 (first ids: [1])",
+		barrierVerdictRowsAhead + "=1 (first ids: [2])", "§10.1"} {
+		if !strings.Contains(r.Notes, want) {
+			t.Errorf("notes %q do not contain %q", r.Notes, want)
+		}
+	}
+}
+
+func TestVerifySaveBarriers_SplitsAMissingBarrierByRowState(t *testing.T) {
+	// 两人都进过场景、都没有屏障:1 在目标库没有行(合服前就登录不了,r2-login#1),2 的两行是零围栏(围栏之前的历史行)。
+	// 两种处置不同(前者恢复工具也救不了,后者要 -allow-legacy),所以分成两个结论。
+	w := newBarrierWorld()
+	w.barriers = nil
+	for _, table := range saveBarrierAckTables {
+		delete(w.fences["zone_902_db."+table], 1)
+		w.setFence("zone_901_db", table, 2, saveBarrierVersion(0, 0))
+	}
+	r := verifySaveBarriersWith(context.Background(), barrierVerifyConfig(t, w, true), w.readFences)
+	if r.Severity != "block" || isInfraAudit(r) || r.ConflictCount != 2 {
+		t.Fatalf("got %+v", r)
+	}
+	for _, want := range []string{barrierVerdictMissingNoSQLRow + "=1 (first ids: [1])",
+		barrierVerdictMissingZeroFence + "=1 (first ids: [2])"} {
+		if !strings.Contains(r.Notes, want) {
+			t.Errorf("notes %q do not contain %q", r.Notes, want)
+		}
+	}
+}
+
+func TestVerifySaveBarriers_WrongTypeAndOrphanBarrierArePerPlayerRefusals(t *testing.T) {
+	// 1 的 owner_epoch 键是别的类型;2 的屏障键不是 hash;3 从没铸过 owner,却有一把已提交的屏障。都是这名玩家自己的
+	// 数据损坏(login 的 Lua 会拒他):按原因分组报 block,不是 INFRA,也不能当成「不要求屏障」放过。
+	w := newBarrierWorld()
+	delete(w.owners, 1)
+	w.ownerWrongType = map[uint64]bool{1: true}
+	delete(w.barriers, 2)
+	w.barrierWrongType = map[uint64]bool{2: true}
+	w.barriers[3] = committedBarrier(saveBarrierVersion(8, 90))
+	r := verifySaveBarriersWith(context.Background(), barrierVerifyConfig(t, w, true), w.readFences)
+	if r.Severity != "block" || isInfraAudit(r) || r.ConflictCount != 3 {
+		t.Fatalf("got %+v", r)
+	}
+	for _, want := range []string{barrierVerdictOwnerMalformed + "=1 (first ids: [1])",
+		barrierVerdictBarrierMalformed + "=1 (first ids: [2])", barrierVerdictWithoutOwner + "=1 (first ids: [3])"} {
+		if !strings.Contains(r.Notes, want) {
+			t.Errorf("notes %q do not contain %q", r.Notes, want)
+		}
+	}
+}
+
+func TestVerifySaveBarriers_TimeoutSaysTheBudgetRanOut(t *testing.T) {
+	// 截止时间已过的 ctx(不依赖墙钟推进):替身 Redis 不看 ctx,读行围栏时与真驱动一样回 ctx 的错误。
+	ctx, cancel := context.WithDeadline(context.Background(), time.Unix(0, 0))
+	defer cancel()
+	w := newBarrierWorld()
+	expired := func(ctx context.Context, _, _ string, _ []uint64) (map[uint64]string, error) { return nil, ctx.Err() }
+	r := verifySaveBarriersWith(ctx, barrierVerifyConfig(t, w, true), expired)
+	if !isInfraAudit(r) || !strings.Contains(r.Notes, "time budget") || !strings.Contains(r.Notes, "not a pass") {
+		t.Fatalf("got %+v", r)
+	}
+}
+
 func TestVerifySaveBarriers_NobodyEnteredASceneNeedsNoSQL(t *testing.T) {
 	w := newBarrierWorld()
 	w.owners = map[uint64]string{2: "0"}
+	w.barriers = nil
 	cfg := barrierVerifyConfig(t, w, true)
 	cfg.routes = nil // 不该走到读落点 / 读行
 	r := verifySaveBarriersWith(context.Background(), cfg, w.readFences)
@@ -463,7 +656,8 @@ func TestVerifySaveBarriers_UncheckableIsInfraOrNotVerified(t *testing.T) {
 	if r := verifySaveBarriersWith(ctx, cfg, w.readFences); !isInfraAudit(r) {
 		t.Errorf("no shared redis: %+v", r)
 	}
-	w.hmgetErr = fakeRedisReplyError("WRONGTYPE Operation against a key holding the wrong kind of value")
+	// 连接级故障(不是 WRONGTYPE 这种逐键的错误回复)不能归到任何一名玩家头上:整行 INFRA。
+	w.hmgetErr = errors.New("read tcp 127.0.0.1:6379: connection reset by peer")
 	if r := verifySaveBarriersWith(ctx, barrierVerifyConfig(t, w, true), w.readFences); !isInfraAudit(r) {
 		t.Errorf("hmget error: %+v", r)
 	}

@@ -4,6 +4,7 @@
 > 本文只讲 robot:做到哪、哪些没提交、怎么验、接着迁什么、迁的时候会踩什么坑。
 > 写作时间 2026-10-19 10:50(America/New_York),本仓 HEAD `c63b22dca`。同一工作区有多个会话并行,接手前先按 §7 重新核对。
 > **2026-10-20 续做**(会话「做完 robot 剩余迁移」):§5 的 A、B 两类已迁完并经语义评审,随用户快照 `c35e1133d` 入库(§1.1);验证命令已按新范围重写(§2);C 类因周额度没做,分组与做法写在 §8,下一个会话可以直接照做。robot/ 场景迁移由本会话负责,`pkg/client.go` 的 `CallSyncThen` 归会话 53a2d1,R1 / 生成器 / Java 归会话 6b6cd9(10-20 三方已确认分工)。
+> **2026-10-23 收尾**:C 类已按 §8 全部迁完并经评审(§9);§5 的 A / B / C 三类全部完成,只剩 D、E 两类按约定不迁。验证命令见 §2 与 §2.1。全部未编译,待 Codex 验证。
 
 ## 1. 现状
 
@@ -55,7 +56,10 @@
 
 ### 1.2 sync / travel 补评审
 
-见本节末尾的结果记录(补评审跑完后填写)。
+`wf_0f932c90-afc`(10-20 改动已入库后重开,对照 `c63b22dca` 评审):2 条低级发现,无中高级。
+- 信封拒绝的诊断提示没覆盖 R1 的 1003、还写着「gate 没换新二进制」:改为 `travelSmokeEnvelopeHint`,10-23 再收敛为委托共享的 `sceneRequestEnvelopeHint`(只把限流指到 travel 自己的节流常量)。
+- 服务端没回显请求号时,id = 0 的 TravelToZone 回包被丢弃、拒绝码丢失:10-22 travel 诊断组补了「未回显请求号回包」计数与诊断(`travelSmokeUncorrelatedReplies`),超时文案优先给出这条原因;判定逻辑不变。
+- 金币槽取值改用共享的 `goldSlotValue`(单测 `TestGoldSlotValue`),travel 不再保留副本。
 
 ## 2. 验证(给 Codex,按顺序;任何一步失败保留输出并停下,不要连续重试)
 
@@ -93,6 +97,35 @@
 - **friend 第 6 步 / guild 第 9 步拿不到信封拒绝**:看路由服是否把上游 PermissionDenied 翻成了 1003 并带回 id。
 - **trade 第 2 步**:期望的就是超时,即 gate 丢弃 TradeAdmin 消息号。
 - **R1 落地之后**(会话 6b6cd9 在做 gate 侧):scene 派发前早退的请求会收到带请求号的 1003 信封,不再超时,失败原因里会显示信封 tip=1003。白名单外的消息号仍然不回包,上面这几个「期望超时」的步骤不受影响。
+
+### 2.1 第二批(C 类)追加验证(10-23)
+
+§2 第 1–6 步(gofmt / build / vet / 单测)已覆盖全部改动文件,照跑即可。在此之上追加:
+
+1. 单测:`go test -mod=vendor -race -run "TestDialBattleDirect|TestBattleDirect|TestEquip|TestAttributePanelOutcome|TestAssetArrival|TestMallArrival|TestFeature|TestTravelSmoke|TestSyncSmoke|TestGoldSlotValue" -v .` 全部 PASS、无 `DATA RACE`;再跑 `go test -mod=vendor ./logic/handler/ -run Feature -v`。新增或改动的用例:
+   - battle:`TestDialBattleDirectParticipantPullsStateOnReady`(新增断言:请求号非 0、`LateReplies` 为 0)、`TestDialBattleDirectDropsUncorrelatedStateReply`、`TestBattleDirectStateReplyDoneCountsAndDispatches`、`TestBattleDirectPullBattleStateReportsNotSent`。
+   - equip:`TestEquipFeatureOutcomeSeparatesEnvelopeBodyTipAndIncompleteReplies`;`TestAttributePanelOutcomeSeparatesEnvelopeAndBodyRejections`(10-23 由 equip 的面板判定用例改为测 attribute / pet / equip 共用的纯函数 `attributePanelOutcome`)。
+   - features:`TestFeatureLobbyCall*` 三条。
+   - travel 诊断:`TestTravelSmokeUncorrelatedReplies`、`TestTravelSmokeUncorrelatedCause`、`TestTravelSmokeDescribeTimeout`;`TestTravelSmokeJudgeRejection` 多了一个参数;`TestTravelSmokeReplyRejection` 的 GM 闸期望文案改为 `gate GM guard rejected it`。
+   - `TestGoldSlotValue`(原 `TestTravelSmokeGold`,改测共享的 `goldSlotValue`)。
+2. 冒烟(在 `robot/` 下 `.\robot.exe -c <配置>`;前提同 §2 第 7 步,另需 GM 闸为 dev / test):
+
+   | 配置 | 覆盖 | 本项通过标准 |
+   |---|---|---|
+   | `etc/chat_smoke.yaml`(默认双 zone;单 zone 复制到 `logs/` 改 `cross_zone: false`) | chat 的 SendChat / PullChatHistory | `CHAT_SMOKE_OK`;第 5 步 tip 为 kMessageSizeExceeded |
+   | `etc/robot.currency-crash.yaml`(currency-crash-snapshot,需 satoken 服务) | `readGoldBalance` / `gmAddGold` | 日志有 `currency-crash-snapshot leg complete`;`logs/currency_crash_window/snapshot.json` 没有 error 字段,`post_balance == pre_balance + 10000` |
+   | `etc/attribute_smoke.yaml`、`etc/pet_smoke.yaml` | 属性 / 宝宝请求与金币 helper | `ATTRIBUTE_SMOKE_OK`、`PET_SMOKE_OK` |
+   | `etc/equip_smoke.yaml`、`etc/equip_forge_smoke.yaml`、`etc/equip_forge_topup.yaml`、`etc/mall_arrival_smoke.yaml` | 背包请求(callDispatch)、属性面板、金币;mall 复用 equip 会话 | `EQUIP_SMOKE_OK`、`EQUIP_FORGE_SMOKE_OK`、`EQUIP_FORGE_TOPUP_OK`(会往账号里累加物品与银两)、`MALL_ARRIVAL_SMOKE_OK`(前置见该 yaml 文件头) |
+   | `etc/battle_smoke.yaml`、`etc/battle_smoke_cross_zone.yaml`、`etc/rank_smoke.yaml` | 大厅 JoinQueue / WatchBattle、直连 GetBattleState 补拉 | `BATTLE_SMOKE_OK`(日志有 `[battle-smoke] JoinQueue accepted` 与 `WatchBattle accepted`)、`CROSS_ZONE_MATCH_OK`(两侧 `state_replies>=1`)、`RANK_SMOKE_OK` |
+   | `etc/team_smoke.yaml`;可选 `etc/guild_smoke.yaml` 且 `activities: true` | 直连补拉改动的下游回归 | `TEAM_SMOKE_OK`、`GUILD_SMOKE_OK` |
+   | `etc/robot.behavioral.yaml`(stress + behavioral,20 个机器人,跑约 2 分钟后 Ctrl+C) | 压测主循环的 ListSkills、`sendAndRecvLocal` | 每个机器人都 entered game;`timed out waiting for skill list`、`skill list unavailable`、`robot panic` 都为 0;reporter 的 login_stuck 为 0;`behavior_test_results.csv` 的 cast_skill 行没有 `no owned skills`。msg_sent 每会话多 1 属预期 |
+   | login-test 本地配置:复制 `etc/robot.yaml` 到不入库的 `logs/login_test.yaml`,只改 `mode: "login-test"`、`robot_count: 5` | `prepareBehaviorClient`、`testSkillCast`、`testSceneSwitch` | 各用例 Passed |
+   | features-smoke 本地配置 `logs/features_smoke.local.yaml`(`mode: "features-smoke"`,字段照 `config.FeaturesSmokeConfig`,账号与认证照 `etc/equip_smoke.yaml`) | 大厅与直连的 `callVia` | 分三轮:只读(只填 account)期望 `FEATURES_READ_OK` 与各 `*_SKIPPED`、`FEATURES_SMOKE_OK`;加 `bag_type: 0`、`sort_bag: true` 期望 `FEATURES_SORT_OK … second_sort_changed=false`;战斗全链加 `battle_config_id: 1`、`scope: 0`、`accept_mission_id: 12`、`claim_mission_id: 12`、`verify_relogin: true`,期望 `FEATURES_BATTLE_OK`、`FEATURES_CLAIM_OK … duplicate_rejected=true`、`FEATURES_RELOGIN_OK`、`FEATURES_SMOKE_OK`(同一角色只能过一次,重跑前清数据或换号) |
+   | asset-arrival-prepare 本地配置 `logs/asset_arrival_prepare.local.yaml`(`mode: asset-arrival-prepare`,`robot_count: 1`,显式 `zone_id`,`auth_type: password`,`use_http_login: false`,`asset_arrival_prepare: {run_mode: dev, dedicated: true, account: robot_assetarrival_<后缀>, gold_target: 17..100000, equipment: true, hold_seconds: 120, output_path: <尚不存在的绝对路径>}`) | equip 复用路径 | stdout 输出一行只含 player_id / item_guid / zone_id 的 JSON,output_path 写出同样内容,保活满 hold_seconds 后退出码 0 |
+
+   - 全局通过标准同 §2,另外 `[battle-direct] catch-up GetBattleState got no reply` 为 0,不出现非 0 的 `uncorrelated_replies` 或 `without a request id`。
+   - 可选负向检查:路由模式下停掉 match 再跑 `battle_smoke`,应在几秒内 `BATTLE_SMOKE_FAIL step=a-join-queue`(信封 1003 或超时文案),不应等约 40s 才报 b-wait-battle-start。做完恢复 match。
+   - 玩家数据可以清空(项目未上线):features 战斗全链与 equip 系列会改账号存档,反复跑前清库或换账号即可。
 
 ## 3. 静态复核结论(工作流 `wf_5cd420ca-79e`,只读,不代替编译)
 
@@ -135,7 +168,7 @@
 - ordering:`ordering_smoke_scenario.go:297` `waitReplies`,以及调用它的 `:346` `pipelineJoinThenCancel`、`:377` `queueState`、`:397` `cancelWithTicket`;`ordering_smoke_groups.go:693` `pipeline`、`:717` `rpcTip`。流水线场景迁移时用多个并发 `gc.Call`,各自按 id 认领。O7 组在 RecvLoop 已启动的连接上连发 Login → EnterGame,不是同步握手,也可以迁。
 - team:`team_smoke_scenario.go:663` `send` 配合 `:949` `teamSmokeWaitPush`,用于 JoinQueue / CancelQueue / GetQueueStatus;`:808` `startSoloBattle`;`team_backfill_smoke_scenario.go:228`、`:364` `backfillCancelQueue`、`:378` `backfillExpectQueueState`。换场景(`:768` `switchScene`)等的是 NotifyEnterScene 推送,可以不迁。
 
-### C. 依赖生成 handler 副作用的等待(待迁,分组与做法见 §8)
+### C. 依赖生成 handler 副作用的等待(10-22 ~ 10-23 已迁,逐处做法见 §9)
 
 - attribute:`attribute_smoke_scenario.go:518` `send`、`:442` `callTolerant`、`:530` `waitSuggestion`。
 - pet:`pet_smoke_scenario.go:506` `send`、`:453` `callTolerant`、`:485` `callAttributePanel`、`:517` `waitSuggestion`。
@@ -167,7 +200,7 @@
 - `login.go:268` 的 RefreshToken 靠生成 handler `ClientPlayerLoginRefreshTokenHandler` 写回新 token。若迁到 `Call`,要在 done 里自己写。
 - 设计 §6.1 的进度表把 chat、currency_crash_window、battle_smoke 大厅侧、channel 的 requestSceneInfo 归为「其余等待帮助函数」。按它们实际等待的对象看,属于 C 类,以本文为准;§6.1 表已指向本文。
 
-## 6. 顺带发现的既有缺陷(本轮范围外,未修)
+## 6. 顺带发现的既有缺陷(10-22 已修,见 §9.2)
 
 - `main.go:879` `sendAndRecvLocal` 不检查信封 `error_message`,空 body 会被当成成功(`login.go` 的 `sendAndRecvTimeout` 有这道检查)。
 - `login.go:138` `sendAndRecvTimeout` 与 `login_test_scenarios.go:683` `testDuplicateLoginRequest` 超时后留下阻塞在 `RecvOne` 的 goroutine,之后会和 RecvLoop 抢 `Recv`。
@@ -182,7 +215,7 @@
 - `smokeCaller` 本身没有单测,靠四个冒烟验证。
 - 记录:运行时实现与迁移在会话「robot 客户端改为按请求号回调」完成;只读复核工作流 `wf_5cd420ca-79e`;上一级总交接见文首链接。
 
-## 8. 第二批:C 类迁移方案(10-20 写,未开工)
+## 8. 第二批:C 类迁移方案(10-20 写;10-22 ~ 10-23 已按此执行,结果见 §9)
 
 **为什么没做**:第一批(14 个代理,约 250 万子代理 token)跑完时周额度已到 83%,补评审期间 15 分钟又涨到 87%(同期还有会话 53a2d1、6b6cd9 在跑)。C 类要 6 个落码代理外加评审,极可能跑到一半撞上周额度,留下半截改动并把账号锁到 10-22 16:00(America/New_York)。所以只把方案写到能直接开工的程度。
 
@@ -218,3 +251,47 @@
 - 实现代理提示里带续做说明(先 `git diff` 看现状、在半截基础上补完),并点名 §4、§8.1 与第一批已迁好的参照(friend / mail / travel / ordering)。
 - 用户会不定期整批快照提交:评审代理要用 `git diff <迁移前提交> -- <文件>` 看改动,不要只用 `git diff`;10-20 的补评审就因为改动已入库而重开过一次。
 - 冒烟(`robot/etc/` 下,10-20 核对过文件存在):`attribute_smoke`、`pet_smoke`、`equip_smoke`、`equip_forge_smoke`、`equip_forge_topup`、`chat_smoke`、`battle_smoke`、`battle_smoke_cross_zone`、`robot.currency-crash.yaml`(currency-crash-snapshot 模式)、`robot.behavioral.yaml`(stress 模式 + behavioral profile,覆盖 `main.go` 的 ListSkills 等待)。login-test、features-smoke、asset-arrival-prepare 没有入库的 yaml,要用对应的 `mode:` 另写不入库的本地配置。通过标准与 §2 的全局标准相同。
+
+## 9. 第二批 C 类实施记录(10-22 ~ 10-23,会话「Robot handoff documentation [4de6a5]」,未编译)
+
+工作流:第一波 `wf_562937ab-7ad`(进程中断,battle / main+login 的评审未跑完);第二波与第一波补评审 `wf_d1b64090-2f6`(撞 5 小时额度,3 个代理失败);收尾 `wf_dd238941-6ce`。每组「实现 → 语义评审 → 中高级发现逐条对抗复核 → 修复」;失败的代理都没有改过文件。提交状态:两波实现与大部分评审修复已随用户快照(`2c07f2c28`、`9d2784fbf`)入库;本会话 10-23 的收尾改动(§9.3 equip 一行与 6b6cd9 转交的注释)在工作区,以 `git status` 为准。
+
+### 9.1 逐组做法
+
+| 组 | 文件 | 做法 |
+|---|---|---|
+| currency + chat | `currency_crash_window_scenario.go`、`chat_smoke_scenario.go` | `readGoldBalance` / `gmAddGold` 签名不变,改为直接解析(全包没有别的读者读 Player 货币状态);信封拒绝、scene 业务拒绝(kFeatureUnavailable 的提示按方法区分退出闸 / GM 闸)、超时分开报,业务拒绝不再返回 `(0, nil)`。新增共享的 `goldSlotValue`、`sceneRequestEnvelopeHint`。chat 的 SendChat / PullChatHistory 走 `smokeCaller` 直接解析响应,删掉 chatInbox 等待与 envelopes / gateTips |
+| main + login | `main.go`、`login_test_scenarios.go`、`login.go` | 压测主循环 ListSkills:`startListOwnedSkills` 用 `gc.Call`,done 在 RecvLoop 上交 handler(保住被动技能剔除),主 goroutine 仍只等 5s、超时只告警。`prepareBehaviorClient` 同样处理,保留 1.5s 停顿(它也在等 AOI 推送),之后到达的失败也会记日志。`testSkillCast` 直接解析 ReleaseSkillResponse(判据收紧:必须收到无错的回包);`testSceneSwitch` 请求改 Call 以快速失败,推送计数等待保留。两处收包回调丢弃 ListSkills / JoinQueue / WatchBattle 上 id = 0 的回包 |
+| battle | `battle_smoke_scenario.go`、`battle_smoke_cross_zone_scenario.go`、`battle_direct_conn.go`(+`_test`) | 大厅 JoinQueue / WatchBattle 直接解析(生成 handler 只打日志),拒绝快速失败,开战 / 观战仍等推送;失败补 Warn 日志(rank 冒烟按先 A 后 B 读结果,B 的拒绝原因靠这行留痕);新增断言 b-watch-battle-id。直连补拉 GetBattleState 经新增的 `battleDirectConn.Call`,done 里先 record(计 stateReplies)再交 onMessage |
+| attribute + pet | `attribute_smoke_scenario.go`、`pet_smoke_scenario.go` | 直接解析响应(面板 / 宝宝列表 / 加点建议),序号游标与来源判断不再需要;allowedTips 只放行业务码,信封拒绝一律报错。属性判定收敛为共享纯函数 `attributePanelOutcome`,信封报错共用 `sceneRequestEnvelopeRejection` |
+| equip | `equip_smoke_scenario.go`(+`_test`)、`equip_forge_smoke_scenario.go`、`equip_forge_topup_scenario.go` | 背包请求 `callDispatch(…, handler.MessageBodyHandler)` 后立刻读 `FeatureResponse(cursor)`,保住 `RecordFeatureBody` 这一唯一判据;信封拒绝直接报错,不再表现为「全零响应」。`attributePanel` 改用共享的 `requestAttributePanel`。`panelAfter` 等的是推送,保留。asset_arrival_prepare 与 mall_arrival 复用会话,接口不变 |
+| features | `features_smoke_scenario.go`(+`_test`)、`features_battle_smoke.go`(+`_test`) | `callVia` 改为接连接(大厅 gc 或直连 `direct.gc`),用 `CallSyncThen` 把回包(含信封)交 `recordFeatureReply`(复用 `HandleFeature*` 的信封处理)后立刻读快照;两条 RecvLoop 回调丢弃本场景请求号上 id = 0 的消息 |
+| travel 诊断 | `travel_smoke_scenario.go`、`sync_smoke_scenario.go`(+`_test`) | 见 §1.2 |
+
+### 9.2 交接 §6 两个既有缺陷
+
+- `sendAndRecvLocal` 补信封错误检查,返回 `*envelopeError`;调用方只 `%w` 包装,除了「空 body 不再被当成功」没有别的行为差异。
+- 握手超时后残留的 RecvOne goroutine:核实发现 `loginAndEnterWithAuth` 的回落链(access_token → http-login → satoken / local)与重定向重登录都会在同一连接上继续握手、成功后还起 RecvLoop,会被残留 goroutine 抢包。修法:超时错误包裹新哨兵 `errLoginStuck`(文案仍含 STUCK),超时后不再在同一连接上回落,由外层换新连接重试;重定向路径超时直接失败。
+
+### 9.3 评审结论
+
+| 组 | 发现 | 处理 |
+|---|---|---|
+| currency + chat | 4 条 low | kFeatureUnavailable 提示按方法区分;共享 helper 不再依赖 travel 私有函数;travel / equip_forge 的过时注释由本会话与 equip 组修掉 |
+| main + login | 3 条 low | 收包回调补丢弃 JoinQueue / WatchBattle 的 id = 0 回包;`prepareBehaviorClient` 之后到达的失败也记日志;重定向路径注释订正 |
+| battle | 1 medium(复核成立)+ 2 low | 失败补 Warn 日志;1003 文案改为「也可能结局未知」;stats 为 nil 时信封补拉回包漏计 MsgRecv,只写注释 |
+| attribute + pet | 2 low | 注释订正;两份相同的信封报错合并 |
+| equip | 5 low | 本会话收尾:合并 equip / attribute 重复的面板判定(`attributePanelOutcome`)与信封报错;改 3 个 yaml 文件头、`logic/handler/player_features_response.go` 与 `scene_bag_client_player_equip_item.go` 的注释、`docs/design/equipment-attributes.md` §10.6;equip 超时提示补「或 gate 没回显请求号」 |
+| features | 1 low | 订正「信封拒绝 = 没到业务逻辑」的注释(1003 可能是结局未知) |
+| travel 诊断 | 1 medium(复核驳倒:基线即如此,本次是改进)+ 1 low | low 已修(信封拒绝时不再打印自相矛盾的 body tip) |
+
+另:会话 6b6cd9 转交的三处旧生成器注释(`logic/handler/match_service_responses.go`、`guild_smoke_scenario.go`、`trade_smoke_scenario.go`)已按新规则订正;match 的三个应答 handler 写在非标准文件名里,生成表不登记,`init()` 补登记仍然需要。
+
+### 9.4 已知限制与后续(不阻塞)
+
+- `prepareBehaviorClient` 只丢弃 ListSkills / JoinQueue / WatchBattle 上 id = 0 的回包;背包 / 属性号上 id = 0 的回包(服务端没回显请求号)仍会被 handler 静默落进 Player,对应 Call 以超时收场,equip 的超时文案已点名这种可能。不能一律丢弃 id = 0:AI 循环等仍用 SendRequest,需要 handler。
+- match 全球权威模式(`GlobalMatch.Enabled`,非 dev / test 档强制)要求 JoinQueue / WatchBattle 带业务幂等键 `request_id` 与地域探测的 `NetworkPlanId`;robot 冒烟迁移前后都没填,只能在 dev 档跑。要支持需另开任务(一次操作一个键,重发共用)。
+- `gameobject.Player.WaitSkillsReady` 已无调用者,`robot/logic/**` 本轮没清理。
+- 退役 REQUEST 方法的旧手写 handler 时,必须同一批先重跑 proto 生成(`message_body_handler.go` 是生成物,随之去掉该条),再编译 robot;只删文件不重生成会编不过(会话 6b6cd9 提醒)。
+- Codex 已生成 `robot/generated/rpc/` 类型化调用桩(如 `rpc.ClientPlayerFriend.AddFriend(c, req, timeout, done)` / `AddFriendSync(ctx, c, req, timeout)`)。现有场景用 `smokeCaller` / `gc.Call`,是否改用调用桩由后续决定,不影响正确性。
+- §12 双版本:本轮只改本仓 robot 冒烟工具及其注释与设计文档,不涉及客户端可见契约;Java 版 game-robot 是否要做同类迁移未核对,按约定不往 Java `PARITY.md` 加行。

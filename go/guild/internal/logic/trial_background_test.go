@@ -320,7 +320,7 @@ func TestOwedRoundMintFailureEndsRoundAndRetriesSameRow(t *testing.T) {
 
 	failed := loop.round(context.Background())
 
-	assert.Equal(t, owedRoundStats{scanned: 1}, failed)
+	assert.Equal(t, owedRoundStats{scanned: 1, failed: 1}, failed)
 	assert.Empty(t, f.store.converted)
 	assert.Len(t, f.store.owedRows, 2)
 

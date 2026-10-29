@@ -404,8 +404,10 @@ func classifyDumpOp(task *db_proto.DBTask) string {
 		return "other"
 	}
 	switch task.Op {
-	case "read", "write":
-		return task.Op
+	case db_proto.DBOp_DB_OP_READ:
+		return "read"
+	case db_proto.DBOp_DB_OP_WRITE:
+		return "write"
 	default:
 		return "other"
 	}
@@ -430,9 +432,9 @@ func auditDumpVerdict(rec dumpRecord, partitionCount int32) (verdict string, exp
 
 // TestParseConsoleConsumerLine 是解析器本身的 hermetic 用例(不需要任何环境)。
 func TestParseConsoleConsumerLine(t *testing.T) {
-	// DBTask{key=1001, op="write", msg_type="player_database"} 的线上字节按 Bytes.toString() 转义后的样子:
-	// 0x08 0xE9 0x07 = field 1 varint 1001;0x1A 0x05 "write" = field 3;'"'(0x22) 0x0F "player_database" = field 4。
-	const writeValue = `\x08\xE9\x07\x1A\x05write"\x0Fplayer_database`
+	// DBTask{key=1001, op=DB_OP_WRITE, msg_type="player_database"} 的线上字节按 Bytes.toString() 转义后的样子:
+	// 0x08 0xE9 0x07 = field 1 varint 1001;0x18 0x02 = field 3 enum WRITE;'"'(0x22) 0x0F "player_database" = field 4。
+	const writeValue = `\x08\xE9\x07\x18\x02"\x0Fplayer_database`
 	line := "Partition:3\tOffset:42\t1001\t" + writeValue
 
 	rec, err := parseConsoleConsumerLine(line)
@@ -449,7 +451,7 @@ func TestParseConsoleConsumerLine(t *testing.T) {
 		t.Fatalf("op = %q, want write", op)
 	}
 
-	readLine := strings.Replace(line, `\x1A\x05write`, `\x1A\x04read`, 1)
+	readLine := strings.Replace(line, `\x18\x02`, `\x18\x01`, 1)
 	rec, err = parseConsoleConsumerLine(readLine)
 	if err != nil {
 		t.Fatalf("parse read line: %v", err)

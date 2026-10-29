@@ -270,7 +270,8 @@ func itDBRelocateManifest(run string, src, dst, generation uint32, tables []stri
 	return m
 }
 
-func itFixtureBackend(t *testing.T) *routeBackend {
+// itFixtureRouteStore 从同一真实 TiDB 夹具装配各角色所需的具体存储，不在角色接口之间转换。
+func itFixtureRouteStore(t *testing.T) *mergeRouteStore {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -279,12 +280,17 @@ func itFixtureBackend(t *testing.T) *routeBackend {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	return &routeBackend{db: st, pub: newRoutePublisher(itRedis(t, itMappingRD), itRouteDurability(t))}
+	return st
+}
+
+func itFixtureBackend(t *testing.T) *routeBackend {
+	t.Helper()
+	return &routeBackend{db: itFixtureRouteStore(t), pub: newRoutePublisher(itRedis(t, itMappingRD), itRouteDurability(t))}
 }
 
 func itFixturePlacements(t *testing.T) sqlRelocatePlacements {
-	rb := itFixtureBackend(t)
-	return sqlRelocatePlacements{store: rb.db, pub: rb.pub}
+	t.Helper()
+	return sqlRelocatePlacements{store: itFixtureRouteStore(t), pub: newRoutePublisher(itRedis(t, itMappingRD), itRouteDurability(t))}
 }
 
 func itClearRoutePlacement(t *testing.T, id uint64) {
@@ -364,6 +370,7 @@ func itReleaseSQLFences(t *testing.T, zones ...uint32) {
 func itAssertRedisDeleteDoesNotReleaseSQLFence(t *testing.T, args ...string) string {
 	t.Helper()
 	rb := itFixtureBackend(t)
+	db := itOpenRouteDB(t)
 	run := ""
 	states := make(map[uint32]routeFenceState, 2)
 	for _, zone := range []uint32{itSrcZone, itDstZone} {
@@ -387,7 +394,7 @@ func itAssertRedisDeleteDoesNotReleaseSQLFence(t *testing.T, args ...string) str
 	}
 	for _, zone := range []uint32{itSrcZone, itDstZone} {
 		state := states[zone]
-		itAssertSQLFence(t, rb.db.db, zone, true, run)
+		itAssertSQLFence(t, db, zone, true, run)
 		if err := rb.pub.setFenceMirror(context.Background(), zone, state.HolderJSON, state.Epoch, state.ExpiresAtMs); err != nil {
 			t.Fatal(err)
 		}

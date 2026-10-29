@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sort"
 	"strings"
 	"testing"
 )
@@ -15,5 +16,26 @@ func TestPlayerFieldIndexKeyMatchesDataService(t *testing.T) {
 	}
 	if !strings.HasPrefix(playerFieldIndexKey(42), "player:{42}:") {
 		t.Fatal("field index key left the player's hash-tag prefix")
+	}
+}
+
+// TestReservedPlayerKeySuffixesMatchSharedRedisslot:镜像表与 go/shared/redisslot 的 TestReservedPlayerKeySuffixes
+// 钉同一份排序后的字面量。漏一个后缀,合服拷 blob 时就会把那把玩家域键(string)当字段拷到目标端。
+func TestReservedPlayerKeySuffixesMatchSharedRedisslot(t *testing.T) {
+	got := make([]string, 0, len(reservedPlayerKeySuffixes))
+	for s := range reservedPlayerKeySuffixes {
+		got = append(got, s)
+	}
+	sort.Strings(got)
+	want := []string{
+		"asset_sql_commit", "channel_switch_cooldown", "handoff", "leave_release_wait", "leave_tomb", "location",
+		"location_revision", "location_revision_floor", "login_generation", "owner_epoch", "save_barrier", "sync_digest",
+	}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("reserved suffixes = %v, want %v", got, want)
+	}
+	if !isReservedPlayerKey(42, "player:{42}:owner_epoch") || isReservedPlayerKey(42, "player:{42}:bag") ||
+		isReservedPlayerKey(42, "player:{43}:owner_epoch") || isReservedPlayerKey(42, "player:{42}:__version") {
+		t.Fatal("isReservedPlayerKey misclassified")
 	}
 }

@@ -5,7 +5,7 @@ ListenOn: 127.0.0.1:60300
 # EnterScene 第一条腿依次做归属查询、Kafka 同步写、失败回滚,然后回 7;服务端先超时的话调用方只拿到 DeadlineExceeded,
 # C++ 把它当"结果未知"的传输失败:交接只记日志,源 scene 仍要冻到 30s 应答看门狗(docs/design/cross-zone-scene-travel.md §12.2)。
 # C++ 每次调用的 deadline 是 bin/etc/base_deploy_config.yaml 的 GrpcClient.CallDeadlineMs.SceneManagerNodeService(10000),
-# 必须 >= 本值 + 2000(上游比下游宽,docs/design/grpc-client-deadline-failure-callback.md §4.2)。本值也是源 scene 还可能
+# 必须 >= 本值 + 2000(上游比下游宽,docs/design/grpc-muduo-transport.md §16.3)。本值也是源 scene 还可能
 # 收到带真实错误码的 EnterScene 应答的最晚时刻(从本服务收到请求起算),须远小于 C++ 的 30s 应答看门狗。
 # <=0 = go-zero 不装超时拦截器(应答时刻无上界)。不要用 MethodTimeouts 只放宽
 # EnterScene:tools/scripts/k8s_deploy.ps1 只镜像标量 Timeout,K8s 上会静默退回全局值。以上由
@@ -43,6 +43,21 @@ Kafka:
 # 调大它必须同步调大文件头的 Timeout(不等式见那里,契约测试守)。
 # 还必须同步 C++ 的 relocate_confirm::kSettleAfterCallDeadline(疏散 / 排空改派的 settle 窗口 = C++ deadline + 本值)。
 KafkaWriteTimeoutSeconds: 5
+
+# 铸造 owner_epoch 之后的落盘确认(docs/design/zone-redis-regression-guard-20261022.md §4.3.2 G3b):铸造 EVAL 与
+# WAITAOF <NumLocal> <NumReplicas> <timeout> 走同一条专用连接,确认之后才推路由 / 重定向;确认不足按推送失败单调回滚、回 7。
+# 实际等待 = min(WaitAOFTimeoutMs, 请求剩余 − KafkaWriteTimeoutSeconds − 0.3s − 0.1s):铸造之后的同步推路由与回滚
+# 必须仍在上面的 Timeout 之内。按现值,归属查询很快时等满 2000ms;归属查询用满 1500ms 时约 1100ms;不足 1ms 时一条都不发、回 3。
+# 取上限 2000 而不是 go/db 的 1500:高可用下 numreplicas=1 要等副本自己 everysec 刷盘,副本只在每秒一次的 cron 或主节点
+# GETACK(每次 WAITAOF 发一次)时上报已刷盘偏移,低负载下平均约 1s、最坏近 2s,1500 会让约 1/8 的铸造回 7(推算,设计 §4.3.3)。
+# 单实例只等本地刷盘(≤ 约 1s),上限调高不影响它。
+# NumLocal 1 要求 appendonly yes(compose 与 K8s 的 redis 都开着);开启时启动先探一次,失败拒启。两项都写 0 = 关闭(启动打 ERROR)。
+# NumReplicas 这里写 0 给本机 compose 单实例;K8s ConfigMap 不镜像它,按共享 Redis 拓扑渲染(单实例 0、高可用 1,
+# tools/scripts/k8s_deploy.ps1 Get-RouteStoreWaitAOFNumReplicas,与 go/db、data_service 同源)。NumLocal / TimeoutMs 原样镜像。
+OwnerEpochMint:
+  WaitAOFNumLocal: 1
+  WaitAOFNumReplicas: 0
+  WaitAOFTimeoutMs: 2000
 
 # 开发旁路:true 时跨节点切场景 / 已有位置的跨区重定向不再要求源 scene 先写出
 # 「已落盘」标记(player:{id}:handoff)。

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -199,8 +200,14 @@ func RunFeaturesSmoke(cfg *config.Config, stats *metrics.Stats) error {
 		if err != nil {
 			return err
 		}
+		// 只认任务逻辑在响应体里的业务拒绝(featureServerError)。信封拒绝(gate 限流 / 1003 等)不能证明任务逻辑
+		// 判过这次重复领取:可能根本没到任务逻辑,1003 也可能是结局未知(RPC0 超时 / 断开);超时同样不知道结局。
+		// 这些都不能证明「服务器拒绝了重复领取」。
 		_, repeatErr := session.call(game.SceneMissionClientPlayerClaimMissionRewardMessageId, request)
 		if _, rejected := repeatErr.(*featureServerError); !rejected {
+			if repeatErr != nil {
+				return fmt.Errorf("duplicate claim was not rejected by mission logic: %w", repeatErr)
+			}
 			return fmt.Errorf("duplicate claim was not explicitly rejected by server")
 		}
 		afterDuplicate, err := session.readBag(options.BagType)
@@ -276,12 +283,18 @@ func openFeatureSmokeSession(cfg *config.Config, stats *metrics.Stats) (*feature
 	session := &featureSmokeSession{gc: gc, player: player, stats: stats, done: make(chan struct{})}
 	go func() {
 		defer close(session.done)
+		// 这里只收推送与不关联请求的消息(id = 0)。本场景经 callVia 发出的请求,回包带请求号,由 GameClient
+		// 交给发起的调用、在那里写 feature 快照,不会到这里。
 		gc.RecvLoop(func(client *pkg.GameClient, message *base.MessageContent) {
 			stats.MsgRecv()
-			if cfg.FeaturesSmoke.BattleConfigID != 0 && handler.HandleFeatureBattleMessage(player, message) {
+			if featureLobbyCallMessage(message.MessageId) {
+				// 同号却 id = 0 说明服务端没回显请求号,那次调用将以超时收场。丢弃而不交 feature 分发:
+				// 写进快照会盖掉调用刚认领、还没来得及读的那一份。
+				smokeDropUncorrelatedReply(client.Account, message)
 				return
 			}
-			if handler.HandleFeatureMessage(player, message) {
+			// 战斗公告(大厅上是开战,以及 scene 结算后的终局)进 feature waiter,见 waitFeatureBattleResponse。
+			if cfg.FeaturesSmoke.BattleConfigID != 0 && handler.HandleFeatureBattleMessage(player, message) {
 				return
 			}
 			if message.MessageId == game.SceneClientPlayerCommonRedirectToGateMessageId {
@@ -408,49 +421,100 @@ func featureAuthCall(gc *pkg.GameClient, stats *metrics.Stats, id uint32, reques
 	}
 }
 
+// featureServerError 是带 tip 的服务端拒绝。callVia 只用它报业务拒绝(快照里响应体的 tip),信封拒绝报包裹
+// *pkg.ServerTipError 的 error —— 重复领奖只认业务拒绝。登录握手(featureAuthCall)与 waitFeatureBattleResponse
+// 不区分两者,一律用它。
 type featureServerError struct{ MessageID, TipID uint32 }
 
 func (e *featureServerError) Error() string {
 	return fmt.Sprintf("server rejected message_id=%d tip=%d", e.MessageID, e.TipID)
 }
 
-func (s *featureSmokeSession) call(id uint32, request proto.Message) (proto.Message, error) {
-	return s.callVia(s.gc.SendRequest, id, request)
+// featureLobbyCallMessage 报告 messageID 是否是本场景经大厅连接用 callVia 发出的请求号:背包两条、任务三条、
+// 活动列表与 JoinQueue。它们的回包带请求号,不会进大厅 RecvLoop 的回调。
+func featureLobbyCallMessage(messageID uint32) bool {
+	switch messageID {
+	case game.SceneBagClientPlayerGetBagMessageId,
+		game.SceneBagClientPlayerSortBagMessageId,
+		game.SceneMissionClientPlayerGetMissionListMessageId,
+		game.SceneMissionClientPlayerAcceptMissionMessageId,
+		game.SceneMissionClientPlayerClaimMissionRewardMessageId,
+		game.SceneActivityClientPlayerGetActivityListMessageId,
+		game.MatchServiceJoinQueueMessageId:
+		return true
+	}
+	return false
 }
 
-// callVia 经 send 发请求,等同消息号、序号新于发送前游标的应答或拒绝。大厅连接与战斗直连
-// (callDirect)共用这套等待:两条连接的应答都记在同一个 Player 的 feature 快照上。
-func (s *featureSmokeSession) callVia(send func(uint32, proto.Message) error, id uint32, request proto.Message) (proto.Message, error) {
+// call 经大厅连接发一条 feature RPC,见 callVia。
+func (s *featureSmokeSession) call(id uint32, request proto.Message) (proto.Message, error) {
+	return s.callVia(s.gc, id, request)
+}
+
+// callVia 经 gc(大厅连接,或 callDirect 给的战斗直连)发一条 feature RPC,只认领本次请求自己的回包
+// (按 MessageContent.id,docs/design/client-rpc-callback.md §6)。回包(应答或信封拒绝)先在 gc 的 RecvLoop 上
+// 交给 recordFeatureReply 写进 Player 的 feature 快照,CallSyncThen 才返回,所以返回后按发送前的游标读快照,
+// 读到的就是本次结果,不必轮询;上一次超时请求的迟到回包由 GameClient 丢弃,不会被当成本次结果。
+//
+// 结果仍以快照为准:响应完整性判据(缺 layout、排队无票据等)只在 logic/handler 的 HandleFeature* 里,这里不复制;
+// 两条连接的应答记在同一个 Player 上,排队与自动战斗的快照另由 waitFeatureBattleResponse 读。
+//
+// gc 的 RecvLoop 必须已经起来;不得在任何 RecvLoop goroutine 上调用(CallSyncThen 的约束)。
+func (s *featureSmokeSession) callVia(gc *pkg.GameClient, id uint32, request proto.Message) (proto.Message, error) {
 	cursor := s.player.FeatureSequence()
-	if err := send(id, request); err != nil {
-		return nil, fmt.Errorf("feature send failed message_id=%d", id)
+	reply, err := gc.CallSyncThen(context.Background(), id, request, featureSmokeTimeout, s.recordFeatureReply)
+	if errors.Is(err, pkg.ErrRPCNotSent) {
+		return nil, fmt.Errorf("feature send failed message_id=%d: %w", id, err)
 	}
 	s.stats.MsgSent()
-	ticker := time.NewTicker(25 * time.Millisecond)
-	defer ticker.Stop()
-	timer := time.NewTimer(featureSmokeTimeout)
-	defer timer.Stop()
-	for {
-		if snapshot, ok := s.player.FeatureResponse(id, cursor); ok {
-			if snapshot.TipID != 0 {
-				return nil, &featureServerError{id, snapshot.TipID}
-			}
-			if snapshot.Failure != "" {
-				return nil, fmt.Errorf("feature response rejected message_id=%d: %s", id, snapshot.Failure)
-			}
-			if snapshot.Response == nil {
-				return nil, fmt.Errorf("missing feature response message_id=%d", id)
-			}
-			return snapshot.Response, nil
-		}
-		select {
-		case <-ticker.C:
-		case <-timer.C:
-			return nil, fmt.Errorf("feature response timed out message_id=%d", id)
-		case <-s.done:
-			return nil, fmt.Errorf("feature connection closed before response message_id=%d", id)
-		}
+	if reply != nil {
+		s.stats.MsgRecv()
 	}
+	return s.featureCallResult(id, cursor, err)
+}
+
+// recordFeatureReply 是 callVia 的 onReply,跑在回包所在连接的 RecvLoop 上,不得阻塞。它把本次回包交给 feature 快照的
+// 权威分发函数:排队 / 自动战斗归 HandleFeatureBattleMessage,大厅场景 RPC 归 HandleFeatureMessage,两者认领的消息号
+// 不相交。信封拒绝也交:两个函数都先看信封,记成带 tip 的失败快照,不会把空 body 解成全零响应。
+func (s *featureSmokeSession) recordFeatureReply(reply *base.MessageContent, _ error) {
+	if handler.HandleFeatureBattleMessage(s.player, reply) {
+		return
+	}
+	handler.HandleFeatureMessage(s.player, reply)
+}
+
+// featureCallResult 把 callVia 的结局(err 的形状同 pkg.GameClient.CallSyncThen)翻译成返回值,cursor 是发送前的
+// FeatureSequence。拒绝分三种报:信封拒绝(gate / 路由服 / 战斗直连面在信封里给了 tip;通常请求没执行,但 1003
+// 也可能表示结局未知 —— RPC0 或 gRPC 调用超时 / 断开后回的,业务可能已执行,不能当作没发生而重试)返回包裹
+// *pkg.ServerTipError 的 error;业务拒绝(响应体 tip)返回 *featureServerError;快照记下的其余失败(响应残缺、
+// 解码失败)返回普通 error。没有回包的结局(超时 / 连接被关)分开报,error 包裹 pkg 的哨兵。
+func (s *featureSmokeSession) featureCallResult(id uint32, cursor uint64, err error) (proto.Message, error) {
+	var envelope *pkg.ServerTipError
+	switch {
+	case errors.As(err, &envelope):
+		return nil, fmt.Errorf("feature request envelope rejected message_id=%d: %w", id, err)
+	case errors.Is(err, pkg.ErrRPCTimeout):
+		return nil, fmt.Errorf("feature response timed out message_id=%d: %w", id, err)
+	case errors.Is(err, pkg.ErrRPCDisconnected):
+		return nil, fmt.Errorf("feature connection closed before response message_id=%d: %w", id, err)
+	case err != nil:
+		return nil, fmt.Errorf("feature call failed message_id=%d: %w", id, err)
+	}
+	snapshot, ok := s.player.FeatureResponse(id, cursor)
+	if !ok {
+		// 回包到了却没有新快照:这个消息号不归 HandleFeature* 认领。不能拿游标之前的旧快照充当本次结果。
+		return nil, fmt.Errorf("feature response was not recorded message_id=%d", id)
+	}
+	if snapshot.TipID != 0 {
+		return nil, &featureServerError{id, snapshot.TipID}
+	}
+	if snapshot.Failure != "" {
+		return nil, fmt.Errorf("feature response rejected message_id=%d: %s", id, snapshot.Failure)
+	}
+	if snapshot.Response == nil {
+		return nil, fmt.Errorf("missing feature response message_id=%d", id)
+	}
+	return snapshot.Response, nil
 }
 
 func (s *featureSmokeSession) readBag(bagType uint32) (*scene.BagInfo, error) {

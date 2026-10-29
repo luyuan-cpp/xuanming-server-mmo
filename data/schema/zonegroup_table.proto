@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+// ZoneGroup 表的权威 schema。源表 data/ZoneGroup.xlsx。
+// 大区 = 若干 zone 号段的分组，是匹配范围树的中间层（zone → 大区 → 全服，
+// docs/design/global-match-hierarchical-pools.md §3）。
+// 只描述玩法分组；数据存放在哪个存储集群不看这张表（data_service 的 Regions 是存储布局，二者独立）。
+// match 只在入队时用它给票据写入大区号，排队中的票不受改表影响。
+// 校验（match 启动时，失败拒启）：group_id 与 zone_begin 非 0、zone_begin ≤ zone_end、任意两行号段不重叠。
+// 没有落在任何号段里的 zone 视为未分大区：放宽时从 zone 层直接到全服。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message ZoneGroupTable {
+  option (cfg_sheet)       = "ZoneGroup";
+  option (cfg_source_file) = "ZoneGroup.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 行号，只作主键。同一个大区可以占多行（合服或扩容后号段不连续）。
+  uint32 id = 1;
+  // 大区号，非 0
+  uint32 group_id = 2;
+  // 号段起点（含），非 0
+  uint32 zone_begin = 3;
+  // 号段终点（含），不小于起点
+  uint32 zone_end = 4;
+  // 大区名，运维备注，不进产物（不进产物的列字段号必须 ≥ 9000，导表器校验）
+  string name = 9001 [(cfg_owner) = "designer"];
+}

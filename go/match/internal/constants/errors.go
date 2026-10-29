@@ -83,4 +83,7 @@ const (
 	// (NotifyBattleAssigned)要经 gate 回落下发(turn-based §22 D68 大厅公告),
 	// 不在线就没有可路由的会话;观战首帧由直连握手快照下发(D69),不依赖大厅会话。
 	ErrSpectateOffline = uint32(table.MatchError_kMatchSpectateOffline)
+	// ErrSpectateFull:该场直连观众席位已满。battle → match 与 match → 客户端共用这一个码
+	// (容量满是规则拒绝,不算故障);随机观战遇到满员也不换场,客户端换一场须用新的 request_id。
+	ErrSpectateFull = uint32(table.MatchError_kMatchSpectateFull)
 )

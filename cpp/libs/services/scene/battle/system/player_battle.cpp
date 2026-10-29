@@ -10,9 +10,12 @@
 #include <hiredis/hiredis.h>
 
 #include <algorithm>
+#include <chrono>
 #include <exception>
 #include <limits>
 #include <map>
+#include <set>
+#include <google/protobuf/message.h>
 #include <string>
 #include <utility>
 #include <vector>
@@ -33,6 +36,7 @@
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
+#include "modules/gain_block/gain_block_service.h"
 #include "modules/currency/system/currency_system.h"
 // tlsGuidSegmentRegistry:掉落入包前预检 item 号段余量(审计 cpp-economy#0)。
 #include "modules/id_segment/guid_segment_registry.h"
@@ -41,13 +45,14 @@
 // PlayerTravelHandoffComp:交接一挂上 SavePlayerToRedis 就硬性跳过写盘,此刻应用等于落不了盘。
 #include "player/comp/player_ownership_comp.h"
 // PlayerLastPersistedSnapshotComp:上一次**确实写进 Redis** 的那份 PlayerAllData。
-// 判「可不可以销账」只认它,不另建已持久化水位(与通用资产通道同一条纪律)。
+// 它仅是SQL确认的候选；销账还须同E/q的双SQL ACK，不另建可漂移的持久化水位。
 #include "player/comp/last_persisted_snapshot_comp.h"
 #include "player/system/player_lifecycle.h"  // IsCrossZoneFrozen / SavePlayerToRedis / IsSceneChangeBusy
 #include "player/system/role_admission_system.h"
 #include "player/system/player_mission.h"
 #include "core/system/redis.h"  // tlsRedisSystem:判断该玩家是否还有未落地的存盘
 #include "player/system/player_pet.h"
+#include "player/system/player_level_rules.h"  // CappedLevel:快照等级按生效等级
 #include "modules/condition/condition_type.h"
 #include "modules/mission/mission_events.h"
 #include "player/system/player_revive.h"
@@ -57,6 +62,7 @@
 #include "player/system/player_landing.h"
 // OnBattleFreezeCleared:因战斗延后的收件箱处置立即重查(player-inbox-service.md §7.3 第 4 条,C1)。
 #include "player/system/player_inbox_system.h"
+#include "player/system/player_inbox_registry.h"
 
 // 时间->回合换算与回合常量的权威定义在回合引擎库(scene 可以依赖 battle 常量,反向禁止)。
 #include "services/battle/constants/turn_battle_constants.h"
@@ -69,6 +75,8 @@
 
 #include "table/code/buff_table.h"
 #include "table/code/item_table.h"
+#include "table/code/pet_table.h"
+#include "table/code/attributepool_table.h"
 #include "table/code/skill_table.h"
 #include "table/proto/tip/asset_error_tip.pb.h"  // kAssetBlocked:金币入账的终局拒绝(审计 cpp-economy#1)
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -90,6 +98,11 @@
 #include "proto/scene/scene.pb.h"                                     // PrepareBattle* / CancelBattlePrepare*(重生成后新增消息)
 #include "proto/battle/player_battle.pb.h"                            // BattleEndS2C / BattleReconnectS2C
 #include "rpc/service_metadata/player_battle_service_metadata.h"      // BattleClientPlayerNotify*MessageId
+
+// Windows SDK 的同名宏会改写 protobuf 反射方法名，此处隔离宏污染。
+#ifdef GetMessage
+#undef GetMessage
+#endif
 
 namespace
 {
@@ -372,6 +385,9 @@ namespace
 	// **只能经 AckSettlementPending 调用**,那里决定此刻能不能销账。
 	void ClearPendingSettlementIfMatch(const uint64_t playerId, const uint64_t battleId)
 	{
+		const auto originalPlayer = tlsEcs.GetPlayer(playerId);
+		const auto originalIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+		const auto originalIdentityBytes = originalIdentity ? originalIdentity->SerializeAsString() : std::string{};
 		if (!RedisReady())
 		{
 			LOG_WARN << "[PlayerBattle] Settlement acknowledgment skipped(Redis disconnected), player_id=" << playerId
@@ -379,8 +395,8 @@ namespace
 			return;
 		}
 		tlsRedis.GetZoneRedis()->command(
-			[playerId, battleId](hiredis::Hiredis*, redisReply* reply) {
-				if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
+			[playerId, battleId, originalPlayer = originalPlayer, originalIdentityBytes](hiredis::Hiredis*, redisReply* reply) {
+				if (reply == nullptr || reply->type != REDIS_REPLY_INTEGER || reply->integer < 0 || reply->integer > 3)
 				{
 					LOG_ERROR << "[PlayerBattle] Settlement acknowledgment EVAL failed, player_id=" << playerId
 							  << " battle_id=" << battleId;
@@ -391,7 +407,13 @@ namespace
 				// 「销账其实没落地 + 重启」退回重复发奖(§9.3 的复制窗口)。
 				const bool lockReleased = reply->type == REDIS_REPLY_INTEGER && (reply->integer & 2) != 0;
 				const auto owner = tlsEcs.GetPlayer(playerId);
-				if (!tlsEcs.actorRegistry.valid(owner) || tlsEcs.GetPlayerId(owner) != playerId) return;
+				if (!tlsEcs.actorRegistry.valid(owner)) return;
+				const auto currentIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+				const auto* admission = tlsEcs.actorRegistry.try_get<PlayerRoleAdmissionComp>(owner);
+				if (owner != originalPlayer || !tlsEcs.actorRegistry.valid(owner) || tlsEcs.GetPlayerId(owner) != playerId
+					|| originalIdentityBytes.empty() || !currentIdentity || currentIdentity->SerializeAsString() != originalIdentityBytes
+					|| admission == nullptr || admission->generation != currentIdentity->generation()
+					|| admission->ownerRevision != currentIdentity->owner_revision()) return;
 				if (auto* ledger = tlsEcs.actorRegistry.try_get<BattleSettlementLedgerComp>(owner);
 					ledger != nullptr && battle_settlement::ForgetApplied(*ledger, battleId))
 				{
@@ -443,15 +465,43 @@ namespace
 		return ledger;
 	}
 
-	// 这一局的账本条目是否**确实已经在盘上**。只看 PlayerLastPersistedSnapshotComp —— 它是
-	// HandlePlayerAsyncSaved 回调里写下的、刚写进 Redis 的整份 PlayerAllData。
-	// 账本与背包/金币在同一份 blob 里,所以「条目在这份快照里」等价于「这一局的资产也在盘上」。
-	bool IsSettlementDurable(entt::entity player, const uint64_t battleId)
+	// 仅证明该局条目在Redis成功快照中；不可代替两张玩家SQL行的提交确认。
+	bool SnapshotContainsSettlement(entt::entity player, const uint64_t battleId)
 	{
 		const auto* snapshot = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
 		if (snapshot == nullptr || !snapshot->HasSnapshot()) return false;
 		return battle_settlement::HasApplied(
 			snapshot->snapshot->player_database_data().settlement_ledger(), battleId);
+	}
+
+	// 只在销账写入口延迟创建的按需状态，不持久化、不持连接；每实体同一时刻最多一个只读probe。
+	struct PendingSettlementSqlProbe
+	{
+		uint64_t requestId{0};
+		std::chrono::steady_clock::time_point started{};
+	};
+	thread_local uint64_t settlementSqlProbeSeq = 0;
+
+	void RequestSqlConfirmedSettlementAck(entt::entity player, uint64_t playerId, uint64_t battleId)
+	{
+		const auto now = std::chrono::steady_clock::now();
+		auto &probe = tlsEcs.actorRegistry.get_or_emplace<PendingSettlementSqlProbe>(player);
+		if (probe.requestId != 0 && now - probe.started < std::chrono::seconds(10)) return;
+		const auto *snapshot = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
+		if (snapshot == nullptr || !snapshot->HasSnapshot() || settlementSqlProbeSeq == UINT64_MAX) return;
+		const auto requestId = ++settlementSqlProbeSeq;
+		probe.requestId = requestId; probe.started = now;
+		const bool sent = RoleAdmissionSystem::ConfirmSnapshotSqlCommit(player, *snapshot->snapshot,
+			[player = player, playerId, battleId, requestId](bool committed) {
+				if (!tlsEcs.actorRegistry.valid(player) || tlsEcs.GetPlayer(playerId) != player
+					|| tlsEcs.GetPlayerId(player) != playerId) return;
+				auto *current = tlsEcs.actorRegistry.try_get<PendingSettlementSqlProbe>(player);
+				if (current == nullptr || current->requestId != requestId) return;
+				current->requestId = 0;
+				if (committed && SnapshotContainsSettlement(player, battleId))
+					ClearPendingSettlementIfMatch(playerId, battleId);
+			});
+		if (!sent) probe.requestId = 0;
 	}
 
 	// 整笔结算此刻能不能应用。**必须是 BagService / CurrencySystem 内部闸的超集**:
@@ -489,7 +539,7 @@ namespace
 		if (!gPersistFn(player))
 		{
 			// false 只表示没有排入新写:要么盘上已是这一份(快路径),要么存盘被拒(缺身份 / 持久组件、存盘序号耗尽,保存入口已打 ERROR)。
-			// 交接 / 退出在途已被上面 IsSettlementApplicable 挡掉,走不到这里。哪种都不能当成「已落盘」,durable 一律由 IsSettlementDurable 按字节判。
+			// 交接 / 退出在途已被上面 IsSettlementApplicable 挡掉,走不到这里。哪种都不能当成「已落盘」,durable 必须由同快照双SQL ACK确认。
 			LOG_DEBUG << "[PlayerBattle] Settlement save not queued(unchanged or refused), player_id="
 					  << playerId << " battle_id=" << battleId;
 			return;
@@ -498,7 +548,7 @@ namespace
 		// hiredis 连接(core/system/redis.cpp:playerRedis 由它构造),回复按发送顺序处理;
 		// 存盘成功回调(HandlePlayerAsyncSaved)同步更新 PlayerLastPersistedSnapshotComp。
 		// 所以 PING 的回调里,刚才那笔存盘若已直接发出,就必然已落地、快照已是新的 ——
-		// 当场判落盘、销账放锁,玩家排下一场的等待只剩一次往返。
+		// PING只触发再次核快照；仍须另读同E/q双SQL ACK才能销账放锁。
 		// 存盘若被排在同玩家另一笔在途存盘之后(或进了失败重试),PING 会先回来,这次销账照常延后,
 		// 由发件箱 10s 重投 / reaper 30s / 登录补销账接手,正确性不依赖快路径。
 		if (!RedisReady()) return;
@@ -513,7 +563,7 @@ namespace
 	//
 	// 规则按优先级只有三条:
 	//  1. 本节点有这名玩家的活实体,且账本里有这一局 = 已应用:
-	//     落盘快照里也有 -> 销账 + 放锁;还没有 -> 什么都不删,必要时再压一次存盘,
+	//     Redis快照中有且同E/q双SQL ACK确认 -> 销账 + 放锁;否则保留，必要时请求存盘,
 	//     交给快路径(PING)/ 发件箱 10s 重投 / reaper 30s / 登录补销账。
 	//  2. 本节点有活实体、账本里没有 = 本实体没应用过这一局 -> 按判废/重复投递处理,立即销账
 	//     (与改造前行为一致)。锁在结算应用后一直留到落盘,所以重投窗口内「锁不在」只可能是
@@ -552,9 +602,13 @@ namespace
 			ClearPendingSettlementIfMatch(playerId, battleId);
 			return;
 		}
-		if (IsSettlementDurable(player, battleId))
+		const auto *candidate = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
+		const auto *owner = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player);
+		if (candidate != nullptr && owner != nullptr && owner->epoch != 0
+			&& candidate->committed_owner_epoch == owner->epoch && candidate->committed_save_seq != 0
+			&& SnapshotContainsSettlement(player, battleId))
 		{
-			ClearPendingSettlementIfMatch(playerId, battleId);
+			RequestSqlConfirmedSettlementAck(player, playerId, battleId);
 			return;
 		}
 		// 已有一笔未落地的存盘时不再压:存盘队列里排着的永远是最新的一份(redis_client.h 的约定),
@@ -1046,8 +1100,8 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 	snapshot.set_gender(profile.gender());
 	snapshot.set_class_id(registry.get<PlayerUint32Comp>(player).class_());
 
-	const uint32_t level = registry.get<LevelComp>(player).level();
-	snapshot.set_level(level > 0 ? level : 1);
+	// 生效等级(超上限的存储等级按上限,0 按 1):引擎的伤害 / 回血 / 怪物参考等级都读快照等级
+	snapshot.set_level(playerlevel::CappedLevel(registry.get<LevelComp>(player).level()));
 
 	*snapshot.mutable_base_attributes() = *baseAttributes;
 	if (baseAttributes->speed() == 0)
@@ -1155,7 +1209,9 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 	const auto& bags = registry.get<PlayerBagsComp>(player);
 	std::map<uint32_t, uint64_t> battleItems;  // 有序:同一背包每次出的副本顺序稳定
 	bags.bags[kInventory].ForEachItem([&battleItems](Guid, const ItemComp& item) {
-		if (!IsBattleUsableItem(item.config_id()))
+		// 副本只计结算时扣得出的普通单位(ItemStore::IsCountableByConfig,与 RemoveItemsClamped 同口径):
+		// 带更新版本字段的药结算扣不到,计进副本就是白用(混版本设计 §4.4 第 6 批)。
+		if (!IsBattleUsableItem(item.config_id()) || !ItemStore::IsCountableByConfig(item))
 		{
 			return;
 		}
@@ -1772,8 +1828,188 @@ void PlayerBattleSystem::RestoreBattleFreezeOnLogin(entt::entity player, const u
 	}
 }
 
+namespace {
+// 完整终局来源里的未知嵌套字段不能被旧执行器忽略后记成整笔APPLIED。
+bool HasNestedUnknownFields(const google::protobuf::Message& message)
+{
+    const auto* reflection = message.GetReflection();
+    if (!reflection->GetUnknownFields(message).empty()) return true;
+    std::vector<const google::protobuf::FieldDescriptor*> fields;
+    reflection->ListFields(message, &fields);
+    for (const auto* field : fields) {
+        if (field->cpp_type() != google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE) continue;
+        if (field->is_repeated()) {
+            for (int i = 0; i < reflection->FieldSize(message, field); ++i)
+                if (HasNestedUnknownFields(reflection->GetRepeatedMessage(message, field, i))) return true;
+        } else if (HasNestedUnknownFields(reflection->GetMessage(message, field))) return true;
+    }
+    return false;
+}
+
+bool CollectExactSettlementItems(const ::BattleSettlementData& settlement,
+                                ItemCountMap& consumed, ItemCountMap& gained)
+{
+    const auto collect = [](const auto& entries, ItemCountMap& target) {
+        for (const auto& item : entries) {
+            if (item.item_table_id() == 0 || item.count() == 0 ||
+                item.count() > std::numeric_limits<uint32_t>::max()) return false;
+            auto& total = target[item.item_table_id()];
+            if (item.count() > std::numeric_limits<uint32_t>::max() - total) return false;
+            total += static_cast<uint32_t>(item.count());
+        }
+        return true;
+    };
+    // 可战斗使用性已在原开局快照审定；终局不按热更后的标记重判这份已提交消耗事实。
+    return collect(settlement.items_consumed(), consumed) && collect(settlement.items_gained(), gained);
+}
+
+using SettlementCurrencyGains = std::map<CurrencyType, uint64_t>;
+
+// 新集合优先；只有集合为空才解释旧金币字段。全笔币种/金额/去重校验不产生副作用。
+bool CollectSettlementCurrencyGains(const ::BattleSettlementData& settlement, SettlementCurrencyGains& gains)
+{
+    if (settlement.currency_gains_size() > 0) {
+        for (const auto& gain : settlement.currency_gains()) {
+            if (gain.currency_type() >= static_cast<uint32_t>(kCurrencyMax) ||
+                gain.amount() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) ||
+                !gains.emplace(static_cast<CurrencyType>(gain.currency_type()), gain.amount()).second) return false;
+        }
+    } else if (settlement.gold_gain() > 0) {
+        if (settlement.gold_gain() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) return false;
+        gains.emplace(kCurrencyGold, settlement.gold_gain());
+    }
+    return true;
+}
+
+// Inbox整批提交前按每个币种复核净入账额；未知债务和封禁继续保留原件，不部分提交。
+bool CanCreditWholeBattleCurrency(entt::entity player, CurrencyType type, uint64_t amount)
+{
+    if (amount == 0) return true;
+    const auto* balances = tlsEcs.actorRegistry.try_get<CurrencyComp>(player);
+    const auto* currency = tlsEcs.actorRegistry.try_get<PlayerCurrencyComp>(player);
+    if (!balances || !currency || amount > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) ||
+        GainBlockService::IsGainBlocked(GainBlockService::GainType::kCurrency, static_cast<uint32_t>(type)) ||
+        CurrencySystem::IsCurrencyBlocked(player, type)) return false;
+    uint64_t net = amount;
+    if (const auto it = currency->debts.find(static_cast<uint32_t>(type)); it != currency->debts.end()) {
+        const auto& debt = it->second;
+        // 只认更新版本加的欠款字段，已退役字段的残留字节不算版本错位。
+        if (CurrencySystem::DebtCarriesUnknownFields(player, type)) return false;
+        if (!debt.frozen && (debt.expiresAt == 0 || TimeSystem::NowSecondsUTC() < debt.expiresAt))
+            net -= std::min(net, debt.Remaining());
+    }
+    const auto index = static_cast<int>(type);
+    const uint64_t balance = index < balances->values_size() ? balances->values(index) : 0;
+    return net <= std::numeric_limits<uint64_t>::max() - balance;
+}
+
+// 数量副本没有GUID；只从当前完整实例候选中扣已知普通单位，未知schema/实例不能当普通数量。
+bool HasUnsupportedInboxConsumption(entt::entity player, const ::BattleSettlementData& settlement)
+{
+    std::set<uint32_t> configs;
+    for (const auto& entry : settlement.items_consumed()) {
+        const auto* row = ItemTableManager::Instance().FindByIdSilent(entry.item_table_id()).first;
+        if (!row || HasNestedUnknownFields(*row)) return true;
+        configs.insert(entry.item_table_id());
+    }
+    const auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(player);
+    if (!bags) return false; // 缺持久组件仍由整笔加载闸拒绝，不能解释为零库存。
+    bool unsupported = false;
+    bags->bags[kInventory].ForEachItem([&](Guid guid, const ItemComp& item) {
+        if (!configs.contains(item.config_id())) return;
+        if (guid == 0 || item.item_id() != guid || item.size() == 0 || !ItemStore::IsCountableByConfig(item)
+            || HasNestedUnknownFields(item)) unsupported = true;
+    });
+    return unsupported;
+}
+
+bool CollectApplicableInboxPets(entt::entity player, const ::BattleSettlementData& settlement,
+                               std::set<uint64_t>& applicable, std::map<std::string, uint32_t>& skipped)
+{
+    if (settlement.pets_size() == 0) return true;
+    const auto* owned = tlsEcs.actorRegistry.try_get<PlayerPetComp>(player);
+    if (!owned || HasNestedUnknownFields(*owned)) return false;
+    std::set<uint64_t> ownedIds, effects;
+    for (const auto& pet : owned->pets())
+        if (pet.pet_id() == 0 || !ownedIds.insert(pet.pet_id()).second) return false;
+    bool hasPool = false, unknownPool = false;
+    for (const auto& pool : AttributePoolTableManager::Instance().FindAll().data())
+        if (pool.owner_type() == PetSystem::kPoolOwnerPet) {
+            hasPool = true; unknownPool = HasNestedUnknownFields(pool); break;
+        }
+    for (const auto& effect : settlement.pets()) {
+        if (effect.pet_id() == 0 || !effects.insert(effect.pet_id()).second) return false;
+        const auto pet = std::find_if(owned->pets().begin(), owned->pets().end(), [&effect](const auto& entry) {
+            return entry.pet_id() == effect.pet_id();
+        });
+        if (pet == owned->pets().end()) { ++skipped["pet_no_longer_owned"]; continue; }
+        const auto* row = PetTableManager::Instance().FindByIdSilent(pet->pet_table_id()).first;
+        if (!row) { ++skipped["pet_table_missing"]; continue; }
+        if (HasNestedUnknownFields(*row)) return false;
+        if (!hasPool) { ++skipped["pet_pool_missing"]; continue; }
+        if (unknownPool) return false;
+        applicable.insert(effect.pet_id());
+    }
+    return true;
+}
+
+bool HasCompleteBattleEffectInputs(entt::entity player, const ::BattleSettlementData& settlement,
+                                  const SettlementCurrencyGains& currencyGains)
+{
+    if (!tlsEcs.actorRegistry.all_of<BaseAttributesComp, DerivedAttributesComp, CurrencyComp, PlayerCurrencyComp>(player))
+        return false;
+    if (const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
+        current != nullptr && current->battle_id() != settlement.battle_id()) return false;
+    const bool kills = std::any_of(settlement.defeated_monsters().begin(), settlement.defeated_monsters().end(),
+        [](const auto& d) { return d.monster_config_id() != 0 && d.count() > 0; });
+    if (kills) {
+        const auto* missions = tlsEcs.actorRegistry.try_get<MissionsContainerComp>(player);
+        if (!missions || !missions->Get(MissionListComp::kPlayerMission)) return false;
+    }
+    std::set<uint64_t> applicable;
+    std::map<std::string, uint32_t> skipped;
+    if (!CollectApplicableInboxPets(player, settlement, applicable, skipped)) return false;
+    return std::all_of(currencyGains.begin(), currencyGains.end(), [player](const auto& gain) {
+        return CanCreditWholeBattleCurrency(player, gain.first, gain.second);
+    });
+}
+} // namespace
+
+PlayerInboxExecResult PlayerBattleSystem::ApplyInboxSettlement(entt::entity player, const std::string& payload)
+{
+    ::BattleSettlementData settlement;
+    if (payload.size() > 16384 || !settlement.ParseFromString(payload) || HasNestedUnknownFields(settlement) ||
+        !::eBattleOutcome_IsValid(settlement.outcome()) || settlement.outcome() == ::BATTLE_OUTCOME_ONGOING)
+        return {PlayerInboxExecKind::kVersionSkew, 0};
+    if (!tlsEcs.actorRegistry.valid(player)) return {PlayerInboxExecKind::kDefer, 0};
+    if (HasUnsupportedInboxConsumption(player, settlement)) return {PlayerInboxExecKind::kVersionSkew, 0};
+    SettlementCurrencyGains currencyGains;
+    if (!CollectSettlementCurrencyGains(settlement, currencyGains)) return {PlayerInboxExecKind::kDefer, 0};
+    for (const auto& [type, amount] : currencyGains)
+        if (amount > 0 && CurrencySystem::DebtCarriesUnknownFields(player, type))
+            return {PlayerInboxExecKind::kVersionSkew, 0};
+    if (!ApplySettlementToEntity(player, settlement, nullptr, true)) return {PlayerInboxExecKind::kDefer, 0};
+    return {PlayerInboxExecKind::kApplied, 0};
+}
+
+bool PlayerBattleSystem::CompleteInboxSettlement(entt::entity player, const std::string& payload)
+{
+    ::BattleSettlementData settlement;
+    if (!tlsEcs.actorRegistry.valid(player) || !settlement.ParseFromString(payload) ||
+        HasNestedUnknownFields(settlement) || settlement.player_id() != tlsEcs.GetPlayerId(player) ||
+        settlement.battle_id() == 0) return false;
+    // SQL确认之后才公开终局/解冻；旧局不能修改已经开始的新局HP或摘新局组件。
+    const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
+    if (current == nullptr || current->battle_id() == settlement.battle_id()) {
+        DeleteBattleLockIfMatch(settlement.player_id(), settlement.battle_id());
+        if (current != nullptr) RemoveInBattleComp(player);
+        PushBattleEndToPlayer(player, settlement);
+    }
+    return true;
+}
+
 bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::BattleSettlementData& settlement,
-                                                bool* alreadyAppliedOut)
+                                                bool* alreadyAppliedOut, bool fromInbox)
 {
     if (alreadyAppliedOut != nullptr) *alreadyAppliedOut = false;
     if (!tlsEcs.actorRegistry.valid(player)) return false;
@@ -1788,16 +2024,16 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 
     // 持久账本先判:它是**权威**的「这一局是否已经应用过」,唯一能跨进程重启与实体重建
     // 生效的一层(thread_local 应用缓存重启即空)。命中 = 奖已经发过,绝不能再发一次。
-    // 但这**不**代表可以销账 —— 能不能销账由 IsSettlementDurable 按落盘字节单独判,
+    // 但这**不**代表可以销账 —— 能不能销账须同快照、同归属的双SQL ACK单独确认,
     // 调用方经 AckSettlementPending 决定。两条判据分开是本次改造的核心。
     // 账本缺失在任何副作用之前就拒绝(校验前置):既判不了这一局应用过没有,应用完也无处登记,
     // 只能整笔不应用、保留 pending 等重投(FindSettlementLedger 的说明)。
-    const auto* ledger = FindSettlementLedger(player, playerId, battleId, "apply");
-    if (ledger == nullptr)
+    const auto* ledger = fromInbox ? nullptr : FindSettlementLedger(player, playerId, battleId, "apply");
+    if (!fromInbox && ledger == nullptr)
     {
         return false;
     }
-    if (battle_settlement::HasApplied(*ledger, battleId))
+    if (!fromInbox && battle_settlement::HasApplied(*ledger, battleId))
     {
         LOG_INFO << "[PlayerBattle] Settlement already in persistent ledger;duplicate application skipped: player_id=" << playerId
                  << " battle_id=" << battleId;
@@ -1831,6 +2067,32 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         return false;
     }
 
+    SettlementCurrencyGains currencyGains;
+    if (!CollectSettlementCurrencyGains(settlement, currencyGains)) {
+        LOG_ERROR << "[PlayerBattle] Invalid currency settlement: player_id=" << playerId
+                  << " battle_id=" << battleId;
+        return false;
+    }
+
+    const auto inboxIdentity = fromInbox ? RoleAdmissionSystem::ConfirmedIdentity(playerId) : std::nullopt;
+    if (fromInbox && !inboxIdentity) return false;
+    const auto originalIdentity = inboxIdentity ? inboxIdentity->SerializeAsString() : std::string{};
+    ItemCountMap inboxConsumed, inboxGained, actualConsumption;
+    std::set<uint64_t> inboxPets;
+    std::map<std::string, uint32_t> skippedPets;
+    std::string originalPets;
+    if (fromInbox && (!HasCompleteBattleEffectInputs(player, settlement, currencyGains) ||
+        !CollectExactSettlementItems(settlement, inboxConsumed, inboxGained))) return false;
+    if (fromInbox) {
+        if (!CollectApplicableInboxPets(player, settlement, inboxPets, skippedPets)) return false;
+        if (settlement.pets_size() > 0) originalPets = tlsEcs.actorRegistry.get<PlayerPetComp>(player).SerializeAsString();
+        if (!inboxConsumed.empty()) {
+            const auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
+            for (const auto& [config, count] : inboxConsumed)
+                actualConsumption[config] = static_cast<uint32_t>(std::min<uint64_t>(count, inventory.GetTotalItemCount(config)));
+        }
+    }
+
     // 掉落要铸的新实例身份必须先有着落(审计 cpp-economy#0)。号段暂缺是会自己消失的条件,
     // 与跨区冻结同类:整笔延后、零副作用,保留 pending 等重投。不能等到入包失败才发现 ——
     // 那时金币已入账,只能记 ERROR 吞掉掉落。
@@ -1844,15 +2106,14 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     // 归属围栏拒绝后废黜),资产也随之没了。以账本为准先清掉它再应用:原先是「本轮不应用、等下一次投递」,
     // 可登录钩子只投这一次、发件箱可能早已放弃,下一局还会覆盖单槽 pending,这一局就丢了
     // (第二轮评审 w0zw729x1 #2)。Forget 不动在途项,重入保护不受影响。
-    if (gSettlementApplications.Forget(playerId, battleId))
+    if (!fromInbox && gSettlementApplications.Forget(playerId, battleId))
     {
         LOG_ERROR << "[PlayerBattle] metric=battle_settlement_cache_ledger_mismatch player_id=" << playerId
                   << " battle_id=" << battleId << ",cache reports applied but persistent ledger has no record;reapply according to ledger";
     }
 
     using ApplicationCache = battle_settlement::SettlementApplicationCache;
-    const auto status = gSettlementApplications.Apply(playerId, battleId,
-        ApplicationCache::Clock::now(), [&]() -> bool {
+    const auto apply = [&]() -> bool {
 		auto* baseAttributes = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(player);
 		if (baseAttributes == nullptr)
 		{
@@ -1861,85 +2122,85 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 			return false;
 		}
 
-	    // 新集合是整笔货币奖励的权威来源；只有旧原件没有新集合时才回退到 gold_gain，
-	    // 两者不能相加。全部参数、必需组件和余额上界必须在首笔入账之前校验，否则
-	    // 后一币种失败后重投会把前面已成功的币种再发一次。重复币种拒绝，避免同币多笔
-	    // 分别通过余额检查后累计溢出。零额条目合法，但仍参与币种与重复校验。
-	    std::map<CurrencyType, uint64_t> currencyGains;
-	    if (settlement.currency_gains_size() > 0)
-	    {
-	        for (const auto& gain : settlement.currency_gains())
-	        {
-	            if (gain.currency_type() >= static_cast<uint32_t>(kCurrencyMax) ||
-	                gain.amount() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) ||
-	                !currencyGains.emplace(static_cast<CurrencyType>(gain.currency_type()), gain.amount()).second)
-	            {
-	                LOG_ERROR << "[PlayerBattle] Invalid currency settlement: player_id=" << playerId
-	                          << " battle_id=" << battleId << " currency_type=" << gain.currency_type()
-	                          << " amount=" << gain.amount();
-	                return false;
-	            }
-	        }
-	    }
-	    else if (settlement.gold_gain() > 0)
-	    {
-	        if (settlement.gold_gain() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
-	        {
-	            LOG_ERROR << "[PlayerBattle] Currency settlement exceeds credit range: player_id=" << playerId
-	                      << " battle_id=" << battleId;
-	            return false;
-	        }
-	        currencyGains.emplace(kCurrencyGold, settlement.gold_gain());
-	    }
-	    const bool grantsCurrency = std::any_of(currencyGains.begin(), currencyGains.end(),
-	        [](const auto& gain) { return gain.second > 0; });
-	    const auto* currency = tlsEcs.actorRegistry.try_get<CurrencyComp>(player);
-	    if (grantsCurrency && (currency == nullptr || !tlsEcs.actorRegistry.all_of<PlayerCurrencyComp>(player)))
-	    {
-	        LOG_ERROR << "[PlayerBattle] Currency settlement component missing: player_id=" << playerId
-	                  << " battle_id=" << battleId;
-	        return false;
-	    }
-	    for (const auto& [type, amount] : currencyGains)
-	    {
-	        if (amount == 0) continue;
-	        const auto typeId = static_cast<uint32_t>(type);
-	        // GetBalance 当前会补齐 values 槽；预检直接只读已加载的 proto，保证拒绝时零副作用。
-	        const uint64_t balance = typeId < static_cast<uint32_t>(currency->values_size())
-	            ? currency->values(static_cast<int>(typeId)) : 0;
-	        // 保守按全额检查；补缴只会减少实际入账额，不能使本检查失效。
-	        if (balance > std::numeric_limits<uint64_t>::max() - amount)
-	        {
-	            LOG_ERROR << "[PlayerBattle] Currency settlement balance overflow: player_id=" << playerId
-	                      << " battle_id=" << battleId << " currency_type=" << static_cast<uint32_t>(type);
-	            return false;
-	        }
-	    }
+        // 普通结算保留全额保守上界检查；Inbox在整批背包候选完成后复核扣债后的净额。
+        // 两条路径均在首笔货币入账之前验证全部币种，不能边入账边校验后一币种。
+        if (!fromInbox) {
+            const bool grantsCurrency = std::any_of(currencyGains.begin(), currencyGains.end(),
+                [](const auto& gain) { return gain.second > 0; });
+            const auto* currency = tlsEcs.actorRegistry.try_get<CurrencyComp>(player);
+            if (grantsCurrency && (currency == nullptr || !tlsEcs.actorRegistry.all_of<PlayerCurrencyComp>(player))) {
+                LOG_ERROR << "[PlayerBattle] Currency settlement component missing: player_id=" << playerId
+                          << " battle_id=" << battleId;
+                return false;
+            }
+            for (const auto& [type, amount] : currencyGains) {
+                if (amount == 0) continue;
+                const auto typeId = static_cast<uint32_t>(type);
+                // GetBalance会补齐values槽；预检只读已加载proto，拒绝不改变组件。
+                const uint64_t balance = typeId < static_cast<uint32_t>(currency->values_size())
+                    ? currency->values(static_cast<int>(typeId)) : 0;
+                if (balance > std::numeric_limits<uint64_t>::max() - amount) {
+                    LOG_ERROR << "[PlayerBattle] Currency settlement balance overflow: player_id=" << playerId
+                              << " battle_id=" << battleId << " currency_type=" << typeId;
+                    return false;
+                }
+            }
+        }
 
-	    // scene EventLoop 内同步执行且不让出；AddCurrency 的参数、组件与冻结拒绝条件已
-	    // 全部前置。剩下的全服/GM 封禁是终局业务拒绝：只跳过该币种，其他资产照常应用。
-	    bool goldBlocked = false;
-	    uint32_t currenciesBlocked = 0;
-	    for (const auto& [type, amount] : currencyGains)
-	    {
-	        if (amount == 0) continue;
-	        const auto err = CurrencySystem::AddCurrency(player, type, static_cast<int64_t>(amount));
-	        if (err == kAssetBlocked)
-	        {
-	            goldBlocked = goldBlocked || type == kCurrencyGold;
-	            ++currenciesBlocked;
-	            LOG_WARN << "[PlayerBattle] metric=battle_settlement_currency_blocked player_id=" << playerId
-	                     << " battle_id=" << battleId << " currency_type=" << static_cast<uint32_t>(type)
-	                     << " amount=" << amount << ",currency gain blocked;remaining settlement applied";
-	        }
-	        else if (err != kSuccess)
-	        {
-	            LOG_ERROR << "[PlayerBattle] Currency credit failed after preflight;settlement retained for redelivery: player_id="
-	                      << playerId << " battle_id=" << battleId
-	                      << " currency_type=" << static_cast<uint32_t>(type) << " err=" << err;
-	            return false;
-	        }
-	    }
+        bool goldBlocked = false;
+        uint32_t currenciesBlocked = 0;
+        // scene EventLoop内同步执行且不让出；全部可拒绝条件已在首笔入账前复核。
+        // 普通路径保留逐币种封禁跳过；Inbox仍按整批契约在credit前拒绝封禁。
+        const auto creditCurrencies = [&]() -> uint32_t {
+            for (const auto& [type, amount] : currencyGains) {
+                if (amount == 0) continue;
+                const auto err = CurrencySystem::AddCurrency(player, type, static_cast<int64_t>(amount),
+                    fromInbox ? TX_SYSTEM_GRANT : TX_CURRENCY_ADD, fromInbox ? battleId : 0);
+                if (err == kAssetBlocked && !fromInbox) {
+                    goldBlocked = goldBlocked || type == kCurrencyGold;
+                    ++currenciesBlocked;
+                    LOG_WARN << "[PlayerBattle] metric=battle_settlement_currency_blocked player_id=" << playerId
+                             << " battle_id=" << battleId << " currency_type=" << static_cast<uint32_t>(type)
+                             << " amount=" << amount << ",currency gain blocked;remaining settlement applied";
+                } else if (err != kSuccess) {
+                    LOG_ERROR << "[PlayerBattle] Currency credit failed after preflight;settlement retained for redelivery: player_id="
+                              << playerId << " battle_id=" << battleId
+                              << " currency_type=" << static_cast<uint32_t>(type) << " err=" << err;
+                    return err;
+                }
+            }
+            return kSuccess;
+        };
+        if (fromInbox) {
+            // 整批包候选及所有初始化完成后，复核身份、宠物与每币净额；成功后不再有业务失败分支。
+            const auto credit = [&]() -> uint32_t {
+                const auto currentIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+                const auto* currentPets = tlsEcs.actorRegistry.try_get<PlayerPetComp>(player);
+                if (!currentIdentity || currentIdentity->SerializeAsString() != originalIdentity ||
+                    (settlement.pets_size() > 0 && (!currentPets || currentPets->SerializeAsString() != originalPets)) ||
+                    HasUnsupportedInboxConsumption(player, settlement) ||
+                    !IsSettlementApplicable(player) || !HasCompleteBattleEffectInputs(player, settlement, currencyGains) ||
+                    !tlsEcs.actorRegistry.all_of<BaseAttributesComp, DerivedAttributesComp>(player)) return kInvalidParameter;
+                return creditCurrencies();
+            };
+            const auto result = inboxConsumed.empty() && inboxGained.empty() ? credit() :
+                BagService::ConsumeInventoryAndGrant(player, inboxConsumed, inboxGained, battleId,
+                    "{\"source\":\"battle-inbox\"}", credit);
+            if (result != kSuccess) return false;
+            for (const auto& [config, requested] : inboxConsumed) {
+                const auto applied = actualConsumption.at(config);
+                if (applied < requested)
+                    LOG_ERROR << "metric=battle_inbox_consumption_shortfall reason=held_less_than_committed"
+                              << " battle_id=" << battleId << " config_id=" << config
+                              << " requested=" << requested << " consumed=" << applied;
+            }
+            for (const auto& [reason, count] : skippedPets)
+                LOG_ERROR << "metric=battle_inbox_pet_effect_skipped reason=" << reason
+                          << " battle_id=" << battleId << " count=" << count;
+            baseAttributes = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(player); // 初始化回调后不持旧storage地址。
+        } else if (creditCurrencies() != kSuccess) {
+            return false;
+        }
 		// HP/MP 终值回写(引擎输出已按快照上限饱和,这里再按派生上限夹一次,防御引擎侧越界)
 		const auto& derived = tlsEcs.actorRegistry.get<DerivedAttributesComp>(player);
 		uint64_t health = settlement.health();
@@ -1977,9 +2238,10 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 		{
 			for (const auto& petSettlement : settlement.pets())
 			{
+				if (fromInbox && !inboxPets.contains(petSettlement.pet_id())) continue;
 				PetSystem::ApplyBattleSettlement(player, petSettlement);
 			}
-			PetSystem::PushList(player);
+			if (!fromInbox || !inboxPets.empty()) PetSystem::PushList(player);
 		}
 
 		// 经验系统尚未接入,一期仅记日志留痕;升级后果见 PlayerAttributeSystem::GmSetLevel,
@@ -1996,7 +2258,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 		// 会让应用缓存把这次记录抹掉、pending 保留,重投时金币会再加一次
 		// (battle_settlement_application_cache.h 的契约:返回 false 必须在不可重复的
 		// 副作用之前)。所以道具的失败一律记日志 + 继续,由流水与告警去兜。
-		if (settlement.items_consumed_size() > 0 || settlement.items_gained_size() > 0)
+		if (!fromInbox && (settlement.items_consumed_size() > 0 || settlement.items_gained_size() > 0))
 		{
 			ApplySettlementItems(player, playerId, settlement);
 		}
@@ -2021,6 +2283,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 		// swap-and-pop 会挪动同类组件,旧指针不再可靠。开头已确认过账本在,此处缺失只可能是
 		// 本实体在应用途中被拆掉 —— 副作用已发生、撤不回,仍返回 true 让应用缓存记成已完成
 		// (返回 false 会让重投再发一次奖,违反应用缓存契约),只大声报错交人工按流水核对。
+		if (fromInbox) return true; // 永久Inbox域水位由调用方与本次效果同帧记入同一快照。
 		auto* recordLedger = tlsEcs.actorRegistry.try_get<BattleSettlementLedgerComp>(player);
 		if (recordLedger == nullptr)
 		{
@@ -2047,7 +2310,9 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 				 << " is_dead=" << settlement.is_dead()
 				 << " rounds=" << settlement.total_rounds();
         return true;
-    });
+    };
+    if (fromInbox) return apply();
+    const auto status = gSettlementApplications.Apply(playerId, battleId, ApplicationCache::Clock::now(), apply);
     if (status == ApplicationCache::Result::Applied)
     {
         // 立刻压一次存盘,把「已应用但没落盘」的窗口从一个周期存盘压到一次 Redis 往返。

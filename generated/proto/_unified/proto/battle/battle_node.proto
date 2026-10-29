@@ -7,8 +7,8 @@ import "proto/common/base/empty.proto";
 import "proto/battle/battle_data.proto";
 import "proto/battle/player_battle.proto";
 
-// 注意:不能加 cc_generic_services(与 grpc_cpp_plugin 冲突,先例见 proto/scene_manager/scene_node_service.proto);
-// battle 节点是纯 gRPC 服务,C++ 侧消费 battle_node.grpc.pb.h 的 BattleNode::Service。
+// 本契约由 muduo_grpc 承载，只生成普通 Protobuf 消息，不启用 cc_generic_services。
+// C++ 服务骨架继承 muduo_grpc::Service，不依赖官方 gRPC 插件或服务桩。
 option (OptionFileDefaultNode) = NODE_BATTLE;
 
 // 非战斗服务在角色首锁内首次捕获的退出原件；只可取消此op，不得重读当前观战补齐。
@@ -49,6 +49,8 @@ message CreateBattleRequest {
   string target_instance_id = 12;
   // 首次创建必须早于备战截止；重复同操作只查询/重放既有结果，不能在备战自愈后重新建房。
   uint64 admit_before_ms = 13;
+  // 1：个人副作用之前必须先取得 Match SQL 的 COMPLETE；0 保持旧协议且不得追认。
+  uint32 outcome_protocol_version = 14;
 }
 
 // error_message 非零 = 未建房。签不出参战票据时回 kServiceUnavailable(turn-based §22 D70 fail-closed):
@@ -56,6 +58,8 @@ message CreateBattleRequest {
 message CreateBattleResponse {
   uint64 battle_id = 1;
   TipInfoMessage error_message = 2;
+  uint32 adopted_outcome_protocol_version = 3;
+  string target_instance_id = 4;
 }
 
 message DestroyBattleRequest {
@@ -77,7 +81,13 @@ enum BattleCreationState {
   BATTLE_CREATION_ABSENT = 2;
   BATTLE_CREATION_ABORTED = 3;
 }
-message QueryBattleCreationResponse { BattleCreationState state = 1; }
+message QueryBattleCreationResponse {
+  BattleCreationState state = 1;
+  string target_instance_id = 2;
+  // ABSENT 也回显节点能力；PRESENT 的 adopted 只取原创建原件，不按现能力追认。
+  uint32 supported_outcome_protocol_version = 3;
+  uint32 adopted_outcome_protocol_version = 4;
+}
 
 // ---- 二期:观战(match → battle,设计文档 §10) ----
 // 观众路由只填 session/gate/zone 字段(scene 字段留 0:观众无结算,battle 不会

@@ -24,6 +24,8 @@ Middlewares:
     IgnoreContentMethods:
       - /player_inbox.PlayerInbox/FetchItems
       - /player_inbox.PlayerInbox/AckItems
+      - /player_inbox.PlayerInbox/EnqueueBattleSettlement
+      - /player_inbox.PlayerInbox/LookupBattleSettlement
 
 # etcd:只给 shared/noderegistry 注册 PlayerInboxNodeService.rpc/...、scene 节点镜像(SceneNodeService.rpc/)
 # 与 shared/killswitch 用。Key 必须显式写空串(契约 D-13):填了会让 go-zero 额外注册 player_inbox.rpc。
@@ -64,7 +66,7 @@ MySQL:
 # 建表策略(D-14 第 4 条):不写或 true = 启动时跑 schemamigrate.Up;false = 只跑只读 plan,不一致即拒启,
 # 补救命令 player_inbox -f etc/player_inbox.yaml -migrate。K8s 非 dev 档由 ConfigMap 固定 false。
 Schema:
-  AutoMigrate: true
+  AutoMigrate: false
 
 # 核心 Redis(与 C++ scene / scene_manager 同一实例,DB 0):
 #   player:{id}:owner_epoch —— 围栏上界 R(IB-8);
@@ -117,7 +119,7 @@ PlayerInbox:
   # v1 **不开** PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT(用户拍板 2026-10-16,交接 §6 M2 / M3):scene 挂欠款会合并
   # 同币种旧欠款、并用后来那单覆盖到期时间,挂错之后也没有撤销路径。合并语义、撤销类型与单笔上限做完之前,
   # 把它列进来 config.Validate 拒启;GmSanctionPlayer 对它回 kPlayerInboxDisabled。
-  EnqueueTypes: []
+  EnqueueTypes: [PLAYER_INBOX_MSG_BATTLE_SETTLEMENT]
   # 终态行保留 30 天(必须大于签发窗 7 天);PENDING 行、流行、审计行永不自动删除(设计 §9.1)。
   TerminalRetentionDays: 30
   SweepIntervalSeconds: 600

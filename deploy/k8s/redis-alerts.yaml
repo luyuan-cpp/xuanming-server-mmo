@@ -1,0 +1,131 @@
+# Prometheus alert rules for the control-domain Redis instances(控制域 Redis:核心 redis / redis-ha、redis-match-cluster)。
+#
+# 来源:shared-redis-split-by-purpose.md §25.3(2026-10-23 拍板记录,原 §13 第 6 条「Redis 监控直接上 redis_exporter」)。
+#       玩家域 Redis Cluster 的告警归 docs/design/redis-player-store-cluster.md 那条线,不在本文件。
+#
+# Install as a PrometheusRule CR (kube-prometheus stack),与 mysql-connection-alerts.yaml 同法:
+#   kubectl apply -n observability -f deploy/k8s/redis-alerts.yaml
+#
+# Scrape prerequisites:
+#   - 每个 Redis Pod 带 redis-exporter sidecar(deploy/k8s/manifests/infra/redis.yaml、redis-ha.yaml、redis-match-cluster.yaml),
+#     指标端口 9121,Pod 模板带 prometheus.io/scrape|port|path 注解。还需要一个指向该端口的 PodMonitor(或按注解抓取的配置),
+#     否则下面全部规则没有数据:空表达式不报错,和「一切正常」长得一样。
+#   - namespace、pod 两个 label 由抓取配置附加。告警只用这两个 label,不用任何玩家维度(低基数)。
+#
+# 指标名按 redis_exporter v1.62.0 的命名凭记忆写成,**未在本机核实**:
+#   redis_up、redis_memory_used_bytes、redis_memory_max_bytes、redis_errorstat_total{err}、redis_rejected_connections_total、
+#   redis_connected_clients、redis_config_maxclients、redis_aof_last_write_status、redis_master_link_up、redis_cluster_state。
+#   部署后逐个对着 exporter 的 /metrics 核对,对不上就改这里 —— 指标名写错的规则不报错,只是永远不响。
+#
+# 阈值与 for 时长是占位值,**待压测确认**(AGENTS.md §6:没有压测对比不下容量结论)。
+# 核心 redis 今天不设 maxmemory(redis.yaml「只写 requests」一段),redis_memory_max_bytes 为 0,RedisMemoryNearMax 对核心恒不触发;
+# 核心显式写 maxmemory 之后(§25.3 第 9 条)自动生效。
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: redis-alerts
+  labels:
+    app: redis
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: redis.control-domain
+      interval: 30s
+      rules:
+        # exporter 连不上本 Pod 的 redis-server:实例挂了、在重放 AOF,或口令不对。核心挂了等于全服登录与存盘停。
+        - alert: RedisDown
+          expr: |
+            redis_up == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Redis {{ $labels.namespace }}/{{ $labels.pod }} 不可达"
+            description: "redis_exporter 连不上本 Pod 的 redis-server 已超过 1 分钟。先看该 Pod 的 redis 容器日志(是否在重放 AOF、是否 OOMKill),再看 Secret redis-auth 与实例口令是否一致。"
+
+        # 内存逼近 maxmemory。控制域实例一律 noeviction:写满后写命令直接报 OOM,不会静默淘汰。
+        # 只在设了 maxmemory 的实例上生效(max > 0)。
+        - alert: RedisMemoryNearMax
+          expr: |
+            redis_memory_max_bytes > 0
+            and
+            redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Redis {{ $labels.namespace }}/{{ $labels.pod }} 内存超过 maxmemory 的 80%"
+            description: "used_memory / maxmemory 持续 5 分钟高于 80%。noeviction 下写满即拒写:按 shared-redis-split-by-purpose.md §6.3 扩容(加主节点或分组),不要改成淘汰型策略。"
+
+        # 已经有写命令因为写满被拒(noeviction 的 OOM 错误)。不是「快满了」,是已经在丢写。
+        - alert: RedisOomRejected
+          expr: |
+            increase(redis_errorstat_total{err="OOM"}[5m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Redis {{ $labels.namespace }}/{{ $labels.pod }} 出现 OOM 拒写"
+            description: "5 分钟内有写命令被 noeviction 拒绝。调用方按各自的失败语义处理(存盘延后重试、排队与匹配报错),但持续拒写会扩大为功能不可用。立即扩容或排查异常增长的键族。"
+
+        # 新连接被拒:连接数撞到 maxclients。全服所有 zone 的连接池都连核心,撞线后新连接全部失败,客户端日志多半看不出原因。
+        - alert: RedisConnectionsRejected
+          expr: |
+            increase(redis_rejected_connections_total[5m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Redis {{ $labels.namespace }}/{{ $labels.pod }} 拒绝了新连接"
+            description: "5 分钟内有连接因 maxclients 被拒。按 deploy/k8s/README.md「Redis 连接上限与总账」核对总账,必要时先在线 CONFIG SET maxclients 再排维护窗口改清单。"
+
+        - alert: RedisConnectionsNearMax
+          expr: |
+            redis_config_maxclients > 0
+            and
+            redis_connected_clients / redis_config_maxclients > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Redis {{ $labels.namespace }}/{{ $labels.pod }} 连接数超过 maxclients 的 80%"
+            description: "connected_clients / maxclients 持续 5 分钟高于 80%,与 k8s_deploy.ps1 Redis 连接总账的 80% 水位同口径。到线之前处理,到线后 redis-cli 自己也连不上。"
+
+        # AOF 最近一次写失败(磁盘满、IO 错误)。持久化失效时实例重启会丢数据。
+        - alert: RedisAofWriteFailed
+          expr: |
+            redis_aof_last_write_status == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Redis {{ $labels.namespace }}/{{ $labels.pod }} AOF 写失败"
+            description: "aof_last_write_status 不是 ok 已超过 1 分钟。检查 PVC 容量与节点磁盘;不处理时实例一旦重启就会丢失最近的写。"
+
+        # 从节点与主节点断链(高可用形态与 Cluster 形态都适用,只有从节点导出这个指标)。
+        - alert: RedisReplicaLinkDown
+          expr: |
+            redis_master_link_up == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Redis 从节点 {{ $labels.namespace }}/{{ $labels.pod }} 与主节点断链"
+            description: "master_link_status 为 down 已超过 1 分钟。此时主节点故障会丢失未同步的写;高可用形态下 min-replicas-to-write 可能随之拒写。"
+
+        # Cluster 状态不是 ok(redis-match-cluster):有 slot 无主或节点失联,相关键的读写报 CLUSTERDOWN。
+        - alert: RedisClusterStateNotOk
+          expr: |
+            redis_cluster_state == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Redis Cluster 节点 {{ $labels.namespace }}/{{ $labels.pod }} 报告集群状态非 ok"
+            description: "cluster_state 不是 ok 已超过 1 分钟,部分 slot 不可用。按 redis-match-cluster.yaml 的建群说明检查节点与 slot 覆盖。"

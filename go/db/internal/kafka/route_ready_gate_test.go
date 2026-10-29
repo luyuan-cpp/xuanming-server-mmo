@@ -466,6 +466,54 @@ func TestRouteReady_RetryRescheduleLogsDebugNotError(t *testing.T) {
 	assert.Zero(t, countLogLines(t, logs, "error", "worker process task failed"))
 }
 
+// 回归(B3G-4):复核时副本不可信(errRouteNotReady 包在 errPlacementMoved 里)不逐条打 ERROR「worker process task failed」
+// —— Redis 重启 / 切主 / 标记被撤期间已派进 worker 的每条任务都会走到这里,汇总由 confirm 里的 noteRouteNotReady 负责。
+// 对照组:副本可信、落点在 SQL 之后真的变了(recheck_moved),同一条路径照旧逐条打 ERROR,也证明日志收集本身是通的。
+// 红证据:handleTask 的条件去掉 errRouteNotReady 那一项,untrusted_at_recheck 数到 1。
+func TestRouteReady_RecheckUntrustedLogsNoError(t *testing.T) {
+	const key uint64 = 9661
+	cases := []struct {
+		name      string
+		afterSQL  func(t *testing.T, mr *miniredis.Miniredis, reader *fakeRouteReadyReader)
+		wantError int
+	}{
+		{
+			name:      "untrusted_at_recheck",
+			afterSQL:  func(_ *testing.T, _ *miniredis.Miniredis, reader *fakeRouteReadyReader) { reader.setAbsent() },
+			wantError: 0,
+		},
+		{
+			name: "moved_control",
+			afterSQL: func(t *testing.T, mr *miniredis.Miniredis, _ *fakeRouteReadyReader) {
+				setRedisValue(t, mr, placement.Key(key), "1000000:4")
+			},
+			wantError: 1,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			logs := logtest.NewCollector(t)
+			w, mr, h := newTestWorker(t, 0)
+			reader := newFakeRouteReadyReader(t, w.redisClient)
+			w.placement.ready = reader
+			setRedisValue(t, mr, placement.Key(key), "102:3")
+			h.setAfterCall(func(recordedCall) { tc.afterSQL(t, mr, reader) })
+			task := makeWriteTask(t, key, placementTestMsgType, 10).dbTask
+			task.RetryCount = 2
+			require.NoError(t, saveToRetryQueue(w.ctx, w.redisClient, w.retryQueueKey, task, 10, 0))
+
+			claimed := claimRetry(t, w)
+			require.NotNil(t, claimed)
+			w.handleTask(claimed, true)
+
+			require.Len(t, h.callsForKey(key), 1, "the SQL did run; what fails is the post-write recheck")
+			require.Equal(t, int64(1), redisListLen(t, w, w.retryQueueKey), "both are retried")
+			assert.Equal(t, int32(2), oldestReadyTask(t, w).RetryCount, "neither consumes the budget")
+			assert.Equal(t, tc.wantError, countLogLines(t, logs, "error", "worker process task failed"))
+		})
+	}
+}
+
 // 延后原因与重试预算:选库时只包 errRouteNotReady(写豁免、读不豁免);复核时同时包着 errPlacementMoved(读写都豁免),
 // 原因都记 route_not_ready;失租优先(既有优先级不变)。
 func TestRouteNotReady_DeferReasonAndRetryBudget(t *testing.T) {
@@ -483,7 +531,7 @@ func TestRouteNotReady_DeferReasonAndRetryBudget(t *testing.T) {
 	assert.Equal(t, metrics.DeferRouteNotReady, deferReason(atRecheck), "the recheck error names the untrusted replica, not a move")
 	assert.Equal(t, metrics.DeferLeaseLost, deferReason(fmt.Errorf("%w: %w", errOrderingLeaseLost, atLookup)))
 
-	write, read := &db_proto.DBTask{Op: "write"}, &db_proto.DBTask{Op: "read"}
+	write, read := &db_proto.DBTask{Op: db_proto.DBOp_DB_OP_WRITE}, &db_proto.DBTask{Op: db_proto.DBOp_DB_OP_READ}
 	assert.True(t, retryBudgetExempt(write, atLookup), "an untrusted replica is not a failed write")
 	assert.False(t, retryBudgetExempt(read, atLookup), "reads consume their budget")
 	assert.True(t, retryBudgetExempt(write, atRecheck))
@@ -551,7 +599,7 @@ func TestRouteReadyGate_StateFollowsEachRefresh(t *testing.T) {
 		}
 	}
 
-	wake := g.recheck()
+	wake := g.nextRefresh()
 	require.False(t, woken(wake))
 	require.NoError(t, g.probe(context.Background()))
 	assert.True(t, g.opened())
@@ -560,7 +608,7 @@ func TestRouteReadyGate_StateFollowsEachRefresh(t *testing.T) {
 
 	reader.setAbsent()
 	before := verdicts()
-	wake = g.recheck()
+	wake = g.nextRefresh()
 	refreshGate(g)
 	assert.False(t, g.opened())
 	assert.True(t, woken(wake))
@@ -575,7 +623,7 @@ func TestRouteReadyGate_StateFollowsEachRefresh(t *testing.T) {
 		routeReadyTestIdentity, errors.New("dial tcp: connection refused"))
 	before = verdicts()
 	scriptErrBefore := metricCount(t, "db_route_ready_verdict_total", map[string]string{"verdict": routeReadyGateStateScriptError})
-	wake = g.recheck()
+	wake = g.nextRefresh()
 	refreshGate(g)
 	assert.False(t, g.opened(), "a failed read keeps the gate closed")
 	assert.True(t, woken(wake))
@@ -590,8 +638,78 @@ func TestRouteReadyGate_StateFollowsEachRefresh(t *testing.T) {
 
 	var none *routeReadyGate
 	assert.True(t, none.opened())
-	assert.Nil(t, none.recheck())
+	assert.Nil(t, none.nextRefresh())
 	assert.False(t, (&KeyOrderedKafkaConsumer{}).retryClaimsPaused())
+}
+
+// 回归(B3G-5):闸的翻转日志按 routeReadyGateLogEvery 限速。读脚本时好时坏时闸每次刷新都翻一次,不能每拍一条 ERROR + INFO:
+// 启动后第一次翻转立即打;距上一条翻转日志不满一个周期的翻转只累加,满周期后的下一次刷新按当时状态打一条、带 flips=N;
+// 翻转停下之后最后一个状态至多晚一个周期打出来;没有翻转时「仍关着」提醒照旧每周期一条。状态与唤醒每次刷新照常更新。
+// 时钟注入(g.now),不依赖墙钟。红证据:apply 去掉翻转限速那一格,闪断期间的 ERROR 数到 11。
+func TestRouteReadyGate_FlipLogsAtMostOncePerInterval(t *testing.T) {
+	logs := logtest.NewCollector(t)
+	base := time.Date(2026, 10, 22, 0, 0, 0, 0, time.UTC)
+	reader := newFakeRouteReadyReader(t, nil)
+	g := newRouteReadyGate(reader, time.Second)
+	var clock time.Time
+	g.now = func() time.Time { return clock }
+	// at 在 base+sec 秒刷新一次:trusted 放行,否则读脚本出错(闸关、state=script_error)。
+	at := func(sec int, trusted bool) {
+		t.Helper()
+		clock = base.Add(time.Duration(sec) * time.Second)
+		if trusted {
+			reader.setTrusted(t)
+		} else {
+			reader.set("", routeReadyTestIdentity, errors.New("i/o timeout"))
+		}
+		wake := g.nextRefresh()
+		refreshGate(g)
+		require.Equal(t, trusted, g.opened(), "t=%ds: the gate state follows every refresh regardless of the log limit", sec)
+		require.True(t, closedWithin(wake, time.Second), "t=%ds: every refresh wakes the waiters", sec)
+	}
+	closedLines := func() int { return countLogLines(t, logs, "error", "route ready gate closed") }
+	reopenLines := func() int { return countLogLines(t, logs, "info", "route ready gate reopened") }
+	stillLines := func() int { return countLogLines(t, logs, "info", "route ready gate still closed") }
+
+	at(0, true)
+	require.Equal(t, 1, countLogLines(t, logs, "info", "route ready gate open"))
+	at(1, false)
+	require.Equal(t, 1, closedLines(), "the first flip after startup is logged at once")
+	assert.Equal(t, 1, countLogLines(t, logs, "error", "deferred as route_not_ready"),
+		"the closed line says where the tasks already in the workers go")
+
+	// 闪断:t=2..21 每秒翻一次(开、关交替),共 20 次,都在上一条翻转日志(t=1)之后一个周期之内。
+	for sec := 2; sec <= 21; sec++ {
+		at(sec, sec%2 == 0)
+	}
+	assert.Equal(t, 1, closedLines(), "flips within one interval are counted, not logged")
+	assert.Zero(t, reopenLines())
+
+	at(60, false)
+	assert.Equal(t, 1, closedLines(), "59s after the last flip line: still within the interval")
+	assert.Zero(t, stillLines(), "pending flips are reported by the flip line, not by the still-closed reminder")
+	at(61, false)
+	require.Equal(t, 2, closedLines(), "one interval after the last flip line the current state is logged")
+	assert.Equal(t, 1, countLogLines(t, logs, "error", "flips=20"), "the line carries the flips counted meanwhile")
+
+	// 恢复:t=62 重开被限速,翻转停下之后至多晚一个周期打出来,带上最后一次关了多久(t=21 关到 t=62)。
+	at(62, true)
+	assert.Zero(t, reopenLines())
+	at(121, true)
+	require.Equal(t, 1, reopenLines())
+	assert.Equal(t, 1, countLogLines(t, logs, "info", "reopened after 41s closed"))
+	assert.Equal(t, 1, countLogLines(t, logs, "info", "(flips=1)"))
+
+	// 没有翻转时照旧:开着不打;关上(距上一条翻转日志满周期)立即打;一直关着每周期一条「仍关着」。
+	at(300, true)
+	at(400, false)
+	require.Equal(t, 3, closedLines(), "a flip after a quiet interval is logged at once")
+	at(459, false)
+	assert.Zero(t, stillLines())
+	at(460, false)
+	assert.Equal(t, 1, stillLines())
+	assert.Equal(t, 3, closedLines())
+	assert.Equal(t, 1, reopenLines())
 }
 
 // 启动探针:不可信不是错误(闸关着,等标记);读脚本执行出错即拒启 —— Start 第一步就返回,什么都没起。
@@ -614,7 +732,7 @@ func TestRouteReadyGate_ProbeErrorRefusesToStart(t *testing.T) {
 	assert.False(t, c.routeGate.opened())
 }
 
-// run 每收到一个 tick 刷新一次;ctx 取消即返回。tick 由用例逐拍喂,用 recheck 通道同步「这一拍已刷完」。
+// run 每收到一个 tick 刷新一次;ctx 取消即返回。tick 由用例逐拍喂,用 nextRefresh 通道同步「这一拍已刷完」。
 func TestRouteReadyGate_RunRefreshesOnEachTick(t *testing.T) {
 	reader := newFakeRouteReadyReader(t, nil)
 	g := newRouteReadyGate(reader, time.Second)
@@ -627,7 +745,7 @@ func TestRouteReadyGate_RunRefreshesOnEachTick(t *testing.T) {
 		g.run(ctx, ticks)
 	}()
 	beat := func() {
-		wake := g.recheck()
+		wake := g.nextRefresh()
 		ticks <- time.Time{}
 		require.True(t, closedWithin(wake, 5*time.Second), "the refresh after a tick must complete")
 	}
@@ -798,4 +916,73 @@ func TestConsumeRetryQueue_RouteReadyGateClosedClaimsNothing(t *testing.T) {
 	c.consumeRetryQueue()
 	assert.Equal(t, 3, counter.count())
 	assert.Len(t, drainDispatched(w), 3)
+}
+
+// retryClaimHook 在每次认领脚本(retryClaimScript)成功返回之后同步调用 after(在执行认领的 goroutine 上)。
+type retryClaimHook struct{ after func() }
+
+func (h retryClaimHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+
+func (h retryClaimHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
+
+func (h retryClaimHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		err := next(ctx, cmd)
+		if args := cmd.Args(); err == nil && cmd.Name() == "eval" && len(args) >= 2 {
+			if script, ok := args[1].(string); ok && script == retryClaimScript {
+				h.after()
+			}
+		}
+		return err
+	}
+}
+
+// 回归(B3G-1):闸在本拍中途关上时,两路的认领循环每认领一条之前再看一次闸(opened,不记等待次数),当拍只认领了关闸时
+// 正在认领的那一条,剩下的收据留在原列表,而不是把整拍额度用完;下一拍在闸前停下(retryClaimsPaused 记一次等待)。
+// 关闸由认领脚本返回之后的钩子触发(第一条认领完、第二条认领之前刷新一次),不依赖墙钟。
+// 红证据:删掉 consumeRetryQueueShared / consumeRetryQueueOwner 认领循环里的 opened 判断,同一拍认领出 3 条。
+func TestConsumeRetryQueue_RouteReadyGateClosingMidTickStopsClaiming(t *testing.T) {
+	for _, mode := range []string{db_config.RetryRoutingShared, db_config.RetryRoutingOwner} {
+		t.Run(mode, func(t *testing.T) {
+			f := newRoutingFixture(t)
+			c := f.consumer("db-a:6000", mode, 1)
+			lease := c.owned.acquire(0, f.ctx)
+			t.Cleanup(func() { c.owned.release(lease) })
+			ready := c.retryQueueKey // shared:从共享收件箱认领
+			if mode == db_config.RetryRoutingOwner {
+				ready = pKey(0) // owner:从租约所在分区的 p0 认领
+			}
+			for i := uint64(0); i < 3; i++ {
+				payload, _ := routedPayload(t, 9681+i, 10, 0, 0)
+				f.push(t, ready, payload)
+			}
+			reader := newFakeRouteReadyReader(t, nil)
+			gate := newRouteReadyGate(reader, time.Second)
+			require.NoError(t, gate.probe(context.Background()))
+			require.True(t, gate.opened())
+			c.routeGate = gate
+			claims := 0
+			f.rc.AddHook(retryClaimHook{after: func() {
+				claims++
+				if claims == 1 {
+					reader.setAbsent()
+					refreshGate(gate)
+				}
+			}})
+
+			c.consumeRetryQueue()
+			assert.Equal(t, 1, claims, "only the claim in progress when the gate closed")
+			assert.Len(t, drainDispatched(c.workers[0]), 1)
+			assert.Equal(t, int64(2), f.llen(t, ready), "the rest stay in the ready list")
+
+			waits := gate.waits.Load()
+			c.consumeRetryQueue()
+			assert.Equal(t, 1, claims, "the next tick pauses on the closed gate")
+			assert.Equal(t, waits+1, gate.waits.Load())
+			assert.Equal(t, int64(2), f.llen(t, ready))
+			assert.Empty(t, drainDispatched(c.workers[0]))
+		})
+	}
 }

@@ -138,6 +138,12 @@ namespace release_fence
 	// owner_epoch == expected 条件补写一枚凭证标记,让 scene_manager 的下一次重试拿到证据删 location。
 	// 安全性与"改派踢线前的凭证补写"(relocate_confirm::DecideCredential)同理:本节点没有该玩家的任何内存态,盘上就是最终态;
 	// 条件写保证不会给更新的一代发证。
+	// 2026-10-23 更正(r2-lc#2):只比 owner_epoch 挡不住同 E 的迟到写(同节点短重连重载不铸新 epoch),标记写一律改为
+	// save_barrier.handoff_fence 原件的 CAS(handoff_sql_barrier.h)。完全不持有时没有缓存的原 H,所以本判定放行(kWrite)之后
+	// 粘合层先 HGET 读现任资格原件,回调里按下面的 DecideCredentialQualification 核对 —— 读回时仍完全不持有、原件是本进程
+	// 实例在期望 E 下的资格 —— 才以观察到的原件做 CAS(kCredentialMarkLua)。迟到的凭证帧在任何更新的登记 / 恢复 / 撤销 /
+	// 发布之后都 CAS 失败,不会复活凭证。不能拒发了事:location-release-binding.md §15 起等待超时不再授权删 location,
+	// 持有节点活着而不持有时,没有凭证 location 就永远删不掉。
 
 	// 凭证判定结论。除 kWrite 外每一项都是一个"不写"的原因。名字同时是 [ReleaseFence] 汇总行里 credential_ 后缀的 key。
 	// 底层类型 uint8_t 数的是结论种类数(现 6 种)。kCount 固定为最后一项,同时是名表长度。
@@ -145,7 +151,7 @@ namespace release_fence
 	{
 		kWrite,
 		kSkipUnversioned,  // 期望 0:scene_manager 不为 epoch 0 发会话结束释放;防御写法,写了也是"0:t",换手门不认
-		kSkipLocalHolder,  // 本节点有实体句柄 / 在途载入 / 改派待确认条目:不是"完全不持有",由那些流程自己收尾
+		kSkipLocalHolder,  // 本节点有实体句柄 / 在途载入 / 改派待确认条目 / 在途入场登记 / 未落地存盘:不是"完全不持有",由那些流程自己收尾
 		kSkipMarkDisabled, // A1′ 开关关闭(SCENE_EXIT_RELEASE_MARK=0):回滚期间不发任何新标记(exit_release_mark.h)
 		kSkipDevBypass,    // dev 旁路开着(SCENE_DEV_UNSAFE_CROSS_NODE_HANDOFF,与 scene_manager 的旁路同步)
 		kSkipIdentity,     // 本节点身份不确认(疏散中 / etcd 租约推定过期,M3):写标记可能给接手的新进程开放行口
@@ -176,7 +182,9 @@ namespace release_fence
 	struct SessionEndedFacts
 	{
 		uint64_t expectedOwnerEpoch{0};  // ReleasePlayerRequest.expected_owner_epoch
-		bool localHolderPossible{true};  // playerList 有该玩家(含无效句柄)/ 有待入场条目 / 有改派待确认条目
+		// playerList 有该玩家(含无效句柄)/ 有待入场条目 / 有改派待确认条目 / RoleAdmission 的登记还在途 /
+		// 有未落地的存盘(后两项 2026-10-23 起:HGET 读到的原件可能正是这条在途登记刚写的 H,不能当成已结束的资格消费)
+		bool localHolderPossible{true};
 		bool markFeatureEnabled{false};  // A1′ 开关(SCENE_EXIT_RELEASE_MARK)
 		bool devUnsafeCrossNode{true};   // dev 旁路开关(SCENE_DEV_UNSAFE_CROSS_NODE_HANDOFF)
 		bool identityConfirmed{false};   // 本节点身份当前确认有效
@@ -206,6 +214,94 @@ namespace release_fence
 			return SessionEndedCredential::kSkipIdentity;
 		}
 		return SessionEndedCredential::kWrite;
+	}
+
+	// ── 凭证的资格核对(2026-10-23,r2-lc#2 之后;location-release-binding.md §3.3)───────────────────────────────
+	//
+	// DecideSessionEndedCredential 判 kWrite 之后,粘合层 HGET player:{id}:save_barrier 的 handoff_fence,在 scene 线程的
+	// 回调里按本判定决定能不能拿读到的原件做 CAS。为什么这样不会复活凭证:
+	//   * 原件必须是本进程实例(S == 本进程 node_uuid,即 RoleAdmission 登记时写入的 S)在期望 E 下的资格。别的节点 / 别的
+	//     进程 / 别的 E 的资格不归本节点处置;跨节点接手先铸 E+1,同节点新持有先登记更新的 N(都会轮换原件)。
+	//   * 读回时重采 SessionEndedFacts、仍须判 kWrite:原件若属于本节点一条正在建立的持有(登记在途 / 待入场 / 实体),
+	//     这一刻它一定还在内存里(登记回包之前 RoleAdmission 在途,之后 Activate 同步建待入场条目),被这一步挡下。
+	//   * CAS 发出之后才开始的任何持有都会先轮换原件,迟到的凭证帧只能回 -2,不依赖连接顺序与墙钟。
+	// 原件状态 H / F / R 都认(未写标记就销毁 / 已发布或已释放而标记已过期或被消费 / 登记被撤销),只说明这一代资格怎么结束。
+	//
+	// 底层类型 uint8_t 数的是结论种类数(现 5 种)。名字同时是 [ReleaseFence] 汇总行里 credential_qualification_ 后缀的 key。
+	// kCount 固定为最后一项,同时是名表长度。只有 kQualified 发 CAS;其余都不写。
+	enum class CredentialQualification : uint8_t
+	{
+		kQualified,       // 原件是本进程实例在期望 E 下的资格,读回时仍完全不持有:以原件 CAS
+		kReadFailed,      // HGET 没有可用应答(Redis 不可用 / 发不出去 / 空应答 / ERROR / 类型不对):结果未知,不写
+		kHolderAppeared,  // 读回时凭证判定已不是 write(本节点又有了该玩家的内存态 / 身份不再确认 / 开关变化):交给那条流程
+		kNoQualification, // 没有原件,或原件不是本进程实例在期望 E 下登记的:没有可消费的资格
+		kMalformed,       // 原件写坏:fail-closed,不写
+
+		kCount
+	};
+
+	constexpr std::size_t kCredentialQualificationCount = static_cast<std::size_t>(CredentialQualification::kCount);
+
+	inline constexpr const char *kCredentialQualificationNames[] = {
+		"qualified",
+		"read_failed",
+		"holder_appeared",
+		"no_qualification",
+		"malformed",
+	};
+	static_assert(std::size(kCredentialQualificationNames) == kCredentialQualificationCount,
+				  "kCredentialQualificationNames 必须与 CredentialQualification 一一对应");
+
+	constexpr const char *CredentialQualificationName(CredentialQualification qualification)
+	{
+		const auto index = static_cast<std::size_t>(qualification);
+		return index < kCredentialQualificationCount ? kCredentialQualificationNames[index] : "?";
+	}
+
+	// 出现即值得人看一眼的结论:no_qualification 意味着 location 指着一个活着却拿不出资格的节点,这条 location 只能等持有
+	// 节点死亡或玩家下次登录落回本节点重新登记(location-release-binding.md §3.3 残余)。同号重启顶替(GO-3)只认资格原件
+	// 的 E 等于 location 的 E,救不了这里;malformed 是数据写坏。
+	constexpr bool QualificationAlarming(CredentialQualification qualification)
+	{
+		return qualification == CredentialQualification::kNoQualification ||
+			   qualification == CredentialQualification::kMalformed;
+	}
+
+	// 资格核对的输入,由粘合层在 HGET 回调里采集。默认值全部取"不写"的一侧(fail-closed)。
+	struct CredentialQualificationFacts
+	{
+		bool replyUsable{false};             // HGET 应答是字符串或 nil
+		bool stillWritable{false};           // 读回时重采的 SessionEndedFacts 仍判 kWrite
+		bool fencePresent{false};            // handoff_fence 字段存在
+		bool fenceParsed{false};             // 字段能按 E|S|N|A|K|T 解析
+		bool fenceMatchesExpectedEpoch{false}; // 原件 E == ReleasePlayerRequest.expected_owner_epoch
+		bool fenceOwnedByThisInstance{false};  // 原件 S == 本进程实例(RoleAdmission 登记时写入的那个值)
+	};
+
+	// 按顺序判,第一个不满足的条件就是结论。顺序只影响"计到哪个原因",不影响写不写。
+	constexpr CredentialQualification DecideCredentialQualification(const CredentialQualificationFacts &facts)
+	{
+		if (!facts.replyUsable)
+		{
+			return CredentialQualification::kReadFailed;
+		}
+		if (!facts.stillWritable)
+		{
+			return CredentialQualification::kHolderAppeared;
+		}
+		if (!facts.fencePresent)
+		{
+			return CredentialQualification::kNoQualification;
+		}
+		if (!facts.fenceParsed)
+		{
+			return CredentialQualification::kMalformed;
+		}
+		if (!facts.fenceMatchesExpectedEpoch || !facts.fenceOwnedByThisInstance)
+		{
+			return CredentialQualification::kNoQualification;
+		}
+		return CredentialQualification::kQualified;
 	}
 
 	// ── 会话结束释放的登录身份判定(ReleasePlayerRequest.covered_*,docs/design/location-release-binding.md §13)────────
@@ -316,7 +412,12 @@ namespace release_fence
 //   session_ended            收到的会话结束释放总数(docs/design/location-release-binding.md §3.3)。登出 / 断线后
 //                            LeaveScene 拿不到释放证据时才会发,平时低速率;持续升高看 scene_manager 的 pending 计数
 //   credential_<结论>        本节点完全不持有时的凭证判定分布,key 见 release_fence::kSessionEndedCredentialNames
-//   credential_written / credential_epoch_moved / credential_failed  凭证条件写的结果(与 A1′ 同一段 Lua)
+//   credential_written / credential_epoch_moved / credential_failed  凭证 CAS(kCredentialMarkLua)的结果
+//   credential_superseded    凭证 CAS 返回 -2:读到的原件在 CAS 之前已被轮换(更新的登记 / 撤销 / 发布),不写。追加在行尾
+//   credential_qualification_<结论>  判 write 之后 HGET 资格原件的核对分布(2026-10-23),key 见
+//                            release_fence::kCredentialQualificationNames。credential_write == 各项之和 + 在途读;
+//                            qualified == written + epoch_moved + superseded + failed + 在途 CAS。no_qualification /
+//                            malformed 有增长时整行升 WARN(release_fence::QualificationAlarming)
 //   binding_<结论>           本节点持有、归属代际已判释放的会话结束释放再过登录身份判定的分布(§13),key 见
 //                            release_fence::kSessionEndedBindingNames。会话结束释放在 verdicts[] 里记的只是代际判定:
 //                            代际放行而 binding_skip_* 挡下的那几次同样记在 verdicts 的 release 系列里,实际退出次数要相减
@@ -332,6 +433,8 @@ namespace release_fence_stats
 		std::atomic<uint64_t> credentialEpochMoved{0};
 		std::atomic<uint64_t> credentialFailed{0};
 		std::array<std::atomic<uint64_t>, release_fence::kSessionEndedBindingCount> bindingDecisions{};
+		std::atomic<uint64_t> credentialSuperseded{0};
+		std::array<std::atomic<uint64_t>, release_fence::kCredentialQualificationCount> credentialQualifications{};
 	};
 
 	inline Counters &Get()
@@ -372,6 +475,16 @@ namespace release_fence_stats
 		}
 	}
 
+	// 越界值不计(DecideCredentialQualification 产不出越界值;防御写法)。
+	inline void IncCredentialQualification(release_fence::CredentialQualification qualification)
+	{
+		const auto index = static_cast<std::size_t>(qualification);
+		if (index < release_fence::kCredentialQualificationCount)
+		{
+			Inc(Get().credentialQualifications[index]);
+		}
+	}
+
 	struct Snapshot
 	{
 		std::array<uint64_t, release_fence::kVerdictCount> verdicts{};
@@ -382,6 +495,8 @@ namespace release_fence_stats
 		uint64_t credentialEpochMoved{0};
 		uint64_t credentialFailed{0};
 		std::array<uint64_t, release_fence::kSessionEndedBindingCount> bindingDecisions{};
+		uint64_t credentialSuperseded{0};
+		std::array<uint64_t, release_fence::kCredentialQualificationCount> credentialQualifications{};
 
 		bool operator==(const Snapshot &) const = default;
 
@@ -399,6 +514,14 @@ namespace release_fence_stats
 			{
 				if (release_fence::BindingAlarming(static_cast<release_fence::SessionEndedBinding>(i)) &&
 					bindingDecisions[i] > previous.bindingDecisions[i])
+				{
+					return true;
+				}
+			}
+			for (std::size_t i = 0; i < credentialQualifications.size(); ++i)
+			{
+				if (release_fence::QualificationAlarming(static_cast<release_fence::CredentialQualification>(i)) &&
+					credentialQualifications[i] > previous.credentialQualifications[i])
 				{
 					return true;
 				}
@@ -427,6 +550,11 @@ namespace release_fence_stats
 		for (std::size_t i = 0; i < snapshot.bindingDecisions.size(); ++i)
 		{
 			snapshot.bindingDecisions[i] = counters.bindingDecisions[i].load(std::memory_order_relaxed);
+		}
+		snapshot.credentialSuperseded = counters.credentialSuperseded.load(std::memory_order_relaxed);
+		for (std::size_t i = 0; i < snapshot.credentialQualifications.size(); ++i)
+		{
+			snapshot.credentialQualifications[i] = counters.credentialQualifications[i].load(std::memory_order_relaxed);
 		}
 		return snapshot;
 	}

@@ -1,5 +1,7 @@
 # 交接:玩家存储落点这条线——完成度核查与剩余工作(落点 + D1 映射持久化,2026-10-19)
 
+> **2026-10-23 更新**:负责人拍板映射改为直读 TiDB,Redis 副本、就绪标记、对账 leader、发布等待都删掉,由会话「账号登录逻辑/物理服瓶颈」统一落码。本文 §3、§4 里与副本 / 就绪 / rewarm 相关的待办随之作废;D1 评审修复做到哪、哪些结论在新方向下仍成立,见 [d1-review-fix-handoff-20261023.md](d1-review-fix-handoff-20261023.md)。
+>
 > **给新账号**:先按 AGENTS.md「会话启动门禁」读完规定材料,再读本文。开场指令在 §9,可直接复制。
 >
 > **怎么来的**:2026-10-19 用户问「09-28 那批落点做完没有」。本会话做了一次只读核查:6 路并行核查,加 1 路复核抽查。只读 git 和文件,**没有跑任何编译、测试或脚本**。核查时 HEAD 为 `c63b22dca`,工作区快照时间 11:03。
@@ -220,6 +222,7 @@
   - 冲突一:`merge_run.go`、`unmerge.go` 正好有 D1 未提交的改动;
   - 冲突二:开服线交接 §5 写了「不要再改 tools/merge_zone」;
   - 两份交接互相都没提对方,需要负责人定谁改、谁先改。
+  - **2026-10-24 已解决**:D1 接手会话同意由「数据覆盖审计交接文档」会话改,r2-mz#1 已落码并经评审修正(未编译,待 Codex)。merge_zone 里它改的位置只有:`player_rows.go` 702-819(删键清单拆出 KeepBarrier 版本,731-733 注释)、`merge_run.go` runMerge copy 分支约 514-533(改调 `invalidatePlayerCachesKeepBarrier`)、`unmerge.go` 5'b 约 305-327(只加注释)、`audit_resources.go` 第 384-388 行(`verifySaveBarriers` 登记与行尾注释)、新文件 `save_barrier_verify.go`、`player_rows_barrier_test.go`、`save_barrier_integration_test.go`;runbook 只动 §5 步骤 1、§8 Step 5 断言表、§10.1。`requireFence`、`routeSource`、`routeReads`、`routeDB` 等路由 / 围栏行都是 D1 的,没有碰。route-source=db 下屏障删 / 留走同一条路径。评审提的「每个 auditor 30s 预算在 `runAuditMode`(约 409 行),大清单可能稳定报 INFRA」属 D1 维护的段落,留给 D1 决定。详见 PROGRESS「2026-10-24 Claude:第二轮审计 r2-mz#1」。
 - **自动快照**:工作区随时会被署名 luyuan-cpp 的「补充…」提交整区收走。本线的未提交文件可能挂在无关的提交说明下入库,所以核对现状一律以工作区为准。
 
 ## 6. 上线前仍缺的大项(本线前置,只登记,不在本交接执行)

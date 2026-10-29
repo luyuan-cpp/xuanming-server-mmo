@@ -33,16 +33,20 @@ func NewWatchBattleLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Watch
 // WatchBattle 观战入口(设计文档 §10.2,决策 D9/D11):
 //   - 互斥检查:持有 match ticket / battle:lock → 拒绝(一名玩家同一时刻只保留一条
 //     battle 直连 —— 客户端单条链路,battle 房间 directConnByPlayer 按 player_id 单槽,
-//     观战与参战不能并存);已在观战则先清退旧场再接入新场(服务端换场语义,
-//     客户端无需先 StopWatchBattle);
+//     观战与参战不能并存);已在观战则先按标记里的原件清退旧观战再接入(服务端换场语义,
+//     客户端无需先 StopWatchBattle;重看同一场也一样,见下方清退分支);
+//   - 观战账本(与全局 BeginSpectator 同口径):每选中一场生成一份 AddObserver 原件(规范 UUID op、
+//     准入截止、battle 实例,newLocalObserverAdd),随观战标记先落 Redis 再发 Add;补偿与清退的
+//     RemoveObserver 一律带同一个 op;
 //   - battle_id=0 随机挑一场;AddObserver 报房间不存在时懒剔除索引并换一场重试一次;
 //     指定场先查活跃集合、再读记录:读记录前未公开且仍在建房窗口内(gather 先写记录后建房,
 //     D82 还会改写记录),只回"不存在"、不剔除(roomMayBeCreating);记录已不在时只摘活跃集合
 //     残留成员、不 DEL;
 //   - 观众是否为该场参战者由 battle 侧校验(房间成员名单只有 battle 有权威),
 //     这里不重复;
-//   - AddObserver 的其余拒绝(观众满 / 参战者 / 签不出票 kServiceUnavailable,
-//     turn-based §22 D70)一律回滚观战标记、不动索引、不换场;签票失败时 battle 侧
+//   - AddObserver 的其余拒绝(观众席位满回「观战人数已满」ErrSpectateFull;墓碑表满 / 参战者 /
+//     签不出票 kServiceUnavailable(turn-based §22 D70)回「该战斗当前无法观战」,映射见
+//     spectateRejectVerdict)一律回滚观战标记、不动索引、不换场;签票失败时 battle 侧
 //     不会留下该观众(新观众不登记,幂等重推路径摘出名单并关其直连),match 不必再发
 //     RemoveObserver;
 //   - 成功即返回:落点分配(NotifyBattleAssigned)由 battle 推给客户端(尚无直连时经
@@ -101,24 +105,17 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 		if err := l.ctx.Err(); err != nil {
 			return internalErr("请求已截止,不再清退旧观战", err)
 		}
-		// "已在观战"不拒绝,懒清退旧场后放行:StopWatchBattle 经 battle 直连直达
+		// "已在观战"不拒绝,懒清退旧观战后放行:StopWatchBattle 经 battle 直连直达
 		// 不经 match,战斗收尾 battle 也不回写 Redis,标记只能靠 TTL 自灭,一律
 		// 拒绝会把玩家卡死整个 TTL 窗口。metrics 在此仅计数懒清退;该标签的
 		// 拒绝出口只剩后方 SetnxEx 并发抢占失败一处。
 		metrics.ObserveWatchBattle("already_watching")
-		if prevBattleId, parseErr := strconv.ParseUint(watchingRaw, 10, 64); parseErr != nil {
-			// 标记值非法:删掉残留后按新请求继续。
-			deleteSpectateWatching(l.svcCtx, playerId)
-		} else if in.BattleId != 0 && in.BattleId == prevBattleId {
-			// 重看同一场:仅删标记,重推分配与首帧 / 换会话关旧直连由 battle 侧 AddObserver
-			// 幂等分支负责;勿发 removeObserver,免得给仍存活的旧会话推假 SpectateEnd。
-			deleteSpectateWatching(l.svcCtx, playerId)
-		} else {
-			// 换场/随机模式:尽力对仍存活的旧场 removeObserver 并删标记
-			// (战斗已收尾则 stopWatchingIfAny 内部只删标记)。
-			stopWatchingIfAny(l.svcCtx, playerId, "rewatch")
-		}
-		// 三种情况都不 return:后续成功路径的 SetnxEx 会为新场原子抢占标记。
+		// 换场、随机模式与重看同一场一律按旧原件 RemoveObserver 后删标记(标记非法 / 战斗已收尾时只删标记)。
+		// 重看同一场也要先摘:battle 名单里挂着旧 op 时,新 op 的 Add 会被观战账本拒绝(只认原 op 的逐字节
+		// 重放),而旧原件的准入截止多半已过、无法原样重放。代价是旧会话会先收到一次 SpectateEnd(rewatch),
+		// 随后凭新分配重连;全局路径(prepareGlobalWatch 先 cancelGlobalSpectator)同口径。
+		stopWatching(l.svcCtx, playerId, watchingRaw, "rewatch")
+		// 不 return:后续成功路径的 SetnxEx 会为新观战原子抢占标记。
 	}
 
 	// 观众必须在线:观众路由(session/gate)从 player:session 组装,观众尚无直连时
@@ -193,6 +190,24 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 			}, nil
 		}
 
+		// 定位 battle 实例并固定本次观战的原件(op / 准入截止 / 实例)。要在写标记之前做完:标记就是原件,
+		// 并发的 gather 清退读到标记时必须能拿到原 op 去 RemoveObserver。节点定位失败(未注册 / 歧义 /
+		// 没有实例 uuid)不是 battle 的业务拒绝,按「其它拒绝」回:不动索引、不换场,标记也还没写。
+		endpoint, instance, err := spectateTarget(l.ctx, l.svcCtx, record.GetBattleNodeId(), battleId)
+		if err != nil {
+			l.Errorf("[spectate] Failed to locate battle node player=%d battle=%d node=%d: %v",
+				playerId, battleId, record.GetBattleNodeId(), err)
+			metrics.ObserveWatchBattle("rejected")
+			return &matchpb.WatchBattleResponse{
+				ErrorMessage: tipErr(constants.ErrBattleNotWatchable, "该战斗当前无法观战"),
+			}, nil
+		}
+		original := newLocalObserverAdd(battleId, playerId, session.Account, routing, instance)
+		mark, err := encodeWatchingMark(original)
+		if err != nil {
+			return internalErr("组观战原件", err)
+		}
+
 		// 先原子抢占互斥标记(SETNX+EX)再 AddObserver:标记必须先于观众登记生效,
 		// 否则并发的 JoinQueue 会漏掉清退;入口已清掉本玩家旧标记,抢占失败只可能
 		// 是并发 WatchBattle,由 SetnxEx 一锤定音拒绝。AddObserver 失败回滚 DEL。
@@ -203,7 +218,7 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 		// 收到超时、gate 放行同一会话的下一条请求之后才把观战绑上(docs/design/client-request-ordering.md §6.1)。
 		// 失败回滚(deleteSpectateWatching / removeObserver)是补偿,仍走独立 ctx。
 		acquired, err := l.svcCtx.MatchRedis.SetnxExCtx(l.ctx, spectateWatchingKey(playerId),
-			strconv.FormatUint(battleId, 10), spectateTTLSeconds(l.svcCtx))
+			mark, spectateTTLSeconds(l.svcCtx))
 		if err != nil {
 			return internalErr("写观战标记", err)
 		}
@@ -213,8 +228,7 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 				ErrorMessage: tipErr(constants.ErrAlreadyWatching, "已在观战另一场战斗"),
 			}, nil
 		}
-		roomMissing, err := addObserver(l.ctx, l.svcCtx, record.GetBattleNodeId(), battleId,
-			playerId, session.Account, routing)
+		rejectTip, err := addObserver(l.ctx, endpoint, original)
 		if err == nil {
 			// double-check 收尾:关『检查→写标记』TOCTOU 的另一半窗口——上方
 			// 『标记先于登记』只保证标记落地之后的 JoinQueue 能看到并清退;若并发
@@ -232,7 +246,7 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 				l.Errorf("[spectate] Double-check failed to check battle lock player=%d: %v", playerId, lerr)
 			}
 			if recheckTicket != nil || recheckLocked {
-				removeObserver(l.svcCtx, record.GetBattleNodeId(), battleId, playerId, "concurrent_queue")
+				removeObserver(l.svcCtx, record.GetBattleNodeId(), original, "concurrent_queue")
 				deleteSpectateWatching(l.svcCtx, playerId)
 				l.Infof("[spectate] Spectating conflicts with concurrent queue join; removing self player=%d battle=%d ticket=%t locked=%t",
 					playerId, battleId, recheckTicket != nil, recheckLocked)
@@ -244,14 +258,19 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 			l.Infof("[spectate] Spectator joined successfully player=%d battle=%d node=%d random=%t",
 				playerId, battleId, record.GetBattleNodeId(), randomMode)
 			metrics.ObserveWatchBattle("ok")
-			return &matchpb.WatchBattleResponse{BattleId: battleId}, nil
+			return &matchpb.WatchBattleResponse{BattleId: battleId, SpectatorOperationId: original.GetSpectatorOperationId()}, nil
 		}
 		if errors.Is(err, errAddObserverOutcomeUnknown) {
 			// 结果未知(多半是请求 ctx 截止):观众可能已在 battle 挂上,要回失败就先摘掉,与回滚标记保持一致。
-			// removeObserver 走独立 ctx,是补偿。
-			removeObserver(l.svcCtx, record.GetBattleNodeId(), battleId, playerId, "watch_outcome_unknown")
+			// removeObserver 走独立 ctx,是补偿;带同一个 op,截止前还会给它立墓碑,挡住仍在途中的 Add。
+			removeObserver(l.svcCtx, record.GetBattleNodeId(), original, "watch_outcome_unknown")
 		}
 		deleteSpectateWatching(l.svcCtx, playerId)
+		// RPC 失败(rejectTip=0)不是 battle 的业务拒绝,按「其它拒绝」处理:不动索引、不换场。
+		clientTip, outcome, roomMissing := constants.ErrBattleNotWatchable, "rejected", false
+		if rejectTip != 0 {
+			clientTip, outcome, roomMissing = spectateRejectVerdict(rejectTip)
+		}
 		if roomMissing {
 			if roomMayBeCreating(record, published, checkedAtMs) {
 				// 房间可能还在建:只回未找到,记录与活跃集合都不动。
@@ -264,16 +283,25 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 					continue
 				}
 			}
-			metrics.ObserveWatchBattle("not_found")
+			metrics.ObserveWatchBattle(outcome)
 			return &matchpb.WatchBattleResponse{
-				ErrorMessage: tipErr(constants.ErrBattleNotWatchable, "该战斗不存在或已结束"),
+				ErrorMessage: tipErr(clientTip, "该战斗不存在或已结束"),
+			}, nil
+		}
+		if clientTip == constants.ErrSpectateFull {
+			// 满员是规则拒绝,不是故障;随机模式也不换场,同一请求的结论不随选序漂移。
+			l.Infof("[spectate] Spectator seats full player=%d battle=%d node=%d random=%t",
+				playerId, battleId, record.GetBattleNodeId(), randomMode)
+			metrics.ObserveWatchBattle(outcome)
+			return &matchpb.WatchBattleResponse{
+				ErrorMessage: tipErr(clientTip, "观战人数已满"),
 			}, nil
 		}
 		l.Errorf("[spectate] AddObserver failed player=%d battle=%d node=%d: %v",
 			playerId, battleId, record.GetBattleNodeId(), err)
-		metrics.ObserveWatchBattle("rejected")
+		metrics.ObserveWatchBattle(outcome)
 		return &matchpb.WatchBattleResponse{
-			ErrorMessage: tipErr(constants.ErrBattleNotWatchable, "该战斗当前无法观战"),
+			ErrorMessage: tipErr(clientTip, "该战斗当前无法观战"),
 		}, nil
 	}
 

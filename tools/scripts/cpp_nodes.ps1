@@ -57,7 +57,7 @@
 #>
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("start", "stop", "status", "list")]
+    [ValidateSet("start", "stop", "stop-and-report", "status", "list")]
     [string]$Command,
 
     [string[]]$Nodes = @(),
@@ -100,7 +100,10 @@ param(
     # Deliberately not a hard-coded LAN address: that would be wrong on every
     # other machine. An already-exported NODE_IP beats detection but loses to an
     # explicit -NodeIp.
-    [string]$NodeIp = ""
+    [string]$NodeIp = "",
+    [string]$MaintenancePlanPath = "",
+    [string]$StopReportPath = "",
+    [switch]$PrepareOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -131,6 +134,8 @@ $NodeCatalogue = [ordered]@{
 }
 
 # ── Helpers ──────────────────────────────────────────────────────
+. (Join-Path $PSScriptRoot "maintenance_drain.ps1")
+
 function Resolve-NodeList {
     param([string[]]$Requested)
     if ($Requested.Count -eq 0) {
@@ -297,7 +302,31 @@ function Write-PidFile {
 
 # ── Commands ─────────────────────────────────────────────────────
 function Invoke-Start {
+    $preparePlan=$null
+    if($PrepareOnly){
+        if(-not [IO.Path]::IsPathRooted($MaintenancePlanPath)){throw 'prepare-only必须显式固定维护计划'}
+        $preparePlan=Read-MaintenanceJson -Path $MaintenancePlanPath
+        $release=Invoke-MaintenancePublicationVerification -Plan $preparePlan -Prestart
+        $fence=Join-Path (Get-PublicationFenceRoot -RepoRoot $RepoRoot) ($preparePlan.operationId+'.closed.json')
+        if(-not [IO.File]::Exists($fence)){throw 'prepare-only缺本run永久launcher围栏'}
+        Assert-PublicationStartAllowed -RepoRoot $RepoRoot -PrepareRunId $release.runId -PrepareRuntime $release
+    }else{
+        if(-not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable('MMORPG_MAINTENANCE_PREPARE_ONLY','Process'))){throw 'prepare-only须显式参数与同run SQL资格，不接受仅环境旁路'}
+        Assert-PublicationStartAllowed -RepoRoot $RepoRoot
+    }
     $names = Resolve-NodeList -Requested $Nodes
+    # 维护控制目录属于单个真实 boot；多节点不能继承同一目录争用动作与收据。
+    $control=if($PrepareOnly){Assert-MaintenanceControlDirectory -Plan $preparePlan}else{[Environment]::GetEnvironmentVariable('MMORPG_MAINTENANCE_CONTROL_DIR','Process')}
+    if($PrepareOnly){foreach($name in @('boot-identity.nodeinfo.json','active.runtime.json','prepared.source.json','open-source.request','source.open.ack.json')){if([IO.File]::Exists((Join-Path $control $name))){throw 'prepare-only必须使用当前新boot私有目录，不消费旧boot原件'}}}
+    if(-not [string]::IsNullOrWhiteSpace($control)){
+        $total=0;foreach($selected in $names){$total+=Get-InstanceCount -NodeName $selected}
+        if($total -ne 1){throw '维护模式每次只可启动一个具名节点，控制目录不得跨boot共用'}
+        if(-not [IO.Path]::IsPathRooted($control) -or -not [IO.Directory]::Exists($control) -or ((Get-Item -LiteralPath $control).Attributes -band [IO.FileAttributes]::ReparsePoint)){throw '维护控制目录必须是既有绝对私有目录'}
+        $helper=[Environment]::GetEnvironmentVariable('MMORPG_SQL_PRIVATE_FILE_HELPER','Process')
+        $helperSha=[Environment]::GetEnvironmentVariable('MMORPG_SQL_PRIVATE_FILE_HELPER_SHA256','Process')
+        if([string]::IsNullOrWhiteSpace($helper) -or -not [IO.Path]::IsPathRooted($helper) -or -not [IO.File]::Exists($helper) -or $helperSha -cnotmatch '^[A-Fa-f0-9]{64}$' -or ((Get-Item -LiteralPath $helper).Attributes -band [IO.FileAttributes]::ReparsePoint) -or (Get-MaintenanceSha256 $helper) -cne $helperSha.ToLowerInvariant()){throw '维护私有文件助手必须为绝对路径和固定SHA的已资格工件'}
+        # 三项环境只由当前启动命令继承；Node 再用固定助手强验目录ACL，并独占消费实际UUID marker。
+    }
     $pids  = Read-PidFile
     $launchedInstances = @()
 
@@ -386,6 +415,7 @@ function Invoke-Start {
             $prevAssetOpSecrets = $null
             $injectAssetOpSecrets = ($name -eq 'scene')
             $previousAccountDirectorySecrets = $null
+            $previousAuthorityEnvironment=$null
             try {
                 if ($name -eq 'scene') {
                     $previousAccountDirectorySecrets = Backup-AccountDirectoryDevSecrets -Service 'scene'
@@ -397,6 +427,8 @@ function Invoke-Start {
                     $prevAssetOpSecrets = Backup-AssetOpDevSecrets
                     Initialize-AssetOpDevSecrets -RepoRoot $RepoRoot | Out-Null
                 }
+                $childAuthorityEnvironment=@{MMORPG_MAINTENANCE_CONTROL_DIR=$control;MMORPG_MAINTENANCE_PREPARE_ONLY=$(if($PrepareOnly){'1'}else{$null})}
+                $previousAuthorityEnvironment=Enter-SqlWriterBootEnvironment -Environment $childAuthorityEnvironment
                 $proc = Start-Process -FilePath $exePath `
                     -WorkingDirectory $BinDir `
                     -RedirectStandardOutput $logOut `
@@ -415,6 +447,7 @@ function Invoke-Start {
                 # 没注入过就没什么可还原的（$prevAssetOpSecrets 仍是 $null）。
                 if ($injectAssetOpSecrets) { Restore-AssetOpDevSecrets $prevAssetOpSecrets }
                 Restore-AccountDirectoryDevSecrets $previousAccountDirectorySecrets
+                Restore-SqlWriterBootEnvironment $previousAuthorityEnvironment
             }
 
             $pids | Add-Member -NotePropertyName $instanceKey -NotePropertyValue $proc.Id -Force
@@ -440,7 +473,13 @@ function Invoke-Start {
         }
     }
 
-    Write-Host "`nAll requested nodes launched. Use -Command status to check." -ForegroundColor Green
+    if($PrepareOnly){
+        $identityFile=Join-Path $control 'boot-identity.nodeinfo.json';$clock=[Diagnostics.Stopwatch]::StartNew()
+        while(-not [IO.File]::Exists($identityFile)){if($clock.ElapsedMilliseconds -ge 60000){throw '新boot没有实际身份原件，保持关闭'};Start-Sleep -Milliseconds 50}
+        $identity=Read-MaintenanceJson -Path $identityFile
+        if([string]::IsNullOrEmpty([string]$identity.nodeUuid) -or [uint32]$identity.nodeId -eq 0){throw '新boot身份尚未实际分配'}
+        Write-Host 'prepare-only新boot身份已写；需绑定实际UUID激活runtime，再等待prepared原件，不代表SOURCE已开放。' -ForegroundColor Yellow
+    }else{Write-Host "`nAll requested nodes launched. Use -Command status to check." -ForegroundColor Green}
 }
 
 function Invoke-Stop {
@@ -517,10 +556,22 @@ function Invoke-List {
     Write-Host ""
 }
 
+function Invoke-StopAndReport {
+    if ([string]::IsNullOrWhiteSpace($MaintenancePlanPath) -or [string]::IsNullOrWhiteSpace($StopReportPath)) { throw '严格停止必须有固定计划及永久输出' }
+    $signalScript=Join-Path $PSScriptRoot 'go_services.ps1'
+    Invoke-LocalStopAndCollect -PlanFile $MaintenancePlanPath -ReportFile $StopReportPath -Family cpp -RepoRoot $RepoRoot -Tracked (Read-PidFile) -Signal {
+        param($processId)
+        # 复用既有唯一控制台信号实现，不把force-kill/日志当闭合；缺Node正式app原件会HOLD。
+        & $signalScript -Command signal-only -SignalProcessId $processId
+        return $?
+    }
+}
+
 # ── Dispatch ─────────────────────────────────────────────────────
 switch ($Command) {
     "start"  { Invoke-Start }
     "stop"   { Invoke-Stop }
+    "stop-and-report" { Invoke-StopAndReport }
     "status" { Invoke-Status }
     "list"   { Invoke-List }
 }

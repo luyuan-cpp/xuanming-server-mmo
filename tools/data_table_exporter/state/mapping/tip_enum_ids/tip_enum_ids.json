@@ -327,7 +327,8 @@
         "MatchNoWatchableBattle": 16017,
         "MatchBattleNotWatchable": 16018,
         "MatchSpectateOffline": 16019,
-        "MatchNotInScene": 16020
+        "MatchNotInScene": 16020,
+        "MatchSpectateFull": 16021
       }
     },
     "attribute_error": {

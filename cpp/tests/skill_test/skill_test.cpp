@@ -1233,6 +1233,58 @@ TEST(PlayerSkillSystemTest, SanitizeSkillListLeavesACleanListUntouched)
     EXPECT_EQ(before, skillList.SerializeAsString());
 }
 
+// 本版本解释不了的取值一律原样携带(docs/design/mixed-version-persist-field-protection.md §12.1 D5 / D6):
+// 超过本版本 max_rank 的职业技能重数、rank 0 的职业技能、写着 rank 的旧通用技能、查不到表的技能,
+// 连同条目与组件本层的未知字段,Sanitize 前后同一实例的序列化逐字节相同 —— 加载期不改写,存盘写回的就是原值。
+// 修复前:重数压回 max_rank、rank 0 的职业技能整条删掉、旧通用技能 rank 清 0,并整体替换组件。
+TEST(PlayerSkillSystemTest, SanitizeSkillListCarriesOutOfRangeRanksVerbatim)
+{
+    constexpr uint32_t kClassActive = 1102;  // 破军 主动(非初始种子)
+    constexpr uint32_t kClassSeed = 1101;    // 破军 初始主动
+    constexpr uint32_t kLegacy = 1;          // 旧通用占位技能
+    const auto* classRow = SkillTableManager::Instance().FindByIdSilent(kClassActive).first;
+    ASSERT_NE(nullptr, classRow);
+    ASSERT_NE(0u, classRow->class_id()) << "fixture: 1102 must be a class skill";
+    const auto* seedRow = SkillTableManager::Instance().FindByIdSilent(kClassSeed).first;
+    ASSERT_NE(nullptr, seedRow);
+    ASSERT_NE(0u, seedRow->class_id()) << "fixture: 1101 must be a class skill";
+    const auto* legacyRow = SkillTableManager::Instance().FindByIdSilent(kLegacy).first;
+    ASSERT_NE(nullptr, legacyRow);
+    ASSERT_EQ(0u, legacyRow->class_id()) << "fixture: 1 must be a legacy skill";
+    ASSERT_FALSE(SkillTableManager::Instance().Exists(1001)) << "fixture: 1001 must be missing from SkillTable";
+    const uint32_t aboveMax = classRow->max_rank() + 5;
+
+    entt::entity player = CreateSkillActor();
+    auto &skillList = tlsEcs.actorRegistry.get_or_emplace<PlayerSkillListComp>(player);
+    auto* rankAboveMax = skillList.add_skill_list();
+    rankAboveMax->set_skill_table_id(kClassActive);
+    rankAboveMax->set_rank(aboveMax);
+    rankAboveMax->mutable_unknown_fields()->AddVarint(412346, 1);
+    auto* rankZero = skillList.add_skill_list();
+    rankZero->set_skill_table_id(kClassSeed);
+    rankZero->set_rank(0);
+    rankZero->mutable_unknown_fields()->AddVarint(412346, 2);
+    auto* legacyWithRank = skillList.add_skill_list();
+    legacyWithRank->set_skill_table_id(kLegacy);
+    legacyWithRank->set_rank(7);
+    legacyWithRank->set_id(42);
+    legacyWithRank->mutable_unknown_fields()->AddVarint(412346, 3);
+    auto* unknownSkill = skillList.add_skill_list();
+    unknownSkill->set_skill_table_id(1001);
+    unknownSkill->set_rank(37);
+    skillList.mutable_unknown_fields()->AddVarint(412345, 5); // 新版本给组件本层加的字段
+    const std::string before = skillList.SerializeAsString();
+
+    PlayerSkillSystem::SanitizeSkillList(player);
+
+    EXPECT_EQ(before, skillList.SerializeAsString());
+    ASSERT_EQ(4, skillList.skill_list_size());
+    EXPECT_EQ(aboveMax, skillList.skill_list(0).rank()) << "超过本版本 max_rank 不压回";
+    EXPECT_EQ(kClassSeed, skillList.skill_list(1).skill_table_id()) << "rank 0 的职业技能不删";
+    EXPECT_EQ(7u, skillList.skill_list(2).rank()) << "旧通用技能的 rank 不清 0";
+    EXPECT_EQ(1, skillList.unknown_fields().field_count());
+}
+
 // Main function
 int main(int argc, char** argv) {
     if (!test_config::FindAndLoadTestConfig(argc, argv))

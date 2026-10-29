@@ -39,7 +39,7 @@ func playerWriteTask(t *testing.T, gen uint32) *db_proto.DBTask {
 	t.Helper()
 	body, err := proto.Marshal(&playerpb.PlayerDatabase{PlayerId: 42, PersistSchemaGen: gen})
 	require.NoError(t, err)
-	return &db_proto.DBTask{Key: 42, Op: "write", MsgType: playerTableMsgType(), Body: body, TaskId: fmt.Sprintf("persist-gen-%d", gen)}
+	return &db_proto.DBTask{Key: 42, Op: db_proto.DBOp_DB_OP_WRITE, MsgType: playerTableMsgType(), Body: body, TaskId: fmt.Sprintf("persist-gen-%d", gen)}
 }
 
 func TestEffectiveGenTreatsZeroAsOne(t *testing.T) {
@@ -59,39 +59,39 @@ func TestCheckWriteSchema(t *testing.T) {
 	gen := persistschema.Gen
 
 	t.Run("non player table is ignored", func(t *testing.T) {
-		kind, err := checkWriteSchema(&db_proto.DBTask{Op: "write"}, &db_proto.TaskResult{})
+		kind, err := checkWriteSchema(&db_proto.DBTask{Op: db_proto.DBOp_DB_OP_WRITE}, &db_proto.TaskResult{})
 		require.NoError(t, err)
 		assert.Empty(t, kind)
 	})
 	t.Run("read op is ignored", func(t *testing.T) {
-		kind, err := checkWriteSchema(&db_proto.DBTask{Op: "read"}, &playerpb.PlayerDatabase{PersistSchemaGen: gen + 1})
+		kind, err := checkWriteSchema(&db_proto.DBTask{Op: db_proto.DBOp_DB_OP_READ}, &playerpb.PlayerDatabase{PersistSchemaGen: gen + 1})
 		require.NoError(t, err)
 		assert.Empty(t, kind)
 	})
 	t.Run("unstamped write during bootstrap is accepted and counted", func(t *testing.T) {
 		before := metricCount(t, "db_persist_schema_unstamped_write_total", nil)
-		kind, err := checkWriteSchema(&db_proto.DBTask{Op: "write"}, &playerpb.PlayerDatabase{})
+		kind, err := checkWriteSchema(&db_proto.DBTask{Op: db_proto.DBOp_DB_OP_WRITE}, &playerpb.PlayerDatabase{})
 		require.NoError(t, err)
 		assert.Empty(t, kind)
 		assert.Equal(t, before+1, metricCount(t, "db_persist_schema_unstamped_write_total", nil))
 	})
 	t.Run("current generation passes", func(t *testing.T) {
-		kind, err := checkWriteSchema(&db_proto.DBTask{Op: "write"}, &playerpb.PlayerDatabase_1{PersistSchemaGen: gen})
+		kind, err := checkWriteSchema(&db_proto.DBTask{Op: db_proto.DBOp_DB_OP_WRITE}, &playerpb.PlayerDatabase_1{PersistSchemaGen: gen})
 		require.NoError(t, err)
 		assert.Empty(t, kind)
 	})
 	t.Run("newer generation is deferred (C1)", func(t *testing.T) {
-		_, err := checkWriteSchema(&db_proto.DBTask{Op: "write"}, &playerpb.PlayerDatabase{PersistSchemaGen: gen + 1})
+		_, err := checkWriteSchema(&db_proto.DBTask{Op: db_proto.DBOp_DB_OP_WRITE}, &playerpb.PlayerDatabase{PersistSchemaGen: gen + 1})
 		require.ErrorIs(t, err, errSchemaTooNew)
 	})
 	t.Run("unstamped write after bootstrap closed is rejected (C0)", func(t *testing.T) {
 		persistBootstrapClosed.Store(true)
 		t.Cleanup(func() { persistBootstrapClosed.Store(false) })
-		kind, err := checkWriteSchema(&db_proto.DBTask{Op: "write"}, &playerpb.PlayerDatabase{})
+		kind, err := checkWriteSchema(&db_proto.DBTask{Op: db_proto.DBOp_DB_OP_WRITE}, &playerpb.PlayerDatabase{})
 		require.NoError(t, err)
 		assert.Equal(t, writePersistUnstamped, kind)
 		// 盖了戳的写不受 C0 影响。
-		kind, err = checkWriteSchema(&db_proto.DBTask{Op: "write"}, &playerpb.PlayerDatabase{PersistSchemaGen: gen})
+		kind, err = checkWriteSchema(&db_proto.DBTask{Op: db_proto.DBOp_DB_OP_WRITE}, &playerpb.PlayerDatabase{PersistSchemaGen: gen})
 		require.NoError(t, err)
 		assert.Empty(t, kind)
 	})
@@ -110,7 +110,7 @@ func TestSchemaRegressed(t *testing.T) {
 
 func TestCheckReadSchema(t *testing.T) {
 	gen := persistschema.Gen
-	task := &db_proto.DBTask{Op: "read", TaskId: "r"}
+	task := &db_proto.DBTask{Op: db_proto.DBOp_DB_OP_READ, TaskId: "r"}
 	require.NoError(t, checkReadSchema(task, &playerpb.PlayerDatabase{}), "行不存在(全零)或未盖戳按世代 1")
 	require.NoError(t, checkReadSchema(task, &playerpb.PlayerDatabase{PersistSchemaGen: gen}))
 	require.ErrorIs(t, checkReadSchema(task, &playerpb.PlayerDatabase_1{PersistSchemaGen: gen + 1}), errSchemaTooNew)
@@ -140,8 +140,8 @@ func TestProcessTaskWithoutLockAppliesWriteSchemaChecksBeforeSQL(t *testing.T) {
 func TestSchemaTooNewDeferralKeepsWriteBudget(t *testing.T) {
 	cause := fmt.Errorf("wrapped: %w", errSchemaTooNew)
 	assert.Equal(t, metrics.DeferSchemaTooNew, deferReason(cause))
-	assert.True(t, retryBudgetExempt(&db_proto.DBTask{Op: "write"}, cause), "写的世代超前不耗重试预算")
-	assert.False(t, retryBudgetExempt(&db_proto.DBTask{Op: "read"}, cause), "读不走延后,不享受豁免")
+	assert.True(t, retryBudgetExempt(&db_proto.DBTask{Op: db_proto.DBOp_DB_OP_WRITE}, cause), "写的世代超前不耗重试预算")
+	assert.False(t, retryBudgetExempt(&db_proto.DBTask{Op: db_proto.DBOp_DB_OP_READ}, cause), "读不走延后,不享受豁免")
 }
 
 func TestFailReadSchemaTooNewAnswersFailureAtOnce(t *testing.T) {
@@ -149,7 +149,7 @@ func TestFailReadSchemaTooNewAnswersFailureAtOnce(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	w := &worker{ctx: ctx, redisClient: rc}
-	dbTask := &db_proto.DBTask{Key: 42, Op: "read", MsgType: playerTableMsgType(), TaskId: "t-schema", ReplyInstance: testReplyInstance}
+	dbTask := &db_proto.DBTask{Key: 42, Op: db_proto.DBOp_DB_OP_READ, MsgType: playerTableMsgType(), TaskId: "t-schema", ReplyInstance: testReplyInstance}
 	before := metricCount(t, "db_task_read_abandoned_total", map[string]string{"reason": metrics.ReadAbandonedSchemaTooNew})
 
 	w.failReadSchemaTooNew(&workerTask{}, dbTask, fmt.Errorf("%w: row_gen=9", errSchemaTooNew))

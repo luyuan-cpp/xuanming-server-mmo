@@ -40,10 +40,9 @@ void NodeConnector::ConnectToGrpcNode(const NodeInfo &nodeInfo)
 {
 	auto &targetRegistry = NodeUtils::GetRegistryForNodeType(nodeInfo.node_type());
 
-	// GRPC node_id is only unique within a zone, not globally across zones.
-	// Use uuid-based dedup and auto-generated entity IDs to avoid collisions
-	// when the gate discovers GRPC nodes from multiple zones (e.g. login nodes
-	// with node_id 1..3 in each of 10 zones sharing the same etcd).
+	// node_id 是业务寻址编号,不是带版本位的 EnTT 实体句柄。
+	// 实体由 registry.create() 自动分配,按 uuid 判断是否为同一进程;
+	// 查找实体应使用 uuid 或 FindNodeEntityByZoneAndNodeId。
 	for (const auto &[entity, existing] : targetRegistry.view<NodeInfo>().each())
 	{
 		if (NodeUtils::IsSameNode(nodeInfo.node_uuid(), existing.node_uuid()))
@@ -98,13 +97,9 @@ void NodeConnector::ConnectToTcpNode(const NodeInfo &nodeInfo)
 {
 	auto &targetRegistry = tlsNodeContextManager.GetRegistry(nodeInfo.node_type());
 
-	// TCP nodes used to key entt::entity by node_id, which only works as long
-	// as a registry holds at most one zone's worth of nodes (node_id is unique
-	// within a zone, not across zones). To make multi-zone deployments safe by
-	// construction we now treat uuid as the primary key and let entt assign
-	// entity ids automatically — the same scheme ConnectToGrpcNode has always
-	// used. Callers that previously did `entt::entity{node_id}` should resolve
-	// the entity via NodeUtils::FindNodeEntityByZoneAndNodeId or by uuid.
+	// node_id 是业务寻址编号,不能转换成完整的 EnTT 实体句柄。
+	// 与 gRPC 路径一致,实体由 registry.create() 自动分配,按 uuid 判断同一进程;
+	// 调用方应使用 uuid 或 NodeUtils::FindNodeEntityByZoneAndNodeId 解析实体。
 	for (const auto &[existingEntity, existingNodeInfo] : targetRegistry.view<NodeInfo>().each())
 	{
 		if (!NodeUtils::IsSameNode(existingNodeInfo.node_uuid(), nodeInfo.node_uuid()))

@@ -106,7 +106,7 @@ func TestSendTaskRoutesByDBTaskContract(t *testing.T) {
 	t.Cleanup(func() { _ = sp.Close() })
 
 	p := newLockTestProducer(t, sp, 10)
-	if err := p.SendTask(context.Background(), &db_proto.DBTask{TaskId: "route-1", Key: 1001, Op: "read"}, "1001"); err != nil {
+	if err := p.SendTask(context.Background(), &db_proto.DBTask{TaskId: "route-1", Key: 1001, Op: db_proto.DBOp_DB_OP_READ}, "1001"); err != nil {
 		t.Fatalf("SendTask: %v", err)
 	}
 }
@@ -124,8 +124,8 @@ func TestSendTasksRoutesByDBTaskContract(t *testing.T) {
 
 	p := newLockTestProducer(t, sp, 10)
 	tasks := []*db_proto.DBTask{
-		{TaskId: "route-a", Key: 1001, Op: "read", MsgType: "a"},
-		{TaskId: "route-b", Key: 1001, Op: "read", MsgType: "b"},
+		{TaskId: "route-a", Key: 1001, Op: db_proto.DBOp_DB_OP_READ, MsgType: "a"},
+		{TaskId: "route-b", Key: 1001, Op: db_proto.DBOp_DB_OP_READ, MsgType: "b"},
 	}
 	if err := p.SendTasks(context.Background(), tasks, "1001"); err != nil {
 		t.Fatalf("SendTasks: %v", err)
@@ -158,14 +158,46 @@ func TestSendTaskRejectsMismatchedKey(t *testing.T) {
 	sp := mocks.NewSyncProducer(t, newDBTaskProducerConfig(testKafkaConfig()))
 	p := newLockTestProducer(t, sp, 10)
 
-	if err := p.SendTask(context.Background(), &db_proto.DBTask{TaskId: "mismatch-1", Key: 42, Op: "read"}, "43"); err == nil {
+	if err := p.SendTask(context.Background(), &db_proto.DBTask{TaskId: "mismatch-1", Key: 42, Op: db_proto.DBOp_DB_OP_READ}, "43"); err == nil {
 		t.Error("SendTask must reject a Kafka key that is not DBTaskKey(task.Key)")
 	}
-	if err := p.SendTasks(context.Background(), []*db_proto.DBTask{{TaskId: "mismatch-2", Key: 42, Op: "read"}}, "43"); err == nil {
+	if err := p.SendTasks(context.Background(), []*db_proto.DBTask{{TaskId: "mismatch-2", Key: 42, Op: db_proto.DBOp_DB_OP_READ}}, "43"); err == nil {
 		t.Error("SendTasks must reject a Kafka key that is not DBTaskKey(task.Key)")
 	}
 	if err := sp.Close(); err != nil {
 		t.Errorf("mock close: %v", err)
+	}
+}
+
+func TestSendTaskRejectsUnspecifiedAndUnknownOp(t *testing.T) {
+	for _, op := range []db_proto.DBOp{db_proto.DBOp_DB_OP_UNSPECIFIED, db_proto.DBOp(99)} {
+		t.Run(op.String(), func(t *testing.T) {
+			// 不登记发送期望，任何误发送都会由 mock 判为失败。
+			sp := mocks.NewSyncProducer(t, newDBTaskProducerConfig(testKafkaConfig()))
+			t.Cleanup(func() { _ = sp.Close() })
+			p := newLockTestProducer(t, sp, 10)
+			task := &db_proto.DBTask{Key: 42, Op: op, TaskId: "invalid-op"}
+			if err := p.SendTask(context.Background(), task, "42"); err == nil {
+				t.Fatal("未指定或未知操作必须在发送前拒绝")
+			}
+		})
+	}
+}
+
+func TestSendTasksInvalidOpCannotPartiallySend(t *testing.T) {
+	for _, op := range []db_proto.DBOp{db_proto.DBOp_DB_OP_UNSPECIFIED, db_proto.DBOp(99)} {
+		t.Run(op.String(), func(t *testing.T) {
+			sp := mocks.NewSyncProducer(t, newDBTaskProducerConfig(testKafkaConfig()))
+			t.Cleanup(func() { _ = sp.Close() })
+			p := newLockTestProducer(t, sp, 10)
+			tasks := []*db_proto.DBTask{
+				{Key: 42, Op: db_proto.DBOp_DB_OP_READ, TaskId: "valid-first"},
+				{Key: 42, Op: op, TaskId: "invalid-second"},
+			}
+			if err := p.SendTasks(context.Background(), tasks, "42"); err == nil {
+				t.Fatal("批量包含非法操作时必须整批拒绝，不能先发送合法前缀")
+			}
+		})
 	}
 }
 
@@ -255,12 +287,12 @@ func TestDBTaskReadAndWriteShareKafkaPartitionIntegration(t *testing.T) {
 		t.Fatalf("DBTaskPartition: %v", err)
 	}
 
-	send := func(producer sarama.SyncProducer, op string) (int32, int64) {
+	send := func(producer sarama.SyncProducer, op db_proto.DBOp) (int32, int64) {
 		t.Helper()
 		value, err := proto.Marshal(&db_proto.DBTask{
 			Key:    playerID,
 			Op:     op,
-			TaskId: "it-" + op + "-" + strconv.FormatInt(time.Now().UnixNano(), 10),
+			TaskId: "it-" + op.String() + "-" + strconv.FormatInt(time.Now().UnixNano(), 10),
 		})
 		if err != nil {
 			t.Fatalf("marshal %s task: %v", op, err)
@@ -276,8 +308,8 @@ func TestDBTaskReadAndWriteShareKafkaPartitionIntegration(t *testing.T) {
 		return partition, offset
 	}
 
-	pW, oW := send(writeProducer, "write")
-	pR, oR := send(readProducer, "read")
+	pW, oW := send(writeProducer, db_proto.DBOp_DB_OP_WRITE)
+	pR, oR := send(readProducer, db_proto.DBOp_DB_OP_READ)
 	if pW != want || pR != want {
 		t.Fatalf("write partition=%d read partition=%d, both must equal contract partition %d", pW, pR, want)
 	}

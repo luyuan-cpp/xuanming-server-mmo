@@ -121,6 +121,8 @@ securityContext:
     - 全新 zone-up:整个 zone 起不来。
 
     所以「先读各节点池硬限」(下文上线前置第 1 步)不是可选项;对单副本 battle 它是唯一的防线。给 C++ Deployment 显式设 maxUnavailable 0 要改共享脚本 `k8s_deploy.ps1`,已列为后续项,本项不改。
+
+    (**2026-10-22 更正**,已落码、未验证:`New-NodeDeploymentYaml` 现在显式写 `strategy.rollingUpdate.maxUnavailable: 0`,maxSurge 仍取 K8s 缺省 25%。从新的 `k8s_deploy.ps1` 部署起,gate / scene / battle 的 Deployment 拒启时只停在滚动中途,上面 scene「先缩掉 1 台」那条不再成立。battle hostPort 形态仍是 maxSurge 0 / maxUnavailable 1,单副本拒启仍整体停服;Agones Fleet 与 external gate 的行为不变。另外,`-WaitReady` 等 gate / scene / battle 失败时,脚本会对未就绪 Pod 读 `kubectl logs --previous`(没有上一个实例时读当前实例),把 `FATAL open file limit` 行打印出来;Agones scene 不等待,只打印对应的 logs 命令。见 PROGRESS「2026-10-22 B0-4 部署侧后续项」条目。)
 - 每次启动 stdout 都有一行(`kubectl logs` 可见,日志文件里也有一份):
   `[open_file_limit] role=gate verdict=ok mode=enforce required=24096 client_cap=20000 cap_key=GateMaxConnections reserve=4096 soft_before=1024 soft=524288 hard=524288 raise=ok`
 - 为什么不在清单里做:K8s 没有按容器的 ulimit 字段;initContainer 改不了别的进程的限值;特权 prlimit 已否决(见 [gate 准入设计](../design/gate-connection-admission-control.md) P0-1);启动壳里的 `ulimit -n` 与进程自抬是同一件事,不做两份。
@@ -161,6 +163,23 @@ securityContext:
   # 撤销必须显式做:set env 加的变量不在 last-applied 里,k8s_deploy 的 apply 不会删它
   kubectl -n <ns> set env deployment/<名字> NODE_OPEN_FILE_LIMIT_MODE-
   ```
+  - **2026-10-22 更正**(已落码、未验证):生成器已接线。
+    - 用法:`k8s_deploy.ps1 -NodeOpenFileLimitMode enforce|warn`,只认小写,其余值在入口被拒。留空 = 不写,进程按 enforce。
+    - 覆盖本次部署的全部 C++ 工作负载:`zone-up` 的 gate(Deployment / external StatefulSet)与 scene(Deployment / Agones Fleet),`infra-up` 的 battle(Deployment / hostPort / Agones Fleet)。
+    - `warn` 每次部署打一条 `Write-Warning`。
+    - 不粘滞:下一次部署不传就落回 enforce。external gate 是 OnDelete,模板改了还要按 `k8s_gate_drain.ps1` 逐台换 Pod。
+    - `dev_tools.ps1` / `k8s_image.ps1` / `k8s_zone_rollback.ps1` 尚未透传,要直接调 `k8s_deploy.ps1 -Command zone-up` / `infra-up`。
+      - (**2026-10-22 再更正**,已落码、未验证)三个包装入口已透传 `-NodeOpenFileLimitMode`,不必再直接调 `k8s_deploy.ps1`。可用入口:
+        - `dev_tools.ps1 -Command k8s-zone-up` / `k8s-infra-up` / `k8s-all-up`;
+        - `k8s-release-zone` / `k8s-release-all`;
+        - `k8s-zone-rollback`。
+      - 包装层留空 = 不透传,同样只收小写。
+      - 回档时以 `warn` 运行的 zone 必须照传。`k8s_zone_rollback.ps1` 第 0 步不核对这个 env;漏传时 gate / scene 在 Step 6 拒启,那时已停服、已回档,只能补上参数单独重跑 Step 6。
+        - (**2026-10-22 三更正**,已落码、未验证)第 0 步 a 现在核对。`-NodeOpenFileLimitMode` 留空时,`-Apply` 在停服之前读 gate(Deployment / external StatefulSet)与 scene Deployment 的模板;装了 Agones 时再读 scene Fleet。上面 `kubectl set env` 手设在单个工作负载上的值也算。
+        - 任一带着 `warn`,或读不到(kubectl / Agones 探测失败、没有 gate),都在 Step 1 之前拒绝,报错给出照传的 `-NodeOpenFileLimitMode warn`。
+          - (**2026-10-23 更正上一句**)两种拒绝给的出路不同。有工作负载带着 `warn` 时,报错要求照传 `-NodeOpenFileLimitMode warn`;硬限已修好就显式传 `enforce`。读不到时(还包括 `valueFrom`、变量重复、存档早于这项核对),报错不替操作者选值:先确认该 zone 实际以哪种模式运行,再显式传 `warn` 或 `enforce`。实际以 enforce 运行的 zone 不要为了过检查传 `warn`,那会让 Step 6 拉起的 gate / scene 带上豁免,不再拒启保护。
+        - 显式给值不核对:照传 `warn`,或确认硬限已修好后显式传 `enforce`。
+    - 上面的 `kubectl set env` 仍可作应急。手设的值不在 last-applied 里,撤销仍按上面显式删。
 - 裸机 / staging 主机:启动节点前 `export NODE_OPEN_FILE_LIMIT_MODE=warn`(见 [linux-staging-stress-runbook.md](./linux-staging-stress-runbook.md) A.1)。
 
 **紧急回退**:本项不改 proto、配置键、ConfigMap 与 K8s 模板,回退就是换回旧镜像 tag(已推送的不可变 git sha tag)。不要用 `k8s-release-zone`,它会从当前工作区重新构建并推送镜像:
@@ -227,7 +246,7 @@ ss -tan state time-wait | awk '{print $4}' | sort | uniq -c | sort -rn | head
 
 | TIME_WAIT 集中在 | 含义 | 修法 |
 |---|---|---|
-| `<login_ip>:<grpc_port>` | gate→login 是短连接 | 任务 #13 核查 channel 单例 |
+| `<login_ip>:<grpc_port>`（路由模式看 router 对端） | gRPC 对端连接频繁周转 | 按 [gRPC 传输设计](../design/grpc-muduo-transport.md) 核查断链、GOAWAY 与重连；业务通道默认关闭周期 keepalive |
 | 自己监听端口 | 客户端/压测短连进来 | 客户端开 keep-alive |
 | 压测机几万 TIME_WAIT | 是压测机的极限,**不是 gate 的** | 压测机也调 sysctl |
 

@@ -1,6 +1,6 @@
 ﻿param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "tree", "naming-audit", "naming-apply", "third-party-lock-check", "third-party-zlib-build", "third-party-grpc-build", "no-raw-pointer-setup", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-zone-rollback", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "k8s-route-tool", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "merge-zone-unmerge", "merge-zone-relocate", "merge-zone-relocate-abort", "merge-zone-pin-placement", "merge-zone-storage-audit", "merge-zone-capability-check", "kafka-offset-reset", "git-stats")]
+    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "tree", "naming-audit", "naming-apply", "third-party-lock-check", "third-party-zlib-build", "third-party-protobuf-build", "third-party-boringssl-build", "no-raw-pointer-setup", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-redis-split-status", "k8s-redis-wipe", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-zone-rollback", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "k8s-route-tool", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "merge-zone-unmerge", "merge-zone-relocate", "merge-zone-relocate-abort", "merge-zone-pin-placement", "merge-zone-storage-audit", "merge-zone-capability-check", "kafka-offset-reset", "git-stats")]
     [string]$Command,
 
     [string]$ConfigPath = "",
@@ -22,6 +22,11 @@
     [switch]$ApplyPatches,
     [string]$BuildRoot = "",
     [string]$ZlibInstallRoot = "",
+    [ValidateSet("Debug", "Release")]
+    [string]$Configuration = "Debug",
+    [ValidateSet("x64", "x86")]
+    [string]$Architecture = "x64",
+    [string]$PreferredMsvcVersion = "14.51",
 
     [string]$ZoneName = "yesterday",
     [int]$ZoneId = 101,
@@ -98,6 +103,14 @@
     # Go 服务、碰不到 match,不转发它。
     [ValidateSet("", "0", "1")]
     [string]$MatchRatingSnapshotPublish = "",
+    # B0-4 运维豁免开关(NODE_OPEN_FILE_LIMIT_MODE),透传给 k8s_deploy.ps1 -NodeOpenFileLimitMode(k8s-infra-up / k8s-zone-up /
+    # k8s-all-up)、k8s_image.ps1(k8s-release-*)与 k8s_zone_rollback.ps1(k8s-zone-rollback,由它的 Step 6 转给 k8s-zone-up)。
+    # 取值语义、覆盖范围(zone-up 的 gate / scene,infra-up 的 battle)与 warn 的代价见 k8s_deploy.ps1 同名参数注释。
+    # 写法同 -GateRouterMode:默认留空 = 不透传,由 k8s_deploy.ps1 接管(那边留空 = 不写 env、进程按 enforce),默认值只留在那一处。
+    # 与下游同一 ValidateSet,同样区分大小写(C++ 只认小写):大写或拼错在本入口就拒,不拖到 k8s_image.ps1 推完镜像、
+    # 或回滚已停服之后才由下游拒。⚠ 不粘滞:以 warn 运行的环境经本入口重新部署却不传,会落回 enforce,硬限仍不够就再次拒启。
+    [ValidateSet("", "enforce", "warn", IgnoreCase = $false)]
+    [string]$NodeOpenFileLimitMode = "",
     # 集群外客户端入口,透传给 k8s_deploy.ps1(k8s-infra-up / k8s-zone-up / k8s-all-up)、k8s_image.ps1(k8s-release-*)
     # 或 k8s_zone_rollback.ps1(k8s-zone-rollback,由它的 Step 6 转给 k8s-zone-up),语义见 k8s_deploy.ps1 同名参数与
     # docs/design/k8s-client-entry.md(集群外入口 D80 / D88 / D89 / D91)。
@@ -157,6 +170,18 @@
     # 它决定 db / data-service 的 WAITAOF 副本份数,k8s_deploy.ps1 的 zone-up 没收到时跟随线上 sts/redis,收到而与线上不同即拒绝。
     [ValidateRange(0, 3)]
     [int]$RedisReplicas = 0,
+    # 共享 Redis 按用途拆实例(G4a 第 1a 批),透传给 k8s_deploy.ps1 / k8s_image.ps1 同名参数,语义见 k8s_deploy.ps1 参数注释。
+    #   -RedisSplit:auto(缺省)= 不透传,由 k8s_deploy.ps1 解析(所有档位不拆;zone 写路径跟随线上);none / queue 才透传。
+    #     k8s-zone-rollback 同样只转发 none / queue:回档 Step 1 删掉 namespace 后 auto 读不到线上,以 queue 运行的 zone 回档要显式给 queue。
+    #   -ConfirmRedisSplitSwitch:确认本次就是要改 login / gateway 的排队 Redis 地址,switch 只在被指定时透传(k8s-zone-rollback 不支持)。
+    #   -RedisQueueMaxMemory:queue 实例的 maxmemory(如 1gb),非空才透传;只对会 apply infra 的入口有意义(k8s-zone-rollback 不支持)。
+    [ValidateSet("auto", "none", "queue")]
+    [string]$RedisSplit = "auto",
+    [switch]$ConfirmRedisSplitSwitch,
+    [string]$RedisQueueMaxMemory = "",
+    # k8s-redis-wipe 的显式确认(压测前清空部署拓扑里的每个 Redis 实例,AGENTS.md §6.2),透传给 k8s_deploy.ps1 -Command redis-wipe;
+    # 那边还要求 -InfraNamespace 匹配 ^mmorpg-stress-。switch 只在被指定时透传。
+    [switch]$ConfirmWipeAllRedis,
     [switch]$SkipInfra,
     [switch]$SkipGoSvc,
     [string]$GoSvcRegistry = "ghcr.io/luyuancpp",
@@ -165,8 +190,6 @@
     [switch]$SkipJavaSvc,
     [string]$JavaSvcRegistry = "ghcr.io/luyuancpp",
     [string]$JavaSvcTag = "",
-    [bool]$BuildRelease = $true,
-    [bool]$BuildDebug = $true,
     # iwyu-run
     [string[]]$NodePath = @("cpp/nodes/scene"),
     [ValidateSet("auto", "iwyu", "clang-tidy")]
@@ -233,7 +256,7 @@
     #                  `DB: 15` 会被静默忽略(那行 inert 的键已从 yaml 删除)。
     #                  传 -MergeMappingRedisDB 15 = fence 与 remap 一起指向
     #                  data_service 从不碰的库 = 审计恒绿、合服报成功却零改动。
-    #   guild   DB 2   guild_rank:zone / guild:v2 / guild_rank:maintenance_lock
+    #   guild   DB 0   guild_rank:zone / guild:v2 / guild_rank:maintenance_lock(2026-10-23 由 DB 2 改为 0)
     #   login   DB 0   player_merge_notice / player:session / kafka:retry|dead
     # friend 的 DB 3 已退役(friend 移植:F2 删读者、F3 删参数):friend:online 从来没有写者,读者也已删除,
     # 好友在线状态改为读共享库的契约 key player:session:{id}(login 段那一行)。
@@ -243,7 +266,7 @@
     [string]$MergeMySqlDsn = "root:@tcp(127.0.0.1:3306)/mmorpg?charset=utf8mb4&parseTime=true&loc=Local",
     [string]$MergeRedisAddr = "127.0.0.1:6379",
     [string]$MergeRedisPassword = "",
-    [int]$MergeRedisDB = 2,
+    [int]$MergeRedisDB = 0,
     # -1 = 从 go/data_service/etc/data_service.yaml 的 MappingRedis 现读(见 Get-MergeMappingRedis)。
     [string]$MergeMappingRedisAddr = "",
     [int]$MergeMappingRedisDB = -1,
@@ -252,6 +275,10 @@
     [int]$MergeNoticeRedisDB = 0,
     [string]$MergeSceneRedisAddr = "",
     [int]$MergeSceneRedisDB = 0,
+    # etcd 客户端地址(逗号分隔,http://host:2379),转发为 -etcd-endpoints。merge-zone / merge-zone-unmerge 必填:
+    # 门禁 P2 与 -MergeClearSourceHotState 要 etcd 场景节点注册表的正面证据(该 zone 一条注册都没有)。
+    # 不设缺省值:指向错的 etcd(例如本机空 etcd 而 Redis 指向 K8s)会把活着的 zone 误判为已下线。
+    [string]$MergeEtcdEndpoints = "",
     # 多 Redis 集群部署才需要的 player:{id}:* blob 拷贝。
     [switch]$MergeMigratePlayerBlobs,
     [string]$MergeSourceDataRedis = "",
@@ -439,9 +466,11 @@
     [string]$MergeZoneTakeOverFence = "",
     # ── D1 映射开关,透传给 k8s_deploy.ps1 同名参数(k8s-infra-up / k8s-zone-up / k8s-all-up)──
     # 语义、组合门禁与粘滞核对(线上现状与本次参数不一致且没带 -ConfirmRouteSwitchChange 即拒绝)都只在 k8s_deploy.ps1 一处,
-    # 本入口只透传:-RouteStoreMode 非空才传,五个 switch 只在被指定时传,默认值只留在下游(redis / false)。
-    # 集群切 db_first 之后,经本入口部署必须照传线上现状(粘滞核对的报错给出照传串),否则在任何写操作之前被拒。
-    # k8s_image.ps1 不部署 Go 服务,k8s-image-* / k8s-release-* 显式给了即拒绝。k8s-zone-rollback 的 Step 6 透传由回滚脚本负责(R9)。
+    # 本入口只透传:-RouteStoreMode 非空才传,五个 switch 只在被指定时传,默认值只留在下游(2026-10-21 起 k8s_deploy 缺省
+    # db_first / 全 true = 全球默认,部署 Go 服务时入口闸只许这一组值)。线上仍是旧值(redis / false)的集群经本入口部署会被
+    # 粘滞核对拒绝,确认升级时加 -ConfirmRouteSwitchChange;读方前提(本次不部署的 zone 必须已 db_first + Arm)不受它豁免。
+    # k8s_image.ps1 不部署 Go 服务,k8s-image-* / k8s-release-* 显式给了即拒绝。k8s_zone_rollback.ps1 不声明这六个参数,
+    # 它的 Step 6 按 k8s_deploy 缺省重建 zone;k8s-zone-rollback 显式给了即在调用回档脚本之前拒绝(不静默丢掉)。
     # 追加在参数块末尾,理由同上(字符串参数按声明顺序占位置)。
     [ValidateSet("", "redis", "db_first")]
     [string]$RouteStoreMode = "",
@@ -785,40 +814,25 @@ function Invoke-ThirdPartyZlibBuild {
     exit $LASTEXITCODE
 }
 
-function Invoke-ThirdPartyGrpcBuild {
-    $scriptPath = Join-Path $ScriptDir "third_party\build_grpc.ps1"
-    if (-not (Test-Path $scriptPath)) {
-        throw "third_party/build_grpc.ps1 not found: $scriptPath"
+function Invoke-ThirdPartySdkBuild {
+    param([ValidateSet('protobuf', 'boringssl')][string]$Sdk)
+    $scriptPath = Join-Path $ScriptDir "third_party/build_$Sdk.ps1"
+    if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
+        throw "第三方 SDK 构建脚本不存在: $scriptPath"
     }
-
     $bound = $script:PSBoundParameters
-    $args = @{}
-    if ($bound.ContainsKey('BuildRelease')) {
-        $args.BuildRelease = $BuildRelease
+    $buildArgs = @{
+        Configuration = $Configuration
+        Architecture = $Architecture
+        PreferredMsvcVersion = $PreferredMsvcVersion
+        Clean = $Clean
+        SkipToolCheck = $SkipToolCheck
+        UseVSGenerator = $UseVSGenerator
     }
-    if ($bound.ContainsKey('BuildDebug')) {
-        $args.BuildDebug = $BuildDebug
-    }
-    if ($bound.ContainsKey('Jobs')) {
-        $args.Jobs = $Jobs
-    }
-    if ($Clean) {
-        $args.Clean = $true
-    }
-    if ($SkipToolCheck) {
-        $args.SkipToolCheck = $true
-    }
-    if ($UseVSGenerator) {
-        $args.UseVSGenerator = $true
-    }
-    if (-not [string]::IsNullOrWhiteSpace($BuildRoot)) {
-        $args.BuildRoot = $BuildRoot
-    }
-    if (-not [string]::IsNullOrWhiteSpace($ZlibInstallRoot)) {
-        $args.ZlibInstallRoot = $ZlibInstallRoot
-    }
-
-    & $scriptPath @args
+    if ($bound.ContainsKey('Jobs')) { $buildArgs.Jobs = $Jobs }
+    if ($BuildRoot) { $buildArgs.BuildRoot = $BuildRoot }
+    if ($Sdk -eq 'protobuf' -and $ZlibInstallRoot) { $buildArgs.ZlibInstallRoot = $ZlibInstallRoot }
+    & $scriptPath @buildArgs
     exit $LASTEXITCODE
 }
 
@@ -945,6 +959,10 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($MatchRatingSnapshotPublish)) {
         $args.MatchRatingSnapshotPublish = $MatchRatingSnapshotPublish
     }
+    # 同上:留空不传,k8s_deploy.ps1 留空即不写 NODE_OPEN_FILE_LIMIT_MODE(进程按 enforce)。
+    if (-not [string]::IsNullOrWhiteSpace($NodeOpenFileLimitMode)) {
+        $args.NodeOpenFileLimitMode = $NodeOpenFileLimitMode
+    }
     # 集群外入口参数同一口径:字符串非空才传,GateNodePortBase 非 -1 才传,switch 只在被指定时传。
     # 不抽成共用函数:契约测试按 AST 单独取出本函数执行,依赖外部函数会让它找不到命令。
     if (-not [string]::IsNullOrWhiteSpace($ClientEntryMode)) { $args.ClientEntryMode = $ClientEntryMode }
@@ -981,6 +999,13 @@ function Invoke-K8sDeploy {
     if ($ConfirmRedisCoreRestart) { $args.ConfirmRedisCoreRestart = $true }
     # 共享 Redis 的形态:非 0 才传(0 = k8s_deploy.ps1 按档位取)。
     if ($RedisReplicas -gt 0) { $args.RedisReplicas = $RedisReplicas }
+    # 共享 Redis 按用途拆实例(G4a 第 1a 批):-RedisSplit 非 auto 才传(auto 是 k8s_deploy.ps1 的缺省),确认开关只在被指定时传,
+    # 容量非空才传。防静默切换的闸只在 k8s_deploy.ps1(Assert-RedisPurposeSwitchIsSafe),本函数只透传。
+    if (-not [string]::IsNullOrWhiteSpace($RedisSplit) -and $RedisSplit -ne 'auto') { $args.RedisSplit = $RedisSplit }
+    if ($ConfirmRedisSplitSwitch) { $args.ConfirmRedisSplitSwitch = $true }
+    if (-not [string]::IsNullOrWhiteSpace($RedisQueueMaxMemory)) { $args.RedisQueueMaxMemory = $RedisQueueMaxMemory }
+    # k8s-redis-wipe 的确认,同一口径。准入(namespace 规则 + 确认)只在 k8s_deploy.ps1 的 Invoke-RedisWipe 判。
+    if ($ConfirmWipeAllRedis) { $args.ConfirmWipeAllRedis = $true }
 
     if ($DryRun) {
         $args.DryRun = $true
@@ -1187,6 +1212,10 @@ function Invoke-K8sImage {
     if (-not [string]::IsNullOrWhiteSpace($GateRouterMode)) {
         $args.GateRouterMode = $GateRouterMode
     }
+    # B0-4 豁免开关同一口径:留空不传,k8s_image.ps1 同样留空不传,最终由 k8s_deploy.ps1 接管。
+    if (-not [string]::IsNullOrWhiteSpace($NodeOpenFileLimitMode)) {
+        $args.NodeOpenFileLimitMode = $NodeOpenFileLimitMode
+    }
     # 集群外入口参数,口径同 Invoke-K8sDeploy(k8s_image.ps1 原样转给 k8s_deploy.ps1)。
     # -Gateway* / -LoginDevPasswordAuth / 第三方登录的 -Login* 与 -ConfirmLoginAuthProviderChange 不在此列,已在函数开头拒绝
     # (k8s_image.ps1 也不声明它们)。
@@ -1202,6 +1231,11 @@ function Invoke-K8sImage {
     if ($ConfirmRedisCoreRestart) { $args.ConfirmRedisCoreRestart = $true }
     # 共享 Redis 的形态同一口径:非 0 才传。
     if ($RedisReplicas -gt 0) { $args.RedisReplicas = $RedisReplicas }
+    # 按用途拆实例(G4a 第 1a 批)同一口径:-RedisSplit 非 auto 才传,确认开关只在被指定时传,容量非空才传。k8s_image.ps1 不部署
+    # login / gateway,只有 release-all(不带 -SkipInfra)的 infra-up 会按 -RedisSplit queue apply 排队实例。
+    if (-not [string]::IsNullOrWhiteSpace($RedisSplit) -and $RedisSplit -ne 'auto') { $args.RedisSplit = $RedisSplit }
+    if ($ConfirmRedisSplitSwitch) { $args.ConfirmRedisSplitSwitch = $true }
+    if (-not [string]::IsNullOrWhiteSpace($RedisQueueMaxMemory)) { $args.RedisQueueMaxMemory = $RedisQueueMaxMemory }
     # 留空不透传;k8s_image.ps1 不部署 login / scene_manager,给了由它告警"只参与预检、不改写 ConfigMap"。
     if (-not [string]::IsNullOrWhiteSpace($RequireClientEndpoint)) { $args.RequireClientEndpoint = $RequireClientEndpoint }
     if ($WaitReady) {
@@ -1345,6 +1379,7 @@ function Get-MergeZoneArgs {
     if ($mapPwd -ne "")                  { $a += @("-mapping-redis-password", $mapPwd) }
     if ($MergeNoticeRedisAddr -ne "")    { $a += @("-notice-redis-addr", $MergeNoticeRedisAddr) }
     if ($MergeSceneRedisAddr -ne "")     { $a += @("-scene-redis-addr", $MergeSceneRedisAddr) }
+    if ($MergeEtcdEndpoints -ne "")      { $a += @("-etcd-endpoints", $MergeEtcdEndpoints) }
     # 建表清单:go run 在 tools/merge_zone 里跑,相对路径会指错地方,一律转绝对。
     $tableList = if ($MergeTableListJson -ne "") { $MergeTableListJson }
                  else { Join-Path $repoRoot "generated\data\mysql_database_table_list.json" }
@@ -1617,7 +1652,19 @@ function New-MergeZoneExePath {
 function Invoke-MergeZoneGo {
     param([Parameter(Mandatory = $true)][string]$MergeCommand)
     $repoRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
-    $goArgs = @(Get-MergeZoneCommandArgs -MergeCommand $MergeCommand -RepoRoot $repoRoot)
+    try {
+        $goArgs = @(Get-MergeZoneCommandArgs -MergeCommand $MergeCommand -RepoRoot $repoRoot)
+    }
+    catch {
+        #   4) merge-zone-capability-check 的 1 是业务结论(有 missing)。参数没给齐(漏 -MergeDbCapabilityZones 等)时一个标记都没查,
+        #      属于「没查成」,按 2 退出,不与 1 混用(09-28 遗留;已 grep 全部调用方,没有依赖这里退出 1 的,runbook §8 Step 6 按 2 处理)。
+        #      其余命令的参数错误仍照旧往上抛(pwsh -File 下为 1 = 拒绝、什么都没做),语义不变。
+        if ($MergeCommand -eq "merge-zone-capability-check") {
+            [Console]::Error.WriteLine("ERROR: $($_.Exception.Message); the tool was NOT run, no capability marker was checked (exit 2)")
+            exit 2
+        }
+        throw
+    }
     # Get-MergeZoneCommandArgs 仍以 "run", "." 开头(契约测试按这个形状钉 flag);执行时去掉这个前缀。
     if ($goArgs.Count -lt 2 -or [string]$goArgs[0] -ne "run" -or [string]$goArgs[1] -ne ".") {
         throw "Invoke-MergeZoneGo: unexpected argument shape for '$MergeCommand' (must start with 'run', '.')"
@@ -1666,13 +1713,21 @@ function Get-K8sRouteToolArgs {
 
 # Invoke-K8sRouteTool 调 k8s_route_tool.ps1 并**以它的退出码结束当前脚本**:route-tool 容器的 0 干净 / 1 要人工处理 / 2 失败 /
 # 3 有生效的合服围栏,必须原样到达调用方(`pwsh -File dev_tools.ps1 ...` 在脚本正常结束时进程退出码恒为 0,见 Invoke-MergeZoneGo)。
+# 本入口自己的失败(没给子命令、k8s_route_tool.ps1 参数绑定失败、未捕获的异常)一律 2,与 k8s_route_tool.ps1「本脚本自己失败一律 2」
+# 同口径:异常往上冒时 pwsh -File 的退出码是 1,会与「完成但需要人工处理」撞号(review B3-7 / OPS-5)。
 function Invoke-K8sRouteTool {
-    if (@($RouteToolArgs).Count -eq 0) {
-        throw "k8s-route-tool requires -RouteToolArgs <subcommand and its arguments>, e.g. -RouteToolArgs @('audit', '-frozen-recovery') (use the -Command form of pwsh for arrays)"
+    try {
+        if (@($RouteToolArgs).Count -eq 0) {
+            throw "k8s-route-tool requires -RouteToolArgs <subcommand and its arguments>, e.g. -RouteToolArgs @('audit', '-frozen-recovery') (use the -Command form of pwsh for arrays)"
+        }
+        $rtArgs = Get-K8sRouteToolArgs
+        $global:LASTEXITCODE = 0
+        & (Join-Path $ScriptDir "k8s_route_tool.ps1") @rtArgs
     }
-    $rtArgs = Get-K8sRouteToolArgs
-    $global:LASTEXITCODE = 0
-    & (Join-Path $ScriptDir "k8s_route_tool.ps1") @rtArgs
+    catch {
+        [Console]::Error.WriteLine("ERROR: k8s-route-tool: $($_.Exception.Message) (exit 2)")
+        exit 2
+    }
     exit $LASTEXITCODE
 }
 
@@ -1734,7 +1789,8 @@ Other common commands:
         默认只读校验 third_party/releases.lock.json；显式 -ApplyPatches 时恢复登记补丁。
     -Command third-party-zlib-build [-BuildRoot <全新目录>] [-Jobs 1]
         隔离构建 Debug/MDd zlib，必须通过上游 ctest 后才安装。
-    -Command third-party-grpc-build [-BuildRoot <目录>] [-ZlibInstallRoot <zlib安装目录>]
+    -Command third-party-protobuf-build [-Configuration Debug|Release] [-Architecture x64|x86] [-BuildRoot <目录>] [-ZlibInstallRoot <zlib安装目录>]
+    -Command third-party-boringssl-build [-Configuration Debug|Release] [-Architecture x64|x86] [-BuildRoot <目录>]
     -Command no-raw-pointer-setup [-LlvmRoot <path>] [-DownloadOnly] [-DryRun]
         自动下载 LLVM/Clang 开发库并串行编译裸指针成员检查器。
     -Command iwyu-run
@@ -1742,13 +1798,21 @@ Other common commands:
         Build all Docker images (C++ node + Go services + Java auth) before deployment.
     -Command k8s-infra-up | k8s-infra-down | k8s-infra-status
         Manage shared infrastructure (etcd/redis/kafka/mysql) in the mmorpg-infra namespace.
+    -Command k8s-redis-split-status | k8s-redis-wipe -ConfirmWipeAllRedis
+        Shared Redis split by purpose (G4a batch 1a, -RedisSplit none|queue, forwarded to k8s_deploy.ps1 with
+        -ConfirmRedisSplitSwitch / -RedisQueueMaxMemory): split-status prints each zone's login / gateway queue Redis
+        address and rollout state (exit 1 on mismatch or unfinished rollout); wipe flushes every Redis instance of a
+        stress environment and checks DBSIZE=0 (-InfraNamespace must match ^mmorpg-stress-). See deploy/k8s/README.md.
     -Command k8s-zone-up | k8s-zone-down | k8s-zone-status
     -Command k8s-all-up | k8s-all-down | k8s-all-status
         k8s-infra-up / k8s-zone-up / k8s-all-up pass the D1 route switches through to
         k8s_deploy.ps1 unchanged: [-RouteStoreMode redis|db_first] [-RouteReconcileArm]
         [-RouteReadRequiresReady] [-DbPlacementRequireRouteReady] [-GuildRequireRouteReady]
-        [-ConfirmRouteSwitchChange]. They are sticky: once the cluster runs db_first, pass the
-        live values (the refusal prints them) or the deploy is refused before any write.
+        [-ConfirmRouteSwitchChange]. k8s_deploy.ps1 defaults to db_first with every switch on
+        (the global default; deploying Go services accepts nothing else). They are sticky: a
+        cluster still on redis / off is refused before any write unless -ConfirmRouteSwitchChange
+        is given; zones not deployed in this run must already be db_first + Arm (use k8s-all-up).
+        k8s-zone-rollback refuses these switches (its Step 6 redeploys with the defaults).
     -Command k8s-exposure-preflight
     -Command k8s-stage-runtime
     -Command k8s-image-preflight | k8s-build-image | k8s-push-image | k8s-release-zone | k8s-release-all
@@ -1853,7 +1917,8 @@ switch ($Command) {
     "naming-apply" { Invoke-NamingApply }
     "third-party-lock-check" { Invoke-ThirdPartyLockCheck }
     "third-party-zlib-build" { Invoke-ThirdPartyZlibBuild }
-    "third-party-grpc-build" { Invoke-ThirdPartyGrpcBuild }
+    "third-party-protobuf-build" { Invoke-ThirdPartySdkBuild -Sdk protobuf }
+    "third-party-boringssl-build" { Invoke-ThirdPartySdkBuild -Sdk boringssl }
     "no-raw-pointer-setup" {
         & (Join-Path $ScriptDir "third_party/setup_no_raw_pointer_check.ps1") -LlvmRoot $LlvmRoot -DownloadOnly:$DownloadOnly -DryRun:$DryRun
     }
@@ -1861,6 +1926,10 @@ switch ($Command) {
     "k8s-infra-up" { Invoke-K8sDeploy -K8sCommand "infra-up" }
     "k8s-infra-down" { Invoke-K8sDeploy -K8sCommand "infra-down" }
     "k8s-infra-status" { Invoke-K8sDeploy -K8sCommand "infra-status" }
+    # 共享 Redis 按用途拆实例(G4a 第 1a 批)的两个运维命令。k8s_deploy.ps1 以 exit 1 报「不一致 / 没清干净」,不 throw,
+    # 所以这里把退出码原样带出来(先清零再判,同 kafka-offset-reset 的处理),否则调用方拿到的永远是 0。
+    "k8s-redis-split-status" { $global:LASTEXITCODE = 0; Invoke-K8sDeploy -K8sCommand "redis-split-status"; exit $LASTEXITCODE }
+    "k8s-redis-wipe" { $global:LASTEXITCODE = 0; Invoke-K8sDeploy -K8sCommand "redis-wipe"; exit $LASTEXITCODE }
     "k8s-zone-up" { Invoke-K8sDeploy -K8sCommand "zone-up" }
     "k8s-zone-down" { Invoke-K8sDeploy -K8sCommand "zone-down" }
     "k8s-zone-status" { Invoke-K8sDeploy -K8sCommand "zone-status" }
@@ -2037,6 +2106,26 @@ switch ($Command) {
         if (-not [string]::IsNullOrWhiteSpace($DbConsumerGroup)) {
             throw "k8s-zone-rollback 不支持 -DbConsumerGroup:回档的 Step 6 固定使用 zone(回档后落到 zone 组的最终形状),给的 '$DbConsumerGroup' 不会生效。去掉该参数重跑;尚未做任何操作。"
         }
+        # D1 映射开关同理:k8s_zone_rollback.ps1 不声明它们,Step 6 按 k8s_deploy 缺省(db_first / 全 true)重建 zone。
+        # 尤其 -ConfirmRouteSwitchChange 被静默丢掉时,Step 6 要到 namespace 已删、库已回档之后才被粘滞核对拒绝(review B3-1 / OPS-3)。
+        $rollbackRouteSwitches = @()
+        if (-not [string]::IsNullOrWhiteSpace($RouteStoreMode)) { $rollbackRouteSwitches += '-RouteStoreMode' }
+        if ($RouteReconcileArm) { $rollbackRouteSwitches += '-RouteReconcileArm' }
+        if ($RouteReadRequiresReady) { $rollbackRouteSwitches += '-RouteReadRequiresReady' }
+        if ($DbPlacementRequireRouteReady) { $rollbackRouteSwitches += '-DbPlacementRequireRouteReady' }
+        if ($GuildRequireRouteReady) { $rollbackRouteSwitches += '-GuildRequireRouteReady' }
+        if ($ConfirmRouteSwitchChange) { $rollbackRouteSwitches += '-ConfirmRouteSwitchChange' }
+        if ($rollbackRouteSwitches.Count -gt 0) {
+            throw "k8s-zone-rollback 不支持 $($rollbackRouteSwitches -join ', '):回档脚本不透传 D1 映射开关,Step 6 按 k8s_deploy.ps1 缺省(db_first / 全 true)重建 zone,给的值不会生效。线上 D1 开关不是全球默认的集群先用 k8s-all-up 切好再回档;去掉这些参数重跑;尚未做任何操作。"
+        }
+        # 按用途拆实例(G4a 第 1a 批):回档脚本只声明 -RedisSplit(Step 6 的 zone-up 用它),不声明确认开关与容量 ——
+        # Step 1 已删掉 namespace,切换闸在 Step 6 无从触发;回档不 infra-up,容量不生效。显式给了就拒绝,不静默吞掉(AGENTS §11.3)。
+        $rollbackRedisSplitExtras = @()
+        if ($ConfirmRedisSplitSwitch) { $rollbackRedisSplitExtras += '-ConfirmRedisSplitSwitch' }
+        if (-not [string]::IsNullOrWhiteSpace($RedisQueueMaxMemory)) { $rollbackRedisSplitExtras += '-RedisQueueMaxMemory' }
+        if ($rollbackRedisSplitExtras.Count -gt 0) {
+            throw "k8s-zone-rollback 不支持 $($rollbackRedisSplitExtras -join ', '):回档的 Step 6 只重建 zone(namespace 已在 Step 1 删掉,没有可比的线上排队地址;也不 apply 排队实例),给的值不会生效。以 queue 运行的 zone 回档只需 -RedisSplit queue;去掉这些参数重跑;尚未做任何操作。"
+        }
         # 必须 hashtable splatting:数组 splatting 会按**位置**绑定,
         # "-ZoneName" 这个字符串本身会被绑到 ZoneName、"$ZoneName" 绑到 [int]$ZoneId,
         # 于是灾难回滚脚本连第一步都进不去。
@@ -2079,7 +2168,11 @@ switch ($Command) {
         # 切换确认闸同一口径透传,由回滚脚本只转给 Step 6(不豁免它第 0 步的停服前核对),语义见 k8s_zone_rollback.ps1 同名参数。
         if ($AllowDisruptiveSwitch)                                        { $rbArgs.AllowDisruptiveSwitch = $true }
         if ($RollbackConfirmNoGatewayIngress)                              { $rbArgs.ConfirmNoGatewayIngress = $true }
+        # 按用途拆实例:非 auto 才转发,回档脚本再原样转给 Step 6(以 queue 运行的 zone 必须显式给,理由见参数注释)。
+        if (-not [string]::IsNullOrWhiteSpace($RedisSplit) -and $RedisSplit -ne 'auto') { $rbArgs.RedisSplit = $RedisSplit }
         if (-not [string]::IsNullOrWhiteSpace($GateRouterMode))            { $rbArgs.GateRouterMode = $GateRouterMode }
+        # B0-4 豁免开关同一口径,回滚脚本只转给 Step 6;以 warn 运行的 zone 回滚时照传(漏传的后果见 k8s_zone_rollback.ps1 同名参数)。
+        if (-not [string]::IsNullOrWhiteSpace($NodeOpenFileLimitMode))     { $rbArgs.NodeOpenFileLimitMode = $NodeOpenFileLimitMode }
         if (-not [string]::IsNullOrWhiteSpace($ClientEntryMode))           { $rbArgs.ClientEntryMode = $ClientEntryMode }
         if (-not [string]::IsNullOrWhiteSpace($ClientPublicHost))          { $rbArgs.ClientPublicHost = $ClientPublicHost }
         if (-not [string]::IsNullOrWhiteSpace($GateClientHostTemplate))    { $rbArgs.GateClientHostTemplate = $GateClientHostTemplate }

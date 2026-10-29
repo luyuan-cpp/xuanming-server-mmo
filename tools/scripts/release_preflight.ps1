@@ -442,9 +442,13 @@ else {
     }
 }
 
-# C++ 节点日志级别:0=DEBUG。生产开 DEBUG 会把热点路径打爆(见 base_deploy_config.yaml 注释)
-Test-NumericFloor -Id 'debug.cpp.loglevel' -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'LogLevel' -Floor 1 `
-    -Why "0=DEBUG,生产开着会在 AOI/移动热点路径上产生海量日志。"
+# C++ 节点日志级别。数值直接按 muduo Logger::LogLevel 枚举解释(0=TRACE 1=DEBUG 2=INFO 3=WARN 4=ERROR 5=FATAL;
+# node.cpp 的 Node::InitLogSystem 直接 static_cast,没有映射表),下界 2 = INFO。
+# 2026-10-22 前这里按「0=DEBUG」把下界设成 1,恰好放过了 DEBUG。
+# K8s 的 node-config ConfigMap 由 k8s_deploy.ps1 从同一个键镜像(同日起不再写死),所以这里查到的就是集群里生效的值;
+# 0..5 的结构校验在 k8s_deploy.ps1 生成期做。
+Test-NumericFloor -Id 'debug.cpp.loglevel' -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'LogLevel' -Floor 2 `
+    -Why "muduo 枚举 0=TRACE、1=DEBUG,生产开着会在 AOI / 移动 / 存盘等热点路径上产生海量日志。"
 
 # ─────────────────────────────────────────────────────────────────
 # H. 制品与版本(仅在给了 -ReleaseVersion 时检查)

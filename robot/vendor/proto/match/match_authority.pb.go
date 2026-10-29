@@ -27,6 +27,8 @@ type MatchNetworkProfile struct {
 	PlanId         string                 `protobuf:"bytes,1,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
 	SessionBinding string                 `protobuf:"bytes,2,opt,name=session_binding,json=sessionBinding,proto3" json:"session_binding,omitempty"`
 	Receipts       []*NetworkProbeReceipt `protobuf:"bytes,3,rep,name=receipts,proto3" json:"receipts,omitempty"`
+	OwnerAccount   string                 `protobuf:"bytes,4,opt,name=owner_account,json=ownerAccount,proto3" json:"owner_account,omitempty"` // 服务端捕获的原会话账号；不得由当前目录反查补权。
+	OwnerRevision  uint64                 `protobuf:"varint,5,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -82,6 +84,313 @@ func (x *MatchNetworkProfile) GetReceipts() []*NetworkProbeReceipt {
 	return nil
 }
 
+func (x *MatchNetworkProfile) GetOwnerAccount() string {
+	if x != nil {
+		return x.OwnerAccount
+	}
+	return ""
+}
+
+func (x *MatchNetworkProfile) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+// 全局观战占用与匹配票在同P事务内互斥；时间到期不意味着远端已取消。
+type MatchSpectatorRecord struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId         uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	OperationId      string                 `protobuf:"bytes,2,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	BattleId         uint64                 `protobuf:"varint,3,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	TargetEndpoint   string                 `protobuf:"bytes,4,opt,name=target_endpoint,json=targetEndpoint,proto3" json:"target_endpoint,omitempty"`
+	TargetInstanceId string                 `protobuf:"bytes,5,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
+	State            uint32                 `protobuf:"varint,6,opt,name=state,proto3" json:"state,omitempty"`                                        // 1待Add、2已准入、3待Cancel、4结果未知、5已证实关闭。
+	RequestPayload   []byte                 `protobuf:"bytes,7,opt,name=request_payload,json=requestPayload,proto3" json:"request_payload,omitempty"` // 原WatchBattleRequest，随机选场结果不能重选。
+	OwnerAccount     string                 `protobuf:"bytes,8,opt,name=owner_account,json=ownerAccount,proto3" json:"owner_account,omitempty"`
+	OwnerRevision    uint64                 `protobuf:"varint,9,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
+	AddRequest       []byte                 `protobuf:"bytes,10,opt,name=add_request,json=addRequest,proto3" json:"add_request,omitempty"` // 原AddObserverRequest，截止/路由/op不可重写。
+	UpdatedMs        uint64                 `protobuf:"varint,11,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	RequestHigh      uint64                 `protobuf:"varint,12,opt,name=request_high,json=requestHigh,proto3" json:"request_high,omitempty"`
+	RequestLow       uint64                 `protobuf:"varint,13,opt,name=request_low,json=requestLow,proto3" json:"request_low,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *MatchSpectatorRecord) Reset() {
+	*x = MatchSpectatorRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchSpectatorRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchSpectatorRecord) ProtoMessage() {}
+
+func (x *MatchSpectatorRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchSpectatorRecord.ProtoReflect.Descriptor instead.
+func (*MatchSpectatorRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *MatchSpectatorRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *MatchSpectatorRecord) GetOperationId() string {
+	if x != nil {
+		return x.OperationId
+	}
+	return ""
+}
+
+func (x *MatchSpectatorRecord) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *MatchSpectatorRecord) GetTargetEndpoint() string {
+	if x != nil {
+		return x.TargetEndpoint
+	}
+	return ""
+}
+
+func (x *MatchSpectatorRecord) GetTargetInstanceId() string {
+	if x != nil {
+		return x.TargetInstanceId
+	}
+	return ""
+}
+
+func (x *MatchSpectatorRecord) GetState() uint32 {
+	if x != nil {
+		return x.State
+	}
+	return 0
+}
+
+func (x *MatchSpectatorRecord) GetRequestPayload() []byte {
+	if x != nil {
+		return x.RequestPayload
+	}
+	return nil
+}
+
+func (x *MatchSpectatorRecord) GetOwnerAccount() string {
+	if x != nil {
+		return x.OwnerAccount
+	}
+	return ""
+}
+
+func (x *MatchSpectatorRecord) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+func (x *MatchSpectatorRecord) GetAddRequest() []byte {
+	if x != nil {
+		return x.AddRequest
+	}
+	return nil
+}
+
+func (x *MatchSpectatorRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+func (x *MatchSpectatorRecord) GetRequestHigh() uint64 {
+	if x != nil {
+		return x.RequestHigh
+	}
+	return 0
+}
+
+func (x *MatchSpectatorRecord) GetRequestLow() uint64 {
+	if x != nil {
+		return x.RequestLow
+	}
+	return 0
+}
+
+type MatchSpectatorIntentRecord struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId       uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	RequestHigh    uint64                 `protobuf:"varint,2,opt,name=request_high,json=requestHigh,proto3" json:"request_high,omitempty"`
+	RequestLow     uint64                 `protobuf:"varint,3,opt,name=request_low,json=requestLow,proto3" json:"request_low,omitempty"`
+	Original       []byte                 `protobuf:"bytes,4,opt,name=original,proto3" json:"original,omitempty"`                                   // 永久原MatchSpectatorRecord，终态更新同当前占用事务提交。
+	RequestPayload []byte                 `protobuf:"bytes,5,opt,name=request_payload,json=requestPayload,proto3" json:"request_payload,omitempty"` // 选场前即持久原请求，旧handler不能成为新意图。
+	OwnerAccount   string                 `protobuf:"bytes,6,opt,name=owner_account,json=ownerAccount,proto3" json:"owner_account,omitempty"`
+	OwnerRevision  uint64                 `protobuf:"varint,7,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
+	State          uint32                 `protobuf:"varint,8,opt,name=state,proto3" json:"state,omitempty"` // 1尚未发出Add、2已绑定current原件、5已关闭；未知一律拒绝。
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MatchSpectatorIntentRecord) Reset() {
+	*x = MatchSpectatorIntentRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchSpectatorIntentRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchSpectatorIntentRecord) ProtoMessage() {}
+
+func (x *MatchSpectatorIntentRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchSpectatorIntentRecord.ProtoReflect.Descriptor instead.
+func (*MatchSpectatorIntentRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *MatchSpectatorIntentRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *MatchSpectatorIntentRecord) GetRequestHigh() uint64 {
+	if x != nil {
+		return x.RequestHigh
+	}
+	return 0
+}
+
+func (x *MatchSpectatorIntentRecord) GetRequestLow() uint64 {
+	if x != nil {
+		return x.RequestLow
+	}
+	return 0
+}
+
+func (x *MatchSpectatorIntentRecord) GetOriginal() []byte {
+	if x != nil {
+		return x.Original
+	}
+	return nil
+}
+
+func (x *MatchSpectatorIntentRecord) GetRequestPayload() []byte {
+	if x != nil {
+		return x.RequestPayload
+	}
+	return nil
+}
+
+func (x *MatchSpectatorIntentRecord) GetOwnerAccount() string {
+	if x != nil {
+		return x.OwnerAccount
+	}
+	return ""
+}
+
+func (x *MatchSpectatorIntentRecord) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+func (x *MatchSpectatorIntentRecord) GetState() uint32 {
+	if x != nil {
+		return x.State
+	}
+	return 0
+}
+
+type MatchSpectatorHeadRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	OperationId   string                 `protobuf:"bytes,2,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"` // 最新已接纳请求UUID；切换head也必须先持P。
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MatchSpectatorHeadRecord) Reset() {
+	*x = MatchSpectatorHeadRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchSpectatorHeadRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchSpectatorHeadRecord) ProtoMessage() {}
+
+func (x *MatchSpectatorHeadRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchSpectatorHeadRecord.ProtoReflect.Descriptor instead.
+func (*MatchSpectatorHeadRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *MatchSpectatorHeadRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *MatchSpectatorHeadRecord) GetOperationId() string {
+	if x != nil {
+		return x.OperationId
+	}
+	return ""
+}
+
 // 仅服务端存储契约；全部副本必须连接同一 TiDB 事务域。
 type MatchNetworkProfileRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -94,7 +403,7 @@ type MatchNetworkProfileRecord struct {
 
 func (x *MatchNetworkProfileRecord) Reset() {
 	*x = MatchNetworkProfileRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[1]
+	mi := &file_proto_match_match_authority_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -106,7 +415,7 @@ func (x *MatchNetworkProfileRecord) String() string {
 func (*MatchNetworkProfileRecord) ProtoMessage() {}
 
 func (x *MatchNetworkProfileRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[1]
+	mi := &file_proto_match_match_authority_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -119,7 +428,7 @@ func (x *MatchNetworkProfileRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchNetworkProfileRecord.ProtoReflect.Descriptor instead.
 func (*MatchNetworkProfileRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{1}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *MatchNetworkProfileRecord) GetPlayerId() uint64 {
@@ -144,30 +453,33 @@ func (x *MatchNetworkProfileRecord) GetExpiresMs() uint64 {
 }
 
 type MatchAuthorityTicketRecord struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId       uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	Ticket         string                 `protobuf:"bytes,2,opt,name=ticket,proto3" json:"ticket,omitempty"`
-	RequestId      string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	Mode           uint32                 `protobuf:"varint,4,opt,name=mode,proto3" json:"mode,omitempty"`
-	ConfigId       uint32                 `protobuf:"varint,5,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
-	TeamSize       uint32                 `protobuf:"varint,6,opt,name=team_size,json=teamSize,proto3" json:"team_size,omitempty"`
-	State          uint32                 `protobuf:"varint,7,opt,name=state,proto3" json:"state,omitempty"` // 1排队、2成局、3已建房、4终态；禁止 TTL 自动释放成局成员。
-	EnqueuedMs     uint64                 `protobuf:"varint,8,opt,name=enqueued_ms,json=enqueuedMs,proto3" json:"enqueued_ms,omitempty"`
-	NotBeforeMs    uint64                 `protobuf:"varint,9,opt,name=not_before_ms,json=notBeforeMs,proto3" json:"not_before_ms,omitempty"`
-	ZoneId         uint32                 `protobuf:"varint,10,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
-	RatingCenti    int64                  `protobuf:"varint,11,opt,name=rating_centi,json=ratingCenti,proto3" json:"rating_centi,omitempty"`
-	FormationId    uint64                 `protobuf:"varint,12,opt,name=formation_id,json=formationId,proto3" json:"formation_id,omitempty"`
-	TeamId         uint64                 `protobuf:"varint,13,opt,name=team_id,json=teamId,proto3" json:"team_id,omitempty"`
-	NetworkProfile []byte                 `protobuf:"bytes,14,opt,name=network_profile,json=networkProfile,proto3" json:"network_profile,omitempty"`
-	ExpiresMs      uint64                 `protobuf:"varint,15,opt,name=expires_ms,json=expiresMs,proto3" json:"expires_ms,omitempty"`
-	SelectedRegion uint32                 `protobuf:"varint,16,opt,name=selected_region,json=selectedRegion,proto3" json:"selected_region,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId        uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Ticket          string                 `protobuf:"bytes,2,opt,name=ticket,proto3" json:"ticket,omitempty"`
+	RequestId       string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Mode            uint32                 `protobuf:"varint,4,opt,name=mode,proto3" json:"mode,omitempty"`
+	ConfigId        uint32                 `protobuf:"varint,5,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
+	TeamSize        uint32                 `protobuf:"varint,6,opt,name=team_size,json=teamSize,proto3" json:"team_size,omitempty"`
+	State           uint32                 `protobuf:"varint,7,opt,name=state,proto3" json:"state,omitempty"` // 1排队、2成局、3已建房、4终态；禁止 TTL 自动释放成局成员。
+	EnqueuedMs      uint64                 `protobuf:"varint,8,opt,name=enqueued_ms,json=enqueuedMs,proto3" json:"enqueued_ms,omitempty"`
+	NotBeforeMs     uint64                 `protobuf:"varint,9,opt,name=not_before_ms,json=notBeforeMs,proto3" json:"not_before_ms,omitempty"`
+	ZoneId          uint32                 `protobuf:"varint,10,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
+	RatingCenti     int64                  `protobuf:"varint,11,opt,name=rating_centi,json=ratingCenti,proto3" json:"rating_centi,omitempty"`
+	FormationId     uint64                 `protobuf:"varint,12,opt,name=formation_id,json=formationId,proto3" json:"formation_id,omitempty"`
+	TeamId          uint64                 `protobuf:"varint,13,opt,name=team_id,json=teamId,proto3" json:"team_id,omitempty"`
+	NetworkProfile  []byte                 `protobuf:"bytes,14,opt,name=network_profile,json=networkProfile,proto3" json:"network_profile,omitempty"`
+	ExpiresMs       uint64                 `protobuf:"varint,15,opt,name=expires_ms,json=expiresMs,proto3" json:"expires_ms,omitempty"`
+	SelectedRegion  uint32                 `protobuf:"varint,16,opt,name=selected_region,json=selectedRegion,proto3" json:"selected_region,omitempty"`
+	PreferredRegion uint32                 `protobuf:"varint,17,opt,name=preferred_region,json=preferredRegion,proto3" json:"preferred_region,omitempty"` // 签名测量最低RTT机房；同RTT按机房编号，不随节点暂时下线改本区。
+	OwnerAccount    string                 `protobuf:"bytes,18,opt,name=owner_account,json=ownerAccount,proto3" json:"owner_account,omitempty"`
+	OwnerRevision   uint64                 `protobuf:"varint,19,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *MatchAuthorityTicketRecord) Reset() {
 	*x = MatchAuthorityTicketRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[2]
+	mi := &file_proto_match_match_authority_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -179,7 +491,7 @@ func (x *MatchAuthorityTicketRecord) String() string {
 func (*MatchAuthorityTicketRecord) ProtoMessage() {}
 
 func (x *MatchAuthorityTicketRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[2]
+	mi := &file_proto_match_match_authority_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -192,7 +504,7 @@ func (x *MatchAuthorityTicketRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchAuthorityTicketRecord.ProtoReflect.Descriptor instead.
 func (*MatchAuthorityTicketRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{2}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *MatchAuthorityTicketRecord) GetPlayerId() uint64 {
@@ -307,22 +619,183 @@ func (x *MatchAuthorityTicketRecord) GetSelectedRegion() uint32 {
 	return 0
 }
 
+func (x *MatchAuthorityTicketRecord) GetPreferredRegion() uint32 {
+	if x != nil {
+		return x.PreferredRegion
+	}
+	return 0
+}
+
+func (x *MatchAuthorityTicketRecord) GetOwnerAccount() string {
+	if x != nil {
+		return x.OwnerAccount
+	}
+	return ""
+}
+
+func (x *MatchAuthorityTicketRecord) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+// 仅作可重建候选索引，票与完整签名profile仍是提交点真相。
+// 同原票锁更新/清理；查询必须JOIN当前ticket代次，最终Claim复核原profile和原角色身份。
+type MatchTicketRegionRecord struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId        uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PhysicalRegion  uint32                 `protobuf:"varint,2,opt,name=physical_region,json=physicalRegion,proto3" json:"physical_region,omitempty"`
+	Ticket          string                 `protobuf:"bytes,3,opt,name=ticket,proto3" json:"ticket,omitempty"`
+	Mode            uint32                 `protobuf:"varint,4,opt,name=mode,proto3" json:"mode,omitempty"`
+	ConfigId        uint32                 `protobuf:"varint,5,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
+	TeamSize        uint32                 `protobuf:"varint,6,opt,name=team_size,json=teamSize,proto3" json:"team_size,omitempty"`
+	PreferredRegion uint32                 `protobuf:"varint,7,opt,name=preferred_region,json=preferredRegion,proto3" json:"preferred_region,omitempty"`
+	EnqueuedMs      uint64                 `protobuf:"varint,8,opt,name=enqueued_ms,json=enqueuedMs,proto3" json:"enqueued_ms,omitempty"`
+	RatingCenti     int64                  `protobuf:"varint,9,opt,name=rating_centi,json=ratingCenti,proto3" json:"rating_centi,omitempty"`
+	RttMs           uint32                 `protobuf:"varint,10,opt,name=rtt_ms,json=rttMs,proto3" json:"rtt_ms,omitempty"`
+	ExpiresMs       uint64                 `protobuf:"varint,11,opt,name=expires_ms,json=expiresMs,proto3" json:"expires_ms,omitempty"`
+	HomeZone        uint32                 `protobuf:"varint,12,opt,name=home_zone,json=homeZone,proto3" json:"home_zone,omitempty"` // 来自原票的SQL home；整队禁止跨home时在LIMIT前过滤。
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MatchTicketRegionRecord) Reset() {
+	*x = MatchTicketRegionRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchTicketRegionRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchTicketRegionRecord) ProtoMessage() {}
+
+func (x *MatchTicketRegionRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchTicketRegionRecord.ProtoReflect.Descriptor instead.
+func (*MatchTicketRegionRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *MatchTicketRegionRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *MatchTicketRegionRecord) GetPhysicalRegion() uint32 {
+	if x != nil {
+		return x.PhysicalRegion
+	}
+	return 0
+}
+
+func (x *MatchTicketRegionRecord) GetTicket() string {
+	if x != nil {
+		return x.Ticket
+	}
+	return ""
+}
+
+func (x *MatchTicketRegionRecord) GetMode() uint32 {
+	if x != nil {
+		return x.Mode
+	}
+	return 0
+}
+
+func (x *MatchTicketRegionRecord) GetConfigId() uint32 {
+	if x != nil {
+		return x.ConfigId
+	}
+	return 0
+}
+
+func (x *MatchTicketRegionRecord) GetTeamSize() uint32 {
+	if x != nil {
+		return x.TeamSize
+	}
+	return 0
+}
+
+func (x *MatchTicketRegionRecord) GetPreferredRegion() uint32 {
+	if x != nil {
+		return x.PreferredRegion
+	}
+	return 0
+}
+
+func (x *MatchTicketRegionRecord) GetEnqueuedMs() uint64 {
+	if x != nil {
+		return x.EnqueuedMs
+	}
+	return 0
+}
+
+func (x *MatchTicketRegionRecord) GetRatingCenti() int64 {
+	if x != nil {
+		return x.RatingCenti
+	}
+	return 0
+}
+
+func (x *MatchTicketRegionRecord) GetRttMs() uint32 {
+	if x != nil {
+		return x.RttMs
+	}
+	return 0
+}
+
+func (x *MatchTicketRegionRecord) GetExpiresMs() uint64 {
+	if x != nil {
+		return x.ExpiresMs
+	}
+	return 0
+}
+
+func (x *MatchTicketRegionRecord) GetHomeZone() uint32 {
+	if x != nil {
+		return x.HomeZone
+	}
+	return 0
+}
+
 // 不能随当前票据覆盖或过期：否则旧 Join 在新一轮结束后重放会复活。
 type MatchJoinIntentRecord struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	RequestId     string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	TicketRecord  []byte                 `protobuf:"bytes,3,opt,name=ticket_record,json=ticketRecord,proto3" json:"ticket_record,omitempty"` // 首次已接纳的 MatchAuthorityTicketRecord；先撤销的未知请求为空。
-	Cancelled     bool                   `protobuf:"varint,4,opt,name=cancelled,proto3" json:"cancelled,omitempty"`
-	RequestHigh   uint64                 `protobuf:"varint,5,opt,name=request_high,json=requestHigh,proto3" json:"request_high,omitempty"` // UUID 的前64位原值；整数复合主键符合 D-14，不截断哈希。
-	RequestLow    uint64                 `protobuf:"varint,6,opt,name=request_low,json=requestLow,proto3" json:"request_low,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId       uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	RequestId      string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	TicketRecord   []byte                 `protobuf:"bytes,3,opt,name=ticket_record,json=ticketRecord,proto3" json:"ticket_record,omitempty"` // 首次已接纳的 MatchAuthorityTicketRecord；先撤销的未知请求为空。
+	Cancelled      bool                   `protobuf:"varint,4,opt,name=cancelled,proto3" json:"cancelled,omitempty"`
+	RequestHigh    uint64                 `protobuf:"varint,5,opt,name=request_high,json=requestHigh,proto3" json:"request_high,omitempty"` // UUID 的前64位原值；整数复合主键符合 D-14，不截断哈希。
+	RequestLow     uint64                 `protobuf:"varint,6,opt,name=request_low,json=requestLow,proto3" json:"request_low,omitempty"`
+	OwnerAccount   string                 `protobuf:"bytes,7,opt,name=owner_account,json=ownerAccount,proto3" json:"owner_account,omitempty"`
+	OwnerRevision  uint64                 `protobuf:"varint,8,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
+	SpectatorExit  []byte                 `protobuf:"bytes,9,opt,name=spectator_exit,json=spectatorExit,proto3" json:"spectator_exit,omitempty"`     // 首次Join在同P内捕获的原观战；空表示当时没有观战。
+	ExitPrepared   bool                   `protobuf:"varint,10,opt,name=exit_prepared,json=exitPrepared,proto3" json:"exit_prepared,omitempty"`      // 原件已固定；禁止重放现场捕获当前观战。
+	RequestPayload []byte                 `protobuf:"bytes,11,opt,name=request_payload,json=requestPayload,proto3" json:"request_payload,omitempty"` // 原JoinQueueRequest规范字节，重试不可改探测/参数。
+	State          uint32                 `protobuf:"varint,12,opt,name=state,proto3" json:"state,omitempty"`                                        // 1等待原观战退出、2已提交原票、3已取消；仅1进入恢复游标。
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *MatchJoinIntentRecord) Reset() {
 	*x = MatchJoinIntentRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[3]
+	mi := &file_proto_match_match_authority_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -334,7 +807,7 @@ func (x *MatchJoinIntentRecord) String() string {
 func (*MatchJoinIntentRecord) ProtoMessage() {}
 
 func (x *MatchJoinIntentRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[3]
+	mi := &file_proto_match_match_authority_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -347,7 +820,7 @@ func (x *MatchJoinIntentRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchJoinIntentRecord.ProtoReflect.Descriptor instead.
 func (*MatchJoinIntentRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{3}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *MatchJoinIntentRecord) GetPlayerId() uint64 {
@@ -392,22 +865,70 @@ func (x *MatchJoinIntentRecord) GetRequestLow() uint64 {
 	return 0
 }
 
+func (x *MatchJoinIntentRecord) GetOwnerAccount() string {
+	if x != nil {
+		return x.OwnerAccount
+	}
+	return ""
+}
+
+func (x *MatchJoinIntentRecord) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+func (x *MatchJoinIntentRecord) GetSpectatorExit() []byte {
+	if x != nil {
+		return x.SpectatorExit
+	}
+	return nil
+}
+
+func (x *MatchJoinIntentRecord) GetExitPrepared() bool {
+	if x != nil {
+		return x.ExitPrepared
+	}
+	return false
+}
+
+func (x *MatchJoinIntentRecord) GetRequestPayload() []byte {
+	if x != nil {
+		return x.RequestPayload
+	}
+	return nil
+}
+
+func (x *MatchJoinIntentRecord) GetState() uint32 {
+	if x != nil {
+		return x.State
+	}
+	return 0
+}
+
 // 整队/活动/挑战接受与全组占用、成局行在同一 SQL 事务提交。
 type MatchDirectIntentRecord struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Kind          uint32                 `protobuf:"varint,1,opt,name=kind,proto3" json:"kind,omitempty"`                      // 1整队、2活动、3挑战。
-	OwnerId       uint64                 `protobuf:"varint,2,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"` // 整队的发起玩家、活动的帮会、挑战的应战玩家。
-	RequestHigh   uint64                 `protobuf:"varint,3,opt,name=request_high,json=requestHigh,proto3" json:"request_high,omitempty"`
-	RequestLow    uint64                 `protobuf:"varint,4,opt,name=request_low,json=requestLow,proto3" json:"request_low,omitempty"`
-	Payload       []byte                 `protobuf:"bytes,5,opt,name=payload,proto3" json:"payload,omitempty"` // 无随机节点/票号的规范业务载荷，重试逐字节核对。
-	BattleId      uint64                 `protobuf:"varint,6,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState  `protogen:"open.v1"`
+	Kind           uint32                  `protobuf:"varint,1,opt,name=kind,proto3" json:"kind,omitempty"`                      // 1整队、2活动、3挑战。
+	OwnerId        uint64                  `protobuf:"varint,2,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"` // 整队的发起玩家、活动的帮会、挑战的应战玩家。
+	RequestHigh    uint64                  `protobuf:"varint,3,opt,name=request_high,json=requestHigh,proto3" json:"request_high,omitempty"`
+	RequestLow     uint64                  `protobuf:"varint,4,opt,name=request_low,json=requestLow,proto3" json:"request_low,omitempty"`
+	Payload        []byte                  `protobuf:"bytes,5,opt,name=payload,proto3" json:"payload,omitempty"` // 无随机节点/票号的规范业务载荷，重试逐字节核对。
+	BattleId       uint64                  `protobuf:"varint,6,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	Cancelled      bool                    `protobuf:"varint,7,opt,name=cancelled,proto3" json:"cancelled,omitempty"`                          // 仅活动kind=2：与成局共用原意图主键锁的持久不再开战墓碑。
+	OwnerAccount   string                  `protobuf:"bytes,8,opt,name=owner_account,json=ownerAccount,proto3" json:"owner_account,omitempty"` // kind1/3的原客户端actor；kind2由Guild永久launch原件授权。
+	OwnerRevision  uint64                  `protobuf:"varint,9,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
+	SpectatorExits []*MatchSpectatorRecord `protobuf:"bytes,10,rep,name=spectator_exits,json=spectatorExits,proto3" json:"spectator_exits,omitempty"`
+	ExitPrepared   bool                    `protobuf:"varint,11,opt,name=exit_prepared,json=exitPrepared,proto3" json:"exit_prepared,omitempty"`
+	StartOriginal  []byte                  `protobuf:"bytes,12,opt,name=start_original,json=startOriginal,proto3" json:"start_original,omitempty"` // MatchDirectStartOriginal；待提交时不能用当前资料替换。
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *MatchDirectIntentRecord) Reset() {
 	*x = MatchDirectIntentRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[4]
+	mi := &file_proto_match_match_authority_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -419,7 +940,7 @@ func (x *MatchDirectIntentRecord) String() string {
 func (*MatchDirectIntentRecord) ProtoMessage() {}
 
 func (x *MatchDirectIntentRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[4]
+	mi := &file_proto_match_match_authority_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -432,7 +953,7 @@ func (x *MatchDirectIntentRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchDirectIntentRecord.ProtoReflect.Descriptor instead.
 func (*MatchDirectIntentRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{4}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *MatchDirectIntentRecord) GetKind() uint32 {
@@ -477,6 +998,286 @@ func (x *MatchDirectIntentRecord) GetBattleId() uint64 {
 	return 0
 }
 
+func (x *MatchDirectIntentRecord) GetCancelled() bool {
+	if x != nil {
+		return x.Cancelled
+	}
+	return false
+}
+
+func (x *MatchDirectIntentRecord) GetOwnerAccount() string {
+	if x != nil {
+		return x.OwnerAccount
+	}
+	return ""
+}
+
+func (x *MatchDirectIntentRecord) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+func (x *MatchDirectIntentRecord) GetSpectatorExits() []*MatchSpectatorRecord {
+	if x != nil {
+		return x.SpectatorExits
+	}
+	return nil
+}
+
+func (x *MatchDirectIntentRecord) GetExitPrepared() bool {
+	if x != nil {
+		return x.ExitPrepared
+	}
+	return false
+}
+
+func (x *MatchDirectIntentRecord) GetStartOriginal() []byte {
+	if x != nil {
+		return x.StartOriginal
+	}
+	return nil
+}
+
+type MatchDirectStartOriginal struct {
+	state         protoimpl.MessageState        `protogen:"open.v1"`
+	Formation     *MatchFormationRecord         `protobuf:"bytes,1,opt,name=formation,proto3" json:"formation,omitempty"`
+	Tickets       []*MatchAuthorityTicketRecord `protobuf:"bytes,2,rep,name=tickets,proto3" json:"tickets,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MatchDirectStartOriginal) Reset() {
+	*x = MatchDirectStartOriginal{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchDirectStartOriginal) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchDirectStartOriginal) ProtoMessage() {}
+
+func (x *MatchDirectStartOriginal) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchDirectStartOriginal.ProtoReflect.Descriptor instead.
+func (*MatchDirectStartOriginal) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *MatchDirectStartOriginal) GetFormation() *MatchFormationRecord {
+	if x != nil {
+		return x.Formation
+	}
+	return nil
+}
+
+func (x *MatchDirectStartOriginal) GetTickets() []*MatchAuthorityTicketRecord {
+	if x != nil {
+		return x.Tickets
+	}
+	return nil
+}
+
+// 邀请正文是SQL原件，Redis仅推送/缓存；新邀请在全员P锁下捕获对端，重放不换主。
+type MatchChallengeInvitationRecord struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	ChallengeId        uint64                 `protobuf:"varint,1,opt,name=challenge_id,json=challengeId,proto3" json:"challenge_id,omitempty"`
+	ChallengerPlayerId uint64                 `protobuf:"varint,2,opt,name=challenger_player_id,json=challengerPlayerId,proto3" json:"challenger_player_id,omitempty"`
+	TargetPlayerId     uint64                 `protobuf:"varint,3,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`
+	ConfigId           uint32                 `protobuf:"varint,4,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
+	ChallengerAccount  string                 `protobuf:"bytes,5,opt,name=challenger_account,json=challengerAccount,proto3" json:"challenger_account,omitempty"`
+	ChallengerRevision uint64                 `protobuf:"varint,6,opt,name=challenger_revision,json=challengerRevision,proto3" json:"challenger_revision,omitempty"`
+	TargetAccount      string                 `protobuf:"bytes,7,opt,name=target_account,json=targetAccount,proto3" json:"target_account,omitempty"`
+	TargetRevision     uint64                 `protobuf:"varint,8,opt,name=target_revision,json=targetRevision,proto3" json:"target_revision,omitempty"`
+	CreatedMs          uint64                 `protobuf:"varint,9,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	ExpiresMs          uint64                 `protobuf:"varint,10,opt,name=expires_ms,json=expiresMs,proto3" json:"expires_ms,omitempty"`
+	State              uint32                 `protobuf:"varint,11,opt,name=state,proto3" json:"state,omitempty"` // 1待应答、2已成局、3已拒绝、4已接受待退出、5已安全关闭；原件不删除。
+	BattleId           uint64                 `protobuf:"varint,12,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *MatchChallengeInvitationRecord) Reset() {
+	*x = MatchChallengeInvitationRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchChallengeInvitationRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchChallengeInvitationRecord) ProtoMessage() {}
+
+func (x *MatchChallengeInvitationRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchChallengeInvitationRecord.ProtoReflect.Descriptor instead.
+func (*MatchChallengeInvitationRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *MatchChallengeInvitationRecord) GetChallengeId() uint64 {
+	if x != nil {
+		return x.ChallengeId
+	}
+	return 0
+}
+
+func (x *MatchChallengeInvitationRecord) GetChallengerPlayerId() uint64 {
+	if x != nil {
+		return x.ChallengerPlayerId
+	}
+	return 0
+}
+
+func (x *MatchChallengeInvitationRecord) GetTargetPlayerId() uint64 {
+	if x != nil {
+		return x.TargetPlayerId
+	}
+	return 0
+}
+
+func (x *MatchChallengeInvitationRecord) GetConfigId() uint32 {
+	if x != nil {
+		return x.ConfigId
+	}
+	return 0
+}
+
+func (x *MatchChallengeInvitationRecord) GetChallengerAccount() string {
+	if x != nil {
+		return x.ChallengerAccount
+	}
+	return ""
+}
+
+func (x *MatchChallengeInvitationRecord) GetChallengerRevision() uint64 {
+	if x != nil {
+		return x.ChallengerRevision
+	}
+	return 0
+}
+
+func (x *MatchChallengeInvitationRecord) GetTargetAccount() string {
+	if x != nil {
+		return x.TargetAccount
+	}
+	return ""
+}
+
+func (x *MatchChallengeInvitationRecord) GetTargetRevision() uint64 {
+	if x != nil {
+		return x.TargetRevision
+	}
+	return 0
+}
+
+func (x *MatchChallengeInvitationRecord) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
+func (x *MatchChallengeInvitationRecord) GetExpiresMs() uint64 {
+	if x != nil {
+		return x.ExpiresMs
+	}
+	return 0
+}
+
+func (x *MatchChallengeInvitationRecord) GetState() uint32 {
+	if x != nil {
+		return x.State
+	}
+	return 0
+}
+
+func (x *MatchChallengeInvitationRecord) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+// 同事务域全部副本使用相同撮合策略；新进程不能覆盖已准入策略。
+type MatchGlobalPolicyRecord struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PolicyId       uint32                 `protobuf:"varint,1,opt,name=policy_id,json=policyId,proto3" json:"policy_id,omitempty"`
+	ContractDigest []byte                 `protobuf:"bytes,2,opt,name=contract_digest,json=contractDigest,proto3" json:"contract_digest,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MatchGlobalPolicyRecord) Reset() {
+	*x = MatchGlobalPolicyRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchGlobalPolicyRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchGlobalPolicyRecord) ProtoMessage() {}
+
+func (x *MatchGlobalPolicyRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchGlobalPolicyRecord.ProtoReflect.Descriptor instead.
+func (*MatchGlobalPolicyRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *MatchGlobalPolicyRecord) GetPolicyId() uint32 {
+	if x != nil {
+		return x.PolicyId
+	}
+	return 0
+}
+
+func (x *MatchGlobalPolicyRecord) GetContractDigest() []byte {
+	if x != nil {
+		return x.ContractDigest
+	}
+	return nil
+}
+
 type MatchFormationMember struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -487,7 +1288,7 @@ type MatchFormationMember struct {
 
 func (x *MatchFormationMember) Reset() {
 	*x = MatchFormationMember{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[5]
+	mi := &file_proto_match_match_authority_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -499,7 +1300,7 @@ func (x *MatchFormationMember) String() string {
 func (*MatchFormationMember) ProtoMessage() {}
 
 func (x *MatchFormationMember) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[5]
+	mi := &file_proto_match_match_authority_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -512,7 +1313,7 @@ func (x *MatchFormationMember) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchFormationMember.ProtoReflect.Descriptor instead.
 func (*MatchFormationMember) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{5}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *MatchFormationMember) GetPlayerId() uint64 {
@@ -554,7 +1355,7 @@ type MatchFormationRecord struct {
 
 func (x *MatchFormationRecord) Reset() {
 	*x = MatchFormationRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[6]
+	mi := &file_proto_match_match_authority_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -566,7 +1367,7 @@ func (x *MatchFormationRecord) String() string {
 func (*MatchFormationRecord) ProtoMessage() {}
 
 func (x *MatchFormationRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[6]
+	mi := &file_proto_match_match_authority_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -579,7 +1380,7 @@ func (x *MatchFormationRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchFormationRecord.ProtoReflect.Descriptor instead.
 func (*MatchFormationRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{6}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *MatchFormationRecord) GetBattleId() uint64 {
@@ -711,7 +1512,7 @@ type MatchPreparedEndpoint struct {
 
 func (x *MatchPreparedEndpoint) Reset() {
 	*x = MatchPreparedEndpoint{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[7]
+	mi := &file_proto_match_match_authority_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -723,7 +1524,7 @@ func (x *MatchPreparedEndpoint) String() string {
 func (*MatchPreparedEndpoint) ProtoMessage() {}
 
 func (x *MatchPreparedEndpoint) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[7]
+	mi := &file_proto_match_match_authority_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -736,7 +1537,7 @@ func (x *MatchPreparedEndpoint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchPreparedEndpoint.ProtoReflect.Descriptor instead.
 func (*MatchPreparedEndpoint) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{7}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *MatchPreparedEndpoint) GetPlayerId() uint64 {
@@ -765,7 +1566,7 @@ type MatchRatingRecord struct {
 
 func (x *MatchRatingRecord) Reset() {
 	*x = MatchRatingRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[8]
+	mi := &file_proto_match_match_authority_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -777,7 +1578,7 @@ func (x *MatchRatingRecord) String() string {
 func (*MatchRatingRecord) ProtoMessage() {}
 
 func (x *MatchRatingRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[8]
+	mi := &file_proto_match_match_authority_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -790,7 +1591,7 @@ func (x *MatchRatingRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchRatingRecord.ProtoReflect.Descriptor instead.
 func (*MatchRatingRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{8}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *MatchRatingRecord) GetPlayerId() uint64 {
@@ -832,7 +1633,7 @@ type MatchRatingAppliedRecord struct {
 
 func (x *MatchRatingAppliedRecord) Reset() {
 	*x = MatchRatingAppliedRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[9]
+	mi := &file_proto_match_match_authority_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -844,7 +1645,7 @@ func (x *MatchRatingAppliedRecord) String() string {
 func (*MatchRatingAppliedRecord) ProtoMessage() {}
 
 func (x *MatchRatingAppliedRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[9]
+	mi := &file_proto_match_match_authority_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -857,7 +1658,7 @@ func (x *MatchRatingAppliedRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchRatingAppliedRecord.ProtoReflect.Descriptor instead.
 func (*MatchRatingAppliedRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{9}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *MatchRatingAppliedRecord) GetBattleId() uint64 {
@@ -895,7 +1696,7 @@ type MatchRankSourceRecord struct {
 
 func (x *MatchRankSourceRecord) Reset() {
 	*x = MatchRankSourceRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[10]
+	mi := &file_proto_match_match_authority_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -907,7 +1708,7 @@ func (x *MatchRankSourceRecord) String() string {
 func (*MatchRankSourceRecord) ProtoMessage() {}
 
 func (x *MatchRankSourceRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[10]
+	mi := &file_proto_match_match_authority_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -920,7 +1721,7 @@ func (x *MatchRankSourceRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchRankSourceRecord.ProtoReflect.Descriptor instead.
 func (*MatchRankSourceRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{10}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *MatchRankSourceRecord) GetSourceEpoch() uint64 {
@@ -970,7 +1771,7 @@ type MatchRankOutboxRecord struct {
 
 func (x *MatchRankOutboxRecord) Reset() {
 	*x = MatchRankOutboxRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[11]
+	mi := &file_proto_match_match_authority_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -982,7 +1783,7 @@ func (x *MatchRankOutboxRecord) String() string {
 func (*MatchRankOutboxRecord) ProtoMessage() {}
 
 func (x *MatchRankOutboxRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[11]
+	mi := &file_proto_match_match_authority_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -995,7 +1796,7 @@ func (x *MatchRankOutboxRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchRankOutboxRecord.ProtoReflect.Descriptor instead.
 func (*MatchRankOutboxRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{11}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *MatchRankOutboxRecord) GetSourceEpoch() uint64 {
@@ -1043,7 +1844,7 @@ type MatchBattleCompletionRecord struct {
 
 func (x *MatchBattleCompletionRecord) Reset() {
 	*x = MatchBattleCompletionRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[12]
+	mi := &file_proto_match_match_authority_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1055,7 +1856,7 @@ func (x *MatchBattleCompletionRecord) String() string {
 func (*MatchBattleCompletionRecord) ProtoMessage() {}
 
 func (x *MatchBattleCompletionRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[12]
+	mi := &file_proto_match_match_authority_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1068,7 +1869,7 @@ func (x *MatchBattleCompletionRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchBattleCompletionRecord.ProtoReflect.Descriptor instead.
 func (*MatchBattleCompletionRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{12}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *MatchBattleCompletionRecord) GetBattleId() uint64 {
@@ -1141,7 +1942,7 @@ type MatchBattleSettlementSourceRecord struct {
 
 func (x *MatchBattleSettlementSourceRecord) Reset() {
 	*x = MatchBattleSettlementSourceRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[13]
+	mi := &file_proto_match_match_authority_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1153,7 +1954,7 @@ func (x *MatchBattleSettlementSourceRecord) String() string {
 func (*MatchBattleSettlementSourceRecord) ProtoMessage() {}
 
 func (x *MatchBattleSettlementSourceRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[13]
+	mi := &file_proto_match_match_authority_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1166,7 +1967,7 @@ func (x *MatchBattleSettlementSourceRecord) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use MatchBattleSettlementSourceRecord.ProtoReflect.Descriptor instead.
 func (*MatchBattleSettlementSourceRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{13}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *MatchBattleSettlementSourceRecord) GetBattleId() uint64 {
@@ -1208,16 +2009,49 @@ var File_proto_match_match_authority_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\n" +
-	"!proto/match/match_authority.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1fproto/match/match_network.proto\"\x8f\x01\n" +
+	"!proto/match/match_authority.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1fproto/match/match_network.proto\"\xdb\x01\n" +
 	"\x13MatchNetworkProfile\x12\x17\n" +
 	"\aplan_id\x18\x01 \x01(\tR\x06planId\x12'\n" +
 	"\x0fsession_binding\x18\x02 \x01(\tR\x0esessionBinding\x126\n" +
-	"\breceipts\x18\x03 \x03(\v2\x1a.match.NetworkProbeReceiptR\breceipts\"\x9b\x01\n" +
+	"\breceipts\x18\x03 \x03(\v2\x1a.match.NetworkProbeReceiptR\breceipts\x12#\n" +
+	"\rowner_account\x18\x04 \x01(\tR\fownerAccount\x12%\n" +
+	"\x0eowner_revision\x18\x05 \x01(\x04R\rownerRevision\"\xa6\x04\n" +
+	"\x14MatchSpectatorRecord\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12!\n" +
+	"\foperation_id\x18\x02 \x01(\tR\voperationId\x12\x1b\n" +
+	"\tbattle_id\x18\x03 \x01(\x04R\bbattleId\x12'\n" +
+	"\x0ftarget_endpoint\x18\x04 \x01(\tR\x0etargetEndpoint\x12,\n" +
+	"\x12target_instance_id\x18\x05 \x01(\tR\x10targetInstanceId\x12\x14\n" +
+	"\x05state\x18\x06 \x01(\rR\x05state\x12'\n" +
+	"\x0frequest_payload\x18\a \x01(\fR\x0erequestPayload\x12#\n" +
+	"\rowner_account\x18\b \x01(\tR\fownerAccount\x12%\n" +
+	"\x0eowner_revision\x18\t \x01(\x04R\rownerRevision\x12\x1f\n" +
+	"\vadd_request\x18\n" +
+	" \x01(\fR\n" +
+	"addRequest\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\v \x01(\x04R\tupdatedMs\x12!\n" +
+	"\frequest_high\x18\f \x01(\x04R\vrequestHigh\x12\x1f\n" +
+	"\vrequest_low\x18\r \x01(\x04R\n" +
+	"requestLow:K\x8a\x92\xf4\x01\x0fmatch_spectator\x92\x92\xf4\x01\tplayer_idڒ\xf4\x01$updated_ms,player_id;state,player_id\"\xe8\x02\n" +
+	"\x1aMatchSpectatorIntentRecord\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12!\n" +
+	"\frequest_high\x18\x02 \x01(\x04R\vrequestHigh\x12\x1f\n" +
+	"\vrequest_low\x18\x03 \x01(\x04R\n" +
+	"requestLow\x12\x1a\n" +
+	"\boriginal\x18\x04 \x01(\fR\boriginal\x12'\n" +
+	"\x0frequest_payload\x18\x05 \x01(\fR\x0erequestPayload\x12#\n" +
+	"\rowner_account\x18\x06 \x01(\tR\fownerAccount\x12%\n" +
+	"\x0eowner_revision\x18\a \x01(\x04R\rownerRevision\x12\x14\n" +
+	"\x05state\x18\b \x01(\rR\x05state:B\x8a\x92\xf4\x01\x16match_spectator_intent\x92\x92\xf4\x01\"player_id,request_high,request_low\"\x83\x01\n" +
+	"\x18MatchSpectatorHeadRecord\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12!\n" +
+	"\foperation_id\x18\x02 \x01(\tR\voperationId:'\x8a\x92\xf4\x01\x14match_spectator_head\x92\x92\xf4\x01\tplayer_id\"\x9b\x01\n" +
 	"\x19MatchNetworkProfileRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x18\n" +
 	"\apayload\x18\x02 \x01(\fR\apayload\x12\x1d\n" +
 	"\n" +
-	"expires_ms\x18\x03 \x01(\x04R\texpiresMs:(\x8a\x92\xf4\x01\x15match_network_profile\x92\x92\xf4\x01\tplayer_id\"\xe9\x04\n" +
+	"expires_ms\x18\x03 \x01(\x04R\texpiresMs:(\x8a\x92\xf4\x01\x15match_network_profile\x92\x92\xf4\x01\tplayer_id\"\xa6\x06\n" +
 	"\x1aMatchAuthorityTicketRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x16\n" +
 	"\x06ticket\x18\x02 \x01(\tR\x06ticket\x12\x1d\n" +
@@ -1238,7 +2072,26 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x0fnetwork_profile\x18\x0e \x01(\fR\x0enetworkProfile\x12\x1d\n" +
 	"\n" +
 	"expires_ms\x18\x0f \x01(\x04R\texpiresMs\x12'\n" +
-	"\x0fselected_region\x18\x10 \x01(\rR\x0eselectedRegion:e\x8a\x92\xf4\x01\x16match_authority_ticket\x92\x92\xf4\x01\tplayer_idڒ\xf4\x017state,mode,config_id,team_size,enqueued_ms;formation_id\"\x99\x02\n" +
+	"\x0fselected_region\x18\x10 \x01(\rR\x0eselectedRegion\x12)\n" +
+	"\x10preferred_region\x18\x11 \x01(\rR\x0fpreferredRegion\x12#\n" +
+	"\rowner_account\x18\x12 \x01(\tR\fownerAccount\x12%\n" +
+	"\x0eowner_revision\x18\x13 \x01(\x04R\rownerRevision:\xaa\x01\x8a\x92\xf4\x01\x16match_authority_ticket\x92\x92\xf4\x01\tplayer_idڒ\xf4\x01|state,mode,config_id,team_size,enqueued_ms;formation_id;state,enqueued_ms,player_id;state,mode,team_id,enqueued_ms,player_id\"\xab\x06\n" +
+	"\x17MatchTicketRegionRecord\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12'\n" +
+	"\x0fphysical_region\x18\x02 \x01(\rR\x0ephysicalRegion\x12\x16\n" +
+	"\x06ticket\x18\x03 \x01(\tR\x06ticket\x12\x12\n" +
+	"\x04mode\x18\x04 \x01(\rR\x04mode\x12\x1b\n" +
+	"\tconfig_id\x18\x05 \x01(\rR\bconfigId\x12\x1b\n" +
+	"\tteam_size\x18\x06 \x01(\rR\bteamSize\x12)\n" +
+	"\x10preferred_region\x18\a \x01(\rR\x0fpreferredRegion\x12\x1f\n" +
+	"\venqueued_ms\x18\b \x01(\x04R\n" +
+	"enqueuedMs\x12!\n" +
+	"\frating_centi\x18\t \x01(\x03R\vratingCenti\x12\x15\n" +
+	"\x06rtt_ms\x18\n" +
+	" \x01(\rR\x05rttMs\x12\x1d\n" +
+	"\n" +
+	"expires_ms\x18\v \x01(\x04R\texpiresMs\x12\x1b\n" +
+	"\thome_zone\x18\f \x01(\rR\bhomeZone:\xa1\x03\x8a\x92\xf4\x01\x13match_ticket_region\x92\x92\xf4\x01\x19player_id,physical_regionڒ\xf4\x01\xd6\x02physical_region,mode,config_id,team_size,preferred_region,enqueued_ms,player_id;physical_region,mode,config_id,team_size,enqueued_ms,player_id;expires_ms,player_id,physical_region;physical_region,mode,config_id,team_size,home_zone,preferred_region,enqueued_ms,player_id;physical_region,mode,config_id,team_size,home_zone,enqueued_ms,player_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x9d\x04\n" +
 	"\x15MatchJoinIntentRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +
@@ -1247,7 +2100,14 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\tcancelled\x18\x04 \x01(\bR\tcancelled\x12!\n" +
 	"\frequest_high\x18\x05 \x01(\x04R\vrequestHigh\x12\x1f\n" +
 	"\vrequest_low\x18\x06 \x01(\x04R\n" +
-	"requestLow:=\x8a\x92\xf4\x01\x11match_join_intent\x92\x92\xf4\x01\"player_id,request_high,request_low\"\x88\x02\n" +
+	"requestLow\x12#\n" +
+	"\rowner_account\x18\a \x01(\tR\fownerAccount\x12%\n" +
+	"\x0eowner_revision\x18\b \x01(\x04R\rownerRevision\x12%\n" +
+	"\x0espectator_exit\x18\t \x01(\fR\rspectatorExit\x12#\n" +
+	"\rexit_prepared\x18\n" +
+	" \x01(\bR\fexitPrepared\x12'\n" +
+	"\x0frequest_payload\x18\v \x01(\fR\x0erequestPayload\x12\x14\n" +
+	"\x05state\x18\f \x01(\rR\x05state:j\x8a\x92\xf4\x01\x11match_join_intent\x92\x92\xf4\x01\"player_id,request_high,request_lowڒ\xf4\x01(state,player_id,request_high,request_low\"\xd2\x04\n" +
 	"\x17MatchDirectIntentRecord\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\rR\x04kind\x12\x19\n" +
 	"\bowner_id\x18\x02 \x01(\x04R\aownerId\x12!\n" +
@@ -1255,7 +2115,36 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\vrequest_low\x18\x04 \x01(\x04R\n" +
 	"requestLow\x12\x18\n" +
 	"\apayload\x18\x05 \x01(\fR\apayload\x12\x1b\n" +
-	"\tbattle_id\x18\x06 \x01(\x04R\bbattleId:C\x8a\x92\xf4\x01\x13match_direct_intent\x92\x92\xf4\x01&kind,owner_id,request_high,request_low\"K\n" +
+	"\tbattle_id\x18\x06 \x01(\x04R\bbattleId\x12\x1c\n" +
+	"\tcancelled\x18\a \x01(\bR\tcancelled\x12#\n" +
+	"\rowner_account\x18\b \x01(\tR\fownerAccount\x12%\n" +
+	"\x0eowner_revision\x18\t \x01(\x04R\rownerRevision\x12D\n" +
+	"\x0fspectator_exits\x18\n" +
+	" \x03(\v2\x1b.match.MatchSpectatorRecordR\x0espectatorExits\x12#\n" +
+	"\rexit_prepared\x18\v \x01(\bR\fexitPrepared\x12%\n" +
+	"\x0estart_original\x18\f \x01(\fR\rstartOriginal:\x90\x01\x8a\x92\xf4\x01\x13match_direct_intent\x92\x92\xf4\x01&kind,owner_id,request_high,request_lowڒ\xf4\x01Hexit_prepared,cancelled,battle_id,kind,owner_id,request_high,request_low\"\x92\x01\n" +
+	"\x18MatchDirectStartOriginal\x129\n" +
+	"\tformation\x18\x01 \x01(\v2\x1b.match.MatchFormationRecordR\tformation\x12;\n" +
+	"\atickets\x18\x02 \x03(\v2!.match.MatchAuthorityTicketRecordR\atickets\"\x85\x05\n" +
+	"\x1eMatchChallengeInvitationRecord\x12!\n" +
+	"\fchallenge_id\x18\x01 \x01(\x04R\vchallengeId\x120\n" +
+	"\x14challenger_player_id\x18\x02 \x01(\x04R\x12challengerPlayerId\x12(\n" +
+	"\x10target_player_id\x18\x03 \x01(\x04R\x0etargetPlayerId\x12\x1b\n" +
+	"\tconfig_id\x18\x04 \x01(\rR\bconfigId\x12-\n" +
+	"\x12challenger_account\x18\x05 \x01(\tR\x11challengerAccount\x12/\n" +
+	"\x13challenger_revision\x18\x06 \x01(\x04R\x12challengerRevision\x12%\n" +
+	"\x0etarget_account\x18\a \x01(\tR\rtargetAccount\x12'\n" +
+	"\x0ftarget_revision\x18\b \x01(\x04R\x0etargetRevision\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\t \x01(\x04R\tcreatedMs\x12\x1d\n" +
+	"\n" +
+	"expires_ms\x18\n" +
+	" \x01(\x04R\texpiresMs\x12\x14\n" +
+	"\x05state\x18\v \x01(\rR\x05state\x12\x1b\n" +
+	"\tbattle_id\x18\f \x01(\x04R\bbattleId:\xa5\x01\x8a\x92\xf4\x01\x1amatch_challenge_invitation\x92\x92\xf4\x01\fchallenge_idڒ\xf4\x01atarget_player_id,state,expires_ms,challenge_id;challenger_player_id,state,expires_ms,challenge_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x87\x01\n" +
+	"\x17MatchGlobalPolicyRecord\x12\x1b\n" +
+	"\tpolicy_id\x18\x01 \x01(\rR\bpolicyId\x12'\n" +
+	"\x0fcontract_digest\x18\x02 \x01(\fR\x0econtractDigest:&\x8a\x92\xf4\x01\x13match_global_policy\x92\x92\xf4\x01\tpolicy_id\"K\n" +
 	"\x14MatchFormationMember\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x16\n" +
 	"\x06ticket\x18\x02 \x01(\tR\x06ticket\"\xce\x05\n" +
@@ -1337,33 +2226,43 @@ func file_proto_match_match_authority_proto_rawDescGZIP() []byte {
 	return file_proto_match_match_authority_proto_rawDescData
 }
 
-var file_proto_match_match_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_proto_match_match_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_proto_match_match_authority_proto_goTypes = []any{
 	(*MatchNetworkProfile)(nil),               // 0: match.MatchNetworkProfile
-	(*MatchNetworkProfileRecord)(nil),         // 1: match.MatchNetworkProfileRecord
-	(*MatchAuthorityTicketRecord)(nil),        // 2: match.MatchAuthorityTicketRecord
-	(*MatchJoinIntentRecord)(nil),             // 3: match.MatchJoinIntentRecord
-	(*MatchDirectIntentRecord)(nil),           // 4: match.MatchDirectIntentRecord
-	(*MatchFormationMember)(nil),              // 5: match.MatchFormationMember
-	(*MatchFormationRecord)(nil),              // 6: match.MatchFormationRecord
-	(*MatchPreparedEndpoint)(nil),             // 7: match.MatchPreparedEndpoint
-	(*MatchRatingRecord)(nil),                 // 8: match.MatchRatingRecord
-	(*MatchRatingAppliedRecord)(nil),          // 9: match.MatchRatingAppliedRecord
-	(*MatchRankSourceRecord)(nil),             // 10: match.MatchRankSourceRecord
-	(*MatchRankOutboxRecord)(nil),             // 11: match.MatchRankOutboxRecord
-	(*MatchBattleCompletionRecord)(nil),       // 12: match.MatchBattleCompletionRecord
-	(*MatchBattleSettlementSourceRecord)(nil), // 13: match.MatchBattleSettlementSourceRecord
-	(*NetworkProbeReceipt)(nil),               // 14: match.NetworkProbeReceipt
+	(*MatchSpectatorRecord)(nil),              // 1: match.MatchSpectatorRecord
+	(*MatchSpectatorIntentRecord)(nil),        // 2: match.MatchSpectatorIntentRecord
+	(*MatchSpectatorHeadRecord)(nil),          // 3: match.MatchSpectatorHeadRecord
+	(*MatchNetworkProfileRecord)(nil),         // 4: match.MatchNetworkProfileRecord
+	(*MatchAuthorityTicketRecord)(nil),        // 5: match.MatchAuthorityTicketRecord
+	(*MatchTicketRegionRecord)(nil),           // 6: match.MatchTicketRegionRecord
+	(*MatchJoinIntentRecord)(nil),             // 7: match.MatchJoinIntentRecord
+	(*MatchDirectIntentRecord)(nil),           // 8: match.MatchDirectIntentRecord
+	(*MatchDirectStartOriginal)(nil),          // 9: match.MatchDirectStartOriginal
+	(*MatchChallengeInvitationRecord)(nil),    // 10: match.MatchChallengeInvitationRecord
+	(*MatchGlobalPolicyRecord)(nil),           // 11: match.MatchGlobalPolicyRecord
+	(*MatchFormationMember)(nil),              // 12: match.MatchFormationMember
+	(*MatchFormationRecord)(nil),              // 13: match.MatchFormationRecord
+	(*MatchPreparedEndpoint)(nil),             // 14: match.MatchPreparedEndpoint
+	(*MatchRatingRecord)(nil),                 // 15: match.MatchRatingRecord
+	(*MatchRatingAppliedRecord)(nil),          // 16: match.MatchRatingAppliedRecord
+	(*MatchRankSourceRecord)(nil),             // 17: match.MatchRankSourceRecord
+	(*MatchRankOutboxRecord)(nil),             // 18: match.MatchRankOutboxRecord
+	(*MatchBattleCompletionRecord)(nil),       // 19: match.MatchBattleCompletionRecord
+	(*MatchBattleSettlementSourceRecord)(nil), // 20: match.MatchBattleSettlementSourceRecord
+	(*NetworkProbeReceipt)(nil),               // 21: match.NetworkProbeReceipt
 }
 var file_proto_match_match_authority_proto_depIdxs = []int32{
-	14, // 0: match.MatchNetworkProfile.receipts:type_name -> match.NetworkProbeReceipt
-	5,  // 1: match.MatchFormationRecord.members:type_name -> match.MatchFormationMember
-	7,  // 2: match.MatchFormationRecord.prepared:type_name -> match.MatchPreparedEndpoint
-	3,  // [3:3] is the sub-list for method output_type
-	3,  // [3:3] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	21, // 0: match.MatchNetworkProfile.receipts:type_name -> match.NetworkProbeReceipt
+	1,  // 1: match.MatchDirectIntentRecord.spectator_exits:type_name -> match.MatchSpectatorRecord
+	13, // 2: match.MatchDirectStartOriginal.formation:type_name -> match.MatchFormationRecord
+	5,  // 3: match.MatchDirectStartOriginal.tickets:type_name -> match.MatchAuthorityTicketRecord
+	12, // 4: match.MatchFormationRecord.members:type_name -> match.MatchFormationMember
+	14, // 5: match.MatchFormationRecord.prepared:type_name -> match.MatchPreparedEndpoint
+	6,  // [6:6] is the sub-list for method output_type
+	6,  // [6:6] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_proto_match_match_authority_proto_init() }
@@ -1378,7 +2277,7 @@ func file_proto_match_match_authority_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_match_match_authority_proto_rawDesc), len(file_proto_match_match_authority_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

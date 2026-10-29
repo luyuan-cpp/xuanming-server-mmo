@@ -22,6 +22,7 @@ import (
 	"data_service/internal/metrics"
 	"data_service/internal/store"
 
+	"shared/drainproof"
 	"shared/placement"
 )
 
@@ -54,12 +55,13 @@ type fakeClock struct {
 	// blockSleep:Sleep 一直阻塞到 ctx 结束(Run / Start 用例:每轮只跑一拍);sleeping 在进入阻塞时收到一个信号。
 	blockSleep bool
 	sleeping   chan struct{}
+	wake       chan struct{}
 	// afterFires:After 立即就绪(关停有界用例);否则永不就绪。
 	afterFires bool
 }
 
 func newFakeClock() *fakeClock {
-	return &fakeClock{now: time.Unix(1_700_000_000, 0), sleeping: make(chan struct{}, 1)}
+	return &fakeClock{now: time.Unix(1_700_000_000, 0), sleeping: make(chan struct{}, 1), wake: make(chan struct{}, 1)}
 }
 
 func (c *fakeClock) Now() time.Time {
@@ -77,8 +79,12 @@ func (c *fakeClock) Sleep(ctx context.Context, d time.Duration) error {
 		case c.sleeping <- struct{}{}:
 		default:
 		}
-		<-ctx.Done()
-		return ctx.Err()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-c.wake:
+			return nil
+		}
 	}
 	c.mu.Lock()
 	c.now = c.now.Add(d)
@@ -141,6 +147,7 @@ type fakeStore struct {
 	// block 非 nil 时 ScanRoutes 先发 scanStarted 信号,再阻塞到 block 关闭(无视 ctx:模拟卡住的库调用)。
 	block       chan struct{}
 	scanStarted chan struct{}
+	scanContext context.Context
 }
 
 func newFakeStore() *fakeStore {
@@ -230,13 +237,11 @@ func (s *fakeStore) AdvanceReconcile(_ context.Context, req store.ReconcileTickR
 	if k := req.WatermarkKey; k != nil {
 		switch {
 		case k.Generation != s.generation:
-			s.writable = false
 			res.Outcome, res.FreezeReason = store.ReconcileTickFrozen, store.RouteFreezeGenerationMismatch
-			return res, nil
+			return store.ReconcileTickResult{}, &store.RouteEmergencyError{Observation: res}
 		case k.WatermarkMs > s.wm && k.WatermarkMs-s.wm > req.ToleranceMs:
-			s.writable = false
 			res.Outcome, res.FreezeReason = store.ReconcileTickFrozen, store.RouteFreezeWatermarkRegressed
-			return res, nil
+			return store.ReconcileTickResult{}, &store.RouteEmergencyError{Observation: res}
 		}
 	}
 	s.wm = max(s.wm, s.nowMs)
@@ -258,8 +263,8 @@ func (s *fakeStore) FreezeByLeader(_ context.Context, id string, reason store.Ro
 	case !s.writable:
 		res.Outcome = store.ReconcileTickAlreadyFrozen
 	default:
-		s.writable = false
 		res.Outcome, res.FreezeReason = store.ReconcileTickFrozen, reason
+		return store.ReconcileTickResult{}, &store.RouteEmergencyError{Observation: res}
 	}
 	return res, nil
 }
@@ -273,9 +278,10 @@ func (s *fakeStore) sortedRows(less func(a, b store.RouteRow) bool) []store.Rout
 	return out
 }
 
-func (s *fakeStore) ScanRoutes(_ context.Context, after store.RouteScanCursor, limit int) ([]store.RouteRow, error) {
+func (s *fakeStore) ScanRoutes(ctx context.Context, after store.RouteScanCursor, limit int) ([]store.RouteRow, error) {
 	s.mu.Lock()
 	block, started := s.block, s.scanStarted
+	s.scanContext = ctx
 	s.scans = append(s.scans, scanCall{shard: after.Shard, after: store.RouteUpdatedCursor{PlayerID: after.PlayerID}, limit: limit})
 	s.mu.Unlock()
 	if block != nil {
@@ -375,7 +381,9 @@ type fakeCache struct {
 	kv      map[string]string
 	// readyWrongType:就绪标记键在但不是 string。
 	readyWrongType bool
-	pushes         [][]uint64
+	// 水位键错误类型与 Redis MGET 的缺席返回分开记录。
+	watermarkWrongType bool
+	pushes             [][]uint64
 	// pushHook 在 Push 判定之前调(持着 c.mu:只许直接改 c.kv / c.id,不许调 fakeCache 的方法)。
 	pushHook func(c *fakeCache, rows []store.RouteRow)
 	forced   map[uint64]PushOutcome
@@ -468,12 +476,15 @@ func (c *fakeCache) ReadControl(context.Context) (Control, error) {
 		return Control{}, c.probeEr
 	}
 	ptr := func(k string) *string {
+		if k == placement.RouteWatermarkKey && c.watermarkWrongType {
+			return nil
+		}
 		if v, ok := c.kv[k]; ok {
 			return &v
 		}
 		return nil
 	}
-	return Control{Ready: ptr(placement.RouteReadyKey), ReadyWrongType: c.readyWrongType, Warm: ptr(placement.RouteWarmKey), Watermark: ptr(placement.RouteWatermarkKey)}, nil
+	return Control{Ready: ptr(placement.RouteReadyKey), ReadyWrongType: c.readyWrongType, Warm: ptr(placement.RouteWarmKey), Watermark: ptr(placement.RouteWatermarkKey), WatermarkWrongType: c.watermarkWrongType}, nil
 }
 
 func (c *fakeCache) SelfCheck(context.Context) (placement.RouteReadyRead, error) {
@@ -553,6 +564,16 @@ func (c *fakeCache) DeleteReadyWrongType(context.Context) error {
 	c.record("DeleteReadyWrongType")
 	c.readyWrongType = false
 	delete(c.kv, placement.RouteReadyKey)
+	return nil
+}
+
+// 与正式 RedisCache 相同：调用方先判错误类型，此方法本身无条件 DEL。
+func (c *fakeCache) DeleteWatermarkWrongType(context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.record("DeleteWatermarkWrongType")
+	c.watermarkWrongType = false
+	delete(c.kv, placement.RouteWatermarkKey)
 	return nil
 }
 
@@ -844,13 +865,15 @@ func (s *seqReader) Read(p []byte) (int, error) {
 // ── 装配 ──────────────────────────────────────────────────────────────────────
 
 type harness struct {
-	t   *testing.T
-	ctx context.Context
-	r   *Reconciler
-	st  *fakeStore
-	c   *fakeCache
-	clk *fakeClock
-	obs *fakeObserver
+	t        *testing.T
+	ctx      context.Context
+	r        *Reconciler
+	st       *fakeStore
+	c        *fakeCache
+	clk      *fakeClock
+	obs      *fakeObserver
+	dangerMu sync.Mutex
+	dangers  []store.ReconcileTickResult
 }
 
 func newHarness(t *testing.T, arm bool, tweak func(rc *config.RouteReconcileConfig)) *harness {
@@ -861,13 +884,27 @@ func newHarness(t *testing.T, arm bool, tweak func(rc *config.RouteReconcileConf
 		tweak(&rc.Reconcile)
 	}
 	h := &harness{t: t, ctx: context.Background(), st: newFakeStore(), c: newFakeCache(), clk: newFakeClock(), obs: newFakeObserver()}
-	r, err := New(rc, Deps{Store: h.st, Cache: h.c, LeaderID: testLeader, Random: &seqReader{}, Clock: h.clk, Observer: h.obs})
+	r, err := New(rc, Deps{Store: h.st, Cache: h.c, LeaderID: testLeader, Random: &seqReader{}, Clock: h.clk, Observer: h.obs, OnDanger: func(_ context.Context, danger *store.RouteEmergencyError) error {
+		h.dangerMu.Lock()
+		defer h.dangerMu.Unlock()
+		h.dangers = append(h.dangers, danger.Observation)
+		return nil // 仅记录交给维护 owner 的真实 typed 观察，不冒充 SQL 冻结。
+	}})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	r.syncTasks = true
 	h.r = r
 	return h
+}
+
+func (h *harness) assertDanger(reason store.RouteFreezeReason) {
+	h.t.Helper()
+	h.dangerMu.Lock()
+	defer h.dangerMu.Unlock()
+	if len(h.dangers) != 1 || h.dangers[0].FreezeReason != reason || !h.r.halted.Load() || !h.st.writable {
+		h.t.Fatalf("危险观察=%+v halted=%t writable=%t；应停止本 boot，SQL 必须等正式维护 owner", h.dangers, h.r.halted.Load(), h.st.writable)
+	}
 }
 
 func (h *harness) tick() string { return h.r.tickOnce(h.ctx) }
@@ -1069,15 +1106,16 @@ func TestCacheAheadFreezes(t *testing.T) {
 	h.c.set(placement.HomeZoneKey(9), "3")
 	h.c.set(placement.MapRevKey(9), "5")
 	h.mustTick(metrics.RouteReconcileTickOK)
-	if len(h.st.freezes) != 1 || h.st.freezes[0] != store.RouteFreezeCacheAhead || h.st.writable {
+	if len(h.st.freezes) != 1 || h.st.freezes[0] != store.RouteFreezeCacheAhead || !h.st.writable {
 		t.Fatalf("freezes=%v writable=%t, want one cache_ahead freeze", h.st.freezes, h.st.writable)
 	}
-	h.mustTick(metrics.RouteReconcileTickFrozen)
-	if h.obs.event(metrics.RouteReconcileEventFreezeCacheAhead) != 1 || h.obs.push(metrics.RouteReconcilePhasePrewarm, metrics.RouteReconcilePushCacheAhead) != 1 {
+	h.assertDanger(store.RouteFreezeCacheAhead)
+	h.r.collectTaskResult(h.ctx)
+	if h.obs.event(metrics.RouteReconcileEventFreezeCacheAhead) != 0 || h.obs.push(metrics.RouteReconcilePhasePrewarm, metrics.RouteReconcilePushCacheAhead) != 1 {
 		t.Fatalf("events=%v pushes=%v", h.obs.events, h.obs.pushes)
 	}
 	pushes := len(h.c.pushes)
-	h.ticks(3, time.Second)
+	h.r.Run(h.ctx) // halted 后循环直接退出，不能再起新发布。
 	if len(h.c.pushes) != pushes || h.readyPresent() || h.c.arms != 0 {
 		t.Fatalf("frozen: pushes %d → %d, marker=%t arms=%d; want no pushes and no marker", pushes, len(h.c.pushes), h.readyPresent(), h.c.arms)
 	}
@@ -1094,6 +1132,7 @@ func TestSupersededRowMissingInDBFreezesCacheAhead(t *testing.T) {
 	if len(h.st.freezes) != 1 || h.st.freezes[0] != store.RouteFreezeCacheAhead {
 		t.Fatalf("a superseded row that vanished from the database must freeze as cache_ahead, got %v", h.st.freezes)
 	}
+	h.assertDanger(store.RouteFreezeCacheAhead)
 }
 
 // ── 身份变化与回看修补 ────────────────────────────────────────────────────────
@@ -1257,8 +1296,9 @@ func TestStaleArmIsDroppedNextTick(t *testing.T) {
 func TestMarkerGenerationMismatchFreezes(t *testing.T) {
 	h := newHarness(t, true, nil)
 	h.c.set(placement.RouteReadyKey, markerFor(t, idA, otherGen, 500_000))
-	h.mustTick(metrics.RouteReconcileTickFrozen)
-	if len(h.st.freezes) != 1 || h.st.freezes[0] != store.RouteFreezeGenerationMismatch || h.obs.event(metrics.RouteReconcileEventFreezeGeneration) != 1 {
+	h.mustTick(metrics.RouteReconcileTickDBError)
+	h.assertDanger(store.RouteFreezeGenerationMismatch)
+	if len(h.st.freezes) != 1 || h.st.freezes[0] != store.RouteFreezeGenerationMismatch || h.obs.event(metrics.RouteReconcileEventFreezeGeneration) != 0 {
 		t.Fatalf("freezes=%v events=%v", h.st.freezes, h.obs.events)
 	}
 	if !h.readyPresent() {
@@ -1274,8 +1314,9 @@ func TestWatermarkRegressionFreezesAndKeepsMarker(t *testing.T) {
 	h.st.wm = 1_000_000
 	h.c.set(placement.RouteReadyKey, markerFor(t, idA, testGen, 900_000))
 	h.c.set(placement.RouteWatermarkKey, watermarkFor(t, testGen, 2_000_000))
-	h.mustTick(metrics.RouteReconcileTickFrozen)
-	if h.st.writable || h.obs.event(metrics.RouteReconcileEventFreezeWatermark) != 1 {
+	h.mustTick(metrics.RouteReconcileTickDBError)
+	h.assertDanger(store.RouteFreezeWatermarkRegressed)
+	if !h.st.writable || h.obs.event(metrics.RouteReconcileEventFreezeWatermark) != 0 {
 		t.Fatalf("writable=%t events=%v, want a watermark freeze", h.st.writable, h.obs.events)
 	}
 	if req := h.lastAdvance(); req.WatermarkKey == nil || req.WatermarkKey.WatermarkMs != 2_000_000 {
@@ -1310,6 +1351,32 @@ func TestWatermarkKeyAdvancedMonotonicallyAfterCommit(t *testing.T) {
 	}
 	if wk, _ := h.c.get(placement.RouteWatermarkKey); wk != newer {
 		t.Fatalf("a newer-format watermark key must be left untouched, got %q", wk)
+	}
+	if n := h.c.count("DeleteWatermarkWrongType"); n != 0 {
+		t.Fatalf("正常和新版格式的水位不应进入错误类型删除分支，调用次数=%d", n)
+	}
+}
+
+func TestWatermarkWrongTypeIsDeletedAndRebuiltByReconciler(t *testing.T) {
+	h := newHarness(t, false, nil)
+	h.c.watermarkWrongType = true
+	h.c.set(placement.RouteWatermarkKey, "错误类型占位")
+	h.mustTick(metrics.RouteReconcileTickOK)
+	if n := h.c.count("DeleteWatermarkWrongType"); n != 1 {
+		t.Fatalf("错误类型水位应由 Reconciler 删除一次，调用次数=%d", n)
+	}
+	ctl, err := h.c.ReadControl(h.ctx)
+	want := watermarkFor(t, testGen, 1_000_000)
+	if err != nil || ctl.WatermarkWrongType || ctl.Watermark == nil || *ctl.Watermark != want {
+		t.Fatalf("错误类型删除后应从已提交库水位重建：control=%+v err=%v", ctl, err)
+	}
+	if req := h.lastAdvance(); req.WatermarkKey != nil {
+		t.Fatalf("错误类型的水位不得作为回档判定证据：%+v", req.WatermarkKey)
+	}
+	h.st.addNow(5_000)
+	h.mustTick(metrics.RouteReconcileTickOK)
+	if n := h.c.count("DeleteWatermarkWrongType"); n != 1 {
+		t.Fatalf("重建后的正常水位不得重复删除，调用次数=%d", n)
 	}
 }
 
@@ -1793,6 +1860,7 @@ func newAsyncHarness(t *testing.T) *harness {
 // TestShutdownReleasesLease:Start 起循环,stop 取消之后 Run 退出:释放租约、关客户端、导出 leader=0 并删观测型 gauge。
 func TestShutdownReleasesLease(t *testing.T) {
 	h := newAsyncHarness(t)
+	h.r.syncTasks = true // 首拍任务确定完成后再取消普通生命周期。
 	stop := h.r.Start(context.Background())
 	<-h.clk.sleeping // 第一拍跑完(当选并起了预热)
 	if !stop(time.Second) {
@@ -1806,29 +1874,116 @@ func TestShutdownReleasesLease(t *testing.T) {
 	}
 }
 
-// TestShutdownBoundedAndReleasesLeaseBestEffort(§4.2 should「关停顺序」):在途任务卡在一次库调用里(无视 ctx)时,
-// Run 只等 taskStopWait 就继续退出;释放租约失败也照样退出(尽力而为,租约到期自然失效)。
+// TestShutdownBoundedAndReleasesLeaseBestEffort：调用者有界返回，后台 owner 必须等实际任务 join 后才释放资源。
 func TestShutdownBoundedAndReleasesLeaseBestEffort(t *testing.T) {
 	h := newAsyncHarness(t)
-	h.clk.afterFires = true
 	h.st.block = make(chan struct{})
 	h.st.scanStarted = make(chan struct{}, 1)
 	h.st.releaseErr = errors.New("database unreachable")
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		h.r.Run(ctx)
-	}()
-	<-h.st.scanStarted // 预热卡在 ScanRoutes 里
-	<-h.clk.sleeping   // 第一拍已经结束
+	var unblock sync.Once
+	defer unblock.Do(func() { close(h.st.block) })
+	finish := h.r.StartWithReport(context.Background())
+	<-h.st.scanStarted
+	<-h.clk.sleeping
+	wait, cancel := context.WithCancel(context.Background())
 	cancel()
-	<-done // Run 不等卡住的任务,也不因释放失败而卡住
+	if err := finish(wait); !errors.Is(err, context.Canceled) {
+		t.Fatalf("未 join 时应有界返回取消，got %v", err)
+	}
 	h.st.mu.Lock()
 	releases := h.st.releases
 	h.st.mu.Unlock()
-	if releases != 1 || !h.c.closed {
-		t.Fatalf("releases=%d closed=%t, want one best-effort release and a closed client", releases, h.c.closed)
+	h.c.mu.Lock()
+	closed := h.c.closed
+	h.c.mu.Unlock()
+	if releases != 0 || closed {
+		t.Fatal("卡住任务仍归 owner；不能提前释放租约或关闭缓存")
 	}
-	close(h.st.block) // 放走卡住的任务 goroutine
+	h.clk.wake <- struct{}{}
+	unblock.Do(func() { close(h.st.block) })
+	joined, stopWait := context.WithTimeout(context.Background(), time.Second)
+	defer stopWait()
+	if err := finish(joined); err == nil {
+		t.Fatal("释放租约失败必须保留，不能宣称排空成功")
+	}
+	if h.st.releases != 1 || !h.c.closed {
+		t.Fatalf("releases=%d closed=%t，join 后仍须尽力释放", h.st.releases, h.c.closed)
+	}
+	if _, err := h.r.SettledDigest(context.Background()); !errors.Is(err, drainproof.ErrHold) {
+		t.Fatalf("失败必须保留 HOLD，got %v", err)
+	}
+}
+
+func TestTrackEffectFailureThenSuccessKeepsHold(t *testing.T) {
+	effects := drainproof.New()
+	failure := errors.New("结果未知")
+	calls := 0
+	if err := trackEffect(context.Background(), effects, func() error { calls++; return failure }); !errors.Is(err, failure) {
+		t.Fatalf("got %v", err)
+	}
+	if err := trackEffect(context.Background(), effects, func() error { calls++; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	effects.CloseAdmission()
+	if calls != 2 || effects.Pending() != 0 {
+		t.Fatalf("calls=%d pending=%d", calls, effects.Pending())
+	}
+	if err := effects.Wait(context.Background()); !errors.Is(err, drainproof.ErrHold) {
+		t.Fatalf("后续成功不得清除历史 UNKNOWN，got %v", err)
+	}
+	if _, err := effects.SettledDigest(context.Background()); !errors.Is(err, drainproof.ErrHold) {
+		t.Fatalf("不得签发 settled 摘要，got %v", err)
+	}
+}
+
+func TestTrackEffectPreCancelledDoesNotDispatch(t *testing.T) {
+	effects := drainproof.New()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	called := false
+	if err := trackEffect(ctx, effects, func() error { called = true; return nil }); !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v", err)
+	}
+	effects.CloseAdmission()
+	if called || effects.Pending() != 0 {
+		t.Fatal("预取消调用不得进入底层副作用")
+	}
+	if err := effects.Wait(context.Background()); err != nil {
+		t.Fatalf("未派发不能伪造未知结果：%v", err)
+	}
+}
+
+func TestStopWithReportDoesNotCancelAcceptedTask(t *testing.T) {
+	h := newAsyncHarness(t)
+	h.st.block = make(chan struct{})
+	h.st.scanStarted = make(chan struct{}, 1)
+	var unblock sync.Once
+	defer unblock.Do(func() { close(h.st.block) })
+	finish := h.r.StartWithReport(context.Background())
+	<-h.st.scanStarted
+	<-h.clk.sleeping
+	wait, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := finish(wait); !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v", err)
+	}
+	h.st.mu.Lock()
+	acceptedContext := h.st.scanContext
+	h.st.mu.Unlock()
+	if acceptedContext == nil || acceptedContext.Err() != nil {
+		t.Fatal("正式 stop 只能关闭新拍，不能取消已接收的任务")
+	}
+	h.clk.wake <- struct{}{}
+	unblock.Do(func() { close(h.st.block) })
+	joined, stopWait := context.WithTimeout(context.Background(), time.Second)
+	defer stopWait()
+	if err := finish(joined); err != nil {
+		t.Fatalf("既有任务完成后应确定 join：%v", err)
+	}
+	if digest, err := h.r.SettledDigest(context.Background()); err != nil || len(digest) != 32 {
+		t.Fatalf("确定排空后才产生摘要：len=%d err=%v", len(digest), err)
+	}
+	if h.st.releases != 1 || !h.c.closed {
+		t.Fatal("必须在 join 后释放租约和缓存")
+	}
 }

@@ -16,6 +16,7 @@
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/currency/comp/player_currency_comp.h"
+#include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
 #include "modules/gain_block/gain_block_service.h"
 #include "modules/id_segment/guid_segment_registry.h"
@@ -400,10 +401,18 @@ bool HasUnsupportedP2Fields(const ::AssetBundle& bundle)
 
 // ── 包内容校验(§4.9 第 8 步:确定性失败,要记账)──────────────────────────
 
+// 只判金额范围。币种是否认识不在这里判:不认识的币种是版本错位,不是确定性失败,见第 8b 步。
 bool IsCurrencyAmountValid(const ::CurrencyAmount& currency)
 {
-	return currency.currency_type() < static_cast<uint32_t>(kCurrencyMax) && currency.amount() >= 1 &&
-		   currency.amount() <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+	return currency.amount() >= 1 && currency.amount() <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+}
+
+// 包里第一个本二进制不认识的币种;都认识时返回 nullptr。
+const ::CurrencyAmount* FindCurrencyUnknownToThisVersion(const ::AssetBundle& bundle)
+{
+	for (const auto& currency : bundle.currencies())
+		if (!IsKnownCurrencyType(currency.currency_type())) return &currency;
+	return nullptr;
 }
 
 bool ValidateDebitBundle(const ::AssetBundle& bundle, std::string& why)
@@ -584,9 +593,23 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 	{
 		if (bags == nullptr) { Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetPlayerNotHere); return; }
 		auto& bag = bags->bags[kInventory];
-		for (const auto& item : quantities)
-			if (bag.GetTotalItemCount(item.first) < item.second)
-			{ RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
+		// 按数量扣出只认可互换的普通单位(ItemStore::IsCountableByConfig)。只有算上带更新版本字段的单位才够,
+		// 是版本错位:回 RETRY、不记账,等玩家落到认识这些字段的节点再扣;记成终态会让对侧白白退款或中止,
+		// 当成普通单位扣走则会把带新属性(例如绑定)的物品交易出去(混版本设计 §4.4 第 6 批)。
+		switch (bag.CheckQuantities(quantities))
+		{
+		case ItemStore::QuantityVerdict::kEnough:
+			break;
+		case ItemStore::QuantityVerdict::kVersionSkew:
+			LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_debit player_id=" << request.player_id()
+					 << " seq=" << request.seq() << " correlation_id=" << request.correlation_id()
+					 << "; items carrying newer-version fields are not debited by quantity, answering RETRY";
+			Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
+			return;
+		case ItemStore::QuantityVerdict::kInsufficient:
+			RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response);
+			return;
+		}
 		if (!guids.empty() && bag.ReserveForBatchRemove(guids) != kSuccess)
 		{ RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
 		for (auto guid : guids)
@@ -1042,6 +1065,20 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 		LOG_WARN << "[AssetOp] Invalid payload rpc=" << RpcName(rpc) << " player_id=" << request.player_id()
 				 << " seq=" << request.seq() << " why=" << why;
 		RejectAndRecord(player, *ledgerComp, request, kAssetInvalidBundle, nowMs, response);
+		return;
+	}
+	// 8b. 本二进制不认识的币种:版本错位,回 RETRY、不记账、不存盘。Go 各入口已按同一张取值表
+	// (proto/common/base/currency_type.proto)拒绝写错的值,这里只可能是更新版本加的币种;记成终态
+	// 会让对侧白白退款或中止,等玩家落到认识它的节点再应用(混版本设计 §12)。
+	// 排在中止(第 6 步)与所有确定性包校验之后:截止时刻照常能关门,与版本无关的坏包仍先记终态;
+	// 排在任何改动之前:ApplyDebit / ApplyCredit 从此见不到不认识的币种。
+	if (const auto* unknown = FindCurrencyUnknownToThisVersion(request.bundle()); unknown != nullptr)
+	{
+		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_currency rpc=" << RpcName(rpc)
+				 << " player_id=" << request.player_id() << " stream=" << static_cast<int>(request.stream())
+				 << " seq=" << request.seq() << " currency_type=" << unknown->currency_type()
+				 << "; currency unknown to this version, answering RETRY";
+		Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
 		return;
 	}
 	// 坏包必须先记终局拒绝；合法交易托管的 Debit 与 Credit 都可能需要背包，不能仅保留旧单币种 Debit 的假设。

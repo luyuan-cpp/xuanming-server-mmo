@@ -48,6 +48,14 @@ on:
       - "go/data_service/data_service.go"
       - "go/data_service/internal/routetoolcli/cli.go"
       - "go/shared/placement/route.go"
+      - "go/shared/placement/route_ready.go"
+      - "go/data_service/internal/metrics/**"
+      - "go/data_service/internal/config/config.go"
+      - "go/db/internal/metrics/**"
+      - "go/db/internal/kafka/durable_enqueue.go"
+      - "go/guild/internal/logic/merge_fence.go"
+      - "go/scene_manager/internal/metrics/**"
+      - "go/scene_manager/internal/logic/home_zone.go"
       - "java/gateway_node/src/main/java/com/game/gateway/ratelimit/RateLimitProperties.java"
       - ".github/workflows/deploy-config-tests.yml"
       - "deploy/k8s/Dockerfile*"
@@ -95,6 +103,20 @@ on:
       - "go/data_service/data_service.go"
       - "go/data_service/internal/routetoolcli/cli.go"
       - "go/shared/placement/route.go"
+      # D1 映射与落点告警的指标名 / 标签取值核对(k8s_deploy_contract.tests.ps1「告警引用的指标名与标签取值从 Go 源码核对」两条用例):
+      # 拼全名读 data_service / go/db / scene_manager 的 metrics 包与 guild 的 merge_fence.go,verdict 取值读 placement/route_ready.go,
+      # reason=home_zone_merging 读 scene_manager 的 home_zone.go。只改这些文件把指标或取值改了名,告警会静默失效
+      - "go/shared/placement/route_ready.go"
+      - "go/data_service/internal/metrics/**"
+      - "go/db/internal/metrics/**"
+      - "go/guild/internal/logic/merge_fence.go"
+      - "go/scene_manager/internal/metrics/**"
+      - "go/scene_manager/internal/logic/home_zone.go"
+      # 部署 / 清库脚本照抄的 Go 常量(k8s_deploy_contract.tests.ps1 的「④ Redis 连接总账」与「D1 镜像常量」用例):
+      # durable_enqueue.go 的 durableClientPoolSize、data_service config.go 的 WAITAOF 超时上界 / 对账 leader 池与租约 / 发布专用池缺省。
+      # 只改 Go 侧不重跑,Redis 总账少算或部署上界与服务拒启上界不一致都要到部署时才发现
+      - "go/db/internal/kafka/durable_enqueue.go"
+      - "go/data_service/internal/config/config.go"
       - "java/gateway_node/src/main/java/com/game/gateway/ratelimit/RateLimitProperties.java"
       - ".github/workflows/deploy-config-tests.yml"
       # 镜像构建输入:版本注入 / OCI label / 构建上下文排除规则改了,发布契约测试要重跑

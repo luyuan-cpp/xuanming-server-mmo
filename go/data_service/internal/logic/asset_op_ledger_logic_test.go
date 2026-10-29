@@ -29,7 +29,7 @@ const ledgerTestPlayerID uint64 = 4242
 // ledgerTestKey 用与生产相同的推导(message 全名)拼 key,而不是写字面量 "PlayerAllData:…":
 // 测试要钉的是"读的是 PlayerAllData 那把 key",不是某个会随 proto package 变化的字符串。
 func ledgerTestKey(playerID uint64) string {
-	return fmt.Sprintf("%s:%d", (&dbpb.PlayerAllData{}).ProtoReflect().Descriptor().FullName(), playerID)
+	return fmt.Sprintf("%s:{%d}", (&dbpb.PlayerAllData{}).ProtoReflect().Descriptor().FullName(), playerID)
 }
 
 // sampleLedger 造一份每个字段都非零的账本,逐字段比较才有意义。

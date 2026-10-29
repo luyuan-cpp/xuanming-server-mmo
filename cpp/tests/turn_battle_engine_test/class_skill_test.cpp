@@ -83,6 +83,30 @@ TEST(ClassSkillRulesTest, PlanUpgradeStopsAtLevelLimitGoldOrMaxRank) {
     EXPECT_FALSE(classskill::IsValidUpgradeCount(11));
 }
 
+// 存储重数高于本版本 max_rank(新版本调大上限后写入 / 本版本下调了上限,加载期原样携带,混版本设计 §12.1 D5):
+// 修习一重都不走、一分钱不扣,停在满重;scene 的 UpgradeSkill 不另加守卫,靠的就是这一条。
+// 生效等级仍被本版本上限夹住。
+TEST(ClassSkillRulesTest, PlanUpgradeFromAboveMaxRankPlansNothing) {
+    constexpr uint64_t kRich = std::numeric_limits<uint64_t>::max();
+
+    for (const uint32_t count : {1u, 10u}) {
+        const auto plan = classskill::PlanUpgrade(15, 10, 10, 1, kRich, count);
+        EXPECT_EQ(plan.steps, 0u) << "count " << count;
+        EXPECT_EQ(plan.finalRank, 15u) << "count " << count;
+        EXPECT_EQ(plan.totalCost, 0u) << "count " << count;
+        EXPECT_EQ(plan.stop, classskill::UpgradeStop::kMaxRank) << "count " << count;
+    }
+    // 存储值在 uint32 顶端也先停在满重,不会算 rank + 1 回绕
+    const auto top = classskill::PlanUpgrade(std::numeric_limits<uint32_t>::max(), 10, 10, 1, kRich, 10);
+    EXPECT_EQ(top.steps, 0u);
+    EXPECT_EQ(top.totalCost, 0u);
+    EXPECT_EQ(top.stop, classskill::UpgradeStop::kMaxRank);
+
+    EXPECT_EQ(classskill::EffectiveRank(15, 30, 1, 10), 10u);  // 超上限的存储重数按上限生效
+    EXPECT_EQ(classskill::EffectiveRank(15, 5, 1, 10), 3u);    // 同时受角色等级的每重上限夹住
+    EXPECT_EQ(classskill::EffectiveRank(0, 30, 1, 10), 0u);    // rank 0 即未学
+}
+
 TEST(ClassSkillRulesTest, ManaCostRoundsUpWithMinimumOneAndNeverOverflows) {
     EXPECT_EQ(classskill::ManaCost(100, 0.03), 3u);
     EXPECT_EQ(classskill::ManaCost(250, 0.06), 15u);

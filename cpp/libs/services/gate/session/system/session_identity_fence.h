@@ -20,6 +20,7 @@
 // 灰度一个版本之后本枚举删掉 kDeliverUnfenced,0 直接归 kDrop。
 
 #include <cstdint>
+#include <string_view>
 
 namespace gate_session_fence
 {
@@ -125,5 +126,42 @@ namespace gate_session_fence
 			return "skip_newer_login";
 		}
 		return "unknown";
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// scene 推来的踢线(KickPlayer 34)来源栅栏(docs/design/cross-zone-scene-travel.md §13.2「上限到期一律踢线」残余、
+	// §12.5.6 残余 1)。
+	//
+	// scene 在交接收口(冻结上限 / 晚发闸 / 标记已发出之后的出口)先推 tip 再推 34,让客户端回选服重登。同 zone 交接时
+	// scene_manager 可能其实已经放行、路由已把会话改绑到目标节点,只是源 scene 没收到应答 —— 源的 34 会断掉这条合法会话。
+	// 会话此刻绑在哪个 scene 进程只有 gate 知道,所以由 gate 核对:34 只认会话当前绑定的那个 scene 进程。
+	//
+	// 只在两边都能正面认出、且确实不同时才丢:
+	// - 任一侧认不出(发送连接不在 scene 注册表里 / 注册不带 uuid、会话还没绑 scene、绑定的节点实体已失效):照发,与旧行为相同。
+	//   34 是让客户端脱困的出口,没有证据就丢,会让一个实体已被销毁的客户端挂在原地;
+	// - 比进程实例号(NodeInfo.node_uuid),不比 node_id、也不比实体句柄:node_id 会被重启的新进程复用,
+	//   实体句柄在节点重连 / 重注册后会换。
+	// tip 不过这道栅栏:多显示一条「传送未成」只是提示不准,不断连接。
+	enum class SceneKickSourceVerdict : uint8_t
+	{
+		// 发送方就是会话当前绑定的 scene 进程。
+		kDeliver,
+		// 任一侧认不出:照发。
+		kDeliverUnverified,
+		// 会话已绑定到另一个 scene 进程:丢弃这条 34。
+		kDropNotBoundScene,
+	};
+
+	// boundSceneInstance:会话当前绑定的 scene 进程实例号(空 = 未绑定 / 认不出)。
+	// senderSceneInstance:本次推送所在连接对应的 scene 进程实例号(空 = 认不出)。
+	inline SceneKickSourceVerdict ClassifySceneKickSource(std::string_view boundSceneInstance,
+	                                                       std::string_view senderSceneInstance)
+	{
+		if (boundSceneInstance.empty() || senderSceneInstance.empty())
+		{
+			return SceneKickSourceVerdict::kDeliverUnverified;
+		}
+		return boundSceneInstance == senderSceneInstance ? SceneKickSourceVerdict::kDeliver
+		                                                  : SceneKickSourceVerdict::kDropNotBoundScene;
 	}
 } // namespace gate_session_fence

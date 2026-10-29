@@ -101,3 +101,43 @@ TEST(KafkaManagerInit, EmptyBrokersRejectedWhenGroupIdIsSet)
     EXPECT_FALSE(outcome.initOk);
     EXPECT_FALSE(outcome.producerHasBrokers);
 }
+
+// 不创建 broker 句柄也必须关闭后拒绝 Publish；幂等 Shutdown 不能重新开放 producer。
+TEST(KafkaManagerInit, ShutdownJoinsIdleOwnerAndRejectsFurtherPublication)
+{
+    bool first = false, second = false, joined = false, localJoined = false, rejected = false, frontier = false;
+    std::thread worker([&] {
+        KafkaManager manager;
+        first = manager.Shutdown(std::chrono::milliseconds(0));
+        second = manager.Shutdown(std::chrono::milliseconds(0));
+        joined = manager.ConsumersJoined();
+        localJoined = manager.LocalWorkJoined();
+        rejected = !manager.Publish("closed-topic", "must-not-send");
+        frontier = manager.ClosedPublicationFrontier().has_value();
+    });
+    worker.join();
+    EXPECT_TRUE(first);
+    EXPECT_TRUE(second);
+    EXPECT_TRUE(joined);
+    EXPECT_TRUE(localJoined);
+    EXPECT_TRUE(rejected);
+    EXPECT_TRUE(frontier);
+}
+
+TEST(KafkaManagerInit, ConsumerlessPreparedBootStillRequiresActualSourceGateAndOpensOnce)
+{
+    bool prepared=false, rejectedWrong=false, opened=false, duplicateRejected=false;int callbacks=0;
+    std::thread worker([&]{
+        KafkaManager manager;ASSERT_TRUE(manager.PrepareOnlyBeforeSubscribe(true));
+        sql_writer_maintenance_receipt::Plan plan;
+        auto readiness=manager.PrepareReadiness(plan,std::string(32,'m'),std::string(16,'i'),std::string(16,'b')).get();
+        ASSERT_TRUE(readiness.has_value());prepared=readiness->groups().empty()&&readiness->manual_assignments().empty();
+        auto changed=*readiness;changed.add_groups()->set_group("not-configured");
+        rejectedWrong=!manager.OpenPrepared(changed,[&]{++callbacks;return true;});
+        EXPECT_EQ(callbacks,0);
+        EXPECT_FALSE(manager.OpenPrepared(*readiness,[&]{++callbacks;return false;}));
+        opened=manager.OpenPrepared(*readiness,[&]{++callbacks;return true;});
+        duplicateRejected=!manager.OpenPrepared(*readiness,[&]{++callbacks;return true;});
+    });worker.join();
+    EXPECT_TRUE(prepared);EXPECT_TRUE(rejectedWrong);EXPECT_TRUE(opened);EXPECT_TRUE(duplicateRejected);EXPECT_EQ(callbacks,2);
+}

@@ -1,25 +1,31 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"db/internal/config"
+	dbdrain "db/internal/drain"
 	"db/internal/kafka"
 	"db/internal/logic/pkg/proto_sql"
 	"db/internal/metrics"
 	"db/internal/saveoutbox"
 	server "db/internal/server/db"
 	"db/internal/svc"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
 	db_grpc "proto/db"
+	"shared/authoritysql"
 	"shared/buildinfo"
+	"shared/drainproof"
 	"shared/grpcstats"
 	"shared/kafkautil"
 	"shared/killswitch"
 	"shared/placement"
 	"shared/serverbase"
+	"strings"
 	"syscall"
 	"time"
 
@@ -30,10 +36,18 @@ import (
 	"github.com/zeromicro/go-zero/zrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
+	databasepb "proto/common/database"
 )
 
 var configFile = flag.String("f", "etc/db.yaml", "the config file")
+
+var maintenanceControlDir = flag.String("maintenance-drain-control-dir", os.Getenv("MMORPG_MAINTENANCE_CONTROL_DIR"), "正常boot受控排空私有目录；不靠重启冒旧boot")
+var maintenancePlan = flag.String("maintenance-drain-plan", "", "正式typed维护runtime Receipt路径；本模式不serve/EnsureTopics/bootstrap")
+var maintenanceDir = flag.String("maintenance-drain-dir", "", "私有stop/report目录")
+var maintenanceSHA = flag.String("maintenance-drain-sha256", "", "runtime Receipt原文件SHA256")
 
 var showVersion = flag.Bool("version", false, "打印版本信息并退出")
 
@@ -95,16 +109,28 @@ func main() {
 	// ~19.5k preload tasks stuck on partitions 1..9 while only ~764 on
 	// partition 0 drained, capping SceneManager.EnterScene throughput at
 	// ~4/s and timing out 78% of robots on "scene ready".
-	if err := kafkautil.EnsureTopics(
-		config.AppConfig.ServerConfig.Kafka.Brokers,
-		[]kafkautil.TopicSpec{{
-			Name:           config.AppConfig.ServerConfig.Kafka.Topic,
-			Partitions:     config.AppConfig.ServerConfig.Kafka.PartitionCnt,
-			RetentionMs:    config.AppConfig.ServerConfig.Kafka.RetentionMs,
-			RetentionBytes: config.AppConfig.ServerConfig.Kafka.RetentionBytes,
-		}},
-	); err != nil {
-		panic(fmt.Sprintf("Kafka db-task partition contract rejected: %v", err))
+	var maintenanceRuntime *drainproof.Runtime
+	if *maintenancePlan != "" {
+		maintenanceRuntime, err = drainproof.LoadRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
+		if err != nil {
+			panic(fmt.Sprintf("维护runtime原件拒绝: %v", err))
+		}
+	} else if *maintenanceDir != "" || *maintenanceSHA != "" {
+		panic("维护参数必须完整提供")
+	}
+	if maintenanceRuntime == nil {
+		if err := kafkautil.EnsureTopics(
+			config.AppConfig.ServerConfig.Kafka.Brokers,
+			[]kafkautil.TopicSpec{{
+				Name:           config.AppConfig.ServerConfig.Kafka.Topic,
+				Partitions:     config.AppConfig.ServerConfig.Kafka.PartitionCnt,
+				RetentionMs:    config.AppConfig.ServerConfig.Kafka.RetentionMs,
+				RetentionBytes: config.AppConfig.ServerConfig.Kafka.RetentionBytes,
+			}},
+		); err != nil {
+			panic(fmt.Sprintf("Kafka db-task partition contract rejected: %v", err))
+		}
+
 	}
 
 	ctx := svc.NewServiceContext()
@@ -129,6 +155,11 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("placement store registry rejected: %v", err))
 	}
+	defer func() {
+		if err := stores.Close(); err != nil {
+			logx.Errorf("DB物理池关闭失败，不能据此宣称UNKNOWN撤销: %v", err)
+		}
+	}()
 	// 连接池指标(mmorpg_sql_pool_*{sql_client="db"},G2b):按本 zone 库 / 额外 zone 家族库 / 非 zone 落点库三类聚合,
 	// 每次抓取时现取 sql.DBStats。必须在 metrics.Start 之前注册;注册失败只记日志,不挡落库。
 	metrics.RegisterSQLPools(stores.PoolSamples)
@@ -153,6 +184,24 @@ func main() {
 
 	logx.Infof("player row fencing: mode=%s epoch_override=%v", fencingMode, config.AppConfig.ServerConfig.Fencing.EpochOverride && fencingMode == config.FencingModeDual)
 
+	if maintenanceRuntime != nil {
+		writerConfig, err := proto_sql.CurrentWriterConfig()
+		if err != nil {
+			panic(fmt.Sprintf("维护writer身份HOLD: %v", err))
+		}
+		if err = bindMaintenanceRuntime(maintenanceRuntime, writerConfig); err != nil {
+			panic(fmt.Sprintf("维护同boot身份HOLD: %v", err))
+		}
+	}
+	if maintenanceRuntime != nil && maintenanceRuntime.Request.RunPhase != databasepb.SqlWriterDrainRun_SQL_RELEASED {
+		maintenanceCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := dbdrain.Run(maintenanceCtx, maintenanceRuntime, config.AppConfig, ctx.RedisClient, ctx.PlacementRedis, stores); err != nil {
+			panic(fmt.Sprintf("维护排空HOLD: %v", err))
+		}
+		return
+	}
+
 	// ── 存盘协议世代门禁(data-overwrite-rollback-audit-20261018.md §2.2)──────────────────────────
 	// 现行 scene / login 只说严格提交屏障,只有 dual 写两表 SQL ACK、跑补投。dual 在消费者与补投启动之前写 zone 级世代标记;
 	// legacy 先确认本 zone 没有严格世代证据(标记或非空补投桶)才启动,运行中周期复查,发现即走正常停机并以非零码退出,
@@ -165,43 +214,48 @@ func main() {
 		}
 	}()
 	protocolConflict := make(chan error, 1)
-	gateCtx, gateCancel := context.WithTimeout(context.Background(), saveProtocolGateTimeout)
-	if fencingMode == config.FencingModeDual {
-		err = saveoutbox.AnnounceStrictGeneration(gateCtx, ctx.RedisClient, config.AppConfig.ZoneId)
-	} else {
-		err = saveoutbox.CheckLegacyAllowed(gateCtx, ctx.RedisClient, config.AppConfig.ZoneId)
-	}
-	gateCancel()
-	if err != nil {
-		panic(fmt.Sprintf("save protocol generation gate rejected startup (mode=%s): %v", fencingMode, err))
-	}
-	if fencingMode == config.FencingModeLegacy {
-		// 复查协程在消费者停完之后才取消(defer 后进先出):停机排空期间仍续写 legacy 存活标记,dual 的补投继续等。
-		watchCtx, stopWatch := context.WithCancel(context.Background())
-		defer stopWatch()
-		go saveoutbox.WatchLegacy(watchCtx, ctx.RedisClient, config.AppConfig.ZoneId, saveoutbox.LegacyWatchInterval, func(err error) {
-			select {
-			case protocolConflict <- err:
-			default:
-			}
-		})
-		logx.Infof("save protocol generation: mode=legacy zone=%d no strict evidence; rechecking every %s",
-			config.AppConfig.ZoneId, saveoutbox.LegacyWatchInterval)
-	} else {
-		logx.Infof("save protocol generation: mode=dual %s=%s", saveoutbox.GenerationKey(config.AppConfig.ZoneId), saveoutbox.GenerationStrict)
-	}
+	if maintenanceRuntime == nil {
+		gateCtx, gateCancel := context.WithTimeout(context.Background(), saveProtocolGateTimeout)
+		if fencingMode == config.FencingModeDual {
+			err = saveoutbox.AnnounceStrictGeneration(gateCtx, ctx.RedisClient, config.AppConfig.ZoneId)
+		} else {
+			err = saveoutbox.CheckLegacyAllowed(gateCtx, ctx.RedisClient, config.AppConfig.ZoneId)
+		}
+		gateCancel()
+		if err != nil {
+			panic(fmt.Sprintf("save protocol generation gate rejected startup (mode=%s): %v", fencingMode, err))
+		}
+		if fencingMode == config.FencingModeLegacy {
+			// 复查协程在消费者停完之后才取消(defer 后进先出):停机排空期间仍续写 legacy 存活标记,dual 的补投继续等。
+			watchCtx, stopWatch := context.WithCancel(context.Background())
+			defer stopWatch()
+			go saveoutbox.WatchLegacy(watchCtx, ctx.RedisClient, config.AppConfig.ZoneId, saveoutbox.LegacyWatchInterval, func(err error) {
+				select {
+				case protocolConflict <- err:
+				default:
+				}
+			})
+			logx.Infof("save protocol generation: mode=legacy zone=%d no strict evidence; rechecking every %s",
+				config.AppConfig.ZoneId, saveoutbox.LegacyWatchInterval)
+		} else {
+			logx.Infof("save protocol generation: mode=dual %s=%s", saveoutbox.GenerationKey(config.AppConfig.ZoneId), saveoutbox.GenerationStrict)
+		}
 
-	// 玩家持久 schema 引导关闭标记(docs/design/mixed-version-persist-field-protection.md §6.2 C0):消费者启动前读一次,
-	// 读不清就拒启;运行中周期复查,只会从开放变成关闭。复查协程随进程停机退出(defer 后进先出,晚于消费者停完)。
-	schemaCtx, schemaCancel := context.WithTimeout(context.Background(), saveProtocolGateTimeout)
-	err = kafka.LoadPersistBootstrapState(schemaCtx, ctx.RedisClient, config.AppConfig.ZoneId)
-	schemaCancel()
-	if err != nil {
-		panic(fmt.Sprintf("persist schema bootstrap state rejected startup: %v", err))
+		// 玩家持久 schema 引导关闭标记(docs/design/mixed-version-persist-field-protection.md §6.2 C0):消费者启动前读一次,
+		// 读不清就拒启;运行中周期复查,只会从开放变成关闭。复查协程随进程停机退出(defer 后进先出,晚于消费者停完)。
+		schemaCtx, schemaCancel := context.WithTimeout(context.Background(), saveProtocolGateTimeout)
+		err = kafka.LoadPersistBootstrapState(schemaCtx, ctx.RedisClient, config.AppConfig.ZoneId)
+		schemaCancel()
+		if err != nil {
+			panic(fmt.Sprintf("persist schema bootstrap state rejected startup: %v", err))
+		}
+		schemaWatchCtx, stopSchemaWatch := context.WithCancel(context.Background())
+		defer stopSchemaWatch()
+		go kafka.WatchPersistBootstrap(schemaWatchCtx, ctx.RedisClient, config.AppConfig.ZoneId)
+
+	} else if fencingMode != config.FencingModeDual {
+		panic("维护新boot要求dual，不进行legacy/bootstrap切换")
 	}
-	schemaWatchCtx, stopSchemaWatch := context.WithCancel(context.Background())
-	defer stopSchemaWatch()
-	go kafka.WatchPersistBootstrap(schemaWatchCtx, ctx.RedisClient, config.AppConfig.ZoneId)
 
 	// Initialize Kafka consumer
 	kafkaConsumer, err := kafka.NewKeyOrderedKafkaConsumer(
@@ -222,7 +276,8 @@ func main() {
 
 	// 父快照Lua中保存的原始任务意图跨scene崩溃恢复；Kafka确认后仍等两表SQL双ACK才清理。
 	// 装配使用可写主父缓存Redis，与只读OwnerEpochRedis区分；跨实例拓扑未支持时拒启。
-	saveReplay, err := saveoutbox.Start(context.Background(), config.AppConfig, ctx.RedisClient, ctx.PlacementRedis, stores)
+	// 补投与消费同看本实例的读方就绪闸(kafkaConsumer.RouteGateOpen)：闸关着时整拍跳过、不计次(r2-rr#5)。
+	saveReplay, err := saveoutbox.Start(context.Background(), config.AppConfig, ctx.RedisClient, ctx.PlacementRedis, stores, kafkaConsumer)
 	if err != nil {
 		panic(fmt.Sprintf("save outbox recovery rejected: %v", err))
 	}
@@ -271,6 +326,12 @@ func main() {
 	}
 	ks.Start(ksCtx, etcdCli)
 
+	controlCtx, stopControl := context.WithCancel(context.Background())
+	defer stopControl()
+	rootAdmission := drainproof.New()
+	if maintenanceRuntime != nil {
+		rootAdmission = drainproof.NewPrepared()
+	}
 	// Start gRPC server
 	s := zrpc.MustNewServer(config.AppConfig.RpcServerConf, func(grpcServer *grpc.Server) {
 		db_grpc.RegisterDbServer(grpcServer, server.NewDbServer(ctx))
@@ -284,6 +345,14 @@ func main() {
 	// killswitch 命中即短路,handler 根本不会被调用;
 	// serverbase 放最内层,只观测真正跑过 handler 的结果,不会把"被人为关停"
 	// 误记成一次业务故障。
+	s.AddUnaryInterceptors(func(callCtx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		done, err := rootAdmission.Enter()
+		if err != nil {
+			return nil, status.Error(codes.Unavailable, "维护入口关闭")
+		}
+		defer done()
+		return handler(callCtx, req)
+	})
 	s.AddUnaryInterceptors(grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor())
 	s.AddUnaryInterceptors(ks.UnaryServerInterceptor())
 	// in-band 故障拦截器。
@@ -310,6 +379,65 @@ func main() {
 	// (2026-09-03 kind 实跑)。go-zero 的 Start() 是阻塞的(内部先注册 etcd 再 Serve,
 	// 出错走 logx.Must 直接退出),放到 goroutine 里,主 goroutine 仍按下面的信号退出。
 	go s.Start()
+	if maintenanceRuntime != nil {
+		go func() {
+			prepareCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			digest, err := kafkaConsumer.ReadyFrontier(prepareCtx)
+			cancel()
+			if err != nil {
+				logx.Errorf("维护新boot consumer准备HOLD: %v", err)
+				return
+			}
+			ready, err := maintenanceRuntime.Readiness("SOURCE", digest)
+			if err != nil {
+				logx.Errorf("维护新boot正式身份HOLD: %v", err)
+				return
+			}
+			if err = maintenanceRuntime.AwaitOpen(context.Background(), ready, func(ctx context.Context) ([]byte, error) {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				if err := rootAdmission.OpenPrepared(); err != nil {
+					return nil, err
+				}
+				return rootAdmission.SnapshotDigest(), nil
+			}); err != nil {
+				logx.Errorf("维护新boot开放HOLD: %v", err)
+			}
+		}()
+	}
+
+	if *maintenanceControlDir != "" {
+		go func() {
+			runtime, err := drainproof.WaitRuntime(controlCtx, *maintenanceControlDir)
+			if err != nil {
+				if controlCtx.Err() == nil {
+					rootAdmission.CloseAdmission()
+					logx.Errorf("维护控制输入HOLD: %v", err)
+				}
+				return
+			}
+			writer, err := proto_sql.CurrentWriterConfig()
+			if err == nil {
+				err = bindMaintenanceRuntime(runtime, writer)
+			}
+			if err != nil {
+				rootAdmission.CloseAdmission()
+				logx.Errorf("维护同boot控制身份HOLD: %v", err)
+				return
+			}
+			if err = dbdrain.RunExisting(controlCtx, runtime, config.AppConfig, ctx.RedisClient, ctx.PlacementRedis, stores, kafkaConsumer, saveReplay, func(ctx context.Context) ([]byte, error) {
+				rootAdmission.CloseAdmission()
+				if err := rootAdmission.Wait(ctx); err != nil {
+					return nil, err
+				}
+				return rootAdmission.SettledDigest(ctx)
+			}); err != nil {
+				rootAdmission.CloseAdmission()
+				logx.Errorf("维护同boot排空HOLD: %v", err)
+			}
+		}()
+	}
 
 	// Wait for shutdown signal
 	fmt.Println("\n=============================================================")
@@ -354,6 +482,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	select {
 	case <-quit:
+		rootAdmission.CloseAdmission()
 		fmt.Println("Shutting down gracefully...")
 	case err := <-protocolConflict:
 		// 走与信号相同的停机路径(全部 defer),最后以非零码退出;重启后停在启动门禁,直到配置改为 dual。
@@ -396,4 +525,15 @@ func newKillSwitchEtcdClient(cfg discov.EtcdConf) *clientv3.Client {
 		return nil
 	}
 	return cli
+}
+
+func bindMaintenanceRuntime(runtime *drainproof.Runtime, writer authoritysql.WriterConfig) error {
+	physical, err := hex.DecodeString(os.Getenv("MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256"))
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(physical, runtime.Plan.PhysicalClusterIdentity) || writer.AuthoritySchema() != runtime.Plan.AuthoritySchema || writer.Generation() != runtime.Request.Generation || strings.Join(writer.ProtectedSchemas(), ",") != strings.Join(runtime.Plan.ProtectedSchemas, ",") {
+		return drainproof.ErrHold
+	}
+	return runtime.BindBoot(writer.InstanceID(), writer.WriterKey())
 }

@@ -14,7 +14,7 @@ import (
 //
 // 该 service 标了 OptionIsClientProtocolService=true:只接客户端经 gate → 路由服转发来的请求。
 // 东西向 / 运维方法不许加到这个 service 上 —— 加进来就等于对客户端开放了一个消息号
-// (生成器会给带 ClientPlayer 前缀的服务出客户端 handler)。
+// (生成器会给标了 OptionIsClientProtocolService 的服务出客户端调用面,与服务名无关)。
 //
 // 内嵌 UnimplementedClientPlayerFriendServer 承担两件事:
 //  1. 满足生成代码的 mustEmbed 约束,将来 proto 加 RPC 时本文件不会编译不过;

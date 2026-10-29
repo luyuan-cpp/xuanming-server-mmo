@@ -24,6 +24,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"proto/common/base"
 	"proto/scene"
 	"robot/config"
 	"robot/generated/pb/game"
@@ -69,12 +71,25 @@ var (
 	tipAttributeNothingToChange      = uint32(tiptable.AttributeError_kAttributeNothingToChange)
 )
 
-// attributeSmokeSession 是一个已登录进场的机器人会话 + 面板序号游标。
+// attributeSmokeSession 是一个已登录进场的机器人会话。属性请求经 caller 发出、只等本次请求自己的回包
+// (按 MessageContent.id 认领),所以不再需要面板序号游标。
 type attributeSmokeSession struct {
-	gc     *pkg.GameClient
+	gc *pkg.GameClient
+	// player 只用作 readGoldBalance / gmAddGold 的兼容参数(它们已不读写它),属性请求不经 Player 状态。
 	player *gameobject.Player
 	stats  *metrics.Stats
-	seq    uint64 // 已消费到的面板序号,保证每次等的是"这次请求的新面板"
+	caller *smokeCaller
+}
+
+// newAttributeSmokeSession 包装一个已进场的连接。gc 的 RecvLoop 必须已启动(prepareBehaviorClient 返回前已起),
+// 否则 caller 等不到回包。
+func newAttributeSmokeSession(gc *pkg.GameClient, player *gameobject.Player, stats *metrics.Stats) *attributeSmokeSession {
+	return &attributeSmokeSession{
+		gc:     gc,
+		player: player,
+		stats:  stats,
+		caller: newSmokeCaller(gc, stats, attributeSmokeAccount, attributeSmokeRpcTimeout, nil),
+	}
 }
 
 // RunAttributeSmoke 是 main.go `mode: attribute-smoke` 的入口。
@@ -112,12 +127,12 @@ func RunAttributeSmoke(cfg *config.Config) {
 	if err != nil {
 		fail("login", "account=%s err=%v", attributeSmokeAccount, err)
 	}
-	session = &attributeSmokeSession{gc: gc, player: player, stats: stats}
+	session = newAttributeSmokeSession(gc, player, stats)
 	zap.L().Info("[attribute-smoke] step 1: in scene", zap.Uint64("player", gc.PlayerId))
 
 	// ---- 步骤 0:预备,把账号拉回已知起点(同账号可反复跑) ----
 	panel, err := session.call(game.SceneAttributeClientPlayerGmSetPlayerLevelMessageId,
-		&scene.GmSetPlayerLevelRequest{Level: 1})
+		&scene.GmSetPlayerLevelRequest{Level: 1}, &scene.GmSetPlayerLevelResponse{})
 	if err != nil {
 		fail("prep-level", "%v", err)
 	}
@@ -136,7 +151,7 @@ func RunAttributeSmoke(cfg *config.Config) {
 	// 1 级洗点免费(reset_free_below_level=30);没有分配时服务器回"无变化",同样视为干净
 	for _, poolId := range []uint32{attrPoolPrimary} {
 		p, tip, err := session.callTolerant(game.SceneAttributeClientPlayerResetAttributePointsMessageId,
-			&scene.ResetAttributePointsRequest{PoolId: poolId}, tipAttributeNothingToChange)
+			&scene.ResetAttributePointsRequest{PoolId: poolId}, &scene.ResetAttributePointsResponse{}, tipAttributeNothingToChange)
 		if err != nil {
 			fail("prep-reset", "pool=%d %v", poolId, err)
 		}
@@ -158,7 +173,7 @@ func RunAttributeSmoke(cfg *config.Config) {
 
 	// ---- 步骤 2:面板形状 ----
 	panel, err = session.call(game.SceneAttributeClientPlayerGetAttributePanelMessageId,
-		&scene.GetAttributePanelRequest{})
+		&scene.GetAttributePanelRequest{}, &scene.GetAttributePanelResponse{})
 	if err != nil {
 		fail("get-panel", "%v", err)
 	}
@@ -186,7 +201,7 @@ func RunAttributeSmoke(cfg *config.Config) {
 	// ---- 步骤 3:1 → 30 级,点数精确 +145(总量不落库,靠等级换算) ----
 	const targetLevel = 30
 	panel, err = session.call(game.SceneAttributeClientPlayerGmSetPlayerLevelMessageId,
-		&scene.GmSetPlayerLevelRequest{Level: targetLevel})
+		&scene.GmSetPlayerLevelRequest{Level: targetLevel}, &scene.GmSetPlayerLevelResponse{})
 	if err != nil {
 		fail("gm-set-level", "%v", err)
 	}
@@ -203,11 +218,7 @@ func RunAttributeSmoke(cfg *config.Config) {
 		zap.Uint32("remaining", primary.Remaining))
 
 	// ---- 步骤 4:自动加点(只算不落) ----
-	if err := session.send(game.SceneAttributeClientPlayerAutoAllocateAttributePointsMessageId,
-		&scene.AutoAllocateAttributePointsRequest{PoolId: attrPoolPrimary}); err != nil {
-		fail("auto-send", "%v", err)
-	}
-	suggested, err := session.waitSuggestion(attrPoolPrimary)
+	suggested, err := session.autoAllocate(attrPoolPrimary)
 	if err != nil {
 		fail("auto-allocate", "%v", err)
 	}
@@ -219,7 +230,7 @@ func RunAttributeSmoke(cfg *config.Config) {
 		fail("auto-delta", "Suggested delta %d != remaining points %d (automatic allocation should spend all remaining points)", delta, primary.Remaining)
 	}
 	fresh, err := session.call(game.SceneAttributeClientPlayerGetAttributePanelMessageId,
-		&scene.GetAttributePanelRequest{})
+		&scene.GetAttributePanelRequest{}, &scene.GetAttributePanelResponse{})
 	if err != nil {
 		fail("panel-after-auto", "%v", err)
 	}
@@ -233,7 +244,8 @@ func RunAttributeSmoke(cfg *config.Config) {
 	// ---- 步骤 5:确认加点 → 剩余点归零、二级属性变大 ----
 	derivedBefore := derivedSum(fresh.Derived)
 	panel, err = session.call(game.SceneAttributeClientPlayerAllocateAttributePointsMessageId,
-		&scene.AllocateAttributePointsRequest{PoolId: attrPoolPrimary, Allocated: suggested})
+		&scene.AllocateAttributePointsRequest{PoolId: attrPoolPrimary, Allocated: suggested},
+		&scene.AllocateAttributePointsResponse{})
 	if err != nil {
 		fail("allocate", "%v", err)
 	}
@@ -254,9 +266,10 @@ func RunAttributeSmoke(cfg *config.Config) {
 		zap.Uint64("speed", panel.Derived.Speed))
 
 	// ---- 步骤 6:幂等 —— 重发同一份目标值被判"无变化" ----
-	if tip := session.callExpectTip(game.SceneAttributeClientPlayerAllocateAttributePointsMessageId,
-		&scene.AllocateAttributePointsRequest{PoolId: attrPoolPrimary, Allocated: suggested}); tip != tipAttributeNothingToChange {
-		fail("idempotent", "Resending the same target values should return tip=%d (unchanged), got %d", tipAttributeNothingToChange, tip)
+	if err := session.callExpectTip(game.SceneAttributeClientPlayerAllocateAttributePointsMessageId,
+		&scene.AllocateAttributePointsRequest{PoolId: attrPoolPrimary, Allocated: suggested},
+		&scene.AllocateAttributePointsResponse{}, tipAttributeNothingToChange); err != nil {
+		fail("idempotent", "Resending the same target values should return tip=%d (unchanged): %v", tipAttributeNothingToChange, err)
 	}
 
 	// ---- 步骤 7:只增不减 ----
@@ -268,9 +281,10 @@ func RunAttributeSmoke(cfg *config.Config) {
 		}
 	}
 	lower := map[uint32]uint32{anyDim: allocatedOf(panel, anyDim) - 1}
-	if tip := session.callExpectTip(game.SceneAttributeClientPlayerAllocateAttributePointsMessageId,
-		&scene.AllocateAttributePointsRequest{PoolId: attrPoolPrimary, Allocated: lower}); tip != tipAttributePointsCannotDecrease {
-		fail("decrease-guard", "Decreasing points should return tip=%d, got %d", tipAttributePointsCannotDecrease, tip)
+	if err := session.callExpectTip(game.SceneAttributeClientPlayerAllocateAttributePointsMessageId,
+		&scene.AllocateAttributePointsRequest{PoolId: attrPoolPrimary, Allocated: lower},
+		&scene.AllocateAttributePointsResponse{}, tipAttributePointsCannotDecrease); err != nil {
+		fail("decrease-guard", "Decreasing points should return tip=%d: %v", tipAttributePointsCannotDecrease, err)
 	}
 
 	// 原步骤 8(相性池单项上限)/ 步骤 9(仙魔池未解锁)随两池删除一并移除(2026-09-14);
@@ -288,7 +302,7 @@ func RunAttributeSmoke(cfg *config.Config) {
 	var otherSchemeId uint32
 	created := false
 	p, tip, err := session.callTolerant(game.SceneAttributeClientPlayerCreateAttributeSchemeMessageId,
-		&scene.CreateAttributeSchemeRequest{}, tipAttributeSchemeLimitReached)
+		&scene.CreateAttributeSchemeRequest{}, &scene.CreateAttributeSchemeResponse{}, tipAttributeSchemeLimitReached)
 	if err != nil {
 		fail("create-scheme", "%v", err)
 	}
@@ -356,7 +370,7 @@ func RunAttributeSmoke(cfg *config.Config) {
 	}
 	session, gc, player = reborn, reborn.gc, reborn.player
 	panel, err = session.call(game.SceneAttributeClientPlayerGetAttributePanelMessageId,
-		&scene.GetAttributePanelRequest{})
+		&scene.GetAttributePanelRequest{}, &scene.GetAttributePanelResponse{})
 	if err != nil {
 		fail("relogin-panel", "%v", err)
 	}
@@ -390,7 +404,7 @@ func RunAttributeSmoke(cfg *config.Config) {
 	}
 	totalBefore := primary.Total
 	panel, err = session.call(game.SceneAttributeClientPlayerResetAttributePointsMessageId,
-		&scene.ResetAttributePointsRequest{PoolId: attrPoolPrimary})
+		&scene.ResetAttributePointsRequest{PoolId: attrPoolPrimary}, &scene.ResetAttributePointsResponse{})
 	if err != nil {
 		fail("reset", "%v", err)
 	}
@@ -423,44 +437,78 @@ func RunAttributeSmoke(cfg *config.Config) {
 // 会话辅助
 // ---------------------------------------------------------------------------
 
-// call 发一个属性 RPC 并等它带回的新面板(成功路径);tip != 0 视为失败。
-func (s *attributeSmokeSession) call(messageId uint32, request proto.Message) (*scene.AttributePanelInfo, error) {
-	panel, tip, err := s.callTolerant(messageId, request)
-	if err != nil {
-		return nil, err
-	}
-	if tip != 0 {
-		return nil, fmt.Errorf("服务器拒绝: tip=%d", tip)
-	}
-	return panel, nil
+// attributePanelResponse 是回全量面板的角色属性响应的公共形状(error_message + panel):GetAttributePanel /
+// AllocateAttributePoints / ResetAttributePoints / CreateAttributeScheme / SwitchAttributeScheme / GmSetPlayerLevel
+// 的响应都满足。pet-smoke 借角色属性通道(改等级 / 查角色面板)时也用它。
+type attributePanelResponse interface {
+	proto.Message
+	GetErrorMessage() *base.TipInfoMessage
+	GetPanel() *scene.AttributePanelInfo
 }
 
-// callTolerant 发一个属性 RPC:成功回 (面板, 0, nil);被拒且 tip 在 allowedTips 里回 (nil, tip, nil);
-// 其它拒绝回 error。用于"可能已经是目标状态"的预备步骤(洗过点的池再洗 → 无变化)。
-// 只认"来源 = 本次请求消息号"的面板:GmSetPlayerLevel 先推一份(170)再回响应(175),不看来源会错位消费,
-// 之后每一步都拿到上一步的旧面板。
-func (s *attributeSmokeSession) callTolerant(messageId uint32, request proto.Message, allowedTips ...uint32) (*scene.AttributePanelInfo, uint32, error) {
-	if err := s.send(messageId, request); err != nil {
+// requestAttributePanel 经 caller 发一个回全量面板的角色属性请求,只等本次请求自己的回包并直接解析
+// (按 MessageContent.id 认领,docs/design/client-rpc-callback.md §6)。response 传该请求对应响应类型的空值。
+// 结局:受理回 (面板, 0, nil);scene 在响应体里拒绝、且码在 allowedTips 里回 (nil, tip, nil);其余一律返回 error:
+// scene 的其它拒绝码(tip 一并返回)、gate 信封拒绝、超时 / 断线 / 没发出、受理却不带面板。
+// allowedTips 只对 scene 的业务码生效:信封拒绝说明请求没到 scene 的属性逻辑,现有调用方容忍 / 期待的都是业务码。
+//
+// 迁移前等的是生成 handler 写进 gameobject.Player 的「面板序号 + 来源消息号」,信封错误则由 prepareBehaviorClient 的
+// 收包回调翻译成同一个 tip,与业务拒绝分不清。GmSetPlayerLevel 先推一份 NotifyAttributePanelChanged 再回响应,
+// 当时要靠来源消息号才不错位;现在回包按请求号认领,拿到的就是本次的响应。attribute-smoke / pet-smoke 不读
+// Player 上那份属性状态,所以本次回包直接解析(交接 §8.1 做法 1),不再经 handler。但 equip / equip_forge 冒烟的
+// panelAfter 还靠它识别 NotifyAttributePanelChanged 推送,所以推送必须继续经 prepareBehaviorClient 的
+// onMessage → handler.MessageBodyHandler 写 Player,那份状态与对应 handler 写入不能删。
+//
+// 调用约束:caller 所在连接的 RecvLoop 必须已启动;不得在 RecvLoop goroutine 上调用(同步等回包会自锁)。
+func requestAttributePanel(caller *smokeCaller, messageId uint32, request proto.Message, response attributePanelResponse,
+	allowedTips ...uint32) (*scene.AttributePanelInfo, uint32, error) {
+	envelopeTip, err := caller.call(messageId, request, response)
+	if err != nil {
 		return nil, 0, err
 	}
-	deadline := time.Now().Add(attributeSmokeRpcTimeout)
-	for time.Now().Before(deadline) {
-		if tip := s.player.GetAttributeLastTip(); tip != 0 {
-			for _, allowed := range allowedTips {
-				if tip == allowed {
-					return nil, tip, nil
-				}
-			}
-			return nil, tip, fmt.Errorf("服务器拒绝: tip=%d", tip)
-		}
-		p, seq := s.player.GetAttributePanel()
-		if p != nil && seq > s.seq && s.player.GetAttributePanelSource() == messageId {
-			s.seq = seq
-			return p, 0, nil
-		}
-		time.Sleep(50 * time.Millisecond)
+	return attributePanelOutcome(messageId, envelopeTip, response, allowedTips...)
+}
+
+// attributePanelOutcome 是 requestAttributePanel 的结局判定(纯函数,单测见 equip_smoke_scenario_test.go)。
+// envelopeTip != 0 时 response 未填充。attribute / pet / equip 三个冒烟的属性请求都经它判定,
+// 改判据只改这一处。
+func attributePanelOutcome(messageId, envelopeTip uint32, response attributePanelResponse,
+	allowedTips ...uint32) (*scene.AttributePanelInfo, uint32, error) {
+	if envelopeTip != 0 {
+		return nil, 0, sceneRequestEnvelopeRejection(messageId, envelopeTip)
 	}
-	return nil, 0, fmt.Errorf("等响应超时 message_id=%d", messageId)
+	if tip := response.GetErrorMessage().GetId(); tip != 0 {
+		if slices.Contains(allowedTips, tip) {
+			return nil, tip, nil
+		}
+		return nil, tip, fmt.Errorf("rejected by scene: message_id=%d tip=%d", messageId, tip)
+	}
+	// 迁移前受理却不带面板的回包不推进序号,表现为等满超时;现在回包就是本次的,不会再有下一份,直接判失败
+	panel := response.GetPanel()
+	if panel == nil {
+		return nil, 0, fmt.Errorf("message_id=%d was accepted but the response carries no panel", messageId)
+	}
+	return panel, 0, nil
+}
+
+// sceneRequestEnvelopeRejection 把 gate 信封拒绝(MessageContent.error_message 非空、响应体为空)报成 error,
+// 与 scene 的业务拒绝分开:不能当成 scene 业务逻辑给的码去断言(1003 也可能是结局未知,见 sceneRequestEnvelopeHint)。
+// attribute / pet / equip 冒烟共用这一份,保证同一次运行里信封拒绝的日志格式只有一种。
+func sceneRequestEnvelopeRejection(messageId, tip uint32) error {
+	return fmt.Errorf("rejected by gate envelope: message_id=%d tip=%d%s", messageId, tip, sceneRequestEnvelopeHint(tip))
+}
+
+// call 发一个属性 RPC 并取它带回的新面板(成功路径);任何拒绝都视为失败。
+func (s *attributeSmokeSession) call(messageId uint32, request proto.Message, response attributePanelResponse) (*scene.AttributePanelInfo, error) {
+	panel, _, err := requestAttributePanel(s.caller, messageId, request, response)
+	return panel, err
+}
+
+// callTolerant 发一个属性 RPC:成功回 (面板, 0, nil);scene 以 allowedTips 里的码拒绝回 (nil, tip, nil);
+// 其它结局回 error(见 requestAttributePanel)。用于"可能已经是目标状态"的步骤(洗过点的池再洗 → 无变化)。
+func (s *attributeSmokeSession) callTolerant(messageId uint32, request proto.Message, response attributePanelResponse,
+	allowedTips ...uint32) (*scene.AttributePanelInfo, uint32, error) {
+	return requestAttributePanel(s.caller, messageId, request, response, allowedTips...)
 }
 
 // relogin 下线(LeaveGame + Disconnect)后用同一账号重新登录进场,返回新会话。
@@ -482,20 +530,29 @@ func (s *attributeSmokeSession) relogin(cfg *config.Config) (*attributeSmokeSess
 	if err != nil {
 		return nil, fmt.Errorf("relogin: %w", err)
 	}
-	return &attributeSmokeSession{gc: gc, player: player, stats: s.stats}, nil
+	return newAttributeSmokeSession(gc, player, s.stats), nil
 }
 
-// callExpectTip 发一个预期会被拒绝的请求,返回服务器给的 tip id(0 = 没被拒或超时,均视为断言失败)。
-func (s *attributeSmokeSession) callExpectTip(messageId uint32, request proto.Message) uint32 {
-	_, tip, _ := s.callTolerant(messageId, request, 0xFFFFFFFF)
-	return tip
+// callExpectTip 发一个预期被 scene 以 want 拒绝的请求:响应体 tip == want 返回 nil;受理、别的拒绝码、gate 信封拒绝
+// 与超时都返回描述实际结局的 error。迁移前这几种结局挤在一个 tip 返回值里(受理与超时都是 0,信封码与业务码不分)。
+func (s *attributeSmokeSession) callExpectTip(messageId uint32, request proto.Message, response attributePanelResponse, want uint32) error {
+	_, tip, err := s.callTolerant(messageId, request, response, want)
+	if err != nil {
+		return err
+	}
+	if tip != want {
+		return fmt.Errorf("message_id=%d was accepted", messageId)
+	}
+	return nil
 }
 
-// switchSchemeWaitingCooldown 切方案;撞上切换冷却(tip 138)就按面板的 switch_cooldown_until 等到期再切一次。
+// switchSchemeWaitingCooldown 切方案;撞上切换冷却(kAttributeSchemeSwitchCooldown)就按面板的 switch_cooldown_until
+// 等到期再切一次。冷却拒绝的响应不带面板,所以到期时刻取调用方给的上一份面板。
 func (s *attributeSmokeSession) switchSchemeWaitingCooldown(panel *scene.AttributePanelInfo, schemeId uint32) (*scene.AttributePanelInfo, error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		p, tip, err := s.callTolerant(game.SceneAttributeClientPlayerSwitchAttributeSchemeMessageId,
-			&scene.SwitchAttributeSchemeRequest{SchemeId: schemeId}, tipAttributeSchemeSwitchCooldown)
+			&scene.SwitchAttributeSchemeRequest{SchemeId: schemeId}, &scene.SwitchAttributeSchemeResponse{},
+			tipAttributeSchemeSwitchCooldown)
 		if err != nil {
 			return nil, err
 		}
@@ -515,31 +572,28 @@ func (s *attributeSmokeSession) switchSchemeWaitingCooldown(panel *scene.Attribu
 	return nil, fmt.Errorf("切换方案 %d 两次都撞冷却", schemeId)
 }
 
-func (s *attributeSmokeSession) send(messageId uint32, request proto.Message) error {
-	// 每次发请求前清 tip、把游标同步到当前面板序号:上一步没被消费的面板(推送 / 迟到响应)不能算作本次结果
-	s.player.SetAttributePanel(nil, 0, 0)
-	_, cur := s.player.GetAttributePanel()
-	s.seq = cur
-	if err := s.gc.SendRequest(messageId, request); err != nil {
-		return fmt.Errorf("send message_id=%d: %w", messageId, err)
+// autoAllocate 发 AutoAllocateAttributePoints 并直接解析本次回包,返回 poolId 的建议目标已分配值(只算不落)。
+// 响应不带面板,所以不走 requestAttributePanel。迁移前等的是生成 handler 写进 Player 的建议,全包只有这里读,
+// 改为直接解析(交接 §8.1 做法 1)。scene 拒绝、gate 信封拒绝、超时,以及建议不属于该池或为空,都返回 error。
+func (s *attributeSmokeSession) autoAllocate(poolId uint32) (map[uint32]uint32, error) {
+	messageId := uint32(game.SceneAttributeClientPlayerAutoAllocateAttributePointsMessageId)
+	response := &scene.AutoAllocateAttributePointsResponse{}
+	envelopeTip, err := s.caller.call(messageId, &scene.AutoAllocateAttributePointsRequest{PoolId: poolId}, response)
+	if err != nil {
+		return nil, err
 	}
-	s.stats.MsgSent()
-	return nil
-}
-
-func (s *attributeSmokeSession) waitSuggestion(poolId uint32) (map[uint32]uint32, error) {
-	deadline := time.Now().Add(attributeSmokeRpcTimeout)
-	for time.Now().Before(deadline) {
-		gotPool, suggested := s.player.GetAttributeSuggestion()
-		if gotPool == poolId && len(suggested) > 0 {
-			return suggested, nil
-		}
-		if tip := s.player.GetAttributeLastTip(); tip != 0 {
-			return nil, fmt.Errorf("服务器拒绝自动加点: tip=%d", tip)
-		}
-		time.Sleep(50 * time.Millisecond)
+	if envelopeTip != 0 {
+		return nil, sceneRequestEnvelopeRejection(messageId, envelopeTip)
 	}
-	return nil, fmt.Errorf("等自动加点建议超时")
+	if tip := response.GetErrorMessage().GetId(); tip != 0 {
+		return nil, fmt.Errorf("auto allocation rejected by scene: tip=%d", tip)
+	}
+	// 迁移前这两种回包不满足等待条件,表现为等满超时;现在回包就是本次的,不会再有下一份,直接判失败
+	if response.GetPoolId() != poolId || len(response.GetSuggested()) == 0 {
+		return nil, fmt.Errorf("auto allocation returned pool_id=%d with %d suggested dimensions, expected pool_id=%d with a nonempty suggestion",
+			response.GetPoolId(), len(response.GetSuggested()), poolId)
+	}
+	return response.GetSuggested(), nil
 }
 
 // ---------------------------------------------------------------------------

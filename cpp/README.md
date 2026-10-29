@@ -67,6 +67,10 @@ bash tools/scripts/build_linux.sh --release
 
 节点可执行文件输出到仓库根的 `bin/`,静态库到 `lib/`,中间文件与测试程序到 `build/cpp/`。
 
+scene 服务库与 scene 节点的工程名都为 `scene`。服务库 Debug 配置的编译器 PDB 保持为
+`$(IntDir)$(ProjectName).compile.pdb`，避免同名符号文件争用；不要改成公共 `scene.pdb`。
+该隔离不改变根规范：MSBuild 仍须 `/m:1`，也不同时启动竞争同一构建输出的命令。
+
 ## 新增一个节点
 
 从 [`nodes/_template/`](nodes/_template/README.md) 开始:无长生命周期状态的节点用

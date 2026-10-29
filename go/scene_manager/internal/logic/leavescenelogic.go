@@ -354,6 +354,12 @@ func (l *LeaveSceneLogic) judgeHolderRelease(in *scene_manager.LeaveSceneRequest
 				return j, fmt.Errorf("read handoff marker of player %d: %w", in.PlayerId, err)
 			}
 			facts.markerReleased = markerReleasesEpoch(markerRaw, j.epoch)
+			// 持有进程被同号新进程顶替(GO-3)与节点判死是同一种证据:持有这一代的进程已从注册表消失、屏障已过。
+			// 不认它的话,顶替后这名玩家的清理任务永远拿不到释放证据。已经拿到判死或标记证据时不再多读一次资格。
+			if !facts.ownerDead && !facts.markerReleased {
+				facts.ownerDead = owner.playerLocationOwnerReplaced(in.PlayerId, loc, j.zoneID, observedEpoch,
+					barrierSiteReplacedOwnerLeaveRelease) == ownerReplacedTakeover
+			}
 		}
 	}
 	j.verdict = decideHolderRelease(facts)

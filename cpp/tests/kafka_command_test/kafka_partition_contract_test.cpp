@@ -26,6 +26,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include "player/constants/player.h"
+#include "proto/db/db_task.pb.h"
 
 // ---------------------------------------------------------------------------
 // kafka_partition_contract_test — 玩家存盘 DBTask 的 Kafka 分区契约(C++ 写侧)。
@@ -297,4 +298,27 @@ TEST(DbTaskPartitionContract, KafkaKeyMatchesGoFormatUint)
         ++keyCount;
     }
     EXPECT_GT(keyCount, 0u) << "向量文件没有可用的 key";
+}
+
+// 与 Go 的同名协议回归共用固定字节，防止任一端悄悄更换操作编号或 wire type。
+TEST(DbTaskOperationContract, ReadAndWriteUseCompactEnumEncoding)
+{
+    taskpb::DBTask read;
+    read.set_op(taskpb::DB_OP_READ);
+    EXPECT_EQ(read.SerializeAsString(), std::string("\x18\x01", 2));
+
+    taskpb::DBTask write;
+    write.set_op(taskpb::DB_OP_WRITE);
+    EXPECT_EQ(write.SerializeAsString(), std::string("\x18\x02", 2));
+
+    taskpb::DBTask decoded;
+    ASSERT_TRUE(decoded.ParseFromString(std::string("\x18\x02", 2)));
+    EXPECT_EQ(decoded.op(), taskpb::DB_OP_WRITE);
+}
+
+TEST(DbTaskOperationContract, LegacyStringDoesNotBecomeAnExecutableOperation)
+{
+    taskpb::DBTask decoded;
+    ASSERT_TRUE(decoded.ParseFromString(std::string("\x1a\x05" "write", 7)));
+    EXPECT_EQ(decoded.op(), taskpb::DB_OP_UNSPECIFIED);
 }

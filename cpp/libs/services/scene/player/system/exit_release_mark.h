@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iterator>
+#include "services/scene/player/system/handoff_sql_barrier.h"
 
 #include "services/scene/player/system/player_exit_intent.h" // ExitCause
 
@@ -13,33 +14,11 @@
 // 设计:docs/design/cross-zone-scene-travel.md §12.6.3 第二步 / 第三步、§12.6.4 M2 / M3 / M6 / M7 / M10 / M11 / M14。
 // 粘合代码在 player_lifecycle.cpp(WriteExitReleaseMark / BeginInheritedMarkClear / RetryInheritedMarkClears)。
 //
-// ── 为什么要写"断线释放标记"(A1′)──
-// 干净断线后 location 仍指向本节点、无人持有,要等 30s 断线租约到期才被删。租约内重登若被挑到别的节点,
-// scene_manager 的换手门(CZ-4)要求出示 player:{id}:handoff 标记("{epoch}:{ms}" = 这一刻的状态已落盘、
-// 此节点不再持有),没有就回 18(§12.6.2)。退出存盘收敛、实体即将销毁的那一刻,本节点恰好有资格写它。
-//
-// ── 为什么载入时要"先核归属再删"(A2′)──
-// 标记被消费后并不会被 scene_manager 删掉(只比对不删除,靠 TTL 回收)。新载入的节点若不清掉继承来的
-// 标记,本节点之后的一次跨节点换图会凭这份旧标记免存盘过门(回档)。删之前必须核对 owner_epoch 仍是
-// 本次路由给的值(M2):不等说明这次路由已过时,节点建出的实体"出生即被废黜",一个标记都不许删。
-// 路由没带 owner_epoch(新旧 gate / scene_manager 混跑的兼容窗口)时无从核对,但**照样清**:改用
-// kLuaInheritClearUnknownEpoch 删掉代际 ≤ 当前 owner_epoch 的标记(复审 ownership-major:跳过清理会让
-// 上一任的 A1′ 标记在新持有期间一直有效,下一次跨节点落点不存盘就被放行)。删标记只影响活性、不会造出
-// 第二个持有者,所以这一段不需要 -1 闸;闸门同样等它确认后才建实体。
-//
-// ── handoff 键的写入方 / 删除方(与 player_ownership_comp.h 的键契约一起看)──
-//   写:BeginTravelHandoff(交接)、DispatchEmergencyRelocate(疏散 / 排空改派,owner_epoch 条件写,与 A1′ 同一段
-//       kLuaWriteIfOwnerEpoch)、A1′(本文件,干净退出)、A2′ 放弃补写(本文件,载入被放弃时把删掉的那一份写回)、
-//       scene_manager 回滚转写(GO-2 §12.8:推路由失败的 bump 回滚只在所凭原标记原样还在时,把 "N:t" 转写成
-//       "N+2:t",后缀逐字节不变;scene_manager 从不删除这个键)、改派踢线前的兜底补写(疏散 / 排空的改派核实出
-//       没生效、要按会话踢线时,按那次核实读到的 owner_epoch 条件写,同一段 kLuaWriteIfOwnerEpoch;已有同代标记、
-//       本节点有该玩家实体或载入在途、身份未确认、dev 旁路时都不写,见 relocate_confirm::DecideCredential)。
-//   删:WithdrawHandoffMark(按原文条件删)、ResolveTravelOutcome(原子取证脚本按 saved_at_ms 只删本次交接这一族,
-//       含转写形态,见 player_lifecycle.h travel_outcome::kLuaJudgeTravelOutcome)、A2′(本文件,核对 owner_epoch
-//       后删 ≤N,转写标记同样在内;路由不带 owner_epoch 时删 ≤ 当前 owner_epoch)。
-//   A2′ 与回滚互斥(令牌):两段都是同一 Redis 上的原子 Lua,A2′ 在先 → 标记已删,回滚回 marker_gone、归属留给
-//   目标节点;回滚在先 → owner_epoch 已是 N+2 ≠ N+1,A2′ 回 -1、目标节点拒建实体。修改 kLuaInheritClear 时
-//   同步 go/scene_manager/internal/logic/owner_epoch_crosslang_test.go 里的逐字副本。
+// A1、弃载补写、疏散与改派凭证都必须消费实体/原载入缓存的 H 资格，不从新 Redis owner 读值补权。
+// SQL 入场登记在 Activate 前原子核 owner、原 scene instance、原 admission generation 并清继承标记；
+// 后续 A2 只核原 H，不再次 DEL。旧加载读到新 prior 仍因 generation floor 被拒。
+// 撤销即使 mark 缺席也轮换资格；未确认前保持冻结。未知 owner 的旧入口不再有清标记资格。
+// 交错与跨语言金样见 owner_epoch_crosslang_test.go；Redis 键当前不是 Cluster 同槽合同。
 namespace exit_release_mark
 {
 	// ── A1′:退出收尾时写不写 ─────────────────────────────────────────────────
@@ -167,27 +146,20 @@ namespace exit_release_mark
 		return ExitReleaseDecision::kWrite;
 	}
 
-	// A1′、A2′ 放弃补写、疏散 / 排空改派(DispatchEmergencyRelocate)与改派踢线前的凭证补写共用的条件写:owner_epoch
-	// 仍等于调用方给的 E 才写标记(A1′ 与改派给实体缓存的值,A2′ 放弃补写给它删掉的那一代,凭证补写给刚从 Redis
-	// 读到的值)。改派用它是为了不覆盖 scene_manager 回滚转写出来的 "E+2:t"(GO-2 §12.8)。
-	//   KEYS[1] = player:{id}:owner_epoch   KEYS[2] = player:{id}:handoff
-	//   ARGV[1] = E(十进制,与 INCR 的文本格式一致)  ARGV[2] = 标记原文 "E:now_ms"  ARGV[3] = TTL 秒
-	// 返回 1 = 写了;0 = owner_epoch 已不是 E(含缺键:GET 返回 false,与字符串永不相等)。
-	// 不做"缺键补种":那是存盘 guard 的语义(见 redis_client.h kSaveIfGuardLuaScript),标记不需要。
-	// 两个键形如 "player:<id>:owner_epoch" / "player:<id>:handoff",**没有**哈希标签({}),Redis Cluster 下不同槽、
-	// 脚本会被 CROSSSLOT 拒绝。当前部署不是 Cluster;要上 Cluster 得先统一给这组键加哈希标签
-	// (2026-10-09 更正:原注释写的"同一个 {player_id} 段,集群下同槽"与 player_ownership_comp.h 里实际的键格式不符)。
-	inline constexpr const char *kLuaWriteIfOwnerEpoch =
-		"if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end "
-		"redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[3]) "
-		"return 1";
+    // KEYS=owner/save_barrier/handoff，ARGV=E/原mark/300/原H/本轮F。
+    // owner与原H同时成立才HSET资格+SET标记；完全相同F只认幂等，不延长TTL。
+    // 返回 1 写成 / 0 owner 已不是 E / -2 原 H 已被轮换。会话结束凭证改用 kCredentialMarkLua(同一组返回码)。
+	inline const std::string& kLuaWriteIfOwnerEpoch = handoff_sql_barrier::kReleaseMarkLua;
 
 	// 条件写的应答分类。一律不重试(R7):写不成的后果只是玩家这一次重登可能回 18、下一次重试放行,
 	// 而重试会把"这一刻已落盘"的凭证推迟到一个不再成立的时刻。
+	// kEpochMoved 与 kSuperseded 都是"不写是对的",分开是为了排障:前者是归属已推进,后者是本次消费的原资格已被
+	// 更新的登记 / 撤销 / 发布轮换(save_barrier.handoff_fence,r2-lc#1 / r2-lc#2 之后的主要拒绝路径)。
 	enum class MarkWriteResult : uint8_t
 	{
 		kWritten,	 // 返回 1
 		kEpochMoved, // 返回 0:owner_epoch 已变,不写是对的
+		kSuperseded, // 返回 -2:原资格已被轮换,不写是对的
 		kFailed,	 // 空应答 / ERROR / 非整数 / 其它整数
 
 		kCount
@@ -210,11 +182,17 @@ namespace exit_release_mark
 		{
 			return MarkWriteResult::kFailed;
 		}
-		if (value == 1)
+		switch (value)
 		{
+		case 1:
 			return MarkWriteResult::kWritten;
+		case 0:
+			return MarkWriteResult::kEpochMoved;
+		case -2:
+			return MarkWriteResult::kSuperseded;
+		default:
+			return MarkWriteResult::kFailed;
 		}
-		return value == 0 ? MarkWriteResult::kEpochMoved : MarkWriteResult::kFailed;
 	}
 
 	// 运行期开关的取值(M14):nullptr / 空串 / 不认识的值 → defaultValue;"0" / "false" / "off" → false;
@@ -250,47 +228,10 @@ namespace exit_release_mark
 
 	// ── A2′:新载入前"先核归属再删"继承来的标记 ─────────────────────────────────
 
-	// KEYS[1] = player:{id}:owner_epoch   KEYS[2] = player:{id}:handoff   ARGV[1] = N(本次路由的 owner_epoch,非 0)
-	// **Go 跨语言金样逐字复制了本脚本**(go/scene_manager/internal/logic/owner_epoch_crosslang_test.go,锁住它与
-	// scene_manager 回滚 Lua 的互斥):改这里必须同步改那边。
-	// 先比 owner_epoch(缺键按 0):≠ N 立即返回 -1,一个标记都不删(M2)。相等时:
-	//   0 = 没有标记;1 = 删掉的是更旧代际(epoch < N);2 = 删掉的恰好是 epoch == N;
-	//   3 = 标记代际比 N 新,保留(只删 ≤N);4 = 标记写坏了(不是 "数字:数字"),一并删掉。
-	// 代际比较不用 tonumber(uint64 超过 2^53 会丢精度):去掉前导零后先比长度、再按字典序比。
-	inline constexpr const char *kLuaInheritClear =
-		"local cur = redis.call('GET', KEYS[1]) "
-		"if cur == false then cur = '0' end "
-		"if cur ~= ARGV[1] then return -1 end "
-		"local mark = redis.call('GET', KEYS[2]) "
-		"if mark == false then return 0 end "
-		"local e = string.match(mark, '^(%d+):%d+$') "
-		"if e == nil then redis.call('DEL', KEYS[2]) return 4 end "
-		"e = (string.gsub(e, '^0+(%d)', '%1')) "
-		"local n = ARGV[1] "
-		"if #e > #n or (#e == #n and e > n) then return 3 end "
-		"redis.call('DEL', KEYS[2]) "
-		"if e == n then return 2 end "
-		"return 1";
-
-	// 路由不带 owner_epoch(ctx.ownerEpoch == 0,兼容窗口)时的 A2′。KEYS 同上,没有 ARGV。
-	// 不核对归属(无从核对,永不返回 -1),以 Redis 里当前的 owner_epoch(缺键按 0)代替 N:
-	//   0 = 没有标记;1 = 删掉的是更旧代际;2 = 删掉的恰好是当前代际;3 = 标记代际比当前新,保留;4 = 写坏了,删掉。
-	// 返回码与 kLuaInheritClear 共用 ClassifyInheritClearReply。删标记只影响活性(之后一次跨节点落点回 18、
-	// 由交接或租约到期兜底),不会造出第二个持有者,所以删到"≤ 当前代际"是安全的上界。
-	// 代际比较同上:去掉前导零后先比长度、再按字典序比,不用 tonumber。
-	inline constexpr const char *kLuaInheritClearUnknownEpoch =
-		"local cur = redis.call('GET', KEYS[1]) "
-		"if cur == false then cur = '0' end "
-		"cur = (string.gsub(cur, '^0+(%d)', '%1')) "
-		"local mark = redis.call('GET', KEYS[2]) "
-		"if mark == false then return 0 end "
-		"local e = string.match(mark, '^(%d+):%d+$') "
-		"if e == nil then redis.call('DEL', KEYS[2]) return 4 end "
-		"e = (string.gsub(e, '^0+(%d)', '%1')) "
-		"if #e > #cur or (#e == #cur and e > cur) then return 3 end "
-		"redis.call('DEL', KEYS[2]) "
-		"if e == cur then return 2 end "
-		"return 1";
+    // 统一登记已清旧标记。KEYS=owner/save_barrier/handoff；ARGV=E/原ctx的H。
+    // 返回0=原资格仍有效；-1=原路由/资格已过时。历史分类码仍保留用于原回包统计。
+    inline const std::string& kLuaInheritClear = handoff_sql_barrier::kConfirmFenceLua;
+    inline constexpr const char *kLuaInheritClearUnknownEpoch = "return -1";
 
 	// A2′ 一次 EVAL 的结果。前五种是"核对通过"(闸门可放行),kEpochMismatch 是"核对不过"(拒建实体、不补发),
 	// 最后两种是失败(有上限重发)。

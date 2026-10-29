@@ -31,7 +31,8 @@ const (
 	leaveReleaseLegacyEpochZero
 	// leaveReleaseNoHolder:location 的 node_id 为空(跨 zone 传送的等待落点),此刻没有任何节点持有该玩家。
 	leaveReleaseNoHolder
-	// leaveReleaseOwnerDead:持有节点在 etcd 注册表里正面消失且再入屏障已过(playerLocationOwnerDead)。不认"zone 负载集为空"
+	// leaveReleaseOwnerDead:持有节点在 etcd 注册表里正面消失且再入屏障已过(playerLocationOwnerDead),或持有进程实例
+	// 已被复用同一节点号的新进程顶替、同样已消失且屏障已过(playerLocationOwnerReplaced,GO-3)。不认"zone 负载集为空"
 	// (playerLocationOwnerGone 修复前的判据):负载键丢失时它会把活节点判死(第二轮审计 r2-sm#3)。
 	leaveReleaseOwnerDead
 	// leaveReleaseReleased:handoff 标记的 epoch 等于当前代 E —— 持有者已把 E 代状态落盘并不再写(A1′ / 交接 / 改派 / 凭证)。
@@ -89,7 +90,7 @@ type holderReleaseFacts struct {
 	enabled        bool   // 整项检查开着(EffectiveLeaveSceneHolderReleaseWait 的 enabled)
 	epoch          uint64 // 当前代 E:owner_epoch 键,键为 0 时取 location 记的 epoch
 	noHolder       bool   // location 的 node_id 为空
-	ownerDead      bool   // 持有节点已死(只认 playerLocationOwnerDead 的正面证据)
+	ownerDead      bool   // 持有节点已死 / 持有进程已被顶替(只认 playerLocationOwnerDead / playerLocationOwnerReplaced 的正面证据)
 	markerReleased bool   // handoff 标记的 epoch == E
 	waitExceeded   bool   // 历史夹具保留；不参与授权删除
 	identityProven bool   // 离场身份判定为 deleted(location 的登录身份 ≤ 离场会话)

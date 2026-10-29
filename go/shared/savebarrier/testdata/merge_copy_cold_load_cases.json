@@ -1,0 +1,35 @@
+{
+  "doc": "前向 copy 合服之后 login 冷加载的判定样例表(2026-10-22,r2-mz#1 评审跟进)。场景:父快照已被合服删除,屏障留在原实例,身份戳等于实例当前身份。两个读者各跑一遍:tools/merge_zone/player_rows_barrier_test.go 用 judgeSaveBarrier 判 verdict / severity;go/login/internal/logic/pkg/dataloader/merge_copy_cold_load_test.go 走 login 真实冷加载入口判 login。约定 info 对 admit(V1 一致,不改屏障)、warn 对 adopt(采纳 SQL 自愈)、block 对 refuse。改 savebarrier.Reconcile、login 冷加载或 merge_zone 判定时同步改这张表。字段:owner 省略 = 键不存在;owner_type=hash / barrier_type=string = 键类型错;pending / ack_first / ack_second 省略 = 字段不存在;row_first / row_second 省略 = 该表没有行;\"v<owner_epoch>:<save_seq>\" 展开为 41 字节版本串,其余字符串原样(畸形样例)。",
+  "cases": [
+    {"name": "V1 一致:屏障已提交且等于两行围栏", "owner": "9", "pending": "v8:90", "ack_first": "v8:90", "ack_second": "v8:90", "row_first": "v8:90", "row_second": "v8:90", "verdict": "", "severity": "info", "login": "admit"},
+    {"name": "没有存盘历史:无 owner、无屏障、两行零围栏空行", "row_first": "v0:0", "row_second": "v0:0", "verdict": "", "severity": "info", "login": "admit"},
+    {"name": "没有存盘历史:owner 为 0、无屏障、两行零围栏空行", "owner": "0", "row_first": "v0:0", "row_second": "v0:0", "verdict": "", "severity": "info", "login": "admit"},
+
+    {"name": "owner 非规范十进制", "owner": "09", "pending": "v8:90", "ack_first": "v8:90", "ack_second": "v8:90", "row_first": "v8:90", "row_second": "v8:90", "verdict": "owner_epoch_malformed", "severity": "block", "login": "refuse"},
+    {"name": "owner 键类型错", "owner_type": "hash", "pending": "v8:90", "ack_first": "v8:90", "ack_second": "v8:90", "row_first": "v8:90", "row_second": "v8:90", "verdict": "owner_epoch_malformed", "severity": "block", "login": "refuse"},
+    {"name": "屏障键类型错", "owner": "9", "barrier_type": "string", "row_first": "v8:90", "row_second": "v8:90", "verdict": "save_barrier_malformed", "severity": "block", "login": "refuse"},
+    {"name": "pending 不是版本串", "owner": "9", "pending": "garbage", "ack_first": "v8:90", "ack_second": "v8:90", "row_first": "v8:90", "row_second": "v8:90", "verdict": "save_barrier_malformed", "severity": "block", "login": "refuse"},
+    {"name": "ACK 不是版本串", "owner": "9", "pending": "v8:90", "ack_first": "7:3", "ack_second": "v8:90", "row_first": "v8:90", "row_second": "v8:90", "verdict": "save_barrier_malformed", "severity": "block", "login": "refuse"},
+    {"name": "pending 是零版本", "owner": "9", "pending": "v0:0", "ack_first": "v0:0", "ack_second": "v0:0", "row_first": "v0:0", "row_second": "v0:0", "verdict": "save_barrier_malformed", "severity": "block", "login": "refuse"},
+    {"name": "屏障在而 owner 键不存在", "pending": "v8:90", "ack_first": "v8:90", "ack_second": "v8:90", "row_first": "v8:90", "row_second": "v8:90", "verdict": "barrier_without_owner", "severity": "block", "login": "refuse"},
+    {"name": "屏障在而 owner 为 0", "owner": "0", "pending": "v8:90", "ack_first": "v8:90", "ack_second": "v8:90", "row_first": "v8:90", "row_second": "v8:90", "verdict": "barrier_without_owner", "severity": "block", "login": "refuse"},
+    {"name": "owner 落后于 pending 的代次", "owner": "5", "pending": "v8:90", "ack_first": "v8:90", "ack_second": "v8:90", "row_first": "v8:90", "row_second": "v8:90", "verdict": "owner_epoch_behind_pending", "severity": "block", "login": "refuse"},
+    {"name": "屏障在途:一表 ACK 落后,两行等于 pending(身份可信时 login 只等补投)", "owner": "9", "pending": "v8:90", "ack_first": "v8:90", "ack_second": "v8:89", "row_first": "v8:90", "row_second": "v8:90", "verdict": "ack_not_equal_pending", "severity": "block", "login": "refuse"},
+    {"name": "屏障在途:一表 ACK 缺失", "owner": "9", "pending": "v8:90", "ack_first": "v8:90", "row_first": "v8:90", "row_second": "v8:90", "verdict": "ack_not_equal_pending", "severity": "block", "login": "refuse"},
+    {"name": "屏障在而有效落点库缺一张表的行", "owner": "9", "pending": "v8:90", "ack_first": "v8:90", "ack_second": "v8:90", "row_first": "v8:90", "verdict": "sql_row_missing", "severity": "block", "login": "refuse"},
+    {"name": "两行比 ACK 旧(SQL 落后)", "owner": "9", "pending": "v8:90", "ack_first": "v8:90", "ack_second": "v8:90", "row_first": "v8:80", "row_second": "v8:80", "verdict": "sql_row_fence_not_equal_pending", "severity": "block", "login": "refuse"},
+    {"name": "两行不同版", "owner": "9", "pending": "v8:90", "ack_first": "v8:90", "ack_second": "v8:90", "row_first": "v8:90", "row_second": "v8:95", "verdict": "sql_row_fence_not_equal_pending", "severity": "block", "login": "refuse"},
+    {"name": "屏障在而两行零围栏", "owner": "9", "pending": "v8:90", "ack_first": "v8:90", "ack_second": "v8:90", "row_first": "v0:0", "row_second": "v0:0", "verdict": "sql_row_fence_not_equal_pending", "severity": "block", "login": "refuse"},
+
+    {"name": "V2:两行同版且新于屏障", "owner": "9", "pending": "v8:90", "ack_first": "v8:90", "ack_second": "v8:90", "row_first": "v8:95", "row_second": "v8:95", "verdict": "sql_rows_ahead_of_barrier", "severity": "warn", "login": "adopt"},
+    {"name": "ACK 超前于 pending,两行等于 ACK", "owner": "9", "pending": "v8:90", "ack_first": "v8:95", "ack_second": "v8:95", "row_first": "v8:95", "row_second": "v8:95", "verdict": "sql_rows_ahead_of_barrier", "severity": "warn", "login": "adopt"},
+    {"name": "V7:屏障缺失,两行同版非零", "owner": "9", "row_first": "v8:90", "row_second": "v8:90", "verdict": "barrier_missing_sql_adoptable", "severity": "warn", "login": "adopt"},
+    {"name": "V7:屏障缺失,两行代次高于 owner(采纳并抬高 owner)", "owner": "5", "row_first": "v8:90", "row_second": "v8:90", "verdict": "barrier_missing_sql_adoptable", "severity": "warn", "login": "adopt"},
+    {"name": "V7:pending 缺失只剩 ACK,两行等于 ACK", "owner": "9", "ack_first": "v8:90", "ack_second": "v8:90", "row_first": "v8:90", "row_second": "v8:90", "verdict": "barrier_missing_sql_adoptable", "severity": "warn", "login": "adopt"},
+
+    {"name": "屏障缺失,两行都是零围栏(围栏之前的历史行)", "owner": "9", "row_first": "v0:0", "row_second": "v0:0", "verdict": "barrier_missing_zero_fence", "severity": "block", "login": "refuse"},
+    {"name": "屏障缺失,两张表都没有行(r2-login#1:合服前就登录不了)", "owner": "9", "verdict": "barrier_missing_no_sql_row", "severity": "block", "login": "refuse"},
+    {"name": "屏障缺失,缺一张表的行", "owner": "9", "row_first": "v8:90", "verdict": "barrier_missing_no_sql_row", "severity": "block", "login": "refuse"},
+    {"name": "屏障缺失,两行不同版", "owner": "9", "row_first": "v8:90", "row_second": "v0:0", "verdict": "barrier_missing_rows_disagree", "severity": "block", "login": "refuse"}
+  ]
+}

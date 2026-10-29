@@ -5,10 +5,12 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
+	"time"
 
 	"data_service/internal/constants"
 	"data_service/internal/guildcheck"
 	"data_service/internal/logic"
+	"data_service/internal/metrics"
 	"data_service/internal/routing"
 	"data_service/internal/store"
 	"data_service/internal/svc"
@@ -28,6 +30,8 @@ type DataServiceServer struct {
 }
 
 func NewDataServiceServer(svcCtx *svc.ServiceContext) *DataServiceServer {
+	// 归属读与账号目录的直方图在第一次 scrape 之前就要有全部序列(见 metrics.PrimeLoginReads);可重复调用。
+	metrics.PrimeLoginReads()
 	return &DataServiceServer{svcCtx: svcCtx}
 }
 
@@ -156,9 +160,17 @@ func (s *DataServiceServer) RegisterPlayerZone(ctx context.Context, req *data_se
 // 时多一种失败,**gRPC code 的集合不变**:缓存不可信、回源全局库又失败 → Unavailable + ErrCodeRouteStoreError(码 30,与
 // mapping Redis 的码 1 分开,值班一眼分清是全局库坏了)。库里没有这名玩家 → 照旧 NotFound(那是库的权威缺席)。
 // 判定顺序是先 ErrRouteReadUnavailable 再 NotFound:一次库故障绝不能被报成「这名玩家没有归属」。
-func (s *DataServiceServer) GetPlayerHomeZone(ctx context.Context, req *data_service.GetPlayerHomeZoneRequest) (*data_service.GetPlayerHomeZoneResponse, error) {
+// 再之前先看调用方是否已放弃(ctx 取消 / 超时,M1-2,2026-10-21):如实回它的取消原因(Canceled / DeadlineExceeded),
+// 不报成 Unavailable + 码 1 / 30 —— 那是本服务或全局库的故障口径,调用方自己的截止时间不该触发它(同 logic/persisted_player_database.go)。
+//
+// 每次调用记 data_service_home_zone_read_seconds{rpc="home"},结局按返回的 gRPC code 归类(homeZoneReadResult)。
+func (s *DataServiceServer) GetPlayerHomeZone(ctx context.Context, req *data_service.GetPlayerHomeZoneRequest) (_ *data_service.GetPlayerHomeZoneResponse, err error) {
+	defer observeHomeZoneRead(metrics.HomeZoneRPCHome, time.Now(), &err)
 	zoneID, merging, err := s.svcCtx.Router.GetPlayerHomeZoneAndMergeFence(ctx, req.GetPlayerId())
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, status.FromContextError(ctxErr).Err()
+		}
 		if errors.Is(err, routing.ErrRouteReadUnavailable) {
 			return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRouteStoreError, err)
 		}
@@ -176,16 +188,43 @@ func (s *DataServiceServer) GetPlayerHomeZone(ctx context.Context, req *data_ser
 // 会把一个正常状态升级成整批失败;单查只有一个 id,没有"部分"可言,所以那边用 NotFound。
 // 值畸形与单查同口径,整批回 Unavailable(2026-10-12 起;此前畸形值被当成缺席静默跳过)。
 // ReadRequiresReady=true 时缓存不可信的块回源全局库,任一块回源失败整批 Unavailable + ErrCodeRouteStoreError(码 30),
-// 不回半份结果(半份会被调用方当成「这些人没有归属」)。
-func (s *DataServiceServer) BatchGetPlayerHomeZone(ctx context.Context, req *data_service.BatchGetPlayerHomeZoneRequest) (*data_service.BatchGetPlayerHomeZoneResponse, error) {
+// 不回半份结果(半份会被调用方当成「这些人没有归属」)。调用方已放弃(ctx 取消 / 超时)时同单查,回它的取消原因(M1-2)。
+//
+// 每次调用记 data_service_home_zone_read_seconds{rpc="batch"}(结局同单查归类,批量查不会有 not_found)与本批 id 个数。
+func (s *DataServiceServer) BatchGetPlayerHomeZone(ctx context.Context, req *data_service.BatchGetPlayerHomeZoneRequest) (_ *data_service.BatchGetPlayerHomeZoneResponse, err error) {
+	metrics.ObserveHomeZoneBatchIDs(len(req.GetPlayerIds()))
+	defer observeHomeZoneRead(metrics.HomeZoneRPCBatch, time.Now(), &err)
 	mapping, err := s.svcCtx.Router.BatchGetPlayerHomeZone(ctx, req.PlayerIds)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, status.FromContextError(ctxErr).Err()
+		}
 		if errors.Is(err, routing.ErrRouteReadUnavailable) {
 			return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRouteStoreError, err)
 		}
 		return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRedis, err)
 	}
 	return &data_service.BatchGetPlayerHomeZoneResponse{PlayerZoneMap: mapping}, nil
+}
+
+// observeHomeZoneRead 在两个归属读 handler 的 defer 里记耗时与结局;start 在 defer 语句处求值,即 handler 入口,
+// 所以每一条出口(含提前返回的失败分支)都被计入。
+func observeHomeZoneRead(rpc string, start time.Time, err *error) {
+	metrics.ObserveHomeZoneRead(rpc, homeZoneReadResult(*err), time.Since(start))
+}
+
+// homeZoneReadResult 按 handler 实际回给调用方的 gRPC code 归类,与上面两段契约同口径:只有映射的权威缺席(NotFound)
+// 算 not_found;mapping Redis / 全局库故障(Unavailable)与调用方取消 / 超时(Canceled / DeadlineExceeded)都是 error ——
+// 后者同样是一次没拿到归属的读,压测里要看见它的尾延迟。
+func homeZoneReadResult(err error) string {
+	switch status.Code(err) {
+	case codes.OK:
+		return metrics.HomeZoneReadResultOK
+	case codes.NotFound:
+		return metrics.HomeZoneReadResultNotFound
+	default:
+		return metrics.HomeZoneReadResultError
+	}
 }
 
 // adminTokenMetadataKey 是运维 RPC 的凭据所在的 gRPC metadata 键。
@@ -694,6 +733,18 @@ func (s *DataServiceServer) BatchGetPlayerName(ctx context.Context, req *data_se
 // 本 RPC 没有 in-band error_code,契约就是 gRPC code;语义表与 code 全在 logic 里一处定义,
 // logic 返回的 error 已经是 status,这里只做搬运 —— 不要在这里再包一层映射。
 func (s *DataServiceServer) GetPlayerAssetOpLedger(ctx context.Context, req *data_service.GetPlayerAssetOpLedgerRequest) (*data_service.GetPlayerAssetOpLedgerResponse, error) {
+	// 副本核验只对 Redis blob 读有意义;SQL 证据分支不核验,两者同时要求是调用方写错了请求,不猜它要哪一份。
+	if req.GetRequireSqlCommit() && req.GetVerifyRedisCopy() {
+		return nil, status.Error(codes.InvalidArgument, "GetPlayerAssetOpLedger: verify_redis_copy applies only to the Redis blob read, not with require_sql_commit")
+	}
+	// 资产自动放弃的闸(docs/design/zone-redis-regression-guard-20261022.md §4.5):blob 与实例身份、身份戳同一段 Lua 读出。
+	if req.GetVerifyRedisCopy() {
+		ledger, found, verified, err := logic.GetVerifiedPlayerAssetOpLedger(ctx, s.svcCtx, req.GetPlayerId())
+		if err != nil {
+			return nil, err
+		}
+		return &data_service.GetPlayerAssetOpLedgerResponse{Found: found, Ledger: ledger, RedisCopyVerified: verified}, nil
+	}
 	if req.GetRequireSqlCommit() {
 		ledger, found, err := logic.GetSQLCommittedAssetLedger(ctx, s.svcCtx, req.GetPlayerId())
 		if err != nil {

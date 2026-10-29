@@ -26,22 +26,25 @@
 #endif
 
 #include <atomic>
+#include <cstdint>
 #include <condition_variable>
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <map>
 #include <optional>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include <rdkafkacpp.h>
+#include "proto/common/database/rollback_database_table.pb.h"
 
 namespace muduo { namespace net { class EventLoop; } }
 
 #include "messaging/kafka/kafka_partition_assign_policy.h"
 
-class KafkaConsumer {
+class KafkaConsumer : private RdKafka::RebalanceCb {
 public:
 	using MessageCallback = std::function<void(const std::string&, const std::string&)>;
 
@@ -50,7 +53,9 @@ public:
 		const std::vector<std::string>& topics,
 		const std::vector<int32_t>& partitions,  // Partitions to consume
 		const MessageCallback& callback,
-		const KafkaPartitionAssignPolicy& assignPolicy = {});
+		const KafkaPartitionAssignPolicy& assignPolicy = {},
+        const sql_writer_maintenance_receipt::ManualConsumerAssignment& manualIdentity = {},
+        bool prepareClosed = false);
 
 	static KafkaConsumer& Instance() {
 		thread_local KafkaConsumer instance;
@@ -76,6 +81,36 @@ public:
 	// no-op once the thread is running.
 	void startBackgroundPolling(muduo::net::EventLoop* dispatchLoop);
 
+
+    using Maintenance = sql_writer_maintenance_receipt;
+    bool HasManualAssignment() const { return manual_; }
+    bool BeginManualDrain(); // P2之后在owner锁内固定leader尾部，继续消费至该位置再pause。
+    bool ManualDrainReady();
+    bool CallbacksJoined(bool requireKnown) const;
+    // 快照可在专用文件/控制工作线程调用；有界网络查询只在owner锁内，poll/rebalance与open共用此锁。
+    std::optional<Maintenance::ConsumerReadiness> PrepareReadiness(const Maintenance::Plan& plan,
+        const std::string& manifest, const std::string& issuer, const std::string& instance);
+    std::optional<Maintenance::ManualConsumerEvidence> ManualEvidence(const std::string& operation,
+        const std::string& manifest, const std::string& issuer, const std::string& instance);
+    // manager按固定consumer顺序全部取得lease、全部Resume，再在同临界区一次开SOURCE。
+    // 任一步失败时析构重新pause；Commit只在SOURCE已实际打开后调用，禁止callback先做可失败副作用。
+    class PreparedLease {
+    public:
+        ~PreparedLease();
+        PreparedLease(const PreparedLease&) = delete;
+        PreparedLease& operator=(const PreparedLease&) = delete;
+        bool Resume();
+        void Commit();
+    private:
+        friend class KafkaConsumer;
+        explicit PreparedLease(KafkaConsumer& owner);
+        KafkaConsumer& owner_;
+        std::unique_lock<std::mutex> lock_;
+        bool resumed_ = false;
+        bool committed_ = false;
+    };
+    std::unique_ptr<PreparedLease> AcquirePrepared(const Maintenance::ConsumerReadiness& expected);
+
 private:
 	void backgroundPollLoop();
 	void dispatch(const std::string& topic, std::string payload);
@@ -83,6 +118,26 @@ private:
 	// 向 broker 查 topic 的分区数。查不到返回 -1(区别于"查到 0")。
 	int32_t queryTopicPartitionCount(const std::string& topic);
 
+    void rebalance_cb(RdKafka::KafkaConsumer* consumer, RdKafka::ErrorCode error,
+        std::vector<RdKafka::TopicPartition*>& partitions) override;
+    bool CurrentPreparedMatches(const Maintenance::ConsumerReadiness& expected);
+    Maintenance::ManualConsumerEvidence ReadManualLocked(const std::string& operation,
+        const std::string& manifest, const std::string& issuer, const std::string& instance);
+    // 本机账本不与正式proto重复：只计队列闭包的实际进入、回调返回及target析构。
+    struct DispatchLedger { std::mutex mutex; std::uint64_t accepted=0, settled=0; bool unknown=false; };
+    std::shared_ptr<DispatchLedger> dispatchLedger_=std::make_shared<DispatchLedger>();
+    std::mutex ownerMutex_;
+    std::string groupId_;
+    std::vector<std::string> topics_;
+    bool manual_=false, prepareClosed_=false, readinessLost_=false, successfulPoll_=false;
+    std::uint64_t assignmentRevision_=0;
+    Maintenance::ManualConsumerAssignment manualIdentity_;
+    std::optional<Maintenance::ManualConsumerEvidence> stoppedManual_;
+    std::optional<Maintenance::ConsumerReadiness> prepared_;
+    std::map<std::int32_t,std::int64_t> manualStartOffsets_;
+    std::map<std::int32_t,std::int64_t> manualDrainEnds_;
+    bool manualDrainStarted_=false;
+    // callback基类及账本活过native handle；stop先join线程、close/reset handle，最后才销毁本对象。
 	std::unique_ptr<RdKafka::KafkaConsumer> consumer_;
 	std::unique_ptr<RdKafka::Conf> conf_;
 	MessageCallback msgCallback_;

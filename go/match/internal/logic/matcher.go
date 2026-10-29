@@ -18,7 +18,6 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
-	"shared/safego"
 )
 
 // releaseLockScript 按持有者标记释放 matcher 锁:值不匹配说明锁已过期并被
@@ -133,15 +132,17 @@ func StartMatcherLoop(ctx context.Context, svcCtx *svc.ServiceContext) {
 	if svcCtx.Authority != nil {
 		svcCtx.GlobalGatherSlots = make(chan struct{}, 16)
 		readyCursor := &globalReadyCursor{}
-		safego.Loop(ctx, "match.global.ready.scan", 500*time.Millisecond, func(ctx context.Context) { readyCursor.round(ctx, svcCtx) })
-		safego.Loop(ctx, "match.global", 500*time.Millisecond, func(ctx context.Context) { runGlobalRound(ctx, svcCtx) })
+		svcCtx.StartRelayLoop(ctx, "match.global.ready.scan", 500*time.Millisecond, func(ctx context.Context) { readyCursor.round(ctx, svcCtx) })
+		svcCtx.StartSourceLoop(ctx, "match.global", 500*time.Millisecond, func(ctx context.Context) { runGlobalRound(ctx, svcCtx) })
+		// 到期成局巡检只报数(2026-10-22 评审补,global_expired_audit.go),与上面的恢复循环分开:不占它的 500ms 节拍。
+		svcCtx.StartRelayLoop(ctx, "match.global.expired.audit", globalExpiredAuditInterval, func(ctx context.Context) { auditStrandedExpiredFormations(ctx, svcCtx) })
 		return
 	}
 	interval := time.Duration(svcCtx.Config.MatcherIntervalMs) * time.Millisecond
 	if interval <= 0 {
 		interval = 500 * time.Millisecond
 	}
-	safego.Loop(ctx, "match.matcher", interval, func(ctx context.Context) { runMatcherRound(ctx, svcCtx) })
+	svcCtx.StartSourceLoop(ctx, "match.matcher", interval, func(ctx context.Context) { runMatcherRound(ctx, svcCtx) })
 }
 
 // runMatcherRound 遍历注册集里的队列 key 并逐个尝试凑单。
@@ -305,7 +306,7 @@ func matchQueueOnce(svcCtx *svc.ServiceContext, queueKey string) {
 		}
 		logx.Infof("[matcher] Match formed successfully queue=%s members=%v matched_ttl=%ds", queueKey, members, matchedTTL)
 		group := members
-		safego.Go("match.gather.queue", func() {
+		svcCtx.LaunchRelayTask("match.gather.queue", func() {
 			runGatherFn(svcCtx, matchpb.MatchMode(mode), config, group, true, tickets)
 		})
 	}

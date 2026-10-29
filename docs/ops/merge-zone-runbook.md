@@ -16,6 +16,7 @@
 
 1. **第一次合服之前,`-MergeBackfillZone` 必须对 source 和 target 各跑一遍**(§4)。存量玩家历史上没有 `player:zone:{id}` 映射,没有映射的玩家**不会被合过去**。工具的守卫会拒绝(源库任何一行没有映射即拒),但拒绝发生在维护窗口里就是浪费停服时间。
 2. **Redis 库号不能猜**(§2)。mapping = **DB 0**,guild = DB 2,login / shared / scene = DB 0。friend 已不占 Redis 库。写错库不会报错,只会静默无效。
+   - **(2026-10-23 更正,上句原文保留)** guild 已改为 DB 0(`go/guild/etc/guild.yaml` 的 `RedisClient.DB`;merge_zone `-redis-db` 与 dev_tools `-MergeRedisDB` 的缺省同步改为 0)。现在全部 Redis 句柄都是 DB 0。
 3. **N 取自 T-0 zone-down 之后的第一次 dry-run**,不是 T-1。T-1 彩排时两个区还在线、还在建号,只能做与在线无关的检查(§7)。把 T-0 dry-run 打出的 `players_in_source=N` 用 `-MergeExpectedSrcPlayers N` 回传给正式跑;数字不一致工具直接拒绝。
 4. **zone-down 之前先排空源区 db_task**(§8 Step 2):先停 scene,等 go/db 把最后一批存盘消费完,再删 namespace。先删 namespace,go/db 跟着没了,P3 / P4 门禁就过不去。
 5. **清单(manifest)是唯一凭据**(§9)。它在第一个字节写出去**之前**落盘;续跑、撤销、`-VerifyMerged`、映射丢失后的重放都要它。dry-run 只写 `<path>.dryrun.json` 预览,**预览不能当清单用**。
@@ -67,6 +68,8 @@
 | **login / shared** | 0 | `player_merge_notice:{pid}` / `player_force_rename:{pid}` / `player:session:{pid}` / `kafka:{retry,processing,dead}:queue:*` / `distributed:lock:kafka:ordering:*`(go/db 排序锁)/ `team:player:*` / `team:rec:*` / `PlayerAllData:{pid}` / `{MsgType}:{pid}` | `go/login/etc/login.yaml` → `Node.RedisClient.DB`;`go/db` / `go/player_locator` / match(组队)同为 0 | `-MergeNoticeRedisAddr` / `-MergeNoticeRedisDB` |
 | **scene_manager** | 0 | `scene_nodes:zone:{z}:load` / `player:{id}:location` / `scene:*:zone` / `world_channels:*` / `world_channel_lineno:*` / `world_channel_directory:*` / `node:zone:{z}:*` | `scene_manager_service.yaml` → `Redis` | `-MergeSceneRedisAddr` / `-MergeSceneRedisDB` |
 | **player data** | 独立 | `player:{id}:*` | data_service 按 region 分的 Redis Cluster(**按 home_zone 选集群**) | `-MergeSourceDataRedis` / `-MergeTargetDataRedis`(仅多集群部署) |
+
+> **(2026-10-23 更正,上表原文保留)** guild 一行的 DB 已由 2 改为 **0**(`guild.yaml`、merge_zone `-redis-db` 缺省、dev_tools `-MergeRedisDB` 缺省同批改);上表现在每个逻辑库都是 DB 0。
 
 > ⚠️ **mapping 恒为 DB 0,没有例外。** data_service 用 go-zero 的 `redis.MustNewRedis(config.MappingRedis)`,而 go-zero `RedisConf` 没有 `DB` 字段,yaml 里写的 `DB` 会被静默忽略。历史文档与脚本里的「DB 15」一直是错的,已全部清理:
 > - `data_service.yaml` 那行删了;
@@ -139,12 +142,12 @@
 | **判据** | **键存在即封锁**。不看值、不看剩余 TTL。Redis 报错一律按「封锁」处理(fail-closed) |
 | **谁写** | 只有 `tools/merge_zone`(merge 与 unmerge 两种模式都写)。`SETNX`:已经有别人的围栏就**拒绝启动**,并把对方的 JSON 打出来 |
 | **什么时候写** | 合服在 P1 / R / C 之后、**收集玩家之前**立围栏(A2),所以收集与预检都在围栏之下 |
-| **TTL** | `-timeout + 30m`,下限 1 小时。默认 `-timeout=2h` ⇒ **TTL 2h30m**。后台 goroutine 每 `ttl/3` 续期一次 |
+| **TTL** | `-timeout + 30m`,下限 1 小时。默认 `-timeout=2h` ⇒ **TTL 2h30m**。后台 goroutine 每 `ttl/3` 续期一次(redis 源;db 源的库围栏每 `min(ttl/3, 30s)` 续期一次,见 §15.4) |
 | **谁清** | 分三种情况:<br>① **正常结束**:显式 DEL。Lua 先比对 `run_id` 再删,不会误删接手者的围栏。<br>② **首跑时,立围栏之后、清单落盘之前被拒绝**(守卫、P2~P7、公会重名、落点扫描、合走标记等):本次什么都没写,工具**正常释放围栏**后 exit 1,日志 `this run wrote nothing and its merge fence was released`。修好原因后直接重跑。<br>③ **清单落盘之后失败**(步骤 1~6、清单写盘),以及**续跑时在清单落盘之前被拒绝**(见下方说明):**围栏保留**在本次 run_id 上,文案带 `LEFT IN PLACE`,并打印续跑指引:确认没有存活的 merge_zone 进程 → `GET merge:in_progress:<SRC>` 核对 run_id 与中止日志一致 → `DEL merge:in_progress:<SRC> merge:in_progress:<DST>` → 立即用原命令(同一个 `-MergeManifestPath`)重跑。<br>**以上 GET / DEL 只适用于 `-MergeZoneRouteSource redis`**。db 源(§15)下围栏的真源是全局库 `zone_merge_fence`,`merge:in_progress:*` 只是镜像:DEL 镜像只会让 scene_manager / guild 提前放行,重跑照样被库拒绝(`merge fence is held by another run`)。db 源的 ③ 改为:确认没有存活进程 → 原命令加 `-MergeZoneTakeOverFence <中止日志里的 run_id>` 重跑,工具在一个库事务里把围栏接到新 run_id,两区一刻不解封(§15.4)。<br>TTL 是进程被 kill 时的兜底,不是正常清除手段 |
 | **dry-run** | **不写**围栏,但会检查是否撞上别人的;撞上就拒绝 |
 
 > **续跑与半撤销时的拒绝保留围栏**(2026-09-28 修复,未经运行验证):
-> - **合服续跑**:清单已存在、且清单里步骤 7 `post_merge_flag` 还没标记完成时,上一次运行可能已写到一半。此时在「围栏之下、清单落盘之前」被拒绝(续跑校验 R2、守卫、P2~P7、公会重名、落点扫描、合走标记、清单写盘),工具**不释放围栏**,文案以「续跑在清单更新之前被拒」开头,带 `LEFT IN PLACE` 与本次 run_id。按 ③ 处理:修好原因 → 核对 run_id → DEL → 原命令重跑。清单已标记步骤 7 完成时照常释放(上一次已跑完全程)。
+> - **合服续跑**:清单已存在、且清单里步骤 7 `post_merge_flag` 还没标记完成时,上一次运行可能已写到一半。此时在「围栏之下、清单落盘之前」被拒绝(续跑校验 R2、守卫、P2~P7、公会重名、落点扫描、合走标记、清单写盘),工具**不释放围栏**,文案以「续跑在清单更新之前被拒」开头,带 `LEFT IN PLACE` 与本次 run_id。按 ③ 处理:修好原因 → 核对 run_id → DEL → 原命令重跑(db 源不 DEL:原命令加 `-MergeZoneTakeOverFence <本次 run_id>`,§15.4;db 源续跑在获取围栏之后镜像确认不了时同样保留围栏)。清单已标记步骤 7 完成时照常释放(上一次已跑完全程)。
 > - **撤销重跑**:立围栏后先看清单玩家里是否已有人 `player:zone == src`(上一次撤销在 5' 之后中止,半撤销)。是则 P、S 段的拒绝同样保留围栏;读映射失败也按半撤销处理。偏保守的副作用:合服当初带了 `-skip-player-mapping`,或合服在步骤 5 之前停下后改跑撤销,清单玩家都还是 src,撤销的门禁拒绝也会保留围栏,照 ③ 处理即可。
 > - 判断拿到的是哪一种:看最后几行有没有 `LEFT IN PLACE`。有 = 围栏还在,按 ③;没有、且有 `merge fence was released` = 按 ②。
 
@@ -287,7 +290,7 @@ K8s 上 db Pod 因此 CrashLoop 时,集群里没有 db-migrate Job,db 镜像也�
 | R2 | resume check | **只在续跑时**:玩家行模式必须与清单一致;copy 模式下玩家表集合变了即拒绝;pin 模式核对能力标记。在围栏之下做,拒绝时保留围栏 | 见下方「F~M 之间的拒绝」 |
 | 0 | collect | 扫一次 mapping 拿源区玩家 id(续跑从清单读,日志 `RESUME: ...`) | 首跑:释放围栏,exit 1;续跑:保留围栏(§3 ③) |
 | G | guard | 0 个玩家 ⇒ 拒绝(除非 `-MergeAllowEmptySource`);源库有行却没有任何映射 ⇒ 拒绝;`-MergeExpectedSrcPlayers` 对不上 ⇒ 拒绝 | 同上 |
-| P2 | preflight | `scene_nodes:zone:{src}:load` 必须空(源区无活节点) | 同上 |
+| P2 | preflight | etcd 场景节点注册表里源区**一条注册都没有**(正面证据,`-MergeEtcdEndpoints` 必填,经 etcd v3 JSON 网关线性一致读)**且** `scene_nodes:zone:{src}:load` 为空。负载集为空不能单独证明下线:负载键丢失 / 被淘汰时也读作 0(2026-10-23 起,`tools/merge_zone/scene_registry.go`)。撤销按目标区口径同样要它 | 同上 |
 | P3 | preflight | `db_task_zone_{src}[_g{gen}]` 在**唯一权威组**上的 LAG = 0(2026-10-15 起):候选是 `db_rpc_consumer_group_z{src}` 加 legacy 组 `db_rpc_consumer_group`(或 `-kafka-group` 显式指定的一个),恰好一个组在本 topic 上有已提交位点才只对它算 LAG;两组都有 / 都没有 / CLI 读不出一律拒绝,见 §2.3。通过日志 `preflight P3 OK: authoritative group <g> lag=0 on <topic> [...]` | 同上 |
 | P4 | preflight | `kafka:retry/processing/dead:queue:db_task_zone_{src}` 三个列表都空,且每个 db 实例各自的 `kafka:retry:processing:{topic}:{实例}` 也空,以及按分区的 ready 列表 `kafka:retry:queue:db_task_zone_{src}:p*` 都空(2026-10-15 起,经 SCAN MATCH 发现,topic 先做 glob 转义,任一页出错整体拒绝) | 同上 |
 | P5 | preflight | 源区玩家没有在持的 `lock:player:{id}` | 同上 |
@@ -298,7 +301,7 @@ K8s 上 db Pod 因此 CrashLoop 时,集群里没有 db-migrate Job,db 镜像也�
 | X | merged_into | 查 `merge:merged_into`:源区已合进别的 zone、目标区自己已被合走、标记读失败或读不懂 ⇒ 在第一次写之前拒绝(A10)。步骤 5 已完成或带 `-skip-player-mapping` 时不查 | 同上 |
 | M | manifest | **在任何写之前**落盘清单(玩家 / 公会 / ZSET 成员 / 表 / 商品 / 模式 / 已有落点)。dry-run 只写 `<path>.dryrun.json`,到此为止 | 同上 |
 | 1 | pin_placement(pin) | 清单里无落点记录的玩家,逐人 CAS 钉 `player:placement = "{src}:1"`。**不拷行、不拷 blob、不删缓存** | **保留围栏**中止(§3 ③) |
-| 1 | player_rows(copy) | 只对**无落点记录**的玩家:`zone_src_db.<表> → zone_dst_db.<表>` 逐表**按列名**拷贝 + 共享 DB 0 上的玩家缓存失效。有记录者计入 `placed_skipped`。续跑时与源行逐列相同、且没有目标独有行的表视为已拷;目标行被改过或目标独有行按 ID SAFETY 拒绝 | 保留围栏中止 |
+| 1 | player_rows(copy) | 只对**无落点记录**的玩家:`zone_src_db.<表> → zone_dst_db.<表>` 逐表**按列名**拷贝 + 共享 DB 0 上的玩家缓存失效(不含 `save_barrier`,2026-10-20 起保留,由 Step 5 的 `verify:save_barrier` 核对)。有记录者计入 `placed_skipped`。续跑时与源行逐列相同、且没有目标独有行的表视为已拷;目标行被改过或目标独有行按 ID SAFETY 拒绝 | 保留围栏中止 |
 | 2 | player_blobs | 跨 data Redis 拷 `player:{id}:*`(仅 `-MergeMigratePlayerBlobs`,**仅 copy 模式**)。拷到的玩家数 ≠ 清单数 ⇒ 中止 | 保留围栏中止 |
 | 3 | guild_mysql | `guild.zone_id` 按清单逐条改写(每个 id 一个显式短事务:`SELECT … FOR UPDATE` → 带 zone 守卫的 UPDATE → COMMIT)+ `guild:v2` 缓存失效 + 复查源区 | 保留围栏中止 |
 | 3b | trade_mysql | 聚宝斋 `mmorpg_trade.trade_listing.market_zone` 由 src 改写为 dst,**只改清单里的 listing_id**,事务形状同步骤 3;`seller_zone_at_listing` 不改。实写后复查源区计数,仍 > 0 ⇒ **中止且不标完成**(清单落盘后又有商品进源区)。续跑:停上架入口 → 按 §3 ③ 核对并 DEL 围栏 → 原命令重跑(新商品并入清单续搬)。库 / 表 / 列缺失在 P1 即拒绝,只有显式 `-MergeSkipTradeMySql` 才跳过 | 保留围栏中止 |
@@ -428,7 +431,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit `
 
 | 名称 | 判据 | 级别 | T-1 预期 |
 |---|---|---|---|
-| `source_scene_nodes` | `scene_nodes:zone:{src}:load` 必须空 | block | **必然 block**(在线),T-1 忽略 |
+| `source_scene_nodes` | etcd 注册表里源区没有场景节点,且 `scene_nodes:zone:{src}:load` 为空(与 P2 同一判据;没给 `-MergeEtcdEndpoints` 报 INFRA) | block | **必然 block**(在线),T-1 忽略 |
 | `online_presence` | `player:session:{pid}`(**DB 0**)必须为 0 | block | **必然 block**,T-1 忽略 |
 | `player_locks` | `lock:player:{id}`(mapping DB)+ `player:{id}:__lock`(data Redis,给了 `-MergeSourceDataRedis` 才查) | block | 可能 block,T-1 忽略 |
 | `kafka_db_task_queues` | `kafka:retry/processing/dead:queue:db_task_zone_{src}` 三个都空,且每个 db 实例各自的 processing 列表也空,以及按分区的 ready 列表 `kafka:retry:queue:db_task_zone_{src}:p*`(2026-10-15 起,经 SCAN 发现)也空 | block | 在线时有也正常;**死信队列非空要在 T-1 查清** |
@@ -446,6 +449,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone `
   -MergeSourceZone <SRC_ID> -MergeTargetZone <DST_ID> `
   -MergeDbCapabilityZones <全部在跑的 zone,例 1,2,3> `
   -MergeKafkaConsumerGroupsCmd <path\to\kafka-consumer-groups.bat> -MergeKafkaBootstrap <broker:9092> `
+  -MergeEtcdEndpoints <http://etcd:2379[,...]> `
   <ROUTE_ARGS> `
   -DryRun
 # copy 模式加 -MergePlayerRowsMode copy;K8s 未部署 guild 加 -MergeSkipGuildMySql -MergeSkipGuildRank
@@ -464,7 +468,7 @@ preflight P1 OK: player tables in zone_<SRC>_db = [player_database ...]
 preflight C OK: placement-routing-v1 confirmed in zones [...]        ← pin 模式
 Mapping: M players with home_zone=<SRC> (<addr> db=0)
 guard OK: all R rows of zone_<SRC>_db.player_database have a player:zone mapping (M map to home_zone=<SRC>)
-preflight P2: ... still has ... live scene node(s) ...                ← T-1 预期的拒绝
+preflight P2 (source zone <SRC>): zone still has live scene nodes: etcd still registers K scene node(s) of zone <SRC> — finish zone-down first   ← T-1 预期的拒绝
 ```
 
 - 这里的 `M` **不要**记成 N:在线期间还会变。
@@ -586,6 +590,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone `
   -MergeDbCapabilityZones <此刻 go/db 仍在跑的其他 zone,不含 SRC / DST;没有就写 none(§5.1)> `
   -MergeManifestPath <repo>\merge_<SRC>_to_<DST>.json `
   -MergeKafkaConsumerGroupsCmd <path> -MergeKafkaBootstrap <broker:9092> `
+  -MergeEtcdEndpoints <http://etcd:2379[,...]> `
   <ROUTE_ARGS> `
   -DryRun
 # copy 模式加 -MergePlayerRowsMode copy;K8s 未部署 guild 加 -MergeSkipGuildMySql -MergeSkipGuildRank
@@ -610,6 +615,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone `
   -MergeDbCapabilityZones <与 4.1 同一份:仍在跑的其他 zone,不含 SRC / DST;没有就写 none> `
   -MergeManifestPath <repo>\merge_<SRC>_to_<DST>.json `
   -MergeKafkaConsumerGroupsCmd <path> -MergeKafkaBootstrap <broker:9092> `
+  -MergeEtcdEndpoints <http://etcd:2379[,...]> `
   <ROUTE_ARGS> `
   -MergeClearSourceHotState
 # 不带 -DryRun 即 -apply(dev_tools.ps1 二选一转发,不存在「两个都不给」)
@@ -676,6 +682,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit `
 | `verify:mapping_src` | mapping 里 `home_zone==src` 的玩家数 == 0(兜清单外的人) | block |
 | `verify:manifest_mapping` | 清单里**每一个**玩家的 `player:zone == dst`;清单人数 ≠ `-MergeExpectedSrcPlayers` 时直接 block(多半拿错了清单) | block |
 | `verify:manifest_rows` | 每个清单玩家在「落点记录所指的库,无记录则 `zone_<dst>_db`」的 `player_database` 里有行。pin 模式下被钉的人查源区库,copy 模式下无记录的人查目标库。清单没记玩家行那一步完成时报 warn `NOT VERIFIED`(不算通过):copy 看 `player_rows`,pin 看 `pin_placement` | block |
+| `verify:save_barrier` | 清单里在 Redis 有存盘历史的玩家(owner_epoch≠0、owner 或屏障键畸形、或屏障里有 pending / ACK),按 login 冷加载(`savebarrier.Reconcile`)逐人预判:`player:{id}:save_barrier` 的 pending 合法且不超过 owner_epoch、两表 ACK 都等于 pending、有效落点库(记录 ?? `zone_<dst>_db`)两张表的行内围栏都等于 pending —— 全部成立即 V1 一致路径。玩家行那一步没记完成时报 warn `NOT VERIFIED`;读失败或时间预算用完报 INFRA | 会拒登的人 block;只会被 login 采纳 SQL 放行的人(`barrier_missing_sql_adoptable` / `sql_rows_ahead_of_barrier`)warn,不算通过。逐个结论的处置见 §10.1 末段 |
 | `verify:guild_zone` | `SELECT COUNT(*) FROM mmorpg_guild.guild WHERE zone_id=src` == 0 | block(同时加 `-MergeSkipGuildMySql -MergeSkipGuildRank` 时为 warn `SKIPPED`,不算通过) |
 | `verify:guild_rank` | `guild_rank:zone:{src}` 不存在;且 `ZCARD guild_rank:zone:{dst}` == `COUNT(guild WHERE zone_id=dst)` | block(同上) |
 | `verify:trade_listing` | `SELECT COUNT(*) FROM mmorpg_trade.trade_listing WHERE market_zone=src` == 0 | block(加 `-MergeSkipTradeMySql` 时为 warn "NOT VERIFIED",不算通过) |
@@ -1013,12 +1020,14 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge `
   -MergeManifestPath <repo>\merge_<SRC>_to_<DST>.json `
   -MergeDbCapabilityZones <此刻 go/db 仍在跑的其他 zone,不含 SRC / DST;没有就写 none> `
   -MergeKafkaConsumerGroupsCmd <path> -MergeKafkaBootstrap <broker:9092> `
+  -MergeEtcdEndpoints <http://etcd:2379[,...]> `
   <ROUTE_ARGS> -DryRun
 
 pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge `
   -MergeManifestPath <repo>\merge_<SRC>_to_<DST>.json `
   -MergeDbCapabilityZones <与 dry-run 同一份> `
   -MergeKafkaConsumerGroupsCmd <path> -MergeKafkaBootstrap <broker:9092> `
+  -MergeEtcdEndpoints <http://etcd:2379[,...]> `
   <ROUTE_ARGS>
 # <ROUTE_ARGS> 必须与当初合服时同一份(§15.1);P4 之后用旧二进制撤销 = 直写 Redis,禁止(§15.5)
 # db 源下撤销写到一半中止(LEFT IN PLACE):同一命令加 -MergeZoneTakeOverFence <中止日志里的 run_id> 重跑(§15.4),不要 DEL 镜像
@@ -1064,10 +1073,14 @@ S   清单玩家不得有冻结的落点记录(与搬库互斥);有「落点记�
 
 **屏障重建:copy 模式撤销之后、zone-up 之前必做**(2026-10-20 修复 r2-mz#1,未经运行验证)
 
-5'b 对**全部清单玩家**连父快照提交屏障 `player:{id}:save_barrier` 一起删:改回源区后玩家读源库,合服后在目标库提交的 pending / 两表 ACK 不再对应他要读的行。删完之后,`owner_epoch≠0`(进过场景)的人冷登录会被 login 以「历史玩家父快照与提交屏障缺失」拒绝 —— fail-closed、不丢数据,但**屏障重建完成之前不许开服**。pin 模式撤销不删缓存也不删屏障,跳过本段。前向 copy 合服从 2026-10-20 起保留屏障,不需要本段;它的 `verify:save_barrier` 报 block 时见本段末尾。
+5'b 对**全部清单玩家**连父快照提交屏障 `player:{id}:save_barrier` 一起删:改回源区后玩家读源库,合服后在目标库提交的 pending / 两表 ACK 不再对应他要读的行。删完之后,`owner_epoch≠0`(进过场景)的人冷登录按源库两行分流(2026-10-22 修订:login 冷加载已改由 `savebarrier.Reconcile` 判定):两行同版非零的,login 采纳 SQL 自愈(设计 V7,每人一条 `PARENT-LOAD-ADOPT-SQL`);零围栏、缺行或两行不同版的,以「历史玩家父快照与提交屏障缺失」等原因拒登 —— fail-closed、不丢数据。重建仍然必做,**完成之前不许开服**,这是保守做法:逐人回执在开服前就把零围栏、缺行、两行不同版的人暴露出来,而不是开服后才在登录时拒绝;重建之后冷加载走 V1 一致路径,不产生采纳告警。pin 模式撤销不删缓存也不删屏障,跳过本段。前向 copy 合服从 2026-10-20 起保留屏障,不需要本段;它的 `verify:save_barrier` 不是 info 时见本段末尾。
 
 1. **保持维护闸**:source / target 保持 §8 Step 1 的维护标记与 Step 2 的 zone-down,不 `k8s-zone-up`、不 `/open`;scene / login / go/db 与合服、pin、relocate、回填工具都不运行。`save_barrier_restore` 的 `-writers-stopped -queues-drained` 只是声明,工具查不了这一条。
-2. **列出要重建的人**:清单 `player_ids` 里 `player:<id>:owner_epoch` 存在且不为 `0` 的玩家。owner_epoch、屏障与父快照都在 §2.1 表 login / shared 那一行的实例(`-MergeNoticeRedisAddr` / `-MergeNoticeRedisDB`,DB 0)。owner_epoch 不存在或为 `0` 的人从没进过场景,不需要屏障,也不能放进计划(工具以「归属计数器缺失」拒绝)。再按此刻的落点记录 `player:placement:<id>` 分组:
+2. **列出要重建的人**:清单 `player_ids` 里 `player:<id>:owner_epoch` 存在且不为 `0` 的玩家。owner_epoch、屏障与父快照都在 §2.1 表 login / shared 那一行的实例(`-MergeNoticeRedisAddr` / `-MergeNoticeRedisDB`,DB 0)。owner_epoch 不存在或为 `0` 的人从没进过场景,不需要屏障,也不能放进计划(工具以「归属计数器缺失」拒绝)。再按源库两行先分出两类单独处理(2026-10-22 补;用 `SELECT player_id, fence_owner_epoch, fence_save_seq FROM zone_<SRC>_db.player_database WHERE player_id IN (<名单>)` 与 `player_database_1` 的同一查询比对名单):
+   - **源库缺行**(两张表任一张没有这名玩家):多半是 r2-login#1 的受害者(owner 已铸、首次存盘之前失败),合服前就登录不了。恢复工具对他报「SQL 玩家行缺失」,放进计划会让整份计划在他这里退出 —— **排除出计划**,名单单独登记进维护工单,等 r2-login#1 的恢复手段。
+   - **两行都是零围栏**(`fence_owner_epoch = 0 AND fence_save_seq = 0`):围栏之前的历史行。先查清 owner 为何已铸而行从未经围栏写入;确认后单独做计划,plan 加 `-allow-legacy`(落点分组与下面相同;只在 plan 给;工具先原子提交两表围栏元数据,重锁复核后才发布屏障)。两行一张零围栏、一张不是的,恢复工具按「两表 SQL 围栏不同版」拒绝,按 §10.2 查清,不放进计划。
+
+   余下的人(两行同版非零)再按此刻的落点记录 `player:placement:<id>` 分组:
    - **没有记录**(copy 模式被拷的人都是):home 已改回 `<SRC>`,行在 `zone_<SRC>_db`。用下面的命令,plan 带 `-allow-home-fallback`。
    - **有记录**:记录是 `<SRC>:<版本>` 的用同一条命令、不带 `-allow-home-fallback`;指向别的库(钉在 dst、搬过库)的按 [mysql-backup-pitr-runbook.md](mysql-backup-pitr-runbook.md)「2026-10-18 第二批」走 v2(要独立审定的 `-audited-owner-upper-bound`)。
 
@@ -1090,11 +1103,13 @@ go run ./cmd/save_barrier_restore -mode apply -schema zone_<SRC>_db -zone <SRC> 
    `-allow-home-fallback` 只在 plan 给,写进计划、计入 SHA-256;apply 不接受它,以审定计划为准。它只放宽一件事:`player:placement:<id>` **不存在**且 `player:zone:<id>` 恰为 `-zone` 的人,按该区自己的 zone 库(`-schema` 必须就是它)恢复。以下照旧拒绝:home≠zone;落点键存在(空串、他库、冻结、畸形);两表 SQL 围栏不同版;父 / 子缓存、资产证据或交接标记仍在;补投桶非空;合服围栏仍在。「落点记录仍不存在」在写屏障的同一段 Lua 里原子复核。屏障按 SQL 两行的当前围栏重建,不会把任何旧屏障恢复回来。任一人失败立刻退出、已完成前缀不回退,修复原因后按**同一计划**重跑。
 5. **验证后再开服**:按 PITR 手册「整批成功后」那段,用受控测试号验证缺父键冷登录读到同版两行;再按原值删掉 `player:save_barrier:maintenance:<SRC>`,然后才按下一段 zone-up。
 
-**合服 Step 5 的 `verify:save_barrier` 报 block**(2026-10-20 新增):前向 copy 合服保留屏障,这一行逐人复刻 login 冷加载的拒绝条件 —— 清单里 owner_epoch≠0 的玩家,屏障 pending 合法且不超过 owner_epoch、两表 ACK 都等于 pending、有效落点库(记录 ?? `zone_<DST>_db`)两张表的行内围栏都等于 pending。Notes 按原因分组,带前几个 id。不进 Step 6,保持维护闸,再按原因处置:
+**合服 Step 5 的 `verify:save_barrier` 不是 info**(2026-10-20 新增;2026-10-22 按 login 冷加载重写):前向 copy 合服保留屏障、删掉父快照,开服后每人第一次登录都是冷加载。这一行按 login 冷加载(`savebarrier.Reconcile`)逐人预判清单里在 Redis 有存盘历史的玩家:info = V1 一致路径;warn = login 会采纳 SQL 放行;block = login 会拒登。Notes 按结论分组,带前几个 id。只有一格有意比 login 严:`ack_not_equal_pending`(实例没重启时 login 只等补投,而 P4 之后等不来)。不进 Step 6,保持维护闸,按结论处置。**屏障重建一律按上面第 1~5 步,把 `<SRC>` 换成 `<DST>`**(`-zone <DST> -schema zone_<DST>_db`,维护标记 `player:save_barrier:maintenance:<DST>`,无记录者带 `-allow-home-fallback`),重建后重跑 `-VerifyMerged`:
 
-- `barrier_missing`:多半是用 2026-10-20 之前的二进制跑了 copy 合服(旧版删屏障)。目标库的行是源库的逐字节拷贝,就地重建即可:按上面第 1~5 步,把 `<SRC>` 换成 `<DST>`(`-zone <DST> -schema zone_<DST>_db`,维护标记 `player:save_barrier:maintenance:<DST>`),无记录者带 `-allow-home-fallback`;重建后重跑 `-VerifyMerged`,直到这一行是 info。
-- 其余原因(`ack_not_equal_pending`、`sql_row_fence_not_equal_pending`、`sql_row_missing`、`owner_epoch_behind_pending`、各类 `*_malformed`):屏障或行与登录要求不一致,说明 P4 之后有写入或数据损坏。**不要就地重建,也不要为了让这一行变绿而手工删屏障** —— 屏障里可能还有未提交的存盘意图(`outbox_*`),按目标库旧行重建可能丢掉更新的数据。按 §10.2 的单玩家事故查清,或整体撤销。
-- 读失败是 INFRA(没查成),不是通过。
+- warn `barrier_missing_sql_adoptable`(屏障缺失或只剩 ACK,两行同版非零)/ `sql_rows_ahead_of_barrier`(两行或 ACK 新于 pending):不丢数据,但不是正确合服留下的状态,先查成因 —— 前者多半是用 2026-10-20 之前的二进制跑了 copy 合服(旧版删屏障),后者说明合服前 Redis 丢过已确认的写。成因清楚、记进工单后可以进 Step 6:开服后这些人第一次登录各有一条 `PARENT-LOAD-ADOPT-SQL`。采纳时 login 还要过 C4(enforce 模式下 schema 世代倒退照样拒),开服前用受控测试号冷登录一次。屏障整把缺失的也可以按上面的方法就地重建,结果与采纳相同;屏障 hash 还在的(只剩 ACK,或 `sql_rows_ahead_of_barrier`),恢复工具要求已有屏障的 pending 与两表 ACK 都等于 SQL 版本,会以 `barrier or outbox conflicts` 拒绝,只能交给 login 采纳,不要为了重建去删屏障。
+- block `barrier_missing_zero_fence`(owner≠0、无屏障、两行都是零围栏):先查清 owner 为何已铸而行从未经围栏写入,确认后就地重建,plan 加 `-allow-legacy`。
+- block `barrier_missing_no_sql_row`(owner≠0、无屏障、目标库缺行):copy 是逐字节拷贝,先用 `SELECT` 核对源库是否同样缺行。源库也缺 —— 合服前他就登录不了(r2-login#1:owner 已铸、首次存盘之前失败),不是合服造成的;合服既不能也不该替他补行,`save_barrier_restore` 对他报「SQL 玩家行缺失」,不要放进任何计划。名单登记进维护工单。这一类 block 重跑不会消失,是否带着这批人开服由负责人书面决定(开服后他们仍登录不了,与合服前相同),或等 r2-login#1 的恢复手段就绪。源库有行而目标库没有,是拷行出了问题,按 `verify:manifest_rows` 的 block 处理。
+- block 其余结论(`barrier_missing_rows_disagree`、`ack_not_equal_pending`、`sql_row_fence_not_equal_pending`、`sql_row_missing`、`owner_epoch_behind_pending`、`barrier_without_owner`、各类 `*_malformed`):屏障或行与登录要求不一致,说明 P4 之后有写入或数据损坏。**不要就地重建,也不要为了让这一行变绿而手工删屏障** —— 屏障里可能还有未提交的存盘意图(`outbox_*`),按目标库旧行重建可能丢掉更新的数据。按 §10.2 的单玩家事故查清,或整体撤销。
+- 读失败是 INFRA(没查成),不是通过。Notes 写着时间预算用完(`time budget ... ran out`)时重跑 `-VerifyMerged`;同样人数下持续超时,说明 `runAuditMode` 给每项检查的预算不够,要改代码放宽,不能跳过这一行。
 
 撤销完成后(copy 模式先完成上面的屏障重建):`k8s-zone-up` 把 source 与 target 都拉起来(2026-09-29:两区各自照传上一次部署的 `-GateRouterMode` / 集群外入口 / Ingress / `-ReleaseProfile` 参数,口径同 §8 Step 6);pin 模式清单的撤销,在两区 `/open` 之前跑 `merge-zone-capability-check -MergeDbCapabilityZones <SRC_ID>,<DST_ID>`,**必须 exit 0**,否则不开服、先把对应 zone 的 go/db 换成新版。之后再发「合服延期」公告。
 
@@ -1466,7 +1481,7 @@ go run ./cmd/migrate -f <db.yaml 副本> -storage-id 1000000 -command up -create
 **围栏保留(写到一半中止,库围栏故意留在原 run_id 上)**:每次运行的 run_id 都是新生成的,原样重跑会被库拒绝(`merge fence is held by another run`),直到库时钟过了 `expires_at_ms`。按报文里的续跑步骤:
 
 1. 按报文原因排除故障(锁冲突查 `SHOW ENGINE INNODB STATUS` 与 `information_schema.innodb_trx` 的长事务;Redis 失败先恢复 mapping Redis 连通)。
-2. 确认那次运行的 merge_zone 进程已经不在(本机 / 跳板机 / Job 都查)。**对一个还在运行的 run_id 接手是错的**:旧进程的下一批映射写入会被库拒绝,但它已经发出的非映射写(拷行、帮会、交易)与新进程交错。
+2. 确认那次运行的 merge_zone 进程已经不在(本机 / 跳板机 / Job 都查)。**对一个还在运行的 run_id 接手是错的**:旧进程的下一批映射写入会被库拒绝,但它不碰映射的写(拷行、blob、帮会、交易、榜单、热状态、公告、清单文件)只看本地判据,要到它下一次续期失败才停 —— db 源续期间隔是 `min(ttl/3, 30s)`,所以最长约 30 秒与新进程交错写、互相覆盖同一份清单文件。
 3. 只读核对库里的持有者与报文一致:`SELECT zone_id, run_id, expires_at_ms, fence_epoch FROM zone_merge_fence WHERE zone_id IN (<SRC>, <DST>) AND shard = 63`。
 4. 用**原命令**(同一份 `-MergeManifestPath`、同一份 `<ROUTE_ARGS>`)加 `-MergeZoneTakeOverFence <报文里的 run_id>` 重跑;撤销中止的同理,`merge-zone-unmerge` 加同一个开关:
 
@@ -1478,6 +1493,13 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone -MergeSourceZone <SRC
 
 - 工具在**一个**库事务里把两区全部 64 片从旧 run_id 接到本次 run_id(`fence_epoch + 1`),两区在库里一刻不解封;镜像按更大的 `fence_epoch` 覆盖旧值并 WAITAOF 确认之后才继续。日志 `merge fence taken over in zone_merge_fence from run_id=…`。
 - 第三个 run_id 持有任何一片(有人在跑另一次合服 / 撤销)仍拒绝,**停下来查清楚**。库里那次围栏已过期 / 已释放时,这个开关不起作用,按普通获取处理。
+- **接手核对**(2026-10-22 补记,未经运行验证):接手事务在库里逐片核对被接手的分片 —— `src_zone` / `dst_zone` 必须与本次相同(写错 `-MergeSourceZone` / `-MergeTargetZone` 时若照样接手,只有点对的那一区被接走,另一区挂在已死的运行上、过期后在半截状态下解封);`holder_json` 里记着的 `manifest_path` 必须与本次 `-MergeManifestPath` 相同(规整后比较;续跑落到另一份清单会被当成首跑,收集出漏人的清单);每个 zone 要么 64 片全在那个 run_id 名下、要么一片都不在(已过期,按普通获取)。任一不满足报 `route store: invalid argument` 并写明库里与本次的值,事务不写,旧围栏原样保留:改正参数(多半是补上原来的 `-MergeManifestPath`)再接手。不比 purpose:合服中止后改跑 `merge-zone-unmerge` 照样能接手。
+- **接手本身失败时围栏不释放**:接手事务结果不明(提交回包丢了),或接手之后镜像 `WAITAOF` 确认不了(上一次正是 Redis 故障中止时很常见),工具**不释放**库围栏、非零退出 —— 释放就等于在半合服 / 半撤销状态下解封。报文写明围栏此刻归谁:镜像没确认时归**本次**的新 run_id(报文带 `fence_epoch`),修好 mapping Redis 后对这个新 run_id 再接手一次;结果不明时是旧 / 新两个之一,先按第 3 步只读查 `shard = 63` 再对库里那个 run_id 接手。不要等它过期,也不要 DEL 镜像。
+- **合服续跑不带这个开关时同一口径**(2026-10-22 补记,未经运行验证):上一次的围栏已过期 / 已释放、本次以新 run_id 普通获取,但清单已存在且步骤 7 未标记完成(两区可能处在半合服状态)—— 获取之后镜像确认不了、获取事务结果不明,同样**不释放**、非零退出,报文以「续跑」说明并给出本次 run_id 与 `-take-over-fence <本次 run_id>`;结果不明时查 `shard = 63`:是本次就接手,没有生效的围栏就用原命令直接重跑。首跑(没有清单)照旧先清库、报 `this run wrote nothing`。撤销在立围栏之前判断不了半撤销,不走这条(只有带开关时才保留)。
+- 带 `-MergeZoneTakeOverFence` 的运行,在清单落盘之前的任何拒绝(续跑校验、守卫、P2~P7、公会重名、落点扫描、合走标记、清单写盘)一律保留围栏(`LEFT IN PLACE`),与清单在不在、是否标记了步骤 7 都无关;撤销同理按半撤销处理。
+- db 源撤销的 7'(删公告标记)、4'(拿 guild_rank 维护锁、还原 ZSET)、1'(删目标库行)失败同样打 `LEFT IN PLACE` 报文并给出接手命令(之前是一行原始错误、围栏挂到过期)。
+- 不带这个开关重跑撞上残留围栏时,报错(`merge fence is held by another run`)会直接提示 `-take-over-fence <run_id>` 与同一份 `-manifest-path`:仍须先做第 2、3 步,不要见到提示就接手。
+- 映射来源:清单记录 `route_source=db` 的合服,续跑与撤销都必须 `-MergeZoneRouteSource db`;用 redis 源续跑或撤销在立围栏之前就被拒(库里留着的围栏不受影响)。
 - 适用范围由工具判:只 `merge-zone` / `merge-zone-unmerge`、只 `-MergeZoneRouteSource db`、值必须是合法 run_id 且不同于本次;其余命令给了即拒绝(`-take-over-fence only applies to …`)。redis 源仍按 §3 ③ 的 GET / DEL 流程。
 - `-DryRun` 加这个开关只读预判,日志 `[DRY-RUN] would take over the merge fence of zone …`,不写库、不写镜像。
 
@@ -1537,3 +1559,17 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone -MergeSourceZone <SRC
   - **§13** 补全 dev_tools.ps1 的全部 merge 参数名。
 - **2026-05-23 v1.1**: 现状对齐(删 5 个空跑 auditor,`player.name` 改为显式「不适用」提示)。
 - **2026-05-23 v1**: 初版。
+
+
+### 2026-10-26：v4 写资格与严格排空接入（实现候选，未验收）
+
+本段记录本轮候选的接口变更及尚未通过的门禁；不是已经可以执行的发布说明。正式状态机见 [存盘围栏设计](../design/db-write-fencing-mysql.md) 的 v4 实施段。当前文件仍为隔离候选，没有覆盖仓库工作区，也没有运行生成、构建、SQL 或排空验收。
+
+- P0 固定完整计划与初始 ACTIVE 集。P1 关闭真实 SOURCE，P3 关闭真实 RELAY；每个物理 boot 的全部既有角色完成后，才能用同 run 的永久 RETIRE 收据退役。目录版本逐次递增，E 保持不变；后继阶段按连续 RETIRE 原件折叠 P0。无 ACTIVE 写者仍可正常冻结。不能原地改 P0，不能以进程退出、队列空或取消代替完成证明。
+- freeze 请求绑定已经存在的 NON_SQL_CLOSED 原收据。GrantTicket 将完整 freeze 摘要写入永久票据，冻结时经票据核对 grant 与其前序原件，避免摘要循环。超期、写入 UNKNOWN、不同 ticket 参数或不同原请求一律保持维护。旧收据认重仍核票据参数。
+- merge_zone 的 apply/unmerge 必须带 maintenance-run-id、freeze-ticket-id、freeze-request-id、freeze-receipt-sha256、frozen-writer-epoch；它们绑定同一 NORMAL 已消费票据与永久 SQL_FROZEN 原件。工具不把 writable 改回 1，不接受人工 attestedLag 代替传输闭包。路由写事务和已接入的公会/交易事务在自身提交事务里锁 meta 并核原冻结。玩家行复制/删除的同事务守卫仍在追加路径提案，未经纳入与验证不能声称全部写面闭合。
+- Redis 等非 SQL 维护动作还必须有本 run 的真实停写、在途完成与不可重入原件。单次 preflight 或另外一条连接长持 meta 锁不能覆盖其它连接或 Redis 的提交结果；SQL_RELEASED 前所需维护工具 owner 接线仍待明确落地。这个缺口不能用超时或运维约定冒认完成。
+- RELEASE_READY 保留原恢复审计与冻结收据；R 的 route_watermark_floor_ms 固定到正式协议，在既有 reconcile 锁内以 GREATEST 与 E/writable 同事务提交。正常恢复后只接纳同 run 的新 boot，消费者真实准备完成且 SOURCE 保持关闭，最后实际 open 产生 ACK；旧 boot 不复活。
+- Windows 私有文件必须由实际本地固定 NTFS、ACL 与祖先句柄校验支持。Go/Java 共用一个无特权文件 I/O owner 的提案正在等待追加范围确认；Java NIO 的 NTFS 名称或日志不能替代真实平台证明。
+
+本轮验收源码增加了 RR 旧快照、真实 slot 锁等待和 E+2 交错后的业务 SQL 零发送断言；LOCK_TOUCH 与 SELECT_ONLY 各自需要独立真实最小权限资格原件。普通 meta/registry SELECT 可能读取事务快照，安全判断依赖锁内 CURRENT slot 状态与 E，不能把这些 SELECT 统称 CURRENT。所有运行结论须等正式生成、构建及独立夹具执行后填写。

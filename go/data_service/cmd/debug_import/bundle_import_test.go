@@ -239,7 +239,7 @@ func TestStageThenCommitLocalRedis(t *testing.T) {
 		t.Fatalf("save_pending index still has %v", members)
 	}
 
-	if err := commitLocalRedis(context.Background(), client, id, version, "dev_tester"); err != nil {
+	if err := commitLocalRedis(context.Background(), client, id, version); err != nil {
 		t.Fatal(err)
 	}
 	for _, field := range []string{"pending", "player_database", "player_database_1"} {
@@ -290,10 +290,10 @@ func TestStageLocalRedisRechecksPreflight(t *testing.T) {
 	if err := stageLocalRedis(context.Background(), client, id, 1, "4", 5, version); err != nil {
 		t.Fatalf("matching preflight refused: %v", err)
 	}
-	if err := commitLocalRedis(context.Background(), client, id, savebarrier.Version(9, 9), ""); err == nil {
+	if err := commitLocalRedis(context.Background(), client, id, savebarrier.Version(9, 9)); err == nil {
 		t.Fatal("commit must refuse when pending is not the staged version")
 	}
 	if mr.Exists(debugutil.PlayerToAccountKey(id)) {
-		t.Fatal("empty local account must not write the reverse index")
+		t.Fatal("refused commit must not write the reverse index")
 	}
 }

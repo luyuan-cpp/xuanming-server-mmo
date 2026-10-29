@@ -208,6 +208,11 @@ function Get-ClientEntryContract {
 		# 该脚本自己的两个模板(New-CppOpenFileLimitModeEnvLines)也取这里的 env 名。
 		NodeOpenFileLimitModeEnv   = 'NODE_OPEN_FILE_LIMIT_MODE'
 		NodeOpenFileLimitModes     = @('enforce', 'warn')
+		# C++ 节点 Prometheus 出口(cpp/libs/engine/core/metrics/metrics_http_exporter.h kMetricsPortEnv):设了才开 GET /metrics。
+		# k8s_deploy.ps1 -CppMetricsPort 经 PodCommon.MetricsPort 写进本库三个 C++ 生成器(env + 容器端口 metrics),
+		# 该脚本自己的两个模板(New-CppMetricsEnvLines / New-CppMetricsPortLines)也取这里的名字。
+		CppMetricsPortEnv          = 'MMORPG_METRICS_PORT'
+		CppMetricsPortName         = 'metrics'
 	}
 }
 
@@ -646,7 +651,10 @@ function New-ClientEntryPodCommon {
 		[AllowNull()][System.Collections.IDictionary]$PodAnnotations = $null,
 		# B0-4 运维豁免开关 NODE_OPEN_FILE_LIMIT_MODE 的取值(k8s_deploy.ps1 -NodeOpenFileLimitMode)。留空 = 不写这个 env
 		# (C++ 缺省 enforce),生成物与不传时逐字相同;非空只收小写 enforce / warn,在渲染时(Get-ClientEntryNodeBaseEnv)校验。
-		[AllowEmptyString()][string]$OpenFileLimitMode = ''
+		[AllowEmptyString()][string]$OpenFileLimitMode = '',
+		# C++ Prometheus 出口端口(k8s_deploy.ps1 -CppMetricsPort)。0 = 不开:不写 env、不声明容器端口,生成物与不传时逐字相同。
+		# 抓取注解(prometheus.io/*)由调用方放进 -PodAnnotations,本库不另写。
+		[ValidateRange(0, 65535)][int]$MetricsPort = 0
 	)
 
 	$given = @($SidecarContainerYaml, $SidecarVolumeYaml, $SidecarConfigHash | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
@@ -675,6 +683,7 @@ function New-ClientEntryPodCommon {
 		SidecarConfigHash    = $SidecarConfigHash
 		PodAnnotations       = $podAnnotationsCopy
 		OpenFileLimitMode    = $OpenFileLimitMode
+		MetricsPort          = $MetricsPort
 	}
 }
 
@@ -725,7 +734,40 @@ function Get-ClientEntryNodeBaseEnv {
 		}
 		$entries += @{ Name = $contract.NodeOpenFileLimitModeEnv; Value = $openFileLimitMode }
 	}
+	# Prometheus 出口:同样经 Get-ClientEntryMember 读,手拼的 PodCommon 缺这个成员 = 不写。
+	$metricsPort = Get-ClientEntryMetricsPort -PodCommon $PodCommon
+	if ($metricsPort -gt 0) {
+		$entries += @{ Name = $contract.CppMetricsPortEnv; Value = [string]$metricsPort }
+	}
 	return ,$entries
+}
+
+# PodCommon.MetricsPort;缺成员或非正数按 0(不开)。
+function Get-ClientEntryMetricsPort {
+	param([Parameter(Mandatory = $true)]$PodCommon)
+	$raw = Get-ClientEntryMember -Object $PodCommon -Path @('MetricsPort')
+	if ($null -eq $raw) {
+		return 0
+	}
+	$port = [int]$raw
+	if ($port -lt 0 -or $port -gt 65535) {
+		throw "Get-ClientEntryMetricsPort: PodCommon.MetricsPort 必须在 0..65535,实际 $port。"
+	}
+	return $port
+}
+
+# C++ /metrics 出口的容器端口项,接在调用方 ports 列表最后一项之后(带前导换行)。端口为 0 时返回空串,生成物与引入前逐字相同。
+# -ItemIndent = 列表项「- containerPort:」所在缩进。
+function Get-ClientEntryMetricsPortYaml {
+	param(
+		[Parameter(Mandatory = $true)]$PodCommon,
+		[Parameter(Mandatory = $true)][string]$ItemIndent
+	)
+	$port = Get-ClientEntryMetricsPort -PodCommon $PodCommon
+	if ($port -le 0) {
+		return ''
+	}
+	return "`n$ItemIndent- containerPort: $port`n$ItemIndent  name: $((Get-ClientEntryContract).CppMetricsPortName)"
 }
 
 # 启动脚本主体:建日志目录 → 日志清理循环 → 启动命令(与 New-NodeDeploymentYaml 的 args 同形)。
@@ -945,7 +987,7 @@ $envBlock
 $mountBlock
           ports:
             - containerPort: $RpcPort
-              name: rpc
+              name: rpc$(Get-ClientEntryMetricsPortYaml -PodCommon $PodCommon -ItemIndent '            ')
           readinessProbe:
             tcpSocket:
               port: $RpcPort
@@ -1193,7 +1235,7 @@ $envBlock
 $mountBlock
               ports:
                 - containerPort: $grpcPort
-                  name: grpc
+                  name: grpc$(Get-ClientEntryMetricsPortYaml -PodCommon $PodCommon -ItemIndent '                ')
           volumes:
 $volumeBlock
 "@
@@ -1284,7 +1326,7 @@ $mountBlock
               hostPort: $RpcPort
               name: rpc
             - containerPort: $grpcPort
-              name: grpc
+              name: grpc$(Get-ClientEntryMetricsPortYaml -PodCommon $PodCommon -ItemIndent '            ')
           startupProbe:
             tcpSocket:
               port: $RpcPort

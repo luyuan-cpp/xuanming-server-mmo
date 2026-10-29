@@ -42,3 +42,25 @@ func TestRoleAdmissionIdentityAndEvidenceAreStrict(t *testing.T) {
 		t.Fatal("NO_ADMISSION证据允许非零围栏")
 	}
 }
+
+func TestInitialCommitEvidenceDoesNotImpersonateSceneOrZeroFence(t *testing.T) {
+	e := &dspb.AccountRoleFreezeEvidence{PlayerId: 1, ListingId: 2, OwnerRevision: 1,
+		PersistedDigest: make([]byte, 32), OwnerEpoch: 1, SaveSeq: 1,
+		Kind: dspb.AccountRoleFreezeEvidenceKind_ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_INITIAL_COMMIT}
+	if !ValidFreezeEvidence(e) || !NoActorFreezeEvidence(e) {
+		t.Fatal("完整初始提交原件被拒")
+	}
+	e.Kind = dspb.AccountRoleFreezeEvidenceKind_ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_SCENE
+	if ValidFreezeEvidence(e) {
+		t.Fatal("保留初始版本冒充 scene 保存")
+	}
+	e.Kind = dspb.AccountRoleFreezeEvidenceKind_ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_NO_ADMISSION
+	if ValidFreezeEvidence(e) {
+		t.Fatal("初始提交被伪装成零围栏")
+	}
+	e.Kind = dspb.AccountRoleFreezeEvidenceKind_ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_INITIAL_COMMIT
+	e.OwnerEpoch = 2
+	if ValidFreezeEvidence(e) {
+		t.Fatal("任意非零围栏被当成初始提交")
+	}
+}

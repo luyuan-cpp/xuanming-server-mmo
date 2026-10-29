@@ -308,14 +308,54 @@ func ReserveAgonesRoomForWorldChannel(
 	return placement.NodeID, true
 }
 
-// TransferAgonesRoomForScene 把一个场景的房间名额从旧节点转到新节点。
+// luaCommitAgonesRoomTransfer 是名额记录改写的比较并交换:只有 scene:{id}:node 仍是 newNode
+// (归属确实落在新节点,场景也没被销毁),才把 scene:{id}:agones_gs 改成 newGs,并在同一个脚本里
+// 原子读出被覆盖的旧值。
 //
-// 世界频道 rebalance 会把频道从 oldNode 搬到 newNode。不转移名额的话:
+// KEYS[1] = scene:{id}:node
+// KEYS[2] = scene:{id}:agones_gs
+// ARGV[1] = newNode
+// ARGV[2] = newGs
+// 返回 {1, prev}:已改到 newGs,prev 是被覆盖的旧值(没有记录时为空串);
+// {0, ''}:属主已不是 newNode,或场景已被销毁,一个键都没动;
+// {2, ''}:记录已经是 newGs(别的写者转过了),一个键都没动。
+const luaCommitAgonesRoomTransfer = `
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then
+    return {0, ''}
+end
+local prev = redis.call('GET', KEYS[2])
+if not prev then
+    prev = ''
+end
+if prev == ARGV[2] then
+    return {2, ''}
+end
+redis.call('SET', KEYS[2], ARGV[2])
+return {1, prev}
+`
+
+const (
+	agonesTransferStale   = 0
+	agonesTransferApplied = 1
+	agonesTransferNoop    = 2
+)
+
+// TransferAgonesRoomForScene 把一个场景的房间名额转到新节点,调用前场景归属必须已经改到 newNode
+// (reassignSceneNode 成功之后)。
+//
+// 场景换节点(rebalance、init 的死节点改派、EnterScene 的死节点自愈等)不转移名额的话:
 // 旧 GameServer 的计数永远不还(容量凭空蒸发),新 GameServer 没记账
 // (容量被超卖)。两个方向都会让 FleetAutoscaler 算错。
 //
 // 顺序是**先占新的再还旧的**:反过来的话,中间窗口里新节点可能已经没容量了,
 // 于是名额两头都不在,频道变成"不占任何容量"的幽灵。
+//
+// 记录改写走 luaCommitAgonesRoomTransfer 的比较并交换,要还的旧名额取脚本原子读出的值,不在占名额
+// 之前预读:K8s 往返期间场景可能被销毁(销毁方已按旧记录还过名额),或被另一个写者再次搬走并转过名额。
+// 预读 + 无条件覆盖会在这些交错里让新名额永久泄漏、旧名额被还两次;预读出错时还会覆盖掉唯一的记录。
+//   - 属主已不是 newNode 或场景已销毁:还掉刚占的这份,旧记录留给销毁方或真正的属主处理。
+//   - 记录已经是新节点的 GameServer:还掉刚占的这份。所以同一目标重复调用是幂等的。
+//   - Redis 出错:结论未知,两边都不还,只打日志 —— 猜错一边就是重复归还,宁可多占一份交给 reconcile 暴露。
 func TransferAgonesRoomForScene(
 	ctx context.Context,
 	svcCtx *svc.ServiceContext,
@@ -327,24 +367,43 @@ func TransferAgonesRoomForScene(
 		return
 	}
 
-	oldGs, _ := svcCtx.Redis.Get(sceneAgonesGsKey(sceneID))
-
 	placement, err := AcquireAgonesRoomOnNode(ctx, svcCtx, newNode, zoneID)
 	if err != nil {
-		// 新节点占不到名额。**不**释放旧的 —— 释放了就等于这个频道不占任何
+		// 新节点占不到名额。**不**释放旧的 —— 释放了就等于这个场景不占任何
 		// 容量,比多占一份更糟。留给 reconcile 去暴露漂移。
-		logx.Errorf("[Agones] scene %d: migrated to node %s but could not reserve a room there (%v); "+
-			"keeping the old reservation on %s, watch scene_manager_agones_counter_drift",
-			sceneID, newNode, err, oldGs)
+		logx.Errorf("[Agones] scene %d: moved to node %s but could not reserve a room there (%v); "+
+			"keeping the old reservation, watch scene_manager_agones_counter_drift",
+			sceneID, newNode, err)
 		return
 	}
+	newGs := placement.GameServerName
 
-	if err := svcCtx.Redis.Set(sceneAgonesGsKey(sceneID), placement.GameServerName); err != nil {
-		logx.Errorf("[Agones] scene %d: failed to update agones gs mapping: %v", sceneID, err)
+	keys := []string{sceneNodeKey(sceneID), sceneAgonesGsKey(sceneID)}
+	raw, err := svcCtx.Redis.Eval(luaCommitAgonesRoomTransfer, keys, newNode, newGs)
+	if err != nil {
+		logx.Errorf("[Agones] COUNTER DRIFT: scene %d: recording the room on %s (node %s) failed with an unknown outcome; "+
+			"releasing neither the new nor the old room, watch scene_manager_agones_counter_drift: %v",
+			sceneID, newGs, newNode, err)
+		return
 	}
-
-	if oldGs != "" && oldGs != placement.GameServerName {
-		ReleaseAgonesRoom(ctx, svcCtx, agonesNamespace(svcCtx), oldGs, "world_channel_migrated")
+	parts := toSlice(raw)
+	if len(parts) < 2 {
+		logx.Errorf("[Agones] COUNTER DRIFT: scene %d: unexpected transfer script reply %v; releasing nothing", sceneID, raw)
+		return
+	}
+	switch toInt64(parts[0]) {
+	case agonesTransferApplied:
+		if prev := toString(parts[1]); prev != "" {
+			ReleaseAgonesRoom(ctx, svcCtx, agonesNamespace(svcCtx), prev, "scene_migrated")
+		}
+	case agonesTransferNoop:
+		ReleaseAgonesRoom(ctx, svcCtx, placement.Namespace, newGs, "transfer_already_recorded")
+	case agonesTransferStale:
+		logx.Infof("[Agones] scene %d: owner is no longer %s (moved again or destroyed); returning the room just taken on %s",
+			sceneID, newNode, newGs)
+		ReleaseAgonesRoom(ctx, svcCtx, placement.Namespace, newGs, "transfer_owner_changed")
+	default:
+		logx.Errorf("[Agones] COUNTER DRIFT: scene %d: unexpected transfer script status %v; releasing nothing", sceneID, parts[0])
 	}
 }
 

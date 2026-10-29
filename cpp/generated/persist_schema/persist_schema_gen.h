@@ -32,4 +32,26 @@ inline constexpr std::array<std::string_view, 8> kUncarriedFields = {
     "player_database.stress_test_probe",
     "player_database_1.stress_test_probe",
 };
+
+// 已退役的持久字段(台账 retired 行,§3.1),按消息全名、字段号升序。残留字节照样原样携带;
+// 判"带着更新版本的字段"(§4.4 守卫)时排除它们,见 unknown_field_carry::CarriesNewerVersionFields。
+struct RetiredField
+{
+    std::string_view message; // 消息全名,不带前导点
+    int number;
+};
+inline constexpr std::array<RetiredField, 0> kRetiredFields = {};
+
+// 字段 <message>#<number> 是否已退役。
+[[nodiscard]] constexpr bool IsRetiredField(std::string_view message, int number)
+{
+    for (const auto &field : kRetiredFields)
+    {
+        if (field.number == number && field.message == message)
+        {
+            return true;
+        }
+    }
+    return false;
+}
 } // namespace persist_schema

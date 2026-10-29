@@ -27,6 +27,7 @@ package logic
 //
 // 单实例用例只读 DATA_SERVICE_IT_REDIS_HOST,Cluster 用例只读 DATA_SERVICE_IT_REDIS_CLUSTER_ADDRS:未设置就 Skip,
 // **不回落**到 etc/data_service.yaml 的开发库;设置了却连不上(或集群没就绪)直接失败。
+// 验收时加 $env:DATA_SERVICE_IT_REQUIRE='1':任何 SKIP 都判 FAIL(requireRealRedisIT)。
 // 玩家 id 从 9900000000001 起,每个用例各占几个、互不重叠。跑前 SCAN player:{id}:* 非空或 lock:player:<id> 已存在就 Skip
 // (不是本用例建的键,一个都不碰);跑后只删这些 id 的 player:{id}:* 与 lock:player:<id>,绝不 FLUSHDB。
 // DevRedis 与 MappingRedis 都指向这台 Redis(同 newTestSvcCtx),两边都在 DB 0;玩家不登记映射,dev 模式照常可写,
@@ -60,6 +61,8 @@ const (
 	envRealRedisHost = "DATA_SERVICE_IT_REDIS_HOST"
 	// envRealRedisClusterAddrs 是逗号分隔的 Cluster 种子地址,只给 TestRealRedisClusterUndeclaredKeys 用。
 	envRealRedisClusterAddrs = "DATA_SERVICE_IT_REDIS_CLUSTER_ADDRS"
+	// envRealRedisRequire 设为 1 时,被跳过的用例判失败(与本模块其他集成测试同一个开关)。
+	envRealRedisRequire = "DATA_SERVICE_IT_REQUIRE"
 	// realRedisPlayerBase 往上依次分给各用例(见每个用例开头),新增用例接着往后排。
 	realRedisPlayerBase uint64 = 9900000000001
 	// realRedisLockToken 是直接调脚本时手工放进数据锁的 token:绕过 Router 拿锁,只为看脚本的原始返回值。
@@ -71,6 +74,22 @@ type realRedisCtx struct {
 	host string
 	svc  *svc.ServiceContext
 	raw  *goredis.Client
+}
+
+// requireRealRedisIT 必须是每个 TestRealRedis* 的第一句:它登记的清理最后一个执行,用例被跳过(环境变量没设、
+// 键空间不干净)且设了 DATA_SERVICE_IT_REQUIRE=1 就判失败,杜绝把 SKIP 当成通过。与 routereconcile 的
+// requireCacheIT、routing 的 requireRouteReadIT 同一写法:跳过的判定只在各自的 setup 一处,这里不再探测一遍。
+func requireRealRedisIT(t *testing.T) {
+	t.Helper()
+	if os.Getenv(envRealRedisRequire) != "1" {
+		return
+	}
+	t.Cleanup(func() {
+		if t.Skipped() {
+			t.Errorf("%s=1: this integration test was skipped (a dependency is missing or unusable, see the SKIP reason above); treated as FAIL",
+				envRealRedisRequire)
+		}
+	})
 }
 
 // realRedisMappingLockKey 与 routing 包未导出的 mappingPlayerLockKey(router.go)同一拼法。
@@ -326,6 +345,7 @@ func bytesMap(m map[string]string) map[string][]byte {
 // 若拿到的是裸字符串,.ok 恒为 nil,类型判断全部失灵。先用探针直接看取值,再看三段脚本的类型分支把类型名拼进
 // error_reply —— 消息里出现 'string' / 'hash' 说明 .ok 取到了值(对 nil 做 .. 拼接是 Lua 运行时错,消息不同)。
 func TestRealRedisTypeReplyOkField(t *testing.T) {
+	requireRealRedisIT(t)
 	ctx := context.Background()
 	pid := realRedisPlayerBase
 	rc := newRealRedisCtx(t, pid)
@@ -367,6 +387,7 @@ func TestRealRedisTypeReplyOkField(t *testing.T) {
 // 回到客户端时按脚本侧协议(缺省 RESP2)转成 null —— 对 RESP3 客户端(go-redis v9 缺省)也是 null,不是布尔 false。
 // decodeLoadAllReply 只认 nil / string,回布尔会整体 fail-closed。两种协议的原始回复都看一遍,再走一次 LoadPlayerData。
 func TestRealRedisLoadAllMissingValueKeepsPairs(t *testing.T) {
+	requireRealRedisIT(t)
 	ctx := context.Background()
 	pid := realRedisPlayerBase + 1
 	rc := newRealRedisCtx(t, pid)
@@ -437,6 +458,7 @@ func TestRealRedisLoadAllMissingValueKeepsPairs(t *testing.T) {
 // 索引从此恒不可信(退化成每次 SCAN,不报错)。15 位仍在 2^53 以内,INCR 回到 Lua 的整数不丢精度,返回值可以精确断言。
 // 守卫上界(15 位最大值 999999999999999)也走一遍:INCR 后是 16 位的 10^15,tostring 会写成 "1e+15"。
 func TestRealRedisStampMatchesVersionBytes(t *testing.T) {
+	requireRealRedisIT(t)
 	ctx := context.Background()
 	pidNew, pidBig, pidMax := realRedisPlayerBase+2, realRedisPlayerBase+3, realRedisPlayerBase+16
 	rc := newRealRedisCtx(t, pidNew, pidBig, pidMax)
@@ -498,6 +520,7 @@ func TestRealRedisStampMatchesVersionBytes(t *testing.T) {
 // 4. saveFieldsScript 的拒绝分支零副作用。Lua 出错不回滚已执行的写,所以可失败的检查必须全在第一条 SET 之前:
 // 字段键是 HASH 回 {-2, cur};版本损坏 / 索引类型不对回 error_reply。拒绝之后字段未写、版本未变、索引未变。
 func TestRealRedisSaveRefusalsHaveNoSideEffects(t *testing.T) {
+	requireRealRedisIT(t)
 	ctx := context.Background()
 	pidConflict, pidIndexStr := realRedisPlayerBase+4, realRedisPlayerBase+5
 	badVersions := []struct {
@@ -602,6 +625,7 @@ func TestRealRedisSaveRefusalsHaveNoSideEffects(t *testing.T) {
 // 5. deletePlayerFieldsScript:只删 TYPE 为 string 的自有键,别家 HASH 保留,返回值等于实际删掉的 string 键数(索引不计)。
 // 索引模式按索引名字删,不 SCAN;未索引时脚本回 -2(零副作用),Go 侧 SCAN 收候选再以回退模式删。
 func TestRealRedisDeleteScriptModes(t *testing.T) {
+	requireRealRedisIT(t)
 	ctx := context.Background()
 	pidIndexed, pidLegacy, pidDirect := realRedisPlayerBase+10, realRedisPlayerBase+11, realRedisPlayerBase+12
 	rc := newRealRedisCtx(t, pidIndexed, pidLegacy, pidDirect)
@@ -702,6 +726,7 @@ func TestRealRedisDeleteScriptModes(t *testing.T) {
 // 6. 端到端:存量玩家(裸写字段 + 版本 "5",无索引)→ 全量读(SCAN)→ 新写(不建残缺索引)→ 删除(回退)
 // → 重新存盘(新玩家,建索引)→ 全量读与删除都走索引。全程别家 HASH 不动,结束时不留锁。
 func TestRealRedisLegacyPlayerEndToEnd(t *testing.T) {
+	requireRealRedisIT(t)
 	ctx := context.Background()
 	pid := realRedisPlayerBase + 13
 	rc := newRealRedisCtx(t, pid)
@@ -797,6 +822,7 @@ func TestRealRedisLegacyPlayerEndToEnd(t *testing.T) {
 //
 //	docker run --rm -d -p 7001-7003:7001-7003 --name ds-it-cluster $img sh -c 'for p in 7001 7002 7003; do redis-server --port $p --cluster-enabled yes --cluster-config-file nodes-$p.conf --cluster-announce-ip 127.0.0.1 --protected-mode no --daemonize yes; done; sleep 2; redis-cli --cluster create 127.0.0.1:7001 127.0.0.1:7002 127.0.0.1:7003 --cluster-replicas 0 --cluster-yes; tail -f /dev/null'
 func TestRealRedisClusterUndeclaredKeys(t *testing.T) {
+	requireRealRedisIT(t)
 	addrs := os.Getenv(envRealRedisClusterAddrs)
 	if addrs == "" {
 		t.Skipf("%s 未设置:本用例只打显式指定的一次性 Cluster", envRealRedisClusterAddrs)

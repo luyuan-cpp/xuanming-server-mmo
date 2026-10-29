@@ -201,8 +201,9 @@ Test-Case '负向:入口参数的枚举拼错、给了 Ingress host 却没给 tr
 # ─────────────────────────────────────────────────────────────────
 
 $SandboxNamespace = 'mmorpg-zone-contract-test'
-# 预检那一条 kubectl 的固定前缀(一次取回两种 gate 与 Ingress,见 k8s_zone_rollback.ps1 Get-ZoneEntryKubectlArgs)。
-$PreflightKubectlPrefix = "get statefulset/gate deployment/gate ingress/gateway -n $SandboxNamespace -o json --ignore-not-found"
+# 预检那一条 kubectl 的固定前缀(一次取回两种 gate、Ingress 与 scene Deployment,见 k8s_zone_rollback.ps1 Get-ZoneEntryKubectlArgs;
+# scene Deployment 供 B0-4 nofile 模式核对,2026-10-22)。
+$PreflightKubectlPrefix = "get statefulset/gate deployment/gate ingress/gateway deployment/scene deployment/scene-world deployment/scene-instance -n $SandboxNamespace -o json --ignore-not-found"
 
 <#
 .SYNOPSIS
@@ -394,12 +395,14 @@ Test-Case '-Apply 显式 -GateRouterMode:不核对路由模式(显式即操作�
     }
 }
 
-Test-Case '-Apply 三项(-GateRouterMode / -ClientEntryMode / -GatewayIngressHost)都显式:不读集群' {
+Test-Case '-Apply 三项(-GateRouterMode / -ClientEntryMode / -GatewayIngressHost)与 -NodeOpenFileLimitMode 都显式:不读集群' {
+    # 沙箱缺省显式传 -NodeOpenFileLimitMode enforce;它留空时仍要读集群,见下面 B0-4 一节。
     $extra = @{ ClientEntryMode = 'podip'; GatewayIngressHost = 'gw.example.com'; GatewayTrustedProxies = '10.244.0.0/16' }
     $run = Invoke-RollbackInSandbox -Apply -DeployDefault '1' -GateRouterMode '1' -ExtraArgs $extra
-    Assert-True -Condition ($null -eq $run.Error) -Because "三项都显式时不该被预检拦。错误: $($run.Error)"
-    Assert-Equal -Expected 0 -Actual $run.KubectlCalls.Count -Because '三项都显式 = 操作者已决定,不核对集群'
-    Assert-Match -Text $run.Output -Pattern 'All three values were supplied explicitly; skipping cluster reads' -Because '输出要写明本次没有核对集群'
+    Assert-True -Condition ($null -eq $run.Error) -Because "四项都显式时不该被预检拦。错误: $($run.Error)"
+    Assert-Equal -Expected 0 -Actual $run.KubectlCalls.Count -Because '四项都显式 = 操作者已决定,不核对集群'
+    Assert-Equal -Expected 0 -Actual $run.AgonesCalls.Count -Because 'nofile 模式显式给值,不探测 Agones、不读 Fleet'
+    Assert-Match -Text $run.Output -Pattern 'All three entry values and -NodeOpenFileLimitMode were supplied explicitly; skipping cluster reads' -Because '输出要写明本次没有核对集群'
 }
 
 Test-Case 'dry-run 留空:不读集群、不执行任何步骤,只预告 -Apply 时的预检' {
@@ -523,6 +526,323 @@ Test-Case '-Apply -KubeContext / -KubeConfig:预检的 kubectl、Step 1、Step 6
         $line = Get-BoundLine -Run $run -Command $command
         Assert-Match -Text $line -Pattern '(^| |;)KubeContext=kind-mmorpg(;|$)' -Because "$command 必须与预检落在同一集群"
         Assert-Match -Text $line -Pattern ([regex]::Escape('KubeConfig=C:/tmp/kind-mmorpg.kubeconfig')) -Because "$command 必须与预检用同一份 kubeconfig"
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────
+# B0-4(2026-10-22):-NodeOpenFileLimitMode 留空时第 0 步 a 的 nofile 模式核对(-Apply,沙箱)
+# Step 1 删掉整个 namespace,Step 6 只按本次参数重建;以 NODE_OPEN_FILE_LIMIT_MODE=warn 运行的 zone 漏传会落回 enforce,
+# 节点池硬限仍不够时 gate / scene 在 Step 6(已停服、已回档、积压已丢弃)拒启。以前第 0 步不读这个 env,只靠摘要提醒。
+# 沙箱缺省显式传 -NodeOpenFileLimitMode enforce(不核对);本节用例一律传 -NodeOpenFileLimitMode ''(留空)。
+# 折算口径同进程(open_file_limit.h ParseMode):只有逐字 "warn" 是豁免,未设、"enforce" 与其它值都是 enforce。
+# ─────────────────────────────────────────────────────────────────
+
+$OpenFileLimitEnvName = 'NODE_OPEN_FILE_LIMIT_MODE'
+# 装了 Agones 时 agones.dev/v1 发现文档的回应(同 k8s_client_entry_contract.tests.ps1 的 CRD 探测用例)。
+$AgonesInstalledReply = @{ ExitCode = 0; Stdout = '{"kind":"APIResourceList","groupVersion":"agones.dev/v1","resources":[{"name":"fleets"},{"name":"gameservers"}]}' }
+# 只核对 nofile 模式:路由模式由各用例显式给 -GateRouterMode 1,入口形态与 Ingress 在这里显式给,不进问题列表。
+$OpenFileLimitQuietEntry = @{ ClientEntryMode = 'podip'; ConfirmNoGatewayIngress = $true }
+$OpenFileLimitUnknownHint = '显式传 -NodeOpenFileLimitMode warn 或 -NodeOpenFileLimitMode enforce'
+
+<#
+.SYNOPSIS
+    C++ 工作负载容器的 env:POD_IP 走 valueFrom(干扰项);-RouterValue 非空才写 GATE_CLIENT_RPC_ROUTER(给 gate);
+    -Value 为 $null 时不写 NODE_OPEN_FILE_LIMIT_MODE(k8s_deploy.ps1 留空时的形状),否则原样写成字面值。
+#>
+function New-OpenFileLimitEnv {
+    param(
+        [AllowNull()]$Value = $null,
+        [string]$RouterValue = ''
+    )
+
+    $entries = @(@{ name = 'POD_IP'; valueFrom = @{ fieldRef = @{ fieldPath = 'status.podIP' } } })
+    if ($RouterValue -ne '') { $entries += @(@{ name = 'GATE_CLIENT_RPC_ROUTER'; value = $RouterValue }) }
+    if ($null -ne $Value) { $entries += @(@{ name = $OpenFileLimitEnvName; value = [string]$Value }) }
+    return $entries
+}
+
+<#
+.SYNOPSIS
+    scene 工作负载(只含核对会看的字段),容器名即工作负载名。Deployment 的 Pod 模板在 spec.template.spec;
+    Fleet 在 spec.template.spec.template.spec(Fleet → GameServer → Pod,k8s_deploy.ps1 New-SceneFleetYaml)。
+#>
+function New-SceneWorkload {
+    param(
+        [ValidateSet('Deployment', 'Fleet')][string]$Kind = 'Deployment',
+        [string]$Name = 'scene',
+        [AllowNull()][object[]]$PodEnv = $null
+    )
+
+    $container = [ordered]@{ name = $Name; image = 'ghcr.io/luyuancpp/mmorpg-node:0123456789ab' }
+    if ($null -ne $PodEnv) { $container.env = $PodEnv }
+    $podSpec = [ordered]@{ containers = @($container) }
+    if ($Kind -eq 'Fleet') {
+        $apiVersion = 'agones.dev/v1'
+        $spec = [ordered]@{ replicas = 1; template = [ordered]@{ spec = [ordered]@{ health = [ordered]@{ disabled = $false }; template = [ordered]@{ spec = $podSpec } } } }
+    }
+    else {
+        $apiVersion = 'apps/v1'
+        $spec = [ordered]@{ template = [ordered]@{ spec = $podSpec } }
+    }
+    return [ordered]@{ apiVersion = $apiVersion; kind = $Kind; metadata = [ordered]@{ name = $Name; namespace = $SandboxNamespace }; spec = $spec }
+}
+
+# 假 Fleet 读取的成功回应(多个具名资源 + --ignore-not-found:找到的合成一个 List,一个都没有时无输出)。
+function New-SceneFleetReply {
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Fleets)
+
+    if ($Fleets.Count -eq 0) { return @{ ExitCode = 0; Stdout = '' } }
+    $list = [ordered]@{ apiVersion = 'v1'; kind = 'List'; items = @($Fleets); metadata = [ordered]@{ resourceVersion = '' } }
+    return @{ ExitCode = 0; Stdout = ($list | ConvertTo-Json -Depth 30) }
+}
+
+Test-Case 'B0-4 -Apply 留空 -NodeOpenFileLimitMode + gate / scene 任一带 warn(gate Deployment / external StatefulSet / 只有一个 scene Deployment / Agones Fleet):停服之前拒绝,报错给出照传的 -NodeOpenFileLimitMode warn' {
+    $plainGate = New-GateWorkload -GateEnv (New-OpenFileLimitEnv -RouterValue '1')
+    $externalEntry = @{ ClientEntryMode = 'external'; GateServiceType = 'NodePort'; GateNodePortBase = 30100; ClientPublicHost = '203.0.113.10'; ConfirmNoGatewayIngress = $true }
+    $cases = @(
+        @{ Label = 'gate Deployment 与 scene 都带 warn(上一次 zone-up 传了 -NodeOpenFileLimitMode warn)'; Extra = $OpenFileLimitQuietEntry
+            Items = @((New-GateWorkload -GateEnv (New-OpenFileLimitEnv -Value 'warn' -RouterValue '1')), (New-SceneWorkload -PodEnv (New-OpenFileLimitEnv -Value 'warn')))
+            Detail = "Deployment gate $OpenFileLimitEnvName=`"warn`"" },
+        @{ Label = 'external gate StatefulSet 带 warn'; Extra = $externalEntry
+            Items = @((New-GateWorkload -Kind StatefulSet -GateEnv ((New-ExternalGateEnv -RouterValue '1') + @(@{ name = $OpenFileLimitEnvName; value = 'warn' }))))
+            Detail = "StatefulSet gate $OpenFileLimitEnvName=`"warn`"" },
+        @{ Label = '只有 scene-world 手设了 warn(runbook §3.1 的 kubectl set env)'; Extra = $OpenFileLimitQuietEntry
+            Items = @($plainGate, (New-SceneWorkload -Name 'scene-world' -PodEnv (New-OpenFileLimitEnv -Value 'warn')), (New-SceneWorkload -Name 'scene-instance'))
+            Detail = "Deployment scene-world $OpenFileLimitEnvName=`"warn`"" }
+    )
+    foreach ($c in $cases) {
+        $run = Invoke-RollbackInSandbox -Apply -DeployDefault '1' -GateRouterMode '1' -NodeOpenFileLimitMode '' -ExtraArgs $c.Extra -KubectlReply (New-KubectlReply -Items $c.Items)
+        Assert-RefusedBeforeStop -Run $run -Label $c.Label -HintPattern '请照传 -NodeOpenFileLimitMode warn'
+        Assert-Match -Text $run.Error -Pattern 'nofile 豁免:[^\r\n]*当前为 "warn"' -Because "$($c.Label):以 warn 运行的 zone 留空会被 Step 6 落回 enforce,节点池硬限不够时在已停服、已回档之后拒启"
+        Assert-Match -Text $run.Error -Pattern ([regex]::Escape($c.Detail)) -Because "$($c.Label):错误文本要点名带 warn 的工作负载与原值"
+        Assert-Match -Text $run.Error -Pattern '显式传 -NodeOpenFileLimitMode enforce' -Because "$($c.Label):硬限已修好、要回到 enforce 的出路也要给"
+        Assert-NotMatch -Text $run.Error -Pattern 'gate 路由模式:|客户端入口形态:|gateway Ingress:' -Because "$($c.Label):入口三项已显式,问题只有 nofile 一项"
+        Assert-Equal -Expected 1 -Actual $run.KubectlCalls.Count -Because "$($c.Label):gate 与 scene Deployment 跟入口同一次读"
+        Assert-Match -Text $run.KubectlCalls[0] -Pattern ('^' + [regex]::Escape($PreflightKubectlPrefix)) -Because "$($c.Label):同一次只读 kubectl 带上三个 scene Deployment"
+        Assert-Equal -Expected 1 -Actual $run.AgonesCalls.Count -Because "$($c.Label):只探测一次 Agones;没装(NotFound)就不读 Fleet"
+    }
+
+    # Agones 编排的 scene:gate 不带豁免,只有 Fleet scene-instance 带 warn。
+    $fleetReply = New-SceneFleetReply -Fleets @((New-SceneWorkload -Kind Fleet -Name 'scene-world'), (New-SceneWorkload -Kind Fleet -Name 'scene-instance' -PodEnv (New-OpenFileLimitEnv -Value 'warn')))
+    $run = Invoke-RollbackInSandbox -Apply -DeployDefault '1' -GateRouterMode '1' -NodeOpenFileLimitMode '' -ExtraArgs $OpenFileLimitQuietEntry `
+        -KubectlReply (New-KubectlReply -Items @($plainGate)) -AgonesDiscoveryReply $AgonesInstalledReply -SceneFleetReply $fleetReply
+    Assert-RefusedBeforeStop -Run $run -Label 'Agones Fleet 带 warn' -HintPattern '请照传 -NodeOpenFileLimitMode warn'
+    Assert-Match -Text $run.Error -Pattern ([regex]::Escape("Fleet scene-instance $OpenFileLimitEnvName=`"warn`"")) -Because 'Fleet 的 env 在 spec.template.spec.template.spec(Fleet → GameServer → Pod),必须读到'
+    Assert-Equal -Expected 2 -Actual $run.AgonesCalls.Count -Because '装了 Agones:先探测一次,再按名读一次 Fleet'
+    Assert-Match -Text $run.AgonesCalls[0] -Pattern '^get --raw /apis/agones\.dev/v1$' -Because '只读 agones.dev 一个组的发现文档(lib Test-AgonesFleetCrdPresent)'
+    Assert-Match -Text $run.AgonesCalls[1] -Pattern ('^get fleets\.agones\.dev scene scene-world scene-instance -n ' + [regex]::Escape($SandboxNamespace) + ' -o json --ignore-not-found') -Because 'Fleet 只读、读本 zone namespace、按名读'
+}
+
+Test-Case 'B0-4 -Apply 显式 -NodeOpenFileLimitMode warn / enforce:不核对(显式即操作者的决定),集群带 warn 也放行;静态预检与 Step 6 收到同值' {
+    $items = @((New-GateWorkload -GateEnv (New-OpenFileLimitEnv -Value 'warn' -RouterValue '1')), (New-SceneWorkload -PodEnv (New-OpenFileLimitEnv -Value 'warn')))
+    foreach ($mode in @('warn', 'enforce')) {
+        $run = Invoke-RollbackInSandbox -Apply -DeployDefault '1' -NodeOpenFileLimitMode $mode -KubectlReply (New-KubectlReply -Items $items) `
+            -AgonesDiscoveryReply @{ Throw = '显式给值时不该探测 Agones' }
+        Assert-True -Condition ($null -eq $run.Error) -Because "显式 -NodeOpenFileLimitMode $mode 不该被预检拦(确认硬限已修好时传 enforce 回到 enforce)。错误: $($run.Error)"
+        Assert-Equal -Expected 0 -Actual $run.AgonesCalls.Count -Because "显式 ${mode}:不探测 Agones、不读 Fleet"
+        Assert-Equal -Expected 1 -Actual $run.KubectlCalls.Count -Because "显式 ${mode}:入口三项仍留空,照旧读一次集群,只核对它们"
+        Assert-Match -Text $run.Output -Pattern "Explicit -NodeOpenFileLimitMode ${mode}:" -Because '输出要写明 nofile 模式这一项没有核对、是操作者的决定'
+        Assert-NotMatch -Text $run.Output -Pattern 'kubectl get statefulset/gate[^\r\n]*NODE_OPEN_FILE_LIMIT_MODE' -Because '显式给值后,预检那一行不再列 nofile 核对项'
+        $up = Get-BoundLine -Run $run -Command 'k8s-zone-up'
+        Assert-Match -Text $up -Pattern "(^| |;)NodeOpenFileLimitMode=$mode(;|$)" -Because "Step 6 必须真正把 $mode 传给 dev_tools.ps1,不只是打印出来"
+        Assert-Equal -Expected ($up -replace '^\S+ ', '') -Actual ((Get-BoundLine -Run $run -Command 'k8s-zone-up/dry-run') -replace '^\S+ ', '') -Because '静态预检的就是 Step 6 将要执行的那一份'
+        Assert-NotMatch -Text (Get-BoundLine -Run $run -Command 'k8s-zone-down') -Pattern 'NodeOpenFileLimitMode' -Because 'Step 1 只删 namespace,不传 nofile 开关'
+    }
+}
+
+Test-Case 'B0-4 -Apply 留空 + gate / scene 都不是 warn(未设 / "enforce" / 进程认不出的大写值 / 装了 Agones 而 Fleet 未设或没有 Fleet):放行,Step 6 不透传,现状随存档落盘' {
+    $plainGate = New-GateWorkload -GateEnv (New-OpenFileLimitEnv -RouterValue '1')
+    $cases = @(
+        @{ Label = '都未设'; Items = @($plainGate, (New-SceneWorkload)); AgonesCalls = 1 },
+        @{ Label = 'gate "enforce"、scene-world 大写 "WARN"(进程按 enforce)'; AgonesCalls = 1
+            Items = @((New-GateWorkload -GateEnv (New-OpenFileLimitEnv -Value 'enforce' -RouterValue '1')), (New-SceneWorkload -Name 'scene-world' -PodEnv (New-OpenFileLimitEnv -Value 'WARN')))
+            Detail = "Deployment scene-world $OpenFileLimitEnvName=`"WARN`"" },
+        @{ Label = 'Agones 编排、Fleet 未设'; Items = @($plainGate); AgonesCalls = 2; Agones = $AgonesInstalledReply
+            Fleet = (New-SceneFleetReply -Fleets @((New-SceneWorkload -Kind Fleet -Name 'scene-world'), (New-SceneWorkload -Kind Fleet -Name 'scene-instance'))) },
+        @{ Label = '装了 Agones 但 namespace 里没有 Fleet'; Items = @($plainGate, (New-SceneWorkload)); AgonesCalls = 2; Agones = $AgonesInstalledReply; Fleet = (New-SceneFleetReply -Fleets @()) }
+    )
+    foreach ($c in $cases) {
+        $sandboxArgs = @{
+            Apply = $true; DeployDefault = '1'; GateRouterMode = '1'; NodeOpenFileLimitMode = ''
+            ExtraArgs = ($OpenFileLimitQuietEntry + @{ RollbackId = 'z101-nofile-pass' }); KubectlReply = (New-KubectlReply -Items $c.Items)
+        }
+        if ($c.ContainsKey('Agones')) { $sandboxArgs.AgonesDiscoveryReply = $c.Agones; $sandboxArgs.SceneFleetReply = $c.Fleet }
+        $run = Invoke-RollbackInSandbox @sandboxArgs
+        Assert-True -Condition ($null -eq $run.Error) -Because "$($c.Label):没有 warn,留空与 Step 6 一致,不该拒。错误: $($run.Error)"
+        Assert-Equal -Expected 1 -Actual $run.KubectlCalls.Count -Because "$($c.Label):入口三项都显式而 nofile 留空,仍要读一次集群"
+        Assert-Equal -Expected $c.AgonesCalls -Actual $run.AgonesCalls.Count -Because "$($c.Label):没装 Agones 只探测一次,装了再读一次 Fleet"
+        Assert-NotMatch -Text $run.Output -Pattern 'All three entry values and -NodeOpenFileLimitMode were supplied explicitly' -Because "$($c.Label):nofile 留空时不能写成没有核对集群"
+        Assert-Match -Text $run.Output -Pattern 'Current gate / scene nofile mode "enforce"[^\r\n]*leaving -NodeOpenFileLimitMode unset will preserve the mode' -Because "$($c.Label):放行时写明核对结论"
+        if ($c.ContainsKey('Detail')) {
+            Assert-Match -Text $run.Output -Pattern ([regex]::Escape($c.Detail)) -Because "$($c.Label):认不出的值也要原样打出来,操作者能看出拼错的开关没有生效"
+        }
+        Assert-NotMatch -Text (Get-BoundLine -Run $run -Command 'k8s-zone-up') -Pattern 'NodeOpenFileLimitMode=' -Because "$($c.Label):留空不透传(默认值只在 k8s_deploy.ps1 一处)"
+        Assert-Match -Text ([string]$run.ReportFiles['entry-state.json']) -Pattern '"OpenFileLimitMode": "enforce"' -Because "$($c.Label):核对过的 nofile 现状随集群现状存档,同一 rid 重跑、namespace 已删时据此核对"
+    }
+
+    # 探测与 Fleet 读取必须落在 Step 1 / Step 6 将要改动的同一集群。
+    $extra = $OpenFileLimitQuietEntry + @{ KubeContext = 'kind-mmorpg'; KubeConfig = 'C:/tmp/kind-mmorpg.kubeconfig' }
+    $run = Invoke-RollbackInSandbox -Apply -DeployDefault '1' -GateRouterMode '1' -NodeOpenFileLimitMode '' -ExtraArgs $extra -KubectlReply (New-KubectlReply -Items @($plainGate)) `
+        -AgonesDiscoveryReply $AgonesInstalledReply -SceneFleetReply (New-SceneFleetReply -Fleets @())
+    Assert-True -Condition ($null -eq $run.Error) -Because "带 -KubeContext / -KubeConfig 不该被拦。错误: $($run.Error)"
+    Assert-Equal -Expected 2 -Actual $run.AgonesCalls.Count -Because '探测一次、读一次 Fleet'
+    foreach ($call in $run.AgonesCalls) {
+        Assert-Match -Text $call -Pattern ('^' + [regex]::Escape('--context kind-mmorpg --kubeconfig C:/tmp/kind-mmorpg.kubeconfig ')) -Because '探测与 Fleet 读取不能落到 kubectl 当前 context'
+    }
+}
+
+Test-Case 'B0-4 -Apply 留空 + 判不出(kubectl 失败 / 不可用、namespace 已删且无存档、只剩 scene、Agones 探测失败、Fleet 读取失败、valueFrom、变量重复):一律停服之前拒绝' {
+    $plainGate = New-GateWorkload -GateEnv (New-OpenFileLimitEnv -RouterValue '1')
+    $plainReply = New-KubectlReply -Items @($plainGate)
+    $cases = @(
+        @{ Label = 'kubectl 以非 0 退出'; Reply = @{ ExitCode = 1; Output = 'Error from server (Forbidden): deployments.apps "scene" is forbidden' }; Detail = 'Forbidden' },
+        @{ Label = 'kubectl 不可用'; Reply = @{ Throw = "The term 'kubectl' is not recognized" }; Detail = 'kubectl 调用失败' },
+        @{ Label = 'namespace 已删、没有存档'; Reply = (New-KubectlReply -Items @()); Detail = 'namespace 里没有 gate' },
+        # 只剩 scene 证明不了 gate 回滚前的取值(namespace 多半正在删)。
+        @{ Label = '只剩 scene、没有 gate'; Reply = (New-KubectlReply -Items @((New-SceneWorkload))); Detail = 'namespace 里没有 gate' },
+        @{ Label = 'Agones 探测 Forbidden(查不到不等于没装)'; Reply = $plainReply; Agones = @{ ExitCode = 1; Stderr = 'Error from server (Forbidden): forbidden' }; Detail = '无法确认集群是否安装了 Agones' },
+        @{ Label = 'Fleet 读取失败'; Reply = $plainReply; Agones = $AgonesInstalledReply; Fleet = @{ ExitCode = 1; Stderr = 'Error from server (Forbidden): fleets.agones.dev is forbidden' }; Detail = '读不到 scene Fleet' },
+        @{ Label = 'Fleet 输出不是 JSON'; Reply = $plainReply; Agones = $AgonesInstalledReply; Fleet = @{ ExitCode = 0; Stdout = '<html>' }; Detail = '读不到 scene Fleet:kubectl 输出不是合法的 JSON' },
+        @{ Label = 'gate 的变量用 valueFrom 注入'; Detail = 'valueFrom'
+            Reply = (New-KubectlReply -Items @((New-GateWorkload -GateEnv @(@{ name = 'GATE_CLIENT_RPC_ROUTER'; value = '1' }, @{ name = $OpenFileLimitEnvName; valueFrom = @{ configMapKeyRef = @{ name = 'nofile'; key = 'mode' } } })))) },
+        # 第一条恰是 enforce:取第一条就会错放行。
+        @{ Label = 'scene 里变量重复'; Detail = '出现 2 次'
+            Reply = (New-KubectlReply -Items @($plainGate, (New-SceneWorkload -PodEnv @(@{ name = $OpenFileLimitEnvName; value = 'enforce' }, @{ name = $OpenFileLimitEnvName; value = 'warn' })))) }
+    )
+    foreach ($c in $cases) {
+        $sandboxArgs = @{ Apply = $true; DeployDefault = '1'; GateRouterMode = '1'; NodeOpenFileLimitMode = ''; ExtraArgs = $OpenFileLimitQuietEntry; KubectlReply = $c.Reply }
+        if ($c.ContainsKey('Agones')) { $sandboxArgs.AgonesDiscoveryReply = $c.Agones }
+        if ($c.ContainsKey('Fleet')) { $sandboxArgs.SceneFleetReply = $c.Fleet }
+        $run = Invoke-RollbackInSandbox @sandboxArgs
+        Assert-RefusedBeforeStop -Run $run -Label $c.Label -HintPattern $OpenFileLimitUnknownHint
+        Assert-Match -Text $run.Error -Pattern 'nofile 豁免:[^\r\n]*当前为 \(读不到\)' -Because "$($c.Label):判不出就无法证明不会翻转(fail-closed)"
+        Assert-Match -Text $run.Error -Pattern ([regex]::Escape($c.Detail)) -Because "$($c.Label):错误文本要带上判不出的原因"
+        Assert-NotMatch -Text $run.Error -Pattern 'gate 路由模式:|客户端入口形态:|gateway Ingress:' -Because "$($c.Label):入口三项已显式,问题只有 nofile 一项"
+    }
+}
+
+Test-Case 'B0-4 -Apply 留空:放行条件跟着 k8s_deploy.ps1 的 -NodeOpenFileLimitMode 默认值走(不在回滚脚本里写死「留空 = enforce」),读不到默认值即拒' {
+    $items = @((New-GateWorkload -GateEnv (New-OpenFileLimitEnv -RouterValue '1')), (New-SceneWorkload))
+    $common = @{ Apply = $true; GateRouterMode = '1'; NodeOpenFileLimitMode = ''; ExtraArgs = $OpenFileLimitQuietEntry; KubectlReply = (New-KubectlReply -Items $items) }
+
+    $warnDefault = Invoke-RollbackInSandbox @common -DeployDefault '1' -DeployOpenFileLimitDefault 'warn'
+    Assert-RefusedBeforeStop -Run $warnDefault -Label '默认值 warn、集群 enforce' -HintPattern $OpenFileLimitUnknownHint
+    Assert-Match -Text $warnDefault.Error -Pattern '默认值 "warn"\(gate / scene 按 warn 运行\)' -Because '默认值必须从 k8s_deploy.ps1 读:那边改成 warn 时,留空同样是一次翻转(enforce → warn)'
+    Assert-Match -Text $warnDefault.Error -Pattern '当前为 "enforce"' -Because '要带上集群现状'
+
+    $missing = Invoke-RollbackInSandbox @common -DeployDefault '1' -DeployOpenFileLimitDefault 'missing'
+    Assert-RefusedBeforeStop -Run $missing -Label '读不到默认值' -HintPattern $OpenFileLimitUnknownHint
+    Assert-Match -Text $missing.Error -Pattern '-NodeOpenFileLimitMode 默认值不是字面常量或文件无法解析' -Because '读不到默认值就不知道 Step 6 会以哪种模式拉起(fail-closed)'
+
+    # 真 k8s_deploy.ps1 的默认值必须能按语法树读成字面常量、且折算为 enforce(负责人 2026-10-17:缺省拒启 + 显式豁免);读不出时 -Apply 留空永远被拒。
+    $real = Invoke-RollbackInSandbox @common -DeployDefault 'real'
+    Assert-True -Condition ($null -eq $real.Error) -Because "真 k8s_deploy.ps1 的默认值下,集群 enforce + 留空必须放行。错误: $($real.Error)"
+}
+
+Test-Case '[10] B0-4 nofile 现状随集群现状存档(Schema 3,不进入口决定):同一 rid 重跑、namespace 已删时按存档核对;首次显式给值或旧存档没有该字段时判为读不到,显式传值放行' {
+    $live = New-KubectlReply -Items @((New-GateWorkload -GateEnv (New-OpenFileLimitEnv -RouterValue '1')), (New-SceneWorkload))
+    $gone = New-KubectlReply -Items @()
+    $deleted = @{ ExitCode = 0; Output = '' }
+
+    $first = Invoke-RollbackInSandbox -Apply -DeployDefault '1' -GateRouterMode '1' -NodeOpenFileLimitMode '' -ExtraArgs ($OpenFileLimitQuietEntry + @{ RollbackId = 'z101-nofile' }) -KubectlReply $live
+    Assert-True -Condition ($null -eq $first.Error) -Because "首次运行不该失败。错误: $($first.Error)"
+    $saved = [string]$first.ReportFiles['entry-state.json']
+    Assert-Match -Text $saved -Pattern '"Schema": 3' -Because '集群现状加了 nofile 模式,存档升到 Schema 3'
+    Assert-Match -Text $saved -Pattern '"OpenFileLimitMode": "enforce"' -Because '核对过的 nofile 现状要落盘'
+    Assert-NotMatch -Text $saved -Pattern '"NodeOpenFileLimitMode"' -Because 'nofile 模式不进入口决定:显式值重跑可以改(硬限没修好时改传 warn 是合法出路)'
+    $seed = @{ 'entry-state.json' = $saved; 'deploy-facts.json' = $first.ReportFiles['deploy-facts.json'] }
+    $rerunArgs = $OpenFileLimitQuietEntry + @{ RollbackId = 'z101-nofile' }
+
+    $reused = Invoke-RollbackInSandbox -Apply -DeployDefault '1' -GateRouterMode '1' -NodeOpenFileLimitMode '' -ExtraArgs $rerunArgs -KubectlReply $gone -SeedReportFiles $seed -SnapshotReply $deleted
+    Assert-True -Condition ($null -eq $reused.Error) -Because "namespace 已删时按存档的 nofile 现状核对,不再要操作者凭记忆重传。错误: $($reused.Error)"
+    Assert-Match -Text $reused.Output -Pattern 'checking against the cluster state saved by the same -RollbackId' -Because '要写明这次核对用的是存档'
+    Assert-Match -Text $reused.Output -Pattern 'Current gate / scene nofile mode "enforce"' -Because '存档里的 nofile 现状参与核对'
+
+    $switched = Invoke-RollbackInSandbox -Apply -DeployDefault '1' -GateRouterMode '1' -NodeOpenFileLimitMode 'warn' -ExtraArgs $rerunArgs -KubectlReply $gone -SeedReportFiles $seed -SnapshotReply $deleted
+    Assert-True -Condition ($null -eq $switched.Error) -Because "显式值不按存档比较,重跑改传 warn 必须放行。错误: $($switched.Error)"
+    Assert-Match -Text (Get-BoundLine -Run $switched -Command 'k8s-zone-up') -Pattern '(^| |;)NodeOpenFileLimitMode=warn(;|$)' -Because 'Step 6 收到本次的显式值'
+
+    # 首次显式给值:没读 Fleet,存档里的 nofile 现状记为判不出;重跑留空且 namespace 已删时拒绝。
+    $explicitFirst = Invoke-RollbackInSandbox -Apply -DeployDefault '1' -NodeOpenFileLimitMode 'warn' -ExtraArgs @{ RollbackId = 'z101-nofile-explicit' } `
+        -KubectlReply (New-KubectlReply -Items @((New-GateWorkload -GateEnv (New-OpenFileLimitEnv -Value 'warn' -RouterValue '1'))))
+    Assert-True -Condition ($null -eq $explicitFirst.Error) -Because "首次显式 warn 不该失败。错误: $($explicitFirst.Error)"
+    $explicitSaved = [string]$explicitFirst.ReportFiles['entry-state.json']
+    Assert-Match -Text $explicitSaved -Pattern '"OpenFileLimitMode": null' -Because '没核对就不能记成某个模式,否则重跑留空会拿没读全的现状放行'
+    $explicitSeed = @{ 'entry-state.json' = $explicitSaved; 'deploy-facts.json' = $explicitFirst.ReportFiles['deploy-facts.json'] }
+    $explicitRerun = Invoke-RollbackInSandbox -Apply -DeployDefault '1' -NodeOpenFileLimitMode '' -ExtraArgs @{ RollbackId = 'z101-nofile-explicit' } `
+        -KubectlReply $gone -SeedReportFiles $explicitSeed -SnapshotReply $deleted
+    Assert-RefusedBeforeStop -Run $explicitRerun -Label '首次显式、重跑留空、namespace 已删' -HintPattern $OpenFileLimitUnknownHint
+    Assert-Match -Text $explicitRerun.Error -Pattern '当前为 \(读不到\)\(未核对' -Because '要写明存档里的 nofile 现状没核对过'
+    Assert-NotMatch -Text $explicitRerun.Error -Pattern 'gate 路由模式:|客户端入口形态:|gateway Ingress:' -Because '其余三项照旧按存档的集群现状核对通过'
+
+    # Schema 3 之前的存档:集群现状没有 OpenFileLimitMode。入口三项按它照常核对,nofile 判为读不到;显式给值放行,存档不改写。
+    $oldArchive = @(
+        '{',
+        '  "Schema": 2,',
+        '  "RollbackId": "z101-nofile-old",',
+        '  "Namespace": "mmorpg-zone-contract-test",',
+        '  "CapturedAtUtc": "2026-10-20T00:00:00.0000000Z",',
+        '  "ClusterState": { "RouterMode": "1", "RouterDetail": "old", "EntryMode": "podip", "EntryDetail": "old", "IngressKnown": true, "Ingress": null, "IngressDetail": "old", "NamespaceEmpty": false },',
+        '  "Decision": { "GateRouterMode": "1", "ClientEntryMode": "podip", "GatewayIngress": "(none)" },',
+        '  "LoginAuthState": null',
+        '}'
+    ) -join "`n"
+    $oldSeed = @{ 'entry-state.json' = $oldArchive }
+    $oldRefused = Invoke-RollbackInSandbox -Apply -DeployDefault '1' -NodeOpenFileLimitMode '' -ExtraArgs @{ RollbackId = 'z101-nofile-old' } -KubectlReply $gone -SeedReportFiles $oldSeed
+    Assert-RefusedBeforeStop -Run $oldRefused -Label '旧存档没有 nofile 现状' -HintPattern $OpenFileLimitUnknownHint
+    Assert-Match -Text $oldRefused.Error -Pattern '早于 nofile 模式核对' -Because '要写明是存档太旧,不是集群读不到'
+    Assert-NotMatch -Text $oldRefused.Error -Pattern 'gate 路由模式:|客户端入口形态:|gateway Ingress:' -Because '旧存档不能连带把入口三项判成读不到'
+    $oldExplicit = Invoke-RollbackInSandbox -Apply -DeployDefault '1' -NodeOpenFileLimitMode 'enforce' -ExtraArgs @{ RollbackId = 'z101-nofile-old' } -KubectlReply $gone -SeedReportFiles $oldSeed
+    Assert-True -Condition ($null -eq $oldExplicit.Error) -Because "显式给值即决定,旧存档不挡路(报错里给的出路要走得通)。错误: $($oldExplicit.Error)"
+    Assert-Equal -Expected $oldArchive.Trim() -Actual ([string]$oldExplicit.ReportFiles['entry-state.json']).Trim() -Because '同一 rid 已有存档时不覆盖'
+}
+
+Test-Case 'B0-4:回滚脚本按名读的 scene 工作负载与 k8s_deploy.ps1 Resolve-SceneDeploymentPlan 生成的名字一致(legacy 单池与拆分两种)' {
+    $parseErrors = $null
+    $deployAst = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'), [ref]$null, [ref]$parseErrors)
+    Assert-Equal -Expected 0 -Actual $parseErrors.Count -Because 'k8s_deploy.ps1 必须能解析'
+    $rollbackAst = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) 'k8s_zone_rollback.ps1'), [ref]$null, [ref]$parseErrors)
+    Assert-Equal -Expected 0 -Actual $parseErrors.Count -Because 'k8s_zone_rollback.ps1 必须能解析'
+    $planFunction = $deployAst.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Resolve-SceneDeploymentPlan' }, $true)
+    $namesFunction = $rollbackAst.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-ZoneSceneWorkloadNames' }, $true)
+    Assert-True -Condition ($null -ne $planFunction -and $null -ne $namesFunction) -Because '两边的函数都必须在(契约测试的前提被改掉了)'
+    . ([scriptblock]::Create($planFunction.Extent.Text))
+    . ([scriptblock]::Create($namesFunction.Extent.Text))
+    $legacyPlan = Resolve-SceneDeploymentPlan -LegacySceneReplicas 1 -WorldReplicas -1 -InstanceReplicas -1
+    $splitPlan = Resolve-SceneDeploymentPlan -LegacySceneReplicas 1 -WorldReplicas 1 -InstanceReplicas 1
+    # 计划函数整体返回数组(return ,@(...)),先展开一层再取名字。
+    $deployNames = @(@($legacyPlan) + @($splitPlan) | ForEach-Object { $_ } | ForEach-Object { [string]$_.Name } | Sort-Object -Unique)
+    $rollbackNames = @(Get-ZoneSceneWorkloadNames | Sort-Object -Unique)
+    Assert-Equal -Expected ($deployNames -join ',') -Actual ($rollbackNames -join ',') -Because 'k8s_deploy.ps1 新增或改名 scene 池而回滚脚本不跟,新池上的 warn 读不到,第 0 步会错放行'
+}
+
+# B0-4 dry-run 与入口校验(子进程,不带 -Apply,不读集群)。
+Test-Case 'B0-4 dry-run:留空时预告 nofile 核对(同一次 kubectl 带 scene Deployment,另预告 Agones 探测与 Fleet 读取),摘要写明 -Apply 会核对;显式给值原样透传到 Step 6、不再预告' {
+    $run = Invoke-RollbackDryRun
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "留空的 dry-run 不该失败。输出: $($run.Output)"
+    Assert-Match -Text $run.Output -Pattern ('kubectl ' + [regex]::Escape($PreflightKubectlPrefix) + '[^\r\n]*NODE_OPEN_FILE_LIMIT_MODE 须与 k8s_deploy\.ps1 -NodeOpenFileLimitMode 默认值一致') -Because 'dry-run 要预告 -Apply 时同一次 kubectl 核对 gate / scene 的 nofile 模式'
+    Assert-Match -Text $run.Output -Pattern ('kubectl get --raw /apis/agones\.dev/v1; only when Agones is installed: kubectl get fleets\.agones\.dev scene scene-world scene-instance -n ' + [regex]::Escape($SandboxNamespace)) -Because 'dry-run 要预告 Agones 探测与 scene Fleet 读取'
+    Assert-Match -Text $run.Output -Pattern 'nofile mode\s*:[^\r\n]*-Apply checks gate / scene before shutdown' -Because '摘要区要写明 -Apply 会在停服前核对,不再写「preflight does not check this」'
+    Assert-NotMatch -Text (Get-ZoneUpArgsLine -Output $run.Output) -Pattern 'NodeOpenFileLimitMode' -Because '留空不透传(默认值只在 k8s_deploy.ps1 一处)'
+
+    foreach ($mode in @('warn', 'enforce')) {
+        $explicit = Invoke-RollbackDryRun -ExtraArguments @('-NodeOpenFileLimitMode', $mode)
+        Assert-Equal -Expected 0 -Actual $explicit.ExitCode -Because "-NodeOpenFileLimitMode $mode 的 dry-run 不该失败。输出: $($explicit.Output)"
+        $line = Get-ZoneUpArgsLine -Output $explicit.Output
+        Assert-Match -Text $line -Pattern "(^|\s)-NodeOpenFileLimitMode $mode(\s|$)" -Because "Step 6 必须原样透传 $mode"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($line, 'NodeOpenFileLimitMode').Count) -Because '只透传一次,重复的具名参数会让 dev_tools.ps1 直接报错'
+        Assert-Match -Text $explicit.Output -Pattern "nofile mode\s*:\s*-NodeOpenFileLimitMode $mode" -Because '摘要区写明 Step 6 以哪种模式拉起 gate / scene'
+        Assert-Match -Text $explicit.Output -Pattern "Explicit -NodeOpenFileLimitMode ${mode}:" -Because '要写明这一项不核对'
+        Assert-NotMatch -Text $explicit.Output -Pattern 'only when Agones is installed' -Because '显式给值不预告 Agones 探测与 Fleet 读取'
+    }
+}
+
+Test-Case 'B0-4 负向:-NodeOpenFileLimitMode 只收小写 enforce / warn,大写与拼错在回滚脚本入口被拒,早于 Step 1' {
+    foreach ($bad in @('WARN', 'Enforce', 'off')) {
+        $run = Invoke-RollbackDryRun -ExtraArguments @('-NodeOpenFileLimitMode', $bad)
+        Assert-True -Condition ($run.ExitCode -ne 0) -Because "C++ 只认小写 warn;'$bad' 必须在回滚脚本入口被拒,拖到 Step 6 才由下游拒时 zone 已停服、数据已回档。输出: $($run.Output)"
+        Assert-Match -Text $run.Output -Pattern 'NodeOpenFileLimitMode' -Because "'$bad':错误文本必须点名 NodeOpenFileLimitMode,不能把其他执行错误误判为参数校验"
+        Assert-NotMatch -Text $run.Output -Pattern 'Step 1:' -Because "'$bad':参数校验必须先于任何步骤"
     }
 }
 
@@ -1192,7 +1512,7 @@ Test-Case '[10] 第三方登录现状随入口决定存档:同一 rid 重跑、n
     Assert-RefusedBeforeStop -Run $missing -Label '重跑漏传第三方登录' -HintPattern '与同一 rollback-id 的存档 [^\r\n]*entry-state\.json 不同'
     Assert-Match -Text $missing.Error -Pattern "LoginWeChatAppId:存档 'wx0123456789abcdef',本次 ''" -Because '要逐项列出差异'
     Assert-Match -Text $missing.Error -Pattern ([regex]::Escape($LoginAuthKeepText)) -Because '要打印存档里的第三方登录参数,照传即可'
-    Assert-Match -Text $first.ReportFiles['entry-state.json'] -Pattern '"Schema": 2' -Because '带第三方登录现状的存档是 Schema 2'
+    Assert-Match -Text $first.ReportFiles['entry-state.json'] -Pattern '"Schema": 3' -Because '带第三方登录现状的存档从 Schema 2 起;2026-10-22 集群现状加了 nofile 模式,当前写 Schema 3'
 }
 
 Test-Case '[10] 第三方登录接入之前写的存档(Schema 1,没有 LoginAuthState 与 -Login* 键):入口决定不按存档比第三方登录,由防误关核对决定,不会互相卡死' {

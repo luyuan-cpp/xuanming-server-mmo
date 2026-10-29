@@ -4,7 +4,9 @@ package main
 // merge_integration)里对着真实的 127.0.0.1 实例跑。
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,7 +19,145 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	pb "proto/common/database"
+	"shared/drainproof"
 )
+
+func TestMergeRecoveryAuditRequiresCompleteActualToolFiles(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "actual-source")
+	raw := []byte("真实读取的审核测试源")
+	if err := os.WriteFile(source, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(raw)
+	plan := &pb.SqlWriterMaintenanceReceipt_Plan{RunId: bytes.Repeat([]byte{1}, 16)}
+	publication := &pb.SqlWriterMaintenanceReceipt_PublicationEvidence{}
+	for i := byte(2); i < 4; i++ {
+		seed := &pb.SqlWriterMaintenanceReceipt_IssuerClosure{IssuerId: bytes.Repeat([]byte{i}, 16), InstanceId: bytes.Repeat([]byte{i + 2}, 16),
+			LogicalRole: "MAINTENANCE", PermanentRevivalFenceId: bytes.Repeat([]byte{i + 4}, 16), SourceEvidence: []*pb.SqlWriterMaintenanceReceipt_SourcePin{{AbsolutePath: source, Sha256: sum[:]}}}
+		plan.MaintenanceIssuers = append(plan.MaintenanceIssuers, seed)
+		session := drainproof.New()
+		finish, err := session.Enter()
+		if err != nil {
+			t.Fatal(err)
+		}
+		finish()
+		session.CloseAdmission()
+		closed, err := session.Closure(context.Background(), seed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		publication.LogicalRoles = append(publication.LogicalRoles, closed)
+		raw, err := protojson.Marshal(closed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(dir, fmt.Sprintf("tool-%d.json", i))
+		if err := os.WriteFile(path, raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(raw)
+		publication.SourceEvidence = append(publication.SourceEvidence, &pb.SqlWriterMaintenanceReceipt_SourcePin{AbsolutePath: path, Sha256: sum[:]})
+	}
+	inventory, err := (proto.MarshalOptions{Deterministic: true}).Marshal(&pb.SqlWriterMaintenanceReceipt_PublicationEvidence{LogicalRoles: plan.MaintenanceIssuers})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(inventory)
+	publication.IssuerInventoryDigest = digest[:]
+	planRaw, err := (proto.MarshalOptions{Deterministic: true}).Marshal(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frozen := &pb.SqlWriterMaintenanceReceipt{RunId: plan.RunId, PlanProto: planRaw, Kind: pb.SqlWriterMaintenanceReceipt_FREEZE, Phase: pb.SqlWriterMaintenanceReceipt_FROZEN, RunPhase: pb.SqlWriterDrainRun_SQL_FROZEN, CommittedMs: 1}
+	if err := verifyClosedMaintenanceForAudit(plan, frozen, publication); err != nil {
+		t.Fatal(err)
+	}
+	for _, mutate := range []func(*pb.SqlWriterMaintenanceReceipt_PublicationEvidence){
+		func(p *pb.SqlWriterMaintenanceReceipt_PublicationEvidence) { p.LogicalRoles = p.LogicalRoles[:1] },
+		func(p *pb.SqlWriterMaintenanceReceipt_PublicationEvidence) {
+			p.LogicalRoles[1].InstanceId = bytes.Repeat([]byte{9}, 16)
+		},
+		func(p *pb.SqlWriterMaintenanceReceipt_PublicationEvidence) {
+			p.LogicalRoles[1].UnresolvedPublications = 1
+		},
+		func(p *pb.SqlWriterMaintenanceReceipt_PublicationEvidence) { p.SourceEvidence = p.SourceEvidence[:1] },
+		func(p *pb.SqlWriterMaintenanceReceipt_PublicationEvidence) { p.SourceEvidence[1] = p.SourceEvidence[0] },
+	} {
+		bad := proto.Clone(publication).(*pb.SqlWriterMaintenanceReceipt_PublicationEvidence)
+		mutate(bad)
+		if err := verifyClosedMaintenanceForAudit(plan, frozen, bad); err == nil {
+			t.Fatal("全集/boot/UNKNOWN/实际文件缺口不得开始业务审核")
+		}
+	}
+	if err := os.WriteFile(source, []byte("源漂移"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyClosedMaintenanceForAudit(plan, frozen, publication); err == nil {
+		t.Fatal("实际源pin漂移必须拒绝")
+	}
+}
+
+func TestMergeRecoveryAuditRejectsUnknownSkippedAndMissingRows(t *testing.T) {
+	rows := []ResourceAudit{}
+	for _, name := range mergeRecoveryRowNames() {
+		rows = append(rows, ResourceAudit{Name: name, Severity: "info", UniqueScope: "global"})
+	}
+	if err := validateMergeRecoveryRows(rows); err != nil {
+		t.Fatal(err)
+	}
+	for _, mutate := range []func([]ResourceAudit) []ResourceAudit{
+		func(r []ResourceAudit) []ResourceAudit { return r[:len(r)-1] },
+		func(r []ResourceAudit) []ResourceAudit { r[1] = r[0]; return r },
+		func(r []ResourceAudit) []ResourceAudit { r[1].Severity = "warn"; return r },
+		func(r []ResourceAudit) []ResourceAudit { r[1].Notes = "SKIPPED"; return r },
+		func(r []ResourceAudit) []ResourceAudit { r[1].Notes = "UNKNOWN"; return r },
+		func(r []ResourceAudit) []ResourceAudit { r[1].Notes = "NOT VERIFIED"; return r },
+		func(r []ResourceAudit) []ResourceAudit { r[1].SourceCount = -1; return r },
+		func(r []ResourceAudit) []ResourceAudit { r[1].ConflictCount = 1; return r },
+	} {
+		bad := mutate(append([]ResourceAudit(nil), rows...))
+		if err := validateMergeRecoveryRows(bad); err == nil {
+			t.Fatal("不完整审核不能解冻")
+		}
+	}
+}
+
+func TestMaintenanceWriteNeedsFixedToolOwner(t *testing.T) {
+	if err := checkMaintenanceTool(context.Background()); !errors.Is(err, drainproof.ErrHold) {
+		t.Fatalf("NORMAL冻结或空上下文不能冒TOOL: %v", err)
+	}
+	ctx, owner := testMaintenanceContext()
+	if err := checkMaintenanceTool(ctx); err != nil {
+		t.Fatal(err)
+	}
+	owner.session.CloseAdmission()
+	calls := 0
+	owner.check = func(context.Context) error { calls++; return nil }
+	if err := checkMaintenanceTool(ctx); !errors.Is(err, drainproof.ErrClosed) || calls != 0 {
+		t.Fatalf("永久闭合后必须在实际读取/写入前拒绝: %v calls=%d", err, calls)
+	}
+}
+
+func TestMaintenanceStrongReadFailurePermanentlyHolds(t *testing.T) {
+	ctx, owner := testMaintenanceContext()
+	readErr := errors.New("SQL_FROZEN强读未知")
+	owner.check = func(context.Context) error { return readErr }
+	if err := checkMaintenanceTool(ctx); !errors.Is(err, readErr) {
+		t.Fatal(err)
+	}
+	owner.check = func(context.Context) error { return nil }
+	if err := checkMaintenanceTool(ctx); err != nil {
+		t.Fatal(err)
+	}
+	owner.session.CloseAdmission()
+	if err := owner.session.Wait(ctx); !errors.Is(err, drainproof.ErrHold) {
+		t.Fatalf("后续强读成功不能洗掉先前未知: %v", err)
+	}
+}
 
 // ── Kafka lag 解析 ────────────────────────────────────────────
 
@@ -27,6 +167,18 @@ db_rpc_consumer_group  db_task_zone_901  0          120             120         
 db_rpc_consumer_group  db_task_zone_901  1          77              77              0    c-1          /1.2.3.4  x
 db_rpc_consumer_group  db_task_zone_902  0          10              15              5    c-2          /1.2.3.5  y
 `
+
+func TestOperatorAttestationNeverProvidesDrainEvidence(t *testing.T) {
+	for _, o := range []options{{assumeKafkaDrained: true}, {assumeKafkaDrained: true, kafkaCLI: "fixture-cli"}} {
+		source := buildLagSource(o)
+		if _, _, err := source.TotalLag(context.Background(), "fixture", []string{"fixture"}); !errors.Is(err, errNormalFreezeProof) {
+			t.Fatalf("人工声明必须拒绝且不能触发CLI: %v", err)
+		}
+	}
+	if err := runPreflight(context.Background(), preflightDeps{lag: fakeLagSource{}}, preflightParams{}); !errors.Is(err, errNormalFreezeProof) {
+		t.Fatalf("lag=0不得绕过正式冻结原件: %v", err)
+	}
+}
 
 func TestParseConsumerGroupLag_SumsOnlyRequestedTopic(t *testing.T) {
 	lag, err := parseConsumerGroupLag(sampleConsumerGroupOutput, "db_task_zone_901")
@@ -700,7 +852,7 @@ func TestSaveOutboxPreflightRequiresAllBucketsDrained(t *testing.T) {
 func TestPlayerCacheKeys_CoversParentSubAndDiscoveredTables(t *testing.T) {
 	keys := playerCacheKeys(42, []string{"player_database", "player_database_1", "player_centre_database"})
 	want := map[string]bool{
-		"PlayerAllData:42":          true,
+		"PlayerAllData:{42}":        true,
 		"BagAllData:42":             true,
 		"QuestAllData:42":           true,
 		"MailAllData:42":            true,
@@ -727,7 +879,7 @@ func TestPlayerCacheKeys_CoversParentSubAndDiscoveredTables(t *testing.T) {
 
 func TestPlayerCacheKeys_DeduplicatesTableAndMsgTypeOverlap(t *testing.T) {
 	// 表名与 MsgType 同名是常态;重复的键会让 pipeline 白跑一次 DEL。
-	keys := playerCacheKeys(7, []string{"PlayerAllData", "player_database"})
+	keys := playerCacheKeys(7, []string{"BagAllData", "player_database"})
 	seen := map[string]int{}
 	for _, k := range keys {
 		seen[k]++
@@ -1104,12 +1256,34 @@ func TestRedisDBDefaultsMatchServiceYAML(t *testing.T) {
 	}{
 		// go-zero RedisConf 没有 DB 字段 → mapping Redis 恒为 DB 0(见 main.go 注释)。
 		{"mapping (data_service MappingRedis, go-zero 无 DB 字段)", defaultMappingRedisDB, 0},
-		{"guild (guild.yaml RedisClient.DB)", defaultGuildRedisDB, 2},
+		{"guild (guild.yaml RedisClient.DB;2026-10-23 由 2 改为 0)", defaultGuildRedisDB, 0},
 		{"shared/login (login.yaml Node.RedisClient.DB)", defaultSharedRedisDB, 0},
 	}
 	for _, c := range cases {
 		if c.got != c.want {
 			t.Errorf("%s: got %d want %d", c.name, c.got, c.want)
 		}
+	}
+}
+
+func TestReadOnlyPreflightDoesNotNeedWriteGrantButStillRequiresFacts(t *testing.T) {
+	err := runPreflight(context.Background(), preflightDeps{}, preflightParams{readOnly: true, zone: 1, scope: "source"})
+	if err == nil || errors.Is(err, errNormalFreezeProof) || errors.Is(err, drainproof.ErrHold) || !strings.Contains(err.Error(), "no scene_manager Redis handle") {
+		t.Fatalf("只读预演应进入真实事实检查、缺句柄仍拒绝: %v", err)
+	}
+}
+func TestWritePreflightStillRejectsMissingNormalFreeze(t *testing.T) {
+	err := runPreflight(context.Background(), preflightDeps{}, preflightParams{zone: 1, scope: "source"})
+	if !errors.Is(err, errNormalFreezeProof) {
+		t.Fatalf("默认真实写不能借只读路径免除冻结: %v", err)
+	}
+	ctx, owner := testMaintenanceContext()
+	err = runPreflight(ctx, preflightDeps{}, preflightParams{zone: 1, scope: "source"})
+	if !errors.Is(err, errNormalFreezeProof) {
+		t.Fatalf("只有TOOL没有正常冻结仍须拒绝: %v", err)
+	}
+	owner.session.CloseAdmission()
+	if !errors.Is(owner.session.Wait(context.Background()), drainproof.ErrHold) {
+		t.Fatal("写路径拒绝未留下HOLD")
 	}
 }

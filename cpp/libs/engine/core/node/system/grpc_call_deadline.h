@@ -7,7 +7,7 @@
 
 #include "proto/common/base/config.pb.h"
 
-// C++ 节点发出的 unary gRPC 调用的 deadline(docs/design/grpc-client-deadline-failure-callback.md §4)。
+// C++ 节点发出的 unary gRPC 调用的 deadline(docs/design/grpc-muduo-transport.md §16.3)。
 //
 // 真源是 BaseDeployConfig.grpc_client(bin/etc/base_deploy_config.yaml 的 GrpcClient 块),按**目标**节点类型配;
 // 没配到的类型用客户端调用公共头中的 kDefaultGrpcCallDeadlineMs(core/network/grpc_client_call.h)。

@@ -32,6 +32,7 @@ type fakeRouteDB struct {
 	takeOver    func(req routeFenceAcquire, prev string) (routeFenceGrant, error)
 	renew       func(zones []uint32, runID string, ttl time.Duration) (map[uint32]uint64, error)
 	release     func(zones []uint32, runID string) (map[uint32]int64, error)
+	releaseCtx  func(ctx context.Context) // 可空:看 ReleaseFence 收到的 ctx(释放 / 清理有没有时限,MZ2-6)
 	readFence   func(zone uint32) (routeFenceState, error)
 	readRoutes  func(ids []uint64) (map[uint64]mergeRouteRow, error)
 	scanByHome  func(zone uint32, after routeScanCursor, limit int) ([]mergeRouteRow, error)
@@ -91,8 +92,11 @@ func (f *fakeRouteDB) RenewFence(_ context.Context, zones []uint32, runID string
 	return f.renew(zones, runID, ttl)
 }
 
-func (f *fakeRouteDB) ReleaseFence(_ context.Context, zones []uint32, runID string) (map[uint32]int64, error) {
+func (f *fakeRouteDB) ReleaseFence(ctx context.Context, zones []uint32, runID string) (map[uint32]int64, error) {
 	f.record("ReleaseFence")
+	if f.releaseCtx != nil {
+		f.releaseCtx(ctx)
+	}
 	if f.release == nil {
 		return nil, errFakeUnexpected
 	}

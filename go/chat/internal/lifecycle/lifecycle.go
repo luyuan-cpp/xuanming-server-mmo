@@ -21,10 +21,12 @@ const (
 // 关闭业务资源、执行框架收尾。注销器 Close 的传输失败由其日志和租约TTL兜底,不能把
 // Close 返回解释成 etcd 已确认删除。Stop 幂等,重复触发等待同一次收尾。
 type Shutdown struct {
-	Server          *grpc.Server
-	ServeDone       <-chan struct{}
-	Unregister      func()
-	CloseResources  func()
+	Server         *grpc.Server
+	ServeDone      <-chan struct{}
+	Unregister     func()
+	CloseResources func()
+	// CloseAndReport 保留资源关闭的真实错误；优先于旧的无错误回调。
+	CloseAndReport  func() error
 	FinishFramework func()
 	DrainTimeout    time.Duration
 	FinishTimeout   time.Duration
@@ -51,7 +53,9 @@ func (s *Shutdown) Stop() error {
 			}
 			timer.Stop()
 		}
-		if s.CloseResources != nil {
+		if s.CloseAndReport != nil {
+			s.err = errors.Join(s.err, s.CloseAndReport())
+		} else if s.CloseResources != nil {
 			s.CloseResources()
 		}
 

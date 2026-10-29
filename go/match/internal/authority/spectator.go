@@ -5,18 +5,34 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
 	"google.golang.org/protobuf/proto"
+	"match/internal/constants"
 	battlepb "proto/battle"
 	pb "proto/match"
 )
 
 var ErrSpectatorBusy = errors.New("观战原意图尚未关闭或玩家已有匹配占用")
 
+// 下列拒绝原因都包装 ErrSpectatorBusy：既有 errors.Is(err, ErrSpectatorBusy) 判断不变，
+// logic 层据此给客户端明确结论；没有细分的裸 ErrSpectatorBusy 仍按未确认处理。
+var (
+	// ErrSpectatorSuperseded：玩家已有更新的观战请求头，本请求不能再推进。替代发生时
+	// SpectatorIntent 已在同一事务给本请求的意图记下关闭原因「已在观战中」，首答与重放同结论。
+	ErrSpectatorSuperseded = fmt.Errorf("%w: 已被更新的观战请求替代", ErrSpectatorBusy)
+	// ErrSpectatorOccupied：玩家仍有尚未证实关闭的旧观战占用。
+	ErrSpectatorOccupied = fmt.Errorf("%w: 旧观战占用尚未关闭", ErrSpectatorBusy)
+	// ErrSpectatorFormationClosed：目标成局已不在可观战的已建房状态，或建房端点已变。
+	ErrSpectatorFormationClosed = fmt.Errorf("%w: 目标成局不可观战", ErrSpectatorBusy)
+	// ErrSpectatorIntentClosed：本请求的观战意图已关闭；结论读意图上保存的 close_tip。
+	ErrSpectatorIntentClosed = fmt.Errorf("%w: 原观战请求已关闭", ErrSpectatorBusy)
+)
+
 const spectatorColumns = "player_id,operation_id,battle_id,target_endpoint,target_instance_id,state,request_payload,owner_account,owner_revision,add_request,updated_ms,request_high,request_low"
-const spectatorIntentColumns = "player_id,request_high,request_low,original,request_payload,owner_account,owner_revision,state"
+const spectatorIntentColumns = "player_id,request_high,request_low,original,request_payload,owner_account,owner_revision,state,close_tip"
 
 func scanSpectator(row scanner) (*pb.MatchSpectatorRecord, error) {
 	out := &pb.MatchSpectatorRecord{}
@@ -78,13 +94,13 @@ func requireSpectatorHead(ctx context.Context, tx *sql.Tx, player uint64, expect
 		return err
 	}
 	if actual != expected {
-		return ErrSpectatorBusy
+		return ErrSpectatorSuperseded
 	}
 	return nil
 }
 func readSpectatorIntent(ctx context.Context, tx *sql.Tx, player, high, low uint64) (*pb.MatchSpectatorIntentRecord, error) {
 	out := &pb.MatchSpectatorIntentRecord{}
-	err := tx.QueryRowContext(ctx, "SELECT "+spectatorIntentColumns+" FROM match_spectator_intent WHERE player_id=? AND request_high=? AND request_low=? FOR UPDATE", player, high, low).Scan(&out.PlayerId, &out.RequestHigh, &out.RequestLow, &out.Original, &out.RequestPayload, &out.OwnerAccount, &out.OwnerRevision, &out.State)
+	err := tx.QueryRowContext(ctx, "SELECT "+spectatorIntentColumns+" FROM match_spectator_intent WHERE player_id=? AND request_high=? AND request_low=? FOR UPDATE", player, high, low).Scan(&out.PlayerId, &out.RequestHigh, &out.RequestLow, &out.Original, &out.RequestPayload, &out.OwnerAccount, &out.OwnerRevision, &out.State, &out.CloseTip)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -101,7 +117,8 @@ func readSpectatorIntent(ctx context.Context, tx *sql.Tx, player, high, low uint
 	}
 	switch out.State {
 	case 1:
-		if len(out.Original) != 0 {
+		// 关闭原因只在关闭或拒绝时写入；尚未发出Add的意图带原因即损坏。
+		if len(out.Original) != 0 || out.CloseTip != 0 {
 			return nil, ErrOriginalPlayer
 		}
 	case 2, 5:
@@ -157,7 +174,7 @@ func (s *Store) SpectatorIntent(ctx context.Context, player uint64, request *pb.
 			return nil, ErrOriginalPlayer
 		}
 		if prior.State != 5 && head != request.RequestId {
-			return nil, ErrSpectatorBusy
+			return nil, ErrSpectatorSuperseded
 		}
 		return prior, tx.Commit()
 	}
@@ -176,14 +193,23 @@ func (s *Store) SpectatorIntent(ctx context.Context, player uint64, request *pb.
 		if old == nil {
 			return nil, ErrOriginalPlayer
 		}
-		if old.State == 1 {
-			if _, err = tx.ExecContext(ctx, "UPDATE match_spectator_intent SET state=5 WHERE player_id=? AND request_high=? AND request_low=? AND state=1", player, hh, hl); err != nil {
+		// 旧请求被本请求替代：同事务给旧意图记下关闭原因（先写为准），旧handler续做时的首答
+		// （ErrSpectatorSuperseded）与旧request_id重放都回「已在观战中」。原因是客户端tip，与logic对
+		// ErrSpectatorSuperseded的映射同码。未发Add的旧意图直接关闭；已绑定原件的仍由本请求prepare或
+		// 后台恢复沿原op取消，关闭到5时保留此原因；已关闭的旧意图不动。
+		switch old.State {
+		case 1:
+			if _, err = tx.ExecContext(ctx, "UPDATE match_spectator_intent SET state=5,close_tip=? WHERE player_id=? AND request_high=? AND request_low=? AND state=1", constants.ErrAlreadyWatching, player, hh, hl); err != nil {
+				return nil, err
+			}
+		case 2:
+			if _, err = tx.ExecContext(ctx, "UPDATE match_spectator_intent SET close_tip=? WHERE player_id=? AND request_high=? AND request_low=? AND state=2 AND close_tip=0", constants.ErrAlreadyWatching, player, hh, hl); err != nil {
 				return nil, err
 			}
 		}
 	}
 	out := &pb.MatchSpectatorIntentRecord{PlayerId: player, RequestHigh: high, RequestLow: low, RequestPayload: payload, OwnerAccount: actor.OwnerAccount, OwnerRevision: actor.OwnerRevision, State: 1}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO match_spectator_intent("+spectatorIntentColumns+") VALUES(?,?,?,?,?,?,?,1)", player, high, low, []byte{}, payload, actor.OwnerAccount, actor.OwnerRevision); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT INTO match_spectator_intent("+spectatorIntentColumns+") VALUES(?,?,?,?,?,?,?,1,0)", player, high, low, []byte{}, payload, actor.OwnerAccount, actor.OwnerRevision); err != nil {
 		return nil, err
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO match_spectator_head(player_id,operation_id) VALUES(?,?) ON DUPLICATE KEY UPDATE operation_id=VALUES(operation_id)", player, request.RequestId); err != nil {
@@ -192,45 +218,46 @@ func (s *Store) SpectatorIntent(ctx context.Context, player uint64, request *pb.
 	return out, tx.Commit()
 }
 
-// 未准备原件还没有网络副作用；明确无场可选时关闭UUID，重试不能重新选择另一局。
-func (s *Store) CloseUnpreparedSpectator(ctx context.Context, player uint64, request *pb.WatchBattleRequest) error {
+// 未准备原件还没有网络副作用；明确拒绝（无场可选、成局不可观战、会话已断开）时关闭UUID并记下原因，
+// 重试不能重新选择另一局。先写的原因为准：返回意图上实际保存的原因，首答与同request_id重放一致。
+func (s *Store) CloseUnpreparedSpectator(ctx context.Context, player uint64, request *pb.WatchBattleRequest, closeTip uint32) (uint32, error) {
 	high, low, err := joinRequestParts(request.GetRequestId())
 	if err != nil {
-		return err
+		return 0, err
 	}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer tx.Rollback()
 	if err = s.lockActor(ctx, tx, player); err != nil {
-		return err
+		return 0, err
 	}
 	if err = requireSpectatorHead(ctx, tx, player, request.RequestId); err != nil {
-		return err
+		return 0, err
 	}
 	original, err := readSpectatorIntent(ctx, tx, player, high, low)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	payload, err := proto.MarshalOptions{Deterministic: true}.Marshal(request)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	actor := originalPlayer(ctx, player)
 	if original == nil || original.OwnerAccount != actor.OwnerAccount || original.OwnerRevision != actor.OwnerRevision || !bytes.Equal(payload, original.RequestPayload) {
-		return ErrOriginalPlayer
+		return 0, ErrOriginalPlayer
 	}
 	if original.State == 5 {
-		return tx.Commit()
+		return original.CloseTip, tx.Commit()
 	}
 	if original.State != 1 {
-		return ErrSpectatorBusy
+		return 0, ErrSpectatorBusy
 	}
-	if _, err = tx.ExecContext(ctx, "UPDATE match_spectator_intent SET state=5 WHERE player_id=? AND request_high=? AND request_low=? AND state=1", player, high, low); err != nil {
-		return err
+	if _, err = tx.ExecContext(ctx, "UPDATE match_spectator_intent SET state=5,close_tip=? WHERE player_id=? AND request_high=? AND request_low=? AND state=1", closeTip, player, high, low); err != nil {
+		return 0, err
 	}
-	return tx.Commit()
+	return closeTip, tx.Commit()
 }
 
 func (s *Store) SpectatorForActor(ctx context.Context, player uint64, expectedHead string) (*pb.MatchSpectatorRecord, error) {
@@ -266,7 +293,7 @@ func (s *Store) BeginSpectator(ctx context.Context, player uint64, request *pb.W
 		return nil, err
 	}
 	if formation == nil || add == nil || formation.State != 4 || formation.BattleId == 0 {
-		return nil, ErrSpectatorBusy
+		return nil, ErrSpectatorFormationClosed
 	}
 	payload, err := proto.MarshalOptions{Deterministic: true}.Marshal(request)
 	if err != nil {
@@ -292,7 +319,7 @@ func (s *Store) BeginSpectator(ctx context.Context, player uint64, request *pb.W
 		return nil, ErrOriginalPlayer
 	}
 	if prior.State == 5 {
-		return nil, ErrSpectatorBusy
+		return nil, ErrSpectatorIntentClosed
 	}
 	if prior.State == 2 {
 		original := &pb.MatchSpectatorRecord{}
@@ -313,7 +340,7 @@ func (s *Store) BeginSpectator(ctx context.Context, player uint64, request *pb.W
 		return nil, err
 	}
 	if current != nil && current.State != 5 {
-		return nil, ErrSpectatorBusy
+		return nil, ErrSpectatorOccupied
 	}
 	if err = s.requireMatchEntryTx(ctx, tx, []*pb.MatchAuthorityTicketRecord{actor}, nil); err != nil {
 		return nil, err
@@ -323,7 +350,8 @@ func (s *Store) BeginSpectator(ctx context.Context, player uint64, request *pb.W
 		return nil, err
 	}
 	if err == nil && TicketOccupied(ticket) {
-		return nil, ErrSpectatorBusy
+		// 同时保留观战占用与票据细分两条链，调用方可按任一判断。
+		return nil, fmt.Errorf("%w: %w", ErrSpectatorBusy, ticketOccupiedErr(ticket))
 	}
 	var state uint32
 	var endpoint, instance string
@@ -331,7 +359,7 @@ func (s *Store) BeginSpectator(ctx context.Context, player uint64, request *pb.W
 		return nil, err
 	}
 	if state != 4 || endpoint != formation.TargetEndpoint || instance != formation.TargetInstanceId {
-		return nil, ErrSpectatorBusy
+		return nil, ErrSpectatorFormationClosed
 	}
 	stamp, err := now(ctx, tx)
 	if err != nil {
@@ -363,15 +391,27 @@ func (s *Store) BeginSpectator(ctx context.Context, player uint64, request *pb.W
 
 // 后台只沿原op推进；前台还须沿新请求head，旧handler不得清退新请求接纳的占用。
 func (s *Store) AdvanceSpectator(ctx context.Context, original *pb.MatchSpectatorRecord, state uint32) (bool, error) {
-	return s.advanceSpectator(ctx, original, state, "")
+	return s.advanceSpectator(ctx, original, state, "", 0)
 }
 func (s *Store) AdvanceSpectatorForHead(ctx context.Context, original *pb.MatchSpectatorRecord, state uint32, expectedHead string) (bool, error) {
 	if expectedHead == "" {
 		return false, ErrOriginalPlayer
 	}
-	return s.advanceSpectator(ctx, original, state, expectedHead)
+	return s.advanceSpectator(ctx, original, state, expectedHead, 0)
 }
-func (s *Store) advanceSpectator(ctx context.Context, original *pb.MatchSpectatorRecord, state uint32, expectedHead string) (bool, error) {
+
+// RejectSpectator 把battle明确拒绝（或准入已截止）的原件转入待取消3，并在同一事务里记下关闭原因。
+// 拒绝即终态：转入3后迟到的同op Add回包不能再推进成准入；原因先写为准，取消证明关闭到5时保留。
+// expectedHead为空表示后台沿原op推进；返回false表示原op已证实关闭，结论以意图上先写的原因为准。
+func (s *Store) RejectSpectator(ctx context.Context, original *pb.MatchSpectatorRecord, closeTip uint32, expectedHead string) (bool, error) {
+	if closeTip == 0 {
+		return false, errors.New("观战拒绝必须携带关闭原因")
+	}
+	return s.advanceSpectator(ctx, original, 3, expectedHead, closeTip)
+}
+
+// closeTip非0时与状态推进同事务记下关闭原因（只在推进成功时写）。
+func (s *Store) advanceSpectator(ctx context.Context, original *pb.MatchSpectatorRecord, state uint32, expectedHead string, closeTip uint32) (bool, error) {
 	if validateSpectator(original) != nil || state < 2 || state > 5 {
 		return false, ErrOriginalPlayer
 	}
@@ -413,6 +453,9 @@ func (s *Store) advanceSpectator(ctx context.Context, original *pb.MatchSpectato
 		return false, ErrOriginalPlayer
 	}
 	if current.State == state {
+		if err = writeSpectatorCloseTipTx(ctx, tx, current, closeTip); err != nil {
+			return false, err
+		}
 		return true, tx.Commit()
 	}
 	if current.State == 5 {
@@ -427,7 +470,20 @@ func (s *Store) advanceSpectator(ctx context.Context, original *pb.MatchSpectato
 	if err = writeSpectatorStateTx(ctx, tx, current, state); err != nil {
 		return false, err
 	}
+	if err = writeSpectatorCloseTipTx(ctx, tx, current, closeTip); err != nil {
+		return false, err
+	}
 	return true, tx.Commit()
+}
+
+// writeSpectatorCloseTipTx 记下原观战请求的关闭原因；已有原因时保持不变（先写为准），closeTip=0不写。
+// 调用方已持该玩家P并确认当前占用就是本原件，意图此时处于2或5，不会给尚未发出Add的意图写原因。
+func writeSpectatorCloseTipTx(ctx context.Context, tx *sql.Tx, current *pb.MatchSpectatorRecord, closeTip uint32) error {
+	if closeTip == 0 {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, "UPDATE match_spectator_intent SET close_tip=? WHERE player_id=? AND request_high=? AND request_low=? AND close_tip=0", closeTip, current.PlayerId, current.RequestHigh, current.RequestLow)
+	return err
 }
 
 func (s *Store) SpectatorRecoveryHighWater(ctx context.Context) (uint64, error) {

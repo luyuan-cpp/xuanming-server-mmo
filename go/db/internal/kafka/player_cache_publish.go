@@ -23,6 +23,15 @@ var errFenceRedis = errors.New("围栏 Redis 步骤失败")
 // 所有类型检查与冲突检查都先于写；Redis 脚本出错不会回滚已经写出的命令。
 // KEYS: 锁、缓存、证据或缓存占位、存盘屏障或缓存占位。
 // ARGV: 令牌、锁TTL毫秒、缓存原件、缓存TTL毫秒、版本、证据原件、发布证据、屏障表名。
+// 回复: 发布结局(个位,cachePublish*) + ACK 领先码(十位,ackAhead* × ackAheadUnit),由 decodeCachePublishReply 拆开。
+//
+// ACK 领先 pending(docs/design/zone-redis-regression-guard-20261022.md §4.2 G2)：不变量是「同一屏障里每张表的
+// ACK ≤ pending」—— C++ 存盘 Lua 先写 pending=V 再投递 V 的 DBTask，pending 只增不减，go/db 只在 SQL 提交 V 之后
+// 才发布 ACK=V。所以本次要写下的 ACK 严格大于 pending、或屏障里根本没有 pending，只可能是 zone Redis 丢了已确认的写
+// (崩溃、切主、从备份恢复)、手工改写或合服拷错。ACK 仍然照写：它是已提交的 SQL 事实，login 核验回退正要靠它；
+// 拒写会丢掉这份证据，还会让补投永远等不到两表 ACK 追平 pending。脚本只把领先种类带回，由 Go 侧计数并打日志。
+// ACK 没被写(已有 ACK ≥ 本次版本)时不带标志、不重复报：那份 ACK 写下时若领先 pending，当时已经报过。
+// pending 存在却不是规范版本串时，与已存 ACK 畸形同口径，在任何写之前报错。
 const playerCachePublishLua = savebarrier.LuaVersionHelpers + `
 if redis.call('GET',KEYS[1]) ~= ARGV[1] then return 0 end
 if not tonumber(ARGV[2]) or tonumber(ARGV[2])<=0 or not tonumber(ARGV[4]) or tonumber(ARGV[4])<=0 then return redis.error_reply('invalid publish TTL') end
@@ -39,20 +48,59 @@ if ARGV[7]=='1' then
  else result=2 end
 end
 local writeBarrier=false
+local ackAhead=0
 if ARGV[8]~='' then
  if not is_version(ARGV[5]) then return redis.error_reply('save barrier version is malformed') end
- local old=redis.call('HGET',KEYS[4],ARGV[8])
+ local stored=redis.call('HMGET',KEYS[4],ARGV[8],'pending')
+ local old,pending=stored[1],stored[2]
  if old and not is_version(old) then return redis.error_reply('stored save barrier version is malformed') end
+ if pending and not is_version(pending) then return redis.error_reply('stored save barrier pending is malformed') end
  writeBarrier=not old or version_gt(ARGV[5],old)
+ if writeBarrier and not pending then ackAhead=20
+ elseif writeBarrier and version_gt(ARGV[5],pending) then ackAhead=10 end
 end
 redis.call('PEXPIRE',KEYS[1],ARGV[2])
 redis.call('SET',KEYS[2],ARGV[3],'PX',ARGV[4])
 if writeEvidence then redis.call('HSET',KEYS[3],'version',ARGV[5],'data',ARGV[6]) end
 if writeBarrier then redis.call('HSET',KEYS[4],ARGV[8],ARGV[5]) end
-return result
+return result+ackAhead
 `
 
 var playerCachePublishScript = redis.NewScript(playerCachePublishLua)
+
+// 发布脚本回复的个位：发布结局。
+const (
+	cachePublishNotOwner         = 0  // 已不持锁，什么都没写
+	cachePublishWritten          = 1  // 缓存已写；需要发布的证据已写或已是同版本同内容
+	cachePublishEvidenceAhead    = 2  // 缓存已写；已有证据版本高于本次，证据不回退
+	cachePublishEvidenceConflict = -1 // 同一版本的证据内容不同，什么都没写
+)
+
+// 发布脚本回复的十位：本次写下的屏障 ACK 领先 pending 的种类，只会叠加在 cachePublishWritten / EvidenceAhead 上。
+//
+// 压进同一个整数而不回数组：令牌脚本经 writeLease.runTokenScript → locker.RunTokenScript 执行，那条约定只认整数
+// 回复(0 = 失锁，>0 = 已写并续期)。叠加后的值仍为正，失锁与续期语义原样沿用，不必为一个旁路标志改租约接口。
+// Lua 里写的是字面量 10 / 20，与这里一一对应，由 TestDecodeCachePublishReply 钉住。
+const (
+	ackAheadUnit           = 10
+	ackAheadNone           = 0
+	ackAheadAbovePending   = 1 // 本次 ACK 严格大于 pending
+	ackAheadPendingMissing = 2 // 屏障里没有 pending
+)
+
+// decodeCachePublishReply 把发布脚本的整数回复拆成发布结局与 ACK 领先码。取值越出约定说明脚本与解码不同步，报错而不猜。
+func decodeCachePublishReply(reply int64) (outcome, ackAhead int64, err error) {
+	switch {
+	case reply == cachePublishNotOwner || reply == cachePublishEvidenceConflict:
+		return reply, ackAheadNone, nil
+	case reply > 0:
+		outcome, ackAhead = reply%ackAheadUnit, reply/ackAheadUnit
+		if (outcome == cachePublishWritten || outcome == cachePublishEvidenceAhead) && ackAhead <= ackAheadPendingMissing {
+			return outcome, ackAhead, nil
+		}
+	}
+	return 0, 0, fmt.Errorf("unexpected cache publication result %d", reply)
+}
 
 const appliedAdvanceLua = luaDecimalGreaterFn + `
 if redis.call('GET',KEYS[1])~=ARGV[1] then return 0 end
@@ -106,28 +154,50 @@ func publishDBWriteResult(ctx context.Context, lease writeLease, task *dbpb.DBTa
 	if err != nil {
 		return err
 	}
-	switch result {
-	case 0:
+	outcome, ackAhead, err := decodeCachePublishReply(result)
+	if err != nil {
+		return err
+	}
+	// decodeCachePublishReply 已保证 outcome 落在这四个取值里。
+	switch outcome {
+	case cachePublishNotOwner:
 		metrics.CountFenceCache("write", "not_owner")
 		return fmt.Errorf("%w: cache publisher no longer owns lock", errOrderingLeaseLost)
-	case -1:
+	case cachePublishEvidenceConflict:
 		metrics.CountFenceCache("write", "evidence_conflict")
 		logx.Errorf("ASSET-SQL-COMMIT-CONFLICT taskID=%s version=%s", task.TaskId, version)
 		return errFenceEvidenceConflict
-	case 1:
+	case cachePublishWritten:
 		metrics.CountFenceCache("write", "written")
-	case 2:
+	case cachePublishEvidenceAhead:
 		metrics.CountFenceCache("write", "written")
 		metrics.CountFenceCache("write", "evidence_ahead")
 		logx.Errorf("ASSET-SQL-COMMIT-AHEAD taskID=%s version=%s", task.TaskId, version)
-	default:
-		return fmt.Errorf("unexpected cache publication result %d", result)
 	}
+	reportSaveBarrierAckAhead(task, version, ackAhead)
 	return nil
 }
 
+// reportSaveBarrierAckAhead 记一次「ACK 领先 pending」的回退证据：计数并打 ERROR；ACK 已照写，任务照常确认。
+// 玩家 ID 只进日志，不进指标 label。回复只有一个整数，带不回 pending 原值：above_pending 时日志只能写明
+// pending 低于 ack，具体值按日志里的 barrierKey 去读屏障。
+func reportSaveBarrierAckAhead(task *dbpb.DBTask, ack string, ackAhead int64) {
+	var kind, pending string
+	switch ackAhead {
+	case ackAheadAbovePending:
+		kind, pending = metrics.SaveBarrierAckAbovePending, "below_ack"
+	case ackAheadPendingMissing:
+		kind, pending = metrics.SaveBarrierAckPendingMissing, "missing"
+	default:
+		return
+	}
+	metrics.CountSaveBarrierAckAhead(kind)
+	logx.Errorf("SAVE-BARRIER-ACK-AHEAD kind=%s playerID=%d table=%s ack=%s pending=%s barrierKey=%s taskID=%s",
+		kind, task.Key, task.MsgType, ack, pending, savebarrier.Key(task.Key), task.TaskId)
+}
+
 func advanceApplied(ctx context.Context, lease writeLease, topic string, dbTask *dbpb.DBTask, task *workerTask) error {
-	if dbTask.Op != "write" {
+	if dbTask.Op != dbpb.DBOp_DB_OP_WRITE {
 		return nil
 	}
 	cursor := ""

@@ -252,7 +252,8 @@ func ownershipStrictRobot(cfg *config.Config, account string, want uint64, stats
 		gc.Close()
 		return nil, fmt.Errorf("严格重登失败")
 	}
-	bot := &travelSmokeBot{account: account, password: cfg.Password, gc: gc, player: gameobject.NewPlayer(want), stats: stats, homePlayer: want}
+	bot := &travelSmokeBot{account: account, password: cfg.Password, gc: gc, player: gameobject.NewPlayer(want), stats: stats, homePlayer: want,
+		hopTimeout: time.Duration(cfg.TravelSmoke.HopTimeoutSeconds) * time.Second}
 	pkg.SetRedirectRelogin(bot.relogin)
 	gameobject.PlayerList.Set(want, bot.player)
 	pkg.Clients.Register(want, gc)

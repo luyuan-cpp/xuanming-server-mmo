@@ -378,7 +378,7 @@ player_events.h：
 
 3. scene/main.cpp 在 ApplyPostConstructionHooks 之后显式调用 scene_local_events::RegisterAll()。
 
-4. 生成的 event_handler.cpp 汇总文件经 regen 后只剩 battle、team、player_migration 三个类。*(2026-10-20 批注:player_migration 的 handler 已在 `e7bb46070`(2026-10-18)删除,它属于已下线的跨 zone 搬数据链;现在 `cpp/nodes/scene/handler/event/` 下是 battle、player_inbox、team 三个 handler 加 `scene_kafka_command_router`。)*
+4. 生成的 event_handler.cpp 汇总文件经 regen 后只剩 battle、team、player_migration 三个类。*(2026-10-20 批注,10-22 补:汇总文件 `event_handler.{h,cpp}` 本身已在 `e76f6f747`(2026-10-16)删除,生成器现在只按 proto 逐个产出 `*_event_handler.{h,cpp}`。player_migration 的 handler 已在 `e7bb46070`(2026-10-18)删除,它属于已下线的跨 zone 搬数据链。现在 `cpp/nodes/scene/handler/event/` 下是 battle、player_inbox、team 三个 handler 加 `scene_kafka_command_router`。)*
 
 5. 删除 11 对旧的生成 handler 文件，并从 scene 节点工程以及 bag_test.vcxproj:181、missions.vcxproj:160 里摘掉 mission_event_handler.cpp，换成新文件。
 
@@ -547,7 +547,7 @@ player_events.h：
 - cpp/generated/proto/common/options/event_ingress_option.pb.*；
 - go/proto/common/options 下的 pb；
 - 各服务的 go/*/generated/pb/game/event_id.go；
-- 4b 之后：proto/event_id.txt 的墓碑行、cpp/nodes/scene/handler/event/event_handler.cpp 汇总文件（只剩 battle、team、player_migration 三个 handler）。*（2026-10-20 批注：现状见上面第 4 条的批注，player_migration 已删。）*
+- 4b 之后：proto/event_id.txt 的墓碑行、cpp/nodes/scene/handler/event/event_handler.cpp 汇总文件（只剩 battle、team、player_migration 三个 handler）。*（2026-10-20 批注，10-22 订正：该汇总文件已在 `e76f6f747` 删除，player_migration handler 已在 `e7bb46070` 删除，现状见上面第 4 条的批注。）*
 - 需要手动删除的陈旧生成物（生成器不删）：cpp/nodes/scene/handler/event 下 11 对 *_event_handler.{h,cpp}（守护段里的用户代码先搬到 scene_local_events.cpp）；cpp/generated/proto/common/event 下 11 对 .pb.{h,cc}；cpp/generated/rpc/service_metadata 下 11 个 common_event_*_event_id.h；go/proto/common/event 下 11 个 .pb.go。同时从 cpp/generated/proto 的 CMakeLists.txt、proto.vcxproj、.filters，以及 scene 节点工程、bag_test.vcxproj、missions.vcxproj 中摘掉对应条目。
 - 生成式 handler 文件中守护段内的改动（属于允许手写的区域）：player_lifecycle_handler.cpp 的日志；battle_event_handler.cpp 与 team_event_handler.cpp 里提到 DispatchProtoEvent 的注释。
 

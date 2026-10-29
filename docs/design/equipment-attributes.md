@@ -699,7 +699,7 @@ Java 版仍以独立仓 `PARITY.md` 为准，不据旧路径或过期交接推�
 ### 10.6 robot 冒烟(§7,2026-10-08)
 
 1. 改了任务名单外的 `robot/config/config.go`(mode 白名单加 `equip-smoke`,不加 `config.Load` 直接报 unknown mode)。
-2. 冒烟自带 700ms 同号节流;gate 级拒绝(限流 / GM 闸)表现为「全零响应」判红,真实码看紧挨着的 `gate envelope error` 日志。
+2. 冒烟自带 700ms 同号节流;gate 级拒绝(限流 / GM 闸)表现为「全零响应」判红,真实码看紧挨着的 `gate envelope error` 日志。(2026-10-23 订正:robot 改为按请求号认领回包后,gate 级拒绝直接在 FAIL reason 里报 `rejected by gate envelope: message_id=… tip=…(原因)`,不再有「全零响应」和 `gate envelope error` 日志;scene 业务拒绝仍报响应体 tip。见 `docs/design/client-rpc-callback.md` §6.1。)
 3. `EquipItem(0)` 认 `kInvalidParameter` 或 `kEquipItemNotFound` 其一,其余判红。
 4. 冒烟镜像了少量表值(config 1101 / 1105 / 1401、槽 3–6、基础值 40 / 12 / 12 / 1620、规则行 1 的蓝 1..3、战斗属性 15 行):策划改这些要同步改 `equip_smoke_scenario.go` 顶部常量。
 5. 预备段「已有就复用」:服务端有 bug 的那一轮铸出的坏实例不会重掷,修好后要换账号或清 `robot_9103` 的背包存档再跑(失败信息里有 `[reused=…]` 提示)。

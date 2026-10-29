@@ -370,6 +370,12 @@ func TestEnsureSchemaStrategy(t *testing.T) {
 				plan = &fakeSchemaRunner{reports: []schemamigrate.Report{clean}}
 			}
 			err := ensureSchema(context.Background(), nil, tc.cfg, up.run, plan.run)
+			if tc.cfg.ShouldAutoMigrate() {
+				if err == nil || up.calls != 0 || plan.calls != 0 {
+					t.Fatalf("常驻启动不得申请 DDL: err=%v up=%d plan=%d", err, up.calls, plan.calls)
+				}
+				return
+			}
 			if tc.wantErr == "" {
 				if err != nil {
 					t.Fatalf("期望通过,得到 %v", err)

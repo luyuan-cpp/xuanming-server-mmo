@@ -15,8 +15,105 @@ import (
 
 	comppb "proto/common/component"
 	login_proto_database "proto/common/database"
+	dbpb "proto/db"
 	"shared/ownerepoch"
+	"shared/savebarrier"
 )
+
+// 只提供已实际提交的两行，不能把空 Data 替换为带 id 的请求体。
+func initialCommitSQLRead(task *dbpb.DBTask) ([]byte, error) {
+	parent := savebarrier.InitialPlayerData(seedTestPlayerID)
+	switch task.MsgType {
+	case string(parent.PlayerDatabaseData.ProtoReflect().Descriptor().FullName()):
+		return proto.Marshal(parent.PlayerDatabaseData)
+	case string(parent.PlayerDatabase_1Data.ProtoReflect().Descriptor().FullName()):
+		return proto.Marshal(parent.PlayerDatabase_1Data)
+	default:
+		return nil, fmt.Errorf("初始提交夹具收到未知 SQL 读类型")
+	}
+}
+
+func TestCommittedSeedCarriesFullSQLVersionAndFirstEnterRemainsFast(t *testing.T) {
+	_, rc := newSeedTestRedis(t)
+	ctx := context.Background()
+	parent := savebarrier.InitialPlayerData(seedTestPlayerID)
+	result, err := seedCommittedNewPlayerAllData(ctx, rc, testParentLoadScripts, parent)
+	requireSeedResult(t, result, err, SeedWritten)
+	got, _ := readSeedParent(t, rc, seedTestPlayerID)
+	if !proto.Equal(got, parent) || rc.Get(ctx, ownerepoch.OwnerEpochKey(seedTestPlayerID)).Val() != "1" {
+		t.Fatal("初始缓存没有完整 SQL 原件和 owner 地板")
+	}
+	version := savebarrier.Version(1, 1)
+	for _, field := range []string{"pending", "player_database", "player_database_1"} {
+		if rc.HGet(ctx, savebarrier.Key(seedTestPlayerID), field).Val() != version {
+			t.Fatal("初始提交屏障不完整")
+		}
+	}
+	calls := 0
+	ensurePlayerAllDataInRedisAsync(ctx, rc, testParentLoadScripts, true, nil, nil, seedTestPlayerID, 0, func(err error) {
+		calls++
+		if err != nil {
+			t.Error(err)
+		}
+	})
+	if calls != 1 {
+		t.Fatal("可信种子没有保留首次进场快路径")
+	}
+}
+
+func TestCommittedSeedRefusesLateOwnerOrBarrierWithoutChangingKeys(t *testing.T) {
+	for _, kind := range []string{"owner", "barrier", "wrongtype", "outbox"} {
+		t.Run(kind, func(t *testing.T) {
+			mr, rc := newSeedTestRedis(t)
+			ctx := context.Background()
+			switch kind {
+			case "owner":
+				_ = rc.Set(ctx, ownerepoch.OwnerEpochKey(seedTestPlayerID), "3", 0).Err()
+			case "barrier":
+				_ = rc.HSet(ctx, savebarrier.Key(seedTestPlayerID), "pending", savebarrier.Version(2, 99)).Err()
+			case "wrongtype":
+				_ = rc.Set(ctx, savebarrier.Key(seedTestPlayerID), "bad", 0).Err()
+			case "outbox":
+				_ = rc.HSet(ctx, savebarrier.Key(seedTestPlayerID), "outbox_retry_ms", "1").Err()
+			}
+			before := mr.Dump()
+			result, _ := seedCommittedNewPlayerAllData(ctx, rc, testParentLoadScripts, savebarrier.InitialPlayerData(seedTestPlayerID))
+			if result == SeedWritten || result == SeedIdempotent || mr.Dump() != before {
+				t.Fatal("迟到初始种子覆盖或更改了现有权威状态")
+			}
+		})
+	}
+}
+
+func TestInitialSQLCommitRecoversFailedFirstLandingWithoutLoweringOwner(t *testing.T) {
+	for _, owner := range []string{"", "3"} {
+		t.Run("owner="+owner, func(t *testing.T) {
+			_, rc := newSeedTestRedis(t)
+			ctx := context.Background()
+			if owner != "" {
+				if err := rc.Set(ctx, ownerepoch.OwnerEpochKey(seedTestPlayerID), owner, 0).Err(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			reads := &coldSQLReads{read: initialCommitSQLRead}
+			calls := 0
+			ensurePlayerAllDataInRedisAsync(ctx, rc, testParentLoadScripts, true, reads, reads, seedTestPlayerID, 0, func(err error) {
+				calls++
+				if err != nil {
+					t.Error(err)
+				}
+			})
+			got, _ := readSeedParent(t, rc, seedTestPlayerID)
+			wantOwner := owner
+			if wantOwner == "" {
+				wantOwner = "1"
+			}
+			if calls != 1 || reads.count != 2 || !proto.Equal(got, savebarrier.InitialPlayerData(seedTestPlayerID)) || rc.Get(ctx, ownerepoch.OwnerEpochKey(seedTestPlayerID)).Val() != wantOwner {
+				t.Fatal("初始提交恢复缺失、不完整或降低已有 owner")
+			}
+		})
+	}
+}
 
 // 新号种子(docs/design/new-player-first-enter-no-cold-read.md)的单测。全部跑在 miniredis 上,
 // 不需要 Kafka / dispatcher:种子命中后的快路径本来就不该碰它们,传 nil 正好把「碰了」变成 panic。
@@ -38,8 +135,9 @@ func newSeedTestRedis(t *testing.T) (*miniredis.Miniredis, *redis.Client) {
 
 // seedParentKey / seedSubKey 按消息全名拼键,与 scene、backfill、go/db 的拼法相同;不手写字面量,
 // 也不复用被测的 buildParentKey,免得键名拼错时测试跟着一起错。
+// seedParentKey 是父快照键 <全名>:{<pid>}(玩家域 hash tag);子表缓存键仍是 <全名>:<pid>(第 4 批改名)。
 func seedParentKey(playerID uint64) string {
-	return seedSubKey(&login_proto_database.PlayerAllData{}, playerID)
+	return fmt.Sprintf("%s:{%d}", (&login_proto_database.PlayerAllData{}).ProtoReflect().Descriptor().FullName(), playerID)
 }
 
 func seedSubKey(msg proto.Message, playerID uint64) string {
@@ -85,7 +183,7 @@ func TestSeedNewPlayerAllData_WritesSkeletonWithTTL(t *testing.T) {
 	mr, rdb := newSeedTestRedis(t)
 	ctx := context.Background()
 
-	got, err := SeedNewPlayerAllData(ctx, rdb, seedTestPlayerID)
+	got, err := seedTestNewPlayerAllData(ctx, rdb, seedTestPlayerID)
 	requireSeedResult(t, got, err, SeedWritten)
 
 	parent, _ := readSeedParent(t, rdb, seedTestPlayerID)
@@ -114,11 +212,11 @@ func TestSeedNewPlayerAllData_RerunIsIdempotent(t *testing.T) {
 	_, rdb := newSeedTestRedis(t)
 	ctx := context.Background()
 
-	got, err := SeedNewPlayerAllData(ctx, rdb, seedTestPlayerID)
+	got, err := seedTestNewPlayerAllData(ctx, rdb, seedTestPlayerID)
 	requireSeedResult(t, got, err, SeedWritten)
 	_, first := readSeedParent(t, rdb, seedTestPlayerID)
 
-	got, err = SeedNewPlayerAllData(ctx, rdb, seedTestPlayerID)
+	got, err = seedTestNewPlayerAllData(ctx, rdb, seedTestPlayerID)
 	requireSeedResult(t, got, err, SeedIdempotent)
 	if _, second := readSeedParent(t, rdb, seedTestPlayerID); !bytes.Equal(first, second) {
 		t.Fatal("rerun changed the seeded parent key")
@@ -142,7 +240,7 @@ func TestSeedNewPlayerAllData_NeverOverwritesExistingParent(t *testing.T) {
 		t.Fatalf("seed existing parent: %v", err)
 	}
 
-	got, err := SeedNewPlayerAllData(ctx, rdb, seedTestPlayerID)
+	got, err := seedTestNewPlayerAllData(ctx, rdb, seedTestPlayerID)
 	requireSeedResult(t, got, err, SeedParentExists)
 
 	if _, after := readSeedParent(t, rdb, seedTestPlayerID); !bytes.Equal(existing, after) {
@@ -161,7 +259,7 @@ func TestSeedNewPlayerAllData_RefusesOnceOwnerEpochExists(t *testing.T) {
 		t.Fatalf("seed owner_epoch: %v", err)
 	}
 
-	got, err := SeedNewPlayerAllData(ctx, rdb, seedTestPlayerID)
+	got, err := seedTestNewPlayerAllData(ctx, rdb, seedTestPlayerID)
 	requireSeedResult(t, got, err, SeedOwnerEpochExists)
 
 	if mr.Exists(seedParentKey(seedTestPlayerID)) {
@@ -174,9 +272,9 @@ func TestSeedNewPlayerAllData_RejectsZeroIDAndNilClient(t *testing.T) {
 	mr, rdb := newSeedTestRedis(t)
 	ctx := context.Background()
 
-	got, err := SeedNewPlayerAllData(ctx, rdb, 0)
+	got, err := seedTestNewPlayerAllData(ctx, rdb, 0)
 	requireSeedResult(t, got, err, SeedError)
-	got, err = SeedNewPlayerAllData(ctx, nil, seedTestPlayerID)
+	got, err = seedTestNewPlayerAllData(ctx, nil, seedTestPlayerID)
 	requireSeedResult(t, got, err, SeedError)
 
 	if keys := mr.Keys(); len(keys) != 0 {
@@ -195,7 +293,7 @@ func TestSeedNewPlayerAllData_RedisDownIsError(t *testing.T) {
 	mr.SetError("simulated outage")
 	t.Cleanup(func() { mr.SetError("") })
 
-	got, err := SeedNewPlayerAllData(ctx, rdb, seedTestPlayerID)
+	got, err := seedTestNewPlayerAllData(ctx, rdb, seedTestPlayerID)
 	requireSeedResult(t, got, err, SeedError)
 
 	mr.SetError("")
@@ -204,12 +302,12 @@ func TestSeedNewPlayerAllData_RedisDownIsError(t *testing.T) {
 	}
 }
 
-// 不变量 I2:种子 ≡ SQL 冷读读空后的组装结果。即使子表缓存全命中，也必须查 SQL。
-func TestSeedEqualsColdReadAssemblyForEmptyRows(t *testing.T) {
+// 已提交种子与两张真实初始 SQL 行组装结果相同；旧子缓存不能替代 SQL 原件。
+func TestCommittedSeedEqualsInitialSQLAssembly(t *testing.T) {
 	ctx := context.Background()
 
 	mr1, rdb1 := newSeedTestRedis(t)
-	got, err := SeedNewPlayerAllData(ctx, rdb1, seedTestPlayerID)
+	got, err := seedCommittedNewPlayerAllData(ctx, rdb1, testParentLoadScripts, savebarrier.InitialPlayerData(seedTestPlayerID))
 	requireSeedResult(t, got, err, SeedWritten)
 
 	mr2, rdb2 := newSeedTestRedis(t)
@@ -224,8 +322,8 @@ func TestSeedEqualsColdReadAssemblyForEmptyRows(t *testing.T) {
 	}
 	calls := 0
 	var gotErr error
-	reads := &coldSQLReads{read: sqlReadAtVersion(0, 0)}
-	EnsurePlayerAllDataInRedisAsync(ctx, rdb2, reads, reads, seedTestPlayerID, 0, func(err error) {
+	reads := &coldSQLReads{read: initialCommitSQLRead}
+	ensureTestPlayerAllDataInRedisAsync(ctx, rdb2, reads, reads, seedTestPlayerID, 0, func(err error) {
 		calls++
 		gotErr = err
 	})
@@ -254,12 +352,12 @@ func TestSeedEqualsColdReadAssemblyForEmptyRows(t *testing.T) {
 func TestEnsurePlayerAllData_SeededParentTakesFastPath(t *testing.T) {
 	mr, rdb := newSeedTestRedis(t)
 	ctx := context.Background()
-	got, err := SeedNewPlayerAllData(ctx, rdb, seedTestPlayerID)
+	got, err := seedCommittedNewPlayerAllData(ctx, rdb, testParentLoadScripts, savebarrier.InitialPlayerData(seedTestPlayerID))
 	requireSeedResult(t, got, err, SeedWritten)
 
 	calls := 0
 	var gotErr error
-	EnsurePlayerAllDataInRedisAsync(ctx, rdb, nil, nil, seedTestPlayerID, 0, func(err error) {
+	ensureTestPlayerAllDataInRedisAsync(ctx, rdb, nil, nil, seedTestPlayerID, 0, func(err error) {
 		calls++
 		gotErr = err
 	})
@@ -277,7 +375,7 @@ func TestEnsurePlayerAllData_SeededParentTakesFastPath(t *testing.T) {
 			t.Fatalf("found %s: the fast path must not register DB tasks", key)
 		}
 	}
-	if parent, _ := readSeedParent(t, rdb, seedTestPlayerID); !proto.Equal(parent, newPlayerAllDataSkeleton(seedTestPlayerID)) {
+	if parent, _ := readSeedParent(t, rdb, seedTestPlayerID); !proto.Equal(parent, savebarrier.InitialPlayerData(seedTestPlayerID)) {
 		t.Fatalf("parent after the fast path = %v, want the untouched seed", parent)
 	}
 }
@@ -339,7 +437,7 @@ func TestProbeMintedPlayerState_Verdicts(t *testing.T) {
 func TestProbeMintedPlayerState_SeesTheSeedsParentKey(t *testing.T) {
 	_, rdb := newSeedTestRedis(t)
 	ctx := context.Background()
-	got, err := SeedNewPlayerAllData(ctx, rdb, seedTestPlayerID)
+	got, err := seedTestNewPlayerAllData(ctx, rdb, seedTestPlayerID)
 	requireSeedResult(t, got, err, SeedWritten)
 
 	probe, err := ProbeMintedPlayerState(ctx, rdb, seedTestPlayerID)

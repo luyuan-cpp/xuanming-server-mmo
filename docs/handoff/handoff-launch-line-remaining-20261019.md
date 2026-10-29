@@ -133,6 +133,15 @@
     - `kNonClientReserve` = 4096 仍是推算。
     - B0-4 已在 main 里,从 main 出的镜像缺省拒启:硬限低于 24096 / 8192 / 4096 的集群会 CrashLoop。所以前三条应在第一次从 main 出镜像部署之前做。
     - Java PARITY 第 240 行 B0-4 的 commit 列仍写「提交后回填」,实际已随 `e7bb46070` / `8b9592de3` 入库,留给 Java 线回填。
+  - **(2026-10-22)前三条已落码、未验证**,详见 PROGRESS「2026-10-22 B0-4 部署侧后续项」条目:
+    - `k8s_deploy.ps1 -NodeOpenFileLimitMode enforce|warn` 写进全部五套 C++ 模板,留空不写;
+    - `New-NodeDeploymentYaml` 显式写 `maxUnavailable: 0`;
+    - `-WaitReady` 失败时用 `kubectl logs --previous` 捞 `FATAL open file limit` 行。
+    - 代码 10-20 被快照提交 `206647611` 带进 main;契约测试与文档在工作区。都未经 Codex 跑过,命令见该条目。
+    - 第四条(`deploy/k8s/AGENTS.md`)待负责人确认,未改。包装入口(dev_tools / k8s_image / k8s_zone_rollback)尚未透传新参数。
+    - (2026-10-22 续)负责人已确认,第四条已写进 `deploy/k8s/AGENTS.md` 的 CONVENTIONS(「C++ 启动壳不加 `ulimit`」)。包装入口透传另开会话在做。
+    - (2026-10-22 再续,已落码、未验证)包装入口已透传 `-NodeOpenFileLimitMode`:`dev_tools.ps1`(含 `k8s-zone-rollback`)、`k8s_image.ps1`、`k8s_zone_rollback.ps1` 的 Step 6,留空不透传,与 `-GateRouterMode` 同口径。契约清单已钉住,Codex 命令见 PROGRESS「B0-4 部署侧:包装入口透传 -NodeOpenFileLimitMode」条目。回滚第 0 步不核对集群里的这个 env,以 warn 运行的 zone 回滚时要照传。
+    - (2026-10-23 更正,已落码、未验证)回滚脚本第 0 步 a 现在核对:`-NodeOpenFileLimitMode` 留空时,`-Apply` 在 Step 1 停服之前读 gate / scene(含 Agones Fleet)模板里的 `NODE_OPEN_FILE_LIMIT_MODE`,任一为 warn 或读不到即拒绝;显式给值不核对。见 PROGRESS「2026-10-23:回滚脚本第 0 步核对 B0-4 nofile 豁免」。
 - **B0-5**:A1 还没做:scene_manager 按 zone 选主、watch 与 knownNodes 收窄到本 zone,以及 rebalance 等领导者循环限定到本 zone。`handleWatchEvent` 的 PUT 换 zone 分支没有按领导者门控。
   - **(2026-10-20 核对)** 两条都仍未做,也没人认领。A1 多了一个新前置:10-19 EnterScene 陈旧位置会话新增的 `isZoneGoneFromRegistry`,以及既有的 `isNodeGoneFromRegistry`,都依赖 knownNodes 是全服镜像。watch 收窄之前,这两处要先改成按 zone 查注册表,否则别的 zone 会一律被判成已下线。另外,上 Cluster 后 `pipelineBatchRejected` 的整批判定要复核(G4a §17)。
 - **B0-3**:stress_summarize 补 login 侧的回执送达小表;dispatch 线程池饱和时的回退路径仍不可观测;`TriggerPlayerDataPreload` 是死代码。
@@ -167,6 +176,31 @@
 | match 的 `migrateLegacyQueues` | 仍在。GlobalMatch 关闭时(dev / 本地)每个副本每分钟 SCAN 一次 `match:queue:*` | 项目未上线,可以整体删掉旧格式兼容,约 10 个文件 |
 | 每次存盘打 LOG_INFO | 仍在,而且每次真写盘打两条(`player_lifecycle.cpp` 的 enqueued 行与 `HandlePlayerAsyncSaved` 开头);`cross-zone-failure-test-runbook.md` 用这两行取证 | 降为 DEBUG,同时改演练手册的取证方式,2~4 个文件 |
 | Kafka 存盘失败后 MySQL 永久落后 | **已由 S5a 处理**(代码已落,未编译):不作废快照,改成按玩家记投递账本,投递失败后强制重存;MySQL 最多落后一个存盘周期。所以上面「该会话没提这一项」的说法不准确 | 不用再写代码;用例已并入验证单 §9 |
+
+**(2026-10-22 注,上表原文不删)`reassignSceneNode` 无 CAS:已落码,未在本线验证。**
+- **代码**:10-20 落地,经保存提交 `206647611` / `6ecf275fa` 进 main。
+  - `world_init.go` 的 `reassignSceneNode` 改为 Lua CAS:只在属主仍为 oldNode 时,同批改归属、两侧反向索引与 scene_count。init 改派漏记 scene_count 的偏差一并修掉。两处懒改派也改走它。
+  - `world_rebalance.go` 的 `migrateWorldChannel` 在 CAS 失败时,对自己预建的 newNode 补一次尽力而为的 DestroyScene;重读确认 newNode 不是当前属主才销毁。
+  - 回归用例在 `reassign_cas_test.go`,共 7 条。
+- **验证**:10-21 整合记录写了「WorldChannelRace 定向组通过」,但没有用例数,修复前红也没跑。完整命令与通过标准见 PROGRESS 2026-10-22 同名条目。
+- **残留**:`enterscenelogic.go` `resolveScene` 的死节点自愈仍是无条件 SET,是同类的第三个写者。修它要先定 CAS 落空时回给客户端的码,未做;另开任务。
+  - (2026-10-22 续,已落码、未编译、未测试)已改走 `reassignSceneNode`(新方法 `reassignSceneOffDeadNode`)。CAS 落空时重读一次属主,活着就直接用,没有新开错误码;Agones 名额只在 CAS 成功后转移。回归用例 `resolve_scene_reassign_cas_test.go` 6 条,Codex 命令见 PROGRESS「2026-10-22 resolveScene 死节点自愈改走 reassignSceneNode CAS」。
+  - (2026-10-23 再续,已落码、未编译、未测试,上一条的命令作废)对抗评审后又改了一轮:
+    - 死节点自愈只重建大世界频道,用 `world_channels` 成员资格确认 conf,提交时在 CAS 脚本里再核对一次(新增 `reassignWorldChannelNode`,防缩容排空交错);副本 / 镜像不再在别处重建,留给死节点收尾销毁。
+    - 顺序改为先建实体、再 CAS、最后转名额,与 rebalance 相同。建场景失败时不改归属,下一次请求重来;CAS 落空时回收预建的实体。
+    - `TransferAgonesRoomForScene` 的记录改写改为比较并交换。
+    - zone 守卫区分「没记录」与「读出错」。
+    - 用例 10 条(另有 Agones 转移用例 2 条)。Codex 命令以 PROGRESS「2026-10-23 resolveScene 死节点自愈收窄为只重建频道」为准。
+    - 合并后待办:「Go scene_manager 读 Redis 出错不再当成映射不存在」会话的 worktree 合回后,由后合的一方做两处。一是懒改派 `lazyReassignStaleWorldChannel` 第 3 步改走 `reassignWorldChannelNode`;二是把两边同为 3s 的收尾时限常量合成一个。
+
+**(2026-10-22 注,上表原文不删)match 旧格式队列兼容、每次存盘的 INFO:两项都已落码,未编译、未测试。**
+- **match**:删掉 `migrateLegacyQueues` / `migrateLegacyQueue` / `legacyQueueSweepInterval`、`legacyMatchQueueScanPattern` / `legacyMatchQueueKey`、只给迁移用的 `ticketSetQueueKeyScript`,以及 `dequeueMemberCtx` 对无 hash tag 键的单 key LREM。`ticketQueueKeys` 改成只返回新键的 `ticketQueueKey`,CancelQueue 与 `leaveQueueForOtherBattle` 跟着改。
+  - 用例:删 `TestMigrateLegacyQueues*` 两条、`TestCancelQueueLegacyTicketFallsBack`、`writeLegacyTicket`,删 keys / PVE 人数档 / JoinQueue 自愈里的旧键断言,删 party 撤单回归里两处「无版本遗留」子用例。迁移用例后半段的镜像补写断言改为单列的 `TestMatcherBackfillsMissingRankMirror`,补写路径本身没动。
+  - 代码 10-20 写完,已被别的会话的保存提交带进 main(`1b41d8f1e` 等)。`cross-zone-matchmaking.md` 的 D2、§4.2、§10、§11.9 已追加删除注。
+- **存盘日志**:`player_lifecycle.cpp` 的两条成功 INFO 降为 DEBUG;失败分支只留汇总 ERROR,原 INFO 里的 home_zone / owner_epoch / save_seq 并进 ERROR。演练手册 §3.1 新增第 7 条(调级方法与不调级时的替代证据),§2.4 与场景 B3a 加了指向注;`cross-zone-scene-travel.md`、`db-task-kafka-partition-contract.md`、`db-task-delivery-and-retention.md` 追加了带日期的更正。
+- **验证**:命令见 PROGRESS「2026-10-22 match 旧格式队列兼容删除与存盘日志降级」。
+- **新发现,未处理**:`LogLevel` 按 muduo 枚举解释(0=TRACE、1=DEBUG、2=INFO),`node.cpp` 的 `InitLogSystem` 直接强转。`k8s_deploy.ps1` 生成的 node ConfigMap 写的是 `LogLevel: 1`,所以 K8s 上所有 C++ 节点实际跑在 DEBUG:这次降级在 K8s 上不减日志,热路径的 DEBUG 日志也一直开着。`release_preflight.ps1` 的 `debug.cpp.loglevel` 按「0=DEBUG、下限 1」检查,把它放过了;`bin/etc/base_deploy_config.yaml` 的注释对照也是错的。另开任务。
+  - **(2026-10-22 已处理,未执行,待 Codex 验证)**:node ConfigMap 改为从 `bin/etc` 镜像 `LogLevel`(默认 2 = INFO,生成期校验 0..5),预检下界改为 2,注释改为 muduo 枚举,契约测试补了三条。K8s 上已在跑的 C++ Pod 要重启才生效(node-config 无配置指纹)。见 PROGRESS「2026-10-22 C++ 节点 LogLevel 口径统一」。
 
 ## 4. 硬约束
 

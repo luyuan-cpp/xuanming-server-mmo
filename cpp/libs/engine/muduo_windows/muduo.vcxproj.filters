@@ -108,6 +108,15 @@
     <ClCompile Include="src\muduo\net\TcpServer.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\muduo\net\http\HttpContext.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\muduo\net\http\HttpResponse.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\muduo\net\http\HttpServer.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\muduo\net\Timer.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -273,6 +282,18 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\muduo\net\TcpServer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\muduo\net\http\HttpContext.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\muduo\net\http\HttpRequest.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\muduo\net\http\HttpResponse.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\muduo\net\http\HttpServer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\muduo\net\Timer.h">

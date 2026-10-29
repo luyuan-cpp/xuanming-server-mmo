@@ -340,9 +340,10 @@ func TestRouteWaitAOFBudgetMs(t *testing.T) {
 // ── 发布 ──────────────────────────────────────────────────────────────────────
 
 func TestPublishRoutes_EvalsThenWaitAOFInOnePipeline(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	rdb, f := newFakeRouteRedis(t, applyAll([]any{int64(1), int64(0)}))
 	p := newTestRoutePublisher(rdb, 1, 0)
-	rep, err := p.publishRoutes(context.Background(), []mergeRouteRow{
+	rep, err := p.publishRoutes(ctx, []mergeRouteRow{
 		{PlayerID: 90002, HomeZone: 102, Rev: 5},
 		{PlayerID: 7, HomeZone: 102, StorageID: 101, PlacementVersion: 1, Rev: 9},
 	})
@@ -373,6 +374,7 @@ func TestPublishRoutes_EvalsThenWaitAOFInOnePipeline(t *testing.T) {
 
 // TestPublishRoutes_ResendsTheWholeBatchWhenWaitAOFIsShort:份数不足 → 整批(EVAL 全部 + WAITAOF)在新的一条 pipeline 里重发。
 func TestPublishRoutes_ResendsTheWholeBatchWhenWaitAOFIsShort(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	rdb, f := newFakeRouteRedis(t, func(n int, cmd redis.Cmder) (any, error) {
 		switch cmd.Name() {
 		case "eval":
@@ -390,7 +392,7 @@ func TestPublishRoutes_ResendsTheWholeBatchWhenWaitAOFIsShort(t *testing.T) {
 		return nil, fmt.Errorf("unexpected %s", cmd.Name())
 	})
 	p := newTestRoutePublisher(rdb, 1, 1)
-	rep, err := p.publishRoutes(context.Background(), []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 2}, {PlayerID: 2, HomeZone: 102, Rev: 3}})
+	rep, err := p.publishRoutes(ctx, []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 2}, {PlayerID: 2, HomeZone: 102, Rev: 3}})
 	if err != nil {
 		t.Fatalf("publishRoutes: %v", err)
 	}
@@ -403,9 +405,10 @@ func TestPublishRoutes_ResendsTheWholeBatchWhenWaitAOFIsShort(t *testing.T) {
 }
 
 func TestPublishRoutes_GivesUpWhenNeverDurable(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	rdb, f := newFakeRouteRedis(t, applyAll([]any{int64(1), int64(0)}))
 	p := newTestRoutePublisher(rdb, 1, 1)
-	_, err := p.publishRoutes(context.Background(), []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 2}})
+	_, err := p.publishRoutes(ctx, []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 2}})
 	if !errors.Is(err, errRoutePublishNotDurable) || f.pipelineCount() != routePublishAttempts {
 		t.Fatalf("error = %v after %d pipelines, want errRoutePublishNotDurable after %d", err, f.pipelineCount(), routePublishAttempts)
 	}
@@ -413,6 +416,7 @@ func TestPublishRoutes_GivesUpWhenNeverDurable(t *testing.T) {
 
 // TestRouteBatchPublishSameRevDifferentValueFails:缓存同 rev 而值不同 = 冲突,零写入、不重试、不伪装成功(规格 §3 表第 2 行)。
 func TestRouteBatchPublishSameRevDifferentValueFails(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	rdb, f := newFakeRouteRedis(t, func(_ int, cmd redis.Cmder) (any, error) {
 		if cmd.Name() == "eval" {
 			rev, _, _ := evalArgs(cmd)
@@ -421,13 +425,14 @@ func TestRouteBatchPublishSameRevDifferentValueFails(t *testing.T) {
 		return []any{int64(1), int64(0)}, nil
 	})
 	p := newTestRoutePublisher(rdb, 1, 0)
-	_, err := p.publishRoutes(context.Background(), []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 2}})
+	_, err := p.publishRoutes(ctx, []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 2}})
 	if !errors.Is(err, errRoutePublishRejected) || !strings.Contains(err.Error(), "conflict") || f.pipelineCount() != 1 {
 		t.Fatalf("error = %v after %d pipelines, want one rejected attempt", err, f.pipelineCount())
 	}
 }
 
 func TestPublishRoutes_SupersededPassesOnlyWithTheSameValue(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	cached := "102"
 	rdb, _ := newFakeRouteRedis(t, func(_ int, cmd redis.Cmder) (any, error) {
 		if cmd.Name() == "eval" {
@@ -436,17 +441,18 @@ func TestPublishRoutes_SupersededPassesOnlyWithTheSameValue(t *testing.T) {
 		return []any{int64(1), int64(0)}, nil
 	})
 	p := newTestRoutePublisher(rdb, 1, 0)
-	rep, err := p.publishRoutes(context.Background(), []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 5}})
+	rep, err := p.publishRoutes(ctx, []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 5}})
 	if err != nil || rep.Superseded != 1 {
 		t.Fatalf("superseded with the same value = (%s, %v)", rep, err)
 	}
 	cached = "103"
-	if _, err := p.publishRoutes(context.Background(), []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 5}}); !errors.Is(err, errRoutePublishRejected) {
+	if _, err := p.publishRoutes(ctx, []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 5}}); !errors.Is(err, errRoutePublishRejected) {
 		t.Fatalf("superseded with another value error = %v, want errRoutePublishRejected", err)
 	}
 }
 
 func TestPublishRoutes_ErrorReplyIsDeterministicNetworkErrorRetries(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	rdb, f := newFakeRouteRedis(t, func(_ int, cmd redis.Cmder) (any, error) {
 		if cmd.Name() == "eval" {
 			return nil, fakeRedisReplyError("ERR route publish: malformed maprev")
@@ -454,7 +460,7 @@ func TestPublishRoutes_ErrorReplyIsDeterministicNetworkErrorRetries(t *testing.T
 		return []any{int64(1), int64(0)}, nil
 	})
 	p := newTestRoutePublisher(rdb, 1, 0)
-	if _, err := p.publishRoutes(context.Background(), []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 5}}); !errors.Is(err, errRoutePublishRejected) || f.pipelineCount() != 1 {
+	if _, err := p.publishRoutes(ctx, []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 5}}); !errors.Is(err, errRoutePublishRejected) || f.pipelineCount() != 1 {
 		t.Fatalf("script error reply = %v after %d pipelines, want one rejected attempt", err, f.pipelineCount())
 	}
 
@@ -465,7 +471,7 @@ func TestPublishRoutes_ErrorReplyIsDeterministicNetworkErrorRetries(t *testing.T
 		return applyAll([]any{int64(1), int64(0)})(n, cmd)
 	})
 	p = newTestRoutePublisher(rdb, 1, 0)
-	if _, err := p.publishRoutes(context.Background(), []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 5}}); err != nil || f.pipelineCount() != 2 {
+	if _, err := p.publishRoutes(ctx, []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 5}}); err != nil || f.pipelineCount() != 2 {
 		t.Fatalf("network error then success = %v after %d pipelines, want success on the 2nd", err, f.pipelineCount())
 	}
 
@@ -477,7 +483,7 @@ func TestPublishRoutes_ErrorReplyIsDeterministicNetworkErrorRetries(t *testing.T
 		return []any{int64(1), rev}, nil
 	})
 	p = newTestRoutePublisher(rdb, 1, 0)
-	if _, err := p.publishRoutes(context.Background(), []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 5}}); err == nil ||
+	if _, err := p.publishRoutes(ctx, []mergeRouteRow{{PlayerID: 1, HomeZone: 102, Rev: 5}}); err == nil ||
 		!strings.Contains(err.Error(), "appendonly") || f.pipelineCount() != 1 {
 		t.Fatalf("WAITAOF error reply = %v after %d pipelines, want one deterministic failure", err, f.pipelineCount())
 	}
@@ -504,13 +510,14 @@ func TestPublishRoutes_RejectsInvalidRowsBeforeSending(t *testing.T) {
 }
 
 func TestPublishRoutes_SplitsIntoPipelinesOfAtMost500(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	rdb, f := newFakeRouteRedis(t, applyAll([]any{int64(1), int64(0)}))
 	p := newTestRoutePublisher(rdb, 1, 0)
 	rows := make([]mergeRouteRow, routePublishBatch+1)
 	for i := range rows {
 		rows[i] = mergeRouteRow{PlayerID: uint64(i + 1), HomeZone: 102, Rev: 1}
 	}
-	rep, err := p.publishRoutes(context.Background(), rows)
+	rep, err := p.publishRoutes(ctx, rows)
 	if err != nil || rep.Applied != len(rows) {
 		t.Fatalf("publishRoutes = (%s, %v)", rep, err)
 	}
@@ -552,6 +559,7 @@ func TestDecideRouteCatchUp(t *testing.T) {
 
 // TestCatchUpRoutes_PublishesOnlyLaggingRows:库 rev 领先或缓存没有 maprev 的行才发布并确认,已是这一版的行不发。
 func TestCatchUpRoutes_PublishesOnlyLaggingRows(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	cache := map[string]any{"player:zone:1": "102", "player:maprev:1": "5", "player:zone:2": "101", "player:maprev:2": "3"}
 	rdb, f := newFakeRouteRedis(t, func(_ int, cmd redis.Cmder) (any, error) {
 		switch cmd.Name() {
@@ -570,7 +578,7 @@ func TestCatchUpRoutes_PublishesOnlyLaggingRows(t *testing.T) {
 		return nil, fmt.Errorf("unexpected %s", cmd.Name())
 	})
 	p := newTestRoutePublisher(rdb, 1, 0)
-	rep, err := p.catchUpRoutes(context.Background(), []mergeRouteRow{
+	rep, err := p.catchUpRoutes(ctx, []mergeRouteRow{
 		{PlayerID: 1, HomeZone: 102, Rev: 5},
 		{PlayerID: 2, HomeZone: 102, Rev: 4},
 		{PlayerID: 3, HomeZone: 102, Rev: 1},
@@ -628,6 +636,7 @@ func TestRouteFenceMirrorArgs(t *testing.T) {
 }
 
 func TestSetFenceMirror(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	holder := `{"run_id":"1-2-20261018T000000Z-0a1b2c3d","fence_epoch":7}`
 	reply := int64(1)
 	rdb, f := newFakeRouteRedis(t, func(_ int, cmd redis.Cmder) (any, error) {
@@ -637,7 +646,7 @@ func TestSetFenceMirror(t *testing.T) {
 		return []any{int64(1), int64(0)}, nil
 	})
 	p := newTestRoutePublisher(rdb, 1, 0)
-	if err := p.setFenceMirror(context.Background(), 2, holder, 7, 1000); err != nil {
+	if err := p.setFenceMirror(ctx, 2, holder, 7, 1000); err != nil {
 		t.Fatalf("setFenceMirror: %v", err)
 	}
 	if !reflect.DeepEqual(f.names(0), []string{"eval", "waitaof"}) {
@@ -647,11 +656,11 @@ func TestSetFenceMirror(t *testing.T) {
 		t.Fatalf("mirror EVAL args = %#v", got)
 	}
 	reply = 0
-	if err := p.setFenceMirror(context.Background(), 2, holder, 7, 1000); !errors.Is(err, errRouteFenceMirrorStale) {
+	if err := p.setFenceMirror(ctx, 2, holder, 7, 1000); !errors.Is(err, errRouteFenceMirrorStale) {
 		t.Fatalf("stale error = %v", err)
 	}
 	reply = 2
-	if err := p.setFenceMirror(context.Background(), 2, holder, 7, 1000); !errors.Is(err, errRouteFenceMirrorForeign) {
+	if err := p.setFenceMirror(ctx, 2, holder, 7, 1000); !errors.Is(err, errRouteFenceMirrorForeign) {
 		t.Fatalf("foreign error = %v", err)
 	}
 	if f.pipelineCount() != 3 {
@@ -660,11 +669,12 @@ func TestSetFenceMirror(t *testing.T) {
 }
 
 func TestDeleteMirrorsCompareTheFullValue(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	deleted := int64(1)
 	rdb, f := newFakeRouteRedis(t, func(_ int, cmd redis.Cmder) (any, error) { return deleted, nil })
 	p := newTestRoutePublisher(rdb, 1, 0)
 	holder := `{"run_id":"r","fence_epoch":3}`
-	ok, err := p.deleteFenceMirror(context.Background(), 2, holder)
+	ok, err := p.deleteFenceMirror(ctx, 2, holder)
 	if err != nil || !ok {
 		t.Fatalf("deleteFenceMirror = (%v, %v)", ok, err)
 	}
@@ -673,7 +683,7 @@ func TestDeleteMirrorsCompareTheFullValue(t *testing.T) {
 	}
 	deleted = 0
 	value := `{"dst":102,"run_id":"r"}`
-	if ok, err := p.deleteMergedIntoMirror(context.Background(), 101, value); err != nil || ok {
+	if ok, err := p.deleteMergedIntoMirror(ctx, 101, value); err != nil || ok {
 		t.Fatalf("deleteMergedIntoMirror on a changed value = (%v, %v), want (false, nil)", ok, err)
 	}
 	if got := f.singles[1].Args(); got[3] != "merge:merged_into:101" || got[4] != value {
@@ -682,6 +692,7 @@ func TestDeleteMirrorsCompareTheFullValue(t *testing.T) {
 }
 
 func TestSetMergedIntoMirror(t *testing.T) {
+	ctx, _ := testMaintenanceContext()
 	rdb, f := newFakeRouteRedis(t, func(_ int, cmd redis.Cmder) (any, error) {
 		if cmd.Name() == "set" {
 			return "OK", nil
@@ -693,7 +704,7 @@ func TestSetMergedIntoMirror(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
-	if err := p.setMergedIntoMirror(context.Background(), 101, value); err != nil {
+	if err := p.setMergedIntoMirror(ctx, 101, value); err != nil {
 		t.Fatalf("setMergedIntoMirror: %v", err)
 	}
 	if !reflect.DeepEqual(f.names(0), []string{"set", "waitaof"}) || !reflect.DeepEqual(f.pipelines[0][0].Args(), []any{"set", "merge:merged_into:101", value}) {

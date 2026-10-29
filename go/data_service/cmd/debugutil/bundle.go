@@ -58,6 +58,9 @@ type Bundle struct {
 
 // BundleSources 记录数据从哪几台实例读出(host:port/库),不含口令。*_id 是实例身份(Redis run_id、
 // MySQL @@server_uuid),导入端据此拒绝「写回导出来源」——port-forward 后地址都是 127.0.0.1,只看地址分不出来。
+// 取不到身份的一侧留空(TiDB 一律留空,见 MySQLServerIdentity);导入端对空身份 fail-closed,不当成「不同实例」
+// (2026-10-22,r2-ds#1)。Redis run_id 只用来拒绝「相同」:线上切主、重启后 run_id 就变,「不同」证明不了写目标
+// 是本地,导入端对 Redis 写目标另要本地标记(HasLocalRedisMarker)。
 type BundleSources struct {
 	CoreRedis      string `json:"core_redis"`
 	CoreRedisID    string `json:"core_redis_id,omitempty"`
@@ -278,9 +281,9 @@ type RedisKeySpec struct {
 	Member string
 }
 
-// ParentKey 是 C++ 存盘写的父快照键:<PlayerAllData 全名>:<id>(proto 无 package,即 PlayerAllData:<id>)。
+// ParentKey 是 C++ 存盘写的父快照键 PlayerAllData:{<id>}(玩家域 hash tag),经 savebarrier.ParentKey 构造。
 func ParentKey(playerID uint64) string {
-	return string((&databasepb.PlayerAllData{}).ProtoReflect().Descriptor().FullName()) + ":" + strconv.FormatUint(playerID, 10)
+	return savebarrier.ParentKey(playerID)
 }
 
 // SubTableCacheKey 是 go/db 落库后回写的子表缓存键 {msg_type}:{id}(key_ordered_consumer.buildCacheKey)。
@@ -396,11 +399,12 @@ func PlayerRedisKeySpecs(playerID uint64, homeZone uint32) []RedisKeySpec {
 	return specs
 }
 
-// AccountRedisKeySpec 是账号角色目录键。值里的 password 一律清掉,且不导出原字节(只读查看)。
+// AccountRedisKeySpec 是旧账号目录缓存键。值里的 password 一律清掉,且不导出原字节(只读查看)。
+// debug_import 不读、不写这把键;角色归属只经全局 SQL 目录 ImportRole 按角色行写入(2026-10-22 核实,r2 账号目录疑点)。
 func AccountRedisKeySpec(account string) RedisKeySpec {
 	return RedisKeySpec{
 		Key: AccountKey(account), Instance: RedisCore, Kind: RedisKindString,
-		Purpose: "账号角色目录(login 权威记录;password 已脱敏、不可导回)",
+		Purpose: "旧账号目录缓存(只读查看;当前归属只认全局 SQL account_role;password 已脱敏、不可导回)",
 		Decode:  newMsg[databasepb.UserAccounts](),
 		Redact: func(msg proto.Message) {
 			if accounts, ok := msg.(*databasepb.UserAccounts); ok {

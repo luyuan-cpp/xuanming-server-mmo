@@ -1,7 +1,7 @@
 # 进场链余项 a–e:踢线、离场、落点、释放与断线上报的身份栅栏
 
 - 日期:2026-10-16
-- 状态:设计 v0.2;**2026-10-16 已按 §7 三组落码(未编译、未测试),落码记录与出入见 §13**。*2026-10-20 回填(只读核对 PROGRESS 回执):C++ 部分单测已绿。`routing_identity_test` 113/113 含 `KickFence` 10 个;`cross_zone_test` 313/313 含 `ReleaseFence` 8 个、`ReleaseFenceEcs` 22 个。出处是 PROGRESS「2026-10-19 Codex:会话释放夹具修复核验完成,跨区随机全量313项通过」,跑的是合并前源码。§8 的两轮真实环境验证没有实跑。*已按「正确性」「发布与可实施性」两路对抗复核修订(逐条处置见 §12);
+- 状态:设计 v0.2;**2026-10-16 已按 §7 三组落码(未编译、未测试),落码记录与出入见 §13**。*2026-10-20 回填(只读核对 PROGRESS 回执,10-22 订正):§8 第二轮(绿跑)的 C++ 部分已有证据。`routing_identity_test` 113/113 含 `KickFence` 10 个;`cross_zone_test` 313/313 含 `ReleaseFence` 8 个、`ReleaseFenceEcs` 22 个。出处是 PROGRESS「2026-10-19 Codex：会话释放夹具修复核验完成，跨区随机全量313项通过」,跑的是合并前源码。Go 侧 scene_manager / player_locator / login 的全量单测另有 10-19 回执。2026-10-22 又有一轮:29 个 C++ 测试 EXE 共 2624 PASS,其中 cross_zone_test 339/339、routing_identity_test 140/140。第一轮(红跑)的证据没有记录;§8 第 5 步的可选联机(robot 同频道重进、travel_smoke / channel_smoke)没有实跑。*已按「正确性」「发布与可实施性」两路对抗复核修订(逐条处置见 §12);
   下一步:Codex 按 §8 两轮验证(命令汇总见 §13 开头的链接)。
 - 范围:login → gate 踢线(a)、player_locator → scene_manager 离场清理(b)、scene_manager → scene 的 `ReleasePlayer`(c)、
   scene_manager 落点(d)、login → player_locator 断线 / 登出上报(e)。scene 入场栅栏本身、存盘链、MySQL 行内围栏都不改。

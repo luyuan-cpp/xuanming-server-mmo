@@ -222,10 +222,10 @@ message RecommendFriendsResponse {
 
 // ── 服务端推送(S2C) ─────────────────────────────────────────────────
 //
-// 推送必须声明在这个**客户端服务**里而不是另起一个服务:Unity / robot 的推送
-// handler 只对服务名含 ClientPlayer / GamePlayer 的服务生成
-// (tools/proto_generator/.../unity/unity_client_handler.go:183-186、
-//  generator/go/robot_case.go:137-138),放错地方就没有客户端收件人。
+// 推送必须声明在这个**客户端服务**里而不是另起一个服务:Unity / robot 生成器只对标了
+// option (OptionIsClientProtocolService) = true 的服务出客户端调用面,推送方法还须标
+// option (OptionClientRpcKind) = CLIENT_RPC_PUSH(见下方 NotifyFriendEvent);放错服务或
+// 漏标 option 就没有客户端收件人。
 // 推送经 kafkautil.PushToPlayer → gate-cmd_g<N>,at-most-once:玩家刚好掉线时
 // 这条事件会丢,所以推送只用来"立刻刷红点",真相仍要靠 GetPendingRequests 拉取。
 
@@ -245,9 +245,9 @@ message FriendEventS2C {
 
 // ── 服务声明 ─────────────────────────────────────────────────────────
 //
-// 服务名从 FriendService 改成 ClientPlayerFriend:见上面 S2C 段的注释 ——
-// 生成器靠服务名里的 ClientPlayer 前缀决定是否给客户端出推送 handler,
-// 改名是本期新增 S2C 推送的前提,不是为了好看。
+// 服务名早先从 FriendService 改成 ClientPlayerFriend,是为了满足当时生成器按服务名含
+// ClientPlayer 过滤客户端服务的规则;该过滤已删除(docs/design/client-rpc-callback.md
+// §5.2 第 4 条),现在是否生成客户端调用面只看下方的 OptionIsClientProtocolService,与服务名无关。
 // NotifyOnline / NotifyOffline 两个 rpc 与它们的四个 message 已删除:全仓非生成
 // 代码里零调用方(已 Grep 确认),在线状态改读契约 key player:session:{id}。
 service ClientPlayerFriend {

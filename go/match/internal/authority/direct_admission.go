@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-sql-driver/mysql"
 	"google.golang.org/protobuf/proto"
 	pb "proto/match"
 )
@@ -113,20 +114,30 @@ func (s *Store) PrepareDirectAdmission(ctx context.Context, key *pb.MatchDirectI
 	if err != nil {
 		return nil, err
 	}
+	// TiDB 的缺行 FOR UPDATE 不提供主键占位；先在原 P 事务抢同一永久主键。
+	// 只将这条 INSERT 的重复主键交给锁内原件复核，截断、锁超时等错误仍返回。
+	if _, err = tx.ExecContext(ctx, "INSERT INTO match_direct_intent(kind,owner_id,request_high,request_low,payload,battle_id,cancelled,owner_account,owner_revision) VALUES(?,?,?,?,?,0,0,?,?)", key.Kind, key.OwnerId, key.RequestHigh, key.RequestLow, payload, actor.OwnerAccount, actor.OwnerRevision); err != nil {
+		var duplicate *mysql.MySQLError
+		if !errors.As(err, &duplicate) || duplicate.Number != 1062 {
+			return nil, err
+		}
+	}
 	current, err := readDirectTx(ctx, tx, key)
 	if err != nil {
 		return nil, err
 	}
-	if current != nil {
-		if !bytes.Equal(current.Payload, payload) || current.OwnerAccount != actor.OwnerAccount || current.OwnerRevision != actor.OwnerRevision {
-			return nil, ErrDirectConflict
-		}
-		if current.Cancelled {
-			return nil, ErrDirectCancelled
-		}
-		if current.ExitPrepared || current.BattleId != 0 {
-			return current, tx.Commit()
-		}
+	if current == nil || !bytes.Equal(current.Payload, payload) {
+		return nil, ErrDirectConflict
+	}
+	// 永久取消只认同正文；墓碑不需要伪造已经准备过的 actor 绑定。
+	if current.Cancelled {
+		return nil, ErrDirectCancelled
+	}
+	if current.OwnerAccount != actor.OwnerAccount || current.OwnerRevision != actor.OwnerRevision {
+		return nil, ErrDirectConflict
+	}
+	if current.ExitPrepared || current.BattleId != 0 {
+		return current, tx.Commit()
 	}
 	out, err := s.prepareDirectAdmissionTx(ctx, tx, key, payload, formation, group, actor, current)
 	if err != nil {

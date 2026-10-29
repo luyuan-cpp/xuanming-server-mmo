@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include <future>
+#include <thread>
 
 #include <algorithm>
 #include <chrono>
@@ -343,4 +345,143 @@ TEST(DeliveryTracker, ResolveAfterTakeAllIsFalse)
     tracker.Accept(21);
     ASSERT_EQ(1u, tracker.TakeAll().size());
     EXPECT_FALSE(tracker.Resolve(21));
+}
+
+
+TEST(PublicationFrontier, OrdinaryAcceptedSendWaitsForBrokerConfirmation)
+{
+    kafka_producer_policy::PublicationFrontier f;
+    EXPECT_TRUE(f.Settled());
+    f.Accepted();
+    EXPECT_FALSE(f.Settled());
+    f.Delivered(true);
+    EXPECT_TRUE(f.Settled());
+}
+
+TEST(PublicationFrontier, TimeoutOrPurgeCannotBeClearedByLaterSuccess)
+{
+    kafka_producer_policy::PublicationFrontier f;
+    f.Accepted();
+    f.Delivered(false);
+    f.Accepted();
+    f.Delivered(true);
+    EXPECT_TRUE(f.HasUnknown());
+    EXPECT_FALSE(f.Settled());
+}
+
+TEST(PublicationFrontier, UnknownOrUnexpectedCallbackKeepsClosedProofUnavailable)
+{
+    kafka_producer_policy::PublicationFrontier f;
+    f.Delivered(true);
+    EXPECT_FALSE(f.Settled());
+    kafka_producer_policy::PublicationFrontier purged;
+    purged.Accepted();
+    purged.MarkUnknown();
+    purged.Delivered(true);
+    EXPECT_FALSE(purged.Settled());
+}
+
+
+TEST(PublicationRegistry, ClosedAdmissionStillWaitsForPreviouslyAcceptedSendAndNativeJoin)
+{
+    kafka_producer_policy::PublicationRegistry registry;
+    const auto owner = registry.Register();
+    ASSERT_TRUE(registry.BeginSend(owner));
+    registry.CloseAdmission();
+    EXPECT_FALSE(registry.BeginSend(owner));
+    EXPECT_FALSE(registry.Read().Settled());
+    // 关门前已接收的调用允许完成入队；不能靠关门吞掉其回执。
+    registry.HandleOpened(owner);
+    registry.Accepted(owner);
+    registry.Delivered(owner, true);
+    registry.EndSend(owner);
+    EXPECT_FALSE(registry.Read().Settled());
+    registry.HandleJoined(owner);
+    EXPECT_TRUE(registry.Read().Settled());
+}
+
+TEST(PublicationRegistry, OtherThreadOwnerCannotBeHiddenByCurrentThreadFlush)
+{
+    kafka_producer_policy::PublicationRegistry registry;
+    const auto first = registry.Register();
+    const auto second = registry.Register();
+    registry.HandleOpened(first);
+    registry.HandleOpened(second);
+    registry.Accepted(second);
+    registry.CloseAdmission();
+    registry.HandleJoined(first);
+    EXPECT_FALSE(registry.Read().Settled());
+    registry.Delivered(second, true);
+    EXPECT_FALSE(registry.Read().Settled());
+    registry.HandleJoined(second);
+    EXPECT_TRUE(registry.Read().Settled());
+    EXPECT_EQ(1u, registry.Read().accepted);
+    EXPECT_EQ(1u, registry.Read().confirmed);
+}
+
+TEST(PublicationRegistry, AmbiguousDeliveryPersistsAfterNativeHandleAndThreadExit)
+{
+    kafka_producer_policy::PublicationRegistry registry;
+    const auto owner = registry.Register();
+    registry.HandleOpened(owner);
+    registry.Accepted(owner);
+    registry.Delivered(owner, false);
+    registry.HandleJoined(owner);
+    registry.CloseAdmission();
+    EXPECT_TRUE(registry.Read().unknown);
+    EXPECT_EQ(0u, registry.Read().openHandles);
+    EXPECT_EQ(0u, registry.Read().activeSends);
+    EXPECT_FALSE(registry.Read().Settled());
+    const auto late = registry.Register();
+    EXPECT_FALSE(registry.BeginSend(late));
+    EXPECT_FALSE(registry.Read().Settled());
+}
+
+TEST(PublicationRegistry, ConcurrentCloseCannotSkipAcceptedThread)
+{
+    kafka_producer_policy::PublicationRegistry registry;
+    const auto owner = registry.Register();
+    std::promise<void> admitted;
+    std::promise<void> release;
+    auto released = release.get_future();
+    bool accepted = false;
+    std::thread sender([&] {
+        accepted = registry.BeginSend(owner);
+        admitted.set_value();
+        released.wait();
+        if (accepted) {
+            registry.Accepted(owner);
+            registry.Delivered(owner, true);
+            registry.EndSend(owner);
+        }
+    });
+    admitted.get_future().wait();
+    registry.CloseAdmission();
+    EXPECT_FALSE(registry.Read().Settled());
+    release.set_value();
+    sender.join();
+    EXPECT_TRUE(accepted);
+    EXPECT_TRUE(registry.Read().Settled());
+}
+
+TEST(PublicationRegistry, DeliveredMessageIsNotSettledUntilListenerAndTargetDestructionReturn)
+{
+    auto registry=std::make_shared<kafka_producer_policy::PublicationRegistry>();const auto owner=registry->Register();
+    registry->Accepted(owner);registry->CloseAdmission();bool destroyed=false;
+    {
+        kafka_producer_policy::PublicationCallbackScope phase(registry,owner);
+        auto target=std::shared_ptr<int>(new int(0),[&](int* value){
+            delete value;destroyed=true;EXPECT_FALSE(registry->OwnerSettled(owner));EXPECT_FALSE(registry->Read().Settled());
+            EXPECT_FALSE(registry->BeginSend(owner));
+        });
+        registry->Delivered(owner,true);
+        EXPECT_FALSE(registry->OwnerSettled(owner));EXPECT_EQ(1u,registry->Read().activeCallbacks);
+    }
+    EXPECT_TRUE(destroyed);EXPECT_EQ(0u,registry->Read().activeCallbacks);EXPECT_TRUE(registry->Read().Settled());
+}
+TEST(PublicationRegistry, ListenerExceptionKeepsUnknownAfterLocalCallbackJoin)
+{
+    auto registry=std::make_shared<kafka_producer_policy::PublicationRegistry>();const auto owner=registry->Register();registry->Accepted(owner);
+    try{kafka_producer_policy::PublicationCallbackScope phase(registry,owner);registry->Delivered(owner,true);throw 1;}catch(int){}
+    registry->CloseAdmission();EXPECT_EQ(0u,registry->Read().activeCallbacks);EXPECT_TRUE(registry->Read().unknown);EXPECT_FALSE(registry->Read().Settled());
 }

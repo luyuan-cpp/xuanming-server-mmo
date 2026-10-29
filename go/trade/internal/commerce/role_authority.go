@@ -71,16 +71,18 @@ func (e *Engine) lockRoles(ctx context.Context, tx *sql.Tx, allowListing uint64,
 	if present {
 		players = append(players, original.Role.PlayerId)
 	}
+	// 目录给出的 ErrConflict(角色被另一条挂单冻结、目录行不合格)与换主一样是长期状态,标成 role_conflict
+	// 供后台推进分钟级复查(2026-10-22);客户端拿到的 tip 码不变。
 	if err := e.Roles.Lock(ctx, tx, allowListing, players...); err != nil {
-		return err
+		return asRoleConflict(err)
 	}
 	if present {
 		current, err := e.Roles.Ownership(ctx, tx, original.Role.PlayerId)
 		if err != nil {
-			return err
+			return asRoleConflict(err)
 		}
 		if current.Account != original.Account || current.OwnerRevision != original.OwnerRevision {
-			return ErrConflict
+			return roleConflict()
 		}
 	}
 	return nil
@@ -100,10 +102,11 @@ func (e *Engine) checkContractIdentities(ctx context.Context, tx *sql.Tx, r *tra
 		}
 		owned, err := e.Roles.Ownership(ctx, tx, party.player)
 		if err != nil {
-			return err
+			return asRoleConflict(err)
 		}
 		if owned.Account != party.identity.Account || owned.OwnerRevision != party.identity.OwnerRevision {
-			return ErrConflict
+			// 原主已换(owner_revision 只增不减,不会再对上):合同与对方托管保留,等人工,不按存储抖动每 10 秒重试。
+			return roleConflict()
 		}
 	}
 	return nil

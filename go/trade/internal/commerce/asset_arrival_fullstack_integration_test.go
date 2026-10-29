@@ -34,6 +34,7 @@ import (
 	"math"
 	"net"
 	"os"
+	"shared/authoritysql/sqltest"
 	"strconv"
 	"strings"
 	"testing"
@@ -47,8 +48,10 @@ import (
 	assetpb "proto/common/asset"
 	componentpb "proto/common/component"
 	playerpb "proto/common/database"
+	dspb "proto/data_service"
 	tradepb "proto/trade"
 	"schemamigrate"
+	"shared/accountdirectory"
 	"shared/assetop"
 	"shared/authoritysql"
 	"shared/domainhost"
@@ -405,7 +408,7 @@ func newTradeFullstackRig(t *testing.T) *tradeFullstackRig {
 	}
 	for player, key := range map[uint64]string{rig.seller: "SELLER_DSN", rig.buyer: "BUYER_DSN"} {
 		cfg := tradeFullstackDSN(t, key, true)
-		db, err := authoritysql.Open(ctx, cfg.FormatDSN(), cfg.DBName, true, 2)
+		db, err := authoritysql.Open(ctx, cfg.FormatDSN(), cfg.DBName, true, 2, authoritysql.Reader())
 		if err != nil {
 			t.Fatalf("实际玩家TiDB连接失败: %v", err)
 		}
@@ -486,35 +489,70 @@ func newTradeFullstackRig(t *testing.T) *tradeFullstackRig {
 	caller := &assetop.Caller{Resolver: locator, Signer: signer}
 	rig.caller = caller
 	adminCfg := tradeFullstackDSN(t, "ADMIN_DSN", false)
-	admin, err := sql.Open("mysql", adminCfg.FormatDSN())
-	if err != nil {
-		t.Fatal("随机交易库连接配置无效")
-	}
-	t.Cleanup(func() { _ = admin.Close() })
 	var nonce [8]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		t.Fatal(err)
 	}
 	name := "trade_fullstack_" + hex.EncodeToString(nonce[:])
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
-		t.Fatalf("创建随机交易库失败: %v", err)
+	opts, err := sqltest.OptionsFromEnv(adminCfg.FormatDSN(), name+"_writer", name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture, err := sqltest.New(ctx, t, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	install, err := fixture.OpenSchema(ctx, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	schemaTables := append(data.Tables(), &playerpb.AccountRole{})
+	report, err := schemamigrate.Up(ctx, install, schemamigrate.Options{Database: name, Tables: schemaTables})
+	if err != nil || len(report.Manual) != 0 {
+		t.Fatalf("正式业务schema迁移未完成: %v", err)
+	}
+	// 本用例只验专用角色资产到账，不验角色过户。真实目录仅以正式trade签名Lookup读取；
+	// 原账号、owner_revision、完整role proto与交易锁原值来自同run实际角色，禁止伪造归属。
+	if strings.TrimSpace(os.Getenv(accountdirectory.TradeSecretEnv)) == "" {
+		t.Fatal("缺少当前DataService一致的TRADE目录只读Lookup签名密钥")
+	}
+	roleDirectory := accountdirectory.NewTradeClient(ids.Data, os.Getenv(accountdirectory.TradeSecretEnv))
+	roleSnapshots := make(map[uint64]*dspb.AccountRoleOwnership, 2)
+	for _, player := range []uint64{rig.seller, rig.buyer} {
+		owned, err := roleDirectory.Lookup(ctx, player)
+		if err != nil || owned == nil || owned.Role == nil || owned.Role.PlayerId != player || !accountdirectory.ValidAccount(owned.Account) || owned.OwnerRevision == 0 || owned.TradeListingId != 0 {
+			t.Fatalf("当前专用角色目录原件缺失、归属无效或有交易锁: %v", err)
+		}
+		raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(owned.Role)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// updated_ms仅是本fixture种子写入时间，initial_player_commit不冒充真实玩家建档凭据。
+		row := &playerpb.AccountRole{PlayerId: player, Account: owned.Account, RoleProto: raw, OwnerRevision: owned.OwnerRevision, UpdatedMs: uint64(time.Now().UnixMilli()), TradeListingId: owned.TradeListingId}
+		result, err := install.ExecContext(ctx, "INSERT INTO account_role(player_id,account,role_proto,owner_revision,updated_ms,trade_listing_id,initial_player_commit) VALUES(?,?,?,?,?,?,?)", row.PlayerId, []byte(row.Account), row.RoleProto, row.OwnerRevision, row.UpdatedMs, row.TradeListingId, row.InitialPlayerCommit)
+		if err != nil {
+			t.Fatalf("仅在本fixture自有目录写入真实角色原件失败: %v", err)
+		}
+		if count, err := result.RowsAffected(); err != nil || count != 1 {
+			t.Fatalf("本fixture角色种子未唯一提交: %v", err)
+		}
+		roleSnapshots[player] = proto.Clone(owned).(*dspb.AccountRoleOwnership)
 	}
 	t.Cleanup(func() {
-		clean, stop := context.WithTimeout(context.Background(), 20*time.Second)
-		defer stop()
-		if _, err := admin.ExecContext(clean, "DROP DATABASE `"+name+"`"); err != nil {
-			t.Errorf("清理本次随机交易库失败: %v", err)
+		// 首尾只读核真实角色原件未变，避免快照夹具掩盖专用角色被换主/冻结。
+		for _, player := range []uint64{rig.seller, rig.buyer} {
+			current, err := roleDirectory.Lookup(ctx, player)
+			if err != nil || !proto.Equal(current, roleSnapshots[player]) {
+				t.Errorf("资产到账期间真实专用角色目录原件发生变化或尾核失败: %v", err)
+			}
 		}
 	})
-	adminCfg.DBName = name
-	db, err := authoritysql.Open(ctx, adminCfg.FormatDSN(), name, true, 2)
-	if err != nil {
-		t.Fatalf("随机交易库权威TiDB连接失败: %v", err)
+	if err = fixture.GrantProtoTables(ctx, name, schemaTables); err != nil {
+		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
-	report, err := schemamigrate.Up(ctx, db, schemamigrate.Options{Database: name, Tables: data.Tables()})
-	if err != nil || len(report.Manual) != 0 {
-		t.Fatalf("正式交易schema迁移未完成: %v", err)
+	db, err := fixture.Open(ctx, name, 2)
+	if err != nil {
+		t.Fatal(err)
 	}
 	ops, err := data.NewAssetOpRepo(db, 3*time.Second)
 	if err != nil {
@@ -524,7 +562,7 @@ func newTradeFullstackRig(t *testing.T) *tradeFullstackRig {
 		t.Fatal(err)
 	}
 	rig.engine = &Engine{Repo: &data.CommerceRepo{DB: db, Ops: ops}, IDs: ids.IDs["trade_listing"], OpIDs: ids.IDs["trade_asset_op"], Policy: Policy{Items: []uint32{original.ConfigId}, Currencies: []uint32{0}, AllowInstances: true}, Applier: caller, Ledger: rig.ledger, Now: time.Now}
-	roles, err := NewRoleAuthority(tradeFullstackEnv(t, "GLOBAL_SCHEMA"))
+	roles, err := NewRoleAuthority(name)
 	if err != nil {
 		t.Fatal(err)
 	}

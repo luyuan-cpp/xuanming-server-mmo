@@ -2,11 +2,11 @@ package team
 
 import (
 	"context"
-	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"net"
 	"os"
+	"shared/authoritysql/sqltest"
 	"strconv"
 	"strings"
 	"sync"
@@ -62,28 +62,20 @@ func newNativeTeamFixture(t *testing.T) *nativeTeamFixture {
 	connection.User = "root"
 	connection.Timeout, connection.ReadTimeout, connection.WriteTimeout = 3*time.Second, 5*time.Second, 5*time.Second
 	connection.Params = map[string]string{"tidb_txn_mode": "'pessimistic'", "transaction_isolation": "'READ-COMMITTED'", "tidb_read_staleness": "0", "tidb_low_resolution_tso": "OFF", "tidb_replica_read": "'leader'", "tidb_read_consistency": "'strict'", "tidb_snapshot": "''"}
-	admin, err := sql.Open("mysql", connection.FormatDSN())
+	schema := "teamit_" + uuid.NewString()[:8]
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	opts, err := sqltest.OptionsFromEnv(connection.FormatDSN(), schema+"_writer", schema)
+	require.NoError(t, err)
+	fixture, err := sqltest.New(ctx, t, opts)
+	require.NoError(t, err)
+	db, err := fixture.OpenSchema(ctx, schema)
 	require.NoError(t, err)
 	var engine string
-	require.NoError(t, admin.QueryRow("SELECT VERSION()").Scan(&engine))
+	require.NoError(t, db.QueryRow("SELECT VERSION()").Scan(&engine))
 	require.Contains(t, strings.ToLower(engine), "tidb")
-	schema := "teamit_" + uuid.NewString()[:8]
-	_, err = admin.Exec("CREATE DATABASE `" + schema + "`")
-	require.NoError(t, err)
-	connection.DBName = schema
-	db, err := sql.Open("mysql", connection.FormatDSN())
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		db.Close()
-		_, err := admin.Exec("DROP DATABASE `" + schema + "`")
-		if err != nil {
-			t.Errorf("清理Team隔离库: %v", err)
-		}
-		admin.Close()
-	})
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	_, err = schemamigrate.Up(ctx, db, schemamigrate.Options{Database: schema, Tables: []proto.Message{&matchpb.MatchAuthorityTicketRecord{}, &matchpb.MatchNetworkProfileRecord{}, &matchpb.MatchTicketRegionRecord{}, &matchpb.MatchJoinIntentRecord{}, &matchpb.MatchDirectIntentRecord{}, &matchpb.MatchFormationRecord{}, &matchpb.MatchSpectatorRecord{}, &matchpb.MatchSpectatorIntentRecord{}, &matchpb.MatchSpectatorHeadRecord{}, &teampb.TeamAuthorityRecord{}, &teampb.TeamMembershipRecord{}, &teampb.TeamInviteIndexRecord{}, &teampb.TeamApplicationIndexRecord{}, &teampb.TeamActionReceiptRecord{}, &teampb.TeamLaunchRecord{}, &teampb.TeamLaunchRegionRecord{}, &teampb.TeamLaunchRoleRecord{}, &guildpb.GuildTrialLaunchRecord{}, &guildpb.GuildTrialLaunchRoleRecord{}, &guildpb.GuildTrialLobbyRecord{}, &guildpb.GuildTrialLobbySlotRecord{}}})
+	tables := []proto.Message{&matchpb.MatchAuthorityTicketRecord{}, &matchpb.MatchNetworkProfileRecord{}, &matchpb.MatchTicketRegionRecord{}, &matchpb.MatchJoinIntentRecord{}, &matchpb.MatchDirectIntentRecord{}, &matchpb.MatchFormationRecord{}, &matchpb.MatchSpectatorRecord{}, &matchpb.MatchSpectatorIntentRecord{}, &matchpb.MatchSpectatorHeadRecord{}, &teampb.TeamAuthorityRecord{}, &teampb.TeamMembershipRecord{}, &teampb.TeamInviteIndexRecord{}, &teampb.TeamApplicationIndexRecord{}, &teampb.TeamActionReceiptRecord{}, &teampb.TeamLaunchRecord{}, &teampb.TeamLaunchRegionRecord{}, &teampb.TeamLaunchRoleRecord{}, &guildpb.GuildTrialLaunchRecord{}, &guildpb.GuildTrialLaunchRoleRecord{}, &guildpb.GuildTrialLobbyRecord{}, &guildpb.GuildTrialLobbySlotRecord{}}
+	_, err = schemamigrate.Up(ctx, db, schemamigrate.Options{Database: schema, Tables: tables})
 	require.NoError(t, err)
 	for _, statement := range []string{
 		"CREATE TABLE account_role(player_id BIGINT UNSIGNED PRIMARY KEY,account VARBINARY(191) NOT NULL,owner_revision BIGINT UNSIGNED NOT NULL,trade_listing_id BIGINT UNSIGNED NOT NULL DEFAULT 0)",
@@ -101,7 +93,11 @@ func newNativeTeamFixture(t *testing.T) *nativeTeamFixture {
 		_, err = db.ExecContext(ctx, "INSERT INTO player_route VALUES(?,?,1,1,NULL)", placement.RouteRowShard(player), player)
 		require.NoError(t, err)
 	}
-	owner := &authority.Store{DB: db, Secret: []byte("fixture-only-network-secret-0000000000"), Config: config.GlobalMatchConf{HardLatencyMs: 180, CrossRegionWaitSeconds: 30}, TeamConfig: config.TeamConf{AllowCrossZone: true}}
+	require.NoError(t, fixture.GrantProtoTables(ctx, schema, tables))
+	require.NoError(t, fixture.GrantTables(ctx, schema, "account_role", "route_meta", "player_route", "zone_merge_fence"))
+	db, err = fixture.Open(ctx, schema, 16)
+	require.NoError(t, err)
+	owner := &authority.Store{DB: db, Secret: []byte("fixture-only-network-secret-0000000000"), Config: config.GlobalMatchConf{RequireTiDB: true, HardLatencyMs: 180, CrossRegionWaitSeconds: 30}, TeamConfig: config.TeamConf{AllowCrossZone: true}}
 	require.NoError(t, owner.ConfigureRoleAuthority(ctx, schema))
 	require.NoError(t, owner.ConfigureMatchEntryAuthority(ctx, schema))
 	require.NoError(t, owner.CheckTeamRouteContract(ctx))
@@ -631,6 +627,8 @@ func TestTeamTiDBPreparedLaunchCapturesOnlyOriginalSpectatorAndResumesWholeQueue
 	require.NoError(t, err)
 	require.Len(t, tickets, 2)
 	_, err = f.owner.CancelTeamLaunchForActor(f.actor(t, 1), 1, queued)
+	require.NoError(t, err)
+	_, err = f.owner.SpectatorIntent(f.actor(t, 1), 1, later)
 	require.NoError(t, err)
 	current, err := f.owner.BeginSpectator(f.actor(t, 1), 1, later, room, add)
 	require.NoError(t, err)

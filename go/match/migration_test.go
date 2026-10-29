@@ -97,7 +97,7 @@ func TestMigrationBranchPrecedesServiceConstruction(t *testing.T) {
 				}
 			}
 			if call, ok := node.(*ast.CallExpr); ok {
-				if selector, ok := call.Fun.(*ast.SelectorExpr); ok && selector.Sel.Name == "NewServiceContext" {
+				if selector, ok := call.Fun.(*ast.SelectorExpr); ok && selector.Sel.Name == "NewServiceContextWithAdmission" {
 					serviceConstruction = call.Pos()
 				}
 			}

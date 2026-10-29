@@ -1,7 +1,7 @@
 // 收件箱 SCENE_GM_SANCTION 域执行器与类型注册表的用例(docs/design/player-inbox-service.md §2.2、§3.2、§7.6)。
 //
 // 执行器只依赖 CurrencySystem 与两份货币组件:这里手搭一个"加载已完成"的实体,喂序列化好的载荷,
-// 验结局(APPLIED / REJECTED / DEFER)与货币状态。注册表用例扫描 proto 描述符,保证每个类型都有执行器、
+// 验结局(APPLIED / REJECTED / DEFER / VERSION_SKEW)与货币状态。注册表用例扫描 proto 描述符,保证每个类型都有执行器、
 // 规格与执行器表不脱节。不连 Redis、不发 gRPC、不读真实墙钟。
 
 #include <gtest/gtest.h>
@@ -111,18 +111,33 @@ TEST_F(GmSanctionInboxExecutorTest, UnblockCurrencyGainAppliesWhetherOrNotBlocke
 	EXPECT_FALSE(CurrencySystem::IsCurrencyBlocked(player_, kCurrencyGold));
 }
 
-TEST_F(GmSanctionInboxExecutorTest, GainPayloadWithUnknownCurrencyOrGarbageIsRejected)
+TEST_F(GmSanctionInboxExecutorTest, GainPayloadWithGarbageIsRejected)
 {
-	const auto unknownType =
-		GmSanctionInboxExecutor::BlockCurrencyGain(player_, GainPayload(static_cast<uint32_t>(kCurrencyMax)));
-	EXPECT_EQ(PlayerInboxExecKind::kRejected, unknownType.kind);
-	EXPECT_EQ(static_cast<uint32_t>(kPlayerInboxPayloadInvalid), unknownType.reason);
-
-	const auto garbage = GmSanctionInboxExecutor::UnblockCurrencyGain(player_, kTruncatedPayload);
-	EXPECT_EQ(PlayerInboxExecKind::kRejected, garbage.kind) << "认识的类型、载荷解不出来:确定性拒绝,记账";
-	EXPECT_EQ(static_cast<uint32_t>(kPlayerInboxPayloadInvalid), garbage.reason);
-
+	for (const auto &result : {GmSanctionInboxExecutor::BlockCurrencyGain(player_, kTruncatedPayload),
+							   GmSanctionInboxExecutor::UnblockCurrencyGain(player_, kTruncatedPayload)})
+	{
+		EXPECT_EQ(PlayerInboxExecKind::kRejected, result.kind) << "认识的类型、载荷解不出来:确定性拒绝,记账";
+		EXPECT_EQ(static_cast<uint32_t>(kPlayerInboxPayloadInvalid), result.reason);
+	}
 	EXPECT_EQ(0, tlsEcs.actorRegistry.get<CurrencyComp>(player_).blocked_types_size()) << "拒绝路径不改状态";
+}
+
+// 载荷币种不在本二进制取值表内:Go 入箱已按同源取值表拒绝写错的值,这里只可能是更新版本加的币种。
+// 是版本错位,不是确定性拒绝 —— 记成 REJECTED 这条处置就永远不会执行(混版本设计 §12、player-inbox-service.md §7.6)。
+TEST_F(GmSanctionInboxExecutorTest, GainPayloadWithCurrencyUnknownToThisVersionReportsVersionSkew)
+{
+	const uint32_t newer = static_cast<uint32_t>(kCurrencyMax);
+	ASSERT_FALSE(IsKnownCurrencyType(newer));
+
+	const auto block = GmSanctionInboxExecutor::BlockCurrencyGain(player_, GainPayload(newer));
+	EXPECT_EQ(PlayerInboxExecKind::kVersionSkew, block.kind) << "不用 DEFER:本二进制在会话内永远不会认识它";
+	EXPECT_EQ(0u, block.reason);
+
+	const auto unblock = GmSanctionInboxExecutor::UnblockCurrencyGain(player_, GainPayload(newer));
+	EXPECT_EQ(PlayerInboxExecKind::kVersionSkew, unblock.kind);
+	EXPECT_EQ(0u, unblock.reason);
+
+	EXPECT_EQ(0, tlsEcs.actorRegistry.get<CurrencyComp>(player_).blocked_types_size()) << "版本错位路径不改状态";
 }
 
 // ── 挂欠款 ──────────────────────────────────────────────────────────────────
@@ -163,14 +178,30 @@ TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtRejectsAmountOutsideInt64R
 	EXPECT_EQ(PlayerInboxExecKind::kRejected, tooLarge.kind) << "不能靠窄化变成负数";
 	EXPECT_EQ(static_cast<uint32_t>(kPlayerInboxPayloadInvalid), tooLarge.reason);
 
-	const auto unknownType =
-		GmSanctionInboxExecutor::AttachCurrencyDebt(player_, DebtPayload(static_cast<uint32_t>(kCurrencyMax), 10));
-	EXPECT_EQ(PlayerInboxExecKind::kRejected, unknownType.kind);
-
 	const auto garbage = GmSanctionInboxExecutor::AttachCurrencyDebt(player_, kTruncatedPayload);
 	EXPECT_EQ(PlayerInboxExecKind::kRejected, garbage.kind);
 
 	EXPECT_TRUE(tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player_).debts.empty()) << "拒绝路径不落欠款";
+}
+
+TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtWithCurrencyUnknownToThisVersionReportsVersionSkew)
+{
+	const auto result =
+		GmSanctionInboxExecutor::AttachCurrencyDebt(player_, DebtPayload(static_cast<uint32_t>(kCurrencyMax), 10));
+	EXPECT_EQ(PlayerInboxExecKind::kVersionSkew, result.kind);
+	EXPECT_EQ(0u, result.reason);
+	EXPECT_TRUE(tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player_).debts.empty()) << "版本错位路径不落欠款";
+}
+
+// 与版本无关的确定性校验排在版本错位之前:金额写错的载荷在任何版本上都不会成功,
+// 不能因为币种是新的就停用本域,等一个注定的拒绝。
+TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtRejectsBadAmountBeforeCheckingCurrency)
+{
+	const auto result =
+		GmSanctionInboxExecutor::AttachCurrencyDebt(player_, DebtPayload(static_cast<uint32_t>(kCurrencyMax), 0));
+	EXPECT_EQ(PlayerInboxExecKind::kRejected, result.kind);
+	EXPECT_EQ(static_cast<uint32_t>(kPlayerInboxPayloadInvalid), result.reason);
+	EXPECT_TRUE(tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player_).debts.empty());
 }
 
 TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtOverflowIsRejectedWithPrimitiveCode)
@@ -189,7 +220,7 @@ TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtOverflowIsRejectedWithPrim
 // 同币种的既有欠款带着本版本不认识的字段(新版本写下的):AttachDebt 不会合并,执行器报版本错位,
 // 不能记成终态 REJECTED —— 那样这笔 GM 欠款以后再也不会挂上(docs/design/mixed-version-persist-field-protection.md §4.4,
 // player-inbox-service.md §7.6)。也不是 DEFER:错位会在会话内消失,本地续做会越过服务端之后挂的 VOID(评审 L1);
-// 收件箱据 kVersionSkew 停用本域、下次落地重拉(见 PlayerInboxSystemTest 的同名场景)。别的币种不受影响。
+// 收件箱据 kVersionSkew 停用本域、实体重建后重拉(见 PlayerInboxSystemTest 的同名场景)。别的币种不受影响。
 TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtReportsVersionSkewWhenExistingDebtCarriesUnknownFields)
 {
 	constexpr int kFutureField = 9999; // 本版本不认识的字段号
@@ -276,7 +307,7 @@ TEST(PlayerInboxRegistry, EveryMessageTypeHasExecutorInItsOwnDomainOnly)
 		EXPECT_EQ(name, player_inbox_registry::TypeName(msgType));
 		++checked;
 	}
-	EXPECT_EQ(3, checked) << "v1 只有三种 GM 处置类型;加了类型请同步补执行器与本断言";
+	EXPECT_EQ(4, checked) << "逐枚举核验三种GM处置和Battle结算，新增类型不得漏执行器";
 }
 
 TEST(PlayerInboxRegistry, UnknownTypeOrDomainHasNoExecutor)
@@ -304,6 +335,15 @@ TEST(PlayerInboxRegistry, GmSanctionDomainSpecIsReadFromDescriptor)
 
 TEST(PlayerInboxRegistry, ConsumerDomainsAreTheDomainsWithExecutors)
 {
-	const std::vector<uint32_t> expected{kGmDomain};
+	const std::vector<uint32_t> expected{kGmDomain, player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT};
 	EXPECT_EQ(expected, player_inbox_registry::ConsumerDomains());
+}
+
+TEST(PlayerInboxRegistry, BattleSettlementDomainRetainsOnePendingAndAllowsInBattleExecution)
+{
+    const auto domain = static_cast<uint32_t>(player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT);
+    const auto rule = player_inbox_registry::DomainRule(domain);
+    EXPECT_TRUE(rule.known); EXPECT_EQ(1u, rule.maxPending); EXPECT_FALSE(rule.requiresOutOfBattle);
+    EXPECT_NE(nullptr, player_inbox_registry::FindExecutor(player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, domain));
+    EXPECT_EQ(nullptr, player_inbox_registry::FindExecutor(player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, kGmDomain));
 }

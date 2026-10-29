@@ -95,11 +95,12 @@ func TestIT_TeamAuthority_MemberShardLockConflictsWithAll64MergeFences(t *testin
 	requireIT(t)
 	itReset(t)
 	rb := itFixtureBackend(t)
+	db := itOpenRouteDB(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	itSeedSQLFence(t, itSrcZone, "it-seed-neutral")
 	itReleaseSQLFences(t, itSrcZone)
-	holder, err := rb.db.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	holder, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,8 +115,8 @@ func TestIT_TeamAuthority_MemberShardLockConflictsWithAll64MergeFences(t *testin
 	if !errors.As(err, &me) || me.Number != 1205 {
 		t.Fatalf("非63参与者片应阻止全部片获取，实际%v", err)
 	}
-	itAssertSQLFence(t, rb.db.db, itSrcZone, false, "")
-	itAssertSQLFence(t, rb.db.db, itDstZone, false, "")
+	itAssertSQLFence(t, db, itSrcZone, false, "")
+	itAssertSQLFence(t, db, itDstZone, false, "")
 	if err := holder.Rollback(); err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +128,7 @@ func TestIT_TeamAuthority_MemberShardLockConflictsWithAll64MergeFences(t *testin
 		t.Fatal("缺真实围栏世代")
 	}
 	for _, zone := range []uint32{itSrcZone, itDstZone} {
-		itAssertSQLFence(t, rb.db.db, zone, true, req.RunID)
+		itAssertSQLFence(t, db, zone, true, req.RunID)
 	}
 	itReleaseSQLFences(t, itSrcZone, itDstZone)
 }

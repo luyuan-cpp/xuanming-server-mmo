@@ -282,6 +282,163 @@ $fakeSceneLog = @"
 $fakeLogPath = Join-Path $realCppLogDir "scene_1.log"
 Set-Content -Path $fakeLogPath -Value $fakeSceneLog -Encoding utf8
 
+# 1e. L-18 观测批(2026-10-23)的新表:每张表各造「新版有序列」与「旧版缺序列 → n/a」两种快照。
+#     取值都小于 1000、各列互不相同,串列就红。
+#     - t18m_login 追加 L1 / L2 / L3 的序列;t5m_login 不加(旧版 login → 三张表全 n/a)。
+#       L1:BatchGetPlayerHomeZone 100 次,sum 300ms → avg 3.0ms;桶 le=2:40、le=5:99 → p99 插值到 5.0ms;code≠0 两次。
+#       L2:cache 90、etcd_stale 10、没有 etcd_unsynced → 那列按族内存在规则打 0,cache% 90.0%。
+#       L3:终态 80 + 10 + 6 + 4 = 100 → deliv% 90.0%、salv% 6.0%、tmo% 4.0%;legacy% = 10 / 90 = 11.1%。
+Add-Content -Path (Join-Path $snapDirForTest "t18m_login.txt") -Encoding utf8 -Value @"
+# TYPE rpc_client_requests_duration_ms histogram
+rpc_client_requests_duration_ms_bucket{method="/data_service.DataService/BatchGetPlayerHomeZone",le="1"} 10
+rpc_client_requests_duration_ms_bucket{method="/data_service.DataService/BatchGetPlayerHomeZone",le="2"} 40
+rpc_client_requests_duration_ms_bucket{method="/data_service.DataService/BatchGetPlayerHomeZone",le="5"} 99
+rpc_client_requests_duration_ms_bucket{method="/data_service.DataService/BatchGetPlayerHomeZone",le="10"} 100
+rpc_client_requests_duration_ms_bucket{method="/data_service.DataService/BatchGetPlayerHomeZone",le="+Inf"} 100
+rpc_client_requests_duration_ms_sum{method="/data_service.DataService/BatchGetPlayerHomeZone"} 300
+rpc_client_requests_duration_ms_count{method="/data_service.DataService/BatchGetPlayerHomeZone"} 100
+# TYPE rpc_client_requests_code_total counter
+rpc_client_requests_code_total{code="0",method="/data_service.DataService/BatchGetPlayerHomeZone"} 98
+rpc_client_requests_code_total{code="14",method="/data_service.DataService/BatchGetPlayerHomeZone"} 2
+# TYPE login_gate_directory_reads_total counter
+login_gate_directory_reads_total{source="cache"} 90
+login_gate_directory_reads_total{source="etcd_stale"} 10
+# TYPE login_task_result_delivery_total counter
+login_task_result_delivery_total{outcome="instance_notify"} 80
+login_task_result_delivery_total{outcome="legacy_notify"} 10
+login_task_result_delivery_total{outcome="late_notify"} 3
+login_task_result_delivery_total{outcome="result_missing"} 1
+login_task_result_delivery_total{outcome="salvaged"} 6
+login_task_result_delivery_total{outcome="timed_out"} 4
+"@
+
+#     - S1:t18m_sm 有 home_zone stage(sum 0.2s / 100 次 → 2.0ms;桶 le=0.002:60、le=0.005:99 → p99 5.0ms)与
+#       mapped 50 / error 2(unmapped、unconfigured 按族内存在规则打 0),没有 role_lookup stage → rl 三格 n/a;
+#       t5m_sm 是旧版 sm,只有原 7 个 stage 之一 → S1 全 n/a。
+$fakeSmNew = @"
+# TYPE scene_manager_home_zone_lookup_total counter
+scene_manager_home_zone_lookup_total{outcome="mapped",zone_id="1"} 50
+scene_manager_home_zone_lookup_total{outcome="error",zone_id="1"} 2
+# TYPE scene_manager_enter_scene_stage_seconds histogram
+scene_manager_enter_scene_stage_seconds_bucket{stage="home_zone",zone_id="1",le="0.001"} 10
+scene_manager_enter_scene_stage_seconds_bucket{stage="home_zone",zone_id="1",le="0.002"} 60
+scene_manager_enter_scene_stage_seconds_bucket{stage="home_zone",zone_id="1",le="0.005"} 99
+scene_manager_enter_scene_stage_seconds_bucket{stage="home_zone",zone_id="1",le="0.01"} 100
+scene_manager_enter_scene_stage_seconds_bucket{stage="home_zone",zone_id="1",le="+Inf"} 100
+scene_manager_enter_scene_stage_seconds_sum{stage="home_zone",zone_id="1"} 0.2
+scene_manager_enter_scene_stage_seconds_count{stage="home_zone",zone_id="1"} 100
+"@
+Set-Content -Path (Join-Path $snapDirForTest "t18m_sm.txt") -Value $fakeSmNew -Encoding utf8
+$fakeSmOld = @"
+# TYPE scene_manager_enter_scene_stage_seconds histogram
+scene_manager_enter_scene_stage_seconds_sum{stage="dedup",zone_id="1"} 0.01
+scene_manager_enter_scene_stage_seconds_count{stage="dedup",zone_id="1"} 10
+"@
+Set-Content -Path (Join-Path $snapDirForTest "t5m_sm.txt") -Value $fakeSmOld -Encoding utf8
+
+#     - D1 / D2:t18m_ds 是新版 data_service。
+#       home:ok 40 / not_found 5 / error 1,sum 合计 0.1s / 46 次 → avg 2.2ms(没有桶 → p99 n/a);
+#       batch:ok 100(sum 0.3s → 3.0ms),not_found / error 为 0;batch_ids sum 300 / 100 → 3.0。
+#       route_read_total:home_fence cache 30 / sql 3 / not_found_sql 1 / sql_error 1,batch cache 90 / sql 8
+#       (batch 没有 not_found_sql 组合)→ rr_cache 120、rr_sql 12、rr_sqlerr 1。
+#       D2:read ok 200 + rejected 3 + error 2 = 205 次,sum 2.05s → 10.0ms;lookup ok 300,sum 0.3s → 1.0ms;
+#       其余三个 rpc 没有序列 → n/a。t5m_ds 是旧版 data_service → D1 / D2 全 n/a。
+$fakeDsNew = @"
+# TYPE data_service_home_zone_read_seconds histogram
+data_service_home_zone_read_seconds_sum{result="ok",rpc="home"} 0.08
+data_service_home_zone_read_seconds_count{result="ok",rpc="home"} 40
+data_service_home_zone_read_seconds_sum{result="not_found",rpc="home"} 0.01
+data_service_home_zone_read_seconds_count{result="not_found",rpc="home"} 5
+data_service_home_zone_read_seconds_sum{result="error",rpc="home"} 0.01
+data_service_home_zone_read_seconds_count{result="error",rpc="home"} 1
+data_service_home_zone_read_seconds_sum{result="ok",rpc="batch"} 0.3
+data_service_home_zone_read_seconds_count{result="ok",rpc="batch"} 100
+data_service_home_zone_read_seconds_sum{result="not_found",rpc="batch"} 0
+data_service_home_zone_read_seconds_count{result="not_found",rpc="batch"} 0
+data_service_home_zone_read_seconds_sum{result="error",rpc="batch"} 0
+data_service_home_zone_read_seconds_count{result="error",rpc="batch"} 0
+# TYPE data_service_home_zone_batch_ids histogram
+data_service_home_zone_batch_ids_sum 300
+data_service_home_zone_batch_ids_count 100
+# TYPE data_service_route_read_total counter
+data_service_route_read_total{path="home_fence",result="cache"} 30
+data_service_route_read_total{path="home_fence",result="sql"} 3
+data_service_route_read_total{path="home_fence",result="not_found_sql"} 1
+data_service_route_read_total{path="home_fence",result="sql_error"} 1
+data_service_route_read_total{path="batch",result="cache"} 90
+data_service_route_read_total{path="batch",result="sql"} 8
+data_service_route_read_total{path="batch",result="sql_error"} 0
+# TYPE data_service_account_directory_rpc_seconds histogram
+data_service_account_directory_rpc_seconds_sum{result="ok",rpc="read"} 1.5
+data_service_account_directory_rpc_seconds_count{result="ok",rpc="read"} 200
+data_service_account_directory_rpc_seconds_sum{result="not_found",rpc="read"} 0
+data_service_account_directory_rpc_seconds_count{result="not_found",rpc="read"} 0
+data_service_account_directory_rpc_seconds_sum{result="rejected",rpc="read"} 0.05
+data_service_account_directory_rpc_seconds_count{result="rejected",rpc="read"} 3
+data_service_account_directory_rpc_seconds_sum{result="error",rpc="read"} 0.5
+data_service_account_directory_rpc_seconds_count{result="error",rpc="read"} 2
+data_service_account_directory_rpc_seconds_sum{result="ok",rpc="lookup"} 0.3
+data_service_account_directory_rpc_seconds_count{result="ok",rpc="lookup"} 300
+"@
+Set-Content -Path (Join-Path $snapDirForTest "t18m_ds.txt") -Value $fakeDsNew -Encoding utf8
+$fakeDsOld = @"
+# TYPE data_service_route_ready_verdict_total counter
+data_service_route_ready_verdict_total{verdict="trusted"} 1
+"@
+Set-Content -Path (Join-Path $snapDirForTest "t5m_ds.txt") -Value $fakeDsOld -Encoding utf8
+
+#     - R1 / R2:core 在 t2m、t5m 各一份 INFO 快照,uptime 100 → 280 → 窗口 180s。
+#       total_commands_processed 1000 → 19000 → ops/s 100;cpu(sys+user)1.0 → 2.8 → 1.0%;main 0.5 → 1.4 → 0.5%;
+#       net in / out 各 0 → 184320 字节 → 1.0 KB/s;clients 7;used 2 MiB → 2.0;maxmemory 0 → mem% "-";
+#       error replies 1 → 3 → 2;Errorstats 段在、没有 OOM → oom 0。
+#       commandstats:get 500 → 9100 次(Δ8600 → 47.8/s,usec 1000 → 18200 → 2.00 µs/call),
+#       mget 100 → 1900 次(Δ1800 → 10.0/s,usec 500 → 9500 → 5.00 µs/call,累计 p50 / p99 / p99.9 = 4.0 / 12.0 / 20.0)。
+#     - mapping 在同两个时刻抓的是同一实例(同 run_id)→ R1 / R2 只打 same_as=core;M1 的 rd 取 mapping,数与 core 相同。
+function New-FakeRedisInfo {
+    param([int]$Uptime, [int]$Cmds, [string]$CpuSys, [string]$CpuUser, [string]$MainSys, [string]$MainUser,
+          [int]$NetBytes, [int]$ErrReplies, [int]$GetCalls, [int]$GetUsec, [int]$MgetCalls, [int]$MgetUsec)
+    return @"
+# Server
+redis_version:7.2.4
+run_id:fixturerunid0000000000000000000000000001
+uptime_in_seconds:$Uptime
+# Clients
+connected_clients:7
+# Memory
+used_memory:2097152
+maxmemory:0
+# Stats
+total_commands_processed:$Cmds
+total_net_input_bytes:$NetBytes
+total_net_output_bytes:$NetBytes
+rejected_connections:0
+total_error_replies:$ErrReplies
+# Persistence
+aof_delayed_fsync:0
+# CPU
+used_cpu_sys:$CpuSys
+used_cpu_user:$CpuUser
+used_cpu_sys_main_thread:$MainSys
+used_cpu_user_main_thread:$MainUser
+# Commandstats
+cmdstat_get:calls=$GetCalls,usec=$GetUsec,usec_per_call=2.00,rejected_calls=0,failed_calls=0
+cmdstat_mget:calls=$MgetCalls,usec=$MgetUsec,usec_per_call=5.00,rejected_calls=0,failed_calls=0
+# Errorstats
+errorstat_ERR:count=3
+# Latencystats
+latency_percentiles_usec_mget:p50=4.001,p99=12.003,p99.9=20.001
+latency_percentiles_usec_get:p50=1.003,p99=3.007,p99.9=5.001
+"@
+}
+foreach ($target in @('core', 'mapping')) {
+    Set-Content -Path (Join-Path $snapDirForTest "t2m_redis_$target.txt") -Encoding utf8 -Value (
+        "# stress_snap target=$target spec=docker:redis captured_at=2026-10-23T00:02:00Z`n" +
+        (New-FakeRedisInfo -Uptime 100 -Cmds 1000 -CpuSys '0.6' -CpuUser '0.4' -MainSys '0.3' -MainUser '0.2' -NetBytes 0 -ErrReplies 1 -GetCalls 500 -GetUsec 1000 -MgetCalls 100 -MgetUsec 500))
+    Set-Content -Path (Join-Path $snapDirForTest "t5m_redis_$target.txt") -Encoding utf8 -Value (
+        "# stress_snap target=$target spec=docker:redis captured_at=2026-10-23T00:05:00Z`n" +
+        (New-FakeRedisInfo -Uptime 280 -Cmds 19000 -CpuSys '1.6' -CpuUser '1.2' -MainSys '0.8' -MainUser '0.6' -NetBytes 184320 -ErrReplies 3 -GetCalls 9100 -GetUsec 18200 -MgetCalls 1900 -MgetUsec 9500))
+}
+
 # ── Run stress_summarize and capture output ─────────────────────────────
 
 Write-Host "Running stress_summarize against fabricated inputs..." -ForegroundColor Cyan
@@ -511,6 +668,88 @@ Assert-SectionRow -Lines $outputLines -SectionMarker 'DB task:result notify' -Sn
 Assert-SectionRow -Lines $outputLines -SectionMarker 'DB task:result notify' -SnapshotName 't18m_db' `
     -Pattern '^\s*t18m_db(\s+n/a){3}\s+\|(\s+n/a){3}\s+\|(\s+n/a){3}\s+\|\s+n/a\s+n/a\s*$' `
     -Reason "a db snapshot without db_task_result_notify_total must print n/a, not 0"
+
+# ── L-18 观测批的新表(造数见 1e) ────────────────────────────────────────
+
+# 一段里任意一行匹配(同一快照在 D2 / R2 里有多行,Get-SectionRow 只取第一行)。
+function Assert-SectionAnyRow {
+    param([string[]]$Lines, [string]$SectionMarker, [string]$Pattern, [string]$Reason)
+    $inSection = $false
+    foreach ($l in $Lines) {
+        if ($l.Contains('=== ')) { $inSection = $l.Contains($SectionMarker); continue }
+        if ($inSection -and $l -match $Pattern) { Write-Host "  ok: $SectionMarker any-row $Pattern" -ForegroundColor DarkGreen; return }
+    }
+    Write-Host "FAIL: no $SectionMarker row matches $Pattern ($Reason)" -ForegroundColor Red
+    Write-Host "── stress_summarize output ──" -ForegroundColor DarkGray
+    $Lines | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+    if (-not $KeepArtifacts) { Remove-Item -Recurse -Force $tmpRoot -ErrorAction SilentlyContinue }
+    exit 1
+}
+
+Assert-HeaderMatches -Lines $outputLines -Pattern 'bgz_n\s+bgz_avg\s+bgz_p99\s+bgz_err\s+\|.*lar_err\s*$' `
+    -Reason "L1 header must list the five login→data_service methods, four columns each"
+Assert-SectionRow -Lines $outputLines -SectionMarker 'L1 Login outbound RPC' -SnapshotName 't18m_login' `
+    -Pattern '^\s*t18m_login\s+\|\s+100\s+3\.0ms\s+5\.0ms\s+2\s+\|\s+n/a\s+n/a\s+n/a\s+n/a\s+\|' `
+    -Reason "BatchGetPlayerHomeZone: n=100, avg 3.0ms, p99 interpolated to 5.0ms, err = non-zero codes; missing methods print n/a"
+Assert-SectionRow -Lines $outputLines -SectionMarker 'L1 Login outbound RPC' -SnapshotName 't5m_login' `
+    -Pattern '^\s*t5m_login(\s+\|(\s+n/a){4}){5}\s*$' `
+    -Reason "an old login without rpc_client_* series must print n/a everywhere"
+
+Assert-SectionRow -Lines $outputLines -SectionMarker 'L2 Login gate directory' -SnapshotName 't18m_login' `
+    -Pattern '^\s*t18m_login\s+\|\s+90\s+0\s+10\s+\|\s+90\.0%\s*$' `
+    -Reason "family-present rule: missing etcd_unsynced prints 0; cache% = 90/100"
+Assert-SectionRow -Lines $outputLines -SectionMarker 'L2 Login gate directory' -SnapshotName 't5m_login' `
+    -Pattern '^\s*t5m_login\s+\|\s+n/a\s+n/a\s+n/a\s+\|\s+n/a\s*$' `
+    -Reason "no series at all prints n/a"
+
+Assert-SectionRow -Lines $outputLines -SectionMarker 'L3 Login task:result' -SnapshotName 't18m_login' `
+    -Pattern '^\s*t18m_login\s+\|\s+80\s+10\s+6\s+4\s+\|\s+3\s+1\s+\|\s+90\.0%\s+6\.0%\s+4\.0%\s+11\.1%\s*$' `
+    -Reason "terminal outcomes form the denominator; legacy% = legacy / (inst + legacy)"
+
+Assert-SectionRow -Lines $outputLines -SectionMarker 'S1 SceneManager' -SnapshotName 't18m_sm' `
+    -Pattern '^\s*t18m_sm\s+\|\s+50\s+0\s+0\s+2\s+\|\s+100\s+2\.0ms\s+5\.0ms\s+\|\s+n/a\s+n/a\s+n/a\s*$' `
+    -Reason "home_zone stage n/avg/p99 summed across zone_id; role_lookup absent prints n/a"
+Assert-SectionRow -Lines $outputLines -SectionMarker 'S1 SceneManager' -SnapshotName 't5m_sm' `
+    -Pattern '^\s*t5m_sm\s+\|(\s+n/a){4}\s+\|(\s+n/a){3}\s+\|(\s+n/a){3}\s*$' `
+    -Reason "an old scene_manager without the new stages prints n/a"
+
+Assert-SectionRow -Lines $outputLines -SectionMarker 'D1 data_service home-zone' -SnapshotName 't18m_ds' `
+    -Pattern '^\s*t18m_ds\s+\|\s+40\s+5\s+1\s+2\.2ms\s+n/a\s+\|\s+100\s+0\s+0\s+3\.0ms\s+n/a\s+\|\s+3\.0\s+\|\s+120\s+12\s+1\s*$' `
+    -Reason "per-result counts, merged avg, no buckets → p99 n/a; route_read sums both paths, batch has no not_found_sql"
+Assert-SectionRow -Lines $outputLines -SectionMarker 'D1 data_service home-zone' -SnapshotName 't5m_ds' `
+    -Pattern '^\s*t5m_ds(\s+\|(\s+n/a){5}){2}\s+\|\s+n/a\s+\|(\s+n/a){3}\s*$' `
+    -Reason "an old data_service prints n/a everywhere"
+
+Assert-SectionRow -Lines $outputLines -SectionMarker 'D2 data_service account directory' -SnapshotName 't18m_ds' `
+    -Pattern '^\s*t18m_ds\s+\|\s+read\s+\|\s+205\s+10\.0ms\s+n/a\s+\|\s+0\s+3\s+2\s*$' `
+    -Reason "read row comes first: n merges all results, nf/rej/err per result"
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'D2 data_service account directory' `
+    -Pattern '^\s*t18m_ds\s+\|\s+lookup\s+\|\s+300\s+1\.0ms\s+n/a\s+\|\s+n/a\s+n/a\s+n/a\s*$' `
+    -Reason "lookup has only ok series → non-ok counts n/a"
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'D2 data_service account directory' `
+    -Pattern '^\s*t18m_ds\s+\|\s+create\s+\|(\s+n/a){3}\s+\|(\s+n/a){3}\s*$' `
+    -Reason "a rpc without series prints n/a"
+
+Assert-SectionRow -Lines $outputLines -SectionMarker 'R1 Redis instance load' -SnapshotName 'core' `
+    -Pattern '^\s*core\s+\|\s+t2m-t5m\s+\|\s+180\s+100\s+1\.0%\s+0\.5%\s+1\.0\s+1\.0\s+\|\s+7\s+2\.0\s+-\s+\|\s+0\s+2\s+0\s+0\s+\|\s*$' `
+    -Reason "window by Δuptime; ops/s, cpu%, main%, KB/s; maxmemory 0 → mem% '-'"
+Assert-SectionRow -Lines $outputLines -SectionMarker 'R1 Redis instance load' -SnapshotName 'mapping' `
+    -Pattern '^\s*mapping\s+\|\s+t2m-t5m\s+\|.*same_as=core\s*$' `
+    -Reason "the same instance captured twice is printed once"
+
+Assert-SectionRow -Lines $outputLines -SectionMarker 'R2 Redis top commands' -SnapshotName 'core' `
+    -Pattern '^\s*core\s+\|\s+t2m-t5m\s+\|\s+get\s+\|\s+47\.8\s+2\.00\s+\|\s+1\.0\s+3\.0\s+5\.0\s+\|\s+0\s+0\s*$' `
+    -Reason "top command by Δcalls first"
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'R2 Redis top commands' `
+    -Pattern '^\s*core\s+\|\s+t2m-t5m\s+\|\s+mget\s+\|\s+10\.0\s+5\.00\s+\|\s+4\.0\s+12\.0\s+20\.0\s+\|\s+0\s+0\s*$' `
+    -Reason "mget: Δcalls/s, Δusec per call, cumulative latency percentiles"
+
+Assert-SectionRow -Lines $outputLines -SectionMarker 'M1 Mapping read path' -SnapshotName 't18m' `
+    -Pattern '^\s*t18m\s+\|\s+3\.0ms\s+n/a\s+\|\s+3\.0ms\s+2\.2ms\s+10\.0ms\s+\|\s+2\.0ms\s+n/a\s+\|\s+n/a\s+n/a\s+\|\s+n/a\s+n/a\s*$' `
+    -Reason "M1 joins login / ds / sm / db by tag; no Redis snapshot at t18m"
+Assert-SectionRow -Lines $outputLines -SectionMarker 'M1 Mapping read path' -SnapshotName 't5m' `
+    -Pattern '^\s*t5m(\s+\|\s+n/a\s+n/a){1}\s+\|(\s+n/a){3}\s+\|(\s+n/a){2}\s+\|(\s+n/a){2}\s+\|\s+100\s+0\.5%\s*$' `
+    -Reason "rd uses the mapping target window ending at t5m"
 
 # ── Cleanup ─────────────────────────────────────────────────────────────
 

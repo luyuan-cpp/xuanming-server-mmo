@@ -10,7 +10,6 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 	teampb "proto/team"
-	"shared/safego"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -81,7 +80,7 @@ func (s *Service) StartSQLMaintenance(ctx context.Context) {
 				logx.Errorf("队伍SQL恢复失败 phase=%s: %v", point, err)
 			}
 		}
-		safego.Loop(ctx, point, 500*time.Millisecond, func(parent context.Context) {
+		s.svcCtx.StartRelayLoop(ctx, point, 500*time.Millisecond, func(parent context.Context) {
 			call, cancel := context.WithTimeout(parent, 3*time.Second)
 			defer cancel()
 			launches, err := s.svcCtx.Authority.TeamLaunchesAfter(call, state, cursor)
@@ -102,10 +101,12 @@ func (s *Service) StartSQLMaintenance(ctx context.Context) {
 				case 1:
 					if starter, ok := s.starter.(sqlTeamBattleStarter); ok {
 						_, err = starter.ReserveSQLTeamMatch(call, launch)
+						s.svcCtx.HoldRelay(err)
 						warn(err)
 					}
 				case 2:
 					closed, err := s.svcCtx.Authority.MaintainQueuedTeam(call, launch)
+					s.svcCtx.HoldRelay(err)
 					warn(err)
 					if err == nil && closed {
 						data, err := authority.DecodeTeamLaunch(launch)
@@ -119,12 +120,15 @@ func (s *Service) StartSQLMaintenance(ctx context.Context) {
 					}
 				case 3:
 					_, pinned, err := s.store.sql.endMatch(call, launch.TeamId, launch.LockToken)
+					s.svcCtx.HoldRelay(err)
 					warn(err)
 					if err == nil && pinned != nil && pinned.Commit != nil {
 						s.publish(0, []*CommitResult{pinned.Commit}, nil)
 					}
 				case 4:
-					warn(s.svcCtx.Authority.CloseCompletedTeamLaunch(call, launch))
+					err := s.svcCtx.Authority.CloseCompletedTeamLaunch(call, launch)
+					s.svcCtx.HoldRelay(err)
+					warn(err)
 				}
 			}
 		})
@@ -134,7 +138,7 @@ func (s *Service) StartSQLMaintenance(ctx context.Context) {
 	start(3, "match.team.sql.forming")
 	start(4, "match.team.sql.completed")
 	var idleExpiry, idleTeam uint64
-	safego.Loop(ctx, "match.team.sql.idle", time.Second, func(parent context.Context) {
+	s.svcCtx.StartRelayLoop(ctx, "match.team.sql.idle", time.Second, func(parent context.Context) {
 		call, cancel := context.WithTimeout(parent, 3*time.Second)
 		defer cancel()
 		idleExpiry, idleTeam = s.expireSQLTeams(call, idleExpiry, idleTeam)
@@ -169,6 +173,7 @@ func (s *Service) expireSQLTeams(ctx context.Context, afterExpiry, afterTeam uin
 		}
 		afterExpiry, afterTeam = team.expiry, team.id
 		commit, err := s.store.sql.expireIdle(ctx, team.id)
+		s.svcCtx.HoldRelay(err)
 		if err == nil && commit != nil {
 			s.publish(0, []*CommitResult{commit}, nil)
 		}

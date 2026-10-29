@@ -52,7 +52,7 @@ func TestTiDBRoleFreezeAndMembershipCommitAreMutuallyExclusive(t *testing.T) {
 	for n := uint64(1); n <= 12; n++ {
 		player := 100 + n
 		account := fmt.Sprint("seller-", player)
-		_, err := d.Create(ctx, account, &base.AccountSimplePlayer{PlayerId: player})
+		_, err := createInitialRoleForTest(d, ctx, account, &base.AccountSimplePlayer{ZoneId: 1, PlayerId: player})
 		require.NoError(t, err)
 		_, err = db.ExecContext(ctx, "INSERT INTO guild_player_state(player_id,updated_ms) VALUES (?,1)", player)
 		require.NoError(t, err)
@@ -109,8 +109,8 @@ func TestTiDBRolePendingAssetsRejectFreezeRemovalAndImport(t *testing.T) {
 	d, s, db := crossRoleGuardStore(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	role := &base.AccountSimplePlayer{PlayerId: 11}
-	_, err := d.Create(ctx, "seller", role)
+	role := &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11}
+	_, err := createInitialRoleForTest(d, ctx, "seller", role)
 	require.NoError(t, err)
 	w, _ := proto.Marshal(&tradepb.TradeCommerceWorkflow{Stage: "rmb_listed", Rmb: &tradepb.TradeRmbConsignmentWorkflow{SellerAccount: "seller", SellerOwnerRevision: 1, AssetKind: "ITEMS"}})
 	_, err = db.ExecContext(ctx, "INSERT INTO trade_commerce(commerce_id,request_key,request_digest,kind,status,seller_player_id,buyer_player_id,market_id,item_config_id,side,unit_price,quantity,filled_quantity,currency_type,expires_ms,created_ms,updated_ms,version,workflow_proto,parent_id,counterparty_id) VALUES (77,'pending',?,6,1,11,0,0,0,0,1,1,0,0,0,1,1,1,?,0,0)", make([]byte, 32), w)
@@ -133,7 +133,7 @@ func TestTiDBRoleCancelBeforeUnknownBeginPersistsPermanentTombstone(t *testing.T
 	d, s, _ := crossRoleGuardStore(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	_, err := d.Create(ctx, "seller", &base.AccountSimplePlayer{PlayerId: 11})
+	_, err := createInitialRoleForTest(d, ctx, "seller", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11})
 	require.NoError(t, err)
 	for listing := uint64(501); listing < 509; listing++ {
 		begin := &dspb.BeginAccountRoleTradeRequest{ListingId: listing, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1}
@@ -251,8 +251,8 @@ func TestTiDBRoleGuildMailPendingManualAndOwedBlockOwnershipChanges(t *testing.T
 			d, s, db := crossRoleGuardStore(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			role := &base.AccountSimplePlayer{PlayerId: 11}
-			_, err := d.Create(ctx, "seller", role)
+			role := &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11}
+			_, err := createInitialRoleForTest(d, ctx, "seller", role)
 			require.NoError(t, err)
 			insertRoleGuardFixture(t, db, test.table, test.row)
 			_, err = s.Begin(ctx, &dspb.BeginAccountRoleTradeRequest{ListingId: 88, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1})
@@ -282,8 +282,8 @@ func TestTiDBRoleKnownAssetTerminalsAndMatchTerminalAllowOwnershipChanges(t *tes
 	d, s, db := crossRoleGuardStore(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	role := &base.AccountSimplePlayer{PlayerId: 11}
-	_, err := d.Create(ctx, "seller", role)
+	role := &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11}
+	_, err := createInitialRoleForTest(d, ctx, "seller", role)
 	require.NoError(t, err)
 	for index, status := range []uint32{2, 3, 4, 6} {
 		seq := uint64(index + 1)
@@ -330,7 +330,7 @@ func TestTiDBRoleExactEmptyMatchPlaceholderDoesNotTrapFreeze(t *testing.T) {
 			d, s, db := crossRoleGuardStore(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			_, err := d.Create(ctx, "seller", &base.AccountSimplePlayer{PlayerId: 11})
+			_, err := createInitialRoleForTest(d, ctx, "seller", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11})
 			require.NoError(t, err)
 			insertRoleGuardFixture(t, db, "match_authority_ticket", &matchpb.MatchAuthorityTicketRecord{PlayerId: 11, OwnerAccount: account, OwnerRevision: 1})
 			_, err = s.Begin(ctx, &dspb.BeginAccountRoleTradeRequest{ListingId: 88, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1})
@@ -377,8 +377,8 @@ func TestTiDBRoleLaunchTerminalRequiresOriginalAndProjectionTogether(t *testing.
 			d, s, db := crossRoleGuardStore(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			role := &base.AccountSimplePlayer{PlayerId: 11}
-			_, err := d.Create(ctx, "seller", role)
+			role := &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11}
+			_, err := createInitialRoleForTest(d, ctx, "seller", role)
 			require.NoError(t, err)
 			for table, row := range test.rows {
 				insertRoleGuardFixture(t, db, table, row)
@@ -400,8 +400,8 @@ func TestTiDBRolePendingGuardMissingSchemaOrColumnDisablesAllOwnershipChanges(t 
 	d, s, db := crossRoleGuardStore(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	role := &base.AccountSimplePlayer{PlayerId: 11}
-	_, err := d.Create(ctx, "seller", role)
+	role := &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11}
+	_, err := createInitialRoleForTest(d, ctx, "seller", role)
 	require.NoError(t, err)
 	var schema string
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&schema))
@@ -440,7 +440,7 @@ func TestTiDBRoleMatchParticipationAndFreezeCommitSharePlayerLock(t *testing.T) 
 	defer cancel()
 	for player := uint64(51); player <= 56; player++ {
 		account := fmt.Sprint("seller-", player)
-		_, err := d.Create(ctx, account, &base.AccountSimplePlayer{PlayerId: player})
+		_, err := createInitialRoleForTest(d, ctx, account, &base.AccountSimplePlayer{ZoneId: 1, PlayerId: player})
 		require.NoError(t, err)
 		insertRoleGuardFixture(t, db, "match_authority_ticket", &matchpb.MatchAuthorityTicketRecord{PlayerId: player})
 		start := make(chan struct{})
@@ -490,8 +490,8 @@ func TestTiDBRoleUnknownCommerceStatusCannotBorrowKnownRefundStage(t *testing.T)
 	d, s, db := crossRoleGuardStore(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	role := &base.AccountSimplePlayer{PlayerId: 11}
-	_, err := d.Create(ctx, "seller", role)
+	role := &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11}
+	_, err := createInitialRoleForTest(d, ctx, "seller", role)
 	require.NoError(t, err)
 	raw, err := proto.Marshal(&tradepb.TradeCommerceWorkflow{Stage: "official_refund"})
 	require.NoError(t, err)
@@ -527,8 +527,8 @@ func TestTiDBRoleNullAssetStateRemainsBlocking(t *testing.T) {
 			d, s, db := crossRoleGuardStore(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			role := &base.AccountSimplePlayer{PlayerId: 11}
-			_, err := d.Create(ctx, "seller", role)
+			role := &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11}
+			_, err := createInitialRoleForTest(d, ctx, "seller", role)
 			require.NoError(t, err)
 			insertRoleGuardFixture(t, db, test.table, test.row)
 			// 只破坏本例随机库，模拟绕过schema装配后的坏值；不能把NULL当成安全终态。

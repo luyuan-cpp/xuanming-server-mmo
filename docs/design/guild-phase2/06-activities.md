@@ -972,6 +972,13 @@ scene 不需要任何改动:活动奖励不走 scene 结算,scene 照常发 PVE 
 | R5 | guild 已结算但 DEL 失败 | battle 继续重发 → guild h 步 duplicate → 再 DEL;最坏 TTL 7 天自然过期 ✓ |
 | R6 | Redis 不可用 | 降级为只发一次(与改造前一致),打 `battle_activity_result_not_durable`,须告警 |
 
+**2026-10-23 更正(第二轮审计 r2-guild#1;本表写于 launch 占用引入之前)**:全球形态下 R1、R2 的「巡检器 3600s 后判 EXPIRED」已不是终局。2026-10-21 起开战前先持久 `guild_trial_launch` 原件与参与者 ACTIVE 占用(本文末「私有历练大厅的全服 SQL 权威」),而 EXPIRED 允许迟到结果,不能清占位。现在的口径:
+
+- 全球局一律走终局协议 v1(cross-zone-matchmaking.md §13.6「2026-10-23 修复」):battle 打完先把含全员个人结算的原件交 match `CommitBattleOutcome`,match 一个 SQL 事务写 COMPLETE 与两个发件箱,活动结果由 match 发件箱补发,battle 不再写 `battle:activity_result:*` 记录,R3–R6 只剩旧协议意义。
+- R1(战斗中 battle 崩溃、或停机 `AbortAllRooms` 作废)与 R2 的出口:match 在权威截止(不晚于成局后 300s)之后与 COMPLETE 争同一主键,原子提交 SQL ABORT(formation 4→5、原票置 4);帮会 launch 恢复器每 10s 重放原 Start 的签名取消,拿到 formation=5 / ABORT 回执后,`FinishCancelledTrialLaunch` 同事务终结 launch、参与者与大厅占位,对局行记 SETTLED/LOSS。截止前的 formation=4、RPC 超时、EXPIRED、帮会解散都不释放。释放规则只在 `data.TrialCancelReceiptIsTerminal` 一处。
+- 停机前一刻已打完、还没拿到 SQL 决定的局,battle 在停机排空窗口内再提交一轮(有界 15s),拿到 COMPLETE 即照常结算;没拿到的按 R1 处理。
+- 巡检 3600s 判 EXPIRED 保留为 guild 本地标记,不碰 launch;到那时仍占用,说明 match 不可达或成局停在 UNKNOWN,保持占用是 fail-closed。
+
 <!-- s6_activities_part7.md -->
 
 # S6 帮会活动 — 第 7 部分:同道历练(B6b)guild 侧配置、邀请房间、确认开战

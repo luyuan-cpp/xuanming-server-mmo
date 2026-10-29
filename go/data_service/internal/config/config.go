@@ -139,6 +139,35 @@ type AccountDirectoryConfig struct {
 	RoleTradeInboxSchema      string `json:",optional"`
 	// 必须显式配置；使用同 TiDB 权威池跨 schema 强读，不新配另一份资产源。
 	RoleTradeSQLProof RoleTradeSQLProofConfig `json:",optional"`
+	// MaxOpenConn 是账号目录独立 SQL 池(store.NewAccountDirectoryStore → authoritysql.Open)的连接上限,经 PoolMaxOpenConn 取用。
+	// 0 / 缺省 = DefaultAccountDirectoryMaxOpenConn;合法区间 [1, MaxAccountDirectoryMaxOpenConn]。越界不纠正成默认值而是不装配目录
+	// (理由同 PlayerNameConfig.Validate):MissingStores 带上 account_directory,全球服务恒为 Store.Required=true,main 拒启。
+	// 每次登录的 ReadAccountDirectory 都在这个池上开一个悲观事务,登录并发上来时它是第一个排队点,所以做成旋钮。
+	// 它与 SnapshotMySQL / PlayerName / RouteStore 的池一样连同一台全局库、计入连接总账(每个副本多占 MaxOpenConn 条):
+	// 调大前按 tools/scripts/k8s_deploy.ps1 的连接总账核对 max_connections,部署脚本从本键读取。
+	MaxOpenConn int `json:",optional"`
+}
+
+// 账号目录池上限的缺省与边界(见 AccountDirectoryConfig.MaxOpenConn)。
+const (
+	// DefaultAccountDirectoryMaxOpenConn 沿用改成可配置之前写死在构造点的值。
+	DefaultAccountDirectoryMaxOpenConn = 8
+	// MaxAccountDirectoryMaxOpenConn = shared/authoritysql.Open 对单池的硬上限:更大的值那边一律拒绝开池,
+	// 在这里先拒,启动日志能直接指到配置键。那边放宽时这里同步。
+	MaxAccountDirectoryMaxOpenConn = 128
+)
+
+// PoolMaxOpenConn 返回账号目录池的实际上限:0 = DefaultAccountDirectoryMaxOpenConn,负数或超过
+// MaxAccountDirectoryMaxOpenConn 返回错误(调用方不装配目录)。
+func (c AccountDirectoryConfig) PoolMaxOpenConn() (int, error) {
+	if c.MaxOpenConn == 0 {
+		return DefaultAccountDirectoryMaxOpenConn, nil
+	}
+	if c.MaxOpenConn < 1 || c.MaxOpenConn > MaxAccountDirectoryMaxOpenConn {
+		return 0, fmt.Errorf("AccountDirectory.MaxOpenConn must be in [1, %d] (0 = default %d), got %d",
+			MaxAccountDirectoryMaxOpenConn, DefaultAccountDirectoryMaxOpenConn, c.MaxOpenConn)
+	}
+	return c.MaxOpenConn, nil
 }
 
 func (c AccountDirectoryConfig) MustLeaveGuild() bool {
@@ -371,8 +400,8 @@ type RouteStoreConfig struct {
 	// ReadRequiresReady:第 3 批读方门禁(docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §5.2)。
 	// true 时 GetPlayerHomeZone / BatchGetPlayerHomeZone / 内部路由的 home 查询只在就绪标记绑定的就是本次读所在的
 	// mapping Redis 实例(placement.VerifyRouteReady = Trusted)时信任缓存,否则回源全局库 player_route(库故障回 Unavailable,
-	// 绝不 NotFound)。只许 Mode=db_first(redis 模式下库不是真源,没有可回源的东西);启动期试跑一次读脚本,跑不起来按
-	// Store.Required 拒启。缺省 false = 与今天逐字相同。所有副本应取同一值;打开前提是对账 leader 已挂标记(规格 §8 P5),
+	// 绝不 NotFound)。只许 Mode=db_first(redis 模式下库不是真源,没有可回源的东西);启动期试跑一次读脚本,跑不起来(或 route
+	// store 因别的原因没装配起来)不论 Store.Required 取值都拒启(M1-5,svc.ServiceContext.RouteReadGateUnassembled)。缺省 false = 与今天逐字相同。所有副本应取同一值;打开前提是对账 leader 已挂标记(规格 §8 P5),
 	// 回退时先关它、再关 ArmReadyMarker、再切回 redis(规格 §13.5 第 1 条)。打开时还要求 Reconcile.Enabled 不是 false
 	// (没有 leader 就没人撤 / 维护就绪标记,见 RouteReconcileConfig.Enabled;Validate 拒启)。
 	ReadRequiresReady bool `json:",optional"`

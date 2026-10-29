@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"shared/authoritysql/sqltest"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,33 +38,25 @@ func testStore(t *testing.T) *Store {
 	c.User = "root"
 	c.Timeout, c.ReadTimeout, c.WriteTimeout = 3*time.Second, 3*time.Second, 3*time.Second
 	c.Params = map[string]string{"tidb_txn_mode": "'pessimistic'", "transaction_isolation": "'READ-COMMITTED'", "tidb_read_staleness": "0", "tidb_low_resolution_tso": "OFF", "tidb_read_consistency": "'strict'", "tidb_replica_read": "'leader'", "tidb_snapshot": "''"}
-	admin, e := sql.Open("mysql", c.FormatDSN())
-	require.NoError(t, e)
-	check, checked := context.WithTimeout(context.Background(), 5*time.Second)
-	defer checked()
-	var version, comment string
-	require.NoError(t, admin.QueryRowContext(check, "SELECT VERSION(),@@version_comment").Scan(&version, &comment))
-	require.Contains(t, strings.ToLower(version+comment), "tidb", "隔离端口必须是真实TiDB，不能回退MySQL")
 	name := "matchit_" + uuid.NewString()[:8]
-	_, e = admin.Exec("CREATE DATABASE `" + name + "`")
-	require.NoError(t, e)
-	c.DBName = name
-	db, e := sql.Open("mysql", c.FormatDSN())
-	require.NoError(t, e)
-	t.Cleanup(func() {
-		db.Close()
-		_, e := admin.Exec("DROP DATABASE `" + name + "`")
-		if e != nil {
-			t.Errorf("清理隔离库失败: %v", e)
-		}
-		admin.Close()
-	})
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	_, e = schemamigrate.Up(ctx, db, schemamigrate.Options{Database: name, Tables: Tables()})
+	opts, e := sqltest.OptionsFromEnv(c.FormatDSN(), name+"_writer", name)
+	require.NoError(t, e)
+	fixture, e := sqltest.New(ctx, t, opts)
+	require.NoError(t, e)
+	install, e := fixture.OpenSchema(ctx, name)
+	require.NoError(t, e)
+	var version, comment string
+	require.NoError(t, install.QueryRowContext(ctx, "SELECT VERSION(),@@version_comment").Scan(&version, &comment))
+	require.Contains(t, strings.ToLower(version+comment), "tidb", "隔离端口必须是真实TiDB，不能回退MySQL")
+	_, e = schemamigrate.Up(ctx, install, schemamigrate.Options{Database: name, Tables: Tables()})
+	require.NoError(t, e)
+	require.NoError(t, fixture.GrantProtoTables(ctx, name, Tables()))
+	db, e := fixture.Open(ctx, name, 16)
 	require.NoError(t, e)
 	// 本夹具只验证独立匹配SQL状态机，明确注入P与跨域准入替身；原生夹具覆盖实际原件围栏。
-	return &Store{DB: db, Secret: []byte("fixture-only-probe-key-00000000000"), Config: config.GlobalMatchConf{HardLatencyMs: 180, CrossRegionWaitSeconds: 30}, roleGuard: func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord) error { return nil }, entryGuard: func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord, *matchEntryOriginal) error {
+	return &Store{DB: db, Secret: []byte("fixture-only-probe-key-00000000000"), Config: config.GlobalMatchConf{RequireTiDB: true, HardLatencyMs: 180, CrossRegionWaitSeconds: 30}, roleGuard: func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord) error { return nil }, entryGuard: func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord, *matchEntryOriginal) error {
 		return nil
 	}}
 }
@@ -162,6 +155,31 @@ func TestProbeSignaturesRejectTamperingAndDomains(t *testing.T) {
 }
 
 func TestAuthorityTiDBImmutableIntentAndFailedQueueKeepsWait(t *testing.T) {
+	t.Run("开房前失败保留原票和等待时间", func(t *testing.T) {
+		s := testStore(t)
+		a, b := testJoin(t, s, 1), testJoin(t, s, 2)
+		ctx := context.Background()
+		f := &pb.MatchFormationRecord{BattleId: 300, OperationId: uuid.NewString(), PhysicalRegion: 1, TargetNodeId: 3, TargetInstanceId: "original-instance", TargetEndpoint: "original-endpoint", Mode: 3, ConfigId: 1, RequeueOnFailure: true, ActivityContext: []byte("activity-owner")}
+		require.NoError(t, s.Claim(ctx, f, []*pb.MatchAuthorityTicketRecord{a, b}))
+		work, e := s.AcquireWork(ctx, 300)
+		require.NoError(t, e)
+		require.NoError(t, s.Unknown(ctx, work))
+		require.NoError(t, s.Finish(ctx, work, false))
+		for _, original := range []*pb.MatchAuthorityTicketRecord{a, b} {
+			after, err := s.Ticket(ctx, original.PlayerId)
+			require.NoError(t, err)
+			require.Equal(t, uint32(1), after.State)
+			require.Equal(t, original.Ticket, after.Ticket)
+			require.Equal(t, original.EnqueuedMs, after.EnqueuedMs)
+			require.Zero(t, after.FormationId)
+		}
+		// 迟到成功不能把已安全中止的旧成局重新变为ready。
+		require.ErrorIs(t, s.Finish(ctx, work, true), ErrWorkLease)
+		after, err := s.Ticket(ctx, 1)
+		require.NoError(t, err)
+		require.Equal(t, uint32(1), after.State)
+	})
+
 	s := testStore(t)
 	a, b := testJoin(t, s, 1), testJoin(t, s, 2)
 	ctx := context.Background()
@@ -172,27 +190,32 @@ func TestAuthorityTiDBImmutableIntentAndFailedQueueKeepsWait(t *testing.T) {
 	first, e := s.SaveIntent(ctx, work, []byte("canonical-create"))
 	require.NoError(t, e)
 	require.Equal(t, []byte("canonical-create"), first)
-	replayed, e := s.SaveIntent(ctx, work, []byte("different-late-create"))
+	replayed, e := s.SaveIntent(ctx, work, first)
 	require.NoError(t, e)
-	require.Equal(t, first, replayed, "迟到worker不得替换已经持久化的seed/快照/目标")
+	require.Equal(t, first, replayed)
 	require.NoError(t, s.Unknown(ctx, work))
 	recovered, e := s.Formation(ctx, 300)
 	require.NoError(t, e)
 	require.Equal(t, uint32(3), recovered.State)
 	require.Equal(t, "original-instance", recovered.TargetInstanceId)
 	require.Equal(t, []byte("activity-owner"), recovered.ActivityContext)
-	require.NoError(t, s.Finish(ctx, work, false))
-	a2, e := s.Ticket(ctx, 1)
+	beforeTickets := make([]*pb.MatchAuthorityTicketRecord, 0, 2)
+	for _, original := range []*pb.MatchAuthorityTicketRecord{a, b} {
+		before, err := s.Ticket(ctx, original.PlayerId)
+		require.NoError(t, err)
+		beforeTickets = append(beforeTickets, before)
+	}
+	_, e = s.SaveIntent(ctx, work, []byte("different-late-create"))
+	require.Error(t, e, "迟到worker不得替换已经持久化的seed/快照/目标")
+	require.Error(t, s.Finish(ctx, work, false), "已有Create原件不能仅凭运行时失败释放原票，必须取得唯一SQL终局")
+	afterFormation, e := s.Formation(ctx, 300)
 	require.NoError(t, e)
-	require.Equal(t, uint32(1), a2.State)
-	require.Equal(t, a.Ticket, a2.Ticket)
-	require.Equal(t, a.EnqueuedMs, a2.EnqueuedMs)
-	require.Zero(t, a2.FormationId)
-	// 迟到成功不能把已安全中止的旧成局重新变为ready。
-	require.ErrorIs(t, s.Finish(ctx, work, true), ErrWorkLease)
-	a3, e := s.Ticket(ctx, 1)
-	require.NoError(t, e)
-	require.Equal(t, uint32(1), a3.State)
+	require.True(t, proto.Equal(recovered, afterFormation), "原件冲突和无SQL终局失败均不得改变成局")
+	for _, before := range beforeTickets {
+		after, err := s.Ticket(ctx, before.PlayerId)
+		require.NoError(t, err)
+		require.True(t, proto.Equal(before, after), "不得释放或替换任一成员原票")
+	}
 }
 
 func TestAuthorityTiDBWholePartyReservationRollsBackOnBusyMember(t *testing.T) {
@@ -297,6 +320,129 @@ func TestAuthorityTiDBDirectIntentCommitsWholeGroupAndReplaysOriginalFormation(t
 	require.Equal(t, uint32(5), replayed.State)
 	_, e = s.Formation(ctx, 511)
 	require.ErrorIs(t, e, sql.ErrNoRows)
+	t.Run("cancelled-original-rejects-late-prepare-without-partial-tickets", func(t *testing.T) {
+		s := testStore(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		a, b := testJoin(t, s, 101), testJoin(t, s, 102)
+		require.NoError(t, s.Cancel(ctx, a.PlayerId, a.Ticket))
+		require.NoError(t, s.Cancel(ctx, b.PlayerId, b.Ticket))
+		beforeA, err := s.Ticket(ctx, a.PlayerId)
+		require.NoError(t, err)
+		beforeB, err := s.Ticket(ctx, b.PlayerId)
+		require.NoError(t, err)
+		key := &pb.MatchDirectIntentRecord{Kind: 2, OwnerId: 44, RequestLow: 7001}
+		body := []byte("permanent-cancel-original")
+		receipt, err := s.CancelActivity(ctx, key, body)
+		require.NoError(t, err)
+		require.True(t, receipt.RequestCancelled)
+		a.Mode, b.Mode = 5, 5
+		formation := &pb.MatchFormationRecord{BattleId: 1701, OperationId: uuid.NewString(), PhysicalRegion: 1, TargetNodeId: 3, TargetInstanceId: "instance", TargetEndpoint: "endpoint", Mode: 5, ConfigId: 1}
+		_, err = s.PrepareDirectAdmission(ctx, key, body, formation, []*pb.MatchAuthorityTicketRecord{a, b})
+		require.ErrorIs(t, err, ErrDirectCancelled)
+		_, err = s.PrepareDirectAdmission(ctx, key, []byte("changed-original"), formation, []*pb.MatchAuthorityTicketRecord{a, b})
+		require.ErrorIs(t, err, ErrDirectConflict)
+		actualA, err := s.Ticket(ctx, a.PlayerId)
+		require.NoError(t, err)
+		actualB, err := s.Ticket(ctx, b.PlayerId)
+		require.NoError(t, err)
+		require.True(t, proto.Equal(beforeA, actualA))
+		require.True(t, proto.Equal(beforeB, actualB))
+		current, err := s.DirectAdmission(ctx, key)
+		require.NoError(t, err)
+		require.NotNil(t, current)
+		require.True(t, current.Cancelled)
+		require.False(t, current.ExitPrepared)
+		require.Zero(t, current.BattleId)
+		require.Equal(t, body, current.Payload)
+		var formations int
+		require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_formation").Scan(&formations))
+		require.Zero(t, formations)
+		replay, err := s.CancelActivity(ctx, key, body)
+		require.NoError(t, err)
+		require.Equal(t, receipt, replay)
+	})
+	t.Run("concurrent-cancel-and-prepare-have-one-original-decision", func(t *testing.T) {
+		s := testStore(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		for n := uint64(1); n <= 8; n++ {
+			a, b := testJoin(t, s, 200+n*2), testJoin(t, s, 201+n*2)
+			require.NoError(t, s.Cancel(ctx, a.PlayerId, a.Ticket))
+			require.NoError(t, s.Cancel(ctx, b.PlayerId, b.Ticket))
+			beforeA, err := s.Ticket(ctx, a.PlayerId)
+			require.NoError(t, err)
+			beforeB, err := s.Ticket(ctx, b.PlayerId)
+			require.NoError(t, err)
+			a.Mode, b.Mode = 5, 5
+			key := &pb.MatchDirectIntentRecord{Kind: 2, OwnerId: 44, RequestLow: 8000 + n}
+			body := []byte("concurrent-original")
+			formation := &pb.MatchFormationRecord{BattleId: 1800 + n, OperationId: uuid.NewString(), PhysicalRegion: 1, TargetNodeId: 3, TargetInstanceId: "instance", TargetEndpoint: "endpoint", Mode: 5, ConfigId: 1}
+			start := make(chan struct{})
+			var wg sync.WaitGroup
+			var reserveErr, cancelErr error
+			var reserved *pb.MatchFormationRecord
+			var receipt *pb.CancelActivityBattleResponse
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				<-start
+				reserved, reserveErr = s.ReserveDirect(ctx, key, body, formation, []*pb.MatchAuthorityTicketRecord{a, b})
+			}()
+			go func() {
+				defer wg.Done()
+				<-start
+				receipt, cancelErr = s.CancelActivity(ctx, key, body)
+			}()
+			close(start)
+			wg.Wait()
+			require.NoError(t, cancelErr)
+			require.NotNil(t, receipt)
+			current, err := s.DirectAdmission(ctx, key)
+			require.NoError(t, err)
+			require.NotNil(t, current)
+			require.Equal(t, body, current.Payload)
+			actualA, err := s.Ticket(ctx, a.PlayerId)
+			require.NoError(t, err)
+			actualB, err := s.Ticket(ctx, b.PlayerId)
+			require.NoError(t, err)
+			var formations int
+			require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_formation WHERE battle_id=?", formation.BattleId).Scan(&formations))
+			if receipt.RequestCancelled {
+				require.ErrorIs(t, reserveErr, ErrDirectCancelled)
+				require.Nil(t, reserved)
+				require.True(t, current.Cancelled)
+				require.Zero(t, current.BattleId)
+				require.Zero(t, formations)
+				for _, ticket := range []*pb.MatchAuthorityTicketRecord{actualA, actualB} {
+					require.Equal(t, uint32(4), ticket.State)
+					require.Zero(t, ticket.FormationId)
+				}
+				if !current.ExitPrepared {
+					require.True(t, proto.Equal(beforeA, actualA))
+					require.True(t, proto.Equal(beforeB, actualB))
+				}
+			} else {
+				require.NoError(t, reserveErr)
+				require.NotNil(t, reserved)
+				require.Equal(t, formation.BattleId, reserved.BattleId)
+				require.Equal(t, formation.BattleId, receipt.BattleId)
+				require.EqualValues(t, 1, receipt.FormationState)
+				require.False(t, current.Cancelled)
+				require.Equal(t, formation.BattleId, current.BattleId)
+				require.Equal(t, 1, formations)
+				for _, ticket := range []*pb.MatchAuthorityTicketRecord{actualA, actualB} {
+					require.Equal(t, uint32(2), ticket.State)
+					require.Equal(t, formation.BattleId, ticket.FormationId)
+				}
+			}
+			replay, err := s.CancelActivity(ctx, key, body)
+			require.NoError(t, err)
+			require.Equal(t, receipt, replay)
+			_, err = s.CancelActivity(ctx, key, []byte("changed-original"))
+			require.ErrorIs(t, err, ErrDirectConflict)
+		}
+	})
 }
 
 func TestAuthorityTiDBDeclineTombstonePreventsLateAcceptAndPartialReservation(t *testing.T) {

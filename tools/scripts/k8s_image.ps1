@@ -113,7 +113,24 @@ param(
     # 同名参数,语义见那边参数注释。非 0 才透传。只有 release-all(不带 -SkipInfra)会 apply 共享 Redis;本脚本不部署 Go 服务,
     # 不渲染 WAITAOF,release-zone 给了也只影响入口打印的那一行。追加在末尾,理由同上方"新参数一律追加在末尾"。
     [ValidateRange(0, 3)]
-    [int]$RedisReplicas = 0
+    [int]$RedisReplicas = 0,
+    # B0-4 运维豁免开关(NODE_OPEN_FILE_LIMIT_MODE),透传给 k8s_deploy.ps1 -NodeOpenFileLimitMode,取值语义与 warn 的代价见那边参数注释。
+    # 生效范围:release-zone 改 gate / scene,release-all(不带 -SkipInfra)还有 battle。
+    # 写法同 -GateRouterMode:默认留空 = 不透传,由 k8s_deploy.ps1 接管(留空 = 不写 env、进程按 enforce),非空才透传。
+    # 与 dev_tools.ps1 同一 ValidateSet 且区分大小写:大写或拼错在本脚本入口就拒,不等镜像构建推送完才由下游拒。
+    # 不粘滞:以 warn 运行的环境经本脚本发版却不传,会落回 enforce。追加在末尾,理由同上方"新参数一律追加在末尾"。
+    [ValidateSet("", "enforce", "warn", IgnoreCase = $false)]
+    [string]$NodeOpenFileLimitMode = "",
+    # 共享 Redis 按用途拆实例(G4a 第 1a 批),透传给 k8s_deploy.ps1 同名参数,语义见那边参数注释。
+    #   -RedisSplit:auto(缺省)= 不透传;none / queue 才透传。本脚本不部署 login / gateway,只有 release-all(不带 -SkipInfra)的
+    #     infra-up 会按 queue apply 排队实例;release-zone 给了也不改任何 ConfigMap。
+    #   -ConfirmRedisSplitSwitch:switch 只在被指定时透传(本脚本不部署 login / gateway,通常用不到)。
+    #   -RedisQueueMaxMemory:queue 实例的 maxmemory,非空才透传;release 档 release-all 带 -RedisSplit queue 时必填(k8s_deploy.ps1 校验)。
+    # 追加在末尾,理由同上方"新参数一律追加在末尾"。
+    [ValidateSet("auto", "none", "queue")]
+    [string]$RedisSplit = "auto",
+    [switch]$ConfirmRedisSplitSwitch,
+    [string]$RedisQueueMaxMemory = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -420,6 +437,10 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($GateRouterMode)) {
         $args.GateRouterMode = $GateRouterMode
     }
+    # B0-4 豁免开关同一口径:留空不传,k8s_deploy.ps1 留空即不写 NODE_OPEN_FILE_LIMIT_MODE。
+    if (-not [string]::IsNullOrWhiteSpace($NodeOpenFileLimitMode)) {
+        $args.NodeOpenFileLimitMode = $NodeOpenFileLimitMode
+    }
     # 集群外入口参数同一口径:字符串非空才传,GateNodePortBase 非 -1 才传。
     if (-not [string]::IsNullOrWhiteSpace($ClientEntryMode)) { $args.ClientEntryMode = $ClientEntryMode }
     if (-not [string]::IsNullOrWhiteSpace($ClientPublicHost)) { $args.ClientPublicHost = $ClientPublicHost }
@@ -430,6 +451,10 @@ function Invoke-K8sDeploy {
     if ($AllowDisruptiveSwitch) { $args.AllowDisruptiveSwitch = $true }
     if ($ConfirmRedisCoreRestart) { $args.ConfirmRedisCoreRestart = $true }
     if ($RedisReplicas -gt 0) { $args.RedisReplicas = $RedisReplicas }
+    # 按用途拆实例(G4a 第 1a 批):-RedisSplit 非 auto 才传,确认开关只在被指定时传,容量非空才传。
+    if (-not [string]::IsNullOrWhiteSpace($RedisSplit) -and $RedisSplit -ne 'auto') { $args.RedisSplit = $RedisSplit }
+    if ($ConfirmRedisSplitSwitch) { $args.ConfirmRedisSplitSwitch = $true }
+    if (-not [string]::IsNullOrWhiteSpace($RedisQueueMaxMemory)) { $args.RedisQueueMaxMemory = $RedisQueueMaxMemory }
     # 同一口径留空不透传。本函数从不传 -GoSvcRegistry,k8s_deploy.ps1 因此不部署 login / scene_manager,
     # 这个值只进它的组合预检、不写进 ConfigMap;"不生效"的告警在脚本入口打(见 switch ($Command) 之前),这里只透传。
     if (-not [string]::IsNullOrWhiteSpace($RequireClientEndpoint)) { $args.RequireClientEndpoint = $RequireClientEndpoint }

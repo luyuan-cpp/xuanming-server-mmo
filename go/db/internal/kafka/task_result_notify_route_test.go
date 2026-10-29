@@ -138,7 +138,7 @@ func readNotifyResult(t *testing.T, mr *miniredis.Miniredis, taskID string) *db_
 func TestPublishDBReadResult_NotifiesReplyInstanceChannel(t *testing.T) {
 	mr, rc, rec := newNotifyFixture(t, nil)
 	row := &db_proto.TaskResult{Timestamp: 42} // 读出的行:任何 proto 消息都行,这里借用 TaskResult
-	task := &db_proto.DBTask{Key: 42, Op: "read", MsgType: "taskpb.TaskResult", TaskId: "t-1", ReplyInstance: testReplyInstance}
+	task := &db_proto.DBTask{Key: 42, Op: db_proto.DBOp_DB_OP_READ, MsgType: "taskpb.TaskResult", TaskId: "t-1", ReplyInstance: testReplyInstance}
 
 	require.NoError(t, publishDBReadResult(context.Background(), rc, task, row))
 
@@ -158,7 +158,7 @@ func TestFailReadTask_NotifiesReplyInstanceChannel(t *testing.T) {
 	t.Cleanup(cancel)
 	w := &worker{ctx: ctx, redisClient: rc}
 	const reason = "placement required but no record"
-	dbTask := &db_proto.DBTask{Key: 42, Op: "read", MsgType: "taskpb.TaskResult", TaskId: "t-2", ReplyInstance: testReplyInstance}
+	dbTask := &db_proto.DBTask{Key: 42, Op: db_proto.DBOp_DB_OP_READ, MsgType: "taskpb.TaskResult", TaskId: "t-2", ReplyInstance: testReplyInstance}
 
 	w.failReadTask(&workerTask{}, dbTask, reason)
 
@@ -171,7 +171,7 @@ func TestFailReadTask_NotifiesReplyInstanceChannel(t *testing.T) {
 // 兼容守卫:读任务可能在重试队列里停留几分钟,重试载荷整份重新序列化 DBTask,回复目标必须原样带回,
 // 否则从重试队列出来的读回执会退回全服广播。三种载荷格式(v2 带分区、v1 不带分区、legacy 裸任务)都要保留。
 func TestEncodeRetryPayload_PreservesReplyInstance(t *testing.T) {
-	task := &db_proto.DBTask{Key: 42, Op: "read", MsgType: "taskpb.TaskResult", TaskId: "t-3", ReplyInstance: testReplyInstance}
+	task := &db_proto.DBTask{Key: 42, Op: db_proto.DBOp_DB_OP_READ, MsgType: "taskpb.TaskResult", TaskId: "t-3", ReplyInstance: testReplyInstance}
 	for _, tc := range []struct {
 		name         string
 		seq          uint64

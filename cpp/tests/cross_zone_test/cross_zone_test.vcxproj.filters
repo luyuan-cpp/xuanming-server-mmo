@@ -13,6 +13,9 @@
     <ClCompile Include="save_seq_test.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="player_ownership_metrics_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Include">

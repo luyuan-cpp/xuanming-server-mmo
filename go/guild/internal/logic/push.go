@@ -17,6 +17,7 @@ package logic
 import (
 	"context"
 	"fmt"
+	"shared/drainproof"
 	"slices"
 	"time"
 
@@ -79,9 +80,10 @@ func (NoopNotifier) Notify(*pb.GuildChangedS2C, []uint64) {}
 // KafkaGuildNotifier 走 Kafka gate-cmd → gate → TCP 这条既有下行链路(设计决策 D6),
 // 与 match / friend 的推送共用 shared/kafkautil 的收口。
 type KafkaGuildNotifier struct {
-	writer   *kafkago.Writer
-	builder  kafkautil.GateCommandBuilder
-	sessions *redis.Client // svcCtx.PlayerLocatorRedisClient,读 player:session:*
+	admission *drainproof.Session
+	writer    *kafkago.Writer
+	builder   kafkautil.GateCommandBuilder
+	sessions  *redis.Client // svcCtx.PlayerLocatorRedisClient,读 player:session:*
 	// messageID 固定为 NotifyGuildChanged 的客户端消息号;存字段而不是每次现取,
 	// 是为了让"推送用的是哪个号"在构造处一眼可见。
 	messageID uint32
@@ -92,12 +94,23 @@ type KafkaGuildNotifier struct {
 // 必须在这里判:kafkautil.PushToPlayer 不判 nil writer(go/shared/kafkautil/gate_push.go),
 // 真拿 nil writer 去 WriteMessages 会 panic 在推送协程里 —— 那是配置缺失,
 // 不该表现为运行期崩溃。打 Info 而不是 Error:本地开发不配 Kafka 是正常形态。
-func NewGuildNotifier(w *kafkago.Writer, b kafkautil.GateCommandBuilder, sessions *redis.Client) GuildNotifier {
+func NewGuildNotifier(w *kafkago.Writer, b kafkautil.GateCommandBuilder, sessions *redis.Client, admissions ...*drainproof.Session) GuildNotifier {
+	var gate *drainproof.Session
+	if len(admissions) > 1 {
+		panic("公会通知角色重复")
+	}
+	if len(admissions) == 1 {
+		gate = admissions[0]
+		if gate == nil {
+			panic("公会通知角色未装配")
+		}
+	}
 	if w == nil || b == nil || sessions == nil {
 		logx.Info("[guild] Kafka writer / gate builder / session Redis not configured: guild push disabled, client refreshes by polling")
 		return NoopNotifier{}
 	}
 	return &KafkaGuildNotifier{
+		admission: gate,
 		writer:    w,
 		builder:   b,
 		sessions:  sessions,
@@ -121,7 +134,25 @@ func (n *KafkaGuildNotifier) Notify(change *pb.GuildChangedS2C, recipients []uin
 		return
 	}
 
+	finish := func() {}
+	if n.admission != nil {
+		accepted, err := n.admission.Enter()
+		if err != nil {
+			n.admission.Hold()
+			return
+		}
+		finish = accepted
+	}
 	safego.Go(guildPushPoint, func() {
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				if n.admission != nil {
+					n.admission.Hold()
+				}
+				panic(recovered)
+			}
+		}()
 		ctx, cancel := context.WithTimeout(context.Background(), guildPushBudget)
 		defer cancel()
 
@@ -146,6 +177,9 @@ func (n *KafkaGuildNotifier) Notify(change *pb.GuildChangedS2C, recipients []uin
 			err = kafkautil.BroadcastToPlayers(ctx, n.writer, n.builder, online, n.messageID, body)
 		}
 		if err != nil {
+			if n.admission != nil {
+				n.admission.Hold()
+			}
 			// BroadcastToPlayers 对个别坏条目会跳过其余照发,只返回首个错误,
 			// 所以整批记 error 是**偏保守**的口径(实际可能大部分已送达);
 			// 宁可指标偏悲观,明细在上面 kafkautil 的 Error 日志里。
@@ -295,7 +329,7 @@ func (l *GuildLogic) notify(kind pb.GuildChangeKind, guildID, actor, target uint
 }
 
 // membersExcept 返回快照成员里去掉 excluded 之后的 player_id,顺序沿用快照
-//(loadGuild 按 player_id 升序装配),便于日志与用例逐条比对。
+// (loadGuild 按 player_id 升序装配),便于日志与用例逐条比对。
 //
 // 只做集合减法、不做去重与丢 0:那两件事在 Notify 的 uniqueNonZero 里统一做,
 // 免得同一条规则散落两处、日后改一处忘一处。
@@ -385,8 +419,9 @@ func (NoopSyncBumper) Bump([]uint64, ...scenepb.SyncDomain) {}
 //
 // 只经 NewGuildSyncBumper 构造(四个字段都必须非零);单测在同一包内按字段注入替身。
 type AsyncGuildSyncBumper struct {
-	inner  PlayerSyncBumper
-	budget time.Duration
+	admission *drainproof.Session
+	inner     PlayerSyncBumper
+	budget    time.Duration
 	// withBudget 按 budget 给每一批建一个独立的预算上下文(不继承请求 ctx)。生产是 backgroundWithTimeout;
 	// 抽成字段是为了单测注入截止时间固定的上下文,直接比对截止时间,不与真实墙钟比较(AGENTS §11.4)。
 	withBudget func(time.Duration) (context.Context, context.CancelFunc)
@@ -408,12 +443,23 @@ func launchSyncBump(fn func()) { safego.Go(guildSyncBumpPoint, fn) }
 // nil 接口的坑:装着 nil *playersync.Bumper 的接口不等于 nil,走不到这里的退回分支;
 // 那种形态(NewGoRedisEvaler / NewBumper 拿到 nil 句柄时返回 nil)由 playersync.Bumper 自己的
 // nil 接收者兜住(BumpAll 直接返回 nil),不会 panic,只是多起一个空跑的协程。
-func NewGuildSyncBumper(inner PlayerSyncBumper) GuildSyncBumper {
+func NewGuildSyncBumper(inner PlayerSyncBumper, admissions ...*drainproof.Session) GuildSyncBumper {
+	var gate *drainproof.Session
+	if len(admissions) > 1 {
+		panic("公会摘要角色重复")
+	}
+	if len(admissions) == 1 {
+		gate = admissions[0]
+		if gate == nil {
+			panic("公会摘要角色未装配")
+		}
+	}
 	if inner == nil {
 		logx.Info("[guild] sync digest bumper not configured: guild domains never change in the landing digest, client refreshes when opening the guild panel")
 		return NoopSyncBumper{}
 	}
 	return &AsyncGuildSyncBumper{
+		admission:  gate,
 		inner:      inner,
 		budget:     guildSyncBumpBudget,
 		withBudget: backgroundWithTimeout,
@@ -429,12 +475,32 @@ func (b *AsyncGuildSyncBumper) Bump(players []uint64, domains ...scenepb.SyncDom
 	// 去重与复制都在起协程**之前**:players 常是事务快照的成员切片、domains 是可变参数的底层数组,
 	// 交给另一个 goroutine 之后调用方若复用它们,-race 下必报。uniqueNonZero 已返回新切片。
 	ds := slices.Clone(domains)
+	finish := func() {}
+	if b.admission != nil {
+		accepted, err := b.admission.Enter()
+		if err != nil {
+			b.admission.Hold()
+			return
+		}
+		finish = accepted
+	}
 	b.launch(func() {
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				if b.admission != nil {
+					b.admission.Hold()
+				}
+				panic(recovered)
+			}
+		}()
 		ctx, cancel := b.withBudget(b.budget)
 		defer cancel()
 		// 返回值只是汇总:每一个失败(含预算耗尽时没来得及发的人数)playersync 都已记 WARN 与指标,
 		// 这里再记一行只会让同一次故障出现两遍。漏掉的由打开面板时的拉取兜底(纪律 3)。
-		_ = b.inner.BumpAll(ctx, ids, ds...)
+		if err := b.inner.BumpAll(ctx, ids, ds...); err != nil && b.admission != nil {
+			b.admission.Hold()
+		}
 	})
 }
 

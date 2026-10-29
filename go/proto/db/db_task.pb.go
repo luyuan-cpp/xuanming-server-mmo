@@ -21,13 +21,63 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// 读写操作由生产端与消费端共享；缺省值和未知编号不得执行。
+type DBOp int32
+
+const (
+	DBOp_DB_OP_UNSPECIFIED DBOp = 0
+	DBOp_DB_OP_READ        DBOp = 1
+	DBOp_DB_OP_WRITE       DBOp = 2
+)
+
+// Enum value maps for DBOp.
+var (
+	DBOp_name = map[int32]string{
+		0: "DB_OP_UNSPECIFIED",
+		1: "DB_OP_READ",
+		2: "DB_OP_WRITE",
+	}
+	DBOp_value = map[string]int32{
+		"DB_OP_UNSPECIFIED": 0,
+		"DB_OP_READ":        1,
+		"DB_OP_WRITE":       2,
+	}
+)
+
+func (x DBOp) Enum() *DBOp {
+	p := new(DBOp)
+	*p = x
+	return p
+}
+
+func (x DBOp) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (DBOp) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_db_db_task_proto_enumTypes[0].Descriptor()
+}
+
+func (DBOp) Type() protoreflect.EnumType {
+	return &file_proto_db_db_task_proto_enumTypes[0]
+}
+
+func (x DBOp) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use DBOp.Descriptor instead.
+func (DBOp) EnumDescriptor() ([]byte, []int) {
+	return file_proto_db_db_task_proto_rawDescGZIP(), []int{0}
+}
+
 // DBTask: DB operation task struct transmitted via Kafka
 // Usage: producer sends DB operation requests, consumer receives and executes
 type DBTask struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	Key        uint64                 `protobuf:"varint,1,opt,name=key,proto3" json:"key,omitempty"`                                 // Business unique key (e.g. user ID, order ID) for locking and partition routing
 	WhereCase  string                 `protobuf:"bytes,2,opt,name=where_case,json=whereCase,proto3" json:"where_case,omitempty"`     // Query condition (read-only, e.g. "id=123 AND status=0")
-	Op         string                 `protobuf:"bytes,3,opt,name=op,proto3" json:"op,omitempty"`                                    // Operation type: "read" or "write"
+	Op         DBOp                   `protobuf:"varint,3,opt,name=op,proto3,enum=taskpb.DBOp" json:"op,omitempty"`                  // 任务操作；上线前统一切换枚举编码，不兼容旧字符串载荷
 	MsgType    string                 `protobuf:"bytes,4,opt,name=msg_type,json=msgType,proto3" json:"msg_type,omitempty"`           // Target proto message type (e.g. "userpb.UserInfo") for deserializing body
 	Body       []byte                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`                                // Serialized business data (e.g. UserInfo bytes)
 	TaskId     string                 `protobuf:"bytes,6,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`              // Unique task ID for storing result in Redis (producer queries by this ID)
@@ -90,11 +140,11 @@ func (x *DBTask) GetWhereCase() string {
 	return ""
 }
 
-func (x *DBTask) GetOp() string {
+func (x *DBTask) GetOp() DBOp {
 	if x != nil {
 		return x.Op
 	}
-	return ""
+	return DBOp_DB_OP_UNSPECIFIED
 }
 
 func (x *DBTask) GetMsgType() string {
@@ -220,12 +270,12 @@ var File_proto_db_db_task_proto protoreflect.FileDescriptor
 
 const file_proto_db_db_task_proto_rawDesc = "" +
 	"\n" +
-	"\x16proto/db/db_task.proto\x12\x06taskpb\"\x95\x02\n" +
+	"\x16proto/db/db_task.proto\x12\x06taskpb\"\xa3\x02\n" +
 	"\x06DBTask\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x1d\n" +
 	"\n" +
-	"where_case\x18\x02 \x01(\tR\twhereCase\x12\x0e\n" +
-	"\x02op\x18\x03 \x01(\tR\x02op\x12\x19\n" +
+	"where_case\x18\x02 \x01(\tR\twhereCase\x12\x1c\n" +
+	"\x02op\x18\x03 \x01(\x0e2\f.taskpb.DBOpR\x02op\x12\x19\n" +
 	"\bmsg_type\x18\x04 \x01(\tR\amsgType\x12\x12\n" +
 	"\x04body\x18\x05 \x01(\fR\x04body\x12\x17\n" +
 	"\atask_id\x18\x06 \x01(\tR\x06taskId\x12\x1f\n" +
@@ -241,7 +291,12 @@ const file_proto_db_db_task_proto_rawDesc = "" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x12\n" +
 	"\x04data\x18\x02 \x01(\fR\x04data\x12\x14\n" +
 	"\x05error\x18\x03 \x01(\tR\x05error\x12\x1c\n" +
-	"\ttimestamp\x18\x04 \x01(\x03R\ttimestampB\n" +
+	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp*>\n" +
+	"\x04DBOp\x12\x15\n" +
+	"\x11DB_OP_UNSPECIFIED\x10\x00\x12\x0e\n" +
+	"\n" +
+	"DB_OP_READ\x10\x01\x12\x0f\n" +
+	"\vDB_OP_WRITE\x10\x02B\n" +
 	"Z\bproto/dbb\x06proto3"
 
 var (
@@ -256,17 +311,20 @@ func file_proto_db_db_task_proto_rawDescGZIP() []byte {
 	return file_proto_db_db_task_proto_rawDescData
 }
 
+var file_proto_db_db_task_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_proto_db_db_task_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_proto_db_db_task_proto_goTypes = []any{
-	(*DBTask)(nil),     // 0: taskpb.DBTask
-	(*TaskResult)(nil), // 1: taskpb.TaskResult
+	(DBOp)(0),          // 0: taskpb.DBOp
+	(*DBTask)(nil),     // 1: taskpb.DBTask
+	(*TaskResult)(nil), // 2: taskpb.TaskResult
 }
 var file_proto_db_db_task_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0, // 0: taskpb.DBTask.op:type_name -> taskpb.DBOp
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_proto_db_db_task_proto_init() }
@@ -279,13 +337,14 @@ func file_proto_db_db_task_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_db_db_task_proto_rawDesc), len(file_proto_db_db_task_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_proto_db_db_task_proto_goTypes,
 		DependencyIndexes: file_proto_db_db_task_proto_depIdxs,
+		EnumInfos:         file_proto_db_db_task_proto_enumTypes,
 		MessageInfos:      file_proto_db_db_task_proto_msgTypes,
 	}.Build()
 	File_proto_db_db_task_proto = out.File

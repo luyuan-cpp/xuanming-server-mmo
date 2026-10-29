@@ -77,7 +77,7 @@ func TestLocalImportAuthorizationAndSQLFailureKeepPendingWithoutACK(t *testing.T
 				return nil
 			}, func() error {
 				steps = append(steps, "ack")
-				return commitLocalRedis(ctx, client, 17, version, "dev_target")
+				return commitLocalRedis(ctx, client, 17, version)
 			})
 			if mode == "success" {
 				require.NoError(t, err)

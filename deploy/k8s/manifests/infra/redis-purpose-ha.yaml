@@ -1,0 +1,853 @@
+# 按用途拆出的 Redis 实例的高可用形态(G4a:排队与限流 → redis-queue-g<N>;docs/design/shared-redis-split-by-purpose.md §25.3 第 18 条子项 1):
+# 1 主 2 从 + 每个 redis Pod 一个哨兵 + 2 个 haproxy 入口代理。结构、代理的路由规则、数据安全的边界、停机交接、崩溃后的启动顺序与实测记录
+# 全部同核心 manifests/infra/redis-ha.yaml,理由只写在那里,本文件不重复:
+#   客户端 ──▶ Service <实例名>(名字与 ClusterIP 都不变)──▶ <实例名>-proxy(haproxy ×2)──▶ 当前的主
+#
+# 由 tools/scripts/k8s_deploy.ps1 的 New-RedisQueueInstanceManifests 渲染:-RedisSplit queue 的 infra-up / 不带 -SkipInfra 的 all-up,
+# 按 zones 配置里出现过的每个 redisQueueGroup 各 apply 一份。形态与核心同一套 -RedisReplicas 档位规则(Get-RedisTopology →
+# Get-RedisQueueShapeFor):非 dev 档缺省 3 = 本文件;1 = redis-purpose.yaml。两种形态的客户端入口都是同名 Service <实例名>:6379,
+# login 的 Node.QueueRedis.Host 与 gateway 的 spring.data.redis.host 不随形态变,换形态不触发 -ConfirmRedisSplitSwitch。
+# 占位(前后各两个下划线,这里不写全,免得注释也被替换):
+#   REDIS_NAME              实例名。对象名一律由它派生,不与核心重名:Service <名> / <名>-headless、PDB <名>-pdb / <名>-proxy-pdb、
+#                           ConfigMap <名>-ha-scripts、StatefulSet <名>、Deployment <名>-proxy;哨兵的 master 名也是 <名>(核心是 mymaster)。
+#                           脚本里的 Pod 名前缀与 headless 域名同样在渲染时写入(k8s_deploy.ps1 的 Get-RedisQueueHaObjectNames 是同一套命名)。
+#   REDIS_MAXMEMORY         redis-server 的 maxmemory(-RedisQueueMaxMemory),写在 Pod 模板里
+#   REDIS_MEM               redis 容器 requests 与 limits 的内存 = 2 × maxmemory(AOF 重写与全量同步的 fork 写时复制最坏会翻倍)
+#   REDIS_STORAGE           每个 redis Pod 的 PVC 大小(脚本常量,与 redis-purpose.yaml 同值:原地切换时 <名>-0 接着用原来那块 PVC)
+#   REDIS_HA_SCRIPTS_DIGEST 脚本 ConfigMap 的摘要(Get-RedisHaScriptsDigest),写进代理的 Pod 模板注解:脚本一改代理就滚动
+# 有占位没替换就拒绝 apply(Assert-InfraManifestPlaceholdersReplaced)。
+#
+# 与 redis-ha.yaml 的差别(其余照抄。脚本 ConfigMap 的代码行由 tools/scripts/tests/k8s_redis_split_contract.tests.ps1 与 redis-ha.yaml
+# 逐行比对,只允许下面列出的差别 —— 改 redis-ha.yaml 的脚本要同步改这里,否则契约测试变红):
+#   - 名字:见上。标签一律 app: <名>(redis Pod)/ app: <名>-proxy(代理),**绝不能是 app: redis / app: redis-proxy**:
+#     核心 Service redis 的 selector 是二者之一,带上就被挂到核心入口后面。
+#   - redis-server 多三个参数 --appendfsync everysec、--maxmemory "$MAXMEMORY"、--maxmemory-policy noeviction(同 redis-purpose.yaml,§6.3:
+#     承载状态的实例一律 noeviction),MAXMEMORY 与 MAXCLIENTS 一样写在 Pod 模板里(改它 = 滚动重启,停机钩子逐个交接主);
+#     redis 容器写 limits(= requests = 2 × maxmemory),OOMKill 比写满报错更糟。
+#   - 连接上限:MAXCLIENTS 必须与 redis-purpose.yaml 同值(queue 的连接总账只读那一份,两种形态共用一份账);代理每副本 PROXY_MAXCONN 满足
+#     PROXY_MAXCONN × (代理副本 2 + maxSurge 1) + 预留 1000 ≤ MAXCLIENTS(Get-RedisHaLimits 在生成期核对,不满足拒绝部署):3000 × 3 + 1000 = 10000。
+#     连接总账在部署时按「单个代理承载全部客户端」再算一次告警水位(Write-RedisQueueConnectionLedger 的「Redis queue proxy ledger」一行)。
+#   - StatefulSet 上没有重启闸注解:滚动重启由停机钩子先交接主,基本无损;排队数据都带 TTL(同 redis-purpose.yaml 的取舍)。
+#
+# 从单实例原地切过来(Assert-RedisQueueTopologyChangeIsSafe 判 upgrade):Apply-RedisQueueInstances 先 delete --cascade=orphan 旧 StatefulSet
+# (podManagementPolicy 创建后不可改)再 apply,<名>-0 带着 PVC 回来、另两个从它全量同步,Service 改指向代理 —— 做法与核心 1 → 3 相同。
+# 反方向(3 → 1)脚本拒绝,步骤见 deploy/k8s/README.md「共享 Redis 按用途拆实例」。
+# **Service <名> 不能删了重建**:改 selector 用 apply,ClusterIP 不变(同核心)。
+apiVersion: v1
+kind: Service
+metadata:
+  name: __REDIS_NAME__
+  labels:
+    app: __REDIS_NAME__
+spec:
+  selector:
+    app: __REDIS_NAME__-proxy
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+# 节点之间(复制、哨兵、代理的健康检查)互相寻址用的 headless Service,同 redis-ha.yaml 的 redis-headless。
+# 名字与 redis-purpose.yaml 的 governing service 相同(StatefulSet 的 serviceName 创建后不可改,原地切换要求同名)。
+apiVersion: v1
+kind: Service
+metadata:
+  name: __REDIS_NAME__-headless
+  labels:
+    app: __REDIS_NAME__
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: __REDIS_NAME__
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+    - name: sentinel
+      port: 26379
+      targetPort: 26379
+---
+# 一次自愿驱逐最多带走一个 redis Pod(同 redis-ha.yaml)。名字与 redis-purpose.yaml 的 PDB 相同,原地切换时 apply 把 minAvailable 换成 maxUnavailable。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: __REDIS_NAME__-pdb
+  labels:
+    app: __REDIS_NAME__
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: __REDIS_NAME__
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: __REDIS_NAME__-proxy-pdb
+  labels:
+    app: __REDIS_NAME__-proxy
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: __REDIS_NAME__-proxy
+---
+# 启动 / 探针 / 停机脚本。代码逐行同 redis-ha.yaml 的 redis-ha-scripts(契约测试比对),每一步的理由见那里的注释;
+# 这里只在差别处写注释。全部是 POSIX sh(redis 镜像是 dash,haproxy 镜像是 busybox ash)。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: __REDIS_NAME__-ha-scripts
+  labels:
+    app: __REDIS_NAME__
+data:
+  common.sh: |
+    # 由其它脚本用 `. /scripts/common.sh` 引入。
+    NS="${POD_NAMESPACE:?POD_NAMESPACE 未注入}"
+    DOMAIN="${CLUSTER_DOMAIN:-cluster.local}"
+    NODES="${REDIS_NODES:-3}"
+    # 差别:哨兵的 master 名取实例名(核心是 mymaster)。每个实例的哨兵只监视自己的主,不同实例之间本来不会串,用实例名是为了排障时一眼认出。
+    MASTER_NAME=__REDIS_NAME__
+    ORDINAL="${HOSTNAME##*-}"
+    if [ -n "${REDIS_PASSWORD:-}" ]; then
+      export REDISCLI_AUTH="$REDIS_PASSWORD"
+    fi
+
+    # 差别:Pod 名前缀与 headless Service 名取实例名(核心是 redis-<n>.redis-headless)。
+    node_fqdn() {
+      echo "__REDIS_NAME__-$1.__REDIS_NAME__-headless.${NS}.svc.${DOMAIN}"
+    }
+    SELF="$(node_fqdn "$ORDINAL")"
+
+    sentinel_master_of() {
+      timeout 3 redis-cli -h "$(node_fqdn "$1")" -p 26379 sentinel get-master-addr-by-name "$MASTER_NAME" 2>/dev/null \
+        | head -n 1 | tr -d '\r' | grep '^__REDIS_NAME__-[0-9]' || true
+    }
+
+    sentinel_votes() {
+      votes=""
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        if [ "$i" != "$1" ]; then
+          m="$(sentinel_master_of "$i")"
+          if [ -n "$m" ]; then
+            votes="$votes $m"
+          fi
+        fi
+        i=$((i + 1))
+      done
+      [ -n "$votes" ] || return 1
+      printf '%s' "$votes" | tr ' ' '\n' | grep . | sort | uniq -c | sort -rn | head -n 1 | sed 's/^ *//'
+    }
+
+    ask_sentinels() {
+      top="$(sentinel_votes "$1")" || return 1
+      echo "${top#* }"
+    }
+
+    local_role() {
+      timeout 2 redis-cli -h 127.0.0.1 -p 6379 info replication 2>/dev/null | tr -d '\r' | sed -n 's/^role://p'
+    }
+
+  redis-start.sh: |
+    #!/bin/sh
+    set -eu
+    . /scripts/common.sh
+    QUORUM=$((NODES / 2 + 1))
+
+    long_running_replica_exists() {
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        if [ "$i" != "$ORDINAL" ]; then
+          info="$(timeout 2 redis-cli -h "$(node_fqdn "$i")" -p 6379 info 2>/dev/null | tr -d '\r' || true)"
+          role="$(printf '%s\n' "$info" | sed -n 's/^role://p')"
+          up="$(printf '%s\n' "$info" | sed -n 's/^uptime_in_seconds://p')"
+          case "$up" in
+            ''|*[!0-9]*) ;;
+            *) if [ "$role" = "slave" ] && [ "$up" -ge 30 ]; then return 0; fi ;;
+          esac
+        fi
+        i=$((i + 1))
+      done
+      return 1
+    }
+
+    sentinels_see_master_down() {
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        flags="$(timeout 3 redis-cli -h "$(node_fqdn "$i")" -p 26379 sentinel master "$MASTER_NAME" 2>/dev/null \
+          | tr -d '\r' | grep -A1 '^flags$' | tail -n 1 || true)"
+        case "$flags" in
+          *s_down*|*o_down*|*failover*) return 0 ;;
+        esac
+        i=$((i + 1))
+      done
+      return 1
+    }
+
+    MASTER=""
+    best=""
+    n=0
+    while [ "$n" -lt 15 ]; do
+      top="$(sentinel_votes "" || true)"
+      if [ -n "$top" ]; then
+        best="${top#* }"
+        if [ "${top%% *}" -ge "$QUORUM" ]; then
+          MASTER="$best"
+          break
+        fi
+      fi
+      sleep 1
+      n=$((n + 1))
+    done
+    if [ -z "$MASTER" ] && [ -n "$best" ]; then
+      MASTER="$best"
+      echo "[redis-start] No consensus from a majority of sentinels within 15 seconds; using the candidate with the most votes: $MASTER"
+    fi
+
+    if [ -z "$MASTER" ]; then
+      MASTER="$(node_fqdn 0)"
+      echo "[redis-start] No sentinel can identify the current primary; using __REDIS_NAME__-0 as primary by convention"
+    elif [ "$MASTER" = "$SELF" ]; then
+      if sentinels_see_master_down || long_running_replica_exists; then
+        echo "[redis-start] Sentinels still identify this node as primary while other nodes have been running (or sentinels marked this node down); waiting up to 20 seconds for failover"
+        n=0
+        while [ "$n" -lt 20 ]; do
+          sleep 1
+          now="$(ask_sentinels "" || true)"
+          if [ -n "$now" ] && [ "$now" != "$SELF" ]; then
+            MASTER="$now"
+            break
+          fi
+          n=$((n + 1))
+        done
+      else
+        echo "[redis-start] Sentinels identify this node as primary and other nodes just started (or are not up yet); starting directly as primary"
+      fi
+    fi
+
+    : "${MAXCLIENTS:?MAXCLIENTS 未注入(应由 Pod 模板的 command 设置)}"
+    # 差别:maxmemory 同样由 Pod 模板注入(见 StatefulSet 的 command)。
+    : "${MAXMEMORY:?MAXMEMORY 未注入(应由 Pod 模板的 command 设置)}"
+    need=$((MAXCLIENTS + 32))
+    soft=$(ulimit -Sn 2>/dev/null || echo unknown)
+    hard=$(ulimit -Hn 2>/dev/null || echo unknown)
+    echo "redis fd limit: soft=$soft hard=$hard need=$need maxclients=$MAXCLIENTS"
+    case "$hard" in
+      unlimited|unknown) ;;
+      *) if [ "$hard" -lt "$need" ]; then echo "ERROR: nofile hard limit $hard < $need, redis-server will lower maxclients below $MAXCLIENTS" >&2; fi ;;
+    esac
+
+    # 差别:多 --appendfsync everysec、--maxmemory、--maxmemory-policy noeviction 三项(见文件头)。其余逐项同 redis-ha.yaml。
+    set -- redis-server \
+      --appendonly yes \
+      --appendfsync everysec \
+      --maxclients "$MAXCLIENTS" \
+      --enable-debug-command no \
+      --maxmemory "$MAXMEMORY" \
+      --maxmemory-policy noeviction \
+      --replica-announce-ip "$SELF" \
+      --min-replicas-to-write 1 \
+      --min-replicas-max-lag 10 \
+      --repl-diskless-sync-delay 1
+    if [ -n "${REDIS_PASSWORD:-}" ]; then
+      set -- "$@" --requirepass "$REDIS_PASSWORD" --masterauth "$REDIS_PASSWORD"
+    fi
+    if [ "$MASTER" = "$SELF" ]; then
+      echo "[redis-start] Starting as primary: $SELF"
+    else
+      echo "[redis-start] Starting as replica: $SELF following $MASTER"
+      set -- "$@" --replicaof "$MASTER" 6379
+    fi
+    exec "$@"
+
+  redis-ready.sh: |
+    #!/bin/sh
+    . /scripts/common.sh
+    [ "$(timeout 2 redis-cli -h 127.0.0.1 -p 6379 ping 2>/dev/null)" = "PONG" ] || exit 1
+    info="$(timeout 2 redis-cli -h 127.0.0.1 -p 6379 info replication 2>/dev/null)" || exit 1
+    case "$info" in
+      *role:master*) exit 0 ;;
+      *master_link_status:up*) exit 0 ;;
+    esac
+    exit 1
+
+  redis-prestop.sh: |
+    #!/bin/sh
+    . /scripts/common.sh
+    [ "$(local_role)" = "master" ] || exit 0
+
+    rc() {
+      timeout 3 redis-cli -h 127.0.0.1 -p 6379 "$@" 2>/dev/null | tr -d '\r'
+    }
+
+    online="$(rc info replication | grep -c 'state=online' || true)"
+    if [ "${online:-0}" -lt 1 ]; then
+      echo "[redis-prestop] This node is primary but has no online replicas; skipping handoff"
+      exit 0
+    fi
+
+    PEER=""
+    n=0
+    while [ "$n" -lt 25 ] && [ -z "$PEER" ]; do
+      online="$(rc info replication | grep -c 'state=online' || true)"
+      if [ "${online:-0}" -lt 1 ]; then
+        echo "[redis-prestop] All online replicas are gone (cluster-wide shutdown?); skipping handoff"
+        exit 0
+      fi
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        if [ "$i" != "$ORDINAL" ]; then
+          seen="$(timeout 3 redis-cli -h "$(node_fqdn "$i")" -p 26379 sentinel replicas "$MASTER_NAME" 2>/dev/null | tr -d '\r')"
+          healthy="$(printf '%s\n' "$seen" | grep -A1 '^flags$' | grep -c '^slave$' || true)"
+          linked="$(printf '%s\n' "$seen" | grep -A1 '^master-link-status$' | grep -c '^ok$' || true)"
+          if [ "${healthy:-0}" -ge "$online" ] && [ "${linked:-0}" -ge "$online" ]; then
+            PEER="$i"
+            break
+          fi
+        fi
+        i=$((i + 1))
+      done
+      if [ -z "$PEER" ]; then
+        sleep 1
+        n=$((n + 1))
+      fi
+    done
+    if [ -z "$PEER" ]; then
+      echo "[redis-prestop] No sentinel discovered all replicas within 25 seconds; attempting handoff as usual"
+    fi
+
+    rc client pause 20000 write >/dev/null
+
+    n=0
+    while [ "$n" -lt 30 ]; do
+      info="$(rc info replication)"
+      mine="$(printf '%s\n' "$info" | sed -n 's/^master_repl_offset://p')"
+      best="$(printf '%s\n' "$info" | sed -n 's/^slave[0-9]*:.*state=online,offset=\([0-9]*\),.*/\1/p' | sort -n | tail -n 1)"
+      if [ -n "$mine" ] && [ -n "$best" ] && [ "$best" -ge "$mine" ]; then
+        break
+      fi
+      sleep 0.1
+      n=$((n + 1))
+    done
+
+    asked=0
+    for i in $PEER $(seq 0 $((NODES - 1))); do
+      if [ "$i" != "$ORDINAL" ]; then
+        r="$(timeout 3 redis-cli -h "$(node_fqdn "$i")" -p 26379 sentinel failover "$MASTER_NAME" 2>&1 | tr -d '\r' || true)"
+        if [ "$r" = "OK" ]; then
+          asked=1
+          break
+        fi
+      fi
+    done
+    if [ "$asked" != "1" ]; then
+      echo "[redis-prestop] No sentinel accepted the failover request; resuming and stopping directly (sentinels will fail over after marking this node down)"
+      rc client unpause >/dev/null
+      exit 0
+    fi
+
+    NEW=""
+    n=0
+    while [ "$n" -lt 100 ]; do
+      agreed=""
+      split=0
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        if [ "$i" != "$ORDINAL" ]; then
+          m="$(sentinel_master_of "$i")"
+          if [ -z "$m" ] || [ "$m" = "$SELF" ]; then
+            split=1
+          elif [ -z "$agreed" ]; then
+            agreed="$m"
+          elif [ "$agreed" != "$m" ]; then
+            split=1
+          fi
+        fi
+        i=$((i + 1))
+      done
+      if [ "$split" = "0" ] && [ -n "$agreed" ]; then
+        NEW="$agreed"
+        break
+      fi
+      sleep 0.2
+      n=$((n + 1))
+    done
+    if [ -z "$NEW" ]; then
+      echo "[redis-prestop] Sentinels did not switch to a new primary within 20 seconds; resuming and stopping directly"
+      rc client unpause >/dev/null
+      exit 0
+    fi
+
+    sleep 1.5
+    rc client kill type normal >/dev/null
+    rc client kill type pubsub >/dev/null
+    rc replicaof "$NEW" 6379 >/dev/null
+    rc client unpause >/dev/null
+    echo "[redis-prestop] Primary role handed over to $NEW"
+    exit 0
+
+  sentinel-start.sh: |
+    #!/bin/sh
+    set -eu
+    . /scripts/common.sh
+    CONF=/data/sentinel/sentinel.conf
+    mkdir -p /data/sentinel
+
+    case "${REDIS_PASSWORD:-}" in
+      *[[:space:]\"\'\\]*)
+        echo "[sentinel-start] Refusing startup: Redis password contains whitespace, quotes, or backslashes. Sentinels cannot save such a password back to the configuration file; use a password containing only letters, digits, and ._~@%+=:,^-." >&2
+        exit 1
+        ;;
+    esac
+
+    if [ ! -s "$CONF" ]; then
+      MASTER="$(ask_sentinels "$ORDINAL" || true)"
+      if [ -z "$MASTER" ]; then
+        MASTER="$(node_fqdn 0)"
+      fi
+      QUORUM=$((NODES / 2 + 1))
+      echo "[sentinel-start] First startup: monitored primary = $MASTER; declaring it down requires $QUORUM votes"
+      {
+        echo "port 26379"
+        echo "dir /data/sentinel"
+        echo "sentinel resolve-hostnames yes"
+        echo "sentinel announce-hostnames yes"
+        echo "sentinel announce-ip $SELF"
+        echo "sentinel monitor $MASTER_NAME $MASTER 6379 $QUORUM"
+        echo "sentinel down-after-milliseconds $MASTER_NAME 5000"
+        echo "sentinel failover-timeout $MASTER_NAME 30000"
+        echo "sentinel parallel-syncs $MASTER_NAME 1"
+      } > "$CONF.tmp"
+      mv "$CONF.tmp" "$CONF"
+    fi
+
+    if [ -n "${REDIS_PASSWORD:-}" ]; then
+      exec redis-sentinel "$CONF" \
+        --requirepass "$REDIS_PASSWORD" \
+        --sentinel auth-pass "$MASTER_NAME" "$REDIS_PASSWORD" \
+        --sentinel sentinel-pass "$REDIS_PASSWORD"
+    fi
+    exec redis-sentinel "$CONF"
+
+  proxy-start.sh: |
+    #!/bin/sh
+    set -eu
+    : "${PROXY_MAXCONN:?PROXY_MAXCONN 未注入(应由 Pod 模板的 command 设置)}"
+    NS="${POD_NAMESPACE:?POD_NAMESPACE 未注入}"
+    DOMAIN="${CLUSTER_DOMAIN:-cluster.local}"
+    NODES="${REDIS_NODES:-3}"
+    QUORUM=$((NODES / 2 + 1))
+    CFG=/tmp/haproxy.cfg
+
+    # 差别:Pod 名前缀与 headless Service 名取实例名(同 common.sh)。
+    node_fqdn() {
+      echo "__REDIS_NAME__-$1.__REDIS_NAME__-headless.${NS}.svc.${DOMAIN}"
+    }
+
+    AUTH_HEX=""
+    if [ -n "${REDIS_PASSWORD:-}" ]; then
+      len="$(printf '%s' "$REDIS_PASSWORD" | wc -c | tr -d ' ')"
+      AUTH_HEX="$(printf '*2\r\n$4\r\nAUTH\r\n$%s\r\n%s\r\n' "$len" "$REDIS_PASSWORD" | od -An -v -tx1 | tr -d ' \n')"
+    fi
+    emit_auth_check() {
+      if [ -n "$AUTH_HEX" ]; then
+        echo "  tcp-check send-binary ${AUTH_HEX}"
+        echo "  tcp-check expect min-recv 5 string +OK"
+      fi
+    }
+
+    SERVER_OPTS="resolvers kube init-addr last,libc,none"
+    DATA_OPTS="tcp-ut 10s"
+
+    {
+      echo "global"
+      echo "  maxconn $((PROXY_MAXCONN + 100))"
+      cat <<'EOF'
+      log stdout format raw daemon notice
+      hard-stop-after 10s
+      stats socket ipv4@127.0.0.1:9999 level admin
+
+    EOF
+      echo "defaults"
+      echo "  maxconn ${PROXY_MAXCONN}"
+      cat <<'EOF'
+      mode tcp
+      log global
+      option dontlog-normal
+      timeout connect 3s
+      timeout check 2s
+      timeout client 1h
+      timeout server 1h
+      option clitcpka
+      option srvtcpka
+      clitcpka-idle 10s
+      clitcpka-intvl 5s
+      clitcpka-cnt 3
+      srvtcpka-idle 10s
+      srvtcpka-intvl 5s
+      srvtcpka-cnt 3
+
+    resolvers kube
+      parse-resolv-conf
+      resolve_retries 3
+      timeout resolve 1s
+      timeout retry 1s
+      hold valid 2s
+      hold nx 2s
+      hold other 2s
+      hold refused 2s
+      hold timeout 2s
+      hold obsolete 5s
+
+    frontend health
+      bind :8405
+      mode http
+      monitor-uri /healthz
+
+    frontend redis_in
+      bind :6379
+    EOF
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        echo "  use_backend redis_${i} if { srv_is_up(redis_${i}/node) } { nbsrv(quorum_${i}) ge ${QUORUM} }"
+        i=$((i + 1))
+      done
+      echo "  use_backend redis_selfreport if { nbsrv(sentinels_alive) eq 0 }"
+      echo "  default_backend redis_none"
+      echo ""
+      echo "# 没有任何 server:连进来的连接立即被关闭,客户端按自己的重试策略再来。"
+      echo "backend redis_none"
+      echo ""
+      echo "backend sentinels_alive"
+      echo "  option tcp-check"
+      echo "  tcp-check connect"
+      emit_auth_check
+      echo '  tcp-check send PING\r\n'
+      echo "  tcp-check expect min-recv 5 string +PONG"
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        echo "  server s${i} $(node_fqdn "$i"):26379 check inter 1s fall 3 rise 1 ${SERVER_OPTS}"
+        i=$((i + 1))
+      done
+
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        echo ""
+        echo "# 有几个哨兵认为主是 __REDIS_NAME__-${i}"
+        echo "backend quorum_${i}"
+        echo "  option tcp-check"
+        echo "  tcp-check connect"
+        emit_auth_check
+        # 差别:问的 master 名与期望的主机名前缀取实例名(核心是 mymaster 与 redis-<n>.redis-headless.)。
+        echo '  tcp-check send SENTINEL\ get-master-addr-by-name\ __REDIS_NAME__\r\n'
+        echo "  tcp-check expect min-recv 32 string __REDIS_NAME__-${i}.__REDIS_NAME__-headless."
+        j=0
+        while [ "$j" -lt "$NODES" ]; do
+          echo "  server s${j} $(node_fqdn "$j"):26379 check inter 1s fall 1 rise 1 ${SERVER_OPTS}"
+          j=$((j + 1))
+        done
+        echo ""
+        echo "backend redis_${i}"
+        echo "  option tcp-check"
+        echo "  tcp-check connect"
+        emit_auth_check
+        echo '  tcp-check send PING\r\n'
+        echo "  tcp-check expect min-recv 5 string +PONG"
+        echo '  tcp-check send INFO\ replication\r\n'
+        echo "  tcp-check expect min-recv 40 string role:master"
+        echo "  server node $(node_fqdn "$i"):6379 check inter 1s fall 2 rise 1 on-marked-down shutdown-sessions ${DATA_OPTS} ${SERVER_OPTS}"
+        i=$((i + 1))
+      done
+
+      echo ""
+      echo "# 哨兵全部失联时的退路:跟随上面各节点自己的检查结果(不另起一套检查)。"
+      echo "backend redis_selfreport"
+      i=0
+      while [ "$i" -lt "$NODES" ]; do
+        echo "  server r${i} $(node_fqdn "$i"):6379 track redis_${i}/node on-marked-down shutdown-sessions ${DATA_OPTS} ${SERVER_OPTS}"
+        i=$((i + 1))
+      done
+    } > "$CFG"
+
+    haproxy -c -f "$CFG"
+    exec haproxy -db -f "$CFG"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: __REDIS_NAME__
+  labels:
+    app: __REDIS_NAME__
+spec:
+  serviceName: __REDIS_NAME__-headless
+  replicas: 3
+  # 同 redis-ha.yaml:整体断电重启时上一任主可能不是 <名>-0,按序创建会互相等死。创建后不能改,所以从单实例切过来要先 orphan 删除旧 StatefulSet。
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: __REDIS_NAME__
+  template:
+    metadata:
+      labels:
+        app: __REDIS_NAME__
+      annotations:
+        kubectl.kubernetes.io/default-container: redis
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9121"
+        prometheus.io/path: "/metrics"
+    spec:
+      # 停机顺序同 redis-ha.yaml:preStop 交接主(最坏约 60 秒)→ SIGTERM → AOF 刷盘后退出。
+      terminationGracePeriodSeconds: 90
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: __REDIS_NAME__
+                topologyKey: kubernetes.io/hostname
+      containers:
+        # 容器名必须叫 redis:k8s_deploy.ps1 的 redis-wipe 与 maxclients 核对按「pod/<名>-<序号> -c redis」exec 进来。
+        - name: redis
+          image: redis:7.2
+          # MAXCLIENTS(与 redis-purpose.yaml 同值)与 MAXMEMORY 只在这里定义一次,写在 Pod 模板里:改它们会改变模板 = 滚动重启并逐个交接主,
+          # 而不是等到下一次意外重启才悄悄生效(同 redis-ha.yaml 的理由)。
+          command:
+            - sh
+            - -c
+            - |
+              MAXCLIENTS=10000
+              MAXMEMORY=__REDIS_MAXMEMORY__
+              export MAXCLIENTS MAXMEMORY
+              exec sh /scripts/redis-start.sh
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: REDIS_NODES
+              value: "3"
+            # 与核心同一个**可选** Secret redis-auth(k8s_deploy.ps1 在 apply 核心 Redis 时按 MMORPG_REDIS_PASSWORD 建或删)。
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+                  optional: true
+          ports:
+            - containerPort: 6379
+              name: redis
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - '. /scripts/common.sh; [ "$(timeout 2 redis-cli -h 127.0.0.1 -p 6379 ping 2>/dev/null)" = "PONG" ]'
+            periodSeconds: 5
+            timeoutSeconds: 4
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: ["sh", "/scripts/redis-ready.sh"]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "/scripts/redis-prestop.sh"]
+          # 差别:requests = limits = 2 × maxmemory(同 redis-purpose.yaml);CPU 只写 requests,理由同 redis-purpose.yaml。
+          resources:
+            requests:
+              cpu: 250m
+              memory: __REDIS_MEM__
+            limits:
+              memory: __REDIS_MEM__
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+        - name: sentinel
+          image: redis:7.2
+          command: ["sh", "/scripts/sentinel-start.sh"]
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: REDIS_NODES
+              value: "3"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+                  optional: true
+          ports:
+            - containerPort: 26379
+              name: sentinel
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - '. /scripts/common.sh; [ "$(timeout 2 redis-cli -h 127.0.0.1 -p 26379 ping 2>/dev/null)" = "PONG" ]'
+            periodSeconds: 5
+            timeoutSeconds: 4
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 26379
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+        # 指标出口,与 redis-ha.yaml / redis-purpose.yaml 的 redis-exporter 逐字同形(告警 deploy/k8s/redis-alerts.yaml)。
+        - name: redis-exporter
+          image: oliver006/redis_exporter:v1.62.0
+          env:
+            - name: REDIS_ADDR
+              value: redis://127.0.0.1:6379
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+                  optional: true
+          ports:
+            - containerPort: 9121
+              name: metrics
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+      volumes:
+        - name: scripts
+          configMap:
+            name: __REDIS_NAME__-ha-scripts
+  # 与 redis-purpose.yaml 同形(卷名 redis-data、大小同一个脚本常量):原地切换时 <名>-0 接着用原来的 PVC redis-data-<名>-0。
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: __REDIS_STORAGE__
+---
+# 入口代理。无状态,两个副本;Service <名> 指向它们。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: __REDIS_NAME__-proxy
+  labels:
+    app: __REDIS_NAME__-proxy
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: __REDIS_NAME__-proxy
+  template:
+    metadata:
+      labels:
+        app: __REDIS_NAME__-proxy
+      annotations:
+        # 脚本 ConfigMap 的摘要(同 redis-ha.yaml 的 redis-proxy):内容一变 Pod 模板就变,Deployment 自动滚动(一次一个,先起后停)。
+        mmorpg.io/redis-ha-scripts-digest: "__REDIS_HA_SCRIPTS_DIGEST__"
+    spec:
+      terminationGracePeriodSeconds: 20
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: __REDIS_NAME__-proxy
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: haproxy
+          image: haproxy:3.2-alpine
+          # 每副本的业务连接上限。必须满足 PROXY_MAXCONN × (replicas + maxSurge) + 预留 ≤ redis 的 MAXCLIENTS(见文件头),
+          # 部署脚本在生成期核对(Get-RedisHaLimits),不满足就拒绝部署。
+          command:
+            - sh
+            - -c
+            - |
+              PROXY_MAXCONN=3000
+              export PROXY_MAXCONN
+              exec sh /scripts/proxy-start.sh
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: REDIS_NODES
+              value: "3"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+                  optional: true
+          ports:
+            - containerPort: 6379
+              name: redis
+            - containerPort: 8405
+              name: health
+          # 探针只看代理进程自己(同 redis-ha.yaml):刚启动时先等头两轮健康检查做完才接流量。
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8405
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8405
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: scripts
+          configMap:
+            name: __REDIS_NAME__-ha-scripts

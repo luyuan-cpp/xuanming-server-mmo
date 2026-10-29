@@ -287,7 +287,7 @@ func TestConsumeClaim_ShutdownDrainTimeoutCancelsRest(t *testing.T) {
 func TestConsumeClaim_RebalanceStillCancelsClaim(t *testing.T) {
 	f := newShutdownFixture(t)
 	ctxSeen := make(chan context.Context, 1)
-	dbOpHandlers["read"] = func(ctx context.Context, _ *proto2mysql.DB, _ *db_proto.DBTask, _ proto.Message) (writeOutcome, error) {
+	dbOpHandlers[db_proto.DBOp_DB_OP_READ] = func(ctx context.Context, _ *proto2mysql.DB, _ *db_proto.DBTask, _ proto.Message) (writeOutcome, error) {
 		ctxSeen <- ctx
 		<-f.gate
 		return writeOutcome{kind: writeApplied}, nil

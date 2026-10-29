@@ -95,7 +95,6 @@
 #include "contracts_kafka_gate_event_event_id.h"
 #include "contracts_kafka_player_event_event_id.h"
 #include "common_event_player_inbox_event_event_id.h"
-#include "common_event_player_migration_event_event_id.h"
 #include "common_event_team_event_event_id.h"
 
 void SendBattleClientPlayerSubmitBattleActionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
@@ -227,6 +226,7 @@ namespace mailpb{void SendMailAdminImportMailRecipientsErased(entt::registry& , 
 namespace mailpb{void SendMailAdminSealMailCampaignErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchInternalStartActivityBattleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchInternalCancelActivityBattleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchInternalCommitBattleOutcomeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceGetNetworkProbePlanErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceCommitNetworkProbeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceJoinQueueErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -241,6 +241,8 @@ namespace match{void SendMatchServiceRequestBattleTicketErased(entt::registry& ,
 namespace match{void SendMatchServiceListWatchableBattlesErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace player_inbox{void SendPlayerInboxFetchItemsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace player_inbox{void SendPlayerInboxAckItemsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace player_inbox{void SendPlayerInboxEnqueueBattleSettlementErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace player_inbox{void SendPlayerInboxLookupBattleSettlementErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace player_inbox{void SendPlayerInboxAdminGmSanctionPlayerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace player_inbox{void SendPlayerInboxAdminGetSummaryErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace player_inbox{void SendPlayerInboxAdminListItemsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -331,7 +333,7 @@ namespace trade{void SendTradeAdminSeedListingErased(entt::registry& , entt::ent
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 346,
+static_assert(kMaxRpcMethodCount == 349,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1057,6 +1059,11 @@ void InitMessageInfo()
         std::make_unique<::match::CancelActivityBattleRequest>(),
         std::make_unique<::match::CancelActivityBattleResponse>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalCancelActivityBattleErased};
+    gRpcMethodRegistry[MatchInternalCommitBattleOutcomeMessageId] = RpcMethodMeta{
+        "MatchInternal", "CommitBattleOutcome",
+        std::make_unique<::match::CommitBattleOutcomeRequest>(),
+        std::make_unique<::match::CommitBattleOutcomeResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalCommitBattleOutcomeErased};
 
     // --- MatchService ---
     gRpcMethodRegistry[MatchServiceGetNetworkProbePlanMessageId] = RpcMethodMeta{
@@ -1131,6 +1138,16 @@ void InitMessageInfo()
         std::make_unique<::player_inbox::AckPlayerInboxRequest>(),
         std::make_unique<::player_inbox::AckPlayerInboxResponse>(),
         1, common::base::eNodeType::PlayerInboxNodeService, player_inbox::SendPlayerInboxAckItemsErased};
+    gRpcMethodRegistry[PlayerInboxEnqueueBattleSettlementMessageId] = RpcMethodMeta{
+        "PlayerInbox", "EnqueueBattleSettlement",
+        std::make_unique<::player_inbox::BattleSettlementInboxRequest>(),
+        std::make_unique<::player_inbox::BattleSettlementInboxResponse>(),
+        1, common::base::eNodeType::PlayerInboxNodeService, player_inbox::SendPlayerInboxEnqueueBattleSettlementErased};
+    gRpcMethodRegistry[PlayerInboxLookupBattleSettlementMessageId] = RpcMethodMeta{
+        "PlayerInbox", "LookupBattleSettlement",
+        std::make_unique<::player_inbox::BattleSettlementInboxRequest>(),
+        std::make_unique<::player_inbox::BattleSettlementInboxResponse>(),
+        1, common::base::eNodeType::PlayerInboxNodeService, player_inbox::SendPlayerInboxLookupBattleSettlementErased};
 
     // --- PlayerInboxAdmin ---
     gRpcMethodRegistry[PlayerInboxAdminGmSanctionPlayerMessageId] = RpcMethodMeta{

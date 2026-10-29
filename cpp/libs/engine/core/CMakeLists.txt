@@ -35,11 +35,9 @@ include_directories(
     ../../../../third_party/boost/
     ../../../../third_party/entt/single_include
     ../../../../third_party/fmt/include
-    ../../../../third_party/grpc/third_party/
     ../../../../third_party/librdkafka/src-cpp/
     ../../../../third_party/lua/src/
     ../../../../third_party/muduo-linux/
-    ../../../../third_party/openssl/include/
     ../../../../third_party/redis/
     ../../../../third_party/redis/deps/
     ../../../../third_party/sol2/include/
@@ -60,6 +58,9 @@ set(SOURCE_FILES
     network/codec/codec.cpp
     network/rpc_channel.cpp
     network/rpc_channel_stats.cpp
+    metrics/prometheus_text.cpp
+    metrics/metrics_registry.cpp
+    metrics/metrics_http_exporter.cpp
     network/message_statistics.cpp
     network/network_utils.cpp
     network/node_utils.cpp
@@ -78,7 +79,6 @@ set(SOURCE_FILES
     node/system/node/client_endpoint.cpp
     node/system/grpc_call_deadline.cpp
     node/system/node/node_util.cpp
-    node/system/node/grpc_runtime_probe.cpp
     node/system/registration/registration_manager.cpp
     node/system/discovery/service_discovery_manager.cpp
     time/comp/timer_task_boost_comp.cpp

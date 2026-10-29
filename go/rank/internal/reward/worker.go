@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
+	"shared/drainproof"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -17,6 +18,8 @@ import (
 )
 
 type Worker struct {
+	// Relay 由进程在启动 worker 前注入，同步RPC返回不能代替邮件终局。
+	Relay  *drainproof.Session
 	Repo   *data.Repo
 	Mail   mailpb.MailAdminClient
 	Secret string
@@ -65,6 +68,22 @@ func (w *Worker) Tick(ctx context.Context) error {
 	return nil
 }
 func (w *Worker) process(ctx context.Context, id uint64) (err error) {
+	if w.Relay != nil {
+		finish, enterErr := w.Relay.Enter()
+		if enterErr != nil {
+			return enterErr
+		}
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				w.Relay.Hold()
+				panic(recovered)
+			}
+			if err != nil {
+				w.Relay.Hold()
+			}
+		}()
+	}
 	outcome := metrics.RewardBusy
 	defer func() {
 		if err != nil {
@@ -72,7 +91,7 @@ func (w *Worker) process(ctx context.Context, id uint64) (err error) {
 		}
 		metrics.ObserveDispatch(outcome)
 	}()
-	ctx, cancel := context.WithTimeout(ctx, 2500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2500*time.Millisecond)
 	defer cancel()
 	var tokenBytes [8]byte
 	if _, err := rand.Read(tokenBytes[:]); err != nil {
@@ -107,6 +126,9 @@ func (w *Worker) process(ctx context.Context, id uint64) (err error) {
 	}
 	switch {
 	case callErr != nil || response == nil || (response.GetErrorMessage().GetId() == 0 && mailID == 0):
+		if w.Relay != nil {
+			w.Relay.Hold()
+		}
 		outcome = metrics.RewardUnknown
 	case mailID != 0:
 		outcome = metrics.RewardDelivered

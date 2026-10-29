@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"shared/drainproof"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -179,6 +180,7 @@ type Applier interface {
 //
 // LoopConfig.RequireSQLCommit 打开时,终结改认 SQL 提交证据:Ledger 还必须实现 SQLCommitLedgerReader
 // (Loop.CheckWiring 在启动时断言),blob 只剩自动放弃的「两份都未见」那一半(abandon.go)。
+// LoopConfig.RequireVerifiedRedisCopy 打开时,自动放弃读 blob 改走 VerifiedLedgerReader(abandon.go 的 G5 闸)。
 type LedgerReader interface {
 	ReadPersistedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, error)
 }
@@ -341,6 +343,20 @@ type LoopConfig struct {
 	// (§8.7 第 ⑤ 步)。打开前要接受:已离线、新链路上线前没有证据的玩家,待办要等他再次存盘才能终结。
 	// 回退时先关它,再把 zone 切回 legacy 或回退 C++。
 	RequireSQLCommit bool
+
+	// RequireVerifiedRedisCopy 是自动放弃的「Redis 副本已核验」闸(docs/design/zone-redis-regression-guard-20261022.md §4.5,
+	// abandon.go 条件 5)。DefaultLoopConfig 取 true。
+	//
+	// true:Redis 父键 blob 给出「确定未见」时,还要这份副本经过当前实例身份核验(读 blob 的同一段 Lua 里,
+	// 实例身份 == 屏障身份戳 verified_identity 且 role=master)才放弃;未核验、身份未知、读失败一律跳过并还租约
+	// (redis_unverified)。Ledger 必须实现 VerifiedLedgerReader,否则自动放弃不运行。「已见」照常终结,不受影响。
+	// false:闸之前的口径,任何 blob 都可以作证据;Redis 回退之后可能把 SQL 已应用的一笔放弃掉(复制或白扣),
+	// 每个进程第一轮放弃时打一次 ERROR。
+	//
+	// **身份戳只由 login 的核验刷新**:login 的 ParentLoad.VerifyOnRedisIdentityChange 关闭时戳不再更新,
+	// Redis 身份一变本闸就挡住全部放弃(只是推迟,不是错放)。运维关 login 核验时要同时知道这一点。
+	// 直接写 LoopConfig 字面量的调用方必须显式透传本项:零值 false 等于关闭闸。
+	RequireVerifiedRedisCopy bool
 }
 
 // DefaultLoopConfig 是规格 §4.37 的取值,加上落地恢复设计 §6 的取值。
@@ -363,6 +379,8 @@ func DefaultLoopConfig() LoopConfig {
 		AbandonBatch:          200,
 		AbandonInterval:       time.Hour,
 		AuditInterval:         24 * time.Hour,
+
+		RequireVerifiedRedisCopy: true,
 	}
 }
 
@@ -435,6 +453,8 @@ type Processed struct {
 
 // Loop 是重投循环。构造后除下面几个可选字段外只读。
 type Loop struct {
+	// Relay 在 worker、唤醒与同步投递启动前由实际进程 owner 注入。
+	Relay   *drainproof.Session
 	cfg     LoopConfig
 	store   Store
 	applier Applier
@@ -470,6 +490,8 @@ type Loop struct {
 	// 「功能没装配齐、不运行」各只打一次 INFO,免得每一轮都刷一遍。
 	auditOffOnce   sync.Once
 	abandonOffOnce sync.Once
+	// abandonUnverifiedOnce:RequireVerifiedRedisCopy 关闭时第一轮放弃打一次 ERROR —— 闸被关掉是要有人知道的事。
+	abandonUnverifiedOnce sync.Once
 }
 
 // NewLoop 校验配置并组装循环。校验失败就别启动服务:这些都是一眼能看出的配置错,
@@ -516,6 +538,15 @@ func (l *Loop) sqlLedger() SQLCommitLedgerReader {
 	return reader
 }
 
+// verifiedLedger 返回能报告「Redis 副本是否已核验」的那份 Ledger(abandon.go 的 G5 闸);没挂或没实现时为 nil。
+func (l *Loop) verifiedLedger() VerifiedLedgerReader {
+	if l.Ledger == nil {
+		return nil
+	}
+	reader, _ := l.Ledger.(VerifiedLedgerReader)
+	return reader
+}
+
 func (l *Loop) nowMs() uint64 { return uint64(l.now().UnixMilli()) }
 
 // Run 按 Interval 反复 Tick,直到 ctx 结束。调用方用 safego.Go 启动它。
@@ -558,7 +589,9 @@ func (l *Loop) RunMaintenance(ctx context.Context) {
 		ticker := time.NewTicker(l.cfg.AuditInterval)
 		defer ticker.Stop()
 		auditC = ticker.C
-		safego.Run("assetop.audit", func() { _ = l.AuditOnce(ctx, l.nowMs()) })
+		safego.Run("assetop.audit", func() {
+			l.maintenanceRound(ctx, func(call context.Context) error { return l.AuditOnce(call, l.nowMs()) })
+		})
 	}
 	if l.cfg.AbandonAfter > 0 {
 		ticker := time.NewTicker(l.cfg.AbandonInterval)
@@ -571,9 +604,13 @@ func (l *Loop) RunMaintenance(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-auditC:
-			safego.Run("assetop.audit", func() { _ = l.AuditOnce(ctx, l.nowMs()) })
+			safego.Run("assetop.audit", func() {
+				l.maintenanceRound(ctx, func(call context.Context) error { return l.AuditOnce(call, l.nowMs()) })
+			})
 		case <-abandonC:
-			safego.Run("assetop.abandon", func() { _, _ = l.AbandonOnce(ctx, l.nowMs()) })
+			safego.Run("assetop.abandon", func() {
+				l.maintenanceRound(ctx, func(call context.Context) error { _, err := l.AbandonOnce(call, l.nowMs()); return err })
+			})
 		}
 	}
 }
@@ -643,6 +680,19 @@ func (l *Loop) drain(ctx context.Context, queue <-chan uint64, processed *atomic
 // 调用方的 ctx 先到期,行带着租约却没人处理。不够一整个 OpBudget 就不领,行原样留给下一次。
 // Tick 用的是没有截止时刻的 Run ctx,这一步对它只等于「ctx 还没结束」。
 func (l *Loop) claimAndProcess(ctx context.Context, opID uint64) bool {
+	if l.Relay != nil {
+		finish, err := l.Relay.Enter()
+		if err != nil {
+			return false
+		}
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				l.Relay.Hold()
+				panic(recovered)
+			}
+		}()
+	}
 	if !l.acquireSlot(ctx) {
 		return false
 	}
@@ -651,11 +701,16 @@ func (l *Loop) claimAndProcess(ctx context.Context, opID uint64) bool {
 		return false
 	}
 
-	op, claimed := l.claim(ctx, opID)
+	work, cancel := context.WithTimeout(context.WithoutCancel(ctx), l.cfg.OpBudget)
+	defer cancel()
+	op, claimed := l.claim(work, opID)
 	if claimed != claimOK {
 		return false
 	}
-	if _, err := l.ProcessOne(ctx, op); err != nil {
+	if _, err := l.processOne(work, op, time.Time{}); err != nil {
+		if l.Relay != nil {
+			l.Relay.Hold()
+		}
 		logx.Errorf("[AssetOp] Failed to process pending row op_id=%d stream=%d seq=%d: %v",
 			op.OpID, op.Stream, op.Seq, err)
 	}
@@ -792,6 +847,9 @@ func (l *Loop) claim(ctx context.Context, opID uint64) (Op, claimResult) {
 		logx.Errorf("[AssetOp] Could not decode pending row payload; postponed for manual handling op_id=%d", opID)
 		return Op{}, claimLost
 	case err != nil:
+		if l.Relay != nil {
+			l.Relay.Hold()
+		}
 		l.metrics.incStoreError("claim")
 		logx.Errorf("[AssetOp] Failed to claim pending row op_id=%d: %v", opID, err)
 		return Op{}, claimFailed
@@ -808,7 +866,35 @@ func (l *Loop) claim(ctx context.Context, opID uint64) (Op, claimResult) {
 // 业务写 RPC 在提交自己的事务之后可以**同步**调用它,让玩家当场看到结果;
 // 那条路径的 ctx 预算是 2500ms(= OpBudget):投递分到 1800ms(CallTimeout 800ms +
 // 重查 700ms 仍在内),落库另有 settleBudget 的 700ms,且不受父 ctx 过期/取消影响。
-func (l *Loop) ProcessOne(ctx context.Context, op Op) (Processed, error) {
+func (l *Loop) ProcessOne(ctx context.Context, op Op) (out Processed, resultErr error) {
+	if err := ctx.Err(); err != nil {
+		return Processed{}, err
+	}
+	if l.Relay != nil {
+		finish, err := l.Relay.Enter()
+		if err != nil {
+			return Processed{}, err
+		}
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				l.Relay.Hold()
+				panic(recovered)
+			}
+			if resultErr != nil {
+				l.Relay.Hold()
+			}
+		}()
+	}
+	// 同步调用方的绝对截止只约束投递与取证，不恢复父取消传播。
+	// 已准入工作和终局写回仍使用各自独立的有界预算。
+	callerApplyDeadline, _ := ctx.Deadline()
+	work, cancel := context.WithTimeout(context.WithoutCancel(ctx), l.cfg.OpBudget)
+	defer cancel()
+	return l.processOne(work, op, callerApplyDeadline)
+}
+
+func (l *Loop) processOne(ctx context.Context, op Op, callerApplyDeadline time.Time) (Processed, error) {
 	nowMs := l.nowMs()
 
 	rpc, ok := l.rpcFor(op, nowMs)
@@ -821,7 +907,12 @@ func (l *Loop) ProcessOne(ctx context.Context, op Op) (Processed, error) {
 	}
 
 	// 投递只拿 OpBudget 的一部分,剩下的 settleBudget 是留给落库的,不能让 RPC 吃掉。
-	applyCtx, cancel := context.WithTimeout(ctx, l.cfg.OpBudget-settleBudget)
+	// 已领行的后台路径传零值；同步路径还须守住调用方已确定的绝对投递截止。
+	applyDeadline := time.Now().Add(l.cfg.OpBudget - settleBudget)
+	if !callerApplyDeadline.IsZero() && callerApplyDeadline.Before(applyDeadline) {
+		applyDeadline = callerApplyDeadline
+	}
+	applyCtx, cancel := context.WithDeadline(ctx, applyDeadline)
 	defer cancel()
 	res, err := l.applier.Do(applyCtx, rpc, op.Request())
 
@@ -845,6 +936,9 @@ func (l *Loop) ProcessOne(ctx context.Context, op Op) (Processed, error) {
 	case ActionFinalize:
 		return l.finalize(ctx, op, rpc, res, nowMs)
 	case ActionAwaitDurable:
+		if l.Relay != nil {
+			l.Relay.Hold()
+		}
 		next := nowMs + uint64(l.cfg.AwaitDurableDelay/time.Millisecond)
 		return l.reschedule(ctx, op, next, res, nowMs, "await_durable")
 	case ActionRetry:
@@ -856,10 +950,16 @@ func (l *Loop) ProcessOne(ctx context.Context, op Op) (Processed, error) {
 			reason = "offline"
 		}
 		if err != nil {
+			if l.Relay != nil {
+				l.Relay.Hold()
+			}
 			return l.rescheduleTransportFailure(ctx, op, next, res, nowMs)
 		}
 		return l.reschedule(ctx, op, next, res, nowMs, reason)
 	default: // ActionAlert
+		if l.Relay != nil {
+			l.Relay.Hold()
+		}
 		if errors.Is(err, ErrOutcomeFlip) {
 			// 翻转已由 Caller 计过 assetop_outcome_flip_total,这里只留日志证据。
 			logx.Errorf("[AssetOp] Outcome changed; not finalizing op_id=%d stream=%d seq=%d: %v",
@@ -1245,4 +1345,29 @@ func newLeaseToken() (uint64, error) {
 		return 0, fmt.Errorf("assetop: 读随机数失败: %w", err)
 	}
 	return binary.LittleEndian.Uint64(buf[:]) | 1, nil
+}
+
+// maintenanceRound 与重投共用同一角色；清理/放弃的提交失败也不能伪装成已结算。
+func (l *Loop) maintenanceRound(ctx context.Context, round func(context.Context) error) {
+	if ctx.Err() != nil {
+		return
+	}
+	if l.Relay != nil {
+		finish, err := l.Relay.Enter()
+		if err != nil {
+			return
+		}
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				l.Relay.Hold()
+				panic(recovered)
+			}
+		}()
+	}
+	work, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+	defer cancel()
+	if err := round(work); err != nil && l.Relay != nil {
+		l.Relay.Hold()
+	}
 }

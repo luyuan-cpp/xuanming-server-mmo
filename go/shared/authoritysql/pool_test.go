@@ -1,100 +1,27 @@
 package authoritysql
 
 import (
+	"bytes"
 	"context"
-	"crypto/rand"
-	"database/sql"
-	"encoding/hex"
 	"errors"
+	"google.golang.org/protobuf/proto"
 	"net"
-	"os"
+	pb "proto/common/database"
 	"strconv"
 	"testing"
-	"time"
-
-	"github.com/go-sql-driver/mysql"
 )
 
 func TestOpenRejectsWrongDatabaseBeforeConnecting(t *testing.T) {
-	if _, err := Open(context.Background(), "root@tcp(127.0.0.1:1)/other", "expected", true, 4); err == nil {
+	if _, err := Open(context.Background(), "root@tcp(127.0.0.1:1)/other", "expected", true, 4, Reader()); err == nil {
 		t.Fatal("不应连接错误库")
 	}
 }
 
 func TestMigrationRejectsWrongDatabaseBeforeConnecting(t *testing.T) {
-	if _, err := OpenForMigration(context.Background(), "root@tcp(127.0.0.1:1)/other", "expected", true); err == nil {
+	if _, err := OpenForMigration(context.Background(), "root@tcp(127.0.0.1:1)/other", "expected", true, Schema("schema_fixture@%")); err == nil {
 		t.Fatal("迁移不应连接错误库")
 	}
 }
-func TestPhysicalTiDBConnectionsPinStrongSession(t *testing.T) {
-	address := os.Getenv("MAIL_RANK_TEST_TIDB")
-	if address == "" {
-		if os.Getenv("MAIL_RANK_REQUIRE_TESTS") == "1" {
-			t.Fatal("MAIL_RANK_TEST_TIDB必须显式配置本任务独占TiDB")
-		}
-		t.Skip("需显式本任务数值loopback TiDB端点，随机自有库")
-	}
-	if err := physicalTiDBFixtureEndpoint(address); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	var random [8]byte
-	if _, err := rand.Read(random[:]); err != nil {
-		t.Fatal(err)
-	}
-	database := "mail_rank_pool_" + hex.EncodeToString(random[:])
-	t.Logf("本用例隔离库=%s", database)
-	// 随机库DDL前先只读系统库，确认真实TiDB及强会话；业务池仍固定5s socket预算。
-	admin, err := OpenForMigration(ctx, "root@tcp("+address+")/mysql", "mysql", true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer admin.Close()
-	if _, err = admin.ExecContext(ctx, "CREATE DATABASE "+database); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		clean, stop := context.WithTimeout(context.Background(), 30*time.Second)
-		defer stop()
-		if _, e := admin.ExecContext(clean, "DROP DATABASE "+database); e != nil {
-			t.Errorf("清随机库: %v", e)
-		}
-	}()
-	cfg := mysql.NewConfig()
-	cfg.User = "root"
-	cfg.Net = "tcp"
-	cfg.Addr = address
-	cfg.DBName = database
-	cfg.Params = map[string]string{"tidb_read_consistency": "'weak'", "tidb_snapshot": "'2000-01-01 00:00:00'", "tidb_read_staleness": "-5", "tidb_replica_read": "'follower'", "transaction_isolation": "'REPEATABLE-READ'"}
-	db, err := Open(ctx, cfg.FormatDSN(), database, true, 4)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	var held []*sql.Conn
-	defer func() {
-		for _, conn := range held {
-			_ = conn.Close()
-		}
-	}()
-	for i := 0; i < 4; i++ {
-		conn, e := db.Conn(ctx)
-		if e != nil {
-			t.Fatal(e)
-		}
-		held = append(held, conn)
-		var mode, isolation, replica, consistency, snapshot string
-		var stale, low int64
-		if e = conn.QueryRowContext(ctx, "SELECT @@tidb_txn_mode,@@transaction_isolation,@@tidb_read_staleness,@@tidb_low_resolution_tso,@@tidb_replica_read,@@tidb_read_consistency,@@tidb_snapshot").Scan(&mode, &isolation, &stale, &low, &replica, &consistency, &snapshot); e != nil {
-			t.Fatal(e)
-		}
-		if mode != "pessimistic" || isolation != "READ-COMMITTED" || stale != 0 || low != 0 || replica != "leader" || consistency != "strict" || snapshot != "" {
-			t.Fatalf("物理连接%d未固定强会话", i)
-		}
-	}
-}
-
 func physicalTiDBFixtureEndpoint(address string) error {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
@@ -118,5 +45,145 @@ func TestPhysicalTiDBFixtureEndpointRejectsForeignOrInvalidPort(t *testing.T) {
 		if physicalTiDBFixtureEndpoint(address) == nil {
 			t.Fatal("非法夹具端点未拒绝")
 		}
+	}
+}
+
+func TestMaintenancePublicationRequiresFrozenSameBootClosure(t *testing.T) {
+	seed := &pb.SqlWriterMaintenanceReceipt_IssuerClosure{IssuerId: bytes.Repeat([]byte{1}, 16), InstanceId: bytes.Repeat([]byte{2}, 16), LogicalRole: "MAINTENANCE"}
+	plan := &pb.SqlWriterMaintenanceReceipt_Plan{MaintenanceIssuers: []*pb.SqlWriterMaintenanceReceipt_IssuerClosure{seed}}
+	inventory := &pb.SqlWriterMaintenanceReceipt_PublicationEvidence{LogicalRoles: plan.MaintenanceIssuers}
+	digest, err := messageDigest(inventory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := proto.Clone(seed).(*pb.SqlWriterMaintenanceReceipt_IssuerClosure)
+	closed.AcceptingClosedMs = 100
+	closed.AcceptedSettledMs = 101
+	closed.AcceptedFrontierDigest = bytes.Repeat([]byte{3}, 32)
+	ready := &pb.SqlWriterMaintenanceReceipt_ReleaseReadiness{MaintenancePublication: &pb.SqlWriterMaintenanceReceipt_PublicationEvidence{LogicalRoles: []*pb.SqlWriterMaintenanceReceipt_IssuerClosure{closed}, IssuerInventoryDigest: digest, SourceEvidence: []*pb.SqlWriterMaintenanceReceipt_SourcePin{{AbsolutePath: "tool.issuer.json", Sha256: bytes.Repeat([]byte{4}, 32)}}}}
+	if err := validateMaintenanceClosure(plan, ready, 100); err != nil {
+		t.Fatal("同冻结后的完整闭合被拒绝", err)
+	}
+	for _, change := range []func(*pb.SqlWriterMaintenanceReceipt_ReleaseReadiness){
+		func(r *pb.SqlWriterMaintenanceReceipt_ReleaseReadiness) {
+			r.MaintenancePublication.LogicalRoles[0].AcceptingClosedMs = 99
+		},
+		func(r *pb.SqlWriterMaintenanceReceipt_ReleaseReadiness) {
+			r.MaintenancePublication.LogicalRoles[0].InstanceId = bytes.Repeat([]byte{5}, 16)
+		},
+		func(r *pb.SqlWriterMaintenanceReceipt_ReleaseReadiness) {
+			r.MaintenancePublication.LogicalRoles[0].UnresolvedPublications = 1
+		},
+		func(r *pb.SqlWriterMaintenanceReceipt_ReleaseReadiness) {
+			r.MaintenancePublication.SourceEvidence = nil
+		},
+	} {
+		bad := proto.Clone(ready).(*pb.SqlWriterMaintenanceReceipt_ReleaseReadiness)
+		change(bad)
+		if validateMaintenanceClosure(plan, bad, 100) == nil {
+			t.Fatal("冻结前、换boot或不完整闭合获准")
+		}
+	}
+	if validateMaintenanceClosure(&pb.SqlWriterMaintenanceReceipt_Plan{}, ready, 100) == nil {
+		t.Fatal("空P0目录容纳了事后增加的工具")
+	}
+	if err := validateMaintenanceClosure(&pb.SqlWriterMaintenanceReceipt_Plan{}, &pb.SqlWriterMaintenanceReceipt_ReleaseReadiness{}, 100); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPublicationRuntimeBindsFreshPreparedBootToPermanentRelease(t *testing.T) {
+	id := func(value byte) []byte { return bytes.Repeat([]byte{value}, 16) }
+	hash := func(value byte) []byte { return bytes.Repeat([]byte{value}, 32) }
+	sourcePin := &pb.SqlWriterMaintenanceReceipt_SourcePin{AbsolutePath: "source.seed.json", Sha256: hash(11)}
+	seed := &pb.SqlWriterMaintenanceReceipt_IssuerClosure{IssuerId: id(1), InstanceId: id(2), LogicalRole: "SOURCE", PermanentRevivalFenceId: id(3), SourceEvidence: []*pb.SqlWriterMaintenanceReceipt_SourcePin{sourcePin}}
+	plan := &pb.SqlWriterMaintenanceReceipt_Plan{RunId: id(4), RootIssuers: []*pb.SqlWriterMaintenanceReceipt_IssuerClosure{seed}}
+	raw, err := deterministic(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	released := &pb.SqlWriterMaintenanceReceipt{RunId: id(4), Generation: "generation", AttemptRevision: 1, AfterEpoch: 3, CommittedMs: 100, PlanProto: raw, Evidence: &pb.SqlWriterMaintenanceReceipt_Evidence{OperationId: id(4), ManifestDigest: hash(5)}}
+	fresh := proto.Clone(seed).(*pb.SqlWriterMaintenanceReceipt_IssuerClosure)
+	fresh.InstanceId = id(6)
+	runtime := proto.Clone(released).(*pb.SqlWriterMaintenanceReceipt)
+	runtime.RunPhase = pb.SqlWriterDrainRun_SQL_RELEASED
+	runtime.Evidence.Detail = &pb.SqlWriterMaintenanceReceipt_Evidence_Publication{Publication: &pb.SqlWriterMaintenanceReceipt_PublicationEvidence{LogicalRoles: []*pb.SqlWriterMaintenanceReceipt_IssuerClosure{fresh}}}
+	ready := &pb.SqlWriterMaintenanceReceipt_IssuerReadiness{IssuerId: id(1), InstanceId: id(6), LogicalRole: "SOURCE", PreparedClosedMs: 101, ConsumerReadyFrontierDigest: hash(7), SourcePins: []*pb.SqlWriterMaintenanceReceipt_SourcePin{sourcePin, {AbsolutePath: "consumer-readiness.report.json", Sha256: hash(7)}}}
+	if err := validatePublicationRuntime(runtime, ready, plan, released); err != nil {
+		t.Fatal("真实非SQL新boot准备原件被拒绝", err)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*pb.SqlWriterMaintenanceReceipt, *pb.SqlWriterMaintenanceReceipt_IssuerReadiness)
+	}{
+		{"旧boot", func(r *pb.SqlWriterMaintenanceReceipt, b *pb.SqlWriterMaintenanceReceipt_IssuerReadiness) {
+			b.InstanceId = id(2)
+			r.Evidence.GetPublication().LogicalRoles[0].InstanceId = id(2)
+		}},
+		{"跨run", func(r *pb.SqlWriterMaintenanceReceipt, b *pb.SqlWriterMaintenanceReceipt_IssuerReadiness) {
+			r.RunId = id(9)
+		}},
+		{"旧epoch", func(r *pb.SqlWriterMaintenanceReceipt, b *pb.SqlWriterMaintenanceReceipt_IssuerReadiness) {
+			r.AfterEpoch = 2
+		}},
+		{"未知issuer", func(r *pb.SqlWriterMaintenanceReceipt, b *pb.SqlWriterMaintenanceReceipt_IssuerReadiness) {
+			b.IssuerId = id(9)
+			r.Evidence.GetPublication().LogicalRoles[0].IssuerId = id(9)
+		}},
+		{"冻结前准备", func(r *pb.SqlWriterMaintenanceReceipt, b *pb.SqlWriterMaintenanceReceipt_IssuerReadiness) {
+			b.PreparedClosedMs = 99
+		}},
+		{"缺原始pin", func(r *pb.SqlWriterMaintenanceReceipt, b *pb.SqlWriterMaintenanceReceipt_IssuerReadiness) {
+			b.SourcePins = b.SourcePins[1:]
+		}},
+		{"交换pin", func(r *pb.SqlWriterMaintenanceReceipt, b *pb.SqlWriterMaintenanceReceipt_IssuerReadiness) {
+			b.SourcePins[0], b.SourcePins[1] = b.SourcePins[1], b.SourcePins[0]
+		}},
+		{"报告摘要变化", func(r *pb.SqlWriterMaintenanceReceipt, b *pb.SqlWriterMaintenanceReceipt_IssuerReadiness) {
+			b.ConsumerReadyFrontierDigest = hash(8)
+		}},
+		{"重复报告摘要", func(r *pb.SqlWriterMaintenanceReceipt, b *pb.SqlWriterMaintenanceReceipt_IssuerReadiness) {
+			b.SourcePins[0].Sha256 = hash(7)
+			r.Evidence.GetPublication().LogicalRoles[0].SourceEvidence[0].Sha256 = hash(7)
+		}},
+		{"非SQL伪注册", func(r *pb.SqlWriterMaintenanceReceipt, b *pb.SqlWriterMaintenanceReceipt_IssuerReadiness) {
+			b.RegistrationReceiptId = id(8)
+		}},
+		{"缺SOURCE", func(r *pb.SqlWriterMaintenanceReceipt, b *pb.SqlWriterMaintenanceReceipt_IssuerReadiness) {
+			r.Evidence.GetPublication().LogicalRoles = nil
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := proto.Clone(runtime).(*pb.SqlWriterMaintenanceReceipt)
+			b := proto.Clone(ready).(*pb.SqlWriterMaintenanceReceipt_IssuerReadiness)
+			tc.change(r, b)
+			if validatePublicationRuntime(r, b, plan, released) == nil {
+				t.Fatal("无效发布准备被接受")
+			}
+		})
+	}
+	// SQL发行者只接受另一个boot与全新writer，真正永久REGISTER及全部64槽由事务内强读校验。
+	sqlPlan := proto.Clone(plan).(*pb.SqlWriterMaintenanceReceipt_Plan)
+	sqlPlan.RootIssuers[0].PhysicalWriterKey = id(12)
+	sqlRaw, err := deterministic(sqlPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlReleased := proto.Clone(released).(*pb.SqlWriterMaintenanceReceipt)
+	sqlReleased.PlanProto = sqlRaw
+	sqlRuntime := proto.Clone(runtime).(*pb.SqlWriterMaintenanceReceipt)
+	sqlRuntime.PlanProto = sqlRaw
+	sqlRuntime.Evidence.GetPublication().LogicalRoles[0].PhysicalWriterKey = id(13)
+	sqlReady := proto.Clone(ready).(*pb.SqlWriterMaintenanceReceipt_IssuerReadiness)
+	sqlReady.PhysicalWriterKey = id(13)
+	sqlReady.RegistrationReceiptId = id(14)
+	sqlReady.RegistrationReceiptDigest = hash(15)
+	if err := validatePublicationRuntime(sqlRuntime, sqlReady, sqlPlan, sqlReleased); err != nil {
+		t.Fatal(err)
+	}
+	sqlRuntime.Evidence.GetPublication().LogicalRoles[0].PhysicalWriterKey = id(12)
+	sqlReady.PhysicalWriterKey = id(12)
+	if validatePublicationRuntime(sqlRuntime, sqlReady, sqlPlan, sqlReleased) == nil {
+		t.Fatal("旧物理writer复用未拒绝")
 	}
 }

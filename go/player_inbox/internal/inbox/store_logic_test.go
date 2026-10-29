@@ -324,9 +324,9 @@ func TestAuditRowFor(t *testing.T) {
 	}
 }
 
-// TestRegisteredPayloadsFitAudit 钉住审计表原样存载荷时的体量前提(评审 L9):审计行永不自动删除,
-// 每条处置 / 作废都复制一份载荷。v1 只有 GM 类型、载荷上限 ≤ 1KiB;登记更大载荷的类型时这里会红,
-// 先重新评估审计表的体量(或改为只存摘要)再放宽。
+// TestRegisteredPayloadsFitAudit 保留 GM 永久审计的 1KiB 预算。Match 专用 Battle 载荷只进永久条目原件，
+// EnqueueBattleSettlement 不传 GM 审计回调且通用 Void 拒绝该域；原接口回归另钉住这些前提。
+// 因此仅此具名类型使用已批准的 16KiB 上限，不能据此放宽其它类型的永久审计预算。
 func TestRegisteredPayloadsFitAudit(t *testing.T) {
 	const auditPayloadBudget = 1024
 	r := mustRegistry(t)
@@ -334,6 +334,13 @@ func TestRegisteredPayloadsFitAudit(t *testing.T) {
 		t.Fatal("注册表没有任何类型")
 	}
 	for typ, e := range r.types {
+		if typ == inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT {
+			if e.Spec.GetDomain() != inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT ||
+				e.Spec.GetPayloadMessage() != "BattleSettlementData" || e.Spec.GetMaxPayloadBytes() != 16*1024 {
+				t.Errorf("Battle 专用原件规格不符: %+v", e.Spec)
+			}
+			continue
+		}
 		if e.Spec.GetMaxPayloadBytes() > auditPayloadBudget {
 			t.Errorf("%v 的 max_payload_bytes = %d,超过审计表按原样存载荷的预算 %d", typ, e.Spec.GetMaxPayloadBytes(), auditPayloadBudget)
 		}
@@ -678,7 +685,7 @@ func TestRegistryDomainsSorted(t *testing.T) {
 			}
 		}
 	}
-	if got := r.Domains(); len(got) != 1 || got[0] != gmDomain {
-		t.Errorf("v1 只登记了 GM 处置域: %v", got)
+	if got := r.Domains(); len(got) != 2 || got[0] != gmDomain || got[1] != inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT {
+		t.Errorf("登记域必须精确为升序 GM 与 Battle，不能漏域或夹带其它域: %v", got)
 	}
 }

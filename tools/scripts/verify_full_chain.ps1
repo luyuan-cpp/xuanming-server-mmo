@@ -1,8 +1,8 @@
 param(
-    [string]$Configuration = "Debug",
-    [string]$Platform = "x64",
+    [ValidateSet('Debug', 'Release')][string]$Configuration = "Debug",
+    [ValidateSet('x64', 'Win32')][string]$Platform = "x64",
     [switch]$SkipClean,
-    [switch]$SkipGrpcBuild,
+    [switch]$SkipSdkBuild,
     [switch]$SkipGrpcClientVerify
 )
 
@@ -47,25 +47,32 @@ Push-Location $repoRoot
 try {
     $msbuild = Resolve-MSBuildPath
 
+    $architecture = if ($Platform -eq 'Win32') { 'x86' } else { 'x64' }
+    if (-not $SkipSdkBuild) {
+        Invoke-Step -Name "Build standalone Protobuf" -Action {
+            & "pwsh" -NoProfile -File "tools/scripts/dev_tools.ps1" -Command "third-party-protobuf-build" -Configuration $Configuration -Architecture $architecture
+        }
+        Invoke-Step -Name "Build standalone BoringSSL" -Action {
+            & "pwsh" -NoProfile -File "tools/scripts/dev_tools.ps1" -Command "third-party-boringssl-build" -Configuration $Configuration -Architecture $architecture
+        }
+        Invoke-Step -Name "Build standalone GoogleTest" -Action {
+            & "pwsh" -NoProfile -File "tools/scripts/third_party/build_gtest.ps1" -Configuration $Configuration -Architecture $architecture
+        }
+    }
+
     if (-not $SkipClean) {
         Invoke-Step -Name "Clean game.sln ($Configuration|$Platform)" -Action {
-            & $msbuild "game.sln" /t:Clean /m /p:Configuration=$Configuration /p:Platform=$Platform /nologo /clp:ErrorsOnly
+            & $msbuild "game.sln" /t:Clean /m:1 /p:Configuration=$Configuration /p:Platform=$Platform /nologo /clp:ErrorsOnly
         }
     }
 
     Invoke-Step -Name "Build game.sln ($Configuration|$Platform)" -Action {
-        & $msbuild "game.sln" /m /p:Configuration=$Configuration /p:Platform=$Platform /nologo /clp:ErrorsOnly
-    }
-
-    if (-not $SkipGrpcBuild) {
-        Invoke-Step -Name "Build third_party grpc" -Action {
-            & "pwsh" -NoProfile -File "tools/scripts/dev_tools.ps1" -Command "third-party-grpc-build"
-        }
+        & $msbuild "game.sln" /m:1 /p:Configuration=$Configuration /p:Platform=$Platform /nologo /clp:ErrorsOnly
     }
 
     if (-not $SkipGrpcClientVerify) {
         Invoke-Step -Name "Verify grpc_client build" -Action {
-            & "pwsh" -NoProfile -File "tools/scripts/verify_grpc_client_build.ps1"
+            & "pwsh" -NoProfile -File "tools/scripts/verify_grpc_client_build.ps1" -Configuration $Configuration -Platform $Platform
         }
     }
 

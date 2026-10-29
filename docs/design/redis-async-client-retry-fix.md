@@ -1,84 +1,78 @@
-# Redis Async Client Retry Fix
+# Redis 异步客户端重试、重连与生命周期
 
-Updated: 2026-04-21
+> 当前接口与重试行为核对：2026-10-23。本次只修订文档，没有新增构建或运行证据。
+> 下文 2026-10-20／21 的生命周期设计、红绿记录与验收边界保留；历史通过只代表当时受测输入。
 
-## Scope
+## 1. 职责与入口
 
-This document records the retry and reconnect behavior in [redis_client.h](../../cpp/libs/engine/infra/storage/redis_client/redis_client.h) and the scene-side wiring in [redis.cpp](../../cpp/libs/services/scene/core/system/redis.cpp).
+[MessageAsyncClient](../../cpp/libs/engine/infra/storage/redis_client/redis_client.h)负责 protobuf 加载、快照写入与业务重试；
+[RedisManager](../../cpp/libs/engine/thread_context/redis_manager.cpp)负责连接、认证、重连与存活探测。
+Scene 的定时驱动与装配见 [redis.cpp](../../cpp/libs/services/scene/core/system/redis.cpp)，
+业务持久化提交契约见[存盘围栏设计](./db-write-fencing-mysql.md)。
 
-## Problems Found
+管理器入口为 `Connect(loop, addr, RedisConnectOptions)`，内部 StartHandshake 先安装回调再 connect，
+避免冷启动连接失败发生在回调安装之前。`SetupReconnect`、`InstallCallbacks` 已退役。
+Hiredis 通过工厂创建并使用 shared_ptr；从 Connect 到 Shutdown 之间 GetZoneRedis 保持非空，
+握手或断线期间为不可用对象，成功后移交已完成握手的连接。不能继续按旧 unique_ptr 临时置空的模型理解。
+调用仍要区分已建连、已认证与业务可用状态。
 
-1. Periodic retry logic and reconnect retry logic were sharing the same entry point.
-   The old flow could clear `loading_queue_` on a timer, re-issue in-flight GETs, and allow duplicate `load_callback_` delivery for the same key.
-2. NIL retries were too aggressive.
-   A fixed 2 second interval with only 5 retries gave about 10 seconds of total retry budget, which was not enough for the Kafka -> db service -> Redis write-back path under load.
-3. Save operations were dropped on disconnect.
-   That made Redis cache recovery depend entirely on later writes from db service.
-4. Save retries re-serialized protobuf payloads and used `EVAL` every time.
-   That was safe, but not efficient.
+## 2. 重连与周期重试分开
 
-## Fix Applied
+- `OnReconnected()` 只用于重连通知，回收在途状态并安排待处理工作的重新投递。
+- `RetryDuePending()` 由 Scene 每秒驱动，只处理到期队列，不按周期清空在途加载表。
+- 队列的 `next_retry_at` 使用 steady_clock。退避依次为 500ms、1s、2s、4s、8s、16s，之后封顶 16s。
+  定时器调度与连接恢复还会影响实际时间，不能把这些间隔相加当作整条操作的严格超时预算。
 
-- Split the retry path into two entry points.
-  - `OnReconnected()` is only used by the reconnect callback. It can safely move in-flight loads into the retry queue and force-flush all pending work.
-  - `RetryDuePending()` is used by the periodic timer. It only drains due entries from the pending queues and never touches `loading_queue_`.
-- Added per-element exponential backoff.
-  - Load retries use 2, 4, 8, 16, 32, 60 second intervals.
-  - `kMaxLoadRetries` was increased to 6.
-  - Each element tracks `next_retry_at` with `steady_clock`.
-- Added a save retry queue.
-  - `Save()` now serializes once into `Element::serialized_payload` and enqueues on disconnect.
-  - Save retries use the same backoff ladder as loads, with `kMaxSaveRetries = 6`.
-  - Latest value per key wins because the pending queue is keyed by Redis key.
-- Added Lua script caching.
-  - The save path now prefers `SCRIPT LOAD` + `EVALSHA`.
-  - If Redis replies with `NOSCRIPT`, the code clears the cached sha, reloads the script, and falls back to `EVAL` without consuming a retry slot.
-- Reduced logging noise.
-  - `AsyncLoad()` debug state is logged at `LOG_DEBUG` instead of `LOG_INFO`.
-  - Save disconnects now log at `LOG_ERROR`.
+### 加载
 
-## Cold-Start Reconnect Fix
+NIL 的重试上限为 6 次；耗尽后的 DataNotFound 只描述该读取路径的结果，
+不证明 SQL 没有角色数据，也不构成新角色创建资格。
+断线造成的空 reply 会重新排队，不消耗 NIL 次数；Redis ERROR 或 protobuf 解析失败直接按失败处理。
+同 key 存盘尚未落定时，加载还可能先挂起等待写入结果，不能只看 pending load 数判断卡点。
 
-The original bootstrap sequence in `node.cpp` constructed `Hiredis`, called `connect()`, and only then ran `SetupReconnect()` to register the disconnect callback. If Redis was not yet running when scene started, the very first `SYN` failure happened before any callback was registered and was silently dropped, so the reconnect timer never started.
+### 存盘
 
-The fix in [redis_manager.cpp](../../cpp/libs/engine/thread_context/redis_manager.cpp):
+`kMaxSaveRetries=6` 是一次故障通知阈值，**不是丢弃阈值**。
+达到阈值通知一次后仍保留最新 payload，以封顶退避继续重试，直到写入落定、被后继值取代或进入停机流程。
+属主或覆盖世代护栏的终态拒绝另走业务拒绝路径，不将已作废的同一快照当作连接故障原样重试。
+这些待重试快照在进程内，不能把队列保留当成已落 Redis 或 SQL。
 
-- New `RedisManager::Connect(loop, addr)` creates the Hiredis instance, registers connect and disconnect callbacks via the new private `InstallCallbacks()` helper, and only then calls `connect()`. Bootstrap in `node.cpp` switched to this single call.
-- `SetupReconnect()` is kept as a thin backwards-compatible alias. If it is ever invoked while `connected()` is false, it now schedules a reconnect immediately so cold start still recovers.
-- The connect-callback failure path now also calls `ScheduleReconnect()` (previously it only logged a warning, which left the system stuck).
-- `ScheduleReconnect()` is now a no-op when a timer is already active, so duplicated connect-failure and disconnect events do not stack timers.
-- A local `kRedisOk = 0` constant is used in place of the `REDIS_OK` macro to avoid relying on transitive includes from muduo's hiredis wrapper.
+同 key 最多一份在途写、一份更新的排队快照。新快照替代尚待重试的旧值时，继承重试次数、
+下次重试时间与已告警状态，避免新调用绕过退避。旧写成功时，每份实际成功快照的提交钩子先执行一次；
+若已有后继快照，先发送后继并抑制旧值的全局成功回调，不能误认为“旧快照完全不再回调”。
 
-## Defensive Guards in Raw `tlsRedis.GetZoneRedis()->command(...)` Callers
+## 3. 快照与提交回调契约
 
-Two best-effort lookups in [player_scene.cpp](../../cpp/libs/services/scene/player/system/player_scene.cpp) (leader location and team info on enter scene) called `tlsRedis.GetZoneRedis()->command(...)` without null or `connected()` checks. During `DoReconnect()` the unique_ptr is briefly reset, and any business call between the disconnect event and the new connection's `connected = true` would dereference a null pointer or fail silently. Both call sites now guard with `if (!zoneRedis || !zoneRedis->connected())` and return early with a `LOG_WARN`. The two etcd-side callers in `etcd_service.cpp` and `etcd_manager.cpp` already used the correct guard pattern.
+Save 在调用时固定 serialized_payload，需要持久化的字段必须提前填写；后续修改不会进入本次重试字节。
+成功回调仍可能引用同一个 shared message，调用方应将其作为不可变快照使用；这是接口约定，不是类型系统自动禁止修改。
 
-## Eager-Serialize Caller Contract
+当前 Scene 存盘提前固定两表 DBTask 意图与字节，严格路径使用提交屏障，Redis 成功后的提交钩子才发送 Kafka。
+不能再把流程写成“Save 返回后立即把当前可变消息发 Kafka”，也不能用 db 的分表回填承诺修复 Scene 父快照键；
+两者键空间与提交职责不同。详见[DBTask 投递设计](./db-task-delivery-and-retention.md)与[存盘围栏](./db-write-fencing-mysql.md)。
 
-`MessageAsyncClient::Save()` now serializes the protobuf payload into `Element::serialized_payload` at call time so the retry path does not have to re-serialize. The hidden contract: **callers must not mutate the message after passing it to `Save()`** — any post-Save mutation is invisible to the Redis blob.
+写入按脚本缓存使用 EVALSHA；脚本尚未加载或收到 NOSCRIPT 时，可重载并回退 EVAL。
+脚本重发仍携带本次快照固定的保护条件，不回头读取调用方的新状态。
 
-`PlayerLifecycleSystem::SavePlayerToRedis` previously set `player_id` on the `player_database_data` and `player_database_1_data` sub-tables _after_ calling `Save()` (those fields were used by the Kafka DB-task path immediately following). After the eager-serialize switch, the Redis blob lost those sub-table primary keys. The fix moves `set_player_id` to before `Save()`. The Kafka path still sees the populated values because the mutation is in-place on the same shared message.
+## 4. 观测与生命周期
 
-## Observability and Lifecycle Hardening
+队列观测包括在途 Load、在途 Save、pending Load、pending Save、等待 Save 的 Load；
+LogQueueSnapshot 在这些数量均为零时不输出，Scene 每 30 秒检查。
+定位重连还要结合认证、代次与连接释放日志，不能把“connected”或队列短暂为零当作业务提交证明。
 
-`MessageAsyncClient` now exposes `in_flight_load_count()`, `pending_load_count()`, `pending_save_count()`, and a one-shot `LogQueueSnapshot(tag)` helper. The snapshot logs nothing when all three queues are empty, so it is safe to call from a periodic timer. `RedisSystem::Initialize` runs it every 30 seconds — if the scene cannot drain pending loads or saves, the operator now sees rising counts in the log without enabling per-call DEBUG output.
+Hiredis → MessageAsyncClient → EventLoop 的释放顺序、pending 阶段销毁与回调重入约束见下面两节。
+底层对象自身保活不自动保护业务回调捕获的其它 owner；业务仍须用 weak 或稳定身份管理寿命。
 
-`RedisManager` is now non-copyable / non-movable and has a destructor that cancels the reconnect timer when the EventLoop pointer is still set. This prevents a stray `DoReconnect()` from firing against a destroyed `this` if the thread-local `tlsRedis` is torn down while the loop is still alive.
+## 5. 验证与环境边界
 
-## Operational Note
+本次没有检查当前监听器、Redis 数据或运行容器，不保留“Windows 服务才是真实目标、Docker 空闲”的历史环境推断。
+具体连接目标以当前配置和进程身份为准。
 
-- Windows native Redis service: actual runtime target
-- Docker Redis container: idle, empty database
-
-This can mislead diagnosis because the container can look healthy while the scene node is actually talking to the Windows service. Only keep one Redis listener on 6379 during local debugging.
-
-## Verification
-
-All modified files compile cleanly (no errors reported by the language server after each change set).
+语言服务无报错不等于编译通过。下文的专项日志、XML 与源码哈希保留原验证范围；
+它们不能代替当前工作区的全量节点构建、真 Redis 资产用例或运行产物已更新的证明。
 
 ## 2026-10-20：握手截止与 socket 同批事件的生命周期修复
 
-本节记录当前 `RedisManager` 的契约；上面的冷启动接口和验证说明保留为历史记录。
+本节记录 2026-10-20 的 `RedisManager` 生命周期修复；文首已按 2026-10-23 源码更新接口与重试说明。
 
 Linux 的 timerfd 与 Hiredis socket 会进入同一批 `activeChannels_`。旧代码从重连定时器直接执行
 `DoReconnect()`，可能先释放握手连接，再分发同批中仍引用它的 socket Channel。Debug 构建会在

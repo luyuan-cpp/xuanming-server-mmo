@@ -2,11 +2,19 @@ package serverbase
 
 import (
 	"context"
+	"crypto/sha256"
+	"errors"
+	"fmt"
+	"google.golang.org/protobuf/encoding/protojson"
+	databasepb "proto/common/database"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"shared/drainproof"
 	"shared/grpcstats"
 )
 
@@ -135,4 +143,205 @@ func codeDomainLabel(bc BizCode) string {
 		return TipDomain(bc.Code)
 	}
 	return "service_private"
+}
+
+// RootAdmission 覆盖同步根调用；异步工作必须在实际发布 owner 另计 RELAY。
+func RootAdmission(gate *drainproof.Session) grpc.UnaryServerInterceptor {
+	return PublicationAdmission(gate, nil, nil)
+}
+
+// PublicationAdmission 按实际内部方法白名单区分派生工作；关闭 SOURCE 不会阻断已接收工作的 RELAY。
+func PublicationAdmission(root, relay *drainproof.Session, relayMethods map[string]bool, relayIngress ...*drainproof.Session) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (response any, resultErr error) {
+		gate := root
+		if relayMethods[info.FullMethod] {
+			gate = relay
+			if len(relayIngress) > 1 {
+				return nil, status.Error(codes.Unavailable, "派生入口配置无效")
+			}
+			if len(relayIngress) == 1 {
+				if relayIngress[0] == nil {
+					return nil, status.Error(codes.Unavailable, "派生入口未装配")
+				}
+				finishIngress, err := relayIngress[0].Enter()
+				if err != nil {
+					return nil, status.Error(codes.Unavailable, "派生外部入口已关闭")
+				}
+				defer finishIngress()
+			}
+		}
+		if gate == nil {
+			return nil, status.Error(codes.Unavailable, "发行者未装配")
+		}
+		finish, err := gate.Enter()
+		if err != nil {
+			return nil, status.Error(codes.Unavailable, "发行者尚未开放或已永久关闭")
+		}
+		defer finish()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				gate.Hold()
+				panic(recovered)
+			}
+			verdict := (Options{}).Classify(ExtractBizCode(response))
+			if resultErr != nil || verdict == VerdictFault || verdict == VerdictUnknown {
+				gate.Hold()
+			}
+		}()
+		return next(ctx, req)
+	}
+}
+
+// DriveDrainRuntime 只编排既有 Runtime：真实 owner 的停止、join 或准备失败一律保留 HOLD。
+// closeSource 不得关闭 RELAY/SQL；closeRelay 只有在所有实际发布终局已知时才能 Seal。
+// prepared 必须提供真实 consumer 准备前沿；没有该 owner 时传 nil，绝不以空队列冒充准备成功。
+// PreparedPublication 带实际 consumer 原件与 open 时的活代次复核。
+// NoConsumers 只用于已审计没有 Kafka consumer 的源；存在 consumer 必须给 Raw 和 WithReady。
+type PreparedPublication struct {
+	Digest      []byte
+	Raw         []byte
+	NoConsumers bool
+	WithReady   func(context.Context, func() ([]byte, error)) ([]byte, error)
+}
+
+func DriveDrainRuntime(ctx context.Context, runtime *drainproof.Runtime, controlDirectory string,
+	root, relay *drainproof.Session, bind func(*drainproof.Runtime) error,
+	closeSource, closeRelay func(context.Context) error, prepared func(context.Context) (*PreparedPublication, error)) (resultErr error) {
+	if root == nil || bind == nil || closeSource == nil {
+		return drainproof.ErrHold
+	}
+	defer func() {
+		if resultErr != nil && !errors.Is(resultErr, context.Canceled) {
+			root.CloseAdmission()
+		}
+	}()
+	if runtime == nil {
+		if controlDirectory == "" {
+			return nil
+		}
+		var err error
+		runtime, err = drainproof.WaitRuntime(ctx, controlDirectory)
+		if err != nil {
+			return err
+		}
+	}
+	if err := bind(runtime); err != nil {
+		return err
+	}
+	if runtime.Request.RunPhase == databasepb.SqlWriterDrainRun_SQL_RELEASED {
+		if prepared == nil {
+			return fmt.Errorf("%w: 新 boot 缺少真实 consumer 准备 owner", drainproof.ErrHold)
+		}
+		prepareCtx, cancel := context.WithTimeout(ctx, time.Minute)
+		observation, err := prepared(prepareCtx)
+		cancel()
+		if err != nil {
+			return err
+		}
+		if observation == nil {
+			return drainproof.ErrHold
+		}
+		var ready *databasepb.SqlWriterMaintenanceReceipt_IssuerReadiness
+		if observation.NoConsumers {
+			if len(observation.Raw) != 0 {
+				return drainproof.ErrHold
+			}
+			raw, marshalErr := (protojson.MarshalOptions{EmitUnpopulated: true}).Marshal(&databasepb.SqlWriterMaintenanceReceipt_ConsumerReadiness{})
+			if marshalErr != nil {
+				return marshalErr
+			}
+			digest := sha256.Sum256(raw)
+			ready, err = runtime.ReadinessWithEvidence("SOURCE", digest[:], raw)
+		} else {
+			if len(observation.Raw) == 0 || observation.WithReady == nil {
+				return drainproof.ErrHold
+			}
+			ready, err = runtime.ReadinessWithEvidence("SOURCE", observation.Digest, observation.Raw)
+		}
+		if err != nil {
+			return err
+		}
+		return runtime.AwaitOpen(ctx, ready, func(openCtx context.Context) ([]byte, error) {
+			commit := func() ([]byte, error) {
+				if err := root.OpenPrepared(); err != nil {
+					return nil, err
+				}
+				return root.SnapshotDigest(), nil
+			}
+			if observation.WithReady != nil {
+				return observation.WithReady(openCtx, commit)
+			}
+			return commit()
+		})
+	}
+	closedSource := runtime.Seed("SOURCE") == nil
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+		if !closedSource {
+			requested, err := runtime.Requested("SOURCE")
+			if err != nil {
+				return err
+			}
+			if requested {
+				closeCtx, cancel := context.WithTimeout(ctx, time.Minute)
+				err = closeSource(closeCtx)
+				cancel()
+				if err != nil {
+					return err
+				}
+				if err = runtime.Write("SOURCE", root); err != nil {
+					return err
+				}
+				closedSource = true
+			}
+		}
+		if !closedSource {
+			continue
+		}
+		if runtime.Seed("RELAY") == nil {
+			return nil
+		}
+		requested, err := runtime.Requested("RELAY")
+		if err != nil {
+			return err
+		}
+		if !requested {
+			continue
+		}
+		if relay == nil || closeRelay == nil {
+			return drainproof.ErrHold
+		}
+		closeCtx, cancel := context.WithTimeout(ctx, time.Minute)
+		err = closeRelay(closeCtx)
+		cancel()
+		if err != nil {
+			return err
+		}
+		return runtime.Write("RELAY", relay)
+	}
+}
+
+// LoadPublicationRuntime 在创建 SQL/worker 之前确定新 boot 的 prepared 根门禁。
+func LoadPublicationRuntime(plan, directory, digest string) (*drainproof.Runtime, *drainproof.Session, *drainproof.Session, error) {
+	var runtime *drainproof.Runtime
+	if plan != "" {
+		var err error
+		runtime, err = drainproof.LoadRuntime(plan, directory, digest)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	} else if directory != "" || digest != "" {
+		return nil, nil, nil, drainproof.ErrHold
+	}
+	root := drainproof.New()
+	if runtime != nil && runtime.Request.RunPhase == databasepb.SqlWriterDrainRun_SQL_RELEASED {
+		root = drainproof.NewPrepared()
+	}
+	return runtime, root, drainproof.New(), nil
 }

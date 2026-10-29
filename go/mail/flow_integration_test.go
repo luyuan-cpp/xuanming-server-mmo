@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"shared/authoritysql/sqltest"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -27,7 +28,6 @@ import (
 	base "proto/common/base"
 	mailpb "proto/mail"
 	"schemamigrate"
-	"shared/authoritysql"
 	"shared/domainhost"
 	"shared/loginsession"
 	"shared/serviceauth"
@@ -90,38 +90,40 @@ func TestTiDBRealRPCAuthSendOfflineReadClaimAndDeleteProtection(t *testing.T) {
 		t.Fatal(err)
 	}
 	database := "mail_rpc_it_" + hex.EncodeToString(random[:])
-	adminDB, err := authoritysql.Open(ctx, "root@tcp("+address+")/mysql", "mysql", true, 2)
+	opts, err := sqltest.OptionsFromEnv("root@tcp("+address+")/mysql", database+"_writer", database)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer adminDB.Close()
-	if _, err = adminDB.ExecContext(ctx, "CREATE DATABASE "+database); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		clean, stop := context.WithTimeout(context.Background(), 5*time.Second)
-		defer stop()
-		if _, e := adminDB.ExecContext(clean, "DROP DATABASE "+database); e != nil {
-			t.Errorf("清RPC随机库: %v", e)
-		}
-	}()
-	db, err := authoritysql.Open(ctx, "root@tcp("+address+")/"+database, database, true, 8)
+	fixture, err := sqltest.New(ctx, t, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
-	if report, e := schemamigrate.Up(ctx, db, schemamigrate.Options{Database: database, Tables: data.Tables()}); e != nil || len(report.Manual) > 0 {
+	install, err := fixture.OpenSchema(ctx, database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report, e := schemamigrate.Up(ctx, install, schemamigrate.Options{Database: database, Tables: data.Tables()}); e != nil || len(report.Manual) > 0 {
 		t.Fatalf("schema: %v %+v", e, report)
 	}
-	if _, err = db.ExecContext(ctx, "CREATE TABLE guild_member (guild_id BIGINT UNSIGNED NOT NULL,player_id BIGINT UNSIGNED NOT NULL,PRIMARY KEY(guild_id,player_id))"); err != nil {
+	if _, err = install.ExecContext(ctx, "CREATE TABLE guild_member (guild_id BIGINT UNSIGNED NOT NULL,player_id BIGINT UNSIGNED NOT NULL,PRIMARY KEY(guild_id,player_id))"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = install.ExecContext(ctx, "CREATE TABLE account_role (player_id BIGINT UNSIGNED PRIMARY KEY,account VARBINARY(191) NOT NULL,owner_revision BIGINT UNSIGNED NOT NULL,trade_listing_id BIGINT UNSIGNED NOT NULL)"); err != nil {
+		t.Fatal(err)
+	}
+	if err = fixture.GrantProtoTables(ctx, database, data.Tables()); err != nil {
+		t.Fatal(err)
+	}
+	if err = fixture.GrantTables(ctx, database, "guild_member", "account_role"); err != nil {
+		t.Fatal(err)
+	}
+	db, err := fixture.Open(ctx, database, 8)
+	if err != nil {
 		t.Fatal(err)
 	}
 	var ids atomic.Uint64
 	next := func(context.Context) (uint64, error) { return ids.Add(1), nil }
 	repo := data.New(db, next, next, func(uint32) bool { return true }, database)
-	if _, err = db.ExecContext(ctx, "CREATE TABLE account_role (player_id BIGINT UNSIGNED PRIMARY KEY,account VARBINARY(191) NOT NULL,owner_revision BIGINT UNSIGNED NOT NULL,trade_listing_id BIGINT UNSIGNED NOT NULL)"); err != nil {
-		t.Fatal(err)
-	}
 	if _, err = db.ExecContext(ctx, "INSERT INTO account_role VALUES (7,?,3,0)", []byte("邮件原账号")); err != nil {
 		t.Fatal(err)
 	}

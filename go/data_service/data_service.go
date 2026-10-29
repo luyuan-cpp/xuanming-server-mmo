@@ -2,13 +2,18 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
+	"path/filepath"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"data_service/internal/config"
@@ -22,8 +27,11 @@ import (
 	"data_service/internal/store"
 	"data_service/internal/svc"
 	base "proto/common/base"
+	databasepb "proto/common/database"
 	"proto/data_service"
+	"shared/authoritysql"
 	"shared/buildinfo"
+	"shared/drainproof"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/safego"
@@ -33,6 +41,7 @@ import (
 	"github.com/zeromicro/go-zero/core/discov"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/netx"
+	"github.com/zeromicro/go-zero/core/proc"
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -41,6 +50,10 @@ import (
 )
 
 var configFile = flag.String("f", "etc/data_service.yaml", "the config file")
+var maintenancePlan = flag.String("maintenance-drain-plan", "", "正式 typed 排空 runtime 原件")
+var maintenanceDir = flag.String("maintenance-drain-dir", "", "私有排空原件目录")
+var maintenanceSHA = flag.String("maintenance-drain-sha256", "", "runtime 原文件 SHA256")
+var maintenanceControlDir = flag.String("maintenance-drain-control-dir", os.Getenv("MMORPG_MAINTENANCE_CONTROL_DIR"), "同一 boot 接收排空与危险观察的私有目录")
 
 // migrateOnly 是生产用的显式建表入口:`data_service -f <yaml> -migrate` 对全局库跑一次
 // store.MigrateSchema(proto 驱动的五张 + 手写 DDL 的路由表,并种 route_meta / route_reconcile 行;与
@@ -95,9 +108,7 @@ const killSwitchEtcdDialTimeout = 5 * time.Second
 // 与 go/match/match_service.go 的对局结果消费者同口径。
 const kafkaStartRetryInterval = 30 * time.Second
 
-// kafkaShutdownGrace:关停时等两条消费者退出的上限。txlog 的 flushOnShutdown 自己用
-// 5s ctx 插最后一批,再加一次 offset 提交,8s 够;超时就放弃等待照常关池 —— 未提交的
-// offset 会在下次启动时重放,而 tx_id 主键 / snapshot_guid 去重让重放是幂等的。
+// kafkaShutdownGrace 只限定调用方等待；到期返回 HOLD，不能据此关闭仍有在途 SQL 的池。
 const kafkaShutdownGrace = 8 * time.Second
 
 // nodeRegisterEtcdDialTimeout:C++ 约定注册用的 etcd 客户端拨号超时,与 killswitch 那把同值。
@@ -176,43 +187,204 @@ func main() {
 		os.Exit(1)
 	}
 
-	svcCtx := svc.NewServiceContext(c)
-	// Store.Required(config.StoreConfig):store 没装配齐就不许进发现池。必须在下面任何一处 etcd 注册之前判,
-	// 否则一个每次调用都报错的实例会被 p2c / C++ 的随机挑选分到流量。os.Exit 不跑 defer,所以先手动收尾。
-	if missing := svcCtx.MissingStores(); c.Store.Required && len(missing) > 0 {
-		logx.Errorf("[startup] Store.Required=true but these stores are not ready: %v; refusing to start (see the errors above for the cause)", missing)
-		fmt.Fprintf(os.Stderr, "data_service refuses to start: Store.Required=true but stores %v are not ready\n", missing)
-		svcCtx.Close()
-		logx.Close()
+	if err := runDataService(c); err != nil {
+		fmt.Fprintf(os.Stderr, "data_service: %v\n", err)
+		_ = logx.Close()
 		os.Exit(1)
 	}
-	defer svcCtx.Close()
+}
 
-	// ── 对账 leader(D1 第 1b-2 批,internal/routereconcile)──────────────
-	// 只在 db_first 且 Reconcile.Enabled 时装配(svcCtx.RouteReconciler 非 nil);redis 模式下什么都不做。
-	// 关停顺序(规格 spec_D1_batch1b2_2_3.md §4.2「关停顺序」):这个 defer 注册在 `defer svcCtx.Close()` 之后、Kafka 的 defer
-	// 之前,按 LIFO 在 Kafka flush **之后**、关连接池**之前**执行:只 cancel、最多等 routeReconcilerStopWait(500ms),
-	// 释放租约是尽力而为(独立 1s 时限,失败不重试,租约 LeaseMs 后自然过期)。它不挤占 Kafka 的 flush。
-	// 总预算(2026-10-20 更正,原文「整个关停 ≤ 5.5s、leader 只占其中 ≤ 500ms」与 kafkaShutdownGrace=8s 矛盾):go-zero proc 收到
-	// SIGTERM 后约 1s 才停 gRPC、5.5s 强杀进程,下面这些 defer 只剩约 4.5s;排在 leader 前面的 Kafka 等待上限是 8s,比它长。
-	// Kafka flush 慢的那次关停里,进程会在 Kafka 等待阶段就被强杀,leader 跑不到释放租约,新 leader 最多晚 LeaseMs 接手。
-	// 不影响正确性(leader 的库写有租约 fencing、推送 set-if-newer、在途推送幂等);顺序按规格保持「Kafka 先、leader 后」,
-	// 宁可换主慢一个 LeaseMs,也不让 leader 的 500ms 挤掉 Kafka 本来就不够的 flush 时间。
-	stopRouteReconciler := startRouteReconciler(svcCtx)
-	defer stopRouteReconciler()
+func runDataService(c config.Config) (runErr error) {
+	runtime, root, relay, err := serverbase.LoadPublicationRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
+	if err != nil {
+		return err
+	}
+	evidenceDir := *maintenanceControlDir
+	if runtime != nil {
+		evidenceDir = runtime.Directory
+	}
+	if c.RouteStore.ReconcileEnabled() {
+		if err := authoritysql.CheckPrivateControlDirectory(evidenceDir); err != nil {
+			return fmt.Errorf("路由危险原件目录不可用: %w", err)
+		}
+	}
+	signalCtx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stopSignals()
+	controlCtx, cancelControl := context.WithCancel(context.Background())
+	defer cancelControl()
+	dangerNotice := make(chan error, 1)
+	var dangerOnce sync.Once
+	var dangerErr error
+	var svcCtx *svc.ServiceContext
+	var kafkaOwner *dskafka.ConsumerOwner
+	onDanger := func(ctx context.Context, observation *store.RouteEmergencyError) error {
+		root.CloseAdmission()
+		if svcCtx != nil {
+			svcCtx.CloseRootAndRelayIngress()
+		}
+		if kafkaOwner != nil {
+			kafkaOwner.BeginDrain()
+		}
+		dangerOnce.Do(func() {
+			root.Hold()
+			relay.Hold()
+			if observation == nil || svcCtx == nil {
+				dangerErr = drainproof.ErrHold
+			} else {
+				record := struct {
+					Schema                string
+					WriterKey, InstanceID []byte
+					Generation            string
+					Observation           *store.RouteEmergencyError
+				}{
+					"DATA_SERVICE_ROUTE_DANGER_OBSERVATION_V1", svcCtx.Writer.WriterKey(), svcCtx.Writer.InstanceID(), svcCtx.Writer.Generation(), observation}
+				raw, encodeErr := json.Marshal(record)
+				dangerErr = encodeErr
+				if encodeErr == nil {
+					path := filepath.Join(evidenceDir, "route-danger-"+hex.EncodeToString(svcCtx.Writer.InstanceID())+".observation.json")
+					dangerErr = authoritysql.WritePrivateControlFile(path, raw)
+				}
+				dangerErr = errors.Join(observation, dangerErr)
+			}
+			dangerNotice <- dangerErr
+		})
+		return dangerErr
+	}
+	svcCtx = svc.NewServiceContextWithAdmission(c, root, relay, onDanger)
+	// 启动自检仍 fail-closed；尚未启动任何 worker 时可安全关闭三个空门禁后回收。
+	cleanupUnstarted := func() error {
+		svcCtx.CloseRootAndRelayIngress()
+		relay.CloseAdmission()
+		return svcCtx.CloseAndReport()
+	}
+	if missing := svcCtx.MissingStores(); c.Store.Required && len(missing) > 0 {
+		return errors.Join(fmt.Errorf("Store.Required=true，依赖未就绪: %v", missing), cleanupUnstarted())
+	}
+	if err := svcCtx.RouteReadGateUnassembled(); err != nil {
+		return errors.Join(err, cleanupUnstarted())
+	}
 
-	// ── Kafka 落库消费者(transaction_log / player_snapshot)────────────
-	// Kafka 不可达绝不能拖死 data_service:Load/Save 是玩家数据热路径。启动失败只记日志,
-	// 后台每 30s 重试;消费者内部 DB 故障时停下不提交(见 internal/kafka 包注释)。
-	kafkaCtx, kafkaCancel := context.WithCancel(context.Background())
-	waitKafka := startKafkaConsumers(kafkaCtx, c.Kafka, svcCtx)
-	// 这个 defer 注册在 `defer svcCtx.Close()` **之后**,所以按 LIFO 先于它执行:
-	// 先取消消费者、等它们把手里那批 flush 完(有界),最后才关连接池。反过来的话
-	// txlog 的 flushOnShutdown 只会拿到一个已经关掉的池,等于从来没写过。
+	kafkaOwner, err = dskafka.NewConsumerOwner(relay, svcCtx.RelayIngress)
+	if err != nil {
+		return errors.Join(err, cleanupUnstarted())
+	}
+	kafkaStart := startKafkaConsumers(context.Background(), c.Kafka, svcCtx, kafkaOwner)
+	var sourceMu sync.Mutex
+	sourceClosed := false
+	sourceMerged := false
+	routeStarted := false
+	var stopRoute func(context.Context) error
+	startRoute := func() {
+		sourceMu.Lock()
+		defer sourceMu.Unlock()
+		if routeStarted || sourceClosed || root.Closed() {
+			return
+		}
+		stopRoute = startRouteReconciler(svcCtx)
+		routeStarted = true
+	}
+	// prepare-only boot 不提前启动会发起业务写的定时 owner；正式 Open 后再启动。
+	if runtime == nil || runtime.Request.RunPhase != databasepb.SqlWriterDrainRun_SQL_RELEASED {
+		startRoute()
+	}
+	closeSource := func(ctx context.Context) error {
+		sourceMu.Lock()
+		defer sourceMu.Unlock()
+		if sourceClosed {
+			return nil
+		}
+		root.CloseAdmission()
+		var result error
+		if stopRoute != nil {
+			if err := stopRoute(ctx); err != nil {
+				root.Hold()
+				result = errors.Join(result, err)
+			}
+		}
+		result = errors.Join(result, root.Wait(ctx))
+		if result != nil {
+			return result
+		}
+		if svcCtx.RouteReconciler != nil && routeStarted && !sourceMerged {
+			digest, err := svcCtx.RouteReconciler.SettledDigest(ctx)
+			if err != nil {
+				return err
+			}
+			if err = root.MergeClosedSettled(digest); err != nil {
+				return err
+			}
+			sourceMerged = true
+		}
+		sourceClosed = true
+		return nil
+	}
+	var relayMu sync.Mutex
+	relayClosed := false
+	var stopRPC func(context.Context) error
+	var controlDone chan struct{}
+	stopAuxiliary := func(context.Context) error { return nil }
+	closeRelay := func(ctx context.Context) error {
+		relayMu.Lock()
+		defer relayMu.Unlock()
+		if relayClosed {
+			return svcCtx.CloseAndReport()
+		}
+		result := closeSource(ctx)
+		svcCtx.RelayIngress.CloseAdmission()
+		kafkaOwner.BeginDrain()
+		digest, err := kafkaStart.StopAndReport(ctx)
+		result = errors.Join(result, err)
+		result = errors.Join(result, svcCtx.RelayIngress.Wait(ctx))
+		result = errors.Join(result, relay.WaitIdle(ctx))
+		result = errors.Join(result, stopAuxiliary(ctx))
+		if result != nil {
+			relay.Hold()
+			return errors.Join(drainproof.ErrHold, result)
+		}
+		if err = relay.MergeSettled(digest); err != nil {
+			return err
+		}
+		relay.CloseAdmission()
+		if err = relay.Wait(ctx); err != nil {
+			return err
+		}
+		if err = svcCtx.CloseAndReport(); err != nil {
+			return err
+		}
+		relayClosed = true
+		return nil
+	}
+
+	finalized := false
+	var finalErr error
+	finishRuntime := func(ctx context.Context) error {
+		if finalized {
+			return finalErr
+		}
+		finalized = true
+		root.CloseAdmission()
+		svcCtx.RelayIngress.CloseAdmission()
+		kafkaOwner.BeginDrain()
+		cancelControl()
+		if controlDone != nil {
+			select {
+			case <-controlDone:
+			case <-ctx.Done():
+				finalErr = errors.Join(drainproof.ErrHold, ctx.Err())
+				return finalErr
+			}
+		}
+		finalErr = closeRelay(ctx)
+		if stopRPC != nil {
+			finalErr = errors.Join(finalErr, stopRPC(ctx))
+		}
+		return finalErr
+	}
 	defer func() {
-		kafkaCancel()
-		if !waitKafka(kafkaShutdownGrace) {
-			logx.Errorf("[kafka] consumers did not stop within %s; closing the stores anyway (unflushed rows will be replayed from the uncommitted offsets)", kafkaShutdownGrace)
+		if !finalized {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			runErr = errors.Join(runErr, finishRuntime(ctx))
+			cancel()
 		}
 	}()
 
@@ -221,9 +393,8 @@ func main() {
 	// 不能放进 NewServiceContext:单测会多次构造 ServiceContext,默认注册表重复注册会报错。注册失败只记日志。
 	metrics.RegisterSQLPools(svcCtx.SQLPoolSamples, c.RouteStore.DBFirst())
 
-	// Start Prometheus /metrics endpoint. Empty addr → no-op.
-	// Surfaces per-RPC outcome / latency, lock contention, version mismatch,
-	// rollback counts. See internal/metrics/metrics.go.
+	// HTTP 导出仅观察指标与并发安全的 DB.Stats，不派生业务写；不作为资产发行者 closure。
+	// 空地址保持禁用。
 	metrics.Start(c.MetricsListenAddr)
 	// 回档帮会闸的 27 条告警序列启动即预置为 0(docs/design/guild-phase2/07-rollback-fail-closed.md §7.9.1):
 	// 放行回档 / 写后分歧一辈子可能只发生一次,序列不预先存在的话 `increase(...) > 0` 恰好漏掉那一次。
@@ -243,14 +414,18 @@ func main() {
 	// 所以整段接线不会让 data_service 的启动多出任何一个失败点。
 	ks := killswitch.New(killswitch.Config{})
 	ksCtx, ksCancel := context.WithCancel(context.Background())
-	defer ksCancel()
 	etcdCli := newKillSwitchEtcdClient(c.Etcd)
-	if etcdCli != nil {
-		defer etcdCli.Close()
-	}
+	// watch 只更新本地拒绝规则，不发行资产、不使用 SQL，也不能重新打开生命周期门禁。
 	ks.Start(ksCtx, etcdCli)
+	var rpcServer *grpc.Server
+	var rpcServerMu sync.Mutex
+	serverReady := make(chan struct{})
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
+		rpcServerMu.Lock()
+		rpcServer = grpcServer
+		rpcServerMu.Unlock()
+		close(serverReady)
 		data_service.RegisterDataServiceServer(grpcServer, server.NewDataServiceServer(svcCtx))
 
 		if c.Mode == service.DevMode || c.Mode == service.TestMode {
@@ -265,6 +440,9 @@ func main() {
 	// 误记成一次业务故障。
 	s.AddUnaryInterceptors(grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor())
 	s.AddUnaryInterceptors(ks.UnaryServerInterceptor())
+	relayMethods := dataServiceRelayMethods()
+	s.AddUnaryInterceptors(serverbase.PublicationAdmission(root, relay, relayMethods, svcCtx.RelayIngress))
+	s.AddUnaryInterceptors(holdDataServiceFaults(root, relay, relayMethods))
 	// in-band 故障拦截器:本服务的 handler 一律 `return resp, nil`,把失败塞进
 	// 响应体的 `uint32 error_code` —— gRPC status 恒 OK,go-zero 自带的指标拦截器
 	// 会把每一次"Redis 挂了""快照库写不进去"都记成一次成功请求,监控上看不出
@@ -321,18 +499,8 @@ func main() {
 	//   ErrCodeRollbackGuildDivergedAfterWrite(29) —— 数据已写、写后复查发现新分歧或复查失败,紧急人工
 	// ErrCodeRollbackGuildDivergence(27) 刻意不算:那是闸在正常工作(规则拒绝,口径同 PlayerOnline)。
 	s.AddUnaryInterceptors(serverbase.UnaryInterceptor(serverbase.Options{
-		ErrorCodeClassifier: serverbase.FaultCodeSet(
-			constants.ErrCodeRedis,
-			constants.ErrCodeSnapshotDBError,
-			constants.ErrCodeRollbackFailed,
-			constants.ErrCodeIdSegmentDBError,
-			constants.ErrCodeIdSegmentExhausted,
-			constants.ErrCodeIdSegmentUnknownTag,
-			constants.ErrCodeRollbackGuildCheckFailed,
-			constants.ErrCodeRollbackGuildDivergedAfterWrite,
-		),
+		ErrorCodeClassifier: dataServiceFaultClassifier(),
 	}))
-	defer s.Stop()
 
 	// ── C++ 约定的 etcd 注册(DataServiceNodeService.rpc)──────────────
 	// go-zero 只写自己的 dataservice.rpc 键,C++ 看不见;scene 靠本注册发现 data_service
@@ -347,9 +515,19 @@ func main() {
 	// etcd 客户端刻意不与 killswitch 共用:那把的契约是 fail-open(nil 合法、永不 panic),
 	// 这把的契约恰好相反(建不出来就拒启)。两把 defer 的 LIFO 顺序保证先注销再关客户端。
 	regCli := mustNewNodeRegistryEtcdClient(c.Etcd)
-	defer regCli.Close()
 	registrar := startNodeRegistration(c, regCli)
-	defer registrar.close()
+	stopAuxiliary = func(ctx context.Context) error {
+		ksCancel()
+		result := registrar.closeAndReport(ctx)
+		if result != nil {
+			return result
+		}
+		if etcdCli != nil {
+			result = errors.Join(result, etcdCli.Close())
+		}
+		result = errors.Join(result, regCli.Close())
+		return result
+	}
 
 	fmt.Println("\n=============================================================")
 	fmt.Println("  DATA_SERVICE STARTED SUCCESSFULLY")
@@ -378,7 +556,92 @@ func main() {
 			c.Kafka.EffectiveTransactionLogTopic(), c.Kafka.EffectiveSnapshotTopic())
 	}
 	fmt.Println("=============================================================")
-	s.Start()
+	serveDone := make(chan struct{})
+	serveResult := make(chan error, 1)
+	go func() {
+		var result error
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				result = fmt.Errorf("data_service gRPC 启动 panic: %v", recovered)
+			}
+			serveResult <- result
+			close(serveDone)
+		}()
+		s.Start()
+	}()
+	stopRPC = func(ctx context.Context) error {
+		rpcServerMu.Lock()
+		server := rpcServer
+		rpcServerMu.Unlock()
+		if server == nil {
+			return drainproof.ErrHold
+		}
+		done := make(chan struct{})
+		go func() { server.GracefulStop(); proc.Shutdown(); <-serveDone; close(done) }()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-done:
+			return nil
+		}
+	}
+	select {
+	case <-serverReady:
+	case err := <-serveResult:
+		return errors.Join(err, drainproof.ErrHold)
+	case <-signalCtx.Done():
+		return drainproof.ErrHold
+	}
+	controlDone = make(chan struct{})
+	controlResult := make(chan error, 1)
+	go func() {
+		defer close(controlDone)
+		result := serverbase.DriveDrainRuntime(controlCtx, runtime, *maintenanceControlDir, root, relay, svcCtx.BindDrainRuntime, closeSource, closeRelay,
+			func(ctx context.Context) (*serverbase.PreparedPublication, error) {
+				bound := svcCtx.DrainRuntime
+				if bound == nil {
+					return nil, drainproof.ErrHold
+				}
+				digest, raw, err := kafkaStart.PreparedFrontier(ctx, bound)
+				if err != nil {
+					return nil, err
+				}
+				return &serverbase.PreparedPublication{Digest: digest, Raw: raw, WithReady: func(openCtx context.Context, commit func() ([]byte, error)) ([]byte, error) {
+					return kafkaStart.WithReady(openCtx, raw, commit)
+				}}, nil
+			})
+		if result == nil && runtime != nil && runtime.Request.RunPhase == databasepb.SqlWriterDrainRun_SQL_RELEASED {
+			startRoute()
+		}
+		controlResult <- result
+	}()
+	shutdownRuntime := func(reason error) error {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		return errors.Join(reason, finishRuntime(ctx))
+	}
+	for {
+		select {
+		case result := <-controlResult:
+			controlResult = nil
+			if result != nil {
+				return shutdownRuntime(result)
+			}
+			if relay.Closed() {
+				return shutdownRuntime(nil)
+			}
+		case err := <-dangerNotice:
+			return shutdownRuntime(errors.Join(drainproof.ErrHold, err))
+		case err := <-kafkaOwner.Errors():
+			return shutdownRuntime(errors.Join(drainproof.ErrHold, err))
+		case err := <-registrar.failed:
+			return shutdownRuntime(err)
+		case <-signalCtx.Done():
+			return shutdownRuntime(nil)
+		case err := <-serveResult:
+			return shutdownRuntime(errors.Join(errors.New("gRPC 服务已退出"), err))
+		}
+	}
 }
 
 // runMigration 是 -migrate 的实现:不设超时(存量大表的 MODIFY COLUMN 会重建表,
@@ -408,26 +671,16 @@ const routeStoreDBFirstWarning = "RouteStore.Mode=db_first: merge_zone 写模式
 	"合服围栏以 zone_merge_fence 为真源,merge:in_progress 只是镜像,不要手工 SET / DEL(merge-zone-runbook §15);" +
 	"ArmReadyMarker 与读方开关按 proposal §13.4 切换,回退先关读方、再 Arm=false"
 
-// routeReconcilerStopWait 是关停时等对账 leader 退出的上限(规格 §4.2「关停顺序」:只 cancel、等待 ≤ 500ms)。
-// 超时就不等了:在途推送幂等且带租约校验,租约 LeaseMs 后自然过期,别的副本接手。
-const routeReconcilerStopWait = 500 * time.Millisecond
-
-// startRouteReconciler 启动对账 leader(svcCtx.RouteReconciler 为 nil 时什么都不做),返回给 defer 用的停止函数。
-// 指标在这里预置(只在装配了 leader 的副本上:assembled=1、leader=0、arm_enabled 按配置,计数器的封闭集合全部为 0)。
-// Start 不阻塞:决策循环跑在 safego goroutine 里,第一拍才连 mapping Redis、抢租约。
-func startRouteReconciler(svcCtx *svc.ServiceContext) func() {
+// startRouteReconciler 返回真实停止新拍并 join 原任务的接缝；不把 bool Wait 或租约 TTL 当成功。
+func startRouteReconciler(svcCtx *svc.ServiceContext) func(context.Context) error {
 	rec := svcCtx.RouteReconciler
 	if rec == nil {
-		return func() {}
+		return func(context.Context) error { return nil }
 	}
 	metrics.PrimeRouteReconcile(rec.ArmEnabled())
-	stop := rec.Start(context.Background())
+	stop := rec.StartWithReport(context.Background())
 	logx.Infof("[startup] route reconcile leader started: leader_id=%s arm_ready_marker=%t", rec.LeaderID(), rec.ArmEnabled())
-	return func() {
-		if !stop(routeReconcilerStopWait) {
-			logx.Errorf("[RouteReconcile] did not stop within %s; continuing the shutdown (its lease expires on its own)", routeReconcilerStopWait)
-		}
-	}
+	return stop
 }
 
 // routeReconcileBanner 是启动横幅里对账 leader 那一行:装配了就是 on + 标识 + Arm 取值;没装配写明原因。
@@ -456,43 +709,37 @@ func migrateExitCode(err error) int {
 	return 1
 }
 
-// startKafkaConsumers 启动两条落库消费者,返回一个"等它们停下"的有界等待函数(给关停用;
-// 没起来时是 no-op)。失败只记日志并每 30s 后台重试,**永不阻塞启动**。
-// Brokers 为空 = 本地无 Kafka 的合法形态,直接不消费。两个 store 任一为 nil(MySQL 不可达
-// 或迁移失败)时也不启动:消费者没有落库目标,启动了只会立刻停下。
-func startKafkaConsumers(ctx context.Context, kc config.KafkaConfig, svcCtx *svc.ServiceContext) func(time.Duration) bool {
-	noop := func(time.Duration) bool { return true }
+// kafkaStartup 拥有首次启动与所有重试本身；P3 必须等 EnsureTopics 返回，不能只等已经创建的 consumer。
+type kafkaStartup struct {
+	owner      *dskafka.ConsumerOwner
+	mu         sync.Mutex
+	consumers  *dskafka.Consumers
+	startErr   error
+	configured bool
+	cancel     context.CancelFunc
+	done       chan struct{}
+}
 
-	if len(kc.Brokers) == 0 {
-		logx.Info("[kafka] Kafka.Brokers empty; transaction_log / player_snapshot consumers disabled")
-		return noop
+func startKafkaConsumers(ctx context.Context, kc config.KafkaConfig, svcCtx *svc.ServiceContext, owner *dskafka.ConsumerOwner) *kafkaStartup {
+	retryCtx, cancel := context.WithCancel(ctx)
+	out := &kafkaStartup{owner: owner, configured: len(kc.Brokers) > 0, cancel: cancel, done: make(chan struct{})}
+	if !out.configured {
+		close(out.done)
+		return out
 	}
 	if svcCtx.TxLogStore == nil || svcCtx.SnapshotStore == nil {
-		logx.Errorf("[kafka] consumers NOT started: transaction log / snapshot store unavailable (MySQL unreachable or schema migration failed); restart data_service after the database recovers")
-		return noop
+		out.startErr = errors.New("Kafka 未装配：transaction_log / snapshot store 缺失")
+		close(out.done)
+		return out
 	}
-
-	// 先把两条 kafka_consumer_up 序列按 0 注册出来,再做第一次尝试。
-	// Prometheus 的 *Vec 只有 WithLabelValues 之后才有那个 child series:不预注册的话
-	// "EnsureTopics 一直失败 → 消费者从未启动"这个最该告警的状态下,
-	// kafka_consumer_up{consumer="..."} 干脆不存在,`== 0` 的告警永远不会触发,
-	// 监控上和"服务没部署"长得一模一样。
-	metrics.SetKafkaConsumerUp(dskafka.ConsumerTxLog, false)
-	metrics.SetKafkaConsumerUp(dskafka.ConsumerSnapshot, false)
-	// 同理把 messages_total / lag_probe_total / isolation_total 的封闭集合预置为 0:坏消息跳过、批量兜底停机这类
-	// 一辈子可能只发生几次的结局,序列不预先存在的话 `increase(...) > 0` 恰好漏掉第一次(审计管道告警的前提)。
-	metrics.PrimeKafkaConsumer(dskafka.ConsumerTxLog)
-	metrics.PrimeKafkaConsumer(dskafka.ConsumerSnapshot)
-
-	txTopic := kc.EffectiveTransactionLogTopic()
-	snapshotTopic := kc.EffectiveSnapshotTopic()
-
-	var (
-		mu        sync.Mutex
-		consumers *dskafka.Consumers
-	)
+	for _, name := range []string{dskafka.ConsumerTxLog, dskafka.ConsumerSnapshot} {
+		metrics.SetKafkaConsumerUp(name, false)
+		metrics.PrimeKafkaConsumer(name)
+	}
+	txTopic, snapshotTopic := kc.EffectiveTransactionLogTopic(), kc.EffectiveSnapshotTopic()
 	start := func() error {
 		cs, err := dskafka.Start(ctx, dskafka.StartConfig{
+			Owner:              owner,
 			Brokers:            kc.Brokers,
 			TxLogTopic:         txTopic,
 			TxLogPartitions:    kc.TransactionLogPartitions,
@@ -513,40 +760,75 @@ func startKafkaConsumers(ctx context.Context, kc config.KafkaConfig, svcCtx *svc
 		if err != nil {
 			return err
 		}
-		mu.Lock()
-		consumers = cs
-		mu.Unlock()
+		out.mu.Lock()
+		out.consumers = cs
+		out.mu.Unlock()
 		return nil
 	}
-
-	// 连第一次尝试都放进 goroutine:EnsureTopics 对半死不活的 broker 会走完 sarama 的
-	// 30s 拨号超时加元数据重试,同步做等于让一个纯审计组件把 gRPC 服务器的启动
-	// (以及 LoadPlayerData / SavePlayerData)按住几十秒。
 	safego.Go("data_service.kafka.start", func() {
-		for attempt := 1; ; attempt++ {
-			if err := start(); err == nil {
-				if attempt > 1 {
-					logx.Info("[kafka] consumers started on retry; backlog will be consumed from the earliest offset")
-				}
-				return
-			} else {
-				logx.Errorf("[kafka] consumers not started (attempt %d), retrying in %s (Load/Save unaffected; topics=%s,%s): %v",
-					attempt, kafkaStartRetryInterval, txTopic, snapshotTopic, err)
+		defer close(out.done)
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				err := errors.New("Kafka 启动 owner panic")
+				out.mu.Lock()
+				out.startErr = err
+				out.mu.Unlock()
+				owner.RecordUnknown(err)
+				panic(recovered)
 			}
-			select {
-			case <-ctx.Done():
+		}()
+		for attempt := 1; retryCtx.Err() == nil && !owner.Draining(); attempt++ {
+			err := start()
+			out.mu.Lock()
+			out.startErr = err
+			out.mu.Unlock()
+			if err == nil {
 				return
-			case <-time.After(kafkaStartRetryInterval):
+			}
+			logx.Errorf("[kafka] 启动失败 attempt=%d，%s 后重试: %v", attempt, kafkaStartRetryInterval, err)
+			timer := time.NewTimer(kafkaStartRetryInterval)
+			select {
+			case <-retryCtx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
 			}
 		}
 	})
-
-	return func(timeout time.Duration) bool {
-		mu.Lock()
-		cs := consumers
-		mu.Unlock()
-		return cs.Wait(timeout)
+	return out
+}
+func (s *kafkaStartup) StopAndReport(ctx context.Context) ([]byte, error) {
+	s.owner.BeginDrain()
+	s.cancel()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-s.done:
 	}
+	s.mu.Lock()
+	consumers, startErr := s.consumers, s.startErr
+	s.mu.Unlock()
+	if consumers != nil {
+		return consumers.StopAndReport(ctx)
+	}
+	if s.configured {
+		return nil, errors.Join(drainproof.ErrHold, startErr)
+	}
+	return s.owner.SettledDigest(ctx)
+}
+func (s *kafkaStartup) PreparedFrontier(ctx context.Context, runtime *drainproof.Runtime) ([]byte, []byte, error) {
+	select {
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	case <-s.done:
+	}
+	s.mu.Lock()
+	consumers, startErr := s.consumers, s.startErr
+	s.mu.Unlock()
+	if consumers == nil {
+		return nil, nil, errors.Join(drainproof.ErrHold, startErr)
+	}
+	return consumers.PreparedFrontier(ctx, runtime, "SOURCE")
 }
 
 // newKillSwitchEtcdClient 按 RpcServerConf.Etcd 建一个只给热关停 watch 用的
@@ -617,37 +899,84 @@ type nodeRegistrar struct {
 	host string // 写进 NodeInfo 的对外 IP(见 advertisedEndpoint)
 	port uint32
 
-	mu     sync.Mutex
-	nr     *noderegistry.NodeRegistration
-	closed bool
+	mu        sync.Mutex
+	nr        *noderegistry.NodeRegistration
+	closed    bool
+	cancel    context.CancelFunc
+	done      chan struct{}
+	failed    chan error
+	startErr  error
+	closeOnce sync.Once
+	closeDone chan struct{}
+	closeErr  error
 }
 
 func (r *nodeRegistrar) set(nr *noderegistry.NodeRegistration) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.closed {
-		nr.Close()
-		return
-	}
 	r.nr = nr
+	r.mu.Unlock()
+}
+func (r *nodeRegistrar) fail(err error) {
+	r.mu.Lock()
+	if r.startErr == nil {
+		r.startErr = err
+	}
+	r.mu.Unlock()
+	select {
+	case r.failed <- err:
+	default:
+	}
+}
+func (r *nodeRegistrar) close() {
+	if err := r.closeAndReport(context.Background()); err != nil {
+		logx.Errorf("节点注册关闭 HOLD: %v", err)
+	}
 }
 
-// close 注销(删两把 key + Revoke 租约)。未注册完成时只打标记,由 set 收尾。
-func (r *nodeRegistrar) close() {
+// 注册 goroutine 自身必须 join。内部 keepalive 只维护发现租约，不能开门或发行资产。
+func (r *nodeRegistrar) closeAndReport(ctx context.Context) error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.closed = true
-	if r.nr != nil {
-		r.nr.Close()
-		r.nr = nil
+	cancel := r.cancel
+	r.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	r.closeOnce.Do(func() {
+		r.closeDone = make(chan struct{})
+		go func() {
+			defer close(r.closeDone)
+			if r.done != nil {
+				<-r.done
+			}
+			r.mu.Lock()
+			nr, startErr := r.nr, r.startErr
+			r.mu.Unlock()
+			r.closeErr = startErr
+			if nr != nil {
+				if owner, ok := any(nr).(interface{ CloseAndReport(context.Context) error }); ok {
+					r.closeErr = errors.Join(r.closeErr, owner.CloseAndReport(context.Background()))
+				} else {
+					// Close 内注销错误保留原日志；控制面晚完成不能重开已永久关闭的业务门禁。
+					nr.Close()
+				}
+			}
+		}()
+	})
+	select {
+	case <-ctx.Done():
+		return errors.Join(drainproof.ErrHold, ctx.Err())
+	case <-r.closeDone:
+		return r.closeErr
 	}
 }
 
 // startNodeRegistration 起一条 goroutine:等本进程的 gRPC 端口 accept,再按 C++ 约定注册
-// DataServiceNodeService 的 NodeInfo 并开始 keepalive。任何一步失败都 panic(启动致命)。
+// DataServiceNodeService 的 NodeInfo 并开始 keepalive。失败交还 main 做真实收尾并拒绝启动。
 func startNodeRegistration(c config.Config, cli *clientv3.Client) *nodeRegistrar {
 	listenHost, port := parseListenOn(c.ListenOn)
-	r := &nodeRegistrar{host: advertisedHost(listenHost), port: port}
+	ctx, cancel := context.WithCancel(context.Background())
+	r := &nodeRegistrar{host: advertisedHost(listenHost), port: port, cancel: cancel, done: make(chan struct{}), failed: make(chan error, 1)}
 
 	// 拨号地址与对外地址是两回事:0.0.0.0 监听时本机只能拨 loopback,而 NodeInfo 里
 	// 必须写别的 Pod / 进程连得上的 IP。
@@ -657,16 +986,24 @@ func startNodeRegistration(c config.Config, cli *clientv3.Client) *nodeRegistrar
 	}
 	dialAddr := net.JoinHostPort(dialHost, strconv.FormatUint(uint64(port), 10))
 
-	// 刻意用裸 go 而不是 safego.Go:safego 会把 panic 兜住变成一个指标继续跑,而这里的
-	// panic 就是要让进程死(CrashLoopBackOff 可见),与 scene_manager 注册失败即 panic 同一语义。
+	// 不把注册失败吞成健康；panic 与显式错误都交给 main 结束本次服务。
 	go func() {
-		if err := waitForListening(dialAddr, nodeRegisterListenWait); err != nil {
-			panic("data_service: gRPC port never accepted within " + nodeRegisterListenWait.String() +
-				", cannot register DataService node in etcd: " + err.Error())
+		defer close(r.done)
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				r.fail(fmt.Errorf("节点注册 owner panic: %v", recovered))
+			}
+		}()
+		if err := waitForListeningContext(ctx, dialAddr, nodeRegisterListenWait); err != nil {
+			if ctx.Err() == nil {
+				r.fail(fmt.Errorf("data_service 监听端口未就绪，不能注册: %w", err))
+			}
+			return
 		}
 		nr, err := noderegistry.Register(cli, uint32(base.ENodeType_DataServiceNodeService), c.ZoneId, r.host, port, c.LeaseTTL)
 		if err != nil {
-			panic("failed to register DataService node in etcd: " + err.Error())
+			r.fail(fmt.Errorf("DataService 节点注册失败: %w", err))
+			return
 		}
 		nr.KeepAlive()
 		logx.Infof("[NodeRegistry] DataService registered: DataServiceNodeService.rpc zone=%d node_type=%d node_id=%d uuid=%s endpoint=%s:%d lease_ttl=%ds",
@@ -678,19 +1015,27 @@ func startNodeRegistration(c config.Config, cli *clientv3.Client) *nodeRegistrar
 
 // waitForListening 反复拨 addr 直到连上(随即关掉)或超时;返回最后一次拨号错误。
 func waitForListening(addr string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	var lastErr error
+	return waitForListeningContext(context.Background(), addr, timeout)
+}
+func waitForListeningContext(parent context.Context, addr string, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	dialer := net.Dialer{Timeout: nodeRegisterListenPoll * 5}
 	for {
-		conn, err := net.DialTimeout("tcp", addr, nodeRegisterListenPoll*5)
+		conn, err := dialer.DialContext(ctx, "tcp", addr)
 		if err == nil {
-			_ = conn.Close()
-			return nil
+			return conn.Close()
 		}
-		lastErr = err
-		if time.Now().After(deadline) {
-			return lastErr
+		if ctx.Err() != nil {
+			return errors.Join(err, ctx.Err())
 		}
-		time.Sleep(nodeRegisterListenPoll)
+		timer := time.NewTimer(nodeRegisterListenPoll)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return errors.Join(err, ctx.Err())
+		case <-timer.C:
+		}
 	}
 }
 
@@ -735,4 +1080,79 @@ func advertisedHost(listenHost string) string {
 		return ip
 	}
 	return "127.0.0.1"
+}
+
+func dataServiceRelayMethods() map[string]bool {
+	return map[string]bool{
+		"/data_service.DataService/ReadAccountDirectory":          true,
+		"/data_service.DataService/CreateAccountRole":             true,
+		"/data_service.DataService/LookupAccountRole":             true,
+		"/data_service.DataService/RepairAccountRole":             true,
+		"/data_service.DataService/RemoveAccountRoles":            true,
+		"/data_service.DataService/BeginAccountRoleTrade":         true,
+		"/data_service.DataService/ConfirmAccountRoleTradeFreeze": true,
+		"/data_service.DataService/CancelAccountRoleTrade":        true,
+		"/data_service.DataService/TransferAccountRole":           true,
+		"/data_service.DataService/RegisterRoleAdmission":         true,
+		"/data_service.DataService/CloseRoleAdmissions":           true,
+		"/data_service.DataService/AckRoleTradeDrain":             true,
+		"/data_service.DataService/LoadPlayerData":                true,
+		"/data_service.DataService/SavePlayerData":                true,
+		"/data_service.DataService/GetPlayerField":                true,
+		"/data_service.DataService/SetPlayerField":                true,
+		"/data_service.DataService/RegisterPlayerZone":            true,
+		"/data_service.DataService/GetPlayerHomeZone":             true,
+		"/data_service.DataService/BatchGetPlayerHomeZone":        true,
+		"/data_service.DataService/DeletePlayerData":              true,
+		"/data_service.DataService/ListPlayerSnapshots":           true,
+		"/data_service.DataService/GetPlayerSnapshotDiff":         true,
+		"/data_service.DataService/QueryTransactionLog":           true,
+		"/data_service.DataService/AllocateIdSegment":             true,
+		"/data_service.DataService/ReservePlayerName":             true,
+		"/data_service.DataService/ReleasePlayerName":             true,
+		"/data_service.DataService/BatchGetPlayerName":            true,
+		"/data_service.DataService/GetPlayerAssetOpLedger":        true,
+		"/data_service.DataService/GetPlayerInboxLedger":          true,
+	}
+}
+func dataServiceFaultClassifier() serverbase.Classifier {
+	return serverbase.FaultCodeSet(
+		constants.ErrCodeRedis,
+		constants.ErrCodeSnapshotDBError,
+		constants.ErrCodeRollbackFailed,
+		constants.ErrCodeIdSegmentDBError,
+		constants.ErrCodeIdSegmentExhausted,
+		constants.ErrCodeIdSegmentUnknownTag,
+		constants.ErrCodeRollbackGuildCheckFailed,
+		constants.ErrCodeRollbackGuildDivergedAfterWrite,
+	)
+}
+
+// DS 的 SQL/Redis 不定结果常以 error_code 返回；不能将 Go error=nil 当作 SOURCE/RELAY 已成功。
+func holdDataServiceFaults(root, relay *drainproof.Session, methods map[string]bool) grpc.UnaryServerInterceptor {
+	classify := serverbase.Options{ErrorCodeClassifier: dataServiceFaultClassifier()}
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
+		response, err := next(ctx, req)
+		if err == nil {
+			verdict := classify.Classify(serverbase.ExtractBizCode(response))
+			if verdict == serverbase.VerdictFault || verdict == serverbase.VerdictUnknown {
+				gate := root
+				if methods[info.FullMethod] {
+					gate = relay
+				}
+				gate.Hold()
+			}
+		}
+		return response, err
+	}
+}
+
+func (s *kafkaStartup) WithReady(ctx context.Context, raw []byte, commit func() ([]byte, error)) ([]byte, error) {
+	s.mu.Lock()
+	consumers := s.consumers
+	s.mu.Unlock()
+	if consumers == nil {
+		return nil, drainproof.ErrHold
+	}
+	return consumers.WithReady(ctx, raw, commit)
 }

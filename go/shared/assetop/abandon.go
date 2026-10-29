@@ -47,6 +47,8 @@ import (
 //     LoopConfig.RequireSQLCommit 打开时,「已落盘账本」有两份:Redis 父键 blob 与 SQL 提交证据,
 //     **两份都**确定未见才放弃;证据已见按证据终结;证据未见而 blob 已见说明证据落后于父键,跳过
 //     (judgeWithSQLCommit,docs/design/db-write-fencing-mysql.md §6.6)。
+//     LoopConfig.RequireVerifiedRedisCopy 打开时(缺省),blob 的「确定未见」还要这份 Redis 副本**已核验**才算数
+//     (下文「Redis 副本核验」);未核验就跳过(redis_unverified)。
 //
 // 于是「Go 退款、scene 从未发货」是唯一可能的终局,与 ABORTED 等价。任何一条拿不到证据都跳过、
 // 还租约并计数,绝不猜(AGENTS §11.3,玩家资产路径 fail-closed)。
@@ -54,6 +56,25 @@ import (
 // seq 窗口的后果:放弃一条 scene 从未见过的 seq 与人工终结相同,会拉开 next_seq 与 scene max_seq 的
 // 距离(04 §4.29:累计超过 511 时新 seq 判 kJumpTooFar,按 §4.31 抬纪元)。每个 (玩家, 流) 的未决上限
 // 是 16(I5),一次放弃最多拉开 16,远低于 511。
+//
+// # Redis 副本核验(条件 5 的闸,docs/design/zone-redis-regression-guard-20261022.md §4.5 G5)
+//
+// blob 与 SQL 证据都是 zone Redis 里的副本。Redis 崩溃丢尾、切主丢尾、从备份恢复之后,两份都可能回到
+// 「未见」,而 SQL 玩家行里其实已经应用过这一笔 —— 此时放弃,对侧退账就是道具复制或扣款白扣。
+// 回退必然伴随实例身份变化(run_id / master_replid);login 每次把 Redis 与 SQL 核对一致后,把当时的身份写进
+// 屏障 hash 的 verified_identity。所以「读 blob 的同一段 Lua 里,当前身份 == 身份戳且是主」说明从核验到这次读
+// 没有丢过已确认的写,blob 不比 SQL 旧,它的「未见」才能代表 SQL 的「未见」。身份、戳与 blob 由 data_service
+// 在同一段 Lua 里取得(VerifiedLedgerReader),中间没有窗口。
+//
+//   - 只拦「未见 → 放弃」这一个出口。「已见」照常按已见结局终结:回退只会删掉后来的写,造不出「已见」;
+//     没有 blob、给不出结论本来就跳过。
+//   - 开关打开时先读的 SQL 证据不另核验,只核验后读的 blob:核验通过说明从写戳到读 blob 之间没有回退。
+//     证据若读于写戳之后,同样没回退;若读于写戳之前,说明期间玩家登录并完成了核验(采纳会把父键改成 SQL
+//     的内容),SQL 已见这一笔则 blob 必然已见,走 sql_evidence_behind,不会放弃。
+//   - 代价是活性:经历过 Redis 身份变化、之后再没登录过的玩家,放弃一直跳过到他下次登录(login 写戳)为止。
+//     login 的核验开关关闭时戳不再刷新,身份一变就挡住全部放弃。
+//   - 不覆盖设计 §4.1.6 的残余 R-G1-1(采纳之后,积压里一笔更新的存盘晚到 SQL):那一笔的 SQL 证据会照常发布,
+//     RequireSQLCommit 打开时按证据已见终结;关闭时与登录侧同一残余,由该节的上线门禁处置。
 //
 // # LastSendMs 契约(条件 4 的依据)
 //
@@ -137,6 +158,22 @@ type Abandoner interface {
 	ReleaseLease(ctx context.Context, op Op, nowMs uint64) error
 }
 
+// VerifiedLedgerReader 是 Loop.Ledger 的**可选**能力:读 Redis 父键 blob,并报告这份副本是否已经过当前实例身份核验
+// (上文「Redis 副本核验」)。LoopConfig.RequireVerifiedRedisCopy 打开时自动放弃只经它读 blob;没实现它就不放弃。
+// DataServiceLedger 实现它。
+//
+// 契约:
+//   - ledger 的映射与 LedgerReader.ReadPersistedLedger 相同(没有 blob → nil;有 blob → 非 nil,可为空消息);
+//   - verified 为真,当且仅当读 blob 的同一次原子读里,该实例身份已知、role=master,且等于屏障 hash 的
+//     verified_identity(savebarrier.VerifiedIdentityField)。身份未知、戳不等、不是主、没有 blob 一律为假;
+//     实现方拿不到这个结论时只能回假或回 error,不得回真;
+//   - 读失败回 error,ledger 为 nil、verified 为假。
+//
+// 不并进 LedgerReader:离线读账本与只读 blob 的测试替身不需要这一位,并进去会逼所有实现同批改(同 SQLCommitLedgerReader)。
+type VerifiedLedgerReader interface {
+	ReadVerifiedPersistedLedger(ctx context.Context, playerID uint64) (ledger *componentpb.PlayerAssetOpLedgerComp, verified bool, err error)
+}
+
 // abandonSkip 是 assetop_abandon_skipped_total 的 reason label。0 不是合法原因,
 // judgeAbandon 用它表示「全部条件成立」。
 type abandonSkip uint8
@@ -165,6 +202,10 @@ const (
 	// —— 证据落后于父键(旧版 scene、计数器倒退期间的存盘没落库或进了死信)。不放弃(会一物两得),也不终结
 	// (开关打开只认 SQL 证据),等证据追上或人工处理。
 	abandonSkipSQLEvidenceBehind
+	// abandonSkipRedisUnverified 只在 RequireVerifiedRedisCopy 打开时出现:blob 给出了「确定未见」,但这份 Redis 副本
+	// 没通过当前实例身份核验(身份戳不等、身份未知、不是主)——它可能回退过,「未见」代表不了 SQL。不放弃,
+	// 等玩家下次登录核验后再判。持续增长说明 Redis 身份变过而大量离线玩家没有再登录,或 login 核验被关掉了。
+	abandonSkipRedisUnverified
 
 	abandonSkipCount
 )
@@ -172,6 +213,7 @@ const (
 var abandonSkipNames = [...]string{
 	"invalid", "located", "locate_error", "recent", "ledger_seen", "ledger_error",
 	"ledger_unknown", "lease_lost", "store_error", "not_candidate", "sql_evidence_behind",
+	"redis_unverified",
 }
 
 var _ = [1]struct{}{}[len(abandonSkipNames)-int(abandonSkipCount)]
@@ -257,6 +299,8 @@ func (l *Loop) abandoner() (Abandoner, bool) {
 		missing = "persisted ledger reader (Loop.Ledger) not attached"
 	case l.cfg.RequireSQLCommit && l.sqlLedger() == nil:
 		missing = "RequireSQLCommit is on but Loop.Ledger cannot read SQL commit evidence"
+	case l.cfg.RequireVerifiedRedisCopy && l.verifiedLedger() == nil:
+		missing = "RequireVerifiedRedisCopy is on but Loop.Ledger cannot report whether the Redis copy is verified"
 	case l.Locator == nil:
 		missing = "player locator (Loop.Locator) not attached"
 	}
@@ -265,6 +309,12 @@ func (l *Loop) abandoner() (Abandoner, bool) {
 			logx.Infof("[AssetOp] Automatic abandon not running: %s", missing)
 		})
 		return nil, false
+	}
+	if !l.cfg.RequireVerifiedRedisCopy {
+		l.abandonUnverifiedOnce.Do(func() {
+			logx.Errorf("[AssetOp] Automatic abandon runs WITHOUT Redis copy verification (RequireVerifiedRedisCopy=false): " +
+				"after a Redis rollback a row already applied in SQL may be abandoned (duplicated or double-refunded asset)")
+		})
 	}
 	return ab, true
 }
@@ -349,9 +399,9 @@ func (l *Loop) judgeAbandon(ctx context.Context, op Op, cutoffMs, nowMs uint64) 
 	return l.judgePlayerBlob(checkCtx, op)
 }
 
-// judgePlayerBlob 是开关关闭时(HEAD 口径)条件 5 的判定:只看 Redis 父键 blob。
+// judgePlayerBlob 是 RequireSQLCommit 关闭时(HEAD 口径)条件 5 的判定:只看 Redis 父键 blob。
 func (l *Loop) judgePlayerBlob(ctx context.Context, op Op) (abandonSkip, Result) {
-	ledger, err := l.Ledger.ReadPersistedLedger(ctx, op.PlayerID)
+	ledger, verified, err := l.readAbandonBlob(ctx, op.PlayerID)
 	if err != nil {
 		logx.Errorf("[AssetOp] Failed to read persisted ledger for abandon check; skipped op_id=%d: %v", op.OpID, err)
 		return abandonSkipLedgerError, Result{}
@@ -364,8 +414,12 @@ func (l *Loop) judgePlayerBlob(ctx context.Context, op Op) (abandonSkip, Result)
 	}
 	switch verdict, state := abandonVerdict(ledger, op); verdict {
 	case ledgerUnseen:
+		if !verified {
+			return skipUnverifiedCopy(op)
+		}
 		return 0, Result{}
 	case ledgerSeen:
+		// 「已见」不看核验:回退只会删掉后来的写,造不出「已见」。
 		return seenForFinalize(ledger, op, false)
 	default:
 		logx.Infof("[AssetOp] Abandon skipped: persisted ledger cannot prove seq unseen op_id=%d stream=%d seq=%d epoch=%d state=%s",
@@ -380,7 +434,8 @@ func (l *Loop) judgePlayerBlob(ctx context.Context, op Op) (abandonSkip, Result)
 // 对应的存盘没有落库(或进了死信),证据停在之前的版本;只读证据判「未见」就放弃并退还对侧,玩家再上线从父键
 // 加载,资产仍在,一物两得(fence-inflight.md F6 (a))。所以:
 //   - SQL 证据已见 → 按证据里的结局正常终结(SQL 已提交,与在线终结同口径);
-//   - SQL 证据确定未见 → 还要 Redis 父键 blob 也确定未见才放弃;blob 已见即证据落后于父键,跳过(sql_evidence_behind);
+//   - SQL 证据确定未见 → 还要 Redis 父键 blob 也确定未见(RequireVerifiedRedisCopy 打开时还要 blob 已核验,否则
+//     redis_unverified)才放弃;blob 已见即证据落后于父键,跳过(sql_evidence_behind);
 //   - 任一侧读失败、缺失或给不出结论 → 跳过,绝不放弃(fail-closed)。
 //
 // 设计里的另一条放行条件「证据 save_seq ≥ 父键 last_save_seq 时单凭证据未见即可」没有实现:GetPlayerAssetOpLedger
@@ -400,13 +455,17 @@ func (l *Loop) judgeWithSQLCommit(ctx context.Context, op Op) (abandonSkip, Resu
 		return abandonSkipLedgerUnknown, Result{}
 	}
 
-	blob, err := l.Ledger.ReadPersistedLedger(ctx, op.PlayerID)
+	// 只核验这一次后读的 blob 就覆盖了先读的证据,理由见文件头「Redis 副本核验」第二条。
+	blob, verified, err := l.readAbandonBlob(ctx, op.PlayerID)
 	if err != nil {
 		logx.Errorf("[AssetOp] Failed to read persisted player blob for abandon check; skipped op_id=%d: %v", op.OpID, err)
 		return abandonSkipLedgerError, Result{}
 	}
 	switch verdict, state := abandonVerdict(blob, op); verdict {
 	case ledgerUnseen:
+		if !verified {
+			return skipUnverifiedCopy(op)
+		}
 		return 0, Result{}
 	case ledgerSeen:
 		// 证据落后于父键:放弃会让对侧退款而玩家下次上线仍拿到资产。要人看:查该玩家的死信与 go/db 证据发布计数。
@@ -419,6 +478,36 @@ func (l *Loop) judgeWithSQLCommit(ctx context.Context, op Op) (abandonSkip, Resu
 			op.OpID, op.Stream, op.Seq, op.StreamEpoch, blob != nil, state)
 		return abandonSkipLedgerUnknown, Result{}
 	}
+}
+
+// readAbandonBlob 读条件 5 用的 Redis 父键 blob,并报告它的「未见」能不能当放弃的证据。
+//
+// RequireVerifiedRedisCopy 打开时只经 VerifiedLedgerReader 读,verified 即「这份副本已核验」;abandoner 已保证
+// Ledger 实现了它,这里再拿不到也按读失败处理(fail-closed),绝不退回不核验的读法。
+// 关闭时走 ReadPersistedLedger,verified 恒为真:闸之前的口径,任何 blob 都可以作证据。
+func (l *Loop) readAbandonBlob(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, bool, error) {
+	if !l.cfg.RequireVerifiedRedisCopy {
+		ledger, err := l.Ledger.ReadPersistedLedger(ctx, playerID)
+		return ledger, true, err
+	}
+	reader := l.verifiedLedger()
+	if reader == nil {
+		return nil, false, errors.New("assetop: RequireVerifiedRedisCopy 打开但 Loop.Ledger 没有实现 VerifiedLedgerReader")
+	}
+	ledger, verified, err := reader.ReadVerifiedPersistedLedger(ctx, playerID)
+	if err != nil {
+		return nil, false, err
+	}
+	return ledger, verified, nil
+}
+
+// skipUnverifiedCopy 是 G5 闸的出口:blob 说「确定未见」,但这份 Redis 副本没通过当前实例身份核验。
+// 不放弃、不终结,还租约后等玩家下次登录(login 核验会刷新身份戳)再判。
+func skipUnverifiedCopy(op Op) (abandonSkip, Result) {
+	logx.Infof("[AssetOp] Abandon skipped: Redis copy not verified against the current instance identity "+
+		"(identity changed since the last login verification, identity unknown, or not master); waiting for the next login op_id=%d stream=%d seq=%d epoch=%d",
+		op.OpID, op.Stream, op.Seq, op.StreamEpoch)
+	return abandonSkipRedisUnverified, Result{}
 }
 
 // ledgerVerdict 是一份已落盘账本对某个 seq 能给出的结论(条件 5)。

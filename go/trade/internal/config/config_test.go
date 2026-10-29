@@ -64,8 +64,8 @@ func TestEtcYamlContractValues(t *testing.T) {
 	if c.MySQL.DBName != data.DatabaseName {
 		t.Errorf("MySQL.DBName = %q, want %q", c.MySQL.DBName, data.DatabaseName)
 	}
-	if !c.ShouldAutoMigrate() {
-		t.Error("本地 dev 应启动期自动建表(Schema.AutoMigrate: true)")
+	if c.ShouldAutoMigrate() {
+		t.Error("本地dev也必须显式迁移，常驻默认仅核对表结构")
 	}
 	// 位置键 player:{id}:location 在共享 Redis 的 DB 0(写者是 C++ scene / scene_manager)。
 	// 段名写错会被 go-zero 当未知键忽略 → Host 空 → Validate 拒绝起服,这里先在测试里点名。
@@ -359,7 +359,7 @@ func TestShouldAutoMigrate(t *testing.T) {
 		v    *bool
 		want bool
 	}{
-		{"没写 = 建表", nil, true},
+		{"没写 = 只读核对", nil, false},
 		{"显式 true", &yes, true},
 		{"显式 false", &no, false},
 	}

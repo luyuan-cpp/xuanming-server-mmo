@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math"
 
+	"shared/currencytype"
+
 	assetpb "proto/common/asset"
 	mailpb "proto/mail"
 )
@@ -22,8 +24,8 @@ func Bundle(attachments *mailpb.MailAttachments, exists func(uint32) bool) (*ass
 	}
 	currencies := map[uint32]bool{}
 	for _, currency := range attachments.Currencies {
-		// CurrencyType的当前权威值为0..2；契约扩展必须同步两版scene及本校验。
-		if currency == nil || len(currency.ProtoReflect().GetUnknown()) != 0 || currency.CurrencyType > 2 || currency.Amount == 0 || currency.Amount > math.MaxInt64 || currencies[currency.CurrencyType] {
+		// 币种按 proto 同源取值表校验(shared/currencytype):写错的值在这里拒绝,scene 才能把不认识的币种判成版本错位。
+		if currency == nil || len(currency.ProtoReflect().GetUnknown()) != 0 || !currencytype.IsKnown(currency.CurrencyType) || currency.Amount == 0 || currency.Amount > math.MaxInt64 || currencies[currency.CurrencyType] {
 			return nil, ErrInvalid
 		}
 		currencies[currency.CurrencyType] = true

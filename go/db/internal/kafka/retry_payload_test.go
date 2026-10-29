@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"testing"
+
+	db_proto "proto/db"
+
+	"google.golang.org/protobuf/proto"
 )
 
 // These tests guard the on-wire retry-queue payload format produced by
@@ -13,6 +17,59 @@ import (
 // that owns the key's serialization), so a silent change here would
 // re-open those regressions without any of the higher-level kafka
 // consumer tests noticing.
+
+// 操作码是跨 C++ / Go 的线缆契约；同时钉住枚举的编号和紧凑编码。
+func TestDBTaskOp_EnumWireEncoding(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		op   db_proto.DBOp
+		wire []byte
+	}{
+		{"read", db_proto.DBOp_DB_OP_READ, []byte{0x18, 0x01}},
+		{"write", db_proto.DBOp_DB_OP_WRITE, []byte{0x18, 0x02}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := proto.Marshal(&db_proto.DBTask{Op: tc.op})
+			if err != nil {
+				t.Fatalf("序列化操作码失败：%v", err)
+			}
+			if !bytes.Equal(raw, tc.wire) {
+				t.Fatalf("操作码编码 = %x，期望 %x", raw, tc.wire)
+			}
+			var task db_proto.DBTask
+			if err := proto.Unmarshal(tc.wire, &task); err != nil {
+				t.Fatalf("解码操作码失败：%v", err)
+			}
+			if task.GetOp() != tc.op {
+				t.Fatalf("解码操作码 = %v，期望 %v", task.GetOp(), tc.op)
+			}
+		})
+	}
+}
+
+func TestDBTaskOp_RetryPayloadPreservesEnum(t *testing.T) {
+	for _, op := range []db_proto.DBOp{db_proto.DBOp_DB_OP_READ, db_proto.DBOp_DB_OP_WRITE} {
+		t.Run(op.String(), func(t *testing.T) {
+			task := &db_proto.DBTask{Key: 42, Op: op, TaskId: "enum-retry", RetryCount: 2,
+				OwnerEpoch: 7, SaveSeq: 9, ReplyInstance: "login-instance"}
+			payload, err := encodeRetryPayload(task, 11, 3, true)
+			if err != nil {
+				t.Fatalf("编码重试失败：%v", err)
+			}
+			seq, partition, hasPartition, raw := unwrapRetryPayload(payload)
+			if seq != 11 || partition != 3 || !hasPartition {
+				t.Fatalf("重试来源丢失：seq=%d partition=%d hasPartition=%v", seq, partition, hasPartition)
+			}
+			var decoded db_proto.DBTask
+			if err := proto.Unmarshal(raw, &decoded); err != nil {
+				t.Fatalf("解码重试失败：%v", err)
+			}
+			if !proto.Equal(task, &decoded) {
+				t.Fatalf("重试任务变化：原任务 %v，解码 %v", task, &decoded)
+			}
+		})
+	}
+}
 
 func TestRetryPayload_RoundTrip(t *testing.T) {
 	cases := []struct {

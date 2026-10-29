@@ -10,8 +10,7 @@
 namespace google::protobuf { class Message; }
 
 // 手工维护的 gRPC 客户端调用契约:tools/proto_generator 的 grpc_async_client / service_header 模板
-// 生成的代码引用这里的类型。设计见 docs/design/grpc-client-deadline-failure-callback.md 与
-// docs/design/grpc-muduo-transport.md §14。
+// 生成的代码引用这里的类型。现行接口与完成契约见 docs/design/grpc-muduo-transport.md §16。
 //
 // 与传输无关:不含任何官方 gRPC 类型。2026-10-15 第 3 批起生成客户端走 muduo_grpc::Channel,第 5 批删除官方运行时。
 
@@ -58,7 +57,7 @@ struct GrpcCallOutcome {
 	const std::string* FindInitialMetadata(std::string_view key) const { return FindGrpcMetadata(initialMetadata, key); }
 };
 
-// 每次调用的完成回调,契约(docs/design/grpc-client-deadline-failure-callback.md「每次调用回调」一节):
+// 每次调用的完成回调,契约(docs/design/grpc-muduo-transport.md §16.1):
 // - 恰好调用一次;只在节点所属 EventLoop 线程调用,从不在 Send 栈内同步调用(本地拒绝也延后投递)。
 // - reply 只在 outcome.ok() 时非空,只在回调期间有效;要留用就拷贝。
 // - done 必填;传入空回调是调用方错误,生成客户端会 LOG_FATAL。

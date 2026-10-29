@@ -7,7 +7,7 @@ PowerShell and shell scripts for common development tasks.
 - 仓库根保留 `dev.bat` 开发菜单，以及转调本目录的 `start-server.cmd` / `start-game.cmd` 薄启动器；维护中的独立工程脚本放在本目录，不把菜单本身误称为无逻辑的薄包装。
 - [tools/scripts](.) is the canonical home for maintained engineering scripts.
 - One-off or retired scripts go to [tools/archived](../archived) instead of staying here.
-- [tools/scripts/third_party](third_party) stores third-party build and maintenance scripts, such as gRPC or future protobuf/redis builds.
+- [tools/scripts/third_party](third_party) stores third-party build and maintenance scripts, 包括独立 Protobuf、BoringSSL、GoogleTest 与 Redis 构建。
 - If a top-level convenience command is needed, keep it as a thin wrapper that forwards into [tools/scripts](.) instead of copying logic.
 - Do not place project-maintained scripts under vendored directories such as [third_party](../../third_party); treat those trees as upstream-owned whenever possible.
 
@@ -48,7 +48,7 @@ Supported commands include:
 - `naming-apply`
 - `third-party-lock-check`（默认只读校验，`-ApplyPatches` 恢复登记补丁）
 - `third-party-zlib-build`（隔离构建 Debug/MDd zlib 并执行上游测试）
-- `third-party-grpc-build`
+- `third-party-protobuf-build`
 - `no-raw-pointer-setup`
 - `iwyu-run`
 - `k8s-*`
@@ -159,7 +159,7 @@ sol2 v3.3.0 的引用 `optional::emplace` 补丁回补上游已有的引用重�
 librdkafka v2.16.0 的补丁同时保留 Windows 工程调整与重入组变参修正：先完成格式化，
 再以 `"%s"` 传递原因，避免读取未初始化的 `va_list` 或将它误传给普通变参函数。
 
-Linux 的 gRPC、curl 与 librdkafka 统一使用 gRPC 固定版本自带的 BoringSSL 头文件及静态归档。
+Linux 的 curl 与 librdkafka 统一使用独立固定提交的 BoringSSL 头文件及静态归档；C++ 不依赖官方 gRPC SDK。
 不要将这些头文件与系统 OpenSSL 库混用。librdkafka 的 BoringSSL 补丁适配密码学随机数、
 HMAC 声明及 PKCS#12 证书、私钥和证书链加载；构建将缺失函数声明视为错误。
 独立 `third_party/openssl` 固定源码版本，本构建流程不安装或使用它。
@@ -203,51 +203,30 @@ Docker builder 保持 `--skip-deps`，复用 CI 已准备的源码和 deps 阶�
 pwsh -File tools/scripts/dev_tools.ps1 -Command third-party-zlib-build -BuildRoot build/third_party/zlib-v1.3.2-dbg -Jobs 1
 ```
 
-### third_party/build_gtest.ps1
+### 独立 C++ 依赖构建
 
-gRPC 关闭上游测试时不安装 GoogleTest。Windows 工程使用 gRPC 固定的 GoogleTest 1.17.0
-源码，单独构建四个静态库，不能保留旧 SDK 中的库代替新构建。
-入口通过 `vswhere` 查找已有工具，默认 MSVC 14.51、Debug `/MDd`、Ninja 串行构建，
-`-BuildRoot` 必须是仓库内全新的 ignored 目录；不下载或安装工具。
-
-```powershell
-pwsh -File tools/scripts/third_party/build_gtest.ps1 -BuildRoot build/third_party/googletest-v1.17.0-dbg
-```
-
-`install/lib/` 中的 `gtest.lib`、`gtest_main.lib`、`gmock.lib`、`gmock_main.lib`
-用于现有工程的根 `lib/`。发布前先归档旧库，使用同一构建的完整四库，保持头文件与库版本一致。
-
-### third_party/build_grpc.ps1
-
-Canonical Windows PowerShell entrypoint for building vendored gRPC from [third_party/grpc](../../third_party/grpc).
+Protobuf 35.1、Abseil、GoogleTest 1.17.0、BoringSSL 都是独立子模块，提交固定于
+`third_party/releases.lock.json`。Protobuf 自带 utf8_range；不再构建官方 gRPC、插件或官方桩。
+构建入口只使用已有 MSVC 14.51、CMake 和 VS / Ninja，串行执行，不安装或升级工具。
+MSVC 缺少英文诊断包时自动选择已有 VS 生成器，避免 Ninja 的本地化依赖前缀转码失真；
+VS / Ninja 使用不同构建缓存目录，安装前缀保持相同。
 
 ```powershell
-pwsh -File tools/scripts/third_party/build_grpc.ps1
+# zlib 安装目录需与目标配置、架构一致；下面复用已有的 Debug 安装。
+pwsh -File tools/scripts/dev_tools.ps1 -Command third-party-protobuf-build -Configuration Debug -ZlibInstallRoot build/third_party/zlib-v1.3.2-dbg/install
+pwsh -File tools/scripts/dev_tools.ps1 -Command third-party-boringssl-build -Configuration Debug
+pwsh -File tools/scripts/third_party/build_gtest.ps1 -Configuration Debug
 ```
 
-Features:
+默认 `x64 Debug` 使用 `/MDd`，安装前缀分别是各子模块内的 `install_vs2026_dbg`；
+`-Configuration Release` 使用 `/MD` 与 `install_vs2026_rel`；`-Architecture x86` 使用
+`install_vs2026_x86_dbg/rel`。不能跨配置或架构混用库。Protobuf 安装包含同批 Abseil 和 utf8 库。
+`-BuildRoot` 可将构建及安装放进仓内 ignored 路径；它不会自动发布到默认前缀。
 
-- Auto-detects Visual Studio / MSVC with `vswhere`
-- 只使用已有 CMake/Ninja；缺少工具时明确失败，不自动安装或升级
-- Builds both Release and Debug into `third_party/grpc/install_vs2026` and `third_party/grpc/install_vs2026_dbg`
-- `dev_tools.ps1` 原样透传显式指定的 `-BuildRoot` 与 `-ZlibInstallRoot`；后者指向上述 zlib 的 `install/`，确保 gRPC 使用本轮构建的固定 zlib。
-
-上述 zlib 入口只生成 Debug 库，传给 gRPC 时必须明确只构建 Debug；
-默认同时构建 Release 会因缺少 `zlibstatic.lib` 在配置前拒绝，不能用 Debug 库代替。
-
-```powershell
-pwsh -File tools/scripts/dev_tools.ps1 -Command third-party-grpc-build '-BuildRelease:$false' '-BuildDebug:$true' -UseVSGenerator -BuildRoot build/third_party/grpc-upgrade-dbg -ZlibInstallRoot build/third_party/zlib-v1.3.2-dbg/install -Jobs 1
-```
-
-Legacy batch launcher is also available at [tools/scripts/third_party/build_grpc_vs2026_v145.bat](third_party/build_grpc_vs2026_v145.bat).
-
-Legacy thin wrapper moved to: [tools/archived/build_grpc.ps1](../archived/build_grpc.ps1)
-
-VS Code tasks are available in [/.vscode/tasks.json](../../.vscode/tasks.json):
-
-- `third_party: grpc build`
-- `third_party: grpc build release`
-- `third_party: grpc build debug`
+Linux 由 `tools/archived/setup_dependencies.sh` 先准备 zlib，再调用
+`third_party/build_linux_sdk.sh` 构建独立序列化与 TLS 依赖；Docker 使用主仓子模块源码，
+不再 clone 官方 gRPC 仓库。SDK Debug 来源清单升级为 schema 2，字段 `dependencySource`
+必须完整包含独立 Protobuf、Abseil、BoringSSL 的提交、gitlink 和文件摘要；旧 schema 1 不接受。
 
 #### Commands
 
@@ -261,8 +240,8 @@ pwsh -File dev_tools.ps1 -Command proto-gen-build
 # Run proto-gen with default config
 pwsh -File dev_tools.ps1 -Command proto-gen-run
 
-# Build vendored gRPC via the canonical third-party script
-pwsh -File dev_tools.ps1 -Command third-party-grpc-build
+# 构建独立 Protobuf
+pwsh -File dev_tools.ps1 -Command third-party-protobuf-build
 
 # Run include cleaner (auto tool selection)
 pwsh -File dev_tools.ps1 -Command iwyu-run -NodePath cpp/nodes/scene
@@ -276,8 +255,8 @@ pwsh -File dev_tools.ps1 -Command iwyu-run -NodePath cpp/nodes/scene -ChangedOnl
 # Batch scan multiple nodes
 pwsh -File dev_tools.ps1 -Command iwyu-run -NodePath cpp/nodes/scene,cpp/nodes/gate -ChangedOnly
 
-# Build vendored gRPC from VS Code Tasks
-# Run Task -> third_party: grpc build
+# 在 VS Code 中构建独立 Protobuf
+# Run Task -> third_party: protobuf build
 
 # Run proto-gen with custom config
 pwsh -File dev_tools.ps1 -Command proto-gen-run -ConfigPath "<path-to-config>"
@@ -306,8 +285,8 @@ pwsh -File dev_tools.ps1 -Command k8s-zone-down -ZoneName yesterday
 pwsh -File dev_tools.ps1 -Command k8s-all-status -ZonesConfigPath deploy/k8s/zones.yaml
 pwsh -File dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath deploy/k8s/zones.yaml
 
-# gRPC release-only rebuild with explicit flags
-pwsh -File dev_tools.ps1 -Command third-party-grpc-build '-BuildDebug:$false' -Clean -Jobs 1
+# 独立 Release 构建需匹配的 Release zlib
+pwsh -File dev_tools.ps1 -Command third-party-protobuf-build -Configuration Release -Clean -Jobs 1 -ZlibInstallRoot "<Release zlib prefix>"
 
 # Preflight/build/push/release runtime image for k8s
 pwsh -File dev_tools.ps1 -Command k8s-stage-runtime -BinarySourceRoot D:/linux-build/bin -ZoneInfoSource bin/zoneinfo -TableSource generated/tables
@@ -416,7 +395,7 @@ pwsh -File dev_tools.ps1 -Command proto-gen-run -ConfigPath ../proto_generator/p
 
 `build_docker_cpp_debug.py` 使用本机已验证 SDK 和 `Debug/-O0`，SDK 来源及依赖守卫位于忽略目录 `build/docker-debug-current/cpp-toolchain.json`；依赖源码变化时停止，不复用不匹配 SDK。`build_docker_go_debug.py` 使用当前 Go 1.27.2、`all=-N -l` 与固定 Delve v1.27.2，逐服务串行构建。`build_docker_java_debug.py` 使用已有 JDK 23/Maven 离线单线程执行测试、打包并核验行号表。三个底层构建器只输出本地镜像及 `--output/result.json`，不自行更新运行栈。
 
-`docker_cpp_sdk_guard.py` 收集 SDK 依赖及 gRPC 的实际文件集合；`docker_debug_manifest.py` 在容器构建中核验冻结源码、维护按 SHA 变化失效的对象缓存，并登记最终编译参数、节点与调试符号摘要。
+`docker_cpp_sdk_guard.py` 收集 SDK 及独立依赖的实际文件集合；`docker_debug_manifest.py` 在容器构建中核验冻结源码、维护按 SHA 变化失效的对象缓存，并登记最终编译参数、节点与调试符号摘要。
 
 VS Code 的“终端 → 运行任务”提供对应的“Docker：重编并更新”任务。“运行和调试”提供 C++ 三节点、Go 七服务及 Java Gateway 的附加配置，每项附加前执行源码检查。也可执行 `python tools/scripts/rebuild_docker_debug.py check --services scene` 单独检查。Go 普通服务不编译的 `*_test.go` 不参与运行源码一致性判定。完整操作与端口见 `docs/design/docker_k8s_build_deploy.md`。
 

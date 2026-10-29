@@ -38,7 +38,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <ConformanceMode>true</ConformanceMode>
       <PreprocessorDefinitions>ENTT_ID_TYPE=uint64_t;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\..\third_party;$(MSBuildThisFileDirectory)..\..\..\third_party\grpc\third_party\abseil-cpp;$(MSBuildThisFileDirectory)..\..\libs\engine;$(MSBuildThisFileDirectory)..\..\libs\engine\core;$(MSBuildThisFileDirectory)..\..\..\third_party\grpc\third_party\googletest\googletest\include;$(MSBuildThisFileDirectory)..\..\..\third_party\grpc\third_party\googletest\googletest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\..\third_party;$(MSBuildThisFileDirectory)..\..\..\third_party\abseil-cpp;$(MSBuildThisFileDirectory)..\..\libs\engine;$(MSBuildThisFileDirectory)..\..\libs\engine\core;$(MSBuildThisFileDirectory)..\..\..\third_party\googletest\googletest\include;$(MSBuildThisFileDirectory)..\..\..\third_party\googletest\googletest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary Condition="'$(Configuration)'=='Debug'">MultiThreadedDebugDLL</RuntimeLibrary>
       <RuntimeLibrary Condition="'$(Configuration)'=='Release'">MultiThreadedDLL</RuntimeLibrary>
       <PreprocessorDefinitions Condition="'$(Configuration)'=='Debug'">_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -54,8 +54,8 @@
   <ItemGroup>
     <ClCompile Include="ecs_context_test.cpp" />
     <ClCompile Include="..\..\libs\engine\thread_context\ecs_context.cpp" />
-    <ClCompile Include="..\..\..\third_party\grpc\third_party\googletest\googletest\src\gtest-all.cc" />
-    <ClCompile Include="..\..\..\third_party\grpc\third_party\googletest\googletest\src\gtest_main.cc" />
+    <ClCompile Include="..\..\..\third_party\googletest\googletest\src\gtest-all.cc" />
+    <ClCompile Include="..\..\..\third_party\googletest\googletest\src\gtest_main.cc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

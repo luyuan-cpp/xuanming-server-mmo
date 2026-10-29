@@ -41,6 +41,7 @@
 #include "proto/common/base/user_accounts.pb.h"
 #include "proto/common/base/service_call_auth.pb.h"
 #include "proto/common/base/role_admission.pb.h"
+#include "proto/common/database/player_cache.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -753,6 +754,7 @@ enum AccountRoleFreezeEvidenceKind : int {
   ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_UNSPECIFIED = 0,
   ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_NO_ADMISSION = 1,
   ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_SCENE = 2,
+  ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_INITIAL_COMMIT = 3,
   AccountRoleFreezeEvidenceKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   AccountRoleFreezeEvidenceKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -763,11 +765,11 @@ extern const uint32_t AccountRoleFreezeEvidenceKind_internal_data_[];
 inline constexpr AccountRoleFreezeEvidenceKind AccountRoleFreezeEvidenceKind_MIN =
     static_cast<AccountRoleFreezeEvidenceKind>(0);
 inline constexpr AccountRoleFreezeEvidenceKind AccountRoleFreezeEvidenceKind_MAX =
-    static_cast<AccountRoleFreezeEvidenceKind>(2);
+    static_cast<AccountRoleFreezeEvidenceKind>(3);
 [[nodiscard]] inline bool AccountRoleFreezeEvidenceKind_IsValid(int value) {
-  return 0 <= value && value <= 2;
+  return 0 <= value && value <= 3;
 }
-inline constexpr int AccountRoleFreezeEvidenceKind_ARRAYSIZE = 2 + 1;
+inline constexpr int AccountRoleFreezeEvidenceKind_ARRAYSIZE = 3 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 AccountRoleFreezeEvidenceKind_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(AccountRoleFreezeEvidenceKind) {
@@ -782,7 +784,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& AccountRoleFreezeEvidenceKind_Name(AccountRoleFreezeEvidenceKind value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<AccountRoleFreezeEvidenceKind_descriptor, 0, 2>(
+  return ::google::protobuf::internal::NameOfDenseEnum<AccountRoleFreezeEvidenceKind_descriptor, 0, 3>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool AccountRoleFreezeEvidenceKind_Parse(
@@ -7251,6 +7253,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerAssetOpLedgerRequest final
   enum : int {
     kPlayerIdFieldNumber = 1,
     kRequireSqlCommitFieldNumber = 2,
+    kVerifyRedisCopyFieldNumber = 3,
   };
   // uint64 player_id = 1;
   void clear_player_id() ;
@@ -7272,11 +7275,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerAssetOpLedgerRequest final
   void _internal_set_require_sql_commit(bool value);
 
   public:
+  // bool verify_redis_copy = 3;
+  void clear_verify_redis_copy() ;
+  [[nodiscard]] bool verify_redis_copy() const;
+  void set_verify_redis_copy(bool value);
+
+  private:
+  bool _internal_verify_redis_copy() const;
+  void _internal_set_verify_redis_copy(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:data_service.GetPlayerAssetOpLedgerRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -7307,6 +7320,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerAssetOpLedgerRequest final
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t player_id_;
     bool require_sql_commit_;
+    bool verify_redis_copy_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -18012,213 +18026,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AccountRoleTradeReceipt final : pub
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AccountDirectoryResponse final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:data_service.AccountDirectoryResponse) */ {
- public:
-  inline AccountDirectoryResponse() : AccountDirectoryResponse(nullptr) {}
-  ~AccountDirectoryResponse() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(AccountDirectoryResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(AccountDirectoryResponse));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr AccountDirectoryResponse(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline AccountDirectoryResponse(const AccountDirectoryResponse& from) : AccountDirectoryResponse(nullptr, from) {}
-  inline AccountDirectoryResponse(AccountDirectoryResponse&& from) noexcept : AccountDirectoryResponse(nullptr, ::std::move(from)) {}
-  inline AccountDirectoryResponse& operator=(const AccountDirectoryResponse& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline AccountDirectoryResponse& operator=(AccountDirectoryResponse&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const AccountDirectoryResponse& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AccountDirectoryResponse>(&AccountDirectoryResponse_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 0;
-  friend void swap(AccountDirectoryResponse& a, AccountDirectoryResponse& b) { a.Swap(&b); }
-  inline void Swap(AccountDirectoryResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(AccountDirectoryResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] AccountDirectoryResponse* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<AccountDirectoryResponse>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const AccountDirectoryResponse& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const AccountDirectoryResponse& from) { AccountDirectoryResponse::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(AccountDirectoryResponse* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "data_service.AccountDirectoryResponse"; }
-
-  explicit AccountDirectoryResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  AccountDirectoryResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AccountDirectoryResponse& from);
-  AccountDirectoryResponse(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AccountDirectoryResponse&& from) noexcept
-      : AccountDirectoryResponse(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kPlayersFieldNumber = 1,
-  };
-  // .AccountSimplePlayerList players = 1;
-  [[nodiscard]] bool has_players()
-      const;
-  void clear_players() ;
-  [[nodiscard]] const ::AccountSimplePlayerList& players() const;
-  [[nodiscard]] ::AccountSimplePlayerList* PROTOBUF_NULLABLE release_players();
-  ::AccountSimplePlayerList* PROTOBUF_NONNULL mutable_players();
-  void set_allocated_players(::AccountSimplePlayerList* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_players(::AccountSimplePlayerList* PROTOBUF_NULLABLE value);
-  ::AccountSimplePlayerList* PROTOBUF_NULLABLE unsafe_arena_release_players();
-
-  private:
-  const ::AccountSimplePlayerList& _internal_players() const;
-  ::AccountSimplePlayerList* PROTOBUF_NONNULL _internal_mutable_players();
-
-  public:
-  // @@protoc_insertion_point(class_scope:data_service.AccountDirectoryResponse)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
-                          1, 0,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const AccountDirectoryResponse& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::AccountSimplePlayerList* PROTOBUF_NULLABLE players_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto;
-};
-// -------------------------------------------------------------------
-
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerInboxLedgerResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:data_service.GetPlayerInboxLedgerResponse) */ {
  public:
@@ -18589,6 +18396,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerAssetOpLedgerResponse fina
     kLedgerFieldNumber = 2,
     kFoundFieldNumber = 1,
     kSqlCommittedFieldNumber = 3,
+    kRedisCopyVerifiedFieldNumber = 4,
   };
   // .PlayerAssetOpLedgerComp ledger = 2;
   [[nodiscard]] bool has_ledger()
@@ -18626,11 +18434,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerAssetOpLedgerResponse fina
   void _internal_set_sql_committed(bool value);
 
   public:
+  // bool redis_copy_verified = 4;
+  void clear_redis_copy_verified() ;
+  [[nodiscard]] bool redis_copy_verified() const;
+  void set_redis_copy_verified(bool value);
+
+  private:
+  bool _internal_redis_copy_verified() const;
+  void _internal_set_redis_copy_verified(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:data_service.GetPlayerAssetOpLedgerResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -18662,6 +18480,232 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerAssetOpLedgerResponse fina
     ::PlayerAssetOpLedgerComp* PROTOBUF_NULLABLE ledger_;
     bool found_;
     bool sql_committed_;
+    bool redis_copy_verified_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AccountDirectoryResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:data_service.AccountDirectoryResponse) */ {
+ public:
+  inline AccountDirectoryResponse() : AccountDirectoryResponse(nullptr) {}
+  ~AccountDirectoryResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AccountDirectoryResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AccountDirectoryResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AccountDirectoryResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AccountDirectoryResponse(const AccountDirectoryResponse& from) : AccountDirectoryResponse(nullptr, from) {}
+  inline AccountDirectoryResponse(AccountDirectoryResponse&& from) noexcept : AccountDirectoryResponse(nullptr, ::std::move(from)) {}
+  inline AccountDirectoryResponse& operator=(const AccountDirectoryResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AccountDirectoryResponse& operator=(AccountDirectoryResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AccountDirectoryResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AccountDirectoryResponse>(&AccountDirectoryResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 0;
+  friend void swap(AccountDirectoryResponse& a, AccountDirectoryResponse& b) { a.Swap(&b); }
+  inline void Swap(AccountDirectoryResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AccountDirectoryResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AccountDirectoryResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<AccountDirectoryResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const AccountDirectoryResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const AccountDirectoryResponse& from) { AccountDirectoryResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AccountDirectoryResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "data_service.AccountDirectoryResponse"; }
+
+  explicit AccountDirectoryResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AccountDirectoryResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AccountDirectoryResponse& from);
+  AccountDirectoryResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AccountDirectoryResponse&& from) noexcept
+      : AccountDirectoryResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayersFieldNumber = 1,
+    kInitialPlayerDataFieldNumber = 2,
+  };
+  // .AccountSimplePlayerList players = 1;
+  [[nodiscard]] bool has_players()
+      const;
+  void clear_players() ;
+  [[nodiscard]] const ::AccountSimplePlayerList& players() const;
+  [[nodiscard]] ::AccountSimplePlayerList* PROTOBUF_NULLABLE release_players();
+  ::AccountSimplePlayerList* PROTOBUF_NONNULL mutable_players();
+  void set_allocated_players(::AccountSimplePlayerList* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_players(::AccountSimplePlayerList* PROTOBUF_NULLABLE value);
+  ::AccountSimplePlayerList* PROTOBUF_NULLABLE unsafe_arena_release_players();
+
+  private:
+  const ::AccountSimplePlayerList& _internal_players() const;
+  ::AccountSimplePlayerList* PROTOBUF_NONNULL _internal_mutable_players();
+
+  public:
+  // .PlayerAllData initial_player_data = 2;
+  [[nodiscard]] bool has_initial_player_data()
+      const;
+  void clear_initial_player_data() ;
+  [[nodiscard]] const ::PlayerAllData& initial_player_data() const;
+  [[nodiscard]] ::PlayerAllData* PROTOBUF_NULLABLE release_initial_player_data();
+  ::PlayerAllData* PROTOBUF_NONNULL mutable_initial_player_data();
+  void set_allocated_initial_player_data(::PlayerAllData* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_initial_player_data(::PlayerAllData* PROTOBUF_NULLABLE value);
+  ::PlayerAllData* PROTOBUF_NULLABLE unsafe_arena_release_initial_player_data();
+
+  private:
+  const ::PlayerAllData& _internal_initial_player_data() const;
+  ::PlayerAllData* PROTOBUF_NONNULL _internal_mutable_initial_player_data();
+
+  public:
+  // @@protoc_insertion_point(class_scope:data_service.AccountDirectoryResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AccountDirectoryResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::AccountSimplePlayerList* PROTOBUF_NULLABLE players_;
+    ::PlayerAllData* PROTOBUF_NULLABLE initial_player_data_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -18775,6 +18819,99 @@ inline void AccountDirectoryResponse::set_allocated_players(::AccountSimplePlaye
 
   _impl_.players_ = reinterpret_cast<::AccountSimplePlayerList*>(value);
   // @@protoc_insertion_point(field_set_allocated:data_service.AccountDirectoryResponse.players)
+}
+
+// .PlayerAllData initial_player_data = 2;
+inline bool AccountDirectoryResponse::has_initial_player_data() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.initial_player_data_ != nullptr);
+  return value;
+}
+inline const ::PlayerAllData& AccountDirectoryResponse::_internal_initial_player_data() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::PlayerAllData* p = _impl_.initial_player_data_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::PlayerAllData>(&::PlayerAllData_globals_);
+}
+inline const ::PlayerAllData& AccountDirectoryResponse::initial_player_data() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:data_service.AccountDirectoryResponse.initial_player_data)
+  return _internal_initial_player_data();
+}
+inline void AccountDirectoryResponse::unsafe_arena_set_allocated_initial_player_data(
+    ::PlayerAllData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.initial_player_data_);
+  }
+  _impl_.initial_player_data_ = reinterpret_cast<::PlayerAllData*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:data_service.AccountDirectoryResponse.initial_player_data)
+}
+inline ::PlayerAllData* PROTOBUF_NULLABLE AccountDirectoryResponse::release_initial_player_data() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::PlayerAllData* released = _impl_.initial_player_data_;
+  _impl_.initial_player_data_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::PlayerAllData* PROTOBUF_NULLABLE AccountDirectoryResponse::unsafe_arena_release_initial_player_data() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:data_service.AccountDirectoryResponse.initial_player_data)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::PlayerAllData* temp = _impl_.initial_player_data_;
+  _impl_.initial_player_data_ = nullptr;
+  return temp;
+}
+inline ::PlayerAllData* PROTOBUF_NONNULL AccountDirectoryResponse::_internal_mutable_initial_player_data() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.initial_player_data_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::PlayerAllData>(GetArena());
+    _impl_.initial_player_data_ = reinterpret_cast<::PlayerAllData*>(p);
+  }
+  return _impl_.initial_player_data_;
+}
+inline ::PlayerAllData* PROTOBUF_NONNULL AccountDirectoryResponse::mutable_initial_player_data()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::PlayerAllData* _msg = _internal_mutable_initial_player_data();
+  // @@protoc_insertion_point(field_mutable:data_service.AccountDirectoryResponse.initial_player_data)
+  return _msg;
+}
+inline void AccountDirectoryResponse::set_allocated_initial_player_data(::PlayerAllData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.initial_player_data_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.initial_player_data_ = reinterpret_cast<::PlayerAllData*>(value);
+  // @@protoc_insertion_point(field_set_allocated:data_service.AccountDirectoryResponse.initial_player_data)
 }
 
 // -------------------------------------------------------------------
@@ -29319,6 +29456,30 @@ inline void GetPlayerAssetOpLedgerRequest::_internal_set_require_sql_commit(bool
   _impl_.require_sql_commit_ = value;
 }
 
+// bool verify_redis_copy = 3;
+inline void GetPlayerAssetOpLedgerRequest::clear_verify_redis_copy() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.verify_redis_copy_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool GetPlayerAssetOpLedgerRequest::verify_redis_copy() const {
+  // @@protoc_insertion_point(field_get:data_service.GetPlayerAssetOpLedgerRequest.verify_redis_copy)
+  return _internal_verify_redis_copy();
+}
+inline void GetPlayerAssetOpLedgerRequest::set_verify_redis_copy(bool value) {
+  _internal_set_verify_redis_copy(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:data_service.GetPlayerAssetOpLedgerRequest.verify_redis_copy)
+}
+inline bool GetPlayerAssetOpLedgerRequest::_internal_verify_redis_copy() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.verify_redis_copy_;
+}
+inline void GetPlayerAssetOpLedgerRequest::_internal_set_verify_redis_copy(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.verify_redis_copy_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // GetPlayerAssetOpLedgerResponse
@@ -29462,6 +29623,30 @@ inline bool GetPlayerAssetOpLedgerResponse::_internal_sql_committed() const {
 inline void GetPlayerAssetOpLedgerResponse::_internal_set_sql_committed(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sql_committed_ = value;
+}
+
+// bool redis_copy_verified = 4;
+inline void GetPlayerAssetOpLedgerResponse::clear_redis_copy_verified() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.redis_copy_verified_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool GetPlayerAssetOpLedgerResponse::redis_copy_verified() const {
+  // @@protoc_insertion_point(field_get:data_service.GetPlayerAssetOpLedgerResponse.redis_copy_verified)
+  return _internal_redis_copy_verified();
+}
+inline void GetPlayerAssetOpLedgerResponse::set_redis_copy_verified(bool value) {
+  _internal_set_redis_copy_verified(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:data_service.GetPlayerAssetOpLedgerResponse.redis_copy_verified)
+}
+inline bool GetPlayerAssetOpLedgerResponse::_internal_redis_copy_verified() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.redis_copy_verified_;
+}
+inline void GetPlayerAssetOpLedgerResponse::_internal_set_redis_copy_verified(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.redis_copy_verified_ = value;
 }
 
 // -------------------------------------------------------------------

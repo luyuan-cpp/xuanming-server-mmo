@@ -1,5 +1,19 @@
 # 新号首次进场免冷读:建角时写入 PlayerAllData 种子
 
+> **2026-10-23 安全合同后继（实现与验证中）**：下文保留原缓存种子方案的历史依据。当前以本节为准：正式建角必须先在同一 TiDB 事务中提交账号角色目录及权威落点的两张玩家 SQL 初始行；缓存种子只能在该事务成功后，由本次严格新建的提交回执产生。尚未取得当前编译、完整测试与真实 TiDB 证据，不表示本节已验证完成。
+
+## 建角初始持久提交
+
+- 初始版本 `(owner_epoch=1, save_seq=1)` 是每个严格全新 ID 的无 actor 持久提交，不能由普通存盘、导入、修复、恢复或转让补发。它不授予场景写权限。建角的目录首次 INSERT 与两张玩家行的严格 INSERT 共用全局权威池的同一个 `sql.Tx`；任一行已存在、权威路由缺失或冻结、落点越出白名单、权限或提交失败，全部回滚，不覆盖原件。
+- 锁顺序为账号目录、路由可写保护、正式中性合服分片与完整主键的权威路由、角色唯一归属、第一张玩家行、第二张玩家行。落点只由被锁的 SQL 路由和 `placement.StoreDBName` 派生；跨 schema 仍用此事务所在的同一物理连接，禁止另开落点连接拼成两阶段提交。
+- `account_role.initial_player_commit=1` 只与本次目录和双行严格新建在同一事务产生，旧行正式迁移默认 0；不从任意旧/导入/恢复的 `1:1` 数字倒推资格。正常 global 装配固定要求初始提交，`RequireTiDB` 探针、`RoleTradeSQLProof` 和 dev/test 模式均不关闭此安全语义；只有显式 `LegacyNonGlobal` 构造器不发此回执。
+- 无 actor 的角色交易使用独立 `INITIAL_COMMIT` 证据：必须完整 P、0 required floor、0 holders、目录标记 1 / owner revision 1 及双 SQL 完整初始 payload；不能伪成 `NO_ADMISSION(0:0)` 或 SCENE。已有 closed admissions 的历史下限仍保留。
+- 目录事务只有一次 Begin/Commit，没有自动重试；每次 action 清空临时初始回执，Commit 未确认时不返回。Login 只能经原 Lookup 恢复目录成功，不能由此补发缓存种子。
+- 默认关闭 `NewPlayerSeed` 时，首次登录强读两张实际 SQL 行，沿现有 `Reconcile/AdoptSQL` 写完整父快照、`LastSaveSeq=1`、pending 和两表 ACK，并将 owner 地板抬到 1。正式首任 actor 随后仍只由 SceneManager 的既有 INCR 铸为 2；Login 和 C++ 不另行 INCR。恢复只抬地板，不降低已铸出的较高 owner。
+- 打开 `NewPlayerSeed` 时保留首次进场免 Kafka 冷读的优化，但种子移到正式 SQL 提交之后。仅本次新建成功回执可写包含完整初始版本的父快照、屏障和 owner 地板；已有目录幂等、未知提交结果及目录回读均不补发该回执。迟到种子遇到非初始父快照、较高 owner 或已推进屏障时不写，不能补偿删除已经提交的角色或释放其在役名字。禁止继续使用 `LastSaveSeq=0` 的已核验快路径冒充持久基底。
+- 任一玩家 SQL 回包的 `Data` 真正缺失均拒绝，不能先填 `player_id` 骨架再称它是已有初始行。目录重放、Import、Repair、Restore、转让及墓碑均不重建缺行。首存前失败可以从仍完整的初始提交恢复；历史任一行丢失仍 fail-closed。该方案不声称检测全套 SQL 原件同时回档至同一旧快照。
+- 验证必须覆盖事务全回滚、并发同 ID、响应丢失、迟到 seed、开关两种模式、初始提交到首任 actor 的衔接、首存前路由失败后保持较高 owner，以及首存后删除任一行仍拒绝。原 §7 的 L-14 开关对照和 p99/读量观测要求保留；未运行时不宣称性能改善。
+
 > **状态**:提案(开服准备 L-05 / G3),2026-10-12 起草,等负责人按 §10 拍板。2026-10-13 已按 §10 的默认值落码(开关默认关,见 §13);同日三视角评审的修复见 §13.1。没有编译、测试或压测,按 AGENTS.md §10.1 交 Codex 验证。
 > **依据**:只读核对代码、配置与文档,HEAD `73b852f32`。`go/db/internal/kafka/key_ordered_consumer.go`、`tools/scripts/k8s_deploy.ps1`、`docs/design/player-storage-placement.md`、`docs/design/zone_data_rollback.md` 有他人未提交的改动,按工作区行号引用;其余文件工作区与 HEAD 相同。
 > **2026-10-16 更正**:同日 `redis_client.h` 删去两段存盘脚本里的 SADD、普通脚本改名并加注释,该文件行号整体下移;本文对 `redis_client.h` 的行号引用改为按符号(常量 / 函数名)引用,其余文件的行号仍是上述 HEAD 快照。
@@ -419,7 +433,7 @@ go test ./... -count=1
 
 | 条目 | 处置 | 文件 |
 |---|---|---|
-| G3-compile-1 | `chainBudget` 改回 5 分钟。它是被误带进提交的改动,与 `login.yaml:9` 的注释、`grpc-client-deadline-failure-callback.md` 重新一致 | `entergamelogic.go` |
+| G3-compile-1 | `chainBudget` 改回 5 分钟。它是被误带进提交的改动,与 `login.yaml:9` 的注释、[历史客户端设计](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md) 重新一致 | `entergamelogic.go` |
 | G3-consistency-3 | 池满(PreloadPool 满、链未启动)计 `entergame_total{result="pool_saturated"}`,只计数,不进耗时直方图;起服由 `PrimeEnterGameMetrics` 预置为 0;汇总脚本 EnterGame 表加 pool_saturated 列,缺序列打印 n/a | `entergamelogic.go`、`clientplayerlogin/metrics.go`、`login.go`、`stress_summarize.ps1`、`test_stress_summarize.ps1`、`login.yaml`、本文 §6 / §7 |
 | G3-consistency-4 | 建角锁的释放改用脱离请求 ctx 的 1s 预算(`createLockReleaseTimeout`) | `createplayerlogic.go` |
 | G3-consistency-1 | 汇总脚本 CreatePlayer stages 表加 seed 列,五个阶段 | `stress_summarize.ps1`、`test_stress_summarize.ps1` |

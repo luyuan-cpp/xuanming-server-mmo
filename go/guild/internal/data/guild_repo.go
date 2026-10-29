@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"shared/drainproof"
 	"strconv"
 	"strings"
 	"sync"
@@ -122,12 +123,15 @@ type MemberData struct {
 // Read path:  Redis → (miss) → singleflight → MySQL → write-back Redis
 // Write path: Redis + MySQL (sync)
 type GuildRepo struct {
-	rdb            *redis.Client
-	db             *sql.DB
-	defaultTTL     time.Duration
-	cacheLoadMu    sync.Mutex
-	roleAuthority  string
-	matchAuthority string
+	publicationMu    sync.Mutex
+	publicationRole  *drainproof.Session
+	publicationOwner *drainproof.Session
+	rdb              *redis.Client
+	db               *sql.DB
+	defaultTTL       time.Duration
+	cacheLoadMu      sync.Mutex
+	roleAuthority    string
+	matchAuthority   string
 }
 
 func NewGuildRepo(rdb *redis.Client, db *sql.DB, defaultTTL time.Duration) *GuildRepo {
@@ -937,4 +941,51 @@ func parseRankScore(raw any) (int64, error) {
 	}
 	score, err := strconv.ParseFloat(text, 64)
 	return int64(score), err
+}
+
+// BindPublication 由实际服务或工具装配同 boot 的 RELAY/MAINTENANCE 角色；必须在交付 repo 前调用。
+func (r *GuildRepo) BindPublication(role *drainproof.Session) error {
+	r.publicationMu.Lock()
+	defer r.publicationMu.Unlock()
+	if role == nil || r.publicationRole != nil {
+		return drainproof.ErrHold
+	}
+	r.publicationRole = role
+	r.publicationOwner = drainproof.New()
+	return nil
+}
+
+// ClosePublication 必须在所有能发起 repo 调用的入口已关闭并 join 后调用。
+// 私有 owner 关闸不关闭共享角色；已接纳的重试仍完成，调用方把摘要合入自己的正式角色前沿。
+func (r *GuildRepo) ClosePublication(ctx context.Context) ([]byte, error) {
+	r.publicationMu.Lock()
+	owner := r.publicationOwner
+	r.publicationMu.Unlock()
+	if owner == nil {
+		return nil, drainproof.ErrHold
+	}
+	owner.CloseAdmission()
+	return owner.SettledDigest(ctx)
+}
+
+func (r *GuildRepo) beginPublication() (finish func(), hold func(), err error) {
+	r.publicationMu.Lock()
+	owner, role := r.publicationOwner, r.publicationRole
+	r.publicationMu.Unlock()
+	// 旧未装配构造保留原业务行为，但 ClosePublication 不为其生成正式收据。
+	if owner == nil || role == nil {
+		return func() {}, func() {}, nil
+	}
+	roleFinish, err := role.Enter()
+	if err != nil {
+		role.Hold()
+		return nil, nil, err
+	}
+	ownerFinish, err := owner.Enter()
+	if err != nil {
+		role.Hold()
+		roleFinish()
+		return nil, nil, err
+	}
+	return func() { ownerFinish(); roleFinish() }, func() { owner.Hold(); role.Hold() }, nil
 }

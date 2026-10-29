@@ -7,12 +7,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"os"
+	"shared/authoritysql"
 	"sort"
 	"strings"
 
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 	"match/internal/config"
+	battlepb "proto/battle"
 	pb "proto/match"
 	"schemamigrate"
 	"shared/roleidentity"
@@ -30,11 +32,20 @@ type Store struct {
 }
 
 const ticketColumns = "player_id,ticket,request_id,mode,config_id,team_size,state,enqueued_ms,not_before_ms,zone_id,rating_centi,formation_id,team_id,network_profile,expires_ms,selected_region,preferred_region,owner_account,owner_revision"
-const formationColumns = "battle_id,operation_id,state,physical_region,target_node_id,target_instance_id,target_endpoint,mode,config_id,members,create_request,created_ms,deadline_ms,retry_at_ms,activity_context,requeue_on_failure,prepared"
+const formationColumns = "battle_id,operation_id,state,physical_region,target_node_id,target_instance_id,target_endpoint,mode,config_id,members,create_request,created_ms,deadline_ms,retry_at_ms,activity_context,requeue_on_failure,prepared,outcome_protocol_version,preflight_supported_version,preflight_instance_id,adopted_outcome_protocol_version,adopted_outcome_observed"
 
 var ErrJoinCancelled = errors.New("匹配请求已经撤销")
 
 func Open(ctx context.Context, c config.GlobalMatchConf) (*Store, error) {
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	return OpenWithPermission(ctx, c, authoritysql.Writer(writer))
+}
+
+// OpenWithPermission 保留全部既有校验，由进程显式传同一 boot 的能力。
+func OpenWithPermission(ctx context.Context, c config.GlobalMatchConf, permission authoritysql.Permission) (*Store, error) {
 	secret := []byte(os.Getenv(c.ProbeSecretEnv))
 	if len(secret) < 32 {
 		return nil, errors.New("全球匹配探测密钥至少32字节，必须从环境注入")
@@ -42,7 +53,7 @@ func Open(ctx context.Context, c config.GlobalMatchConf) (*Store, error) {
 	if c.CrossRegionWaitSeconds == 0 || c.HardLatencyMs < 20 || c.HardLatencyMs > 1000 || c.ProbeTTLSeconds < 30 || c.ProbeTTLSeconds > 600 {
 		return nil, errors.New("全球匹配数据库或地域配置无效")
 	}
-	db, err := openAuthorityDatabase(ctx, c)
+	db, err := openAuthorityDatabaseWithPermission(ctx, c, permission)
 	if err != nil {
 		return nil, err
 	}
@@ -557,7 +568,7 @@ func (s *Store) claimTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRec
 	if f.ActivityContext == nil {
 		f.ActivityContext = []byte{}
 	}
-	_, e = tx.ExecContext(ctx, "INSERT INTO match_formation("+formationColumns+") VALUES("+strings.TrimSuffix(strings.Repeat("?,", 17), ",")+")", f.BattleId, f.OperationId, 1, f.PhysicalRegion, f.TargetNodeId, f.TargetInstanceId, f.TargetEndpoint, f.Mode, f.ConfigId, mb, []byte{}, f.CreatedMs, f.DeadlineMs, f.RetryAtMs, f.ActivityContext, f.RequeueOnFailure, []byte{})
+	_, e = tx.ExecContext(ctx, "INSERT INTO match_formation("+formationColumns+") VALUES("+strings.TrimSuffix(strings.Repeat("?,", 22), ",")+")", f.BattleId, f.OperationId, 1, f.PhysicalRegion, f.TargetNodeId, f.TargetInstanceId, f.TargetEndpoint, f.Mode, f.ConfigId, mb, []byte{}, f.CreatedMs, f.DeadlineMs, f.RetryAtMs, f.ActivityContext, f.RequeueOnFailure, []byte{}, uint32(0), uint32(0), "", uint32(0), false)
 	if e != nil {
 		return e
 	}
@@ -753,7 +764,7 @@ func (s *Store) ReserveDirect(ctx context.Context, key *pb.MatchDirectIntentReco
 func scanFormation(s scanner) (*pb.MatchFormationRecord, error) {
 	f := &pb.MatchFormationRecord{}
 	var members, prepared []byte
-	e := s.Scan(&f.BattleId, &f.OperationId, &f.State, &f.PhysicalRegion, &f.TargetNodeId, &f.TargetInstanceId, &f.TargetEndpoint, &f.Mode, &f.ConfigId, &members, &f.CreateRequest, &f.CreatedMs, &f.DeadlineMs, &f.RetryAtMs, &f.ActivityContext, &f.RequeueOnFailure, &prepared)
+	e := s.Scan(&f.BattleId, &f.OperationId, &f.State, &f.PhysicalRegion, &f.TargetNodeId, &f.TargetInstanceId, &f.TargetEndpoint, &f.Mode, &f.ConfigId, &members, &f.CreateRequest, &f.CreatedMs, &f.DeadlineMs, &f.RetryAtMs, &f.ActivityContext, &f.RequeueOnFailure, &prepared, &f.OutcomeProtocolVersion, &f.PreflightSupportedVersion, &f.PreflightInstanceId, &f.AdoptedOutcomeProtocolVersion, &f.AdoptedOutcomeObserved)
 	if e != nil {
 		return nil, e
 	}
@@ -775,6 +786,34 @@ var ErrWorkLease = errors.New("成局工作租约已失效或被其他副本持�
 
 const WorkLeaseMs uint64 = 120000
 
+// ErrAwaitingExpiredOutcome 表示成局只剩到期终局一个出口，不再发工作租约（2026-10-22 修复，
+// social-match-battle#0）。判定规则见 awaitsExpiredOutcome。
+var ErrAwaitingExpiredOutcome = errors.New("成局已过权威截止，只能由到期终局恢复裁决")
+
+// awaitsExpiredOutcome：已持久 v1 Create 原件且已过权威截止的成局，唯一出口是 RecoverExpiredOutcomes
+// 在原 P→formation 锁内争唯一 SQL 终局，而它要求工作租约已经到期。worker 此时能做的只剩查询目标
+// Battle 后 Unknown，每次取租约都把 retry_at 再推后 120 秒；多副本巡检或重放的开局请求一直抢在前面时，
+// 到期出口迟迟走不到，票据停在 state 2/3。所以过截止后不再发租约，也不进 Pending 候选。
+// expiredOutcomeSQL 是同一规则的 SQL 写法，供候选扫描在索引侧过滤，两处必须一起改。
+func awaitsExpiredOutcome(f *pb.MatchFormationRecord, nowMs uint64) bool {
+	return f.OutcomeProtocolVersion == 1 && len(f.CreateRequest) != 0 && f.DeadlineMs != 0 && f.DeadlineMs <= nowMs
+}
+
+const expiredOutcomeSQL = "(outcome_protocol_version=1 AND LENGTH(create_request)>0 AND deadline_ms>0 AND deadline_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED))"
+
+// CountStrandedExpiredFormations 数被上面的门禁挡住、却进不了到期终局恢复的成局（2026-10-22 评审补，
+// social-match-battle#0）：state 2/3、满足 expiredOutcomeSQL，但不满足 RecoverExpiredOutcomes 的候选形状
+// recoverableOutcomeShapeSQL（能力证据缺失、preflight_instance 与 target 不一致、adopted 观察值不合法等）。
+// 它们领不到租约、不进 Pending、也不会被到期恢复选中，票据静默停在 state 2/3。修复前同样没有出口，
+// 但每 120 秒的租约轮回至少会出 recover/unknown 计数；门禁之后连这个信号也没了，所以由巡检单独报数。
+// 只读，只给报数用，不参与任何释放判定；处置见 cross-zone-matchmaking.md §13.3。
+// 形状合格但 Create 正文与成局字段对不上（supportedOutcomeOriginal 失败）的一类不在 SQL 里判，不计入。
+func (s *Store) CountStrandedExpiredFormations(ctx context.Context) (uint64, error) {
+	var stranded uint64
+	err := s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_formation f WHERE f.state IN(2,3) AND "+expiredOutcomeSQL+" AND NOT ("+recoverableOutcomeShapeSQL+")").Scan(&stranded)
+	return stranded, err
+}
+
 func (s *Store) AcquireWork(ctx context.Context, id uint64) (*pb.MatchFormationRecord, error) {
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {
@@ -791,6 +830,9 @@ func (s *Store) AcquireWork(ctx context.Context, id uint64) (*pb.MatchFormationR
 	}
 	if f.State >= 4 || f.RetryAtMs > n {
 		return nil, ErrWorkLease
+	}
+	if awaitsExpiredOutcome(f, n) {
+		return nil, ErrAwaitingExpiredOutcome
 	}
 	if f.State == 1 && f.RetryAtMs != f.CreatedMs {
 		f.State = 3
@@ -827,6 +869,23 @@ func (s *Store) CheckWork(ctx context.Context, work *pb.MatchFormationRecord) er
 		return ErrWorkLease
 	}
 	return nil
+}
+
+// CreateIntentPersisted 在本代工作租约仍有效时回答原 operation 是否已持久 Create 原件；租约失效回 ErrWorkLease。
+// 返回 false 是"原 operation 从未、也不会再向任何 Battle 发出 Create"的正面证据：gather 只在
+// SaveSupportedIntent 于同一租约提交成功、且发送前 CheckWork 仍有效之后才发 Create，而租约被接管后
+// 旧 worker 的 SaveIntent / CheckWork 都因 retry_at 不符被拒。持租约者本身不会与这次读取并发写原件。
+// 调用方据此不必等目标 Battle 应答即可按发房前失败收尾（2026-10-22 修复，social-match-battle#0）。
+func (s *Store) CreateIntentPersisted(ctx context.Context, work *pb.MatchFormationRecord) (bool, error) {
+	if work == nil {
+		return false, ErrWorkLease
+	}
+	var persisted bool
+	e := s.DB.QueryRowContext(ctx, "SELECT LENGTH(create_request)>0 FROM match_formation WHERE battle_id=? AND state IN(1,2,3) AND retry_at_ms=? AND retry_at_ms>CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED)", work.BattleId, work.RetryAtMs).Scan(&persisted)
+	if errors.Is(e, sql.ErrNoRows) {
+		return false, ErrWorkLease
+	}
+	return persisted, e
 }
 
 // 先持久备战时精确端点，恢复取消不再重新读取可能已经迁移的玩家位置。
@@ -866,7 +925,8 @@ func (s *Store) Formation(ctx context.Context, id uint64) (*pb.MatchFormationRec
 	return scanFormation(s.DB.QueryRowContext(ctx, "SELECT "+formationColumns+" FROM match_formation WHERE battle_id=?", id))
 }
 func (s *Store) Pending(ctx context.Context) ([]*pb.MatchFormationRecord, error) {
-	r, e := s.DB.QueryContext(ctx, "SELECT "+formationColumns+" FROM match_formation WHERE state IN(1,2,3) AND retry_at_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) ORDER BY retry_at_ms LIMIT 32")
+	// 过截止的 v1 原件只归到期终局恢复；留在这里既领不到租约，还会占住前 32 个名额挡住后面的成局。
+	r, e := s.DB.QueryContext(ctx, "SELECT "+formationColumns+" FROM match_formation WHERE state IN(1,2,3) AND retry_at_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) AND NOT "+expiredOutcomeSQL+" ORDER BY retry_at_ms LIMIT 32")
 	if e != nil {
 		return nil, e
 	}
@@ -882,6 +942,21 @@ func (s *Store) Pending(ctx context.Context) ([]*pb.MatchFormationRecord, error)
 	return out, r.Err()
 }
 func (s *Store) SaveIntent(ctx context.Context, work *pb.MatchFormationRecord, request []byte) ([]byte, error) {
+	return s.saveIntent(ctx, work, request, nil)
+}
+
+// 能力证明和完整v1正文先于任何Create提交，adopted必须另取原创建回执。
+func (s *Store) SaveSupportedIntent(ctx context.Context, work *pb.MatchFormationRecord, request []byte, capability *battlepb.QueryBattleCreationResponse) ([]byte, error) {
+	if work == nil || capability == nil || capability.TargetInstanceId != work.TargetInstanceId || capability.SupportedOutcomeProtocolVersion != 1 || capability.State != battlepb.BattleCreationState_BATTLE_CREATION_ABSENT {
+		return nil, errors.New("原Battle实例未证明支持终局协议1或已有未知创建")
+	}
+	r := &battlepb.CreateBattleRequest{}
+	if proto.Unmarshal(request, r) != nil || r.BattleId != work.BattleId || r.PlacementOperationId != work.OperationId || r.TargetInstanceId != work.TargetInstanceId || r.OutcomeProtocolVersion != 1 || r.DeadlineMs == 0 {
+		return nil, errors.New("终局协议创建原件不完整")
+	}
+	return s.saveIntent(ctx, work, request, capability)
+}
+func (s *Store) saveIntent(ctx context.Context, work *pb.MatchFormationRecord, request []byte, capability *battlepb.QueryBattleCreationResponse) ([]byte, error) {
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {
 		return nil, e
@@ -895,15 +970,47 @@ func (s *Store) SaveIntent(ctx context.Context, work *pb.MatchFormationRecord, r
 		return nil, e
 	}
 	if f.State == 1 {
-		if _, e = tx.ExecContext(ctx, "UPDATE match_formation SET state=2,create_request=? WHERE battle_id=?", request, f.BattleId); e != nil {
+		version, supported, instance := uint32(0), uint32(0), ""
+		if capability != nil {
+			version, supported, instance = 1, 1, capability.TargetInstanceId
+		}
+		if _, e = tx.ExecContext(ctx, "UPDATE match_formation SET state=2,create_request=?,outcome_protocol_version=?,preflight_supported_version=?,preflight_instance_id=? WHERE battle_id=?", request, version, supported, instance, f.BattleId); e != nil {
 			return nil, e
 		}
 		f.CreateRequest = request
+	} else if !bytes.Equal(f.CreateRequest, request) || (capability != nil && (f.OutcomeProtocolVersion != 1 || f.PreflightSupportedVersion != 1 || f.PreflightInstanceId != capability.TargetInstanceId)) {
+		return nil, errors.New("持久创建原件或能力证据冲突")
 	}
 	if e = tx.Commit(); e != nil {
 		return nil, e
 	}
 	return f.CreateRequest, nil
+}
+
+func (s *Store) RecordBattleAdopted(ctx context.Context, work *pb.MatchFormationRecord, instance string, version uint32) error {
+	if work == nil || instance != work.TargetInstanceId {
+		return errors.New("Battle实际采用版本原件不符")
+	}
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	f, err := scanFormation(tx.QueryRowContext(ctx, "SELECT "+formationColumns+" FROM match_formation WHERE battle_id=? FOR UPDATE", work.BattleId))
+	if err != nil {
+		return err
+	}
+	// 回执可能迟于工作租约；事实属于固定原op/UUID，不能因换worker丢掉明确adopted0。
+	if f.OperationId != work.OperationId || f.TargetInstanceId != work.TargetInstanceId {
+		return errors.New("采用版本回执原操作不符")
+	}
+	if f.OutcomeProtocolVersion != 1 || f.PreflightSupportedVersion != 1 || f.PreflightInstanceId != instance || f.TargetInstanceId != instance || (f.AdoptedOutcomeObserved && f.AdoptedOutcomeProtocolVersion != version) {
+		return errors.New("缺原发起前能力证据或实际采用回执冲突")
+	}
+	if _, err = tx.ExecContext(ctx, "UPDATE match_formation SET adopted_outcome_protocol_version=?,adopted_outcome_observed=1 WHERE battle_id=?", version, work.BattleId); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 func (s *Store) Unknown(ctx context.Context, work *pb.MatchFormationRecord) error {
 	if work == nil {
@@ -932,6 +1039,11 @@ func (s *Store) Finish(ctx context.Context, work *pb.MatchFormationRecord, succe
 	}
 	if e = checkWork(ctx, tx, f, work); e != nil {
 		return e
+	}
+	// 发房前失败可沿原合同释放；一旦持久Create，运行时ABORTED/连接失败都不等于
+	// 本权威已提交ABORT。保留原票给唯一SQL终局恢复，绝不能先state5或换新轮票。
+	if !success && len(f.CreateRequest) != 0 {
+		return errors.New("已有持久创建原件，失败收尾必须等待唯一SQL终局")
 	}
 	n, e := now(ctx, tx)
 	if e != nil {

@@ -234,44 +234,44 @@ constexpr DBTask::ParseTableT_ DBTask::InternalGenerateParseTable_(const ::_pbi:
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 key = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DBTask, _impl_.key_), 6>(),
-       {8, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DBTask, _impl_.key_), 5>(),
+       {8, 5, 0,
         PROTOBUF_FIELD_OFFSET(DBTask, _impl_.key_)}},
       // string where_case = 2;
       {::_pbi::TcParser::FastUS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(DBTask, _impl_.where_case_)}},
-      // string op = 3;
-      {::_pbi::TcParser::FastUS1,
-       {26, 1, 0,
+      // .taskpb.DBOp op = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DBTask, _impl_.op_), 6>(),
+       {24, 6, 0,
         PROTOBUF_FIELD_OFFSET(DBTask, _impl_.op_)}},
       // string msg_type = 4;
       {::_pbi::TcParser::FastUS1,
-       {34, 2, 0,
+       {34, 1, 0,
         PROTOBUF_FIELD_OFFSET(DBTask, _impl_.msg_type_)}},
       // bytes body = 5;
       {::_pbi::TcParser::FastBS1,
-       {42, 3, 0,
+       {42, 2, 0,
         PROTOBUF_FIELD_OFFSET(DBTask, _impl_.body_)}},
       // string task_id = 6;
       {::_pbi::TcParser::FastUS1,
-       {50, 4, 0,
+       {50, 3, 0,
         PROTOBUF_FIELD_OFFSET(DBTask, _impl_.task_id_)}},
       // int32 retry_count = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DBTask, _impl_.retry_count_), 9>(),
-       {56, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DBTask, _impl_.retry_count_), 7>(),
+       {56, 7, 0,
         PROTOBUF_FIELD_OFFSET(DBTask, _impl_.retry_count_)}},
       // uint64 owner_epoch = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DBTask, _impl_.owner_epoch_), 7>(),
-       {64, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DBTask, _impl_.owner_epoch_), 8>(),
+       {64, 8, 0,
         PROTOBUF_FIELD_OFFSET(DBTask, _impl_.owner_epoch_)}},
       // uint64 save_seq = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DBTask, _impl_.save_seq_), 8>(),
-       {72, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DBTask, _impl_.save_seq_), 9>(),
+       {72, 9, 0,
         PROTOBUF_FIELD_OFFSET(DBTask, _impl_.save_seq_)}},
       // string reply_instance = 10;
       {::_pbi::TcParser::FastUS1,
-       {82, 5, 0,
+       {82, 4, 0,
         PROTOBUF_FIELD_OFFSET(DBTask, _impl_.reply_instance_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -282,32 +282,31 @@ constexpr DBTask::ParseTableT_ DBTask::InternalGenerateParseTable_(const ::_pbi:
       65535, 65535
     }}, {{
       // uint64 key = 1;
-      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.key_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.key_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string where_case = 2;
       {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.where_case_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // string op = 3;
-      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.op_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // .taskpb.DBOp op = 3;
+      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.op_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // string msg_type = 4;
-      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.msg_type_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.msg_type_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // bytes body = 5;
-      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.body_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.body_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // string task_id = 6;
-      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.task_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.task_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // int32 retry_count = 7;
-      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.retry_count_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.retry_count_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
       // uint64 owner_epoch = 8;
-      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.owner_epoch_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.owner_epoch_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 save_seq = 9;
-      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.save_seq_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.save_seq_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string reply_instance = 10;
-      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.reply_instance_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.reply_instance_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\15\0\12\2\10\0\7\0\0\0\16\0\0\0\0\0"
+      "\15\0\12\0\10\0\7\0\0\0\16\0\0\0\0\0"
       "taskpb.DBTask"
       "where_case"
-      "op"
       "msg_type"
       "task_id"
       "reply_instance"
@@ -323,9 +322,6 @@ inline constexpr DBTask::Impl_::Impl_(
         where_case_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
-        op_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
         msg_type_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
@@ -339,9 +335,10 @@ inline constexpr DBTask::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         key_{::uint64_t{0u}},
+        op_{static_cast< ::taskpb::DBOp >(0)},
+        retry_count_{0},
         owner_epoch_{::uint64_t{0u}},
-        save_seq_{::uint64_t{0u}},
-        retry_count_{0} {}
+        save_seq_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr DBTask::DBTask(::_pbi::ConstantInitialized,
@@ -436,8 +433,8 @@ const ::_pbi::ClassData* DBTask_get_class_data() {
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace taskpb
-static constexpr const ::_pb::EnumDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
-    file_level_enum_descriptors_proto_2fdb_2fdb_5ftask_2eproto = nullptr;
+static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
+    file_level_enum_descriptors_proto_2fdb_2fdb_5ftask_2eproto[1];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_proto_2fdb_2fdb_5ftask_2eproto = nullptr;
 const ::uint32_t
@@ -456,16 +453,16 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::taskpb::DBTask, _impl_.owner_epoch_),
         PROTOBUF_FIELD_OFFSET(::taskpb::DBTask, _impl_.save_seq_),
         PROTOBUF_FIELD_OFFSET(::taskpb::DBTask, _impl_.reply_instance_),
-        6,
+        5,
         0,
+        6,
         1,
         2,
         3,
-        4,
-        9,
         7,
         8,
-        5,
+        9,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::taskpb::TaskResult, _impl_._has_bits_),
         7, // hasbit index offset
@@ -491,20 +488,22 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_proto_2fdb_2fdb_5ftask_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\026proto/db/db_task.proto\022\006taskpb\"\272\001\n\006DBT"
-    "ask\022\013\n\003key\030\001 \001(\004\022\022\n\nwhere_case\030\002 \001(\t\022\n\n\002"
-    "op\030\003 \001(\t\022\020\n\010msg_type\030\004 \001(\t\022\014\n\004body\030\005 \001(\014"
-    "\022\017\n\007task_id\030\006 \001(\t\022\023\n\013retry_count\030\007 \001(\005\022\023"
-    "\n\013owner_epoch\030\010 \001(\004\022\020\n\010save_seq\030\t \001(\004\022\026\n"
-    "\016reply_instance\030\n \001(\t\"M\n\nTaskResult\022\017\n\007s"
-    "uccess\030\001 \001(\010\022\014\n\004data\030\002 \001(\014\022\r\n\005error\030\003 \001("
-    "\t\022\021\n\ttimestamp\030\004 \001(\003B\004Z\002dbb\006proto3"
+    "\n\026proto/db/db_task.proto\022\006taskpb\"\310\001\n\006DBT"
+    "ask\022\013\n\003key\030\001 \001(\004\022\022\n\nwhere_case\030\002 \001(\t\022\030\n\002"
+    "op\030\003 \001(\0162\014.taskpb.DBOp\022\020\n\010msg_type\030\004 \001(\t"
+    "\022\014\n\004body\030\005 \001(\014\022\017\n\007task_id\030\006 \001(\t\022\023\n\013retry"
+    "_count\030\007 \001(\005\022\023\n\013owner_epoch\030\010 \001(\004\022\020\n\010sav"
+    "e_seq\030\t \001(\004\022\026\n\016reply_instance\030\n \001(\t\"M\n\nT"
+    "askResult\022\017\n\007success\030\001 \001(\010\022\014\n\004data\030\002 \001(\014"
+    "\022\r\n\005error\030\003 \001(\t\022\021\n\ttimestamp\030\004 \001(\003*>\n\004DB"
+    "Op\022\025\n\021DB_OP_UNSPECIFIED\020\000\022\016\n\nDB_OP_READ\020"
+    "\001\022\017\n\013DB_OP_WRITE\020\002B\004Z\002dbb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fdb_2fdb_5ftask_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fdb_2fdb_5ftask_2eproto = {
     false,
     false,
-    314,
+    392,
     descriptor_table_protodef_proto_2fdb_2fdb_5ftask_2eproto,
     "proto/db/db_task.proto",
     &descriptor_table_proto_2fdb_2fdb_5ftask_2eproto_once,
@@ -518,6 +517,13 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fdb_2fd
     file_level_service_descriptors_proto_2fdb_2fdb_5ftask_2eproto,
 };
 namespace taskpb {
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+DBOp_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fdb_2fdb_5ftask_2eproto);
+  return file_level_enum_descriptors_proto_2fdb_2fdb_5ftask_2eproto[0];
+}
+PROTOBUF_CONSTINIT const uint32_t DBOp_internal_data_[] = {
+    196608u, 0u, };
 // ===================================================================
 
 DBTask::DBTask(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
@@ -536,7 +542,6 @@ PROTOBUF_NDEBUG_INLINE DBTask::Impl_::Impl_(
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
         where_case_(arena, from.where_case_),
-        op_(arena, from.op_),
         msg_type_(arena, from.msg_type_),
         body_(arena, from.body_),
         task_id_(arena, from.task_id_),
@@ -560,9 +565,9 @@ DBTask::DBTask(
                offsetof(Impl_, key_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, key_),
-           offsetof(Impl_, retry_count_) -
+           offsetof(Impl_, save_seq_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::retry_count_));
+               sizeof(Impl_::save_seq_));
 
   // @@protoc_insertion_point(copy_constructor:taskpb.DBTask)
 }
@@ -571,7 +576,6 @@ PROTOBUF_NDEBUG_INLINE DBTask::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
         where_case_(arena),
-        op_(arena),
         msg_type_(arena),
         body_(arena),
         task_id_(arena),
@@ -582,9 +586,9 @@ inline void DBTask::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, key_),
            0,
-           offsetof(Impl_, retry_count_) -
+           offsetof(Impl_, save_seq_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::retry_count_));
+               sizeof(Impl_::save_seq_));
 }
 DBTask::~DBTask() {
   // @@protoc_insertion_point(destructor:taskpb.DBTask)
@@ -598,7 +602,6 @@ inline void DBTask::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.where_case_.Destroy();
-  this_._impl_.op_.Destroy();
   this_._impl_.msg_type_.Destroy();
   this_._impl_.body_.Destroy();
   this_._impl_.task_id_.Destroy();
@@ -640,35 +643,32 @@ PROTOBUF_NOINLINE void DBTask::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.where_case_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      _impl_.op_.ClearNonDefaultToEmpty();
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       _impl_.msg_type_.ClearNonDefaultToEmpty();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       _impl_.body_.ClearNonDefaultToEmpty();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       _impl_.task_id_.ClearNonDefaultToEmpty();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       _impl_.reply_instance_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
     ::memset(&_impl_.key_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.owner_epoch_) -
-        reinterpret_cast<char*>(&_impl_.key_)) + sizeof(_impl_.owner_epoch_));
+        reinterpret_cast<char*>(&_impl_.retry_count_) -
+        reinterpret_cast<char*>(&_impl_.key_)) + sizeof(_impl_.retry_count_));
   }
   if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
-    ::memset(&_impl_.save_seq_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.retry_count_) -
-        reinterpret_cast<char*>(&_impl_.save_seq_)) + sizeof(_impl_.retry_count_));
+    ::memset(&_impl_.owner_epoch_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.save_seq_) -
+        reinterpret_cast<char*>(&_impl_.owner_epoch_)) + sizeof(_impl_.save_seq_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -694,7 +694,7 @@ PROTOBUF_NOINLINE void DBTask::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 key = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_key() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -712,18 +712,17 @@ PROTOBUF_NOINLINE void DBTask::Clear() {
     }
   }
 
-  // string op = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-    if (!this_._internal_op().empty()) {
-      const ::std::string& _s = this_._internal_op();
-      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "taskpb.DBTask.op");
-      target = stream->WriteStringMaybeAliased(3, _s, target);
+  // .taskpb.DBOp op = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_op() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          3, this_._internal_op(), target);
     }
   }
 
   // string msg_type = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (!this_._internal_msg_type().empty()) {
       const ::std::string& _s = this_._internal_msg_type();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -733,7 +732,7 @@ PROTOBUF_NOINLINE void DBTask::Clear() {
   }
 
   // bytes body = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (!this_._internal_body().empty()) {
       const ::std::string& _s = this_._internal_body();
       target = stream->WriteBytesMaybeAliased(5, _s, target);
@@ -741,7 +740,7 @@ PROTOBUF_NOINLINE void DBTask::Clear() {
   }
 
   // string task_id = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (!this_._internal_task_id().empty()) {
       const ::std::string& _s = this_._internal_task_id();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -751,7 +750,7 @@ PROTOBUF_NOINLINE void DBTask::Clear() {
   }
 
   // int32 retry_count = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_retry_count() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt32ToArrayWithField<7>(
@@ -760,7 +759,7 @@ PROTOBUF_NOINLINE void DBTask::Clear() {
   }
 
   // uint64 owner_epoch = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_owner_epoch() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -769,7 +768,7 @@ PROTOBUF_NOINLINE void DBTask::Clear() {
   }
 
   // uint64 save_seq = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_save_seq() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -778,7 +777,7 @@ PROTOBUF_NOINLINE void DBTask::Clear() {
   }
 
   // string reply_instance = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (!this_._internal_reply_instance().empty()) {
       const ::std::string& _s = this_._internal_reply_instance();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -820,69 +819,69 @@ PROTOBUF_NOINLINE void DBTask::Clear() {
                                         this_._internal_where_case());
       }
     }
-    // string op = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (!this_._internal_op().empty()) {
-        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
-                                        this_._internal_op());
-      }
-    }
     // string msg_type = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (!this_._internal_msg_type().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_msg_type());
       }
     }
     // bytes body = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (!this_._internal_body().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
                                         this_._internal_body());
       }
     }
     // string task_id = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (!this_._internal_task_id().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_task_id());
       }
     }
     // string reply_instance = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (!this_._internal_reply_instance().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_reply_instance());
       }
     }
     // uint64 key = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_key() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_key());
       }
     }
-    // uint64 owner_epoch = 8;
+    // .taskpb.DBOp op = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_op() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_op());
+      }
+    }
+    // int32 retry_count = 7;
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_retry_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
+            this_._internal_retry_count());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    // uint64 owner_epoch = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_owner_epoch() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_owner_epoch());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
     // uint64 save_seq = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_save_seq() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_save_seq());
-      }
-    }
-    // int32 retry_count = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (this_._internal_retry_count() != 0) {
-        total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
-            this_._internal_retry_count());
       }
     }
   }
@@ -914,15 +913,6 @@ void DBTask::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (!from._internal_op().empty()) {
-        _this->_internal_set_op(from._internal_op());
-      } else {
-        if (_this->_impl_.op_.IsDefault()) {
-          _this->_internal_set_op("");
-        }
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (!from._internal_msg_type().empty()) {
         _this->_internal_set_msg_type(from._internal_msg_type());
       } else {
@@ -931,7 +921,7 @@ void DBTask::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (!from._internal_body().empty()) {
         _this->_internal_set_body(from._internal_body());
       } else {
@@ -940,7 +930,7 @@ void DBTask::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (!from._internal_task_id().empty()) {
         _this->_internal_set_task_id(from._internal_task_id());
       } else {
@@ -949,7 +939,7 @@ void DBTask::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (!from._internal_reply_instance().empty()) {
         _this->_internal_set_reply_instance(from._internal_reply_instance());
       } else {
@@ -958,26 +948,31 @@ void DBTask::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_key() != 0) {
         _this->_impl_.key_ = from._impl_.key_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_op() != 0) {
+        _this->_impl_.op_ = from._impl_.op_;
+      }
+    }
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_owner_epoch() != 0) {
-        _this->_impl_.owner_epoch_ = from._impl_.owner_epoch_;
+      if (from._internal_retry_count() != 0) {
+        _this->_impl_.retry_count_ = from._impl_.retry_count_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-      if (from._internal_save_seq() != 0) {
-        _this->_impl_.save_seq_ = from._impl_.save_seq_;
+      if (from._internal_owner_epoch() != 0) {
+        _this->_impl_.owner_epoch_ = from._impl_.owner_epoch_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (from._internal_retry_count() != 0) {
-        _this->_impl_.retry_count_ = from._impl_.retry_count_;
+      if (from._internal_save_seq() != 0) {
+        _this->_impl_.save_seq_ = from._impl_.save_seq_;
       }
     }
   }
@@ -1001,14 +996,13 @@ void DBTask::InternalSwap(DBTask* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.where_case_, &other->_impl_.where_case_, arena);
-  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.op_, &other->_impl_.op_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.msg_type_, &other->_impl_.msg_type_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.body_, &other->_impl_.body_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.task_id_, &other->_impl_.task_id_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reply_instance_, &other->_impl_.reply_instance_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(DBTask, _impl_.retry_count_)
-      + sizeof(DBTask::_impl_.retry_count_)
+      PROTOBUF_FIELD_OFFSET(DBTask, _impl_.save_seq_)
+      + sizeof(DBTask::_impl_.save_seq_)
       - PROTOBUF_FIELD_OFFSET(DBTask, _impl_.key_)>(
           reinterpret_cast<char*>(&_impl_.key_),
           reinterpret_cast<char*>(&other->_impl_.key_));

@@ -74,10 +74,32 @@ public:
         }
     }
 
-    // 某个 config 在本仓库里的总数量(跨所有堆叠求和)。
+    // 按 config 计数、预检、扣除时,这个实例算不算可互换的普通单位:不带更新版本才有的字段即可
+    // (已退役字段的残留不算,判据是 unknown_field_carry::CarriesNewerVersionFields)。
+    // 新版本给物品加的属性(例如绑定、限时)可能决定它能不能被消耗、交易、镶嵌;旧代码看不懂这些属性,
+    // 不能把它当普通单位计数或扣走 —— 否则资产通道会把一件绑定物品当普通物品交易出去,属性无声消失
+    // (docs/design/mixed-version-persist-field-protection.md §4.4,第 6 批)。
+    // 与 IsIndependentInstance 是两条规则:那条管"能不能并堆",这条管"能不能按 config 计数和扣除"。
+    // has_equip 的实例照算:按 config 扣到装备,是调用方用配置表排除的事(BagService::RemoveItemsExact 注释)。
+    [[nodiscard]] static bool IsCountableByConfig(const ItemComp &item);
+
+    // 某个 config 在本仓库里可按数量计的总数:跨所有堆叠求和,只计 IsCountableByConfig 的实例。
     [[nodiscard]] std::size_t TotalCountOf(uint32_t configId) const;
 
-    // 是否持有 required 列出的每一项(config_id -> 需求数量)。只读。
+    // 按数量预检的结论。三态而不是 bool:"只有算上带新版本字段的单位才够"是版本错位,
+    // 调用方必须当成可重试的暂时状态,不能和"确实不够"一样记成终态拒绝。
+    enum class QuantityVerdict : uint8_t
+    {
+        kEnough,       // 每一项的可计单位都够
+        kVersionSkew,  // 没有哪项确定不够,但至少一项只有算上带更新版本字段的单位才够
+        kInsufficient, // 至少一项连算上那些单位都不够:确定不足(任何版本都扣不出来)
+    };
+
+    // required(config_id -> 需求数量)整体的预检结论。只读,一次遍历。需求为 0 的项视为满足。
+    // 结论优先级:确定不足 > 版本错位 > 够。
+    [[nodiscard]] QuantityVerdict CheckQuantities(const ItemCountMap &required) const;
+
+    // 是否持有 required 列出的每一项(只计可计单位)。等价于 CheckQuantities(required) == kEnough。
     [[nodiscard]] bool HasAll(const ItemCountMap &required) const;
 
     // ── 堆叠语义 ──────────────────────────────────────────────────────
@@ -121,8 +143,9 @@ public:
     // 从某个 config 的若干堆叠里抽走 count 个单位，逐堆抽到够为止。
     // 抽光的堆 size 变 0，实例层不销毁；Bag 必须当场成对 DestroyItem（DrainOneConfig 已这样做）。
     //
+    // 只从 IsCountableByConfig 的堆里抽:带更新版本字段的堆不当普通单位扣(与 TotalCountOf / CheckQuantities 同口径)。
     // 库存不足时按实际持有夹紧(本来就是逐堆 min(需求, 库存)),**返回值即实扣量**;
-    // 调用方要"不够就整体失败"的语义,必须自己先 HasAll(Bag::RemoveItems 就是这么做的)。
+    // 调用方要"不够就整体失败"的语义,必须自己先 CheckQuantities(Bag::RemoveItems 就是这么做的)。
     // drainedOut(可为 nullptr)按抽取顺序收集 (guid, 抽走量),size==0 的僵尸堆不进回执。
     // rank 由调用方提供,实例层不解释它。桥层传槽位号,按 rank 再按实例序抽取。
     // 回调只读且不重入仓库;每个候选的 rank 在排序前只计算一次。
@@ -164,7 +187,8 @@ public:
     // Bag::AddItems 的规划按它把传入物品分进「单独计实例」或「可并堆」,与提交时 CanStack(既有堆, 传入物品) 同口径。
     [[nodiscard]] static bool CanStack(const ItemComp &leftItem, const ItemComp &rightItem);
 
-    // 不与任何实例并堆的独立实例:带实例数据(has_equip(),presence 即判据),或带着本版本不认识的字段(见 CanStack)。
+    // 不与任何实例并堆的独立实例:带实例数据(has_equip(),presence 即判据),或带着更新版本才有的字段(见 CanStack;
+    // 已退役字段的残留字节不算,判据是 unknown_field_carry::CarriesNewerVersionFields)。
     // 包内既有的堆与传入物品都用它判,任何"能不能并"的预检、规划、提交不得另写一份判据。
     [[nodiscard]] static bool IsIndependentInstance(const ItemComp &item);
 

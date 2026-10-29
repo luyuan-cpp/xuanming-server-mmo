@@ -17,7 +17,8 @@ package main
 // 「能不能退役」绝不能按一份可能落后 / 丢键的缓存下结论),redis 时读 mapping Redis(今天的口径原样保留)。
 // 两种来源经同一个接缝 routeReadSide 交给同一套判定,值串逐字节相同。本文件同时放这个接缝(audit 与搬库 R0 共用)。
 //
-// 退出码:0 = 审计跑完(无论能不能退役,看最后一行结论);2 = 没查成(连不上 / 库不在 / 库与 Redis 不成对),结论不可信。
+// 退出码:0 = 审计跑完(无论能不能退役,看最后一行结论);2 = 没查成(连不上 / 库不在 / 库与 Redis 不成对 / db 源下扫描前后
+// route_meta.writable != 1,即回档恢复期间库不是可信的那一份,R8-1),结论不可信。
 
 import (
 	"context"
@@ -409,6 +410,52 @@ func auditStorageWith(ctx context.Context, db *sql.DB, routes routeReadSide, sto
 	}
 }
 
+// routeWritableChecker 是 route_meta.writable 的预检原语(生产 *mergeRouteStore.RequireWritable,relocate_run.go;单测 memRouteDB)。
+type routeWritableChecker interface {
+	RequireWritable(ctx context.Context) error
+}
+
+// storageAuditRouteAuthority(R8-1)判定 -route-source=db 时全局库此刻能不能作为「能否退役」的依据。
+//
+// route_meta.writable != 1 = 对账 leader 检测到库回档 / 缓存领先,把映射写者冻结了(runbook §9.4:freeze → reconcile-from-cache
+// → audit → unfreeze)。这段时间库是已知落后的那一份,go/db 仍按 mapping Redis 选库:库口径下的「冷副本」可能正是 go/db 在读写的
+// 活行,据此下线库就把回档点之后的数据一起删了。所以冻结期间 storage-audit 不给结论(调用方按「没查成」exit 2),读不到开关同样
+// 不给。只是预检:扫描结束后调用方再核一次,覆盖扫描途中被冻结的情况(auditStorageChecked)。
+func storageAuditRouteAuthority(ctx context.Context, w routeWritableChecker) error {
+	err := w.RequireWritable(ctx)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, errRouteNotWritable):
+		return fmt.Errorf("the route DB is not authoritative right now: the route writers are frozen for a rollback recovery "+
+			"(runbook §9.4), go/db still routes by the mapping Redis and the DB may have lost placements it holds — a DB-based "+
+			"verdict could retire live rows; re-run storage-audit after unfreeze: %w", err)
+	default:
+		return fmt.Errorf("check route_meta.writable (cannot tell whether the route DB is authoritative): %w", err)
+	}
+}
+
+// auditStorageChecked 是入口用的本体:authority 非 nil(-route-source=db)时,扫描前后各核一次写开关(storageAuditRouteAuthority),
+// 任一次不过即返回错误(扫描后那次连同已扫出的报告一起返回,调用方当「没查成」);authority 为 nil(redis 源)与 auditStorageWith
+// 逐字相同。调用方给 nil 时必须是无类型的 nil 接口,不能是 nil 的 *mergeRouteStore。
+func auditStorageChecked(ctx context.Context, db *sql.DB, routes routeReadSide, authority routeWritableChecker,
+	storage uint32) (storageAuditReport, error) {
+	if authority != nil {
+		if err := storageAuditRouteAuthority(ctx, authority); err != nil {
+			return storageAuditReport{Storage: storage}, err
+		}
+	}
+	rep, err := auditStorageWith(ctx, db, routes, storage)
+	if err != nil || authority == nil {
+		return rep, err
+	}
+	// 扫描途中被冻结(leader 这一拍检测到回档):扫描读到的库口径同样不可信。
+	if err := storageAuditRouteAuthority(ctx, authority); err != nil {
+		return rep, fmt.Errorf("after the scan: %w", err)
+	}
+	return rep, nil
+}
+
 func runStorageAuditEntry(p storageAuditEntryParams) {
 	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
 	defer cancel()
@@ -434,11 +481,14 @@ func runStorageAuditEntry(p storageAuditEntryParams) {
 	if err != nil {
 		infra("route source %q: %v", p.route.source, err)
 	}
+	// db 源另核写开关(R8-1):回档恢复期间库不是可信的那一份,不给退役结论。redis 源 authority 留无类型 nil,行为不变。
+	var authority routeWritableChecker
 	if routeStore != nil {
 		defer routeStore.Close()
+		authority = routeStore
 	}
 	log.Printf("route mapping is read from %s", routes.source())
-	rep, err := auditStorageWith(ctx, db, routes, p.storage)
+	rep, err := auditStorageChecked(ctx, db, routes, authority, p.storage)
 	if err != nil {
 		infra("%v (partial: %s)", err, rep)
 	}

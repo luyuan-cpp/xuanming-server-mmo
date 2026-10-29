@@ -110,13 +110,13 @@ MySQL:
   MaxIdleConn: 5
 
 # 建表策略(D-14 第 4 条):
-#   AutoMigrate 不写或 true:启动时跑 schemamigrate.Up(有 GET_LOCK,多副本并发安全);
+#   AutoMigrate 不写或 false:常驻启动只核对；表由独立 -migrate 预建。
 #     出错或出现需人工项(类型漂移 / 缺主键)即拒绝启动。
 #   false:启动时只跑一次只读 plan,有待执行语句或需人工项就拒绝启动,并打印补救命令
 #     friend -f etc/friend.yaml -migrate
 # K8s 非 dev 档由 ConfigMap 固定 false,表由 friend-migrate Job 建。
 Schema:
-  AutoMigrate: true
+  AutoMigrate: false
 
 # Kafka:S2C 推送(kafkautil.PushToPlayer → gate-cmd_g<N>)的 broker 地址,at-most-once(契约 §5)。
 # Brokers 留空是合法配置:svc 会让 KafkaWriter 保持 nil,推送路径降级为"不推"(好友申请照样落库,

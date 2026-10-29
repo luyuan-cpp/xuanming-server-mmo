@@ -87,6 +87,9 @@ func TestHomeFallbackRechecksAbsenceAtomically(t *testing.T) {
 	require.Zero(t, s.commits)
 
 	// 跳过 Go 侧复核、直接走写屏障的那段 Lua:「落点记录仍不存在」在同一原子段里复核,照样拒绝且不写屏障。
+	// (2026-10-22 注)这一段在修复前的 Lua 下也会拒绝:旧脚本拿 GET 结果与计划里的空串比,"17:1" 本来就不等于空串。
+	// 所以它只防「EXISTS 分支被写成放行」;原子 EXISTS 分支确实存在,要靠正向用例
+	// TestHomeFallbackRestoresAPlayerWithoutPlacementRecord 在旧脚本下变红来证明(落点键不存在时 GET 回 false,同样不等于空串)。
 	err := r.inspect(ctx, p, p.Players[0], true, true, 1)
 	require.ErrorContains(t, err, "authoritative route changed")
 	require.False(t, m.Exists(savebarrier.Key(7)))

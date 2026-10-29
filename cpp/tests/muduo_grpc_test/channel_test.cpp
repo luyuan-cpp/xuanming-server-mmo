@@ -1163,4 +1163,230 @@ TEST_F(ChannelLoopbackTest, SingleLargeMessageFitsAnEmptyStreamBufferButABacklog
     EXPECT_EQ(events->status.code(), StatusCode::kResourceExhausted) << events->status.ToString();
 }
 
+TEST_F(ChannelLoopbackTest, MaintenanceWaitsForSuccessfulUnaryCallbackToReturn)
+{
+    StartServer(&RespondEcho);
+    const auto maintenance = std::make_shared<muduo_grpc::MaintenanceState>();
+    ChannelOptions options;
+    options.maintenance = maintenance;
+    const auto channel = MakeChannel(options);
+    const auto record = std::make_shared<CallRecord>();
+    channel->StartUnaryCall(MakeRequest("maintenance", 5s), [maintenance, record](UnaryCallResult &&result)
+    {
+        std::string frontier;
+        EXPECT_FALSE(maintenance->Joined());
+        EXPECT_FALSE(maintenance->Frontier(frontier));
+        ++record->count;
+        record->result = std::move(result);
+    });
+    maintenance->Close();
+    EXPECT_FALSE(maintenance->Joined());
+    ASSERT_TRUE(RunUntil([maintenance] { return maintenance->Joined(); }, 5s));
+    ASSERT_EQ(record->count, 1);
+    EXPECT_TRUE(record->result.status.ok());
+    std::string frontier;
+    EXPECT_TRUE(maintenance->Frontier(frontier));
+    EXPECT_FALSE(frontier.empty());
+}
+
+TEST_F(ChannelLoopbackTest, MaintenanceTracksRejectedCallbacksAndTheirNestedCallsAfterClose)
+{
+    const auto maintenance = std::make_shared<muduo_grpc::MaintenanceState>();
+    maintenance->Close();
+    ChannelOptions options;
+    options.maintenance = maintenance;
+    const auto channel = MakeChannel(options);
+    const auto callbacks = std::make_shared<int>(0);
+    const std::weak_ptr<Channel> weakChannel = channel;
+    channel->StartUnaryCall(MakeRequest("rejected", 5s), [maintenance, callbacks, weakChannel](UnaryCallResult &&result)
+    {
+        EXPECT_EQ(result.status.code(), StatusCode::kUnavailable);
+        EXPECT_FALSE(maintenance->Joined());
+        ++*callbacks;
+        if (const auto current = weakChannel.lock())
+        {
+            current->StartUnaryCall(MakeRequest("nested", 5s), [maintenance, callbacks](UnaryCallResult &&nested)
+            {
+                EXPECT_EQ(nested.status.code(), StatusCode::kUnavailable);
+                EXPECT_FALSE(maintenance->Joined());
+                ++*callbacks;
+            });
+        }
+    });
+    EXPECT_EQ(*callbacks, 0);
+    EXPECT_EQ(channel->outstandingCalls(), 0u);
+    EXPECT_FALSE(maintenance->Joined());
+    std::string frontier;
+    EXPECT_FALSE(maintenance->Frontier(frontier));
+    ASSERT_TRUE(RunUntil([maintenance] { return maintenance->Joined(); }, 2s));
+    EXPECT_EQ(*callbacks, 2);
+    EXPECT_EQ(channel->GetState(false), ConnectivityState::kIdle);
+    EXPECT_TRUE(maintenance->Frontier(frontier)) << "本地拒绝已返回，不冒充远端未知提交";
+}
+
+TEST_F(ChannelLoopbackTest, MaintenanceTracksRejectedStreamCloseCallback)
+{
+    const auto maintenance = std::make_shared<muduo_grpc::MaintenanceState>();
+    maintenance->Close();
+    ChannelOptions options;
+    options.maintenance = maintenance;
+    const auto channel = MakeChannel(options);
+    const auto events = std::make_shared<StreamEvents>();
+    auto callbacks = StreamRecorder(events);
+    auto close = std::move(callbacks.onClose);
+    callbacks.onClose = [maintenance, close = std::move(close)](const muduo_grpc::Status &status, const Metadata &trailing)
+    {
+        EXPECT_FALSE(maintenance->Joined());
+        close(status, trailing);
+    };
+    const auto stream = channel->StartStream(kStreamMethod, {}, std::move(callbacks));
+    EXPECT_TRUE(stream->closed());
+    EXPECT_FALSE(stream->Write("rejected"));
+    EXPECT_EQ(events->closes, 0);
+    EXPECT_FALSE(maintenance->Joined());
+    ASSERT_TRUE(RunUntil([maintenance] { return maintenance->Joined(); }, 2s));
+    EXPECT_EQ(events->closes, 1);
+    EXPECT_EQ(events->status.code(), StatusCode::kUnavailable);
+    std::string frontier;
+    EXPECT_TRUE(maintenance->Frontier(frontier));
+}
+
+TEST_F(ChannelLoopbackTest, MaintenanceSeparatesDestroyedCallJoinFromUnknownRemoteOutcome)
+{
+    const auto maintenance = std::make_shared<muduo_grpc::MaintenanceState>();
+    ChannelOptions options;
+    options.maintenance = maintenance;
+    auto channel = MakeChannel(options);
+    const auto record = std::make_shared<CallRecord>();
+    channel->StartUnaryCall(MakeRequest("in-flight", 5s), Recorder(record));
+    maintenance->Close();
+    channel.reset();
+    EXPECT_EQ(record->count, 0);
+    EXPECT_FALSE(maintenance->Joined());
+    ASSERT_TRUE(RunUntil([maintenance] { return maintenance->Joined(); }, 2s));
+    EXPECT_EQ(record->count, 1);
+    EXPECT_EQ(record->result.status.code(), StatusCode::kUnavailable);
+    std::string frontier;
+    EXPECT_FALSE(maintenance->Frontier(frontier));
+}
+
+TEST_F(ChannelLoopbackTest, MaintenanceSeparatesCancelledStreamJoinFromUnknownRemoteOutcome)
+{
+    const auto maintenance = std::make_shared<muduo_grpc::MaintenanceState>();
+    ChannelOptions options;
+    options.maintenance = maintenance;
+    const auto channel = MakeChannel(options);
+    const auto events = std::make_shared<StreamEvents>();
+    const auto stream = channel->StartStream(kStreamMethod, {}, StreamRecorder(events));
+    maintenance->Close();
+    EXPECT_FALSE(maintenance->Joined());
+    stream->Cancel();
+    ASSERT_TRUE(RunUntil([maintenance] { return maintenance->Joined(); }, 2s));
+    EXPECT_EQ(events->closes, 0) << "保留原Cancel不再回调的合同";
+    std::string frontier;
+    EXPECT_FALSE(maintenance->Frontier(frontier));
+}
+
+TEST_F(ChannelLoopbackTest, MaintenanceStreamFrontierWaitsForAllSuccessfulCallbacks)
+{
+    StartServer(&IgnoreRequest);
+    server_->SetActivityHandler(EchoStreams(std::make_shared<EchoStreamState>()));
+    const auto maintenance = std::make_shared<muduo_grpc::MaintenanceState>();
+    ChannelOptions options;
+    options.maintenance = maintenance;
+    const auto channel = MakeChannel(options);
+    const auto events = std::make_shared<StreamEvents>();
+    auto callbacks = StreamRecorder(events);
+    auto onMessage = std::move(callbacks.onMessage);
+    callbacks.onMessage = [maintenance, onMessage = std::move(onMessage)](std::string &&message)
+    {
+        EXPECT_FALSE(maintenance->Joined());
+        onMessage(std::move(message));
+    };
+    auto onClose = std::move(callbacks.onClose);
+    callbacks.onClose = [maintenance, onClose = std::move(onClose)](const muduo_grpc::Status &status, const Metadata &trailing)
+    {
+        EXPECT_FALSE(maintenance->Joined());
+        onClose(status, trailing);
+    };
+    const auto stream = channel->StartStream(kStreamMethod, {}, std::move(callbacks));
+    EXPECT_TRUE(stream->Write("accepted"));
+    stream->WritesDone();
+    maintenance->Close();
+    ASSERT_TRUE(RunUntil([maintenance] { return maintenance->Joined(); }, 5s));
+    EXPECT_EQ(events->messages, (std::vector<std::string>{"echo:accepted"}));
+    EXPECT_EQ(events->headers, 1);
+    EXPECT_EQ(events->closes, 1);
+    EXPECT_TRUE(events->status.ok());
+    std::string frontier;
+    EXPECT_TRUE(maintenance->Frontier(frontier));
+}
+
+TEST(ChannelMaintenanceTest, DroppedLocalCallbackJoinsButNeverProducesAClosure)
+{
+    muduo_grpc_test::EnsureSocketsInitialized();
+    const auto maintenance = std::make_shared<muduo_grpc::MaintenanceState>();
+    maintenance->Close();
+    const auto called = std::make_shared<bool>(false);
+    {
+        muduo::net::EventLoop loop;
+        ChannelOptions options;
+        options.maintenance = maintenance;
+        auto channel = Channel::Create(loop, "127.0.0.1", 1, options);
+        ASSERT_NE(channel, nullptr);
+        channel->StartUnaryCall(MakeRequest("not-dispatched", 5s), [called](UnaryCallResult &&) { *called = true; });
+        EXPECT_FALSE(maintenance->Joined());
+        channel.reset();
+        // 此用例不运行loop：析构只释放排队闭包，不能把没有调用的业务回调写成成功。
+    }
+    EXPECT_FALSE(*called);
+    EXPECT_TRUE(maintenance->Joined());
+    std::string frontier;
+    EXPECT_FALSE(maintenance->Frontier(frontier));
+}
+
+
+TEST_F(ChannelLoopbackTest, MaintenanceWaitsForCallbackTargetDestructionAndItsDerivedRejection)
+{
+    const auto state = std::make_shared<muduo_grpc::MaintenanceState>();
+    state->Close();
+    ChannelOptions options; options.maintenance = state;
+    auto channel = MakeChannel(options);
+    const std::weak_ptr<Channel> weak = channel;
+    auto calls = std::make_shared<int>(0);
+    auto target = std::shared_ptr<int>(new int(0), [state, weak, calls](int* value) {
+        delete value;
+        EXPECT_FALSE(state->Joined()) << "target 析构必须早于完成票据";
+        if (const auto locked = weak.lock()) locked->StartUnaryCall(MakeRequest("derived-on-destroy", 5s), [state, calls](UnaryCallResult&& result) {
+            EXPECT_FALSE(state->Joined()); EXPECT_EQ(result.status.code(), StatusCode::kUnavailable); ++*calls;
+        });
+    });
+    channel->StartUnaryCall(MakeRequest("closed", 5s), [target, calls](UnaryCallResult&& result) { EXPECT_EQ(result.status.code(), StatusCode::kUnavailable); ++*calls; });
+    target.reset();
+    ASSERT_TRUE(RunUntil([state] { return state->Joined(); }, 2s));
+    EXPECT_EQ(*calls, 2);
+    std::string frontier; EXPECT_TRUE(state->Frontier(frontier));
+}
+
+TEST_F(ChannelLoopbackTest, MaintenanceNativeJoinWaitsForOriginalLoopTransportRelease)
+{
+    StartServer(&RespondEcho);
+    const auto state = std::make_shared<muduo_grpc::MaintenanceState>();
+    ChannelOptions options; options.maintenance = state;
+    auto channel = MakeChannel(options);
+    const auto call = std::make_shared<CallRecord>();
+    channel->StartUnaryCall(MakeRequest("before-close", 5s), Recorder(call));
+    ASSERT_TRUE(RunUntil([call] { return call->count == 1; }, 5s));
+    ASSERT_TRUE(call->result.status.ok());
+    std::string frontier; EXPECT_TRUE(state->SettledFrontier(frontier));
+    EXPECT_FALSE(state->Closed()) << "P1 快照不应关闭 relay";
+    state->Close();
+    EXPECT_FALSE(state->NativeJoined());
+    channel.reset();
+    EXPECT_FALSE(state->NativeJoined()) << "析构返回仍有原 loop 的 forceClose/connectDestroyed";
+    ASSERT_TRUE(RunUntil([state] { return state->NativeJoined(); }, 2s));
+    EXPECT_TRUE(state->Joined());
+    EXPECT_TRUE(state->Frontier(frontier));
+}
+
 } // namespace

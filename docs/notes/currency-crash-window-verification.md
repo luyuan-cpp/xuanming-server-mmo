@@ -24,7 +24,7 @@
 |---|---|---|
 | 周期性全量 save | `cpp/libs/services/scene/core/system/redis.cpp:75-90` | 默认每 300s 扫一次 `tlsEcs.playerList`,每个在线玩家都 marshal 一次。`SCENE_PLAYER_SAVE_INTERVAL_SECONDS=0` 可关 |
 | 玩家退出 | `player_lifecycle.cpp:438` | `HandleExitGameNode` 路径,正常下线必走 |
-| 跨服迁移 | `player_lifecycle.cpp:671` | 跨 zone 完成时。**2026-10-20 更正**:这条搬数据链(player_migrate)已下线。现在跨 zone 传送与同 zone 跨节点换图在交接开始时存一次盘:`StartTravelHandoff` 先冻结再 `SavePlayerToRedis`,存盘落地后才写 handoff 标记,见 cross-zone-scene-travel.md §11.3、§13.2 |
+| 跨服迁移 | `player_lifecycle.cpp:671`(2026-10-22:现为 `StartTravelHandoff`) | 跨 zone 完成时。**2026-10-20 更正(10-22 补限定)**:这条搬数据链(player_migrate)已下线。<br>现在跨 zone 传送一定在交接开始时存一次盘。同 zone 跨节点换图只有被 scene_manager 以 18 拒绝时才进入同一条链,这要求 `AllowUnsafeCrossNodeHandoff=false`(生产);本机 `scene_manager_service.yaml` 默认是 `true`,所以本文"单 zone,本机环境"的验证里不会多这次存盘。<br>`StartTravelHandoff` 先冻结再存盘;盘上已是同一份、且没有在途存盘时,跳过这次存盘。Redis 存盘落地、且两张子表的 SQL ACK 与 pending 同版之后,才写 handoff 标记(`handoff_sql_barrier.h`)。<br>见 cross-zone-scene-travel.md §11.2、§11.3、§13.2 |
 | GM 加金币 | ❌ **没有** | `GmAddCurrency` handler 调 `CurrencySystem::AddCurrency` 后**没有**主动 SavePlayerToRedis,变更只在内存里 |
 
 **即默认 300s 周期**: 加金币 → 等 0~300s → 周期 save → 之间崩了就丢这段时间的 delta。

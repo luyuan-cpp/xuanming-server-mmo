@@ -67,6 +67,9 @@ Node:
     # 任务结果 Pub/Sub 专用连接不占池名额。tools/scripts/k8s_deploy.ps1 把它镜像进 login ConfigMap(要求正整数),
     # Redis 连接总账读同一个键:改它看部署时打印的 "Redis connection ledger" 一行。池等满会排队(go-redis PoolTimeout)。
     PoolSize: 20
+  # QueueRedis(可选,G4a 第 1a 批):排队、准入与放行锁所在的 Redis。本机单实例不写,即与上面 RedisClient 共用同一个 client;
+  # K8s 上由 tools/scripts/k8s_deploy.ps1 -RedisSplit queue 整段渲染(字段同 RedisClient,全部必填,含 PoolSize)。
+  # gate 排空标记不在这里,始终在 RedisClient(shared-redis-split-by-purpose.md §25.3)。
 
 # Snowflake ID config
 Snowflake:
@@ -107,8 +110,10 @@ Locker:
   #     连接池排队与拨号。「围栏写最晚在 handler 起算 4s 内发出」的结论不变。
   # 原值 10 是名字登记加入之前定的,已经盖不住;20 盖住「gRPC 三步全部拖满 + Redis 慢但还在回包」。
   # **20 不是硬上界**,不要把它读成「有余量的保证」:
-  #   - Redis 那个 3s 是 go-redis 默认的**单次** socket 读超时。svc/servicecontext.go 构造客户端时
+  #   - Redis 那个 3s 是**单次** socket 读超时。svc/servicecontext.go 构造客户端时
   #     并没有把上面 Node.RedisClient 的 Read/WriteTimeout 传进去,数值相同只是巧合;
+  #     (2026-10-23 更正,上句原文保留:现在 redisOptions 已把 Dial / Read / WriteTimeout 原样传入,
+  #     3s 就是这里配的 ReadTimeout;拨号超时随之由 go-redis 缺省 5s 变为配置的 3s。推导不变。)
   #   - 客户端没开 ContextTimeoutEnabled,ctx 截止时间不约束 socket 读写;MaxRetries 走默认值 3,
   #     读超时的命令会被原样重发 —— Redis 卡住时读 blob、写 blob 各自最长约 4×3s + 退避 ≈ 12.5s。
   #     回读那一步代码里套的 1s ctx 预算只能掐掉重发,单次等待仍可到 3s。
@@ -183,7 +188,11 @@ SceneManagerRpc:
     Hosts:
       - 127.0.0.1:2379
     Key: scenemanagerservice.rpc
-  Timeout: 5000
+  # 调用方超时必须 ≥ scene_manager 服务端 zrpc Timeout(scene_manager_service.yaml,8000)+ 2000:服务端自己的超时
+  # 应答要能回到 login。以前是 5000 < 8000,scene_manager 还在落点 / 推路由时 login 就按失败收口、给客户端推 3023,
+  # 服务端随后却可能已放行(结果未知)。与 C++ deadline ≥ Timeout + 2000 同一条规则(cross-zone-scene-travel.md §13.5);
+  # 由 tools/scripts/tests/k8s_deploy_contract.tests.ps1 守着,K8s ConfigMap 从这里镜像。
+  Timeout: 10000
   Middlewares:
     Breaker: false
 
@@ -282,6 +291,10 @@ Placement:
 #   启动日志 "[new-player-seed] enabled=..." 是核对依据。
 NewPlayerSeed:
   Enabled: false
+
+# Redis 身份变化后先核两张 SQL 行；关闭仅用于冷读风暴止血，不能豁免历史缺口或 ACK 超前。
+ParentLoad:
+  VerifyOnRedisIdentityChange: true
 
 # 持久 schema 世代倒退判定(C4,docs/design/mixed-version-persist-field-protection.md §5.1)。
 # EnterGame 命中 PlayerAllData 父快照(快路径)时,父快照两张表的覆盖世代取最小值(0 按 1),

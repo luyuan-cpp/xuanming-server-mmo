@@ -32,7 +32,7 @@ func TestOnlineDirectoryKeepsOnlineNewPlayerBeforeFirstSnapshot(t *testing.T) {
 		}
 		raw, err := proto.Marshal(profile)
 		require.NoError(t, err)
-		require.NoError(t, mr.Set(fmt.Sprintf("%s:%d", prefix, id), string(raw)))
+		require.NoError(t, mr.Set(fmt.Sprintf("%s:{%d}", prefix, id), string(raw)))
 	}
 	directory := OnlineDirectory{Redis: reader.rdb, DataService: directoryDataService{zones: map[uint64]uint32{1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1}}}
 	response, err := directory.List(context.Background(), 1, "", 10, nil, "")

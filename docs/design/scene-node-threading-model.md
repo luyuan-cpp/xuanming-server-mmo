@@ -1,108 +1,94 @@
-# Scene Node 线程模型决策
+# Scene Node 线程归属、帧循环与停机
 
-**日期**: 2025-04-05
-**最近修订**: 2026-10-16(第 4 批:gRPC 服务端改为 muduo 驱动,跑在 EventLoop 上,见 [grpc-muduo-transport.md](grpc-muduo-transport.md) §15;代码未编译,待 Codex 验证)
+> 源码核对：2026-10-23。本次只更新文档，不新增构建、测试或线程采样证据。
+> gRPC 传输与排空细节以[gRPC 传输设计 §15](./grpc-muduo-transport.md)为准；
+> Redis 底层回调与释放见[Redis 生命周期设计](./redis-async-client-retry-fix.md)。
 
-## 现状：业务逻辑单线程，进程并非单线程
+## 1. 业务状态归单个 EventLoop
 
-Scene Node 的线程安全边界是单个 muduo `EventLoop`，不是“整个进程只有一条线程”。
+Scene 的边界是业务状态归同一个 muduo EventLoop，不是整个进程只有一条线程。
+ECS、玩家与场景变更、World tick、RPC0 业务处理、Kafka 消费后投递的业务回调均在该 loop 上执行。
+Kafka 后台线程只收取并投递，不能直接改 Scene 的 registry。
 
-必须在 EventLoop 上执行的内容包括：
+当前 gRPC 客户端与服务端也由节点 loop 驱动；服务端接入、HTTP/2、派发、截止与排空，
+以及生成的 `grpc.<M>.guard` 和同步 `Handle*` 都在该 loop。
+外部结果如 Agones 许可通过异步请求取得，再经 queueInLoop 续跑，handler 不得阻塞等待。
 
-- ECS、玩家、场景等 gameplay 状态变更；
-- `World::Update()` 逻辑 tick（33ms 帧间隔）；
-- muduo RPC handler 的业务部分；
-- Kafka 后台 consumer 投递回来的业务回调；
-- gRPC 服务端（第 4 批起是 `muduo_grpc::Server`）的全部工作：接入、HTTP/2 协议、派发、截止、排空，
-  以及生成代码里的 `grpc.<M>.guard` 守护段和同步的 `Handle*`；
-- Agones 异步许可（`AcquireAllocationPermitAsync`）经 `queueInLoop` 投回来的回调。
+进程仍可有 librdkafka、异步日志与 Agones lifecycle worker 等后台线程。
+当前设计不构造官方 gRPC poller、EventEngine、Lifeguard 或 gRPC 关机 worker；
+这不代表运行进程的线程数已被本轮实测为零。
+2026-10-26 起移除官方 C++ SDK、初始化探针及其运行期守卫。依赖边界由构建与源码契约检查；
+ThreadMonitor 继续采样实际线程基线，不再查询官方库的初始化状态。
+`GRPC_SERVER_MAX_POLLERS` 已退役，不能用它或旧线程池变量调当前节点线程数。
 
-进程中同时存在非业务线程：
+## 2. 当前帧与派发预算
 
-- Kafka/librdkafka、异步日志和 Agones lifecycle worker 等后台线程。
+`core/constants/fps.h` 的目标为 **20 FPS，固定模拟步长 50ms**，
+World 初始化使用 `delta_time=1/target_fps`，Scene 据此安排定时驱动。
+这不是墙钟调度保证：World 累计时间限制在 ±1 秒，每次 Update 最多执行 5 个模拟步，
+并丢弃超过追赶上限的模拟时间。旧文的“33ms 帧间隔”不是当前实现。
 
-第 3 批（客户端）与第 4 批（服务端）之后，节点不再构造任何官方 gRPC 运行时对象，所以**没有** gRPC
-sync server poller、EventEngine 线程池、Lifeguard，也没有关机期间跑 `grpc::Server::Shutdown()` 的
-临时 worker（[grpc-muduo-transport.md](grpc-muduo-transport.md) §14、§15）。`GRPC_SERVER_MAX_POLLERS`
-已退役：进程忽略它，设了只打一行 WARN。第 5 批再加「运行期不起 gRPC 线程」的守卫。
-以上是设计结论，代码尚未编译运行：是否真的没有这些线程，以 grpc-muduo-transport.md §15.14 第 8 步的 thread baseline 与线程名核对为准，
-核对通过前不宣称「线程归零」。
+gRPC 派发泵默认每轮最多处理 64 项，在调用之间检查 2000µs 预算，至少处理一项。
+它不能抢占正在同步执行的 handler；单个 handler 就可能超过 2ms。
+因此 2ms 是协作式派发预算，不能当作单次 handler 或整轮执行的硬上限。
 
-历史（第 4 批之前）：官方 sync server 自带 poller（`GRPC_SERVER_MAX_POLLERS` 默认上限 8），gRPC v1.83
-默认 EventEngine 会 eager 启动 `Clamp(gpr_cpu_num_cores(), 4, 16)` 条 reserve worker 外加 1 条 Lifeguard，
-并能按积压扩展，且没有公开的环境变量能调。这正是第 3–5 批要消除的「线程数不可控」。
+容量文档中另行约定的 `p99≤33ms` 等验收目标不因此自动放宽；固定步长、实测帧耗时与目标 SLO 必须分开判断。
 
-入口为 `RunNodeMain`，最终由 `loop.loop()` 驱动业务主线程。
+## 3. gRPC 排空与业务排空
 
-## 决策：现阶段保持业务状态单线程归属
+gRPC 排空在 loop 内推进，没有该部分专用的关机线程或 join；
+整体关机仍会停止并 join Kafka consumer、Agones worker 等，因此不能概括成“停机完全没有 join”。
 
-### 理由
-
-1. **无锁 ECS**：所有 gameplay 状态变更回到同一 EventLoop，访问 entt registry 无需跨线程加锁。
-2. **连接数少**：Scene Node 对端是内部服务（Gate、SceneManager），不是客户端，业务侧无需为连接数引入并行状态修改。
-3. **Kafka 消息轻量**：后台 consumer 只负责收取并投递，实际 control message 处理仍回到 EventLoop。
-4. **水平扩容**：通过多个 Scene Node 实例分担不同场景/地图，而不是先把单个 ECS 拆成多线程共享状态。
-5. **调试简单**：业务状态变更顺序由 EventLoop 串行化，竞态边界清晰。
-
-第 4 批起 gRPC 的传输和业务都在 EventLoop 上：派发泵每轮最多 64 个调用且累计 ≤2ms（至少 1 个），
-剩余的留到下一轮，中间让出给定时器和 I/O。因此 handler **不得阻塞**：`Handle*` 同步执行；
-需要等外部结果的（Agones allocate 许可）由守护段发起异步请求，结果经 `queueInLoop` 回到 loop 再
-`Proceed()`。不再有 promise/future 跨线程等待，也不存在「gRPC 线程读写 ECS」的问题。
-
-### 对比：Gate Node
-
-Gate 面对大量客户端 TCP 连接，可以使用 `EventLoopThreadPool` 扩展 I/O
-处理；这不改变业务状态必须按其明确所有权串行化或同步的原则。
-
-## gRPC 关机约束
-
-第 4 批起 gRPC 排空全部在 EventLoop 内完成（[grpc-muduo-transport.md](grpc-muduo-transport.md) §15.10），
-没有关机线程、没有 join。排空本身要靠 loop 推进，所以 handler 不得同步等待排空。关机状态机仍是：
+状态可概括为：
 
 ```text
-Running -> ClosingIngress -> (GrpcDraining || PersistenceDraining) -> Finalizing -> Done
+Running → ClosingIngress →（GrpcDraining 与 PersistenceDraining）→ Finalizing → Done
 ```
 
-1. EventLoop 先停止并 join Kafka consumer，封住 Kafka 入站；producer 继续
-   存活，供玩家停机存盘发送 DBTask。随后执行关机前业务 hook（scene 在 hook 里
-   `lifecycle.Stop()`，把还在等 Agones 许可的 CreateScene 以「拒绝」投进 loop 队列）。
-2. 同一个 loop 任务里调 `grpcServer_->BeginShutdown({2s, 1s, 1s}, onDrained)`：置排空标志（此后
-   `ServerDraining()` 为真，CreateScene 守护段回 `UNAVAILABLE "scene_node_shutting_down"`）、
-   经 `queueInLoop` 销毁 Acceptor 停止监听、每条连接两段 GOAWAY（收到 PING ACK 或满 1s 发最终
-   GOAWAY）。最终 GOAWAY 之前收到的调用照常处理；2s 到期时未开始的回 `REFUSED_STREAM`、已开始的回
-   `UNAVAILABLE "server shutting down"`，再写半关、宽限 1s 后 forceClose，总上限约 3s。同时 EventLoop
-   每 100ms 现场检查业务 barrier：玩家实体为空、退出存盘均已收到 Redis ACK、Kafka producer 队列已真正
-   flush。两条 drain 并行推进。
-3. 只有 gRPC 已排空（`onDrained` 经 `queueInLoop` 投递，`Node::OnGrpcServerDrained` 在该排队任务里
-   销毁 Server），并且业务 barrier 当前为完成状态，EventLoop 才能 Finalize；业务 barrier 最多等待
-   15 秒，超时必须明确记录未完成并继续退出。gRPC 排空完成前不得锁存一次短暂的业务完成结果，因为在途
-   调用仍可能追加工作。
-4. Finalize 时先有界 flush Kafka producer，再执行 `tlsRedis.Shutdown()`；该调用
-   会在 `MessageAsyncClient` 仍存活时触发 Hiredis pending callback 并注销 Channel。
-   `loop.loop()` 返回后再执行 `tlsRedisSystem.Shutdown()` 销毁
-   `MessageAsyncClient`，最后才允许 `EventLoop` 析构。固定析构顺序为
-   Hiredis → MessageAsyncClient → EventLoop。
+1. 停止并 join Kafka consumer，封住 Kafka 业务入站；producer 继续存活，供退出存盘使用。
+   执行关机前业务 hook，Scene 停止 lifecycle，并让尚待许可的创建请求按拒绝路径收口。
+2. 调用 `BeginShutdown({2s, 1s, 1s}, onDrained)`，设置排空状态、排队撤监听，发送两阶段 GOAWAY。
+   最终 GOAWAY 前的在途请求仍可能追加业务工作。到期后拒绝未开始的调用、结束已开始的调用；
+   已提交的 DATA / trailers 仍须处理写窗口与背压，帧写完且所有流关闭后半关；排空到期路径的 closeGrace 从该到期时刻起算，
+   到期即 forceClose，不是半关后再额外等待一秒。
+   这些预算依赖 loop 正常推进，不能解释为整个进程严格三秒退出。
+3. 业务 barrier 每 100ms 现场重查：玩家实体为空、玩家存盘无在途、退出释放标记为零、
+   改派确认表为空、Kafka producer 已 flush。它不是 MySQL 全部落地的证明，
+   具体边界见[属主重入屏障](./scene-owner-reentry-barrier.md)。
+4. gRPC 的 onDrained 经 queueInLoop 投递并销毁 Server；只有传输已排空，且业务 barrier 当前满足或其 15 秒预算耗尽才 Finalize。
+   业务 drain 的 15 秒预算到期时记录未完成项并继续收尾，不能锁存较早一次短暂完成。
 
-`muduo_grpc::Server` 与它的 Acceptor 只能在 `queueInLoop` 任务里或 loop 外析构（I/O 事件处理期间
-`removeChannel` 有断言）；Finalize 时若 Server 仍在，只能经 `queueInLoop` 防御销毁，不能同步 reset。
-（第 4 批之前的约束是「不得在 EventLoop 上同步调用 `grpc::Server::Shutdown()`、不得立即 join 关机
-worker」，随官方服务端一起退役。）
+身份冲突路径还可能先经历独立的业务排空预算。外线程 Shutdown 的约 20 秒等待用于报告卡顿，
+析构仍等待安全收尾，不能把任一单段预算当作整个进程的硬退出时间。
 
-## 演进路径（未来如遇瓶颈）
+## 4. Finalize 的两阶段收尾
 
-```text
-阶段 0（现在）: 单线程业务 EventLoop（RPC0 与 gRPC 传输都在其上）+ 后台 workers
-    ↓  当网络投递和业务回调持续挤压逻辑帧
-阶段 1: 增加 muduo I/O worker，只负责收发和解码
-         所有业务状态修改继续 runInLoop 投递回主线程
-    ↓  当单场景玩家密度极高
-阶段 2: 场景内按 AOI 区域分片（需要明确 ECS 分片和跨分片消息协议）
-```
+当前实现入口为
+[Node::FinalizeShutdownInLoop](../../cpp/libs/engine/core/node/system/node/node.cpp)
+与同文件的 FinalizeTeardownInLoop：
 
-## 触发演进的信号
+1. 残留 gRPC Server 只能经排队任务防御销毁。撤销节点租约、停止发现与 etcd，
+   关闭 RPC0 在途调用并释放出站 MuduoGrpcChannelPtr，使失败完成先进入 loop 队列；
+   再排队进入 teardown，不能直接拆业务状态。
+2. 执行 KafkaManager 的最终有界 flush（此调用不关闭或销毁 producer），再执行一次 BeforeTeardown 业务 hook。
+   Scene 在这里停止 DBTask Pump 并记录未落定事项；随后调用 `tlsRedis.Shutdown()`。
+3. 释放 Hiredis 可能同步触发空 reply，业务客户端与回调捕获此时必须仍活着。
+   本地 gRPC 完成尚未投递排尽时，让出一轮再检查；之后才清节点池、ECS 与日志资源。
+4. 最后以两跳 queueInLoop 排空 forceClose 和 connectDestroyed，再 quit。
+   完成标记及通知在最后一跳 quit 之后、完成锁内发出；解锁后不再访问 Node。
+   不以定时器或固定睡眠代替该顺序。
+5. loop 返回、Node 析构后，Scene 主入口显式调用 `tlsRedisSystem.Shutdown()`，由其 reset 客户端并销毁 MessageAsyncClient，最后析构 EventLoop。
+   顺序保持 **Hiredis → MessageAsyncClient → EventLoop**。
 
-- 投递到 EventLoop 的网络/Kafka 回调单帧耗时持续超过 2ms；
-- `World::Update` 耗时接近 33ms 帧间隔；
-- EventLoop 待执行队列持续积压；
-- `[GrpcServer] summary` 的 `max_backlog` / `max_dispatched_per_turn` 持续偏高，或出现 `rejected_overload`；
-- AOI 同步或跨场景序列化成为稳定瓶颈。
+muduo_grpc::Server 与 Acceptor 只能在排队任务或 loop 外析构，不能在 I/O 分发栈上同步 reset。
+底层 Hiredis 自定义删除器还会把事件分发期间的最终释放推迟到 pending 阶段；
+这不允许上层提前销毁 EventLoop 或业务回调依赖。连接所有权与回调要求遵守根 `AGENTS.md` §11.7。
+
+## 5. 何时重新评估线程模型
+
+当前选择通过多个 Scene 实例分担场景，不引入多个线程共享同一套可变 ECS。
+若要增加 I/O worker 或拆分场景，需要另行明确状态所有权、消息投递、关闭和跨分片契约，不能只改线程数。
+
+应结合实际 profiling 观察 World::Update 耗时、loop 待执行队列、网络／Kafka 回调耗时、
+gRPC max_backlog / rejected_overload 及 AOI 热点。2ms 只能作为网络派发的观察信号，
+不能直接指定玩法 System 的预算；固定步长也不能代替单实例容量测试。

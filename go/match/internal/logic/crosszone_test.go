@@ -14,6 +14,7 @@ import (
 	"match/internal/config"
 	"match/internal/constants"
 	"match/internal/svc"
+	"shared/drainproof"
 
 	matchpb "proto/match"
 	smpb "proto/scene_manager"
@@ -37,11 +38,12 @@ func newTestSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis) {
 		BattleMaxDurationSeconds: 300,
 	}
 	return &svc.ServiceContext{
-		Config:      c,
-		MatchRedis:  rds,
-		SharedRedis: rds,
-		Redis:       rds,
-		InstanceID:  "test-instance",
+		RelayAdmission: drainproof.New(),
+		Config:         c,
+		MatchRedis:     rds,
+		SharedRedis:    rds,
+		Redis:          rds,
+		InstanceID:     "test-instance",
 	}, mr
 }
 

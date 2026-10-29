@@ -104,7 +104,7 @@ func TestPlayerName_BootstrapDDLIsVarcharUniqueBin(t *testing.T) {
 	before := db.ShowCreateTable(t, store.PlayerNameTableName)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}), "second migration must be a no-op")
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}), "second migration must be a no-op")
 	assert.Equal(t, before, db.ShowCreateTable(t, store.PlayerNameTableName), "player_name DDL changed on second migration")
 }
 
@@ -1112,7 +1112,7 @@ func TestPlayerName_MigrationSwitchesPrimaryKeyFromPlayerID(t *testing.T) {
 		require.NoError(t, err, "夹具:种 %s 失败", norm)
 	}
 
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}), "迁移应当把旧结构换成新结构")
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}), "迁移应当把旧结构换成新结构")
 
 	pkCols, err := store.PrimaryKeyColumnsForTest(ctx, db.Raw, db.Name, store.PlayerNameTableName)
 	require.NoError(t, err)
@@ -1145,7 +1145,7 @@ func TestPlayerName_MigrationSwitchesPrimaryKeyFromPlayerID(t *testing.T) {
 
 	// 幂等:生产每次部署都会重复跑 -migrate,第二次必须零变更。
 	before := db.ShowCreateTable(t, store.PlayerNameTableName)
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}), "second migration must be a no-op")
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}), "second migration must be a no-op")
 	assert.Equal(t, before, db.ShowCreateTable(t, store.PlayerNameTableName), "player_name DDL changed on second migration")
 
 	// 迁移之后 store 必须探到新形态,并选新结构那条 Release 语句。
@@ -1180,7 +1180,7 @@ func TestPlayerName_MigrationRefusesUnknownPrimaryKeyShape(t *testing.T) {
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
 	require.NoError(t, err)
 
-	err = store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{})
+	err = db.Migrate(ctx, store.MigrateOptions{})
 	require.Error(t, err, "认不出的主键形状上必须 fail-closed,不许猜着 ALTER")
 	assert.Contains(t, err.Error(), store.PlayerNameTableName)
 
@@ -1203,6 +1203,7 @@ func TestPlayerName_LegacyShapeStorePicksLegacyRelease(t *testing.T) {
 	_, err := db.Raw.ExecContext(ctx, legacyDDL)
 	require.NoError(t, err, "夹具:建旧结构的 player_name 失败")
 
+	require.NoError(t, db.Fixture().GrantTables(ctx, db.Name, store.PlayerNameTableName))
 	st, err := store.NewPlayerNameStore(db.Cfg)
 	require.NoError(t, err, "旧结构不该拒绝建 store:它功能正确,只是更容易成环(TiDB 上迁移会跳过,拒启动等于让 player_name 不可用)")
 	defer st.Close()
@@ -1270,7 +1271,7 @@ func TestPlayerName_MigrationConvergesLeftoverKeyShape(t *testing.T) {
 		db.Name, store.PlayerNameTableName, store.PlayerNameLegacyNormUniqueKey).Scan(&leftover))
 	require.Equal(t, 1, leftover, "夹具:中间态里旧的 %s 必须还在", store.PlayerNameLegacyNormUniqueKey)
 
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}),
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}),
 		"主键已对但形状没收敛时,迁移必须把它收敛掉,而不是在快路径直接跳过")
 
 	pkCols, err := store.PrimaryKeyColumnsForTest(ctx, db.Raw, db.Name, store.PlayerNameTableName)
@@ -1302,7 +1303,7 @@ func TestPlayerName_MigrationConvergesLeftoverKeyShape(t *testing.T) {
 
 	// 幂等:收敛过的表再跑一次必须零变更(收敛这一步每次启动都会走到)。
 	before := db.ShowCreateTable(t, store.PlayerNameTableName)
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}), "second migration must be a no-op")
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}), "second migration must be a no-op")
 	assert.Equal(t, before, db.ShowCreateTable(t, store.PlayerNameTableName), "player_name DDL changed on second migration")
 
 	st, err := store.NewPlayerNameStore(db.Cfg)
@@ -1327,7 +1328,7 @@ func TestPlayerName_MigrationCanSkipPrimaryKeySwitchByOption(t *testing.T) {
 	_, err := db.Raw.ExecContext(ctx, legacyDDL)
 	require.NoError(t, err, "夹具:建旧结构的 player_name 失败")
 
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{AllowLegacyPlayerNamePrimaryKey: true}),
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{AllowLegacyPlayerNamePrimaryKey: true}),
 		"开关打开时整条迁移必须跑完(其余四张表的列同步与地板校验是无关且必要的)")
 
 	pkCols, err := store.PrimaryKeyColumnsForTest(ctx, db.Raw, db.Name, store.PlayerNameTableName)
@@ -1343,7 +1344,7 @@ func TestPlayerName_MigrationCanSkipPrimaryKeySwitchByOption(t *testing.T) {
 		store.PlayerNameLegacyNormUniqueKey)
 
 	// 关掉开关重跑一次就该根治 —— 逃生口是"推迟",不是"永久跳过"。
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}))
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}))
 	pkCols, err = store.PrimaryKeyColumnsForTest(ctx, db.Raw, db.Name, store.PlayerNameTableName)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"name_norm"}, pkCols)

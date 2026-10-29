@@ -66,7 +66,8 @@ type budgetEatingApplier struct {
 	hasDeadline bool
 	remaining   time.Duration
 
-	res Result
+	res            Result
+	afterExhausted func() // 预算结束、scene 答复交付前同步触发父取消，消除等长 timer 观察竞态。
 }
 
 func (a *budgetEatingApplier) Do(ctx context.Context, _ RPC, _ *assetpb.AssetOpRequest) (Result, error) {
@@ -77,6 +78,9 @@ func (a *budgetEatingApplier) Do(ctx context.Context, _ RPC, _ *assetpb.AssetOpR
 	}
 	a.mu.Unlock()
 	<-ctx.Done()
+	if a.afterExhausted != nil {
+		a.afterExhausted()
+	}
 	// 预算耗尽的同一瞬间答复到了:结局有效,钱已经动了。
 	return a.res, nil
 }
@@ -104,6 +108,7 @@ func TestFinalizeKeepsBudgetAfterApplyExhaustsIt(t *testing.T) {
 	// 投递吃满之后父 ctx 必然过期,正是修复前落库拿到死 ctx 的那条时序。
 	parent, cancel := context.WithTimeout(context.Background(), loop.cfg.OpBudget-settleBudget)
 	defer cancel()
+	applier.afterExhausted = cancel // 等实际投递预算耗尽，再同步确认父取消。
 
 	processed, err := loop.ProcessOne(parent, op)
 	if err != nil {
@@ -142,10 +147,17 @@ func TestAwaitSQLKeepsBudgetAfterApplyExhaustsIt(t *testing.T) {
 		c.RequireSQLCommit = true
 	})
 
+	ledger := sqlLedgerFixture(true, op)
+	loop.Ledger = ledger
+	if err := loop.CheckWiring(); err != nil {
+		t.Fatal(err)
+	}
+
 	// 父 ctx 只剩投递那一段:同步路径的调用方在进来之前已经花掉了前面一部分预算。
 	// 投递吃满之后父 ctx 必然过期,正是修复前落库拿到死 ctx 的那条时序。
 	parent, cancel := context.WithTimeout(context.Background(), loop.cfg.OpBudget-settleBudget)
 	defer cancel()
+	applier.afterExhausted = cancel // 不靠两个等长 timer 的调度顺序证明父取消。
 
 	processed, err := loop.ProcessOne(parent, op)
 	if err != nil {
@@ -155,6 +167,9 @@ func TestAwaitSQLKeepsBudgetAfterApplyExhaustsIt(t *testing.T) {
 		t.Fatal("父 ctx 本应已经过期,否则这个用例什么也没验到")
 	}
 
+	if ledger.reads.Load() != 0 {
+		t.Fatal("apply 预算已耗尽，不得读取 SQL 证据")
+	}
 	finalize, reschedule := store.probes()
 	if finalize.calls != 0 || reschedule.calls != 1 {
 		t.Fatalf("预算耗尽后未取得 SQL 证据，必须可靠重排: finalize=%d reschedule=%d", finalize.calls, reschedule.calls)
@@ -194,22 +209,25 @@ func TestApplyBudgetReservesSettleShare(t *testing.T) {
 	}
 }
 
-// 父 ctx 已经取消(调用方超时返回 / 服务正在关停),终局仍要落库(RequireSQLCommit 关闭,HEAD 口径)。
+// 已准入投递在 scene 答复交付边界取消父 ctx，终局仍要落库(RequireSQLCommit 关闭,HEAD 口径)。
 func TestFinalizeSurvivesCanceledParent(t *testing.T) {
 	op := testOp(1)
 	store := &settleSpyStore{fakeStore: newFakeStore(op)}
+	parent, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// scene 已经答复过了:结局到手,钱已经动了,这一步只剩写回去。
 	applier := &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) {
+		cancel() // 已准入的投递取得 scene 结局后，父调用方退出。
 		return resultApplied(true), nil
 	}}
 	loop, _ := newTestLoop(t, store, applier, nil)
 
-	parent, cancel := context.WithCancel(context.Background())
-	cancel()
-
 	processed, err := loop.ProcessOne(parent, op)
 	if err != nil {
 		t.Fatalf("ProcessOne 出错: %v", err)
+	}
+	if parent.Err() != context.Canceled {
+		t.Fatal("scene 答复交付边界必须已同步取消父 ctx")
 	}
 	finalize, _ := store.probes()
 	if finalize.calls != 1 || finalize.err != nil {
@@ -223,23 +241,33 @@ func TestFinalizeSurvivesCanceledParent(t *testing.T) {
 	}
 }
 
-// RequireSQLCommit 打开时父 ctx 已经取消:读不了 SQL 证据就不终结,但「未确认」本身仍要可靠写回。
+// RequireSQLCommit 打开且已准入投递耗尽 apply 预算时，不读取或伪造 SQL 证据；父取消不连累待办可靠写回。
 func TestUnconfirmedResultSurvivesCanceledParentAsPending(t *testing.T) {
 	op := testOp(1)
 	store := &settleSpyStore{fakeStore: newFakeStore(op)}
-	// scene 已经答复过了:结局到手,钱已经动了,这一步只剩写回去。
-	applier := &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) {
-		return resultApplied(true), nil
-	}}
-	loop, _ := newTestLoop(t, store, applier, requireSQLCommit)
-	loop.Ledger = sqlLedgerFixture(true, op)
-
 	parent, cancel := context.WithCancel(context.Background())
-	cancel()
+	defer cancel()
+	// 已准入的 scene 投递耗尽 apply 预算后交付结果，并同步取消父调用；不能再用该预算取 SQL 证据。
+	applier := &budgetEatingApplier{res: resultApplied(true), afterExhausted: cancel}
+	loop, _ := newTestLoop(t, store, applier, func(c *LoopConfig) {
+		tightBudget(c)
+		requireSQLCommit(c)
+	})
+	ledger := sqlLedgerFixture(true, op)
+	loop.Ledger = ledger
+	if err := loop.CheckWiring(); err != nil {
+		t.Fatal(err)
+	}
 
 	processed, err := loop.ProcessOne(parent, op)
 	if err != nil {
 		t.Fatalf("ProcessOne 出错: %v", err)
+	}
+	if parent.Err() != context.Canceled {
+		t.Fatal("scene 答复交付边界必须已同步取消父 ctx")
+	}
+	if ledger.reads.Load() != 0 || processed.Result.SQLCommitted {
+		t.Fatal("已耗尽取证预算不得读取或伪造 SQL 已提交证据")
 	}
 	finalize, reschedule := store.probes()
 	if finalize.calls != 0 || reschedule.calls != 1 || reschedule.err != nil {
@@ -257,16 +285,19 @@ func TestUnconfirmedResultSurvivesCanceledParentAsPending(t *testing.T) {
 func TestRescheduleSurvivesCanceledParent(t *testing.T) {
 	op := testOp(1)
 	store := &settleSpyStore{fakeStore: newFakeStore(op)}
+	parent, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	applier := &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) {
+		cancel()                         // 已准入的 scene 结果交付后父调用方退出，重排仍有独立预算。
 		return resultApplied(false), nil // 结局有了但没落盘 → await_durable 重排
 	}}
 	loop, _ := newTestLoop(t, store, applier, nil)
 
-	parent, cancel := context.WithCancel(context.Background())
-	cancel()
-
 	if _, err := loop.ProcessOne(parent, op); err != nil {
 		t.Fatalf("ProcessOne 出错: %v", err)
+	}
+	if parent.Err() != context.Canceled {
+		t.Fatal("scene 答复交付边界必须已同步取消父 ctx")
 	}
 	_, reschedule := store.probes()
 	if reschedule.calls != 1 || reschedule.err != nil {
@@ -274,5 +305,26 @@ func TestRescheduleSurvivesCanceledParent(t *testing.T) {
 	}
 	if !reschedule.hasDeadline {
 		t.Fatal("重排的 ctx 必须自带超时")
+	}
+}
+
+// 准入前取消与已接收结果的收尾不同：不得先派发，再借独立 settle 预算做新副作用。
+func TestProcessOneRejectsAlreadyCanceledParent(t *testing.T) {
+	op := testOp(1)
+	store := &settleSpyStore{fakeStore: newFakeStore(op)}
+	applier := &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) {
+		t.Fatal("已取消的新操作不得派发 scene RPC")
+		return Result{}, nil
+	}}
+	loop, _ := newTestLoop(t, store, applier, nil)
+	parent, cancel := context.WithCancel(context.Background())
+	cancel()
+	processed, err := loop.ProcessOne(parent, op)
+	if err != context.Canceled || processed.Finalized || applier.calls.Load() != 0 {
+		t.Fatalf("已取消操作必须在派发前拒绝: result=%+v err=%v calls=%d", processed, err, applier.calls.Load())
+	}
+	finalize, reschedule := store.probes()
+	if finalize.calls != 0 || reschedule.calls != 0 {
+		t.Fatalf("未准入操作不得终结或重排: finalize=%d reschedule=%d", finalize.calls, reschedule.calls)
 	}
 }

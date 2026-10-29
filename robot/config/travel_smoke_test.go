@@ -66,3 +66,40 @@ func TestTravelSmokeAccountConfig(t *testing.T) {
 		})
 	}
 }
+
+// hop_timeout_seconds:缺省 60(旧配置不写也照旧);验收冻结硬上限时可调大;0 / 负数在登录前就拒绝,
+// 不能让一跳预算变成"立刻超时"。
+func TestTravelSmokeHopTimeoutConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		line    string
+		want    int
+		invalid bool
+	}{
+		{name: "旧配置缺省", want: 60},
+		{name: "验收冻结上限", line: "  hop_timeout_seconds: 90\n", want: 90},
+		{name: "零", line: "  hop_timeout_seconds: 0\n", invalid: true},
+		{name: "负数", line: "  hop_timeout_seconds: -1\n", invalid: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "travel.yaml")
+			data := "gateway_addr: http://127.0.0.1:58900\nmode: travel-smoke\ntravel_smoke:\n  home_zone: 990017\n  visit_zone: 990018\n" + tc.line
+			if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := config.Load(path)
+			if tc.invalid {
+				if err == nil {
+					t.Fatal("非正的一跳预算必须在任何登录副作用前被拒绝")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("配置加载失败: %v", err)
+			}
+			if got.TravelSmoke.HopTimeoutSeconds != tc.want {
+				t.Fatalf("hop_timeout_seconds = %d, want %d", got.TravelSmoke.HopTimeoutSeconds, tc.want)
+			}
+		})
+	}
+}

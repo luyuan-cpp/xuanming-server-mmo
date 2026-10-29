@@ -883,6 +883,130 @@ func FormatZone(zoneID uint32) string {
 	return strconv.FormatUint(uint64(zoneID), 10)
 }
 
+// ── 登录取归属 zone 与账号目录(开服线 X-3;L-14 / L-18 压测口径,docs/design/player-route-mapping-durability-proposal.md §12.2)──
+//
+// 每次登录(HTTP 与 gate 各一次)都要 ReadAccountDirectory(全局 TiDB 悲观事务)+ BatchGetPlayerHomeZone,EnterGame 与
+// scene_manager 的每次 EnterScene 还要 LookupAccountRole / GetPlayerHomeZone。这三组直方图给出服务端视角的单次耗时与结局,
+// 与 login 侧 go-zero 的 rpc_client_requests_duration_ms 对照,就能分清慢在网络 / 排队还是慢在 data_service 自己。
+// 全部是封闭集合,PrimeLoginReads 在构造 gRPC server 时逐个预建(理由同 PrimeRoute:error 这类偶发结局的序列
+// 不预先存在,`increase(...) > 0` 恰好漏掉第一次)。label 不带 player_id / account(AGENTS.md §9)。
+// 单独一把 sync.Once 注册,不动上面那张 MustRegister 清单(只追加)。
+// 取值名同时是 tools/scripts/stress_summarize.ps1 的契约($homeZoneReadResults / $accountDirectoryRpcs),
+// metrics_test.go 读脚本逐项比对。
+
+// home_zone_read_seconds{rpc,result} 的取值。
+const (
+	HomeZoneRPCHome  = "home"  // GetPlayerHomeZone(单查,带合服围栏)
+	HomeZoneRPCBatch = "batch" // BatchGetPlayerHomeZone(login 角色列表)
+
+	// 按返回的 gRPC code 归类(server.homeZoneReadResult):OK → ok,NotFound(映射的权威缺席)→ not_found,
+	// 其余(mapping Redis / 全局库故障、调用方取消或超时)→ error。批量查没有缺席结论,not_found 恒为 0。
+	HomeZoneReadResultOK       = "ok"
+	HomeZoneReadResultNotFound = "not_found"
+	HomeZoneReadResultError    = "error"
+)
+
+// account_directory_rpc_seconds{rpc,result} 的取值。rpc 覆盖 internal/server/account_directory.go 里的全部账号目录 RPC
+// (角色交易与入场登记在各自的文件里,不在这组)。
+const (
+	AccountDirectoryRPCRead   = "read"   // ReadAccountDirectory
+	AccountDirectoryRPCCreate = "create" // CreateAccountRole
+	AccountDirectoryRPCLookup = "lookup" // LookupAccountRole
+	AccountDirectoryRPCRepair = "repair" // RepairAccountRole
+	AccountDirectoryRPCRemove = "remove" // RemoveAccountRoles
+
+	// 按返回的 gRPC code 归类(server.directoryRPCResult,与 directoryError / admitDirectory 的映射一一对应):
+	//   ok        = OK
+	//   not_found = NotFound(ErrMissing,目录里没有这名角色)
+	//   rejected  = 明确拒绝:PermissionDenied(调用证明无效)、InvalidArgument(ErrInvalid)、
+	//               ResourceExhausted(ErrFull)、FailedPrecondition(ErrConflict,归属或身份已变化)
+	//   error     = 依赖故障:Unavailable(目录未就绪、SQL 失败)及其余一切(调用方取消 / 超时等)
+	AccountDirectoryResultOK       = "ok"
+	AccountDirectoryResultNotFound = "not_found"
+	AccountDirectoryResultRejected = "rejected"
+	AccountDirectoryResultError    = "error"
+)
+
+var (
+	homeZoneRPCs        = []string{HomeZoneRPCHome, HomeZoneRPCBatch}
+	homeZoneReadResults = []string{HomeZoneReadResultOK, HomeZoneReadResultNotFound, HomeZoneReadResultError}
+
+	accountDirectoryRPCs = []string{
+		AccountDirectoryRPCRead, AccountDirectoryRPCCreate, AccountDirectoryRPCLookup,
+		AccountDirectoryRPCRepair, AccountDirectoryRPCRemove,
+	}
+	accountDirectoryResults = []string{
+		AccountDirectoryResultOK, AccountDirectoryResultNotFound, AccountDirectoryResultRejected, AccountDirectoryResultError,
+	}
+
+	// loginReadLatencyBuckets:0.5ms 起步盖住 Redis 就绪读的命中,2.5s 封顶盖住 login / scene_manager 1.5s 级的调用方超时与 TiDB 锁等待。
+	loginReadLatencyBuckets = []float64{0.0005, 0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5}
+
+	homeZoneReadSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: subsystem,
+		Name:      "home_zone_read_seconds",
+		Help:      "GetPlayerHomeZone (rpc=home) / BatchGetPlayerHomeZone (rpc=batch) handler latency by result (ok|not_found|error).",
+		Buckets:   loginReadLatencyBuckets,
+	}, []string{"rpc", "result"})
+
+	homeZoneBatchIDs = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Subsystem: subsystem,
+		Name:      "home_zone_batch_ids",
+		Help:      "Number of player ids per BatchGetPlayerHomeZone call.",
+		Buckets:   []float64{1, 2, 4, 8, 16, 32, 64, 128},
+	})
+
+	accountDirectoryRPCSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: subsystem,
+		Name:      "account_directory_rpc_seconds",
+		Help:      "Account directory RPC handler latency by rpc (read|create|lookup|repair|remove) and result (ok|not_found|rejected|error).",
+		Buckets:   loginReadLatencyBuckets,
+	}, []string{"rpc", "result"})
+
+	loginReadRegisterOnce sync.Once
+)
+
+func registerLoginReads() {
+	loginReadRegisterOnce.Do(func() {
+		prometheus.MustRegister(homeZoneReadSeconds, homeZoneBatchIDs, accountDirectoryRPCSeconds)
+	})
+}
+
+// PrimeLoginReads 预建 home_zone_read_seconds(2 × 3 = 6 条,批量查的 not_found 也建,让两种 rpc 的列形状一致)与
+// account_directory_rpc_seconds(5 × 4 = 20 条)的全部组合;home_zone_batch_ids 无 label,注册即导出。
+// server.NewDataServiceServer 调用;可重复调用(只建子序列,不打点)。
+func PrimeLoginReads() {
+	registerLoginReads()
+	for _, rpc := range homeZoneRPCs {
+		for _, result := range homeZoneReadResults {
+			homeZoneReadSeconds.WithLabelValues(rpc, result)
+		}
+	}
+	for _, rpc := range accountDirectoryRPCs {
+		for _, result := range accountDirectoryResults {
+			accountDirectoryRPCSeconds.WithLabelValues(rpc, result)
+		}
+	}
+}
+
+// ObserveHomeZoneRead 记一次归属读 handler 的耗时与结局。rpc / result 取 HomeZone* 常量(封闭集合),本函数不校验。
+func ObserveHomeZoneRead(rpc, result string, d time.Duration) {
+	registerLoginReads()
+	homeZoneReadSeconds.WithLabelValues(rpc, result).Observe(d.Seconds())
+}
+
+// ObserveHomeZoneBatchIDs 记一次 BatchGetPlayerHomeZone 的 id 个数(含 0 个,落在 le=1 桶)。
+func ObserveHomeZoneBatchIDs(n int) {
+	registerLoginReads()
+	homeZoneBatchIDs.Observe(float64(n))
+}
+
+// ObserveAccountDirectoryRPC 记一次账号目录 RPC 的耗时与结局。rpc / result 取 AccountDirectory* 常量(封闭集合),本函数不校验。
+func ObserveAccountDirectoryRPC(rpc, result string, d time.Duration) {
+	registerLoginReads()
+	accountDirectoryRPCSeconds.WithLabelValues(rpc, result).Observe(d.Seconds())
+}
+
 // ── 对账 leader(D1 第 1b-2 批,docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §4.2、§13.1 第 8、9 条)──
 //
 // 三类序列,口径不同(告警按 leader 过滤,1b-3):
@@ -1205,4 +1329,27 @@ func boolGauge(b bool) float64 {
 		return 1
 	}
 	return 0
+}
+
+// PrimeRouteEnumerate 只把 route_read_total 里 path="enumerate" 的两条序列(sql / sql_error)预置为 0(M1-6,2026-10-23)。
+// R7(GetAllPlayerIDsInZone)在 db_first 下一律读库、与读方开关无关,每次调用都计这两条之一;只靠 PrimeRouteRead(读方开关打开时才调)
+// 预置的话,开关关着时 enumerate 的 sql_error 要等第一次出现才有序列,`increase(...) > 0` 恰好漏掉那一次(zone 回档的孤儿号报告
+// 就走 R7)。所以 db_first 一律调本函数(svc.NewServiceContext);其余 11 条与 verdict 仍只由 PrimeRouteRead 在开关打开时预置。
+// 取值从 routeReadSeries 里按 path 筛,不另抄一份;与 PrimeRouteRead 重复调用无害(Add(0))。
+func PrimeRouteEnumerate() {
+	register()
+	for _, s := range routeEnumerateSeries() {
+		routeReadTotal.WithLabelValues(s[0], s[1]).Add(0)
+	}
+}
+
+// routeEnumerateSeries 是 routeReadSeries 里 path="enumerate" 的那几条(现为 sql / sql_error 两条)。
+func routeEnumerateSeries() [][2]string {
+	var out [][2]string
+	for _, s := range routeReadSeries {
+		if s[0] == RouteReadPathEnumerate {
+			out = append(out, s)
+		}
+	}
+	return out
 }

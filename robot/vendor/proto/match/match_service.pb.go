@@ -894,8 +894,9 @@ func (x *ChallengeResultS2C) GetResponderId() uint64 {
 
 type WatchBattleRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"` // 权威身份以 session metadata 为准
-	BattleId      uint64                 `protobuf:"varint,2,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"` // 0 = 随机观战
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`   // 权威身份以 session metadata 为准
+	BattleId      uint64                 `protobuf:"varint,2,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`   // 0 = 随机观战
+	RequestId     string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // 全球模式原观战意图UUID，重试复用；已关闭原件不能复活或清退后来的观战。
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -944,12 +945,20 @@ func (x *WatchBattleRequest) GetBattleId() uint64 {
 	return 0
 }
 
+func (x *WatchBattleRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
 type WatchBattleResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`            // 实际观战的战斗(随机模式回填)
-	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"` // 无可观战战斗/本人在战斗或队列中/战斗已结束
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	BattleId             uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`            // 实际观战的战斗(随机模式回填)
+	ErrorMessage         *base.TipInfoMessage   `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"` // 无可观战战斗/本人在战斗或队列中/战斗已结束
+	SpectatorOperationId string                 `protobuf:"bytes,3,opt,name=spectator_operation_id,json=spectatorOperationId,proto3" json:"spectator_operation_id,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *WatchBattleResponse) Reset() {
@@ -994,6 +1003,13 @@ func (x *WatchBattleResponse) GetErrorMessage() *base.TipInfoMessage {
 		return x.ErrorMessage
 	}
 	return nil
+}
+
+func (x *WatchBattleResponse) GetSpectatorOperationId() string {
+	if x != nil {
+		return x.SpectatorOperationId
+	}
+	return ""
 }
 
 type ListWatchableBattlesRequest struct {
@@ -1421,13 +1437,16 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x12ChallengeResultS2C\x12!\n" +
 	"\fchallenge_id\x18\x01 \x01(\x04R\vchallengeId\x12\x1a\n" +
 	"\baccepted\x18\x02 \x01(\bR\baccepted\x12!\n" +
-	"\fresponder_id\x18\x03 \x01(\x04R\vresponderId\"N\n" +
+	"\fresponder_id\x18\x03 \x01(\x04R\vresponderId\"m\n" +
 	"\x12WatchBattleRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1b\n" +
-	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\"h\n" +
+	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\"\x9e\x01\n" +
 	"\x13WatchBattleResponse\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
-	"\rerror_message\x18\x02 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"P\n" +
+	"\rerror_message\x18\x02 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x124\n" +
+	"\x16spectator_operation_id\x18\x03 \x01(\tR\x14spectatorOperationId\"P\n" +
 	"\x1bListWatchableBattlesRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\rR\x05limit\"S\n" +

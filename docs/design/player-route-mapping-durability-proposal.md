@@ -1,5 +1,7 @@
 # 玩家归属与落点映射持久化:库为真源 + Redis 完整副本 + 就绪标记(已拍板;第 0 ~ 3 批已落码,未验证;2026-10-19 起读方按身份绑定的就绪标记判可信,见 §13)
 
+> **2026-10-23 方向变更**：负责人拍板映射改为直读 TiDB、撤掉 Redis 副本与就绪标记，见文末 §15（设计已定，未落码）。本文 §2 / §5.1 / §5.4 / §13 的副本与就绪标记设计、§14 里依赖 ready 的首次启动步骤随之作废，落码以 §15 为准。
+
 > **状态**:**已拍板(2026-10-12,负责人),分批落码中**。2026-10-12 起草;拍板结果与落码进度见文末「§11 拍板与落码记录」。
 > **起因**:用户提出「逻辑服 id(home_zone)和 storage_id 应该存到 TiDB,Redis 只做缓存,不然 Redis 丢了映射无法恢复」。这正是 [TiDB 决策](./global-data-layer-tidb-decision.md) D1「映射持久化兜底」与 [player-storage-placement.md](./player-storage-placement.md) §4.4 / §11.4 的遗留项。
 > **怎么来的**:多 agent 只读设计。先盘点两份映射的全部读写点与不变量,再并行出三种方案:A 库为真源 + Redis 缓存;B Redis 为真源 + 数据库副本;C 把归属写进玩家主表。之后从「数据一致性」「运维上线」两个视角做对抗评审,最后汇总成本稿。只读代码、grep、git 得出,没有编译、测试或压测。按 AGENTS.md §10.1,实现后交 Codex 验证,在那之前不能说「已验证」。
@@ -1528,3 +1530,95 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 存量环境先停止旧映射写者，保留原Redis/SQL原件，运行既有route-tool import-from-redis -allow-db-first -dry-run=false及audit；缺placement者还须沿正规merge_zone pin-placement流程补齐，不能在正常入场时偷偷创建默认home。然后起DS自然reconcile，严格audit -require-maprev为0并核真实ready后再开放DB/Login。SQL路由为空但Redis为空也不能证明全新：目录或任一白名单存盘有记录必须拒启并要求正规恢复。SQL已有route时不做每副本全表startup audit，继续原逐行maprev/水位防回档协议。恢复/回档不得使用第13节旧“切回Redis”的服务回退；只许保持全球强一致合同的正规工具恢复。
 
 本批不新增表或proto，不伪造导入/ready凭证；新增配置、空库/存量负例、真实TiDB玩家历史和caller权限回归均仍待根代理实际执行。原DS/DB/Login/SM运行证据仅代表此前字节，不代表本批当前源。
+
+
+---
+
+## 15. 2026-10-23 负责人拍板：映射改为直读 TiDB，撤掉 Redis 副本（设计已定，未落码）
+
+> **状态**：方向已拍板，本节是落码依据；**一行代码都还没改**。取代 §2「Redis 完整副本 + 就绪标记」、§5.1 / §5.4、§13 的 M1–M5、第 1b-2 批对账 leader 与第 3 批读方。保留：库为真源、四张（含 proto 守卫共五张）路由表、合服围栏落库、提交点在 TiDB 事务。
+> **来源**：负责人在会话「账号登录逻辑/物理服瓶颈」里，面对三个选项（直读 TiDB / Redis 分片副本 / 这次不动）选了「直读 TiDB（推荐）」。选项原文：去掉 Redis 映射副本，`player_route` 只在 TiDB 一份，登录、进场、go/db 直接 SQL 点查，go/db 在同一 TiDB 事务里核落点；删掉就绪标记、对账 leader、预热、发布等待。负责人同日说明：项目未上线，玩家数据可完全清空。
+> **与 §14 的关系**：§14（2026-10-21 全球正式默认与首次启动）里依赖副本的部分随本节作废：对账 leader 自然挂 ready、go/db 消费 / 重试就绪闸放行、「Mapping Redis 无历史 zone/placement/maprev/merged_into」这一条空环境判据、存量环境的 `route-tool import-from-redis` 与 `audit -require-maprev`。首次启动改为：预建并迁移全局库与白名单落点库 → 起 data_service（§14 的 SQL 空环境判据保留）→ 直接起 go/db 与 login，不再等待 ready。§14 其余内容（RequireTiDB、Placement.Required、PinOnCreate、storage_id 白名单反解、强读会话）保留。
+> **依据**：§12.3 与 2026-10-22~23 的两轮多代理静态核对（基线 HEAD `940ef9746` / `2c07f2c28`）；D1 移交 [d1-review-fix-handoff-20261023.md](../handoff/d1-review-fix-handoff-20261023.md)；数据服务路由审计会话给出的写门禁契约（[data_service_role_and_scope.md](./data_service_role_and_scope.md)「写门禁契约」「已澄清」）。本节的删除清单是汇总结果，**不是穷举**；落码第一步先按 §15.7 B0 做全仓穷举盘点。
+
+### 15.1 为什么改
+
+- 2026-10-21 全球权威改动（`1b41d8f1e`）之后，全部 SQL（全局库、全部 zone / player_store 库）已在同一个外部 TiDB 集群上。登录链路上唯一不能水平扩展的环节，就是挂在单个共享 Redis 主上的映射副本。
+- 副本要靠「绑定实例身份的就绪标记」才能判可信（§13 M1）。这个设计天然只能单实例，上不了 Cluster（§12.3 阻塞点 5、10）；Redis 重启或切主后要全量预热数小时，期间 go/db 全服停消费、读方全部回源（§13.5 第 5 条，R2 审计 r2-rr#5）。
+- 直读 TiDB 只有一份数据，一致性由 TiDB 事务直接给出；`player_route` 主键已按 `(route_shard, player_id)` 聚簇打散（§11.2 G1a），点查随 TiKV / tidb-server 加节点扩展。代价是每次读从约 0.2ms（Redis）变成约 1~2ms（同地域 TiDB 点查，推断，待压测）。
+- 未上线、数据可清空：不写迁移、混跑、回退兼容，首次上线整批起步。
+
+### 15.2 读路径（改造后）
+
+| 读方 | 改造前 | 改造后 | 失败语义 |
+|---|---|---|---|
+| login 角色列表 `BatchGetPlayerHomeZone`（每次 Login 1 次） | data_service 在 mapping Redis 上跑就绪读脚本（GET 标记 + 2 次 INFO + MGET），不可信回源 | data_service 一条 `SELECT player_id, home_zone FROM player_route WHERE (route_shard, player_id) IN (…)`（≤ `RouteBatchLimit`，TiDB BatchPointGet） | 不变：login 失败放行、保留建角 zone；data_service 侧 SQL 故障回 Unavailable，不回 NotFound；调用方取消不计 sql_error（M1-2 口径保留） |
+| scene_manager 进场 / 换图 `GetPlayerHomeZone` | 一段 EVAL（GET home + EXISTS 围栏键） | 现有 `RouteStore.GetHomeAndFence`：**同一条 SQL** 读出 home 与 `zone_merge_fence`（A16：预检的 home 与围栏必须同一读） | 无记录回 NotFound；SQL 故障回 Unavailable（故障码 1，不降级、不回落别的源） |
+| data_service 写门禁（`AcquirePlayerWriteLock`） | 两次 EVAL 读 home + 围栏 | 预检与提交点复核都改为 `GetHomeAndFence`；顺序保持「预检 → 两把玩家锁 → 数据锁 SETNX 之后复核」，复核看到围栏 / home 变化 / 读失败先放锁再拒绝（回 22） | 同上 |
+| go/db 每条读写任务（选库 + 落库后复核，现为 2 次两键 MGET 或就绪脚本） | Redis | 见 §15.3「go/db 在写事务里锁读路由」 | 三态，见 §15.5 |
+| guild 合服围栏（`MergeMarkerRedis.RequireRouteReady` 就绪读） | Redis 围栏镜像 | 在 guild 现有的 TiDB 会话里用库名限定读 `<全局库>.zone_merge_fence` | 读失败按封锁处理（与现行 fail-closed 一致） |
+| friend / match / trade / player_inbox | 经 data_service RPC | 接口不变，随 data_service 内部改读 SQL | 不变 |
+| saveoutbox 补投 | 跨 zone 迁移前直读 `player:zone` | 由「Redis 物理水平扩展设计」会话的 saveoutbox 改造删掉这处映射读，home 是否匹配改由消费端 go/db 判（[redis-player-store-cluster.md](./redis-player-store-cluster.md) §5.13） | 见 §15.5 第 1 条 |
+
+### 15.3 写路径与 go/db 的一致性
+
+- **建角 W1**：data_service `RegisterPlayerZone` 只剩一个 TiDB 事务（读 `route_meta`、`FOR UPDATE` 围栏分片行、INSERT `player_route`），提交即完成。删掉发布脚本与 WAITAOF，`publish_redis.go` 整个文件删除。
+- **合服 / 搬库（merge_zone）**：`tools/merge_zone/route_store.go` 只写 SQL；删除 Redis 镜像发布（`route_publish.go`、catchUp、源码比对守卫）、`-route-source`（只剩 db）、`verify:route_cache` 审计与 WAITAOF 参数。D1 移交 §2.1 里仍成立的围栏接手 / 续期 / 换源拒绝 / 失权中止 / 时限释放全部保留。合服围栏只在 TiDB `zone_merge_fence`，删掉 `merge:in_progress:{zone}` 镜像。
+- **go/db 在写事务里锁读路由**（取代「选库 MGET + 落库后复核 MGET」）：
+  1. 先无锁点查 `player_route` 拿到 `storage_id` / `home_zone` / 冻结状态 / 行版本，用来选目标库连接池（go/db 仍按库开池，不改池结构）；
+  2. 在目标库连接上开写事务，第一条语句用库名限定 `SELECT … FROM <全局库>.player_route WHERE … FOR UPDATE` 重读并核对行版本与第 1 步一致（不一致：本次放弃、按最新路由重试），然后写两张玩家表、提交。同一 TiDB 集群内跨库事务原子；
+  3. 搬库 / 合服写者改路由行时同样先锁路由行。**锁序固定为「路由行 → 玩家数据行」**，两边一致，不会互锁；
+  4. TiDB 对 `FOR SHARE` / `LOCK IN SHARE MODE` 默认不支持（开 `tidb_enable_noop_functions` 后也只是空操作，推断，落码时用真 TiDB 用例确认），所以用 `FOR UPDATE`。同一玩家的写本来就被排序锁串行，额外的行锁只与搬库 / 合服竞争；
+  5. 冷登录读任务：在目标库连接上开读事务，先 `FOR UPDATE` 锁读路由行核对未冻结、版本一致，再读两张玩家表、提交。只发生在冷登录，锁持有时间短。
+  这样「搬库要等在途写完成」（§13 R2）由 TiDB 行锁直接保证，不再需要 SQL 之后的二次复核与就绪闸。go/db 需要新配置项：全局库名（`Placement.RouteSchema`），以及该账号对全局库 `player_route` 的读与加锁权限。
+
+### 15.4 删除与保留清单（汇总，B0 穷举后补全）
+
+- **data_service**：删 `routing/route_read.go` 的就绪读、`routing/publish_redis.go`、`route_publish.go` 的发布与 WAITAOF（W1 的 SQL 部分保留）、`internal/routereconcile/` 整包、routetool 的 rewarm / 水位键出口 / `audit -require-maprev`；配置删 `RouteStore.Mode`（只剩 SQL，不再有 redis / db_first 之分）/ `ReadRequiresReady` / `Reconcile.*` / `ArmReadyMarker` / `PublishRedisPoolSize` / `WaitAOF*`，`global_authority.go` 的强制组合随之简化；指标删 `route_ready_*`，`route_read_total` 改为只计 SQL 读结局（ok / not_found / error）。D1 会话留下的未提交读方门禁改动（M1-5 / M1-6 / `PrimeRouteEnumerate` 及两份测试）随之删改。
+- **`go/shared/placement`**：删 `route_ready.go`（就绪脚本、Arm 脚本、`VerifyRouteReady`、水位键）与 `route.go` 的发布脚本、`PublishRouteKeys`、`MapRevKey`；保留按 player_id 计算路由分片等纯函数。
+- **go/db**：删 `route_ready_gate.go`、`placement_route.go` 的 Redis 读（改为 §15.3）、配置 `Placement.Redis` / `RequireRouteReady` / `RouteReadyGateIntervalMs`、`ValidateGlobalAuthority` 里对应的组合、就绪指标；`placement_lookup` / `placement_recheck` 两个 Redis 步骤指标改为 SQL 步骤。`db:capability:zone:{z}` 是给旧版 go/db 作证的临时标记，未上线、整批起步时不再需要，一并删除。**保留** go/db 核心 Redis 上 persistBeforeAck 用的 WAITAOF（与映射无关）。
+- **guild**：删 `MergeMarkerRedis` 句柄与就绪读，改读 SQL 围栏。
+- **tools**：merge_zone 见 §15.3；`data_consistency_check` 删 redis 口径，保留 D1 移交里已落码的读失败判 fail；`dev_tools.ps1` 删 `-MergeZoneRouteSource` 与 WAITAOF 转发；`k8s_route_tool.ps1` 删 rewarm。
+- **部署**：`k8s_deploy.ps1` 删 `-RouteStoreMode` / `-RouteReconcileArm` / `-RouteReadRequiresReady` / `-DbPlacementRequireRouteReady` / `-GuildRequireRouteReady` 五个开关、粘滞核对与组合门禁；Redis 连接总账删对账 leader 池与发布池；`deploy/k8s/data-service-route-alerts.yaml` 删副本 / 就绪 / 发布类告警；`redis.yaml` 的 `--enable-debug-command no` 保留（加固，无副作用）。`Get-RouteStoreWaitAOFNumReplicas` 若只剩 go/db 核心 Redis 一个用途，改名并注明。
+- **表**：删 `route_reconcile`（leader 租约）及 `route_meta` 里只为副本服务的水位 / 世代列；`player_route` 的行版本列保留，作为 §15.3 的乐观核对版本。同步改 proto 守卫（`rollback_database_table.proto` 末尾 message、`schema.go` 的 `routeTableMessages`），按 AGENTS §4 重生成。
+- **保留 data_service 的 `MappingRedis` 句柄**：写门禁的玩家锁（`AcquirePlayerLock`、数据锁 SETNX）仍在这台实例上（路由审计会话 10-23 刚改过，`router_lock_test.go` 依赖它）。句柄只剩锁这一个用途，注释与配置说明改成「玩家写锁」；锁是否挪走另议。
+
+### 15.5 错误语义（必须保持）
+
+1. **go/db 路由读三态**（与「Redis 物理水平扩展设计」会话的约定）：读失败（超时、断连、TiDB 不可用）→ 可重试延后，不 ACK、进重试，**不进 stale_topic 死信，也不经 save_outbox_note 触发 markTerminal**；确定无记录 → `Placement.Required` 语义（写进死信、读回失败）；读到且 home≠本 zone → 才判 stale。补回归用例「读错不进 stale、不终结补投意图」。
+2. data_service 路由读失败一律 fail-closed，按故障回码 1，日志 `[DataRoute] <op> player=<id>:<原因>`，指标 label 不放 player_id；映射缺席不另造新码（4 不在 FaultCodeSet，会把故障哑掉）。
+3. login 角色列表补齐仍失败放行；scene_manager 进场归属读失败可重试拒绝。
+4. merge_zone「结果不明不释放围栏」原则保留（D1 移交 B1-1）。
+
+### 15.6 容量与扩展边界（推断，以 L-14 压测为准）
+
+- 每次热登录：2 次批量点查（R 个 id）+ 账号目录已有的 SQL；每次进场 / 换图 1 次带围栏的点查；每条 DBTask 1 次无锁点查 + 写事务内 1 次锁读。存盘量按容量模型口径（在线 / 300 × 2 条任务）估算，S3 档是每秒十万级点查，需要相应数量的 tidb-server / TiKV，**不再有单主上限**。
+- 热点：`player_route` 已按分片聚簇；号段 `player_id` 单调导致的索引尾部热点由 G1a 的分片前缀消除。`zone_merge_fence` 只在合服时写。
+- TiDB 不可用时：登录（账号目录本来就已依赖 TiDB）与存盘（消息留在 Kafka）一起停，爆炸半径与账号目录相同，不新增依赖。
+- data_service route store 池（`RouteStore.MaxOpenConn`，缺省 20）与账号目录池（`AccountDirectory.MaxOpenConn`）都计入 TiDB 连接预算；TiDB 侧连接总账仍缺（§12.3、开服线拍板清单），一并补。
+
+### 15.7 分批实现计划（每批：实现 → 对抗复核 → 修复；编译测试交 Codex）
+
+- **B0 穷举盘点**（只读）：按键字面量、配置键、指标名、K8s 参数、测试文件、文档引用多路扫描，产出逐文件清单，补全 §15.4。
+- **B1 data_service + `go/shared/placement`**：读写路径改 SQL、删副本相关包与配置、改指标与测试。保留 `router.go` 的玩家锁段。
+- **B2 go/db**：§15.3 写事务锁读、三态语义、配置与测试。`servicecontext.go` / `config.go` 与「Redis 物理水平扩展设计」会话第 4 批同改，按「先落的通知后落的」。
+- **B3 guild、merge_zone、data_consistency_check、dev_tools**。
+- **B4 部署**：k8s_deploy 开关与总账、告警、route tool、契约测试。
+- **B5 文档**：merge-zone runbook、release-checklist（加「写过落点记录之后禁止回退到不认落点的 go/db」）、§12.3 复核结论更新、G4a 稿指向注（由 G4a 会话加）、PROGRESS。
+- 验证（Codex）：data_service / go/db / guild / merge_zone / data_consistency_check 的 build、vet、单测与真 TiDB 用例（MySQL 通过不能代替 TiDB）、PowerShell 契约测试；L-14 压测看 D1 / D2 / M1 表。
+
+### 15.8 对其他线的边界
+
+- 「Redis 物理水平扩展设计」：映射域已从其分片方案撤出（[redis-player-store-cluster.md](./redis-player-store-cluster.md) §5.13）；saveoutbox 归它。
+- G4a（[shared-redis-split-by-purpose.md](./shared-redis-split-by-purpose.md)）：不再需要 redis-mapping 实例；`MappingRedis` 只留给 data_service 玩家写锁。§18 / §21 / §25.2 第 7 条由 G4a 会话加「被取代」指向注。
+- D1：[d1-review-fix-handoff-20261023.md](../handoff/d1-review-fix-handoff-20261023.md) §2 仍成立的项并入本节各批；§3 作废项不再修。
+- **Java 版**：不适用。Java 没有映射层，归属区就是单库 `game.player.zone_id` 列，按约定不往 `PARITY.md` 加行。
+
+
+### 2026-10-26：全 SQL 写资格与路由维护接缝（候选，未验证）
+
+本批采用 [存盘围栏设计的 v4 实施段](db-write-fencing-mysql.md) 中的 writer 目录、维护阶段和永久票据。route_meta.writable 不再接受无正式请求的独立翻转；route_tool 的冻结和解冻通过显式 Operator 与 Catalog 操作，normal data_service 保持自己的 WriterConfig。对账检测到危险时只能关闭本 boot 的入口、保留危险事实，再由独立维护 owner 申请紧急 HOLD；normal 服务不能暗持 Operator 凭据。
+
+冻结、解冻均保留原世代与业务行语义。正常释放所需水位下限固定到 ReleaseReadiness.route_watermark_floor_ms，必须覆盖审核时同世代可信 ReadyMarker 与 Redis watermark 下限；Catalog 在 slots→reconcile→meta→run→ticket 顺序下，于同一事务抬 route_reconcile.watermark_ms 并推进 E/writable。请求或审核原件一旦封装，不因当前观测变化而原地重封。已有 Redis CAS 后处理继续按原结果判断，UNKNOWN 保持维护。
+
+当前生产主入口、真实发行者关闭/新 boot prepare-open 仍在逐项接线；相应遗漏路径单列待范围决策。候选只读形状检查、独立 fresh-prestart 与测试夹具的 Schema 能力已分开；未执行生成、构建、真库或压力测试。Java 版由同批独立实现对齐，不复制 R 的 route_reconcile 结构。

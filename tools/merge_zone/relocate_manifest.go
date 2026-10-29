@@ -91,8 +91,10 @@ type relocateManifest struct {
 	// Aborted:-mode relocate-abort 跑过。之后不能再续跑(要搬就用新清单另起一次)。
 	Aborted bool `json:"aborted,omitempty"`
 	// RouteSource:写这份清单的运行用的映射来源(-route-source db|redis,D1 第 2 批)。续跑与 relocate-abort 必须同一个来源
-	// (checkManifestRouteSource):冻结 / 切换写在哪一边,认领与解冻就只能在哪一边做 —— 换来源续跑会把本次的冻结当成
-	// 「不是本次冻结的」,或在另一边写出与真源分叉的落点。本字段之前写的清单没有它 = redis。新增字段不升 relocate_version。
+	// (relocateRouteSourceRefusal,relocate_run.go;判定即 checkManifestRouteSource):冻结 / 切换写在哪一边,认领与解冻就只能
+	// 在哪一边做 —— 换来源续跑会把本次的冻结当成「不是本次冻结的」,或在另一边写出与真源分叉的落点;换来源撤销会把只在另一边
+	// 冻结的人记成 skipped、清单标成 Aborted,那边的冻结成了孤儿。拒绝文案按方向给出路。
+	// 本字段之前写的清单没有它 = redis。新增字段不升 relocate_version。
 	RouteSource string           `json:"route_source,omitempty"`
 	Players     []relocatePlayer `json:"players"`
 }

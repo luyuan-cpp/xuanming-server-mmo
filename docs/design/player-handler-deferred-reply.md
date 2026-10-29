@@ -3,7 +3,7 @@
 > 状态(2026-10-15,Claude):**设计已定,暂不实施**。三个独立方案经评审选定(§2),但全仓**没有合理的首个调用方**(§1),
 > 按 AGENTS.md §11.2 YAGNI / §11.5 第 2 条,机制与测试都不先写;满足 §7 触发条件时与首个调用方同批实施。
 > 上游:`docs/design/muduo-rpc-channel.md` §2 非目标、§5.2(延后不保证次序)、§14 第 1 项;gRPC 下游见
-> `docs/design/grpc-client-deadline-failure-callback.md` §11。本文全部来自静态阅读,行号以 2026-10-15 工作区为准。
+> `docs/design/grpc-muduo-transport.md` §16.1。本文全部来自静态阅读,行号以 2026-10-15 工作区为准。
 
 ## 0. 一句话
 

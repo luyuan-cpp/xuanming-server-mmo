@@ -8,16 +8,17 @@
 #   failed to compute cache key: "/<路径>": not found
 # 改这里之前先 grep 上面几个 Dockerfile 的 COPY 源。
 
-# ── Large third-party sources (cloned inside Docker instead) ───
-third_party/grpc/
-# OpenSSL headers come from apt libssl-dev
+# TLS 使用独立 BoringSSL；未消费的 OpenSSL 源码不进入构建上下文。
+# 构建消费者使用独立 BoringSSL 安装头。
 third_party/openssl/
 
 # Windows pre-built libraries — not used in Linux Docker builds
 lib/
 # build_nghttp2.ps1 把 Windows Debug 产物装在子模块内;Linux 由 setup_dependencies.sh 自己编到 /usr/local。
 # 不排除的话它会随 COPY third_party/nghttp2/ 进镜像,还会被算进 nghttp2 源码树的内容哈希。
-third_party/nghttp2/install_vs2026_dbg/
+third_party/*/install_*/
+third_party/*/.build*/
+build/
 
 # Build outputs and IDE files
 bin/

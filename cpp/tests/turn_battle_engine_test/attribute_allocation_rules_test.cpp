@@ -9,11 +9,13 @@
 
 #include "services/scene/player/system/attribute_allocation_rules.h"
 #include "services/scene/player/system/player_level_rules.h"
+#include "system/class_skill_rules.h"  // RankLimit:随等级单调不减的用例(超上限等级按上限读的前提)
 
 // 属性加点纯规则(attribute_allocation_rules.h)与角色等级范围(player_level_rules.h)的单元测试,
 // 设计文档 docs/design/player-attribute-allocation.md §2.2 / §5。
 // 重点守住"客户端数据不可信":请求里的点数是 uint32,外挂塞进来的负数到服务器会绕成超大正数
 // (-1 → 4294967295);多个超大值相加若用 32 位累加,会绕回一个小数骗过"剩余点"校验。
+// 存储加点的生效判定(StoredAllocationRulesTest,2026-10-23)同样按"存档不可信"写:超大存储值不回绕。
 // 放在 battle 测试工程:规则是纯 inline 头函数,不需要链接 scene.lib(同 player_revive_rule_test)。
 
 using attributerules::AllocatedIncrement;
@@ -24,8 +26,11 @@ using attributerules::FullInvestmentEffectivePoints;
 using attributerules::FullInvestmentPoints;
 using attributerules::MakeFormulaRule;
 using attributerules::DistributePoints;
+using attributerules::PoolAllocationEffective;
 using attributerules::PoolRule;
+using attributerules::RemainingPoints;
 using attributerules::RescaleCurrent;
+using attributerules::StoredPoolAllocation;
 using attributerules::TotalPoints;
 using attributerules::ValidateAllocation;
 
@@ -252,6 +257,139 @@ TEST(AttributeAllocationRulesTest, ZeroUnlockLevelMeansLocked) {
     EXPECT_EQ(TotalPoints(rule, playerlevel::kMaxLevel, 0), 0u);
 }
 
+// 总量随等级单调不减。两条结论靠它成立:超上限的存储等级按上限读(CappedLevel)时拿到的恰好是满级号的总量;
+// 等级降低只会让总量变少或不变,于是"降级后超额 → 整池不生效、升回原等级 → 同一份加点原样生效"。
+// 扫到上限以上 50 级,确认上限之外也没有回落。
+TEST(AttributeAllocationRulesTest, TotalPointsNeverDecreaseAsLevelRises) {
+    PoolRule withBasePoints = MakeAttributePool();
+    withBasePoints.basePoints = 10;
+    for (const auto& rule : {MakeAttributePool(), MakeCappedPool(), MakeLockedPool(), withBasePoints}) {
+        uint32_t previous = 0;
+        for (uint32_t level = 0; level <= playerlevel::kMaxLevel + 50; ++level) {
+            const uint32_t total = TotalPoints(rule, level, 0);
+            ASSERT_GE(total, previous) << "pool=" << rule.poolId << " level=" << level;
+            previous = total;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 存储加点的生效判定(加点统一规则 3 / 4,attribute_allocation_rules.h;
+// docs/design/mixed-version-persist-field-protection.md §12.1 D1–D4)
+// 加载与重算不改写已分配点,只回答"这份存储加点在本版本生不生效、还剩几点"。
+// 当前表里两个池的 dimension_cap 都是 0,单项上限分支只在这里有覆盖。
+// ---------------------------------------------------------------------------
+
+namespace {
+
+StoredPoolAllocation Stored(uint64_t knownUsed, uint32_t knownLargest, uint64_t foreignUsed) {
+    StoredPoolAllocation stored;
+    stored.knownUsed = knownUsed;
+    stored.knownLargest = knownLargest;
+    stored.foreignUsed = foreignUsed;
+    return stored;
+}
+
+}  // namespace
+
+// 单项不限(cap 0):只看总量。已知恰好等于总量生效、剩余 0;多 1 点整池不生效、剩余 0。
+TEST(StoredAllocationRulesTest, UncappedPoolIsEffectiveUpToTheTotal) {
+    const auto rule = MakeAttributePool();
+    ASSERT_EQ(rule.dimensionCap, 0u);
+    // 单项再大也不受限:425 点全压在一个维度上照样生效
+    EXPECT_TRUE(PoolAllocationEffective(rule, 425, Stored(425, 425, 0)));
+    EXPECT_EQ(RemainingPoints(rule, 425, Stored(425, 425, 0)), 0u);
+    EXPECT_TRUE(PoolAllocationEffective(rule, 425, Stored(100, 100, 0)));
+    EXPECT_EQ(RemainingPoints(rule, 425, Stored(100, 100, 0)), 325u);
+    EXPECT_FALSE(PoolAllocationEffective(rule, 425, Stored(426, 426, 0)));
+    EXPECT_EQ(RemainingPoints(rule, 425, Stored(426, 426, 0)), 0u) << "an ineffective pool has nothing left";
+    // 一点没加:生效,剩余 = 总量
+    EXPECT_TRUE(PoolAllocationEffective(rule, 425, Stored(0, 0, 0)));
+    EXPECT_EQ(RemainingPoints(rule, 425, Stored(0, 0, 0)), 425u);
+}
+
+// 有单项上限(夹具上限 50):恰好等于上限生效,超 1 点整池不生效 —— 哪怕总量远没用完。
+TEST(StoredAllocationRulesTest, CappedPoolIsIneffectiveOnceAnyDimensionExceedsTheCap) {
+    const auto rule = MakeCappedPool();
+    ASSERT_EQ(rule.dimensionCap, 50u);
+    EXPECT_TRUE(PoolAllocationEffective(rule, 85, Stored(50, 50, 0)));
+    EXPECT_EQ(RemainingPoints(rule, 85, Stored(50, 50, 0)), 35u);
+    EXPECT_FALSE(PoolAllocationEffective(rule, 85, Stored(51, 51, 0)));
+    EXPECT_EQ(RemainingPoints(rule, 85, Stored(51, 51, 0)), 0u);
+    // 每项都在上限内、合计恰好等于总量:生效,剩余 0
+    EXPECT_TRUE(PoolAllocationEffective(rule, 85, Stored(85, 50, 0)));
+    EXPECT_EQ(RemainingPoints(rule, 85, Stored(85, 50, 0)), 0u);
+    // 每项都在上限内、合计超总量:不生效
+    EXPECT_FALSE(PoolAllocationEffective(rule, 85, Stored(100, 50, 0)));
+}
+
+// 未解锁的池总量为 0:一点没加照样生效(剩余 0),存着任何加点都不生效。
+TEST(StoredAllocationRulesTest, LockedPoolWithStoredPointsIsIneffective) {
+    const auto rule = MakeLockedPool();
+    const uint32_t total = TotalPoints(rule, 59, 0);
+    ASSERT_EQ(total, 0u);
+    EXPECT_TRUE(PoolAllocationEffective(rule, total, Stored(0, 0, 0)));
+    EXPECT_EQ(RemainingPoints(rule, total, Stored(0, 0, 0)), 0u);
+    EXPECT_FALSE(PoolAllocationEffective(rule, total, Stored(1, 1, 0)));
+    EXPECT_EQ(RemainingPoints(rule, total, Stored(1, 1, 0)), 0u);
+}
+
+// 未知键不影响生效,只计入已用、减少剩余点,减到 0 为止(规则 4 的保守口径)。
+TEST(StoredAllocationRulesTest, UnknownKeysOnlyReduceTheRemainingPoints) {
+    const auto rule = MakeAttributePool();
+    EXPECT_TRUE(PoolAllocationEffective(rule, 425, Stored(0, 0, 30)));
+    EXPECT_EQ(RemainingPoints(rule, 425, Stored(0, 0, 30)), 395u);
+    EXPECT_EQ(RemainingPoints(rule, 425, Stored(0, 0, 425)), 0u);
+    EXPECT_TRUE(PoolAllocationEffective(rule, 425, Stored(0, 0, 1000))) << "unknown keys never make a pool ineffective";
+    EXPECT_EQ(RemainingPoints(rule, 425, Stored(0, 0, 1000)), 0u);
+    // 已知 + 未知超总量、已知本身不超:已知部分照常生效,只是没有剩余
+    EXPECT_TRUE(PoolAllocationEffective(rule, 425, Stored(400, 400, 30)));
+    EXPECT_EQ(RemainingPoints(rule, 425, Stored(400, 400, 30)), 0u);
+    EXPECT_EQ(RemainingPoints(rule, 425, Stored(300, 300, 30)), 95u);
+}
+
+// 存储值来自存档,可能是写坏的或新版本的超大值:64 位求和且饱和,判定时不先把两个和相加,不回绕。
+TEST(StoredAllocationRulesTest, HugeStoredValuesNeverWrapIntoALegalLookingRemainder) {
+    const auto rule = MakeAttributePool();
+    // 已知 UINT32_MAX、未知饱和在 UINT64_MAX:先相加的话 UINT32_MAX + UINT64_MAX 绕成 UINT32_MAX − 1,
+    // 总量 UINT32_MAX 时"剩余"就成了 1
+    EXPECT_TRUE(PoolAllocationEffective(rule, UINT32_MAX, Stored(UINT32_MAX, UINT32_MAX, UINT64_MAX)));
+    EXPECT_EQ(RemainingPoints(rule, UINT32_MAX, Stored(UINT32_MAX, UINT32_MAX, UINT64_MAX)), 0u);
+    EXPECT_EQ(RemainingPoints(rule, UINT32_MAX, Stored(0, 0, UINT64_MAX)), 0u);
+
+    // 四个已知维度各 UINT32_MAX:64 位和远超 32 位总量,不生效(32 位累加会绕成 UINT32_MAX − 3)
+    StoredPoolAllocation fourHuge;
+    for (int i = 0; i < 4; ++i) {
+        fourHuge.AddKnown(UINT32_MAX);
+    }
+    EXPECT_EQ(fourHuge.knownUsed, uint64_t{UINT32_MAX} * 4);
+    EXPECT_EQ(fourHuge.knownLargest, UINT32_MAX);
+    EXPECT_FALSE(PoolAllocationEffective(rule, UINT32_MAX, fourHuge));
+    EXPECT_EQ(RemainingPoints(rule, UINT32_MAX, fourHuge), 0u);
+
+    // 累加本身饱和:离 UINT64_MAX 只差 1 时再加,停在 UINT64_MAX 而不是绕回一个小数
+    auto nearMax = Stored(0, 0, UINT64_MAX - 1);
+    nearMax.AddForeign(UINT32_MAX);
+    EXPECT_EQ(nearMax.foreignUsed, UINT64_MAX);
+    EXPECT_EQ(RemainingPoints(rule, 425, nearMax), 0u);
+}
+
+// 剩余点恒 ≤ 总量:有上限 / 无上限池 × 总量 × 已知 × 未知 的组合逐一扫过。
+TEST(StoredAllocationRulesTest, RemainingNeverExceedsTheTotal) {
+    for (const auto& rule : {MakeAttributePool(), MakeCappedPool()}) {
+        for (const uint32_t total : {0u, 1u, 85u, 425u, UINT32_MAX}) {
+            for (const uint64_t known : {uint64_t{0}, uint64_t{1}, uint64_t{50}, uint64_t{425}, uint64_t{UINT32_MAX}}) {
+                for (const uint64_t foreign : {uint64_t{0}, uint64_t{30}, uint64_t{UINT64_MAX}}) {
+                    const auto largest = static_cast<uint32_t>(known > 50 ? 50 : known);
+                    EXPECT_LE(RemainingPoints(rule, total, Stored(known, largest, foreign)), total)
+                        << "pool=" << rule.poolId << " total=" << total << " known=" << known
+                        << " foreign=" << foreign;
+                }
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // 角色等级范围(player_level_rules.h)
 // ---------------------------------------------------------------------------
@@ -266,13 +404,36 @@ TEST(PlayerLevelRulesTest, OnlyOneThroughMaxLevelIsWritable) {
     EXPECT_FALSE(playerlevel::IsValidLevel(UINT32_MAX));
 }
 
-// 上限下调前留下的超限存档(GM 设过 86~200 级 / 回档到这类快照)加载时压回上限;合法等级与 0 原样不动
-TEST(PlayerLevelRulesTest, StoredLevelAboveCapIsClampedDown) {
-    EXPECT_EQ(playerlevel::ClampToMaxLevel(200), playerlevel::kMaxLevel);
-    EXPECT_EQ(playerlevel::ClampToMaxLevel(playerlevel::kMaxLevel + 1), playerlevel::kMaxLevel);
-    EXPECT_EQ(playerlevel::ClampToMaxLevel(playerlevel::kMaxLevel), playerlevel::kMaxLevel);
-    EXPECT_EQ(playerlevel::ClampToMaxLevel(30), 30u);
-    EXPECT_EQ(playerlevel::ClampToMaxLevel(0), 0u);
+// 存储等级 → 玩法生效等级:0 按 1,超上限按上限,其余原样。超上限的存储等级(新版本提高上限后回滚、
+// 混版本跨 zone、上限下调前 GM 设过的老存档)不再在加载时压回,只在读的时候按上限生效。
+// static_assert 守住 constexpr:别处可以拿它做编译期常量。
+TEST(PlayerLevelRulesTest, CappedLevelReadsStoredLevelsWithinOneThroughMax) {
+    static_assert(playerlevel::CappedLevel(0) == 1, "CappedLevel must stay usable in constant expressions");
+    static_assert(playerlevel::CappedLevel(UINT32_MAX) == playerlevel::kMaxLevel,
+                  "CappedLevel must stay usable in constant expressions");
+    ASSERT_EQ(playerlevel::kMaxLevel, 85u);  // 下面的字面量按 85 级上限写
+    EXPECT_EQ(playerlevel::CappedLevel(0), 1u);
+    EXPECT_EQ(playerlevel::CappedLevel(1), 1u);
+    EXPECT_EQ(playerlevel::CappedLevel(85), 85u);
+    EXPECT_EQ(playerlevel::CappedLevel(86), 85u);
+    EXPECT_EQ(playerlevel::CappedLevel(UINT32_MAX), 85u);
+}
+
+// 职业技能的重数上限同样随等级单调不减(超上限等级按上限读的前提,同 TotalPointsNeverDecreaseAsLevelRises)。
+// 覆盖解锁等级在上限以内 / 恰好在上限 / 超过上限、以及表里没填最高重(0)的组合。
+TEST(PlayerLevelRulesTest, RankLimitNeverDecreasesAsLevelRises) {
+    struct Case {
+        uint32_t unlockLevel;
+        uint32_t maxRank;
+    };
+    for (const auto& c : {Case{1, 10}, Case{10, 10}, Case{30, 5}, Case{85, 3}, Case{86, 10}, Case{1, 0}}) {
+        uint32_t previous = 0;
+        for (uint32_t level = 0; level <= playerlevel::kMaxLevel + 50; ++level) {
+            const uint32_t limit = classskill::RankLimit(level, c.unlockLevel, c.maxRank);
+            ASSERT_GE(limit, previous) << "unlock=" << c.unlockLevel << " max_rank=" << c.maxRank << " level=" << level;
+            previous = limit;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

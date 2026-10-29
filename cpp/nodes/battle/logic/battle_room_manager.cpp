@@ -1,6 +1,8 @@
 #include "battle_room_manager.h"
 
 #include <limits>
+#include <cstdlib>
+#include <chrono>
 #include <map>
 #include <memory>
 #include <string>
@@ -24,6 +26,13 @@
 #include "node/system/node/node_command_route.h"
 #include "node_config_manager.h"
 #include "thread_context/redis_manager.h"
+#include "thread_context/node_context_manager.h"
+#include "core/utils/random/random.h"
+#include "node/system/node/muduo_grpc_channel_slot.h"
+#include "muduo_grpc/channel.h"
+#include "core/security/service_call_auth.h"
+#include "grpc_client/match/match_internal_grpc_client.h"
+#include "proto/match/match_internal.pb.h"
 #include "time/system/time.h"
 
 #include "battle_push_policy.h"
@@ -51,6 +60,8 @@
 #include "proto/contracts/kafka/scene_command.pb.h"
 
 #include "table/proto/tip/common_error_tip.pb.h"
+// kMatchSpectateFull(观众席满;battle→match 与 match→客户端共用)
+#include "table/proto/tip/match_error_tip.pb.h"
 
 // 事件 id 注册表常量:
 //   contracts_kafka_gate_event_event_id.h  → ContractsKafkaPushToPlayerEventEventId(大厅公告回落)
@@ -65,9 +76,7 @@
 namespace
 {
 
-    // 单房间观众上限(设计文档 §10.5)。纯内存房间,每观众每回合一条直连推送,
-    // 上限约束单房间出站扇出,防观战成为放大器。
-    constexpr size_t kMaxObserversPerRoom = 20;
+    // 单房间观众席上限 kMaxObserversPerRoom 是 BattleRoomManager 的公开常量(头文件),测试直接引用。
     constexpr size_t kMaxSpectatorOperations = 100000;
     using battle_security::ValidSpectatorOperation;
 
@@ -571,11 +580,26 @@ void BattleRoomManager::EraseRoom(const uint64_t battleId)
     rooms_.Erase(battleId);
 }
 
+bool BattleRoomManager::OutcomeSigningKeyReady(std::string_view secret)
+{
+    if (token_security::TrimAscii(secret).size() >= 32) return true;
+    if (!outcomeKeyUnavailableLogged_) {
+        outcomeKeyUnavailableLogged_ = true;
+        LOG_ERROR << "metric=battle_sql_outcome_key_unavailable protocol_version=1 disabled=1";
+    }
+    return false;
+}
+
 void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
                                            ::CreateBattleResponse &response)
 {
     const auto battleId = request.battle_id();
     response.set_battle_id(battleId);
+    if (request.outcome_protocol_version() > 1 ||
+        (request.outcome_protocol_version() == 1 && (request.placement_operation_id().empty() ||
+            request.target_instance_id().empty()))) {
+        response.mutable_error_message()->set_id(kInvalidParameter); return;
+    }
     if(network_probe::Enabled()&&request.placement_operation_id().empty())
     {response.mutable_error_message()->set_id(kInvalidParameter);return;}
 
@@ -593,9 +617,14 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
         const auto old=creationOperations_.find(battleId);
         if(old!=creationOperations_.end())
         {
+            const auto* originalRoom = FindRoom(battleId);
             if(old->second.aborted||old->second.operationId!=request.placement_operation_id()||
-               old->second.canonicalRequest!=canonical||FindRoom(battleId)==nullptr)
+               old->second.canonicalRequest!=canonical||originalRoom==nullptr)
                 response.mutable_error_message()->set_id(kInvalidParameter);
+            else {
+                response.set_adopted_outcome_protocol_version(originalRoom->outcomeProtocol);
+                response.set_target_instance_id(originalRoom->targetInstance);
+            }
             return;
         }
         if(request.admit_before_ms()==0||request.admit_before_ms()<=currentMs)
@@ -603,6 +632,14 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     }
     else if(request.required_physical_region()!=0||!request.target_instance_id().empty())
     {response.mutable_error_message()->set_id(kInvalidParameter);return;}
+
+    // 既有操作在上方仍按原房间回显 adopted；缺密钥只禁止创建新的v1房间，不降级。
+    const char* outcomeSecret = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
+    if (request.outcome_protocol_version() == 1 &&
+        !OutcomeSigningKeyReady(outcomeSecret ? outcomeSecret : "")) {
+        response.mutable_error_message()->set_id(kFeatureUnavailable);
+        return;
+    }
 
     // 幂等:match 补偿路径可能重试 CreateBattle
     if (FindRoom(battleId) != nullptr)
@@ -655,6 +692,9 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     // 活动上下文原样保存(未填 = kind NONE);FinishBattle 回显并据此选结果通道(§6.20)
     room->activityContext = request.activity_context();
     room->requiresResultConfirmation = !request.placement_operation_id().empty();
+    room->outcomeProtocol = request.outcome_protocol_version();
+    room->placementOperation = request.placement_operation_id();
+    room->targetInstance = request.target_instance_id();
     if (!room->engine.Initialize(request))
     {
         LOG_ERROR << "CreateBattle engine initialization failed(invalid snapshot/table data): battle_id=" << battleId
@@ -756,6 +796,8 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
                                          [this, battleId]
                                          { ResendBattleConfirmed(battleId); });
 
+    response.set_adopted_outcome_protocol_version(roomPtr->outcomeProtocol);
+    response.set_target_instance_id(roomPtr->targetInstance);
     LOG_INFO << "CreateBattle succeeded: battle_id=" << battleId
              << " players=" << request.players_size()
              << " battle_config_id=" << request.battle_config_id()
@@ -770,7 +812,7 @@ void BattleRoomManager::HandleDestroyBattle(const ::DestroyBattleRequest &reques
 {
     const auto battleId = request.battle_id();
     // 原事件可能已落 broker，尚未收到确认不能先把相同对局宣布为作废。
-    if (const auto* pending = FindRoom(battleId); pending && pending->resultCommit) return;
+    if (const auto* pending = FindRoom(battleId); pending && (pending->outcomeProtocol == 1 || TerminalPending(*pending))) return;
     if(!request.placement_operation_id().empty())
     {
         if(!gNode||request.target_instance_id()!=gNode->GetNodeInfo().node_uuid())return;
@@ -810,10 +852,15 @@ void BattleRoomManager::HandleDestroyBattle(const ::DestroyBattleRequest &reques
 void BattleRoomManager::HandleQueryBattleCreation(const ::QueryBattleCreationRequest& request,::QueryBattleCreationResponse& response)
 {
     if(!gNode||request.target_instance_id()!=gNode->GetNodeInfo().node_uuid()||request.placement_operation_id().empty())return;
+    response.set_target_instance_id(gNode->GetNodeInfo().node_uuid());
+    const char* secret = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
+    response.set_supported_outcome_protocol_version(OutcomeSigningKeyReady(secret ? secret : "") ? 1 : 0);
     const auto found=creationOperations_.find(request.battle_id());
     if(found==creationOperations_.end()){response.set_state(BATTLE_CREATION_ABSENT);return;}
     if(found->second.operationId!=request.placement_operation_id())return;
-    response.set_state(found->second.aborted?BATTLE_CREATION_ABORTED:(FindRoom(request.battle_id())?BATTLE_CREATION_PRESENT:BATTLE_CREATION_ABSENT));
+    const auto* room = FindRoom(request.battle_id());
+    if (room != nullptr) response.set_adopted_outcome_protocol_version(room->outcomeProtocol);
+    response.set_state(found->second.aborted?BATTLE_CREATION_ABORTED:(room?BATTLE_CREATION_PRESENT:BATTLE_CREATION_ABSENT));
 }
 
 bool BattleRoomManager::AcceptsPlacementOperation(uint64_t id,const std::string& operation,const std::string& instance) const
@@ -857,7 +904,7 @@ void BattleRoomManager::HandleSubmitBattleAction(const ::SessionDetails &session
         return;
     }
 
-    if (room->resultCommit) { response.mutable_error_message()->set_id(kServiceUnavailable); return; }
+    if (TerminalPending(*room)) { response.mutable_error_message()->set_id(kServiceUnavailable); return; }
     // 先查后提交:校验码回给提交者(G2)。原先"一律回 OK"会让玩家点了吃药、
     // 客户端显示成功、回合结算却变成默认普攻,连原因都看不到 —— 玩家资产路径
     // 不许静默降级(AGENTS §11.3)。ValidateAction 零副作用,与 SubmitAction 的
@@ -980,6 +1027,8 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
         }
     } else {
         if (spectatorOperations_.size() >= kMaxSpectatorOperations) {
+            // 操作墓碑表满是节点级过载保护(表按原准入截止过期回收,稍后重试即可),不是观众席满员,
+            // 不能回 kMatchSpectateFull 让客户端误以为这场人满。
             response.mutable_error_message()->set_id(kRateLimitExceeded);
             return;
         }
@@ -1046,10 +1095,7 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
                       << " player_id=" << observerId << " role=observer"
                       << " path=" << (sameSession ? "idempotent_same_session" : "idempotent_session_changed")
                       << ",spectator ticket signing failed;observer removed and request rejected(kServiceUnavailable)";
-            room->routingByObserver.erase(it);
-            room->observerNames.erase(observerId);
-            room->observerOperations.erase(observerId);
-            CloseDirectConnectionOf(*room, observerId, "observer_ticket_issue_failed");
+            RetireObserver(*room, observerId, "observer_ticket_issue_failed");
             response.mutable_error_message()->set_id(kServiceUnavailable);
             return;
         }
@@ -1076,16 +1122,23 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
         // 先关旧直连,让分配包走 Kafka→gate 到新会话;新客户端凭新票重新挂接,
         // 观战首帧随握手下发(§22 D69),这里不推 —— 直连刚关,推了也只会被战斗帧出口丢弃。
         CloseDirectConnectionOf(*room, observerId, "observer_session_changed");
+        // 防御性计时:同 op 原件比对(canonicalRequest)已包含 routing,会话变了的同 op 请求在函数开头
+        // 就回 kInvalidParameter,本分支在现有契约下走不到,只在以后放宽原件比对时才会生效。
+        // 一旦走到:上面已把直连摘出表,旧连接随后的断开回调走 DetachDirectConnection 时什么都摘不到,
+        // 不会替它计重连宽限;这里必须自己重新计时,否则新会话一直不来挂接,这个席位就永远不回收。
+        StartObserverSeatGrace(*room, observerId, false);
         PushAssignment(*room, observerId, it->second, assigned);
         operation->second.cancelled = false;
         return;
     }
 
+    // 席位按名单人数计:名单含已挂直连、待连接(登记后宽限内)与断线宽限中的观众,
+    // 后两类到期由 ReclaimExpiredObserverSeats 回收腾位。幂等重放已在上面放行,不受满员影响。
     if (room->routingByObserver.size() >= kMaxObserversPerRoom)
     {
         LOG_INFO << "AddObserver spectator capacity reached: battle_id=" << battleId
                  << " observer=" << observerId << " cap=" << kMaxObserversPerRoom;
-        response.mutable_error_message()->set_id(kRateLimitExceeded);
+        response.mutable_error_message()->set_id(kMatchSpectateFull);
         return;
     }
 
@@ -1105,6 +1158,8 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
     room->observerNames.emplace(observerId, request.observer_name());
     room->observerOperations.emplace(observerId, request.spectator_operation_id());
     operation->second.cancelled = false;
+    // 从登记起计连接宽限:到期仍未挂上直连就回收席位,不让拿了票不来的观众一直占座
+    StartObserverSeatGrace(*room, observerId, false);
 
     // 只下发落点分配(大厅公告)。观战首帧随直连握手下发(§22 D69 snapshot on connect):
     // 此刻观众一定还没有直连,在这里推首帧只会被战斗帧出口丢弃
@@ -1153,8 +1208,7 @@ void BattleRoomManager::HandleRemoveObserver(const ::RemoveObserverRequest &requ
     if (it == room->routingByObserver.end())
     {
         // 原op已精确匹配：同时清掉失败准入遗留的私有槽，旧op不能清新op。
-        room->observerNames.erase(observerId);
-        room->observerOperations.erase(active);
+        RetireObserver(*room, observerId, "observer_removed");
         return;
     }
 
@@ -1166,11 +1220,8 @@ void BattleRoomManager::HandleRemoveObserver(const ::RemoveObserverRequest &requ
     end.set_reason(::SPECTATE_END_REMOVED);
     PushBattleFrame(*room, observerId, BattleClientPlayerNotifySpectateEndMessageId, end);
 
-    room->routingByObserver.erase(it);
-    room->observerNames.erase(observerId);
-    room->observerOperations.erase(observerId);
     // 观众已不在名单,直连没有存在意义;SpectateEnd 已排队,shutdown 让它先 flush
-    CloseDirectConnectionOf(*room, observerId, "observer_removed");
+    RetireObserver(*room, observerId, "observer_removed");
 
     LOG_INFO << "RemoveObserver completed: battle_id=" << battleId
              << " observer=" << observerId << " reason=" << request.reason();
@@ -1203,20 +1254,10 @@ void BattleRoomManager::HandleStopWatchBattle(const ::SessionDetails &sessionDet
         return;
     }
 
-    // 主动退出不推 SpectateEnd:是客户端自己发起的动作,回包即确认
-    if (const auto active = room->observerOperations.find(playerId); active != room->observerOperations.end()) {
-        const auto operation = spectatorOperations_.find(std::make_tuple(room->battleId, playerId, active->second));
-        if (operation != spectatorOperations_.end()) {
-            if (operation->second.admitBeforeMs <= TimeSystem::NowMillisecondsUTC()) spectatorOperations_.erase(operation);
-            else operation->second.cancelled = true;
-        }
-        room->observerOperations.erase(active);
-    }
-    room->routingByObserver.erase(it);
-    room->observerNames.erase(playerId);
+    // 主动退出不推 SpectateEnd:是客户端自己发起的动作,回包即确认。
     // 退出请求可能就是从这条直连来的,应答由直连面在本函数返回后写出;关闭已推迟到本轮
     // loop 之后(CloseDirectConnectionOf 内部 queueInLoop),应答不会被丢
-    CloseDirectConnectionOf(*room, playerId, "stop_watch");
+    RetireObserver(*room, playerId, "stop_watch");
 
     LOG_INFO << "StopWatchBattle completed: battle_id=" << room->battleId
              << " observer=" << playerId;
@@ -1252,7 +1293,7 @@ void BattleRoomManager::HandleSetAutoBattle(const ::SessionDetails &sessionDetai
         return;
     }
 
-    if (room->resultCommit) { response.mutable_error_message()->set_id(kServiceUnavailable); return; }
+    if (TerminalPending(*room)) { response.mutable_error_message()->set_id(kServiceUnavailable); return; }
     // 置位前先采样就绪态,供下方判断本次置位是否触发"未就绪 -> 全员就绪"的翻转
     const bool wasAllReady = room->engine.AllPlayersReady();
 
@@ -1278,7 +1319,7 @@ void BattleRoomManager::HandleSetAutoBattle(const ::SessionDetails &sessionDetai
 
 void BattleRoomManager::ArmRoundTimer(BattleRoom &room)
 {
-    // 行动收集窗口 = 一回合等效挂钟时长(v1 策略,与时间→回合换算共用常量)。
+    // 手动行动收集窗口为 25 秒,不影响技能/buff 的时间→回合换算。
     // 全自动例外(D13):装填时 AllPlayersReady() 已为真说明全部存活玩家都挂机,
     // 本窗口内不会再有任何提交把回合"提前"结算,整窗等待纯属空转拖慢节奏;
     // 又不能立即结算(同步递归刷回合,观众/客户端表现跟不上),
@@ -1287,7 +1328,7 @@ void BattleRoomManager::ArmRoundTimer(BattleRoom &room)
     // 客户端 6 倍速也演不完,会把整回合演出跳过。开局首次装填 LastActionOrder 为空 → 仍是下限 2000ms。
     const uint64_t windowMs = room.engine.AllPlayersReady()
                                   ? turnbattle::AutoRoundIntervalMsFor(room.engine.LastActionOrder().size())
-                                  : turnbattle::kRoundDurationMs;
+                                  : turnbattle::kActionTimeoutMs;
     room.actionDeadlineMs = TimeSystem::NowMillisecondsUTC() + windowMs;
     const auto battleId = room.battleId;
     // timer 回调按 battle_id 重查房间:房间可能在窗口内被销毁,不能捕获裸指针
@@ -1303,7 +1344,7 @@ void BattleRoomManager::ResolveRound(const uint64_t battleId)
     {
         return;
     }
-    if (room->resultCommit) return;
+    if (TerminalPending(*room)) return;
     auto visibleBefore = room->engine.BuildStateSnapshot();
     visibleBefore.set_battle_id(battleId);
 
@@ -1354,7 +1395,7 @@ void BattleRoomManager::OnBattleDeadline(const uint64_t battleId)
     {
         return;
     }
-    if (room->resultCommit) return;
+    if (TerminalPending(*room)) return;
 
     // 整场 deadline 打满仍未分出胜负:强制平局收尾(battle_node.proto 契约)。
     // 引擎无"强制终局"接口,由节点在结算数据上盖平局章。
@@ -1437,7 +1478,11 @@ contracts::kafka::BattleResultEvent BattleRoomManager::BuildResult(const BattleR
 void BattleRoomManager::BeginResultCommit(BattleRoom& room, const ::eBattleOutcome outcome,
     const ::eSpectateEndReason reason, std::optional<::TurnResultS2C> finalTurn, ::BattleStateS2C visibleBefore)
 {
-    if (room.resultCommit) return;
+    if (TerminalPending(room)) return;
+    if (room.outcomeProtocol == 1) {
+        BeginSqlOutcome(room, outcome, reason, std::move(finalTurn), std::move(visibleBefore));
+        return;
+    }
     room.roundTimer.Cancel(); room.battleTimer.Cancel(); room.confirmResendTimer.Cancel();
     room.actionDeadlineMs = 0;
     visibleBefore.set_battle_id(room.battleId);
@@ -1451,6 +1496,8 @@ void BattleRoomManager::BeginResultCommit(BattleRoom& room, const ::eBattleOutco
     {
         LOG_ERROR << "metric=battle_result_commit_serialization_failed;terminal remains unknown";
         room.resultCommit.emplace(std::string{});
+        // 占位房间留在节点上排不空:周期提醒(ReportExhaustedStagingRooms)要靠报数定时器,这里补装(2026-10-22 评审补)。
+        EnsureSettlementBacklogReporter();
         return;
     }
     // 个人结算字节在发结果之前就要落 pending(StagePersonalSettlements),成员必须与房间一一对应;
@@ -1465,6 +1512,7 @@ void BattleRoomManager::BeginResultCommit(BattleRoom& room, const ::eBattleOutco
                   << ";terminal remains unknown";
         room.personalSettlementPayloads.clear();
         room.resultCommit.emplace(std::string{});
+        EnsureSettlementBacklogReporter(); // 占位房间的周期提醒,同上
         return;
     }
     // 落库前置条件按成员记(审计 r2-battle#1):成员集合 = 个人结算字节的键,上面已核对与房间成员一一对应。
@@ -1484,6 +1532,115 @@ void BattleRoomManager::BeginResultCommit(BattleRoom& room, const ::eBattleOutco
         { if (const auto self = weak.lock()) self->PumpResultCommits(); });
     }
     PumpResultCommits();
+}
+
+void BattleRoomManager::BeginSqlOutcome(BattleRoom& room, const ::eBattleOutcome outcome,
+    const ::eSpectateEndReason reason, std::optional<::TurnResultS2C> finalTurn, ::BattleStateS2C visibleBefore)
+{
+    if (TerminalPending(room) || room.outcomeProtocol != 1) return;
+    room.roundTimer.Cancel(); room.battleTimer.Cancel(); room.confirmResendTimer.Cancel();
+    room.actionDeadlineMs = 0;
+    visibleBefore.set_battle_id(room.battleId); visibleBefore.set_action_deadline_ms(0);
+    room.pendingVisibleState = std::move(visibleBefore);
+    room.pendingFinalTurn = std::move(finalTurn); room.pendingSpectateReason = reason;
+    room.outcomePending = true;
+    room.outcomeSince = std::chrono::steady_clock::now();
+    room.pendingResult = BuildResult(room, outcome);
+    // 原终局只计算一次；未知回执不允许重新取掉落、时间或目标UUID。
+    if (room.pendingResult.settlement_format_version() != 1 ||
+        !room.pendingResult.SerializeToString(&room.outcomePayload) || room.outcomePayload.empty()) {
+        room.outcomeExhausted = true;
+        LOG_ERROR << "metric=battle_sql_outcome_source_invalid;terminal remains unknown";
+        // v1 房间不走 R07 落库,节点可能从没装过报数定时器;滞留房间的周期提醒要靠它(2026-10-22 评审补)。
+        EnsureSettlementBacklogReporter();
+        return;
+    }
+    match::CommitBattleOutcomeRequest original;
+    original.set_battle_id(room.battleId); original.set_placement_operation_id(room.placementOperation);
+    original.set_target_instance_id(room.targetInstance); original.set_raw_result_payload(room.outcomePayload);
+    room.outcomeRequestDigest = service_call_auth::Digest(original);
+    if (room.outcomeRequestDigest.empty()) { room.outcomeExhausted = true; EnsureSettlementBacklogReporter(); return; }
+    sqlOutcomeRooms_.insert(room.battleId);
+    if (!sqlOutcomeTimer_.IsActive()) sqlOutcomeTimer_.RunEvery(1.0, [weak = WeakSelf()] {
+        if (const auto self = weak.lock()) self->PumpSqlOutcomes();
+    });
+    PumpSqlOutcomes();
+}
+
+void BattleRoomManager::PumpSqlOutcomes()
+{
+    if (outcomeStopping_) return;
+    constexpr std::string_view method = "/match.MatchInternal/CommitBattleOutcome";
+    const auto now = std::chrono::steady_clock::now();
+    const std::vector<uint64_t> ids(sqlOutcomeRooms_.begin(), sqlOutcomeRooms_.end());
+    for (const auto battleId : ids) {
+        auto* room = FindRoom(battleId);
+        if (!room || !room->outcomePending || room->outcomeExhausted) { sqlOutcomeRooms_.erase(battleId); continue; }
+        if (now - room->outcomeSince >= turnbattle::kMaxStagingSpan) {
+            // 有界重试耗尽不是ABORT；保留冻结可见状态，Match仍能由持久preflight裁决恢复。
+            room->outcomeExhausted = true; sqlOutcomeRooms_.erase(battleId);
+            LOG_ERROR << "metric=battle_sql_outcome_unconfirmed battle_id=" << battleId;
+            // 之后由报数定时器每 60s 报 sql_unconfirmed=(ReportExhaustedStagingRooms,2026-10-22 评审补)。
+            EnsureSettlementBacklogReporter();
+            continue;
+        }
+        if (room->outcomeInFlight || now < room->nextOutcomeAttempt) continue;
+        room->nextOutcomeAttempt = now + std::chrono::seconds(5);
+        const char* secret = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
+        if (!OutcomeSigningKeyReady(secret ? secret : "") || room->targetInstance.empty() || room->placementOperation.empty()) continue;
+        auto& registry = tlsNodeContextManager.GetRegistry(common::base::MatchNodeService);
+        std::vector<entt::entity> ready;
+        // 沿Inbox相同的READY候选随机选择；跨Match副本仍只重放同一SQL原件，不固定首个实例。
+        for (const auto node : registry.view<NodeInfo, MuduoGrpcChannelPtr>()) {
+            const auto& channel = registry.get<MuduoGrpcChannelPtr>(node);
+            if (channel && channel->GetState(true) == muduo_grpc::ConnectivityState::kReady) ready.push_back(node);
+        }
+        if (ready.empty() || room->outcomeAttempt == std::numeric_limits<uint64_t>::max()) continue;
+        const auto target = ready[tlsRandom.Rand<std::size_t>(0, ready.size() - 1)];
+        match::CommitBattleOutcomeRequest request;
+        request.set_battle_id(battleId); request.set_placement_operation_id(room->placementOperation);
+        request.set_target_instance_id(room->targetInstance); request.set_raw_result_payload(room->outcomePayload);
+        if (service_call_auth::Digest(request) != room->outcomeRequestDigest ||
+            !service_call_auth::Sign(method, request, *request.mutable_auth(), "battle", secret, TimeSystem::NowMillisecondsUTC())) continue;
+        const auto attempt = ++room->outcomeAttempt;
+        const auto op = room->placementOperation, instance = room->targetInstance, digest = room->outcomeRequestDigest;
+        room->outcomeInFlight = true;
+        match::SendMatchInternalCommitBattleOutcome(registry, target, request,
+            [weak = WeakSelf(), battleId, attempt, op, instance, digest](const GrpcCallOutcome& outcome,
+                const match::CommitBattleOutcomeResponse* reply) {
+                const auto self = weak.lock();
+                if (!self) return;
+                if (self->outcomeStopping_) {
+                    LOG_INFO << "event=battle_outcome_reply_after_stop battle_id=" << battleId
+                             << " attempt=" << attempt << " code=" << outcome.code
+                             << " reply_present=" << (reply != nullptr)
+                             << " digest_matches=" << (reply && reply->request_digest() == digest);
+                    return;
+                }
+                auto* current = self->FindRoom(battleId);
+                if (!current || !current->outcomePending || current->outcomeAttempt != attempt ||
+                    current->placementOperation != op || current->targetInstance != instance ||
+                    current->outcomeRequestDigest != digest) return;
+                current->outcomeInFlight = false;
+                const char* key = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
+                if (!outcome.ok() || !reply || !key || reply->request_digest() != digest ||
+                    !service_call_auth::Verify("/match.MatchInternal/CommitBattleOutcome/reply", *reply,
+                        reply->auth(), "match", key, TimeSystem::NowMillisecondsUTC())) return;
+                if (reply->decision() == match::BATTLE_OUTCOME_DECISION_COMPLETE) {
+                    current->outcomeComplete = true;
+                    if (!self->FinishBattle(*current, current->pendingResult.outcome(),
+                        current->pendingSpectateReason, &current->pendingResult)) return;
+                } else if (reply->decision() == match::BATTLE_OUTCOME_DECISION_ABORT) {
+                    // 唯有Match持久ABORT才可宣布作废，绝不生成任何个人效果/来源。
+                    self->NotifySpectateEndAndClose(*current, ::SPECTATE_END_BATTLE_ABORTED, ::BATTLE_OUTCOME_ONGOING);
+                    self->CloseDirectConnections(*current, "sql_aborted");
+                } else return; // UNKNOWN只重放同件，不能落回legacy。
+                self->sqlOutcomeRooms_.erase(battleId);
+                self->EraseRoom(battleId);
+                if (self->sqlOutcomeRooms_.empty()) self->sqlOutcomeTimer_.Cancel();
+            });
+    }
+    if (sqlOutcomeRooms_.empty()) sqlOutcomeTimer_.Cancel();
 }
 
 void BattleRoomManager::PumpResultCommits()
@@ -1522,7 +1679,7 @@ void BattleRoomManager::PumpResultCommits()
         if (!room || !room->resultCommit) { resultRooms_.erase(battleId); continue; }
         const auto instant = turnbattle::ResultCommit::Clock::now();
         // 个人结算没落完 pending 之前不发结果(ResultCommit 的发送前置条件,CanSend 同样把关)。
-        // 落库轮次用尽的房间由 OnPersonalSettlementsStaged 移出 resultRooms_,不会再走到这里。
+        // 落库到总跨度上限的房间由 StagePersonalSettlements 判用尽时移出 resultRooms_,不会再走到这里。
         if (!room->resultCommit->PersonalSettlementsDurable())
         {
             StagePersonalSettlements(*room, instant);
@@ -1556,36 +1713,38 @@ void BattleRoomManager::StopResultCommits()
 
 void BattleRoomManager::StagePersonalSettlements(BattleRoom &room, const turnbattle::ResultCommit::Clock::time_point now)
 {
+    auto &commit = *room.resultCommit;
+    // 总跨度先判,放在 Redis 连通性检查之前:Redis 一直断着也要到点收手、出告警(turnbattle::kMaxStagingSpan 的说明)。
+    if (commit.ExhaustStagingIfOverdue(now))
+    {
+        RetireExhaustedStaging(room);
+        return;
+    }
     if (!RedisReady()) return;
-    const uint64_t attempt = room.resultCommit->BeginStaging(now);
+    const uint64_t attempt = commit.BeginStaging(now);
     if (attempt == 0) return;
     // 本节点开始往积压索引里写了,报数定时器随之常驻(与 DispatchSettlementDurably 同口径)。
     EnsureSettlementBacklogReporter();
 
     // 本轮只写还没落定的成员(审计 r2-battle#1):上一轮已写进去的成员,scene 可能已经应用并销账
     // (删 pending 与锁、摘账本),再写一次 pending 就会复活,玩家下次登录重复领奖。
-    // 集合在本轮回复到齐之前不变(ResultCommit 的约定)。这里抄一份遍历:最后一名成员同步失败(命令没发出)时,
-    // onReply 会当场经 FinishStaging 改写待写集合,遍历副本不受影响。
-    const std::set<uint64_t> members = room.resultCommit->UnstagedMembers();
-
-    // 本轮回复计数。回调只捕获值与 weak_ptr<自己>(AGENTS.md §11.7);房间按 battle_id 重查。
-    struct StagingRound
-    {
-        std::size_t remaining = 0;
-        std::set<uint64_t> settled; // 本轮拿到确定结论(写入 / 本局早先已写 / 已被别的局取代)的成员
-    };
-    const auto round = std::make_shared<StagingRound>();
-    round->remaining = members.size();
+    // 本轮成员在开轮时定下,整轮不变(StagingRoundTally::Members):最后一名成员同步失败(命令没发出)时,
+    // onReply 会当场经 FinishStaging 改写 ResultCommit 的待写集合,遍历的是 tally 自己那份,不受影响。
+    // 回调只捕获值与 weak_ptr<自己>(AGENTS.md §11.7);房间按 battle_id 重查。
+    const auto round = std::make_shared<turnbattle::StagingRoundTally>(commit.UnstagedMembers());
     const uint64_t battleId = room.battleId;
     const uint64_t enqueuedAtMs = TimeSystem::NowMillisecondsUTC();
     const auto onReply = [weakSelf = WeakSelf(), round, battleId, attempt](const uint64_t playerId, const bool settled)
     {
-        if (settled) round->settled.insert(playerId);
-        if (--round->remaining != 0) return;
+        if (!round->Record(playerId, settled)) return;
         if (const auto self = weakSelf.lock())
-            self->OnPersonalSettlementsStaged(battleId, attempt, std::move(round->settled));
+            self->OnPersonalSettlementsStaged(battleId, attempt, round->Settled());
     };
-    for (const uint64_t playerId : members)
+    // 落库标记要活过整个落库阶段,一轮开出时它才一定还在(kMaxStagingSpan 的推导,留 4 倍余量)。
+    static_assert(turnbattle::kMaxStagingSpan * 4 <=
+                      std::chrono::seconds(battle_settlement::kStagedSettlementMembersTtlSec),
+                  "staged-settlement marker TTL must outlive the whole staging span with margin");
+    for (const uint64_t playerId : round->Members())
     {
         const auto payload = room.personalSettlementPayloads.find(playerId);
         if (payload == room.personalSettlementPayloads.end())
@@ -1615,7 +1774,9 @@ void BattleRoomManager::StagePersonalSettlements(BattleRoom &room, const turnbat
                 case battle_settlement::StageVerdict::kSuperseded:
                     LOG_WARN << "metric=battle_personal_settlement_superseded battle_id=" << battleId
                              << " player_id=" << playerId
-                             << ",battle lock held by another battle;pending not written(scene discards this settlement on every path)";
+                             << ",battle lock or(lock absent)pending slot held by another battle;pending not written"
+                             << "(scene dispatch discards this settlement,login/unfreeze re-read is forgone so the other "
+                             << "battle's pending is not overwritten)";
                     break;
                 case battle_settlement::StageVerdict::kUnconfirmed:
                     LOG_ERROR << "metric=battle_personal_settlement_stage_failed battle_id=" << battleId
@@ -1655,6 +1816,25 @@ void BattleRoomManager::OnPersonalSettlementsStaged(const uint64_t battleId, con
         // 发送交给下一次 pump(50ms 定时器仍在转:房间还在 resultRooms_ 里)。
         LOG_INFO << "battle personal settlements durable before result publish: battle_id=" << battleId
                  << " players=" << room->personalSettlementPayloads.size();
+        // 低频阶段才落定(2026-10-22 评审补,r2-battle#4 should_fix):此刻各成员的冻结必然已解除(整场期限不晚于成局后
+        // 300s,低频阶段从第 1 轮之后约 571s 起),随后的派发到在线、无 InBattleComp、锁已不在的成员时,scene 的
+        // AckSettlementPending 规则 2 会把已落库的 pending 直接删掉、不应用(cross-service-assets#1,另一会话在修)。
+        // 风险覆盖整局成员(派发对所有人同时发生),不只是最后落定的那几个。那条修复落地之前,在这里列出全部成员,
+        // 供事后按账本对账补偿;battle_id 与其他逐局日志同一写法,player_id 列表只放正文。
+        if (commit.StagingFailures() >= turnbattle::kFastStagingRounds)
+        {
+            std::string members;
+            for (const auto &[playerId, bytes] : room->personalSettlementPayloads)
+            {
+                if (!members.empty()) members += ' ';
+                members += std::to_string(playerId);
+            }
+            LOG_ERROR << "metric=battle_personal_settlement_staged_late battle_id=" << battleId
+                      << " failed_rounds=" << commit.StagingFailures()
+                      << ";staged after the fast phase,freeze already released;online members without the battle lock "
+                      << "may have this pending cleared unapplied on dispatch(cross-service-assets#1);"
+                      << "reconcile against the scene ledger: " << members;
+        }
         // 落库标记只在落库轮次之间有用(kStagedSettlementMembersKeyFmt 的说明),此后不会再有下一轮。
         // fire-and-forget:删不掉就随 TTL 过期。
         if (RedisReady())
@@ -1665,16 +1845,28 @@ void BattleRoomManager::OnPersonalSettlementsStaged(const uint64_t battleId, con
         }
         return;
     }
-    // 轮次用尽(审计 r2-battle#4):不再开新轮,也不放弃落库直接发结果(那会退回 social-match-battle#2)。
+    // 还有成员没落定:什么都不做。房间仍在 resultRooms_ 里,下一次 pump 先判总跨度(ExhaustStagingIfOverdue),
+    // 没到点再按退避开下一轮。用尽只在没有在途轮次时判,所以不会在这里出现。
+}
+
+void BattleRoomManager::RetireExhaustedStaging(BattleRoom &room)
+{
+    const auto battleId = room.battleId;
+    const auto &commit = *room.resultCommit;
+    // 总跨度用尽(审计 r2-battle#4):不再开新轮,也不放弃落库直接发结果(那会退回 social-match-battle#2)。
     // 终局保持未知:房间移出 resultRooms_ 不再 pump,但留在房间表里 —— 结果不发、DestroyBattle 不作废、
-    // 新行动照旧拒绝,直到停机 AbortAllRooms(说明见头文件 AbortAllRooms)。只在移出那一刻响一次。
+    // 新行动照旧拒绝,直到停机 AbortAllRooms(说明与值班处置见头文件 AbortAllRooms)。这一行只在移出那一刻响一次;
+    // 之后由积压报数定时器每 60s 再报一行 staging_exhausted_rooms(ReportExhaustedStagingRooms),直到房间被清掉。
     if (commit.StagingExhausted() && resultRooms_.erase(battleId) != 0)
     {
+        // Redis 一直没连上时本节点可能还没开过一轮、报数定时器还没装填:这里补装,周期提醒才有人发。
+        EnsureSettlementBacklogReporter();
         LOG_ERROR << "metric=battle_personal_settlement_staging_exhausted battle_id=" << battleId
                   << " rounds=" << commit.StagingFailures()
-                  << " members=" << room->personalSettlementPayloads.size()
+                  << " members=" << room.personalSettlementPayloads.size()
                   << " unstaged=" << commit.UnstagedMembers().size()
-                  << ";terminal remains unknown,result not published,room retained until node shutdown";
+                  << ";terminal remains unknown,result not published,room retained until node shutdown"
+                  << "(drain this game server,wait for other rooms to finish,then delete it)";
         for (const auto playerId : commit.UnstagedMembers())
         {
             LOG_ERROR << "battle personal settlement not staged after staging exhausted: battle_id=" << battleId
@@ -1688,6 +1880,7 @@ bool BattleRoomManager::FinishBattle(BattleRoom &room, const ::eBattleOutcome ou
                                      const ::eSpectateEndReason spectateReason,
                                      const contracts::kafka::BattleResultEvent* committedResult)
 {
+    if (room.outcomeProtocol == 1 && (!room.outcomeComplete || committedResult != &room.pendingResult)) return false;
     room.roundTimer.Cancel();
     room.battleTimer.Cancel();
     room.confirmResendTimer.Cancel();
@@ -1704,7 +1897,7 @@ bool BattleRoomManager::FinishBattle(BattleRoom &room, const ::eBattleOutcome ou
             return false;
         }
         for (const auto& [playerId, routing] : room.routingByPlayer)
-            if (!settlements.contains(playerId) || !room.personalSettlementPayloads.contains(playerId))
+            if (!settlements.contains(playerId) || (room.outcomeProtocol != 1 && !room.personalSettlementPayloads.contains(playerId)))
             {
                 LOG_ERROR << "metric=battle_settlement_source_member_mismatch;no terminal dispatched";
                 return false;
@@ -1714,6 +1907,8 @@ bool BattleRoomManager::FinishBattle(BattleRoom &room, const ::eBattleOutcome ou
 
     for (const auto &[playerId, routing] : room.routingByPlayer)
     {
+        // v1个人150/资产可见性只由Scene在同snapshot双SQL确认之后通知；Battle只发布公共终局帧。
+        if (room.outcomeProtocol == 1) continue;
         ::BattleSettlementData settlement = committedResult ? settlements.at(playerId) : room.engine.BuildSettlement(playerId);
         // 强制平局路径引擎结算里还是 ONGOING,以节点判定为准统一盖章
         settlement.set_outcome(outcome);
@@ -1745,7 +1940,8 @@ bool BattleRoomManager::FinishBattle(BattleRoom &room, const ::eBattleOutcome ou
     const auto result = committedResult ? *committedResult : BuildResult(room, outcome);
     // 活动局(帮会同道历练)丢一条就是整局帮贡 / 资金 / 物品永久丢失,走持久化通道;
     // 普通对局丢一条只影响评分,保持原来的发一次(§6.19)。
-    if (result.has_activity_context())
+    if (room.outcomeProtocol == 1) { /* Match持久outbox负责结果事件，不在Battle重复生产。 */ }
+    else if (result.has_activity_context())
     {
         DispatchActivityResultDurably(result, committedResult != nullptr);
     }
@@ -1838,15 +2034,31 @@ void BattleRoomManager::PushSpectateState(const BattleRoom &room, const uint64_t
     state.mutable_state()->set_action_deadline_ms(room.actionDeadlineMs);
     // 观众视角:全员冷却剔除,不带任何人的道具余量(G7)
     RedactStateForViewer(*state.mutable_state(), 0);
-    state.set_observer_count(static_cast<uint32_t>(room.routingByObserver.size()));
+    // 只数有活直连的观众:待连接 / 断线宽限中的席位不算"正在看"(满员判定另按名单人数)
+    state.set_observer_count(LiveObserverCount(room));
 
     PushBattleFrame(room, observerId, BattleClientPlayerNotifySpectateStateMessageId, state);
+}
+
+uint32_t BattleRoomManager::LiveObserverCount(const BattleRoom &room) const
+{
+    uint32_t count = 0;
+    for (const auto &[observerId, routing] : room.routingByObserver)
+    {
+        if (LiveDirectConnOf(room, observerId) != nullptr)
+        {
+            ++count;
+        }
+    }
+    return count;
 }
 
 void BattleRoomManager::NotifySpectateEndAndClose(BattleRoom &room,
                                                   const ::eSpectateEndReason reason,
                                                   const ::eBattleOutcome outcome)
 {
+    // 房间收尾 / 作废:观众席不再回收(房间对象析构时定时器也会取消,这里显式收口)
+    room.observerSeatTimer.Cancel();
     if (room.routingByObserver.empty())
     {
         return;
@@ -1857,33 +2069,153 @@ void BattleRoomManager::NotifySpectateEndAndClose(BattleRoom &room,
     end.set_outcome(outcome);
     end.set_reason(reason);
 
-    // 同一条直连先推终局包再关(关闭推迟到本轮 loop 之后,shutdown 等输出缓冲排空再 FIN):
-    // 观众先看到结束原因。没有直连的观众收不到它(战斗帧不回落,§22 D68)
+    // 先抄名单再逐个摘除:RetireObserver 会改 routingByObserver
+    std::vector<uint64_t> observers;
+    observers.reserve(room.routingByObserver.size());
     for (const auto &[observerId, routing] : room.routingByObserver)
     {
-        if (const auto active = room.observerOperations.find(observerId); active != room.observerOperations.end()) {
-            const auto operation = spectatorOperations_.find(std::make_tuple(room.battleId, observerId, active->second));
-            if (operation != spectatorOperations_.end()) {
-                if (operation->second.admitBeforeMs <= TimeSystem::NowMillisecondsUTC()) spectatorOperations_.erase(operation);
-                else operation->second.cancelled = true;
-            }
-        }
+        observers.push_back(observerId);
+    }
+    // 同一条直连先推终局包再关(关闭推迟到本轮 loop 之后,shutdown 等输出缓冲排空再 FIN):
+    // 观众先看到结束原因。没有直连的观众收不到它(战斗帧不回落,§22 D68)
+    for (const auto observerId : observers)
+    {
         PushBattleFrame(room, observerId, BattleClientPlayerNotifySpectateEndMessageId, end);
-        CloseDirectConnectionOf(room, observerId, "spectate_end");
+        RetireObserver(room, observerId, "spectate_end");
     }
 
     LOG_INFO << "Spectators removed: battle_id=" << room.battleId
-             << " observers=" << room.routingByObserver.size()
+             << " observers=" << observers.size()
              << " reason=" << ::eSpectateEndReason_Name(reason);
 
+    // 防御:各表只经 RetireObserver 成套增删,这里应已为空;清一遍保证此后任何广播都打不到观众
     room.routingByObserver.clear();
     room.observerNames.clear();
     room.observerOperations.clear();
+    room.observerSeatDeadlines.clear();
+}
+
+void BattleRoomManager::RetireObserver(BattleRoom &room, const uint64_t observerId, const char *reason)
+{
+    if (const auto active = room.observerOperations.find(observerId); active != room.observerOperations.end())
+    {
+        // 封墓碑:原准入截止已过 → 迟到的同 op Add 会被 HandleAddObserver 的时间校验挡住,墓碑可删;
+        // 未过 → 置 cancelled,同 op 迟到的 Add 不能翻成准入。墓碑不存在(已被删)时无事可做。
+        const auto operation = spectatorOperations_.find(std::make_tuple(room.battleId, observerId, active->second));
+        if (operation != spectatorOperations_.end())
+        {
+            if (operation->second.admitBeforeMs <= TimeSystem::NowMillisecondsUTC())
+            {
+                spectatorOperations_.erase(operation);
+            }
+            else
+            {
+                operation->second.cancelled = true;
+            }
+        }
+        room.observerOperations.erase(active);
+    }
+    room.routingByObserver.erase(observerId);
+    room.observerNames.erase(observerId);
+    room.observerSeatDeadlines.erase(observerId);
+    CloseDirectConnectionOf(room, observerId, reason);
+}
+
+void BattleRoomManager::StartObserverSeatGrace(BattleRoom &room, const uint64_t observerId, const bool reconnect)
+{
+    const auto grace = reconnect ? kObserverReconnectGrace : kObserverConnectGrace;
+    room.observerSeatDeadlines[observerId] =
+        BattleRoom::ObserverSeatDeadline{std::chrono::steady_clock::now() + grace, reconnect};
+    ArmObserverSeatTimer(room);
+}
+
+void BattleRoomManager::ArmObserverSeatTimer(BattleRoom &room)
+{
+    if (room.observerSeatDeadlines.empty())
+    {
+        room.observerSeatTimer.Cancel();
+        return;
+    }
+    auto earliest = room.observerSeatDeadlines.begin()->second.at;
+    for (const auto &[observerId, deadline] : room.observerSeatDeadlines)
+    {
+        if (deadline.at < earliest)
+        {
+            earliest = deadline.at;
+        }
+    }
+    // 已过期限按 0 延迟挂(本轮 loop 之后回收)。muduo 定时器的到期时钟与 steady_clock 不一定同源
+    // (Linux 版按墙钟判定到期),与单调期限可能有偏差:早到时回收入口按单调时钟判定,没到的留着并重挂,
+    // 不会提前回收;墙钟回拨只会让回收迟到。
+    const double remainingSec = std::chrono::duration<double>(earliest - std::chrono::steady_clock::now()).count();
+    const double delaySec = remainingSec > 0.0 ? remainingSec : 0.0;
+    const bool armed = room.observerSeatTimer.RunAfter(
+        delaySec,
+        [weakSelf = WeakSelf(), battleId = room.battleId]
+        {
+            if (const auto self = weakSelf.lock())
+            {
+                self->ReclaimExpiredObserverSeats(battleId, std::chrono::steady_clock::now());
+            }
+        });
+    if (!armed)
+    {
+        // 只可能是当前线程没有 EventLoop(装配错误):席位不会到期回收,响亮报出来
+        LOG_ERROR << "observer seat timer arm failed: battle_id=" << room.battleId
+                  << " pending_seats=" << room.observerSeatDeadlines.size();
+    }
+}
+
+void BattleRoomManager::ReclaimExpiredObserverSeats(const uint64_t battleId,
+                                                    const std::chrono::steady_clock::time_point now)
+{
+    auto *room = FindRoom(battleId);
+    if (room == nullptr)
+    {
+        // 定时器迟到打到已销毁的房间:观众早已随收尾 / 作废路径清退
+        return;
+    }
+    // 先抄到期名单再摘除:RetireObserver 会改期限表
+    std::vector<std::pair<uint64_t, bool>> expired;
+    for (const auto &[observerId, deadline] : room->observerSeatDeadlines)
+    {
+        if (deadline.at <= now)
+        {
+            expired.emplace_back(observerId, deadline.reconnect);
+        }
+    }
+    for (const auto &[observerId, reconnect] : expired)
+    {
+        // battle 没有 Prometheus 端点,按 metric= 行计数、按 cause 聚合;battle_id / observer 只供排查,不作标签
+        LOG_INFO << "metric=battle_observer_seat_reclaimed cause="
+                 << (reconnect ? "reconnect_timeout" : "connect_timeout")
+                 << " battle_id=" << battleId << " observer=" << observerId;
+        RetireObserver(*room, observerId, "observer_seat_reclaimed");
+    }
+    ArmObserverSeatTimer(*room);
 }
 
 void BattleRoomManager::AbortAllRooms(const std::string &reason)
 {
+    // 旧协议(outcome_protocol 0)确认模式的 Kafka 结果提交到此为止;全球局一律走 v1,这条只剩兼容意义。
     StopResultCommits();
+    // v1 终局在这里不停(2026-10-23 修复,审计 r2-battle#2):已经算出、还没拿到 SQL 决定的终局,在停机排空窗口内立即再提交,
+    // main.cpp 的 SetShutdownDrainComplete(SqlOutcomesFlushed)等它们拿到 COMPLETE / ABORT,有界于 Node 的排空预算;
+    // 停止闸到拆除前钩子(StopSqlOutcomes)才装。原来这里直接装停止闸、清空待提交集合:除了恰好在途的那一次,
+    // 停机前一刻打完的局再没有机会提交,只能等 match 截止后判 ABORT,全员白打一局。
+    // 不打断在途的那一次:它的回复(或 DefaultCallDeadline 到期的失败)回来之后照常按 5s 节奏续发。
+    std::size_t flushing = 0;
+    for (const auto battleId : sqlOutcomeRooms_)
+    {
+        auto *room = FindRoom(battleId);
+        if (room == nullptr || !turnbattle::NeedsShutdownOutcomeFlush(room->outcomeProtocol, room->outcomePending,
+                                                                      room->outcomeComplete, room->outcomeExhausted))
+            continue;
+        if (!room->outcomeInFlight) room->nextOutcomeAttempt = {};
+        ++flushing;
+    }
+    LOG_INFO << "event=battle_outcome_shutdown_flush pending=" << flushing << " reason=" << reason;
+    if (flushing != 0) PumpSqlOutcomes();
     if (rooms_.Empty())
     {
         return;
@@ -1905,14 +2237,58 @@ void BattleRoomManager::AbortAllRooms(const std::string &reason)
         // 不结算:战斗作废,scene reaper 按 InBattleComp.deadline_ms 解冻(§3.2)。
         // 等结果回执的房间例外:个人结算在结果发出之前已写进 pending,这里不动它。框架随后 flush producer,
         // 结果可能到达 broker;无论到没到,scene 都会在登录钩子 / 冻结到期补读时应用(审计 social-match-battle#2)。
-        // 还在落库或落库轮次已用尽(r2-battle#4)的房间同样清掉:结果从未发出,已落定成员的 pending 照常应用,
+        // 还在落库或落库已到总跨度上限(r2-battle#4)的房间同样清掉:结果从未发出,已落定成员的 pending 照常应用,
         // 没落定的成员按作废处理(同局不对称,r2-battle#2 残余)。本局落库标记随 TTL 过期。
+        // 上面关于等结果回执与落库的说明只适用于旧协议(outcome_protocol 0)确认模式房间;match 的全球成局一律发 v1(gather.go 发 Create 前固定
+        // OutcomeProtocolVersion=1、只持久 v1 原件),这类房间不再产生(2026-10-23 核对,cross-zone-matchmaking.md §13.6)。
         // 停机作废无胜负:观众收 ABORTED + ONGOING
+        if (room->outcomeProtocol == 1) {
+            // 正常停机不铸造ABORT，也不把UNKNOWN房间报已移除/Ready；Match凭原preflight恢复裁决。
+            // 原loop关闭后在途回包可能失败；保留房间直到manager销毁，不再发布任何终局。
+            // 2026-10-23:上面补提交的房间若在排空窗口内拿到 COMPLETE / ABORT,由回复处理照常收尾删房(lifecycle 已在
+            // Stop 之后,删房只记账、不回 Ready);还在打的房间没有终局可交,按作废处理,match 在权威截止后判 ABORT。
+            CloseDirectConnections(*room, reason.c_str());
+            continue;
+        }
         if (!room->resultCommit)
             NotifySpectateEndAndClose(*room, ::SPECTATE_END_BATTLE_ABORTED, ::BATTLE_OUTCOME_ONGOING);
         CloseDirectConnections(*room, reason.c_str());
         EraseRoom(battleId);
     }
+}
+
+bool BattleRoomManager::SqlOutcomesFlushed() const
+{
+    for (const auto battleId : sqlOutcomeRooms_)
+    {
+        const auto *room = rooms_.Find(battleId);
+        if (room != nullptr && turnbattle::NeedsShutdownOutcomeFlush(room->outcomeProtocol, room->outcomePending,
+                                                                     room->outcomeComplete, room->outcomeExhausted))
+            return false;
+    }
+    return true;
+}
+
+void BattleRoomManager::StopSqlOutcomes()
+{
+    outcomeStopping_ = true;
+    LOG_INFO << "event=battle_outcome_stop_installed pending=" << sqlOutcomeRooms_.size();
+    // 排空预算用完仍没拿到 SQL 决定的终局逐局留痕:battle 这边再没有机会提交,match 在权威截止后原子判 ABORT,
+    // 全员作废(除非某次在途提交其实已在 match 落库,那时是 COMPLETE,由 match 发件箱照常补发)。
+    // 对账按 battle_id 查 match_battle_completion;battle_id 只进正文,不作 label。
+    for (const auto battleId : sqlOutcomeRooms_)
+    {
+        const auto *room = rooms_.Find(battleId);
+        if (room == nullptr || !turnbattle::NeedsShutdownOutcomeFlush(room->outcomeProtocol, room->outcomePending,
+                                                                      room->outcomeComplete, room->outcomeExhausted))
+            continue;
+        LOG_ERROR << "metric=battle_sql_outcome_unflushed_at_shutdown battle_id=" << battleId
+                  << " attempts=" << room->outcomeAttempt
+                  << ",terminal not confirmed before exit;match decides after the authority deadline"
+                  << "(ABORT for every member unless an in-flight commit already landed)";
+    }
+    sqlOutcomeTimer_.Cancel();
+    sqlOutcomeRooms_.clear();
 }
 
 // ---- 客户端直连(设计文档 §18,D23-D28;下行出口 turn-based §22 D68) ----
@@ -2140,6 +2516,11 @@ bool BattleRoomManager::AttachDirectConnection(const uint64_t battleId, const ui
         old->forceClose();
     }
     slot = conn;
+    if (role == ::BATTLE_TICKET_ROLE_OBSERVER)
+    {
+        // 挂上直连即停止席位计时(连接宽限 / 重连宽限)。不重挂定时器:早到一次由回收入口重挂
+        room->observerSeatDeadlines.erase(playerId);
+    }
     if (gateSessionId != nullptr)
     {
         *gateSessionId = routing->session_id();
@@ -2159,6 +2540,12 @@ void BattleRoomManager::DetachDirectConnection(const uint64_t battleId, const ui
     if (it != room->directConnByPlayer.end() && it->second.lock() == conn)
     {
         room->directConnByPlayer.erase(it);
+        // 观众断线:仍在名单上就开始重连宽限,期内没重连即回收席位。
+        // 主动摘除的路径(CloseDirectConnectionOf / CloseDirectConnections)先删表项,走不到这里。
+        if (room->routingByObserver.count(playerId) != 0)
+        {
+            StartObserverSeatGrace(*room, playerId, true);
+        }
     }
 }
 
@@ -2341,9 +2728,66 @@ void BattleRoomManager::EnsureSettlementBacklogReporter()
                                      {
                                          if (const auto self = weakSelf.lock())
                                          {
+                                             // 先报滞留房间:它不依赖 Redis,Redis 断着时也要响。
+                                             self->ReportExhaustedStagingRooms();
                                              self->ReportPendingSettlementBacklog();
                                          }
                                      });
+}
+
+void BattleRoomManager::ReportExhaustedStagingRooms()
+{
+    // 落库到总跨度上限的房间(RetireExhaustedStaging)留在房间表里,节点排不空;那一行一次性告警过了值班查询窗口
+    // 就再没有信号。这里每轮从房间表现数一遍,不另记集合:房间表是唯一真相,房间被清掉后计数自然归零。
+    // battle_id 只放日志正文,不写成 key=value 字段(LogQL 解析字段会把它变成高基数 label)。
+    // 2026-10-22 评审补:同样排不空的还有两类,原先只有一次性日志 —— v1 房间 SQL 终局重试到上限仍未确认
+    // (PumpSqlOutcomes,HandleDestroyBattle 对 v1 直接返回),以及终局未知的占位房间(BeginResultCommit 序列化失败 /
+    // 成员对不上)。三类按 turnbattle::ClassifyStuckTerminal 一起数:count= 仍是落库用尽的房间数(沿用已登记的值班查询,
+    // metric 名不改),sql_unconfirmed= / placeholder= 是另两类,stuck_total= 是三者之和。
+    // node_rooms = 本节点房间总数:值班打排空标签后等它降到与 stuck_total 相等,说明其余房间都已打完,再删 GameServer。
+    // 房间数受节点容量约束,一行列全即可。
+    std::size_t stagingExhausted = 0;
+    std::size_t sqlUnconfirmed = 0;
+    std::size_t placeholder = 0;
+    std::string stuckBattles;
+    for (const auto battleId : rooms_.Ids())
+    {
+        const auto *room = FindRoom(battleId);
+        if (room == nullptr)
+        {
+            continue;
+        }
+        const auto stuck = turnbattle::ClassifyStuckTerminal(room->resultCommit ? &*room->resultCommit : nullptr,
+                                                             room->outcomePending && room->outcomeExhausted);
+        switch (stuck)
+        {
+        case turnbattle::StuckTerminal::kNone:
+            continue;
+        case turnbattle::StuckTerminal::kStagingExhausted:
+            ++stagingExhausted;
+            break;
+        case turnbattle::StuckTerminal::kSqlOutcomeUnconfirmed:
+            ++sqlUnconfirmed;
+            break;
+        case turnbattle::StuckTerminal::kPlaceholder:
+            ++placeholder;
+            break;
+        }
+        if (!stuckBattles.empty())
+        {
+            stuckBattles += ' ';
+        }
+        stuckBattles += std::to_string(battleId) + '(' + turnbattle::StuckTerminalName(stuck) + ')';
+    }
+    const std::size_t stuckTotal = stagingExhausted + sqlUnconfirmed + placeholder;
+    if (stuckTotal == 0)
+    {
+        return;
+    }
+    LOG_ERROR << "metric=battle_personal_settlement_staging_exhausted_rooms count=" << stagingExhausted
+              << " sql_unconfirmed=" << sqlUnconfirmed << " placeholder=" << placeholder
+              << " stuck_total=" << stuckTotal << " node_rooms=" << rooms_.Size()
+              << ";results unpublished,this node cannot drain until these rooms are cleared;stuck battles: " << stuckBattles;
 }
 
 void BattleRoomManager::ReportPendingSettlementBacklog()
@@ -2807,6 +3251,7 @@ void BattleRoomManager::HandleIssueBattleTicket(const ::IssueBattleTicketRequest
         if (original == room->observerOperations.end() || original->second != request.spectator_operation_id()) {
             response.mutable_error_message()->set_id(kInvalidParameter); return;
         }
+        // 补签不碰观众席期限:宽限从登记 / 断线起算,补签若能续期,反复补签就能一直占座
         role = ::BATTLE_TICKET_ROLE_OBSERVER;
     }
     else

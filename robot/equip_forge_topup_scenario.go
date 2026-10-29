@@ -5,8 +5,8 @@ package main
 // 为什么要有它:游戏里没有强化石、宝石的产出,客户端也没有 GM 发物入口;equip-forge-smoke 每次强化前只「缺多少补多少」,
 // 跑完之后账号上的强化石是 0。想在真实客户端里点一次强化 / 镶嵌,得先用它把东西补进人物背包。
 //
-// 它不是冒烟:只发东西,不强化、不镶嵌、不卸装备、不改别的。发完重新读一次人物背包,核对每种物品与银两确实多了这么多;
-// 核对不上(GM 闸关着、Item 表没导这一行……)就判失败,免得以为补上了、进游戏才发现按钮还是灰的。
+// 它不是冒烟:只发东西,不强化、不镶嵌、不卸装备、不改别的。GM 指令被拒(GM 闸关着、Item 表没导这一行……)当场判失败;
+// 发完再重新读一次人物背包,核对每种物品与银两确实多了这么多,核对不上同样判失败,免得以为补上了、进游戏才发现按钮还是灰的。
 //
 // 结果约定(供外层脚本消费):
 //   全部发到 → 日志一行 `EQUIP_FORGE_TOPUP_OK …`,退出码 0;
@@ -73,8 +73,10 @@ func RunEquipForgeTopup(cfg *config.Config) {
 	if err != nil {
 		fail("read-after", "%v", err)
 	}
+	// GM 闸拒绝(gate 信封 / scene 响应体)与 Item 表缺行(kEquipGrantInvalid)在 grant / gold 两步就已判红;
+	// 走到这里是指令都回了成功,背包却没多出这么多
 	if problems := equipForgeTopupShortfalls(before, after, topup); len(problems) != 0 {
-		fail("verify", "GM 指令没有全部生效(GM 闸不在 dev / test?Item 表没导这一行?看紧挨着的 `gate envelope error` 日志): %s",
+		fail("verify", "GM 指令回了成功,人物背包却没有全部到账(scene 发物 / 加银两没落到背包?): %s",
 			strings.Join(problems, "; "))
 	}
 

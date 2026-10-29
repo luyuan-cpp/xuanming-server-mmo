@@ -28,7 +28,7 @@
 //	                                  scene_manager 仍然从不删除这个键;放行之后它自然过时,
 //	                                  靠 TTL 回收。
 //
-// 本包刻意只依赖标准库:db 与 scene_manager 用的 Redis 客户端不同(go-redis vs
+// 本包刻意只依赖标准库与同模块的 redisslot:db 与 scene_manager 用的 Redis 客户端不同(go-redis vs
 // go-zero),键名与解析放在这里,读写各自用自己的客户端。
 package ownerepoch
 
@@ -38,6 +38,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"shared/redisslot"
 )
 
 // HandoffTTL 是 handoff 标记的存活时间。写标记的主要是 C++ 源 scene(EX 300,与这里
@@ -45,9 +47,11 @@ import (
 // 两边改值必须同拍。
 const HandoffTTL = 300 * time.Second
 
-// OwnerEpochKey 返回 player:{id}:owner_epoch。
+// OwnerEpochKey 返回 player:{<id>}:owner_epoch:玩家 id 以 hash tag 包住,与该玩家的其他玩家域键同槽
+// (docs/design/redis-player-store-cluster.md §5.2)。C++ player_ownership::OwnerEpochRedisKey 与存盘严格 Lua
+// 按同一形状逐字核对。
 func OwnerEpochKey(playerID uint64) string {
-	return fmt.Sprintf("player:%d:owner_epoch", playerID)
+	return "player:" + redisslot.PlayerTag(playerID) + ":owner_epoch"
 }
 
 // HandoffKey 返回 player:{id}:handoff。

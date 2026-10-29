@@ -82,6 +82,13 @@ spec:
     metadata:
       labels:
         app: redis
+      # default-container:Pod 里有 redis-exporter sidecar 之后,不带 -c 的 kubectl exec / logs 仍落到 redis 容器。
+      # prometheus.io/*:与 go-svc 清单同一种抓取注解,指向 redis-exporter 的 9121;告警见 deploy/k8s/redis-alerts.yaml。
+      annotations:
+        kubectl.kubernetes.io/default-container: redis
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9121"
+        prometheus.io/path: "/metrics"
     spec:
       # SIGTERM 后 redis-server 要把 AOF 缓冲刷盘再退出,给足时间。
       terminationGracePeriodSeconds: 30
@@ -186,6 +193,31 @@ spec:
           volumeMounts:
             - name: redis-data
               mountPath: /data
+        # Redis 指标出口(2026-10-23,shared-redis-split-by-purpose.md §25.3 原 §13 第 6 条):redis_exporter 连本 Pod 的
+        # 127.0.0.1:6379,在 9121 出 Prometheus 指标(内存、OOM 错误、拒绝连接、AOF、主从链路),告警规则在 deploy/k8s/redis-alerts.yaml。
+        # 口令走环境变量 REDIS_PASSWORD(redis_exporter 原生读取),不上命令行、不进日志;Secret 缺失时无口令连接,与 redis 容器同口径。
+        # 镜像钉具体版本。增删本容器同样改 Pod 模板,apply 要 -ConfirmRedisCoreRestart。压测复盘仍用 stress_snap.ps1 的 INFO 快照。
+        - name: redis-exporter
+          image: oliver006/redis_exporter:v1.62.0
+          env:
+            - name: REDIS_ADDR
+              value: redis://127.0.0.1:6379
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+                  optional: true
+          ports:
+            - containerPort: 9121
+              name: metrics
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
   # 不写 storageClassName = 用集群默认 StorageClass(与 etcd.yaml / kafka.yaml 一致)。
   volumeClaimTemplates:
     - metadata:

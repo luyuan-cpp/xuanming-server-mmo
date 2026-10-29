@@ -9,9 +9,9 @@ not a single-threaded process. Kafka, logging, and lifecycle components have
 background threads. gRPC does not: since the muduo-driven gRPC migration
 (batches 3 and 4, `docs/design/grpc-muduo-transport.md` §14–§15) the generated
 gRPC clients and the scene / battle gRPC servers run on the node's own EventLoop
-through `muduo_grpc` and create no threads. The official gRPC library is still
-linked, but its runtime must never be initialized in a node process; a runtime
-guard checks this (see [gRPC Runtime Guard](#grpc-runtime-guard)).
+through `muduo_grpc` and create no threads.
+2026-10-26 起，C++ 工程不再链接官方 gRPC SDK；Protobuf、Abseil、GoogleTest 与必要的
+BoringSSL 各自独立管理，协议与 Go 服务保持兼容。
 
 ---
 
@@ -24,7 +24,6 @@ guard checks this (see [gRPC Runtime Guard](#grpc-runtime-guard)).
   - Windows: `CreateToolhelp32Snapshot` + `Thread32First/Next`
   - Linux: `readdir("/proc/self/task")`
 - **Behavior**: Passive monitoring only — logs warnings, does **NOT** enforce hard limits or kill threads
-- **gRPC runtime guard**: checks at registration and on every sample that the official gRPC runtime is still uninitialized (see below)
 
 ### Environment Variables
 
@@ -35,78 +34,34 @@ guard checks this (see [gRPC Runtime Guard](#grpc-runtime-guard)).
 | `NODE_THREAD_MONITOR_STABLE_WINDOW_SECONDS` | `60` | Wait this long before setting baseline |
 | `NODE_THREAD_MONITOR_GROWTH_WARN_CONSECUTIVE_SAMPLES` | `6` | Consecutive growth samples before warning |
 | `NODE_THREAD_MONITOR_GROWTH_WARN_ABSOLUTE_INCREASE` | `16` | Min absolute increase from baseline to trigger warning |
-| `NODE_GRPC_RUNTIME_GUARD_FATAL` | unset (off) | `1` / `true` / `on`: the gRPC runtime guard exits the process (`LOG_FATAL`) on first detection instead of logging. Set it in CI and smoke environments; leave it unset in production (fail-open by design) |
 
 ### Log Output Examples
 
 ```
-[INFO]  Gate thread metrics: total_threads=12, delta_threads=0, peak_threads=14, uptime_sec=120, grpc_runtime_initialized=0
+[INFO]  Gate thread metrics: total_threads=12, delta_threads=0, peak_threads=14, uptime_sec=120
 [INFO]  Gate thread baseline (stable window reached): baseline_threads=12, ...
 [WARN]  Gate thread growth warning: total_threads=30, increase_from_baseline=+18, consecutive_growth_samples=7, ...
-[ERROR] Scene official gRPC runtime is initialized (grpc_is_initialized()=1, detected_at=sample, uptime_sec=3610): its threads (...) are not controlled by the node, ...
 ```
 
-The `thread metrics` line is logged on the first sample and then at most once
-per hour. The `ERROR` line only appears when the guard below fires, and at most
-once per process.
+`thread metrics` 行在第一次采样时输出，此后最多每小时一次；持续增长告警继续使用原有基线与阈值。
 
-### gRPC Runtime Guard
+### C++ SDK 依赖边界（2026-10-26）
 
-The owner's goal is a controllable thread count: the gRPC library may stay
-linked, but no official gRPC thread may start. Once the official runtime is
-initialized (an explicit `grpc_init()`, or implicitly by constructing an
-official object derived from `grpc::internal::GrpcLibrary`: a channel from
-`grpc::CreateChannel`, a server from `grpc::ServerBuilder::BuildAndStart`,
-`grpc::CompletionQueue`, channel or server credentials, `grpc::ResourceQuota`,
-`grpc::Alarm`; a `*.grpc.pb.h` stub implies it too, since it needs a channel),
-it starts EventEngine workers, a Lifeguard, and a timer manager that the node
-does not control.
+节点使用 `muduo_grpc` 与 nghttp2 实现标准 gRPC 协议，消息序列化由独立 Protobuf 提供。
+官方 gRPC C++ SDK、官方桩生成插件及其运行时链接项已经退出 C++ 构建。原运行时探针、
+配套守卫配置、日志字段与仅检查该探针的旧测试同步移除；ThreadMonitor 的采样、基线、
+增长告警和启停配置继续生效。
 
-- **Probe**: `cpp/libs/engine/core/node/system/node/grpc_runtime_probe.{h,cpp}`,
-  `node::observability::IsGrpcRuntimeInitialized()` wraps
-  `grpc_is_initialized()`. The header includes no gRPC header; only the `.cpp`
-  includes `<grpc/grpc.h>`. The first call in a process runs gRPC's one-time
-  basic setup (an internal mutex, `GRPC_*` environment variables); that setup
-  starts no thread and does not count as initialization, so the probe never
-  turns its own result true.
-- **When it checks**: once in `RegisterThreadObservability()` (independent of
-  `NODE_THREAD_MONITOR_ENABLED`) and on every ThreadMonitor sample (only while
-  the monitor is enabled).
-- **What it reports**: the first time the runtime is found initialized, one
-  `ERROR` line `<Node> official gRPC runtime is initialized (grpc_is_initialized()=1, detected_at=registration|sample, uptime_sec=N): ...`
-  with troubleshooting hints. The hourly `thread metrics` line always carries
-  `grpc_runtime_initialized=0|1`.
-- **Fail-open by design** (AGENTS.md §11.3): the guard only logs; it neither
-  stops the process nor rejects traffic. An initialized runtime affects thread
-  controllability, an operational property, not player assets, data
-  consistency, or security; taking a live scene / battle / gate down for it
-  would cost far more. The risk is covered by the ERROR line, the
-  `grpc_runtime_initialized` field, and the regression test below.
-- **Regression test**: `cpp/tests/rpc_controller_test/grpc_runtime_not_initialized_test.cpp`
-  drives a generated-client local reject and a real `muduo_grpc` loopback call
-  (generated client → `muduo_grpc::Channel` → in-process `muduo_grpc::Server` →
-  `GrpcUnaryCall`) and asserts that the runtime is still uninitialized, also
-  after teardown. No test in the `rpc_controller_test` process may construct
-  official gRPC objects: the state is process-wide and `grpc_shutdown` may
-  finish asynchronously on a background thread.
+依赖边界由 `tools/scripts/tests/test_cpp_grpc_dependency_boundary.py` 检查：覆盖全部
+Windows 工程配置及继承 targets，拒绝官方 SDK 路径、专用库、头文件、运行时调用和官方
+生成桩，核对 Linux CMake 不再查找官方 SDK，同时允许自有 `grpc_client` 与 `muduo_grpc`。
+生成客户端的本地拒绝与真实回环行为分别保留在 `grpc_client_local_reject_test.cpp` 和
+`grpc_client_loopback_test.cpp`；静态边界检查不能代替这些行为测试、实际构建与互通验证。
 
-How to check a node:
-
-1. Logs: no `official gRPC runtime is initialized` line; the hourly
-   `thread metrics` line shows `grpc_runtime_initialized=0`.
-2. Compare `thread baseline (stable window reached): total_threads=` across
-   builds and hosts; it must not scale with the CPU core count any more.
-3. Linux: `for t in /proc/<pid>/task/*; do cat $t/comm; done | sort | uniq -c`
-   must not show official gRPC thread names (`comm` keeps 15 characters):
-   `event_engine`, `lifeguard`, `grpc_global_tim`, `grpcpp_sync_ser`,
-   `grpc_shutdown`.
-4. Code: `rg -n --type cpp "grpcpp|\bgrpc::|grpc_init\(" cpp --glob '!cpp/generated/**'`
-   should only hit comments and diagnostic strings (the guard's own ERROR text
-   in `thread_observability.h` and the regression test's failure message);
-   without `--type cpp` it also hits the `grpcpp_*.lib` link entries in the
-   `.vcxproj` files. `rg -n --type cpp "#include <grpc" cpp --glob '!cpp/generated/**'`
-   should only hit `grpc_runtime_probe.cpp`, the only handwritten file that
-   includes an official gRPC header.
+核对节点线程时，继续比较同等条件下的 `thread baseline (stable window reached)` 和
+`thread metrics`；Linux 可通过
+`for t in /proc/<pid>/task/*; do cat $t/comm; done | sort | uniq -c`
+核实实际线程来源。移除官方 SDK 不给 Kafka、日志或其它组件增加固定线程数保证。
 
 ---
 
@@ -125,7 +80,7 @@ pollers, and shutdown used a temporary worker thread.
 |---|---|---|---|
 | muduo EventLoop (business main thread) | 1 | — | Owns ECS and serialized business-state changes; also drives the `muduo_grpc` client channels and server and the muduo_h2 etcd transport |
 | gRPC clients and servers (`muduo_grpc`, h2c over nghttp2) | 0 extra | — | Run on the node's EventLoop; server limits (256 streams per connection, 1024 in-flight calls per node, at most 64 dispatches / 2ms per loop turn) are in `grpc-muduo-transport.md` §15 |
-| Official gRPC runtime (EventEngine, Lifeguard, timer manager, sync server pollers) | 0 — must stay uninitialized | — | The library is still linked, but nothing may initialize its runtime; enforced by the [gRPC Runtime Guard](#grpc-runtime-guard) and its regression test |
+| 官方 gRPC C++ SDK | 0（不链接） | — | 官方运行时与桩生成插件已移除；依赖边界由源码及工程静态检查把关 |
 | Kafka consumer / librdkafka | implementation-dependent | librdkafka internal | Background threads; measure rather than assume a fixed count |
 | Async logging and lifecycle workers | component-dependent | component-specific | Includes the Agones lifecycle worker on scene / battle where enabled |
 | OS / runtime threads | platform-dependent | — | For example Windows loader thread-pool workers, which may exit on their own; measure, do not assume |
@@ -137,18 +92,16 @@ Retired or inert settings:
   handling: `grpc-muduo-transport.md` §15.11).
 - `GRPC_MAX_THREADS` configured the `ResourceQuota` of the official client
   channels in `GrpcChannelCache`, which batch 3 deleted; nothing reads it now.
-- `GRPC_THREAD_POOL_RESERVE_THREADS` and `GRPC_THREAD_POOL_MAX_THREADS` were
-  never public controls for gRPC v1.83's built-in EventEngine. With the
-  official runtime uninitialized there is nothing for them to configure; do not
-  use any of these names for capacity planning.
+- `GRPC_THREAD_POOL_RESERVE_THREADS` 和 `GRPC_THREAD_POOL_MAX_THREADS` 从来不是
+  gRPC v1.83 内置 EventEngine 的公开控制项；官方 SDK 移除后节点没有对应配置入口。
+  以上变量都不能用于容量规划。
 
 ### Gate Node
 
 Gate keeps business-state ownership separate from transport work. Since batch 3
 its gRPC client channels (router forwarding and the other generated clients)
-are `muduo_grpc::Channel` instances on the gate EventLoop, so creating them no
-longer initializes the official gRPC runtime or its EventEngine. Kafka and
-logging still add their own background threads.
+are `muduo_grpc::Channel` instances on the gate EventLoop.
+创建通道不依赖官方 gRPC SDK；Kafka 与日志组件仍会增加自己的后台线程。
 
 ### Scene and Battle Nodes
 
@@ -211,8 +164,8 @@ are queued or waiting asynchronously (for example on an Agones permit).
 
 1. **C++ monitoring is passive** — logs and warns but does not kill or cap threads.
 2. **Business single-threading is an ownership rule** — it does not describe the total process thread count.
-3. **gRPC creates no threads** — `muduo_grpc` clients and servers run on the node's EventLoop; the official gRPC library stays linked, but its runtime must never be initialized.
-4. **The official runtime is guarded at runtime** — checked at registration and on every sample; the first detection logs one `ERROR`, the hourly metrics line carries `grpc_runtime_initialized`, and the guard is fail-open by design (AGENTS.md §11.3); CI and smoke environments set `NODE_GRPC_RUNTIME_GUARD_FATAL=1` to make it fail-closed.
+3. **gRPC 协议收发不新增线程** — `muduo_grpc` 客户端与服务端跑在节点 EventLoop 上，官方 gRPC C++ SDK 已退出构建。
+4. **依赖边界由源码与工程检查把关** — 检查全部工程配置、生成产物与 Linux 导出入口；ThreadMonitor 继续负责实际线程观测。
 5. **`GRPC_SERVER_MAX_POLLERS` and `GRPC_MAX_THREADS` are retired** — the sync server pollers and client `ResourceQuota` they configured no longer exist.
 6. **Go services have no goroutine hard limit** — they rely on scheduling via `GOMAXPROCS`; `runtime.SetMaxThreads()` concerns OS threads, not goroutine count.
 7. **Kafka internal threads are implementation-managed** — production baselines must come from ThreadMonitor measurements.
@@ -224,9 +177,10 @@ are queued or waiting asynchronously (for example on an Agones permit).
 
 | File | Purpose |
 |------|---------|
-| `cpp/libs/engine/core/node/system/node/thread_observability.h` | ThreadMonitor class, env var parsing, gRPC runtime guard, `RegisterThreadObservability()` |
-| `cpp/libs/engine/core/node/system/node/grpc_runtime_probe.{h,cpp}` | `IsGrpcRuntimeInitialized()` (wraps `grpc_is_initialized()`); the header includes no gRPC header |
+| `cpp/libs/engine/core/node/system/node/thread_observability.h` | ThreadMonitor 类、环境变量解析、`RegisterThreadObservability()` |
 | `cpp/libs/engine/core/node/system/node/node.cpp` | Registers ThreadMonitor; starts the `muduo_grpc` server and runs its in-loop shutdown drain |
 | `cpp/libs/engine/muduo_grpc/` | muduo-driven gRPC client channels and server (no threads) |
-| `cpp/tests/rpc_controller_test/grpc_runtime_not_initialized_test.cpp` | Regression test: a generated-client local reject and a real `muduo_grpc` call leave the official runtime uninitialized |
+| `tools/scripts/tests/test_cpp_grpc_dependency_boundary.py` | 官方 SDK 的源码、生成产物与全配置工程依赖边界检查 |
+| `cpp/tests/rpc_controller_test/grpc_client_local_reject_test.cpp` | 生成客户端本地拒绝与异步完成回归 |
+| `cpp/tests/rpc_controller_test/grpc_client_loopback_test.cpp` | 生成客户端经 muduo 通道的真实回环回归 |
 | `go/db/internal/kafka/key_ordered_consumer.go` | Kafka partition worker pool (structured goroutine control) |

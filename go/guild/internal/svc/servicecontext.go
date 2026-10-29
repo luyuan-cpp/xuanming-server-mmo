@@ -2,8 +2,12 @@ package svc
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"errors"
 	"fmt"
+	"os"
+	"sync"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -18,6 +22,7 @@ import (
 	dspb "proto/data_service"
 	matchpb "proto/match"
 	"shared/authoritysql"
+	"shared/drainproof"
 	"shared/generated/table"
 	"shared/idsegment"
 	"shared/kafkacmd"
@@ -39,6 +44,21 @@ const (
 )
 
 type ServiceContext struct {
+	ConsumerOwner *kafkautil.BoundConsumerGroup
+	// 同一 boot 的 SQL 身份与两个独立角色；P1 不关闭 RELAY 或 SQL 池。
+	WriterConfig             authoritysql.WriterConfig
+	RootAdmission            *drainproof.Session
+	RelayAdmission           *drainproof.Session
+	RelayIngress             *drainproof.Session
+	DrainRuntime             *drainproof.Runtime
+	lifecycleMu              sync.Mutex
+	sourceMu                 sync.Mutex
+	relayStop                func(context.Context) error
+	publicationRepo          *data.GuildRepo
+	resourcesClosed          bool
+	resourceCloseErr         error
+	sourceStop               func(context.Context) error
+	sourceClosed             bool
 	Config                   config.Config
 	RedisClient              *redis.Client
 	PlayerLocatorRedisClient *redis.Client
@@ -80,6 +100,19 @@ type ServiceContext struct {
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		panic(fmt.Errorf("guild SQL boot 装配失败: %w", err))
+	}
+	return NewServiceContextWithAdmission(c, writer, drainproof.New(), drainproof.New())
+}
+
+// NewServiceContextWithAdmission 由实际进程 owner 显式传入同一 boot 的身份与角色门禁。
+// 新 boot 的 prepared 门禁也在这里传入，不能在 handler 已持有门禁后替换它。
+func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterConfig, root, relay *drainproof.Session) *ServiceContext {
+	if len(writer.InstanceID()) != 16 || len(writer.WriterKey()) != 16 || root == nil || relay == nil || root == relay {
+		panic("guild SQL boot 与 SOURCE/RELAY 装配缺失或角色复用")
+	}
 	table.LoadTables(c.TableDir, false)
 
 	// PoolSize:0 = go-redis 缺省 10 × GOMAXPROCS,负数已被 config.Validate 拒绝(见 config.RedisConf.PoolSize)。
@@ -118,7 +151,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 而这是正确性约束、不是部署偏好。解析失败一律拒启,且错误里不含 DSN 原文(它带口令)。
 	// 迁移使用独立强会话池；DDL的元数据锁与socket预算由迁移器单独约束。
 	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	db, err := OpenMySQL(dbCtx, c.MySQL)
+	db, err := openMySQL(dbCtx, c.MySQL, authoritysql.Writer(writer))
 	dbCancel()
 	if err != nil {
 		panic(fmt.Errorf("failed to connect authoritative SQL: %w", err))
@@ -127,6 +160,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	var w *kafkago.Writer
 	if len(c.Kafka.Brokers) > 0 {
 		w = &kafkago.Writer{
+			Completion: func(_ []kafkago.Message, err error) {
+				if err != nil {
+					relay.Hold()
+				}
+			},
 			Addr: kafkago.TCP(c.Kafka.Brokers...),
 			// 控制面命令 topic(gate-cmd_gN)必须按 node_id % P 落到**指定分区**:
 			// 消费端 assign 的就是那一个分区,落错分区 = 目标 gate 永远收不到,
@@ -153,6 +191,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	syncRdb := newPlayerSyncRedis(plRedisConf)
 	sc := &ServiceContext{
+		WriterConfig:             writer,
+		RootAdmission:            root,
+		RelayAdmission:           relay,
+		RelayIngress:             drainproof.New(),
 		Config:                   c,
 		RedisClient:              rdb,
 		PlayerLocatorRedisClient: plRdb,
@@ -175,12 +217,25 @@ func NewServiceContext(c config.Config) *ServiceContext {
 // OpenMySQL 只接受帮会独占库，逐物理连接初始化强会话；TiDB不满足时拒启。
 // WithLockWaitTimeout继续强制clientFoundRows=false并去掉旧隔离别名。
 func OpenMySQL(ctx context.Context, c config.MySQLConf) (*sql.DB, error) {
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	return openMySQL(ctx, c, authoritysql.Writer(writer))
+}
+
+// OpenReadOnlyMySQL只用于常驻启动期的只读schema核对。
+func OpenReadOnlyMySQL(ctx context.Context, c config.MySQLConf) (*sql.DB, error) {
+	return openMySQL(ctx, c, authoritysql.Reader())
+}
+
+func openMySQL(ctx context.Context, c config.MySQLConf, permission authoritysql.Permission) (*sql.DB, error) {
 	dsn, err := data.WithLockWaitTimeout(c.DataSource)
 	if err != nil {
 		return nil, err
 	}
 	maxOpen, maxIdle := c.EffectivePool()
-	db, err := authoritysql.Open(ctx, dsn, data.DatabaseName, c.RequiresTiDB(), maxOpen)
+	db, err := authoritysql.Open(ctx, dsn, data.DatabaseName, c.RequiresTiDB(), maxOpen, permission)
 	if err != nil {
 		return nil, err
 	}
@@ -188,13 +243,17 @@ func OpenMySQL(ctx context.Context, c config.MySQLConf) (*sql.DB, error) {
 	return db, nil
 }
 
-// OpenSchemaMySQL 只用于启动检查与显式迁移，不能交给在线仓储。
+// OpenSchemaMySQL 只用于显式迁移，不能交给常驻启动检查或在线仓储。
 func OpenSchemaMySQL(ctx context.Context, c config.MySQLConf) (*sql.DB, error) {
 	dsn, err := data.WithLockWaitTimeout(c.DataSource)
 	if err != nil {
 		return nil, err
 	}
-	return authoritysql.OpenForMigration(ctx, dsn, data.DatabaseName, c.RequiresTiDB())
+	permission, err := authoritysql.LoadSchemaPermission(os.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	return authoritysql.OpenForMigration(ctx, dsn, data.DatabaseName, c.RequiresTiDB(), permission)
 }
 
 // initMatchInternalClient 按 MatchRpc 建 match 内部服务客户端;没配目标时保持 nil 接口(历练未开放)。
@@ -271,44 +330,178 @@ func newMergeMarkerRedis(c config.Config) *redis.Client {
 	return cli
 }
 
-func (s *ServiceContext) Stop() {
-	// 号段客户端最先关:Close 取消在途领段并等它退出,之后再关 Kafka / Redis / DB。
-	// op_id 排在 guild_id 之前只是与建立顺序相反,两者互不依赖。
-	if s.AssetOpIDSegment != nil {
-		s.AssetOpIDSegment.Close()
+// BindDrainRuntime 将维护原件绑定到已经消费的同一 SQL boot，不重新读 grant。
+// 实际 main 仍须接 RPC、cleanup、trial 的 SOURCE 与资产/结果消费的 RELAY。
+func (s *ServiceContext) BindDrainRuntime(runtime *drainproof.Runtime) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if runtime == nil || s.DrainRuntime != nil || s.RootAdmission == nil || s.RelayAdmission == nil ||
+		s.RootAdmission == s.RelayAdmission || runtime.Seed("SOURCE") == nil || runtime.Seed("RELAY") == nil {
+		return drainproof.ErrHold
+	}
+	if err := runtime.BindBoot(s.WriterConfig.InstanceID(), s.WriterConfig.WriterKey()); err != nil {
+		return err
+	}
+	s.DrainRuntime = runtime
+	return nil
+}
+
+// CloseSource 关闭根门禁，停止并 join 清理发起者，等待 RPC 后关闭只供根调用的 guild 号源。
+// 资产号源、结果消费、RELAY 与 SQL 保持开放供已接纳工作派生和完成。
+func (s *ServiceContext) BindSourceStop(stop func(context.Context) error) error {
+	s.sourceMu.Lock()
+	defer s.sourceMu.Unlock()
+	if stop == nil || s.sourceStop != nil || s.sourceClosed {
+		return drainproof.ErrHold
+	}
+	s.sourceStop = stop
+	return nil
+}
+func (s *ServiceContext) CloseSource(ctx context.Context) error {
+	s.sourceMu.Lock()
+	defer s.sourceMu.Unlock()
+	if s.sourceClosed {
+		return nil
+	}
+	if s.RootAdmission == nil {
+		return drainproof.ErrHold
+	}
+	s.RootAdmission.CloseAdmission()
+	if s.sourceStop != nil {
+		if err := s.sourceStop(ctx); err != nil {
+			s.RootAdmission.Hold()
+			return err
+		}
+	}
+	if err := s.RootAdmission.Wait(ctx); err != nil {
+		return err
 	}
 	if s.GuildIDSegment != nil {
-		s.GuildIDSegment.Close()
+		digest, err := s.GuildIDSegment.DrainAndReport(ctx)
+		if err != nil {
+			s.RootAdmission.Hold()
+			return err
+		}
+		if err = s.RootAdmission.MergeClosedSettled(digest); err != nil {
+			return err
+		}
+	}
+	s.sourceClosed = true
+	return nil
+}
+
+// StopAndReport 必须先取得资产 TX2/APPLIED、结果消费与发布链的真实 RELAY 前沿，
+// 才能 Seal 同一 WriterConfig 并关 SQL 池；缺失绑定或实际 join 失败时保留共享资源。
+func (s *ServiceContext) BindRelayOwners(repo *data.GuildRepo, stop func(context.Context) error) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if repo == nil || stop == nil || s.publicationRepo != nil || s.relayStop != nil {
+		return drainproof.ErrHold
+	}
+	s.publicationRepo = repo
+	s.relayStop = stop
+	return nil
+}
+func (s *ServiceContext) StopAndReport(ctx context.Context) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if s.resourcesClosed {
+		return s.resourceCloseErr
+	}
+	if err := s.CloseSource(ctx); err != nil {
+		return err
+	}
+	if s.RelayAdmission == nil || s.publicationRepo == nil || s.relayStop == nil {
+		return drainproof.ErrHold
+	}
+	s.RelayIngress.CloseAdmission()
+	if err := s.RelayIngress.Wait(ctx); err != nil {
+		return err
+	}
+	if s.ConsumerOwner != nil {
+		raw, err := s.ConsumerOwner.CloseAndReport(ctx)
+		if err != nil {
+			return err
+		}
+		digest := sha256.Sum256(raw)
+		if err = s.RelayAdmission.MergeSettled(digest[:]); err != nil {
+			return err
+		}
+	}
+	if err := s.relayStop(ctx); err != nil {
+		s.RelayAdmission.Hold()
+		return err
+	}
+	if s.AssetOpIDSegment != nil {
+		digest, err := s.AssetOpIDSegment.DrainAndReport(ctx)
+		if err != nil {
+			s.RelayAdmission.Hold()
+			return err
+		}
+		if err = s.RelayAdmission.MergeSettled(digest); err != nil {
+			return err
+		}
+	}
+	// 调用入口和所有 worker 已 join，缓存失败重试仍由 repo 自己的实际 owner 等待。
+	digest, err := s.publicationRepo.ClosePublication(ctx)
+	if err != nil {
+		return err
+	}
+	if err = s.RelayAdmission.MergeSettled(digest); err != nil {
+		return err
+	}
+	if err = s.RelayAdmission.WaitIdle(ctx); err != nil {
+		return err
 	}
 	if s.KafkaWriter != nil {
-		if err := s.KafkaWriter.Close(); err != nil {
-			logx.Errorf("Failed to close Kafka writer: %v", err)
+		if err = s.KafkaWriter.Close(); err != nil {
+			s.RelayAdmission.Hold()
+			return err
 		}
 	}
-	if s.RedisClient != nil {
-		if err := s.RedisClient.Close(); err != nil {
-			logx.Errorf("Failed to close Redis client: %v", err)
-		}
+	s.RelayAdmission.CloseAdmission()
+	if err = s.RelayAdmission.Wait(ctx); err != nil {
+		return err
 	}
-	if s.PlayerLocatorRedisClient != nil {
-		if err := s.PlayerLocatorRedisClient.Close(); err != nil {
-			logx.Errorf("Failed to close player locator Redis client: %v", err)
-		}
-	}
-	// 关掉之后仍在途的 bump 协程会拿到 redis: client is closed,只计 result="error",不影响任何业务结果。
+	s.WriterConfig.Seal()
+	var result error
 	if s.PlayerSyncRedisClient != nil {
-		if err := s.PlayerSyncRedisClient.Close(); err != nil {
-			logx.Errorf("Failed to close player sync digest Redis client: %v", err)
-		}
+		result = errors.Join(result, s.PlayerSyncRedisClient.Close())
 	}
 	if s.MergeMarkerRedisClient != nil {
-		if err := s.MergeMarkerRedisClient.Close(); err != nil {
-			logx.Errorf("Failed to close merge marker Redis client: %v", err)
-		}
+		result = errors.Join(result, s.MergeMarkerRedisClient.Close())
+	}
+	if s.PlayerLocatorRedisClient != nil {
+		result = errors.Join(result, s.PlayerLocatorRedisClient.Close())
+	}
+	if s.RedisClient != nil {
+		result = errors.Join(result, s.RedisClient.Close())
 	}
 	if s.DB != nil {
-		if err := s.DB.Close(); err != nil {
-			logx.Errorf("Failed to close MySQL: %v", err)
-		}
+		result = errors.Join(result, s.DB.Close())
 	}
+	s.resourcesClosed = true
+	s.resourceCloseErr = result
+	if result != nil {
+		s.RelayAdmission.Hold()
+	}
+	return result
+}
+func (s *ServiceContext) Stop() {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if err := s.StopAndReport(ctx); err != nil {
+		logx.Errorf("guild 排空 HOLD: %v", err)
+	}
+}
+
+// BindConsumerOwner 只登记本服务真实消费组，不能在维护时换成另一个代次 owner。
+func (sc *ServiceContext) BindConsumerOwner(owner *kafkautil.BoundConsumerGroup) error {
+	sc.lifecycleMu.Lock()
+	defer sc.lifecycleMu.Unlock()
+	if owner == nil || sc.ConsumerOwner != nil {
+		return drainproof.ErrHold
+	}
+	sc.ConsumerOwner = owner
+	return nil
 }

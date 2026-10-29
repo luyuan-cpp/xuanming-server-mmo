@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 #include "actor/actor_net_id.h"
+#include "services/scene/player/system/handoff_sql_barrier.h"
+#include "services/scene/player/comp/player_ownership_comp.h"
 #include "core/system/id_generator.h"
 #include "core/type_alias/player_session_type_alias.h"
 #include "engine/core/type_define/player_guid_comp.h"
@@ -869,3 +871,17 @@ TEST_F(PlayerFeaturePersistenceTest, InitFromAllDataRejectsDuplicateWithoutLeavi
 }
 
 } // namespace
+
+TEST_F(PlayerFeaturePersistenceTest, OldAdmissionGenerationCannotInitializeReplacementEntity)
+{
+    const ScopedInitializationScene target;
+    auto context=target.Context();
+    context.roleAdmissionGeneration=10; // 本宿主明确确认的SQL原件是11，不能借当前角色替旧ctx补身份。
+    context.handoffFence=*handoff_sql_barrier::EncodeFence({8,"fixture",10,std::string(32,'a'),
+        handoff_sql_barrier::FenceState::kHeld,std::string(32,'b')});
+    PlayerAllData data;data.mutable_player_database_data()->set_player_id(kPlayerId);
+    const auto before=tlsEcs.actorRegistry.storage<entt::entity>().free_list();
+    EXPECT_TRUE(PlayerLifecycleSystem::InitPlayerFromAllData(data,context)==entt::null);
+    EXPECT_EQ(before,tlsEcs.actorRegistry.storage<entt::entity>().free_list());
+    EXPECT_FALSE(tlsEcs.playerList.contains(kPlayerId));
+}

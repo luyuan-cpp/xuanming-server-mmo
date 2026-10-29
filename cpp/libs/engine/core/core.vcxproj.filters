@@ -15,7 +15,6 @@
     <ClCompile Include="node\system\node\client_endpoint.cpp" />
     <ClCompile Include="node\system\grpc_call_deadline.cpp" />
     <ClCompile Include="node\system\node\node_util.cpp" />
-    <ClCompile Include="node\system\node\grpc_runtime_probe.cpp" />
     <ClCompile Include="node\system\registration\registration_manager.cpp" />
     <ClCompile Include="node\system\discovery\service_discovery_manager.cpp" />
     <ClCompile Include="time\comp\timer_task_boost_comp.cpp" />
@@ -24,6 +23,9 @@
     <ClCompile Include="network\codec\codec.cpp" />
     <ClCompile Include="network\rpc_channel.cpp" />
     <ClCompile Include="network\rpc_channel_stats.cpp" />
+    <ClCompile Include="metrics\prometheus_text.cpp" />
+    <ClCompile Include="metrics\metrics_registry.cpp" />
+    <ClCompile Include="metrics\metrics_http_exporter.cpp" />
     <ClCompile Include="network\message_statistics.cpp" />
     <ClCompile Include="network\network_utils.cpp" />
     <ClCompile Include="network\client_message_sender.cpp" />
@@ -77,6 +79,9 @@
     <ClInclude Include="network\codec\dispatcher.h" />
     <ClInclude Include="network\rpc_channel.h" />
     <ClInclude Include="network\rpc_channel_stats.h" />
+    <ClInclude Include="metrics\prometheus_text.h" />
+    <ClInclude Include="metrics\metrics_registry.h" />
+    <ClInclude Include="metrics\metrics_http_exporter.h" />
     <ClInclude Include="network\rpc_controller.h" />
     <ClInclude Include="network\rpc_done_callback.h" />
     <ClInclude Include="network\grpc_client_call.h" />
@@ -112,7 +117,6 @@
     <ClInclude Include="node\system\node\node_kafka_command_handler.h" />
     <ClInclude Include="node\system\node\node_entry.h" />
     <ClInclude Include="node\system\node\thread_observability.h" />
-    <ClInclude Include="node\system\node\grpc_runtime_probe.h" />
     <ClInclude Include="network\traffic_statistics.h" />
     <ClInclude Include="utils\bit_index\bit_index_util.h" />
     <ClInclude Include="utils\data_structures\double_buffer_queue.h" />

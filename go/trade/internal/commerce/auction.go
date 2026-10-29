@@ -70,12 +70,15 @@ func (e *Engine) acceptBid(ctx context.Context, bidID uint64) error {
 			return err
 		}
 		var lw *tradepb.TradeCommerceWorkflow
+		lotDefect := "lot missing"
 		if err == nil {
 			if lot.SellerPlayerId != parentSeller || lot.BuyerPlayerId != parentBuyer {
-				return ErrConflict
+				// 预读拍品之后别的副本接受了另一条出价:乐观冲突,下一轮重读即可。不能按暂时失败推迟 10 秒 ——
+				// 临近截止时那会把这条已冻结的有效出价拖过截止、变成退款,改变拍卖结果(2026-10-22)。
+				return staleObservation()
 			}
 			if lw, err = data.Workflow(lot); err != nil {
-				lw = nil
+				lw, lotDefect = nil, "lot workflow undecodable"
 			}
 		}
 		bid, err := e.Repo.Lock(ctx, tx, bidID)
@@ -93,12 +96,20 @@ func (e *Engine) acceptBid(ctx context.Context, bidID uint64) error {
 			return err
 		}
 		if lw != nil {
-			if err := e.checkContractIdentities(ctx, tx, lot, lw); err != nil {
-				return err
+			// 拍品自己的原归属身份不合格(缺身份的存量数据、原主已换)时它不可能接受这条出价:与拍品缺失同样按不合格退款,
+			// 只动出价人自己的冻结资金;只有出价自身的数据坏了才算这条出价 corrupt(2026-10-22)。
+			// 以前这里原样返回,拍品缺身份时被隔离为人工的是这条出价,冻结的钱一起进了人工单。
+			// 存储 / 目录读取失败照常返回,下一轮重试,不能当成拍品坏了。
+			switch checkErr := e.checkContractIdentities(ctx, tx, lot, lw); {
+			case checkErr == nil:
+			case errors.Is(checkErr, errCorruptContract), errors.Is(checkErr, errRoleConflict):
+				lw, lotDefect = nil, "lot identity check failed: "+checkErr.Error()
+			default:
+				return checkErr
 			}
 		}
 		if lw == nil {
-			logx.Errorf("[Commerce] Bid refunded because its lot is missing or undecodable bid_id=%d lot_id=%d", bid.CommerceId, candidate.ParentId)
+			logx.Errorf("[Commerce] Bid refunded because its lot cannot accept bids bid_id=%d lot_id=%d reason=%s", bid.CommerceId, candidate.ParentId, lotDefect)
 		}
 		var now uint64
 		if err := tx.QueryRowContext(ctx, "SELECT CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED)").Scan(&now); err != nil {

@@ -93,8 +93,10 @@
 - 输出五段二维表：robot 每分钟 stats + entergame_total + dataloader stage avg + SceneManager EnterScene 子阶段 + DB task 子阶段 + Kafka lag，约 3KB 上下文。
 - **Round 16+ 推荐用 `tools/scripts/stress_snap.ps1` 后台批量拉 snapshot**（并行 scrape 三端口）：
   `pwsh tools/scripts/stress_snap.ps1 -RunDir robot/logs/stress-<name>-<ts> -StartTime '<yyyy-MM-dd HH:mm:ss>' -Stages 2,5,10,15,18`
-  端口分工：`:9101` login / `:9150` scene_manager / `:9160` db。
-  文件命名 `t<N>m_login.txt` / `t<N>m_sm.txt` / `t<N>m_db.txt`，summarize 脚本自动按后缀分流。
+  端口分工：`:9101` login / `:9150` scene_manager / `:9160` db / `:9260` data_service（2026-10-23 起）。
+  文件命名 `t<N>m_login.txt` / `t<N>m_sm.txt` / `t<N>m_db.txt` / `t<N>m_ds.txt`，summarize 脚本自动按后缀分流。
+  同一时刻还对 `-RedisTargets`（缺省 `@{ core = 'docker:redis' }`）抓 `redis-cli INFO` 快照 `t<N>m_redis_<name>.txt`，
+  汇总脚本相邻两份求差出 Redis 的 ops/s、CPU、热点命令；Redis 求差要基线，`-Stages` 建议带上 0。
 - 旧式单端口手拉（legacy 兼容）：`curl -s http://127.0.0.1:9101/metrics > $RunDir/prom-snapshots/t<n>m.txt`。
 - 历史复盘文档（`stress-1zone-*.md`）直接复用脚本输出的表格，不要再贴 raw count/sum 数字。
 

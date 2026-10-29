@@ -51,4 +51,6 @@ enum match_error {
 
   kMatchNotInScene = 16020;
 
+  kMatchSpectateFull = 16021;
+
 };

@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"crypto/sha256"
 	db_config "db/internal/config"
 	"db/internal/dbguard"
 	"db/internal/metrics"
@@ -11,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	playerpb "proto/common/database"
 	db_proto "proto/db"
 	"runtime/debug"
 	"strconv"
@@ -22,6 +24,7 @@ import (
 
 	"db/internal/locker"
 
+	"shared/drainproof"
 	"shared/kafkautil"
 
 	"github.com/IBM/sarama"
@@ -116,6 +119,14 @@ type KeyOrderedKafkaConsumer struct {
 	// consumeDone 在消费循环退出时关闭(最后一个 session 已释放、位点已最后一次提交),Stop 第②步等它。
 	consumeDone chan struct{}
 	stopOnce    sync.Once
+	stopMu      sync.Mutex
+	stopDone    chan struct{}
+	stopErr     error
+	relayWork   *drainproof.Session
+	ready       chan struct{}
+	readyOnce   sync.Once
+	readyActive bool
+	readyDigest []byte
 	// shutdownDrainTimeout 是停机时每个 claim 等在途任务做完的上限(≤0 时取 claimDrainTimeout);
 	// Stop 第②步最多等它加 consumerShutdownGrace。
 	shutdownDrainTimeout time.Duration
@@ -269,12 +280,21 @@ type workerTask struct {
 	// retryDone 是 owner 重试的在途回执(claim 租约的 exit,retry_routing.go):任务走到终态(执行完、搬回、进死信、
 	// 停机丢弃)时恰好调一次,由 finishRetry 调用。Kafka 任务与 shared 重试为 nil。
 	retryDone func()
+	drainDone func()
 }
 
 // finishRetry 交还 owner 重试的在途回执:先取出、置 nil 再调用,所以多次调用只生效一次。
 // 任务任一时刻只归一个 goroutine(经 channel 交接:重试协程 → worker 路由 → 子 shard),无需加锁。
 func (t *workerTask) finishRetry() {
-	if t == nil || t.retryDone == nil {
+	if t == nil {
+		return
+	}
+	if t.drainDone != nil {
+		done := t.drainDone
+		t.drainDone = nil
+		done()
+	}
+	if t.retryDone == nil {
 		return
 	}
 	done := t.retryDone
@@ -499,9 +519,9 @@ type dbOpHandler func(
 	msg proto.Message,
 ) (writeOutcome, error)
 
-var dbOpHandlers = map[string]dbOpHandler{
-	"read":  handleDBReadOp,
-	"write": handleDBWriteOp,
+var dbOpHandlers = map[db_proto.DBOp]dbOpHandler{
+	db_proto.DBOp_DB_OP_READ:  handleDBReadOp,
+	db_proto.DBOp_DB_OP_WRITE: handleDBWriteOp,
 }
 
 // handleDBReadOp 的 ctx 是调用方的 ctx(Kafka 来源即 claimCtx):claim 被收回、停机超时时读随之取消,排空更快;
@@ -512,8 +532,16 @@ func handleDBReadOp(
 	task *db_proto.DBTask,
 	msg proto.Message,
 ) (writeOutcome, error) {
-	if err := store.WithContext(ctx).FindOneByWhereClause(msg, task.WhereCase); err != nil && !errors.Is(err, proto2mysql.ErrNoRowsFound) {
-		return writeOutcome{}, fmt.Errorf("db read failed: %w", storeerr.Tag(err))
+	if err := store.WithContext(ctx).FindOneByWhereClause(msg, task.WhereCase); err != nil {
+		if !errors.Is(err, proto2mysql.ErrNoRowsFound) {
+			return writeOutcome{}, fmt.Errorf("db read failed: %w", storeerr.Tag(err))
+		}
+		// 玩家双表已由正式 Create 原子建立；缺行代表权威历史缺口，不能把带 id 的读请求原样发布为存档。
+		switch msg.ProtoReflect().Descriptor().FullName() {
+		case (&playerpb.PlayerDatabase{}).ProtoReflect().Descriptor().FullName(),
+			(&playerpb.PlayerDatabase_1{}).ProtoReflect().Descriptor().FullName():
+			return writeOutcome{}, errMissingPlayerSQLRow
+		}
 	}
 	// C2(persist_schema.go):本实例的 SELECT 只列自己认识的列,行世代更高时读出的是截断副本,不能回填缓存、不能交给 login。
 	if err := checkReadSchema(task, msg); err != nil {
@@ -669,12 +697,12 @@ func orderingForTask(ctx context.Context, rc redis.Cmdable, topic string, dbTask
 	// even when this key has no marker: Key%N is not the producer's partitioner,
 	// and executing the task could race a fresh write on another worker.
 	if task.fromRetry && (task.seq == 0 || !task.hasOriginPartition) {
-		if dbTask.Op == "write" {
+		if dbTask.Op == db_proto.DBOp_DB_OP_WRITE {
 			metrics.CountOrderingGuard(metrics.OrderingIncomparable)
 		}
 		return orderingIncomparable, nil
 	}
-	if dbTask.Op != "write" {
+	if dbTask.Op != db_proto.DBOp_DB_OP_WRITE {
 		return orderingApply, nil
 	}
 	getStart := time.Now()
@@ -719,7 +747,7 @@ func orderingForTask(ctx context.Context, rc redis.Cmdable, topic string, dbTask
 // tying it to the 24h business-cache TTL would let a delayed retry resurrect
 // after the guard expired and overwrite a newer full snapshot.
 func markAppliedSeq(ctx context.Context, rc redis.Cmdable, topic string, dbTask *db_proto.DBTask, task *workerTask) error {
-	if task.seq == 0 || dbTask.Op != "write" {
+	if task.seq == 0 || dbTask.Op != db_proto.DBOp_DB_OP_WRITE {
 		return nil
 	}
 	cursor := appliedCursor{seq: task.seq, partition: task.originPartition, hasPartition: task.hasOriginPartition}
@@ -969,7 +997,7 @@ func (w *worker) guardOwnerEpoch(task *workerTask, dbTask *db_proto.DBTask) bool
 // 失败不回滚业务写、也不让任务重试:代价只是守卫暂时少看到一格(之后同一持有者的
 // 任何一次成功写都会补上),而重试一笔已经落库的写没有任何收益。
 func (w *worker) markAppliedOwnerEpoch(dbTask *db_proto.DBTask) {
-	if dbTask.Op != "write" || dbTask.OwnerEpoch == 0 || w.appliedEpochs == nil {
+	if dbTask.Op != db_proto.DBOp_DB_OP_WRITE || dbTask.OwnerEpoch == 0 || w.appliedEpochs == nil {
 		return
 	}
 	if err := w.appliedEpochs.MarkAppliedEpoch(w.ctx, w.topic, dbTask.Key, dbTask.MsgType, dbTask.OwnerEpoch); err != nil {
@@ -1177,6 +1205,7 @@ func NewKeyOrderedKafkaConsumer(
 
 	config := sarama.NewConfig()
 	config.Version = consumerKafkaVersion
+	config.Metadata.AllowAutoTopicCreation = false
 	config.ClientID = consumerClientID(cfg.ZoneId, hostname)
 	config.Consumer.Return.Errors = true
 	config.Consumer.Group.Session.Timeout = time.Duration(kcfg.SessionTimeoutMs) * time.Millisecond
@@ -1261,6 +1290,8 @@ func NewKeyOrderedKafkaConsumer(
 		pullStop:             make(chan struct{}),
 		consumeDone:          make(chan struct{}),
 		shutdownDrainTimeout: claimDrainTimeout,
+		relayWork:            drainproof.New(),
+		ready:                make(chan struct{}),
 
 		retryRouting: retryRouting,
 		// shared 模式也建 p 键:每拍兜底排空 p*(从 owner 回滚的路径)。
@@ -1271,12 +1302,15 @@ func NewKeyOrderedKafkaConsumer(
 		// 必须先 Start 里的 enqueuer().start(探针)才能用;Stop 的最后一步关闭。放在所有会失败返回的步骤之后,
 		// 构造失败时不会留下没人关的专用客户端。外面包一层 confirmingEnqueue:任一请求确认成功就清零重新入组的退避
 		// (rejoin_backoff.go)。
-		durable:        confirmingEnqueue{durableEnqueue: newDurableEnqueue(cfg.ServerConfig.RedisClient, redisClient), backoff: durableBackoff},
+		durable:        &drainEnqueue{inner: confirmingEnqueue{durableEnqueue: newDurableEnqueue(cfg.ServerConfig.RedisClient, redisClient), backoff: durableBackoff}, pending: drainproof.New()},
 		durableBackoff: durableBackoff,
 	}
 	// 读方门禁的两半:逐条选库 / 复核用的读(所有 worker 共用同一个 placementRouter),与进程级就绪闸。
 	c.placement.ready = routeReader
 	c.routeGate = routeGate
+	// 落点选库与按需开库的计数器以 0 建出全部序列(封闭 label 集合):「出现一次就报」的告警用 increase(),序列从无到 1
+	// 时会漏掉第一次(deploy/k8s/player-placement-alerts.yaml)。go/db 的消费者一律按落点选库,装配到这里即启用。
+	metrics.PrimePlacement()
 	for i := int32(0); i < cfg.ServerConfig.Kafka.PartitionCnt; i++ {
 		c.workers[i] = c.buildWorker(i)
 	}
@@ -1730,14 +1764,17 @@ func (c *KeyOrderedKafkaConsumer) consumeOneRetryFrom(readyKey string) bool {
 		retryReceipt:       append([]byte(nil), msgBytes...),
 		enqueuedAt:         time.Now(),
 	}
+	c.trackTask(retryTask)
 	select {
 	case w.taskCh <- retryTask:
 		metrics.CountRetryRoute(mode, action)
 		logx.Debugf("retry task routed to worker: taskID=%s, partition=%d, retryCount=%d, action=%s",
 			task.TaskId, partition, task.RetryCount, action)
 	case <-c.ctx.Done():
+		retryTask.finishRetry()
 		return false
 	case <-c.pullStop:
+		retryTask.finishRetry()
 		// 停机撤拉取时 worker 通道还满着:不再派发,收据留在本实例 processing,由 Stop 第⑤步归还。
 		return false
 	}
@@ -1761,9 +1798,13 @@ func (c *KeyOrderedKafkaConsumer) parseClaimedRetry(msg []byte, mode string) (*d
 		deadLetter(metrics.DeadLetterMalformedPayload, fmt.Sprintf("malformed payload: %v", err))
 		return nil, 0, 0, nil, false
 	}
+	if _, ok := dbOpHandlers[task.Op]; !ok {
+		deadLetter(metrics.DeadLetterMalformedPayload, fmt.Sprintf("unsupported op: %d", task.Op))
+		return nil, 0, 0, nil, false
+	}
 
 	if task.RetryCount >= int32(c.retryMaxTimes) {
-		if task.Op == "read" {
+		if task.Op == db_proto.DBOp_DB_OP_READ {
 			// 读不改数据,进死信没有可保全的东西,只会让死信告警失去判别力(L-04 §3.6)。
 			if c.abandonClaimedReadRetry(msg, &task) {
 				metrics.CountRetryRoute(mode, metrics.RetryRouteDead)
@@ -1863,7 +1904,11 @@ func (w *worker) start(isOfflineExpand bool) {
 func (w *worker) routeToSubShard(task *workerTask) {
 	if w.subShardCount <= 1 {
 		// Legacy: only one sub-shard, no routing needed.
-		w.subShardChans[0] <- task
+		select {
+		case w.subShardChans[0] <- task:
+		case <-w.ctx.Done():
+			task.finishRetry()
+		}
 		return
 	}
 
@@ -1991,6 +2036,11 @@ type writeCoalesceKey struct {
 // 触发条件:父键全量丢失、FLUSH、运维删键会走冷读,屏障有效;AOF 部分回退时父键回到旧值、
 // 走 EXISTS 快路径不发读,与屏障无关,属于 Redis 持久化的范畴。
 func (w *worker) processTaskBatch(batch []*workerTask, isOfflineExpand bool) {
+	defer func() {
+		for _, task := range batch {
+			task.finishRetry()
+		}
+	}()
 	if len(batch) == 1 {
 		w.handleTask(batch[0], isOfflineExpand)
 		return
@@ -2040,7 +2090,7 @@ func (w *worker) processTaskBatch(batch []*workerTask, isOfflineExpand bool) {
 		}
 		ck := writeCoalesceKey{key: pt.dbTask.Key, msgType: pt.dbTask.MsgType}
 		switch pt.dbTask.Op {
-		case "write":
+		case db_proto.DBOp_DB_OP_WRITE:
 			if pt.wt.seq == 0 || !pt.wt.hasOriginPartition {
 				continue
 			}
@@ -2082,10 +2132,13 @@ func (w *worker) processTaskBatch(batch []*workerTask, isOfflineExpand bool) {
 			} else {
 				byPartition[pt.wt.originPartition] = i
 			}
-		case "read":
+		case db_proto.DBOp_DB_OP_READ:
 			// Read acts as a barrier: any earlier write for ck is in a
 			// different segment and must execute so the read sees post-write
 			// state.
+			delete(liveBestWrite, ck)
+		default:
+			// 未知操作由 handleTask 持久隔离；不能跨过它合并写，保留原始执行边界。
 			delete(liveBestWrite, ck)
 		}
 	}
@@ -2189,9 +2242,19 @@ func (w *worker) handleTask(task *workerTask, isOfflineExpand bool) {
 	// Keep the decoded task on the envelope so panic recovery can persist the
 	// exact operation instead of leaving a retry receipt stranded.
 	task.dbTask = dbTask
+	if _, ok := dbOpHandlers[dbTask.Op]; !ok {
+		cause := fmt.Errorf("unsupported op: %d", dbTask.Op)
+		// 旧字符串载荷按新协议解码后 Op 为零，也必须先保全原始载荷再确认。
+		if task.fromRetry {
+			w.quarantineOrderingConflict(task, dbTask, metrics.DeadLetterMalformedPayload, cause.Error())
+		} else {
+			w.quarantinePoisonTask(task, cause)
+		}
+		return
+	}
 
 	var orderingLock *orderingLease
-	if dbTask.Op == "write" {
+	if dbTask.Op == db_proto.DBOp_DB_OP_WRITE {
 		var lockErr error
 		orderingLock, lockErr = acquireOrderingLock(w.ctx, w, dbTask)
 		if lockErr != nil {
@@ -2246,15 +2309,14 @@ func (w *worker) handleTask(task *workerTask, isOfflineExpand bool) {
 
 	// 归属 epoch 守卫:seq 只证明「同分区内更晚到」,不证明「来自当前归属节点」。
 	// 只对 write 生效;read 不改数据。判定与终态处理都在 guardOwnerEpoch 里。
-	if dbTask.Op == "write" && !w.guardOwnerEpoch(task, dbTask) {
+	if dbTask.Op == db_proto.DBOp_DB_OP_WRITE && !w.guardOwnerEpoch(task, dbTask) {
 		return
 	}
 
 	// 按玩家落点选库(player-storage-placement.md §6.2):写在上面三道守卫全部通过之后才选,
 	// 选中的库连同选库时的快照交给执行路径,SQL 之后由 runDBOp 复核(§6.3)。
-	// 读写之外的 op 不选库,执行时按 unsupported op 报错(与改动前相同)。
 	var route *placementRoute
-	if dbTask.Op == "write" || dbTask.Op == "read" {
+	if dbTask.Op == db_proto.DBOp_DB_OP_WRITE || dbTask.Op == db_proto.DBOp_DB_OP_READ {
 		var routed bool
 		if route, routed = w.routeTask(task, dbTask); !routed {
 			return
@@ -2286,8 +2348,12 @@ func (w *worker) handleTask(task *workerTask, isOfflineExpand bool) {
 		metrics.CountFenceRejectedBytes("epoch_override", len(dbTask.Body))
 	}
 	// C2(persist_schema.go):行世代高于本实例的读立即回失败回执,不进重试 —— 读按 L-04 会耗预算,排队只会让登录等满超时。
-	if err != nil && dbTask.Op == "read" && errors.Is(err, errSchemaTooNew) {
+	if err != nil && dbTask.Op == db_proto.DBOp_DB_OP_READ && errors.Is(err, errSchemaTooNew) {
 		w.failReadSchemaTooNew(task, dbTask, err)
+		return
+	}
+	if err != nil && dbTask.Op == db_proto.DBOp_DB_OP_READ && errors.Is(err, errMissingPlayerSQLRow) {
+		w.failReadAuthority(task, dbTask, metrics.ReadAbandonedMissingPlayerRow, err)
 		return
 	}
 
@@ -2346,7 +2412,10 @@ func (w *worker) handleTask(task *workerTask, isOfflineExpand bool) {
 		}
 		// 存储不可用(L-04)时每条任务都会失败一次,逐条 ERROR 会刷屏;由 deferFailedTask 按原因限速记录。
 		// 世代超前(C1)同理:go/db 回滚或违反发布顺序时同一 key 的每次存盘都会走到这里。
-		if !logsAsStoreOutage(err) && !errors.Is(err, errSchemaTooNew) {
+		// 复核时副本不可信(errRouteNotReady,包在 errPlacementMoved 里)同理:Redis 重启 / 切主 / 标记被撤期间已派进 worker
+		// 的每条任务都会走到这里;逐条不打 ERROR(重试来源的在 deferFailedTask 打 DEBUG),汇总由 confirm 里的 noteRouteNotReady
+		// 每分钟一条 INFO。
+		if !logsAsStoreOutage(err) && !errors.Is(err, errSchemaTooNew) && !errors.Is(err, errRouteNotReady) {
 			logx.Errorf("worker process task failed: partition=%d, cost=%v, err=%v",
 				w.partition, time.Since(startTime), err)
 		}
@@ -2462,6 +2531,24 @@ func (h *consumerGroupHandler) Setup(session sarama.ConsumerGroupSession) error 
 		}
 	}
 
+	raw, err := json.Marshal(struct {
+		Topic, Group, Member string
+		Generation           int32
+		Claims               map[string][]int32
+	}{h.consumer.topic, h.consumer.groupID, session.MemberID(), session.GenerationID(), session.Claims()})
+	if err != nil {
+		return err
+	}
+	digest := sha256.Sum256(raw)
+	h.consumer.stopMu.Lock()
+	h.consumer.readyActive = true
+	h.consumer.readyDigest = append([]byte(nil), digest[:]...)
+	h.consumer.stopMu.Unlock()
+	h.consumer.readyOnce.Do(func() {
+		if h.consumer.ready != nil {
+			close(h.consumer.ready)
+		}
+	})
 	h.setupDone = true
 	if d, ok := h.consumer.gap.sessionStarted(h.consumer.nowTime()); ok {
 		metrics.ObserveRebalanceGap(d)
@@ -2470,6 +2557,9 @@ func (h *consumerGroupHandler) Setup(session sarama.ConsumerGroupSession) error 
 }
 
 func (h *consumerGroupHandler) Cleanup(session sarama.ConsumerGroupSession) error {
+	h.consumer.stopMu.Lock()
+	h.consumer.readyActive = false
+	h.consumer.stopMu.Unlock()
 	claims := session.Claims()
 	if partitions, ok := claims[h.consumer.topic]; ok {
 		partitionIDs := make([]int32, 0, len(partitions))
@@ -2562,7 +2652,9 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 		}
 		// 读方就绪闸(route_ready_gate.go,D1 第 3 批):闸关着时 messages 为 nil(这一路永不就绪 = 不取新消息、不 track、
 		// 不派发,位点停在已完成的前缀,消息留在 Kafka),等 recheck(下一次刷新完成)醒来再判;其余各路照常,停机、再平衡、
-		// 交接让出与失败收尾都不受影响。闸为 nil(开关关着)时 messages 恒为 claim.Messages()、recheck 恒为 nil。
+		// 交接让出与失败收尾都不受影响。闸放行时 recheck 也是刷新通道:刷新把闸关上时 select 立即醒来、回到循环顶停在闸前,
+		// 空闲分区上等消息的 claim 不会在闸关之后漏取下一条;代价是每个 claim 每个刷新间隔空转一圈(见 gatedMessages)。
+		// 闸为 nil(开关关着)时 messages 恒为 claim.Messages()、recheck 恒为 nil。
 		messages, recheck := h.consumer.gatedMessages(claim)
 		select {
 		case <-recheck:
@@ -2695,12 +2787,14 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 				enqueuedAt:         time.Now(),
 			}
 
+			h.consumer.trackTask(task)
 			// Block until worker accepts the task or context is canceled.
 			// Never drop messages — the worker will mark the offset after processing.
 			select {
 			case w.taskCh <- task:
 				logx.Debugf("message dispatched to worker: partition=%d, offset=%d", partition, msg.Offset)
 			case <-h.consumer.pullStop:
+				task.finishRetry()
 				// 停机撤拉取时这条还没交出去(worker 通道满):摘掉它,走停机收尾。
 				//   - 不加这一路,通道满时只能等 worker 腾出槽位或 Stop 第④步取消 w.ctx;而 sarama 的 Close→leave
 				//     要等全部 ConsumeClaim 返回、会话释放完才拿得到锁(第③步),第③步等这里、这里等第④步,
@@ -2717,10 +2811,12 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 				}
 				return h.drainClaimForShutdown(claim, acker, lease)
 			case err := <-acker.failureCh:
+				task.finishRetry()
 				acker.fail(msg, fmt.Errorf("claim stopped before dispatch after prior failure: %w", err))
 				drainAfterStop("failure before dispatch")
 				return err
 			case <-claimCtx.Done():
+				task.finishRetry()
 				acker.fail(msg, fmt.Errorf("claim canceled before dispatch: %w", claimCtx.Err()))
 				drainAfterStop("claim canceled before dispatch")
 				// session 结束或交接闸让出都是正常收尾,返回 nil;其它原因的取消照旧作为错误返回。
@@ -2729,6 +2825,7 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 				}
 				return claimCtx.Err()
 			case <-w.ctx.Done():
+				task.finishRetry()
 				acker.fail(msg, fmt.Errorf("worker context canceled before dispatch"))
 				drainAfterStop("worker canceled before dispatch")
 				logx.Infof("worker context canceled, stop dispatching: topic=%s, partition=%d",
@@ -2769,6 +2866,7 @@ func (h *consumerGroupHandler) drainClaimForShutdown(claim sarama.ConsumerGroupC
 		logx.Infof("claim drained for shutdown: topic=%s partition=%d", h.consumer.topic, claim.Partition())
 		return nil
 	case err := <-acker.failureCh:
+		h.consumer.holdStop(err)
 		acker.stop()
 		return err
 	case <-consumerDone:
@@ -2776,6 +2874,7 @@ func (h *consumerGroupHandler) drainClaimForShutdown(claim sarama.ConsumerGroupC
 		acker.stop()
 		return nil
 	case <-timer.C:
+		h.consumer.holdStop(errors.New("claim未在预算内实际排空"))
 		acker.stop()
 		logx.Errorf("shutdown drain timed out; remaining tasks replay from the committed offset: topic=%s partition=%d timeout=%v inflightRetries=%d",
 			h.consumer.topic, claim.Partition(), timeout, lease.inflightCount())
@@ -2784,6 +2883,9 @@ func (h *consumerGroupHandler) drainClaimForShutdown(claim sarama.ConsumerGroupC
 }
 
 func processDBTask(ctx context.Context, w *worker, task *db_proto.DBTask, route *placementRoute, lease writeLease, partition int32, seq uint64, isOfflineExpand bool) (writeOutcome, error) {
+	if _, ok := dbOpHandlers[task.GetOp()]; !ok {
+		return writeOutcome{}, fmt.Errorf("unsupported op: %d", task.GetOp())
+	}
 	key := strconv.FormatUint(task.Key, 10)
 	logx.Debugf("received db task: taskID=%s, key=%s, partition=%d, seq=%d, isOfflineExpand=%v",
 		task.TaskId, key, partition, seq, isOfflineExpand)
@@ -2862,11 +2964,12 @@ func tryLockAndProcess(ctx context.Context, worker *worker, key string, task *db
 }
 
 func processTaskWithoutLock(ctx context.Context, redisClient redis.Cmdable, task *db_proto.DBTask, route *placementRoute, lease writeLease) (writeOutcome, error) {
-	totalStart := time.Now()
-	opLabel := task.Op
-	if opLabel != "read" && opLabel != "write" {
-		opLabel = "unknown"
+	handler, ok := dbOpHandlers[task.GetOp()]
+	if !ok {
+		return writeOutcome{}, fmt.Errorf("unsupported op: %d", task.GetOp())
 	}
+	totalStart := time.Now()
+	opLabel := taskOpLabel(task)
 	defer func() {
 		metrics.ObserveStage(metrics.StageOpTotal, opLabel, time.Since(totalStart))
 	}()
@@ -2892,24 +2995,18 @@ func processTaskWithoutLock(ctx context.Context, redisClient redis.Cmdable, task
 		return writeOutcome{kind: kind}, nil
 	}
 
-	var opErr error
-	var outcome writeOutcome
-	if handler, ok := dbOpHandlers[task.Op]; !ok {
-		opErr = fmt.Errorf("unsupported op: %s", task.Op)
-	} else {
-		// op_handler(写)= SQL + 落库后复核 + 核锁 + 缓存回写;(读)= SQL + 复核 + 缓存回写 + 结果发布。
-		// 写比 S4 之前多了一次核锁往返(原来在 handleTask 里、缓存回写之后),与 R19 对比时按这个口径。
-		handlerStart := time.Now()
-		outcome, opErr = runDBOp(ctx, redisClient, task, msg, handler, route, lease)
-		metrics.ObserveStage(metrics.StageOpHandler, opLabel, time.Since(handlerStart))
-	}
+	// op_handler(写)= SQL + 落库后复核 + 核锁 + 缓存回写;(读)= SQL + 复核 + 缓存回写 + 结果发布。
+	// 写比 S4 之前多了一次核锁往返(原来在 handleTask 里、缓存回写之后),与 R19 对比时按这个口径。
+	handlerStart := time.Now()
+	outcome, opErr := runDBOp(ctx, redisClient, task, msg, handler, route, lease)
+	metrics.ObserveStage(metrics.StageOpHandler, opLabel, time.Since(handlerStart))
 
 	errText := ""
 	if opErr != nil {
 		errText = opErr.Error()
 	}
 	logx.Infof("task processed: taskID=%s, op=%s, success=%v, err=%s",
-		task.TaskId, task.Op, opErr == nil, errText)
+		task.TaskId, opLabel, opErr == nil, errText)
 
 	if opErr != nil {
 		metrics.ObserveResult(opLabel, "error")
@@ -2933,10 +3030,13 @@ func processTaskWithoutLock(ctx context.Context, redisClient redis.Cmdable, task
 // lease 只对写生效;handleTask 只在真的持锁时才把租约装进接口(nil 指针装进接口后接口本身不为 nil)。
 func runDBOp(ctx context.Context, redisClient redis.Cmdable, task *db_proto.DBTask, msg proto.Message,
 	handler dbOpHandler, route *placementRoute, lease writeLease) (writeOutcome, error) {
-	if route == nil || route.store == nil {
-		return writeOutcome{}, fmt.Errorf("no placement route for op=%s taskID=%s; refusing to guess a database", task.Op, task.TaskId)
+	if _, ok := dbOpHandlers[task.GetOp()]; !ok {
+		return writeOutcome{}, fmt.Errorf("unsupported op: %d", task.GetOp())
 	}
-	isWrite := task.Op == "write"
+	if route == nil || route.store == nil {
+		return writeOutcome{}, fmt.Errorf("no placement route for op=%s taskID=%s; refusing to guess a database", taskOpLabel(task), task.TaskId)
+	}
+	isWrite := task.Op == db_proto.DBOp_DB_OP_WRITE
 	sqlCtx := ctx
 	finish := func(error) {}
 	if isWrite {
@@ -3325,7 +3425,33 @@ func (w *worker) quarantinePoisonTask(task *workerTask, decodeErr error) {
 //   - 第⑥步必须是最后一行;改停机顺序时保留 worker 退出的 discardQueuedRetries 与 routeToSubShard 丢弃分支的
 //     finishRetry,否则每次停机都要等满排空时限。
 func (c *KeyOrderedKafkaConsumer) Stop() {
-	c.stopOnce.Do(c.stop)
+	if err := c.StopAndReport(context.Background()); err != nil {
+		logx.Errorf("DB消费者排空HOLD: %v", err)
+	}
+}
+
+// StopAndReport的成功要求全部owner/worker/异步命令已经join；ctx截止只给调用方HOLD，不杀掉实际收尾。
+func (c *KeyOrderedKafkaConsumer) StopAndReport(ctx context.Context) error {
+	c.stopMu.Lock()
+	if c.stopDone == nil {
+		c.stopDone = make(chan struct{})
+	}
+	done := c.stopDone
+	c.stopMu.Unlock()
+	c.stopOnce.Do(func() { go func() { c.stop(); close(done) }() })
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-done:
+	}
+	c.stopMu.Lock()
+	defer c.stopMu.Unlock()
+	return c.stopErr
+}
+func (c *KeyOrderedKafkaConsumer) holdStop(err error) {
+	c.stopMu.Lock()
+	c.stopErr = errors.Join(c.stopErr, err)
+	c.stopMu.Unlock()
 }
 
 func (c *KeyOrderedKafkaConsumer) stop() {
@@ -3346,6 +3472,7 @@ func (c *KeyOrderedKafkaConsumer) stop() {
 		select {
 		case <-c.consumeDone:
 		case <-timer.C:
+			c.holdStop(errors.New("消费session未在预算内实际排空"))
 			// 超时:在离组(③)之前先取消 worker。
 			//   - 仍是先提交、后离组:sarama v1.43.1 的 Close→leave 要拿 consumerGroup.lock,Consume 从入口持有它,
 			//     直到会话 release 返回(等全部 ConsumeClaim → Cleanup → offsets.Close 最后一次提交 → 停心跳)。
@@ -3370,6 +3497,7 @@ func (c *KeyOrderedKafkaConsumer) stop() {
 	// ③ 离组:位点已在会话释放时提交(② 超时时 Close 内部仍要等 sarama 释放完会话,见上)。
 	if c.consumer != nil {
 		if err := c.consumer.Close(); err != nil {
+			c.holdStop(err)
 			logx.Errorf("close consumer group failed: groupID=%s, err=%v", c.groupID, err)
 		} else {
 			logx.Infof("consumer group closed: groupID=%s, topic=%s", c.groupID, c.topic)
@@ -3386,16 +3514,33 @@ func (c *KeyOrderedKafkaConsumer) stop() {
 	}
 
 	// ⑤ 归还重试收据(worker 与重试协程已全部停下,不会再认领、再续租);再收掉交接闸(守望 goroutine 随 c.ctx 退出)。
+	// 所有durable done先真实返回，避免归还processing后迟到callback再次改队列。
+	c.enqueuer().close()
+	if status, ok := c.enqueuer().(interface{ drainError() error }); ok {
+		if err := status.drainError(); err != nil {
+			c.holdStop(err)
+		}
+	}
 	c.releaseRetryOwnership()
 	c.closeHandoff()
+	if c.stranded.size() != 0 {
+		c.holdStop(errors.New("stranded retry收据未逐条确认"))
+	}
+	if c.retryOwner.unresolvedClaimCount() != 0 {
+		c.holdStop(errors.New("retry仍有结果未知认领"))
+	}
 	if c.ownerEpochClient != nil {
 		if err := c.ownerEpochClient.Close(); err != nil {
 			logx.Errorf("close owner epoch reader: %v", err)
 		}
 	}
 	// ⑥ 最后关入队层:生命周期独立于 c.ctx,不能早于 ⑤;close 返回时所有已提交请求的 done 都已调用过。
-	c.enqueuer().close()
-
+	if c.relayWork != nil {
+		c.relayWork.CloseAdmission()
+		if err := c.relayWork.Wait(context.Background()); err != nil {
+			c.holdStop(err)
+		}
+	}
 	logx.Infof("db consumer stopped: groupID=%s topic=%s took=%v", c.groupID, c.topic, time.Since(started))
 }
 
@@ -3454,8 +3599,59 @@ func (c *KeyOrderedKafkaConsumer) releaseRetryOwnership() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), retryReleaseTimeout)
 	defer cancel()
+	if err := c.drainStranded(ctx); err != nil {
+		c.holdStop(err)
+	}
+	if !c.retryOwner.resolveUnresolvedClaims(ctx) {
+		c.holdStop(errors.New("结果未知的retry认领未解决"))
+	}
 	if err := c.retryOwner.release(ctx); err != nil {
+		c.holdStop(err)
 		logx.Errorf("release retry receipt ownership failed (receipts stay recoverable until the lease expires): topic=%s err=%v",
 			c.topic, err)
 	}
+}
+
+func (c *KeyOrderedKafkaConsumer) trackTask(task *workerTask) {
+	c.stopMu.Lock()
+	if c.relayWork == nil {
+		c.relayWork = drainproof.New()
+	}
+	gate := c.relayWork
+	c.stopMu.Unlock()
+	done, err := gate.Enter()
+	if err != nil {
+		c.holdStop(err)
+		return
+	}
+	task.drainDone = done
+}
+
+// FrontierDigest只在StopAndReport真实join后返回本boot全部实际接收/完成集合的前沿。
+func (c *KeyOrderedKafkaConsumer) FrontierDigest(ctx context.Context) ([]byte, error) {
+	if err := c.StopAndReport(ctx); err != nil {
+		return nil, err
+	}
+	c.stopMu.Lock()
+	gate := c.relayWork
+	c.stopMu.Unlock()
+	if gate == nil {
+		gate = drainproof.New()
+		gate.CloseAdmission()
+	}
+	return gate.SettledDigest(ctx)
+}
+
+func (c *KeyOrderedKafkaConsumer) ReadyFrontier(ctx context.Context) ([]byte, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-c.ready:
+	}
+	c.stopMu.Lock()
+	defer c.stopMu.Unlock()
+	if !c.readyActive || len(c.readyDigest) != 32 {
+		return nil, drainproof.ErrHold
+	}
+	return append([]byte(nil), c.readyDigest...), nil
 }

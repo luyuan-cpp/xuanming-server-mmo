@@ -51,8 +51,9 @@ func SetLeaderCheckForTest(f func() bool) (restore func()) {
 	}
 }
 
-// loadReporterResync 用于在领导权变化时踢 load reporter 立即重跑 fullSync:
-// 新任领导者把跟随者期间跳过的变更动作(补频道 / rebalance / 清理)一次补齐。
+// loadReporterResync 用于踢 load reporter 立即重跑 fullSync。两个来源:领导权变化(新任领导者把跟随者期间跳过的变更
+// 动作 —— 补频道 / rebalance / 清理 —— 一次补齐);推迟摘除放弃时(retryDeferredNodeDetaches 的 abandoned 分支,
+// 让 fullSync 的陈旧清扫把还留在负载集里的死节点重新推迟)。
 // 容量 1 + 非阻塞发送:合并密集信号,发送方永不阻塞。
 var loadReporterResync = make(chan struct{}, 1)
 

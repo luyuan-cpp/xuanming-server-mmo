@@ -49,7 +49,7 @@ func migrateWithTags(t *testing.T, db *storetest.DB, tags ...string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{BootstrapTags: tags}))
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{BootstrapTags: tags}))
 }
 
 type idSegmentRow struct {
@@ -360,7 +360,7 @@ func TestMigrateSchema_BootstrapsIdSegmentRowsIdempotently(t *testing.T) {
 	// 一份手滑的 yaml:非法 tag 让整次迁移失败,而不是往主键表里塞垃圾行。
 	migCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	err = store.MigrateSchema(migCtx, db.Cfg, store.MigrateOptions{BootstrapTags: []string{"player", "Bad-Tag"}})
+	err = db.Migrate(migCtx, store.MigrateOptions{BootstrapTags: []string{"player", "Bad-Tag"}})
 	require.ErrorIs(t, err, store.ErrIdSegmentInvalidTag)
 	_, ok = readIdSegmentRow(t, db, "Bad-Tag")
 	assert.False(t, ok)

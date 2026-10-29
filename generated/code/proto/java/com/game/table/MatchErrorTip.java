@@ -119,6 +119,10 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchNotInScene = 16020;</code>
      */
     kMatchNotInScene(16020),
+    /**
+     * <code>kMatchSpectateFull = 16021;</code>
+     */
+    kMatchSpectateFull(16021),
     UNRECOGNIZED(-1),
     ;
 
@@ -219,6 +223,10 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchNotInScene = 16020;</code>
      */
     public static final int kMatchNotInScene_VALUE = 16020;
+    /**
+     * <code>kMatchSpectateFull = 16021;</code>
+     */
+    public static final int kMatchSpectateFull_VALUE = 16021;
 
 
     public final int getNumber() {
@@ -267,6 +275,7 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
         case 16018: return kMatchBattleNotWatchable;
         case 16019: return kMatchSpectateOffline;
         case 16020: return kMatchNotInScene;
+        case 16021: return kMatchSpectateFull;
         default: return null;
       }
     }
@@ -332,7 +341,7 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025match_error_tip.proto*\366\004\n\013match_error\022" +
+      "\n\025match_error_tip.proto*\217\005\n\013match_error\022" +
       "\022\n\016kMatch_errorOK\020\000\022\023\n\016kMatchInBattle\020\200}" +
       "\022\030\n\023kMatchAlreadyQueued\020\201}\022\026\n\021kMatchMode" +
       "NotOpen\020\202}\022 \n\033kMatchTeamSizeNotConfigure" +
@@ -348,8 +357,9 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       "kMatchAlreadyWatching\020\220}\022\034\n\027kMatchNoWatc" +
       "hableBattle\020\221}\022\035\n\030kMatchBattleNotWatchab" +
       "le\020\222}\022\032\n\025kMatchSpectateOffline\020\223}\022\025\n\020kMa" +
-      "tchNotInScene\020\224}B$\n\016com.game.tableZ\022gene" +
-      "rated/pb/tableb\006proto3"
+      "tchNotInScene\020\224}\022\027\n\022kMatchSpectateFull\020\225" +
+      "}B$\n\016com.game.tableZ\022generated/pb/tableb" +
+      "\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

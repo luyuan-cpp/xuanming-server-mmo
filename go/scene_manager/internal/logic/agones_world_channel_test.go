@@ -88,6 +88,9 @@ func TestWorldChannel_InertWhenAgonesDisabled(t *testing.T) {
 }
 
 // ── 频道迁移时的名额转移 ────────────────────────────────────────────────
+//
+// 契约:调用 TransferAgonesRoomForScene 之前,场景归属已经改到新节点(reassignSceneNode 成功之后),
+// 所以这些用例都先把 scene:{id}:node 摆成新节点。
 
 // 搬家:新节点占上、旧节点还回去、映射更新。
 func TestWorldChannel_TransferMovesRoomToNewNode(t *testing.T) {
@@ -100,6 +103,7 @@ func TestWorldChannel_TransferMovesRoomToNewNode(t *testing.T) {
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 	bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(5005), "20"))
 	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(5005), "gs-old"))
 
 	TransferAgonesRoomForScene(context.Background(), sc, 5005, "20", testZoneId)
@@ -123,6 +127,7 @@ func TestWorldChannel_TransferKeepsOldReservationWhenNewNodeIsFull(t *testing.T)
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 	bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(5006), "20"))
 	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(5006), "gs-old"))
 
 	TransferAgonesRoomForScene(context.Background(), sc, 5006, "20", testZoneId)
@@ -137,12 +142,78 @@ func TestWorldChannel_TransferKeepsOldReservationWhenNewNodeIsFull(t *testing.T)
 // Agones 关闭时转移是 no-op。
 func TestWorldChannel_TransferInertWhenAgonesDisabled(t *testing.T) {
 	sc, _ := newTestSvcCtxWithWorldScenes(t)
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(5007), "20"))
 	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(5007), "gs-old"))
 
 	TransferAgonesRoomForScene(context.Background(), sc, 5007, "20", testZoneId)
 
 	gs, _ := sc.Redis.Get(sceneAgonesGsKey(5007))
 	assert.Equal(t, "gs-old", gs)
+}
+
+// 转移在 K8s 往返期间,场景被销毁(销毁方已按旧记录还过名额)或被另一个写者再次搬走:属主已不是
+// 新节点。只还刚占的这份,旧记录一个字节都不动。
+// 修复前预读旧记录后无条件覆盖:销毁后重建出一把孤儿 agones_gs、新名额永久泄漏,旧名额被还第二次。
+func TestWorldChannel_TransferBacksOutWhenOwnerMovedOn(t *testing.T) {
+	cases := []struct {
+		name    string
+		sceneID uint64
+		owner   string // 空串 = 场景已被销毁
+	}{
+		{name: "moved_again", sceneID: 5008, owner: "30"},
+		{name: "destroyed", sceneID: 5009, owner: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sc, _ := newTestSvcCtxWithWorldScenes(t)
+			alloc := newFakeAllocator(
+				&fakeGameServer{name: "gs-old", podIP: "10.0.0.8", state: "Allocated", count: 1, capacity: 4},
+				&fakeGameServer{name: "gs-new", podIP: "10.0.0.9", state: "Ready", capacity: 4},
+			)
+			withAgones(t, sc, alloc, true)
+			bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
+			bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
+			if tc.owner != "" {
+				require.NoError(t, sc.Redis.Set(sceneNodeKey(tc.sceneID), tc.owner))
+				require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(tc.sceneID), "gs-old"))
+			}
+
+			TransferAgonesRoomForScene(context.Background(), sc, tc.sceneID, "20", testZoneId)
+
+			assert.EqualValues(t, 0, alloc.roomsOf("gs-new"), "属主已不是新节点,刚占的名额必须还回去")
+			assert.EqualValues(t, 1, alloc.roomsOf("gs-old"), "旧名额归属主或销毁方处理,这里不得再还")
+			gs, err := sc.Redis.Get(sceneAgonesGsKey(tc.sceneID))
+			require.NoError(t, err)
+			if tc.owner == "" {
+				assert.Equal(t, "", gs, "已销毁的场景不得重建出 agones_gs")
+			} else {
+				assert.Equal(t, "gs-old", gs)
+			}
+		})
+	}
+}
+
+// 同一目标重复转移(两个写者先后把同一场景搬到同一节点,或 CAS 结论未知时补转一次):第二次
+// 读到记录已是新节点的 GameServer,还掉刚占的那份,净结果只记一次。
+func TestWorldChannel_TransferIsIdempotentForSameTarget(t *testing.T) {
+	sc, _ := newTestSvcCtxWithWorldScenes(t)
+	alloc := newFakeAllocator(
+		&fakeGameServer{name: "gs-old", podIP: "10.0.0.8", state: "Allocated", count: 1, capacity: 4},
+		&fakeGameServer{name: "gs-new", podIP: "10.0.0.9", state: "Ready", capacity: 4},
+	)
+	withAgones(t, sc, alloc, true)
+	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
+	bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(5010), "20"))
+	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(5010), "gs-old"))
+
+	TransferAgonesRoomForScene(context.Background(), sc, 5010, "20", testZoneId)
+	TransferAgonesRoomForScene(context.Background(), sc, 5010, "20", testZoneId)
+
+	assert.EqualValues(t, 1, alloc.roomsOf("gs-new"), "重复转移只记一次")
+	assert.EqualValues(t, 0, alloc.roomsOf("gs-old"), "旧名额只还一次")
+	gs, _ := sc.Redis.Get(sceneAgonesGsKey(5010))
+	assert.Equal(t, "gs-new", gs)
 }
 
 // 排空一个世界频道时,名额要归还。

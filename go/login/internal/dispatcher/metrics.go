@@ -66,17 +66,37 @@ var (
 			"Cancelled registrations and those drained on Stop are not counted.",
 	}, []string{"outcome"})
 
+	// dispatchOverflowTotal 是 login_task_result_dispatch_overflow_total:通知命中了在册登记,但有界派发池的
+	// 队列(dispatchJobsBuffer)已满,只好另起一个临时 goroutine 去 LPOP 与回调(dispatch 的 default 分支)。
+	// 它不是送达结果:那条通知照样计了 instance_notify / legacy_notify,所以不进 delivery_total 的 outcome,
+	// 也不进送达率的分母。偶发非 0 = 突发尾部吃满了池子;持续增长 = dispatchWorkerCount 偏小,要扩池或查回调变慢。
+	// 无 label,注册即有 0 序列。
+	dispatchOverflowTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: "login_task_result",
+		Name:      "dispatch_overflow_total",
+		Help: "DB read-result notifies for a pending registration that found the bounded dispatch worker pool's " +
+			"queue full and were handed to an ad-hoc goroutine instead. The notify itself is still counted in " +
+			"delivery_total (instance_notify / legacy_notify). Occasional increments mean a burst filled the pool; " +
+			"sustained growth means the pool is undersized or callbacks are slow.",
+	})
+
 	deliveryOnce sync.Once
 )
 
-// registerDeliveryMetrics 注册计数器并预置全部 outcome 序列,可重复调用。
+// registerDeliveryMetrics 注册送达计数与派发溢出计数,并预置全部 outcome 序列,可重复调用。
 func registerDeliveryMetrics() {
 	deliveryOnce.Do(func() {
-		prometheus.MustRegister(deliveryTotal)
+		prometheus.MustRegister(deliveryTotal, dispatchOverflowTotal)
 		for _, outcome := range deliveryOutcomes {
 			deliveryTotal.WithLabelValues(outcome).Add(0)
 		}
 	})
+}
+
+// countDispatchOverflow 记一次「派发池队列已满、改走临时 goroutine」。
+func countDispatchOverflow() {
+	registerDeliveryMetrics()
+	dispatchOverflowTotal.Inc()
 }
 
 // countDelivery 记一次送达结果,outcome 只能取 delivery* 常量。

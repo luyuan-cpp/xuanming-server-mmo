@@ -9,6 +9,9 @@
 
 #include <hiredis/hiredis.h>
 #include <memory>
+#include <mutex>
+#include <cstdint>
+#include <string>
 
 struct redisAsyncContext;
 
@@ -27,7 +30,37 @@ namespace hiredis
 class Hiredis : public std::enable_shared_from_this<Hiredis>,
                 muduo::noncopyable
 {
+  class LocalReference;
  public:
+  // 命令关闭与接受共用锁；正常回复且业务回调返回后才计完成。跨连接销毁保留 UNKNOWN。
+  class MaintenanceState {
+   public:
+    bool Begin();
+    void Complete(bool known);
+    void Close();
+    // 只证明原 loop 上命令回调、wrapper 和排队 Channel 引用均已释放；不消除 Redis UNKNOWN。
+    bool Joined() const;
+    bool Frontier(std::string& value) const;
+    // P1 当前已接收命令均有确定结果；保留连接和 relay 准入。
+    bool SettledFrontier(std::string& value) const;
+   private:
+    friend class Hiredis;
+    friend class LocalReference;
+    bool HoldLocal(bool newClient);
+    void ReleaseLocal(bool joined);
+    bool AllowConnect() const;
+    void MarkUnknown();
+    mutable std::mutex mutex_;
+    std::uint64_t accepted_ = 0;
+    std::uint64_t completed_ = 0;
+    std::uint64_t localHeld_ = 0;
+    std::uint64_t localReleased_ = 0;
+    bool localAccountingUnknown_ = false;
+    bool closed_ = false;
+    bool unknown_ = false;
+  };
+  static std::shared_ptr<MaintenanceState> ProcessMaintenance();
+
   typedef std::function<void(Hiredis*, int)> ConnectCallback;
   typedef std::function<void(Hiredis*, int)> DisconnectCallback;
   typedef std::function<void(Hiredis*, redisReply*)> CommandCallback;
@@ -36,7 +69,8 @@ class Hiredis : public std::enable_shared_from_this<Hiredis>,
   // I/O 分发期间释放最后一个引用时，整个对象、context 和 fd 统一延至 pending 阶段销毁。
   // 空 loop 只用于从不 connect 的不可用占位对象。
   static std::shared_ptr<Hiredis> Create(muduo::net::EventLoop* loop,
-                                       const muduo::net::InetAddress& serverAddr);
+                                       const muduo::net::InetAddress& serverAddr,
+                                       std::shared_ptr<MaintenanceState> maintenance = ProcessMaintenance());
   ~Hiredis();
 
   const muduo::net::InetAddress& serverAddress() const { return serverAddr_; }
@@ -55,7 +89,8 @@ class Hiredis : public std::enable_shared_from_this<Hiredis>,
   int ping();
 
  private:
-  Hiredis(muduo::net::EventLoop* loop, const muduo::net::InetAddress& serverAddr);
+  Hiredis(muduo::net::EventLoop* loop, const muduo::net::InetAddress& serverAddr,
+          std::shared_ptr<MaintenanceState> maintenance);
   void handleRead(muduo::Timestamp receiveTime);
   void handleWrite();
 
@@ -81,6 +116,11 @@ class Hiredis : public std::enable_shared_from_this<Hiredis>,
   static void cleanup(void* privdata);
 
  private:
+  std::shared_ptr<MaintenanceState> maintenance_;
+  std::shared_ptr<LocalReference> lifetime_;
+  std::string lastError_;
+  // 仅 loop 线程访问；局部副本让回调返回时无需重新读取 wrapper。
+  std::shared_ptr<bool> callbackActive_ = std::make_shared<bool>(false);
   muduo::net::EventLoop* loop_;
   const muduo::net::InetAddress serverAddr_;
   redisAsyncContext* context_;

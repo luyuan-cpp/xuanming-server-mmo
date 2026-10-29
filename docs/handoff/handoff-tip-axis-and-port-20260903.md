@@ -69,7 +69,7 @@ tip 码轴的**代码已全部完成**，剩下的都卡在需要跑东西：
 ## 四、当前工作区状态（重要）
 
 - ~~未提交~~ **2026-09-05 更新**：tip 码轴的代码与产物已随 `71edf77f7` 进仓（`PROGRESS.md` 的 09-03「收尾复核」段落除外，它还在工作区）。本轮（fault 列收口）的改动**未提交**，暂存区为空；本文件自身仍是未跟踪文件。本轮改动集的完整清单见 `PROGRESS.md` 2026-09-05「tip 故障分类收口」一节。
-- **有并发编辑者**。2026-09-05 时 `git status` 里下列都**不是**本轮的：`cpp/nodes/battle/**`（含未跟踪的 `battle_security.h` / `client/` / `tests/`）、`cpp/libs/engine/core/security/`、`cpp/libs/engine/config/config.cpp`、`cpp/nodes/gate/gate_security.h` 及其测试、`proto/battle/**`、`proto/common/base/config.proto`、`bin/etc/base_deploy_config.yaml`、`robot/**`、`docs/notes/slg-moba/moba-battle-target-architecture.md` / `turn-based-battle-server.md`、`third_party/*` 子模块指针。**动手前务必 `git status` 确认归属，不要看 mtime。**
+- **有并发编辑者**。2026-09-05 时 `git status` 里下列都**不是**本轮的：`cpp/nodes/battle/**`（含未跟踪的 `battle_security.h` / `client/` / `tests/`）、`cpp/libs/engine/core/security/`、`cpp/libs/engine/config/config.cpp`、`cpp/nodes/gate/gate_security.h` 及其测试、`proto/battle/**`、`proto/common/base/config.proto`、`bin/etc/base_deploy_config.yaml`、`robot/**`、`docs/notes/slg-moba/moba-battle-target-architecture.md`（现为 `docs/notes/moba/moba-battle-target-architecture.md`） / `turn-based-battle-server.md`、`third_party/*` 子模块指针。**动手前务必 `git status` 确认归属，不要看 mtime。**
 - **`PROGRESS.md` 是混写文件**：同一份未提交 diff 里有三段——09-03「收尾复核」、本轮「tip 故障分类收口」、并发编辑者的「回合制战斗：客户端直连 battle 节点……未编译」。提交时用 `git add -p` 只挑前两段，**不要整文件 add**，否则会把别人未编译的记录一起带进 tip 提交。
 - 本轮结束时的验证状态见 `docs/design/tip-code-axis.md` §6（Codex 那轮）与 §6.2（本机复核）。
 

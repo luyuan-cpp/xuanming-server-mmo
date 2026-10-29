@@ -46,6 +46,20 @@ type Metrics struct {
 // NewMetrics 在 reg 上注册本包的全部指标。
 // reg 为 nil 时只构造不注册(promauto 的既定行为),单测可以放心用。
 func NewMetrics(reg prometheus.Registerer, service string) *Metrics {
+	m := newMetrics(reg, service)
+	m.primeAbandonSkipped()
+	return m
+}
+
+// primeAbandonSkipped 把放弃跳过计数的每个原因(集合封闭,abandonSkipNames)在起服时置 0:
+// 告警按 increase() 判(sql_evidence_behind、redis_unverified),序列不先存在时第一次跳过看不出增量。
+func (m *Metrics) primeAbandonSkipped() {
+	for r := abandonSkipLocated; r < abandonSkipCount; r++ {
+		m.abandonSkippedTotal.WithLabelValues(r.String()).Add(0)
+	}
+}
+
+func newMetrics(reg prometheus.Registerer, service string) *Metrics {
 	f := promauto.With(reg)
 	labels := prometheus.Labels{"service": service}
 	return &Metrics{
@@ -150,7 +164,8 @@ func NewMetrics(reg prometheus.Registerer, service string) *Metrics {
 		abandonSkippedTotal: f.NewCounterVec(prometheus.CounterOpts{
 			Name: "assetop_abandon_skipped_total",
 			Help: "放弃候选被跳过的次数:located / locate_error / recent / ledger_seen / ledger_error / ledger_unknown" +
-				" / lease_lost / store_error / not_candidate / sql_evidence_behind(SQL 提交证据落后于父键,须告警)",
+				" / lease_lost / store_error / not_candidate / sql_evidence_behind(SQL 提交证据落后于父键,须告警)" +
+				" / redis_unverified(Redis 副本未通过实例身份核验,等玩家下次登录)",
 			ConstLabels: labels,
 		}, []string{"reason"}),
 	}

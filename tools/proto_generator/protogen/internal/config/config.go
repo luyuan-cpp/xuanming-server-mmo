@@ -51,7 +51,6 @@ type Paths struct {
 	ProtoDir                      string `yaml:"proto_dir"`
 	ProtoParentIncludePath        string `yaml:"proto_parent_include_path"`
 	ThirdPartyDir                 string `yaml:"third_party_dir"`
-	GrpcDir                       string `yaml:"grpc_dir"`
 	ProtobufDir                   string `yaml:"protobuf_dir"`
 	NodeGoDir                     string `yaml:"node_go_dir"`
 	NodeCppDir                    string `yaml:"node_cpp_dir"`
@@ -71,13 +70,11 @@ type Paths struct {
 	TempFileGenDir                string `yaml:"temp_file_gen_dir"`
 	ProtoBufDescDir               string `yaml:"proto_buf_desc_dir"`
 	AllInOneDesc                  string `yaml:"all_in_one_desc"`
-	GrpcTempDir                   string `yaml:"grpc_temp_dir"`
 	ProtoBufCTempDir              string `yaml:"proto_buf_c_temp_dir"`
 	PlayerStorageTempDir          string `yaml:"player_storage_temp_dir"`
 	ProtoBufCProtoOutputDir       string `yaml:"proto_buf_c_proto_output_dir"`
 	GeneratedOutputDir            string `yaml:"generated_output_dir"`
 	GrpcOutputDir                 string `yaml:"grpc_output_dir"`
-	GrpcProtoOutputDir            string `yaml:"grpc_proto_output_dir"`
 	RobotGeneratedOutputDir       string `yaml:"robot_generated_output_dir"`
 	RobotGoGamePbDir              string `yaml:"robot_go_game_pb_dir"`
 	RobotGoGenDir                 string `yaml:"robot_go_gen_dir"`
@@ -112,11 +109,13 @@ type Paths struct {
 	PersistSchemaCppHeaderFile string `yaml:"persist_schema_cpp_header_file"`
 	PersistSchemaGoFile        string `yaml:"persist_schema_go_file"`
 
+	// RobotRpcDir 是 robot 类型化调用桩目录(docs/design/client-rpc-callback.md §5.5),生成器整写这一层。
+	RobotRpcDir string `yaml:"robot_rpc_dir"`
+
 	// Unity client output paths.
-	UnityClientDir           string `yaml:"unity_client_dir"`
-	UnityRpcDir              string `yaml:"unity_rpc_dir"`
-	UnityHandlerDir          string `yaml:"unity_handler_dir"`
-	UnityHandlerRegistryFile string `yaml:"unity_handler_registry_file"`
+	// UnityRpcDir 是类型化调用桩目录(docs/design/client-rpc-callback.md §5.3);旧的每消息 Handler 与注册表已退役,不再有对应配置。
+	UnityClientDir string `yaml:"unity_client_dir"`
+	UnityRpcDir    string `yaml:"unity_rpc_dir"`
 
 	// paths from original config
 	EventHandlerSourceDirectory    string `yaml:"event_handler_source_directory"`
@@ -130,8 +129,6 @@ type FileExtensions struct {
 	Proto          string `yaml:"proto"`
 	PbCc           string `yaml:"pb_cc"`
 	PbH            string `yaml:"pb_h"`
-	GrpcPbCc       string `yaml:"grpc_pb_cc"`
-	GrpcPbH        string `yaml:"grpc_pb_h"`
 	Header         string `yaml:"header"`
 	Cpp            string `yaml:"cpp"`
 	HandlerH       string `yaml:"handler_h"`

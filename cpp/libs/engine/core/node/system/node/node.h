@@ -31,6 +31,10 @@ class Server;
 class Service;
 } // namespace muduo_grpc
 
+// Prometheus /metrics 出口(core/metrics/metrics_http_exporter.h),完整定义只在 node.cpp 里需要。
+class MetricsHttpExporter;
+struct NodeMaintenanceControl;
+
 // Tracks a pending node removal that can be cancelled if the node re-registers.
 struct PendingNodeRemoval
 {
@@ -210,6 +214,16 @@ public:
     // RequestShutdown()。
     void Shutdown();
 
+    // 仅报告已观察到的失败；false 不代表完整 P1/P3 资格，不能代替各传输 owner 的正式收据。
+    bool HasKnownShutdownFailure() const { return shutdownFailure_.load(std::memory_order_acquire); }
+
+    // P1 仅封根；P3 才停止中继。装配方复用真实业务钩子，不能用进程存活或 pid 代替排空。
+    // 由真实启动owner声明整个内部RPC/gRPC为relay；不按method名称推断。
+    Node& SetMaintenanceInboundRelay() { maintenanceInboundRelay_=true; return *this; }
+    bool RequiresMaintenanceTargetIdentity() const { return maintenancePrepareBoot_; }
+    Node& SetMaintenanceSourceClose(BeforeShutdownFn fn) { maintenanceSourceClose_ = std::move(fn); return *this; }
+    Node& SetMaintenanceRelayStop(BeforeTeardownFn fn) { maintenanceRelayStop_ = std::move(fn); return *this; }
+
     // Utility and state queries
     bool IsCurrentNode(const NodeInfo &candidateNode) const;
     bool IsServiceStarted() { return rpcServer != nullptr; }
@@ -238,6 +252,8 @@ protected:
     void StartKafkaPolling();
     virtual bool RegisterKafkaHandlers() { return kafkaHandlersFn_ ? kafkaHandlersFn_(*this) : true; }
     void InitEtcdService();
+    // 按 MMORPG_METRICS_PORT 开 Prometheus 出口(未设 = 不开;非法值拒启)。只在 Initialize 里调一次。
+    void StartMetricsExporter();
 
     // gRPC server lifecycle (called automatically if services registered).
     void StartGrpcServer();
@@ -263,6 +279,11 @@ protected:
     void MaybeFinalizeShutdownInLoop();
 
     void ShutdownInLoop();
+    void InitMaintenanceControl();
+    void PollMaintenanceControl();
+    void CloseMaintenanceSource();
+    void CloseTransportOwnersInLoop();
+    void ReleaseLocalOwnersInLoop();
 
     // Member variables
     // 本节点身份的唯一所有者,最先构造、最后析构;ECS Clear 不影响身份。
@@ -271,12 +292,18 @@ protected:
     muduo::net::EventLoop &eventLoop;
     muduo::AsyncLogging logSystem;
     RpcServerPtr rpcServer;
+    // /metrics 出口:在 loop 线程创建,FinalizeTeardownInLoop 里随出站连接一起释放(TcpServer 必须在 loop 活着时析构)。
+    std::unique_ptr<MetricsHttpExporter> metricsExporter_;
     TimerTaskComp serviceHealthMonitorTimer;
     // 注意:node_id / 端口的重试定时器住在 EtcdService(它才是驱动注册流的那个类)。
     // Node 这里曾经有一份同名成员,但从来没被 RunAfter 过,只在 Shutdown 里被 Cancel ——
     // 纯粹是影子成员,读代码的人会以为取消它就停住了重试,其实什么也没停。已删除。
     TimerTaskComp conflictDrainTimer;
     TimerTaskComp shutdownDrainTimer;
+    TimerTaskComp maintenanceControlTimer_;
+    std::unique_ptr<NodeMaintenanceControl> maintenanceControl_;
+    BeforeShutdownFn maintenanceSourceClose_;
+    BeforeTeardownFn maintenanceRelayStop_;
     // Kafka consumption is driven by KafkaConsumer::startBackgroundPolling
     // (a dedicated thread that queueInLoop's callbacks back into eventLoop).
     // The producer is non-blocking and flushes via KafkaManager::Shutdown.
@@ -295,6 +322,7 @@ protected:
     std::condition_variable shutdownCompletionCv_;
     bool shutdownComplete_{false};
     bool shutdownGrpcDrainComplete_{false};
+    std::atomic<bool> shutdownFailure_{false};
     bool shutdownFinalizationStarted_{false};
     bool kafkaPollingStarted{false};
     // 见 ClientEndpointRequired();由 InitClientEndpoint 在构造期写一次。
@@ -313,6 +341,13 @@ protected:
     BeforeTeardownFn beforeTeardownFn_;
     // FinalizeTeardownInLoop 会因 gRPC 本地延后完成未排空而重入;钩子只在第一次进入时调用。
     bool beforeTeardownRan_{false};
+    bool sourceBusinessClosed_{false};
+    bool maintenanceInboundRelay_{false};
+    bool maintenancePrepareBoot_{false}, maintenancePreparedStart_{false}, maintenanceSourceOpened_{false};
+    void StartPreparedSourceInLoop();
+    bool transportCloseStarted_{false};
+    bool rpcNativeJoined_{false};
+    bool localOwnerReleaseStarted_{false};
     OnConflictShutdownFn onConflictShutdownFn_;
     ConflictDrainCompleteFn conflictDrainCompleteFn_;
     bool conflictShutdownStarted_{false};

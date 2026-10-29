@@ -218,18 +218,30 @@ uint32_t Bag::CheckSpaceFor(const ItemCountMap &itemsToAdd, std::size_t *instanc
 	return kSuccess;
 }
 
-uint32_t Bag::CheckItemsAvailable(const ItemCountMap &requiredItems)
+uint32_t Bag::CheckItemsAvailable(const ItemCountMap &requiredItems) const
 {
-	// 纯实例层问题:有没有这些东西。跟摆在哪、还剩几格毫无关系。
-	return store_.HasAll(requiredItems) ? kSuccess
-										: PrintStackAndReturnError(kBagInsufficientItems);
+	// 纯实例层问题:有没有这些东西。跟摆在哪、还剩几格毫无关系。静默:常规的"不够"由调用方决定怎么报。
+	switch (CheckQuantities(requiredItems))
+	{
+	case ItemStore::QuantityVerdict::kEnough:
+		return kSuccess;
+	case ItemStore::QuantityVerdict::kVersionSkew:
+		return kFeatureUnavailable;
+	case ItemStore::QuantityVerdict::kInsufficient:
+		break;
+	}
+	return kBagInsufficientItems;
 }
 
 uint32_t Bag::RemoveItems(const ItemCountMap &itemsToRemove,
 						  std::vector<DrainedInstance> *drainedOut)
 {
 	// 事务语义:先确认每种物品都够扣,任何一种不够就整体失败,绝不做部分删除。
-	RETURN_ON_ERROR(CheckItemsAvailable(itemsToRemove));
+	// 调用方应先用 CheckQuantities 静默预检;走到这里还不够说明调用方漏了预检,打调用栈。
+	if (const uint32_t availability = CheckItemsAvailable(itemsToRemove); availability != kSuccess)
+	{
+		return PrintStackAndReturnError(availability);
+	}
 
 	// 数量扣光后由桥层立即成对释放实例与槽位，后续整理无需再回收零堆。
 	for (const auto &[configId, count] : SortedByConfigId(itemsToRemove))

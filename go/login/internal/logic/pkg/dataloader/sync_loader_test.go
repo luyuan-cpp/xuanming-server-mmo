@@ -73,7 +73,7 @@ func TestNewDBReadTask_StampsReplyInstance(t *testing.T) {
 	}
 	// 其余字段是 go/db 读路径的既有契约,加字段不得改动它们。
 	wantType := string(sub.ProtoReflect().Descriptor().FullName())
-	if task.GetKey() != 42 || task.GetWhereCase() != "player_id='42'" || task.GetOp() != "read" ||
+	if task.GetKey() != 42 || task.GetWhereCase() != "player_id='42'" || task.GetOp() != login_proto.DBOp_DB_OP_READ ||
 		task.GetMsgType() != wantType || task.GetTaskId() != "t-1" ||
 		task.GetOwnerEpoch() != 0 || task.GetSaveSeq() != 0 || task.GetRetryCount() != 0 {
 		t.Fatalf("read task fields changed: %+v", task)
@@ -129,7 +129,7 @@ func TestEnsurePlayerAllDataInRedisAsync_StampsRegistrarReplyInstance(t *testing
 	rec := &replyStampRecorder{instance: testReplyInstance}
 	calls := 0
 	var gotErr error
-	EnsurePlayerAllDataInRedisAsync(context.Background(), rc, rec, rec, 42, 0, func(err error) {
+	ensureTestPlayerAllDataInRedisAsync(context.Background(), rc, rec, rec, 42, 0, func(err error) {
 		calls++
 		gotErr = err
 	})
@@ -166,7 +166,7 @@ func TestEnsurePlayerAllDataInRedisAsync_SendFailureCancelsRegistrations(t *test
 	rec := &replyStampRecorder{instance: testReplyInstance, sendErr: sendErr}
 	calls := 0
 	var gotErr error
-	EnsurePlayerAllDataInRedisAsync(context.Background(), rc, rec, rec, 42, 0, func(err error) {
+	ensureTestPlayerAllDataInRedisAsync(context.Background(), rc, rec, rec, 42, 0, func(err error) {
 		calls++
 		gotErr = err
 	})

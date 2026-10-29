@@ -7,6 +7,7 @@
 #include "proto/common/component/actor_attribute_state_comp.pb.h"
 #include "combat/buff/comp/buff_comp.h"
 #include "combat/buff/constants/buff.h"
+#include "player/system/player_level_rules.h"  // CappedLevel:回血公式按生效等级
 #include <thread_context/ecs_context.h>
 
 void ModifierBuffImplSystem::OnBuffStart(entt::entity parent, BuffEntry& buff, const BuffTable* buffTable) {
@@ -34,10 +35,11 @@ static bool OnHealthRegenerationBasedOnLostHealth(entt::entity parent, BuffEntry
                  << entt::to_integral(parent) << " buff_table_id=" << buffTable->id();
         return false;
     }
-    // 没有等级组件的目标按 1 级算(与 skill.cpp 的伤害公式一致)
+    // 没有等级组件的目标按 1 级算(与 skill.cpp 的伤害公式一致)。LevelComp 只有玩家有,
+    // 按生效等级取:超上限的存储等级按上限(player_level_rules.h)
     uint32_t level = 1;
     if (const auto *levelComponent = tlsEcs.actorRegistry.try_get<LevelComp>(parent)) {
-        level = levelComponent->level();
+        level = playerlevel::CappedLevel(levelComponent->level());
     }
 
     const auto lostHealth = derivedAttributesPbComponent->max_health() - baseAttributesPbComponent->health();

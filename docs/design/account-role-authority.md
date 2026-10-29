@@ -100,6 +100,8 @@ trade普通交易、寄售、拍卖、撮合和人民币合同的所有新增参
 
 历练邀请的同意身份是服务端私有`GuildTrialLobbyConsent`，按(lobby,player)在Redis保存不可覆盖原件；发起人建房捕获本人，被邀者亲自同意时捕获本人。缺件或不同账号／修订要求重新组队，不向客户端LobbyMember加入账号。launch前读取全体原同意，在全员P升序与G锁下核原账号／修订及本帮成员，持久`guild_trial_launch`完整原件和`guild_trial_launch_role` ACTIVE索引，再调用原request_id的Match Start。未知结果保留PREPARED，恢复轮转重放原名单、周期、配置与身份，不再从Redis或当前owner捕获。结果通过服务端`BattleActivityContext.launch_request_id=7`定位原件，结算和POISON同事务终结参与索引；owed／真实op继续独立保护资产。原有EXPIRED允许迟到结果，故不是安全撤销证明，不能清ACTIVE。PREPARED释放还要求Match同原意图锁的持久取消墓碑，或真实formation安全中止终局；RPC负答和房间过期都不够。
 
+2026-10-23 更正（第二轮审计 r2-guild#1）：上段没有覆盖「开局成功（Match formation=4）之后战斗不出结果」，即 battle 停机作废、崩溃或活动结果没发出。那时既无结算也无标毒，原先 launch 与 ACTIVE 占用永不解除，冻结、删除、导入与全球匹配入口的挂起守卫一直拒绝这批角色。现在的出口是 Match 的 SQL 终局：权威截止之后，`RecoverExpiredOutcomes` 或帮会重放原 Start 的签名 `CancelActivityBattle`，在原 P→formation 锁内与 COMPLETE 争同一主键，原子提交 ABORT，formation 4→5、全员原票置 4。帮会拿到 formation=5、TerminalDecision=ABORT 的回执后，`FinishCancelledTrialLaunch` 同事务置 launch3、role2、lobby4、slot0，本文挂起守卫随之放行。截止前的 formation=4、一次 RPC 超时、EXPIRED、帮会解散都不是终局，占用照旧保留；formation=5 却带 COMPLETE 的矛盾回执同样拒绝。释放规则只在 `go/guild/internal/data/trial_launch_repo.go` 的 `TrialCancelReceiptIsTerminal` 一处，推导与回归见 cross-zone-matchmaking.md §13.6「2026-10-23 修复」。
+
 装配还必须显式配置trade／guild的`AccountRoleSchema`、`GlobalLoginSessions`和`LoginRedis`；进程实际断言TiDB pessimistic／RC／leader／strict／无快照／无staleness，不能只看配置布尔值。普通独立交易状态机测试可显式注入fixture角色接口，旧目录隔离测试可显式关闭跨域guard；它们不能当原生验收。新增真TiDB回归分别使用独占`ACCOUNT_DIRECTORY_TEST_DSN`、`COMMERCE_TEST_DSN`与`GUILD_ROLE_TEST_DSN`及对应REQUIRE开关，fullstack还必须显式给`TRADE_ASSET_FULLSTACK_GLOBAL_SCHEMA`。本批只执行源码格式化和静态检查，正式生成、编译、真实SQL与双区在线验收须另记实际证据。
 
 ## 跨域挂起守卫的终态白名单（2026-10-21 源码补充）
@@ -113,3 +115,19 @@ Match 使用显式 `RoleTradeMatchSchema` 下的 `match_authority_ticket` 原件
 同一 Match schema 下的 `match_challenge_invitation` 同时保护挑战双方：state=1 且按数据库当前时间尚未过期的原件、未知状态、NULL 均阻止双方角色变更归属。精确过期 PENDING 不能再接受，state=2 ACCEPTED 在同 P 事务已交接到真实票／formation，state=3 DECLINED 已拒绝；后二者的后续占用由 ticket 与 admission 继续保护。通知投递失败不删除或改写邀请原件；data_service 不依赖 Redis 通知是否送达来裁决。缺邀请表或所需列与缺票表同样在启动装配和实际提交时拒绝。
 
 新增回归源码覆盖 trade/guild/mail 的 pending、manual、0、未知、NULL、已知安全终态，Match 三类在途、精确空占位与伪空占位，Begin／Remove／Import 的零副作用，以及 Match 新参与与冻结提交竞争。配置解析与缺 schema／缺列装配失败也有回归源。当前只完成源码和静态检查，未执行本轮生成、编译、单测、真实 TiDB 或双区进程验收；测试入口与环境约束登记在本轮构建目录清单，不引用历史测试结果作为本轮通过证据。
+
+## 旧 Scene 入场登记的受控恢复（2026-10-23，已授权实施，待验收）
+
+恢复模块只负责已经固定 listing 的原失联入场登记：调用者是受控维护 CLI，变化原因是旧 Scene 崩溃后无法补发原排空 ACK；它不授予新 Scene 替旧实例宣称排空的权限。正常 Register／Close／Ack 与角色交易提交仍沿上述接口和锁序。负责人先授权两版最多 24 个手写路径及必要正规生成，随后明确授权与历练终局恢复的 76 路径合并，按最多 100 个唯一手写路径统一管理；业务范围和总上限不增加。具体源码、生成、真库与故障结果分开登记。
+
+仅有新 UUID、TTL 到期或 SQL 围栏大于登记身份都不够。主 C++ 的 B5 可以在同一入场 generation 内采纳 E+2，SQL admission.identity 不随本地 owner 改写。例如原登记 E1、实际两 SQL 已为 E3/q1，而原 E3/q2 仍在 pending；以 3>1 退休登记会放过仍合法的 q2。恢复必须核旧实例所有可能已发及未来可发 epoch 的审核上界、旧写资格已撤销的永久证据，以及原完整父内容、pending、outbox 的实际收敛；不能清除未确认义务来制造可恢复条件。
+
+维护正向链必须实际可达：先阻止原写者和迟到 B5 继续取得资格，真实完成或明确拒绝原待投，再在权威 route 和两张完整玩家 SQL 的行锁下建立严格高于旧写上界的永久围栏。现有屏障恢复对非零 SQL 通常保留原 E/q，不能假定它已自动完成这一抬升。若需要只抬围栏，必须有独立的审定计划、原 SQL 全列摘要与版本 CAS，保持全部业务列，原子提交两表并保留提交未知时的原件消歧；不能仅在测试夹具手工抬 E 后声称生产入口成立。
+
+最终退休按账号 guard→原 listing→角色→原 admission／holder→权威 route→两 SQL 的既有顺序，在同一权威事务内复核原身份、修订、连续世代上界、撤销证明及 SQL 版本／覆盖世代／全列摘要，保存永久 SQL 恢复原件和摘要后才退休指定前缀。不能先核 SQL、解锁后再裸调 Close。相同请求重放返回原收据；换 UUID、世代、revision、route 或正文拒绝，迟到旧请求不得推进新登记。恢复原件不是业务效果 APPLIED，也不能代替其他 holder 的排空。
+
+维护退休写下的是专属 recovery 域摘要和永久 SQL 收据，不是旧 Scene 发出的 ACK。既有 `AccountRoleFreezeEvidenceKind.SCENE` 原本分类非初始的实际玩家 SQL 存档，即使没有本轮 holder 也可能返回该值；它不证明收到过某个实例的回包。本分支沿用该分类，具体退休来源必须查看永久恢复原件，不能只凭枚举把维护退休记成真实 Scene 排空回包。
+
+Redis 维护撤销与 SQL 提交不宣称跨存储 ACID：任一阶段失败保留维护闸和原证据，未知结果复用同一原件消歧，不签恢复成功。CLI 默认只生成可审计划，显式 apply 绑定精确摘要；连接、命名空间和目标范围沿现有本地维护工具约束，秘密仅取环境变量。缺任一行、SQL 两版不齐、世代超前、route 变化、待投仍高于已提交版本、撤销资格不明或权限不足时均拒绝且不关闭原登记。
+
+Java 版按自己的 SQL owner 与最终存盘模型实现。旧 OPEN 只有准入、没有最终快照载荷；现有七天清理的安全依据是同 P／route 锁内的持久更高 E 与最终状态条件，七天本身只是保留期。新工具只退休已固定 listing 的指定旧 OPEN，并持久保存恢复原件；PENDING、未知状态、Match／Inbox／资产待投不进入退休集合，不伪造 EXACT_APPLIED。更高 E 已入场时要求原 SCENE_ACK 与实际 SQL APPLIED；更高 E 仅 claim、尚未 load 时，要求该 E 的最终准入实际缺席及非 NULL 原存档，计划固定剩余旧 OPEN 集合、数量和最后一条语义，仅最后一条退休时复用正式封闭形成真实 SQL_NO_ADMISSION。load 与冻结以同 P 决定先后，不能借无准入分支替已经入场的实体造 ACK。两版必须分别验证真实崩溃后阻断、合法恢复、旧写者迟到拒绝、B5 反例、未确认 pending 拒绝、并发 Cancel／Register／过户、提交未知及原件重放。

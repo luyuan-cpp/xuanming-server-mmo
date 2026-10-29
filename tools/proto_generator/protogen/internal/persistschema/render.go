@@ -6,9 +6,35 @@ import (
 	"strings"
 )
 
-// RenderCppHeader 生成 C++ 头文件:世代常量,以及往返一致性测试用的冻结类型与未携带字段清单(§4.3)。
+// RetiredField 是台账里一条已退役字段的身份(消息全名 + 字段号),供 C++ 产物使用。
+type RetiredField struct {
+	Message string
+	Number  int32
+}
+
+// RetiredFieldsOf 把台账的退役身份 "<消息全名>#<字段号>" 拆开,按消息全名、字段号升序,输出稳定。
+func RetiredFieldsOf(keys []string) ([]RetiredField, error) {
+	out := make([]RetiredField, 0, len(keys))
+	for _, key := range keys {
+		message, number, err := splitFieldKey(key)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, RetiredField{Message: message, Number: number})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Message != out[j].Message {
+			return out[i].Message < out[j].Message
+		}
+		return out[i].Number < out[j].Number
+	})
+	return out, nil
+}
+
+// RenderCppHeader 生成 C++ 头文件:世代常量,往返一致性测试用的冻结类型与未携带字段清单(§4.3),
+// 以及已退役字段清单(§3.1、§4.4:守卫判"带着更新版本的字段"时排除退役残留)。
 // 只含头文件,不需要登记进 CMakeLists / vcxproj。字符串字面量只有类型名与字段名,全是 ASCII。
-func RenderCppHeader(gen uint32, s Schema) []byte {
+func RenderCppHeader(gen uint32, s Schema, retired []RetiredField) []byte {
 	frozen := sortedKeys(s.Frozen)
 	uncarried := make([]string, 0, len(s.Uncarried))
 	for _, name := range s.Uncarried {
@@ -28,8 +54,33 @@ func RenderCppHeader(gen uint32, s Schema) []byte {
 	writeCppStringArray(&b, "kFrozenMessageTypes", frozen)
 	b.WriteString("\n// 存盘时不原样携带的持久字段 \"<消息全名>.<字段名>\"(§3.2)。往返一致性测试不经由它们注入。\n")
 	writeCppStringArray(&b, "kUncarriedFields", uncarried)
+	writeCppRetiredFields(&b, retired)
 	b.WriteString("} // namespace persist_schema\n")
 	return []byte(b.String())
+}
+
+// writeCppRetiredFields 输出退役字段清单与查询函数。退役字段的残留字节在之后的每个版本里都是未知字段、
+// 原样携带(§3.1);"带着更新版本的字段"一类守卫(合堆、合并、按数量扣除,§4.4)必须把它们排除,
+// 否则带残留的对象会被永远当成更新版本的数据。
+func writeCppRetiredFields(b *strings.Builder, retired []RetiredField) {
+	b.WriteString("\n// 已退役的持久字段(台账 retired 行,§3.1),按消息全名、字段号升序。残留字节照样原样携带;\n")
+	b.WriteString("// 判\"带着更新版本的字段\"(§4.4 守卫)时排除它们,见 unknown_field_carry::CarriesNewerVersionFields。\n")
+	b.WriteString("struct RetiredField\n{\n    std::string_view message; // 消息全名,不带前导点\n    int number;\n};\n")
+	fmt.Fprintf(b, "inline constexpr std::array<RetiredField, %d> kRetiredFields = {", len(retired))
+	if len(retired) == 0 {
+		b.WriteString("};\n")
+	} else {
+		b.WriteString("{\n")
+		for _, f := range retired {
+			fmt.Fprintf(b, "    {%q, %d},\n", f.Message, f.Number)
+		}
+		b.WriteString("}};\n")
+	}
+	b.WriteString("\n// 字段 <message>#<number> 是否已退役。\n")
+	b.WriteString("[[nodiscard]] constexpr bool IsRetiredField(std::string_view message, int number)\n{\n")
+	b.WriteString("    for (const auto &field : kRetiredFields)\n    {\n")
+	b.WriteString("        if (field.number == number && field.message == message)\n        {\n            return true;\n        }\n    }\n")
+	b.WriteString("    return false;\n}\n")
 }
 
 func writeCppStringArray(b *strings.Builder, name string, values []string) {

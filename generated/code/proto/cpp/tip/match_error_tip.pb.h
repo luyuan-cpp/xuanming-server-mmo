@@ -84,6 +84,7 @@ enum match_error : int {
   kMatchBattleNotWatchable = 16018,
   kMatchSpectateOffline = 16019,
   kMatchNotInScene = 16020,
+  kMatchSpectateFull = 16021,
   match_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   match_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -94,11 +95,11 @@ extern const uint32_t match_error_internal_data_[];
 inline constexpr match_error match_error_MIN =
     static_cast<match_error>(0);
 inline constexpr match_error match_error_MAX =
-    static_cast<match_error>(16020);
+    static_cast<match_error>(16021);
 [[nodiscard]] inline bool match_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, match_error_internal_data_);
 }
-inline constexpr int match_error_ARRAYSIZE = 16020 + 1;
+inline constexpr int match_error_ARRAYSIZE = 16021 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 match_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(match_error) {

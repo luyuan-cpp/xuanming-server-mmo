@@ -33,6 +33,9 @@
     </properties>
 
     <dependencies>
+        <dependency><groupId>com.game</groupId><artifactId>authority-jdbc</artifactId><version>0.1.0-SNAPSHOT</version></dependency>
+    
+        
         <!-- Spring Boot Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

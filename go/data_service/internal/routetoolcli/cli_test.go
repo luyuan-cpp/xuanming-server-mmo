@@ -10,7 +10,10 @@ package routetoolcli
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -24,9 +27,15 @@ import (
 	"data_service/internal/routetool"
 	"data_service/internal/store"
 
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	pb "proto/common/database"
+	"shared/authoritysql"
+	"shared/drainproof"
 	"shared/placement"
 
 	"github.com/alicebob/miniredis/v2"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -62,7 +71,7 @@ func runCLI(args ...string) (int, string, string) {
 // runCLIWith 走注入的装配(不连真库)。
 func runCLIWith(d deps, args ...string) (int, string, string) {
 	var stdout, stderr lockedBuffer
-	code := run(context.Background(), args, &stdout, &stderr, d)
+	code := run(context.Background(), withMaintenanceShape(args...), &stdout, &stderr, d)
 	return code, stdout.String(), stderr.String()
 }
 
@@ -150,7 +159,13 @@ func TestRouteToolRealImportUnderDBFirstNeedsExplicitFlag(t *testing.T) {
 		{"audit passes the gate", []string{"-f", path, "audit"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			code, stdout, stderr := runCLI(c.args...)
+			d := defaultDeps()
+			if strings.Contains(strings.Join(c.args, " "), "-dry-run=false") {
+				// 本例隔离权限解析，只核原模式门禁与 Redis 连接顺序；缺 grant 的真实入口另有断言。
+				d.resolvePermission = func(*cliArgs) (authoritysql.Permission, error) { return authoritysql.Reader(), nil }
+				d.openCommand = unitRouteCommand
+			}
+			code, stdout, stderr := runCLIWith(d, c.args...)
 			assert.Equal(t, routetool.ExitFailed, code)
 			assert.Empty(t, stdout)
 			assert.Contains(t, stderr, "unreachable", "越过 db_first 闸之后才会去连 Redis")
@@ -160,17 +175,32 @@ func TestRouteToolRealImportUnderDBFirstNeedsExplicitFlag(t *testing.T) {
 }
 
 // TestRouteToolTiDBPrepareDoesNotTouchRedis:tidb-prepare 只碰全局库,不连 mapping Redis。两个地址都指向刚关掉的
-// 不同端口:失败必须来自全局库(stderr 带 MySQL 的地址),而不是 Redis(不带 Redis 的地址、没有 Redis 的 unreachable 文案)。
+// 不同端口:经原装配接口核实际全局库目标与调用次数；错误必须脱敏，不能靠泄露 MySQL 地址识别来源。
 // SnapshotMySQL.Host 必须显式写:不写会回落默认 127.0.0.1:3306,本机可能真有 MySQL。
 func TestRouteToolTiDBPrepareDoesNotTouchRedis(t *testing.T) {
 	redisAddr, mysqlAddr := twoClosedLocalAddrs(t)
 	path := writeYaml(t, fmt.Sprintf(minimalYaml, redisAddr)+fmt.Sprintf("SnapshotMySQL:\n  Host: %s\n", mysqlAddr))
 
-	code, stdout, stderr := runCLI("-f", path, "tidb-prepare", "-zones=1,2")
+	globalOpens, redisOpens := 0, 0
+	d := defaultDeps()
+	openGlobal := d.openRouteStore
+	d.openRouteStore = func(c config.Config, permission authoritysql.Permission, frozen *pb.SqlWriterMaintenanceReceipt) (routeStore, error) {
+		globalOpens++
+		assert.Equal(t, mysqlAddr, c.SnapshotMySQL.Host, "失败应来自本例指定的全局库")
+		return openGlobal(c, permission, frozen)
+	}
+	d.connectRedis = func(context.Context, redis.RedisConf) (routeRedis, error) {
+		redisOpens++
+		return nil, errors.New("tidb-prepare 不应装配 mapping Redis")
+	}
+	code, stdout, stderr := runCLIWith(d, "-f", path, "tidb-prepare", "-zones=1,2")
 
 	assert.Equal(t, routetool.ExitFailed, code)
 	assert.Empty(t, stdout)
-	assert.Contains(t, stderr, mysqlAddr, "失败应来自全局库")
+	assert.Equal(t, 1, globalOpens, "必须真实进入全局库建池失败路径")
+	assert.Zero(t, redisOpens, "tidb-prepare 不得尝试连接 mapping Redis")
+	assert.Contains(t, stderr, "cannot open the route tables on the global DB", "失败应来自全局库")
+	assert.NotContains(t, stderr, mysqlAddr, "权威SQL物理连接失败不得泄露目标地址")
 	assert.NotContains(t, stderr, redisAddr, "tidb-prepare 不该去连 mapping Redis")
 	assert.NotContains(t, stderr, "unreachable", "那是 mapping Redis 的文案")
 }
@@ -231,13 +261,29 @@ func TestRunReconcileAndUnfreezeRefusedInRedisMode(t *testing.T) {
 		{"-f", path, "audit", "-frozen-recovery"},
 	} {
 		t.Run(strings.Join(args[2:], " "), func(t *testing.T) {
-			code, stdout, stderr := runCLI(args...)
+			shaped := withMaintenanceShape(args...)
+			if strings.Contains(strings.Join(args, " "), "-dry-run=false") {
+				// 只补语法形状以到达原模式门禁；该门禁必须先于任何原件读取，不能制造票据或runtime收据。
+				private := t.TempDir()
+				shaped = append(shaped, "-drain-runtime-plan="+filepath.Join(private, "must-not-read-runtime.json"),
+					"-drain-runtime-directory="+private, "-drain-runtime-sha256="+strings.Repeat("a", 64))
+			}
+			code, stdout, stderr := runCLI(shaped...)
 			assert.Equal(t, routetool.ExitFailed, code)
 			assert.Empty(t, stdout)
 			assert.Contains(t, stderr, "RouteStore.Mode=redis")
 			assert.NotContains(t, stderr, "unreachable", "必须在连 Redis 之前就拒绝")
 		})
 	}
+
+	t.Run("P6缺runtime先于模式门禁拒绝", func(t *testing.T) {
+		code, stdout, stderr := runCLI(withMaintenanceShape("-f", path, "reconcile-from-cache", "-dry-run=false")...)
+		assert.Equal(t, routetool.ExitFailed, code)
+		assert.Empty(t, stdout)
+		assert.Contains(t, stderr, "P6恢复必须绑定P0预列runtime及同NORMAL票据")
+		assert.NotContains(t, stderr, "RouteStore.Mode=redis", "缺P0原件不能越过更早的参数门禁")
+		assert.NotContains(t, stderr, "unreachable", "缺P0原件不得尝试外部连接")
+	})
 
 	t.Run("freeze 允许_打WARN", func(t *testing.T) {
 		st := &fakeStore{meta: store.RouteMeta{Generation: testGen, Writable: 1}}
@@ -299,7 +345,8 @@ func TestRunUnfreezeNeedsConfirmAudited(t *testing.T) {
 	assert.Contains(t, stderr, "用法:")
 	assert.NotContains(t, stderr, "unreachable")
 
-	code, stdout, stderr = runCLI("-f", path, "unfreeze", "-confirm-audited")
+	st := &fakeStore{meta: store.RouteMeta{Generation: testGen, Writable: 0}}
+	code, stdout, stderr = runCLIWith(fakeDeps(st), "-f", path, "unfreeze", "-confirm-audited")
 	assert.Equal(t, routetool.ExitFailed, code)
 	assert.Empty(t, stdout)
 	assert.Contains(t, stderr, "unreachable", "越过参数闸之后才会去连 Redis")
@@ -311,7 +358,12 @@ func TestRunFreezeUnreachableDBExitsTwo(t *testing.T) {
 	redisAddr, mysqlAddr := twoClosedLocalAddrs(t)
 	path := writeYaml(t, fmt.Sprintf(minimalYaml, redisAddr)+dbFirstYaml+fmt.Sprintf("SnapshotMySQL:\n  Host: %s\n", mysqlAddr))
 
-	code, stdout, stderr := runCLI("-f", path, "freeze", "-reason=it")
+	// 显式隔离 SQL 网络故障；正式凭据拒绝由独立默认入口测试覆盖。
+	d := fakeDeps(&fakeStore{})
+	d.openMaintenance = func(context.Context, config.Config, cliArgs) (*maintenanceInput, error) {
+		return nil, fmt.Errorf("全局 SQL %s 连接失败", mysqlAddr)
+	}
+	code, stdout, stderr := runCLIWith(d, "-f", path, "freeze", "-reason=it")
 
 	assert.Equal(t, routetool.ExitFailed, code)
 	assert.Empty(t, stdout)
@@ -355,7 +407,7 @@ func TestRunUnfreezeRefusesWithoutVerifiedMarker(t *testing.T) {
 		path := writeYaml(t, fmt.Sprintf(minimalYaml, mr.Addr())+dbFirstYaml)
 		st := &fakeStore{meta: store.RouteMeta{Generation: testGen, Writable: 0}}
 		d := fakeDeps(st)
-		d.redisIdentity = func(context.Context, *redis.Redis) (routetool.RedisIdentity, error) { return current, nil }
+		d.redisIdentity = func(context.Context, routeRedis) (routetool.RedisIdentity, error) { return current, nil }
 		return mr, path, st, d
 	}
 
@@ -387,6 +439,7 @@ func TestRunUnfreezeRefusesWithoutVerifiedMarker(t *testing.T) {
 	t.Run("标记可信_不必确认_水位取标记", func(t *testing.T) {
 		mr, path, st, d := setup(t)
 		require.NoError(t, mr.Set(placement.RouteReadyKey, marker(t, current, 1_760_000_000_000)))
+		st.releaseFloor = 1_760_000_000_000
 		code, stdout, stderr := runCLIWith(d, "-f", path, "unfreeze", "-confirm-audited")
 		assert.Equal(t, routetool.ExitClean, code, stderr)
 		assert.Equal(t, []uint64{1_760_000_000_000}, st.unfreezeCalls)
@@ -473,7 +526,7 @@ func TestRunRewarmDropsKeysWithoutTouchingTheDB(t *testing.T) {
 			path := writeYaml(t, fmt.Sprintf(minimalYaml, mr.Addr())+mode.yamlTail)
 			opened := 0
 			d := fakeDeps(&fakeStore{})
-			d.openRouteStore = func(config.Config) (routeStore, error) {
+			d.openRouteStore = func(config.Config, authoritysql.Permission, *pb.SqlWriterMaintenanceReceipt) (routeStore, error) {
 				opened++
 				return nil, fmt.Errorf("must not open the global DB")
 			}
@@ -601,7 +654,9 @@ func TestRunAuditRequireMapRevFlag(t *testing.T) {
 		rows:      map[uint64]store.RouteRow{1: {PlayerID: 1, HomeZone: 1, Rev: 2}},
 	}
 	d := fakeDeps(ast.fakeStore)
-	d.openRouteStore = func(config.Config) (routeStore, error) { return ast, nil }
+	d.openRouteStore = func(config.Config, authoritysql.Permission, *pb.SqlWriterMaintenanceReceipt) (routeStore, error) {
+		return ast, nil
+	}
 
 	code, stdout, stderr := runCLIWith(d, "-f", path, "audit", "-recheck-delay=0s")
 	assert.Equal(t, routetool.ExitClean, code, stderr)
@@ -662,6 +717,8 @@ type fakeStore struct {
 	unfreezeCalls []uint64
 	// logOnFreeze 非空时 FreezeRouteWriters 用 logx 打这一行(模拟 store 自己的日志)。
 	logOnFreeze string
+	// releaseFloor 是测试排列时固定的正式请求水位，不由被测工具回填。
+	releaseFloor uint64
 	// dbNowMs 是 ListActiveMergeFences 回的库时钟(rewarm -wait 的基线);clockCalls 记调用次数。
 	dbNowMs    uint64
 	clockCalls int
@@ -699,12 +756,224 @@ func (f *fakeStore) ListActiveMergeFences(context.Context) (store.ActiveMergeFen
 // fakeDeps 用真 connectMappingRedis(miniredis 或不可达地址都行)、假库,身份读取默认报错(用例按需替换)。
 func fakeDeps(st *fakeStore) deps {
 	return deps{
-		connectRedis:   connectMappingRedis,
-		openRouteStore: func(config.Config) (routeStore, error) { return st, nil },
-		redisIdentity: func(context.Context, *redis.Redis) (routetool.RedisIdentity, error) {
+		connectRedis:      connectMappingRedis,
+		resolvePermission: func(*cliArgs) (authoritysql.Permission, error) { return authoritysql.Reader(), nil }, // 无真实 SQL；只隔离装配依赖。
+		openCommand:       unitRouteCommand,
+		openMaintenance: func(_ context.Context, _ config.Config, a cliArgs) (*maintenanceInput, error) {
+			return unitMaintenanceInput(st, a)
+		},
+		openRouteStore: func(config.Config, authoritysql.Permission, *pb.SqlWriterMaintenanceReceipt) (routeStore, error) {
+			return st, nil
+		},
+		redisIdentity: func(context.Context, routeRedis) (routetool.RedisIdentity, error) {
 			return routetool.RedisIdentity{}, fmt.Errorf("identity not scripted in this test")
 		},
 	}
+}
+
+// 单测只隔离SQL/P0装配；Redis客户端仍由真实owned factory创建和关闭，不制作假队列原件。
+func unitRouteCommand(_ context.Context, _ config.Config, _ cliArgs, input *maintenanceInput) (*routeCommand, error) {
+	c := &routeCommand{session: drainproof.New(), redisSession: drainproof.New()}
+	if input != nil {
+		c.catalog = input.db
+	}
+	return c, nil
+}
+
+type routeCommandCloser func() error
+
+func (f routeCommandCloser) Close() error { return f() }
+
+func TestRouteCommandClosesResourcesBeforeFormalClosure(t *testing.T) {
+	ctx := context.Background()
+	var events []string
+	c, _ := unitRouteCommand(ctx, config.Config{}, cliArgs{}, nil)
+	c.maintenance = true
+	c.resources = []io.Closer{
+		routeCommandCloser(func() error { events = append(events, "sql-close"); return nil }),
+		routeCommandCloser(func() error { events = append(events, "redis-close"); return nil }),
+	}
+	c.check = func(context.Context) error { events = append(events, "frozen-recheck"); return nil }
+	c.catalog = routeCommandCloser(func() error { events = append(events, "catalog-close"); return nil })
+	c.write = func(role string, session *drainproof.Session) error {
+		require.Equal(t, "MAINTENANCE", role)
+		require.True(t, session.Closed())
+		require.Zero(t, session.Pending())
+		events = append(events, "formal-closure")
+		return nil
+	}
+	done, err := c.session.Enter()
+	require.NoError(t, err)
+	done()
+	require.NoError(t, c.finish(ctx))
+	require.Equal(t, []string{"redis-close", "sql-close", "frozen-recheck", "catalog-close", "formal-closure"}, events)
+}
+
+func TestRouteCommandPipelineUnknownSurvivesLocalJoin(t *testing.T) {
+	ctx := context.Background()
+	for _, aggregate := range []bool{false, true} {
+		t.Run(fmt.Sprint(aggregate), func(t *testing.T) {
+			c, _ := unitRouteCommand(ctx, config.Config{}, cliArgs{}, nil)
+			wrote := false
+			c.maintenance = true
+			c.write = func(string, *drainproof.Session) error { wrote = true; return nil }
+			cmd := goredis.NewCmd(ctx, "SET", "fixture-key", "v")
+			hook := routeRedisHook{command: c}.ProcessPipelineHook(func(context.Context, []goredis.Cmder) error {
+				if aggregate {
+					return errors.New("整批结局未知")
+				}
+				cmd.SetErr(errors.New("单项结局未知"))
+				return nil
+			})
+			_ = hook(ctx, []goredis.Cmder{cmd})
+			require.Zero(t, c.redisSession.Pending(), "本机hook已经返回")
+			require.ErrorIs(t, c.finish(ctx), drainproof.ErrHold)
+			require.False(t, wrote, "本机join不能清业务UNKNOWN")
+		})
+	}
+}
+
+func TestRouteCommandClosedRedisRejectsBeforeNativeCall(t *testing.T) {
+	ctx := context.Background()
+	c, _ := unitRouteCommand(ctx, config.Config{}, cliArgs{}, nil)
+	require.NoError(t, c.finish(ctx))
+	calls := 0
+	hook := routeRedisHook{command: c}.ProcessHook(func(context.Context, goredis.Cmder) error { calls++; return nil })
+	require.ErrorIs(t, hook(ctx, goredis.NewCmd(ctx, "SET", "fixture-key", "v")), drainproof.ErrClosed)
+	require.Zero(t, calls)
+	require.Zero(t, c.redisSession.Pending())
+	require.NoError(t, c.redisSession.Wait(ctx), "明确本地拒绝没有发布，不能凭空增加UNKNOWN")
+}
+
+func TestRouteCommandCloseFailurePreventsFormalClosure(t *testing.T) {
+	ctx := context.Background()
+	c, _ := unitRouteCommand(ctx, config.Config{}, cliArgs{}, nil)
+	wrote := false
+	c.maintenance = true
+	c.write = func(string, *drainproof.Session) error { wrote = true; return nil }
+	c.resources = []io.Closer{routeCommandCloser(func() error { return errors.New("连接关闭未确定") })}
+	require.Error(t, c.finish(ctx))
+	require.False(t, wrote)
+}
+
+func TestRunP6WithoutRuntimeRefusesBeforeRedisAndSQLWork(t *testing.T) {
+	mr := miniredis.RunT(t)
+	path := writeYaml(t, fmt.Sprintf(minimalYaml, mr.Addr())+dbFirstYaml)
+	st := &fakeStore{}
+	d := fakeDeps(st)
+	d.openCommand = openRouteCommand
+	connected, opened := 0, 0
+	d.connectRedis = func(context.Context, redis.RedisConf) (routeRedis, error) {
+		connected++
+		return nil, errors.New("不应连接")
+	}
+	d.openRouteStore = func(config.Config, authoritysql.Permission, *pb.SqlWriterMaintenanceReceipt) (routeStore, error) {
+		opened++
+		return st, nil
+	}
+	code, out, errOut := runCLIWith(d, "-f", path, subReconcile, "-dry-run=false")
+	require.Equal(t, routetool.ExitFailed, code)
+	require.Empty(t, out)
+	require.Contains(t, errOut, "P0预列runtime")
+	require.Zero(t, connected)
+	require.Zero(t, opened)
+}
+
+func TestOwnedRouteRedisRetainedHandleCannotPublishAfterFinish(t *testing.T) {
+	ctx := context.Background()
+	c, _ := unitRouteCommand(ctx, config.Config{}, cliArgs{}, nil)
+	ctx = context.WithValue(ctx, routeCommandKey{}, c)
+	mr := miniredis.RunT(t)
+	rd, err := connectMappingRedis(ctx, redis.RedisConf{Host: mr.Addr(), Type: redis.NodeType})
+	require.NoError(t, err)
+	c.resources = append(c.resources, rd)
+	_, err = rd.DelCtx(ctx, "fixture-before-close")
+	require.NoError(t, err)
+	require.NoError(t, c.finish(ctx))
+	_, err = rd.SetnxCtx(context.Background(), "fixture-after-close", "v")
+	require.Error(t, err)
+	require.False(t, mr.Exists("fixture-after-close"))
+}
+
+func TestP6RewarmCannotWaitForFrozenLeader(t *testing.T) {
+	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t))+dbFirstYaml)
+	directory := t.TempDir()
+	code, out, errOut := runCLI("-f", path, subRewarm, "-wait=1m", "-maintenance-request="+filepath.Join(directory, "frozen.json"), "-maintenance-sha256="+strings.Repeat("a", 64), "-ticket-id="+strings.Repeat("01", 16), "-drain-runtime-plan="+filepath.Join(directory, "runtime.json"), "-drain-runtime-directory="+directory, "-drain-runtime-sha256="+strings.Repeat("b", 64))
+	require.Equal(t, routetool.ExitFailed, code)
+	require.Empty(t, out)
+	require.Contains(t, errOut, "P6冻结期只允许-wait=0")
+}
+
+// withMaintenanceShape 只用于显式注入依赖的装配测试；不创建凭据文件、不改变生产身份解析。
+func withMaintenanceShape(args ...string) []string {
+	out := append([]string(nil), args...)
+	if len(args) < 3 {
+		return out
+	}
+	sub := args[2]
+	maint := sub == subFreeze || sub == subUnfreeze || sub == subReconcile
+	for _, arg := range args[3:] {
+		if arg == "-frozen-recovery" {
+			maint = true
+		}
+	}
+	if !maint {
+		return out
+	}
+	out = append(out, "-maintenance-request="+filepath.Join(os.TempDir(), "route-cli-unit-request.json"), "-maintenance-sha256="+strings.Repeat("a", 64))
+	if sub == subFreeze || sub == subUnfreeze || sub == subReconcile {
+		out = append(out, "-ticket-id="+strings.Repeat("01", 16))
+	}
+	return out
+}
+
+// unitCatalog 隔离真正的 SQL 控制器。它只驱动既有业务装配替身，不证明权限、锁或永久收据。
+type unitCatalog struct{ st *fakeStore }
+
+func (c *unitCatalog) Freeze(ctx context.Context, ticket []byte, request *pb.SqlWriterMaintenanceReceipt) (*pb.SqlWriterMaintenanceReceipt, error) {
+	if len(ticket) != 16 || request == nil || request.Kind != pb.SqlWriterMaintenanceReceipt_FREEZE {
+		return nil, fmt.Errorf("冻结请求不符")
+	}
+	if _, err := c.st.FreezeRouteWriters(ctx); err != nil {
+		return nil, err
+	}
+	return proto.Clone(request).(*pb.SqlWriterMaintenanceReceipt), nil
+}
+func (c *unitCatalog) Release(ctx context.Context, ticket []byte, request *pb.SqlWriterMaintenanceReceipt) (*pb.SqlWriterMaintenanceReceipt, error) {
+	if len(ticket) != 16 || request == nil || request.Kind != pb.SqlWriterMaintenanceReceipt_RELEASE || request.GetEvidence().GetReleaseReadiness() == nil {
+		return nil, fmt.Errorf("释放请求不符")
+	}
+	if _, err := c.st.UnfreezeRouteWriters(ctx, request.GetEvidence().GetReleaseReadiness().RouteWatermarkFloorMs); err != nil {
+		return nil, err
+	}
+	return proto.Clone(request).(*pb.SqlWriterMaintenanceReceipt), nil
+}
+func (c *unitCatalog) MaintenanceReceipt(context.Context, []byte) (*pb.SqlWriterMaintenanceReceipt, error) {
+	return nil, fmt.Errorf("本装配测试未提供永久 SQL 收据")
+}
+func (c *unitCatalog) CurrentMeta(context.Context) (*pb.RouteMeta, error) {
+	return nil, fmt.Errorf("本装配测试未提供 SQL 控制快照")
+}
+func unitMaintenanceInput(st *fakeStore, a cliArgs) (*maintenanceInput, error) {
+	kind := pb.SqlWriterMaintenanceReceipt_FREEZE
+	if a.sub == subUnfreeze {
+		kind = pb.SqlWriterMaintenanceReceipt_RELEASE
+	}
+	run := bytes.Repeat([]byte{1}, 16)
+	plan, err := (proto.MarshalOptions{Deterministic: true}).Marshal(&pb.SqlWriterMaintenanceReceipt_Plan{RunId: run, BeforeEpoch: 1, CatalogRevision: 1})
+	if err != nil {
+		return nil, err
+	}
+	manifest := sha256.Sum256(plan)
+	request := &pb.SqlWriterMaintenanceReceipt{RequestId: bytes.Repeat([]byte{2}, 16), RunId: run, Generation: testGen, BeforeEpoch: 1, CatalogRevision: 1, AttemptRevision: 1, Kind: kind, PlanProto: plan, Evidence: &pb.SqlWriterMaintenanceReceipt_Evidence{OperationId: run, ManifestDigest: manifest[:]}}
+	if kind == pb.SqlWriterMaintenanceReceipt_RELEASE {
+		request.Evidence.Detail = &pb.SqlWriterMaintenanceReceipt_Evidence_ReleaseReadiness{ReleaseReadiness: &pb.SqlWriterMaintenanceReceipt_ReleaseReadiness{OriginalFreezeReceiptId: bytes.Repeat([]byte{3}, 16), OriginalFreezeReceiptDigest: bytes.Repeat([]byte{4}, 32), RouteWatermarkFloorMs: st.releaseFloor}}
+	}
+	request, err = authoritysql.SealMaintenanceRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	return &maintenanceInput{db: st, catalog: &unitCatalog{st: st}, request: request, ticketID: bytes.Repeat([]byte{1}, 16)}, nil
 }
 
 // minimalYaml 是能被 conf.Load 接受的最小配置(同 internal/config 的 minimalYaml),MappingRedis.Host 由用例填。
@@ -753,4 +1022,376 @@ func twoClosedLocalAddrs(t *testing.T) (string, string) {
 	require.NoError(t, a.Close())
 	require.NoError(t, b.Close())
 	return first, second
+}
+
+// 默认入口不能从模式开关、审计确认或可达地址推导正式权限。
+func TestRunProductionMaintenanceRequiresOriginalBeforeConnecting(t *testing.T) {
+	address := closedLocalAddr(t)
+	configPath := writeYaml(t, fmt.Sprintf(minimalYaml, address)+dbFirstYaml)
+	for _, sub := range []string{"freeze", "unfreeze", "reconcile-from-cache"} {
+		args := []string{"-f", configPath, sub}
+		if sub == "unfreeze" {
+			args = append(args, "-confirm-audited")
+		}
+		code, stdout, stderr := runCLI(args...)
+		assert.Equal(t, routetool.ExitFailed, code)
+		assert.Empty(t, stdout)
+		assert.Contains(t, stderr, "维护操作必须指定原件")
+		assert.NotContains(t, stderr, "unreachable")
+	}
+}
+
+func TestRunProductionRealImportRejectsMissingGrant(t *testing.T) {
+	t.Setenv("MMORPG_SQL_WRITER_GRANT_FILE", "")
+	t.Setenv("MMORPG_SQL_WRITER_GRANT_SHA256", "")
+	configPath := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t))+dbFirstYaml)
+	code, stdout, stderr := runCLI("-f", configPath, "import-from-redis", "-dry-run=false", "-allow-db-first")
+	assert.Equal(t, routetool.ExitFailed, code)
+	assert.Empty(t, stdout)
+	assert.Contains(t, stderr, "SQL writer启动grant缺失")
+	assert.NotContains(t, stderr, "unreachable")
+}
+
+func TestNormalRouteRuntimeRejectsReleasedBeforeConsumingBoot(t *testing.T) {
+	for _, phase := range []pb.SqlWriterDrainRun_Phase{pb.SqlWriterDrainRun_PLAN_FIXED, pb.SqlWriterDrainRun_SQL_FROZEN, pb.SqlWriterDrainRun_SQL_RELEASED} {
+		directory := t.TempDir()
+		pin := routeRecoveryTestPin(t, filepath.Join(directory, "source.json"), []byte("fixed source"))
+		seed := &pb.SqlWriterMaintenanceReceipt_IssuerClosure{IssuerId: bytes.Repeat([]byte{1}, 16), InstanceId: bytes.Repeat([]byte{2}, 16), PhysicalWriterKey: bytes.Repeat([]byte{3}, 16), LogicalRole: "SOURCE", PermanentRevivalFenceId: bytes.Repeat([]byte{4}, 16), SourceEvidence: []*pb.SqlWriterMaintenanceReceipt_SourcePin{pin}}
+		plan := &pb.SqlWriterMaintenanceReceipt_Plan{RunId: bytes.Repeat([]byte{5}, 16), AuthoritySchema: "fixture", RootIssuers: []*pb.SqlWriterMaintenanceReceipt_IssuerClosure{seed}}
+		current := proto.Clone(seed).(*pb.SqlWriterMaintenanceReceipt_IssuerClosure)
+		role := "SOURCE"
+		if phase == pb.SqlWriterDrainRun_SQL_RELEASED {
+			current.InstanceId = bytes.Repeat([]byte{6}, 16)
+			current.PhysicalWriterKey = bytes.Repeat([]byte{7}, 16)
+		}
+		if phase == pb.SqlWriterDrainRun_SQL_FROZEN {
+			current.LogicalRole = "MAINTENANCE"
+			current.PhysicalWriterKey = nil
+			plan.MaintenanceIssuers = []*pb.SqlWriterMaintenanceReceipt_IssuerClosure{current}
+			role = "MAINTENANCE"
+		}
+		planRaw, err := (proto.MarshalOptions{Deterministic: true}).Marshal(plan)
+		require.NoError(t, err)
+		digest := sha256.Sum256(planRaw)
+		runtime := &drainproof.Runtime{Directory: directory, Plan: plan, Request: &pb.SqlWriterMaintenanceReceipt{RunId: plan.RunId, Generation: "abc", RunPhase: phase, PlanProto: planRaw, Evidence: &pb.SqlWriterMaintenanceReceipt_Evidence{OperationId: plan.RunId, ManifestDigest: digest[:], Detail: &pb.SqlWriterMaintenanceReceipt_Evidence_Publication{Publication: &pb.SqlWriterMaintenanceReceipt_PublicationEvidence{LogicalRoles: []*pb.SqlWriterMaintenanceReceipt_IssuerClosure{current}}}}}}
+		require.NotNil(t, runtime.Seed(role), "夹具必须是有效的同boot正式角色，不能靠空Plan在BindBoot中碰巧失败")
+		marker := filepath.Join(directory, "observable-bind.consumed")
+		bound, worked := 0, 0
+		// 仅隔离BindBoot的私有文件副作用；生产传真实Runtime.BindBoot，不绕过任何正式身份验证。
+		err = bindNormalRouteRuntime(runtime, func() error { bound++; return os.WriteFile(marker, []byte("binding reached"), 0600) })
+		if err == nil {
+			worked++
+		}
+		if phase == pb.SqlWriterDrainRun_PLAN_FIXED {
+			require.NoError(t, err)
+			require.Equal(t, 1, bound)
+			require.Equal(t, 1, worked)
+			_, err = os.Stat(marker)
+			require.NoError(t, err)
+		} else {
+			require.ErrorIs(t, err, drainproof.ErrHold)
+			require.Zero(t, bound)
+			require.Zero(t, worked)
+			_, err = os.Stat(marker)
+			require.True(t, errors.Is(err, os.ErrNotExist), "阶段拒绝必须先于实际binding副作用")
+		}
+	}
+}
+
+func TestRouteRecoveryExportRequiresExplicitCompleteReadOnlyShape(t *testing.T) {
+	directory := t.TempDir()
+	valid := []string{"-f", "fixture.yaml", subAudit, "-frozen-recovery", "-maintenance-request=" + filepath.Join(directory, "frozen.json"), "-maintenance-sha256=" + strings.Repeat("a", 64), "-maintenance-publication=" + filepath.Join(directory, "closed.json"), "-maintenance-publication-sha256=" + strings.Repeat("b", 64), "-recovery-audit-output=" + filepath.Join(directory, "audit.json")}
+	args, err := parseArgs(valid, io.Discard)
+	require.NoError(t, err)
+	require.NotEmpty(t, args.recoveryAuditOutput)
+	for _, extra := range [][]string{{"-require-maprev"}, {"-timeout=31m"}, {"-maintenance-publication-sha256=bad"}, {"-recovery-audit-output=relative"}, {"-frozen-recovery=false"}} {
+		_, err := parseArgs(append(append([]string(nil), valid...), extra...), io.Discard)
+		require.Error(t, err)
+	}
+	ordinary, err := parseArgs([]string{"-f", "fixture.yaml", subAudit}, io.Discard)
+	require.NoError(t, err)
+	require.Empty(t, ordinary.recoveryAuditOutput)
+}
+
+type routeRecoveryEmptyStore struct {
+	fakeStore
+	scans int
+}
+
+func (s *routeRecoveryEmptyStore) ScanRoutes(context.Context, store.RouteScanCursor, int) ([]store.RouteRow, error) {
+	s.scans++
+	return nil, nil
+}
+func (s *routeRecoveryEmptyStore) GetRoutes(context.Context, []uint64) (map[uint64]store.RouteRow, error) {
+	return map[uint64]store.RouteRow{}, nil
+}
+func (s *routeRecoveryEmptyStore) ListMergedInto(context.Context) ([]store.MergedIntoRow, error) {
+	return nil, nil
+}
+
+type routeRecoveryEmptyRedis struct {
+	routeRedis
+	scans int
+}
+
+func (r *routeRecoveryEmptyRedis) ScanCtx(context.Context, uint64, string, int64) ([]string, uint64, error) {
+	r.scans++
+	return nil, 0, nil
+}
+func (r *routeRecoveryEmptyRedis) GetCtx(context.Context, string) (string, error) { return "", nil }
+func (r *routeRecoveryEmptyRedis) MgetCtx(_ context.Context, keys ...string) ([]string, error) {
+	return make([]string, len(keys)), nil
+}
+
+func TestRouteRecoveryStatsUseActualAuditAndRejectEveryBlockingObservation(t *testing.T) {
+	rd, st := &routeRecoveryEmptyRedis{}, &routeRecoveryEmptyStore{}
+	report, err := routetool.Audit(context.Background(), rd, st, routetool.AuditOptions{Batch: 10, MaxReport: 10, MaxRecheck: 10, FrozenRecovery: true, Stdout: io.Discard, Stderr: io.Discard})
+	require.NoError(t, err)
+	require.Positive(t, rd.scans)
+	require.Positive(t, st.scans)
+	stats, err := routeRecoveryStats(report)
+	require.NoError(t, err)
+	require.True(t, stats.FrozenRecovery)
+	require.False(t, stats.RequireMapRev)
+	require.False(t, stats.Completed, "资源尚未关闭不能宣告完成")
+	unpublished := report
+	unpublished.DBRows = 7
+	unpublished.RedisPlayers = 5
+	unpublished.DBOnlyUnpublished = 2
+	stats, err = routeRecoveryStats(unpublished)
+	require.NoError(t, err)
+	require.Equal(t, uint64(7), stats.DbRows)
+	require.Equal(t, uint64(5), stats.RedisPlayers)
+	require.Equal(t, uint64(2), stats.DbOnlyUnpublished)
+	for _, change := range []func(*routetool.AuditReport){
+		func(r *routetool.AuditReport) { r.DBRows = -1 }, func(r *routetool.AuditReport) { r.RedisPlayers = -1 }, func(r *routetool.AuditReport) { r.DBOnlyUnpublished = -1 },
+		func(r *routetool.AuditReport) { r.DBOnlyUnpublished = 1 }, func(r *routetool.AuditReport) { r.MissingInRedis = 1 }, func(r *routetool.AuditReport) { r.MissingInDB = 1 },
+		func(r *routetool.AuditReport) { r.ValueMismatch = 1 }, func(r *routetool.AuditReport) { r.RedisMalformed = 1 }, func(r *routetool.AuditReport) { r.DBInvalid = 1 },
+		func(r *routetool.AuditReport) { r.RedisRevAhead = 1 }, func(r *routetool.AuditReport) { r.RedisRevBehind = 1 }, func(r *routetool.AuditReport) { r.MergedIntoMissingInRedis = 1 },
+		func(r *routetool.AuditReport) { r.MergedIntoMissingInDB = 1 }, func(r *routetool.AuditReport) { r.MergedIntoMismatch = 1 }, func(r *routetool.AuditReport) { r.RedisFencesActive = 1 },
+		func(r *routetool.AuditReport) { r.TransientCleared = 1 }, func(r *routetool.AuditReport) { r.RequireMapRev = true }, func(r *routetool.AuditReport) { r.FrozenRecovery = false },
+	} {
+		bad := report
+		change(&bad)
+		_, err := routeRecoveryStats(bad)
+		require.Error(t, err)
+	}
+}
+
+func routeRecoveryTestPin(t *testing.T, file string, raw []byte) *pb.SqlWriterMaintenanceReceipt_SourcePin {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Dir(file), 0700))
+	require.NoError(t, os.WriteFile(file, raw, 0600))
+	sum := sha256.Sum256(raw)
+	return &pb.SqlWriterMaintenanceReceipt_SourcePin{AbsolutePath: file, Sha256: sum[:]}
+}
+func TestRouteRecoveryPublicationBindsEveryRealToolOriginal(t *testing.T) {
+	directory := t.TempDir()
+	source := routeRecoveryTestPin(t, filepath.Join(directory, "source.json"), []byte("actual-source-fixture"))
+	seed := &pb.SqlWriterMaintenanceReceipt_IssuerClosure{IssuerId: bytes.Repeat([]byte{1}, 16), InstanceId: bytes.Repeat([]byte{2}, 16), LogicalRole: "MAINTENANCE", PermanentRevivalFenceId: bytes.Repeat([]byte{3}, 16), SourceEvidence: []*pb.SqlWriterMaintenanceReceipt_SourcePin{source}}
+	plan := &pb.SqlWriterMaintenanceReceipt_Plan{MaintenanceIssuers: []*pb.SqlWriterMaintenanceReceipt_IssuerClosure{seed}}
+	closed := proto.Clone(seed).(*pb.SqlWriterMaintenanceReceipt_IssuerClosure)
+	closed.AcceptingClosedMs = 100
+	closed.AcceptedSettledMs = 101
+	closed.AcceptedFrontierDigest = bytes.Repeat([]byte{4}, 32)
+	raw, err := (protojson.MarshalOptions{}).Marshal(closed)
+	require.NoError(t, err)
+	original := routeRecoveryTestPin(t, filepath.Join(directory, "maintenance.issuer.json"), raw)
+	inventory, err := (proto.MarshalOptions{Deterministic: true}).Marshal(&pb.SqlWriterMaintenanceReceipt_PublicationEvidence{LogicalRoles: plan.MaintenanceIssuers})
+	require.NoError(t, err)
+	digest := sha256.Sum256(inventory)
+	publication := &pb.SqlWriterMaintenanceReceipt_PublicationEvidence{LogicalRoles: []*pb.SqlWriterMaintenanceReceipt_IssuerClosure{closed}, SourceEvidence: []*pb.SqlWriterMaintenanceReceipt_SourcePin{original}, IssuerInventoryDigest: digest[:]}
+	frozen := &pb.SqlWriterMaintenanceReceipt{CommittedMs: 99}
+	require.NoError(t, verifyRouteMaintenancePublication(plan, frozen, publication))
+	for _, change := range []func(*pb.SqlWriterMaintenanceReceipt_PublicationEvidence){
+		func(p *pb.SqlWriterMaintenanceReceipt_PublicationEvidence) { p.LogicalRoles = nil }, func(p *pb.SqlWriterMaintenanceReceipt_PublicationEvidence) { p.SourceEvidence = nil },
+		func(p *pb.SqlWriterMaintenanceReceipt_PublicationEvidence) {
+			p.LogicalRoles[0].InstanceId = bytes.Repeat([]byte{9}, 16)
+		},
+		func(p *pb.SqlWriterMaintenanceReceipt_PublicationEvidence) {
+			p.LogicalRoles[0].UnresolvedPublications = 1
+		},
+		func(p *pb.SqlWriterMaintenanceReceipt_PublicationEvidence) { p.LogicalRoles[0].AcceptingClosedMs = 98 },
+		func(p *pb.SqlWriterMaintenanceReceipt_PublicationEvidence) { p.LogicalRoles[0].AcceptedSettledMs++ },
+	} {
+		bad := proto.Clone(publication).(*pb.SqlWriterMaintenanceReceipt_PublicationEvidence)
+		change(bad)
+		require.Error(t, verifyRouteMaintenancePublication(plan, frozen, bad))
+	}
+	require.NoError(t, os.WriteFile(original.AbsolutePath, []byte("changed"), 0600))
+	require.Error(t, verifyRouteMaintenancePublication(plan, frozen, publication))
+}
+
+func TestRouteRecoveryQuerySourcesMustAllExistInImmutableP0(t *testing.T) {
+	directory := t.TempDir()
+	plan := &pb.SqlWriterMaintenanceReceipt_Plan{}
+	for _, rel := range []string{"go/data_service/internal/routetoolcli/cli.go", "go/data_service/internal/routetool/auditor.go", "go/data_service/internal/routetool/redisread.go", "go/data_service/internal/store/route_store.go"} {
+		plan.SourcePins = append(plan.SourcePins, routeRecoveryTestPin(t, filepath.Join(directory, filepath.FromSlash(rel)), []byte(rel)))
+	}
+	pins, err := routeRecoveryQueryPins(plan)
+	require.NoError(t, err)
+	require.Len(t, pins, 4)
+	bad := proto.Clone(plan).(*pb.SqlWriterMaintenanceReceipt_Plan)
+	bad.SourcePins = bad.SourcePins[:3]
+	_, err = routeRecoveryQueryPins(bad)
+	require.Error(t, err)
+	bad = proto.Clone(plan).(*pb.SqlWriterMaintenanceReceipt_Plan)
+	bad.SourcePins = append(bad.SourcePins, bad.SourcePins[0])
+	_, err = routeRecoveryQueryPins(bad)
+	require.Error(t, err)
+	require.NoError(t, os.WriteFile(plan.SourcePins[0].AbsolutePath, []byte("changed source"), 0600))
+	_, err = routeRecoveryQueryPins(plan)
+	require.Error(t, err)
+}
+
+func TestRouteRecoveryPublishesOnlyAfterEveryResourceCloses(t *testing.T) {
+	for _, failClose := range []bool{false, true} {
+		events := []string{}
+		audit := &pb.SqlWriterMaintenanceReceipt_RouteRecoveryAudit{Stats: &pb.SqlWriterMaintenanceReceipt_RouteRecoveryStats{FrozenRecovery: true}}
+		resources := []io.Closer{routeCommandCloser(func() error { events = append(events, "catalog"); return nil }), routeCommandCloser(func() error {
+			events = append(events, "redis")
+			if failClose {
+				return errors.New("close unknown")
+			}
+			return nil
+		}), routeCommandCloser(func() error { events = append(events, "store"); return nil })}
+		wrote := false
+		err := publishRouteRecoveryAudit(context.Background(), "fixture", audit, resources, func(_ string, raw []byte) error {
+			events = append(events, "write")
+			wrote = true
+			decoded := &pb.SqlWriterMaintenanceReceipt_RouteRecoveryAudit{}
+			require.NoError(t, (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(raw, decoded))
+			require.True(t, decoded.Stats.Completed)
+			return nil
+		})
+		if failClose {
+			require.Error(t, err)
+			require.False(t, wrote)
+			require.False(t, audit.Stats.Completed)
+			require.Equal(t, []string{"store", "redis", "catalog"}, events)
+		} else {
+			require.NoError(t, err)
+			require.True(t, wrote)
+			require.Equal(t, []string{"store", "redis", "catalog", "write"}, events)
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	called := false
+	require.Error(t, publishRouteRecoveryAudit(ctx, "fixture", &pb.SqlWriterMaintenanceReceipt_RouteRecoveryAudit{Stats: &pb.SqlWriterMaintenanceReceipt_RouteRecoveryStats{}}, nil, func(string, []byte) error { called = true; return nil }))
+	require.False(t, called)
+}
+
+type routeRecoveryAtomicRedis struct {
+	routeRedis
+	reply    any
+	err      error
+	script   string
+	keys     []string
+	argCount int
+}
+
+func (r *routeRecoveryAtomicRedis) EvalCtx(_ context.Context, script string, keys []string, args ...any) (any, error) {
+	r.script = script
+	r.keys = append([]string(nil), keys...)
+	r.argCount = len(args)
+	return r.reply, r.err
+}
+func TestRouteRecoveryUsesOneAtomicSnapshotAndActualWatermarkFloor(t *testing.T) {
+	runID := bytes.Repeat([]byte{1}, 16)
+	target := &pb.SqlWriterMaintenanceReceipt_RedisTargetClosure{Role: "mapping", Address: "127.0.0.1:6379", ServerRunId: []byte(strings.Repeat("a", 40)), MaintenanceNonce: bytes.Repeat([]byte{2}, 16)}
+	marker, err := placement.EncodeRouteReadyMarker(placement.RouteReadyMarker{Generation: "abc", RedisRunID: string(target.ServerRunId), MasterReplID: strings.Repeat("b", 40), SetAtMs: 50, WatermarkMs: 80, Leader: "fixture"})
+	require.NoError(t, err)
+	watermark, err := placement.EncodeRouteWatermark(placement.RouteWatermark{Generation: "abc", WatermarkMs: 90})
+	require.NoError(t, err)
+	reply := []any{"run_id:" + string(target.ServerRunId) + "\r\nuptime_in_seconds:1\r\n", "role:master\r\nmaster_replid:" + strings.Repeat("b", 40) + "\r\n", marker, watermark, strings.Repeat("02", 16)}
+	rd := &routeRecoveryAtomicRedis{reply: reply}
+	before, err := captureRouteRecoveryRedis(context.Background(), rd, target, runID, "abc")
+	require.NoError(t, err)
+	require.Equal(t, uint64(90), before.RouteWatermarkFloorMs)
+	key, err := drainproof.RedisMaintenanceNonceKey(runID)
+	require.NoError(t, err)
+	require.Equal(t, drainproof.RouteRecoveryReadScript, rd.script)
+	require.Equal(t, []string{key, placement.RouteReadyKey, placement.RouteWatermarkKey}, rd.keys)
+	require.Zero(t, rd.argCount)
+	reply[0] = "run_id:" + string(target.ServerRunId) + "\r\nuptime_in_seconds:2\r\n"
+	after, err := captureRouteRecoveryRedis(context.Background(), rd, target, runID, "abc")
+	require.NoError(t, err)
+	require.True(t, sameRouteRecoveryRedis(before, after), "INFO时间变化不代表物理身份变化")
+	after.WatermarkRaw = []byte("changed")
+	require.False(t, sameRouteRecoveryRedis(before, after))
+	reply[3] = nil
+	without, err := captureRouteRecoveryRedis(context.Background(), rd, target, runID, "abc")
+	require.NoError(t, err)
+	require.Equal(t, uint64(80), without.RouteWatermarkFloorMs)
+	for _, tc := range []struct {
+		index int
+		value any
+	}{{0, "run_id:" + strings.Repeat("c", 40)}, {1, "role:slave\r\nmaster_replid:" + strings.Repeat("b", 40)}, {2, nil}, {2, "malformed"}, {3, "malformed"}, {4, strings.Repeat("03", 16)}} {
+		changed := append([]any(nil), reply...)
+		changed[tc.index] = tc.value
+		rd.reply = changed
+		_, err := captureRouteRecoveryRedis(context.Background(), rd, target, runID, "abc")
+		require.Error(t, err)
+	}
+	rd.reply = reply
+	rd.err = errors.New("maintenance nonce missing or expiring")
+	_, err = captureRouteRecoveryRedis(context.Background(), rd, target, runID, "abc")
+	require.Error(t, err)
+}
+
+type routeRecoveryCatalogFixture struct {
+	frozen *pb.SqlWriterMaintenanceReceipt
+	run    *pb.SqlWriterDrainRun
+	meta   *pb.RouteMeta
+}
+
+func (c *routeRecoveryCatalogFixture) MaintenanceReceipt(context.Context, []byte) (*pb.SqlWriterMaintenanceReceipt, error) {
+	return c.frozen, nil
+}
+func (c *routeRecoveryCatalogFixture) DrainRun(context.Context, []byte) (*pb.SqlWriterDrainRun, error) {
+	return c.run, nil
+}
+func (c *routeRecoveryCatalogFixture) CurrentMeta(context.Context) (*pb.RouteMeta, error) {
+	return c.meta, nil
+}
+func TestRouteRecoveryRechecksPermanentFrozenRunAndEpoch(t *testing.T) {
+	runID := bytes.Repeat([]byte{1}, 16)
+	plan := &pb.SqlWriterMaintenanceReceipt_Plan{RunId: runID}
+	raw, err := (proto.MarshalOptions{Deterministic: true}).Marshal(plan)
+	require.NoError(t, err)
+	digest := sha256.Sum256(raw)
+	frozen := &pb.SqlWriterMaintenanceReceipt{Kind: pb.SqlWriterMaintenanceReceipt_FREEZE, Phase: pb.SqlWriterMaintenanceReceipt_FROZEN, RunPhase: pb.SqlWriterDrainRun_SQL_FROZEN, RequestId: bytes.Repeat([]byte{2}, 16), RunId: runID, Generation: "abc", AttemptRevision: 1, AfterEpoch: 3, CatalogRevision: 7, PlanProto: raw, CommittedMs: 100}
+	catalog := &routeRecoveryCatalogFixture{frozen: proto.Clone(frozen).(*pb.SqlWriterMaintenanceReceipt), run: &pb.SqlWriterDrainRun{Phase: pb.SqlWriterDrainRun_SQL_FROZEN, Generation: "abc", AttemptRevision: 1, ManifestProto: raw, ManifestDigest: digest[:], FrozenRequestId: frozen.RequestId}, meta: &pb.RouteMeta{Generation: "abc", WriterEpoch: 3, CatalogRevision: 7, FreezeRunId: runID}}
+	snapshot, err := readRouteRecoveryFrozen(context.Background(), catalog, plan, frozen)
+	require.NoError(t, err)
+	require.NoError(t, snapshot.verifyCurrent(context.Background(), catalog, plan, frozen))
+	for _, change := range []func(*routeRecoveryCatalogFixture){func(c *routeRecoveryCatalogFixture) { c.meta.Writable = 1 }, func(c *routeRecoveryCatalogFixture) { c.meta.WriterEpoch++ }, func(c *routeRecoveryCatalogFixture) { c.meta.CatalogRevision++ }, func(c *routeRecoveryCatalogFixture) { c.run.AttemptRevision++ }, func(c *routeRecoveryCatalogFixture) { c.run.Phase = pb.SqlWriterDrainRun_SQL_RELEASED }, func(c *routeRecoveryCatalogFixture) { c.frozen.CommittedMs++ }} {
+		bad := &routeRecoveryCatalogFixture{frozen: proto.Clone(catalog.frozen).(*pb.SqlWriterMaintenanceReceipt), run: proto.Clone(catalog.run).(*pb.SqlWriterDrainRun), meta: proto.Clone(catalog.meta).(*pb.RouteMeta)}
+		change(bad)
+		_, err := readRouteRecoveryFrozen(context.Background(), bad, plan, frozen)
+		require.Error(t, err)
+	}
+	// 这些变化单独看仍满足FROZEN/RELEASE_READY集合及原epoch，必须由首尾全文比较拒绝。
+	for _, change := range []func(*routeRecoveryCatalogFixture){
+		func(c *routeRecoveryCatalogFixture) { c.run.Phase = pb.SqlWriterDrainRun_RELEASE_READY },
+		func(c *routeRecoveryCatalogFixture) { c.run.LatestReceiptId = bytes.Repeat([]byte{8}, 16) },
+		func(c *routeRecoveryCatalogFixture) { c.run.LatestReceiptDigest = bytes.Repeat([]byte{9}, 32) },
+		func(c *routeRecoveryCatalogFixture) { c.run.UpdatedMs++ },
+		func(c *routeRecoveryCatalogFixture) { c.meta.ProtoReflect().SetUnknown([]byte{0xf8, 0x07, 0x01}) },
+	} {
+		active := &routeRecoveryCatalogFixture{frozen: proto.Clone(catalog.frozen).(*pb.SqlWriterMaintenanceReceipt), run: proto.Clone(catalog.run).(*pb.SqlWriterDrainRun), meta: proto.Clone(catalog.meta).(*pb.RouteMeta)}
+		initial, err := readRouteRecoveryFrozen(context.Background(), active, plan, frozen)
+		require.NoError(t, err)
+		change(active)
+		_, err = readRouteRecoveryFrozen(context.Background(), active, plan, frozen)
+		require.NoError(t, err, "尾读单独合法，不能把这个分支当作原字段校验的负例")
+		wrote := false
+		if err = initial.verifyCurrent(context.Background(), active, plan, frozen); err == nil {
+			err = publishRouteRecoveryAudit(context.Background(), "fixture", &pb.SqlWriterMaintenanceReceipt_RouteRecoveryAudit{Stats: &pb.SqlWriterMaintenanceReceipt_RouteRecoveryStats{}}, nil, func(string, []byte) error { wrote = true; return nil })
+		}
+		require.Error(t, err)
+		require.False(t, wrote, "SQL窗口漂移不得进入正式写入口")
+	}
+
 }

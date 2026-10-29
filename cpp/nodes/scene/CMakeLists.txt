@@ -32,10 +32,8 @@ include_directories(
     ../../../third_party/boost/
     ../../../third_party/entt/single_include
     ../../../third_party/fmt/include
-    ../../../third_party/grpc/third_party/boringssl-with-bazel/include/
     ../../../third_party/librdkafka/src-cpp/
     ../../../third_party/muduo-linux/
-    ../../../third_party/openssl/include/
     ../../../third_party/redis/
     ../../../third_party/redis/deps/
     ../../../third_party/spdlog/include
@@ -58,8 +56,6 @@ include_directories(
     ../third_party/
     ../third_party/boost/
     ../third_party/muduo-linux/
-    ../third_party/protobuf/src/
-    ../third_party/protobuf/third_party/abseil-cpp/
     ../third_party/redis/
     ../third_party/redis/deps/
     ../third_party/ue5navmesh/Public/
@@ -91,15 +87,15 @@ set(SOURCE_FILES
     handler/grpc/scene_node_service.cpp
     main.cpp
     id_segment_bootstrap.cpp
-    handler/rpc/player/player_mystery_merchant_handler.cpp
     handler/rpc/player/player_bag_handler.cpp
     handler/rpc/player/player_mission_handler.cpp
     handler/rpc/player/player_activity_handler.cpp
+    handler/rpc/player/player_mystery_merchant_handler.cpp
 )
 
 find_package(absl CONFIG REQUIRED)
 find_package(protobuf CONFIG REQUIRED)
-find_package(gRPC CONFIG REQUIRED)
+find_package(OpenSSL CONFIG REQUIRED PATHS /usr/local/lib/cmake/OpenSSL NO_DEFAULT_PATH)
 
 link_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/../../../lib"
@@ -128,15 +124,12 @@ target_link_libraries(scene
     -lproto
     -lthird_party
     -Wl,--end-group
-    gRPC::grpc++
-    gRPC::grpc++_reflection
-    gRPC::grpc
-    gRPC::gpr
     protobuf::libprotobuf
     -Wl,--exclude-libs,libnghttp2.a
     nghttp2
     muduo_protobuf_codec
     muduo_hiredis
+    muduo_http
     muduo_net
     muduo_base
     rdkafka++
@@ -146,8 +139,8 @@ target_link_libraries(scene
     curl
     z
     zstd
-    ssl
-    crypto
+    OpenSSL::SSL
+    OpenSSL::Crypto
     pthread
     dl
     absl::absl_check

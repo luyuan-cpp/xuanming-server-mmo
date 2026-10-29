@@ -52,9 +52,10 @@ using equiprules::EffectKind;
 
 // 等级 / 职业的取法与 player_attribute.cpp 的同名函数同口径(那两个是它的文件内私有函数,
 // 这里照 player_pet.cpp 的 OwnerLevel 的做法各留一份;改组件归属时三处一起改)。
+// 等级按 playerlevel::CappedLevel 生效(超上限的存储等级按上限,0 按 1,player_level_rules.h);缺组件仍按 1 级。
 uint32_t PlayerLevel(entt::entity player) {
 	const auto* levelComp = tlsEcs.actorRegistry.try_get<LevelComp>(player);
-	return (levelComp != nullptr && levelComp->level() > 0) ? levelComp->level() : 1;
+	return levelComp != nullptr ? playerlevel::CappedLevel(levelComp->level()) : 1;
 }
 
 uint32_t PlayerClassId(entt::entity player) {
@@ -1202,7 +1203,16 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, EnhanceOut
 			return kEquipInternalError;
 		}
 		// 7. 静默预检:「材料不够」是玩家随手能触发的常规拒绝,不让它走到底层会打 ERROR + 调用栈的不足分支。
-		if (inventory.GetTotalItemCount(materialId) < materialCount) {
+		//    与提交段的扣除同一个判据(Bag::CheckQuantities):必须在下面扣金币之前判完,否则扣了金币才发现材料扣不出。
+		//    只有算上带更新版本字段的材料才够 = 版本错位(混版本设计 §4.4 第 6 批):不当普通单位扣,回暂不可用。
+		switch (inventory.CheckQuantities({{materialId, materialCount}})) {
+		case ItemStore::QuantityVerdict::kEnough:
+			break;
+		case ItemStore::QuantityVerdict::kVersionSkew:
+			LOG_WARN << "[PlayerEquip] metric=persist_version_skew where=equip_enhance player_id="
+					 << tlsEcs.GetPlayerId(player) << " material=" << materialId;
+			return kFeatureUnavailable;
+		case ItemStore::QuantityVerdict::kInsufficient:
 			return kEquipEnhanceMaterialNotEnough;
 		}
 	}
@@ -1337,8 +1347,16 @@ uint32_t PlayerEquipSystem::InlayGem(entt::entity player, Guid itemId, uint32_t 
 				  << " gem_records=" << storedGems.size() << " limit=" << equiprules::kMaxGemSockets;
 		return kEquipInternalError;
 	}
-	// 6. 静默预检:背包里至少有 1 颗
-	if (inventory.GetTotalItemCount(gemConfigId) == 0) {
+	// 6. 静默预检:背包里至少有 1 颗可按数量扣的宝石,与提交段扣除同一个判据(Bag::CheckQuantities)。
+	//    只有带更新版本字段的宝石 = 版本错位(混版本设计 §4.4 第 6 批):不当普通宝石嵌进去,回暂不可用。
+	switch (inventory.CheckQuantities({{gemConfigId, 1}})) {
+	case ItemStore::QuantityVerdict::kEnough:
+		break;
+	case ItemStore::QuantityVerdict::kVersionSkew:
+		LOG_WARN << "[PlayerEquip] metric=persist_version_skew where=equip_inlay player_id="
+				 << tlsEcs.GetPlayerId(player) << " gem=" << gemConfigId;
+		return kFeatureUnavailable;
+	case ItemStore::QuantityVerdict::kInsufficient:
 		return kEquipGemNotOwned;
 	}
 	Bag& holder = located.bag->get();

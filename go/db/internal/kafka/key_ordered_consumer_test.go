@@ -139,7 +139,7 @@ type recordingHarness struct {
 	mu         sync.Mutex
 	calls      []recordedCall
 	failNextOf map[string]int // taskID -> remaining failure count (0 = always succeed)
-	prevHnd    map[string]dbOpHandler
+	prevHnd    map[db_proto.DBOp]dbOpHandler
 	// afterCall 在一次 SQL「成功执行」之后、落库后复核之前被调用(不持锁),
 	// 落点用例用它模拟搬库工具恰好在这个窗口里冻结 / 切换记录。
 	afterCall func(recordedCall)
@@ -150,16 +150,16 @@ func newHarness(t *testing.T) *recordingHarness {
 	h := &recordingHarness{
 		t:          t,
 		failNextOf: map[string]int{},
-		prevHnd:    map[string]dbOpHandler{},
+		prevHnd:    map[db_proto.DBOp]dbOpHandler{},
 	}
 
 	// Save and override the package-level handler map.
 	for k, v := range dbOpHandlers {
 		h.prevHnd[k] = v
 	}
-	dbOpHandlers = map[string]dbOpHandler{
-		"read":  h.makeHandler("read"),
-		"write": h.makeHandler("write"),
+	dbOpHandlers = map[db_proto.DBOp]dbOpHandler{
+		db_proto.DBOp_DB_OP_READ:  h.makeHandler("read"),
+		db_proto.DBOp_DB_OP_WRITE: h.makeHandler("write"),
 	}
 
 	t.Cleanup(func() {
@@ -292,7 +292,7 @@ func makeWriteTask(t *testing.T, key uint64, msgType string, seq uint64) *worker
 
 	dbTask := &db_proto.DBTask{
 		Key:     key,
-		Op:      "write",
+		Op:      db_proto.DBOp_DB_OP_WRITE,
 		MsgType: msgType,
 		Body:    bodyBytes,
 		TaskId:  fmt.Sprintf("k=%d:t=%s:seq=%d", key, msgType, seq),
@@ -315,7 +315,7 @@ func makeReadTask(t *testing.T, key uint64, msgType string, tag string) *workerT
 	return &workerTask{
 		dbTask: &db_proto.DBTask{
 			Key:       key,
-			Op:        "read",
+			Op:        db_proto.DBOp_DB_OP_READ,
 			MsgType:   msgType,
 			Body:      bodyBytes,
 			TaskId:    fmt.Sprintf("k=%d:t=%s:read=%s", key, msgType, tag),
@@ -993,6 +993,102 @@ func TestPoisonKafkaPayloadIsPersistedBeforeAck(t *testing.T) {
 	assert.NotEmpty(t, record.Error)
 }
 
+// 旧版 string op 在新 schema 下可能作为未知字段保留，不能把解码成功当作操作合法。
+func invalidDBTaskOpPayloads(t *testing.T) []struct {
+	name string
+	raw  []byte
+} {
+	t.Helper()
+	var cases []struct {
+		name string
+		raw  []byte
+	}
+	for _, op := range []db_proto.DBOp{db_proto.DBOp_DB_OP_UNSPECIFIED, db_proto.DBOp(99)} {
+		raw, err := proto.Marshal(&db_proto.DBTask{Key: 42, Op: op, MsgType: "taskpb.TaskResult", TaskId: "invalid-op", RetryCount: 3})
+		require.NoError(t, err)
+		cases = append(cases, struct {
+			name string
+			raw  []byte
+		}{op.String(), raw})
+	}
+	for _, oldOp := range []string{"read", "write"} {
+		raw, err := proto.Marshal(&db_proto.DBTask{Key: 42, MsgType: "taskpb.TaskResult", TaskId: "legacy-op", RetryCount: 3})
+		require.NoError(t, err)
+		raw = append(raw, 0x1a, byte(len(oldOp)))
+		raw = append(raw, oldOp...)
+		cases = append(cases, struct {
+			name string
+			raw  []byte
+		}{"legacy-string-" + oldOp, raw})
+	}
+	return cases
+}
+
+func TestDBTaskOp_InvalidKafkaTaskIsDurablyQuarantined(t *testing.T) {
+	for _, tc := range invalidDBTaskOpPayloads(t) {
+		t.Run(tc.name, func(t *testing.T) {
+			w, _, h := newTestWorker(t, 0)
+			claimCtx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			session := &recordingSession{ctx: claimCtx}
+			acker := newClaimAcker(session, 60, cancel)
+			msg := &sarama.ConsumerMessage{Topic: w.topic, Partition: 0, Offset: 60, Key: []byte("42"), Value: tc.raw}
+			acker.track(msg)
+
+			w.handleTask(&workerTask{kafkaMsg: msg, acker: acker, claimCtx: claimCtx}, true)
+
+			assert.Empty(t, h.snapshot(), "非法操作不得进入 SQL handler")
+			assert.Equal(t, []int64{60}, session.marked(), "原消息持久隔离后才可确认 offset")
+			stored, err := w.redisClient.LIndex(w.ctx, w.retryDeadQueueKey, 0).Bytes()
+			require.NoError(t, err)
+			require.NotEmpty(t, stored)
+			require.Equal(t, poisonPayloadMagic, stored[0])
+			var record poisonMessageRecord
+			require.NoError(t, json.Unmarshal(stored[1:], &record))
+			assert.Equal(t, tc.raw, record.Value, "隔离保留旧字符串及未知编号的原始字节")
+			assert.Contains(t, record.Error, "unsupported op")
+			assert.Zero(t, w.redisClient.Exists(w.ctx, appliedSeqKey(w.topic, 42, "taskpb.TaskResult")).Val(),
+				"非法操作不能推进已应用游标")
+		})
+	}
+}
+
+func TestDBTaskOp_InvalidKafkaTaskCannotAckWithoutDurableCopy(t *testing.T) {
+	w, _, h := newTestWorker(t, 0)
+	require.NoError(t, w.redisClient.Set(w.ctx, w.retryDeadQueueKey, "wrong-type", 0).Err())
+	claimCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	session := &recordingSession{ctx: claimCtx}
+	acker := newClaimAcker(session, 60, cancel)
+	msg := &sarama.ConsumerMessage{Topic: w.topic, Partition: 0, Offset: 60, Key: []byte("42"), Value: invalidDBTaskOpPayloads(t)[0].raw}
+	acker.track(msg)
+
+	w.handleTask(&workerTask{kafkaMsg: msg, acker: acker, claimCtx: claimCtx}, true)
+
+	assert.Empty(t, h.snapshot())
+	assert.Empty(t, session.marked(), "隔离失败必须保留 Kafka 原消息供重投")
+}
+
+func TestDBTaskOp_InvalidTaskPreservesBatchWriteBoundary(t *testing.T) {
+	w, _, h := newTestWorker(t, 0)
+	first := makeWriteTask(t, 42, "taskpb.TaskResult", 1)
+	invalid := makeKafkaWriteTask(t, 42, "taskpb.TaskResult", 2)
+	var task db_proto.DBTask
+	require.NoError(t, proto.Unmarshal(invalid.kafkaMsg.Value, &task))
+	task.Op = db_proto.DBOp(99)
+	var err error
+	invalid.kafkaMsg.Value, err = proto.Marshal(&task)
+	require.NoError(t, err)
+	last := makeWriteTask(t, 42, "taskpb.TaskResult", 3)
+
+	w.processTaskBatch([]*workerTask{first, invalid, last}, true)
+
+	calls := h.callsForKey(42)
+	require.Len(t, calls, 2, "写合并不得越过非法任务而丢弃前一条写")
+	assert.Equal(t, first.dbTask.TaskId, calls[0].taskID)
+	assert.Equal(t, last.dbTask.TaskId, calls[1].taskID)
+}
+
 // ---------------------------------------------------------------------------
 // TC7 — owner_epoch 守卫(reentry-barrier §6.3 / cross-zone-scene-travel CZ-4)
 // ---------------------------------------------------------------------------
@@ -1111,7 +1207,7 @@ func TestCheckOwnerEpoch_Verdicts(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			task := &db_proto.DBTask{Key: player, MsgType: msgType, Op: "write", OwnerEpoch: tc.taskEpoch}
+			task := &db_proto.DBTask{Key: player, MsgType: msgType, Op: db_proto.DBOp_DB_OP_WRITE, OwnerEpoch: tc.taskEpoch}
 			verdict, err := checkOwnerEpoch(context.Background(), tc.store, "db_task_zone_1", task)
 			if tc.wantErr {
 				require.Error(t, err)
@@ -1247,7 +1343,7 @@ func TestOwnerEpochGuard_PreviousOwnersLastWriteLandsBeforeNewOwnerWrites(t *tes
 	const msgType = "taskpb.TaskResult"
 	setAppliedEpoch(t, w, key, msgType, 4)
 	// scene_manager 早已把当前 epoch 推到 5;db 守卫不看这把键。
-	require.NoError(t, w.redisClient.Set(w.ctx, fmt.Sprintf("player:%d:owner_epoch", key), "5", 0).Err())
+	require.NoError(t, w.redisClient.Set(w.ctx, fmt.Sprintf("player:{%d}:owner_epoch", key), "5", 0).Err())
 
 	w.handleTask(makeEpochWriteTask(t, key, msgType, 10, 4), true) // 源节点的最后一笔
 	w.handleTask(makeEpochWriteTask(t, key, msgType, 11, 5), true) // 新主的第一笔
@@ -1564,4 +1660,45 @@ func TestConcurrentWorkers_FinalStateIsGlobalMax(t *testing.T) {
 	}
 	t.Logf("soak: produced=%d, totalKeys=%d, writesPerPlayer=%d",
 		produced.Load(), totalKeys, writesPerPlayer)
+}
+
+func TestRelayAcceptedFrontierWaitsActualTaskCompletion(t *testing.T) {
+	consumer := &KeyOrderedKafkaConsumer{}
+	task := &workerTask{}
+	consumer.trackTask(task)
+	consumer.relayWork.CloseAdmission()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := consumer.relayWork.Wait(ctx); err == nil {
+		t.Fatal("实际接收任务尚未完成却排空成功")
+	}
+	task.finishRetry()
+	task.finishRetry()
+	if err := consumer.relayWork.Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSingleSubShardCancellationReturnsAcceptedReceipt(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	returned := 0
+	task := &workerTask{retryDone: func() { returned++ }}
+	worker := &worker{ctx: ctx, subShardCount: 1, subShardChans: []chan *workerTask{make(chan *workerTask)}}
+	done := make(chan struct{})
+	go func() { worker.routeToSubShard(task); close(done) }()
+	defer func() {
+		select {
+		case <-worker.subShardChans[0]:
+		case <-done:
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("取消后单shard路由未退出")
+	}
+	if returned != 1 {
+		t.Fatal("单shard退出后路由仍阻塞或未交还收据")
+	}
 }

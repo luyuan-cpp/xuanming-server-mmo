@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/proto"
-	"login/internal/constants"
 	"login/internal/logic/pkg/homezone"
 	pbbase "proto/common/base"
 	comppb "proto/common/component"
@@ -84,14 +83,9 @@ func TestSelfHealedRoleRecoversAppearanceWithoutMutatingOtherRoles(t *testing.T)
 	account := &dbpb.UserAccounts{SimplePlayers: &pbbase.AccountSimplePlayerList{Players: []*pbbase.AccountSimplePlayer{
 		{PlayerId: identityPlayerID, Name: "恢复角色"}, {PlayerId: 7002, AppearanceId: "06_thunder_caster_boy"},
 	}}}
-	blob, err := proto.Marshal(account)
-	if err != nil {
-		t.Fatal(err)
-	}
 	ctx := context.Background()
-	if err := rdb.Set(ctx, constants.GetAccountDataKey("appearance-recovery"), blob, time.Hour).Err(); err != nil {
-		t.Fatal(err)
-	}
+	// 目录归属与修复均以显式 SQL 替身为准，Redis 只保留 PlayerAllData 缓存。
+	fixtureDirectory(t, rdb).seed("appearance-recovery", account.SimplePlayers.Players...)
 	roles := []*loginpb.AccountSimplePlayerWrapper{{Player: account.SimplePlayers.Players[0]}}
 	fillMissingRoleAppearances(ctx, rdb, roles)
 	if roles[0].Player.AppearanceId != "04_mountain_guardian_boy" || account.SimplePlayers.Players[0].AppearanceId != "" {
@@ -102,13 +96,7 @@ func TestSelfHealedRoleRecoversAppearanceWithoutMutatingOtherRoles(t *testing.T)
 	if err := l.backfillPlayerIdentity(ctx, nil, state); err != nil {
 		t.Fatal(err)
 	}
-	raw, err := rdb.Get(ctx, constants.GetAccountDataKey(state.account)).Bytes()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := proto.Unmarshal(raw, account); err != nil {
-		t.Fatal(err)
-	}
+	account.SimplePlayers = fixtureRoles(t, rdb, state.account)
 	if got := account.SimplePlayers.Players[0]; got.AppearanceId != "04_mountain_guardian_boy" || got.ClassId != 3 || got.Gender != 1 {
 		t.Fatalf("self-heal身份未修复: %v", got)
 	}
@@ -119,8 +107,8 @@ func TestSelfHealedRoleRecoversAppearanceWithoutMutatingOtherRoles(t *testing.T)
 		t.Fatal("外观修复不能取消 PlayerAllData 缓存 TTL")
 	}
 	mr.FastForward(48 * time.Hour)
-	if saved, err := rdb.Get(ctx, constants.GetAccountDataKey(state.account)).Bytes(); err != nil || !proto.Equal(account, mustUnmarshalAccount(t, saved)) {
-		t.Fatalf("修复后的账号目录未长期保留: %v", err)
+	if saved := fixtureRoles(t, rdb, state.account); !proto.Equal(account.SimplePlayers, saved) {
+		t.Fatalf("修复后的账号目录未长期保留: %v", saved)
 	}
 }
 

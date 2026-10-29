@@ -48,7 +48,7 @@ namespace
 	using player_inbox_rules::Durability;
 	using player_inbox_rules::ItemAction;
 
-	// 在途请求的兜底期限 = 该类节点的 gRPC deadline + 5s(上游比下游宽,grpc-client-deadline-failure-callback.md §4.2)。
+	// 在途请求的兜底期限 = 该类节点的 gRPC deadline + 5s(上游比下游宽,grpc-muduo-transport.md §16.3)。
 	// 生成的客户端保证每次调用在 deadline 内以应答或失败之一收场,正常走不到这里;它只防"完成通知永远不来"。
 	constexpr uint64_t kInflightSlackMs = 5000;
 
@@ -177,6 +177,11 @@ namespace
 	// 消费开关关闭时下一次补打 WARN 的时刻(单调时钟,评审 H1)。0 = 未排期:开关开着,或还没打过首条;
 	// 开关一关,下一个 Tick 立即打首条。同一份节拍与 registry_broken 共用(TakeNodeRelogTurn)。
 	thread_local uint64_t tlsNextConsumerDisabledLogMs = 0;
+
+	bool IsBattleDomain(const PlayerInboxDomainState& state)
+	{
+		return state.domain == static_cast<uint32_t>(player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT);
+	}
 
 	uint64_t NextCorrelationId()
 	{
@@ -435,6 +440,7 @@ namespace
 		state.correlationId = 0;
 		state.inflightSinceMs = 0;
 		state.durableMismatchReported = false;
+		if (IsBattleDomain(state)) state.pendingItems.clear();
 		if (state.halted)
 		{
 			state.nextCheckMs = 0;
@@ -506,7 +512,7 @@ namespace
 			return;
 		}
 		// 不可改的实体不压存盘:冻结 / 交接在途时本节点无权再写盘,退出在途时退出存盘已经在飞
-		// (它 marshal 的那一份本来就含账本,落地即 durable)。跳过不影响正确性:durable 仍只看快照。
+		// (它 marshal 的那一份本来就含账本)。Redis快照只是候选，确认仍须核同版本双SQL ACK。
 		if (!player_mutability::IsPlayerMutable(player))
 		{
 			return;
@@ -531,7 +537,7 @@ namespace
 	}
 
 	// 本批每一条结局是否都已出现在最后一次落盘快照里(规则见 player_inbox_rules::ClassifyDurability)。
-	bool AllDecisionsDurable(entt::entity player, uint64_t playerId, PlayerInboxDomainState &state)
+	bool DecisionsInPersistedSnapshot(entt::entity player, uint64_t playerId, PlayerInboxDomainState &state)
 	{
 		const auto *snapshotComp = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
 		if (snapshotComp == nullptr || !snapshotComp->HasSnapshot())
@@ -611,7 +617,47 @@ namespace
 		state.inflightSinceMs = nowMs;
 	}
 
-	// kAwaitDurable 的推进:全部落盘就确认;没落盘就(每 5 秒)补请求一次存盘。确认不受前置闸限制。
+	// 只读确认绑定原实体、域、轮次与完整快照。未知或过期回包只保留待确认条目，不推断SQL成功。
+	void RequestSqlConfirmedAck(entt::entity player, uint64_t playerId, PlayerInboxDomainState &state, uint64_t nowMs)
+	{
+		if (state.correlationId != 0 && nowMs - state.inflightSinceMs < InflightTimeoutMs()) return;
+		const auto *snapshot = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
+		if (snapshot == nullptr || !snapshot->HasSnapshot()) return;
+		const auto domain = state.domain;
+		const auto probeId = NextCorrelationId();
+		const auto battleItems = IsBattleDomain(state) ? state.pendingItems : std::vector<player_inbox::PlayerInboxItem>{};
+		state.correlationId = probeId;
+		state.inflightSinceMs = nowMs;
+		const bool sent = RoleAdmissionSystem::ConfirmSnapshotSqlCommit(player, *snapshot->snapshot,
+			[player = player, playerId, domain, probeId, battleItems](bool committed) {
+				entt::entity live = entt::null;
+				auto *current = FindLiveState(playerId, domain, live);
+				if (current == nullptr || live != player || current->correlationId != probeId) return;
+				current->correlationId = 0;
+				current->inflightSinceMs = 0;
+				if (current->phase != PlayerInboxPhase::kAwaitDurable || current->ackQueue.empty()) return;
+				if (!committed || !DecisionsInPersistedSnapshot(player, playerId, *current)) return;
+				if (IsBattleDomain(*current)) {
+					// 原Fetch载荷随本轮保留到双ACK；不从当前角色重新构造终局或补身份。
+					for (const auto& decision : current->ackQueue) {
+						const auto item = std::find_if(battleItems.begin(), battleItems.end(), [&decision](const auto& row) {
+							return row.seq() == decision.seq() && row.request_id() == decision.request_id()
+								&& static_cast<uint32_t>(row.msg_type()) == decision.msg_type();
+						});
+						if (decision.outcome() != player_inbox::PLAYER_INBOX_OUTCOME_APPLIED || item == battleItems.end()
+							|| !PlayerBattleSystem::CompleteInboxSettlement(player, item->payload())) return;
+					}
+					// 解冻会唤醒其他域；重新取当前实体/轮次，不能继续持跨回调可失效的引用。
+					current = FindLiveState(playerId, domain, live);
+					if (!current || live != player || current->phase != PlayerInboxPhase::kAwaitDurable) return;
+				}
+				SendAck(player, playerId, *current, gNowMsFn());
+			});
+		// false合同不回调；不要在同步完成的分支继续持有可能已转阶段的state引用。
+		if (!sent) { state.correlationId = 0; state.inflightSinceMs = 0; }
+	}
+
+	// kAwaitDurable的推进：Redis快照含结局后，再等同E/q的双SQL ACK；不复用交易排空的可变floor缓存。
 	void TryAck(entt::entity player, uint64_t playerId, PlayerInboxDomainState &state, uint64_t nowMs)
 	{
 		if (state.phase != PlayerInboxPhase::kAwaitDurable)
@@ -623,7 +669,10 @@ namespace
 			FinishRound(state, nowMs);
 			return;
 		}
-		if (!AllDecisionsDurable(player, playerId, state))
+		const auto *candidate = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
+		const bool needsCurrentCommit = candidate == nullptr || candidate->committed_owner_epoch != OwnerEpochOf(player)
+			|| candidate->committed_save_seq == 0;
+		if (needsCurrentCommit || !DecisionsInPersistedSnapshot(player, playerId, state))
 		{
 			if (state.lastPersistRequestMs == 0 || nowMs - state.lastPersistRequestMs >= player_inbox_rules::kResaveIntervalMs)
 			{
@@ -635,13 +684,15 @@ namespace
 		{
 			return;
 		}
-		SendAck(player, playerId, state, nowMs);
+		RequestSqlConfirmedAck(player, playerId, state, nowMs);
 	}
 
 	// 只切进 kAwaitDurable、不当场推进(调用方 ackQueue 非空)。之后由 PING 回调或 tick 的 TryAck 推进。
 	void EnterAwaitDurable(PlayerInboxDomainState &state, uint64_t nowMs)
 	{
 		state.phase = PlayerInboxPhase::kAwaitDurable;
+		state.correlationId = 0;
+		state.inflightSinceMs = 0;
 		state.nextAckMs = nowMs;
 		state.ackFailStreak = 0;
 		state.durableMismatchReported = false;
@@ -691,7 +742,7 @@ namespace
 	// false = 已回到 kIdle,检查时刻由调用方安排。
 	bool DropPendingForRefetch(PlayerInboxDomainState &state)
 	{
-		state.pendingItems.clear();
+		if (!IsBattleDomain(state) || state.ackQueue.empty()) state.pendingItems.clear();
 		state.hasMore = false; // 丢掉的那批的 has_more 已不可信,重拉时由新回包重新决定
 		if (state.ackQueue.empty())
 		{
@@ -741,6 +792,9 @@ namespace
 				player_inbox_rules::FindCursor(*ledger, state.domain), item.seq(), item.request_id(),
 				static_cast<uint32_t>(item.msg_type()), &replayed);
 			const auto action = player_inbox_rules::PlanItem(deliveryClass, static_cast<uint32_t>(item.directive()));
+			if (IsBattleDomain(state) && (item.msg_type() != player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT ||
+				item.directive() != player_inbox::PLAYER_INBOX_DIRECTIVE_NONE ||
+				action != ItemAction::kReplay || replayed.outcome() != player_inbox::PLAYER_INBOX_OUTCOME_APPLIED)) break;
 			if (action == ItemAction::kReplay)
 			{
 				state.ackQueue.push_back(replayed);
@@ -762,7 +816,7 @@ namespace
 				 << " first_seq=" << state.pendingItems.front().seq()
 				 << " last_seq=" << state.pendingItems[queued - 1].seq()
 				 << "; entries already decided in the ledger are acknowledged instead of being dropped";
-		state.pendingItems.erase(state.pendingItems.begin(),
+		if (!IsBattleDomain(state)) state.pendingItems.erase(state.pendingItems.begin(),
 								 state.pendingItems.begin() + static_cast<std::ptrdiff_t>(queued));
 	}
 
@@ -818,6 +872,13 @@ namespace
 			const auto deliveryClass = player_inbox_rules::ClassifyDelivery(
 				player_inbox_rules::FindCursor(ledger, state.domain), seq, requestId, msgType, &replayed);
 			const auto action = player_inbox_rules::PlanItem(deliveryClass, static_cast<uint32_t>(directive));
+			if (IsBattleDomain(state) && (msgType != player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT ||
+				directive != player_inbox::PLAYER_INBOX_DIRECTIVE_NONE || action == ItemAction::kAckUnknown ||
+				(action == ItemAction::kReplay && replayed.outcome() != player_inbox::PLAYER_INBOX_OUTCOME_APPLIED))) {
+				Halt(state, playerId, PlayerInboxHaltReason::kVersionSkew, "battle outcome requires original APPLIED decision");
+				AfterBatchDecided(player, playerId, state, recorded, nowMs);
+				return;
+			}
 
 			// 1. 重复投递:按 (seq, request_id, msg_type) 核对后回放(IB-9)。只报告账本里已有的事实,
 			//    不需要执行器 —— 本二进制即使已不认识这个类型,回放原结局也是对的。
@@ -909,7 +970,7 @@ namespace
 					// 版本错位:与未知类型同口径 —— 停在这一条、不记账、不确认这一条,停用该域,已定前缀照常确认。
 					// 不走下面 DEFER 的本地续做:这类错位会在会话内消失(例如那笔带新字段的欠款被还清删除),
 					// 按本地旧副本续做看不到服务端之后挂的 VOID,会把已作废的处置执行掉并报 APPLIED(评审 L1)。
-					// 这一行留在服务端 PENDING,下次落地重拉:已作废就记 SKIPPED,落到新版本节点就正常执行。
+					// 这一行留在服务端 PENDING,实体重建后重拉(退出完成后再登录,或换节点);退出保留期内重登会复用实体,不重拉:已作废就记 SKIPPED,落到新版本节点就正常执行。
 					// 告警走 Halt 打的 metric=inbox_halted reason=version_skew;这一行只补条目上下文。
 					LOG_ERROR << "[PlayerInbox] Executor reported version skew player_id=" << playerId
 							  << " domain=" << state.domain << " seq=" << seq
@@ -959,7 +1020,8 @@ namespace
 					 << " reason=" << decision.reason();
 		}
 
-		state.pendingItems.clear();
+		// Battle专域max_pending=1，原payload留至SQL确认后的通知/解冻；不会再次执行效果。
+		if (!IsBattleDomain(state)) state.pendingItems.clear();
 		state.failStreak = 0;
 		state.deferReason = PlayerInboxDeferReason::kNone;
 		AfterBatchDecided(player, playerId, state, recorded, nowMs);
@@ -1272,9 +1334,9 @@ void PlayerInboxSystem::OnPlayerLeaving(entt::entity player)
 			// kIdle 带着非空 ackQueue 违反不变量(StartFetch 开头已有守卫并打 ERROR),离开时不再处理;kFetching 已在上面处理。
 			continue;
 		}
-		// 落盘之后才确认(IB-3):只认最后一次落盘的快照。调用方在退出存盘收敛之后才调本函数,快照里应已有这些结局;
+		// 退出只作最佳努力：本地快照与双SQL ACK都确认后才发Ack，实体先销毁则留到下次落地。
 		// 没有就什么都不做,也不再压存盘(退出存盘就是最后一次),等下次落地从账本补确认。
-		if (!AllDecisionsDurable(player, playerId, state))
+		if (!DecisionsInPersistedSnapshot(player, playerId, state))
 		{
 			LOG_INFO << "[PlayerInbox] metric=inbox_leave_ack result=not_durable player_id=" << playerId
 					 << " domain=" << state.domain << " decisions=" << state.ackQueue.size()
@@ -1285,9 +1347,9 @@ void PlayerInboxSystem::OnPlayerLeaving(entt::entity player)
 		// 新 owner 若已推进围栏会判 STALE,无害:它加载的存档里已有这些结局,会自己补确认。
 		// SendAck 的完成回调只捕获调用身份:实体已销毁时 OnAckReply / OnAckFailed 丢弃;
 		// 同一玩家重新落地后的新实体关联号也对不上(节点级单调计数器),这里不登记额外等待状态。
-		SendAck(player, playerId, state, nowMs);
+		RequestSqlConfirmedAck(player, playerId, state, nowMs);
 		const bool sent = state.phase == PlayerInboxPhase::kAcking;
-		LOG_INFO << "[PlayerInbox] metric=inbox_leave_ack result=" << (sent ? "sent" : "not_sent")
+		LOG_INFO << "[PlayerInbox] metric=inbox_leave_ack result=" << (sent ? "sent" : "sql_pending_or_not_sent")
 				 << " player_id=" << playerId << " domain=" << state.domain << " decisions=" << state.ackQueue.size()
 				 << " corr=" << state.correlationId << "; best effort, the reply is not awaited";
 	}
@@ -1545,6 +1607,11 @@ void PlayerInboxSystem::OnFetchReply(uint64_t playerId, uint32_t domain, uint64_
 		return;
 	}
 
+	if (IsBattleDomain(*state) && response.items_size() > 1) {
+		Halt(*state, playerId, PlayerInboxHaltReason::kBatchMalformed, "battle domain max_pending=1");
+		FinishRound(*state, nowMs);
+		return;
+	}
 	state->hasMore = response.has_more();
 	state->pendingItems.assign(response.items().begin(), response.items().end());
 	state->phase = PlayerInboxPhase::kApplying;

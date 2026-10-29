@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"shared/drainproof"
 	"strings"
 	"time"
 
@@ -31,15 +32,17 @@ import (
 //
 // Store 构造后只读,可被多个 RPC 与后台循环并发使用。
 type Store struct {
-	db       *sql.DB
-	registry *Registry
-	allowed  map[inboxpb.PlayerInboxMessageType]struct{}
-	players  PlayerDirectory
-	epochs   EpochReader
-	notifier Notifier
-	now      func() time.Time
-	txCfg    assetop.TxRetryConfig
-	roles    RoleAuthority
+	// RelayAdmission 在启动前绑定，通知后的 SQL CAS 失败属于未决发布。
+	RelayAdmission *drainproof.Session
+	db             *sql.DB
+	registry       *Registry
+	allowed        map[inboxpb.PlayerInboxMessageType]struct{}
+	players        PlayerDirectory
+	epochs         EpochReader
+	notifier       Notifier
+	now            func() time.Time
+	txCfg          assetop.TxRetryConfig
+	roles          RoleAuthority
 }
 
 // PlayerDirectory 是入箱前的玩家存在预检；最终归属/冻结判定只由同事务SQL原P负责。
@@ -501,8 +504,12 @@ func (s *Store) notifyAndClear(ctx context.Context, playerID uint64, domain inbo
 		return result
 	}
 	if _, err := s.ClearNotifyDue(ctx, playerID, domain, expectNextSeq); err != nil {
+		if s.RelayAdmission != nil {
+			s.RelayAdmission.Hold()
+		}
 		logx.WithContext(ctx).Errorf("[player_inbox] Notify settled but clearing notify_due failed player=%d domain=%d: %v "+
-			"(resend loop will notify again; harmless)", playerID, domain, err)
+			"(resend loop will notify again; outcome remains unknown)", playerID, domain, err)
+		return NotifyError
 	}
 	return result
 }

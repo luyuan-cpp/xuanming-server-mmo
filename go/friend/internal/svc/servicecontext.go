@@ -12,6 +12,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -20,6 +21,8 @@ import (
 	"friend/internal/sqldialect"
 
 	redv9 "github.com/redis/go-redis/v9"
+	"shared/authoritysql"
+	"shared/drainproof"
 	"shared/idsegment"
 	"shared/kafkacmd"
 	"shared/kafkautil"
@@ -119,7 +122,17 @@ type ServiceContext struct {
 	// friend/generated/pb/game 常量,所以只能留在 friend 里、不能上提到 shared。
 	GateCommandBuilder kafkautil.GateCommandBuilder
 
-	stopOnce sync.Once
+	// 同一 boot 的 SQL 身份与两个独立角色；P1 不关闭 RELAY 或 SQL 池。
+	WriterConfig     authoritysql.WriterConfig
+	RootAdmission    *drainproof.Session
+	RelayAdmission   *drainproof.Session
+	RelayIngress     *drainproof.Session
+	DrainRuntime     *drainproof.Runtime
+	lifecycleMu      sync.Mutex
+	sourceStop       func(context.Context) error
+	sourceClosed     bool
+	resourcesClosed  bool
+	resourceCloseErr error
 }
 
 // NewServiceContext 建全部依赖。任何一项建不出来都 panic(启动致命,照 trade):
@@ -127,6 +140,19 @@ type ServiceContext struct {
 // 每个请求都只能回 kServiceUnavailable。这种进程活着但全量失败的形态比起不来更难查,
 // 所以在启动期就把它变成崩溃 + 日志。
 func NewServiceContext(c config.Config) *ServiceContext {
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		panic(fmt.Errorf("friend SQL boot 装配失败: %w", err))
+	}
+	return NewServiceContextWithAdmission(c, writer, drainproof.New(), drainproof.New())
+}
+
+// NewServiceContextWithAdmission 由实际进程 owner 显式传入同一 boot 的身份与角色门禁。
+// 新 boot 的 prepared 门禁也在这里传入，不能在 handler 已持有门禁后替换它。
+func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterConfig, root, relay *drainproof.Session) *ServiceContext {
+	if len(writer.InstanceID()) != 16 || len(writer.WriterKey()) != 16 || root == nil || relay == nil || root == relay {
+		panic("friend SQL boot 与 SOURCE/RELAY 装配缺失或角色复用")
+	}
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:   c.Etcd.Hosts,
 		DialTimeout: etcdDialTimeout,
@@ -135,7 +161,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic("friend: failed to create etcd client: " + err.Error())
 	}
 
-	db, err := OpenMySQL(c.MySQL, c.RequireTiDB)
+	db, err := openMySQL(c.MySQL, c.RequireTiDB, authoritysql.Writer(writer))
 	if err != nil {
 		panic(fmt.Errorf("friend: %w", err))
 	}
@@ -168,7 +194,19 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic("好友显式全局 LoginRedis 不可用")
 	}
 
+	kafkaWriter := newKafkaWriter(c)
+	if kafkaWriter != nil {
+		kafkaWriter.Completion = func(_ []kafkago.Message, err error) {
+			if err != nil {
+				relay.Hold()
+			}
+		}
+	}
 	return &ServiceContext{
+		WriterConfig:       writer,
+		RootAdmission:      root,
+		RelayAdmission:     relay,
+		RelayIngress:       drainproof.New(),
 		LoginSessions:      loginSessions,
 		Config:             c,
 		Etcd:               etcdCli,
@@ -176,12 +214,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		SQLDialect:         dialect,
 		SharedRedis:        sharedRds,
 		FriendRedis:        friendRds,
-		SyncDigest:         playersync.NewBumper(playersync.NewGoZeroEvaler(sharedRds), "friend"),
+		SyncDigest:         playersync.NewBumper(relayDigestEvaler{next: playersync.NewGoZeroEvaler(sharedRds), relay: relay}, "friend"),
 		DataService:        directoryClient,
 		RequestIDs:         requestIDs,
 		directoryConn:      directoryConn,
 		FriendRedisTarget:  target,
-		KafkaWriter:        newKafkaWriter(c),
+		KafkaWriter:        kafkaWriter,
 		GateCommandBuilder: friendkafka.NewGateCommandBuilder(),
 	}
 }
@@ -283,7 +321,26 @@ func MySQLTarget(c config.MySQLConf) string {
 // 错误信息点名库名:友好度不是重点,重点是 `-migrate` 以 1 退出时运维能直接看出
 // 是"库不存在"而不是"密码错"(D-14 第 5 条)。
 func OpenMySQL(c config.MySQLConf, requireTiDB bool) (*sql.DB, error) {
-	db, err := sql.Open("mysql", BuildDSN(c, requireTiDB))
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	return openMySQL(c, requireTiDB, authoritysql.Writer(writer))
+}
+
+// OpenSchemaMySQL只属于显式迁移入口，常驻业务不得借用此能力。
+func OpenSchemaMySQL(c config.MySQLConf, requireTiDB bool) (*sql.DB, error) {
+	permission, err := authoritysql.LoadSchemaPermission(os.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	return openMySQL(c, requireTiDB, permission)
+}
+
+func openMySQL(c config.MySQLConf, requireTiDB bool, permission authoritysql.Permission) (*sql.DB, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
+	defer cancel()
+	db, err := authoritysql.Open(ctx, BuildDSN(c, requireTiDB), c.DBName, requireTiDB, c.MaxOpenConn, permission)
 	if err != nil {
 		return nil, fmt.Errorf("open MySQL %s: %w", MySQLTarget(c), err)
 	}
@@ -292,8 +349,6 @@ func OpenMySQL(c config.MySQLConf, requireTiDB bool) (*sql.DB, error) {
 	db.SetMaxOpenConns(c.MaxOpenConn)
 	db.SetMaxIdleConns(c.MaxIdleConn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
-	defer cancel()
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("ping MySQL %s 失败(库 %s 不存在时先按 deploy/mysql-init/00_init_zone_dbs.sql 建库并授权): %w",
@@ -370,46 +425,144 @@ func newKafkaWriter(c config.Config) *kafkago.Writer {
 	}
 }
 
-// Stop 依次关 Kafka writer(flush 在途批次)、DB、etcd。幂等,正常 defer 与
-// 异常强退路径可安全共用。
-//
-// **不关 Redis 句柄**,两条理由:
-//  1. go-zero 的 redis.Redis 没有 Close —— 连接池由框架持有并复用,本来就不该由业务关;
-//  2. FriendRedis 回落时它与 SharedRedis 是**同一个实例**,即使有 Close 也会被关两次
-//     (二次释放)。
-//
-// 顺序不能改:Kafka 先关才能 flush 掉在途推送;etcd 必须最后关,因为
-// noderegistry 与 killswitch 共用这条连接。调用方须保证 noderegistry.Close()
-// (注销)与 killswitch 的 ctx 取消都**先于**本函数 —— 先关连接会让注销 Txn 失败
-// (节点键留在 etcd 里等租约过期,这段时间路由服还在往死进程拨号),
-// 并让 watch 撞上已关闭的 client。
+// BindDrainRuntime 将维护原件绑定到已经消费的同一 SQL boot，不重新读 grant。
+// 实际 main 仍须把 RootAdmission 接进 RPC/sweep，把 RelayAdmission 接进发布链。
+func (sc *ServiceContext) BindDrainRuntime(runtime *drainproof.Runtime) error {
+	sc.lifecycleMu.Lock()
+	defer sc.lifecycleMu.Unlock()
+	if runtime == nil || sc.DrainRuntime != nil || sc.RootAdmission == nil || sc.RelayAdmission == nil ||
+		sc.RootAdmission == sc.RelayAdmission || runtime.Seed("SOURCE") == nil || runtime.Seed("RELAY") == nil {
+		return drainproof.ErrHold
+	}
+	if err := runtime.BindBoot(sc.WriterConfig.InstanceID(), sc.WriterConfig.WriterKey()); err != nil {
+		return err
+	}
+	sc.DrainRuntime = runtime
+	return nil
+}
+
+// CloseSource 只关闭根门禁，等待已经计入该门禁的 RPC；不冒称 sweep/号段/摘要已收敛。
+// StartSweep 尚无 join/frontier，RequestIDs.Close 取消 RPC 也不能证明服务器端结局。
+// 缺这些真实 owner 原件时保持 HOLD，同 boot 的 RELAY 与 SQL 句柄继续保留。
+func (sc *ServiceContext) BindSourceStop(stop func(context.Context) error) error {
+	sc.lifecycleMu.Lock()
+	defer sc.lifecycleMu.Unlock()
+	if stop == nil || sc.sourceStop != nil || sc.sourceClosed {
+		return drainproof.ErrHold
+	}
+	sc.sourceStop = stop
+	return nil
+}
+
+func (sc *ServiceContext) CloseSource(ctx context.Context) error {
+	sc.lifecycleMu.Lock()
+	defer sc.lifecycleMu.Unlock()
+	if sc.sourceClosed {
+		return nil
+	}
+	if sc.RootAdmission == nil {
+		return drainproof.ErrHold
+	}
+	sc.RootAdmission.CloseAdmission()
+	if sc.sourceStop != nil {
+		if err := sc.sourceStop(ctx); err != nil {
+			sc.RootAdmission.Hold()
+			return err
+		}
+	}
+	if err := sc.RootAdmission.Wait(ctx); err != nil {
+		return err
+	}
+	if sc.RequestIDs != nil {
+		frontier, err := sc.RequestIDs.DrainAndReport(ctx)
+		if err != nil {
+			sc.RootAdmission.Hold()
+			return err
+		}
+		if err = sc.RootAdmission.MergeClosedSettled(frontier); err != nil {
+			return err
+		}
+	}
+	sc.sourceClosed = true
+	return nil
+}
+
+// friend 的发布与摘要调用同步包含在根 RPC 中；Kafka Completion 和 Evaler 保留吞掉的 I/O 错误。
+// 根入口与 sweep 真 join 后才关闭 Kafka，再关闭 relay 与同 boot SQL writer。
+func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
+	if err := sc.CloseSource(ctx); err != nil {
+		return err
+	}
+	sc.lifecycleMu.Lock()
+	defer sc.lifecycleMu.Unlock()
+	if sc.resourcesClosed {
+		return sc.resourceCloseErr
+	}
+	if sc.RelayAdmission == nil || sc.RelayIngress == nil {
+		return drainproof.ErrHold
+	}
+	sc.RelayIngress.CloseAdmission()
+	if err := sc.RelayIngress.Wait(ctx); err != nil {
+		return err
+	}
+	if err := sc.RelayAdmission.WaitIdle(ctx); err != nil {
+		return err
+	}
+	if sc.KafkaWriter != nil {
+		if err := sc.KafkaWriter.Close(); err != nil {
+			sc.RelayAdmission.Hold()
+			return err
+		}
+	}
+	sc.RelayAdmission.CloseAdmission()
+	if err := sc.RelayAdmission.Wait(ctx); err != nil {
+		return err
+	}
+	sc.WriterConfig.Seal()
+	var result error
+	if sc.directoryConn != nil {
+		result = errors.Join(result, sc.directoryConn.Close())
+	}
+	if sc.LoginSessions != nil {
+		result = errors.Join(result, sc.LoginSessions.Close())
+	}
+	if sc.DB != nil {
+		result = errors.Join(result, sc.DB.Close())
+	}
+	if sc.Etcd != nil {
+		result = errors.Join(result, sc.Etcd.Close())
+	}
+	sc.resourcesClosed = true
+	sc.resourceCloseErr = result
+	return result
+}
+
+// relayDigestEvaler 复用 playersync 的实际 Eval 接缝；业务提示失败仍保持原返回语义，但维护不能遗忘它。
+type relayDigestEvaler struct {
+	next  playersync.Evaler
+	relay *drainproof.Session
+}
+
+func (e relayDigestEvaler) Eval(ctx context.Context, script string, keys []string, args ...string) (resultErr error) {
+	finish, err := e.relay.Enter()
+	if err != nil {
+		return err
+	}
+	defer finish()
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			e.relay.Hold()
+			panic(recovered)
+		}
+		if resultErr != nil {
+			e.relay.Hold()
+		}
+	}()
+	return e.next.Eval(ctx, script, keys, args...)
+}
+
 func (sc *ServiceContext) Stop() {
-	sc.stopOnce.Do(func() {
-		if sc.LoginSessions != nil {
-			_ = sc.LoginSessions.Close()
-		}
-		if sc.RequestIDs != nil {
-			sc.RequestIDs.Close()
-		}
-		if sc.directoryConn != nil {
-			if err := sc.directoryConn.Close(); err != nil {
-				logx.Errorf("[friend] Failed to close online directory data_service connection: %v", err)
-			}
-		}
-		if sc.KafkaWriter != nil {
-			if err := sc.KafkaWriter.Close(); err != nil {
-				logx.Errorf("[friend] Kafka writer close/flush failed: %v", err)
-			}
-		}
-		if sc.DB != nil {
-			if err := sc.DB.Close(); err != nil {
-				logx.Errorf("[friend] MySQL close failed: %v", err)
-			}
-		}
-		if sc.Etcd != nil {
-			if err := sc.Etcd.Close(); err != nil {
-				logx.Errorf("[friend] etcd client close failed: %v", err)
-			}
-		}
-	})
+	if err := sc.StopAndReport(context.Background()); err != nil {
+		logx.Errorf("friend 排空 HOLD，保留同 boot SQL/RELAY 资源: %v", err)
+	}
 }

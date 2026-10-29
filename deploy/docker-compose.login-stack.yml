@@ -86,10 +86,12 @@ services:
       - "51000:51000"
       - "9101:9101"          # Prometheus scrape (T)
     volumes:
-      - ./login-stack.linux/login.yaml:/app/etc/login.yaml:ro
+      - ${LOGIN_SQL_RUNTIME_CONFIG:?set per-boot login runtime config}:/app/etc/login.yaml:ro
+      - ${LOGIN_SQL_WRITER_GRANT_FILE:?set registered login boot grant}:/run/sql-writer/grant.json:ro
+      - ${LOGIN_SQL_WRITER_CONSUME_DIR:?set private persistent login consume dir}:/run/sql-writer/consume
     depends_on:
       - sandbox-mock
-    restart: unless-stopped
+    restart: "no"
     # login points at the external infra network — those services
     # must be reachable from this container. With the default bridge
     # network and Docker Desktop on Windows, the deploy/docker-compose.yml
@@ -101,6 +103,11 @@ services:
       # Required local-only shared secret for the dev-gated robot_ password
       # provider. Compose fails before startup when the host did not inject it.
       - LOGIN_DEV_PASSWORD_SHARED_SECRET=${LOGIN_DEV_PASSWORD_SHARED_SECRET:?set LOGIN_DEV_PASSWORD_SHARED_SECRET}
+      - MMORPG_SQL_WRITER_GRANT_FILE=/run/sql-writer/grant.json
+      - MMORPG_SQL_WRITER_GRANT_SHA256=${LOGIN_SQL_WRITER_GRANT_SHA256:?set verified grant sha256}
+      - MMORPG_SQL_WRITER_CONSUME_DIR=/run/sql-writer/consume
+      - MMORPG_SQL_DEPLOYMENT_ID=${LOGIN_SQL_DEPLOYMENT_ID:?set fixed login boot deployment id}
+      - MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256=${SQL_PHYSICAL_AUTHORITY_SHA256:?set physical authority evidence sha256}
     extra_hosts:
       # On Linux this is what makes host.docker.internal resolvable.
       - "host.docker.internal:host-gateway"
@@ -111,17 +118,30 @@ services:
   # gateway-mock-stress.sh + curl runbooks work unchanged.
   gateway:
     build:
-      context: ../java/gateway_node
-      dockerfile: ../../deploy/k8s/Dockerfile.java-svc
+      context: ../java
+      dockerfile: ../deploy/k8s/Dockerfile.java-svc
+      args:
+        SERVICE: gateway_node
     image: mmorpg-gateway:dev
     container_name: mmorpg-gateway
+    volumes:
+      - ${GATEWAY_SQL_WRITER_GRANT_FILE:?set registered gateway boot grant}:/run/sql-writer/grant.json:ro
+      - ${GATEWAY_SQL_WRITER_CONSUME_DIR:?set private persistent gateway consume dir}:/run/sql-writer/consume
     ports:
       - "8081:8081"
     environment:
       # Match the dev-box conventions. The Java image uses Spring's
       # standard SPRING_DATA_REDIS_* / SPRING_DATASOURCE_URL keys.
       - SPRING_DATA_REDIS_HOST=${INFRA_HOST:-host.docker.internal}
-      - SPRING_DATASOURCE_URL=jdbc:mysql://${INFRA_HOST:-host.docker.internal}:3306/gateway?useSSL=false&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_URL=${GATEWAY_SQL_AUTHORITY_URL:?set exact authority jdbc URL}
+      - SPRING_DATASOURCE_USERNAME=${GATEWAY_SQL_USERNAME:?set unique per-boot runtime principal user}
+      - SPRING_DATASOURCE_PASSWORD=${GATEWAY_SQL_PASSWORD:?set per-boot runtime password}
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=none
+      - MMORPG_SQL_WRITER_GRANT_FILE=/run/sql-writer/grant.json
+      - MMORPG_SQL_WRITER_GRANT_SHA256=${GATEWAY_SQL_WRITER_GRANT_SHA256:?set verified grant sha256}
+      - MMORPG_SQL_WRITER_CONSUME_DIR=/run/sql-writer/consume
+      - MMORPG_SQL_DEPLOYMENT_ID=${GATEWAY_SQL_DEPLOYMENT_ID:?set fixed gateway boot deployment id}
+      - MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256=${SQL_PHYSICAL_AUTHORITY_SHA256:?set physical authority evidence sha256}
       - LOGIN_GRPC_ENDPOINTS=login:51000
       - ETCD_ENDPOINTS=http://${INFRA_HOST:-host.docker.internal}:2379
       # Pin the JPA dialect so a slow MySQL handshake at startup
@@ -135,4 +155,4 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       - login
-    restart: unless-stopped
+    restart: "no"

@@ -29,6 +29,8 @@
 #include "node/system/node/thread_observability.h"
 #include "network/traffic_statistics.h"
 #include "network/rpc_channel_stats.h"
+#include "metrics/metrics_http_exporter.h"
+#include "metrics/metrics_registry.h"
 #include <boost/algorithm/string.hpp>
 #include "node/system/etcd/etcd_service.h"
 #include "node/system/grpc_call_deadline.h"
@@ -36,6 +38,7 @@
 #include "node/system/node/muduo_grpc_channel_slot.h"
 #include "node/system/node/client_endpoint.h"
 #include "node/system/node/open_file_limit.h"
+#include "engine/config/node_log_level.h"
 #include "thread_context/node_context_manager.h"
 #include "muduo_grpc/address.h"
 #include "muduo_grpc/method_table.h"
@@ -53,6 +56,384 @@
 #ifdef __linux__
 #include <sys/resource.h>
 #endif
+
+
+#include <algorithm>
+#include <filesystem>
+#include <string>
+#include <string_view>
+#include <fstream>
+#include <future>
+#include <thread>
+#include <stdexcept>
+#include <array>
+#include <boost/uuid/string_generator.hpp>
+#include "utils/encode/sha256.h"
+#include "proto/common/database/rollback_database_table.pb.h"
+#include "google/protobuf/unknown_field_set.h"
+#include "messaging/kafka/kafka_producer.h"
+#include "muduo_grpc/channel.h"
+#ifdef _WIN32
+#include <windows.h>
+#ifdef GetMessage
+#undef GetMessage
+#endif
+#else
+#include <fcntl.h>
+#include <poll.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
+extern char **environ;
+#endif
+
+namespace {
+using MaintenanceReceipt = sql_writer_maintenance_receipt;
+constexpr std::size_t kControlLimit = 16 * 1024 * 1024;
+// 维护文件名按 UTF-8 解释，char8_t 字符串保留 Windows 路径编码语义。
+std::filesystem::path PathFromUtf8(std::string_view value) {
+    return std::filesystem::path(std::u8string(value.begin(), value.end()));
+}
+std::string ReadPinnedBytes(const std::string& file, std::size_t limit) {
+    const std::filesystem::path p = PathFromUtf8(file);
+    if (!p.is_absolute() || !std::filesystem::is_regular_file(std::filesystem::symlink_status(p))) throw std::runtime_error("维护原件无效");
+    const auto size = std::filesystem::file_size(p);
+    if (size == 0 || size > limit) throw std::runtime_error("维护原件大小无效");
+    std::ifstream input(p, std::ios::binary);
+    std::string out(static_cast<std::size_t>(size), '\0');
+    if (!input.read(out.data(), static_cast<std::streamsize>(out.size())) || input.peek() != std::char_traits<char>::eof()) throw std::runtime_error("维护原件读取失败");
+    return out;
+}
+std::string PathUtf8(const std::filesystem::path& path) { const auto raw = path.u8string(); return std::string(reinterpret_cast<const char*>(raw.data()), raw.size()); }
+std::string ControlHex(const std::string& bytes) {
+    constexpr char digits[] = "0123456789abcdef";
+    std::string out; out.reserve(bytes.size() * 2);
+    for (unsigned char b : bytes) { out.push_back(digits[b >> 4]); out.push_back(digits[b & 15]); }
+    return out;
+}
+bool NoUnknownProto(const google::protobuf::Message& message) {
+    const auto* reflection = message.GetReflection();
+    if (reflection->GetUnknownFields(message).field_count() != 0) return false;
+    std::vector<const google::protobuf::FieldDescriptor*> fields;
+    reflection->ListFields(message, &fields);
+    for (const auto* f : fields) if (f->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE) {
+        if (f->is_repeated()) { for (int i = 0; i < reflection->FieldSize(message, f); ++i) if (!NoUnknownProto(reflection->GetRepeatedMessage(message, f, i))) return false; }
+        else if (!NoUnknownProto(reflection->GetMessage(message, f))) return false;
+    }
+    return true;
+}
+// 只执行明确 pin 的本地文件 owner；没有 shell、网络或 SQL。所有调用均在 std::async 工作线程上。
+// stdout 只回传有界原字节；stderr 丢到空设备，路径/环境/原件正文不进入节点日志。
+std::string PrivateControlCommand(const std::string& helper, const std::string& expectedHash,
+                                  const std::string& command, const std::string& file,
+                                  const std::string& input = {}) {
+    if (!PathFromUtf8(helper).is_absolute() || !PathFromUtf8(file).is_absolute() ||
+        expectedHash.size() != 64 || input.size() > kControlLimit) throw std::runtime_error("维护文件助手配置无效");
+    std::string output;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+#ifdef _WIN32
+    const auto wide = [](const std::string& s) { return PathFromUtf8(s).wstring(); };
+    const auto quote = [](const std::wstring& s) {
+        std::wstring out = L"\""; std::size_t slashes = 0;
+        for (wchar_t c : s) { if (c == L'\\') { ++slashes; continue; }
+            if (c == L'\"') out.append(slashes * 2 + 1, L'\\'); else out.append(slashes, L'\\');
+            slashes = 0; out.push_back(c); }
+        out.append(slashes * 2, L'\\'); out.push_back(L'\"'); return out;
+    };
+    // 持有不共享写入/删除的二进制句柄直到 CreateProcess 返回，消除 SHA 检查到执行之间的替换窗口。
+    HANDLE binary = CreateFileW(wide(helper).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (binary == INVALID_HANDLE_VALUE) throw std::runtime_error("维护文件助手不可用");
+    BY_HANDLE_FILE_INFORMATION info{}; LARGE_INTEGER size{}; std::string executable;
+    bool pinned = GetFileInformationByHandle(binary, &info) && !(info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) &&
+                  GetFileSizeEx(binary, &size) && size.QuadPart > 0 && size.QuadPart <= 64 * 1024 * 1024;
+    if (pinned) { executable.resize(static_cast<std::size_t>(size.QuadPart)); DWORD count = 0;
+        pinned = ReadFile(binary, executable.data(), static_cast<DWORD>(executable.size()), &count, nullptr) && count == executable.size() && Sha256::HashToHex(executable) == expectedHash; }
+    if (!pinned) { CloseHandle(binary); throw std::runtime_error("维护文件助手摘要不符"); }
+    SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE};
+    HANDLE childIn = nullptr, parentIn = nullptr, parentOut = nullptr, childOut = nullptr;
+    if (!CreatePipe(&childIn, &parentIn, &sa, 0) || !CreatePipe(&parentOut, &childOut, &sa, 0)) {
+        for (HANDLE h : {childIn, parentIn, parentOut, childOut}) if (h) CloseHandle(h);
+        CloseHandle(binary); throw std::runtime_error("维护文件助手管道失败"); }
+    SetHandleInformation(parentIn, HANDLE_FLAG_INHERIT, 0); SetHandleInformation(parentOut, HANDLE_FLAG_INHERIT, 0);
+    HANDLE nullError = CreateFileW(L"NUL", GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, OPEN_EXISTING, 0, nullptr);
+    STARTUPINFOEXW startup{}; startup.StartupInfo.cb = sizeof(startup);
+    startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES; startup.StartupInfo.hStdInput = childIn;
+    startup.StartupInfo.hStdOutput = childOut; startup.StartupInfo.hStdError = nullError;
+    SIZE_T attributeSize = 0; InitializeProcThreadAttributeList(nullptr, 1, 0, &attributeSize);
+    std::vector<unsigned char> attributes(attributeSize); startup.lpAttributeList = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attributes.data());
+    HANDLE inherited[] = {childIn, childOut, nullError};
+    bool attributesReady = nullError != INVALID_HANDLE_VALUE && InitializeProcThreadAttributeList(startup.lpAttributeList, 1, 0, &attributeSize);
+    bool ready = attributesReady && UpdateProcThreadAttribute(startup.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherited, sizeof(inherited), nullptr, nullptr);
+    std::wstring arguments = quote(wide(helper)) + L" --command " + quote(wide(command)) + L" --path " + quote(wide(file)) + L" --max-bytes 16777216";
+    PROCESS_INFORMATION process{};
+    const bool started = ready && CreateProcessW(wide(helper).c_str(), arguments.data(), nullptr, nullptr, TRUE,
+                                                 CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT, nullptr, nullptr, &startup.StartupInfo, &process);
+    if (attributesReady) DeleteProcThreadAttributeList(startup.lpAttributeList);
+    CloseHandle(binary); CloseHandle(childIn); CloseHandle(childOut); if (nullError != INVALID_HANDLE_VALUE) CloseHandle(nullError);
+    if (!started) { CloseHandle(parentIn); CloseHandle(parentOut); throw std::runtime_error("维护文件助手启动失败"); }
+    CloseHandle(process.hThread);
+    std::atomic<bool> writeOk{true};
+    std::thread writer;
+    bool ok = true;
+    try {
+    writer = std::thread([&] { std::size_t offset = 0; while (offset < input.size()) { DWORD count = 0;
+        if (!WriteFile(parentIn, input.data() + offset, static_cast<DWORD>((std::min)(input.size() - offset, std::size_t(4096))), &count, nullptr) || count == 0) { writeOk = false; break; } offset += count; }
+        CloseHandle(parentIn); });
+    for (;;) {
+        DWORD available = 0;
+        if (!PeekNamedPipe(parentOut, nullptr, 0, nullptr, &available, nullptr)) {
+            if (GetLastError() != ERROR_BROKEN_PIPE) { ok = false; break; }
+            // stdout 提前关闭不证明 child 已退出；仍按同一截止时间等实际进程终局。
+            available = 0;
+        }
+        if (available) { char buffer[4096]; DWORD count = 0;
+            if (!ReadFile(parentOut, buffer, (std::min)(available, DWORD(sizeof(buffer))), &count, nullptr)) { ok = false; break; }
+            output.append(buffer, count); if (output.size() > kControlLimit) { ok = false; break; } continue; }
+        if (WaitForSingleObject(process.hProcess, 0) == WAIT_OBJECT_0) break;
+        if (std::chrono::steady_clock::now() >= deadline) { ok = false; break; }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    } catch (...) {
+        TerminateProcess(process.hProcess, 1); WaitForSingleObject(process.hProcess, INFINITE);
+        if (writer.joinable()) writer.join(); else CloseHandle(parentIn);
+        CloseHandle(process.hProcess); CloseHandle(parentOut); throw;
+    }
+    if (!ok) TerminateProcess(process.hProcess, 1);
+    WaitForSingleObject(process.hProcess, INFINITE); // 被终止的单个受控 helper 必须实际退出，不能遗留写原件的进程。
+    writer.join(); DWORD exitCode = 1; GetExitCodeProcess(process.hProcess, &exitCode);
+    CloseHandle(process.hProcess); CloseHandle(parentOut);
+    if (!ok || !writeOk || exitCode != 0) throw std::runtime_error("维护文件助手拒绝或超时");
+#else
+    const int binary = ::open(helper.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    struct stat info{}; std::string executable;
+    bool pinned = binary >= 0 && ::fstat(binary, &info) == 0 && S_ISREG(info.st_mode) && !(info.st_mode & 0022) &&
+                  info.st_size > 0 && info.st_size <= 64 * 1024 * 1024;
+    if (pinned) { executable.resize(static_cast<std::size_t>(info.st_size)); std::size_t n = 0;
+        while (n < executable.size()) { const auto got = ::read(binary, executable.data() + n, executable.size() - n); if (got <= 0) { pinned = false; break; } n += static_cast<std::size_t>(got); }
+        pinned = pinned && Sha256::HashToHex(executable) == expectedHash; }
+    if (!pinned) { if (binary >= 0) ::close(binary); throw std::runtime_error("维护文件助手摘要不符"); }
+    int channel[2]; if (::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, channel) != 0) { ::close(binary); throw std::runtime_error("维护文件助手管道失败"); }
+    char* const argv[] = {const_cast<char*>(helper.c_str()), const_cast<char*>("--command"), const_cast<char*>(command.c_str()),
+        const_cast<char*>("--path"), const_cast<char*>(file.c_str()), const_cast<char*>("--max-bytes"), const_cast<char*>("16777216"), nullptr};
+    const pid_t child = ::fork();
+    if (child == 0) {
+        ::dup2(channel[1], STDIN_FILENO); ::dup2(channel[1], STDOUT_FILENO);
+        const int nullError = ::open("/dev/null", O_WRONLY); if (nullError >= 0) ::dup2(nullError, STDERR_FILENO);
+        ::close(channel[0]); ::close(channel[1]); if (nullError > STDERR_FILENO) ::close(nullError);
+        ::fexecve(binary, argv, environ); ::_exit(127);
+    }
+    ::close(binary); ::close(channel[1]);
+    if (child < 0) { ::close(channel[0]); throw std::runtime_error("维护文件助手启动失败"); }
+    ::fcntl(channel[0], F_SETFL, ::fcntl(channel[0], F_GETFL) | O_NONBLOCK);
+    std::size_t offset = 0; bool inputClosed = false, ok = true, exited = false; int status = 0;
+    for (;;) {
+        if (offset < input.size()) { const auto sent = ::send(channel[0], input.data() + offset, input.size() - offset, MSG_NOSIGNAL);
+            if (sent > 0) offset += static_cast<std::size_t>(sent); else if (sent < 0 && errno != EAGAIN && errno != EINTR) { ok = false; break; } }
+        if (offset == input.size() && !inputClosed) { ::shutdown(channel[0], SHUT_WR); inputClosed = true; }
+        char buffer[4096]; const auto count = ::recv(channel[0], buffer, sizeof(buffer), 0);
+        if (count > 0) { output.append(buffer, static_cast<std::size_t>(count)); if (output.size() > kControlLimit) { ok = false; break; } continue; }
+        if (count < 0 && errno != EAGAIN && errno != EINTR) { ok = false; break; }
+        const auto wait = ::waitpid(child, &status, WNOHANG); if (wait == child) exited = true;
+        if (exited && count == 0) break;
+        if (std::chrono::steady_clock::now() >= deadline) { ok = false; break; }
+        pollfd pfd{channel[0], static_cast<short>(POLLIN | (offset < input.size() ? POLLOUT : 0)), 0}; ::poll(&pfd, 1, 10);
+    }
+    if (!exited) { ::kill(child, SIGKILL); while (::waitpid(child, &status, 0) < 0 && errno == EINTR) {} }
+    ::close(channel[0]);
+    if (!ok || offset != input.size() || !WIFEXITED(status) || WEXITSTATUS(status) != 0) throw std::runtime_error("维护文件助手拒绝或超时");
+#endif
+    if (command != "read-file" && !output.empty()) throw std::runtime_error("维护文件助手输出无效");
+    return output;
+}
+}
+
+
+// Node 独占生命周期状态，文件工作线程只持值副本；只有 loop 线程能封业务入口/读取 owner 前沿。
+struct NodeMaintenanceControl {
+    struct ReadResult {
+        bool ok = true, active = false, sourceRequested = false, relayRequested = false;
+        MaintenanceReceipt request;
+        MaintenanceReceipt::Plan plan;
+        std::optional<MaintenanceReceipt::IssuerClosure> source, relay;
+        std::optional<MaintenanceReceipt::ManualConsumerEvidence> baseline;
+        std::optional<MaintenanceReceipt::SourceOpenAck> open;
+    };
+    std::string directory, helper, helperHash, instance;
+    std::future<ReadResult> reading;
+    std::future<bool> writing;
+    ReadResult runtime;
+    bool loaded = false, held = false, sourceClosed = false, relayClosed = false;
+    bool sourceWritten = false, relayWritten = false, writingSource = false, relayDraining = false;
+    std::uint64_t sourceClosedMs = 0, relayClosedMs = 0;
+    std::string sourceFrontier;
+    bool prepareBoot=false, baselineWritten=false, manualWritten=false, preparedWritten=false, opened=false, identityWritten=false;
+    int writingOther=0;
+    std::optional<MaintenanceReceipt::ManualConsumerEvidence> baselineIntent;
+    std::future<std::optional<MaintenanceReceipt::ManualConsumerEvidence>> manualReading;
+    std::future<std::optional<MaintenanceReceipt::ConsumerReadiness>> preparing;
+    std::future<bool> manualDraining;
+    bool manualDrainReady=false, manualConsumersStopped=false;
+    MaintenanceReceipt::ConsumerReadiness consumers;
+    MaintenanceReceipt::IssuerReadiness readiness;
+    std::string manualDigest;
+    std::optional<MaintenanceReceipt::SourceOpenAck> openIntent;
+    std::chrono::steady_clock::time_point stageDeadline{};
+    static std::uint64_t NowMs() {
+        const auto value = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        return value > 0 ? static_cast<std::uint64_t>(value) : 0;
+    }
+    static void VerifyPins(const google::protobuf::RepeatedPtrField<MaintenanceReceipt::SourcePin>& pins) {
+        if (pins.empty() || pins.size() > 128) throw std::runtime_error("维护原件 pin 数量无效");
+        std::set<std::string> seen;
+        for (const auto& pin : pins) if (pin.sha256().size() != 32 || !seen.insert(pin.absolute_path()).second ||
+            Sha256::HashToBytes(ReadPinnedBytes(pin.absolute_path(), kControlLimit)) != pin.sha256()) throw std::runtime_error("维护原件 pin 不符");
+    }
+    static ReadResult Read(const std::string& directory, const std::string& helper, const std::string& helperHash,
+                           const std::string& instance, bool loaded, bool prepareBoot, bool baselineWritten) {
+        ReadResult out;
+        try {
+            const auto join = [&](const char* name) { return PathUtf8(PathFromUtf8(directory) / name); };
+            PrivateControlCommand(helper, helperHash, "validate-directory", directory);
+            if(!loaded&&!baselineWritten&&!prepareBoot){
+                const auto file=join("manual-baseline.request.json");
+                if(std::filesystem::exists(PathFromUtf8(file))){
+                    MaintenanceReceipt::ManualConsumerEvidence intent;
+                    if(!google::protobuf::util::JsonStringToMessage(PrivateControlCommand(helper,helperHash,"read-file",file),&intent).ok()||!NoUnknownProto(intent)||intent.operation_id().size()!=16||!intent.manifest_digest().empty()||intent.assignments_size()!=1||intent.accepting_closed()||intent.callbacks_joined()||intent.accepted()!=0||intent.settled()!=0||intent.unresolved_publications()!=0)throw std::runtime_error("manual P0意图无效");
+                    auto identity=intent.assignments(0);if(identity.issuer_id().size()!=16||identity.instance_id()!=instance)throw std::runtime_error("manual P0 boot无效");
+                    identity.clear_issuer_id();identity.clear_instance_id();if(identity.ByteSizeLong()!=0)throw std::runtime_error("manual P0不能预填native事实");
+                    VerifyPins(intent.source_pins());
+                    bool ownDirectory=false;for(const auto& pin:intent.source_pins())if(PathFromUtf8(pin.absolute_path()).parent_path()==PathFromUtf8(directory))ownDirectory=true;if(!ownDirectory)throw std::runtime_error("manual P0目录无效");
+                    out.baseline=std::move(intent);
+                }
+            }
+            if (!loaded) {
+                const auto runtimePath = join("active.runtime.json"), hashPath = join("active.runtime.sha256");
+                if (!std::filesystem::exists(PathFromUtf8(runtimePath)) || !std::filesystem::exists(PathFromUtf8(hashPath))) return out;
+                const auto raw = PrivateControlCommand(helper, helperHash, "read-file", runtimePath);
+                auto hash = PrivateControlCommand(helper, helperHash, "read-file", hashPath);
+                if (hash.size() == 65 && hash.back() == '\n') hash.pop_back();
+                if (hash.size() != 64 || Sha256::HashToHex(raw) != hash ||
+                    !google::protobuf::util::JsonStringToMessage(raw, &out.request).ok() || !NoUnknownProto(out.request) ||
+                    !out.plan.ParseFromString(out.request.plan_proto()) || !NoUnknownProto(out.plan)) throw std::runtime_error("维护 runtime 无效");
+                const auto& request = out.request; const auto& plan = out.plan;
+                if ((request.run_phase() == sql_writer_drain_run::SQL_RELEASED) != prepareBoot || request.run_id().size() != 16 ||
+                    request.run_id() != request.evidence().operation_id() || plan.run_id() != request.run_id() ||
+                    request.evidence().manifest_digest() != Sha256::HashToBytes(request.plan_proto()) ||
+                    !request.evidence().has_publication() || plan.root_issuers().empty() || plan.queue_mutators().empty() ||
+                    (plan.kafka_partitions().empty() && plan.manual_assignments().empty()) || plan.redis_targets().empty() || plan.launchers().empty()) throw std::runtime_error("维护 Manifest 绑定无效");
+                VerifyPins(plan.source_pins());
+                const auto& roles = request.evidence().publication().logical_roles();
+                if (roles.empty() || roles.size() > 2) throw std::runtime_error("维护实际角色无效");
+                for (const auto& role : roles) {
+                    if (role.issuer_id().size() != 16 || role.instance_id() != instance || !role.physical_writer_key().empty() ||
+                        role.permanent_revival_fence_id().size() != 16 || role.accepting_closed_ms() != 0 || role.accepted_settled_ms() != 0 ||
+                        !role.accepted_frontier_digest().empty() || role.unresolved_publications() != 0) throw std::runtime_error("维护 boot 身份无效");
+                    const auto* expected = role.logical_role() == "SOURCE" ? &plan.root_issuers() : role.logical_role() == "RELAY" ? &plan.queue_mutators() : nullptr;
+                    if (!expected) throw std::runtime_error("维护角色无效");
+                    int found = 0; for (const auto& seed : *expected) {
+                        if(!prepareBoot&&google::protobuf::util::MessageDifferencer::Equals(seed,role))++found;
+                        if(prepareBoot&&seed.issuer_id()==role.issuer_id()&&seed.logical_role()==role.logical_role()&&seed.physical_writer_key().empty()&&seed.instance_id()!=role.instance_id())++found;
+                    }
+                    if (found != 1) throw std::runtime_error("维护 P0 角色不匹配");
+                    VerifyPins(role.source_evidence());
+                    auto& selected = role.logical_role() == "SOURCE" ? out.source : out.relay;
+                    if (selected) throw std::runtime_error("维护角色重复"); selected = role;
+                }
+                if (!out.source) throw std::runtime_error("C++ 节点缺少实际 SOURCE 身份");
+                // 不允许旧 boot 借重启恢复；独占 durable marker 与 Go/Java 使用同一平台 owner。
+                PrivateControlCommand(helper, helperHash, "create-file", join(("boot-" + ControlHex(instance) + ".consumed").c_str()), request.evidence().manifest_digest());
+                out.active = true;
+            }
+            const auto requested = [&](const char* name, const char* value) {
+                const auto file = join(name); if (!std::filesystem::exists(PathFromUtf8(file))) return false;
+                const auto raw = PrivateControlCommand(helper, helperHash, "read-file", file);
+                if (raw != std::string(value) + "\n") throw std::runtime_error("维护关闭请求无效"); return true;
+            };
+            if(prepareBoot){
+                const auto file=join("open-source.request");if(std::filesystem::exists(PathFromUtf8(file))){MaintenanceReceipt::SourceOpenAck intent;
+                    if(!google::protobuf::util::JsonStringToMessage(PrivateControlCommand(helper,helperHash,"read-file",file),&intent).ok()||!NoUnknownProto(intent))throw std::runtime_error("SOURCE开放意图无效");VerifyPins(intent.source_pins());out.open=std::move(intent);}
+            }
+            out.sourceRequested = requested("close-source.request", "CLOSE_SOURCE");
+            out.relayRequested = requested("close-relay.request", "CLOSE_RELAY");
+        } catch (...) { out.ok = false; }
+        return out;
+    }
+    void PollFiles() {
+        if (!reading.valid() && !held && !(runtime.sourceRequested && runtime.relayRequested)) {
+            reading = std::async(std::launch::async, &NodeMaintenanceControl::Read, directory, helper, helperHash, instance, loaded, prepareBoot, baselineWritten);
+        }
+    }
+
+    static std::string Json(const google::protobuf::Message& value){
+        google::protobuf::util::JsonPrintOptions options;options.always_print_fields_with_no_presence=true;
+        std::string raw;if(!google::protobuf::util::MessageToJsonString(value,&raw,options).ok())throw std::runtime_error("维护proto编码失败");return raw;
+    }
+    void WriteIdentity(const NodeInfo& info){
+        const auto file=PathUtf8(PathFromUtf8(directory)/"boot-identity.nodeinfo.json"),raw=Json(info);writingOther=5;
+        writing=std::async(std::launch::async,[helper=helper,hash=helperHash,file,raw]{try{PrivateControlCommand(helper,hash,"create-file",file,raw);return true;}catch(...){return false;}});
+    }
+    void WriteManual(MaintenanceReceipt::ManualConsumerEvidence report,bool baseline){
+        if(writing.valid())return;
+        const auto& pins=baseline?baselineIntent->source_pins():runtime.source->source_evidence();
+        report.mutable_source_pins()->CopyFrom(pins);VerifyPins(pins);
+        bool ownDirectory=false;for(const auto& pin:pins)if(PathFromUtf8(pin.absolute_path()).parent_path()==PathFromUtf8(directory))ownDirectory=true;if(!ownDirectory)throw std::runtime_error("manual原件不在SOURCE固定私有目录");
+        const auto file=PathUtf8(PathFromUtf8(directory)/(baseline?"manual-baseline.report.json":"manual-closure.report.json"));
+        const auto raw=Json(report);if(!baseline)manualDigest=Sha256::HashToBytes(raw);
+        writingOther=baseline?1:4;
+        writing=std::async(std::launch::async,[helper=helper,hash=helperHash,file,raw]{try{PrivateControlCommand(helper,hash,"create-file",file,raw);return true;}catch(...){return false;}});
+    }
+    void WritePrepared(MaintenanceReceipt::ConsumerReadiness actual){
+        consumers=std::move(actual);readiness.Clear();readiness.set_issuer_id(runtime.source->issuer_id());readiness.set_instance_id(instance);readiness.set_logical_role("SOURCE");
+        readiness.set_prepared_closed_ms(NowMs());readiness.mutable_source_pins()->CopyFrom(runtime.source->source_evidence());
+        auto consumerProof=consumers;for(auto& manual:*consumerProof.mutable_manual_assignments())manual.mutable_source_pins()->CopyFrom(runtime.source->source_evidence());
+        const auto consumerPath=PathUtf8(PathFromUtf8(directory)/"consumer-readiness.report.json");const auto consumerRaw=Json(consumerProof);
+        readiness.set_consumer_ready_frontier_digest(Sha256::HashToBytes(consumerRaw));
+        auto* pin=readiness.add_source_pins();pin->set_absolute_path(consumerPath);pin->set_sha256(readiness.consumer_ready_frontier_digest());
+        const auto readyPath=PathUtf8(PathFromUtf8(directory)/"prepared.source.json"),readyRaw=Json(readiness);
+        writingOther=2;writing=std::async(std::launch::async,[helper=helper,hash=helperHash,consumerPath,consumerRaw,readyPath,readyRaw,pins=runtime.source->source_evidence()]{try{VerifyPins(pins);PrivateControlCommand(helper,hash,"create-file",consumerPath,consumerRaw);PrivateControlCommand(helper,hash,"create-file",readyPath,readyRaw);return true;}catch(...){return false;}});
+    }
+    bool ValidOpen()const{
+        if(!openIntent||!preparedWritten)return false;const auto& open=*openIntent;
+        if(open.source_pins_size()!=readiness.source_pins_size())return false;
+        for(const auto& pin:readiness.source_pins()){int found=0;for(const auto& actual:open.source_pins())if(google::protobuf::util::MessageDifferencer::Equals(pin,actual))++found;if(found!=1)return false;}
+        return open.issuer_id()==readiness.issuer_id()&&open.instance_id()==instance&&open.physical_writer_key().empty()&&open.logical_role()=="SOURCE"&&open.registration_receipt_id().empty()&&open.registration_receipt_digest().empty()&&open.operation_id()==runtime.request.run_id()&&open.manifest_digest()==runtime.request.evidence().manifest_digest()&&open.open_request_id().size()==16&&open.opened_ms()==0&&open.accepted_frontier_digest().empty();
+    }
+    void WriteOpen(){
+        auto ack=*openIntent;ack.set_opened_ms(NowMs());ack.mutable_source_pins()->CopyFrom(readiness.source_pins());
+        ack.set_accepted_frontier_digest(Sha256::HashToBytes(ack.open_request_id()+ack.operation_id()+ack.manifest_digest()+instance+readiness.consumer_ready_frontier_digest()));
+        const auto file=PathUtf8(PathFromUtf8(directory)/"source.open.ack.json"),raw=Json(ack);
+        writingOther=3;writing=std::async(std::launch::async,[helper=helper,hash=helperHash,file,raw]{try{PrivateControlCommand(helper,hash,"create-file",file,raw);return true;}catch(...){return false;}});
+    }
+
+    void Write(bool source, const std::string& frontier) {
+        const auto& seed = source ? runtime.source : runtime.relay;
+        if (!seed || writing.valid()) return;
+        auto closure = *seed;
+        closure.set_accepting_closed_ms(source ? sourceClosedMs : relayClosedMs);
+        closure.set_accepted_settled_ms(NowMs());
+        closure.set_unresolved_publications(0);
+        closure.set_accepted_frontier_digest(Sha256::HashToBytes(closure.issuer_id() + instance + closure.logical_role() +
+            runtime.request.evidence().manifest_digest() + frontier));
+        const auto runtimePath = PathUtf8(PathFromUtf8(directory) / "active.runtime.json");
+        const auto outputPath = PathUtf8(PathFromUtf8(directory) / (source ? "source.issuer.json" : "relay.issuer.json"));
+        writingOther=0;writingSource = source;
+        writing = std::async(std::launch::async, [closure = std::move(closure), runtimePath, outputPath,
+            helper = helper, helperHash = helperHash, expected = runtime.request]() mutable {
+            try {
+                VerifyPins(closure.source_evidence());
+                const auto raw = PrivateControlCommand(helper, helperHash, "read-file", runtimePath);
+                MaintenanceReceipt again;
+                if (!google::protobuf::util::JsonStringToMessage(raw, &again).ok() || !google::protobuf::util::MessageDifferencer::Equals(again, expected)) return false;
+                // P0固定source_evidence等集不可追加；新manual报告在NonSqlClosureEvidence独立pin。
+                if (closure.accepting_closed_ms() == 0 || closure.accepted_settled_ms() < closure.accepting_closed_ms()) return false;
+                const auto json=Json(closure);
+                PrivateControlCommand(helper, helperHash, "create-file", outputPath, json); return true;
+            } catch (...) { return false; }
+        });
+    }
+};
 
 namespace
 {
@@ -398,6 +779,28 @@ namespace
 		std::abort(); // LOG_FATAL 已 abort;这一行只为让 [[noreturn]] 对编译器成立
 	}
 
+	// 每个 C++ 节点都有的两条身份序列,排在各模块的采集结果之前。Pod 标签只能说明「哪个 Pod」,
+	// zone / node_id 要靠这条关联;node_id 在 etcd 分配前为 0。
+	std::string RenderNodeIdentityMetrics(const NodeInfo &info)
+	{
+		prometheus_text::Writer writer;
+		writer.BeginFamily("cpp_node_info",
+						   "Identity of this C++ node process (value is always 1); node_id is 0 before etcd allocation.",
+						   prometheus_text::MetricType::kGauge);
+		const auto nodeType = std::to_string(info.node_type());
+		const auto zoneId = std::to_string(info.zone_id());
+		const auto nodeId = std::to_string(info.node_id());
+		const auto sceneNodeType = std::to_string(info.scene_node_type());
+		writer.Sample({{"node_type", nodeType}, {"zone_id", zoneId}, {"node_id", nodeId},
+					   {"scene_node_type", sceneNodeType}},
+					  1);
+		writer.BeginFamily("cpp_node_start_time_seconds",
+						   "Unix time this C++ node process started (NodeInfo.launch_time).",
+						   prometheus_text::MetricType::kGauge);
+		writer.Sample({}, info.launch_time() / 1000000);
+		return writer.Text();
+	}
+
 #ifdef __linux__
 	// fd 限值行同时写 stdout 与日志:Linux 上 muduo 日志只进异步文件,stdout 是 kubectl logs 唯一看得到它的地方
 	// (写法同 gate_version::PrintStartupLine,不受 LogLevel 过滤);日志文件那份由 sidecar 送 Loki。
@@ -637,12 +1040,38 @@ void Node::Initialize()
 	// 生成的 gRPC 客户端的 deadline 必须在发出第一个请求(InitEtcdService 里的 etcd Range / LeaseGrant)之前就位;
 	// 放在 InitLogSystem 之后,被忽略的配置项与生效值才进日志文件。
 	grpc_call_deadline::Apply(tlsNodeConfigManager.GetBaseDeployConfig().grpc_client());
+	// /metrics 出口排在任何业务网络之前:启动卡在 etcd / Redis 时也能抓到 cpp_node_info。
+	StartMetricsExporter();
 	InitRpcServer();
+	InitMaintenanceControl();
 	LoadAllConfigData();
 	InitKafka();
 	InitEtcdService();
 
 	LOG_DEBUG << "Node initialization complete.";
+}
+
+void Node::StartMetricsExporter()
+{
+	eventLoop.assertInLoopThread();
+	const auto port = ParseMetricsPortEnv(std::getenv(kMetricsPortEnv));
+	if (!port)
+	{
+		FatalStartupConfig("metrics exporter",
+						   std::string(kMetricsPortEnv) + " must be a port number 1..65535 (leave it unset to disable)");
+	}
+	if (*port == 0)
+	{
+		LOG_INFO << "[Metrics] " << kMetricsPortEnv << " is not set; Prometheus exporter disabled";
+		return;
+	}
+	// 回调捕获 this:出口是本 Node 的成员,在 FinalizeTeardownInLoop 里先于 Node 释放,
+	// 属于 AGENTS.md §11.7「与被绑对象同寿命的成员」的例外。只在 loop 线程上读 NodeInfo。
+	metricsExporter_ = std::make_unique<MetricsHttpExporter>(&eventLoop, *port, [this]
+	{
+		return RenderNodeIdentityMetrics(GetNodeInfo()) + GlobalMetricsRegistry().Render();
+	});
+	metricsExporter_->Start();
 }
 
 void Node::InitRpcServer()
@@ -829,7 +1258,13 @@ bool Node::RegisterKafkaMessageHandler(const std::vector<std::string> &topics,
 	}
 
 	auto &kafkaConfig = tlsNodeConfigManager.GetBaseDeployConfig().kafka();
-	if (!GetKafkaManager().Subscribe(kafkaConfig, topics, groupId, partitions, std::move(handler), assignPolicy))
+    MaintenanceReceipt::ManualConsumerAssignment manual;
+    if(!partitions.empty()&&maintenanceControl_){
+        if(topics.size()!=1||partitions.size()!=1||assignPolicy.expectedTopicPartitions<=0||!assignPolicy.ownOffsets||!assignPolicy.startAtEnd)return false;
+        manual.set_consumer_id(groupId);manual.set_instance_id(maintenanceControl_->instance);manual.set_target_instance_id(maintenanceControl_->instance);
+        manual.set_target_node_id(GetNodeId());manual.set_partition_count(assignPolicy.expectedTopicPartitions);
+    }
+	if (!GetKafkaManager().Subscribe(kafkaConfig, topics, groupId, partitions, std::move(handler), assignPolicy, manual))
 	{
 		LOG_ERROR << "Kafka subscribe failed. group_id=" << groupId;
 		return false;
@@ -867,7 +1302,7 @@ void Node::StartGrpcServer()
 	// etcd 端口分配可能晚于关机开始。此时不再启动服务端,也不发布发现键:ShutdownInLoop 调 ShutdownGrpcServer 时还没有
 	// 服务端,已把 gRPC 排空记为完成;这里再起服务端,它会在排空之后才开始监听,只能被 Finalize 的防御分支不发 GOAWAY
 	// 地销毁,而发布发现键会让 Go 侧在收尾期间拨号进来(docs/design/grpc-muduo-transport.md §15.16 第 4 条)。
-	if (shutdownStarted.load(std::memory_order_acquire))
+	if (shutdownStarted.load(std::memory_order_acquire) || (maintenanceControl_ && maintenanceControl_->sourceClosed))
 	{
 		LOG_WARN << "Shutdown already started; not starting the gRPC server and not publishing discovery.";
 		return;
@@ -981,8 +1416,15 @@ void Node::OnGrpcServerDrained()
 	const auto drainMs = std::chrono::duration_cast<std::chrono::milliseconds>(
 							 std::chrono::steady_clock::now() - grpcDrainStart_)
 							 .count();
+	const auto stats = grpcServer_->Stats();
+	if (stats.deadlineAfterStart != 0 || stats.abortedAfterStart != 0 || stats.unavailableOnShutdown != 0 ||
+		stats.lateFinish != 0 || stats.dropped != 0 || stats.droppedOffLoop != 0)
+	{
+		shutdownFailure_.store(true, std::memory_order_release);
+		LOG_ERROR << "gRPC 生命周期 HOLD：已接收业务存在超时、丢弃或未知完成；连接清空不是成功闭合";
+	}
 	LOG_INFO << "gRPC server drained. drain_ms=" << drainMs << " "
-			 << muduo_grpc::FormatServerStats(grpcServer_->Stats());
+			 << muduo_grpc::FormatServerStats(stats);
 	// 这里是排队任务:不在 Server 自己的栈上,也不在 I/O 事件处理期间,可以同步销毁(server.h 的析构前置条件)。
 	// 此时连接表已空、Acceptor 早已销毁;~Server 万一再排进 forceClose / connectDestroyed,由收尾末尾的两跳 quit 覆盖。
 	grpcServer_.reset();
@@ -1069,6 +1511,7 @@ void Node::StartConflictDrainWatchdog()
 void Node::StartRpcServer()
 {
 	eventLoop.assertInLoopThread();
+    if (shutdownStarted.load(std::memory_order_acquire) || (maintenanceControl_ && maintenanceControl_->sourceClosed)) return;
 	if (rpcServer)
 	{
 		LOG_TRACE << "RPC server already started, skipping.";
@@ -1091,7 +1534,7 @@ void Node::StartRpcServer()
 			 << " registered endpoint=" << localNodeInfo.endpoint().ip() << ":" << listenPort;
 
 	rpcServer = std::make_unique<RpcServerPtr::element_type>(&eventLoop, rpcListenAddress);
-	rpcServer->start();
+	if(!maintenancePrepareBoot_)rpcServer->start();
 	auto *nodeReplyService = GetNodeReplyService();
 	if (nodeReplyService != nullptr)
 	{
@@ -1120,9 +1563,9 @@ void Node::StartRpcServer()
 		LOG_FATAL << "RegisterKafkaHandlers failed for node_type=" << GetNodeInfo().node_type();
 	}
 
-	StartNodeRegistrationHealthMonitor();
+	if(!maintenancePrepareBoot_)StartNodeRegistrationHealthMonitor();
 
-	StartGrpcServer();
+	if(!maintenancePrepareBoot_)StartGrpcServer();
 
 
 	auto nodeTypeName = boost::to_upper_copy(eNodeType_Name(GetNodeInfo().node_type()));
@@ -1190,8 +1633,215 @@ void Node::StartRpcServer()
 												   "=============================================================\n";
 	LOG_INFO << banner;
 
-	if (afterStartFn_)
-		afterStartFn_(*this);
+    maintenancePreparedStart_=true;
+	if (afterStartFn_&&!maintenancePrepareBoot_)afterStartFn_(*this);
+}
+
+
+void Node::StartPreparedSourceInLoop(){
+    eventLoop.assertInLoopThread();
+    if(!maintenancePrepareBoot_||!maintenancePreparedStart_||!rpcServer||!afterStartFn_||shutdownStarted.load())throw std::runtime_error("SOURCE未实际准备");
+    // consumer owner lease中的提交只切准入闸，不在可失败的校验回调中发SQL/Kafka/Redis。
+    // 此函数在提交成功后、同一loop调用栈尚未让出时完成已准备listener和域启动；失败保UNKNOWN，不重放open。
+    if(!maintenanceSourceOpened_)throw std::runtime_error("SOURCE尚未原子提交");
+    afterStartFn_(*this);StartGrpcServer();rpcServer->start();StartNodeRegistrationHealthMonitor();
+}
+
+void Node::InitMaintenanceControl()
+{
+    const char* directory = GetNonEmptyEnv("MMORPG_MAINTENANCE_CONTROL_DIR");
+    const char* prepare=GetNonEmptyEnv("MMORPG_MAINTENANCE_PREPARE_ONLY");
+    if(prepare&&std::string(prepare)!="1")FatalStartupConfig("maintenance","prepare-only只能显式为1");
+    if (!directory) {if(prepare)FatalStartupConfig("maintenance","prepare-only缺私有控制目录");return;}
+    const char* helper = GetNonEmptyEnv("MMORPG_SQL_PRIVATE_FILE_HELPER");
+    const char* helperHash = GetNonEmptyEnv("MMORPG_SQL_PRIVATE_FILE_HELPER_SHA256");
+    if (!helper || !helperHash || !PathFromUtf8(directory).is_absolute() ||
+        !PathFromUtf8(helper).is_absolute() || !std::regex_match(helperHash, std::regex("[0-9a-fA-F]{64}")) ||
+        !RpcChannel::ProcessMaintenance()->EnableAcknowledgedSends()) {
+        FatalStartupConfig("maintenance", "维护控制目录/固定文件助手配置无效，或首次发布已经发生");
+    }
+    auto control = std::make_unique<NodeMaintenanceControl>();
+    control->directory = directory; control->helper = helper;
+    control->prepareBoot=prepare!=nullptr;maintenancePrepareBoot_=control->prepareBoot;
+    if(!kafkaManager.PrepareOnlyBeforeSubscribe(maintenancePrepareBoot_)||(maintenancePrepareBoot_&&!RpcChannel::ProcessMaintenance()->PrepareSources()))FatalStartupConfig("maintenance","prepare-only必须早于首次接收");
+    control->helperHash = boost::to_lower_copy(std::string(helperHash));
+    try {
+        const auto uuid = boost::uuids::string_generator()(GetNodeInfo().node_uuid());
+        control->instance.assign(reinterpret_cast<const char*>(uuid.data()), uuid.size());
+    } catch (...) { FatalStartupConfig("maintenance", "实际节点 boot UUID 无效"); }
+    maintenanceControl_ = std::move(control);
+    maintenanceControlTimer_.RunEvery(0.1, [this] { PollMaintenanceControl(); });
+}
+
+void Node::CloseMaintenanceSource()
+{
+    auto& control = *maintenanceControl_;
+    if (control.sourceClosed) return;
+    control.sourceClosed = true; control.sourceClosedMs = NodeMaintenanceControl::NowMs();
+    control.stageDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+    if(!maintenanceInboundRelay_) RpcChannel::ProcessMaintenance()->CloseSources();
+    if (!maintenanceSourceClose_ || !shutdownDrainCompleteFn_ || !maintenanceRelayStop_) {
+        control.held = true; shutdownFailure_.store(true, std::memory_order_release);
+        LOG_ERROR << "维护 HOLD：实际节点未装配 source/relay 生命周期钩子";
+    } else if (!sourceBusinessClosed_) {
+        sourceBusinessClosed_ = true; maintenanceSourceClose_(*this);
+    }
+    if(!maintenanceInboundRelay_) ShutdownGrpcServer();
+    // Kafka consumers、Redis 和出站 RPC 在 P1 继续推动已接收工作；不能以 Shutdown 代替关闭根。
+}
+
+void Node::PollMaintenanceControl()
+{
+    eventLoop.assertInLoopThread();
+    if (!maintenanceControl_ || shutdownStarted.load(std::memory_order_acquire)) return;
+    auto& control = *maintenanceControl_;
+    const auto hold = [&] {
+        if (!control.held) LOG_ERROR << "维护 HOLD：私有原件、实际 owner 结果或生命周期门禁未满足";
+        control.held = true; shutdownFailure_.store(true, std::memory_order_release);
+        CloseMaintenanceSource();
+    };
+    if (control.held) return;
+    if (control.reading.valid() && control.reading.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        auto result = control.reading.get();
+        if (!result.ok) { hold(); return; }
+        if(result.baseline&&!control.baselineWritten&&!control.baselineIntent){control.baselineIntent=std::move(result.baseline);control.stageDeadline=std::chrono::steady_clock::now()+std::chrono::seconds(60);}
+        if(result.open){if(control.openIntent&&!google::protobuf::util::MessageDifferencer::Equals(*control.openIntent,*result.open)){hold();return;}control.openIntent=std::move(result.open);}
+        if (result.active) { control.runtime = std::move(result); control.loaded = true; control.stageDeadline=std::chrono::steady_clock::now()+std::chrono::seconds(60); }
+        else {
+            control.runtime.sourceRequested = control.runtime.sourceRequested || result.sourceRequested;
+            control.runtime.relayRequested = control.runtime.relayRequested || result.relayRequested;
+        }
+    }
+    if (control.writing.valid() && control.writing.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        if (!control.writing.get()) { hold(); return; }
+        if(control.writingOther==1)control.baselineWritten=true;
+        else if(control.writingOther==2)control.preparedWritten=true;
+        else if(control.writingOther==3)control.opened=true;
+        else if(control.writingOther==4)control.manualWritten=true;
+        else if(control.writingOther==5)control.identityWritten=true;
+        else if (control.writingSource) control.sourceWritten = true; else control.relayWritten = true;
+        control.writingOther=0;
+    }
+    control.PollFiles();
+    if(maintenancePreparedStart_&&!control.identityWritten){if(!control.writing.valid())try{control.WriteIdentity(GetNodeInfo());}catch(...){hold();}return;}
+    if(control.baselineIntent&&!control.baselineWritten&&!control.loaded&&maintenancePreparedStart_){
+        if(!control.manualReading.valid()&&!control.writing.valid())control.manualReading=kafkaManager.ManualEvidence(control.baselineIntent->operation_id(),"",control.baselineIntent->assignments(0).issuer_id(),control.instance);
+        if(control.manualReading.valid()&&control.manualReading.wait_for(std::chrono::seconds(0))==std::future_status::ready){auto actual=control.manualReading.get();if(!actual){if(std::chrono::steady_clock::now()>=control.stageDeadline)hold();return;}if(actual->assignments().empty()){hold();return;}try{control.WriteManual(std::move(*actual),true);}catch(...){hold();return;}}
+    }
+    if (!control.loaded) return;
+    if(control.prepareBoot){
+        if(control.runtime.sourceRequested||control.runtime.relayRequested){hold();return;}
+        if(control.opened)return;
+        if(!control.preparedWritten&&std::chrono::steady_clock::now()>=control.stageDeadline){hold();return;}
+        if(!maintenancePreparedStart_||!afterStartFn_)return;
+        if(!control.preparedWritten&&!control.writing.valid()){
+            if(!control.preparing.valid())control.preparing=kafkaManager.PrepareReadiness(control.runtime.plan,control.runtime.request.evidence().manifest_digest(),control.runtime.source->issuer_id(),control.instance);
+            if(control.preparing.wait_for(std::chrono::seconds(0))==std::future_status::ready){auto actual=control.preparing.get();if(actual){try{control.WritePrepared(std::move(*actual));}catch(...){hold();return;}}}
+            return;
+        }
+        if(control.preparedWritten&&control.openIntent&&!control.writing.valid()){
+            if(!control.ValidOpen()){hold();return;}
+            try{
+                if(!kafkaManager.OpenPrepared(control.consumers,[&]{
+                    if(maintenanceSourceOpened_||shutdownStarted.load()||!rpcServer||!afterStartFn_)return false;
+                    if(!RpcChannel::ProcessMaintenance()->OpenPreparedSources())return false;
+                    maintenanceSourceOpened_=true;return true;
+                })){hold();return;}
+                StartPreparedSourceInLoop();control.WriteOpen();
+            }catch(...){hold();return;}
+        }
+        return;
+    }
+    if (control.runtime.sourceRequested) CloseMaintenanceSource();
+    if (!control.sourceClosed || control.held) return;
+    if (HasKnownShutdownFailure()) { hold(); return; }
+    if (!control.sourceWritten && std::chrono::steady_clock::now() >= control.stageDeadline) { hold(); return; }
+    const auto ingressSettled=[&](std::string& frontier) {
+        const bool rpcReady=maintenanceInboundRelay_?RpcChannel::ProcessMaintenance()->SettledFrontier(frontier):RpcChannel::ProcessMaintenance()->Frontier(true,frontier);
+        if(!rpcReady)return false;
+        if(grpcServer_){const auto stats=grpcServer_->Stats();
+            if(stats.inFlight!=0||stats.deadlineAfterStart!=0||stats.abortedAfterStart!=0||stats.unavailableOnShutdown!=0||stats.lateFinish!=0||stats.dropped!=0||stats.droppedOffLoop!=0)return false;
+            frontier+="\ngrpc-server:"+std::to_string(stats.dispatched)+":"+std::to_string(stats.inFlight);
+        }else if(!grpcServices_.empty()&&!shutdownGrpcDrainComplete_)return false;
+        return true;
+    };
+    if (!control.sourceWritten && !control.writing.valid() && shutdownDrainCompleteFn_(*this)) {
+        std::string rpc, grpc, redis;
+        const auto kafka = KafkaProducer::ProcessPublicationFrontier();
+        if (ingressSettled(rpc) && muduo_grpc::Channel::ProcessMaintenance()->SettledFrontier(grpc) &&
+            hiredis::Hiredis::ProcessMaintenance()->SettledFrontier(redis) && !kafka.unknown && kafka.activeSends == 0 && kafka.activeCallbacks == 0 && kafka.accepted == kafka.confirmed) {
+            control.sourceFrontier = rpc + "\n" + grpc + "\n" + redis + "\nkafka-accepted:" + std::to_string(kafka.accepted) + ":" + std::to_string(kafka.confirmed);
+            control.Write(true, control.sourceFrontier);
+        }
+    }
+    if (!control.runtime.relayRequested || !control.runtime.relay || !control.sourceWritten || control.relayWritten) return;
+    if (!control.relayDraining) { control.relayDraining = true; control.stageDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        RpcChannel::ProcessMaintenance()->CloseSources(); ShutdownGrpcServer();
+        control.manualDraining=kafkaManager.BeginManualDrain();
+    }
+    if (std::chrono::steady_clock::now() >= control.stageDeadline) { hold(); return; }
+    if(!control.manualDrainReady){
+        if(control.manualDraining.valid()&&control.manualDraining.wait_for(std::chrono::seconds(0))==std::future_status::ready){if(!control.manualDraining.get()){hold();return;}control.manualDrainReady=true;}
+        if(!control.manualDrainReady)return;
+    }
+    if (!control.relayClosed) {
+        if(!control.manualConsumersStopped){if(!kafkaManager.ManualDrainReady())return;kafkaManager.StopConsumers();control.manualConsumersStopped=true;}
+        if (!shutdownGrpcDrainComplete_ || !kafkaManager.ConsumersJoined() || !shutdownDrainCompleteFn_(*this)) return;
+        std::string rpc, grpc, redis;
+        const auto kafka = KafkaProducer::ProcessPublicationFrontier();
+        if (!RpcChannel::ProcessMaintenance()->Frontier(true, rpc) || !muduo_grpc::Channel::ProcessMaintenance()->SettledFrontier(grpc) ||
+            !hiredis::Hiredis::ProcessMaintenance()->SettledFrontier(redis) || kafka.unknown || kafka.activeSends != 0 || kafka.activeCallbacks != 0 || kafka.accepted != kafka.confirmed) return;
+        control.relayClosed = true; control.relayClosedMs = NodeMaintenanceControl::NowMs();
+        maintenanceRelayStop_(*this); beforeTeardownRan_ = true;
+        CloseTransportOwnersInLoop();
+        ReleaseLocalOwnersInLoop();
+        kafkaManager.Shutdown(std::chrono::milliseconds(0));
+    }
+    if (std::chrono::steady_clock::now() >= control.stageDeadline) { hold(); return; }
+    bool ownsManual=false;for(const auto& row:control.runtime.plan.manual_assignments())if(row.issuer_id()==control.runtime.source->issuer_id()&&row.instance_id()==control.instance)ownsManual=true;
+    if(ownsManual&&!control.manualWritten){
+        if(!control.manualReading.valid()&&!control.writing.valid())control.manualReading=kafkaManager.ManualEvidence(control.runtime.request.run_id(),control.runtime.request.evidence().manifest_digest(),control.runtime.source->issuer_id(),control.instance);
+        if(control.manualReading.valid()&&control.manualReading.wait_for(std::chrono::seconds(0))==std::future_status::ready){auto actual=control.manualReading.get();if(!actual||actual->assignments().empty()||!actual->accepting_closed()||!actual->callbacks_joined()||actual->unresolved_publications()!=0||actual->accepted()!=actual->settled()){hold();return;}try{control.WriteManual(std::move(*actual),false);}catch(...){hold();return;}}
+        return;
+    }
+    std::string rpc, grpc, redis;
+    const auto kafka = kafkaManager.ClosedPublicationFrontier();
+    if (!control.writing.valid() && rpcNativeJoined_ && kafkaManager.LocalWorkJoined() && RpcChannel::ProcessMaintenance()->LocalCallbacksJoined() &&
+        muduo_grpc::Channel::ProcessMaintenance()->Joined() && muduo_grpc::Channel::ProcessMaintenance()->NativeJoined() &&
+        muduo_grpc::Channel::ProcessControlMaintenance()->Joined() && muduo_grpc::Channel::ProcessControlMaintenance()->NativeJoined() &&
+        hiredis::Hiredis::ProcessMaintenance()->Joined() && RpcChannel::ProcessMaintenance()->Frontier(false, rpc) &&
+        muduo_grpc::Channel::ProcessMaintenance()->Frontier(grpc) && hiredis::Hiredis::ProcessMaintenance()->Frontier(redis) && kafka) {
+        control.Write(false, control.sourceFrontier + "\n" + rpc + "\n" + grpc + "\n" + redis + "\n" + *kafka + "\nmanual:" + ControlHex(control.manualDigest));
+    }
+}
+
+void Node::CloseTransportOwnersInLoop()
+{
+    eventLoop.assertInLoopThread();
+    if (transportCloseStarted_) return;
+    transportCloseStarted_ = true;
+    ReleaseNodeId();
+    serviceDiscoveryManager.Shutdown();
+    serviceHealthMonitorTimer.Cancel(); conflictDrainTimer.Cancel();
+    RpcChannel::ProcessMaintenance()->ClosePublications();
+    muduo_grpc::Channel::ProcessMaintenance()->Close();
+    muduo_grpc::Channel::ProcessControlMaintenance()->Close();
+    NodeUtils::CloseAllRpcChannels();
+    for (auto& registry : tlsNodeContextManager.GetAllRegistries()) registry.clear<MuduoGrpcChannelPtr>();
+}
+
+void Node::ReleaseLocalOwnersInLoop()
+{
+    eventLoop.assertInLoopThread();
+    if (localOwnerReleaseStarted_) return;
+    localOwnerReleaseStarted_ = true;
+    hiredis::Hiredis::ProcessMaintenance()->Close();
+    tlsRedis.Shutdown();
+    // TcpServer 析构不能发生在 I/O 分发栈；所有 TCP owner 都在原 loop 释放，随后两跳覆盖 forceClose/connectDestroyed。
+    eventLoop.queueInLoop([this] {
+        rpcServer.reset(); tlsNodeContextManager.Clear();
+        eventLoop.queueInLoop([this] { eventLoop.queueInLoop([this] { rpcNativeJoined_ = true; }); });
+    });
 }
 
 void Node::RequestShutdown()
@@ -1246,8 +1896,10 @@ void Node::ShutdownInLoop()
 	// producer 保持可用,供玩家存盘继续发送 DBTask。
 	kafkaManager.StopConsumers();
 
-	if (beforeShutdownFn_)
+	RpcChannel::ProcessMaintenance()->CloseSources();
+	if (!sourceBusinessClosed_ && beforeShutdownFn_)
 	{
+		sourceBusinessClosed_ = true;
 		LOG_INFO << "Running before-shutdown hook...";
 		beforeShutdownFn_(*this);
 	}
@@ -1265,11 +1917,7 @@ void Node::StartShutdownDrainWatchdog()
 {
 	eventLoop.assertInLoopThread();
 
-	if (!shutdownDrainCompleteFn_)
-	{
-		return;
-	}
-
+	// 即使业务 hook 同步完成，Kafka 已排入 loop 的回调仍须真实返回。
 	constexpr double kDrainPollIntervalSec = 0.1;
 	shutdownDrainDeadline_ = std::chrono::steady_clock::now() + kShutdownDrainBudget;
 	LOG_INFO << "Waiting for before-shutdown work to drain. timeout_s="
@@ -1284,28 +1932,30 @@ void Node::StartShutdownDrainWatchdog()
 void Node::MaybeFinalizeShutdownInLoop()
 {
 	eventLoop.assertInLoopThread();
-	if (shutdownFinalizationStarted_)
+	if (!shutdownStarted.load(std::memory_order_acquire) || shutdownFinalizationStarted_)
 	{
 		return;
 	}
 
 	const bool businessDrained = !shutdownDrainCompleteFn_ || shutdownDrainCompleteFn_(*this);
-	const bool businessExpired = shutdownDrainCompleteFn_ &&
-		std::chrono::steady_clock::now() >= shutdownDrainDeadline_;
-	if (!shutdownGrpcDrainComplete_ || (!businessDrained && !businessExpired))
+	const bool businessExpired = std::chrono::steady_clock::now() >= shutdownDrainDeadline_;
+	const bool kafkaCallbacksJoined = kafkaManager.ConsumersJoined();
+	if (!shutdownGrpcDrainComplete_ || !kafkaCallbacksJoined || (!businessDrained && !businessExpired))
 	{
+		if (businessExpired) shutdownFailure_.store(true, std::memory_order_release);
 		return;
 	}
 
 	shutdownFinalizationStarted_ = true;
 	shutdownDrainTimer.Cancel();
-	if (businessDrained)
+	if (businessDrained && kafkaCallbacksJoined)
 	{
-		LOG_INFO << "Before-shutdown drain complete.";
+		LOG_INFO << "Before-shutdown work and queued Kafka callbacks joined.";
 	}
 	else
 	{
-		LOG_ERROR << "Before-shutdown drain budget exceeded; continuing with work still in flight. timeout_s="
+		shutdownFailure_.store(true, std::memory_order_release);
+		LOG_ERROR << "Lifecycle HOLD: shutdown budget expired with unresolved work; teardown is not a closure receipt. timeout_s="
 				  << std::chrono::duration_cast<std::chrono::seconds>(kShutdownDrainBudget).count();
 	}
 	FinalizeShutdownInLoop();
@@ -1326,28 +1976,9 @@ void Node::FinalizeShutdownInLoop()
 		eventLoop.queueInLoop([server = std::move(grpcServer_)]() mutable
 							  { server.reset(); });
 	}
-	// 先发既有的租约释放,再关 etcd 传输(LeaseRevoke 尽量送达,§13.7),然后关全部出站通道。
-	ReleaseNodeId();
-	serviceDiscoveryManager.Shutdown();
-
-	serviceHealthMonitorTimer.Cancel();
-	conflictDrainTimer.Cancel();
 	shutdownDrainTimer.Cancel();
-
-	// 阶段 0(docs/design/muduo-rpc-channel.md §6.5):先让所有在途调用以失败完成,再把拆除排到它们之后。
-	// 失败回调一律经 queueInLoop 投递;本函数可能从 drain 定时器进入,同一轮 I/O 阶段里对端 DOWN 排进来的
-	// 失败闭包也已在队列里。以前拆除在这里同步执行,这些回调全都跑在 tlsEcs.Clear() / logSystem.stop() 之后
-	// (ECS 已清、日志已停)。现在拆除放进 FinalizeTeardownInLoop 并排在队尾,FIFO 保证它们先执行。
-	// 关机期间回调里再 queueInLoop 的后续工作会落到拆除之后(两跳 quit 仍会再排空一层),不要依赖它。
-	NodeUtils::CloseAllRpcChannels();
-	for (auto &nodeRegistry : tlsNodeContextManager.GetAllRegistries())
-	{
-		// muduo_grpc 通道按值持有 TcpClient;析构时把在途调用以 UNAVAILABLE 排进队列 —— 放在阶段 0 清,
-		// 那些回调也排在拆除之前、看得到活着的 ECS 与日志。~TcpClient 排进的 forceCloseInLoop /
-		// connectDestroyed 仍由拆除末尾的两跳覆盖。docs/design/grpc-muduo-transport.md §6、§14。
-		// 此后的 Send 找不到通道,以本地 UNAVAILABLE 延后完成(计入 GrpcClientLocalCompletionsDrained)。
-		nodeRegistry.clear<MuduoGrpcChannelPtr>();
-	}
+	maintenanceControlTimer_.Cancel();
+	CloseTransportOwnersInLoop();
 	eventLoop.queueInLoop([this]
 	{
 		FinalizeTeardownInLoop();
@@ -1360,7 +1991,11 @@ void Node::FinalizeTeardownInLoop()
 
 	// node_id / 端口的重试定时器由 serviceDiscoveryManager.Shutdown() -> EtcdService::Shutdown()
 	// 取消,不在这里。
-	kafkaManager.Shutdown();
+	if (!kafkaManager.Shutdown())
+	{
+		shutdownFailure_.store(true, std::memory_order_release);
+		LOG_ERROR << "Kafka 生命周期 HOLD：native producer 或已接收回调尚未确认，禁止以进程退出签闭合";
+	}
 	// 拆除前钩子(SetBeforeTeardown):排在 producer 最后一次有界 flush 之后(重入时 kafkaManager.Shutdown 只返回缓存结果,
 	// 不再 flush),排在 Redis / ECS / 注册表拆除与 logSystem.stop() 之前 —— 业务在这里停掉自己的定时器并把未落定的事
 	// 打进日志(scene:DBTask 回执 Pump 与未落定玩家清单)。只在第一次进入时调用:下面的让轮会重入本函数,
@@ -1375,15 +2010,17 @@ void Node::FinalizeTeardownInLoop()
 	}
 	// Hiredis 持有 muduo Channel 和待回调命令;必须在 EventLoop 与 Scene
 	// MessageAsyncClient 回调目标都存活时释放。
-	tlsRedis.Shutdown();
+	ReleaseLocalOwnersInLoop();
 	// 阶段 0 与本函数之间、以及 Redis 取消回调里，都可能向已关闭节点 Send:那是排在本函数之后的异步本地失败。
 	// 让一轮,等它们在 ECS / 日志仍活着时执行完再拆(Kafka / Redis 的 Shutdown 可重入)。
-	if (!GrpcClientLocalCompletionsDrained())
+	if (!rpcNativeJoined_ || !GrpcClientLocalCompletionsDrained() || !kafkaManager.LocalWorkJoined() ||
+        !RpcChannel::ProcessMaintenance()->LocalCallbacksJoined() ||
+        !muduo_grpc::Channel::ProcessMaintenance()->Joined() || !muduo_grpc::Channel::ProcessMaintenance()->NativeJoined() ||
+        !muduo_grpc::Channel::ProcessControlMaintenance()->Joined() || !muduo_grpc::Channel::ProcessControlMaintenance()->NativeJoined() ||
+        !hiredis::Hiredis::ProcessMaintenance()->Joined())
 	{
-		eventLoop.queueInLoop([this]
-		{
-			FinalizeTeardownInLoop();
-		});
+		// 等的只是仍引用业务对象的本机工作；UNKNOWN 已退出的路径不会卡在此处。
+		shutdownDrainTimer.RunAfter(0.05, [this] { FinalizeTeardownInLoop(); });
 		return;
 	}
 	// 节点 registry 里的出站 TCP 客户端必须趁 EventLoop 还活着释放:RpcClient 按值持有
@@ -1394,6 +2031,9 @@ void Node::FinalizeTeardownInLoop()
 	// gRPC 与 RPC0 的在途调用都已失败完成；现在才允许清除整个节点池。
 	// 同时释放 protobuf，避免拖到 EventLoop/protobuf 关闭后的 TLS 析构。
 	tlsNodeContextManager.Clear();
+	// /metrics 出口同理趁 EventLoop 还活着释放(~TcpServer 要在 loop 线程上关掉已有连接);它的采集回调读 tlsEcs,
+	// 必须排在 tlsEcs.Clear() 之前。关闭排进队列的连接收尾由下面的两跳 queueInLoop 排空。
+	metricsExporter_.reset();
 	// Cleared by tlsEcs.Clear() below.
 	tlsEcs.Clear();
 #ifdef WIN32
@@ -1433,7 +2073,8 @@ void Node::FinalizeTeardownInLoop()
 		loop->queueInLoop([this, loop]
 		{
 			loop->quit();
-			LOG_DEBUG << "Node shutdown complete.";
+			if (shutdownFailure_.load(std::memory_order_acquire)) { LOG_ERROR << "Node teardown complete with lifecycle HOLD"; }
+			else { LOG_DEBUG << "Node teardown complete; maintenance closure requires original owner receipts"; }
 			std::lock_guard<std::mutex> lock(shutdownCompletionMutex_);
 			shutdownComplete_ = true;
 			shutdownCompletionCv_.notify_all();
@@ -1444,9 +2085,18 @@ void Node::FinalizeTeardownInLoop()
 void Node::InitLogSystem()
 {
 	// Log system already started in constructor; just apply config-driven log level.
-	auto logLevel = static_cast<muduo::Logger::LogLevel>(
-		tlsNodeConfigManager.GetBaseDeployConfig().log_level());
-	muduo::Logger::setLogLevel(logLevel);
+	// 数值即 muduo 枚举(node_log_level.h,没有映射表);readBaseDeployConfig 已对缺键 / 越界拒启。
+	// 转换前再核一次:越界值转成枚举是未定义行为,不依赖「只有读配置会写这个字段」。
+	static_assert(static_cast<uint32_t>(muduo::Logger::TRACE) == 0 &&
+					  static_cast<uint32_t>(muduo::Logger::FATAL) == node_log_level::kMaxValue,
+				  "LogLevel 配置值直接按 muduo 枚举解释;枚举顺序变了要同步 node_log_level.h 与 bin/etc 注释");
+	const uint32_t configured = tlsNodeConfigManager.GetBaseDeployConfig().log_level();
+	if (!node_log_level::IsValidValue(configured))
+	{
+		FatalStartupConfig("LogLevel", "log_level=" + std::to_string(configured) +
+										   " is not a muduo Logger::LogLevel (0=TRACE .. 5=FATAL)");
+	}
+	muduo::Logger::setLogLevel(static_cast<muduo::Logger::LogLevel>(configured));
 }
 
 void Node::LoadConfigs()

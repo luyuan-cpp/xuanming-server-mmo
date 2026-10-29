@@ -11,8 +11,8 @@ spring:
     # 2026-10-16:URL 末尾的 connectTimeout / socketTimeout(毫秒)是 Connector/J 的连接级超时,K8s ConfigMap 从这里镜像
     # (k8s_deploy.ps1 读本键的查询串,缺一项即生成失败;契约测试钉住两边一致)。理由见下面 hikari 段的 2026-10-16 补注(续)。
     url: jdbc:mysql://localhost:3306/mmorpg?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&connectTimeout=3000&socketTimeout=10000
-    username: appuser
-    password: apppass123
+    username: ${MMORPG_SQL_USERNAME}
+    password: ${MMORPG_SQL_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
     # 连接池显式配置(2026-10-12 G2b;数值待压测确认)。不写时是 Hikari 默认:maximumPoolSize=10,minimumIdle 缺省
     # 等于 maximumPoolSize —— 每个副本恒开 10 条,K8s 上每 zone 2 副本 = 20 条,计入所有 zone 共用的那台 MySQL 的总账。
@@ -181,3 +181,9 @@ logging:
 # CI smoke: this trailing comment exists only to dirty the file enough
 # to fire .github/workflows/login-path-tests.yml on a verification PR.
 # It can be reverted before merge — content is documentation-only.
+
+# 每boot独立NORMAL主体；启动grant缺失时拒启。
+mmorpg:
+  run-mode: ${MMORPG_RUN_MODE:prod}
+  sql:
+    require-tidb: ${MMORPG_SQL_REQUIRE_TIDB:true}

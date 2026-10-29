@@ -21,6 +21,7 @@ import (
 	"match/internal/pkg/ctxkeys"
 	"match/internal/playercontract"
 	"match/internal/svc"
+	"shared/drainproof"
 
 	base "proto/common/base"
 	event "proto/common/event"
@@ -124,11 +125,12 @@ func newServiceHarness(t *testing.T, teamConf config.TeamConf) *serviceHarness {
 	mr.SetTime(storeBase)
 	rds := redis.MustNewRedis(redis.RedisConf{Host: mr.Addr(), Type: "node"})
 	svcCtx := &svc.ServiceContext{
-		Config:      config.Config{Team: teamConf},
-		MatchRedis:  rds,
-		SharedRedis: rds,
-		Redis:       rds,
-		SceneNodes:  discovery.NewNodeWatcher("scene", svc.SceneNodeRpcPrefix, nil, nil),
+		RelayAdmission: drainproof.New(),
+		Config:         config.Config{Team: teamConf},
+		MatchRedis:     rds,
+		SharedRedis:    rds,
+		Redis:          rds,
+		SceneNodes:     discovery.NewNodeWatcher("scene", svc.SceneNodeRpcPrefix, nil, nil),
 	}
 	svcCtx.SceneNodes.Upsert(testSceneNodeKey, discovery.NodeEntry{
 		NodeId: 1, ZoneId: testZone, NodeUuid: testSceneUuid, Endpoint: "127.0.0.1:1",

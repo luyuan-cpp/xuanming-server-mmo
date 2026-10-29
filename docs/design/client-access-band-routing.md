@@ -8,7 +8,7 @@
 
 改动预计远超 30 个文件，还要改客户端仓。动手前须按 AGENTS §10.2 报告并取得授权，客户端仓另需 §9 授权。
 
-**关联:** [client-rpc-router.md](./client-rpc-router.md)（本文修订其中 D30、D31、D33、D34 的部分表述）、[xuanming-port-decisions-20260910.md](./xuanming-port-decisions-20260910.md)（D-9、D-12）、[tip-code-axis.md](./tip-code-axis.md)（号段先例）、[grpc-client-deadline-failure-callback.md](./grpc-client-deadline-failure-callback.md)、[ARCH.md](./ARCH.md)、AGENTS §4、§6、§7、§11.3、§11.7。
+**关联:** [client-rpc-router.md](./client-rpc-router.md)（本文修订其中 D30、D31、D33、D34 的部分表述）、[xuanming-port-decisions-20260910.md](./xuanming-port-decisions-20260910.md)（D-9、D-12）、[tip-code-axis.md](./tip-code-axis.md)（号段先例）、[grpc-muduo-transport.md](./grpc-muduo-transport.md)、[ARCH.md](./ARCH.md)、AGENTS §4、§6、§7、§11.3、§11.7。
 
 **证据标注:**
 - 【码】代码或配置事实，写成 `路径:行号`，行号以 HEAD `ed75ad177` 为准。

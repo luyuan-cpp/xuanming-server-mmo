@@ -189,6 +189,8 @@ type BagAllData struct {
 	// those are compile-time constants today, but a player may have
 	// unlocked extra slots via gameplay (Bag::Unlock); persisting per-
 	// player capacity preserves that progression.
+	// 下标 ≥ 本版本 kBagTypeCount 的项是更新版本加的包类型的容量:旧版本必须原样携带、原样写回,
+	// 不得截断(docs/design/mixed-version-persist-field-protection.md §12,第 5 批)。
 	Capacities []uint32 `protobuf:"varint,2,rep,packed,name=capacities,proto3" json:"capacities,omitempty"`
 	// Transient runtime bags (event bags / per-pet bags). Empty for most
 	// players. Each carries its own owner id + capacity + items.
@@ -478,7 +480,7 @@ func (x *QuestAllData) GetScopedStatePresent() bool {
 // session state, mail has an offline-delivery requirement: GM /
 // system / other players send mail to recipients who may not be
 // online on any scene node. So mail probably should NOT live inside
-// PlayerAllData and travel with cross-zone migration — it belongs
+// PlayerAllData and travel with it from node to node — it belongs
 // in an independent Go service (like guild/friend), keyed by
 // player_id, queried over RPC when the player loads.
 //

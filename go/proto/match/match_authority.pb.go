@@ -22,6 +22,55 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type MatchBattleCompletionSourceKind int32
+
+const (
+	MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED MatchBattleCompletionSourceKind = 0
+	MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_KAFKA       MatchBattleCompletionSourceKind = 1
+	MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC  MatchBattleCompletionSourceKind = 2
+)
+
+// Enum value maps for MatchBattleCompletionSourceKind.
+var (
+	MatchBattleCompletionSourceKind_name = map[int32]string{
+		0: "MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED",
+		1: "MATCH_BATTLE_COMPLETION_SOURCE_KAFKA",
+		2: "MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC",
+	}
+	MatchBattleCompletionSourceKind_value = map[string]int32{
+		"MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED": 0,
+		"MATCH_BATTLE_COMPLETION_SOURCE_KAFKA":       1,
+		"MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC":  2,
+	}
+)
+
+func (x MatchBattleCompletionSourceKind) Enum() *MatchBattleCompletionSourceKind {
+	p := new(MatchBattleCompletionSourceKind)
+	*p = x
+	return p
+}
+
+func (x MatchBattleCompletionSourceKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (MatchBattleCompletionSourceKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_match_match_authority_proto_enumTypes[0].Descriptor()
+}
+
+func (MatchBattleCompletionSourceKind) Type() protoreflect.EnumType {
+	return &file_proto_match_match_authority_proto_enumTypes[0]
+}
+
+func (x MatchBattleCompletionSourceKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use MatchBattleCompletionSourceKind.Descriptor instead.
+func (MatchBattleCompletionSourceKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{0}
+}
+
 type MatchNetworkProfile struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	PlanId         string                 `protobuf:"bytes,1,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
@@ -248,7 +297,8 @@ type MatchSpectatorIntentRecord struct {
 	RequestPayload []byte                 `protobuf:"bytes,5,opt,name=request_payload,json=requestPayload,proto3" json:"request_payload,omitempty"` // 选场前即持久原请求，旧handler不能成为新意图。
 	OwnerAccount   string                 `protobuf:"bytes,6,opt,name=owner_account,json=ownerAccount,proto3" json:"owner_account,omitempty"`
 	OwnerRevision  uint64                 `protobuf:"varint,7,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
-	State          uint32                 `protobuf:"varint,8,opt,name=state,proto3" json:"state,omitempty"` // 1尚未发出Add、2已绑定current原件、5已关闭；未知一律拒绝。
+	State          uint32                 `protobuf:"varint,8,opt,name=state,proto3" json:"state,omitempty"`                       // 1尚未发出Add、2已绑定current原件、5已关闭；未知一律拒绝。
+	CloseTip       uint32                 `protobuf:"varint,9,opt,name=close_tip,json=closeTip,proto3" json:"close_tip,omitempty"` // 关闭原因(客户端tip)，先写为准，同request_id重放回同一结论；0=未记录原因，state1必须为0。
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -335,6 +385,13 @@ func (x *MatchSpectatorIntentRecord) GetOwnerRevision() uint64 {
 func (x *MatchSpectatorIntentRecord) GetState() uint32 {
 	if x != nil {
 		return x.State
+	}
+	return 0
+}
+
+func (x *MatchSpectatorIntentRecord) GetCloseTip() uint32 {
+	if x != nil {
+		return x.CloseTip
 	}
 	return 0
 }
@@ -1331,26 +1388,31 @@ func (x *MatchFormationMember) GetTicket() string {
 }
 
 type MatchFormationRecord struct {
-	state            protoimpl.MessageState   `protogen:"open.v1"`
-	BattleId         uint64                   `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	OperationId      string                   `protobuf:"bytes,2,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
-	State            uint32                   `protobuf:"varint,3,opt,name=state,proto3" json:"state,omitempty"` // 1待备战、2已持久化创建请求、3结果未知、4成功、5已安全中止。
-	PhysicalRegion   uint32                   `protobuf:"varint,4,opt,name=physical_region,json=physicalRegion,proto3" json:"physical_region,omitempty"`
-	TargetNodeId     uint32                   `protobuf:"varint,5,opt,name=target_node_id,json=targetNodeId,proto3" json:"target_node_id,omitempty"`
-	TargetInstanceId string                   `protobuf:"bytes,6,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
-	TargetEndpoint   string                   `protobuf:"bytes,7,opt,name=target_endpoint,json=targetEndpoint,proto3" json:"target_endpoint,omitempty"`
-	Mode             uint32                   `protobuf:"varint,8,opt,name=mode,proto3" json:"mode,omitempty"`
-	ConfigId         uint32                   `protobuf:"varint,9,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
-	Members          []*MatchFormationMember  `protobuf:"bytes,10,rep,name=members,proto3" json:"members,omitempty"`
-	CreateRequest    []byte                   `protobuf:"bytes,11,opt,name=create_request,json=createRequest,proto3" json:"create_request,omitempty"`
-	CreatedMs        uint64                   `protobuf:"varint,12,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
-	DeadlineMs       uint64                   `protobuf:"varint,13,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`
-	RetryAtMs        uint64                   `protobuf:"varint,14,opt,name=retry_at_ms,json=retryAtMs,proto3" json:"retry_at_ms,omitempty"`
-	ActivityContext  []byte                   `protobuf:"bytes,15,opt,name=activity_context,json=activityContext,proto3" json:"activity_context,omitempty"`       // 备战前崩溃恢复也保留活动归属，内容为BattleActivityContext。
-	RequeueOnFailure bool                     `protobuf:"varint,16,opt,name=requeue_on_failure,json=requeueOnFailure,proto3" json:"requeue_on_failure,omitempty"` // 排队失败保持原票号与最早等待；整队/点名不能拆散回队。
-	Prepared         []*MatchPreparedEndpoint `protobuf:"bytes,17,rep,name=prepared,proto3" json:"prepared,omitempty"`                                            // 备战时真实端点；恢复取消不能重新猜玩家当前所在场景。
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state                         protoimpl.MessageState   `protogen:"open.v1"`
+	BattleId                      uint64                   `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	OperationId                   string                   `protobuf:"bytes,2,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	State                         uint32                   `protobuf:"varint,3,opt,name=state,proto3" json:"state,omitempty"` // 1待备战、2已持久化创建请求、3结果未知、4成功、5已安全中止。
+	PhysicalRegion                uint32                   `protobuf:"varint,4,opt,name=physical_region,json=physicalRegion,proto3" json:"physical_region,omitempty"`
+	TargetNodeId                  uint32                   `protobuf:"varint,5,opt,name=target_node_id,json=targetNodeId,proto3" json:"target_node_id,omitempty"`
+	TargetInstanceId              string                   `protobuf:"bytes,6,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
+	TargetEndpoint                string                   `protobuf:"bytes,7,opt,name=target_endpoint,json=targetEndpoint,proto3" json:"target_endpoint,omitempty"`
+	Mode                          uint32                   `protobuf:"varint,8,opt,name=mode,proto3" json:"mode,omitempty"`
+	ConfigId                      uint32                   `protobuf:"varint,9,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
+	Members                       []*MatchFormationMember  `protobuf:"bytes,10,rep,name=members,proto3" json:"members,omitempty"`
+	CreateRequest                 []byte                   `protobuf:"bytes,11,opt,name=create_request,json=createRequest,proto3" json:"create_request,omitempty"`
+	CreatedMs                     uint64                   `protobuf:"varint,12,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	DeadlineMs                    uint64                   `protobuf:"varint,13,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`
+	RetryAtMs                     uint64                   `protobuf:"varint,14,opt,name=retry_at_ms,json=retryAtMs,proto3" json:"retry_at_ms,omitempty"`
+	ActivityContext               []byte                   `protobuf:"bytes,15,opt,name=activity_context,json=activityContext,proto3" json:"activity_context,omitempty"`       // 备战前崩溃恢复也保留活动归属，内容为BattleActivityContext。
+	RequeueOnFailure              bool                     `protobuf:"varint,16,opt,name=requeue_on_failure,json=requeueOnFailure,proto3" json:"requeue_on_failure,omitempty"` // 排队失败保持原票号与最早等待；整队/点名不能拆散回队。
+	Prepared                      []*MatchPreparedEndpoint `protobuf:"bytes,17,rep,name=prepared,proto3" json:"prepared,omitempty"`                                            // 备战时真实端点；恢复取消不能重新猜玩家当前所在场景。
+	OutcomeProtocolVersion        uint32                   `protobuf:"varint,18,opt,name=outcome_protocol_version,json=outcomeProtocolVersion,proto3" json:"outcome_protocol_version,omitempty"`
+	PreflightSupportedVersion     uint32                   `protobuf:"varint,19,opt,name=preflight_supported_version,json=preflightSupportedVersion,proto3" json:"preflight_supported_version,omitempty"`
+	PreflightInstanceId           string                   `protobuf:"bytes,20,opt,name=preflight_instance_id,json=preflightInstanceId,proto3" json:"preflight_instance_id,omitempty"`                                  // 发任何Create之前与完整version1正文同事务保存。
+	AdoptedOutcomeProtocolVersion uint32                   `protobuf:"varint,21,opt,name=adopted_outcome_protocol_version,json=adoptedOutcomeProtocolVersion,proto3" json:"adopted_outcome_protocol_version,omitempty"` // 独立保存真实Create/PRESENT回执，不能由能力推算。
+	AdoptedOutcomeObserved        bool                     `protobuf:"varint,22,opt,name=adopted_outcome_observed,json=adoptedOutcomeObserved,proto3" json:"adopted_outcome_observed,omitempty"`                        // 未回包与原身份明确回显0不同；首个实际回执永久不变。
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *MatchFormationRecord) Reset() {
@@ -1500,6 +1562,41 @@ func (x *MatchFormationRecord) GetPrepared() []*MatchPreparedEndpoint {
 		return x.Prepared
 	}
 	return nil
+}
+
+func (x *MatchFormationRecord) GetOutcomeProtocolVersion() uint32 {
+	if x != nil {
+		return x.OutcomeProtocolVersion
+	}
+	return 0
+}
+
+func (x *MatchFormationRecord) GetPreflightSupportedVersion() uint32 {
+	if x != nil {
+		return x.PreflightSupportedVersion
+	}
+	return 0
+}
+
+func (x *MatchFormationRecord) GetPreflightInstanceId() string {
+	if x != nil {
+		return x.PreflightInstanceId
+	}
+	return ""
+}
+
+func (x *MatchFormationRecord) GetAdoptedOutcomeProtocolVersion() uint32 {
+	if x != nil {
+		return x.AdoptedOutcomeProtocolVersion
+	}
+	return 0
+}
+
+func (x *MatchFormationRecord) GetAdoptedOutcomeObserved() bool {
+	if x != nil {
+		return x.AdoptedOutcomeObserved
+	}
+	return false
 }
 
 type MatchPreparedEndpoint struct {
@@ -1827,19 +1924,26 @@ func (x *MatchRankOutboxRecord) GetEntries() []byte {
 	return nil
 }
 
-// 完整结算来源归档；只由收到的Kafka原字节写入，不作为第二套资产权威或自动补发队列。
+// 唯一终局与原结果outbox；RPC来源不伪造Kafka位点。
 type MatchBattleCompletionRecord struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	BattleId        uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	RawPayload      []byte                 `protobuf:"bytes,2,opt,name=raw_payload,json=rawPayload,proto3" json:"raw_payload,omitempty"`
-	PayloadDigest   []byte                 `protobuf:"bytes,3,opt,name=payload_digest,json=payloadDigest,proto3" json:"payload_digest,omitempty"`
-	FormatVersion   uint32                 `protobuf:"varint,4,opt,name=format_version,json=formatVersion,proto3" json:"format_version,omitempty"`
-	ArchivedMs      uint64                 `protobuf:"varint,5,opt,name=archived_ms,json=archivedMs,proto3" json:"archived_ms,omitempty"`
-	SourceTopic     string                 `protobuf:"bytes,6,opt,name=source_topic,json=sourceTopic,proto3" json:"source_topic,omitempty"`
-	SourcePartition int32                  `protobuf:"varint,7,opt,name=source_partition,json=sourcePartition,proto3" json:"source_partition,omitempty"`
-	SourceOffset    int64                  `protobuf:"varint,8,opt,name=source_offset,json=sourceOffset,proto3" json:"source_offset,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state                  protoimpl.MessageState          `protogen:"open.v1"`
+	BattleId               uint64                          `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	RawPayload             []byte                          `protobuf:"bytes,2,opt,name=raw_payload,json=rawPayload,proto3" json:"raw_payload,omitempty"`
+	PayloadDigest          []byte                          `protobuf:"bytes,3,opt,name=payload_digest,json=payloadDigest,proto3" json:"payload_digest,omitempty"`
+	FormatVersion          uint32                          `protobuf:"varint,4,opt,name=format_version,json=formatVersion,proto3" json:"format_version,omitempty"`
+	ArchivedMs             uint64                          `protobuf:"varint,5,opt,name=archived_ms,json=archivedMs,proto3" json:"archived_ms,omitempty"`
+	SourceTopic            string                          `protobuf:"bytes,6,opt,name=source_topic,json=sourceTopic,proto3" json:"source_topic,omitempty"`
+	SourcePartition        int32                           `protobuf:"varint,7,opt,name=source_partition,json=sourcePartition,proto3" json:"source_partition,omitempty"`
+	SourceOffset           int64                           `protobuf:"varint,8,opt,name=source_offset,json=sourceOffset,proto3" json:"source_offset,omitempty"`
+	Decision               BattleOutcomeDecision           `protobuf:"varint,9,opt,name=decision,proto3,enum=match.BattleOutcomeDecision" json:"decision,omitempty"`
+	SourceKind             MatchBattleCompletionSourceKind `protobuf:"varint,10,opt,name=source_kind,json=sourceKind,proto3,enum=match.MatchBattleCompletionSourceKind" json:"source_kind,omitempty"`
+	PlacementOperationId   string                          `protobuf:"bytes,11,opt,name=placement_operation_id,json=placementOperationId,proto3" json:"placement_operation_id,omitempty"`
+	TargetInstanceId       string                          `protobuf:"bytes,12,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
+	OutcomeProtocolVersion uint32                          `protobuf:"varint,13,opt,name=outcome_protocol_version,json=outcomeProtocolVersion,proto3" json:"outcome_protocol_version,omitempty"`
+	ResultPublished        bool                            `protobuf:"varint,14,opt,name=result_published,json=resultPublished,proto3" json:"result_published,omitempty"`
+	NextRetryMs            uint64                          `protobuf:"varint,15,opt,name=next_retry_ms,json=nextRetryMs,proto3" json:"next_retry_ms,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *MatchBattleCompletionRecord) Reset() {
@@ -1928,6 +2032,55 @@ func (x *MatchBattleCompletionRecord) GetSourceOffset() int64 {
 	return 0
 }
 
+func (x *MatchBattleCompletionRecord) GetDecision() BattleOutcomeDecision {
+	if x != nil {
+		return x.Decision
+	}
+	return BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN
+}
+
+func (x *MatchBattleCompletionRecord) GetSourceKind() MatchBattleCompletionSourceKind {
+	if x != nil {
+		return x.SourceKind
+	}
+	return MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED
+}
+
+func (x *MatchBattleCompletionRecord) GetPlacementOperationId() string {
+	if x != nil {
+		return x.PlacementOperationId
+	}
+	return ""
+}
+
+func (x *MatchBattleCompletionRecord) GetTargetInstanceId() string {
+	if x != nil {
+		return x.TargetInstanceId
+	}
+	return ""
+}
+
+func (x *MatchBattleCompletionRecord) GetOutcomeProtocolVersion() uint32 {
+	if x != nil {
+		return x.OutcomeProtocolVersion
+	}
+	return 0
+}
+
+func (x *MatchBattleCompletionRecord) GetResultPublished() bool {
+	if x != nil {
+		return x.ResultPublished
+	}
+	return false
+}
+
+func (x *MatchBattleCompletionRecord) GetNextRetryMs() uint64 {
+	if x != nil {
+		return x.NextRetryMs
+	}
+	return 0
+}
+
 // 与整局原件同一事务登记；稳定身份为battle_id+player_id，保留到显式迁移/恢复流程接管。
 type MatchBattleSettlementSourceRecord struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -1936,6 +2089,13 @@ type MatchBattleSettlementSourceRecord struct {
 	SettlementProto []byte                 `protobuf:"bytes,3,opt,name=settlement_proto,json=settlementProto,proto3" json:"settlement_proto,omitempty"`
 	PayloadDigest   []byte                 `protobuf:"bytes,4,opt,name=payload_digest,json=payloadDigest,proto3" json:"payload_digest,omitempty"`
 	ArchivedMs      uint64                 `protobuf:"varint,5,opt,name=archived_ms,json=archivedMs,proto3" json:"archived_ms,omitempty"`
+	OwnerAccount    string                 `protobuf:"bytes,6,opt,name=owner_account,json=ownerAccount,proto3" json:"owner_account,omitempty"`
+	OwnerRevision   uint64                 `protobuf:"varint,7,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
+	IssuedAtMs      uint64                 `protobuf:"varint,8,opt,name=issued_at_ms,json=issuedAtMs,proto3" json:"issued_at_ms,omitempty"`
+	InboxSeq        uint64                 `protobuf:"varint,9,opt,name=inbox_seq,json=inboxSeq,proto3" json:"inbox_seq,omitempty"`
+	InboxState      uint32                 `protobuf:"varint,10,opt,name=inbox_state,json=inboxState,proto3" json:"inbox_state,omitempty"`
+	DispatchState   uint32                 `protobuf:"varint,11,opt,name=dispatch_state,json=dispatchState,proto3" json:"dispatch_state,omitempty"` // 0旧归档、1待入箱/核原收据、2已确认APPLIED。
+	NextRetryMs     uint64                 `protobuf:"varint,12,opt,name=next_retry_ms,json=nextRetryMs,proto3" json:"next_retry_ms,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -2005,11 +2165,60 @@ func (x *MatchBattleSettlementSourceRecord) GetArchivedMs() uint64 {
 	return 0
 }
 
+func (x *MatchBattleSettlementSourceRecord) GetOwnerAccount() string {
+	if x != nil {
+		return x.OwnerAccount
+	}
+	return ""
+}
+
+func (x *MatchBattleSettlementSourceRecord) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+func (x *MatchBattleSettlementSourceRecord) GetIssuedAtMs() uint64 {
+	if x != nil {
+		return x.IssuedAtMs
+	}
+	return 0
+}
+
+func (x *MatchBattleSettlementSourceRecord) GetInboxSeq() uint64 {
+	if x != nil {
+		return x.InboxSeq
+	}
+	return 0
+}
+
+func (x *MatchBattleSettlementSourceRecord) GetInboxState() uint32 {
+	if x != nil {
+		return x.InboxState
+	}
+	return 0
+}
+
+func (x *MatchBattleSettlementSourceRecord) GetDispatchState() uint32 {
+	if x != nil {
+		return x.DispatchState
+	}
+	return 0
+}
+
+func (x *MatchBattleSettlementSourceRecord) GetNextRetryMs() uint64 {
+	if x != nil {
+		return x.NextRetryMs
+	}
+	return 0
+}
+
 var File_proto_match_match_authority_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\n" +
-	"!proto/match/match_authority.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1fproto/match/match_network.proto\"\xdb\x01\n" +
+	"!proto/match/match_authority.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1fproto/match/match_network.proto\x1a proto/match/match_internal.proto\"\xdb\x01\n" +
 	"\x13MatchNetworkProfile\x12\x17\n" +
 	"\aplan_id\x18\x01 \x01(\tR\x06planId\x12'\n" +
 	"\x0fsession_binding\x18\x02 \x01(\tR\x0esessionBinding\x126\n" +
@@ -2033,7 +2242,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"updated_ms\x18\v \x01(\x04R\tupdatedMs\x12!\n" +
 	"\frequest_high\x18\f \x01(\x04R\vrequestHigh\x12\x1f\n" +
 	"\vrequest_low\x18\r \x01(\x04R\n" +
-	"requestLow:K\x8a\x92\xf4\x01\x0fmatch_spectator\x92\x92\xf4\x01\tplayer_idڒ\xf4\x01$updated_ms,player_id;state,player_id\"\xe8\x02\n" +
+	"requestLow:K\x8a\x92\xf4\x01\x0fmatch_spectator\x92\x92\xf4\x01\tplayer_idڒ\xf4\x01$updated_ms,player_id;state,player_id\"\x85\x03\n" +
 	"\x1aMatchSpectatorIntentRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12!\n" +
 	"\frequest_high\x18\x02 \x01(\x04R\vrequestHigh\x12\x1f\n" +
@@ -2043,7 +2252,8 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x0frequest_payload\x18\x05 \x01(\fR\x0erequestPayload\x12#\n" +
 	"\rowner_account\x18\x06 \x01(\tR\fownerAccount\x12%\n" +
 	"\x0eowner_revision\x18\a \x01(\x04R\rownerRevision\x12\x14\n" +
-	"\x05state\x18\b \x01(\rR\x05state:B\x8a\x92\xf4\x01\x16match_spectator_intent\x92\x92\xf4\x01\"player_id,request_high,request_low\"\x83\x01\n" +
+	"\x05state\x18\b \x01(\rR\x05state\x12\x1b\n" +
+	"\tclose_tip\x18\t \x01(\rR\bcloseTip:B\x8a\x92\xf4\x01\x16match_spectator_intent\x92\x92\xf4\x01\"player_id,request_high,request_low\"\x83\x01\n" +
 	"\x18MatchSpectatorHeadRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12!\n" +
 	"\foperation_id\x18\x02 \x01(\tR\voperationId:'\x8a\x92\xf4\x01\x14match_spectator_head\x92\x92\xf4\x01\tplayer_id\"\x9b\x01\n" +
@@ -2147,7 +2357,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x0fcontract_digest\x18\x02 \x01(\fR\x0econtractDigest:&\x8a\x92\xf4\x01\x13match_global_policy\x92\x92\xf4\x01\tpolicy_id\"K\n" +
 	"\x14MatchFormationMember\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x16\n" +
-	"\x06ticket\x18\x02 \x01(\tR\x06ticket\"\xce\x05\n" +
+	"\x06ticket\x18\x02 \x01(\tR\x06ticket\"\xff\a\n" +
 	"\x14MatchFormationRecord\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12!\n" +
 	"\foperation_id\x18\x02 \x01(\tR\voperationId\x12\x14\n" +
@@ -2168,7 +2378,12 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\vretry_at_ms\x18\x0e \x01(\x04R\tretryAtMs\x12)\n" +
 	"\x10activity_context\x18\x0f \x01(\fR\x0factivityContext\x12,\n" +
 	"\x12requeue_on_failure\x18\x10 \x01(\bR\x10requeueOnFailure\x128\n" +
-	"\bprepared\x18\x11 \x03(\v2\x1c.match.MatchPreparedEndpointR\bprepared:8\x8a\x92\xf4\x01\x0fmatch_formation\x92\x92\xf4\x01\tbattle_idڒ\xf4\x01\x11state,retry_at_ms\"P\n" +
+	"\bprepared\x18\x11 \x03(\v2\x1c.match.MatchPreparedEndpointR\bprepared\x128\n" +
+	"\x18outcome_protocol_version\x18\x12 \x01(\rR\x16outcomeProtocolVersion\x12>\n" +
+	"\x1bpreflight_supported_version\x18\x13 \x01(\rR\x19preflightSupportedVersion\x122\n" +
+	"\x15preflight_instance_id\x18\x14 \x01(\tR\x13preflightInstanceId\x12G\n" +
+	" adopted_outcome_protocol_version\x18\x15 \x01(\rR\x1dadoptedOutcomeProtocolVersion\x128\n" +
+	"\x18adopted_outcome_observed\x18\x16 \x01(\bR\x16adoptedOutcomeObserved:8\x8a\x92\xf4\x01\x0fmatch_formation\x92\x92\xf4\x01\tbattle_idڒ\xf4\x01\x11state,retry_at_ms\"P\n" +
 	"\x15MatchPreparedEndpoint\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1a\n" +
 	"\bendpoint\x18\x02 \x01(\tR\bendpoint\"\xa9\x01\n" +
@@ -2194,7 +2409,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\rsource_cursor\x18\x02 \x01(\x04R\fsourceCursor\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x03 \x01(\x04R\trequestId\x12\x18\n" +
-	"\aentries\x18\x04 \x01(\fR\aentries:5\x8a\x92\xf4\x01\x11match_rank_outbox\x92\x92\xf4\x01\x1asource_epoch,source_cursor\"\xe9\x02\n" +
+	"\aentries\x18\x04 \x01(\fR\aentries:5\x8a\x92\xf4\x01\x11match_rank_outbox\x92\x92\xf4\x01\x1asource_epoch,source_cursor\"\x8f\x06\n" +
 	"\x1bMatchBattleCompletionRecord\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1f\n" +
 	"\vraw_payload\x18\x02 \x01(\fR\n" +
@@ -2205,14 +2420,37 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"archivedMs\x12!\n" +
 	"\fsource_topic\x18\x06 \x01(\tR\vsourceTopic\x12)\n" +
 	"\x10source_partition\x18\a \x01(\x05R\x0fsourcePartition\x12#\n" +
-	"\rsource_offset\x18\b \x01(\x03R\fsourceOffset:*\x8a\x92\xf4\x01\x17match_battle_completion\x92\x92\xf4\x01\tbattle_id\"\x8d\x02\n" +
+	"\rsource_offset\x18\b \x01(\x03R\fsourceOffset\x128\n" +
+	"\bdecision\x18\t \x01(\x0e2\x1c.match.BattleOutcomeDecisionR\bdecision\x12G\n" +
+	"\vsource_kind\x18\n" +
+	" \x01(\x0e2&.match.MatchBattleCompletionSourceKindR\n" +
+	"sourceKind\x124\n" +
+	"\x16placement_operation_id\x18\v \x01(\tR\x14placementOperationId\x12,\n" +
+	"\x12target_instance_id\x18\f \x01(\tR\x10targetInstanceId\x128\n" +
+	"\x18outcome_protocol_version\x18\r \x01(\rR\x16outcomeProtocolVersion\x12)\n" +
+	"\x10result_published\x18\x0e \x01(\bR\x0fresultPublished\x12\"\n" +
+	"\rnext_retry_ms\x18\x0f \x01(\x04R\vnextRetryMs:`\x8a\x92\xf4\x01\x17match_battle_completion\x92\x92\xf4\x01\tbattle_idڒ\xf4\x011decision,result_published,next_retry_ms,battle_id\"\xb9\x04\n" +
 	"!MatchBattleSettlementSourceRecord\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12)\n" +
 	"\x10settlement_proto\x18\x03 \x01(\fR\x0fsettlementProto\x12%\n" +
 	"\x0epayload_digest\x18\x04 \x01(\fR\rpayloadDigest\x12\x1f\n" +
 	"\varchived_ms\x18\x05 \x01(\x04R\n" +
-	"archivedMs:;\x8a\x92\xf4\x01\x1ematch_battle_settlement_source\x92\x92\xf4\x01\x13battle_id,player_idB\rZ\vproto/matchb\x06proto3"
+	"archivedMs\x12#\n" +
+	"\rowner_account\x18\x06 \x01(\tR\fownerAccount\x12%\n" +
+	"\x0eowner_revision\x18\a \x01(\x04R\rownerRevision\x12 \n" +
+	"\fissued_at_ms\x18\b \x01(\x04R\n" +
+	"issuedAtMs\x12\x1b\n" +
+	"\tinbox_seq\x18\t \x01(\x04R\binboxSeq\x12\x1f\n" +
+	"\vinbox_state\x18\n" +
+	" \x01(\rR\n" +
+	"inboxState\x12%\n" +
+	"\x0edispatch_state\x18\v \x01(\rR\rdispatchState\x12\"\n" +
+	"\rnext_retry_ms\x18\f \x01(\x04R\vnextRetryMs:p\x8a\x92\xf4\x01\x1ematch_battle_settlement_source\x92\x92\xf4\x01\x13battle_id,player_idڒ\xf4\x010dispatch_state,next_retry_ms,battle_id,player_id*\xaa\x01\n" +
+	"\x1fMatchBattleCompletionSourceKind\x12.\n" +
+	"*MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED\x10\x00\x12(\n" +
+	"$MATCH_BATTLE_COMPLETION_SOURCE_KAFKA\x10\x01\x12-\n" +
+	")MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC\x10\x02B\rZ\vproto/matchb\x06proto3"
 
 var (
 	file_proto_match_match_authority_proto_rawDescOnce sync.Once
@@ -2226,43 +2464,48 @@ func file_proto_match_match_authority_proto_rawDescGZIP() []byte {
 	return file_proto_match_match_authority_proto_rawDescData
 }
 
+var file_proto_match_match_authority_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_proto_match_match_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_proto_match_match_authority_proto_goTypes = []any{
-	(*MatchNetworkProfile)(nil),               // 0: match.MatchNetworkProfile
-	(*MatchSpectatorRecord)(nil),              // 1: match.MatchSpectatorRecord
-	(*MatchSpectatorIntentRecord)(nil),        // 2: match.MatchSpectatorIntentRecord
-	(*MatchSpectatorHeadRecord)(nil),          // 3: match.MatchSpectatorHeadRecord
-	(*MatchNetworkProfileRecord)(nil),         // 4: match.MatchNetworkProfileRecord
-	(*MatchAuthorityTicketRecord)(nil),        // 5: match.MatchAuthorityTicketRecord
-	(*MatchTicketRegionRecord)(nil),           // 6: match.MatchTicketRegionRecord
-	(*MatchJoinIntentRecord)(nil),             // 7: match.MatchJoinIntentRecord
-	(*MatchDirectIntentRecord)(nil),           // 8: match.MatchDirectIntentRecord
-	(*MatchDirectStartOriginal)(nil),          // 9: match.MatchDirectStartOriginal
-	(*MatchChallengeInvitationRecord)(nil),    // 10: match.MatchChallengeInvitationRecord
-	(*MatchGlobalPolicyRecord)(nil),           // 11: match.MatchGlobalPolicyRecord
-	(*MatchFormationMember)(nil),              // 12: match.MatchFormationMember
-	(*MatchFormationRecord)(nil),              // 13: match.MatchFormationRecord
-	(*MatchPreparedEndpoint)(nil),             // 14: match.MatchPreparedEndpoint
-	(*MatchRatingRecord)(nil),                 // 15: match.MatchRatingRecord
-	(*MatchRatingAppliedRecord)(nil),          // 16: match.MatchRatingAppliedRecord
-	(*MatchRankSourceRecord)(nil),             // 17: match.MatchRankSourceRecord
-	(*MatchRankOutboxRecord)(nil),             // 18: match.MatchRankOutboxRecord
-	(*MatchBattleCompletionRecord)(nil),       // 19: match.MatchBattleCompletionRecord
-	(*MatchBattleSettlementSourceRecord)(nil), // 20: match.MatchBattleSettlementSourceRecord
-	(*NetworkProbeReceipt)(nil),               // 21: match.NetworkProbeReceipt
+	(MatchBattleCompletionSourceKind)(0),      // 0: match.MatchBattleCompletionSourceKind
+	(*MatchNetworkProfile)(nil),               // 1: match.MatchNetworkProfile
+	(*MatchSpectatorRecord)(nil),              // 2: match.MatchSpectatorRecord
+	(*MatchSpectatorIntentRecord)(nil),        // 3: match.MatchSpectatorIntentRecord
+	(*MatchSpectatorHeadRecord)(nil),          // 4: match.MatchSpectatorHeadRecord
+	(*MatchNetworkProfileRecord)(nil),         // 5: match.MatchNetworkProfileRecord
+	(*MatchAuthorityTicketRecord)(nil),        // 6: match.MatchAuthorityTicketRecord
+	(*MatchTicketRegionRecord)(nil),           // 7: match.MatchTicketRegionRecord
+	(*MatchJoinIntentRecord)(nil),             // 8: match.MatchJoinIntentRecord
+	(*MatchDirectIntentRecord)(nil),           // 9: match.MatchDirectIntentRecord
+	(*MatchDirectStartOriginal)(nil),          // 10: match.MatchDirectStartOriginal
+	(*MatchChallengeInvitationRecord)(nil),    // 11: match.MatchChallengeInvitationRecord
+	(*MatchGlobalPolicyRecord)(nil),           // 12: match.MatchGlobalPolicyRecord
+	(*MatchFormationMember)(nil),              // 13: match.MatchFormationMember
+	(*MatchFormationRecord)(nil),              // 14: match.MatchFormationRecord
+	(*MatchPreparedEndpoint)(nil),             // 15: match.MatchPreparedEndpoint
+	(*MatchRatingRecord)(nil),                 // 16: match.MatchRatingRecord
+	(*MatchRatingAppliedRecord)(nil),          // 17: match.MatchRatingAppliedRecord
+	(*MatchRankSourceRecord)(nil),             // 18: match.MatchRankSourceRecord
+	(*MatchRankOutboxRecord)(nil),             // 19: match.MatchRankOutboxRecord
+	(*MatchBattleCompletionRecord)(nil),       // 20: match.MatchBattleCompletionRecord
+	(*MatchBattleSettlementSourceRecord)(nil), // 21: match.MatchBattleSettlementSourceRecord
+	(*NetworkProbeReceipt)(nil),               // 22: match.NetworkProbeReceipt
+	(BattleOutcomeDecision)(0),                // 23: match.BattleOutcomeDecision
 }
 var file_proto_match_match_authority_proto_depIdxs = []int32{
-	21, // 0: match.MatchNetworkProfile.receipts:type_name -> match.NetworkProbeReceipt
-	1,  // 1: match.MatchDirectIntentRecord.spectator_exits:type_name -> match.MatchSpectatorRecord
-	13, // 2: match.MatchDirectStartOriginal.formation:type_name -> match.MatchFormationRecord
-	5,  // 3: match.MatchDirectStartOriginal.tickets:type_name -> match.MatchAuthorityTicketRecord
-	12, // 4: match.MatchFormationRecord.members:type_name -> match.MatchFormationMember
-	14, // 5: match.MatchFormationRecord.prepared:type_name -> match.MatchPreparedEndpoint
-	6,  // [6:6] is the sub-list for method output_type
-	6,  // [6:6] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	22, // 0: match.MatchNetworkProfile.receipts:type_name -> match.NetworkProbeReceipt
+	2,  // 1: match.MatchDirectIntentRecord.spectator_exits:type_name -> match.MatchSpectatorRecord
+	14, // 2: match.MatchDirectStartOriginal.formation:type_name -> match.MatchFormationRecord
+	6,  // 3: match.MatchDirectStartOriginal.tickets:type_name -> match.MatchAuthorityTicketRecord
+	13, // 4: match.MatchFormationRecord.members:type_name -> match.MatchFormationMember
+	15, // 5: match.MatchFormationRecord.prepared:type_name -> match.MatchPreparedEndpoint
+	23, // 6: match.MatchBattleCompletionRecord.decision:type_name -> match.BattleOutcomeDecision
+	0,  // 7: match.MatchBattleCompletionRecord.source_kind:type_name -> match.MatchBattleCompletionSourceKind
+	8,  // [8:8] is the sub-list for method output_type
+	8,  // [8:8] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_proto_match_match_authority_proto_init() }
@@ -2271,18 +2514,20 @@ func file_proto_match_match_authority_proto_init() {
 		return
 	}
 	file_proto_match_match_network_proto_init()
+	file_proto_match_match_internal_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_match_match_authority_proto_rawDesc), len(file_proto_match_match_authority_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_proto_match_match_authority_proto_goTypes,
 		DependencyIndexes: file_proto_match_match_authority_proto_depIdxs,
+		EnumInfos:         file_proto_match_match_authority_proto_enumTypes,
 		MessageInfos:      file_proto_match_match_authority_proto_msgTypes,
 	}.Build()
 	File_proto_match_match_authority_proto = out.File

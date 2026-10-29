@@ -11,7 +11,7 @@ import "proto/common/component/mission_comp.proto";
 // 存盘时不原样写回的字段标了 OptionPersistUncarried(投影或只读旧格式),往返一致性测试不经由它们注入。
 
 // BagAllData — full snapshot of a player's bag/inventory state for
-// cross-zone migration, persistence, and rollback.
+// persistence (including the ownership-handoff save before a cross-zone move) and rollback.
 //
 // Background (cross-zone-readiness-audit.md §3.2 件 1):
 //   PlayerAllData previously carried only 7 ECS components — Transform,
@@ -19,6 +19,7 @@ import "proto/common/component/mission_comp.proto";
 //   Bag lived in C++ scene-node ECS memory only (entt::registry on
 //   the Bag class), so:
 //     • cross-zone migration silently dropped bag every transition
+//       (historical: that migration chain was removed later, CZ-1)
 //     • normal logout dropped bag (HandleExitGameNode → SavePlayerToRedis
 //       marshalled the same 7 components, no bag)
 //     • rollback could not restore bag (snapshot had no bag bytes)
@@ -187,6 +188,8 @@ message BagAllData {
   // those are compile-time constants today, but a player may have
   // unlocked extra slots via gameplay (Bag::Unlock); persisting per-
   // player capacity preserves that progression.
+  // 下标 ≥ 本版本 kBagTypeCount 的项是更新版本加的包类型的容量:旧版本必须原样携带、原样写回,
+  // 不得截断(docs/design/mixed-version-persist-field-protection.md §12,第 5 批)。
   repeated uint32 capacities = 2;
 
   // Transient runtime bags (event bags / per-pet bags). Empty for most
@@ -258,7 +261,7 @@ message QuestAllData {
 // session state, mail has an offline-delivery requirement: GM /
 // system / other players send mail to recipients who may not be
 // online on any scene node. So mail probably should NOT live inside
-// PlayerAllData and travel with cross-zone migration — it belongs
+// PlayerAllData and travel with it from node to node — it belongs
 // in an independent Go service (like guild/friend), keyed by
 // player_id, queried over RPC when the player loads.
 //

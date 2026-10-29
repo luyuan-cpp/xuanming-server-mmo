@@ -22,7 +22,13 @@ TableDataFormat: "binary"
 DataRootDirectory: "../"
 
 # 日志配置（控制日志输出级别）
-LogLevel: 2 # 日志级别编码（通常约定：0=DEBUG，1=INFO，2=WARN，3=ERROR，4=FATAL，具体需结合业务代码定义）
+# 数值直接按 muduo Logger::LogLevel 枚举解释（没有映射表，判定见 cpp/libs/engine/config/node_log_level.h）：
+#   0=TRACE，1=DEBUG，2=INFO，3=WARN，4=ERROR，5=FATAL；LOG_WARN / LOG_ERROR / LOG_FATAL 不受级别过滤，任何取值都会打。
+# 必填：缺键、空值、非 0..5 的整数（如 INFO、-1、6）时 scene / gate / battle 拒绝启动（config.cpp::readBaseDeployConfig，
+# stderr 有一行 "FATAL LogLevel config"）。2026-10-22 前缺键会静默落到 0 = TRACE。
+# K8s 的 node-config / battle-node-config ConfigMap 由 k8s_deploy.ps1 从这里镜像（2026-10-22 前写死 1 = DEBUG）；
+# 发布预检 release_preflight.ps1 的 debug.cpp.loglevel 要求 >= 2。本地临时看 DEBUG 日志改成 1，测完还原，不要提交。
+LogLevel: 2 # INFO
 
 # 健康检查相关配置（定期检测服务存活状态）
 HealthCheckInterval: 1 # 健康检查间隔（单位：秒）：定期请求下方services列表中的健康检查接口
@@ -190,7 +196,8 @@ DbTaskTopicGeneration: 1
 # 只认 warn / enforce(区分大小写):
 #   warn    判定为截断(加载世代 < 屏障记录的世代)时照写、计数、打日志,不拦截;
 #   enforce 拒写,该玩家本次在线进度不落盘(宁可不写,也不让截断的数据覆盖 SQL)。
-# 缺键 / 空串 = warn;其余值 scene / gate / battle 拒绝启动(config.cpp::readBaseDeployConfig)。
+# 缺键 / 空串 / YAML 空值 = warn;其余值 scene / gate / battle 拒绝启动(config.cpp::readBaseDeployConfig)。
+# K8s 的 node ConfigMap 由 k8s_deploy.ps1 从本键镜像,生成期要求显式写 warn 或 enforce(空值直接拒绝生成)。
 # 切 enforce 的前提(设计 §8.1 第 5 步):staging 真实升世代演练中 C3 / C4 倒退计数为 0,且线上 warn 观察期计数也为 0。
 # login 侧 C4 用 go/login/etc/login.yaml 的同名键,两边分别切换。
 # K8s 上 node ConfigMap 里的这一键由 k8s_deploy.ps1 从本文件镜像生成。
@@ -243,7 +250,7 @@ IdSegments:
     MaxStep: 100000
 
 # C++ 节点发出的每次 unary gRPC 调用的 deadline(毫秒),按**目标**节点类型配,键 = ENodeType 枚举名。
-# 设计与预算表:docs/design/grpc-client-deadline-failure-callback.md §4。两条不等式(上游比下游宽,
+# 设计与预算表:docs/design/grpc-muduo-transport.md §16.3。两条不等式(上游比下游宽,
 # docs/design/microservice-zone-contract-20260914.md §3):
 #   1. deadline > 目标服务的服务端超时(+2000 余量):下游先超时,C++ 才收得到带真实错误码的应答;
 #   2. 依赖调用结果的 C++ 看门狗 > deadline:号段 fetchTimeout、换图在途 TTL 都从这里派生,不另写常数。

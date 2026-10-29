@@ -2,10 +2,14 @@ package svc
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"net"
 	"os"
+	pb "proto/common/database"
+	"shared/drainproof"
 	"strconv"
+	"sync"
 	"sync/atomic"
 
 	"github.com/bwmarrin/snowflake"
@@ -35,8 +39,24 @@ import (
 )
 
 type ServiceContext struct {
-	AccountDirectory accountdirectory.Directory
-	RedisClient      *redis.Client
+	lifecycleMu        sync.Mutex
+	sourceMu           sync.Mutex
+	rootAdmission      *drainproof.Session
+	preloads           *drainproof.Session
+	stopOnce           sync.Once
+	stopErr            error
+	background         sync.WaitGroup
+	backgroundCancel   context.CancelFunc
+	backgroundDone     chan struct{}
+	backgroundWait     sync.Once
+	queueStarted       bool
+	idSegmentNeverUsed bool
+	idSegmentFrontier  []byte
+	AccountDirectory   accountdirectory.Directory
+	RedisClient        *redis.Client
+	// QueueRedis 只给排队(loginqueue.Queue)与放行锁(loginqueue.Dispatcher)用。Node.QueueRedis 没配置时
+	// 与 RedisClient 是同一个指针(newQueueRedis)。gate 排空标记仍走 RedisClient。
+	QueueRedis *redis.Client
 	// SnowFlake 是 PlayerId 发号器。包了一层 fence 闸(见 player_id_gen.go):
 	// 失去 worker id 所有权后必须一个号都发不出去,不能靠"停服"兜底。
 	SnowFlake *PlayerIDGen
@@ -120,26 +140,19 @@ func NewServiceContext() *ServiceContext {
 
 	// Initialize Redis client
 	redisHost := config.AppConfig.Node.RedisClient.Host
-	redisPassword := config.AppConfig.Node.RedisClient.Password
 	redisDB := int(config.AppConfig.Node.RedisClient.DB)
 	if err := config.AppConfig.Node.RedisClient.ValidatePoolSize(); err != nil {
 		panic(fmt.Errorf("Node.RedisClient: %w", err))
 	}
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     redisHost,
-		Password: redisPassword,
-		DB:       redisDB,
-		// 共享 Redis 连接总账按它记账(0 = go-redis 缺省 10 × GOMAXPROCS),见 config.RedisConf.PoolSize。
-		PoolSize:         config.AppConfig.Node.RedisClient.PoolSize,
-		DisableIndentity: true, // suppress CLIENT SETINFO on Redis < 7.2
-	})
+	redisClient := redis.NewClient(redisOptions(config.AppConfig.Node.RedisClient))
 
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		panic(fmt.Errorf("failed to connect Redis: %w", err))
 	}
 	// 生效值(缺省时是 go-redis 算出来的 10 × GOMAXPROCS):核对 ConfigMap 镜像的 PoolSize 是否真的被加载。
 	logx.Infof("Redis client %s DB=%d pool_size=%d", redisHost, redisDB, redisClient.Options().PoolSize)
+	queueRedis := newQueueRedis(ctx, redisClient, config.AppConfig.Node.QueueRedis)
 
 	kafkaClient, err := kafka.NewKeyOrderedKafkaProducer(config.AppConfig.Kafka)
 
@@ -214,7 +227,10 @@ func NewServiceContext() *ServiceContext {
 
 	sc := &ServiceContext{
 		authCleanup:          authCleanup,
+		rootAdmission:        drainproof.New(),
+		preloads:             drainproof.New(),
 		RedisClient:          redisClient,
+		QueueRedis:           queueRedis,
 		KafkaClient:          kafkaClient,
 		ExpandMonitor:        monitor,
 		PlayerLocatorClient:  plClient,
@@ -231,6 +247,52 @@ func NewServiceContext() *ServiceContext {
 	sc.AccountDirectory = accountdirectory.NewClient(sc.DataServiceClient, os.Getenv(accountdirectory.SecretEnv))
 	initialized = true
 	return sc
+}
+
+// redisOptions 把 Node 段的 RedisConf 原样映射成 go-redis 连接选项,配置里写了的每一项都要真的生效。
+// 超时为 0 时沿用 go-redis 缺省(拨号 5s、读写 3s);PoolSize 为 0 时是缺省 10 × GOMAXPROCS,
+// 共享 Redis 连接总账按它记账(见 config.RedisConf.PoolSize)。
+// 2026-10-23 之前这里没传三项超时,etc/login.yaml 与 K8s ConfigMap 写的 DialTimeout 3s 被静默忽略
+// (shared-redis-split-by-purpose.md §2.5 第 8 条)。
+func redisOptions(c config.RedisConf) *redis.Options {
+	return &redis.Options{
+		Addr:             c.Host,
+		Password:         c.Password,
+		DB:               int(c.DB),
+		PoolSize:         c.PoolSize,
+		DialTimeout:      c.DialTimeout,
+		ReadTimeout:      c.ReadTimeout,
+		WriteTimeout:     c.WriteTimeout,
+		DisableIndentity: true, // suppress CLIENT SETINFO on Redis < 7.2
+	}
+}
+
+// queueRedis 是 initLoginQueue 取排队句柄的唯一入口。QueueRedis 为 nil 只出现在只构造了 RedisClient 的
+// ServiceContext(单测);按「未配置 = 与核心共用」处理,与 newQueueRedis 的缺省同一语义。
+func (s *ServiceContext) queueRedis() *redis.Client {
+	if s.QueueRedis != nil {
+		return s.QueueRedis
+	}
+	return s.RedisClient
+}
+
+// newQueueRedis 返回排队与放行锁用的 Redis 句柄。c 为 nil(Node.QueueRedis 整段没写)时原样返回 core:
+// 同一个指针、不多开连接池,行为与拆分前逐字相同。配置了就按 redisOptions 另建一个 client,
+// 与核心同口径:PoolSize 非法或 Ping 不通直接 panic(起服即失败),错误里带句柄名与 Host、不带口令。
+func newQueueRedis(ctx context.Context, core *redis.Client, c *config.RedisConf) *redis.Client {
+	if c == nil {
+		logx.Infof("Redis queue client: shared with core %s", core.Options().Addr)
+		return core
+	}
+	if err := c.ValidatePoolSize(); err != nil {
+		panic(fmt.Errorf("Node.QueueRedis: %w", err))
+	}
+	client := redis.NewClient(redisOptions(*c))
+	if err := client.Ping(ctx).Err(); err != nil {
+		panic(fmt.Errorf("failed to connect Node.QueueRedis %s: %w", c.Host, err))
+	}
+	logx.Infof("Redis queue client %s DB=%d pool_size=%d", c.Host, c.DB, client.Options().PoolSize)
+	return client
 }
 
 // initPlayerNames 给 CreatePlayer / Login / EnterGame 装上角色名登记表的客户端。
@@ -476,7 +538,7 @@ func (s *ServiceContext) initLoginQueue() {
 		panic(fmt.Errorf("login queue: %w", err))
 	}
 	s.LoginQueue = loginqueue.New(
-		s.RedisClient,
+		s.queueRedis(),
 		cfg.QueueEntryTTL,
 		cfg.AdmitTTL,
 		s.QueueTokenSigningSecret(),
@@ -490,7 +552,7 @@ func (s *ServiceContext) initLoginQueue() {
 	queueDispatcher, err := loginqueue.NewDispatcher(
 		s.LoginQueue,
 		s.queueCapProvider,
-		s.RedisClient,
+		s.queueRedis(), // 放行锁与队列同实例:同一 zone 的 leader 只看这一个实例上的锁
 		// dispatcher 这条参数是给 gate token 签名用的(它只挑 gate、
 		// 真正签名在 consume 时由 handler 做),所以传 gate 密钥不是队列密钥。
 		s.GateTokenSigningSecret(),
@@ -517,7 +579,12 @@ func (s *ServiceContext) initLoginQueue() {
 }
 
 func (s *ServiceContext) Start() {
-	s.ExpandMonitor.Start()
+	backgroundCtx, cancel := context.WithCancel(context.Background())
+	s.backgroundCancel = cancel
+	if s.ExpandMonitor != nil {
+		s.background.Add(1)
+		safego.Go("login.kafka_expand_monitor", func() { defer s.background.Done(); s.ExpandMonitor.RunJoined(backgroundCtx) })
+	}
 	s.startPreloadStatsLogger()
 	s.warmPlayerIDSegment()
 	if s.TaskResultDispatcher != nil {
@@ -525,6 +592,7 @@ func (s *ServiceContext) Start() {
 	}
 	if s.QueueDispatcher != nil {
 		s.QueueDispatcher.Start()
+		s.queueStarted = true
 	}
 	s.startGateWatcher()
 	s.startGateDrainMonitor()
@@ -540,7 +608,8 @@ func (s *ServiceContext) startGateWatcher() {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.gateWatchStop = cancel
 	watcher := s.GateWatcher
-	safego.Go("login.gate_watcher", func() { watcher.Run(ctx) })
+	s.background.Add(1)
+	safego.Go("login.gate_watcher", func() { defer s.background.Done(); watcher.Run(ctx) })
 }
 
 // startGateDrainMonitor 起 gate 排空判定循环(集群外入口 D87:标 draining → 等 drained → 删 Pod
@@ -564,8 +633,29 @@ func (s *ServiceContext) startGateDrainMonitor() {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.gateDrainStop = cancel
-	loginqueue.StartGateDrainMonitor(ctx, s.RedisClient,
-		newGateDrainSnapshotFunc(s.GateWatcher.FetchAllNodes), gateDrainPolicy(cfg), cfg.Interval)
+	// 只在本owner管理ticker/退出；业务判定仍复用唯一EvaluateDrainingGates。
+	snapshot, policy := newGateDrainSnapshotFunc(s.GateWatcher.FetchAllNodes), gateDrainPolicy(cfg)
+	s.background.Add(1)
+	safego.Go("login.gate_drain_monitor", func() {
+		defer s.background.Done()
+		ticker := time.NewTicker(cfg.Interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				safego.Run("login.gate_drain_monitor", func() {
+					gates, err := snapshot(ctx)
+					if err != nil {
+						logx.Errorf("gate drain snapshot失败: %v", err)
+						return
+					}
+					loginqueue.EvaluateDrainingGates(ctx, s.RedisClient, gates, policy, time.Now().Unix())
+				})
+			}
+		}
+	})
 }
 
 // newGateDrainSnapshotFunc 把「取 gate 原始节点」包成排空判定的快照函数。
@@ -686,35 +776,193 @@ func (s *ServiceContext) PushTipToSession(gateID string, gateInstanceID string, 
 	return nil
 }
 
+// CloseRootAdmission永久关闭RPC根入口；同boot Kafka生产者仍服务已接收的异步收尾。
+func (s *ServiceContext) CloseRootAdmission() {
+	s.lifecycleMu.Lock()
+	if s.rootAdmission == nil {
+		s.rootAdmission = drainproof.New()
+	}
+	s.rootAdmission.CloseAdmission()
+	s.lifecycleMu.Unlock()
+}
+func (s *ServiceContext) EnterRoot() (func(), error) {
+	s.lifecycleMu.Lock()
+	if s.rootAdmission == nil {
+		s.rootAdmission = drainproof.New()
+	}
+	gate := s.rootAdmission
+	s.lifecycleMu.Unlock()
+	return gate.Enter()
+}
 func (s *ServiceContext) Stop() {
-	if s.authCleanup != nil {
-		defer s.authCleanup()
+	if err := s.StopAndReport(context.Background()); err != nil {
+		logx.Errorf("login排空HOLD: %v", err)
 	}
-	s.ExpandMonitor.Stop()
-	if s.PlayerIDSegment != nil {
-		s.PlayerIDSegment.Close()
+}
+
+// StopAndReport先闭根入口，保留预加载/结果回调的相互派生能力；全部实际返回后才关闭生产者。
+// ctx截止不等于server undo；返回错误时不关闭SQL/Redis或伪造已静止报告。
+func (s *ServiceContext) CloseSource(ctx context.Context) error {
+	s.sourceMu.Lock()
+	defer s.sourceMu.Unlock()
+	s.CloseRootAdmission()
+	if s.TaskResultDispatcher != nil {
+		s.TaskResultDispatcher.BeginDrain()
 	}
-	if s.preloadStatsStop != nil {
-		close(s.preloadStatsStop)
-		s.preloadStatsStop = nil
+	if s.KafkaClient != nil {
+		s.KafkaClient.BeginDrain()
 	}
-	if s.gateDrainStop != nil {
-		s.gateDrainStop()
-		s.gateDrainStop = nil
+	if err := s.rootAdmission.Wait(ctx); err != nil {
+		return err
 	}
-	if s.gateWatchStop != nil {
-		s.gateWatchStop()
-		s.gateWatchStop = nil
+	s.stopOnce.Do(func() {
+		if s.backgroundCancel != nil {
+			s.backgroundCancel()
+		}
+		if s.QueueDispatcher != nil && s.queueStarted {
+			s.QueueDispatcher.Stop()
+		}
+		if s.ExpandMonitor != nil {
+			s.ExpandMonitor.Stop()
+		}
+		if s.gateDrainStop != nil {
+			s.gateDrainStop()
+		}
+		if s.gateWatchStop != nil {
+			s.gateWatchStop()
+		}
+		if s.preloadStatsStop != nil {
+			close(s.preloadStatsStop)
+		}
+	})
+	s.backgroundWait.Do(func() {
+		s.backgroundDone = make(chan struct{})
+		go func() { s.background.Wait(); close(s.backgroundDone) }()
+	})
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-s.backgroundDone:
+	}
+	s.lifecycleMu.Lock()
+	if s.preloads == nil {
+		s.preloads = drainproof.New()
+	}
+	preloads := s.preloads
+	s.lifecycleMu.Unlock()
+	for {
+		if err := preloads.WaitIdle(ctx); err != nil {
+			return err
+		}
+		if s.TaskResultDispatcher != nil {
+			if err := s.TaskResultDispatcher.WaitIdle(ctx); err != nil {
+				return err
+			}
+		}
+		if preloads.Pending() == 0 {
+			break
+		}
+	}
+	preloads.CloseAdmission()
+	if err := preloads.Wait(ctx); err != nil {
+		return err
 	}
 	if s.TaskResultDispatcher != nil {
-		s.TaskResultDispatcher.Stop()
-	}
-	if s.QueueDispatcher != nil {
-		s.QueueDispatcher.Stop()
+		if err := s.TaskResultDispatcher.StopAndReport(ctx); err != nil {
+			return err
+		}
 	}
 	if s.PreloadPool != nil {
 		s.PreloadPool.Release()
 	}
+	if s.PlayerIDSegment != nil {
+		if s.idSegmentNeverUsed {
+			s.PlayerIDSegment.Close()
+			empty := drainproof.New()
+			empty.CloseAdmission()
+			digest, err := empty.SettledDigest(ctx)
+			if err != nil {
+				return err
+			}
+			s.idSegmentFrontier = digest
+		} else {
+			owner, ok := any(s.PlayerIDSegment).(interface {
+				DrainAndReport(context.Context) ([]byte, error)
+			})
+			if !ok {
+				return fmt.Errorf("号段预取缺真实drain owner，保持HOLD")
+			}
+			digest, err := owner.DrainAndReport(ctx)
+			if err != nil {
+				return err
+			}
+			if len(digest) != 32 {
+				return drainproof.ErrHold
+			}
+			s.idSegmentFrontier = digest
+		}
+	}
+	return nil
+}
+
+func (s *ServiceContext) StopAndReport(ctx context.Context) error {
+	if err := s.CloseSource(ctx); err != nil {
+		return err
+	}
+	if s.KafkaClient != nil {
+		if err := s.KafkaClient.StopAndReport(ctx); err != nil {
+			return err
+		}
+	}
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if s.authCleanup != nil {
+		s.authCleanup()
+		s.authCleanup = nil
+	}
+	return s.stopErr
+}
+
+// SourceFrontier包括已接收RPC、预加载及全部结果回调的实际前沿。
+func (s *ServiceContext) SourceFrontier(ctx context.Context) ([]byte, error) {
+	if err := s.CloseSource(ctx); err != nil {
+		return nil, err
+	}
+	combined := drainproof.New()
+	for _, owner := range []*drainproof.Session{s.rootAdmission, s.preloads} {
+		digest, err := owner.SettledDigest(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if err = combined.MergeSettled(digest); err != nil {
+			return nil, err
+		}
+	}
+	if s.TaskResultDispatcher != nil {
+		digest, err := s.TaskResultDispatcher.FrontierDigest(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if err = combined.MergeSettled(digest); err != nil {
+			return nil, err
+		}
+	}
+	if len(s.idSegmentFrontier) != 0 {
+		if err := combined.MergeSettled(s.idSegmentFrontier); err != nil {
+			return nil, err
+		}
+	}
+	combined.CloseAdmission()
+	return combined.SettledDigest(ctx)
+}
+func (s *ServiceContext) RelayFrontier(ctx context.Context) ([]byte, error) {
+	if err := s.StopAndReport(ctx); err != nil {
+		return nil, err
+	}
+	if s.KafkaClient == nil {
+		return nil, drainproof.ErrHold
+	}
+	return s.KafkaClient.FrontierDigest(ctx)
 }
 
 // SubmitPreload submits a background task to the preload pool and updates
@@ -725,7 +973,34 @@ func (s *ServiceContext) Stop() {
 // entergame_total{result="pool_saturated"}. The drop counter kept here only
 // feeds the periodic [preload-pool] log.
 func (s *ServiceContext) SubmitPreload(task func()) bool {
-	if err := s.PreloadPool.Submit(task); err != nil {
+	s.lifecycleMu.Lock()
+	if s.preloads == nil {
+		s.preloads = drainproof.New()
+	}
+	preloads := s.preloads
+	s.lifecycleMu.Unlock()
+	done, err := preloads.Enter()
+	if err != nil {
+		s.preloadDropped.Add(1)
+		return false
+	}
+	if s.PreloadPool == nil {
+		done()
+		s.preloadDropped.Add(1)
+		return false
+	}
+	if err := s.PreloadPool.Submit(func() {
+		defer func() {
+			if fault := recover(); fault != nil {
+				preloads.Hold()
+				done()
+				panic(fault)
+			}
+			done()
+		}()
+		task()
+	}); err != nil {
+		done()
 		s.preloadDropped.Add(1)
 		return false
 	}
@@ -742,7 +1017,9 @@ func (s *ServiceContext) startPreloadStatsLogger() {
 	}
 	s.preloadStatsStop = make(chan struct{})
 	stop := s.preloadStatsStop
+	s.background.Add(1)
 	safego.Go("login.preload_stats_logger", func() {
+		defer s.background.Done()
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		var lastSubmitted, lastDropped uint64
@@ -762,4 +1039,69 @@ func (s *ServiceContext) startPreloadStatsLogger() {
 			}
 		}
 	})
+}
+
+func NewServiceContextForDrain(runtime *drainproof.Runtime) (*ServiceContext, error) {
+	if runtime == nil {
+		return nil, drainproof.ErrHold
+	}
+	seed := runtime.Seed("SOURCE")
+	if seed == nil {
+		return nil, drainproof.ErrHold
+	}
+	if err := runtime.BindBoot(seed.InstanceId, nil); err != nil {
+		return nil, err
+	}
+	service := NewServiceContext()
+	results, err := dispatcher.NewTaskResultDispatcherForBoot(service.RedisClient, 30*time.Second, seed.InstanceId)
+	if err != nil {
+		return nil, err
+	}
+	service.TaskResultDispatcher = results
+	if runtime.Request.RunPhase == pb.SqlWriterDrainRun_SQL_RELEASED {
+		service.rootAdmission = drainproof.NewPrepared()
+	} else {
+		service.idSegmentNeverUsed = true
+	}
+	return service, nil
+}
+func (s *ServiceContext) PreparedFrontier(ctx context.Context) ([]byte, error) {
+	if s.rootAdmission == nil || s.rootAdmission.Pending() != 0 {
+		return nil, drainproof.ErrHold
+	}
+	callback, err := s.TaskResultDispatcher.ReadyFrontier(ctx)
+	if err != nil {
+		return nil, err
+	}
+	producer, err := s.KafkaClient.ReadyFrontier(ctx)
+	if err != nil {
+		return nil, err
+	}
+	h := sha256.New()
+	h.Write(callback)
+	h.Write(producer)
+	h.Write(s.rootAdmission.SnapshotDigest())
+	return h.Sum(nil), nil
+}
+func (s *ServiceContext) OpenPreparedRoot(ctx context.Context) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s.rootAdmission == nil {
+		return nil, drainproof.ErrHold
+	}
+	if err := s.rootAdmission.OpenPrepared(); err != nil {
+		return nil, err
+	}
+	return s.rootAdmission.SnapshotDigest(), nil
+}
+
+// StartForDrain只启动真实结果relay，不warm号段或启动会发新根命令的登录队列。
+func (s *ServiceContext) StartForDrain() {
+	if !s.idSegmentNeverUsed {
+		panic("专用排空启动必须是从未serve的固定boot")
+	}
+	if s.TaskResultDispatcher != nil {
+		s.TaskResultDispatcher.Start()
+	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -705,6 +706,9 @@ func testDuplicateLoginRequest(host string, port int, account, password string, 
 	_ = gc.SendRequest(game.ClientPlayerLoginLoginMessageId, req2)
 
 	// Read responses (server may send 1 or 2).
+	// 同步握手(D 类),不迁到 Call:本用例故意发两条不关联请求,数 RecvOne 读到几条 Login 回包。
+	// 等到 deadline 时最后那个读者 goroutine 仍阻塞在 RecvOne 上(vendored muduo 的 Recv 无法取消,Close 也唤不醒),
+	// 所以本连接到 summary 即作废:只交给 defer 关闭,之后不得再在 gc 上握手或起 RecvLoop(见 errLoginStuck)。
 	responses := 0
 	deadline := time.After(5 * time.Second)
 	for i := 0; i < 2; i++ {
@@ -1095,9 +1099,26 @@ func prepareBehaviorClient(host string, port int, account, password string, stat
 
 	go gc.RecvLoop(func(client *pkg.GameClient, msg *base.MessageContent) {
 		stats.MsgRecv()
-		// gate 级拒绝(限流 / 超长包等)写在信封 MessageContent.error_message,body 为空。
-		// 属性冒烟的等待方靠"响应体 tip"或"新面板"推进,信封错误若只是被静默分发成一条全零响应,
-		// 现象就是 10s 超时而看不到真实原因;这里先把它落成 tip + Error 日志再决定是否分发。
+		// 这里只收推送与 SendRequest 发出的不关联请求(id = 0)的回包。带请求号的回包(Call / smokeCaller)
+		// 已不经这里:GameClient 按 MessageContent.id 交给发起它的调用,信封错误由调用点自己处理
+		// (smokeCaller 返回的 envelopeTip),下面的翻译管不到它们。
+		//
+		// 仍用 SendRequest 发属性请求的复用者,回包照旧走这里:gate 级拒绝(限流 / 超长包等)写在信封
+		// MessageContent.error_message,body 为空。属性冒烟的等待方靠"响应体 tip"或"新面板"推进,信封错误若只是被
+		// 静默分发成一条全零响应,现象就是 10s 超时而看不到真实原因;这里先把它落成 tip + Error 日志再决定是否分发。
+		//
+		// 下面三个请求消息号在本函数建的连接上只经 Call / smokeCaller 带请求号发出(全包 grep 过):ListSkills 由
+		// startListOwnedSkills 发,JoinQueue / WatchBattle 由 battle 冒烟(跨区版也经 battleSmokeLogin 复用本函数)的
+		// smokeCaller 发。它们的 id = 0 回包说明服务端没回显请求号,丢弃,等它的那次调用随后以超时收场;若交给 handler,
+		// 空 body 会被解成全零响应,match 的 handler 还会打出 "join queue ok" 这类与超时相矛盾的成功日志。
+		// ReleaseSkill / EnterScene 不在此列:testMultiRobotBehavior 的 AI 循环仍以 SendRequest 发它们,回包要交 handler。
+		switch msg.GetMessageId() {
+		case game.SceneSkillClientPlayerListSkillsMessageId,
+			game.MatchServiceJoinQueueMessageId,
+			game.MatchServiceWatchBattleMessageId:
+			smokeDropUncorrelatedReply(client.Account, msg)
+			return
+		}
 		if msg.ErrorMessage != nil && msg.ErrorMessage.Id != 0 {
 			zap.L().Error("gate envelope error", zap.Uint32("message_id", msg.MessageId),
 				zap.Uint32("tip", msg.ErrorMessage.Id))
@@ -1120,11 +1141,33 @@ func prepareBehaviorClient(host string, port int, account, password string, stat
 		return nil, nil, fmt.Errorf("wait scene ready: %w", err)
 	}
 
-	_ = gc.SendRequest(game.SceneSkillClientPlayerListSkillsMessageId, &scene.ListSkillsRequest{})
-	stats.MsgSent()
-	time.Sleep(1500 * time.Millisecond)
+	// 首次技能拉取:回包在 RecvLoop 上交给 handler.MessageBodyHandler(startListOwnedSkills),testSkillCast、
+	// testMultiRobotBehavior 与它起的 AI 循环读 Player 上的已拥有技能,只有 handler 会写它。
+	// 与迁移前一样不等回包本身:发出后固定停 behaviorClientSettle 再返回,回包到得更晚也照旧由 handler 写进 Player
+	// (testSkillCast 另有 3s 等待)。拉取失败只告警、照常返回:其余复用者(attribute / pet / equip / currency 等)
+	// 不依赖技能列表,本函数的成败口径与返回时机都不因它改变。
+	//
+	// 这段停顿保留:它迁移前就不只在等 ListSkills 回包,也在等登录后的 AOI(NotifyActorCreate / NotifyActorListCreate)
+	// 等初始推送落地,而这些没有别的等待点替代——testMultiRobotBehavior 起 AI 前不等可见实体、也不等技能,
+	// 其余复用者的首个请求也一直发在这段停顿之后。
+	//
+	// 结局交给一个只记日志的 goroutine:失败(信封 / 业务拒绝 / 超时)比停顿到得晚也要留下原因,否则 testSkillCast
+	// 只能报「技能列表为空」。Call 保证 listSkillsReplyTimeout 内恰好一个结局,这个 goroutine 不会泄漏。
+	// 连接已断(pkg.ErrRPCDisconnected)不记:复用者用完即 Close,回包没到就关是正常收尾。
+	skillsResult := startListOwnedSkills(gc, stats, listSkillsReplyTimeout)
+	go func() {
+		err := <-skillsResult
+		if err == nil || errors.Is(err, pkg.ErrRPCDisconnected) {
+			return
+		}
+		zap.L().Warn("behavior client skill list unavailable", zap.String("account", account), zap.Error(err))
+	}()
+	time.Sleep(behaviorClientSettle)
 	return gc, player, nil
 }
+
+// behaviorClientSettle 是 prepareBehaviorClient 发出 ListSkills 后、返回前的固定停顿(迁移前的 1.5s,原因见调用处)。
+const behaviorClientSettle = 1500 * time.Millisecond
 
 func testSkillCast(host string, port int, account, password string, stats *metrics.Stats, tokenPayload, tokenSig []byte) testResult {
 	start := time.Now()
@@ -1150,31 +1193,38 @@ func testSkillCast(host string, port int, account, password string, stats *metri
 		return testResult{Elapsed: time.Since(start), Detail: "no visible/self entity found for skill cast"}
 	}
 
-	ackBefore, usedBefore, _ := player.GetSkillStats()
-	if err := gc.SendRequest(game.SceneSkillClientPlayerReleaseSkillMessageId, &scene.ReleaseSkillRequest{
+	// ReleaseSkill 的响应类型是 ReleaseSkillResponse(非 Empty),scene 总会回包并回显请求号,所以用 Call 等它自己的回包,
+	// 直接解析结果(做法 a):受理 = 回包无 error_message。迁移前靠 handler 写的 ack 计数(GetSkillStats 的 ackCount)
+	// 只有本用例读,回包带请求号后 handler 不再跑、它也不再增加,判据改看 Call 的结果。
+	// 技能使用 / 打断推送(NotifySkillUsed / NotifySkillInterrupted)不带请求号,照旧经 RecvLoop 由 handler 计数,
+	// used 只记进 Detail;迁移前回包先到时也不等它。
+	_, usedBefore, _ := player.GetSkillStats()
+	caller := newSmokeCaller(gc, stats, account, skillCastReplyTimeout, nil)
+	var rsp scene.ReleaseSkillResponse
+	tip, err := caller.call(game.SceneSkillClientPlayerReleaseSkillMessageId, &scene.ReleaseSkillRequest{
 		SkillTableId: skills[0],
 		TargetId:     targetID,
 		Position:     &component.Vector3{X: 0, Y: 0, Z: 0},
-	}); err != nil {
+	}, &rsp)
+	if errors.Is(err, pkg.ErrRPCNotSent) {
 		return testResult{Elapsed: time.Since(start), Detail: fmt.Sprintf("release skill send failed: %v", err)}
 	}
-	stats.MsgSent()
 	stats.SkillSent()
-
-	ok := waitUntil(3*time.Second, func() bool {
-		ack, used, lastErr := player.GetSkillStats()
-		return lastErr != "" || ack > ackBefore || used > usedBefore
-	})
-	ackAfter, usedAfter, lastErr := player.GetSkillStats()
-	if !ok {
-		return testResult{Elapsed: time.Since(start), Detail: "no skill response/usage notification received"}
+	switch {
+	case err != nil:
+		return testResult{Elapsed: time.Since(start), Detail: fmt.Sprintf("no skill response received: %v", err)}
+	case tip != 0:
+		return testResult{Elapsed: time.Since(start), Detail: fmt.Sprintf("skill rejected: envelope tip=%d", tip)}
+	case rsp.GetErrorMessage() != nil:
+		return testResult{Elapsed: time.Since(start), Detail: "skill rejected: " + rsp.GetErrorMessage().String()}
 	}
-	if lastErr != "" {
-		return testResult{Elapsed: time.Since(start), Detail: "skill rejected: " + lastErr}
-	}
+	_, usedAfter, _ := player.GetSkillStats()
 
-	return testResult{Passed: true, Elapsed: time.Since(start), Detail: fmt.Sprintf("skill=%d target=%d ack=%d used=%d", skills[0], targetID, ackAfter-ackBefore, usedAfter-usedBefore)}
+	return testResult{Passed: true, Elapsed: time.Since(start), Detail: fmt.Sprintf("skill=%d target=%d ack=1 used=%d", skills[0], targetID, usedAfter-usedBefore)}
 }
+
+// skillCastReplyTimeout 是 testSkillCast 等 ReleaseSkill 回包的预算,沿用迁移前等回应 / 推送的 3s。
+const skillCastReplyTimeout = 3 * time.Second
 
 func testSceneSwitch(host string, port int, account, password string, stats *metrics.Stats, tokenPayload, tokenSig []byte) testResult {
 	start := time.Now()
@@ -1194,20 +1244,38 @@ func testSceneSwitch(host string, port int, account, password string, stats *met
 	beforeCount := player.GetSceneEnterCount()
 	beforeScene := player.GetSceneID()
 	sceneConfID := player.GetSceneConfigID()
-	if err := gc.SendRequest(game.SceneSceneClientPlayerEnterSceneMessageId, &scene.EnterSceneC2SRequest{
+	// EnterScene 的同步回包(EnterSceneC2SResponse,非 Empty)只说明受理与否,真正的换场景以 NotifyEnterScene 推送为准。
+	// 请求改用 Call,只为让拒绝(信封或回包 error_message)立刻失败、报出原因,不再等满推送窗口;
+	// 推送不带请求号,照旧经 RecvLoop 由 handler 计数,下面的推送计数等待保留。
+	// 两段共用一个从发出起算的 5s 预算,与迁移前「发出后等推送 5s」相同。
+	switchDeadline := time.Now().Add(sceneSwitchNotifyTimeout)
+	caller := newSmokeCaller(gc, stats, account, sceneSwitchNotifyTimeout, nil)
+	var rsp scene.EnterSceneC2SResponse
+	tip, err := caller.call(game.SceneSceneClientPlayerEnterSceneMessageId, &scene.EnterSceneC2SRequest{
 		SceneInfo: &scene.SceneInfoComp{SceneConfigId: sceneConfID},
-	}); err != nil {
+	}, &rsp)
+	if errors.Is(err, pkg.ErrRPCNotSent) {
 		return testResult{Elapsed: time.Since(start), Detail: fmt.Sprintf("scene switch send failed: %v", err)}
 	}
-	stats.MsgSent()
 	stats.SceneSwitchSent()
+	switch {
+	case err != nil:
+		return testResult{Elapsed: time.Since(start), Detail: fmt.Sprintf("no enter-scene reply after switch request (scene=%d conf=%d): %v", beforeScene, sceneConfID, err)}
+	case tip != 0:
+		return testResult{Elapsed: time.Since(start), Detail: fmt.Sprintf("scene switch rejected: envelope tip=%d (scene=%d conf=%d)", tip, beforeScene, sceneConfID)}
+	case rsp.GetErrorMessage() != nil:
+		return testResult{Elapsed: time.Since(start), Detail: fmt.Sprintf("scene switch rejected: %s (scene=%d conf=%d)", rsp.GetErrorMessage().String(), beforeScene, sceneConfID)}
+	}
 
-	if !waitUntil(5*time.Second, func() bool { return player.GetSceneEnterCount() > beforeCount }) {
+	if !waitUntil(time.Until(switchDeadline), func() bool { return player.GetSceneEnterCount() > beforeCount }) {
 		return testResult{Elapsed: time.Since(start), Detail: fmt.Sprintf("no enter-scene notification after switch request (scene=%d conf=%d)", beforeScene, sceneConfID)}
 	}
 
 	return testResult{Passed: true, Elapsed: time.Since(start), Detail: fmt.Sprintf("scene notifications %d->%d current_scene=%d", beforeCount, player.GetSceneEnterCount(), player.GetSceneID())}
 }
+
+// sceneSwitchNotifyTimeout 是 testSceneSwitch 从发出 EnterScene 起等回包与 NotifyEnterScene 的总预算(迁移前等推送的 5s)。
+const sceneSwitchNotifyTimeout = 5 * time.Second
 
 func testMultiRobotBehavior(host string, port int, accountFmt, password string, stats *metrics.Stats, tokenPayload, tokenSig []byte, n int) testResult {
 	start := time.Now()

@@ -771,7 +771,8 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 			return corrupt(err)
 		}
 		if r.SellerPlayerId != old.SellerPlayerId || r.BuyerPlayerId != old.BuyerPlayerId {
-			return ErrConflict
+			// Due 之后有人买下 / 换了参与者:角色锁是按旧参与者拿的,不能在这把锁下推进。下一轮按新行重来。
+			return staleObservation()
 		}
 		if err := e.checkContractIdentities(ctx, tx, r, w); err != nil {
 			return err
@@ -798,6 +799,10 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 			// 自动放弃(6)与人工判定的 REJECTED / ABORTED 都是"没扣到",由 plan 走与 scene 拒绝同一条补偿路径
 			// (退回另一方已托管的资产、寄售重新开放);腿的 Outcome 只记一次,补偿腿按角色名只建一次,不会退两次。
 			if out.Status == tradepb.TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_APPLIED_PARTIAL {
+				// 与 quarantineLockedTx 同理:转人工之前截止合同名下仍在途的托管扣款,不再把另一方的资产扣进人工单(2026-10-22)。
+				if err := e.Repo.Ops.ExpireCommerceEscrowDebitsTx(ctx, tx, r.CommerceId, e.now()); err != nil {
+					return err
+				}
 				r.Status = Manual
 				w.Stage = "manual"
 				return e.Repo.Save(ctx, tx, r, w, e.now())
@@ -812,7 +817,8 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 			// 已扣出的托管迟早要原样转给对方或退回(Transfer),在记下结局的这一刻就核对它转得动。
 			// 典型是人工终结为 APPLIED 的实例扣款:ResolveManually 不写 escrow_snapshot,自动路径缺原件则根本不终结
 			// (assetop escrowAwaitsReceipt)。若不在这里拦,寄售 / 拍品会照常上架,等买家付了款才在发货时判错,
-			// 把第二个玩家的钱也一起压进人工单;在这里拦则只隔离卖家这一份托管。
+			// 把第二个玩家的钱也一起压进人工单;在这里拦则在别人付款之前就隔离。隔离时合同名下仍在途的托管扣款
+			// 一并截止(quarantineLockedTx),已经扣到的留证据、没扣到的不再扣(2026-10-22 起;此前只改合同行,在途扣款照常落地)。
 			if l.Stream == 3 && applied(l) {
 				if _, err := Transfer(l.Bundle, l.Snapshot); err != nil {
 					return corrupt(fmt.Errorf("腿 %s op_id=%d 已扣出但托管原件不可转交(%s 终局): %w", l.Role, l.OpId, out.Source(), err))
@@ -892,11 +898,14 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 // **不得并发调用同一个 Engine**:ACK 翻页游标 ackAfterOpID 只归这一个 goroutine。
 //
 // 单行失败不再整轮返回(2026-10-20,第一轮审计 §2.5 go-asset-services#0;实现见 tick_isolation.go):
-//   - 每行各有 tickRowBudget 子预算,一行卡住不吃光整轮预算;
-//   - 暂时失败(存储超时、ErrTooManyPending 等)按 tickFailureBackoff 推迟这一行的下次到期,本轮其余行照常推进;
+//   - 每行的子预算从父 ctx 截止时刻推出来(rowBudgetFor,2026-10-22),一定早于整轮截止结束:
+//     卡住的行先撞上自己的子预算,父 ctx 还来得及推迟它,同一轮后面的行与收据 ACK 也各有余量;
+//   - 暂时失败(存储超时、ErrTooManyPending、角色冲突等)按 tickFailureBackoff 推迟这一行的下次到期,本轮其余行照常推进;
+//     乐观冲突不推迟,下一轮立即重试;
 //   - 确定性坏数据(corrupt)隔离为 Manual,移出 Due,等人工处理,不再无限重试。
 //
-// 只有 Due / AckDue 查询本身失败(存储级),或本轮总预算用完时才返回错误;后者不推迟任何行(不是那一行的错)。
+// 剩余预算只够收据 ACK 时停止开新行(计 trade_commerce_tick_truncated_total),没轮到的行仍到期,下一轮或别的副本接着推进。
+// 只有 Due / AckDue 查询本身失败(存储级)、收据 ACK 依赖失败,或整轮被取消(关停)时才返回错误;取消时不推迟任何行。
 func (e *Engine) Tick(ctx context.Context) error {
 	rows, err := e.Repo.Due(ctx, e.now(), tickDueLimit)
 	if err != nil {
@@ -906,13 +915,19 @@ func (e *Engine) Tick(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		rowCtx, cancel := context.WithTimeout(ctx, tickRowBudget)
+		budget, ok := rowBudgetFor(ctx, time.Now())
+		if !ok {
+			tickTruncatedTotal.Inc()
+			break
+		}
+		rowCtx, cancel := context.WithTimeout(ctx, budget)
 		err := e.step(rowCtx, r)
 		cancel()
 		if err == nil {
 			continue
 		}
 		if ctx.Err() != nil {
+			// 子预算早于父截止时刻结束,走到这里只可能是整轮被取消(关停):不是这一行的错,不推迟。
 			return ctx.Err()
 		}
 		e.deferCommerce(ctx, r, err)

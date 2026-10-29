@@ -29,6 +29,9 @@
     <!-- Removed redundant dependencyManagement: parent already locks Jackson 2.x -->
 
     <dependencies>
+        <dependency><groupId>com.game</groupId><artifactId>authority-jdbc</artifactId><version>0.1.0-SNAPSHOT</version></dependency>
+    
+        
         <!-- Web - exclude higher Jackson version, keep base deps (simplified exclusions) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

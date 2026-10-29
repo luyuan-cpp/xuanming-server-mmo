@@ -153,9 +153,13 @@ public final class DeliveryStore {
             || !in.channel().matches("[a-z][a-z0-9_-]{1,31}") || !in.transactionId().matches("[A-Za-z0-9_-]{1,128}"))
             throw new CommerceException(400, "退款回执非法");
         tx.executeWithoutResult(status -> {
-            var original = jdbc.queryForList("SELECT o.status,p.amount_minor,p.currency FROM oms_order o JOIN "
-                    + "commerce_payment_receipt p ON p.order_sn=o.order_sn WHERE o.order_sn=? FOR UPDATE",
+            // 与mock原件保持唯一键索引→订单记录的锁序；JOIN可能先锁记录再等索引而成环。
+            var lockedOrder = jdbc.queryForList("SELECT status FROM oms_order WHERE order_sn=? FOR UPDATE",
                 in.orderId());
+            if (lockedOrder.size() != 1)
+                throw new CommerceException(404, "退款订单不存在");
+            var original = jdbc.queryForList(
+                "SELECT amount_minor,currency FROM commerce_payment_receipt WHERE order_sn=?", in.orderId());
             if (original.size() != 1)
                 throw new CommerceException(404, "退款订单不存在");
             var row = original.getFirst();
@@ -171,7 +175,7 @@ public final class DeliveryStore {
                     throw new CommerceException(409, "退款流水冲突");
                 return;
             }
-            if (((Number) row.get("status")).intValue() != 5)
+            if (((Number) lockedOrder.getFirst().get("status")).intValue() != 5)
                 throw new CommerceException(409, "订单不在退款中");
             jdbc.update("INSERT INTO commerce_refund_receipt(order_sn,channel,transaction_id,amount_minor,currency) "
                     + "VALUES(?,?,?,?,?)",

@@ -3506,7 +3506,7 @@ TEST(GuidSegmentClientTest, LateResponseAfterTimeoutIsUsedAndSurplusIsDropped)
 
 // 传输失败(生成的 gRPC 客户端以非 OK 完成每次调用回调)立即按退避重试,不必等 fetchTimeout;
 // 本次发送挂着的 fetchTimeout 随后开火时已不在途,不得再记一次失败。修复前生成客户端对非 OK 只打日志,
-// 失败只能靠 fetchTimeout 发现(docs/design/grpc-client-deadline-failure-callback.md §5 #7)。
+// 失败只能靠 fetchTimeout 发现(docs/design/grpc-muduo-transport.md §16.5)。
 TEST(GuidSegmentClientTest, TransportFailureRetriesWithoutWaitingForFetchTimeout)
 {
     SegClient client;

@@ -85,6 +85,15 @@ See also:
 
 ## Notes
 
+### 输入完整性与手写代码保护（2026-10-23）
+
+- 完整流水线先在描述符阶段严格检查 `domain_meta` 的 source：空配置、缺失目录、非目录、遍历失败或没有 proto 都应失败，不能按旧笔记的“告警后跳过”完成整轮。低层 C++ 批次的跳过行为不代表完整流水线契约。此阶段失败早于消息号／事件号文件写入，但此前可能已有复制或部分生成，不保证所有产物完全未变；删域与墓碑规则见[RPC 设计 §20.1](../../docs/design/muduo-rpc-channel.md)。
+- 全局 `FirstCode` 必须位于当前方法签名／方法体之前；方法守护段不能误取为全局段。非空段无法放回、重复覆盖、孤立、嵌套或未闭合等问题须拒绝生成，不能吞掉手写代码。规则与诊断以 [`code_parser.go`](protogen/internal/code_parser.go) 及 gRPC 的命名段校验为准，生成式 handler 的可编辑边界仍遵守根 `AGENTS.md` §3。
+- `EnableCpp=true` 时，流水线末尾由 `SyncCppBuildProjects` 为 `cpp/generated/proto` 与 `cpp/generated/grpc_client` 补齐 CMake／vcxproj／filters 登记，只补条目、不删除旧条目，不包含表、配置或其它 handler 工程。新增 Kafka proto 后先走完整生成与差异核对，不按旧笔记手改生成工程登记。实现见 [`cpp_build_projects.go`](protogen/internal/prototools/cpp_build_projects.go)。
+- gRPC 插件路径由生成器解析；个别低层生成失败仍可能只记 WARN，退出码 0 不能代替对预期产物、生成日志与受影响服务构建的检查。当前命令与服务端专用配置见上文，未获授权不要写独立客户端。
+- 事件消息沿用 `*Event`（不加 `Pb` 中缀），组件使用根 `AGENTS.md` §8 的 `*Comp`。进程内事件是所属模块的普通 C++ 结构，不为命名统一而新增 proto 或事件号；跨进程事件是否允许由 Kafka 进入，仍须显式标注入口。边界见[组件访问规则](../../docs/design/ecs-component-access-rules.md)与[控制面事件入口](../../docs/design/control-plane-topic-partitioning-20260908.md)。旧后缀改名清单不再作为现役消息目录。
+- proto 文件名按业务职责命名，`client_`、`player_`、`s2s_` 等前缀不决定可调用范围。客户端协议服务与方法形态分别以 `OptionIsClientProtocolService`、`OptionClientRpcKind` 为准，目标节点由相应 option 指定，见[协议目录说明](../../proto/README.md)与[客户端调用桩设计](../../docs/design/client-rpc-callback.md)。
+
 - proto-gen is idempotent; running it multiple times produces the same output
 - `dev_tools.ps1` still accepts legacy aliases `pbgen-build` and `pbgen-run`
 - Always validate generated code before committing

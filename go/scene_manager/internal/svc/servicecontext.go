@@ -49,9 +49,14 @@ type ServiceContext struct {
 	// 调用方按「本地单区联调」处理(归属 = gate zone,WARN 计数)。
 	HomeZone      HomeZoneClient
 	RoleDirectory RoleDirectory
-	SceneIDGen    *snowflake.Node
-	snowflakeHd   *snowflakealloc.Handle // 持有 worker id 的 etcd lease,进程退出时 Close
-	stopOnce      sync.Once
+	// OwnerEpochMint 是铸造 owner_epoch 的执行面(墙钟地板 + 铸造 EVAL 与 WAITAOF 同一条连接,owner_epoch_mint.go)。
+	// 生产恒非 nil;logic 遇到 nil 一律拒绝铸造(fail-closed),不退回 Redis 字段上的无确认路径。
+	OwnerEpochMint OwnerEpochMinter
+	SceneIDGen     *snowflake.Node
+	snowflakeHd    *snowflakealloc.Handle // 持有 worker id 的 etcd lease,进程退出时 Close
+	// ownerEpochMintRedis 是 OwnerEpochMint 的生产实现本体,只为 Stop 时关闭它的专用连接池。
+	ownerEpochMintRedis *RedisOwnerEpochMinter
+	stopOnce            sync.Once
 	// kafkaDeliveryFailures 统计 writer Completion 给出的终态失败。
 	kafkaDeliveryFailures atomic.Uint64
 }
@@ -59,6 +64,10 @@ type ServiceContext struct {
 func NewServiceContext(c config.Config) *ServiceContext {
 	// 只读目录是必需依赖；在分配etcd租约/号段及连接其它后端前检查，缺密钥不带病发现。
 	roleSecret := configuredRoleDirectorySecret(c)
+	// 铸造落盘确认的取值越界同样在占用任何外部资源之前拒启(fail-closed,口径同 go/db 的 RedisClient.WaitAOF*)。
+	if err := c.OwnerEpochMint.Validate(); err != nil {
+		panic("scene_manager 配置非法: " + err.Error())
+	}
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:   c.Etcd.Hosts,
 		DialTimeout: 5 * time.Second,
@@ -110,10 +119,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		SceneIDGen:  hd.NewNode(),
 		snowflakeHd: hd,
 	}
-	kafkaWriteTimeout := time.Duration(c.KafkaWriteTimeoutSeconds) * time.Second
-	if kafkaWriteTimeout <= 0 {
-		kafkaWriteTimeout = 5 * time.Second
-	}
+	sc.ownerEpochMintRedis = mustStartOwnerEpochMinter(c)
+	sc.OwnerEpochMint = sc.ownerEpochMintRedis
+	kafkaWriteTimeout := c.EffectiveKafkaWriteTimeout()
 	sc.Kafka = &kafka.Writer{
 		Addr: kafka.TCP(c.Kafka.Brokers...),
 		// 控制面命令 topic(gate-cmd_gN)必须按 node_id % P 落到**指定分区**:
@@ -152,6 +160,30 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 	sc.RoleDirectory = &roleDirectoryClient{rpc: rpc, secret: roleSecret}
 	return sc
+}
+
+// mustStartOwnerEpochMinter 建铸造专用客户端并做启动探针,任何一步失败都 panic(拒启)。
+//
+// 开启 WAITAOF 时先探一次:appendonly no、Redis < 7.2、NumReplicas 与拓扑不符都是确定性错误,留到运行期就是每一次
+// 首登 / 换节点都因「铸造未落盘」回滚失败。两项都配 0 时不探、只打一行 ERROR:这时铸造出来的 epoch 没有落盘确认,
+// Redis 崩溃 / 切主丢掉它会让现任持有者被当成废黜(设计 §3 player-save#2),只许没有 AOF 的环境这样配。
+func mustStartOwnerEpochMinter(c config.Config) *RedisOwnerEpochMinter {
+	minter, err := NewRedisOwnerEpochMinter(c.Redis.RedisConf, c.OwnerEpochMint, WallClockMs)
+	if err != nil {
+		panic("owner epoch mint client init failed: " + err.Error())
+	}
+	if !minter.WaitsForAOF() {
+		logx.Errorf("[OwnerEpochMint] WAITAOF disabled (OwnerEpochMint.WaitAOFNumLocal=0 and WaitAOFNumReplicas=0): " +
+			"minted owner epochs are routed without a durability confirmation")
+		return minter
+	}
+	if err := minter.Probe(context.Background()); err != nil {
+		_ = minter.Close()
+		panic("owner epoch mint WAITAOF probe failed: " + err.Error())
+	}
+	logx.Infof("[OwnerEpochMint] WAITAOF enabled: numlocal=%d numreplicas=%d timeout=%s pool=%d",
+		c.OwnerEpochMint.NumLocal(), c.OwnerEpochMint.NumReplicas(), c.OwnerEpochMint.EffectiveWaitAOFTimeout(), ownerEpochMintPoolSize)
+	return minter
 }
 
 // newHomeZoneClient 按 DataServiceRpc 拨 data_service;没配目标(本地单区联调)返回 nil。
@@ -213,6 +245,11 @@ func (sc *ServiceContext) Stop() {
 		}
 		if failures := sc.KafkaDeliveryFailures(); failures > 0 {
 			logx.Errorf("[scene_manager] stopping with %d terminal Kafka delivery failures", failures)
+		}
+		if sc.ownerEpochMintRedis != nil {
+			if err := sc.ownerEpochMintRedis.Close(); err != nil {
+				logx.Errorf("[OwnerEpochMint] mint redis client close failed: %v", err)
+			}
 		}
 		if sc.snowflakeHd != nil {
 			sc.snowflakeHd.Close()

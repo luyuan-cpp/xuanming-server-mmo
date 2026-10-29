@@ -432,7 +432,7 @@ func RunFriendSmoke(cfg *config.Config) {
 
 	// ---- 步骤 6:D-9 反向断言 —— 客户端不能调 S2C 方法 ----
 	// NotifyFriendEvent 与 10 个 C2S 方法同处 ClientPlayerFriend 这一个服务里
-	// (推送 handler 只对服务名含 ClientPlayer/GamePlayer 的服务生成),
+	// (客户端协议服务只看 OptionIsClientProtocolService,推送方法标 CLIENT_RPC_PUSH),
 	// 所以 gate 的客户端白名单**会**收这个消息号、请求**会**进到 friend ——
 	// 与 trade 第 2 步那种"gate 直接丢弃、表现为超时"不是同一回事,这里期望的是信封拒绝。
 	// 挡它的是 friend 的会话拦截器(方法级白名单),不是"服务端恰好没实现"。

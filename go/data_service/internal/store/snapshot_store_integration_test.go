@@ -1207,7 +1207,7 @@ func TestSnapshotMigration_DedupesDuplicateGuidsAndIsRerunnable(t *testing.T) {
 	require.Equal(t, int64(6), db.Count(t, store.PlayerSnapshotTableName, "snapshot_guid <> 0"))
 
 	// 跑迁移:去重 → 加生成列 → 加唯一键。
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}),
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}),
 		"迁移应先清掉重复行再建唯一键;失败多半是 1062 —— 说明去重那一步没跑或没跑干净")
 
 	for guid, ids := range dupes {
@@ -1228,7 +1228,7 @@ func TestSnapshotMigration_DedupesDuplicateGuidsAndIsRerunnable(t *testing.T) {
 
 	// 再跑一遍:幂等,行数与唯一键都不变(这也覆盖"proto 同步不会删掉生成列与唯一键")。
 	before := db.Count(t, store.PlayerSnapshotTableName, "1 = 1")
-	require.NoError(t, store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}))
+	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}))
 	assert.Equal(t, before, db.Count(t, store.PlayerSnapshotTableName, "1 = 1"), "重跑迁移不该再删任何行")
 	assert.True(t, newSnapshotStore(t, db).UniqueGuidKeyForTest(),
 		"重跑迁移之后唯一键应还在:proto 的列 / 索引同步不该删掉 proto 里没有的生成列与唯一键")
@@ -1290,7 +1290,7 @@ func TestSnapshotMigration_RefusesSameNamedNonUniqueIndex(t *testing.T) {
 		store.PlayerSnapshotTableName, store.SnapshotGuidUniqueKey))
 	require.NoError(t, err, "夹具:造一个同名的非唯一索引")
 
-	err = store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{})
+	err = db.Migrate(ctx, store.MigrateOptions{})
 	require.Error(t, err, "同名的非唯一索引必须让迁移失败 —— 放行等于让写路径以为唯一约束在,"+
 		"而普通 / ODKU 写入在没有唯一约束的表上根本不去重")
 	assert.Contains(t, err.Error(), store.SnapshotGuidUniqueKey, "错误里要指名是哪个索引,运维才知道去 DROP 哪条")
@@ -1320,7 +1320,7 @@ func TestSnapshotMigration_RefusesSameNamedPlainColumn(t *testing.T) {
 		store.PlayerSnapshotTableName, store.SnapshotGuidNzColumn))
 	require.NoError(t, err, "夹具:造一个同名的普通列")
 
-	err = store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{})
+	err = db.Migrate(ctx, store.MigrateOptions{})
 	require.Error(t, err, "同名的普通列必须让迁移失败 —— 跳过 ADD COLUMN 之后,唯一键会建在一个恒为 NULL "+
 		"(约束不到任何行)或恒为 0(第二条 GM 行就撞键)的列上")
 	assert.Contains(t, err.Error(), store.SnapshotGuidNzColumn, "错误里要指名是哪一列")

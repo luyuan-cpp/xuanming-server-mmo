@@ -38,6 +38,8 @@ class BattlePetSettlementData;
 class PetSystem {
 public:
 	// 从 DB 加载 / 首登后调用:清理已失效引用、同步等级、按上限夹当前 HP/MP。
+	// 已分配点原样携带,不清理、不返还:本版本宝宝池之外的键是未知键(不生效、计入已用),超额的加点整池按 0 生效
+	// (加点统一规则,attribute_allocation_rules.h;docs/design/mixed-version-persist-field-protection.md §12.1 D3 / D4)。
 	static void InitializeOnLoad(entt::entity player);
 
 	// 重算的触发原因(与 PlayerAttributeSystem::RecalcReason 同语义):
@@ -46,7 +48,9 @@ public:
 	//         极低血量因"至少留 1"有上界的回升例外,见 attributerules::RescaleCurrent)。
 	enum class RecalcReason : uint8_t { kLoad, kLevelChanged, kAllocate, kReset };
 
-	// 重算全部宝宝(同步等级 + 处理当前 HP/MP);不落库。
+	// 重算全部宝宝(同步等级 + 处理当前 HP/MP);不落库,不改写已分配点。
+	// 只有 kLevelChanged 会因主人等级低于出战宝宝而取消出战;kLoad 不写 active_pet_id
+	// (召唤与战斗快照本来就按主人等级拦截)。
 	static void RecalculateAll(entt::entity player, RecalcReason reason = RecalcReason::kLoad);
 
 	// 面板全量(客户端零配表:维度名/说明/上限/剩余点/资质/成长率都在这里)。
@@ -58,11 +62,14 @@ public:
 	static uint32_t Summon(entt::entity player, uint64_t petId);
 	static uint32_t Recall(entt::entity player);
 
-	// 确认加点:target 为该宝宝"目标已分配"(全量、幂等;缺省维度视为不变)
+	// 确认加点:target 为该宝宝"目标已分配"(全量、幂等;缺省维度视为不变)。目标只能是宝宝池已知维度;
+	// 只写真正变化的键。剩余点扣掉未知键,加点不生效时剩余为 0(回「点数不足」)。
 	static uint32_t Allocate(entt::entity player, uint64_t petId,
 							 const std::map<uint32_t, uint32_t>& target);
 
-	// 洗点:清空该宝宝全部分配,按 AttributePool 表扣金币
+	// 洗点:清空该宝宝在宝宝池已知维度上的分配,未知键原样保留;按 AttributePool 表扣金币。
+	// 已知维度一点没加(含只剩未知键)→ kPetNothingToChange 且不扣费;加点不生效 → 免费并打 WARN
+	// (metric=allocation_reset_free_ineffective)。费用与列表 reset_cost_gold 同一口径。
 	static uint32_t Reset(entt::entity player, uint64_t petId);
 
 	// 自动加点:按 AttributeAutoPlan(宝宝池)算建议"目标已分配",只算不落
@@ -103,8 +110,10 @@ public:
 	// pet_id 撞号拒绝(同一玩家名下已有该 id)。
 	//
 	// 快照来自交易库(托管期间不在 scene 的玩家存档里),所以这是唯一一个输入不受
-	// scene 自己把关的宠物写入口。只夹两样:level 夹回 PetTable.level_cap(缺配则不夹),
-	// 以及按夹后等级现算的 HP/MP 上限。资质刻意不夹,理由见 .cpp。
+	// scene 自己把关的宠物写入口。实例整条原样放回、什么都不夹:level、资质、已分配点、当前 HP/MP 与未知字段
+	// 都按快照保留 —— 这是已有实例的移动,本版本调低的 level_cap 不能把托管的合法资产改写成另一只。
+	// 低级主人用不了高级宝宝,由召唤与战斗快照入口按主人等级复核;身份、配置存在、字节上限等不可信输入
+	// 由资产通道入口(PlayerAssetOpSystem)在任何副作用之前校验。
 	static uint32_t RestorePetFromSnapshot(entt::entity player, const PetInstance& snapshot);
 
 	// —— 战斗接缝(scene/battle/system/player_battle.cpp 调用)——

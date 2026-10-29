@@ -485,8 +485,10 @@ type routeMeta struct {
 
 // mergeRouteStore 是路由表的读写。连接池独立于 -mysql-dsn 的池(会话变量不同)。并发安全(sql.DB 是)。
 type mergeRouteStore struct {
-	db     *sql.DB
-	writer string
+	db        *sql.DB
+	writer    string
+	closeOnce sync.Once
+	closeErr  error
 	// sleep / backoff 是 1213 / 9007 重试的退避接缝:生产 sleepCtx 与均匀抖动,单测注入不睡的实现。
 	sleep   func(ctx context.Context, d time.Duration) error
 	backoff func() time.Duration
@@ -503,7 +505,7 @@ func openMergeRouteStore(ctx context.Context, rawDSN, writer string) (*mergeRout
 	if err != nil {
 		return nil, routeMeta{}, err
 	}
-	db, err := sql.Open("mysql", dsn)
+	db, err := openToolSQLPool(ctx, dsn)
 	if err != nil {
 		return nil, routeMeta{}, fmt.Errorf("open -route-db-dsn: %w", err)
 	}
@@ -512,8 +514,7 @@ func openMergeRouteStore(ctx context.Context, rawDSN, writer string) (*mergeRout
 	pctx, cancel := context.WithTimeout(ctx, routeProbeTimeout)
 	defer cancel()
 	if err := db.PingContext(pctx); err != nil {
-		_ = db.Close()
-		return nil, routeMeta{}, fmt.Errorf("ping -route-db-dsn: %w", err)
+		return nil, routeMeta{}, fmt.Errorf("ping -route-db-dsn: %w", errors.Join(err, db.Close()))
 	}
 	return newMergeRouteStoreFromDB(pctx, db, writer)
 }
@@ -521,20 +522,25 @@ func openMergeRouteStore(ctx context.Context, rawDSN, writer string) (*mergeRout
 // newMergeRouteStoreFromDB 在一个已开好的池上跑探针并装出 store;任一步失败都关掉 db。单测注入假驱动用。
 func newMergeRouteStoreFromDB(ctx context.Context, db *sql.DB, writer string) (*mergeRouteStore, routeMeta, error) {
 	st := &mergeRouteStore{db: db, writer: writer, sleep: sleepCtx, backoff: routeLockRetryBackoff}
+	if err := registerMaintenanceResource(ctx, st); err != nil {
+		return nil, routeMeta{}, errors.Join(err, st.Close())
+	}
 	meta, err := st.probe(ctx)
 	if err != nil {
-		_ = db.Close()
-		return nil, routeMeta{}, fmt.Errorf("route db probe: %w", err)
+		return nil, routeMeta{}, fmt.Errorf("route db probe: %w", errors.Join(err, st.Close()))
 	}
 	if meta.Writable != 1 {
-		log.Printf("WARN: route_meta(id=1).writable=%d: route writers are frozen, every route write of this run will be refused", meta.Writable)
+		if normalFreezeFromContext(ctx) == nil {
+			log.Printf("WARN: route_meta(id=1).writable=%d: 缺少本轮NORMAL冻结收据，拒绝路由写入", meta.Writable)
+		}
 	}
 	return st, meta, nil
 }
 
 // Close 关闭连接池。
 func (s *mergeRouteStore) Close() error {
-	return s.db.Close()
+	s.closeOnce.Do(func() { s.closeErr = s.db.Close() })
+	return s.closeErr
 }
 
 // probe 是开写前探针(判据与 SQL 照抄 data_service store.newRouteStoreFromDB):
@@ -552,6 +558,11 @@ func (s *mergeRouteStore) probe(ctx context.Context) (routeMeta, error) {
 	meta, err := readRouteMeta(ctx, s.db)
 	if err != nil {
 		return routeMeta{}, err
+	}
+	if maintenanceFromContext(ctx) == nil {
+		// audit/dry-run 装配只读句柄；会话与元数据仍须校验，不能为探针发送回滚 DML。
+		// 这不授予写权限：所有真实维护写边界另外核同 boot TOOL 身份。
+		return meta, nil
 	}
 	if err := retryRouteTx(ctx, "chk_route_shard probes", s.sleep, s.backoff, func() error {
 		return probeRouteShardCheck(ctx, s.db)
@@ -590,12 +601,37 @@ func readRouteMeta(ctx context.Context, q routeQueryer) (routeMeta, error) {
 }
 
 // probeRouteShardCheck 是探针第 4、5 步:一个必然回滚的事务,第一句锁 route_meta(id=1) 作守卫,再跑 P4,P4 通过后同一事务跑 P5。
-func probeRouteShardCheck(ctx context.Context, db *sql.DB) error {
+func probeRouteShardCheck(ctx context.Context, db *sql.DB) (err error) {
+	if err := checkMaintenanceTool(ctx); err != nil {
+		return err
+	}
+	proof := normalFreezeFromContext(ctx)
+	if proof == nil && !normalToolFromContext(ctx) {
+		return errNormalFreezeProof
+	}
+	finish, err := enterMaintenanceWork(ctx)
+	if err != nil {
+		return err
+	}
+	defer finish()
+	defer func() {
+		if problem := recover(); problem != nil {
+			holdMaintenanceTool(ctx)
+			panic(problem)
+		}
+		if err != nil {
+			holdMaintenanceTool(ctx)
+		}
+	}()
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin chk_route_shard probe: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+			err = errors.Join(err, rollbackErr)
+		}
+	}()
 
 	var writable uint64
 	switch err := tx.QueryRowContext(ctx, routeLockProbeGuardSQL).Scan(&writable); {
@@ -603,6 +639,11 @@ func probeRouteShardCheck(ctx context.Context, db *sql.DB) error {
 		return errRouteMetaMissing
 	case err != nil:
 		return fmt.Errorf("lock route_meta(id=1) as the probe guard: %w", err)
+	}
+	if proof != nil {
+		if err := proof.check(ctx, tx); err != nil {
+			return err
+		}
 	}
 	_, err = tx.ExecContext(ctx, routeProbeShardCheckSQL)
 	if err == nil {
@@ -773,17 +814,51 @@ func retryRouteTx(ctx context.Context, op string, sleep func(context.Context, ti
 
 // runTx 跑一个事务(BEGIN → body → COMMIT,出错 ROLLBACK),按 retryRouteTx 有界重来。body 必须可整体重跑:
 // 结果只在 body 成功返回时交给外层变量。
-func (s *mergeRouteStore) runTx(ctx context.Context, op string, body func(tx *sql.Tx) error) error {
-	return retryRouteTx(ctx, op, s.sleep, s.backoff, func() error {
+func (s *mergeRouteStore) runTx(ctx context.Context, op string, body func(tx *sql.Tx) error) (err error) {
+	if err := checkMaintenanceTool(ctx); err != nil {
+		return err
+	}
+	proof := normalFreezeFromContext(ctx)
+	if proof == nil && !normalToolFromContext(ctx) {
+		return errNormalFreezeProof
+	}
+	finish, err := enterMaintenanceWork(ctx)
+	if err != nil {
+		return err
+	}
+	defer finish()
+	defer func() {
+		if problem := recover(); problem != nil {
+			holdMaintenanceTool(ctx)
+			panic(problem)
+		}
+		if err != nil {
+			holdMaintenanceTool(ctx)
+		}
+	}()
+	return retryRouteTx(ctx, op, s.sleep, s.backoff, func() (err error) {
 		tx, err := s.db.BeginTx(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("%s: begin: %w", op, err)
 		}
+		defer func() {
+			rollbackErr := tx.Rollback()
+			if rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+				holdMaintenanceTool(ctx)
+				err = errors.Join(err, rollbackErr)
+			}
+		}()
+		// 释放/续租等body原先没有requireRouteWritable，也必须在同一事务锁meta并强读原冻结。
+		if proof != nil {
+			if err := proof.lockTransaction(ctx, tx); err != nil {
+				return err
+			}
+		}
 		if err := body(tx); err != nil {
-			_ = tx.Rollback()
 			return err
 		}
 		if err := tx.Commit(); err != nil {
+			holdMaintenanceTool(ctx)
 			return fmt.Errorf("%s: commit: %w", op, err)
 		}
 		return nil
@@ -816,6 +891,15 @@ func readRouteDBNowMs(ctx context.Context, q routeQueryer) (uint64, error) {
 
 // requireRouteWritable 是每个写事务的第一句:route_meta.writable != 1 即拒写(普通一致读,提案 §4.1-2 第 1 步)。
 func requireRouteWritable(ctx context.Context, q routeQueryer) error {
+	if proof := normalFreezeFromContext(ctx); proof != nil {
+		// 维护工具不改writable；每个实际路由写事务先锁meta并强读原NORMAL消费链。
+		// 此锁与正式Release同一行，不能由事务外预检代替提交前缀。
+		tx, ok := q.(*sql.Tx)
+		if !ok {
+			return errNormalFreezeProof
+		}
+		return proof.lockTransaction(ctx, tx)
+	}
 	var writable uint64
 	err := q.QueryRowContext(ctx, routeReadWritableSQL).Scan(&writable)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -1015,6 +1099,23 @@ func collectRouteRowsAfter(rows *sql.Rows, what string, key uint64, after routeS
 // ensureAllFenceShards 确保每个 zone 的 0..63 号分片行都在(autocommit、事务外,一条 ODKU,按 (zone, shard) 升序)。
 // 不在持锁事务里插:两个事务同时对不存在的行 FOR UPDATE 再各自 INSERT 是经典的成环形状(data_service R3 同理)。
 func (s *mergeRouteStore) ensureAllFenceShards(ctx context.Context, zones []uint32) error {
+	if err := checkMaintenanceTool(ctx); err != nil {
+		return err
+	}
+	if normalFreezeFromContext(ctx) == nil && !normalToolFromContext(ctx) {
+		return errNormalFreezeProof
+	}
+	finish, err := enterMaintenanceWork(ctx)
+	if err != nil {
+		return err
+	}
+	defer finish()
+	defer func() {
+		if problem := recover(); problem != nil {
+			holdMaintenanceTool(ctx)
+			panic(problem)
+		}
+	}()
 	args := make([]any, 0, 2*len(zones)*int(routeFenceShards))
 	for _, zone := range zones {
 		for shard := uint32(0); shard < routeFenceShards; shard++ {
@@ -1022,8 +1123,18 @@ func (s *mergeRouteStore) ensureAllFenceShards(ctx context.Context, zones []uint
 		}
 	}
 	query := routeEnsureFenceSQL(len(args) / 2)
+	if normalFreezeFromContext(ctx) != nil {
+		return s.runTx(ctx, "冻结维护初始化围栏片", func(tx *sql.Tx) error {
+			if err := requireRouteWritable(ctx, tx); err != nil {
+				return err
+			}
+			_, err := tx.ExecContext(ctx, query, args...)
+			return err
+		})
+	}
 	return retryRouteTx(ctx, "ensure merge fence shards", s.sleep, s.backoff, func() error {
 		if _, err := s.db.ExecContext(ctx, query, args...); err != nil {
+			holdMaintenanceTool(ctx)
 			return fmt.Errorf("ensure zone_merge_fence shards for zones %v: %w", zones, err)
 		}
 		return nil
@@ -1032,6 +1143,23 @@ func (s *mergeRouteStore) ensureAllFenceShards(ctx context.Context, zones []uint
 
 // ensureFenceCheckShard 确保每个 zone 的 63 号片行在(先一致读,缺了才发 ODKU:不在线上建角的围栏片上白白加一次 X 锁)。
 func (s *mergeRouteStore) ensureFenceCheckShard(ctx context.Context, zones []uint32) error {
+	if err := checkMaintenanceTool(ctx); err != nil {
+		return err
+	}
+	if normalFreezeFromContext(ctx) == nil && !normalToolFromContext(ctx) {
+		return errNormalFreezeProof
+	}
+	finish, err := enterMaintenanceWork(ctx)
+	if err != nil {
+		return err
+	}
+	defer finish()
+	defer func() {
+		if problem := recover(); problem != nil {
+			holdMaintenanceTool(ctx)
+			panic(problem)
+		}
+	}()
 	for _, zone := range zones {
 		var one int64
 		err := s.db.QueryRowContext(ctx, routeFenceShardExistsSQL, uint64(zone), uint64(routeFenceCheckShard)).Scan(&one)
@@ -1042,8 +1170,21 @@ func (s *mergeRouteStore) ensureFenceCheckShard(ctx context.Context, zones []uin
 			return fmt.Errorf("read zone_merge_fence(%d, %d): %w", zone, routeFenceCheckShard, err)
 		}
 		args := []any{uint64(zone), uint64(routeFenceCheckShard)}
+		if normalFreezeFromContext(ctx) != nil {
+			if err := s.runTx(ctx, "冻结维护初始化检查片", func(tx *sql.Tx) error {
+				if err := requireRouteWritable(ctx, tx); err != nil {
+					return err
+				}
+				_, err := tx.ExecContext(ctx, routeEnsureFenceSQL(1), args...)
+				return err
+			}); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := retryRouteTx(ctx, "ensure merge fence check shard", s.sleep, s.backoff, func() error {
 			if _, err := s.db.ExecContext(ctx, routeEnsureFenceSQL(1), args...); err != nil {
+				holdMaintenanceTool(ctx)
 				return fmt.Errorf("ensure zone_merge_fence(%d, %d): %w", zone, routeFenceCheckShard, err)
 			}
 			return nil
@@ -1241,8 +1382,10 @@ func (s *mergeRouteStore) AcquireFence(ctx context.Context, req routeFenceAcquir
 // TakeOverFence 是续跑接手(W12 获取的变体,fence.go 的 -take-over-fence):与 AcquireFence 同一个事务形状,只多放行一种
 // 「生效且 run_id ≠ 本次」—— run_id == previousRunID(运维已确认那次运行的进程不在了)。接手与获取在同一个事务里完成,
 // 两区在库里一刻都不解封(对照 redis 源「DEL 镜像 → 重跑」之间那几秒无围栏的窗口)。旧进程若其实还活着,它的下一个批事务
-// 按 run_id 复核失败(errRouteFenceLost)、下一次续期确定失权,映射写入被拦在库这一层。
-// 生效且属于第三个 run_id 的分片照样 errRouteFenceHeld。previousRunID 必须合法且不同于本次。
+// 按 run_id 复核失败(errRouteFenceLost)、下一次续期确定失权,映射写入被拦在库这一层;它不碰映射的写只靠本地判据,
+// 要到下一次续期失败才停(续期间隔不超过 routeFenceRenewMaxInterval),所以接手的前提仍是运维确认那次运行的进程不在了。
+// 生效且属于第三个 run_id 的分片照样 errRouteFenceHeld;被接手的分片还要过 checkTakeOverShard(zone 对、清单路径),且每个 zone
+// 接手 0 片或全部 64 片,不满足即 errRouteInvalidArgument。previousRunID 必须合法且不同于本次。
 // (前一波原语里没有它:续跑接手是本波接线 db 源的中止 / 续跑流程时补的;AcquireFence 的语义不变,只是与它共用事务体。)
 func (s *mergeRouteStore) TakeOverFence(ctx context.Context, req routeFenceAcquire, previousRunID string) (routeFenceGrant, error) {
 	if !validRunID(previousRunID) || previousRunID == req.RunID {
@@ -1524,8 +1667,12 @@ type routeFenceGuard struct {
 	lastOK time.Time
 	lost   error
 
-	cancel context.CancelFunc
-	done   chan struct{}
+	cancel      context.CancelFunc
+	done        chan struct{}
+	started     bool
+	stopping    bool
+	runErr      error
+	workContext context.Context
 }
 
 // newRouteFenceGuard 装配守卫。acquiredAt 是调用 AcquireFence **之前**取的本地时刻(保守起点)。
@@ -1575,6 +1722,7 @@ func (g *routeFenceGuard) renewOnce(ctx context.Context) error {
 	start := g.now()
 	expiries, err := g.renewer.RenewFence(ctx, g.zones, g.runID, g.ttl)
 	if err != nil {
+		g.keepMaintenanceFailure(ctx, err)
 		if errors.Is(err, errRouteFenceLost) {
 			g.mu.Lock()
 			if g.lost == nil {
@@ -1591,6 +1739,7 @@ func (g *routeFenceGuard) renewOnce(ctx context.Context) error {
 	g.mu.Unlock()
 	if g.onRenewed != nil {
 		if herr := g.onRenewed(ctx, expiries); herr != nil {
+			g.keepMaintenanceFailure(ctx, herr)
 			log.Printf("WARN: merge fence renewed in zone_merge_fence but the mirror refresh failed (the reconcile leader re-syncs it): %v", herr)
 		}
 	}
@@ -1599,23 +1748,99 @@ func (g *routeFenceGuard) renewOnce(ctx context.Context) error {
 
 // Start 起续期 goroutine(只能调一次);Stop 取消并等它退出。
 func (g *routeFenceGuard) Start(ctx context.Context) {
+	g.mu.Lock()
+	if g.started || g.stopping {
+		g.mu.Unlock()
+		holdMaintenanceTool(ctx)
+		return
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	g.cancel = cancel
 	g.done = make(chan struct{})
-	go g.loop(ctx)
+	g.started = true
+	g.workContext = ctx
+	done := g.done
+	g.mu.Unlock()
+	finish, err := enterMaintenanceWork(ctx)
+	if err != nil {
+		g.keepMaintenanceFailure(ctx, err)
+		cancel()
+		close(done)
+		return
+	}
+	if err := registerMaintenanceStop(ctx, func(stopCtx context.Context) error {
+		err := g.StopAndReport(stopCtx)
+		select {
+		case <-done:
+			// 历史写错误已经永久 HOLD；本回调只证明本机 worker 已 join。
+			return nil
+		default:
+			return err
+		}
+	}); err != nil {
+		g.keepMaintenanceFailure(ctx, err)
+		cancel()
+		finish()
+		close(done)
+		return
+	}
+	go func() {
+		returned := false
+		defer close(done)
+		defer finish()
+		defer func() {
+			if !returned {
+				holdMaintenanceTool(ctx)
+			}
+		}()
+		g.loop(ctx)
+		returned = true
+	}()
 }
 
 // Stop 取消续期并等 goroutine 退出;没 Start 过时是空操作。
 func (g *routeFenceGuard) Stop() {
-	if g.cancel == nil {
+	_ = g.StopAndReport(context.Background())
+}
+
+// StopAndReport 区分真实 worker 退出与 Redis/SQL 未知；取消本身不产生成功原件。
+func (g *routeFenceGuard) StopAndReport(ctx context.Context) error {
+	g.mu.Lock()
+	g.stopping = true
+	cancel, done, runErr := g.cancel, g.done, g.runErr
+	g.mu.Unlock()
+	if cancel == nil {
+		return runErr
+	}
+	cancel()
+	select {
+	case <-done:
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		return g.runErr
+	case <-ctx.Done():
+		g.keepMaintenanceFailure(ctx, ctx.Err())
+		return errors.Join(runErr, ctx.Err())
+	}
+}
+
+func (g *routeFenceGuard) keepMaintenanceFailure(ctx context.Context, err error) {
+	if err == nil {
 		return
 	}
-	g.cancel()
-	<-g.done
+	g.mu.Lock()
+	if g.runErr == nil {
+		g.runErr = err
+	}
+	workCtx := g.workContext
+	g.mu.Unlock()
+	if workCtx == nil {
+		workCtx = ctx
+	}
+	holdMaintenanceTool(workCtx)
 }
 
 func (g *routeFenceGuard) loop(ctx context.Context) {
-	defer close(g.done)
 	wait := g.interval
 	for {
 		if err := g.sleep(ctx, wait); err != nil {
@@ -2280,8 +2505,7 @@ func openRouteBackend(ctx context.Context, source, rawDSN, writer string, wm rou
 			err = decideRoutePairing(source, raw, present, meta.Generation)
 		}
 		if err != nil {
-			_ = st.Close()
-			return nil, err
+			return nil, errors.Join(err, st.Close())
 		}
 		return st, nil
 	default:

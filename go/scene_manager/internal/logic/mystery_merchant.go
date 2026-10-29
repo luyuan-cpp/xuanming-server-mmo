@@ -16,6 +16,7 @@ import (
 	"scene_manager/internal/config"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
+	"shared/currencytype"
 	"shared/generated/table"
 	"shared/safego"
 
@@ -84,7 +85,6 @@ const (
 	merchantMaxShelfSize       uint32 = 32
 	merchantMaxGoodsPrice      uint64 = 1_000_000_000
 	merchantMaxLimitCount      uint32 = 99
-	merchantMaxCurrencyType    uint32 = 2
 )
 
 func mysteryMerchantKey(zoneID uint32) string {
@@ -207,7 +207,7 @@ func loadMerchantTables(cfg config.MysteryMerchantConfig) (merchantTables, error
 		}
 		if g.GetItemCount() == 0 || g.GetPrice() == 0 || g.GetPrice() > merchantMaxGoodsPrice ||
 			g.GetLimitCount() == 0 || g.GetLimitCount() > merchantMaxLimitCount ||
-			g.GetCurrencyType() > merchantMaxCurrencyType {
+			!currencytype.IsKnown(g.GetCurrencyType()) {
 			return merchantTables{}, fmt.Errorf("MysteryMerchantGoods id=%d 取值越界(item_count=%d price=%d limit_count=%d currency_type=%d)",
 				g.GetId(), g.GetItemCount(), g.GetPrice(), g.GetLimitCount(), g.GetCurrencyType())
 		}

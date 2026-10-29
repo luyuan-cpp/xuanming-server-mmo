@@ -98,9 +98,12 @@ func newGatherSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis) {
 	svcCtx.SceneNodes.Upsert(svc.SceneNodeRpcPrefix+"zone/1/1", discovery.NodeEntry{NodeId: 1, ZoneId: 1, Endpoint: "scene-z1"})
 	svcCtx.SceneNodes.Upsert(svc.SceneNodeRpcPrefix+"zone/2/1", discovery.NodeEntry{NodeId: 1, ZoneId: 2, Endpoint: "scene-z2"})
 	svcCtx.BattleNodes = discovery.NewNodeWatcher("battle", svc.BattleNodeRpcPrefix, nil, nil)
-	svcCtx.BattleNodes.Upsert(svc.BattleNodeRpcPrefix+"7", discovery.NodeEntry{NodeId: 7, Endpoint: "battle-7"})
+	svcCtx.BattleNodes.Upsert(svc.BattleNodeRpcPrefix+"7", discovery.NodeEntry{NodeId: 7, NodeUuid: testBattle7Instance, Endpoint: "battle-7"})
 	return svcCtx, mr
 }
+
+// testBattle7Instance 是 newGatherSvcCtx 灌的 battle 节点 7 的实例 uuid(本地观战原件的 target_instance_id)。
+const testBattle7Instance = "5b0f3c1e-7a42-4d0e-9a51-2f6c8d9e0b17"
 
 // popMatchedPair 让 a(zone1)/ b(zone2)入 1V1 队列并按生产路径弹出
 // (票据进 matched),返回 gather 入参。

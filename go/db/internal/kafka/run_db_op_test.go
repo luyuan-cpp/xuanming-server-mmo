@@ -183,7 +183,14 @@ func (f *runDBOpFixture) route(op string) *placementRoute {
 }
 
 func (f *runDBOpFixture) task(op string) *db_proto.DBTask {
-	task := &db_proto.DBTask{Key: runDBOpTestKey, Op: op, MsgType: placementTestMsgType, TaskId: "run-db-op-" + op}
+	opCode := db_proto.DBOp_DB_OP_UNSPECIFIED
+	switch op {
+	case "read":
+		opCode = db_proto.DBOp_DB_OP_READ
+	case "write":
+		opCode = db_proto.DBOp_DB_OP_WRITE
+	}
+	task := &db_proto.DBTask{Key: runDBOpTestKey, Op: opCode, MsgType: placementTestMsgType, TaskId: "run-db-op-" + op}
 	if op == "read" {
 		task.WhereCase = fmt.Sprintf("player_id='%d'", runDBOpTestKey)
 	}

@@ -181,7 +181,7 @@ func TestIT_Placement_PinMergeVerifyUnmerge(t *testing.T) {
 		t.Fatal(err)
 	}
 	itSetHome(t, 9050, itDstZone)
-	shared.Set(ctx, "PlayerAllData:9001", "live-cache", 0)
+	shared.Set(ctx, "PlayerAllData:{9001}", "live-cache", 0)
 	itMarkCapable(t, itSrcZone, itDstZone)
 
 	manifest := filepath.Join(t.TempDir(), "merge.json")
@@ -208,7 +208,7 @@ func TestIT_Placement_PinMergeVerifyUnmerge(t *testing.T) {
 	if itPlacement(t, 9050) != "" {
 		t.Error("a target-zone native got a placement record")
 	}
-	if n, _ := shared.Exists(ctx, "PlayerAllData:9001").Result(); n != 1 {
+	if n, _ := shared.Exists(ctx, "PlayerAllData:{9001}").Result(); n != 1 {
 		t.Error("pin mode must not invalidate the shared player cache (nothing moved)")
 	}
 	itAssertNoFence(t, "a finished pin merge")
@@ -232,10 +232,12 @@ func TestIT_Placement_PinMergeVerifyUnmerge(t *testing.T) {
 	if out, code := verify(); code != 0 || !strings.Contains(out, "0 block(s)") {
 		t.Fatalf("pin verification must pass (rows are found through the placement records) exit=%d\n%s", code, out)
 	}
-	// 旧缓存漏钉不能改变SQL真相；回档镜像必须仍按原SQL落点验收。
+	// SQL 原件决定行所在库，镜像缺失不改原件；SQL 行核对与缓存开服门禁独立，缓存不一致仍须阻止开服。
 	mapRdb.Del(ctx, placementKey(9002))
-	if out, code := verify(); code != 0 {
-		t.Fatalf("a missing placement mirror must not override the SQL original (exit=%d)\n%s", code, out)
+	if out, code := verify(); code != 1 || !strings.Contains(out, "Audit summary: 1 block(s),") ||
+		!strings.Contains(out, "[ ] verify:manifest_rows") || !strings.Contains(out, "[!] verify:route_cache") ||
+		!strings.Contains(out, `9002: player:placement <absent> != DB placement "901:1"`) {
+		t.Fatalf("落点镜像缺失时应仅阻断缓存开服门禁，SQL 原件及行核对仍有效（exit=%d）\n%s", code, out)
 	}
 	// 真SQL原件漏钉则有效落点回落902，没有原行，必须拒绝。
 	itClearRoutePlacement(t, 9002)
@@ -276,7 +278,7 @@ func TestIT_Placement_PinMergeVerifyUnmerge(t *testing.T) {
 	if n := itCount(t, db, zoneDBName(itSrcZone)+".player_database"); n != 3 {
 		t.Errorf("source rows after unmerge = %d, want 3 (they never moved)", n)
 	}
-	if n, _ := shared.Exists(ctx, "PlayerAllData:9001").Result(); n != 1 {
+	if n, _ := shared.Exists(ctx, "PlayerAllData:{9001}").Result(); n != 1 {
 		t.Error("a pin-mode unmerge must not invalidate the shared cache")
 	}
 }

@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
+	"github.com/alicebob/miniredis/v2/server"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
 
@@ -22,9 +24,11 @@ import (
 	dspb "proto/data_service"
 	loginpb "proto/login"
 	"shared/generated/pb/table"
+	"shared/generated/persistschema"
 	"shared/idsegment"
 	"shared/ownerepoch"
 	"shared/playername"
+	"shared/savebarrier"
 )
 
 // 建角写新号种子(docs/design/new-player-first-enter-no-cold-read.md)的单测。harness 沿用
@@ -33,6 +37,25 @@ import (
 
 // newPlayerSeedTTL 与 dataloader 里冷读组装父键的 TTL 相同(包内常量不导出,这里照抄数值)。
 const newPlayerSeedTTL = 24 * time.Hour
+
+// miniredis 的 INFO 没有实例身份，只替换这两条只读命令的回包。
+// 正式 Lua 的快路判定/屏障检查不变，也不关闭默认身份核验开关。
+func installParentIdentityInfoForTest(mr *miniredis.Miniredis) {
+	mr.Server().SetPreHook(func(peer *server.Peer, command string, args ...string) bool {
+		if command != "INFO" || len(args) != 1 {
+			return false
+		}
+		switch strings.ToLower(args[0]) {
+		case "server":
+			peer.WriteBulk("run_id:" + strings.Repeat("a", 40) + "\r\n")
+		case "replication":
+			peer.WriteBulk("role:master\r\nmaster_replid:" + strings.Repeat("b", 40) + "\r\n")
+		default:
+			return false
+		}
+		return true
+	})
+}
 
 // setNewPlayerSeed 设置种子开关,用例结束恢复原值。CreatePlayer 直接读全局 config.AppConfig,
 // 不恢复会把同包后续用例悄悄变成「开着」。
@@ -51,9 +74,10 @@ func seedCount(t *testing.T, result string) float64 {
 	return createPlayerCounterValue(t, "login_create_player_seed_total", map[string]string{"result": result})
 }
 
-// seedParentKeyFor 与 backfill / scene / go/db 同一种拼法(PlayerAllData 全名 + player_id)。
+// seedParentKeyFor 与 backfill / scene 同一种拼法(PlayerAllData 全名 + ":{" + player_id + "}",玩家域 hash tag)。
+// 刻意不调生产函数,独立钉住键形。
 func seedParentKeyFor(playerID uint64) string {
-	return fmt.Sprintf("%s:%d", (&pbdb.PlayerAllData{}).ProtoReflect().Descriptor().FullName(), playerID)
+	return fmt.Sprintf("%s:{%d}", (&pbdb.PlayerAllData{}).ProtoReflect().Descriptor().FullName(), playerID)
 }
 
 // seedSubCacheKeys 是两张子表的缓存键:冷读发过读任务时 go/db 会回写它们,快路径下必须不存在。
@@ -64,11 +88,12 @@ func seedSubCacheKeys(playerID uint64) []string {
 	}
 }
 
-// expectedSeed 是新号种子应有的内容:两张子表只带 player_id。在测试里独立写一份,不复用被测的构造。
+// 独立表达正式初始提交，不复用被测构造函数；仍不携带身份和注册业务初值。
 func expectedSeed(playerID uint64) *pbdb.PlayerAllData {
 	return &pbdb.PlayerAllData{
-		PlayerDatabaseData:   &pbdb.PlayerDatabase{PlayerId: playerID},
-		PlayerDatabase_1Data: &pbdb.PlayerDatabase_1{PlayerId: playerID},
+		PlayerDatabaseData:   &pbdb.PlayerDatabase{PlayerId: playerID, FenceOwnerEpoch: 1, FenceSaveSeq: 1, PersistSchemaGen: persistschema.Gen},
+		PlayerDatabase_1Data: &pbdb.PlayerDatabase_1{PlayerId: playerID, FenceOwnerEpoch: 1, FenceSaveSeq: 1, PersistSchemaGen: persistschema.Gen},
+		LastSaveSeq:          1,
 	}
 }
 
@@ -109,8 +134,8 @@ func TestCreatePlayer_SeedOffWritesNoParentKey(t *testing.T) {
 	}
 }
 
-// 开关开着:父键 = 骨架、带 TTL;建角结果照旧;种子不碰 data_service(调用序列仍是 reserve,register)。
-func TestCreatePlayer_SeedOnWritesSkeletonBeforeAccountBlob(t *testing.T) {
+// 开关开着：SQL 目录提交后才缓存完整初始提交，保留原名字与路由调用。
+func TestCreatePlayer_SeedOnWritesCompleteCommitAfterDirectory(t *testing.T) {
 	setNewPlayerSeed(t, true)
 	fake := &fakeRegisterClient{}
 	h := newCreatePlayerHarnessWithNames(t, homezone.New(fake, 0, 0, 0), fake)
@@ -121,7 +146,15 @@ func TestCreatePlayer_SeedOnWritesSkeletonBeforeAccountBlob(t *testing.T) {
 
 	parent, _ := readSeededParent(t, h.ctx, h.rdb, hzPlayerID)
 	if !proto.Equal(parent, expectedSeed(hzPlayerID)) {
-		t.Fatalf("seed = %v, want the skeleton (player_id only on both sub tables)", parent)
+		t.Fatalf("seed = %v, want the complete initial SQL commit", parent)
+	}
+	if h.rdb.Get(h.ctx, ownerepoch.OwnerEpochKey(hzPlayerID)).Val() != "1" {
+		t.Fatal("缺初始 owner 地板")
+	}
+	for _, field := range []string{"pending", "player_database", "player_database_1"} {
+		if h.rdb.HGet(h.ctx, savebarrier.Key(hzPlayerID), field).Val() != savebarrier.Version(1, 1) {
+			t.Fatal("初始提交屏障不完整")
+		}
 	}
 	if ttl := h.mr.TTL(seedParentKeyFor(hzPlayerID)); ttl <= 0 || ttl > newPlayerSeedTTL {
 		t.Fatalf("seed TTL = %v, want (0, %v]", ttl, newPlayerSeedTTL)
@@ -154,10 +187,8 @@ func TestCreatePlayer_SeedSkippedWhenHomeZoneRegistrationFails(t *testing.T) {
 	}
 }
 
-// 种子写在账号 blob **之前**:建角锁在持锁期间丢了(在 Reserve 回调里删锁模拟过期后易主),
-// 围栏写回 -1、回读确认不含新角色 → 建角失败;此时种子已经落地,只留下一份会过期的孤儿种子
-// (这个 id 已经烧掉,没人能拿它进场)。做法照 TestCreatePlayerName_LostLockFencesAccountWrite。
-func TestCreatePlayer_SeedSurvivesLostAccountWrite(t *testing.T) {
+// 入口锁在名字登记后丢失，目录提交点拒绝；名字补偿保留，不得留下可信种子。
+func TestCreatePlayer_LostCreateLockNeverWritesUncommittedSeed(t *testing.T) {
 	setNewPlayerSeed(t, true)
 	n := newNameHarness(t)
 	n.fake.reserve = func(int, *dspb.ReservePlayerNameRequest) (*dspb.ReservePlayerNameResponse, error) {
@@ -173,8 +204,8 @@ func TestCreatePlayer_SeedSurvivesLostAccountWrite(t *testing.T) {
 	if players := storedPlayers(t, n.ctx, n.rdb); len(players) != 0 {
 		t.Fatalf("account blob persisted %d player(s) although the fenced write was refused", len(players))
 	}
-	if ttl := n.mr.TTL(seedParentKeyFor(hzPlayerID)); ttl <= 0 {
-		t.Fatalf("seed TTL = %v, want an expiring seed left behind (it is written before the account blob)", ttl)
+	if n.mr.Exists(seedParentKeyFor(hzPlayerID)) {
+		t.Fatal("SQL 尚未提交时写了可信种子")
 	}
 	if len(n.fake.releaseReqs) != 1 || len(n.scheduled) != 0 {
 		t.Fatalf("release calls = %d, delayed = %d, want 1/0", len(n.fake.releaseReqs), len(n.scheduled))
@@ -653,17 +684,17 @@ func TestCreatePlayer_IDProbeClearThenDeadlineSendsNoReserve(t *testing.T) {
 
 // 种子脚本报错(父键是个 list,脚本里的 GET 回 WRONGTYPE):建角照常成功,账号 blob 与反查索引照写,
 // 计 error,父键原样不动。证明「种子结果不改变建角结果」对 error 分支同样成立。
-// 2026-10-15 改注入时机:list 键在 Reserve 回调里(6b' 探测之后)才写入。原先建角之前就预置,现在会被探测
-// 当成 parent_exists 拒在 6c 之前,种子根本跑不到;期望不变。
+// list 键只在 SQL 已提交回执后出现，不能由提交前的只读身份探测代替此回归。
 func TestCreatePlayer_SeedErrorDoesNotFailCreate(t *testing.T) {
 	setNewPlayerSeed(t, true)
 	fake := &fakeRegisterClient{}
 	h := newCreatePlayerHarnessWithNames(t, homezone.New(fake, 0, 0, 0), fake)
 	key := seedParentKeyFor(hzPlayerID)
-	plantInSeedWindow(t, fake, func() error {
-		_, err := h.mr.Lpush(key, "x")
-		return err
-	})
+	fixtureDirectory(t, h.rdb).afterCommit = func() {
+		if _, err := h.mr.Lpush(key, "x"); err != nil {
+			t.Fatal(err)
+		}
+	}
 	before := seedCount(t, "error")
 
 	resp, err := h.l.CreatePlayer(&loginpb.CreatePlayerRequest{})
@@ -681,6 +712,54 @@ func TestCreatePlayer_SeedErrorDoesNotFailCreate(t *testing.T) {
 	if typ := h.mr.Type(key); typ != "list" {
 		t.Fatalf("parent key type = %q after a failed seed, want the original list untouched", typ)
 	}
+	if len(fake.releaseReqs) != 0 {
+		t.Fatal("缓存失败释放了已提交角色的在役名字")
+	}
+}
+
+func TestCreatePlayer_LateCommittedSeedKeepsOwnerAndRegisteredName(t *testing.T) {
+	setNewPlayerSeed(t, true)
+	n := newNameHarness(t)
+	ownerKey := ownerepoch.OwnerEpochKey(hzPlayerID)
+	fixtureDirectory(t, n.rdb).afterCommit = func() {
+		if err := n.rdb.Set(n.ctx, ownerKey, "3", 0).Err(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resp, err := n.l.CreatePlayer(&loginpb.CreatePlayerRequest{})
+	requireCreated(t, resp, err)
+	if n.rdb.Get(n.ctx, ownerKey).Val() != "3" || n.mr.Exists(seedParentKeyFor(hzPlayerID)) {
+		t.Fatal("迟到初始种子覆盖了更高 owner 或写出旧父快照")
+	}
+	if len(n.fake.releaseReqs) != 0 || len(n.scheduled) != 0 {
+		t.Fatal("迟到种子补偿释放了已提交角色的名字")
+	}
+	if len(storedPlayers(t, n.ctx, n.rdb)) != 1 {
+		t.Fatal("缓存拒写删除了已提交目录")
+	}
+}
+
+func TestCreatePlayer_UnknownCommitRecoversDirectoryWithoutSeedReceipt(t *testing.T) {
+	setNewPlayerSeed(t, true)
+	n := newNameHarness(t)
+	fixtureDirectory(t, n.rdb).afterCreateErr = errors.New("SQL 已提交但应答丢失")
+	before := make(map[string]float64)
+	for _, label := range seedResultLabels {
+		before[label] = seedCount(t, label)
+	}
+	resp, err := n.l.CreatePlayer(&loginpb.CreatePlayerRequest{})
+	requireCreated(t, resp, err)
+	if n.mr.Exists(seedParentKeyFor(hzPlayerID)) || n.mr.Exists(ownerepoch.OwnerEpochKey(hzPlayerID)) {
+		t.Fatal("未知提交经 Lookup 恢复时制造了初始凭据")
+	}
+	if len(storedPlayers(t, n.ctx, n.rdb)) != 1 || len(n.fake.releaseReqs) != 0 {
+		t.Fatal("未知提交恢复未保留目录与名字")
+	}
+	for _, label := range seedResultLabels {
+		if seedCount(t, label) != before[label] {
+			t.Fatal("Lookup 恢复触发了缓存种子")
+		}
+	}
 }
 
 // 种子 → EnterGame:预加载走 EXISTS 快路径(svc 里 KafkaClient / TaskResultDispatcher 为 nil,
@@ -690,10 +769,10 @@ func TestEnterGame_SeededNewPlayerTakesFastPath(t *testing.T) {
 	h := newEnterWiringHarness(t, []*pbbase.AccountSimplePlayer{{PlayerId: identityPlayerID, ClassId: 3, Name: "云中君"}}, nil)
 	ctx := context.Background()
 	// harness 默认种下一份老存档;换成建角种子,模拟「刚建完角、第一次进场」。
-	if err := h.rdb.Del(ctx, identityBlobKey()).Err(); err != nil {
+	if err := h.rdb.Del(ctx, identityBlobKey(), ownerepoch.OwnerEpochKey(identityPlayerID), savebarrier.Key(identityPlayerID)).Err(); err != nil {
 		t.Fatalf("drop harness parent key: %v", err)
 	}
-	if got, err := dataloader.SeedNewPlayerAllData(ctx, h.rdb, identityPlayerID); err != nil || got != dataloader.SeedWritten {
+	if got, err := dataloader.SeedCommittedNewPlayerAllData(ctx, h.rdb, expectedSeed(identityPlayerID)); err != nil || got != dataloader.SeedWritten {
 		t.Fatalf("SeedNewPlayerAllData = %v / err %v, want written / nil", got, err)
 	}
 
@@ -733,12 +812,13 @@ func TestEnterGame_SeededNewPlayerTakesFastPath(t *testing.T) {
 
 // 身份CAS之后、SceneManager铸造owner之前中断，不得把仍无任何资产的新号永久锁死。
 func TestSeededPlayerCanRetryAfterIdentityBackfillBeforeFirstOwner(t *testing.T) {
-	l, rc, _, _ := newIdentityBackfillHarness(t, &pbdb.PlayerDatabase{PlayerId: identityPlayerID})
+	l, rc, mr, _ := newIdentityBackfillHarness(t, &pbdb.PlayerDatabase{PlayerId: identityPlayerID})
+	installParentIdentityInfoForTest(mr)
 	ctx := context.Background()
 	if err := rc.Del(ctx, identityBlobKey()).Err(); err != nil {
 		t.Fatal(err)
 	}
-	if result, err := dataloader.SeedNewPlayerAllData(ctx, rc, identityPlayerID); err != nil || result != dataloader.SeedWritten {
+	if result, err := dataloader.SeedCommittedNewPlayerAllData(ctx, rc, expectedSeed(identityPlayerID)); err != nil || result != dataloader.SeedWritten {
 		t.Fatalf("正式建角种子失败: %v/%v", result, err)
 	}
 	state := identityState(3, "云中君")

@@ -76,6 +76,6 @@ func (s *Service) bumpSyncDigest(ctx context.Context, caller uint64, commits []*
 	}
 	ctx, cancel := context.WithTimeout(ctx, syncDigestBudget)
 	defer cancel()
-	_ = s.syncDigest.BumpAll(ctx, teamIds, scenepb.SyncDomain_SYNC_DOMAIN_TEAM)
-	_ = s.syncDigest.BumpAll(ctx, inviteIds, scenepb.SyncDomain_SYNC_DOMAIN_TEAM_INVITE)
+	s.svcCtx.HoldRelay(s.syncDigest.BumpAll(ctx, teamIds, scenepb.SyncDomain_SYNC_DOMAIN_TEAM))
+	s.svcCtx.HoldRelay(s.syncDigest.BumpAll(ctx, inviteIds, scenepb.SyncDomain_SYNC_DOMAIN_TEAM_INVITE))
 }

@@ -34,6 +34,7 @@ enum PlayerInboxClass {
 enum PlayerInboxProducerKind {
   PLAYER_INBOX_PRODUCER_UNSPECIFIED = 0;
   PLAYER_INBOX_PRODUCER_GM = 1;       // PlayerInboxAdmin.GmSanctionPlayer
+  PLAYER_INBOX_PRODUCER_MATCH = 2;    // Match SQL 永久终局来源，独立内部签名
 }
 
 // 域规格:挂在 PlayerInboxDomain 的枚举值上。
@@ -64,6 +65,10 @@ enum PlayerInboxDomain {
     max_pending: 64
     requires_out_of_battle: true
   }];
+  PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT = 2 [(OptionPlayerInboxDomain) = {
+    max_pending: 1
+    requires_out_of_battle: false
+  }];
 }
 
 // 消息类型。新增类型 = 追加枚举值并写全规格;号上线后不复用。
@@ -89,6 +94,12 @@ enum PlayerInboxMessageType {
     klass: PLAYER_INBOX_CLASS_DURABLE
     payload_message: "player_inbox.GmCurrencyDebtPayload"
     max_payload_bytes: 1024
+  }];
+  PLAYER_INBOX_MSG_BATTLE_SETTLEMENT = 4 [(OptionPlayerInboxType) = {
+    domain: PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT
+    klass: PLAYER_INBOX_CLASS_DURABLE
+    payload_message: "BattleSettlementData"
+    max_payload_bytes: 16384
   }];
 }
 
@@ -170,13 +181,36 @@ message GmCurrencyDebtPayload {
   uint64 expires_at = 5;              // Unix 秒(UTC),与 CurrencyDebtEntry.expires_at 同单位;0 = 永不过期
 }
 
-// ── 服务:scene → 收件箱(拉取 + 落盘后确认)────────────────────────────
+// Scene 分方法签名后拉取/确认；Match 用独立签名专门入箱/查询永久结算原收据。
 
 service PlayerInbox {
   // 按 seq 升序拉 PENDING 条目,同时推进 owner_epoch 围栏。无流时只是一次不加锁的主键点读。
   rpc FetchItems(FetchPlayerInboxRequest) returns (FetchPlayerInboxResponse) {}
   // 报告**已落盘**的结局(设计 §7.7)。不受 consumer_enabled 等前置闸限制。
   rpc AckItems(AckPlayerInboxRequest) returns (AckPlayerInboxResponse) {}
+  rpc EnqueueBattleSettlement(BattleSettlementInboxRequest) returns (BattleSettlementInboxResponse);
+  rpc LookupBattleSettlement(BattleSettlementInboxRequest) returns (BattleSettlementInboxResponse);
+}
+
+// 固定原归属与签发时间；重投只能重签 auth，不得刷新正文或借当前目录补权。
+message BattleSettlementInboxRequest {
+  uint64 player_id = 1;
+  uint64 battle_id = 2;
+  string expected_owner_account = 3;
+  uint64 expected_owner_revision = 4;
+  uint64 issued_at_ms = 5;
+  bytes settlement_payload = 6;
+  common.base.ServiceCallAuth auth = 7;
+}
+message BattleSettlementInboxResponse {
+  TipInfoMessage error_message = 1;
+  uint64 player_id = 2;
+  uint64 battle_id = 3;
+  uint64 seq = 4;
+  PlayerInboxItemState state = 5;
+  bytes content_sha256 = 6;
+  string request_digest = 7;
+  common.base.ServiceCallAuth auth = 8;
 }
 
 message FetchPlayerInboxRequest {

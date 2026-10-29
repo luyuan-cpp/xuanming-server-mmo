@@ -37,6 +37,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto, /* tracker*/ nullptr,},
         // ::match::CancelActivityBattleResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto, /* tracker*/ nullptr,},
+        // ::match::CommitBattleOutcomeRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto, /* tracker*/ nullptr,},
+        // ::match::CommitBattleOutcomeResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -376,6 +380,361 @@ const ::_pbi::ClassData* StartActivityBattleRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class CommitBattleOutcomeResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CommitBattleOutcomeResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeResponse, _impl_._has_bits_);
+};
+
+constexpr CommitBattleOutcomeResponse::ParseTableT_ CommitBattleOutcomeResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::CommitBattleOutcomeResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .match.BattleOutcomeDecision decision = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CommitBattleOutcomeResponse, _impl_.decision_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeResponse, _impl_.decision_)}},
+      // string request_digest = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeResponse, _impl_.request_digest_)}},
+      // .common.base.ServiceCallAuth auth = 3;
+      {::_pbi::TcParser::FastMtS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeResponse, _impl_.auth_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .match.BattleOutcomeDecision decision = 1;
+      {PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeResponse, _impl_.decision_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // string request_digest = 2;
+      {PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeResponse, _impl_.request_digest_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // .common.base.ServiceCallAuth auth = 3;
+      {PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeResponse, _impl_.auth_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+      "\41\0\16\0\0\0\0\0"
+      "match.CommitBattleOutcomeResponse"
+      "request_digest"
+    }},
+  };
+}
+
+
+inline constexpr CommitBattleOutcomeResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        request_digest_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        auth_{nullptr},
+        decision_{static_cast< ::match::BattleOutcomeDecision >(0)} {}
+
+template <typename>
+constexpr CommitBattleOutcomeResponse::CommitBattleOutcomeResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CommitBattleOutcomeResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CommitBattleOutcomeResponse(arena);
+}
+constexpr auto CommitBattleOutcomeResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(CommitBattleOutcomeResponse), alignof(CommitBattleOutcomeResponse));
+}
+constexpr auto CommitBattleOutcomeResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CommitBattleOutcomeResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CommitBattleOutcomeResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CommitBattleOutcomeResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CommitBattleOutcomeResponse>(), &CommitBattleOutcomeResponse::ByteSizeLong,
+              &CommitBattleOutcomeResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[5],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CommitBattleOutcomeResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CommitBattleOutcomeResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CommitBattleOutcomeResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CommitBattleOutcomeResponse::InternalGenerateClassData_(
+            _default, &CommitBattleOutcomeResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CommitBattleOutcomeResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CommitBattleOutcomeResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CommitBattleOutcomeResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CommitBattleOutcomeResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CommitBattleOutcomeResponseGlobalsTypeInternal CommitBattleOutcomeResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CommitBattleOutcomeResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CommitBattleOutcomeResponse_globals_.GetClassData();
+#else
+  return CommitBattleOutcomeResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class CommitBattleOutcomeRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CommitBattleOutcomeRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequest, _impl_._has_bits_);
+};
+
+constexpr CommitBattleOutcomeRequest::ParseTableT_ CommitBattleOutcomeRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::CommitBattleOutcomeRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 battle_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CommitBattleOutcomeRequest, _impl_.battle_id_), 4>(),
+       {8, 4, 0,
+        PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequest, _impl_.battle_id_)}},
+      // string placement_operation_id = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequest, _impl_.placement_operation_id_)}},
+      // string target_instance_id = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequest, _impl_.target_instance_id_)}},
+      // bytes raw_result_payload = 4;
+      {::_pbi::TcParser::FastBS1,
+       {34, 2, 0,
+        PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequest, _impl_.raw_result_payload_)}},
+      // .common.base.ServiceCallAuth auth = 5;
+      {::_pbi::TcParser::FastMtS1,
+       {42, 3, 0,
+        PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequest, _impl_.auth_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 battle_id = 1;
+      {PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequest, _impl_.battle_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string placement_operation_id = 2;
+      {PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequest, _impl_.placement_operation_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string target_instance_id = 3;
+      {PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequest, _impl_.target_instance_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bytes raw_result_payload = 4;
+      {PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequest, _impl_.raw_result_payload_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // .common.base.ServiceCallAuth auth = 5;
+      {PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequest, _impl_.auth_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+      "\40\0\26\22\0\0\0\0"
+      "match.CommitBattleOutcomeRequest"
+      "placement_operation_id"
+      "target_instance_id"
+    }},
+  };
+}
+
+
+inline constexpr CommitBattleOutcomeRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        placement_operation_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        target_instance_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        raw_result_payload_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        auth_{nullptr},
+        battle_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr CommitBattleOutcomeRequest::CommitBattleOutcomeRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CommitBattleOutcomeRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CommitBattleOutcomeRequest(arena);
+}
+constexpr auto CommitBattleOutcomeRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(CommitBattleOutcomeRequest), alignof(CommitBattleOutcomeRequest));
+}
+constexpr auto CommitBattleOutcomeRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CommitBattleOutcomeRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CommitBattleOutcomeRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CommitBattleOutcomeRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CommitBattleOutcomeRequest>(), &CommitBattleOutcomeRequest::ByteSizeLong,
+              &CommitBattleOutcomeRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[4],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CommitBattleOutcomeRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CommitBattleOutcomeRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CommitBattleOutcomeRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CommitBattleOutcomeRequest::InternalGenerateClassData_(
+            _default, &CommitBattleOutcomeRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CommitBattleOutcomeRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CommitBattleOutcomeRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CommitBattleOutcomeRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CommitBattleOutcomeRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CommitBattleOutcomeRequestGlobalsTypeInternal CommitBattleOutcomeRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CommitBattleOutcomeRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CommitBattleOutcomeRequest_globals_.GetClassData();
+#else
+  return CommitBattleOutcomeRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class CancelActivityBattleResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<CancelActivityBattleResponse>()._impl_._has_bits_);
@@ -388,11 +747,11 @@ constexpr CancelActivityBattleResponse::ParseTableT_ CancelActivityBattleRespons
     {
       PROTOBUF_FIELD_OFFSET(CancelActivityBattleResponse, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      6,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -423,7 +782,10 @@ constexpr CancelActivityBattleResponse::ParseTableT_ CancelActivityBattleRespons
       {::_pbi::TcParser::FastUS1,
        {42, 0, 0,
         PROTOBUF_FIELD_OFFSET(CancelActivityBattleResponse, _impl_.request_digest_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .match.BattleOutcomeDecision terminal_decision = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CancelActivityBattleResponse, _impl_.terminal_decision_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(CancelActivityBattleResponse, _impl_.terminal_decision_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -438,6 +800,8 @@ constexpr CancelActivityBattleResponse::ParseTableT_ CancelActivityBattleRespons
       {PROTOBUF_FIELD_OFFSET(CancelActivityBattleResponse, _impl_.auth_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // string request_digest = 5;
       {PROTOBUF_FIELD_OFFSET(CancelActivityBattleResponse, _impl_.request_digest_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // .match.BattleOutcomeDecision terminal_decision = 6;
+      {PROTOBUF_FIELD_OFFSET(CancelActivityBattleResponse, _impl_.terminal_decision_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -465,7 +829,8 @@ inline constexpr CancelActivityBattleResponse::Impl_::Impl_(
         auth_{nullptr},
         battle_id_{::uint64_t{0u}},
         request_cancelled_{false},
-        formation_state_{0u} {}
+        formation_state_{0u},
+        terminal_decision_{static_cast< ::match::BattleOutcomeDecision >(0)} {}
 
 template <typename>
 constexpr CancelActivityBattleResponse::CancelActivityBattleResponse(::_pbi::ConstantInitialized,
@@ -720,7 +1085,7 @@ const ::_pbi::ClassData* CancelActivityBattleRequest_get_class_data() {
 #endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace match
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_proto_2fmatch_2fmatch_5finternal_2eproto[1];
+    file_level_enum_descriptors_proto_2fmatch_2fmatch_5finternal_2eproto[2];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_proto_2fmatch_2fmatch_5finternal_2eproto = nullptr;
 const ::uint32_t
@@ -757,17 +1122,41 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::CancelActivityBattleResponse, _impl_._has_bits_),
-        8, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::match::CancelActivityBattleResponse, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::match::CancelActivityBattleResponse, _impl_.request_cancelled_),
         PROTOBUF_FIELD_OFFSET(::match::CancelActivityBattleResponse, _impl_.formation_state_),
         PROTOBUF_FIELD_OFFSET(::match::CancelActivityBattleResponse, _impl_.auth_),
         PROTOBUF_FIELD_OFFSET(::match::CancelActivityBattleResponse, _impl_.request_digest_),
+        PROTOBUF_FIELD_OFFSET(::match::CancelActivityBattleResponse, _impl_.terminal_decision_),
         2,
         3,
         4,
         1,
         0,
+        5,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::CommitBattleOutcomeRequest, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::CommitBattleOutcomeRequest, _impl_.battle_id_),
+        PROTOBUF_FIELD_OFFSET(::match::CommitBattleOutcomeRequest, _impl_.placement_operation_id_),
+        PROTOBUF_FIELD_OFFSET(::match::CommitBattleOutcomeRequest, _impl_.target_instance_id_),
+        PROTOBUF_FIELD_OFFSET(::match::CommitBattleOutcomeRequest, _impl_.raw_result_payload_),
+        PROTOBUF_FIELD_OFFSET(::match::CommitBattleOutcomeRequest, _impl_.auth_),
+        4,
+        0,
+        1,
+        2,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::CommitBattleOutcomeResponse, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::CommitBattleOutcomeResponse, _impl_.decision_),
+        PROTOBUF_FIELD_OFFSET(::match::CommitBattleOutcomeResponse, _impl_.request_digest_),
+        PROTOBUF_FIELD_OFFSET(::match::CommitBattleOutcomeResponse, _impl_.auth_),
+        2,
+        0,
+        1,
 };
 
 static const ::_pbi::MigrationSchema
@@ -776,6 +1165,8 @@ static const ::_pbi::MigrationSchema
         {11, sizeof(::match::StartActivityBattleResponse)},
         {22, sizeof(::match::CancelActivityBattleRequest)},
         {29, sizeof(::match::CancelActivityBattleResponse)},
+        {44, sizeof(::match::CommitBattleOutcomeRequest)},
+        {57, sizeof(::match::CommitBattleOutcomeResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -783,6 +1174,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::match::StartActivityBattleResponse_globals_,
         &::match::CancelActivityBattleRequest_globals_,
         &::match::CancelActivityBattleResponse_globals_,
+        &::match::CommitBattleOutcomeRequest_globals_,
+        &::match::CommitBattleOutcomeResponse_globals_,
 };
 const char descriptor_table_protodef_proto_2fmatch_2fmatch_5finternal_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -800,24 +1193,39 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5finternal_2eproto[] 
     "te\030\004 \001(\r\"~\n\033CancelActivityBattleRequest\022"
     "3\n\010original\030\001 \001(\0132!.match.StartActivityB"
     "attleRequest\022*\n\004auth\030\002 \001(\0132\034.common.base"
-    ".ServiceCallAuth\"\251\001\n\034CancelActivityBattl"
+    ".ServiceCallAuth\"\342\001\n\034CancelActivityBattl"
     "eResponse\022\021\n\tbattle_id\030\001 \001(\004\022\031\n\021request_"
     "cancelled\030\002 \001(\010\022\027\n\017formation_state\030\003 \001(\r"
     "\022*\n\004auth\030\004 \001(\0132\034.common.base.ServiceCall"
-    "Auth\022\026\n\016request_digest\030\005 \001(\t*\216\002\n\024Activit"
-    "yBattleReject\022\037\n\033ACTIVITY_BATTLE_REJECT_"
-    "NONE\020\000\022+\n\'ACTIVITY_BATTLE_REJECT_INVALID"
-    "_ARGUMENT\020\001\022)\n%ACTIVITY_BATTLE_REJECT_ME"
-    "MBER_OFFLINE\020\002\022+\n\'ACTIVITY_BATTLE_REJECT"
-    "_MEMBER_IN_BATTLE\020\003\022+\n\'ACTIVITY_BATTLE_R"
-    "EJECT_MEMBER_NOT_READY\020\004\022#\n\037ACTIVITY_BAT"
-    "TLE_REJECT_INTERNAL\020\0052\316\001\n\rMatchInternal\022"
-    "\\\n\023StartActivityBattle\022!.match.StartActi"
-    "vityBattleRequest\032\".match.StartActivityB"
-    "attleResponse\022_\n\024CancelActivityBattle\022\"."
-    "match.CancelActivityBattleRequest\032#.matc"
-    "h.CancelActivityBattleResponseB\024Z\013match/"
-    "match\200\001\000\230\324a\025b\006proto3"
+    "Auth\022\026\n\016request_digest\030\005 \001(\t\0227\n\021terminal"
+    "_decision\030\006 \001(\0162\034.match.BattleOutcomeDec"
+    "ision\"\263\001\n\032CommitBattleOutcomeRequest\022\021\n\t"
+    "battle_id\030\001 \001(\004\022\036\n\026placement_operation_i"
+    "d\030\002 \001(\t\022\032\n\022target_instance_id\030\003 \001(\t\022\032\n\022r"
+    "aw_result_payload\030\004 \001(\014\022*\n\004auth\030\005 \001(\0132\034."
+    "common.base.ServiceCallAuth\"\221\001\n\033CommitBa"
+    "ttleOutcomeResponse\022.\n\010decision\030\001 \001(\0162\034."
+    "match.BattleOutcomeDecision\022\026\n\016request_d"
+    "igest\030\002 \001(\t\022*\n\004auth\030\003 \001(\0132\034.common.base."
+    "ServiceCallAuth*\216\002\n\024ActivityBattleReject"
+    "\022\037\n\033ACTIVITY_BATTLE_REJECT_NONE\020\000\022+\n\'ACT"
+    "IVITY_BATTLE_REJECT_INVALID_ARGUMENT\020\001\022)"
+    "\n%ACTIVITY_BATTLE_REJECT_MEMBER_OFFLINE\020"
+    "\002\022+\n\'ACTIVITY_BATTLE_REJECT_MEMBER_IN_BA"
+    "TTLE\020\003\022+\n\'ACTIVITY_BATTLE_REJECT_MEMBER_"
+    "NOT_READY\020\004\022#\n\037ACTIVITY_BATTLE_REJECT_IN"
+    "TERNAL\020\005*\205\001\n\025BattleOutcomeDecision\022#\n\037BA"
+    "TTLE_OUTCOME_DECISION_UNKNOWN\020\000\022$\n BATTL"
+    "E_OUTCOME_DECISION_COMPLETE\020\001\022!\n\035BATTLE_"
+    "OUTCOME_DECISION_ABORT\020\0022\254\002\n\rMatchIntern"
+    "al\022\\\n\023StartActivityBattle\022!.match.StartA"
+    "ctivityBattleRequest\032\".match.StartActivi"
+    "tyBattleResponse\022_\n\024CancelActivityBattle"
+    "\022\".match.CancelActivityBattleRequest\032#.m"
+    "atch.CancelActivityBattleResponse\022\\\n\023Com"
+    "mitBattleOutcome\022!.match.CommitBattleOut"
+    "comeRequest\032\".match.CommitBattleOutcomeR"
+    "esponseB\024Z\013match/match\200\001\000\230\324a\025b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto_deps[3] = {
@@ -829,13 +1237,13 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5finternal_2epro
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto = {
     false,
     false,
-    1260,
+    1877,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5finternal_2eproto,
     "proto/match/match_internal.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto_once,
     descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto_deps,
     3,
-    4,
+    6,
     schemas,
     file_message_globals,
     TableStruct_proto_2fmatch_2fmatch_5finternal_2eproto::offsets,
@@ -850,6 +1258,13 @@ ActivityBattleReject_descriptor() {
 }
 PROTOBUF_CONSTINIT const uint32_t ActivityBattleReject_internal_data_[] = {
     393216u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+BattleOutcomeDecision_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto);
+  return file_level_enum_descriptors_proto_2fmatch_2fmatch_5finternal_2eproto[1];
+}
+PROTOBUF_CONSTINIT const uint32_t BattleOutcomeDecision_internal_data_[] = {
+    196608u, 0u, };
 // ===================================================================
 
 void StartActivityBattleRequest::clear_activity_context() {
@@ -1749,9 +2164,9 @@ CancelActivityBattleResponse::CancelActivityBattleResponse(
                offsetof(Impl_, battle_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, battle_id_),
-           offsetof(Impl_, formation_state_) -
+           offsetof(Impl_, terminal_decision_) -
                offsetof(Impl_, battle_id_) +
-               sizeof(Impl_::formation_state_));
+               sizeof(Impl_::terminal_decision_));
 
   // @@protoc_insertion_point(copy_constructor:match.CancelActivityBattleResponse)
 }
@@ -1766,9 +2181,9 @@ inline void CancelActivityBattleResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULL
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, auth_),
            0,
-           offsetof(Impl_, formation_state_) -
+           offsetof(Impl_, terminal_decision_) -
                offsetof(Impl_, auth_) +
-               sizeof(Impl_::formation_state_));
+               sizeof(Impl_::terminal_decision_));
 }
 CancelActivityBattleResponse::~CancelActivityBattleResponse() {
   // @@protoc_insertion_point(destructor:match.CancelActivityBattleResponse)
@@ -1829,10 +2244,10 @@ PROTOBUF_NOINLINE void CancelActivityBattleResponse::Clear() {
       _impl_.auth_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
     ::memset(&_impl_.battle_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.formation_state_) -
-        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.formation_state_));
+        reinterpret_cast<char*>(&_impl_.terminal_decision_) -
+        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.terminal_decision_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1901,6 +2316,15 @@ PROTOBUF_NOINLINE void CancelActivityBattleResponse::Clear() {
     }
   }
 
+  // .match.BattleOutcomeDecision terminal_decision = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_terminal_decision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          6, this_._internal_terminal_decision(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1926,7 +2350,7 @@ PROTOBUF_NOINLINE void CancelActivityBattleResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // string request_digest = 5;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_request_digest().empty()) {
@@ -1959,6 +2383,13 @@ PROTOBUF_NOINLINE void CancelActivityBattleResponse::Clear() {
             this_._internal_formation_state());
       }
     }
+    // .match.BattleOutcomeDecision terminal_decision = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_terminal_decision() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_terminal_decision());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -1978,7 +2409,7 @@ void CancelActivityBattleResponse::MergeImpl(::google::protobuf::MessageLite& to
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_request_digest().empty()) {
         _this->_internal_set_request_digest(from._internal_request_digest());
@@ -2011,6 +2442,11 @@ void CancelActivityBattleResponse::MergeImpl(::google::protobuf::MessageLite& to
         _this->_impl_.formation_state_ = from._impl_.formation_state_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_terminal_decision() != 0) {
+        _this->_impl_.terminal_decision_ = from._impl_.terminal_decision_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -2033,14 +2469,656 @@ void CancelActivityBattleResponse::InternalSwap(CancelActivityBattleResponse* PR
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.request_digest_, &other->_impl_.request_digest_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(CancelActivityBattleResponse, _impl_.formation_state_)
-      + sizeof(CancelActivityBattleResponse::_impl_.formation_state_)
+      PROTOBUF_FIELD_OFFSET(CancelActivityBattleResponse, _impl_.terminal_decision_)
+      + sizeof(CancelActivityBattleResponse::_impl_.terminal_decision_)
       - PROTOBUF_FIELD_OFFSET(CancelActivityBattleResponse, _impl_.auth_)>(
           reinterpret_cast<char*>(&_impl_.auth_),
           reinterpret_cast<char*>(&other->_impl_.auth_));
 }
 
 ::google::protobuf::Metadata CancelActivityBattleResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void CommitBattleOutcomeRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+CommitBattleOutcomeRequest::CommitBattleOutcomeRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CommitBattleOutcomeRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.CommitBattleOutcomeRequest)
+}
+PROTOBUF_NDEBUG_INLINE CommitBattleOutcomeRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::CommitBattleOutcomeRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        placement_operation_id_(arena, from.placement_operation_id_),
+        target_instance_id_(arena, from.target_instance_id_),
+        raw_result_payload_(arena, from.raw_result_payload_) {}
+
+CommitBattleOutcomeRequest::CommitBattleOutcomeRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CommitBattleOutcomeRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CommitBattleOutcomeRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CommitBattleOutcomeRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000008U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  _impl_.battle_id_ = from._impl_.battle_id_;
+
+  // @@protoc_insertion_point(copy_constructor:match.CommitBattleOutcomeRequest)
+}
+PROTOBUF_NDEBUG_INLINE CommitBattleOutcomeRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        placement_operation_id_(arena),
+        target_instance_id_(arena),
+        raw_result_payload_(arena) {}
+
+inline void CommitBattleOutcomeRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, auth_),
+           0,
+           offsetof(Impl_, battle_id_) -
+               offsetof(Impl_, auth_) +
+               sizeof(Impl_::battle_id_));
+}
+CommitBattleOutcomeRequest::~CommitBattleOutcomeRequest() {
+  // @@protoc_insertion_point(destructor:match.CommitBattleOutcomeRequest)
+  SharedDtor(*this);
+}
+inline void CommitBattleOutcomeRequest::SharedDtor(MessageLite& self) {
+  CommitBattleOutcomeRequest& this_ = static_cast<CommitBattleOutcomeRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.placement_operation_id_.Destroy();
+  this_._impl_.target_instance_id_.Destroy();
+  this_._impl_.raw_result_payload_.Destroy();
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CommitBattleOutcomeRequest_class_data_ =
+        CommitBattleOutcomeRequest::InternalGenerateClassData_(CommitBattleOutcomeRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CommitBattleOutcomeRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CommitBattleOutcomeRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CommitBattleOutcomeRequest_class_data_.tc_table);
+  return CommitBattleOutcomeRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CommitBattleOutcomeRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CommitBattleOutcomeRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CommitBattleOutcomeRequest_globals_));
+  return CommitBattleOutcomeRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CommitBattleOutcomeRequest::ParseTableT_
+    CommitBattleOutcomeRequest::_table_ =
+        CommitBattleOutcomeRequest::InternalGenerateParseTable_(CommitBattleOutcomeRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CommitBattleOutcomeRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.CommitBattleOutcomeRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.placement_operation_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.target_instance_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.raw_result_payload_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      ABSL_DCHECK(_impl_.auth_ != nullptr);
+      _impl_.auth_->Clear();
+    }
+  }
+  _impl_.battle_id_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CommitBattleOutcomeRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CommitBattleOutcomeRequest& this_ = static_cast<const CommitBattleOutcomeRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CommitBattleOutcomeRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CommitBattleOutcomeRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.CommitBattleOutcomeRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 battle_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_battle_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_battle_id(), target);
+    }
+  }
+
+  // string placement_operation_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_placement_operation_id().empty()) {
+      const ::std::string& _s = this_._internal_placement_operation_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.CommitBattleOutcomeRequest.placement_operation_id");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // string target_instance_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_target_instance_id().empty()) {
+      const ::std::string& _s = this_._internal_target_instance_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.CommitBattleOutcomeRequest.target_instance_id");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // bytes raw_result_payload = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_raw_result_payload().empty()) {
+      const ::std::string& _s = this_._internal_raw_result_payload();
+      target = stream->WriteBytesMaybeAliased(4, _s, target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        5, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.CommitBattleOutcomeRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CommitBattleOutcomeRequest::ByteSizeLong(const MessageLite& base) {
+  const CommitBattleOutcomeRequest& this_ = static_cast<const CommitBattleOutcomeRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CommitBattleOutcomeRequest::ByteSizeLong() const {
+  const CommitBattleOutcomeRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.CommitBattleOutcomeRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // string placement_operation_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_placement_operation_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_placement_operation_id());
+      }
+    }
+    // string target_instance_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_target_instance_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_target_instance_id());
+      }
+    }
+    // bytes raw_result_payload = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_raw_result_payload().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_raw_result_payload());
+      }
+    }
+    // .common.base.ServiceCallAuth auth = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+    // uint64 battle_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_battle_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_battle_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CommitBattleOutcomeRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CommitBattleOutcomeRequest*>(&to_msg);
+  auto& from = static_cast<const CommitBattleOutcomeRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.CommitBattleOutcomeRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_placement_operation_id().empty()) {
+        _this->_internal_set_placement_operation_id(from._internal_placement_operation_id());
+      } else {
+        if (_this->_impl_.placement_operation_id_.IsDefault()) {
+          _this->_internal_set_placement_operation_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_target_instance_id().empty()) {
+        _this->_internal_set_target_instance_id(from._internal_target_instance_id());
+      } else {
+        if (_this->_impl_.target_instance_id_.IsDefault()) {
+          _this->_internal_set_target_instance_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_raw_result_payload().empty()) {
+        _this->_internal_set_raw_result_payload(from._internal_raw_result_payload());
+      } else {
+        if (_this->_impl_.raw_result_payload_.IsDefault()) {
+          _this->_internal_set_raw_result_payload("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_battle_id() != 0) {
+        _this->_impl_.battle_id_ = from._impl_.battle_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CommitBattleOutcomeRequest::CopyFrom(const CommitBattleOutcomeRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.CommitBattleOutcomeRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CommitBattleOutcomeRequest::InternalSwap(CommitBattleOutcomeRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.placement_operation_id_, &other->_impl_.placement_operation_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.target_instance_id_, &other->_impl_.target_instance_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.raw_result_payload_, &other->_impl_.raw_result_payload_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequest, _impl_.battle_id_)
+      + sizeof(CommitBattleOutcomeRequest::_impl_.battle_id_)
+      - PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeRequest, _impl_.auth_)>(
+          reinterpret_cast<char*>(&_impl_.auth_),
+          reinterpret_cast<char*>(&other->_impl_.auth_));
+}
+
+::google::protobuf::Metadata CommitBattleOutcomeRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void CommitBattleOutcomeResponse::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+CommitBattleOutcomeResponse::CommitBattleOutcomeResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CommitBattleOutcomeResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.CommitBattleOutcomeResponse)
+}
+PROTOBUF_NDEBUG_INLINE CommitBattleOutcomeResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::CommitBattleOutcomeResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        request_digest_(arena, from.request_digest_) {}
+
+CommitBattleOutcomeResponse::CommitBattleOutcomeResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CommitBattleOutcomeResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CommitBattleOutcomeResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CommitBattleOutcomeResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  _impl_.decision_ = from._impl_.decision_;
+
+  // @@protoc_insertion_point(copy_constructor:match.CommitBattleOutcomeResponse)
+}
+PROTOBUF_NDEBUG_INLINE CommitBattleOutcomeResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        request_digest_(arena) {}
+
+inline void CommitBattleOutcomeResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, auth_),
+           0,
+           offsetof(Impl_, decision_) -
+               offsetof(Impl_, auth_) +
+               sizeof(Impl_::decision_));
+}
+CommitBattleOutcomeResponse::~CommitBattleOutcomeResponse() {
+  // @@protoc_insertion_point(destructor:match.CommitBattleOutcomeResponse)
+  SharedDtor(*this);
+}
+inline void CommitBattleOutcomeResponse::SharedDtor(MessageLite& self) {
+  CommitBattleOutcomeResponse& this_ = static_cast<CommitBattleOutcomeResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.request_digest_.Destroy();
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CommitBattleOutcomeResponse_class_data_ =
+        CommitBattleOutcomeResponse::InternalGenerateClassData_(CommitBattleOutcomeResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CommitBattleOutcomeResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CommitBattleOutcomeResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CommitBattleOutcomeResponse_class_data_.tc_table);
+  return CommitBattleOutcomeResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CommitBattleOutcomeResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CommitBattleOutcomeResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CommitBattleOutcomeResponse_globals_));
+  return CommitBattleOutcomeResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CommitBattleOutcomeResponse::ParseTableT_
+    CommitBattleOutcomeResponse::_table_ =
+        CommitBattleOutcomeResponse::InternalGenerateParseTable_(CommitBattleOutcomeResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CommitBattleOutcomeResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.CommitBattleOutcomeResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.request_digest_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.auth_ != nullptr);
+      _impl_.auth_->Clear();
+    }
+  }
+  _impl_.decision_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CommitBattleOutcomeResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CommitBattleOutcomeResponse& this_ = static_cast<const CommitBattleOutcomeResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CommitBattleOutcomeResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CommitBattleOutcomeResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.CommitBattleOutcomeResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .match.BattleOutcomeDecision decision = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_decision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_decision(), target);
+    }
+  }
+
+  // string request_digest = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_request_digest().empty()) {
+      const ::std::string& _s = this_._internal_request_digest();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.CommitBattleOutcomeResponse.request_digest");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.CommitBattleOutcomeResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CommitBattleOutcomeResponse::ByteSizeLong(const MessageLite& base) {
+  const CommitBattleOutcomeResponse& this_ = static_cast<const CommitBattleOutcomeResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CommitBattleOutcomeResponse::ByteSizeLong() const {
+  const CommitBattleOutcomeResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.CommitBattleOutcomeResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // string request_digest = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_request_digest().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_request_digest());
+      }
+    }
+    // .common.base.ServiceCallAuth auth = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+    // .match.BattleOutcomeDecision decision = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_decision() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_decision());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CommitBattleOutcomeResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CommitBattleOutcomeResponse*>(&to_msg);
+  auto& from = static_cast<const CommitBattleOutcomeResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.CommitBattleOutcomeResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_request_digest().empty()) {
+        _this->_internal_set_request_digest(from._internal_request_digest());
+      } else {
+        if (_this->_impl_.request_digest_.IsDefault()) {
+          _this->_internal_set_request_digest("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_decision() != 0) {
+        _this->_impl_.decision_ = from._impl_.decision_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CommitBattleOutcomeResponse::CopyFrom(const CommitBattleOutcomeResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.CommitBattleOutcomeResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CommitBattleOutcomeResponse::InternalSwap(CommitBattleOutcomeResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.request_digest_, &other->_impl_.request_digest_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeResponse, _impl_.decision_)
+      + sizeof(CommitBattleOutcomeResponse::_impl_.decision_)
+      - PROTOBUF_FIELD_OFFSET(CommitBattleOutcomeResponse, _impl_.auth_)>(
+          reinterpret_cast<char*>(&_impl_.auth_),
+          reinterpret_cast<char*>(&other->_impl_.auth_));
+}
+
+::google::protobuf::Metadata CommitBattleOutcomeResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

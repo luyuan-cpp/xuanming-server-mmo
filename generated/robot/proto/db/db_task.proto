@@ -3,6 +3,12 @@ option go_package = "robot/proto/db";
 
 package taskpb;
 
+// 读写操作由生产端与消费端共享；缺省值和未知编号不得执行。
+enum DBOp {
+  DB_OP_UNSPECIFIED = 0;
+  DB_OP_READ = 1;
+  DB_OP_WRITE = 2;
+}
 
 
 // DBTask: DB operation task struct transmitted via Kafka
@@ -10,7 +16,7 @@ package taskpb;
 message DBTask {
   uint64 key = 1;                // Business unique key (e.g. user ID, order ID) for locking and partition routing
   string where_case = 2;         // Query condition (read-only, e.g. "id=123 AND status=0")
-  string op = 3;                 // Operation type: "read" or "write"
+  DBOp op = 3;                   // 任务操作；上线前统一切换枚举编码，不兼容旧字符串载荷
   string msg_type = 4;           // Target proto message type (e.g. "userpb.UserInfo") for deserializing body
   bytes body = 5;                // Serialized business data (e.g. UserInfo bytes)
   string task_id = 6;            // Unique task ID for storing result in Redis (producer queries by this ID)

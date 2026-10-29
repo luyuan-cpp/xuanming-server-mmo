@@ -15,6 +15,8 @@ import (
 // snapshot / transaction_log / id_segment 三个 store 都落在同一个全局库
 // (config.SnapshotMySQL),这里是它们共用的连接参数。
 type MySQLConfig struct {
+	// Permission 由进程装配入口显式传入；同一 boot 的所有业务池复用同一不可变写者。
+	Permission  authoritysql.Permission
 	RequireTiDB bool
 	Host        string
 	User        string
@@ -71,7 +73,7 @@ func openMySQLWithDSN(cfg MySQLConfig, dsn string) (*sql.DB, error) {
 	if maxOpen <= 0 {
 		maxOpen = 5
 	}
-	db, err := authoritysql.Open(ctx, dsn, cfg.DBName, cfg.RequireTiDB, maxOpen)
+	db, err := authoritysql.Open(ctx, dsn, cfg.DBName, cfg.RequireTiDB, maxOpen, cfg.Permission)
 	if err != nil {
 		return nil, fmt.Errorf("open mysql: %w", err)
 	}

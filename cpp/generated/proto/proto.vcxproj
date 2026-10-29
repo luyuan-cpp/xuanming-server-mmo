@@ -20,17 +20,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="battle\battle_data.pb.cc" />
-    <ClCompile Include="battle\battle_data.grpc.pb.cc" />
     <ClCompile Include="battle\battle_node.pb.cc" />
-    <ClCompile Include="battle\battle_node.grpc.pb.cc" />
     <ClCompile Include="battle\player_battle.pb.cc" />
-    <ClCompile Include="battle\player_battle.grpc.pb.cc" />
     <ClCompile Include="match\match_service.pb.cc" />
-    <ClCompile Include="match\match_service.grpc.pb.cc" />
     <ClCompile Include="match\match_internal.pb.cc" />
-    <ClCompile Include="match\match_internal.grpc.pb.cc" />
     <ClCompile Include="client_rpc_router\client_rpc_router.pb.cc" />
-    <ClCompile Include="client_rpc_router\client_rpc_router.grpc.pb.cc" />
     <ClCompile Include="common\asset\asset_op.pb.cc" />
     <ClCompile Include="common\component\asset_op_ledger_comp.pb.cc" />
     <ClCompile Include="common\component\battle_settlement_ledger_comp.pb.cc" />
@@ -39,9 +33,7 @@
     <ClCompile Include="common\event\battle_event.pb.cc" />
     <ClCompile Include="common\event\team_event.pb.cc" />
     <ClCompile Include="chat\chat.pb.cc" />
-    <ClCompile Include="chat\chat.grpc.pb.cc" />
     <ClCompile Include="team\team.pb.cc" />
-    <ClCompile Include="team\team.grpc.pb.cc" />
     <ClCompile Include="common\base\common.pb.cc" />
     <ClCompile Include="common\base\config.pb.cc" />
     <ClCompile Include="common\base\empty.pb.cc" />
@@ -97,46 +89,26 @@
     <ClCompile Include="contracts\kafka\player_event.pb.cc" />
     <ClCompile Include="contracts\kafka\scene_command.pb.cc" />
     <ClCompile Include="data_service\data_service.pb.cc" />
-    <ClCompile Include="data_service\data_service.grpc.pb.cc" />
     <ClCompile Include="db\db.pb.cc" />
-    <ClCompile Include="db\db.grpc.pb.cc" />
     <ClCompile Include="db\db_task.pb.cc" />
-    <ClCompile Include="db\db_task.grpc.pb.cc" />
-    <ClCompile Include="db\proto_option.grpc.pb.cc" />
     <ClCompile Include="db\proto_option.pb.cc" />
-    <ClCompile Include="etcd\etcd.grpc.pb.cc" />
     <ClCompile Include="etcd\etcd.pb.cc" />
-    <ClCompile Include="etcd\kv.grpc.pb.cc" />
     <ClCompile Include="etcd\kv.pb.cc" />
-    <ClCompile Include="etcd\version.grpc.pb.cc" />
     <ClCompile Include="etcd\version.pb.cc" />
-    <ClCompile Include="friend\friend.grpc.pb.cc" />
     <ClCompile Include="friend\friend.pb.cc" />
-    <ClCompile Include="rank\rank.grpc.pb.cc" />
     <ClCompile Include="rank\rank.pb.cc" />
-    <ClCompile Include="mail\mail.grpc.pb.cc" />
     <ClCompile Include="mail\mail.pb.cc" />
-    <ClCompile Include="mail\mail_admin.grpc.pb.cc" />
     <ClCompile Include="mail\mail_admin.pb.cc" />
     <ClCompile Include="gate\gate_service.pb.cc" />
-    <ClCompile Include="guild\guild.grpc.pb.cc" />
     <ClCompile Include="guild\guild.pb.cc" />
     <ClCompile Include="guild\guild_db.pb.cc" />
-    <ClCompile Include="guild\guild_internal.grpc.pb.cc" />
     <ClCompile Include="guild\guild_internal.pb.cc" />
-    <ClCompile Include="trade\jubaozhai.grpc.pb.cc" />
     <ClCompile Include="trade\jubaozhai.pb.cc" />
-    <ClCompile Include="trade\trade_admin.grpc.pb.cc" />
     <ClCompile Include="trade\trade_admin.pb.cc" />
-    <ClCompile Include="trade\trade_table.grpc.pb.cc" />
     <ClCompile Include="trade\trade_table.pb.cc" />
-    <ClCompile Include="player_inbox\player_inbox.grpc.pb.cc" />
     <ClCompile Include="player_inbox\player_inbox.pb.cc" />
-    <ClCompile Include="player_inbox\player_inbox_admin.grpc.pb.cc" />
     <ClCompile Include="player_inbox\player_inbox_admin.pb.cc" />
-    <ClCompile Include="player_inbox\player_inbox_table.grpc.pb.cc" />
     <ClCompile Include="player_inbox\player_inbox_table.pb.cc" />
-    <ClCompile Include="login\login.grpc.pb.cc" />
     <ClCompile Include="login\login.pb.cc" />
     <ClCompile Include="scene\client_player_common.pb.cc" />
     <ClCompile Include="scene\player_lifecycle.pb.cc" />
@@ -152,18 +124,13 @@
     <ClCompile Include="scene\player_state_attribute_sync.pb.cc" />
     <ClCompile Include="scene\scene.pb.cc" />
     <ClCompile Include="scene\scene_info.pb.cc" />
-    <ClCompile Include="scene_manager\scene_manager_service.grpc.pb.cc" />
     <ClCompile Include="scene_manager\scene_manager_service.pb.cc" />
-    <ClCompile Include="scene_manager\scene_node_service.grpc.pb.cc" />
     <ClCompile Include="scene_manager\scene_node_service.pb.cc" />
-    <ClCompile Include="scene_manager\storage.grpc.pb.cc" />
     <ClCompile Include="scene_manager\storage.pb.cc" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="chat\chat.pb.h" />
-    <ClInclude Include="chat\chat.grpc.pb.h" />
     <ClInclude Include="team\team.pb.h" />
-    <ClInclude Include="team\team.grpc.pb.h" />
     <ClInclude Include="common\base\common.pb.h" />
     <ClInclude Include="common\base\config.pb.h" />
     <ClInclude Include="common\base\empty.pb.h" />
@@ -222,45 +189,26 @@
     <ClInclude Include="contracts\kafka\player_event.pb.h" />
     <ClInclude Include="contracts\kafka\scene_command.pb.h" />
     <ClInclude Include="data_service\data_service.pb.h" />
-    <ClInclude Include="data_service\data_service.grpc.pb.h" />
     <ClInclude Include="db\db.pb.h" />
-    <ClInclude Include="db\db.grpc.pb.h" />
     <ClInclude Include="db\db_task.pb.h" />
-    <ClInclude Include="db\db_task.grpc.pb.h" />
-    <ClInclude Include="db\proto_option.grpc.pb.h" />
     <ClInclude Include="db\proto_option.pb.h" />
-    <ClInclude Include="etcd\etcd.grpc.pb.h" />
     <ClInclude Include="etcd\etcd.pb.h" />
-    <ClInclude Include="etcd\kv.grpc.pb.h" />
     <ClInclude Include="etcd\kv.pb.h" />
-    <ClInclude Include="etcd\version.grpc.pb.h" />
     <ClInclude Include="etcd\version.pb.h" />
-    <ClInclude Include="friend\friend.grpc.pb.h" />
     <ClInclude Include="friend\friend.pb.h" />
-    <ClInclude Include="rank\rank.grpc.pb.h" />
     <ClInclude Include="rank\rank.pb.h" />
-    <ClInclude Include="mail\mail.grpc.pb.h" />
     <ClInclude Include="mail\mail.pb.h" />
-    <ClInclude Include="mail\mail_admin.grpc.pb.h" />
     <ClInclude Include="mail\mail_admin.pb.h" />
     <ClInclude Include="gate\gate_service.pb.h" />
-    <ClInclude Include="guild\guild.grpc.pb.h" />
     <ClInclude Include="guild\guild.pb.h" />
     <ClInclude Include="guild\guild_db.pb.h" />
-    <ClInclude Include="guild\guild_internal.grpc.pb.h" />
     <ClInclude Include="guild\guild_internal.pb.h" />
-    <ClInclude Include="trade\jubaozhai.grpc.pb.h" />
     <ClInclude Include="trade\jubaozhai.pb.h" />
-    <ClInclude Include="trade\trade_admin.grpc.pb.h" />
     <ClInclude Include="trade\trade_admin.pb.h" />
     <ClInclude Include="trade\trade_table.pb.h" />
-    <ClInclude Include="player_inbox\player_inbox.grpc.pb.h" />
     <ClInclude Include="player_inbox\player_inbox.pb.h" />
-    <ClInclude Include="player_inbox\player_inbox_admin.grpc.pb.h" />
     <ClInclude Include="player_inbox\player_inbox_admin.pb.h" />
-    <ClInclude Include="player_inbox\player_inbox_table.grpc.pb.h" />
     <ClInclude Include="player_inbox\player_inbox_table.pb.h" />
-    <ClInclude Include="login\login.grpc.pb.h" />
     <ClInclude Include="login\login.pb.h" />
     <ClInclude Include="scene\client_player_common.pb.h" />
     <ClInclude Include="scene\player_lifecycle.pb.h" />
@@ -276,11 +224,8 @@
     <ClInclude Include="scene\player_state_attribute_sync.pb.h" />
     <ClInclude Include="scene\scene.pb.h" />
     <ClInclude Include="scene\scene_info.pb.h" />
-    <ClInclude Include="scene_manager\scene_manager_service.grpc.pb.h" />
     <ClInclude Include="scene_manager\scene_manager_service.pb.h" />
-    <ClInclude Include="scene_manager\scene_node_service.grpc.pb.h" />
     <ClInclude Include="scene_manager\scene_node_service.pb.h" />
-    <ClInclude Include="scene_manager\storage.grpc.pb.h" />
     <ClInclude Include="scene_manager\storage.pb.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -350,7 +295,7 @@
       <PrecompiledHeaderFile></PrecompiledHeaderFile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <AdditionalIncludeDirectories>./src/;../third_party/protobuf/src/;../third_party/protobuf/third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>./src/;../third_party/protobuf/src/;../third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem></SubSystem>
@@ -384,7 +329,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile></PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>../;../../../third_party/grpc/include/;../../../third_party/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../;../../../third_party/;../../../third_party/protobuf/src/;../../../third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4018;4244;4082;4267;4819;</DisableSpecificWarnings>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
@@ -411,7 +356,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>../;../../../third_party/grpc/include/;../../../third_party/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../;../../../third_party/;../../../third_party/protobuf/src/;../../../third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -439,69 +384,46 @@
     <ClCompile Include="scene\player_mystery_merchant.pb.cc" />
     <ClInclude Include="scene\player_mystery_merchant.pb.h" />
     <ClInclude Include="battle\battle_data.pb.h" />
-    <ClInclude Include="battle\battle_data.grpc.pb.h" />
     <ClInclude Include="battle\battle_node.pb.h" />
-    <ClInclude Include="battle\battle_node.grpc.pb.h" />
     <ClInclude Include="battle\player_battle.pb.h" />
-    <ClInclude Include="battle\player_battle.grpc.pb.h" />
     <ClInclude Include="client_rpc_router\client_rpc_router.pb.h" />
-    <ClInclude Include="client_rpc_router\client_rpc_router.grpc.pb.h" />
     <ClInclude Include="common\component\battle_comp.pb.h" />
     <ClInclude Include="common\database\bag_quest_mail_data.pb.h" />
     <ClInclude Include="common\event\battle_event.pb.h" />
     <ClInclude Include="contracts\kafka\match_event.pb.h" />
     <ClInclude Include="match\match_service.pb.h" />
-    <ClInclude Include="match\match_service.grpc.pb.h" />
     <ClInclude Include="match\match_internal.pb.h" />
-    <ClInclude Include="match\match_internal.grpc.pb.h" />
-    <ClInclude Include="trade\trade_table.grpc.pb.h" />
   </ItemGroup>
   <ItemGroup Label="ProtoGeneratorSources">
     <ClCompile Include="common\base\service_call_auth.pb.cc" />
-    <ClCompile Include="friend\friend_table.grpc.pb.cc" />
     <ClCompile Include="friend\friend_table.pb.cc" />
-    <ClCompile Include="guild\guild_db.grpc.pb.cc" />
-    <ClCompile Include="mail\mail_table.grpc.pb.cc" />
     <ClCompile Include="mail\mail_table.pb.cc" />
-    <ClCompile Include="match\match_authority.grpc.pb.cc" />
     <ClCompile Include="match\match_authority.pb.cc" />
-    <ClCompile Include="match\match_network.grpc.pb.cc" />
     <ClCompile Include="match\match_network.pb.cc" />
-    <ClCompile Include="rank\rank_admin.grpc.pb.cc" />
     <ClCompile Include="rank\rank_admin.pb.cc" />
-    <ClCompile Include="rank\rank_table.grpc.pb.cc" />
     <ClCompile Include="rank\rank_table.pb.cc" />
-    <ClCompile Include="trade\commerce.grpc.pb.cc" />
     <ClCompile Include="trade\commerce.pb.cc" />
     <ClInclude Include="common\base\service_call_auth.pb.h" />
-    <ClInclude Include="friend\friend_table.grpc.pb.h" />
     <ClInclude Include="friend\friend_table.pb.h" />
-    <ClInclude Include="guild\guild_db.grpc.pb.h" />
-    <ClInclude Include="mail\mail_table.grpc.pb.h" />
     <ClInclude Include="mail\mail_table.pb.h" />
-    <ClInclude Include="match\match_authority.grpc.pb.h" />
     <ClInclude Include="match\match_authority.pb.h" />
-    <ClInclude Include="match\match_network.grpc.pb.h" />
     <ClInclude Include="match\match_network.pb.h" />
-    <ClInclude Include="rank\rank_admin.grpc.pb.h" />
     <ClInclude Include="rank\rank_admin.pb.h" />
-    <ClInclude Include="rank\rank_table.grpc.pb.h" />
     <ClInclude Include="rank\rank_table.pb.h" />
-    <ClInclude Include="trade\commerce.grpc.pb.h" />
     <ClInclude Include="trade\commerce.pb.h" />
   </ItemGroup>
   <ItemGroup Label="ProtoGeneratorSources">
-    <ClCompile Include="player_locator\player_locator.grpc.pb.cc" />
     <ClCompile Include="player_locator\player_locator.pb.cc" />
-    <ClInclude Include="player_locator\player_locator.grpc.pb.h" />
     <ClInclude Include="player_locator\player_locator.pb.h" />
   </ItemGroup>
   <ItemGroup Label="ProtoGeneratorSources">
     <ClCompile Include="common\base\role_admission.pb.cc" />
-    <ClCompile Include="team\team_authority.grpc.pb.cc" />
     <ClCompile Include="team\team_authority.pb.cc" />
     <ClInclude Include="common\base\role_admission.pb.h" />
-    <ClInclude Include="team\team_authority.grpc.pb.h" />
     <ClInclude Include="team\team_authority.pb.h" />
+  </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="common\base\currency_type.pb.cc" />
+    <ClInclude Include="common\base\currency_type.pb.h" />
   </ItemGroup>
 </Project>

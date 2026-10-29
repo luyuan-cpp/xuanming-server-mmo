@@ -12,6 +12,7 @@
 #include "core/system/redis.h"
 #include "frame/manager/frame_time.h"
 #include "player/system/player_lifecycle.h"
+#include "player/system/player_ownership_metrics.h"
 #include "player/system/player_equip.h"
 #include "player/system/player_inbox_system.h"
 #include "player/system/player_mystery_merchant.h"
@@ -112,9 +113,14 @@ int main(int argc, char *argv[])
         // 捕获的 node 活到本作用域结束(含析构里的兜底 drain 循环),作用域之后立即清掉。
         // 本地 ACK 在 TTL/2 内时 etcd 侧租约至少还剩 TTL/2,正常不可能已被别的进程接手;残余(§12.6.8)只剩
         // 租约被 etcd 提前撤销(人工 revoke / etcd 数据恢复)、本地尚未收到 TTL<=0 的窗口。同一窗口里旧进程
-        // 迟到的同代存盘本身已会覆盖新进程(GO-3 既有问题),A1′ 只是多一个来源。
+        // 迟到的同代存盘覆盖不了新进程:同号新进程按同一 E 登记交接资格会被拒(kRegisterFenceLua,同 E 不同实例),
+        // scene_manager 判定持有实例已被顶替后先铸新 epoch 再派(GO-3,cross-zone-scene-travel.md §13.10),
+        // 旧进程之后的存盘被 owner CAS 拒绝;A1′ 迟到的标记同样过不了资格校验。
         PlayerLifecycleSystem::SetNodeIdentityProbe([&node]()
             { return node.GetServiceDiscoveryManager().etcdService.IsIdentityConfirmedFresh(); });
+
+        // 归属交接 / owner_epoch 计数挂到 Prometheus 出口(设了 MMORPG_METRICS_PORT 才有出口,见 metrics_http_exporter.h)。
+        RegisterPlayerOwnershipMetrics();
 
         // context 先于 node 构造、晚于 node 析构:方法表闭包捕获 grpcService 的 this,服务必须活过 Node。
         node.RegisterGrpcService(context->grpcService);
@@ -153,7 +159,7 @@ int main(int argc, char *argv[])
 			context->worldTimer.Cancel();
 			// 收件箱 tick 一并停:停机期间不再拉取 / 确认。已应用、未确认的结局随退出存盘落地,
 			// 下次落地时由账本补确认(设计 §7.7)。
-			context->playerInboxTimer.Cancel();
+			// P1 保留持久收件箱 relay；普通停机与 P3 才取消此计时器。
 			PlayerBattleSystem::StopReaper();
 			PlayerMysteryMerchantSystem::Stop();
 			tlsRedisSystem.BeginShutdown();
@@ -180,9 +186,12 @@ int main(int argc, char *argv[])
 			}
 			LOG_INFO << "Shutdown save initiated; waiting for Redis ACK and Kafka producer flush.";
         };
-        node.SetBeforeShutdown(exitAllPlayers);
+        node.SetMaintenanceInboundRelay(); // gate/Go已接收链的下游，保留到P3；根是本机世界/玩家输入。
+        node.SetMaintenanceSourceClose(exitAllPlayers);
+        node.SetMaintenanceRelayStop([&context](Node &) { context->playerInboxTimer.Cancel(); tlsRedisSystem.StopDbTaskDispatch(); });
+        node.SetBeforeShutdown([&context, exitAllPlayers](Node &n) { context->playerInboxTimer.Cancel(); exitAllPlayers(n); });
 
-		// 每次轮询都重新扫描在线实体。Kafka 入口已经由 Node 封住;gRPC 在 OnGrpcServerDrained 之前仍在排空,
+		// 每次轮询都重新扫描在线实体。P1保留Kafka/RPC下游推进，P3才停止并join；gRPC在OnGrpcServerDrained前仍在排空,
 		// 已收完的调用照常派发,停机瞬间已经排入 EventLoop 的请求也会执行,都可能晚一拍创建玩家;不能只信首次快照。
 		node.SetShutdownDrainComplete([&context](Node &n)
 									  {
@@ -280,8 +289,8 @@ int main(int argc, char *argv[])
         // (合服 / 回档以 MySQL 为准时追查旧档的唯一证据)。以前它只在 Node 析构之后的 tlsRedisSystem.Shutdown() 里打,
         // 那时 logSystem 已停、gNodeAtomic 已置空,Linux 上静默丢失;Pump 也一直跑到那时,会在半拆的节点上推下线收尾。
         // 两种停机路径都经过这里;下面 Node 作用域之后的 tlsRedisSystem.Shutdown() 仍保留为幂等兜底。
-        node.SetBeforeTeardown([](Node &)
-                               { tlsRedisSystem.StopDbTaskDispatch(); });
+        node.SetBeforeTeardown([&context](Node &)
+                               { context->playerInboxTimer.Cancel(); tlsRedisSystem.StopDbTaskDispatch(); });
 
         // 身份冲突(etcd 租约过期 / node_id 被别人抢走)和普通 SIGTERM 不是一回事:
         // 这台节点马上就不再是 node_id 的合法持有者,但玩家的 gate 会话还连着。

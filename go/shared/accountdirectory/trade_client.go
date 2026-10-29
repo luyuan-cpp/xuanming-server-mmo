@@ -81,7 +81,7 @@ func validRoleTradeReceipt(out *dspb.AccountRoleTradeReceipt, listing, player ui
 			return false
 		}
 	}
-	if out.FreezeEvidence != nil && out.FreezeEvidence.Kind == dspb.AccountRoleFreezeEvidenceKind_ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_NO_ADMISSION && len(out.Holders) > 0 {
+	if NoActorFreezeEvidence(out.FreezeEvidence) && len(out.Holders) > 0 {
 		return false
 	}
 	return (out.State != dspb.AccountRoleTradeState_ACCOUNT_ROLE_TRADE_STATE_FROZEN && out.State != dspb.AccountRoleTradeState_ACCOUNT_ROLE_TRADE_STATE_TRANSFERRED) || out.FreezeEvidence != nil

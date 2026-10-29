@@ -29,6 +29,23 @@ import (
 //
 // rpc 只进 status 文案,logTag 只进日志前缀,都由调用方传常量。只读:不加锁、不写任何 key、不碰 MySQL。
 func readPersistedPlayerDatabase(ctx context.Context, svcCtx *svc.ServiceContext, playerID uint64, rpc, logTag string) (*dbpb.PlayerDatabase, bool, error) {
+	return readPersistedPlayerDatabaseWith(ctx, svcCtx, playerID, rpc, logTag, getPlayerAllDataBlob)
+}
+
+// playerBlobFetcher 从玩家所在 zone 的 Redis 取 PlayerAllData blob 原文。key 不存在必须回 goredis.Nil
+// (语义表的 found=false),其余错误原样返回,由 readPersistedPlayerDatabaseWith 统一映射成 gRPC status。
+type playerBlobFetcher func(ctx context.Context, client goredis.Cmdable, playerID uint64) ([]byte, error)
+
+// getPlayerAllDataBlob 是缺省取法:一次 GET。
+func getPlayerAllDataBlob(ctx context.Context, client goredis.Cmdable, playerID uint64) ([]byte, error) {
+	return client.Get(ctx, playerAllDataKey(playerID)).Bytes()
+}
+
+// readPersistedPlayerDatabaseWith 与 readPersistedPlayerDatabase 的返回约定、错误语义完全相同,只是 blob 原文由 fetch 取。
+// 带副本核验的账本读(asset_op_ledger_verified.go)用它在取 blob 的同一段 Lua 里顺带取实例身份与身份戳,
+// 路由、错误映射与解码仍只有这一份。
+func readPersistedPlayerDatabaseWith(ctx context.Context, svcCtx *svc.ServiceContext, playerID uint64, rpc, logTag string,
+	fetch playerBlobFetcher) (*dbpb.PlayerDatabase, bool, error) {
 	if playerID == 0 {
 		return nil, false, status.Errorf(codes.InvalidArgument, "%s: player_id is required", rpc)
 	}
@@ -46,7 +63,7 @@ func readPersistedPlayerDatabase(ctx context.Context, svcCtx *svc.ServiceContext
 		return nil, false, status.Errorf(codes.Unavailable, "%s: resolve home zone: %v", rpc, err)
 	}
 
-	raw, err := client.Get(ctx, playerAllDataKey(playerID)).Bytes()
+	raw, err := fetch(ctx, client, playerID)
 	if errors.Is(err, goredis.Nil) {
 		return nil, false, nil
 	}
@@ -55,7 +72,7 @@ func readPersistedPlayerDatabase(ctx context.Context, svcCtx *svc.ServiceContext
 			// 调用方已放弃:如实回它的取消原因,不记成本服务故障。
 			return nil, false, status.FromContextError(ctxErr).Err()
 		}
-		logx.Errorf("[%s] zone redis GET failed: player_id=%d: %v", logTag, playerID, err)
+		logx.Errorf("[%s] zone redis read failed: player_id=%d: %v", logTag, playerID, err)
 		return nil, false, status.Errorf(codes.Internal, "%s: read player blob: %v", rpc, err)
 	}
 

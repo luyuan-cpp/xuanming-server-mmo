@@ -1,7 +1,7 @@
 package main
 
 // fence.go 的 -route-source=db 库围栏(W12,规格 §6.3、§13.1 第 3 条、§13.3 第 4 条)单测。替身见 merge_run_db_test.go。
-// 续期 goroutine 的节奏(ttl/3、瞬时错误重试)由 route_store_test.go 的 routeFenceGuard 用例钉住;这里只证本层的顺序:
+// 续期 goroutine 的节奏(min(ttl/3, 30s)、瞬时错误重试)由 route_store_test.go 的 routeFenceGuard 用例钉住;这里只证本层的顺序:
 // 库先提交 → 镜像确认 → 才返回;镜像失败先清库;失权(续期确定失权 / 镜像更大 epoch)让 check 与写 ctx 一起失败;
 // 释放先清库、再按完整值删镜像;redis 源逐字不变。
 
@@ -243,6 +243,227 @@ func TestAcquireRouteFence_TakeOver(t *testing.T) {
 	}
 }
 
+// TestAcquireRouteFence_TakeOverMirrorFailureKeepsTheDBFence(B1-1 / MZ2-1):接手已提交、镜像没确认 → 库围栏保留在本次 run_id 上
+// (不调 ReleaseFence、不删任何镜像),错误写明围栏归谁、fence_epoch 与续跑指引。接手的前提是上一次已写到一半,
+// 这时释放 = 在半合服 / 半撤销状态下解封。首跑的同一情形照旧先清库(TestAcquireRouteFence_MirrorFailureReleasesTheDBFence)。
+func TestAcquireRouteFence_TakeOverMirrorFailureKeepsTheDBFence(t *testing.T) {
+	const prev = "901-902-20261018T000000Z-deadbeef"
+	db := grantingFenceDB(nil)
+	db.takeOver = func(routeFenceAcquire, string) (routeFenceGrant, error) {
+		return routeFenceGrant{Epoch: 8, ExpiresAtMs: 6_000_000, HolderJSON: testDBHolder}, nil
+	}
+	cache := &fakeRouteCache{}
+	cache.setFence = func(zone uint32, _ string, _, _ uint64) error {
+		if zone == testDBDst {
+			return fmt.Errorf("%w: WAITAOF acked 0", errRoutePublishNotDurable)
+		}
+		return nil
+	}
+	p := testRouteFenceParams()
+	p.takeOverRunID = prev
+	f, err := acquireRouteFence(context.Background(), db, cache, p)
+	if !errors.Is(err, errRoutePublishNotDurable) || f != nil {
+		t.Fatalf("take over = (%v, %v), want (nil, errRoutePublishNotDurable)", f, err)
+	}
+	for _, want := range []string{"run_id=" + testDBRun, "run_id=" + prev, "fence_epoch=8", "-manifest-path m.json",
+		"-take-over-fence " + testDBRun, mergeFenceKey(testDBDst)} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error lacks %q:\n%v", want, err)
+		}
+	}
+	if strings.Contains(err.Error(), "this run wrote nothing") {
+		t.Fatalf("a taken-over fence is not a fresh acquisition:\n%v", err)
+	}
+	if got, want := db.called(), []string{"TakeOverFence"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("db calls = %v, want %v (the taken-over fence must stay in zone_merge_fence)", got, want)
+	}
+	if got, want := cache.called(), []string{fmt.Sprintf("setFenceMirror(%d)", testDBSrc), fmt.Sprintf("setFenceMirror(%d)", testDBDst)}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("cache calls = %v, want %v (no mirror may be deleted)", got, want)
+	}
+}
+
+// TestAcquireRouteFence_TakeOverFailureNeverCleansUp(B1-1 / MZ2-1):接手事务报错时一律不做清理性 ReleaseFence。结果不明(回包丢了)
+// 时提交可能已生效、围栏已归本次,清掉就是解封;错误同时点出两个 run_id,由运维查库再接手。Held / InvalidArgument 原样返回。
+func TestAcquireRouteFence_TakeOverFailureNeverCleansUp(t *testing.T) {
+	const prev = "901-902-20261018T000000Z-deadbeef"
+	for _, tc := range []struct {
+		name  string
+		err   error
+		wants []string
+	}{
+		{"commit-reply-lost", errors.New("invalid connection"), []string{"run_id=" + prev, "run_id=" + testDBRun, "shard=63", "-manifest-path m.json"}},
+		{"held-by-a-third-run", fmt.Errorf("%w: zone 901", errRouteFenceHeld), nil},
+		{"mismatched-fence", fmt.Errorf("%w: zone pair", errRouteInvalidArgument), nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := grantingFenceDB(nil)
+			db.takeOver = func(routeFenceAcquire, string) (routeFenceGrant, error) { return routeFenceGrant{}, tc.err }
+			p := testRouteFenceParams()
+			p.takeOverRunID = prev
+			cache := &fakeRouteCache{}
+			f, err := acquireRouteFence(context.Background(), db, cache, p)
+			if !errors.Is(err, tc.err) || f != nil {
+				t.Fatalf("take over = (%v, %v), want (nil, %v)", f, err, tc.err)
+			}
+			for _, want := range tc.wants {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("error lacks %q:\n%v", want, err)
+				}
+			}
+			if got, want := db.called(), []string{"TakeOverFence"}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("db calls = %v, want %v (no cleanup release on the take-over path)", got, want)
+			}
+			if len(cache.called()) != 0 {
+				t.Fatalf("cache calls = %v, want none", cache.called())
+			}
+		})
+	}
+}
+
+// TestAcquireRouteFence_ResumedRunKeepsTheDBFence(B1-1):合服续跑(keepOnFailure:清单已存在且步骤 7 未标记完成,上一次的围栏已过期、
+// 不带 -take-over-fence)与接手同一口径 —— 获取之后镜像没确认、获取事务结果不明,都不调 ReleaseFence、不删镜像,错误给出本次 run_id
+// 与接手指引;Held 原样返回。首跑(keepOnFailure=false)照旧先清库(TestAcquireRouteFence_MirrorFailureReleasesTheDBFence)。
+func TestAcquireRouteFence_ResumedRunKeepsTheDBFence(t *testing.T) {
+	t.Run("mirror-not-confirmed", func(t *testing.T) {
+		db := grantingFenceDB(nil)
+		cache := &fakeRouteCache{}
+		cache.setFence = func(zone uint32, _ string, _, _ uint64) error {
+			if zone == testDBDst {
+				return fmt.Errorf("%w: WAITAOF acked 0", errRoutePublishNotDurable)
+			}
+			return nil
+		}
+		p := testRouteFenceParams()
+		p.keepOnFailure = true
+		f, err := acquireRouteFence(context.Background(), db, cache, p)
+		if !errors.Is(err, errRoutePublishNotDurable) || f != nil {
+			t.Fatalf("resumed acquire = (%v, %v), want (nil, errRoutePublishNotDurable)", f, err)
+		}
+		for _, want := range []string{"run_id=" + testDBRun, "fence_epoch=7", "续跑", "-manifest-path m.json",
+			"-take-over-fence " + testDBRun, mergeFenceKey(testDBDst)} {
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("error lacks %q:\n%v", want, err)
+			}
+		}
+		if strings.Contains(err.Error(), "this run wrote nothing") {
+			t.Fatalf("a resumed run must not claim the zones are clean:\n%v", err)
+		}
+		if got, want := db.called(), []string{"AcquireFence"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("db calls = %v, want %v (the fence of a resumed run must stay in zone_merge_fence)", got, want)
+		}
+		if got, want := cache.called(), []string{fmt.Sprintf("setFenceMirror(%d)", testDBSrc), fmt.Sprintf("setFenceMirror(%d)", testDBDst)}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("cache calls = %v, want %v (no mirror may be deleted)", got, want)
+		}
+	})
+	// 镜像键里是旧格式值(没有 fence_epoch):leader 不覆盖它,文案不能再说「leader 会按库补镜像」,改为先处理这一把键。
+	t.Run("foreign-mirror", func(t *testing.T) {
+		db := grantingFenceDB(nil)
+		cache := &fakeRouteCache{}
+		cache.setFence = func(uint32, string, uint64, uint64) error {
+			return fmt.Errorf("%w: merge:in_progress:%d", errRouteFenceMirrorForeign, testDBSrc)
+		}
+		p := testRouteFenceParams()
+		p.keepOnFailure = true
+		_, err := acquireRouteFence(context.Background(), db, cache, p)
+		if !errors.Is(err, errRouteFenceMirrorForeign) {
+			t.Fatalf("resumed acquire over a foreign mirror = %v, want errRouteFenceMirrorForeign", err)
+		}
+		if !strings.Contains(err.Error(), "不是库围栏的镜像") || strings.Contains(err.Error(), "对账 leader 会按库补镜像") ||
+			!strings.Contains(err.Error(), "-take-over-fence "+testDBRun) {
+			t.Fatalf("foreign-mirror guidance:\n%v", err)
+		}
+		if got, want := db.called(), []string{"AcquireFence"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("db calls = %v, want %v", got, want)
+		}
+	})
+	for _, tc := range []struct {
+		name  string
+		err   error
+		wants []string
+	}{
+		{"commit-reply-lost", errors.New("invalid connection"), []string{"run_id=" + testDBRun, "shard=63", "-take-over-fence " + testDBRun, "-manifest-path m.json"}},
+		{"held-by-another-run", fmt.Errorf("%w: zone 901", errRouteFenceHeld), nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := grantingFenceDB(nil)
+			db.acquire = func(routeFenceAcquire) (routeFenceGrant, error) { return routeFenceGrant{}, tc.err }
+			p := testRouteFenceParams()
+			p.keepOnFailure = true
+			cache := &fakeRouteCache{}
+			f, err := acquireRouteFence(context.Background(), db, cache, p)
+			if !errors.Is(err, tc.err) || f != nil {
+				t.Fatalf("resumed acquire = (%v, %v), want (nil, %v)", f, err, tc.err)
+			}
+			for _, want := range tc.wants {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("error lacks %q:\n%v", want, err)
+				}
+			}
+			if got, want := db.called(), []string{"AcquireFence"}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("db calls = %v, want %v (no cleanup release for a resumed run)", got, want)
+			}
+			if len(cache.called()) != 0 {
+				t.Fatalf("cache calls = %v, want none", cache.called())
+			}
+		})
+	}
+}
+
+// TestRouteFence_ReleaseAndCleanupAreTimeBounded(MZ2-6):释放与首跑获取失败后的清理都带时限(routeFenceReleaseTimeout)——
+// 路由库 DSN 没有读写超时,库网络黑洞时不能卡住退出。调用方给的是 context.Background()。
+func TestRouteFence_ReleaseAndCleanupAreTimeBounded(t *testing.T) {
+	db := grantingFenceDB(nil)
+	var bounded []bool
+	db.releaseCtx = func(ctx context.Context) {
+		_, ok := ctx.Deadline()
+		bounded = append(bounded, ok)
+	}
+	f, err := acquireRouteFence(context.Background(), db, &fakeRouteCache{}, testRouteFenceParams())
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	f.release(context.Background())
+	db.acquire = func(routeFenceAcquire) (routeFenceGrant, error) {
+		return routeFenceGrant{}, errors.New("invalid connection")
+	}
+	if _, err := acquireRouteFence(context.Background(), db, &fakeRouteCache{}, testRouteFenceParams()); err == nil {
+		t.Fatal("a failed acquisition must return its error")
+	}
+	if want := []bool{true, true}; !reflect.DeepEqual(bounded, want) {
+		t.Fatalf("ReleaseFence ctx has a deadline = %v, want %v (release, then the cleanup of a failed acquisition)", bounded, want)
+	}
+}
+
+// TestRouteFenceAbortLost(B1-4 / MZ2-4):本地判据先说失权就用它;本地仍判持有、而本步骤带回的错误里有批事务内的 fencing token 复核
+// 判的 errRouteFenceLost(被接手而本地下一次续期还没到)时用后者 —— 中止文案改成「先查清是谁接手」,不再说「仍归本次、对自己接手」。
+func TestRouteFenceAbortLost(t *testing.T) {
+	local := fmt.Errorf("%w: local deadline passed", errRouteFenceLost)
+	batch := fmt.Errorf("remap a batch of 2 players: %w", fmt.Errorf("%w: zone 901 holds run_id=%q", errRouteFenceLost, "other-run"))
+	other := fmt.Errorf("%w: WAITAOF acked 0", errRoutePublishNotDurable)
+	for _, tc := range []struct {
+		name  string
+		check error
+		errs  []error
+		want  error
+	}{
+		{"local-wins", local, []error{batch}, local},
+		{"batch-token", nil, []error{other, batch}, batch},
+		{"nil-entries", nil, []error{nil, batch}, batch},
+		{"not-a-loss", nil, []error{other}, nil},
+		{"nothing", nil, nil, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := routeFenceAbortLost(tc.check, tc.errs...); got != tc.want {
+				t.Fatalf("routeFenceAbortLost = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	msg := routeFenceKeptAbortMessage("step 5 failed", fencedOpMerge, testDBSrc, testDBDst, testDBRun, "m.json", routeFenceAbortLost(nil, batch))
+	if !strings.Contains(msg, "失去合服围栏") || strings.Contains(msg, "LEFT IN PLACE") {
+		t.Fatalf("a batch-detected loss must produce the lost message:\n%s", msg)
+	}
+}
+
 // TestAcquireRouteFence_DryRunOnlyReads:dry-run 只读库:别的 run 持有即拒(-take-over-fence 点名的除外),不写库、不写镜像,check 恒 nil。
 func TestAcquireRouteFence_DryRunOnlyReads(t *testing.T) {
 	ctx := context.Background()
@@ -256,7 +477,9 @@ func TestAcquireRouteFence_DryRunOnlyReads(t *testing.T) {
 	cache := &fakeRouteCache{}
 	p := testRouteFenceParams()
 	p.dryRun = true
-	if _, err := acquireRouteFence(ctx, db, cache, p); err == nil || !strings.Contains(err.Error(), "another merge is already fencing zone 901") {
+	if _, err := acquireRouteFence(ctx, db, cache, p); err == nil || !strings.Contains(err.Error(), "another merge is already fencing zone 901") ||
+		!strings.Contains(err.Error(), "-take-over-fence other-run") {
+		// 撞上别人的围栏时文案给出唯一的出路 -take-over-fence <run_id>(MZ2-5:工具没有别的释放入口)。
 		t.Fatalf("dry-run against a live fence: error = %v", err)
 	}
 	p.takeOverRunID = "other-run"
@@ -358,7 +581,9 @@ func TestRouteFenceKeptAbortMessage(t *testing.T) {
 	}
 	lost := routeFenceKeptAbortMessage("step X failed", fencedOpUnmerge, testDBSrc, testDBDst, testDBRun, manifest,
 		fmt.Errorf("%w: renewed 0/64", errRouteFenceLost))
-	if !strings.Contains(lost, "失去合服围栏") || strings.Contains(lost, "立即用原命令加 -take-over-fence") {
+	// 失权文案不给接手指引:不出现「对本次 run_id 接手」与 LEFT IN PLACE(原来比对的「立即用原命令加 -take-over-fence」在保留文案
+	// 插进 -manifest-path 之后两种文案里都不再出现,那条否定断言恒真,改比对接手命令本身)。
+	if !strings.Contains(lost, "失去合服围栏") || strings.Contains(lost, "-take-over-fence "+testDBRun) || strings.Contains(lost, "LEFT IN PLACE") {
 		t.Fatalf("lost message:\n%s", lost)
 	}
 }

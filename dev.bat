@@ -522,7 +522,7 @@ exit /b 0
 
 :: ================================================================
 :prepare_protoc
-set "REPO_PROTOC_DIR=%~dp0third_party\grpc\install_vs2026_dbg\bin"
+set "REPO_PROTOC_DIR=%~dp0third_party\protobuf\install_vs2026_dbg\bin"
 set "REPO_PROTOC=%REPO_PROTOC_DIR%\protoc.exe"
 if not exist "%REPO_PROTOC%" (
     echo Required protoc was not found: "%REPO_PROTOC%"

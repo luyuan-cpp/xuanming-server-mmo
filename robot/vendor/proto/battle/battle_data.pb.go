@@ -1744,6 +1744,7 @@ type BattleActivityContext struct {
 	PeriodKey         uint32                 `protobuf:"varint,4,opt,name=period_key,json=periodKey,proto3" json:"period_key,omitempty"`                           // 确认开战时的游戏日键 YYYYMMDD(gameday.DayKey,UTC+8 05:00 换日),用于个人每日次数
 	InitiatorPlayerId uint64                 `protobuf:"varint,5,opt,name=initiator_player_id,json=initiatorPlayerId,proto3" json:"initiator_player_id,omitempty"` // 发起人;match 校验它等于 StartActivityBattleRequest.member_player_ids[0]
 	GuildPeriodKey    uint32                 `protobuf:"varint,6,opt,name=guild_period_key,json=guildPeriodKey,proto3" json:"guild_period_key,omitempty"`          // 确认开战时的帮会期键(activity.GuildPeriodKey;历练即游戏日),用于每日计资金胜场上限
+	LaunchRequestId   uint64                 `protobuf:"varint,7,opt,name=launch_request_id,json=launchRequestId,proto3" json:"launch_request_id,omitempty"`       // 同道历练开战前持久原件；match/battle原样复制回结果，不包含账号
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -1816,6 +1817,13 @@ func (x *BattleActivityContext) GetInitiatorPlayerId() uint64 {
 func (x *BattleActivityContext) GetGuildPeriodKey() uint32 {
 	if x != nil {
 		return x.GuildPeriodKey
+	}
+	return 0
+}
+
+func (x *BattleActivityContext) GetLaunchRequestId() uint64 {
+	if x != nil {
+		return x.LaunchRequestId
 	}
 	return 0
 }
@@ -1985,7 +1993,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12\x16\n" +
 	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x12\n" +
 	"\x04mana\x18\x03 \x01(\x04R\x04mana\x12\x17\n" +
-	"\ais_dead\x18\x04 \x01(\bR\x06isDead\"\xf6\x01\n" +
+	"\ais_dead\x18\x04 \x01(\bR\x06isDead\"\xa2\x02\n" +
 	"\x15BattleActivityContext\x12(\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x14.eBattleActivityKindR\x04kind\x12\x19\n" +
 	"\bguild_id\x18\x02 \x01(\x04R\aguildId\x12\x1f\n" +
@@ -1994,7 +2002,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\n" +
 	"period_key\x18\x04 \x01(\rR\tperiodKey\x12.\n" +
 	"\x13initiator_player_id\x18\x05 \x01(\x04R\x11initiatorPlayerId\x12(\n" +
-	"\x10guild_period_key\x18\x06 \x01(\rR\x0eguildPeriodKey*\x86\x01\n" +
+	"\x10guild_period_key\x18\x06 \x01(\rR\x0eguildPeriodKey\x12*\n" +
+	"\x11launch_request_id\x18\a \x01(\x04R\x0flaunchRequestId*\x86\x01\n" +
 	"\x10eBattleActorType\x12\x1a\n" +
 	"\x16BATTLE_ACTOR_TYPE_NONE\x10\x00\x12\x1c\n" +
 	"\x18BATTLE_ACTOR_TYPE_PLAYER\x10\x01\x12\x1d\n" +

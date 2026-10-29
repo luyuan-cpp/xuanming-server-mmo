@@ -164,7 +164,7 @@ bool ResolveGoods(const ::MysteryMerchantShelfEntry &entry, ResolvedGoods &out, 
 		reason = "limit count not in 1..99";
 		return false;
 	}
-	if (goodsRow->currency_type() >= kCurrencyMax)
+	if (!IsKnownCurrencyType(goodsRow->currency_type()))
 	{
 		reason = "unknown currency type";
 		return false;

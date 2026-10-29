@@ -88,10 +88,12 @@ public:
                                const std::string &gmOperator = {},
                                uint64_t expiresAt = 0);
 
-    // 该币种的既有欠款是否带着本版本不认识的字段(新版本给 CurrencyDebtEntry 加的)。只读,不建组件:
+    // 该币种的既有欠款是否带着更新版本才有的字段(新版本给 CurrencyDebtEntry 加的;已退役字段的残留字节不算,
+    // 见 unknown_field_carry::CarriesNewerVersionFields)。只读,不建组件:
     // 缺 PlayerCurrencyComp、类型越界、没有这种币种的欠款都返回 false。
+    // 需要判"欠款是否带新版本字段"的地方一律调它,不要直接看 CurrencyDebt::unknownFields 是否为空。
     // AttachDebt 遇到 true 拒绝合并;收件箱执行器在调用 AttachDebt 之前先判,命中回 kVersionSkew
-    // (收件箱停用本域、下次落地重拉;docs/design/mixed-version-persist-field-protection.md §4.4)。
+    // (收件箱停用本域,实体重建后重拉;docs/design/mixed-version-persist-field-protection.md §4.4)。
     // 结果会在会话内变化(欠款被还清删除后变 false),调用方不能把一次 true 当成"本会话一直做不了"。
     static bool DebtCarriesUnknownFields(entt::entity player, CurrencyType type);
 

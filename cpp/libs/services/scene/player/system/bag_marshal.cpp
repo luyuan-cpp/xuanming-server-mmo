@@ -136,8 +136,10 @@ void Marshal(entt::entity player, BagAllData& out)
     }
 
     // Capacity slot per BagType, in order kInventory/kWarehouse/kEquipment/
-    // kTemporary. We always emit kBagTypeCount entries so the consumer can
-    // index bag_type → capacity directly without a sparse map.
+    // kTemporary: the first kBagTypeCount entries are always emitted so the
+    // consumer can index bag_type → capacity directly without a sparse map.
+    // 之后是本版本不认识的包类型(新版本加的包)的容量,原样携带,下标仍与 bag_type 一一对应
+    // (混版本设计 §12,第 5 批)。所以数组长度可以大于 kBagTypeCount,读写两侧都不得截断或拒绝。
     const auto& unsupported = bags->unsupportedBagTypes;
     out.mutable_capacities()->Reserve(static_cast<int>(kBagTypeCount + unsupported.capacities.size()));
     for (uint32_t bagType = 0; bagType < static_cast<uint32_t>(kBagTypeCount); ++bagType)
@@ -204,10 +206,10 @@ void Unmarshal(entt::entity player, const BagAllData& in)
     // capacity_ via the bag's own bookkeeping, so getting capacities
     // straight before items go in matters.
     //
-    // The capacities array on the wire SHOULD have exactly kBagTypeCount
-    // entries (Marshal always emits that many). If we receive a
-    // shorter array (older client / corrupt payload), the missing
-    // bags fall through to default capacity_ from the Bag default ctor.
+    // Marshal 至少写出 kBagTypeCount 个容量;超出的部分是本版本不认识的包类型的容量,
+    // 不得截断或拒绝,下面进 unsupportedBagTypes 原样携带(混版本设计 §12,第 5 批)。
+    // If we receive a shorter array (older client / corrupt payload), the
+    // missing bags fall through to default capacity_ from the Bag default ctor.
     const int caps = in.capacities_size();
     for (uint32_t bagType = 0; bagType < static_cast<uint32_t>(kBagTypeCount); ++bagType)
     {

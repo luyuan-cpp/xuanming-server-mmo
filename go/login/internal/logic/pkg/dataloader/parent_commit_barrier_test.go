@@ -86,7 +86,8 @@ func installCommittedBarrier(t *testing.T, rc *redis.Client, epoch, seq uint64) 
 		t.Fatal(err)
 	}
 	v := savebarrier.Version(epoch, seq)
-	if err := rc.HSet(ctx, savebarrier.Key(seedTestPlayerID), "pending", v, "player_database", v, "player_database_1", v).Err(); err != nil {
+	// 此 fixture 明确表示同一实例已经核验并提交过 SQL；无须绕过正式的身份核验开关。
+	if err := rc.HSet(ctx, savebarrier.Key(seedTestPlayerID), "pending", v, "player_database", v, "player_database_1", v, savebarrier.VerifiedIdentityField, "redis-test").Err(); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -100,7 +101,7 @@ func TestColdRecoveryRequiresBothSQLReceipts(t *testing.T) {
 				t.Fatal(err)
 			}
 			calls := 0
-			EnsurePlayerAllDataInRedisAsync(context.Background(), rc, nil, nil, seedTestPlayerID, 0, func(err error) {
+			ensureTestPlayerAllDataInRedisAsync(context.Background(), rc, nil, nil, seedTestPlayerID, 0, func(err error) {
 				calls++
 				if err == nil {
 					t.Error("未提交的子表被放行")
@@ -124,7 +125,7 @@ func TestColdRecoveryIgnoresSubCachesAndCarriesSQLFloor(t *testing.T) {
 	}
 	reads := &coldSQLReads{read: sqlReadAtVersion(2, 99)}
 	calls := 0
-	EnsurePlayerAllDataInRedisAsync(context.Background(), rc, reads, reads, seedTestPlayerID, 0, func(err error) {
+	ensureTestPlayerAllDataInRedisAsync(context.Background(), rc, reads, reads, seedTestPlayerID, 0, func(err error) {
 		calls++
 		if err != nil {
 			t.Error(err)
@@ -136,13 +137,16 @@ func TestColdRecoveryIgnoresSubCachesAndCarriesSQLFloor(t *testing.T) {
 	}
 }
 
-func TestColdRecoveryRejectsOlderSQLAndMissingOwnershipHistory(t *testing.T) {
+func TestColdRecoveryDistinguishesOlderSQLAndAuthoritativeHistory(t *testing.T) {
 	for _, test := range []struct {
 		name       string
 		install    bool
 		epoch, seq uint64
+		wantError  bool
 	}{
-		{"SQL较旧", true, 2, 98}, {"SQL已换主", true, 3, 100}, {"Redis归属历史丢失", false, 2, 99},
+		{"SQL较旧", true, 2, 98, true},
+		{"SQL已换主", true, 3, 100, false},
+		{"Redis归属历史丢失", false, 2, 99, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			mr, rc := newSeedTestRedis(t)
@@ -151,14 +155,20 @@ func TestColdRecoveryRejectsOlderSQLAndMissingOwnershipHistory(t *testing.T) {
 			}
 			reads := &coldSQLReads{read: sqlReadAtVersion(test.epoch, test.seq)}
 			calls := 0
-			EnsurePlayerAllDataInRedisAsync(context.Background(), rc, reads, reads, seedTestPlayerID, 0, func(err error) {
+			ensureTestPlayerAllDataInRedisAsync(context.Background(), rc, reads, reads, seedTestPlayerID, 0, func(err error) {
 				calls++
-				if err == nil {
-					t.Error("不可信 SQL 结果被放行")
+				if (err != nil) != test.wantError {
+					t.Errorf("SQL 核验错误=%v，期望拒绝=%v", err, test.wantError)
 				}
 			})
-			if calls != 1 || mr.Exists(seedParentKey(seedTestPlayerID)) {
-				t.Fatal("拒绝恢复后出现父键")
+			if calls != 1 || mr.Exists(seedParentKey(seedTestPlayerID)) == test.wantError {
+				t.Fatal("SQL 核验的完成次数或父键终态不符")
+			}
+			if !test.wantError {
+				parent, _ := readSeedParent(t, rc, seedTestPlayerID)
+				if parent.LastSaveSeq != test.seq || parent.GetPlayerDatabaseData().GetFenceOwnerEpoch() != test.epoch || parent.GetPlayerDatabase_1Data().GetFenceSaveSeq() != test.seq || rc.Get(context.Background(), ownerepoch.OwnerEpochKey(seedTestPlayerID)).Val() != fmt.Sprint(test.epoch) {
+					t.Fatal("SQL 权威恢复未精确采纳版本并抬高 owner")
+				}
 			}
 		})
 	}
@@ -171,7 +181,7 @@ func TestColdRecoveryCASPreservesNewOwnerOrNewerSnapshot(t *testing.T) {
 			installCommittedBarrier(t, rc, 2, 99)
 			ctx := context.Background()
 			key := seedParentKey(seedTestPlayerID)
-			snapshot, err := beginParentLoad(ctx, rc, key, seedTestPlayerID, config.PersistSchemaRegressionWarn)
+			snapshot, err := beginParentLoad(ctx, rc, testParentLoadScripts, key, seedTestPlayerID, config.PersistSchemaRegressionWarn)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -186,7 +196,7 @@ func TestColdRecoveryCASPreservesNewOwnerOrNewerSnapshot(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = snapshot.publish(ctx, rc, key, seedTestPlayerID, newPlayerAllDataSkeleton(seedTestPlayerID))
+			_, err = snapshot.settle(ctx, rc, testParentLoadScripts, key, seedTestPlayerID, sqlParentAtVersion(2, 99), config.PersistSchemaRegressionWarn)
 			if mutation == "parent" {
 				if err != nil || rc.Get(ctx, key).Val() != "newer-parent" {
 					t.Fatal("覆盖了并发新父键", err)
@@ -215,7 +225,12 @@ func TestColdRecoveryFailsClosedForMalformedBarrierAndRedisFailure(t *testing.T)
 			case "redis-error":
 				mr.SetError("injected Redis unavailable")
 			}
-			if _, err := beginParentLoad(ctx, rc, seedParentKey(seedTestPlayerID), seedTestPlayerID, config.PersistSchemaRegressionWarn); err == nil {
+			snapshot, err := beginParentLoad(ctx, rc, testParentLoadScripts, seedParentKey(seedTestPlayerID), seedTestPlayerID, config.PersistSchemaRegressionWarn)
+			if err == nil && fault == "missing-pending" {
+				// ACK 已存在而 pending 丢失会转 SQL 核验；SQL 空行不能洗掉这份已提交证据。
+				_, err = snapshot.settle(ctx, rc, testParentLoadScripts, seedParentKey(seedTestPlayerID), seedTestPlayerID, newPlayerAllDataSkeleton(seedTestPlayerID), config.PersistSchemaRegressionWarn)
+			}
+			if err == nil {
 				t.Fatal("损坏/不可用屏障未拒绝")
 			}
 		})
@@ -226,13 +241,17 @@ func TestUnversionedHistoryCannotBeMistakenForNewPlayer(t *testing.T) {
 	t.Run("种子已分配过归属", func(t *testing.T) {
 		_, rc := newSeedTestRedis(t)
 		ctx := context.Background()
-		if _, err := SeedNewPlayerAllData(ctx, rc, seedTestPlayerID); err != nil {
+		if _, err := seedTestNewPlayerAllData(ctx, rc, seedTestPlayerID); err != nil {
 			t.Fatal(err)
 		}
 		if err := rc.Set(ctx, ownerepoch.OwnerEpochKey(seedTestPlayerID), "1", 0).Err(); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := beginParentLoad(ctx, rc, seedParentKey(seedTestPlayerID), seedTestPlayerID, config.PersistSchemaRegressionWarn); err == nil {
+		snapshot, err := beginParentLoad(ctx, rc, testParentLoadScripts, seedParentKey(seedTestPlayerID), seedTestPlayerID, config.PersistSchemaRegressionWarn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if route, _ := snapshot.route(false); snapshot.historyGap == nil || route != parentLoadVerify {
 			t.Fatal("已分配归属的旧种子被当成新号")
 		}
 	})
@@ -252,7 +271,7 @@ func TestUnversionedHistoryCannotBeMistakenForNewPlayer(t *testing.T) {
 			return proto.Marshal(row)
 		}}
 		calls := 0
-		EnsurePlayerAllDataInRedisAsync(context.Background(), rc, reads, reads, seedTestPlayerID, 0, func(err error) {
+		ensureTestPlayerAllDataInRedisAsync(context.Background(), rc, reads, reads, seedTestPlayerID, 0, func(err error) {
 			calls++
 			if err == nil {
 				t.Error("零围栏历史资产被当成新号")
@@ -299,7 +318,10 @@ func TestUnownedIdentitySeedDoesNotAdmitAssetsOrUnknownFields(t *testing.T) {
 			if err := rc.Set(context.Background(), seedParentKey(seedTestPlayerID), raw, time.Hour).Err(); err != nil {
 				t.Fatal(err)
 			}
-			_, err = beginParentLoad(context.Background(), rc, seedParentKey(seedTestPlayerID), seedTestPlayerID, config.PersistSchemaRegressionWarn)
+			snapshot, err := beginParentLoad(context.Background(), rc, testParentLoadScripts, seedParentKey(seedTestPlayerID), seedTestPlayerID, config.PersistSchemaRegressionWarn)
+			if err == nil {
+				err = snapshot.historyGap
+			}
 			if (err != nil) != tc.wantError {
 				t.Fatalf("身份种子校验=%v，预期拒绝=%v", err, tc.wantError)
 			}
@@ -436,7 +458,7 @@ func TestParentFastPathPersistSchemaRegression(t *testing.T) {
 			_, rc := newSeedTestRedis(t)
 			installFastPathParent(t, rc, tc.gen, tc.gen1, tc.barrierGen, tc.withBarrierGen)
 			before := schemaRegressionCounts(t)
-			snapshot, err := beginParentLoad(context.Background(), rc, seedParentKey(seedTestPlayerID), seedTestPlayerID, tc.mode)
+			snapshot, err := beginParentLoad(context.Background(), rc, testParentLoadScripts, seedParentKey(seedTestPlayerID), seedTestPlayerID, tc.mode)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("beginParentLoad err = %v, want error = %v", err, tc.wantErr)
 			}
@@ -461,7 +483,7 @@ func TestParentFastPathMalformedBarrierSchemaGenIsRegressionEvidence(t *testing.
 			_, rc := newSeedTestRedis(t)
 			installFastPathParent(t, rc, ^uint32(0), ^uint32(0), raw, true)
 			before := schemaRegressionCounts(t)
-			if _, err := beginParentLoad(context.Background(), rc, seedParentKey(seedTestPlayerID), seedTestPlayerID,
+			if _, err := beginParentLoad(context.Background(), rc, testParentLoadScripts, seedParentKey(seedTestPlayerID), seedTestPlayerID,
 				config.PersistSchemaRegressionEnforce); err == nil {
 				t.Fatalf("schema_gen=%q 未按损坏拒绝", raw)
 			}
@@ -513,7 +535,7 @@ func TestParentSchemaRegressionCheckRunsAfterIdentityAndWatermark(t *testing.T) 
 					t.Fatal(err)
 				}
 				before := schemaRegressionCounts(t)
-				_, err = beginParentLoad(ctx, rc, seedParentKey(seedTestPlayerID), seedTestPlayerID, mode)
+				_, err = beginParentLoad(ctx, rc, testParentLoadScripts, seedParentKey(seedTestPlayerID), seedTestPlayerID, mode)
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("beginParentLoad err = %v, want an error mentioning %q", err, tc.wantErr)
 				}
@@ -546,7 +568,7 @@ func TestColdLoadSkipsPersistSchemaRegression(t *testing.T) {
 				t.Fatal(err)
 			}
 			before := schemaRegressionCounts(t)
-			snapshot, err := beginParentLoad(context.Background(), rc, seedParentKey(seedTestPlayerID), seedTestPlayerID,
+			snapshot, err := beginParentLoad(context.Background(), rc, testParentLoadScripts, seedParentKey(seedTestPlayerID), seedTestPlayerID,
 				config.PersistSchemaRegressionEnforce)
 			if err != nil || snapshot.raw != "" || mr.Exists(seedParentKey(seedTestPlayerID)) {
 				t.Fatalf("冷加载被 C4 拦下或写了父键: err=%v raw=%d bytes", err, len(snapshot.raw))
@@ -571,7 +593,7 @@ func TestColdRecoveryUnderEnforceDoesNotJudgeSchemaGen(t *testing.T) {
 	before := schemaRegressionCounts(t)
 	reads := &coldSQLReads{read: sqlReadAtVersion(2, 99)}
 	calls := 0
-	EnsurePlayerAllDataInRedisAsync(context.Background(), rc, reads, reads, seedTestPlayerID, 0, func(err error) {
+	ensureTestPlayerAllDataInRedisAsync(context.Background(), rc, reads, reads, seedTestPlayerID, 0, func(err error) {
 		calls++
 		if err != nil {
 			t.Error(err)
@@ -612,7 +634,7 @@ func TestEnsurePlayerAllDataPassesConfiguredRegressionMode(t *testing.T) {
 			installFastPathParent(t, rc, 1, 1, barrierGen, true)
 			calls := 0
 			// 快路径与失败路径都不碰 dispatcher / Kafka:传 nil,碰了就 panic。
-			EnsurePlayerAllDataInRedisAsync(context.Background(), rc, nil, nil, seedTestPlayerID, 0, func(err error) {
+			ensureTestPlayerAllDataInRedisAsync(context.Background(), rc, nil, nil, seedTestPlayerID, 0, func(err error) {
 				calls++
 				if (err != nil) != tc.wantErr {
 					t.Errorf("onComplete err = %v, want error = %v", err, tc.wantErr)
@@ -641,7 +663,7 @@ func TestNewPlayerSeedStaysUnstamped(t *testing.T) {
 
 	ctx := context.Background()
 	_, rc := newSeedTestRedis(t)
-	if _, err := SeedNewPlayerAllData(ctx, rc, seedTestPlayerID); err != nil {
+	if _, err := seedTestNewPlayerAllData(ctx, rc, seedTestPlayerID); err != nil {
 		t.Fatal(err)
 	}
 	seeded, _ := readSeedParent(t, rc, seedTestPlayerID)
@@ -649,7 +671,7 @@ func TestNewPlayerSeedStaysUnstamped(t *testing.T) {
 		t.Fatalf("写进 Redis 的种子带了戳: %v", seeded)
 	}
 	before := schemaRegressionCounts(t)
-	snapshot, err := beginParentLoad(ctx, rc, seedParentKey(seedTestPlayerID), seedTestPlayerID, config.PersistSchemaRegressionEnforce)
+	snapshot, err := beginParentLoad(ctx, rc, testParentLoadScripts, seedParentKey(seedTestPlayerID), seedTestPlayerID, config.PersistSchemaRegressionEnforce)
 	if err != nil || snapshot.raw == "" {
 		t.Fatalf("新号种子在 enforce 下未走快路径: err=%v raw=%d bytes", err, len(snapshot.raw))
 	}

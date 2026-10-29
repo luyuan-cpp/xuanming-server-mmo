@@ -213,6 +213,8 @@ struct BagProfile
 
 class Bag
 {
+    // 服务层仅为同步整笔交易复制候选store/layout；策略仍只读，不暴露恢复接口。
+    friend class BagService;
 public:
     // 实例指针、ForEach 借用和 Layout 引用仅限当前只读阶段；任何成功写入（含纯合堆）
     // 都可能整体替换候选仓库/布局，后续必须按 guid 重新获取，不得跨写操作持有借用。
@@ -279,7 +281,15 @@ public:
     uint32_t CheckSpaceFor(const ItemCountMap &itemsToAdd,
                            std::size_t *instancesNeededOut = nullptr);
 
-    uint32_t CheckItemsAvailable(const ItemCountMap &requiredItems);
+    // 按数量预检(只读、静默,不打日志):调用方按结论分支 —— 版本错位(kVersionSkew)是可重试的暂时状态,
+    // 不得和确定不足一样记成终态拒绝(ItemStore::CheckQuantities,混版本设计 §4.4 第 6 批)。
+    [[nodiscard]] ItemStore::QuantityVerdict CheckQuantities(const ItemCountMap &requiredItems) const
+    {
+        return store_.CheckQuantities(requiredItems);
+    }
+
+    // CheckQuantities 映射成 tip 码,静默:kSuccess / kFeatureUnavailable(版本错位)/ kBagInsufficientItems。
+    [[nodiscard]] uint32_t CheckItemsAvailable(const ItemCountMap &requiredItems) const;
     // evictedOut(可为 nullptr)按退役顺序收集**本次入包为了腾位而销毁的实例**
     // (销毁前抓拍 guid/config/size)。今天只有临时格(EvictOldestFirst)会非空。
     // 与 MergeAndCompact 的 destroyedOut 是同一个形状、同一个理由:被挤掉的

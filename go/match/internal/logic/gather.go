@@ -174,7 +174,7 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 
 	fail := func(outcome string, failedPlayer uint64, prepared []preparedMember, battleId uint64) bool {
 		if opts.formation != nil {
-			if globalDestroy(svcCtx, opts.formation) {
+			if globalDestroy(svcCtx.Authority, opts.formation) {
 				globalAbortPrepared(svcCtx, opts.formation)
 			} else {
 				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -341,12 +341,20 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 		createReq.PlacementOperationId = f.OperationId
 		createReq.TargetInstanceId = f.TargetInstanceId
 		createReq.AdmitBeforeMs = prepareDeadlineMs
+		createReq.OutcomeProtocolVersion = 1
+		// 先证明原UUID支持SQL终局门禁；旧节点会忽略Create新字段，因此不能直接试发。
+		capctx, capcancel := context.WithTimeout(context.Background(), 3*time.Second)
+		capability, cerr := queryOutcomeCapability(capctx, battleNode, createReq)
+		capcancel()
+		if cerr != nil {
+			return fail("outcome_capability_missing", 0, prepared, battleId)
+		}
 		payload, merr := proto.MarshalOptions{Deterministic: true}.Marshal(createReq)
 		if merr != nil {
 			return fail("intent_failed", 0, prepared, battleId)
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		canonical, merr := svcCtx.Authority.SaveIntent(ctx, opts.formation, payload)
+		canonical, merr := svcCtx.Authority.SaveSupportedIntent(ctx, opts.formation, payload, capability)
 		cancel()
 		if merr != nil {
 			return fail("intent_failed", 0, prepared, battleId)
@@ -423,6 +431,12 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 	if err != nil {
 		if opts.formation != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			var adoption *outcomeAdoptionError
+			if errors.As(err, &adoption) {
+				if observationErr := svcCtx.Authority.RecordBattleAdopted(ctx, opts.formation, adoption.instance, adoption.version); observationErr != nil {
+					logx.Error("原Battle采用版本事实尚未持久，保留原件等待恢复")
+				}
+			}
 			_ = svcCtx.Authority.Unknown(ctx, opts.formation)
 			cancel()
 			return false
@@ -458,7 +472,10 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 	//    battle 节点的 BattleStartS2C / 结算链路接管。
 	if opts.formation != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		e := svcCtx.Authority.Finish(ctx, opts.formation, true)
+		e := svcCtx.Authority.RecordBattleAdopted(ctx, opts.formation, createReq.TargetInstanceId, 1)
+		if e == nil {
+			e = svcCtx.Authority.Finish(ctx, opts.formation, true)
+		}
 		cancel()
 		if e != nil {
 			logx.Error("建房成功但全球权威提交未确认，保留原意图恢复")
@@ -677,7 +694,39 @@ func createBattle(node discovery.NodeEntry, req *battlepb.CreateBattleRequest) e
 	if resp.GetErrorMessage().GetId() != 0 {
 		return fmt.Errorf("battle 节点拒绝建房 tip_id=%d", resp.GetErrorMessage().GetId())
 	}
+	if req.OutcomeProtocolVersion == 1 {
+		if resp.GetBattleId() != req.BattleId || resp.GetTargetInstanceId() != req.TargetInstanceId {
+			return errors.New("Battle创建回执原局或原UUID不符")
+		}
+		if resp.GetAdoptedOutcomeProtocolVersion() != 1 {
+			return &outcomeAdoptionError{instance: resp.TargetInstanceId, version: resp.AdoptedOutcomeProtocolVersion}
+		}
+	}
 	return nil
+}
+
+type outcomeAdoptionError struct {
+	instance string
+	version  uint32
+}
+
+func (e *outcomeAdoptionError) Error() string {
+	return "原Battle创建明确未采用终局协议1，禁止追认"
+}
+
+func queryOutcomeCapability(ctx context.Context, node discovery.NodeEntry, req *battlepb.CreateBattleRequest) (*battlepb.QueryBattleCreationResponse, error) {
+	conn, err := discovery.DialEndpoint(node.Endpoint)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := battlepb.NewBattleNodeClient(conn).QueryBattleCreation(ctx, &battlepb.QueryBattleCreationRequest{BattleId: req.BattleId, PlacementOperationId: req.PlacementOperationId, TargetInstanceId: req.TargetInstanceId})
+	if err != nil {
+		return nil, err
+	}
+	if resp.GetTargetInstanceId() != req.TargetInstanceId || resp.GetSupportedOutcomeProtocolVersion() != 1 || resp.GetState() != battlepb.BattleCreationState_BATTLE_CREATION_ABSENT {
+		return nil, errors.New("原节点能力未知或原创建并非ABSENT，禁止发Create")
+	}
+	return resp, nil
 }
 
 // isBattleNotAllocatable 判定 CreateBattle 的 gRPC 错误是否为节点级准入拒绝(k8s-client-entry D82):

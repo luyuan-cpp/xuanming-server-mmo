@@ -1,5 +1,7 @@
 # Login Node: Stateless, No Session Affinity
 
+> **2026-10-23 阅读边界**：本文是 2026-04-11 的实例亲和讨论，旧表的服务状态与 Gate 实现不能直接作当前事实。“不需要绑定 login 实例”不等于进程没有预加载、异步等待、排队等在途工作，也不能从本文推导所有 Go 服务都已支持无感维护。当前 db／login／guild／friend 的多实例与停机差异见 [节点生命周期与发布需求 §3.2](node-lifecycle-elasticity-release-20261023.md#32-dbloginguildfriend-的单独结论同日追问补充)。
+
 **Date:** 2026-04-11
 
 ## Q&A

@@ -6,7 +6,7 @@
 // 路由模式手写的 Forward 回调(router_muduo_forward.cpp)都只调这里,所以两条出站路径对客户端的可见行为逐条相同,
 // 路由 lane 的保序认领(client_request_lane.h,docs/design/client-request-ordering.md §4.5)也对两者同样生效。
 // 第 3 批起两条路径底下都是 muduo_grpc 通道(docs/design/grpc-muduo-transport.md §8、§14)。
-// 参见 docs/design/grpc-client-deadline-failure-callback.md §5。
+// 参见 docs/design/grpc-muduo-transport.md §16.5。
 //
 // 只在 gate 的 EventLoop 线程调用(会话表是 thread_local)。
 

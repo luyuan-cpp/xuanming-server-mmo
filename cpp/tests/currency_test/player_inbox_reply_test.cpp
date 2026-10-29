@@ -5,6 +5,9 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <chrono>
+#include <functional>
+#include <string>
 #include <memory>
 #include <vector>
 
@@ -18,6 +21,7 @@
 #include "player/system/player_inbox_registry.h"
 #include "player/system/player_inbox_rules.h"
 #include "player/system/player_inbox_system.h"
+#include "player/system/role_admission_system.h"
 #include "proto/common/base/node.pb.h"
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
@@ -48,8 +52,9 @@ bool FakeSendFetch(const player_inbox::FetchPlayerInboxRequest &request)
 	if (static_cast<uint32_t>(request.domain()) == kDomain)
 	{
 		gFetchRequests.push_back(request);
+		return true;
 	}
-	return true;
+	return false;
 }
 
 bool FakeSendAck(const player_inbox::AckPlayerInboxRequest &request)
@@ -57,8 +62,9 @@ bool FakeSendAck(const player_inbox::AckPlayerInboxRequest &request)
 	if (static_cast<uint32_t>(request.domain()) == kDomain)
 	{
 		gAckRequests.push_back(request);
+		return true;
 	}
-	return true;
+	return false;
 }
 
 player_inbox::FetchPlayerInboxResponse FetchReply(const player_inbox::FetchPlayerInboxRequest &request)
@@ -165,13 +171,29 @@ protected:
 		PlayerInboxSystem::SetConsumerConfigForTest(false, false, 0);
 		gFetchRequests.clear();
 		gAckRequests.clear();
+		admission_.reset();
 	}
 
 	void CreateLoadedPlayer()
 	{
+		admission_.reset();
+		RoleAdmissionSystem::Dependencies deps;
+		deps.localNode = [] { return RoleAdmissionSystem::LocalNode{"inbox-reply-test", "4242", 1}; };
+		deps.now = [] { return RoleAdmissionSystem::Clock::time_point(std::chrono::milliseconds(gNowMs)); };
+		common::base::RoleAdmissionIdentity identity;
+		identity.set_player_id(kPlayerId); identity.set_owner_epoch(1);
+		identity.set_generation(++generation_); identity.set_owner_revision(1);
+		identity.set_scene_instance_id("inbox-reply-test");
+		deps.confirmedAdmissions.push_back(identity);
+		deps.readSqlAck = [this](Guid id, auto done) {
+			EXPECT_EQ(kPlayerId, id); ++sqlReads_;
+			done(sqlAck_); return true;
+		};
+		admission_ = std::make_unique<RoleAdmissionSystem::ScopedDependencies>(std::move(deps));
 		player_ = tlsEcs.actorRegistry.create();
 		tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player_, kPlayerId);
 		tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player_).epoch = 1;
+		tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player_, generation_, std::uint64_t{1});
 		// 持久数据在加载创建点显式挂上;运行时组件由落地入口延迟创建。
 		tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player_);
 		tlsEcs.actorRegistry.emplace<CurrencyComp>(player_);
@@ -203,13 +225,23 @@ protected:
 		ASSERT_EQ(1u, gPersistCalls);
 		ASSERT_TRUE(gAckRequests.empty()) << "未落盘时不能确认";
 
-		// 显式完成一次假存盘,直接写快照而不使用真实墙钟。
-		auto &snapshot = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_);
-		snapshot.snapshot = std::make_unique<PlayerAllData>();
-		snapshot.snapshot->mutable_player_database_data()->mutable_inbox_ledger()->CopyFrom(
+		// 同原保存链先捕获不可变E/q提交原件，成功hook先于全局Replace；Redis与SQL是两份独立证据。
+		auto payload = std::make_shared<PlayerAllData>();
+		payload->set_last_save_seq(1);
+		payload->mutable_player_database_data()->set_player_id(kPlayerId);
+		payload->mutable_player_database_1_data()->set_player_id(kPlayerId);
+		payload->mutable_player_database_data()->mutable_inbox_ledger()->CopyFrom(
 			tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player_));
+		auto committed = RoleAdmissionSystem::CaptureSnapshotCommit(player_, payload, 1, 1);
+		ASSERT_TRUE(static_cast<bool>(committed));
+		committed();
+		auto &snapshot = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_);
+		snapshot.Replace(*payload);
+		const std::string version = "00000000000000000001:00000000000000000001";
+		sqlAck_ = RoleAdmissionSystem::SqlAck{"1", version, version, version};
 		PlayerInboxSystem::Tick();
 		ASSERT_EQ(1u, gAckRequests.size());
+		ASSERT_EQ(1u, sqlReads_);
 		ASSERT_EQ(PlayerInboxPhase::kAcking, State().phase);
 	}
 
@@ -219,6 +251,10 @@ protected:
 	}
 
 	entt::entity player_{entt::null};
+	uint64_t generation_{0};
+	uint32_t sqlReads_{0};
+	std::optional<RoleAdmissionSystem::SqlAck> sqlAck_;
+	std::unique_ptr<RoleAdmissionSystem::ScopedDependencies> admission_;
 };
 
 class PlayerInboxEchoMismatchTest : public PlayerInboxReplyTest, public ::testing::WithParamInterface<EchoField>

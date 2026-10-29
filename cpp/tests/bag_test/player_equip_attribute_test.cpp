@@ -25,6 +25,7 @@
 // 不碰掷属性回调(用例不铸装备:装备实例都是手工构造后走搬运原语进包的)。
 
 #include <gtest/gtest.h>
+#include <google/protobuf/util/message_differencer.h>
 #include "engine/core/type_define/player_guid_comp.h"
 
 #include <cmath>
@@ -86,6 +87,7 @@
 #include "table/code/equipslot_table.h"
 #include "table/code/item_table.h"
 #include "table/code/mission_table.h"
+#include "table/proto/tip/attribute_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 
@@ -94,6 +96,8 @@ namespace
 
 using RecalcReason = PlayerAttributeSystem::RecalcReason;
 using equiprules::CombatStat;
+// 比较两份 proto:map 字段的序列化顺序不保证,两个不同实例的 SerializeAsString 不能直接比
+using google::protobuf::util::MessageDifferencer;
 
 const char *const kExportHint = "run the data table exporter first (docs/design/equipment-attributes.md 2.6)";
 
@@ -147,6 +151,9 @@ constexpr uint32_t kDimSpirit = 102;
 constexpr uint32_t kDimStrength = 103;
 constexpr uint32_t kDimAgility = 104;
 constexpr uint32_t kPlayerDimensions[] = {kDimConstitution, kDimSpirit, kDimStrength, kDimAgility};
+// 本版本表里没有的维度号,代表「新版本加的维度」:回滚后它是未知键 —— 原样携带、永不生效、计入已用
+// (加点统一规则,attribute_allocation_rules.h)。用例里先断言表里确实没有这一行。
+constexpr uint32_t kFutureDimension = 987654;
 
 // 颜色档(EquipAffix.tier)。
 constexpr uint32_t kBlue = 1;
@@ -341,6 +348,13 @@ uint64_t NaturalPoints(uint32_t dimensionId)
 {
 	const auto *row = AttributeDimensionTableManager::Instance().FindByIdSilent(dimensionId).first;
 	return row != nullptr ? static_cast<uint64_t>(row->base_per_level()) * kLevel : 0;
+}
+
+// 同上,但按 level 级算(降级 / 超上限等级的用例用)。
+uint64_t NaturalPointsAt(uint32_t dimensionId, uint32_t level)
+{
+	const auto *row = AttributeDimensionTableManager::Instance().FindByIdSilent(dimensionId).first;
+	return row != nullptr ? static_cast<uint64_t>(row->base_per_level()) * level : 0;
 }
 
 // 没穿装备、没加点的 80 级角色 = 职业初值 + 四个维度的自然成长。
@@ -959,8 +973,9 @@ protected:
 		return comp != nullptr ? comp->SerializeAsString() : std::string{};
 	}
 
-	// 每次只摘一个真实输入,所有读写入口共用同一道完整性门。故意放一份超额分配,
-	// 确认重算拒绝发生在 ConvergeOverAllocation 清点和 HP/MP 夹取之前。
+	// 每次只摘一个真实输入,所有读写入口共用同一道完整性门。故意放一份超额分配并把当前 HP/MP 抬到远超上限:
+	// 缺输入时任何入口都必须在扣费、改方案与 HP/MP 夹取之前拒绝,下面逐个组件比对「什么都没动」。
+	// (输入齐全时重算也不改写这份超额分配,只按不生效处理,见 OverAllocatedPoolIsCarriedButIneffective...)
 	template <typename MissingComp>
 	void ExpectMissingInputRejected(const char* name)
 	{
@@ -1100,6 +1115,53 @@ protected:
 	{
 		const auto *row = AttributeDimensionTableManager::Instance().FindByIdSilent(kDimStrength).first;
 		return row != nullptr ? row->pool_id() : 0;
+	}
+
+	// ── 存储加点生效判定的帮手(加点统一规则,attribute_allocation_rules.h)──────────────
+
+	static const AttributePoolTable *PlayerPoolRow()
+	{
+		return AttributePoolTableManager::Instance().FindByIdSilent(PlayerPoolId()).first;
+	}
+
+	// 角色属性点池在 level 级的总点数,按表独立算一遍(不经被测代码):基础点 + 每级点数 × (等级 − 解锁等级 + 1)。
+	static uint32_t ExpectedTotalAt(uint32_t level)
+	{
+		const auto *pool = PlayerPoolRow();
+		if (pool == nullptr || pool->unlock_level() == 0 || level < pool->unlock_level())
+		{
+			return 0;
+		}
+		return pool->base_points() + pool->points_per_level() * (level - pool->unlock_level() + 1);
+	}
+
+	// 同职业、没穿装备、没有加点的对照玩家在 level 级时的六项:「这份加点没有生效」就是与它逐项相等。
+	Six NoAllocationSixAt(uint32_t level)
+	{
+		const auto twin = NewPlayer();
+		tlsEcs.actorRegistry.get<LevelComp>(twin).set_level(level);
+		PlayerAttributeSystem::Recalculate(twin, RecalcReason::kLoad);
+		return ReadSix(Derived(twin));
+	}
+
+	// 表里任意一个非角色池(宝宝池)的维度:它在角色方案里是「本版本归不到角色」的未知键。按表独立找,不经被测代码。
+	static uint32_t AnyNonPlayerDimension()
+	{
+		for (const auto &dimension : AttributeDimensionTableManager::Instance().FindAll().data())
+		{
+			const auto *pool = AttributePoolTableManager::Instance().FindByIdSilent(dimension.pool_id()).first;
+			if (pool != nullptr && pool->owner_type() != 0)
+			{
+				return dimension.id();
+			}
+		}
+		return 0;
+	}
+
+	// 夹具玩家只有加载时补上的方案一,且已激活(InitializeOnLoadFillsTheDefaultSchemeAndCreatesTheDerivedCache)。
+	static auto &FirstSchemeAllocation(entt::entity entity)
+	{
+		return *AttributeComp(entity).mutable_schemes(0)->mutable_allocated();
 	}
 
 	// ── 强化 / 镶嵌的帮手 ────────────────────────────────────────────────
@@ -1483,33 +1545,364 @@ TEST_F(PlayerEquipAttributeTest, DeadPlayerStaysDeadThroughEquipmentChanges)
 	EXPECT_EQ(0u, Base(player).health());
 }
 
-// 换装不改等级、不改总点数:「已分配 > 总量」的整池清零只属于加载与等级变化。
-TEST_F(PlayerEquipAttributeTest, EquipmentChangeDoesNotTriggerAllocationConvergence)
+// ── 存储加点的生效判定(mixed-version-persist-field-protection.md §12.1 D1 / D2;
+//    player-attribute-allocation.md §3.3):加载与重算不改写已分配,只决定它在本版本生不生效 ──────────
+
+// 等级降低(GM / 回档)或改表缩点后,已分配可能超过本版本总量:存储值原样携带,整池按 0 生效。
+// 以前 kLoad / kLevelChanged 会把它整池清零返还(ConvergeOverAllocation),回滚一次就删、升回也恢复不了;
+// 现在任何原因的重算都不改写它,面板照实显示存储值、value 与六项只算生效部分,等级回来了同一份加点原样生效。
+TEST_F(PlayerEquipAttributeTest, OverAllocatedPoolIsCarriedButIneffectiveOnEveryRecalculation)
 {
 	constexpr uint32_t kAllocated = 100;
 	constexpr uint32_t kLoweredLevel = 10;
 	const uint32_t poolId = PlayerPoolId();
+	ASSERT_LT(ExpectedTotalAt(kLoweredLevel), kAllocated) << "the lowered level must leave fewer points than were allocated";
+	const Six loweredBaseline = NoAllocationSixAt(kLoweredLevel);
 	ASSERT_EQ(kSuccess, PlayerAttributeSystem::Allocate(player, poolId, std::map<uint32_t, uint32_t>{{kDimStrength, kAllocated}}));
+	const Six allocatedSix = ReadSix(Derived(player));
+	const PlayerAttributeComp stored = AttributeComp(player);
 
 	// 绕开升级事件直接压低等级,造出「已分配超过总量」的状态。
 	tlsEcs.actorRegistry.get<LevelComp>(player).set_level(kLoweredLevel);
+	for (const auto reason : {RecalcReason::kLoad, RecalcReason::kLevelChanged, RecalcReason::kAllocate,
+							  RecalcReason::kSchemeSwitch, RecalcReason::kReset, RecalcReason::kEquipmentChanged,
+							  RecalcReason::kSkillChanged})
+	{
+		SCOPED_TRACE(static_cast<int>(reason));
+		PlayerAttributeSystem::Recalculate(player, reason);
+		EXPECT_TRUE(MessageDifferencer::Equals(stored, AttributeComp(player)))
+			<< "no recalculation may rewrite or refund the stored allocation";
+		ExpectSix(loweredBaseline, ReadSix(Derived(player)));
+
+		AttributePanelInfo panel;
+		ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, panel));
+		const auto *pool = FindPool(panel, poolId);
+		ASSERT_NE(nullptr, pool);
+		EXPECT_EQ(ExpectedTotalAt(kLoweredLevel), pool->total());
+		EXPECT_EQ(0u, pool->remaining()) << "an ineffective pool has nothing left to allocate";
+		const auto *strength = FindDimension(panel, kDimStrength);
+		ASSERT_NE(nullptr, strength);
+		EXPECT_EQ(kAllocated, strength->allocated()) << "the panel still shows the stored allocation";
+		EXPECT_EQ(NaturalPointsAt(kDimStrength, kLoweredLevel), strength->value())
+			<< "but the ineffective points add nothing to the value";
+	}
+
+	// 等级回来了,同一份加点原样生效。
+	tlsEcs.actorRegistry.get<LevelComp>(player).set_level(kLevel);
+	PlayerAttributeSystem::Recalculate(player, RecalcReason::kLevelChanged);
+	ExpectSix(allocatedSix, ReadSix(Derived(player)));
+	EXPECT_TRUE(MessageDifferencer::Equals(stored, AttributeComp(player)));
+}
+
+// 新版本加的维度(本版本表里没有)和本版本归不到角色的键(宝宝维度)都是未知键:走真实的存档往返仍原样携带,
+// 永不生效 —— 六项等于只有已知加点的那一份。以前 SanitizeSchemes 在加载时把查不到表的维度删掉(D1)。
+TEST_F(PlayerEquipAttributeTest, UnknownDimensionSurvivesLoadAndIsNotEffective)
+{
+	constexpr uint32_t kKnown = 50;
+	constexpr uint32_t kFuturePoints = 30;
+	constexpr uint32_t kForeignPoints = 20;
+	const uint32_t foreignDimension = AnyNonPlayerDimension();
+	ASSERT_NE(0u, foreignDimension) << "the table has no dimension outside the player pools";
+	ASSERT_EQ(nullptr, AttributeDimensionTableManager::Instance().FindByIdSilent(kFutureDimension).first);
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::Allocate(player, PlayerPoolId(), std::map<uint32_t, uint32_t>{{kDimStrength, kKnown}}));
+	const Six knownOnly = ReadSix(Derived(player));
+
+	FirstSchemeAllocation(player)[kFutureDimension] = kFuturePoints;
+	FirstSchemeAllocation(player)[foreignDimension] = kForeignPoints;
+	const PlayerAttributeComp stored = AttributeComp(player);
+	PlayerAttributeSystem::Recalculate(player, RecalcReason::kLoad);
+	EXPECT_TRUE(MessageDifferencer::Equals(stored, AttributeComp(player)));
+	ExpectSix(knownOnly, ReadSix(Derived(player)));
+
+	// 真实的存档往返:存盘 → 冷读 → 加载链路(PlayerDatabaseMessageFieldsUnmarshal → InitializeOnLoad)。
+	CompletePersistedComps(player);
+	PlayerAllData saved;
+	ASSERT_TRUE(PlayerAllDataMessageFieldsMarshal(player, saved));
+	std::string bytes;
+	ASSERT_TRUE(saved.player_database_data().SerializeToString(&bytes));
+	PlayerAllData coldSnapshot;
+	ASSERT_TRUE(coldSnapshot.mutable_player_database_data()->ParseFromString(bytes));
+	const auto restored = tlsEcs.actorRegistry.create();
+	players.push_back(restored);
+	tlsEcs.actorRegistry.emplace<PlayerGuidComp>(restored, kPlayerIdBase + players.size());
+	PlayerAllDataMessageFieldsUnmarshal(restored, coldSnapshot);
+
+	const auto *restoredComp = tlsEcs.actorRegistry.try_get<PlayerAttributeComp>(restored);
+	ASSERT_NE(nullptr, restoredComp);
+	EXPECT_TRUE(MessageDifferencer::Equals(stored, *restoredComp)) << "unknown keys must survive the load path untouched";
+	const auto *derived = tlsEcs.actorRegistry.try_get<DerivedAttributesComp>(restored);
+	ASSERT_NE(nullptr, derived);
+	ExpectSix(knownOnly, ReadSix(*derived));
+
 	AttributePanelInfo panel;
-	PlayerAttributeSystem::BuildPanel(player, panel);
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(restored, panel));
+	EXPECT_EQ(nullptr, FindDimension(panel, kFutureDimension)) << "the panel only lists dimensions this version knows";
+	EXPECT_EQ(nullptr, FindDimension(panel, foreignDimension));
+	ASSERT_NO_FATAL_FAILURE(ExpectDimension(panel, kDimStrength, kKnown, 0));
+}
+
+// 未知键计入已用:剩余点与加点上限都扣掉它;洗点按表收费、只清本池已知维度,未知键原样留下,
+// 洗完的剩余点 = 总量 − 未知键。
+TEST_F(PlayerEquipAttributeTest, UnknownDimensionReducesRemainingAndSurvivesReset)
+{
+	constexpr uint32_t kKnown = 50;
+	constexpr uint32_t kFuturePoints = 30;
+	constexpr uint64_t kGold = 100000;
+	const uint32_t poolId = PlayerPoolId();
+	const uint32_t total = ExpectedTotalAt(kLevel);
+	ASSERT_GT(total, kKnown + kFuturePoints);
+	const auto *poolRow = PlayerPoolRow();
+	ASSERT_NE(nullptr, poolRow);
+	ASSERT_GT(poolRow->reset_cost_gold(), 0u);
+	ASSERT_LE(poolRow->reset_free_below_level(), kLevel) << "the fixture level must be past the free-reset threshold";
+	ASSERT_GT(kGold, poolRow->reset_cost_gold());
+	ASSERT_EQ(nullptr, AttributeDimensionTableManager::Instance().FindByIdSilent(kFutureDimension).first);
+
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::Allocate(player, poolId, std::map<uint32_t, uint32_t>{{kDimStrength, kKnown}}));
+	FirstSchemeAllocation(player)[kFutureDimension] = kFuturePoints;
+	PlayerAttributeSystem::Recalculate(player, RecalcReason::kLoad);
+
+	AttributePanelInfo panel;
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, panel));
 	const auto *pool = FindPool(panel, poolId);
 	ASSERT_NE(nullptr, pool);
-	ASSERT_LT(pool->total(), kAllocated) << "the lowered level must leave fewer points than were allocated";
+	const uint32_t remaining = total - kKnown - kFuturePoints;
+	EXPECT_EQ(total, pool->total());
+	EXPECT_EQ(remaining, pool->remaining()) << "points parked on an unknown dimension stay spent";
 
-	PlayerAttributeSystem::Recalculate(player, RecalcReason::kEquipmentChanged);
-	PlayerAttributeSystem::BuildPanel(player, panel);
-	const auto *strength = FindDimension(panel, kDimStrength);
-	ASSERT_NE(nullptr, strength);
-	EXPECT_EQ(kAllocated, strength->allocated()) << "an equipment change must leave the allocation alone";
+	// 加点上限同样扣掉未知键:多 1 点拒绝且什么都不动,恰好用完放行。
+	const PlayerAttributeComp beforeRejected = AttributeComp(player);
+	EXPECT_EQ(kAttributePointsNotEnough,
+			  PlayerAttributeSystem::Allocate(player, poolId,
+											  std::map<uint32_t, uint32_t>{{kDimStrength, kKnown + remaining + 1}}));
+	EXPECT_TRUE(MessageDifferencer::Equals(beforeRejected, AttributeComp(player)));
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::Allocate(player, poolId,
+														 std::map<uint32_t, uint32_t>{{kDimStrength, kKnown + remaining}}));
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, panel));
+	pool = FindPool(panel, poolId);
+	ASSERT_NE(nullptr, pool);
+	EXPECT_EQ(0u, pool->remaining());
 
+	// 洗点:按表收费,只清本池已知维度,未知键原样留下。
+	SetGold(player, kGold);
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::Reset(player, poolId));
+	EXPECT_EQ(kGold - poolRow->reset_cost_gold(), CurrencySystem::GetBalance(player, kCurrencyGold));
+	const auto &allocated = AttributeComp(player).schemes(0).allocated();
+	EXPECT_FALSE(allocated.contains(kDimStrength));
+	ASSERT_TRUE(allocated.contains(kFutureDimension)) << "a reset must not touch keys this version cannot place in the pool";
+	EXPECT_EQ(kFuturePoints, allocated.at(kFutureDimension));
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, panel));
+	pool = FindPool(panel, poolId);
+	ASSERT_NE(nullptr, pool);
+	EXPECT_EQ(total - kFuturePoints, pool->remaining());
+}
+
+// 0 值的未知键:不占点、不生效、不算「可洗」,面板与六项和没有它时一模一样;它自己原样留着。
+// 顺带钉住「加点只写真正变化的键」:目标里带着 0 的已知维度不会在存档里落一个 0 值新键。
+TEST_F(PlayerEquipAttributeTest, ZeroValueUnknownKeyChangesNothing)
+{
+	constexpr uint32_t kStrengthPoints = 10;
+	constexpr uint64_t kGold = 100000;
+	const uint32_t poolId = PlayerPoolId();
+	AttributePanelInfo before;
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, before));
+	const Six sixBefore = ReadSix(Derived(player));
+
+	FirstSchemeAllocation(player)[kFutureDimension] = 0;
 	PlayerAttributeSystem::Recalculate(player, RecalcReason::kLoad);
-	PlayerAttributeSystem::BuildPanel(player, panel);
-	strength = FindDimension(panel, kDimStrength);
-	ASSERT_NE(nullptr, strength);
-	EXPECT_EQ(0u, strength->allocated()) << "the load path is the one that converges";
+	AttributePanelInfo after;
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, after));
+	EXPECT_TRUE(MessageDifferencer::Equals(before, after)) << "a zero-valued unknown key must not show anywhere on the panel";
+	ExpectSix(sixBefore, ReadSix(Derived(player)));
+
+	// 方案里只有它一个键:洗点是「无可洗」,不扣费,它也还在。
+	SetGold(player, kGold);
+	EXPECT_EQ(kAttributeNothingToChange, PlayerAttributeSystem::Reset(player, poolId));
+	EXPECT_EQ(kGold, CurrencySystem::GetBalance(player, kCurrencyGold));
+	EXPECT_TRUE(AttributeComp(player).schemes(0).allocated().contains(kFutureDimension));
+
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::Allocate(player, poolId,
+														 std::map<uint32_t, uint32_t>{{kDimStrength, kStrengthPoints},
+																					  {kDimConstitution, 0},
+																					  {kDimSpirit, 0}}));
+	const auto &allocated = AttributeComp(player).schemes(0).allocated();
+	EXPECT_EQ(2u, allocated.size()) << "only the changed key is written next to the carried unknown key";
+	EXPECT_EQ(kStrengthPoints, allocated.at(kDimStrength));
+	EXPECT_FALSE(allocated.contains(kDimConstitution));
+	EXPECT_FALSE(allocated.contains(kDimSpirit));
+	ASSERT_TRUE(allocated.contains(kFutureDimension));
+	EXPECT_EQ(0u, allocated.at(kFutureDimension));
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, after));
+	const auto *pool = FindPool(after, poolId);
+	ASSERT_NE(nullptr, pool);
+	EXPECT_EQ(ExpectedTotalAt(kLevel) - kStrengthPoints, pool->remaining());
+}
+
+// GM 降级再设回原等级(回档 / 混版本同理):降级时超额的池按 0 生效、存储加点一点不动;
+// 设回原等级,同一份加点原样生效。以前降级时整池清零返还(D2),设回去也回不来。
+TEST_F(PlayerEquipAttributeTest, LoweringAndRestoringTheLevelKeepsTheAllocation)
+{
+	constexpr uint32_t kAllocated = 300;
+	constexpr uint32_t kLoweredLevel = 10;
+	ASSERT_TRUE(playerlevel::IsValidLevel(kLoweredLevel));
+	ASSERT_LT(ExpectedTotalAt(kLoweredLevel), kAllocated);
+	ASSERT_GE(ExpectedTotalAt(kLevel), kAllocated);
+	// GmSetLevel 会顺带重算宝宝并推任务事件(同 GmSetLevelRecalculatesDerivedAttributesWithoutEventWiring)。
+	tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+	ASSERT_EQ(kSuccess, PlayerMissionSystem::Initialize(player));
+	SetGold(player, 1000000);
+	const Six loweredBaseline = NoAllocationSixAt(kLoweredLevel);
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::Allocate(player, PlayerPoolId(), std::map<uint32_t, uint32_t>{{kDimStrength, kAllocated}}));
+	const Six allocatedSix = ReadSix(Derived(player));
+	const PlayerAttributeComp stored = AttributeComp(player);
+
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::GmSetLevel(player, kLoweredLevel));
+	EXPECT_TRUE(MessageDifferencer::Equals(stored, AttributeComp(player))) << "lowering the level must not refund the allocation";
+	ExpectSix(loweredBaseline, ReadSix(Derived(player)));
+
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::GmSetLevel(player, kLevel));
+	EXPECT_TRUE(MessageDifferencer::Equals(stored, AttributeComp(player)));
+	ExpectSix(allocatedSix, ReadSix(Derived(player)));
+	AttributePanelInfo panel;
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, panel));
+	ASSERT_NO_FATAL_FAILURE(ExpectDimension(panel, kDimStrength, kAllocated, 0));
+}
+
+// 不生效的池洗点免费(不生效来自改表缩点 / 降级 / 混版本,不是玩家的操作),面板下发的费用同样是 0;
+// 旧上限 / 新上限都是生效值,洗点前后不变,当前气血 / 法力也就不变 —— 不会先按存储值抬一次再压回来。
+TEST_F(PlayerEquipAttributeTest, ResetOfAnIneffectivePoolIsFreeAndKeepsHealth)
+{
+	constexpr uint32_t kStrengthPoints = 150;
+	constexpr uint32_t kConstitutionPoints = 150;  // 体质进气血上限:「上限没变」才有意义
+	constexpr uint32_t kLoweredLevel = 40;
+	constexpr uint64_t kGold = 100000;
+	const uint32_t poolId = PlayerPoolId();
+	const auto *poolRow = PlayerPoolRow();
+	ASSERT_NE(nullptr, poolRow);
+	ASSERT_GT(poolRow->reset_cost_gold(), 0u);
+	ASSERT_LE(poolRow->reset_free_below_level(), kLoweredLevel) << "an effective reset at the lowered level must cost gold";
+	ASSERT_LT(ExpectedTotalAt(kLoweredLevel), kStrengthPoints + kConstitutionPoints);
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::Allocate(player, poolId,
+														 std::map<uint32_t, uint32_t>{{kDimStrength, kStrengthPoints},
+																					  {kDimConstitution, kConstitutionPoints}}));
+
+	tlsEcs.actorRegistry.get<LevelComp>(player).set_level(kLoweredLevel);
+	PlayerAttributeSystem::Recalculate(player, RecalcReason::kLevelChanged);
+	const Six ineffective = ReadSix(Derived(player));
+	ExpectSix(NoAllocationSixAt(kLoweredLevel), ineffective);
+	const uint64_t health = Derived(player).max_health() / 2;
+	const uint64_t mana = Derived(player).max_mana() / 3;
+	ASSERT_GT(health, 0u);
+	ASSERT_GT(mana, 0u);
+	Base(player).set_health(health);
+	Base(player).set_mana(mana);
+
+	AttributePanelInfo panel;
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, panel));
+	const auto *pool = FindPool(panel, poolId);
+	ASSERT_NE(nullptr, pool);
+	EXPECT_EQ(0u, pool->reset_cost_gold()) << "the panel quotes the same price the reset will charge";
+	EXPECT_EQ(0u, pool->remaining());
+
+	SetGold(player, kGold);
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::Reset(player, poolId));
+	EXPECT_EQ(kGold, CurrencySystem::GetBalance(player, kCurrencyGold)) << "resetting an ineffective pool is free";
+	EXPECT_TRUE(AttributeComp(player).schemes(0).allocated().empty());
+	ExpectSix(ineffective, ReadSix(Derived(player)));
+	EXPECT_EQ(health, Base(player).health()) << "the effective maximum did not move, so neither does the health";
+	EXPECT_EQ(mana, Base(player).mana());
+
+	// 洗完池就生效了(一点没加):面板恢复按表报价。
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, panel));
+	pool = FindPool(panel, poolId);
+	ASSERT_NE(nullptr, pool);
+	EXPECT_EQ(poolRow->reset_cost_gold(), pool->reset_cost_gold());
+	EXPECT_EQ(ExpectedTotalAt(kLoweredLevel), pool->remaining());
+}
+
+// 方案之间互不牵连:切到一个超额的方案(另一版本存下的 / 降级前加满的),它照样不生效、存储值不动,
+// 在它上面加点回「点数不足」;切回原方案,原方案的加点原样生效。
+TEST_F(PlayerEquipAttributeTest, SwitchingToAnOverAllocatedSchemeKeepsItIneffective)
+{
+	constexpr uint32_t kFirstSchemePoints = 100;
+	constexpr uint32_t kSecondSchemeId = 2;
+	const uint32_t poolId = PlayerPoolId();
+	const uint32_t total = ExpectedTotalAt(kLevel);
+	const Six noAllocation = ReadSix(Derived(player));
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::Allocate(player, poolId,
+														 std::map<uint32_t, uint32_t>{{kDimStrength, kFirstSchemePoints}}));
+	const Six firstSchemeSix = ReadSix(Derived(player));
+
+	// 直接往存档里塞第二个方案:已知维度合计超过本版本总量。
+	auto &comp = AttributeComp(player);
+	const uint32_t firstSchemeId = comp.active_scheme_id();
+	ASSERT_NE(kSecondSchemeId, firstSchemeId);
+	auto *second = comp.add_schemes();
+	second->set_scheme_id(kSecondSchemeId);
+	second->set_name("方案二");
+	(*second->mutable_allocated())[kDimConstitution] = total + 1;
+	comp.set_next_scheme_id(kSecondSchemeId + 1);
+	comp.set_last_switch_time(0);  // 越过切换冷却
+	const AttributeScheme secondStored = *second;
+
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::SwitchScheme(player, kSecondSchemeId));
+	ExpectSix(noAllocation, ReadSix(Derived(player)));
+	AttributePanelInfo panel;
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, panel));
+	const auto *pool = FindPool(panel, poolId);
+	ASSERT_NE(nullptr, pool);
+	EXPECT_EQ(0u, pool->remaining());
+	EXPECT_EQ(0u, pool->reset_cost_gold());
+	const auto *constitution = FindDimension(panel, kDimConstitution);
+	ASSERT_NE(nullptr, constitution);
+	EXPECT_EQ(total + 1, constitution->allocated());
+	EXPECT_EQ(NaturalPoints(kDimConstitution), constitution->value());
+	EXPECT_EQ(kAttributePointsNotEnough,
+			  PlayerAttributeSystem::Allocate(player, poolId, std::map<uint32_t, uint32_t>{{kDimStrength, 1}}));
+	ASSERT_EQ(2, AttributeComp(player).schemes_size());
+	EXPECT_TRUE(MessageDifferencer::Equals(secondStored, AttributeComp(player).schemes(1)));
+
+	// 切回:SwitchScheme 按当前时间记过一次冷却,手动拨回去。
+	AttributeComp(player).set_last_switch_time(0);
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::SwitchScheme(player, firstSchemeId));
+	ExpectSix(firstSchemeSix, ReadSix(Derived(player)));
+	EXPECT_TRUE(MessageDifferencer::Equals(secondStored, AttributeComp(player).schemes(1)));
+}
+
+// 超上限的存储等级(新版本提高上限后回滚 / 混版本跨 zone 带进来)原样携带,玩法按上限读:面板等级、总点数、
+// 自然成长与六项都等于满级号;重算(含加载)不改写 LevelComp,加点也按上限算出的总量封顶。
+TEST_F(PlayerEquipAttributeTest, StoredLevelAboveCapUsesCappedLevelForTotals)
+{
+	constexpr uint32_t kStoredLevel = 200;
+	ASSERT_GT(kStoredLevel, playerlevel::kMaxLevel);
+	const uint32_t poolId = PlayerPoolId();
+	const uint32_t totalAtCap = ExpectedTotalAt(playerlevel::kMaxLevel);
+	const Six atCap = NoAllocationSixAt(playerlevel::kMaxLevel);
+
+	tlsEcs.actorRegistry.get<LevelComp>(player).set_level(kStoredLevel);
+	PlayerAttributeSystem::Recalculate(player, RecalcReason::kLoad);
+	EXPECT_EQ(kStoredLevel, tlsEcs.actorRegistry.get<LevelComp>(player).level()) << "the stored level is carried as-is";
+	ExpectSix(atCap, ReadSix(Derived(player)));
+
+	AttributePanelInfo panel;
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, panel));
+	EXPECT_EQ(playerlevel::kMaxLevel, panel.level());
+	const auto *pool = FindPool(panel, poolId);
+	ASSERT_NE(nullptr, pool);
+	EXPECT_EQ(totalAtCap, pool->total());
+	EXPECT_EQ(totalAtCap, pool->remaining());
+	for (const auto dimensionId : kPlayerDimensions)
+	{
+		const auto *dimension = FindDimension(panel, dimensionId);
+		ASSERT_NE(nullptr, dimension) << "dimension " << dimensionId;
+		EXPECT_EQ(NaturalPointsAt(dimensionId, playerlevel::kMaxLevel), dimension->value()) << "dimension " << dimensionId;
+	}
+
+	EXPECT_EQ(kAttributePointsNotEnough,
+			  PlayerAttributeSystem::Allocate(player, poolId, std::map<uint32_t, uint32_t>{{kDimStrength, totalAtCap + 1}}));
+	EXPECT_EQ(kSuccess,
+			  PlayerAttributeSystem::Allocate(player, poolId, std::map<uint32_t, uint32_t>{{kDimStrength, totalAtCap}}));
+	EXPECT_EQ(kStoredLevel, tlsEcs.actorRegistry.get<LevelComp>(player).level());
 }
 
 // ── 面板 ─────────────────────────────────────────────────────────────────

@@ -18,6 +18,7 @@
 #include "deps/hiredis/hiredis.h"
 
 #include "engine/core/type_define/type_define.h"
+#include "engine/infra/storage/redis_cluster/redis_slot.h"
 
 // 普通存盘(无归属校验)。KEYS[1]=数据键, ARGV[1]=payload。
 // 仍走脚本并恒返回 1,而不是裸 SET:三条存盘共用 ScriptSlot 的 EVALSHA / NOSCRIPT 回退
@@ -32,7 +33,7 @@ static constexpr const char* kSaveLuaScript = R"(
 )";
 
 // 带归属校验的存盘变体(scene-owner-reentry-barrier.md §6.2 方案 a)。
-// KEYS[1]=数据键, KEYS[2]=旧 guard 键(如 player:123:owner_epoch,不含花括号),
+// KEYS[1]=数据键, KEYS[2]=guard 键(如 player:{123}:owner_epoch,player_ownership::OwnerEpochRedisKey),
 // ARGV[1]=payload, ARGV[2]=调用方缓存的期望值。
 // 比对与写入在同一段脚本里完成,没有 GET→SET 之间的 TOCTOU。
 //
@@ -59,11 +60,23 @@ static constexpr const char* kSaveIfGuardLuaScript = R"(
     return 1
 )";
 
-// 严格提交屏障:KEYS = 父缓存 / 旧 owner 键 / save_barrier hash / 分桶待投 ZSET。
+// 严格提交屏障:KEYS = 父缓存 / owner 键 player:{pid}:owner_epoch / save_barrier hash / 分桶待投 ZSET。
 // ARGV = 父 bytes / owner / 41 字节版本 / topic / 两条完整 DBTask bytes / 玩家十进制
 //        / 输出世代 / 加载世代 / 模式(warn | enforce)/ 写方令牌。
 // owner 缺失必须由恢复流程处置,禁止沿用旧脚本的自动补种。全部校验先于 SET / HSET:Lua 错误不会回滚写入。
-// 版本按字节比较,不转 double;当前键未同槽,部署前提是同一 Redis 实例。
+// 版本按字节比较,不转 double。父键 <全名>:{pid}、owner 键、屏障键都带 {pid} hash tag;补投索引键第 2c 批前仍不同槽,
+// 部署前提是同一 Redis 实例(docs/design/redis-player-store-cluster.md §5.3、§13)。
+//
+// owner 判定(docs/design/zone-redis-regression-guard-20261022.md §4.4,G4):Redis 里的 owner 与 ARGV[2] 相等才继续。
+//   - owner 缺失:error_reply(见上一段,不补种)。
+//   - owner > ARGV[2]:返回 0。铸造方已把玩家派给更新的持有者,本实体已被废黜。
+//   - owner < ARGV[2]:返回二元数组 {4, owner},一个键都不写。计数器只由铸造方抬高,持有者缓存的值来自一次成功的铸造,
+//     Redis 里反而更小,只可能是 Redis 回退(崩溃丢 AOF 尾、异步复制切主、恢复旧备份)丢掉了那次铸造。存储值随回包
+//     带回只为日志与计数。
+//   - 只检测、不修复:不把计数器前推到 ARGV[2] 再照写。持有者在本地分不清自己载入的父键是新是旧 —— 回退丢掉源端冻结
+//     存盘、却留下铸造时,目标节点载入的就是旧父键;前推会让这份旧内容以更高的 epoch 写穿 go/db 的 SQL 行围栏(旧盖新)。
+//     所以 C++ 按废黜处置(HandlePlayerSaveRejected,原因 owner_counter_behind),只丢不盖;回退由 login 加载侧核验兜底。
+//   - 两值都已过 is_owner(1..20 位、无前导零的十进制),num_gt 先比长度再按字节比,不经 Lua double。
 //
 // 覆盖世代校验 C3(docs/design/mixed-version-persist-field-protection.md §5.2):
 //   - hash 的 schema_gen 是"这名玩家最近一次经屏障写入的覆盖世代",只升不降;写入成功时同一个 HSET 里写
@@ -74,8 +87,11 @@ static constexpr const char* kSaveIfGuardLuaScript = R"(
 //     代次判"是不是自己写的":同一实体会换代次(E→E+1 复用、B5 采纳),同一代次也会先后加载出两个实体(同落点重连)。
 //   - 同版本重放(pending == ARGV[3])显式跳过:同版本分支不提前返回,会落到写入。
 //   - 比较放在 owner / 版本判定之后:已被废黜的旧持有者必须拿到 0(DestroyDeposedPlayer),不能先拿到 3。
-//   - 加载世代 ARGV[9] < 存储值,或存储值不是合法十进制 uint32 = 倒退证据:warn 照写、返回 2;
-//     enforce 不写任何键、返回 3(下一次仍会比较)。hash 或 schema_gen 字段不存在 = 不比较。
+//   - 加载世代 ARGV[9] < 存储值,或存储值不是合法十进制 uint32 = 倒退证据:warn 照写、返回 2,并把写方令牌记进
+//     schema_regressed;enforce 不写任何键、返回 3(下一次仍会比较)。hash 或 schema_gen 字段不存在 = 不比较。
+//   - schema_regressed 等于 ARGV[11] 时(这个写方先前在 warn 下被判过倒退)照写并继续返回 2:判定那次的回包可能丢了,
+//     重放同一元素或改发同令牌的后继都跳过 C3,只靠这个字段把证据带回来。别的写方写成功也不删它(只在等于本令牌时
+//     起作用,令牌全局唯一;只有 save_barrier_restore 以 SQL 为准重建时清掉)。
 //   - 参数非法(世代不是 1..4294967295、ARGV[9] > ARGV[8]、模式不是两个字面量、令牌为空 / 超过 64 字节 /
 //     含字母数字与 ':' '-' 以外的字符)返回 error_reply:那是 C++ 的编程错误,SaveWithCommitBarrier 入队前已校验。
 // 旧二进制自带 7 参旧脚本(ScriptSlot 按脚本文本算 SHA),不受影响;它不写 schema_gen / schema_writer,
@@ -145,9 +161,9 @@ static constexpr const char* kSaveWithCommitBarrierLuaScript = R"(
         or #ARGV[1] == 0 or #ARGV[5] == 0 or #ARGV[6] == 0 then
         return redis.error_reply('SAVE_BARRIER invalid outbox')
     end
-    if KEYS[2] ~= 'player:' .. ARGV[7] .. ':owner_epoch'
+    if KEYS[2] ~= 'player:{' .. ARGV[7] .. '}:owner_epoch'
         or KEYS[3] ~= 'player:{' .. ARGV[7] .. '}:save_barrier'
-        or #KEYS[1] <= #ARGV[7] + 1 or string.sub(KEYS[1], -#ARGV[7] - 1) ~= ':' .. ARGV[7] then
+        or #KEYS[1] <= #ARGV[7] + 3 or string.sub(KEYS[1], -#ARGV[7] - 3) ~= ':{' .. ARGV[7] .. '}' then
         return redis.error_reply('SAVE_BARRIER player key mismatch')
     end
     -- GUID 仅逐位求余,中间值小于 640,不把 uint64 转成 double。
@@ -177,6 +193,8 @@ static constexpr const char* kSaveWithCommitBarrierLuaScript = R"(
             return redis.error_reply('SAVE_BARRIER invalid stored outbox')
         end
     end
+    -- G4:计数器比缓存值小 = Redis 回退丢了铸造。只检测:回 {4, 存储值},不写任何键,也不前推计数器(见头注释)。
+    if num_gt(ARGV[2], owner) then return {4, owner} end
     if owner ~= ARGV[2] then return 0 end
     if pending and gt(pending, ARGV[3]) then
         return redis.error_reply('SAVE_BARRIER version regression')
@@ -192,19 +210,28 @@ static constexpr const char* kSaveWithCommitBarrierLuaScript = R"(
     local stored_gen = redis.call('HGET', KEYS[3], 'schema_gen')
     local stored_gen_valid = stored_gen and is_u32(stored_gen)
     local stored_writer = redis.call('HGET', KEYS[3], 'schema_writer')
+    local stored_regressed = redis.call('HGET', KEYS[3], 'schema_regressed')
     local regression = false
     if stored_gen and pending ~= ARGV[3] and stored_writer ~= ARGV[11] then
         regression = not stored_gen_valid or num_gt(stored_gen, ARGV[9])
     end
     if regression and ARGV[10] == 'enforce' then return 3 end
+    -- warn 判过倒退的写方,之后的写入(回包丢失后的同版本重放、同令牌的后继)继续返回 2:判定那次的回包可能丢了,
+    -- 证据不能跟着消失。证据记在 schema_regressed(= 被判倒退的写方令牌),别的写方写成功也不清:它只在等于
+    -- ARGV[11] 时起作用而令牌全局唯一,保留对 C3 没有副作用;清掉的话"判倒退后回包丢失、随即被废黜"的那次判定就永远
+    -- 不计数。值班巡检这个字段的存量(deploy/k8s/README.md)作为切 enforce 门禁的第三项。
+    local warned = regression or stored_regressed == ARGV[11]
     local schema_gen = ARGV[8]
     if stored_gen_valid and num_gt(stored_gen, schema_gen) then schema_gen = stored_gen end
     redis.call('SET', KEYS[1], ARGV[1])
     redis.call('HSET', KEYS[3], 'pending', ARGV[3], 'outbox_version', ARGV[3],
         'outbox_topic', ARGV[4], 'outbox_player_database', ARGV[5], 'outbox_player_database_1', ARGV[6],
         'schema_gen', schema_gen, 'schema_writer', ARGV[11])
+    if regression then
+        redis.call('HSET', KEYS[3], 'schema_regressed', ARGV[11])
+    end
     redis.call('ZADD', KEYS[4], 0, ARGV[7])
-    if regression then return 2 end
+    if warned then return 2 end
     return 1
 )";
 
@@ -255,6 +282,45 @@ struct RedisSaveSchemaGen
             return false;
         }
     }
+    return true;
+}
+
+// owner 归属校验拒绝一笔存盘的原因,随 SaveRejectedCallback 交给调用方。两种都是"这份期望值已作废"、都不重试,
+// 区别只在成因:调用方据此分开计数与日志,不能把 Redis 回退混进"已被改派"的双主证据里。
+enum class RedisSaveOwnerRejectReason : uint8_t
+{
+    // Lua 返回 0:Redis 的 owner 与期望值不等。严格屏障里只剩"Redis 比期望值大"(已被改派、本实体被废黜);
+    // 旧 guard 脚本(kSaveIfGuardLuaScript)不分大小。
+    kOwnerMismatch,
+    // 严格屏障返回 {4, 存储值}:Redis 的 owner 比期望值小 = Redis 回退丢了铸造(zone-redis-regression-guard-20261022.md §4.4)。
+    kOwnerCounterBehind,
+};
+
+struct RedisSaveOwnerRejection
+{
+    RedisSaveOwnerRejectReason reason = RedisSaveOwnerRejectReason::kOwnerMismatch;
+    std::string stored_owner; // 仅 kOwnerCounterBehind 有值:Redis 里 owner 计数器的十进制原文;返回 0 时脚本不带存储值,为空
+};
+
+// 严格屏障"owner 计数器比期望值小"的回包码,与 kSaveWithCommitBarrierLuaScript 里 return {4, owner} 同值。
+inline constexpr long long kRedisSaveOwnerCounterBehindCode = 4;
+
+// 解析严格屏障的 {4, 存储值} 回包。形状完全相符才返回 true 并写出存储值;任何偏差都不是这个结论,
+// 交给调用方按坏回包处理(重试),不能猜成"被拒"而丢掉这次存盘。
+[[nodiscard]] inline bool ParseRedisOwnerCounterBehindReply(const redisReply* reply, std::string& storedOwner)
+{
+    if (reply == nullptr || reply->type != REDIS_REPLY_ARRAY || reply->elements != 2 || reply->element == nullptr)
+    {
+        return false;
+    }
+    const redisReply* code = reply->element[0];
+    const redisReply* stored = reply->element[1];
+    if (code == nullptr || code->type != REDIS_REPLY_INTEGER || code->integer != kRedisSaveOwnerCounterBehindCode ||
+        stored == nullptr || stored->type != REDIS_REPLY_STRING || stored->str == nullptr || stored->len == 0)
+    {
+        return false;
+    }
+    storedOwner.assign(stored->str, stored->len);
     return true;
 }
 
@@ -361,29 +427,34 @@ public:
 	// load_failed_callback_,存盘路径缺这一半是接口级的不对称。
 	using SaveFailedCallback = std::function<void(MessageKey, const std::string& redisKey, int retryCount)>;
 
-	// 带 guard 的存盘被 Redis 原子拒绝(Lua 返回 0)的通知。
+	// 带 guard 的存盘被 Redis 原子拒绝(Lua 返回 0,或严格屏障返回 {4, 存储值})的通知。
 	//
-	// 这不是故障,是"这份期望值已作废":发出这次存盘时缓存的归属值落后于 Redis。
+	// 这不是故障,是"这份期望值已作废":发出这次存盘时缓存的归属值与 Redis 不等。
 	// 所以它既不走 save_failed_callback_(那一条的含义是"Redis 不可用,仍在重试"),
 	// 也不原样重试 —— 同一个期望值再存只会再被拒。
 	//
 	// guardExpected 是**被拒的那一份**期望值,调用方必须拿它与自己当前缓存的值比:
-	// 相等 = 自己确实已被废黜(销毁本地实体、停止一切存盘、不得发 relocate,
+	// 相等 = 这份归属确实已作废(销毁本地实体、停止一切存盘、不得发 relocate,
 	// reentry-barrier §3.3 / §6.2);不相等 = 被拒的只是一笔旧代际的在途写,自己
 	// 已经拿到了更新的归属,应当用新值重新存盘而不是自毁。
-	// 同 key 排队中的值:期望值与被拒的相同 → 一并丢弃(发出去只会再收一个 0);
+	// rejection 说明成因(见 RedisSaveOwnerRejectReason):kOwnerMismatch = 已被改派;kOwnerCounterBehind = Redis 的计数器
+	// 比期望值还小(Redis 回退丢了铸造),stored_owner 带回存储值。两者处置相同,调用方只用它分开计数与日志,
+	// 不得据此前推计数器或改写期望值重存(理由见严格 Lua 头注释)。
+	// 同 key 排队中的值:期望值与被拒的相同 → 一并丢弃(发出去只会再被拒一次);
 	// 期望值不同 → 它带着更新的归属,照常发出,此时不回调(那笔旧写已被它取代)。
-	using SaveRejectedCallback = std::function<void(MessageKey, const std::string& redisKey, const std::string& guardExpected)>;
+	using SaveRejectedCallback = std::function<void(MessageKey, const std::string& redisKey, const std::string& guardExpected,
+													const RedisSaveOwnerRejection& rejection)>;
 
 	// 严格屏障覆盖世代校验 C3 的两种结局(docs/design/mixed-version-persist-field-protection.md §5.2)。
 	//
 	// 返回 2(warn 模式判定倒退但照写):Redis 已提交,是提交证据,照常执行提交钩子、发布 save_callback_。
-	// SaveSchemaWarnedCallback 只用于计数与日志,在提交钩子之前同步调用,不得重入 Save。
+	// SaveSchemaWarnedCallback 只用于计数与日志,在提交钩子之前同步调用,不得重入 Save。writer 是这份写入的写方令牌:
+	// 同一写方被判过倒退之后每次写入都会再返回 2(证据留在 Redis,防回包丢失),调用方按令牌去重计数。
 	//
 	// 返回 3(enforce 模式拒写,一个键都没动):与 owner 拒绝(0)一样不重试、不执行提交钩子、不发布 save_callback_,
 	// 同 key 排队值的处置也同 0 分支(期望值相同丢弃;不同则照发、不回调)。语义却不同于"已被废黜",
 	// 所以不复用 SaveRejectedCallback(那条会按 epoch 重存而无限循环,或按废黜销毁),由调用方按实体状态分派。
-	using SaveSchemaWarnedCallback = std::function<void(MessageKey, const std::string& redisKey)>;
+	using SaveSchemaWarnedCallback = std::function<void(MessageKey, const std::string& redisKey, const std::string& writer)>;
 	using SaveSchemaRejectedCallback = std::function<void(MessageKey, const std::string& redisKey, const std::string& guardExpected)>;
 
 	using HiredisPtr = std::shared_ptr<hiredis::Hiredis>;
@@ -401,6 +472,11 @@ public:
 	}
 
 	inline const std::string full_name() const { return std::string(MessageValue::GetDescriptor()->full_name()); }
+
+	// 玩家域父键 <消息全名>:{<key>}(docs/design/redis-player-store-cluster.md §5.2):key 以 hash tag 包住,与同一玩家的
+	// owner_epoch、屏障、补投索引同槽。与 go/shared/savebarrier.ParentKey 逐字一致;严格存盘 Lua 按 ":{<pid>}" 尾缀核对。
+	// 队列的键、发往 Redis 的键都只经这里构造。
+	std::string RedisKeyFor(const MessageKey& key) const { return full_name() + ":" + redis_slot::PlayerTag(key); }
 
 	void SetSaveCallback(const EventCallback& cb) { save_callback_ = cb; }
 	void SetLoadCallback(const EventCallback& cb) { load_callback_ = cb; }
@@ -455,9 +531,36 @@ public:
 						   std::move(committed));
 	}
 
+	// 同 key 还有本客户端未落定的存盘(在途或排队)时,加载先挂起,等这些存盘落定(成功、被拒或被更新值取代后落定)
+	// 再发 GET(ReleaseLoadsAwaitingSaves,由 RetryDuePending 的周期节拍驱动)。
+	//
+	// 为什么(docs/design/mixed-version-persist-field-protection.md §13 第 9 条):前任实体被不存盘销毁时,它的存盘可能还在
+	// 排队重试;同落点重连在同一 owner 代次下加载出的新实体若先读,读到的是那笔存盘之前的父快照,随后那笔存盘落地,
+	// 新实体的下一次存盘就会把它盖回去(回档),升世代窗口里还会被 C3 判倒退而永久拒存。挂起加载不改存盘语义:
+	// 前任那份照常落地或被拒,新实体读到的就是落定之后的状态。不同 key 互不影响;同一连接上已在途的 GET 不受影响。
 	void AsyncLoad(const MessageKey& key, int retry_count = 0)
 	{
-		std::string redis_key = full_name() + ":" + std::to_string(key);
+		std::string redis_key = RedisKeyFor(key);
+
+		if (HasUnsettledSave(key) && loading_queue_.find(redis_key) == loading_queue_.end())
+		{
+			auto& parked = loads_awaiting_saves_[redis_key];
+			if (!parked)
+			{
+				parked = std::make_shared<Element>();
+				parked->message_key = key;
+				parked->redis_key = redis_key;
+				LOG_INFO << "AsyncLoad deferred until the pending save of the same key settles: " << redis_key;
+			}
+			parked->retry_count = std::max(parked->retry_count, retry_count);
+			// 同 key 已在等重试的那份并进挂起项,免得两条路各发一次 GET。
+			if (auto pendingIt = pending_retry_queue_.find(redis_key); pendingIt != pending_retry_queue_.end())
+			{
+				parked->retry_count = std::max(parked->retry_count, pendingIt->second->retry_count);
+				pending_retry_queue_.erase(pendingIt);
+			}
+			return;
+		}
 
 		LOG_DEBUG << "AsyncLoad: key=" << redis_key
 				  << " connected=" << (hiredis_ ? hiredis_->connected() : false)
@@ -579,6 +682,8 @@ public:
 	// fires twice for the same key.
 	void RetryDuePending()
 	{
+		// 先放行存盘已落定的挂起加载(AsyncLoad 自己处理未连接:放回 pending_retry_queue_ 等重连)。
+		ReleaseLoadsAwaitingSaves();
 		if (!hiredis_ || !hiredis_->connected())
 		{
 			return;
@@ -603,9 +708,12 @@ public:
 	// 按key核实真实GET及重试均已排空；交易封存不能用待入场上下文消失替代它。
 	bool HasPendingLoad(const MessageKey& key) const
 	{
-		const std::string redisKey = full_name() + ":" + std::to_string(key);
-		return loading_queue_.contains(redisKey) || pending_retry_queue_.contains(redisKey);
+		const std::string redisKey = RedisKeyFor(key);
+		return loading_queue_.contains(redisKey) || pending_retry_queue_.contains(redisKey) ||
+			   loads_awaiting_saves_.contains(redisKey);
 	}
+	// 因同 key 存盘未落定而挂起的加载数(见 AsyncLoad)。
+	size_t awaiting_save_load_count() const { return loads_awaiting_saves_.size(); }
 	// Number of saves waiting in the failure/disconnect retry queue.
 	size_t pending_save_count() const { return pending_save_queue_.size(); }
 	// Number of SETs whose reply has not yet been received.
@@ -622,7 +730,7 @@ public:
 	//   - 只看存盘的两个队列(saving_queue_ / pending_save_queue_),不看 pending_retry_queue_(那是载入的)。
 	bool HasUnsettledSave(const MessageKey& key) const
 	{
-		const std::string redisKey = full_name() + ":" + std::to_string(key);
+		const std::string redisKey = RedisKeyFor(key);
 		return saving_queue_.find(redisKey) != saving_queue_.end() ||
 			   pending_save_queue_.find(redisKey) != pending_save_queue_.end();
 	}
@@ -632,7 +740,7 @@ public:
 	void LogQueueSnapshot(const char *tag) const
 	{
 		if (in_flight_load_count() == 0 && in_flight_save_count() == 0 &&
-			pending_load_count() == 0 && pending_save_count() == 0)
+			pending_load_count() == 0 && pending_save_count() == 0 && awaiting_save_load_count() == 0)
 		{
 			return;
 		}
@@ -640,7 +748,8 @@ public:
 				 << " in_flight_loads=" << in_flight_load_count()
 				 << " in_flight_saves=" << in_flight_save_count()
 				 << " pending_loads=" << pending_load_count()
-				 << " pending_saves=" << pending_save_count();
+				 << " pending_saves=" << pending_save_count()
+				 << " loads_awaiting_saves=" << awaiting_save_load_count();
 	}
 
 private:
@@ -664,6 +773,33 @@ private:
 			return std::chrono::milliseconds(8000);
 		default:
 			return std::chrono::milliseconds(16000);
+		}
+	}
+
+	// 放行同 key 存盘都已落定的挂起加载(见 AsyncLoad)。先收集再发:AsyncLoad 会改本表。
+	void ReleaseLoadsAwaitingSaves()
+	{
+		if (loads_awaiting_saves_.empty())
+		{
+			return;
+		}
+		std::vector<ElementPtr> released;
+		for (auto it = loads_awaiting_saves_.begin(); it != loads_awaiting_saves_.end();)
+		{
+			if (!HasUnsettledSave(it->second->message_key))
+			{
+				released.push_back(it->second);
+				it = loads_awaiting_saves_.erase(it);
+			}
+			else
+			{
+				++it;
+			}
+		}
+		for (const auto& element : released)
+		{
+			LOG_INFO << "AsyncLoad released after the pending save settled: " << element->redis_key;
+			AsyncLoad(element->message_key, element->retry_count);
 		}
 	}
 
@@ -750,7 +886,7 @@ private:
 	{
 		ElementPtr element = std::make_shared<Element>();
 		element->message_key = key;
-		element->redis_key = full_name() + ":" + std::to_string(key);
+		element->redis_key = RedisKeyFor(key);
 		element->message_value = message;
 		element->guard_key = guardKey;
 		element->guard_expected = guardExpected;
@@ -1012,7 +1148,7 @@ private:
 				 << " for key: " << element->redis_key << " in " << backoff.count() << "ms";
 	}
 
-	// 在途写被原子拒绝(owner guard 返回 0,或严格屏障 C3 enforce 返回 3)之后,同 key 排队值的处置:
+	// 在途写被原子拒绝(owner guard 返回 0 或严格屏障 {4, 存储值},或严格屏障 C3 enforce 返回 3)之后,同 key 排队值的处置:
 	// 排队值的 guard 期望值与被拒的不同 → 调用方在这笔写在途期间拿到了更新的归属,照常发出它并返回 true,
 	// 调用方此时不回调(那笔旧写已被它取代,由它的结果决定后续);相同 → 同一份已作废的期望值,一并丢弃,返回 false。
 	// sameWriterOnly(C3 用):排队值的写方令牌与被拒的不同时同样照发 —— 它来自另一个加载实体,C3 的判定只看
@@ -1038,6 +1174,27 @@ private:
 				 << (otherWriter ? " from another loaded entity" : "") << ", issuing it";
 		IssueSave(next);
 		return true;
+	}
+
+	// owner 归属校验拒绝(Lua 返回 0,或严格屏障返回 {4, 存储值})的共同处置。调用前在途记录必须已摘除。
+	// 两种回包的处置完全相同,只有 rejection 里的成因与存储值不同:同 guard 的排队值一并丢弃后回调一次;
+	// 排队值带着更新的 guard 就照发、不回调(见 IssuePendingWithNewerGuard)。
+	void RejectSaveByOwner(const ElementPtr& element, const RedisSaveOwnerRejection& rejection)
+	{
+		const bool counterBehind = rejection.reason == RedisSaveOwnerRejectReason::kOwnerCounterBehind;
+		if (IssuePendingWithNewerGuard(element, counterBehind ? "owner guard (counter behind)" : "owner guard"))
+		{
+			return;
+		}
+		LOG_WARN << "Redis Save rejected by owner guard for key: " << element->redis_key
+				 << " guard=" << element->guard_key << " expected=" << element->guard_expected
+				 << (counterBehind ? " stored=" + rejection.stored_owner + " (owner counter behind the expected value)"
+								   : std::string())
+				 << " -- dropping in-flight and same-guard pending values";
+		if (save_rejected_callback_)
+		{
+			save_rejected_callback_(element->message_key, element->redis_key, element->guard_expected, rejection);
+		}
 	}
 
 	void OnSaved(hiredis::Hiredis * /*c*/, redisReply *reply, ElementPtr element)
@@ -1095,17 +1252,19 @@ private:
 		if (!element->guard_key.empty() && reply->type == REDIS_REPLY_INTEGER && reply->integer == 0)
 		{
 			saving_queue_.erase(inFlight);
-			if (IssuePendingWithNewerGuard(element, "owner guard"))
-			{
-				return;
-			}
-			LOG_WARN << "Redis Save rejected by owner guard for key: " << element->redis_key
-					 << " guard=" << element->guard_key << " expected=" << element->guard_expected
-					 << " -- dropping in-flight and same-guard pending values";
-			if (save_rejected_callback_)
-			{
-				save_rejected_callback_(element->message_key, element->redis_key, element->guard_expected);
-			}
+			RejectSaveByOwner(element, RedisSaveOwnerRejection{});
+			return;
+		}
+
+		// 严格屏障返回 {4, 存储值} = Redis 里的 owner 计数器比这份期望值还小(Redis 回退丢了铸造,
+		// docs/design/zone-redis-regression-guard-20261022.md §4.4),一个键都没动。处置与上面的 0 完全相同
+		// (不重试、不执行提交钩子、不发布 save_callback_,同 guard 排队值一并丢弃),只是把成因与存储值带给调用方。
+		// 本类不前推计数器、不换期望值重发,理由见严格 Lua 头注释。只对屏障元素解释这种回包;形状不符按坏回包重试。
+		if (RedisSaveOwnerRejection behind{RedisSaveOwnerRejectReason::kOwnerCounterBehind, {}};
+			!element->barrier_key.empty() && ParseRedisOwnerCounterBehindReply(reply, behind.stored_owner))
+		{
+			saving_queue_.erase(inFlight);
+			RejectSaveByOwner(element, behind);
 			return;
 		}
 
@@ -1146,7 +1305,7 @@ private:
 		{
 			if (save_schema_warned_callback_)
 			{
-				save_schema_warned_callback_(element->message_key, element->redis_key);
+				save_schema_warned_callback_(element->message_key, element->redis_key, element->schema_writer);
 			}
 			else
 			{
@@ -1310,6 +1469,8 @@ private:
 	HiredisPtr& hiredis_;
 	LoadingQueue loading_queue_;
 	LoadingQueue pending_retry_queue_;
+	// 因同 key 存盘未落定而挂起的加载(见 AsyncLoad);RetryDuePending 每拍检查,落定即发 GET。
+	LoadingQueue loads_awaiting_saves_;
 	LoadingQueue saving_queue_;
 	LoadingQueue pending_save_queue_;
 	ScriptSlot save_script_{kSaveLuaScript};

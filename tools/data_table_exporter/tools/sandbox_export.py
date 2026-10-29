@@ -45,7 +45,7 @@ if str(_ROOT) not in sys.path:
 import yaml                                                        # noqa: E402
 
 # 仓内自带的 protoc。dev.bat :prepare_protoc 要求恰好 libprotoc 35.1,这里沿用同一个。
-_REPO_PROTOC = _REPO / "third_party" / "grpc" / "install_vs2026_dbg" / "bin" / "protoc.exe"
+_REPO_PROTOC = _REPO / "third_party" / "protobuf" / "install_vs2026_dbg" / "bin" / "protoc.exe"
 
 # manifest 里这几个字段本来就与内容无关(见 core/manifest.py 的 content_digest 口径),
 # 每次跑都会变,不能算差异。比对时改为核对 content_digest 与 tables 段。

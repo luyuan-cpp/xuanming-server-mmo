@@ -15,10 +15,16 @@
 - `Atomic` 标准库实现保留 getAndAdd 的旧值、addAndGet / incrementAndGet / decrementAndGet 的新值语义；
   getAndSet 必须是单次 exchange。否则恢复原版 Thread 默认命名时会出现 Thread0 与创建数 1 不一致，
   Timer 的序号也偏离原契约。新增固定值回归直接守住这些返回值，不调整 Thread 命名预期掩盖基础差异。
+- `Timestamp` 恢复原版 Boost 比较基类，六种关系在两个平台具有相同契约；不再删除 Windows 的部分比较能力。
+  MSVC 仅增加 `empty_bases` 属性，保持八字节值布局及原对齐。固定整数边界回归验证全部关系、大小和对齐，
+  不依赖真实时钟；主仓现役头、使用方镜像和独立库头同步。
 - Windows UDP 唤醒的创建、发送、排空集中在内部 `muduo/net/WindowsWakeup.{h,cc}`；
   EventLoop 只保留平台调用，不增加公开接口或成员。保留自连回环、非阻塞、不可继承、通知合并和排空到 EWOULDBLOCK 的语义。
 - 单调时钟、动态 poll 超时、同批取消守卫、连接失败回调、Connector 生命周期及 HUP 处理是独立的正确性修复，
   本次接口收口不撤销。Linux 继续使用固定上游及既有 overlay，不套用 Windows 实现。
+- 2026-10-22 复核发现独立库尚未同步下文三处闭包清理重入修复，已补齐双索引摘除、析构清理与取消窗口顺序。
+  独立库另删除全树无调用的旧唤醒、HUP 返回及 poller 选择兼容入口，Windows 唤醒只由 WindowsWakeup 承担。
+  Condition、Thread、Mutex 及现有连接修复继续保留，不为减少差异行数新增透传层或改回不兼容语义。
 
 下文“只能在 muduo 里拦、组件层无能为力”描述的是裸 this 回调的旧方案，不能推广到当前全部调用者。
 现役 TimerTaskComp 的闭包先锁独立 weak State，再核对 generation，已能在外层阻止失效的业务回调；
@@ -375,3 +381,43 @@ ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
 时钟验证包括纯函数、真实 EventLoop 和平台等待链；**没有实际修改系统日期时间**。
 没有宣称实时精度、休眠语义或生产负载下性能结论，也没有部署替换运行节点。
 上方旧的组件移动风险记载只作历史：当前组件移动转移独立 State，现有专项已覆盖 swap-and-pop 幸存者与移动后宿主销毁。
+
+## 2026-10-22：TimerTaskComp 的取消与替换重入
+
+继续保留独立 weak State、generation、RAII 与移动转交结构。底层前述三处闭包清理修复已在主干，
+本轮直接复用并重新验证，不重复重写 Windows 或 Linux overlay。
+
+组件此前先调用 `loop->cancel()`、后清句柄和代际。取消会同步析构旧回调捕获物；捕获物的析构若再次调度、
+移动或销毁宿主，外层随后读写组件就会覆盖新状态，或者访问已释放内存。只把 `Cancel` 的清状态操作前移还不够，
+因为旧的调度替换流程仍在 `Cancel()` 返回后继续访问宿主。
+
+现行顺序与接口契约：
+
+- `CancelState` 按值保活独立状态，先清句柄、清 armed、推进 generation，最后取消底层 Timer；释放闭包后不再回写。
+- 替换调度先安装新 Timer 并完成状态更新，最后取消旧 Timer。旧闭包清理期间发生的后续取消、调度或移动决定最终状态；
+  外层不再访问宿主。移动赋值同样先转交源状态，再清理目标旧状态，清理后不再访问源对象。
+- `RunAt/RunAfter/RunEvery` 返回是否接受调度；返回 true 不保证稍后重入操作没有覆盖它。
+  空回调或无当前 EventLoop 返回 false；非法参数也返回 false，均不改变现有计时。
+- `RunEvery` 必须使用正间隔；相对时长必须有限，绝对值严格小于 `INT64_MAX / 2` 微秒对应的秒数，
+  为浮点转整数、截止点相加和队列求差留出余量。`RunAfter` 的零和负延迟仍按到期任务处理。
+- 调度、移动、取消和销毁继续仅在所属 EventLoop 线程执行；回调不得阻塞。
+  正在释放旧闭包时可以销毁一个仍存活的宿主；**组件自身已进入析构后，不支持再次武装该对象**。
+  改为 bool 返回值后，库与使用方必须配套重新编译，不支持混用旧目标文件。
+
+回归增加 `TimerTaskRegressionTest`：非法周期/时长、空回调/无 loop、零与负单次延迟、取消中重入取消/重挂/自毁、
+替换中取消/重挂/移动/销毁宿主、移动赋值清理中重挂目标/销毁源，以及周期回调自行取消/销毁/替换。
+未修改组件布局、协议、配置、客户端或运行节点。Java 版没有对应的 muduo 层，本轮没有共享客户端契约变更。
+
+本轮验证入口与原始日志位于 `build/verification/timer-task-fix-20261022/`。
+未修复组件的实际红态中，前五条回归均出现业务断言失败，第六条替换中销毁宿主由 ASan 报告 heap-use-after-free；
+进程退出 1，后续用例未执行，不能把该轮称为九条完整测试结果。
+
+修复后 Windows MSVC 独立 Debug 专项 **54/54**、Linux GCC 13.4 Debug/ASan/UBSan 专项 **53/53**，
+零失败、错误、跳过或禁用。新增 16 条回归在 Linux 另以独立进程连续运行 20 轮，320/320 通过，
+每轮均有独立 XML、日志及退出码；没有 ASan、UBSan 或泄漏报告。Linux 46 条实际编译命令均含 `-UNDEBUG`
+和 `-fsanitize=address,undefined`，受核对的七个源码/构建入口首终 SHA 不变。
+
+原件包括 `linux-red.log`、两端 `*-green.xml`/日志、`linux-green-repeat-*.xml`/日志、
+`linux-green-build/compile_commands.json` 和 `result.json`。Windows 以 `/m:1`、禁用编译并发重新编译真 muduo、
+组件及测试；Linux 从固定本地 SDK 镜像源码加当前 overlay 重编。未构建完整 `game.sln`，未替换服务产物或重启节点，
+也不把专项结果当作已部署 SDK 归档或生产负载的验证。

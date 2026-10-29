@@ -345,7 +345,7 @@ used to get no tip at all). A SceneManager that legitimately reuses an
 existing mirror via `MirrorDedupBySource` still auto-routes the requesting
 player into that mirror.
 
-> **2026-10-17 契约勘误**：以上第 3 / 4 步和“creator_ids 是唯一关联键”保留为旧流程。镜像建场现在先登记 `PlayerMirrorCreateInFlightComp`，完成闭包按值捕获 playerId / token 并委托 `PlayerSceneSystem::HandleMirrorCreateDone`；全局 CreateScene 处理器与 `scene_manager_response_handler.cpp` 已删除，不依赖响应回显创建者。普通换图与镜像共用当前生效的 SceneManager deadline + 1000ms 时效政策，时间回拨按失效处理。完成入口先核对 token，再要求槽未过 TTL；token 不符不动新槽，匹配 token 但已过期或回拨时，仅摘对应当前 token 后静默丢弃，不推 tip、不自动进场。有效完成才释放本次槽，成功时复核玩家仍在、未进入战斗及可用 SceneManager，再经 `RequestSceneChange` 自动进场。有效槽内业务拒绝、零 scene_id 或建好时已在战斗回 `kEnterSceneFailed`，无可用 SceneManager 或传输失败回 `kEnterSceneServerBusy`（3028）。建场在途也占换图互斥闸，客户端换图、队伍跟随与跨 zone 传送不能绕过它。后来的普通换图登记、交接全部预检通过、退出新挂 `UnregisterPlayer`、权威落点成功这四个提交点永久摘掉旧镜像令牌；UTC 回拨后恢复到原 TTL 内也不能使旧提示或自动进场复活。忙碌检查仍只读，未通过的交接预检不取消旧镜像。验证状态另据实际结果；Java 对照见 `grpc-client-deadline-failure-callback.md` §12.4。
+> **2026-10-17 契约勘误**：以上第 3 / 4 步和“creator_ids 是唯一关联键”保留为旧流程。镜像建场现在先登记 `PlayerMirrorCreateInFlightComp`，完成闭包按值捕获 playerId / token 并委托 `PlayerSceneSystem::HandleMirrorCreateDone`；全局 CreateScene 处理器与 `scene_manager_response_handler.cpp` 已删除，不依赖响应回显创建者。普通换图与镜像共用当前生效的 SceneManager deadline + 1000ms 时效政策，时间回拨按失效处理。完成入口先核对 token，再要求槽未过 TTL；token 不符不动新槽，匹配 token 但已过期或回拨时，仅摘对应当前 token 后静默丢弃，不推 tip、不自动进场。有效完成才释放本次槽，成功时复核玩家仍在、未进入战斗及可用 SceneManager，再经 `RequestSceneChange` 自动进场。有效槽内业务拒绝、零 scene_id 或建好时已在战斗回 `kEnterSceneFailed`，无可用 SceneManager 或传输失败回 `kEnterSceneServerBusy`（3028）。建场在途也占换图互斥闸，客户端换图、队伍跟随与跨 zone 传送不能绕过它。后来的普通换图登记、交接全部预检通过、退出新挂 `UnregisterPlayer`、权威落点成功这四个提交点永久摘掉旧镜像令牌；UTC 回拨后恢复到原 TTL 内也不能使旧提示或自动进场复活。忙碌检查仍只读，未通过的交接预检不取消旧镜像。验证状态另据实际结果；Java 对照见 `grpc-muduo-transport.md` §16.6。
 
 ### C++ Side (Scene.CreateScene handler)
 
@@ -356,18 +356,28 @@ player into that mirror.
 
 ## Destroy Flow
 
+> 2026-10-23 更正:下图按 `instance_lifecycle.go::destroyInstanceInternal` 的现行顺序重画。旧图把级联与
+> RPC 画在原子认领之前;实际级联在认领成功之后,空闲 CAS 放弃时镜像原样保留。
+
 ```
-Go SceneManager.DestroyScene(scene_id) or InstanceLifecycleManager
+destroyInstanceInternal(scene_id)
+  ← destroyInstance (idle) / destroyInstanceForce (explicit DestroyScene RPC,
+    source_migrated, source_scaled_in) / destroyOrphanOfDeadNode (node_death)
 │
-├─ [cascade] SMEMBERS scene:{id}:mirrors → destroyInstanceForce(each)
-├─ GET scene:{id}:node → resolve nodeId
-├─ RequestNodeDestroyScene → gRPC → C++ Scene.DestroyScene(scene_id)
-├─ [atomic] EVAL destroy-if-idle (see "Destroy-while-entering race")
-│    └─ DEL scene:{id}:{node, player_count, mirror, source, zone}
+├─ snapshot GET scene:{id}:{node, agones_gs, player_count, source, mirror}  (reference only)
+├─ [atomic claim] EVAL luaAtomicDestroyInstance (idle: aborts if player_count > 0)
+│                 or luaAtomicDestroyInstanceForce (others; node_death passes the
+│                 dead node as expected owner, aborts if scene:{id}:node differs)
+│    └─ DEL scene:{id}:{node, player_count, mirror, source, zone, agones_gs}
 │       + ZREM instances:zone:{zoneId}:active
+│    claim lost → return, no side effects at all
+├─ [cascade] SMEMBERS scene:{id}:mirrors → destroyInstanceInternal(child, force, reason=cascade)
+│            then DEL scene:{id}:mirrors
+├─ RequestNodeDestroyScene → gRPC → C++ Scene.DestroyScene(scene_id)   (only if owner alive)
 ├─ SREM node:zone:{zoneId}:{nodeId}:scenes
 ├─ [if mirror] SREM scene:{sourceId}:mirrors
-└─ INCRBY node:zone:{zoneId}:{nodeId}:scene_count -1 + drain residual from player_count
+├─ INCRBY node:zone:{zoneId}:{nodeId}:scene_count -1 + drain residual from player_count
+└─ ReleaseAgonesRoomForScene (if agones_gs was set)
 ```
 
 ### Destroy-while-entering race (fixed 2026-04-23)
@@ -387,12 +397,18 @@ serialises them:
   `instance:{id}:player_count`. If present INCRs and returns the new count.
   EnterScene treats `-1` as "scene disappeared, reject the request" and
   rolls back the `PlayerLocation` write.
-- **`luaAtomicDestroyInstance`** (lifecycle + DestroyScene path): if
+- **`luaAtomicDestroyInstance`** (idle lifecycle path, via `destroyInstance`): if
   `player_count > 0`, returns `""` without touching anything; otherwise
   wipes every scene-scoped key, `ZREM`s from the active set, and returns
   the hosted nodeId so the caller can fire `DestroyScene` RPC and drain
-  counters. A force path (`destroyInstanceForce`) bypasses the idle check
-  for admin teardowns and node-death reconciliation.
+  counters. A force path (`luaAtomicDestroyInstanceForce`) bypasses the idle
+  check: `destroyInstanceForce` for explicit / source_migrated /
+  source_scaled_in, and the mirror cascade (which recurses inside
+  `destroyInstanceInternal`); since 2026-10-23 the explicit `DestroyScene`
+  RPC delegates to it instead of its own snapshot-then-DEL copy.
+  Node-death reconciliation uses `destroyOrphanOfDeadNode`, which passes
+  the dead node as the expected owner, so the script only wipes scenes
+  still owned by it (see below).
 
 Failure mode coverage:
 
@@ -423,8 +439,9 @@ destroy script wipes it alongside the rest of the scene-scoped keys.
 ### Cascade destroy
 
 When a scene with mirrors is destroyed (explicit RPC or lifecycle), we
-`SMEMBERS scene:{id}:mirrors` BEFORE the atomic wipe and force-destroy
-every child. This prevents mirrors from living on a dead source (their
+`SMEMBERS scene:{id}:mirrors` only after the atomic claim succeeds and
+force-destroy every child; if the idle CAS aborts, the mirrors are left
+untouched (the destroy scripts never touch that set). This prevents mirrors from living on a dead source (their
 NPCs reference the source's spawn data; leaving them behind means
 nothing can enter them and their state ticks uselessly until idle
 timeout).
@@ -445,22 +462,59 @@ correctly on newNode.
 
 ### Node-death reconciliation
 
-`load_reporter.go::removeNodeFromRedis` now finishes with
-`reconcileDeadNodeScenes`:
+> 2026-10-23 更正:本节原先描述的是早期实现(`removeNodeFromRedis` 末尾直接收尾、现读 SMEMBERS、
+> 无条件 `destroyInstanceForce`、最后 DEL 整个集合),以下为现状。
 
-1. `SMEMBERS node:zone:{zoneId}:{deadNodeId}:scenes`.
-2. For each sceneId: if `scene:{id}:node` still points at the dead node
-   AND the scene is in `instances:zone:{z}:active` (i.e. it's an
-   instance, not a world channel) → `destroyInstanceForce(reason="node_death")`.
-3. Reassigned scenes (mapping already points at a live node) and world
-   channels are skipped — the rebalance pipeline handles them.
-4. `DEL node:zone:{zoneId}:{nodeId}:scenes`.
+The leader's `load_reporter.go::removeNodeFromRedis` writes `death_at`,
+removes the node from the load set, snapshots
+`node:zone:{zoneId}:{deadNodeId}:scenes` and enqueues a reconcile task
+(when `death_at` cannot be written or the load-set removal fails, the
+detach is deferred, GO-6). `reentry_barrier.go::drainPendingDeadNodeReconciles`
+runs on every 5s loadTicker and in fullSync's leader branch; it has no
+leader gate of its own (only the leader enqueues). Once the barrier has
+elapsed it calls `reconcileDeadNodeScenes(entry, snapshot)`, which checks
+`isLeader()` per member and aborts on lost leadership:
+
+1. Fast filter: members whose `scene:{id}:node` already points at another
+   node are counted `stale`.
+2. Members not in `instances:zone:{z}:active` are counted `world_skipped`:
+   world channels (left to the rebalance pipeline) and instances already
+   destroyed before this read, e.g. mirrors cascaded by their source
+   earlier in the same sweep — every destroy script `ZREM`s atomically with
+   the mapping `DEL`. Only `redis.Nil` counts as "not in the set"; a read
+   error counts `failed`.
+3. The rest go to `destroyOrphanOfDeadNode(deadNode)`: no player_count
+   check, but the Lua script only wipes the scene while `scene:{id}:node`
+   still equals the dead node; otherwise it touches nothing and the member
+   is counted `stale`. That covers a writer that moved the instance with
+   `reassignSceneNode` after the GET in step 1 (at fix time, 2026-10-22,
+   `resolveScene`'s dead-owner self-heal did; since 10-23 it only rebuilds
+   world channels, so the compare is defence in depth), and a mapping that
+   disappears between the Zscore and the script (a concurrent destroy, or
+   `rollbackInstanceAllocation`, which DELs the mapping before the ZREM —
+   the path that deleted it owns the rest of the cleanup). Redis errors
+   count `failed`.
+4. Only snapshot members are `SREM`ed (never `DEL` the set); `failed`
+   members stay in the set, since their mapping may still point at the
+   dead node.
+
+After reconcile returns, drain runs `deleteNodeCounters` (must run after
+the sweep) and drops the task either way. No retry is scheduled for
+`failed` members, and members left by a sweep aborted on lost leadership
+are not picked up by the new leader either (its fullSync only scans load
+sets). They are only picked up if the same node_id is declared dead again,
+or by idle reclaim once their player_count drains to 0 (LeaveScene from the
+player_locator lease expiry, or the player entering elsewhere). Tracked as
+residual R1 of the `docs/PROGRESS.md` 2026-10-23 entry 「scene_manager
+死节点收尾与显式 DestroyScene 的销毁改为按认领时属主」.
 
 World channels are intentionally excluded here; destroying them would
 drop every player in that shard. The existing rebalance path already
 moves them to a new node and re-issues CreateScene on the C++ side.
 
-Regression: `TestReconcileDeadNode_{DestroysOrphanInstances,PreservesWorldChannels,SkipsReassignedScenes}`.
+Regression: `TestReconcileDeadNode_{DestroysOrphanInstances,PreservesWorldChannels,SkipsReassignedScenes,DestroysCoLocatedMirrors,ReassignedAfterOwnerRead_LeavesNewOwnerIntact,StillOwnedByDeadNode_Destroys,DestroyScriptErrorKeepsMemberIndexed}`,
+`TestAtomicDestroyForce_{ExpectedOwnerMismatchTouchesNothing,NoExpectedOwnerWipesWhoeverOwnsIt}`,
+`TestOwnerReadInterleave_{ReconcileSkipsSceneReassignedAfterOwnerRead,ExplicitDestroyFollowsOwnerAtClaimTime}`.
 
 ### Observability (Prometheus)
 
@@ -470,7 +524,7 @@ Added counters alongside the existing gauges in
 | Metric | Labels | Emitted by |
 |--------|--------|-----------|
 | `scene_manager_mirror_colocate_total` | `zone_id`, `outcome` (hit\|fallback), `reason` (ok\|no_mapping\|zone_mismatch\|node_dead\|overloaded) | `pickInstanceNode` |
-| `scene_manager_instance_destroyed_total` | `zone_id`, `kind` (instance\|mirror), `reason` (idle\|explicit\|cascade\|node_death\|source_migrated) | `destroyInstance*`, `DestroyScene`, `migrateWorldChannel` |
+| `scene_manager_instance_destroyed_total` | `zone_id`, `kind` (instance\|mirror), `reason` (idle\|explicit\|cascade\|node_death\|source_migrated\|source_scaled_in) | `destroyInstanceInternal` (via `destroyInstance` / `destroyInstanceForce` / `destroyOrphanOfDeadNode`), `DestroyScene`, `migrateWorldChannel`, `world_autoscale` |
 | `scene_manager_enter_scene_rejected_total` | `zone_id`, `reason` (not a fixed list here — the authoritative set of values is the metric's `Help` string in `go/scene_manager/internal/metrics/metrics.go`) | `EnterScene` reject paths (`enterscenelogic.go` / `home_zone.go`) |
 | `scene_manager_scene_orphans_reconciled_total` | `zone_id` | `reconcileDeadNodeScenes` |
 | `scene_manager_mirror_source_missing_total` | `zone_id` | `createInstance` source-clone refusal |
@@ -923,7 +977,7 @@ MetricsListenAddr: ":9150"
 |------|---------|
 | `go/scene_manager/internal/logic/createscenelogic.go` | CreateScene routing: main world vs instance |
 | `go/scene_manager/internal/logic/world_init.go` | Startup init of persistent world scenes |
-| `go/scene_manager/internal/logic/instance_lifecycle.go` | Auto-destroy idle instances + player count helpers. Per-type timeout (mirror vs. regular) via `resolveMirrorTimeout` + `scene:{id}:mirror` flag. Also: atomic CAS destroy, cascade to mirrors, node-death force path |
+| `go/scene_manager/internal/logic/instance_lifecycle.go` | Auto-destroy idle instances + player count helpers. Per-type timeout (mirror vs. regular) via `resolveMirrorTimeout` + `scene:{id}:mirror` flag. Also: atomic CAS destroy, cascade to mirrors, node-death owner-CAS force path (`destroyOrphanOfDeadNode`) |
 | `go/scene_manager/internal/logic/scene_atomic.go` | Redis Lua scripts for the race-safe enter / destroy CAS paths |
 | `go/scene_manager/internal/logic/scene_node_client.go` | gRPC client cache + RequestNodeCreateScene/DestroyScene |
 | `go/scene_manager/internal/logic/enterscenelogic.go` | EnterScene: ownership gate, exact-value location rollback, broker-ACKed Gate routing, player count |
@@ -933,7 +987,7 @@ MetricsListenAddr: ":9150"
 | `go/scene_manager/internal/logic/load_refresh.go` | (2026-10-16)领导者按 zone 批量刷新负载分;pipeline 结果按批判定、读失败不按 0 写 |
 | `go/scene_manager/internal/logic/zone_registry.go` | (2026-10-16)zone 登记集合 `scene_manager:zones`,替代 fullSync 里的全库 SCAN |
 | `go/scene_manager/internal/logic/logic_test.go` | Unit tests incl. `TestCreateScene_Mirror_*` co-location suite |
-| `go/scene_manager/internal/logic/world_rebalance.go` | World channel migration. `migrateWorldChannel` uses `reassignSceneNode` to keep `node:zone:{zoneId}:{nodeId}:scenes` in sync with `scene:{id}:node` |
+| `go/scene_manager/internal/logic/world_rebalance.go` | World channel migration. `migrateWorldChannel` uses `reassignSceneNode` to keep `node:zone:{zoneId}:{nodeId}:scenes` in sync with `scene:{id}:node`。2026-10-20 起 `reassignSceneNode`(`world_init.go`)是 Lua CAS:只在属主仍为 oldNode 时同批改归属、两侧反向索引与 scene_count;迁移 CAS 落空时 `destroyUnownedMigrationTarget` 回收 newNode 上预建的实体。`resolveScene` 的死节点自愈仍是无条件 SET,未纳入(2026-10-22 更正:已纳入,`enterscenelogic.go` `reassignSceneOffDeadNode` 改走 `reassignSceneNode`,落空时重读属主;见 PROGRESS 同日「resolveScene 死节点自愈改走 reassignSceneNode CAS」)。2026-10-23 再更正:死节点自愈只重建大世界频道(以 `world_channels` 成员资格确认 conf,提交时经 `reassignWorldChannelNode` 在 CAS 脚本里再核对一次;副本 / 镜像留给死节点收尾销毁),顺序与本行的 rebalance 相同:先建实体、再 CAS、最后转名额;`TransferAgonesRoomForScene` 的记录改写也改为比较并交换,见 PROGRESS 2026-10-23「resolveScene 死节点自愈收窄为只重建频道」 |
 | `go/scene_manager/internal/logic/orphan_cleanup.go` | Drops world-channel sets whose confId is no longer in the World table; cleans all scene-scoped keys + reverse indexes |
 | `go/scene_manager/internal/metrics/metrics.go` | Prometheus gauges + counters for nodes, mirrors, lifecycle, dedup, source-missing, orphans |
 | `proto/scene/scene.proto` | C++ Scene service (CreateScene, DestroyScene) |

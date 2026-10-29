@@ -19,7 +19,7 @@ import (
 func testReplayWith(t *testing.T, rc *redis.Client, p Publisher, health StoreHealth, cfg Config) *Replay {
 	t.Helper()
 	cfg.ZoneID, cfg.Batch, cfg.Budget, cfg.Interval = 1, 2, 100*time.Millisecond, 10*time.Millisecond
-	r, err := New(rc, rc, p, health, cfg, prometheus.NewRegistry())
+	r, err := New(rc, rc, p, health, openRouteGate(), cfg, prometheus.NewRegistry())
 	require.NoError(t, err)
 	r.now = func() time.Time { return time.UnixMilli(fixtureNowMs) }
 	r.jitter = func() time.Duration { return 0 }

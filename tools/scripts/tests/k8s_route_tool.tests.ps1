@@ -24,7 +24,7 @@ foreach ($node in $script:RouteToolAst.FindAll({ param($a) $a -is [Management.Au
     Set-Item -Path "Function:script:$($node.Name)" -Value $node.Body.GetScriptBlock()
 }
 foreach ($name in @('Get-RouteToolContract', 'Get-RouteToolArgErrors', 'New-RouteToolRunId', 'ConvertTo-RouteToolArgsYaml', 'New-RouteToolJobManifest',
-        'Split-RouteToolLog', 'Resolve-RouteToolExitCode', 'Get-RouteToolJobPhase', 'Invoke-RouteTool')) {
+        'Split-RouteToolLog', 'Resolve-RouteToolExitCode', 'Get-RouteToolJobPhase', 'Invoke-RouteTool', 'Save-RouteToolSummary', 'Save-RouteToolReportText')) {
     if (-not (Test-Path "Function:$name")) { throw "k8s_route_tool.ps1 缺少函数 $name(后续断言无意义)" }
 }
 
@@ -317,12 +317,83 @@ Test-Case '子进程非法参数:退出码 2、点名原因,在任何 kubectl �
     }
 }
 
-Test-Case '脚本入口:函数之外只有参数、$ErrorActionPreference、两个路径变量、dot-source 与入口两行;入口以 Invoke-RouteTool 的返回值作退出码' {
+Test-Case '脚本入口:函数之外只有参数、$ErrorActionPreference、两个路径变量、dot-source 与入口两条;入口以 Invoke-RouteTool 的返回值作退出码,未预料的异常兜成 2' {
     $statements = @($script:RouteToolAst.EndBlock.Statements | Where-Object { $_ -isnot [Management.Automation.Language.FunctionDefinitionAst] })
     $texts = @($statements | ForEach-Object { $_.Extent.Text })
     Assert-Equal -Expected 6 -Actual $statements.Count -Because "函数之外只有 6 条语句(主流程不得漏在入口里,测不到):$($texts -join ' || ')"
-    Assert-Equal -Expected '$exitCode = Invoke-RouteTool' -Actual $texts[4] -Because '入口调用 Invoke-RouteTool'
+    Assert-Match -Text $texts[4] -Pattern '^try\s*\{\s*\$exitCode = Invoke-RouteTool\s*\}\s*catch\s*\{' -Because '入口调用 Invoke-RouteTool,外面包一层 try(review B3-7 / OPS-5)'
+    Assert-Match -Text $texts[4] -Pattern '\$exitCode = \(Get-RouteToolContract\)\.ExitFailed' -Because '未预料的异常按本脚本自己的失败(2)退出:pwsh -File 下未捕获异常是 1,与「完成但需要人工处理」撞号'
     Assert-Equal -Expected 'exit ([int]$exitCode)' -Actual $texts[5] -Because '以主流程返回值作退出码(0/1/2/3 原样)'
+}
+
+# ─── 退出码兜底(review B3-7 / OPS-5):本脚本自己的失败一律 2,Job 之后的落盘失败不盖掉容器退出码 ───
+
+# 在本进程里调 Invoke-RouteTool:它按动态作用域读脚本参数,这里在调用方作用域给全;调用方作用域里定义的同名函数就是替身。
+# 返回 { Codes(返回值,应恰好一个);Text(Write-Host 与 Write-Warning 合并)}。
+function Invoke-RouteToolInProcess {
+    param([Parameter(Mandatory = $true)][hashtable]$Variables)
+    foreach ($name in $Variables.Keys) { Set-Variable -Name $name -Value $Variables[$name] }
+    $items = @(Invoke-RouteTool 3>&1 6>&1)
+    $isStream = { param($item) $item -is [Management.Automation.InformationRecord] -or $item -is [Management.Automation.WarningRecord] }
+    $codes = @($items | Where-Object { -not (& $isStream $_) } | ForEach-Object { [string]$_ })
+    $text = (@($items | Where-Object { & $isStream $_ } | ForEach-Object { [string]$_ })) -join "`n"
+    return [pscustomobject]@{ Codes = ($codes -join ','); Text = $text }
+}
+
+Test-Case 'Invoke-RouteTool:Job 模板读不到时返回 2 并点名原因,不 throw 到入口、不调用 kubectl、不建报告目录(DryRun 与真跑同口径)' {
+    $missingRoot = Join-Path ([IO.Path]::GetTempPath()) ('route-tool-no-template-' + [guid]::NewGuid().ToString('N'))
+    $kubectlCalls = [System.Collections.Generic.List[string]]::new()
+    function Invoke-RouteToolKubectlChecked { param([string[]]$Arguments, [string]$What) $kubectlCalls.Add($Arguments -join ' '); return '' }
+    function Invoke-RouteToolKubectl { param([string[]]$Arguments, [int]$TimeoutSeconds) $kubectlCalls.Add($Arguments -join ' '); return [pscustomobject]@{ TimedOut = $false; ExitCode = 0; Output = ''; ErrorOutput = '' } }
+    foreach ($dry in @($true, $false)) {
+        $r = Invoke-RouteToolInProcess -Variables @{ RepoRoot = $missingRoot; RouteToolArgs = @('audit'); ZoneName = 'z1'; NamespacePrefix = 'mmorpg-zone'; Image = ''
+            TimeoutSeconds = 2400; ReportDir = ''; DryRun = $dry; KubeContext = ''; KubeConfig = '' }
+        Assert-Equal -Expected '2' -Actual $r.Codes -Because "DryRun=${dry}:模板读不到是本脚本自己的失败,返回 2(以前 throw 出去,pwsh -File 下是 1)。输出: $($r.Text)"
+        Assert-Match -Text $r.Text -Pattern 'cannot read the Job template, nothing was created' -Because "DryRun=${dry}:点名原因,并说明什么都没建"
+    }
+    Assert-Equal -Expected 0 -Actual $kubectlCalls.Count -Because '模板读不到时在任何 kubectl 之前返回'
+    Assert-True -Condition (-not (Test-Path -LiteralPath $missingRoot)) -Because '不建报告目录'
+}
+
+Test-Case 'Invoke-RouteTool:Job 跑完、容器退出 3 之后 stdout.txt / stderr.txt / summary.txt 都写不了:只告警,仍返回 3,done 一行照常打出' {
+    $c = Get-RouteToolContract
+    $runId = '20261022-120000-00ab'
+    # Get-Command kubectl -CommandType Application 要找得到一个 kubectl;真正的 kubectl 调用全部经下面的替身函数,假 kubectl 一次都不该被调。
+    $fake = New-FakeKubectlDir
+    $report = Join-Path $fake 'report'
+    # 三个报告文件的位置先建成同名目录:WriteAllText 在 Windows / Linux 上都必然失败(确定、可重复,不靠磁盘满)。
+    foreach ($name in @('stdout.txt', 'stderr.txt', 'summary.txt')) { $null = New-Item -ItemType Directory -Force -Path (Join-Path $report $name) }
+    $kubectlCalls = [System.Collections.Generic.List[string]]::new()
+    function New-RouteToolRunId { param($Now, $Random) return '20261022-120000-00ab' }
+    function Invoke-RouteToolKubectlChecked { param([string[]]$Arguments, [string]$What) $kubectlCalls.Add($Arguments -join ' '); return '' }
+    function Get-ActiveRouteToolJobs { return @() }
+    function Get-RouteToolJobState { param($Namespace, $JobName) return [pscustomobject]@{ Phase = 'complete'; Reason = ''; Uid = 'uid-1' } }
+    function Get-RouteToolPodResult { param($Namespace, $JobName, $JobUid) return [pscustomobject]@{ PodName = 'route-tool-pod'; ExitCode = 3; Reason = 'Completed' } }
+    function Invoke-RouteToolKubectl {
+        param([string[]]$Arguments, [int]$TimeoutSeconds)
+        $kubectlCalls.Add($Arguments -join ' ')
+        $log = "merge fence active`n" + ($c.StdoutBeginFormat -f $runId) + "`nroute_audit total=3`n`n" + ($c.StdoutEndFormat -f $runId) + "`n"
+        return [pscustomobject]@{ TimedOut = $false; ExitCode = 0; Output = $log; ErrorOutput = '' }
+    }
+    $savedPath = $env:PATH
+    try {
+        $env:PATH = "$fake$([IO.Path]::PathSeparator)$env:PATH"
+        $r = Invoke-RouteToolInProcess -Variables @{ RepoRoot = (Get-RepoRoot); RouteToolArgs = @('audit'); ZoneName = 'z1'; NamespacePrefix = 'mmorpg-zone'
+            Image = 'ghcr.io/luyuancpp/mmorpg-data-service:0123456789ab'; TimeoutSeconds = 2400; ReportDir = $report; DryRun = $false; KubeContext = ''; KubeConfig = '' }
+        Assert-Equal -Expected '3' -Actual $r.Codes -Because "容器退出码 3(有生效的合服围栏)必须原样返回,报告写不了也不能盖成 2 或 1。输出: $($r.Text)"
+        Assert-Match -Text $r.Text -Pattern 'could not write [^\n]*stdout\.txt' -Because 'stdout.txt 写不了要告警'
+        Assert-Match -Text $r.Text -Pattern 'could not write [^\n]*stderr\.txt' -Because 'stderr.txt 写不了要告警'
+        Assert-Match -Text $r.Text -Pattern 'could not write [^\n]*summary\.txt' -Because 'summary.txt 写不了要告警'
+        Assert-Match -Text $r.Text -Pattern 'done: job_phase=complete container_exit=3 verdict=merge-fence-active exit=3 ' -Because 'done 一行照常打出,运维在控制台看得到 3'
+        Assert-Match -Text $r.Text -Pattern 'route_audit total=3' -Because '统计行照常打到控制台'
+        Assert-True -Condition (Test-Path -LiteralPath (Join-Path $report 'manifest.yaml') -PathType Leaf) -Because 'apply 之前写的清单照常落盘(apply 读的就是它)'
+        Assert-Equal -Expected 1 -Actual @($kubectlCalls | Where-Object { $_ -like 'apply -n mmorpg-zone-z1 -f *' }).Count -Because '夹具前提:走到了 apply'
+        Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $fake 'calls.txt'))) -Because '夹具前提:kubectl 调用全部经替身函数,假 kubectl 没被直接调用'
+    }
+    finally {
+        $env:PATH = $savedPath
+        Remove-Item -LiteralPath $fake -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 exit (Complete-TestRun -SuiteName 'k8s_route_tool')

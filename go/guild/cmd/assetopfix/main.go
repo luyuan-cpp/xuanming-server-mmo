@@ -20,7 +20,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -39,8 +38,11 @@ import (
 	"guild/internal/config"
 	"guild/internal/data"
 	assetpb "proto/common/asset"
+	databasepb "proto/common/database"
 	pb "proto/guild"
 	"shared/assetop"
+	"shared/authoritysql"
+	"shared/drainproof"
 )
 
 const (
@@ -111,6 +113,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	global.SetOutput(stderr)
 	global.Usage = func() { fmt.Fprint(stderr, usageText) }
 	configFile := global.String("f", "etc/guild.yaml", "guild 服务的配置文件(与服务进程同一份)")
+	drainPlan := global.String("maintenance-drain-plan", "", "本boot正式排空runtime原件")
+	drainDir := global.String("maintenance-drain-dir", "", "本boot固定私有排空目录")
+	drainSHA := global.String("maintenance-drain-sha256", "", "runtime原件固定SHA256")
 	if err := global.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return exitOK
@@ -130,7 +135,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if !ok {
 			return exitRejected
 		}
-		return withStore(*configFile, stderr, func(ctx context.Context, store *data.GuildAssetStore) int {
+		return withStore(*configFile, true, *drainPlan, *drainDir, *drainSHA, stderr, func(ctx context.Context, store *data.GuildAssetStore) int {
 			return runList(ctx, store, opts, stdout, stderr)
 		})
 	case "resolve":
@@ -138,7 +143,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if !ok {
 			return exitRejected
 		}
-		return withStore(*configFile, stderr, func(ctx context.Context, store *data.GuildAssetStore) int {
+		return withStore(*configFile, false, *drainPlan, *drainDir, *drainSHA, stderr, func(ctx context.Context, store *data.GuildAssetStore) int {
 			return runResolve(ctx, store, opts, stdout, stderr)
 		})
 	default:
@@ -149,7 +154,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 }
 
 // withStore 加载配置、按配置初始化日志、连 MySQL 与缓存 Redis,把 Store 交给 fn,返回 fn 的退出码。
-func withStore(configPath string, stderr io.Writer, fn func(ctx context.Context, store *data.GuildAssetStore) int) int {
+func withStore(configPath string, readOnly bool, plan, directory, digest string, stderr io.Writer, fn func(ctx context.Context, store *data.GuildAssetStore) int) (result int) {
 	var c config.Config
 	// conf.Load 会跑 config.Validate(与服务进程同一套校验);其错误文案不含 DSN 原文。
 	if err := conf.Load(configPath, &c); err != nil {
@@ -167,27 +172,90 @@ func withStore(configPath string, stderr io.Writer, fn func(ctx context.Context,
 
 	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
 	defer cancel()
-	store, closeDeps, err := openStore(ctx, c)
+	permission := authoritysql.Reader()
+	var writer authoritysql.WriterConfig
+	if !readOnly {
+		var err error
+		writer, err = authoritysql.LoadWriterConfig(os.Getenv)
+		if err != nil {
+			fmt.Fprintln(stderr, "NORMAL工具启动身份无效:", err)
+			return exitError
+		}
+		permission = authoritysql.Writer(writer)
+		defer writer.Seal()
+	}
+	var runtime *drainproof.Runtime
+	source, relay := drainproof.New(), drainproof.New()
+	if plan != "" || directory != "" || digest != "" {
+		if readOnly {
+			fmt.Fprintln(stderr, "只读list不参加写者闭合发行")
+			return exitRejected
+		}
+		var err error
+		runtime, err = drainproof.LoadRuntime(plan, directory, digest)
+		if err != nil || runtime.Request.RunPhase >= databasepb.SqlWriterDrainRun_SQL_FROZEN || runtime.Seed("SOURCE") == nil || runtime.Seed("RELAY") == nil {
+			fmt.Fprintln(stderr, "有限NORMAL工具缺同boot SOURCE/RELAY原件")
+			return exitError
+		}
+		if err = runtime.BindBoot(writer.InstanceID(), writer.WriterKey()); err != nil {
+			fmt.Fprintln(stderr, err)
+			return exitError
+		}
+	}
+	accepted, err := source.Enter()
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return exitError
+	}
+	source.CloseAdmission()
+	store, closeDeps, err := openStore(ctx, c, permission, relay)
 	if err != nil {
 		fmt.Fprintf(stderr, "%v\n", err)
 		return exitError
 	}
-	defer closeDeps()
-	return fn(ctx, store)
+	completed := false
+	defer func() {
+		if !completed || result == exitError {
+			source.Hold()
+		}
+		accepted()
+		// 命令返回后仍等真实缓存重试结束，不能拿即将退出进程代替闭合报告。
+		closeCtx, cancelClose := context.WithTimeout(context.Background(), opTimeout)
+		defer cancelClose()
+		if err := closeDeps(closeCtx); err != nil {
+			source.Hold()
+			fmt.Fprintln(stderr, "工具资源闭合失败，保持HOLD:", err)
+			result = exitError
+			return
+		}
+		if runtime != nil {
+			if err := runtime.Write("SOURCE", source); err != nil {
+				fmt.Fprintln(stderr, err)
+				result = exitError
+				return
+			}
+			if err := runtime.Write("RELAY", relay); err != nil {
+				fmt.Fprintln(stderr, err)
+				result = exitError
+			}
+		}
+	}()
+	result = fn(ctx, store)
+	completed = true
+	return result
 }
 
 // openStore 只建 MySQL + 缓存 Redis → GuildRepo → GuildAssetStore。
 //
 // Redis 连不上就拒绝执行(list 也一样,只为少一条分支):终结会改帮会资金与成员帮贡,
 // 缓存失效失败时服务会继续按旧缓存显示,直到 Cache.DefaultTTL 过期。
-// 已知限制:缓存失效的**后台重试**(100/400/1600ms)在本进程退出时会被截断;首次失效是同步的,
-// Redis 健康时它就足够。
-func openStore(ctx context.Context, c config.Config) (*data.GuildAssetStore, func(), error) {
+// 后台缓存重试由同boot角色持有，真实返回后才关闭连接池。
+func openStore(ctx context.Context, c config.Config, permission authoritysql.Permission, relay *drainproof.Session) (*data.GuildAssetStore, func(context.Context) error, error) {
 	dsn, err := data.WithLockWaitTimeout(c.MySQL.DataSource)
 	if err != nil {
 		return nil, nil, err // 该错误本身不含 DSN 原文(DSN 带口令)
 	}
-	db, err := sql.Open("mysql", dsn)
+	db, err := authoritysql.Open(ctx, dsn, data.DatabaseName, c.MySQL.RequiresTiDB(), 2, permission)
 	if err != nil {
 		return nil, nil, errors.New("打开 MySQL 失败(DSN 含口令,不打印原错误)")
 	}
@@ -211,15 +279,34 @@ func openStore(ctx context.Context, c config.Config) (*data.GuildAssetStore, fun
 	}
 
 	repo := data.NewGuildRepo(rdb, db, c.Cache.DefaultTTL)
+	if err := repo.BindPublication(relay); err != nil {
+		_ = rdb.Close()
+		_ = db.Close()
+		return nil, nil, err
+	}
 	store, err := data.NewGuildAssetStore(repo)
 	if err != nil {
 		_ = rdb.Close()
 		_ = db.Close()
 		return nil, nil, fmt.Errorf("构造 GuildAssetStore 失败: %w", err)
 	}
-	return store, func() {
-		_ = rdb.Close()
-		_ = db.Close()
+	return store, func(closeCtx context.Context) error {
+		frontier, publicationErr := repo.ClosePublication(closeCtx)
+		if err := relay.WaitIdle(closeCtx); err != nil {
+			return errors.Join(publicationErr, err)
+		}
+		if publicationErr != nil {
+			relay.Hold()
+		} else if err := relay.MergeSettled(frontier); err != nil {
+			publicationErr = err
+			relay.Hold()
+		}
+		redisErr, sqlErr := rdb.Close(), db.Close()
+		if redisErr != nil || sqlErr != nil {
+			relay.Hold()
+		}
+		relay.CloseAdmission()
+		return errors.Join(publicationErr, redisErr, sqlErr, relay.Wait(closeCtx))
 	}, nil
 }
 

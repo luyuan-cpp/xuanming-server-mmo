@@ -24,6 +24,7 @@
 // 线程模型:所有方法都必须在 scene 节点 loop 线程调用(gRPC 入口:muduo_grpc 服务端在 loop 线程上派发)。
 
 #include <cstdint>
+#include <string>
 
 #include "entt/src/entt/entity/entity.hpp"
 #include "engine/core/type_define/type_define.h"
@@ -51,10 +52,16 @@ class BattleSettlementEvent;
 class BattleConfirmedEvent;
 class BattleSettlementData;
 class BattlePlayerSnapshot;
+struct PlayerInboxExecResult;
 
 class PlayerBattleSystem
 {
 public:
+	// v1只由Match持久Inbox投递；效果与Inbox永久域水位同快照提交，不碰legacy有限账本。
+	// 暂缺任一已实现效果的前置条件时整笔DEFER零副作用；未知嵌套字段按版本错位拒执行。
+	static PlayerInboxExecResult ApplyInboxSettlement(entt::entity player, const std::string& payload);
+	// 仅在原完整快照经同E/q双SQL ACK确认后调用；不重复效果，不动另一局冻结。
+	static bool CompleteInboxSettlement(entt::entity player, const std::string& payload);
 	// match -> scene:冻结玩家并返回战斗快照。
 	// 校验:在线(实体在本节点且有 gate 会话)/ 无 InBattleComp / 无换图在途
 	// (PlayerLifecycleSystem::IsSceneChangeBusy:交接冻结、普通 EnterScene / 镜像建场景应答未回等,回 kFeatureUnavailable)。
@@ -144,7 +151,7 @@ private:
 	// 实体缺结算幂等账本(BattleSettlementLedgerComp,加载时挂上的必需组件)时返回 false 且零副作用:
 	// 判不了这一局应用过没有,整笔不应用、pending 保留;本函数不会补建账本。
 	static bool ApplySettlementToEntity(entt::entity player, const ::BattleSettlementData& settlement,
-										bool* alreadyAppliedOut = nullptr);
+										bool* alreadyAppliedOut = nullptr, bool fromInbox = false);
 
 	// 战斗中换会话 / 登录重建为 FIGHTING:经大厅会话推 BattleReconnectS2C{battle_id}
 	// (scene→gate TCP,不经 Kafka)。gate 不中继战斗,没有绑定要重建(turn-based §22 D72);

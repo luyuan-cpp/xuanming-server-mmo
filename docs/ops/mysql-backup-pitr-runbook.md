@@ -382,6 +382,17 @@ Redis 为权威且实例分离时使用 `-routing-mode redis-split`，去掉 `-r
 
 正常迁移必须先为两张玩家表建立 `persist_schema_gen` 的 int unsigned / NOT NULL / DEFAULT 0 列。缺列、NULL及非规范uint32会拒绝，不得靠临时补测试列冒充迁移已完成。工具从同一事务已经点锁的两行取最大世代，历史0的有效floor为1；缺hash时建立floor，已有合法floor只升不降，SQL原戳和全部资产列不改。SQL原始戳仍进入全列摘要；增列或0→1等原字节变化后，须重新生成并审查计划，不能手改计划或以有效世代相同为由忽略漂移。该floor不加入可编辑计划字段。
 
+### 2026-10-22 口径变更：`schema_gen` 改为两行最小值、以 SQL 为准覆盖（未编译、真实环境未验）
+
+上一节"取两行最大世代、已有 floor 只升不降"已作废（`docs/design/mixed-version-persist-field-protection.md` §13 第 8 条）。原因：scene 严格屏障（C3）与 login 快路径（C4）比较的"加载世代"是两表戳的**最小值**；恢复写最大值或保留更高的旧值时，两行戳不同（单表进过死信）或 hash 曾被一次没落进 SQL 的写抬高的玩家，恢复后第一次进游戏与存盘都会被判倒退，enforce 下既进不来也存不了——而恢复本身就是倒退的处置手段。现行口径：
+
+- 写入 `schema_gen = max(1, 两行戳的最小值)`（0 按 1），即恢复后冷加载出的数据的加载世代；
+- hash 里已有的 `schema_gen` 只是索引，一律覆盖，格式损坏也不再拒绝；
+- 字段白名单另接受 `schema_writer` / `schema_regressed`（scene 写入的写方令牌与 warn 倒退证据），写入时两者一并删除，之后任何写方的第一次存盘都重新比较；
+- 其余拒绝条件不变（未知字段、未裁决 outbox、缺精确 ACK、TTL、停写与路由冻结）。
+
+代价：两行戳不同的那名玩家，较高那张表里新世代字段的数据会在下一次整行写时按较低世代重写——这正是"以 SQL 为准恢复"接受的损失；执行前在工单里写明受影响玩家。
+
 当前证据仅为私有接缝RED→GREEN：旧实现真实7子例失败；其中4条缺floor断言、3条合法第四字段预检拒绝。最初收据器错误地要求7条require ErrorTrace并停止，该首错/原生exit1原件保留，逐例补充解释后不重跑RED。修复后22顶层单元（含子项103条）与CLI5均通过、0skip，两包vet和CLI build退出0，751输入与22046实际依赖首终无漂移；正规应用7手写路径后canonical与私有GREEN全751相同。原件 `build/verification/barrierrestore-schema-gen-candidate-20261019T093721030724Z/root-unit-preparation/green-after-red-20261019T104347472Z-416cfbdf/proof.json`，SHA `60585D50533B5E5E7E0D0BBFD4C2E25886D90270E26ECA6964343B8F16EDF6AB`。
 
 新增真实TiDB/独立Redis组合尚未执行，原64项真库成绩只绑定旧来源，不作为本批通过。C++ C3写抬floor和login C4读比较仍未实施；本工具格式兼容不能证明混版本世代防倒退已完成。真实双区旧实例复活、延迟SQL ACK、全链放流及灾备验收继续维持未完成。

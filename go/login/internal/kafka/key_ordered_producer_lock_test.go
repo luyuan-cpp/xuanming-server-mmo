@@ -45,8 +45,8 @@ func TestSendTaskLeaderNotAvailableDoesNotDeadlock(t *testing.T) {
 	done := make(chan result, 1)
 	go func() {
 		var r result
-		r.first = p.SendTask(context.Background(), &db_proto.DBTask{TaskId: "lock-1", Key: 42, Op: "read"}, "42")
-		r.second = p.SendTask(context.Background(), &db_proto.DBTask{TaskId: "lock-2", Key: 42, Op: "read"}, "42")
+		r.first = p.SendTask(context.Background(), &db_proto.DBTask{TaskId: "lock-1", Key: 42, Op: db_proto.DBOp_DB_OP_READ}, "42")
+		r.second = p.SendTask(context.Background(), &db_proto.DBTask{TaskId: "lock-2", Key: 42, Op: db_proto.DBOp_DB_OP_READ}, "42")
 		done <- r
 	}()
 

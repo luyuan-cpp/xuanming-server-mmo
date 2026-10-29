@@ -18,7 +18,7 @@ Current project structure (active nodes: gate + scene + battle):
   - cpp/nodes/battle/    → battle executable
 
 On Linux, muduo comes from third_party/muduo-linux (NOT muduo_windows).
-gRPC/protobuf/abseil are installed to /usr/local via setup_dependencies.sh.
+Protobuf、Abseil 与独立 BoringSSL 由 setup_dependencies.sh 安装到 /usr/local。
 """
 
 import xml.dom.minidom
@@ -42,14 +42,16 @@ INCLUDE_REPLACEMENTS = [
     ("third_party/muduo;", "third_party/muduo-linux;"),
 ]
 
-# Include paths containing these will be dropped (headers come from /usr/local
-# on Linux after gRPC cmake install)
+# Linux 使用已安装的独立依赖头，不引用 Windows 构建目录或 Protobuf 的内部依赖树。
 SKIP_INCLUDE_PATTERNS = [
-    "third_party/grpc/include",
-    "third_party/grpc/third_party/protobuf/src",
-    "third_party/grpc/third_party/abseil-cpp",
-    "third_party/grpc/third_party/re2",
-    "third_party/grpc/third_party/utf8_range",
+    "third_party/protobuf/src",
+    "third_party/protobuf/third_party/utf8_range",
+    "third_party/protobuf/install_vs2026_",
+    "third_party/abseil-cpp",
+    "third_party/boringssl/install_vs2026_",
+    "third_party/googletest/install_vs2026_",
+    # Linux 只使用独立 BoringSSL，避免源码树中的 OpenSSL 头遮蔽同名安装头。
+    "third_party/openssl/include",
     # Windows 上 build_nghttp2.ps1 的安装目录;Linux 的 nghttp2 头由 setup_dependencies.sh
     # 装到 /usr/local/include(下面每个工程都会加这一项)。
     "third_party/nghttp2/install_vs2026_dbg",
@@ -59,8 +61,7 @@ SKIP_INCLUDE_PATTERNS = [
 # Libraries that have CMake find_package support use CMake target names.
 # Others use plain names (resolved via link_directories).
 EXTERNAL_LIBS = [
-    # gRPC + protobuf (CMake imported targets from find_package)
-    "gRPC::grpc++", "gRPC::grpc++_reflection", "gRPC::grpc", "gRPC::gpr",
+    # 独立 Protobuf 的导出目标同时携带所需 Abseil / utf8_range 依赖。
     "protobuf::libprotobuf",
     # nghttp2 静态核心库(setup_dependencies.sh 第 8 段装到 /usr/local/lib/libnghttp2.a),
     # 供 muduo_grpc 使用;排在 --end-group 之后,组内的 muduo_grpc 引用都能解析到。
@@ -72,12 +73,14 @@ EXTERNAL_LIBS = [
     "-Wl,--exclude-libs,libnghttp2.a",
     "nghttp2",
     # muduo (from muduo-linux cmake build, no find_package)
-    "muduo_protobuf_codec", "muduo_hiredis", "muduo_net", "muduo_base",
+    # muduo_http:C++ 节点的 Prometheus 出口(core/metrics/metrics_http_exporter.cpp)用 muduo 自带的 HttpServer;
+    # 它依赖 muduo_net,必须排在 muduo_net 之前。
+    "muduo_protobuf_codec", "muduo_hiredis", "muduo_http", "muduo_net", "muduo_base",
     # other third-party (installed to /usr/local/lib)
     "rdkafka++", "rdkafka",
     "yaml-cpp", "hiredis", "curl",
-    # TLS 显式使用 gRPC 同套静态目标，避免裸库名解析到系统共享库而混用两套 ABI。
-    "z", "zstd", "gRPC::SSL", "gRPC::Crypto",
+    # 显式使用独立 BoringSSL 静态导出目标，避免混入系统 OpenSSL 的同名库。
+    "z", "zstd", "OpenSSL::SSL", "OpenSSL::Crypto",
     # system
     "pthread", "dl",
 ]
@@ -127,6 +130,22 @@ def parse_vcxproj(vcxproj_file):
     include_dirs = []
 
     xmldoc = xml.dom.minidom.parse(vcxproj_file)
+    # 这是构建入口的边界检查，防止历史工程项在下一次导出时重新带回官方 SDK。
+    for name in ("AdditionalIncludeDirectories", "AdditionalLibraryDirectories"):
+        for item in xmldoc.getElementsByTagName(name):
+            if item.firstChild and "third_party/grpc" in item.firstChild.data.replace("\\", "/").lower():
+                raise ValueError("工程仍引用官方 gRPC SDK: %s" % vcxproj_file)
+            if item.firstChild and "protobuf/third_party/abseil-cpp" in item.firstChild.data.replace("\\", "/").lower():
+                raise ValueError("工程仍引用已拆出的嵌套 Abseil 路径: %s" % vcxproj_file)
+    for item in xmldoc.getElementsByTagName("AdditionalDependencies"):
+        if not item.firstChild:
+            continue
+        for library in item.firstChild.data.lower().split(";"):
+            library = library.strip()
+            if (library in {"gpr.lib", "cares.lib", "address_sorting.lib", "re2.lib", "utf8_range_lib.lib"}
+                    or library.startswith("upb_")
+                    or (library.startswith("grpc") and library != "grpc_client.lib")):
+                raise ValueError("工程仍链接官方 gRPC 库: %s: %s" % (vcxproj_file, library))
     for root_node in xmldoc.childNodes:
         for sub_node in root_node.childNodes:
             # Source files
@@ -136,6 +155,8 @@ def parse_vcxproj(vcxproj_file):
                         attrs = item.attributes
                         if "Include" in attrs.keys():
                             path = attrs["Include"].value.replace("\\", "/")
+                            if path.endswith((".grpc.pb.cc", ".grpc.pb.cpp")):
+                                raise ValueError("工程仍编译官方 gRPC 生成代码: %s" % vcxproj_file)
                             source_files.append(path)
 
             # Include directories — merge from ALL ItemDefinitionGroups
@@ -268,7 +289,7 @@ def write_cmake(vcxproj_dir, project_name, source_files, include_dirs, target_ty
         transformed = transform_include_for_linux(inc)
         if transformed:
             linux_includes.append(transformed)
-    # Always include /usr/local/include for installed gRPC/protobuf headers
+    # 独立 Protobuf、Abseil 与 BoringSSL 的安装头。
     linux_includes.append("/usr/local/include")
     # Common third-party header paths that MSVC propagates from parent projects
     # but CMake does not.  Add them globally so every target can find them.
@@ -308,10 +329,10 @@ def write_cmake(vcxproj_dir, project_name, source_files, include_dirs, target_ty
             lines.append("add_library(%s INTERFACE)" % project_name)
     else:
         # Executable
-        # find_package for installed deps (gRPC cmake install provides these)
+        # 三个依赖各自安装，构建不再查找官方 gRPC SDK。
         lines.append("find_package(absl CONFIG REQUIRED)")
         lines.append("find_package(protobuf CONFIG REQUIRED)")
-        lines.append("find_package(gRPC CONFIG REQUIRED)")
+        lines.append("find_package(OpenSSL CONFIG REQUIRED PATHS /usr/local/lib/cmake/OpenSSL NO_DEFAULT_PATH)")
         lines.append("")
 
         # link_directories must come before add_executable

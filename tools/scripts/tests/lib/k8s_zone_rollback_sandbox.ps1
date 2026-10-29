@@ -12,6 +12,8 @@
     假 kubectl 对第 0 步 f 部署快照与 Step 1 之后 namespace 检查的回应、假 Start-Sleep(只记账不等),以及按调用顺序记下全部下游的时间线。
     同日回档复核修正版另加:假工具的 -version 与 -expect-run-id 核对、假 kubectl 对 redis-0 INFO server 的回应、Step 4a 之后才生效的
     namespace / --state 回应(模拟 PITR 期间写者回来),以及 New-RollbackDeploySnapshotReply 的 -GroupLines(final(Z) / 交接形状)与 -DbImage。
+    2026-10-22(B0-4 第 0 步 nofile 核对)另加:假 dev_tools.ps1 的 -NodeOpenFileLimitMode、假 k8s_deploy.ps1 的同名默认值、
+    假 kubectl 对 Agones 探测与 scene Fleet 读取的回应;沙箱缺省显式传 -NodeOpenFileLimitMode enforce(见该参数)。
 #>
 
 Set-StrictMode -Off
@@ -115,7 +117,7 @@ function New-RollbackLoginConfigMapReply {
     DevToolsCalls 按调用顺序;DevToolsBound 每次调用一行 "<命令> 参数=值;…"(按参数名排序,不含 Command 与 DryRun);
     KafkaResetBound 每次调用一行 "参数=值;…"(按参数名排序);DiscardCalls 每次调用一行 "<模式> <argv 以空格拼接>";
     Timeline 是全部下游按调用先后的统一记录("dev_tools:<命令>"、"reset:apply|dry-run"、"tool:<模式>|version"、"kafka-cg:<组>[:state]"、
-    "get-offsets"、"kubectl:entry|exec|snapshot|namespace|redis|login-auth"、"sleep")。
+    "get-offsets"、"kubectl:entry|exec|snapshot|namespace|redis|login-auth|agones|fleet"、"sleep")。
 
 .PARAMETER ExtraArgs
     额外传给被测脚本的具名参数;值为 $null 的键表示从缺省参数里去掉它(如 @{ RedisHost = $null } 测 E3)。
@@ -166,6 +168,21 @@ function New-RollbackLoginConfigMapReply {
 .PARAMETER NamespaceReplyAfterInventory / KafkaStateOutputAfterInventory
     Step 4a 盘点之后(假工具记下 inventory 之后)的 namespace 检查回应与 --state 回应(@{ <组名> = @{ Lines; ExitCode } }),
     用来模拟 PITR 期间 namespace 被重建、zone 组又活跃(回档复核 [8]);缺省同 NamespaceReply / KafkaStateOutput。
+
+.PARAMETER NodeOpenFileLimitMode
+    传给被测脚本的 -NodeOpenFileLimitMode(B0-4,2026-10-22)。缺省 'enforce' = 显式给值,第 0 步 a 不核对 nofile 模式:
+    这道核对在留空时要读集群(gate / scene 与 Agones Fleet),已有用例关心的是别的步骤,不该因它多读集群或被拒。
+    测这道核对的用例传空串(留空,不传给被测脚本)。
+
+.PARAMETER DeployOpenFileLimitDefault
+    假 k8s_deploy.ps1 的 -NodeOpenFileLimitMode 默认值(被测脚本按语法树读它);缺省空串(同真脚本:不写 env,进程按 enforce)。
+    'missing' = 假脚本不声明这个参数,被测脚本读不到默认值。-DeployDefault real 时用真脚本,本参数不起作用。
+
+.PARAMETER AgonesDiscoveryReply / SceneFleetReply
+    第 0 步 a nofile 核对读的两次 kubectl(lib Test-AgonesFleetCrdPresent 的 get --raw /apis/agones.dev/v1,与 Get-ClusterSceneFleets 的
+    get fleets.agones.dev …)的回应 @{ ExitCode; Stdout; Stderr }(Stderr 以 ErrorRecord 写出,同真 kubectl 的 stderr),或 @{ Throw = '…' }。
+    探测缺省 = 组未注册(NotFound,没装 Agones),于是不读 Fleet;Fleet 缺省 = 本用例不该读。两次调用单独记账(AgonesCalls,时间线
+    "kubectl:agones" / "kubectl:fleet"),不进 KubectlCalls。
 #>
 function Invoke-RollbackInSandbox {
     param(
@@ -199,6 +216,12 @@ function Invoke-RollbackInSandbox {
         [hashtable]$KafkaStateOutputAfterInventory = @{},
         [hashtable]$LoginConfigMapReply = $null,
         [hashtable]$LoginOAuthSecretReply = @{ ExitCode = 0; Output = '' },
+        # 取值 '' / enforce / warn;不加 ValidateSet,空串由用例显式传入(被测脚本自己的 ValidateSet 才是要测的入口校验)。
+        [AllowEmptyString()][string]$NodeOpenFileLimitMode = 'enforce',
+        # 取值 '' / enforce / warn / missing。
+        [AllowEmptyString()][string]$DeployOpenFileLimitDefault = '',
+        [hashtable]$AgonesDiscoveryReply = @{ ExitCode = 1; Stderr = 'Error from server (NotFound): the server could not find the requested resource' },
+        [hashtable]$SceneFleetReply = @{ Throw = '本用例不该读 scene Fleet' },
         [switch]$Apply
     )
 
@@ -244,15 +267,19 @@ function Invoke-RollbackInSandbox {
             Copy-Item -LiteralPath (Join-Path $toolsDir 'k8s_deploy.ps1') -Destination $sandboxDir
         }
         else {
-            Set-Content -LiteralPath (Join-Path $sandboxDir 'k8s_deploy.ps1') -Encoding utf8 -Value @(
-                'param(',
+            $paramLines = @(
                 '    [ValidateSet("0", "1")]',
                 ('    [string]$GateRouterMode = "{0}",' -f $DeployDefault),
                 '    [ValidateSet("podip", "external")]',
-                ('    [string]$ClientEntryMode = "{0}"' -f $DeployEntryDefault),
-                ')',
-                'throw "假 k8s_deploy.ps1 只供预检读默认值,不该被执行"'
+                ('    [string]$ClientEntryMode = "{0}"' -f $DeployEntryDefault)
             )
+            # -NodeOpenFileLimitMode 的默认值同真脚本写成字符串字面常量;'missing' 时不声明,模拟读不到默认值。
+            if ($DeployOpenFileLimitDefault -cne 'missing') {
+                $paramLines[-1] += ','
+                $paramLines += @('    [ValidateSet("enforce", "warn", IgnoreCase = $false)]', ('    [string]$NodeOpenFileLimitMode = "{0}"' -f $DeployOpenFileLimitDefault))
+            }
+            Set-Content -LiteralPath (Join-Path $sandboxDir 'k8s_deploy.ps1') -Encoding utf8 -Value (
+                @('param(') + $paramLines + @(')', 'throw "假 k8s_deploy.ps1 只供预检读默认值,不该被执行"'))
         }
         $timeline = Join-Path $sandboxRoot 'timeline.txt'
         $timelineLiteral = $timeline.Replace("'", "''")
@@ -267,7 +294,7 @@ param($Command, $ZoneName, $ZoneId, $NodeImage, $NamespacePrefix, [switch]$WaitR
     $RequireClientEndpoint, [switch]$LoginDevPasswordAuth, [switch]$AllowDisruptiveSwitch, $GatewayIngressHost, $GatewayIngressClassName,
     $GatewayIngressTlsSecret, $GatewayTrustedProxies, $KubeContext, $KubeConfig, $DbConsumerGroup,
     $LoginWeChatAppId, $LoginWeChatEndpoint, [switch]$LoginWeChatAllowOpenId, $LoginQQAppId, $LoginQQEndpoint, [switch]$LoginQQAllowOpenId,
-    [switch]$ConfirmLoginAuthProviderChange, __INFRA_PARAM__[switch]$DryRun)
+    [switch]$ConfirmLoginAuthProviderChange, $NodeOpenFileLimitMode, __INFRA_PARAM__[switch]$DryRun)
 $label = if ($DryRun) { "$Command/dry-run" } else { $Command }
 Add-Content -LiteralPath '__CALLS__' -Encoding utf8 -Value "$label GateRouterMode=$GateRouterMode"
 Add-Content -LiteralPath '__TIMELINE__' -Encoding utf8 -Value "dev_tools:$label"
@@ -355,6 +382,7 @@ exit $code
         $fakeNamespaceCalls = [System.Collections.Generic.List[string]]::new()
         $fakeRedisExecCalls = [System.Collections.Generic.List[string]]::new()
         $fakeLoginAuthCalls = [System.Collections.Generic.List[string]]::new()
+        $fakeAgonesCalls = [System.Collections.Generic.List[string]]::new()
         if ($null -eq $LoginConfigMapReply) { $LoginConfigMapReply = New-RollbackLoginConfigMapReply }
         if ($null -eq $RedisInfoReply) {
             $RedisInfoReply = @{ ExitCode = 0; Output = @('# Server', 'redis_version:7.2.4', "run_id:$($script:RollbackSandboxRedisRunId)", 'tcp_port:6379') }
@@ -403,6 +431,22 @@ exit $code
                 }
                 $global:LASTEXITCODE = $loginAuthReply.ExitCode
                 return $loginAuthReply.Output
+            }
+            # 第 0 步 a:nofile 核对的 Agones 探测(lib Test-AgonesFleetCrdPresent)与 scene Fleet 读取(Get-ClusterSceneFleets),
+            # 都经 lib Invoke-ClientEntryKubectl(--context / --kubeconfig 在前)。单独记账,不进 KubectlCalls。
+            $isAgonesProbe = $kubectlArgList -ccontains '--raw'
+            if ($isAgonesProbe -or $kubectlArgList -ccontains 'fleets.agones.dev') {
+                $fakeAgonesCalls.Add(($kubectlArgList -join ' '))
+                Add-Content -LiteralPath $timeline -Encoding utf8 -Value $(if ($isAgonesProbe) { 'kubectl:agones' } else { 'kubectl:fleet' })
+                $agonesReply = if ($isAgonesProbe) { $AgonesDiscoveryReply } else { $SceneFleetReply }
+                if ($agonesReply.ContainsKey('Throw')) {
+                    throw [System.Management.Automation.CommandNotFoundException]::new($agonesReply.Throw)
+                }
+                # 同 k8s_client_entry_contract.tests.ps1 的 CRD 探测替身:stderr 以 ErrorRecord 写出,Invoke-ClientEntryKubectl 按类型分开收。
+                if ($agonesReply.Stderr) { Write-Error -Message $agonesReply.Stderr -ErrorAction Continue }
+                $global:LASTEXITCODE = $agonesReply.ExitCode
+                if ($agonesReply.Stdout) { return $agonesReply.Stdout }
+                return
             }
             # Step 1 之后与 Step 5 之前:namespace 是否已不存在。
             if ($kubectlArgList -ccontains 'namespace') {
@@ -505,6 +549,7 @@ exit $code
             BarrierProtocol     = 'legacy'
         }
         if ($GateRouterMode -ne '') { $rollbackArgs.GateRouterMode = $GateRouterMode }
+        if ($NodeOpenFileLimitMode -ne '') { $rollbackArgs.NodeOpenFileLimitMode = $NodeOpenFileLimitMode }
         foreach ($key in $ExtraArgs.Keys) {
             if ($null -eq $ExtraArgs[$key]) { $rollbackArgs.Remove($key) } else { $rollbackArgs[$key] = $ExtraArgs[$key] }
         }
@@ -549,6 +594,7 @@ exit $code
             NamespaceCalls     = @($fakeNamespaceCalls)
             RedisExecCalls     = @($fakeRedisExecCalls)
             LoginAuthCalls     = @($fakeLoginAuthCalls)
+            AgonesCalls        = @($fakeAgonesCalls)
             VersionCalls       = @(if (Test-Path -LiteralPath $discardVersions) { Get-Content -LiteralPath $discardVersions -Encoding utf8 })
             LeoCalls           = @($fakeLeoCalls)
             SleepCalls         = @($fakeSleepCalls)

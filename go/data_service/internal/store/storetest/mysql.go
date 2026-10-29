@@ -12,7 +12,7 @@
 // 为什么留环境变量覆盖:本地 docker MySQL(deploy/docker-compose.yml)的 appuser 只对
 // mmorpg / zone_*_db 有权限,没有全局 CREATE,建不了一次性库。此时用
 // DATA_SERVICE_IT_MYSQL_USER / DATA_SERVICE_IT_MYSQL_PASSWORD 指到 root 跑一次即可,
-// 不需要对容器做任何持久的授权改动。建库被拒(1044)时用例 Skip 并给出提示,不算失败。
+// 不需要对容器做任何持久的授权改动。已显式启用时，归属/权限/锁资格缺失均失败；不以 Skip 掩盖拒绝。
 package storetest
 
 import (
@@ -20,8 +20,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/luyuancpp/proto2mysql"
+	"google.golang.org/protobuf/proto"
 	"os"
 	"path/filepath"
+	pb "proto/common/database"
+	"shared/authoritysql"
+	"shared/authoritysql/sqltest"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -61,8 +66,11 @@ var dbCounter atomic.Uint32
 type DB struct {
 	// Name 库名。
 	Name string
-	// Cfg 指向本库的 store 连接参数,直接喂给 store.New*Store / store.MigrateSchema。
+	// Cfg 只交给 normal store；显式迁移经 DB.Migrate 使用 SchemaCfg。
 	Cfg store.MySQLConfig
+	// SchemaCfg 只交给显式迁移；在线Store只使用上面的normal配置。
+	SchemaCfg store.MySQLConfig
+	fixture   *sqltest.Fixture
 	// Raw 是一条已 USE 本库的管理连接,用于用例里的直接断言 / 造数据(种子行、查列)。
 	Raw *sql.DB
 }
@@ -73,71 +81,62 @@ type mysqlSection struct {
 	SnapshotMySQL config.SnapshotMySQLConfig `json:",optional"`
 }
 
-// NewEmptyDB 建一个空的一次性库(不建表),测试结束自动 DROP。
-// MySQL 连不上或没有建库权限时 Skip。
+// NewEmptyDB 创建只有正式writer目录和归属原件的自有测试库，业务表由显式迁移准备。
+// 显式夹具目标、权限或资格缺失时报错；不把拒绝访问冒充未启用测试。
 func NewEmptyDB(t *testing.T) *DB {
 	t.Helper()
-
 	host, user, password := resolveCredentials(t)
-	adminDSN := fmt.Sprintf("%s:%s@tcp(%s)/?parseTime=true&charset=utf8mb4", user, password, host)
-	admin, err := sql.Open("mysql", adminDSN)
-	if err != nil {
-		t.Fatalf("open admin connection: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
-	defer cancel()
-	if err := admin.PingContext(ctx); err != nil {
-		admin.Close()
-		if isMySQLErr(err, mysqlErrAccessDenied) {
-			t.Skipf("MySQL %s rejected user %q (set %s/%s to an account that can CREATE DATABASE): %v",
-				host, user, EnvUser, EnvPassword, err)
-		}
-		t.Skipf("MySQL %s unreachable, skipping integration test: %v", host, err)
-	}
-
+	admin := mysql.NewConfig()
+	admin.Net, admin.Addr, admin.User, admin.Passwd = "tcp", host, user, password
+	admin.ParseTime = true
 	name := fmt.Sprintf("%s%d_%d", dbNamePrefix, os.Getpid(), dbCounter.Add(1))
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"); err != nil {
-		admin.Close()
-		if isMySQLErr(err, mysqlErrDBAccessDenied) {
-			t.Skipf("user %q cannot CREATE DATABASE on %s; rerun with %s/%s pointing at an admin account "+
-				"(local docker: root, password in deploy/docker-compose.yml): %v", user, host, EnvUser, EnvPassword, err)
-		}
-		t.Fatalf("create throwaway database %s: %v", name, err)
-	}
-	t.Logf("[storetest] created throwaway database %s on %s as %s", name, host, user)
-
-	rawDSN := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&charset=utf8mb4", user, password, host, name)
-	raw, err := sql.Open("mysql", rawDSN)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	opts, err := sqltest.OptionsFromEnv(admin.FormatDSN(), name, name)
 	if err != nil {
-		admin.Close()
-		t.Fatalf("open raw connection to %s: %v", name, err)
+		t.Fatal(err)
 	}
-	raw.SetMaxOpenConns(4)
+	// 本组既有集成测试允许显式MySQL兼容端点；锁资格仍须runner提供真实原件。
+	opts.AllowMySQL = true
+	fixture, err := sqltest.New(ctx, t, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	normal, err := mysql.ParseDSN(fixture.DSN(name))
+	if err != nil {
+		t.Fatal("无法装配本例normal配置")
+	}
+	var schemaPrincipal string
+	if err = fixture.Schema.QueryRowContext(ctx, "SELECT CURRENT_USER()").Scan(&schemaPrincipal); err != nil {
+		t.Fatal(err)
+	}
+	common := store.MySQLConfig{Host: host, DBName: name, MaxOpenConn: 40, MaxIdleConn: 8}
+	normalCfg := common
+	normalCfg.User, normalCfg.Password, normalCfg.Permission = normal.User, normal.Passwd, fixture.Permission
+	schemaCfg := common
+	schemaCfg.User, schemaCfg.Password, schemaCfg.Permission = user, password, authoritysql.Schema(schemaPrincipal)
+	return &DB{Name: name, Cfg: normalCfg, SchemaCfg: schemaCfg, Raw: fixture.Schema, fixture: fixture}
+}
 
-	t.Cleanup(func() {
-		raw.Close()
-		dropCtx, dropCancel := context.WithTimeout(context.Background(), connectTimeout)
-		defer dropCancel()
-		if _, err := admin.ExecContext(dropCtx, "DROP DATABASE IF EXISTS `"+name+"`"); err != nil {
-			t.Errorf("[storetest] drop throwaway database %s failed (drop it by hand): %v", name, err)
+// Migrate 使用明确的Schema主体准备同一份正式模型，然后只给normal授予具名业务表。
+// 目录控制表始终归operator，测试也不能把Schema能力交给在线Store。
+func (d *DB) Migrate(ctx context.Context, opts store.MigrateOptions) error {
+	if err := store.MigrateOwnedFixtureSchema(ctx, d.fixture, d.Name, opts); err != nil {
+		return err
+	}
+	var business []proto.Message
+	for _, model := range store.TableMessages() {
+		name, ok := proto2mysql.TableNameFromDescriptor(model.ProtoReflect().Descriptor())
+		if !ok {
+			return errors.New("正式模型缺少表名")
 		}
-		admin.Close()
-	})
-
-	return &DB{
-		Name: name,
-		Cfg: store.MySQLConfig{
-			Host:     host,
-			User:     user,
-			Password: password,
-			DBName:   name,
-			// 并发用例(32 goroutine 领段)需要比默认 5 大的池,免得把锁等待误判成池饥饿。
-			MaxOpenConn: 40,
-			MaxIdleConn: 8,
-		},
-		Raw: raw,
+		switch name {
+		case "route_meta", "writer_registry", "writer_slot", "writer_lifecycle_receipt", "sql_writer_drain_run", "sql_writer_freeze_ticket", "sql_writer_maintenance_receipt":
+			continue
+		}
+		business = append(business, model)
 	}
+	return d.fixture.GrantProtoTables(ctx, d.Name, business)
 }
 
 // NewMigratedDB 建库并跑一遍 store.MigrateSchema(五张表就位)。
@@ -150,7 +149,7 @@ func NewMigratedDB(t *testing.T) *DB {
 	db := NewEmptyDB(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	if err := store.MigrateSchema(ctx, db.Cfg, store.MigrateOptions{}); err != nil {
+	if err := db.Migrate(ctx, store.MigrateOptions{}); err != nil {
 		t.Fatalf("MigrateSchema on %s: %v", db.Name, err)
 	}
 	return db
@@ -256,4 +255,38 @@ func findYaml(t *testing.T) string {
 func isMySQLErr(err error, number uint16) bool {
 	var me *mysql.MySQLError
 	return errors.As(err, &me) && me.Number == number
+}
+
+// Fixture只供integration测试复用正式控制面，不向生产装配暴露Schema/Operator。
+func (d *DB) Fixture() *sqltest.Fixture { return d.fixture }
+func (d *DB) Freeze(ctx context.Context) (*pb.SqlWriterMaintenanceReceipt, error) {
+	return d.fixture.Freeze(ctx)
+}
+func (d *DB) PrepareRelease(ctx context.Context, floor uint64) ([]byte, *pb.SqlWriterMaintenanceReceipt, error) {
+	return d.fixture.PrepareRelease(ctx, floor)
+}
+func (d *DB) Release(ctx context.Context, floor uint64) (*pb.SqlWriterMaintenanceReceipt, error) {
+	receipt, err := d.fixture.Release(ctx, floor)
+	if err == nil {
+		d.Cfg.Permission = d.fixture.Permission
+	}
+	return receipt, err
+}
+func (d *DB) ReopenAfterRelease(ctx context.Context) error {
+	if err := d.fixture.ReopenAfterRelease(ctx); err != nil {
+		return err
+	}
+	d.Cfg.Permission = d.fixture.Permission
+	return nil
+}
+
+// MaintenanceCfg只交给恢复工具；冻结原件由调用者另传RouteStoreOptions.MaintenanceFreeze。
+func (d *DB) MaintenanceCfg(ctx context.Context) (store.MySQLConfig, error) {
+	var principal string
+	if err := d.Raw.QueryRowContext(ctx, "SELECT CURRENT_USER()").Scan(&principal); err != nil {
+		return store.MySQLConfig{}, err
+	}
+	cfg := d.SchemaCfg
+	cfg.Permission = authoritysql.Operator(principal)
+	return cfg, nil
 }

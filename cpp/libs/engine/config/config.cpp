@@ -1,8 +1,10 @@
 ﻿#include "config.h"
+#include <cstdio>
 #include <yaml-cpp/yaml.h>
 #include <muduo/base/Logging.h>
 #include <node_config_manager.h>
 
+#include "node_log_level.h"
 #include "persist_schema_regression_mode.h"
 
 namespace
@@ -50,9 +52,27 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 		baseConfig.set_node_removal_grace_seconds(root["Etcd"]["NodeRemovalGraceSeconds"].as<uint32_t>());
 	}
 
-	if (root["LogLevel"])
+	// 日志级别(见 node_log_level.h):数值即 muduo 枚举,只认 0..5 的整数;缺键 / 空值 / 非整数 / 越界都拒绝启动
+	// (gate 准入设计 P0-3)。以前缺键静默落到 proto 默认 0 = TRACE,越界值原样进 Node::InitLogSystem 的 static_cast。
 	{
-		baseConfig.set_log_level(root["LogLevel"].as<uint32_t>());
+		const YAML::Node levelNode = root["LogLevel"];
+		// 缺键、YAML 空值(`LogLevel:` / `~`)与序列 / 映射都折成空串,由 Parse 一并拒绝。
+		// 不走 as<uint32_t>():非整数会抛 yaml-cpp 异常,得不到下面这行带枚举对照的说明。
+		const std::string rawLevel = (levelNode && levelNode.IsScalar()) ? levelNode.Scalar() : std::string();
+		const auto level = node_log_level::Parse(rawLevel);
+		if (!level)
+		{
+			// 写法同 node.cpp 的 FatalStartupConfig:Node 构造时已切到异步日志,LOG_FATAL 的 abort 可能赶在落盘之前,
+			// Linux 上 kubectl logs 也看不到;先同步写一行 stderr(kubectl logs --previous 可见)。原值是运维手写的数字,不敏感。
+			const std::string reason = "LogLevel must be an integer 0..5 (muduo Logger::LogLevel: 0=TRACE 1=DEBUG 2=INFO 3=WARN 4=ERROR 5=FATAL), got " +
+									   (rawLevel.empty() ? std::string("missing / empty value") : "'" + rawLevel + "'") +
+									   " in " + filename + "; refusing to start (a missing key used to mean 0=TRACE)";
+			std::fprintf(stderr, "FATAL LogLevel config: %s\n", reason.c_str());
+			std::fflush(stderr);
+			LOG_FATAL << "readBaseDeployConfig: " << reason;
+			return false; // LOG_FATAL 已 abort;这一行只为不在 nullopt 上解引用
+		}
+		baseConfig.set_log_level(*level);
 	}
 
 	if (root["HealthCheckInterval"])
@@ -148,9 +168,10 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 	// 在这里一次性归一化:缺键 / 空串 = warn;warn / enforce 原样;其余拒绝启动。运行期只会见到两个字面量,
 	// 非法值不会进 Lua 的 ARGV[10](那会让脚本返回 error_reply、OnSaved 无限重试,全服存不进盘)。
 	{
-		const std::string rawMode = root["PersistSchemaRegressionMode"]
-										? root["PersistSchemaRegressionMode"].as<std::string>()
-										: std::string();
+		// YAML 空值(`PersistSchemaRegressionMode:` 或 `~`)是 Null 节点,yaml-cpp 的 as<std::string>() 会把它变成字面量
+		// "null";与缺键、空串一样按 warn,和 login、start_game.ps1 的口径一致。
+		const YAML::Node modeNode = root["PersistSchemaRegressionMode"];
+		const std::string rawMode = (modeNode && !modeNode.IsNull()) ? modeNode.as<std::string>() : std::string();
 		const auto mode = persist_schema_regression_mode::Normalize(rawMode);
 		if (!mode)
 		{

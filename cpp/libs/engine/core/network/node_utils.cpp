@@ -44,7 +44,7 @@ namespace
 	// 分级只做"有更好的选择时避开坏通道",不新增 null 窗口 —— 调用方拿到 null 走的是立即失败分支,它们比
 	// "挑一个坏实例、让那次调用失败"更伤:跨 zone 交接在 handoff 标记 SET 已发出后
 	// 拿不到 SceneManager 只能 ConcludeHandoffAfterMarkSent(销毁 + 踢线重登);而挑一个坏实例,那次调用以
-	// UNAVAILABLE 完成每次调用回调(grpc-client-deadline-failure-callback.md §12),或由 30s 看门狗收尾,
+	// UNAVAILABLE 完成每次调用回调(grpc-muduo-transport.md §16.1),或由 30s 看门狗收尾,
 	// 这正是改造前的行为。
 	//
 	// 状态取自 muduo_grpc::Channel(docs/design/grpc-muduo-transport.md §5):IDLE = 没有连接;CONNECTING = 正在建 TCP、

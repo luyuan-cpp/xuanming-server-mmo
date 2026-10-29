@@ -261,8 +261,10 @@ type CreateBattleRequest struct {
 	TargetInstanceId       string                 `protobuf:"bytes,12,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
 	// 首次创建必须早于备战截止；重复同操作只查询/重放既有结果，不能在备战自愈后重新建房。
 	AdmitBeforeMs uint64 `protobuf:"varint,13,opt,name=admit_before_ms,json=admitBeforeMs,proto3" json:"admit_before_ms,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 1：个人副作用之前必须先取得 Match SQL 的 COMPLETE；0 保持旧协议且不得追认。
+	OutcomeProtocolVersion uint32 `protobuf:"varint,14,opt,name=outcome_protocol_version,json=outcomeProtocolVersion,proto3" json:"outcome_protocol_version,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *CreateBattleRequest) Reset() {
@@ -386,14 +388,23 @@ func (x *CreateBattleRequest) GetAdmitBeforeMs() uint64 {
 	return 0
 }
 
+func (x *CreateBattleRequest) GetOutcomeProtocolVersion() uint32 {
+	if x != nil {
+		return x.OutcomeProtocolVersion
+	}
+	return 0
+}
+
 // error_message 非零 = 未建房。签不出参战票据时回 kServiceUnavailable(turn-based §22 D70 fail-closed):
 // battle 保证没有建房、没有推送、没有发确认事件,match 按通用补偿回滚(DestroyBattle 幂等 → CancelBattlePrepare)。
 type CreateBattleResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId                      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	ErrorMessage                  *base.TipInfoMessage   `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	AdoptedOutcomeProtocolVersion uint32                 `protobuf:"varint,3,opt,name=adopted_outcome_protocol_version,json=adoptedOutcomeProtocolVersion,proto3" json:"adopted_outcome_protocol_version,omitempty"`
+	TargetInstanceId              string                 `protobuf:"bytes,4,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *CreateBattleResponse) Reset() {
@@ -438,6 +449,20 @@ func (x *CreateBattleResponse) GetErrorMessage() *base.TipInfoMessage {
 		return x.ErrorMessage
 	}
 	return nil
+}
+
+func (x *CreateBattleResponse) GetAdoptedOutcomeProtocolVersion() uint32 {
+	if x != nil {
+		return x.AdoptedOutcomeProtocolVersion
+	}
+	return 0
+}
+
+func (x *CreateBattleResponse) GetTargetInstanceId() string {
+	if x != nil {
+		return x.TargetInstanceId
+	}
+	return ""
 }
 
 type DestroyBattleRequest struct {
@@ -570,10 +595,14 @@ func (x *QueryBattleCreationRequest) GetTargetInstanceId() string {
 }
 
 type QueryBattleCreationResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	State         BattleCreationState    `protobuf:"varint,1,opt,name=state,proto3,enum=BattleCreationState" json:"state,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	State            BattleCreationState    `protobuf:"varint,1,opt,name=state,proto3,enum=BattleCreationState" json:"state,omitempty"`
+	TargetInstanceId string                 `protobuf:"bytes,2,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
+	// ABSENT 也回显节点能力；PRESENT 的 adopted 只取原创建原件，不按现能力追认。
+	SupportedOutcomeProtocolVersion uint32 `protobuf:"varint,3,opt,name=supported_outcome_protocol_version,json=supportedOutcomeProtocolVersion,proto3" json:"supported_outcome_protocol_version,omitempty"`
+	AdoptedOutcomeProtocolVersion   uint32 `protobuf:"varint,4,opt,name=adopted_outcome_protocol_version,json=adoptedOutcomeProtocolVersion,proto3" json:"adopted_outcome_protocol_version,omitempty"`
+	unknownFields                   protoimpl.UnknownFields
+	sizeCache                       protoimpl.SizeCache
 }
 
 func (x *QueryBattleCreationResponse) Reset() {
@@ -611,6 +640,27 @@ func (x *QueryBattleCreationResponse) GetState() BattleCreationState {
 		return x.State
 	}
 	return BattleCreationState_BATTLE_CREATION_UNKNOWN
+}
+
+func (x *QueryBattleCreationResponse) GetTargetInstanceId() string {
+	if x != nil {
+		return x.TargetInstanceId
+	}
+	return ""
+}
+
+func (x *QueryBattleCreationResponse) GetSupportedOutcomeProtocolVersion() uint32 {
+	if x != nil {
+		return x.SupportedOutcomeProtocolVersion
+	}
+	return 0
+}
+
+func (x *QueryBattleCreationResponse) GetAdoptedOutcomeProtocolVersion() uint32 {
+	if x != nil {
+		return x.AdoptedOutcomeProtocolVersion
+	}
+	return 0
 }
 
 // ---- 二期:观战(match → battle,设计文档 §10) ----
@@ -1168,7 +1218,7 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\anode_id\x18\t \x01(\rR\x06nodeId\x12\x1f\n" +
 	"\vinstance_id\x18\n" +
 	" \x01(\tR\n" +
-	"instanceId\"\xbb\x04\n" +
+	"instanceId\"\xf5\x04\n" +
 	"\x13CreateBattleRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12(\n" +
 	"\x10battle_config_id\x18\x02 \x01(\rR\x0ebattleConfigId\x12/\n" +
@@ -1185,10 +1235,13 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	" \x01(\rR\x16requiredPhysicalRegion\x124\n" +
 	"\x16placement_operation_id\x18\v \x01(\tR\x14placementOperationId\x12,\n" +
 	"\x12target_instance_id\x18\f \x01(\tR\x10targetInstanceId\x12&\n" +
-	"\x0fadmit_before_ms\x18\r \x01(\x04R\radmitBeforeMs\"i\n" +
+	"\x0fadmit_before_ms\x18\r \x01(\x04R\radmitBeforeMs\x128\n" +
+	"\x18outcome_protocol_version\x18\x0e \x01(\rR\x16outcomeProtocolVersion\"\xe0\x01\n" +
 	"\x14CreateBattleResponse\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
-	"\rerror_message\x18\x02 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"\xaf\x01\n" +
+	"\rerror_message\x18\x02 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12G\n" +
+	" adopted_outcome_protocol_version\x18\x03 \x01(\rR\x1dadoptedOutcomeProtocolVersion\x12,\n" +
+	"\x12target_instance_id\x18\x04 \x01(\tR\x10targetInstanceId\"\xaf\x01\n" +
 	"\x14DestroyBattleRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x124\n" +
@@ -1197,9 +1250,12 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\x1aQueryBattleCreationRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
 	"\x16placement_operation_id\x18\x02 \x01(\tR\x14placementOperationId\x12,\n" +
-	"\x12target_instance_id\x18\x03 \x01(\tR\x10targetInstanceId\"I\n" +
+	"\x12target_instance_id\x18\x03 \x01(\tR\x10targetInstanceId\"\x8d\x02\n" +
 	"\x1bQueryBattleCreationResponse\x12*\n" +
-	"\x05state\x18\x01 \x01(\x0e2\x14.BattleCreationStateR\x05state\"\xba\x02\n" +
+	"\x05state\x18\x01 \x01(\x0e2\x14.BattleCreationStateR\x05state\x12,\n" +
+	"\x12target_instance_id\x18\x02 \x01(\tR\x10targetInstanceId\x12K\n" +
+	"\"supported_outcome_protocol_version\x18\x03 \x01(\rR\x1fsupportedOutcomeProtocolVersion\x12G\n" +
+	" adopted_outcome_protocol_version\x18\x04 \x01(\rR\x1dadoptedOutcomeProtocolVersion\"\xba\x02\n" +
 	"\x12AddObserverRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12,\n" +
 	"\x12observer_player_id\x18\x02 \x01(\x04R\x10observerPlayerId\x12(\n" +

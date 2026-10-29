@@ -12,7 +12,7 @@ import subprocess
 def sha(path: Path, *, link_contents: bool = False) -> str:
     if link_contents and path.is_symlink():
         return hashlib.sha256(os.readlink(path).encode("utf-8")).hexdigest()
-    # gRPC 有超过传统 MAX_PATH 的已跟踪路径；不修改系统长路径设置。
+    # 依赖源码可含超过传统 MAX_PATH 的路径；不修改系统长路径设置。
     native = Path("\\\\?\\" + str(path.absolute())) if os.name == "nt" else path
     value = hashlib.sha256()
     with native.open("rb") as source:
@@ -93,19 +93,24 @@ def guard_files(root: Path, roots: list[str], policy: dict) -> dict[str, Path]:
 def git(root: Path, *arguments: str) -> bytes:
     result = subprocess.run(["git", "-C", str(root), *arguments], capture_output=True, timeout=180)
     if result.returncode:
-        raise RuntimeError("gRPC 源码 Git 只读检查失败：" + root.name)
+        raise RuntimeError("SDK 源码 Git 只读检查失败：" + root.name)
     return result.stdout
 
 
-def grpc_files(root: Path, inventory: dict) -> dict[str, str]:
-    """复核冻结的各 gRPC 仓库；索引以外的新源码也进入集合，忽略构建输出。"""
+def dependency_files(root: Path, inventory: dict) -> dict[str, str]:
+    """复核独立 SDK 仓库；索引外的新源码也进入集合，忽略构建输出。"""
     result = {}
     policy = inventory["untrackedPolicy"]
+    expected_roots = {"third_party/protobuf", "third_party/abseil-cpp", "third_party/boringssl"}
+    if {repo["path"] for repo in inventory["repositories"]} != expected_roots:
+        raise RuntimeError("SDK 来源必须完整覆盖独立 Protobuf、Abseil 和 BoringSSL")
+    if len(inventory["repositories"]) != len(expected_roots):
+        raise RuntimeError("SDK 来源仓库重复")
     for repository in inventory["repositories"]:
         prefix = repository["path"]
         source = checked(root, prefix)
         if git(source, "rev-parse", "HEAD").decode().strip() != repository["head"]:
-            raise RuntimeError("gRPC 子仓库提交已变化：" + prefix)
+            raise RuntimeError("SDK 独立仓库提交已变化：" + prefix)
         entries, links = {}, {}
         for record in git(source, "ls-files", "--stage", "-z").split(b"\0"):
             if not record:
@@ -113,20 +118,20 @@ def grpc_files(root: Path, inventory: dict) -> dict[str, str]:
             spec, name = record.split(b"\t", 1)
             mode, blob, stage = spec.decode("ascii").split()
             if stage != "0":
-                raise RuntimeError("gRPC 索引存在未合并项")
+                raise RuntimeError("SDK 索引存在未合并项")
             relative = name.decode("utf-8")
             if mode == "160000":
                 links[relative] = blob
             else:
                 entries[relative] = mode
         if links != repository["gitlinks"]:
-            raise RuntimeError("gRPC 子模块清单已变化：" + prefix)
+            raise RuntimeError("SDK 子模块清单已变化：" + prefix)
         for value in git(source, "ls-files", "--others", "--exclude-standard", "-z").split(b"\0"):
             if value:
                 relative = value.decode("utf-8")
                 parts = PurePosixPath(relative).parts
                 # Windows 安装树未必在上游 .gitignore 中；只过滤非跟踪构建产物。
-                if (any(p in policy["ignored_directories"] or p.startswith((".build", ".tmp.")) for p in parts)
+                if (any(p in policy["ignored_directories"] or p.startswith((".build", ".tmp.", "install_")) for p in parts)
                         or PurePosixPath(relative).suffix.lower() in policy["ignored_suffixes"]
                         or relative.endswith(".so") or ".so." in parts[-1]):
                     continue
@@ -135,13 +140,6 @@ def grpc_files(root: Path, inventory: dict) -> dict[str, str]:
             logical = prefix + "/" + relative
             path = checked(root, logical)
             if not path.is_file():
-                raise RuntimeError("gRPC 源码文件缺失：" + logical)
+                raise RuntimeError("SDK 源码文件缺失：" + logical)
             result[logical] = sha(path, link_contents=mode == "120000")
-    for external in inventory["externalRoots"]:
-        # grpc-proto 未初始化，SDK 使用已验证的官方精确提交归档；不冒充本机 Git 源。
-        files = physical_files(root, external["root"], lambda name, directory: False)
-        base = checked(root, external["root"])
-        for path in files.values():
-            logical = external["prefix"] + "/" + path.relative_to(base).as_posix()
-            result[logical] = sha(path)
     return dict(sorted(result.items()))

@@ -43,6 +43,17 @@ const (
 	ClientPlayerJubaozhai_CancelAuctionLot_FullMethodName     = "/trade.ClientPlayerJubaozhai/CancelAuctionLot"
 	ClientPlayerJubaozhai_BrowseCommerceOffers_FullMethodName = "/trade.ClientPlayerJubaozhai/BrowseCommerceOffers"
 	ClientPlayerJubaozhai_ListTradeMarkets_FullMethodName     = "/trade.ClientPlayerJubaozhai/ListTradeMarkets"
+	ClientPlayerJubaozhai_CreateRmbConsignment_FullMethodName = "/trade.ClientPlayerJubaozhai/CreateRmbConsignment"
+	ClientPlayerJubaozhai_GetRmbConsignment_FullMethodName    = "/trade.ClientPlayerJubaozhai/GetRmbConsignment"
+	ClientPlayerJubaozhai_ListRmbConsignments_FullMethodName  = "/trade.ClientPlayerJubaozhai/ListRmbConsignments"
+	ClientPlayerJubaozhai_BuyRmbConsignment_FullMethodName    = "/trade.ClientPlayerJubaozhai/BuyRmbConsignment"
+	ClientPlayerJubaozhai_CancelRmbConsignment_FullMethodName = "/trade.ClientPlayerJubaozhai/CancelRmbConsignment"
+	ClientPlayerJubaozhai_GetRmbOrder_FullMethodName          = "/trade.ClientPlayerJubaozhai/GetRmbOrder"
+	ClientPlayerJubaozhai_ListRmbOrders_FullMethodName        = "/trade.ClientPlayerJubaozhai/ListRmbOrders"
+	ClientPlayerJubaozhai_CancelRmbOrder_FullMethodName       = "/trade.ClientPlayerJubaozhai/CancelRmbOrder"
+	ClientPlayerJubaozhai_ListSellerIncomes_FullMethodName    = "/trade.ClientPlayerJubaozhai/ListSellerIncomes"
+	ClientPlayerJubaozhai_CreateWithdrawal_FullMethodName     = "/trade.ClientPlayerJubaozhai/CreateWithdrawal"
+	ClientPlayerJubaozhai_GetWithdrawal_FullMethodName        = "/trade.ClientPlayerJubaozhai/GetWithdrawal"
 )
 
 // ClientPlayerJubaozhaiClient is the client API for ClientPlayerJubaozhai service.
@@ -75,6 +86,18 @@ type ClientPlayerJubaozhaiClient interface {
 	CancelAuctionLot(ctx context.Context, in *CancelAuctionLotRequest, opts ...grpc.CallOption) (*AuctionLotResponse, error)
 	BrowseCommerceOffers(ctx context.Context, in *BrowseCommerceOffersRequest, opts ...grpc.CallOption) (*BrowseCommerceOffersResponse, error)
 	ListTradeMarkets(ctx context.Context, in *ListTradeMarketsRequest, opts ...grpc.CallOption) (*ListTradeMarketsResponse, error)
+	// 人民币分、原账号订单权及卖家逐单结算；支付/退款/出款原件只来自内部适配器。
+	CreateRmbConsignment(ctx context.Context, in *CreateRmbConsignmentRequest, opts ...grpc.CallOption) (*RmbConsignmentResponse, error)
+	GetRmbConsignment(ctx context.Context, in *GetRmbConsignmentRequest, opts ...grpc.CallOption) (*RmbConsignmentResponse, error)
+	ListRmbConsignments(ctx context.Context, in *ListRmbConsignmentsRequest, opts ...grpc.CallOption) (*ListRmbConsignmentsResponse, error)
+	BuyRmbConsignment(ctx context.Context, in *BuyRmbConsignmentRequest, opts ...grpc.CallOption) (*CommerceOrderResponse, error)
+	CancelRmbConsignment(ctx context.Context, in *CancelRmbConsignmentRequest, opts ...grpc.CallOption) (*RmbConsignmentResponse, error)
+	GetRmbOrder(ctx context.Context, in *GetCommerceOrderRequest, opts ...grpc.CallOption) (*CommerceOrderResponse, error)
+	ListRmbOrders(ctx context.Context, in *ListCommerceOrdersRequest, opts ...grpc.CallOption) (*ListCommerceOrdersResponse, error)
+	CancelRmbOrder(ctx context.Context, in *CancelCommerceOrderRequest, opts ...grpc.CallOption) (*CommerceOrderResponse, error)
+	ListSellerIncomes(ctx context.Context, in *ListSellerIncomesRequest, opts ...grpc.CallOption) (*ListSellerIncomesResponse, error)
+	CreateWithdrawal(ctx context.Context, in *CreateWithdrawalRequest, opts ...grpc.CallOption) (*WithdrawalResponse, error)
+	GetWithdrawal(ctx context.Context, in *GetWithdrawalRequest, opts ...grpc.CallOption) (*WithdrawalResponse, error)
 }
 
 type clientPlayerJubaozhaiClient struct {
@@ -325,6 +348,116 @@ func (c *clientPlayerJubaozhaiClient) ListTradeMarkets(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *clientPlayerJubaozhaiClient) CreateRmbConsignment(ctx context.Context, in *CreateRmbConsignmentRequest, opts ...grpc.CallOption) (*RmbConsignmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RmbConsignmentResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerJubaozhai_CreateRmbConsignment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerJubaozhaiClient) GetRmbConsignment(ctx context.Context, in *GetRmbConsignmentRequest, opts ...grpc.CallOption) (*RmbConsignmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RmbConsignmentResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerJubaozhai_GetRmbConsignment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerJubaozhaiClient) ListRmbConsignments(ctx context.Context, in *ListRmbConsignmentsRequest, opts ...grpc.CallOption) (*ListRmbConsignmentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRmbConsignmentsResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerJubaozhai_ListRmbConsignments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerJubaozhaiClient) BuyRmbConsignment(ctx context.Context, in *BuyRmbConsignmentRequest, opts ...grpc.CallOption) (*CommerceOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommerceOrderResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerJubaozhai_BuyRmbConsignment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerJubaozhaiClient) CancelRmbConsignment(ctx context.Context, in *CancelRmbConsignmentRequest, opts ...grpc.CallOption) (*RmbConsignmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RmbConsignmentResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerJubaozhai_CancelRmbConsignment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerJubaozhaiClient) GetRmbOrder(ctx context.Context, in *GetCommerceOrderRequest, opts ...grpc.CallOption) (*CommerceOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommerceOrderResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerJubaozhai_GetRmbOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerJubaozhaiClient) ListRmbOrders(ctx context.Context, in *ListCommerceOrdersRequest, opts ...grpc.CallOption) (*ListCommerceOrdersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListCommerceOrdersResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerJubaozhai_ListRmbOrders_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerJubaozhaiClient) CancelRmbOrder(ctx context.Context, in *CancelCommerceOrderRequest, opts ...grpc.CallOption) (*CommerceOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommerceOrderResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerJubaozhai_CancelRmbOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerJubaozhaiClient) ListSellerIncomes(ctx context.Context, in *ListSellerIncomesRequest, opts ...grpc.CallOption) (*ListSellerIncomesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSellerIncomesResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerJubaozhai_ListSellerIncomes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerJubaozhaiClient) CreateWithdrawal(ctx context.Context, in *CreateWithdrawalRequest, opts ...grpc.CallOption) (*WithdrawalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WithdrawalResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerJubaozhai_CreateWithdrawal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerJubaozhaiClient) GetWithdrawal(ctx context.Context, in *GetWithdrawalRequest, opts ...grpc.CallOption) (*WithdrawalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WithdrawalResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerJubaozhai_GetWithdrawal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClientPlayerJubaozhaiServer is the server API for ClientPlayerJubaozhai service.
 // All implementations must embed UnimplementedClientPlayerJubaozhaiServer
 // for forward compatibility.
@@ -355,6 +488,18 @@ type ClientPlayerJubaozhaiServer interface {
 	CancelAuctionLot(context.Context, *CancelAuctionLotRequest) (*AuctionLotResponse, error)
 	BrowseCommerceOffers(context.Context, *BrowseCommerceOffersRequest) (*BrowseCommerceOffersResponse, error)
 	ListTradeMarkets(context.Context, *ListTradeMarketsRequest) (*ListTradeMarketsResponse, error)
+	// 人民币分、原账号订单权及卖家逐单结算；支付/退款/出款原件只来自内部适配器。
+	CreateRmbConsignment(context.Context, *CreateRmbConsignmentRequest) (*RmbConsignmentResponse, error)
+	GetRmbConsignment(context.Context, *GetRmbConsignmentRequest) (*RmbConsignmentResponse, error)
+	ListRmbConsignments(context.Context, *ListRmbConsignmentsRequest) (*ListRmbConsignmentsResponse, error)
+	BuyRmbConsignment(context.Context, *BuyRmbConsignmentRequest) (*CommerceOrderResponse, error)
+	CancelRmbConsignment(context.Context, *CancelRmbConsignmentRequest) (*RmbConsignmentResponse, error)
+	GetRmbOrder(context.Context, *GetCommerceOrderRequest) (*CommerceOrderResponse, error)
+	ListRmbOrders(context.Context, *ListCommerceOrdersRequest) (*ListCommerceOrdersResponse, error)
+	CancelRmbOrder(context.Context, *CancelCommerceOrderRequest) (*CommerceOrderResponse, error)
+	ListSellerIncomes(context.Context, *ListSellerIncomesRequest) (*ListSellerIncomesResponse, error)
+	CreateWithdrawal(context.Context, *CreateWithdrawalRequest) (*WithdrawalResponse, error)
+	GetWithdrawal(context.Context, *GetWithdrawalRequest) (*WithdrawalResponse, error)
 	mustEmbedUnimplementedClientPlayerJubaozhaiServer()
 }
 
@@ -436,6 +581,39 @@ func (UnimplementedClientPlayerJubaozhaiServer) BrowseCommerceOffers(context.Con
 }
 func (UnimplementedClientPlayerJubaozhaiServer) ListTradeMarkets(context.Context, *ListTradeMarketsRequest) (*ListTradeMarketsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListTradeMarkets not implemented")
+}
+func (UnimplementedClientPlayerJubaozhaiServer) CreateRmbConsignment(context.Context, *CreateRmbConsignmentRequest) (*RmbConsignmentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateRmbConsignment not implemented")
+}
+func (UnimplementedClientPlayerJubaozhaiServer) GetRmbConsignment(context.Context, *GetRmbConsignmentRequest) (*RmbConsignmentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRmbConsignment not implemented")
+}
+func (UnimplementedClientPlayerJubaozhaiServer) ListRmbConsignments(context.Context, *ListRmbConsignmentsRequest) (*ListRmbConsignmentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRmbConsignments not implemented")
+}
+func (UnimplementedClientPlayerJubaozhaiServer) BuyRmbConsignment(context.Context, *BuyRmbConsignmentRequest) (*CommerceOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BuyRmbConsignment not implemented")
+}
+func (UnimplementedClientPlayerJubaozhaiServer) CancelRmbConsignment(context.Context, *CancelRmbConsignmentRequest) (*RmbConsignmentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelRmbConsignment not implemented")
+}
+func (UnimplementedClientPlayerJubaozhaiServer) GetRmbOrder(context.Context, *GetCommerceOrderRequest) (*CommerceOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRmbOrder not implemented")
+}
+func (UnimplementedClientPlayerJubaozhaiServer) ListRmbOrders(context.Context, *ListCommerceOrdersRequest) (*ListCommerceOrdersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRmbOrders not implemented")
+}
+func (UnimplementedClientPlayerJubaozhaiServer) CancelRmbOrder(context.Context, *CancelCommerceOrderRequest) (*CommerceOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelRmbOrder not implemented")
+}
+func (UnimplementedClientPlayerJubaozhaiServer) ListSellerIncomes(context.Context, *ListSellerIncomesRequest) (*ListSellerIncomesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSellerIncomes not implemented")
+}
+func (UnimplementedClientPlayerJubaozhaiServer) CreateWithdrawal(context.Context, *CreateWithdrawalRequest) (*WithdrawalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateWithdrawal not implemented")
+}
+func (UnimplementedClientPlayerJubaozhaiServer) GetWithdrawal(context.Context, *GetWithdrawalRequest) (*WithdrawalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetWithdrawal not implemented")
 }
 func (UnimplementedClientPlayerJubaozhaiServer) mustEmbedUnimplementedClientPlayerJubaozhaiServer() {}
 func (UnimplementedClientPlayerJubaozhaiServer) testEmbeddedByValue()                               {}
@@ -890,6 +1068,204 @@ func _ClientPlayerJubaozhai_ListTradeMarkets_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClientPlayerJubaozhai_CreateRmbConsignment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateRmbConsignmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerJubaozhaiServer).CreateRmbConsignment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerJubaozhai_CreateRmbConsignment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerJubaozhaiServer).CreateRmbConsignment(ctx, req.(*CreateRmbConsignmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerJubaozhai_GetRmbConsignment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRmbConsignmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerJubaozhaiServer).GetRmbConsignment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerJubaozhai_GetRmbConsignment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerJubaozhaiServer).GetRmbConsignment(ctx, req.(*GetRmbConsignmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerJubaozhai_ListRmbConsignments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRmbConsignmentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerJubaozhaiServer).ListRmbConsignments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerJubaozhai_ListRmbConsignments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerJubaozhaiServer).ListRmbConsignments(ctx, req.(*ListRmbConsignmentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerJubaozhai_BuyRmbConsignment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BuyRmbConsignmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerJubaozhaiServer).BuyRmbConsignment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerJubaozhai_BuyRmbConsignment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerJubaozhaiServer).BuyRmbConsignment(ctx, req.(*BuyRmbConsignmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerJubaozhai_CancelRmbConsignment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelRmbConsignmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerJubaozhaiServer).CancelRmbConsignment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerJubaozhai_CancelRmbConsignment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerJubaozhaiServer).CancelRmbConsignment(ctx, req.(*CancelRmbConsignmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerJubaozhai_GetRmbOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCommerceOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerJubaozhaiServer).GetRmbOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerJubaozhai_GetRmbOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerJubaozhaiServer).GetRmbOrder(ctx, req.(*GetCommerceOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerJubaozhai_ListRmbOrders_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListCommerceOrdersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerJubaozhaiServer).ListRmbOrders(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerJubaozhai_ListRmbOrders_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerJubaozhaiServer).ListRmbOrders(ctx, req.(*ListCommerceOrdersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerJubaozhai_CancelRmbOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelCommerceOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerJubaozhaiServer).CancelRmbOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerJubaozhai_CancelRmbOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerJubaozhaiServer).CancelRmbOrder(ctx, req.(*CancelCommerceOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerJubaozhai_ListSellerIncomes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSellerIncomesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerJubaozhaiServer).ListSellerIncomes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerJubaozhai_ListSellerIncomes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerJubaozhaiServer).ListSellerIncomes(ctx, req.(*ListSellerIncomesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerJubaozhai_CreateWithdrawal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateWithdrawalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerJubaozhaiServer).CreateWithdrawal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerJubaozhai_CreateWithdrawal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerJubaozhaiServer).CreateWithdrawal(ctx, req.(*CreateWithdrawalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerJubaozhai_GetWithdrawal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetWithdrawalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerJubaozhaiServer).GetWithdrawal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerJubaozhai_GetWithdrawal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerJubaozhaiServer).GetWithdrawal(ctx, req.(*GetWithdrawalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClientPlayerJubaozhai_ServiceDesc is the grpc.ServiceDesc for ClientPlayerJubaozhai service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -992,6 +1368,50 @@ var ClientPlayerJubaozhai_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListTradeMarkets",
 			Handler:    _ClientPlayerJubaozhai_ListTradeMarkets_Handler,
+		},
+		{
+			MethodName: "CreateRmbConsignment",
+			Handler:    _ClientPlayerJubaozhai_CreateRmbConsignment_Handler,
+		},
+		{
+			MethodName: "GetRmbConsignment",
+			Handler:    _ClientPlayerJubaozhai_GetRmbConsignment_Handler,
+		},
+		{
+			MethodName: "ListRmbConsignments",
+			Handler:    _ClientPlayerJubaozhai_ListRmbConsignments_Handler,
+		},
+		{
+			MethodName: "BuyRmbConsignment",
+			Handler:    _ClientPlayerJubaozhai_BuyRmbConsignment_Handler,
+		},
+		{
+			MethodName: "CancelRmbConsignment",
+			Handler:    _ClientPlayerJubaozhai_CancelRmbConsignment_Handler,
+		},
+		{
+			MethodName: "GetRmbOrder",
+			Handler:    _ClientPlayerJubaozhai_GetRmbOrder_Handler,
+		},
+		{
+			MethodName: "ListRmbOrders",
+			Handler:    _ClientPlayerJubaozhai_ListRmbOrders_Handler,
+		},
+		{
+			MethodName: "CancelRmbOrder",
+			Handler:    _ClientPlayerJubaozhai_CancelRmbOrder_Handler,
+		},
+		{
+			MethodName: "ListSellerIncomes",
+			Handler:    _ClientPlayerJubaozhai_ListSellerIncomes_Handler,
+		},
+		{
+			MethodName: "CreateWithdrawal",
+			Handler:    _ClientPlayerJubaozhai_CreateWithdrawal_Handler,
+		},
+		{
+			MethodName: "GetWithdrawal",
+			Handler:    _ClientPlayerJubaozhai_GetWithdrawal_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

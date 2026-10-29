@@ -1,10 +1,9 @@
 #pragma once
 
-#ifdef __linux__
 #include <absl/log/initialize.h>
+#ifdef __linux__
 #include <csignal>
 #else
-#include "grpc/third_party/abseil-cpp/absl/log/initialize.h"
 #include <Windows.h>
 #endif
 #include "muduo/net/EventLoop.h"

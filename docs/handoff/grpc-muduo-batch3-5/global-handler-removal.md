@@ -56,7 +56,7 @@
    - 未提交、未编译，13 个文件，+488/-173，13 个文件在该 worktree 里都是 ` M`，没有未跟踪的新文件。
    - 基线是 `526780b4e`，落后 HEAD 4 个提交，看不到第 3 批的改动。它用的 `SendSceneManagerCreateScene(…, GrpcDone, GrpcCallOptions)` 签名与主工作区现有生成物一致。
    - 新增 **8 条** `MirrorCreateInFlightEcs.*` 用例。
-   - 主工作区 `docs/design/grpc-client-deadline-failure-callback.md` §7 已把它记为“已关闭（未编译）”。
+   - 主工作区 [历史设计 docs/design/grpc-client-deadline-failure-callback.md](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md) §7 已把它记为“已关闭（未编译）”。
 6. **EnterScene 有 5 条发起路径，但只有一个出口。** 换图 C2S、队伍跟随、镜像自动进场、交接、疏散/排空，全都经过 `player_lifecycle.cpp` 的 `SendCorrelatedEnterScene`。所以只改这一处发送点和两个 `Dispatch*`，`player_scene_handler.cpp` 和 `player_team.cpp` 不用动。
 7. **生产代码目前没有地方调用每次调用回调重载**，只有上面那个测试和 blissful（未合入）在用。battle 等其他节点也不调用任何生成的 `Send`。
 8. **`grpc_init_total.cpp.tmpl` 的实际行号和先前调查不一致。** 实际是：前向声明 L15-19（L19 是 `CallDeadline`），总广播 L23-45，`SetGrpcCallDeadline` L47-54。先前写的 38-41 / 46-68 不对。
@@ -712,7 +712,7 @@ void QueueLocal{{S}}{{M}}Failure(GrpcDone<{{Resp}}> done, uint32_t code, std::st
 
 **6.7 `cpp/tests/rpc_controller_test/grpc_client_local_reject_test.cpp`**（未跟踪文件，必须和本步一起交付）
 
-- 文件头 L7-8 的契约改为：“done 是唯一的完成通道（全局处理器已删，见 grpc-client-deadline-failure-callback.md §12）”。
+- 文件头 L7-8 的契约改为：“done 是唯一的完成通道（全局处理器已删，见 [grpc-muduo-transport.md §16.1](../../design/grpc-muduo-transport.md#grpc-client-callback)）”。
 - 删 `SetUp` / `TearDown`，以及 L75-78 的四个成员（`globalReplyCalls_`、`globalFailedCalls_`、`savedReplyHandler_`、`savedFailedHandler_`）。夹具只留 `loop_`、`registry_` 和 `RunLoopUntilQuiet`。
 - 用例 1：删 L135-136；L81 的注释去掉“不触发全局处理器”。
 - 用例 2（`WithoutDoneFailedHandlerGetsUnavailableWithSentCopies`）改名为 `PerCallDoneOnEveryChannellessShapeCompletesOnceWithUnavailable`：
@@ -751,7 +751,7 @@ void QueueLocal{{S}}{{M}}Failure(GrpcDone<{{Resp}}> done, uint32_t code, std::st
 
 | 文档 | 改什么 |
 |---|---|
-| `docs/design/grpc-client-deadline-failure-callback.md` | 状态行追加一句。§1 D3 行尾注“已由 §12 在结构上消除”。§3 开头加横幅：3.1 / 3.2 是历史选型，3.3“结果未知”仍然适用。§5 表格后加一行，指向 §12.2。§6 写结论“已关闭”。§9.2 的冒烟项把 `reply dropped…` 换成“不得出现 `requires a done callback`”。§10 第 2、6 条标为作废。§11.2 / §11.3 / §11.4 加勘误。新增 §12，内容见本表之后。 |
+| [历史设计 docs/design/grpc-client-deadline-failure-callback.md](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md) | 状态行追加一句。§1 D3 行尾注“已由 §12 在结构上消除”。§3 开头加横幅：3.1 / 3.2 是历史选型，3.3“结果未知”仍然适用。§5 表格后加一行，指向 §12.2。§6 写结论“已关闭”。§9.2 的冒烟项把 `reply dropped…` 换成“不得出现 `requires a done callback`”。§10 第 2、6 条标为作废。§11.2 / §11.3 / §11.4 加勘误。新增 §12，内容见本表之后。 |
 | `docs/design/grpc-muduo-transport.md` §14.1 / §14.3 | 以下几段之后各加一条日期注：“全局处理器保留”“流式方法仍生成三个旧 Send 重载”“session 改为 GetSessionDetailsByReplyContext”“gate main 全局处理器换新签名”“号段、收件箱、scene_manager 只迁签名”“测试不触发全局处理器”。 |
 | `docs/design/muduo-rpc-channel.md` | §8.4 段末注“已过时”。§9.2 注“gRPC 应答适配也已退场”。§14 第 2 条划掉。§19.2 注“done 是唯一完成通道”。 |
 | `docs/design/client-request-ordering.md` §4.5 | 认领表中“成功回包 / gRPC 失败”两行改为：直连指向 `ForwardDirectGrpcCallResult`，路由指向 `router_muduo_forward.cpp` 的 `SendForward` 完成回调。可选：顺手改 L204 的“CQ 轮询”和 L212 的过时说法。 |
@@ -766,7 +766,7 @@ void QueueLocal{{S}}{{M}}Failure(GrpcDone<{{Resp}}> done, uint32_t code, std::st
 | `docs/design/scene-creation-architecture.md` | blissful 合入后，把“不再经过 AsyncSceneManagerCreateSceneHandler”改成“全局处理器已删除”。 |
 | `docs/design/third-party-login-end-to-end-design.md` L233-234 | 可选。 |
 
-`grpc-client-deadline-failure-callback.md` 新增 §12，内容：
+[历史设计 grpc-client-deadline-failure-callback.md](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md) 新增 §12，内容：
 - 动机；
 - 删除清单；
 - 保留清单；
@@ -802,7 +802,7 @@ void QueueLocal{{S}}{{M}}Failure(GrpcDone<{{Resp}}> done, uint32_t code, std::st
 | `session.{h,cpp}`、`id_segment_bootstrap.cpp`、`player_inbox_system.cpp`、`router_muduo_forward.*`、`rpc_reply_bridge.h`、gate `main.cpp` | 第 3 批未提交改动 | 在上面叠加。 |
 | `grpc_client_local_reject_test.cpp` | 第 3 批新增的未跟踪文件 | `git diff` 看不到它，交付时单独列出，不要漏交或误删。 |
 | `docs/design/scene-enter-chain-residuals.md` | 另一会话的未跟踪计划文档 | 不擅自改；按步骤 7 的表先问。 |
-| `docs/design/grpc-client-deadline-failure-callback.md`、`client-request-ordering.md` | 主工作区（M）；sleepy-dhawan-974040 有描述已删除 CQ 代码的过时修改；多个 worktree 在别的段落追加 | sleepy-dhawan 的文档修改和它未跟踪的 `grpc_completion_ok_test.go` 都**不合入**（后者守的是已删的 CQ 模板，会让 go test 失败）。动 §1 / §10 之前请负责人确认那份作废。 |
+| [历史设计 docs/design/grpc-client-deadline-failure-callback.md](https://github.com/luyuan-cpp/xuanming-server-mmo/blob/2c07f2c28c627f2559f76b6699d82c4aa8aa05dd/docs/design/grpc-client-deadline-failure-callback.md)、`client-request-ordering.md` | 主工作区（M）；sleepy-dhawan-974040 有描述已删除 CQ 代码的过时修改；多个 worktree 在别的段落追加 | sleepy-dhawan 的文档修改和它未跟踪的 `grpc_completion_ok_test.go` 都**不合入**（后者守的是已删的 CQ 模板，会让 go test 失败）。动 §1 / §10 之前请负责人确认那份作废。 |
 | `docs/PROGRESS.md` | 多处在末尾追加 | `merge=union`，只追加；步骤 1 用 `git merge-file --union`。 |
 
 ---
@@ -892,7 +892,7 @@ grep -c 'GrpcMessageDone , const GrpcCallOptions& );' cpp/generated/rpc/service_
 
 把第 145、146 两行替换为：
 
-> - 节点间 muduo RPC（RPC0）和出站 gRPC（生成客户端）的回包都在调用点处理。RPC0 用 `CallMethod` 的每次调用 lambda（`RpcStatus` + 响应）。gRPC 用 `Send<Svc><Method>(registry, node, req, GrpcDone<Resp>, GrpcCallOptions)` 的每次调用回调：恰好调用一次，从不同步调用，done 必填。不再有按 message_id 的全局回包表，也不再有生成客户端的全局 `Async<Svc><Method>Handler` / `Set*Handler`。回调只按值捕获上下文，委托给 `*System` 的具名函数；应答里的回显字段只作核对，不作路由依据。服务端要等下游返回后再回复时，用 `RpcDoneCallback::Adopt(done)`。见 `docs/design/muduo-rpc-channel.md`、`docs/design/grpc-client-deadline-failure-callback.md` §12。
+> - 节点间 muduo RPC（RPC0）和出站 gRPC（生成客户端）的回包都在调用点处理。RPC0 用 `CallMethod` 的每次调用 lambda（`RpcStatus` + 响应）。gRPC 用 `Send<Svc><Method>(registry, node, req, GrpcDone<Resp>, GrpcCallOptions)` 的每次调用回调：恰好调用一次，从不同步调用，done 必填。不再有按 message_id 的全局回包表，也不再有生成客户端的全局 `Async<Svc><Method>Handler` / `Set*Handler`。回调只按值捕获上下文，委托给 `*System` 的具名函数；应答里的回显字段只作核对，不作路由依据。服务端要等下游返回后再回复时，用 `RpcDoneCallback::Adopt(done)`。见 `docs/design/muduo-rpc-channel.md`、[grpc-muduo-transport.md §16.1](../../design/grpc-muduo-transport.md#grpc-client-callback)。
 > - `rpc_replies/` 只剩 gate 生成的空 `InitServiceHandler`（battle 的 `register_handler.cpp` 是手写空壳），不要在这里新增回包适配。
 
 `.github/copilot-instructions.md:190-191`、`cpp/AGENTS.md:24,39`、`cpp/README.md:48` 按同样的意思同步修改。

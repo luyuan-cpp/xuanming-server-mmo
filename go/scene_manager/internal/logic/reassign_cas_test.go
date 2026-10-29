@@ -52,24 +52,32 @@ func requireSceneIndexedOnlyOn(t *testing.T, sc *svc.ServiceContext, zoneID uint
 	}
 }
 
-// 两个写者都在「属主是 10」时做了决定:先到的改到 20,后到的拿着陈旧判断想改到 30。
-// 修复前后到的一方无条件 SET 覆盖成 30 并返回 true,20 上的实体成了孤儿。
+// 单元用例的节点号刻意不与别的用例重名:再入屏障会读进程内的推迟摘除队列,别的用例若在
+// zone 1 留下 "10" 之类常用节点的推迟态,这里的改派会被静默挡下,报出与本缺陷无关的失败。
+const (
+	casNodeOld   = "8810"
+	casNodeFirst = "8820"
+	casNodeLate  = "8830"
+)
+
+// 两个写者都在「属主是 old」时做了决定:先到的改到 first,后到的拿着陈旧判断想改到 late。
+// 修复前后到的一方无条件 SET 覆盖成 late 并返回 true,first 上的实体成了孤儿。
 func TestReassignSceneNode_StaleSecondWriterChangesNothing(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	const sceneID uint64 = 88001
-	seedSceneOwnedBy(t, mr, reassignCASZone, sceneID, "10")
+	seedSceneOwnedBy(t, mr, reassignCASZone, sceneID, casNodeOld)
 
-	require.True(t, reassignSceneNode(sc, reassignCASZone, sceneID, "10", "20"))
-	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, "10", "30"),
-		"属主已不是 10,后到的改派必须落空")
+	require.True(t, reassignSceneNode(sc, reassignCASZone, sceneID, casNodeOld, casNodeFirst))
+	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, casNodeOld, casNodeLate),
+		"属主已不是 old,后到的改派必须落空")
 
 	owner, err := mr.Get(sceneNodeKey(sceneID))
 	require.NoError(t, err)
-	require.Equal(t, "20", owner)
-	requireSceneIndexedOnlyOn(t, sc, reassignCASZone, sceneID, "20", "10", "30")
-	require.EqualValues(t, 0, readInt64(sc, nodeSceneCountKey(reassignCASZone, "10")))
-	require.EqualValues(t, 1, readInt64(sc, nodeSceneCountKey(reassignCASZone, "20")))
-	require.False(t, mr.Exists(nodeSceneCountKey(reassignCASZone, "30")), "落空的一方不得建出计数键")
+	require.Equal(t, casNodeFirst, owner)
+	requireSceneIndexedOnlyOn(t, sc, reassignCASZone, sceneID, casNodeFirst, casNodeOld, casNodeLate)
+	require.EqualValues(t, 0, readInt64(sc, nodeSceneCountKey(reassignCASZone, casNodeOld)))
+	require.EqualValues(t, 1, readInt64(sc, nodeSceneCountKey(reassignCASZone, casNodeFirst)))
+	require.False(t, mr.Exists(nodeSceneCountKey(reassignCASZone, casNodeLate)), "落空的一方不得建出计数键")
 }
 
 // 懒改派处理「频道没有属主映射」时以空串作 oldNode:只有映射确实不存在才能认领。
@@ -77,16 +85,16 @@ func TestReassignSceneNode_EmptyOldNodeClaimsOnlyUnmappedScene(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	const sceneID uint64 = 88002
 
-	require.True(t, reassignSceneNode(sc, reassignCASZone, sceneID, "", "20"))
-	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, "", "30"),
+	require.True(t, reassignSceneNode(sc, reassignCASZone, sceneID, "", casNodeFirst))
+	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, "", casNodeLate),
 		"映射已被别的懒改派认领,空串期望不得命中")
 
 	owner, err := mr.Get(sceneNodeKey(sceneID))
 	require.NoError(t, err)
-	require.Equal(t, "20", owner)
-	requireSceneIndexedOnlyOn(t, sc, reassignCASZone, sceneID, "20", "30")
-	require.EqualValues(t, 1, readInt64(sc, nodeSceneCountKey(reassignCASZone, "20")))
-	require.False(t, mr.Exists(nodeSceneCountKey(reassignCASZone, "30")))
+	require.Equal(t, casNodeFirst, owner)
+	requireSceneIndexedOnlyOn(t, sc, reassignCASZone, sceneID, casNodeFirst, casNodeLate)
+	require.EqualValues(t, 1, readInt64(sc, nodeSceneCountKey(reassignCASZone, casNodeFirst)))
+	require.False(t, mr.Exists(nodeSceneCountKey(reassignCASZone, casNodeLate)))
 	require.False(t, mr.Exists(nodeScenesKey(reassignCASZone, "")), "没有老属主时不得碰空节点名拼出的键")
 	require.False(t, mr.Exists(nodeSceneCountKey(reassignCASZone, "")))
 }
@@ -96,16 +104,17 @@ func TestReassignSceneNode_EmptyOldNodeClaimsOnlyUnmappedScene(t *testing.T) {
 func TestReassignSceneNode_UnincrementableCounterLeavesOwnershipUntouched(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	const sceneID uint64 = 88003
-	seedSceneOwnedBy(t, mr, reassignCASZone, sceneID, "10")
-	require.NoError(t, mr.Set(nodeSceneCountKey(reassignCASZone, "20"), "not-a-number"))
+	seedSceneOwnedBy(t, mr, reassignCASZone, sceneID, casNodeOld)
+	require.NoError(t, mr.Set(nodeSceneCountKey(reassignCASZone, casNodeFirst), "not-a-number"))
 
-	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, "10", "20"))
+	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, casNodeOld, casNodeFirst),
+		"新节点计数键无法 INCR 时,改派必须整体失败")
 
 	owner, err := mr.Get(sceneNodeKey(sceneID))
 	require.NoError(t, err)
-	require.Equal(t, "10", owner)
-	requireSceneIndexedOnlyOn(t, sc, reassignCASZone, sceneID, "10", "20")
-	require.EqualValues(t, 1, readInt64(sc, nodeSceneCountKey(reassignCASZone, "10")))
+	require.Equal(t, casNodeOld, owner, "脚本报错时归属一个字节都不改")
+	requireSceneIndexedOnlyOn(t, sc, reassignCASZone, sceneID, casNodeOld, casNodeFirst)
+	require.EqualValues(t, 1, readInt64(sc, nodeSceneCountKey(reassignCASZone, casNodeOld)))
 }
 
 // ---------------------------------------------------------------------------
@@ -205,7 +214,7 @@ func (r *worldChannelRace) requireOwnedOnlyBy(t *testing.T, owner, loser *sceneN
 	t.Helper()
 	got, err := r.mr.Get(sceneNodeKey(r.sceneID))
 	require.NoError(t, err)
-	require.Equal(t, owner.nodeID, got)
+	require.Equal(t, owner.nodeID, got, "属主映射必须指向先提交的写者")
 	requireSceneIndexedOnlyOn(t, r.sc, worldChannelRaceZone, r.sceneID, owner.nodeID, r.old, loser.nodeID)
 	require.EqualValues(t, 1, readInt64(r.sc, nodeSceneCountKey(worldChannelRaceZone, owner.nodeID)),
 		"属主的 scene_count 恰好加一次")

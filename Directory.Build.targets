@@ -32,14 +32,11 @@
     </Link>
   </ItemDefinitionGroup>
 
-  <!-- Suppress C4996 from gRPC v1.83 deprecated-but-still-used types in headers
-       (IdentityKeyCertPair, set_certificate_provider, etc.). -->
   <ItemDefinitionGroup
       Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
     <ClCompile>
       <!-- protobuf v35.1 parse_context.h includes utf8_validity.h directly. -->
-      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)third_party\grpc\third_party\utf8_range\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <DisableSpecificWarnings>4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)third_party\protobuf\third_party\utf8_range\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
 
@@ -58,4 +55,27 @@
           Condition="'$(MSBuildProjectExtension)' == '.vcxproj' and '$(SkipNoRawPointerMemberCheck)' != 'true' and !$([System.Text.RegularExpressions.Regex]::IsMatch('$(MSBuildProjectDirectory)', '(?i)(^|[\\/])(third_party|cpp[\\/]libs[\\/]engine[\\/]muduo_windows)([\\/]|$)'))">
     <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)tools\scripts\check_no_raw_pointer_member.ps1&quot; -ProjectDir &quot;$(MSBuildProjectDirectory)&quot; -ProjectName &quot;$(ProjectName)&quot; -ProjectFile &quot;$(MSBuildProjectFullPath)&quot; -Configuration &quot;$(Configuration)&quot; -Platform &quot;$(Platform)&quot; -MSBuildPath &quot;$(MSBuildBinPath)\MSBuild.exe&quot;" />
   </Target>
+  <!-- 独立 Protobuf 35.1 的编译器依赖与静态 zlib，由手写及生成工程共同继承。 -->
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
+    <IndependentSdkRepositoryRoot Condition="'$(IndependentSdkRepositoryRoot)' == ''">$(MSBuildThisFileDirectory)</IndependentSdkRepositoryRoot>
+    <IndependentSdkProjectRelativePath>$([MSBuild]::MakeRelative('$(IndependentSdkRepositoryRoot)', '$(MSBuildProjectDirectory)'))</IndependentSdkProjectRelativePath>
+    <IndependentSdkOwnCppProject>$([System.Text.RegularExpressions.Regex]::IsMatch('$(IndependentSdkProjectRelativePath)', '(?i)^cpp[\\/](generated|libs|nodes|tests)([\\/]|$)'))</IndependentSdkOwnCppProject>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(IndependentSdkOwnCppProject)' == 'true' and ('$(Configuration)' == 'Debug' or '$(Configuration)' == 'Release')">
+    <IndependentSdkArchitectureSuffix Condition="'$(Platform)' == 'Win32'">_x86</IndependentSdkArchitectureSuffix>
+    <IndependentSdkConfigurationSuffix Condition="'$(Configuration)' == 'Debug'">dbg</IndependentSdkConfigurationSuffix>
+    <IndependentSdkConfigurationSuffix Condition="'$(Configuration)' == 'Release'">rel</IndependentSdkConfigurationSuffix>
+    <IndependentSdkLibraryPostfix Condition="'$(Configuration)' == 'Debug'">d</IndependentSdkLibraryPostfix>
+    <IndependentSdkZlibRoot>$(IndependentSdkRepositoryRoot)build/third_party/zlib-v1.3.2$(IndependentSdkArchitectureSuffix)-$(IndependentSdkConfigurationSuffix)/install/</IndependentSdkZlibRoot>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(IndependentSdkOwnCppProject)' == 'true' and ('$(Configuration)' == 'Debug' or '$(Configuration)' == 'Release') and ('$(Platform)' == 'x64' or '$(Platform)' == 'Win32')">
+    <Link>
+      <!-- 不让 bin 里的历史 zlib DLL 或公共 lib 中的旧归档替代本轮 SDK。 -->
+      <AdditionalLibraryDirectories>$(IndependentSdkZlibRoot)lib/;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$([System.Text.RegularExpressions.Regex]::Replace('%(AdditionalDependencies)', '(?i)(^|;)\s*zlib(?:static)?d?\.lib(?=;|$)', '$1zlibstatic$(IndependentSdkLibraryPostfix).lib'))</AdditionalDependencies>
+      <AdditionalDependencies>$([System.Text.RegularExpressions.Regex]::Replace('%(AdditionalDependencies)', '(?i)(^|;)\s*libupbd?\.lib(?=;|$)', '$1libupb$(IndependentSdkLibraryPostfix).lib'))</AdditionalDependencies>
+      <AdditionalDependencies Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(AdditionalDependencies)', '(?i)(^|;)\s*libprotocd?\.lib(?=;|$)')) and !$([System.Text.RegularExpressions.Regex]::IsMatch('%(AdditionalDependencies)', '(?i)(^|;)\s*libupbd?\.lib(?=;|$)'))">libupb$(IndependentSdkLibraryPostfix).lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+
 </Project>

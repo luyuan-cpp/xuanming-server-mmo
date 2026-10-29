@@ -13,7 +13,9 @@ import (
 // gate 崩溃后玩家立刻从别的 gate 重登:旧会话的清理(断线租约到期 → LeaveScene → session_ended 释放)要等租约到期才发,
 // 这期间 location 仍指向挂着僵尸实体的持有节点 X。登录被派到别的节点时,换手门要求 X 写出当前代标记,而僵尸没人通知、
 // 永远不写 —— 每次重登都回 18,直到旧会话清理到期。这里让登录在换手门拒绝时直接请 X 按会话结束释放(与 LeaveScene 的
-// pending 同一个 RPC):X 持有 → 按客户端断线退出、存盘落地后写 A1′ 标记;不持有 → 按 owner_epoch 条件补写凭证。
+// pending 同一个 RPC):X 持有 → 按客户端断线退出、存盘落地后写 A1′ 标记;不持有 → 补写凭证。2026-10-23 起凭证带围栏
+// (r2-lc#2,location-release-binding.md §3.3):X 先读 save_barrier.handoff_fence,确认是本进程实例在该 E 下登记的资格、
+// 自己仍完全不持有,才以读到的原件做 CAS 写标记;拿不出资格时不写(计 credential_qualification_no_qualification 并 WARN)。
 // 下一次重登拿到标记即放行并铸造。
 //
 // 只替「已被证明是当前最新登录」的请求去请(§12.2 的论证):
@@ -118,7 +120,7 @@ func identityStrictlyNewer(verdict placementVerdict, loc placementIdentity) bool
 	return verdict == placementAdmitNewer && loc.loginGeneration != 0
 }
 
-// enterHolderReleaseTimeout 是等持有节点应答的上限。login 调 EnterScene 的预算是 5s(login.yaml SceneManagerRpc.Timeout),
+// enterHolderReleaseTimeout 是等持有节点应答的上限。login 调 EnterScene 的预算见 login.yaml SceneManagerRpc.Timeout(现为 10s),
 // 这里只占一小段;超时按 failed 记,照常回 18,下一次重登再请。
 const enterHolderReleaseTimeout = 1 * time.Second
 

@@ -73,16 +73,16 @@ func TestImportPlayerDBRefusesUnsafeExports(t *testing.T) {
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			err := importPlayerDB(context.Background(), "", c.data, true, "", false)
+			err := importPlayerDB(context.Background(), "", c.data, legacyImportOptions{dryRun: true})
 			if err == nil || !strings.Contains(err.Error(), c.want) {
 				t.Fatalf("err = %v, want contains %q", err, c.want)
 			}
 		})
 	}
-	if err := importPlayerDB(context.Background(), "", legacyExport("player_centre_database", &no), true, "", false); err != nil {
+	if err := importPlayerDB(context.Background(), "", legacyExport("player_centre_database", &no), legacyImportOptions{dryRun: true}); err != nil {
 		t.Fatalf("clean dry run refused: %v", err)
 	}
-	if err := importPlayerDB(context.Background(), "", legacyExport("player_database", &no), true, "", true); err != nil {
+	if err := importPlayerDB(context.Background(), "", legacyExport("player_database", &no), legacyImportOptions{dryRun: true, allowFencedTables: true}); err != nil {
 		t.Fatalf("-allow-fenced-tables dry run refused: %v", err)
 	}
 }

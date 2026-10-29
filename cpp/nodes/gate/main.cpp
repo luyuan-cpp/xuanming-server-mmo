@@ -150,6 +150,7 @@ namespace
         // 路由 lane 在途调用的本地截止扫描(handler/rpc/client_request_lane.cpp)。回调不捕获任何对象;
         // 必须主动扫:队头卡住时客户端在等回包,不会再发新请求触发惰性清理(client-request-ordering.md §4.5)。
         TimerTaskComp routerLaneExpiryTimer;
+        bool sourceClosed = false;
 
         GateRuntimeContext()
             : protobufDispatcher([](const TcpConnectionPtr &conn, const MessagePtr &msg, Timestamp)
@@ -304,8 +305,11 @@ int main(int argc, char *argv[])
             }
 
             // Disconnect all client sessions before shutdown (SIGTERM or conflict).
-            auto disconnectAllClients = [](Node &)
+            auto disconnectAllClients = [&context](Node &)
             {
+                context.sourceClosed = true;
+                context.dependencyGate.probeTimer.Cancel();
+                context.playerCountReportTimer.Cancel();
                 auto &sessions = tlsSessionManager.sessions();
                 LOG_INFO << "Disconnecting " << sessions.size() << " client sessions before shutdown...";
                 for (auto &[sessionId, info] : sessions)
@@ -328,13 +332,18 @@ int main(int argc, char *argv[])
             // 模式区分:直连模式(默认,通知走 login 通道)与路由模式(走路由服通道)都等。
             {
                 auto closingSessions = std::make_shared<std::vector<SessionId>>();
-                node.SetBeforeShutdown([disconnectAllClients, closingSessions](Node &n)
+                auto closeSource = [disconnectAllClients, closingSessions](Node &n)
                                        {
                     for (const auto &entry : tlsSessionManager.sessions())
                     {
                         closingSessions->push_back(entry.first);
                     }
-                    disconnectAllClients(n); });
+                    disconnectAllClients(n); };
+                node.SetBeforeShutdown(closeSource);
+                node.SetMaintenanceInboundRelay(); // 内部推送/路由是relay；客户端TCP根由closeSource关闭。
+                node.SetMaintenanceSourceClose(closeSource);
+                node.SetMaintenanceRelayStop([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); });
+                node.SetBeforeTeardown([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); });
                 node.SetShutdownDrainComplete([closingSessions](Node &)
                                               {
                     const auto &sessions = tlsSessionManager.sessions();
@@ -386,10 +395,12 @@ int main(int argc, char *argv[])
 
                         n.GetTcpServer().setConnectionCallback(
                             [&context](const TcpConnectionPtr& conn) {
+                                if (context.sourceClosed && conn->connected()) { conn->forceClose(); return; }
                                 context.clientSessionHandler.OnConnection(conn);
                             });
                         n.GetTcpServer().setMessageCallback(
                             [&context](const TcpConnectionPtr& conn, muduo::net::Buffer* buf, Timestamp ts) {
+                                if (context.sourceClosed) { buf->retrieveAll(); conn->forceClose(); return; }
                                 context.codec.onMessage(conn, buf, ts);
                             });
 

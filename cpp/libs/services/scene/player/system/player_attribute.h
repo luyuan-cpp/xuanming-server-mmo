@@ -29,8 +29,11 @@ class AttributePanelInfo;
 // 实体无效 → kEntityIsNull(本类既有口径),实体有效但缺必需组件 → kServiceUnavailable。
 class PlayerAttributeSystem {
 public:
-	// 从 DB 加载 / 首登后调用(PlayerAttributeComp 已由 Unmarshal 挂上):补默认方案、清理不存在的维度、
+	// 从 DB 加载 / 首登后调用(PlayerAttributeComp 已由 Unmarshal 挂上):补默认方案、
 	// 挂上全新的 DerivedAttributesComp 并重算二级属性。存档组件缺失时只记错误,不补建。
+	// 已分配点原样携带,不清理、不返还:本版本表里查不到 / 归不到角色的维度是未知键(不生效、计入已用),
+	// 超额的池整池按 0 生效(加点统一规则,attribute_allocation_rules.h;
+	// docs/design/mixed-version-persist-field-protection.md §12.1 D1 / D2)。
 	static void InitializeOnLoad(entt::entity player);
 
 	// 重算的触发原因:决定当前 HP/MP 怎么跟随上限变化(评审 2026-09-04 堵住"降后再升"白嫖回血):
@@ -40,15 +43,19 @@ public:
 	//                 切方案 / 洗点 / 重新加点都不能成为回血手段(turn-based-battle-server.md D4 残血带出战斗)。
 	//   kEquipmentChanged  穿上 / 卸下装备(PlayerEquipSystem::Equip / Unequip 成功后):与加点同走「按比例保持」,
 	//                 **不是**补增量 —— 否则脱下加血装再穿回就是一次免费回血(equipment-attributes.md §4.4、
-	//                 §5 不变量 4)。也不触发下面的「已分配 > 总量」收敛:换装不改等级、不改总点数,
-	//                 那个收敛只属于加载与等级变化。
-	//   kSkillChanged  学习 / 修习了被动职业技能(PlayerSkillSystem::UpgradeSkill):与换装同走「按比例保持」,
-	//                 不触发「已分配 > 总量」收敛(docs/design/class-skills.md §7)。
+	//                 §5 不变量 4)。
+	//   kSkillChanged  学习 / 修习了被动职业技能(PlayerSkillSystem::UpgradeSkill):与换装同走「按比例保持」
+	//                 (docs/design/class-skills.md §7)。
+	// reason 只决定 HP/MP 怎么跟随上限,不决定加点怎么处理:任何原因的重算都不改写已分配点(见 Recalculate)。
 	// 只许在末尾追加:player_event_handler / player_equip 等调用方按名字引用这些值。
 	enum class RecalcReason : uint8_t { kLoad, kLevelChanged, kAllocate, kSchemeSwitch, kReset, kEquipmentChanged, kSkillChanged };
 
 	// 重算二级属性(DerivedAttributesComp + BaseAttributesComp.speed / armor(职业初值)),按 reason 处理当前 HP/MP;不落库。
-	// kLoad / kLevelChanged 还会先做"已分配 > 总量"的收敛(降级 / 改表后整池清零返还),防止低等级号带着高等级面板。
+	// 只读 PlayerAttributeComp,不改写、不返还已分配点(以前 kLoad / kLevelChanged 会把超额的池整池清零返还,
+	// 回滚 / 降级一次就删数据,mixed-version-persist-field-protection.md §12.1 D2)。现在按加点统一规则
+	// (attribute_allocation_rules.h)只决定生效值:超过本版本总量或单项上限的池整池按 0 换算,本版本归不到角色的
+	// 未知键永不生效 —— 低等级号照样带不着高等级面板进战斗快照,而等级回来了同一份加点原样生效。
+	// kLoad 时对不生效的池 / 带未知键的方案各打一条 WARN(metric=allocation_not_effective),不写数据。
 	//
 	// 装备加成(equipment-attributes.md §4.4)每次都在这里从装备栏现算(PlayerEquipSystem::CollectBonus,纯读),
 	// 所以任何触发原因的重算都自带装备,不存在「某条路径忘了算装备」:
@@ -68,6 +75,8 @@ public:
 	static void Recalculate(entt::entity player, RecalcReason reason = RecalcReason::kLoad);
 
 	// 面板全量(客户端零配表,维度名/说明/上限/剩余点都在这里)。
+	// 一级属性的 allocated 下发存储值;value 只算生效的已分配(所属池不生效时按 0),剩余点与洗点费用按同一个
+	// 生效判定给出(不生效的池剩余 0、洗点免费)。
 	// 一级属性的 value 含装备点,bonus = bonus_values + 装备点(已含在 value 内);combat = 战斗类属性的终值
 	// (必杀率含角色基础暴击率,抗物理 / 抗法术含基础抗性;百分比项夹到 100),按 sort 升序(sort 相同按 combat_id)。
 	// 取数口径:输入(等级 / 已分配 / 装备点)现读,产出(六项二级属性与战斗类加成)读上一次 Recalculate 的结果。
@@ -83,11 +92,14 @@ public:
 	// (客户端按整体覆盖处理面板,空面板等于把真实数据抹掉)。只读,不改变实体的组件集合。
 	static uint32_t BuildPanel(entt::entity player, AttributePanelInfo& panel);
 
-	// 确认加点:target 为该池"目标已分配"(全量、幂等;缺省维度视为不变)
+	// 确认加点:target 为该池"目标已分配"(全量、幂等;缺省维度视为不变)。目标只能是本池已知维度;
+	// 只写真正变化的键(不落 0 值新键)。剩余点扣掉未知键,池不生效时剩余为 0(回「点数不足」)。
 	static uint32_t Allocate(entt::entity player, uint32_t poolId,
 							 const std::map<uint32_t, uint32_t>& target);
 
-	// 重置(洗点):清空当前方案里该池全部分配;按 AttributePool 表扣金币
+	// 重置(洗点):清空当前方案里该池的已知维度,未知键原样保留;按 AttributePool 表扣金币。
+	// 本池已知维度一点没加(含只剩未知键)→ kAttributeNothingToChange 且不扣费;池不生效 → 免费并打 WARN
+	// (metric=allocation_reset_free_ineffective)。费用与面板 reset_cost_gold 同一口径。
 	static uint32_t Reset(entt::entity player, uint32_t poolId);
 
 	// 自动加点:按 AttributeAutoPlan(职业 → 通用兜底)算建议"目标已分配",只算不落
@@ -98,7 +110,8 @@ public:
 	static uint32_t SwitchScheme(entt::entity player, uint32_t schemeId);
 	static uint32_t RenameScheme(entt::entity player, uint32_t schemeId, const std::string& name);
 
-	// GM:设等级(1..kMaxLevel),直接重算并推面板与宠物列表。
+	// GM:设等级(1..kMaxLevel,绝对设值),直接重算并推面板与宠物列表。降级不清加点:超额的池按 0 生效,
+	// 设回原等级后原样生效。存储等级原本超上限时会被覆写,打 WARN 留痕(GM 只在 dev/test 开放)。
 	static uint32_t GmSetLevel(entt::entity player, uint32_t level);
 
 	// 主动推面板(升级 / GM / 外部加成变化);BuildPanel 失败时不推。

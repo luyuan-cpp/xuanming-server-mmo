@@ -438,6 +438,8 @@ message ActivityRewardTierTable {
 
 ### 6.2 表结构（示意）
 
+> **2026-10-24 更正**：`PlayMode` 已按最小子集先行落档，字段编号以 `data/schema/playmode_table.proto` 为准（`id=1, match_mode=2, battle_config_id=3, enabled=4, team_size_max=5`），见 [global-match-hierarchical-pools.md](global-match-hierarchical-pools.md) §7。下方示意里的 kind / rated / rule_set 等列以后作为新字段号追加，不按示意重排现有编号。
+
 ```proto
 // playmodekind_table.proto —— 凑局处理器字典
 message PlayModeKindTable {

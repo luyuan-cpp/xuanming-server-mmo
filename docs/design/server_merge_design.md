@@ -103,7 +103,8 @@
 P1  preflight   zone_<src>_db / zone_<dst>_db 都存在;从表清单 JSON 发现玩家表
 0   collect     扫一次 mapping 拿源区玩家 id(或从既有清单 RESUME);之后所有步骤复用这一份
 G   guard       0 个玩家 / 源库行数 > 映射数 / 与 -expected-src-players 不符 → 拒绝
-P2  preflight   scene_nodes:zone:{src}:load 必须空(源区无活节点)
+P2  preflight   etcd 场景节点注册表里源区一条注册都没有(-etcd-endpoints,正面证据)且 scene_nodes:zone:{src}:load 为空
+                (2026-10-23 起;负载集为空不能单独证明下线,见 cross-zone-scene-travel.md §13.10)
 P3  preflight   db_task_zone_{src}[_g{gen}] 在唯一权威组上 LAG=0(2026-10-15 起;已落码,未编译、未测试,待 Codex 验证):
                 候选 = zone 组 db_rpc_consumer_group_z{src} + legacy 组 db_rpc_consumer_group(-kafka-legacy-group),
                 或 -kafka-group 显式指定的一个;恰好一个组在本 topic 上有已提交位点才只对它算 LAG,

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -521,6 +522,13 @@ func runRobotOnce(account string, cfg *config.Config, stats *metrics.Stats, stop
 		defer close(recvDone)
 		gc.RecvLoop(func(client *pkg.GameClient, msg *base.MessageContent) {
 			stats.MsgRecv()
+			// 这里只收推送与 id = 0 的回包。ListSkills 只经 startListOwnedSkills 带请求号发出,它的 id = 0 回包说明服务端
+			// 没回显请求号,丢弃(那次调用将以超时收场);AI 循环仍以 SendRequest 发的请求(ReleaseSkill / EnterScene 等)
+			// 回包照旧交 handler。
+			if msg.GetMessageId() == game.SceneSkillClientPlayerListSkillsMessageId {
+				smokeDropUncorrelatedReply(client.Account, msg)
+				return
+			}
 			handler.MessageBodyHandler(client, msg)
 		})
 	}()
@@ -547,13 +555,21 @@ func runRobotOnce(account string, cfg *config.Config, stats *metrics.Stats, stop
 	}
 
 	// Now safe to send scene-targeted requests.
-	_ = gc.SendRequest(game.SceneSkillClientPlayerListSkillsMessageId, &scene.ListSkillsRequest{})
-
 	// Wait for the ListSkills response so the AI loop only casts skills the player actually owns.
-	skillsCtx, skillsCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer skillsCancel()
-	if err := player.WaitSkillsReady(skillsCtx); err != nil {
-		zap.L().Warn("timed out waiting for skill list", zap.String("account", gc.Account), zap.Error(err))
+	// 只等 listSkillsWait:等不到只告警、AI 照常起跑(此时没有已拥有技能,施法动作记失败),与迁移前等 WaitSkillsReady
+	// 超时的语义一致;之后才到的回包仍由 handler 写进 Player,AI 从那时起按已拥有技能施法。
+	// RecvLoop 已在上面启动,满足 startListOwnedSkills 的前提。
+	skillsResult := startListOwnedSkills(gc, stats, listSkillsReplyTimeout)
+	skillsWait := time.NewTimer(listSkillsWait)
+	select {
+	case err := <-skillsResult:
+		skillsWait.Stop()
+		if err != nil {
+			zap.L().Warn("skill list unavailable", zap.String("account", gc.Account), zap.Error(err))
+		}
+	case <-skillsWait.C:
+		zap.L().Warn("timed out waiting for skill list", zap.String("account", gc.Account),
+			zap.Duration("waited", listSkillsWait))
 	}
 
 	robotAI := ai.NewRobotAI(gc, stats)
@@ -592,6 +608,67 @@ func runRobotOnce(account string, cfg *config.Config, stats *metrics.Stats, stop
 	}
 	ok = true
 	return
+}
+
+const (
+	// listSkillsWait 是压测主循环起 AI 前等 ListSkills 结局的时长(迁移前等 WaitSkillsReady 的 5s)。
+	listSkillsWait = 5 * time.Second
+	// listSkillsReplyTimeout 是 ListSkills 这次调用本身的回包预算,刻意长于各处的等待时长:迁移前回包到得再晚,
+	// 也会被 handler 写进 Player,AI 从那以后就按已拥有技能施法;满载时 scene 积压能让回包晚于 5s,若按等待时长
+	// 设预算,它会被当成迟到回包丢弃,整场会话都不再施法,压测的请求构成随之改变。
+	// 取大厅客户端的 15s(docs/design/client-rpc-callback.md §2.3):gate 等 scene 回包满 12s 即回带请求号的 1003
+	// (cpp/nodes/gate/handler/rpc/client_session_handler.cpp kGateToSceneClientCallTimeout),gate 正常时
+	// 回包或信封总在预算内到达。
+	listSkillsReplyTimeout = 15 * time.Second
+)
+
+// startListOwnedSkills 发出一次 ListSkills 并立刻返回,不等回包(压测主循环与 prepareBehaviorClient 共用)。
+//
+// 回包带请求号,不进 RecvLoop 的 onMessage,生成 handler 不会自己跑;而 AI 循环(RobotAI.castSkill)与登录测试读的是
+// Player 上那份已拥有技能(GetOwnedSkillIDs),ListSkills 的 handler 还负责剔除职业被动(服务端拒绝施放被动,
+// docs/design/class-skills.md §4)。所以 done 在派发回包的 RecvLoop goroutine 上把成功回包交给
+// handler.MessageBodyHandler:与迁移前同一 goroutine、同一收包顺序,不会与同连接上的推送处理器交错。
+// 信封错误不交 handler(body 为空,会被解成一份全零响应)。
+//
+// 返回的通道恰好收到一条结局,容量 1:done 写入从不阻塞,调用方不读也不泄漏。nil = 列表已由 handler 写进 Player;
+// 否则是信封拒绝(*pkg.ServerTipError,Player 保持原样)、业务拒绝(回包 error_message,handler 照常执行、
+// 已拥有技能被写成空)、超时(pkg.ErrRPCTimeout)、本地未发出(pkg.ErrRPCNotSent)或连接已断(pkg.ErrRPCDisconnected)。
+// 调用方可以只等其中一段:之后才到的成功回包仍由 handler 写进 Player,与迁移前一致。
+//
+// 前提:gc 的 RecvLoop 已经启动(回包只能由它派发)。不阻塞,在任何 goroutine 上调用都安全。
+// 发出时计 MsgSent,收到回包或信封时计 MsgRecv(stats 可为 nil)。成功路径不打日志:压测一次上万机器人。
+func startListOwnedSkills(gc *pkg.GameClient, stats *metrics.Stats, timeout time.Duration) <-chan error {
+	result := make(chan error, 1)
+	gc.Call(game.SceneSkillClientPlayerListSkillsMessageId, &scene.ListSkillsRequest{}, timeout,
+		func(reply *base.MessageContent, err error) {
+			if reply != nil && stats != nil {
+				stats.MsgRecv() // 回包与信封不再经过 onMessage,在这里计数
+			}
+			if err == nil {
+				handler.MessageBodyHandler(gc, reply)
+				var rsp scene.ListSkillsResponse
+				if decodeErr := proto.Unmarshal(reply.GetSerializedMessage(), &rsp); decodeErr != nil {
+					err = fmt.Errorf("decode list skills reply: %w", decodeErr)
+				} else if rsp.GetErrorMessage() != nil {
+					err = fmt.Errorf("list skills rejected: %s", rsp.GetErrorMessage().String())
+				}
+			}
+			result <- err
+		})
+	// 本地没发出(已 Close / 无连接)在 Call 返回前同步完成,不计发送。其余结局也可能已抢先写入:
+	// 取出后原样放回(done 只写一次,此刻槽是空的,不会阻塞),照 ordering 冒烟的 callAll。
+	select {
+	case err := <-result:
+		result <- err
+		if errors.Is(err, pkg.ErrRPCNotSent) {
+			return result
+		}
+	default:
+	}
+	if stats != nil {
+		stats.MsgSent()
+	}
+	return result
 }
 
 func initLogger() {
@@ -793,6 +870,13 @@ func loginAndEnterLocal(gc *pkg.GameClient, password string, stats *metrics.Stat
 // loginAndEnterWithAuth routes to the correct login implementation based on cfg.AuthType.
 // If prevAccessToken is non-empty and not near expiry, it is tried first; on
 // failure we transparently fall back to the configured primary auth provider.
+//
+// 例外:前一种方式因握手超时失败(errLoginStuck)时不回落,直接返回该错误——超时后连接上留着阻塞的读者,
+// 这条连接已不能再用。返回之后怎样取决于调用方:压测主路径(runRobotOnce / data_stress)登录失败即结束本次会话,
+// 外层退避后换新连接重来。重定向重登录(pkg.SetRedirectRelogin)也走本函数,同样不回落,但那里没有外层重连:
+// FollowRedirect 返回的错误目前只被 logic/handler 的重定向处理器记一行日志,RecvLoop 继续读这条未认证的新连接
+// (muduo 的 Close 也唤不醒它),会话就此空转到 stop,仍按已连接计数。这是「确定失败、不做有竞态的回落」的代价;
+// 让重定向失败结束会话要改 logic/handler 与 pkg,不在本文件范围。
 func loginAndEnterWithAuth(gc *pkg.GameClient, cfg *config.Config, stats *metrics.Stats, prevAccessToken string, prevAccessExpire int64) error {
 	// Use access_token reconnect when available and with at least 60s of TTL left.
 	if prevAccessToken != "" && (prevAccessExpire == 0 || time.Now().Unix() < prevAccessExpire-60) {
@@ -800,6 +884,11 @@ func loginAndEnterWithAuth(gc *pkg.GameClient, cfg *config.Config, stats *metric
 			stats.AccessReconnectOK()
 			zap.L().Debug("access_token reconnect ok", zap.String("account", gc.Account))
 			return nil
+		} else if errors.Is(err, errLoginStuck) {
+			// 握手超时后这条连接上还留着一个阻塞在 RecvOne 的读者,在同一连接上换认证方式重试会和它抢回包
+			// (回落发的同样是 Login,同号回包可能被它吞掉),所以不回落,直接返回;返回后主路径换新连接重来、
+			// 重定向路径会话空转,见函数注释。
+			return err
 		} else {
 			stats.AccessReconnectFallback()
 			zap.L().Info("access_token reconnect failed, falling back",
@@ -813,6 +902,9 @@ func loginAndEnterWithAuth(gc *pkg.GameClient, cfg *config.Config, stats *metric
 	if cfg.UseHttpLogin {
 		if err := loginAndEnterViaHttpGateway(gc, cfg, stats); err == nil {
 			return nil
+		} else if errors.Is(err, errLoginStuck) {
+			// 同上:gate 上的握手已超时,这条连接不能再用(errLoginStuck)。
+			return err
 		} else {
 			zap.L().Warn("http-login path failed, falling back to legacy gate Login RPC",
 				zap.String("account", gc.Account), zap.Error(err))
@@ -885,6 +977,19 @@ func loginAndEnterViaHttpGateway(gc *pkg.GameClient, cfg *config.Config, stats *
 	return loginAndEnterAccessToken(gc, rsp.AccessToken, stats)
 }
 
+// errLoginStuck 标记同步握手(sendAndRecvLocal 与 login.go 的 sendAndRecvTimeout)在预算内没等到回包。
+// 包裹它的错误文案仍以「STUCK: 」开头:登录测试与压测统计按 strings.Contains(err, "STUCK") 归类卡死。
+//
+// 见到它的调用方必须丢弃这条连接,不能在同一个 gc 上继续握手或起 RecvLoop:等回包的读者 goroutine
+// 仍阻塞在 RecvOne 上(vendored muduo 的 Recv 读的是永不关闭的 incoming channel,Close 也唤不醒它),
+// 之后同一连接上的任何读者都会和它抢收包——同号回包可能被它吞掉,其余消息被它塞进暂存队列。
+// loginAndEnterWithAuth 因此在它之后不再换认证方式回落,直接把它返回给调用方(各调用方的后果见该函数注释)。
+var errLoginStuck = errors.New("STUCK")
+
+// sendAndRecvLocal 是 loginAndEnterLocal 的同步握手,形状与 login.go 的 sendAndRecvTimeout 相同:跑在 RecvLoop 之前,
+// 或在重定向重登录时跑在 RecvLoop 之上,只能 SendRequest + RecvOne,不迁到 Call。
+// 信封错误返回 *envelopeError;超时返回包裹 errLoginStuck 的错误,此时读者 goroutine 仍阻塞在 RecvOne 上,
+// 调用方必须丢弃这条连接,不得再在同一个 gc 上握手或起 RecvLoop(见 errLoginStuck)。
 func sendAndRecvLocal(gc *pkg.GameClient, stats *metrics.Stats, msgID uint32, req, resp proto.Message) error {
 	if err := gc.SendRequest(msgID, req); err != nil {
 		return err
@@ -918,9 +1023,14 @@ func sendAndRecvLocal(gc *pkg.GameClient, stats *metrics.Stats, msgID uint32, re
 		if r.err != nil {
 			return r.err
 		}
+		// gate / 路由服级失败回的是信封错误,body 为空;只解 body 会把它当成「成功、字段全默认」——
+		// Login 看成角色列表为空去建角,EnterGame 看成已进游戏。口径与 sendAndRecvTimeout 相同。
+		if tipID := r.msg.GetErrorMessage().GetId(); tipID != 0 {
+			return &envelopeError{msgID: msgID, tipID: tipID}
+		}
 		return proto.Unmarshal(r.msg.SerializedMessage, resp)
 	case <-time.After(defaultLoginTimeoutLocal):
 		stats.LoginStuck()
-		return fmt.Errorf("STUCK: no response for msg_id=%d within %s", msgID, defaultLoginTimeoutLocal)
+		return fmt.Errorf("%w: no response for msg_id=%d within %s", errLoginStuck, msgID, defaultLoginTimeoutLocal)
 	}
 }

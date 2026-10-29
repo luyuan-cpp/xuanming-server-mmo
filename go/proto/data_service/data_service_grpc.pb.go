@@ -123,8 +123,8 @@ type DataServiceClient interface {
 	BatchGetPlayerName(ctx context.Context, in *BatchGetPlayerNameRequest, opts ...grpc.CallOption) (*BatchGetPlayerNameResponse, error)
 	// ── 资产通道:已落盘账本只读 ─────────────────────────────────
 	// 读 zone Redis 里 scene 写的 PlayerAllData blob 的 asset_op_ledger 子字段。只读、不鉴权(与
-	// BatchGetPlayerName 同级)。实现 go/shared/assetop 的 LedgerReader。
-	// 设计见 docs/design/guild-phase2/07-rollback-fail-closed.md §7.8。
+	// BatchGetPlayerName 同级)。实现 go/shared/assetop 的 LedgerReader / SQLCommitLedgerReader / VerifiedLedgerReader。
+	// 设计见 docs/design/guild-phase2/07-rollback-fail-closed.md §7.8;副本核验见 zone-redis-regression-guard-20261022.md §4.5。
 	GetPlayerAssetOpLedger(ctx context.Context, in *GetPlayerAssetOpLedgerRequest, opts ...grpc.CallOption) (*GetPlayerAssetOpLedgerResponse, error)
 	// ── 玩家收件箱:已落盘账本只读 ───────────────────────────────
 	// 读同一份 PlayerAllData blob 的 inbox_ledger 子字段,读法与错误语义照 GetPlayerAssetOpLedger。
@@ -566,8 +566,8 @@ type DataServiceServer interface {
 	BatchGetPlayerName(context.Context, *BatchGetPlayerNameRequest) (*BatchGetPlayerNameResponse, error)
 	// ── 资产通道:已落盘账本只读 ─────────────────────────────────
 	// 读 zone Redis 里 scene 写的 PlayerAllData blob 的 asset_op_ledger 子字段。只读、不鉴权(与
-	// BatchGetPlayerName 同级)。实现 go/shared/assetop 的 LedgerReader。
-	// 设计见 docs/design/guild-phase2/07-rollback-fail-closed.md §7.8。
+	// BatchGetPlayerName 同级)。实现 go/shared/assetop 的 LedgerReader / SQLCommitLedgerReader / VerifiedLedgerReader。
+	// 设计见 docs/design/guild-phase2/07-rollback-fail-closed.md §7.8;副本核验见 zone-redis-regression-guard-20261022.md §4.5。
 	GetPlayerAssetOpLedger(context.Context, *GetPlayerAssetOpLedgerRequest) (*GetPlayerAssetOpLedgerResponse, error)
 	// ── 玩家收件箱:已落盘账本只读 ───────────────────────────────
 	// 读同一份 PlayerAllData blob 的 inbox_ledger 子字段,读法与错误语义照 GetPlayerAssetOpLedger。

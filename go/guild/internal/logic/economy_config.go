@@ -18,17 +18,18 @@ import (
 	"time"
 
 	"guild/internal/constants"
+	"shared/currencytype"
 	"shared/gameday"
 	tablepb "shared/generated/pb/table"
 	"shared/generated/table"
 )
 
-// 可捐献的货币类型。数值的权威定义在 C++ 的 cpp/libs/modules/currency/constants/currency.h
-// (kCurrencyGold = 0 / kCurrencyDiamond = 1),该枚举没有 proto 镜像,只能写数值 + 出处,
-// 改那边要连这里一起改。绑定灵石(kCurrencyBindDiamond = 2)按 05 §5.1 R1 不可捐,所以不在这里。
+// 可捐献的货币类型:取值表的子集,只点名 shared/currencytype 的常量(事实源是
+// proto/common/base/currency_type.proto),不写数字,扩白名单时不可能写出表外的值。
+// 绑定灵石(currencytype.BindDiamond)按 05 §5.1 R1 不可捐,所以不在这里。
 const (
-	donateCurrencyGold    uint32 = 0
-	donateCurrencyDiamond uint32 = 1
+	donateCurrencyGold    = currencytype.Gold
+	donateCurrencyDiamond = currencytype.Diamond
 )
 
 // 商店分类:1 修行补给 / 2 帮会珍藏 / 3 节庆好礼。客户端按这三个分类各开一个页签,

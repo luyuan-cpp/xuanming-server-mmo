@@ -147,7 +147,7 @@ func RunEquipForgeSmoke(cfg *config.Config) {
 	}
 	getPanel := func() (*scene.AttributePanelInfo, error) {
 		return session.attributePanel(game.SceneAttributeClientPlayerGetAttributePanelMessageId,
-			&scene.GetAttributePanelRequest{})
+			&scene.GetAttributePanelRequest{}, &scene.GetAttributePanelResponse{})
 	}
 
 	// ---- 登录进场 ----
@@ -677,12 +677,12 @@ func equipForgeGrant(s *equipSmokeSession, configId uint32, count uint64) (*scen
 
 // equipForgeAddGold 用 GmAddCurrency 加金币。
 // gmAddGold 是各冒烟共用的 helper,不走 equipSmokeSession.call,所以这里手动过一次同号节流(同一张表、同一个间隔)。
-// 它还分不清「被拒」与「余额是 0」(gate / scene 的 GM 闸拒绝时回的 balance_after 就是 0):
-// 加没加上由调用方重新读背包快照来判断,这里不看返回的余额。
+// gate GM 闸(信封)、scene GM 闸 / 冻结(响应体 tip)与超时,gmAddGold 都直接返回 error,这里原样带上去。
+// 返回的 balance_after 不看:对账以随后重新读的背包快照为准(每份 BagInfo 都带 currency),见 equipForgeFund。
 func equipForgeAddGold(s *equipSmokeSession, amount int64) error {
 	s.throttle(game.SceneCurrencyClientPlayerGmAddCurrencyMessageId)
 	if _, err := gmAddGold(s.gc, s.player, s.stats, amount, equipSmokeRpcTimeout); err != nil {
-		return fmt.Errorf("GmAddCurrency(gold, +%d): %w", amount, err)
+		return fmt.Errorf("gold +%d: %w", amount, err)
 	}
 	return nil
 }
@@ -717,9 +717,10 @@ func equipForgeFund(s *equipSmokeSession, bags equipForgeBags, itemId uint64) (e
 	if err != nil {
 		return equipForgeBags{}, err
 	}
+	// GM 指令被拒(gate / scene 的 GM 闸)在上面就已经是 error;走到这里是两条指令都回了成功,背包快照却没补够
 	if gold, material := equipForgeShortfall(funded.inventory, next); gold != 0 || material != 0 {
-		return equipForgeBags{}, fmt.Errorf("补完之后仍缺 金币 %d / 材料(config_id=%d)%d 个:GM 指令没生效"+
-			"(GM 闸不在 dev / test?看紧挨着的 `gate envelope error` 日志)", gold, next.GetMaterialConfigId(), material)
+		return equipForgeBags{}, fmt.Errorf("补完之后仍缺 金币 %d / 材料(config_id=%d)%d 个:GM 指令回了成功,"+
+			"背包快照里却没补够(scene 发物 / 加金币没落到人物背包?)", gold, next.GetMaterialConfigId(), material)
 	}
 	return funded, nil
 }

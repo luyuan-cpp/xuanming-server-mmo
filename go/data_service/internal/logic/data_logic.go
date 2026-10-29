@@ -14,8 +14,7 @@ import (
 	"data_service/internal/routing"
 	"data_service/internal/svc"
 
-	"shared/assetop"
-	"shared/savebarrier"
+	"shared/redisslot"
 
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -49,17 +48,15 @@ func fieldIndexKey(playerID uint64) string {
 
 // isReservedPlayerField 报告字段名能不能当 data_service 的玩家字段用。
 //
-// player:{id}:<field> 与别的模块共用同一个花括号前缀:C++ 存盘围栏 player:{id}:save_barrier(HASH)与 go/db 的
-// SQL 提交证据 player:{id}:asset_sql_commit(HASH)。用这两个名字 Save / SetField 会把别家的 HASH 覆盖成 string,
-// C++ 存盘脚本见到类型不对就回 error_reply(cpp/libs/engine/infra/storage/redis_client/redis_client.h),
-// 该玩家此后每一次游戏存盘都失败。键名直接取自两个模块的规范键函数,不另抄字面量。
-// 今后任何模块新增 player:{%d}: 花括号键,必须同时登记到这里(见 docs/design/shared-redis-split-by-purpose.md)。
-func isReservedPlayerField(playerID uint64, field string) bool {
-	if strings.HasPrefix(field, reservedFieldPrefix) {
-		return true
-	}
-	key := playerField(playerID, field)
-	return key == savebarrier.Key(playerID) || key == assetop.SQLCommitKey(playerID)
+// player:{id}:<field> 与别的模块共用同一个花括号前缀:C++ 存盘围栏 player:{id}:save_barrier(HASH)、go/db 的
+// SQL 提交证据 player:{id}:asset_sql_commit(HASH),以及玩家域集群化后带 tag 的 owner_epoch / handoff / location 等
+// (docs/design/redis-player-store-cluster.md §5.2)。用这些名字 Save / SetField 会覆盖别家的键,SCAN 退路还会把
+// 它们当字段读出或删掉 —— 例如覆盖 save_barrier 后 C++ 存盘脚本见到类型不对就回 error_reply,该玩家此后每一次
+// 游戏存盘都失败;删掉 owner_epoch 等于抹掉归属代次。保留后缀只认 shared/redisslot 的登记表,这里不另抄名字;
+// 今后任何模块新增 player:{<id>}: 键,必须登记到那张表(redisslot 的契约测试枚举核对)。
+// playerID 不参与判定(保留名与玩家无关),留着是为了调用点不变。
+func isReservedPlayerField(_ uint64, field string) bool {
+	return strings.HasPrefix(field, reservedFieldPrefix) || redisslot.IsReservedPlayerKeySuffix(field)
 }
 
 // ── 玩家数据路由 ───────────────────────────────────────────────
@@ -697,10 +694,11 @@ func parseVersionReply(playerID uint64, raw interface{}) (uint64, error) {
 	return parseVersionValue(playerID, val)
 }
 
+// parseVersionValue 解读版本键**存在**时的值;「键不存在」只由 parseVersionReply 的 nil 分支表达。
+// 空串同样按损坏处理:saveFieldsScript 只经 INCR 写版本、守卫也拒绝空串,空串只可能是带外写坏的。
+// 读成 0 并回成功违反 LoadPlayerData 的 fail-closed 契约:调用方看到「无版本」,下一次存盘才被写侧守卫拒掉,
+// 故障被推迟到写路径,原因也被掩盖。
 func parseVersionValue(playerID uint64, val string) (uint64, error) {
-	if val == "" {
-		return 0, nil
-	}
 	v, err := strconv.ParseUint(val, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("corrupt version value %q for player %d: %w", val, playerID, err)

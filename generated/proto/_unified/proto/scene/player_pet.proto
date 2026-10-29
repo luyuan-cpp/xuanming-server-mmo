@@ -20,7 +20,8 @@ message PetDimensionInfo {
   string name = 3;         // 体质 / 灵力 / 力量 / 敏捷
   string desc = 4;
   uint32 allocated = 5;    // 已分配点
-  uint64 value = 6;        // 面板显示值 = 自然成长 + 已分配
+  uint64 value = 6;        // 面板显示值 = 自然成长 + 生效的已分配。加点不生效(已分配超过本版本总量或单项上限)时
+                           // 已分配部分按 0 计,allocated 仍是存储值(docs/design/player-pet.md §3.3)
   uint32 cap = 7;          // 单项上限(0 = 不限)
   uint32 sort = 8;
   uint32 aptitude = 9;     // 该维度资质(万分比,10000 = 100%)
@@ -47,7 +48,7 @@ message PetInfo {
   uint32 model_id = 6;                   // 客户端模型
   bool is_active = 7;                    // 是否出战中
   uint32 total_points = 8;               // 宝宝属性点总量(按宝宝等级换算)
-  uint32 remaining_points = 9;           // 剩余可分配
+  uint32 remaining_points = 9;           // 剩余可分配 = 加点生效 ? max(0, 总量 − 宝宝池已分配 − 本版本解释不了的维度上的点) : 0
   uint32 pool_id = 10;                   // 宝宝属性点池 id(加点/洗点请求要带)
   uint64 reset_cost_gold = 11;           // 当前等级下洗点金币(0 = 免费)
   uint32 growth = 12;                    // 成长率(万分比):四维资质均值,服务器算好给,纯展示

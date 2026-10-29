@@ -8,7 +8,7 @@ endif()
 set(MMORPG_SOURCE_ROOT "/src" CACHE PATH "本轮仓库源码根目录")
 set(MMORPG_SDK_ROOT "/src" CACHE PATH "已锁定依赖的 SDK 源码根目录")
 set(MMORPG_GTEST_ROOT
-    "${MMORPG_SOURCE_ROOT}/third_party/grpc/third_party/googletest/googletest"
+    "${MMORPG_SOURCE_ROOT}/third_party/googletest/googletest"
     CACHE PATH "锁定的 GoogleTest 源码目录")
 option(MMORPG_ENABLE_SANITIZERS "启用地址及未定义行为检查" ON)
 
@@ -101,6 +101,7 @@ target_link_libraries(redis_lifecycle_test PRIVATE lifecycle_muduo lifecycle_gte
 
 add_executable(timer_queue_lifecycle_test
     "${MMORPG_SOURCE_ROOT}/cpp/tests/timer_queue_unit_test/timer_queue_unit_test.cpp"
+    "${MMORPG_SOURCE_ROOT}/cpp/tests/timer_queue_unit_test/muduo_base_contract_test.cpp"
     "${MMORPG_SOURCE_ROOT}/cpp/libs/engine/core/time/comp/timer_task_comp.cpp")
 target_include_directories(timer_queue_lifecycle_test PRIVATE
     "${MMORPG_SOURCE_ROOT}/cpp/libs/engine/core"

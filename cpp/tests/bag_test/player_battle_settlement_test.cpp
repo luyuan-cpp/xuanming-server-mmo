@@ -9,7 +9,9 @@
 #include <cstdlib>
 #include <functional>
 #include <limits>
+#include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 #include <hiredis/hiredis.h>
@@ -28,6 +30,8 @@
 #include "modules/gain_block/gain_block_service.h"
 #include "proto/battle/battle_data.pb.h"
 #include "table/code/item_table.h"
+#include "table/code/pet_table.h"
+#include "table/code/attributepool_table.h"
 #include "table/code/condition_table.h"
 #include "table/code/dungeon_table.h"
 #include "table/code/mission_table.h"
@@ -47,6 +51,13 @@
 #include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/comp/last_persisted_snapshot_comp.h"
 #include "services/scene/player/system/player_mission.h"
+#include "services/scene/player/system/role_admission_system.h"
+#include "services/scene/player/system/player_inbox_registry.h"
+#include "services/scene/player/system/player_inbox_rules.h"
+#include "services/scene/player/system/player_inbox_system.h"
+#include "proto/common/component/player_inbox_ledger_comp.pb.h"
+#include "proto/player_inbox/player_inbox.pb.h"
+#include "network/node_utils.h"
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/event/battle_event.pb.h"
 #include "modules/mission/mission_events.h"
@@ -220,6 +231,19 @@ protected:
         // 缓存跨实体生命周期，所以每个测试/重复运行分配不同真实身份。
         static uint64_t nextPlayer = 9876500;
         playerId = ++nextPlayer;
+        RoleAdmissionSystem::Dependencies dependencies;
+        common::base::RoleAdmissionIdentity identity;
+        identity.set_player_id(playerId); identity.set_generation(1); identity.set_owner_revision(1);
+        identity.set_owner_epoch(7); identity.set_scene_instance_id("battle-sql-test-scene");
+        dependencies.confirmedAdmissions.push_back(identity);
+        dependencies.readSqlAck = [this](Guid id, auto completed) {
+            EXPECT_EQ(playerId, id);
+            ++sqlReads;
+            if (deferSql) pendingSql.push_back(std::move(completed));
+            else completed(sqlAck);
+            return true;
+        };
+        admission = std::make_unique<RoleAdmissionSystem::ScopedDependencies>(std::move(dependencies));
         ASSERT_TRUE(missionRows.Install());
         CreatePlayerEntity();
         RegisterPlayer();
@@ -247,10 +271,14 @@ protected:
         PlayerBattleSystem::SetPersistFnForTest(nullptr);
         tlsEcs.playerList.erase(playerId);
         if (tlsEcs.actorRegistry.valid(player)) tlsEcs.actorRegistry.destroy(player);
+        pendingSql.clear();
+        admission.reset();
     }
     void CreatePlayerEntity() {
         player = tlsEcs.actorRegistry.create();
         tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, Guid{playerId});
+        tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 7;
+        tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player, std::uint64_t{1}, std::uint64_t{1});
         auto& attributes = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player);
         attributes.set_health(100);
         attributes.set_mana(50);
@@ -266,6 +294,26 @@ protected:
         // 结算幂等账本是加载时(PlayerDatabaseMessageFieldsUnmarshal)无条件挂上的必需组件,
         // 结算路径只取不建。夹具照加载路径挂一本空账本 = 「盘上没有任何已应用条目」。
         tlsEcs.actorRegistry.emplace<BattleSettlementLedgerComp>(player);
+    }
+    // 两份证据由夹具分别完成；默认不伪造SQL提交。
+    void SaveSettlementCandidate(bool sqlCommitted) {
+        PlayerAllData persisted;
+        auto* first = persisted.mutable_player_database_data();
+        first->set_player_id(playerId);
+        persisted.set_last_save_seq(++saveSeq);
+        first->mutable_settlement_ledger()->add_applied()->set_battle_id(settlement.battle_id());
+        auto* second = persisted.mutable_player_database_1_data();
+        second->set_player_id(playerId);
+        const auto source = std::make_shared<const PlayerAllData>(persisted);
+        const auto committed = RoleAdmissionSystem::CaptureSnapshotCommit(player, source, 7, saveSeq);
+        ASSERT_TRUE(static_cast<bool>(committed));
+        committed();
+        tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player).Replace(*source);
+        if (sqlCommitted) {
+            const auto q = std::to_string(saveSeq);
+            const auto version = std::string(19, '0') + "7:" + std::string(20 - q.size(), '0') + q;
+            sqlAck = RoleAdmissionSystem::SqlAck{"7", version, version, version};
+        }
     }
     uint32_t KillProgressAt(int slot) const {
         const auto* container = tlsEcs.actorRegistry.try_get<MissionsContainerComp>(player);
@@ -297,6 +345,12 @@ protected:
     uint64_t playerId{};
     BattleSettlementData settlement;
     ScopedSettlementMissionRows missionRows;
+    std::unique_ptr<RoleAdmissionSystem::ScopedDependencies> admission;
+    std::optional<RoleAdmissionSystem::SqlAck> sqlAck;
+    std::vector<std::function<void(std::optional<RoleAdmissionSystem::SqlAck>)>> pendingSql;
+    bool deferSql{false};
+    int sqlReads{0};
+    uint64_t saveSeq{0};
 };
 
 TEST_F(PlayerBattleSettlementTest, DuplicateSuccessfulCallbacksPayAndProgressOnce) {
@@ -756,17 +810,39 @@ TEST_F(PlayerBattleSettlementTest, AckDefersClearWhileAppliedButNotDurable) {
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<InBattleComp>(player));
 }
 
-// 落盘快照里已有这一局 = 字节确实在盘上:走销账分支,不再额外压存盘。
+// 原用例现在明确完成同一快照的双SQL证据；Redis删除仍由独立真Redis合同验证。
 TEST_F(PlayerBattleSettlementTest, AckClearsOnceLedgerEntryIsDurable) {
-    PlayerAllData persisted;
-    persisted.mutable_player_database_data()->mutable_settlement_ledger()->add_applied()->set_battle_id(
-        settlement.battle_id());
-    tlsEcs.actorRegistry.emplace<PlayerLastPersistedSnapshotComp>(player).Replace(persisted);
-
+    SaveSettlementCandidate(true);
     PlayerBattleSettlementTestAccess::ApplyPending(player, settlement);
-
     EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
-    EXPECT_EQ(gPersistCalls, 1);  // 只有应用时那一次
+    EXPECT_EQ(gPersistCalls, 1); // 只有应用时那一次
+    EXPECT_EQ(1, sqlReads) << "必须核双SQL，不得仅凭Redis候选销账";
+}
+
+TEST_F(PlayerBattleSettlementTest, RedisOnlySettlementRetainsLedgerAndRequestsSqlProof) {
+    SaveSettlementCandidate(false);
+    PlayerBattleSettlementTestAccess::ApplyPending(player, settlement);
+    EXPECT_EQ(1, sqlReads);
+    EXPECT_TRUE(battle_settlement::HasApplied(
+        tlsEcs.actorRegistry.get<BattleSettlementLedgerComp>(player), settlement.battle_id()));
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+}
+
+TEST_F(PlayerBattleSettlementTest, SqlProofForOldEntityDoesNotModifyRecreatedPlayer) {
+    SaveSettlementCandidate(true);
+    deferSql = true;
+    PlayerBattleSettlementTestAccess::ApplyPending(player, settlement);
+    ASSERT_EQ(1u, pendingSql.size());
+    const auto old = player;
+    tlsEcs.playerList.erase(playerId);
+    tlsEcs.actorRegistry.destroy(player);
+    CreatePlayerEntity();
+    RegisterPlayer();
+    const auto bytes = tlsEcs.actorRegistry.get<BattleSettlementLedgerComp>(player).SerializeAsString();
+    pendingSql.front()(sqlAck);
+    EXPECT_NE(old, player);
+    EXPECT_EQ(bytes, tlsEcs.actorRegistry.get<BattleSettlementLedgerComp>(player).SerializeAsString());
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
 }
 
 // 「已有未落地存盘就不再压」依赖真实 Redis 客户端的队列状态,单测里客户端为空,
@@ -811,6 +887,135 @@ TEST_F(PlayerBattleSettlementTest, MissingLedgerAckDoesNotFabricateLedger) {
     const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
     ASSERT_NE(current, nullptr);
     EXPECT_EQ(current->battle_id(), nextBattleId);
+}
+
+// v1执行入口不使用可裁剪的legacy账本；重复消费由PlayerInboxSystem永久域水位验证。
+TEST_F(PlayerBattleSettlementTest, InboxSettlementUsesWholeEffectInputsWithoutLegacyLedgerOrOwnSave) {
+    tlsEcs.actorRegistry.remove<BattleSettlementLedgerComp>(player);
+    const auto result = PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString());
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, result.kind);
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(2u, KillProgress());
+    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<BattleSettlementLedgerComp>(player));
+    EXPECT_EQ(0, gPersistCalls) << "执行器不独立落盘：由Inbox效果+永久游标同快照保存";
+}
+
+TEST_F(PlayerBattleSettlementTest, InboxGoldBlockDefersWholeSettlementAndRetryAppliesAllEffects) {
+    ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player, kCurrencyGold));
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, KillProgress());
+    EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+    ASSERT_EQ(kSuccess, CurrencySystem::UnblockCurrency(player, kCurrencyGold));
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(2u, KillProgress());
+}
+
+TEST_F(PlayerBattleSettlementTest, InboxChecksNetGoldAfterActiveDebtAndNeverWrapsBalance) {
+    auto& currency = tlsEcs.actorRegistry.get<CurrencyComp>(player);
+    currency.mutable_values()->Resize(static_cast<int>(kCurrencyMax), 0);
+    currency.set_values(static_cast<int>(kCurrencyGold), std::numeric_limits<uint64_t>::max() - 5);
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(0u, KillProgress());
+    auto& debt = tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player).debts[static_cast<uint32_t>(kCurrencyGold)];
+    debt.owed = 10;
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(std::numeric_limits<uint64_t>::max() - 3, CurrencySystem::GetBalance(player, kCurrencyGold));
+}
+
+TEST_F(PlayerBattleSettlementTest, InboxMissingPlayerMissionScopeCannotDropKillOrCreditGold) {
+    tlsEcs.actorRegistry.get<MissionsContainerComp>(player).map.clear();
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+}
+
+TEST_F(PlayerBattleSettlementTest, InboxUnownedPetSkipsOnlyRetiredPetEffect) {
+    auto& pets = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+    settlement.add_pets()->set_pet_id(911);
+    const auto before = pets.SerializeAsString();
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(before, pets.SerializeAsString());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(2u, KillProgress());
+    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+}
+
+TEST_F(PlayerBattleSettlementTest, InboxMissingPetTableSkipsOnlyThatPetEffect) {
+    auto& pets = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+    auto* pet = pets.add_pets(); pet->set_pet_id(911); pet->set_pet_table_id(UINT32_MAX); pet->set_health(17);
+    settlement.add_pets()->set_pet_id(911);
+    const auto before = pets.SerializeAsString();
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(before, pets.SerializeAsString());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(2u, KillProgress());
+}
+
+TEST_F(PlayerBattleSettlementTest, InboxMissingPetPoolSkipsOnlyThatPetEffect) {
+    PetTableManager::Instance().Load(); AttributePoolTableManager::Instance().Load();
+    ASSERT_GT(PetTableManager::Instance().FindAll().data_size(), 0);
+    struct RestorePoolOwners {
+        std::vector<std::pair<uint32_t, uint32_t>> rows;
+        ~RestorePoolOwners() {
+            for (const auto& [id, owner] : rows) {
+                auto* row = const_cast<AttributePoolTable*>(AttributePoolTableManager::Instance().FindByIdSilent(id).first);
+                EXPECT_NE(nullptr, row);
+                if (row) row->set_owner_type(owner);
+            }
+        }
+    } restore;
+    for (const auto& row : AttributePoolTableManager::Instance().FindAll().data()) {
+        auto* changed = const_cast<AttributePoolTable*>(&row);
+        restore.rows.emplace_back(row.id(), row.owner_type()); changed->set_owner_type(0);
+    }
+    auto& pets = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+    auto* pet = pets.add_pets(); pet->set_pet_id(911);
+    pet->set_pet_table_id(PetTableManager::Instance().FindAll().data(0).id()); pet->set_health(17);
+    settlement.add_pets()->set_pet_id(911);
+    const auto before = pets.SerializeAsString();
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(before, pets.SerializeAsString());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(2u, KillProgress());
+}
+
+TEST_F(PlayerBattleSettlementTest, InboxMissingUnknownOrDamagedPetStateStillDefersBeforeEffects) {
+    settlement.add_pets()->set_pet_id(911);
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    auto& pets = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+    pets.GetReflection()->MutableUnknownFields(&pets)->AddVarint(900, 1);
+    const auto opaque = pets.SerializeAsString();
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(opaque, pets.SerializeAsString());
+    pets.Clear(); pets.add_pets()->set_pet_id(911); pets.add_pets()->set_pet_id(911);
+    const auto damaged = pets.SerializeAsString();
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(damaged, pets.SerializeAsString());
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, KillProgress());
+    EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+}
+
+TEST_F(PlayerBattleSettlementTest, InboxNestedUnknownFieldCannotBeSilentlyApplied) {
+    auto* defeat = settlement.mutable_defeated_monsters(0);
+    defeat->GetReflection()->MutableUnknownFields(defeat)->AddVarint(900, 1);
+    EXPECT_EQ(PlayerInboxExecKind::kVersionSkew, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, KillProgress());
+}
+
+TEST_F(PlayerBattleSettlementTest, InboxOldBattleCannotRewriteNextBattleHealthOrFreeze) {
+    auto& current = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    current.set_battle_id(settlement.battle_id() + 1);
+    const auto nextBytes = current.SerializeAsString();
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_TRUE(PlayerBattleSystem::CompleteInboxSettlement(player, settlement.SerializeAsString()));
+    EXPECT_EQ(nextBytes, tlsEcs.actorRegistry.get<InBattleComp>(player).SerializeAsString());
+    EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
 }
 
 // ── 账本纯规则(无 ECS、无 Redis)────────────────────────────────────────────
@@ -893,6 +1098,35 @@ protected:
         param.itemPBComp.set_size(count);
         ASSERT_EQ(kSuccess, Inventory().AddItem(param));
     }
+    std::map<Guid, std::string> ItemBytes() {
+        std::map<Guid, std::string> out;
+        Inventory().ForEachItem([&out](Guid guid, const ItemComp& item) { out.emplace(guid, item.SerializeAsString()); });
+        return out;
+    }
+    void PrepareThreeCurrencyInboxExchange() {
+        tlsEcs.actorRegistry.get<CurrencyComp>(player).mutable_values()->Resize(static_cast<int>(kCurrencyMax), 0);
+        AddCurrencyGain(kCurrencyGold, 12);
+        AddCurrencyGain(kCurrencyDiamond, 7);
+        AddCurrencyGain(kCurrencyBindDiamond, 3);
+        settlement.set_gold_gain(999); // 新集合存在时旧金币不能叠加，亦不能被Inbox旧入口单独解释。
+        ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+        SetConsumed(kSettlementStackItem, 1);
+        SetGained(kSettlementNonStackItem, 1);
+    }
+    void ExpectInboxExchangeRejectedWithoutEffects(PlayerInboxExecKind kind) {
+        const auto money = tlsEcs.actorRegistry.get<CurrencyComp>(player).SerializeAsString();
+        const auto items = ItemBytes();
+        const auto slots = Inventory().GridSlots();
+        EXPECT_EQ(kind, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+        EXPECT_EQ(money, tlsEcs.actorRegistry.get<CurrencyComp>(player).SerializeAsString());
+        EXPECT_EQ(items, ItemBytes()); EXPECT_EQ(slots, Inventory().GridSlots());
+        EXPECT_EQ(0u, Temporary().OccupiedGridCount());
+        EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+        EXPECT_EQ(50u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).mana());
+        EXPECT_EQ(0u, KillProgress()); EXPECT_EQ(0, gPersistCalls);
+        EXPECT_FALSE(battle_settlement::HasApplied(
+            tlsEcs.actorRegistry.get<BattleSettlementLedgerComp>(player), settlement.battle_id()));
+    }
     void SetConsumed(uint32_t configId, uint64_t count) {
         auto* entry = settlement.add_items_consumed();
         entry->set_item_table_id(configId);
@@ -904,6 +1138,413 @@ protected:
         entry->set_count(count);
     }
 };
+
+// 整笔候选的流水不得先于空间/规则/外层货币确认；用独立号段观察失败时没有流水铸号。
+class ScopedPreparedExchangeSegments {
+public:
+    bool Install() {
+        itemEnabled_ = tlsGuidSegmentRegistry.Get(GuidKind::kItem).IsEnabled();
+        txEnabled_ = tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).IsEnabled();
+        installed_ = true;
+        return Arm(GuidKind::kItem, "item", 9100000, 9200000) && Arm(GuidKind::kTxLog, "txlog", 19100000, 19200000);
+    }
+    ~ScopedPreparedExchangeSegments() {
+        if (!installed_) return;
+        tlsGuidSegmentRegistry.Get(GuidKind::kItem).Reset();
+        tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).Reset();
+        if (itemEnabled_) EXPECT_TRUE(Arm(GuidKind::kItem, "item", 1, uint64_t{1} << 54));
+        if (txEnabled_) EXPECT_TRUE(Arm(GuidKind::kTxLog, "txlog", 1, uint64_t{1} << 54));
+    }
+private:
+    static bool Arm(GuidKind kind, const std::string& name, uint64_t low, uint64_t high) {
+        auto& client = tlsGuidSegmentRegistry.Get(kind);
+        client.Reset();
+        GuidSegmentClient::Options options; options.kindName = name; options.initialStep = 100000;
+        if (!client.Enable(options, [](const std::string&, uint32_t) { return true; },
+            [](GuidSegmentClient::TimerKind, double, std::function<void()>) {}, [] { return 0.0; })) return false;
+        client.Warm(); client.OnResponse(0, low, high);
+        return client.IsReady();
+    }
+    bool installed_{false}, itemEnabled_{false}, txEnabled_{false};
+};
+
+// 复用正式Inbox状态机/执行器，依赖仅替换时钟、传输与存盘回执；不自行实现去重。
+constexpr uint32_t kCompositionBattleDomain = player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT;
+uint64_t gCompositionInboxNowMs = 1'000'000;
+std::vector<player_inbox::FetchPlayerInboxRequest> gCompositionInboxFetches;
+std::vector<player_inbox::AckPlayerInboxRequest> gCompositionInboxAcks;
+NodeInfo gCompositionInboxNode;
+const NodeInfo* gCompositionPreviousNode = nullptr;
+uint64_t CompositionInboxNow() { return gCompositionInboxNowMs; }
+bool CaptureCompositionInboxFetch(const player_inbox::FetchPlayerInboxRequest& request) {
+    if (static_cast<uint32_t>(request.domain()) != kCompositionBattleDomain) return false;
+    gCompositionInboxFetches.push_back(request); return true;
+}
+bool CaptureCompositionInboxAck(const player_inbox::AckPlayerInboxRequest& request) {
+    if (static_cast<uint32_t>(request.domain()) != kCompositionBattleDomain) return false;
+    gCompositionInboxAcks.push_back(request); return true;
+}
+class ScopedCompositionInbox {
+public:
+    ScopedCompositionInbox() {
+        gCompositionInboxNowMs = 1'000'000;
+        gCompositionInboxFetches.clear(); gCompositionInboxAcks.clear();
+        const auto& old = GetNodeInfo();
+        gCompositionPreviousNode = &old == &NodeInfo::default_instance() ? nullptr : &old;
+        gCompositionInboxNode.Clear(); gCompositionInboxNode.set_node_id(4242);
+        InstallLocalNodeInfo(&gCompositionInboxNode);
+        PlayerInboxSystem::SetNowFnForTest(&CompositionInboxNow);
+        PlayerInboxSystem::SetPersistFnForTest(&CountingPersist);
+        PlayerInboxSystem::SetTransportForTest(&CaptureCompositionInboxFetch, &CaptureCompositionInboxAck);
+        PlayerInboxSystem::SetConsumerConfigForTest(true, true, 0);
+    }
+    ~ScopedCompositionInbox() {
+        PlayerInboxSystem::SetConsumerConfigForTest(false, false, 0);
+        PlayerInboxSystem::SetTransportForTest(nullptr, nullptr);
+        PlayerInboxSystem::SetPersistFnForTest(nullptr); PlayerInboxSystem::SetNowFnForTest(nullptr);
+        InstallLocalNodeInfo(gCompositionPreviousNode); gCompositionPreviousNode = nullptr;
+        gCompositionInboxFetches.clear(); gCompositionInboxAcks.clear();
+    }
+};
+
+TEST_F(PlayerBattleSettlementItemTest, InboxThreeCurrenciesUseOneAtomicCreditAndPermanentReplayIgnoresLegacyGold)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    ASSERT_NO_FATAL_FAILURE(PrepareThreeCurrencyInboxExchange());
+    ScopedCompositionInbox inbox;
+    const auto confirmed = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+    ASSERT_TRUE(confirmed.has_value());
+    RoleAdmissionSystem::Dependencies dependencies;
+    dependencies.now = [] { return RoleAdmissionSystem::Clock::time_point(std::chrono::milliseconds(gCompositionInboxNowMs)); };
+    dependencies.localNode = [] { return RoleAdmissionSystem::LocalNode{"battle-sql-test-scene", "4242", 1}; };
+    dependencies.confirmedAdmissions.push_back(*confirmed);
+    dependencies.readSqlAck = [this](Guid id, auto completed) {
+        EXPECT_EQ(playerId, id); ++sqlReads; completed(sqlAck); return true;
+    };
+    RoleAdmissionSystem::ScopedDependencies proof(std::move(dependencies));
+    tlsEcs.actorRegistry.remove<BattleSettlementLedgerComp>(player);
+    tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player);
+    PlayerInboxSystem::OnPlayerLanded(player); PlayerInboxSystem::Tick();
+    ASSERT_EQ(1u, gCompositionInboxFetches.size());
+    const auto respond = [&](const player_inbox::FetchPlayerInboxRequest& fetch) {
+        player_inbox::FetchPlayerInboxResponse response;
+        response.set_player_id(playerId); response.set_domain(fetch.domain());
+        response.set_correlation_id(fetch.correlation_id()); response.set_fence(player_inbox::PLAYER_INBOX_FENCE_MATCH);
+        auto* item = response.add_items(); item->set_seq(10); item->set_request_id(settlement.battle_id());
+        item->set_msg_type(player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT);
+        item->set_payload(settlement.SerializeAsString()); item->set_delivery_count(1); item->set_created_ms(1);
+        PlayerInboxSystem::OnFetchReply(playerId, kCompositionBattleDomain, fetch.correlation_id(), response);
+    };
+    respond(gCompositionInboxFetches.back());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(7u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+    EXPECT_EQ(3u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
+    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementStackItem));
+    EXPECT_EQ(1u, Inventory().GetTotalItemCount(kSettlementNonStackItem));
+    EXPECT_EQ(2u, KillProgress()); EXPECT_TRUE(gCompositionInboxAcks.empty());
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<BattleSettlementLedgerComp>(player));
+
+    // 按既有Inbox夹具分别完成Redis候选与同E/q双SQL回执，不把persist函数返回值当证明。
+    PlayerAllData persisted;
+    auto* first = persisted.mutable_player_database_data(); first->set_player_id(playerId);
+    first->mutable_currency()->CopyFrom(tlsEcs.actorRegistry.get<CurrencyComp>(player));
+    first->mutable_derived_attributes_component()->CopyFrom(tlsEcs.actorRegistry.get<BaseAttributesComp>(player));
+    first->mutable_inbox_ledger()->CopyFrom(tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player));
+    persisted.mutable_player_database_1_data()->set_player_id(playerId); persisted.set_last_save_seq(++saveSeq);
+    const auto source = std::make_shared<const PlayerAllData>(persisted);
+    const auto committed = RoleAdmissionSystem::CaptureSnapshotCommit(player, source, 7, saveSeq);
+    ASSERT_TRUE(static_cast<bool>(committed)); committed();
+    tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player).Replace(*source);
+    const auto q = std::to_string(saveSeq);
+    const auto version = std::string(19, '0') + "7:" + std::string(20 - q.size(), '0') + q;
+    sqlAck = RoleAdmissionSystem::SqlAck{"7", version, version, version};
+    PlayerInboxSystem::Tick(); ASSERT_EQ(1u, gCompositionInboxAcks.size());
+    const auto ack = gCompositionInboxAcks.back();
+    ASSERT_EQ(1, ack.decisions_size());
+    EXPECT_EQ(player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, ack.decisions(0).outcome());
+    player_inbox::AckPlayerInboxResponse acknowledged;
+    acknowledged.set_player_id(playerId); acknowledged.set_domain(ack.domain());
+    acknowledged.set_correlation_id(ack.correlation_id()); acknowledged.set_fence(player_inbox::PLAYER_INBOX_FENCE_MATCH);
+    auto* finalized = acknowledged.add_results(); finalized->set_seq(ack.decisions(0).seq());
+    finalized->set_result(player_inbox::PLAYER_INBOX_ACK_FINALIZED); finalized->set_state(player_inbox::PLAYER_INBOX_ITEM_APPLIED);
+    PlayerInboxSystem::OnAckReply(playerId, kCompositionBattleDomain, ack.correlation_id(), acknowledged);
+
+    const auto after = ItemBytes();
+    tlsEcs.actorRegistry.get<BaseAttributesComp>(player).set_health(90);
+    gCompositionInboxNowMs += player_inbox_rules::kMinCheckGapMs + 1;
+    PlayerInboxSystem::OnNotifyEvent(playerId, kCompositionBattleDomain); PlayerInboxSystem::Tick();
+    ASSERT_EQ(2u, gCompositionInboxFetches.size()); respond(gCompositionInboxFetches.back());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(7u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+    EXPECT_EQ(3u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
+    EXPECT_EQ(after, ItemBytes()); EXPECT_EQ(2u, KillProgress());
+    EXPECT_EQ(90u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+    ASSERT_EQ(2u, gCompositionInboxAcks.size());
+}
+
+TEST_F(PlayerBattleSettlementItemTest, InboxLaterCurrencyOverflowRejectsMoneyItemsHealthAndMissionTogether)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    ASSERT_NO_FATAL_FAILURE(PrepareThreeCurrencyInboxExchange());
+    tlsEcs.actorRegistry.get<CurrencyComp>(player).set_values(
+        static_cast<int>(kCurrencyBindDiamond), std::numeric_limits<uint64_t>::max() - 2);
+    ASSERT_NO_FATAL_FAILURE(ExpectInboxExchangeRejectedWithoutEffects(PlayerInboxExecKind::kDefer));
+    tlsEcs.actorRegistry.get<CurrencyComp>(player).set_values(static_cast<int>(kCurrencyBindDiamond), 0);
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(7u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+    EXPECT_EQ(3u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
+    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementStackItem));
+    EXPECT_EQ(1u, Inventory().GetTotalItemCount(kSettlementNonStackItem)); EXPECT_EQ(2u, KillProgress());
+}
+
+TEST_F(PlayerBattleSettlementItemTest, InboxBlockedLaterCurrencyDefersWholeExchangeAndRetryCreditsEachCurrencyOnce)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    ASSERT_NO_FATAL_FAILURE(PrepareThreeCurrencyInboxExchange());
+    ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player, kCurrencyBindDiamond));
+    ASSERT_NO_FATAL_FAILURE(ExpectInboxExchangeRejectedWithoutEffects(PlayerInboxExecKind::kDefer));
+    ASSERT_EQ(kSuccess, CurrencySystem::UnblockCurrency(player, kCurrencyBindDiamond));
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(7u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+    EXPECT_EQ(3u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
+    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementStackItem));
+    EXPECT_EQ(1u, Inventory().GetTotalItemCount(kSettlementNonStackItem)); EXPECT_EQ(2u, KillProgress());
+}
+
+TEST_F(PlayerBattleSettlementItemTest, InboxUnknownDebtOnLaterCurrencyStopsBeforeAnyCreditOrConsumption)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    ASSERT_NO_FATAL_FAILURE(PrepareThreeCurrencyInboxExchange());
+    CurrencyDebtEntry unknown;
+    unknown.GetReflection()->MutableUnknownFields(&unknown)->AddVarint(900, 1);
+    const auto carried = unknown_field_carry::Capture(unknown);
+    auto& debt = tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player).debts[static_cast<uint32_t>(kCurrencyBindDiamond)];
+    debt.owed = 1; debt.unknownFields = carried;
+    ASSERT_TRUE(CurrencySystem::DebtCarriesUnknownFields(player, kCurrencyBindDiamond));
+    ASSERT_NO_FATAL_FAILURE(ExpectInboxExchangeRejectedWithoutEffects(PlayerInboxExecKind::kVersionSkew));
+    EXPECT_EQ(0u, debt.paid); EXPECT_EQ(carried, debt.unknownFields);
+}
+
+TEST_F(PlayerBattleSettlementItemTest, InboxAdmissionChangeDuringCandidateInitializationCannotPartiallyCreditCurrencies)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    ASSERT_NO_FATAL_FAILURE(PrepareThreeCurrencyInboxExchange());
+    const auto before = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+    ASSERT_TRUE(before.has_value());
+    auto replacement = *before; replacement.set_owner_revision(before->owner_revision() + 1);
+    int initialized = 0;
+    struct ResetInitializer { ~ResetInitializer() { BagService::SetItemInstanceInitializer({}); } } reset;
+    const auto installAdmission = [&](const common::base::RoleAdmissionIdentity& identity) {
+        admission.reset();
+        RoleAdmissionSystem::Dependencies dependencies;
+        dependencies.confirmedAdmissions.push_back(identity);
+        admission = std::make_unique<RoleAdmissionSystem::ScopedDependencies>(std::move(dependencies));
+        auto& loaded = tlsEcs.actorRegistry.get<PlayerRoleAdmissionComp>(player);
+        loaded.generation = identity.generation(); loaded.ownerRevision = identity.owner_revision();
+    };
+    BagService::SetItemInstanceInitializer([&](ItemComp&) {
+        ++initialized;
+        installAdmission(replacement); // 对抗性重入：容器候选未发布，最终提交必须再核入场原件。
+    });
+    ASSERT_NO_FATAL_FAILURE(ExpectInboxExchangeRejectedWithoutEffects(PlayerInboxExecKind::kDefer));
+    EXPECT_EQ(1, initialized);
+    const auto changed = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+    ASSERT_TRUE(changed.has_value()); EXPECT_EQ(replacement.owner_revision(), changed->owner_revision());
+    BagService::SetItemInstanceInitializer({}); installAdmission(*before);
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(7u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+    EXPECT_EQ(3u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
+    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementStackItem));
+    EXPECT_EQ(1u, Inventory().GetTotalItemCount(kSettlementNonStackItem)); EXPECT_EQ(2u, KillProgress());
+}
+
+TEST_F(PlayerBattleSettlementItemTest, InboxFullBagsKeepConsumptionGoldHealthAndKillsUnchanged)
+{
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    Inventory().SetCapacityForRestore(1); Temporary().SetCapacityForRestore(0);
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    SetConsumed(kSettlementStackItem, 1); SetGained(kSettlementNonStackItem, 1);
+    const auto slots = Inventory().GridSlots();
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(3u, Inventory().GetTotalItemCount(kSettlementStackItem));
+    EXPECT_EQ(slots, Inventory().GridSlots());
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, KillProgress());
+    EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+}
+
+TEST_F(PlayerBattleSettlementItemTest, InboxCommittedConsumptionSurvivesBattleUsableHotReloadAndPreservesOtherInstances)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementDropItem, 2));
+    Guid consumedGuid = 0, opaqueGuid = 0;
+    Inventory().ForEachItem([&](Guid guid, const ItemComp& item) {
+        if (item.config_id() == kSettlementStackItem) consumedGuid = guid;
+        if (item.config_id() == kSettlementDropItem) opaqueGuid = guid;
+    });
+    ASSERT_NE(0u, consumedGuid); ASSERT_NE(0u, opaqueGuid);
+    auto* opaque = Inventory().GetItemCompByGuid(opaqueGuid);
+    opaque->GetReflection()->MutableUnknownFields(opaque)->AddVarint(900, 7);
+    const auto before = ItemBytes();
+    const auto slots = Inventory().GridSlots();
+    auto* row = const_cast<ItemTable*>(ItemTableManager::Instance().FindByIdSilent(kSettlementStackItem).first);
+    ASSERT_NE(nullptr, row);
+    struct RestoreBattleUsable { ItemTable& row; uint32_t old; ~RestoreBattleUsable() { row.set_battle_usable(old); } } restore{*row, row->battle_usable()};
+    row->set_battle_usable(0);
+    SetConsumed(kSettlementStackItem, 1);
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    const auto after = ItemBytes();
+    ASSERT_EQ(before.size(), after.size()); ASSERT_EQ(2u, after.size());
+    EXPECT_TRUE(after.contains(consumedGuid)); EXPECT_TRUE(after.contains(opaqueGuid));
+    EXPECT_EQ(before.at(opaqueGuid), after.at(opaqueGuid));
+    ItemComp expected; ASSERT_TRUE(expected.ParseFromString(before.at(consumedGuid))); expected.set_size(2);
+    EXPECT_EQ(expected.SerializeAsString(), after.at(consumedGuid));
+    EXPECT_EQ(slots, Inventory().GridSlots());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold)); EXPECT_EQ(2u, KillProgress());
+}
+
+TEST_F(PlayerBattleSettlementItemTest, InboxUnknownConsumedInstanceCannotBeDowngradedToOrdinaryQuantity)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    Guid guid = 0; Inventory().ForEachItem([&guid](Guid id, const ItemComp&) { guid = id; });
+    ASSERT_NE(0u, guid);
+    auto* item = Inventory().GetItemCompByGuid(guid);
+    item->GetReflection()->MutableUnknownFields(item)->AddVarint(900, 7);
+    const auto before = ItemBytes();
+    const auto slots = Inventory().GridSlots();
+    SetConsumed(kSettlementStackItem, 1);
+    EXPECT_EQ(PlayerInboxExecKind::kVersionSkew, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(before, ItemBytes()); EXPECT_EQ(slots, Inventory().GridSlots());
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold)); EXPECT_EQ(0u, KillProgress());
+    EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+}
+
+TEST_F(PlayerBattleSettlementItemTest, InboxKnownConsumptionStillClampsToActualHeldInstances)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 1)); SetConsumed(kSettlementStackItem, 3);
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_TRUE(ItemBytes().empty()); EXPECT_EQ(0u, Inventory().OccupiedGridCount());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold)); EXPECT_EQ(2u, KillProgress());
+}
+
+TEST_F(PlayerBattleSettlementItemTest, InboxMissionRewardFailureRetainsClaimableEntitlement)
+{
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    auto* row = const_cast<MissionTable*>(MissionTableManager::Instance().FindByIdSilent(4).first);
+    ASSERT_NE(nullptr, row);
+    row->set_target_count(0, 1); row->set_target_count(1, 1);
+    Inventory().SetCapacityForRestore(0); Temporary().SetCapacityForRestore(0);
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    auto& missions = tlsEcs.actorRegistry.get<MissionsContainerComp>(player).map.at(MissionListComp::kPlayerMission);
+    EXPECT_TRUE(missions.IsComplete(4)); EXPECT_TRUE(missions.IsClaimable(4));
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    Inventory().SetCapacityForRestore(20);
+    EXPECT_EQ(kSuccess, PlayerMissionSystem::ClaimReward(player, MissionListComp::kPlayerMission, 4));
+    EXPECT_FALSE(missions.IsClaimable(4));
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "后领不重加结算金币/击杀";
+}
+
+TEST_F(PlayerBattleSettlementItemTest, PreparedExchangeCannotConsumeOrCreditWhenBothTargetsReject)
+{
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    Inventory().SetCapacityForRestore(1); Temporary().SetCapacityForRestore(0);
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    const auto slots = Inventory().GridSlots();
+    const auto txBefore = tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).Available();
+    int credits = 0;
+    const auto result = BagService::ConsumeInventoryAndGrant(player,
+        {{kSettlementStackItem, 1}}, {{kSettlementNonStackItem, 1}}, 7001, "prepared-test", [&] {
+            ++credits; return CurrencySystem::AddCurrency(player, kCurrencyGold, 5);
+        });
+    EXPECT_NE(kSuccess, result);
+    EXPECT_EQ(0, credits);
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(3u, Inventory().GetTotalItemCount(kSettlementStackItem));
+    EXPECT_EQ(slots, Inventory().GridSlots());
+    EXPECT_EQ(0u, Temporary().OccupiedGridCount());
+    EXPECT_EQ(txBefore, tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).Available());
+}
+
+TEST_F(PlayerBattleSettlementItemTest, PreparedExchangeUsesSpaceFreedByConsumptionBeforeGrant)
+{
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    Inventory().SetCapacityForRestore(1); Temporary().SetCapacityForRestore(0);
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 2));
+    int credits = 0;
+    ASSERT_EQ(kSuccess, BagService::ConsumeInventoryAndGrant(player,
+        {{kSettlementStackItem, 2}}, {{kSettlementNonStackItem, 1}}, 7002, "prepared-test", [&] {
+            ++credits; return CurrencySystem::AddCurrency(player, kCurrencyGold, 5);
+        }));
+    EXPECT_EQ(1, credits);
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, Inventory().GetTotalItemCount(kSettlementStackItem));
+    EXPECT_EQ(1u, Inventory().GetTotalItemCount(kSettlementNonStackItem));
+    EXPECT_TRUE(Inventory().IsLayerConsistent());
+    EXPECT_EQ(0u, Temporary().OccupiedGridCount());
+}
+
+TEST_F(PlayerBattleSettlementItemTest, PreparedExchangeCommitsConsumptionAndWholeTemporaryBatchTogether)
+{
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    Inventory().SetCapacityForRestore(1); Temporary().SetCapacityForRestore(1);
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    ASSERT_EQ(kSuccess, BagService::ConsumeInventoryAndGrant(player,
+        {{kSettlementStackItem, 1}}, {{kSettlementNonStackItem, 1}}, 7003, "prepared-test"));
+    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementStackItem));
+    EXPECT_EQ(0u, Inventory().GetTotalItemCount(kSettlementNonStackItem));
+    EXPECT_EQ(1u, Temporary().GetTotalItemCount(kSettlementNonStackItem));
+    EXPECT_TRUE(Inventory().IsLayerConsistent()); EXPECT_TRUE(Temporary().IsLayerConsistent());
+}
+
+TEST_F(PlayerBattleSettlementItemTest, PreparedExchangeExternalCreditRefusalPublishesNoBagOrLogs)
+{
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    const auto slots = Inventory().GridSlots();
+    const auto txBefore = tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).Available();
+    int attempts = 0;
+    EXPECT_NE(kSuccess, BagService::ConsumeInventoryAndGrant(player,
+        {{kSettlementStackItem, 1}}, {{kSettlementDropItem, 1}}, 7004, "prepared-test", [&] {
+            ++attempts; return uint32_t{kInvalidParameter};
+        }));
+    EXPECT_EQ(1, attempts);
+    EXPECT_EQ(3u, Inventory().GetTotalItemCount(kSettlementStackItem));
+    EXPECT_EQ(0u, Inventory().GetTotalItemCount(kSettlementDropItem));
+    EXPECT_EQ(slots, Inventory().GridSlots());
+    EXPECT_EQ(txBefore, tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).Available());
+}
+
+TEST_F(PlayerBattleSettlementItemTest, PreparedExchangeGainBlockRejectsBeforeConsumptionOrCredit)
+{
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    struct RestoreBlock {
+        bool original{GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kItem, kSettlementDropItem)};
+        RestoreBlock() { GainBlockService::BlockGlobal(GainBlockService::GainType::kItem, kSettlementDropItem); }
+        ~RestoreBlock() { if (!original) GainBlockService::UnblockGlobal(GainBlockService::GainType::kItem, kSettlementDropItem); }
+    } block;
+    int credits = 0;
+    EXPECT_NE(kSuccess, BagService::ConsumeInventoryAndGrant(player,
+        {{kSettlementStackItem, 1}}, {{kSettlementDropItem, 1}}, 7005, "prepared-test", [&] {
+            ++credits; return uint32_t{kSuccess};
+        }));
+    EXPECT_EQ(0, credits);
+    EXPECT_EQ(3u, Inventory().GetTotalItemCount(kSettlementStackItem));
+    EXPECT_EQ(0u, Inventory().GetTotalItemCount(kSettlementDropItem));
+}
 
 TEST_F(PlayerBattleSettlementItemTest, SettlementMainBagFullSendsWholeDropBatchToTemporary) {
     // 铺底使用还原入口；发物和流水各有独立号段，本例显式安装二者，不依赖前序用例状态。
@@ -1406,28 +2047,121 @@ TEST(PendingSettlementContract, ConfirmedStagingWritesWithoutLockButNeverOverAno
     ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.keys[0]}), "blob-852-v"));
 }
 
-// 判定都在第一条写之前;标记写在两键之后;ZADD 最后;EXPIRE 只作用在标记上;锁不在时不提前返回。
+// 2026-10-22 评审补(r2-battle#1/#4 评审 must_fix 第 1 条):锁不在时还要看 pending 槽属于哪一局。
+// 复现时序:本局 850 落库时成员一直没写进去,他的冻结在 850 截止时解除,接着打完 999 并下线;999 的 pending 两键
+// 已写、还没消费,锁 999 已按 TTL 过期(这里不写锁)。850 的低频重试轮恢复后再写这名成员:
+// 修复前锁不在就照写,999 的 pending 被覆盖,999 的发件箱探测到 pending:id ≠ 999 按已销账停投,999 的奖励永久丢失;
+// 修复后返回 3,blob、id、索引成员都不动,标记里也没有该成员。
+// 锁 == 本局时照旧覆盖(锁证明本局是当前局,槽里的只会更旧);锁不在而槽已属于本局时照写。
+TEST(PendingSettlementContract, ConfirmedStagingWithoutLockNeverOverwritesAnotherBattlesPending) {
+    const char* address = std::getenv("MMORPG_TEST_REDIS_ADDR");
+    if (address == nullptr || *address == '\0')
+        GTEST_SKIP() << "未设置 MMORPG_TEST_REDIS_ADDR，跳过真实 Redis 落库契约";
+    SettlementRedisFixture redis;
+    ASSERT_NO_FATAL_FAILURE(redis.Connect(address));
+
+    // 另一局 999 已落的 pending 两键与索引成员;锁已过期。
+    for (const auto& [index, value] : std::vector<std::pair<std::size_t, std::string>>{
+             {0, "blob-999"}, {1, "999"}}) {
+        const auto reply = redis.Run({"SET", redis.keys[index], value});
+        ASSERT_NE(nullptr, reply);
+        ASSERT_EQ(REDIS_REPLY_STATUS, reply->type);
+    }
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.Run({"ZADD", redis.keys[4], "7", "player"}), 1));
+
+    // 850 迟到的一轮:锁不在、槽属于 999 → 返回 3,什么都不写。修复前这里返回 1,下面三条断言全红。
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.Stage("blob-850", "850", 0), 3));
+    ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.keys[0]}), "blob-999"));
+    ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.keys[1]}), "999"));
+    ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"ZSCORE", redis.keys[4], "player"}), "7"));
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.Run({"EXISTS", redis.markers[0]}), 0));
+    ASSERT_NO_FATAL_FAILURE(ExpectNil(redis.Run({"GET", redis.keys[2]})));
+
+    // 锁属于本局:照旧覆盖,槽里的 999 只能是更旧的一局。
+    {
+        const auto reply = redis.Run({"SET", redis.keys[2], "850"});
+        ASSERT_NE(nullptr, reply);
+        ASSERT_EQ(REDIS_REPLY_STATUS, reply->type);
+    }
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.Stage("blob-850", "850", 1), 1));
+    ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.keys[0]}), "blob-850"));
+    ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.keys[1]}), "850"));
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.Run({"SISMEMBER", redis.markers[1], "player"}), 1));
+
+    // 锁不在、槽已属于本局(例如 scene 离线暂存写过同一份):照写,不误判为别的局。
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.Run({"DEL", redis.keys[2]}), 1));
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.Stage("blob-850", "850", 2), 1));
+    ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.keys[1]}), "850"));
+}
+
+// 2026-10-22 补:脚本「ZADD 放最后」的运行证据(此前只有下一条的静态顺序断言)。
+// 积压索引被写坏(键类型错)时 ZADD 报 WRONGTYPE、脚本回 ERROR,但 Redis 脚本不回滚,pending 两键与本局落库标记
+// 已经写下。battle 把这一轮记作「结论未知」,下一轮重写该成员时读到标记返回 2:不重写、pending 不变,落库照常收口。
+// 索引只影响报数。
+TEST(PendingSettlementContract, ConfirmedStagingPartialWriteOnBrokenIndexSettlesNextRound) {
+    const char* address = std::getenv("MMORPG_TEST_REDIS_ADDR");
+    if (address == nullptr || *address == '\0')
+        GTEST_SKIP() << "未设置 MMORPG_TEST_REDIS_ADDR，跳过真实 Redis 落库契约";
+    SettlementRedisFixture redis;
+    ASSERT_NO_FATAL_FAILURE(redis.Connect(address));
+
+    // 积压索引被写成字符串(运维误操作;冒烟时人为制造)。
+    {
+        const auto reply = redis.Run({"SET", redis.keys[4], "not-a-zset"});
+        ASSERT_NE(nullptr, reply);
+        ASSERT_EQ(REDIS_REPLY_STATUS, reply->type);
+    }
+    // 第 1 轮:最后一步 ZADD 报 WRONGTYPE,调用方只看到 ERROR(ClassifyStageReply → 未确认)。
+    {
+        const auto reply = redis.Stage("blob-853", "853", 0);
+        ASSERT_NE(nullptr, reply);
+        ASSERT_EQ(REDIS_REPLY_ERROR, reply->type);
+        EXPECT_NE(std::string::npos, std::string(reply->str, reply->len).find("WRONGTYPE"));
+    }
+    // 它之前的写都已落地:pending 两键与标记。
+    ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.keys[0]}), "blob-853"));
+    ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.keys[1]}), "853"));
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.Run({"SISMEMBER", redis.markers[0], "player"}), 1));
+    // 第 2 轮重写该成员:读到标记返回 2。这里故意换一份字节,好让「没重写」看得见(生产里两轮字节相同)。
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.Stage("blob-853-retry", "853", 0), 2));
+    ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.keys[0]}), "blob-853"));
+    ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.keys[1]}), "853"));
+    ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.keys[4]}), "not-a-zset"));
+}
+
+// 判定都在第一条写之前;标记写在两键之后;ZADD 最后;EXPIRE 只作用在标记上;锁不在时只因槽位属于别的局而返回。
 // 键位与 battle_room_manager.cpp StagePersonalSettlements 的 EVAL 参数顺序一一对应,改脚本时这里先红。
 TEST(PendingSettlementContract, ConfirmedStagingDecidesBeforeAnyWriteAndMarksAfterPending) {
     const std::string script = battle_settlement::kStagePendingSettlementOnceScript;
     const auto marker = script.find("if redis.call('SISMEMBER', KEYS[5], ARGV[4]) == 1 then return 2 end");
     const auto lock = script.find("if lock and lock ~= ARGV[2] then return 3 end");
+    // 2026-10-22 评审补:锁不在时看 pending 槽归属(KEYS[2] = pending:id),属于别的局就不写。
+    const auto ownerRead = script.find("local owner = redis.call('GET', KEYS[2])");
+    const auto slotGuard = script.find("if lock == false and owner and owner ~= ARGV[2] then return 3 end");
     const auto blobSet = script.find("redis.call('SET', KEYS[1], ARGV[1])");
     const auto idSet = script.find("redis.call('SET', KEYS[2], ARGV[2])");
     const auto sadd = script.find("redis.call('SADD', KEYS[5], ARGV[4])");
     const auto expire = script.find("redis.call('EXPIRE', KEYS[5], ARGV[5])");
     const auto zadd = script.find("redis.call('ZADD', KEYS[3], ARGV[3], ARGV[4])");
-    for (const auto position : {marker, lock, blobSet, idSet, sadd, expire, zadd}) {
+    for (const auto position : {marker, lock, ownerRead, slotGuard, blobSet, idSet, sadd, expire, zadd}) {
         ASSERT_NE(std::string::npos, position);
     }
     EXPECT_LT(marker, lock);
     EXPECT_LT(lock, blobSet);
+    // 槽位守卫必须早于第一条写:晚了就是先覆盖别的局再返回 3。
+    EXPECT_LT(lock, ownerRead);
+    EXPECT_LT(ownerRead, slotGuard);
+    EXPECT_LT(slotGuard, blobSet);
+    EXPECT_LT(slotGuard, idSet);
     EXPECT_LT(blobSet, sadd);
     EXPECT_LT(idSet, sadd);
     EXPECT_LT(sadd, zadd);
     EXPECT_LT(expire, zadd);
-    // 锁不在必须照写:不能出现「锁不在就返回」的分支(审计建议的纯锁纪律在全球模式下会静默丢结算)。
+    // 锁不在不能一律返回:不能出现「锁不在就返回」的分支(审计建议的纯锁纪律在全球模式下会静默丢结算)。
+    // 锁不在时唯一的返回是上面的槽位守卫,它同时要求槽里有别的局(owner 存在且不等于本局)。
     EXPECT_EQ(std::string::npos, script.find("if not lock"));
+    EXPECT_EQ(script.find("return 3"), lock + std::string("if lock and lock ~= ARGV[2] then ").size());
+    EXPECT_EQ(script.rfind("return 3"), slotGuard + std::string("if lock == false and owner and owner ~= ARGV[2] then ").size());
     // pending 两键不过期:EXPIRE 只出现一次(标记),也不带 EX / PX / KEEPTTL。
     EXPECT_EQ(script.find("EXPIRE"), script.rfind("EXPIRE"));
     EXPECT_FALSE(ScriptContains(battle_settlement::kStagePendingSettlementOnceScript, "'EX'"));
@@ -1452,7 +2186,9 @@ TEST(PendingSettlementContract, ConfirmedStagingKeysAreFormatSafeAndDistinct) {
         EXPECT_STRNE(staged, pendingId);
         EXPECT_STRNE(staged, battle_settlement::kPendingSettlementIndexKey);
     }
-    // 标记必须活过落库轮次之间的间隔:至少覆盖一整轮用尽窗口(约 9.5 分钟)外加单边断连的余量。
+    // 标记必须活过整个落库阶段。2026-10-22 起与 ResultCommit 总跨度(6 小时)的 4 倍余量关系由
+    // turn_battle_engine_test 的 StagingSpanLeavesStagedMarkerTtlMargin 与 battle_room_manager.cpp 的 static_assert 守住,
+    // 这里只留一条与 battle 节点无关的下限。
     EXPECT_GE(battle_settlement::kStagedSettlementMembersTtlSec, 3600u);
 }
 

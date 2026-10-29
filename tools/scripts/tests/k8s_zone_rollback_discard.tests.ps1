@@ -289,7 +289,7 @@ Test-Case 'dry-run:第 0 步 f、1b、4a、4b、5b 的工具命令都完整打�
     for ($i = 1; $i -lt $order.Count; $i++) {
         Assert-True -Condition ($order[$i - 1] -ge 0 -and $order[$i - 1] -lt $order[$i]) -Because "dry-run 的步骤顺序必须是 1 → 1b → 3 → 4a → 5 → 4b → 5b → 6(第 $i 项错位)"
     }
-    Assert-Match -Text $run.Output -Pattern "PlayerAllData:<pid>" -Because 'Step 7 的键名改正为 PlayerAllData:<pid>'
+    Assert-Match -Text $run.Output -Pattern ([regex]::Escape("PlayerAllData:{<pid>}")) -Because 'Step 7 的父快照键名是 PlayerAllData:{<pid>}(玩家域 hash tag)'
     Assert-NotMatch -Text $run.Output -Pattern 'player:\{<known-pid>\}:player_database' -Because '旧的错误键名不再出现'
 }
 

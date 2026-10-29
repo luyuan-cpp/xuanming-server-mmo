@@ -37,6 +37,7 @@
 package dataloader
 
 import (
+	"shared/savebarrier"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/metric"
@@ -162,6 +163,46 @@ func PrimePersistSchemaRegressionMetrics() {
 		for _, mode := range []string{"warn", "enforce"} {
 			persistSchemaRegressionTotal.Add(0, reason, mode)
 		}
+	}
+}
+
+// parentLoadVerifyTotal 计父快照核验路径(冷加载、Redis 实例身份变化、ACK 高于 pending、历史缺口)的结论
+// (docs/design/zone-redis-regression-guard-20261022.md §7)。verdict 取 savebarrier.Verdict 的 String(),
+// 判定之前或提交时失败记 error。adopted 每次都说明 Redis 丢过已确认的写;sql_behind 说明 SQL 侧回档或损坏，
+// 合法流程恒为 0;reconciling 持续增长说明两张表停在不同版本，要转人工 save_barrier_restore。不带 player_id。
+var parentLoadVerifyTotal = metric.NewCounterVec(&metric.CounterVecOpts{
+	Namespace: "login",
+	Subsystem: "",
+	Name:      "parent_load_verify_total",
+	Help: "Outcomes of the parent-snapshot SQL verification path (cold load, Redis instance identity change, " +
+		"ACK ahead of pending, missing barrier history). verdict: consistent | adopted | inflight | reconciling | " +
+		"sql_behind | error. sql_behind is expected to stay 0.",
+	Labels: []string{"verdict"},
+})
+
+// parentLoadVerifyVerdicts 是 login_parent_load_verify_total 的全部 verdict 取值，集合封闭。
+var parentLoadVerifyVerdicts = []string{
+	savebarrier.VerdictConsistent.String(), savebarrier.VerdictAdoptSQL.String(), savebarrier.VerdictInflight.String(),
+	savebarrier.VerdictReconciling.String(), savebarrier.VerdictSQLBehind.String(), parentLoadVerifyError,
+}
+
+const parentLoadVerifyError = "error"
+
+// countParentLoadVerify 记一次核验结论。consistent / adopted 本该成功，带着错误返回说明提交失败，记 error;
+// 其余结论本身就以错误返回(等待或拒绝)，按结论记。
+func countParentLoadVerify(verdict savebarrier.Verdict, err error) {
+	label := verdict.String()
+	if verdict == 0 || (err != nil && (verdict == savebarrier.VerdictConsistent || verdict == savebarrier.VerdictAdoptSQL)) {
+		label = parentLoadVerifyError
+	}
+	parentLoadVerifyTotal.Inc(label)
+}
+
+// PrimeParentLoadVerifyMetrics 把 login_parent_load_verify_total 的全部序列预置成 0,理由与调用时机同
+// PrimePersistSchemaRegressionMetrics(sql_behind 的第一次绝不能漏)。
+func PrimeParentLoadVerifyMetrics() {
+	for _, verdict := range parentLoadVerifyVerdicts {
+		parentLoadVerifyTotal.Add(0, verdict)
 	}
 }
 

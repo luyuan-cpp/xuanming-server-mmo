@@ -78,7 +78,8 @@ func (k ClientRpcKind) String() string {
 // 输入:任意 MethodDescriptorProto;nil 或没有 options 视为未标注。
 // 返回:未标注 → (ClientRpcRequest, false, nil);标注 → (该值, true, nil),显式标 CLIENT_RPC_REQUEST 也算标注。
 // 错误:字段号 410001 被另一个扩展占用、wire type 不是 varint、字节损坏,或值不在 ClientRpcKind 枚举范围内。
-// 读取顺序同 prototools.ReadBoolExtension:先看已注册扩展(将来绑定里有了它也能读),再看未知字段;
+// 读取顺序同 ReadBoolExtension(internal/prototools/option/value.go;目录名 option,包名 prototools,调用方按
+// prototools.ReadBoolExtension 引用):先看已注册扩展(将来绑定里有了它也能读),再看未知字段;
 // 同一字段在未知字段里出现多次时按 protobuf 语义取最后一次。只读描述符,可并发调用。
 func ReadClientRpcKind(method *descriptorpb.MethodDescriptorProto) (ClientRpcKind, bool, error) {
 	opts := method.GetOptions()

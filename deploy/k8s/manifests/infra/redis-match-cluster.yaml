@@ -24,8 +24,12 @@ data:
     appendonly yes
     # 与 redis.yaml 同款 OOM 防御思路,但 match 的 key 都是短 TTL 的排队/票据,
     # 量级远小于玩家缓存,给小上限即可;淘汰策略用 volatile-lru 只淘汰带 TTL 的。
+    # (2026-10-23 更正,上句原文保留)淘汰策略改为 noeviction:票据、匹配锁、挑战锁都带 TTL,
+    # volatile-lru 写满时恰好先淘汰它们,锁被挤掉就等于互斥失效、同一票据可能被两次成局。
+    # 承载状态的实例一律 noeviction,写满时写命令报错、由告警发现(shared-redis-split-by-purpose.md §6.3、§25.3)。
+    # chat 已改为 SQL 原件,K8s 上不再连本集群。改本行要滚动重启各节点,或逐节点 CONFIG SET 后再滚动。
     maxmemory 512mb
-    maxmemory-policy volatile-lru
+    maxmemory-policy noeviction
 ---
 # headless Service:给每个 pod 一个稳定 DNS
 # redis-match-cluster-{0..5}.redis-match-cluster.<ns>.svc.cluster.local
@@ -66,6 +70,12 @@ spec:
     metadata:
       labels:
         app: redis-match-cluster
+      # 与 redis.yaml 相同(2026-10-23):default-container 指向 redis;抓取注解指向 redis-exporter 的 9121。
+      annotations:
+        kubectl.kubernetes.io/default-container: redis
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9121"
+        prometheus.io/path: "/metrics"
     spec:
       terminationGracePeriodSeconds: 30
       affinity:
@@ -117,13 +127,32 @@ spec:
               memory: 256Mi
             limits:
               cpu: 500m
-              memory: 640Mi
+              # 2 × maxmemory(2026-10-23 由 640Mi 调整):AOF 重写 fork 时写时复制最坏会翻倍,
+              # 640Mi 在 512mb 写满时可能被 OOMKill。requests 不动,免得本机 kind 排不下 6 个 Pod。
+              memory: 1Gi
           volumeMounts:
             - name: config
               mountPath: /etc/redis
               readOnly: true
             - name: data
               mountPath: /data
+        # 指标出口(2026-10-23,与 redis.yaml 同形):每个集群节点一个,只连本节点;本集群无口令,不挂 Secret。
+        # Cluster 状态告警(redis_cluster_state)靠它。
+        - name: redis-exporter
+          image: oliver006/redis_exporter:v1.62.0
+          env:
+            - name: REDIS_ADDR
+              value: redis://127.0.0.1:6379
+          ports:
+            - containerPort: 9121
+              name: metrics
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
       volumes:
         - name: config
           configMap:

@@ -65,6 +65,7 @@ travel_smoke:
   visit_zone: 2 # 去做客的 zone;必须与 home_zone 不同
   scene_config_id: 0 # 目标地图(BaseScene id),去程回程共用;0 = 由目标 zone 的 scene_manager 挑默认大世界,此时不断言落地地图
   dwell_seconds: 35 # 访客区停留秒数;缺省 35 > home 区 login 断线租约 30s。0 = 不停留(只验链路)
+  hop_timeout_seconds: 60 # 一跳传送总预算;验收冻结硬上限(runbook 场景 H)时改成 ≥ 75,否则 robot 先于服务端超时
   require_move_ack: false # true = 访客区收不到 MoveAck 即失败;场景没有导航网格时 fail-open 不回 ack,所以缺省 false
 
 # 认证:password 模式(robot_ 前缀账号走 DevPasswordAuth)。

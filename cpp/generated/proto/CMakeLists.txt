@@ -33,25 +33,17 @@ include_directories(
     ../../../third_party/entt/single_include
     ../../../third_party/fmt/include
     ../../../third_party/spdlog/include
-    ../third_party/protobuf/src/
-    ../third_party/protobuf/third_party/abseil-cpp/
     ./src/
     /usr/local/include
 )
 
 set(SOURCE_FILES
     battle/battle_data.pb.cc
-    battle/battle_data.grpc.pb.cc
     battle/battle_node.pb.cc
-    battle/battle_node.grpc.pb.cc
     battle/player_battle.pb.cc
-    battle/player_battle.grpc.pb.cc
     match/match_service.pb.cc
-    match/match_service.grpc.pb.cc
     match/match_internal.pb.cc
-    match/match_internal.grpc.pb.cc
     client_rpc_router/client_rpc_router.pb.cc
-    client_rpc_router/client_rpc_router.grpc.pb.cc
     common/asset/asset_op.pb.cc
     common/component/asset_op_ledger_comp.pb.cc
     common/component/battle_settlement_ledger_comp.pb.cc
@@ -60,9 +52,7 @@ set(SOURCE_FILES
     common/event/battle_event.pb.cc
     common/event/team_event.pb.cc
     chat/chat.pb.cc
-    chat/chat.grpc.pb.cc
     team/team.pb.cc
-    team/team.grpc.pb.cc
     common/base/common.pb.cc
     common/base/config.pb.cc
     common/base/empty.pb.cc
@@ -118,46 +108,26 @@ set(SOURCE_FILES
     contracts/kafka/player_event.pb.cc
     contracts/kafka/scene_command.pb.cc
     data_service/data_service.pb.cc
-    data_service/data_service.grpc.pb.cc
     db/db.pb.cc
-    db/db.grpc.pb.cc
     db/db_task.pb.cc
-    db/db_task.grpc.pb.cc
-    db/proto_option.grpc.pb.cc
     db/proto_option.pb.cc
-    etcd/etcd.grpc.pb.cc
     etcd/etcd.pb.cc
-    etcd/kv.grpc.pb.cc
     etcd/kv.pb.cc
-    etcd/version.grpc.pb.cc
     etcd/version.pb.cc
-    friend/friend.grpc.pb.cc
     friend/friend.pb.cc
-    rank/rank.grpc.pb.cc
     rank/rank.pb.cc
-    mail/mail.grpc.pb.cc
     mail/mail.pb.cc
-    mail/mail_admin.grpc.pb.cc
     mail/mail_admin.pb.cc
     gate/gate_service.pb.cc
-    guild/guild.grpc.pb.cc
     guild/guild.pb.cc
     guild/guild_db.pb.cc
-    guild/guild_internal.grpc.pb.cc
     guild/guild_internal.pb.cc
-    trade/jubaozhai.grpc.pb.cc
     trade/jubaozhai.pb.cc
-    trade/trade_admin.grpc.pb.cc
     trade/trade_admin.pb.cc
-    trade/trade_table.grpc.pb.cc
     trade/trade_table.pb.cc
-    player_inbox/player_inbox.grpc.pb.cc
     player_inbox/player_inbox.pb.cc
-    player_inbox/player_inbox_admin.grpc.pb.cc
     player_inbox/player_inbox_admin.pb.cc
-    player_inbox/player_inbox_table.grpc.pb.cc
     player_inbox/player_inbox_table.pb.cc
-    login/login.grpc.pb.cc
     login/login.pb.cc
     scene/client_player_common.pb.cc
     scene/player_lifecycle.pb.cc
@@ -173,37 +143,25 @@ set(SOURCE_FILES
     scene/player_state_attribute_sync.pb.cc
     scene/scene.pb.cc
     scene/scene_info.pb.cc
-    scene_manager/scene_manager_service.grpc.pb.cc
     scene_manager/scene_manager_service.pb.cc
-    scene_manager/scene_node_service.grpc.pb.cc
     scene_manager/scene_node_service.pb.cc
-    scene_manager/storage.grpc.pb.cc
     scene_manager/storage.pb.cc
     scene/player_bag.pb.cc
     scene/player_mission.pb.cc
     scene/player_activity.pb.cc
     scene/player_mystery_merchant.pb.cc
     common/base/service_call_auth.pb.cc
-    friend/friend_table.grpc.pb.cc
     friend/friend_table.pb.cc
-    guild/guild_db.grpc.pb.cc
-    mail/mail_table.grpc.pb.cc
     mail/mail_table.pb.cc
-    match/match_authority.grpc.pb.cc
     match/match_authority.pb.cc
-    match/match_network.grpc.pb.cc
     match/match_network.pb.cc
-    rank/rank_admin.grpc.pb.cc
     rank/rank_admin.pb.cc
-    rank/rank_table.grpc.pb.cc
     rank/rank_table.pb.cc
-    trade/commerce.grpc.pb.cc
     trade/commerce.pb.cc
-    player_locator/player_locator.grpc.pb.cc
     player_locator/player_locator.pb.cc
     common/base/role_admission.pb.cc
-    team/team_authority.grpc.pb.cc
     team/team_authority.pb.cc
+    common/base/currency_type.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

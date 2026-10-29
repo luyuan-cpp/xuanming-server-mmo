@@ -106,11 +106,17 @@
 3. 铸造与屏障 Lua 这类关键写加 WAITAOF（`numlocal=1`，HA 下 `numreplicas=1`）。有延迟代价，要按 AGENTS §6 压测后再定。
 4. ACK > pending 时给出自动处置，或至少告警，不要静默永久拒登。
 
+> **（2026-10-22 指向注）** 合并设计稿见 [zone-redis-regression-guard-20261022.md](zone-redis-regression-guard-20261022.md)，有两处修正：
+> - 上面第 1 条说它「能堵住新 epoch 越过 SQL 新行」，不成立。任何铸造地板都只能防重铸同值；越过 SQL 新行要在加载侧堵（设计稿 G1）。
+> - 第 3 条的 WAITAOF 只适用于有专用连接的 Go 侧铸造。C++ 存盘 Lua 走 hiredis 单连接，不能加。
+>
+> §0 里「全仓只有路由发布用了 WAITAOF」也要补一句：go/db 的重试、死信入队同样用了 WAITAOF。
+
 ### 2.3 low · 其他
 
 | 编号 | 问题 | 位置 | 可达性 / 备注 |
 |---|---|---|---|
-| handover-single-writer#1 | location 只记 node_id，不记进程实例。同号新进程顶替后，`samePhysicalNode` / `samePlacement` 不铸造 epoch，存活的旧进程与新进程同持一个 E，存盘 CAS 拦不住，墙钟晚发号的一方胜出，可能旧盖新。旧进程还可能写出没有身份闸的改派标记，让新进程的进度在下一跳换图时作废 | `enterscenelogic.go:546-550`、`:687`、`:696-737`；`load_reporter.go:926-931`（同号注册即 `clearNodeDeath`）；`save_seq.h:59-66` | 要求进程暂停或 etcd 单边分区超过租约，加上同号被复用，加上玩家落到同号节点。设计 GO-3 只按活性问题登记；`cross-zone-scene-travel.md` §13.9 写"推迟没有数据风险"，与 `main.cpp:113-115` 注释和 M3/M13 矛盾 |
+| handover-single-writer#1 | location 只记 node_id，不记进程实例。同号新进程顶替后，`samePhysicalNode` / `samePlacement` 不铸造 epoch，存活的旧进程与新进程同持一个 E，存盘 CAS 拦不住，墙钟晚发号的一方胜出，可能旧盖新。旧进程还可能写出没有身份闸的改派标记，让新进程的进度在下一跳换图时作废 | `enterscenelogic.go:546-550`、`:687`、`:696-737`；`load_reporter.go:926-931`（同号注册即 `clearNodeDeath`）；`save_seq.h:59-66` | 要求进程暂停或 etcd 单边分区超过租约，加上同号被复用，加上玩家落到同号节点。设计 GO-3 只按活性问题登记；`cross-zone-scene-travel.md` §13.9 写"推迟没有数据风险"，与 `main.cpp:113-115` 注释和 M3/M13 矛盾。*2026-10-23：落地围栏线的 `handoff_fence` 拒绝同 E 不同实例登记，同代双持在当前树上不可达；GO-3 已按持有进程自己盖的资格章落码（接管时铸新 epoch，未编译），见 `cross-zone-scene-travel.md` §13.10* |
 | handover-single-writer-v#1 | etcd 单边分区时，活着的持有节点被判死。C++ 失租后只重注册，不冻结、不存盘、不疏散（`node.cpp:1711-1727`，注释写明不设围栏）。再入屏障"老进程 15s 内疏散存盘"的前提（`enterscenelogic.go:974-976`）落空，接管后丢掉一个本可以落盘的活节点的进度 | `node.cpp:1711-1727`；`etcd_service.cpp:762-772`；`enterscenelogic.go:968-1026`；`leave_release.go:109-110` | 分区要超过租约 TTL 加 20s。只丢不盖 |
 | player-save#3 | 超过 kafka-go 缺省 `BatchBytes` 1MiB 的 DBTask 意图，补投每次都发布失败；不计次、永远到不了 exhausted、没有告警，还每 10~21s 把整个 zone 的补投暂停 10s | `saveoutbox/replay.go:305-311`；`publisher.go:30-41` | 这种意图本来在 go/db 的 1MiB 整行闸处就会被拒。危害只在于观测缺失、拖慢同 zone 其他玩家的恢复。是 r2-db#1 修复的副作用 |
 | identity-routing-redis#2 | 本地战斗 pending 的 SET 落在 Redis 丢尾里，且命令被重启后的 scene 按代次丢弃（或锁已过期）时，重投判"记录缺失 = 已销账"，静默摘除 | `settlement_outbox.h:55-80` | 复核后收窄：玩家离线时，开局 scene 的离线分支会按锁把 pending 写回去，多数情况能自愈 |
@@ -128,7 +134,7 @@
 
 - `db-write-fencing-mysql.md:1057-1059`：称 "dual 下 S1 保住"，只覆盖了计数器同步回退。计数器没回退、只丢存盘时不成立（§2.2）。
 - `guild-actor-architecture.md`：actor 加定期落库的方案只是 06-04 的草案，代码是直写 MySQL 事务。
-- `cross-zone-scene-travel.md` §13.9：称 GO-3 "推迟没有数据风险"，与 `main.cpp:113-115` 注释、M3/M13 矛盾（§2.3 handover-single-writer#1）。
+- `cross-zone-scene-travel.md` §13.9：称 GO-3 "推迟没有数据风险"，与 `main.cpp:113-115` 注释、M3/M13 矛盾（§2.3 handover-single-writer#1）。*（2026-10-23 已在 §13.9 加批注更正，`main.cpp` 注释同步改写，见 §13.10）*
 - `enterscenelogic.go:974-976` 注释：再入屏障依赖"老进程失租后 15s 内疏散存盘"，当前 C++ 失租不疏散。
 - assetop 设计把 durable 说成"盖了入库章"，`player_lifecycle.cpp:4352` 自述只证明已进 Redis。
 - `jubaozhai-market.md:327`：称回档排除有合法交易流水的转移，代码只有帮会闸（§2.3 cross-service-assets#3）。

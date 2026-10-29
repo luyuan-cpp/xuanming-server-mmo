@@ -31,6 +31,12 @@ ListenOn: 127.0.0.1:50500
 # WatchBattle 的 addObserver 也从请求 ctx 派生截止时间,不再在客户端收到失败之后继续绑定观战(原「保持 5000」的理由见
 # team-system.md §A.3 第 7 条及其 2026-10-14 更正)。K8s ConfigMap 从这里镜像;部署门禁 Assert-RouterForwardBudget 核对。
 Timeout: 4000
+# 终局原事件、原账号与签名不进入请求体日志；保留方法和耗时。
+Middlewares:
+  StatConf:
+    IgnoreContentMethods:
+      - /match.MatchInternal/CommitBattleOutcome
+      - /match.MatchInternal/CancelActivityBattle
 Etcd:
   Hosts:
     - 127.0.0.1:2379

@@ -22,6 +22,8 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -32,8 +34,21 @@ func runMerge(o options) {
 	if err := requireTeamRouteDomain(o.mysqlDSN, o.routeDBDSN, o.routeSource); err != nil {
 		log.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
+	ctx, cancel := context.WithTimeout(maintenanceParent(o), o.timeout)
 	defer cancel()
+	var freeze *normalFreezeProof
+	var freezeDB *sql.DB
+	if !o.dryRun {
+		if err := checkMaintenanceTool(ctx); err != nil {
+			log.Fatal(err)
+		}
+		var freezeErr error
+		freeze, freezeDB, freezeErr = openNormalFreezeProof(ctx, o)
+		if freezeErr != nil {
+			log.Fatal(freezeErr)
+		}
+		ctx = withNormalFreezeProof(ctx, freeze)
+	}
 
 	src, dst := o.sourceZone, o.targetZone
 	now := time.Now()
@@ -61,21 +76,31 @@ func runMerge(o options) {
 
 	// ── 句柄 ────────────────────────────────────────────────
 	db := mustOpenMySQL(ctx, o.mysqlDSN)
-	defer db.Close()
+	defer closeUnownedMaintenanceResource(ctx, db)
 	teamAuthority, err := openTeamAuthority(ctx, o.mysqlDSN, firstNonEmpty(o.teamSchema, defaultTeamSchema))
 	if err != nil {
 		log.Fatalf("组队权威门禁: %v", err)
 	}
-	defer teamAuthority.db.Close()
+	if err := registerMaintenanceResource(ctx, teamAuthority.db); err != nil {
+		log.Fatal(err)
+	}
+	defer closeUnownedMaintenanceResource(ctx, teamAuthority.db)
 
 	mapRdb := mustDial(ctx, "mapping", o.mappingAddr, o.mappingPwd, o.mappingDB)
-	defer mapRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, mapRdb)
 	guildRdb := mustDial(ctx, "guild", o.redisAddr, o.redisPwd, o.redisDB)
-	defer guildRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, guildRdb)
 	sharedRdb := mustDial(ctx, "login/shared(DB0)", o.noticeAddr, o.noticePwd, o.noticeDB)
-	defer sharedRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, sharedRdb)
 	sceneRdb := mustDial(ctx, "scene_manager", o.sceneAddr, o.scenePwd, o.sceneDB)
-	defer sceneRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, sceneRdb)
+	// preflight P2 与 -clear-source-hot-state 都要 etcd 注册表的正面证据(scene_registry.go)。在任何写入之前就校验参数,
+	// 不让一次合服跑到门禁或第 6 步才因为缺参数中止。
+	sceneNodes, rerr := newEtcdGatewayRegistry(o.etcdEndpoints)
+	if rerr != nil {
+		log.Fatalf("-etcd-endpoints is required: preflight P2 and -clear-source-hot-state need positive evidence that zone %d has no registered scene node: %v", src, rerr)
+	}
+	log.Printf("    scene-node registry: etcd endpoints=%s", strings.Join(sceneNodes.endpoints, ","))
 
 	// -route-source(规格 §6.4、§13.3 第 3 条):db 源开路由库并核对库与 mapping Redis 成对;redis 源只核对这个 Redis 不归
 	// db_first 管。之后每个写入点 / 读方按 rb 是否为 nil 分派(nil = 今天的 Redis 路径,逐字不变)。
@@ -83,7 +108,9 @@ func runMerge(o options) {
 	if err != nil {
 		log.Fatalf("route source: %v", err)
 	}
-	defer rb.Close()
+	if maintenanceFromContext(ctx) == nil {
+		defer rb.Close()
+	}
 
 	srcSchema, dstSchema := zoneDBName(src), zoneDBName(dst)
 
@@ -186,8 +213,9 @@ func runMerge(o options) {
 		return nil
 	}
 	// 首跑:只读、先于围栏,拒绝时什么都没动,也没有需要保护的半截状态。
-	// 续跑的三项清单校验(模式 / 表集合 / C)挪到围栏之后(见 F 段下方):运维此时已照中止文案 DEL 了上一次的
-	// 围栏,两个 zone 处于半合服状态;围栏之前 log.Fatalf 等于让它们在没有围栏的情况下一直敞着。
+	// 续跑的三项清单校验(模式 / 表集合 / C)挪到围栏之后(见 F 段下方):redis 源时运维此时已照中止文案 DEL 了上一次的
+	// 围栏,两个 zone 处于半合服状态;围栏之前 log.Fatalf 等于让它们在没有围栏的情况下一直敞着。(db 源的库围栏不 DEL,
+	// 续跑以 -take-over-fence 接手;挪到围栏之下对它同样成立:拒绝走 abortKeepingFence,围栏留在本次 run_id 上。)
 	if existing == nil && o.playerRowsMode == playerRowsModePin {
 		if err := checkPinCapability(); err != nil {
 			log.Fatal(err)
@@ -198,15 +226,35 @@ func runMerge(o options) {
 	// 收集与预检都得在围栏之下做:之前的顺序是「收集 → 预检 → 立围栏」,收集与立围栏之间 RegisterPlayerZone
 	// 进来的新号既不在清单里、又没被挡住,改映射时被漏在源区。
 	// db 源:库围栏(zone_merge_fence)提交 → 两区镜像 + WAITAOF 确认之后才返回(规格 §6.3 W12),之后才收集。
+	// resumedFence:清单已存在且步骤 7 未标记完成 = 上一次运行可能已写到一半(理由见下面 refuse)。db 源的获取之后失败(镜像确认不了、
+	// 获取结果不明)同样不释放库围栏(keepOnFailure,B1-1):释放 = 在半合服状态下解封。redis 源不看它,逐字不变。
+	resumedFence := existing != nil && !existing.stepDone(stepPostMerge)
 	fence, err := acquireRunFence(ctx, rb, mapRdb, routeFenceParams{src: src, dst: dst, runID: runID, purpose: routeFencePurposeMerge,
-		manifestPath: manifestPath, runTimeout: o.timeout, dryRun: o.dryRun, takeOverRunID: o.takeOverFenceRunID})
+		manifestPath: manifestPath, runTimeout: o.timeout, dryRun: o.dryRun, takeOverRunID: o.takeOverFenceRunID,
+		keepOnFailure: resumedFence})
 	if err != nil {
 		log.Fatalf("merge fence: %v", err)
 	}
-	defer fence.release(context.Background())
+	if o.dryRun {
+		defer fence.release(ctx)
+	}
 	// db 源:围栏一旦失权,看门狗取消之后的一切写(批内与改不到的步骤兜底);gate 是每批之前的显式判据。redis 源两者都不生效。
-	ctx = fence.writeContext(ctx)
-	gate := writeGate(fence.check)
+	ctx, err = maintenanceFenceContext(ctx, fence)
+	if err != nil {
+		log.Fatal(err)
+	}
+	gate := writeGate(func() error {
+		if err := fence.check(); err != nil {
+			return err
+		}
+		if o.dryRun {
+			return nil
+		}
+		if err := checkMaintenanceTool(ctx); err != nil {
+			return err
+		}
+		return freeze.check(ctx, freezeDB)
+	})
 	// abortKeepingFence:清单落盘之后的失败走这里,围栏故意不释放并给出续跑指引(见 fenceKeptAbortMessage;db 源见
 	// routeFenceKeptAbortMessage,失权时文案改成「先查清是谁接手」)。dry-run 从没写过围栏,只报原因。
 	// errs 是本步骤带回的错误(可省):db 源里批事务内的 fencing token 复核判了 errRouteFenceLost 而本地判据还没察觉时,
@@ -236,7 +284,7 @@ func runMerge(o options) {
 	//   - 例外:清单已标记步骤 7 完成 = 上一次已跑完全程,此时 dst 可能已经开服,保留围栏只会挡住 dst,照常释放。
 	//   - -take-over-fence(只有 db 源)一律算续跑:接手的前提就是上一次写到一半、围栏故意留着;本次刚接手的围栏若在拒绝出口释放,
 	//     就是在半合服状态下解封。与清单在不在、是否标记了步骤 7 都无关(清单路径已由接手事务按 holder_json 核对)。
-	resumedFence := existing != nil && !existing.stepDone(stepPostMerge)
+	// (resumedFence 在 F 段立围栏之前算好。)
 	halfDone := resumedFence || o.takeOverFenceRunID != ""
 	refuse := func(format string, args ...any) {
 		if halfDone {
@@ -309,10 +357,12 @@ func runMerge(o options) {
 	if err := runPreflight(ctx, preflightDeps{
 		teamAuthority: teamAuthority,
 		sceneRdb:      sceneRdb,
+		sceneNodes:    sceneNodes,
 		mappingRdb:    mapRdb,
 		sharedRdb:     sharedRdb,
 		lag:           lagSrc,
 	}, preflightParams{
+		readOnly:        o.dryRun,
 		zone:            src,
 		scope:           "source",
 		kafkaGroups:     kafkaGroupCandidates(o.kafkaGroup, o.kafkaLegacyGroup, src),
@@ -554,7 +604,8 @@ func runMerge(o options) {
 	if !o.skipGuild && !m.stepDone(stepGuildMySQL) {
 		// 重名断言已挪到清单落盘之前(上面 N 段,A4):它的意义是「冲突时一个字节都不写」。
 		// 只改清单里的 id,逐条主键点更新(锁序理由见 migrateGuildZone)。锁冲突重试耗尽 / 其他写失败时
-		// 已有一部分公会搬过去了,与 3b 复查中止同理**不提前释放围栏**,文案给出核对 run_id → DEL → 重跑。
+		// 已有一部分公会搬过去了,与 3b 复查中止同理**不提前释放围栏**,文案给出核对 run_id → DEL → 重跑
+		// (redis 源;db 源是 routeFenceKeptAbortMessage 的 -take-over-fence 续跑)。
 		// db 源:每个 guild_id 的单行事务之前查 gate(规格 §6.3「不碰映射的步骤每批之前查失权」)。
 		rows, gerr := migrateGuildZoneGated(ctx, db, o.guildSchema, m.GuildIDs, src, dst, o.dryRun, gate)
 		if gerr != nil {
@@ -612,7 +663,7 @@ func runMerge(o options) {
 		// 中止且**不 persist**:重跑时本步骤仍未完成,清单阶段会先把它们并进清单再搬。
 		// 只打 WARN 继续是 fail-open —— 步骤一旦标记完成就不会再收集,那几条既搬不走、也撤不回。
 		// log.Fatal 不跑 defer:围栏留在本次 run_id 上,且**故意不提前释放**(理由见
-		// tradeResidualAbortMessage),文案里写明核对 run_id → DEL → 重跑。
+		// tradeResidualAbortMessage),文案里写明核对 run_id → DEL → 重跑(redis 源;db 源见下面 rb != nil 分支)。
 		if !o.dryRun {
 			left, cerr := countTradeListingsInZone(ctx, db, o.tradeSchema, src)
 			if cerr != nil {
@@ -710,7 +761,7 @@ func runMerge(o options) {
 	// ── 6: scene_manager 热状态 ─────────────────────────────
 	if o.clearHotState && !m.stepDone(stepHotState) {
 		requireFence(stepHotState)
-		hot, herr := clearSourceZoneHotState(ctx, sceneRdb, src, playerIDs, o.dryRun)
+		hot, herr := clearSourceZoneHotState(ctx, sceneRdb, sceneNodes, src, playerIDs, o.dryRun)
 		if herr != nil {
 			abortKeepingFence(fmt.Sprintf("clear source hot state:步骤 %s 未标记完成(删除幂等,重跑补齐):%v", stepHotState, herr))
 		}
@@ -749,6 +800,11 @@ func runMerge(o options) {
 		}
 	}
 
+	if !o.dryRun {
+		if err := finishMaintenanceFence(ctx, fence); err != nil {
+			log.Fatal(err)
+		}
+	}
 	log.Printf("=== Done (players_in_source=%d %s) ===", len(playerIDs), summary.String())
 	if o.dryRun {
 		log.Printf("DRY-RUN: nothing was written to MySQL or Redis (only the preview %s). Record players_in_source=%d and pass it "+
@@ -825,10 +881,10 @@ func guardPlayerSet(ctx context.Context, rows playerIDSource, mapped mappingPres
 			o.sourceZone, o.mappingAddr, o.mappingDB, defaultMappingRedisDB, o.sourceZone)
 	}
 
-	// mappingTerm 是文案里「有归属」的说法:redis 源是 player:zone 键,db 源是 player_route 的 home_zone。
+	// 保留既有诊断前缀供运维定位；db 源同时注明归属真源，避免误以为补 Redis 镜像即可修复。
 	mappingTerm := "player:zone mapping"
 	if dbSource {
-		mappingTerm = "home_zone in player_route"
+		mappingTerm = "player:zone mapping (authoritative player_route.home_zone)"
 	}
 	srcTable := zoneDBName(o.sourceZone) + ".player_database"
 	scan, err := findUnmappedPlayers(ctx, rows, mapped)
@@ -1529,6 +1585,9 @@ func rewriteZoneByPrimaryKey(ctx context.Context, db *sql.DB, table, pkCol, zone
 	if len(ids) == 0 {
 		return 0, nil
 	}
+	if err := checkMaintenanceTool(ctx); err != nil {
+		return 0, err
+	}
 	lockStmt, err := db.PrepareContext(ctx, zoneLockSelectSQL(table, pkCol, zoneCol))
 	if err != nil {
 		return 0, fmt.Errorf("prepare %s.%s 行锁读:%w", table, zoneCol, err)
@@ -1614,9 +1673,12 @@ func rewriteOneZoneRow(ctx context.Context, begin beginZoneRowTx, id uint64, fro
 
 // sqlZoneRowTx 是 zoneRowTx 的生产实现:一个 *sql.Tx 加上绑定到它的两条预编译语句。
 type sqlZoneRowTx struct {
-	tx     *sql.Tx
-	lock   *sql.Stmt // tx 内的 zoneLockSelectSQL
-	update *sql.Stmt // tx 内的 zonePointUpdateSQL
+	tx       *sql.Tx
+	lock     *sql.Stmt // tx 内的 zoneLockSelectSQL
+	update   *sql.Stmt // tx 内的 zonePointUpdateSQL
+	ctx      context.Context
+	finish   func()
+	finished *sync.Once
 }
 
 func (t sqlZoneRowTx) lockZone(ctx context.Context, id uint64) (uint32, bool, error) {
@@ -1626,6 +1688,7 @@ func (t sqlZoneRowTx) lockZone(ctx context.Context, id uint64) (uint32, bool, er
 		return 0, false, nil
 	}
 	if err != nil {
+		holdMaintenanceTool(t.ctx)
 		return 0, false, err
 	}
 	return zone, true, nil
@@ -1634,23 +1697,59 @@ func (t sqlZoneRowTx) lockZone(ctx context.Context, id uint64) (uint32, bool, er
 func (t sqlZoneRowTx) rewriteZone(ctx context.Context, id uint64, from, to uint32) (int64, error) {
 	res, err := t.update.ExecContext(ctx, to, id, from)
 	if err != nil {
+		holdMaintenanceTool(t.ctx)
 		return 0, err
 	}
-	return res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		holdMaintenanceTool(t.ctx)
+	}
+	return n, err
 }
 
-func (t sqlZoneRowTx) commit() error   { return t.tx.Commit() }
-func (t sqlZoneRowTx) rollback() error { return t.tx.Rollback() }
+func (t sqlZoneRowTx) terminal(op func() error) (err error) {
+	returned := false
+	defer func() {
+		if !returned || (err != nil && !errors.Is(err, sql.ErrTxDone)) {
+			holdMaintenanceTool(t.ctx)
+		}
+		t.finished.Do(t.finish)
+	}()
+	err = op()
+	returned = true
+	return
+}
+func (t sqlZoneRowTx) commit() error   { return t.terminal(t.tx.Commit) }
+func (t sqlZoneRowTx) rollback() error { return t.terminal(t.tx.Rollback) }
 
 // sqlZoneRowTxBeginner 返回生产用的 beginZoneRowTx。lock / update 是在 db 上预编译好的语句,
 // tx.StmtContext 把它们绑到本事务的连接上(同一连接上只 prepare 一次)。
 func sqlZoneRowTxBeginner(db *sql.DB, lock, update *sql.Stmt) beginZoneRowTx {
 	return func(ctx context.Context) (zoneRowTx, error) {
-		tx, err := db.BeginTx(ctx, nil)
+		if err := checkMaintenanceTool(ctx); err != nil {
+			return nil, err
+		}
+		proof := normalFreezeFromContext(ctx)
+		if proof == nil {
+			return nil, errNormalFreezeProof
+		}
+		finish, err := enterMaintenanceWork(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return sqlZoneRowTx{tx: tx, lock: tx.StmtContext(ctx, lock), update: tx.StmtContext(ctx, update)}, nil
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			holdMaintenanceTool(ctx)
+			finish()
+			return nil, err
+		}
+		if err := proof.lockTransaction(ctx, tx); err != nil {
+			rollbackErr := tx.Rollback()
+			holdMaintenanceTool(ctx)
+			finish()
+			return nil, errors.Join(err, rollbackErr)
+		}
+		return sqlZoneRowTx{tx: tx, lock: tx.StmtContext(ctx, lock), update: tx.StmtContext(ctx, update), ctx: ctx, finish: finish, finished: &sync.Once{}}, nil
 	}
 }
 
@@ -1663,7 +1762,8 @@ const (
 	fencedOpUnmerge                 // -mode unmerge:runUnmerge 的 3b' / 3'
 )
 
-// fenceKeptAbortMessage 是「写到一半中止、合服围栏故意留着」的统一中止文案:合服清单落盘之后任何一步的
+// fenceKeptAbortMessage 是「写到一半中止、合服围栏故意留着」的统一中止文案(redis 源专用:下面的 GET / DEL 步骤在 db 源下是错的,
+// db 源走 fence.go 的 routeFenceKeptAbortMessage,续跑用 -take-over-fence):合服清单落盘之后任何一步的
 // 失败(步骤 1~6 的写失败、复查失败、缓存失效失败、清单更新失败、改映射人数对不上);撤销 3' / 3b' 的
 // 写失败与 5' 之后的标记 / 缓存失效失败;以及续跑(清单已存在)或半撤销状态下、第一次写之前的拒绝 —— 那时
 // 上一次运行已写到一半(见 runMerge / runUnmerge 的 refuse)。首跑在清单落盘之前的拒绝不走这里,走 mergeFence.refuseAndRelease。
@@ -1717,7 +1817,14 @@ func fencedOpText(op fencedOp) (why, fixHint, rerun string) {
 }
 
 func mustDial(ctx context.Context, label, addr, pwd string, dbIndex int) *redis.Client {
-	c := redis.NewClient(&redis.Options{Addr: addr, Password: pwd, DB: dbIndex})
+	opts := &redis.Options{Addr: addr, Password: pwd, DB: dbIndex}
+	if maintenanceFromContext(ctx) != nil {
+		opts.MaxRetries = -1
+	}
+	c := redis.NewClient(opts)
+	if err := bindMaintenanceRedis(ctx, c); err != nil {
+		log.Fatal(errors.Join(err, c.Close()))
+	}
 	if err := c.Ping(ctx).Err(); err != nil {
 		log.Fatalf("%s redis ping (%s db=%d): %v", label, addr, dbIndex, err)
 	}
@@ -1726,14 +1833,11 @@ func mustDial(ctx context.Context, label, addr, pwd string, dbIndex int) *redis.
 
 // buildLagSource 选一个 Kafka 积压来源。两个都没配 = 返回 nil,preflight 拒绝。
 func buildLagSource(o options) kafkaLagSource {
+	if o.assumeKafkaDrained {
+		return attestedLagSource{}
+	}
 	if o.kafkaCLI != "" {
 		return kafkaCLILagSource{cmdPath: o.kafkaCLI, bootstrap: o.kafkaBootstrap}
-	}
-	if o.assumeKafkaDrained {
-		log.Printf("⚠️  -assume-kafka-drained: NO Kafka lag was measured. " +
-			"This attestation goes into the merge record; if a db_task backlog existed, " +
-			"those saves are still in Kafka and will never reach the target zone.")
-		return attestedLagSource{}
 	}
 	return nil
 }
@@ -1751,10 +1855,16 @@ func copyPlayerBlobs(ctx context.Context, o options, ids []uint64, gate writeGat
 		log.Println("Data Redis: source and target endpoints identical — skipping player blob copy (single backend)")
 		return 0, 0, nil
 	}
-	srcData := newDataRedisClient(sAddrs, o.dataPwd, o.sourceDataDB)
-	dstData := newDataRedisClient(tAddrs, o.dataPwd, o.targetDataDB)
-	defer srcData.Close()
-	defer dstData.Close()
+	srcData, err := newToolDataRedisClient(ctx, sAddrs, o.dataPwd, o.sourceDataDB)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer closeUnownedMaintenanceResource(ctx, srcData)
+	dstData, err := newToolDataRedisClient(ctx, tAddrs, o.dataPwd, o.targetDataDB)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer closeUnownedMaintenanceResource(ctx, dstData)
 	if err := srcData.Ping(ctx).Err(); err != nil {
 		return 0, 0, fmt.Errorf("source data redis ping: %w", err)
 	}

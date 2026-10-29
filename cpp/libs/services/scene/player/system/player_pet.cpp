@@ -21,6 +21,7 @@
 #include "player/comp/player_frozen_comp.h"
 #include "player/system/attribute_allocation_rules.h"
 #include "player/system/pet_rules.h"
+#include "player/system/player_level_rules.h"
 
 #include "rpc/service_metadata/player_pet_service_metadata.h"
 #include "table/code/attributeautoplan_table.h"
@@ -52,8 +53,9 @@ std::optional<uint32_t> OwnerLevel(entt::entity player) {
 				  << entt::to_integral(player) << " player_id=" << tlsEcs.GetPlayerId(player);
 		return std::nullopt;
 	}
-	// 新角色加载期间的零等级仍按既有规则归一成1;组件缺失不能走这条存量兼容分支。
-	return std::max<uint32_t>(levelComp->level(), 1);
+	// 玩法读的是主人的生效等级:playerlevel::CappedLevel(新角色加载期间的 0 按 1,超上限的存储等级按上限),
+	// 存储值本身不改。组件缺失不能走这条换算分支。
+	return playerlevel::CappedLevel(levelComp->level());
 }
 
 const PetRuleTable* RuleRow() {
@@ -134,19 +136,56 @@ uint32_t AptitudeIn(const PetInstance& pet, uint32_t dimensionId) {
 	return it == pet.aptitude().end() ? petrules::kAptitudeBase : it->second;
 }
 
-uint32_t UsedPoints(const PetInstance& pet) {
-	uint64_t used = 0;
-	for (const auto& [_, value] : pet.allocated()) {
-		used += value;
-	}
-	return used > std::numeric_limits<uint32_t>::max() ? std::numeric_limits<uint32_t>::max()
-													  : static_cast<uint32_t>(used);
+// 该键是不是本版本宝宝池的已知维度(加点统一规则 2):表里有这一行且属于宝宝池。
+bool IsPetPoolDimension(uint32_t dimensionId, uint32_t poolId) {
+	const auto [dim, err] = AttributeDimensionTableManager::Instance().FindByIdSilent(dimensionId);
+	return dim != nullptr && dim->pool_id() == poolId;
 }
 
-// 把表行 + 实例翻译成纯规则输入(纯规则不认识表也不认识 proto)
-std::vector<petrules::DimensionInput> BuildDimensionInputs(const PetInstance& pet, uint32_t poolId) {
+// 宝宝在宝宝池上的存储加点汇总(加点统一规则 2,attribute_allocation_rules.h):
+//   已知 = 本版本表里属于宝宝池的维度;未知 = 其余的键(新版本加的维度、角色维度、表里查不到的维度),
+//   不生效、计入已用。
+// PetInstance 本层的未知字段(新版本给实例加的字段)不在这里判、也不加 HasUnknown 守卫:那会把退役字段的残留
+// 误判成永久冻结;与加点语义耦合的新字段按混版本持久字段保护的 R5 走评审(规则 8)。
+attributerules::StoredPoolAllocation StoredAllocationOf(const PetInstance& pet, uint32_t poolId) {
+	attributerules::StoredPoolAllocation stored;
+	for (const auto& [dimensionId, points] : pet.allocated()) {
+		if (IsPetPoolDimension(dimensionId, poolId)) {
+			stored.AddKnown(points);
+		} else {
+			stored.AddForeign(points);
+		}
+	}
+	return stored;
+}
+
+// 宝宝在宝宝池上的判定结果(加点统一规则 3 / 4),与角色侧 PoolAllocationState 同构。
+// 列表、加点、洗点、自动加点与生效输入都从这里取,不再各抄一份"总量 − 已用"。
+struct PetPoolState {
+	uint32_t total = 0;
+	attributerules::StoredPoolAllocation stored;
+	bool effective = true;
+	uint32_t remaining = 0;
+};
+
+// 总量按宝宝已存等级算(等级只升不降,见 RecalculateOne)。
+PetPoolState EvaluatePetPool(const PetInstance& pet, const AttributePoolTable& pool) {
+	PetPoolState state;
+	const auto rule = ToRule(pool);
+	state.total = attributerules::TotalPoints(rule, pet.level(), 0);
+	state.stored = StoredAllocationOf(pet, pool.id());
+	state.effective = attributerules::PoolAllocationEffective(rule, state.total, state.stored);
+	state.remaining = attributerules::RemainingPoints(rule, state.total, state.stored);
+	return state;
+}
+
+// 把表行 + 实例翻译成纯规则输入(纯规则不认识表也不认识 proto)。这是宝宝「生效加点」的唯一出处:
+// 二级属性、列表 value、战斗快照、结算夹取都经它,按加点统一规则 3 过门 —— 池不生效时已知维度一律按 0,
+// 未知键根本不进输入。存储的 allocated 原样不动。
+std::vector<petrules::DimensionInput> BuildDimensionInputs(const PetInstance& pet, const AttributePoolTable& pool) {
+	const bool effective = EvaluatePetPool(pet, pool).effective;
 	std::vector<petrules::DimensionInput> inputs;
-	for (const auto* dim : PetDimensions(poolId)) {
+	for (const auto* dim : PetDimensions(pool.id())) {
 		petrules::DimensionInput input;
 		input.dimensionId = dim->id();
 		input.coefficients.basePerLevel = dim->base_per_level();
@@ -156,7 +195,7 @@ std::vector<petrules::DimensionInput> BuildDimensionInputs(const PetInstance& pe
 		input.coefficients.magicAttack = dim->magic_attack();
 		input.coefficients.speed = dim->speed();
 		input.coefficients.defense = dim->defense();
-		input.allocated = AllocatedIn(pet, dim->id());
+		input.allocated = effective ? AllocatedIn(pet, dim->id()) : 0;
 		input.aptitude = AptitudeIn(pet, dim->id());
 		inputs.push_back(input);
 	}
@@ -192,26 +231,6 @@ const PetInstance* FindPet(const PlayerPetComp& comp, uint64_t petId) {
 		}
 	}
 	return nullptr;
-}
-
-// 清掉表里已不存在(或已不属于宝宝池)的维度。不清的话 UsedPoints 会把这些点一直算进
-// "已用",玩家的宝宝点数凭空少一截且永远拿不回来 —— 角色侧 SanitizeSchemes 的对等物。
-void SanitizeAllocations(PlayerPetComp& comp, uint32_t poolId) {
-	std::vector<uint32_t> valid;
-	for (const auto* dim : PetDimensions(poolId)) {
-		valid.push_back(dim->id());
-	}
-	for (auto& pet : *comp.mutable_pets()) {
-		std::vector<uint32_t> stale;
-		for (const auto& [dimensionId, _] : pet.allocated()) {
-			if (std::find(valid.begin(), valid.end(), dimensionId) == valid.end()) {
-				stale.push_back(dimensionId);
-			}
-		}
-		for (const auto dimensionId : stale) {
-			pet.mutable_allocated()->erase(dimensionId);
-		}
-	}
 }
 
 // PlayerPetComp 是玩家必需组件(存档字段),唯一创建点是加载时的 PlayerDatabaseMessageFieldsUnmarshal。
@@ -305,19 +324,50 @@ bool IsPetNameValid(const std::string& name) {
 	return hasVisible && codePoints <= maxLen;
 }
 
-uint64_t ResetCostFor(const PetInstance& pet, const AttributePoolTable& pool) {
+// 洗点金币:列表下发的 reset_cost_gold 与 Reset 实际扣的是这同一个函数。
+// 加点不生效时免费(加点统一规则 6,理由同角色侧 ResetCostFor:不生效不是玩家造成的,而那时已知维度本就按 0 计)。
+uint64_t ResetCostFor(const PetInstance& pet, const AttributePoolTable& pool, const PetPoolState& state) {
+	if (!state.effective) {
+		return 0;
+	}
 	if (pool.reset_free_below_level() > 0 && pet.level() < pool.reset_free_below_level()) {
 		return 0;
 	}
 	return pool.reset_cost_gold();
 }
 
-// 一只宝宝的二级属性:现算,不缓存(见头文件"没有第二份真相")
-petrules::DerivedAttributes ComputeDerived(const PetInstance& pet, const PetTable& row, uint32_t poolId) {
-	return petrules::ComputeDerived(BaseValuesOf(row), BuildDimensionInputs(pet, poolId), pet.level());
+// 一只宝宝的二级属性:现算,不缓存(见头文件"没有第二份真相")。加点按 BuildDimensionInputs 过门后的生效值算,
+// 所以从不生效状态洗点前后上限不变,HP/MP 也不变(加点统一规则 7)。
+petrules::DerivedAttributes ComputeDerived(const PetInstance& pet, const PetTable& row, const AttributePoolTable& pool) {
+	return petrules::ComputeDerived(BaseValuesOf(row), BuildDimensionInputs(pet, pool), pet.level());
 }
 
-// 单只宝宝重算:同步等级 + 按新上限处理当前 HP/MP + 收敛超额分配。
+// 加载期可观测性(只读,不写任何数据):加点不生效、或带着本版本解释不了的键时各打一条 WARN。
+// 加载不再清理 / 返还宝宝的加点(以前超额整只清空、查不到的维度直接删,D3 / D4),这是线上唯一看得见的痕迹。
+void WarnStoredAllocationOnLoad(entt::entity player, const PetInstance& pet, const AttributePoolTable& pool) {
+	const auto state = EvaluatePetPool(pet, pool);
+	if (!state.effective) {
+		LOG_WARN << "[PlayerPet] metric=allocation_not_effective kind=pool player_id=" << tlsEcs.GetPlayerId(player)
+				 << " pet_id=" << pet.pet_id() << " pool=" << pool.id() << " known_used=" << state.stored.knownUsed
+				 << " known_largest=" << state.stored.knownLargest << " total=" << state.total
+				 << " dimension_cap=" << pool.dimension_cap() << "; stored allocation carried as-is, pool counts as 0";
+	}
+	uint32_t unknownKeys = 0;
+	for (const auto& entry : pet.allocated()) {
+		if (!IsPetPoolDimension(entry.first, pool.id())) {
+			++unknownKeys;
+		}
+	}
+	if (unknownKeys > 0) {
+		LOG_WARN << "[PlayerPet] metric=allocation_not_effective kind=unknown_dimension player_id="
+				 << tlsEcs.GetPlayerId(player) << " pet_id=" << pet.pet_id() << " unknown_keys=" << unknownKeys
+				 << " unknown_points=" << state.stored.foreignUsed
+				 << "; unknown dimensions carried as-is, never effective, counted as spent";
+	}
+}
+
+// 单只宝宝重算:同步等级 + 按新上限处理当前 HP/MP。不改写、不返还已分配点(加点统一规则 1):
+// 超额的加点整池按 0 生效(ComputeDerived 过门),等级涨回来或洗点之后再按本版本解释。
 // 返回是否发生了变化(仅用于日志)。
 //
 // previous:调用方在**改动 allocated 之前**拿到的旧二级属性。宝宝的二级属性是现算的
@@ -339,18 +389,15 @@ bool RecalculateOne(entt::entity player, uint32_t ownerLevel, PetInstance& pet, 
 	const auto oldLevel = pet.level();
 	// 成长属于实例，换低级主人或主人降级不能删除已获得等级与加点。
 	const auto newLevel = std::max(oldLevel, petrules::EffectiveLevel(ownerLevel, row->level_cap()));
-	const auto oldDerived = previous != nullptr ? *previous : ComputeDerived(pet, *row, pool.id());
+	const auto oldDerived = previous != nullptr ? *previous : ComputeDerived(pet, *row, pool);
 	pet.set_level(newLevel);
 
-	// 配表缩点造成的非法分配仍按池规则收敛；主人的等级下降不会降低宝宝等级。
-	const auto total = attributerules::TotalPoints(ToRule(pool), newLevel, 0);
-	if (UsedPoints(pet) > total) {
-		pet.mutable_allocated()->clear();
-		LOG_WARN << "[PlayerPet] Allocation exceeds total;reset and refunded: player_id=" << tlsEcs.GetPlayerId(player)
-				 << " pet_id=" << pet.pet_id() << " total=" << total;
+	// 配表缩点造成的超额只让这份加点不生效(总量按同步后的等级算),不再整只清空返还。
+	if (reason == PetSystem::RecalcReason::kLoad) {
+		WarnStoredAllocationOnLoad(player, pet, pool);
 	}
 
-	const auto newDerived = ComputeDerived(pet, *row, pool.id());
+	const auto newDerived = ComputeDerived(pet, *row, pool);
 	if (reason == PetSystem::RecalcReason::kLevelChanged) {
 		// 与角色 PlayerAttributeSystem::Recalculate 逐条对齐:抬高按绝对增量补当前值,
 		// **降低只夹**(不按比例缩)。早先这里把降级也丢给按比例分支,主人被 GM 降级 /
@@ -393,13 +440,14 @@ void FillPetInfo(entt::entity player, const PlayerPetComp& comp, const PetInstan
 		}
 	}
 
-	const auto total = attributerules::TotalPoints(ToRule(pool), pet.level(), 0);
-	const auto used = UsedPoints(pet);
-	info.set_total_points(total);
-	info.set_remaining_points(total > used ? total - used : 0);
-	info.set_reset_cost_gold(ResetCostFor(pet, pool));
+	// 总量 / 剩余 / 洗点费用出自同一个 EvaluatePetPool:不生效时剩余 0、洗点免费,与 Allocate / Reset 的实际判定一致。
+	const auto state = EvaluatePetPool(pet, pool);
+	info.set_total_points(state.total);
+	info.set_remaining_points(state.remaining);
+	info.set_reset_cost_gold(ResetCostFor(pet, pool, state));
 
-	const auto inputs = BuildDimensionInputs(pet, pool.id());
+	// value 复用这份已过门的输入(与二级属性、战斗快照同一个判定),不另写一份生效判断。
+	const auto inputs = BuildDimensionInputs(pet, pool);
 	info.set_growth(petrules::GrowthPermyriad(inputs));
 	for (const auto* dim : PetDimensions(pool.id())) {
 		auto* dimensionInfo = info.add_dimensions();
@@ -407,19 +455,20 @@ void FillPetInfo(entt::entity player, const PlayerPetComp& comp, const PetInstan
 		dimensionInfo->set_pool_id(dim->pool_id());
 		dimensionInfo->set_name(dim->name());
 		dimensionInfo->set_desc(dim->desc());
+		// allocated 下发存储值(加点不生效时也照实显示);value 只算生效的那部分。
 		dimensionInfo->set_allocated(AllocatedIn(pet, dim->id()));
 		dimensionInfo->set_cap(pool.dimension_cap());
 		dimensionInfo->set_sort(dim->sort());
 		dimensionInfo->set_aptitude(AptitudeIn(pet, dim->id()));
-		petrules::DimensionInput one;
-		one.coefficients.basePerLevel = dim->base_per_level();
-		one.allocated = AllocatedIn(pet, dim->id());
-		dimensionInfo->set_value(petrules::DimensionValue(one, pet.level()));
+		const auto input = std::find_if(inputs.begin(), inputs.end(), [dim](const petrules::DimensionInput& one) {
+			return one.dimensionId == dim->id();
+		});
+		dimensionInfo->set_value(input != inputs.end() ? petrules::DimensionValue(*input, pet.level()) : 0);
 	}
 
 	auto* derivedInfo = info.mutable_derived();
 	if (row != nullptr) {
-		const auto derived = ComputeDerived(pet, *row, pool.id());
+		const auto derived = ComputeDerived(pet, *row, pool);
 		derivedInfo->set_max_health(derived.maxHealth);
 		derivedInfo->set_max_mana(derived.maxMana);
 		derivedInfo->set_physical_attack(derived.physicalAttack);
@@ -438,23 +487,23 @@ void PetSystem::InitializeOnLoad(entt::entity player) {
 		return;
 	}
 	// 存档组件由 Unmarshal 挂上;这里只做加载期的数据修补,不替加载链路补建(FindComp 已记错误)。
+	// 已分配点原样携带,不按本版本表清理(加点统一规则 1,mixed-version-persist-field-protection.md §12.1 D3):
+	// 本版本解释不了的键不生效、计入已用,由 BuildDimensionInputs / EvaluatePetPool 解释。
 	auto* petComp = FindComp(player);
 	if (petComp == nullptr) {
 		return;
 	}
-	// 初始化会清理持久化分配并同步等级,必须在任何修补之前确认等级已经载入。
+	// 初始化会修补出战引用并同步等级,必须在任何修补之前确认等级已经载入。
 	if (!OwnerLevel(player).has_value()) {
 		return;
 	}
 	auto& comp = *petComp;
-	// 出战指向一只已不存在的宝宝(异常存档 / 二期放生后的残留):就地纠正为未出战
+	// 出战指向一只已不存在的宝宝(异常存档 / 二期放生后的残留):就地纠正为未出战。
+	// 与版本无关的坏档自愈(指向的实例根本不在这份存档里),不属于"按本版本配置改写"。
 	if (comp.active_pet_id() != 0 && FindPet(comp, comp.active_pet_id()) == nullptr) {
 		LOG_WARN << "[PlayerPet] active_pet_id points to nonexistent pet;cleared: player_id=" << tlsEcs.GetPlayerId(player)
 				 << " active_pet_id=" << comp.active_pet_id();
 		comp.set_active_pet_id(0);
-	}
-	if (const auto* pool = PetPool(); pool != nullptr) {
-		SanitizeAllocations(comp, pool->id());
 	}
 	RecalculateAll(player, RecalcReason::kLoad);
 }
@@ -483,8 +532,13 @@ void PetSystem::RecalculateAll(entt::entity player, RecalcReason reason) {
 	for (auto& pet : *comp.mutable_pets()) {
 		RecalculateOne(player, *ownerLevel, pet, *pool, reason);
 	}
-	if (const auto* active = FindPet(comp, comp.active_pet_id()); active != nullptr && *ownerLevel < active->level()) {
-		comp.set_active_pet_id(0);
+	// 主人等级低于出战宝宝时取消出战,只在等级真的变化(kLevelChanged)时做。加载(kLoad)不写 active_pet_id:
+	// 主人的生效等级可能只是这一版本的解读(超上限的存储等级按上限读、混版本带来的等级差),按它改写出战状态会随
+	// 存盘落库;而运行期 Summon 与 BuildBattleSnapshot 本来就按主人等级拦截,留着的出战指针带不进战斗。
+	if (reason == RecalcReason::kLevelChanged) {
+		if (const auto* active = FindPet(comp, comp.active_pet_id()); active != nullptr && *ownerLevel < active->level()) {
+			comp.set_active_pet_id(0);
+		}
 	}
 }
 
@@ -593,28 +647,31 @@ uint32_t PetSystem::Allocate(entt::entity player, uint64_t petId,
 		return kPetTableRowMissing;
 	}
 
+	// current 只含宝宝池已知维度:目标里出现别的键(未知键、角色维度)一律 kDimensionNotInPool。
 	std::map<uint32_t, uint32_t> current;
 	for (const auto* dim : PetDimensions(pool->id())) {
 		current[dim->id()] = AllocatedIn(*pet, dim->id());
 	}
-	const auto total = attributerules::TotalPoints(ToRule(*pool), pet->level(), 0);
-	const auto used = UsedPoints(*pet);
-	const uint32_t remaining = total > used ? total - used : 0;
+	// 剩余点按加点统一规则 4:未知键计入已用;加点不生效时剩余为 0,任何增量都回「点数不足」。
+	const auto state = EvaluatePetPool(*pet, *pool);
 
 	uint32_t delta = 0;
 	const auto err = attributerules::ValidateAllocation(ToRule(*pool), pet->level(), current, target,
-														remaining, delta);
+														state.remaining, delta);
 	if (err != AllocError::kOk) {
 		return MapAllocError(err);
 	}
 	// 旧上限必须在改 allocated 之前取(见 RecalculateOne 的 previous 参数注释)
-	const auto before = ComputeDerived(*pet, *row, pool->id());
+	const auto before = ComputeDerived(*pet, *row, *pool);
+	// 只写真正变化的键(同角色侧 Allocate):want == current 的键不落,存档里不会凭空多出 0 值新键。
 	for (const auto& [dimensionId, want] : target) {
-		(*pet->mutable_allocated())[dimensionId] = want;
+		if (const auto it = current.find(dimensionId); it != current.end() && it->second != want) {
+			(*pet->mutable_allocated())[dimensionId] = want;
+		}
 	}
 	RecalculateOne(player, *ownerLevel, *pet, *pool, RecalcReason::kAllocate, &before);
 	LOG_INFO << "[PlayerPet] Points allocated: player_id=" << tlsEcs.GetPlayerId(player) << " pet_id=" << petId
-			 << " delta=" << delta << " remaining=" << (remaining - delta);
+			 << " delta=" << delta << " remaining=" << (state.remaining - delta);
 	return kSuccess;
 }
 
@@ -643,11 +700,15 @@ uint32_t PetSystem::Reset(entt::entity player, uint64_t petId) {
 	if (row == nullptr) {
 		return kPetTableRowMissing;
 	}
-	if (UsedPoints(*pet) == 0) {
+	// 洗点只管宝宝池已知维度(加点统一规则 6):只剩未知键时也是「无可洗」,不扣费 ——
+	// 未知键不归宝宝池,洗点不碰它们,收了钱却什么都没清掉。
+	const auto state = EvaluatePetPool(*pet, *pool);
+	if (state.stored.knownUsed == 0) {
 		return kPetNothingToChange;
 	}
-	// 先扣费再清点:扣费失败什么都不动(货币系统内部有冻结/封禁校验)
-	const auto cost = ResetCostFor(*pet, *pool);
+	// 先扣费再清点:扣费失败什么都不动(货币系统内部有冻结/封禁校验)。
+	// 费用与列表下发的 reset_cost_gold 同一个函数:加点不生效时免费。
+	const auto cost = ResetCostFor(*pet, *pool, state);
 	if (cost > 0) {
 		if (!CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(cost))) {
 			return kPetGoldNotEnough;
@@ -657,9 +718,19 @@ uint32_t PetSystem::Reset(entt::entity player, uint64_t petId) {
 			return err;
 		}
 	}
-	// 同 Allocate:洗点会把上限打下去,旧上限只能在清点之前取
-	const auto before = ComputeDerived(*pet, *row, pool->id());
-	pet->mutable_allocated()->clear();
+	if (!state.effective) {
+		LOG_WARN << "[PlayerPet] metric=allocation_reset_free_ineffective player_id=" << tlsEcs.GetPlayerId(player)
+				 << " pet_id=" << petId << " pool=" << pool->id() << " known_used=" << state.stored.knownUsed
+				 << " known_largest=" << state.stored.knownLargest << " total=" << state.total
+				 << " dimension_cap=" << pool->dimension_cap() << "; ineffective allocation reset for free";
+	}
+	// 同 Allocate:洗点会把上限打下去,旧上限只能在清点之前取。旧上限是生效值:从不生效状态洗点,
+	// 前后上限相同,HP/MP 不变(加点统一规则 7)。
+	const auto before = ComputeDerived(*pet, *row, *pool);
+	// 只清宝宝池已知维度,未知键原样保留。
+	for (const auto* dim : PetDimensions(pool->id())) {
+		pet->mutable_allocated()->erase(dim->id());
+	}
 	RecalculateOne(player, *ownerLevel, *pet, *pool, RecalcReason::kReset, &before);
 	LOG_INFO << "[PlayerPet] Points reset: player_id=" << tlsEcs.GetPlayerId(player) << " pet_id=" << petId
 			 << " cost_gold=" << cost;
@@ -711,9 +782,8 @@ uint32_t PetSystem::AutoAllocate(entt::entity player, uint64_t petId,
 		order.push_back(dimensionId);
 		weights.push_back(i < plan->weight_size() ? plan->weight(i) : 1);
 	}
-	const auto total = attributerules::TotalPoints(ToRule(*pool), pet->level(), 0);
-	const auto used = UsedPoints(*pet);
-	const uint32_t remaining = total > used ? total - used : 0;
+	// 剩余点与 Allocate 同一个判定(加点统一规则 4):建议能原样提交通过校验。
+	const auto remaining = EvaluatePetPool(*pet, *pool).remaining;
 	if (remaining == 0) {
 		return kPetNothingToChange;
 	}
@@ -827,7 +897,7 @@ uint32_t PetSystem::GrantPet(entt::entity player, uint32_t petTableId, uint64_t&
 	}
 
 	// 出生满状态
-	const auto derived = ComputeDerived(*pet, *row, pool->id());
+	const auto derived = ComputeDerived(*pet, *row, *pool);
 	pet->set_health(derived.maxHealth);
 	pet->set_mana(derived.maxMana);
 	// 种类自带技能**不抄进实例**:抄了就是第二份真相,策划改表之后这只宝宝会永远
@@ -952,7 +1022,8 @@ bool PetSystem::BuildBattleSnapshot(entt::entity player, ::BattlePetSnapshot& sn
 		return false;
 	}
 
-	const auto derived = ComputeDerived(*pet, *row, pool->id());
+	// 快照里的数值与列表同一个来源(ComputeDerived 已按生效加点过门):不生效的加点、未知键都带不进战斗。
+	const auto derived = ComputeDerived(*pet, *row, *pool);
 	snapshot.set_pet_id(pet->pet_id());
 	snapshot.set_owner_player_id(tlsEcs.GetPlayerId(player));
 	snapshot.set_pet_name(!pet->name().empty() ? pet->name() : row->name());
@@ -995,7 +1066,7 @@ void PetSystem::ApplyBattleSettlement(entt::entity player, const ::BattlePetSett
 	if (row == nullptr || pool == nullptr) {
 		return;
 	}
-	const auto derived = ComputeDerived(*pet, *row, pool->id());
+	const auto derived = ComputeDerived(*pet, *row, *pool);
 	pet->set_health(std::min(settlement.health(), derived.maxHealth));
 	pet->set_mana(derived.maxMana > 0 ? std::min(settlement.mana(), derived.maxMana) : settlement.mana());
 	// 阵亡回满:与玩家同口径(player_battle.cpp 的结算复活)。不回满的话 0 血宝宝

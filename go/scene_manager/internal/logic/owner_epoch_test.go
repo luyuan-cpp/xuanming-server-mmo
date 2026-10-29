@@ -113,6 +113,29 @@ func writeHandoffMarker(t *testing.T, sc *svc.ServiceContext, playerID uint64, e
 
 // --- 铸造 ------------------------------------------------------------------
 
+func TestEnterScene_InitialDurableCommitFloorProducesActorEpochTwo(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	const playerID, targetID = uint64(6199), uint64(7199)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "0")
+	// 这是已由 SQL 采纳建立的地板，不是测试或 Login 另行铸造 actor。
+	require.NoError(t, mr.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		OwnerRevision: 1, PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Zero(t, resp.ErrorCode)
+	require.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+	location, err := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NoError(t, err)
+	require.NotNil(t, location)
+	require.EqualValues(t, 2, location.OwnerEpoch)
+	require.Len(t, *captured, 1)
+	require.EqualValues(t, 2, decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch)
+}
+
 func TestEnterScene_FirstLandingMintsEpochOneAndCarriesItInRouteEvent(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	captured := capturingKafkaWriter(sc)

@@ -1,6 +1,7 @@
 package inbox
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -9,6 +10,8 @@ import (
 	"player_inbox/internal/constants"
 	"player_inbox/internal/metrics"
 
+	"google.golang.org/protobuf/proto"
+	battlepb "proto/battle"
 	dspb "proto/data_service"
 	inboxpb "proto/player_inbox"
 
@@ -30,6 +33,8 @@ type EnqueueParams struct {
 	// Operator 写进条目 operator_name(必填,≤ 64B);Note 写进条目 note(≤ 256B)。
 	Operator string
 	Note     string
+	// 仅签名Match专用入口设置；普通GM不能借此跳过签发窗或捕获新的角色归属。
+	battleOriginal *inboxpb.BattleSettlementInboxRequest
 }
 
 // EnqueueResult 是入箱结局。Code 为 0 表示成功:Created=true 是新建,false 是 DUPLICATE(同键同摘要,
@@ -47,6 +52,9 @@ var errDuplicateUnderP = errors.New("inbox: duplicate key while original role P 
 // errStreamVanished 表示 ensureStream 刚确认过的流行在主事务里读不到(流行永不删除,只可能是缺陷或库被动过)。
 var errStreamVanished = errors.New("inbox: stream row vanished after ensureStream")
 
+// 仅专用Battle原件的确定性冲突；角色冻结、SQL/传输错误仍可能恢复，不能按文本归此类。
+var ErrBattleSettlementOriginal = errors.New("inbox: Battle永久原件冲突")
+
 // Enqueue 是入箱核心(设计 §6.2)。inTx 在主事务里、提交之前执行(GM 生产方用它同事务写审计,设计 §6.1);
 // 它返回错误会让整次入箱回滚。inTx 可能因事务重试被调用多次,必须可重跑。
 //
@@ -63,6 +71,9 @@ func (s *Store) Enqueue(ctx context.Context, p EnqueueParams, inTx func(*sql.Tx,
 func (s *Store) enqueue(ctx context.Context, p EnqueueParams, inTx func(*sql.Tx, uint64) error) (EnqueueResult, error) {
 	// ── 1. 注册表与字段校验(与时间无关)──
 	if p.PlayerID == 0 || p.RequestID == 0 || p.IssuedAtMs == 0 || !validProducer(p.Producer) {
+		return EnqueueResult{Code: constants.ErrInvalidParameter}, nil
+	}
+	if (p.Producer == inboxpb.PlayerInboxProducerKind_PLAYER_INBOX_PRODUCER_MATCH || p.Type == inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT) != (p.battleOriginal != nil) {
 		return EnqueueResult{Code: constants.ErrInvalidParameter}, nil
 	}
 	entry, code := s.registry.ValidatePayload(p.Type, s.allowed, p.Payload)
@@ -104,11 +115,17 @@ func (s *Store) enqueue(ctx context.Context, p EnqueueParams, inTx func(*sql.Tx,
 	var res EnqueueResult
 	err = s.withPlayerTx(ctx, p.PlayerID, func(tx *sql.Tx, original *dspb.AccountRoleOwnership) error {
 		res = EnqueueResult{} // 可重跑:上一轮的结果作废
+		if p.battleOriginal != nil && !battleOriginalMatches(p.battleOriginal, original) {
+			return fmt.Errorf("%w: 原账号或revision不符", ErrBattleSettlementOriginal)
+		}
 		existing, err := readItemByRequest(ctx, tx, shard, p.PlayerID, p.Producer, p.RequestID)
 		if err != nil {
 			return err
 		}
 		if err = requireItemOriginal(existing, original); err != nil {
+			if p.battleOriginal != nil {
+				return fmt.Errorf("%w: 永久收据原归属不符", ErrBattleSettlementOriginal)
+			}
 			return err
 		}
 		if existing != nil {
@@ -116,7 +133,7 @@ func (s *Store) enqueue(ctx context.Context, p EnqueueParams, inTx func(*sql.Tx,
 			return nil
 		}
 		nowMs := s.nowMs()
-		if !issuedWithinWindow(p.IssuedAtMs, nowMs) {
+		if (p.battleOriginal == nil && !issuedWithinWindow(p.IssuedAtMs, nowMs)) || (p.battleOriginal != nil && p.IssuedAtMs > nowMs+uint64(constants.IssuedAtMaxFuture.Milliseconds())) {
 			res.Code = constants.ErrIssuedOutOfWindow
 			return nil
 		}
@@ -201,6 +218,77 @@ func (s *Store) enqueue(ctx context.Context, p EnqueueParams, inTx func(*sql.Tx,
 		}
 	}
 	return res, nil
+}
+
+// Battle来源是Match已提交的原件，旧于GM签发窗仍须恢复；全部归属校验仍在同一P锁内。
+// Lookup只返回永久SQL原收据，不以当前玩家水位猜测APPLIED。
+func (s *Store) EnqueueBattleSettlement(ctx context.Context, req *inboxpb.BattleSettlementInboxRequest) (*inboxpb.BattleSettlementInboxResponse, error) {
+	if err := validateBattleOriginal(req); err != nil {
+		return nil, err
+	}
+	p := EnqueueParams{PlayerID: req.PlayerId, Type: inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT,
+		Producer: inboxpb.PlayerInboxProducerKind_PLAYER_INBOX_PRODUCER_MATCH, RequestID: req.BattleId,
+		IssuedAtMs: req.IssuedAtMs, Payload: req.SettlementPayload, Operator: "match", battleOriginal: req}
+	r, err := s.Enqueue(ctx, p, nil)
+	if err != nil {
+		return nil, err
+	}
+	if r.Code == constants.ErrIdempotencyConflict {
+		return nil, fmt.Errorf("%w: 同局入箱正文冲突", ErrBattleSettlementOriginal)
+	}
+	return &inboxpb.BattleSettlementInboxResponse{PlayerId: req.PlayerId, BattleId: req.BattleId, Seq: r.Seq, State: r.State,
+		ContentSha256: ContentSHA256(p.Type, p.IssuedAtMs, p.Payload), ErrorMessage: tipOf(r.Code)}, nil
+}
+
+func (s *Store) LookupBattleSettlement(ctx context.Context, req *inboxpb.BattleSettlementInboxRequest) (*inboxpb.BattleSettlementInboxResponse, error) {
+	if err := validateBattleOriginal(req); err != nil {
+		return nil, err
+	}
+	resp := &inboxpb.BattleSettlementInboxResponse{PlayerId: req.PlayerId, BattleId: req.BattleId}
+	digest := ContentSHA256(inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, req.IssuedAtMs, req.SettlementPayload)
+	err := s.withPlayerTx(ctx, req.PlayerId, func(tx *sql.Tx, original *dspb.AccountRoleOwnership) error {
+		resp.Seq, resp.State, resp.ContentSha256 = 0, 0, nil
+		if !battleOriginalMatches(req, original) {
+			return fmt.Errorf("%w: 原账号或revision不符", ErrBattleSettlementOriginal)
+		}
+		row, err := readItemByRequest(ctx, tx, RowShard(req.PlayerId), req.PlayerId, inboxpb.PlayerInboxProducerKind_PLAYER_INBOX_PRODUCER_MATCH, req.BattleId)
+		if err != nil {
+			return err
+		}
+		if row == nil {
+			return nil
+		}
+		if err = requireItemOriginal(row, original); err != nil {
+			return fmt.Errorf("%w: 永久收据原归属不符", ErrBattleSettlementOriginal)
+		}
+		if row.GetMsgType() != uint32(inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT) || !bytes.Equal(row.GetContentSha256(), digest) || !bytes.Equal(row.GetPayload(), req.SettlementPayload) || row.GetIssuedAtMs() != req.IssuedAtMs {
+			return fmt.Errorf("%w: 原Battle收据正文冲突", ErrBattleSettlementOriginal)
+		}
+		resp.Seq, resp.State, resp.ContentSha256 = row.GetSeq(), inboxpb.PlayerInboxItemState(row.GetState()), append([]byte(nil), row.GetContentSha256()...)
+		return nil
+	})
+	return resp, err
+}
+
+func validateBattleOriginal(req *inboxpb.BattleSettlementInboxRequest) error {
+	if req == nil || req.PlayerId == 0 || req.BattleId == 0 || ValidateText(req.ExpectedOwnerAccount, 191, true) != 0 || req.ExpectedOwnerRevision == 0 || req.IssuedAtMs == 0 || len(req.SettlementPayload) == 0 || len(req.SettlementPayload) > 16384 || battlePayloadHasUnknown(req.ProtoReflect()) {
+		return fmt.Errorf("%w: Battle原件不完整", ErrBattleSettlementOriginal)
+	}
+	p := &battlepb.BattleSettlementData{}
+	if err := proto.Unmarshal(req.SettlementPayload, p); err != nil {
+		return fmt.Errorf("%w: Battle载荷不能解码", ErrBattleSettlementOriginal)
+	}
+	if p.PlayerId != req.PlayerId || p.BattleId != req.BattleId {
+		return fmt.Errorf("%w: Battle载荷身份不符", ErrBattleSettlementOriginal)
+	}
+	if err := validateBattlePayload(p); err != nil {
+		return fmt.Errorf("%w: Battle载荷语义不完整", ErrBattleSettlementOriginal)
+	}
+	return nil
+}
+
+func battleOriginalMatches(req *inboxpb.BattleSettlementInboxRequest, role *dspb.AccountRoleOwnership) bool {
+	return role != nil && req.PlayerId == role.GetRole().GetPlayerId() && req.ExpectedOwnerAccount == role.GetAccount() && req.ExpectedOwnerRevision == role.GetOwnerRevision()
 }
 
 // resultForExisting 按判重规则把已存在的行折成结局。

@@ -1,0 +1,23 @@
+syntax = "proto3";
+package common.base;
+
+option go_package = "robot/proto/common/base";
+
+// 币种取值表的唯一事实源。C++ 的 currency.h 与 Go 的 shared/currencytype 都从这里派生，
+// 不得在任何服务里再手写一份币种数值或上限。
+//
+// 维护规则（混版本持久字段保护设计 §13；两侧连续性测试守住第 3 条）：
+// 1. 只增不删：停用的币种保留枚举值，改用配置或封禁停用。
+// 2. 不复用：删掉的值不得分给新币种。已入箱、已入外发箱的条目带着旧值，
+//    复用会让旧条目在新版本上按新币种执行。
+// 3. 从 0 连续编号：CurrencyComp.values 以币种为下标，C++ 用 ARRAYSIZE 作上限。
+// 4. 0 必须是银两（代码里的 kCurrencyGold），满足 proto3 首值为 0 的要求。
+//
+// 线上字段一律保持 uint32 currency_type，本枚举只作取值表，不改变任何线上编码。
+// 加新值的版本里，旧 scene 会把新值判为版本错位（收件箱停用本域、资产通道回 RETRY），
+// 所以 scene 全量升级之前，GM 不得对新币种下处置，交易、邮件不得发放新币种。
+enum CurrencyType {
+  CURRENCY_TYPE_GOLD = 0;         // 银两
+  CURRENCY_TYPE_DIAMOND = 1;      // 灵石
+  CURRENCY_TYPE_BIND_DIAMOND = 2; // 绑定灵石
+}

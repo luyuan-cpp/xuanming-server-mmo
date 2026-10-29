@@ -164,6 +164,19 @@ Scene 侧:
 expected_session_version}`；Locator 只在 session id/version 仍匹配时以 Lua CAS
 删除。迟到的旧连接请求是成功 no-op，不能删掉替换登录后的新会话。
 
+## 6. 登录超时配置待办（2026-10-23，未完成）
+
+[TimeoutConf](../../go/login/internal/config/config.go) 中的 `TaskWaitTimeout`、`LoginTotalTimeout` 当前只有字段声明和配置，没有运行时读取；修改这两个值不会改变 DB 任务等待或登录总超时。下表数值仅指当前[本地配置](../../go/login/etc/login.yaml)，不代表所有部署配置。
+
+| 配置 | 本地配置值 | 待办（未完成） |
+|------|------------|----------------|
+| `Timeouts.TaskWaitTimeout` | `30s` | 明确并实现与 DB 任务结果等待预算的关联；若确认废弃，则移除字段及各配置入口。 |
+| `Timeouts.LoginTotalTimeout` | `10s` | 明确同步受理与异步入场各自覆盖的流程边界，再接入相应总预算；若确认废弃，则移除字段及各配置入口。 |
+
+**这不表示登录没有超时。** 当前本地配置的同步 RPC `Timeout: 4000` 由 zrpc 执行；[EnterGame](../../go/login/internal/logic/clientplayerlogin/entergamelogic.go) 后台入场链另建独立 context，使用 `enterGameChainBudget = 5min`，预加载回调登记使用 `dispatcherTaskTTL = 8s`。[TaskResultDispatcher](../../go/login/internal/dispatcher/task_result_dispatcher.go) 按登记 TTL 记录过期时间并每秒扫描，不保证严格在第 8 秒触发回调。这些预算均不是由上述两个配置字段驱动的。
+
+接线后需验证配置确实改变相应截止时间、子预算不延长父截止时间，并覆盖到期与取消后的回调、锁等资源清理。在完成接线及验证前，不得把调整这两个 YAML 值视为超时已经生效。
+
 ---
 
 ## 数据流总结

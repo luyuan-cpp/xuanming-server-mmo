@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <map>
+#include <unordered_map>
 
 #include "engine/core/error_handling/error_handling.h"
 #include "engine/core/utils/proto/unknown_field_carry.h"
@@ -119,13 +120,18 @@ std::vector<ItemStore::Items::value_type *> ItemStore::InAcquireOrder()
     return ordered;
 }
 
+bool ItemStore::IsCountableByConfig(const ItemComp &item)
+{
+    return !unknown_field_carry::CarriesNewerVersionFields(item);
+}
+
 std::size_t ItemStore::TotalCountOf(uint32_t configId) const
 {
     std::size_t totalSize = 0;
     // 总量与遍历顺序无关。
     for (const auto &[guid, item] : items_)
     {
-        if (item.config_id() == configId)
+        if (item.config_id() == configId && IsCountableByConfig(item))
         {
             totalSize += item.size();
         }
@@ -133,29 +139,49 @@ std::size_t ItemStore::TotalCountOf(uint32_t configId) const
     return totalSize;
 }
 
-bool ItemStore::HasAll(const ItemCountMap &required) const
+ItemStore::QuantityVerdict ItemStore::CheckQuantities(const ItemCountMap &required) const
 {
-    // 只读检查:是否拥有 required 要求的每一项 (config_id -> 需求数量)。
-    // 思路:把需求拷一份,遍历实例逐个堆叠去抵扣,需求全部清零即满足。
-    auto itemsToCheck = required;  // 拷一份,边遍历边扣减(不污染入参)
-
-    // 是否足额与遍历顺序无关。
+    // 一次遍历,按需求里的 config 分别累计可计单位与"扣下"的单位(带更新版本字段的)。与遍历顺序无关。
+    struct Held
+    {
+        uint64_t countable{0};
+        uint64_t withheld{0};
+    };
+    std::unordered_map<uint32_t, Held> heldByConfig;
     for (const auto &[guid, item] : items_)
     {
-        auto it = itemsToCheck.find(item.config_id());  // 这个 config 在需求清单里吗
-        if (it == itemsToCheck.end())
+        if (!required.contains(item.config_id()))
         {
-            continue;  // 不是需要的物品,跳过
-        }
-        if (item.size() >= it->second)
-        {
-            itemsToCheck.erase(it);  // 这一堆就够抵该 config 的全部剩余需求
             continue;
         }
-        it->second -= item.size();  // 只够抵一部分 -> 扣减后继续找后面的同 config 堆叠
+        auto &held = heldByConfig[item.config_id()];
+        (IsCountableByConfig(item) ? held.countable : held.withheld) += item.size();
     }
 
-    return itemsToCheck.empty();
+    bool versionSkew = false;
+    for (const auto &[configId, need] : required)
+    {
+        if (need == 0)
+        {
+            continue;
+        }
+        const auto it = heldByConfig.find(configId);
+        const Held held = it == heldByConfig.end() ? Held{} : it->second;
+        if (held.countable + held.withheld < need)
+        {
+            return QuantityVerdict::kInsufficient; // 任何版本都扣不出来:确定不足,优先于版本错位
+        }
+        if (held.countable < need)
+        {
+            versionSkew = true;
+        }
+    }
+    return versionSkew ? QuantityVerdict::kVersionSkew : QuantityVerdict::kEnough;
+}
+
+bool ItemStore::HasAll(const ItemCountMap &required) const
+{
+    return CheckQuantities(required) == QuantityVerdict::kEnough;
 }
 
 // ── 堆叠语义 ─────────────────────────────────────────────────────────────
@@ -266,7 +292,8 @@ uint32_t ItemStore::DrainStacks(uint32_t configId, uint32_t count,
     for (auto &entry : items_)
     {
         assert(entry.first == entry.second.item_id());
-        if (entry.second.config_id() == configId && entry.second.size() > 0)
+        // 带更新版本字段的堆不当普通单位扣(IsCountableByConfig,与 TotalCountOf / CheckQuantities 同口径)。
+        if (entry.second.config_id() == configId && entry.second.size() > 0 && IsCountableByConfig(entry.second))
         {
             ordered.emplace_back(drainRank ? drainRank(entry.first) : uint64_t{0}, &entry);
         }
@@ -324,7 +351,7 @@ bool ItemStore::IsMergeCandidate(const ItemComp &item, uint32_t maxStack)
 
 bool ItemStore::IsIndependentInstance(const ItemComp &item)
 {
-    return item.has_equip() || unknown_field_carry::HasUnknown(item);
+    return item.has_equip() || unknown_field_carry::CarriesNewerVersionFields(item);
 }
 
 void ItemStore::MergePartialStacks()

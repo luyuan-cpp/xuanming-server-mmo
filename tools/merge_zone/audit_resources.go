@@ -71,8 +71,8 @@ type ResourceAudit struct {
 //
 //	mapping  DB 0   player:zone:{id} / lock:player:{id} / merge:in_progress:{zone}
 //	                (go/data_service/etc/data_service.yaml MappingRedis)
-//	guild    DB 2   guild_rank:zone:{z} / guild:v2:{id} / guild_rank:maintenance_lock
-//	                (go/guild/etc/guild.yaml RedisClient)
+//	guild    DB 0   guild_rank:zone:{z} / guild:v2:{id} / guild_rank:maintenance_lock
+//	                (go/guild/etc/guild.yaml RedisClient;2026-10-23 由 DB 2 改为 0)
 //	shared   DB 0   player:session:{pid} / kafka:{retry,dead}:queue:* /
 //	                PlayerAllData:{pid} / {MsgType}:{pid} / player_merge_notice:{pid}
 //	                (go/login, go/db, go/player_locator, scene_manager 都是 DB 0)
@@ -84,12 +84,14 @@ type ResourceAudit struct {
 type auditConfig struct {
 	db        *sql.DB       // game MySQL — zone_{N}_db;帮会表在 guildSchema、好友在 friendSchema、聚宝斋在 tradeSchema
 	mappingDB *redis.Client // DB 0(go-zero RedisConf 无 DB 字段)
-	rankRDB   *redis.Client // DB 2
+	rankRDB   *redis.Client // guild 的 RedisClient,DB 0
 	sharedRDB *redis.Client // DB 0
 	sceneRDB  *redis.Client // scene_manager Redis (DB 0 by default)
 	// dataRDB: per-zone player data Redis(standalone 或 cluster)。可选:
 	// 只有配了 -source-data-redis 才有,用来查 player:{id}:__lock。
 	dataRDB redis.UniversalClient
+	// sceneNodes: etcd 场景节点注册表(scene_registry.go)。nil = 没给 -etcd-endpoints 或地址非法。
+	sceneNodes sceneRegistry
 
 	// 只用于把 DB 号打进 Notes —— 审计输出必须自己说清「我查的是哪个库」,
 	// 否则「0 在线」这种结论没法复核。
@@ -179,6 +181,8 @@ type auditEntryParams struct {
 	sceneAddr string
 	scenePwd  string
 	sceneDB   int
+	// etcdEndpoints: -etcd-endpoints 原文;空 = 没给,source_scene_nodes 报 INFRA。
+	etcdEndpoints string
 
 	dataAddrs []string
 	dataPwd   string
@@ -262,6 +266,15 @@ func runAuditEntry(p auditEntryParams) {
 		}
 	}
 
+	var sceneNodes sceneRegistry
+	if p.etcdEndpoints != "" {
+		if reg, err := newEtcdGatewayRegistry(p.etcdEndpoints); err != nil {
+			log.Printf("ERROR: %v", err)
+		} else {
+			sceneNodes = reg
+		}
+	}
+
 	cfg := auditConfig{
 		db:                 db,
 		mappingDB:          mapRdb,
@@ -269,6 +282,7 @@ func runAuditEntry(p auditEntryParams) {
 		sharedRDB:          sharedRdb,
 		sceneRDB:           sceneRdb,
 		dataRDB:            dataRdb,
+		sceneNodes:         sceneNodes,
 		sharedDBIndex:      p.sharedDB,
 		src:                p.src,
 		dst:                p.dst,
@@ -381,7 +395,7 @@ func runAuditMode(ctx context.Context, cfg auditConfig) []ResourceAudit {
 			verifyGuildRankZSets,
 			verifyTradeMarketZoneDrained, // trade_listing.market_zone=src 必须为 0(trade_step.go)
 			verifyManifestRows,           // 清单里每个玩家的主数据行在该在的库里(A6,取代 verify:target_zone_rows)
-			verifySaveBarriers,           // owner_epoch≠0 的清单玩家屏障已提交且等于两表行内围栏(r2-mz#1,save_barrier_verify.go)
+			verifySaveBarriers,           // 按 login 冷加载预判有存盘历史的清单玩家:一致 / 采纳 SQL / 拒登(r2-mz#1,save_barrier_verify.go)
 			verifySourceHotStateGone,
 			verifyFenceReleased,
 		)

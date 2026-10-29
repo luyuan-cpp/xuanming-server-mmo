@@ -24,6 +24,10 @@ Store:
 
 AccountDirectory:
   MaxPlayersPerAccount: 5
+  # 账号目录独立 SQL 池的连接上限(每次登录的 ReadAccountDirectory 在这个池上开一个悲观事务)。缺省 = 8;
+  # 合法 [1, 128](128 = shared/authoritysql 的单池硬上限),越界不装配目录、全球服务拒启。
+  # 与 SnapshotMySQL / PlayerName / RouteStore 的池一样计入全局库连接总账:k8s_deploy.ps1 从本键读取,调大前先核 max_connections。
+  MaxOpenConn: 8
   RoleTradeRequireGuildExit: true
   RoleTradeGuildSchema: mmorpg_guild
   RoleTradeTradeSchema: mmorpg_trade
@@ -221,6 +225,8 @@ RouteStore:
   PublishRedisPoolSize: 20
   # 第 3 批读方门禁(docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §5.2):true 时归属查询只在就绪标记
   # 绑定本实例身份时信任缓存,否则回源全局库 player_route(库故障回 Unavailable,绝不 NotFound)。只许 db_first(否则拒启)。
+  # 打开时启动期试跑一次读脚本:跑不起来、或 route store 没装配起来,不论 Store.Required 都拒启;探针结论是 not_master /
+  # identity_unavailable(MappingRedis 不是主、或脚本里取不到 INFO 身份)时照常启动但记 ERROR —— 标记对该实例永远挂不上,读全部回源库。
   # 全球配置默认开启；历史 P5 描述存量导入顺序，不授权现役全球服务退回 redis 或绕开 ready 门禁。
   ReadRequiresReady: true
   # 对账 leader(第 1b-2 批,docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §4、§13.1;internal/routereconcile)。

@@ -4,8 +4,12 @@ package svc
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"shared/authoritysql"
+	"shared/drainproof"
 	"sync"
 	"time"
 
@@ -45,13 +49,28 @@ type ServiceContext struct {
 	// noderegistry 按 C++ NodeInfo 约定写的 ChatNodeService.rpc/... 两把 key。
 	Etcd *clientv3.Client
 
-	stopOnce sync.Once
+	WriterConfig  authoritysql.WriterConfig
+	RootAdmission *drainproof.Session
+	DrainRuntime  *drainproof.Runtime
+	stopErr       error
+	stopOnce      sync.Once
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		panic(err)
+	}
+	return NewServiceContextWithAdmission(c, writer, drainproof.New())
+}
+
+func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterConfig, root *drainproof.Session) *ServiceContext {
+	if root == nil {
+		panic("聊天根门禁未装配")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	db, store, err := OpenAuthority(ctx, c, false)
+	db, store, err := OpenAuthorityWithPermission(ctx, c, false, authoritysql.Writer(writer))
 	if err != nil {
 		panic("聊天权威SQL初始化失败：" + err.Error())
 	}
@@ -73,6 +92,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	chatRds, sharedRds, target := NewRedisHandles(c)
 	return &ServiceContext{
 		Authority: store, AuthorityDB: db, LoginSessions: login,
+		WriterConfig: writer, RootAdmission: root,
 		Config:          c,
 		ChatRedis:       chatRds,
 		SharedRedis:     sharedRds,
@@ -99,24 +119,61 @@ func NewRedisHandles(c config.Config) (chatRds, sharedRds *redis.Redis, target s
 // Stop关闭本服务拥有的SQL/原登录态/etcd客户端。幂等，必须先排空RPC。
 // 调用方须保证 noderegistry.Close() 与 killswitch 的 ctx 取消都**先于**它 ——
 // 二者都在用这条连接,先关连接会让注销 Txn 失败、watch 撞上已关闭的 client。
-func (sc *ServiceContext) Stop() {
+func (sc *ServiceContext) BindDrainRuntime(runtime *drainproof.Runtime) error {
+	if runtime == nil || sc.DrainRuntime != nil || runtime.Seed("SOURCE") == nil || runtime.Seed("RELAY") != nil {
+		return drainproof.ErrHold
+	}
+	if err := runtime.BindBoot(sc.WriterConfig.InstanceID(), sc.WriterConfig.WriterKey()); err != nil {
+		return err
+	}
+	sc.DrainRuntime = runtime
+	return nil
+}
+
+// 聊天只从同步 RPC 写 SQL；没有 Kafka/Redis 发布 worker。P1 等待该集合后即可封同一 SQL boot。
+func (sc *ServiceContext) CloseSource(ctx context.Context) error {
+	sc.RootAdmission.CloseAdmission()
+	if err := sc.RootAdmission.Wait(ctx); err != nil {
+		return err
+	}
+	sc.WriterConfig.Seal()
+	return nil
+}
+
+func (sc *ServiceContext) PreparedFrontier(ctx context.Context) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if sc.Authority == nil || sc.AuthorityDB == nil || sc.RootAdmission == nil || sc.RootAdmission.Pending() != 0 {
+		return nil, drainproof.ErrHold
+	}
+	return sc.RootAdmission.SnapshotDigest(), nil
+}
+
+func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
+	if err := sc.CloseSource(ctx); err != nil {
+		return err
+	}
 	sc.stopOnce.Do(func() {
 		if sc.LoginSessions != nil {
-			if err := sc.LoginSessions.Close(); err != nil {
-				logx.Error("聊天原登录态连接关闭失败")
-			}
+			sc.stopErr = errors.Join(sc.stopErr, sc.LoginSessions.Close())
 		}
 		if sc.AuthorityDB != nil {
-			if err := sc.AuthorityDB.Close(); err != nil {
-				logx.Error("聊天权威SQL关闭失败")
-			}
+			sc.stopErr = errors.Join(sc.stopErr, sc.AuthorityDB.Close())
 		}
 		if sc.Etcd != nil {
-			if err := sc.Etcd.Close(); err != nil {
-				logx.Errorf("[chat] etcd client close failed: %v", err)
-			}
+			sc.stopErr = errors.Join(sc.stopErr, sc.Etcd.Close())
 		}
 	})
+	return sc.stopErr
+}
+
+func (sc *ServiceContext) Stop() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := sc.StopAndReport(ctx); err != nil {
+		logx.Errorf("聊天关闭 HOLD: %v", err)
+	}
 }
 
 // ---------------------------------------------------------------------------

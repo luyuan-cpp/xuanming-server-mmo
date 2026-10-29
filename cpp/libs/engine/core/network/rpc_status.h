@@ -6,7 +6,7 @@
 // 两类失败必须分清:
 //   * DefinitelyNotExecuted():本地没发出去,或对端在派发前就拒绝了 —— 可以安全重试;
 //   * OutcomeUnknown():超时 / 断连 / 通道关闭 / 回包坏了 / handler 接管后丢了回复 —— 对端可能已经执行。
-//     与 gRPC 的口径一致(grpc-client-deadline-failure-callback.md §3.3):只释放本地在途状态、提示客户端、
+//     与 gRPC 的口径一致(grpc-muduo-transport.md §16.2):只释放本地在途状态、提示客户端、
 //     重试幂等操作,不得当作「对端拒绝」去改权威状态。
 // 命名避开 Windows 的 ERROR / NO_ERROR 宏(muduo 原版 RpcChannel.cc 在 proto 改名后踩过)。
 

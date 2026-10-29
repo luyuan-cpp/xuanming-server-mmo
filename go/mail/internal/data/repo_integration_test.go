@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"shared/authoritysql/sqltest"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -22,7 +23,6 @@ import (
 	mailpb "proto/mail"
 	"schemamigrate"
 	"shared/assetop"
-	"shared/authoritysql"
 	"shared/roleidentity"
 )
 
@@ -46,39 +46,39 @@ func mailFixture(t *testing.T) (context.Context, *sql.DB, *Repo) {
 	}
 	database := "mail_it_" + hex.EncodeToString(random[:])
 	guildDB := "mail_guild_it_" + hex.EncodeToString(random[:])
-	// 只读系统库完成真实TiDB/逐物理连接强读探针后，才创建本例随机库。
-	admin, err := authoritysql.Open(ctx, "root@tcp("+address+")/mysql", "mysql", true, 2)
+	opts, err := sqltest.OptionsFromEnv("root@tcp("+address+")/mysql", database+"_writer", database, guildDB)
 	if err != nil {
 		t.Fatal(err)
 	}
-	created := []string{}
-	t.Cleanup(func() {
-		defer admin.Close()
-		// 两个隔离库的DDL排队可能跨过单次5秒；清理有独立预算，不能让第二个库继承将耗尽的请求窗口。
-		clean, stop := context.WithTimeout(context.Background(), 30*time.Second)
-		defer stop()
-		for _, name := range created {
-			if _, e := admin.ExecContext(clean, "DROP DATABASE "+name); e != nil {
-				t.Errorf("清随机库%s: %v", name, e)
-			}
-		}
-	})
-	for _, name := range []string{database, guildDB} {
-		if _, err = admin.ExecContext(ctx, "CREATE DATABASE "+name); err != nil {
-			t.Fatal(err)
-		}
-		created = append(created, name) // 只有实际创建成功才拥有清理权，碰撞不删除已有库。
-	}
-	db, err := authoritysql.Open(ctx, "root@tcp("+address+")/"+database, database, true, 12)
+	fixture, err := sqltest.New(ctx, t, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close() })
-	report, err := schemamigrate.Up(ctx, db, schemamigrate.Options{Database: database, Tables: Tables()})
+	install, err := fixture.OpenSchema(ctx, database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := schemamigrate.Up(ctx, install, schemamigrate.Options{Database: database, Tables: Tables()})
 	if err != nil || len(report.Manual) > 0 {
 		t.Fatalf("schema: %v %+v", err, report)
 	}
-	if _, err = db.ExecContext(ctx, "CREATE TABLE "+guildDB+".guild_member (guild_id BIGINT UNSIGNED NOT NULL,player_id BIGINT UNSIGNED NOT NULL,PRIMARY KEY(guild_id,player_id),UNIQUE KEY player_id(player_id))"); err != nil {
+	if _, err = install.ExecContext(ctx, "CREATE TABLE "+guildDB+".guild_member (guild_id BIGINT UNSIGNED NOT NULL,player_id BIGINT UNSIGNED NOT NULL,PRIMARY KEY(guild_id,player_id),UNIQUE KEY player_id(player_id))"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = install.ExecContext(ctx, "CREATE TABLE account_role (player_id BIGINT UNSIGNED PRIMARY KEY,account VARBINARY(191) NOT NULL,owner_revision BIGINT UNSIGNED NOT NULL,trade_listing_id BIGINT UNSIGNED NOT NULL)"); err != nil {
+		t.Fatal(err)
+	}
+	if err = fixture.GrantProtoTables(ctx, database, Tables()); err != nil {
+		t.Fatal(err)
+	}
+	if err = fixture.GrantTables(ctx, database, "account_role"); err != nil {
+		t.Fatal(err)
+	}
+	if err = fixture.GrantTables(ctx, guildDB, "guild_member"); err != nil {
+		t.Fatal(err)
+	}
+	db, err := fixture.Open(ctx, database, 12)
+	if err != nil {
 		t.Fatal(err)
 	}
 	var next atomic.Uint64
@@ -116,9 +116,6 @@ func personal(request, player uint64) *mailpb.SendMailRequest {
 
 func mailRoleOwner(t *testing.T, ctx context.Context, db *sql.DB, r *Repo, account string, revision, listing uint64) context.Context {
 	t.Helper()
-	if _, err := db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS account_role (player_id BIGINT UNSIGNED PRIMARY KEY,account VARBINARY(191) NOT NULL,owner_revision BIGINT UNSIGNED NOT NULL,trade_listing_id BIGINT UNSIGNED NOT NULL)"); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := db.ExecContext(ctx, "INSERT INTO account_role VALUES (7,?,?,?) ON DUPLICATE KEY UPDATE account=?,owner_revision=?,trade_listing_id=?", []byte(account), revision, listing, []byte(account), revision, listing); err != nil {
 		t.Fatal(err)
 	}

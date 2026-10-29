@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 	assetpb "proto/common/asset"
 	tradepb "proto/trade"
@@ -39,7 +40,11 @@ func (e *Engine) matchMarket(ctx context.Context, id uint64) error {
 	if err != nil {
 		return err
 	}
-	return e.Repo.Tx(ctx, func(tx *sql.Tx) error {
+	// 本事务把坏对手单移出盘口时记下原因与原 stage,提交成功之后才计数、记日志(事务可能回滚重跑)。
+	var defect error
+	var defectStage string
+	err = e.Repo.Tx(ctx, func(tx *sql.Tx) error {
+		defect, defectStage = nil, ""
 		if err := e.lockRoles(ctx, tx, 0, taker.SellerPlayerId, observed.SellerPlayerId); err != nil {
 			return err
 		}
@@ -60,8 +65,8 @@ func (e *Engine) matchMarket(ctx context.Context, id uint64) error {
 			return err
 		}
 		if otherID != observedID {
-			return ErrConflict
-		} // 价格时间最优项变化时重新规划，不拿未锁角色的新候选成交。
+			return staleObservation()
+		} // 价格时间最优项变化时重新规划，不拿未锁角色的新候选成交(乐观冲突,下一轮立即重撮)。
 		first, second := id, otherID
 		if first > second {
 			first, second = second, first
@@ -73,6 +78,25 @@ func (e *Engine) matchMarket(ctx context.Context, id uint64) error {
 		b, err := e.Repo.Lock(ctx, tx, second)
 		if err != nil {
 			return err
+		}
+		// 对手单自己不可能再成交(workflow 解不开、缺原归属身份、原主已换)时只把它移出盘口,taker 不报错(2026-10-22):
+		// 它停在最优价位上会挡住这个物品的整个盘口,而 taker 自己没有任何问题。以前这里返回的是 taker 的错误,
+		// taker 每轮报一次 ERROR,坏单永远留在盘口上。隔离在本事务里做(已持有它的行锁),下一轮按新的最优价重撮。
+		other := a
+		if b.CommerceId == otherID {
+			other = b
+		}
+		found, err := e.counterpartyDefect(ctx, tx, other)
+		if err != nil {
+			return err
+		}
+		if found != nil {
+			stage, err := e.quarantineLockedTx(ctx, tx, other)
+			if err != nil {
+				return err
+			}
+			defect, defectStage = found, stage
+			return nil
 		}
 		aw, err := data.Workflow(a)
 		if err != nil {
@@ -143,6 +167,31 @@ func (e *Engine) matchMarket(ctx context.Context, id uint64) error {
 		}
 		return e.Repo.Save(ctx, tx, b, bw, now)
 	})
+	if err == nil && defect != nil {
+		quarantinedTotal.Inc()
+		logx.Errorf("[Commerce] Market counterparty quarantined as manual and taken off the book counterparty_id=%d taker_id=%d stage=%q: %v",
+			observedID, id, defectStage, defect)
+	}
+	return err
+}
+
+// counterpartyDefect 判断已锁住的对手单是否因它自己的持久数据而不可能再成交:workflow 解不开、缺原归属身份,
+// 或原归属角色已换主(owner_revision 只增不减,不会再对上)。返回的 defect 非 nil 即应移出盘口;
+// 存储 / 目录读取失败经 err 原样返回,不能当成对手单坏了。
+// 角色被另一条挂单冻结(lockRoles 阶段的 role_conflict)不在此列:那是暂时状态,而且分不清是哪一方被冻结。
+func (e *Engine) counterpartyDefect(ctx context.Context, tx *sql.Tx, r *tradepb.TradeCommerceRecord) (defect error, err error) {
+	w, decodeErr := data.Workflow(r)
+	if decodeErr != nil {
+		return corrupt(decodeErr), nil
+	}
+	switch checkErr := e.checkContractIdentities(ctx, tx, r, w); {
+	case checkErr == nil:
+		return nil, nil
+	case errors.Is(checkErr, errCorruptContract), errors.Is(checkErr, errRoleConflict):
+		return checkErr, nil
+	default:
+		return nil, checkErr
+	}
 }
 
 type marketQuery interface {

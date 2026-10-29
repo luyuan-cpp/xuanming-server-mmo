@@ -136,7 +136,12 @@ func reconcileTestConfig(mode string, enabled *bool, arm bool) config.Config {
 // 装配成功时不连接,leader 标识带本机名(取不到用 unknown),ArmReadyMarker 透传。
 func TestNewRouteReconcilerOnlyWhenEnabled(t *testing.T) {
 	built, closed := 0, 0
+	dangerOwner := func(context.Context, *store.RouteEmergencyError) error {
+		t.Error("纯装配测试不得执行危险关闭owner")
+		return errors.New("仅装配，不执行危险关闭")
+	}
 	deps := routeReconcilerDeps{
+		onDanger: dangerOwner,
 		newCache: func(redis.RedisConf, config.RouteStoreConfig) (routereconcile.Cache, error) {
 			built++
 			return stubReconcileCache{closed: &closed}, nil
@@ -160,6 +165,12 @@ func TestNewRouteReconcilerOnlyWhenEnabled(t *testing.T) {
 		t.Fatalf("db_first without a route store: reconciler=%v err=%v built=%d, want an error before building the redis client", r, err, built)
 	}
 
+	missingOwner := deps
+	missingOwner.onDanger = nil
+	if r, err := newRouteReconciler(dbFirst, stubReconcileStore{}, missingOwner); r != nil || err == nil || built != 0 {
+		t.Fatalf("missing danger owner: reconciler=%v err=%v built=%d, want an error before building the redis client", r, err, built)
+	}
+
 	r, err := newRouteReconciler(reconcileTestConfig(config.RouteStoreModeDBFirst, nil, true), stubReconcileStore{}, deps)
 	if err != nil || r == nil {
 		t.Fatalf("db_first: reconciler=%v err=%v", r, err)
@@ -175,12 +186,12 @@ func TestNewRouteReconcilerOnlyWhenEnabled(t *testing.T) {
 
 	cluster := dbFirst
 	cluster.MappingRedis = redis.RedisConf{Host: closedLoopbackAddr(t), Type: redis.ClusterType}
-	if r, err := newRouteReconciler(cluster, stubReconcileStore{}, productionRouteReconcilerDeps()); r != nil || err == nil {
+	if r, err := newRouteReconciler(cluster, stubReconcileStore{}, productionRouteReconcilerDeps(dangerOwner)); r != nil || err == nil {
 		t.Fatalf("a cluster mapping redis must be refused: reconciler=%v err=%v", r, err)
 	}
 	node := dbFirst
 	node.MappingRedis = redis.RedisConf{Host: closedLoopbackAddr(t), Type: redis.NodeType}
-	if r, err := newRouteReconciler(node, stubReconcileStore{}, productionRouteReconcilerDeps()); r == nil || err != nil {
+	if r, err := newRouteReconciler(node, stubReconcileStore{}, productionRouteReconcilerDeps(dangerOwner)); r == nil || err != nil {
 		t.Fatalf("the production deps must assemble without connecting: reconciler=%v err=%v", r, err)
 	}
 
@@ -195,6 +206,10 @@ func TestNewRouteReconcilerOnlyWhenEnabled(t *testing.T) {
 func TestMissingStoresReportsRouteReconcilerOnlyWhenEnabled(t *testing.T) {
 	off := false
 	deps := routeReconcilerDeps{
+		onDanger: func(context.Context, *store.RouteEmergencyError) error {
+			t.Error("MissingStores纯装配测试不得执行危险关闭owner")
+			return errors.New("仅装配，不执行危险关闭")
+		},
 		newCache: func(redis.RedisConf, config.RouteStoreConfig) (routereconcile.Cache, error) {
 			return stubReconcileCache{}, nil
 		},

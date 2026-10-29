@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"database/sql"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -12,9 +13,66 @@ import (
 	"match/internal/discovery"
 	"match/internal/svc"
 	"math"
+	battlepb "proto/battle"
 	pb "proto/match"
+	"shared/serviceauth"
 	"testing"
+	"time"
 )
+
+func TestOutcomeCreateResponseRequiresOriginalInstanceAndAdoptedVersion(t *testing.T) {
+	original := createBattleFn
+	defer func() { createBattleFn = original }()
+	req := &battlepb.CreateBattleRequest{BattleId: 17, TargetInstanceId: "original-instance", OutcomeProtocolVersion: 1}
+	for _, test := range []struct {
+		name     string
+		id       uint64
+		instance string
+		adopted  uint32
+		good     bool
+	}{
+		{"旧回包", 17, "", 0, false}, {"错实例", 17, "new-instance", 1, false}, {"只支持未采用", 17, "original-instance", 0, false}, {"错局", 18, "original-instance", 1, false}, {"原件", 17, "original-instance", 1, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			createBattleFn = func(string, *battlepb.CreateBattleRequest) (*battlepb.CreateBattleResponse, error) {
+				return &battlepb.CreateBattleResponse{BattleId: test.id, TargetInstanceId: test.instance, AdoptedOutcomeProtocolVersion: test.adopted}, nil
+			}
+			err := createBattle(discovery.NodeEntry{Endpoint: "fixture"}, req)
+			if test.good {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestBattleOutcomeRPCRejectsWrongMethodCallerAndChangedOriginal(t *testing.T) {
+	const secret = "fixture-only-battle-terminal-signature-000000000"
+	v, err := serviceauth.New(map[string]string{"battle": secret})
+	require.NoError(t, err)
+	s := &svc.ServiceContext{Authority: &authority.Store{}, BattleOutcomeAuth: v, BattleOutcomeSecret: secret}
+	r := &pb.CommitBattleOutcomeRequest{BattleId: 17, PlacementOperationId: "original-op", TargetInstanceId: "original-instance", RawResultPayload: []byte{8, 17}}
+	_, err = CommitBattleOutcome(context.Background(), s, r)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+	require.NoError(t, serviceauth.Sign(pb.MatchInternal_CommitBattleOutcome_FullMethodName, r, "battle", secret, uint64(time.Now().UnixMilli())))
+	changed := proto.Clone(r).(*pb.CommitBattleOutcomeRequest)
+	changed.TargetInstanceId = "other"
+	_, err = CommitBattleOutcome(context.Background(), s, changed)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+	require.NoError(t, serviceauth.Sign(pb.MatchInternal_CancelActivityBattle_FullMethodName, r, "battle", secret, uint64(time.Now().UnixMilli())))
+	_, err = CommitBattleOutcome(context.Background(), s, r)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+	require.NoError(t, serviceauth.Sign(pb.MatchInternal_CommitBattleOutcome_FullMethodName, r, "guild", secret, uint64(time.Now().UnixMilli())))
+	_, err = CommitBattleOutcome(context.Background(), s, r)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+	require.NoError(t, serviceauth.Sign(pb.MatchInternal_CommitBattleOutcome_FullMethodName, r, "battle", secret, uint64(time.Now().UnixMilli())))
+	_, err = CommitBattleOutcome(context.Background(), s, r)
+	require.Equal(t, codes.Unavailable, status.Code(err), "有效签名仍不能把无DB冒成成功")
+	s.Authority.DB = new(sql.DB)
+	_, err = CommitBattleOutcome(context.Background(), s, r)
+	require.Equal(t, codes.FailedPrecondition, status.Code(err), "有效签名下的原PB语义错误在SQL前永久拒绝")
+}
 
 func globalCandidate(pid, queued, now uint64, first, second uint32) *pb.MatchAuthorityTicketRecord {
 	p := &pb.MatchNetworkProfile{PlanId: "p", SessionBinding: "s"}

@@ -49,7 +49,8 @@ descriptor 全部字段——存量库缺这一列时**整行玩家数据读写�
 - **`AttributePool`** —— 池:`unlock_level` / `points_per_level` / `base_points` / `dimension_cap`(单维度上限,0=不限)/
   `reset_cost_gold` / `reset_free_below_level`。当前两行:属性点(行 1,1 级解锁,每级 5 点)与宝宝属性点(行 4,`owner_type=1`,见 `player-pet.md`)。
   相性点(行 2)/ 仙魔点(行 3)2026-09-14 按用户决定删除,连同维度 201-205 / 301-304 与自动加点方案 2 / 3 / 12 / 13 / 22 / 23;
-  存档里分配到这些维度的点在加载时由 `SanitizeSchemes` 静默清掉(§5),不需要数据迁移。
+  当时存档里分配到这些维度的点在加载时由 `SanitizeSchemes` 静默清掉。**2026-10-23 起加载不再清理**(§3.3):
+  表里查不到的维度是未知键,原样携带、不生效、仍计入已用;项目未上线,本地存量号直接清档,不写迁移。
 - **`AttributeDimension`** —— 维度 + **系数矩阵**:`pool_id`(idx)、`name` / `desc`(直接下发客户端做面板文案与悬浮说明)、
   `sort`、`base_per_level`(不占点的自然成长)、以及六列 double 系数 `max_health / max_mana / physical_attack /
   magic_attack / speed / defense`。**加一个新属性维度 = 加一行表,不改任何代码。**
@@ -69,9 +70,11 @@ descriptor 全部字段——存量库缺这一列时**整行玩家数据读写�
   项目未上线、没有老存档,不做存档迁移;护甲由 `Recalculate` 每次按职业表重写(§3.1)。
   `desc` 只写定性说明、不写系数数字:面板不下发系数,文案里写数字就成了第二份真相,改系数时极易漏改。
 - **角色等级上限 85**(`player_level_rules.h` 的 `playerlevel::kMaxLevel`,`PlayerAttributeSystem::kMaxLevel` 是它的别名;
-  2026-09-10 由 200 改为 85)。经验表未落地前是代码常量。`GmSetPlayerLevel` 越界即 `kInvalidParameter`;
-  读存档(登录 / 跨 zone 落地 / 回档都走 `PlayerDatabaseMessageFieldsUnmarshal`)时超限等级压回 85 并打 WARN,
-  随后 §3.1 的"已分配 > 总量"收敛整池返还多出的点。按此口径属性点满级总量 = 85 × 5 = 425。
+  2026-09-10 由 200 改为 85)。经验表未落地前是代码常量。`GmSetPlayerLevel` 越界即 `kInvalidParameter`(绝对设值;
+  覆写一份超上限的存储等级时打 WARN)。**2026-10-23 起存储等级与生效等级分开**:读存档(登录 / 跨 zone 落地 / 回档都走
+  `PlayerDatabaseMessageFieldsUnmarshal`)时超上限的等级原样携带、只打 WARN,不再压回;总点数、面板等级、自然成长、
+  洗点免费线等玩法一律按 `playerlevel::CappedLevel`(0 按 1、超上限按 85)读,存储等级只有加载 / 存盘 / GmSetLevel /
+  管理端 dump 读原值(`mixed-version-persist-field-protection.md` §12.1)。按此口径属性点满级总量 = 85 × 5 = 425。
 - **`AttributeRule`** —— 单行全局规则:方案数上限 / 免费方案数 / 开新方案金币 / 切换冷却秒 / 方案名长度;
   `alloc_efficiency_bonus` 当前为 **0.0**（2026-10-23），分配点线性换算，不再额外奖励集中投资。负数或非有限数仍按代码兜底 0.20。
   满投点数与除数**不进表**，由池表与等级上限现算；当前两者均为 425 —— 手抄进表就是第二份真相,
@@ -155,8 +158,9 @@ message PlayerAttributeComp {
   见单测 `RescaleRoundTripHealingIsBounded`)。最初版本对所有路径都"抬高补增量、降低只夹",组合起来就是免费无限回血:
   残血 200/3950 → 洗点(30 级以下免费)夹到 200/1100 → 原样加回 → 200+2850;或开个空方案每 60 秒切一次。
   这直接绕过 `turn-based-battle-server.md` D4"残血带出战斗",故切方案 / 洗点 / 重新加点一律不得成为治疗手段。
-- **已分配 > 总量的收敛**(`kLoad` / `kLevelChanged` 前置):等级下降(GM / 回档 / 上限下调后读存档压回上限,§2.2)
-  或改表缩点后,某方案某池的已分配可能超过总量;整池清零返还并打 WARN,防止低等级号带着高等级面板进战斗快照。
+- **已分配 > 总量不再收敛**(2026-10-23):以前 `kLoad` / `kLevelChanged` 会把超额的池整池清零返还(`ConvergeOverAllocation`),
+  回滚 / 降级一次就删数据、升回也恢复不了。现在任何原因的重算都不改写已分配,超额的池整池按 0 生效(§3.3);
+  低等级号照样带不着高等级面板进战斗快照。HP/MP 的旧上限 / 新上限都是生效值,从不生效的池洗点时上限不变、HP/MP 不变。
 - 死人(health==0)不因加点复活,复活统一走 `player_revive.h` 的规则。
 
 ### 3.2 二级属性进战斗
@@ -185,6 +189,41 @@ message PlayerAttributeComp {
 任何命中至少打出四成。怪物没有防御,等级取参战玩家最高等级;实时战斗没有 PVP 对局概念,不乘 PVP 系数;
 毒 / 灼烧等周期伤害是表里的固定值,两者都不乘。单测:`combat_damage_rules_test.cpp`(纯规则)与 `turn_battle_engine_test` 的
 `DerivedDefenseReducesIncomingDamageProportionally` / `PvpDirectDamageIsScaled` / `PhysicalSkillUsesPhysicalAttackWithMultiplier`。
+
+### 3.3 存储加点的生效判定(2026-10-23,`mixed-version-persist-field-protection.md` §12.1 D1 / D2)
+
+背景:以前加载时按本版本表**破坏性改写**已分配并随存盘落库 —— `SanitizeSchemes` 删掉表里查不到的维度(D1),
+`ConvergeOverAllocation` 把超过总量的池整池清零返还(D2)。新版本加维度 / 扩点 / 提高等级上限后回滚 scene、或混版本
+跨 zone 迁移,一次加载就删掉玩家的加点布局,升回新版本也恢复不了。现在改为**加载与重算不改写持久值,生效值在运行期按本版本
+配置算出,解释不了的内容只做保守处理(不生效、不让它变强)**。宝宝与角色同一套规则(`player-pet.md` §3.3)。
+
+纯规则在 `attribute_allocation_rules.h`(`StoredPoolAllocation` / `PoolAllocationEffective` / `RemainingPoints`),
+按表归类在 `PlayerAttributeSystem` 的 `StoredAllocationOf` / `EvaluatePool`。加点统一规则:
+
+1. **加载与重算永不改写、不返还 `allocated`**。只有玩家主动的 Allocate / Reset 与 GM 会改它。
+2. **已知 / 未知**:"已知维度" = 本版本表里属于该池、且属于该归属方(角色)的维度;`allocated` 里其余的键都是"未知键"
+   (新版本加的维度、宝宝维度、所属池查不到的维度)。
+3. **池生效** ⇔ Σ已知 ≤ 本版本总量(按 `CappedLevel` 算)且(`dimension_cap` 为 0,或每个已知维度 ≤ 上限)。
+   不生效 ⇒ 该池全部已知维度按 0 参与二级属性、面板 `value` 与战斗快照;未知键永不生效。
+4. **剩余点** = 生效 ? max(0, 总量 − Σ已知 − Σ未知) : 0,全部 64 位饱和求和。未知键归不到池,保守地**对每个角色池都扣**:
+   否则旧版本里玩家能把这些点再加到别的维度上,升回新版本后正好超额。
+5. **Allocate**:目标仍只能是本池已知维度;剩余点按第 4 条;只写 `want != current` 的键,不落 0 值新键。
+   不生效时剩余为 0,自然回 `kAttributePointsNotEnough`。
+6. **Reset**:只清本池已知维度,未知键原样保留;Σ已知 == 0(含只剩未知键)⇒ `kAttributeNothingToChange`、不扣费;
+   池不生效(改表缩点 / 等级降低 / 混版本)⇒ **免费**,并打 WARN(`metric=allocation_reset_free_ineffective`);其余照常收费。
+   面板 `reset_cost_gold` 与实际扣费是同一个函数(`ResetCostFor`)。
+7. **HP/MP**:旧上限 / 新上限都按生效值算 —— 从不生效状态洗点,上限不变,HP/MP 不变,不制造往返回血。
+8. 不给 `AttributeScheme` 本层未知字段加 `HasUnknown` 守卫(会把退役字段的残留误判成永久冻结);与加点语义耦合的新字段
+   按混版本持久字段保护的 R5 走评审。
+
+面板口径:`allocated` 下发存储值(玩家看得到自己的加点还在),`value` 只算生效部分,`remaining` 按第 4 条。
+加载期可观测性:`Recalculate(kLoad)` 对每个方案里不生效的池、带未知键的方案各打一条 WARN(`metric=allocation_not_effective`),
+不写数据。等级降低后超额的池按 0 生效,等级回来了同一份加点原样生效(`GmSetLevel` 降级再设回、`SwitchScheme` 切到超额方案同理)。
+
+代价:表里真删了一个维度之后,点数不会再自动返还,要靠洗点(未知键不归任何池,洗点也不清它)或一次性迁移;
+项目未上线,当前不写迁移。用例:`attribute_allocation_rules_test.cpp` 的 `StoredAllocationRulesTest`(含单项上限分支,
+当前表里 `dimension_cap` 都是 0)、`player_equip_attribute_test.cpp` 的 `OverAllocatedPoolIsCarriedButIneffectiveOnEveryRecalculation`
+等 8 条集成用例(未编译,待 Codex 验证)。
 
 ## 4. 协议(`proto/scene/player_attribute.proto`,service `SceneAttributeClientPlayer`,消息号 167-175)
 
@@ -224,7 +263,8 @@ message PlayerAttributeComp {
 - **跨 zone 冻结期间(`PlayerFrozenComp`)拒绝一切写** —— 源 zone 的写不会进目的 zone 的快照,
   写了就是数据分叉(`cross-zone-readiness-audit.md` §11.1);
 - **战斗在途(`InBattleComp`)拒绝一切写** —— `BattlePlayerSnapshot` 已出,改属性会让局内数值与面板分叉;
-- **表里已删除的维度会在加载时静默清理**(`SanitizeSchemes`),点数自动返还,老存档自愈;
+- **加载与重算不改写已分配**(2026-10-23,§3.3):表里查不到的维度原样携带、不生效、计入已用;超额的池整池按 0 生效。
+  (此前由 `SanitizeSchemes` 在加载时删掉、`ConvergeOverAllocation` 整池返还,回滚会删数据。)
 - 洗点 / 开新方案的金币**必须走 `CurrencySystem`**(补缴与封禁钩子都在里面),禁止直写 `CurrencyComp`;
   先扣费成功再改数据,扣费失败什么都不动。
 
@@ -263,9 +303,11 @@ message PlayerAttributeComp {
 - **纯规则**:`attribute_allocation_rules.h` 与 `player_level_rules.h` 的单测在
   `turn_battle_engine_test/attribute_allocation_rules_test.cpp`(2026-09-10 补;此前加点规则头文件没有任何用例)。
   覆盖客户端坏数据(uint32 绕回的负数、多项超大值 32 位求和溢出、塞非本池维度)、只增不减 / 跨维度挪点、
-  剩余点与单项上限边界、幂等、解锁、85 级满级总量与总量饱和、等级合法范围与存档等级压回上限、
+  剩余点与单项上限边界、幂等、解锁、85 级满级总量与总量饱和、等级合法范围与 `CappedLevel` 生效等级、
   自动加点逐维分配(权重比例 / 余数按优先序补齐 / 权重 0 跳过)且建议可原样通过校验、HP/MP 按比例往返不回血
-  (极低血量有界例外)。已用点 `UsedPoints`(角色 / 宝宝各一份,64 位累加后饱和)在匿名命名空间里,暂无单测。
+  (极低血量有界例外)。2026-10-23 起:存储加点生效判定 `StoredAllocationRulesTest`(单项上限 0 / 恰好等于 / 超 1、
+  已知等于总量、只有未知键只减剩余、超大存储值不回绕)、总量与技能重数上限随等级单调不减。
+  旧的 `UsedPoints`(角色 / 宝宝各一份)已删,改由 `StoredAllocationOf` 按表归类、纯规则判定。
 - **每点可见与单位放大**(2026-09-14):`AllocFormulaTest.EveryAllocatedPointRaisesEachStatByAtLeastOne`(1..425 点逐点);
   `CombatDamageRulesTest.DefenseUnitScaleKeepsReceivedRatio`(护甲 / 防御 / 等级系数同乘 12 后受伤比例不变)。
 - **端到端**:`robot/robot.exe -c etc/attribute_smoke.yaml`(`attribute_smoke_scenario.go`,10 步):预备(等级归 1 /
@@ -291,7 +333,7 @@ message PlayerAttributeComp {
   默认(未设置)= prod = 关闭,部署链从不注入这两个变量;本机启动器兜底 dev,
   `attribute-smoke` 不受影响。见 `cpp/nodes/gate/SECURITY.md` §3。
   **这是"关掉"不是"鉴权"** —— 线上没有设等级的通道,等经验系统接上才有正规升级路径。
-  降级路径已有"已分配 > 总量整池清零"的收敛兜底。
+  降级后超额的池整池按 0 生效(§3.3),存储加点不动,设回原等级即原样生效(2026-10-23 前是整池清零返还)。
 - **历史数值平衡（2026-09-14，当时最终口径，已由 2026-10-23 基线取代）**。本条及下文 09-11 推算仅作历史记录，
   其中全投方案、b = 0.20、低比例加点、怪物值与胜率均不是当前配表，也不用于本批验收。用户当时先后拍板:加点改百分比 + 集中投资公式、伤害改比例减伤、
   加 PVP 伤害系数、删相性点 / 仙魔点、速度单位 ×12、防御单位 ×12 / 法力单位 ×4、怪物按新口径重定、"按玩家能接受的范围调整数值"。
@@ -336,7 +378,8 @@ message PlayerAttributeComp {
   不随新上限抬高(例:30 级通用方案满血 2150,新上限 3250 后仍 2150),MP 被截到新上限(1300 → 750)。这是"改属性
   不当治疗"护栏的预期副作用;要满状态上线需一次性 GM 回满或数据迁移。
   2026-09-14 删相性 / 仙魔后同理:老号首登少了这两池的加成,上限下降,HP/MP 被夹到新上限;分配到 201-205 / 301-304 的点
-  由 `SanitizeSchemes` 清掉,不返还(池已不存在)。落库的 `BaseAttributesComp.speed` 是旧单位,登录时 `Recalculate` 按新单位覆盖。
+  当时由 `SanitizeSchemes` 清掉,不返还(池已不存在)。2026-10-23 起不再清理:这类键是未知键,原样携带、不生效、计入已用(§3.3)。
+  落库的 `BaseAttributesComp.speed` 是旧单位,登录时 `Recalculate` 按新单位覆盖。
   防御 ×12 / 法力 ×4:项目未上线、没有老存档,不做迁移。本地测试号登录时护甲按职业表重写;当前法力只夹不补,
   会偏低但可用(阵亡复活或重建号即回满)。
 - **历史发布说明（2026-09，以下旧/新值仅指当时单位与算法版本，不是当前数值验收）**：`AttributeDimension` / `AttributeAllocRatio` / `AttributeRule` 都不在 `BattleTableFingerprint` 里

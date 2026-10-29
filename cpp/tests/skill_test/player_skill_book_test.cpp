@@ -3,10 +3,13 @@
 #include <cstdint>
 #include <vector>
 
+#include <google/protobuf/unknown_field_set.h>
+
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
+#include "player/system/player_level_rules.h"
 #include "player/system/player_skill.h"
 #include "proto/battle/battle_data.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
@@ -59,10 +62,16 @@ protected:
         return player;
     }
 
-    static void Own(entt::entity player, uint32_t skillTableId, uint32_t rank) {
+    // 返回刚加的条目,给要在条目上挂未知字段 / 内部 id 的用例用;列表被整体替换(SanitizeSkillList 剔除了条目)后失效
+    static PlayerSkillComp* Own(entt::entity player, uint32_t skillTableId, uint32_t rank) {
         auto* entry = tlsEcs.actorRegistry.get<PlayerSkillListComp>(player).add_skill_list();
         entry->set_skill_table_id(skillTableId);
         entry->set_rank(rank);
+        return entry;
+    }
+
+    static const SkillTable* Row(uint32_t skillTableId) {
+        return SkillTableManager::Instance().FindByIdSilent(skillTableId).first;
     }
 
     static std::vector<uint32_t> OwnedIds(entt::entity player) {
@@ -119,32 +128,43 @@ TEST_F(PlayerSkillBookTest, RegisterPlayerSeedsOnlyCurrentClassInitialSkills) {
     EXPECT_EQ(OwnedIds(player).size(), 2u);
 }
 
-// 加载整理:坏记录(重复 / 0 级职业技能)剔掉、超上限的夹住;未知技能、别的职业技能与已退役的占位技能
-// 留在存档里,未知与非当前职业条目所有读路径都看不见(不静默丢掉玩家花过钱的等级)
-TEST_F(PlayerSkillBookTest, InitializeOnLoadCleansBadRecordsAndHidesRetiredEntries) {
+// 加载整理只剔除与版本无关的坏记录(ID 0、重复 ID 保留首条),其余原样携带(混版本设计 §12.1 D5 / D6):
+// 旧通用技能写着的 rank、超过本版本最高重的重数、别的职业技能、查不到表的技能都不改写,生效与否 / 生效几重
+// 由读路径按本版本的表判定;rank 0 的本职业初始种子即"未学",原地补回 1 重、位置不变
+TEST_F(PlayerSkillBookTest, InitializeOnLoadDropsOnlyZeroAndDuplicateIdsAndCarriesTheRest) {
+    const auto* hengGe = Row(kHengGeLieYue);
+    ASSERT_NE(hengGe, nullptr);
+    ASSERT_EQ(classskill::RankLimit(30, hengGe->unlock_level(), hengGe->max_rank()), hengGe->max_rank())
+        << "夹具前提:30 级已能修满 1102";
+    const uint32_t aboveMax = hengGe->max_rank() + 5;
+
     const auto player = NewPlayer(1, 30, 0);
-    Own(player, kLegacySkill, 5);
-    Own(player, kXuanFuLuoYao, 3);       // 别的职业
-    Own(player, kPoZhenJingFeng, 0);     // 0 级:坏记录
-    Own(player, kHengGeLieYue, 15);      // 超过最高重
-    Own(player, kHengGeLieYue, 2);       // 重复
-    Own(player, 999999, 1);              // 表里没有
+    Own(player, kLegacySkill, 5);          // 旧通用技能:rank 读写都忽略,原样携带
+    Own(player, kXuanFuLuoYao, 3);         // 别的职业
+    Own(player, kPoZhenJingFeng, 0);       // rank 0 的本职业初始种子:未学,原地补 1 重
+    Own(player, kHengGeLieYue, aboveMax);  // 超过本版本最高重:不压回,按上限生效
+    Own(player, kHengGeLieYue, 2);         // 重复:剔除,保留首条
+    Own(player, 999999, 1);                // 表里没有
+    Own(player, 0, 4);                     // ID 0:剔除
 
     PlayerSkillSystem::InitializeOnLoad(player);
 
     EXPECT_EQ(OwnedIds(player),
-              (std::vector<uint32_t>{kLegacySkill, kXuanFuLuoYao, kHengGeLieYue, 999999, kPoZhenJingFeng, kTieGuZhuHun}));
-    EXPECT_EQ(StoredRank(player, kLegacySkill), 0u);        // 旧通用技能不分等级
-    EXPECT_EQ(StoredRank(player, kXuanFuLuoYao), 3u);       // 保留,不生效
-    EXPECT_EQ(StoredRank(player, kHengGeLieYue), 10u);      // 夹到 10
-    EXPECT_EQ(StoredRank(player, kPoZhenJingFeng), 1u);     // 坏记录剔掉后按初始技能补回 1 重
-    EXPECT_EQ(StoredRank(player, 999999), 1u);              // 未知技能及等级保留但不生效
+              (std::vector<uint32_t>{kLegacySkill, kXuanFuLuoYao, kPoZhenJingFeng, kHengGeLieYue, 999999, kTieGuZhuHun}));
+    EXPECT_EQ(StoredRank(player, kLegacySkill), 5u);         // 不归零
+    EXPECT_EQ(StoredRank(player, kXuanFuLuoYao), 3u);        // 保留,不生效
+    EXPECT_EQ(StoredRank(player, kPoZhenJingFeng), 1u);      // 原地补 1 重,位置不变
+    EXPECT_EQ(StoredRank(player, kHengGeLieYue), aboveMax);  // 首条的存储重数原样保留
+    EXPECT_EQ(StoredRank(player, 999999), 1u);               // 未知技能及等级保留但不生效
+    EXPECT_EQ(StoredRank(player, kTieGuZhuHun), 1u);         // 缺的初始被动照常补在末尾
     EXPECT_FALSE(PlayerSkillSystem::HasSkill(player, 999999));
     EXPECT_FALSE(PlayerSkillSystem::HasSkill(player, kLegacySkill));
     EXPECT_FALSE(PlayerSkillSystem::HasSkill(player, kXuanFuLuoYao));
     EXPECT_TRUE(PlayerSkillSystem::HasSkill(player, kHengGeLieYue));
-    EXPECT_EQ(PlayerSkillSystem::EffectiveRank(player, kHengGeLieYue), 10u);
+    EXPECT_TRUE(PlayerSkillSystem::HasSkill(player, kPoZhenJingFeng));
+    EXPECT_EQ(PlayerSkillSystem::EffectiveRank(player, kHengGeLieYue), hengGe->max_rank());
     EXPECT_EQ(PlayerSkillSystem::EffectiveRank(player, kXuanFuLuoYao), 0u);
+    EXPECT_EQ(PlayerSkillSystem::EffectiveRank(player, kLegacySkill), 0u);
 
     ListSkillsResponse book;
     ASSERT_EQ(PlayerSkillSystem::BuildSkillBook(player, book), kSuccess);
@@ -153,14 +173,25 @@ TEST_F(PlayerSkillBookTest, InitializeOnLoadCleansBadRecordsAndHidesRetiredEntri
     for (const auto& skill : book.skill_list().skill_list()) {
         usable.push_back(skill.skill_table_id());
     }
-    EXPECT_EQ(usable, (std::vector<uint32_t>{kHengGeLieYue, kPoZhenJingFeng, kTieGuZhuHun}));
+    EXPECT_EQ(usable, (std::vector<uint32_t>{kPoZhenJingFeng, kHengGeLieYue, kTieGuZhuHun}));
     ASSERT_EQ(book.catalog_size(), 8);
     for (int index = 0; index < book.catalog_size(); ++index) {
         EXPECT_EQ(book.catalog(index).skill_table_id(), static_cast<uint32_t>(1101 + index));
         EXPECT_EQ(book.catalog(index).class_id(), 1u);
     }
+    // 目录 rank 是存储重数(UpgradeSkill.expected_rank 的口径);高于上限时按满重阻断
+    const auto* hengGeView = FindEntry(book, kHengGeLieYue);
+    ASSERT_NE(hengGeView, nullptr);
+    EXPECT_EQ(hengGeView->rank(), aboveMax);
+    EXPECT_EQ(hengGeView->next_rank_cost(), 0u);
+    EXPECT_EQ(hengGeView->upgrade_block_tip_id(), static_cast<uint32_t>(kSkillMaxRankReached));
     EXPECT_EQ(book.class_id(), 1u);
     EXPECT_EQ(book.player_level(), 30u);
+
+    // 再加载一次什么都不变(同一实例前后比较)
+    const auto settled = tlsEcs.actorRegistry.get<PlayerSkillListComp>(player).SerializeAsString();
+    PlayerSkillSystem::InitializeOnLoad(player);
+    EXPECT_EQ(settled, tlsEcs.actorRegistry.get<PlayerSkillListComp>(player).SerializeAsString());
 }
 
 // 还没有职业技能的职业(5..9)继续用旧通用技能
@@ -346,4 +377,199 @@ TEST_F(PlayerSkillBookTest, PassiveBonusUsesEffectiveRank) {
     Own(scout, kTingFengShiXi, 1);
     EXPECT_DOUBLE_EQ(PlayerSkillSystem::CollectPassiveBonus(scout).critPercentPoints, 5.0);
     EXPECT_DOUBLE_EQ(PlayerSkillSystem::CollectPassiveBonus(scout).defense, 0.0);
+}
+
+// ---------------------------------------------------------------------------
+// 混版本:加载与重算不改写持久值(docs/design/mixed-version-persist-field-protection.md §12.1 D5 / D6)
+// ---------------------------------------------------------------------------
+
+// 新版本调大 max_rank、玩家修到更高重后回滚 scene:本版本加载不压回存储重数,读路径一律按本版本上限生效。
+// 升回新版本后玩家修过的重数还在
+TEST_F(PlayerSkillBookTest, RollbackRankAboveTableMaxIsStoredButEffectiveAtMax) {
+    const auto* active = Row(kPoZhenJingFeng);
+    const auto* passive = Row(kTieGuZhuHun);
+    ASSERT_NE(active, nullptr);
+    ASSERT_NE(passive, nullptr);
+    ASSERT_EQ(classskill::RankLimit(30, active->unlock_level(), active->max_rank()), active->max_rank());
+    ASSERT_EQ(classskill::RankLimit(30, passive->unlock_level(), passive->max_rank()), passive->max_rank());
+    const uint32_t activeStored = active->max_rank() + 3;
+    const uint32_t passiveStored = passive->max_rank() + 7;
+
+    const auto player = NewPlayer(1, 30, 0);
+    Own(player, kPoZhenJingFeng, activeStored);
+    Own(player, kTieGuZhuHun, passiveStored);
+
+    PlayerSkillSystem::InitializeOnLoad(player);
+
+    EXPECT_EQ(OwnedIds(player), (std::vector<uint32_t>{kPoZhenJingFeng, kTieGuZhuHun}));  // 种子都已学,不补
+    EXPECT_EQ(StoredRank(player, kPoZhenJingFeng), activeStored);
+    EXPECT_EQ(StoredRank(player, kTieGuZhuHun), passiveStored);
+    EXPECT_EQ(PlayerSkillSystem::EffectiveRank(player, kPoZhenJingFeng), active->max_rank());
+    EXPECT_EQ(PlayerSkillSystem::EffectiveRank(player, kTieGuZhuHun), passive->max_rank());
+
+    BattlePlayerSnapshot snapshot;
+    PlayerSkillSystem::FillBattleSnapshot(player, snapshot);
+    ASSERT_EQ(snapshot.skill_ranks().size(), 2u);
+    EXPECT_EQ(snapshot.skill_ranks().at(kPoZhenJingFeng), active->max_rank());
+    EXPECT_EQ(snapshot.skill_ranks().at(kTieGuZhuHun), passive->max_rank());
+    EXPECT_DOUBLE_EQ(PlayerSkillSystem::CollectPassiveBonus(player).defense,
+                     passive->passive_percent() * classskill::PassiveRankFactor(passive->max_rank()));
+}
+
+// 存储重数高于本版本上限时修习一步不走:回满重、一分钱不扣、存储重数不动(不压回,也不会算 rank + 1 回绕)
+TEST_F(PlayerSkillBookTest, UpgradeRefusesRankAboveTableMaxWithoutCharging) {
+    const auto* row = Row(kHengGeLieYue);
+    ASSERT_NE(row, nullptr);
+    const uint32_t aboveMax = row->max_rank() + 5;
+    const auto player = NewPlayer(1, 30, 100000);
+    Own(player, kHengGeLieYue, aboveMax);
+
+    for (const uint32_t count : {1u, 10u}) {
+        const auto response = Upgrade(player, kHengGeLieYue, aboveMax, count);
+        ASSERT_TRUE(response.has_error_message()) << "count " << count;
+        EXPECT_EQ(response.error_message().id(), static_cast<uint32_t>(kSkillMaxRankReached)) << "count " << count;
+        EXPECT_EQ(response.upgraded_count(), 0u);
+        ASSERT_TRUE(response.has_state());
+        const auto* view = FindEntry(response.state(), kHengGeLieYue);
+        ASSERT_NE(view, nullptr);
+        EXPECT_EQ(view->rank(), aboveMax);
+        EXPECT_EQ(view->upgrade_block_tip_id(), static_cast<uint32_t>(kSkillMaxRankReached));
+    }
+    EXPECT_EQ(StoredRank(player, kHengGeLieYue), aboveMax);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 100000u);
+}
+
+// rank 0 的职业技能条目与未学同义(例如新版本把通用技能改成职业技能,条目带着 rank 0 回来):
+// 加载不删,读路径都当没学;之后修习原地复用这一条,不会出现两条同 id
+TEST_F(PlayerSkillBookTest, RankZeroClassSkillIsUnlearnedButCarried) {
+    const auto* row = Row(kHengGeLieYue);
+    ASSERT_NE(row, nullptr);
+    const auto player = NewPlayer(1, 30, 100000);
+    Own(player, kHengGeLieYue, 0)->mutable_unknown_fields()->AddVarint(412346, 9);  // 1102 不是初始种子
+
+    PlayerSkillSystem::InitializeOnLoad(player);
+
+    ASSERT_EQ(OwnedIds(player), (std::vector<uint32_t>{kHengGeLieYue, kPoZhenJingFeng, kTieGuZhuHun}));
+    EXPECT_EQ(StoredRank(player, kHengGeLieYue), 0u);
+    EXPECT_FALSE(PlayerSkillSystem::HasSkill(player, kHengGeLieYue));
+    EXPECT_EQ(PlayerSkillSystem::EffectiveRank(player, kHengGeLieYue), 0u);
+    BattlePlayerSnapshot snapshot;
+    PlayerSkillSystem::FillBattleSnapshot(player, snapshot);
+    EXPECT_EQ(snapshot.skill_ranks().count(kHengGeLieYue), 0u);
+    for (const auto castable : snapshot.skill_table_ids()) {
+        EXPECT_NE(castable, kHengGeLieYue);
+    }
+
+    ListSkillsResponse book;
+    ASSERT_EQ(PlayerSkillSystem::BuildSkillBook(player, book), kSuccess);
+    for (const auto& skill : book.skill_list().skill_list()) {
+        EXPECT_NE(skill.skill_table_id(), kHengGeLieYue) << "未学的条目不进已拥有列表";
+    }
+    const auto* view = FindEntry(book, kHengGeLieYue);
+    ASSERT_NE(view, nullptr);
+    EXPECT_EQ(view->rank(), 0u);
+    EXPECT_EQ(view->upgrade_block_tip_id(), 0u);
+
+    const auto response = Upgrade(player, kHengGeLieYue, 0, 1);
+    EXPECT_FALSE(response.has_error_message());
+    EXPECT_EQ(response.upgraded_count(), 1u);
+    EXPECT_EQ(OwnedIds(player), (std::vector<uint32_t>{kHengGeLieYue, kPoZhenJingFeng, kTieGuZhuHun}))
+        << "复用 rank 0 的条目,不另加一条";
+    EXPECT_EQ(StoredRank(player, kHengGeLieYue), 1u);
+    EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerSkillListComp>(player).skill_list(0).unknown_fields().field_count(), 1)
+        << "原地改等级,条目上的未知字段还在";
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold),
+              100000u - classskill::UpgradeCost(1, row->unlock_level()));
+}
+
+// rank 0 的本职业初始种子是"未学":加载时原地补 1 重(复用条目,位置与条目上的未知字段不动);再跑一遍不变
+TEST_F(PlayerSkillBookTest, RankZeroClassSeedIsRegrantedInPlace) {
+    const auto player = NewPlayer(1, 1, 0);
+    Own(player, kTieGuZhuHun, 0)->mutable_unknown_fields()->AddVarint(412346, 9);
+
+    PlayerSkillSystem::InitializeOnLoad(player);
+
+    EXPECT_EQ(OwnedIds(player), (std::vector<uint32_t>{kTieGuZhuHun, kPoZhenJingFeng}));
+    EXPECT_EQ(StoredRank(player, kTieGuZhuHun), 1u);
+    EXPECT_EQ(StoredRank(player, kPoZhenJingFeng), 1u);
+    EXPECT_TRUE(PlayerSkillSystem::HasSkill(player, kTieGuZhuHun));
+    {
+        const auto& list = tlsEcs.actorRegistry.get<PlayerSkillListComp>(player);
+        ASSERT_EQ(list.skill_list(0).unknown_fields().field_count(), 1);
+        EXPECT_EQ(list.skill_list(0).unknown_fields().field(0).number(), 412346);
+    }
+
+    const auto settled = tlsEcs.actorRegistry.get<PlayerSkillListComp>(player).SerializeAsString();
+    PlayerSkillSystem::InitializeOnLoad(player);
+    PlayerSkillSystem::RegisterPlayer(player);
+    EXPECT_EQ(settled, tlsEcs.actorRegistry.get<PlayerSkillListComp>(player).SerializeAsString()) << "幂等";
+}
+
+// 旧通用技能不分等级:存档里写着的 rank 原样携带(可能是新版本改了归属后写的),读路径全都忽略它 ——
+// 技能书回包里 rank 为 0,快照不带等级
+TEST_F(PlayerSkillBookTest, LegacySkillRankIsCarriedAndIgnored) {
+    const auto player = NewPlayer(5, 10, 0);  // 职业 5 还没有职业技能,种子是旧通用技能 1
+    Own(player, kLegacySkill, 7);
+
+    PlayerSkillSystem::InitializeOnLoad(player);
+
+    EXPECT_EQ(OwnedIds(player), (std::vector<uint32_t>{kLegacySkill}));
+    EXPECT_EQ(StoredRank(player, kLegacySkill), 7u);
+    EXPECT_TRUE(PlayerSkillSystem::HasSkill(player, kLegacySkill));
+    EXPECT_EQ(PlayerSkillSystem::EffectiveRank(player, kLegacySkill), 0u);
+
+    ListSkillsResponse book;
+    ASSERT_EQ(PlayerSkillSystem::BuildSkillBook(player, book), kSuccess);
+    ASSERT_EQ(book.skill_list().skill_list_size(), 1);
+    EXPECT_EQ(book.skill_list().skill_list(0).skill_table_id(), kLegacySkill);
+    EXPECT_EQ(book.skill_list().skill_list(0).rank(), 0u);
+
+    BattlePlayerSnapshot snapshot;
+    PlayerSkillSystem::FillBattleSnapshot(player, snapshot);
+    EXPECT_TRUE(snapshot.skill_ranks().empty());
+}
+
+// 已拥有列表是显式投影:存档条目上的内部 id 与新版本加的未知字段都不下发,存档条目本身不动
+TEST_F(PlayerSkillBookTest, OwnedListIsAnExplicitProjection) {
+    constexpr uint64_t kStoredEntryId = (uint64_t{1} << 60) + 851;
+    const auto player = NewPlayer(1, 30, 0);
+    auto* stored = Own(player, kHengGeLieYue, 3);
+    stored->set_id(kStoredEntryId);
+    stored->mutable_unknown_fields()->AddVarint(412346, 9);
+
+    ListSkillsResponse book;
+    ASSERT_EQ(PlayerSkillSystem::BuildSkillBook(player, book), kSuccess);
+    ASSERT_EQ(book.skill_list().skill_list_size(), 1);
+    const auto& owned = book.skill_list().skill_list(0);
+    EXPECT_EQ(owned.skill_table_id(), kHengGeLieYue);
+    EXPECT_EQ(owned.rank(), 3u);
+    EXPECT_EQ(owned.id(), 0u);
+    EXPECT_EQ(owned.unknown_fields().field_count(), 0);
+
+    const auto& list = tlsEcs.actorRegistry.get<PlayerSkillListComp>(player);
+    ASSERT_EQ(list.skill_list_size(), 1);
+    EXPECT_EQ(list.skill_list(0).id(), kStoredEntryId);
+    EXPECT_EQ(list.skill_list(0).unknown_fields().field_count(), 1);
+}
+
+// 存储等级高于本版本 kMaxLevel(新版本调高上限后回滚):技能书按 CappedLevel 报等级、算每重上限,
+// LevelComp 的存储值不改写;存储等级 0(新号加载时)按 1 级算
+TEST_F(PlayerSkillBookTest, StoredLevelAboveCapReportsCappedPlayerLevel) {
+    const uint32_t storedLevel = playerlevel::kMaxLevel + 15;
+    const auto veteran = NewPlayer(1, storedLevel, 0);
+    ListSkillsResponse book;
+    ASSERT_EQ(PlayerSkillSystem::BuildSkillBook(veteran, book), kSuccess);
+    EXPECT_EQ(book.player_level(), playerlevel::kMaxLevel);
+    ASSERT_GT(book.catalog_size(), 0);
+    for (const auto& view : book.catalog()) {
+        EXPECT_EQ(view.rank_limit(),
+                  classskill::RankLimit(playerlevel::kMaxLevel, view.unlock_level(), view.max_rank()))
+            << "skill " << view.skill_table_id();
+    }
+    EXPECT_EQ(tlsEcs.actorRegistry.get<LevelComp>(veteran).level(), storedLevel);
+
+    const auto fresh = NewPlayer(1, 0, 0);
+    ASSERT_EQ(PlayerSkillSystem::BuildSkillBook(fresh, book), kSuccess);
+    EXPECT_EQ(book.player_level(), 1u);
+    EXPECT_EQ(tlsEcs.actorRegistry.get<LevelComp>(fresh).level(), 0u);
 }

@@ -9,6 +9,7 @@ import (
 
 	base "proto/common/base"
 	dspb "proto/data_service"
+	"shared/savebarrier"
 	"shared/serviceauth"
 
 	"google.golang.org/grpc/codes"
@@ -35,6 +36,26 @@ type Directory interface {
 	Lookup(context.Context, uint64) (*dspb.AccountRoleOwnership, error)
 	Repair(context.Context, string, *base.AccountSimplePlayer, uint64) (*base.AccountSimplePlayerList, error)
 	Remove(context.Context, string, []*dspb.AccountRoleVersion) error
+}
+
+// InitialCommitCreator 只在本次 SQL 严格新建成功时返回可缓存的持久初始原件。
+// 旧 Directory 的调用面保留；不支持此能力的实现不获得种子优化，必须走 SQL 核验。
+type InitialCommitCreator interface {
+	CreateWithInitialCommit(context.Context, string, *base.AccountSimplePlayer) (*dspb.AccountDirectoryResponse, error)
+}
+
+func CreateWithInitialCommit(ctx context.Context, directory Directory, account string, role *base.AccountSimplePlayer) (*dspb.AccountDirectoryResponse, error) {
+	if creator, ok := directory.(InitialCommitCreator); ok {
+		return creator.CreateWithInitialCommit(ctx, account, role)
+	}
+	if directory == nil {
+		return nil, ErrUnavailable
+	}
+	players, err := directory.Create(ctx, account, role)
+	if err != nil {
+		return nil, err
+	}
+	return &dspb.AccountDirectoryResponse{Players: players}, nil
 }
 
 func ValidAccount(account string) bool {
@@ -95,6 +116,14 @@ func (c *Client) Read(ctx context.Context, account string, create bool) (*base.A
 	return out.Players, nil
 }
 func (c *Client) Create(ctx context.Context, account string, role *base.AccountSimplePlayer) (*base.AccountSimplePlayerList, error) {
+	out, err := c.CreateWithInitialCommit(ctx, account, role)
+	if err != nil {
+		return nil, err
+	}
+	return out.Players, nil
+}
+
+func (c *Client) CreateWithInitialCommit(ctx context.Context, account string, role *base.AccountSimplePlayer) (*dspb.AccountDirectoryResponse, error) {
 	in := &dspb.CreateAccountRoleRequest{Account: account, Role: role}
 	call, cancel, err := c.prepare(ctx, "CreateAccountRole", in)
 	if err != nil {
@@ -108,7 +137,11 @@ func (c *Client) Create(ctx context.Context, account string, role *base.AccountS
 	if out == nil || out.Players == nil {
 		return nil, ErrUnavailable
 	}
-	return out.Players, nil
+	if out.InitialPlayerData != nil && (!savebarrier.IsInitialPlayerData(out.InitialPlayerData) ||
+		out.InitialPlayerData.GetPlayerDatabaseData().GetPlayerId() != role.GetPlayerId()) {
+		return nil, ErrUnavailable
+	}
+	return out, nil
 }
 func (c *Client) Lookup(ctx context.Context, player uint64) (*dspb.AccountRoleOwnership, error) {
 	in := &dspb.LookupAccountRoleRequest{PlayerId: player}

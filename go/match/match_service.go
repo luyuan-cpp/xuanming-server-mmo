@@ -8,6 +8,9 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"shared/authoritysql"
+	"shared/drainproof"
+	"shared/kafkautil"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,7 +38,7 @@ import (
 	"shared/buildinfo"
 	"shared/grpcstats"
 	sharedregistry "shared/noderegistry"
-	"shared/safego"
+	"shared/serverbase"
 	"shared/serviceauth"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -76,6 +79,11 @@ const (
 	shutdownDrainTimeout = 5 * time.Second
 )
 
+var maintenancePlan = flag.String("maintenance-drain-plan", "", "正式 typed 排空 runtime 原件")
+var maintenanceDir = flag.String("maintenance-drain-dir", "", "私有排空原件目录")
+var maintenanceSHA = flag.String("maintenance-drain-sha256", "", "runtime 原文件 SHA256")
+var maintenanceControlDir = flag.String("maintenance-drain-control-dir", os.Getenv("MMORPG_MAINTENANCE_CONTROL_DIR"), "同一 boot 接收排空请求的私有目录")
+
 func main() {
 	flag.Parse()
 	// 版本行直写 stdout,先于读配置与 logx 初始化:进程在配置 / 依赖阶段就崩溃时也已留下"跑的是哪一版"
@@ -94,7 +102,15 @@ func main() {
 	if *migrateOnly {
 		os.Exit(runMigration(c, *allowModify, authority.Migrate))
 	}
-	svcCtx := svc.NewServiceContext(c)
+	runtime, root, relay, err := serverbase.LoadPublicationRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
+	if err != nil {
+		panic(err)
+	}
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		panic(err)
+	}
+	svcCtx := svc.NewServiceContextWithAdmission(c, writer, root, relay)
 	// 独立内部取消证明；未配置时保持nil并在RPC入口拒绝，绝不降级为无签名取消。
 	if secret := strings.TrimSpace(os.Getenv("MMORPG_MATCH_INTERNAL_SECRET_GUILD")); secret != "" {
 		verifier, err := serviceauth.New(map[string]string{"guild": secret})
@@ -106,7 +122,12 @@ func main() {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	if err := svcCtx.BindBackgroundStop(cancel); err != nil {
+		panic(err)
+	}
+	defer func() { root.CloseAdmission(); cancel() }()
 	resultConfig := matchkafka.ResultConsumerConfig{
+		RelayAdmission: relay, BindOwner: svcCtx.BindConsumerOwner,
 		Brokers: c.Kafka.Brokers, Topic: c.ResultTopic,
 		GroupID: c.ResultConsumerGroup, Partitions: c.ResultTopicPartitions,
 		RequireSQLCommit: c.GlobalMatch.Enabled,
@@ -128,8 +149,8 @@ func main() {
 	// scene / battle 节点发现:etcd list-watch 内存镜像
 	// (gather 定位 PrepareBattle / CreateBattle 对端用,照 LoadReporter 模式;
 	// 组队给 scene 发 PlayerTeamRefreshEvent 也从这里取 NodeUuid)。
-	safego.Go("match.watch.scene", func() { svcCtx.SceneNodes.Run(ctx, svcCtx.Etcd) })
-	safego.Go("match.watch.battle", func() { svcCtx.BattleNodes.Run(ctx, svcCtx.Etcd) })
+	svcCtx.LaunchRelayTask("match.watch.scene", func() { svcCtx.SceneNodes.Run(ctx, svcCtx.Etcd) })
+	svcCtx.LaunchRelayTask("match.watch.battle", func() { svcCtx.BattleNodes.Run(ctx, svcCtx.Etcd) })
 
 	// 全球结果来源归档独立于评分开关，PVE与不计分局也必须保全完整个人原件。
 	// 启动接线先于matcher与RPC注册；旧兼容模式仍只在启用评分时消费。
@@ -178,7 +199,7 @@ func main() {
 				panic(fmt.Errorf("全球匹配完整结算来源消费者未就绪，拒绝启动: %w", err))
 			}
 			logx.Errorf("[rating] Failed to start battle result consumer; rating updates paused, retrying in the background after 30s: %v", err)
-			safego.Go("match.kafka.results.retry", func() {
+			svcCtx.LaunchRelayTask("match.kafka.results.retry", func() {
 				for {
 					select {
 					case <-ctx.Done():
@@ -198,7 +219,7 @@ func main() {
 		// 不在这里同步试第一次:Kafka 能建连却不回包时一次 admin 调用最坏要几十秒,叠在 startRating 之后会把 gRPC 起服推迟一倍,
 		// 被 liveness 探针杀掉重启 —— 而开关关着时没有任何东西等这个 topic。
 		if c.RatingEnabled && !c.GlobalMatch.Enabled && !c.RatingSnapshotPublishEnabled {
-			safego.Go("match.kafka.rating_snapshot_topic", func() {
+			svcCtx.LaunchRelayTask("match.kafka.rating_snapshot_topic", func() {
 				for {
 					err := ensureSnapshotTopic()
 					if err == nil {
@@ -261,6 +282,11 @@ func main() {
 	// 解进 ctx(team 的调用者身份只从这里取,缺失即 fail-closed 回 4001);grpcstats 在内层计流量。
 	// zrpc 顶层 Timeout 保持 5000:改小会截断 WatchBattle 同步链;team 在每个方法入口自设 3500ms 预算(§A.3 第 7 条)。
 	s.AddUnaryInterceptors(
+		serverbase.PublicationAdmission(root, relay, map[string]bool{
+			matchpb.MatchInternal_StartActivityBattle_FullMethodName:  true,
+			matchpb.MatchInternal_CancelActivityBattle_FullMethodName: true,
+			matchpb.MatchInternal_CommitBattleOutcome_FullMethodName:  true,
+		}, svcCtx.RelayIngress),
 		sessionInterceptor,
 		originalRoleInterceptor(svcCtx),
 		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
@@ -289,6 +315,40 @@ func main() {
 		s.Stop() // go-zero RpcServer.Stop 只做 logx.Close
 		os.Exit(1)
 	}
+
+	controlCtx, cancelControl := context.WithCancel(context.Background())
+	controlDone := make(chan struct{})
+	go func() {
+		defer close(controlDone)
+		prepared := func(prepareCtx context.Context) (*serverbase.PreparedPublication, error) {
+			bound := svcCtx.DrainRuntime
+			if bound == nil || root.Pending() != 0 || svcCtx.Authority == nil {
+				return nil, drainproof.ErrHold
+			}
+			owner := svcCtx.ConsumerOwner
+			if c.GlobalMatch.Enabled || c.RatingEnabled {
+				if owner == nil {
+					return nil, drainproof.ErrHold
+				}
+				expected, err := owner.ExpectedPartitions(bound)
+				if err != nil {
+					return nil, err
+				}
+				digest, raw, err := owner.PreparedFrontier(prepareCtx, bound, "SOURCE", expected)
+				if err != nil {
+					return nil, err
+				}
+				return &serverbase.PreparedPublication{Digest: digest, Raw: raw, WithReady: func(openCtx context.Context, commit func() ([]byte, error)) ([]byte, error) {
+					return kafkautil.WithConsumerReadiness(openCtx, raw, []*kafkautil.BoundConsumerGroup{owner}, commit)
+				}}, nil
+			}
+			return &serverbase.PreparedPublication{NoConsumers: true}, nil
+		}
+		if err := serverbase.DriveDrainRuntime(controlCtx, runtime, *maintenanceControlDir, root, relay, svcCtx.BindDrainRuntime, svcCtx.CloseSource, svcCtx.StopAndReport, prepared); err != nil && controlCtx.Err() == nil {
+			logx.Errorf("匹配排空 HOLD: %v", err)
+		}
+	}()
+	defer func() { cancelControl(); <-controlDone }()
 
 	fmt.Println("\n=============================================================")
 	fmt.Println("  MATCH SERVICE STARTED SUCCESSFULLY")
@@ -338,7 +398,7 @@ func main() {
 	//    shutdown listener 在收到信号 1s 后执行,所以这里等 serveDone(有上限);
 	//  ③ 停后台循环(节点发现 / matcher / 评分消费);
 	//  ④ svcCtx.Stop()(flush Kafka、释放 snowflake 租约)→ s.Stop()(logx.Close 放最后,前面的错误日志不丢)。
-	// 组队的异步副作用(推送、EndMatch 清开战锁)不等:开战锁靠自然过期(5 人 101s),推送至多一次。
+	// 组队已接纳的异步推送与清锁由同 boot RELAY 等待；TTL 不作为完成证据。
 	regs.Close()
 	select {
 	case <-serveDone:

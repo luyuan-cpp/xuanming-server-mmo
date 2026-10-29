@@ -302,7 +302,7 @@
 
 | # | 事 | 还缺 | 工作量 |
 |---|---|---|---|
-| #102 | 开服限流(Bucket4j+Redis+波次放人) | 设计+Java骨架齐,步骤 2–10 未写 | M |
+| #102 | 开服限流(Bucket4j+Redis+波次放人) | Gateway 限流已实现；真排队部署门禁未清，专项指标与尖峰容量待验收，见削峰设计 | M |
 | #280/#242/#243 | 存档未完成时 re-login 的竞态 | `player_lifecycle.cpp:376` 有 TODO,补状态机 | M |
 | #70/#125 | 出错时打印请求协议+堆栈 | 基础组件齐,缺统一 hook | S | ✅ 2026-05-14 完成 |
 | #216 | SIGUSR1 打印所有线程堆栈 | `PrintDefaultStackTrace()` 已有,缺 signal handler | S | ✅ 2026-05-12: 当前线程版完成 |
@@ -434,7 +434,7 @@
 ### 开服 · 限流 · 排队
 | # | 事项 | 现状 | 缺 | 量 | 依赖 |
 |---|---|---|---|---|---|
-| #102 | 流量冲击/活动峰值 | 设计文档 `open-server-rate-limit-design.md` + Java 骨架 | 步骤 2–10 全部实施 | **M** | — |
+| #102 | 流量冲击/活动峰值 | [削峰现行契约](../design/open-server-rate-limit-design.md)与已有实现 | 专项指标、真实故障放行、排队门禁与尖峰容量验收 | **M** | — |
 | #214 | 登录排队开源限流器 | Java `AssignGateRateLimiter` + `QueueShardCount` | 是否闭环仍有差距 | M | #102 |
 
 ### 活动 · 时间
@@ -473,7 +473,7 @@
 | #103 | c2s string 长度 | gate kMaxClientMessageSize=1024 | string 字段独立校验 | S | #192 |
 | #127 | 换场景消息丢失 | `cross_scene_player_messaging.md` + `cross-zone-scene-travel.md` §14(2026-10-20 更正:`player_migration_event_handler` 属于已下线的 player_migrate 搬数据链,已在 `e7bb46070` 删除) | 队列化方案 TODO | M | #208 |
 | #206 | 客户端数据大小 | codec kMaxMessageLen=64MB | gate 侧客户端包专项 | S | #103 |
-| #247 | 协议兼容 | proto3 天然 + `proto3_enum_zero_requirement.md` | 专项版本兼容层 | M | #255 |
+| #247 | 协议兼容 | [根 AGENTS.md §4、§11.3](../../AGENTS.md)：枚举首值须为 0，兼容性按具体变更判断 | 按实际发布接缝核验版本兼容与迁移，不能由 proto3 语法推定兼容 | M | #255 |
 
 ### 登录 · 会话 · 重连
 | # | 事项 | 现状 | 缺 | 量 | 依赖 |

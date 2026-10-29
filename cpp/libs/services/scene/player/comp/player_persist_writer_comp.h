@@ -20,6 +20,9 @@
 struct PlayerPersistWriterComp
 {
     std::string token;
+    // 本实体在 warn 模式下被判过倒退、且已计数打日志。严格屏障之后对它的每次写入都会再返回 2(证据留在 Redis 的
+    // schema_regressed,防回包丢失),计数只记第一次(PlayerLifecycleSystem::HandlePlayerSaveSchemaWarned)。
+    bool regressionWarnReported{false};
 };
 
 namespace player_persist_writer

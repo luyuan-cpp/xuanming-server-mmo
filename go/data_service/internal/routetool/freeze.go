@@ -10,6 +10,8 @@ import (
 
 	"data_service/internal/store"
 
+	pb "proto/common/database"
+	"shared/authoritysql"
 	"shared/placement"
 
 	goredis "github.com/redis/go-redis/v9"
@@ -88,8 +90,38 @@ func ParseRedisIdentity(infoServer, infoReplication string) (RedisIdentity, erro
 
 // ── freeze ──────────────────────────────────────────────────────────────────
 
+// FreezeCatalog 只暴露正式冻结提交；生产由独立Operator的authoritysql.Catalog实现。
+type FreezeCatalog interface {
+	Freeze(context.Context, []byte, *pb.SqlWriterMaintenanceReceipt) (*pb.SqlWriterMaintenanceReceipt, error)
+}
+
+// ReleaseCatalog 只暴露同票据及完整ReleaseReadiness的正式释放。
+type ReleaseCatalog interface {
+	Release(context.Context, []byte, *pb.SqlWriterMaintenanceReceipt) (*pb.SqlWriterMaintenanceReceipt, error)
+}
+
+// MaintenanceCatalog 是CLI维护连接的完整typed能力，普通业务Store不持有它。
+type MaintenanceCatalog interface {
+	FreezeCatalog
+	ReleaseCatalog
+	FrozenCatalog
+}
+
+// MaintenanceWork是同步恢复调用的接收门。CLI传真实BindMaintenance会话；SQL域用例可显式
+// 注入本地会话，仅证明自己的同步SQL已返回，不据此伪造全栈P0/Redis/Kafka身份或P7审计。
+type MaintenanceWork interface {
+	Enter() (func(), error)
+	Hold()
+}
+
+var _ MaintenanceCatalog = (*authoritysql.Catalog)(nil)
+
 // FreezeOptions 是 freeze 的参数。
 type FreezeOptions struct {
+	// 仅接受已固定摘要的正式请求；调用方不能从当前状态拼造排空证据。
+	Catalog  FreezeCatalog
+	TicketID []byte
+	Request  *pb.SqlWriterMaintenanceReceipt
 	// Reason 只打到 stderr(route_meta 没有记原因的列),给事后对日志。
 	Reason string
 	// Timeout 是冻结写本身的时限,至少 store.RouteFreezeTimeoutMin(见它的注释)。
@@ -110,6 +142,9 @@ type FreezeReport struct {
 
 // Freeze 冻结映射写者。成功时 stdout 一行 `route_freeze changed=… writable=0`;出错时退出码 2、不出统计行。
 func Freeze(ctx context.Context, db freezeDB, opts FreezeOptions) (FreezeReport, error) {
+	if opts.Catalog == nil || len(opts.TicketID) != 16 || opts.Request == nil {
+		return FreezeReport{}, errors.New("冻结缺少正式 Catalog、票据或固定请求")
+	}
 	if opts.Stdout == nil || opts.Stderr == nil {
 		return FreezeReport{}, errors.New("stdout / stderr writers are required")
 	}
@@ -126,15 +161,13 @@ func Freeze(ctx context.Context, db freezeDB, opts FreezeOptions) (FreezeReport,
 	fmt.Fprintf(opts.Stderr, "FREEZE reason=%q\n", opts.Reason)
 	wctx, cancel := context.WithTimeout(ctx, opts.Timeout)
 	defer cancel()
-	changed, err := db.FreezeRouteWriters(wctx)
+	_, err := opts.Catalog.Freeze(wctx, opts.TicketID, opts.Request)
 	if err != nil {
 		return FreezeReport{}, err
 	}
-	// W1 / 导入对开关是普通读:已经过了检查的事务仍会提交。反向修库开始前会再等 -freeze-grace。
-	fmt.Fprintln(opts.Stderr, "NOTE: route writers that already passed the writable check may still commit for ~2s; "+
-		"reconcile-from-cache waits -freeze-grace before scanning")
-	fmt.Fprintf(opts.Stdout, "route_freeze changed=%t writable=0\n", changed)
-	return FreezeReport{Changed: changed}, nil
+	// 成功原件已经包含全部角色、历史非SQL副作用和槽锁排空；不以延迟猜测完成。
+	fmt.Fprintln(opts.Stdout, "route_freeze changed=true writable=0")
+	return FreezeReport{Changed: true}, nil
 }
 
 // FreezeExitCode:出错 2,否则 0(含本来就冻结)。
@@ -175,6 +208,9 @@ var ErrWatermarkKeyNotReset = errors.New("route_tool unfreeze: route writers are
 
 // UnfreezeOptions 是 unfreeze 的参数。
 type UnfreezeOptions struct {
+	Catalog  ReleaseCatalog
+	TicketID []byte
+	Request  *pb.SqlWriterMaintenanceReceipt
 	// CacheUnverifiedAcknowledged:没有可信标记时仍解冻(-cache-was-not-verified-acknowledged)。见文件头。
 	CacheUnverifiedAcknowledged bool
 	// RedisMode:yaml 是 RouteStore.Mode=redis。不读标记(rd 可为 nil、Identity 可不给),最低水位 0;
@@ -250,6 +286,9 @@ func UnfreezeExitCode(_ UnfreezeReport, err error) int {
 // Unfreeze 解冻映射写者(流程见文件头)。调用方(routetoolcli)负责 -confirm-audited 与 RouteStore.Mode 的门禁
 // (redis 模式另要求显式确认,这里只兜底)。只有翻成功或本来就可写才往 Stdout 写统计行。
 func Unfreeze(ctx context.Context, rd readyMarkerRedis, db unfreezeDB, opts UnfreezeOptions) (UnfreezeReport, error) {
+	if opts.Catalog == nil || len(opts.TicketID) != 16 || opts.Request == nil || opts.Request.Evidence.GetReleaseReadiness() == nil {
+		return UnfreezeReport{}, errors.New("解冻缺少正式 Catalog、票据或 P8 ReleaseReadiness 原件")
+	}
 	if opts.Stdout == nil || opts.Stderr == nil {
 		return UnfreezeReport{}, errors.New("stdout / stderr writers are required")
 	}
@@ -367,7 +406,13 @@ func Unfreeze(ctx context.Context, rd readyMarkerRedis, db unfreezeDB, opts Unfr
 func unfreezeWriters(ctx context.Context, db unfreezeDB, opts UnfreezeOptions, rep UnfreezeReport, afterFlip func(*UnfreezeReport) error) (UnfreezeReport, error) {
 	wctx, cancel := context.WithTimeout(ctx, opts.Timeout)
 	defer cancel()
-	changed, err := db.UnfreezeRouteWriters(wctx, rep.MinWatermarkMs)
+	// 强读所得下限只能检验固定原件，不得修改、重封原件来掩盖漂移。
+	proof := opts.Request.Evidence.GetReleaseReadiness()
+	if proof == nil || proof.RouteWatermarkFloorMs < rep.MinWatermarkMs {
+		return rep, errors.New("P8 原件的路由水位下限低于当前可信 Redis 水位，拒绝解冻")
+	}
+	_, err := opts.Catalog.Release(wctx, opts.TicketID, opts.Request)
+	changed := err == nil
 	if err != nil {
 		return rep, err
 	}

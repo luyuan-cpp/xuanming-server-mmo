@@ -23,7 +23,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -82,12 +81,6 @@ var (
 	tipChatServiceUnavailable  = uint32(tiptable.CommonError_kServiceUnavailable)
 )
 
-// chatSmokeEnvelopeError 是 gate / 路由服级拒绝:MessageContent.error_message 非空、body 为空。
-type chatSmokeEnvelopeError struct {
-	messageId uint32
-	tip       uint32
-}
-
 // chatSmokeBot 是一个已登录进场的机器人会话。
 type chatSmokeBot struct {
 	account string
@@ -96,10 +89,9 @@ type chatSmokeBot struct {
 	player  *gameobject.Player
 	stats   *metrics.Stats
 
-	// RecvLoop goroutine 写、场景主流程读,mu 保护。
-	mu        sync.Mutex
-	envelopes []chatSmokeEnvelopeError // 本次请求期间收到的聊天消息号信封拒绝
-	gateTips  []uint32                 // 本次请求期间收到的 SendTipToClient(gate 找不到路由服时走这条)
+	// caller 发聊天请求并只等它自己的回包(按请求号认领,见 smoke_rpc_call.go)。
+	// 在起 RecvLoop 之前赋值:onMessage 要把 gate 的 SendTipToClient 交给它做快速失败。
+	caller *smokeCaller
 
 	lastRequestAt time.Time // 仅主流程读写,用于 chatSmokeRequestSpacing
 }
@@ -132,7 +124,6 @@ func RunChatSmoke(cfg *config.Config) {
 			}
 			_ = leaveGame(b.gc, stats)
 			sendDisconnectBestEffort(b.gc)
-			handler.ResetChatInbox(b.gc.PlayerId)
 			gameobject.PlayerList.Delete(b.gc.PlayerId)
 			b.gc.Close()
 		}
@@ -301,11 +292,14 @@ func RunChatSmoke(cfg *config.Config) {
 
 // chatSmokeLogin 为一个账号走完整的 AssignGate → 连接 → 登录 → 进场流程,并挂上本场景自己的 RecvLoop 回调。
 //
-// 为什么不直接用 prepareBehaviorClient:它的 RecvLoop 回调只替属性消息拦截信封错误,其余消息一律交给
-// MessageBodyHandler。聊天请求被 gate(限流 / 超长)或路由服(无 chat 实例 / 上游 gRPC 错误,见
-// go/client_rpc_router/internal/logic/forwardlogic.go rejected)拒绝时,回的是 body 为空、
-// error_message 在信封上的 MessageContent —— 分发下去会被解成全零 SendChatResponse,收件箱里记成 tip=0,
-// 冒烟就把"根本没到 chat"误判成"chat 受理成功"(第 6 步幂等断言会因此假绿)。
+// 为什么不直接用 prepareBehaviorClient:本场景要自己的 RecvLoop 回调。聊天请求的回包带请求号,由 GameClient
+// 直接交给 caller,不经回调;回调要做的是另外两件事:
+//   - 聊天消息号上 id = 0 的回包(服务端没回显请求号)丢弃,不交 MessageBodyHandler。聊天请求被 gate(限流 / 超长)
+//     或路由服(无 chat 实例 / 上游 gRPC 错误,见 go/client_rpc_router/internal/logic/forwardlogic.go rejected)
+//     拒绝时回的是 body 为空、error_message 在信封上的 MessageContent,分发下去会被解成全零 SendChatResponse,
+//     看上去像受理,冒烟就把"根本没到 chat"误判成"chat 受理成功"(第 6 步幂等断言会因此假绿)。
+//   - gate 的 SendTipToClient 交给 caller,kServiceUnavailable 时让当前等待立刻失败。
+//
 // 其余步骤(connectAndVerify / loginAndEnterScenario / NewPlayer / WaitSceneReady)与 prepareBehaviorClient 一致;
 // 省掉 ListSkills + 1.5s 等待:聊天不依赖技能列表。
 func chatSmokeLogin(cfg *config.Config, account string, stats *metrics.Stats) (*chatSmokeBot, error) {
@@ -335,6 +329,7 @@ func chatSmokeLogin(cfg *config.Config, account string, stats *metrics.Stats) (*
 		gc:      gc,
 		player:  gameobject.NewPlayer(gc.PlayerId),
 		stats:   stats,
+		caller:  newSmokeCaller(gc, stats, account, chatSmokeRpcTimeout, nil),
 	}
 	gameobject.PlayerList.Set(gc.PlayerId, bot.player)
 	go gc.RecvLoop(bot.onMessage)
@@ -351,128 +346,90 @@ func chatSmokeLogin(cfg *config.Config, account string, stats *metrics.Stats) (*
 	return bot, nil
 }
 
-// onMessage 是本场景的 RecvLoop 回调:先拦聊天消息号的信封错误与 gate 的 SendTipToClient,再交给通用分发。
+// onMessage 是本场景的 RecvLoop 回调。聊天请求的回包带请求号,由 GameClient 直接交给 caller,不会到这里;
+// 走到这里的是推送、gate 的 SendTipToClient,以及服务端没回显请求号(id = 0)的聊天回包。
 func (b *chatSmokeBot) onMessage(client *pkg.GameClient, msg *base.MessageContent) {
 	b.stats.MsgRecv()
+	id := msg.GetMessageId()
+	if chatSmokeIsChatMessage(id) {
+		// 认领不到任何调用的聊天回包:丢弃,不交通用分发(信封拒绝 body 为空,会被解成全零响应、看上去像受理)。
+		smokeDropUncorrelatedReply(b.account, msg)
+		return
+	}
 	if tip := msg.GetErrorMessage().GetId(); tip != 0 {
 		zap.L().Error("[chat-smoke] gate envelope error",
-			zap.String("account", b.account), zap.Uint32("message_id", msg.GetMessageId()), zap.Uint32("tip", tip))
-		if chatSmokeIsChatMessage(msg.GetMessageId()) {
-			b.mu.Lock()
-			b.envelopes = append(b.envelopes, chatSmokeEnvelopeError{messageId: msg.GetMessageId(), tip: tip})
-			b.mu.Unlock()
-			return // 不再分发空 body(否则 handler 会把它记成 tip=0 的成功响应)
-		}
+			zap.String("account", b.account), zap.Uint32("message_id", id), zap.Uint32("tip", tip))
 	}
-	if msg.GetMessageId() == game.SceneClientPlayerCommonSendTipToClientMessageId {
-		// gate 在路由模式下找不到路由服实例时不回信封,而是单独推一条 SendTipToClient(kServiceUnavailable),
-		// 与请求没有消息号关联;记下来,等待方据此快速失败并给出可读原因,而不是干等 10s 超时。
+	if id == game.SceneClientPlayerCommonSendTipToClientMessageId {
+		// gate 在路由模式下找不到路由服实例时不回信封,而是单独推一条不带请求号的 SendTipToClient(kServiceUnavailable);
+		// 交给 caller,让当前等待立刻失败并给出可读原因,而不是干等 10s 超时。其它码不影响等待,
+		// 只记一条日志(迁移前它们出现在超时原因的 gate_tips 里,现在超时原因不再带它们)。
 		var tipInfo base.TipInfoMessage
 		if err := proto.Unmarshal(msg.GetSerializedMessage(), &tipInfo); err == nil && tipInfo.GetId() != 0 {
 			zap.L().Warn("[chat-smoke] gate tip", zap.String("account", b.account), zap.Uint32("tip", tipInfo.GetId()))
-			b.mu.Lock()
-			b.gateTips = append(b.gateTips, tipInfo.GetId())
-			b.mu.Unlock()
+			b.caller.onGateTip(tipInfo.GetId())
 		}
 	}
 	handler.MessageBodyHandler(client, msg)
 }
 
-// send 发一个请求:先按 chatSmokeRequestSpacing 让出间隔,再清空本玩家的聊天收件箱与 gate 级拒绝记录
-// (上一步迟到的响应不能被这一步当成自己的结果消费),最后发出。
-func (b *chatSmokeBot) send(messageId uint32, request proto.Message) error {
+// call 发一个聊天请求并只等它自己的回包:先按 chatSmokeRequestSpacing 让出间隔,再经 caller 发出。
+// envelopeTip 非 0 是 gate / 路由服级拒绝(信封错误,response 未填充);超时与 gate 推 kServiceUnavailable 返回 error。
+//
+// 迁移前每步发出前要清空 handler 的聊天收件箱,防上一步的迟到回包被这一步当成自己的结果;现在回包按请求号认领,
+// 迟到回包由 GameClient 计数后丢弃,不再经过收件箱。只能在场景主流程(非 RecvLoop)goroutine 上调用。
+func (b *chatSmokeBot) call(messageId uint32, request, response proto.Message) (envelopeTip uint32, err error) {
 	if wait := chatSmokeRequestSpacing - time.Since(b.lastRequestAt); wait > 0 {
 		time.Sleep(wait)
 	}
-	handler.ResetChatInbox(b.gc.PlayerId)
-	b.mu.Lock()
-	b.envelopes = nil
-	b.gateTips = nil
-	b.mu.Unlock()
-
-	if err := b.gc.SendRequest(messageId, request); err != nil {
-		return fmt.Errorf("send message_id=%d: %w", messageId, err)
-	}
+	// 间隔从发出时刻算起(与迁移前一致):gate 限流按请求到达计数,与回包何时回来无关。
 	b.lastRequestAt = time.Now()
-	b.stats.MsgSent()
-	return nil
+	return b.caller.call(messageId, request, response)
 }
 
-// sendChat 发 SendChat 并等 chat 的响应 tip(0 = 受理)。
+// sendChat 发 SendChat,返回 chat 写在响应体里的 tip(0 = 受理)。
 // gate / 路由服级拒绝(信封错误、SendTipToClient kServiceUnavailable)与超时一律返回 error:
 // 它们说明请求没有到达 chat 业务逻辑,调用方不能把它们当成 chat 给的码去断言。
+// requestId 是 chat 的业务幂等键,由调用方给出、重发时复用(第 6 步);与每次请求各自分配的信封请求号无关。
 func (b *chatSmokeBot) sendChat(message *chat.ChatMessage, requestId string) (uint32, error) {
 	messageId := uint32(game.ClientPlayerChatSendChatMessageId)
-	if err := b.send(messageId, &chat.SendChatRequest{Message: message, RequestId: requestId}); err != nil {
-		return 0, err
+	response := &chat.SendChatResponse{}
+	envelopeTip, err := b.call(messageId, &chat.SendChatRequest{Message: message, RequestId: requestId}, response)
+	if err != nil {
+		return 0, fmt.Errorf("SendChat request_id=%s: %w", requestId, err)
 	}
-	deadline := time.Now().Add(chatSmokeRpcTimeout)
-	for time.Now().Before(deadline) {
-		if tips := handler.ChatSendTipsOf(b.gc.PlayerId); len(tips) > 0 {
-			return tips[0], nil
-		}
-		if reason, rejected := b.gateRejection(messageId); rejected {
-			return 0, errors.New(reason)
-		}
-		time.Sleep(50 * time.Millisecond)
+	if envelopeTip != 0 {
+		return 0, chatSmokeEnvelopeRejection(messageId, envelopeTip)
 	}
-	return 0, fmt.Errorf("等 SendChat 响应超时(%s) account=%s gate_tips=%v", chatSmokeRpcTimeout, b.account, b.gateTipsSnapshot())
+	return response.GetErrorMessage().GetId(), nil
 }
 
-// pullHistory 发 PullChatHistory 并等响应;chat 在响应体里给的拒绝码返回 error。
+// pullHistory 发 PullChatHistory 并直接解析响应;gate / 路由服级拒绝、chat 在响应体里给的拒绝码与超时都返回 error。
 func (b *chatSmokeBot) pullHistory(channel chat.ChatChannelType, peerPlayerId uint64, limit uint32) ([]*chat.ChatMessage, error) {
 	messageId := uint32(game.ClientPlayerChatPullChatHistoryMessageId)
-	if err := b.send(messageId, &chat.PullChatHistoryRequest{
+	response := &chat.PullChatHistoryResponse{}
+	envelopeTip, err := b.call(messageId, &chat.PullChatHistoryRequest{
 		Channel:      channel,
 		PeerPlayerId: peerPlayerId,
 		Limit:        limit,
-	}); err != nil {
-		return nil, err
+	}, response)
+	if err != nil {
+		return nil, fmt.Errorf("PullChatHistory channel=%s peer=%d: %w", channel, peerPlayerId, err)
 	}
-	deadline := time.Now().Add(chatSmokeRpcTimeout)
-	for time.Now().Before(deadline) {
-		if responses := handler.ChatHistoriesOf(b.gc.PlayerId); len(responses) > 0 {
-			response := responses[0]
-			if tip := response.GetErrorMessage().GetId(); tip != 0 {
-				return nil, fmt.Errorf("chat 拒绝 PullChatHistory channel=%s peer=%d: tip=%d", channel, peerPlayerId, tip)
-			}
-			return response.GetMessages(), nil
-		}
-		if reason, rejected := b.gateRejection(messageId); rejected {
-			return nil, errors.New(reason)
-		}
-		time.Sleep(50 * time.Millisecond)
+	if envelopeTip != 0 {
+		return nil, chatSmokeEnvelopeRejection(messageId, envelopeTip)
 	}
-	return nil, fmt.Errorf("等 PullChatHistory 响应超时(%s) account=%s channel=%s gate_tips=%v",
-		chatSmokeRpcTimeout, b.account, channel, b.gateTipsSnapshot())
+	if tip := response.GetErrorMessage().GetId(); tip != 0 {
+		return nil, fmt.Errorf("chat 拒绝 PullChatHistory channel=%s peer=%d: tip=%d", channel, peerPlayerId, tip)
+	}
+	return response.GetMessages(), nil
 }
 
-// gateRejection 返回本次请求期间收到的、足以判定"请求没到 chat"的 gate / 路由服级拒绝。
-// 只有 kServiceUnavailable 的 SendTipToClient 算数:其它 tip 可能是场景顺手推的无关提示,
-// 只进超时原因,不据此提前失败。
-func (b *chatSmokeBot) gateRejection(messageId uint32) (string, bool) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for _, e := range b.envelopes {
-		if e.messageId == messageId {
-			return fmt.Sprintf("gate/路由服信封拒绝 message_id=%d tip=%d(请求未到达 chat 业务逻辑:"+
-				"tip=%d 多为路由服无 chat 实例或上游 gRPC 错误,其它常见为 gate 限流 / 超长)",
-				e.messageId, e.tip, tipChatServiceUnavailable), true
-		}
-	}
-	for _, tip := range b.gateTips {
-		if tip == tipChatServiceUnavailable {
-			return fmt.Sprintf("gate SendTipToClient tip=%d(gate 选不到目标:没有可用路由服实例,"+
-				"或 gate 未以 GATE_CLIENT_RPC_ROUTER=1 启动而直连模式下 chat 不可达)", tip), true
-		}
-	}
-	return "", false
-}
-
-func (b *chatSmokeBot) gateTipsSnapshot() []uint32 {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return append([]uint32(nil), b.gateTips...)
+// chatSmokeEnvelopeRejection 把 gate / 路由服级拒绝(MessageContent.error_message 非空、body 为空)报成 error。
+func chatSmokeEnvelopeRejection(messageId, tip uint32) error {
+	return fmt.Errorf("gate/路由服信封拒绝 message_id=%d tip=%d(请求未到达 chat 业务逻辑:"+
+		"tip=%d 多为路由服无 chat 实例或上游 gRPC 错误,其它常见为 gate 限流 / 超长)",
+		messageId, tip, tipChatServiceUnavailable)
 }
 
 // ---------------------------------------------------------------------------

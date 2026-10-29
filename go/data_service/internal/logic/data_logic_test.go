@@ -297,17 +297,20 @@ func TestLoadPlayerData_UncontendedVersionAcceptedByCAS(t *testing.T) {
 }
 
 // TestLoadPlayerData_CorruptVersionFailsClosed:版本值损坏时两个分支都回 ErrCodeRedis,不能当成 0(= 跳过 CAS)。
+// 空串也算损坏:版本键存在、值为空串,与「键不存在」不是一回事。
 func TestLoadPlayerData_CorruptVersionFailsClosed(t *testing.T) {
-	for i, fields := range [][]string{nil, {"bag"}} {
-		svcCtx, mr := newTestSvcCtx(t)
-		playerID := uint64(97 + i)
-		setupPlayer(t, svcCtx, playerID, 1)
-		mustSave(t, svcCtx, playerID, map[string][]byte{"bag": []byte("v1")})
-		require.NoError(t, mr.Set(versionKey(playerID), "not-a-number"))
+	for _, badVersion := range []string{"not-a-number", ""} {
+		for i, fields := range [][]string{nil, {"bag"}} {
+			svcCtx, mr := newTestSvcCtx(t)
+			playerID := uint64(97 + i)
+			setupPlayer(t, svcCtx, playerID, 1)
+			mustSave(t, svcCtx, playerID, map[string][]byte{"bag": []byte("v1")})
+			require.NoError(t, mr.Set(versionKey(playerID), badVersion))
 
-		resp, err := LoadPlayerData(context.Background(), svcCtx, &LoadPlayerDataReq{PlayerID: playerID, Fields: fields})
-		assert.Error(t, err, "fields=%v", fields)
-		assert.Equal(t, constants.ErrCodeRedis, resp.ErrorCode, "fields=%v", fields)
+			resp, err := LoadPlayerData(context.Background(), svcCtx, &LoadPlayerDataReq{PlayerID: playerID, Fields: fields})
+			assert.Error(t, err, "version=%q fields=%v", badVersion, fields)
+			assert.Equal(t, constants.ErrCodeRedis, resp.ErrorCode, "version=%q fields=%v", badVersion, fields)
+		}
 	}
 }
 

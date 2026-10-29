@@ -90,8 +90,27 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 			t.Fatalf("%s 有 %d 个 ascii 列,只有 %d 个显式 COLLATE ascii_bin(MySQL 默认 ascii_general_ci、TiDB 只有 ascii_bin)", name, n, m)
 		}
 	}
-	if got := len(bootstrapTables); got != 14 {
-		t.Fatalf("bootstrapTables 有 %d 项,want 14(id_segment、player_name、七张账号目录/交易/入场/导入表 + 五张路由表)", got)
+	// 16张既有业务/路由/恢复事实表之外，正式authority catalog新增六张永久写资格控制表。
+	writerControlDDLs := map[string]string{
+		"writer_registry":                writerRegistryBootstrapDDL,
+		"writer_slot":                    writerSlotBootstrapDDL,
+		"writer_lifecycle_receipt":       writerLifecycleReceiptBootstrapDDL,
+		"sql_writer_drain_run":           writerDrainRunBootstrapDDL,
+		"sql_writer_freeze_ticket":       writerFreezeTicketBootstrapDDL,
+		"sql_writer_maintenance_receipt": writerMaintenanceReceiptBootstrapDDL,
+	}
+	if got, want := len(bootstrapTables), 16+len(writerControlDDLs); got != want {
+		t.Fatalf("bootstrapTables 有 %d 项,want %d(既有16表加六张正式authority控制表)", got, want)
+	}
+	for name, ddl := range writerControlDDLs {
+		if bootstrapTables[name] != ddl {
+			t.Fatalf("正式authority控制表 %s 未按原catalog DDL装配", name)
+		}
+	}
+	for name, ddl := range map[string]string{SaveBarrierMaintenanceTableName: saveBarrierMaintenanceDDL, AccountRoleAdmissionRecoveryTableName: accountRoleAdmissionRecoveryDDL} {
+		if bootstrapTables[name] != ddl {
+			t.Fatalf("永久恢复事实表 %s 没有按原DDL装配", name)
+		}
 	}
 
 	// player_route 的聚簇主键 (route_shard, player_id) 与 64 片(G1a;模数 2026-10-13 由 16 改为 64,数值由
@@ -393,10 +412,6 @@ func allRouteSQLForTest() map[string]string {
 		"R17":             routeRepairOverwriteSQL,
 		"R18":             routeReadMetaSQL,
 		"R18x":            routeLockMetaSQL,
-		"R19":             routeFreezeSQL,
-		"R20":             routeLockReconcileWatermarkSQL,
-		"R21":             routeRaiseWatermarkSQL,
-		"R22":             routeUnfreezeSQL,
 		"P0":              routeLockProbeGuardSQL,
 		"P4":              routeProbeShardCheckSQL,
 		"P5":              routeProbeShardModulusSQL,
@@ -538,6 +553,7 @@ func TestRouteMetaAndReconcileWritesOnlyInStoreFiles(t *testing.T) {
 	}
 	write := regexp.MustCompile("(?i)(INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|REPLACE\\s+INTO|TRUNCATE\\s+TABLE)\\s+`?(" +
 		RouteMetaTableName + "|" + RouteReconcileTableName + ")\\b")
+	metaMutation := regexp.MustCompile("(?i)(UPDATE|DELETE\\s+FROM|REPLACE\\s+INTO|TRUNCATE\\s+TABLE)\\s+`?" + RouteMetaTableName + "\\b")
 	allowed := map[string]bool{"internal/store/route_store.go": true, "internal/store/route_reconcile.go": true}
 
 	var files, allowedHits int
@@ -575,7 +591,9 @@ func TestRouteMetaAndReconcileWritesOnlyInStoreFiles(t *testing.T) {
 			if err != nil || !write.MatchString(s) {
 				return true
 			}
-			if allowed[rel] {
+			if metaMutation.MatchString(s) {
+				offenders = append(offenders, rel+": 服务代码不得控制 route_meta: "+s)
+			} else if allowed[rel] {
 				allowedHits++
 			} else {
 				offenders = append(offenders, rel+": "+s)
@@ -590,10 +608,10 @@ func TestRouteMetaAndReconcileWritesOnlyInStoreFiles(t *testing.T) {
 	if files == 0 {
 		t.Fatalf("在 %s 下一个 .go 文件都没扫到:守卫失效", root)
 	}
-	// 至少九条:route_store.go 的 R15 / R16(种行)、R19(冻结)、R21(抬水位)、R22(解冻),
-	// 加上 route_reconcile.go(第 1b-2 批)的 R23(续约 / 抢租约)、R25(释放)、R27(推进水位)、R28(leader 冻结)。
-	if allowedHits < 9 {
-		t.Fatalf("允许的文件里只匹配到 %d 条 route_meta / route_reconcile 写语句(至少应有 R15 / R16 / R19 / R21 / R22 / R23 / R25 / R27 / R28):正则失效", allowedHits)
+	// 仍必须识别五条真实写：Schema 的 R15/R16 与 normal 的 R23/R25/R27。
+	// writable/epoch/catalog 的 UPDATE 属于独立 authoritysql.Catalog，服务模块绝不拥有。
+	if allowedHits < 5 {
+		t.Fatalf("允许的文件里只匹配到 %d 条 route_meta / route_reconcile 写语句(至少应有 R15/R16/R23/R25/R27):正则失效", allowedHits)
 	}
 	if len(offenders) > 0 {
 		t.Fatalf("route_meta / route_reconcile 的写入只许出现在 %v,以下位置绕过了它:\n%s", allowed, strings.Join(offenders, "\n"))
@@ -1165,6 +1183,19 @@ func TestRouteTiDBPrepareStatements(t *testing.T) {
 	} {
 		if _, _, err := normalizeRouteTiDBPrepareIDs(tc.zones, tc.storages); !errors.Is(err, ErrRouteInvalidArgument) {
 			t.Fatalf("%s: err = %v, want ErrRouteInvalidArgument", tc.name, err)
+		}
+	}
+}
+
+func TestRouteShardConstraintExactReadOnlyShape(t *testing.T) {
+	for _, clause := range []string{"route_shard = player_id % 64", "(`route_shard` = (`player_id` % 64))", "((route_shard) = ((player_id) % (64)))"} {
+		if !routeShardClauseMatches(clause) {
+			t.Fatalf("合法MySQL/TiDB表达式被拒绝：%q", clause)
+		}
+	}
+	for _, clause := range []string{"(route_shard=player_id)%64", "route_shard=player_id%16", "route_shard=player_id%128", "route_shard=player_id%64 OR 1", "(route_shard=player_id%64", "route_shard=player_id%64)", "route_shard=(player_id%64)+0", "route_shard=player_id%64;SELECT 1", "route_shard=other_id%64", "route_shard=player_id%0"} {
+		if routeShardClauseMatches(clause) {
+			t.Fatalf("未知或改变语义的CHECK必须拒绝：%q", clause)
 		}
 	}
 }

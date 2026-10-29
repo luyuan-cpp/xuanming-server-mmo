@@ -142,7 +142,7 @@ func (s *Store) TeamLaunchTickets(ctx context.Context, launch *teampb.TeamLaunch
 	if err != nil {
 		return nil, err
 	}
-	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: !s.Config.RequireTiDB, Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, err
 	}

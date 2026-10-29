@@ -38,8 +38,10 @@ func (f *playerIDsSQL) open(t *testing.T) *sql.DB {
 
 type playerIDsSQLConnector struct{ f *playerIDsSQL }
 
-func (c playerIDsSQLConnector) Connect(context.Context) (driver.Conn, error) { return playerIDsSQLConn{f: c.f}, nil }
-func (c playerIDsSQLConnector) Driver() driver.Driver                        { return playerIDsSQLDriver{} }
+func (c playerIDsSQLConnector) Connect(context.Context) (driver.Conn, error) {
+	return playerIDsSQLConn{f: c.f}, nil
+}
+func (c playerIDsSQLConnector) Driver() driver.Driver { return playerIDsSQLDriver{} }
 
 type playerIDsSQLDriver struct{}
 
@@ -275,6 +277,70 @@ func TestAuditStorageReadsTheDB(t *testing.T) {
 	}
 }
 
+// writableAfter 是写开关替身:前 okCalls 次可写,之后返回 err(模拟扫描途中 leader 把写者冻结)。
+type writableAfter struct {
+	okCalls int
+	err     error
+	calls   int
+}
+
+func (w *writableAfter) RequireWritable(context.Context) error {
+	w.calls++
+	if w.calls <= w.okCalls {
+		return nil
+	}
+	return w.err
+}
+
+// TestAuditStorageChecked_FrozenRouteWritersGiveNoVerdict(R8-1):db 源下 route_meta.writable != 1(回档恢复中,库是已知落后的
+// 那一份)不给退役结论 —— 扫描前冻结不扫、扫描途中冻结丢弃结论,错误包着 errRouteNotWritable 并指向 runbook §9.4;读不到开关同样
+// 不给结论;可写时扫描前后各核一次,报告与 auditStorageWith 相同;authority 为 nil(redis 源)不查开关。
+func TestAuditStorageChecked_FrozenRouteWritersGiveNoVerdict(t *testing.T) {
+	ctx := context.Background()
+	db := (&playerIDsSQL{schema: zoneDBName(901), ids: []uint64{9901, 9902, 9903, 9904}}).open(t)
+	routes := routeReadSideDB{db: storageAuditDBFixture()}
+	want, err := auditStorageWith(ctx, db, routes, 901)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frozen := fmt.Errorf("%w (writable=0)", errRouteNotWritable)
+
+	// 扫描之前已冻结:不扫,报告是空的。
+	before := newMemRouteDB()
+	before.writableErr = frozen
+	rep, err := auditStorageChecked(ctx, db, routes, before, 901)
+	if !errors.Is(err, errRouteNotWritable) || !strings.Contains(err.Error(), "runbook §9.4") || rep.Rows != 0 {
+		t.Fatalf("frozen before the scan = (%s, %v), want no scan and errRouteNotWritable naming runbook §9.4", rep, err)
+	}
+
+	// 扫描途中被冻结:扫完也不给结论。
+	during := &writableAfter{okCalls: 1, err: frozen}
+	if _, err := auditStorageChecked(ctx, db, routes, during, 901); !errors.Is(err, errRouteNotWritable) || during.calls != 2 {
+		t.Fatalf("frozen during the scan = %v after %d checks, want errRouteNotWritable from the second check", err, during.calls)
+	}
+
+	// 读不到开关:同样不给结论,原因原样带出,不当成「冻结」。
+	unreadable := newMemRouteDB()
+	unreadable.writableErr = errors.New("read route_meta.writable: connection refused")
+	if _, err := auditStorageChecked(ctx, db, routes, unreadable, 901); err == nil || errors.Is(err, errRouteNotWritable) ||
+		!strings.Contains(err.Error(), "connection refused") {
+		t.Fatalf("unreadable switch = %v, want the cause", err)
+	}
+
+	// 可写:前后各核一次,报告与不核开关时相同。
+	ok := newMemRouteDB()
+	got, err := auditStorageChecked(ctx, db, routes, ok, 901)
+	if err != nil || !reflect.DeepEqual(got, want) || ok.writableChecks != 2 {
+		t.Fatalf("writable = (%s, %v) after %d checks, want %s after 2", got, err, ok.writableChecks, want)
+	}
+
+	// redis 源(authority 为无类型 nil):不查开关,与 auditStorageWith 逐字相同。
+	got, err = auditStorageChecked(ctx, db, routes, nil, 901)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("no authority = (%s, %v), want %s", got, err, want)
+	}
+}
+
 // TestOpenRouteReadSide_RefusesAMissingSource:装配层没传 -route-source 时 fail-closed,不默认成任何一种来源。
 func TestOpenRouteReadSide_RefusesAMissingSource(t *testing.T) {
 	if _, _, err := openRouteReadSide(context.Background(), routeEntryOptions{}, nil, "audit"); err == nil || !strings.Contains(err.Error(), "-route-source") {
@@ -354,7 +420,8 @@ func TestRouteCacheMatches(t *testing.T) {
 	}{
 		{"一致", row, true, "902", "901:1", "5", true, ""},
 		{"缓存rev落后", row, true, "902", "901:1", "4", false, `player:maprev "4" != DB rev 5`},
-		{"缓存rev比库新也不算一致", row, true, "902", "901:1", "6", false, `player:maprev "6"`},
+		{"缓存rev比库新也不算一致", row, true, "902", "901:1", "6", false, `player:maprev "6" is AHEAD of DB rev 5`},
+		{"缓存rev不规范按不相等报", row, true, "902", "901:1", "06", false, `player:maprev "06" != DB rev 5`},
 		{"缓存没有maprev", row, true, "902", "901:1", nil, false, "player:maprev is absent"},
 		{"home不同", row, true, "901", "901:1", "5", false, `player:zone "901" != DB home_zone "902"`},
 		{"库有落点缓存没有", row, true, "902", nil, "5", false, `player:placement <absent> != DB placement "901:1"`},
@@ -393,6 +460,10 @@ func TestVerifyRouteCache(t *testing.T) {
 	if r.Severity != "block" || r.ConflictCount != 1 || !strings.Contains(r.Notes, `2: player:maprev "3" != DB rev 4`) {
 		t.Fatalf("verify:route_cache = %+v, want player 2 flagged", r)
 	}
+	// B2-5:block 文案同时给出「缓存领先 = 库回档」的处置(leader 与重跑都压不低缓存 rev)。
+	if !strings.Contains(r.Notes, "AHEAD") || !strings.Contains(r.Notes, "runbook §9.4") {
+		t.Fatalf("verify:route_cache notes = %q, want the rollback (cache AHEAD) guidance", r.Notes)
+	}
 	cache.seed(db.rows[2])
 	if r := verifyRouteCache(context.Background(), cfg); r.Severity != "info" || r.TargetCount != 2 {
 		t.Fatalf("after the leader caught up: %+v", r)
@@ -421,6 +492,64 @@ func TestVerifyFenceReleased_DBSourceAlsoChecksTheDBFence(t *testing.T) {
 	db.fences[902] = routeFenceState{Present: true, Epoch: 3}
 	if r := verifyFenceReleased(context.Background(), cfg); r.Severity != "info" {
 		t.Fatalf("released fence = %+v", r)
+	}
+}
+
+// TestVerifyFenceReleased_DBSourceGuidance(B2-4 / R8-3):-route-source=db 时
+//   - 库读方没装成 = 没查真源:INFRA(带原因),不能报「已释放」;
+//   - 库围栏仍生效:block,处置指向持有它的那次运行(-take-over-fence)或等库时钟过期,明确不许 DEL 镜像;
+//   - 只剩镜像、库围栏已释放:block,等对账 leader 删掉过期镜像(没有 fence_epoch 的才手工 DEL);
+//   - 都已释放:info,说明库与镜像都核过。
+//
+// redis 源的判定与文案逐字不变。
+func TestVerifyFenceReleased_DBSourceGuidance(t *testing.T) {
+	ctx := context.Background()
+	cache := newMemRouteCache()
+	rdb, _ := newFakeRouteRedisWithExists(t, cache)
+	db := newMemRouteDB()
+	cfg := auditConfig{src: 901, dst: 902, mappingDB: rdb, routeSource: routeSourceDB}
+
+	cfg.routeErr = errors.New("route DB and mapping Redis are not paired")
+	if r := verifyFenceReleased(ctx, cfg); !isInfraAudit(r) || !strings.Contains(r.Notes, "not paired") {
+		t.Fatalf("no route DB (with cause) = %+v, want INFRA with the cause", r)
+	}
+	cfg.routeErr = nil
+	if r := verifyFenceReleased(ctx, cfg); !isInfraAudit(r) || !strings.Contains(r.Notes, "zone_merge_fence was not checked") {
+		t.Fatalf("no route DB = %+v, want INFRA saying the DB fence was not checked", r)
+	}
+
+	cfg.routeDB = db
+	cache.kv[mergeFenceKey(902)] = `{"run_id":"901-902-run","fence_epoch":3}`
+	db.fences[902] = routeFenceState{Present: true, RunID: "901-902-run", Epoch: 3, Active: true}
+	r := verifyFenceReleased(ctx, cfg)
+	if r.Severity != "block" || !strings.Contains(r.Notes, "Do NOT DEL") || !strings.Contains(r.Notes, "-take-over-fence") ||
+		strings.Contains(r.Notes, "DEL them once") || r.SourceCount != 2 {
+		t.Fatalf("active DB fence = %+v, want block pointing at the owning run and forbidding DEL of the mirror", r)
+	}
+
+	db.fences[902] = routeFenceState{Present: true, Epoch: 3}
+	r = verifyFenceReleased(ctx, cfg)
+	if r.Severity != "block" || !strings.Contains(r.Notes, "already released") || !strings.Contains(r.Notes, "compare-and-deletes") ||
+		r.SourceCount != 1 {
+		t.Fatalf("stale mirror only = %+v, want block waiting for the reconcile leader", r)
+	}
+
+	delete(cache.kv, mergeFenceKey(902))
+	if r := verifyFenceReleased(ctx, cfg); r.Severity != "info" || !strings.Contains(r.Notes, "zone_merge_fence released") {
+		t.Fatalf("both released = %+v, want info naming the DB fence", r)
+	}
+
+	// redis 源:文案逐字不变,不碰库。
+	redisCfg := auditConfig{src: 901, dst: 902, mappingDB: rdb, routeSource: routeSourceRedis}
+	cache.kv[mergeFenceKey(901)] = "holder"
+	want := "merge fence still set: [" + mergeFenceKey(901) + "] — data_service RegisterPlayerZone and guild CreateGuild " +
+		"are refusing new objects in those zones. DEL them once no merge_zone process is alive."
+	if r := verifyFenceReleased(ctx, redisCfg); r.Severity != "block" || r.Notes != want {
+		t.Fatalf("redis source held = %+v, want the unchanged notes %q", r, want)
+	}
+	delete(cache.kv, mergeFenceKey(901))
+	if r := verifyFenceReleased(ctx, redisCfg); r.Severity != "info" || r.Notes != "no merge:in_progress:* fence left behind" {
+		t.Fatalf("redis source released = %+v", r)
 	}
 }
 

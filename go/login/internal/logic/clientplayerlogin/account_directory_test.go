@@ -15,6 +15,7 @@ import (
 	dbpb "proto/common/database"
 	dspb "proto/data_service"
 	"shared/accountdirectory"
+	"shared/savebarrier"
 )
 
 // 明确注入的目录接口替身。只在 fixture 创建时从其输入快照播种；运行期间不读取 Redis。
@@ -23,6 +24,7 @@ type testDirectory struct {
 	accounts                                      map[string]bool
 	owners                                        map[uint64]*dspb.AccountRoleOwnership
 	readErr, lookupErr, createErr, afterCreateErr error
+	afterCommit                                   func()
 	max                                           int
 }
 
@@ -63,6 +65,13 @@ func (d *testDirectory) Read(ctx context.Context, a string, create bool) (*base.
 	return d.list(a), nil
 }
 func (d *testDirectory) Create(ctx context.Context, a string, r *base.AccountSimplePlayer) (*base.AccountSimplePlayerList, error) {
+	out, err := d.CreateWithInitialCommit(ctx, a, r)
+	if err != nil {
+		return nil, err
+	}
+	return out.Players, nil
+}
+func (d *testDirectory) CreateWithInitialCommit(ctx context.Context, a string, r *base.AccountSimplePlayer) (*dspb.AccountDirectoryResponse, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -75,14 +84,24 @@ func (d *testDirectory) Create(ctx context.Context, a string, r *base.AccountSim
 		if old.Account != a || old.TradeListingId != 0 || !proto.Equal(old.Role, r) {
 			return nil, accountdirectory.ErrConflict
 		}
-		return d.list(a), d.afterCreateErr
+		if d.afterCreateErr != nil {
+			return nil, d.afterCreateErr
+		}
+		return &dspb.AccountDirectoryResponse{Players: d.list(a)}, nil
 	}
 	if len(d.list(a).Players) >= d.max {
 		return nil, accountdirectory.ErrFull
 	}
 	d.accounts[a] = true
 	d.owners[r.PlayerId] = &dspb.AccountRoleOwnership{Account: a, Role: proto.Clone(r).(*base.AccountSimplePlayer), OwnerRevision: 1}
-	return d.list(a), d.afterCreateErr
+	if d.afterCreateErr != nil {
+		return nil, d.afterCreateErr
+	}
+	if d.afterCommit != nil {
+		d.afterCommit()
+	}
+	// 替身通过同一能力接口承诺 SQL 提交；未知应答和旧角色重放均不返回初始凭据。
+	return &dspb.AccountDirectoryResponse{Players: d.list(a), InitialPlayerData: savebarrier.InitialPlayerData(r.PlayerId)}, nil
 }
 func (d *testDirectory) Lookup(ctx context.Context, id uint64) (*dspb.AccountRoleOwnership, error) {
 	d.mu.Lock()

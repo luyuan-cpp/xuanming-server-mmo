@@ -13,6 +13,9 @@ package main
 // 直连无条件建立(turn-based §22 D73):gate 拒绝战斗上行(D66)、战斗帧只走直连(D68),
 // 拨号失败即 FAIL,没有经 gate 的回落可跑。
 //
+// JoinQueue 走 Call(battleSmokeJoinQueue),只等本次请求自己的回包:拒绝(信封或响应体)立即 FAIL,
+// 受理后照旧等 NotifyBattleStart 推送。
+//
 // 结果约定(供外层脚本消费):
 //   全部通过 → 日志一行 `CROSS_ZONE_MATCH_OK battle_id=… zone_a=… zone_b=… a_turns=… b_turns=…
 //                a_direct_turns=… b_direct_turns=…`(直连计数恒 ≥ 1),
@@ -168,30 +171,42 @@ func runCrossZoneMatchSmoke(cfg *config.Config) {
 	// ---- 步骤 2:双双入队,各自在 goroutine 里跑完参战全程 ----
 	aDone := make(chan crossZoneFighterResult, 1)
 	bDone := make(chan crossZoneFighterResult, 1)
-	go func() { aDone <- runCrossZoneFighter("A", botA, zoneA, mode, stats) }()
-	go func() { bDone <- runCrossZoneFighter("B", botB, zoneB, mode, stats) }()
+	// fighterFailed 在任一侧带着 error 结束时关闭(先交出结果再关,只关一次;成功结束不关),让下面对开战的等待
+	// 提前醒来:1V1 一侧入队被拒时另一侧永远凑不成对局,不提前醒就只能等满预算、报一条笼统的 no BattleStart。
+	fighterFailed := make(chan struct{})
+	var fighterFailedOnce sync.Once
+	runFighter := func(side string, bot *battleSmokeBot, zone uint32, done chan<- crossZoneFighterResult) {
+		res := runCrossZoneFighter(side, bot, zone, mode, stats)
+		done <- res
+		if res.err != nil {
+			fighterFailedOnce.Do(func() { close(fighterFailed) })
+		}
+	}
+	go runFighter("A", botA, zoneA, aDone)
+	go runFighter("B", botB, zoneB, bDone)
 
 	// ---- 步骤 3:主流程等双方开战,断言同一场对局 ----
 	// battleStart 通道是 close 广播,主流程与参战 goroutine 可同时等待。
 	// 比 goroutine 内的 30s 预算略宽,保证先看到参战侧更具体的失败原因。
-	waitStart := func(side string, bot *battleSmokeBot, done chan crossZoneFighterResult) uint64 {
-		ctx, cancel := context.WithTimeout(context.Background(), battleSmokeStartTimeout+5*time.Second)
-		defer cancel()
-		battleId, err := bot.player.WaitBattleStart(ctx)
+	waitStart := func(side string, bot *battleSmokeBot) uint64 {
+		battleId, err := battleSmokeWaitStart(bot.player, battleSmokeStartTimeout+5*time.Second, fighterFailed)
 		if err != nil {
-			select {
-			case res := <-done:
-				if res.err != nil {
-					fail(res.step, "%v", res.err)
+			// 两侧都看:1V1 里一侧失败(如 JoinQueue 被拒),另一侧同样开不了战,具体原因在失败的那一侧。
+			for _, done := range []chan crossZoneFighterResult{aDone, bDone} {
+				select {
+				case res := <-done:
+					if res.err != nil {
+						fail(res.step, "%v", res.err)
+					}
+				default:
 				}
-			default:
 			}
 			fail(side+"-wait-battle-start", "no BattleStart within %s: %v", battleSmokeStartTimeout, err)
 		}
 		return battleId
 	}
-	aBattleId := waitStart("a", botA, aDone)
-	bBattleId := waitStart("b", botB, bDone)
+	aBattleId := waitStart("a", botA)
+	bBattleId := waitStart("b", botB)
 	if aBattleId == 0 || aBattleId != bBattleId {
 		fail("battle-id-mismatch", "A battle_id=%d B battle_id=%d (expected the same non-zero battle)",
 			aBattleId, bBattleId)
@@ -239,19 +254,21 @@ func runCrossZoneFighter(side string, bot *battleSmokeBot, zone uint32, mode mat
 		zap.String("side", side), zap.String("account", bot.account),
 		zap.Uint32("zone", zone), zap.String("mode", mode.String()))
 
+	// 开战预算从发 JoinQueue 起算,回包与 NotifyBattleStart 推送共用(与迁移前同口径);
+	// battleSmokeJoinQueue 只让拒绝立即失败,受理后照旧等开战推送(1V1 要等对侧也入队才凑成对局)。
+	startCtx, startCancel := context.WithTimeout(context.Background(), battleSmokeStartTimeout)
 	// zone_id 只是可观测性字段:match 以玩家位置里的 zone 为准(设计 D6),
 	// 这里如实填本侧登录的 zone。
-	if err := bot.gc.SendRequest(game.MatchServiceJoinQueueMessageId, &match.JoinQueueRequest{
+	if err := battleSmokeJoinQueue(bot, stats, &match.JoinQueueRequest{
 		PlayerId:       bot.gc.PlayerId,
 		Mode:           mode,
 		BattleConfigId: crossZoneBattleConfigId,
 		ZoneId:         zone,
-	}); err != nil {
-		return crossZoneFighterResult{step: stepPrefix + "-join-queue", err: fmt.Errorf("send JoinQueue: %w", err)}
+	}, battleSmokeStartTimeout); err != nil {
+		startCancel()
+		return crossZoneFighterResult{step: stepPrefix + "-join-queue", err: err}
 	}
-	stats.MsgSent()
 
-	startCtx, startCancel := context.WithTimeout(context.Background(), battleSmokeStartTimeout)
 	battleId, err := bot.player.WaitBattleStart(startCtx)
 	startCancel()
 	if err != nil {

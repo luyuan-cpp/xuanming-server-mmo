@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -59,6 +60,15 @@ public:
 		TransactionType txType = TX_SYSTEM_GRANT,
 		uint64_t correlationId = 0,
 		const std::string &extra = {});
+
+    // 同步整笔：主包按实际持有扣消耗，再把全批新增放主包或全批转临时格。先在store/layout候选中
+    // 完成全部空间、发号、初始化与禁发检查；任何失败不改玩家包、不记流水。允许烧掉未提交的ID。
+    // beforeCommit只给同帧外层的另一份零失败后置效果（当前为货币）：失败必须零副作用；不得yield、
+    // 抛异常或修改背包。它返回成功之后，只做不抛出的两层swap及流水发布，不再有业务失败分支。
+    // 策略只在本同步调用内借用原只读对象；返回时不保留任何连接、实体或策略引用。
+    static uint32_t ConsumeInventoryAndGrant(entt::entity playerEntity,
+        const ItemCountMap& consumed, const ItemCountMap& gained, uint64_t correlationId,
+        const std::string& extra, const std::function<uint32_t()>& beforeCommit = {});
 
 	// 上面这个按数量入包的重载,一次调用最多新铸多少个实例身份(item guid)。
 	// 调用方在不可重复的副作用之前,拿它与 tlsGuidSegmentRegistry.Get(GuidKind::kItem).Available()

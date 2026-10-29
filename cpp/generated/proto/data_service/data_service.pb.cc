@@ -4633,11 +4633,11 @@ constexpr GetPlayerAssetOpLedgerRequest::ParseTableT_ GetPlayerAssetOpLedgerRequ
     {
       PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerRequest, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -4647,14 +4647,19 @@ constexpr GetPlayerAssetOpLedgerRequest::ParseTableT_ GetPlayerAssetOpLedgerRequ
       ::_pbi::TcParser::GetTable<::data_service::GetPlayerAssetOpLedgerRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // bool require_sql_commit = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetPlayerAssetOpLedgerRequest, _impl_.require_sql_commit_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerRequest, _impl_.require_sql_commit_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetPlayerAssetOpLedgerRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerRequest, _impl_.player_id_)}},
+      // bool require_sql_commit = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetPlayerAssetOpLedgerRequest, _impl_.require_sql_commit_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerRequest, _impl_.require_sql_commit_)}},
+      // bool verify_redis_copy = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetPlayerAssetOpLedgerRequest, _impl_.verify_redis_copy_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerRequest, _impl_.verify_redis_copy_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -4662,6 +4667,8 @@ constexpr GetPlayerAssetOpLedgerRequest::ParseTableT_ GetPlayerAssetOpLedgerRequ
       {PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bool require_sql_commit = 2;
       {PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerRequest, _impl_.require_sql_commit_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool verify_redis_copy = 3;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerRequest, _impl_.verify_redis_copy_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -4675,7 +4682,8 @@ inline constexpr GetPlayerAssetOpLedgerRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         player_id_{::uint64_t{0u}},
-        require_sql_commit_{false} {}
+        require_sql_commit_{false},
+        verify_redis_copy_{false} {}
 
 template <typename>
 constexpr GetPlayerAssetOpLedgerRequest::GetPlayerAssetOpLedgerRequest(::_pbi::ConstantInitialized,
@@ -12405,153 +12413,6 @@ const ::_pbi::ClassData* AccountRoleTradeReceipt_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
-class AccountDirectoryResponse::_Internal {
- public:
-  using HasBits = decltype(::std::declval<AccountDirectoryResponse>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_._has_bits_);
-};
-
-constexpr AccountDirectoryResponse::ParseTableT_ AccountDirectoryResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
-  return ParseTableT_{
-    {
-      PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_._has_bits_),
-      0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
-      offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
-      offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
-      1,  // num_aux_entries
-      offsetof(ParseTableT_, aux_entries),
-      class_data,
-      nullptr,  // post_loop_handler
-      ::_pbi::TcParser::GenericFallback,  // fallback
-      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::data_service::AccountDirectoryResponse>(),  // to_prefetch
-      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
-    }, {{
-      // .AccountSimplePlayerList players = 1;
-      {::_pbi::TcParser::FastMtS1,
-       {10, 0, 0,
-        PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.players_)}},
-    }}, {{
-      65535, 65535
-    }}, {{
-      // .AccountSimplePlayerList players = 1;
-      {PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.players_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-    }},
-    {{
-        #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::AccountSimplePlayerList>()},
-        #else
-        {::_pbi::FieldAuxMessageGlobals(), &::AccountSimplePlayerList_globals_},
-        #endif
-    }},
-    {{
-    }},
-  };
-}
-
-
-inline constexpr AccountDirectoryResponse::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0},
-        players_{nullptr} {}
-
-template <typename>
-constexpr AccountDirectoryResponse::AccountDirectoryResponse(::_pbi::ConstantInitialized,
-                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : ::google::protobuf::Message(
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          class_data
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          ),
-      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
-}
-inline void* PROTOBUF_NONNULL AccountDirectoryResponse::PlacementNew_(
-    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) AccountDirectoryResponse(arena);
-}
-constexpr auto AccountDirectoryResponse::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(AccountDirectoryResponse), alignof(AccountDirectoryResponse));
-}
-constexpr auto AccountDirectoryResponse::InternalGenerateClassData_(
-    const MessageLite& prototype,
-    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
-  return ::google::protobuf::internal::ClassDataFull{
-      ::google::protobuf::internal::ClassData{
-          &prototype,
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-          &_table_.header,
-#else
-          tc_table,
-#endif
-          nullptr,  // IsInitialized
-          &AccountDirectoryResponse::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<AccountDirectoryResponse>(),
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          &AccountDirectoryResponse::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<AccountDirectoryResponse>(), &AccountDirectoryResponse::ByteSizeLong,
-              &AccountDirectoryResponse::_InternalSerialize,
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_._cached_size_),
-          false,
-      },
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[0],
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-      &::_pbi::kDescriptorMethods,
-      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
-      nullptr,  // tracker
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  };
-}
-struct AccountDirectoryResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr AccountDirectoryResponseGlobalsTypeInternal()
-      :
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-        _default(::_pbi::ConstantInitialized{},
-                 AccountDirectoryResponse_class_data_.base())
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(AccountDirectoryResponse::InternalGenerateClassData_(
-            _default, &AccountDirectoryResponse_globals_._table.header)),
-        _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<AccountDirectoryResponse>(
-            GetClassData()))
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  {
-  }
-  ~AccountDirectoryResponseGlobalsTypeInternal() {}
-  union {
-    alignas(::_pbi::kMaxMessageAlignment) AccountDirectoryResponse _default;
-  };
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<AccountDirectoryResponse>(
-      ::std::declval<const ::_pbi::ClassData*>())) _table;
-#endif
-};
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(AccountDirectoryResponseGlobalsTypeInternal, _default) ==
-              ::_pbi::MessageGlobalsBase::OffsetToDefault());
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AccountDirectoryResponseGlobalsTypeInternal AccountDirectoryResponse_globals_
-        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-namespace {
-const ::_pbi::ClassData* AccountDirectoryResponse_get_class_data() {
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  return AccountDirectoryResponse_globals_.GetClassData();
-#else
-  return AccountDirectoryResponse_class_data_.base();
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-}
-}  // namespace
-#endif  // PROTOBUF_CUSTOM_VTABLE
 class GetPlayerInboxLedgerResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<GetPlayerInboxLedgerResponse>()._impl_._has_bits_);
@@ -12718,11 +12579,11 @@ constexpr GetPlayerAssetOpLedgerResponse::ParseTableT_ GetPlayerAssetOpLedgerRes
     {
       PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerResponse, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      4,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -12732,7 +12593,10 @@ constexpr GetPlayerAssetOpLedgerResponse::ParseTableT_ GetPlayerAssetOpLedgerRes
       ::_pbi::TcParser::GetTable<::data_service::GetPlayerAssetOpLedgerResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool redis_copy_verified = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetPlayerAssetOpLedgerResponse, _impl_.redis_copy_verified_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerResponse, _impl_.redis_copy_verified_)}},
       // bool found = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetPlayerAssetOpLedgerResponse, _impl_.found_), 1>(),
        {8, 1, 0,
@@ -12754,6 +12618,8 @@ constexpr GetPlayerAssetOpLedgerResponse::ParseTableT_ GetPlayerAssetOpLedgerRes
       {PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerResponse, _impl_.ledger_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool sql_committed = 3;
       {PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerResponse, _impl_.sql_committed_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool redis_copy_verified = 4;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerResponse, _impl_.redis_copy_verified_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -12774,7 +12640,8 @@ inline constexpr GetPlayerAssetOpLedgerResponse::Impl_::Impl_(
       : _cached_size_{0},
         ledger_{nullptr},
         found_{false},
-        sql_committed_{false} {}
+        sql_committed_{false},
+        redis_copy_verified_{false} {}
 
 template <typename>
 constexpr GetPlayerAssetOpLedgerResponse::GetPlayerAssetOpLedgerResponse(::_pbi::ConstantInitialized,
@@ -12868,6 +12735,165 @@ const ::_pbi::ClassData* GetPlayerAssetOpLedgerResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class AccountDirectoryResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<AccountDirectoryResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_._has_bits_);
+};
+
+constexpr AccountDirectoryResponse::ParseTableT_ AccountDirectoryResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::AccountDirectoryResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .PlayerAllData initial_player_data = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.initial_player_data_)}},
+      // .AccountSimplePlayerList players = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.players_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .AccountSimplePlayerList players = 1;
+      {PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.players_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .PlayerAllData initial_player_data = 2;
+      {PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.initial_player_data_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::AccountSimplePlayerList>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::AccountSimplePlayerList_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::PlayerAllData>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::PlayerAllData_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr AccountDirectoryResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        players_{nullptr},
+        initial_player_data_{nullptr} {}
+
+template <typename>
+constexpr AccountDirectoryResponse::AccountDirectoryResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL AccountDirectoryResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) AccountDirectoryResponse(arena);
+}
+constexpr auto AccountDirectoryResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(AccountDirectoryResponse), alignof(AccountDirectoryResponse));
+}
+constexpr auto AccountDirectoryResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &AccountDirectoryResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<AccountDirectoryResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &AccountDirectoryResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<AccountDirectoryResponse>(), &AccountDirectoryResponse::ByteSizeLong,
+              &AccountDirectoryResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[0],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct AccountDirectoryResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr AccountDirectoryResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 AccountDirectoryResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(AccountDirectoryResponse::InternalGenerateClassData_(
+            _default, &AccountDirectoryResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<AccountDirectoryResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~AccountDirectoryResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) AccountDirectoryResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<AccountDirectoryResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(AccountDirectoryResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AccountDirectoryResponseGlobalsTypeInternal AccountDirectoryResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* AccountDirectoryResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return AccountDirectoryResponse_globals_.GetClassData();
+#else
+  return AccountDirectoryResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace data_service
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
     file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[5];
@@ -12878,9 +12904,11 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::AccountDirectoryResponse, _impl_._has_bits_),
-        4, // hasbit index offset
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::data_service::AccountDirectoryResponse, _impl_.players_),
+        PROTOBUF_FIELD_OFFSET(::data_service::AccountDirectoryResponse, _impl_.initial_player_data_),
         0,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::AccountRoleOwnership, _impl_._has_bits_),
         7, // hasbit index offset
@@ -13648,20 +13676,24 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerAssetOpLedgerRequest, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerAssetOpLedgerRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerAssetOpLedgerRequest, _impl_.require_sql_commit_),
+        PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerAssetOpLedgerRequest, _impl_.verify_redis_copy_),
         0,
         1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerAssetOpLedgerResponse, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerAssetOpLedgerResponse, _impl_.found_),
         PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerAssetOpLedgerResponse, _impl_.ledger_),
         PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerAssetOpLedgerResponse, _impl_.sql_committed_),
+        PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerAssetOpLedgerResponse, _impl_.redis_copy_verified_),
         1,
         0,
         2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerInboxLedgerRequest, _impl_._has_bits_),
         4, // hasbit index offset
@@ -13679,81 +13711,81 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::data_service::AccountDirectoryResponse)},
-        {5, sizeof(::data_service::AccountRoleOwnership)},
-        {16, sizeof(::data_service::AccountRoleVersion)},
-        {23, sizeof(::data_service::ReadAccountDirectoryRequest)},
-        {32, sizeof(::data_service::CreateAccountRoleRequest)},
-        {41, sizeof(::data_service::LookupAccountRoleRequest)},
-        {48, sizeof(::data_service::RepairAccountRoleRequest)},
-        {59, sizeof(::data_service::RemoveAccountRolesRequest)},
-        {68, sizeof(::data_service::AccountRoleFreezeEvidence)},
-        {85, sizeof(::data_service::AccountRoleTradeHolder)},
-        {92, sizeof(::data_service::AccountRoleTradeReceipt)},
-        {109, sizeof(::data_service::AccountRoleTransferReceipt)},
-        {130, sizeof(::data_service::BeginAccountRoleTradeRequest)},
-        {143, sizeof(::data_service::ConfirmAccountRoleTradeFreezeRequest)},
-        {156, sizeof(::data_service::CancelAccountRoleTradeRequest)},
-        {169, sizeof(::data_service::TransferAccountRoleRequest)},
-        {186, sizeof(::data_service::RegisterRoleAdmissionRequest)},
-        {193, sizeof(::data_service::RegisterRoleAdmissionResponse)},
-        {200, sizeof(::data_service::CloseRoleAdmissionsRequest)},
-        {217, sizeof(::data_service::CloseRoleAdmissionsResponse)},
-        {222, sizeof(::data_service::AckRoleTradeDrainRequest)},
-        {233, sizeof(::data_service::LoadPlayerDataRequest)},
-        {240, sizeof(::data_service::LoadPlayerDataResponse_DataEntry_DoNotUse)},
-        {247, sizeof(::data_service::LoadPlayerDataResponse)},
-        {256, sizeof(::data_service::SavePlayerDataRequest_DataEntry_DoNotUse)},
-        {263, sizeof(::data_service::SavePlayerDataRequest)},
-        {272, sizeof(::data_service::SavePlayerDataResponse)},
-        {279, sizeof(::data_service::GetPlayerFieldRequest)},
-        {286, sizeof(::data_service::GetPlayerFieldResponse)},
-        {293, sizeof(::data_service::SetPlayerFieldRequest)},
-        {304, sizeof(::data_service::SetPlayerFieldResponse)},
-        {311, sizeof(::data_service::RegisterPlayerZoneRequest)},
-        {320, sizeof(::data_service::GetPlayerHomeZoneRequest)},
-        {325, sizeof(::data_service::GetPlayerHomeZoneResponse)},
-        {332, sizeof(::data_service::BatchGetPlayerHomeZoneRequest)},
-        {337, sizeof(::data_service::BatchGetPlayerHomeZoneResponse_PlayerZoneMapEntry_DoNotUse)},
-        {344, sizeof(::data_service::BatchGetPlayerHomeZoneResponse)},
-        {349, sizeof(::data_service::RemapHomeZoneForMergeRequest)},
-        {358, sizeof(::data_service::RemapHomeZoneForMergeResponse)},
-        {367, sizeof(::data_service::DeletePlayerDataRequest)},
-        {374, sizeof(::data_service::DeletePlayerDataResponse)},
-        {381, sizeof(::data_service::CreatePlayerSnapshotRequest)},
-        {392, sizeof(::data_service::CreatePlayerSnapshotResponse)},
-        {401, sizeof(::data_service::ListPlayerSnapshotsRequest)},
-        {410, sizeof(::data_service::SnapshotInfo)},
-        {431, sizeof(::data_service::ListPlayerSnapshotsResponse)},
-        {438, sizeof(::data_service::GetPlayerSnapshotDiffRequest)},
-        {447, sizeof(::data_service::FieldDiff)},
-        {460, sizeof(::data_service::GetPlayerSnapshotDiffResponse)},
-        {471, sizeof(::data_service::RollbackGuildDivergence)},
-        {490, sizeof(::data_service::RollbackPlayerRequest)},
-        {509, sizeof(::data_service::RollbackPlayerResponse)},
-        {526, sizeof(::data_service::RollbackZoneRequest)},
-        {539, sizeof(::data_service::RollbackZoneResponse)},
-        {560, sizeof(::data_service::RollbackAllRequest)},
-        {571, sizeof(::data_service::RollbackAllResponse)},
-        {588, sizeof(::data_service::BatchRecallItemsRequest)},
-        {609, sizeof(::data_service::RecallResult)},
-        {624, sizeof(::data_service::BatchRecallItemsResponse)},
-        {637, sizeof(::data_service::QueryTransactionLogRequest)},
-        {656, sizeof(::data_service::TransactionLogRow)},
-        {687, sizeof(::data_service::QueryTransactionLogResponse)},
-        {696, sizeof(::data_service::CreateEventSnapshotRequest)},
-        {707, sizeof(::data_service::CreateEventSnapshotResponse)},
-        {716, sizeof(::data_service::AllocateIdSegmentRequest)},
-        {723, sizeof(::data_service::AllocateIdSegmentResponse)},
-        {732, sizeof(::data_service::ReservePlayerNameRequest)},
-        {739, sizeof(::data_service::ReservePlayerNameResponse)},
-        {746, sizeof(::data_service::ReleasePlayerNameRequest)},
-        {753, sizeof(::data_service::BatchGetPlayerNameRequest)},
-        {758, sizeof(::data_service::BatchGetPlayerNameResponse_NamesEntry_DoNotUse)},
-        {765, sizeof(::data_service::BatchGetPlayerNameResponse)},
-        {770, sizeof(::data_service::GetPlayerAssetOpLedgerRequest)},
-        {777, sizeof(::data_service::GetPlayerAssetOpLedgerResponse)},
-        {786, sizeof(::data_service::GetPlayerInboxLedgerRequest)},
-        {791, sizeof(::data_service::GetPlayerInboxLedgerResponse)},
+        {7, sizeof(::data_service::AccountRoleOwnership)},
+        {18, sizeof(::data_service::AccountRoleVersion)},
+        {25, sizeof(::data_service::ReadAccountDirectoryRequest)},
+        {34, sizeof(::data_service::CreateAccountRoleRequest)},
+        {43, sizeof(::data_service::LookupAccountRoleRequest)},
+        {50, sizeof(::data_service::RepairAccountRoleRequest)},
+        {61, sizeof(::data_service::RemoveAccountRolesRequest)},
+        {70, sizeof(::data_service::AccountRoleFreezeEvidence)},
+        {87, sizeof(::data_service::AccountRoleTradeHolder)},
+        {94, sizeof(::data_service::AccountRoleTradeReceipt)},
+        {111, sizeof(::data_service::AccountRoleTransferReceipt)},
+        {132, sizeof(::data_service::BeginAccountRoleTradeRequest)},
+        {145, sizeof(::data_service::ConfirmAccountRoleTradeFreezeRequest)},
+        {158, sizeof(::data_service::CancelAccountRoleTradeRequest)},
+        {171, sizeof(::data_service::TransferAccountRoleRequest)},
+        {188, sizeof(::data_service::RegisterRoleAdmissionRequest)},
+        {195, sizeof(::data_service::RegisterRoleAdmissionResponse)},
+        {202, sizeof(::data_service::CloseRoleAdmissionsRequest)},
+        {219, sizeof(::data_service::CloseRoleAdmissionsResponse)},
+        {224, sizeof(::data_service::AckRoleTradeDrainRequest)},
+        {235, sizeof(::data_service::LoadPlayerDataRequest)},
+        {242, sizeof(::data_service::LoadPlayerDataResponse_DataEntry_DoNotUse)},
+        {249, sizeof(::data_service::LoadPlayerDataResponse)},
+        {258, sizeof(::data_service::SavePlayerDataRequest_DataEntry_DoNotUse)},
+        {265, sizeof(::data_service::SavePlayerDataRequest)},
+        {274, sizeof(::data_service::SavePlayerDataResponse)},
+        {281, sizeof(::data_service::GetPlayerFieldRequest)},
+        {288, sizeof(::data_service::GetPlayerFieldResponse)},
+        {295, sizeof(::data_service::SetPlayerFieldRequest)},
+        {306, sizeof(::data_service::SetPlayerFieldResponse)},
+        {313, sizeof(::data_service::RegisterPlayerZoneRequest)},
+        {322, sizeof(::data_service::GetPlayerHomeZoneRequest)},
+        {327, sizeof(::data_service::GetPlayerHomeZoneResponse)},
+        {334, sizeof(::data_service::BatchGetPlayerHomeZoneRequest)},
+        {339, sizeof(::data_service::BatchGetPlayerHomeZoneResponse_PlayerZoneMapEntry_DoNotUse)},
+        {346, sizeof(::data_service::BatchGetPlayerHomeZoneResponse)},
+        {351, sizeof(::data_service::RemapHomeZoneForMergeRequest)},
+        {360, sizeof(::data_service::RemapHomeZoneForMergeResponse)},
+        {369, sizeof(::data_service::DeletePlayerDataRequest)},
+        {376, sizeof(::data_service::DeletePlayerDataResponse)},
+        {383, sizeof(::data_service::CreatePlayerSnapshotRequest)},
+        {394, sizeof(::data_service::CreatePlayerSnapshotResponse)},
+        {403, sizeof(::data_service::ListPlayerSnapshotsRequest)},
+        {412, sizeof(::data_service::SnapshotInfo)},
+        {433, sizeof(::data_service::ListPlayerSnapshotsResponse)},
+        {440, sizeof(::data_service::GetPlayerSnapshotDiffRequest)},
+        {449, sizeof(::data_service::FieldDiff)},
+        {462, sizeof(::data_service::GetPlayerSnapshotDiffResponse)},
+        {473, sizeof(::data_service::RollbackGuildDivergence)},
+        {492, sizeof(::data_service::RollbackPlayerRequest)},
+        {511, sizeof(::data_service::RollbackPlayerResponse)},
+        {528, sizeof(::data_service::RollbackZoneRequest)},
+        {541, sizeof(::data_service::RollbackZoneResponse)},
+        {562, sizeof(::data_service::RollbackAllRequest)},
+        {573, sizeof(::data_service::RollbackAllResponse)},
+        {590, sizeof(::data_service::BatchRecallItemsRequest)},
+        {611, sizeof(::data_service::RecallResult)},
+        {626, sizeof(::data_service::BatchRecallItemsResponse)},
+        {639, sizeof(::data_service::QueryTransactionLogRequest)},
+        {658, sizeof(::data_service::TransactionLogRow)},
+        {689, sizeof(::data_service::QueryTransactionLogResponse)},
+        {698, sizeof(::data_service::CreateEventSnapshotRequest)},
+        {709, sizeof(::data_service::CreateEventSnapshotResponse)},
+        {718, sizeof(::data_service::AllocateIdSegmentRequest)},
+        {725, sizeof(::data_service::AllocateIdSegmentResponse)},
+        {734, sizeof(::data_service::ReservePlayerNameRequest)},
+        {741, sizeof(::data_service::ReservePlayerNameResponse)},
+        {748, sizeof(::data_service::ReleasePlayerNameRequest)},
+        {755, sizeof(::data_service::BatchGetPlayerNameRequest)},
+        {760, sizeof(::data_service::BatchGetPlayerNameResponse_NamesEntry_DoNotUse)},
+        {767, sizeof(::data_service::BatchGetPlayerNameResponse)},
+        {772, sizeof(::data_service::GetPlayerAssetOpLedgerRequest)},
+        {781, sizeof(::data_service::GetPlayerAssetOpLedgerResponse)},
+        {792, sizeof(::data_service::GetPlayerInboxLedgerRequest)},
+        {797, sizeof(::data_service::GetPlayerInboxLedgerResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -13843,376 +13875,382 @@ const char descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2ep
     "ayer_inbox_ledger_comp.proto\032%proto/comm"
     "on/base/user_accounts.proto\032)proto/commo"
     "n/base/service_call_auth.proto\032&proto/co"
-    "mmon/base/role_admission.proto\"E\n\030Accoun"
-    "tDirectoryResponse\022)\n\007players\030\001 \001(\0132\030.Ac"
-    "countSimplePlayerList\"}\n\024AccountRoleOwne"
-    "rship\022\017\n\007account\030\001 \001(\t\022\"\n\004role\030\002 \001(\0132\024.A"
-    "ccountSimplePlayer\022\026\n\016owner_revision\030\003 \001"
-    "(\004\022\030\n\020trade_listing_id\030\004 \001(\004\"\?\n\022AccountR"
-    "oleVersion\022\021\n\tplayer_id\030\001 \001(\004\022\026\n\016owner_r"
-    "evision\030\002 \001(\004\"u\n\033ReadAccountDirectoryReq"
-    "uest\022\017\n\007account\030\001 \001(\t\022\031\n\021create_if_missi"
-    "ng\030\002 \001(\010\022*\n\004auth\030\003 \001(\0132\034.common.base.Ser"
-    "viceCallAuth\"{\n\030CreateAccountRoleRequest"
-    "\022\017\n\007account\030\001 \001(\t\022\"\n\004role\030\002 \001(\0132\024.Accoun"
-    "tSimplePlayer\022*\n\004auth\030\003 \001(\0132\034.common.bas"
-    "e.ServiceCallAuth\"Y\n\030LookupAccountRoleRe"
-    "quest\022\021\n\tplayer_id\030\001 \001(\004\022*\n\004auth\030\002 \001(\0132\034"
-    ".common.base.ServiceCallAuth\"\234\001\n\030RepairA"
-    "ccountRoleRequest\022\017\n\007account\030\001 \001(\t\022\"\n\004ro"
-    "le\030\002 \001(\0132\024.AccountSimplePlayer\022\037\n\027expect"
-    "ed_owner_revision\030\003 \001(\004\022*\n\004auth\030\004 \001(\0132\034."
-    "common.base.ServiceCallAuth\"\211\001\n\031RemoveAc"
-    "countRolesRequest\022\017\n\007account\030\001 \001(\t\022/\n\005ro"
-    "les\030\002 \003(\0132 .data_service.AccountRoleVers"
-    "ion\022*\n\004auth\030\003 \001(\0132\034.common.base.ServiceC"
-    "allAuth\"\326\001\n\031AccountRoleFreezeEvidence\022\021\n"
-    "\tplayer_id\030\001 \001(\004\022\022\n\nlisting_id\030\002 \001(\004\022\026\n\016"
-    "owner_revision\030\003 \001(\004\022\023\n\013owner_epoch\030\004 \001("
-    "\004\022\020\n\010save_seq\030\005 \001(\004\022\030\n\020persisted_digest\030"
-    "\006 \001(\014\0229\n\004kind\030\007 \001(\0162+.data_service.Accou"
-    "ntRoleFreezeEvidenceKind\"S\n\026AccountRoleT"
-    "radeHolder\022(\n\004seal\030\001 \001(\0132\032.common.base.R"
-    "oleTradeSeal\022\017\n\007drained\030\002 \001(\010\"\244\002\n\027Accoun"
-    "tRoleTradeReceipt\022\022\n\nlisting_id\030\001 \001(\004\022\021\n"
-    "\tplayer_id\030\002 \001(\004\022\026\n\016seller_account\030\003 \001(\t"
-    "\022\035\n\025seller_owner_revision\030\004 \001(\004\0222\n\005state"
-    "\030\005 \001(\0162#.data_service.AccountRoleTradeSt"
-    "ate\022@\n\017freeze_evidence\030\006 \001(\0132\'.data_serv"
-    "ice.AccountRoleFreezeEvidence\0225\n\007holders"
-    "\030\007 \003(\0132$.data_service.AccountRoleTradeHo"
-    "lder\"\366\001\n\032AccountRoleTransferReceipt\022\r\n\005t"
-    "x_id\030\001 \001(\004\022\022\n\nlisting_id\030\002 \001(\004\022\021\n\tplayer"
-    "_id\030\003 \001(\004\022\026\n\016seller_account\030\004 \001(\t\022\025\n\rbuy"
-    "er_account\030\005 \001(\t\022\035\n\025seller_owner_revisio"
-    "n\030\006 \001(\004\022\034\n\024buyer_owner_revision\030\007 \001(\004\022\"\n"
-    "\004role\030\010 \001(\0132\024.AccountSimplePlayer\022\022\n\ncre"
-    "ated_ms\030\t \001(\004\"\252\001\n\034BeginAccountRoleTradeR"
-    "equest\022\022\n\nlisting_id\030\001 \001(\004\022\021\n\tplayer_id\030"
-    "\002 \001(\004\022\026\n\016seller_account\030\003 \001(\t\022\037\n\027expecte"
-    "d_owner_revision\030\004 \001(\004\022*\n\004auth\030\005 \001(\0132\034.c"
-    "ommon.base.ServiceCallAuth\"\262\001\n$ConfirmAc"
-    "countRoleTradeFreezeRequest\022\022\n\nlisting_i"
-    "d\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\026\n\016seller_acc"
-    "ount\030\003 \001(\t\022\037\n\027expected_owner_revision\030\004 "
-    "\001(\004\022*\n\004auth\030\005 \001(\0132\034.common.base.ServiceC"
-    "allAuth\"\253\001\n\035CancelAccountRoleTradeReques"
-    "t\022\022\n\nlisting_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004"
-    "\022\026\n\016seller_account\030\003 \001(\t\022\037\n\027expected_own"
-    "er_revision\030\004 \001(\004\022*\n\004auth\030\005 \001(\0132\034.common"
-    ".base.ServiceCallAuth\"\316\001\n\032TransferAccoun"
-    "tRoleRequest\022\r\n\005tx_id\030\001 \001(\004\022\022\n\nlisting_i"
-    "d\030\002 \001(\004\022\021\n\tplayer_id\030\003 \001(\004\022\026\n\016seller_acc"
-    "ount\030\004 \001(\t\022\025\n\rbuyer_account\030\005 \001(\t\022\037\n\027exp"
-    "ected_owner_revision\030\006 \001(\004\022*\n\004auth\030\007 \001(\013"
-    "2\034.common.base.ServiceCallAuth\"\200\001\n\034Regis"
-    "terRoleAdmissionRequest\0224\n\010identity\030\001 \001("
-    "\0132\".common.base.RoleAdmissionIdentity\022*\n"
-    "\004auth\030\002 \001(\0132\034.common.base.ServiceCallAut"
-    "h\"m\n\035RegisterRoleAdmissionResponse\0224\n\010id"
-    "entity\030\001 \001(\0132\".common.base.RoleAdmission"
-    "Identity\022\026\n\016closed_through\030\002 \001(\004\"\343\001\n\032Clo"
-    "seRoleAdmissionsRequest\022\021\n\tplayer_id\030\001 \001"
-    "(\004\022\031\n\021scene_instance_id\030\002 \001(\t\022\026\n\016owner_r"
-    "evision\030\003 \001(\004\022\032\n\022through_generation\030\004 \001("
-    "\004\022\034\n\024required_owner_epoch\030\005 \001(\004\022\031\n\021requi"
-    "red_save_seq\030\006 \001(\004\022*\n\004auth\030\007 \001(\0132\034.commo"
-    "n.base.ServiceCallAuth\"5\n\033CloseRoleAdmis"
-    "sionsResponse\022\026\n\016closed_through\030\001 \001(\004\"\251\001"
-    "\n\030AckRoleTradeDrainRequest\022(\n\004seal\030\001 \001(\013"
-    "2\032.common.base.RoleTradeSeal\022\034\n\024required"
-    "_owner_epoch\030\002 \001(\004\022\031\n\021required_save_seq\030"
-    "\003 \001(\004\022*\n\004auth\030\004 \001(\0132\034.common.base.Servic"
-    "eCallAuth\":\n\025LoadPlayerDataRequest\022\021\n\tpl"
-    "ayer_id\030\001 \001(\004\022\016\n\006fields\030\002 \003(\t\"\250\001\n\026LoadPl"
-    "ayerDataResponse\022\022\n\nerror_code\030\001 \001(\r\022<\n\004"
-    "data\030\002 \003(\0132..data_service.LoadPlayerData"
-    "Response.DataEntry\022\017\n\007version\030\003 \001(\004\032+\n\tD"
-    "ataEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001(\014:\0028\001"
-    "\"\256\001\n\025SavePlayerDataRequest\022\021\n\tplayer_id\030"
-    "\001 \001(\004\022;\n\004data\030\002 \003(\0132-.data_service.SaveP"
-    "layerDataRequest.DataEntry\022\030\n\020expected_v"
-    "ersion\030\003 \001(\004\032+\n\tDataEntry\022\013\n\003key\030\001 \001(\t\022\r"
-    "\n\005value\030\002 \001(\014:\0028\001\"A\n\026SavePlayerDataRespo"
-    "nse\022\022\n\nerror_code\030\001 \001(\r\022\023\n\013new_version\030\002"
-    " \001(\004\"9\n\025GetPlayerFieldRequest\022\021\n\tplayer_"
-    "id\030\001 \001(\004\022\r\n\005field\030\002 \001(\t\";\n\026GetPlayerFiel"
-    "dResponse\022\022\n\nerror_code\030\001 \001(\r\022\r\n\005value\030\002"
-    " \001(\014\"b\n\025SetPlayerFieldRequest\022\021\n\tplayer_"
-    "id\030\001 \001(\004\022\r\n\005field\030\002 \001(\t\022\r\n\005value\030\003 \001(\014\022\030"
-    "\n\020expected_version\030\004 \001(\004\"A\n\026SetPlayerFie"
-    "ldResponse\022\022\n\nerror_code\030\001 \001(\r\022\023\n\013new_ve"
-    "rsion\030\002 \001(\004\"X\n\031RegisterPlayerZoneRequest"
-    "\022\021\n\tplayer_id\030\001 \001(\004\022\024\n\014home_zone_id\030\002 \001("
-    "\r\022\022\n\nstorage_id\030\003 \001(\r\"-\n\030GetPlayerHomeZo"
-    "neRequest\022\021\n\tplayer_id\030\001 \001(\004\"L\n\031GetPlaye"
-    "rHomeZoneResponse\022\024\n\014home_zone_id\030\001 \001(\r\022"
-    "\031\n\021home_zone_merging\030\002 \001(\010\"3\n\035BatchGetPl"
-    "ayerHomeZoneRequest\022\022\n\nplayer_ids\030\001 \003(\004\""
-    "\260\001\n\036BatchGetPlayerHomeZoneResponse\022X\n\017pl"
-    "ayer_zone_map\030\002 \003(\0132\?.data_service.Batch"
-    "GetPlayerHomeZoneResponse.PlayerZoneMapE"
-    "ntry\0324\n\022PlayerZoneMapEntry\022\013\n\003key\030\001 \001(\004\022"
-    "\r\n\005value\030\002 \001(\r:\0028\001\"_\n\034RemapHomeZoneForMe"
-    "rgeRequest\022\026\n\016source_zone_id\030\001 \001(\r\022\026\n\016ta"
-    "rget_zone_id\030\002 \001(\r\022\017\n\007dry_run\030\003 \001(\010\"e\n\035R"
-    "emapHomeZoneForMergeResponse\022\022\n\nerror_co"
-    "de\030\001 \001(\r\022\027\n\017players_matched\030\002 \001(\r\022\027\n\017pla"
-    "yers_updated\030\003 \001(\r\"I\n\027DeletePlayerDataRe"
-    "quest\022\021\n\tplayer_id\030\001 \001(\004\022\033\n\023delete_zone_"
-    "mapping\030\002 \001(\010\"D\n\030DeletePlayerDataRespons"
-    "e\022\022\n\nerror_code\030\001 \001(\r\022\024\n\014keys_deleted\030\002 "
-    "\001(\r\"|\n\033CreatePlayerSnapshotRequest\022\021\n\tpl"
-    "ayer_id\030\001 \001(\004\022(\n\004type\030\002 \001(\0162\032.data_servi"
-    "ce.SnapshotType\022\016\n\006reason\030\003 \001(\t\022\020\n\010opera"
-    "tor\030\004 \001(\t\"[\n\034CreatePlayerSnapshotRespons"
-    "e\022\022\n\nerror_code\030\001 \001(\r\022\023\n\013snapshot_id\030\002 \001"
-    "(\004\022\022\n\ncreated_at\030\003 \001(\004\"S\n\032ListPlayerSnap"
-    "shotsRequest\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013befor"
-    "e_time\030\002 \001(\004\022\r\n\005limit\030\003 \001(\r\"\320\001\n\014Snapshot"
-    "Info\022\023\n\013snapshot_id\030\001 \001(\004\022\021\n\tplayer_id\030\002"
-    " \001(\004\022\017\n\007zone_id\030\003 \001(\r\022(\n\004type\030\004 \001(\0162\032.da"
-    "ta_service.SnapshotType\022\022\n\ncreated_at\030\005 "
-    "\001(\004\022\016\n\006reason\030\006 \001(\t\022\020\n\010operator\030\007 \001(\t\022\027\n"
-    "\017data_size_bytes\030\010 \001(\r\022\016\n\006fields\030\t \003(\t\"`"
-    "\n\033ListPlayerSnapshotsResponse\022\022\n\nerror_c"
-    "ode\030\001 \001(\r\022-\n\tsnapshots\030\002 \003(\0132\032.data_serv"
-    "ice.SnapshotInfo\"[\n\034GetPlayerSnapshotDif"
-    "fRequest\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013snapshot_"
-    "id\030\002 \001(\004\022\023\n\013target_time\030\003 \001(\004\"|\n\tFieldDi"
-    "ff\022\r\n\005field\030\001 \001(\t\022\026\n\016snapshot_value\030\002 \001("
-    "\014\022\025\n\rcurrent_value\030\003 \001(\014\022\030\n\020only_in_snap"
-    "shot\030\004 \001(\010\022\027\n\017only_in_current\030\005 \001(\010\"\214\001\n\035"
-    "GetPlayerSnapshotDiffResponse\022\022\n\nerror_c"
-    "ode\030\001 \001(\r\022\030\n\020snapshot_id_used\030\002 \001(\004\022\025\n\rs"
-    "napshot_time\030\003 \001(\004\022&\n\005diffs\030\004 \003(\0132\027.data"
-    "_service.FieldDiff\"\260\001\n\027RollbackGuildDive"
-    "rgence\022\r\n\005op_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004"
-    "\022\020\n\010guild_id\030\003 \001(\004\022\014\n\004kind\030\004 \001(\r\022\016\n\006stat"
-    "us\030\005 \001(\r\022\023\n\013funds_delta\030\006 \001(\004\022\032\n\022contrib"
-    "ution_delta\030\007 \001(\004\022\022\n\nupdated_ms\030\010 \001(\004\"\323\001"
-    "\n\025RollbackPlayerRequest\022\021\n\tplayer_id\030\001 \001"
-    "(\004\022\023\n\013snapshot_id\030\002 \001(\004\022\023\n\013target_time\030\003"
-    " \001(\004\022*\n\005scope\030\004 \001(\0162\033.data_service.Rollb"
-    "ackScope\022\016\n\006fields\030\005 \003(\t\022\016\n\006reason\030\006 \001(\t"
-    "\022\020\n\010operator\030\007 \001(\t\022\037\n\027accept_guild_diver"
-    "gence\030\010 \001(\010\"\212\002\n\026RollbackPlayerResponse\022\022"
-    "\n\nerror_code\030\001 \001(\r\022\030\n\020snapshot_id_used\030\002"
-    " \001(\004\022 \n\030pre_rollback_snapshot_id\030\003 \001(\004\022\027"
-    "\n\017fields_restored\030\004 \003(\t\022\036\n\026guild_diverge"
-    "nce_count\030\005 \001(\r\022@\n\021guild_divergences\030\006 \003"
-    "(\0132%.data_service.RollbackGuildDivergenc"
-    "e\022%\n\035guild_unprovable_player_count\030\007 \001(\r"
-    "\"~\n\023RollbackZoneRequest\022\017\n\007zone_id\030\001 \001(\r"
-    "\022\023\n\013target_time\030\002 \001(\004\022\016\n\006reason\030\003 \001(\t\022\020\n"
-    "\010operator\030\004 \001(\t\022\037\n\027accept_guild_divergen"
-    "ce\030\005 \001(\010\"\264\002\n\024RollbackZoneResponse\022\022\n\nerr"
-    "or_code\030\001 \001(\r\022\030\n\020players_affected\030\002 \001(\r\022"
-    "\026\n\016players_failed\030\003 \001(\r\022\031\n\021failed_player"
-    "_ids\030\004 \003(\004\022\031\n\021orphan_player_ids\030\005 \003(\004\022\027\n"
-    "\017orphans_cleaned\030\006 \001(\r\022\036\n\026guild_divergen"
-    "ce_count\030\007 \001(\r\022@\n\021guild_divergences\030\010 \003("
-    "\0132%.data_service.RollbackGuildDivergence"
-    "\022%\n\035guild_unprovable_player_count\030\t \001(\r\""
-    "l\n\022RollbackAllRequest\022\023\n\013target_time\030\001 \001"
-    "(\004\022\016\n\006reason\030\002 \001(\t\022\020\n\010operator\030\003 \001(\t\022\037\n\027"
-    "accept_guild_divergence\030\004 \001(\010\"\375\001\n\023Rollba"
-    "ckAllResponse\022\022\n\nerror_code\030\001 \001(\r\022\027\n\017zon"
-    "es_processed\030\002 \001(\r\022\030\n\020players_affected\030\003"
-    " \001(\r\022\026\n\016players_failed\030\004 \001(\r\022\036\n\026guild_di"
-    "vergence_count\030\005 \001(\r\022@\n\021guild_divergence"
-    "s\030\006 \003(\0132%.data_service.RollbackGuildDive"
-    "rgence\022%\n\035guild_unprovable_player_count\030"
-    "\007 \001(\r\"\307\001\n\027BatchRecallItemsRequest\022\022\n\npla"
-    "yer_ids\030\001 \003(\004\022\026\n\016item_config_id\030\002 \001(\r\022\025\n"
-    "\rcurrency_type\030\003 \001(\r\022\022\n\ntime_start\030\004 \001(\004"
-    "\022\020\n\010time_end\030\005 \001(\004\022\020\n\010tx_types\030\006 \003(\r\022\016\n\006"
-    "reason\030\007 \001(\t\022\020\n\010operator\030\010 \001(\t\022\017\n\007dry_ru"
-    "n\030\t \001(\010\"\203\001\n\014RecallResult\022\021\n\tplayer_id\030\001 "
-    "\001(\004\022\021\n\titem_uuid\030\002 \001(\004\022\026\n\016item_config_id"
-    "\030\003 \001(\r\022\016\n\006amount\030\004 \001(\004\022\017\n\007success\030\005 \001(\010\022"
-    "\024\n\014error_detail\030\006 \001(\t\"\240\001\n\030BatchRecallIte"
-    "msResponse\022\022\n\nerror_code\030\001 \001(\r\022\025\n\rtotal_"
-    "matched\030\002 \001(\r\022\026\n\016total_recalled\030\003 \001(\r\022\024\n"
-    "\014total_failed\030\004 \001(\r\022+\n\007results\030\005 \003(\0132\032.d"
-    "ata_service.RecallResult\"\265\001\n\032QueryTransa"
-    "ctionLogRequest\022\021\n\tplayer_id\030\001 \001(\004\022\022\n\nti"
-    "me_start\030\002 \001(\004\022\020\n\010time_end\030\003 \001(\004\022\020\n\010tx_t"
-    "ypes\030\004 \003(\r\022\026\n\016item_config_id\030\005 \001(\r\022\025\n\rcu"
-    "rrency_type\030\006 \001(\r\022\r\n\005limit\030\007 \001(\r\022\016\n\006offs"
-    "et\030\010 \001(\004\"\265\002\n\021TransactionLogRow\022\r\n\005tx_id\030"
-    "\001 \001(\004\022\021\n\ttimestamp\030\002 \001(\004\022\017\n\007tx_type\030\003 \001("
-    "\r\022\023\n\013from_player\030\004 \001(\004\022\021\n\tto_player\030\005 \001("
-    "\004\022\021\n\titem_uuid\030\006 \001(\004\022\026\n\016item_config_id\030\007"
-    " \001(\r\022\025\n\ritem_quantity\030\010 \001(\r\022\025\n\rcurrency_"
-    "type\030\t \001(\r\022\026\n\016currency_delta\030\n \001(\003\022\026\n\016ba"
-    "lance_before\030\013 \001(\004\022\025\n\rbalance_after\030\014 \001("
-    "\004\022\026\n\016correlation_id\030\r \001(\004\022\r\n\005extra\030\016 \001(\t"
-    "\"u\n\033QueryTransactionLogResponse\022\022\n\nerror"
-    "_code\030\001 \001(\r\022-\n\004rows\030\002 \003(\0132\037.data_service"
-    ".TransactionLogRow\022\023\n\013total_count\030\003 \001(\r\""
-    "\214\001\n\032CreateEventSnapshotRequest\022\021\n\tplayer"
-    "_id\030\001 \001(\004\0223\n\nevent_type\030\002 \001(\0162\037.data_ser"
-    "vice.SnapshotEventType\022\024\n\014event_detail\030\003"
-    " \001(\t\022\020\n\010operator\030\004 \001(\t\"Z\n\033CreateEventSna"
-    "pshotResponse\022\022\n\nerror_code\030\001 \001(\r\022\023\n\013sna"
-    "pshot_id\030\002 \001(\004\022\022\n\ncreated_at\030\003 \001(\004\"9\n\030Al"
-    "locateIdSegmentRequest\022\017\n\007biz_tag\030\001 \001(\t\022"
-    "\014\n\004step\030\002 \001(\r\"G\n\031AllocateIdSegmentRespon"
-    "se\022\022\n\nerror_code\030\001 \001(\r\022\n\n\002lo\030\002 \001(\004\022\n\n\002hi"
-    "\030\003 \001(\004\";\n\030ReservePlayerNameRequest\022\021\n\tpl"
-    "ayer_id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\"D\n\031ReservePl"
-    "ayerNameResponse\022\016\n\006result\030\001 \001(\r\022\027\n\017owne"
-    "r_player_id\030\002 \001(\004\";\n\030ReleasePlayerNameRe"
-    "quest\022\021\n\tplayer_id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\"/"
-    "\n\031BatchGetPlayerNameRequest\022\022\n\nplayer_id"
-    "s\030\001 \003(\004\"\216\001\n\032BatchGetPlayerNameResponse\022B"
-    "\n\005names\030\001 \003(\01323.data_service.BatchGetPla"
-    "yerNameResponse.NamesEntry\032,\n\nNamesEntry"
-    "\022\013\n\003key\030\001 \001(\004\022\r\n\005value\030\002 \001(\t:\0028\001\"N\n\035GetP"
-    "layerAssetOpLedgerRequest\022\021\n\tplayer_id\030\001"
-    " \001(\004\022\032\n\022require_sql_commit\030\002 \001(\010\"p\n\036GetP"
-    "layerAssetOpLedgerResponse\022\r\n\005found\030\001 \001("
-    "\010\022(\n\006ledger\030\002 \001(\0132\030.PlayerAssetOpLedgerC"
-    "omp\022\025\n\rsql_committed\030\003 \001(\010\"0\n\033GetPlayerI"
-    "nboxLedgerRequest\022\021\n\tplayer_id\030\001 \001(\004\"U\n\034"
-    "GetPlayerInboxLedgerResponse\022\r\n\005found\030\001 "
-    "\001(\010\022&\n\006ledger\030\002 \001(\0132\026.PlayerInboxLedgerC"
-    "omp*\214\002\n\025AccountRoleTradeState\022(\n$ACCOUNT"
-    "_ROLE_TRADE_STATE_UNSPECIFIED\020\000\022%\n!ACCOU"
-    "NT_ROLE_TRADE_STATE_FREEZING\020\001\022#\n\037ACCOUN"
-    "T_ROLE_TRADE_STATE_FROZEN\020\002\022&\n\"ACCOUNT_R"
-    "OLE_TRADE_STATE_CANCELLED\020\003\022(\n$ACCOUNT_R"
-    "OLE_TRADE_STATE_TRANSFERRED\020\004\022+\n\'ACCOUNT"
-    "_ROLE_TRADE_STATE_CANCEL_PENDING\020\005*\263\001\n\035A"
-    "ccountRoleFreezeEvidenceKind\0221\n-ACCOUNT_"
-    "ROLE_FREEZE_EVIDENCE_KIND_UNSPECIFIED\020\000\022"
-    "2\n.ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_NO_"
-    "ADMISSION\020\001\022+\n\'ACCOUNT_ROLE_FREEZE_EVIDE"
-    "NCE_KIND_SCENE\020\002*\207\001\n\014SnapshotType\022\023\n\017SNA"
-    "PSHOT_MANUAL\020\000\022\025\n\021SNAPSHOT_PERIODIC\020\001\022\034\n"
-    "\030SNAPSHOT_PRE_MAINTENANCE\020\002\022\031\n\025SNAPSHOT_"
-    "PRE_ROLLBACK\020\003\022\022\n\016SNAPSHOT_LOGIN\020\004*8\n\rRo"
-    "llbackScope\022\021\n\rROLLBACK_FULL\020\000\022\024\n\020ROLLBA"
-    "CK_PARTIAL\020\001*\212\001\n\021SnapshotEventType\022\033\n\027EV"
-    "ENT_LARGE_TRANSACTION\020\000\022\022\n\016EVENT_RECHARG"
-    "E\020\001\022\031\n\025EVENT_PRE_MAINTENANCE\020\002\022\022\n\016EVENT_"
-    "LEVEL_UP\020\003\022\025\n\021EVENT_FIRST_LOGIN\020\0042\257\035\n\013Da"
-    "taService\022k\n\024ReadAccountDirectory\022).data"
-    "_service.ReadAccountDirectoryRequest\032&.d"
-    "ata_service.AccountDirectoryResponse\"\000\022e"
-    "\n\021CreateAccountRole\022&.data_service.Creat"
-    "eAccountRoleRequest\032&.data_service.Accou"
-    "ntDirectoryResponse\"\000\022a\n\021LookupAccountRo"
-    "le\022&.data_service.LookupAccountRoleReque"
-    "st\032\".data_service.AccountRoleOwnership\"\000"
-    "\022e\n\021RepairAccountRole\022&.data_service.Rep"
-    "airAccountRoleRequest\032&.data_service.Acc"
-    "ountDirectoryResponse\"\000\022W\n\022RemoveAccount"
-    "Roles\022\'.data_service.RemoveAccountRolesR"
-    "equest\032\026.google.protobuf.Empty\"\000\022l\n\025Begi"
-    "nAccountRoleTrade\022*.data_service.BeginAc"
-    "countRoleTradeRequest\032%.data_service.Acc"
-    "ountRoleTradeReceipt\"\000\022|\n\035ConfirmAccount"
-    "RoleTradeFreeze\0222.data_service.ConfirmAc"
-    "countRoleTradeFreezeRequest\032%.data_servi"
-    "ce.AccountRoleTradeReceipt\"\000\022n\n\026CancelAc"
-    "countRoleTrade\022+.data_service.CancelAcco"
+    "mmon/base/role_admission.proto\032(proto/co"
+    "mmon/database/player_cache.proto\"r\n\030Acco"
+    "untDirectoryResponse\022)\n\007players\030\001 \001(\0132\030."
+    "AccountSimplePlayerList\022+\n\023initial_playe"
+    "r_data\030\002 \001(\0132\016.PlayerAllData\"}\n\024AccountR"
+    "oleOwnership\022\017\n\007account\030\001 \001(\t\022\"\n\004role\030\002 "
+    "\001(\0132\024.AccountSimplePlayer\022\026\n\016owner_revis"
+    "ion\030\003 \001(\004\022\030\n\020trade_listing_id\030\004 \001(\004\"\?\n\022A"
+    "ccountRoleVersion\022\021\n\tplayer_id\030\001 \001(\004\022\026\n\016"
+    "owner_revision\030\002 \001(\004\"u\n\033ReadAccountDirec"
+    "toryRequest\022\017\n\007account\030\001 \001(\t\022\031\n\021create_i"
+    "f_missing\030\002 \001(\010\022*\n\004auth\030\003 \001(\0132\034.common.b"
+    "ase.ServiceCallAuth\"{\n\030CreateAccountRole"
+    "Request\022\017\n\007account\030\001 \001(\t\022\"\n\004role\030\002 \001(\0132\024"
+    ".AccountSimplePlayer\022*\n\004auth\030\003 \001(\0132\034.com"
+    "mon.base.ServiceCallAuth\"Y\n\030LookupAccoun"
+    "tRoleRequest\022\021\n\tplayer_id\030\001 \001(\004\022*\n\004auth\030"
+    "\002 \001(\0132\034.common.base.ServiceCallAuth\"\234\001\n\030"
+    "RepairAccountRoleRequest\022\017\n\007account\030\001 \001("
+    "\t\022\"\n\004role\030\002 \001(\0132\024.AccountSimplePlayer\022\037\n"
+    "\027expected_owner_revision\030\003 \001(\004\022*\n\004auth\030\004"
+    " \001(\0132\034.common.base.ServiceCallAuth\"\211\001\n\031R"
+    "emoveAccountRolesRequest\022\017\n\007account\030\001 \001("
+    "\t\022/\n\005roles\030\002 \003(\0132 .data_service.AccountR"
+    "oleVersion\022*\n\004auth\030\003 \001(\0132\034.common.base.S"
+    "erviceCallAuth\"\326\001\n\031AccountRoleFreezeEvid"
+    "ence\022\021\n\tplayer_id\030\001 \001(\004\022\022\n\nlisting_id\030\002 "
+    "\001(\004\022\026\n\016owner_revision\030\003 \001(\004\022\023\n\013owner_epo"
+    "ch\030\004 \001(\004\022\020\n\010save_seq\030\005 \001(\004\022\030\n\020persisted_"
+    "digest\030\006 \001(\014\0229\n\004kind\030\007 \001(\0162+.data_servic"
+    "e.AccountRoleFreezeEvidenceKind\"S\n\026Accou"
+    "ntRoleTradeHolder\022(\n\004seal\030\001 \001(\0132\032.common"
+    ".base.RoleTradeSeal\022\017\n\007drained\030\002 \001(\010\"\244\002\n"
+    "\027AccountRoleTradeReceipt\022\022\n\nlisting_id\030\001"
+    " \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\026\n\016seller_accoun"
+    "t\030\003 \001(\t\022\035\n\025seller_owner_revision\030\004 \001(\004\0222"
+    "\n\005state\030\005 \001(\0162#.data_service.AccountRole"
+    "TradeState\022@\n\017freeze_evidence\030\006 \001(\0132\'.da"
+    "ta_service.AccountRoleFreezeEvidence\0225\n\007"
+    "holders\030\007 \003(\0132$.data_service.AccountRole"
+    "TradeHolder\"\366\001\n\032AccountRoleTransferRecei"
+    "pt\022\r\n\005tx_id\030\001 \001(\004\022\022\n\nlisting_id\030\002 \001(\004\022\021\n"
+    "\tplayer_id\030\003 \001(\004\022\026\n\016seller_account\030\004 \001(\t"
+    "\022\025\n\rbuyer_account\030\005 \001(\t\022\035\n\025seller_owner_"
+    "revision\030\006 \001(\004\022\034\n\024buyer_owner_revision\030\007"
+    " \001(\004\022\"\n\004role\030\010 \001(\0132\024.AccountSimplePlayer"
+    "\022\022\n\ncreated_ms\030\t \001(\004\"\252\001\n\034BeginAccountRol"
+    "eTradeRequest\022\022\n\nlisting_id\030\001 \001(\004\022\021\n\tpla"
+    "yer_id\030\002 \001(\004\022\026\n\016seller_account\030\003 \001(\t\022\037\n\027"
+    "expected_owner_revision\030\004 \001(\004\022*\n\004auth\030\005 "
+    "\001(\0132\034.common.base.ServiceCallAuth\"\262\001\n$Co"
+    "nfirmAccountRoleTradeFreezeRequest\022\022\n\nli"
+    "sting_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\026\n\016sel"
+    "ler_account\030\003 \001(\t\022\037\n\027expected_owner_revi"
+    "sion\030\004 \001(\004\022*\n\004auth\030\005 \001(\0132\034.common.base.S"
+    "erviceCallAuth\"\253\001\n\035CancelAccountRoleTrad"
+    "eRequest\022\022\n\nlisting_id\030\001 \001(\004\022\021\n\tplayer_i"
+    "d\030\002 \001(\004\022\026\n\016seller_account\030\003 \001(\t\022\037\n\027expec"
+    "ted_owner_revision\030\004 \001(\004\022*\n\004auth\030\005 \001(\0132\034"
+    ".common.base.ServiceCallAuth\"\316\001\n\032Transfe"
+    "rAccountRoleRequest\022\r\n\005tx_id\030\001 \001(\004\022\022\n\nli"
+    "sting_id\030\002 \001(\004\022\021\n\tplayer_id\030\003 \001(\004\022\026\n\016sel"
+    "ler_account\030\004 \001(\t\022\025\n\rbuyer_account\030\005 \001(\t"
+    "\022\037\n\027expected_owner_revision\030\006 \001(\004\022*\n\004aut"
+    "h\030\007 \001(\0132\034.common.base.ServiceCallAuth\"\200\001"
+    "\n\034RegisterRoleAdmissionRequest\0224\n\010identi"
+    "ty\030\001 \001(\0132\".common.base.RoleAdmissionIden"
+    "tity\022*\n\004auth\030\002 \001(\0132\034.common.base.Service"
+    "CallAuth\"m\n\035RegisterRoleAdmissionRespons"
+    "e\0224\n\010identity\030\001 \001(\0132\".common.base.RoleAd"
+    "missionIdentity\022\026\n\016closed_through\030\002 \001(\004\""
+    "\343\001\n\032CloseRoleAdmissionsRequest\022\021\n\tplayer"
+    "_id\030\001 \001(\004\022\031\n\021scene_instance_id\030\002 \001(\t\022\026\n\016"
+    "owner_revision\030\003 \001(\004\022\032\n\022through_generati"
+    "on\030\004 \001(\004\022\034\n\024required_owner_epoch\030\005 \001(\004\022\031"
+    "\n\021required_save_seq\030\006 \001(\004\022*\n\004auth\030\007 \001(\0132"
+    "\034.common.base.ServiceCallAuth\"5\n\033CloseRo"
+    "leAdmissionsResponse\022\026\n\016closed_through\030\001"
+    " \001(\004\"\251\001\n\030AckRoleTradeDrainRequest\022(\n\004sea"
+    "l\030\001 \001(\0132\032.common.base.RoleTradeSeal\022\034\n\024r"
+    "equired_owner_epoch\030\002 \001(\004\022\031\n\021required_sa"
+    "ve_seq\030\003 \001(\004\022*\n\004auth\030\004 \001(\0132\034.common.base"
+    ".ServiceCallAuth\":\n\025LoadPlayerDataReques"
+    "t\022\021\n\tplayer_id\030\001 \001(\004\022\016\n\006fields\030\002 \003(\t\"\250\001\n"
+    "\026LoadPlayerDataResponse\022\022\n\nerror_code\030\001 "
+    "\001(\r\022<\n\004data\030\002 \003(\0132..data_service.LoadPla"
+    "yerDataResponse.DataEntry\022\017\n\007version\030\003 \001"
+    "(\004\032+\n\tDataEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 "
+    "\001(\014:\0028\001\"\256\001\n\025SavePlayerDataRequest\022\021\n\tpla"
+    "yer_id\030\001 \001(\004\022;\n\004data\030\002 \003(\0132-.data_servic"
+    "e.SavePlayerDataRequest.DataEntry\022\030\n\020exp"
+    "ected_version\030\003 \001(\004\032+\n\tDataEntry\022\013\n\003key\030"
+    "\001 \001(\t\022\r\n\005value\030\002 \001(\014:\0028\001\"A\n\026SavePlayerDa"
+    "taResponse\022\022\n\nerror_code\030\001 \001(\r\022\023\n\013new_ve"
+    "rsion\030\002 \001(\004\"9\n\025GetPlayerFieldRequest\022\021\n\t"
+    "player_id\030\001 \001(\004\022\r\n\005field\030\002 \001(\t\";\n\026GetPla"
+    "yerFieldResponse\022\022\n\nerror_code\030\001 \001(\r\022\r\n\005"
+    "value\030\002 \001(\014\"b\n\025SetPlayerFieldRequest\022\021\n\t"
+    "player_id\030\001 \001(\004\022\r\n\005field\030\002 \001(\t\022\r\n\005value\030"
+    "\003 \001(\014\022\030\n\020expected_version\030\004 \001(\004\"A\n\026SetPl"
+    "ayerFieldResponse\022\022\n\nerror_code\030\001 \001(\r\022\023\n"
+    "\013new_version\030\002 \001(\004\"X\n\031RegisterPlayerZone"
+    "Request\022\021\n\tplayer_id\030\001 \001(\004\022\024\n\014home_zone_"
+    "id\030\002 \001(\r\022\022\n\nstorage_id\030\003 \001(\r\"-\n\030GetPlaye"
+    "rHomeZoneRequest\022\021\n\tplayer_id\030\001 \001(\004\"L\n\031G"
+    "etPlayerHomeZoneResponse\022\024\n\014home_zone_id"
+    "\030\001 \001(\r\022\031\n\021home_zone_merging\030\002 \001(\010\"3\n\035Bat"
+    "chGetPlayerHomeZoneRequest\022\022\n\nplayer_ids"
+    "\030\001 \003(\004\"\260\001\n\036BatchGetPlayerHomeZoneRespons"
+    "e\022X\n\017player_zone_map\030\002 \003(\0132\?.data_servic"
+    "e.BatchGetPlayerHomeZoneResponse.PlayerZ"
+    "oneMapEntry\0324\n\022PlayerZoneMapEntry\022\013\n\003key"
+    "\030\001 \001(\004\022\r\n\005value\030\002 \001(\r:\0028\001\"_\n\034RemapHomeZo"
+    "neForMergeRequest\022\026\n\016source_zone_id\030\001 \001("
+    "\r\022\026\n\016target_zone_id\030\002 \001(\r\022\017\n\007dry_run\030\003 \001"
+    "(\010\"e\n\035RemapHomeZoneForMergeResponse\022\022\n\ne"
+    "rror_code\030\001 \001(\r\022\027\n\017players_matched\030\002 \001(\r"
+    "\022\027\n\017players_updated\030\003 \001(\r\"I\n\027DeletePlaye"
+    "rDataRequest\022\021\n\tplayer_id\030\001 \001(\004\022\033\n\023delet"
+    "e_zone_mapping\030\002 \001(\010\"D\n\030DeletePlayerData"
+    "Response\022\022\n\nerror_code\030\001 \001(\r\022\024\n\014keys_del"
+    "eted\030\002 \001(\r\"|\n\033CreatePlayerSnapshotReques"
+    "t\022\021\n\tplayer_id\030\001 \001(\004\022(\n\004type\030\002 \001(\0162\032.dat"
+    "a_service.SnapshotType\022\016\n\006reason\030\003 \001(\t\022\020"
+    "\n\010operator\030\004 \001(\t\"[\n\034CreatePlayerSnapshot"
+    "Response\022\022\n\nerror_code\030\001 \001(\r\022\023\n\013snapshot"
+    "_id\030\002 \001(\004\022\022\n\ncreated_at\030\003 \001(\004\"S\n\032ListPla"
+    "yerSnapshotsRequest\022\021\n\tplayer_id\030\001 \001(\004\022\023"
+    "\n\013before_time\030\002 \001(\004\022\r\n\005limit\030\003 \001(\r\"\320\001\n\014S"
+    "napshotInfo\022\023\n\013snapshot_id\030\001 \001(\004\022\021\n\tplay"
+    "er_id\030\002 \001(\004\022\017\n\007zone_id\030\003 \001(\r\022(\n\004type\030\004 \001"
+    "(\0162\032.data_service.SnapshotType\022\022\n\ncreate"
+    "d_at\030\005 \001(\004\022\016\n\006reason\030\006 \001(\t\022\020\n\010operator\030\007"
+    " \001(\t\022\027\n\017data_size_bytes\030\010 \001(\r\022\016\n\006fields\030"
+    "\t \003(\t\"`\n\033ListPlayerSnapshotsResponse\022\022\n\n"
+    "error_code\030\001 \001(\r\022-\n\tsnapshots\030\002 \003(\0132\032.da"
+    "ta_service.SnapshotInfo\"[\n\034GetPlayerSnap"
+    "shotDiffRequest\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013sn"
+    "apshot_id\030\002 \001(\004\022\023\n\013target_time\030\003 \001(\004\"|\n\t"
+    "FieldDiff\022\r\n\005field\030\001 \001(\t\022\026\n\016snapshot_val"
+    "ue\030\002 \001(\014\022\025\n\rcurrent_value\030\003 \001(\014\022\030\n\020only_"
+    "in_snapshot\030\004 \001(\010\022\027\n\017only_in_current\030\005 \001"
+    "(\010\"\214\001\n\035GetPlayerSnapshotDiffResponse\022\022\n\n"
+    "error_code\030\001 \001(\r\022\030\n\020snapshot_id_used\030\002 \001"
+    "(\004\022\025\n\rsnapshot_time\030\003 \001(\004\022&\n\005diffs\030\004 \003(\013"
+    "2\027.data_service.FieldDiff\"\260\001\n\027RollbackGu"
+    "ildDivergence\022\r\n\005op_id\030\001 \001(\004\022\021\n\tplayer_i"
+    "d\030\002 \001(\004\022\020\n\010guild_id\030\003 \001(\004\022\014\n\004kind\030\004 \001(\r\022"
+    "\016\n\006status\030\005 \001(\r\022\023\n\013funds_delta\030\006 \001(\004\022\032\n\022"
+    "contribution_delta\030\007 \001(\004\022\022\n\nupdated_ms\030\010"
+    " \001(\004\"\323\001\n\025RollbackPlayerRequest\022\021\n\tplayer"
+    "_id\030\001 \001(\004\022\023\n\013snapshot_id\030\002 \001(\004\022\023\n\013target"
+    "_time\030\003 \001(\004\022*\n\005scope\030\004 \001(\0162\033.data_servic"
+    "e.RollbackScope\022\016\n\006fields\030\005 \003(\t\022\016\n\006reaso"
+    "n\030\006 \001(\t\022\020\n\010operator\030\007 \001(\t\022\037\n\027accept_guil"
+    "d_divergence\030\010 \001(\010\"\212\002\n\026RollbackPlayerRes"
+    "ponse\022\022\n\nerror_code\030\001 \001(\r\022\030\n\020snapshot_id"
+    "_used\030\002 \001(\004\022 \n\030pre_rollback_snapshot_id\030"
+    "\003 \001(\004\022\027\n\017fields_restored\030\004 \003(\t\022\036\n\026guild_"
+    "divergence_count\030\005 \001(\r\022@\n\021guild_divergen"
+    "ces\030\006 \003(\0132%.data_service.RollbackGuildDi"
+    "vergence\022%\n\035guild_unprovable_player_coun"
+    "t\030\007 \001(\r\"~\n\023RollbackZoneRequest\022\017\n\007zone_i"
+    "d\030\001 \001(\r\022\023\n\013target_time\030\002 \001(\004\022\016\n\006reason\030\003"
+    " \001(\t\022\020\n\010operator\030\004 \001(\t\022\037\n\027accept_guild_d"
+    "ivergence\030\005 \001(\010\"\264\002\n\024RollbackZoneResponse"
+    "\022\022\n\nerror_code\030\001 \001(\r\022\030\n\020players_affected"
+    "\030\002 \001(\r\022\026\n\016players_failed\030\003 \001(\r\022\031\n\021failed"
+    "_player_ids\030\004 \003(\004\022\031\n\021orphan_player_ids\030\005"
+    " \003(\004\022\027\n\017orphans_cleaned\030\006 \001(\r\022\036\n\026guild_d"
+    "ivergence_count\030\007 \001(\r\022@\n\021guild_divergenc"
+    "es\030\010 \003(\0132%.data_service.RollbackGuildDiv"
+    "ergence\022%\n\035guild_unprovable_player_count"
+    "\030\t \001(\r\"l\n\022RollbackAllRequest\022\023\n\013target_t"
+    "ime\030\001 \001(\004\022\016\n\006reason\030\002 \001(\t\022\020\n\010operator\030\003 "
+    "\001(\t\022\037\n\027accept_guild_divergence\030\004 \001(\010\"\375\001\n"
+    "\023RollbackAllResponse\022\022\n\nerror_code\030\001 \001(\r"
+    "\022\027\n\017zones_processed\030\002 \001(\r\022\030\n\020players_aff"
+    "ected\030\003 \001(\r\022\026\n\016players_failed\030\004 \001(\r\022\036\n\026g"
+    "uild_divergence_count\030\005 \001(\r\022@\n\021guild_div"
+    "ergences\030\006 \003(\0132%.data_service.RollbackGu"
+    "ildDivergence\022%\n\035guild_unprovable_player"
+    "_count\030\007 \001(\r\"\307\001\n\027BatchRecallItemsRequest"
+    "\022\022\n\nplayer_ids\030\001 \003(\004\022\026\n\016item_config_id\030\002"
+    " \001(\r\022\025\n\rcurrency_type\030\003 \001(\r\022\022\n\ntime_star"
+    "t\030\004 \001(\004\022\020\n\010time_end\030\005 \001(\004\022\020\n\010tx_types\030\006 "
+    "\003(\r\022\016\n\006reason\030\007 \001(\t\022\020\n\010operator\030\010 \001(\t\022\017\n"
+    "\007dry_run\030\t \001(\010\"\203\001\n\014RecallResult\022\021\n\tplaye"
+    "r_id\030\001 \001(\004\022\021\n\titem_uuid\030\002 \001(\004\022\026\n\016item_co"
+    "nfig_id\030\003 \001(\r\022\016\n\006amount\030\004 \001(\004\022\017\n\007success"
+    "\030\005 \001(\010\022\024\n\014error_detail\030\006 \001(\t\"\240\001\n\030BatchRe"
+    "callItemsResponse\022\022\n\nerror_code\030\001 \001(\r\022\025\n"
+    "\rtotal_matched\030\002 \001(\r\022\026\n\016total_recalled\030\003"
+    " \001(\r\022\024\n\014total_failed\030\004 \001(\r\022+\n\007results\030\005 "
+    "\003(\0132\032.data_service.RecallResult\"\265\001\n\032Quer"
+    "yTransactionLogRequest\022\021\n\tplayer_id\030\001 \001("
+    "\004\022\022\n\ntime_start\030\002 \001(\004\022\020\n\010time_end\030\003 \001(\004\022"
+    "\020\n\010tx_types\030\004 \003(\r\022\026\n\016item_config_id\030\005 \001("
+    "\r\022\025\n\rcurrency_type\030\006 \001(\r\022\r\n\005limit\030\007 \001(\r\022"
+    "\016\n\006offset\030\010 \001(\004\"\265\002\n\021TransactionLogRow\022\r\n"
+    "\005tx_id\030\001 \001(\004\022\021\n\ttimestamp\030\002 \001(\004\022\017\n\007tx_ty"
+    "pe\030\003 \001(\r\022\023\n\013from_player\030\004 \001(\004\022\021\n\tto_play"
+    "er\030\005 \001(\004\022\021\n\titem_uuid\030\006 \001(\004\022\026\n\016item_conf"
+    "ig_id\030\007 \001(\r\022\025\n\ritem_quantity\030\010 \001(\r\022\025\n\rcu"
+    "rrency_type\030\t \001(\r\022\026\n\016currency_delta\030\n \001("
+    "\003\022\026\n\016balance_before\030\013 \001(\004\022\025\n\rbalance_aft"
+    "er\030\014 \001(\004\022\026\n\016correlation_id\030\r \001(\004\022\r\n\005extr"
+    "a\030\016 \001(\t\"u\n\033QueryTransactionLogResponse\022\022"
+    "\n\nerror_code\030\001 \001(\r\022-\n\004rows\030\002 \003(\0132\037.data_"
+    "service.TransactionLogRow\022\023\n\013total_count"
+    "\030\003 \001(\r\"\214\001\n\032CreateEventSnapshotRequest\022\021\n"
+    "\tplayer_id\030\001 \001(\004\0223\n\nevent_type\030\002 \001(\0162\037.d"
+    "ata_service.SnapshotEventType\022\024\n\014event_d"
+    "etail\030\003 \001(\t\022\020\n\010operator\030\004 \001(\t\"Z\n\033CreateE"
+    "ventSnapshotResponse\022\022\n\nerror_code\030\001 \001(\r"
+    "\022\023\n\013snapshot_id\030\002 \001(\004\022\022\n\ncreated_at\030\003 \001("
+    "\004\"9\n\030AllocateIdSegmentRequest\022\017\n\007biz_tag"
+    "\030\001 \001(\t\022\014\n\004step\030\002 \001(\r\"G\n\031AllocateIdSegmen"
+    "tResponse\022\022\n\nerror_code\030\001 \001(\r\022\n\n\002lo\030\002 \001("
+    "\004\022\n\n\002hi\030\003 \001(\004\";\n\030ReservePlayerNameReques"
+    "t\022\021\n\tplayer_id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\"D\n\031Re"
+    "servePlayerNameResponse\022\016\n\006result\030\001 \001(\r\022"
+    "\027\n\017owner_player_id\030\002 \001(\004\";\n\030ReleasePlaye"
+    "rNameRequest\022\021\n\tplayer_id\030\001 \001(\004\022\014\n\004name\030"
+    "\002 \001(\t\"/\n\031BatchGetPlayerNameRequest\022\022\n\npl"
+    "ayer_ids\030\001 \003(\004\"\216\001\n\032BatchGetPlayerNameRes"
+    "ponse\022B\n\005names\030\001 \003(\01323.data_service.Batc"
+    "hGetPlayerNameResponse.NamesEntry\032,\n\nNam"
+    "esEntry\022\013\n\003key\030\001 \001(\004\022\r\n\005value\030\002 \001(\t:\0028\001\""
+    "i\n\035GetPlayerAssetOpLedgerRequest\022\021\n\tplay"
+    "er_id\030\001 \001(\004\022\032\n\022require_sql_commit\030\002 \001(\010\022"
+    "\031\n\021verify_redis_copy\030\003 \001(\010\"\215\001\n\036GetPlayer"
+    "AssetOpLedgerResponse\022\r\n\005found\030\001 \001(\010\022(\n\006"
+    "ledger\030\002 \001(\0132\030.PlayerAssetOpLedgerComp\022\025"
+    "\n\rsql_committed\030\003 \001(\010\022\033\n\023redis_copy_veri"
+    "fied\030\004 \001(\010\"0\n\033GetPlayerInboxLedgerReques"
+    "t\022\021\n\tplayer_id\030\001 \001(\004\"U\n\034GetPlayerInboxLe"
+    "dgerResponse\022\r\n\005found\030\001 \001(\010\022&\n\006ledger\030\002 "
+    "\001(\0132\026.PlayerInboxLedgerComp*\214\002\n\025AccountR"
+    "oleTradeState\022(\n$ACCOUNT_ROLE_TRADE_STAT"
+    "E_UNSPECIFIED\020\000\022%\n!ACCOUNT_ROLE_TRADE_ST"
+    "ATE_FREEZING\020\001\022#\n\037ACCOUNT_ROLE_TRADE_STA"
+    "TE_FROZEN\020\002\022&\n\"ACCOUNT_ROLE_TRADE_STATE_"
+    "CANCELLED\020\003\022(\n$ACCOUNT_ROLE_TRADE_STATE_"
+    "TRANSFERRED\020\004\022+\n\'ACCOUNT_ROLE_TRADE_STAT"
+    "E_CANCEL_PENDING\020\005*\351\001\n\035AccountRoleFreeze"
+    "EvidenceKind\0221\n-ACCOUNT_ROLE_FREEZE_EVID"
+    "ENCE_KIND_UNSPECIFIED\020\000\0222\n.ACCOUNT_ROLE_"
+    "FREEZE_EVIDENCE_KIND_NO_ADMISSION\020\001\022+\n\'A"
+    "CCOUNT_ROLE_FREEZE_EVIDENCE_KIND_SCENE\020\002"
+    "\0224\n0ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_IN"
+    "ITIAL_COMMIT\020\003*\207\001\n\014SnapshotType\022\023\n\017SNAPS"
+    "HOT_MANUAL\020\000\022\025\n\021SNAPSHOT_PERIODIC\020\001\022\034\n\030S"
+    "NAPSHOT_PRE_MAINTENANCE\020\002\022\031\n\025SNAPSHOT_PR"
+    "E_ROLLBACK\020\003\022\022\n\016SNAPSHOT_LOGIN\020\004*8\n\rRoll"
+    "backScope\022\021\n\rROLLBACK_FULL\020\000\022\024\n\020ROLLBACK"
+    "_PARTIAL\020\001*\212\001\n\021SnapshotEventType\022\033\n\027EVEN"
+    "T_LARGE_TRANSACTION\020\000\022\022\n\016EVENT_RECHARGE\020"
+    "\001\022\031\n\025EVENT_PRE_MAINTENANCE\020\002\022\022\n\016EVENT_LE"
+    "VEL_UP\020\003\022\025\n\021EVENT_FIRST_LOGIN\020\0042\257\035\n\013Data"
+    "Service\022k\n\024ReadAccountDirectory\022).data_s"
+    "ervice.ReadAccountDirectoryRequest\032&.dat"
+    "a_service.AccountDirectoryResponse\"\000\022e\n\021"
+    "CreateAccountRole\022&.data_service.CreateA"
+    "ccountRoleRequest\032&.data_service.Account"
+    "DirectoryResponse\"\000\022a\n\021LookupAccountRole"
+    "\022&.data_service.LookupAccountRoleRequest"
+    "\032\".data_service.AccountRoleOwnership\"\000\022e"
+    "\n\021RepairAccountRole\022&.data_service.Repai"
+    "rAccountRoleRequest\032&.data_service.Accou"
+    "ntDirectoryResponse\"\000\022W\n\022RemoveAccountRo"
+    "les\022\'.data_service.RemoveAccountRolesReq"
+    "uest\032\026.google.protobuf.Empty\"\000\022l\n\025BeginA"
+    "ccountRoleTrade\022*.data_service.BeginAcco"
     "untRoleTradeRequest\032%.data_service.Accou"
-    "ntRoleTradeReceipt\"\000\022k\n\023TransferAccountR"
-    "ole\022(.data_service.TransferAccountRoleRe"
-    "quest\032(.data_service.AccountRoleTransfer"
-    "Receipt\"\000\022r\n\025RegisterRoleAdmission\022*.dat"
-    "a_service.RegisterRoleAdmissionRequest\032+"
-    ".data_service.RegisterRoleAdmissionRespo"
-    "nse\"\000\022l\n\023CloseRoleAdmissions\022(.data_serv"
-    "ice.CloseRoleAdmissionsRequest\032).data_se"
-    "rvice.CloseRoleAdmissionsResponse\"\000\022U\n\021A"
-    "ckRoleTradeDrain\022&.data_service.AckRoleT"
-    "radeDrainRequest\032\026.google.protobuf.Empty"
-    "\"\000\022]\n\016LoadPlayerData\022#.data_service.Load"
-    "PlayerDataRequest\032$.data_service.LoadPla"
-    "yerDataResponse\"\000\022]\n\016SavePlayerData\022#.da"
-    "ta_service.SavePlayerDataRequest\032$.data_"
-    "service.SavePlayerDataResponse\"\000\022]\n\016GetP"
-    "layerField\022#.data_service.GetPlayerField"
-    "Request\032$.data_service.GetPlayerFieldRes"
-    "ponse\"\000\022]\n\016SetPlayerField\022#.data_service"
-    ".SetPlayerFieldRequest\032$.data_service.Se"
-    "tPlayerFieldResponse\"\000\022W\n\022RegisterPlayer"
-    "Zone\022\'.data_service.RegisterPlayerZoneRe"
-    "quest\032\026.google.protobuf.Empty\"\000\022f\n\021GetPl"
-    "ayerHomeZone\022&.data_service.GetPlayerHom"
-    "eZoneRequest\032\'.data_service.GetPlayerHom"
-    "eZoneResponse\"\000\022u\n\026BatchGetPlayerHomeZon"
-    "e\022+.data_service.BatchGetPlayerHomeZoneR"
-    "equest\032,.data_service.BatchGetPlayerHome"
-    "ZoneResponse\"\000\022r\n\025RemapHomeZoneForMerge\022"
-    "*.data_service.RemapHomeZoneForMergeRequ"
-    "est\032+.data_service.RemapHomeZoneForMerge"
-    "Response\"\000\022c\n\020DeletePlayerData\022%.data_se"
-    "rvice.DeletePlayerDataRequest\032&.data_ser"
-    "vice.DeletePlayerDataResponse\"\000\022o\n\024Creat"
-    "ePlayerSnapshot\022).data_service.CreatePla"
-    "yerSnapshotRequest\032*.data_service.Create"
-    "PlayerSnapshotResponse\"\000\022l\n\023ListPlayerSn"
-    "apshots\022(.data_service.ListPlayerSnapsho"
-    "tsRequest\032).data_service.ListPlayerSnaps"
-    "hotsResponse\"\000\022r\n\025GetPlayerSnapshotDiff\022"
-    "*.data_service.GetPlayerSnapshotDiffRequ"
-    "est\032+.data_service.GetPlayerSnapshotDiff"
-    "Response\"\000\022]\n\016RollbackPlayer\022#.data_serv"
-    "ice.RollbackPlayerRequest\032$.data_service"
-    ".RollbackPlayerResponse\"\000\022W\n\014RollbackZon"
-    "e\022!.data_service.RollbackZoneRequest\032\".d"
-    "ata_service.RollbackZoneResponse\"\000\022T\n\013Ro"
-    "llbackAll\022 .data_service.RollbackAllRequ"
-    "est\032!.data_service.RollbackAllResponse\"\000"
-    "\022c\n\020BatchRecallItems\022%.data_service.Batc"
-    "hRecallItemsRequest\032&.data_service.Batch"
-    "RecallItemsResponse\"\000\022l\n\023QueryTransactio"
-    "nLog\022(.data_service.QueryTransactionLogR"
-    "equest\032).data_service.QueryTransactionLo"
-    "gResponse\"\000\022l\n\023CreateEventSnapshot\022(.dat"
-    "a_service.CreateEventSnapshotRequest\032).d"
-    "ata_service.CreateEventSnapshotResponse\""
-    "\000\022f\n\021AllocateIdSegment\022&.data_service.Al"
-    "locateIdSegmentRequest\032\'.data_service.Al"
-    "locateIdSegmentResponse\"\000\022f\n\021ReservePlay"
-    "erName\022&.data_service.ReservePlayerNameR"
-    "equest\032\'.data_service.ReservePlayerNameR"
-    "esponse\"\000\022U\n\021ReleasePlayerName\022&.data_se"
-    "rvice.ReleasePlayerNameRequest\032\026.google."
-    "protobuf.Empty\"\000\022i\n\022BatchGetPlayerName\022\'"
-    ".data_service.BatchGetPlayerNameRequest\032"
-    "(.data_service.BatchGetPlayerNameRespons"
-    "e\"\000\022u\n\026GetPlayerAssetOpLedger\022+.data_ser"
-    "vice.GetPlayerAssetOpLedgerRequest\032,.dat"
-    "a_service.GetPlayerAssetOpLedgerResponse"
-    "\"\000\022o\n\024GetPlayerInboxLedger\022).data_servic"
-    "e.GetPlayerInboxLedgerRequest\032*.data_ser"
-    "vice.GetPlayerInboxLedgerResponse\"\000B\033Z\031d"
-    "ata_service/data_serviceb\006proto3"
+    "ntRoleTradeReceipt\"\000\022|\n\035ConfirmAccountRo"
+    "leTradeFreeze\0222.data_service.ConfirmAcco"
+    "untRoleTradeFreezeRequest\032%.data_service"
+    ".AccountRoleTradeReceipt\"\000\022n\n\026CancelAcco"
+    "untRoleTrade\022+.data_service.CancelAccoun"
+    "tRoleTradeRequest\032%.data_service.Account"
+    "RoleTradeReceipt\"\000\022k\n\023TransferAccountRol"
+    "e\022(.data_service.TransferAccountRoleRequ"
+    "est\032(.data_service.AccountRoleTransferRe"
+    "ceipt\"\000\022r\n\025RegisterRoleAdmission\022*.data_"
+    "service.RegisterRoleAdmissionRequest\032+.d"
+    "ata_service.RegisterRoleAdmissionRespons"
+    "e\"\000\022l\n\023CloseRoleAdmissions\022(.data_servic"
+    "e.CloseRoleAdmissionsRequest\032).data_serv"
+    "ice.CloseRoleAdmissionsResponse\"\000\022U\n\021Ack"
+    "RoleTradeDrain\022&.data_service.AckRoleTra"
+    "deDrainRequest\032\026.google.protobuf.Empty\"\000"
+    "\022]\n\016LoadPlayerData\022#.data_service.LoadPl"
+    "ayerDataRequest\032$.data_service.LoadPlaye"
+    "rDataResponse\"\000\022]\n\016SavePlayerData\022#.data"
+    "_service.SavePlayerDataRequest\032$.data_se"
+    "rvice.SavePlayerDataResponse\"\000\022]\n\016GetPla"
+    "yerField\022#.data_service.GetPlayerFieldRe"
+    "quest\032$.data_service.GetPlayerFieldRespo"
+    "nse\"\000\022]\n\016SetPlayerField\022#.data_service.S"
+    "etPlayerFieldRequest\032$.data_service.SetP"
+    "layerFieldResponse\"\000\022W\n\022RegisterPlayerZo"
+    "ne\022\'.data_service.RegisterPlayerZoneRequ"
+    "est\032\026.google.protobuf.Empty\"\000\022f\n\021GetPlay"
+    "erHomeZone\022&.data_service.GetPlayerHomeZ"
+    "oneRequest\032\'.data_service.GetPlayerHomeZ"
+    "oneResponse\"\000\022u\n\026BatchGetPlayerHomeZone\022"
+    "+.data_service.BatchGetPlayerHomeZoneReq"
+    "uest\032,.data_service.BatchGetPlayerHomeZo"
+    "neResponse\"\000\022r\n\025RemapHomeZoneForMerge\022*."
+    "data_service.RemapHomeZoneForMergeReques"
+    "t\032+.data_service.RemapHomeZoneForMergeRe"
+    "sponse\"\000\022c\n\020DeletePlayerData\022%.data_serv"
+    "ice.DeletePlayerDataRequest\032&.data_servi"
+    "ce.DeletePlayerDataResponse\"\000\022o\n\024CreateP"
+    "layerSnapshot\022).data_service.CreatePlaye"
+    "rSnapshotRequest\032*.data_service.CreatePl"
+    "ayerSnapshotResponse\"\000\022l\n\023ListPlayerSnap"
+    "shots\022(.data_service.ListPlayerSnapshots"
+    "Request\032).data_service.ListPlayerSnapsho"
+    "tsResponse\"\000\022r\n\025GetPlayerSnapshotDiff\022*."
+    "data_service.GetPlayerSnapshotDiffReques"
+    "t\032+.data_service.GetPlayerSnapshotDiffRe"
+    "sponse\"\000\022]\n\016RollbackPlayer\022#.data_servic"
+    "e.RollbackPlayerRequest\032$.data_service.R"
+    "ollbackPlayerResponse\"\000\022W\n\014RollbackZone\022"
+    "!.data_service.RollbackZoneRequest\032\".dat"
+    "a_service.RollbackZoneResponse\"\000\022T\n\013Roll"
+    "backAll\022 .data_service.RollbackAllReques"
+    "t\032!.data_service.RollbackAllResponse\"\000\022c"
+    "\n\020BatchRecallItems\022%.data_service.BatchR"
+    "ecallItemsRequest\032&.data_service.BatchRe"
+    "callItemsResponse\"\000\022l\n\023QueryTransactionL"
+    "og\022(.data_service.QueryTransactionLogReq"
+    "uest\032).data_service.QueryTransactionLogR"
+    "esponse\"\000\022l\n\023CreateEventSnapshot\022(.data_"
+    "service.CreateEventSnapshotRequest\032).dat"
+    "a_service.CreateEventSnapshotResponse\"\000\022"
+    "f\n\021AllocateIdSegment\022&.data_service.Allo"
+    "cateIdSegmentRequest\032\'.data_service.Allo"
+    "cateIdSegmentResponse\"\000\022f\n\021ReservePlayer"
+    "Name\022&.data_service.ReservePlayerNameReq"
+    "uest\032\'.data_service.ReservePlayerNameRes"
+    "ponse\"\000\022U\n\021ReleasePlayerName\022&.data_serv"
+    "ice.ReleasePlayerNameRequest\032\026.google.pr"
+    "otobuf.Empty\"\000\022i\n\022BatchGetPlayerName\022\'.d"
+    "ata_service.BatchGetPlayerNameRequest\032(."
+    "data_service.BatchGetPlayerNameResponse\""
+    "\000\022u\n\026GetPlayerAssetOpLedger\022+.data_servi"
+    "ce.GetPlayerAssetOpLedgerRequest\032,.data_"
+    "service.GetPlayerAssetOpLedgerResponse\"\000"
+    "\022o\n\024GetPlayerInboxLedger\022).data_service."
+    "GetPlayerInboxLedgerRequest\032*.data_servi"
+    "ce.GetPlayerInboxLedgerResponse\"\000B\033Z\031dat"
+    "a_service/data_serviceb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_deps[6] = {
+    descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_deps[7] = {
         &::descriptor_table_google_2fprotobuf_2fempty_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2frole_5fadmission_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2fservice_5fcall_5fauth_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2fuser_5faccounts_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fasset_5fop_5fledger_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5finbox_5fledger_5fcomp_2eproto,
+        &::descriptor_table_proto_2fcommon_2fdatabase_2fplayer_5fcache_2eproto,
 };
 static ::absl::once_flag descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto = {
     false,
     false,
-    14272,
+    14470,
     descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
     "proto/data_service/data_service.proto",
     &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_once,
     descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_deps,
-    6,
+    7,
     76,
     schemas,
     file_message_globals,
@@ -14234,7 +14272,7 @@ AccountRoleFreezeEvidenceKind_descriptor() {
   return file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[1];
 }
 PROTOBUF_CONSTINIT const uint32_t AccountRoleFreezeEvidenceKind_internal_data_[] = {
-    196608u, 0u, };
+    262144u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 SnapshotType_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto);
@@ -14262,6 +14300,11 @@ void AccountDirectoryResponse::clear_players() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.players_ != nullptr) _impl_.players_->Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+void AccountDirectoryResponse::clear_initial_player_data() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.initial_player_data_ != nullptr) _impl_.initial_player_data_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 AccountDirectoryResponse::AccountDirectoryResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -14297,6 +14340,9 @@ AccountDirectoryResponse::AccountDirectoryResponse(
   _impl_.players_ = (CheckHasBit(cached_has_bits, 0x00000001U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.players_)
                 : nullptr;
+  _impl_.initial_player_data_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.initial_player_data_)
+                : nullptr;
 
   // @@protoc_insertion_point(copy_constructor:data_service.AccountDirectoryResponse)
 }
@@ -14307,7 +14353,12 @@ PROTOBUF_NDEBUG_INLINE AccountDirectoryResponse::Impl_::Impl_(
 
 inline void AccountDirectoryResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.players_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, players_),
+           0,
+           offsetof(Impl_, initial_player_data_) -
+               offsetof(Impl_, players_) +
+               sizeof(Impl_::initial_player_data_));
 }
 AccountDirectoryResponse::~AccountDirectoryResponse() {
   // @@protoc_insertion_point(destructor:data_service.AccountDirectoryResponse)
@@ -14321,6 +14372,7 @@ inline void AccountDirectoryResponse::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   delete this_._impl_.players_;
+  delete this_._impl_.initial_player_data_;
   this_._impl_.~Impl_();
 }
 
@@ -14358,9 +14410,15 @@ PROTOBUF_NOINLINE void AccountDirectoryResponse::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    ABSL_DCHECK(_impl_.players_ != nullptr);
-    _impl_.players_->Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.players_ != nullptr);
+      _impl_.players_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.initial_player_data_ != nullptr);
+      _impl_.initial_player_data_->Clear();
+    }
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -14392,6 +14450,13 @@ PROTOBUF_NOINLINE void AccountDirectoryResponse::Clear() {
         stream);
   }
 
+  // .PlayerAllData initial_player_data = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.initial_player_data_, this_._impl_.initial_player_data_->GetCachedSize(), target,
+        stream);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -14415,12 +14480,18 @@ PROTOBUF_NOINLINE void AccountDirectoryResponse::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-   {
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // .AccountSimplePlayerList players = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.players_);
+    }
+    // .PlayerAllData initial_player_data = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.initial_player_data_);
     }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
@@ -14441,12 +14512,22 @@ void AccountDirectoryResponse::MergeImpl(::google::protobuf::MessageLite& to_msg
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    ABSL_DCHECK(from._impl_.players_ != nullptr);
-    if (_this->_impl_.players_ == nullptr) {
-      _this->_impl_.players_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.players_);
-    } else {
-      _this->_impl_.players_->MergeFrom(*from._impl_.players_);
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.players_ != nullptr);
+      if (_this->_impl_.players_ == nullptr) {
+        _this->_impl_.players_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.players_);
+      } else {
+        _this->_impl_.players_->MergeFrom(*from._impl_.players_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.initial_player_data_ != nullptr);
+      if (_this->_impl_.initial_player_data_ == nullptr) {
+        _this->_impl_.initial_player_data_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.initial_player_data_);
+      } else {
+        _this->_impl_.initial_player_data_->MergeFrom(*from._impl_.initial_player_data_);
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -14466,7 +14547,12 @@ void AccountDirectoryResponse::InternalSwap(AccountDirectoryResponse* PROTOBUF_R
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  swap(_impl_.players_, other->_impl_.players_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.initial_player_data_)
+      + sizeof(AccountDirectoryResponse::_impl_.initial_player_data_)
+      - PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.players_)>(
+          reinterpret_cast<char*>(&_impl_.players_),
+          reinterpret_cast<char*>(&other->_impl_.players_));
 }
 
 ::google::protobuf::Metadata AccountDirectoryResponse::GetMetadata() const {
@@ -34762,9 +34848,9 @@ inline void GetPlayerAssetOpLedgerRequest::SharedCtor(::_pb::Arena* PROTOBUF_NUL
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, require_sql_commit_) -
+           offsetof(Impl_, verify_redis_copy_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::require_sql_commit_));
+               sizeof(Impl_::verify_redis_copy_));
 }
 GetPlayerAssetOpLedgerRequest::~GetPlayerAssetOpLedgerRequest() {
   // @@protoc_insertion_point(destructor:data_service.GetPlayerAssetOpLedgerRequest)
@@ -34814,10 +34900,10 @@ PROTOBUF_NOINLINE void GetPlayerAssetOpLedgerRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.require_sql_commit_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.require_sql_commit_));
+        reinterpret_cast<char*>(&_impl_.verify_redis_copy_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.verify_redis_copy_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -34860,6 +34946,15 @@ PROTOBUF_NOINLINE void GetPlayerAssetOpLedgerRequest::Clear() {
     }
   }
 
+  // bool verify_redis_copy = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_verify_redis_copy() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_verify_redis_copy(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -34885,7 +34980,7 @@ PROTOBUF_NOINLINE void GetPlayerAssetOpLedgerRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // uint64 player_id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -34896,6 +34991,12 @@ PROTOBUF_NOINLINE void GetPlayerAssetOpLedgerRequest::Clear() {
     // bool require_sql_commit = 2;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_require_sql_commit() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool verify_redis_copy = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_verify_redis_copy() != 0) {
         total_size += 2;
       }
     }
@@ -34917,7 +35018,7 @@ void GetPlayerAssetOpLedgerRequest::MergeImpl(::google::protobuf::MessageLite& t
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
@@ -34926,6 +35027,11 @@ void GetPlayerAssetOpLedgerRequest::MergeImpl(::google::protobuf::MessageLite& t
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_require_sql_commit() != 0) {
         _this->_impl_.require_sql_commit_ = from._impl_.require_sql_commit_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_verify_redis_copy() != 0) {
+        _this->_impl_.verify_redis_copy_ = from._impl_.verify_redis_copy_;
       }
     }
   }
@@ -34947,8 +35053,8 @@ void GetPlayerAssetOpLedgerRequest::InternalSwap(GetPlayerAssetOpLedgerRequest* 
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerRequest, _impl_.require_sql_commit_)
-      + sizeof(GetPlayerAssetOpLedgerRequest::_impl_.require_sql_commit_)
+      PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerRequest, _impl_.verify_redis_copy_)
+      + sizeof(GetPlayerAssetOpLedgerRequest::_impl_.verify_redis_copy_)
       - PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerRequest, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));
@@ -35002,9 +35108,9 @@ GetPlayerAssetOpLedgerResponse::GetPlayerAssetOpLedgerResponse(
                offsetof(Impl_, found_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, found_),
-           offsetof(Impl_, sql_committed_) -
+           offsetof(Impl_, redis_copy_verified_) -
                offsetof(Impl_, found_) +
-               sizeof(Impl_::sql_committed_));
+               sizeof(Impl_::redis_copy_verified_));
 
   // @@protoc_insertion_point(copy_constructor:data_service.GetPlayerAssetOpLedgerResponse)
 }
@@ -35018,9 +35124,9 @@ inline void GetPlayerAssetOpLedgerResponse::SharedCtor(::_pb::Arena* PROTOBUF_NU
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, ledger_),
            0,
-           offsetof(Impl_, sql_committed_) -
+           offsetof(Impl_, redis_copy_verified_) -
                offsetof(Impl_, ledger_) +
-               sizeof(Impl_::sql_committed_));
+               sizeof(Impl_::redis_copy_verified_));
 }
 GetPlayerAssetOpLedgerResponse::~GetPlayerAssetOpLedgerResponse() {
   // @@protoc_insertion_point(destructor:data_service.GetPlayerAssetOpLedgerResponse)
@@ -35076,8 +35182,8 @@ PROTOBUF_NOINLINE void GetPlayerAssetOpLedgerResponse::Clear() {
     _impl_.ledger_->Clear();
   }
   ::memset(&_impl_.found_, 0, static_cast<::size_t>(
-      reinterpret_cast<char*>(&_impl_.sql_committed_) -
-      reinterpret_cast<char*>(&_impl_.found_)) + sizeof(_impl_.sql_committed_));
+      reinterpret_cast<char*>(&_impl_.redis_copy_verified_) -
+      reinterpret_cast<char*>(&_impl_.found_)) + sizeof(_impl_.redis_copy_verified_));
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -35126,6 +35232,15 @@ PROTOBUF_NOINLINE void GetPlayerAssetOpLedgerResponse::Clear() {
     }
   }
 
+  // bool redis_copy_verified = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_redis_copy_verified() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_redis_copy_verified(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -35151,7 +35266,7 @@ PROTOBUF_NOINLINE void GetPlayerAssetOpLedgerResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // .PlayerAssetOpLedgerComp ledger = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
@@ -35166,6 +35281,12 @@ PROTOBUF_NOINLINE void GetPlayerAssetOpLedgerResponse::Clear() {
     // bool sql_committed = 3;
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_sql_committed() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool redis_copy_verified = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_redis_copy_verified() != 0) {
         total_size += 2;
       }
     }
@@ -35188,7 +35309,7 @@ void GetPlayerAssetOpLedgerResponse::MergeImpl(::google::protobuf::MessageLite& 
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.ledger_ != nullptr);
       if (_this->_impl_.ledger_ == nullptr) {
@@ -35205,6 +35326,11 @@ void GetPlayerAssetOpLedgerResponse::MergeImpl(::google::protobuf::MessageLite& 
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_sql_committed() != 0) {
         _this->_impl_.sql_committed_ = from._impl_.sql_committed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_redis_copy_verified() != 0) {
+        _this->_impl_.redis_copy_verified_ = from._impl_.redis_copy_verified_;
       }
     }
   }
@@ -35226,8 +35352,8 @@ void GetPlayerAssetOpLedgerResponse::InternalSwap(GetPlayerAssetOpLedgerResponse
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerResponse, _impl_.sql_committed_)
-      + sizeof(GetPlayerAssetOpLedgerResponse::_impl_.sql_committed_)
+      PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerResponse, _impl_.redis_copy_verified_)
+      + sizeof(GetPlayerAssetOpLedgerResponse::_impl_.redis_copy_verified_)
       - PROTOBUF_FIELD_OFFSET(GetPlayerAssetOpLedgerResponse, _impl_.ledger_)>(
           reinterpret_cast<char*>(&_impl_.ledger_),
           reinterpret_cast<char*>(&other->_impl_.ledger_));

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"shared/drainproof"
 	"strconv"
+	"sync"
 	"time"
 
 	"match/internal/metrics"
@@ -32,10 +34,12 @@ import (
 
 // ResultConsumerConfig 消费者参数(来自 config.Config,由 main 装配)。
 type ResultConsumerConfig struct {
-	Brokers    []string
-	Topic      string
-	GroupID    string
-	Partitions int32
+	RelayAdmission *drainproof.Session
+	BindOwner      func(*kafkautil.BoundConsumerGroup) error
+	Brokers        []string
+	Topic          string
+	GroupID        string
+	Partitions     int32
 	// 全球 SQL 权威只在入账确认后提交位点；失败关闭并重建 reader 恢复原消息。
 	RequireSQLCommit bool
 }
@@ -101,6 +105,34 @@ func StartResultConsumer(ctx context.Context, cfg ResultConsumerConfig, handle R
 		return err
 	}
 
+	if cfg.RelayAdmission != nil {
+		if cfg.BindOwner == nil {
+			return fmt.Errorf("结果消费者缺少实际生命周期 owner")
+		}
+		var serial sync.Mutex
+		owner, err := kafkautil.NewBoundConsumerGroup(kafkautil.BoundConsumerGroupConfig{Group: kafkago.ConsumerGroupConfig{ID: cfg.GroupID, Brokers: cfg.Brokers, Topics: []string{cfg.Topic}, StartOffset: kafkago.FirstOffset}, Reader: kafkago.ReaderConfig{MinBytes: 1, MaxBytes: 1 << 20, MaxWait: 500 * time.Millisecond}, HandlerTimeout: 2 * time.Minute}, cfg.RelayAdmission, func(call context.Context, message kafkago.Message) error {
+			serial.Lock()
+			defer serial.Unlock()
+			if err := call.Err(); err != nil {
+				return err
+			}
+			return processResultRecord(call, message, handle, cfg.RequireSQLCommit, sleepCtx, record...)
+		})
+		if err != nil {
+			return err
+		}
+		if err = cfg.BindOwner(owner); err != nil {
+			return err
+		}
+		safego.Go("match.kafka.results", func() {
+			if err := owner.Run(ctx); err != nil {
+				cfg.RelayAdmission.Hold()
+				logx.Errorf("结果消费者 HOLD: %v", err)
+			}
+		})
+		return nil
+	}
+
 	logx.Infof("[rating] Battle result consumer started topic=%s group=%s", cfg.Topic, cfg.GroupID)
 	safego.Go("match.kafka.results", func() {
 		delay := resultFetchBackoff
@@ -147,68 +179,60 @@ type resultReader interface {
 
 func runResultConsumer(ctx context.Context, reader resultReader, handle ResultHandler, requireSQLCommit bool, wait func(context.Context, time.Duration) bool, record ...ResultRecordHandler) {
 	for {
-		msg, err := reader.FetchMessage(ctx)
+		message, err := reader.FetchMessage(ctx)
 		if err != nil {
 			if ctx.Err() != nil || errors.Is(err, context.Canceled) {
-				logx.Info("[rating] Battle result consumer stopped")
 				return
 			}
-			logx.Errorf("[rating] Failed to fetch battle result; retrying after %s: %v", resultFetchBackoff, err)
+			logx.Errorf("结果拉取失败，等待原有退避: %v", err)
 			if !wait(ctx, resultFetchBackoff) {
 				return
 			}
 			continue
 		}
-
-		event := &kafkapb.BattleResultEvent{}
-		if err := proto.Unmarshal(msg.Value, event); err != nil {
-			// 全球模式关闭本轮并保留原位点；只有显式旧兼容模式允许跳过坏消息。
-			logx.Errorf("[rating] Failed to deserialize battle result partition=%d offset=%d key=%s: %v",
-				msg.Partition, msg.Offset, string(msg.Key), err)
-			metrics.ObserveRatingUpdate("unknown", "decode_error")
-			if requireSQLCommit {
-				return
-			}
-			commitResult(ctx, reader, msg)
-			continue
+		if err = processResultRecord(ctx, message, handle, requireSQLCommit, wait, record...); err != nil {
+			return
 		}
-		if key := string(msg.Key); key != "" && key != strconv.FormatUint(event.GetBattleId(), 10) {
-			// key 契约是 battle_id;不一致只是日志,payload 里的 battle_id 为准。
-			logx.Errorf("[rating] Battle result key=%s does not match battle_id=%d", key, event.GetBattleId())
-		}
-
-		handled := false
-		for attempt := 1; attempt <= resultHandleMaxAttempts; attempt++ {
-			if len(record) == 1 {
-				if err := record[0](ctx, event, msg.Value, msg.Topic, msg.Partition, msg.Offset); err != nil {
-					logx.Errorf("完整结算来源未确认 partition=%d offset=%d attempt=%d: %v", msg.Partition, msg.Offset, attempt, err)
-					if attempt < resultHandleMaxAttempts && !wait(ctx, resultHandleBackoff) {
-						return
-					}
-					continue
-				}
-			}
-			if err := handle(ctx, event); err == nil {
-				handled = true
-				break
-			} else {
-				logx.Errorf("[rating] Failed to process battle result (attempt %d/%d) battle=%d mode=%s: %v",
-					attempt, resultHandleMaxAttempts, event.GetBattleId(),
-					matchpb.MatchMode(event.GetMatchMode()).String(), err)
-			}
-			if attempt < resultHandleMaxAttempts && !wait(ctx, resultHandleBackoff) {
-				return
-			}
-		}
-		if !handled {
-			if requireSQLCommit || len(record) == 1 {
-				return
-			}
-			// 显式旧兼容模式保留原来的软评分跳过策略。
-			logx.Errorf("[rating] Battle result retries exhausted; skipping battle=%d", event.GetBattleId())
-		}
-		commitResult(ctx, reader, msg)
+		commitResult(ctx, reader, message)
 	}
+}
+
+// processResultRecord 只返回业务结局；实际 offset 提交由唯一 consumer owner 完成。
+func processResultRecord(ctx context.Context, msg kafkago.Message, handle ResultHandler, requireSQLCommit bool, wait func(context.Context, time.Duration) bool, record ...ResultRecordHandler) error {
+	event := &kafkapb.BattleResultEvent{}
+	if err := proto.Unmarshal(msg.Value, event); err != nil {
+		metrics.ObserveRatingUpdate("unknown", "decode_error")
+		logx.Errorf("结果原件解码失败 partition=%d offset=%d: %v", msg.Partition, msg.Offset, err)
+		if requireSQLCommit {
+			return err
+		}
+		return nil
+	}
+	if key := string(msg.Key); key != "" && key != strconv.FormatUint(event.GetBattleId(), 10) {
+		logx.Errorf("结果 key 与 battle_id 不符 partition=%d offset=%d", msg.Partition, msg.Offset)
+	}
+	var last error
+	for attempt := 1; attempt <= resultHandleMaxAttempts; attempt++ {
+		last = nil
+		if len(record) == 1 {
+			last = record[0](ctx, event, msg.Value, msg.Topic, msg.Partition, msg.Offset)
+		}
+		if last == nil {
+			last = handle(ctx, event)
+		}
+		if last == nil {
+			return nil
+		}
+		logx.Errorf("结果处理未确认 attempt=%d/%d battle=%d mode=%s: %v", attempt, resultHandleMaxAttempts, event.GetBattleId(), matchpb.MatchMode(event.GetMatchMode()).String(), last)
+		if attempt < resultHandleMaxAttempts && !wait(ctx, resultHandleBackoff) {
+			return errors.Join(last, ctx.Err())
+		}
+	}
+	if requireSQLCommit || len(record) == 1 {
+		return last
+	}
+	logx.Errorf("旧兼容评分有限重试后跳过 battle=%d", event.GetBattleId())
+	return nil
 }
 
 // commitResult 同步提交一条消息的 offset;失败只记日志(下次提交会覆盖,

@@ -65,10 +65,10 @@ std::string DefaultSchemeName(uint32_t ordinal) {
 }
 
 
-// 调用方均已过 CheckAttributeInputs。
+// 玩法读的生效等级:存储等级经 playerlevel::CappedLevel(0 按 1、超上限按上限),存储值本身不改。
+// 总点数、面板等级、自然成长、洗点免费线都读它。调用方均已过 CheckAttributeInputs。
 uint32_t PlayerLevel(entt::entity player) {
-	const auto level = tlsEcs.actorRegistry.get<LevelComp>(player).level();
-	return level > 0 ? level : 1;
+	return playerlevel::CappedLevel(tlsEcs.actorRegistry.get<LevelComp>(player).level());
 }
 
 // 调用方均已过 CheckAttributeInputs。
@@ -160,18 +160,77 @@ uint32_t AllocatedIn(const AttributeScheme& scheme, uint32_t dimensionId) {
 	return it == scheme.allocated().end() ? 0 : it->second;
 }
 
-// 当前方案里某池已用点数
-uint32_t UsedPoints(const AttributeScheme& scheme, uint32_t poolId) {
-	uint64_t used = 0;
-	for (const auto* dim : AttributeDimensionTableManager::Instance().GetByPoolId(poolId)) {
-		used += AllocatedIn(scheme, dim->id());
-	}
-	return used > std::numeric_limits<uint32_t>::max() ? std::numeric_limits<uint32_t>::max()
-													  : static_cast<uint32_t>(used);
-}
-
 uint32_t TotalPoints(entt::entity player, const PlayerAttributeComp& comp, const AttributePoolTable& pool) {
 	return attributerules::TotalPoints(ToRule(pool), PlayerLevel(player), BonusPoints(comp, pool.id()));
+}
+
+// 方案在某角色池上的存储加点汇总(加点统一规则 2,attribute_allocation_rules.h):
+//   已知 = 本版本表里属于该池的角色维度;
+//   未知 = IsPlayerDimension 答 false 的键(新版本加的维度、宝宝维度、所属池查不到的维度)。它们归不到任何
+//         角色池,对每个角色池都计入 foreignUsed(规则 4)。
+// 属于另一个角色池的已知维度两边都不计 —— 由那个池自己汇总。
+// AttributeScheme 本层的未知字段(新版本给方案加的字段)不在这里判、也不加 HasUnknown 守卫:那会把退役字段的
+// 残留误判成永久冻结;与加点语义耦合的新字段按混版本持久字段保护的 R5 走评审(规则 8)。
+attributerules::StoredPoolAllocation StoredAllocationOf(const AttributeScheme& scheme, uint32_t poolId) {
+	attributerules::StoredPoolAllocation stored;
+	for (const auto& [dimensionId, points] : scheme.allocated()) {
+		const auto [dim, err] = AttributeDimensionTableManager::Instance().FindByIdSilent(dimensionId);
+		if (dim == nullptr || !IsPlayerDimensionRow(*dim)) {
+			stored.AddForeign(points);
+		} else if (dim->pool_id() == poolId) {
+			stored.AddKnown(points);
+		}
+	}
+	return stored;
+}
+
+// 方案在某角色池上的判定结果(加点统一规则 3 / 4)。面板、加点、洗点、自动加点、重算都从这里取,
+// 不再各抄一份"总量 − 已用"。
+struct PoolAllocationState {
+	uint32_t total = 0;
+	attributerules::StoredPoolAllocation stored;
+	bool effective = true;
+	uint32_t remaining = 0;
+};
+
+// scheme 为空(激活方案指向不存在的方案,原样保留不纠正)按"没有加点"处理。
+PoolAllocationState EvaluatePool(entt::entity player, const PlayerAttributeComp& comp, const AttributeScheme* scheme,
+								 const AttributePoolTable& pool) {
+	PoolAllocationState state;
+	state.total = TotalPoints(player, comp, pool);
+	if (scheme != nullptr) {
+		state.stored = StoredAllocationOf(*scheme, pool.id());
+	}
+	const auto rule = ToRule(pool);
+	state.effective = attributerules::PoolAllocationEffective(rule, state.total, state.stored);
+	state.remaining = attributerules::RemainingPoints(rule, state.total, state.stored);
+	return state;
+}
+
+// 当前方案下各角色池是否生效,按 pool_id 查。Recalculate 用它决定哪些加点参与换算;
+// BuildPanel 在填池信息的同一个循环里按同一个 EvaluatePool 建出同样的表 —— 面板 value 与实际换算不会分叉。
+std::map<uint32_t, bool> EffectivePlayerPools(entt::entity player, const PlayerAttributeComp& comp,
+											  const AttributeScheme* scheme) {
+	std::map<uint32_t, bool> effective;
+	for (const auto& pool : AttributePoolTableManager::Instance().FindAll().data()) {
+		if (IsPlayerPool(pool)) {
+			effective[pool.id()] = EvaluatePool(player, comp, scheme, pool).effective;
+		}
+	}
+	return effective;
+}
+
+// 维度的生效加点:所属池生效时取存储值,否则按 0(加点统一规则 3)。存储值本身不动。
+uint32_t EffectiveAllocatedIn(const AttributeScheme* scheme, const AttributeDimensionTable& dim,
+							  const std::map<uint32_t, bool>& effectivePools) {
+	if (scheme == nullptr) {
+		return 0;
+	}
+	const auto it = effectivePools.find(dim.pool_id());
+	if (it == effectivePools.end() || !it->second) {
+		return 0;
+	}
+	return AllocatedIn(*scheme, dim.id());
 }
 
 // 装备加成在 equiprules 里是饱和到 uint64 上限的整数;这里再与别的量相加也保持饱和,不回绕
@@ -194,14 +253,13 @@ uint64_t ExternalBonusPoints(const PlayerAttributeComp& comp, const equiprules::
 	return SaturatingAdd(BonusValue(comp, dimensionId), equiprules::PrimaryPointsFor(equipBonus, dimensionId));
 }
 
-// 维度面板值 = 每级自然成长 × 等级 + 已分配 + 外部加成(面板显示的是点数,与换算口径无关)。
-// externalBonus 由调用方用 ExternalBonusPoints 算好传入,同一个数也作为 AttributeDimensionInfo.bonus 下发。
-uint64_t DimensionValue(entt::entity player, const AttributeScheme* scheme, const AttributeDimensionTable& dim,
+// 维度面板值 = 每级自然成长 × 等级 + 生效的已分配 + 外部加成(面板显示的是点数,与换算口径无关)。
+// effectiveAllocated 由 EffectiveAllocatedIn 给:所属池不生效时是 0,与参与二级属性换算的是同一个数;
+// 面板的 allocated 仍下发存储值。externalBonus 由调用方用 ExternalBonusPoints 算好传入,
+// 同一个数也作为 AttributeDimensionInfo.bonus 下发。
+uint64_t DimensionValue(entt::entity player, const AttributeDimensionTable& dim, uint32_t effectiveAllocated,
 						uint64_t externalBonus) {
-	uint64_t value = static_cast<uint64_t>(dim.base_per_level()) * PlayerLevel(player);
-	if (scheme != nullptr) {
-		value += AllocatedIn(*scheme, dim.id());
-	}
+	const uint64_t value = static_cast<uint64_t>(dim.base_per_level()) * PlayerLevel(player) + effectiveAllocated;
 	return SaturatingAdd(value, externalBonus);
 }
 
@@ -496,7 +554,7 @@ uint32_t MapAllocError(AllocError err) {
 }
 
 // 面板、重算与写入口共用的真实输入契约。没有背包/职业/等级不是「空装备/默认职业/1级」;
-// 派生缓存只由 InitializeOnLoad 创建,缺任一输入都在扣费、方案收敛或夹 HP/MP 之前拒绝。
+// 派生缓存只由 InitializeOnLoad 创建,缺任一输入都在扣费、改方案或夹 HP/MP 之前拒绝。
 uint32_t CheckAttributeInputs(entt::entity player) {
 	if (!tlsEcs.actorRegistry.valid(player)) {
 		return kEntityIsNull;
@@ -532,7 +590,13 @@ uint32_t CheckWritable(entt::entity player) {
 	return kSuccess;
 }
 
-uint64_t ResetCostFor(entt::entity player, const AttributePoolTable& pool) {
+// 洗点金币:面板下发的 reset_cost_gold 与 Reset 实际扣的是这同一个函数。
+// 池不生效时免费(加点统一规则 6):不生效的来源是改表缩点、等级降低或混版本,都不是玩家的操作,
+// 而那时已知维度本来就按 0 参与计算 —— 照收的话等于让玩家为一份没有生效的加点付费。
+uint64_t ResetCostFor(entt::entity player, const AttributePoolTable& pool, const PoolAllocationState& state) {
+	if (!state.effective) {
+		return 0;
+	}
 	if (pool.reset_free_below_level() > 0 && PlayerLevel(player) < pool.reset_free_below_level()) {
 		return 0;
 	}
@@ -627,21 +691,6 @@ void NormalizeSchemesOnLoad(PlayerAttributeComp& comp) {
 	}
 }
 
-// 清掉表里已不存在的维度(改表后老存档自愈,点数自动返还)
-void SanitizeSchemes(PlayerAttributeComp& comp) {
-	for (auto& scheme : *comp.mutable_schemes()) {
-		std::vector<uint32_t> stale;
-		for (const auto& [dimensionId, _] : scheme.allocated()) {
-			if (!AttributeDimensionTableManager::Instance().Exists(dimensionId)) {
-				stale.push_back(dimensionId);
-			}
-		}
-		for (const auto dimensionId : stale) {
-			scheme.mutable_allocated()->erase(dimensionId);
-		}
-	}
-}
-
 }  // namespace
 
 bool PlayerAttributeSystem::IsPlayerDimension(uint32_t dimensionId) {
@@ -653,13 +702,14 @@ void PlayerAttributeSystem::InitializeOnLoad(entt::entity player) {
 	if (!tlsEcs.actorRegistry.valid(player)) {
 		return;
 	}
-	// 存档组件由 Unmarshal 挂上;这里只做加载期的数据修补,不替加载链路补建(FindComp 已记错误)。
+	// 存档组件由 Unmarshal 挂上;这里只补缺省方案,不替加载链路补建(FindComp 已记错误)。
+	// 已分配点原样携带:表里查不到的维度不再清掉(加点统一规则 1,mixed-version-persist-field-protection.md §12.1 D1),
+	// 它们是未知键,不生效但计入已用,由 Recalculate / 写入口按本版本表解释。
 	auto* comp = FindComp(player);
 	if (comp == nullptr) {
 		return;
 	}
 	NormalizeSchemesOnLoad(*comp);
-	SanitizeSchemes(*comp);
 	// 二级属性是派生缓存、不入库,唯一创建点就是这里;之后 Recalculate 只写不建。
 	// 每次加载从零开始:旧上限为 0 时 Recalculate(kLoad) 只把当前 HP/MP 向下夹到新上限。
 	tlsEcs.actorRegistry.emplace_or_replace<DerivedAttributesComp>(player);
@@ -668,25 +718,38 @@ void PlayerAttributeSystem::InitializeOnLoad(entt::entity player) {
 
 namespace {
 
-// 已分配 > 总量的收敛:等级下降(GM / 回档)或改表缩点后,某方案某池的已分配可能超过该池总量。
-// 不收敛的话低等级号会一直带着高等级面板进战斗快照。整池清零返还(不做按比例裁剪:裁剪结果不可预期,
-// 玩家更容易理解"点数退回来了")。
-void ConvergeOverAllocation(entt::entity player, PlayerAttributeComp& comp) {
+// 加载期可观测性(只读,不写任何数据):每个方案里不生效的池、带未知键的方案各打一条 WARN。
+// 加载不再改写已分配点(以前超额整池清零返还、查不到表的维度直接删),"改表缩点 / 等级降低 / 混版本回滚"
+// 在线上唯一看得见的痕迹就是这两条日志。只在 kLoad 打:其它原因的重算每次写操作都走,重复刷同一件事没有信息量。
+void WarnStoredAllocationsOnLoad(entt::entity player, const PlayerAttributeComp& comp) {
 	const auto& pools = AttributePoolTableManager::Instance().FindAll().data();
-	for (const auto& pool : pools) {
-		if (!IsPlayerPool(pool)) {
-			continue;  // 宝宝池的收敛由 PetSystem 按宝宝等级做
-		}
-		const auto total = TotalPoints(player, comp, pool);
-		for (auto& scheme : *comp.mutable_schemes()) {
-			if (UsedPoints(scheme, pool.id()) <= total) {
+	for (const auto& scheme : comp.schemes()) {
+		for (const auto& pool : pools) {
+			if (!IsPlayerPool(pool)) {
 				continue;
 			}
-			for (const auto* dim : AttributeDimensionTableManager::Instance().GetByPoolId(pool.id())) {
-				scheme.mutable_allocated()->erase(dim->id());
+			const auto state = EvaluatePool(player, comp, &scheme, pool);
+			if (!state.effective) {
+				LOG_WARN << "[PlayerAttribute] metric=allocation_not_effective kind=pool player_id="
+						 << tlsEcs.GetPlayerId(player) << " scheme=" << scheme.scheme_id() << " pool=" << pool.id()
+						 << " known_used=" << state.stored.knownUsed << " known_largest=" << state.stored.knownLargest
+						 << " total=" << state.total << " dimension_cap=" << pool.dimension_cap()
+						 << "; stored allocation carried as-is, pool counts as 0";
 			}
-			LOG_WARN << "[PlayerAttribute] Allocation exceeds total;entire pool reset and refunded: player_id=" << tlsEcs.GetPlayerId(player)
-					 << " pool=" << pool.id() << " scheme=" << scheme.scheme_id() << " total=" << total;
+		}
+		uint32_t unknownKeys = 0;
+		uint64_t unknownPoints = 0;
+		for (const auto& [dimensionId, points] : scheme.allocated()) {
+			if (!PlayerAttributeSystem::IsPlayerDimension(dimensionId)) {
+				++unknownKeys;
+				unknownPoints += points;
+			}
+		}
+		if (unknownKeys > 0) {
+			LOG_WARN << "[PlayerAttribute] metric=allocation_not_effective kind=unknown_dimension player_id="
+					 << tlsEcs.GetPlayerId(player) << " scheme=" << scheme.scheme_id() << " unknown_keys=" << unknownKeys
+					 << " unknown_points=" << unknownPoints
+					 << "; unknown dimensions carried as-is, never effective, counted as spent";
 		}
 	}
 }
@@ -697,17 +760,21 @@ void PlayerAttributeSystem::Recalculate(entt::entity player, RecalcReason reason
 	if (CheckAttributeInputs(player) != kSuccess) {
 		return;
 	}
-	// 输入已统一校验;后面的收敛会改方案、重算会夹 HP/MP,不能带缺失输入继续执行。
+	// 输入已统一校验;重算会夹 HP/MP,不能带缺失输入继续执行。
+	// 任何原因的重算都只读 PlayerAttributeComp、不改写不返还已分配点(加点统一规则 1):等级降低 / 改表缩点后
+	// 超额的池整池按 0 生效,等级回来了同一份加点原样生效。
 	auto* baseAttrs = &tlsEcs.actorRegistry.get<BaseAttributesComp>(player);
-	auto& comp = tlsEcs.actorRegistry.get<PlayerAttributeComp>(player);
+	const auto& comp = tlsEcs.actorRegistry.get<PlayerAttributeComp>(player);
 	auto& derived = tlsEcs.actorRegistry.get<DerivedAttributesComp>(player);
-	if (reason == RecalcReason::kLoad || reason == RecalcReason::kLevelChanged) {
-		ConvergeOverAllocation(player, comp);
+	if (reason == RecalcReason::kLoad) {
+		WarnStoredAllocationsOnLoad(player, comp);
 	}
 	const auto* scheme = ActiveScheme(comp);
 	const auto* classRow = ResolveClassRow(player);
 	const auto classId = PlayerClassId(player);
 	const auto level = PlayerLevel(player);
+	// 当前方案下各池是否生效;不生效的池,其已知维度在下面按 0 参与换算,未知键根本不进循环(只遍历表里的维度)。
+	const auto effectivePools = EffectivePlayerPools(player, comp, scheme);
 
 	// 装备加成每次重算都从装备栏现算(纯读,不写任何组件)。**不写** bonus_values:那是落库字段,写进去就成了
 	// 「装备栏」之外的第二份真相,脱下时还得记得减回去(equipment-attributes.md §4.4、§5 不变量 3)。
@@ -734,7 +801,7 @@ void PlayerAttributeSystem::Recalculate(entt::entity player, RecalcReason reason
 		if (natural > 0.0) {
 			acc.AddLinear(dim, natural);
 		}
-		const uint32_t allocated = scheme != nullptr ? AllocatedIn(*scheme, dim.id()) : 0;
+		const uint32_t allocated = EffectiveAllocatedIn(scheme, dim, effectivePools);
 		if (allocated == 0) {
 			continue;
 		}
@@ -798,6 +865,8 @@ void PlayerAttributeSystem::Recalculate(entt::entity player, RecalcReason reason
 	//   加载/加点/切方案/洗点/换装:按比例保持 —— 降后再升往返不净得(极低血量因"至少留 1"有上界的回升例外,
 	//   见 RescaleCurrent),堵住"切方案/洗点当治疗"。换装(kEquipmentChanged)必须落在这个分支:
 	//   走上面的补增量分支的话,脱下加血装再穿回就是一次免费回血。
+	// 旧上限 / 新上限都是生效值(上一次重算按同一个生效判定算出):从不生效的池洗点时上限不变,HP/MP 也就不变,
+	// 不会出现"先按存储值抬一次上限、再按生效值压回去"的往返(加点统一规则 7)。
 	if (reason == RecalcReason::kLevelChanged) {
 		if (baseAttrs->health() > 0 && derived.max_health() > oldMaxHealth && oldMaxHealth > 0) {
 			baseAttrs->set_health(baseAttrs->health() + (derived.max_health() - oldMaxHealth));
@@ -838,22 +907,25 @@ uint32_t PlayerAttributeSystem::BuildPanel(entt::entity player, AttributePanelIn
 		panel.set_switch_cooldown_until(comp.last_switch_time() + rule->switch_cooldown_seconds());
 	}
 
+	// 池信息与下面维度 value 的生效判定出自同一个 EvaluatePool(与 Recalculate 的 EffectivePlayerPools 同一函数):
+	// 剩余点、洗点费用、value 里算不算已分配,三处不会各说各话。
+	std::map<uint32_t, bool> effectivePools;
 	const auto& pools = AttributePoolTableManager::Instance().FindAll().data();
 	for (const auto& pool : pools) {
 		if (!IsPlayerPool(pool)) {
 			continue;
 		}
+		const auto state = EvaluatePool(player, comp, scheme, pool);
+		effectivePools[pool.id()] = state.effective;
 		auto* info = panel.add_pools();
 		info->set_pool_id(pool.id());
 		info->set_name(pool.name());
-		const auto total = TotalPoints(player, comp, pool);
-		const auto used = scheme != nullptr ? UsedPoints(*scheme, pool.id()) : 0;
-		info->set_total(total);
-		info->set_remaining(total > used ? total - used : 0);
+		info->set_total(state.total);
+		info->set_remaining(state.remaining);
 		info->set_dimension_cap(pool.dimension_cap());
 		info->set_unlocked(attributerules::IsUnlocked(ToRule(pool), level));
 		info->set_unlock_level(pool.unlock_level());
-		info->set_reset_cost_gold(ResetCostFor(player, pool));
+		info->set_reset_cost_gold(ResetCostFor(player, pool, state));
 	}
 
 	// 装备的一级属性点在这里再现算一次,而不是在 Recalculate 时缓存进一个运行时组件:
@@ -874,10 +946,11 @@ uint32_t PlayerAttributeSystem::BuildPanel(entt::entity player, AttributePanelIn
 		info->set_pool_id(dim.pool_id());
 		info->set_name(dim.name());
 		info->set_desc(dim.desc());
+		// allocated 下发存储值(池不生效时也照实显示,玩家看得到自己的加点还在);value 只算生效的那部分。
 		info->set_allocated(scheme != nullptr ? AllocatedIn(*scheme, dim.id()) : 0);
 		// bonus 已含在 value 内(客户端显示成「170(+15)」);它不占点、也不抬高可分配上限。
 		const uint64_t externalBonus = ExternalBonusPoints(comp, equipBonus, dim.id());
-		info->set_value(DimensionValue(player, scheme, dim, externalBonus));
+		info->set_value(DimensionValue(player, dim, EffectiveAllocatedIn(scheme, dim, effectivePools), externalBonus));
 		info->set_bonus(SaturateToU32(externalBonus));
 		if (const auto [pool, err] = AttributePoolTableManager::Instance().FindByIdSilent(dim.pool_id()); pool != nullptr) {
 			info->set_cap(pool->dimension_cap());
@@ -926,27 +999,31 @@ uint32_t PlayerAttributeSystem::Allocate(entt::entity player, uint32_t poolId,
 		return kAttributeSchemeNotFound;
 	}
 
+	// current 只含本池已知维度:目标里出现别的键(未知键、宝宝维度、别的池)一律 kDimensionNotInPool。
 	std::map<uint32_t, uint32_t> current;
 	for (const auto* dim : AttributeDimensionTableManager::Instance().GetByPoolId(poolId)) {
 		current[dim->id()] = AllocatedIn(*scheme, dim->id());
 	}
-	const auto total = TotalPoints(player, comp, *pool);
-	const auto used = UsedPoints(*scheme, poolId);
-	const uint32_t remaining = total > used ? total - used : 0;
+	// 剩余点按加点统一规则 4:未知键计入已用;池不生效时为 0,任何增量都回「点数不足」。
+	const auto state = EvaluatePool(player, comp, scheme, *pool);
 
 	uint32_t delta = 0;
 	const auto err = attributerules::ValidateAllocation(ToRule(*pool), PlayerLevel(player), current, target,
-														 remaining, delta);
+														 state.remaining, delta);
 	if (err != AllocError::kOk) {
 		return MapAllocError(err);
 	}
+	// 只写真正变化的键:ValidateAllocation 已保证每个键都是本池已知维度且只增不减;want == current 的键
+	// (客户端常把整池维度连同 0 一起发来)不落,存档里不会凭空多出 0 值新键。
 	for (const auto& [dimensionId, want] : target) {
-		(*scheme->mutable_allocated())[dimensionId] = want;
+		if (const auto it = current.find(dimensionId); it != current.end() && it->second != want) {
+			(*scheme->mutable_allocated())[dimensionId] = want;
+		}
 	}
 	Recalculate(player, RecalcReason::kAllocate);
 	LOG_INFO << "[PlayerAttribute] Points allocated: player_id=" << tlsEcs.GetPlayerId(player) << " pool=" << poolId
 			 << " scheme=" << scheme->scheme_id() << " delta=" << delta
-			 << " remaining=" << (remaining - delta);
+			 << " remaining=" << (state.remaining - delta);
 	return kSuccess;
 }
 
@@ -967,11 +1044,15 @@ uint32_t PlayerAttributeSystem::Reset(entt::entity player, uint32_t poolId) {
 	if (scheme == nullptr) {
 		return kAttributeSchemeNotFound;
 	}
-	if (UsedPoints(*scheme, poolId) == 0) {
+	// 洗点只管本池已知维度(加点统一规则 6):只剩未知键时也是「无可洗」—— 未知键不归本池,洗点不碰它们,
+	// 收了钱却什么都没清掉。
+	const auto state = EvaluatePool(player, comp, scheme, *pool);
+	if (state.stored.knownUsed == 0) {
 		return kAttributeNothingToChange;
 	}
-	// 先扣费再清点:扣费失败则什么都不动(货币系统内部有冻结/封禁校验)
-	const auto cost = ResetCostFor(player, *pool);
+	// 先扣费再清点:扣费失败则什么都不动(货币系统内部有冻结/封禁校验)。
+	// 费用与面板下发的 reset_cost_gold 同一个函数:池不生效时免费。
+	const auto cost = ResetCostFor(player, *pool, state);
 	if (cost > 0) {
 		if (!CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(cost))) {
 			return kAttributeGoldNotEnough;
@@ -981,6 +1062,13 @@ uint32_t PlayerAttributeSystem::Reset(entt::entity player, uint32_t poolId) {
 			return err;
 		}
 	}
+	if (!state.effective) {
+		LOG_WARN << "[PlayerAttribute] metric=allocation_reset_free_ineffective player_id=" << tlsEcs.GetPlayerId(player)
+				 << " pool=" << poolId << " scheme=" << scheme->scheme_id() << " known_used=" << state.stored.knownUsed
+				 << " known_largest=" << state.stored.knownLargest << " total=" << state.total
+				 << " dimension_cap=" << pool->dimension_cap() << "; ineffective pool reset for free";
+	}
+	// 只清本池已知维度,未知键原样保留(它们在本版本归不到任何池,也就不归这次洗点)。
 	for (const auto* dim : AttributeDimensionTableManager::Instance().GetByPoolId(poolId)) {
 		scheme->mutable_allocated()->erase(dim->id());
 	}
@@ -1044,9 +1132,8 @@ uint32_t PlayerAttributeSystem::AutoAllocate(entt::entity player, uint32_t poolI
 		order.push_back(dimensionId);
 		weights.push_back(i < plan->weight_size() ? plan->weight(i) : 1);
 	}
-	const auto total = TotalPoints(player, comp, *pool);
-	const auto used = UsedPoints(*scheme, poolId);
-	const uint32_t remaining = total > used ? total - used : 0;
+	// 剩余点与 Allocate 同一个判定(加点统一规则 4):建议能原样提交通过校验。
+	const auto remaining = EvaluatePool(player, comp, scheme, *pool).remaining;
 	if (remaining == 0) {
 		return kAttributeNothingToChange;
 	}
@@ -1155,7 +1242,15 @@ uint32_t PlayerAttributeSystem::GmSetLevel(entt::entity player, uint32_t level) 
 		return kServiceUnavailable;
 	}
 	auto& levelComp = *levelCompPtr;
+	// 写前取存储原值(player_level_rules.h 允许直读 LevelComp 的四处之一)。GM 是绝对设值:
+	// 存储等级超上限(新版本提高上限后回滚 / 混版本带进来,读路径按上限生效、原值照常携带)时,这一下会把
+	// 携带的等级覆写掉且不可恢复。GM 只在 dev/test 开放,这里留痕不拦。
 	const auto oldLevel = levelComp.level();
+	if (oldLevel > playerlevel::kMaxLevel) {
+		LOG_WARN << "[PlayerAttribute] GM level set overwrites a carried stored level above the cap: player_id="
+				 << tlsEcs.GetPlayerId(player) << " stored_level=" << oldLevel << " cap=" << playerlevel::kMaxLevel
+				 << " new_level=" << level;
+	}
 	levelComp.set_level(level);
 	LOG_INFO << "[PlayerAttribute] GM level set: player_id=" << tlsEcs.GetPlayerId(player) << " " << oldLevel << " -> " << level;
 

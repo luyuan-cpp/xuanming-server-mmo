@@ -25,13 +25,13 @@ END = "<!-- END GENERATED INDEX -->"
 DESIGN_RULES = [
     ("总览与入门", [
         "ARCH.md", "onboarding.md", "architecture-current-state-vs-gaps-*", "ecs*.md",
-        "table-api-reference*", "script_directory_rules*", "root_level_cleanup_findings*",
+        "table-api-reference*",
         "capacity-model-*",
     ]),
     ("构建、部署与发布", [
         "docker_k8s_build_deploy*", "cpp_image_optimization*", "release-packaging-standard-*",
         "rolling-update-restart-resilience-tests.md", "vs2026_cross_machine_compatibility*",
-        "scene_build_pdb_note*", "gateway-k8s-deployment.md",
+        "gateway-k8s-deployment.md",
     ]),
     ("测试与机器人", [
         "robot-*", "login-test-anti-stuck-system.md", "data-consistency-stress-testing.md",
@@ -46,12 +46,12 @@ DESIGN_RULES = [
         "async-load-disconnect-reconnect-race.md", "redis-async-client-retry-fix.md",
     ]),
     ("协议与配表工具链", [
-        "proto-*", "proto3_*", "pbgen_notes*", "excel-6row-header-format*", "tip-code-axis.md",
+        "proto-*", "proto3_*", "excel-6row-header-format*", "tip-code-axis.md",
         "generated-table-header-decoupling-plan.md",
     ]),
     ("ID、节点身份与寻址", [
         "snowflake-*", "node-*", "node_id_*", "id-routing-session-status-*",
-        "routing-identity-audit-*", "grpc_node_entity_id_collision.md",
+        "routing-identity-audit-*",
         "control-plane-topic-partitioning-*",
     ]),
     ("跨服、合服与回档", [
@@ -83,7 +83,7 @@ DESIGN_RULES = [
     ]),
     ("基础设施与中间件", [
         "kafka-*", "infra-reconnect-overview.md", "go-zero-rpc-timeout-fix.md",
-        "grpc-client-deadline-failure-callback.md", "grpc-muduo-transport.md",
+        "grpc-muduo-transport.md",
         "muduo-timer-cancellation-hazards.md",
         "muduo-rpc-*", "player-handler-deferred-reply.md",
         "hashed-timing-wheel.md", "double-buffer-queue-optimizations.md",

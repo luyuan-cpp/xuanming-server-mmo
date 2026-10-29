@@ -63,16 +63,49 @@ spec:
                   matchLabels:
                     app: chat
                 topologyKey: kubernetes.io/hostname
+      # 独立registrar只在init读取有限预批准roster与控制凭据；normal只见本Pod选中配置。
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      initContainers:
+        - name: sql-writer-registrar
+          image: PLACEHOLDER_SQL_WRITER_REGISTRAR_IMAGE
+          command: ["/bin/sh", "-ec"]
+          args: ["umask 077; mkdir -p /run/sql-writer/runtime/env; exec /app/service \"$@\"","--","-command","register","-roster","/run/sql-writer/input/request/roster.json","-roster-sha256","PLACEHOLDER_SQL_WRITER_ROSTER_SHA256","-input-root","/run/sql-writer/input","-lock-qualification","/run/sql-writer/input/request/lock-qualification.original","-runtime-config-output","/run/sql-writer/runtime/chat.yaml","-runtime-env-output","/run/sql-writer/runtime/env","-boot-output","/run/sql-writer/grant/boot-grant.json","-deployment-id","$(MMORPG_SQL_DEPLOYMENT_ID)"]
+          env:
+            - name: MMORPG_SQL_DEPLOYMENT_ID
+              valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+            - name: MMORPG_SQL_OPERATOR_PRINCIPAL
+              valueFrom:
+                secretKeyRef: {name: PLACEHOLDER_SQL_WRITER_REGISTRAR_SECRET, key: principal, optional: false}
+            - name: MMORPG_SQL_REGISTRAR_DSN
+              valueFrom:
+                secretKeyRef: {name: PLACEHOLDER_SQL_WRITER_REGISTRAR_SECRET, key: dsn, optional: false}
+            - name: MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256
+              value: "PLACEHOLDER_SQL_WRITER_PHYSICAL_SHA256"
+          volumeMounts:
+            - {name: sql-writer-request, mountPath: /run/sql-writer/input/request, readOnly: true}
+            - {name: sql-writer-runtime-input, mountPath: /run/sql-writer/input/runtime, readOnly: true}
+            - {name: sql-writer-grant, mountPath: /run/sql-writer/grant}
+            - {name: svc-config, mountPath: /run/sql-writer/runtime}
       containers:
         - name: chat
           image: PLACEHOLDER_IMAGE
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
           env:
+          # grant只读，consume留在同PodemptyDir；同Podrestart不得重复消费boot。
+            - name: MMORPG_SQL_WRITER_GRANT_FILE
+              value: /run/sql-writer/grant/boot-grant.json
+            - name: MMORPG_SQL_WRITER_CONSUME_DIR
+              value: /run/sql-writer/consume
+            - name: MMORPG_SQL_DEPLOYMENT_ID
+              valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+            - name: MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256
+              value: "PLACEHOLDER_SQL_WRITER_PHYSICAL_SHA256"
             # 两个DSN必须同GlobalAuthorityTiDBHost事务域、库名mmorpg_chat；不同账号分别承担运行与DDL。
             # 值由运维在外部Secret预置，脚本不回显或写入ConfigMap。
-            - name: CHAT_AUTHORITY_DSN
-              valueFrom:
-                secretKeyRef: {name: chat-authority-secrets, key: runtime-dsn, optional: false}
             - name: LOGIN_REDIS_PASSWORD
               valueFrom:
                 secretKeyRef: {name: redis-auth, key: password, optional: true}
@@ -85,7 +118,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-          args: ["-f", "/app/etc/chat.yaml"]
+          command: ["/bin/sh", "-ec"]
+          args: ["MMORPG_SQL_WRITER_GRANT_SHA256=\"$(cat /run/sql-writer/grant/boot-grant.json.sha256)\"; export MMORPG_SQL_WRITER_GRANT_SHA256; CHAT_AUTHORITY_DSN=\"$(cat /app/etc/env/CHAT_AUTHORITY_DSN)\"; export CHAT_AUTHORITY_DSN; exec /app/service \"$@\"","--","-f","/app/etc/chat.yaml"]
           ports:
             - containerPort: 50700
               name: grpc
@@ -109,6 +143,8 @@ spec:
               exec:
                 command: ["sh", "-c", "sleep 5"]
           volumeMounts:
+            - {name: sql-writer-grant, mountPath: /run/sql-writer/grant, readOnly: true}
+            - {name: sql-writer-consume, mountPath: /run/sql-writer/consume}
             - name: svc-config
               mountPath: /app/etc
               readOnly: true
@@ -122,9 +158,16 @@ spec:
               memory: 256Mi
       terminationGracePeriodSeconds: 30
       volumes:
+        - name: sql-writer-request
+          secret: {secretName: PLACEHOLDER_SQL_WRITER_REQUEST_SECRET, defaultMode: 288}
+        - name: sql-writer-runtime-input
+          secret: {secretName: PLACEHOLDER_SQL_WRITER_RUNTIME_SECRET, defaultMode: 288}
+        - name: sql-writer-grant
+          emptyDir: {medium: Memory, sizeLimit: 1Mi}
+        - name: sql-writer-consume
+          emptyDir: {medium: Memory, sizeLimit: 1Mi}
         - name: svc-config
-          configMap:
-            name: go-svc-chat-config
+          emptyDir: {medium: Memory, sizeLimit: 20Mi}
 ---
 # PDB 与主 manifest 同文件:k8s_deploy.ps1 只 apply 目录条目里的主 manifest。
 apiVersion: policy/v1

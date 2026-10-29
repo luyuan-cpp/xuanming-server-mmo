@@ -42,6 +42,36 @@ func TestCheckManifestRouteSource(t *testing.T) {
 	}
 }
 
+// TestCheckUnmergeRouteSource(B1-3):撤销只拒绝「清单是 db、本次是 redis」与不认识的记录值;redis / 旧清单配 db 撤销放行
+// (合服在 P1 之前、撤销在 P4 之后是认可的路径)。
+func TestCheckUnmergeRouteSource(t *testing.T) {
+	for _, tc := range []struct {
+		name, recorded, current string
+		wantErr                 string // 空 = 期望通过
+	}{
+		{"db merge undone with db", routeSourceDB, routeSourceDB, ""},
+		{"redis merge undone with redis", routeSourceRedis, routeSourceRedis, ""},
+		{"legacy merge undone with redis", "", routeSourceRedis, ""},
+		{"redis merge undone with db", routeSourceRedis, routeSourceDB, ""},
+		{"legacy merge undone with db", "", routeSourceDB, ""},
+		{"db merge undone with redis", routeSourceDB, routeSourceRedis, "-route-source db"},
+		{"unknown recorded value", "mysql", routeSourceDB, "unknown route_source"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := checkUnmergeRouteSource(tc.recorded, tc.current)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("checkUnmergeRouteSource(%q, %q) = %v, want nil", tc.recorded, tc.current, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("checkUnmergeRouteSource(%q, %q) = %v, want an error containing %q", tc.recorded, tc.current, err, tc.wantErr)
+			}
+		})
+	}
+}
+
 // 字段真的落盘、真的读回:续跑核对靠的是磁盘上的清单,不是内存里的结构。
 func TestManifestRouteSourceRoundTrip(t *testing.T) {
 	dir := t.TempDir()

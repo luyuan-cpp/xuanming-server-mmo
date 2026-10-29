@@ -118,8 +118,11 @@ func deferReason(cause error) string {
 
 // taskOpLabel 把 DBTask.Op 归到指标的 op 取值。
 func taskOpLabel(dbTask *db_proto.DBTask) string {
-	if dbTask != nil && (dbTask.Op == "read" || dbTask.Op == "write") {
-		return dbTask.Op
+	switch dbTask.GetOp() {
+	case db_proto.DBOp_DB_OP_READ:
+		return "read"
+	case db_proto.DBOp_DB_OP_WRITE:
+		return "write"
 	}
 	return "unknown"
 }
@@ -158,7 +161,7 @@ func logStoreDeferral(dbTask *db_proto.DBTask, reason string, cause error) {
 		return
 	}
 	logx.Errorf("task deferred, store unavailable (retry budget kept for writes): reason=%s taskID=%s op=%s suppressed_since_last=%d cause=%v",
-		reason, dbTask.GetTaskId(), dbTask.GetOp(), suppressed, cause)
+		reason, dbTask.GetTaskId(), taskOpLabel(dbTask), suppressed, cause)
 }
 
 // retryQueueSample 是一拍开始时的重试列表长度(sampleRetryQueues),给本拍的认领额度用。

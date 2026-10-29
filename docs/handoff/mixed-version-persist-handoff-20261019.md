@@ -396,7 +396,7 @@ Java 仓在 `D:\luyuan\xuanming-server-mmo`，版本 0.1.0-SNAPSHOT。
 - ② `ItemStore::IsIndependentInstance` 移到 public（紧挨 `CanStack`），`Bag::AddItems` 规划按它分流；`item_store.h` 那段"已知缺口"注释改为正式口径。
 - ③ `HasStackWithRoom` 改为用只有 `config_id` 的探针实例调 `ItemStore::CanStack`，再加 `size < maxStackSize`。
 - 用例：
-  - `GmSanctionInboxExecutorTest.AttachCurrencyDebtDefersWhenExistingDebtCarriesUnknownFields`（新增）；`MissingCurrencyComponentsDeferWithoutSideEffects` 补一条谓词断言；
+  - `GmSanctionInboxExecutorTest.AttachCurrencyDebtReportsVersionSkewWhenExistingDebtCarriesUnknownFields`（新增；A-1 前名为 `AttachCurrencyDebtDefersWhenExistingDebtCarriesUnknownFields`，见 §10.6）；`MissingCurrencyComponentsDeferWithoutSideEffects` 补一条谓词断言；
   - `CurrencyTest.AttachDebtRefusesToMergeIntoDebtWithUnknownFields` 补谓词断言；
   - `BagInstanceDataTest.AddItemsPlansIncomingInstancesCarryingUnknownFieldsAsSeparate`（新增）；
   - `PlayerEquipTest.RemoveGemPrecheckSkipsAStackCarryingUnknownFields`（新增）。"没有调到 `BagService::AddItems`"没有直接的注入点，用 muduo 日志出口探针 `StackTraceDumpProbe` 数容器层不足分支打的 `Stack trace (error code: ` 行，用例开头先直接打一次做校准。
@@ -429,7 +429,7 @@ Java 仓在 `D:\luyuan\xuanming-server-mmo`，版本 0.1.0-SNAPSHOT。
    - `CrossZoneBagMarshal.UnmarshalCarriesOutOfRangeBagTypeVerbatim`
    - `PlayerSkillSystemTest.SanitizeSkillListKeepsUnknownSkillsInactiveAndRemovesDuplicates`
    - `PlayerSkillSystemTest.SanitizeSkillListLeavesACleanListUntouched`
-3. 旧用例名 `CrossZoneBagMarshal.UnmarshalDropsOutOfRangeBagType`、`PlayerSkillSystemTest.SanitizeSkillListRemovesUnknownAndDuplicateSkills` 不应再出现（已改写）。
+3. 旧用例名 `CrossZoneBagMarshal.UnmarshalDropsOutOfRangeBagType`、`PlayerSkillSystemTest.SanitizeSkillListRemovesUnknownAndDuplicateSkills`、`GmSanctionInboxExecutorTest.AttachCurrencyDebtDefersWhenExistingDebtCarriesUnknownFields` 不应再出现（已改写或改名）。
 
 ### 10.5 本节文件清单（工作区，未提交）
 
@@ -467,13 +467,65 @@ Java 仓 `PARITY.md` 已补登一行「Java 待做」（§9 要求的那一行�
 
 | 编号 | 严重度 | 发现 | 处理 |
 |---|---|---|---|
-| A-1 | 中 | 版本错位用 DEFER 会按本地旧副本续做，看不到服务端之后挂的 VOID；欠款在旧节点被还清删除后错位消失，续做就把一条可能已作废的 GM 欠款挂上并报 APPLIED（违反收件箱设计 §7.5 评审 L1 的前提） | 已修：新结局 `kVersionSkew`，收件箱停用本域（`reason=version_skew`）、已定前缀照常确认、下次落地重拉。没选"每次重拉"：每次 Fetch 让 `delivery_count` +1，几分钟内就触发毒消息告警 |
+| A-1 | 中 | 版本错位用 DEFER 会按本地旧副本续做，看不到服务端之后挂的 VOID；欠款在旧节点被还清删除后错位消失，续做就把一条可能已作废的 GM 欠款挂上并报 APPLIED（违反收件箱设计 §7.5 评审 L1 的前提） | 已修：新结局 `kVersionSkew`，收件箱停用本域（`reason=version_skew`）、已定前缀照常确认、实体重建后重拉（退出保留期内重登复用实体，不重拉）。没选"每次重拉"：每次 Fetch 让 `delivery_count` +1，几分钟内就触发毒消息告警 |
 | D-1 | 低 | 资产通道入账的跨包 guid 查重只扫运行时包，看不到第 5 批携带的越界包类型记录；同一实例可能在新旧两个包各落一份，升回新版本后两份都还原 | 已修：`PlayerBagsComp::ContainsGuid`（固定包、动态包、携带记录的 item_uuid 或实例 item_id） |
 | B-1 | 低 | 按 config 计数和扣数量（资产通道数量扣出、强化材料、镶嵌宝石、战斗消耗）不看 `IsIndependentInstance`；文档读起来像已守住 | 只改文档：设计 §4.4 新增一行标"暂无守卫"，§0、R5、§13 评审清单收窄说法；补代码守卫要另立一批，修法写在 §4.4 那一行 |
 | F-1 | 低 | 设计 §8.3 引用了不存在的"§12 待核对行" | 已修：§12 新增"其他按配置表解释的持久值：未核对"一行；§8.3 写明第 5 批只解除包类型、技能两类值域 |
 | E 附注 | — | 技能表行 id 若被复用，留在老玩家数据里的不生效 id 会自动生效 | 设计 §12 加约束：删除的技能 id 不得复用 |
 
 复核还确认了这些没有问题（摘要）：A–E 没有确定的编译缺陷；规划与提交铸号数在各种组合下相等；越界包类型往返字节稳定、重新还原清干净、容量下标不错位；技能的五条消费路径都只认生效的项。以上都来自读码，没有编译。
+
+### 10.7 第二轮复核、订正与运行旁证（2026-10-20 ~ 10-22）
+
+**运行旁证**：这不是本主题专门的验证。见 PROGRESS「2026-10-20 客户端消息发送模块命名整理收尾」。
+- 本节改动已随别的会话的整仓提交入库（`c35e1133d`、`10fa5d939` 等）。
+- Codex 在含这些改动的工作区里串行构建了 9 个目标，全部通过：Scene 共享库，Scene / Gate / Battle 节点，`bag_test`，以及另外 4 个目标。
+- 跑过的相关用例 0 失败：`PersistRoundTripTest.*` 4 条、`BagInstanceDataTest.StacksCarryingUnknownFieldsAreNeverMergedInto`，以及其他背包、装备用例。
+- 为了编译，Codex 改了两处测试：
+  - `bag_instance_data_test.cpp`：检查函数参数改为 `Bag&`；
+  - `persist_round_trip_test.cpp`：include 之后清除 Windows SDK 的 `GetMessage` 宏。
+- **仍未运行**：3a′ 与第 5 批的新用例，`currency_test`、`cross_zone_test`、`skill_test` 三个工程也都没跑。§5.2 与 §10.4 的命令照旧要跑。
+
+**第二轮复核**：先续跑第一轮没跑完的"测试""文档"两个视角，再加一个视角专门复核 A-1、D-1 的修正。
+- 确认 11 条，全部是文档与注释不一致，没有代码缺陷。
+- 修正视角确认 A-1、D-1 的修法本身没有问题。
+- 11 条都已订正：
+  - **重拉时机**：停用对当前实体一直有效，实体重建（退出完成后再登录，或换节点）后才重拉；退出保留期内重登会复用实体，不重拉。涉及代码注释 9 处，以及设计 §4.4 / §15、收件箱设计 §7.5 / §7.6、运行手册 §5.2、本文 §10.6。
+  - **运行手册 A′**：删掉"回滚到同一版本"这个解法，补上整体回滚后的三种解除方式，并提醒同域排在后面的处置会一起停住。
+  - **设计稿**：
+    - §0 / R5 / §4.4 改正"纪元重置是拒绝执行"的说法，实际是 `Clear()` 后照常重置；
+    - §4.4 开头"三类"改为"四类"；
+    - §4.3 与 §12 两行的现状改标为"第 5 批前"；
+    - §9 删掉残留的"应回 kDefer"；
+    - 头部状态改为 v0.7。
+  - **容量注释**：`bag_marshal.cpp` 里两段"capacities 恰好 kBagTypeCount 个"的注释已改；`proto/common/database/bag_quest_mail_data.proto` 中 `capacities` 字段的注释也已改。proto 只改了注释，下次 `proto-gen-run` 时 Go 绑定里的注释会跟着变，不影响行为。
+  - **用例名**：§10.2 / §10.4 换成新名，旧名补进"不应再出现"一条。
+
+**新确认的持久值域问题**（设计 §12）：
+- **等级上限** `playerlevel::kMaxLevel`：
+  - 加载时压回超限等级，并连带整池返还加点、取消宝宝出战，随存盘落库。已确认会删数据，单列一行。
+  - 修好之前，提高等级上限的版本不能回滚 scene。
+  - 修法要另立一批，并由负责人拍板。
+- **新币种**：
+  - 旧版收件箱执行器把不认识的币种当作载荷非法，记终态 REJECTED；资产通道在已有改动之后记 APPLIED_PARTIAL。
+  - 复核者因额度没跑完，由本会话读码核实（`gm_sanction_inbox_executor.cpp` 的 `IsKnownCurrencyType`，Go 侧不校验取值）。
+  - 已记入 §12 载荷行：在 Go 侧按完整取值表校验之前，新增币种必须整批换版。
+- **属性加点维度与装备槽位**：
+  - 属性加点维度：加载时删掉查不到表的维度；
+  - 装备槽位：快照槽位不被接受时挪到同部位第一个空槽；
+  - 两项都作为"未核对"行的已知线索登记。
+
+**(a″) 写方令牌的三路对抗攻击与裁决**：结论已转交 3b 会话，落不落地记在 §11。
+- 三路都没推翻 (a″)。
+- 成立的中等问题：
+  - warn 下返回 2 的证据会随回包丢失而消失；
+  - 令牌不变量缺行为级测试；
+  - C3 的 Lua 语义只有真 Redis 用例覆盖，没配 Redis 时会被 SKIP。
+- B5 幽灵写方一条，三路意见有分歧，裁决结果见下面一条。
+- **裁决（2026-10-22）**：(a″) 可以采用。
+  - 驳回 B5 幽灵写方一条：B5 要求标记原样还在，目标节点的 A2′ 先删标记再建实体，两者互斥，按代码不可达。也不采纳"proven 基线"修法，它会把首存状态和回包依赖带回来。
+  - 成立 7 条：返回 2 的证据丢失、令牌不变量的测试、真 Redis 跳过、返回 3 的排队值规则文字、merge_zone 文字、前任实体残留存盘、疏散退出不踢线。
+  - 全文与 §5.2 / §10 应补的规则、用例已转交 3b 会话。其中证据字段与按令牌去重，3b 会话在工作区已按同一做法在改，未编译。
 
 ## 11. 续：§5.2 修订、第 3b 批与第 4 批落码（2026-10-19 ~ 10-20，另一个接手会话）
 
@@ -539,3 +591,51 @@ Java 仓 `PARITY.md` 已补登一行「Java 待做」（§9 要求的那一行�
 
 - 新增：`cpp/libs/engine/config/persist_schema_regression_mode.h`、`cpp/libs/services/scene/player/comp/player_persist_writer_comp.h`、`go/login/internal/config/persist_schema_regression.go` 及 `_test.go`。
 - 修改：`proto/common/base/config.proto`、`cpp/libs/engine/config/config.cpp`、`cpp/libs/engine/infra/storage/redis_client/redis_client.h`、`cpp/libs/services/scene/player/system/player_lifecycle.{h,cpp}`、`cpp/libs/services/scene/core/system/redis.cpp`、`cpp/tests/currency_test/currency_test.cpp`、`cpp/tests/cross_zone_test/cross_zone_test.cpp`、`bin/etc/base_deploy_config.yaml`、`tools/scripts/{k8s_deploy.ps1,start_game.ps1,tests/k8s_deploy_contract.tests.ps1}`、`go/db/internal/barrierrestore/{scripts.go,schema_gen_test.go}`、`go/login/{login.go,etc/login.yaml,internal/config/config.go}`、`go/login/internal/logic/pkg/dataloader/{parent_commit_barrier.go,parent_commit_barrier_test.go,ensure_player_all_data_async.go,metrics.go}`、`go/login/internal/logic/clientplayerlogin/player_identity_backfill_test.go`、`deploy/login-stack.linux/login.yaml`、`deploy/k8s/{README.md,persist-schema-alerts.yaml}`、设计稿（§0、§5.1–§5.4、§7、§9、§10、§13 第 8 条、§15 v0.6）、本文。
+
+### 11.7 续：3b 评审、写方令牌裁决之后的修正（2026-10-22，同一会话）
+
+3b 落码后做了两路只读评审（Lua 与客户端状态机 / 生命周期、测试与部署），§10 的会话另对写方令牌做了三路攻击与裁决（结论：(a″) 可以采用）。据此改了下面这些，**均未编译、未测试**：
+
+- **warn 证据不随回包丢失消失**（评审与裁决都判中）：判倒退那次的回包一丢，重放同一元素、改发同令牌后继都跳过比较、返回 1，计数永远为 0，切 enforce 门禁假阴性。改为 warn 判倒退时在 hash 写 `schema_regressed = 写方令牌`，之后同令牌写入照写并继续返回 2；别的写方写成功**不清**（只在等于本令牌时起作用；清掉的话"判倒退后回包丢失、随即被废黜"那次就永不计数），只有 `save_barrier_restore` 清。`SaveSchemaWarnedCallback` 增加写方令牌参数，`HandlePlayerSaveSchemaWarned` 按令牌去重（`PlayerPersistWriterComp::regressionWarnReported`），令牌对不上（别的实体留下的在途写）照常计数。切 enforce 门禁改为三项都为 0：C++ `regression_warned`、`login_persist_schema_regression_total`、巡检 `schema_regressed` 存量（`deploy/k8s/README.md` 给了只读 SCAN 命令）。
+- **屏障 11 参在线格式没有端到端测试**（评审判低）：新增真连接用例 `RedisCommitBarrierWireFormatThroughClientAgainstRealRedis`，经 `MessageAsyncClient::SaveWithCommitBarrier` 发出，第一次 EVAL、第二次 EVALSHA，参数取可区分的值。测试对端加了只读访问器 `BarrierScriptSha`。
+- **返回 3 时排队值处置**：guard 相同但写方令牌不同（同一代次下另一个加载实体的存盘）也照发（`IssuePendingWithNewerGuard(..., sameWriterOnly)`），新增 `RedisCommitBarrierSchemaRejectedIssuesPendingFromAnotherWriter`。
+- **疏散 / 排空退出遇 enforce 拒写**：会话仍绑定时先 `SendTipAndKickToClient(kEnterSceneFailed)` 再 `DestroyDeposedPlayer`，不新增 tip。
+- **恢复工具**：字段白名单再接受 `schema_regressed`；写入时 `HDEL schema_writer schema_regressed`（可选加固：以 SQL 为准后任何写方都重新比较）。用例改名 `TestSchemaGenRestoreAcceptsAndClearsWriterFields`。
+- **令牌取用可测**：`PersistWriterToken` 挪成 `player_persist::WriterTokenForSave`（`player_persist_marshal.h`，写入口懒建），新增 `ExitPersistEcs.PersistWriterTokenIsPerLoadedEntity`。
+- **按裁决撤掉的**：我一度加了"本实体写入被证实提交后，`ARGV[9]` 改用输出世代"（防 B5 幽灵目标节点插写）。裁决判该路径按代码不可达（B5 只认标记原样还在，目标 A2′ 先删标记再建实体），而这条加固会把首存状态与回包依赖带回 C++，已撤掉；前提与 dev 旁路 `AllowUnsafeCrossNodeHandoff` 例外写进设计 §5.2"前提"一行，新增真 Redis 用例 `RedisCommitBarrierForeignWriteBetweenSameEntityWritesIsComparedAgainstRealRedis` 钉住判据本身。
+- **文字**：设计 §3.3 / §5.2 / §5.4 的 merge_zone 说法改为"前向 copy 合服保留 hash、照常比较"；§10、§15 的排队值口径（0 只看 guard，3 看 guard 与令牌）；§15 v0.6 补三条决策；§13 新增第 9 条。
+- **新登记、切 enforce 前须落地**：设计 §13 第 9 条"前任实体的存盘元素活得比实体长"（X1 被不存盘销毁时还有未落地存盘，同落点重连出的 X2 读到旧父快照，A 落地后 X2 永久拒存），两种修法见那一条，本批没做。
+
+**§11.4 的验证口径追加**：
+- 第 3 步真 Redis：用一次性本机 Redis，`--gtest_filter=*AgainstRealRedis*`，**`[ SKIPPED ]` 必须为 0**，Redis 7.2 与 8.10.x 各跑一轮并在日志里记版本；有任何 SKIP 一律报"未验证"。本节新增的真 Redis 用例：`RedisCommitBarrierSchemaWarnEvidenceSurvivesLostReplyAgainstRealRedis`、`RedisCommitBarrierForeignWriteBetweenSameEntityWritesIsComparedAgainstRealRedis`、`RedisCommitBarrierWireFormatThroughClientAgainstRealRedis`（后者是真连接，走 muduo EventLoop）。
+- 第 2 步 C++ 新增 / 改动的用例：`RedisCommitBarrierSchemaRejectedIssuesPendingFromAnotherWriter`、`RedisCommitBarrierSchemaWarnedIsCommitEvidence`（回调带令牌）、`ExitPersistEcs.PersistWriterTokenIsPerLoadedEntity`、`ExitPersistEcs.SchemaWarnOnlyCountsAndGonePlayerIsNoop`（去重）、`PlayerSqlTasksRequireParentCommitSourceContract`（调用文本改为 `WriterTokenForSave`）。
+- 第 4 步 go/db：`TestSchemaGenRestoreAcceptsAndClearsWriterFields`（原 `...KeepsSchemaWriter` 改名、期望改为清掉两个字段）。
+
+本节新增改动的文件：`cpp/libs/engine/infra/storage/redis_client/redis_client.h`、`cpp/libs/services/scene/player/comp/player_persist_writer_comp.h`、`cpp/libs/services/scene/player/system/{player_persist_marshal.h,player_lifecycle.h,player_lifecycle.cpp}`、`cpp/tests/currency_test/currency_test.cpp`、`cpp/tests/cross_zone_test/cross_zone_test.cpp`、`go/db/internal/barrierrestore/{scripts.go,schema_gen_test.go}`、`deploy/k8s/README.md`、设计稿、本文。注意 `player_lifecycle.cpp` 同时有别的会话在调日志级别（`HandlePlayerAsyncSaved` / 存盘收尾行），与本节无关。
+
+### 11.8 续：§13 第 9 条落码与第二路评审修正（2026-10-22，同一会话）
+
+均**未编译、未测试**。
+- **§13 第 9 条「前任实体的存盘元素活得比实体长」按修法 (2) 落码**（与 §10 会话分工：本条归本会话，第 6 批归它）：`MessageAsyncClient::AsyncLoad` 在同 key 还有本客户端未落定的存盘时把加载挂进 `loads_awaiting_saves_`，`RetryDuePending` 每拍放行已落定的；`HasPendingLoad` 计入挂起项；`LogQueueSnapshot` 行尾多 `loads_awaiting_saves=N`。做在客户端内部、没碰节点层入口（生产调用方 `role_admission_system.cpp` 属别的会话）。用例 `CurrencyTest.RedisLoadWaitsForUnsettledSaveOfTheSameKey`。
+- **第二路评审（生命周期 / 测试 / 部署）只查到一条低危，已修**：YAML 空值（`PersistSchemaRegressionMode:` 或 `~`）是 Null 节点，yaml-cpp 的 `as<std::string>()` 返回字面量 `"null"`，C++ 会拒绝启动，与"空串 = warn"及 `start_game.ps1` 预检不一致。`readBaseDeployConfig` 改为把 Null 节点当缺键；`start_game.ps1` 预检把 `~` / `null` 也当空值；新增 `CurrencyTest.ReadBaseDeployConfigNormalizesPersistSchemaRegressionMode`（读临时 YAML：缺键、空值、`~`、`''`、`warn`、`enforce`）。K8s 生成期仍要求显式写 `warn` / `enforce`（`bin/etc` 注释已写明）。
+- 其余评审结论：生命周期分派、令牌生命期、配置链、测试有效性均未发现问题。
+
+**§11.4 / §11.7 的验证口径追加**：currency_test 新增 `RedisLoadWaitsForUnsettledSaveOfTheSameKey`、`ReadBaseDeployConfigNormalizesPersistSchemaRegressionMode`（后者会在系统临时目录写并删除 6 个小文件）。`start_game.ps1` 的预检没有自动化测试，Codex 可选手工核对：把 `bin/etc/base_deploy_config.yaml` 的键临时改成 `~`、`Warn` 各跑一次 `Assert-PersistSchemaRegressionModes`（前者通过、后者拒绝），改回原值。
+
+本节改动的文件：`cpp/libs/engine/infra/storage/redis_client/redis_client.h`、`cpp/libs/engine/config/config.cpp`、`cpp/tests/currency_test/currency_test.cpp`、`tools/scripts/start_game.ps1`、`bin/etc/base_deploy_config.yaml`（注释）、设计稿 §13 第 9 条、本文。
+
+## 12. 续：§12「其他持久值域」逐项核对（2026-10-22，只读会话）
+
+> 本节由只读核对会话追加（只追加，不改上文）。只读代码、只改文档，没有改 C++ / Go，没有编译，也没有跑测试。
+
+- **结果**：设计稿 §12 那一行已改为"已核对"，逐项清单在新增的 **§12.1**；§8.3 scene 行已同步。
+  - 会删 7 项（D1–D7）：属性 / 宝宝加点维度（`SanitizeSchemes`、`SanitizeAllocations`）、属性 / 宝宝加点超额整池返还（`ConvergeOverAllocation`、`RecalculateOne`）、职业技能重数按 `max_rank` 压回（`SanitizeSkillList`，新发现）、技能改职业 / 通用归属后整条删或清 0（新发现）、战斗结算账本 `kMaxAppliedRecords = 64` 的运行期淘汰（新发现）。
+  - 会改写 3 项（W1–W3）：装备栏槽位挪位、入场坐标按导航网格吸附或拉回出生点（`EnsureValidEnterLocation`，新发现）、当前 HP / MP 夹到本版本上限。
+  - 不适用 15 项（N1–N15）：物品、任务 / 条件、宝宝种类、越界币种、动态包 profile 等都原样保留；资产通道 / 收件箱账本遇到新枚举值只停用该玩家的通道，不丢数据。
+- **待负责人拍板**：见设计 §12.1 末尾 6 条。D5（删掉加载期的重数压回）改动小，建议先做；其余建议作为发布约束，或接受。
+- **附注**：`IsActiveSkill` 目前只有 `skill_test` 调用，消费侧各自用 `FindSkillRow` 判，口径一致；`player_skill.cpp` 的注释措辞可以顺手改准。
+- **未做**：没有配回滚场景用例；D1–D7 都没改代码。Java 版：待做，`PARITY.md` 已有的那一行覆盖本主题，没有新增。
+
+### 11.9 续：恢复工具 schema_gen 改为两行最小值（设计 §13 第 8 条，2026-10-22）
+
+未编译、未测试。`go/db/internal/barrierrestore/restore.go`：`schemaFloor`（两行最大值）改为 `restoredSchemaGen`（两行最小值，0 按 1）；`scripts.go`：不再保留 hash 里更高的旧 `schema_gen`，旧值格式损坏也覆盖。用例：`TestSchemaGenRestoreUsesSQLMinimumAndOverwritesIndex`（原 `...SQLMaximumAndExistingFloor`）、新增 `TestSchemaGenRestoreOverwritesMalformedIndex`、`TestSchemaGenRejectsInvalidRedisFieldsWithoutWrites` 去掉 schema_gen 损坏用例、`TestSchemaGenRecoveryAcrossRedisSplitAndDBFirst` 期望 7→4、真库集成 `TestIntegrationBarrierRestoreSchemaGeneration` 期望同步。运维手册 `docs/ops/mysql-backup-pitr-runbook.md` 追加 2026-10-22 口径变更小节。Codex：工作目录 `go/db`，`go test -count=1 ./internal/barrierrestore/`；有真库环境时再按该文件头的环境变量跑集成用例。

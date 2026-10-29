@@ -52,6 +52,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"strconv"
@@ -73,8 +74,21 @@ func runUnmerge(o options) {
 	if err := requireTeamRouteDomain(o.mysqlDSN, o.routeDBDSN, o.routeSource); err != nil {
 		log.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
+	ctx, cancel := context.WithTimeout(maintenanceParent(o), o.timeout)
 	defer cancel()
+	var freeze *normalFreezeProof
+	var freezeDB *sql.DB
+	if !o.dryRun {
+		if err := checkMaintenanceTool(ctx); err != nil {
+			log.Fatal(err)
+		}
+		var freezeErr error
+		freeze, freezeDB, freezeErr = openNormalFreezeProof(ctx, o)
+		if freezeErr != nil {
+			log.Fatal(freezeErr)
+		}
+		ctx = withNormalFreezeProof(ctx, freeze)
+	}
 
 	// dry-run 预览(<path>.dryrun.json)一律拒读(A3):它记的是彩排那一刻的名单,不是任何一次写入。
 	m, err := loadRunManifest(o.manifestPath)
@@ -108,7 +122,11 @@ func runUnmerge(o options) {
 	log.Printf("    scope: %d trade listings (schema=%s; restored only where market_zone is still %d)",
 		len(m.TradeListingIDs), o.tradeSchema, dst)
 	log.Printf("    scope: guild schema=%s (restored only where zone_id is still %d)", o.guildSchema, dst)
-	// 撤销不要求与合服同一个映射来源(理由见 mergeManifest.RouteSource):合服在 P1 之前、撤销在 P4 之后是合法的。只记一行供复盘。
+	// 撤销只拒绝「清单是 db、本次是 redis」(checkUnmergeRouteSource;理由见 mergeManifest.RouteSource):围栏之前、任何写之前拒绝,
+	// 合服留下的库围栏(若有)原样不动。其余不一致(合服在 P1 之前、撤销在 P4 之后)是合法的,只记一行供复盘。
+	if err := checkUnmergeRouteSource(m.RouteSource, o.routeSource); err != nil {
+		log.Fatalf("manifest %s: %v", o.manifestPath, err)
+	}
 	if got := recordedRouteSource(m.RouteSource); got != o.routeSource {
 		log.Printf("    route source: the merge ran with -route-source %s, this unmerge uses %s (allowed: the rollout gates P1–P3 "+
 			"import and audit the mappings into the global DB before P4)", got, o.routeSource)
@@ -116,20 +134,28 @@ func runUnmerge(o options) {
 	log.Printf("    NOTHING outside this list is touched — target-zone natives are safe by construction.")
 
 	db := mustOpenMySQL(ctx, o.mysqlDSN)
-	defer db.Close()
+	defer closeUnownedMaintenanceResource(ctx, db)
 	teamAuthority, err := openTeamAuthority(ctx, o.mysqlDSN, firstNonEmpty(o.teamSchema, defaultTeamSchema))
 	if err != nil {
 		log.Fatalf("组队权威门禁: %v", err)
 	}
-	defer teamAuthority.db.Close()
+	if err := registerMaintenanceResource(ctx, teamAuthority.db); err != nil {
+		log.Fatal(err)
+	}
+	defer closeUnownedMaintenanceResource(ctx, teamAuthority.db)
 	mapRdb := mustDial(ctx, "mapping", o.mappingAddr, o.mappingPwd, o.mappingDB)
-	defer mapRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, mapRdb)
 	guildRdb := mustDial(ctx, "guild", o.redisAddr, o.redisPwd, o.redisDB)
-	defer guildRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, guildRdb)
 	sharedRdb := mustDial(ctx, "login/shared(DB0)", o.noticeAddr, o.noticePwd, o.noticeDB)
-	defer sharedRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, sharedRdb)
 	sceneRdb := mustDial(ctx, "scene_manager", o.sceneAddr, o.scenePwd, o.sceneDB)
-	defer sceneRdb.Close()
+	defer closeUnownedMaintenanceResource(ctx, sceneRdb)
+	// preflight P2(目标区口径)要 etcd 注册表的正面证据,见 scene_registry.go。写入之前校验参数。
+	sceneNodes, rerr := newEtcdGatewayRegistry(o.etcdEndpoints)
+	if rerr != nil {
+		log.Fatalf("-etcd-endpoints is required: preflight P2 needs positive evidence that zone %d has no registered scene node: %v", dst, rerr)
+	}
 
 	// 聚宝斋前置:清单里有商品 id = 当初真的搬过,库 / 表必须在。放在任何写之前 ——
 	// -trade-schema 指错时,不能等 5' mapping / 4' ZSET 已经改回之后才在 3b' 失败(先证明,再写)。
@@ -155,16 +181,34 @@ func runUnmerge(o options) {
 	if err != nil {
 		log.Fatalf("route source: %v", err)
 	}
-	defer rb.Close()
+	if maintenanceFromContext(ctx) == nil {
+		defer rb.Close()
+	}
 	fence, err := acquireRunFence(ctx, rb, mapRdb, routeFenceParams{src: src, dst: dst, runID: runID, purpose: routeFencePurposeUnmerge,
 		manifestPath: o.manifestPath, runTimeout: o.timeout, dryRun: o.dryRun, takeOverRunID: o.takeOverFenceRunID})
 	if err != nil {
 		log.Fatalf("merge fence: %v", err)
 	}
-	defer fence.release(context.Background())
+	if o.dryRun {
+		defer fence.release(ctx)
+	}
 	// db 源:围栏一旦失权,看门狗取消之后的一切写;gate 是每批之前的显式判据。redis 源两者都不生效。
-	ctx = fence.writeContext(ctx)
-	gate := writeGate(fence.check)
+	ctx, err = maintenanceFenceContext(ctx, fence)
+	if err != nil {
+		log.Fatal(err)
+	}
+	gate := writeGate(func() error {
+		if err := fence.check(); err != nil {
+			return err
+		}
+		if o.dryRun {
+			return nil
+		}
+		if err := checkMaintenanceTool(ctx); err != nil {
+			return err
+		}
+		return freeze.check(ctx, freezeDB)
+	})
 	// abortKeepingFence:MySQL / 公会缓存改回到一半的失败走这里,围栏故意不释放并给出续跑指引
 	// (撤销口径的文案,见 fenceKeptAbortMessage;db 源见 routeFenceKeptAbortMessage)。
 	// dry-run 从没写过围栏,只报原因。errs 是本步骤带回的错误(可省):db 源里批事务内的 fencing token 复核判了 errRouteFenceLost
@@ -222,10 +266,12 @@ func runUnmerge(o options) {
 	if err := runPreflight(ctx, preflightDeps{
 		teamAuthority: teamAuthority,
 		sceneRdb:      sceneRdb,
+		sceneNodes:    sceneNodes,
 		mappingRdb:    mapRdb,
 		sharedRdb:     sharedRdb,
 		lag:           lagSrc,
 	}, preflightParams{
+		readOnly:        o.dryRun,
 		zone:            dst,
 		scope:           "target",
 		kafkaGroups:     kafkaGroupCandidates(o.kafkaGroup, o.kafkaLegacyGroup, dst),
@@ -277,8 +323,13 @@ func runUnmerge(o options) {
 	}
 
 	// 7' 公告 flag。
+	// 本步与 4'、1' 的失败:log.Fatalf 不跑 defer,围栏留在本次 run_id 上。db 源改走 abortKeepingFence —— 库围栏同样保留,但给出
+	// -take-over-fence 续跑指引(B1-5 / MZ2-9;否则重跑只会撞上 Held,运维不知道怎么解);redis 源的出口逐字不变。
 	requireFence("7'")
 	if n, err := deleteNoticeFlags(ctx, sharedRdb, m.PlayerIDs, o.dryRun); err != nil {
+		if rb != nil {
+			abortKeepingFence(fmt.Sprintf("clear post-merge flags(撤销步骤 7':本次还没改回映射,只删过部分公告标记):%v", err), err)
+		}
 		log.Fatalf("clear post-merge flags: %v", err)
 	} else {
 		log.Printf("Post-merge flags: %d notice keys cleared", n)
@@ -288,7 +339,8 @@ func runUnmerge(o options) {
 	// db 源(W8):每批库事务 CAS home dst → src(原来是无条件 SET)→ 发布 + WAITAOF;写到一半的失败保留围栏。
 	if n, err := stepRestoreMapping(ctx, rb, mapRdb, m.PlayerIDs, src, dst, runID, gate, o.dryRun); err != nil {
 		if rb != nil {
-			abortKeepingFence(fmt.Sprintf("restore mapping:改回中途失败(本次已改回 %d 个):%v", n, err))
+			// 带上 err:批事务内的 fencing token 复核判了失权(errRouteFenceLost)时,文案按失权写(routeFenceAbortLost,B1-4)。
+			abortKeepingFence(fmt.Sprintf("restore mapping:改回中途失败(本次已改回 %d 个):%v", n, err), err)
 		}
 		log.Fatalf("restore mapping: %v", err)
 	} else {
@@ -300,7 +352,7 @@ func runUnmerge(o options) {
 	requireFence("5'a")
 	cleared, merr := stepClearMergedInto(ctx, rb, mapRdb, src, dst, runID, m.RunID, o.dryRun)
 	if merr != nil {
-		abortKeepingFence(fmt.Sprintf("clear %s:映射已改回源区,但标记删除失败:%v", mergedIntoKey(src), merr))
+		abortKeepingFence(fmt.Sprintf("clear %s:映射已改回源区,但标记删除失败:%v", mergedIntoKey(src), merr), merr)
 	}
 	log.Printf("merged_into marker %s: cleared=%v", mergedIntoKey(src), cleared)
 
@@ -327,11 +379,17 @@ func runUnmerge(o options) {
 		requireFence("4'")
 		release, lerr := acquireGuildRankLock(ctx, guildRdb, o.dryRun)
 		if lerr != nil {
+			if rb != nil {
+				abortKeepingFence(fmt.Sprintf("guild rank lock(撤销步骤 4',映射已改回源区):%v", lerr), lerr)
+			}
 			log.Fatalf("guild rank lock: %v", lerr)
 		}
 		n, rerr := unmergeRankZSET(ctx, guildRdb, src, dst, m.RankMembers, o.dryRun)
 		release()
 		if rerr != nil {
+			if rb != nil {
+				abortKeepingFence(fmt.Sprintf("restore rank ZSET(撤销步骤 4',映射已改回源区):%v", rerr), rerr)
+			}
 			log.Fatalf("restore rank ZSET: %v", rerr)
 		}
 		log.Printf("Redis rank: %d members restored to guild_rank:zone:%d", n, src)
@@ -396,6 +454,9 @@ func runUnmerge(o options) {
 		requireFence("1'")
 		deleted, refused, err := deletePlayerRows(ctx, db, srcSchema, dstSchema, t, deleteIDs, o.dryRun)
 		if err != nil {
+			if rb != nil {
+				abortKeepingFence(fmt.Sprintf("delete target rows for %s(撤销步骤 1',映射已改回源区;删除只删逐字节相同的行,重跑幂等):%v", t, err), err)
+			}
 			log.Fatalf("delete target rows for %s: %v", t, err)
 		}
 		totalDeleted += deleted
@@ -418,6 +479,11 @@ func runUnmerge(o options) {
 			totalRefused, refusedSample, src, dstSchema)
 	}
 
+	if !o.dryRun {
+		if err := finishMaintenanceFence(ctx, fence); err != nil {
+			log.Fatal(err)
+		}
+	}
 	log.Printf("=== Unmerge done (players=%d guilds=%d rank=%d trade_listings=%d/%d rows_deleted=%d rows_refused=%d) ===",
 		len(m.PlayerIDs), len(m.GuildIDs), len(m.RankMembers), tradeRestored, len(m.TradeListingIDs), totalDeleted, totalRefused)
 	if o.migrateBlobs {

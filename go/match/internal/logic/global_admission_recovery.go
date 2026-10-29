@@ -12,7 +12,6 @@ import (
 	dspb "proto/data_service"
 	pb "proto/match"
 	"shared/roleidentity"
-	"shared/safego"
 )
 
 func admissionWarningLimiter() func(string) {
@@ -42,7 +41,7 @@ func resumeGlobalDirectAdmission(ctx context.Context, s *svc.ServiceContext, rec
 
 // Direct和Solo使用独立扫描预算/工作许可；持续输入以固定高水位分轮，UNKNOWN不挡后项。
 func startGlobalDirectAdmissionRecovery(ctx context.Context, s *svc.ServiceContext) {
-	safego.Go("match.direct.admission.recovery", func() {
+	s.LaunchRelayTask("match.direct.admission.recovery", func() {
 		warnRead, warnOperation := admissionWarningLimiter(), admissionWarningLimiter()
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
@@ -58,7 +57,7 @@ func startGlobalDirectAdmissionRecovery(ctx context.Context, s *svc.ServiceConte
 			if len(slots) == cap(slots) {
 				continue
 			}
-			call, cancel := context.WithTimeout(ctx, 3*time.Second)
+			call, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 			if !active {
 				var err error
 				through, err = s.Authority.DirectAdmissionHighWater(call)
@@ -87,12 +86,13 @@ func startGlobalDirectAdmissionRecovery(ctx context.Context, s *svc.ServiceConte
 				slots <- struct{}{}
 				after = authority.DirectCursor{Kind: record.Kind, Owner: record.OwnerId, High: record.RequestHigh, Low: record.RequestLow}
 				original := record
-				safego.Go("match.direct.admission.operation", func() {
+				s.LaunchRelayTask("match.direct.admission.operation", func() {
 					defer func() { <-slots }()
-					call, cancel := context.WithTimeout(ctx, 3*time.Second)
+					call, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 					defer cancel()
 					f, err := resumeGlobalDirectAdmission(call, s, original)
 					if err != nil {
+						s.HoldRelay(err)
 						warnOperation("直接开战原退出仍未确认")
 						return
 					}
@@ -134,7 +134,7 @@ func resumeGlobalJoinAdmission(ctx context.Context, s *svc.ServiceContext, inten
 	return err
 }
 func startGlobalJoinAdmissionRecovery(ctx context.Context, s *svc.ServiceContext) {
-	safego.Go("match.join.admission.recovery", func() {
+	s.LaunchRelayTask("match.join.admission.recovery", func() {
 		warnRead, warnOperation := admissionWarningLimiter(), admissionWarningLimiter()
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
@@ -150,7 +150,7 @@ func startGlobalJoinAdmissionRecovery(ctx context.Context, s *svc.ServiceContext
 			if len(slots) == cap(slots) {
 				continue
 			}
-			call, cancel := context.WithTimeout(ctx, 3*time.Second)
+			call, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 			if !active {
 				var err error
 				through, err = s.Authority.PendingJoinHighWater(call)
@@ -179,11 +179,12 @@ func startGlobalJoinAdmissionRecovery(ctx context.Context, s *svc.ServiceContext
 				slots <- struct{}{}
 				after = authority.JoinCursor{Player: record.PlayerId, High: record.RequestHigh, Low: record.RequestLow}
 				original := record
-				safego.Go("match.join.admission.operation", func() {
+				s.LaunchRelayTask("match.join.admission.operation", func() {
 					defer func() { <-slots }()
-					call, cancel := context.WithTimeout(ctx, 3*time.Second)
+					call, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 					defer cancel()
 					if err := resumeGlobalJoinAdmission(call, s, original); err != nil {
+						s.HoldRelay(err)
 						warnOperation("单排原退出仍未确认")
 					}
 				})

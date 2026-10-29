@@ -2744,6 +2744,36 @@ TEST_F(PlayerEquipTest, EnhanceIsRefusedWithoutEnoughMaterial)
 	EXPECT_EQ(kEquipEnhanceMaterialNotEnough, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
 }
 
+// 一堆带着更新版本字段(新版本给物品加的属性,本版本不认识)的可叠加物品。按 config 计数和扣数量时它不算普通单位
+// (ItemStore::IsCountableByConfig,混版本设计 §4.4 第 6 批)。
+ItemComp MakeStackFromNewerVersion(Guid guid, uint32_t configId, uint32_t count)
+{
+	ItemComp stack;
+	stack.set_item_id(guid);
+	stack.set_config_id(configId);
+	stack.set_size(count);
+	stack.mutable_unknown_fields()->AddVarint(412345, 1);
+	return stack;
+}
+
+// 材料只有算上带更新版本字段的那堆才够:版本错位,回「暂不可用」而不是「材料不足」,金币与材料都不动 ——
+// 预检与提交同一个判据,不会扣了金币才发现材料扣不出。
+TEST_F(PlayerEquipTest, EnhanceWithMaterialOnlyEnoughCountingNewerVersionStacksIsAVersionSkew)
+{
+	auto &row = Editable(EnhanceRowOrNull(1));
+	row.set_material_count(3);
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1), 0},
+							  {MakeStackFromNewerVersion(kGuidFiller, kEnhanceStone, 5), kStonePos + 1}});
+	PutStack(kGuidStone, kEnhanceStone, 1, kStonePos); // 普通的只有 1 颗
+	SetGold(row.cost_gold());
+	UseDice({});
+	const ForgeState before = CaptureForge();
+
+	PlayerEquipSystem::EnhanceOutcome outcome;
+	EXPECT_EQ(kFeatureUnavailable, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	ExpectForgeUnchanged(before);
+}
+
 TEST_F(PlayerEquipTest, EnhanceIsRefusedWithoutEnoughGold)
 {
 	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1), 0}});
@@ -3104,6 +3134,18 @@ TEST_F(PlayerEquipTest, InlayGemIsRefusedWhenTheGemIsNotInTheInventory)
 	EXPECT_EQ(kEquipGemNotOwned, PlayerEquipSystem::InlayGem(player, kGuidA, kWeaponAttackSocket, kAttackGem));
 	ExpectForgeUnchanged(before);
 	EXPECT_EQ(warehouseBefore, Capture(Warehouse()));
+}
+
+// 要嵌的那种宝石只有带更新版本字段的一堆:版本错位,回「暂不可用」,不当普通宝石嵌进去(装备上只记 config,
+// 拆下时会生成普通宝石,新属性就此洗掉),装备与宝石都不动(混版本设计 §4.4 第 6 批)。
+TEST_F(PlayerEquipTest, InlayGemWithOnlyNewerVersionGemsIsAVersionSkew)
+{
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1), 5},
+							  {MakeStackFromNewerVersion(kGuidGemA, kAttackGem, 3), kGemPosA}});
+	const ForgeState before = CaptureForge();
+
+	EXPECT_EQ(kFeatureUnavailable, PlayerEquipSystem::InlayGem(player, kGuidA, kWeaponAttackSocket, kAttackGem));
+	ExpectForgeUnchanged(before);
 }
 
 // 孔位不存在:这个部位的孔位定义里没有这个号。没有任何孔的部位,哪个号都不存在。

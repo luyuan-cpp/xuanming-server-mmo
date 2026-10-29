@@ -192,8 +192,8 @@ func TestWatchBattleAddObserverOutcomeUnknownRemovesObserver(t *testing.T) {
 			require.Equal(t, constants.ErrBattleNotWatchable, resp.GetErrorMessage().GetId())
 			require.Len(t, fake.removes, 1, "结果未知必须补发 RemoveObserver")
 			require.Equal(t, battleId, fake.removes[0].GetBattleId())
-			require.Equal(t, watcher, fake.removes[0].GetObserverPlayerId())
-			require.Equal(t, "watch_outcome_unknown", fake.removes[0].GetReason())
+			// 补偿 Remove 必须带原 Add 的 op / 截止 / 实例:battle 据此在截止前封墓碑,挡住仍在途中的同 op Add。
+			requireRemoveOf(t, fake.adds[0], fake.removes[0], "watch_outcome_unknown")
 			require.Empty(t, watchingMark(t, mr, watcher))
 		})
 	}

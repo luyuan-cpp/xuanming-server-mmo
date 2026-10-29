@@ -163,8 +163,9 @@ type mergeManifest struct {
 	// RouteSource 是写这份清单的运行用的映射来源(-route-source db|redis,D1 第 2 批)。合服续跑必须同一个来源
 	// (checkManifestRouteSource):换来源续跑 = 前一半写在 mapping Redis、后一半写在全局库(或反过来),另一边看不见前一半
 	// —— 典型是跨提案 §13.4 的 P2 / P4 边界续跑,而 P1~P4 的冻结窗口本来就禁止 merge_zone 写模式。
-	// 撤销(-mode unmerge)不要求一致:合服在 P1 之前做完、撤销在 P4 之后做是合法的(P3 的导入与审计保证库与 Redis 一致),
-	// 只打一行日志。本字段之前写的清单没有它 = redis(那时只有直写 Redis 这一种做法)。
+	// 撤销(-mode unmerge)只拒绝一个方向(checkUnmergeRouteSource):清单是 db、本次是 redis。合服在 P1 之前做完(redis)、
+	// 撤销在 P4 之后做(db)是合法的(P3 的导入与审计保证库与 Redis 一致),只打一行日志。本字段之前写的清单没有它 = redis
+	// (那时只有直写 Redis 这一种做法)。
 	// 新增字段不升 manifestVersion:既有字段语义没变;旧版工具读到它会忽略。
 	RouteSource string `json:"route_source,omitempty"`
 
@@ -197,6 +198,26 @@ func checkManifestRouteSource(kind, recorded, current string) error {
 		"source half-way leaves the earlier writes where the other source cannot see them. Finish (or undo) this run with "+
 		"-route-source %s; if that source is no longer usable here (the rollout crossed P2 / P4 while it was half done), stop "+
 		"and escalate (docs/ops/merge-zone-runbook.md §15)", kind, got, note, current, got)
+}
+
+// checkUnmergeRouteSource 是撤销对清单映射来源的核对(纯函数,B1-3):
+//   - 记录了不认识的值:拒绝(同 checkManifestRouteSource,不猜它当初写在哪);
+//   - 清单是 db、本次是 redis:拒绝。db 源合服的映射真源是全局库 player_route,redis 源撤销只改 mapping Redis —— 库里仍是 dst,
+//     读方 / 对账 leader 按库看见的是没撤销;合服若写到一半中止,库围栏还在,redis 源的 SETNX 撞上镜像、给出「DEL 镜像」的
+//     错误指引。合法的回退窗口(提案 §13.4)本来就不跑合服写模式;要撤销就回到 db_first 用 -route-source db;
+//   - 其余组合放行(redis / 旧清单配 db 撤销:合服在 P1 之前、撤销在 P4 之后是认可的,见 mergeManifest.RouteSource)。
+func checkUnmergeRouteSource(recorded, current string) error {
+	got := recordedRouteSource(recorded)
+	if got != routeSourceDB && got != routeSourceRedis {
+		return fmt.Errorf("the merge manifest records an unknown route_source %q — refuse to guess", recorded)
+	}
+	if got == routeSourceDB && current != routeSourceDB {
+		return fmt.Errorf("the merge manifest was written with -route-source db (the global route DB is the truth for these players) "+
+			"but this unmerge uses -route-source %s: a redis-source unmerge only rewrites the mapping Redis and leaves player_route at "+
+			"the target zone. Unmerge with -route-source db (and -take-over-fence <run_id> if the merge stopped half-way and kept its "+
+			"fence); if this environment is no longer db_first, stop and escalate (docs/ops/merge-zone-runbook.md §15)", current)
+	}
+	return nil
 }
 
 // rowsMode 返回清单记录的玩家行模式;没有记录(本字段之前写的清单)按 copy。

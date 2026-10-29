@@ -355,7 +355,7 @@ guild:Deployment + ConfigMap(DSN 库 `mmorpg_guild`、appuser、`Schema.AutoMigr
 | `jubaozhai-market.md` §6.4 | B4b(先 diff 交易会话未提交内容);§6.3 `TransferPlayer` 带 name 由交易会话合入 |
 | `team-system.md` §G.2 名字来源、§E.1 与 MatchInternal 关系 | 组队会话合入(S3 #15、S6 §6.47),本期只发备注 |
 | `docs/ops/merge-zone-runbook.md` | B1b(`-guild-schema`)、B3a-2(§4.4 名字、`profile_component` 前置检查) |
-| `deploy/k8s/README.md:351`、`friend-persistence-architecture.md`、`guild_friend_service_notes*.md` | B1 之后的文档批(S1 §17.3) |
+| `deploy/k8s/README.md:351`、`friend-persistence-architecture.md`、[公会与好友中文说明](../guild_friend_service_notes_zh.md) | B1 之后的文档批(S1 §17.3)；公会／好友说明已于 2026-10-23 按源码更新，仅保留中文版 |
 | `mmorpg-client/Docs/GuildUI.md` | B2c;**B5c、B6a-cli、B6b-cli 各补捐献/商店、活动、历练段(S5/S6 漏列)** |
 | `data/AGENTS.md` 表索引 | 导表后 `gen_schema_index.py` 生成(B2s、B3a-1、B5a、B6a-srv) |
 | `PROGRESS.md` | 每批在文件末尾追加一条,不改他人条目 |

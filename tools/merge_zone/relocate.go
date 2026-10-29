@@ -7,7 +7,9 @@ package main
 //	R0  校验 S≠T、两库存在、列名对齐;检查能力标记;清单在任何写之前落盘(relocate_run.go)
 //	R1  冻结:逐人一段 Lua(placementCASScript)原子确认「记录与 home 仍是刚读到的值、home 所在 zone 没有
 //	    合服围栏」后写 "{S}:{v}:frozen:{run}"。有效落点 == S、记录不在冻结态由 Go 侧用同一套编解码判定
-//	    (decideFreeze);Lua 确认的正是判定所依据的那两个原值没变,两者合起来等价于原子完成。不满足的人跳过
+//	    (decideFreeze);Lua 确认的正是判定所依据的那两个原值没变,两者合起来等价于原子完成。不满足的人跳过。
+//	    -route-source=db 时同一组判定由 RelocateCAS 事务完成(锁围栏 63 号片 + 玩家行锁,比对编码后的当前值与 home),
+//	    提交并发布确认之后才算写成(relocate_run.go 的 sqlRelocatePlacements)
 //	R2  等在途写:每人每张玩家表的 go/db 排序锁都至少一次观察到不存在;超时 → 本批解冻
 //	R3  拷贝:每人一个事务,T 里该玩家的旧行(冷副本)先删后插,INSERT … SELECT 自 S,按列名对位
 //	R4  逐人逐表逐字节比对 S 与 T;不一致 → 解冻该人
@@ -18,8 +20,9 @@ package main
 // go/db 的落库后复核看到冻结 / 切换会不标记游标、稍后重投到 T(§6.3 末段)。R2 只是少一些重投与 R4 比对失败。
 //
 // 与合服互斥(§9 末条):R1 的 Lua 检查玩家 home 所在 zone 的合服围栏;合服在立围栏之后检查清单玩家
-// 没有冻结记录(merge_run.go 的落点扫描)。两边各自「先写自己的标记、再查对方的标记」,落在同一个 Redis 上,
-// 不会同时放行。
+// 没有冻结记录(merge_run.go 的落点扫描)。两边各自「先写自己的标记、再查对方的标记」,不会同时放行:-route-source=redis
+// 时两边的标记落在同一个 mapping Redis 上;-route-source=db 时都在全局库里(zone_merge_fence 63 号片的行锁与 player_route 的
+// frozen_run_id),互斥靠库的行锁。
 //
 // 本文件是与存储无关的状态机(relocateEngine),Redis / MySQL 经三个接缝注入:生产实现在 relocate_run.go,
 // 单测(relocate_test.go)注入内存替身。

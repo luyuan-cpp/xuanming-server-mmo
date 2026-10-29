@@ -280,7 +280,9 @@ namespace battle_settlement
 	{
 		kStored,        // 脚本返回 1:本次写入
 		kAlreadyStored, // 脚本返回 2:本局早先已为该成员写过 —— 上一轮的应答丢了或报了 ERROR,命令其实执行了。不重写
-		kSuperseded,    // 脚本返回 3:锁属于别的局,这一局对该成员已被取代。不写,免得旧局覆盖新局的单槽 pending
+		// 脚本返回 3:锁属于别的局,或锁不在而 pending 槽属于别的局(2026-10-22 评审补),这一局对该成员已被取代。
+		// 不写,免得旧局覆盖新局的单槽 pending
+		kSuperseded,
 		// 空应答 / ERROR / 意外形状或取值:不知道写没写。下一轮重写是安全的:命令若其实执行过,脚本会返回 2。
 		kUnconfirmed,
 	};
@@ -578,10 +580,11 @@ namespace battle_settlement
 	// 确认模式落库标记:SET,member = 十进制 player_id,每局一个键(按 battle_id)。
 	// 只表达「本局已经为这名成员写过 pending」:与 pending 两键在同一条脚本里写下,之后没有任何脚本摘成员
 	// (销账脚本不碰它),所以销账之后它仍能证明「写过」。
-	// 寿命:只在落库轮次之间有用。全部成员落定后 battle 立即 DEL(不会再有下一轮);停机、崩溃、轮次用尽时留下的
-	// 随 TTL 过期。TTL 必须活过「上一轮结论未知 → 下一轮」的间隔:Redis 连得上时轮次用尽前最多约 9.5 分钟
-	// (ResultCommit 的 kMaxStagingRounds),能把间隔拉长的只有 battle 节点单边连不上 Redis(连不上时不开轮)。
-	// 取 24 小时;单边断连超过 24 小时不在保证范围内。
+	// 寿命:只在落库轮次之间有用。全部成员落定后 battle 立即 DEL(不会再有下一轮);停机、崩溃、落库判用尽时留下的
+	// 随 TTL 过期。TTL 必须活过整个落库阶段:2026-10-22 起 ResultCommit 从第一次问起落库算起满 kMaxStagingSpan
+	// (6 小时,单调时钟,与 Redis 连不连得上无关)即不再开轮,而标记的写入不早于这个起点,所以任何一轮开出时标记都还在。
+	// 取 24 小时,留 4 倍余量;battle_room_manager.cpp 的 static_assert 与 turn_battle_engine_test 守住两者关系。
+	// (原先只数轮次、没有墙钟上限,battle 节点单边连不上 Redis 超过 24 小时时标记会先过期,已随跨度上限堵上。)
 	// 前缀与按玩家的 pending 两键、积压索引都不同,不会被它们的格式撞上。
 	inline constexpr char kStagedSettlementMembersKeyFmt[] = "battle:settlement:staged:%llu";
 	inline constexpr uint32_t kStagedSettlementMembersTtlSec = 86400;
@@ -589,7 +592,8 @@ namespace battle_settlement
 	// 确认模式(全球对局)发结果之前的个人结算落库,一条 Lua 原子完成(审计 r2-battle#1,2026-10-19)。
 	// KEYS[1]=pending blob,KEYS[2]=pending:id,KEYS[3]=积压索引,KEYS[4]=battle:lock,KEYS[5]=本局落库标记;
 	// ARGV[1]=blob,ARGV[2]=battle_id,ARGV[3]=now_ms,ARGV[4]=player_id,ARGV[5]=标记 TTL 秒。
-	// 返回 1 = 本次写入,2 = 本局早先已为该成员写过(不重写),3 = 锁属于别的局(不写)。结论见 ClassifyStageReply。
+	// 返回 1 = 本次写入,2 = 本局早先已为该成员写过(不重写),3 = 锁属于别的局、或锁不在而 pending 槽属于别的局(不写)。
+	// 结论见 ClassifyStageReply。
 	//
 	// 为什么需要它:确认模式按轮落库。原来每轮对全部成员无条件 SET,一轮里只要有一人没拿到确认,下一轮就把所有人
 	// 重写一遍 —— 已被 scene 应用并销账的成员 pending 复活,账本条目已随销账摘除,下次登录整笔再发一次。
@@ -606,10 +610,26 @@ namespace battle_settlement
 	//   - 重试轮拖过正式期限 + 60s 时,锁自然过期。
 	// 这些情形按「已收尾」处理会把合法结算静默丢掉(与 scene 侧 StorePendingSettlementIfLockMatch 注释里
 	// 「离线结算常晚于锁到达」是同一个结论)。所以锁不在时照写,与改造前一致;只有锁属于别的局才不写 ——
-	// 那一局能拿到锁,说明这一局要么已销账、要么已被判废,scene 每条路径都会丢弃这一局的结算
-	// (锁值不符丢弃、离线暂存返回 2 后销账),再写只会让旧局覆盖新局的单槽 pending。
+	// 那一局能拿到锁,说明这一局要么已销账、要么已被判废。scene 的**派发路径**都会丢弃这一局的结算
+	// (在线时 InBattleComp 不符、或无组件时锁值不符 → 销账;离线暂存锁不符返回 2 → 销账)。
+	// 不走派发的两条读路径不看锁:登录钩子(CheckPendingSettlementOnEnter → ApplyPendingSettlement)与冻结到期补读。
+	// 改造前旧局 pending 写下之后、新局覆盖之前若走到它们,旧局奖励原本可能被应用;现在返回 3 不写,
+	// 这个窗口里的旧局奖励**有意放弃**,换的是旧局不再覆盖新局的单槽 pending(2026-10-22 措辞更正)。
 	//
-	// 顺序:先判标记,再判锁,两键 SET 之后才写标记,ZADD 放最后。
+	// 锁不在也不能盲写,还要看 pending 槽属于哪一局(2026-10-22 评审补):锁不在只说明「此刻没有哪一局持锁」,
+	// 证明不了槽里那份 pending 比本局旧。时序:本局 B1 落库时成员 X 一直没写进去(battle 单边连不上 zone Redis),
+	// X 的冻结在 B1 截止时解除,接着打完 B2 并下线;B2 的 pending 两键已写、还没消费,锁 B2 按 TTL 自然过期。
+	// B1 的低频重试轮(ResultCommit 的 kSlowStagingRetryInterval)恢复后若照写,就把 B2 的 pending 覆盖了;
+	// B2 的发件箱探测到 pending:id ≠ B2,按已销账停投,B2 的奖励永久丢失(旧盖新)。
+	// 所以锁不在且 pending:id 属于别的局时同样返回 3,不写。锁 == 本局时照旧覆盖:锁证明本局是该玩家的当前局,
+	// 槽里如果是别的局,只会更旧。锁不在且槽空、或槽已属于本局(scene 离线暂存写过同一份)时照写。
+	// 返回 3 之后本局对 X 的派发都碰不到 B2:在线派发的条件销账只删 pending:id == 本局的记录,离线暂存锁不在时什么都不写,
+	// 发件箱按 pending:id ≠ 本局停投。
+	// 代价:锁不在而槽里恰好是更旧一局(已应用、等落盘销账;或被冻结 / 封禁暂缓应用)时,本局对该成员的奖励放弃。
+	// 单槽 pending 下两局只能留一份(turn-battle-gap-closure.md §9.3 残余),这里选不覆盖:资产路径 fail-closed,
+	// 宁可这一局不发,也不让迟到的一局抹掉已落定的另一局。
+	//
+	// 顺序:先判标记,再判锁与槽位归属,两键 SET 之后才写标记,ZADD 放最后。
 	//   - 标记写在两键之后,标记在就说明两键已写。OOM 只在第一条写之前判一次(之后的写为保原子性放行),
 	//     NOAUTH、READONLY、MISCONF 都在第一条写之前失败,所以不会出现「两键写了、标记没写」。
 	//     按命令粒度的 ACL 误配置(放行 SET、拒绝 SADD)是例外,不在保证范围内;
@@ -620,6 +640,8 @@ namespace battle_settlement
 		"if redis.call('SISMEMBER', KEYS[5], ARGV[4]) == 1 then return 2 end "
 		"local lock = redis.call('GET', KEYS[4]) "
 		"if lock and lock ~= ARGV[2] then return 3 end "
+		"local owner = redis.call('GET', KEYS[2]) "
+		"if lock == false and owner and owner ~= ARGV[2] then return 3 end "
 		"redis.call('SET', KEYS[1], ARGV[1]) "
 		"redis.call('SET', KEYS[2], ARGV[2]) "
 		"redis.call('SADD', KEYS[5], ARGV[4]) "

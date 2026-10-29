@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"shared/authoritysql"
 	"strconv"
 	"syscall"
 	"time"
@@ -58,6 +59,11 @@ const (
 	// registerTimeout:注册整体(探端口 + etcd CAS)的上限,须大于 listenProbeTimeout。
 	registerTimeout = 45 * time.Second
 )
+
+var maintenancePlan = flag.String("maintenance-drain-plan", "", "正式 typed 排空 runtime 原件")
+var maintenanceDir = flag.String("maintenance-drain-dir", "", "私有排空原件目录")
+var maintenanceSHA = flag.String("maintenance-drain-sha256", "", "runtime 原文件 SHA256")
+var maintenanceControlDir = flag.String("maintenance-drain-control-dir", os.Getenv("MMORPG_MAINTENANCE_CONTROL_DIR"), "同一 boot 接收排空请求的私有目录")
 
 func main() {
 	flag.Parse()
@@ -131,7 +137,15 @@ func runChat(c config.Config) (runErr error) {
 		return err
 	}
 
-	svcCtx := svc.NewServiceContext(c)
+	runtime, root, _, err := serverbase.LoadPublicationRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
+	if err != nil {
+		return err
+	}
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		return err
+	}
+	svcCtx := svc.NewServiceContextWithAdmission(c, writer, root)
 
 	// Prometheus /metrics(MetricsListenAddr 为空则不开)。
 	stopMetrics := svc.StartMetrics(c.MetricsListenAddr)
@@ -144,12 +158,19 @@ func runChat(c config.Config) (runErr error) {
 
 	var serverSlot lifecycle.ServerSlot
 	shutdown := &lifecycle.Shutdown{
-		DrainTimeout:    lifecycle.DrainTimeout,
-		FinishTimeout:   lifecycle.FinishTimeout,
-		CloseResources:  func() { ksCancel(); stopMetrics(); svcCtx.Stop() },
+		DrainTimeout:  lifecycle.DrainTimeout,
+		FinishTimeout: lifecycle.FinishTimeout,
+		CloseAndReport: func() error {
+			ksCancel()
+			stopMetrics()
+			closeCtx, cancel := context.WithTimeout(context.Background(), lifecycle.DrainTimeout)
+			defer cancel()
+			return svcCtx.StopAndReport(closeCtx)
+		},
 		FinishFramework: proc.Shutdown,
 	}
 	defer func() {
+		root.CloseAdmission()
 		stopSignals() // 启动失败也从这里启动同一个24s退出硬截止。
 		shutdown.Server = serverSlot.TakeForShutdown()
 		runErr = errors.Join(runErr, shutdown.Stop())
@@ -169,7 +190,7 @@ func runChat(c config.Config) (runErr error) {
 	}
 	// go-zero 自带的 trace / recover / stat / prometheus / breaker / shedding / timeout 拦截器
 	// 在 NewServer 里已先加入,位于下面这条链的外层;"grpcstats 最外"指本服务自己的链内。
-	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, session.OriginalIdentityInterceptor(svcCtx.LoginSessions))...)
+	s.AddUnaryInterceptors(append([]grpc.UnaryServerInterceptor{serverbase.RootAdmission(root)}, buildUnaryInterceptors(ks, session.OriginalIdentityInterceptor(svcCtx.LoginSessions))...)...)
 
 	// 先启动gRPC再注册。保存真实Server用于主动排空,Start错误经通道交回主线程,
 	// 让监听失败、注册失败和收到启动期信号都能清理已创建的资源。
@@ -220,6 +241,26 @@ func runChat(c config.Config) (runErr error) {
 	}
 	shutdown.Unregister = nr.Close
 	nr.KeepAlive()
+
+	var prepared func(context.Context) (*serverbase.PreparedPublication, error)
+	if runtime != nil {
+		prepared = func(ctx context.Context) (*serverbase.PreparedPublication, error) {
+			_, err := svcCtx.PreparedFrontier(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return &serverbase.PreparedPublication{NoConsumers: true}, nil
+		}
+	}
+	controlCtx, cancelControl := context.WithCancel(ctx)
+	controlDone := make(chan struct{})
+	go func() {
+		defer close(controlDone)
+		if err := serverbase.DriveDrainRuntime(controlCtx, runtime, *maintenanceControlDir, root, nil, svcCtx.BindDrainRuntime, svcCtx.CloseSource, nil, prepared); err != nil && controlCtx.Err() == nil {
+			logx.Errorf("聊天排空 HOLD: %v", err)
+		}
+	}()
+	defer func() { cancelControl(); <-controlDone }()
 
 	fmt.Println("\n=============================================================")
 	fmt.Println("  CHAT SERVICE STARTED SUCCESSFULLY")

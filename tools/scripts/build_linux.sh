@@ -232,7 +232,7 @@ buildproject() {
 
 # ── 1. Submodules + third-party dependencies ────────────────────────────────
 # Skipped in Docker: the builder stage has no .git, and the deps stage already
-# compiled gRPC / muduo / librdkafka / redis / yaml-cpp / zlib / nghttp2 into /usr/local.
+# compiled Protobuf / Abseil / BoringSSL / muduo / librdkafka / redis / yaml-cpp / zlib / nghttp2 into /usr/local.
 if [ "$SKIP_DEPS" -eq 0 ]; then
     echo "[1] submodules + third-party dependencies"
     run git submodule update --init --recursive

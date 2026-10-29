@@ -8,7 +8,7 @@ const (
 	ErrInvalidNodeID     uint32 = 4
 	ErrInvalidGateID     uint32 = 5
 	ErrEncodeEvent       uint32 = 6
-	ErrKafkaRoute        uint32 = 7
+	ErrKafkaRoute        uint32 = 7 // 推路由 / 重定向失败,或铸造的 owner_epoch 没确认落盘(WAITAOF,zone-redis-regression-guard-20261022.md §4.3.2);两者走同一套单调回滚,可重试
 	ErrRedis             uint32 = 8
 	ErrDuplicateScene    uint32 = 9
 	ErrInvalidSceneType  uint32 = 10

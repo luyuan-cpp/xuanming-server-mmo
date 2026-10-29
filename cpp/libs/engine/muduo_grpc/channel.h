@@ -18,6 +18,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <random>
 #include <set>
 #include <string>
@@ -64,8 +65,37 @@ struct BackoffOptions
     std::chrono::milliseconds max{120000};
 };
 
+class MaintenanceState {
+public:
+    bool Begin();
+    void Complete(bool known);
+    void Close();
+    bool Closed() const;
+    // 本机回调已返回与远端结果已确认是两个问题；UNKNOWN 不阻止本机 join。
+    // 这里只核已入账操作/回调，调用方仍须在原 loop 关闭传输和连接 owner。
+    bool Joined() const;
+    bool Frontier(std::string& value) const;
+    // P1 只读当前已接收集合，不关闭 relay 准入；长控制流由实际 etcd owner 显式分账。
+    bool SettledFrontier(std::string& value) const;
+    void OwnerOpened();
+    void OwnerJoined();
+    bool NativeJoined() const;
+    // 本地拒绝仍会排队调用业务回调，关准入以后也必须计入本机 join。
+    void BeginCallback();
+    void CompleteCallback(bool returned);
+private:
+    mutable std::mutex mutex_;
+    std::uint64_t accepted_ = 0, completed_ = 0;
+    std::uint64_t callbacksAccepted_ = 0, callbacksCompleted_ = 0;
+    bool closed_ = false, unknown_ = false;
+    bool callbackTrackingLost_ = false;
+    std::uint64_t liveOwners_ = 0;
+};
+
 struct ChannelOptions
 {
+    // 默认共用进程账本；测试可以注入独立域，不清空生产历史。
+    std::shared_ptr<MaintenanceState> maintenance;
     std::string authority;                              // 空 = "ip:port"
     std::string userAgent{"grpc-c++-muduo/1.0"};
     size_t maxSendMessageBytes{4 * 1024 * 1024};        // grpc-go 服务端默认接收上限
@@ -116,12 +146,15 @@ class Channel;
 
 namespace detail
 {
+struct MaintenanceOperation;
 // 一个双向流的通道侧记录;ClientStream 只弱持有它,用来在 Cancel 时就地压住还在队列里的回调。
 struct StreamRecord
 {
     uint64_t id{0};
     std::string path;
     Metadata metadata;
+    // operation 先构造、最后析构，保证 callback target 的析构也属于本机工作。
+    std::shared_ptr<MaintenanceOperation> maintenance;
     StreamCallbacks callbacks;
     std::vector<std::string> pendingFramed;  // 开流之前写的消息(已带前缀)
     size_t pendingBytes{0};
@@ -172,6 +205,9 @@ class Channel : public std::enable_shared_from_this<Channel>, public Http2Transp
     };
 
 public:
+    static std::shared_ptr<MaintenanceState> ProcessMaintenance();
+    // 仅实际 etcd owner 显式使用；UNKNOWN 保留，仍须与业务域共同参加 P3 本机 join。
+    static std::shared_ptr<MaintenanceState> ProcessControlMaintenance();
     // ip 只接受 IPv4 字面量(节点注册的 grpc_endpoint 都是 POD / 宿主 IP);非法返回 nullptr 并记 ERROR。
     static std::shared_ptr<Channel> Create(muduo::net::EventLoop &loop, const std::string &ip, uint16_t port,
                                            ChannelOptions options = {});
@@ -256,6 +292,7 @@ private:
     void SetState(ConnectivityState state);
     bool LoopIsCurrent() const;
 
+    std::shared_ptr<MaintenanceState> maintenance_;
     muduo::net::EventLoop &loop_;
     const std::string target_;
     const muduo::net::InetAddress address_;

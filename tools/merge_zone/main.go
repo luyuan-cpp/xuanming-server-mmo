@@ -9,8 +9,8 @@ package main
 //	                player-storage-placement.md §4;go/db 的 Placement.Redis 指向这里)
 //	                go/data_service/etc/data_service.yaml → MappingRedis(Host/Type only;
 //	                go-zero RedisConf 没有 DB 字段 ⇒ 恒 DB 0)
-//	guild    DB 2   guild_rank:zone:{z} / guild:v2:{id} / guild_rank:maintenance_lock
-//	                go/guild/etc/guild.yaml → RedisClient.DB
+//	guild    DB 0   guild_rank:zone:{z} / guild:v2:{id} / guild_rank:maintenance_lock
+//	                go/guild/etc/guild.yaml → RedisClient.DB(2026-10-23 由 2 改为 0)
 //	shared   DB 0   player:session:{pid} / kafka:{retry,processing,dead}:queue:* /
 //	                distributed:lock:kafka:ordering:*(go/db 排序锁,搬库 R2 等它)/
 //	                PlayerAllData:{pid} / {MsgType}:{pid} / player_merge_notice:{pid}
@@ -47,6 +47,8 @@ package main
 // F 之后、M 之前的拒绝:首跑时本次什么都没写,正常释放围栏、非零退出(mergeFence.refuseAndRelease);
 // 续跑(清单已存在且步骤 7 未标记完成)时上一次运行可能已写到一半,围栏保留、走 fenceKeptAbortMessage。
 // M 之后的失败:围栏保留在本次 run_id 上,按打印的指引核对 → DEL → 用原命令续跑(fenceKeptAbortMessage)。
+// 以上「DEL」只适用于 -route-source=redis;db 源的围栏真源是全局库 zone_merge_fence,镜像不能删,续跑用原命令加
+// -take-over-fence <run_id>(routeFenceKeptAbortMessage,fence.go「-route-source=db:库围栏」)。
 //
 // 1 必须在 5 之前:mapping 一改,玩家就被路由到目标区,而他的行还在源库。
 // 5 一旦跑完,collectPlayerIDsWithHomeZone 再也找不到这批人 —— 这正是清单
@@ -85,12 +87,33 @@ package main
 //	-backfill-home-zone    -zone N:回填 player:zone(backfill_home_zone.go)
 
 import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"math"
+	"net"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
+
+	"github.com/go-sql-driver/mysql"
+	"github.com/redis/go-redis/v9"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	pb "proto/common/database"
+	"shared/authoritysql"
+	"shared/drainproof"
 )
 
 const playerZoneKeyPrefix = "player:zone:"
@@ -110,7 +133,7 @@ const (
 	// 把这里改成 15 会让 fence 与 remap 都指向 data_service 从不碰的库:
 	// fence 失效、remap 报告成功却一个 key 都没改 —— 正是合服最危险的静默失败。
 	defaultMappingRedisDB = 0
-	defaultGuildRedisDB   = 2 // guild.yaml RedisClient.DB
+	defaultGuildRedisDB   = 0 // guild.yaml RedisClient.DB(2026-10-23 由 2 改为 0:Redis Cluster 只有 DB 0)
 	// friend 的 DB 3 已删(2026-09-18,friend 移植 F3):它唯一服务的键 friend:online:{pid}
 	// 全仓没有写者、读者也已删除,审计改用 shared 的 player:session 判在线。
 	defaultSharedRedisDB = 0 // login / db / player_locator / scene_manager
@@ -165,6 +188,7 @@ type options struct {
 	migrateBlobs  bool
 	skipBlobs     bool
 	clearHotState bool
+	etcdEndpoints string
 	skipTrade     bool
 	tradeSchema   string
 	guildSchema   string
@@ -178,12 +202,27 @@ type options struct {
 
 	// kafkaGroup 是 -kafka-group(非空时 P3 只看它);kafkaLegacyGroup 是 -kafka-legacy-group,
 	// 只在 kafkaGroup 为空时与 db_rpc_consumer_group_z<zone> 一起作 P3 的候选,见 kafkaGroupCandidates。
-	kafkaGroup         string
-	kafkaLegacyGroup   string
-	kafkaTopicGen      uint
-	kafkaCLI           string
-	kafkaBootstrap     string
-	assumeKafkaDrained bool
+	kafkaGroup                   string
+	kafkaLegacyGroup             string
+	kafkaTopicGen                uint
+	kafkaCLI                     string
+	kafkaBootstrap               string
+	assumeKafkaDrained           bool
+	maintenanceRunID             string
+	freezeTicketID               string
+	freezeRequestID              string
+	freezeReceiptSHA256          string
+	frozenWriterEpoch            uint64
+	maintenanceRuntimePlan       string
+	maintenanceRuntimeDirectory  string
+	maintenanceRuntimeSHA256     string
+	normalRuntimePlan            string
+	normalRuntimeDirectory       string
+	normalRuntimeSHA256          string
+	recoveryAuditOutput          string
+	maintenancePublicationFile   string
+	maintenancePublicationSHA256 string
+	maintenance                  *maintenanceTool
 
 	timeout time.Duration
 
@@ -224,7 +263,7 @@ func main() {
 
 	flag.StringVar(&o.mode, "mode", "merge",
 		"Operation mode: 'merge' (default), 'audit' (read-only, audit_resources.go), 'unmerge' (reverse a run from its manifest; "+
-			"runs the pre-flight gates against the TARGET zone first, so it needs -kafka-consumer-groups-cmd or -assume-kafka-drained too), "+
+			"runs the pre-flight gates against the TARGET zone and requires the current NORMAL consumed freeze receipt), "+
 			"'pin-placement' (-zone N: pin \"N:1\" for players with home_zone=N and no placement record; safe online), "+
 			"'relocate' (move player main data between placement stores: -relocate-source-storage / -relocate-target-storage), "+
 			"'relocate-abort' (unfreeze what a relocate run left frozen: -manifest-path) or "+
@@ -269,7 +308,7 @@ func main() {
 
 	flag.StringVar(&o.redisAddr, "redis-addr", "127.0.0.1:6379", "Default Redis address (used when a specific -*-redis-addr is empty)")
 	flag.StringVar(&o.redisPwd, "redis-password", "", "Default Redis password")
-	flag.IntVar(&o.redisDB, "redis-db", defaultGuildRedisDB, "GUILD Redis DB (guild_rank:zone / guild:v2 / guild_rank:maintenance_lock; guild.yaml default 2)")
+	flag.IntVar(&o.redisDB, "redis-db", defaultGuildRedisDB, "GUILD Redis DB (guild_rank:zone / guild:v2 / guild_rank:maintenance_lock; guild.yaml default 0)")
 
 	flag.StringVar(&o.mappingAddr, "mapping-redis-addr", "", "Player mapping Redis address (player:zone:*). Default: -redis-addr")
 	flag.StringVar(&o.mappingPwd, "mapping-redis-password", "", "Player mapping Redis password. Default: -redis-password")
@@ -322,7 +361,9 @@ func main() {
 	flag.BoolVar(&o.migrateBlobs, "migrate-player-blobs", false, "Copy player:{id}:* keys between per-zone data Redis clusters (multi-cluster deployments only)")
 	flag.BoolVar(&o.skipBlobs, "skip-player-blob-migration", false, "Skip the blob step even if -migrate-player-blobs was passed (emergency)")
 	flag.BoolVar(&o.clearHotState, "clear-source-hot-state", false,
-		"After remap: DEL source-zone player:{id}:location / scene:* / world_channels / node_load in the scene_manager Redis, then (last step) SREM S from scene_manager:zones. Refuses unless scene_nodes:zone:{S}:load is empty")
+		"After remap: DEL source-zone player:{id}:location / scene:* / world_channels / node_load in the scene_manager Redis, then (last step) SREM S from scene_manager:zones. Refuses unless the etcd scene-node registry (-etcd-endpoints) has no node of zone S and scene_nodes:zone:{S}:load is empty")
+	flag.StringVar(&o.etcdEndpoints, "etcd-endpoints", "",
+		"Comma-separated etcd client URLs (http://host:2379), read through the etcd v3 JSON gateway. Required with -clear-source-hot-state: positive evidence that zone S has no registered scene node")
 
 	flag.BoolVar(&o.allowEmptySource, "allow-empty-source", false,
 		"Allow -apply when the source zone maps zero players (otherwise refused: an empty mapping usually means the wrong -mapping-redis-db or a missing -backfill-home-zone)")
@@ -348,7 +389,21 @@ func main() {
 	flag.StringVar(&o.kafkaCLI, "kafka-consumer-groups-cmd", "", "Path to kafka-consumer-groups(.sh|.bat) for the lag pre-flight")
 	flag.StringVar(&o.kafkaBootstrap, "kafka-bootstrap", "127.0.0.1:9092", "Kafka bootstrap server for -kafka-consumer-groups-cmd")
 	flag.BoolVar(&o.assumeKafkaDrained, "assume-kafka-drained", false,
-		"Operator attestation that the db_task backlog is drained (no lag is measured). Only for environments without the Kafka CLI")
+		"已废弃：人工声明不能替代本轮NORMAL已消费冻结收据，指定即拒绝")
+	flag.StringVar(&o.maintenanceRunID, "maintenance-run-id", "", "本轮正式维护run的32位小写hex，不是merge清单run_id")
+	flag.StringVar(&o.freezeTicketID, "freeze-ticket-id", "", "本轮NORMAL已消费freeze ticket的32位小写hex")
+	flag.StringVar(&o.freezeRequestID, "freeze-request-id", "", "已提交SQL_FROZEN请求的32位小写hex")
+	flag.StringVar(&o.freezeReceiptSHA256, "freeze-receipt-sha256", "", "已提交SQL_FROZEN永久收据的64位小写hex")
+	flag.Uint64Var(&o.frozenWriterEpoch, "frozen-writer-epoch", 0, "SQL_FROZEN收据实际after_epoch，必须仍是当前writer epoch")
+	flag.StringVar(&o.maintenanceRuntimePlan, "maintenance-runtime-plan", "", "P0已固定的单次MAINTENANCE工具私有runtime原件")
+	flag.StringVar(&o.maintenanceRuntimeDirectory, "maintenance-runtime-directory", "", "本工具boot私有控制目录，不复用旧boot")
+	flag.StringVar(&o.maintenanceRuntimeSHA256, "maintenance-runtime-sha256", "", "runtime原件SHA256，必须与P0来源一致")
+	flag.StringVar(&o.normalRuntimePlan, "normal-runtime-plan", "", "在线有限NORMAL工具固定SOURCE runtime；无run由launcher独立RETIRE")
+	flag.StringVar(&o.normalRuntimeDirectory, "normal-runtime-directory", "", "在线工具SOURCE私有目录")
+	flag.StringVar(&o.normalRuntimeSHA256, "normal-runtime-sha256", "", "在线SOURCE runtime原件SHA256")
+	flag.StringVar(&o.recoveryAuditOutput, "recovery-audit-output", "", "仅audit -verify-merged：输出正式P7 MergeRecoveryAudit私有原件")
+	flag.StringVar(&o.maintenancePublicationFile, "maintenance-publication-file", "", "P0 MAINTENANCE全集实际closure及SourcePin的正式PublicationEvidence")
+	flag.StringVar(&o.maintenancePublicationSHA256, "maintenance-publication-sha256", "", "维护闭合全集原件SHA256")
 
 	flag.DurationVar(&o.timeout, "timeout", 2*time.Hour, "Overall run timeout. The merge fence TTL is derived from it (timeout + 30m)")
 
@@ -372,9 +427,20 @@ func main() {
 	flag.StringVar(&o.takeOverFenceRunID, "take-over-fence", "",
 		"-route-source=db, -mode merge / unmerge only: resume after an abort by taking over the merge fence that the aborted run "+
 			"<run_id> left in zone_merge_fence, in one DB transaction (the zones are never unfenced). Pass the run_id printed by the "+
-			"abort message, and only after confirming that no merge_zone process of that run is alive")
+			"abort message with the same -manifest-path and zone pair (both are checked against the fence), and only after confirming "+
+			"that no merge_zone process of that run is alive: a live old process has its next mapping batch refused by the DB, but its "+
+			"other writes (rows, blobs, guild, trade, rank, hot state, manifest file) only stop at its next renewal (up to "+
+			routeFenceRenewMaxInterval.String()+" later). "+
+			"If the take-over itself fails half-way, the fence is kept, never released")
 
 	flag.Parse()
+	// 未接实际资源owner的旁路不得凭同一个可执行文件取得维护写资格。
+	if err := checkMaintenanceMode(o); err != nil {
+		fail("%v", err)
+	}
+	if o.assumeKafkaDrained {
+		fail("-assume-kafka-drained已废弃；人工声明不能替代正式非SQL闭合与NORMAL冻结收据")
+	}
 	o.sourceZone = uint32(*srcZone)
 	o.targetZone = uint32(*dstZone)
 	// 下面几个是 uint32 的落点 / zone 编号:超出范围直接拒绝,不能让 uint32() 静默截断成另一个库。
@@ -430,6 +496,12 @@ func main() {
 		if err := requireWriteIntent(o); err != nil {
 			fail("%v", err)
 		}
+		if !o.dryRun {
+			if err := executeMaintenanceTool(o, runMaintenanceBackfill); err != nil {
+				fail("%v", err)
+			}
+			return
+		}
 		runBackfillEntry(backfillEntryParams{
 			zone:        o.zone,
 			mysqlDSN:    o.mysqlDSN,
@@ -451,15 +523,20 @@ func main() {
 		if err := requireWriteIntent(o); err != nil {
 			fail("%v", err)
 		}
-		runPinPlacementEntry(pinPlacementEntryParams{
-			zone:        o.zone,
-			mappingAddr: o.mappingAddr,
-			mappingPwd:  o.mappingPwd,
-			mappingDB:   o.mappingDB,
-			dryRun:      o.dryRun,
-			timeout:     o.timeout,
-			route:       routeEntryOptionsOf(o),
-		})
+		if err := executeNormalTool(o, func(bound options) {
+			runPinPlacementEntry(pinPlacementEntryParams{
+				zone:        o.zone,
+				mappingAddr: o.mappingAddr,
+				mappingPwd:  o.mappingPwd,
+				mappingDB:   o.mappingDB,
+				dryRun:      o.dryRun,
+				timeout:     o.timeout,
+				route:       routeEntryOptionsOf(o),
+				parent:      maintenanceParent(bound),
+			})
+		}); err != nil {
+			fail("%v", err)
+		}
 		return
 
 	case "relocate":
@@ -476,7 +553,9 @@ func main() {
 		if err := requireCapabilityZones(o.capSpec, capabilityForRelocate); err != nil {
 			fail("%v", err)
 		}
-		runRelocateEntry(o)
+		if err := executeNormalTool(o, runRelocateEntry); err != nil {
+			fail("%v", err)
+		}
 		return
 
 	case modeCapabilityCheck:
@@ -500,7 +579,9 @@ func main() {
 		if o.manifestPath == "" {
 			fail("-mode relocate-abort requires -manifest-path <the manifest written by the relocate run>")
 		}
-		runRelocateAbortEntry(o)
+		if err := executeNormalTool(o, runRelocateAbortEntry); err != nil {
+			fail("%v", err)
+		}
 		return
 
 	case "storage-audit":
@@ -553,6 +634,12 @@ func main() {
 			fail("-verify-merged requires -manifest-path <the manifest written by the merge being verified>: " +
 				"every manifest player's mapping and main-data row is checked one by one")
 		}
+		if o.recoveryAuditOutput != "" {
+			if err := runMergeRecoveryAuditEntry(o); err != nil {
+				fail("P7业务审核未完成，保持冻结: %v", err)
+			}
+			return
+		}
 		runAuditEntry(auditEntryParams{
 			src:                o.sourceZone,
 			dst:                o.targetZone,
@@ -569,6 +656,7 @@ func main() {
 			sceneAddr:          o.sceneAddr,
 			scenePwd:           o.scenePwd,
 			sceneDB:            o.sceneDB,
+			etcdEndpoints:      o.etcdEndpoints,
 			dataAddrs:          addrsFromCSV(o.sourceData),
 			dataPwd:            o.dataPwd,
 			dataDB:             o.sourceDataDB,
@@ -593,7 +681,9 @@ func main() {
 		if o.manifestPath == "" {
 			fail("-mode unmerge requires -manifest-path <file written by the original run>")
 		}
-		runUnmerge(o)
+		if err := executeMaintenanceTool(o, runUnmerge); err != nil {
+			fail("%v", err)
+		}
 		return
 
 	case "merge":
@@ -622,7 +712,9 @@ func main() {
 		if err := checkMergeCapabilityFlag(o); err != nil {
 			fail("%v", err)
 		}
-		runMerge(o)
+		if err := executeMaintenanceTool(o, runMerge); err != nil {
+			fail("%v", err)
+		}
 		return
 
 	default:
@@ -769,4 +861,1048 @@ func verbWrite(dry bool) string {
 		return "would be migrated"
 	}
 	return "migrated"
+}
+
+// maintenanceTool只拥有本次P0固定的单boot工具；资源和后台任务随它一起闭合。
+type maintenanceCloser interface{ Close() error }
+type maintenanceTool struct {
+	normalSQL     *authoritysql.WriterConfig
+	normalOutcome error
+	runtime       *drainproof.Runtime
+	session       *drainproof.Session
+	catalogDB     *sql.DB
+	check         func(context.Context) error
+	context       context.Context
+	mu            sync.Mutex
+	resources     []maintenanceCloser
+	registered    map[maintenanceCloser]bool
+	redisBound    map[redis.UniversalClient]bool
+	stops         []func(context.Context) error
+	closing       bool
+	stopOnce      sync.Once
+	stopErr       error
+	finishOnce    sync.Once
+	finishErr     error
+}
+type maintenanceContextKey struct{}
+
+func checkMaintenanceMode(o options) error {
+	if o.dryRun || o.mode == "audit" || o.mode == "storage-audit" || o.mode == "capability-check" {
+		return nil
+	}
+	if o.backfill || o.mode == "merge" || o.mode == "unmerge" || o.mode == "pin-placement" || o.mode == "relocate" || o.mode == "relocate-abort" {
+		return nil
+	}
+	return fmt.Errorf("模式 %q 尚未绑定P0单次维护工具身份，拒绝实际写入", o.mode)
+}
+func maintenanceFromContext(ctx context.Context) *maintenanceTool {
+	t, _ := ctx.Value(maintenanceContextKey{}).(*maintenanceTool)
+	return t
+}
+
+func normalToolFromContext(ctx context.Context) bool {
+	t := maintenanceFromContext(ctx)
+	return t != nil && t.normalSQL != nil
+}
+func normalToolFailure(ctx context.Context, err error) {
+	if err == nil {
+		return
+	}
+	if owner := maintenanceFromContext(ctx); owner != nil {
+		owner.mu.Lock()
+		owner.normalOutcome = errors.Join(owner.normalOutcome, err)
+		owner.mu.Unlock()
+		owner.hold()
+	}
+}
+
+func openToolSQLPool(ctx context.Context, dsn string) (*sql.DB, error) {
+	t := maintenanceFromContext(ctx)
+	if t == nil || t.normalSQL == nil {
+		return sql.Open("mysql", dsn)
+	}
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return nil, err
+	}
+	inner, err := mysql.NewConnector(cfg)
+	if err != nil {
+		return nil, err
+	}
+	connector, err := authoritysql.PinCurrentSession(inner, true, authoritysql.Writer(*t.normalSQL))
+	if err != nil {
+		return nil, err
+	}
+	return sql.OpenDB(connector), nil
+}
+
+// 在线pin/relocate是NORMAL，始终writable=1和正式own64/epoch；不使用P6冻结工具身份。
+func executeNormalTool(o options, run func(options)) error {
+	if o.dryRun {
+		run(o)
+		return nil
+	}
+	if o.timeout <= 0 {
+		return drainproof.ErrHold
+	}
+	config, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
+	defer cancel()
+	var runtime *drainproof.Runtime
+	if o.normalRuntimePlan != "" {
+		runtime, err = drainproof.LoadRuntime(o.normalRuntimePlan, o.normalRuntimeDirectory, o.normalRuntimeSHA256)
+		if err != nil {
+			config.Seal()
+			return err
+		}
+		if runtime.Request.RunPhase == pb.SqlWriterDrainRun_SQL_FROZEN || runtime.Request.RunPhase == pb.SqlWriterDrainRun_SQL_RELEASED || runtime.Seed("SOURCE") == nil || runtime.Seed("RELAY") != nil {
+			config.Seal()
+			return drainproof.ErrHold
+		}
+		if err = runtime.BindBoot(config.InstanceID(), config.WriterKey()); err != nil {
+			config.Seal()
+			return err
+		}
+	} else if o.normalRuntimeDirectory != "" || o.normalRuntimeSHA256 != "" {
+		config.Seal()
+		return drainproof.ErrHold
+	}
+	owner := &maintenanceTool{normalSQL: &config, runtime: runtime, session: drainproof.New(), check: func(context.Context) error { return nil }}
+	owner.context = context.WithValue(ctx, maintenanceContextKey{}, owner)
+	o.maintenance = owner
+	returned := false
+	defer func() {
+		if !returned {
+			owner.hold()
+		}
+	}()
+	finish, err := owner.session.Enter()
+	if err != nil {
+		return err
+	}
+	func() { defer finish(); run(o) }()
+	returned = true
+	if err = owner.stop(ctx); err != nil {
+		return err
+	}
+	owner.session.CloseAdmission()
+	if err = owner.session.WaitIdle(ctx); err != nil {
+		owner.hold()
+		return err
+	}
+	owner.mu.Lock()
+	owner.closing = true
+	resources := append([]maintenanceCloser(nil), owner.resources...)
+	owner.mu.Unlock()
+	config.Seal()
+	for i := len(resources) - 1; i >= 0; i-- {
+		err = errors.Join(err, resources[i].Close())
+	}
+	if err != nil {
+		owner.hold()
+	}
+	if err = errors.Join(err, owner.session.Wait(ctx), owner.normalOutcome); err != nil {
+		return err
+	}
+	if runtime != nil {
+		return runtime.Write("SOURCE", owner.session)
+	}
+	return nil // 无run不造unbound closure；launcher按实际registered boot独立RETIRE。
+}
+func maintenanceParent(o options) context.Context {
+	if o.maintenance != nil {
+		return o.maintenance.context
+	}
+	return context.Background()
+}
+func (t *maintenanceTool) hold() { t.session.Hold() }
+func holdMaintenanceTool(ctx context.Context) {
+	if t := maintenanceFromContext(ctx); t != nil {
+		t.hold()
+	}
+}
+func checkMaintenanceTool(ctx context.Context) error {
+	t := maintenanceFromContext(ctx)
+	if t == nil || t.session == nil || t.check == nil {
+		return drainproof.ErrHold
+	}
+	t.mu.Lock()
+	closed := t.closing
+	t.mu.Unlock()
+	if closed || t.session.Closed() {
+		return drainproof.ErrClosed
+	}
+	if err := t.check(ctx); err != nil {
+		t.hold()
+		return err
+	}
+	return nil
+}
+func enterMaintenanceWork(ctx context.Context) (func(), error) {
+	if t := maintenanceFromContext(ctx); t != nil {
+		return t.session.Enter()
+	}
+	return func() {}, nil // 只读入口；真实写另经checkMaintenanceTool。
+}
+func registerMaintenanceResource(ctx context.Context, r maintenanceCloser) error {
+	t := maintenanceFromContext(ctx)
+	if t == nil {
+		return nil
+	}
+	if r == nil {
+		return drainproof.ErrHold
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closing || t.session.Closed() {
+		return drainproof.ErrClosed
+	}
+	if t.registered == nil {
+		t.registered = map[maintenanceCloser]bool{}
+	}
+	if !t.registered[r] {
+		t.registered[r] = true
+		t.resources = append(t.resources, r)
+	}
+	return nil
+}
+func registerMaintenanceStop(ctx context.Context, stop func(context.Context) error) error {
+	t := maintenanceFromContext(ctx)
+	if t == nil {
+		return nil
+	}
+	if stop == nil {
+		return drainproof.ErrHold
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closing || t.session.Closed() {
+		return drainproof.ErrClosed
+	}
+	t.stops = append(t.stops, stop)
+	return nil
+}
+func closeUnownedMaintenanceResource(ctx context.Context, r maintenanceCloser) {
+	if maintenanceFromContext(ctx) == nil && r != nil {
+		if err := r.Close(); err != nil {
+			log.Printf("只读资源关闭失败: %v", err)
+		}
+	}
+}
+func (t *maintenanceTool) stop(ctx context.Context) error {
+	t.stopOnce.Do(func() {
+		t.stopErr = drainproof.ErrHold
+		returned := false
+		defer func() {
+			if !returned {
+				t.hold()
+			}
+		}()
+		t.mu.Lock()
+		stops := append([]func(context.Context) error(nil), t.stops...)
+		t.mu.Unlock()
+		var stopErr error
+		for i := len(stops) - 1; i >= 0; i-- {
+			stopErr = errors.Join(stopErr, stops[i](ctx))
+		}
+		t.stopErr = stopErr
+		returned = true
+		if t.stopErr != nil {
+			t.hold()
+		}
+	})
+	return t.stopErr
+}
+
+// Hook捕获固定owner，连同Background释放命令也经过同一关闭线性化点。
+type maintenanceRedisHook struct{ tool *maintenanceTool }
+
+func (h maintenanceRedisHook) DialHook(next redis.DialHook) redis.DialHook {
+	return func(ctx context.Context, network, addr string) (conn net.Conn, err error) {
+		finish, err := h.tool.session.Enter()
+		if err != nil {
+			return nil, err
+		}
+		returned := false
+		defer func() {
+			if !returned || err != nil {
+				h.tool.hold()
+			}
+			finish()
+		}()
+		conn, err = next(ctx, network, addr)
+		returned = true
+		return
+	}
+}
+func (h maintenanceRedisHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) (err error) {
+		finish, err := h.tool.session.Enter()
+		if err != nil {
+			return err
+		}
+		returned := false
+		defer func() {
+			if !returned || redisUnknown(err) || redisUnknown(cmd.Err()) {
+				h.tool.hold()
+			}
+			finish()
+		}()
+		err = next(ctx, cmd)
+		returned = true
+		return
+	}
+}
+func redisUnknown(err error) bool { return err != nil && !errors.Is(err, redis.Nil) }
+func (h maintenanceRedisHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []redis.Cmder) (err error) {
+		finish, err := h.tool.session.Enter()
+		if err != nil {
+			return err
+		}
+		returned := false
+		defer func() {
+			unknown := !returned || redisUnknown(err)
+			for _, cmd := range cmds {
+				unknown = unknown || redisUnknown(cmd.Err())
+			}
+			if unknown {
+				h.tool.hold()
+			}
+			finish()
+		}()
+		err = next(ctx, cmds)
+		returned = true
+		return
+	}
+}
+func bindMaintenanceRedisNode(ctx context.Context, client *redis.Client) error {
+	return installMaintenanceRedisHook(ctx, client)
+}
+func bindMaintenanceRedis(ctx context.Context, client redis.UniversalClient) error {
+	if err := installMaintenanceRedisHook(ctx, client); err != nil {
+		return err
+	}
+	return registerMaintenanceResource(ctx, client)
+}
+func installMaintenanceRedisHook(ctx context.Context, client redis.UniversalClient) error {
+	t := maintenanceFromContext(ctx)
+	if t == nil {
+		return nil
+	}
+	if client == nil {
+		return drainproof.ErrHold
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closing || t.session.Closed() {
+		return drainproof.ErrClosed
+	}
+	if t.redisBound == nil {
+		t.redisBound = map[redis.UniversalClient]bool{}
+	}
+	if !t.redisBound[client] {
+		client.AddHook(maintenanceRedisHook{tool: t})
+		t.redisBound[client] = true
+	}
+	return nil
+}
+
+func loadMaintenanceTool(ctx context.Context, o options) (*maintenanceTool, error) {
+	proof, err := parseNormalFreezeProof(o)
+	if err != nil {
+		return nil, err
+	}
+	runtime, err := drainproof.LoadMaintenanceRuntime(o.maintenanceRuntimePlan, o.maintenanceRuntimeDirectory, o.maintenanceRuntimeSHA256)
+	if err != nil {
+		return nil, err
+	}
+	physical, err := hex.DecodeString(os.Getenv("MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256"))
+	if err != nil || len(physical) != 32 || !bytes.Equal(physical, runtime.Plan.PhysicalClusterIdentity) ||
+		!bytes.Equal(proof.runID, runtime.Plan.RunId) || proof.authoritySchema != runtime.Plan.AuthoritySchema {
+		return nil, drainproof.ErrHold
+	}
+	db, err := authoritysql.Open(ctx, o.routeDBDSN, proof.authoritySchema, true, 1, authoritysql.Reader())
+	if err != nil {
+		return nil, err
+	}
+	var principal string
+	if err = db.QueryRowContext(ctx, "SELECT CURRENT_USER()").Scan(&principal); err != nil {
+		return nil, errors.Join(err, db.Close())
+	}
+	catalog, err := authoritysql.NewCatalog(db, authoritysql.CatalogConfig{
+		AuthoritySchema: proof.authoritySchema, Generation: runtime.Request.Generation,
+		ProtectedSchemas: runtime.Plan.ProtectedSchemas, PhysicalAuthoritySHA256: physical, Principal: principal, RequireReconcile: true})
+	if err != nil {
+		return nil, errors.Join(err, db.Close())
+	}
+	check := func(ctx context.Context) error {
+		frozen, err := runtime.CheckMaintenance(ctx, catalog, proof.ticketID)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(frozen.RequestId, proof.requestID) || !bytes.Equal(frozen.ReceiptDigest, proof.receiptDigest) || frozen.AfterEpoch != proof.epoch {
+			return drainproof.ErrHold
+		}
+		return nil
+	}
+	if err = check(ctx); err != nil {
+		return nil, errors.Join(err, db.Close())
+	}
+	session, err := runtime.BindMaintenance(ctx, catalog, proof.ticketID)
+	if err != nil {
+		return nil, errors.Join(err, db.Close())
+	}
+	t := &maintenanceTool{runtime: runtime, session: session, catalogDB: db, check: check}
+	t.context = context.WithValue(ctx, maintenanceContextKey{}, t)
+	return t, nil
+}
+
+// 先join真正后台，再永久拒新命令并等待accepted；UNKNOWN不阻止资源关闭，但阻止正式成功原件。
+func (t *maintenanceTool) finish(ctx context.Context) error {
+	t.finishOnce.Do(func() {
+		t.finishErr = drainproof.ErrHold
+		returned := false
+		defer func() {
+			if !returned {
+				t.hold()
+			}
+		}()
+		t.finishErr = t.finishOnceJoined(ctx)
+		returned = true
+	})
+	return t.finishErr
+}
+func (t *maintenanceTool) finishOnceJoined(ctx context.Context) error {
+	if err := t.stop(ctx); err != nil {
+		return err
+	} // 尚未join时不能关闭资源。
+	t.session.CloseAdmission()
+	if err := t.session.WaitIdle(ctx); err != nil {
+		t.hold()
+		return err
+	}
+	t.mu.Lock()
+	t.closing = true
+	resources := append([]maintenanceCloser(nil), t.resources...)
+	t.mu.Unlock()
+	var closeErr error
+	for i := len(resources) - 1; i >= 0; i-- {
+		closeErr = errors.Join(closeErr, resources[i].Close())
+	}
+	if closeErr != nil {
+		t.hold()
+	}
+	checkErr := t.check(ctx)
+	if checkErr != nil {
+		t.hold()
+	}
+	if t.catalogDB != nil {
+		closeErr = errors.Join(closeErr, t.catalogDB.Close())
+		if closeErr != nil {
+			t.hold()
+		}
+	}
+	if err := errors.Join(t.session.Wait(ctx), closeErr, checkErr); err != nil {
+		return err
+	}
+	if err := t.runtime.Write("MAINTENANCE", t.session); err != nil {
+		t.hold()
+		return err
+	}
+	return nil
+}
+func executeMaintenanceTool(o options, run func(options)) error {
+	if o.dryRun {
+		run(o)
+		return nil
+	}
+	if o.timeout <= 0 {
+		return fmt.Errorf("维护工具timeout必须大于0")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
+	defer cancel()
+	t, err := loadMaintenanceTool(ctx, o)
+	if err != nil {
+		return err
+	}
+	o.maintenance = t
+	returned := false
+	defer func() {
+		if !returned {
+			t.hold()
+		}
+	}() // panic继续传播，Fatal退出也不会写成功原件。
+	finish, err := t.session.Enter()
+	if err != nil {
+		return err
+	}
+	func() { defer finish(); run(o) }()
+	returned = true
+	return t.finish(t.context)
+}
+
+// 原fence.writeContext只有cancel没有join；这里保同一判据并登记真正done。
+func maintenanceFenceContext(parent context.Context, fence runFence) (context.Context, error) {
+	t := maintenanceFromContext(parent)
+	if t == nil {
+		return fence.writeContext(parent), nil
+	}
+	work, fail := context.WithCancelCause(parent)
+	watch, stop := context.WithCancel(parent)
+	done := make(chan struct{})
+	finish, err := t.session.Enter()
+	if err != nil {
+		stop()
+		fail(err)
+		return nil, err
+	}
+	if err = registerMaintenanceStop(parent, func(ctx context.Context) error {
+		stop()
+		select {
+		case <-done:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}); err != nil {
+		finish()
+		stop()
+		fail(err)
+		return nil, err
+	}
+	go func() {
+		returned := false
+		defer close(done)
+		defer finish()
+		defer func() {
+			if !returned {
+				t.hold()
+			}
+		}()
+		ticker := time.NewTicker(routeFenceWatchInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-watch.Done():
+				returned = true
+				return
+			case <-ticker.C:
+				if err := fence.check(); err != nil {
+					t.hold()
+					fail(err)
+					returned = true
+					return
+				}
+			}
+		}
+	}()
+	return work, nil
+}
+func finishMaintenanceFence(ctx context.Context, fence runFence) error {
+	t := maintenanceFromContext(ctx)
+	if t == nil {
+		fence.release(ctx)
+		return nil
+	}
+	if err := t.stop(ctx); err != nil {
+		return err
+	}
+	// 原release只WARN，不能据此发布工具成功；在同一共享原语核全64片和镜像的真实返回。
+	f, ok := fence.(*routeMergeFence)
+	if !ok {
+		t.hold()
+		return drainproof.ErrHold
+	}
+	releaseCtx, cancel := context.WithTimeout(ctx, routeFenceReleaseTimeout)
+	defer cancel()
+	f.mu.Lock()
+	held := f.held
+	f.held = false
+	f.mu.Unlock()
+	if !held {
+		t.hold()
+		return drainproof.ErrHold
+	}
+	released, err := f.store.ReleaseFence(releaseCtx, f.zones, f.runID)
+	if err != nil {
+		t.hold()
+		return err
+	}
+	for _, zone := range f.zones {
+		if released[zone] != int64(routeFenceShards) {
+			t.hold()
+			return fmt.Errorf("zone %d 释放围栏片数不完整", zone)
+		}
+		deleted, err := f.mirror.deleteFenceMirror(releaseCtx, zone, f.grant.HolderJSON)
+		if err != nil {
+			t.hold()
+			return err
+		}
+		if !deleted {
+			t.hold()
+			return fmt.Errorf("zone %d 围栏镜像不再属于本次工具", zone)
+		}
+	}
+	return nil
+}
+
+// 回填算法仍由原领域函数承担；装配在本文件统一，所有真实句柄进入同一个TOOL owner。
+func runMaintenanceBackfill(o options) {
+	ctx := maintenanceParent(o)
+	if err := checkMaintenanceTool(ctx); err != nil {
+		log.Fatal(err)
+	}
+	proof, _, err := openNormalFreezeProof(ctx, o)
+	if err != nil {
+		log.Fatal(err)
+	}
+	ctx = withNormalFreezeProof(ctx, proof)
+	db := mustOpenMySQL(ctx, o.mysqlDSN)
+	if err := assertSchemaExists(ctx, db, zoneDBName(o.zone)); err != nil {
+		log.Fatal(err)
+	}
+	mapping := mustDial(ctx, "mapping", o.mappingAddr, o.mappingPwd, o.mappingDB)
+	routes, err := openRunRouteBackend(ctx, routeEntryOptionsOf(o), mapping, newToolRunID("backfill", o.zone, time.Now()))
+	if err != nil {
+		log.Fatal(err)
+	}
+	rep, err := stepBackfillHomeZone(ctx, routes, mapping, newMySQLPlayerIDSource(db, o.zone), o.zone, false)
+	if err != nil {
+		log.Fatalf("backfill: %v (partial progress: %s)", err, rep)
+	}
+	log.Printf("回填完成，等待工具闭合: %s", rep)
+}
+
+// P7只调用原审核器。正式proto适配由独占schema owner合入；这里不写并行审核JSON。
+// verifyFrozen必须强读同NORMAL consumed/current SQL_FROZEN，审核前后均执行；不得以闭合代业务结果。
+func runClosedMergeAudit(ctx context.Context, cfg auditConfig, plan *pb.SqlWriterMaintenanceReceipt_Plan,
+	frozen *pb.SqlWriterMaintenanceReceipt, publication *pb.SqlWriterMaintenanceReceipt_PublicationEvidence,
+	verifyFrozen func(context.Context) error) ([]ResourceAudit, error) {
+	if verifyFrozen == nil || !cfg.verify || cfg.manifest == nil || cfg.manifestErr != nil || cfg.routeSource != routeSourceDB ||
+		cfg.src == 0 || cfg.dst == 0 || cfg.src == cfg.dst || cfg.manifest.SourceZone != cfg.src || cfg.manifest.TargetZone != cfg.dst {
+		return nil, drainproof.ErrHold
+	}
+	if err := verifyFrozen(ctx); err != nil {
+		return nil, err
+	}
+	if err := verifyClosedMaintenanceForAudit(plan, frozen, publication); err != nil {
+		return nil, err
+	}
+	rows := runAuditMode(ctx, cfg)
+	if err := errors.Join(ctx.Err(), verifyFrozen(ctx), validateMergeRecoveryRows(rows)); err != nil {
+		return rows, err
+	}
+	// 审核期间任何closure/source pin变化都不能作为P7原件。
+	if err := verifyClosedMaintenanceForAudit(plan, frozen, publication); err != nil {
+		return rows, err
+	}
+	return rows, nil
+}
+
+func verifyClosedMaintenanceForAudit(plan *pb.SqlWriterMaintenanceReceipt_Plan, frozen *pb.SqlWriterMaintenanceReceipt,
+	publication *pb.SqlWriterMaintenanceReceipt_PublicationEvidence) error {
+	if plan == nil || frozen == nil || publication == nil || len(plan.MaintenanceIssuers) == 0 ||
+		frozen.Kind != pb.SqlWriterMaintenanceReceipt_FREEZE || frozen.Phase != pb.SqlWriterMaintenanceReceipt_FROZEN ||
+		frozen.RunPhase != pb.SqlWriterDrainRun_SQL_FROZEN || frozen.CommittedMs == 0 || !bytes.Equal(plan.RunId, frozen.RunId) ||
+		len(publication.LogicalRoles) != len(plan.MaintenanceIssuers) || len(publication.SourceEvidence) != len(plan.MaintenanceIssuers) ||
+		len(publication.ProtoReflect().GetUnknown()) != 0 {
+		return drainproof.ErrHold
+	}
+	decodedPlan := &pb.SqlWriterMaintenanceReceipt_Plan{}
+	if proto.Unmarshal(frozen.PlanProto, decodedPlan) != nil || !proto.Equal(plan, decodedPlan) {
+		return drainproof.ErrHold
+	}
+	inventory, err := (proto.MarshalOptions{Deterministic: true}).Marshal(&pb.SqlWriterMaintenanceReceipt_PublicationEvidence{LogicalRoles: plan.MaintenanceIssuers})
+	if err != nil {
+		return err
+	}
+	digest := sha256.Sum256(inventory)
+	if !bytes.Equal(digest[:], publication.IssuerInventoryDigest) {
+		return drainproof.ErrHold
+	}
+	expected := map[string]*pb.SqlWriterMaintenanceReceipt_IssuerClosure{}
+	for _, seed := range plan.MaintenanceIssuers {
+		if seed == nil || len(seed.IssuerId) != 16 || expected[string(seed.IssuerId)] != nil {
+			return drainproof.ErrHold
+		}
+		expected[string(seed.IssuerId)] = seed
+	}
+	actual := map[string]*pb.SqlWriterMaintenanceReceipt_IssuerClosure{}
+	for _, closed := range publication.LogicalRoles {
+		if closed == nil || actual[string(closed.IssuerId)] != nil || closed.AcceptingClosedMs < frozen.CommittedMs {
+			return drainproof.ErrHold
+		}
+		if err := drainproof.VerifyClosure(closed); err != nil {
+			return err
+		}
+		identity := proto.Clone(closed).(*pb.SqlWriterMaintenanceReceipt_IssuerClosure)
+		identity.AcceptingClosedMs = 0
+		identity.AcceptedSettledMs = 0
+		identity.AcceptedFrontierDigest = nil
+		identity.UnresolvedPublications = 0
+		if !proto.Equal(identity, expected[string(closed.IssuerId)]) {
+			return drainproof.ErrHold
+		}
+		actual[string(closed.IssuerId)] = closed
+	}
+	seen := map[string]bool{}
+	for _, pin := range publication.SourceEvidence {
+		raw, err := drainproof.ReadPin(pin, 16<<20)
+		if err != nil {
+			return err
+		}
+		closed := &pb.SqlWriterMaintenanceReceipt_IssuerClosure{}
+		if (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(raw, closed) != nil || seen[string(closed.IssuerId)] ||
+			!proto.Equal(actual[string(closed.IssuerId)], closed) {
+			return drainproof.ErrHold
+		}
+		seen[string(closed.IssuerId)] = true
+	}
+	if len(seen) != len(expected) {
+		return drainproof.ErrHold
+	}
+	return nil
+}
+
+func mergeRecoveryRowNames() []string {
+	return []string{"player.name (global)", "friend", "friend_request", "guild_member",
+		"verify:mapping_src", "verify:manifest_mapping", "verify:guild_zone", "verify:guild_rank", "verify:trade_listing",
+		"verify:manifest_rows", "verify:save_barrier", "verify:source_hot_state", "verify:merge_fence", "verify:route_cache"}
+}
+
+func validateMergeRecoveryRows(rows []ResourceAudit) error {
+	expected := map[string]bool{}
+	for _, name := range mergeRecoveryRowNames() {
+		expected[name] = true
+	}
+	if len(rows) != len(expected) {
+		return drainproof.ErrHold
+	}
+	for _, row := range rows {
+		note := strings.ToUpper(row.Notes)
+		if !expected[row.Name] || row.Severity != "info" || row.SourceCount < 0 || row.TargetCount < 0 || row.ConflictCount != 0 || isInfraAudit(row) ||
+			strings.Contains(note, "SKIP") || strings.Contains(note, "UNKNOWN") || strings.Contains(note, "NOT VERIFIED") || strings.Contains(note, "NOT IMPLEMENTED") {
+			return drainproof.ErrHold
+		}
+		delete(expected, row.Name)
+	}
+	if len(expected) != 0 {
+		return drainproof.ErrHold
+	}
+	return nil
+}
+
+// P7是独立只读运行：不BindBoot、不复用已关闭TOOL的资源，不生成第二套审核格式。
+func runMergeRecoveryAuditEntry(o options) (err error) {
+	if !o.verifyMerged || o.mode != "audit" || o.dryRun || !filepath.IsAbs(o.recoveryAuditOutput) ||
+		!filepath.IsAbs(o.maintenancePublicationFile) || o.expectedSrcPlayers < 0 {
+		return drainproof.ErrHold
+	}
+	if err := requireTeamRouteDomain(o.mysqlDSN, o.routeDBDSN, o.routeSource); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	proof, err := parseNormalFreezeProof(o)
+	if err != nil {
+		return err
+	}
+	runtime, err := drainproof.LoadMaintenanceRuntime(o.maintenanceRuntimePlan, o.maintenanceRuntimeDirectory, o.maintenanceRuntimeSHA256)
+	if err != nil {
+		return err
+	}
+	physical, err := hex.DecodeString(os.Getenv("MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256"))
+	if err != nil || len(physical) != 32 || !bytes.Equal(physical, runtime.Plan.PhysicalClusterIdentity) ||
+		!bytes.Equal(proof.runID, runtime.Plan.RunId) || proof.authoritySchema != runtime.Plan.AuthoritySchema {
+		return drainproof.ErrHold
+	}
+	var resources []maintenanceCloser
+	defer func() {
+		for i := len(resources) - 1; i >= 0; i-- {
+			err = errors.Join(err, resources[i].Close())
+		}
+	}()
+	openSQL := func(raw string, maxOpen int) (*sql.DB, error) {
+		cfg, err := mysql.ParseDSN(raw)
+		if err != nil {
+			return nil, drainproof.ErrHold
+		}
+		found := false
+		for _, schema := range runtime.Plan.ProtectedSchemas {
+			found = found || schema == cfg.DBName
+		}
+		if !found {
+			return nil, drainproof.ErrHold
+		}
+		db, err := authoritysql.Open(ctx, raw, cfg.DBName, true, maxOpen, authoritysql.Reader())
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, db)
+		return db, nil
+	}
+	authority, err := openSQL(o.routeDBDSN, 4)
+	if err != nil {
+		return err
+	}
+	var principal string
+	if err = authority.QueryRowContext(ctx, "SELECT CURRENT_USER()").Scan(&principal); err != nil {
+		return err
+	}
+	catalog, err := authoritysql.NewCatalog(authority, authoritysql.CatalogConfig{AuthoritySchema: proof.authoritySchema,
+		Generation: runtime.Request.Generation, ProtectedSchemas: runtime.Plan.ProtectedSchemas,
+		PhysicalAuthoritySHA256: physical, Principal: principal, RequireReconcile: true})
+	if err != nil {
+		return err
+	}
+	var frozen *pb.SqlWriterMaintenanceReceipt
+	verifyFrozen := func(ctx context.Context) error {
+		current, err := runtime.CheckMaintenance(ctx, catalog, proof.ticketID)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(current.RequestId, proof.requestID) || !bytes.Equal(current.ReceiptDigest, proof.receiptDigest) || current.AfterEpoch != proof.epoch {
+			return drainproof.ErrHold
+		}
+		if frozen != nil && !proto.Equal(frozen, current) {
+			return drainproof.ErrHold
+		}
+		frozen = current
+		return nil
+	}
+	if err = verifyFrozen(ctx); err != nil {
+		return err
+	}
+	publicationRaw, err := authoritysql.ReadPrivateControlFile(o.maintenancePublicationFile, 16<<20)
+	if err != nil {
+		return err
+	}
+	publicationSHA, err := hex.DecodeString(o.maintenancePublicationSHA256)
+	if err != nil || len(publicationSHA) != 32 {
+		return drainproof.ErrHold
+	}
+	publicationSum := sha256.Sum256(publicationRaw)
+	if !bytes.Equal(publicationSum[:], publicationSHA) {
+		return drainproof.ErrHold
+	}
+	publication := &pb.SqlWriterMaintenanceReceipt_PublicationEvidence{}
+	if err = (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(publicationRaw, publication); err != nil {
+		return err
+	}
+	if err = verifyClosedMaintenanceForAudit(runtime.Plan, frozen, publication); err != nil {
+		return err
+	}
+	manifestRaw, err := os.ReadFile(o.manifestPath)
+	if err != nil {
+		return err
+	}
+	if len(manifestRaw) == 0 || len(manifestRaw) > 16<<20 || !filepath.IsAbs(o.manifestPath) {
+		return drainproof.ErrHold
+	}
+	manifestSHA := sha256.Sum256(manifestRaw)
+	manifest, err := loadVerifyManifest(o.manifestPath, o.sourceZone, o.targetZone)
+	if err != nil {
+		return err
+	}
+	if !validRunID(manifest.RunID) || recordedRouteSource(manifest.RouteSource) != routeSourceDB {
+		return drainproof.ErrHold
+	}
+	// 原领域loader负责种类/版本/预览规则；另比对所解析的结构确实来自这份已pin字节。
+	var pinnedManifest mergeManifest
+	if err := json.Unmarshal(manifestRaw, &pinnedManifest); err != nil {
+		return err
+	}
+	if pinnedManifest.Steps == nil {
+		pinnedManifest.Steps = map[string]manifestStep{}
+	}
+	pinnedJSON, err := json.Marshal(&pinnedManifest)
+	if err != nil {
+		return err
+	}
+	loadedJSON, err := json.Marshal(manifest)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(pinnedJSON, loadedJSON) {
+		return drainproof.ErrHold
+	}
+	manifestPin := &pb.SqlWriterMaintenanceReceipt_SourcePin{AbsolutePath: o.manifestPath, Sha256: manifestSHA[:]}
+	sources, err := mergeRecoveryQueryPins(runtime.Plan)
+	if err != nil {
+		return err
+	}
+	game, err := openSQL(o.mysqlDSN, 4)
+	if err != nil {
+		return err
+	}
+	dial := func(addr, password string, db int) (*redis.Client, error) {
+		client := redis.NewClient(&redis.Options{Addr: addr, Password: password, DB: db, MaxRetries: -1})
+		resources = append(resources, client)
+		if err := client.Ping(ctx).Err(); err != nil {
+			return nil, err
+		}
+		if err := verifyMergeAuditRedisTarget(ctx, client, runtime.Plan); err != nil {
+			return nil, err
+		}
+		return client, nil
+	}
+	mapping, err := dial(o.mappingAddr, o.mappingPwd, o.mappingDB)
+	if err != nil {
+		return err
+	}
+	rank, err := dial(o.redisAddr, o.redisPwd, o.redisDB)
+	if err != nil {
+		return err
+	}
+	shared, err := dial(o.noticeAddr, o.noticePwd, o.noticeDB)
+	if err != nil {
+		return err
+	}
+	scene, err := dial(o.sceneAddr, o.scenePwd, o.sceneDB)
+	if err != nil {
+		return err
+	}
+	// 只读Reader池构造route store：nil TOOL上下文仅跑session/meta读探针，写方法没有授权。
+	routeStore, meta, err := newMergeRouteStoreFromDB(ctx, authority, newMergeRouteWriter("audit", "p7"))
+	if err != nil {
+		return err
+	}
+	if err := requireCurrentTiDB(ctx, game); err != nil {
+		return err
+	}
+	watermark, present, err := (&routePublisher{rdb: mapping}).readWatermark(ctx)
+	if err != nil {
+		return err
+	}
+	if err := decideRoutePairing(routeSourceDB, watermark, present, meta.Generation); err != nil {
+		return err
+	}
+	cfg := auditConfig{db: game, mappingDB: mapping, rankRDB: rank, sharedRDB: shared, sceneRDB: scene, sharedDBIndex: o.noticeDB,
+		src: o.sourceZone, dst: o.targetZone, verify: true, timeout: 30 * time.Second, expectedSrcPlayers: o.expectedSrcPlayers,
+		manifest: manifest, topicGeneration: uint32(o.kafkaTopicGen), tradeSchema: o.tradeSchema, skipTrade: o.skipTrade,
+		guildSchema: o.guildSchema, skipGuild: o.skipGuild && o.skipRank, friendSchema: o.friendSchema,
+		routeSource: routeSourceDB, routes: routeReadSideDB{db: routeStore}, routeDB: routeStore}
+	started := uint64(time.Now().UnixMilli())
+	for _, closed := range publication.LogicalRoles {
+		if closed.AcceptedSettledMs > started {
+			return drainproof.ErrHold
+		}
+	}
+	rows, auditErr := runClosedMergeAudit(ctx, cfg, runtime.Plan, frozen, publication, verifyFrozen)
+	printAuditReport(rows)
+	if auditErr != nil {
+		return auditErr
+	}
+	for _, client := range []*redis.Client{mapping, rank, shared, scene} {
+		if err := verifyMergeAuditRedisTarget(ctx, client, runtime.Plan); err != nil {
+			return err
+		}
+	}
+	if _, err := drainproof.ReadPin(manifestPin, 16<<20); err != nil {
+		return err
+	}
+	if _, err := mergeRecoveryQueryPins(runtime.Plan); err != nil {
+		return err
+	}
+	if current, err := authoritysql.ReadPrivateControlFile(o.maintenancePublicationFile, 16<<20); err != nil || !bytes.Equal(publicationRaw, current) {
+		return errors.Join(drainproof.ErrHold, err)
+	}
+	var instance [16]byte
+	if _, err := rand.Read(instance[:]); err != nil {
+		return err
+	}
+	planSHA := sha256.Sum256(frozen.PlanProto)
+	ended := uint64(time.Now().UnixMilli())
+	if ended < started {
+		return drainproof.ErrHold
+	}
+	audit := &pb.SqlWriterMaintenanceReceipt_MergeRecoveryAudit{AuditInstanceId: instance[:], RunId: frozen.RunId,
+		Generation: frozen.Generation, AttemptRevision: frozen.AttemptRevision, PlanDigest: planSHA[:], OriginalFreezeReceiptId: frozen.RequestId,
+		OriginalFreezeReceiptDigest: frozen.ReceiptDigest, MaintenancePublication: publication, MergeManifest: manifestPin,
+		MergeRunId: manifest.RunID, SourceZone: cfg.src, TargetZone: cfg.dst, VerifyMerged: true, ObservedStartMs: started,
+		ObservedEndMs: ended, AuditSourcePins: sources}
+	for _, row := range rows {
+		kind := pb.SqlWriterMaintenanceReceipt_MergeRecoveryCheck_OBSERVATION
+		if row.Name == "player.name (global)" {
+			kind = pb.SqlWriterMaintenanceReceipt_MergeRecoveryCheck_RULE
+		}
+		audit.Checks = append(audit.Checks, &pb.SqlWriterMaintenanceReceipt_MergeRecoveryCheck{Name: row.Name, SourceCount: row.SourceCount,
+			TargetCount: row.TargetCount, UniqueScope: row.UniqueScope, ConflictCount: row.ConflictCount, Severity: row.Severity,
+			Status: pb.SqlWriterMaintenanceReceipt_MergeRecoveryCheck_COMPLETE, Notes: row.Notes, QuerySourcePins: sources, Kind: kind})
+	}
+	// 所有只读资源真实Close成功后才发布P7原件；失败不能留下一个看似可释放的文件。
+	for i := len(resources) - 1; i >= 0; i-- {
+		err = errors.Join(err, resources[i].Close())
+	}
+	resources = nil
+	if err != nil {
+		return err
+	}
+	raw, err := (protojson.MarshalOptions{EmitUnpopulated: true}).Marshal(audit)
+	if err != nil {
+		return err
+	}
+	return authoritysql.WritePrivateControlFile(o.recoveryAuditOutput, raw)
+}
+
+func mergeRecoveryQueryPins(plan *pb.SqlWriterMaintenanceReceipt_Plan) ([]*pb.SqlWriterMaintenanceReceipt_SourcePin, error) {
+	if plan == nil {
+		return nil, drainproof.ErrHold
+	}
+	required := []string{"main.go", "audit_resources.go", "audit_checks.go", "trade_step.go", "save_barrier_verify.go",
+		"storage_audit.go", "route_store.go", "route_publish.go", "manifest.go", "player_rows.go", "scene_hot_state.go", "player_blob_migrate.go"}
+	result := []*pb.SqlWriterMaintenanceReceipt_SourcePin{}
+	for _, name := range required {
+		var selected *pb.SqlWriterMaintenanceReceipt_SourcePin
+		for _, pin := range plan.SourcePins {
+			if pin != nil && strings.HasSuffix(strings.ReplaceAll(pin.AbsolutePath, "\\", "/"), "/tools/merge_zone/"+name) {
+				if selected != nil {
+					return nil, drainproof.ErrHold
+				}
+				selected = pin
+			}
+		}
+		if selected == nil {
+			return nil, fmt.Errorf("P0缺少真实审核/查询源码pin: %s", name)
+		}
+		if _, err := drainproof.ReadPin(selected, 16<<20); err != nil {
+			return nil, err
+		}
+		result = append(result, selected)
+	}
+	return result, nil
+}
+
+func verifyMergeAuditRedisTarget(ctx context.Context, client *redis.Client, plan *pb.SqlWriterMaintenanceReceipt_Plan) error {
+	if client == nil || plan == nil {
+		return drainproof.ErrHold
+	}
+	info, err := client.Info(ctx, "server").Result()
+	if err != nil {
+		return err
+	}
+	runID := ""
+	for _, line := range strings.Split(info, "\n") {
+		line = strings.TrimSuffix(line, "\r")
+		if strings.HasPrefix(line, "run_id:") {
+			if runID != "" {
+				return drainproof.ErrHold
+			}
+			runID = strings.TrimPrefix(line, "run_id:")
+		}
+	}
+	if len(runID) != 40 || !routeLowerHexOfLen(runID, 40, 40) {
+		return drainproof.ErrHold
+	}
+	opts := client.Options()
+	for _, target := range plan.RedisTargets {
+		if target != nil && target.Address == opts.Addr && target.Db == int32(opts.DB) && bytes.Equal(target.ServerRunId, []byte(runID)) {
+			return nil
+		}
+	}
+	return fmt.Errorf("审核Redis目标/DB/实际server run_id不在固定P0目录")
 }

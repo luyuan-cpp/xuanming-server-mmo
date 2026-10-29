@@ -33,11 +33,14 @@ package inbox
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
 	"os"
+	"shared/authoritysql/sqltest"
 	"sort"
 	"strconv"
 	"strings"
@@ -50,12 +53,12 @@ import (
 	"player_inbox/internal/data"
 	"player_inbox/internal/metrics"
 
+	battlepb "proto/battle"
 	base "proto/common/base"
 	componentpb "proto/common/component"
 	inboxpb "proto/player_inbox"
 
 	"schemamigrate"
-	"shared/authoritysql"
 
 	"github.com/go-sql-driver/mysql"
 	"google.golang.org/protobuf/proto"
@@ -143,6 +146,66 @@ type itEnv struct {
 	missing  map[uint64]bool
 }
 
+func TestIntegrationBattleSettlementKeepsPermanentOriginalUntilApplied(t *testing.T) {
+	e := openIntegration(t)
+	ctx := itCtx(t)
+	const player = uint64(8911)
+	e.epochs.set(player, 7)
+	payload := marshal(t, &battlepb.BattleSettlementData{PlayerId: player, BattleId: 9123, Outcome: battlepb.EBattleOutcome_BATTLE_OUTCOME_DRAW, GoldGain: 5})
+	r := &inboxpb.BattleSettlementInboxRequest{PlayerId: player, BattleId: 9123, ExpectedOwnerAccount: "inbox-fixture-8911", ExpectedOwnerRevision: 1, IssuedAtMs: testNowMs - uint64((8 * 24 * time.Hour).Milliseconds()), SettlementPayload: payload}
+	first, err := e.store.EnqueueBattleSettlement(ctx, r)
+	if err != nil || first.GetErrorMessage().GetId() != 0 || first.Seq == 0 {
+		t.Fatalf("可信老来源必须可入箱: %+v %v", first, err)
+	}
+	again, err := e.store.EnqueueBattleSettlement(ctx, r)
+	if err != nil || again.Seq != first.Seq {
+		t.Fatalf("永久原收据必须同seq: %+v %v", again, err)
+	}
+	other := proto.Clone(r).(*inboxpb.BattleSettlementInboxRequest)
+	other.BattleId++
+	other.SettlementPayload = marshal(t, &battlepb.BattleSettlementData{PlayerId: player, BattleId: other.BattleId, Outcome: battlepb.EBattleOutcome_BATTLE_OUTCOME_DRAW})
+	full, err := e.store.EnqueueBattleSettlement(ctx, other)
+	if err != nil || full.GetErrorMessage().GetId() != constants.ErrFull {
+		t.Fatalf("未确认原条必须占单槽: %+v %v", full, err)
+	}
+	domain := inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT
+	identity := e.admission(t, player, 7)
+	fetched, err := e.store.Fetch(ctx, &inboxpb.FetchPlayerInboxRequest{PlayerId: player, Domain: domain, OwnerEpoch: 7, MaxItems: 1, Admission: identity})
+	if err != nil || len(fetched.GetItems()) != 1 || fetched.Items[0].Seq != first.Seq {
+		t.Fatalf("按原入场交付: %+v %v", fetched, err)
+	}
+	for _, outcome := range []inboxpb.PlayerInboxOutcome{inboxpb.PlayerInboxOutcome_PLAYER_INBOX_OUTCOME_REJECTED, inboxpb.PlayerInboxOutcome_PLAYER_INBOX_OUTCOME_SKIPPED, inboxpb.PlayerInboxOutcome_PLAYER_INBOX_OUTCOME_UNKNOWN} {
+		ack, err := e.store.Ack(ctx, &inboxpb.AckPlayerInboxRequest{PlayerId: player, Domain: domain, OwnerEpoch: 7, Admission: identity, Decisions: []*inboxpb.PlayerInboxDecisionReport{dec(first.Seq, outcome, 0, r.BattleId)}})
+		if err != nil || len(ack.GetResults()) != 1 || ack.Results[0].State != statePending {
+			t.Fatalf("非APPLIED不得终结: %+v %v", ack, err)
+		}
+	}
+	void, err := e.store.Void(ctx, VoidParams{PlayerID: player, Domain: domain, Seq: first.Seq, Reason: inboxpb.PlayerInboxVoidReason_PLAYER_INBOX_VOID_CANCELLED, Operator: "fixture"}, nil)
+	if err != nil || void.GetErrorMessage().GetId() != constants.ErrItemStateConflict {
+		t.Fatalf("通用VOID不得取消奖励: %+v %v", void, err)
+	}
+	ack, err := e.store.Ack(ctx, &inboxpb.AckPlayerInboxRequest{PlayerId: player, Domain: domain, OwnerEpoch: 7, Admission: identity, Decisions: []*inboxpb.PlayerInboxDecisionReport{dec(first.Seq, inboxpb.PlayerInboxOutcome_PLAYER_INBOX_OUTCOME_APPLIED, 0, r.BattleId)}})
+	if err != nil || len(ack.GetResults()) != 1 || ack.Results[0].State != stateApplied {
+		t.Fatalf("真实APPLIED可终结: %+v %v", ack, err)
+	}
+	lookup, err := e.store.LookupBattleSettlement(ctx, r)
+	if err != nil || lookup.State != stateApplied || lookup.Seq != first.Seq {
+		t.Fatalf("永久SQL原收据必须保全: %+v %v", lookup, err)
+	}
+	// 模拟消费环已滚出及远超GM七天窗：SQL永久原件仍能重放同一序号，不新增待项。
+	e.clock.advance(uint64((40 * 24 * time.Hour).Milliseconds()))
+	again, err = e.store.EnqueueBattleSettlement(ctx, r)
+	if err != nil || again.State != stateApplied || again.Seq != first.Seq {
+		t.Fatalf("老来源不可复活/换seq: %+v %v", again, err)
+	}
+	if _, err = e.db.ExecContext(ctx, "UPDATE account_role SET account='new-owner',owner_revision=2 WHERE player_id=?", player); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.store.LookupBattleSettlement(ctx, r); err == nil {
+		t.Fatal("换主后不能以旧来源补权")
+	}
+}
+
 func openIntegration(t *testing.T) *itEnv {
 	t.Helper()
 	dsn := os.Getenv("PLAYER_INBOX_TEST_MYSQL_DSN")
@@ -165,25 +228,24 @@ func openIntegration(t *testing.T) *itEnv {
 	if parsed.Net != "tcp" || addrErr != nil || portErr != nil || port == 0 || address == nil || !address.IsLoopback() {
 		t.Fatal("全球Inbox原生SQL夹具只允许数值loopback的合法TiDB端口")
 	}
-	db, err := authoritysql.Open(context.Background(), dsn, parsed.DBName, true, 64)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	var nonce [8]byte
+	if _, err = rand.Read(nonce[:]); err != nil {
+		t.Fatal(err)
+	}
+	dbName := "player_inbox_it_" + strconv.FormatUint(binary.LittleEndian.Uint64(nonce[:]), 10) + "_1"
+	opts, err := sqltest.OptionsFromEnv(dsn, dbName+"_writer", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
-	db.SetMaxOpenConns(64)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	var dbName string
-	if err := db.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&dbName); err != nil || dbName == "" {
-		t.Fatalf("DSN 必须带库名: %v", err)
+	fixture, err := sqltest.New(ctx, t, opts)
+	if err != nil {
+		t.Fatal(err)
 	}
-	// 下面每个用例都会 DROP 表与 schemamigrate 台账:DSN 指错库(mmorpg_player_inbox、testdb、zone_N_db …)就会清掉
-	// 那个库的数据。所以第一条 DROP 之前按白名单断言库名(评审 L14,照 go/guild 的 guildTestDBNamePattern)。
-	if !inboxTestDBNamePattern.MatchString(dbName) {
-		t.Fatalf("测试 DSN 指向库 %q:只允许 player_inbox_it 或 player_inbox_it_<pid>_<n>"+
-			"(本组用例会 DROP 收件箱三张表与 schema_migrations,防止误删 mmorpg_player_inbox / data_service / trade / go/db 的表与台账)",
-			dbName)
+	db, err := fixture.OpenSchema(ctx, dbName)
+	if err != nil {
+		t.Fatal(err)
 	}
 	for _, stmt := range []string{
 		"DROP TABLE IF EXISTS account_role_admission",
@@ -213,6 +275,16 @@ func openIntegration(t *testing.T) *itEnv {
 		}
 	}
 	if err = createInboxFixtureRouteTables(ctx, db, dbName); err != nil {
+		t.Fatal(err)
+	}
+	if err = fixture.GrantProtoTables(ctx, dbName, data.Tables()); err != nil {
+		t.Fatal(err)
+	}
+	if err = fixture.GrantTables(ctx, dbName, "account_role", "account_role_admission", "route_meta", "player_route", "zone_merge_fence", "zone_merged_into", "route_reconcile"); err != nil {
+		t.Fatal(err)
+	}
+	db, err = fixture.Open(ctx, dbName, 64)
+	if err != nil {
 		t.Fatal(err)
 	}
 	roles, err := NewSQLRoleAuthority(ctx, db, dbName)

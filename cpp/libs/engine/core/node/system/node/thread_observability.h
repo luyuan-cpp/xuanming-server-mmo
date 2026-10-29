@@ -2,7 +2,6 @@
 
 #include "muduo/base/Logging.h"
 #include "muduo/net/EventLoop.h"
-#include "node/system/node/grpc_runtime_probe.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -57,22 +56,6 @@ inline bool ConfiguredThreadMonitorEnabled()
 {
     const char* env = std::getenv("NODE_THREAD_MONITOR_ENABLED");
     return !IsDisabledEnvValue(env);
-}
-
-// gRPC 运行时守卫是否 fail-closed:NODE_GRPC_RUNTIME_GUARD_FATAL 设为 1 / true / on 时,发现官方运行时被初始化即
-// LOG_FATAL 退出。生产默认不设(fail-open,理由见 GrpcRuntimeGuard);CI 与冒烟环境设上,把「又有代码拉起了官方
-// gRPC 线程」变成硬失败,而不是一条可能没人看的 ERROR。
-inline bool ConfiguredGrpcRuntimeGuardFatal()
-{
-    const char* env = std::getenv("NODE_GRPC_RUNTIME_GUARD_FATAL");
-    if (env == nullptr) {
-        return false;
-    }
-    return std::strcmp(env, "1") == 0
-        || std::strcmp(env, "true") == 0
-        || std::strcmp(env, "TRUE") == 0
-        || std::strcmp(env, "on") == 0
-        || std::strcmp(env, "ON") == 0;
 }
 
 inline std::string NormalizeNodeDisplayName(const std::string& rawName)
@@ -258,58 +241,9 @@ private:
     bool baselineReady_ = false;
 };
 
-// gRPC 运行时守卫(gRPC 迁到 muduo 驱动第 5 批;docs/design/thread-count-monitoring_zh.md「gRPC 运行时守卫」)。
-// 第 3、4 批之后节点内的 gRPC 全部走 muduo_grpc,官方 gRPC 运行时应始终未初始化;它一旦被初始化,
-// EventEngine 线程池、定时器等官方线程不受节点控制,进程线程数就不再可控。守卫在注册时与每次采样时核对,
-// 第一次发现已初始化即打一条 ERROR,此后只由每小时指标行的 grpc_runtime_initialized 反映。
-//
-// 这是可用性优先的 fail-open(AGENTS.md §11.3):只记日志与指标,不终止进程、不拒绝流量。依据:运行时被
-// 初始化影响的是「线程数是否可控」这一运维属性,不涉及玩家资产、数据一致性或安全;为它让在线的
-// scene / battle / gate 退出会踢人、中断战斗,代价远大于多出一批线程。风险由三处兜住:首次 ERROR 日志、
-// 指标行的 grpc_runtime_initialized=0/1、回归用例 cpp/tests/rpc_controller_test/grpc_runtime_not_initialized_test.cpp。
-// CI 与冒烟环境设 NODE_GRPC_RUNTIME_GUARD_FATAL=1 改为 fail-closed(发现即 LOG_FATAL),生产不设。
-//
-// 注册(Node 构造)与采样(loop 定时器)在同一线程上串行执行,不需要同步。
-class GrpcRuntimeGuard
-{
-public:
-    // 返回官方 gRPC 运行时当前是否已初始化;第一次为真时打一条 ERROR。detectedAt 只用于日志。
-    bool Check(const std::string& displayName, const char* detectedAt, std::int64_t uptimeSeconds)
-    {
-        const bool initialized = IsGrpcRuntimeInitialized();
-        if (initialized && !reported_) {
-            reported_ = true;
-            LOG_ERROR << displayName << " official gRPC runtime is initialized (grpc_is_initialized()=1, detected_at="
-                << detectedAt << ", uptime_sec=" << uptimeSeconds
-                << "): its threads (EventEngine workers, lifeguard, timer manager) are not controlled by the node,"
-                << " so the process thread count is no longer bounded. Node gRPC traffic must go through muduo_grpc only."
-                << " Troubleshoot: find code that calls grpc_init() or constructs official grpc objects"
-                << " (grpc::CreateChannel / grpc::Channel, grpc::ServerBuilder::BuildAndStart / grpc::Server,"
-                << " grpc::CompletionQueue, channel / server credentials, grpc::ResourceQuota, grpc::Alarm);"
-                << " on Linux list thread names via /proc/<pid>/task/*/comm"
-                << " (event_engine, lifeguard, grpc_global_tim, grpcpp_sync_ser)."
-                << " See docs/design/thread-count-monitoring.md. Reported once; the hourly thread metrics line carries"
-                << " grpc_runtime_initialized.";
-            if (fatal_) {
-                LOG_FATAL << displayName << " exiting: NODE_GRPC_RUNTIME_GUARD_FATAL is set and the official gRPC"
-                    << " runtime is initialized (see the ERROR above).";
-            }
-        }
-        return initialized;
-    }
-
-private:
-    bool reported_ = false;
-    // 构造时读一次:进程运行中改环境变量不生效,与其它 NODE_THREAD_MONITOR_* 开关一致。
-    bool fatal_ = ConfiguredGrpcRuntimeGuardFatal();
-};
-
 inline void RegisterThreadObservability(muduo::net::EventLoop& loop, const std::string& nodeName)
 {
     const std::string displayName = NormalizeNodeDisplayName(nodeName);
-    auto grpcRuntimeGuard = std::make_shared<GrpcRuntimeGuard>();
-    // 注册时的核对不受 NODE_THREAD_MONITOR_ENABLED 影响:关掉线程监控只是不再周期采样(也就不再周期核对)。
-    grpcRuntimeGuard->Check(displayName, "registration", 0);
     if (!ConfiguredThreadMonitorEnabled()) {
         LOG_INFO << displayName << " thread monitor disabled by env NODE_THREAD_MONITOR_ENABLED";
         return;
@@ -327,9 +261,8 @@ inline void RegisterThreadObservability(muduo::net::EventLoop& loop, const std::
     // 空 = 还没打过指标行:第一次采样就打一行,此后每小时一次。不能用 time_point::min() 表示「从未打过」:
     // steady_clock 是 int64 纳秒,now - min() 有符号溢出,实际回绕成负数,指标行就永远不会打出。
     auto lastInfoLogTime = std::make_shared<std::optional<std::chrono::steady_clock::time_point>>();
-    loop.runEvery(static_cast<double>(sampleIntervalSeconds), [threadMonitor, displayName, lastInfoLogTime, grpcRuntimeGuard] {
+    loop.runEvery(static_cast<double>(sampleIntervalSeconds), [threadMonitor, displayName, lastInfoLogTime] {
         const auto snapshot = threadMonitor->Sample();
-        const bool grpcRuntimeInitialized = grpcRuntimeGuard->Check(displayName, "sample", snapshot.uptimeSeconds);
         const auto now = std::chrono::steady_clock::now();
         constexpr int kInfoLogIntervalSeconds = 3600;
         if (!lastInfoLogTime->has_value()
@@ -338,8 +271,7 @@ inline void RegisterThreadObservability(muduo::net::EventLoop& loop, const std::
             LOG_INFO << displayName << " thread metrics: total_threads=" << snapshot.totalThreads
                 << ", delta_threads=" << snapshot.deltaThreads
                 << ", peak_threads=" << snapshot.peakThreads
-                << ", uptime_sec=" << snapshot.uptimeSeconds
-                << ", grpc_runtime_initialized=" << (grpcRuntimeInitialized ? 1 : 0);
+                << ", uptime_sec=" << snapshot.uptimeSeconds;
         }
 
         if (snapshot.baselineJustReady) {

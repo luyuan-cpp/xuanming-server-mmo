@@ -581,8 +581,8 @@ func tradeSmokeLogin(cfg *config.Config, account string, spacing time.Duration, 
 // onMessage:trade 请求的回包(含信封拒绝)带请求号,由 GameClient 交给 caller,不会到这里;
 // gate 的 SendTipToClient 交给 caller 供快速失败;其余交给通用分发。
 //
-// 必须在分发前拦下**全部**五个 trade 消息号(同号却 id = 0 的记一行后丢弃):ClientPlayerJubaozhai 服务名含 "ClientPlayer",
-// 生成器会给它产出 robot handler stub 并登记进 message_body_handler.go;信封拒绝(body 为空)
+// 必须在分发前拦下**全部**五个 trade 消息号(同号却 id = 0 的记一行后丢弃):它们在 logic/handler 下有标准文件名的
+// handler(client_player_jubaozhai_<method>.go),生成的 message_body_handler.go 会登记它们;信封拒绝(body 为空)
 // 一旦落进 MessageBodyHandler 会被解成全零响应,看上去像 tip=0 受理。
 func (b *tradeSmokeBot) onMessage(client *pkg.GameClient, msg *base.MessageContent) {
 	b.stats.MsgRecv()

@@ -14,11 +14,11 @@ import (
 )
 
 func TestTiDBEmptyRouteBootstrapDoesNotTreatExistingPlayerHistoryAsFresh(t *testing.T) {
-	d, db := accountDirectoryTiDB(t)
+	d, db, fixture := accountDirectoryTiDBWithWriter(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	// 复用随机自有storage及正规PB建表；额外两表与GoDB TablesFromJSON的正式迁移布局相同。
-	id, name, rows := roleProofStorage(t, db, 11)
+	id, name, rows := roleProofStorage(t, db, 11, fixture)
 	model := proto2mysql.NewDB()
 	require.NoError(t, model.OpenDB(rows, name))
 	for _, row := range []proto.Message{&dbpb.PlayerCentreDatabase{}, &dbpb.UserAccounts{}} {
@@ -64,7 +64,7 @@ func TestTiDBEmptyRouteBootstrapDoesNotTreatExistingPlayerHistoryAsFresh(t *test
 	require.True(t, history, "非空未知旧目录不是无角色证明")
 	_, err = rows.ExecContext(ctx, "UPDATE user_accounts SET simple_players=NULL WHERE account='password-only'")
 	require.NoError(t, err)
-	_, err = d.Create(ctx, "original-owner", &base.AccountSimplePlayer{PlayerId: 22})
+	_, err = createInitialRoleForTest(d, ctx, "original-owner", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 22})
 	require.NoError(t, err)
 	history, err = route.HasHistoricalPlayers(ctx, []uint32{id})
 	require.NoError(t, err)

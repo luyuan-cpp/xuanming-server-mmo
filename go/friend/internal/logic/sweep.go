@@ -49,8 +49,7 @@
 //
 // 那个 ctx 就是 main 里 signal.NotifyContext 的 ctx:进程收到 SIGTERM 时循环自行退出,
 // 不需要额外的停机钩子(ticker 在 safego.Loop 的 defer 里 Stop)。
-// 停机**不等它退出**:sweep 是幂等的批量 DELETE,被打断只是少删一批、下一轮接着删,
-// 为它加停机等待反而会挤占 24s 硬预算(契约 §9.1)。
+// 停止函数会等待真实 goroutine 退出；未决提交保留 HOLD，取消不能代替结算。
 //
 // ⚠ 默认 `Sweep.Mode = report_only`,接上之后**不会删任何数据**,只统计 + 打 WARN + 更新
 // gauge。要真删必须显式把配置改成 delete,而改之前必须先确认 updated_ms 有写入方
@@ -104,36 +103,84 @@ type SweepStore interface {
 //
 // 首轮不是立刻跑,而是先等一个 [0, Interval) 的随机抖动再进入 ticker 节拍:
 // 多副本同时重启(滚动升级、K8s 驱逐)时不要在同一秒一起对 friend_request 发 DELETE。
-func StartSweep(ctx context.Context, deps *Deps) {
+func StartSweep(ctx context.Context, deps *Deps) func(context.Context) error {
+	runCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	stop := func(waitCtx context.Context) error {
+		cancel()
+		select {
+		case <-done:
+			return nil
+		case <-waitCtx.Done():
+			return waitCtx.Err()
+		}
+	}
 	cfg := deps.SvcCtx.Config.Friend.Sweep
 	if deps.Sweeps == nil {
 		logx.Errorf("[friend] SweepStore not wired; sweep not started (terminal friend requests and zero-friend capacity rows will not be reclaimed)")
-		return
+		close(done)
+		return stop
 	}
 	// Interval <= 0 在生产不可能出现(config.Validate 拒收),这里不启动而不是用 0 间隔 ——
 	// 0 间隔的 ticker 会 panic,safego.Loop 也会拒绝启动,拒绝得越早越好排查。
 	if cfg.Interval <= 0 {
 		logx.Errorf("[friend] Invalid sweep Interval=%v; cleanup not started", cfg.Interval)
-		return
+		close(done)
+		return stop
 	}
 
 	logx.Infof("[friend] Sweep started mode=%s interval=%v retention_days=%d batch=%d (cleanup targets: terminal friend_request rows + zero-friend friend_capacity rows, sharing these parameters)",
 		cfg.Mode, cfg.Interval, cfg.RetentionDays, cfg.BatchLimit)
 
 	safego.Go(sweepPoint+".start", func() {
+		defer close(done)
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				if deps.SvcCtx.RootAdmission != nil {
+					deps.SvcCtx.RootAdmission.Hold()
+				}
+				panic(recovered)
+			}
+		}()
 		jitter := time.Duration(rand.Int64N(int64(cfg.Interval)))
 		select {
-		case <-ctx.Done():
+		case <-runCtx.Done():
 			return
 		case <-time.After(jitter):
 		}
 		// safego.Loop 的 recover 作用域精确到"一轮":某一轮 panic 只丢那一轮,
 		// 节拍继续。裸 `go func(){ for { … } }()` 做不到这件事 —— 一轮炸掉整个循环
 		// 就静默停摆,而外面没人知道。
-		safego.Loop(ctx, sweepPoint, cfg.Interval, func(ctx context.Context) {
-			deps.runSweepRound(ctx)
-		})
+		ticker := time.NewTicker(cfg.Interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-runCtx.Done():
+				return
+			case <-ticker.C:
+			}
+			safego.Run(sweepPoint, func() {
+				gate := deps.SvcCtx.RootAdmission
+				if gate == nil {
+					return
+				}
+				finish, err := gate.Enter()
+				if err != nil {
+					return
+				}
+				defer finish()
+				defer func() {
+					if recovered := recover(); recovered != nil {
+						gate.Hold()
+						panic(recovered)
+					}
+				}()
+				// 关闭只停止下一轮；已接收 SQL 保留自己的有界预算，不以取消制造终局。
+				deps.runSweepRound(context.WithoutCancel(runCtx))
+			})
+		}
 	})
+	return stop
 }
 
 // runSweepRound 跑一轮清理:先终态好友申请,再零好友容量行,两段共用同一个单轮预算。
@@ -176,6 +223,9 @@ func (d *Deps) sweepTerminalRequests(ctx context.Context, cfg config.SweepConf) 
 	pending, deleted, err := d.Sweeps.SweepTerminalRequests(
 		ctx, cfg.Mode, cfg.RetentionDays, cfg.BatchLimit, d.now().UnixMilli())
 	if err != nil {
+		if cfg.Mode == config.SweepModeDelete && d.SvcCtx.RootAdmission != nil {
+			d.SvcCtx.RootAdmission.Hold()
+		}
 		// data 层逐行按主键删,出错时已删的行是真删了:行数要进日志(与容量行回收那一支同口径)。
 		logx.WithContext(ctx).Errorf("[friend] Sweep failed to clean terminal requests mode=%s (%d rows observed, %d deleted before abort): %v",
 			cfg.Mode, pending, deleted, err)
@@ -225,6 +275,9 @@ func (d *Deps) sweepIdleCapacityRows(ctx context.Context, cfg config.SweepConf) 
 	idle, deleted, err := d.Sweeps.SweepIdleCapacityRows(
 		ctx, cfg.Mode, cfg.RetentionDays, cfg.BatchLimit, d.now().UnixMilli())
 	if err != nil {
+		if cfg.Mode == config.SweepModeDelete && d.SvcCtx.RootAdmission != nil {
+			d.SvcCtx.RootAdmission.Hold()
+		}
 		// data 层出错时仍返回已删行数(逐行独立提交),这里必须带进日志,否则已删的行无处可查。
 		// Gauge 在失败分支**不刷**:候选读失败时 idle = 0,刷了会把"失败"伪装成"无积压"。
 		logx.WithContext(ctx).Errorf("[friend] Sweep failed to reclaim zero-friend capacity rows mode=%s (%d rows observed, %d deleted before abort): %v",

@@ -46,8 +46,8 @@
 #   6. 第 7 步(重登)若报随机属性丢失 / 面板不一致:先查 scene 的存盘 / 读盘是否带上了新字段 ItemEntry.equip
 #      (bag_marshal 的 ItemComp ↔ ItemEntry 往返),再确认落库链路上的进程都是本批重编的。
 #
-# gate 级拒绝(限流 / GM 闸)的表现:日志里先有一条 `gate envelope error message_id=… tip=…`,
-# 随后本冒烟在该步报「回了全零 / 残缺的响应」—— 背包这几条消息的信封错误目前不会被翻译成 tip。
+# gate 级拒绝(限流 / GM 闸 / scene 派发前早退时 gate 补回的 1003)的表现:请求按请求号认领回包,
+# 该步的 FAIL reason 里直接写 `rejected by gate envelope: message_id=… tip=…(原因)`;scene 的业务拒绝仍报响应体 tip。
 
 gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
 zone_id: 1 # 目标 zone(0 = 从 /api/server-list 自动选推荐 zone)

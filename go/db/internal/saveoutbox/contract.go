@@ -88,7 +88,7 @@ func validateIntent(playerID uint64, in intent) (uint32, error) {
 		if i == 1 {
 			row = second
 		}
-		if task.GetKey() != playerID || task.GetOp() != "write" || task.GetMsgType() != string(row.ProtoReflect().Descriptor().FullName()) ||
+		if task.GetKey() != playerID || task.GetOp() != dbpb.DBOp_DB_OP_WRITE || task.GetMsgType() != string(row.ProtoReflect().Descriptor().FullName()) ||
 			task.GetOwnerEpoch() == 0 || task.GetSaveSeq() == 0 || savebarrier.Version(task.GetOwnerEpoch(), task.GetSaveSeq()) != in.version {
 			return 0, errors.New("存盘意图 DBTask 身份或围栏不匹配")
 		}

@@ -1,5 +1,7 @@
 # Rolling Update & Node Restart Resilience Tests
 
+> **2026-10-23 阅读边界**：本文保留 2026-04-04 的历史实验。“Grayscale”标题描述的是当时的滚动替换，没有证明稳定玩家分组或金丝雀发布；“杀 Scene 无影响”也不能证明资产、世界状态或对局连续性。当前需求与验收边界见 [全类型节点生命周期与发布需求](node-lifecycle-elasticity-release-20261023.md)，本次未重跑历史实验。
+
 **Date:** 2026-04-04  
 **Cluster:** Docker Desktop K8s (single node), zone-1 (mmorpg-zone-zone-1)  
 **Test tool:** Robot stress test (50 robots for rolling update, 30 for restart)

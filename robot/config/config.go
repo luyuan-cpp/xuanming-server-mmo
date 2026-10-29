@@ -690,6 +690,11 @@ type TravelSmokeConfig struct {
 	// RequireMoveAck=true 时访客区收不到 MoveAck 即失败。缺省 false:MoveAck 只在服务器纠偏时才回,
 	// 场景没有导航网格时 fail-open 不回(player_movement_handler.cpp),不能当硬断言。
 	RequireMoveAck bool `yaml:"require_move_ack"`
+
+	// HopTimeoutSeconds 是一跳传送的总预算(TravelToZone 的认领窗口与等到达共用),缺省 60,推导见
+	// travel_smoke_scenario.go 的 travelSmokeRedirectTimeout。要自动验收冻结硬上限(runbook 场景 H:服务端最迟 71s
+	// 给结论,客户端预算 75s)时设成 ≥ 75,否则 robot 自己先超时,看不到上限分支。必须 > 0。
+	HopTimeoutSeconds int `yaml:"hop_timeout_seconds"`
 }
 
 func (c *TravelSmokeConfig) validate() error {
@@ -710,6 +715,9 @@ func (c *TravelSmokeConfig) validate() error {
 	}
 	if c.DwellSeconds < 0 {
 		return fmt.Errorf("dwell_seconds must be >= 0 (got %d)", c.DwellSeconds)
+	}
+	if c.HopTimeoutSeconds <= 0 {
+		return fmt.Errorf("hop_timeout_seconds must be > 0 (got %d)", c.HopTimeoutSeconds)
 	}
 	return nil
 }
@@ -887,7 +895,8 @@ func Load(path string) (*Config, error) {
 		// rank-smoke 缺省:读榜间隔同 friend-smoke;等写榜 30s;限流断言默认关(MessageLimiter 按 rank 导表之后再开)。
 		RankSmoke: RankSmokeConfig{RequestIntervalMs: 1100, UpdateTimeoutMs: 30000, RateLimitPerSecond: 5},
 		// travel-smoke 缺省:停留 35s,大于 login 断线租约 30s(见 TravelSmokeConfig.DwellSeconds)。
-		TravelSmoke: TravelSmokeConfig{DwellSeconds: 35},
+		// 一跳预算缺省 60s(推导见 travel_smoke_scenario.go 的 travelSmokeRedirectTimeout)。
+		TravelSmoke: TravelSmokeConfig{DwellSeconds: 35, HopTimeoutSeconds: 60},
 		// channel-smoke 缺省:等到达 20s(同节点切线毫秒级,留足余量);冷却验证最多等 60s(服务端缺省冷却 10s)。
 		ChannelSmoke: ChannelSmokeConfig{ArriveTimeoutSeconds: 20, MaxCooldownWaitSeconds: 60},
 		// merchant-smoke 缺省:切到商人所在线时等到达 20s。

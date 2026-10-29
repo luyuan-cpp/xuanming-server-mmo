@@ -139,7 +139,10 @@ func (l *EnterSceneLogic) resolveHomeZone(in *scene_manager.EnterSceneRequest, u
 	ctx, cancel := context.WithTimeout(l.ctx, timeout)
 	defer cancel()
 
+	// enter_scene_stage_seconds{stage="home_zone"} 只量这一次 RPC(不论结局),zone_id 与下面的 home_zone_lookup_total 同取 gate zone。
+	lookupStart := time.Now()
 	resp, err := l.svcCtx.HomeZone.GetPlayerHomeZone(ctx, &dspb.GetPlayerHomeZoneRequest{PlayerId: in.PlayerId})
+	metrics.ObserveEnterSceneStage(in.GateZoneId, metrics.EnterSceneStageHomeZone, time.Since(lookupStart))
 	if err != nil {
 		if isHomeZoneUnmapped(err) {
 			metrics.ObserveHomeZoneLookup(in.GateZoneId, metrics.HomeZoneLookupUnmapped)

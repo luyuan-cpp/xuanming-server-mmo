@@ -3,7 +3,8 @@ package dataloader
 import (
 	"context"
 	"errors"
-	"fmt"
+
+	"shared/savebarrier"
 
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
@@ -40,9 +41,9 @@ func collectSubMessages(msg proto.Message) []proto.Message {
 	return []proto.Message{msg}
 }
 
-// buildParentKey generates the cache key for a parent message.
+// buildParentKey 返回父消息的玩家域缓存键 <全名>:{<pid>},与 C++ 存盘写的父快照键同形(savebarrier.ParentKeyFor)。
 func buildParentKey(msg proto.Message, key uint64) string {
-	return fmt.Sprintf("%s:%d", msg.ProtoReflect().Descriptor().FullName(), key)
+	return savebarrier.ParentKeyFor(msg, key)
 }
 
 // LoadProtoFromRedis loads a protobuf message from Redis.

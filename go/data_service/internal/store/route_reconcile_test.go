@@ -238,7 +238,7 @@ func TestNewRouteLeaderIDUniqueAndValid(t *testing.T) {
 }
 
 // TestRouteReconcileSQLShapes 钉住 R23–R31 的文本形状:每条 route_reconcile 写都带租约判据(fencing)、库时钟用 dbNowMsSQL、
-// R28 只从可写翻到冻结、R29 照提案 G1a 模板(片等值 + 键集,不是行比较)、R31 只读 63 号片、只有 R26 加锁。
+// normal 不再直接翻 writable；R29 照提案 G1a 模板(片等值 + 键集,不是行比较)、R31 只读 63 号片、只有 R26 加锁。
 func TestRouteReconcileSQLShapes(t *testing.T) {
 	contains := func(name, stmt string, parts ...string) {
 		t.Helper()
@@ -279,12 +279,7 @@ func TestRouteReconcileSQLShapes(t *testing.T) {
 		"WHERE id = 1 AND leader = ? AND lease_until_ms >= "+dbNowMsSQL)
 	placeholders("R27", routeAdvanceReconcileSQL, 3)
 
-	if routeLeaderFreezeSQL != "UPDATE route_meta SET writable = 0 WHERE id = 1 AND writable = 1" {
-		t.Fatalf("R28 must only flip writable 1 -> 0: %q", routeLeaderFreezeSQL)
-	}
-	if routeLeaderFreezeSQL == routeFreezeSQL {
-		t.Fatal("R28 must differ from route_tool freeze R19 (the contract tests tell the two writers apart by text)")
-	}
+	// 危险只交付观察；normal 对账 SQL 不拥有 writable 翻转语句。
 
 	contains("R29", routeScanUpdatedSinceSQL,
 		"SELECT route_shard, player_id, "+routeRowColumnsSQL+" FROM player_route",
@@ -307,7 +302,7 @@ func TestRouteReconcileSQLShapes(t *testing.T) {
 	ws := regexp.MustCompile(`\s+`)
 	for name, stmt := range map[string]string{
 		"R23": routeRenewLeaseSQL, "R24": routePeekLeaseSQL, "R25": routeReleaseLeaseSQL, "R26": routeLockReconcileSQL,
-		"R27": routeAdvanceReconcileSQL, "R28": routeLeaderFreezeSQL, "R29": routeScanUpdatedSinceSQL, "R30": routeDBNowSQL,
+		"R27": routeAdvanceReconcileSQL, "R29": routeScanUpdatedSinceSQL, "R30": routeDBNowSQL,
 		"R31": routeListFenceZonesSQL,
 	} {
 		norm := ws.ReplaceAllString(strings.ToUpper(stmt), " ")
@@ -327,7 +322,7 @@ func TestRouteReconcileFileDoesNotWritePlayerRoute(t *testing.T) {
 		PlayerRouteTableName + "|" + ZoneMergeFenceTableName + "|" + ZoneMergedIntoTableName + ")\\b")
 	for name, stmt := range map[string]string{
 		"R23": routeRenewLeaseSQL, "R24": routePeekLeaseSQL, "R25": routeReleaseLeaseSQL, "R26": routeLockReconcileSQL,
-		"R27": routeAdvanceReconcileSQL, "R28": routeLeaderFreezeSQL, "R29": routeScanUpdatedSinceSQL, "R30": routeDBNowSQL,
+		"R27": routeAdvanceReconcileSQL, "R29": routeScanUpdatedSinceSQL, "R30": routeDBNowSQL,
 		"R31": routeListFenceZonesSQL,
 	} {
 		if write.MatchString(stmt) {

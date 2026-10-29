@@ -217,6 +217,74 @@ func TestDispatch_InstanceLateNotifyCounted(t *testing.T) {
 	}
 }
 
+// dispatchOverflowValue 读出 login_task_result_dispatch_overflow_total 的当前值。序列不存在即失败:
+// 它在构造 dispatcher 时就注册(无 label 的 Counter 注册即有 0 序列),increase() 才不会漏掉第一次。
+func dispatchOverflowValue(t *testing.T) float64 {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("gather metrics: %v", err)
+	}
+	for _, mf := range families {
+		if mf.GetName() == "login_task_result_dispatch_overflow_total" {
+			if ms := mf.GetMetric(); len(ms) == 1 {
+				return ms[0].GetCounter().GetValue()
+			}
+			t.Fatalf("login_task_result_dispatch_overflow_total has %d series, want exactly 1 (no labels)", len(mf.GetMetric()))
+		}
+	}
+	t.Fatal("login_task_result_dispatch_overflow_total series missing")
+	return 0
+}
+
+// 派发池队列满了(突发尾部):通知改由临时 goroutine 处理,回调照样拿到结果;计一次溢出,
+// 送达计数与不溢出时相同(instance_notify +1),溢出不是送达结果、不进送达率分母。
+// 不 Start(没有 worker 消费),先用占位任务把队列填满,让这次 dispatch 必然走 default 分支。
+func TestDispatch_PoolSaturatedFallsBackAndCountsOverflow(t *testing.T) {
+	ctx := context.Background()
+	d, mr := newUnitDispatcher(t)
+	for i := 0; i < cap(d.dispatchJobs); i++ {
+		d.dispatchJobs <- dispatchJob{taskID: "filler"}
+	}
+	got := make(chan deliveredResult, 1)
+	d.Register("t-overflow", time.Hour, recordInto(got))
+	pushResult(t, mr, "t-overflow", &db_proto.TaskResult{Success: true})
+
+	overflowBefore := dispatchOverflowValue(t)
+	before := deliverySnapshot(t)
+	d.dispatch(ctx, d.instanceChannel, "t-overflow")
+
+	r := waitDelivered(t, got)
+	if r.err != nil || !r.res.GetSuccess() {
+		t.Fatalf("callback got res=%v err=%v, want success via the overflow goroutine", r.res, r.err)
+	}
+	if delta := dispatchOverflowValue(t) - overflowBefore; delta != 1 {
+		t.Fatalf("login_task_result_dispatch_overflow_total delta = %v, want 1", delta)
+	}
+	assertDeliveryDelta(t, before, map[string]float64{deliveryInstanceNotify: 1})
+	if n := len(d.dispatchJobs); n != cap(d.dispatchJobs) {
+		t.Fatalf("dispatchJobs = %d, want the queue untouched at %d (the overflow job must not be queued)", n, cap(d.dispatchJobs))
+	}
+	if isPending(d, "t-overflow") {
+		t.Fatal("task still pending after an overflow dispatch")
+	}
+}
+
+// 队列没满时不计溢出:走 worker 池的常规路径。
+func TestDispatch_QueuedJobDoesNotCountOverflow(t *testing.T) {
+	d, _ := newUnitDispatcher(t)
+	d.Register("t-queued", time.Hour, func(*db_proto.TaskResult, error) {})
+
+	overflowBefore := dispatchOverflowValue(t)
+	d.dispatch(context.Background(), d.instanceChannel, "t-queued")
+	if delta := dispatchOverflowValue(t) - overflowBefore; delta != 0 {
+		t.Fatalf("login_task_result_dispatch_overflow_total delta = %v, want 0 when the job fits in the queue", delta)
+	}
+	if n := len(d.dispatchJobs); n != 1 {
+		t.Fatalf("dispatchJobs = %d, want 1", n)
+	}
+}
+
 func TestRunDispatchJob_ResultMissingCounted(t *testing.T) {
 	t.Run("结果 LIST 为空", func(t *testing.T) {
 		d, _ := newUnitDispatcher(t)
@@ -329,5 +397,36 @@ func TestSweepExpired_TimesOutWithoutResult(t *testing.T) {
 	assertDeliveryDelta(t, before, map[string]float64{deliveryTimedOut: 1})
 	if isPending(d, "t-timeout") {
 		t.Fatal("expired registration still pending after sweep")
+	}
+}
+
+func TestStopAndReportDoesNotDiscardPendingCallbacks(t *testing.T) {
+	d, _ := newUnitDispatcher(t)
+	delivered := false
+	d.Register("drain-pending", time.Hour, func(*db_proto.TaskResult, error) { delivered = true })
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := d.StopAndReport(ctx); err == nil {
+		t.Fatal("pending未完成却成功停止")
+	}
+	if delivered || !isPending(d, "drain-pending") {
+		t.Fatal("超时清掉了pending或伪造回调")
+	}
+	callback := d.take("drain-pending")
+	callback(nil, nil)
+	if err := d.WaitIdle(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDrainTimeoutCallbackRemainsUnknown(t *testing.T) {
+	d, _ := newUnitDispatcher(t)
+	d.Register("unknown-server", time.Hour, func(*db_proto.TaskResult, error) {})
+	d.BeginDrain()
+	cb := d.take("unknown-server")
+	cb(nil, context.DeadlineExceeded)
+	d.callbacks.CloseAdmission()
+	if err := d.callbacks.Wait(context.Background()); err == nil {
+		t.Fatal("TTL/取消被当成server undo")
 	}
 }

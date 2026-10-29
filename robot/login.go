@@ -134,6 +134,10 @@ func (e *envelopeError) Error() string {
 // sendAndRecvTimeout is like sendAndRecv but with an explicit timeout.
 // If the response is not received within the timeout, it returns an error
 // indicating the login is stuck.
+//
+// 这是同步握手(登录 / 重定向重登录,跑在 RecvLoop 之前或之上),只能 SendRequest + RecvOne,不迁到 Call。
+// 超时返回包裹 errLoginStuck 的错误,此时读者 goroutine 仍阻塞在 RecvOne 上:调用方必须丢弃这条连接,
+// 不得再在同一个 gc 上握手或起 RecvLoop(见 main.go 的 errLoginStuck)。信封错误返回 *envelopeError。
 func sendAndRecvTimeout(gc *pkg.GameClient, stats *metrics.Stats, msgId uint32, req, resp proto.Message, timeout time.Duration) error {
 	if err := gc.SendRequest(msgId, req); err != nil {
 		return err
@@ -183,7 +187,7 @@ func sendAndRecvTimeout(gc *pkg.GameClient, stats *metrics.Stats, msgId uint32, 
 		return proto.Unmarshal(r.msg.SerializedMessage, resp)
 	case <-time.After(timeout):
 		stats.LoginStuck()
-		return fmt.Errorf("STUCK: no response for msg_id=%d within %s", msgId, timeout)
+		return fmt.Errorf("%w: no response for msg_id=%d within %s", errLoginStuck, msgId, timeout)
 	}
 }
 

@@ -1,5 +1,9 @@
 #include "bag_service.h"
 
+#include <algorithm>
+#include <tuple>
+#include <type_traits>
+#include <typeindex>
 #include <utility>
 
 #include "engine/core/error_handling/error_handling.h"
@@ -9,6 +13,8 @@
 #include "table/code/item_table.h"
 
 #include "modules/gain_block/gain_block_service.h"
+#include "modules/bag/comp/player_bags_comp.h"
+#include "thread_context/ecs_context.h"
 #include "modules/transaction_log/anomaly_detector.h"
 #include "modules/transaction_log/transaction_log_system.h"
 #include "services/scene/player/system/player_lifecycle.h" // IsCrossZoneFrozen — cross-zone-readiness-audit.md §11.1
@@ -178,6 +184,121 @@ uint32_t BagService::AddItems(
     }
 
 	return kSuccess;
+}
+
+namespace
+{
+    // 候选只借用原只读策略；不持有源Bag，也不把这两个适配器暴露给调用方。
+    class BorrowedAdmission final : public IAdmissionPolicy
+    {
+    public:
+        explicit BorrowedAdmission(const IAdmissionPolicy& source) : source_(source) {}
+        bool Accepts(uint32_t config) const override { return source_.Accepts(config); }
+    private:
+        const IAdmissionPolicy& source_;
+    };
+    class BorrowedEviction final : public IEvictionPolicy
+    {
+    public:
+        explicit BorrowedEviction(const IEvictionPolicy& source) : source_(source) {}
+        GuidVector SelectVictims(std::size_t needed, const ItemStore& store, const IContainerLayout& layout) const override
+        { return source_.SelectVictims(needed, store, layout); }
+    private:
+        const IEvictionPolicy& source_;
+    };
+}
+
+uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
+    const ItemCountMap& consumed, const ItemCountMap& gained, uint64_t correlationId,
+    const std::string& extra, const std::function<uint32_t()>& beforeCommit)
+{
+    if (!tlsEcs.actorRegistry.valid(playerEntity) || !PlayerLifecycleSystem::IsPlayerMutable(playerEntity)) return kInvalidParameter;
+    const auto playerId = tlsEcs.GetPlayerId(playerEntity);
+    if (playerId == 0 || tlsEcs.GetPlayer(playerId) != playerEntity) return kInvalidParameter;
+    for (const auto* batch : {&consumed, &gained})
+        for (const auto& [config, count] : *batch)
+            if (config == 0 || count == 0 || ItemTableManager::Instance().FindByIdSilent(config).first == nullptr)
+                return kInvalidParameter;
+    const auto gainsAllowed = [&gained] {
+        return std::all_of(gained.begin(), gained.end(), [](const auto& entry) {
+            return !GainBlockService::IsGainBlocked(GainBlockService::GainType::kItem, entry.first);
+        });
+    };
+    if (!gainsAllowed()) return kInvalidParameter;
+    if (consumed.empty() && gained.empty()) return beforeCommit ? beforeCommit() : uint32_t{kSuccess};
+    auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(playerEntity);
+    if (bags == nullptr) return kInvalidParameter;
+    auto& inventory = bags->bags[kInventory];
+    auto& temporary = bags->bags[kTemporary];
+    if (!inventory.IsLayerConsistent() || !temporary.IsLayerConsistent()) return kInvalidParameter;
+
+    const auto fingerprint = [](const Bag& bag) {
+        std::vector<std::pair<Guid, std::string>> items;
+        bag.store_.ForEach([&items](Guid id, const ItemComp& item) { items.emplace_back(id, item.SerializeAsString()); });
+        std::sort(items.begin(), items.end());
+        std::vector<std::pair<uint32_t, Guid>> slots(bag.layout_->Slots().begin(), bag.layout_->Slots().end());
+        std::sort(slots.begin(), slots.end());
+        const auto* grid = dynamic_cast<const GridLayout*>(bag.layout_.get());
+        return std::tuple{std::move(items), std::move(slots), bag.store_.NextAcquireSeq(), bag.Capacity(),
+            bag.layout_.get(), std::type_index(typeid(*bag.layout_)), grid ? grid->Width() : 0u,
+            grid ? grid->Height() : 0u, bag.layout_->FreeCells(),
+            bag.ProfileId(), bag.PlayerGuid(), bag.admission_.get(), bag.eviction_.get()};
+    };
+    const auto inventoryBefore = fingerprint(inventory), temporaryBefore = fingerprint(temporary);
+    const auto sameSource = [&] {
+        if (!tlsEcs.actorRegistry.valid(playerEntity) || tlsEcs.GetPlayer(playerId) != playerEntity
+            || tlsEcs.GetPlayerId(playerEntity) != playerId || !PlayerLifecycleSystem::IsPlayerMutable(playerEntity)) return false;
+        const auto* current = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(playerEntity);
+        return current == bags && fingerprint(current->bags[kInventory]) == inventoryBefore
+            && fingerprint(current->bags[kTemporary]) == temporaryBefore;
+    };
+    const auto clone = [](const Bag& source, Bag& candidate) {
+        candidate.store_ = source.store_;
+        candidate.layout_ = source.layout_->Clone();
+        candidate.admission_ = std::make_unique<BorrowedAdmission>(source.Admission());
+        candidate.eviction_ = std::make_unique<BorrowedEviction>(source.Eviction());
+        candidate.profileId_ = source.profileId_; candidate.playerGuid = source.playerGuid;
+        return candidate.layout_ != nullptr;
+    };
+    Bag nextInventory, nextTemporary;
+    if (!clone(inventory, nextInventory) || !clone(temporary, nextTemporary)) return kInvalidParameter;
+    std::vector<DrainedInstance> drained;
+    if (!consumed.empty()) {
+        const auto result = nextInventory.RemoveItemsClamped(consumed, &drained);
+        if (result != kSuccess) return result;
+    }
+    std::vector<DestroyedInstance> evicted;
+    std::vector<GuidVector> written;
+    if (!gained.empty()) {
+        auto result = nextInventory.AddItems(gained, &evicted, &written, InstalledItemInstanceInitializer());
+        if (result != kSuccess) {
+            if (!sameSource()) return kInvalidParameter;
+            evicted.clear(); written.clear();
+            result = nextTemporary.AddItems(gained, &evicted, &written, InstalledItemInstanceInitializer());
+        }
+        if (result != kSuccess) return result;
+        if (written.size() != gained.size()) return kInvalidParameter;
+    }
+    if (!sameSource() || !gainsAllowed()) return kInvalidParameter;
+    if (beforeCommit) {
+        const auto result = beforeCommit();
+        if (result != kSuccess) return result;
+    }
+    // 原策略不移交，候选从未发布；所有可能拒绝的步骤都已完成。这里不回调、不yield。
+    static_assert(std::is_nothrow_move_assignable_v<ItemStore>);
+    inventory.store_ = std::move(nextInventory.store_); inventory.layout_ = std::move(nextInventory.layout_);
+    temporary.store_ = std::move(nextTemporary.store_); temporary.layout_ = std::move(nextTemporary.layout_);
+    for (const auto& entry : drained)
+        TransactionLogSystem::LogItemDestroy(playerEntity, entry.guid, entry.configId, entry.amount, correlationId, extra);
+    LogEvictedInstances(playerEntity, evicted);
+    const auto ordered = SortedByConfigId(gained);
+    for (std::size_t i = 0; i < ordered.size(); ++i) {
+        const auto& [config, count] = ordered[i];
+        TransactionLogSystem::LogItemCreate(playerEntity, PrimaryWrittenGuid(written[i]), config, count,
+            TX_ITEM_AWARD, correlationId, extra);
+        AnomalyDetector::RecordItemGain(playerEntity, config, count);
+    }
+    return kSuccess;
 }
 
 uint64_t BagService::MaxNewInstancesFor(const ItemCountMap &itemsToAdd)

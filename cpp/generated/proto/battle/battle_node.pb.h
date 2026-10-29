@@ -1418,8 +1418,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QueryBattleCreationResponse final :
 
   // accessors -------------------------------------------------------
   enum : int {
+    kTargetInstanceIdFieldNumber = 2,
     kStateFieldNumber = 1,
+    kSupportedOutcomeProtocolVersionFieldNumber = 3,
+    kAdoptedOutcomeProtocolVersionFieldNumber = 4,
   };
+  // string target_instance_id = 2;
+  void clear_target_instance_id() ;
+  [[nodiscard]] const ::std::string& target_instance_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_target_instance_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_target_instance_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_target_instance_id();
+  void set_allocated_target_instance_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_target_instance_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_target_instance_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_target_instance_id();
+
+  public:
   // .BattleCreationState state = 1;
   void clear_state() ;
   [[nodiscard]] ::BattleCreationState state() const;
@@ -1430,12 +1448,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QueryBattleCreationResponse final :
   void _internal_set_state(::BattleCreationState value);
 
   public:
+  // uint32 supported_outcome_protocol_version = 3;
+  void clear_supported_outcome_protocol_version() ;
+  [[nodiscard]] ::uint32_t supported_outcome_protocol_version() const;
+  void set_supported_outcome_protocol_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_supported_outcome_protocol_version() const;
+  void _internal_set_supported_outcome_protocol_version(::uint32_t value);
+
+  public:
+  // uint32 adopted_outcome_protocol_version = 4;
+  void clear_adopted_outcome_protocol_version() ;
+  [[nodiscard]] ::uint32_t adopted_outcome_protocol_version() const;
+  void set_adopted_outcome_protocol_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_adopted_outcome_protocol_version() const;
+  void _internal_set_adopted_outcome_protocol_version(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:QueryBattleCreationResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
-                          0, 0,
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          0, 54,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1463,7 +1501,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QueryBattleCreationResponse final :
         const QueryBattleCreationResponse& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr target_instance_id_;
     int state_;
+    ::uint32_t supported_outcome_protocol_version_;
+    ::uint32_t adopted_outcome_protocol_version_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2578,9 +2619,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleResponse final : public
 
   // accessors -------------------------------------------------------
   enum : int {
+    kTargetInstanceIdFieldNumber = 4,
     kErrorMessageFieldNumber = 2,
     kBattleIdFieldNumber = 1,
+    kAdoptedOutcomeProtocolVersionFieldNumber = 3,
   };
+  // string target_instance_id = 4;
+  void clear_target_instance_id() ;
+  [[nodiscard]] const ::std::string& target_instance_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_target_instance_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_target_instance_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_target_instance_id();
+  void set_allocated_target_instance_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_target_instance_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_target_instance_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_target_instance_id();
+
+  public:
   // .TipInfoMessage error_message = 2;
   [[nodiscard]] bool has_error_message()
       const;
@@ -2607,12 +2665,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleResponse final : public
   void _internal_set_battle_id(::uint64_t value);
 
   public:
+  // uint32 adopted_outcome_protocol_version = 3;
+  void clear_adopted_outcome_protocol_version() ;
+  [[nodiscard]] ::uint32_t adopted_outcome_protocol_version() const;
+  void set_adopted_outcome_protocol_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_adopted_outcome_protocol_version() const;
+  void _internal_set_adopted_outcome_protocol_version(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:CreateBattleResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          1, 0,
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          1, 47,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2640,8 +2708,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleResponse final : public
         const CreateBattleResponse& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr target_instance_id_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::uint64_t battle_id_;
+    ::uint32_t adopted_outcome_protocol_version_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3649,8 +3719,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleRequest final : public 
     kSeedFieldNumber = 4,
     kCreatedAtMsFieldNumber = 6,
     kDeadlineMsFieldNumber = 7,
-    kAdmitBeforeMsFieldNumber = 13,
     kRequiredPhysicalRegionFieldNumber = 10,
+    kOutcomeProtocolVersionFieldNumber = 14,
+    kAdmitBeforeMsFieldNumber = 13,
   };
   // repeated .BattlePlayerSnapshot players = 3;
   [[nodiscard]] int players_size()
@@ -3794,16 +3865,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleRequest final : public 
   void _internal_set_deadline_ms(::uint64_t value);
 
   public:
-  // uint64 admit_before_ms = 13;
-  void clear_admit_before_ms() ;
-  [[nodiscard]] ::uint64_t admit_before_ms() const;
-  void set_admit_before_ms(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_admit_before_ms() const;
-  void _internal_set_admit_before_ms(::uint64_t value);
-
-  public:
   // uint32 required_physical_region = 10;
   void clear_required_physical_region() ;
   [[nodiscard]] ::uint32_t required_physical_region() const;
@@ -3814,11 +3875,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleRequest final : public 
   void _internal_set_required_physical_region(::uint32_t value);
 
   public:
+  // uint32 outcome_protocol_version = 14;
+  void clear_outcome_protocol_version() ;
+  [[nodiscard]] ::uint32_t outcome_protocol_version() const;
+  void set_outcome_protocol_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_outcome_protocol_version() const;
+  void _internal_set_outcome_protocol_version(::uint32_t value);
+
+  public:
+  // uint64 admit_before_ms = 13;
+  void clear_admit_before_ms() ;
+  [[nodiscard]] ::uint64_t admit_before_ms() const;
+  void set_admit_before_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_admit_before_ms() const;
+  void _internal_set_admit_before_ms(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:CreateBattleRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
+      ::google::protobuf::internal::TcParseTable<4, 14,
                           2, 93,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3858,8 +3939,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleRequest final : public 
     ::uint64_t seed_;
     ::uint64_t created_at_ms_;
     ::uint64_t deadline_ms_;
-    ::uint64_t admit_before_ms_;
     ::uint32_t required_physical_region_;
+    ::uint32_t outcome_protocol_version_;
+    ::uint64_t admit_before_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4755,7 +4837,7 @@ inline void CreateBattleRequest::set_allocated_activity_context(::BattleActivity
 inline void CreateBattleRequest::clear_required_physical_region() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.required_physical_region_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t CreateBattleRequest::required_physical_region() const {
   // @@protoc_insertion_point(field_get:CreateBattleRequest.required_physical_region)
@@ -4763,7 +4845,7 @@ inline ::uint32_t CreateBattleRequest::required_physical_region() const {
 }
 inline void CreateBattleRequest::set_required_physical_region(::uint32_t value) {
   _internal_set_required_physical_region(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:CreateBattleRequest.required_physical_region)
 }
 inline ::uint32_t CreateBattleRequest::_internal_required_physical_region() const {
@@ -4907,7 +4989,7 @@ inline void CreateBattleRequest::set_allocated_target_instance_id(::std::string*
 inline void CreateBattleRequest::clear_admit_before_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.admit_before_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t CreateBattleRequest::admit_before_ms() const {
   // @@protoc_insertion_point(field_get:CreateBattleRequest.admit_before_ms)
@@ -4915,7 +4997,7 @@ inline ::uint64_t CreateBattleRequest::admit_before_ms() const {
 }
 inline void CreateBattleRequest::set_admit_before_ms(::uint64_t value) {
   _internal_set_admit_before_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:CreateBattleRequest.admit_before_ms)
 }
 inline ::uint64_t CreateBattleRequest::_internal_admit_before_ms() const {
@@ -4927,6 +5009,30 @@ inline void CreateBattleRequest::_internal_set_admit_before_ms(::uint64_t value)
   _impl_.admit_before_ms_ = value;
 }
 
+// uint32 outcome_protocol_version = 14;
+inline void CreateBattleRequest::clear_outcome_protocol_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.outcome_protocol_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint32_t CreateBattleRequest::outcome_protocol_version() const {
+  // @@protoc_insertion_point(field_get:CreateBattleRequest.outcome_protocol_version)
+  return _internal_outcome_protocol_version();
+}
+inline void CreateBattleRequest::set_outcome_protocol_version(::uint32_t value) {
+  _internal_set_outcome_protocol_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:CreateBattleRequest.outcome_protocol_version)
+}
+inline ::uint32_t CreateBattleRequest::_internal_outcome_protocol_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.outcome_protocol_version_;
+}
+inline void CreateBattleRequest::_internal_set_outcome_protocol_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.outcome_protocol_version_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // CreateBattleResponse
@@ -4935,7 +5041,7 @@ inline void CreateBattleRequest::_internal_set_admit_before_ms(::uint64_t value)
 inline void CreateBattleResponse::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t CreateBattleResponse::battle_id() const {
   // @@protoc_insertion_point(field_get:CreateBattleResponse.battle_id)
@@ -4943,7 +5049,7 @@ inline ::uint64_t CreateBattleResponse::battle_id() const {
 }
 inline void CreateBattleResponse::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:CreateBattleResponse.battle_id)
 }
 inline ::uint64_t CreateBattleResponse::_internal_battle_id() const {
@@ -4957,7 +5063,7 @@ inline void CreateBattleResponse::_internal_set_battle_id(::uint64_t value) {
 
 // .TipInfoMessage error_message = 2;
 inline bool CreateBattleResponse::has_error_message() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
   PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
   return value;
 }
@@ -4978,16 +5084,16 @@ inline void CreateBattleResponse::unsafe_arena_set_allocated_error_message(
   }
   _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:CreateBattleResponse.error_message)
 }
 inline ::TipInfoMessage* PROTOBUF_NULLABLE CreateBattleResponse::release_error_message() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::TipInfoMessage* released = _impl_.error_message_;
   _impl_.error_message_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -5007,7 +5113,7 @@ inline ::TipInfoMessage* PROTOBUF_NULLABLE CreateBattleResponse::unsafe_arena_re
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:CreateBattleResponse.error_message)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::TipInfoMessage* temp = _impl_.error_message_;
   _impl_.error_message_ = nullptr;
   return temp;
@@ -5022,7 +5128,7 @@ inline ::TipInfoMessage* PROTOBUF_NONNULL CreateBattleResponse::_internal_mutabl
 }
 inline ::TipInfoMessage* PROTOBUF_NONNULL CreateBattleResponse::mutable_error_message()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::TipInfoMessage* _msg = _internal_mutable_error_message();
   // @@protoc_insertion_point(field_mutable:CreateBattleResponse.error_message)
   return _msg;
@@ -5039,13 +5145,101 @@ inline void CreateBattleResponse::set_allocated_error_message(::TipInfoMessage* 
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
 
   _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
   // @@protoc_insertion_point(field_set_allocated:CreateBattleResponse.error_message)
+}
+
+// uint32 adopted_outcome_protocol_version = 3;
+inline void CreateBattleResponse::clear_adopted_outcome_protocol_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.adopted_outcome_protocol_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t CreateBattleResponse::adopted_outcome_protocol_version() const {
+  // @@protoc_insertion_point(field_get:CreateBattleResponse.adopted_outcome_protocol_version)
+  return _internal_adopted_outcome_protocol_version();
+}
+inline void CreateBattleResponse::set_adopted_outcome_protocol_version(::uint32_t value) {
+  _internal_set_adopted_outcome_protocol_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:CreateBattleResponse.adopted_outcome_protocol_version)
+}
+inline ::uint32_t CreateBattleResponse::_internal_adopted_outcome_protocol_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.adopted_outcome_protocol_version_;
+}
+inline void CreateBattleResponse::_internal_set_adopted_outcome_protocol_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.adopted_outcome_protocol_version_ = value;
+}
+
+// string target_instance_id = 4;
+inline void CreateBattleResponse::clear_target_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_instance_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& CreateBattleResponse::target_instance_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:CreateBattleResponse.target_instance_id)
+  return _internal_target_instance_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CreateBattleResponse::set_target_instance_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.target_instance_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:CreateBattleResponse.target_instance_id)
+}
+inline ::std::string* PROTOBUF_NONNULL CreateBattleResponse::mutable_target_instance_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_target_instance_id();
+  // @@protoc_insertion_point(field_mutable:CreateBattleResponse.target_instance_id)
+  return _s;
+}
+inline const ::std::string& CreateBattleResponse::_internal_target_instance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_instance_id_.Get();
+}
+inline void CreateBattleResponse::_internal_set_target_instance_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_instance_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CreateBattleResponse::_internal_mutable_target_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.target_instance_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CreateBattleResponse::release_target_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:CreateBattleResponse.target_instance_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.target_instance_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.target_instance_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CreateBattleResponse::set_allocated_target_instance_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.target_instance_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.target_instance_id_.IsDefault()) {
+    _impl_.target_instance_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:CreateBattleResponse.target_instance_id)
 }
 
 // -------------------------------------------------------------------
@@ -5432,7 +5626,7 @@ inline void QueryBattleCreationRequest::set_allocated_target_instance_id(::std::
 inline void QueryBattleCreationResponse::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::BattleCreationState QueryBattleCreationResponse::state() const {
   // @@protoc_insertion_point(field_get:QueryBattleCreationResponse.state)
@@ -5440,7 +5634,7 @@ inline ::BattleCreationState QueryBattleCreationResponse::state() const {
 }
 inline void QueryBattleCreationResponse::set_state(::BattleCreationState value) {
   _internal_set_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:QueryBattleCreationResponse.state)
 }
 inline ::BattleCreationState QueryBattleCreationResponse::_internal_state() const {
@@ -5450,6 +5644,118 @@ inline ::BattleCreationState QueryBattleCreationResponse::_internal_state() cons
 inline void QueryBattleCreationResponse::_internal_set_state(::BattleCreationState value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = value;
+}
+
+// string target_instance_id = 2;
+inline void QueryBattleCreationResponse::clear_target_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_instance_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& QueryBattleCreationResponse::target_instance_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:QueryBattleCreationResponse.target_instance_id)
+  return _internal_target_instance_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void QueryBattleCreationResponse::set_target_instance_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.target_instance_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:QueryBattleCreationResponse.target_instance_id)
+}
+inline ::std::string* PROTOBUF_NONNULL QueryBattleCreationResponse::mutable_target_instance_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_target_instance_id();
+  // @@protoc_insertion_point(field_mutable:QueryBattleCreationResponse.target_instance_id)
+  return _s;
+}
+inline const ::std::string& QueryBattleCreationResponse::_internal_target_instance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_instance_id_.Get();
+}
+inline void QueryBattleCreationResponse::_internal_set_target_instance_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_instance_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL QueryBattleCreationResponse::_internal_mutable_target_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.target_instance_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE QueryBattleCreationResponse::release_target_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:QueryBattleCreationResponse.target_instance_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.target_instance_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.target_instance_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void QueryBattleCreationResponse::set_allocated_target_instance_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.target_instance_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.target_instance_id_.IsDefault()) {
+    _impl_.target_instance_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:QueryBattleCreationResponse.target_instance_id)
+}
+
+// uint32 supported_outcome_protocol_version = 3;
+inline void QueryBattleCreationResponse::clear_supported_outcome_protocol_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.supported_outcome_protocol_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t QueryBattleCreationResponse::supported_outcome_protocol_version() const {
+  // @@protoc_insertion_point(field_get:QueryBattleCreationResponse.supported_outcome_protocol_version)
+  return _internal_supported_outcome_protocol_version();
+}
+inline void QueryBattleCreationResponse::set_supported_outcome_protocol_version(::uint32_t value) {
+  _internal_set_supported_outcome_protocol_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:QueryBattleCreationResponse.supported_outcome_protocol_version)
+}
+inline ::uint32_t QueryBattleCreationResponse::_internal_supported_outcome_protocol_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.supported_outcome_protocol_version_;
+}
+inline void QueryBattleCreationResponse::_internal_set_supported_outcome_protocol_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.supported_outcome_protocol_version_ = value;
+}
+
+// uint32 adopted_outcome_protocol_version = 4;
+inline void QueryBattleCreationResponse::clear_adopted_outcome_protocol_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.adopted_outcome_protocol_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t QueryBattleCreationResponse::adopted_outcome_protocol_version() const {
+  // @@protoc_insertion_point(field_get:QueryBattleCreationResponse.adopted_outcome_protocol_version)
+  return _internal_adopted_outcome_protocol_version();
+}
+inline void QueryBattleCreationResponse::set_adopted_outcome_protocol_version(::uint32_t value) {
+  _internal_set_adopted_outcome_protocol_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:QueryBattleCreationResponse.adopted_outcome_protocol_version)
+}
+inline ::uint32_t QueryBattleCreationResponse::_internal_adopted_outcome_protocol_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.adopted_outcome_protocol_version_;
+}
+inline void QueryBattleCreationResponse::_internal_set_adopted_outcome_protocol_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.adopted_outcome_protocol_version_ = value;
 }
 
 // -------------------------------------------------------------------

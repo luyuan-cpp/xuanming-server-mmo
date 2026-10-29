@@ -815,6 +815,106 @@ RouteStore:
 	}
 }
 
+// TestRouteStoreReadRequiresReadyNeedsReconcileLeader(A1-6 / A2-2 / M1-1 / LR-6):读方门禁开着时不许急停对账 leader
+// (Reconcile.Enabled=false)—— 没有 leader 就没人撤 / 维护就绪标记,读方却继续判 Trusted。
+//   - 读方开 + Enabled=false:不论 ArmReadyMarker 是否已改成 false 都拒启,报错点名两个键(结构体与 yaml 两条入口);
+//   - 先关读方再急停、或 leader 开着(没写 = true / 显式 true):照常通过;
+//   - 随仓库的全球默认组合(db_first + 读方门禁 + leader 开)通过;在它上面只把 Enabled 改成 false(Arm 一并改 false,
+//     只留这一处违例)就被拒 —— 守卫确实罩住现役配置。
+func TestRouteStoreReadRequiresReadyNeedsReconcileLeader(t *testing.T) {
+	off, on := false, true
+
+	for _, arm := range []bool{false, true} {
+		bad := RouteStoreConfig{Mode: RouteStoreModeDBFirst, ReadRequiresReady: true}
+		bad.Reconcile.Enabled = &off
+		bad.Reconcile.ArmReadyMarker = arm
+		err := bad.Normalize().Validate()
+		if err == nil {
+			t.Fatalf("ReadRequiresReady=true with Reconcile.Enabled=false (ArmReadyMarker=%t) must be rejected", arm)
+		}
+		if !arm && (!strings.Contains(err.Error(), "ReadRequiresReady") || !strings.Contains(err.Error(), "Reconcile.Enabled")) {
+			t.Fatalf("the rejection must name both keys, got %v", err)
+		}
+	}
+
+	c := loadYaml(t, minimalYaml+`
+RouteStore:
+  Mode: db_first
+  ReadRequiresReady: true
+  Reconcile:
+    Enabled: false
+`)
+	if err := c.RouteStore.Normalize().Validate(); err == nil || !strings.Contains(err.Error(), "Reconcile.Enabled") {
+		t.Fatalf("the same combination written in yaml must be rejected naming Reconcile.Enabled, got %v", err)
+	}
+
+	stop := RouteStoreConfig{Mode: RouteStoreModeDBFirst}
+	stop.Reconcile.Enabled = &off
+	if err := stop.Normalize().Validate(); err != nil {
+		t.Fatalf("an emergency stop after the readers are off must validate: %v", err)
+	}
+	for _, enabled := range []*bool{nil, &on} {
+		r := RouteStoreConfig{Mode: RouteStoreModeDBFirst, ReadRequiresReady: true}
+		r.Reconcile.Enabled = enabled
+		if err := r.Normalize().Validate(); err != nil {
+			t.Fatalf("ReadRequiresReady=true with the leader on (Enabled=%v) must validate: %v", enabled, err)
+		}
+	}
+
+	var shipped Config
+	if err := conf.Load("../../etc/data_service.yaml", &shipped); err != nil {
+		t.Fatalf("load etc/data_service.yaml: %v", err)
+	}
+	rs := shipped.RouteStore.Normalize()
+	if !rs.DBFirst() || !rs.ReadRequiresReady || !rs.Reconcile.On() {
+		t.Fatalf("this case assumes the shipped global default (db_first + ReadRequiresReady + leader on), got Mode=%q ReadRequiresReady=%t Enabled=%t",
+			rs.Mode, rs.ReadRequiresReady, rs.Reconcile.On())
+	}
+	if err := rs.Validate(); err != nil {
+		t.Fatalf("the shipped global default combination must validate: %v", err)
+	}
+	rs.Reconcile.Enabled = &off
+	rs.Reconcile.ArmReadyMarker = false
+	if err := rs.Validate(); err == nil || !strings.Contains(err.Error(), "Reconcile.Enabled") {
+		t.Fatalf("stopping the leader on the shipped global default must be rejected naming Reconcile.Enabled, got %v", err)
+	}
+}
+
+// TestRouteStorePublishRedisPoolSize(A2-1 / LR-4):db_first 发布客户端的池上限。没配(整段缺失、段在键不在)= 缺省 20;
+// [1, 128] 之外拒启(0 由 Normalize 换成缺省,所以拒绝的是负数与超上限),与 Mode 无关;边界值本身允许;
+// 随仓库的 yaml 写的就是缺省值。
+func TestRouteStorePublishRedisPoolSize(t *testing.T) {
+	for _, y := range []string{minimalYaml, minimalYaml + `
+RouteStore: {}
+`} {
+		if got := loadYaml(t, y).RouteStore.Normalize().PublishRedisPoolSize; got != DefaultRouteStorePublishRedisPoolSize {
+			t.Fatalf("PublishRedisPoolSize must default to %d, got %d for yaml:\n%s", DefaultRouteStorePublishRedisPoolSize, got, y)
+		}
+	}
+	for _, mode := range []string{RouteStoreModeRedis, RouteStoreModeDBFirst} {
+		for _, size := range []int{-1, MaxRouteStorePublishRedisPoolSize + 1} {
+			err := RouteStoreConfig{Mode: mode, PublishRedisPoolSize: size}.Normalize().Validate()
+			if err == nil || !strings.Contains(err.Error(), "PublishRedisPoolSize") {
+				t.Fatalf("Mode=%s PublishRedisPoolSize=%d must be rejected naming the key, got %v", mode, size, err)
+			}
+		}
+		for _, size := range []int{1, MaxRouteStorePublishRedisPoolSize} {
+			if err := (RouteStoreConfig{Mode: mode, PublishRedisPoolSize: size}).Normalize().Validate(); err != nil {
+				t.Fatalf("Mode=%s PublishRedisPoolSize=%d must be accepted: %v", mode, size, err)
+			}
+		}
+	}
+
+	var shipped Config
+	if err := conf.Load("../../etc/data_service.yaml", &shipped); err != nil {
+		t.Fatalf("load etc/data_service.yaml: %v", err)
+	}
+	if shipped.RouteStore.PublishRedisPoolSize != DefaultRouteStorePublishRedisPoolSize {
+		t.Fatalf("etc/data_service.yaml RouteStore.PublishRedisPoolSize = %d, want the default %d spelled out",
+			shipped.RouteStore.PublishRedisPoolSize, DefaultRouteStorePublishRedisPoolSize)
+	}
+}
+
 // Store.Required:本地 yaml 不写(整段缺失)必须保持旧的降级语义;K8s ConfigMap 显式写 true 必须生效。
 // 零值就是旧行为,所以这里用裸 bool 是安全的(对照 Schema.AutoMigrate 必须用 *bool 的理由)。
 func TestStoreRequiredDefaultsToFalseAndHonoursExplicitTrue(t *testing.T) {

@@ -39,7 +39,7 @@ func TestCheckLocalWriteTarget(t *testing.T) {
 func TestPlayerKeyFormats(t *testing.T) {
 	const id = 42
 	cases := []struct{ got, want string }{
-		{ParentKey(id), "PlayerAllData:42"},
+		{ParentKey(id), "PlayerAllData:{42}"},
 		{SubTableCacheKey(&databasepb.PlayerDatabase{}, id), "player_database:42"},
 		{SubTableCacheKey(&databasepb.PlayerDatabase_1{}, id), "player_database_1:42"},
 		{SavePendingIndexKey(3, 130), "player:save_pending:3:2"},
@@ -47,7 +47,7 @@ func TestPlayerKeyFormats(t *testing.T) {
 		{AccountKey("dev_a"), "account:dev_a"},
 		{LocatorSessionKey(id), "player:session:42"},
 		{savebarrier.Key(id), "player:{42}:save_barrier"},
-		{ownerepoch.OwnerEpochKey(id), "player:42:owner_epoch"},
+		{ownerepoch.OwnerEpochKey(id), "player:{42}:owner_epoch"},
 	}
 	for _, c := range cases {
 		if c.got != c.want {

@@ -3,7 +3,6 @@ package game
 const ContractsKafkaKickPlayerEventEventId = 10
 const ContractsKafkaRoutePlayerEventEventId = 11
 const ContractsKafkaBroadcastToAllEventEventId = 18
-const PlayerMigrationEventEventId = 27
 const ContractsKafkaBindSessionEventEventId = 32
 const ContractsKafkaPlayerDisconnectedEventEventId = 33
 const ContractsKafkaPlayerLeaseExpiredEventEventId = 34
@@ -12,7 +11,6 @@ const ContractsKafkaRedirectToGateEventEventId = 37
 const ContractsKafkaBroadcastToPlayersEventEventId = 38
 const ContractsKafkaPushToPlayerEventEventId = 39
 const ContractsKafkaBroadcastToSceneEventEventId = 40
-const PlayerMigrationAckEventEventId = 41
 const BattleSettlementEventEventId = 42
 const BattleConfirmedEventEventId = 45
 const ContractsKafkaBattleResultEventEventId = 46

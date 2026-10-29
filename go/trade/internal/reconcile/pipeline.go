@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"shared/drainproof"
 	"time"
 
 	"trade/internal/data"
@@ -29,6 +30,7 @@ import (
 	tradepb "proto/trade"
 
 	"shared/assetop"
+	"shared/currencytype"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
@@ -429,7 +431,8 @@ func (p *Pipeline) EnqueueEscrowDebit(ctx context.Context, req EscrowRequest) (E
 //  1. §4.9 第 8 步的 Debit(v1) 形状:恰好 1 条货币、0 件物品、amount ∈ [1, INT64_MAX]。
 //     这类包送到 scene 会被记成**终局 REJECTED**(§4.10 该行"记账=是")并吃掉一个 seq ——
 //     一次注定失败的往返,还在账本里留下一条永远翻不了案的记录。本地判等价且免费。
-//     currency_type 的上界(C++ kCurrencyMax)Go 侧没有事实源,留给 scene 判。
+//     currency_type 按 proto 同源取值表(shared/currencytype)判:写错的值必须在这里拒,
+//     scene 才能把不认识的币种判成版本错位(回 RETRY 不记账),而不是对一个笔误永久重投。
 //
 //  2. `item_uuids` / `pet_id` **一律拒收**,因为 v1 的 scene 还没实现按 guid 扣装备 /
 //     扣宝宝(那是 P3 托管的活)。这两个字段已经在 proto/common/asset/asset_op.proto 里
@@ -455,6 +458,9 @@ func validateDebitBundle(b *assetpb.AssetBundle) error {
 	}
 	if len(b.GetCurrencies()) != 1 {
 		return fmt.Errorf("trade: 托管资产包有 %d 条货币,Debit v1 恰收 1 条(§4.9 第 8 步)", len(b.GetCurrencies()))
+	}
+	if currency := b.GetCurrencies()[0].GetCurrencyType(); !currencytype.IsKnown(currency) {
+		return fmt.Errorf("trade: 托管币种 %d 不在取值表内(proto/common/base/currency_type.proto)", currency)
 	}
 	amount := b.GetCurrencies()[0].GetAmount()
 	if amount < 1 || amount > math.MaxInt64 {
@@ -535,3 +541,12 @@ func (p *Pipeline) nowMs() uint64 {
 
 // 重投循环领取用的随机令牌由 shared/assetop 自己生成(Loop.claim → newLeaseToken),
 // 本包不再提供第二份实现:两处各生成一份令牌只会让"这一行现在归谁"多一种说法。
+
+// BindRelayAdmission 仅在 Start/同步业务入口之前装配，同一私有 Loop 覆盖重投、维护、唤醒和首次投递。
+func (p *Pipeline) BindRelayAdmission(relay *drainproof.Session) error {
+	if p == nil || p.loop == nil || relay == nil || p.loop.Relay != nil {
+		return drainproof.ErrHold
+	}
+	p.loop.Relay = relay
+	return nil
+}

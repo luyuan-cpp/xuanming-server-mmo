@@ -12,6 +12,24 @@ import (
 	"go.uber.org/zap"
 )
 
+// protocCommands 统一限制序列化编译子进程，避免各阶段的 goroutine 同时启动大量 protoc。
+// 进程退出并收完输出后才交出名额；现有命令、输出与失败语义保持。
+var protocCommands = newProtocExecutionGate()
+
+type protocExecutionGate struct {
+	active chan struct{}
+}
+
+func newProtocExecutionGate() *protocExecutionGate {
+	return &protocExecutionGate{active: make(chan struct{}, 1)}
+}
+
+func (g *protocExecutionGate) run(command func() error) error {
+	g.active <- struct{}{}
+	defer func() { <-g.active }()
+	return command()
+}
+
 // EnsureDir ensures the directory exists, creating it with 0755 permissions if needed.
 func EnsureDir(dirPath string) error {
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
@@ -74,7 +92,7 @@ func ExecuteProtocCmd(cmd *exec.Cmd, actionDesc string) error {
 		zap.String("command", cmd.String()),
 	)
 
-	if err := cmd.Run(); err != nil {
+	if err := protocCommands.run(cmd.Run); err != nil {
 		logger.Global.Fatal("protoc execution failed",
 			zap.String("action", actionDesc),
 			zap.Error(err),

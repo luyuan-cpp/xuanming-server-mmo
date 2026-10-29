@@ -11,6 +11,8 @@ import (
 	"data_service/internal/svc"
 
 	"shared/assetop"
+	"shared/ownerepoch"
+	"shared/redisslot"
 	"shared/savebarrier"
 
 	"github.com/alicebob/miniredis/v2"
@@ -122,11 +124,13 @@ func TestLoadAllFields_NoDataDoesNotScan(t *testing.T) {
 }
 
 // 存量老玩家(有字段与版本、没有索引)退回 SCAN:别的模块同前缀的 HASH 与保留名不进结果;读路径不写索引。
+// owner_epoch 是同前缀的 string 键(玩家域集群化后带 tag),MGET 读得出值,只能靠保留后缀表挡住。
 func TestLoadAllFields_LegacyPlayerScanFallback(t *testing.T) {
 	tc := newTestCtx(t, 9303)
 	makeLegacyPlayer(t, tc.mr, tc.pid, map[string]string{"bag": "b", "attr": "a"}, "5")
 	tc.mr.HSet(savebarrier.Key(tc.pid), "pending", "x")
 	tc.mr.HSet(assetop.SQLCommitKey(tc.pid), "version", "x")
+	require.NoError(t, tc.mr.Set(ownerepoch.OwnerEpochKey(tc.pid), "7"))
 	require.NoError(t, tc.mr.Set(playerField(tc.pid, "__old"), "z"))
 	rec := installRecorder(t, tc)
 	rec.reset()
@@ -258,13 +262,16 @@ func TestSave_VersionPrecisionCap(t *testing.T) {
 	assert.Equal(t, "9007199254740993", ver)
 }
 
-// 保留名(内部键前缀 __、别的模块的 save_barrier / asset_sql_commit):四个入口都拒绝,别家的键原样不动。
+// 保留名(内部键前缀 __、shared/redisslot 登记的别家后缀,如 save_barrier / asset_sql_commit / owner_epoch):
+// 四个入口都拒绝,别家的键原样不动。
 func TestReservedNamesRejected(t *testing.T) {
 	ctx := context.Background()
 	tc := newTestCtx(t, 9310)
 	tc.mr.HSet(savebarrier.Key(tc.pid), "pending", "keep")
+	require.NoError(t, tc.mr.Set(ownerepoch.OwnerEpochKey(tc.pid), "7"))
 
-	for _, name := range []string{"save_barrier", "asset_sql_commit", "__fields", "__foo"} {
+	names := append([]string{"__fields", "__foo"}, redisslot.ReservedPlayerKeySuffixes()...)
+	for _, name := range names {
 		saved, err := SavePlayerData(ctx, tc.svc, &SavePlayerDataReq{PlayerID: tc.pid, Data: map[string][]byte{name: []byte("x")}})
 		require.NoError(t, err, name)
 		assert.Equal(t, constants.ErrCodeInvalidRequest, saved.ErrorCode, name)
@@ -279,6 +286,9 @@ func TestReservedNamesRejected(t *testing.T) {
 	}
 	assert.Equal(t, "hash", tc.mr.Type(savebarrier.Key(tc.pid)))
 	assert.Equal(t, "keep", tc.mr.HGet(savebarrier.Key(tc.pid), "pending"))
+	owner, err := tc.mr.Get(ownerepoch.OwnerEpochKey(tc.pid))
+	require.NoError(t, err)
+	assert.Equal(t, "7", owner)
 	assert.False(t, tc.mr.Exists(versionKey(tc.pid)))
 }
 
@@ -372,6 +382,7 @@ func TestDelete_LegacyFallbackSkipsForeignAndReserved(t *testing.T) {
 	makeLegacyPlayer(t, tc.mr, tc.pid, map[string]string{"bag": "b", "attr": "a"}, "5")
 	tc.mr.HSet(savebarrier.Key(tc.pid), "pending", "keep")
 	tc.mr.HSet(assetop.SQLCommitKey(tc.pid), "data", "keep")
+	require.NoError(t, tc.mr.Set(ownerepoch.OwnerEpochKey(tc.pid), "7"))
 	require.NoError(t, tc.mr.Set(playerField(tc.pid, "__old"), "z"))
 	rec := installRecorder(t, tc)
 	rec.reset()
@@ -386,6 +397,7 @@ func TestDelete_LegacyFallbackSkipsForeignAndReserved(t *testing.T) {
 	assert.False(t, tc.mr.Exists(versionKey(tc.pid)))
 	assert.True(t, tc.mr.Exists(savebarrier.Key(tc.pid)))
 	assert.True(t, tc.mr.Exists(assetop.SQLCommitKey(tc.pid)))
+	assert.True(t, tc.mr.Exists(ownerepoch.OwnerEpochKey(tc.pid)), "owner_epoch 是 string 键,只靠保留后缀表免删")
 	assert.True(t, tc.mr.Exists(playerField(tc.pid, "__old")))
 }
 
@@ -397,13 +409,14 @@ func TestFieldIndexKeyLiteralPinnedForMergeZone(t *testing.T) {
 	assert.Equal(t, "player:{42}:", playerKeyPrefix(42))
 }
 
-// 非规范十进制的版本(前导零)读路径同样 fail-closed,与写侧守卫同一口径。
+// 非规范十进制的版本(前导零、空串)读路径同样 fail-closed,与写侧守卫同一口径。
+// 版本键不存在走 parseVersionReply 的 nil 分支,不经过这里。
 func TestParseVersionValueRejectsNonCanonical(t *testing.T) {
-	for _, val := range []string{"007", "00", "+1", " 1"} {
+	for _, val := range []string{"", "007", "00", "+1", " 1"} {
 		_, err := parseVersionValue(1, val)
 		assert.Error(t, err, "val=%q", val)
 	}
-	for val, want := range map[string]uint64{"": 0, "0": 0, "7": 7, "18446744073709551615": 18446744073709551615} {
+	for val, want := range map[string]uint64{"0": 0, "7": 7, "18446744073709551615": 18446744073709551615} {
 		got, err := parseVersionValue(1, val)
 		require.NoError(t, err, "val=%q", val)
 		assert.Equal(t, want, got, "val=%q", val)

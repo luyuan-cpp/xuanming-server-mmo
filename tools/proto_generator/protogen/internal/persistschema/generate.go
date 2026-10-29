@@ -62,7 +62,11 @@ func run(ledgerPath, cppPath, goPath string, files []*descriptorpb.FileDescripto
 			return 0, fmt.Errorf("写回台账 %s 失败: %w", ledgerPath, err)
 		}
 	}
-	if err := utils.WriteFileIfChanged(cppPath, RenderCppHeader(result.Gen, schema)); err != nil {
+	retired, err := RetiredFieldsOf(result.Ledger.Retired)
+	if err != nil {
+		return 0, fmt.Errorf("台账退役行不合法: %w", err)
+	}
+	if err := utils.WriteFileIfChanged(cppPath, RenderCppHeader(result.Gen, schema, retired)); err != nil {
 		return 0, fmt.Errorf("写 C++ 产物 %s 失败: %w", cppPath, err)
 	}
 	if err := utils.WriteFileIfChanged(goPath, RenderGo(result.Gen)); err != nil {

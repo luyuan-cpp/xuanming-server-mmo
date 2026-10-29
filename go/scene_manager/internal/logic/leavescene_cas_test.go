@@ -149,7 +149,7 @@ func TestLeaveScene_KeepsLocationRewrittenBetweenReadAndDelete(t *testing.T) {
 	locKey := getPlayerLocationKey(playerID)
 	seedLeaveCasFixture(t, mr, playerID, sceneID, l1, "2")
 
-	// 钩子在第一次碰到 location 键的 EVAL / EVALSHA / DEL 时把 location 改写成 L2。
+	// 钩子跳过原子快照读取，在第一次写 location 的 EVAL / EVALSHA / DEL 前改写成 L2。
 	// 先用 CompareAndSwap 消费「只触发一次」的标志,再 mr.Set:Lua 里的 redis.call('DEL') 会带着
 	// miniredis 的锁重入本钩子,那时标志已被消费,走不到 mr.Set(否则死锁)。同一套钩子对旧代码
 	// (顶层裸 DEL)也能触发,可以直接拿来红跑。
@@ -161,7 +161,7 @@ func TestLeaveScene_KeepsLocationRewrittenBetweenReadAndDelete(t *testing.T) {
 		default:
 			return false
 		}
-		if !slices.Contains(args, locKey) || !fired.CompareAndSwap(false, true) {
+		if identReadOnlySnapshotEval(cmd, args) || !slices.Contains(args, locKey) || !fired.CompareAndSwap(false, true) {
 			return false
 		}
 		if err := mr.Set(locKey, l2); err != nil {

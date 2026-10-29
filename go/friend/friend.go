@@ -24,6 +24,8 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"shared/authoritysql"
+	"shared/drainproof"
 	"strconv"
 	"strings"
 	"syscall"
@@ -64,7 +66,7 @@ var (
 	configFile = flag.String("f", "etc/friend.yaml", "the config file")
 
 	// migrateOnly 是生产用的显式建表入口(D-14 第 4 条):`friend -f <yaml> -migrate` 只对 mmorpg_friend
-	// 跑一次 schemamigrate.Up(与 Schema.AutoMigrate=true 的启动路径是同一份表清单与选项),跑完即退出。
+	// 用独立 Schema 能力执行一次正式迁移后退出；常驻启动仅核对表结构。
 	// 退出码按 schemamigrate.ExitCode:0 成功 / 1 错误 / 3 锁被占(K8s Job 按 backoff 重试)/ 4 需人工。
 	migrateOnly = flag.Bool("migrate", false, "run schemamigrate.Up on mmorpg_friend and exit (0 ok / 1 error / 3 lock busy / 4 manual)")
 	// 改列授权只属于显式迁移,不得被常驻服务启动期的 AutoMigrate 继承。
@@ -87,6 +89,11 @@ const (
 // migrateRemedyCommand 是 Schema.AutoMigrate=false 且库与 proto 不一致时打印给运维的补救命令。
 const migrateRemedyCommand = "friend -f etc/friend.yaml -migrate"
 
+var maintenancePlan = flag.String("maintenance-drain-plan", "", "正式 typed 排空 runtime 原件")
+var maintenanceDir = flag.String("maintenance-drain-dir", "", "私有排空原件目录")
+var maintenanceSHA = flag.String("maintenance-drain-sha256", "", "runtime 原文件 SHA256")
+var maintenanceControlDir = flag.String("maintenance-drain-control-dir", os.Getenv("MMORPG_MAINTENANCE_CONTROL_DIR"), "同一 boot 接收排空请求的私有目录")
+
 func main() {
 	flag.Parse()
 	// 版本行直写 stdout,先于读配置与 logx 初始化:进程在配置 / 依赖阶段就崩溃时也已留下"跑的是哪一版"
@@ -106,7 +113,7 @@ func main() {
 
 	if *migrateOnly {
 		openAuthority := func(mysqlConf config.MySQLConf) (*sql.DB, error) {
-			return svc.OpenMySQL(mysqlConf, c.RequireTiDB)
+			return svc.OpenSchemaMySQL(mysqlConf, c.RequireTiDB)
 		}
 		os.Exit(runMigration(c, *allowModify, openAuthority, schemamigrate.Up))
 	}
@@ -149,7 +156,15 @@ func runFriend(c config.Config) (runErr error) {
 		return err
 	}
 
-	svcCtx := svc.NewServiceContext(c)
+	runtime, root, relay, err := serverbase.LoadPublicationRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
+	if err != nil {
+		return err
+	}
+	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	if err != nil {
+		return err
+	}
+	svcCtx := svc.NewServiceContextWithAdmission(c, writer, root, relay)
 
 	// 收尾所有权从这里开始:之后任何 return 都会 注销(若已注册)→ 排空(若已起服)→ 关资源 → 框架收尾。
 	stopKillSwitch := func() {}
@@ -158,11 +173,17 @@ func runFriend(c config.Config) (runErr error) {
 		DrainTimeout:  lifecycle.DrainTimeout,
 		FinishTimeout: lifecycle.FinishTimeout,
 		// killswitch watch 与注销共用 svcCtx 的 etcd 客户端,必须在 svcCtx.Stop 关连接之前停。
-		CloseResources:  func() { stopKillSwitch(); svcCtx.Stop() },
+		CloseAndReport: func() error {
+			stopKillSwitch()
+			closeCtx, cancel := context.WithTimeout(context.Background(), lifecycle.DrainTimeout)
+			defer cancel()
+			return svcCtx.StopAndReport(closeCtx)
+		},
 		FinishFramework: proc.Shutdown,
 	}
 	defer func() {
 		stopSignals() // 启动失败时也从这里触发同一个 24s 硬截止
+		root.CloseAdmission()
 		shutdown.Server = serverSlot.TakeForShutdown()
 		if err := shutdown.Stop(); err != nil {
 			logx.Errorf("[friend] Shutdown cleanup exceeded its budget: %v", err)
@@ -202,10 +223,12 @@ func runFriend(c config.Config) (runErr error) {
 	// ctx 就是本函数顶部 signal.NotifyContext 的那个:收到 SIGTERM 即 cancel,循环自行退出。
 	// **不新建 context.Background()** —— 那样的循环在停机时根本不会退,只能等 24s 硬截止强杀。
 	//
-	// 停机**不等它退出**(直接丢下):sweep 是幂等的批量 DELETE,中途被打断只是少删一批,
-	// 下一个周期接着删;为它加一步停机等待反而要挤占那 24s 硬预算(契约 §9.1),代价与收益不成比例。
-	// 代价是收尾关 DB / Redis 时,在途的那一轮可能留下一条查询失败日志 —— 刻意接受的噪声,不是缺陷。
-	logic.StartSweep(ctx, deps)
+	// 停机和正式排空均须等待 sweep 的实际停止；
+	// 关闭只停止下一轮；已接纳轮次使用自己的预算，必须在关闭 SQL 池之前真实返回。
+	stopSweep := logic.StartSweep(ctx, deps)
+	if err := svcCtx.BindSourceStop(stopSweep); err != nil {
+		return err
+	}
 
 	// RPC 级热关停(shared/killswitch):复用 svcCtx 的 etcd 客户端;Start 非阻塞,etcd 不可达一律放行。
 	ksCtx, ksCancel := context.WithCancel(context.Background())
@@ -229,6 +252,7 @@ func runFriend(c config.Config) (runErr error) {
 		return fmt.Errorf("friend RPC 构造失败: %w", err)
 	}
 	// go-zero 自带拦截器在 NewServer 里已先加入,位于下面这条链的外层。
+	s.AddUnaryInterceptors(serverbase.RootAdmission(root))
 	s.AddUnaryInterceptors(buildUnaryInterceptors(ks,
 		session.OriginalIdentityInterceptor(svcCtx.LoginSessions, c.RequestBudget(), deps.CheckOriginalRole))...)
 
@@ -283,6 +307,25 @@ func runFriend(c config.Config) (runErr error) {
 	}
 	shutdown.Unregister = nr.Close
 	nr.KeepAlive()
+
+	controlCtx, cancelControl := context.WithCancel(ctx)
+	controlDone := make(chan struct{})
+	go func() {
+		defer close(controlDone)
+		if err := serverbase.DriveDrainRuntime(controlCtx, runtime, *maintenanceControlDir, root, relay, svcCtx.BindDrainRuntime, svcCtx.CloseSource, svcCtx.StopAndReport, func(prepareCtx context.Context) (*serverbase.PreparedPublication, error) {
+			if err := prepareCtx.Err(); err != nil {
+				return nil, err
+			}
+			if svcCtx.DB == nil || root.Pending() != 0 {
+				return nil, drainproof.ErrHold
+			}
+			// friend 没有 Kafka consumer；RPC 与 sweep 共用 prepared SOURCE 门禁。
+			return &serverbase.PreparedPublication{NoConsumers: true}, nil
+		}); err != nil && controlCtx.Err() == nil {
+			logx.Errorf("friend 排空 HOLD: %v", err)
+		}
+	}()
+	defer func() { cancelControl(); <-controlDone }()
 
 	fmt.Println("\n=============================================================")
 	// 这一行的字面量是 tools/scripts/go_services.ps1 的就绪判据(它在启动日志里找
@@ -434,23 +477,14 @@ func missingIndexError(r schemamigrate.Report) error {
 }
 
 // ensureSchema 是启动期建表策略(D-14 第 4 条):
-//   - Schema.AutoMigrate 没写或 true:跑 Up;err 非 nil 或出现需人工项 → 返回错误(调用方拒绝启动)。
+//   - 常驻入口拒绝 AutoMigrate=true；表结构必须先由独立迁移命令准备。
 //     多副本同时起:Up 内部 GET_LOCK 串行化;等锁超时返回 ErrLockBusy,本副本拒启动后由进程拉起方重试。
 //   - false:只跑只读 Plan;有待执行语句或需人工项 → 返回错误,并带上补救命令。
 //   - 两种模式都额外把"缺普通索引"从 Warning 升级成阻断(见 missingIndexWarnings)。
 func ensureSchema(ctx context.Context, db *sql.DB, c config.Config, up, plan schemaRunner) error {
 	opts := schemaOptions()
 	if c.ShouldAutoMigrate() {
-		report, err := up(ctx, db, opts)
-		logReport("schemamigrate.Up", report)
-		if err != nil {
-			return fmt.Errorf("[friend] 启动期建表失败(库 %s),拒绝启动: %w", data.DatabaseName, err)
-		}
-		if len(report.Manual) > 0 {
-			return fmt.Errorf("[friend] 启动期建表发现 %d 项需人工处理(库 %s),拒绝启动: %s",
-				len(report.Manual), data.DatabaseName, strings.Join(report.Manual, "; "))
-		}
-		return missingIndexError(report)
+		return errors.New("常驻服务禁止自动DDL，请关闭AutoMigrate并显式运行 -migrate")
 	}
 
 	report, err := plan(ctx, db, opts)
@@ -547,7 +581,7 @@ func logReport(stage string, r schemamigrate.Report) {
 // schemaModeLabel 是横幅里的建表策略描述。
 func schemaModeLabel(c config.Config) string {
 	if c.ShouldAutoMigrate() {
-		return "auto-migrate (schemamigrate.Up at startup)"
+		return "拒绝常驻自动迁移；请先执行独立 -migrate"
 	}
 	return "plan-only (tables owned by " + migrateRemedyCommand + ")"
 }

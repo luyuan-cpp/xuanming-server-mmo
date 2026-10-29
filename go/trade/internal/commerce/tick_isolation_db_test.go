@@ -8,6 +8,10 @@ package commerce
 // 两个 DSN 都设时用 MySQL。都没设时整组 Skip —— Skip 不代表通过,验收必须带 REQUIRE 开关并在 -v 里逐条看到 PASS。
 // 资产终局由夹具或生产写路径(Claim → Abandon、ResolveManually)直接落在 outbox 上,验证的是交易 SQL 状态机,
 // 不冒充 scene 端到端。
+//
+// 2026-10-22 按复核意见补(文件后半):生产 3s 预算下队头卡住 / 行锁被占、旧版本推迟与隔离落空、
+// 隔离截止在途托管扣款、角色冲突分钟级复查、乐观冲突不推迟、拍品身份不合格时退款、坏对手单移出盘口、
+// 两个副本同时推进只补偿一次。
 
 import (
 	"context"
@@ -15,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -22,7 +27,9 @@ import (
 	"time"
 
 	assetpb "proto/common/asset"
+	base "proto/common/base"
 	componentpb "proto/common/component"
+	dspb "proto/data_service"
 	tradepb "proto/trade"
 	"shared/assetop"
 	"trade/internal/data"
@@ -594,4 +601,415 @@ func TestRealDBReceiptAckSkipsUndecodablePayload(t *testing.T) {
 	var pending bool
 	require.NoError(t, e.Repo.DB.QueryRow("SELECT receipt_ack_pending FROM trade_asset_op WHERE op_id=1").Scan(&pending))
 	require.True(t, pending, "坏行保留 ACK 待办,等人工")
+}
+
+// ---- 2026-10-22 按复核意见补的回归 ----
+
+// productionTickBudget 与 svc.AssetChannel.Start 每轮给合同推进的子预算一致。
+const productionTickBudget = 3 * time.Second
+
+// stallingRoles 让涉及 stalled 玩家的角色互锁一直等到 ctx 结束才返回,模拟"一行卡住":
+// 在 account_role 上等锁、目录事务持锁、依赖 RPC 不回包,表现都是只在调用方的 ctx 到期时才返回。
+type stallingRoles struct {
+	fixtureRoles
+	stalled uint64
+}
+
+func (s stallingRoles) Lock(ctx context.Context, tx *sql.Tx, listing uint64, players ...uint64) error {
+	if slices.Contains(players, s.stalled) {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	return s.fixtureRoles.Lock(ctx, tx, listing, players...)
+}
+
+// 复核 must_fix:单行子预算以前固定 5s,比 svc 给的 3s 还长,卡住的队头与父 ctx 同时到期,
+// Tick 直接返回、不推迟它,下一秒它又排在队头吃满整轮 —— 依赖卡多久,全服合同推进就停多久。
+func TestRealDBTickStalledHeadRowIsCutBeforeTheRoundBudget(t *testing.T) {
+	e := realDBEngine(t)
+	clock := newTestClock()
+	e.Now = clock.Now
+	head := consignment(t, e, 91, "stalled-head-01")
+	var behind []uint64
+	for p := uint64(92); p <= 94; p++ {
+		clock.Advance(time.Millisecond) // 让队头的 updated_ms 严格最早
+		behind = append(behind, consignment(t, e, p, fmt.Sprintf("behind-stalled-%d", p)).CommerceId)
+	}
+	e.Roles = stallingRoles{stalled: 91}
+
+	round, cancel := context.WithTimeout(context.Background(), productionTickBudget)
+	defer cancel()
+	require.NoError(t, e.Tick(round), "卡住的行只算它自己的失败,整轮不报错")
+	require.NoError(t, round.Err(), "整轮在父预算之内结束:卡住的行撞上的是自己的子预算")
+
+	for _, id := range behind {
+		_, w := state(t, e, id)
+		require.NotZero(t, leg(w, "seller_debit").GetOpId(), "队头卡住时同一轮后面的合同照常推进")
+	}
+	hr, hw := state(t, e, head.CommerceId)
+	require.Nil(t, leg(hw, "seller_debit"), "卡住那一轮的合同事务整体回滚,不留半截托管")
+	require.Equal(t, head.Version, hr.Version, "推迟不改版本")
+	nowMs := e.now()
+	retryMs := uint64(tickRetryBackoff.Milliseconds())
+	require.GreaterOrEqual(t, hr.UpdatedMs, nowMs+retryMs*8/10, "父 ctx 还有余量,卡住的行被推迟,下一轮不再排在队头")
+	require.LessOrEqual(t, hr.UpdatedMs, nowMs+retryMs*12/10)
+	require.False(t, dueIDs(t, e)[head.CommerceId])
+}
+
+// 复核 must_fix 的另一种卡法:别的事务(比如事务中途被分区的另一个副本)一直持有队头合同行的行锁。
+// 这时推迟也要这把锁,同样拿不到 —— 这一行下一轮仍在队头,但每轮只花它自己的子预算与推迟预算,
+// 同一轮其余合同照常推进;锁一放开它就照常推进。
+func TestRealDBTickLockedHeadRowDoesNotStarveTheRound(t *testing.T) {
+	e := realDBEngine(t)
+	clock := newTestClock()
+	e.Now = clock.Now
+	ctx := context.Background()
+	head := consignment(t, e, 95, "locked-head-01")
+	var behind []uint64
+	for p := uint64(96); p <= 98; p++ {
+		clock.Advance(time.Millisecond)
+		behind = append(behind, consignment(t, e, p, fmt.Sprintf("behind-locked-%d", p)).CommerceId)
+	}
+	blocker, err := e.Repo.DB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer func() { _ = blocker.Rollback() }()
+	var locked uint64
+	require.NoError(t, blocker.QueryRowContext(ctx, "SELECT commerce_id FROM trade_commerce WHERE commerce_id=? FOR UPDATE", head.CommerceId).Scan(&locked))
+
+	round, cancel := context.WithTimeout(ctx, productionTickBudget)
+	err = e.Tick(round)
+	cancel()
+	require.NoError(t, err)
+	for _, id := range behind {
+		_, w := state(t, e, id)
+		require.NotZero(t, leg(w, "seller_debit").GetOpId(), "队头行锁被占时同一轮后面的合同照常推进")
+	}
+	hr, _ := state(t, e, head.CommerceId)
+	require.Equal(t, head.Version, hr.Version)
+	require.Equal(t, head.UpdatedMs, hr.UpdatedMs, "行锁在别人手里时推迟同样拿不到锁,这一行保持到期")
+
+	require.NoError(t, blocker.Rollback())
+	tick(t, e)
+	_, hw := state(t, e, head.CommerceId)
+	require.NotZero(t, leg(hw, "seller_debit").GetOpId(), "锁一放开,下一轮照常推进")
+}
+
+// Due 之后行被别的写者推进过:拿 Due 读到的旧版本去推迟或隔离都必须落空,不改 updated_ms、status 与 stage(不旧盖新)。
+func TestRealDBStaleObservationNeitherDefersNorQuarantines(t *testing.T) {
+	e := realDBEngine(t)
+	ctx := context.Background()
+	offer := consignment(t, e, 101, "stale-defer-01")
+	stale, err := e.Repo.Get(ctx, offer.CommerceId) // Due 读到的那一版
+	require.NoError(t, err)
+	tick(t, e) // 别的写者(这里是一轮推进)把它推进到下一版
+	fresh, freshW := state(t, e, offer.CommerceId)
+	require.Greater(t, fresh.Version, stale.Version)
+
+	e.deferCommerce(ctx, stale, errors.New("store timeout"))
+	e.deferCommerce(ctx, stale, corrupt(errors.New("workflow 解不开")))
+	e.deferCommerce(ctx, stale, roleConflict())
+
+	after, afterW := state(t, e, offer.CommerceId)
+	require.Equal(t, fresh.Version, after.Version, "旧观察不能改新行")
+	require.Equal(t, fresh.UpdatedMs, after.UpdatedMs, "旧版本的推迟落空")
+	require.Equal(t, fresh.Status, after.Status, "旧版本的隔离落空")
+	require.Equal(t, freshW.Stage, afterW.Stage)
+	require.True(t, dueIDs(t, e)[offer.CommerceId], "新状态照常到期")
+}
+
+// 复核 should_fix:隔离以前只改合同行,在途的托管扣款照常投递,隔离之后还会继续把资产扣进人工单。
+// 现在隔离与玩家取消同一写法:把合同名下仍待办的托管扣款截止提前到现在,由资产通道用同一个 seq 改发 Abort 定论。
+func TestRealDBQuarantineExpiresInFlightEscrowDebits(t *testing.T) {
+	e := realDBEngine(t)
+	ctx := context.Background()
+	offer := consignment(t, e, 102, "quarantine-inflight-01")
+	tick(t, e)
+	settleLegs(t, e, 2)
+	tick(t, e)
+	_, err := e.Mutate(ctx, 103, offer.CommerceId, "buy", "quarantine-buy-0001")
+	require.NoError(t, err)
+	tick(t, e)
+	r, w := state(t, e, offer.CommerceId)
+	require.Equal(t, "pay", w.Stage)
+	debit := buyerDebit(w)
+	require.NotZero(t, debit.GetOpId())
+	var deadline uint64
+	require.NoError(t, e.Repo.DB.QueryRow("SELECT deadline_ms FROM trade_asset_op WHERE op_id=?", debit.OpId).Scan(&deadline))
+	require.Greater(t, deadline, e.now(), "买家扣款原截止是寄售到期")
+
+	// 制造确定性坏数据:一条已发出却查不到 outbox 行的腿(数据事故的典型形状),排在仍在途的买家扣款之后。
+	w.Legs = append(w.Legs, &tradepb.TradeCommerceLeg{Role: "ghost_debit", PlayerId: 102, Stream: 3, OpId: 987654321})
+	require.NoError(t, e.Repo.Tx(ctx, func(tx *sql.Tx) error {
+		cur, err := e.Repo.Lock(ctx, tx, r.CommerceId)
+		if err != nil {
+			return err
+		}
+		return e.Repo.Save(ctx, tx, cur, w, e.now())
+	}))
+
+	tick(t, e)
+	qr, qw := state(t, e, offer.CommerceId)
+	require.Equal(t, Manual, qr.Status)
+	require.Equal(t, "manual", qw.Stage)
+	var status int32
+	require.NoError(t, e.Repo.DB.QueryRow("SELECT status,deadline_ms FROM trade_asset_op WHERE op_id=?", debit.OpId).Scan(&status, &deadline))
+	require.EqualValues(t, tradepb.TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_PENDING, status, "隔离不替 scene 判结局:同一个 seq 由资产通道改发 Abort 定论")
+	require.LessOrEqual(t, deadline, e.now(), "在途扣款截止提前到隔离时刻:没扣到的买家不会再被扣进人工单")
+	require.Zero(t, opCount(t, e, 103, 4), "隔离不发出任何退款")
+	require.Zero(t, opCount(t, e, 102, 4), "隔离不退回任何托管")
+}
+
+// 复核 should_fix:角色换主是长期状态,以前按暂时失败每 10 秒重试一次并打 ERROR,指标上与存储抖动分不开。
+func TestRealDBRoleConflictBacksOffForMinutes(t *testing.T) {
+	e := realDBEngine(t)
+	clock := newTestClock()
+	e.Now = clock.Now
+	offer := consignment(t, e, 104, "role-conflict-01")
+	// 卖家角色挂单之后换了主:合同里存的原归属身份(account-104, 修订 1)永远对不上了。
+	e.Roles = fixtureRoles{Values: map[uint64]*dspb.AccountRoleOwnership{
+		104: {Account: "account-new-owner", OwnerRevision: 2, Role: &base.AccountSimplePlayer{PlayerId: 104}},
+	}}
+
+	tick(t, e)
+	r, w := state(t, e, offer.CommerceId)
+	require.Nil(t, leg(w, "seller_debit"), "已换主的角色不托管、不发资产")
+	require.Equal(t, offer.Version, r.Version, "推迟不改版本")
+	require.NotEqual(t, Manual, r.Status, "角色冲突不是坏数据,不隔离")
+	nowMs := e.now()
+	backoffMs := uint64(tickRoleConflictBackoff.Milliseconds())
+	require.GreaterOrEqual(t, r.UpdatedMs, nowMs+backoffMs*8/10, "按分钟级复查,不再每 10 秒重试")
+	require.LessOrEqual(t, r.UpdatedMs, nowMs+backoffMs*12/10)
+}
+
+// racingRoles 在 acceptBid 拿角色锁的那一刻(预读拍品之后、锁拍品之前)跑一次 race,
+// 模拟另一个副本恰好在这个窗口里接受了别的出价。只在角色集合同时包含 bidder 与 lotSeller 时触发(即 acceptBid)。
+type racingRoles struct {
+	fixtureRoles
+	bidder, lotSeller uint64
+	fired             *atomic.Bool
+	race              func(context.Context) error
+}
+
+func (r racingRoles) Lock(ctx context.Context, tx *sql.Tx, listing uint64, players ...uint64) error {
+	if slices.Contains(players, r.bidder) && slices.Contains(players, r.lotSeller) && r.fired.CompareAndSwap(false, true) {
+		if err := r.race(ctx); err != nil {
+			return err
+		}
+	}
+	return r.fixtureRoles.Lock(ctx, tx, listing, players...)
+}
+
+// 复核 should_fix:乐观冲突以前按暂时失败推迟 10 秒。拍品临近截止时,这会把一条已冻结的有效高价出价拖过截止、
+// 变成退款,改变拍卖结果。现在乐观冲突不推迟,下一轮按新状态立即重试。
+func TestRealDBBidRaceIsRetriedNextRoundNotDeferred(t *testing.T) {
+	e := realDBEngine(t)
+	clock := newTestClock()
+	e.Now = clock.Now
+	ctx := context.Background()
+	lot, err := e.CreateLot(ctx, 11, &tradepb.CreateAuctionLotRequest{ClientRequestId: "race-lot-0001",
+		Assets: &tradepb.TradeAssetSelection{Items: map[uint32]uint32{10: 1}}, CurrencyType: 1, OpeningPrice: 50, MinimumIncrement: 5, DurationMs: 3_600_000})
+	require.NoError(t, err)
+	tick(t, e)
+	settleLegs(t, e, 2)
+	tick(t, e)
+	high, err := e.PlaceBid(ctx, 21, lot.CommerceId, &tradepb.PlaceAuctionBidRequest{LotId: fmt.Sprint(lot.CommerceId), ClientRequestId: "race-bid-high", Amount: 70})
+	require.NoError(t, err)
+	low, err := e.PlaceBid(ctx, 22, lot.CommerceId, &tradepb.PlaceAuctionBidRequest{LotId: fmt.Sprint(lot.CommerceId), ClientRequestId: "race-bid-low1", Amount: 60})
+	require.NoError(t, err)
+	tick(t, e)
+	settleLegs(t, e, 2)
+	tick(t, e)
+	before, bw := state(t, e, high.CommerceId)
+	require.Equal(t, "bid_ready", bw.Stage)
+
+	// 高价出价预读拍品之后、锁拍品之前,"另一个副本"接受了低价出价,拍品的买家变了。
+	e.Roles = racingRoles{bidder: 21, lotSeller: 11, fired: &atomic.Bool{}, race: func(ctx context.Context) error {
+		return e.acceptBid(ctx, low.CommerceId)
+	}}
+	tick(t, e)
+	raced, rw := state(t, e, high.CommerceId)
+	require.Equal(t, "bid_ready", rw.Stage)
+	require.Equal(t, before.Version, raced.Version)
+	require.Equal(t, before.UpdatedMs, raced.UpdatedMs, "乐观冲突不推迟")
+	require.True(t, dueIDs(t, e)[high.CommerceId], "下一轮立即重试")
+
+	tick(t, e)
+	_, hw := state(t, e, high.CommerceId)
+	require.Equal(t, "bid_held", hw.Stage, "重读之后高价出价照常成为最高价")
+	_, lw := state(t, e, low.CommerceId)
+	require.Equal(t, "bid_refund", lw.Stage, "被超价的低价出价原币退回")
+}
+
+// 复核 should_fix:拍品自己缺原归属身份时,以前被隔离为人工的是这条 bid_ready 出价,冻结的钱一起进了人工单。
+// 现在拍品不可接受出价(缺身份 / workflow 解不开)一律按不合格原币退款;坏拍品由它自己那一行隔离。
+func TestRealDBReadyBidOnUnusableLotIsRefunded(t *testing.T) {
+	e := realDBEngine(t)
+	ctx := context.Background()
+	now := e.now()
+	insert := func(r *tradepb.TradeCommerceRecord) {
+		t.Helper()
+		require.NoError(t, e.Repo.Tx(ctx, func(tx *sql.Tx) error { return e.Repo.Insert(ctx, tx, r) }))
+	}
+	noIdentity, err := proto.MarshalOptions{Deterministic: true}.Marshal(&tradepb.TradeCommerceWorkflow{Stage: "lot_open", MinimumIncrement: 5,
+		SellerAssets: &tradepb.TradeAssetSelection{Items: map[uint32]uint32{10: 1}}})
+	require.NoError(t, err)
+	lots := []*tradepb.TradeCommerceRecord{
+		{CommerceId: 900201, RequestKey: "lot-without-identity", RequestDigest: []byte{4}, Kind: 5, Status: Escrowing, SellerPlayerId: 72,
+			UnitPrice: 50, CurrencyType: 1, ExpiresMs: now + 3_600_000, CreatedMs: now - 5000, UpdatedMs: now - 5000, Version: 1, WorkflowProto: noIdentity},
+		{CommerceId: 900202, RequestKey: "lot-undecodable", RequestDigest: []byte{5}, Kind: 5, Status: Escrowing, SellerPlayerId: 73,
+			UnitPrice: 50, CurrencyType: 1, ExpiresMs: now + 3_600_000, CreatedMs: now - 5000, UpdatedMs: now - 5000, Version: 1, WorkflowProto: []byte{0xff, 0xff, 0xff}},
+	}
+	sel := &tradepb.TradeAssetSelection{CurrencyType: 1, CurrencyAmount: 60}
+	for i, lot := range lots {
+		insert(lot)
+		bidder := uint64(74 + i)
+		raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(&tradepb.TradeCommerceWorkflow{Stage: "bid_ready", SellerAssets: sel,
+			SellerIdentity: &tradepb.TradeRoleIdentity{Account: fmt.Sprintf("account-%d", bidder), OwnerRevision: 1},
+			Legs:           []*tradepb.TradeCommerceLeg{{Role: "bid_debit", PlayerId: bidder, Stream: 3, Bundle: Bundle(sel), OpId: 525250 + uint64(i), Outcome: 2}}})
+		require.NoError(t, err)
+		insert(&tradepb.TradeCommerceRecord{CommerceId: 900211 + uint64(i), RequestKey: fmt.Sprintf("bid-on-unusable-lot-%d", i), RequestDigest: []byte{byte(6 + i)},
+			Kind: BidKind, Status: Escrowing, SellerPlayerId: bidder, ParentId: lot.CommerceId, UnitPrice: 60, CurrencyType: 1,
+			ExpiresMs: lot.ExpiresMs, CreatedMs: now - 1000, UpdatedMs: now - 1000, Version: 1, WorkflowProto: raw})
+	}
+
+	for i := 0; i < 3; i++ {
+		tick(t, e)
+	}
+	for i, lot := range lots {
+		bidder := uint64(74 + i)
+		br, bw := state(t, e, 900211+uint64(i))
+		require.Equal(t, "return", bw.Stage, "拍品不可接受出价时这条出价原币退回,不进人工单")
+		require.NotEqual(t, Manual, br.Status)
+		require.NotNil(t, leg(bw, "bid_return"))
+		require.Equal(t, 1, opCount(t, e, bidder, 4), "原币退款只建一次")
+		lr, err := e.Repo.Get(ctx, lot.CommerceId)
+		require.NoError(t, err)
+		require.Equal(t, Manual, lr.Status, "坏拍品由它自己那一行隔离")
+	}
+}
+
+// 复核 should_fix:对手单自己坏了时,以前报错的是 taker,taker 每轮打一条 ERROR,坏单停在最优价位上挡住整个盘口。
+// 现在坏对手单在撮合事务里被隔离、移出盘口,taker 不报错,下一轮按次优价照常成交。
+func TestRealDBUntradableCounterpartyIsTakenOffTheBook(t *testing.T) {
+	e := realDBEngine(t)
+	ctx := context.Background()
+	open := func(player uint64, side tradepb.MarketOrderSide, price uint64) uint64 {
+		t.Helper()
+		r, err := e.PlaceMarket(ctx, player, &tradepb.PlaceMarketOrderRequest{ClientRequestId: fmt.Sprintf("book-open-%d", player), MarketId: 1, ItemConfigId: 10, Side: side, UnitPrice: price, Quantity: 1, CurrencyType: 1})
+		require.NoError(t, err)
+		require.NoError(t, e.advance(ctx, r))
+		settleLegs(t, e, 2)
+		r, _ = state(t, e, r.CommerceId)
+		require.NoError(t, e.advance(ctx, r))
+		return r.CommerceId
+	}
+	good := open(41, 1, 55)
+	// 盘口最优的买单缺原归属身份(存量数据)。updated_ms 放在将来:它不在 Due 里,只有撮合会碰到它。
+	now := e.now()
+	sel := &tradepb.TradeAssetSelection{CurrencyType: 1, CurrencyAmount: 60}
+	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(&tradepb.TradeCommerceWorkflow{Stage: "market_open", SellerAssets: sel,
+		Legs: []*tradepb.TradeCommerceLeg{{Role: "seller_debit", PlayerId: 43, Stream: 3, Bundle: Bundle(sel), OpId: 626262, Outcome: 2}}})
+	require.NoError(t, err)
+	bad := &tradepb.TradeCommerceRecord{CommerceId: 900301, RequestKey: "book-without-identity", RequestDigest: []byte{9}, Kind: 4, Status: Escrowing,
+		SellerPlayerId: 43, MarketId: 1, ItemConfigId: 10, Side: 1, UnitPrice: 60, Quantity: 1, CurrencyType: 1,
+		CreatedMs: now - 10_000, UpdatedMs: now + 3_600_000, Version: 1, WorkflowProto: raw}
+	require.NoError(t, e.Repo.Tx(ctx, func(tx *sql.Tx) error { return e.Repo.Insert(ctx, tx, bad) }))
+	sell := open(42, 2, 50)
+
+	require.NoError(t, e.matchMarket(ctx, sell), "对手单坏了不算 taker 的失败")
+	br, bw := state(t, e, bad.CommerceId)
+	require.Equal(t, Manual, br.Status, "坏对手单移出盘口")
+	require.Equal(t, "manual", bw.Stage)
+	require.Zero(t, br.FilledQuantity, "坏对手单没有成交")
+
+	require.NoError(t, e.matchMarket(ctx, sell))
+	var child uint64
+	require.NoError(t, e.Repo.DB.QueryRow("SELECT commerce_id FROM trade_commerce WHERE kind=4 AND side=0 AND parent_id=? AND counterparty_id=?", good, sell).Scan(&child),
+		"坏单移出盘口之后按次优价照常撮合")
+}
+
+// 两个副本同时对同一个库跑 Tick(生产就是这样:每个副本的 trade.commerce.reconcile 都推进同一张合同表)。
+// 推进、放弃补偿、到期退回都只能各做一次:扣款 seq 不重发,退回卖家的 credit 只建一次,买家不收任何退款。
+func TestRealDBTwoReplicasTickingTogetherCompensateOnce(t *testing.T) {
+	a := realDBEngine(t)
+	clock := newTestClock()
+	a.Now = clock.Now
+	b := *a // 同一个库、同一套号源(op_id / 合同号不撞)、同一个时钟,各自的 ACK 游标:等同两个副本
+	ctx := context.Background()
+	sellers := []uint64{111, 112, 113, 114}
+	buyers := []uint64{121, 122, 123, 124}
+	offers := make([]uint64, len(sellers))
+	for i, seller := range sellers {
+		offers[i] = consignment(t, a, seller, fmt.Sprintf("replica-offer-%d", i)).CommerceId
+	}
+	round := func() {
+		t.Helper()
+		var wg sync.WaitGroup
+		errs := make([]error, 2)
+		for i, replica := range []*Engine{a, &b} {
+			wg.Add(1)
+			go func(i int, replica *Engine) {
+				defer wg.Done()
+				c, cancel := context.WithTimeout(ctx, 15*time.Second)
+				defer cancel()
+				errs[i] = replica.Tick(c)
+			}(i, replica)
+		}
+		wg.Wait()
+		require.NoError(t, errors.Join(errs...))
+		clock.Advance(time.Minute) // 两个副本撞锁而被推迟的行(10s±20%)下一轮必然到期
+	}
+	untilAll := func(what string, done func(*tradepb.TradeCommerceRecord, *tradepb.TradeCommerceWorkflow) bool) {
+		t.Helper()
+		for attempt := 0; attempt < 10; attempt++ {
+			round()
+			all := true
+			for _, id := range offers {
+				if r, w := state(t, a, id); !done(r, w) {
+					all = false
+					break
+				}
+			}
+			if all {
+				return
+			}
+		}
+		t.Fatalf("两个副本 10 轮内没有把全部合同推进到:%s", what)
+	}
+
+	untilAll("托管扣款已发出", func(_ *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) bool {
+		return leg(w, "seller_debit").GetOpId() != 0
+	})
+	settleLegs(t, a, 2)
+	untilAll("上架", func(_ *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) bool { return w.Stage == "open" })
+	for i, id := range offers {
+		_, err := a.Mutate(ctx, buyers[i], id, "buy", fmt.Sprintf("replica-buy-%04d", i))
+		require.NoError(t, err)
+	}
+	untilAll("买家扣款已发出", func(_ *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) bool {
+		return w.Stage == "pay" && buyerDebit(w).GetOpId() != 0
+	})
+	for _, id := range offers {
+		_, w := state(t, a, id)
+		abandonOp(t, a, buyerDebit(w).OpId)
+	}
+	untilAll("放弃后重新开放", func(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) bool {
+		return w.Stage == "open" && r.BuyerPlayerId == 0
+	})
+	for _, id := range offers {
+		_, err := a.Repo.DB.Exec("UPDATE trade_commerce SET expires_ms=1 WHERE commerce_id=?", id)
+		require.NoError(t, err)
+	}
+	untilAll("退回卖家已发出", func(_ *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) bool {
+		return w.Stage == "return" && leg(w, "seller_return").GetOpId() != 0
+	})
+	settleLegs(t, a, 2)
+	untilAll("结案", func(r *tradepb.TradeCommerceRecord, _ *tradepb.TradeCommerceWorkflow) bool { return r.Status == Cancelled })
+
+	for i := range offers {
+		require.Equal(t, 1, opCount(t, a, sellers[i], 3), "卖家托管扣款只发一次")
+		require.Equal(t, 1, opCount(t, a, sellers[i], 4), "退回卖家只建一次")
+		require.Equal(t, 1, opCount(t, a, buyers[i], 3), "被放弃的买家扣款 seq 不重发")
+		require.Zero(t, opCount(t, a, buyers[i], 4), "买家从未被扣,不收任何退款")
+	}
 }

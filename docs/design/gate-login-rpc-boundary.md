@@ -252,8 +252,8 @@ Refresh token 续签是"无状态"操作(只看 refresh token 本身,不需要 s
 
 | 维度 | 现状 | 文档 |
 |---|---|---|
-| Channel 单例长连复用 | ✅ `GrpcChannelCache` 按 `IP:Port` 缓存 | [gate-grpc-long-connection-audit-2026-05.md](./gate-grpc-long-connection-audit-2026-05.md) |
-| HTTP/2 keepalive | ✅ 默认 30s/10s/permit-without-calls=1(env 可调) | 同上 |
+| Channel 长连接复用 | ✅ 每个发现节点持有 `MuduoGrpcChannelPtr`，发现即预连，调用复用现有通道；GOAWAY 时可与排空连接并存 | [grpc-muduo-transport.md](./grpc-muduo-transport.md) §3、§14 |
+| HTTP/2 keepalive | ✅ 业务通道默认关闭周期 PING，使用截止触发探测；旧 30s 空闲 PING 曾触发 `too_many_pings` | [grpc-muduo-transport.md](./grpc-muduo-transport.md) §4.4 |
 | 服务发现 | ✅ etcd `login.rpc` key | go-zero 标配 |
 | 负载均衡 | ✅ `PickRandomNode`(login 无状态) | client_message_processor.cpp:426 |
 | Session affinity | scene 才需要(`SceneNodeService`) | client_message_processor.cpp:420 |
@@ -288,7 +288,7 @@ gate 业务层有两件事:
 - [docs/design/auth-provider-framework.md](./auth-provider-framework.md) — 第三方登录 provider
 - [docs/design/dual-token-authentication.md](./dual-token-authentication.md) — Access + Refresh token
 - [docs/design/open-server-rate-limit-design.md](./open-server-rate-limit-design.md) — `/api/login` 限流
-- [docs/design/gate-grpc-long-connection-audit-2026-05.md](./gate-grpc-long-connection-audit-2026-05.md) — gate→login channel 复用核查
+- [docs/design/grpc-muduo-transport.md](./grpc-muduo-transport.md) — 现行 gRPC 通道复用、保活与 GOAWAY 语义
 - [docs/design/architecture-current-state-vs-gaps-2026-05.md](./architecture-current-state-vs-gaps-2026-05.md) — 现状盘点
 - 代码: `cpp/nodes/gate/handler/rpc/client_message_processor.cpp` (`HandleGrpcNodeMessage` / `HandleTcpNodeMessage`)
 - 代码: `proto/login/login.proto` (`ClientPlayerLogin` 6 个 RPC)

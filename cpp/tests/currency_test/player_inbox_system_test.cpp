@@ -21,6 +21,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -42,6 +44,12 @@
 #include "player/system/player_inbox_registry.h" // SelfCheck:调 Initialize 之前先确认它不会停用本线程的消费
 #include "player/system/player_inbox_rules.h"
 #include "player/system/player_inbox_system.h"
+#include "player/system/role_admission_system.h"
+#include "battle/system/player_battle.h"
+#include "proto/battle/battle_data.pb.h"
+#include "proto/common/component/actor_comp.pb.h"
+#include "proto/common/component/actor_attribute_state_comp.pb.h"
+#include "proto/common/component/battle_comp.pb.h"
 #include "player/system/player_lifecycle.h" // FinishExitOrAwaitDbTaskAck(评审 F1)
 #include "proto/common/base/common.pb.h"    // NodeInfo
 #include "proto/common/base/node.pb.h"      // PlayerInboxNodeService
@@ -115,6 +123,8 @@ namespace
 	}
 
 	// 假传输:attempts 计全部调用,sent 只收回报"发出去了"的那些(等同于到了线上的请求)。
+	// 本夹具只驱动GM域；新增域仍由注册表自检与各自完整系统用例验证，不伪造它们的回包。
+	uint32_t g_transportDomain = kGmDomain;
 	bool g_fetchSendOk = true;
 	bool g_ackSendOk = true;
 	int g_fetchAttempts = 0;
@@ -124,6 +134,7 @@ namespace
 
 	bool FakeSendFetch(const player_inbox::FetchPlayerInboxRequest &request)
 	{
+		if (static_cast<uint32_t>(request.domain()) != g_transportDomain) return false;
 		++g_fetchAttempts;
 		if (!g_fetchSendOk)
 		{
@@ -135,6 +146,7 @@ namespace
 
 	bool FakeSendAck(const player_inbox::AckPlayerInboxRequest &request)
 	{
+		if (static_cast<uint32_t>(request.domain()) != g_transportDomain) return false;
 		++g_ackAttempts;
 		if (!g_ackSendOk)
 		{
@@ -304,6 +316,28 @@ namespace
 		return seqs;
 	}
 
+	// SQL回执由夹具独立提交；Redis快照更新本身不产生SQL证据。
+	std::optional<RoleAdmissionSystem::SqlAck> g_sqlAck;
+	std::vector<std::function<void(std::optional<RoleAdmissionSystem::SqlAck>)>> g_sqlReplies;
+	bool g_deferSqlReply = false;
+	bool g_sqlSendOk = true;
+	bool g_sqlCompletionSendStatus = true;
+	uint64_t g_snapshotSeq = 0;
+	int g_sqlReads = 0;
+
+	std::string SqlVersion(uint64_t epoch, uint64_t seq)
+	{
+		const auto e = std::to_string(epoch), q = std::to_string(seq);
+		return std::string(20 - e.size(), '0') + e + ":" + std::string(20 - q.size(), '0') + q;
+	}
+
+	void CompleteFakeSqlSave(entt::entity player)
+	{
+		const auto &snap = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player);
+		const auto version = SqlVersion(snap.committed_owner_epoch, snap.committed_save_seq);
+		g_sqlAck = RoleAdmissionSystem::SqlAck{std::to_string(snap.committed_owner_epoch), version, version, version};
+	}
+
 	// ── 实体侧 ───────────────────────────────────────────────────────────────
 
 	const PlayerInboxDomainState *GmState(entt::entity player)
@@ -356,12 +390,27 @@ namespace
 
 	// 模拟一次落盘回调到达:把当前账本原样拷进"最后一次成功写入 Redis 的玩家数据"。
 	// 测试在这里扮演 HandlePlayerAsyncSaved,所以由它建快照组件(生产里也只有存盘回调建它)。
-	void CompleteFakeSave(entt::entity player)
+	void CompleteFakeSave(entt::entity player, bool sqlCommitted = true)
 	{
 		PlayerAllData persisted;
+		const auto epoch = tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch;
+		const auto seq = ++g_snapshotSeq;
+		auto *first = persisted.mutable_player_database_data();
+		first->set_player_id(kTestPlayerId);
+		if (const auto* currency = tlsEcs.actorRegistry.try_get<CurrencyComp>(player)) first->mutable_currency()->CopyFrom(*currency);
+		if (const auto* attributes = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(player))
+			first->mutable_derived_attributes_component()->CopyFrom(*attributes);
+		auto *second = persisted.mutable_player_database_1_data();
+		second->set_player_id(kTestPlayerId);
+		persisted.set_last_save_seq(seq);
 		persisted.mutable_player_database_data()->mutable_inbox_ledger()->CopyFrom(
 			tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player));
-		tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player).Replace(persisted);
+		const auto source = std::make_shared<const PlayerAllData>(persisted);
+		const auto committed = RoleAdmissionSystem::CaptureSnapshotCommit(player, source, epoch, seq);
+		EXPECT_TRUE(static_cast<bool>(committed));
+		if (committed) committed(); // 与正式成功hook一致，先记原source，再发布saved回调。
+		tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player).Replace(*source);
+		if (sqlCommitted) CompleteFakeSqlSave(player); // 普通用例显式完成两份证据；反例仅写Redis。
 	}
 
 	// ── 日志抓取 ─────────────────────────────────────────────────────────────
@@ -470,6 +519,7 @@ namespace
 		{
 			g_nowMs = kStartMs;
 			g_persistCalls = 0;
+			g_transportDomain = kGmDomain;
 			g_fetchSendOk = true;
 			g_ackSendOk = true;
 			g_fetchAttempts = 0;
@@ -477,6 +527,7 @@ namespace
 			g_sentFetches.clear();
 			g_sentAcks.clear();
 			g_ackMoment = AckMomentProbe{};
+			g_snapshotSeq = 0; g_sqlReads = 0; g_sqlAck.reset(); g_sqlReplies.clear(); g_deferSqlReply = false; g_sqlSendOk = true; g_sqlCompletionSendStatus = true;
 
 			PlayerInboxSystem::SetNowFnForTest(&FakeNowMs);
 			PlayerInboxSystem::SetPersistFnForTest(&FakePersist);
@@ -499,6 +550,8 @@ namespace
 				DestroyPlayer(player);
 			}
 			created_.clear();
+			g_sqlReplies.clear();
+			admission_.reset();
 			tlsEcs.playerList.erase(kTestPlayerId);
 			SessionMap().erase(kExitSession); // BindSession 的映射;退出收尾正常时已被 RemovePlayerSession 擦掉
 
@@ -516,6 +569,26 @@ namespace
 		// 运行时组件一律不预挂 —— "没有运行时组件"本身就是新落地判据的一半(设计 §7.3)。
 		entt::entity CreateLoadedPlayer(uint64_t epoch, const PlayerInboxLedgerComp &ledger)
 		{
+			// 重登必须由新的已确认入场原件建立，旧作用域回包不能借用新实体。
+			admission_.reset();
+			RoleAdmissionSystem::Dependencies dependencies;
+			dependencies.now = [] { return RoleAdmissionSystem::Clock::time_point(std::chrono::milliseconds(g_nowMs)); };
+			dependencies.localNode = [] { return RoleAdmissionSystem::LocalNode{"inbox-sql-test-scene", "4242", 1}; };
+			dependencies.freeze = [](Guid) {}; // 本fixture只验撤资格/只读确认，不驱动真实存盘。
+			dependencies.hasPendingLoad = [](Guid) { return false; };
+			common::base::RoleAdmissionIdentity identity;
+			identity.set_player_id(kTestPlayerId); identity.set_generation(++admissionGeneration_); identity.set_owner_revision(1);
+			identity.set_owner_epoch(epoch); identity.set_scene_instance_id("inbox-sql-test-scene");
+			dependencies.confirmedAdmissions.push_back(identity);
+			dependencies.readSqlAck = [](Guid id, auto completed) {
+				EXPECT_EQ(kTestPlayerId, id);
+				++g_sqlReads;
+				if (!g_sqlSendOk) return false;
+				if (g_deferSqlReply) g_sqlReplies.push_back(std::move(completed));
+				else completed(g_sqlAck);
+				return g_deferSqlReply || g_sqlCompletionSendStatus;
+			};
+			admission_ = std::make_unique<RoleAdmissionSystem::ScopedDependencies>(std::move(dependencies));
 			const entt::entity player = tlsEcs.actorRegistry.create();
 			tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, kTestPlayerId);
 			tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
@@ -523,6 +596,7 @@ namespace
 			tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player, ledger);
 			// 收件箱只在存盘带归属围栏的实体上消费(player_mutability::HasFencedOwnership)。
 			tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = epoch;
+			tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player, admissionGeneration_, std::uint64_t{1});
 			tlsEcs.playerList[kTestPlayerId] = player;
 			created_.push_back(player);
 			return player;
@@ -596,9 +670,280 @@ namespace
 		}
 
 		std::vector<entt::entity> created_;
+		std::unique_ptr<RoleAdmissionSystem::ScopedDependencies> admission_;
+		uint64_t admissionGeneration_{0};
 		entt::entity player_{entt::null};
 	};
 } // namespace
+
+// ── 同一快照双SQL确认(IB-3)──────────────────────────────────────────────
+
+TEST_F(PlayerInboxSystemTest, RedisSuccessDoesNotAcknowledgeWithoutBothSqlRows)
+{
+	player_inbox::FetchPlayerInboxRequest fetch;
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	PlayerInboxSystem::OnFetchReply(fetch.player_id(), fetch.domain(), fetch.correlation_id(),
+		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
+	CompleteFakeSave(player_, false);
+	PlayerInboxSystem::Tick();
+	EXPECT_TRUE(g_sentAcks.empty());
+	CompleteFakeSqlSave(player_);
+	const auto correct = *g_sqlAck;
+	for (int damage = 0; damage != 4; ++damage)
+	{
+		g_sqlAck = correct;
+		if (damage == 0) g_sqlAck->playerDatabase1 = SqlVersion(kEpoch, 0);
+		if (damage == 1) g_sqlAck->playerDatabase = SqlVersion(kEpoch, 0);
+		if (damage == 2) g_sqlAck->ownerEpoch = std::to_string(kEpoch + 1);
+		if (damage == 3) g_sqlAck->pending = SqlVersion(kEpoch, g_snapshotSeq + 1);
+		PlayerInboxSystem::Tick();
+		EXPECT_TRUE(g_sentAcks.empty()) << damage;
+	}
+	g_sqlAck = correct;
+	PlayerInboxSystem::Tick();
+	ASSERT_EQ(1u, g_sentAcks.size());
+	EXPECT_EQ(1, g_sentAcks.back().decisions_size());
+}
+
+TEST_F(PlayerInboxSystemTest, SqlReplyForReplacedSnapshotCannotAcknowledgeNewRound)
+{
+	player_inbox::FetchPlayerInboxRequest fetch;
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	PlayerInboxSystem::OnFetchReply(fetch.player_id(), fetch.domain(), fetch.correlation_id(),
+		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
+	CompleteFakeSave(player_);
+	g_deferSqlReply = true;
+	PlayerInboxSystem::Tick();
+	ASSERT_EQ(1u, g_sqlReplies.size());
+	const auto old = g_sqlAck;
+	CompleteFakeSave(player_); // 同账本，不同q，旧SQL回包不能给新快照确认。
+	g_sqlReplies.front()(old);
+	EXPECT_TRUE(g_sentAcks.empty());
+	g_deferSqlReply = false;
+	PlayerInboxSystem::Tick();
+	EXPECT_EQ(1u, g_sentAcks.size());
+}
+
+TEST_F(PlayerInboxSystemTest, SqlReplyCannotCrossAdmissionOrEntityLifetime)
+{
+	player_inbox::FetchPlayerInboxRequest fetch;
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	PlayerInboxSystem::OnFetchReply(fetch.player_id(), fetch.domain(), fetch.correlation_id(),
+		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
+	CompleteFakeSave(player_);
+	g_deferSqlReply = true;
+	PlayerInboxSystem::Tick();
+	ASSERT_EQ(1u, g_sqlReplies.size());
+	tlsEcs.actorRegistry.get<PlayerRoleAdmissionComp>(player_).generation = 2;
+	g_sqlReplies.front()(g_sqlAck);
+	EXPECT_TRUE(g_sentAcks.empty());
+	// 另一次读在原N下发出，然后同playerId重建实体。旧回调不能给新实体挂状态或发Ack。
+	tlsEcs.actorRegistry.get<PlayerRoleAdmissionComp>(player_).generation = 1;
+	PlayerInboxSystem::Tick();
+	ASSERT_EQ(2u, g_sqlReplies.size());
+	DestroyPlayer(player_);
+	player_ = CreateLoadedPlayer(kEpoch, PlayerInboxLedgerComp{});
+	g_sqlReplies.back()(g_sqlAck);
+	EXPECT_TRUE(g_sentAcks.empty());
+	EXPECT_EQ(nullptr, GmState(player_));
+}
+
+TEST_F(PlayerInboxSystemTest, LeavingWhileSqlPendingRetainsUnacknowledgedDecision)
+{
+	player_inbox::FetchPlayerInboxRequest fetch;
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	PlayerInboxSystem::OnFetchReply(fetch.player_id(), fetch.domain(), fetch.correlation_id(),
+		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
+	CompleteFakeSave(player_, false);
+	PlayerInboxSystem::OnPlayerLeaving(player_);
+	EXPECT_TRUE(g_sentAcks.empty());
+	EXPECT_EQ(10u, DecidedThrough(player_));
+	EXPECT_EQ(1, g_persistCalls);
+}
+
+TEST_F(PlayerInboxSystemTest, SealBeforeSqlReplyRejectsAckWithoutBlockingWriterDrain)
+{
+	player_inbox::FetchPlayerInboxRequest fetch;
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	PlayerInboxSystem::OnFetchReply(fetch.player_id(), fetch.domain(), fetch.correlation_id(),
+		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
+	CompleteFakeSave(player_);
+	g_deferSqlReply = true;
+	PlayerInboxSystem::Tick();
+	ASSERT_EQ(1u, g_sqlReplies.size());
+	common::base::RoleTradeSeal seal;
+	seal.set_player_id(kTestPlayerId); seal.set_owner_revision(1); seal.set_through_generation(1);
+	seal.set_listing_id(42); seal.set_scene_instance_id("inbox-sql-test-scene");
+	seal.set_scene_node_id("4242"); seal.set_zone_id(1);
+	ASSERT_TRUE(RoleAdmissionSystem::Seal(seal));
+	EXPECT_FALSE(RoleAdmissionSystem::ConfirmedIdentity(kTestPlayerId).has_value());
+	// 第一条只读回包保持悬挂，也不计入写者callbacks；drain能读取自己的SQL floor。
+	RoleAdmissionSystem::ObserveTradeSaveQueued(kTestPlayerId, kEpoch, g_snapshotSeq);
+	DestroyPlayer(player_);
+	Advance(1001);
+	RoleAdmissionSystem::Tick();
+	EXPECT_EQ(2u, g_sqlReplies.size()) << "排空应能读取其原SQL floor，不被Inbox只读probe阻塞";
+	g_sqlReplies.front()(g_sqlAck);
+	EXPECT_TRUE(g_sentAcks.empty());
+}
+
+TEST_F(PlayerInboxSystemTest, SnapshotSqlConfirmationRejectsMismatchedRowsBeforeReading)
+{
+	CompleteFakeSave(player_);
+	PlayerAllData wrong = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot;
+	wrong.mutable_player_database_1_data()->set_fence_save_seq(g_snapshotSeq + 1);
+	tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).Replace(wrong);
+	int callbacks = 0;
+	EXPECT_FALSE(RoleAdmissionSystem::ConfirmSnapshotSqlCommit(player_,
+		*tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot,
+		[&callbacks](bool) { ++callbacks; }));
+	EXPECT_EQ(0, g_sqlReads);
+	EXPECT_EQ(0, callbacks);
+}
+
+TEST_F(PlayerInboxSystemTest, SnapshotSqlSendFailureAndDuplicateRepliesPreserveSingleCompletion)
+{
+	CompleteFakeSave(player_);
+	const auto &snap = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot;
+	int callbacks = 0;
+	g_sqlSendOk = false;
+	EXPECT_FALSE(RoleAdmissionSystem::ConfirmSnapshotSqlCommit(player_, snap, [&callbacks](bool) { ++callbacks; }));
+	EXPECT_EQ(0, callbacks);
+	g_sqlSendOk = true;
+	EXPECT_TRUE(RoleAdmissionSystem::ConfirmSnapshotSqlCommit(player_, snap, [&callbacks](bool committed) {
+		EXPECT_TRUE(committed); ++callbacks;
+	}));
+	EXPECT_EQ(1, callbacks); // 同步回调也只完成一次。
+	g_sqlCompletionSendStatus = false; // 错误适配器已同步完成却报未发送，公开接口仍须返回已接管。
+	EXPECT_TRUE(RoleAdmissionSystem::ConfirmSnapshotSqlCommit(player_, snap, [&callbacks](bool committed) {
+		EXPECT_TRUE(committed); ++callbacks;
+	}));
+	EXPECT_EQ(2, callbacks);
+	g_sqlCompletionSendStatus = true;
+	g_deferSqlReply = true;
+	EXPECT_TRUE(RoleAdmissionSystem::ConfirmSnapshotSqlCommit(player_, snap, [&callbacks](bool committed) {
+		EXPECT_TRUE(committed); ++callbacks;
+	}));
+	ASSERT_EQ(1u, g_sqlReplies.size());
+	g_sqlReplies.front()(g_sqlAck);
+	g_sqlReplies.front()(g_sqlAck);
+	EXPECT_EQ(3, callbacks);
+}
+
+TEST_F(PlayerInboxSystemTest, CommitProofRequiresOriginalHookBeforeSamePayloadSavedCallback)
+{
+	CompleteFakeSave(player_);
+	PlayerAllData fresh = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot;
+	fresh.set_last_save_seq(++g_snapshotSeq);
+	const auto source = std::make_shared<const PlayerAllData>(fresh);
+	const auto hook = RoleAdmissionSystem::CaptureSnapshotCommit(player_, source, kEpoch, g_snapshotSeq);
+	ASSERT_TRUE(static_cast<bool>(hook));
+	auto &snap = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_);
+	snap.Replace(*source); // 未成功的提交不调用hook：有字节也没有提交资格。
+	EXPECT_EQ(0u, snap.committed_owner_epoch);
+	hook();
+	const auto sameBytesDifferentSource = std::make_shared<const PlayerAllData>(fresh);
+	snap.Replace(*sameBytesDifferentSource);
+	EXPECT_EQ(0u, snap.committed_save_seq) << "原hook不能被另一份相同字节载荷借用";
+	hook();
+	snap.Replace(*source);
+	EXPECT_EQ(kEpoch, snap.committed_owner_epoch);
+	EXPECT_EQ(g_snapshotSeq, snap.committed_save_seq);
+	EXPECT_EQ(0u, snap.snapshot->last_save_seq());
+	EXPECT_EQ(0u, snap.snapshot->player_database_data().fence_owner_epoch());
+	EXPECT_EQ(0u, snap.snapshot->player_database_1_data().fence_save_seq());
+}
+
+TEST_F(PlayerInboxSystemTest, OldCommitHookCannotAuthorizeNewAdmissionOrRecreatedEntity)
+{
+	CompleteFakeSave(player_);
+	PlayerAllData fresh = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot;
+	fresh.set_last_save_seq(++g_snapshotSeq);
+	const auto source = std::make_shared<const PlayerAllData>(fresh);
+	const auto hook = RoleAdmissionSystem::CaptureSnapshotCommit(player_, source, kEpoch, g_snapshotSeq);
+	ASSERT_TRUE(static_cast<bool>(hook));
+	tlsEcs.actorRegistry.get<PlayerRoleAdmissionComp>(player_).generation = 2;
+	hook();
+	auto &old = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_);
+	old.Replace(*source);
+	EXPECT_EQ(0u, old.committed_save_seq);
+	DestroyPlayer(player_);
+	player_ = CreateLoadedPlayer(kEpoch, PlayerInboxLedgerComp{});
+	hook();
+	auto &current = tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player_);
+	current.Replace(*source);
+	EXPECT_EQ(0u, current.committed_save_seq);
+	EXPECT_EQ(0, g_sqlReads);
+}
+
+TEST_F(PlayerInboxSystemTest, SameBusinessBytesAfterOwnerAdvanceRequireFreshCommitAndBothSqlAcks)
+{
+	player_inbox::FetchPlayerInboxRequest fetch;
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	PlayerInboxSystem::OnFetchReply(fetch.player_id(), fetch.domain(), fetch.correlation_id(),
+		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
+	CompleteFakeSave(player_);
+	const auto oldBytes = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot->SerializeAsString();
+	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player_).epoch = kEpoch + 2; // B5保留原N与identity。
+	Advance(rules::kResaveIntervalMs);
+	PlayerInboxSystem::Tick();
+	EXPECT_EQ(2, g_persistCalls) << "不能仅凭旧E的同业务字节跳过新提交";
+	EXPECT_EQ(0, g_sqlReads);
+	EXPECT_TRUE(g_sentAcks.empty());
+	CompleteFakeSave(player_, false); // 真正的新E/q提交，SQL仍是旧E。
+	EXPECT_EQ(oldBytes, tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot->SerializeAsString());
+	PlayerInboxSystem::Tick();
+	EXPECT_TRUE(g_sentAcks.empty());
+	CompleteFakeSqlSave(player_);
+	PlayerInboxSystem::Tick();
+	ASSERT_EQ(1u, g_sentAcks.size());
+	EXPECT_EQ(kEpoch + 2, g_sentAcks.back().owner_epoch());
+}
+
+TEST_F(PlayerInboxSystemTest, SnapshotSqlTimeoutDoesNotQueueCommandsOrAcceptLateReply)
+{
+	CompleteFakeSave(player_);
+	const auto &snapshot = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot;
+	g_deferSqlReply = true;
+	int callbacks = 0;
+	ASSERT_TRUE(RoleAdmissionSystem::ConfirmSnapshotSqlCommit(player_, snapshot, [&callbacks](bool committed) {
+		EXPECT_FALSE(committed); ++callbacks;
+	}));
+	ASSERT_EQ(1u, g_sqlReplies.size());
+	Advance(9999);
+	RoleAdmissionSystem::Tick();
+	EXPECT_EQ(0, callbacks);
+	Advance(1);
+	RoleAdmissionSystem::Tick();
+	EXPECT_EQ(1, callbacks);
+	for (int tick = 0; tick != 3; ++tick) {
+		EXPECT_FALSE(RoleAdmissionSystem::ConfirmSnapshotSqlCommit(player_, snapshot, [&callbacks](bool) { ++callbacks; }));
+		Advance(11000); RoleAdmissionSystem::Tick();
+	}
+	EXPECT_EQ(1, g_sqlReads) << "physical回包未到，不能每次超时又排一条Redis命令";
+	g_sqlReplies.front()(g_sqlAck);
+	EXPECT_EQ(1, callbacks) << "迟到不能重复交付原结果";
+	g_deferSqlReply = false;
+	EXPECT_TRUE(RoleAdmissionSystem::ConfirmSnapshotSqlCommit(player_, snapshot, [&callbacks](bool committed) {
+		EXPECT_TRUE(committed); ++callbacks;
+	}));
+	EXPECT_EQ(2, callbacks);
+	EXPECT_EQ(2, g_sqlReads);
+}
+
+TEST_F(PlayerInboxSystemTest, SnapshotSqlReplyAfterRoleStateDestructionHasNoCallback)
+{
+	CompleteFakeSave(player_);
+	g_deferSqlReply = true;
+	int callbacks = 0;
+	ASSERT_TRUE(RoleAdmissionSystem::ConfirmSnapshotSqlCommit(player_,
+		*tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot,
+		[&callbacks](bool) { ++callbacks; }));
+	ASSERT_EQ(1u, g_sqlReplies.size());
+	admission_.reset();
+	g_sqlReplies.front()(g_sqlAck);
+	EXPECT_EQ(0, callbacks);
+}
 
 // ── 落盘之后才确认(IB-3,设计 §7.7)─────────────────────────────────────────
 
@@ -1348,7 +1693,14 @@ TEST_F(PlayerInboxSystemTest, CorruptLedgerWarnsAgainEveryFixedNumberOfDeferrals
 	ASSERT_NE(nullptr, GmState(player_));
 	ASSERT_EQ(PlayerInboxDeferReason::kLedgerInvalid, GmState(player_)->deferReason);
 	const std::vector<std::string> stuckWarn{"metric=inbox_ledger_invalid", "source=apply_gate"};
-	EXPECT_EQ(1u, CapturedLinesWith(stuckWarn)) << "延后原因刚变成账本损坏:打一次";
+	const auto& domains = player_inbox_registry::ConsumerDomains();
+	ASSERT_FALSE(domains.empty());
+	EXPECT_EQ(domains.size(), CapturedLinesWith(stuckWarn)) << "每个注册域首次延后各打一次";
+	for (const auto domain : domains)
+	{
+		EXPECT_EQ(1u, CapturedLinesWith({"metric=inbox_ledger_invalid", "source=apply_gate", " domain=" + std::to_string(domain) + " "}))
+			<< "延后原因刚变成账本损坏:该域打一次";
+	}
 
 	for (uint32_t streak = 1; streak < rules::kStuckWarnEveryFailures; ++streak)
 	{
@@ -1356,7 +1708,12 @@ TEST_F(PlayerInboxSystemTest, CorruptLedgerWarnsAgainEveryFixedNumberOfDeferrals
 		PlayerInboxSystem::Tick();
 	}
 	EXPECT_EQ(rules::kStuckWarnEveryFailures, GmState(player_)->failStreak);
-	EXPECT_EQ(2u, CapturedLinesWith(stuckWarn)) << "第 kStuckWarnEveryFailures 次连续延后再打一次";
+	EXPECT_EQ(domains.size() * 2, CapturedLinesWith(stuckWarn)) << "各域到固定连续延后次数再打一次";
+	for (const auto domain : domains)
+	{
+		EXPECT_EQ(2u, CapturedLinesWith({"metric=inbox_ledger_invalid", "source=apply_gate", " domain=" + std::to_string(domain) + " "}))
+			<< "第 kStuckWarnEveryFailures 次连续延后:该域再打一次";
+	}
 	EXPECT_EQ(0, g_fetchAttempts) << "账本损坏:一次都不拉";
 }
 
@@ -1813,7 +2170,8 @@ TEST_F(PlayerInboxSystemTest, LateAckFromAPreviousEntityIsDiscardedAfterRelandin
 // 上面的 Leaving* 用例都直接调 OnPlayerLeaving,钉不住生产里那一行调用:它还在不在、是不是排在 DestroyPlayer 之前
 // (OnPlayerLeaving 在实体无效时直接返回)。这里走真正的收尾入口 FinishExitOrAwaitDbTaskAck(闸门判 kFinish)
 // → FinishExitAfterPersist,实体带着生产里此刻一定在的退出标记;把那一行挪到销毁之后或合并时弄丢,这个用例就会红。
-TEST_F(PlayerInboxSystemTest, ExitFinishAcksTheDurableOutcomeBeforeTheEntityIsDestroyed)
+// 同步确认是依赖允许的边界，不代表真实异步Redis回包能赶在实体销毁之前。
+TEST_F(PlayerInboxSystemTest, ExitFinishAcksBeforeDestroyWhenSqlConfirmationCompletesSynchronously)
 {
 	BindSession(player_);
 	player_inbox::FetchPlayerInboxRequest fetch;
@@ -1845,4 +2203,135 @@ TEST_F(PlayerInboxSystemTest, ExitFinishAcksTheDurableOutcomeBeforeTheEntityIsDe
 
 	EXPECT_FALSE(tlsEcs.actorRegistry.valid(player_)) << "收尾之后实体已销毁";
 	EXPECT_EQ(entt::entity{entt::null}, tlsEcs.GetPlayer(kTestPlayerId));
+}
+
+// 正式退出路径不等待只读SQL探针：迟到回包不能碰新实体，新E依永久账本补确认而不重复入账。
+TEST_F(PlayerInboxSystemTest, ExitFinishDropsAsyncSqlReplyAndRelandingAcksWithoutPayingAgain)
+{
+    g_transportDomain = player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT;
+    BindSession(player_);
+    auto& attributes = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player_);
+    attributes.set_health(100); attributes.set_mana(50);
+    auto& derived = tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(player_);
+    derived.set_max_health(100); derived.set_max_mana(50);
+    BattleSettlementData settlement;
+    settlement.set_battle_id(792); settlement.set_player_id(kTestPlayerId);
+    settlement.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+    settlement.set_health(80); settlement.set_mana(30); settlement.set_gold_gain(5);
+    const auto item = MakeItem(10, player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, 272,
+        settlement.SerializeAsString());
+    player_inbox::FetchPlayerInboxRequest fetch;
+    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+    PlayerInboxSystem::OnFetchReply(kTestPlayerId, g_transportDomain, fetch.correlation_id(), FetchReplyFor(fetch, {item}));
+    ASSERT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold));
+    MarkExiting(player_);
+    CompleteFakeSave(player_);
+    const PlayerAllData persisted = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot;
+    const auto originalAck = g_sqlAck;
+    g_deferSqlReply = true;
+    EXPECT_TRUE(PlayerLifecycleSystem::FinishExitOrAwaitDbTaskAck(kTestPlayerId));
+    ASSERT_EQ(1u, g_sqlReplies.size());
+    auto oldReply = g_sqlReplies.front();
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player_));
+    oldReply(originalAck);
+    EXPECT_TRUE(g_sentAcks.empty()) << "实体销毁后不得从旧SQL确认补发Ack";
+
+    player_ = CreateLoadedPlayer(kEpoch + 1, persisted.player_database_data().inbox_ledger());
+    tlsEcs.actorRegistry.get<CurrencyComp>(player_).CopyFrom(persisted.player_database_data().currency());
+    auto& reloaded = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player_);
+    reloaded.set_health(80); reloaded.set_mana(30);
+    auto& reloadedDerived = tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(player_);
+    reloadedDerived.set_max_health(100); reloadedDerived.set_max_mana(50);
+    g_deferSqlReply = false;
+    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+    PlayerInboxSystem::OnFetchReply(kTestPlayerId, g_transportDomain, fetch.correlation_id(), FetchReplyFor(fetch, {item}));
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold)) << "永久水位回放不得重发金币";
+    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player_).health());
+    CompleteFakeSave(player_, false);
+    PlayerInboxSystem::Tick();
+    EXPECT_TRUE(g_sentAcks.empty()) << "原E双ACK不能证明新E提交";
+    CompleteFakeSqlSave(player_);
+    PlayerInboxSystem::Tick();
+    ASSERT_EQ(1u, g_sentAcks.size());
+    const auto ack = g_sentAcks.back();
+    EXPECT_EQ(kEpoch + 1, ack.owner_epoch());
+    ASSERT_EQ(1, ack.decisions_size());
+    ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 272);
+    oldReply(originalAck);
+    EXPECT_EQ(1u, g_sentAcks.size()) << "旧闭包再到也不能给新实体补资格";
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold));
+    PlayerInboxSystem::OnAckReply(kTestPlayerId, g_transportDomain, ack.correlation_id(), AckReplyFor(ack));
+}
+
+// Battle专域只回放APPLIED，效果先和永久水位同snapshot保存，再等原E/q双SQLACK。
+TEST_F(PlayerInboxSystemTest, BattleDomainPaysOnceAcrossRedeliveryAndWaitsForBothSqlRows)
+{
+    g_transportDomain = player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT;
+    auto& attributes = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player_);
+    attributes.set_health(100); attributes.set_mana(50);
+    auto& derived = tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(player_);
+    derived.set_max_health(100); derived.set_max_mana(50);
+    tlsEcs.actorRegistry.emplace<InBattleComp>(player_).set_battle_id(791);
+    BattleSettlementData settlement;
+    settlement.set_battle_id(791); settlement.set_player_id(kTestPlayerId);
+    settlement.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN); settlement.set_health(80); settlement.set_mana(30);
+    settlement.set_gold_gain(5);
+    const auto item = MakeItem(10, player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, 271,
+        settlement.SerializeAsString());
+    player_inbox::FetchPlayerInboxRequest fetch;
+    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+    PlayerInboxSystem::OnFetchReply(kTestPlayerId, g_transportDomain, fetch.correlation_id(), FetchReplyFor(fetch, {item}));
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold));
+    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player_).health());
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<InBattleComp>(player_)) << "Redis/SQL提交前不能先解冻";
+    CompleteFakeSave(player_, false);
+    PlayerInboxSystem::Tick();
+    EXPECT_TRUE(g_sentAcks.empty());
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<InBattleComp>(player_));
+    CompleteFakeSqlSave(player_);
+    PlayerInboxSystem::Tick();
+    ASSERT_EQ(1u, g_sentAcks.size());
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<InBattleComp>(player_));
+    const auto ack = g_sentAcks.back();
+    ASSERT_EQ(1, ack.decisions_size());
+    EXPECT_EQ(player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, ack.decisions(0).outcome());
+    PlayerInboxSystem::OnAckReply(kTestPlayerId, g_transportDomain, ack.correlation_id(), AckReplyFor(ack));
+    tlsEcs.actorRegistry.get<BaseAttributesComp>(player_).set_health(90);
+    Advance(rules::kMinCheckGapMs + 1);
+    PlayerInboxSystem::OnNotifyEvent(kTestPlayerId, g_transportDomain);
+    PlayerInboxSystem::Tick();
+    ASSERT_EQ(2u, g_sentFetches.size());
+    fetch = g_sentFetches.back();
+    PlayerInboxSystem::OnFetchReply(kTestPlayerId, g_transportDomain, fetch.correlation_id(), FetchReplyFor(fetch, {item}));
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold)) << "永久域游标拦重复发奖";
+    EXPECT_EQ(90u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player_).health()) << "重复载荷不回写旧HP";
+    ASSERT_EQ(2u, g_sentAcks.size());
+}
+
+TEST_F(PlayerInboxSystemTest, BattleDomainNeverTurnsVoidIntoTerminalSkipped)
+{
+    g_transportDomain = player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT;
+    player_inbox::FetchPlayerInboxRequest fetch;
+    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+    PlayerInboxSystem::OnFetchReply(kTestPlayerId, g_transportDomain, fetch.correlation_id(),
+        FetchReplyFor(fetch, {Voided(10, player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, 271, kCancelled)}));
+    EXPECT_TRUE(g_sentAcks.empty());
+    EXPECT_EQ(nullptr, rules::FindCursor(tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player_), g_transportDomain));
+    const auto& domains = tlsEcs.actorRegistry.get<PlayerInboxRuntimeComp>(player_).domains;
+    const auto state = std::find_if(domains.begin(), domains.end(), [](const auto& row) { return row.domain == g_transportDomain; });
+    ASSERT_NE(domains.end(), state); EXPECT_TRUE(state->halted);
+}
+
+TEST_F(PlayerInboxSystemTest, BattleDomainBelowWatermarkWithoutReceiptNeverClaimsAppliedOrUnknown)
+{
+    g_transportDomain = player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT;
+    auto& cursor = rules::MutableCursor(tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player_), g_transportDomain);
+    cursor.set_decided_through_seq(100);
+    const auto before = tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player_).SerializeAsString();
+    player_inbox::FetchPlayerInboxRequest fetch;
+    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+    PlayerInboxSystem::OnFetchReply(kTestPlayerId, g_transportDomain, fetch.correlation_id(),
+        FetchReplyFor(fetch, {MakeItem(10, player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, 271, "unread")}));
+    EXPECT_TRUE(g_sentAcks.empty());
+    EXPECT_EQ(before, tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player_).SerializeAsString());
 }

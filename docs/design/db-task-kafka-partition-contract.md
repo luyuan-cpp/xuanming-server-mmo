@@ -17,6 +17,33 @@
 Kafka 扩分区会重映射一部分 key；新 partition 的 offset 与旧 partition 不可比较。
 把它们直接比较会回档，不比较而继续写也无法证明顺序，因此只能 fail-closed。
 
+## DBTask 操作枚举契约（2026-10-22）
+
+`proto/db/db_task.proto` 的 `DBTask.op` 使用共享 `DBOp`：`DB_OP_UNSPECIFIED=0`、
+`DB_OP_READ=1`、`DB_OP_WRITE=2`。C++ scene 存盘、Go login 读请求、DB 消费者、
+重试和存盘补投均使用同一枚举。零值和未知编号不得进入排序锁、选库或 SQL；Kafka
+非法任务和重试收据沿既有持久死信路径保全原始字节，持久隔离成功后才允许确认消费。
+批合并不能跨过未知操作合并同一玩家、同一表的写。
+
+这是上线前对原 `string op=3` 的统一替换，字段号仍为 3，wire type 从 LEN 改为 VARINT，
+不支持新旧协议混跑。旧字符串任务在新绑定中不会成为 READ 或 WRITE，必须被拒绝；
+开发环境切换前应排空旧 Kafka 任务、Redis 重试及父屏障内的原始补投意图，不能仅更新
+消费者。未决写不能直接丢弃，本次源码改造不清理运行环境数据。上线状态以
+[存盘围栏设计](db-write-fencing-mysql.md)文末为准。
+
+操作字段单独的未压缩 protobuf 编码为 READ=`18 01`、WRITE=`18 02`，均 2 字节；
+原字符串分别为 6、7 字节。此处只记录编码尺寸，不据此宣称吞吐或延迟改善。Go 的 handler
+map 使用枚举键；日志和指标仍映射成原有 `read/write/unknown`，分区审计保持
+`read/write/other`，避免改变监控契约。Java 没有该 Kafka 生产/消费路径，但其内部协议副本
+须通过正式 ContractSync 同步并重生成编译。
+
+同类字段只读排查：Kafka 的 SceneCommand、PlayerLifecycleCommand 已使用枚举，GateCommand
+使用全局整数事件号。交易协议的 `TradeCommerceWorkflow.stage`、`TradeCommerceLeg.role`
+是后续可单独评估的封闭集合，但属于持久化及恢复契约；人民币寄售 `asset_kind` 和市场/竞拍
+视图 `state` 还涉及客户端或外部商城 JSON，需另批明确映射并同步两版与客户端。本次不改这些
+合同。`DBTask.msg_type` 是 protobuf 全限定类型名，认证渠道是可扩展注册名，标识、文案和
+开放文本不能仅因使用 string 就转成枚举。
+
 ## 代码门禁
 
 1. `kafkautil.EnsureTopics` 只创建缺失 topic，绝不原地扩分区；已存在 topic 的
@@ -189,6 +216,11 @@ C++ 发送路径；**以后若加「从 yaml 透传 librdkafka 参数」的能�
    再打 INFO `saved to Redis, DB write tasks NOT all queued (see the ERROR above)`，不再出现 `DB write tasks enqueued`。
    全部入队也只说明进了 librdkafka 本地队列、不等于 acks=all，所以第 2 步仍以 Kafka 侧的 end offset 与抽样复核为准，不变。
    已落码，未编译、未测试，待 Codex 验证。
+   **2026-10-20 更正（存盘日志降级）**：成功那行 `saved to Redis, DB write tasks enqueued` 与 `HandlePlayerAsyncSaved: Saving complete` 已从 INFO 降为 DEBUG
+   （每次真写盘都打两条，会把 INFO 刷满）；没全入队时那行 INFO `DB write tasks NOT all queued (see the ERROR above)` 已删，只剩逐条 ERROR `Kafka send failed`
+   与汇总 ERROR `not every DB write task was queued to Kafka (topic=…, home_zone=…, owner_epoch=…, save_seq=…)`，原 INFO 里的字段并进了汇总 ERROR。
+   本地 `bin/etc/base_deploy_config.yaml` 默认 `LogLevel: 2`（muduo 枚举，2=INFO、1=DEBUG），要看成功那行须临时调到 `1` 并重启 scene。
+   第 2 步本来就以 Kafka 侧 end offset 为准，判据不变。已落码，未编译、未测试，待 Codex 验证。
 
 ---
 
@@ -256,7 +288,7 @@ C++ 发送路径；**以后若加「从 yaml 透传 librdkafka 参数」的能�
 
 1. 优雅停掉 go/db；robot 登录、改状态、下线。
 2. **在 Kafka 侧确认写 W 已到 broker**：登出前记下该玩家所在分区 p = `DBTaskPartition(key, N)` 的 end offset（`kafka-get-offsets.sh --time -1`）；
-   登出、看到存盘日志后确认这个 end offset 增长了；再用 console consumer `--partition p --offset <旧 end>` 抽到 key=<id>、op=write 的那条
+   登出、看到存盘日志后确认这个 end offset 增长了（2026-10-20 起存盘日志是 DEBUG，scene 不调到 `LogLevel: 1` 时不等日志，直接按 end offset 增长判断）；再用 console consumer `--partition p --offset <旧 end>` 抽到 key=<id>、op=write 的那条
    （复用上面的抽样复核器解析）；同时确认该玩家没有 "Kafka send failed" 日志。以上都满足才允许删键。
 3. 从父键解出 W 的 `test_seq`；删掉父键与两个子表键（父键见 login dataloader `go/login/internal/logic/pkg/dataloader/data_loader.go` 的 `buildParentKey`，子表键见 `go/db/internal/kafka/key_ordered_consumer.go` 的 `buildCacheKey`，格式 `{MsgType}:{key}`），不要删 `consumer:applied*` 键。
 4. robot 再次登录（login 日志出现 "LoadSync: sending … DB read tasks"），2 秒内拉起 go/db。

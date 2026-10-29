@@ -27,6 +27,10 @@
 > - **TiDB 兼容遗留**(迁库前必须处理):`player_snapshot` 的 `snapshot_guid_nz` 唯一键在 TiDB 上建不出(`go/data_service/internal/store/schema.go`,当前 fail-closed);friend 推荐查询的 `INL_JOIN` 提示已实测可用但未加([friend-handoff-20260920.md](../handoff/friend-handoff-20260920.md) §9.5 第 12 条);data_service 迁移互斥的 `GET_LOCK` 与 `player_name` 改主键都没在 TiDB 上实测。
 > - **验证**:落点代码 2026-09-29 跑过一轮(Claude 按用户指示执行);之后 `be6b4ab1d` 改了 go/db 重试队列与 `tools/merge_zone`,当前 HEAD 的复验清单见 [placement-reverify-checklist-20261012.md](../handoff/placement-reverify-checklist-20261012.md)。
 
+> **⚠️ 状态说明(2026-10-24):玩家数据不再用 Redis 存储,Redis 的其他用途照旧保留**,见本文 §9。
+> - 只定了方向,存盘与加载的新路径没有设计、没有落码;现行代码仍按 D5 先写 Redis、再经 Kafka 由 go/db 写 TiDB。
+> - §D5 的「Redis 权威读缓存」,以及 write-behind 管线里经 Redis 缓冲、中转玩家数据的部分,由 §9 修订。applied cursor、retry/dead 队列、SubShard、写合并与 topic / partition 契约在新设计里逐条裁定(同 §D5 末尾修订注);per-key LWW、L1–L4 验收与 `sql_mode` 照旧。
+
 ---
 
 ## 结论(先读这节)
@@ -166,6 +170,8 @@ CREATE TABLE IF NOT EXISTS `player_database` (
 > 2. 迁移窗口内冻结 RetryRouting:L1–L4 与 chaos_test 在迁移前后用同一个值跑;迁移的「停写 drain」核对清单加上 `kafka:retry:queue:{topic}:p*`。
 > 3. topic 命名与 partition=10 不可变契约**不变**:④ 不改分区数、不换代;④B2(双消费在线换代)本轮不做。要做 B2 必须先落 MySQL 条件写,并另行修订本节第一条「改 topic 路由必须走停写 drain + 新 TopicGeneration」,不能以本修订为依据;双消费窗口内禁止 relocate / 合服,三方相等校验要同步放宽。
 > 4. 风险表第 9 条照旧。
+
+> **2026-10-24 修订**:玩家数据不再用 Redis 存储(§9)。本节的「Redis 权威读缓存」,以及 write-behind 管线里经 Redis 缓冲、中转玩家数据的部分不再保留。applied cursor、retry/dead 队列、SubShard、写合并以及 topic / partition 契约是否随新存盘路径调整,在新设计里逐条裁定,裁定之前照旧;per-key LWW、L1–L4 验收与 `sql_mode` 不受影响。
 
 ### D6: proto2mysql 升级与 TiDB 方言支持(库是我们自己的)
 
@@ -338,3 +344,100 @@ TiDB 将一条 SQL 行编码成一个 KV 记录,再按 Key 范围管理 Region�
 本次只补文档。实际拆分属于独立变更,须先明确字段真源、读写所有者、原子范围、数据量上限与验收标准,再决定表 / PB 形状。迁移设计覆盖 proto 源与生成器、建表、装卸、DBTask、缓存、快照 / 回档、合服与落点迁移工具、新旧版本并存和回退。上线字段不复用编号,删除使用 `reserved`;不得手改生成产物。验证按风险覆盖冷 / 热加载、失败、重放、幂等、并发旧写、原子恢复与兼容。
 
 Java 版:本节只记录共享设计原则及 C++/Go 当前源码,对应 Java 版本号为无,没有功能或客户端契约变更。不能推断 Java 当前已有相同表或 PB;以后实施业务拆分时按 `AGENTS.md §12` 核对另一版、同步客户端可见契约并登记 `PARITY.md`,内部存储按各自实现设计。
+
+## 9. 玩家数据不再用 Redis 存储(2026-10-24 方向,未设计、未落码)
+
+> **来源**:2026-10-24 用户在「玩家数据存储 Redis vs TiDB」会话里明确:「我不是撤掉 redis 啊,就是玩家数据不要 redis 存储而已,其他改用的地方还是要用的哦……该用还是用」。
+> **状态**:只定方向。存盘与加载的新路径没有设计、没有落码,现行代码仍按 §D5 先写 Redis、再经 Kafka 由 go/db 写 TiDB。项目尚未上线,按[存盘围栏](./db-write-fencing-mysql.md)文末「上线状态」,落码时直接以新形态起步,不做双写与迁移。
+> **证据口径**:§9.3 的键族由本会话 6 路只读盘点、1 路对抗核查和 3 路文档核查(事实、分类完整性、跨文档一致)得出,以 2026-10-24 主工作区为准(多个会话在改,引用以文件名、函数名为主);[C] 读代码确认,[D] 文档记载,[I] 推断。没有编译、运行或压测。
+
+### 9.1 决定的内容
+
+1. 玩家数据(持久存档,以及它的整份或部分副本、中转载荷)以 TiDB 为唯一存储。Redis 不再保存、缓存或中转玩家数据本体。
+2. **Redis 不撤。** 会话、锁、归属与位置投影、排队与限流、队列、Pub/Sub 等协调用途照旧用 Redis;以后的功能该用 Redis 的地方继续用,不因本条改走 TiDB。
+3. 本条修订 §D5「Redis 权威读缓存 + applied cursor + retry/dead 队列、SubShard 并行、写合并: 全不动」里与玩家数据有关的部分(读缓存,以及经 Redis 缓冲、中转玩家数据的部分)。applied cursor、retry/dead 队列、SubShard、写合并与 topic / partition 契约随新存盘路径逐条裁定,裁定之前照旧;per-key LWW、L1–L4 验收与 `sql_mode` 不受影响。
+
+### 9.2 判据
+
+一个 Redis 键算不算「玩家数据」,看它的值,不看键名里有没有 player_id:
+
+- 值是玩家持久数据的内容,或内容的副本、中转载荷,丢了只能从 TiDB 找回 → **玩家数据,移出 Redis**;
+- 值是代次、租约、锁、位置、标记、计数、队列成员一类的协调信息,丢了可以按协议重建或按 TTL 自然失效 → **协调态,留在 Redis**。
+
+两者兼有的(例如同一个 hash 里既有载荷又有版本号),拆开后各归各类。协调态里只服务于 Redis 父快照或 outbox 的键(例如补投索引),不因为它是协调态就保留:载荷移出后它失去用途,随新设计一起去留。
+
+只作加速、真源在 TiDB、可随时丢弃、正确性从不依赖它的读缓存,按值算是副本,但不是存储。这类缓存是否保留逐项裁定(看有没有读者、能不能接受丢),默认不新增。
+
+### 9.3 现行键族分类
+
+**A. 移出 Redis**
+
+| 键族 | 现在的作用 | 去向 |
+|---|---|---|
+| `PlayerAllData:{<pid>}` 父快照(第 2b 批已改为带 tag 的键名,未编译) | 写方:scene 每次存盘在严格屏障 Lua 里写;login 的进场预加载(SQL 读回后发布)、核验采纳、新号种子(`NewPlayerSeed`)、首次入场身份补齐(整字节 CAS)也写。读方:scene 进场只从它加载,不读 SQL [C]:`redis_client.h` 严格存盘脚本与 `AsyncLoad`、`role_admission_system.cpp`,login `ensure_player_all_data_async.go`、`parent_commit_barrier.go`、`new_player_seed.go`、`player_class_backfill.go` | TiDB 两张玩家表为唯一来源;存盘与加载路径重新设计(§9.4 第 1、2 条),scene 与 login 的写方同批去掉 |
+| `{MsgType}:<pid>` 子表缓存(`player_database:<pid>`、`player_database_1:<pid>`) | go/db 写任务 SQL 提交后(applied / equal)在发布资产证据与 ACK 的同一段令牌 Lua 里 SET 整行;读任务只在键不存在时 SETNX 回填;TTL 3600s。login 冷加载已不读,生产路径没有读者 [C]:`player_cache_publish.go`、`key_ordered_consumer.go`、`ensure_player_all_data_async.go` | 删除;令牌 Lua 随之改形 |
+| `player:{<pid>}:save_barrier` 里的 outbox 载荷 `outbox_player_database`、`outbox_player_database_1`(两条 DBTask 原字节) | 「写 Redis」与「投 Kafka」不能原子完成,所以意图要和父快照在同一段 Lua 里留存,供 go/db saveoutbox 补投 [C]:`redis_client.h` 严格存盘脚本、`go/db/internal/saveoutbox` | 父快照不进 Redis 后不再需要;新存盘路径若保留异步投递,意图留在哪里另行设计 |
+| go/db 重试与死信队列的成员:`kafka:retry:queue:*`(含 `:p<N>`)、`kafka:retry:processing:*`、`kafka:dead:queue:*` | 写失败、隔离、毒消息时把整条 DBTask 压进列表(`body` 是玩家行整行字节),重试协程认领后重放 [C]:`key_ordered_consumer.go` 的 `encodeRetryPayload`、`retry_routing.go` | 不再把玩家行字节留在 Redis 队列;若保留 Kafka → go/db,重试载荷改存 TiDB 或 Kafka 重试 topic,Redis 只留认领收据与计数 |
+| `player:{<pid>}:asset_sql_commit` 资产 SQL 提交证据(含账本 `asset_op_ledger`) | go/db 在 SQL 提交后发布,data_service 资产通道据此判定已落盘 [C]:`player_cache_publish.go`、`go/data_service/internal/logic/asset_sql_commit.go` | 改为强读 TiDB 玩家行 |
+| data_service 读 `PlayerAllData:{<pid>}` 解账本(`GetPlayerAssetOpLedger`、`GetPlayerInboxLedger`) | guild / trade / mail 资产通道与 player_inbox 对账判断「已见 / 未见」[C]:`persisted_player_database.go` | 同上;data_service 已有在 TiDB 里跨 schema 读两张玩家行的代码 [C]:`account_role_sql_proof.go` |
+| `task:result:<id>` 读结果 | 玩家读 DBTask 的回包,载荷是整条消息,TTL 5 分钟 [C]:`key_ordered_consumer.go` | 加载改直读后不再承载玩家数据;其他读任务是否还用它另定 |
+| `battle:settlement:pending:<pid>` 结算原件(伴生的 `battle:settlement:pending:id:<pid>`、积压索引 `battle:settlement:pending:index`、落库标记 `battle:settlement:staged:<battle_id>` 是协调键,随原件一起去留) | battle 先写再投递,scene 应用并按 battle_id 销账后才删,不过期;投递整条丢失时,下次登录靠它补发。值是要并入玩家存档的奖励原件 [C]:`cpp/libs/services/battle/settlement/settlement_outbox.h`、`player_battle.cpp` | 去向是 match 写 SQL 原件 + player_inbox(TiDB)入箱的新路径(工作区未提交)。两条路径各覆盖哪些对局核实之前,旧路径不删 |
+| `match:rating:<pid>`(及入账标记 `match:rating:applied:<battle_id>`) | `GlobalMatch.Enabled=false` 时玩家评分只存在 MatchRedis,无 TTL;这个分支只有 dev / test 档允许,非 dev / test 档强制开启,评分走 TiDB `match_rating` / `match_rating_applied` [C]:`go/match/internal/logic/keys.go`、`rating.go`,`go/match/internal/authority/rating.go`,`go/match/internal/svc/servicecontext.go` | 删除 Redis 分支,评分只走 TiDB |
+| data_service 字段 KV `player:{<id>}:<field>`、`__version`、`__fields`、`__lock` | 只存在于 Redis,没有生产写者;GM 快照、回档建在它上面 [C]:`data_logic.go`、`snapshot_logic.go`、`rollback_logic.go` | 删除,或把 GM 能力重建在 TiDB 玩家行上 |
+
+**B. 新设计时逐项裁定**
+
+| 键族 | 为什么待定 |
+|---|---|
+| `save_barrier` 的其余字段:`pending`、两表 ACK、`handoff_fence`、`schema_*`、`verified_identity`、outbox 元数据与补投重试态(`outbox_version`、`outbox_topic`、`outbox_attempt*`、`outbox_terminal*`、`outbox_retry_ms`);补投索引 `player:save_pending:*`(成员只是 pid);barrierrestore 维护键 `player:save_barrier:maintenance:<zone>` / `player:save_barrier:maintenance_release:*` | 本身是协调态,但几乎都只服务于 Redis 父快照与 outbox。ACK 镜像、`verified_identity`(证明 Redis 父快照与资产证据没回退)、补投索引与补投状态、恢复维护键在载荷移出后失去用途;`pending` 与 `handoff_fence` 是否保留取决于新的交接设计(§9.4 第 4 条) |
+| go/db 管线控制:排序锁 `distributed:lock:kafka:ordering:*`、游标 `consumer:applied:*` / `consumer:applied_epoch:*`、重试认领守卫与实例登记 `kafka:retry:guard:*` / `kafka:retry:instances:*` / `kafka:retry:instance_mode:*`、存盘协议世代 `db:save_protocol:zone:*` | 本身是协调态,该在 Redis;但只在保留 Kafka → go/db 写管线时才有用,随 §9.4 第 1 条一起定。重试与死信队列的成员是玩家行载荷,已归表 A |
+| `battle:activity_result:<battle_id>` | battle 对局结果发件箱(帮会同道历练):值是对局事件,TTL 7 天,guild 结算提交后 DEL,巡检器直接读它补结算 [C]:`cpp/libs/services/battle/system/battle_result_activity.h`、`go/guild/internal/data/trial_result_record.go`。不是玩家存档,但结算前是唯一原件、丢了不能重建,§9.2 两条都套不上,与结算原件同批裁定 |
+| `player_merge_notice:<pid>`、`player_force_rename:<pid>` | merge_zone 按玩家写的合服公告与强制改名标记,无 TTL,Redis 是唯一记录 [C]:`tools/merge_zone/post_merge_stamp.go`、login `entergamelogic.go`。设计落点是玩家行 `merge_state`(`PlayerMergeStateComp`);force_rename 管线目前未启用 |
+| 只读加速缓存:`player:name:<pid>`(全局 `player_name` 表的读缓存与负缓存,唯一性判定从不读它),以及各服务私有 Redis 里的非权威读缓存 | 真源在 SQL、可随时丢弃,按 §9.2 末段规则裁定是否保留 |
+| 父快照的展示读:friend 好友档案与在线推荐(`go/friend/internal/data/friend_profiles.go`、`online_directory.go`)、match(`go/match/internal/team/presence.go`)、login 选角列表补外观(`go/login/internal/logic/clientplayerlogin/role_appearance_backfill.go`) | 改读 TiDB,或改为专门的展示投影。投影若放 Redis,只能是可从 TiDB 重算的副本,不得成为唯一来源。`online_directory.go` 在父快照缺失时直接跳过候选,改造时不能让推荐列表悄悄变空 |
+
+**C. 继续用 Redis(不受本条影响)**
+
+- 归属与交接:`player:{<pid>}:owner_epoch` 的铸造、`player:<pid>:handoff`、`location` / `location_revision` / `location_revision_floor`、离场释放等待。
+- 会话与登录:`player:session:*`、`player:leases*`、`player_locker:*`、`login_generation`、进场去重。
+- 战斗:`battle:lock:*`、`battle:ctx:*`(值是 `InBattleComp` 的对局状态,不在玩家表里)。
+- 落地恢复摘要 `player:<pid>:sync_digest`:代次加各域变更计数,只是提示,丢失或过期时客户端全量拉一次。
+- 排队与限流、场景路由与节点负载、选主锁。
+- Pub/Sub:`assetop:wake`、`task:result:notify*`。
+- 各服务私有 Redis 的协调用途:chat / friend / guild / match 的限流、配额、排队、选主锁等(rank 已全部走 SQL,不用 Redis;match 评分见表 A,非权威读缓存见表 B)。
+
+**不在本条范围**:归属与落点映射 `player:zone` / `player:placement` / `player:maprev`,以及 go/db 能力标记 `db:capability:zone:*`。负责人 2026-10-23 已另行定为移出 Redis、直读 TiDB(设计见 [映射持久化提案](./player-route-mapping-durability-proposal.md) §15,未落码),本条不改变那个结论。
+
+### 9.4 新设计必须回答的问题(都未定)
+
+1. **存盘提交路径**:二选一或另提。
+   - scene 经已有的异步 gRPC → data_service 通道直接提交 TiDB 事务。这条通道 `RegisterRoleAdmission` 已在用,接在 EventLoop 上、带签名鉴权,见 `role_admission_system.cpp`。
+   - 保留 Kafka → go/db 异步写,但不在 Redis 留存意图。
+
+   两种都要重新论证丢失窗口、退出与停机排空、同 key 写合并。scene tick 不得同步等 SQL([scene 线程模型](./scene-node-threading-model.md))。
+2. **加载路径**:scene 进场从哪里拿数据,是 login 读 TiDB 后经 RPC 下发,还是 scene 经 RPC 读 TiDB。重连、同节点重登这类今天走 Redis 的热加载,代价要算清。
+3. **单写围栏怎么闭合**:owner_epoch 仍在 Redis 铸造,存盘却落 TiDB,两者不再在同一段 Lua 里比对。只比 TiDB 行内已落库的 `(fence_owner_epoch, fence_save_seq)` 不够 [C]:
+   - 行围栏只拒 epoch 更小的写(`player_row_fence.go`);go/db 的 applied_epoch 守卫有意只拦新持有者落库之后的老写(`key_ordered_consumer.go` 归属 epoch 守卫)。
+   - 今天新持有者第一次存盘之前,挡住被废黜持有者迟到写的只有 C++ 严格存盘 Lua 的 owner 比对,外加靠时间的再入屏障(`enterscenelogic.go` 的 `playerLocationOwnerDead` 分支)。存盘改为直接提交 TiDB 后,Lua 这一层没有了,迟到写会被接受。
+   - 入场登记已在同一笔 TiDB 悲观事务里把 owner_epoch 写进 `account_role_admission.identity_proto`(按 `(player_id, scene_instance_id)` 一行,`account_role_admission_store.go`)。但它不是可比较的列:登记时不比 owner_epoch、不跨实例取最大,也不抬玩家行围栏。
+   - 可选方向:把它提成代次地板,或在入场登记的同一事务里抬两张玩家行的 `fence_owner_epoch`,存盘事务在同一事务里比对。Java 版把 owner_epoch 放在玩家行里,是现成先例。
+4. **交接、交易、结算门禁**:今天经 Redis 里的两表 ACK 镜像判断「SQL 已追平」(`handoff_sql_barrier.h` 的发布标记脚本、`role_admission_system.cpp` 的 `kReadSqlAck`)。存盘直接提交 TiDB 后,判据改为事务提交结果或 TiDB 强读。
+5. **两张玩家表的原子性**:今天两表是两条独立 DBTask,跨表不原子。直接提交 TiDB 时可以在同一事务里提交,须明确是否这样做;§8.4 的资产原子范围不得放宽。
+6. **容量与延迟**:存盘与加载的 TiDB 往返按[容量模型](./capacity-model-hok-scale.md)的 N_save 口径压测,按 AGENTS §6 出对比表;TiDB 抖动、切主时的表现单独测。没有数据之前不宣称性能结论。
+7. **读方与工具**:friend(好友档案、在线推荐)、match、login 的选角外观补齐与首次入场身份补齐(`role_appearance_backfill.go`、`player_class_backfill.go`)、data_service 账本、`go/db/internal/barrierrestore`、`tools/merge_zone`、`debug_fetch` / `debug_import`,以及压测工具 `go/db/cmd/verifier`,凡读父快照或子表缓存的地方逐个改。同批改不完的按 fail-closed 处理,不能带着旧键静默空过。(`tools/data_consistency_check` 只读映射 Redis,不在此列。)
+8. **TiDB 部署**:仓库没有 TiDB 的 K8s 清单,只有本地 `deploy/docker-compose.tidb.yml`。`k8s_deploy.ps1` 只接收外部 TiDB 入口(`-GlobalAuthorityTiDBHost`,或必须与之相同的 `-FriendTiDBHost` / `-TradeTiDBHost` / `-MatchTiDBHost`),go/db 的玩家表与目录、好友、交易、匹配共用这一个入口。玩家数据只存 TiDB 之后,TiDB 是存档读写的唯一依赖,部署、备份与回档方案要先落(§D8、[TiDB Phase 1 与开服准备](./tidb-phase1-and-launch-readiness.md))。
+
+### 9.5 对其他文档的影响
+
+- [玩家态 Redis 集群化](./redis-player-store-cluster.md):
+  - 父快照、子表缓存、资产证据、结算原件属于玩家数据,不再进 Redis Cluster。补投索引与补投器随父快照移出失去现有用途;新存盘路径若保留异步投递,另行设计。
+  - 第 2b 批(父快照改名)在本方向记录之前已落码(未编译),保留还是回退待用户定。2c(补投索引按 slot)、2d(补投器分片)已暂停(该稿 §13)。第 4 批里子表缓存与排序锁 / 游标的改名、第 8 批战斗结算按 slot,等新设计定稿后再定。
+  - owner_epoch(2a,已落码)、归属与位置族(3)、player_locator(7)等协调键的分片不受影响,但集群规模要按剩下的键重算。
+- [共享 Redis 按用途拆分](./shared-redis-split-by-purpose.md):§19 redis-cache 的主要内容(子表缓存、玩家读结果)移出 Redis,「必做」结论待重评。go/db 控制面按组分实例(§18、§24 第 2 批)与 §18.7 令牌发布脚本的硬依赖,随 §9.4 第 1 条重评。§16 的相关推算要重算;§23 的冷卸载以父键为对象,父快照移出后失去对象。
+- [异步存盘丢失窗口](./player-async-save-loss-windows.md)、[Redis 回退守卫](./zone-redis-regression-guard-20261022.md):以 Redis 父快照为对象的丢尾、回退与实例身份核验,随新存盘路径重写。前者 §7 的待实现修复、后者里只服务于父快照与资产证据的部分,开工前先按本条向用户确认是否还做。
+- [存盘围栏](./db-write-fencing-mysql.md)文末 2026-10-17「C++ 父快照提交屏障」「登录冷恢复」附注,以及[跨 zone 传送](./cross-zone-scene-travel.md) CZ-2「`PlayerAllData` Redis 物理共享」契约:都以 Redis 父快照为提交与加载对象,随 §9.4 第 1~4 条重写。
+- §D5 的修订见 §9.1 第 3 条与 §D5 末尾的 2026-10-24 修订注。
+
+### 9.6 Java 版
+
+Java 版的存档与归属代次在 MySQL,与归属相关的 Redis 键只有位置投影([Redis 回退守卫](./zone-redis-regression-guard-20261022.md)「Java 版不同构」一段与 §12 [D])。Java 是否还在 Redis 里缓存或中转别的玩家数据没有核过(同文 §12 注明 G5「资产放弃是否读 Redis 副本」未核)。本仓落码时按 AGENTS §12 核对,确认后再判 Java 是否已是目标形态;结论为不适用或已有等价时,按约定不往 Java `PARITY.md` 加行。本条只改文档,Java 版无对应改动(对应 Java 版本 0.1.0-SNAPSHOT)。
